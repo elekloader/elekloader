@@ -49,7 +49,7 @@ class Device:
     isa: str                     # 'coldfire'
     hmac_key_from: tuple = ()    # for 'hmac': (section id, seed string); the key is read from
                                  # the stock file's own section, never stored here (syx.seal_key)
-    container: str = 'ele3'      # the file family: 'ele3' (syx.py) or 'elek' (elek.py)
+    container: str = 'ele3'      # the file family: 'ele3', 'ele2' (syx.py) or 'elek' (elek.py)
     version_len: int = 4         # the characters of the version field the unit shows
     version_at: int = 0x14       # 'ele3': where that field is in the container header
     version_optional: bool = False   # True: a build given no version keeps stock's field
@@ -126,10 +126,10 @@ class Device:
 
 def _all():
     from . import (analog_four_mk2, analog_rytm_mk2, digitakt_mk1, digitakt_mk2, digitone_mk1, digitone_mk2,
-                   model_cycles, model_samples, octatrack)
+                   model_cycles, model_samples, octatrack, analog_rytm_mk1)
     return [digitakt_mk1.DEVICE, digitakt_mk2.DEVICE, digitone_mk1.DEVICE, octatrack.DEVICE,
             model_cycles.DEVICE, model_samples.DEVICE, analog_rytm_mk2.DEVICE, analog_four_mk2.DEVICE,
-            digitone_mk2.DEVICE]
+            digitone_mk2.DEVICE, analog_rytm_mk1.DEVICE]
 
 
 DEVICES = None
@@ -142,10 +142,13 @@ def devices():
     return DEVICES
 
 
-def version_at(sysex_id):
-    """-> where the version field of an 'ele3' file with this device byte is."""
+SYX_FAMILIES = ('ele3', 'ele2')   # the file families syx.py reads and writes
+
+
+def version_at(sysex_id, container='ele3'):
+    """-> where the version field of a syx.py file of this family with this device byte is."""
     for d in devices():
-        if d.container == 'ele3' and d.sysex_id == sysex_id:
+        if d.container == container and d.sysex_id == sysex_id:
             return d.version_at
     return 0x14
 

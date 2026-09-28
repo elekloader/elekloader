@@ -629,7 +629,7 @@ class LoaderWindow:
             cur = self.version_var.get().strip()
             if dev.version_optional:
                 default = self.model.rel.version       # the stock field ("1.13")
-            elif dev.container == 'ele3':
+            elif dev.container in devices.SYX_FAMILIES:
                 default = '2.0a'
             else:
                 default = '%s ELEK' % self.model.rel.version

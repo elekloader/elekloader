@@ -5,7 +5,8 @@ Everything elekloader knows about a product is in one profile,
 (`_all()`). The Digitakt mk1 profile is the example. The Digitone mk1's
 (`digitone_mk1.py`) is a second device of the same file family, with its own
 core. The Octatrack's (`octatrack.py`) is a second file family, with a core
-and a hook bus of its own.
+and a hook bus of its own. The Analog Rytm MKI's (`analog_rytm_mk1.py`) is a
+third, ELE2, read and written by `syx.py`.
 
 | field | what it is | how it was found for the Digitakt mk1 |
 |---|---|---|
@@ -22,7 +23,7 @@ and a hook bus of its own.
 | `ddr`, `sram_code`, `fast_table` | where the linker puts mods' code and data, fast code, and the table that copies it | the areas above |
 | `core_ddr` | from a core's version on, the linker's area in place of `ddr` | core 4.0: `0x47BC0000-0x47C00000`, the gap between the sample pool's end and the audio input ring |
 | `recovery` | how to get back to stock, shown to the user | FUNC at power-on |
-| `container`, `version_len` | the file family (`'ele3'`, `'elek'`) and the version field's length | the container header |
+| `container`, `version_len` | the file family (`'ele3'`, `'ele2'`, `'elek'`) and the version field's length | the container header |
 | `protected` | main OS ranges no mod may change, with the reason | none on the mk1 |
 | `relocatable` | data inside a protected range that the OS reaches only through the listed 4-byte operands and never writes, so a mod may serve its own copy through them (sdk.octabam does, for a poke there) | none on the mk1 |
 | `keep` | main OS ranges that look free (they read zero, nothing points at them) but that the OS reads, with the reason: no site may write them, and every build must leave them stock | none on the mk1 |
@@ -701,6 +702,62 @@ smaller core-only CO02 build then flashed and booted successfully (below).
 Mods are made per release: a mod's target names one stock file by hash, so
 supporting a new OS version means adding its release to the profile and
 rebuilding the mods for it (below).
+
+## The Analog Rytm MKI (1.73, 1.74)
+
+`analog_rytm_mk1.py`. gdeo607 measured 1.73 ([rytm1_mods](https://github.com/gdeo607/rytm1_mods),
+issue #11); draadpiraat measured 1.74 on the stock image, in rytm-emu and on
+a unit (Modwerk's `docs/RYTM_MKI_OS_RESEARCH.md` has the evidence). The two
+releases' main OS images have the same length.
+
+- **Files.** `Analog-Rytm_OS1.73.syx` and `Analog-Rytm_OS1.74.syx`: the
+  Digitakt mk1's SysEx transport (device id `0x07`; the same counters,
+  checksums and framing) around an **ELE2** container. That is a `0x14`-byte
+  header (`ELE2`, the build, spaces, the version at `0x10`: the profile's
+  `version_at`), the load address `0x40000400`, and the one packed section
+  (the main OS) at `0x18`, with no table, digest or seal. The container is
+  padded to 4 bytes. From its own section stream, the writer reproduces the
+  stock file byte for byte (`tests/test_rytm.py`, both releases).
+- **Unpacking.** The bootstrap lives in flash below `0x20000` and the
+  container starts at `0x20000`. At boot the bootstrap depacks from flash
+  (`0x20018` to the address at `0x20014`). After an upgrade it depacks the
+  section staged at `0x40200000` to `0x40000400` in place. Both use one
+  routine, at flash `0x2a` (356 bytes), **byte-identical** to the Digitakt
+  mk1 bootstrap's depacker (`0x8000009e`), so this packer's streams are valid
+  here too. Stock's in-place gap is 558,719 bytes (1.73), 558,611 (1.74).
+- **Flash.** The OS reads calibration records (`RBOW`) at `0x780000`,
+  `0x7C0000` and `0x7F0000`, and no other flash address between the container
+  and them (1.74); reads near `0x100000` go to the +Drive by sector, not to the
+  NOR. So `flash_limit` is `0x780000`. The bootstrap's MIDI upgrade erases
+  only the 64 KB sectors the received length needs, from `0x20000`.
+- **Protected.** The main OS carries a copy of the bootstrap: on 1.74 its
+  version halfword (`0x0602`) at `0x4028c768` and the 87,060-byte image at
+  `0x4028c770-0x402a1b84`; on 1.73 the same, 0x60 bytes earlier. At every
+  boot the OS entry (`0x40000592-0x400005d8`) compares that version with the
+  installed bootstrap's (flash `0x1fff8`), and only if the installed one is
+  lower calls BOOTSTRAP UPGRADE (`0x4011a7a4` on 1.74), which erases the boot
+  sectors and writes exactly that image to flash 0. The startup menu is inside
+  that image. Both copies and the compare are protected.
+- **Mods' area** `0x47BE0000-0x47C00000`, the MKII's. On a 1.74 unit
+  (8 November 2026), a canary filled `0x47B00000-0x47F00000` at boot and read
+  it back with no word changed, with the sample memory full, sound locks,
+  playback and a save. Not checked on 1.73. Linkable mods need a core there;
+  none ships here yet (Modwerk's MKI base is the MKII base's core-ar2 0.7 at
+  the MKI's addresses). core-ar2's ids and machine slots hold: stock's
+  parameter records are 0..468 and there are 53 machines, as on the MKII.
+- **The version field** is a build's own: a 1.74 build marked `MW01` booted
+  and its start-up screen showed `MW01`.
+- **On a unit (1.74):** builds that differ from stock only in the main OS
+  stream and the version field, flashed with Transfer over USB (the in-OS
+  upgrade), booted and played; the stock file brought the unit back over USB
+  and over MIDI DIN from the startup menu. Those builds were written by
+  Modwerk's ELE2 writer, which matches this one; a file written by elekloader
+  has not been flashed yet.
+- **1.73's patch sets.** gdeo607's 1.73 profile placed patch sets' code in
+  three zero runs (`cave`, `cave2`, `cave3`). They are not zero at those
+  addresses on 1.74, a profile has one set of areas for all its releases, and
+  `cave3`'s evidence was still open, so they are left out: mods link into the
+  DDR area instead.
 
 ## A new OS version of a supported device
 
