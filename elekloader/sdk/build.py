@@ -43,7 +43,7 @@ A site's "op" says how its new bytes are made:
 | `jsr`, `jmp` | `4eb9` or `4ef9` + target's address, nop-padded to the stock length (6 bytes or more) |
 | `keep2` | the stock opcode word + target's address (a `jsr.l` or `lea.l` whose operand you redirect) |
 | `ptr` | target's address (4 bytes of data, e.g. a vtable entry) |
-| `bytes` | `new`, given in hex; `"kind": "code"` if they are instructions |
+| `bytes` | `new`, given in hex; `"kind": "code"` if they are instructions; `"relocs"`, as `[offset, "abs32", "sym:NAME", addend]`, put your own symbols' addresses in them |
 | `dsp_jsr` | `jsr >target` over one two-word DSP instruction in a payload (6 bytes) |
 
 With a target, `"addend": N` (optional) adds N bytes to its address (N words
@@ -421,6 +421,12 @@ def build(mdir, stock_path, out_dir=None, extra=None):
         elif op == 'bytes':
             new = bytes.fromhex(s['new'])
             kind = s.get('kind', 'data')
+            rel_ = [list(r) for r in s.get('relocs', [])]      # [offset, type, target, addend]
+            for r in rel_:
+                if r[1] != 'abs32' or not 0 <= r[0] <= len(new) - 4 or \
+                        not str(r[2]).startswith(('sym:', 'abs')):
+                    raise BuildError('site 0x%08x: a relocation is [offset, "abs32", '
+                                     '"sym:NAME", addend] inside the new bytes' % addr)
         elif op == 'dsp_jsr':                # two DSP words of a payload: jsr >target
             if not any(at <= addr and addr + len(stockb) <= at + n
                        for at, n in dev.dsp_payloads.values()):
@@ -445,7 +451,7 @@ def build(mdir, stock_path, out_dir=None, extra=None):
                 raise BuildError('site 0x%08x: %s. A code site must cover whole stock '
                                  'instructions' % (addr, note))
         for _o, _t, tgt, _a in rel_:
-            if tgt[4:] not in symbols:
+            if tgt.startswith('sym:') and tgt[4:] not in symbols:
                 imports.add(tgt[4:])
         sites.append({'addr': '0x%08x' % addr, 'len': len(stockb), 'stock_sha256': sha(stockb),
                       'new': new.hex(), 'kind': kind, 'relocs': rel_})
