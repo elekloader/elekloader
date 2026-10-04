@@ -59,7 +59,15 @@ boot:
         move.w  %d0, DTMR0              | bus clock, free running
 4:
         .endif
+        .ifdef  VBR_FN2
+        | Model:Cycles and Model:Samples: the site is two calls, the SRAM
+        | copy (VBR_FN) and the .bss clear (VBR_FN2). The DDR image above
+        | lies in what the clear zeroes, so it is copied out first.
+        jsr     VBR_FN
+        jmp     VBR_FN2                 | its rts returns past the site
+        .else
         jmp     VBR_FN                  | its rts returns to 0x4000053e
+        .endif
 
 | ============================ .run ========================================
         .section .run, "ax"

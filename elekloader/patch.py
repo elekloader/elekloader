@@ -115,6 +115,8 @@ def build(stock_path, mod_paths, version=None, check_only=False, log=print):
         return None, man
     if version is None:
         vs = {m.doc.get('ele3_version') for m in mods} - {None}
+        if not vs and dev.version_optional:
+            vs = {stock.version}
         if len(vs) != 1:
             raise PatchError('give --version (%s): the mods name %s'
                              % ('%d characters' % dev.version_len if dev.container == 'ele3'
