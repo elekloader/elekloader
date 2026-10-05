@@ -43,6 +43,12 @@ platform with its own addresses.
   zeroed at reset; no decoded instruction names it on either model. The
   Digitakt mk1 has the same tail free (its profile, from a write watch).
   A mod claims what it uses as a region. No .fast area (no copy table).
+- SRAM 0x80001C5C-0x800074B4 and 0x8000CAC0-0x8000EAE0: CHORD's 30
+  wavetables (1028 B each), read through 31 pointers at 0x40118594 and by
+  nothing else (no other instruction names them; a write through a4 at
+  0x400a8906 stops at 0x8000CAC0). Free only for a mod that serves CHORD
+  its tables from elsewhere and points those pointers there (fast-audio).
+  Model:Samples has no CHORD: it has neither area.
 """
 from . import Device, Release
 
@@ -70,6 +76,8 @@ DEVICE = Device(
     areas={
         'ddr': (0x47E00000, 0x47E40000),          # above every buffer, below the boot stack
         'sram-tail': (0x8000F700, 0x80010000),    # zeroed at reset, named by no instruction
+        'sram-chord-a': (0x80001C5C, 0x800074B4),  # CHORD's tables: see above
+        'sram-chord-b': (0x8000CAC0, 0x8000EAE0),
     },
     ddr=(0x47E00000, 0x47E40000),
     recovery=('hold FUNC while powering on for the STARTUP MENU, press TRIG 4 (OS UPGRADE), '
