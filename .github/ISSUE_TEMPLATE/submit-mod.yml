@@ -1,0 +1,61 @@
+name: Submit a mod
+description: Add your mod's GitHub release to elekloader's shop. A check runs on the release and opens a pull request for a maintainer.
+title: "Submit a mod: "
+labels: [mod-submission]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Publish your mod's `.elemod` files in a GitHub release first (published, not a draft or a pre-release). When you submit this form, a check:
+        - downloads the release's files and checks each against the sha256 GitHub lists;
+        - reads each with elekloader: its id, version, device, OS, licence and requirements;
+        - comments here with what it found.
+
+        If files pass, it opens a pull request that adds them to the shop, and a maintainer reviews and merges it. Edit this issue to fix anything, and the check runs again.
+  - type: input
+    id: repo
+    attributes:
+      label: Repository
+      description: owner/name, as on GitHub (for example irpina/digislicer).
+      placeholder: owner/name
+    validations:
+      required: true
+  - type: input
+    id: tag
+    attributes:
+      label: Release tag
+      description: The release that carries the .elemod files, such as v1.0.
+      placeholder: v1.0
+    validations:
+      required: true
+  - type: input
+    id: summary
+    attributes:
+      label: Summary
+      description: One sentence the shop shows on the mod's card.
+    validations:
+      required: true
+  - type: textarea
+    id: on_unit
+    attributes:
+      label: Tested on a unit
+      description: What you have checked on real hardware, and what not yet. The shop shows it.
+  - type: input
+    id: license
+    attributes:
+      label: Licence, for files that name none
+      description: The repository's licence as an SPDX id (MIT, GPL-2.0-or-later, …). The shop passes a mod on only under a licence that allows it.
+  - type: textarea
+    id: files
+    attributes:
+      label: Only these files
+      description: The .elemod files to submit, one per line, if not all of the release's. The cores they need come with them.
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks
+      options:
+        - label: I wrote these mods, or their licence allows them to be passed on.
+          required: true
+        - label: The files carry no Elektron firmware, only the mod's own code (and the short stock fragments elekloader allows).
+          required: true

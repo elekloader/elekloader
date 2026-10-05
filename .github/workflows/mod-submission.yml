@@ -1,0 +1,106 @@
+# A mod submitted with the "Submit a mod" issue form (.github/ISSUE_TEMPLATE/submit-mod.yml):
+# 1. packaging/submit_mod.py checks the release:
+#    - it compares with the shop's current files, downloaded as pages.yml does;
+#    - it writes web/catalog.json when files pass.
+# 2. The result goes in a comment on the issue.
+# 3. When files pass, a pull request adds them to the shop, for a maintainer to review. Nothing reaches main without
+#    that review.
+#
+# The issue's text is untrusted: it reaches the script as a file, never the shell, and the script only reads the
+# release's files (nothing in them runs). Editing the issue runs the check again and updates the same pull request.
+#
+# The repository needs Settings > Actions > General > "Allow GitHub Actions to create and approve pull requests".
+name: Mod submission
+
+on:
+  issues:
+    types: [opened, edited, reopened]
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+concurrency:
+  group: mod-submission-${{ github.event.issue.number }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    if: >-
+      github.event.issue.state == 'open' &&
+      (contains(github.event.issue.labels.*.name, 'mod-submission') || startsWith(github.event.issue.title, 'Submit a mod'))
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      ISSUE: ${{ github.event.issue.number }}
+      BASE: ${{ github.event.repository.default_branch }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: The shop's files, to compare with
+        run: |
+          mkdir -p build/shop
+          python packaging/build_web.py --catalog-list web/catalog.json | while read -r how repo ref path; do
+            if [ "$how" = commit ]; then
+              out="build/shop/${path##*/}"
+              gh api "repos/$repo/contents/$path?ref=$ref" -H "Accept: application/vnd.github.raw" > "$out.part" \
+                && mv "$out.part" "$out" || rm -f "$out.part"
+            else
+              gh release download "$ref" --repo "$repo" --pattern "$path" --dir build/shop --clobber || true
+            fi
+          done
+      - name: Check the release
+        id: check
+        env:
+          BODY: ${{ github.event.issue.body }}
+        run: |
+          printf '%s' "$BODY" > "$RUNNER_TEMP/body.md"
+          set +e
+          python packaging/submit_mod.py --issue-body "$RUNNER_TEMP/body.md" --files-dir build/shop \
+            --report "$RUNNER_TEMP/report.md" --result "$RUNNER_TEMP/result.json"
+          echo "status=$?" >> "$GITHUB_OUTPUT"
+      - name: The pull request
+        id: pr
+        if: steps.check.outputs.status == '0'
+        run: |
+          branch="mod-submission/$ISSUE"
+          title=$(python -c "import json, os; r = json.load(open(os.environ['RUNNER_TEMP'] + '/result.json')); print('The shop: %s (%s %s)' % (', '.join(r['titles']) or 'a mod', r['repo'], r['tag']))")
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -B "$branch"
+          git add web/catalog.json
+          printf '%s\n\nFrom #%s, checked by packaging/submit_mod.py.\n' "$title" "$ISSUE" > "$RUNNER_TEMP/message.txt"
+          git commit -q -F "$RUNNER_TEMP/message.txt"
+          git push -q -f origin "$branch"
+          { printf 'Adds the files checked in #%s to the shop. Merging it puts them on the site at the next deploy.\n\n' "$ISSUE"
+            cat "$RUNNER_TEMP/report.md"
+            printf '\nCloses #%s\n' "$ISSUE"; } > "$RUNNER_TEMP/pr.md"
+          url=$(gh pr list --head "$branch" --state open --json url --jq '.[0].url // empty')
+          if [ -n "$url" ]; then
+            gh pr edit "$url" --title "$title" --body-file "$RUNNER_TEMP/pr.md" >/dev/null
+          else
+            url=$(gh pr create --base "$BASE" --head "$branch" --title "$title" --body-file "$RUNNER_TEMP/pr.md")
+          fi
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+      - name: The comment and labels
+        if: always() && steps.check.outputs.status != ''
+        env:
+          STATUS: ${{ steps.check.outputs.status }}
+          PR: ${{ steps.pr.outputs.url }}
+        run: |
+          gh label create mod-submission --color 1d76db --description "Submitted with the Submit a mod form" --force >/dev/null
+          gh label create needs-changes --color e99695 --description "The check found something to fix" --force >/dev/null
+          { cat "$RUNNER_TEMP/report.md"
+            if [ -n "$PR" ]; then printf '\nPull request: %s\n' "$PR"; fi; } > "$RUNNER_TEMP/comment.md"
+          gh issue comment "$ISSUE" --edit-last --body-file "$RUNNER_TEMP/comment.md" 2>/dev/null \
+            || gh issue comment "$ISSUE" --body-file "$RUNNER_TEMP/comment.md"
+          if [ "$STATUS" = 1 ]; then
+            gh issue edit "$ISSUE" --add-label mod-submission --add-label needs-changes >/dev/null
+          else
+            gh issue edit "$ISSUE" --add-label mod-submission --remove-label needs-changes >/dev/null
+          fi

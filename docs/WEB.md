@@ -166,6 +166,44 @@ the file's path, and its sha256. A shop mod that requires another shop mod
 machine needs machines) shows "Needs machines" with a + beside it, which adds the shop's for your OS and ticks it. A mod with a file for each OS version gets an item per file; the page
 shows them as one card (the same repository, mod, version and device).
 
+### Submitting a mod
+
+Authors don't need to edit the list themselves. The shop's **Submit a mod** button opens the
+[issue form](../.github/ISSUE_TEMPLATE/submit-mod.yml): the repository, the release tag, a
+one-sentence summary, what has been tested on a unit, the licence if the files name none, and
+optionally which of the release's files to submit.
+
+When the issue is opened (or edited), `.github/workflows/mod-submission.yml` runs
+`packaging/submit_mod.py` on it:
+- **The check.** It downloads the release's `.elemod` files and checks each against the sha256
+  GitHub lists. It reads each with elekloader (id, version, device, OS, licence, requirements) and
+  refuses a licence that doesn't allow the site to pass the file on (`SHOP_LICENCES`).
+- **The comparison.** It compares the files with the shop's, downloaded as the pages workflow does:
+  - **an update:** the same mod, device and OS from the same repository replaces the old entry, in
+    its place;
+  - **a clash:** another repository's file for a mod the shop lists is flagged and left out. A
+    release sometimes bundles someone else's mod; the submitter can name the file in "Only these
+    files" to add it anyway, and the review decides;
+  - **a core:** a core of the release goes in with the mods that need it, if the shop doesn't list
+    it.
+- **The answer.** It comments on the issue with a table of what it found, and labels the issue
+  `needs-changes` if nothing could be added. Editing the issue runs the check again.
+- **The pull request.** When files pass, it writes them into `web/catalog.json` (in the list's own
+  layout, which `tests/test_units.py` keeps exact) and opens a pull request from branch
+  `mod-submission/<issue>`. The pull request closes the issue when a maintainer merges it, and the
+  next deploy puts the mods on the site.
+
+Nothing reaches `main` without that review, and nothing in a submitted file runs. The issue's text
+reaches the script as a file, never the shell. The repository needs **Settings > Actions > General
+> Allow GitHub Actions to create and approve pull requests**.
+
+The same check runs locally, on a copy of the list:
+
+```bash
+python packaging/submit_mod.py --repo owner/name --tag v1.0 --summary "One sentence." \
+    --catalog /tmp/catalog.json --files-dir build/shop
+```
+
 ## What stays private, and how
 
 - **Nothing is sent anywhere.** No request ever carries your files. The

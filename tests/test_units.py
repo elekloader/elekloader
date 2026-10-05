@@ -1122,6 +1122,26 @@ def test_model_cycles_bulk_area():
         assert 'outside every free area' in str(e)
 
 
+def test_the_shop_list_keeps_its_layout():
+    """packaging/submit_mod.py rewrites web/catalog.json: it writes the file as it is laid out by hand."""
+    sys.path.insert(0, os.path.join(os.path.dirname(HERE), 'packaging'))
+    import submit_mod
+    with open(os.path.join(os.path.dirname(HERE), 'web', 'catalog.json'), encoding='utf-8') as fh:
+        text = fh.read()
+    assert submit_mod.render(json.loads(text)) == text
+
+
+def test_the_submit_a_mod_form_is_read():
+    sys.path.insert(0, os.path.join(os.path.dirname(HERE), 'packaging'))
+    import submit_mod
+    body = ('### Repository\r\n\r\nirpina/digitables\r\n\r\n### Release tag\r\n\r\nv1.3\r\n\r\n'
+            '### Summary\r\n\r\nPitch tables.\r\n\r\n### Tested on a unit\r\n\r\n_No response_\r\n\r\n'
+            '### Only these files\r\n\r\ndigitables-1.3.elemod\r\n\r\n### Checks\r\n\r\n- [X] I wrote these mods\r\n')
+    assert submit_mod.parse_issue(body) == {'repo': 'irpina/digitables', 'tag': 'v1.3', 'summary': 'Pitch tables.',
+                                            'on_unit': '', 'files': 'digitables-1.3.elemod'}
+    status, report = submit_mod.submit({'repo': 'not a repo', 'tag': 'v1', 'summary': ''})
+    assert status == 1 and len(report['errors']) == 2
+
 if __name__ == '__main__':
     import traceback
     ok = failed = 0
