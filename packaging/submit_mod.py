@@ -185,7 +185,9 @@ def submit(fields, catalog=CATALOG, files_dir=None):
             row.update(f)
             row['sha256'] = sha
             if only and a['name'] not in only and not f['core']:   # cores follow the mods that need them
-                row['result'] = 'left out: not in "Only these files"'
+                listed = by_name.get(a['name'])
+                row['result'] = ('already in the shop' if listed and listed['sha256'] == sha
+                                 else 'left out: not in "Only these files"')
                 continue
             if f['license'] not in SHOP_LICENCES:
                 row['result'] = ("refused: licence '%s' does not allow the site to pass it on" % f['license']
