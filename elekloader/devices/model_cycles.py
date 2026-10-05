@@ -38,8 +38,11 @@ platform with its own addresses.
 - Free at run time: DDR 0x47E00000-0x47E40000, 1.75 MB below the boot
   stack, the same window on Model:Samples (whose sample pool and buffer end
   at 0x46800000). Not yet watched at run time.
-- No .fast area: the SRAM is tight (the USB 16-channel mod takes the
-  second half's tail), so .fast code is refused.
+- SRAM 0x8000F700-0x80010000 (2304 B): past the data the reset copies into
+  the second half (to 0x8000F6F0 here, 0x8000D150 on Model:Samples), so
+  zeroed at reset; no decoded instruction names it on either model. The
+  Digitakt mk1 has the same tail free (its profile, from a write watch).
+  A mod claims what it uses as a region. No .fast area (no copy table).
 """
 from . import Device, Release
 
@@ -66,6 +69,7 @@ DEVICE = Device(
     version_optional=True,
     areas={
         'ddr': (0x47E00000, 0x47E40000),          # above every buffer, below the boot stack
+        'sram-tail': (0x8000F700, 0x80010000),    # zeroed at reset, named by no instruction
     },
     ddr=(0x47E00000, 0x47E40000),
     recovery=('hold FUNC while powering on for the STARTUP MENU, press TRIG 4 (OS UPGRADE), '
