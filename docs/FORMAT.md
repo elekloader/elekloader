@@ -174,7 +174,7 @@ and `core_projdata` (project data); 2.2 the event `ev_hold` and the table
 0x4009e098 in 1.44) and the table `core_param_override`; 3.2 the event
 `ev_midi_cc` (0x400ed96e, 0x400edbe2 in 1.44) and the table `core_audio`;
 3.3 the events `ev_key_leds` (0x40018332 in both) and `ev_render_params`
-(0x4009db80, 0x4009dba0 in 1.44) (docs/ADAPTING.md has each). The Digitakt II 1.17's core (core-dt2 1.0) has
+(0x4009db80, 0x4009dba0 in 1.44) ; 3.4 `core_audio`'s insert flag, with no new site (docs/ADAPTING.md has each). The Digitakt II 1.17's core (core-dt2 1.0) has
 `ev_tick`, `ev_draw`, `ev_key`, `ev_enc` and `ev_settings`, at 0x40032ad4,
 0x40032b3a, 0x40033d94, 0x40033dde and 0x400a5eac, a Digitakt II-only
 `ev_personalize` (0x4009e2a2, the PERSONALIZE menu, `void f(menu)`), and no

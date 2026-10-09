@@ -6,7 +6,7 @@
 | one that uses a 3.1 name (fw_voices, core_sound_set, ...) needs 3.1, a
 | 3.2 one (fw_tempo, core_audio, ev_midi_cc) 3.2, and a 3.3 one
 | (ev_key_leds, ev_render_params, fw_memcpy, fw_textbox, fw_pattern,
-| __ashldi3, ...) 3.3.
+| __ashldi3, ...) 3.3, and CORE_AUDIO_INSERT 3.4.
 | The SDK puts this folder on the include path:
 |
 |       .include "digitone-mk1/core3.inc"
@@ -30,6 +30,7 @@
         .equ    CORE_AUDIO_RENDER, 4             | render(out, in), each block
         .equ    CORE_AUDIO_FLAGS,  8
         .equ    CORE_AUDIO_MUTE_VOICES, 1        | skip the voices' filters too
+        .equ    CORE_AUDIO_INSERT, 2             | 3.3: after the master stage, on its output
         .equ    CORE_MIDI_CC_AUTO, 1             | ev_midi_cc's flags: on the auto channel
 | 3.3: ev_render_params' words
         .equ    CORE_PARAMS_STRIDE, 158          | words + 158 v + 2 k: slot k of voice v (8.8)

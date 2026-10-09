@@ -105,6 +105,7 @@ typedef void (*ev_render_voices_fn)(int32_t *voices);
 extern volatile int32_t fw_tempo;               /* 3.2: the tempo x 120 (87.0 BPM: 10440), as the sequencer
                                                    runs it; the timeline moves twice this every block */
 #define CORE_AUDIO_MUTE_VOICES  1u
+#define CORE_AUDIO_INSERT       2u      /* 3.3 */
 /* A mod that wants the whole output contributes a pointer to one of these to the table core_audio and
  * may have its buffers in the profile's bulk area (a region it claims). A build may hold several such
  * mods: each block, before the voices' filters, core takes the first record whose on is set (the table's
@@ -116,11 +117,17 @@ extern volatile int32_t fw_tempo;               /* 3.2: the tempo x 120 (87.0 BP
  * renders them, and the voice mix still runs: skipping it would leave a note that started meanwhile
  * silent after the owner lets go, until its next note). Interrupt level, inside the render: keep it
  * short, and keep MACSR as it was if the EMAC is used. Set and clear on from the UI task; it takes effect
- * at the next block. */
+ * at the next block.
+ * With CORE_AUDIO_INSERT (3.3) the master stage runs as stock, and in is what it wrote to the output
+ * (the voices, the inputs as the mixer has them, chorus, delay, reverb, the master drive), in Q1.31: an
+ * effect on everything the Digitone plays. What render returns goes to the codec and to USB's main pair
+ * in its place; the rest of the USB block and a Keys' second buffer stay the stage's. The voices always
+ * play then (CORE_AUDIO_MUTE_VOICES is ignored), and the stock render's own share of the block stays:
+ * an insert has what is left. A mod may switch its flags from the UI task; core reads them each block. */
 struct core_audio_owner {
     volatile int32_t on;            /* +0 nonzero: this mod has the output */
     void (*render)(int32_t *out, const int32_t *in);    /* +4 each block it has it */
-    uint32_t flags;                 /* +8 CORE_AUDIO_MUTE_VOICES */
+    uint32_t flags;                 /* +8 CORE_AUDIO_MUTE_VOICES, CORE_AUDIO_INSERT */
 } __attribute__((aligned(4)));
 
 /* ---- core-dn1's tables (core 2.1-2.3): what a mod contributes points to one of these ------------ */

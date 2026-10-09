@@ -200,6 +200,8 @@ below was found again in 1.17.
   From 3.3 (`leds.s`, `block.s`, `fw.s`) it has the key LEDs and each block's
   sound parameters, and exports more firmware locations: the C library, the
   text box, the transport, the active pattern and the project.
+  From 3.4 (`audio.s`) it has insert audio: an owner on the master stage's
+  output.
   1.44 has all of these, at its own addresses (`ports`).
 - **The DDR area** is the Digitakt's, `0x47BE0000-0x47C00000`:
   - The OS clears `0x4028E000-0x43229E60` at start, and its stack runs down

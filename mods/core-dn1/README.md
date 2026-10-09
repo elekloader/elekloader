@@ -137,18 +137,27 @@ the Digitone needs it. On its own it changes nothing the unit does.
   `fw_pattern` and `fw_project`, with the pattern's layout in core3.h
   (`FW_TRACK`, `FW_STEP`, `FW_TRACK_NOTE`, ...). These are exports only:
   they add no code, sites or tables.
+- **From 3.4, insert audio** ([audio.s](audio.s); docs/ADAPTING.md,
+  "Insert audio"): an owner with `CORE_AUDIO_INSERT` in its flags gets
+  what the master stage made instead of the input: the stage runs as
+  stock, and its output goes through the owner's `render` on its way to
+  the codec and USB's main pair. An effect on everything the Digitone
+  plays, which may stay on under the Digitone's own pages. No new site:
+  3.4 is 3.3 with that flag. [examples/dn-tremolo](../../examples/dn-tremolo)
+  is the smallest such mod.
 - **OS 1.44:** every site has its port (`ports` in mod.json): the same
   code, moved, and RAM 0x1000 further on.
 
 Build it with the SDK (it needs m68k binutils):
 
 ```bash
-python -m elekloader.sdk.build mods/core-dn1 --stock Digitone_and_Digitone_Keys_OS1.43.syx   # out/core-3.2.elemod
-python -m elekloader.sdk.build mods/core-dn1 --stock Digitone_and_Digitone_Keys_OS1.44.syx   # out/core-3.2-os1.44.elemod
-python -m elekloader.lint mods/core-dn1/out/core-3.2-os1.44.elemod --stock Digitone_and_Digitone_Keys_OS1.44.syx
+python -m elekloader.sdk.build mods/core-dn1 --stock Digitone_and_Digitone_Keys_OS1.43.syx   # out/core-3.3.elemod
+python -m elekloader.sdk.build mods/core-dn1 --stock Digitone_and_Digitone_Keys_OS1.44.syx   # out/core-3.3-os1.44.elemod
+python -m elekloader.lint mods/core-dn1/out/core-3.3-os1.44.elemod --stock Digitone_and_Digitone_Keys_OS1.44.syx
 ```
 
-A release names them `core-dn1-3.2.elemod` and `core-dn1-3.2-os1.44.elemod`
+A release names them `core-dn1-3.3.elemod` and `core-dn1-3.3-os1.44.elemod`.
+3.3 is not released yet;
 3.2's are on the [core-dn1-v3.2](https://github.com/irpina/elekloader/releases/tag/core-dn1-v3.2) pre-release
 (3.0 and 3.1 were not released), and
 2.3's on the [core-dn1-v2.3](https://github.com/irpina/elekloader/releases/tag/core-dn1-v2.3) pre-release.
@@ -208,3 +217,14 @@ or by every piece of code that names it (data), and the eleven library
 routines were called through the values the built cores export, with
 random arguments on each version's image, against Python: every call
 agreed.
+3.4 was checked the same way on 1.43 and 1.44: every stage passes, every
+screen is identical, and the audio is identical up to PLAY. With TREMOLO
+([../../examples/dn-tremolo](../../examples/dn-tremolo)) on while the factory
+pattern plays, the pattern comes out with a 4 Hz wobble (its level's 4 Hz
+part 0.26 of its mean, against 0.008 stock), and picking TREMOLO again gives
+the stock sound back; on the cycle clock, the stock master stage takes
+53,240 cycles of a block, core's conversion in and out 602 and TREMOLO
+926.
+`tests/test_sdk.py` checks that it keeps all of 3.3: the
+same sites, tables, contributions and exports, with only audio.s's code
+changed.
