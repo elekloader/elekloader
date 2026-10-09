@@ -457,7 +457,7 @@ FW_DN = ['fw_active_track', 'fw_blit', 'fw_ev_alloc', 'fw_ev_free', 'fw_ev_queue
          'fw_tempo', 'fw_font_label', 'fw_font_title', 'fw_voice_len', 'fw_voice_params', 'fw_voice_pitch', 'fw_voice_track', 'fw_voices',
          'fw_memcpy', 'fw_memset', 'fw_memchr', 'fw_strcmp', 'fw_strncmp', 'fw_strchr', 'fw_strncpy', 'fw_crc32',
          '__ashldi3', '__lshrdi3', '__ashrdi3', 'fw_textbox', 'fw_transport', 'fw_pattern', 'fw_project']
-CORE_DN3 = ['core_key_leds', 'core_menu_open', 'core_midi_cc', 'core_param_short', 'core_param_ui_make',
+CORE_DN3 = ['core_audio_caps', 'core_key_leds', 'core_menu_open', 'core_midi_cc', 'core_param_short', 'core_param_ui_make',
             'core_render_master', 'core_render_params', 'core_render_voices', 'core_sound_set',
             'core_voices_gate']
 
@@ -564,15 +564,18 @@ CORE_DN32 = os.environ.get('ELEKLOADER_CORE_DN1_32', '')
 
 def check_dn_32(old_path, new_path):
     """core-dn1 3.3 is 3.2 with insert audio: the same sites, tables,
-    contributions, resources and exports, every symbol of 3.2's in the same
-    section; only audio.s's code grows (CORE_AUDIO_INSERT, a flag)."""
+    contributions and resources, 3.2's exports and core_audio_caps, every
+    symbol of 3.2's in the same section; only audio.s's code grows
+    (CORE_AUDIO_INSERT, a flag)."""
     with open(old_path) as fh:
         old = json.load(fh)
     with open(new_path) as fh:
         new = json.load(fh)
     assert old['version'] == '3.2' and new['version'] == '3.3'
-    for k in ('target', 'contribute', 'resources', 'collections', 'exports'):
+    for k in ('target', 'contribute', 'resources', 'collections'):
         assert new[k] == old[k], k
+    assert sorted(set(new['exports']) - set(old['exports'])) == ['core_audio_caps']
+    assert set(old['exports']) <= set(new['exports'])
 
     def what(d):
         return [(s['addr'], s['len'], s['kind'], s['new'], s.get('relocs')) for s in d['sites']]
