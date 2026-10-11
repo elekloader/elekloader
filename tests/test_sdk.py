@@ -734,21 +734,21 @@ def test_digicosm_builds_and_links():
         dpath, d = build.build(os.path.join(ROOT, 'mods', 'digicosm-dn1'), DN_STOCK, tmp)
         tpath, _t = build.build(os.path.join(ROOT, 'examples', 'dn-thru'), DN_STOCK, tmp)
         mpath, _m = build.build(os.path.join(ROOT, 'mods', 'machines-dn1'), DN_STOCK, tmp)
-        assert os.path.basename(dpath) == 'digicosm-0.1.elemod'
+        assert os.path.basename(dpath) == 'digicosm-0.1.1.elemod'
         assert d.needs_core == '3.2' and not d.sites
         assert set(d.imports) == {'fw_fillrect', 'fw_font5', 'fw_font_label', 'fw_font_title', 'fw_framerect',
                                   'fw_tempo', 'fw_textf', 'fw_timeline'}, d.imports
         assert [(g['area'], g['lo'], g['hi']) for g in d.regions] == [('bulk', 0x44000000, 0x45B00000)]
         rc, r = lint_json(dpath, '--stock', DN_STOCK, '--with', core3, '--with', tpath, '--with', mpath)
         assert rc == 0, r['problems']
-        assert r['link']['order'] == ['core ' + DN_VERSION, 'digicosm 0.1', 'dnthru 1.0', 'machines 0.1']
+        assert r['link']['order'] == ['core ' + DN_VERSION, 'digicosm 0.1.1', 'dnthru 1.0', 'machines 0.1']
         if CORE_DN23 and os.path.exists(CORE_DN23):
             rc, r = lint_json(dpath, '--stock', DN_STOCK, '--with', CORE_DN23)
-            assert rc == 1 and 'digicosm 0.1 needs core 3.2 or newer, and this build has core 2.3' \
+            assert rc == 1 and 'digicosm 0.1.1 needs core 3.2 or newer, and this build has core 2.3' \
                 in r['problems'], r['problems']
         if DN_STOCK_144 and os.path.exists(DN_STOCK_144):
             path4, d4 = build.build(os.path.join(ROOT, 'mods', 'digicosm-dn1'), DN_STOCK_144, tmp)
-            assert path4.endswith('digicosm-0.1-os1.44.elemod')
+            assert path4.endswith('digicosm-0.1.1-os1.44.elemod')
             images = []
             for st, x in ((DN_STOCK, d), (DN_STOCK_144, d4)):
                 s, dv, _rel = formats.load(st)
@@ -783,7 +783,8 @@ def test_digichroma_builds_and_links():
         rc, r = lint_json(hpath, '--stock', DN_STOCK, '--with', core3, '--with', dpath, '--with', tpath,
                           '--with', mpath)
         assert rc == 0, r['problems']
-        assert r['link']['order'] == ['core ' + DN_VERSION, 'digichroma 0.1', 'digicosm 0.1', 'dnthru 1.0', 'machines 0.1']
+        assert r['link']['order'] == ['core ' + DN_VERSION, 'digichroma 0.1', 'digicosm 0.1.1', 'dnthru 1.0',
+                                       'machines 0.1']
         if CORE_DN23 and os.path.exists(CORE_DN23):
             rc, r = lint_json(hpath, '--stock', DN_STOCK, '--with', CORE_DN23)
             assert rc == 1 and 'digichroma 0.1 needs core 3.2 or newer, and this build has core 2.3' \

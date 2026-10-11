@@ -133,8 +133,8 @@ core-dn1's render; the UI (`ui.c`) runs in the Digitone's UI task.
 With the SDK and a stock OS file:
 
 ```bash
-python -m elekloader.sdk.build mods/digicosm-dn1 --stock Digitone_and_Digitone_Keys_OS1.43.syx   # out/digicosm-0.1.elemod
-python -m elekloader.sdk.build mods/digicosm-dn1 --stock Digitone_and_Digitone_Keys_OS1.44.syx   # out/digicosm-0.1-os1.44.elemod
+python -m elekloader.sdk.build mods/digicosm-dn1 --stock Digitone_and_Digitone_Keys_OS1.43.syx   # out/digicosm-0.1.1.elemod
+python -m elekloader.sdk.build mods/digicosm-dn1 --stock Digitone_and_Digitone_Keys_OS1.44.syx   # out/digicosm-0.1.1-os1.44.elemod
 ```
 
 It names no firmware address, so its 1.44 port is empty. It needs core-dn1
@@ -168,6 +168,13 @@ It runs on a Digitone mk1, with core-dn1 3.2. In digikit's emulator, OS
   fifth gone), reverse, stop with its fade, and erase.
 - **Hold.** MOSAIC and HAZE keep sounding with the input silent while Hold
   is on, and fall silent once it is off.
+- **Mono input (0.1.1).** With SETUP's INPUT on MONO and white noise on the
+  left input only, the dry and the bypassed signal come out of both sides
+  at the same level (in 0.1 they stayed on the left), and every engine's
+  effect is centred: over 5 s, right against left between 0.87 and 1.07,
+  except BLOCKS and INTERRUPT, whose random placements average out over
+  longer. MOSAIC, TUNNEL, PATTERN and WARP used to lean to one side (down
+  to 0.62) and now spread their voices evenly.
 - **Presets.** A page saved as preset 5 from SETUP comes back exactly with
   FUNC + trig 5 after the engine, variation and knobs have changed; an
   empty preset changes nothing. The page and its presets fit in the
