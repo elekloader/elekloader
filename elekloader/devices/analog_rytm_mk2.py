@@ -35,8 +35,11 @@ starts from) in Ghidra and on the stock images. Proof-of-concept profile.
   0x4198911A, and erase and write there through the same routines. So the
   container must end below 0x300000: 2.5 MB from 0x80000, a whole number of
   256 KB units. Stock's ends at 0x1EA2F0; elekloader's repack of the stock
-  main OS, which compresses less than Elektron's, at 0x20A5D0. The
-  in-OS upgrade's own erase range is not traced yet.
+  main OS, which compresses less than Elektron's, at 0x20A5D0. The in-OS
+  upgrade (0x4009F3A0) erases from 0x80000 only as far as the container it
+  received reaches.
+- No protected range: the main OS holds no copy of the bootstrap, and
+  nothing in it writes its own bytes to flash (docs/DEVICES.md).
 - The OS clears 0x402CE000-0x42FBB250 at start (0x4000083A, the
   Digitakt's routine at 0x400004B2, which clears 0x40253000-0x439D1000)
   and runs its stack down from 0x48000000.

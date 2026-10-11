@@ -68,7 +68,8 @@ branch):
   `ev_render_out`, `ev_key` and `ev_enc` counted every key and encoder event
   while the unit acted on each as stock does, and `ev_settings` listed the
   HOOK TEST row through `core_additem`, which counted each selection while
-  the other rows worked as stock.
+  the other rows worked as stock. The same through a short session with a
+  pattern playing into the delay and reverb.
 
 Statically, against the stock image (python, no toolchain): every site's
 stock bytes, and that each covers whole instructions.
@@ -76,7 +77,7 @@ stock bytes, and that each covers whole instructions.
 ## Building
 
 ```bash
-export ELEKLOADER_CROSS=m68k-elf-     # or install m68k-linux-gnu binutils and gcc
+# needs m68k-linux-gnu binutils and gcc (or set ELEKLOADER_CROSS to another prefix)
 python -m elekloader.sdk.build mods/core-ar2 --stock Analog-Rytm_MKII_OS1.73.syx
 python -m elekloader.sdk.build examples/hello-marker-ar2 --stock Analog-Rytm_MKII_OS1.73.syx
 python -m elekloader.lint examples/hello-marker-ar2/out/hello-marker-1.0.elemod \

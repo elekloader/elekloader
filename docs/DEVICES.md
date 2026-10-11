@@ -313,19 +313,19 @@ Digitakt's in the places elekloader depends on.
   `0x380000`-`0x400000`, and a second one of its own at `0x300000`-`0x380000`
   (a 0x1B072-byte block at `0x300000` or `0x340000`), read, written and erased
   through the same routines. elekloader's repack of stock ends at `0x20A5D0`
-  (Elektron's at `0x1EA2F0`). The in-OS upgrade's erase path is not traced
-  yet.
+  (Elektron's at `0x1EA2F0`). The in-OS upgrade erases from `0x80000`, a
+  sector at a time, only as far as the container it received reaches.
 - **No protected range.** The main OS holds no copy of the bootstrap: no 512
   bytes of section 2's first 0x7D94 are in it (after them come zero-padded
-  tables), what they share is
-  pieces of tables and data, and the packed section shares nothing. Every call into
-  the OS's SPI NOR routines (program 0x40136fae; erase 0x4013702a and five
-  others) is from one of: the stores at 0x300000 and 0x380000; the in-OS
-  upgrade (0x4009f3a0: erase and write from 0x80000, from what it
-  received); the factory console (0x4013a068: "READY FOR BOOTSTRAP" writes
-  a received bootstrap at 0x40000, "READY FOR OS" a received container from
-  0x80000); and an erase of 0x400000-0xc00000 behind a marker. None writes
-  bytes of the main OS image. tests/test_rytm.py checks both.
+  tables), what they share is pieces of tables and data, and the packed
+  section shares nothing. Every call into the OS's SPI NOR routines (program
+  0x40136fae; erase 0x4013702a and five others) is from one of: the stores
+  at 0x300000 and 0x380000; the in-OS upgrade (0x4009f3a0: erase and write
+  from 0x80000, from what it received); the factory console (0x4013a068:
+  "READY FOR BOOTSTRAP" writes a received bootstrap at 0x40000, "READY FOR
+  OS" a received container from 0x80000); and an erase of 0x400000-0xc00000
+  behind a marker. None writes bytes of the main OS image.
+  tests/test_rytm.py checks both.
 - **Mods' area.** `0x47BE0000`-`0x47C00000`, the Digitakt mk1's. Checked on a
   unit: filled from the boot site at power-on, no word of it changed through a
   long session of playback, sampling, effects, MIDI and Overbridge, or after a
