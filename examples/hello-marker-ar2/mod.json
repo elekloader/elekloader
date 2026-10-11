@@ -1,0 +1,16 @@
+{
+ "id": "hello-marker",
+ "version": "1.0",
+ "title": "Hello marker",
+ "category": "Examples",
+ "license": "GPL-2.0-or-later",
+ "description": "Draws a small white square in a corner of every screen: the smallest mod that runs code on the Analog Rytm MKII. A template to start from (docs/ADAPTING.md).",
+ "device": "analog-rytm-mk2",
+ "os": "1.73",
+ "sources": ["../hello-marker/hello.c"],
+ "cflags": ["-DFILLRECT_AT=0x400706ba"],
+ "subscribe": [
+  {"event": "ev_draw", "fn": "hello_draw", "order": 60}
+ ],
+ "requires": ["core"]
+}

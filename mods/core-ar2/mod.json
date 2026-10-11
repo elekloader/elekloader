@@ -1,0 +1,34 @@
+{
+ "id": "core", "version": "0.1",
+ "license": "GPL-2.0-or-later",
+ "title": "core", "category": "Framework", "author": "irpina, ConnorWay32",
+ "description": "The boot copier and the hook bus for the Analog Rytm MKII: every other mod needs it. A proof of concept: the Digitakt mk1's core.s, settings.s and render.s with the Rytm's addresses. On its own it changes nothing the unit does.",
+ "device": "analog-rytm-mk2", "os": "1.73",
+ "sources": ["../core/core.s", "../core/settings.s", "../core/render.s"],
+ "defsym": {
+  "DRAWALL": "0x40079086",
+  "KEYDISP": "0x400a02ca",
+  "ENCDISP": "0x400a0364",
+  "OP_NEW": "0x400829d4",
+  "ITEM_CTOR": "0x40072f50",
+  "MENU_ADD": "0x40072786",
+  "FN_MGR": "0x40193f4e",
+  "DTMR0": "0xFC070000",
+  "PPMSR0": "0xFC04002D",
+  "VBR_FN": "0x400014cc",
+  "SETTINGS_RET": "0x400db884",
+  "RENDER_FRAME": "0xb4"
+ },
+ "sites": [
+  {"addr": "0x400008c0", "stock": "4eb9400014cc", "op": "jsr", "target": "boot"},
+  {"addr": "0x400a2bee", "stock": "4eb940079050", "op": "jsr", "target": "core_tick"},
+  {"addr": "0x400a2c56", "stock": "4eb940079086", "op": "jsr", "target": "core_draw"},
+  {"addr": "0x400a47cc", "stock": "4eb9400a02ca", "op": "jsr", "target": "core_key"},
+  {"addr": "0x400a4816", "stock": "4eb9400a0364", "op": "jsr", "target": "core_enc"},
+  {"addr": "0x400db87e", "stock": "205248780002", "op": "jmp", "target": "core_settings"},
+  {"addr": "0x4011fb02", "stock": "203c7fffffff", "op": "jsr", "target": "core_render_in"},
+  {"addr": "0x40121656", "stock": "4cee3fffff4c", "op": "jsr", "target": "core_render_out"}
+ ],
+ "collections": {"ev_tick": 4, "ev_draw": 4, "ev_key": 4, "ev_enc": 4, "ev_settings": 4, "ev_render_in": 4, "ev_render_out": 4},
+ "resources": {"names": ["timer:DTIM0"]}
+}

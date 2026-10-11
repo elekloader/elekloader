@@ -36,6 +36,7 @@ python -m elekloader.patch --stock <stock.syx> --mod <core.elemod> --mod <mod.el
 | `elekloader/lint.py`, `elekloader/mkmod.py`, `elekloader/sdk/` | tools for mod authors; `sdk/octabam.py` converts octabam's modules |
 | `elekloader/codec/`, `elekloader/isa/` | code from digikit (GPL-2.0-or-later): change it only with a round-trip test |
 | `mods/core/`, `mods/core-dn1/`, `mods/core-dt2/` | the core mod (the hook bus every format-2 mod needs): one `core.s` (with `settings.s`, `render.s` and `fast.s` where the device uses them), each device's addresses and sites in its `mod.json`, each further OS version's in its `ports`. `elekloader/sdk/include/digitone-mk1/core3.h` and `core3.inc` describe core-dn1 3.0's exports and tables to mods |
+| `mods/core-ar2/` | the Analog Rytm MKII's core, a proof of concept: `core.s`, `settings.s` and `render.s` with the Rytm's addresses |
 | `mods/core-ot/` | the Octatrack's core: its RAM reserve (from 0.3 sized to the mods by the linker: the profile's `reserve`) and `.boot`, and from 0.2 its own hook bus (`bus.s`, with the draw site's gate in `gate.s`) |
 | `mods/dspbus-ot/` | the Octatrack's optional DSP bus: frees SPATIALIZER's DSP words for mods' DSP code and declares `ev_dsp_rx` (data sites only, no code) |
 | `mods/machine-pages/` | the Digitakt mk1's machine page companion (core 3.0): owns the SRC page's, the LFO page's and the render point's sites once, and draws every added machine's page from its descriptor's tail; `elekloader/sdk/include/digitakt-mk1/core3.h` and `core3.inc` describe it to mods |
@@ -57,6 +58,7 @@ ELEKLOADER_OT_SYX=... ELEKLOADER_OT_BIN=... python tests/test_octatrack.py
 ELEKLOADER_OT_SYX=... ELEKLOADER_OCTABAM=... python tests/test_octabam.py
 ELEKLOADER_DN_SYX=... python tests/test_digitone.py
 ELEKLOADER_DT2_SYX=... python tests/test_digitakt2.py
+ELEKLOADER_AR_SYX=... python tests/test_rytm.py
 ELEKLOADER_RELEASES=<folder of stock files> python tests/test_releases.py   # every known release, and the cores for it
 ELEKLOADER_STOCK=... ELEKLOADER_OT_SYX=... ELEKLOADER_MODS=... python tests/test_gui.py   # the window, hidden (Tk)
 python packaging/build_web.py --pyodide pyodide-core-<v>.tar.bz2 --core core-*.elemod --out build/site

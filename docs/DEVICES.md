@@ -288,6 +288,42 @@ below was found again in 1.17.
     (`on_unit` in web/catalog.json).
   - Not yet run on an MKI.
 
+## The Analog Rytm MKII (1.73)
+
+A proof of concept: the profile (`analog_rytm_mk2.py`, where each fact's
+evidence is) and a core (mods/core-ar2) built from the Digitakt mk1's sources.
+The Rytm runs on the Digitakt mk1's platform, and its main OS reads like the
+Digitakt's in the places elekloader depends on.
+
+- **Files.** The Digitakt mk1's family (ELE3, the same SysEx transport),
+  device byte `0x0C`, no trailer. Five sections: 5, 2 (the bootstrap, with the
+  STARTUP menu), 1 (an FPGA bitstream), 3 (MAIN OS) and 8 (the ARM image the
+  Digitakt mk1 and Digitone mk1 carry too, byte for byte). The writer
+  reproduces the stock file byte for byte from its own main OS stream.
+- **Staging.** The bootstrap's loader (`0x80000590`) is the Digitakt mk1's call
+  for call: section 3 from flash at its container offset + `0x80000`, to
+  `0x40200000`, unpacked in place to `0x40000400` by the same depacker. Stock's
+  in-place gap is 401,261 bytes; elekloader's repack of stock, 533,073.
+- **Flash.** `flash_limit` is `0x300000`. The OS keeps the Digitakt's store at
+  `0x380000`-`0x400000`, and a second one of its own at `0x300000`-`0x380000`
+  (a 0x1B072-byte block at `0x300000` or `0x340000`), read, written and erased
+  through the same routines. elekloader's repack of stock ends at `0x20A5D0`
+  (Elektron's at `0x1EA2F0`). The in-OS upgrade's erase path is not traced
+  yet.
+- **No protected range.** The main OS has neither the bootstrap's code nor its
+  STARTUP strings, so there is no copy of the bootstrap for it to re-flash
+  that we could find. Worth confirming against the in-OS upgrade before
+  this is relied on.
+- **Mods' area.** `0x47BE0000`-`0x47C00000`, the Digitakt mk1's. Checked on a
+  unit: filled from the boot site at power-on, no word of it changed through a
+  long session of playback, sampling, effects, MIDI and Overbridge, or after a
+  power cycle.
+- **Recovery.** The STARTUP menu (FUNC at power-on), TRIG 4 for OS UPGRADE, the
+  stock file over MIDI DIN. Checked on a unit with stock 1.73.
+- **Not done.** The TypeScript engine (js/) does not know the device yet, so
+  the web page and the kit cannot build for it; the window and the command
+  line can.
+
 ## What a new device needs besides its profile
 
 - **Sealed files.** `trailer='hmac'` with `hmac_key_from` (the Digitakt
