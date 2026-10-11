@@ -109,6 +109,52 @@ def test_core_ar2_sites():
     assert int(d['SETTINGS_RET'], 16) == 0x400db87e + 6
 
 
+def test_no_copy_of_the_bootstrap_in_the_main_os():
+    """The main OS holds no copy of the bootstrap (section 2). No 512 bytes of
+    its first 0x7d94 (zero-padded tables and data follow them) are in
+    the main OS, no 2 KB anywhere in it with more than 32 distinct byte
+    values is, and its stored (packed) bytes share nothing. What the two do
+    share is pieces of tables and data."""
+    _r, st, img = stock()
+    boot, packed = st.section(2), st.stored[2]
+    for o in range(0, 0x7d94 - 512, 64):
+        assert boot[o:o + 512] not in img, hex(o)
+    for o in range(0, len(boot) - 2048, 64):
+        w = boot[o:o + 2048]
+        assert len(set(w)) <= 32 or w not in img, hex(o)
+    for o in range(0, len(packed) - 32, 32):
+        assert packed[o:o + 32] not in img, hex(o)
+
+
+def test_every_flash_write_and_erase_in_the_os_is_known():
+    """The SPI NOR routines (program 0x40136fae; erase 0x4013702a, 0x40136bae,
+    0x40136cd0, 0x40136aaa, 0x40136e88, 0x401366d6) are reached only from:
+    the store at 0x300000 (0x400fac00-0x400fb200), the settings store at
+    0x380000 (0x40139100-0x40139b10), the factory console (0x4013a068-
+    0x4013bf98: "READY FOR BOOTSTRAP" writes a received bootstrap at
+    0x40000, "READY FOR OS" a received container from 0x80000), the in-OS
+    upgrade (0x4009f3a0-0x4009f460: erase and write from 0x80000), and an
+    erase of 0x400000, 0x800000 and 0xc00000 (0x401229f0-0x40122a30). Each
+    writes what it received or a store, never bytes of the main OS image:
+    nothing in it is a bootstrap the OS could re-flash, so no protected range."""
+    _r, _s, img = stock()
+    known = [(0x400fac00, 0x400fb200), (0x40139100, 0x40139b10), (0x4013a068, 0x4013bf98),
+             (0x4009f3a0, 0x4009f460), (0x401229f0, 0x40122a30)]
+    for routine in (0x40136fae, 0x4013702a, 0x40136bae, 0x40136cd0, 0x40136aaa, 0x40136e88, 0x401366d6):
+        word, i, refs = routine.to_bytes(4, 'big'), 0, []
+        while True:
+            i = img.find(word, i)
+            if i < 0:
+                break
+            refs.append(DEV.main_load + i - 2)
+            i += 2
+        assert refs, hex(routine)
+        for r in refs:
+            assert any(lo <= r < hi for lo, hi in known), (hex(routine), hex(r))
+    assert at(img, 0x4009f3c2, 6) == bytes.fromhex('267c00080000')        # a3 = 0x80000
+    assert at(img, 0x4013bea0, 6) == bytes.fromhex('2f3c00040000')        # the bootstrap at 0x40000
+
+
 if __name__ == '__main__':
     import traceback
     ok = skipped = failed = 0
