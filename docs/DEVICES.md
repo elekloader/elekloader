@@ -328,7 +328,9 @@ Digitakt's in the places elekloader depends on.
 - **The TypeScript engine** (js/) has the profile too (`ANALOG_RYTM_MK2`). Its
   ColdFire decoder agrees with the Python's at every even offset of the 1.73
   main OS (`tools/isa_parity`), and `tools/parity.ts` takes the Rytm's cases
-  (`stocks.ar173`, `dirs.ar`). The web page's list of where to download each
+  (`stocks.ar173`, `dirs.ar`). With core-ar2 0.1, hello-marker-ar2 and
+  hooks-check-ar2 built for 1.73, its nine cases (four builds, a check, three
+  refusals) give the same files, messages and checks as the Python (11 Oct 2026). The web page's list of where to download each
   stock OS does not name the Rytm yet.
 
 ## What a new device needs besides its profile
