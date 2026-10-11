@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 """Model:Cycles: an NXP MCF54415 (ColdFire V4m, EMAC, no FPU); the main OS
-runs from DDR at 0x40000400. Measured on OS 1.13 (model-cycles-os research,
-work/FINDINGS.md there); Model:Samples (model_samples.py) is the same
-platform with its own addresses.
+runs from DDR at 0x40000400. Measured on OS 1.13 (static analysis of the
+image, an emulator, and both units); Model:Samples (model_samples.py) is the
+same platform with its own addresses.
 
 - The container: sections 5 (the build string), 2 (the bootstrap, run at
   0x80000400 in SRAM; its `dest` is 0x04000000), 3 (MAIN OS) and 4 (the
@@ -37,7 +37,7 @@ platform with its own addresses.
   the boot stack, cached or uncached.
 - Free at run time: DDR 0x47E00000-0x47E40000, 1.75 MB below the boot
   stack, the same window on Model:Samples (whose sample pool and buffer end
-  at 0x46800000). Not yet watched at run time.
+  at 0x46800000). Mods run from it on both units.
 - SRAM 0x8000F700-0x80010000 (2304 B): past the data the reset copies into
   the second half (to 0x8000F6F0 here, 0x8000D150 on Model:Samples), so
   zeroed at reset; no decoded instruction names it on either model. The

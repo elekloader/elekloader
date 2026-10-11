@@ -22,6 +22,7 @@ file on your own machine, and you flash it the way you flash any OS update.
 | Digitakt II | 1.17 | experimental: whole builds (format-1 mods) and linkable mods with its own core (the hook bus's tick, draw, key and encoder events), sealed as the unit checks them; boots in digikit's emulator; core with a key-swap mod works on a unit (Transfer over USB) |
 | Digitone (mk1) and Digitone Keys | 1.43, 1.44 | supported |
 | Octatrack (MKI and MKII) | 1.40C | supported: whole builds (format-1 mods); linkable mods with its own core: boots on an MKII, not yet run on an MKI |
+| Model:Cycles, Model:Samples | 1.13 | supported: linkable mods with their own core (the hook bus's tick, draw, key and encoder events); builds work on both units (Transfer over USB) |
 | other Elektron devices | | planned: see [docs/DEVICES.md](docs/DEVICES.md) |
 
 ## Get started
@@ -51,7 +52,9 @@ a Digitone mk1, hold **FUNC** while powering on for the startup menu, press
 OS upgrade mode (on the Digitakt II, over its MIDI ports: not USB). On the
 Octatrack, hold **FUNC** while powering on, press **TRIG 3** for MIDI
 UPGRADE, and send the stock `.syx` over 5-pin DIN MIDI (USB MIDI does not
-work for this).
+work for this). On a Model:Cycles or Model:Samples, hold **FUNC** while
+powering on, press **TRIG 4** for OS UPGRADE, and send the stock `.syx` over
+5-pin DIN MIDI.
 
 ## Mods
 

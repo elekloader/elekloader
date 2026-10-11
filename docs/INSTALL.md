@@ -59,7 +59,9 @@ publishes it:
 - Digitone mk1 or Digitone Keys: `Digitone_and_Digitone_Keys_OS1.44.syx` or
   `..._OS1.43.syx` (one file serves both), from Elektron's Digitone downloads;
 - Octatrack MKI or MKII: `OCTATRACK_OS1.40C.syx` or `OCTATRACK_OS1.40C.bin`
-  (one file serves both), from Elektron's Octatrack downloads.
+  (one file serves both), from Elektron's Octatrack downloads;
+- Model:Cycles or Model:Samples: the OS 1.13 `.syx`, from Elektron's
+  Model:Cycles or Model:Samples downloads.
 
 The `.zip` Elektron's site gives you works as it is. elekloader recognises
 the file by its hash.

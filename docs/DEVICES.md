@@ -288,6 +288,40 @@ below was found again in 1.17.
     (`on_unit` in web/catalog.json).
   - Not yet run on an MKI.
 
+## The Model:Cycles and Model:Samples (1.13)
+
+One platform (an MCF54415, ColdFire V4 with EMAC, as the Digitakt), two
+profiles: `model_cycles.py` keeps the evidence for each fact, and
+`model_samples.py` gives the Model:Samples' own addresses.
+
+- **Files.** One ELE3 container: sections 5 (the build string), 2 (the
+  bootstrap), 3 (the main OS, packed as the Digitakt's) and 4 (the updater).
+  Sealed as the Digitakt II: an HMAC-SHA256 after the last section, its key
+  from the bootstrap's seed string (`REVERB SEND`, `DELAY TIME`). `syx.py`
+  rebuilds both stock files byte for byte from their own main OS stream
+  (tests/test_releases.py).
+- **The version field** is at `0x0C`, not `0x14`: the unit shows the
+  header's `1.13` there, and nothing reads `0x14-0x18`. The profile places it
+  (`version_at`), and a build that names no version keeps stock's
+  (`version_optional`).
+- **Staging and flash.** Section 3 is read to `0x40200000` and unpacked to
+  `0x40000400`, as on the Digitakt mk1. The container is at flash
+  `0x20000` and must end below `0x1E0000`, where the OS keeps two stores:
+  1.75 MB, of which stock takes 0.70 MB.
+- **Free memory.** DDR `0x47E00000-0x47E40000` (the linker's `ddr`), below
+  the boot stack and above every buffer the OSes use; the SRAM tail
+  `0x8000F700-0x80010000`, zeroed at reset and named by no instruction. On
+  the Model:Cycles, CHORD's two SRAM tables (`sram-chord-a`, `-b`) are free
+  only to a mod that serves CHORD its tables from elsewhere.
+- **The core** ([mods/core-mc](../mods/core-mc), [mods/core-ms](../mods/core-ms))
+  is the shared core.s with ev_tick, ev_draw, ev_key and ev_enc
+  ([CORES.md](CORES.md)).
+- **On the units.** Builds with the core and mods on it (a hook bus, menus,
+  USB audio, sample playback changes) run on both units, sent with Transfer
+  over USB as an OS update. Recovery: hold
+  FUNC while powering on, TRIG 4 (OS UPGRADE), and the stock `.syx` over
+  5-pin MIDI.
+
 ## What a new device needs besides its profile
 
 - **Sealed files.** `trailer='hmac'` with `hmac_key_from` (the Digitakt
