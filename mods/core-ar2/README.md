@@ -62,10 +62,16 @@ branch):
   its version (HM01), and drew the 3x3 square on every screen. So the boot
   copier, the linked image in DDR and `ev_draw` work.
 
+- **Every event**, with [hooks-check-ar2](../../examples/hooks-check-ar2)
+  (11 Oct 2026, build HC01): `ev_tick` blinked its square and requested
+  redraws, `ev_render_in` advanced its bar steadily and never disagreed with
+  `ev_render_out`, `ev_key` and `ev_enc` counted every key and encoder event
+  while the unit acted on each as stock does, and `ev_settings` listed the
+  HOOK TEST row through `core_additem`, which counted each selection while
+  the other rows worked as stock.
+
 Statically, against the stock image (python, no toolchain): every site's
-stock bytes, and that each covers whole instructions. Not yet run on a unit:
-`ev_tick`, `ev_key`, `ev_enc`, `ev_settings`, and this core's own render
-handlers (rytm-mods-src's test hooked the same two sites).
+stock bytes, and that each covers whole instructions.
 
 ## Building
 

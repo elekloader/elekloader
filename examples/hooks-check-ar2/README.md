@@ -18,9 +18,10 @@ Each bar is its count mod 128. The tick handler also asks for a redraw every
 
 The SETTINGS row uses the firmware's MenuItem with a label callback in
 assembly (`label.s`, the Rytm's own label routine with other text) and
-callbacks that do nothing for draw and change. That convention is the one
-part not checked against the Digitakt's: if opening SETTINGS misbehaves,
-this row is the first suspect.
+callbacks that do nothing for draw and change. That convention was the one
+part not checked against the Digitakt's; on a unit (11 Oct 2026, build HC01)
+the row was listed after SYSTEM, its selections counted, and every bar
+moved as the table says.
 
 ```bash
 export ELEKLOADER_CROSS=m68k-elf-
