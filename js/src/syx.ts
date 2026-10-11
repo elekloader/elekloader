@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Elektron OS .syx files of the ELE3 family (the Digitakt mk1 and II, the Digitone mk1): read, rebuild with a new
+// Elektron OS .syx files of the ELE3 family (the Digitakt mk1 and II, the Digitone mk1, the Analog Rytm MKII): read, rebuild with a new
 // main OS, verify. Ported from elekloader's syx.py (GPL-2.0-or-later), which has the layout and its evidence.
 //
 // The writer changes one thing: the stored bytes of the device's main OS section. Every other section's stored

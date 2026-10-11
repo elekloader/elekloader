@@ -325,9 +325,11 @@ Digitakt's in the places elekloader depends on.
   power cycle.
 - **Recovery.** The STARTUP menu (FUNC at power-on), TRIG 4 for OS UPGRADE, the
   stock file over MIDI DIN. Checked on a unit with stock 1.73.
-- **Not done.** The TypeScript engine (js/) does not know the device yet, so
-  the web page and the kit cannot build for it; the window and the command
-  line can.
+- **The TypeScript engine** (js/) has the profile too (`ANALOG_RYTM_MK2`). Its
+  ColdFire decoder agrees with the Python's at every even offset of the 1.73
+  main OS (`tools/isa_parity`), and `tools/parity.ts` takes the Rytm's cases
+  (`stocks.ar173`, `dirs.ar`). The web page's list of where to download each
+  stock OS does not name the Rytm yet.
 
 ## What a new device needs besides its profile
 
