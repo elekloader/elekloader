@@ -46,8 +46,8 @@ What differs from the Digitakt mk1 at these sites:
 
 ## Checked so far
 
-On a unit (OS 1.73), with test images built by rytm-mods-src (its `elemod`
-branch), not by this core:
+On a unit (OS 1.73). With test images built by rytm-mods-src (its `elemod`
+branch):
 
 - **The boot site**, and the DDR area the linker uses: mod 0016 filled
   0x47BE0000-0x47C00000 from 0x400008c0 at boot, and a readout showed no word
@@ -57,9 +57,15 @@ branch), not by this core:
   delay and the reverb pulsed, each on its own setting, with the reverb return
   PRE or POST.
 
+- **This core**, with [hello-marker-ar2](../../examples/hello-marker-ar2), built
+  and patched by elekloader (11 Oct 2026): the unit booted the build, reported
+  its version (HM01), and drew the 3x3 square on every screen. So the boot
+  copier, the linked image in DDR and `ev_draw` work.
+
 Statically, against the stock image (python, no toolchain): every site's
 stock bytes, and that each covers whole instructions. Not yet run on a unit:
-this core itself, `ev_tick`, `ev_draw`, `ev_key`, `ev_enc` and `ev_settings`.
+`ev_tick`, `ev_key`, `ev_enc`, `ev_settings`, and this core's own render
+handlers (rytm-mods-src's test hooked the same two sites).
 
 ## Building
 

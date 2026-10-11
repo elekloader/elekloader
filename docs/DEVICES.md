@@ -292,6 +292,8 @@ below was found again in 1.17.
 
 A proof of concept: the profile (`analog_rytm_mk2.py`, where each fact's
 evidence is) and a core (mods/core-ar2) built from the Digitakt mk1's sources.
+On a unit (11 Oct 2026), a build of core-ar2 with hello-marker-ar2 booted,
+reported its own version (HM01) and drew the marker on every screen.
 The Rytm runs on the Digitakt mk1's platform, and its main OS reads like the
 Digitakt's in the places elekloader depends on.
 
