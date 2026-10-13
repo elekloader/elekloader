@@ -50,6 +50,8 @@ class Device:
                                  # the stock file's own section, never stored here (syx.seal_key)
     container: str = 'ele3'      # the file family: 'ele3' (syx.py) or 'elek' (elek.py)
     version_len: int = 4         # the characters of the version field the unit shows
+    version_at: int = 0x14       # 'ele3': where that field is in the container header
+    version_optional: bool = False   # True: a build given no version keeps stock's field
     protected: tuple = ()        # ((lo, hi, why), ...): main OS bytes no mod may change
     relocatable: tuple = ()      # ((lo, n, (ref, ...), what), ...): data in a protected range
                                  # the OS reaches only through the 4-byte operands at the refs,
@@ -96,8 +98,9 @@ class Device:
 
 
 def _all():
-    from . import digitakt_mk1, digitakt_mk2, digitone_mk1, octatrack
-    return [digitakt_mk1.DEVICE, digitakt_mk2.DEVICE, digitone_mk1.DEVICE, octatrack.DEVICE]
+    from . import digitakt_mk1, digitakt_mk2, digitone_mk1, octatrack, model_cycles, model_samples
+    return [digitakt_mk1.DEVICE, digitakt_mk2.DEVICE, digitone_mk1.DEVICE, octatrack.DEVICE,
+            model_cycles.DEVICE, model_samples.DEVICE]
 
 
 DEVICES = None
@@ -108,6 +111,14 @@ def devices():
     if DEVICES is None:
         DEVICES = _all()
     return DEVICES
+
+
+def version_at(sysex_id):
+    """-> where the version field of an 'ele3' file with this device byte is."""
+    for d in devices():
+        if d.container == 'ele3' and d.sysex_id == sysex_id:
+            return d.version_at
+    return 0x14
 
 
 def identify(syx_sha256):

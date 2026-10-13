@@ -139,8 +139,13 @@ class Syx:
             return cls(fh.read())
 
     @property
+    def version_at(self):
+        from .devices import version_at
+        return version_at(self.device_id)
+
+    @property
     def version(self):
-        return self.header[0x14:0x18].decode('ascii', 'replace')
+        return self.header[self.version_at:self.version_at + 4].decode('ascii', 'replace')
 
     def section(self, sid):
         """-> the section's decoded bytes."""
@@ -190,7 +195,7 @@ def write(stock, stored_main, dev, version=None):
         v = version.encode('ascii')
         if len(v) != 4:
             raise SyxError('the version field is exactly 4 characters')
-        header[0x14:0x18] = v
+        header[dev.version_at:dev.version_at + 4] = v
     cont = bytearray(stock.container[:stock.data_start])   # the table area as stock has it
     cont[:COUNT_OFF] = header
     for i, (sid, _o, _l, dest) in enumerate(stock.table):
@@ -293,7 +298,7 @@ def verify(out, stock, want_main, dev, version=None):
         raise SyxError('the container ends at flash 0x%x > 0x%x'
                        % (dev.flash_at + o.total, dev.flash_limit))
     hd = [i for i in range(COUNT_OFF) if o.header[i] != stock.header[i]]
-    if any(not 0x14 <= i < 0x18 for i in hd):
+    if any(not dev.version_at <= i < dev.version_at + 4 for i in hd):
         raise SyxError('ELE3 header differs outside the version field: %s' % hd)
     if version is not None and o.version != version:
         raise SyxError('version field %r, not %r' % (o.version, version))

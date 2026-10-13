@@ -1,0 +1,16 @@
+{
+ "id": "hello-marker",
+ "version": "1.0",
+ "title": "Hello marker",
+ "category": "Examples",
+ "license": "GPL-2.0-or-later",
+ "description": "Draws a small white square in a right-hand corner of every screen: the smallest mod that runs code on the device.",
+ "device": "model-cycles",
+ "os": "1.13",
+ "sources": ["../hello.s"],
+ "defsym": {"FILL": "0x400710c6"},
+ "subscribe": [
+  {"event": "ev_draw", "fn": "hello_draw", "order": 60}
+ ],
+ "requires": ["core"]
+}

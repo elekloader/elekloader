@@ -30,6 +30,8 @@ export type Device = {
   hmacKeyFrom: [number, string] | null          // for 'hmac': the section and seed the key is derived from
   container: 'ele3' | 'elek'
   versionLen: number
+  versionAt: number                             // 'ele3': where the version field is in the container header
+  versionOptional: boolean                      // true: a build given no version keeps stock's field
   protected: [number, number, string][]        // main OS bytes no mod may change
   relocatable: [number, number, number[], string][]
   blobMax: number | null
@@ -49,7 +51,7 @@ const rel = (version: string, syxSha256: string, mainSha256: string, mainLen: nu
 
 const base = {
   mainSection: 3, mainLoad: 0x40000400, isa: 'coldfire' as const, hmacKeyFrom: null, container: 'ele3' as const,
-  versionLen: 4, protected: [], relocatable: [], blobMax: null, sramCode: [0, 0] as Range, fastTable: '',
+  versionLen: 4, versionAt: 0x14, versionOptional: false, protected: [], relocatable: [], blobMax: null, sramCode: [0, 0] as Range, fastTable: '',
   imageFree: [], reserve: null, dspPayloads: {}, dspAreas: [], trailer: null,
 }
 
@@ -119,9 +121,42 @@ export const OCTATRACK: Device = {
     + '.syx over 5-pin MIDI (not USB)',
 }
 
-const DEVICES: Device[] = [DIGITAKT_MK1, DIGITAKT_MK2, DIGITONE_MK1, OCTATRACK]
+export const MODEL_CYCLES: Device = {
+  ...base,
+  key: 'model-cycles', name: 'Model:Cycles', sysexId: 0x11,
+  releases: [
+    rel('1.13', '44fe586269631a0ca7da25a3383fc6733c314809505fc3cc52f1e0ed9800640c',
+      'cc99d4f0175d34d1e91d046e6ec85a5e8ab58ab9edbb3c24406acd48cb99ee98', 1744192),
+  ],
+  stage: 0x40200000, flashAt: 0x20000, flashLimit: 0x1e0000, trailer: 'hmac', hmacKeyFrom: [2, 'REVERB SEND'],
+  versionAt: 0x0c, versionOptional: true,
+  areas: { ddr: [0x47e00000, 0x47e40000], 'sram-tail': [0x8000f700, 0x80010000],
+    'sram-chord-a': [0x80001c5c, 0x800074b4], 'sram-chord-b': [0x8000cac0, 0x8000eae0] },
+  ddr: [0x47e00000, 0x47e40000],
+  recovery: 'hold FUNC while powering on for the STARTUP MENU, press TRIG 4 (OS UPGRADE), '
+    + 'then send the stock .syx over 5-pin MIDI (not USB)',
+}
+
+export const MODEL_SAMPLES: Device = {
+  ...MODEL_CYCLES,
+  key: 'model-samples', name: 'Model:Samples', sysexId: 0x0f,
+  releases: [
+    rel('1.13', 'e11859b68deb7e5e3fe86ab32581212093849c4be5d3950add011eac398a2ce8',
+      'a351392c62ec1c6c3324a807baf46934690d54edfc76029a4b4882541cad1ab2', 1733184),
+  ],
+  hmacKeyFrom: [2, 'DELAY TIME'],
+  areas: { ddr: [0x47e00000, 0x47e40000], 'sram-tail': [0x8000f700, 0x80010000] },
+}
+
+const DEVICES: Device[] = [DIGITAKT_MK1, DIGITAKT_MK2, DIGITONE_MK1, OCTATRACK, MODEL_CYCLES, MODEL_SAMPLES]
 
 export const devices = (): Device[] => DEVICES
+
+/** -> where the version field of an 'ele3' file with this device byte is. */
+export function versionAt(sysexId: number): number {
+  for (const d of DEVICES) if (d.container === 'ele3' && d.sysexId === sysexId) return d.versionAt
+  return 0x14
+}
 
 export function releaseFor(d: Device, syxSha256?: string, mainSha256?: string): Release | null {
   for (const r of d.releases) {

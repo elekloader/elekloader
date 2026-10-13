@@ -24,6 +24,8 @@ where the stock files are, and only the cores are uploaded.
    | `mods/core-dn1` | `core-dn1-<version>.elemod`, `core-dn1-<version>-os1.44.elemod` |
    | `mods/core-dt2` | `core-dt2-<version>.elemod` |
    | `mods/core-ot` | `core-ot-<version>.elemod` |
+   | `mods/core-mc` | `core-mc-<version>.elemod` |
+   | `mods/core-ms` | `core-ms-<version>.elemod` |
 
    A release may carry several versions of one device's core (the Digitakt
    mk1's 2.1 and 3.0 lines, say): a build picks one ([CORES.md](CORES.md#how-a-build-picks-one)).

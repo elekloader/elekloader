@@ -200,6 +200,24 @@ function plan(configPath: string, casesPath: string) {
     add('dt154 core-3.0 alone', 'dt154', [cfg.files.core3_154])
     add('dt154 core-3.0 all', 'dt154', [cfg.files.core3_154, ...os154.map(m => f('dt', m))])
   }
+  // Model:Cycles and Model:Samples 1.13 (stocks.mc113 / ms113 and dirs.mc / ms, optional): each folder's
+  // core-*.elemod and the mods built for it. Their version is optional: no version keeps stock's field ("1.13")
+  for (const [k, d] of [['mc113', 'mc'], ['ms113', 'ms']]) {
+    if (!cfg.stocks[k] || !cfg.dirs[d]) continue
+    const all = readdirSync(dir(d)).filter(n => n.endsWith('.elemod')).sort()
+    const core = all.find(n => n.startsWith('core'))!
+    const mods = all.filter(n => n !== core)
+    add(`${k} core alone, no version`, k, [f(d, core)], null)
+    for (const m of mods) add(`${k} core + ${m}`, k, [f(d, core), f(d, m)], null)
+    add(`${k} all, no version`, k, [f(d, core), ...mods.map(m => f(d, m))], null)
+    add(`${k} all, version TEST`, k, [f(d, core), ...mods.map(m => f(d, m))])
+    add(`${k} version too long`, k, [f(d, core)], 'TOOLONG')
+    add(`${k} without core`, k, mods.slice(0, 1).map(m => f(d, m)), null)
+  }
+  if (cfg.stocks.mc113 && cfg.dirs.ms) {
+    const other = readdirSync(dir('ms')).filter(n => n.endsWith('.elemod') && n.startsWith('core'))
+    add('mc113 + a Model:Samples core', 'mc113', other.map(n => f('ms', n)), null)
+  }
   writeFileSync(casesPath, JSON.stringify({ root: cfg.root, cases }, null, 1))
   console.log(`${cases.length} cases -> ${casesPath}`)
 }

@@ -40,7 +40,7 @@ export function device(d: Device, rel: Release | null = null) {
     container: d.container, version_len: d.versionLen, exact_len: d.container === 'ele3', recovery: d.recovery,
     card_file: d.container === 'elek', linkable: linkable(d),
     // the window's default (gui.LoaderWindow.refresh_stock)
-    default_version: d.container === 'ele3' ? '2.0a' : rel ? `${rel.version} ELEK` : '',
+    default_version: d.versionOptional ? (rel ? rel.version : '') : d.container === 'ele3' ? '2.0a' : rel ? `${rel.version} ELEK` : '',
   }
 }
 

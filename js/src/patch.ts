@@ -129,6 +129,7 @@ export async function build(stock: File, modFiles: File[], version: string | nul
       const v = get(m.doc, 'ele3_version')
       if (v !== null && !vs.some(x => x === v)) vs.push(v)
     }
+    if (!vs.length && dev.versionOptional) vs.push(parsed.version)
     if (vs.length !== 1) {
       const sorted = [...vs].sort((a, b) => (String(a) < String(b) ? -1 : String(a) > String(b) ? 1 : 0))
       throw new PatchError(`give --version (${dev.container === 'ele3' ? `${dev.versionLen} characters` : `up to ${dev.versionLen} characters`}): `

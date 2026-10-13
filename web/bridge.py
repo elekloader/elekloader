@@ -44,7 +44,8 @@ def _device(d, rel=None):
             'exact_len': d.container == 'ele3', 'recovery': d.recovery,
             'card_file': d.container == 'elek', 'linkable': d.linkable(),
             # the window's default (gui.LoaderWindow.refresh_stock)
-            'default_version': ('2.0a' if d.container == 'ele3'
+            'default_version': ((rel.version if rel else '') if d.version_optional
+                                else '2.0a' if d.container == 'ele3'
                                 else '%s ELEK' % rel.version if rel else '')}
 
 

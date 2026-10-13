@@ -140,7 +140,7 @@ def header_problems(stock, built, dev):
                 bad.append('section %d differs from stock; a mod can only change the main OS'
                            % sid)
         n = 0x1C
-        lo, hi = 0x14, 0x18
+        lo, hi = dev.version_at, dev.version_at + 4
     else:
         n, (lo, hi) = elek.SECT, elek.VERSION
     hd = [i for i in range(n) if built.header[i] != stock.header[i]]

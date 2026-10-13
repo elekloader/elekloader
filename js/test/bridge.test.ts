@@ -20,6 +20,8 @@ test('info: every device, as bridge.py lists them', () => {
     ['digitakt-mk2', ['1.17'], '2.0a', true],
     ['digitone-mk1', ['1.43', '1.44'], '2.0a', true],
     ['octatrack', ['1.40C'], '', true],
+    ['model-cycles', ['1.13'], '', true],
+    ['model-samples', ['1.13'], '', true],
   ])
   assert.deepEqual(i.exts, ['.elemod', '.dtmod'])
   assert.match(i.supported, /^Digitakt mk1 1\.53, Digitakt mk1 1\.54, Digitakt II 1\.17, /)

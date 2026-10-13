@@ -594,7 +594,12 @@ class LoaderWindow:
         dev = self.model.dev
         if dev is not None:
             cur = self.version_var.get().strip()
-            default = '2.0a' if dev.container == 'ele3' else '%s ELEK' % self.model.rel.version
+            if dev.version_optional:
+                default = self.model.rel.version       # the stock field ("1.13")
+            elif dev.container == 'ele3':
+                default = '2.0a'
+            else:
+                default = '%s ELEK' % self.model.rel.version
             try:
                 formats.check_version(dev, cur)
                 if cur in ('2.0a',) or cur.endswith(' ELEK'):

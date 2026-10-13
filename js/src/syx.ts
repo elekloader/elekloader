@@ -13,6 +13,7 @@ import { packSection } from './codec/aplib.ts'
 import { BIAS, Bits, FAR, Out, REUSE, depackSection } from './codec/elz.ts'
 import { CHUNK_SIZE, FIRST_COUNTER, MFR, contentChecksum, encodeSyx, packetChecksum } from './codec/transport.ts'
 import type { Device } from './devices.ts'
+import { versionAt } from './devices.ts'
 import { hexw, repr } from './py.ts'
 
 export const COUNT_OFF = 0x1c, TABLE_OFF = 0x20, ENTRY_SZ = 16
@@ -128,7 +129,9 @@ export class Syx {
     }
   }
 
-  get version(): string { return decodeAscii(this.header.subarray(0x14, 0x18)) }
+  get versionAt(): number { return versionAt(this.deviceId) }
+
+  get version(): string { return decodeAscii(this.header.subarray(this.versionAt, this.versionAt + 4)) }
 
   /** -> the section's decoded bytes. */
   section(sid: number): Uint8Array {
@@ -173,7 +176,7 @@ export function write(stock: Syx, storedMain: Uint8Array, dev: Device, version: 
   if (version !== null) {
     const v = ascii(version)
     if (v.length !== 4) throw new SyxError('the version field is exactly 4 characters')
-    header.set(v, 0x14)
+    header.set(v, dev.versionAt)
   }
   const parts: Uint8Array[] = []
   const head = stock.container.slice(0, stock.dataStart)  // the table area as stock has it
@@ -280,7 +283,7 @@ export function verify(out: Uint8Array, stock: Syx, wantMain: Uint8Array, dev: D
     throw new SyxError(`the container ends at flash 0x${(dev.flashAt + o.total).toString(16)} > 0x${dev.flashLimit.toString(16)}`)
   const hd: number[] = []
   for (let i = 0; i < COUNT_OFF; i++) if (o.header[i] !== stock.header[i]) hd.push(i)
-  if (hd.some(i => !(i >= 0x14 && i < 0x18))) throw new SyxError(`ELE3 header differs outside the version field: ${repr(hd)}`)
+  if (hd.some(i => !(i >= dev.versionAt && i < dev.versionAt + 4))) throw new SyxError(`ELE3 header differs outside the version field: ${repr(hd)}`)
   if (version !== null && o.version !== version) throw new SyxError(`version field ${repr(o.version)}, not ${repr(version)}`)
   if (!equal(o.container.subarray(TABLE_OFF + ENTRY_SZ * o.table.length, stock.dataStart),
     stock.container.subarray(TABLE_OFF + ENTRY_SZ * stock.table.length, stock.dataStart)))

@@ -33,6 +33,8 @@ There is one core file per device and OS:
 | Digitakt II | 1.17 | `core-dt2-1.0.elemod` | not released yet: build it ([below](#building-a-core)) |
 | Octatrack MKI, MKII | 1.40C | `core-ot-0.1.elemod` | the latest release (v0.4.0) |
 | Octatrack MKI, MKII | 1.40C | `core-ot-0.3.elemod` | on main, not released yet (0.2, with the hook bus, is too) |
+| Model:Cycles | 1.13 | `core-mc-0.1.elemod` | on main, not released yet: build it ([below](#building-a-core)) |
+| Model:Samples | 1.13 | `core-ms-0.1.elemod` | on main, not released yet: build it ([below](#building-a-core)) |
 
 From 3.0 the Digitakt mk1's core and the Digitone mk1's each have two
 lines, 2.x and 3.x, and a build takes the 3.x line only for a mod that
@@ -86,6 +88,12 @@ ticked: there, untick the built-in one when you add a newer core.
   bus with the Octatrack's events; from 0.3 it reserves only the RAM the mods
   use, at most 10 MB. Beside it,
   [mods/dspbus-ot](../mods/dspbus-ot) is an optional bus for mods' DSP code.
+- **Model:Cycles, Model:Samples** ([mods/core-mc](../mods/core-mc),
+  [mods/core-ms](../mods/core-ms)): the shared core.s with the hook bus's
+  tick, draw, key and encoder events. Their OS entry makes its SRAM copy and
+  its .bss clear in two calls, and the boot site covers both, so `.boot`
+  copies the mods' DDR image out first. Like the Digitakt II's, they leave
+  DMA timer 0 as the stock OS has it (`NO_DTIM0`).
 
 ### The Digitone's Mod Menu
 
@@ -104,7 +112,8 @@ has more screens and how a mod adds an entry.
 One source, [mods/core/core.s](../mods/core/core.s), is built with each
 device's addresses ([mods/core](../mods/core) for the Digitakt mk1,
 [mods/core-dn1](../mods/core-dn1) for the Digitone mk1,
-[mods/core-dt2](../mods/core-dt2) for the Digitakt II). Each `mod.json`
+[mods/core-dt2](../mods/core-dt2) for the Digitakt II, [mods/core-mc](../mods/core-mc)
+and [mods/core-ms](../mods/core-ms) for the Model:Cycles and the Model:Samples). Each `mod.json`
 gives the addresses of every OS it supports (its `os`, and its `ports`):
 the stock file you build with picks them. The Octatrack's has its own
 source. Build any of them with the SDK, which needs the device's cross
@@ -115,6 +124,8 @@ python -m elekloader.sdk.build mods/core --stock Digitakt_OS1.54.syx            
 python -m elekloader.sdk.build mods/core-dn1 --stock Digitone_and_Digitone_Keys_OS1.44.syx   # the Digitone mk1's (or 1.43)
 python -m elekloader.sdk.build mods/core-dt2 --stock Digitakt_II_OS1.17.syx                      # the Digitakt II's
 python -m elekloader.sdk.build mods/core-ot --stock OCTATRACK_OS1.40C.syx                    # the Octatrack's
+python -m elekloader.sdk.build mods/core-mc --stock Model_Cycles_OS1.13.syx                  # the Model:Cycles'
+python -m elekloader.sdk.build mods/core-ms --stock Model_Samples_OS1.13.syx                 # the Model:Samples'
 python -m elekloader.sdk.build mods/dspbus-ot --stock OCTATRACK_OS1.40C.syx                  # its DSP bus (optional)
 ```
 
