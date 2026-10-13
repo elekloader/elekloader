@@ -1,7 +1,7 @@
 {
  "id": "core", "version": "0.1",
  "license": "GPL-2.0-or-later",
- "title": "core", "category": "Framework", "author": "irpina, ConnorWay32",
+ "title": "core", "category": "Framework", "author": "irpina, Iced-Cream",
  "description": "The boot copier and the hook bus for the Analog Rytm MKII: every other mod needs it. A proof of concept: the Digitakt mk1's core.s, settings.s and render.s with the Rytm's addresses. On its own it changes nothing the unit does.",
  "device": "analog-rytm-mk2", "os": "1.73",
  "sources": ["../core/core.s", "../core/settings.s", "../core/render.s"],

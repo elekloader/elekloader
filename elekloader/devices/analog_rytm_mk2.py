@@ -45,7 +45,7 @@ starts from) in Ghidra and on the stock images. Proof-of-concept profile.
   and runs its stack down from 0x48000000.
 - Mods' area: 0x47BE0000-0x47C00000, the Digitakt mk1's
   area, below the stack's page. Verified on hardware 2026-10-11 with the
-  DDR canary (mod 0016 + 0003 diag mode 4, ConnorWay32/rytm-mods-src,
+  DDR canary (mod 0016 + 0003 diag mode 4, Iced-Cream/rytm-mods-src,
   elemod branch at fb1a0ec,
   `make ddr-canary-build`): the area was
   filled with address ^ 0xC0DEF00D at the boot site and read back with 0
