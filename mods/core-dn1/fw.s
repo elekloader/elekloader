@@ -54,6 +54,28 @@
 |                                timeline moves twice this every block
 |   fw_font_label    0x4022eb58  the stock pages' labels' font: capitals 4 x 5
 |   fw_font_title    0x4022dc88  their title bar's: 6 pixels, upper and lower case
+| From 3.3, the firmware's C library (newlib and libgcc's, so the same
+| contracts), which a mod has none of:
+|   fw_memcpy        0x400fb864  memcpy(dst, src, n) -> dst
+|   fw_memset        0x400fb8ac  memset(p, c, n) -> p
+|   fw_memchr        0x4013bfc4  memchr(p, c, n)
+|   fw_strcmp        0x4013cb44  strcmp(a, b)
+|   fw_strncmp       0x4013cffc  strncmp(a, b, n)
+|   fw_strchr        0x4013c9d8  strchr(s, c)
+|   fw_strncpy       0x4013d0ec  strncpy(dst, src, n)
+|   fw_crc32         0x4010388c  zlib's crc32(crc, p, n)
+|   __ashldi3        0x40136ff8  libgcc's 64-bit shift left, under its own name, so
+|                                gcc's calls link with no libgcc in a mod
+|   __lshrdi3        0x40136fa8  right, logical
+|   __ashrdi3        0x40137048  right, arithmetic
+| (a mod must not define these three: two exports of one name do not link)
+| and more of the UI's:
+|   fw_textbox       0x400de0b8  textbox(bmp, font, x, y, align, deco, template,
+|                                fmt, ...): clears a box as wide as template,
+|                                then draws fmt left (0), centred (1) or right (2)
+|   fw_transport     0x4138e208  the transport, a long: 0 stopped, 1 playing, 2 paused
+|   fw_pattern       0x4138e214  -> the active pattern's data: track t at +976 t
+|   fw_project       0x419efde0  -> the project
 
         .macro  FW name, value
         .globl  \name
@@ -92,3 +114,18 @@
         FW      fw_tempo, FW_TEMPO
         FW      fw_font_label, FONT_LABEL
         FW      fw_font_title, FONT_TITLE
+        FW      fw_memcpy, MEMCPY
+        FW      fw_memset, FW_MEMSET
+        FW      fw_memchr, FW_MEMCHR
+        FW      fw_strcmp, FW_STRCMP
+        FW      fw_strncmp, FW_STRNCMP
+        FW      fw_strchr, FW_STRCHR
+        FW      fw_strncpy, FW_STRNCPY
+        FW      fw_crc32, FW_CRC32
+        FW      __ashldi3, FW_ASHLDI3
+        FW      __lshrdi3, FW_LSHRDI3
+        FW      __ashrdi3, FW_ASHRDI3
+        FW      fw_textbox, FW_TEXTBOX
+        FW      fw_transport, FW_TRANSPORT
+        FW      fw_pattern, FW_PATTERN
+        FW      fw_project, FW_PROJECT

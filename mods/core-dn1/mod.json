@@ -1,8 +1,8 @@
 {
- "id": "core", "version": "3.2",
+ "id": "core", "version": "3.3",
  "license": "GPL-2.0-or-later",
  "title": "core", "category": "Framework", "author": "irpina",
- "description": "The boot copier and the hook bus for the Digitone mk1 and Digitone Keys: every other mod needs it. From 2.1 also the voice note-on event, parameter slots, mod pages and project data, from 2.2 the Mod Menu (hold a track key), from 2.3 its grid of icons, from 3.0 the firmware locations mods use, as exports, so a mod that names only them builds for 1.43 and 1.44 alike, and from 3.1 what machines need: the voices' sound before the filter (ev_render_voices), stock parameters a mod relabels for its tracks (core_param_override), sound edits the voices hear (core_sound_set) and submenus in the Mod Menu, and from 3.2 exclusive audio: one mod may take the output from the master stage, with the voices muted if it likes (core_audio), the tempo (fw_tempo) and the MIDI CCs the unit receives, before the stock applies them (ev_midi_cc), and from the next version the key-LED frame before the stock views (ev_key_leds) and each block's sound parameters before the controllers and LFOs (ev_render_params). On its own it changes nothing the unit does.",
+ "description": "The boot copier and the hook bus for the Digitone mk1 and Digitone Keys: every other mod needs it. From 2.1 also the voice note-on event, parameter slots, mod pages and project data, from 2.2 the Mod Menu (hold a track key), from 2.3 its grid of icons, from 3.0 the firmware locations mods use, as exports, so a mod that names only them builds for 1.43 and 1.44 alike, and from 3.1 what machines need: the voices' sound before the filter (ev_render_voices), stock parameters a mod relabels for its tracks (core_param_override), sound edits the voices hear (core_sound_set) and submenus in the Mod Menu, and from 3.2 exclusive audio: one mod may take the output from the master stage, with the voices muted if it likes (core_audio), the tempo (fw_tempo) and the MIDI CCs the unit receives, before the stock applies them (ev_midi_cc), and from 3.3 the key-LED frame before the stock views (ev_key_leds), each block's sound parameters before the controllers and LFOs (ev_render_params) and more firmware locations: its C library (fw_memcpy, fw_crc32, the 64-bit shifts, ...), its text box, the transport, the active pattern and the project. On its own it changes nothing the unit does.",
  "device": "digitone-mk1", "os": "1.43",
  "sources": ["../core/core.s", "../core/settings.s", "../core/render.s", "voice.s", "params.s", "pages.s", "projdata.s", "menu.s", "fw.s", "voices.s", "audio.s", "midi.s", "leds.s", "block.s"],
  "defsym": {
@@ -66,7 +66,21 @@
   "FONT_TITLE": "0x4022dc88",
   "ROUTER_EXIT": "0x400eddb0",
   "VIEW_LEDS": "0x400e5d22",
-  "CONTROLLERS": "0x4009c058"
+  "CONTROLLERS": "0x4009c058",
+  "FW_MEMSET": "0x400fb8ac",
+  "FW_MEMCHR": "0x4013bfc4",
+  "FW_STRCMP": "0x4013cb44",
+  "FW_STRNCMP": "0x4013cffc",
+  "FW_STRCHR": "0x4013c9d8",
+  "FW_STRNCPY": "0x4013d0ec",
+  "FW_CRC32": "0x4010388c",
+  "FW_ASHLDI3": "0x40136ff8",
+  "FW_LSHRDI3": "0x40136fa8",
+  "FW_ASHRDI3": "0x40137048",
+  "FW_TEXTBOX": "0x400de0b8",
+  "FW_TRANSPORT": "0x4138e208",
+  "FW_PATTERN": "0x4138e214",
+  "FW_PROJECT": "0x419efde0"
  },
  "sites": [
   {"addr": "0x40000538", "stock": "4eb940001df4", "op": "jsr", "target": "core_dn_boot"},
@@ -219,7 +233,21 @@
     "FONT_TITLE": "0x4022e088",
     "ROUTER_EXIT": "0x400ee024",
     "VIEW_LEDS": "0x400e5f96",
-    "CONTROLLERS": "0x4009c078"
+    "CONTROLLERS": "0x4009c078",
+    "FW_MEMSET": "0x400fbb20",
+    "FW_MEMCHR": "0x4013c238",
+    "FW_STRCMP": "0x4013cdb8",
+    "FW_STRNCMP": "0x4013d270",
+    "FW_STRCHR": "0x4013cc4c",
+    "FW_STRNCPY": "0x4013d360",
+    "FW_CRC32": "0x40103b00",
+    "FW_ASHLDI3": "0x4013726c",
+    "FW_LSHRDI3": "0x4013721c",
+    "FW_ASHRDI3": "0x401372bc",
+    "FW_TEXTBOX": "0x400de32c",
+    "FW_TRANSPORT": "0x4138f208",
+    "FW_PATTERN": "0x4138f214",
+    "FW_PROJECT": "0x419f0de0"
    },
    "sites": [
     {"addr": "0x40000538", "stock": "4eb940001df4", "op": "jsr", "target": "core_dn_boot"},

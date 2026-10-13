@@ -117,15 +117,26 @@ the Digitone needs it. On its own it changes nothing the unit does.
   at 0x400ed96e (0x400edbe2 in 1.44), 32 bytes past the router's entry,
   which Tone+FX patches: the two link together, and a CC Tone+FX lets
   through comes to core next.
-- **From the next core-dn1, `ev_key_leds`** ([leds.s](leds.s)): the key-LED frame,
+- **From 3.3, `ev_key_leds`** ([leds.s](leds.s)): the key-LED frame,
   before the stock views set theirs, `f(mgr)` with the LedManager, at the
   frame's call to the views' LED update (0x40018332 in both versions); the
   first setter of an LED wins, so a handler's stays over the stock view's.
-- **From the next core-dn1, `ev_render_params`** ([block.s](block.s)): each block's sound
+- **From 3.3, `ev_render_params`** ([block.s](block.s)): each block's sound
   parameter words, `f(words)`, after the smoother writes them and before
   the controller stage (0x4009c058) and the LFOs ride on them, at its call
   (0x4009db80, 0x4009dba0 in 1.44). A change lasts the block
   (docs/ADAPTING.md, "Key LEDs and each block's sound parameters").
+- **From 3.3, more firmware locations** ([fw.s](fw.s); docs/ADAPTING.md,
+  "Firmware locations"): the firmware's C library, `fw_memcpy`,
+  `fw_memset`, `fw_memchr`, `fw_strcmp`, `fw_strncmp`, `fw_strchr`,
+  `fw_strncpy` and zlib's `fw_crc32`; libgcc's 64-bit shifts under their
+  own names, `__ashldi3`, `__lshrdi3` and `__ashrdi3`, so gcc's calls link
+  with no libgcc in a mod (which then must not define them); the stock
+  menus' text box, `fw_textbox`;
+  the transport, `fw_transport`; and the active pattern and the project,
+  `fw_pattern` and `fw_project`, with the pattern's layout in core3.h
+  (`FW_TRACK`, `FW_STEP`, `FW_TRACK_NOTE`, ...). These are exports only:
+  they add no code, sites or tables.
 - **OS 1.44:** every site has its port (`ports` in mod.json): the same
   code, moved, and RAM 0x1000 further on.
 
@@ -169,7 +180,7 @@ pattern plays, the inputs reach the output at their own level and the FM
 does not; after NO the FM is back. Its two new sites are the same code
 in 1.44, 0x20 bytes later, as are the routines they call.
 
-The key LEDs and the block's parameters were checked in digiemu on 1.44:
+3.3's key LEDs and the block's parameters were checked in digiemu on 1.44:
 against stock, both screens are identical and the audio differs from PLAY
 on in the same 28 windows of 100 ms as the core without the two events.
 With a test mod that lights trig key 1 green from `ev_key_leds` and sets
@@ -189,3 +200,11 @@ and channel 12, which no track uses, never reached the site. The site's
 six bytes and the router's exit are the same code in 1.44, 0x274 bytes
 later. Core 3.2 links beside Tone+FX 3.0a, which patches the router's
 entry.
+
+3.3's exports add no code of their own (only its two events do), and it keeps all of the released 2.3 (`tests/test_sdk.py`). Each
+new 1.43 and 1.44 value was found by its own code (a routine, its bytes
+with the addresses in them masked, and the routines it calls the same)
+or by every piece of code that names it (data), and the eleven library
+routines were called through the values the built cores export, with
+random arguments on each version's image, against Python: every call
+agreed.

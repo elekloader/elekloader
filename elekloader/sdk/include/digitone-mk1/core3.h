@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
-/* core-dn1 3.0 to 3.2, and the next core-dn1, for the Digitone mk1, in C: the firmware locations core exports, and core-dn1's
+/* core-dn1 3.0 to 3.3 for the Digitone mk1, in C: the firmware locations core exports, and core-dn1's
  * own tables and calls (docs/ADAPTING.md, "Firmware locations", "Parameter slots", "Mod pages", "Project
  * data", "The Mod Menu" and "Machines and stock parameters"). The SDK puts this folder on the include
  * path:
@@ -8,8 +8,8 @@
  *
  * Every fw_ name here is resolved by the linker against the core in the build, so a mod that uses only
  * these rebuilds for another OS version without a change (its port in mod.json is empty). Declaring one
- * makes the mod need core-dn1 3.0, or 3.1 or 3.2 for the names marked so, or the next core-dn1 for those
- * marked "next": say so with "resources": {"core": "3.0"} (or "3.1", "3.2", or the next version). digitone-mk1/core3.inc has the same for assembly. Functions that return a pointer
+ * makes the mod need core-dn1 3.0, or 3.1, 3.2 or 3.3 for the names marked so: say so with "resources":
+ * {"core": "3.0"} (or "3.1", "3.2", "3.3"). digitone-mk1/core3.inc has the same for assembly. Functions that return a pointer
  * are declared to return uint32_t: the firmware returns it in d0, where gcc for m68k looks in a0. */
 #ifndef ELEKLOADER_DIGITONE_MK1_CORE3_H
 #define ELEKLOADER_DIGITONE_MK1_CORE3_H
@@ -58,6 +58,35 @@ extern const char fw_font_label[];             /* 3.2: the stock pages' labels (
 extern const char fw_font_title[];             /* 3.2: their title bar (Amplitude (1/2)), 6 pixels */
 extern void fw_blit(void *dst, const void *src, int32_t x, int32_t y, int32_t centre);
 extern uint32_t fw_op_new(uint32_t size);       /* the firmware's heap; 0 when it is full */
+/* 3.3: textbox clears a box as wide as tmpl (fillrect colour 0), then draws fmt at x: align 0 left,
+ * 1 centred, 2 right; y as fw_textf's. What the stock menus draw their values with. deco: 0. */
+extern void fw_textbox(void *bmp, const void *font, int32_t x, int32_t y, int32_t align, int32_t deco,
+                       const char *tmpl, const char *fmt, ...);
+extern volatile uint32_t fw_transport;          /* 3.3: 0 stopped, 1 playing, 2 paused */
+extern uint8_t *volatile fw_project;            /* 3.3: the project */
+extern uint8_t *volatile fw_pattern;            /* 3.3: the active pattern's data, 976 bytes a track: */
+#define FW_TRACK(pat, t)         ((pat) + 976 * (t))
+#define FW_STEP(trk, s)          (*(volatile uint16_t *)((trk) + 2 * (s)))   /* step s's word: */
+#define FW_STEP_TRIG             1u             /* a note trig */
+#define FW_STEP_LOCK_TRIG        2u             /* a lock trig (no note) */
+#define FW_TRACK_NOTE(trk)       ((trk)[0x3c0]) /* NOTE, a MIDI note */
+#define FW_TRACK_ROOT(trk)       ((trk)[0x3cb]) /* the keyboard's ROOT, a MIDI note */
+#define FW_TRACK_SCALE(trk)      ((int8_t)(trk)[0x3ce])  /* its SCALE: -1 chromatic, 0-34 */
+#define FW_TRACK_LENGTH(trk)     ((trk)[0x3c5] << 8 | (trk)[0x3c6])  /* in per-track mode: 1-64 */
+
+/* ---- 3.3: the firmware's C library (newlib's and libgcc's, with their contracts); any task ------- */
+extern uint32_t fw_memcpy(void *dst, const void *src, uint32_t n);   /* -> dst */
+extern uint32_t fw_memset(void *p, int32_t c, uint32_t n);            /* -> p */
+extern uint32_t fw_memchr(const void *p, int32_t c, uint32_t n);      /* -> the byte, or 0 */
+extern int32_t fw_strcmp(const char *a, const char *b);
+extern int32_t fw_strncmp(const char *a, const char *b, uint32_t n);
+extern uint32_t fw_strchr(const char *s, int32_t c);                  /* -> the char, or 0 */
+extern uint32_t fw_strncpy(char *dst, const char *src, uint32_t n);   /* -> dst */
+extern uint32_t fw_crc32(uint32_t crc, const void *p, uint32_t n);    /* zlib's: crc32(0, p, n) */
+/* libgcc's 64-bit shifts, __ashldi3, __lshrdi3 and __ashrdi3, are exported under their own names:
+ * gcc calls them for a 64-bit value shifted by a variable count, and those calls now link with no
+ * libgcc in the mod. So a mod must not define them itself: every global a mod defines is an export,
+ * and the linker refuses two exports of one name. */
 extern volatile int32_t fw_active_track;        /* 3.1: the active track, 0-3 the synth tracks */
 extern const uint8_t fw_params[];               /* 3.1: the parameter records, 60 bytes an id (slot at +4,
                                                    min +8, max +12, default +16, names +40 +44 +48) */
@@ -171,11 +200,11 @@ typedef int32_t (*ev_hold_fn)(void *brain, void *event, int32_t track);     /* n
  * (Tone+FX) sees a CC first. */
 #define CORE_MIDI_CC_AUTO  1u
 typedef int32_t (*ev_midi_cc_fn)(int32_t track, int32_t cc, int32_t value, int32_t flags);
-/* next: the key-LED frame, every frame of the UI task, after the LEDs are cleared and before the stock views
+/* 3.3: the key-LED frame, every frame of the UI task, after the LEDs are cleared and before the stock views
  * set theirs: the first setter of an LED wins, so what a handler sets stays over the stock view's. mgr:
  * the LedManager. */
 typedef void (*ev_key_leds_fn)(void *mgr);
-/* next: each block's sound parameter words (8.8) before the controller stage and the LFOs ride on them:
+/* 3.3: each block's sound parameter words (8.8) before the controller stage and the LFOs ride on them:
  * voice v's slot k at words[CORE_PARAMS_VOICE * v + k], the global FX's (chorus, delay, reverb, master)
  * at record CORE_PARAMS_FX; the layout of fw_voice_params past its 18 bytes, which holds the targets the
  * smoother glides these words to. The smoother writes them again every block, so a change lasts one

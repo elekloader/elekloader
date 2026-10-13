@@ -384,10 +384,11 @@ def test_digitone_core_builds_and_links():
     machine slots), voice.s (ev_voice_on), params.s (parameter slots, ids
     182-184), pages.s (mod pages, 27-30), projdata.s (mods' data saved with
     the project), menu.s (the Mod Menu, a grid of icons from 2.3, submenus
-    from 3.1), fw.s (firmware locations as exports, from 3.0) and voices.s
+    from 3.1), fw.s (firmware locations as exports, from 3.0; the C library,
+    the text box and the pattern from 3.3) and voices.s
     (ev_render_voices, for machines, from 3.1), audio.s (exclusive audio,
-    from 3.2), midi.s (ev_midi_cc, from 3.2), leds.s (ev_key_leds, next)
-    and block.s (ev_render_params, next), the last eleven Digitone only."""
+    from 3.2), midi.s (ev_midi_cc, from 3.2), leds.s (ev_key_leds, 3.3)
+    and block.s (ev_render_params, 3.3), the last eleven Digitone only."""
     with tempfile.TemporaryDirectory() as tmp:
         path = dn_core(tmp)
         with open(path) as fh:
@@ -449,7 +450,9 @@ FW_DN = ['fw_active_track', 'fw_blit', 'fw_ev_alloc', 'fw_ev_free', 'fw_ev_queue
          'fw_font5', 'fw_framerect', 'fw_gate_off', 'fw_gate_on', 'fw_kit', 'fw_lfo_state',
          'fw_lock_alloc', 'fw_locks_free', 'fw_nodes_free', 'fw_op_new', 'fw_params', 'fw_slot_ids',
          'fw_str_amp', 'fw_str_empty', 'fw_textf', 'fw_timeline', 'fw_transpose', 'fw_uirecs',
-         'fw_tempo', 'fw_font_label', 'fw_font_title', 'fw_voice_len', 'fw_voice_params', 'fw_voice_pitch', 'fw_voice_track', 'fw_voices']
+         'fw_tempo', 'fw_font_label', 'fw_font_title', 'fw_voice_len', 'fw_voice_params', 'fw_voice_pitch', 'fw_voice_track', 'fw_voices',
+         'fw_memcpy', 'fw_memset', 'fw_memchr', 'fw_strcmp', 'fw_strncmp', 'fw_strchr', 'fw_strncpy', 'fw_crc32',
+         '__ashldi3', '__lshrdi3', '__ashrdi3', 'fw_textbox', 'fw_transport', 'fw_pattern', 'fw_project']
 CORE_DN3 = ['core_key_leds', 'core_menu_open', 'core_midi_cc', 'core_param_short', 'core_param_ui_make',
             'core_render_master', 'core_render_params', 'core_render_voices', 'core_sound_set',
             'core_voices_gate']
@@ -460,8 +463,8 @@ def check_dn_superset(old_path, new_path):
     resources and exports, and every symbol in the same section; it adds
     the firmware exports, the machines' hooks (3.1: two sites, two tables),
     exclusive audio and the MIDI CCs (3.2: three sites, two tables), the
-    key LEDs and the block's parameters (next: two sites, two tables) and
-    their calls."""
+    key LEDs and the block's parameters (3.3: two sites, two tables), their
+    calls and 3.3's firmware exports."""
     with open(old_path) as fh:
         old = json.load(fh)
     with open(new_path) as fh:
