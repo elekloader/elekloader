@@ -316,8 +316,8 @@ line stays on 2.3.
 | `fw_pattern` (3.3) | 0x4138e214 | 0x4138f214 | -> the active pattern's data: track t at +976 t, its step words at +2 s (bit 0 a note trig, bit 1 a lock trig), NOTE +0x3c0, the per-track length +0x3c5 (big-endian), the keyboard's ROOT +0x3cb and SCALE +0x3ce (`core3.h`'s `FW_TRACK` macros) |
 | `fw_project` (3.3) | 0x419efde0 | 0x419f0de0 | -> the project |
 
-A name marked 3.1, 3.2 or 3.3 needs that core-dn1 (`"resources": {"core": "3.1"}`,
-`"3.2"` or `"3.3"`).
+A name marked 3.1, 3.2, 3.3 or 3.4 needs that core-dn1 (`"resources": {"core": "3.1"}`,
+`"3.2"`, `"3.3"` or `"3.4"`).
 
 gcc calls libgcc's `__ashldi3`, `__lshrdi3` and `__ashrdi3` for a 64-bit value shifted by a
 variable count, and a mod links no libgcc. From core-dn1 3.3, core exports the firmware's
@@ -766,7 +766,7 @@ Core-dn1 3.2 owns two more sites: 0x4009e07e (`core_voices_gate`, by jmp
 over the 14 bytes before the voices' filter loop) and 0x4009e146
 (`core_render_master`, by jsr); in 1.44 they are 0x4009e09e and 0x4009e166.
 
-### Insert audio (core-dn1 3.3, Digitone mk1)
+### Insert audio (core-dn1 3.4, Digitone mk1)
 
 An owner may instead take what the master stage made: an effect on
 everything the Digitone plays. With `CORE_AUDIO_INSERT` (2) in its flags,
@@ -798,7 +798,7 @@ struct core_audio_owner trem_owner = { 0, trem_render, CORE_AUDIO_INSERT };
 ```json
 "contribute": [{"to": "core_audio", "order": 70, "data": "00000000",
                 "relocs": [[0, "abs32", "sym:trem_owner", 0]]}],
-"resources": {"core": "3.3"}
+"resources": {"core": "3.4"}
 ```
 
 The table's order still decides between owners: each block the first
@@ -806,10 +806,10 @@ record whose `on` is set has the output, so an exclusive mod that opens over
 an insert that stays on contributes before it, with a lower `order`, and the
 insert carries on once the exclusive one lets go. A mod may change its flags
 from the UI task, as it may `on`: core reads them each block. A mod that
-also runs on core-dn1 3.2, as an exclusive owner there, can tell whether
-the core takes inserts: 3.3 exports `core_audio_caps`, a long with
+also runs on an older core-dn1 (3.2 or 3.3), as an exclusive owner there, can
+tell whether the core takes inserts: 3.4 exports `core_audio_caps`, a long with
 `CORE_AUDIO_INSERT` set, and a mod that lists it under `weak` in mod.json
-reads 0 with an older core (the linker's `core_zero`). 3.3 owns no new
+reads 0 with an older core (the linker's `core_zero`). 3.4 owns no new
 site: `core_render_master` (0x4009e146) runs the stage first for an
 insert.
 

@@ -55,7 +55,7 @@ docs match its code.
   - `dn-thru`, the smallest Digitone mk1 mod that takes the whole output
     (core-dn1 3.2): the audio inputs straight through, the synths silent;
   - `dn-tremolo`, the smallest one that takes it as an insert (core-dn1
-    3.3): a tremolo on everything the Digitone plays;
+    3.4): a tremolo on everything the Digitone plays;
   - `dsp-tone-ot`, the smallest mod with code on the Octatrack's DSP: a quiet
     sawtooth in place of input A, through the DSP bus.
 

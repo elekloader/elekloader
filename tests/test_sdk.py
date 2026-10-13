@@ -14,11 +14,11 @@ missing is skipped, not passed:
                         and 1.44 files, for mods/core-dn1 and its port
   ELEKLOADER_CORE_DN1_23  optional: the released core-dn1-2.3.elemod (the
                         core-dn1-v2.3 pre-release), with
-                        core-dn1-2.3-os1.44.elemod beside it: core-dn1 3.3
+                        core-dn1-2.3-os1.44.elemod beside it: core-dn1 3.x
                         must keep all of it
   ELEKLOADER_CORE_DN1_32  optional: the released core-dn1-3.2.elemod (the
                         core-dn1-v3.2 pre-release), with
-                        core-dn1-3.2-os1.44.elemod beside it: core-dn1 3.3
+                        core-dn1-3.2-os1.44.elemod beside it: core-dn1 3.4
                         must keep all of it too
 Building mods/core or the example also needs the cross toolchain
 (m68k-linux-gnu-as, -gcc and -ld).
@@ -562,31 +562,35 @@ def test_a_digitone_mod_in_c_names_only_core_exports():
 CORE_DN32 = os.environ.get('ELEKLOADER_CORE_DN1_32', '')
 
 
+DN33_EXPORTS = ['core_key_leds', 'core_render_params', 'fw_memcpy', 'fw_memset', 'fw_memchr', 'fw_strcmp',
+                'fw_strncmp', 'fw_strchr', 'fw_strncpy', 'fw_crc32', '__ashldi3', '__lshrdi3', '__ashrdi3',
+                'fw_textbox', 'fw_transport', 'fw_pattern', 'fw_project']
+
+
 def check_dn_32(old_path, new_path):
-    """core-dn1 3.3 is 3.2 with insert audio: the same sites, tables,
-    contributions and resources, 3.2's exports and core_audio_caps, every
-    symbol of 3.2's in the same section; only audio.s's code grows
-    (CORE_AUDIO_INSERT, a flag)."""
+    """core-dn1 3.4 keeps all of 3.2: its sites, tables, contributions,
+    resources and exports, every symbol of 3.2's in the same section. It
+    adds 3.3's (the key LEDs and the block's parameters: two sites, two
+    tables, their calls and the firmware exports) and 3.4's insert audio,
+    a flag and core_audio_caps, with no site."""
     with open(old_path) as fh:
         old = json.load(fh)
     with open(new_path) as fh:
         new = json.load(fh)
-    assert old['version'] == '3.2' and new['version'] == '3.3'
-    for k in ('target', 'contribute', 'resources', 'collections'):
+    assert old['version'] == '3.2' and new['version'] == DN_VERSION
+    for k in ('target', 'contribute', 'resources'):
         assert new[k] == old[k], k
-    assert sorted(set(new['exports']) - set(old['exports'])) == ['core_audio_caps']
-    assert set(old['exports']) <= set(new['exports'])
+    assert sorted(set(new['collections']) - set(old['collections'])) == ['ev_key_leds', 'ev_render_params']
+    assert all(new['collections'][k] == v for k, v in old['collections'].items())
+    assert sorted(set(new['exports']) - set(old['exports'])) == sorted(DN33_EXPORTS + ['core_audio_caps'])
 
     def what(d):
         return [(s['addr'], s['len'], s['kind'], s['new'], s.get('relocs')) for s in d['sites']]
-    assert what(new) == what(old)
+    assert all(x in what(new) for x in what(old)) and len(new['sites']) == len(old['sites']) + 2
     assert all(new['symbols'][k][0] == v[0] for k, v in old['symbols'].items())
-    assert sorted(set(new['build']['sources'])) == sorted(set(old['build']['sources']))
-    changed = [f for f in new['build']['sources'] if new['build']['sources'][f] != old['build']['sources'][f]]
-    assert changed == ['audio.s'], changed
 
 
-def test_digitone_core_3_3_is_3_2_and_more():
+def test_digitone_core_3_4_is_3_2_and_more():
     if not CORE_DN32 or not os.path.exists(CORE_DN32):
         raise Skip('missing ELEKLOADER_CORE_DN1_32 (the released core-dn1-3.2.elemod)')
     with tempfile.TemporaryDirectory() as tmp:
@@ -680,10 +684,10 @@ def test_digitone_exclusive_audio_example():
 
 
 def test_digitone_insert_audio_example():
-    """examples/dn-tremolo, on core-dn1 3.3's insert audio
+    """examples/dn-tremolo, on core-dn1 3.4's insert audio
     (CORE_AUDIO_INSERT): it patches no site and names no firmware address,
-    needs 3.3, carries the same code for 1.43 and 1.44 (an empty port),
-    links with 3.3 beside THRU (an exclusive owner) and the machines mod,
+    needs 3.4, carries the same code for 1.43 and 1.44 (an empty port),
+    links with 3.4 beside THRU (an exclusive owner) and the machines mod,
     and is refused beside 3.2."""
     if not DN_STOCK or not os.path.exists(DN_STOCK):
         raise Skip('missing ELEKLOADER_DN_SYX')
@@ -696,13 +700,13 @@ def test_digitone_insert_audio_example():
         tpath, _t = build.build(os.path.join(ROOT, 'examples', 'dn-thru'), DN_STOCK, tmp)
         mpath, _m = build.build(os.path.join(ROOT, 'mods', 'machines-dn1'), DN_STOCK, tmp)
         assert os.path.basename(path) == 'dntrem-1.0.elemod'
-        assert t.needs_core == '3.3' and not t.sites and not t.imports
+        assert t.needs_core == '3.4' and not t.sites and not t.imports
         rc, r = lint_json(path, '--stock', DN_STOCK, '--with', core3, '--with', tpath, '--with', mpath)
         assert rc == 0, r['problems']
-        assert r['link']['order'] == ['core 3.3', 'dnthru 1.0', 'dntrem 1.0', 'machines 0.1']
+        assert r['link']['order'] == ['core ' + DN_VERSION, 'dnthru 1.0', 'dntrem 1.0', 'machines 0.1']
         if CORE_DN32 and os.path.exists(CORE_DN32):
             rc, r = lint_json(path, '--stock', DN_STOCK, '--with', CORE_DN32)
-            assert rc == 1 and 'dntrem 1.0 needs core 3.3 or newer, and this build has core 3.2' \
+            assert rc == 1 and 'dntrem 1.0 needs core 3.4 or newer, and this build has core 3.2' \
                 in r['problems'], r['problems']
         if DN_STOCK_144 and os.path.exists(DN_STOCK_144):
             path4, t4 = build.build(os.path.join(ROOT, 'examples', 'dn-tremolo'), DN_STOCK_144, tmp)

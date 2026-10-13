@@ -152,13 +152,13 @@ the Digitone needs it. On its own it changes nothing the unit does.
 Build it with the SDK (it needs m68k binutils):
 
 ```bash
-python -m elekloader.sdk.build mods/core-dn1 --stock Digitone_and_Digitone_Keys_OS1.43.syx   # out/core-3.3.elemod
-python -m elekloader.sdk.build mods/core-dn1 --stock Digitone_and_Digitone_Keys_OS1.44.syx   # out/core-3.3-os1.44.elemod
-python -m elekloader.lint mods/core-dn1/out/core-3.3-os1.44.elemod --stock Digitone_and_Digitone_Keys_OS1.44.syx
+python -m elekloader.sdk.build mods/core-dn1 --stock Digitone_and_Digitone_Keys_OS1.43.syx   # out/core-3.4.elemod
+python -m elekloader.sdk.build mods/core-dn1 --stock Digitone_and_Digitone_Keys_OS1.44.syx   # out/core-3.4-os1.44.elemod
+python -m elekloader.lint mods/core-dn1/out/core-3.4-os1.44.elemod --stock Digitone_and_Digitone_Keys_OS1.44.syx
 ```
 
-A release names them `core-dn1-3.3.elemod` and `core-dn1-3.3-os1.44.elemod`.
-3.3 is not released yet;
+A release names them `core-dn1-3.4.elemod` and `core-dn1-3.4-os1.44.elemod`.
+3.3 and 3.4 are not released yet;
 3.2's are on the [core-dn1-v3.2](https://github.com/irpina/elekloader/releases/tag/core-dn1-v3.2) pre-release
 (3.0 and 3.1 were not released), and
 2.3's on the [core-dn1-v2.3](https://github.com/irpina/elekloader/releases/tag/core-dn1-v2.3) pre-release.
