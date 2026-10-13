@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
-/* core-dn1 3.0 to 3.2 for the Digitone mk1, in C: the firmware locations core exports, and core-dn1's
+/* core-dn1 3.0 to 3.2, and the next core-dn1, for the Digitone mk1, in C: the firmware locations core exports, and core-dn1's
  * own tables and calls (docs/ADAPTING.md, "Firmware locations", "Parameter slots", "Mod pages", "Project
  * data", "The Mod Menu" and "Machines and stock parameters"). The SDK puts this folder on the include
  * path:
@@ -8,8 +8,8 @@
  *
  * Every fw_ name here is resolved by the linker against the core in the build, so a mod that uses only
  * these rebuilds for another OS version without a change (its port in mod.json is empty). Declaring one
- * makes the mod need core-dn1 3.0, or 3.1 or 3.2 for the names marked so: say so with "resources":
- * {"core": "3.0"} (or "3.1", "3.2"). digitone-mk1/core3.inc has the same for assembly. Functions that return a pointer
+ * makes the mod need core-dn1 3.0, or 3.1 or 3.2 for the names marked so, or the next core-dn1 for those
+ * marked "next": say so with "resources": {"core": "3.0"} (or "3.1", "3.2", or the next version). digitone-mk1/core3.inc has the same for assembly. Functions that return a pointer
  * are declared to return uint32_t: the firmware returns it in d0, where gcc for m68k looks in a0. */
 #ifndef ELEKLOADER_DIGITONE_MK1_CORE3_H
 #define ELEKLOADER_DIGITONE_MK1_CORE3_H
@@ -171,5 +171,18 @@ typedef int32_t (*ev_hold_fn)(void *brain, void *event, int32_t track);     /* n
  * (Tone+FX) sees a CC first. */
 #define CORE_MIDI_CC_AUTO  1u
 typedef int32_t (*ev_midi_cc_fn)(int32_t track, int32_t cc, int32_t value, int32_t flags);
+/* next: the key-LED frame, every frame of the UI task, after the LEDs are cleared and before the stock views
+ * set theirs: the first setter of an LED wins, so what a handler sets stays over the stock view's. mgr:
+ * the LedManager. */
+typedef void (*ev_key_leds_fn)(void *mgr);
+/* next: each block's sound parameter words (8.8) before the controller stage and the LFOs ride on them:
+ * voice v's slot k at words[CORE_PARAMS_VOICE * v + k], the global FX's (chorus, delay, reverb, master)
+ * at record CORE_PARAMS_FX; the layout of fw_voice_params past its 18 bytes, which holds the targets the
+ * smoother glides these words to. The smoother writes them again every block, so a change lasts one
+ * block and never builds up; the kit and the targets are untouched. Interrupt level, inside the render,
+ * ~1500 blocks a second; fw_voice_track[v] is voice v's track. */
+#define CORE_PARAMS_VOICE  79
+#define CORE_PARAMS_FX     8
+typedef void (*ev_render_params_fn)(int16_t *words);
 
 #endif

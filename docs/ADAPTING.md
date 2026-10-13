@@ -108,10 +108,12 @@ event (lower first; the shipped mods use 10-90).
 | `ev_personalize` | Digitakt II only (core-dt2): SETTINGS > PERSONALIZE is built | `void f(void *menu)` | add a row with `core_additem(menu, row)`, after TRK SELECT; a row redraws the menu with `View::invalidate(menu + 0x38)`, as from SETTINGS; a checkbox is drawn as mods/core-dt2/README.md describes |
 | `ev_voice_on` | Digitone mk1 only (core-dn1 2.1): a voice starts a note, in the render | `void f(int voice, int track, void *event)` | interrupt level. The voice's pitch word (`0x41391f80` + 4 x voice, the note << 16) is already written and may be changed: the render reads it every block. The voice's sound and the step's locks load after this, so read the voice's parameters from `ev_render_out` |
 | `ev_midi_cc` | Digitone mk1 only (core-dn1 3.2): each MIDI CC the unit receives on a track's channel or the auto channel, before the stock applies it; the MIDI task | `int f(int track, int cc, int value, int flags)` | `track` 0-8 (with MIDI CONFIG's default channels, channels 1-9); a CC on the auto channel comes as the active track, with `flags` bit 0 (`CORE_MIDI_CC_AUTO`) set. Return nonzero to take it: the stock does not apply it. Only what MIDI CONFIG lets in arrives (PORT CONFIG > INPUT FROM). A mod that patches the CC router's entry, 0x400ed94e (Tone+FX), sees a CC before core |
+| `ev_key_leds` | Digitone mk1 only (the next core-dn1): the key-LED frame, every UI frame, after the frame clears the LEDs and before the stock views set theirs; UI task | `void f(void *mgr)` | `mgr` the LedManager. The first setter of an LED wins, so what a handler sets stays over the stock view's: a mod shows its state on the keys while the stock page keeps the rest |
+| `ev_render_params` | Digitone mk1 only (the next core-dn1): each block's sound parameter words, before the controller stage and the LFOs, in the render | `void f(int16_t *words)` | interrupt level, ~1500 times a second. Voice v's slot k at `words[79 * v + k]` (8.8, `CORE_PARAMS_VOICE`), the global FX at record 8; the smoother writes them again every block, so a change lasts one block and the kit is untouched. The words of a block are rendered in the next two; `fw_voice_track[v]` is voice v's track ("Each block's sound parameters" below) |
 
 The events, their prototypes and their conventions are the same on every
-device; only the sites differ, and `ev_voice_on` and `ev_midi_cc` exist on the
-Digitone only. The Digitakt II's core (mods/core-dt2 1.0) has `ev_tick`, `ev_draw`,
+device; only the sites differ, and `ev_voice_on`, `ev_midi_cc`, `ev_key_leds`
+and `ev_render_params` exist on the Digitone only. The Digitakt II's core (mods/core-dt2 1.0) has `ev_tick`, `ev_draw`,
 `ev_key`, `ev_enc`, `ev_settings` and its own `ev_personalize`, and no
 render events: its audio
 renders on the DSP. It copies `.fast` code into SRAM itself, on the first
@@ -123,10 +125,11 @@ the tick site runs first). The sites core owns (do not patch them):
 - Digitone mk1 1.43: 0x40000538, 0x4001900c, 0x40019072, 0x40019d9c,
   0x40019de4, 0x40072a34, 0x4009d108, 0x4009e51c, from core-dn1 2.1
   0x4009e928, from 3.1 0x4009e078 and 0x400207b8, and from 3.2
-  0x4009e07e, 0x4009e146 and 0x400ed96e;
+  0x4009e07e, 0x4009e146 and 0x400ed96e, and from the next core-dn1 0x40018332 and
+  0x4009db80;
 - Digitone mk1 1.44: the same, but 0x40072a54, 0x4009d128 and 0x4009e53c
   for the last three of the eight, 0x4009e948, 0x4009e098, 0x400207b8,
-  0x4009e09e, 0x4009e166 and 0x400edbe2;
+  0x4009e09e, 0x4009e166, 0x400edbe2, 0x40018332 and 0x4009dba0;
 - Digitakt II 1.17: 0x40000538, 0x40032ad4, 0x40032b3a, 0x40033d94,
   0x40033dde, 0x400a5eac, 0x4009e2a2.
 
@@ -758,6 +761,39 @@ in 1.54 they are at the same addresses, but 0x400a1706 is 0x400a1862):
 0x4003b452, 0x4003b49e, 0x4003b4ac, 0x4003b6d4, 0x4003b6de, 0x40077272,
 0x40078f72, 0x40079124, 0x40079144, 0x400791d6, 0x40079240, 0x4007a2ea,
 0x400a1706.
+
+### Key LEDs and each block's sound parameters (the next core-dn1, Digitone mk1)
+
+Two events for mods that perform over the stock pages rather than replace
+them.
+
+**`ev_key_leds`.** Each UI frame clears every key LED and then lets the
+visible views set theirs (0x400e5d22, 0x400e5f96 in 1.44, called at
+0x40018332 in both); the first setter of an LED wins. Core calls the
+handlers, `void f(void *mgr)` with the LedManager, before that call, so a
+handler's LED stays over the stock view's while the stock page shows the
+rest: a mod's state on the trig keys, the track keys or the page keys.
+
+**`ev_render_params`.** Each audio block the render (vector 191) writes the
+sound parameter words from the smoother, which glides each toward its
+target (`fw_voice_params`), then calls its controller stage (0x4009c058,
+0x4009c078 in 1.44; called at 0x4009db80, 0x4009dba0), where the mod wheel,
+breath, aftertouch, the LFOs, pitch, pan and gain ride on them; the second
+CPU renders them. Core calls the handlers, `void f(int16_t *words)`, before
+the controller stage: voice v's slot k is `words[79 * v + k]` (8.8, the
+layout of `fw_voice_params` past its 18 bytes), the global FX's (chorus,
+delay, reverb, master) are record 8. A change lasts this block: the
+smoother writes the words again for the next, so nothing builds up and the
+kit and the targets are untouched; to hold a value, write it every block.
+The words of a block are rendered and filtered in the next two, so
+`ev_render_voices` hears a change two blocks on. Interrupt level, inside
+the render: a handler that uses the EMAC keeps MACSR as it found it.
+`fw_voice_track[v]` is voice v's track. A mod that writes the targets
+instead (`fw_voice_params`) changes what the smoother glides to, and the
+glide with it.
+
+With no handler each site costs a test and a jump: the stock call runs as
+it was, by a tail jump with the stack as it came.
 
 ## 3. Path B: a linkable mod
 

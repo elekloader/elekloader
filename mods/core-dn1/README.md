@@ -117,6 +117,15 @@ the Digitone needs it. On its own it changes nothing the unit does.
   at 0x400ed96e (0x400edbe2 in 1.44), 32 bytes past the router's entry,
   which Tone+FX patches: the two link together, and a CC Tone+FX lets
   through comes to core next.
+- **From the next core-dn1, `ev_key_leds`** ([leds.s](leds.s)): the key-LED frame,
+  before the stock views set theirs, `f(mgr)` with the LedManager, at the
+  frame's call to the views' LED update (0x40018332 in both versions); the
+  first setter of an LED wins, so a handler's stays over the stock view's.
+- **From the next core-dn1, `ev_render_params`** ([block.s](block.s)): each block's sound
+  parameter words, `f(words)`, after the smoother writes them and before
+  the controller stage (0x4009c058) and the LFOs ride on them, at its call
+  (0x4009db80, 0x4009dba0 in 1.44). A change lasts the block
+  (docs/ADAPTING.md, "Key LEDs and each block's sound parameters").
 - **OS 1.44:** every site has its port (`ports` in mod.json): the same
   code, moved, and RAM 0x1000 further on.
 
@@ -159,6 +168,16 @@ screen is identical, and the audio is identical up to PLAY. With THRU
 pattern plays, the inputs reach the output at their own level and the FM
 does not; after NO the FM is back. Its two new sites are the same code
 in 1.44, 0x20 bytes later, as are the routines they call.
+
+The key LEDs and the block's parameters were checked in digiemu on 1.44:
+against stock, both screens are identical and the audio differs from PLAY
+on in the same 28 windows of 100 ms as the core without the two events.
+With a test mod that lights trig key 1 green from `ev_key_leds` and sets
+every voice's Amp VOL (slot 72) to 0 from `ev_render_params`, the factory
+pattern plays at an RMS of 4-29 where core alone gives 1650-2015, and trig
+key 1 is green while every other LED (the playhead's red included) is as
+with core alone. Its two sites hold the same stock bytes in 1.43, the same
+code 0x20 bytes earlier for the render's (not run on 1.43).
 
 `ev_midi_cc` was checked with CCs sent into the emulator's MIDI input on
 1.43 and 1.44, with a mod's handler that takes the CCs it maps: a CC it
