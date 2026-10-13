@@ -9,7 +9,7 @@ const FAR = 3328            // past this, the decoder adds 1 to the length
 const REUSE = 2             // a gamma of 2 reuses the last offset
 const MIN_MATCH = 3         // below this a match costs more bits than literals
 const MAX_OFFSET = 1 << 16
-const MAX_COUNT = 1 << 12
+const MAX_COUNT = 1 << 11   // Elektron's own streams never match more than 2048 bytes (issue #59)
 const CANDIDATES = 24
 const TERMINATOR_GAMMA = (1 << 24) + 2     // with a trailing 0xFF byte: (2**24+2)*256 + 255 == 0x2FF mod 2**32
 const TERMINATOR_TRAILER = 0xff

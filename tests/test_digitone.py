@@ -177,7 +177,7 @@ def test_mkmod_diff_round_trip():
     o = addr - DEV.main_load
     changed[o:o + len(new)] = new
     changed += bytes(range(100))
-    built = formats.write(st, formats.pack_main(bytes(changed)), DEV, 'DN02')
+    built = formats.write(st, formats.pack_main(bytes(changed), DEV), DEV, 'DN02')
     with tempfile.TemporaryDirectory() as tmp:
         bp = os.path.join(tmp, 'built.syx')
         with open(bp, 'wb') as fh:

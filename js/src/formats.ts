@@ -7,7 +7,6 @@
 //     const outputs = write(stock, storedMain, dev, version)   // {syx} or {syx, bin}
 //     const facts = verify(outputs, stock, wantMain, dev, version)
 import { encodeAsciiReplace, equal, sha } from './bytes.ts'
-import { packSection } from './codec/aplib.ts'
 import { type Device, type Release, UnknownFirmware, identify, supported } from './devices.ts'
 import * as elek from './elek.ts'
 import { hexw } from './py.ts'
@@ -73,7 +72,9 @@ export function checkVersion(dev: Device, version: string | null): void {
   if (!(n > 0 && n <= dev.versionLen)) throw new FormatError(`the version is 1 to ${dev.versionLen} ASCII characters`)
 }
 
-export const packMain = (image: Uint8Array): Uint8Array => packSection(image)
+/** Main OS image -> its stored section, as `dev`'s family stores it. */
+export const packMain = (image: Uint8Array, dev: Device): Uint8Array =>
+  dev.container === 'ele3' ? syx.packMain(image) : elek.packMain(image)
 
 export type Outputs = { syx: Uint8Array; bin?: Uint8Array }
 

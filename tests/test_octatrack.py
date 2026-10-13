@@ -162,7 +162,7 @@ def test_refuses_the_protected_bootloader_copy():
     st, img = stock()
     bad = bytearray(img)
     bad[lo - DEV.main_load] ^= 1
-    stored = formats.pack_main(bytes(bad))
+    stored = formats.pack_main(bytes(bad), DEV)
     outputs = formats.write(st, stored, DEV, 'x')
     expect(lambda: formats.verify(outputs, st, bytes(bad), DEV, 'x'), 'not stock')
 
@@ -872,7 +872,7 @@ def test_mkmod_diff_round_trip():
     changed[o:o + 10] = b'OS UPDATE!'
     changed[0x40050000 - DEV.main_load] ^= 0xFF
     changed += blob
-    built = formats.write(st, formats.pack_main(bytes(changed)), DEV, 'BUILD 1')
+    built = formats.write(st, formats.pack_main(bytes(changed), DEV), DEV, 'BUILD 1')
     with tempfile.TemporaryDirectory() as tmp:
         bp = os.path.join(tmp, 'built.syx')
         with open(bp, 'wb') as fh:

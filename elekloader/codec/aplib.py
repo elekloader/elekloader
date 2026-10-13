@@ -116,7 +116,7 @@ _BIAS = 767              # offset = ((g << 8) + byte) - 767
 _FAR = 3328              # past this, the decoder adds 1 to the length
 _MIN_MATCH = 3           # below this a match costs more bits than literals
 _MAX_OFFSET = 1 << 16    # further back only makes the gamma longer
-_MAX_COUNT = 1 << 12     # long enough for any run worth coding in one match
+_MAX_COUNT = 1 << 11     # Elektron's own streams never match more than 2048 bytes (issue #59)
 
 
 def _match_events(offset, count):

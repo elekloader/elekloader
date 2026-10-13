@@ -126,7 +126,7 @@ def build(stock_path, mod_paths, version=None, check_only=False, log=print):
     except formats.FormatError as e:
         raise PatchError(str(e))
     t = time.time()
-    stored = formats.pack_main(img)
+    stored = formats.pack_main(img, dev)
     log('packed the main OS: %d -> %d bytes (%.1f s)' % (len(img), len(stored), time.time() - t))
     try:
         outputs = formats.write(stock, stored, dev, version)
