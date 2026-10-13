@@ -73,7 +73,12 @@ ticked: there, untick the built-in one when you add a newer core.
   From 3.2 a mod may take the whole output, with the synths silent, and
   keep large buffers in the profile's `bulk` area ([ADAPTING.md](ADAPTING.md),
   "Exclusive audio"), and take MIDI CCs before the stock applies them
-  (`ev_midi_cc`).
+  (`ev_midi_cc`). From 3.3 a mod sets key LEDs over the stock views'
+  (`ev_key_leds`) and changes each block's sound parameters before the
+  controllers and the LFOs (`ev_render_params`), and core exports more of
+  the firmware: its C library (`fw_memcpy`, `fw_crc32`, the 64-bit shifts),
+  the stock menus' text box, the transport, the active pattern and the
+  project.
 - **Digitakt II** ([mods/core-dt2](../mods/core-dt2)): the hook bus's tick,
   draw, key and encoder events, and rows in SETTINGS > PERSONALIZE.
 - **Octatrack** ([mods/core-ot](../mods/core-ot)): a source of its own. It

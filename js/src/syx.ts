@@ -138,8 +138,12 @@ export class Syx {
   }
 }
 
-/** Main OS image -> its stored section (the aPLib-shaped packer). */
-export const packMain = (image: Uint8Array): Uint8Array => packSection(image)
+/** Main OS image -> its stored section (the aPLib-shaped packer), with zeros to a multiple of 4 as Elektron stores a
+ * packed section: the table's length counts them, the header's does not (issue #59). */
+export function packMain(image: Uint8Array): Uint8Array {
+  const sec = packSection(image)
+  return sec.length % 4 ? concat([sec, new Uint8Array(4 - (sec.length % 4))]) : sec
+}
 
 /** -> the HMAC key of a sealed device's files, derived from `stock` as its bootstrap derives it: in the section
  * dev.hmacKeyFrom names, the seed string, a NUL and a 32-byte constant C; the key is

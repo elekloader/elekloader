@@ -148,8 +148,11 @@ class Syx:
 
 
 def pack_main(image):
-    """Main OS image -> its stored section (the aPLib-shaped packer)."""
-    return aplib.pack_section(bytes(image))
+    """Main OS image -> its stored section (the aPLib-shaped packer), with
+    zeros to a multiple of 4 as Elektron stores a packed section: the table's
+    length counts them, the header's does not (issue #59)."""
+    sec = aplib.pack_section(bytes(image))
+    return sec + bytes(-len(sec) % 4)
 
 
 def seal_key(stock, dev):

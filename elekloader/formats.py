@@ -14,7 +14,6 @@
 import hashlib
 
 from . import devices, elek, syx
-from .codec import aplib
 
 
 class FormatError(ValueError):
@@ -90,8 +89,11 @@ def check_version(dev, version):
         raise FormatError('the version is 1 to %d ASCII characters' % dev.version_len)
 
 
-def pack_main(image):
-    return aplib.pack_section(bytes(image))
+def pack_main(image, dev):
+    """Main OS image -> its stored section, as `dev`'s family stores it."""
+    if dev.container == 'ele3':
+        return syx.pack_main(image)
+    return elek.pack_main(image)
 
 
 def write(stock, stored_main, dev, version=None):

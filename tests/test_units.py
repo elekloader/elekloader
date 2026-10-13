@@ -165,6 +165,33 @@ def test_a_longer_section_table_moves_the_data_start():
     assert all(o.stored[k] == s.stored[k] for k in (5, 2, 4, 6, 7, 8))
 
 
+def test_the_main_os_is_stored_padded_to_4():
+    """Elektron stores a packed section as its header and stream, then zeros
+    to a multiple of 4; the table's length counts them, the header's does not
+    (issue #59). pack_main pads the same way; the Octatrack's family does not
+    pad, and write() keeps whatever stream it is given."""
+    from elekloader import elek, formats
+    body = b'main os image ' * 300
+    s = syx.Syx(transport.encode_syx(
+        (lambda c: struct.pack('>II', len(c), transport.content_checksum(c)) + c)(
+            _container([(5, 0, b'meta'), (3, 0x40000400, aplib.pack_section(body))])),
+        0x0A, FRAMING0, FRAMING1))
+    dev = devices.devices()[0]
+    seen = set()
+    for extra in range(8):
+        img = body + b'!' * extra
+        packed = aplib.pack_section(img)
+        seen.add(len(packed) % 4)
+        stored = syx.pack_main(img)
+        assert formats.pack_main(img, dev) == stored
+        assert len(stored) % 4 == 0 and stored[:len(packed)] == packed
+        assert stored[len(packed):] == bytes(len(stored) - len(packed))
+        o = syx.Syx(syx.write(s, stored, dev))
+        assert o.stored[3] == stored and o.section(3) == img
+        assert elek.pack_main(img) == packed
+    assert len(seen) > 1, 'the cases do not reach an unaligned stream'
+
+
 def test_elek_transport_and_card_file_round_trip():
     from elekloader import elek
     body = b'octatrack main os ' * 400
