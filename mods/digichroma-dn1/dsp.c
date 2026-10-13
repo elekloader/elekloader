@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
 /* DigiChroma's render: core-dn1 calls dchroma_render at interrupt level for every block while it has the
  * output, 32 frames, 667 us. With the source INPUTS it owns the audio (the master stage does not run, the synths
- * are muted): in is the audio inputs. With DIGITONE (core-dn1 3.3) it is an insert (CORE_AUDIO_INSERT): in is
+ * are muted): in is the audio inputs. With DIGITONE (core-dn1 3.4) it is an insert (CORE_AUDIO_INSERT): in is
  * what the master stage made, the synths, the inputs as the mixer has them, chorus, delay and reverb. The chain:
  *   in -> CAPTURE (pre-FX) -> the four modules, in their order -> MIX with the dry -> CAPTURE (post-FX)
  *   -> OUTPUT LEVEL -> a soft clip -> out

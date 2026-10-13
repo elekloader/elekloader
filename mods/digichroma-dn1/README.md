@@ -19,7 +19,7 @@ and the screen back. The sequencer keeps running, so PLAY, STOP and TEMPO
 still work and the clock can follow the Digitone's tempo. BYPASS (trig 16)
 passes the inputs through dry, with the delays' and the reverb's tails.
 
-**Sources.** That is SETUP's SOURCE: INPUTS, the default. With core-dn1 3.3
+**Sources.** That is SETUP's SOURCE: INPUTS, the default. With core-dn1 3.4
 (its insert audio) SOURCE can also be DIGITONE: the pedal then sits after
 the Digitone's master stage, so the synths, the inputs as the mixer has
 them and the Digitone's own chorus, delay and reverb all go through it, and
@@ -60,7 +60,7 @@ Digitone's and DigiChroma's (see CPU below).
 | FX SETUP (A + D): routing, filter style, capture routing | page 3 (DUAL BYPASS in SETUP) |
 | Calibration (both footswitches) | LEVL on page 3, and SENS on page 2 |
 | 80 user presets (B + C, the preset browser) | 8: in SETUP a trig key 1-8 saves the pedal there; FUNC + a trig key 1-8 recalls it |
-| Global settings (all four buttons) | YES opens SETUP: SOURCE (INPUTS, or DIGITONE with core-dn1 3.3), INPUT (STEREO, or MONO from input L), CLOCK, BYPASS (trails or cut), DUAL BYPASS, MIDI CC (auto channel or any), CC CLOSED |
+| Global settings (all four buttons) | YES opens SETUP: SOURCE (INPUTS, or DIGITONE with core-dn1 3.4), INPUT (STEREO, or MONO from input L), CLOCK, BYPASS (trails or cut), DUAL BYPASS, MIDI CC (auto channel or any), CC CLOSED |
 | Expression pedal | not yet |
 
 ## Modules and effects
@@ -206,8 +206,8 @@ python -m elekloader.sdk.build mods/digichroma-dn1 --stock Digitone_and_Digitone
 
 It names no firmware address, so its 1.44 port is empty. It needs core-dn1
 3.2 (`"resources": {"core": "3.2"}`) and an elekloader with the profile's
-`bulk` area. The source DIGITONE needs core-dn1 3.3's insert audio:
-DigiChroma weak-imports 3.3's `core_audio_caps` (`"weak"` in mod.json),
+`bulk` area. The source DIGITONE needs core-dn1 3.4's insert audio:
+DigiChroma weak-imports 3.4's `core_audio_caps` (`"weak"` in mod.json),
 which reads 0 with 3.2, and then offers the inputs only. `gentables.py`
 makes `tables.h`.
 
@@ -218,14 +218,14 @@ compiled for a computer and fed test signals:
 
 - **The firmware.** A build with the released core-dn1 3.2 and DigiChroma
   passes every stage of the emulator's check against stock on 1.43 and
-  1.44, with every screen identical (and so did one with core-dn1 3.3).
+  1.44, with every screen identical (and so did one with core-dn1 3.4).
 - **INPUTS.** With plucked notes on the inputs and the factory pattern
   playing: closed, the synths; open, the plucks through the pedal and the
   synths silent (with the inputs silent too, an rms of 6 against the
   synths' 1856), the whole render 40% of a block with the default chain and
   its full SPACE; after NO the synths again, and the stock render. With
   core-dn1 3.2 SOURCE stays INPUTS.
-- **DIGITONE** (core-dn1 3.3): SETUP's SOURCE turns to DIGITONE, the synths
+- **DIGITONE** (core-dn1 3.4): SETUP's SOURCE turns to DIGITONE, the synths
   go through the pedal, and it stays on after NO.
 - **The page and the keys.** Its three pages, a knob turn and its value in
   the title, T2's next effect (VIBRATO, by name), T3 held (Diffusion
@@ -264,7 +264,7 @@ compiled for a computer and fed test signals:
 - Program changes, and an expression pedal (the Digitone Keys has an input
   for one).
 - The source DIGITONE on a unit with a released core: it needs core-dn1
-  3.3, which is not released yet.
+  3.4, which is not released yet.
 - More presets, and gestures and captures saved: the project has room for
   eight presets, and the Digitone's +Drive no files for mods.
 - Automatic calibration: LEVL and SENS set the input level by hand.

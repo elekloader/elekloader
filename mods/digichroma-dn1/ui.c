@@ -285,7 +285,7 @@ static void set_knob(int i, int sec, s32 v)
     }
 }
 
-static int can_insert(void)                   /* the core takes the source DIGITONE (core-dn1 3.3) */
+static int can_insert(void)                   /* the core takes the source DIGITONE (core-dn1 3.4) */
 {
     return (core_audio_caps & CORE_AUDIO_INSERT) != 0;
 }

@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
 /* DigiChroma: a Chroma Console-style effects pedal for the Digitone mk1, on core-dn1's core_audio: on the audio
  * inputs with the synths silent while its page is open (exclusive, core-dn1 3.2), or on everything the Digitone
- * plays, staying on (an insert, CORE_AUDIO_INSERT, core-dn1 3.3). Shared by dsp.c (the render, interrupt level)
+ * plays, staying on (an insert, CORE_AUDIO_INSERT, core-dn1 3.4). Shared by dsp.c (the render, interrupt level)
  * and ui.c (the UI task). */
 #ifndef DCHROMA_H
 #define DCHROMA_H
@@ -9,9 +9,9 @@
 #include <stdint.h>
 #include "digitone-mk1/core3.h"
 #ifndef CORE_AUDIO_INSERT
-#define CORE_AUDIO_INSERT       2u      /* core-dn1 3.3's insert */
+#define CORE_AUDIO_INSERT       2u      /* core-dn1 3.4's insert */
 #endif
-extern const uint32_t core_audio_caps;       /* 3.3: CORE_AUDIO_INSERT where the core takes inserts; weak (mod.json), so
+extern const uint32_t core_audio_caps;       /* 3.4: CORE_AUDIO_INSERT where the core takes inserts; weak (mod.json), so
                                            0 with core-dn1 3.2, where the source is always the inputs */
 
 typedef int32_t s32;

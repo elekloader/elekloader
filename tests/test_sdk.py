@@ -686,7 +686,7 @@ def test_digichroma_builds_and_links():
         assert h.needs_core == '3.2' and not h.sites
         assert set(h.imports) == {'fw_fillrect', 'fw_font5', 'fw_font_label', 'fw_font_title', 'fw_framerect',
                                   'fw_tempo', 'fw_textf', 'core_audio_caps'}, h.imports
-        assert set(h.weak) == {'core_audio_caps'}     # 3.3's: with 3.2 it reads 0, and the source is the inputs
+        assert set(h.weak) == {'core_audio_caps'}     # 3.4's: with an older core it reads 0, and the source is the inputs
         assert [(g['area'], g['lo'], g['hi']) for g in h.regions] == [('bulk', 0x45B00000, 0x46200000)]
         rc, r = lint_json(hpath, '--stock', DN_STOCK, '--with', core3, '--with', dpath, '--with', tpath,
                           '--with', mpath)
