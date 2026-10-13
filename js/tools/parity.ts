@@ -7,8 +7,8 @@
 //                                                              refusal, the log, the live check, every describe
 //
 // config.json names your files: {"root": "/tmp/elekparity", "map": [["C:/", "/mnt/c/"]], "scratch": "<a folder>",
-// "stocks": {"dt153": ..., "dt154": ..., "dt153zip": ..., "dn143": ..., "dn144": ..., "ot": ..., "otbin": ...},
-// "dirs": {"dt": ..., "release": ..., "octabam": ..., "dtmod": ...}, "files": {"octatrick": ..., "bundle": ...}}.
+// "stocks": {"dt153": ..., "dt154": ..., "dt153zip": ..., "dn143": ..., "dn144": ..., "ot": ..., "otbin": ..., "ar173": ...},
+// "dirs": {"dt": ..., "release": ..., "octabam": ..., "dtmod": ..., "ar": ...}, "files": {"octatrick": ..., "bundle": ...}}.
 // Both sides see each file under the same path (root/<case>/stock/<name>, root/<case>/mods/<name>), so the
 // manifests, which name those paths, must match byte for byte too.
 import { mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
@@ -76,6 +76,19 @@ function plan(configPath: string, casesPath: string) {
     add('ot sized core alone', 'ot', [cfg.files.slimcore])
     for (const m of ob) add(`ot sized core + ${m}`, 'ot', [cfg.files.slimcore, f('octabam', m)])
     add('ot sized core + octabam all', 'ot', [cfg.files.slimcore, ...ob.map(m => f('octabam', m))])
+  }
+
+  // the Analog Rytm MKII (optional: stocks.ar173, and dirs.ar with core-0.1.elemod, hello-marker-1.0.elemod and
+  // hooks-check-0.1.elemod built from mods/core-ar2 and examples/*-ar2)
+  if (cfg.stocks.ar173 && cfg.dirs.ar) {
+    const core = f('ar', 'core-0.1.elemod'), hello = f('ar', 'hello-marker-1.0.elemod'), hooks = f('ar', 'hooks-check-0.1.elemod')
+    add('ar173 core alone', 'ar173', [core])
+    add('ar173 core + hello-marker', 'ar173', [core, hello])
+    add('ar173 core + hooks-check', 'ar173', [core, hooks])
+    add('ar173 core + both', 'ar173', [core, hello, hooks])
+    add('ar173 hooks-check without core', 'ar173', [hooks])
+    add('ar173 version too long', 'ar173', [core], 'TOOLONG')
+    add('ar173 check only', 'ar173', [core, hooks], 'TEST', { check_only: true })
   }
 
   const scratch = cfg.scratch

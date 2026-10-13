@@ -1,0 +1,24 @@
+{
+ "id": "hooks-check",
+ "version": "0.1",
+ "title": "Hooks check",
+ "category": "Examples",
+ "license": "GPL-2.0-or-later",
+ "description": "A test for core-ar2 on the Analog Rytm MKII: subscribes to every event, takes none, and draws what it counts as bars along the top of the screen; adds a HOOK TEST row to SETTINGS.",
+ "device": "analog-rytm-mk2",
+ "os": "1.73",
+ "sources": ["hooks.c", "label.s"],
+ "cflags": ["-DFILLRECT_AT=0x400706ba"],
+ "defsym": {"STRING_CTOR": "0x401bcd4c"},
+ "subscribe": [
+  {"event": "ev_tick", "fn": "hc_tick", "order": 60},
+  {"event": "ev_draw", "fn": "hc_draw", "order": 60},
+  {"event": "ev_key", "fn": "hc_key", "order": 60},
+  {"event": "ev_enc", "fn": "hc_enc", "order": 60},
+  {"event": "ev_settings", "fn": "hc_settings", "order": 60},
+  {"event": "ev_render_in", "fn": "hc_render_in", "order": 60},
+  {"event": "ev_render_out", "fn": "hc_render_out", "order": 60}
+ ],
+ "resources": {"names": ["settings:HOOK TEST"]},
+ "requires": ["core"]
+}

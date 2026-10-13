@@ -31,6 +31,7 @@ There is one core file per device and OS:
 | Digitone mk1, Digitone Keys | 1.43 | `core-dn1-3.2.elemod` | the [core-dn1-v3.2](https://github.com/irpina/elekloader/releases/tag/core-dn1-v3.2) pre-release, for mods that need the 3.x line |
 | Digitone mk1, Digitone Keys | 1.44 | `core-dn1-3.2-os1.44.elemod` | the same pre-release |
 | Digitakt II | 1.17 | `core-dt2-1.0.elemod` | not released yet: build it ([below](#building-a-core)) |
+| Analog Rytm MKII | 1.73 | `core-0.1.elemod` (mods/core-ar2) | a proof of concept, not released: build it ([below](#building-a-core)) |
 | Octatrack MKI, MKII | 1.40C | `core-ot-0.1.elemod` | the latest release (v0.4.0) |
 | Octatrack MKI, MKII | 1.40C | `core-ot-0.3.elemod` | on main, not released yet (0.2, with the hook bus, is too) |
 | Model:Cycles | 1.13 | `core-mc-0.1.elemod` | on main, not released yet: build it ([below](#building-a-core)) |
@@ -123,6 +124,7 @@ toolchain ([ADAPTING.md](ADAPTING.md), "What you need"):
 python -m elekloader.sdk.build mods/core --stock Digitakt_OS1.54.syx                          # the Digitakt mk1's (or 1.53)
 python -m elekloader.sdk.build mods/core-dn1 --stock Digitone_and_Digitone_Keys_OS1.44.syx   # the Digitone mk1's (or 1.43)
 python -m elekloader.sdk.build mods/core-dt2 --stock Digitakt_II_OS1.17.syx                      # the Digitakt II's
+python -m elekloader.sdk.build mods/core-ar2 --stock Analog-Rytm_MKII_OS1.73.syx                  # the Analog Rytm MKII's
 python -m elekloader.sdk.build mods/core-ot --stock OCTATRACK_OS1.40C.syx                    # the Octatrack's
 python -m elekloader.sdk.build mods/core-mc --stock Model_Cycles_OS1.13.syx                  # the Model:Cycles'
 python -m elekloader.sdk.build mods/core-ms --stock Model_Samples_OS1.13.syx                 # the Model:Samples'

@@ -480,6 +480,7 @@ class LoaderWindow:
                                     command=self.build)
         self.build_btn.pack(side='right')
         self.version_var = tk.StringVar(value='2.0a')
+        self.version_default = '2.0a'       # the last default the field was given, any device's
         ttk.Entry(foot, textvariable=self.version_var, width=11, style='Dark.TEntry',
                   font=(FONT, 11)).pack(side='right', padx=8)
         tk.Label(foot, text='OS version shown', font=(FONT, 9), fg=C['muted'],
@@ -602,10 +603,11 @@ class LoaderWindow:
                 default = '%s ELEK' % self.model.rel.version
             try:
                 formats.check_version(dev, cur)
-                if cur in ('2.0a',) or cur.endswith(' ELEK'):
+                if cur in ('2.0a', self.version_default) or cur.endswith(' ELEK'):
                     self.version_var.set(default)         # another device's default
             except formats.FormatError:
                 self.version_var.set(default)
+            self.version_default = default
         self.note.configure(text=(
             'Nothing here talks to your device: flash the built .syx yourself, as with any OS '
             'update. Only the main OS changes, so the stock .syx always recovers the unit'

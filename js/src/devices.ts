@@ -148,7 +148,22 @@ export const MODEL_SAMPLES: Device = {
   areas: { ddr: [0x47e00000, 0x47e40000], 'sram-tail': [0x8000f700, 0x80010000] },
 }
 
-const DEVICES: Device[] = [DIGITAKT_MK1, DIGITAKT_MK2, DIGITONE_MK1, OCTATRACK, MODEL_CYCLES, MODEL_SAMPLES]
+export const ANALOG_RYTM_MK2: Device = {
+  ...base,
+  key: 'analog-rytm-mk2', name: 'Analog Rytm MKII', sysexId: 0x0c,
+  releases: [
+    rel('1.73', '8ad671087ec30433d5407c7380d2396e0915ab931c5d3dd18a78bf284d3d1e52',
+      '28d9ef40c895e03f17dfce096543109adaf708947392db72818fc2a412d685d6', 3005432),
+  ],
+  stage: 0x40200000, flashAt: 0x80000, flashLimit: 0x300000,
+  areas: { ddr: [0x47be0000, 0x47c00000] },
+  ddr: [0x47be0000, 0x47c00000],
+  recovery: 'hold FUNC while powering on for the STARTUP menu, press TRIG 4 (OS UPGRADE), '
+    + 'then send the stock .syx over MIDI DIN (not USB)',
+}
+
+const DEVICES: Device[] = [DIGITAKT_MK1, DIGITAKT_MK2, DIGITONE_MK1, OCTATRACK, MODEL_CYCLES, MODEL_SAMPLES,
+  ANALOG_RYTM_MK2]
 
 export const devices = (): Device[] => DEVICES
 

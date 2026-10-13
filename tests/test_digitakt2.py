@@ -352,7 +352,7 @@ def test_every_flash_write_and_erase_in_the_os_is_known():
     (0x400caff0-0x400cb370: 'READY FOR OS', the container at 0x80000), and
     the in-OS upgrade (0x4013ac54: validated, then erase and write from
     0x80000). None writes from the main OS image, so no range of it is a
-    bootstrap the OS could re-flash (unlike the Analog Rytm's)."""
+    bootstrap the OS could re-flash (unlike the Analog Rytm mk1's, #11)."""
     st, img = stock()
     known = [(0x400ca6c0, 0x400cab80), (0x400caff0, 0x400cb370), (0x4013ac54, 0x4013ad94),
              (0x40137cbe, 0x40137e10)]                 # the driver's own wrappers

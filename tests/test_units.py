@@ -242,6 +242,26 @@ def test_overlaps():
     assert pairs == {('a', 'b'), ('a', 'c')}
 
 
+def test_bytes_site_relocs():
+    """A `bytes` site's relocs: well-formed ones pass, anything else is a
+    BuildError naming the site, not a crash."""
+    from elekloader.sdk import build
+    new = bytes(12)
+    ok = [[0, 'abs32', 'sym:a', 0], [8, 'abs32', 'abs', 0x10]]
+    assert build.bytes_relocs(0x40001000, new, ok) == ok
+    for bad in ([[0, 'abs32', 'sym:a']], [['0', 'abs32', 'sym:a', 0]], [[0, 'abs32', 'sym:a', '1']],
+                [[True, 'abs32', 'sym:a', 0]], [[9, 'abs32', 'sym:a', 0]], [[-1, 'abs32', 'sym:a', 0]],
+                [[0, 'pc32', 'sym:a', 0]], [[0, 'abs32', 'absfoo', 0]], [[0, 'abs32', 'sym:', 0]],
+                [[0, 'abs32', 3, 0]], [[0, 'abs32', 'sym:a', 0], [2, 'abs32', 'sym:b', 0]],
+                ['x'], {'0': 1}):
+        try:
+            build.bytes_relocs(0x40001000, new, bad)
+        except build.BuildError as e:
+            assert '0x40001000' in str(e), e
+        else:
+            raise AssertionError('accepted %r' % (bad,))
+
+
 def test_devices():
     d, r = devices.identify(devices.devices()[0].releases['1.53'].syx_sha256)
     assert d.key == 'digitakt-mk1' and r.version == '1.53'
