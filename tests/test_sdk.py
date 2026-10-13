@@ -702,7 +702,7 @@ def test_digichroma_builds_and_links():
         rc, r = lint_json(hpath, '--stock', DN_STOCK, '--with', core3, '--with', dpath, '--with', tpath,
                           '--with', mpath)
         assert rc == 0, r['problems']
-        assert r['link']['order'] == ['core 3.2', 'digichroma 0.1', 'digicosm 0.1', 'dnthru 1.0', 'machines 0.1']
+        assert r['link']['order'] == ['core ' + DN_VERSION, 'digichroma 0.1', 'digicosm 0.1', 'dnthru 1.0', 'machines 0.1']
         if CORE_DN23 and os.path.exists(CORE_DN23):
             rc, r = lint_json(hpath, '--stock', DN_STOCK, '--with', CORE_DN23)
             assert rc == 1 and 'digichroma 0.1 needs core 3.2 or newer, and this build has core 2.3' \
