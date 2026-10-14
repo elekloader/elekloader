@@ -81,6 +81,27 @@ def test_a_mod_that_needs_core_3_ticks_core_3():
     assert one_core(d, {c21, c30, 'lib/pages.elemod'}) == {c30, 'lib/pages.elemod'}
 
 
+def test_a_digitone_machine_ticks_machines_and_its_core():
+    """The shop's machines-dn1 (id machines, needs core-dn1 3.1) comes with a
+    machine mod that requires it, and the core the shop lists that will do
+    (3.2, not 2.3) with them."""
+    from elekloader.gui import with_requirements
+    d = {
+        'app/core-dn1-2.3.elemod': {'id': 'core', 'version': '2.3', 'fits': True, 'requires': []},
+        'app/core-dn1-3.2.elemod': {'id': 'core', 'version': '3.2', 'fits': True, 'requires': []},
+        'lib/machines-0.1.elemod': {'id': 'machines', 'fits': True, 'requires': ['core'],
+                                    'needs_core': '3.1'},
+        'lib/dnsine-1.0.elemod': {'id': 'dnsine', 'fits': True, 'requires': ['core', 'machines']},
+        'lib/tables.elemod': {'id': 'tables', 'fits': True, 'requires': ['core']},
+    }
+    c23, c32 = 'app/core-dn1-2.3.elemod', 'app/core-dn1-3.2.elemod'
+    assert with_requirements(d, set(), 'lib/dnsine-1.0.elemod') == {
+        'lib/dnsine-1.0.elemod', 'lib/machines-0.1.elemod', c32}
+    # beside a mod that took 2.3, the machine brings machines and moves the build to 3.2
+    assert with_requirements(d, {'lib/tables.elemod', c23}, 'lib/dnsine-1.0.elemod') == {
+        'lib/tables.elemod', 'lib/dnsine-1.0.elemod', 'lib/machines-0.1.elemod', c32}
+
+
 def test_8in7_round_trip():
     rnd = random.Random(1)
     for n in (0, 1, 6, 7, 8, 13, 14, 101, 250):

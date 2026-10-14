@@ -86,6 +86,18 @@
       "sha256": "f2c6a28c3ff8c65d961afc78e87961b9378988d2d9b8b482f7033bc4362d08f6"
     },
     {
+      "repo": "irpina/elekloader", "tag": "machines-dn1-v0.1", "file": "machines-0.1.elemod",
+      "device": "digitone-mk1", "needs_core": "3.1",
+      "sha256": "4cd0962454c67b5045ee131a5da38725b9ca7f75c49471cc161e3407b65686bf",
+      "summary": "Machines for the Digitone: sounds that play a machine mod's voice in place of FM, through the Digitone's own filter, mixer and effects, with the AMP page's envelope. MACHINES in the Mod Menu (hold a track key) picks the held track's machine, and a machine track's SYN1 and SYN2 knobs become the machine's. On its own it adds the menu and nothing else: a machine mod built for it ticks it here. Needs core-dn1 3.1, which the shop takes for it."
+    },
+    {
+      "repo": "irpina/elekloader", "tag": "machines-dn1-v0.1", "file": "machines-0.1-os1.44.elemod",
+      "device": "digitone-mk1", "needs_core": "3.1",
+      "sha256": "5f5589daa6866265ca75d9ae53ed0f6ae6369dfc8a0c5ea3c8a264bf778f862e",
+      "summary": "Machines for the Digitone: sounds that play a machine mod's voice in place of FM, through the Digitone's own filter, mixer and effects, with the AMP page's envelope. MACHINES in the Mod Menu (hold a track key) picks the held track's machine, and a machine track's SYN1 and SYN2 knobs become the machine's. On its own it adds the menu and nothing else: a machine mod built for it ticks it here. Needs core-dn1 3.1, which the shop takes for it."
+    },
+    {
       "repo": "irpina/digitables", "tag": "v1.3", "file": "digitables-1.3.elemod",
       "device": "digitone-mk1", "needs_core": "2.2",
       "sha256": "a9a2335d0f0c80c17103062bb731a3560af5aca3b05b1b4650713dd273ca5511",

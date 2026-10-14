@@ -8,6 +8,10 @@ MACHINES to the Mod Menu and nothing else: machines come in mods of their
 own, and [examples/dn-sine-machine](../../examples/dn-sine-machine) is one
 to start from.
 
+0.1's files are on the [machines-dn1-v0.1](https://github.com/irpina/elekloader/releases/tag/machines-dn1-v0.1) pre-release, and it is in
+the mod shop, beside the cores: a machine mod that requires it (`"requires": ["core",
+"machines"]`) ticks it there, and the page takes core-dn1 3.1 or newer for it.
+
 | | |
 |---|---|
 | needs | core-dn1 3.1 (`resources.core`) |
