@@ -458,8 +458,8 @@ FW_DN = ['fw_active_track', 'fw_blit', 'fw_ev_alloc', 'fw_ev_free', 'fw_ev_queue
          'fw_tempo', 'fw_font_label', 'fw_font_title', 'fw_voice_len', 'fw_voice_params', 'fw_voice_pitch', 'fw_voice_track', 'fw_voices',
          'fw_memcpy', 'fw_memset', 'fw_memchr', 'fw_strcmp', 'fw_strncmp', 'fw_strchr', 'fw_strncpy', 'fw_crc32',
          '__ashldi3', '__lshrdi3', '__ashrdi3', 'fw_textbox', 'fw_transport', 'fw_pattern', 'fw_project']
-CORE_DN3 = ['core_audio_caps', 'core_key_leds', 'core_menu_open', 'core_midi_cc', 'core_param_short', 'core_param_ui_make',
-            'core_render_master', 'core_render_params', 'core_render_voices', 'core_sound_set',
+CORE_DN3 = ['core_audio_caps', 'core_key_leds', 'core_menu_open', 'core_midi_cc', 'core_midi_pc', 'core_param_short',
+            'core_param_ui_make', 'core_render_master', 'core_render_params', 'core_render_voices', 'core_sound_set',
             'core_voices_gate']
 
 
@@ -469,7 +469,8 @@ def check_dn_superset(old_path, new_path):
     the firmware exports, the machines' hooks (3.1: two sites, two tables),
     exclusive audio and the MIDI CCs (3.2: three sites, two tables), the
     key LEDs and the block's parameters (3.3: two sites, two tables), their
-    calls and 3.3's firmware exports."""
+    calls and 3.3's firmware exports, and the program changes (4.0: a site,
+    a table)."""
     with open(old_path) as fh:
         old = json.load(fh)
     with open(new_path) as fh:
@@ -478,9 +479,9 @@ def check_dn_superset(old_path, new_path):
     for k in ('target', 'contribute', 'resources'):
         assert new[k] == old[k], k
     assert all(s in new['sites'] for s in old['sites'])
-    assert len(new['sites']) == len(old['sites']) + 7
+    assert len(new['sites']) == len(old['sites']) + 8
     assert sorted(set(new['collections']) - set(old['collections'])) == [
-        'core_audio', 'core_param_override', 'ev_key_leds', 'ev_midi_cc', 'ev_render_params',
+        'core_audio', 'core_param_override', 'ev_key_leds', 'ev_midi_cc', 'ev_midi_pc', 'ev_render_params',
         'ev_render_voices']
     assert all(new['collections'][k] == v for k, v in old['collections'].items())
     assert sorted(set(new['exports']) - set(old['exports'])) == sorted(CORE_DN3 + FW_DN)
