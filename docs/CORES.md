@@ -47,15 +47,31 @@ Digitone's 3.2 on the core-dn1-v3.2 pre-release, and both are in the shop.
 
 A mod says which core it needs at least (`resources.core` in the file,
 `needs_core` in the shop's list). A build takes the newest core of the
-oldest major line that is new enough ([ADAPTING.md](ADAPTING.md), "Core
-3.0"). So a Digitakt mk1 selection stays on 2.1 unless a mod needs 3.0, and
-a Digitone selection takes 2.3, the newest of the 2.x line, unless a mod
-needs core-dn1 3.0, 3.1 or 3.2, and then it takes 3.2 (3.3 and 4.0 once
-they are released: a mod that needs one of them waits for it; 4.0 starts
-a major line of its own). The web page,
-the kit and the window (from source, and the apps after 0.4.0) tick that
-core for you and keep one. The 0.4.0 apps refuse a build with two cores
-ticked: there, untick the built-in one when you add a newer core.
+oldest major line that is new enough and whose RAM holds the mods
+([ADAPTING.md](ADAPTING.md), "Core 3.0"). So a Digitakt mk1 selection
+stays on 2.1 unless a mod needs 3.0, and a Digitone selection takes 2.3,
+the newest of the 2.x line, unless a mod needs core-dn1 3.0, 3.1 or 3.2,
+and then it takes 3.2 (3.3 once it is released: a mod that needs it waits
+for it).
+
+The RAM decides only on the Digitone. Core-dn1 4.0 starts a major line of
+its own and gives the mods' code, tables and variables 1.25 MB, where the
+2.x and 3.x lines give them 128 KB ([ADAPTING.md](ADAPTING.md), "The
+mods' RAM"). With 4.0 listed, a selection over 128 KB takes 4.0 though
+its mods need only 3.2 (five effects pedals of 25-37 KB each, say), and a
+selection that fits takes 2.3 or 3.2 as before. How a builder tells: each
+mod's file gives the most it can take of the area, its sections with their
+alignment and its table entries, each rounded up to 4 (`ram_bound` in the
+mod list), and a core holds the mods when theirs and its own add up to no
+more than its area (`ram_area`). The linker never lays them out in more.
+When no core that is new enough holds them, the build takes the core it
+would have taken anyway, and the check says how many bytes are over.
+
+The web page, the kit and the window (from source, and the apps after
+0.4.0) tick that core for you and keep one: a core you ticked yourself
+stays while it is new enough and holds the mods. The 0.4.0 apps refuse a
+build with two cores ticked: there, untick the built-in one when you add a
+newer core.
 
 ## What each core adds
 

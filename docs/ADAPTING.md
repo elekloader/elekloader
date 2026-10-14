@@ -239,9 +239,12 @@ mod shop, so the web page and the kit take 3.0 for such a mod.
 **Which core a build takes.** A builder (the app, the web page, the kit)
 takes, of the cores it has for the stock OS, the newest of the oldest major
 line that every selected mod's `resources.core` (the catalog's
-`needs_core`) allows. A selection that needs nothing from 3.0 builds with
-2.x, as it did before 3.0 existed; one that needs 3.0 builds with the
-newest 3.x. A core chosen by hand that is new enough is kept.
+`needs_core`) allows, and whose RAM holds the mods. A selection that needs
+nothing from 3.0 builds with 2.x, as it did before 3.0 existed; one that
+needs 3.0 builds with the newest 3.x. On the Digitone, mods over 128 KB
+together take core-dn1 4.0, which has 1.25 MB ("The mods' RAM", below;
+[CORES.md](CORES.md), "How a build picks one"). A core chosen by hand that
+is new enough and holds the mods is kept.
 
 ### Firmware locations (core 3.0, Digitakt mk1)
 
@@ -881,7 +884,10 @@ effects mods of 25-40 KB each filled it. From core-dn1 4.0 the area is
 `bulk` area. The profile says so (`core_ddr`: from a core's version on, the
 area in place of `ddr`), so a build with an older core keeps 128 KB, and
 mods need no change: the linker relocates them wherever they go. A mod
-that needs more than 128 KB on its own says `"core": "4.0"`.
+that needs more than 128 KB on its own says `"core": "4.0"`. Mods that are
+over 128 KB only together need say nothing: the app, the web page and the
+kit take 4.0 for them when they would take 2.3 or 3.2 ([CORES.md](CORES.md),
+"How a build picks one").
 
 Why there: the OS's instruction operands in DDR end at a 384 KB ring,
 0x43E472C0-0x43EA72C0, whose end it compares at 0x43EA72C8 and

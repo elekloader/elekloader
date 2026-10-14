@@ -98,7 +98,7 @@ const log = buildLogText({ title: 'Your site build log', builder: describeBuilde
 - **`prepare`** does the whole selection:
   - checks that the stock file is the device and OS chosen;
   - adds each mod from the catalog, with the mods it requires;
-  - ticks the core the plan needs;
+  - ticks the core the plan needs, one whose RAM holds the mods;
   - runs the live check.
 - **`examples/minimal/`** does all of this, with downloads and the log, in about a hundred lines.
 
@@ -195,7 +195,7 @@ Cores come only from the catalog, at `init`. A page cannot add a core of its own
 
 - **What each file says about itself:** `file`, `sha256`, `id`, `version`, `device`, `os`, `license`, `requires` and `conflicts`. `kit.ts feed` reads them from the file with the engine.
 - **What a page shows:** `title`, `summary`, `description`, `category`, `author`, `needs_core` (the oldest core the mod links with) and `on_unit` (what has been checked on real hardware).
-- **Which core a build takes:** a catalog may list several cores for one device and OS (core 2.1 and 3.0 for the Digitakt mk1). `planBuild` takes the newest of the oldest major line that every selected mod's `needs_core` allows, so a selection that needs nothing from 3.0 builds with 2.1, byte for byte as before 3.0 was listed. The app and elekloader's page take the same core.
+- **Which core a build takes:** a catalog may list several cores for one device and OS (core 2.1 and 3.0 for the Digitakt mk1). `planBuild` takes the newest of the oldest major line that every selected mod's `needs_core` allows, so a selection that needs nothing from 3.0 builds with 2.1, byte for byte as before 3.0 was listed. The catalog cannot say how much RAM the mods take, so `prepare` plans again once they are loaded, with `planBuild`'s `holds`: a core whose RAM holds them (the builder's mod list gives each file's `ram_bound`, and each core's `ram_area`). On the Digitone, a selection over 128 KB takes core-dn1 4.0 (1.25 MB) where it would take 2.3 or 3.2 ([CORES.md](CORES.md), "How a build picks one"). The app and elekloader's page take the same core.
 - **Where the file comes from:** `source` is a GitHub release (`repo`, `tag`) or a commit (`repo`, the whole `commit`, `path`).
 - **File names are unique.** A site serves every file beside `catalog.json` under that name.
 

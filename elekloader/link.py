@@ -180,6 +180,23 @@ class Mod2:
             return 0
         return d['size'] if sec == '.bss' else d['len']
 
+    def ram_bound(self):
+        """The most it can take of the linker's area, whatever it is linked with:
+        its .run and .bss with their alignment, its table entries (and the zero
+        entry of each table it has), its .fast copy and that copy's entry, each
+        rounded up to 4. link() lays them out in no more than the sum of the
+        mods' bounds, so a builder can tell which core's area holds them
+        (gui.with_core)."""
+        n = 0
+        for sec in ('.run', '.bss'):
+            if self.size(sec):
+                n += _align(self.size(sec), 4) + max(4, self.sections[sec]['align']) - 4
+        n += sum(_align(len(c['data']), 4) for c in self.contribute)
+        n += sum(_align(e, 4) for e in self.collections.values())
+        if self.size('.fast'):
+            n += _align(self.size('.fast'), 4) + FAST_ENTRY
+        return n
+
 
 # ---- checks ---------------------------------------------------------------------------
 
@@ -406,7 +423,7 @@ def link(mods, image):
             at += m.size('.bss')
     bss_end = _align(at, 4)
     if bss_end > ddr_end:
-        more = [(v, a) for v, a in dev.core_ddr if a[1] - a[0] > ddr_end - ddr_base]
+        more = [(v, a) for v, a in dev.core_ddr if a[1] - a[0] >= bss_end - ddr_base]
         raise ModError('the mods need RAM to 0x%08x, past 0x%08x (%d bytes over)%s'
                        % (bss_end, ddr_end, bss_end - ddr_end,
                           '; core %s or newer gives them %d bytes' % (more[0][0], more[0][1][1] - more[0][1][0])

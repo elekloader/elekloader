@@ -185,11 +185,13 @@ export const cmpVersions = (a: string, b: string) => cmpKey(versionKey(a), versi
 
 /** The core a builder takes for a selection: of `versions` (the cores for one device and OS), the newest of the
  * oldest major line with one at least `need`. A new line (3.x beside 2.x) is taken only when a mod needs it, so
- * adding one leaves every other build as it was. -> its index (the last of equals), or null when none is new
- * enough. elemod.pick_core. */
-export function pickCore(versions: string[], need: string | null = null): number | null {
-  const ok = versions.map((_, i) => i).filter(i => need === null || cmpVersions(versions[i], need) >= 0)
+ * adding one leaves every other build as it was. `fits`, if given, says for each core whether its RAM holds the
+ * selection's mods: only those that do count, unless none new enough does (core-dn1 4.0's 1.25 MB beside 3.2's
+ * 128 KB). -> its index (the last of equals), or null when none is new enough. elemod.pick_core. */
+export function pickCore(versions: string[], need: string | null = null, fits: boolean[] | null = null): number | null {
+  let ok = versions.map((_, i) => i).filter(i => need === null || cmpVersions(versions[i], need) >= 0)
   if (!ok.length) return null
+  if (fits !== null && ok.some(i => fits[i])) ok = ok.filter(i => fits[i])
   const major = (i: number) => versionKey(versions[i]).slice(0, 1)
   const low = ok.map(major).reduce((a, b) => (cmpKey(b, a) < 0 ? b : a))
   let best: number | null = null

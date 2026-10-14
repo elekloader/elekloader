@@ -89,6 +89,29 @@ test('versions sort as numbers, and pickCore takes the newest of the oldest line
   assert.equal(pickCore(['2.0a', '2.2', '2.3', '3.0'], '2.2'), 2)
   assert.equal(pickCore(['2.0a', '2.2', '2.3', '3.0'], '3.0'), 3)
   assert.equal(pickCore([], null), null)
+  // fits: whether each core's RAM holds the mods (the Digitone's 4.0 has 1.25 MB, 2.3 and 3.2 128 KB)
+  const dn = ['2.3', '3.2', '4.0', '4.1'], all = [true, true, true, true]
+  assert.equal(pickCore(dn, null, all), 0)
+  assert.equal(pickCore(dn, '3.2', all), 1)
+  assert.equal(pickCore(dn, '3.2', [false, false, true, true]), 3)   // the newest of the next line
+  assert.equal(pickCore(dn, null, [false, false, true, true]), 3)
+  assert.equal(pickCore(dn, '3.2', [true, false, false, false]), 1)  // none new enough holds: as before
+  assert.equal(pickCore(dn, '4.1', [true, true, false, true]), 3)
+  assert.equal(pickCore(dn, '5.0', all), null)
+})
+
+test('a plan whose mods are too big for its core\'s RAM takes the next line that holds them', () => {
+  const cat = structuredClone(CATALOG) as any
+  cat.cores.push(core('core-dn1-2.3.elemod', '1.43', '2.3', 'digitone-mk1'), core('core-dn1-3.2.elemod', '1.43', '3.2', 'digitone-mk1'),
+    core('core-dn1-4.0.elemod', '1.43', '4.0', 'digitone-mk1'))
+  cat.mods.push({ ...mod('pedal', '1.43', { needs_core: '3.2' }), device: 'digitone-mk1' })
+  const c = parseCatalog(cat)
+  const plan = (holds?: (f: string) => boolean) => planBuild(c, 'digitone-mk1', '1.43', ['pedal'], holds && (p => holds(p.file))).core?.file
+  assert.equal(plan(), 'core-dn1-3.2.elemod')
+  assert.equal(plan(() => true), 'core-dn1-3.2.elemod')
+  assert.equal(plan(f => f === 'core-dn1-4.0.elemod'), 'core-dn1-4.0.elemod')
+  assert.equal(plan(() => false), 'core-dn1-3.2.elemod')                       // none holds them: as before
+  assert.equal(planBuild(c, 'digitone-mk1', '1.43', [], p => p.version !== '3.2').core?.file, 'core-dn1-2.3.elemod')
 })
 
 /** A site: its files by URL. */
@@ -197,6 +220,34 @@ test('prepare: the stock file must be the one chosen, the plan\'s files come fro
   assert.deepEqual(other, { ok: false, error: 'This OS file is Digitakt mk1 1.54, not the digitakt-mk1 OS 1.53 chosen.', device: { key: 'digitakt-mk1' } })
   assert.deepEqual(await prepare(fake('1.54'), { catalog: c, device: 'digitakt-mk1', os: '1.54', stock, ids: ['fancy'] }),
     { ok: false, error: 'Not available for OS 1.54: fancy.' })
+})
+
+test('prepare: mods whose RAM is more than the plan\'s core holds take the catalog\'s core that holds them', async () => {
+  const cat = structuredClone(CATALOG) as any
+  cat.cores.push(core('core-dn1-3.2.elemod', '1.43', '3.2', 'digitone-mk1'), core('core-dn1-4.0.elemod', '1.43', '4.0', 'digitone-mk1'))
+  const ids = ['p1', 'p2', 'p3', 'p4', 'p5']
+  for (const id of ids) cat.mods.push({ ...mod(id, '1.43', { needs_core: '3.2' }), device: 'digitone-mk1' })
+  const c = parseCatalog(cat)
+  const kb = 1024
+  const fake = {
+    load: async () => ({}),
+    setStock: async () => ({ ok: true, file: 'x.syx', device: 'Digitone mk1', os: '1.43', dev: { key: 'digitone-mk1' } }),
+    addCatalogMod: async (file: string) => ({ ok: true, mod: { path: '/work/mods/' + file } }),
+    tick: async (enabled: string[], path: string) => [...new Set([...enabled, path])].sort(),
+    mods: async () => [
+      { path: '/work/core/core-dn1-3.2.elemod', file: 'core-dn1-3.2.elemod', id: 'core', builtin: true, fits: true, ram_bound: 6 * kb, ram_area: 128 * kb },
+      { path: '/work/core/core-dn1-4.0.elemod', file: 'core-dn1-4.0.elemod', id: 'core', builtin: true, fits: true, ram_bound: 6 * kb, ram_area: 1280 * kb },
+      ...ids.map(id => ({ path: `/work/mods/${id}-1.43.elemod`, file: `${id}-1.43.elemod`, id, builtin: false, fits: true, ram_bound: 30 * kb })),
+    ],
+    check: async (enabled: string[]) => ({ ok: true, order: enabled }),
+  } as any
+  const stock = new File([new Uint8Array(4)], 'x.syx')
+  const coreOf = async (sel: string[]) => {
+    const p = await prepare(fake, { catalog: c, device: 'digitone-mk1', os: '1.43', stock, ids: sel })
+    return p.ok && p.enabled.filter(x => x.startsWith('/work/core/'))
+  }
+  assert.deepEqual(await coreOf(ids.slice(0, 4)), ['/work/core/core-dn1-3.2.elemod'])   // 120 KB + 6 KB: 3.2 holds them
+  assert.deepEqual(await coreOf(ids), ['/work/core/core-dn1-4.0.elemod'])              // 150 KB: 4.0
 })
 
 test('the build steps and the build log', () => {

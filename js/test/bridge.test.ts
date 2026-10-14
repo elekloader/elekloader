@@ -1,12 +1,50 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// The bridge without firmware: what it says about files that are not stock or not mods, and its device list.
+// The bridge without firmware: what it says about files that are not stock or not mods, its device list, and the core
+// its tick takes.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { Bridge } from '../src/bridge.ts'
 import { sha } from '../src/bytes.ts'
+import { type Desc, oneCore, withRequirements } from '../src/model.ts'
 import { VERSION } from '../src/version.ts'
 import { lcg } from './helpers.ts'
+
+test('tick: a selection too big for its core takes one with more RAM (test_units.py\'s cases)', () => {
+  const kb = 1024
+  const d = new Map<string, Desc>([
+    ['app/core-dn1-2.3.elemod', { id: 'core', version: '2.3', fits: true, requires: [], ram_bound: 4 * kb, ram_area: 128 * kb }],
+    ['app/core-dn1-3.2.elemod', { id: 'core', version: '3.2', fits: true, requires: [], ram_bound: 6 * kb, ram_area: 128 * kb }],
+    ['app/core-dn1-4.0.elemod', { id: 'core', version: '4.0', fits: true, requires: [], ram_bound: 6 * kb, ram_area: 1280 * kb }],
+    ['lib/tiny.elemod', { id: 'tiny', fits: true, requires: ['core'], ram_bound: kb }],
+    ['lib/whole.elemod', { id: 'whole', fits: true, format: 1 }],
+    ['lib/huge.elemod', { id: 'huge', fits: true, requires: ['core'], needs_core: '3.2', ram_bound: 2000 * kb }],
+  ])
+  const pedals = [1, 2, 3, 4, 5].map(i => `lib/pedal${i}.elemod`)
+  pedals.forEach((p, i) => d.set(p, { id: `pedal${i + 1}`, fits: true, requires: ['core'], needs_core: '3.2', ram_bound: 30 * kb }))
+  const [c23, c32, c40] = ['app/core-dn1-2.3.elemod', 'app/core-dn1-3.2.elemod', 'app/core-dn1-4.0.elemod']
+  const tick = (on: Iterable<string>, p: string) => withRequirements(d, on, p)
+  const is = (got: Set<string>, want: string[]) => assert.deepEqual([...got].sort(), [...want].sort())
+  let on = new Set<string>()
+  pedals.slice(0, 4).forEach((p, k) => {                         // up to 120 KB + 3.2's 6 KB: 3.2 holds them
+    on = tick(on, p)
+    is(on, [...pedals.slice(0, k + 1), c32])
+  })
+  is(tick(on, pedals[4]), [...pedals, c40])                       // 150 KB: 4.0 in 3.2's place
+  is(tick([], 'lib/tiny.elemod'), ['lib/tiny.elemod', c23])
+  is(tick(['lib/tiny.elemod', c23], pedals[0]), ['lib/tiny.elemod', pedals[0], c32])
+  is(tick([c40], 'lib/tiny.elemod'), [c40, 'lib/tiny.elemod'])
+  is(tick([c32], pedals[0]), [c32, pedals[0]])
+  d.set('lib/edge.elemod', { id: 'edge', fits: true, requires: ['core'], needs_core: '3.2', ram_bound: 122 * kb })
+  is(tick([], 'lib/edge.elemod'), ['lib/edge.elemod', c32])
+  d.get('lib/edge.elemod')!.ram_bound += 1
+  is(tick([], 'lib/edge.elemod'), ['lib/edge.elemod', c40])
+  is(tick([], 'lib/huge.elemod'), ['lib/huge.elemod', c32])     // held by no core: as before
+  is(tick([c32], 'lib/huge.elemod'), ['lib/huge.elemod', c32])
+  is(tick(['lib/whole.elemod'], 'lib/tiny.elemod'), ['lib/whole.elemod', 'lib/tiny.elemod', c23])
+  is(oneCore(d, [c23, c32, c40, ...pedals]), [...pedals, c40])
+  is(oneCore(d, [c23, c32, c40, 'lib/tiny.elemod']), [c23, 'lib/tiny.elemod'])
+})
 
 test('the version is elekloader\'s', () => {
   const init = readFileSync(new URL('../../elekloader/__init__.py', import.meta.url), 'utf8')

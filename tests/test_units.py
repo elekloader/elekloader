@@ -50,6 +50,64 @@ def test_versions_sort_and_the_core_a_build_takes():
     assert elemod.pick_core(['2.0a', '2.2', '2.3', '3.0'], '2.2') == 2
     assert elemod.pick_core(['2.0a', '2.2', '2.3', '3.0'], '3.0') == 3
     assert elemod.pick_core([]) is None
+    # fits: whether each core's RAM holds the mods (the Digitone's 4.0 has 1.25 MB, 2.3 and 3.2 128 KB)
+    dn = ['2.3', '3.2', '4.0', '4.1']
+    assert elemod.pick_core(dn, None, [True] * 4) == 0
+    assert elemod.pick_core(dn, '3.2', [True] * 4) == 1
+    assert elemod.pick_core(dn, '3.2', [False, False, True, True]) == 3   # the newest of the next line
+    assert elemod.pick_core(dn, None, [False, False, True, True]) == 3
+    assert elemod.pick_core(dn, '3.2', [True, False, False, False]) == 1  # none new enough holds: as before
+    assert elemod.pick_core(dn, '4.1', [True, True, False, True]) == 3
+    assert elemod.pick_core(dn, '5.0', [True] * 4) is None
+
+
+def test_a_selection_too_big_for_its_core_takes_one_with_more_ram():
+    from elekloader.gui import one_core, with_requirements
+    kb = 1024
+    d = {
+        'app/core-dn1-2.3.elemod': {'id': 'core', 'version': '2.3', 'fits': True, 'requires': [],
+                                    'ram_bound': 4 * kb, 'ram_area': 128 * kb},
+        'app/core-dn1-3.2.elemod': {'id': 'core', 'version': '3.2', 'fits': True, 'requires': [],
+                                    'ram_bound': 6 * kb, 'ram_area': 128 * kb},
+        'app/core-dn1-4.0.elemod': {'id': 'core', 'version': '4.0', 'fits': True, 'requires': [],
+                                    'ram_bound': 6 * kb, 'ram_area': 1280 * kb},
+        'lib/tiny.elemod': {'id': 'tiny', 'fits': True, 'requires': ['core'], 'ram_bound': kb},
+        'lib/whole.elemod': {'id': 'whole', 'fits': True, 'format': 1},
+        'lib/huge.elemod': {'id': 'huge', 'fits': True, 'requires': ['core'], 'needs_core': '3.2',
+                            'ram_bound': 2000 * kb},
+    }
+    for i in range(1, 6):                          # five pedals of 30 KB that need core 3.2
+        d['lib/pedal%d.elemod' % i] = {'id': 'pedal%d' % i, 'fits': True, 'requires': ['core'],
+                                       'needs_core': '3.2', 'ram_bound': 30 * kb}
+    c23, c32, c40 = 'app/core-dn1-2.3.elemod', 'app/core-dn1-3.2.elemod', 'app/core-dn1-4.0.elemod'
+    pedals = ['lib/pedal%d.elemod' % i for i in range(1, 6)]
+    on = set()
+    for k, p in enumerate(pedals[:4]):             # up to 120 KB + 3.2's 6 KB: 3.2 holds them
+        on = with_requirements(d, on, p)
+        assert on == set(pedals[:k + 1]) | {c32}, on
+    on = with_requirements(d, on, pedals[4])       # 150 KB: 4.0 in 3.2's place
+    assert on == set(pedals) | {c40}
+    # what needs nothing stays on 2.3, and a small selection on 3.2
+    assert with_requirements(d, set(), 'lib/tiny.elemod') == {'lib/tiny.elemod', c23}
+    assert with_requirements(d, {'lib/tiny.elemod', c23}, pedals[0]) == {'lib/tiny.elemod', pedals[0], c32}
+    # a core chosen by hand that will do is kept, 4.0 for a small selection too
+    assert with_requirements(d, {c40}, 'lib/tiny.elemod') == {c40, 'lib/tiny.elemod'}
+    assert with_requirements(d, {c32}, pedals[0]) == {c32, pedals[0]}
+    # exactly 3.2's area: 3.2; a byte more: 4.0
+    d['lib/edge.elemod'] = {'id': 'edge', 'fits': True, 'requires': ['core'], 'needs_core': '3.2',
+                            'ram_bound': 122 * kb}
+    assert with_requirements(d, set(), 'lib/edge.elemod') == {'lib/edge.elemod', c32}
+    d['lib/edge.elemod']['ram_bound'] += 1
+    assert with_requirements(d, set(), 'lib/edge.elemod') == {'lib/edge.elemod', c40}
+    # held by no core: as before (3.2), for the check to say how much RAM is over
+    assert with_requirements(d, set(), 'lib/huge.elemod') == {'lib/huge.elemod', c32}
+    assert with_requirements(d, {c32}, 'lib/huge.elemod') == {'lib/huge.elemod', c32}
+    # a file with no ram_bound (a whole build, an unreadable file) counts as nothing
+    assert with_requirements(d, {'lib/whole.elemod'}, 'lib/tiny.elemod') == {'lib/whole.elemod',
+                                                                              'lib/tiny.elemod', c23}
+    # the first run's ticks: one core, the one that holds them
+    assert one_core(d, {c23, c32, c40} | set(pedals)) == set(pedals) | {c40}
+    assert one_core(d, {c23, c32, c40, 'lib/tiny.elemod'}) == {c23, 'lib/tiny.elemod'}
 
 
 def test_a_mod_that_needs_core_3_ticks_core_3():

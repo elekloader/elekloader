@@ -81,25 +81,36 @@ def with_requirements(descs, enabled, path):
 
 
 def with_core(descs, out):
-    """-> `out` with the core its mods need (their resources.core): the core
-    enabled when it is new enough, else the one elemod.pick_core takes of those
-    listed for the stock firmware, in its place (the newest, when none is new
-    enough, for the check to say so)."""
+    """-> `out` with the core its mods need (their resources.core) and whose RAM
+    holds them: the core enabled when it is new enough and holds them (or no
+    core listed for the stock firmware does both), else the one
+    elemod.pick_core takes of those listed, in its place (the newest, when none
+    is new enough, for the check to say so). A core holds the mods when its
+    area (describe's ram_area) is at least their ram_bound and its own."""
     need = None
     for p in out:
         v = descs.get(p, {}).get('needs_core')
         if v and (need is None or elemod.version_key(v) > elemod.version_key(need)):
             need = v
+    ram = sum(descs.get(p, {}).get('ram_bound', 0) for p in out
+              if descs.get(p, {}).get('id') != 'core')
+
+    def new_enough(p):
+        return need is None or elemod.version_key(descs[p].get('version', '')) >= elemod.version_key(need)
+
+    def holds(p):
+        return 'ram_area' not in descs[p] or ram + descs[p].get('ram_bound', 0) <= descs[p]['ram_area']
+
     on = [p for p in out if descs.get(p, {}).get('id') == 'core']
-    if on and (need is None or all(elemod.version_key(descs[p].get('version', ''))
-                                   >= elemod.version_key(need) for p in on)):
-        return out
     cands = sorted((p for p, x in descs.items()
                     if x.get('id') == 'core' and x.get('fits') and 'error' not in x),
                    key=os.path.basename)
+    if on and all(new_enough(p) for p in on) and (all(holds(p) for p in on)
+                                                  or not any(new_enough(p) and holds(p) for p in cands)):
+        return out
     if not cands:
         return out
-    i = elemod.pick_core([descs[p].get('version', '') for p in cands], need)
+    i = elemod.pick_core([descs[p].get('version', '') for p in cands], need, [holds(p) for p in cands])
     if i is None:
         if on:
             return out
@@ -214,6 +225,10 @@ class LoaderModel:
             d['format'] = 2
             d['ram'] = m.size('.run') + m.size('.bss')
             d['fast'] = m.size('.fast')
+            d['ram_bound'] = m.ram_bound()
+            if '.boot' in m.sections:          # a core: the linker's area with it (with_core)
+                lo, hi = m.dev.ddr_for(m.version)
+                d['ram_area'] = hi - lo
             d['events'] = sorted((c['to'], c['order'], c['relocs'][0][2][4:])
                                  for c in m.contribute if c['to'].startswith('ev_'))
             adds = {}

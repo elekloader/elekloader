@@ -640,6 +640,58 @@ def test_digitone_core_4_gives_the_mods_1_25_mb():
                 r['problems']
 
 
+def test_digitone_mods_over_128_kb_take_core_4():
+    """A builder (the window, the web page, the kit: gui.with_requirements and
+    the kit's prepare, which take the same core) takes core-dn1 4.0 in 3.2's
+    place when the mods' RAM is more than 3.2's 128 KB, though they need only
+    3.2: with both listed, a small mod that needs 3.2 takes 3.2, 200 KB of mods
+    take 4.0 and link, and more than 4.0 holds stays on 3.2, refused with no
+    core named."""
+    if not CORE_DN32 or not os.path.exists(CORE_DN32):
+        raise Skip('missing ELEKLOADER_CORE_DN1_32 (the released core-dn1-3.2.elemod)')
+    tc = [x for x in devices.devices() if x.key == 'digitone-mk1'][0].toolchain
+    if not shutil.which(os.environ.get('ELEKLOADER_CROSS', tc['prefix']) + 'gcc'):
+        raise Skip('no m68k cross compiler')
+    from elekloader import gui
+    with tempfile.TemporaryDirectory() as tmp:
+        lib, cores = os.path.join(tmp, 'lib'), os.path.join(tmp, 'cores')
+        os.makedirs(lib)
+        os.makedirs(cores)
+        shutil.copy(dn_core(tmp), cores)
+        shutil.copy(CORE_DN32, cores)
+        for name, size in (('small', 1000), ('big', 200000), ('huge', 1400000)):
+            d = os.path.join(tmp, name)
+            os.makedirs(d)
+            with open(os.path.join(d, name + '.c'), 'w') as fh:
+                fh.write('char %s_buf[%d];\nvoid %s_tick(void *ctrl) { (void)ctrl; %s_buf[0]++; }\n'
+                         % (name, size, name, name))
+            with open(os.path.join(d, 'mod.json'), 'w') as fh:
+                json.dump({'id': name, 'version': '0.1', 'license': 'GPL-2.0-or-later', 'device': 'digitone-mk1',
+                           'os': '1.43', 'sources': [name + '.c'], 'resources': {'core': '3.2'},
+                           'subscribe': [{'event': 'ev_tick', 'fn': name + '_tick'}], 'requires': ['core']}, fh)
+            shutil.copy(build.build(d, DN_STOCK, tmp)[0], lib)
+        m = gui.LoaderModel(stock=DN_STOCK, library=lib, also=[cores], settings=os.path.join(tmp, 's.json'))
+        descs = {p: m.describe(p) for p in m.files()}
+        at = {(x['id'] if x['id'] != 'core' else x['version']): p for p, x in descs.items()}
+        assert descs[at['3.2']]['ram_area'] == 0x20000 and descs[at[DN_VERSION]]['ram_area'] == 0x140000
+
+        def core_of(on):
+            return [descs[p]['version'] for p in on if descs[p]['id'] == 'core']
+
+        small = gui.with_requirements(descs, set(), at['small'])
+        assert core_of(small) == ['3.2'] and m.check(sorted(small))['ok']
+        big = gui.with_requirements(descs, small, at['big'])
+        assert core_of(big) == [DN_VERSION], big
+        r = m.check(sorted(big))
+        assert r['ok'] and r['ram'][1] == 0x140000, r.get('problems')
+        assert 200000 < r['ram'][0] <= sum(descs[p]['ram_bound'] for p in big), r['ram']
+        huge = gui.with_requirements(descs, set(), at['huge'])
+        assert core_of(huge) == ['3.2']
+        r = m.check(sorted(huge))
+        assert not r['ok'] and any('the mods need RAM to' in x and 'or newer gives them' not in x
+                                   for x in r['problems']), r['problems']
+
+
 def test_digitone_program_change_example():
     """examples/dn-progchange, on core-dn1 4.0's ev_midi_pc: it patches no
     site, needs 4.0, carries the same code for 1.43 and 1.44 (an empty port),

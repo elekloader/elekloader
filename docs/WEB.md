@@ -141,7 +141,10 @@ stock file.
   adding it. If it needs a newer core than the one ticked (`needs_core`, or
   the file's own `resources.core`), the core a build takes for it (the
   newest of the oldest major line that is new enough: docs/ADAPTING.md,
-  "Core 3.0") is ticked in its place, and the page says so.
+  "Core 3.0") is ticked in its place, and the page says so. So is a core
+  whose RAM holds the mods when the ticked one's does not (on the
+  Digitone, core-dn1 4.0's 1.25 MB in place of 3.2's 128 KB:
+  docs/CORES.md, "How a build picks one").
 
 To add a mod to the shop, publish its `.elemod` in a GitHub release, add an
 item to `web/catalog.json` with the asset's sha256 (the release page shows

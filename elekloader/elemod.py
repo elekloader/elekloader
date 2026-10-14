@@ -169,15 +169,19 @@ def version_key(v):
                  for x in re.findall(r'[0-9]+|[^0-9]+', str(v)))
 
 
-def pick_core(versions, need=None):
+def pick_core(versions, need=None, fits=None):
     """The core a builder takes for a selection: of `versions` (the cores for one
     device and OS), the newest of the oldest major line with one at least `need`.
     A new line (3.x beside 2.x) is taken only when a mod needs it, so adding one
-    leaves every other build as it was. -> its index (the last of equals), or
-    None when none is new enough."""
+    leaves every other build as it was. `fits`, if given, says for each core
+    whether its RAM holds the selection's mods: only those that do count, unless
+    none new enough does (core-dn1 4.0's 1.25 MB beside 3.2's 128 KB). -> its
+    index (the last of equals), or None when none is new enough."""
     ok = [i for i, v in enumerate(versions) if need is None or version_key(v) >= version_key(need)]
     if not ok:
         return None
+    if fits is not None and any(fits[i] for i in ok):
+        ok = [i for i in ok if fits[i]]
     major = {i: version_key(versions[i])[:1] for i in ok}
     low = min(major.values())
     return max((i for i in ok if major[i] == low), key=lambda i: (version_key(versions[i]), i))

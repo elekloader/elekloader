@@ -32,6 +32,7 @@ export type Mod = {
   path: string; file: string; id: string; label: string; builtin: boolean; error?: string
   version?: string; os?: string; fits?: boolean; title?: string; description?: string; category?: string; author?: string
   license?: string; sha256?: string; requires?: string[]; conflicts?: string[]; ram?: number; fast?: number
+  ram_bound?: number; ram_area?: number           // the most it takes of the linker's area; a core's area (withCore)
   for_device?: string; for_label?: string; status?: string
   [fact: string]: unknown
 }

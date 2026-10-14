@@ -200,6 +200,32 @@ def test_refuses_over_budget():
            'SRAM')
 
 
+def test_ram_bound_is_at_least_what_the_link_lays_out():
+    """A builder picks a core by the mods' ram_bound (gui.with_core): whatever
+    is linked together, the link's RAM is never more than their sum, with odd
+    sizes and wide alignments too."""
+    def used(ms):
+        lay = link.link(ms, image()).layout
+        return lay['bss'][1] - lay['ddr'][0]
+
+    sets = [mods('core', *sub) for r in range(0, 4)
+            for sub in itertools.combinations(('sysinfo', 'fast-audio', 'slicer'), r)]
+    for ms in sets + [mods('core', 'fast-audio', 'opts'), mods(*IDS)]:
+        assert 0 < used(ms) <= sum(m.ram_bound() for m in ms), [m.label() for m in ms]
+    ds = [doc(i) for i in IDS]
+    for k, d in enumerate(ds):
+        for sec, s in d['sections'].items():
+            if sec == '.bss':
+                s['size'] = elemod._int(s['size'], 'test') + 2 * k + 1
+            elif sec == '.run':
+                s['parts'] = s['parts'] + [['hex', '00' * (k + 1)]]
+                s.pop('len', None)
+            if sec in ('.run', '.bss'):
+                s['align'] = (16, 64, 8, 256, 32)[k]
+    ms = [link.Mod2(d, i) for d, i in zip(ds, IDS)]
+    assert used(ms) <= sum(m.ram_bound() for m in ms), (used(ms), sum(m.ram_bound() for m in ms))
+
+
 def test_full_build_verifies():
     image()
     for i in IDS:

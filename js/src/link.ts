@@ -196,6 +196,21 @@ export class Mod2 implements AnyMod {
     if (!d) return 0
     return sec === '.bss' ? d.size! : d.len!
   }
+
+  /** The most it can take of the linker's area, whatever it is linked with: its .run and .bss with their alignment,
+   * its table entries (and the zero entry of each table it has), its .fast copy and that copy's entry, each rounded up
+   * to 4. link() lays them out in no more than the sum of the mods' bounds, so a builder can tell which core's area
+   * holds them (model.ts withCore). */
+  ramBound(): number {
+    let n = 0
+    for (const sec of ['.run', '.bss']) {
+      if (this.size(sec)) n += align(this.size(sec), 4) + Math.max(4, this.sections.get(sec)!.align) - 4
+    }
+    for (const c of this.contribute) n += align(c.data.length, 4)
+    for (const e of this.collections.values()) n += align(e, 4)
+    if (this.size('.fast')) n += align(this.size('.fast'), 4) + FAST_ENTRY
+    return n
+  }
 }
 
 // ---- checks ----
@@ -440,7 +455,7 @@ export function link(mods: Mod2[], image: Uint8Array): Linked {
   }
   const bssEnd = align(at, 4)
   if (bssEnd > ddrEnd) {
-    const more = dev.coreDdr.filter(([, a]) => a[1] - a[0] > ddrEnd - ddrBase)
+    const more = dev.coreDdr.filter(([, a]) => a[1] - a[0] >= bssEnd - ddrBase)
     throw new ModError(`the mods need RAM to ${hex8(bssEnd)}, past ${hex8(ddrEnd)} (${bssEnd - ddrEnd} bytes over)`
       + (more.length ? `; core ${more[0][0]} or newer gives them ${more[0][1][1] - more[0][1][0]} bytes` : ''))
   }

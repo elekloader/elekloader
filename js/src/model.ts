@@ -6,7 +6,7 @@ import { sha } from './bytes.ts'
 import type { Device, Release } from './devices.ts'
 import { type AnyMod, EXTS, ModError, cmpVersions, get, pickCore } from './elemod.ts'
 import * as formats from './formats.ts'
-import { type Mod2, link } from './link.ts'
+import { type Mod2, ddrFor, link } from './link.ts'
 import { apply, type Mod } from './elemod.ts'
 import { basename, build as patchBuild, dirname, loadAny, save } from './patch.ts'
 import { PyException, truthy } from './py.ts'
@@ -79,20 +79,25 @@ export function withRequirements(descs: Map<string, Desc>, enabled: Iterable<str
   return core ? withCore(descs, out) : out
 }
 
-/** `out` with the core its mods need (their resources.core): the core enabled when it is new enough, else the one
- * pickCore takes of those listed for the stock firmware, in its place (the newest, when none is new enough, for the
- * check to say so). gui.with_core. */
+/** `out` with the core its mods need (their resources.core) and whose RAM holds them: the core enabled when it is new
+ * enough and holds them (or no core listed for the stock firmware does both), else the one pickCore takes of those
+ * listed, in its place (the newest, when none is new enough, for the check to say so). A core holds the mods when its
+ * area (describe's ram_area) is at least their ram_bound and its own. gui.with_core. */
 export function withCore(descs: Map<string, Desc>, out: Set<string>): Set<string> {
   let need: string | null = null
   for (const p of out) {
     const v = descs.get(p)?.needs_core
     if (v && (need === null || cmpVersions(v, need) > 0)) need = v
   }
+  let ram = 0
+  for (const p of out) if (descs.get(p)?.id !== 'core') ram += descs.get(p)?.ram_bound ?? 0
+  const newEnough = (p: string) => need === null || cmpVersions(descs.get(p)!.version ?? '', need) >= 0
+  const holds = (p: string) => !('ram_area' in descs.get(p)!) || ram + (descs.get(p)!.ram_bound ?? 0) <= descs.get(p)!.ram_area
   const on = [...out].filter(p => descs.get(p)?.id === 'core')
-  if (on.length && (need === null || on.every(p => cmpVersions(descs.get(p)!.version ?? '', need!) >= 0))) return out
   const cands = candidates(descs, 'core')
+  if (on.length && on.every(newEnough) && (on.every(holds) || !cands.some(p => newEnough(p) && holds(p)))) return out
   if (!cands.length) return out
-  let i = pickCore(cands.map(p => descs.get(p)!.version ?? ''), need)
+  let i = pickCore(cands.map(p => descs.get(p)!.version ?? ''), need, cands.map(holds))
   if (i === null) {
     if (on.length) return out
     i = cands.length - 1
@@ -211,6 +216,11 @@ export class LoaderModel {
       d.format = 2
       d.ram = m2.size('.run') + m2.size('.bss')
       d.fast = m2.size('.fast')
+      d.ram_bound = m2.ramBound()
+      if (m2.sections.has('.boot')) {         // a core: the linker's area with it (withCore)
+        const [lo, hi] = ddrFor(m2.dev, m2.version)
+        d.ram_area = hi - lo
+      }
       d.events = m2.contribute.filter(c => c.to.startsWith('ev_')).map(c => {
         if (!c.relocs.length) throw new Error('IndexError: list index out of range')
         return [c.to, c.order, c.relocs[0][2].slice(4)]

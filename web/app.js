@@ -150,7 +150,8 @@ const lib = { device: S.libDevice || (S.profiles.find(p => p.id === S.current) |
 const OWN = '\u0000own';                         // the "Your files" kind
 const cmpVer = (a, b) => String(a).localeCompare(String(b), undefined, { numeric: true });
 // The core a build takes (elemod.pick_core): of these cores, the newest of the oldest major line that is at least
-// `need`, so a selection that needs nothing from core 3.0 stays on 2.x. -> a core, or undefined.
+// `need`, so a selection that needs nothing from core 3.0 stays on 2.x. The engine's tick then also weighs the mods'
+// RAM against each core's (gui.with_core). -> a core, or undefined.
 function pickCore(cores, need) {
   const major = c => parseInt(c.version, 10) || 0;
   const ok = cores.filter(c => !need || cmpVer(c.version, need) >= 0);
@@ -1193,25 +1194,28 @@ async function addMod(name, data, tickIt = true, sha256 = null) {
 async function tickWithCore(p) {
   const d = desc(p);
   const want = d && (shopItem(d) || {}).needs_core;
+  const coreOn = () => st.mods.find(x => x.id === 'core' && st.enabled.has(x.path));
+  const was = coreOn();
   if (want) {
     const cores = st.mods.filter(x => x.id === 'core' && x.fits);
-    const on = cores.find(x => st.enabled.has(x.path));
-    if (on && cmpVer(on.version, want) < 0) {
+    if (was && cmpVer(was.version, want) < 0) {
       const best = pickCore(cores, want);
       if (best) {
-        st.enabled.delete(on.path);
+        st.enabled.delete(was.path);
         st.enabled.add(best.path);
-        toast(`Core ${on.version} → ${best.version}: ${d.title} needs core ${want} or newer.`);
       }
     }
   }
-  // the engine's tick swaps the core too, for a file whose own resources.core asks for a newer one
-  const coreOn = () => st.mods.find(x => x.id === 'core' && st.enabled.has(x.path));
-  const was = coreOn();
+  // the engine's tick swaps the core too: for a file whose own resources.core asks for a newer one, and for mods
+  // whose RAM is more than the core's area holds (with_core: core-dn1 4.0 has 1.25 MB, 3.2 128 KB)
   st.enabled = new Set(await engine.call('tick', { enabled: [...st.enabled], path: p }));
   const now = coreOn();
-  if (was && now && was.path !== now.path && d)
-    toast(`Core ${was.version} → ${now.version}: ${d.title} needs core ${d.needs_core || now.version} or newer.`);
+  if (was && now && was.path !== now.path && d) {
+    const need = [want, d.needs_core].filter(Boolean).sort(cmpVer).pop() || now.version;
+    toast(`Core ${was.version} → ${now.version}: ` + ((now.ram_area || 0) > (was.ram_area || 0)
+      ? `your mods need more RAM than core ${was.version}'s ${Math.round(was.ram_area / 1024)} KB.`
+      : `${d.title} needs core ${need} or newer.`));
+  }
 }
 
 async function addMods(files) {
