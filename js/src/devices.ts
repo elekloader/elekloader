@@ -68,6 +68,7 @@ export const DIGITAKT_MK1: Device = {
   stage: 0x40200000, flashAt: 0x80000, flashLimit: 0x380000,
   areas: { ddr: [0x47be0000, 0x47c00000], 'sram-tail': [0x8000f700, 0x80010000], 'sram-block': [0x80003360, 0x80008000] },
   ddr: [0x47be0000, 0x47c00000], sramCode: [0x8000f700, 0x80010000], fastTable: 'fa_copies',
+  coreDdr: [['4.0', [0x47bc0000, 0x47c00000]]],   // core 4.0: 256 KB
   recovery: 'hold FUNC while powering on for the startup menu, then send the stock .syx',
 }
 

@@ -26,6 +26,7 @@ There is one core file per device and OS:
 | Digitakt mk1 | 1.54 | `core-2.1-os1.54.elemod` | the latest release (v0.4.0) |
 | Digitakt mk1 | 1.53 | `core-3.0.elemod` | the [core-v3.0](https://github.com/irpina/elekloader/releases/tag/core-v3.0) pre-release, for mods that need the 3.x line |
 | Digitakt mk1 | 1.54 | `core-3.0-os1.54.elemod` | the same pre-release |
+| Digitakt mk1 | 1.53, 1.54 | `core-4.0.elemod`, `core-4.0-os1.54.elemod` | on main, not released yet: build them ([below](#building-a-core)) |
 | Digitone mk1, Digitone Keys | 1.43 | `core-dn1-2.3.elemod` | the [core-dn1-v2.3](https://github.com/irpina/elekloader/releases/tag/core-dn1-v2.3) pre-release (v0.4.0 has 2.0a) |
 | Digitone mk1, Digitone Keys | 1.44 | `core-dn1-2.3-os1.44.elemod` | the same pre-release (v0.4.0 has 2.0a) |
 | Digitone mk1, Digitone Keys | 1.43 | `core-dn1-3.2.elemod` | the [core-dn1-v3.2](https://github.com/irpina/elekloader/releases/tag/core-dn1-v3.2) pre-release, for mods that need the 3.x line |
@@ -54,9 +55,10 @@ the newest of the 2.x line, unless a mod needs core-dn1 3.0, 3.1 or 3.2,
 and then it takes 3.2 (3.3 once it is released: a mod that needs it waits
 for it).
 
-The RAM decides only on the Digitone. Core-dn1 4.0 starts a major line of
-its own and gives the mods' code, tables and variables 1.25 MB, where the
-2.x and 3.x lines give them 128 KB ([ADAPTING.md](ADAPTING.md), "The
+The RAM decides with a 4.0 core. Core-dn1 4.0 starts a major line of its
+own and gives the mods' code, tables and variables 1.25 MB, where the
+2.x and 3.x lines give them 128 KB; the Digitakt mk1's core 4.0 gives them
+256 KB ([ADAPTING.md](ADAPTING.md), "The
 mods' RAM"). With 4.0 listed, a selection over 128 KB takes 4.0 though
 its mods need only 3.2 (five effects pedals of 25-37 KB each, say), and a
 selection that fits takes 2.3 or 3.2 as before. How a builder tells: each

@@ -1,8 +1,8 @@
 {
- "id": "core", "version": "3.0",
+ "id": "core", "version": "4.0",
  "license": "GPL-2.0-or-later",
  "title": "core", "category": "Framework", "author": "irpina",
- "description": "The boot copier, the hook bus, SRC machine slots, and from 3.0 the firmware locations as named exports and machines that describe their own page: every other mod needs it. On its own it changes nothing the unit does.",
+ "description": "The boot copier, the hook bus, SRC machine slots, from 3.0 the firmware locations as named exports and machines that describe their own page, and from 4.0 256 KB for the mods' code, tables and variables (from 0x47BC0000, in place of the 128 KB at 0x47BE0000): every other mod needs it. On its own it changes nothing the unit does.",
  "device": "digitakt-mk1", "os": "1.53",
  "sources": ["core.s", "settings.s", "render.s", "machines.s", "fw.s"],
  "defsym": {

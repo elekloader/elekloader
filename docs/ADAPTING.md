@@ -64,9 +64,10 @@ what you see when it is broken (section 5 has the fixes).
    another mod's table entries claim. *"... overlap"*.
 6. **Let the linker place you.** Your code and data go in sections; never
    hard-code the address of your own code or data. Budgets are shared by
-   every mod: on the Digitakt mk1, 128 KB of RAM (`.run` + `.bss`) and
-   2304 bytes of fast SRAM (`.fast`); on the Digitone mk1 128 KB, or
-   1.25 MB with core-dn1 4.0 ("The mods' RAM" below). *"the mods need RAM
+   every mod: on the Digitakt mk1, 128 KB of RAM (`.run` + `.bss`), or
+   256 KB with core 4.0, and 2304 bytes of fast SRAM (`.fast`); on the
+   Digitone mk1 128 KB, or 1.25 MB with core-dn1 4.0 ("The mods' RAM"
+   below). *"the mods need RAM
    to ..."*.
 7. **Only relocatable references.** The linker relocates 32-bit absolute and
    32/16-bit PC-relative references. Use the device's compiler flags (the
@@ -241,8 +242,9 @@ takes, of the cores it has for the stock OS, the newest of the oldest major
 line that every selected mod's `resources.core` (the catalog's
 `needs_core`) allows, and whose RAM holds the mods. A selection that needs
 nothing from 3.0 builds with 2.x, as it did before 3.0 existed; one that
-needs 3.0 builds with the newest 3.x. On the Digitone, mods over 128 KB
-together take core-dn1 4.0, which has 1.25 MB ("The mods' RAM", below;
+needs 3.0 builds with the newest 3.x. Mods over 128 KB together take
+4.0: core 4.0 on the Digitakt mk1 (256 KB), core-dn1 4.0 on the Digitone
+(1.25 MB) ("The mods' RAM", below;
 [CORES.md](CORES.md), "How a build picks one"). A core chosen by hand that
 is new enough and holds the mods is kept.
 
@@ -874,7 +876,7 @@ int32_t prog_pc(int32_t channel, int32_t program, int32_t flags)
 "resources": {"core": "4.0"}
 ```
 
-### The mods' RAM (core-dn1 4.0, Digitone mk1)
+### The mods' RAM (core-dn1 4.0, Digitone mk1; core 4.0, Digitakt mk1)
 
 The linker lays every mod's `.run`, the tables and every `.bss` out in one
 area, and core's boot copier puts them there before the OS starts. On the
@@ -898,6 +900,16 @@ grows with them: the patcher refuses a build the bootloader could not
 unpack in place, or one past the flash. With core-dn1 4.0, five effects
 pedals, DigiCosm and DigiChroma in one build take 243 KB of it, and the
 file still unpacks in place with 427 KB to spare.
+
+The Digitakt mk1 has less to give: its 64 MB sample pool and the 4 MB
+audio input ring above it fill the DDR the OS does not use for itself. Its
+core 4.0 (core 3.0's code, with no change but the version) lays the mods
+out from 0x47BC0000 to 0x47C00000, 256 KB in place of 128 KB: the whole
+gap between the pool's end (0x47BAF640 in 1.53, 0x47BBF640 in 1.54, which
+the OS compares against) and the ring at 0x47C00000. No instruction operand
+points into it, and in an emulator run nothing writes there. As on the
+Digitone, a selection over 128 KB takes 4.0 where it would take 2.1 or 3.0,
+and one that fits keeps its core and its bytes.
 
 ### Key LEDs and each block's sound parameters (core-dn1 3.3, Digitone mk1)
 

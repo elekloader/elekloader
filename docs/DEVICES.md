@@ -19,6 +19,7 @@ and a hook bus of its own.
 | `isa` | the main CPU's instruction decoder, for the boundary checks | ColdFire (`isa/coldfire.py`) |
 | `areas` | memory that is free at run time: where a mod's regions may lie | the research on what the OS never touches |
 | `ddr`, `sram_code`, `fast_table` | where the linker puts mods' code and data, fast code, and the table that copies it | the areas above |
+| `core_ddr` | from a core's version on, the linker's area in place of `ddr` | core 4.0: `0x47BC0000-0x47C00000`, the gap between the sample pool's end and the audio input ring |
 | `recovery` | how to get back to stock, shown to the user | FUNC at power-on |
 | `container`, `version_len` | the file family (`'ele3'`, `'elek'`) and the version field's length | the container header |
 | `protected` | main OS ranges no mod may change, with the reason | none on the mk1 |

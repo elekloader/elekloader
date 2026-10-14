@@ -93,7 +93,8 @@ A format-2 mod is a relocatable object:
      (core-ot 0.3). The RAM budget is still the device's `ddr`.
    - The area is the profile's `ddr`, unless its `core_ddr` names another
      from the build's core's version on: the Digitone mk1's mods run from
-     0x43EC0000 (1.25 MB) with core-dn1 4.0, and from 0x47BE0000 (128 KB)
+     0x43EC0000 (1.25 MB) with core-dn1 4.0, the Digitakt mk1's from
+     0x47BC0000 (256 KB) with core 4.0, and both from 0x47BE0000 (128 KB)
      with an older core.
 3. **Builds the tables.** Each table's entries are sorted by (`order`, mod
    id), followed by one zero entry. A table defines two symbols: `NAME` (its

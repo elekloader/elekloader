@@ -40,6 +40,8 @@ from elekloader import devices, elemod, formats, lint, link        # noqa: E402
 from elekloader.sdk import build                           # noqa: E402
 
 STOCK = os.environ.get('ELEKLOADER_STOCK', '')
+with open(os.path.join(ROOT, 'mods', 'core', 'mod.json')) as _fh:
+    DT_VERSION = json.load(_fh)['version']     # the Digitakt mk1 core these tests build
 MODS = os.environ.get('ELEKLOADER_MODS', '')
 
 
@@ -143,14 +145,14 @@ FW = ['fw_active_track', 'fw_amp_env', 'fw_bitmap_vt', 'fw_blit', 'fw_fillrect',
 
 
 def test_core_builds_and_lints():
-    """core 3.0: the hook bus (core.s, 8 sites), the SRC machine slots
+    """core (3.0 and 4.0, the same code): the hook bus (core.s, 8 sites), the SRC machine slots
     (machines.s, Digitakt mk1 only: 31 sites and the table core_machines),
     the machine page reader (core_machine_ui) and the firmware locations
     (fw.s: absolute exports, no site)."""
     path = built_core()
     with open(path) as fh:
         doc = json.load(fh)
-    assert doc['id'] == 'core' and doc['version'] == '3.0'
+    assert doc['id'] == 'core' and doc['version'] == DT_VERSION
     assert '.boot' in doc['sections'] and len(doc['sites']) == 39
     assert sorted(doc['collections']) == sorted(HOOK_BUS + ['core_machines'])
     assert set(FW + ['core_machine', 'core_machine_ui']) <= set(doc['exports'])
@@ -163,14 +165,14 @@ CORE_21 = os.environ.get('ELEKLOADER_CORE_21', '')
 
 
 def check_superset(old_path, new_path, st):
-    """Core 3.0 is core 2.1 and more: the same sites with the same bytes, the
-    same tables, every 2.1 symbol where 2.1 has it, 2.1's .run at the start of
-    3.0's and the same .bss."""
+    """Core 3.0 (and 4.0, the same code) is core 2.1 and more: the same sites
+    with the same bytes, the same tables, every 2.1 symbol where 2.1 has it,
+    2.1's .run at the start of the new core's and the same .bss."""
     with open(old_path) as fh:
         old = json.load(fh)
     with open(new_path) as fh:
         new = json.load(fh)
-    assert old['version'] == '2.1' and new['version'] == '3.0'
+    assert old['version'] == '2.1' and new['version'] == DT_VERSION
     assert old['target'] == new['target']
     assert new['sites'] == old['sites'] and new['collections'] == old['collections']
     assert new['contribute'] == old['contribute'] and new['resources'] == old['resources']
@@ -195,6 +197,38 @@ def test_core_3_is_core_2_1_and_more():
         with tempfile.TemporaryDirectory() as tmp:
             path, _m = build.build(os.path.join(ROOT, 'mods', 'core'), STOCK_154, tmp)
             check_superset(other, path, STOCK_154)
+
+
+def test_digitakt_core_4_gives_the_mods_256_kb():
+    """From core 4.0 the Digitakt mk1's linker lays the mods out from 0x47BC0000
+    to 0x47C00000 (256 KB, the profile's core_ddr), the gap between the sample
+    pool's end and the audio input ring, in place of the 128 KB at 0x47BE0000:
+    mods that need 200 KB link with 4.0, and beside the released 2.1 they are
+    refused, the message naming the core that has room."""
+    tc = devices.devices()[0].toolchain
+    if not shutil.which(os.environ.get('ELEKLOADER_CROSS', tc['prefix']) + 'gcc'):
+        raise Skip('no m68k cross compiler')
+    dev = [x for x in devices.devices() if x.key == 'digitakt-mk1'][0]
+    assert dev.ddr_for('3.0') == dev.ddr_for('2.1') == (0x47BE0000, 0x47C00000) == dev.ddr
+    assert dev.ddr_for('4.0') == dev.ddr_for('4.1') == (0x47BC0000, 0x47C00000)
+    st = stock()
+    with tempfile.TemporaryDirectory() as tmp:
+        d = os.path.join(tmp, 'big')
+        os.makedirs(d)
+        with open(os.path.join(d, 'big.c'), 'w') as fh:
+            fh.write('char big_buf[200000];\nvoid big_tick(void *ctrl) { (void)ctrl; big_buf[0]++; }\n')
+        with open(os.path.join(d, 'mod.json'), 'w') as fh:
+            json.dump({'id': 'big', 'version': '0.1', 'license': 'GPL-2.0-or-later', 'device': 'digitakt-mk1',
+                       'os': '1.53', 'sources': ['big.c'],
+                       'subscribe': [{'event': 'ev_tick', 'fn': 'big_tick'}], 'requires': ['core']}, fh)
+        bpath, _b = build.build(d, st, tmp)
+        rc, r = lint_json(bpath, '--stock', st, '--with', built_core())
+        assert rc == 0, r['problems']
+        assert r['link']['ram_size'] == 0x40000 and 200000 < r['link']['ram_used'] < 0x40000, r['link']
+        if CORE_21 and os.path.exists(CORE_21):
+            rc, r = lint_json(bpath, '--stock', st, '--with', CORE_21)
+            assert rc == 1 and any('core 4.0 or newer gives them 262144 bytes' in x for x in r['problems']), \
+                r['problems']
 
 
 def test_core_too_old_is_said_plainly():
@@ -987,7 +1021,7 @@ def test_seq_events_dt1_builds_and_links():
         assert not e.sites and not e.imports, e.imports
         rc, r = lint_json(epath, '--stock', st, '--with', built_core(), '--with', qpath)
         assert rc == 0, r['problems']
-        assert r['link']['order'] == ['core 3.0', 'euclid 1.0', 'seq-events 0.1']
+        assert r['link']['order'] == ['core ' + DT_VERSION, 'euclid 1.0', 'seq-events 0.1']
         mpath, _m = build.build(os.path.join(ROOT, 'mods', 'machine-pages'), st, tmp)
         rc, r = lint_json(qpath, '--stock', st, '--with', built_core(), '--with', mpath)
         assert rc == 0, r['problems']
@@ -1034,7 +1068,7 @@ def test_core_port_to_154_is_the_same_core():
     st154 = stock_154()
     with tempfile.TemporaryDirectory() as tmp:
         path, _m = build.build(os.path.join(ROOT, 'mods', 'core'), st154, tmp)
-        assert os.path.basename(path) == 'core-3.0-os1.54.elemod'
+        assert os.path.basename(path) == 'core-%s-os1.54.elemod' % DT_VERSION
         with open(path) as fh:
             new = json.load(fh)
         with open(built_core()) as fh:

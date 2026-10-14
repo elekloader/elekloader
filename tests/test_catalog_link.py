@@ -91,7 +91,7 @@ def check_os(os_version):
         raise Skip('no m68k cross assembler to build mods/core')
     with tempfile.TemporaryDirectory() as tmp:
         rows, old, new, _image = matrix(os_version, tmp)
-        assert new.version == '3.0' and rows
+        assert elemod.version_key(new.version) >= elemod.version_key('3.0') and rows
         same, on3 = [], []
         for sel, a, b, ms in rows:
             needs = [m.needs_core for m in ms if m.needs_core]

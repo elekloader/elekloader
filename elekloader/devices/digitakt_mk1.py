@@ -16,6 +16,19 @@ for both:
   unpacks it from there to 0x40000400, over itself.
 - Free at run time: the gap below the audio DMA ring (0x47BE0000-0x47C00000,
   above the sample pool) and two SRAM ranges the OS zeroes and never uses.
+- From core 4.0 the mods run from 0x47BC0000-0x47C00000 instead (256 KB,
+  twice the 128 KB above; core_ddr): the whole gap between the sample pool's
+  end (0x47BAF640 in 1.53, 0x47BBF640 in 1.54, which the OS compares
+  against) and the audio input ring at 0x47C00000. Nothing else is free in
+  the DDR: the OS's variables and its uncached buffers run from the heap to
+  the pool's start (0x43BAF5F0 in 1.53), and the ring fills the last 4 MB
+  (the OS clears 0x400000 bytes there and masks its index with 0x7FFFF, 8
+  bytes a frame). No instruction operand points between the pool's end and
+  the ring, in 1.53 or 1.54, and in an emulator run (the pattern playing,
+  pages changing) nothing writes from 0x47B00000 to 0x48000000 but the
+  boot stack's top page. The core's boot copier puts the mods wherever the
+  linker laid them out, so only the area changes; an older core keeps
+  0x47BE0000.
 """
 from . import Device, Release
 
@@ -48,6 +61,7 @@ DEVICE = Device(
         'sram-block': (0x80003360, 0x80008000),   # free SRAM (FAST AUDIO's copy)
     },
     ddr=(0x47BE0000, 0x47C00000),
+    core_ddr=(('4.0', (0x47BC0000, 0x47C00000)),),   # core 4.0: 256 KB (above)
     sram_code=(0x8000F700, 0x80010000),
     fast_table='fa_copies',
     recovery='hold FUNC while powering on for the startup menu, then send the stock .syx',
