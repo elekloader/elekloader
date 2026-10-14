@@ -1,12 +1,12 @@
 | SPDX-License-Identifier: GPL-2.0-or-later
-| core-dn1 3.0 to 3.4 for the Digitone mk1, in assembly: the layouts that go
+| core-dn1 3.0 to 4.0 for the Digitone mk1, in assembly: the layouts that go
 | with the firmware locations core exports (core3.h has the same in C).
 | Assembly names the locations directly: fw_voice_pitch, fw_kit, fw_fillrect,
 | ... A mod that uses them needs core-dn1 3.0: "resources": {"core": "3.0"};
 | one that uses a 3.1 name (fw_voices, core_sound_set, ...) needs 3.1, a
 | 3.2 one (fw_tempo, core_audio, ev_midi_cc) 3.2, and a 3.3 one
 | (ev_key_leds, ev_render_params, fw_memcpy, fw_textbox, fw_pattern,
-| __ashldi3, ...) 3.3, and CORE_AUDIO_INSERT 3.4.
+| __ashldi3, ...) 3.3, and CORE_AUDIO_INSERT and ev_midi_pc's CORE_MIDI_PC_STOCK 4.0.
 | The SDK puts this folder on the include path:
 |
 |       .include "digitone-mk1/core3.inc"
@@ -30,9 +30,10 @@
         .equ    CORE_AUDIO_RENDER, 4             | render(out, in), each block
         .equ    CORE_AUDIO_FLAGS,  8
         .equ    CORE_AUDIO_MUTE_VOICES, 1        | skip the voices' filters too
-        .equ    CORE_AUDIO_INSERT, 2             | 3.4: after the master stage, on its output
-| 3.4: core_audio_caps, a long, the flags core_audio takes (weak-import it: 0 before 3.4)
+        .equ    CORE_AUDIO_INSERT, 2             | 4.0: after the master stage, on its output
+| 4.0: core_audio_caps, a long, the flags core_audio takes (weak-import it: 0 before 4.0)
         .equ    CORE_MIDI_CC_AUTO, 1             | ev_midi_cc's flags: on the auto channel
+        .equ    CORE_MIDI_PC_STOCK, 2            | 4.0: ev_midi_pc's: the stock would apply it
 | 3.3: ev_render_params' words
         .equ    CORE_PARAMS_STRIDE, 158          | words + 158 v + 2 k: slot k of voice v (8.8)
         .equ    CORE_PARAMS_FX,     8            | the global FX's record

@@ -12,7 +12,7 @@
 // placed in the P words of that payload a mod frees by claiming the area's name (the profile's dspAreas); a symbol there
 // is a DSP word address, and a `dsp24` relocation writes one as three little-endian bytes.
 import { concat, sha } from './bytes.ts'
-import { type Device, type Release, imageEnd, linkable } from './devices.ts'
+import { type Device, type Range, type Release, imageEnd, linkable } from './devices.ts'
 import { pSpan } from './dsp.ts'
 import {
   type AnyMod, type Part, type Region, type Site, type Span, COMMON, ModError, RSIZE, cmpVersions, commonChecks, formatOf, get,
@@ -355,6 +355,13 @@ export type Linked = {
   layout: Layout
 }
 
+/** The linker's area for .run, tables and .bss with a core of this version (devices.py's ddr_for). */
+export function ddrFor(dev: Device, coreVersion: string): Range {
+  let area = dev.ddr
+  for (const [v, a] of dev.coreDdr) if (cmpVersions(coreVersion, v) >= 0) area = a
+  return area
+}
+
 /** The patched main OS, its map, tables and layout. Throws ModError. */
 export function link(mods: Mod2[], image: Uint8Array): Linked {
   if (!mods.length) throw new ModError('no mods')
@@ -363,9 +370,9 @@ export function link(mods: Mod2[], image: Uint8Array): Linked {
   const problems = summarize(check(mods, image), mods)
   if (problems.length) throw new ModError('the mods do not combine:\n  ' + problems.join('\n  '))
   const end = imageEnd(dev, rel)
-  const [ddrBase, ddrEnd] = dev.ddr
-  const [fastBase, fastEnd] = dev.sramCode
   const core = mods.filter(m => m.sections.has('.boot'))[0]
+  const [ddrBase, ddrEnd] = ddrFor(dev, core.version)
+  const [fastBase, fastEnd] = dev.sramCode
   const order = [core, ...mods.filter(m => m !== core).sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))]
   const tables = new Map<string, [Mod2, number]>()
   for (const m of order) for (const [c, e] of m.collections) tables.set(c, [m, e])
@@ -432,7 +439,11 @@ export function link(mods: Mod2[], image: Uint8Array): Linked {
     }
   }
   const bssEnd = align(at, 4)
-  if (bssEnd > ddrEnd) throw new ModError(`the mods need RAM to ${hex8(bssEnd)}, past ${hex8(ddrEnd)} (${bssEnd - ddrEnd} bytes over)`)
+  if (bssEnd > ddrEnd) {
+    const more = dev.coreDdr.filter(([, a]) => a[1] - a[0] > ddrEnd - ddrBase)
+    throw new ModError(`the mods need RAM to ${hex8(bssEnd)}, past ${hex8(ddrEnd)} (${bssEnd - ddrEnd} bytes over)`
+      + (more.length ? `; core ${more[0][0]} or newer gives them ${more[0][1][1] - more[0][1][0]} bytes` : ''))
+  }
   if (fastAt > fastEnd) throw new ModError(`.fast code needs SRAM to ${hex8(fastAt)}, past ${hex8(fastEnd)}`)
   const runLoad = align(end + bootLen, 16)
 

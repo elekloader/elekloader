@@ -8,7 +8,8 @@ Digitone's addresses and sites (`mod.json`: 1.43's, and 1.44's under
 the Digitone needs it. On its own it changes nothing the unit does.
 
 - **At boot** (the OS entry's call at 0x40000538, as on the Digitakt),
-  `boot` copies the RAM image the linker built to 0x47BE0000, zeroes
+  `boot` copies the RAM image the linker built to its area (0x43EC0000
+  from 4.0, 0x47BE0000 before), zeroes
   `.bss`, starts the DTIM0 counter if nothing has, and goes on to the call
   it replaced.
 - **The events** are the Digitakt mk1's (docs/ADAPTING.md, "The hook
@@ -137,28 +138,37 @@ the Digitone needs it. On its own it changes nothing the unit does.
   `fw_pattern` and `fw_project`, with the pattern's layout in core3.h
   (`FW_TRACK`, `FW_STEP`, `FW_TRACK_NOTE`, ...). These are exports only:
   they add no code, sites or tables.
-- **From 3.4, insert audio** ([audio.s](audio.s); docs/ADAPTING.md,
+- **From 4.0, insert audio** ([audio.s](audio.s); docs/ADAPTING.md,
   "Insert audio"): an owner with `CORE_AUDIO_INSERT` in its flags gets
   what the master stage made instead of the input: the stage runs as
   stock, and its output goes through the owner's `render` on its way to
   the codec and USB's main pair. An effect on everything the Digitone
   plays, which may stay on under the Digitone's own pages. No new site:
-  3.4 is 3.3 with that flag, and `core_audio_caps`, an export that says
+  with that flag, and `core_audio_caps`, an export that says
   so to a mod that weak-imports it (0 with an older core). [examples/dn-tremolo](../../examples/dn-tremolo)
   is the smallest such mod.
+- **From 4.0, the mods' RAM and program changes** (docs/ADAPTING.md,
+  "The mods' RAM" and "Program changes"): the linker lays the mods out
+  from 0x43EC0000 to 0x44000000, 1.25 MB in place of 128 KB (the
+  profile's `core_ddr`; nothing in core's code changes for it), and
+  `ev_midi_pc` ([midi.s](midi.s)) gives a mod each program change the
+  unit receives before the stock applies it, at 0x400ea1a8 (0x400ea41c
+  in 1.44), MIDI CONFIG's receive test in the firmware's handler.
+  [examples/dn-progchange](../../examples/dn-progchange) is the smallest
+  such mod.
 - **OS 1.44:** every site has its port (`ports` in mod.json): the same
   code, moved, and RAM 0x1000 further on.
 
 Build it with the SDK (it needs m68k binutils):
 
 ```bash
-python -m elekloader.sdk.build mods/core-dn1 --stock Digitone_and_Digitone_Keys_OS1.43.syx   # out/core-3.4.elemod
-python -m elekloader.sdk.build mods/core-dn1 --stock Digitone_and_Digitone_Keys_OS1.44.syx   # out/core-3.4-os1.44.elemod
-python -m elekloader.lint mods/core-dn1/out/core-3.4-os1.44.elemod --stock Digitone_and_Digitone_Keys_OS1.44.syx
+python -m elekloader.sdk.build mods/core-dn1 --stock Digitone_and_Digitone_Keys_OS1.43.syx   # out/core-4.0.elemod
+python -m elekloader.sdk.build mods/core-dn1 --stock Digitone_and_Digitone_Keys_OS1.44.syx   # out/core-4.0-os1.44.elemod
+python -m elekloader.lint mods/core-dn1/out/core-4.0-os1.44.elemod --stock Digitone_and_Digitone_Keys_OS1.44.syx
 ```
 
-A release names them `core-dn1-3.4.elemod` and `core-dn1-3.4-os1.44.elemod`.
-3.3 and 3.4 are not released yet;
+A release names them `core-dn1-4.0.elemod` and `core-dn1-4.0-os1.44.elemod`.
+3.3 and 4.0 are not released yet;
 3.2's are on the [core-dn1-v3.2](https://github.com/irpina/elekloader/releases/tag/core-dn1-v3.2) pre-release
 (3.0 and 3.1 were not released), and
 2.3's on the [core-dn1-v2.3](https://github.com/irpina/elekloader/releases/tag/core-dn1-v2.3) pre-release.
@@ -218,14 +228,29 @@ or by every piece of code that names it (data), and the eleven library
 routines were called through the values the built cores export, with
 random arguments on each version's image, against Python: every call
 agreed.
-3.4 was checked the same way on 1.43 and 1.44: every stage passes, every
-screen is identical, and the audio is identical up to PLAY. With TREMOLO
+Insert audio (written as 3.4, released in 4.0) was checked the same way on
+1.43 and 1.44: every stage passes, every screen is identical, and the audio
+is identical up to PLAY. With TREMOLO
 ([../../examples/dn-tremolo](../../examples/dn-tremolo)) on while the factory
 pattern plays, the pattern comes out with a 4 Hz wobble (its level's 4 Hz
 part 0.26 of its mean, against 0.008 stock), and picking TREMOLO again gives
 the stock sound back; on the cycle clock, the stock master stage takes
 53,240 cycles of a block, core's conversion in and out 602 and TREMOLO
 926.
-`tests/test_sdk.py` checks that it keeps all of 3.3: the
-same sites, tables, contributions and exports, with only audio.s's code
-changed.
+`tests/test_sdk.py` checks that 4.0 keeps all of 3.2: the same sites,
+tables, contributions and exports, with 3.3's and 4.0's added.
+
+4.0 was checked the same way on 1.43 and 1.44: every stage passes and every
+screen is identical, alone, with PROG, and with seven effects mods at once
+(five pedals, DigiCosm and DigiChroma: 243 KB of the area, more than the
+old 128 KB could hold). In that build each opened from the Mod Menu in turn
+owns the audio alone, plucked notes on the inputs come out through it, and
+after NO the synths are back; with an insert running (a DigiChroma that stays
+on), each exclusive one opened over it took the audio. Program changes went
+in through the emulator's MIDI input on both versions, with PROG
+([../../examples/dn-progchange](../../examples/dn-progchange)): channel 16's
+were taken and the stock did not change the pattern; with MIDI CONFIG's
+receive off the stock ignored them and PROG still saw them, flags 1 on the
+auto channel; with it on, PROG CH IN's channel (AUTO, then channel 3) went on
+to the stock with `CORE_MIDI_PC_STOCK` set, and another channel did not. The
+TypeScript engine's build of the seven is byte for byte the Python's.

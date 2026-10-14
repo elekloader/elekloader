@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
-/* core-dn1 3.0 to 3.4 for the Digitone mk1, in C: the firmware locations core exports, and core-dn1's
+/* core-dn1 3.0 to 4.0 for the Digitone mk1, in C: the firmware locations core exports, and core-dn1's
  * own tables and calls (docs/ADAPTING.md, "Firmware locations", "Parameter slots", "Mod pages", "Project
  * data", "The Mod Menu" and "Machines and stock parameters"). The SDK puts this folder on the include
  * path:
@@ -8,8 +8,9 @@
  *
  * Every fw_ name here is resolved by the linker against the core in the build, so a mod that uses only
  * these rebuilds for another OS version without a change (its port in mod.json is empty). Declaring one
- * makes the mod need core-dn1 3.0, or 3.1, 3.2, 3.3 or 3.4 for the names marked so: say so with "resources":
- * {"core": "3.0"} (or "3.1", "3.2", "3.3", "3.4"). digitone-mk1/core3.inc has the same for assembly. Functions that return a pointer
+ * makes the mod need core-dn1 3.0, or 3.1, 3.2, 3.3 or 4.0 for the names marked so: say so with "resources":
+ * {"core": "3.0"} (or "3.1", "3.2", "3.3", "4.0"). From 4.0 the mods' code, tables and variables
+ * have 1.25 MB (from 0x43EC0000) in place of 128 KB: a build that needs more than 128 KB needs core 4.0. digitone-mk1/core3.inc has the same for assembly. Functions that return a pointer
  * are declared to return uint32_t: the firmware returns it in d0, where gcc for m68k looks in a0. */
 #ifndef ELEKLOADER_DIGITONE_MK1_CORE3_H
 #define ELEKLOADER_DIGITONE_MK1_CORE3_H
@@ -105,8 +106,8 @@ typedef void (*ev_render_voices_fn)(int32_t *voices);
 extern volatile int32_t fw_tempo;               /* 3.2: the tempo x 120 (87.0 BPM: 10440), as the sequencer
                                                    runs it; the timeline moves twice this every block */
 #define CORE_AUDIO_MUTE_VOICES  1u
-#define CORE_AUDIO_INSERT       2u      /* 3.4 */
-/* 3.4: the flags core_audio takes beyond CORE_AUDIO_MUTE_VOICES (CORE_AUDIO_INSERT). A mod that runs on 3.2 too
+#define CORE_AUDIO_INSERT       2u      /* 4.0 */
+/* 4.0: the flags core_audio takes beyond CORE_AUDIO_MUTE_VOICES (CORE_AUDIO_INSERT). A mod that runs on 3.2 too
  * lists it under "weak" in mod.json: with an older core it then reads 0, and the mod offers no insert. */
 extern const uint32_t core_audio_caps;
 /* A mod that wants the whole output contributes a pointer to one of these to the table core_audio and
@@ -121,7 +122,7 @@ extern const uint32_t core_audio_caps;
  * silent after the owner lets go, until its next note). Interrupt level, inside the render: keep it
  * short, and keep MACSR as it was if the EMAC is used. Set and clear on from the UI task; it takes effect
  * at the next block.
- * With CORE_AUDIO_INSERT (3.4) the master stage runs as stock, and in is what it wrote to the output
+ * With CORE_AUDIO_INSERT (4.0) the master stage runs as stock, and in is what it wrote to the output
  * (the voices, the inputs as the mixer has them, chorus, delay, reverb, the master drive), in Q1.31: an
  * effect on everything the Digitone plays. What render returns goes to the codec and to USB's main pair
  * in its place; the rest of the USB block and a Keys' second buffer stay the stage's. The voices always
@@ -223,5 +224,11 @@ typedef void (*ev_key_leds_fn)(void *mgr);
 #define CORE_PARAMS_VOICE  79
 #define CORE_PARAMS_FX     8
 typedef void (*ev_render_params_fn)(int16_t *words);
+/* 4.0: each program change the unit receives, on any channel, before the stock applies it: channel 0-15,
+ * program 0-127; flags CORE_MIDI_CC_AUTO when it came on the auto channel, and CORE_MIDI_PC_STOCK when the
+ * stock would apply it (MIDI CONFIG receives program changes and it is on PROG CH IN's channel). Nonzero
+ * takes it: the stock does not change the pattern. The MIDI task, not interrupt level. */
+#define CORE_MIDI_PC_STOCK  2u
+typedef int32_t (*ev_midi_pc_fn)(int32_t channel, int32_t program, int32_t flags);
 
 #endif

@@ -32,6 +32,16 @@ the DDR area, so what follows holds for both:
   stack; the highest is 0x4BEA72C8, the uncached view of 0x43EA72C8. And in
   a settled emulator run, no DDR page from 0x43400000 to 0x47C00000 is ever
   mapped.
+- From core-dn1 4.0 the mods run from 0x43EC0000-0x44000000 instead
+  (1.25 MB, ten times the 128 KB above; core_ddr), between the OS's
+  highest buffer and the bulk area. Its instruction operands there end at
+  a 384 KB ring, 0x43E472C0-0x43EA72C0, whose end it compares at
+  0x43EA72C8 and 0x43EA72C9 (0x4008d660-0x4008d724 in 1.43); nothing above
+  that, to 0x44000000, in 1.43 or 1.44. The core's boot copier puts the
+  mods wherever the linker laid them out, so only the area changes; an
+  older core keeps 0x47BE0000. The blob grows with the mods' code and
+  tables (not their .bss), and the patcher refuses one the bootloader
+  could not unpack in place.
 - No .fast area: the free SRAM (0x800058F0-0x80008000, zero in the same
   run) is not claimed yet.
 - A second area for mods' large buffers, 'bulk': 0x44000000-0x47BE0000
@@ -73,6 +83,7 @@ DEVICE = Device(
         'bulk': (0x44000000, 0x47BE0000),         # large buffers, claimed as regions (above)
     },
     ddr=(0x47BE0000, 0x47C00000),
+    core_ddr=(('4.0', (0x43EC0000, 0x44000000)),),   # core-dn1 4.0: 1.25 MB (above)
     recovery=('hold FUNC while powering on for the startup menu, press TRIG 4 (OS UPGRADE), '
               'then send the stock .syx'),
     toolchain={

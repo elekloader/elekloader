@@ -37,6 +37,7 @@ export type Device = {
   blobMax: number | null
   areas: Record<string, Range>                  // in the profile's order
   ddr: Range
+  coreDdr: [string, Range][]                   // [core version, area]: from that core on, the linker's area in place of ddr
   sramCode: Range
   fastTable: string
   imageFree: Range[]
@@ -51,7 +52,7 @@ const rel = (version: string, syxSha256: string, mainSha256: string, mainLen: nu
 
 const base = {
   mainSection: 3, mainLoad: 0x40000400, isa: 'coldfire' as const, hmacKeyFrom: null, container: 'ele3' as const,
-  versionLen: 4, versionAt: 0x14, versionOptional: false, protected: [], relocatable: [], blobMax: null, sramCode: [0, 0] as Range, fastTable: '',
+  versionLen: 4, versionAt: 0x14, versionOptional: false, protected: [], relocatable: [], blobMax: null, sramCode: [0, 0] as Range, coreDdr: [] as [string, Range][], fastTable: '',
   imageFree: [], reserve: null, dspPayloads: {}, dspAreas: [], trailer: null,
 }
 
@@ -96,6 +97,7 @@ export const DIGITONE_MK1: Device = {
   stage: 0x40200000, flashAt: 0x80000, flashLimit: 0x380000,
   areas: { ddr: [0x47be0000, 0x47c00000], bulk: [0x44000000, 0x47be0000] },
   ddr: [0x47be0000, 0x47c00000],
+  coreDdr: [['4.0', [0x43ec0000, 0x44000000]]],   // core-dn1 4.0: 1.25 MB
   recovery: 'hold FUNC while powering on for the startup menu, press TRIG 4 (OS UPGRADE), then send the stock .syx',
 }
 

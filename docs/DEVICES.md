@@ -200,8 +200,9 @@ below was found again in 1.17.
   From 3.3 (`leds.s`, `block.s`, `fw.s`) it has the key LEDs and each block's
   sound parameters, and exports more firmware locations: the C library, the
   text box, the transport, the active pattern and the project.
-  From 3.4 (`audio.s`) it has insert audio: an owner on the master stage's
-  output.
+  From 4.0 it has insert audio (`audio.s`): an owner on the master stage's
+  output, program changes (`midi.s`, `ev_midi_pc`), and the mods run from a
+  bigger area (below).
   1.44 has all of these, at its own addresses (`ports`).
 - **The DDR area** is the Digitakt's, `0x47BE0000-0x47C00000`:
   - The OS clears `0x4028E000-0x43229E60` at start, and its stack runs down
@@ -214,6 +215,10 @@ below was found again in 1.17.
   core-dn1 3.2), for
     mods' large buffers: a mod claims a piece as a region and uses it at
     run time. Nothing is placed there, and the OS never clears it.
+  - From core-dn1 4.0 the mods run from `0x43EC0000-0x44000000`
+    (1.25 MB, the profile's `core_ddr`): the OS's operands end at a
+    384 KB ring, `0x43E472C0-0x43EA72C0`, whose end it compares at
+    `0x43EA72C8` and `0x43EA72C9`.
 - **Checked in the emulator:** with core alone, the build passes every
   stage, with every screen identical to stock.
   - The audio is identical to stock up to PLAY.

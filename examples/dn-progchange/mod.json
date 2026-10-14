@@ -1,0 +1,16 @@
+{
+ "id": "dnprog", "version": "1.0",
+ "license": "GPL-2.0-or-later",
+ "title": "PROG (Digitone program changes)", "category": "Utility", "author": "irpina",
+ "description": "PROG, the smallest program change mod for the Digitone mk1: every program change the unit receives shows for two seconds in the screen's corner (its channel and program, and + when the stock applies it too), and the ones on MIDI channel 16 are its own, so the stock never changes the pattern for them. A template for a mod that answers program changes (docs/ADAPTING.md, \"Program changes\"): it names no firmware address, so its OS 1.44 port is empty. Needs core-dn1 4.0.",
+ "device": "digitone-mk1", "os": "1.43",
+ "ports": {"1.44": {}},
+ "sources": ["prog.c"],
+ "subscribe": [
+  {"event": "ev_midi_pc", "fn": "prog_pc", "order": 50},
+  {"event": "ev_tick", "fn": "prog_tick", "order": 50},
+  {"event": "ev_draw", "fn": "prog_draw", "order": 50}
+ ],
+ "resources": {"core": "4.0"},
+ "requires": ["core"]
+}

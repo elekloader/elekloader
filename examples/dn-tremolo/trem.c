@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
-/* TREMOLO: the smallest insert-audio mod for the Digitone mk1 and Digitone Keys (core-dn1 3.4). TREMOLO in
+/* TREMOLO: the smallest insert-audio mod for the Digitone mk1 and Digitone Keys (core-dn1 4.0). TREMOLO in
  * the Mod Menu turns it on, and again off: a 4 Hz tremolo on everything the Digitone plays (the synths, the
  * inputs as the mixer has them, chorus, delay and reverb), while every key, knob and screen stays the
  * Digitone's. A template for an effect on the Digitone's output (docs/ADAPTING.md, "Insert audio"). */

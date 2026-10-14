@@ -65,7 +65,9 @@ what you see when it is broken (section 5 has the fixes).
 6. **Let the linker place you.** Your code and data go in sections; never
    hard-code the address of your own code or data. Budgets are shared by
    every mod: on the Digitakt mk1, 128 KB of RAM (`.run` + `.bss`) and
-   2304 bytes of fast SRAM (`.fast`). *"the mods need RAM to ..."*.
+   2304 bytes of fast SRAM (`.fast`); on the Digitone mk1 128 KB, or
+   1.25 MB with core-dn1 4.0 ("The mods' RAM" below). *"the mods need RAM
+   to ..."*.
 7. **Only relocatable references.** The linker relocates 32-bit absolute and
    32/16-bit PC-relative references. Use the device's compiler flags (the
    SDK does) and 32-bit addressing for your own symbols. Firmware addresses
@@ -108,12 +110,13 @@ event (lower first; the shipped mods use 10-90).
 | `ev_personalize` | Digitakt II only (core-dt2): SETTINGS > PERSONALIZE is built | `void f(void *menu)` | add a row with `core_additem(menu, row)`, after TRK SELECT; a row redraws the menu with `View::invalidate(menu + 0x38)`, as from SETTINGS; a checkbox is drawn as mods/core-dt2/README.md describes |
 | `ev_voice_on` | Digitone mk1 only (core-dn1 2.1): a voice starts a note, in the render | `void f(int voice, int track, void *event)` | interrupt level. The voice's pitch word (`0x41391f80` + 4 x voice, the note << 16) is already written and may be changed: the render reads it every block. The voice's sound and the step's locks load after this, so read the voice's parameters from `ev_render_out` |
 | `ev_midi_cc` | Digitone mk1 only (core-dn1 3.2): each MIDI CC the unit receives on a track's channel or the auto channel, before the stock applies it; the MIDI task | `int f(int track, int cc, int value, int flags)` | `track` 0-8 (with MIDI CONFIG's default channels, channels 1-9); a CC on the auto channel comes as the active track, with `flags` bit 0 (`CORE_MIDI_CC_AUTO`) set. Return nonzero to take it: the stock does not apply it. Only what MIDI CONFIG lets in arrives (PORT CONFIG > INPUT FROM). A mod that patches the CC router's entry, 0x400ed94e (Tone+FX), sees a CC before core |
+| `ev_midi_pc` | Digitone mk1 only (core-dn1 4.0): each program change the unit receives, on any channel, before the stock applies it; the MIDI task | `int f(int channel, int program, int flags)` | `channel` 0-15, `program` 0-127; `flags` bit 0 (`CORE_MIDI_CC_AUTO`): it came on the auto channel; bit 1 (`CORE_MIDI_PC_STOCK`): the stock would apply it (MIDI CONFIG receives program changes, and it came on PROG CH IN's channel). Return nonzero to take it: the stock does not change the pattern. Only what MIDI CONFIG lets in arrives (PORT CONFIG > INPUT FROM) |
 | `ev_key_leds` | Digitone mk1 only (core-dn1 3.3): the key-LED frame, every UI frame, after the frame clears the LEDs and before the stock views set theirs; UI task | `void f(void *mgr)` | `mgr` the LedManager. The first setter of an LED wins, so what a handler sets stays over the stock view's: a mod shows its state on the keys while the stock page keeps the rest |
 | `ev_render_params` | Digitone mk1 only (core-dn1 3.3): each block's sound parameter words, before the controller stage and the LFOs, in the render | `void f(int16_t *words)` | interrupt level, ~1500 times a second. Voice v's slot k at `words[79 * v + k]` (8.8, `CORE_PARAMS_VOICE`), the global FX at record 8; the smoother writes them again every block, so a change lasts one block and the kit is untouched. The words of a block are rendered in the next two; `fw_voice_track[v]` is voice v's track ("Each block's sound parameters" below) |
 
 The events, their prototypes and their conventions are the same on every
-device; only the sites differ, and `ev_voice_on`, `ev_midi_cc`, `ev_key_leds`
-and `ev_render_params` exist on the Digitone only. The Digitakt II's core (mods/core-dt2 1.0) has `ev_tick`, `ev_draw`,
+device; only the sites differ, and `ev_voice_on`, `ev_midi_cc`, `ev_key_leds`,
+`ev_render_params` and `ev_midi_pc` exist on the Digitone only. The Digitakt II's core (mods/core-dt2 1.0) has `ev_tick`, `ev_draw`,
 `ev_key`, `ev_enc`, `ev_settings` and its own `ev_personalize`, and no
 render events: its audio
 renders on the DSP. It copies `.fast` code into SRAM itself, on the first
@@ -125,11 +128,12 @@ the tick site runs first). The sites core owns (do not patch them):
 - Digitone mk1 1.43: 0x40000538, 0x4001900c, 0x40019072, 0x40019d9c,
   0x40019de4, 0x40072a34, 0x4009d108, 0x4009e51c, from core-dn1 2.1
   0x4009e928, from 3.1 0x4009e078 and 0x400207b8, and from 3.2
-  0x4009e07e, 0x4009e146 and 0x400ed96e, and from 3.3 0x40018332 and
-  0x4009db80;
+  0x4009e07e, 0x4009e146 and 0x400ed96e, from 3.3 0x40018332 and
+  0x4009db80, and from 4.0 0x400ea1a8;
 - Digitone mk1 1.44: the same, but 0x40072a54, 0x4009d128 and 0x4009e53c
   for the last three of the eight, 0x4009e948, 0x4009e098, 0x400207b8,
-  0x4009e09e, 0x4009e166, 0x400edbe2, 0x40018332 and 0x4009dba0;
+  0x4009e09e, 0x4009e166, 0x400edbe2, 0x40018332, 0x4009dba0 and
+  0x400ea41c;
 - Digitakt II 1.17: 0x40000538, 0x40032ad4, 0x40032b3a, 0x40033d94,
   0x40033dde, 0x400a5eac, 0x4009e2a2.
 
@@ -316,8 +320,8 @@ line stays on 2.3.
 | `fw_pattern` (3.3) | 0x4138e214 | 0x4138f214 | -> the active pattern's data: track t at +976 t, its step words at +2 s (bit 0 a note trig, bit 1 a lock trig), NOTE +0x3c0, the per-track length +0x3c5 (big-endian), the keyboard's ROOT +0x3cb and SCALE +0x3ce (`core3.h`'s `FW_TRACK` macros) |
 | `fw_project` (3.3) | 0x419efde0 | 0x419f0de0 | -> the project |
 
-A name marked 3.1, 3.2, 3.3 or 3.4 needs that core-dn1 (`"resources": {"core": "3.1"}`,
-`"3.2"`, `"3.3"` or `"3.4"`).
+A name marked 3.1, 3.2, 3.3 or 4.0 needs that core-dn1 (`"resources": {"core": "3.1"}`,
+`"3.2"`, `"3.3"` or `"4.0"`).
 
 gcc calls libgcc's `__ashldi3`, `__lshrdi3` and `__ashrdi3` for a 64-bit value shifted by a
 variable count, and a mod links no libgcc. From core-dn1 3.3, core exports the firmware's
@@ -768,7 +772,7 @@ Core-dn1 3.2 owns two more sites: 0x4009e07e (`core_voices_gate`, by jmp
 over the 14 bytes before the voices' filter loop) and 0x4009e146
 (`core_render_master`, by jsr); in 1.44 they are 0x4009e09e and 0x4009e166.
 
-### Insert audio (core-dn1 3.4, Digitone mk1)
+### Insert audio (core-dn1 4.0, Digitone mk1)
 
 An owner may instead take what the master stage made: an effect on
 everything the Digitone plays. With `CORE_AUDIO_INSERT` (2) in its flags,
@@ -800,7 +804,7 @@ struct core_audio_owner trem_owner = { 0, trem_render, CORE_AUDIO_INSERT };
 ```json
 "contribute": [{"to": "core_audio", "order": 70, "data": "00000000",
                 "relocs": [[0, "abs32", "sym:trem_owner", 0]]}],
-"resources": {"core": "3.4"}
+"resources": {"core": "4.0"}
 ```
 
 The table's order still decides between owners: each block the first
@@ -809,9 +813,9 @@ an insert that stays on contributes before it, with a lower `order`, and the
 insert carries on once the exclusive one lets go. A mod may change its flags
 from the UI task, as it may `on`: core reads them each block. A mod that
 also runs on an older core-dn1 (3.2 or 3.3), as an exclusive owner there, can
-tell whether the core takes inserts: 3.4 exports `core_audio_caps`, a long with
+tell whether the core takes inserts: 4.0 exports `core_audio_caps`, a long with
 `CORE_AUDIO_INSERT` set, and a mod that lists it under `weak` in mod.json
-reads 0 with an older core (the linker's `core_zero`). 3.4 owns no new
+reads 0 with an older core (the linker's `core_zero`). 4.0 owns no new
 site: `core_render_master` (0x4009e146) runs the stage first for an
 insert.
 
@@ -827,6 +831,67 @@ in 1.54 they are at the same addresses, but 0x400a1706 is 0x400a1862):
 0x4003b452, 0x4003b49e, 0x4003b4ac, 0x4003b6d4, 0x4003b6de, 0x40077272,
 0x40078f72, 0x40079124, 0x40079144, 0x400791d6, 0x40079240, 0x4007a2ea,
 0x400a1706.
+
+### Program changes (core-dn1 4.0, Digitone mk1)
+
+`ev_midi_pc` gives a mod each program change the unit receives, on any
+channel, before the stock applies it: a pedal can recall its presets, a
+sequencer mod its scenes. The firmware's program change handler
+(0x400ea19c) first tests MIDI CONFIG's "receive program changes", and with
+it on takes the change that comes on PROG CH IN's channel (or the auto
+channel's, when PROG CH IN is AUTO) and has the UI task change the pattern.
+Core takes that test (0x400ea1a8, `tst.l` of the setting; 0x400ea41c in
+1.44): each handler sees the change first, with `CORE_MIDI_PC_STOCK` in its
+flags when the stock would apply it, and one that returns nonzero takes it,
+so the pattern stays. With none taking it, core makes the same test and the
+stock goes on. A mod that answers only while its page is open should return
+0 when it is closed, so the unit's own program changes keep working.
+
+`examples/dn-progchange` (PROG) is the smallest such mod: it shows each
+program change in the screen's corner for two seconds, and takes the ones
+on MIDI channel 16. Its handler:
+
+```c
+int32_t prog_pc(int32_t channel, int32_t program, int32_t flags)
+{
+    prog.channel = channel;
+    prog.program = program;
+    prog.flags = flags;
+    prog.count++;
+    prog.show = 60;
+    if (channel != TAKE_CHANNEL)
+        return 0;
+    prog.taken++;
+    return 1;
+}
+```
+
+```json
+"subscribe": [{"event": "ev_midi_pc", "fn": "prog_pc", "order": 50}, ...],
+"resources": {"core": "4.0"}
+```
+
+### The mods' RAM (core-dn1 4.0, Digitone mk1)
+
+The linker lays every mod's `.run`, the tables and every `.bss` out in one
+area, and core's boot copier puts them there before the OS starts. On the
+Digitone it was the Digitakt mk1's, 0x47BE0000-0x47C00000, 128 KB: a few
+effects mods of 25-40 KB each filled it. From core-dn1 4.0 the area is
+0x43EC0000-0x44000000, 1.25 MB, between the OS's highest buffer and the
+`bulk` area. The profile says so (`core_ddr`: from a core's version on, the
+area in place of `ddr`), so a build with an older core keeps 128 KB, and
+mods need no change: the linker relocates them wherever they go. A mod
+that needs more than 128 KB on its own says `"core": "4.0"`.
+
+Why there: the OS's instruction operands in DDR end at a 384 KB ring,
+0x43E472C0-0x43EA72C0, whose end it compares at 0x43EA72C8 and
+0x43EA72C9 (0x4008d660-0x4008d724 in 1.43). Nothing of the OS's points
+above it, in 1.43 or 1.44, and the area starts 64 KB further on. The mods'
+code and tables travel in the OS file (their `.bss` does not), so the file
+grows with them: the patcher refuses a build the bootloader could not
+unpack in place, or one past the flash. With core-dn1 4.0, five effects
+pedals, DigiCosm and DigiChroma in one build take 243 KB of it, and the
+file still unpacks in place with 427 KB to spare.
 
 ### Key LEDs and each block's sound parameters (core-dn1 3.3, Digitone mk1)
 

@@ -91,6 +91,10 @@ A format-2 mod is a relocatable object:
      the layout then says `reserve: {units, end}`. The Octatrack's are
      `arena_base`, `__arena_pages`, `__arena_fill` and `__arena_clear`
      (core-ot 0.3). The RAM budget is still the device's `ddr`.
+   - The area is the profile's `ddr`, unless its `core_ddr` names another
+     from the build's core's version on: the Digitone mk1's mods run from
+     0x43EC0000 (1.25 MB) with core-dn1 4.0, and from 0x47BE0000 (128 KB)
+     with an older core.
 3. **Builds the tables.** Each table's entries are sorted by (`order`, mod
    id), followed by one zero entry. A table defines two symbols: `NAME` (its
    address) and `NAME_n` (its count). Each `.fast` section is added to the
@@ -174,7 +178,7 @@ and `core_projdata` (project data); 2.2 the event `ev_hold` and the table
 0x4009e098 in 1.44) and the table `core_param_override`; 3.2 the event
 `ev_midi_cc` (0x400ed96e, 0x400edbe2 in 1.44) and the table `core_audio`;
 3.3 the events `ev_key_leds` (0x40018332 in both) and `ev_render_params`
-(0x4009db80, 0x4009dba0 in 1.44) ; 3.4 `core_audio`'s insert flag, with no new site (docs/ADAPTING.md has each). The Digitakt II 1.17's core (core-dt2 1.0) has
+(0x4009db80, 0x4009dba0 in 1.44); 3.4 `core_audio`'s insert flag, with no new site; 4.0 the event `ev_midi_pc` (0x400ea1a8, 0x400ea41c in 1.44) (docs/ADAPTING.md has each). The Digitakt II 1.17's core (core-dt2 1.0) has
 `ev_tick`, `ev_draw`, `ev_key`, `ev_enc` and `ev_settings`, at 0x40032ad4,
 0x40032b3a, 0x40033d94, 0x40033dde and 0x400a5eac, a Digitakt II-only
 `ev_personalize` (0x4009e2a2, the PERSONALIZE menu, `void f(menu)`), and no

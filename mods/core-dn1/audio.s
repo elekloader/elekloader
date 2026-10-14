@@ -1,5 +1,5 @@
 | SPDX-License-Identifier: GPL-2.0-or-later
-| core-dn1 3.2: exclusive audio (Digitone mk1), and from 3.4 insert audio.
+| core-dn1 3.2: exclusive audio (Digitone mk1), and from 4.0 insert audio.
 | ColdFire V4; assemble with -mcpu=54455. Beside core.s; the Digitakt's
 | core does not have it.
 |
@@ -28,7 +28,7 @@
 |              well. The voice mix still runs: skipping it would leave a
 |              note that started meanwhile silent after the owner lets go,
 |              until its next note.
-|              bit 1, CORE_AUDIO_INSERT (3.4): the master stage runs, and the
+|              bit 1, CORE_AUDIO_INSERT (4.0): the master stage runs, and the
 |              owner gets what it wrote: an effect on everything the
 |              Digitone plays. Bit 0 is ignored then: the stage mixes the
 |              voices' filters' output, so the filters always run.
@@ -163,7 +163,7 @@ core_render_master:
         lea     24(%sp), %sp
         rts
 
-| An INSERT owner (3.4): the stock stage with the same four arguments, then
+| An INSERT owner (4.0): the stock stage with the same four arguments, then
 | the owner on what the stage wrote to the output's half, and what it
 | returns over that half and USB's main pair.
 core_render_insert:
@@ -208,7 +208,7 @@ core_render_insert:
         lea     12(%sp), %sp
         rts
 
-| core_audio_caps (3.4): the flags core_audio takes beyond MUTE_VOICES. A mod
+| core_audio_caps (4.0): the flags core_audio takes beyond MUTE_VOICES. A mod
 | that weak-imports it reads 0 with an older core (the linker's core_zero),
 | so it can offer an insert only where there is one.
         .balign 4

@@ -59,6 +59,8 @@ class Device:
     blob_max: int = None         # the most a whole build may append (None: the flash budget)
     areas: dict = field(default_factory=dict)   # name -> (lo, hi): free at run time
     ddr: tuple = (0, 0)          # the linker's area for .run, tables and .bss
+    core_ddr: tuple = ()         # ((core version, (lo, hi)), ...): from that core's version on,
+                                 # the linker's area in place of ddr (the last that applies)
     sram_code: tuple = (0, 0)    # the linker's area for .fast code
     fast_table: str = ''         # the table .fast sections are copied through
     image_free: tuple = ()       # ((lo, hi), ...): zero runs inside the main OS that
@@ -85,6 +87,15 @@ class Device:
     def linkable(self):
         """Whether format-2 mods (a core, the linker's areas) exist for it."""
         return self.ddr[1] > self.ddr[0]
+
+    def ddr_for(self, core_version):
+        """The linker's area for .run, tables and .bss with a core of this version."""
+        from ..elemod import version_key
+        area = self.ddr
+        for v, a in self.core_ddr:
+            if version_key(core_version) >= version_key(v):
+                area = a
+        return area
 
     def image_end(self, release):
         """Where an appended blob loads: the stock main OS's end."""

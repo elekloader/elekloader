@@ -343,9 +343,9 @@ def link(mods, image):
     if bad:
         raise ModError('the mods do not combine:\n  ' + '\n  '.join(bad))
     image_end = dev.image_end(rel)
-    ddr_base, ddr_end = dev.ddr
-    fast_base, fast_end = dev.sram_code
     core = [m for m in mods if '.boot' in m.sections][0]
+    ddr_base, ddr_end = dev.ddr_for(core.version)
+    fast_base, fast_end = dev.sram_code
     order = [core] + sorted((m for m in mods if m is not core), key=lambda m: m.id)
     tables = {c: (m, e) for m in order for c, e in m.collections.items()}
 
@@ -406,8 +406,11 @@ def link(mods, image):
             at += m.size('.bss')
     bss_end = _align(at, 4)
     if bss_end > ddr_end:
-        raise ModError('the mods need RAM to 0x%08x, past 0x%08x (%d bytes over)'
-                       % (bss_end, ddr_end, bss_end - ddr_end))
+        more = [(v, a) for v, a in dev.core_ddr if a[1] - a[0] > ddr_end - ddr_base]
+        raise ModError('the mods need RAM to 0x%08x, past 0x%08x (%d bytes over)%s'
+                       % (bss_end, ddr_end, bss_end - ddr_end,
+                          '; core %s or newer gives them %d bytes' % (more[0][0], more[0][1][1] - more[0][1][0])
+                          if more else ''))
     if fast_at > fast_end:
         raise ModError('.fast code needs SRAM to 0x%08x, past 0x%08x' % (fast_at, fast_end))
     run_load = _align(image_end + boot_len, 16)
