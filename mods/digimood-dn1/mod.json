@@ -1,0 +1,33 @@
+{
+ "id": "digimood", "version": "0.1",
+ "license": "GPL-2.0-or-later",
+ "title": "DigiMood", "category": "Effect", "author": "irpina",
+ "description": "A MOOD-style two-channel pedal for the Digitone mk1's audio inputs: a Wet Channel (REVERB, DELAY, SLIP, with FREEZE) and an always-listening Micro-Looper that keeps the last 15 seconds and loops the last LENGTH of it when you turn it on (ENV, TAPE, STRETCH, with OVERDUB), routed into each other as the pedal's ROUTING says, a CLOCK that lowers the sample rate of both from 48K to 2K, the hidden options, eight presets and the MOOD MKII's MIDI CCs. DIGIMOOD in core-dn1's Mod Menu (hold a track key) opens its page; while it is open it owns the audio engine (the synths are muted) and processes the inputs, and NO gives both back. Needs core-dn1 3.2.",
+ "device": "digitone-mk1", "os": "1.43",
+ "ports": {"1.44": {}},
+ "sources": ["dsp.c", "ui.c"],
+ "subscribe": [
+  {"event": "ev_key", "fn": "dmood_key", "order": 7},
+  {"event": "ev_enc", "fn": "dmood_enc", "order": 7},
+  {"event": "ev_hold", "fn": "dmood_hold", "order": 7},
+  {"event": "ev_midi_cc", "fn": "dmood_cc", "order": 56},
+  {"event": "ev_render_in", "fn": "dmood_rin", "order": 51},
+  {"event": "ev_render_out", "fn": "dmood_rout", "order": 51},
+  {"event": "ev_tick", "fn": "dmood_tick", "order": 62},
+  {"event": "ev_draw", "fn": "dmood_draw", "order": 92}
+ ],
+ "contribute": [
+  {"to": "core_menu", "order": 32, "data": "00000000",
+   "relocs": [[0, "abs32", "sym:dmood_menu", 0]]},
+  {"to": "core_audio", "order": 61, "data": "00000000",
+   "relocs": [[0, "abs32", "sym:dmood_owner", 0]]},
+  {"to": "core_projdata", "order": 71, "data": "00000000",
+   "relocs": [[0, "abs32", "sym:dmood_projdata", 0]]}
+ ],
+ "resources": {
+  "core": "3.2",
+  "names": ["projdata:DMOD"],
+  "regions": [{"name": "digimood ring and lines", "lo": "0x47300000", "hi": "0x47700000"}]
+ },
+ "requires": ["core"]
+}

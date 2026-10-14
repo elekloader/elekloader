@@ -763,7 +763,12 @@ its grid from it and from `fw_timeline`.
 inputs, with eleven engines, a looper and its own page, buffers in the
 bulk area, and the Microcosm's MIDI CCs through `ev_midi_cc`; `mods/digichroma-dn1`
 (DigiChroma) is another, a Chroma Console-style pedal with four modules of
-effects. `examples/dn-thru` is the smallest such mod. THRU in the Mod Menu takes
+effects, and DigiMood, DigiHedra, DigiTensor, DigiHabit and DigiSky
+(`mods/digimood-dn1` and on) five more, sharing a pedal shell (`pedal.h`,
+`pedal_dsp.inc`, `pedal_ui.inc`: the pages, SETUP, presets, TAP, BYPASS,
+the CPU guard and the project data, copied into each). Each pedal's buffers
+have a region of their own in the bulk area, so all seven share a build;
+together they need core-dn1 4.0's RAM. `examples/dn-thru` is the smallest such mod. THRU in the Mod Menu takes
 the output, and the inputs go straight to it at knob A's level; NO gives
 it back. It names no firmware address, so its 1.44 port is empty:
 

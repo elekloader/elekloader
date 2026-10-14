@@ -47,6 +47,13 @@ docs match its code.
 - **Another on the same:** [mods/digichroma-dn1](../mods/digichroma-dn1),
   DigiChroma, a Chroma Console-style pedal for the inputs, with its own
   page and the Chroma Console's MIDI CCs.
+- **Five more pedals** on a shared pedal shell, each with its pedal's MIDI
+  CCs: [DigiMood](../mods/digimood-dn1) (after the MOOD MkII: a wet channel
+  and a micro-looper), [DigiHedra](../mods/digihedra-dn1) (the Hedra: three
+  pitch voices in a key, with delays), [DigiTensor](../mods/digitensor-dn1)
+  (the Tensor: tape speed, reverse, hold and stutter in time),
+  [DigiHabit](../mods/digihabit-dn1) (the Habit: echoes from a 3-minute
+  memory) and [DigiSky](../mods/digisky-dn1) (the BigSky: twelve reverbs).
 - **Examples to start from** ([examples/](../examples)):
   - `hello-marker`, one C function on the draw event that puts a small square
     in the corner of every screen; `hello-marker-dt2` and `hello-marker-ot`

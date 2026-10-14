@@ -1,0 +1,33 @@
+{
+ "id": "digihabit", "version": "0.1",
+ "license": "GPL-2.0-or-later",
+ "title": "DigiHabit", "category": "Effect", "author": "irpina",
+ "description": "A Habit-style echo collector for the Digitone mk1's audio inputs: a 3-minute memory that always records what you play (COLLECT overdubs it, ALWAYS keeps it recording while bypassed), an echo with REPEATS and SIZE (in time with the Digitone's tempo), SCAN (auto: it wanders off into the past and plays old fragments into the echoes; manual: you pick the moment), SPREAD (a second echo further back, placed apart in stereo), the Habit's six modifiers (stepped and smooth speed, stability, trimmer, filter, dropper) after the echo, in its feedback or round the memory (IN, OUT, FEED), LOOP, CLEAR, RAMP and bounce, eight presets and the Habit's MIDI CCs. DIGIHABIT in core-dn1's Mod Menu (hold a track key) opens its page; while it is open it owns the audio engine (the synths are muted) and processes the inputs, and NO gives both back. Needs core-dn1 3.2.",
+ "device": "digitone-mk1", "os": "1.43",
+ "ports": {"1.44": {}},
+ "sources": ["dsp.c", "ui.c"],
+ "subscribe": [
+  {"event": "ev_key", "fn": "dhabit_key", "order": 10},
+  {"event": "ev_enc", "fn": "dhabit_enc", "order": 10},
+  {"event": "ev_hold", "fn": "dhabit_hold", "order": 10},
+  {"event": "ev_midi_cc", "fn": "dhabit_cc", "order": 59},
+  {"event": "ev_render_in", "fn": "dhabit_rin", "order": 54},
+  {"event": "ev_render_out", "fn": "dhabit_rout", "order": 54},
+  {"event": "ev_tick", "fn": "dhabit_tick", "order": 65},
+  {"event": "ev_draw", "fn": "dhabit_draw", "order": 95}
+ ],
+ "contribute": [
+  {"to": "core_menu", "order": 35, "data": "00000000",
+   "relocs": [[0, "abs32", "sym:dhabit_menu", 0]]},
+  {"to": "core_audio", "order": 64, "data": "00000000",
+   "relocs": [[0, "abs32", "sym:dhabit_owner", 0]]},
+  {"to": "core_projdata", "order": 74, "data": "00000000",
+   "relocs": [[0, "abs32", "sym:dhabit_projdata", 0]]}
+ ],
+ "resources": {
+  "core": "3.2",
+  "names": ["projdata:DHAB"],
+  "regions": [{"name": "digihabit memory", "lo": "0x46200000", "hi": "0x47300000"}]
+ },
+ "requires": ["core"]
+}

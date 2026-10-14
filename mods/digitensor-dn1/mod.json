@@ -1,0 +1,33 @@
+{
+ "id": "digitensor", "version": "0.1",
+ "license": "GPL-2.0-or-later",
+ "title": "DigiTensor", "category": "Effect", "author": "irpina",
+ "description": "A Tensor-style time-warp pedal for the Digitone mk1's audio inputs: a 10-second tape that always listens, played back at -2x to +2x (reverse included) in windows in time with the Digitone's tempo, pitch apart from speed (STRETCH) or with it (TAPE), HOLD (loop the last or the next window, forwards, backwards or back and forth), TAPE STOP, random speed, pitch, reverse and stutter events, an SL-2-style slicer, eight presets and MIDI CCs. DIGITENSOR in core-dn1's Mod Menu (hold a track key) opens its page; while it is open it owns the audio engine (the synths are muted) and processes the inputs, and NO gives both back. Needs core-dn1 3.2.",
+ "device": "digitone-mk1", "os": "1.43",
+ "ports": {"1.44": {}},
+ "sources": ["dsp.c", "ui.c"],
+ "subscribe": [
+  {"event": "ev_key", "fn": "dtensor_key", "order": 9},
+  {"event": "ev_enc", "fn": "dtensor_enc", "order": 9},
+  {"event": "ev_hold", "fn": "dtensor_hold", "order": 9},
+  {"event": "ev_midi_cc", "fn": "dtensor_cc", "order": 58},
+  {"event": "ev_render_in", "fn": "dtensor_rin", "order": 53},
+  {"event": "ev_render_out", "fn": "dtensor_rout", "order": 53},
+  {"event": "ev_tick", "fn": "dtensor_tick", "order": 64},
+  {"event": "ev_draw", "fn": "dtensor_draw", "order": 94}
+ ],
+ "contribute": [
+  {"to": "core_menu", "order": 34, "data": "00000000",
+   "relocs": [[0, "abs32", "sym:dtensor_menu", 0]]},
+  {"to": "core_audio", "order": 63, "data": "00000000",
+   "relocs": [[0, "abs32", "sym:dtensor_owner", 0]]},
+  {"to": "core_projdata", "order": 73, "data": "00000000",
+   "relocs": [[0, "abs32", "sym:dtensor_projdata", 0]]}
+ ],
+ "resources": {
+  "core": "3.2",
+  "names": ["projdata:DTEN"],
+  "regions": [{"name": "digitensor tape", "lo": "0x47700000", "hi": "0x47900000"}]
+ },
+ "requires": ["core"]
+}

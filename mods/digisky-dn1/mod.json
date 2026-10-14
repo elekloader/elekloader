@@ -1,0 +1,33 @@
+{
+ "id": "digisky", "version": "0.1",
+ "license": "GPL-2.0-or-later",
+ "title": "DigiSky", "category": "Effect", "author": "irpina",
+ "description": "A BigSky-style reverb pedal for the Digitone mk1's audio inputs: twelve machines on trig 1-12 (ROOM, HALL, PLATE, SPRING, SWELL, BLOOM, CLOUD, CHORALE, SHIMMER, MAGNETO, NONLINEAR, REFLECTIONS) around one eight-line feedback delay network, each with its own diffusers, damping, modulation, size and the BigSky's PARAM 1 and PARAM 2 (shimmer intervals, dwell and springs, rise time, bloom length and feedback, vowels, tape heads, nonlinear shapes, room shape and position), DECAY, PRE-DELAY (or the tempo's divisions), MIX, TONE, MOD, LOW END, BOOST, HOLD as FREEZE or INFINITE on T1, PERSIST, SPILLOVER, a cab filter, eight presets and the BigSky's MIDI CCs. DIGISKY in core-dn1's Mod Menu (hold a track key) opens its page; while it is open it owns the audio engine (the synths are muted) and processes the inputs, and NO gives both back. Needs core-dn1 3.2.",
+ "device": "digitone-mk1", "os": "1.43",
+ "ports": {"1.44": {}},
+ "sources": ["dsp.c", "ui.c"],
+ "subscribe": [
+  {"event": "ev_key", "fn": "dsky_key", "order": 11},
+  {"event": "ev_enc", "fn": "dsky_enc", "order": 11},
+  {"event": "ev_hold", "fn": "dsky_hold", "order": 11},
+  {"event": "ev_midi_cc", "fn": "dsky_cc", "order": 60},
+  {"event": "ev_render_in", "fn": "dsky_rin", "order": 55},
+  {"event": "ev_render_out", "fn": "dsky_rout", "order": 55},
+  {"event": "ev_tick", "fn": "dsky_tick", "order": 66},
+  {"event": "ev_draw", "fn": "dsky_draw", "order": 96}
+ ],
+ "contribute": [
+  {"to": "core_menu", "order": 36, "data": "00000000",
+   "relocs": [[0, "abs32", "sym:dsky_menu", 0]]},
+  {"to": "core_audio", "order": 65, "data": "00000000",
+   "relocs": [[0, "abs32", "sym:dsky_owner", 0]]},
+  {"to": "core_projdata", "order": 75, "data": "00000000",
+   "relocs": [[0, "abs32", "sym:dsky_projdata", 0]]}
+ ],
+ "resources": {
+  "core": "3.2",
+  "names": ["projdata:DSKY"],
+  "regions": [{"name": "digisky reverb", "lo": "0x47900000", "hi": "0x47B00000"}]
+ },
+ "requires": ["core"]
+}

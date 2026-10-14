@@ -1042,6 +1042,58 @@ def test_seq_events_dt1_builds_and_links():
             assert images[0] == images[1] and e.relocs == e4.relocs
 
 
+GAS_PEDALS = [('digimood', 0x47300000, 0x47700000), ('digihedra', 0x47B00000, 0x47BE0000),
+              ('digitensor', 0x47700000, 0x47900000), ('digihabit', 0x46200000, 0x47300000),
+              ('digisky', 0x47900000, 0x47B00000)]
+
+
+def test_gas_pedals_build_and_link():
+    """The five effects pedals on the pedal shell (mods/digimood-dn1, digihedra-dn1, digitensor-dn1,
+    digihabit-dn1, digisky-dn1), each a whole Digitone mod on core-dn1 3.2's exclusive audio: each patches
+    no site, needs 3.2, keeps its buffers in a region of its own in the bulk area and carries the same code
+    for 1.43 and 1.44 (an empty port). All five, DigiCosm and DigiChroma link together with the tree's
+    core (core-dn1 4.0: over 128 KB together, they need its 1.25 MB); beside the released 3.2 that set is
+    refused for the RAM, the message naming 4.0, and beside 2.3 each pedal is refused."""
+    if not DN_STOCK or not os.path.exists(DN_STOCK):
+        raise Skip('missing ELEKLOADER_DN_SYX')
+    tc = [x for x in devices.devices() if x.key == 'digitone-mk1'][0].toolchain
+    if not shutil.which(os.environ.get('ELEKLOADER_CROSS', tc['prefix']) + 'gcc'):
+        raise Skip('no m68k cross compiler')
+    with tempfile.TemporaryDirectory() as tmp:
+        core = dn_core(tmp)
+        paths = []
+        for name, lo, hi in GAS_PEDALS:
+            path, m = build.build(os.path.join(ROOT, 'mods', name + '-dn1'), DN_STOCK, tmp)
+            assert os.path.basename(path) == name + '-0.1.elemod'
+            assert m.needs_core == '3.2' and not m.sites, name
+            assert [(g['area'], g['lo'], g['hi']) for g in m.regions] == [('bulk', lo, hi)], (name, m.regions)
+            rc, r = lint_json(path, '--stock', DN_STOCK, '--with', core)
+            assert rc == 0, (name, r['problems'])
+            if CORE_DN23 and os.path.exists(CORE_DN23):
+                rc, r = lint_json(path, '--stock', DN_STOCK, '--with', CORE_DN23)
+                assert rc == 1 and '%s 0.1 needs core 3.2 or newer, and this build has core 2.3' % name \
+                    in r['problems'], r['problems']
+            if DN_STOCK_144 and os.path.exists(DN_STOCK_144):
+                path4, m4 = build.build(os.path.join(ROOT, 'mods', name + '-dn1'), DN_STOCK_144, tmp)
+                assert path4.endswith(name + '-0.1-os1.44.elemod')
+                images = []
+                for st, x in ((DN_STOCK, m), (DN_STOCK_144, m4)):
+                    sd, dv, _rel = formats.load(st)
+                    images.append(bytes(elemod.parts_bytes(x.sections['.run']['parts'],
+                                                           formats.main_image(sd, dv), dv)))
+                assert images[0] == images[1] and m.relocs == m4.relocs, name
+            paths.append(path)
+        for name in ('digicosm-dn1', 'digichroma-dn1'):
+            paths.append(build.build(os.path.join(ROOT, 'mods', name), DN_STOCK, tmp)[0])
+        others = sum((['--with', x] for x in paths[1:]), [])
+        rc, r = lint_json(paths[0], '--stock', DN_STOCK, '--with', core, *others)
+        assert rc == 0, r['problems']
+        assert r['link']['ram_used'] > 0x20000, r['link']        # over 128 KB: 4.0's area
+        if CORE_DN32 and os.path.exists(CORE_DN32):
+            rc, r = lint_json(paths[0], '--stock', DN_STOCK, '--with', CORE_DN32, *others)
+            assert rc == 1 and any('core 4.0 or newer gives them' in x for x in r['problems']), r['problems']
+
+
 def test_example_builds_and_links():
     tc = devices.devices()[0].toolchain
     if not shutil.which(os.environ.get('ELEKLOADER_CROSS', tc['prefix']) + 'gcc'):
