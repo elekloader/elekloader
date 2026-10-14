@@ -22,6 +22,16 @@
       "sha256": "5bdefabdca61d344756a3d0448f414c715006937ab417eb002032a976e9196e7"
     },
     {
+      "repo": "irpina/elekloader", "tag": "core-v4.0", "file": "core-4.0.elemod", "kind": "core",
+      "device": "digitakt-mk1",
+      "sha256": "5f578843cf162621e09c92fdbfb5d92a162430eaa5f90c09d70d97ef7699fa61"
+    },
+    {
+      "repo": "irpina/elekloader", "tag": "core-v4.0", "file": "core-4.0-os1.54.elemod", "kind": "core",
+      "device": "digitakt-mk1",
+      "sha256": "8b6e5af584973f6eb3aaecffd8b6ab1825f15fabbb5e82eac38ba23aa5f49d39"
+    },
+    {
       "repo": "irpina/elekloader", "tag": "machine-pages-v1.1", "file": "machine-pages-1.1.elemod",
       "device": "digitakt-mk1", "needs_core": "3.0",
       "sha256": "56899d2a3cfee638bee6ba1e1d881853676dcd5c0db2922a9d898e151d88d17d",
@@ -48,21 +58,27 @@
       "summary": "A slicing machine with a slice editor: cut a sample where you want, and play the slices from the trig keys and the keyboard."
     },
     {
-      "repo": "irpina/digihealth", "tag": "v1.1", "file": "digihealth-1.0.elemod",
+      "repo": "irpina/digihealth", "tag": "v1.1.1", "file": "digihealth-1.0.elemod",
       "device": "digitakt-mk1",
-      "sha256": "aba9413ee205e1368ec3997172a84e59eaa4e787d267bc7a3e94a161b4fcd0f1",
+      "sha256": "b2ce4d6ad0bea1623f59b53c359860573f99ab1bfb55d20c224a623f27d135c2",
       "summary": "FAST AUDIO lowers the DSP load; SYSTEM INFO shows CPU, DSP and memory in the top bar."
     },
     {
-      "repo": "irpina/digihealth", "tag": "v1.1", "file": "digihealth-1.0-os1.54.elemod",
+      "repo": "irpina/digihealth", "tag": "v1.1.1", "file": "digihealth-1.0-os1.54.elemod",
       "device": "digitakt-mk1",
-      "sha256": "b8a49c1137fb3f2a06338f71f0d5730812481a0ce1cef362144334fe55b11c5a",
+      "sha256": "84c39e08eff429dfc7766d09b91d323524275eba1df9de55a30074e7338863bb",
       "summary": "FAST AUDIO lowers the DSP load; SYSTEM INFO shows CPU, DSP and memory in the top bar."
     },
     {
-      "repo": "irpina/digihealth", "tag": "v1.1", "file": "digihealth-1.1.elemod",
+      "repo": "irpina/digihealth", "tag": "v1.1.1", "file": "digihealth-1.1.elemod",
       "device": "digitone-mk1",
-      "sha256": "5d2e5e201f9cd6323f0641093817250b030b196dd00816e2b18ca6ab0ed0ca99",
+      "sha256": "e30ddf521fd92d71b585a02cfcdc391a33ff841723b9c8ee5a30d026cd5cc319",
+      "summary": "SYSTEM INFO shows CPU, DSP and free RAM in the top bar."
+    },
+    {
+      "repo": "irpina/digihealth", "tag": "v1.1.1", "file": "digihealth-1.1-os1.44.elemod",
+      "device": "digitone-mk1",
+      "sha256": "b4b093b53a4865f737d5b31203a7c333f3c3d4cca64d5c4c3b3358fb114dd2a2",
       "summary": "SYSTEM INFO shows CPU, DSP and free RAM in the top bar."
     },
     {
@@ -86,6 +102,16 @@
       "sha256": "f2c6a28c3ff8c65d961afc78e87961b9378988d2d9b8b482f7033bc4362d08f6"
     },
     {
+      "repo": "irpina/elekloader", "tag": "core-dn1-v4.0", "file": "core-dn1-4.0.elemod", "kind": "core",
+      "device": "digitone-mk1",
+      "sha256": "cbcb3cd26858bf5af9c1e70af326844877f3b1739d0138ce52ed7e98561a45d5"
+    },
+    {
+      "repo": "irpina/elekloader", "tag": "core-dn1-v4.0", "file": "core-dn1-4.0-os1.44.elemod", "kind": "core",
+      "device": "digitone-mk1",
+      "sha256": "05bd7c0a505188380fcd2ccfd41ab03bbc77640c7186644862aed2db2a2bf13e"
+    },
+    {
       "repo": "irpina/elekloader", "tag": "machines-dn1-v0.1", "file": "machines-0.1.elemod",
       "device": "digitone-mk1", "needs_core": "3.1",
       "sha256": "4cd0962454c67b5045ee131a5da38725b9ca7f75c49471cc161e3407b65686bf",
@@ -105,18 +131,102 @@
       "on_unit": "Tested on a Digitone mk1 (3-4 Oct 2026): the TBL page, the table editor, the fast speeds, the Mod Menu and ADD steps. Not yet checked: the tables restored at power-up, and the arpeggiator with tables."
     },
     {
-      "repo": "irpina/digicosm", "tag": "v0.1", "file": "digicosm-0.1.elemod",
+      "repo": "irpina/digicosm", "tag": "v0.1.1", "file": "digicosm-0.1.1.elemod",
       "device": "digitone-mk1", "needs_core": "3.2",
-      "sha256": "bac1184caf36f939e66891faae42d9187ac86efa1e5f72ce7f72fd4199fbb04e",
+      "sha256": "fb54af2a00ecdb02be9a843aa03f147a6bb3270dcf300f2d848e3c68f703d67e",
       "summary": "A Microcosm-style effects engine for the audio inputs: eleven engines with four variations, a 60-second looper, Hold, Reverse and the Microcosm's MIDI CCs, on a page like the Digitone's own. The synths are silent while it is open.",
-      "on_unit": "Tested on a Digitone mk1 (Oct 2026): it runs and works. Also checked in digikit's emulator on OS 1.43 and 1.44. Not yet run on a Digitone Keys."
+      "on_unit": "0.1 tested on a Digitone mk1 (Oct 2026): it runs and works. 0.1.1 changes only a mono input (it now comes out of both sides), checked in digikit's emulator on OS 1.43 and 1.44. Not yet run on a Digitone Keys."
     },
     {
-      "repo": "irpina/digicosm", "tag": "v0.1", "file": "digicosm-0.1-os1.44.elemod",
+      "repo": "irpina/digicosm", "tag": "v0.1.1", "file": "digicosm-0.1.1-os1.44.elemod",
       "device": "digitone-mk1", "needs_core": "3.2",
-      "sha256": "012028c0b35447a45aaf7615a9cedb9e18f374a53ffa363b678ab4f1bf039d8b",
+      "sha256": "b83da6c8a2cc96b9f86eee258adb4fae5e5c9937d551f5d1904bdf7f9fcbbcb6",
       "summary": "A Microcosm-style effects engine for the audio inputs: eleven engines with four variations, a 60-second looper, Hold, Reverse and the Microcosm's MIDI CCs, on a page like the Digitone's own. The synths are silent while it is open.",
-      "on_unit": "Tested on a Digitone mk1 (Oct 2026): it runs and works. Also checked in digikit's emulator on OS 1.43 and 1.44. Not yet run on a Digitone Keys."
+      "on_unit": "0.1 tested on a Digitone mk1 (Oct 2026): it runs and works. 0.1.1 changes only a mono input (it now comes out of both sides), checked in digikit's emulator on OS 1.43 and 1.44. Not yet run on a Digitone Keys."
+    },
+    {
+      "repo": "irpina/digichroma", "tag": "v0.1", "file": "digichroma-0.1.elemod",
+      "device": "digitone-mk1", "needs_core": "3.2",
+      "sha256": "81d52f67ac731aee7b2dc16c59798835f3ab2cc5c1f14030fe1699b648d9bcbb",
+      "summary": "A Chroma Console-style pedal for the audio inputs: four modules of five effects in any order, GESTURE, CAPTURE (a 30-second looper) and the Chroma Console's MIDI CCs, on a page like the Digitone's own. The synths are silent while it is open.",
+      "on_unit": "Tested on a Digitone mk1 by its author (14 Oct 2026): it loads and works as expected; still a beta. Also checked in digikit's emulator on OS 1.43 and 1.44."
+    },
+    {
+      "repo": "irpina/digichroma", "tag": "v0.1", "file": "digichroma-0.1-os1.44.elemod",
+      "device": "digitone-mk1", "needs_core": "3.2",
+      "sha256": "c982d2b9318ed73e55eb3bf246a745ba0fa643fbc053fd3f85f46479e9416814",
+      "summary": "A Chroma Console-style pedal for the audio inputs: four modules of five effects in any order, GESTURE, CAPTURE (a 30-second looper) and the Chroma Console's MIDI CCs, on a page like the Digitone's own. The synths are silent while it is open.",
+      "on_unit": "Tested on a Digitone mk1 by its author (14 Oct 2026): it loads and works as expected; still a beta. Also checked in digikit's emulator on OS 1.43 and 1.44."
+    },
+    {
+      "repo": "irpina/digimood", "tag": "v0.1", "file": "digimood-0.1.elemod",
+      "device": "digitone-mk1", "needs_core": "3.2",
+      "sha256": "91d73f225fbdf8ad42bfb8d35bad3ca45a87ff219e75404c678e57c7912c3bee",
+      "summary": "A MOOD MkII-style pedal for the audio inputs: a wet channel (reverb, delay, slip) and a micro-looper that always listens (envelope, tape, stretch), CLOCK as the pedal's sample-rate clock, and its MIDI CCs. The synths are silent while it is open.",
+      "on_unit": "Tested on a Digitone mk1 by its author (14 Oct 2026): it loads and works as expected; still a beta. Also checked in digikit's emulator on OS 1.43 and 1.44."
+    },
+    {
+      "repo": "irpina/digimood", "tag": "v0.1", "file": "digimood-0.1-os1.44.elemod",
+      "device": "digitone-mk1", "needs_core": "3.2",
+      "sha256": "dabba9aeba3245a3f4426173303b3be718aff57bafb6010c28ccccf1e4895490",
+      "summary": "A MOOD MkII-style pedal for the audio inputs: a wet channel (reverb, delay, slip) and a micro-looper that always listens (envelope, tape, stretch), CLOCK as the pedal's sample-rate clock, and its MIDI CCs. The synths are silent while it is open.",
+      "on_unit": "Tested on a Digitone mk1 by its author (14 Oct 2026): it loads and works as expected; still a beta. Also checked in digikit's emulator on OS 1.43 and 1.44."
+    },
+    {
+      "repo": "irpina/digihedra", "tag": "v0.1", "file": "digihedra-0.1.elemod",
+      "device": "digitone-mk1", "needs_core": "3.2",
+      "sha256": "f9645b8fb8d8accfb4290b3b59c3f517f43b7b2149532f71ff9b575d8fb68791",
+      "summary": "A Hedra-style pitch shifter for the audio inputs: three voices in a key and scale (or chromatic), each through its own delay, four delay modes, rhythms and the Hedra's MIDI CCs. The synths are silent while it is open.",
+      "on_unit": "Tested on a Digitone mk1 by its author (14 Oct 2026): it loads and works as expected; still a beta. Also checked in digikit's emulator on OS 1.43 and 1.44."
+    },
+    {
+      "repo": "irpina/digihedra", "tag": "v0.1", "file": "digihedra-0.1-os1.44.elemod",
+      "device": "digitone-mk1", "needs_core": "3.2",
+      "sha256": "f5ffd14c0453cc5e09062ea8d2f715653a45aa57ed137ec948ebe7837e6a2574",
+      "summary": "A Hedra-style pitch shifter for the audio inputs: three voices in a key and scale (or chromatic), each through its own delay, four delay modes, rhythms and the Hedra's MIDI CCs. The synths are silent while it is open.",
+      "on_unit": "Tested on a Digitone mk1 by its author (14 Oct 2026): it loads and works as expected; still a beta. Also checked in digikit's emulator on OS 1.43 and 1.44."
+    },
+    {
+      "repo": "irpina/digitensor", "tag": "v0.1", "file": "digitensor-0.1.elemod",
+      "device": "digitone-mk1", "needs_core": "3.2",
+      "sha256": "05938ff58091fe843c8d53aec113b3e2dd087657dd8d2539499a6c784b8b62cb",
+      "summary": "A Tensor-style time-warp pedal for the audio inputs: tape speed from -2x to +2x in tempo windows, pitch apart from speed, HOLD, TAPE STOP, random events, a slicer and MIDI CCs. The synths are silent while it is open.",
+      "on_unit": "Tested on a Digitone mk1 by its author (14 Oct 2026): it loads and works as expected; still a beta. Also checked in digikit's emulator on OS 1.43 and 1.44."
+    },
+    {
+      "repo": "irpina/digitensor", "tag": "v0.1", "file": "digitensor-0.1-os1.44.elemod",
+      "device": "digitone-mk1", "needs_core": "3.2",
+      "sha256": "6dbd81c28f88994d157c8bca8469f230addbf124b18d528c746199e585e77a74",
+      "summary": "A Tensor-style time-warp pedal for the audio inputs: tape speed from -2x to +2x in tempo windows, pitch apart from speed, HOLD, TAPE STOP, random events, a slicer and MIDI CCs. The synths are silent while it is open.",
+      "on_unit": "Tested on a Digitone mk1 by its author (14 Oct 2026): it loads and works as expected; still a beta. Also checked in digikit's emulator on OS 1.43 and 1.44."
+    },
+    {
+      "repo": "irpina/digihabit", "tag": "v0.1", "file": "digihabit-0.1.elemod",
+      "device": "digitone-mk1", "needs_core": "3.2",
+      "sha256": "daff2881e1c100ced66130afe22b7c0943301877e6d4912fb8a5bab3b6547bc1",
+      "summary": "A Habit-style echo collector for the audio inputs: echoes with SCAN and SPREAD from a 3-minute memory, the Habit's six modifiers, LOOP and its MIDI CCs. The synths are silent while it is open.",
+      "on_unit": "Tested on a Digitone mk1 by its author (14 Oct 2026): it loads and works as expected; still a beta. Also checked in digikit's emulator on OS 1.43 and 1.44."
+    },
+    {
+      "repo": "irpina/digihabit", "tag": "v0.1", "file": "digihabit-0.1-os1.44.elemod",
+      "device": "digitone-mk1", "needs_core": "3.2",
+      "sha256": "19080d0f692fccb43d6d2c0a03e65dc7b5cb0053d4f347b80c23ff4aec59a23a",
+      "summary": "A Habit-style echo collector for the audio inputs: echoes with SCAN and SPREAD from a 3-minute memory, the Habit's six modifiers, LOOP and its MIDI CCs. The synths are silent while it is open.",
+      "on_unit": "Tested on a Digitone mk1 by its author (14 Oct 2026): it loads and works as expected; still a beta. Also checked in digikit's emulator on OS 1.43 and 1.44."
+    },
+    {
+      "repo": "irpina/digisky", "tag": "v0.1", "file": "digisky-0.1.elemod",
+      "device": "digitone-mk1", "needs_core": "3.2",
+      "sha256": "b7f974e1c3b194c8c5eda3c49293ada7af57e8c2a4d2c7b7ffc3c6b457c8b463",
+      "summary": "A BigSky-style reverb for the audio inputs: its twelve machines, ROOM to REFLECTIONS, with PARAM 1 and 2, FREEZE and INFINITE, and the BigSky's MIDI CCs. The synths are silent while it is open.",
+      "on_unit": "Tested on a Digitone mk1 by its author (14 Oct 2026): it loads and works as expected; still a beta. Also checked in digikit's emulator on OS 1.43 and 1.44."
+    },
+    {
+      "repo": "irpina/digisky", "tag": "v0.1", "file": "digisky-0.1-os1.44.elemod",
+      "device": "digitone-mk1", "needs_core": "3.2",
+      "sha256": "ba9f27c2281446087e02d537fc3c3a743151ab18e0e00480adf9334c939835c0",
+      "summary": "A BigSky-style reverb for the audio inputs: its twelve machines, ROOM to REFLECTIONS, with PARAM 1 and 2, FREEZE and INFINITE, and the BigSky's MIDI CCs. The synths are silent while it is open.",
+      "on_unit": "Tested on a Digitone mk1 by its author (14 Oct 2026): it loads and works as expected; still a beta. Also checked in digikit's emulator on OS 1.43 and 1.44."
     },
     {
       "repo": "irpina/digineighbor", "tag": "v0.6", "file": "digineighbor-0.6.elemod",
@@ -138,100 +248,132 @@
       "on_unit": "Tested on a Digitakt mk1 by its author (release v1.1.13): one Sophie track runs without FAST AUDIO, two ran with it on; eight tracks are not claimed."
     },
     {
-      "repo": "gdeo607/digi1_mods", "commit": "35bacb3730d108e4dc48a7bd6de4c99ae9b161e6",
+      "repo": "gdeo607/digi1_mods", "commit": "8c40cf37b5aa897dd1ffcd80a86cb2522624dcda",
       "path": "elemods/digichain-1.6.elemod",
       "device": "digitakt-mk1", "needs_core": "2.1",
       "sha256": "819f6045b5ad4deaa720c74f0126d078cc15c019dfcb07710112ac453b65d47d",
       "summary": "What Digi Mono and Digi Poly build on: their SRC pages, knob graphics and menu icons. Not with the shop's DIGISLICER, NEIGHBOR or SOPHIE.",
-      "on_unit": "Not yet tested on a unit, its author reports; it passes their emulator tests on OS 1.53 and 1.54."
+      "on_unit": "Confirmed on a Digitakt mk1, its author reports (1.3); 1.6 passes their emulator tests on OS 1.53 and 1.54."
     },
     {
-      "repo": "gdeo607/digi1_mods", "commit": "35bacb3730d108e4dc48a7bd6de4c99ae9b161e6",
+      "repo": "gdeo607/digi1_mods", "commit": "8c40cf37b5aa897dd1ffcd80a86cb2522624dcda",
       "path": "elemods/digichain-1.6-os1.54.elemod",
       "device": "digitakt-mk1", "needs_core": "2.1",
       "sha256": "5d4910f597874ac2f5348e2cd76bea7e34b9ea0060c9bcf1406dd317a7af9e42",
       "summary": "What Digi Mono and Digi Poly build on: their SRC pages, knob graphics and menu icons. Not with the shop's DIGISLICER, NEIGHBOR or SOPHIE.",
-      "on_unit": "Not yet tested on a unit, its author reports; it passes their emulator tests on OS 1.53 and 1.54."
+      "on_unit": "Confirmed on a Digitakt mk1, its author reports (1.3); 1.6 passes their emulator tests on OS 1.53 and 1.54."
     },
     {
-      "repo": "gdeo607/digi1_mods", "commit": "35bacb3730d108e4dc48a7bd6de4c99ae9b161e6",
-      "path": "elemods/digimono-0.13b.elemod",
+      "repo": "gdeo607/digi1_mods", "commit": "8c40cf37b5aa897dd1ffcd80a86cb2522624dcda",
+      "path": "elemods/digimono-0.23.elemod",
       "device": "digitakt-mk1", "needs_core": "2.1",
-      "sha256": "79b51a364b1b7fd8ca13ac6aacba15bd1439bb46569b11d1ad5b3a35b1cec3ec",
-      "summary": "Seven synth machines after the Monomachine: sine, noise, saw, pulse, an ensemble, a formant voice and a three-sine chord, each with its own SRC page.",
-      "on_unit": "Not yet tested on a unit, its author reports; it passes their emulator tests on OS 1.53 and 1.54."
+      "sha256": "6b8b9b62bbc322160ea5e9227dacfe3c04cf90191b795c73207b40a74715c829",
+      "summary": "Seven synth machines after the Monomachine (sine, noise, saw, pulse, an ensemble, a formant voice, a three-sine chord) and CHORDS, a chord on one track, each with its own SRC page. Needs digichain, which the shop ticks with it.",
+      "on_unit": "Confirmed on a Digitakt mk1, its author reports (0.22); 0.23 passes their emulator tests on OS 1.53 and 1.54."
     },
     {
-      "repo": "gdeo607/digi1_mods", "commit": "35bacb3730d108e4dc48a7bd6de4c99ae9b161e6",
-      "path": "elemods/digimono-0.13b-os1.54.elemod",
+      "repo": "gdeo607/digi1_mods", "commit": "8c40cf37b5aa897dd1ffcd80a86cb2522624dcda",
+      "path": "elemods/digimono-0.23-os1.54.elemod",
       "device": "digitakt-mk1", "needs_core": "2.1",
-      "sha256": "bbd79b944ab7a2176d933d671cc3019e2f55748412c37e1b9c64779348137dbc",
-      "summary": "Seven synth machines after the Monomachine: sine, noise, saw, pulse, an ensemble, a formant voice and a three-sine chord, each with its own SRC page.",
-      "on_unit": "Not yet tested on a unit, its author reports; it passes their emulator tests on OS 1.53 and 1.54."
+      "sha256": "5750fcaf0699fd16c14bc1e9c63429a3f00915cd3bce6bd5643719eee32c7db6",
+      "summary": "Seven synth machines after the Monomachine (sine, noise, saw, pulse, an ensemble, a formant voice, a three-sine chord) and CHORDS, a chord on one track, each with its own SRC page. Needs digichain, which the shop ticks with it.",
+      "on_unit": "Confirmed on a Digitakt mk1, its author reports (0.22); 0.23 passes their emulator tests on OS 1.53 and 1.54."
     },
     {
-      "repo": "gdeo607/digi1_mods", "commit": "35bacb3730d108e4dc48a7bd6de4c99ae9b161e6",
-      "path": "elemods/digipoly-2.0.elemod",
-      "device": "digitakt-mk1", "needs_core": "2.1", "license": "MIT",
-      "sha256": "1d2615c58e0a944c1ca49741739be4e1b3cc26cf8d94ce3ab1cd6af78c47ebac",
-      "summary": "A POLY machine: chords from a track's own trigs, borrowing other tracks' voices, and polyphonic MIDI on its channel.",
-      "on_unit": "Not yet tested on a unit, its author reports; it passes their emulator tests on OS 1.53 and 1.54."
+      "repo": "gdeo607/digi1_mods", "commit": "8c40cf37b5aa897dd1ffcd80a86cb2522624dcda",
+      "path": "elemods/digimacro-1.1.elemod",
+      "device": "digitakt-mk1", "needs_core": "2.1",
+      "sha256": "9cc981a5eb7f1ce0ba3dd97ca72a5f878746c5a298debf22e4bde40fa531292a",
+      "summary": "MACRO: eight engines from Mutable Instruments' Plaits (waveshaping, 2-op FM, noise, particles, kick, snare, hi-hat, grains) as a machine, the engine on knob B and p-lockable. Needs Digi Mono, which the shop ticks with it.",
+      "on_unit": "Confirmed on a Digitakt mk1 with Digi Mono 0.22, no freezes, its author reports (1.0); 1.1 passes their emulator tests."
     },
     {
-      "repo": "gdeo607/digi1_mods", "commit": "35bacb3730d108e4dc48a7bd6de4c99ae9b161e6",
-      "path": "elemods/digipoly-2.0-os1.54.elemod",
-      "device": "digitakt-mk1", "needs_core": "2.1", "license": "MIT",
-      "sha256": "4cc14624253150776b2eedd8e02b8b86b378888b1459cd2f0a0b49148b48263e",
-      "summary": "A POLY machine: chords from a track's own trigs, borrowing other tracks' voices, and polyphonic MIDI on its channel.",
-      "on_unit": "Not yet tested on a unit, its author reports; it passes their emulator tests on OS 1.53 and 1.54."
+      "repo": "gdeo607/digi1_mods", "commit": "8c40cf37b5aa897dd1ffcd80a86cb2522624dcda",
+      "path": "elemods/digimacro-1.1-os1.54.elemod",
+      "device": "digitakt-mk1", "needs_core": "2.1",
+      "sha256": "cfb07c31450ce02c5b712eb009a766322a68fdd9c60790dd8ffefa826995fecc",
+      "summary": "MACRO: eight engines from Mutable Instruments' Plaits (waveshaping, 2-op FM, noise, particles, kick, snare, hi-hat, grains) as a machine, the engine on knob B and p-lockable. Needs Digi Mono, which the shop ticks with it.",
+      "on_unit": "Confirmed on a Digitakt mk1 with Digi Mono 0.22, no freezes, its author reports (1.0); 1.1 passes their emulator tests."
     },
     {
-      "repo": "gdeo607/digi1_mods", "commit": "35bacb3730d108e4dc48a7bd6de4c99ae9b161e6",
-      "path": "elemods/digimatrix-1.0b.elemod",
+      "repo": "gdeo607/digi1_mods", "commit": "8c40cf37b5aa897dd1ffcd80a86cb2522624dcda",
+      "path": "elemods/digipoly-2.0a.elemod",
       "device": "digitakt-mk1", "needs_core": "2.1", "license": "MIT",
-      "sha256": "792810c2432cadab14e6db5c02957c85714f87eca2a066d68b28e8e134148a9b",
+      "sha256": "7ddeefb4616e27e650184f3d78004eddad44a8cb898f8ea535afd3cd17e0e7f7",
+      "summary": "A POLY machine: chords from a track's own trigs, borrowing other tracks' voices, and polyphonic MIDI on its channel. Needs digichain, which the shop ticks with it.",
+      "on_unit": "Confirmed on a Digitakt mk1, its author reports; it passes their emulator tests on OS 1.53 and 1.54."
+    },
+    {
+      "repo": "gdeo607/digi1_mods", "commit": "8c40cf37b5aa897dd1ffcd80a86cb2522624dcda",
+      "path": "elemods/digipoly-2.0a-os1.54.elemod",
+      "device": "digitakt-mk1", "needs_core": "2.1", "license": "MIT",
+      "sha256": "d374422cd1a95b257c92f7efded92377f7f64fa1e503c1c4b9df42303151a7c9",
+      "summary": "A POLY machine: chords from a track's own trigs, borrowing other tracks' voices, and polyphonic MIDI on its channel. Needs digichain, which the shop ticks with it.",
+      "on_unit": "Confirmed on a Digitakt mk1, its author reports; it passes their emulator tests on OS 1.53 and 1.54."
+    },
+    {
+      "repo": "gdeo607/digi1_mods", "commit": "8c40cf37b5aa897dd1ffcd80a86cb2522624dcda",
+      "path": "elemods/digimatrix-1.0c.elemod",
+      "device": "digitakt-mk1", "needs_core": "2.1", "license": "MIT",
+      "sha256": "dc2c9d32dde13e759e923a0d94a99c6fb1a7571434cc89ed3fd37deaaef5c2af",
       "summary": "A modulation matrix: any track's LFO to any parameter of any track, in 8 slots, per pattern.",
-      "on_unit": "Not yet tested on a unit, its author reports; it passes their emulator tests on OS 1.53 and 1.54."
+      "on_unit": "Confirmed on a Digitakt mk1, its author reports; it passes their emulator tests on OS 1.53 and 1.54."
     },
     {
-      "repo": "gdeo607/digi1_mods", "commit": "35bacb3730d108e4dc48a7bd6de4c99ae9b161e6",
-      "path": "elemods/digimatrix-1.0b-os1.54.elemod",
+      "repo": "gdeo607/digi1_mods", "commit": "8c40cf37b5aa897dd1ffcd80a86cb2522624dcda",
+      "path": "elemods/digimatrix-1.0c-os1.54.elemod",
       "device": "digitakt-mk1", "needs_core": "2.1", "license": "MIT",
-      "sha256": "f12fd6c0f154f1358c5b16916630865263cb81c1b72a13e2795f6eba171c95aa",
+      "sha256": "ce044908388369567b87b0890860706cdf1afab8877c6e852814414cd5e0cba3",
       "summary": "A modulation matrix: any track's LFO to any parameter of any track, in 8 slots, per pattern.",
-      "on_unit": "Not yet tested on a unit, its author reports; it passes their emulator tests on OS 1.53 and 1.54."
+      "on_unit": "Confirmed on a Digitakt mk1, its author reports; it passes their emulator tests on OS 1.53 and 1.54."
     },
     {
-      "repo": "gdeo607/digi1_mods", "commit": "35bacb3730d108e4dc48a7bd6de4c99ae9b161e6",
-      "path": "elemods/digieq-1.0b.elemod",
+      "repo": "gdeo607/digi1_mods", "commit": "8c40cf37b5aa897dd1ffcd80a86cb2522624dcda",
+      "path": "elemods/digieq-1.0c.elemod",
       "device": "digitakt-mk1", "needs_core": "2.1", "license": "MIT",
-      "sha256": "af5088bf444de4f1c269e56151805e196277568a96645cf216fc947091162969",
+      "sha256": "eb5c75fbc5b1ecda248f205730d2b7d9e129a52a9c19bccf3ef47ed4c78e712f",
       "summary": "A 4-band master EQ on every output (main outs, headphones and USB), per pattern.",
-      "on_unit": "Not yet tested on a unit, its author reports; it passes their emulator tests on OS 1.53 and 1.54."
+      "on_unit": "Confirmed on a Digitakt mk1, its author reports; it passes their emulator tests on OS 1.53 and 1.54."
     },
     {
-      "repo": "gdeo607/digi1_mods", "commit": "35bacb3730d108e4dc48a7bd6de4c99ae9b161e6",
-      "path": "elemods/digieq-1.0b-os1.54.elemod",
+      "repo": "gdeo607/digi1_mods", "commit": "8c40cf37b5aa897dd1ffcd80a86cb2522624dcda",
+      "path": "elemods/digieq-1.0c-os1.54.elemod",
       "device": "digitakt-mk1", "needs_core": "2.1", "license": "MIT",
-      "sha256": "82dcd78faf44e67bc7fd0920266bb122583bd60288c1dd03fa878b6f3f9301a0",
+      "sha256": "d0ee392ba21d65909d44b81f689a02c3d9cb7a1d02406ddaea19bdd5ecc9a87b",
       "summary": "A 4-band master EQ on every output (main outs, headphones and USB), per pattern.",
-      "on_unit": "Not yet tested on a unit, its author reports; it passes their emulator tests on OS 1.53 and 1.54."
+      "on_unit": "Confirmed on a Digitakt mk1, its author reports; it passes their emulator tests on OS 1.53 and 1.54."
     },
     {
-      "repo": "gdeo607/digi1_mods", "commit": "35bacb3730d108e4dc48a7bd6de4c99ae9b161e6",
+      "repo": "gdeo607/digi1_mods", "commit": "8c40cf37b5aa897dd1ffcd80a86cb2522624dcda",
+      "path": "elemods/tonefx-3.2a3.elemod",
+      "device": "digitakt-mk1", "needs_core": "2.1",
+      "sha256": "c37a8a727594392f03457609d5dcfabbb7fa2816420efc8a146a144fd25b29a5",
+      "summary": "Tone+FX: Digital Alchemy DSP's master effects, ported: ring modulator, wavefolder, tilt EQ, bit crusher, pitch and stereo modes and a PERFORM page of momentary pads, on every output. Not with Digi EQ, which uses the same master page.",
+      "on_unit": "Not yet tested on a unit, its author reports."
+    },
+    {
+      "repo": "gdeo607/digi1_mods", "commit": "8c40cf37b5aa897dd1ffcd80a86cb2522624dcda",
+      "path": "elemods/tonefx-3.2a3-os1.54.elemod",
+      "device": "digitakt-mk1", "needs_core": "2.1",
+      "sha256": "c490c6f22fcdd727184256690bcce9a6d41854f0f27e593aa86f547ac17ceef9",
+      "summary": "Tone+FX: Digital Alchemy DSP's master effects, ported: ring modulator, wavefolder, tilt EQ, bit crusher, pitch and stereo modes and a PERFORM page of momentary pads, on every output. Not with Digi EQ, which uses the same master page.",
+      "on_unit": "Not yet tested on a unit, its author reports."
+    },
+    {
+      "repo": "gdeo607/digi1_mods", "commit": "8c40cf37b5aa897dd1ffcd80a86cb2522624dcda",
       "path": "elemods/digiutils-1.9a.elemod",
       "device": "digitakt-mk1", "needs_core": "2.1", "license": "MIT",
       "sha256": "8697ac1fe883cb8fc6ee29f441f6172bde5b24506a1a4337358d66106844b5c1",
       "summary": "Hold \"...\" for a live scope, spectrum analyser and stereo X-Y view, with a tuner and track activity.",
-      "on_unit": "Its author reports the stand-alone 1.5d tested on a Digitakt mk1, and 1.9a not yet; it passes their emulator tests on OS 1.53 and 1.54."
+      "on_unit": "Confirmed on a Digitakt mk1, its author reports; it passes their emulator tests on OS 1.53 and 1.54."
     },
     {
-      "repo": "gdeo607/digi1_mods", "commit": "35bacb3730d108e4dc48a7bd6de4c99ae9b161e6",
+      "repo": "gdeo607/digi1_mods", "commit": "8c40cf37b5aa897dd1ffcd80a86cb2522624dcda",
       "path": "elemods/digiutils-1.9a-os1.54.elemod",
       "device": "digitakt-mk1", "needs_core": "2.1", "license": "MIT",
       "sha256": "ed13ca17753e4885b195c2ee7183ce370ad2fdd5b9f730de8a03962fc9397765",
       "summary": "Hold \"...\" for a live scope, spectrum analyser and stereo X-Y view, with a tuner and track activity.",
-      "on_unit": "Its author reports the stand-alone 1.5d tested on a Digitakt mk1, and 1.9a not yet; it passes their emulator tests on OS 1.53 and 1.54."
+      "on_unit": "Confirmed on a Digitakt mk1, its author reports; it passes their emulator tests on OS 1.53 and 1.54."
     },
     {
       "repo": "Alez22/digistring", "tag": "v0.8.0", "file": "digistring-0.8.0.elemod",
