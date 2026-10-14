@@ -235,16 +235,14 @@ ignore:
 The loader then refuses it beside an older core with *"needs core 3.0 or
 newer"*, and an older loader with the imports it cannot resolve. Core 3.0's
 files are on the [core-v3.0](https://github.com/irpina/elekloader/releases/tag/core-v3.0) pre-release and in the
-mod shop, so the web page and the kit take 3.0 for such a mod.
+mod shop.
 
 **Which core a build takes.** A builder (the app, the web page, the kit)
-takes, of the cores it has for the stock OS, the newest of the oldest major
-line that every selected mod's `resources.core` (the catalog's
-`needs_core`) allows, and whose RAM holds the mods. A selection that needs
-nothing from 3.0 builds with 2.x, as it did before 3.0 existed; one that
-needs 3.0 builds with the newest 3.x. Mods over 128 KB together take
-4.0: core 4.0 on the Digitakt mk1 (256 KB), core-dn1 4.0 on the Digitone
-(1.25 MB) ("The mods' RAM", below;
+takes the newest core it has for the stock OS, which keeps all of every
+older one: core 4.0 on the Digitakt mk1, core-dn1 4.0 on the Digitone, for
+a selection that needs nothing from 3.0 too. Of the cores new enough for
+every selected mod's `resources.core` (the catalog's `needs_core`), it
+takes the newest whose RAM holds the mods ("The mods' RAM", below;
 [CORES.md](CORES.md), "How a build picks one"). A core chosen by hand that
 is new enough and holds the mods is kept.
 
@@ -290,8 +288,8 @@ empty port entry, `"ports": {"1.44": {}}`; it says it needs 3.0 with
 also declares core-dn1's descriptors (`struct core_param`, `core_page`,
 `core_projdata`, `core_menu_item`) and `core_page_open` and
 `core_page_shown`. In assembly, use the names as they are. A build takes
-3.0 only for a mod that needs it ("Core 3.0" above), so the Digitone's 2.x
-line stays on 2.3.
+the newest core-dn1 for every selection ("Core 3.0" above), so a mod built
+for 2.x builds with it too.
 
 | name | 1.43 | 1.44 | |
 |---|---|---|---|
@@ -893,7 +891,7 @@ area in place of `ddr`), so a build with an older core keeps 128 KB, and
 mods need no change: the linker relocates them wherever they go. A mod
 that needs more than 128 KB on its own says `"core": "4.0"`. Mods that are
 over 128 KB only together need say nothing: the app, the web page and the
-kit take 4.0 for them when they would take 2.3 or 3.2 ([CORES.md](CORES.md),
+kit take 4.0, the newest core, for every selection ([CORES.md](CORES.md),
 "How a build picks one").
 
 Why there: the OS's instruction operands in DDR end at a 384 KB ring,
@@ -913,8 +911,7 @@ out from 0x47BC0000 to 0x47C00000, 256 KB in place of 128 KB: the whole
 gap between the pool's end (0x47BAF640 in 1.53, 0x47BBF640 in 1.54, which
 the OS compares against) and the ring at 0x47C00000. No instruction operand
 points into it, and in an emulator run nothing writes there. As on the
-Digitone, a selection over 128 KB takes 4.0 where it would take 2.1 or 3.0,
-and one that fits keeps its core and its bytes.
+Digitone, a build takes 4.0, the newest core, for every selection.
 
 ### Key LEDs and each block's sound parameters (core-dn1 3.3, Digitone mk1)
 

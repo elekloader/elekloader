@@ -61,57 +61,55 @@ test('a plan brings what each mod requires, and the core it needs', () => {
   assert.deepEqual(releases(c, 'digitakt-mk1', 'digimono'), ['1.53', '1.54'])
 })
 
-test('a new major core is taken only by the selections that need it', () => {
+test('every selection takes the newest core the catalog lists for its OS', () => {
   const cat = structuredClone(CATALOG)
   cat.cores.push(core('core-3.0.elemod', '1.53', '3.0'))
   cat.mods.push(mod('pages', '1.53', { needs_core: '3.0' }), mod('later', '1.53', { needs_core: '4.0' }))
   const c = parseCatalog(cat)
   const plan = (ids: string[]) => planBuild(c, 'digitakt-mk1', '1.53', ids).core?.file
-  assert.equal(plan(['digimono']), 'core-2.2.elemod')              // as before core 3.0 was listed
-  assert.equal(plan(['fancy']), 'core-2.2.elemod')
-  assert.equal(plan([]), 'core-2.2.elemod')
+  assert.equal(plan(['digimono']), 'core-3.0.elemod')              // it keeps all of 2.1 and 2.2
+  assert.equal(plan(['fancy']), 'core-3.0.elemod')
+  assert.equal(plan([]), 'core-3.0.elemod')
   assert.equal(plan(['pages', 'digimono']), 'core-3.0.elemod')
   assert.equal(plan(['later']), undefined)
   assert.equal(planBuild(c, 'digitakt-mk1', '1.54', ['pages']).core?.file, 'core-2.1-os1.54.elemod')
 })
 
-test('versions sort as numbers, and pickCore takes the newest of the oldest line that will do', () => {
+test('versions sort as numbers, and pickCore takes the newest core that will do', () => {
   const order = ['', '0.13a', '0.13b', '2', '2.0', '2.0a', '2.1', '2.9', '2.10', '3.0', '10.0']
   assert.deepEqual([...order].reverse().sort(cmpVersions), order)
   assert.equal(cmpVersions('2.1', '2.1'), 0)
-  assert.equal(pickCore(['2.1', '3.0', '2.0a']), 0)
-  assert.equal(pickCore(['2.1', '3.0', '2.0a'], '2.1'), 0)
-  assert.equal(pickCore(['2.1', '3.0', '2.0a'], '2.2'), 1)
+  // the newest, whatever the mods need: each core keeps all of the one before it (elemod.pick_core)
+  assert.equal(pickCore(['2.1', '3.0', '2.0a']), 1)
+  assert.equal(pickCore(['2.1', '3.0', '2.0a'], '2.1'), 1)
   assert.equal(pickCore(['2.1', '3.0', '3.1'], '3.0'), 2)
   assert.equal(pickCore(['2.1', '2.1'], null), 1)                  // the last of equals, as gui does
   assert.equal(pickCore(['2.1', '3.0'], '3.1'), null)
-  assert.equal(pickCore(['2.0a', '2.2', '2.3', '3.0'], null), 2)     // the Digitone's 2.x line
-  assert.equal(pickCore(['2.0a', '2.2', '2.3', '3.0'], '2.2'), 2)
-  assert.equal(pickCore(['2.0a', '2.2', '2.3', '3.0'], '3.0'), 3)
+  assert.equal(pickCore(['2.0a', '2.2', '2.3', '3.0'], null), 3)
+  assert.equal(pickCore(['2.0a', '2.2', '2.10', '2.3'], null), 2)   // versions as numbers
   assert.equal(pickCore([], null), null)
   // fits: whether each core's RAM holds the mods (the Digitone's 4.0 has 1.25 MB, 2.3 and 3.2 128 KB)
   const dn = ['2.3', '3.2', '4.0', '4.1'], all = [true, true, true, true]
-  assert.equal(pickCore(dn, null, all), 0)
-  assert.equal(pickCore(dn, '3.2', all), 1)
-  assert.equal(pickCore(dn, '3.2', [false, false, true, true]), 3)   // the newest of the next line
-  assert.equal(pickCore(dn, null, [false, false, true, true]), 3)
-  assert.equal(pickCore(dn, '3.2', [true, false, false, false]), 1)  // none new enough holds: as before
+  assert.equal(pickCore(dn, null, all), 3)
+  assert.equal(pickCore(dn, '3.2', all), 3)
+  assert.equal(pickCore(dn, null, [true, true, false, false]), 1)    // the newest that holds them
+  assert.equal(pickCore(dn, '3.2', [true, false, false, false]), 3)  // none new enough holds: the newest
   assert.equal(pickCore(dn, '4.1', [true, true, false, true]), 3)
   assert.equal(pickCore(dn, '5.0', all), null)
 })
 
-test('a plan whose mods are too big for its core\'s RAM takes the next line that holds them', () => {
+test('a plan takes the newest core whose RAM holds its mods', () => {
   const cat = structuredClone(CATALOG) as any
   cat.cores.push(core('core-dn1-2.3.elemod', '1.43', '2.3', 'digitone-mk1'), core('core-dn1-3.2.elemod', '1.43', '3.2', 'digitone-mk1'),
     core('core-dn1-4.0.elemod', '1.43', '4.0', 'digitone-mk1'))
   cat.mods.push({ ...mod('pedal', '1.43', { needs_core: '3.2' }), device: 'digitone-mk1' })
   const c = parseCatalog(cat)
   const plan = (holds?: (f: string) => boolean) => planBuild(c, 'digitone-mk1', '1.43', ['pedal'], holds && (p => holds(p.file))).core?.file
-  assert.equal(plan(), 'core-dn1-3.2.elemod')
-  assert.equal(plan(() => true), 'core-dn1-3.2.elemod')
-  assert.equal(plan(f => f === 'core-dn1-4.0.elemod'), 'core-dn1-4.0.elemod')
-  assert.equal(plan(() => false), 'core-dn1-3.2.elemod')                       // none holds them: as before
-  assert.equal(planBuild(c, 'digitone-mk1', '1.43', [], p => p.version !== '3.2').core?.file, 'core-dn1-2.3.elemod')
+  assert.equal(plan(), 'core-dn1-4.0.elemod')
+  assert.equal(plan(() => true), 'core-dn1-4.0.elemod')
+  assert.equal(plan(f => f !== 'core-dn1-4.0.elemod'), 'core-dn1-3.2.elemod')   // the newest that holds them
+  assert.equal(plan(() => false), 'core-dn1-4.0.elemod')                       // none holds them: the newest
+  assert.equal(planBuild(c, 'digitone-mk1', '1.43', [], p => p.version === '2.3').core?.file, 'core-dn1-2.3.elemod')
 })
 
 /** A site: its files by URL. */
@@ -222,13 +220,14 @@ test('prepare: the stock file must be the one chosen, the plan\'s files come fro
     { ok: false, error: 'Not available for OS 1.54: fancy.' })
 })
 
-test('prepare: mods whose RAM is more than the plan\'s core holds take the catalog\'s core that holds them', async () => {
+test('prepare: the newest of the catalog\'s cores whose RAM holds the mods', async () => {
   const cat = structuredClone(CATALOG) as any
   cat.cores.push(core('core-dn1-3.2.elemod', '1.43', '3.2', 'digitone-mk1'), core('core-dn1-4.0.elemod', '1.43', '4.0', 'digitone-mk1'))
   const ids = ['p1', 'p2', 'p3', 'p4', 'p5']
   for (const id of ids) cat.mods.push({ ...mod(id, '1.43', { needs_core: '3.2' }), device: 'digitone-mk1' })
   const c = parseCatalog(cat)
   const kb = 1024
+  let area40 = 1280 * kb
   const fake = {
     load: async () => ({}),
     setStock: async () => ({ ok: true, file: 'x.syx', device: 'Digitone mk1', os: '1.43', dev: { key: 'digitone-mk1' } }),
@@ -236,7 +235,7 @@ test('prepare: mods whose RAM is more than the plan\'s core holds take the catal
     tick: async (enabled: string[], path: string) => [...new Set([...enabled, path])].sort(),
     mods: async () => [
       { path: '/work/core/core-dn1-3.2.elemod', file: 'core-dn1-3.2.elemod', id: 'core', builtin: true, fits: true, ram_bound: 6 * kb, ram_area: 128 * kb },
-      { path: '/work/core/core-dn1-4.0.elemod', file: 'core-dn1-4.0.elemod', id: 'core', builtin: true, fits: true, ram_bound: 6 * kb, ram_area: 1280 * kb },
+      { path: '/work/core/core-dn1-4.0.elemod', file: 'core-dn1-4.0.elemod', id: 'core', builtin: true, fits: true, ram_bound: 6 * kb, ram_area: area40 },
       ...ids.map(id => ({ path: `/work/mods/${id}-1.43.elemod`, file: `${id}-1.43.elemod`, id, builtin: false, fits: true, ram_bound: 30 * kb })),
     ],
     check: async (enabled: string[]) => ({ ok: true, order: enabled }),
@@ -246,8 +245,10 @@ test('prepare: mods whose RAM is more than the plan\'s core holds take the catal
     const p = await prepare(fake, { catalog: c, device: 'digitone-mk1', os: '1.43', stock, ids: sel })
     return p.ok && p.enabled.filter(x => x.startsWith('/work/core/'))
   }
-  assert.deepEqual(await coreOf(ids.slice(0, 4)), ['/work/core/core-dn1-3.2.elemod'])   // 120 KB + 6 KB: 3.2 holds them
-  assert.deepEqual(await coreOf(ids), ['/work/core/core-dn1-4.0.elemod'])              // 150 KB: 4.0
+  assert.deepEqual(await coreOf(ids.slice(0, 4)), ['/work/core/core-dn1-4.0.elemod'])   // the newest
+  assert.deepEqual(await coreOf(ids), ['/work/core/core-dn1-4.0.elemod'])
+  area40 = 64 * kb                                                                     // a newest core too small for them
+  assert.deepEqual(await coreOf(ids.slice(0, 2)), ['/work/core/core-dn1-3.2.elemod'])
 })
 
 test('the build steps and the build log', () => {

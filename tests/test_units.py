@@ -40,23 +40,21 @@ def test_requirements_are_ticked_with_a_mod():
 def test_versions_sort_and_the_core_a_build_takes():
     order = ['', '0.13a', '0.13b', '2', '2.0', '2.0a', '2.1', '2.9', '2.10', '3.0', '10.0']
     assert sorted(reversed(order), key=elemod.version_key) == order
-    assert elemod.pick_core(['2.1', '3.0', '2.0a']) == 0
-    assert elemod.pick_core(['2.1', '3.0', '2.0a'], '2.1') == 0
-    assert elemod.pick_core(['2.1', '3.0', '2.0a'], '2.2') == 1
+    # the newest, whatever the mods need: each core keeps all of the one before it
+    assert elemod.pick_core(['2.1', '3.0', '2.0a']) == 1
+    assert elemod.pick_core(['2.1', '3.0', '2.0a'], '2.1') == 1
     assert elemod.pick_core(['2.1', '3.0', '3.1'], '3.0') == 2
     assert elemod.pick_core(['2.1', '2.1']) == 1                 # the last of equals
     assert elemod.pick_core(['2.1', '3.0'], '3.1') is None
-    assert elemod.pick_core(['2.0a', '2.2', '2.3', '3.0']) == 2     # the Digitone's 2.x line
-    assert elemod.pick_core(['2.0a', '2.2', '2.3', '3.0'], '2.2') == 2
-    assert elemod.pick_core(['2.0a', '2.2', '2.3', '3.0'], '3.0') == 3
+    assert elemod.pick_core(['2.0a', '2.2', '2.3', '3.0']) == 3
+    assert elemod.pick_core(['2.0a', '2.2', '2.10', '2.3']) == 2   # versions as numbers
     assert elemod.pick_core([]) is None
     # fits: whether each core's RAM holds the mods (the Digitone's 4.0 has 1.25 MB, 2.3 and 3.2 128 KB)
     dn = ['2.3', '3.2', '4.0', '4.1']
-    assert elemod.pick_core(dn, None, [True] * 4) == 0
-    assert elemod.pick_core(dn, '3.2', [True] * 4) == 1
-    assert elemod.pick_core(dn, '3.2', [False, False, True, True]) == 3   # the newest of the next line
-    assert elemod.pick_core(dn, None, [False, False, True, True]) == 3
-    assert elemod.pick_core(dn, '3.2', [True, False, False, False]) == 1  # none new enough holds: as before
+    assert elemod.pick_core(dn, None, [True] * 4) == 3
+    assert elemod.pick_core(dn, '3.2', [True] * 4) == 3
+    assert elemod.pick_core(dn, None, [True, True, False, False]) == 1     # the newest that holds them
+    assert elemod.pick_core(dn, '3.2', [True, False, False, False]) == 3  # none new enough holds: the newest
     assert elemod.pick_core(dn, '4.1', [True, True, False, True]) == 3
     assert elemod.pick_core(dn, '5.0', [True] * 4) is None
 
@@ -81,33 +79,36 @@ def test_a_selection_too_big_for_its_core_takes_one_with_more_ram():
                                        'needs_core': '3.2', 'ram_bound': 30 * kb}
     c23, c32, c40 = 'app/core-dn1-2.3.elemod', 'app/core-dn1-3.2.elemod', 'app/core-dn1-4.0.elemod'
     pedals = ['lib/pedal%d.elemod' % i for i in range(1, 6)]
+    # a build takes the newest core, 4.0, for a small selection too
     on = set()
-    for k, p in enumerate(pedals[:4]):             # up to 120 KB + 3.2's 6 KB: 3.2 holds them
+    for k, p in enumerate(pedals):
+        on = with_requirements(d, on, p)
+        assert on == set(pedals[:k + 1]) | {c40}, on
+    assert with_requirements(d, set(), 'lib/tiny.elemod') == {'lib/tiny.elemod', c40}
+    # a core chosen by hand that will do is kept
+    assert with_requirements(d, {c32}, pedals[0]) == {c32, pedals[0]}
+    assert with_requirements(d, {c23}, 'lib/tiny.elemod') == {c23, 'lib/tiny.elemod'}
+    # with 3.2 chosen by hand: up to 120 KB + 3.2's 6 KB, 3.2 holds them; 150 KB, 4.0 in its place
+    on = {c32}
+    for k, p in enumerate(pedals[:4]):
         on = with_requirements(d, on, p)
         assert on == set(pedals[:k + 1]) | {c32}, on
-    on = with_requirements(d, on, pedals[4])       # 150 KB: 4.0 in 3.2's place
-    assert on == set(pedals) | {c40}
-    # what needs nothing stays on 2.3, and a small selection on 3.2
-    assert with_requirements(d, set(), 'lib/tiny.elemod') == {'lib/tiny.elemod', c23}
-    assert with_requirements(d, {'lib/tiny.elemod', c23}, pedals[0]) == {'lib/tiny.elemod', pedals[0], c32}
-    # a core chosen by hand that will do is kept, 4.0 for a small selection too
-    assert with_requirements(d, {c40}, 'lib/tiny.elemod') == {c40, 'lib/tiny.elemod'}
-    assert with_requirements(d, {c32}, pedals[0]) == {c32, pedals[0]}
-    # exactly 3.2's area: 3.2; a byte more: 4.0
+    assert with_requirements(d, on, pedals[4]) == set(pedals) | {c40}
+    # exactly 3.2's area: 3.2 is kept; a byte more: 4.0
     d['lib/edge.elemod'] = {'id': 'edge', 'fits': True, 'requires': ['core'], 'needs_core': '3.2',
                             'ram_bound': 122 * kb}
-    assert with_requirements(d, set(), 'lib/edge.elemod') == {'lib/edge.elemod', c32}
+    assert with_requirements(d, {c32}, 'lib/edge.elemod') == {'lib/edge.elemod', c32}
     d['lib/edge.elemod']['ram_bound'] += 1
-    assert with_requirements(d, set(), 'lib/edge.elemod') == {'lib/edge.elemod', c40}
-    # held by no core: as before (3.2), for the check to say how much RAM is over
-    assert with_requirements(d, set(), 'lib/huge.elemod') == {'lib/huge.elemod', c32}
+    assert with_requirements(d, {c32}, 'lib/edge.elemod') == {'lib/edge.elemod', c40}
+    # held by no core: the newest, or the one chosen by hand, for the check to say how much RAM is over
+    assert with_requirements(d, set(), 'lib/huge.elemod') == {'lib/huge.elemod', c40}
     assert with_requirements(d, {c32}, 'lib/huge.elemod') == {'lib/huge.elemod', c32}
     # a file with no ram_bound (a whole build, an unreadable file) counts as nothing
-    assert with_requirements(d, {'lib/whole.elemod'}, 'lib/tiny.elemod') == {'lib/whole.elemod',
-                                                                              'lib/tiny.elemod', c23}
-    # the first run's ticks: one core, the one that holds them
+    assert with_requirements(d, {'lib/whole.elemod', c23}, 'lib/tiny.elemod') == {
+        'lib/whole.elemod', 'lib/tiny.elemod', c23}
+    # the first run's ticks: one core, the newest
     assert one_core(d, {c23, c32, c40} | set(pedals)) == set(pedals) | {c40}
-    assert one_core(d, {c23, c32, c40, 'lib/tiny.elemod'}) == {c23, 'lib/tiny.elemod'}
+    assert one_core(d, {c23, c32, c40, 'lib/tiny.elemod'}) == {c40, 'lib/tiny.elemod'}
 
 
 def test_a_mod_that_needs_core_3_ticks_core_3():
@@ -124,18 +125,19 @@ def test_a_mod_that_needs_core_3_ticks_core_3():
                              'needs_core': '4.0'},
     }
     c21, c30 = 'app/core-2.1.elemod', 'app/core-3.0.elemod'
-    # what needs nothing from 3.0 builds on 2.1, as before 3.0 was there
-    assert with_requirements(d, set(), 'lib/health.elemod') == {'lib/health.elemod', c21}
-    # what needs it brings 3.0, through its requirements too, in 2.1's place
+    # what needs nothing from 3.0 builds on 3.0 too: the newest core
+    assert with_requirements(d, set(), 'lib/health.elemod') == {'lib/health.elemod', c30}
+    # a core chosen by hand that will do is kept
+    assert with_requirements(d, {c21}, 'lib/health.elemod') == {c21, 'lib/health.elemod'}
+    assert with_requirements(d, {c30}, 'lib/health.elemod') == {c30, 'lib/health.elemod'}
+    # what needs 3.0 brings it, through its requirements too, in place of 2.1 chosen by hand
     assert with_requirements(d, {'lib/health.elemod', c21}, 'lib/nb.elemod') == {
         'lib/health.elemod', 'lib/nb.elemod', 'lib/pages.elemod', c30}
-    # a core chosen by hand that will do is kept
-    assert with_requirements(d, {c30}, 'lib/health.elemod') == {c30, 'lib/health.elemod'}
     # none new enough: the newest, for the check to say why
     assert with_requirements(d, set(), 'lib/later.elemod') == {'lib/later.elemod', c30}
     assert with_requirements(d, {c21}, 'lib/later.elemod') == {'lib/later.elemod', c21}
-    # the first run's ticks: one core
-    assert one_core(d, {c21, c30, 'lib/health.elemod'}) == {c21, 'lib/health.elemod'}
+    # the first run's ticks: one core, the newest
+    assert one_core(d, {c21, c30, 'lib/health.elemod'}) == {c30, 'lib/health.elemod'}
     assert one_core(d, {c21, c30, 'lib/pages.elemod'}) == {c30, 'lib/pages.elemod'}
 
 
@@ -155,7 +157,7 @@ def test_a_digitone_machine_ticks_machines_and_its_core():
     c23, c32 = 'app/core-dn1-2.3.elemod', 'app/core-dn1-3.2.elemod'
     assert with_requirements(d, set(), 'lib/dnsine-1.0.elemod') == {
         'lib/dnsine-1.0.elemod', 'lib/machines-0.1.elemod', c32}
-    # beside a mod that took 2.3, the machine brings machines and moves the build to 3.2
+    # beside 2.3 chosen by hand, the machine brings machines and moves the build to 3.2
     assert with_requirements(d, {'lib/tables.elemod', c23}, 'lib/dnsine-1.0.elemod') == {
         'lib/tables.elemod', 'lib/dnsine-1.0.elemod', 'lib/machines-0.1.elemod', c32}
 

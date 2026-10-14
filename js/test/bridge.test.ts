@@ -10,7 +10,7 @@ import { type Desc, oneCore, withRequirements } from '../src/model.ts'
 import { VERSION } from '../src/version.ts'
 import { lcg } from './helpers.ts'
 
-test('tick: a selection too big for its core takes one with more RAM (test_units.py\'s cases)', () => {
+test('tick: the newest core, and one with more RAM in place of a core chosen by hand that is too small (test_units.py\'s cases)', () => {
   const kb = 1024
   const d = new Map<string, Desc>([
     ['app/core-dn1-2.3.elemod', { id: 'core', version: '2.3', fits: true, requires: [], ram_bound: 4 * kb, ram_area: 128 * kb }],
@@ -26,24 +26,28 @@ test('tick: a selection too big for its core takes one with more RAM (test_units
   const tick = (on: Iterable<string>, p: string) => withRequirements(d, on, p)
   const is = (got: Set<string>, want: string[]) => assert.deepEqual([...got].sort(), [...want].sort())
   let on = new Set<string>()
-  pedals.slice(0, 4).forEach((p, k) => {                         // up to 120 KB + 3.2's 6 KB: 3.2 holds them
+  pedals.forEach((p, k) => {                                      // the newest core, 4.0, for a small selection too
+    on = tick(on, p)
+    is(on, [...pedals.slice(0, k + 1), c40])
+  })
+  is(tick([], 'lib/tiny.elemod'), ['lib/tiny.elemod', c40])
+  is(tick([c32], pedals[0]), [c32, pedals[0]])                    // a core chosen by hand that will do is kept
+  is(tick([c23], 'lib/tiny.elemod'), [c23, 'lib/tiny.elemod'])
+  on = new Set([c32])
+  pedals.slice(0, 4).forEach((p, k) => {                         // 3.2 by hand: up to 120 KB + its 6 KB, it holds them
     on = tick(on, p)
     is(on, [...pedals.slice(0, k + 1), c32])
   })
   is(tick(on, pedals[4]), [...pedals, c40])                       // 150 KB: 4.0 in 3.2's place
-  is(tick([], 'lib/tiny.elemod'), ['lib/tiny.elemod', c23])
-  is(tick(['lib/tiny.elemod', c23], pedals[0]), ['lib/tiny.elemod', pedals[0], c32])
-  is(tick([c40], 'lib/tiny.elemod'), [c40, 'lib/tiny.elemod'])
-  is(tick([c32], pedals[0]), [c32, pedals[0]])
   d.set('lib/edge.elemod', { id: 'edge', fits: true, requires: ['core'], needs_core: '3.2', ram_bound: 122 * kb })
-  is(tick([], 'lib/edge.elemod'), ['lib/edge.elemod', c32])
+  is(tick([c32], 'lib/edge.elemod'), ['lib/edge.elemod', c32])
   d.get('lib/edge.elemod')!.ram_bound += 1
-  is(tick([], 'lib/edge.elemod'), ['lib/edge.elemod', c40])
-  is(tick([], 'lib/huge.elemod'), ['lib/huge.elemod', c32])     // held by no core: as before
-  is(tick([c32], 'lib/huge.elemod'), ['lib/huge.elemod', c32])
-  is(tick(['lib/whole.elemod'], 'lib/tiny.elemod'), ['lib/whole.elemod', 'lib/tiny.elemod', c23])
+  is(tick([c32], 'lib/edge.elemod'), ['lib/edge.elemod', c40])
+  is(tick([], 'lib/huge.elemod'), ['lib/huge.elemod', c40])     // held by no core: the newest
+  is(tick([c32], 'lib/huge.elemod'), ['lib/huge.elemod', c32])  // or the one chosen by hand
+  is(tick(['lib/whole.elemod', c23], 'lib/tiny.elemod'), ['lib/whole.elemod', 'lib/tiny.elemod', c23])
   is(oneCore(d, [c23, c32, c40, ...pedals]), [...pedals, c40])
-  is(oneCore(d, [c23, c32, c40, 'lib/tiny.elemod']), [c23, 'lib/tiny.elemod'])
+  is(oneCore(d, [c23, c32, c40, 'lib/tiny.elemod']), [c40, 'lib/tiny.elemod'])
 })
 
 test('the version is elekloader\'s', () => {

@@ -37,16 +37,13 @@ are 1.53's.
   - `core_machine_ui(id)`: the page a machine describes in its
     descriptor's tail, which [../machine-pages](../machine-pages) draws.
 
-  A builder takes 3.0 only for a selection with a mod whose
-  `resources.core` asks for it, and 2.1 for every other, so adding 3.0 to
-  a catalog or the app changes no build that does not need it.
+  A mod built for 2.1 links with 3.0 as it does with 2.1.
   [docs/ADAPTING.md](../../docs/ADAPTING.md), "Core 3.0".
 - **4.0: core 3.0 with twice the RAM** (Digitakt mk1). The same code,
   sites, events, tables and exports; the linker lays the mods' code, tables
   and variables out from 0x47BC0000 to 0x47C00000, 256 KB in place of
   128 KB (the profile's `core_ddr`; nothing in core's code changes for it).
-  A builder takes 4.0 only for a selection whose RAM is more than 128 KB,
-  so adding 4.0 changes no build that fits 3.0 or 2.1.
+  A builder takes the newest core, 4.0, for every selection.
   [docs/ADAPTING.md](../../docs/ADAPTING.md), "The mods' RAM".
 
 Build it with the SDK (it needs m68k binutils):

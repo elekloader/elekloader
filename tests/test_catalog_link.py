@@ -1,12 +1,12 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 """The catalog against a new core (pytest, or run with python): every Digitakt
 mk1 mod of a catalog, alone and with every other, linked against the
-catalog's core 2.1 and against mods/core built from this tree. Core 3.0 is
-core 2.1 and more, so every selection must link or be refused as it is
-with 2.1, with the same messages; and the core a builder takes for each
-selection (elemod.pick_core) must stay 2.1, so today's builds keep their
-bytes. A selection with a mod that needs core 3.0 (machine-pages, say) is
-the exception: 2.1 refuses it for that, and the builder takes 3.0.
+catalog's core 2.1 and against mods/core built from this tree. The core
+built here keeps all of 2.1, and a builder takes it (elemod.pick_core takes
+the newest) for every selection, so every selection must link or be
+refused with it as it is with 2.1, with the same messages. A selection with
+a mod that needs core 3.0 (machine-pages, say) is the exception: 2.1
+refuses it for that.
 
 Needs files named by environment variables; without them it skips:
   ELEKLOADER_CATALOG_DIR  a folder with the catalog's .elemod files, cores
@@ -96,29 +96,30 @@ def check_os(os_version):
         for sel, a, b, ms in rows:
             needs = [m.needs_core for m in ms if m.needs_core]
             need = max(needs, key=elemod.version_key) if needs else None
-            took = elemod.pick_core([old.version, new.version], need)
+            # the core a builder takes: the newest, the one built here
+            assert elemod.pick_core([old.version, new.version], need) == 1, sel
             if need and elemod.version_key(need) > elemod.version_key(old.version):
-                # a mod that needs 3.0: refused with 2.1 for that, and a builder takes 3.0
-                assert took == 1 and 'needs core %s or newer' % need in a, (sel, a)
+                # a mod that needs 3.0: refused with 2.1 for that
+                assert 'needs core %s or newer' % need in a, (sel, a)
                 on3.append((sel, b))
             else:
-                # the core a builder takes: 2.1, as before 3.0 was listed, with the same outcome
-                assert took == 0 and a == b, (sel, a, b)
+                # with the same outcome as with 2.1
+                assert a == b, (sel, a, b)
                 same.append(a)
         linked = sum(a == 'links' for a in same)
-        print('  %s: %d selections take 2.1, %d link and %d are refused, the same with core 3.0'
-              % (os_version, len(same), linked, len(same) - linked))
+        print('  %s: %d selections link (%d) or are refused (%d) with core %s as with 2.1'
+              % (os_version, len(same), linked, len(same) - linked, new.version))
         if on3:
-            print('  %s: %d need core 3.0 and take it: %d link, %d are refused'
+            print('  %s: %d need core 3.0: %d link, %d are refused'
                   % (os_version, len(on3), sum(b == 'links' for _s, b in on3),
                      sum(b != 'links' for _s, b in on3)))
 
 
-def test_the_catalog_links_with_core_3_as_with_core_2_1():
+def test_the_catalog_links_with_the_newest_core_as_with_core_2_1():
     check_os('1.53')
 
 
-def test_the_catalog_links_with_core_3_as_with_core_2_1_on_1_54():
+def test_the_catalog_links_with_the_newest_core_as_with_core_2_1_on_1_54():
     check_os('1.54')
 
 

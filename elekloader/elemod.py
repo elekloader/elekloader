@@ -171,20 +171,18 @@ def version_key(v):
 
 def pick_core(versions, need=None, fits=None):
     """The core a builder takes for a selection: of `versions` (the cores for one
-    device and OS), the newest of the oldest major line with one at least `need`.
-    A new line (3.x beside 2.x) is taken only when a mod needs it, so adding one
-    leaves every other build as it was. `fits`, if given, says for each core
-    whether its RAM holds the selection's mods: only those that do count, unless
-    none new enough does (core-dn1 4.0's 1.25 MB beside 3.2's 128 KB). -> its
-    index (the last of equals), or None when none is new enough."""
+    device and OS), the newest, if it is at least `need`. Each core keeps all of
+    the one before it (tests/test_sdk.py checks the newest against the released
+    2.1 and 2.3), so a mod built for an older core links with the newest as it
+    did with its own. `fits`, if given, says for each core whether its RAM holds
+    the selection's mods: only those that do count, unless none new enough does.
+    -> its index (the last of equals), or None when none is new enough."""
     ok = [i for i, v in enumerate(versions) if need is None or version_key(v) >= version_key(need)]
     if not ok:
         return None
     if fits is not None and any(fits[i] for i in ok):
         ok = [i for i in ok if fits[i]]
-    major = {i: version_key(versions[i])[:1] for i in ok}
-    low = min(major.values())
-    return max((i for i in ok if major[i] == low), key=lambda i: (version_key(versions[i]), i))
+    return max(ok, key=lambda i: (version_key(versions[i]), i))
 
 
 def read_json(path):

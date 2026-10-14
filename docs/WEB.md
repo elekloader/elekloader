@@ -138,14 +138,13 @@ stock file.
   released yet.
 - **In the page,** a mod from the shop comes from this site like everything
   else, and the worker checks it against the catalog's sha256 again before
-  adding it. If it needs a newer core than the one ticked (`needs_core`, or
-  the file's own `resources.core`), the core a build takes for it (the
-  newest of the oldest major line that is new enough: docs/ADAPTING.md,
-  "Core 3.0") is ticked in its place, and the page says so. So is a core
-  whose RAM holds the mods when the ticked one's does not (core-dn1
-  4.0's 1.25 MB on the Digitone, core 4.0's 256 KB on the Digitakt mk1, in
-  place of 128 KB:
-  docs/CORES.md, "How a build picks one").
+  adding it. The page ticks the newest core of the device and OS, the one
+  it lists (docs/CORES.md, "How a build picks one"). If a mod needs a newer
+  core than one you ticked yourself (`needs_core`, or the file's own
+  `resources.core`), the newest is ticked in its place, and the page says
+  so. So is the newest when the ticked core's RAM does not hold the mods
+  (core-dn1 4.0's 1.25 MB on the Digitone, core 4.0's 256 KB on the
+  Digitakt mk1, in place of 128 KB).
 
 To add a mod to the shop, publish its `.elemod` in a GitHub release, add an
 item to `web/catalog.json` with the asset's sha256 (the release page shows
@@ -193,7 +192,7 @@ shows them as one card (the same repository, mod, version and device).
 |---|---|
 | `index.html`, `style.css`, `app.js`, `worker.js`, `bridge.py` | `web/`, as committed |
 | `elekloader.zip` | the elekloader package, exactly as the commit has it (`git archive HEAD elekloader`), stored, sorted, fixed dates: its sha256 follows from the commit |
-| `core/*.elemod`, `core/index.json` | the cores of the latest release, and the cores the catalog lists, with their sha256 (the worker checks each) |
+| `core/*.elemod`, `core/index.json` | the cores of the latest release, and the cores the catalog lists, with their sha256; the worker loads the newest of each device and OS and checks it |
 | `shop/*.elemod`, `shop/index.json` | the shop: the catalog's mods, from their authors' releases, with what each file says about itself |
 | `pyodide/` | five files from Pyodide's core tarball (`pyodide.mjs`, `pyodide.asm.mjs`, `pyodide.asm.wasm`, `python_stdlib.zip`, `pyodide-lock.json`), and `NOTICE.txt` with their licences |
 | `build.json` | the commit, the package's sha256 and git tree, the release the cores come from and whether the package is that release's, Pyodide's version, every file's sha256 |

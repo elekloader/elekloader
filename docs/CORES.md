@@ -24,14 +24,14 @@ There is one core file per device and OS:
 |---|---|---|---|
 | Digitakt mk1 | 1.53 | `core-2.1.elemod` | the latest release (v0.4.0) |
 | Digitakt mk1 | 1.54 | `core-2.1-os1.54.elemod` | the latest release (v0.4.0) |
-| Digitakt mk1 | 1.53 | `core-3.0.elemod` | the [core-v3.0](https://github.com/irpina/elekloader/releases/tag/core-v3.0) pre-release, for mods that need the 3.x line |
+| Digitakt mk1 | 1.53 | `core-3.0.elemod` | the [core-v3.0](https://github.com/irpina/elekloader/releases/tag/core-v3.0) pre-release |
 | Digitakt mk1 | 1.54 | `core-3.0-os1.54.elemod` | the same pre-release |
-| Digitakt mk1 | 1.53, 1.54 | `core-4.0.elemod`, `core-4.0-os1.54.elemod` | on main, not released yet: build them ([below](#building-a-core)) |
+| Digitakt mk1 | 1.53, 1.54 | `core-4.0.elemod`, `core-4.0-os1.54.elemod` | the [core-v4.0](https://github.com/irpina/elekloader/releases/tag/core-v4.0) pre-release |
 | Digitone mk1, Digitone Keys | 1.43 | `core-dn1-2.3.elemod` | the [core-dn1-v2.3](https://github.com/irpina/elekloader/releases/tag/core-dn1-v2.3) pre-release (v0.4.0 has 2.0a) |
 | Digitone mk1, Digitone Keys | 1.44 | `core-dn1-2.3-os1.44.elemod` | the same pre-release (v0.4.0 has 2.0a) |
-| Digitone mk1, Digitone Keys | 1.43 | `core-dn1-3.2.elemod` | the [core-dn1-v3.2](https://github.com/irpina/elekloader/releases/tag/core-dn1-v3.2) pre-release, for mods that need the 3.x line |
+| Digitone mk1, Digitone Keys | 1.43 | `core-dn1-3.2.elemod` | the [core-dn1-v3.2](https://github.com/irpina/elekloader/releases/tag/core-dn1-v3.2) pre-release |
 | Digitone mk1, Digitone Keys | 1.44 | `core-dn1-3.2-os1.44.elemod` | the same pre-release |
-| Digitone mk1, Digitone Keys | 1.43, 1.44 | `core-dn1-4.0.elemod`, `core-dn1-4.0-os1.44.elemod` | on main, not released yet: build them ([below](#building-a-core)) |
+| Digitone mk1, Digitone Keys | 1.43, 1.44 | `core-dn1-4.0.elemod`, `core-dn1-4.0-os1.44.elemod` | the [core-dn1-v4.0](https://github.com/irpina/elekloader/releases/tag/core-dn1-v4.0) pre-release |
 | Digitakt II | 1.17 | `core-dt2-1.0.elemod` | not released yet: build it ([below](#building-a-core)) |
 | Analog Rytm MKII | 1.73 | `core-0.1.elemod` (mods/core-ar2) | a proof of concept, not released: build it ([below](#building-a-core)) |
 | Octatrack MKI, MKII | 1.40C | `core-ot-0.1.elemod` | the latest release (v0.4.0) |
@@ -39,41 +39,41 @@ There is one core file per device and OS:
 | Model:Cycles | 1.13 | `core-mc-0.1.elemod` | on main, not released yet: build it ([below](#building-a-core)) |
 | Model:Samples | 1.13 | `core-ms-0.1.elemod` | on main, not released yet: build it ([below](#building-a-core)) |
 
-From 3.0 the Digitakt mk1's core and the Digitone mk1's each have two
-lines, 2.x and 3.x, and a build takes the 3.x line only for a mod that
-needs it. The Digitakt's 3.0 is on the core-v3.0 pre-release and the
-Digitone's 3.2 on the core-dn1-v3.2 pre-release, and both are in the shop.
+Each core keeps all of the one before it: the same sites with the same
+bytes, the same events and tables, and every symbol where the older core
+has it (`tests/test_sdk.py` checks the Digitakt mk1's against the released
+2.1 and the Digitone's against the released 2.3). So a mod built for an
+older core links with the newest as it did with its own, and a build takes
+the newest. The older files stay on their releases.
 
 ## How a build picks one
 
 A mod says which core it needs at least (`resources.core` in the file,
-`needs_core` in the shop's list). A build takes the newest core of the
-oldest major line that is new enough and whose RAM holds the mods
-([ADAPTING.md](ADAPTING.md), "Core 3.0"). So a Digitakt mk1 selection
-stays on 2.1 unless a mod needs 3.0, and a Digitone selection takes 2.3,
-the newest of the 2.x line, unless a mod needs core-dn1 3.0, 3.1 or 3.2,
-and then it takes 3.2 (3.3 once it is released: a mod that needs it waits
-for it).
+`needs_core` in the shop's list). A build takes the newest core it has for
+the stock OS: core 4.0 on the Digitakt mk1 and core-dn1 4.0 on the
+Digitone, for a mod built for 2.1 or 2.3 too. A mod that needs a core
+newer than any listed is refused with *"needs core ... or newer"*.
 
-The RAM decides with a 4.0 core. Core-dn1 4.0 starts a major line of its
-own and gives the mods' code, tables and variables 1.25 MB, where the
-2.x and 3.x lines give them 128 KB; the Digitakt mk1's core 4.0 gives them
-256 KB ([ADAPTING.md](ADAPTING.md), "The
-mods' RAM"). With 4.0 listed, a selection over 128 KB takes 4.0 though
-its mods need only 3.2 (five effects pedals of 25-37 KB each, say), and a
-selection that fits takes 2.3 or 3.2 as before. How a builder tells: each
-mod's file gives the most it can take of the area, its sections with their
-alignment and its table entries, each rounded up to 4 (`ram_bound` in the
-mod list), and a core holds the mods when theirs and its own add up to no
-more than its area (`ram_area`). The linker never lays them out in more.
-When no core that is new enough holds them, the build takes the core it
-would have taken anyway, and the check says how many bytes are over.
+The 4.0 cores also give the mods' code, tables and variables more RAM:
+1.25 MB on the Digitone, 256 KB on the Digitakt mk1, where the 2.x and 3.x
+lines give them 128 KB ([ADAPTING.md](ADAPTING.md), "The mods' RAM"). How
+a builder tells whether a core holds the mods: each mod's file gives the
+most it can take of the area, its sections with their alignment and its
+table entries, each rounded up to 4 (`ram_bound` in the mod list), and a
+core holds the mods when theirs and its own add up to no more than its
+area (`ram_area`). The linker never lays them out in more. A build takes
+the newest core that holds them; when none does, the newest, and the
+check says how many bytes are over.
 
-The web page, the kit and the window (from source, and the apps after
-0.4.0) tick that core for you and keep one: a core you ticked yourself
-stays while it is new enough and holds the mods. The 0.4.0 apps refuse a
-build with two cores ticked: there, untick the built-in one when you add a
-newer core.
+The web page lists only the newest core of each device and OS (the site
+carries the older ones too). The web page, the kit and the window (from
+source, and the apps after 0.4.0) tick that core for you and keep one: a
+core you ticked yourself (your own file, added to the page or the
+window's library) stays while it is new enough and holds the mods, and
+gives way to the newest when it does not. A profile the page saved with an
+older core takes the newest in its place. The 0.4.0 apps refuse a build
+with two cores ticked: there, untick the built-in one when you add a newer
+core.
 
 ## What each core adds
 

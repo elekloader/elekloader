@@ -674,13 +674,13 @@ def test_digitone_core_4_gives_the_mods_1_25_mb():
                 r['problems']
 
 
-def test_digitone_mods_over_128_kb_take_core_4():
+def test_digitone_mods_take_core_4_and_its_ram():
     """A builder (the window, the web page, the kit: gui.with_requirements and
-    the kit's prepare, which take the same core) takes core-dn1 4.0 in 3.2's
-    place when the mods' RAM is more than 3.2's 128 KB, though they need only
-    3.2: with both listed, a small mod that needs 3.2 takes 3.2, 200 KB of mods
-    take 4.0 and link, and more than 4.0 holds stays on 3.2, refused with no
-    core named."""
+    the kit's prepare, which take the same core) takes the newest core,
+    core-dn1 4.0, though the mods need only 3.2: with both listed, a small mod
+    takes 4.0; 3.2 chosen by hand is kept for it and gives way to 4.0 when the
+    mods' RAM is more than its 128 KB (200 KB link with 4.0); and more than 4.0
+    holds is refused with no newer core named."""
     if not CORE_DN32 or not os.path.exists(CORE_DN32):
         raise Skip('missing ELEKLOADER_CORE_DN1_32 (the released core-dn1-3.2.elemod)')
     tc = [x for x in devices.devices() if x.key == 'digitone-mk1'][0].toolchain
@@ -712,7 +712,8 @@ def test_digitone_mods_over_128_kb_take_core_4():
         def core_of(on):
             return [descs[p]['version'] for p in on if descs[p]['id'] == 'core']
 
-        small = gui.with_requirements(descs, set(), at['small'])
+        assert core_of(gui.with_requirements(descs, set(), at['small'])) == [DN_VERSION]
+        small = gui.with_requirements(descs, {at['3.2']}, at['small'])
         assert core_of(small) == ['3.2'] and m.check(sorted(small))['ok']
         big = gui.with_requirements(descs, small, at['big'])
         assert core_of(big) == [DN_VERSION], big
@@ -720,7 +721,7 @@ def test_digitone_mods_over_128_kb_take_core_4():
         assert r['ok'] and r['ram'][1] == 0x140000, r.get('problems')
         assert 200000 < r['ram'][0] <= sum(descs[p]['ram_bound'] for p in big), r['ram']
         huge = gui.with_requirements(descs, set(), at['huge'])
-        assert core_of(huge) == ['3.2']
+        assert core_of(huge) == [DN_VERSION]
         r = m.check(sorted(huge))
         assert not r['ok'] and any('the mods need RAM to' in x and 'or newer gives them' not in x
                                    for x in r['problems']), r['problems']

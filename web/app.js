@@ -149,15 +149,12 @@ const lib = { device: S.libDevice || (S.profiles.find(p => p.id === S.current) |
   type: S.libType || null, sort: S.libSort || 'collection', query: '' };
 const OWN = '\u0000own';                         // the "Your files" kind
 const cmpVer = (a, b) => String(a).localeCompare(String(b), undefined, { numeric: true });
-// The core a build takes (elemod.pick_core): of these cores, the newest of the oldest major line that is at least
-// `need`, so a selection that needs nothing from core 3.0 stays on 2.x. The engine's tick then also weighs the mods'
-// RAM against each core's (gui.with_core). -> a core, or undefined.
+// The core a build takes (elemod.pick_core): of these cores, the newest, if it is at least `need`. The site carries
+// the newest core of each device and OS (worker.js), which links every mod built for an older one; the engine's tick
+// also weighs the mods' RAM against each core's (gui.with_core). -> a core, or undefined.
 function pickCore(cores, need) {
-  const major = c => parseInt(c.version, 10) || 0;
   const ok = cores.filter(c => !need || cmpVer(c.version, need) >= 0);
-  if (!ok.length) return undefined;
-  const low = Math.min(...ok.map(major));
-  return ok.filter(c => major(c) === low).sort((a, b) => cmpVer(a.version, b.version)).pop();
+  return ok.sort((a, b) => cmpVer(a.version, b.version)).pop();
 }
 const shopItem = d => shop.items.find(e => e.available && e.sha256 === d.sha256);
 // why a shop file is not on the site: its release is not out, or its commit's file could not be fetched
@@ -1022,15 +1019,22 @@ function makeProfile(name, stock = null) {
 function remember() {
   const p = cur();
   if (!p || !inUse(p)) return;
-  const away = p.mods.filter(f => !st.mods.some(d => d.file === f));   // named, not added here
+  const away = p.mods.filter(f => !f.startsWith('core-') && !st.mods.some(d => d.file === f));   // named, not added here
   p.mods = [...new Set([...st.enabled].map(base).concat(away))].sort();
   saveSettings();
 }
 
-// a profile's mods ticked: the ones that are here and fit
+// a profile's mods ticked: the ones that are here and fit. A core it names that the page does not list (an older
+// one: the page has the newest) is the core a build takes now.
 function tickProfile(p, warn) {
   st.enabled = new Set(st.mods.filter(d => d.fits && p.mods.includes(d.file)).map(d => d.path));
-  const missing = p.mods.filter(f => !st.mods.some(d => d.file === f));
+  const gone = p.mods.filter(f => !st.mods.some(d => d.file === f));
+  const coreOn = st.mods.some(d => d.id === 'core' && st.enabled.has(d.path));
+  if (!coreOn && gone.some(f => f.startsWith('core-'))) {
+    const core = pickCore(st.mods.filter(d => d.fits && d.id === 'core'));
+    if (core) st.enabled.add(core.path);
+  }
+  const missing = gone.filter(f => !f.startsWith('core-'));
   if (warn && missing.length) note('This profile also names mods that are not added here: ' + missing.join(', '));
 }
 
