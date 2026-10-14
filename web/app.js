@@ -1423,6 +1423,37 @@ function rowStatus(d) {
   return s || ['off', 'Checking…'];
 }
 
+// A ticked mod that needs a mod that is not ticked (machines, for a Digitone machine you added yourself): a + beside
+// its "Needs ..." for each one this page can provide. It ticks yours when you have one for this stock OS, or adds the
+// shop's (the newest for this OS, with what that one needs) and ticks it.
+function needButtons(d, on, cls) {
+  if (!on || cls !== 'warn' || !dev()) return [];
+  const have = new Set([...st.enabled].map(desc).filter(Boolean).map(x => x.id));
+  const newest = xs => xs.sort((a, b) => cmpVer(a.version, b.version)).pop();
+  return (d.requires || []).filter(r => r !== 'core' && !have.has(r)).map(r => {
+    const mine = newest(st.mods.filter(x => x.fits && !x.error && x.id === r));
+    const item = !mine && newest(shop.items.filter(i => i.available && i.id === r && i.device === dev().key
+      && i.os === st.stock.os));
+    if (!mine && !item) return null;
+    const name = (mine || item).title || r;
+    return el('button', {
+      type: 'button', class: 'add-need', disabled: st.busy,
+      title: `Add ${name} to the build` + (item ? ', from the shop' : ''), 'aria-label': `Add ${name} to the build`,
+      onclick: async ev => {
+        if (mine) {
+          await tickWithCore(mine.path);
+          remember();
+          changed();
+          toast(`${name} ticked.`);
+        } else {
+          await shopAdd([item], ev.currentTarget);
+          renderMods();
+        }
+      },
+    }, '+');
+  }).filter(Boolean);
+}
+
 function renderMods() {
   const rows = $('mod-rows');
   const order = (st.check && st.check.load_order) || {};
@@ -1458,7 +1489,7 @@ function renderMods() {
       el('span', { class: 'file' }, d.builtin ? `${d.file} · built in`
         : shopItem(d) ? `${d.file} · from the shop` : d.file)),
     el('td', {}, d.version || ''),
-    el('td', {}, el('span', { class: 'pill ' + cls }, text)),
+    el('td', { class: 'state' }, el('span', { class: 'pill ' + cls }, text), ...needButtons(d, on, cls)),
     el('td', { class: 'num' }, d.error ? '' : kb(d.ram || 0)),
     el('td', { class: 'num' }, order[d.path] || ''),
     el('td', { class: 'x' }, d.builtin ? '' : el('button', {

@@ -336,6 +336,12 @@ td.empty { color: var(--muted); padding: 18px 8px; cursor: default; }
 .pill.ok { background: rgba(98, 216, 150, 0.14); color: var(--ok); }
 .pill.bad, .pill.err { background: rgba(242, 128, 138, 0.15); color: var(--bad); }
 .pill.warn { background: rgba(240, 165, 96, 0.15); color: var(--warn); }
+td.state { white-space: nowrap; }
+button.add-need { margin-left: 6px; width: 20px; height: 20px; padding: 0; border-radius: 999px; vertical-align: middle;
+  border: 1px solid var(--warn); background: none; color: var(--warn); font-size: 14px; font-weight: 700; line-height: 1;
+  cursor: pointer; }
+button.add-need:hover:not(:disabled) { background: rgba(240, 165, 96, 0.15); }
+button.add-need:disabled { opacity: 0.5; cursor: default; }
 button.remove { background: none; border: 0; color: var(--faint); font-size: 19px; cursor: pointer; padding: 0 6px; }
 button.remove:hover:not(:disabled) { color: var(--bad); }
 .details { margin-top: 14px; padding: 13px 16px; border-radius: 8px; background: var(--well); border: 1px solid var(--line); overflow-wrap: anywhere; }

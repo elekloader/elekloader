@@ -153,7 +153,8 @@ it, or `gh release view --json assets`), and merge: the next deploy takes
 it. A mod whose author keeps its `.elemod` files in their repository
 instead (as digi1_mods does) is pinned to a commit: the whole commit id,
 the file's path, and its sha256. A shop mod that requires another shop mod
-(Digi Mono needs digichain) brings it when it is added. A mod with a file for each OS version gets an item per file; the page
+(Digi Mono needs digichain) brings it when it is added. A mod you added yourself that needs a shop mod (a Digitone
+machine needs machines) shows "Needs machines" with a + beside it, which adds the shop's for your OS and ticks it. A mod with a file for each OS version gets an item per file; the page
 shows them as one card (the same repository, mod, version and device).
 
 ## What stays private, and how
