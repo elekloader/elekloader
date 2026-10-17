@@ -422,14 +422,14 @@
       "device": "digitakt-mk1", "needs_core": "3.0",
       "sha256": "5207ec84572d42b782ae7a255cee798774d6192792674dca28ee415aec59027c",
       "summary": "An Oberheim OB-1 oscillator section as an SRC machine: two VCOs, each with saw type (triangle to saw) and pulse type (narrow pulse to square) and a sub-octave, hard sync and cross mod, noise, and the OB-1's mixer (ON, -3 dB or OFF).",
-      "on_unit": "Version 0.3 ran on a Digitakt mk1 by its author, on OS 1.53 and on OS 1.54, with core 4.0 and machine-pages 1.1. Version 0.4's physical hardware qualification remains outstanding."
+      "on_unit": "Version 0.4 tested on a Digitakt mk1 by its author."
     },
     {
       "repo": "simonjohansson/elektrob-1", "tag": "ob1-v0.4", "file": "ob1-0.4-os1.54.elemod",
       "device": "digitakt-mk1", "needs_core": "3.0",
       "sha256": "611757a2457c702d65dea65cfea0c8854bd74e793e5e90f59d6f3b9093e43d12",
       "summary": "An Oberheim OB-1 oscillator section as an SRC machine: two VCOs, each with saw type (triangle to saw) and pulse type (narrow pulse to square) and a sub-octave, hard sync and cross mod, noise, and the OB-1's mixer (ON, -3 dB or OFF).",
-      "on_unit": "Version 0.3 ran on a Digitakt mk1 by its author, on OS 1.53 and on OS 1.54, with core 4.0 and machine-pages 1.1. Version 0.4's physical hardware qualification remains outstanding."
+      "on_unit": "Version 0.4 tested on a Digitakt mk1 by its author."
     },
     {
       "repo": "irpina/octabam2elemod", "tag": "v1.0", "file": "octabam-tuner-363861e.elemod",
