@@ -418,18 +418,18 @@
       "on_unit": "Tested on a Digitakt mk1 by its author: 1.2.1 on OS 1.54 with core 3.0, machine-pages 1.1 and digihealth. Earlier, on OS 1.53, four tracks together used about 95% CPU, about 85% with digihealth's FAST AUDIO on. Eight tracks are not claimed."
     },
     {
-      "repo": "simonjohansson/elektrob-1", "tag": "ob1-v0.3", "file": "ob1-0.3-os1.53.elemod",
+      "repo": "simonjohansson/elektrob-1", "tag": "ob1-v0.4", "file": "ob1-0.4-os1.53.elemod",
       "device": "digitakt-mk1", "needs_core": "3.0",
-      "sha256": "7626db618540b4239ddb9f42ba5529f9986b60cfec9ca8bdae190feb9a2f008c",
+      "sha256": "5207ec84572d42b782ae7a255cee798774d6192792674dca28ee415aec59027c",
       "summary": "An Oberheim OB-1 oscillator section as an SRC machine: two VCOs, each with saw type (triangle to saw) and pulse type (narrow pulse to square) and a sub-octave, hard sync and cross mod, noise, and the OB-1's mixer (ON, -3 dB or OFF).",
-      "on_unit": "Ran on a Digitakt mk1 by its author, on OS 1.53 and on OS 1.54, with core 4.0 and machine-pages 1.1."
+      "on_unit": "Version 0.3 ran on a Digitakt mk1 by its author, on OS 1.53 and on OS 1.54, with core 4.0 and machine-pages 1.1. Version 0.4's physical hardware qualification remains outstanding."
     },
     {
-      "repo": "simonjohansson/elektrob-1", "tag": "ob1-v0.3", "file": "ob1-0.3-os1.54.elemod",
+      "repo": "simonjohansson/elektrob-1", "tag": "ob1-v0.4", "file": "ob1-0.4-os1.54.elemod",
       "device": "digitakt-mk1", "needs_core": "3.0",
-      "sha256": "df94d23d826e87f03062722763e059233e97496d9e842e176559c45ae7455939",
+      "sha256": "611757a2457c702d65dea65cfea0c8854bd74e793e5e90f59d6f3b9093e43d12",
       "summary": "An Oberheim OB-1 oscillator section as an SRC machine: two VCOs, each with saw type (triangle to saw) and pulse type (narrow pulse to square) and a sub-octave, hard sync and cross mod, noise, and the OB-1's mixer (ON, -3 dB or OFF).",
-      "on_unit": "Ran on a Digitakt mk1 by its author, on OS 1.53 and on OS 1.54, with core 4.0 and machine-pages 1.1."
+      "on_unit": "Version 0.3 ran on a Digitakt mk1 by its author, on OS 1.53 and on OS 1.54, with core 4.0 and machine-pages 1.1. Version 0.4's physical hardware qualification remains outstanding."
     },
     {
       "repo": "irpina/octabam2elemod", "tag": "v1.0", "file": "octabam-tuner-363861e.elemod",
