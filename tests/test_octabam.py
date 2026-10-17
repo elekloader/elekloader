@@ -657,6 +657,12 @@ def test_real_usb_io_remix_equals_octabams_build():
     assert rx['harvested'] == ['SPATIALIZER']
     at = {s['addr'] for s in plan['json']['sites']}
     assert '0x400ef758' in at                       # payload A, P:0x88: the inject's hook
+    # octabam's build (before its #753) moved PURGE SAMPLES' banks end with the arena's
+    # base; the mod leaves it stock, so PURGE does not freeze the unit
+    purge, base = octabam.PURGE_BANKS_END, DEV.main_load
+    assert rx['ref'][purge - base:purge - base + 4] != img[purge - base:purge - base + 4]
+    assert not any(int(s['addr'], 16) < purge + 4 and purge < int(s['addr'], 16)
+                   + len(s['stock']) // 2 for s in plan['json']['sites'])
     out = tempfile.mkdtemp()
     path, mod = build.build(octabam.write(ob, plan, out), SYX, out)
     lines = octabam.check(ob, plan, path, core(out), SYX, os.path.join(out, 'check'))

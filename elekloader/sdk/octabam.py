@@ -111,6 +111,9 @@ from . import build as sdkbuild
 
 DEVICE = 'octatrack'
 ARENA_STOCK_BASE = 0x40A955E0
+# `cmpa.l #0x40a955e0,a2` ends PURGE SAMPLES' walk over the banks: not the arena's base.
+# octabam's builds before its #753 moved it with the base (and PURGE froze); core-ot does not.
+PURGE_BANKS_END = 0x400254FA
 EMIT_AT = (0x10000000, 0x20000000)      # two trial addresses for a cave's emit()
 NOP = b'\x4e\x71'
 OPS = {'jmp': b'\x4e\xf9', 'jsr': b'\x4e\xb9'}
@@ -914,6 +917,7 @@ def convert(ob, name, image, dev, rx=None, bus=False):
                                                     for h in hooks]   # left stock: the bus
         if dsp_subs:
             taken += _dspbus_spans(image, dev)      # the DSP bus's: compared by the check
+        taken.append((PURGE_BANKS_END, PURGE_BANKS_END + 4))  # left stock: compared by the check
         moved = {a + i for r in relocs.values() for a, w in r['pokes'] for i in range(len(w))}
 
         def ours(a):
@@ -1380,6 +1384,9 @@ def check(ob, plan, mod_path, core_path, stock_path, work, dspbus_path=None):
                       for i in range(4)}
         bused = {a for h in plan.get('bus', ()) for a in range(h['site'], h['site'] + h['len'])
                  if ln.image[a - base] == image[a - base]}   # its hooks the bus serves: stock
+        purge = {a for a in range(PURGE_BANKS_END, PURGE_BANKS_END + 4)
+                 if ln.image[a - base] == image[a - base]}   # octabam's old move, left stock
+        cores |= purge
         dspd = set()                        # the DSP bus's hook (to its table) and its table
         for d in plan.get('dsp_bus', ()):
             tag, ev = d['payload'], d['event']

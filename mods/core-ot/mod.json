@@ -1,5 +1,5 @@
 {
- "id": "core", "version": "0.3",
+ "id": "core", "version": "0.3.1",
  "license": "GPL-2.0-or-later",
  "title": "core", "category": "Framework", "author": "irpina",
  "description": "The boot copier and the hook bus for the Octatrack: it reserves the bottom of the sample and recorder memory for mods, only the 6 KB pages their RAM fills (0.2 took 10 MB), copies their code there at boot, and calls them on the UI tick, the screen, the keys, the encoders, MIDI in and the audio frame. Every linkable Octatrack mod needs it. On its own it changes nothing else the unit does.",
@@ -23,7 +23,6 @@
   {"addr": "0x400072a8", "stock": "40a955e0", "op": "ptr", "target": "arena_base"},
   {"addr": "0x40007644", "stock": "40a955e0", "op": "ptr", "target": "arena_base"},
   {"addr": "0x4000d5c2", "stock": "40a955e0", "op": "ptr", "target": "arena_base"},
-  {"addr": "0x400254fa", "stock": "40a955e0", "op": "ptr", "target": "arena_base"},
   {"addr": "0x4006c108", "stock": "40a955e0", "op": "ptr", "target": "arena_base"},
   {"addr": "0x40093434", "stock": "40a955e0", "op": "ptr", "target": "arena_base"},
   {"addr": "0x40094a0c", "stock": "40a955e0", "op": "ptr", "target": "arena_base"},

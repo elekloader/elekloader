@@ -10,14 +10,26 @@ changes nothing else the unit does.
   (0x40a955e0-0x46025de0, 14,602 pages of 6,144 B) to samples and the
   recorders. The core moves the arena's base past its bottom pages, so they
   are left for mods: the linker places `.run` and `.bss` from 0x40a955e0
-  (the device's `ddr`). That takes 28 writes (`mod.json`):
-  - 23 instructions carry the base;
+  (the device's `ddr`). That takes 27 writes (`mod.json`):
+  - 22 instructions carry the base;
   - one carries base + 6,144;
   - four literals set the geometry: the page count, the fill limit and the
     clear length each shrink by the pages taken.
 
   These are the same writes sambanks/octabam's platform makes (`arena.py`,
   MIT) for the same reservation.
+  - **0.3.1: PURGE SAMPLES no longer freezes the unit.** The base's
+    literal has a 23rd use, `cmpa.l #0x40a955e0,a2` at 0x400254f8, which
+    is not the arena: it ends PURGE SAMPLES' walk over the 16 banks, which
+    end where the arena starts only by layout. 0.1 to 0.3 moved it with the
+    base, and the walk stops only on an exact match, so it never ended. It
+    stays stock now. Found and fixed in octabam (#753), whose unit (an MKII)
+    froze on PURGE and stopped freezing with the fix. In octabam's emulator,
+    calling PURGE's routine (0x400253d4) after a load: with 0.1 (the released
+    core) and 0.3 the walk runs on until the emulator stops it at 0x69f72010;
+    with 0.3.1, as with stock, it leaves the walk at 0x40025502 and returns.
+    octabam's builds before #753 carry the same move: `sdk.octabam` leaves it
+    out of a converted remix and its check allows for it.
   - **0.3 takes only what the mods use.** Each write is a `ptr` against a
     symbol the linker defines from the pages the linked mods' RAM fills, at
     least one (the profile's `reserve`): `arena_base`, `__arena_pages`,

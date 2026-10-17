@@ -34,8 +34,8 @@ There is one core file per device and OS:
 | Digitone mk1, Digitone Keys | 1.43, 1.44 | `core-dn1-4.0.elemod`, `core-dn1-4.0-os1.44.elemod` | the [core-dn1-v4.0](https://github.com/irpina/elekloader/releases/tag/core-dn1-v4.0) pre-release |
 | Digitakt II | 1.17 | `core-dt2-1.0.elemod` | not released yet: build it ([below](#building-a-core)) |
 | Analog Rytm MKII | 1.73, 1.74 | `core-0.1.elemod`, `core-0.1-os1.74.elemod` (mods/core-ar2) | a proof of concept, not released: build it ([below](#building-a-core)) |
-| Octatrack MKI, MKII | 1.40C | `core-ot-0.1.elemod` | the latest release (v0.4.0) |
-| Octatrack MKI, MKII | 1.40C | `core-ot-0.3.elemod` | on main, not released yet (0.2, with the hook bus, is too) |
+| Octatrack MKI, MKII | 1.40C | `core-ot-0.1.elemod` | the latest release (v0.4.0); PURGE SAMPLES freezes the unit with it, fixed in 0.3.1 |
+| Octatrack MKI, MKII | 1.40C | `core-ot-0.3.1.elemod` | on main, not released yet (0.2, with the hook bus, and 0.3 are not either) |
 | Model:Cycles | 1.13 | `core-mc-0.1.elemod` | on main, not released yet: build it ([below](#building-a-core)) |
 | Model:Samples | 1.13 | `core-ms-0.1.elemod` | on main, not released yet: build it ([below](#building-a-core)) |
 

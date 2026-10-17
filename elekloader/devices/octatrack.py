@@ -49,7 +49,7 @@ Facts taken from sambanks/octabam (MIT) and not re-derived here are marked
   - Linkable mods run with the Octatrack's core (mods/core-ot), which takes
     the arena's bottom pages, as octabam's platform does: at most 1,707
     (10 MB), 0x40a955e0-0x41495de0, the `ddr` below. The core moves the
-    arena's base past them: 23 instructions carry the base and one carries
+    arena's base past them: 22 instructions carry the base and one carries
     base + 6,144, then four literals give the geometry. Those are octabam's
     arena.py writes (octabam), for the same reservation.
   - From core 0.3 it takes only the pages the mods' RAM fills (`reserve`

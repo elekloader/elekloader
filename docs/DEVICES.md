@@ -251,9 +251,12 @@ below was found again in 1.17.
   bottom pages, as sambanks/octabam's platform does: from 0.3 only those
   the mods' RAM fills (the profile's `reserve`), at most 1,707 (10 MB, all
   of them in 0.2), which is the device's `ddr`: `0x40a955e0-0x41495de0`.
-  - It moves the arena's base past them with octabam's 28 arena writes
+  - It moves the arena's base past them with octabam's 27 arena writes
     (the base, base + one page, the page count, the fill limit and the
     clear length). tests/test_octatrack.py derives each from the page count.
+    The base's literal at 0x400254f8 is left stock: it ends PURGE SAMPLES'
+    walk over the banks, and moved, PURGE froze the unit (core-ot 0.1-0.3,
+    octabam #753).
   - Its `.boot` is appended at the image's end (`0x4010fdf0`) and called
     from the boot site `0x4000050c`, in place of `0x40001e50`, which it
     calls first. It copies the run image to the reserve through the

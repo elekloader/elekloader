@@ -208,6 +208,7 @@ def test_verify_refuses_a_changed_header():
 # ---- linkable mods and the core -------------------------------------------------------------
 
 PAGE, PAGES, STOCK_PAGES = 6144, 1707, 14602
+PURGE_BANKS_END = 0x400254F8
 
 
 def test_linkable_mods_need_the_octatrack_core():
@@ -258,8 +259,14 @@ def test_the_core_moves_the_arena_past_its_reserve():
             assert (a + add) & 0xFFFFFFFF == v                        # 0 pages: stock
             assert (a + b * PAGES + add) & 0xFFFFFFFF == moved[v]     # 1,707: core 0.2's
             seen[v] = seen.get(v, 0) + 1
-    assert seen == {lo: 23, lo + PAGE: 1, STOCK_PAGES: 2, STOCK_PAGES + 1: 1,
+    assert seen == {lo: 22, lo + PAGE: 1, STOCK_PAGES: 2, STOCK_PAGES + 1: 1,
                     (STOCK_PAGES + 1) * PAGE: 1}
+    # The literal's 23rd use is not the arena: `cmpa.l #0x40a955e0,a2` at 0x400254f8
+    # ends PURGE SAMPLES' walk over the 16 banks, which end where the arena starts
+    # only by layout. Moved, the walk never ends and the unit freezes (octabam #753).
+    o = PURGE_BANKS_END - DEV.main_load
+    assert img[o:o + 6] == bytes.fromhex('b5fc40a955e0')
+    assert all(int(s['addr'], 16) != PURGE_BANKS_END + 2 for s in j['sites'])
     calls = {s['target']: int(s['addr'], 16) for s in j['sites'] if s['op'] == 'jsr'}
     assert calls.pop('boot') == 0x4000050c
     assert set(calls) == set(BUS_SITES), calls             # the rest are the hook bus's
