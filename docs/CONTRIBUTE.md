@@ -13,6 +13,12 @@ on the web page's leaderboard, on your pull request and in the release
 notes of the version that takes it. The list on this page is the
 community's to-do list.
 
+New to it? The web page's Contribute view has short guides:
+[Get started developing](https://irpina.github.io/elekloader/#contribute/start),
+[What is a core mod?](https://irpina.github.io/elekloader/#contribute/core),
+[Your first pull request](https://irpina.github.io/elekloader/#contribute/pr) and
+[Test before you flash](https://irpina.github.io/elekloader/#contribute/test).
+
 ## Ways to help
 
 - **Take an entry from the to-do list below.** Each one is stock code that

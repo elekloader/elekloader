@@ -946,19 +946,33 @@ function toast(text) {
 
 // ---- the frame: the three views, your setup, the counts ----
 
-const VIEWS = { '#build': 'build', '#contribute': 'contribute' };
-const view = () => VIEWS[location.hash] || 'library';
+const view = () => location.hash === '#build' ? 'build'
+  : /^#contribute(\/|$)/.test(location.hash) ? 'contribute' : 'library';
+// Contribute's pages: #contribute is the overview, #contribute/<page> the others (index.html, cp-<page>)
+const CPAGES = ['overview', 'start', 'core', 'pr', 'test'];
+const cpage = () => {
+  const p = location.hash.split('/')[1];
+  return CPAGES.includes(p) ? p : 'overview';
+};
 
 function route() {
-  const v = view();
+  const v = view(), cp = cpage();
   for (const n of ['library', 'build', 'contribute']) $('view-' + n).hidden = v !== n;
-  document.title = { build: 'Build', contribute: 'Contribute', library: 'Mods' }[v] + ' · elekloader';
+  for (const p of CPAGES) $('cp-' + p).hidden = p !== cp;
+  for (const a of document.querySelectorAll('[data-cpage]')) {
+    a.classList.toggle('on', v === 'contribute' && a.dataset.cpage === cp);
+    if (v === 'contribute' && a.dataset.cpage === cp) a.setAttribute('aria-current', 'page');
+    else a.removeAttribute('aria-current');
+  }
+  $('nav-csub').hidden = v !== 'contribute';
+  const page = v === 'contribute' && cp !== 'overview' ? $('cp-' + cp).querySelector('h1').textContent : null;
+  document.title = (page || { build: 'Build', contribute: 'Contribute', library: 'Mods' }[v]) + ' · elekloader';
   $('content').scrollTop = 0;
   $('topbar').classList.remove('solid');
   window.scrollTo(0, 0);
   renderLibrary();
   renderChrome();
-  if (v === 'contribute') renderTodo();
+  if (v === 'contribute' && cp === 'overview') renderTodo();
 }
 
 // ---- Contribute: the leaderboard (shop/claims.json) and the to-do list for the core (shop/bounties.json) ----

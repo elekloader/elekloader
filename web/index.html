@@ -29,6 +29,14 @@
       <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M13.5 3.5 6.5 13h5l-1 7.5 7-9.5h-5z"/></svg>Build<span class="badge" id="nav-count">0</span></a>
     <a class="nav-link" id="nav-contribute" href="#contribute">
       <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/></svg>Contribute</a>
+    <!-- Contribute's pages, under it while it is open (the page's own row of links does the same on a phone) -->
+    <div class="side-sub" id="nav-csub" hidden>
+      <a class="sub-link" href="#contribute" data-cpage="overview">Overview</a>
+      <a class="sub-link" href="#contribute/start" data-cpage="start">Get started</a>
+      <a class="sub-link" href="#contribute/core" data-cpage="core">What is a core mod?</a>
+      <a class="sub-link" href="#contribute/pr" data-cpage="pr">Your first pull request</a>
+      <a class="sub-link" href="#contribute/test" data-cpage="test">Test before you flash</a>
+    </div>
     <h3 class="side-h">Categories</h3>
     <ul class="side-list" id="nav-types"></ul>
     <h3 class="side-h">Profiles
@@ -112,6 +120,14 @@
   </section>
 
   <section class="view" id="view-contribute" aria-labelledby="contrib-title" hidden>
+    <nav class="cnav chips" id="cnav" aria-label="Contribute pages">
+      <a class="chip" href="#contribute" data-cpage="overview">Overview</a>
+      <a class="chip" href="#contribute/start" data-cpage="start">Get started</a>
+      <a class="chip" href="#contribute/core" data-cpage="core">What is a core mod?</a>
+      <a class="chip" href="#contribute/pr" data-cpage="pr">Your first pull request</a>
+      <a class="chip" href="#contribute/test" data-cpage="test">Test before you flash</a>
+    </nav>
+    <div class="cpage" id="cp-overview">
     <header class="page-head">
       <p class="eyebrow">Help build it</p>
       <h1 id="contrib-title">Contribute to elekloader!</h1>
@@ -123,9 +139,9 @@
     <ul class="ways">
       <li><strong>Take an entry from the to-do list below.</strong> Each is stock code a mod still hooks for
         itself. As a core event, any number of mods can use it, and none of them needs its own port for the next
-        OS. <a href="https://github.com/irpina/elekloader/blob/main/docs/CORE-CONTRIBUTING.md" rel="noreferrer" target="_blank">How to grow the core</a></li>
+        OS. <a href="#contribute/core">What is a core mod?</a> <a href="#contribute/pr">Your first pull request</a></li>
       <li><strong>Write a mod</strong> on the core and offer it to the shop.
-        <a href="https://github.com/irpina/elekloader/blob/main/docs/ADAPTING.md" rel="noreferrer" target="_blank">Adapting your mod</a></li>
+        <a href="#contribute/start">Get started developing</a></li>
       <li><strong>Add a device or an OS version</strong>, fix a step that didn't work, or make a page clearer.
         <a href="https://github.com/irpina/elekloader/blob/main/CONTRIBUTING.md" rel="noreferrer" target="_blank">Contributing</a></li>
     </ul>
@@ -143,6 +159,166 @@
       others see the entry is taken.
       <a href="https://github.com/irpina/elekloader/blob/main/docs/CONTRIBUTE.md" rel="noreferrer" target="_blank">More in the docs</a></p>
     <div id="todo"><p class="muted">Loading the list&hellip;</p></div>
+    </div>
+
+    <article class="cpage guide-page" id="cp-start" hidden>
+      <header class="page-head">
+        <p class="eyebrow">Contribute</p>
+        <h1>Get started developing</h1>
+        <p class="sub">From nothing to your first mod built, linked and checked: about half an hour, most of it
+          installing a compiler.</p>
+      </header>
+      <h2>What you need</h2>
+      <ul>
+        <li><strong>Python 3.9 or newer</strong> and <strong>git</strong>. elekloader itself has no other dependencies.</li>
+        <li><strong>The stock OS file</strong> for your device, from Elektron's support pages: the same file this page
+          asks for. elekloader recognises each release by its hash.</li>
+        <li><strong>The cross compiler,</strong> for a mod with code. On the Digitakt mk1 and the Digitone mk1 that is m68k
+          binutils and gcc: on Debian or Ubuntu <code>apt install binutils-m68k-linux-gnu gcc-m68k-linux-gnu</code>; on
+          Windows, the same inside WSL. A mod that only changes a byte or two needs none.</li>
+        <li><strong>Optional:</strong> <a href="https://github.com/irpina/digiemu" rel="noreferrer" target="_blank">digiemu</a>,
+          to run and check your build without a unit (<a href="#contribute/test">Test before you flash</a>).</li>
+      </ul>
+      <h2>Your first mod</h2>
+      <ol>
+        <li>Get the code and check it runs:
+          <pre><code>git clone https://github.com/irpina/elekloader
+cd elekloader
+python tests/test_units.py</code></pre></li>
+        <li>Copy the template, a complete mod that draws a small square in the corner of every screen. For the
+          Digitakt II start from <code>examples/hello-marker-dt2</code>, for the Octatrack <code>hello-marker-ot</code>,
+          for the Models <code>hello-marker-model</code>:
+          <pre><code>cp -r examples/hello-marker my-mod</code></pre></li>
+        <li>Give it your own <code>id</code> in <code>my-mod/mod.json</code> (lowercase; it also prefixes your global
+          symbols), then build it and the core for your device:
+          <pre><code>python -m elekloader.sdk.build my-mod --stock Digitakt_OS1.53.syx
+python -m elekloader.sdk.build mods/core --stock Digitakt_OS1.53.syx</code></pre>
+          Each prints <code>BUILT</code> and the <code>.elemod</code> it wrote (in the folder's <code>out/</code>).</li>
+        <li>Check it the way every build is checked, then make a firmware file from it:
+          <pre><code>python -m elekloader.lint my-mod/out/my-mod-1.0.elemod --stock Digitakt_OS1.53.syx --with mods/core/out/core-4.0.elemod
+python -m elekloader.patch --stock Digitakt_OS1.53.syx --mod mods/core/out/core-4.0.elemod --mod my-mod/out/my-mod-1.0.elemod --out test.syx --version TEST</code></pre>
+          The file names are the ones the build printed. Or skip the command line: drop your <code>.elemod</code> on
+          this page's Build view with your stock file.</li>
+      </ol>
+      <h2>The rules in short</h2>
+      <ul>
+        <li><strong>Subscribe, don't patch.</strong> If the core has an event for what you need, use it. If it
+          doesn't and another mod could want the same thing, that's a core event to add: <a href="#contribute/core">What is a core mod?</a></li>
+        <li><strong>Ship no firmware.</strong> Call firmware routines by address; never copy Elektron's code into your sources.</li>
+        <li><strong>One namespace.</strong> Prefix your global symbols with your mod's id, and keep the rest <code>static</code>.</li>
+        <li><strong>Only the main OS changes,</strong> so the stock OS file always gets a unit back.</li>
+      </ul>
+      <p>The whole guide, with every command's expected output and every refusal message with its fix:
+        <a href="https://github.com/irpina/elekloader/blob/main/docs/ADAPTING.md" rel="noreferrer" target="_blank">Adapting your mod</a>.
+        Working with a coding agent? Point it at
+        <a href="https://github.com/irpina/elekloader/blob/main/AGENTS.md" rel="noreferrer" target="_blank">AGENTS.md</a>:
+        it has the rules, the commands and what "done" means.</p>
+      <p class="next">Next: <a href="#contribute/core">What is a core mod?</a></p>
+    </article>
+
+    <article class="cpage guide-page" id="cp-core" hidden>
+      <header class="page-head">
+        <p class="eyebrow">Contribute</p>
+        <h1>What is a core mod?</h1>
+        <p class="sub">The one mod every build has, and the reason mods from different people combine.</p>
+      </header>
+      <h2>Without it</h2>
+      <p>A mod changes the stock firmware at the places it needs: it replaces an instruction with a jump to its own
+        code. Two mods that need the same place can't both have it, so they can't be in one build, and every mod has
+        to find all its places again for each new OS version.</p>
+      <h2>With it</h2>
+      <p>The core owns the shared places once, for every mod, and offers them as:</p>
+      <ul>
+        <li><strong>Events</strong> a mod subscribes to: the UI tick, the screen, keys and encoders, SETTINGS, the
+          audio render, MIDI, and more on each device. A handler can also take what it sees (a key, a CC) so
+          the stock firmware doesn't.</li>
+        <li><strong>Tables</strong> other mods add entries to: the Digitakt's SRC machines, the Digitone's Mod Menu.</li>
+        <li><strong>Firmware exports:</strong> named firmware routines and variables (<code>fw_…</code>), so a mod that uses
+          only those builds for every OS version the core supports without a port of its own.</li>
+      </ul>
+      <p>It also copies every mod's code into RAM when the unit boots, and gives the mods their share of it. Every
+        linkable mod needs exactly one core for its device, and builds pick it for you.</p>
+      <h2>Companions</h2>
+      <p>A group of places only one kind of mod uses has a companion beside the core: <strong>machine-pages</strong>
+        draws the Digitakt's SRC and LFO pages for machine mods, <strong>machines</strong> plays a machine mod's voice
+        on the Digitone, and <strong>seq-events</strong> turns the sequencer's steps into events. The to-do list counts
+        them as core.</p>
+      <h2>Versions</h2>
+      <p>Each core keeps everything the one before it had, so a mod built for an older core links with the newest,
+        and a build takes the newest: core 4.x on the Digitakt mk1, core-dn1 4.x on the Digitone mk1, core-ot 0.3.x on
+        the Octatrack. The Digitakt II, the Analog Rytm MKII and the Models have early cores (the tick, the screen,
+        keys and encoders) with a lot left to add.</p>
+      <h2>Growing it</h2>
+      <p>Every event the core has came from a mod that needed it. When yours needs something the core lacks, build
+        that part in the core's shape, in a file of its own, and open a pull request that moves it into the core:
+        <a href="https://github.com/irpina/elekloader/blob/main/docs/CORE-CONTRIBUTING.md" rel="noreferrer" target="_blank">Growing the core</a>
+        says how. The <a href="#contribute">to-do list</a> is every place a mod still patches itself: each one a core
+        event waiting to be written.</p>
+      <p class="next">Next: <a href="#contribute/pr">Your first pull request</a></p>
+    </article>
+
+    <article class="cpage guide-page" id="cp-pr" hidden>
+      <header class="page-head">
+        <p class="eyebrow">Contribute</p>
+        <h1>Your first pull request</h1>
+        <p class="sub">Taking an entry from the to-do list to the leaderboard. You don't need to ask first, and a
+          draft that says what it couldn't finish is a fine start.</p>
+      </header>
+      <ol class="steps">
+        <li><strong>Pick an entry</strong> from the <a href="#contribute">to-do list</a>. <em>A core event</em> means the
+          core has nothing there yet; <em>move onto the core</em> means a mod can use what the core already has (that
+          change goes to the mod's own repository, and its shop update here is where you claim it).</li>
+        <li><strong>Open a draft pull request early,</strong> on <a href="https://github.com/irpina/elekloader" rel="noreferrer" target="_blank">irpina/elekloader</a>,
+          with a plain line in its description naming the entry:
+          <pre><code>Claims: digitakt-mk1@1.53:0x400d553e</code></pre>
+          Others then see it's taken. Several ids on one line are fine.</li>
+        <li><strong>Build it in the core's shape:</strong> a file of its own in the core's folder, the core's names
+          (<code>ev_…</code>, <code>core_…</code>, <code>fw_…</code>), the handler written down over the code, the unit
+          behaving exactly as stock when no mod subscribes, and the address on every OS version the core supports.
+          <a href="https://github.com/irpina/elekloader/blob/main/docs/CORE-CONTRIBUTING.md" rel="noreferrer" target="_blank">Growing the core</a>
+          has the checklist.</li>
+        <li><strong>Show it works:</strong> say in the pull request which tests ran (<code>python tests/test_units.py</code>
+          always; the others need stock files), what you checked in <a href="#contribute/test">digiemu</a> or on a
+          unit, and, best of all, a mod rebuilt on your event without its own patch.</li>
+        <li><strong>Mark it ready.</strong> A maintainer reviews and merges it, and the next build of this page puts
+          you on the <a href="#contribute">leaderboard</a>, one point for each entry you claimed. The first merged
+          claim on an entry takes it.</li>
+      </ol>
+      <p>A <code>Claims:</code> line inside a code block, a comment or a quote is an example and claims nothing. More in
+        <a href="https://github.com/irpina/elekloader/blob/main/docs/CONTRIBUTE.md#claiming-an-entry" rel="noreferrer" target="_blank">Claiming an entry</a>.</p>
+      <p class="next">Next: <a href="#contribute/test">Test before you flash</a></p>
+    </article>
+
+    <article class="cpage guide-page" id="cp-test" hidden>
+      <header class="page-head">
+        <p class="eyebrow">Contribute</p>
+        <h1>Test before you flash</h1>
+        <p class="sub">You can build, run and check most of it without a unit, and a unit always comes back.</p>
+      </header>
+      <h2>Every build is checked</h2>
+      <p>Before it writes a file, elekloader refuses any build that would change the bootloader, put two mods on the
+        same bytes, or run out of the mods' RAM. <code>python -m elekloader.lint</code> runs the same checks on your
+        mod alone, with the reason for each refusal.</p>
+      <h2>In an emulator</h2>
+      <p><a href="https://github.com/irpina/digiemu" rel="noreferrer" target="_blank">digiemu</a> runs the real firmware
+        of the Digitakt mk1, the Digitone mk1, the Model:Cycles and the Model:Samples on Windows and on Apple silicon
+        Macs, with a clickable front panel and live audio. You bring Elektron's file, as here.</p>
+      <ul>
+        <li><strong>Check firmware…</strong> takes your build's <code>.syx</code> and compares it with stock: it boots it,
+          drives it through the screens and the sequencer, and ends with PASS or FAIL and the reasons.</li>
+        <li>Add your build as a firmware of its own to play it from the panel, or from a script with
+          <code>digiemu-console.exe --add FILE.syx</code>.</li>
+      </ul>
+      <p>The Octatrack, the Digitakt II and the Analog Rytm MKII aren't emulated: there, test on a unit.</p>
+      <h2>On a unit</h2>
+      <p>Send your <code>.syx</code> with Elektron Transfer like any OS update
+        (<a href="https://github.com/irpina/elekloader/blob/main/docs/BUILDING.md#flash-it" rel="noreferrer" target="_blank">how to flash</a>).
+        The bootloader is never changed, so the stock OS file always gets the unit back: on a Digitakt mk1, Digitakt II
+        or Digitone mk1, hold <strong>FUNC</strong> while powering on and press <strong>TRIG 4</strong> for OS UPGRADE,
+        then send the stock file; on an Octatrack, hold <strong>FUNC</strong> and press <strong>TRIG 3</strong>, and send
+        it over 5-pin MIDI (<a href="https://github.com/irpina/elekloader/blob/main/docs/BUILDING.md#recovery" rel="noreferrer" target="_blank">recovery</a>).</p>
+      <p class="next">Back to the <a href="#contribute">to-do list and the leaderboard</a></p>
+    </article>
   </section>
   <section class="view" id="view-build" aria-labelledby="build-title" hidden>
     <header class="page-head head-build">

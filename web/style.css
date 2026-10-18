@@ -394,7 +394,28 @@ pre.error { white-space: pre-wrap; color: var(--bad); font-family: var(--mono); 
 details summary { cursor: pointer; color: var(--muted); }
 details summary:hover { color: var(--text); }
 
-/* ---- Contribute: the ways to help, and the to-do list ---- */
+/* ---- Contribute: its pages, the ways to help, and the to-do list ---- */
+.cnav { display: flex; flex-wrap: wrap; gap: 8px; padding-top: 24px; }
+.cnav .chip { color: var(--text); text-decoration: none; }
+.cnav .chip.on { color: #131316; }
+.side-sub { display: flex; flex-direction: column; margin: 2px 0 4px 34px; border-left: 1px solid var(--line-2); }
+.sub-link { padding: 4px 10px; color: var(--muted); font-size: 13px; border-radius: 0 6px 6px 0; }
+.sub-link:hover { color: var(--text); background: var(--hover); text-decoration: none; }
+.sub-link.on { color: var(--accent); }
+.guide-page { max-width: 760px; padding-bottom: 20px; }
+.guide-page h2 { margin: 26px 0 8px; font-size: 18px; }
+.guide-page p, .guide-page li { color: var(--muted); font-size: 14.5px; line-height: 1.6; }
+.guide-page strong, .guide-page em { color: var(--text); }
+.guide-page a { color: var(--accent-hi); }
+.ways a { color: var(--accent-hi); margin-right: 10px; }
+.guide-page ul, .guide-page ol { padding-left: 22px; }
+.guide-page li { margin: 6px 0; }
+.guide-page pre { margin: 8px 0; padding: 10px 14px; background: var(--well); border: 1px solid var(--line); border-radius: 8px;
+  overflow-x: auto; white-space: pre; }
+.guide-page pre code { color: var(--text); font-size: 12.5px; }
+.guide-page :not(pre) > code { color: var(--accent); }
+.guide-page .steps > li { margin: 12px 0; }
+.guide-page .next { margin-top: 28px; padding-top: 14px; border-top: 1px solid var(--line); }
 .ways { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: 12px; margin: 4px 0 0; padding: 0;
   list-style: none; }
 .ways li { padding: 14px 16px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r);
