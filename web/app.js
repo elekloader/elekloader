@@ -167,6 +167,60 @@ const unpublished = e => (e.commit ? `Its file at ${e.commit.slice(0, 7)} could 
   : `Its release (${e.tag}) is not published yet.`);
 const owned = e => st.mods.find(d => !d.builtin && d.sha256 === e.sha256);
 
+// What a file holds that no other mod in one build may share: a shop file's footprint (packaging/build_web.py), or
+// the same from describe() for your own files (without the claims and exports describe does not list).
+function footprint(x) {
+  const f = x.footprint || (shopItem(x) || {}).footprint;
+  if (f) return { id: x.id, ...f };
+  return { id: x.id, format: x.format, conflicts: x.conflicts || [], names: x.names || [], exports: [],
+    tables: x.tables || [], spans: (x.sites || []).map(s => [s[0], s[0] + s[1]]),
+    regions: (x.regions || []).map(g => [g[1], g[2]]) };
+}
+
+// Why two mods' files can never go in one build, by the link check's rules that need no stock file
+// (link.check, elemod.common_checks), or '' when nothing here stops them (the check, as you tick, has the last word).
+// Two versions of one mod are not a clash here: the card is the same mod.
+function clash(a, b) {
+  if (a.id === b.id) return '';
+  const meets = (p, q) => p.some(([lo, hi]) => q.some(([l, h]) => lo < h && l < hi));
+  const both = (p, q) => p.find(x => q.includes(x));
+  if (a.format !== b.format) return 'a whole build combines with no separate mod';
+  if (a.conflicts.includes(b.id) || b.conflicts.includes(a.id)) return 'one names the other as incompatible';
+  if (meets(a.spans, b.spans)) return 'both patch the same place in the firmware';
+  let x;
+  if ((x = both(a.names, b.names))) return `both claim ${x}`;
+  if ((x = both(a.exports, b.exports))) return `both export ${x}`;
+  if ((x = both(a.tables, b.tables))) return `both declare the table ${x}`;
+  if (meets(a.regions, b.regions)) return 'both use the same memory';
+  return '';
+}
+
+// The mods in the build a file clashes with, itself or by a mod it brings along (what it requires and the build does
+// not have: your file of it for this OS, else the shop's newest, as Add and the tick take them): [{title, why}]
+function clashes(x) {
+  const sd = dev();
+  const build = [...st.enabled].map(desc).filter(d => d && !d.error && d.sha256 !== x.sha256);
+  const have = new Set(build.map(d => d.id));
+  const newest = list => list.sort((a, b) => cmpVer(a.version, b.version)).pop();
+  const along = (x.requires || []).filter(r => r !== 'core' && r !== x.id && !have.has(r))
+    .map(r => newest(st.mods.filter(d => !d.builtin && !d.error && d.id === r && d.fits))
+      || newest(shop.items.filter(i => i.available && i.id === r && sd && i.device === sd.key && i.os === st.stock.os)))
+    .filter(Boolean);
+  const out = [];
+  for (const d of build) {
+    const fd = footprint(d);
+    for (const y of [x, ...along]) {
+      const why = clash(footprint(y), fd);
+      if (why) {
+        out.push({ title: d.title || d.id, why: y === x ? why : `it needs ${y.title || y.id}, and ${why}` });
+        break;
+      }
+    }
+  }
+  return out;
+}
+const clashNote = cs => `Can't go in your build with ${cs.map(c => c.title).join(', ')}: ${cs[0].why}.`;
+
 // One card per mod: its files for each OS version of a device (a mod's ports)
 // are one card, oldest OS first.
 function shopGroups(items) {
@@ -230,7 +284,11 @@ function entryState(en) {
   }
   const pick = en.shop ? shopPick(en.shop) : (fitting || mine[0]);
   const otherOs = sd && sd.key === en.device && !fitting && pick && pick.os !== st.stock.os;
-  return { mine, fitting, inBuild, toAdd, pick, otherOs };
+  // the file that would go in the build (yours that fits, or the shop's for this OS), against what is ticked
+  const cand = fitting || (en.shop && sd && pick && pick.available && pick.device === sd.key && pick.os === st.stock.os
+    ? pick : null);
+  const clashing = !inBuild && cand ? clashes(cand) : [];
+  return { mine, fitting, inBuild, toAdd, pick, otherOs, clashing };
 }
 
 async function loadShop() {
@@ -791,6 +849,7 @@ function action(en, s) {
     return { kind: 'in', label: `Take ${en.title} out of your build (it stays in your mods)`, disabled: st.busy || !sd,
       run: () => untick(s.mine.map(d => d.path)) };
   }
+  if (s.clashing.length) return { kind: 'clash', label: clashNote(s.clashing), disabled: true };
   if (s.fitting && sd) {
     return { kind: 'add', label: `Add ${en.title} to your build`, disabled: st.busy,
       run: async () => { await tickWithCore(s.fitting.path); remember(); changed(); } };
@@ -812,11 +871,13 @@ function card(en) {
   cover.style.setProperty('--h', String(Math.round((KIND_HUE[en.category] ?? 330) + (m ? m.hue : 0)
     + (m ? 16 : 36) * seeded(en.id)() - (m ? 8 : 18))));
   const button = act
-    ? el('button', { type: 'button', class: 'add' + (act.kind === 'in' ? ' in' : ''), disabled: act.disabled,
-      title: act.label, onclick: act.run }, act.kind === 'in' ? '✓ In build' : '+ Add')
+    ? el('button', { type: 'button', class: 'add' + (act.kind === 'in' ? ' in' : act.kind === 'clash' ? ' clash' : ''),
+      disabled: act.disabled, title: act.label, onclick: act.run },
+      act.kind === 'in' ? '✓ In build' : act.kind === 'clash' ? 'Clashes' : '+ Add')
     : el('button', { type: 'button', class: 'add have', disabled: true }, en.available ? '✓ Added' : 'Soon');
   const sites = en.shop ? pick.sites : (pick.sites || []).length;
-  return el('article', { class: 'card' + (s.inBuild ? ' live' : '') + (en.available ? '' : ' unavailable') },
+  return el('article', { class: 'card' + (s.inBuild ? ' live' : '') + (en.available ? '' : ' unavailable')
+    + (s.clashing.length ? ' clashing' : '') },
     cover,
     el('div', { class: 'card-body' },
       el('div', { class: 'card-main' },
@@ -828,6 +889,7 @@ function card(en) {
           button),
         el('p', { class: 'summary' }, en.summary),
         s.otherOs ? el('p', { class: 'note' }, `Made for OS ${pick.os}; your stock file is OS ${st.stock.os}.`) : '',
+        s.clashing.length ? el('p', { class: 'note' }, clashNote(s.clashing)) : '',
         !en.available && en.shop ? el('p', { class: 'note' }, unpublished(en.shop[0])) : ''),
       el('div', { class: 'card-foot' },
         el('span', {}, en.available && sites != null ? `${sites} patch sites` : ''),
@@ -868,12 +930,14 @@ function openSheet(en) {
     const i = parts.findIndex(p => p && p.classList && p.classList.contains('desc'));
     parts.splice(i < 0 ? parts.length : i + 1, 0, el('h4', {}, 'On a unit'), el('p', { class: 'muted' }, en.onUnit));
   }
+  if (s.clashing.length) parts.unshift(el('p', { class: 'note' }, clashNote(s.clashing)));
   // what you can do with it: the card's action, Remove, its source
   const act = action(en, s);
   const close = () => $('mod-sheet').close();
   const acts = el('div', { class: 'sheet-acts' },
     act ? el('button', { type: 'button', class: 'btn ' + (act.kind === 'in' ? 'outline' : 'primary'), disabled: act.disabled,
-      onclick: ev => { close(); act.run(ev); } }, act.kind === 'in' ? 'Take it out of the build' : 'Add') : '',
+      onclick: ev => { close(); act.run(ev); } }, act.kind === 'in' ? 'Take it out of the build'
+      : act.kind === 'clash' ? 'Clashes with your build' : 'Add') : '',
     s.mine.length && !st.busy ? el('button', { type: 'button', class: 'btn outline',
       onclick: () => { close(); removeMods(s.mine.map(x => x.path)); } }, 'Remove') : '',
     en.shop ? el('a', { class: 'btn outline', rel: 'noreferrer',

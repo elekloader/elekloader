@@ -230,8 +230,26 @@ def shop(path, folder):
                          device_name=m.dev.name, os=m.rel.version, format=2 if v2 else 1,
                          requires=list(m.requires), conflicts=list(m.conflicts),
                          ram=(m.size('.run') + m.size('.bss')) if v2 else 0,
-                         fast=m.size('.fast') if v2 else 0, sites=len(m.sites)), raw))
+                         fast=m.size('.fast') if v2 else 0, sites=len(m.sites),
+                         footprint=footprint(m)), raw))
     return cs, out
+
+
+def footprint(m):
+    """What a mod's file holds that no other mod in one build may share, by the
+    link check's rules that need no stock file (link.check, elemod.common_checks):
+    the bytes it patches or claims, the names it claims, the symbols it exports,
+    the tables it declares, its memory regions, the mods it names as conflicts, and its format (a whole
+    build combines with no separate mod). The page greys out a shop card whose
+    file cannot go in the build with what is ticked (app.js, clash)."""
+    v2 = isinstance(m, link.Mod2)
+    spans = [[s['addr'], s['addr'] + s['len']] for s in m.sites]
+    if v2:
+        spans += [[a, b] for c in m.contribute for a, b in c['claims']]
+    return {'format': 2 if v2 else 1, 'conflicts': list(m.conflicts), 'names': list(m.names),
+            'exports': sorted(m.exports) if v2 else [], 'tables': sorted(m.collections) if v2 else [],
+            'spans': sorted(spans),
+            'regions': sorted([g['lo'], g['hi']] for g in m.regions)}
 
 
 def device_list():

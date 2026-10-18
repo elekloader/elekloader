@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 """Unit tests that need no firmware (pytest, or run with python)."""
+import json
 import os
 import random
 import struct
@@ -659,6 +660,28 @@ def test_the_site_names_its_files_with_its_version_and_lists_the_devices():
     ds = build_web.device_list()
     assert [d['key'] for d in ds] == [d.key for d in devices.devices()]
     assert all(set(d) == {'key', 'name', 'releases'} and d['releases'] == sorted(d['releases']) for d in ds)
+
+
+def test_the_shop_lists_what_each_file_may_not_share():
+    """The page greys out a card that cannot go in the build (app.js, clash) from each shop file's footprint: what
+    the link check refuses two mods sharing, without a stock file."""
+    pack = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'packaging')
+    if not os.path.exists(os.path.join(pack, 'build_web.py')):
+        return      # under Pyodide (tests/test_web.mjs): no packaging/
+    sys.path.insert(0, pack)
+    import build_web
+    dt = devices.devices()[0]
+    m = link.Mod2({'elemod': 2, 'id': 'a', 'version': '1', 'target': devices.target_of(dt, dt.releases['1.53']),
+                   'sections': {'.run': {'align': 4, 'parts': [['hex', '00' * 8]]}},
+                   'symbols': {'p': ['.run', 0], 'q': ['.run', 4]}, 'exports': ['q'],
+                   'collections': {'ev_b': {'entry': 8}, 'ev_a': {'entry': 4}},
+                   'contribute': [{'to': 'ev_a', 'data': '00000000', 'relocs': [[0, 'abs32', 'sym:p', 0]],
+                                   'claims': [[0x40001000, 0x40001006]]}],
+                   'conflicts': ['b'], 'resources': {'names': ['soundslot:3']}}, 'a')
+    f = build_web.footprint(m)
+    assert f == {'format': 2, 'conflicts': ['b'], 'names': ['soundslot:3'], 'exports': ['q'],
+                 'tables': ['ev_a', 'ev_b'], 'spans': [[0x40001000, 0x40001006]], 'regions': []}, f
+    assert json.loads(json.dumps(f)) == f                  # it goes in shop/index.json as it is
 
 
 def test_merged_pull_requests_claim_entries_for_the_leaderboard():

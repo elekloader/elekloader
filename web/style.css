@@ -222,6 +222,9 @@ h1 { margin: 0 0 6px; font-size: 32px; line-height: 1.1; font-weight: 800; lette
 .cover .name { position: absolute; left: 14px; top: 11px; right: 14px; font-size: 19px; font-weight: 800; line-height: 1.1;
   letter-spacing: -0.03em; color: #fff; text-align: left; overflow-wrap: anywhere; text-shadow: 0 1px 8px rgba(0, 0, 0, 0.25); }
 .card.unavailable .cover { filter: grayscale(1) brightness(0.6); }
+.card.clashing { opacity: 0.55; }
+.card.clashing:hover { opacity: 0.85; transform: none; }
+.card.clashing .cover { filter: grayscale(1) brightness(0.6); }
 .card-body { display: flex; flex-direction: column; flex: 1; padding: 13px 15px 12px; }
 .card-title { display: flex; align-items: flex-start; gap: 10px; }
 .card-title > div { flex: 1; min-width: 0; }

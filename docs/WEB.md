@@ -113,6 +113,16 @@ and the files with their sha256.
 - **✓ In build** marks a mod in your build; a click takes it out of the
   build, and it stays in your mods.
 - **Remove** takes it out of your mods.
+- **Clashes** greys out a card whose file can never go in one build with
+  what is ticked. The note under the summary, and the same note in the
+  details sheet, say which ticked mod it clashes with and why: both patch
+  the same place, one names the other as incompatible, both claim the same
+  name, symbol, table or memory, or one is a whole build. A mod it would
+  bring along counts too: DT-FM needs machine pages, which clashes with
+  DigiSlicer. These are the link check's rules that need no stock file.
+  Each shop file's `footprint` in `shop/index.json` (`build_web.footprint`)
+  carries what they need, and your own files have it from the engine. The
+  check as you tick still has the last word.
 
 A mod built for several OS versions of a device (its files for 1.53 and
 1.54, say) is one card, which lists the OS versions it has. With a stock
