@@ -7,11 +7,11 @@ the core's events came from mods that needed them, and support for
 Digitakt II came from an outside contributor. Pull requests are welcome
 and encouraged, and you don't need to ask first.
 
-There is no reward but credit: your name on your pull request, in the
-release notes of the version that takes it, and on the web page's
-leaderboard for each entry of the to-do list you claim
-([below](#claiming-an-entry)). The list on this page is the community's
-to-do list.
+Help the community grow and earn a spot on the leaderboard: claim an
+entry of the to-do list ([below](#claiming-an-entry)), and your name goes
+on the web page's leaderboard, on your pull request and in the release
+notes of the version that takes it. The list on this page is the
+community's to-do list.
 
 ## Ways to help
 
