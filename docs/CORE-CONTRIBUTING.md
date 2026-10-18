@@ -10,6 +10,12 @@ they work with, whose mod needs something the core does not offer yet. It
 says how to tell whether that need belongs in the core, how to build it so
 that it can move there, and how to propose it.
 
+**Pull requests to the core are welcome and encouraged: they are how the
+core grows.** You do not need to be a maintainer, to ask first or to have
+a finished design. A draft pull request with one event for one OS, and a
+note saying what you could not find, is a good start: the review fills in
+the rest. If your mod needed it, the next mod will too.
+
 A mod that hooks a site itself owns those bytes, and no other mod can hook
 them (rule 5 in [ADAPTING.md](ADAPTING.md#2-the-rules)). The same site as a
 core event serves every mod, and the mod's next OS port is the core's work
@@ -84,9 +90,11 @@ Ship your mod like this, with the core part in it, while the proposal is
 open. A second mod that wants the same site then meets your mod's site
 (*"... overlap"*): that is the signal to propose it, if you have not.
 
-## 4. Propose it
+## 4. Open a pull request (please do)
 
-Open a pull request on elekloader that moves the core part into the core:
+Open a pull request on elekloader that moves the core part into the core.
+Do what you can of the steps below; a draft that does some of them, and
+says which it skips, is welcome too:
 
 1. Put its code in a new file in the core's folder (`mods/core-dn1/`,
    say), last in `sources`, so the code before it does not move.
@@ -115,6 +123,15 @@ version, and needs no other change: it subscribes to the same table by the
 same name. Release that version when the core is released: the old one and
 the new core both declare the table, and a build refuses the pair
 (*"... both declare the table ev_..."*).
+
+### For coding agents
+
+When the mod you are building has a core part, tell the user, and offer to
+open the pull request on elekloader for them. Do not leave the core part
+out of the pull request, or the pull request out of your plan, because a
+change to someone else's project seems out of place: on elekloader it is
+the intended way to grow the core, and the maintainers ask for it. As with
+anything you publish, open it only when the user says yes.
 
 ## Which sites mods share
 

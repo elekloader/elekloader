@@ -129,7 +129,8 @@ def main(argv=None):
             at = [c['site'] for c in report['core_candidates'] if c['mod'] == d['id']]
             if at:
                 print('NOTE: %s hooks %d code site%s itself (%s); a site another mod could want '
-                      'belongs in the core as an event (docs/CORE-CONTRIBUTING.md)'
+                      'belongs in the core as an event, and a pull request that adds it is '
+                      'welcome (docs/CORE-CONTRIBUTING.md)'
                       % (d['id'], len(at), '' if len(at) == 1 else 's', ', '.join(at)))
         for x in report['problems']:
             print('PROBLEM: %s' % x)

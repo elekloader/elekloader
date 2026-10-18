@@ -25,7 +25,7 @@ docs match its code.
   definition of done. Coding agents: start with [AGENTS.md](../AGENTS.md).
 - **[Growing the core](CORE-CONTRIBUTING.md)**: when what your mod needs
   belongs in the core, how to build it so it can move there, and how to
-  propose it.
+  propose it. Pull requests to the core are welcome and encouraged.
 - **[The file format](FORMAT.md)**: `.elemod`, whole builds (format 1) and
   linkable mods (format 2).
 - **[Adding a device](DEVICES.md)**: a device profile, and what was found

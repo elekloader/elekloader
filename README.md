@@ -68,6 +68,12 @@ Menu, where you pick what your mods add ([docs/CORES.md](docs/CORES.md)):
 Find mods in the web page's shop, or write your own:
 [docs/ADAPTING.md](docs/ADAPTING.md) takes you from the first build to done.
 
+**Contributions are welcome and encouraged.** The core grows from what mods
+need: when yours needs an event, a table or a firmware address the core
+lacks, a pull request that adds it is the intended path
+([Growing the core](docs/CORE-CONTRIBUTING.md)). So are new devices, OS
+versions, fixes and docs ([CONTRIBUTING.md](CONTRIBUTING.md)).
+
 ## Documentation
 
 The [docs](docs/README.md) are elekloader's wiki:
