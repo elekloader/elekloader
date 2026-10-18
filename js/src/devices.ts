@@ -38,6 +38,7 @@ export type Device = {
   areas: Record<string, Range>                  // in the profile's order
   ddr: Range
   coreDdr: [string, Range][]                   // [core version, area]: from that core on, the linker's area in place of ddr
+  slotClaims: [string, number, number, string][]   // [table, at, count, prefix]: a contribution to table points at a descriptor whose long at +at is a sound slot; the mod claims prefix:<slot>
   sramCode: Range
   fastTable: string
   imageFree: Range[]
@@ -52,7 +53,7 @@ const rel = (version: string, syxSha256: string, mainSha256: string, mainLen: nu
 
 const base = {
   mainSection: 3, mainLoad: 0x40000400, isa: 'coldfire' as const, hmacKeyFrom: null, container: 'ele3' as const,
-  versionLen: 4, versionAt: 0x14, versionOptional: false, protected: [], relocatable: [], blobMax: null, sramCode: [0, 0] as Range, coreDdr: [] as [string, Range][], fastTable: '',
+  versionLen: 4, versionAt: 0x14, versionOptional: false, protected: [], relocatable: [], blobMax: null, sramCode: [0, 0] as Range, coreDdr: [] as [string, Range][], slotClaims: [] as [string, number, number, string][], fastTable: '',
   imageFree: [], reserve: null, dspPayloads: {}, dspAreas: [], trailer: null,
 }
 
@@ -99,6 +100,7 @@ export const DIGITONE_MK1: Device = {
   areas: { ddr: [0x47be0000, 0x47c00000], bulk: [0x44000000, 0x47be0000] },
   ddr: [0x47be0000, 0x47c00000],
   coreDdr: [['4.0', [0x43ec0000, 0x44000000]]],   // core-dn1 4.0: 1.25 MB
+  slotClaims: [['core_params', 8, 79, 'soundslot']],   // a parameter slot's descriptor names its sound slot at +8
   recovery: 'hold FUNC while powering on for the startup menu, press TRIG 4 (OS UPGRADE), then send the stock .syx',
 }
 

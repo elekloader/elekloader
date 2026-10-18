@@ -455,6 +455,50 @@ def test_section_alignment():
         raise AssertionError('accepted alignment %d' % bad)
 
 
+def test_a_parameter_slot_claims_its_sound_slot():
+    """On the Digitone a mod that adds a parameter slot (core-dn1's core_params) claims the sound
+    slot its descriptor names at +8, as soundslot:<n>, so two mods that store in one of a
+    sound's slots never link together, whether their files say so or not (digitables 1.3's
+    does not). The descriptor's bytes may be stock parts, read from the image."""
+    dn = [d for d in devices.devices() if d.key == 'digitone-mk1'][0]
+    r = dn.releases['1.43']
+    image = bytearray(r.main_len)
+    image[0x100:0x104] = (65).to_bytes(4, 'big')        # a long a descriptor shares with the stock
+
+    def mod(i, parts, names=(), relocs=()):
+        return link.Mod2({'elemod': 2, 'id': i, 'version': '1', 'target': devices.target_of(dn, r),
+                          'sections': {'.run': {'align': 4, 'parts': parts}},
+                          'symbols': {'p': ['.run', 0]}, 'relocs': [list(x) for x in relocs],
+                          'contribute': [{'to': 'core_params', 'data': '00000000',
+                                          'relocs': [[0, 'abs32', 'sym:p', 0]]}],
+                          'resources': {'names': list(names)}}, i)
+
+    def desc(slot):                                     # id 182, group 1, the slot, 56 more bytes
+        return [['hex', '000000b6' + '00000001' + '%08x' % slot + '00' * 56]]
+    a, b = mod('a', desc(26)), mod('b', desc(26))
+    assert a.implied_names(bytes(image)) == ['soundslot:26'] and a.names == []
+    problems = link.check([a, b], bytes(image))
+    assert 'a 1 and b 1 both claim soundslot:26' in problems, problems
+    assert a.names == ['soundslot:26']                  # check() adds it
+    # a slot another mod claims itself (machines: soundslot:0)
+    problems = link.check([mod('p', desc(0)), mod('m', desc(26), names=['soundslot:0'])], bytes(image))
+    assert 'p 1 and m 1 both claim soundslot:0' in problems, problems
+    # the descriptor's slot in a stock part
+    c = mod('c', [['hex', '000000b7' + '00000001'], ['stock', '0x%08x' % (dn.main_load + 0x100), 4],
+                  ['hex', '00' * 56]])
+    assert c.implied_names(bytes(image)) == ['soundslot:65']
+    # not a slot: past the 79, or a long the linker relocates
+    assert mod('d', desc(79)).implied_names(bytes(image)) == []
+    assert mod('e', desc(26), relocs=[('.run', 8, 'abs32', 'abs', 26)]).implied_names(bytes(image)) == []
+    # the Digitakt mk1's profile names no such table
+    dt = devices.devices()[0]
+    t = link.Mod2({'elemod': 2, 'id': 't', 'version': '1', 'target': devices.target_of(dt, dt.releases['1.53']),
+                   'sections': {'.run': {'align': 4, 'parts': desc(26)}}, 'symbols': {'p': ['.run', 0]},
+                   'contribute': [{'to': 'core_params', 'data': '00000000',
+                                   'relocs': [[0, 'abs32', 'sym:p', 0]]}]}, 't')
+    assert t.implied_names(b'') == []
+
+
 def test_parts_stay_in_the_image():
     d, r = devices.identify(devices.devices()[0].releases['1.53'].syx_sha256)
     ok = elemod.parse_parts([['hex', '00ff'], ['stock', '0x40000400', 8]], 't', d, r)

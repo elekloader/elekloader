@@ -453,7 +453,7 @@ table `core_params` a pointer to a descriptor:
 |---|---|---|
 | +0 | id | 182, 183 or 184: claim it as the resource `param:<id>` |
 | +4 | group | the page group: 1 Amp, 2 Filter, ... (a sound page's, for a sound parameter) |
-| +8 | slot | the sound parameter it edits (0-78): a slot no stock parameter of that kind uses, e.g. 26 on a synth track |
+| +8 | slot | the sound parameter it edits (0-78): a slot no stock parameter of that kind uses, e.g. 26 on a synth track. The linker claims it for the mod as `soundslot:<slot>` (below) |
 | +12, +16, +20 | min, max, default | 8.8 fixed point, as the slot holds them |
 | +24 | flags | 0 |
 | +28 | cc | MIDI CC (MSB << 16 \| LSB), or -1 for none |
@@ -469,6 +469,18 @@ pages", below): a page's eight ids are written with
 immediates, not read from a table: AMP page 1's knob F, empty, is cleared
 by `clrl 0x4136b6d4` at `0x4016affe`, so a `jsr` there to a routine that
 writes 182 puts id 182 on it.
+
+**Sound slots are scarce.** A Digitone sound is 79 slots, and only three hold
+no stock parameter: 0, 26 and 65 (no knob, 0 in every factory sound, no effect
+on the sound). Slot 0 is also where an LFO with no destination points. The
+machines mod keeps a sound's machine in slot 0; digitables' TBL and SPD are 26
+and 65. A mod that keeps anything in a sound slot claims it as the resource
+`soundslot:<slot>`, and the linker refuses two mods that claim the same one. A
+parameter slot claims its own: the linker reads the slot from the descriptor
+(+8, from the mod's bytes or, where the file shares them with the firmware, the
+stock image), so a mod whose file says nothing, such as digitables 1.3, claims
+26 and 65 all the same. The device profile names the table and the offset
+(`slot_claims`).
 
 Core-dn1 2.1 owns these sites too (`mods/core-dn1/mod.json`): the boot call
 at 0x40000538 now goes to `core_dn_boot`, which moves two small tables from

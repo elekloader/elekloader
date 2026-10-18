@@ -61,6 +61,9 @@ class Device:
     ddr: tuple = (0, 0)          # the linker's area for .run, tables and .bss
     core_ddr: tuple = ()         # ((core version, (lo, hi)), ...): from that core's version on,
                                  # the linker's area in place of ddr (the last that applies)
+    slot_claims: tuple = ()      # ((table, at, count, prefix), ...): a contribution to `table` points
+                                 # at a descriptor whose long at +`at` is a sound slot (0 to count - 1);
+                                 # the mod claims `prefix:<slot>` for it (link.Mod2.implied_names)
     sram_code: tuple = (0, 0)    # the linker's area for .fast code
     fast_table: str = ''         # the table .fast sections are copied through
     image_free: tuple = ()       # ((lo, hi), ...): zero runs inside the main OS that

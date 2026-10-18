@@ -179,6 +179,52 @@ export class Mod2 implements AnyMod {
     this.conflicts = iter(get(doc, 'conflicts', [])).map(x => str(x))
   }
 
+  /** The names this mod claims by what it contributes (the profile's slotClaims): a contribution to such a table
+   * points at a descriptor whose long at a known offset is a sound slot, and the mod claims that slot (digitables'
+   * TBL parameter: soundslot:26), so two mods that store in one slot never link together, whether their files say
+   * so or not. `image` is the stock main OS the mod is for: a descriptor's bytes may be stock parts. A descriptor
+   * this cannot read (outside the mod's own bytes, or relocated there) claims nothing. check() adds them to the
+   * mod's names. link.Mod2.implied_names. */
+  impliedNames(image: Uint8Array): string[] {
+    const out: string[] = []
+    for (const [table, at, count, prefix] of this.dev.slotClaims) {
+      for (const c of this.contribute) {
+        if (c.to !== table) continue
+        for (const [off, typ, tgt, add] of c.relocs) {
+          if (off !== 0 || typ !== 'abs32') continue
+          let sec: string, base: number
+          if (tgt.startsWith('sym:') && this.symbols.has(tgt.slice(4))) [sec, base] = this.symbols.get(tgt.slice(4))!
+          else if (tgt.startsWith('sec:')) [sec, base] = [tgt.slice(4), 0]
+          else continue
+          const v = this.long(sec, base + add + at, image)
+          const nm = `${prefix}:${v}`
+          if (v !== null && v >= 0 && v < count && !out.includes(nm)) out.push(nm)
+        }
+      }
+    }
+    return out
+  }
+
+  /** The big-endian long at sec+off of this mod's bytes, or null: in a section without bytes, split across parts,
+   * or under a relocation. */
+  private long(sec: string, off: number, image: Uint8Array): number | null {
+    const d = this.sections.get(sec)
+    if (!d || !d.parts || d.len === undefined || off < 0 || off + 4 > d.len) return null
+    if (this.relocs.some(([s, o, t]) => s === sec && o < off + 4 && off < o + (RSIZE.get(t) ?? 0))) return null
+    let at = 0
+    for (const p of d.parts) {
+      const n = p[0] === 'hex' ? p[1].length : p[2]
+      if (at <= off && off + 4 <= at + n) {
+        const [b, i] = p[0] === 'hex' ? [p[1], off - at] : [image, p[1] - this.dev.mainLoad + off - at]
+        if (i < 0 || i + 4 > b.length) return null
+        return ((b[i] << 24) | (b[i + 1] << 16) | (b[i + 2] << 8) | b[i + 3]) >>> 0
+      }
+      if (at < off + 4 && off < at + n) return null           // split across parts
+      at += n
+    }
+    return null
+  }
+
   private relocOk(sec: unknown, off: number, typ: unknown, tgt: unknown) {
     if (typeof sec !== 'string' || !this.sections.has(sec) || sec === '.bss') throw new ModError(`${this.name}: relocation in ${str(sec)}`)
     if (!RTYPES.includes(typ as string)) throw new ModError(`${this.name}: relocation type ${str(typ)}`)
@@ -256,6 +302,9 @@ export function check(mods: Mod2[], image: Uint8Array): string[] {
       const [lo, hi, at, owner, nm] = areas.get(tag)!
       spans.push([at, at + 3 * (hi - lo), owner, `DSP area ${nm} (payload ${tag} P:0x${hexw(lo, 4)}-0x${hexw(hi - 1, 4)})`])
     }
+  }
+  if (new Set(mods.map(m => m.dev.key + '\0' + m.rel.version)).size === 1) {
+    for (const m of mods) for (const nm of m.impliedNames(image)) if (!m.names.includes(nm)) m.names.push(nm)   // the sound slots their parameters store in
   }
   const bad = commonChecks(mods, image, spans)
   if (bad.length && bad[0].startsWith('the mods are for different firmware')) return bad

@@ -159,6 +159,56 @@ class Mod2:
         self.conflicts = [str(x) for x in doc.get('conflicts', [])]
         self.blob = None                       # (format 1 only)
 
+    def implied_names(self, image):
+        """The names this mod claims by what it contributes (the profile's slot_claims): a
+        contribution to such a table points at a descriptor whose long at a known offset is a
+        sound slot, and the mod claims that slot (digitables' TBL parameter: soundslot:26), so
+        two mods that store in one slot never link together, whether their files say so or not.
+        `image` is the stock main OS the mod is for: a descriptor's bytes may be stock parts. A
+        descriptor this cannot read (outside the mod's own bytes, or relocated there) claims
+        nothing. check() adds them to the mod's names."""
+        out = []
+        for table, at, count, prefix in self.dev.slot_claims:
+            for c in self.contribute:
+                if c['to'] != table:
+                    continue
+                for off, typ, tgt, add in c['relocs']:
+                    if off != 0 or typ != 'abs32':
+                        continue
+                    if tgt.startswith('sym:') and tgt[4:] in self.symbols:
+                        sec, base = self.symbols[tgt[4:]]
+                    elif tgt.startswith('sec:'):
+                        sec, base = tgt[4:], 0
+                    else:
+                        continue
+                    v = self._long(sec, base + add + at, image)
+                    if v is not None and 0 <= v < count and '%s:%d' % (prefix, v) not in out:
+                        out.append('%s:%d' % (prefix, v))
+        return out
+
+    def _long(self, sec, off, image):
+        """The big-endian long at `sec`+`off` of this mod's bytes, or None: in a section
+        without bytes, split across parts, or under a relocation."""
+        d = self.sections.get(sec)
+        if not d or 'parts' not in d or off < 0 or off + 4 > d['len']:
+            return None
+        if any(s == sec and o < off + 4 and off < o + RSIZE[t] for s, o, t, _g, _a in self.relocs):
+            return None
+        at = 0
+        for p in d['parts']:
+            n = len(p[1]) if p[0] == 'hex' else p[2]
+            if at <= off and off + 4 <= at + n:
+                if p[0] == 'hex':
+                    raw = p[1][off - at:off - at + 4]
+                else:
+                    o = p[1] - self.dev.main_load + off - at
+                    raw = image[o:o + 4]
+                return struct.unpack('>I', raw)[0] if len(raw) == 4 else None
+            if at < off + 4 and off < at + n:
+                return None                     # split across parts
+            at += n
+        return None
+
     def _reloc_ok(self, sec, off, typ, tgt):
         if sec not in self.sections or sec == '.bss':
             raise ModError('%s: relocation in %s' % (self.name, sec))
@@ -239,6 +289,11 @@ def check(mods, image):
         for tag, (lo, hi, at, owner, nm) in sorted(areas.items()):
             spans.append((at, at + 3 * (hi - lo), owner,
                           'DSP area %s (payload %s P:0x%04x-0x%04x)' % (nm, tag, lo, hi - 1)))
+    if len({(m.dev.key, m.rel.version) for m in mods}) == 1:
+        for m in mods:                          # the sound slots their parameters store in
+            for nm in m.implied_names(image):
+                if nm not in m.names:
+                    m.names.append(nm)
     bad = common_checks(mods, image, spans)
     if bad and bad[0].startswith('the mods are for different firmware'):
         return bad
