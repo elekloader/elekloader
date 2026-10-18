@@ -1,0 +1,34 @@
+{
+ "id": "digiprism", "version": "0.1.1",
+ "license": "GPL-2.0-or-later",
+ "title": "DigiPrism", "category": "Effect", "author": "irpina",
+ "description": "An effects pedal for the Digitone mk1's audio inputs: four modules, Color (DRIVE, WARMTH, FUZZ, WAIL, SWELL), Motion (DOUBLER, VIBRATO, PHASER, TREMOLO, PITCH), Ambience (ECHOES, TAPE, SPACE, SCATTER, REVERSE) and Grit (FILTER, COMP, LO-FI, GLITCH, STATIC), in any order, with TILT, RATE, TIME, MIX and four AMOUNTs on the encoders, their secondary controls, GESTURE (knob recordings), CAPTURE (a 30-second looper and sustainer), eight presets and MIDI CCs. DIGIPRISM in core-dn1's Mod Menu (hold a track key) opens its page; while it is open it owns the audio engine (the synths are muted) and processes the inputs, and NO gives both back. With SETUP's SOURCE on DIGITONE and core-dn1 3.4 it processes everything the Digitone plays instead, and stays on after NO. Needs core-dn1 3.2.",
+ "device": "digitone-mk1", "os": "1.43",
+ "ports": {"1.44": {}},
+ "sources": ["dsp.c", "ui.c"],
+ "weak": ["core_audio_caps"],
+ "subscribe": [
+  {"event": "ev_key", "fn": "dprism_key", "order": 6},
+  {"event": "ev_enc", "fn": "dprism_enc", "order": 6},
+  {"event": "ev_hold", "fn": "dprism_hold", "order": 6},
+  {"event": "ev_midi_cc", "fn": "dprism_cc", "order": 55},
+  {"event": "ev_render_in", "fn": "dprism_rin", "order": 50},
+  {"event": "ev_render_out", "fn": "dprism_rout", "order": 50},
+  {"event": "ev_tick", "fn": "dprism_tick", "order": 61},
+  {"event": "ev_draw", "fn": "dprism_draw", "order": 91}
+ ],
+ "contribute": [
+  {"to": "core_menu", "order": 31, "data": "00000000",
+   "relocs": [[0, "abs32", "sym:dprism_menu", 0]]},
+  {"to": "core_audio", "order": 60, "data": "00000000",
+   "relocs": [[0, "abs32", "sym:dprism_owner", 0]]},
+  {"to": "core_projdata", "order": 70, "data": "00000000",
+   "relocs": [[0, "abs32", "sym:dprism_projdata", 0]]}
+ ],
+ "resources": {
+  "core": "3.2",
+  "names": ["projdata:DCHR"],
+  "regions": [{"name": "digiprism buffers", "lo": "0x45B00000", "hi": "0x46200000"}]
+ },
+ "requires": ["core"]
+}

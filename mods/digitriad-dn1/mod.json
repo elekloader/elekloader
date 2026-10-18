@@ -1,0 +1,33 @@
+{
+ "id": "digitriad", "version": "0.1.1",
+ "license": "GPL-2.0-or-later",
+ "title": "DigiTriad", "category": "Effect", "author": "irpina",
+ "description": "A three-voice rhythmic pitch shifter for the Digitone mk1's audio inputs: three voices from -2 to +2 octaves, chromatic or in a key and scale (Major, Minor, Melodic Minor, Harmonic Minor, Double Harmonic, Lydian and Minor Pentatonic) from the note a pitch detector hears, with microtune, glide and pitch correction, each behind its own time division of a delay in time with the Digitone's tempo, in four delay modes (pitch feedback, series, dual with cross feedback, dual), rhythm patterns, half speed, swell, freeze, eight presets and MIDI CCs. DIGITRIAD in core-dn1's Mod Menu (hold a track key) opens its page; while it is open it owns the audio engine (the synths are muted) and processes the inputs, and NO gives both back. Needs core-dn1 3.2.",
+ "device": "digitone-mk1", "os": "1.43",
+ "ports": {"1.44": {}},
+ "sources": ["dsp.c", "ui.c"],
+ "subscribe": [
+  {"event": "ev_key", "fn": "dtriad_key", "order": 8},
+  {"event": "ev_enc", "fn": "dtriad_enc", "order": 8},
+  {"event": "ev_hold", "fn": "dtriad_hold", "order": 8},
+  {"event": "ev_midi_cc", "fn": "dtriad_cc", "order": 57},
+  {"event": "ev_render_in", "fn": "dtriad_rin", "order": 52},
+  {"event": "ev_render_out", "fn": "dtriad_rout", "order": 52},
+  {"event": "ev_tick", "fn": "dtriad_tick", "order": 63},
+  {"event": "ev_draw", "fn": "dtriad_draw", "order": 93}
+ ],
+ "contribute": [
+  {"to": "core_menu", "order": 33, "data": "00000000",
+   "relocs": [[0, "abs32", "sym:dtriad_menu", 0]]},
+  {"to": "core_audio", "order": 62, "data": "00000000",
+   "relocs": [[0, "abs32", "sym:dtriad_owner", 0]]},
+  {"to": "core_projdata", "order": 72, "data": "00000000",
+   "relocs": [[0, "abs32", "sym:dtriad_projdata", 0]]}
+ ],
+ "resources": {
+  "core": "3.2",
+  "names": ["projdata:DHED"],
+  "regions": [{"name": "digitriad lines", "lo": "0x47B00000", "hi": "0x47BE0000"}]
+ },
+ "requires": ["core"]
+}

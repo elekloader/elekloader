@@ -44,19 +44,19 @@ docs match its code.
   [mods/core-ot](../mods/core-ot) with [mods/dspbus-ot](../mods/dspbus-ot)
   (Octatrack).
 - **A whole mod on core-dn1 3.2's exclusive audio:**
-  [mods/digicosm-dn1](../mods/digicosm-dn1), DigiCosm, a Microcosm-style
-  effects engine for the Digitone mk1's audio inputs, with its own page in
-  the Mod Menu and the Microcosm's MIDI CCs (`ev_midi_cc`).
-- **Another on the same:** [mods/digichroma-dn1](../mods/digichroma-dn1),
-  DigiChroma, a Chroma Console-style pedal for the inputs, with its own
-  page and the Chroma Console's MIDI CCs.
-- **Five more pedals** on a shared pedal shell, each with its pedal's MIDI
-  CCs: [DigiMood](../mods/digimood-dn1) (after the MOOD MkII: a wet channel
-  and a micro-looper), [DigiHedra](../mods/digihedra-dn1) (the Hedra: three
-  pitch voices in a key, with delays), [DigiTensor](../mods/digitensor-dn1)
-  (the Tensor: tape speed, reverse, hold and stutter in time),
-  [DigiHabit](../mods/digihabit-dn1) (the Habit: echoes from a 3-minute
-  memory) and [DigiSky](../mods/digisky-dn1) (the BigSky: twelve reverbs).
+  [mods/digiswarm-dn1](../mods/digiswarm-dn1), DigiSwarm, an effects
+  engine for the Digitone mk1's audio inputs (grains, micro-loops, a
+  looper), with its own page in the Mod Menu and MIDI CCs (`ev_midi_cc`).
+- **Another on the same:** [mods/digiprism-dn1](../mods/digiprism-dn1),
+  DigiPrism, a pedal for the inputs with four reorderable modules of
+  effects, its own page and MIDI CCs.
+- **Five more pedals** on a shared pedal shell, each with its own MIDI
+  CCs: [DigiTide](../mods/digitide-dn1) (a wet channel and a
+  micro-looper), [DigiTriad](../mods/digitriad-dn1) (three pitch voices in
+  a key, with delays), [DigiReel](../mods/digireel-dn1) (tape speed,
+  reverse, hold and stutter in time), [DigiHoard](../mods/digihoard-dn1)
+  (echoes from a 3-minute memory) and [DigiHalo](../mods/digihalo-dn1)
+  (twelve reverbs).
 - **Examples to start from** ([examples/](../examples)):
   - `hello-marker`, one C function on the draw event that puts a small square
     in the corner of every screen; `hello-marker-dt2` and `hello-marker-ot`

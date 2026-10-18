@@ -877,8 +877,8 @@ def test_digitone_insert_audio_example():
             assert images[0] == images[1] and t.relocs == t4.relocs
 
 
-def test_digicosm_builds_and_links():
-    """mods/digicosm-dn1 (DigiCosm) on core-dn1 3.2: it patches no site, needs
+def test_digiswarm_builds_and_links():
+    """mods/digiswarm-dn1 (DigiSwarm) on core-dn1 3.2: it patches no site, needs
     3.2, carries the same code for 1.43 and 1.44 (an empty port), keeps its
     buffers in a region of the bulk area, links with 3.3 beside THRU and
     the machines mod (two owners of the output may share a build), and is
@@ -890,24 +890,24 @@ def test_digicosm_builds_and_links():
         raise Skip('no m68k cross compiler')
     with tempfile.TemporaryDirectory() as tmp:
         core3 = dn_core(tmp)
-        dpath, d = build.build(os.path.join(ROOT, 'mods', 'digicosm-dn1'), DN_STOCK, tmp)
+        dpath, d = build.build(os.path.join(ROOT, 'mods', 'digiswarm-dn1'), DN_STOCK, tmp)
         tpath, _t = build.build(os.path.join(ROOT, 'examples', 'dn-thru'), DN_STOCK, tmp)
         mpath, _m = build.build(os.path.join(ROOT, 'mods', 'machines-dn1'), DN_STOCK, tmp)
-        assert os.path.basename(dpath) == 'digicosm-0.1.1.elemod'
+        assert os.path.basename(dpath) == 'digiswarm-0.1.2.elemod'
         assert d.needs_core == '3.2' and not d.sites
         assert set(d.imports) == {'fw_fillrect', 'fw_font5', 'fw_font_label', 'fw_font_title', 'fw_framerect',
                                   'fw_tempo', 'fw_textf', 'fw_timeline'}, d.imports
         assert [(g['area'], g['lo'], g['hi']) for g in d.regions] == [('bulk', 0x44000000, 0x45B00000)]
         rc, r = lint_json(dpath, '--stock', DN_STOCK, '--with', core3, '--with', tpath, '--with', mpath)
         assert rc == 0, r['problems']
-        assert r['link']['order'] == ['core ' + DN_VERSION, 'digicosm 0.1.1', 'dnthru 1.0', 'machines 0.1']
+        assert r['link']['order'] == ['core ' + DN_VERSION, 'digiswarm 0.1.2', 'dnthru 1.0', 'machines 0.1']
         if CORE_DN23 and os.path.exists(CORE_DN23):
             rc, r = lint_json(dpath, '--stock', DN_STOCK, '--with', CORE_DN23)
-            assert rc == 1 and 'digicosm 0.1.1 needs core 3.2 or newer, and this build has core 2.3' \
+            assert rc == 1 and 'digiswarm 0.1.2 needs core 3.2 or newer, and this build has core 2.3' \
                 in r['problems'], r['problems']
         if DN_STOCK_144 and os.path.exists(DN_STOCK_144):
-            path4, d4 = build.build(os.path.join(ROOT, 'mods', 'digicosm-dn1'), DN_STOCK_144, tmp)
-            assert path4.endswith('digicosm-0.1.1-os1.44.elemod')
+            path4, d4 = build.build(os.path.join(ROOT, 'mods', 'digiswarm-dn1'), DN_STOCK_144, tmp)
+            assert path4.endswith('digiswarm-0.1.2-os1.44.elemod')
             images = []
             for st, x in ((DN_STOCK, d), (DN_STOCK_144, d4)):
                 s, dv, _rel = formats.load(st)
@@ -916,11 +916,11 @@ def test_digicosm_builds_and_links():
             assert images[0] == images[1] and d.relocs == d4.relocs
 
 
-def test_digichroma_builds_and_links():
-    """mods/digichroma-dn1 (DigiChroma) on core-dn1 3.2's core_audio: it
+def test_digiprism_builds_and_links():
+    """mods/digiprism-dn1 (DigiPrism) on core-dn1 3.2's core_audio: it
     patches no site, needs 3.2, carries the same code for 1.43 and 1.44 (an
     empty port), keeps its buffers in a region of the bulk area beside
-    DigiCosm's, links with 3.2 beside DigiCosm, THRU and the machines mod
+    DigiSwarm's, links with 3.2 beside DigiSwarm, THRU and the machines mod
     (three owners of the output in one build), and is refused beside 2.3."""
     if not DN_STOCK or not os.path.exists(DN_STOCK):
         raise Skip('missing ELEKLOADER_DN_SYX')
@@ -929,11 +929,11 @@ def test_digichroma_builds_and_links():
         raise Skip('no m68k cross compiler')
     with tempfile.TemporaryDirectory() as tmp:
         core3 = dn_core(tmp)
-        hpath, h = build.build(os.path.join(ROOT, 'mods', 'digichroma-dn1'), DN_STOCK, tmp)
-        dpath, _d = build.build(os.path.join(ROOT, 'mods', 'digicosm-dn1'), DN_STOCK, tmp)
+        hpath, h = build.build(os.path.join(ROOT, 'mods', 'digiprism-dn1'), DN_STOCK, tmp)
+        dpath, _d = build.build(os.path.join(ROOT, 'mods', 'digiswarm-dn1'), DN_STOCK, tmp)
         tpath, _t = build.build(os.path.join(ROOT, 'examples', 'dn-thru'), DN_STOCK, tmp)
         mpath, _m = build.build(os.path.join(ROOT, 'mods', 'machines-dn1'), DN_STOCK, tmp)
-        assert os.path.basename(hpath) == 'digichroma-0.1.elemod'
+        assert os.path.basename(hpath) == 'digiprism-0.1.1.elemod'
         assert h.needs_core == '3.2' and not h.sites
         assert set(h.imports) == {'fw_fillrect', 'fw_font5', 'fw_font_label', 'fw_font_title', 'fw_framerect',
                                   'fw_tempo', 'fw_textf', 'core_audio_caps'}, h.imports
@@ -942,15 +942,15 @@ def test_digichroma_builds_and_links():
         rc, r = lint_json(hpath, '--stock', DN_STOCK, '--with', core3, '--with', dpath, '--with', tpath,
                           '--with', mpath)
         assert rc == 0, r['problems']
-        assert r['link']['order'] == ['core ' + DN_VERSION, 'digichroma 0.1', 'digicosm 0.1.1', 'dnthru 1.0',
+        assert r['link']['order'] == ['core ' + DN_VERSION, 'digiprism 0.1.1', 'digiswarm 0.1.2', 'dnthru 1.0',
                                        'machines 0.1']
         if CORE_DN23 and os.path.exists(CORE_DN23):
             rc, r = lint_json(hpath, '--stock', DN_STOCK, '--with', CORE_DN23)
-            assert rc == 1 and 'digichroma 0.1 needs core 3.2 or newer, and this build has core 2.3' \
+            assert rc == 1 and 'digiprism 0.1.1 needs core 3.2 or newer, and this build has core 2.3' \
                 in r['problems'], r['problems']
         if DN_STOCK_144 and os.path.exists(DN_STOCK_144):
-            path4, h4 = build.build(os.path.join(ROOT, 'mods', 'digichroma-dn1'), DN_STOCK_144, tmp)
-            assert path4.endswith('digichroma-0.1-os1.44.elemod')
+            path4, h4 = build.build(os.path.join(ROOT, 'mods', 'digiprism-dn1'), DN_STOCK_144, tmp)
+            assert path4.endswith('digiprism-0.1.1-os1.44.elemod')
             images = []
             for st, x in ((DN_STOCK, h), (DN_STOCK_144, h4)):
                 s, dv, _rel = formats.load(st)
@@ -1043,16 +1043,16 @@ def test_seq_events_dt1_builds_and_links():
             assert images[0] == images[1] and e.relocs == e4.relocs
 
 
-GAS_PEDALS = [('digimood', 0x47300000, 0x47700000), ('digihedra', 0x47B00000, 0x47BE0000),
-              ('digitensor', 0x47700000, 0x47900000), ('digihabit', 0x46200000, 0x47300000),
-              ('digisky', 0x47900000, 0x47B00000)]
+GAS_PEDALS = [('digitide', 0x47300000, 0x47700000), ('digitriad', 0x47B00000, 0x47BE0000),
+              ('digireel', 0x47700000, 0x47900000), ('digihoard', 0x46200000, 0x47300000),
+              ('digihalo', 0x47900000, 0x47B00000)]
 
 
 def test_gas_pedals_build_and_link():
-    """The five effects pedals on the pedal shell (mods/digimood-dn1, digihedra-dn1, digitensor-dn1,
-    digihabit-dn1, digisky-dn1), each a whole Digitone mod on core-dn1 3.2's exclusive audio: each patches
+    """The five effects pedals on the pedal shell (mods/digitide-dn1, digitriad-dn1, digireel-dn1,
+    digihoard-dn1, digihalo-dn1), each a whole Digitone mod on core-dn1 3.2's exclusive audio: each patches
     no site, needs 3.2, keeps its buffers in a region of its own in the bulk area and carries the same code
-    for 1.43 and 1.44 (an empty port). All five, DigiCosm and DigiChroma link together with the tree's
+    for 1.43 and 1.44 (an empty port). All five, DigiSwarm and DigiPrism link together with the tree's
     core (core-dn1 4.0: over 128 KB together, they need its 1.25 MB); beside the released 3.2 that set is
     refused for the RAM, the message naming 4.0, and beside 2.3 each pedal is refused."""
     if not DN_STOCK or not os.path.exists(DN_STOCK):
@@ -1065,18 +1065,18 @@ def test_gas_pedals_build_and_link():
         paths = []
         for name, lo, hi in GAS_PEDALS:
             path, m = build.build(os.path.join(ROOT, 'mods', name + '-dn1'), DN_STOCK, tmp)
-            assert os.path.basename(path) == name + '-0.1.elemod'
+            assert os.path.basename(path) == name + '-0.1.1.elemod'
             assert m.needs_core == '3.2' and not m.sites, name
             assert [(g['area'], g['lo'], g['hi']) for g in m.regions] == [('bulk', lo, hi)], (name, m.regions)
             rc, r = lint_json(path, '--stock', DN_STOCK, '--with', core)
             assert rc == 0, (name, r['problems'])
             if CORE_DN23 and os.path.exists(CORE_DN23):
                 rc, r = lint_json(path, '--stock', DN_STOCK, '--with', CORE_DN23)
-                assert rc == 1 and '%s 0.1 needs core 3.2 or newer, and this build has core 2.3' % name \
+                assert rc == 1 and '%s 0.1.1 needs core 3.2 or newer, and this build has core 2.3' % name \
                     in r['problems'], r['problems']
             if DN_STOCK_144 and os.path.exists(DN_STOCK_144):
                 path4, m4 = build.build(os.path.join(ROOT, 'mods', name + '-dn1'), DN_STOCK_144, tmp)
-                assert path4.endswith(name + '-0.1-os1.44.elemod')
+                assert path4.endswith(name + '-0.1.1-os1.44.elemod')
                 images = []
                 for st, x in ((DN_STOCK, m), (DN_STOCK_144, m4)):
                     sd, dv, _rel = formats.load(st)
@@ -1084,7 +1084,7 @@ def test_gas_pedals_build_and_link():
                                                            formats.main_image(sd, dv), dv)))
                 assert images[0] == images[1] and m.relocs == m4.relocs, name
             paths.append(path)
-        for name in ('digicosm-dn1', 'digichroma-dn1'):
+        for name in ('digiswarm-dn1', 'digiprism-dn1'):
             paths.append(build.build(os.path.join(ROOT, 'mods', name), DN_STOCK, tmp)[0])
         others = sum((['--with', x] for x in paths[1:]), [])
         rc, r = lint_json(paths[0], '--stock', DN_STOCK, '--with', core, *others)

@@ -3,7 +3,7 @@
 # Growing the core
 
 Every event, table and firmware export a core has came from a mod that
-needed it: `ev_midi_cc` from DigiCosm's MIDI, machine pages from the SRC
+needed it: `ev_midi_cc` from DigiSwarm's MIDI, machine pages from the SRC
 machines, step-fire events from mods that change what the sequencer
 plays. This page is for mod authors, and for the coding agents
 they work with, whose mod needs something the core does not offer yet. It

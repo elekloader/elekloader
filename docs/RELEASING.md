@@ -30,9 +30,9 @@ where the stock files are, and only the cores are uploaded.
    A release may carry several versions of one device's core (the Digitakt
    mk1's 2.1 and 3.0 lines, say): a build picks one ([CORES.md](CORES.md#how-a-build-picks-one)).
 
-   The other mods (machine-pages, machines-dn1, seq-events-dn1, seq-events-dt1, dspbus-ot, digicosm-dn1) are not
+   The other mods (machine-pages, machines-dn1, seq-events-dn1, seq-events-dt1, dspbus-ot, digiswarm-dn1) are not
    cores. The apps and the page take only `core-*.elemod` from a release; a mod
-   reaches the shop from its own release (DigiCosm does, [WEB.md](WEB.md));
+   reaches the shop from its own release (DigiSwarm does, [WEB.md](WEB.md));
    machine-pages from its pre-release here, `machine-pages-v1.1`, and
    machines-dn1 from `machines-dn1-v0.1`. seq-events-dn1, seq-events-dt1 and
    dspbus-ot are not in the shop yet.

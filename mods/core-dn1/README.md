@@ -242,10 +242,10 @@ tables, contributions and exports, with 3.3's and 4.0's added.
 
 4.0 was checked the same way on 1.43 and 1.44: every stage passes and every
 screen is identical, alone, with PROG, and with seven effects mods at once
-(five pedals, DigiCosm and DigiChroma: 243 KB of the area, more than the
+(five pedals, DigiSwarm and DigiPrism: 243 KB of the area, more than the
 old 128 KB could hold). In that build each opened from the Mod Menu in turn
 owns the audio alone, plucked notes on the inputs come out through it, and
-after NO the synths are back; with an insert running (a DigiChroma that stays
+after NO the synths are back; with an insert running (a DigiPrism that stays
 on), each exclusive one opened over it took the audio. Program changes went
 in through the emulator's MIDI input on both versions, with PROG
 ([../../examples/dn-progchange](../../examples/dn-progchange)): channel 16's

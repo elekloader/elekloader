@@ -1,0 +1,33 @@
+{
+ "id": "digihalo", "version": "0.1.1",
+ "license": "GPL-2.0-or-later",
+ "title": "DigiHalo", "category": "Effect", "author": "irpina",
+ "description": "A reverb pedal for the Digitone mk1's audio inputs: twelve machines on trig 1-12 (ROOM, HALL, PLATE, SPRING, SWELL, SWIRL, NEBULA, VOWEL, SHIMMER, TAPE, NONLINEAR, REFLECTIONS) around one eight-line feedback delay network, each with its own diffusers, damping, modulation, size and its own PARAM 1 and PARAM 2 (shimmer intervals, dwell and springs, rise time, swirl length and feedback, vowels, tape heads, nonlinear shapes, room shape and position), DECAY, PRE-DELAY (or the tempo's divisions), MIX, TONE, MOD, LOW END, BOOST, HOLD as FREEZE or INFINITE on T1, PERSIST, SPILLOVER, a cab filter, eight presets and MIDI CCs. DIGIHALO in core-dn1's Mod Menu (hold a track key) opens its page; while it is open it owns the audio engine (the synths are muted) and processes the inputs, and NO gives both back. Needs core-dn1 3.2.",
+ "device": "digitone-mk1", "os": "1.43",
+ "ports": {"1.44": {}},
+ "sources": ["dsp.c", "ui.c"],
+ "subscribe": [
+  {"event": "ev_key", "fn": "dhalo_key", "order": 11},
+  {"event": "ev_enc", "fn": "dhalo_enc", "order": 11},
+  {"event": "ev_hold", "fn": "dhalo_hold", "order": 11},
+  {"event": "ev_midi_cc", "fn": "dhalo_cc", "order": 60},
+  {"event": "ev_render_in", "fn": "dhalo_rin", "order": 55},
+  {"event": "ev_render_out", "fn": "dhalo_rout", "order": 55},
+  {"event": "ev_tick", "fn": "dhalo_tick", "order": 66},
+  {"event": "ev_draw", "fn": "dhalo_draw", "order": 96}
+ ],
+ "contribute": [
+  {"to": "core_menu", "order": 36, "data": "00000000",
+   "relocs": [[0, "abs32", "sym:dhalo_menu", 0]]},
+  {"to": "core_audio", "order": 65, "data": "00000000",
+   "relocs": [[0, "abs32", "sym:dhalo_owner", 0]]},
+  {"to": "core_projdata", "order": 75, "data": "00000000",
+   "relocs": [[0, "abs32", "sym:dhalo_projdata", 0]]}
+ ],
+ "resources": {
+  "core": "3.2",
+  "names": ["projdata:DSKY"],
+  "regions": [{"name": "digihalo reverb", "lo": "0x47900000", "hi": "0x47B00000"}]
+ },
+ "requires": ["core"]
+}

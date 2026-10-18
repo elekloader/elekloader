@@ -784,12 +784,12 @@ It clears what it reads before it has written it. `fw_tempo` (3.2) is the
 tempo the sequencer runs at, x 120: a mod in time with the Digitone takes
 its grid from it and from `fw_timeline`.
 
-`mods/digicosm-dn1` (DigiCosm) is a whole one: an effects engine for the
+`mods/digiswarm-dn1` (DigiSwarm) is a whole one: an effects engine for the
 inputs, with eleven engines, a looper and its own page, buffers in the
-bulk area, and the Microcosm's MIDI CCs through `ev_midi_cc`; `mods/digichroma-dn1`
-(DigiChroma) is another, a Chroma Console-style pedal with four modules of
-effects, and DigiMood, DigiHedra, DigiTensor, DigiHabit and DigiSky
-(`mods/digimood-dn1` and on) five more, sharing a pedal shell (`pedal.h`,
+bulk area, and MIDI CCs through `ev_midi_cc`; `mods/digiprism-dn1`
+(DigiPrism) is another, a pedal with four reorderable modules of
+effects, and DigiTide, DigiTriad, DigiReel, DigiHoard and DigiHalo
+(`mods/digitide-dn1` and on) five more, sharing a pedal shell (`pedal.h`,
 `pedal_dsp.inc`, `pedal_ui.inc`: the pages, SETUP, presets, TAP, BYPASS,
 the CPU guard and the project data, copied into each). Each pedal's buffers
 have a region of their own in the bulk area, so all seven share a build;
@@ -928,7 +928,7 @@ above it, in 1.43 or 1.44, and the area starts 64 KB further on. The mods'
 code and tables travel in the OS file (their `.bss` does not), so the file
 grows with them: the patcher refuses a build the bootloader could not
 unpack in place, or one past the flash. With core-dn1 4.0, five effects
-pedals, DigiCosm and DigiChroma in one build take 243 KB of it, and the
+pedals, DigiSwarm and DigiPrism in one build take 243 KB of it, and the
 file still unpacks in place with 427 KB to spare.
 
 The Digitakt mk1 has less to give: its 64 MB sample pool and the 4 MB

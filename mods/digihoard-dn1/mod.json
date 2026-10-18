@@ -1,0 +1,33 @@
+{
+ "id": "digihoard", "version": "0.1.1",
+ "license": "GPL-2.0-or-later",
+ "title": "DigiHoard", "category": "Effect", "author": "irpina",
+ "description": "An echo collector for the Digitone mk1's audio inputs: a 3-minute memory that always records what you play (COLLECT overdubs it, ALWAYS keeps it recording while bypassed), an echo with REPEATS and SIZE (in time with the Digitone's tempo), SCAN (auto: it wanders off into the past and plays old fragments into the echoes; manual: you pick the moment), SPREAD (a second echo further back, placed apart in stereo), six modifiers (stepped and smooth speed, stability, trimmer, filter, dropper) after the echo, in its feedback or round the memory (IN, OUT, FEED), LOOP, CLEAR, RAMP and bounce, eight presets and MIDI CCs. DIGIHOARD in core-dn1's Mod Menu (hold a track key) opens its page; while it is open it owns the audio engine (the synths are muted) and processes the inputs, and NO gives both back. Needs core-dn1 3.2.",
+ "device": "digitone-mk1", "os": "1.43",
+ "ports": {"1.44": {}},
+ "sources": ["dsp.c", "ui.c"],
+ "subscribe": [
+  {"event": "ev_key", "fn": "dhoard_key", "order": 10},
+  {"event": "ev_enc", "fn": "dhoard_enc", "order": 10},
+  {"event": "ev_hold", "fn": "dhoard_hold", "order": 10},
+  {"event": "ev_midi_cc", "fn": "dhoard_cc", "order": 59},
+  {"event": "ev_render_in", "fn": "dhoard_rin", "order": 54},
+  {"event": "ev_render_out", "fn": "dhoard_rout", "order": 54},
+  {"event": "ev_tick", "fn": "dhoard_tick", "order": 65},
+  {"event": "ev_draw", "fn": "dhoard_draw", "order": 95}
+ ],
+ "contribute": [
+  {"to": "core_menu", "order": 35, "data": "00000000",
+   "relocs": [[0, "abs32", "sym:dhoard_menu", 0]]},
+  {"to": "core_audio", "order": 64, "data": "00000000",
+   "relocs": [[0, "abs32", "sym:dhoard_owner", 0]]},
+  {"to": "core_projdata", "order": 74, "data": "00000000",
+   "relocs": [[0, "abs32", "sym:dhoard_projdata", 0]]}
+ ],
+ "resources": {
+  "core": "3.2",
+  "names": ["projdata:DHAB"],
+  "regions": [{"name": "digihoard memory", "lo": "0x46200000", "hi": "0x47300000"}]
+ },
+ "requires": ["core"]
+}
