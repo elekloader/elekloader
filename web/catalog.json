@@ -272,71 +272,71 @@
       "on_unit": "Tested on a Digitakt mk1 by its author (release v1.1.13): one Sophie track runs without FAST AUDIO, two ran with it on; eight tracks are not claimed."
     },
     {
-      "repo": "gdeo607/digi1_mods", "commit": "8c40cf37b5aa897dd1ffcd80a86cb2522624dcda",
-      "path": "elemods/digichain-1.6.elemod",
-      "device": "digitakt-mk1", "needs_core": "2.1",
-      "sha256": "819f6045b5ad4deaa720c74f0126d078cc15c019dfcb07710112ac453b65d47d",
-      "summary": "What Digi Mono and Digi Poly build on: their SRC pages, knob graphics and menu icons. Not with the shop's DIGISLICER, NEIGHBOR or SOPHIE.",
-      "on_unit": "Confirmed on a Digitakt mk1, its author reports (1.3); 1.6 passes their emulator tests on OS 1.53 and 1.54."
+      "repo": "gdeo607/digi1_mods", "commit": "32fd22a1fd66fa5833b808b1c1c049a0deb82d88",
+      "path": "elemods/digimono-0.24.elemod",
+      "device": "digitakt-mk1", "needs_core": "3.0",
+      "sha256": "8e4dd3ae443f85d6e70b686c4f3565c0c534f5d4efd677b8c3c64aceb25557a0",
+      "summary": "Seven synth machines after the Monomachine (sine, noise, saw, pulse, an ensemble, a formant voice, a three-sine chord) and CHORDS, a chord on one track, each with its own SRC page. Built for machine-pages, which the shop ticks with it.",
+      "on_unit": "Confirmed on a Digitakt mk1 (OS 1.54), its author reports (0.24, with Digi Macro 1.2 and Digi Poly 2.1); it passes their emulator tests on OS 1.53 and 1.54."
     },
     {
-      "repo": "gdeo607/digi1_mods", "commit": "8c40cf37b5aa897dd1ffcd80a86cb2522624dcda",
-      "path": "elemods/digichain-1.6-os1.54.elemod",
-      "device": "digitakt-mk1", "needs_core": "2.1",
-      "sha256": "5d4910f597874ac2f5348e2cd76bea7e34b9ea0060c9bcf1406dd317a7af9e42",
-      "summary": "What Digi Mono and Digi Poly build on: their SRC pages, knob graphics and menu icons. Not with the shop's DIGISLICER, NEIGHBOR or SOPHIE.",
-      "on_unit": "Confirmed on a Digitakt mk1, its author reports (1.3); 1.6 passes their emulator tests on OS 1.53 and 1.54."
+      "repo": "gdeo607/digi1_mods", "commit": "32fd22a1fd66fa5833b808b1c1c049a0deb82d88",
+      "path": "elemods/digimono-0.24-os1.54.elemod",
+      "device": "digitakt-mk1", "needs_core": "3.0",
+      "sha256": "00b060b864c4412d669544421b22b1032ac64bfbd3a930cda1deda095b634dee",
+      "summary": "Seven synth machines after the Monomachine (sine, noise, saw, pulse, an ensemble, a formant voice, a three-sine chord) and CHORDS, a chord on one track, each with its own SRC page. Built for machine-pages, which the shop ticks with it.",
+      "on_unit": "Confirmed on a Digitakt mk1 (OS 1.54), its author reports (0.24, with Digi Macro 1.2 and Digi Poly 2.1); it passes their emulator tests on OS 1.53 and 1.54."
     },
     {
-      "repo": "gdeo607/digi1_mods", "commit": "8c40cf37b5aa897dd1ffcd80a86cb2522624dcda",
-      "path": "elemods/digimono-0.23.elemod",
-      "device": "digitakt-mk1", "needs_core": "2.1",
-      "sha256": "6b8b9b62bbc322160ea5e9227dacfe3c04cf90191b795c73207b40a74715c829",
-      "summary": "Seven synth machines after the Monomachine (sine, noise, saw, pulse, an ensemble, a formant voice, a three-sine chord) and CHORDS, a chord on one track, each with its own SRC page. Needs digichain, which the shop ticks with it.",
-      "on_unit": "Confirmed on a Digitakt mk1, its author reports (0.22); 0.23 passes their emulator tests on OS 1.53 and 1.54."
+      "repo": "gdeo607/digi1_mods", "commit": "32fd22a1fd66fa5833b808b1c1c049a0deb82d88",
+      "path": "elemods/digimacro-1.2.elemod",
+      "device": "digitakt-mk1", "needs_core": "3.0",
+      "sha256": "76803565917a2660611f720ee020a2a28a81726687951bab21ae91c5795fa1f6",
+      "summary": "MACRO: eight engines from Mutable Instruments' Plaits (waveshaping, 2-op FM, noise, particles, kick, snare, hi-hat, grains) as a machine, the engine on knob B and p-lockable. Needs Digi Mono and machine-pages, which the shop ticks with it.",
+      "on_unit": "Confirmed on a Digitakt mk1 (OS 1.54), its author reports (1.2); it passes their emulator tests on OS 1.53 and 1.54."
     },
     {
-      "repo": "gdeo607/digi1_mods", "commit": "8c40cf37b5aa897dd1ffcd80a86cb2522624dcda",
-      "path": "elemods/digimono-0.23-os1.54.elemod",
-      "device": "digitakt-mk1", "needs_core": "2.1",
-      "sha256": "5750fcaf0699fd16c14bc1e9c63429a3f00915cd3bce6bd5643719eee32c7db6",
-      "summary": "Seven synth machines after the Monomachine (sine, noise, saw, pulse, an ensemble, a formant voice, a three-sine chord) and CHORDS, a chord on one track, each with its own SRC page. Needs digichain, which the shop ticks with it.",
-      "on_unit": "Confirmed on a Digitakt mk1, its author reports (0.22); 0.23 passes their emulator tests on OS 1.53 and 1.54."
+      "repo": "gdeo607/digi1_mods", "commit": "32fd22a1fd66fa5833b808b1c1c049a0deb82d88",
+      "path": "elemods/digimacro-1.2-os1.54.elemod",
+      "device": "digitakt-mk1", "needs_core": "3.0",
+      "sha256": "d99823b2cd3c2933d49882ca55fa705a87a80f649929ba0bb554b692fc367ba8",
+      "summary": "MACRO: eight engines from Mutable Instruments' Plaits (waveshaping, 2-op FM, noise, particles, kick, snare, hi-hat, grains) as a machine, the engine on knob B and p-lockable. Needs Digi Mono and machine-pages, which the shop ticks with it.",
+      "on_unit": "Confirmed on a Digitakt mk1 (OS 1.54), its author reports (1.2); it passes their emulator tests on OS 1.53 and 1.54."
     },
     {
-      "repo": "gdeo607/digi1_mods", "commit": "8c40cf37b5aa897dd1ffcd80a86cb2522624dcda",
-      "path": "elemods/digimacro-1.1.elemod",
-      "device": "digitakt-mk1", "needs_core": "2.1",
-      "sha256": "9cc981a5eb7f1ce0ba3dd97ca72a5f878746c5a298debf22e4bde40fa531292a",
-      "summary": "MACRO: eight engines from Mutable Instruments' Plaits (waveshaping, 2-op FM, noise, particles, kick, snare, hi-hat, grains) as a machine, the engine on knob B and p-lockable. Needs Digi Mono, which the shop ticks with it.",
-      "on_unit": "Confirmed on a Digitakt mk1 with Digi Mono 0.22, no freezes, its author reports (1.0); 1.1 passes their emulator tests."
+      "repo": "gdeo607/digi1_mods", "commit": "32fd22a1fd66fa5833b808b1c1c049a0deb82d88",
+      "path": "elemods/digi101-0.25.elemod",
+      "device": "digitakt-mk1", "needs_core": "3.0",
+      "sha256": "ea7c3956baeeb2de30e7d233c1da182471f376fd9d5823c58268683af331fddf",
+      "summary": "DH-101: an SH-101-style monosynth machine (saw, pulse with PWM, sub, noise, glide) with the 101's resonant 4-pole filter. Two SRC pages through machine-pages 1.2: every knob of both takes p-locks and both LFOs. By Robbie. Needs Digi Mono and machine-pages 1.2, which the shop ticks with it.",
+      "on_unit": "0.22 confirmed on a Digitakt mk1 (OS 1.54) by its author; 0.25, on machine-pages 1.2's second SRC page, passes the emulator tests on OS 1.53 and 1.54."
     },
     {
-      "repo": "gdeo607/digi1_mods", "commit": "8c40cf37b5aa897dd1ffcd80a86cb2522624dcda",
-      "path": "elemods/digimacro-1.1-os1.54.elemod",
-      "device": "digitakt-mk1", "needs_core": "2.1",
-      "sha256": "cfb07c31450ce02c5b712eb009a766322a68fdd9c60790dd8ffefa826995fecc",
-      "summary": "MACRO: eight engines from Mutable Instruments' Plaits (waveshaping, 2-op FM, noise, particles, kick, snare, hi-hat, grains) as a machine, the engine on knob B and p-lockable. Needs Digi Mono, which the shop ticks with it.",
-      "on_unit": "Confirmed on a Digitakt mk1 with Digi Mono 0.22, no freezes, its author reports (1.0); 1.1 passes their emulator tests."
+      "repo": "gdeo607/digi1_mods", "commit": "32fd22a1fd66fa5833b808b1c1c049a0deb82d88",
+      "path": "elemods/digi101-0.25-os1.54.elemod",
+      "device": "digitakt-mk1", "needs_core": "3.0",
+      "sha256": "4285b1c619d6b8bc90d44c90aa3609facd146e05b20e6805357f5821452f3e31",
+      "summary": "DH-101: an SH-101-style monosynth machine (saw, pulse with PWM, sub, noise, glide) with the 101's resonant 4-pole filter. Two SRC pages through machine-pages 1.2: every knob of both takes p-locks and both LFOs. By Robbie. Needs Digi Mono and machine-pages 1.2, which the shop ticks with it.",
+      "on_unit": "0.22 confirmed on a Digitakt mk1 (OS 1.54) by its author; 0.25, on machine-pages 1.2's second SRC page, passes the emulator tests on OS 1.53 and 1.54."
     },
     {
-      "repo": "gdeo607/digi1_mods", "commit": "8c40cf37b5aa897dd1ffcd80a86cb2522624dcda",
-      "path": "elemods/digipoly-2.0a.elemod",
-      "device": "digitakt-mk1", "needs_core": "2.1", "license": "MIT",
-      "sha256": "7ddeefb4616e27e650184f3d78004eddad44a8cb898f8ea535afd3cd17e0e7f7",
-      "summary": "A POLY machine: chords from a track's own trigs, borrowing other tracks' voices, and polyphonic MIDI on its channel. Needs digichain, which the shop ticks with it.",
-      "on_unit": "Confirmed on a Digitakt mk1, its author reports; it passes their emulator tests on OS 1.53 and 1.54."
+      "repo": "gdeo607/digi1_mods", "commit": "32fd22a1fd66fa5833b808b1c1c049a0deb82d88",
+      "path": "elemods/digipoly-2.1.elemod",
+      "device": "digitakt-mk1", "needs_core": "3.0", "license": "MIT",
+      "sha256": "6fc08067b4e3841618022f4668a3060d205c1c9062da3536ab4799e504cab970",
+      "summary": "A POLY machine: chords from a track's own trigs, borrowing other tracks' voices, and polyphonic MIDI on its channel. Built for machine-pages, which the shop ticks with it.",
+      "on_unit": "Confirmed on a Digitakt mk1 (OS 1.54), its author reports (2.1); it passes their emulator tests on OS 1.53 and 1.54."
     },
     {
-      "repo": "gdeo607/digi1_mods", "commit": "8c40cf37b5aa897dd1ffcd80a86cb2522624dcda",
-      "path": "elemods/digipoly-2.0a-os1.54.elemod",
-      "device": "digitakt-mk1", "needs_core": "2.1", "license": "MIT",
-      "sha256": "d374422cd1a95b257c92f7efded92377f7f64fa1e503c1c4b9df42303151a7c9",
-      "summary": "A POLY machine: chords from a track's own trigs, borrowing other tracks' voices, and polyphonic MIDI on its channel. Needs digichain, which the shop ticks with it.",
-      "on_unit": "Confirmed on a Digitakt mk1, its author reports; it passes their emulator tests on OS 1.53 and 1.54."
+      "repo": "gdeo607/digi1_mods", "commit": "32fd22a1fd66fa5833b808b1c1c049a0deb82d88",
+      "path": "elemods/digipoly-2.1-os1.54.elemod",
+      "device": "digitakt-mk1", "needs_core": "3.0", "license": "MIT",
+      "sha256": "460dc14ed4cf531f446aee8f9328b630ce39beb5b857d51c4b5794245202b901",
+      "summary": "A POLY machine: chords from a track's own trigs, borrowing other tracks' voices, and polyphonic MIDI on its channel. Built for machine-pages, which the shop ticks with it.",
+      "on_unit": "Confirmed on a Digitakt mk1 (OS 1.54), its author reports (2.1); it passes their emulator tests on OS 1.53 and 1.54."
     },
     {
-      "repo": "gdeo607/digi1_mods", "commit": "8c40cf37b5aa897dd1ffcd80a86cb2522624dcda",
+      "repo": "gdeo607/digi1_mods", "commit": "32fd22a1fd66fa5833b808b1c1c049a0deb82d88",
       "path": "elemods/digimatrix-1.0c.elemod",
       "device": "digitakt-mk1", "needs_core": "2.1", "license": "MIT",
       "sha256": "dc2c9d32dde13e759e923a0d94a99c6fb1a7571434cc89ed3fd37deaaef5c2af",
@@ -344,7 +344,7 @@
       "on_unit": "Confirmed on a Digitakt mk1, its author reports; it passes their emulator tests on OS 1.53 and 1.54."
     },
     {
-      "repo": "gdeo607/digi1_mods", "commit": "8c40cf37b5aa897dd1ffcd80a86cb2522624dcda",
+      "repo": "gdeo607/digi1_mods", "commit": "32fd22a1fd66fa5833b808b1c1c049a0deb82d88",
       "path": "elemods/digimatrix-1.0c-os1.54.elemod",
       "device": "digitakt-mk1", "needs_core": "2.1", "license": "MIT",
       "sha256": "ce044908388369567b87b0890860706cdf1afab8877c6e852814414cd5e0cba3",
@@ -352,7 +352,7 @@
       "on_unit": "Confirmed on a Digitakt mk1, its author reports; it passes their emulator tests on OS 1.53 and 1.54."
     },
     {
-      "repo": "gdeo607/digi1_mods", "commit": "8c40cf37b5aa897dd1ffcd80a86cb2522624dcda",
+      "repo": "gdeo607/digi1_mods", "commit": "32fd22a1fd66fa5833b808b1c1c049a0deb82d88",
       "path": "elemods/digieq-1.0c.elemod",
       "device": "digitakt-mk1", "needs_core": "2.1", "license": "MIT",
       "sha256": "eb5c75fbc5b1ecda248f205730d2b7d9e129a52a9c19bccf3ef47ed4c78e712f",
@@ -360,7 +360,7 @@
       "on_unit": "Confirmed on a Digitakt mk1, its author reports; it passes their emulator tests on OS 1.53 and 1.54."
     },
     {
-      "repo": "gdeo607/digi1_mods", "commit": "8c40cf37b5aa897dd1ffcd80a86cb2522624dcda",
+      "repo": "gdeo607/digi1_mods", "commit": "32fd22a1fd66fa5833b808b1c1c049a0deb82d88",
       "path": "elemods/digieq-1.0c-os1.54.elemod",
       "device": "digitakt-mk1", "needs_core": "2.1", "license": "MIT",
       "sha256": "d0ee392ba21d65909d44b81f689a02c3d9cb7a1d02406ddaea19bdd5ecc9a87b",
@@ -368,7 +368,7 @@
       "on_unit": "Confirmed on a Digitakt mk1, its author reports; it passes their emulator tests on OS 1.53 and 1.54."
     },
     {
-      "repo": "gdeo607/digi1_mods", "commit": "8c40cf37b5aa897dd1ffcd80a86cb2522624dcda",
+      "repo": "gdeo607/digi1_mods", "commit": "32fd22a1fd66fa5833b808b1c1c049a0deb82d88",
       "path": "elemods/tonefx-3.2a3.elemod",
       "device": "digitakt-mk1", "needs_core": "2.1",
       "sha256": "c37a8a727594392f03457609d5dcfabbb7fa2816420efc8a146a144fd25b29a5",
@@ -376,7 +376,7 @@
       "on_unit": "Not yet tested on a unit, its author reports."
     },
     {
-      "repo": "gdeo607/digi1_mods", "commit": "8c40cf37b5aa897dd1ffcd80a86cb2522624dcda",
+      "repo": "gdeo607/digi1_mods", "commit": "32fd22a1fd66fa5833b808b1c1c049a0deb82d88",
       "path": "elemods/tonefx-3.2a3-os1.54.elemod",
       "device": "digitakt-mk1", "needs_core": "2.1",
       "sha256": "c490c6f22fcdd727184256690bcce9a6d41854f0f27e593aa86f547ac17ceef9",
@@ -384,7 +384,7 @@
       "on_unit": "Not yet tested on a unit, its author reports."
     },
     {
-      "repo": "gdeo607/digi1_mods", "commit": "8c40cf37b5aa897dd1ffcd80a86cb2522624dcda",
+      "repo": "gdeo607/digi1_mods", "commit": "32fd22a1fd66fa5833b808b1c1c049a0deb82d88",
       "path": "elemods/digiutils-1.9a.elemod",
       "device": "digitakt-mk1", "needs_core": "2.1", "license": "MIT",
       "sha256": "8697ac1fe883cb8fc6ee29f441f6172bde5b24506a1a4337358d66106844b5c1",
@@ -392,7 +392,7 @@
       "on_unit": "Confirmed on a Digitakt mk1, its author reports; it passes their emulator tests on OS 1.53 and 1.54."
     },
     {
-      "repo": "gdeo607/digi1_mods", "commit": "8c40cf37b5aa897dd1ffcd80a86cb2522624dcda",
+      "repo": "gdeo607/digi1_mods", "commit": "32fd22a1fd66fa5833b808b1c1c049a0deb82d88",
       "path": "elemods/digiutils-1.9a-os1.54.elemod",
       "device": "digitakt-mk1", "needs_core": "2.1", "license": "MIT",
       "sha256": "ed13ca17753e4885b195c2ee7183ce370ad2fdd5b9f730de8a03962fc9397765",
