@@ -58,6 +58,9 @@ claimed it until it leaves the list.
 
 - **One point an entry.** The first merged pull request that claims an
   entry takes it; a later claim on the same entry scores nothing.
+- **A plain line claims.** One in a code block, an HTML comment or a quote
+  (`>`) is an example and claims nothing; ids in backticks on a plain line
+  count.
 - **Open it as a draft early,** with its `Claims:` line, so others see the
   entry is taken.
 - **A "move onto the core" entry** is done in the mod's own repository; its

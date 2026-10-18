@@ -267,20 +267,23 @@ def to_do(core_paths, folder, items, cs):
 
 # an entry of the to-do list, as sdk.bounties names it: device@os:lowest site
 ENTRY_ID = re.compile(r'\b([a-z0-9][a-z0-9-]*@[0-9][0-9A-Za-z.]*:0x[0-9a-fA-F]{8})\b')
-CLAIMS_LINE = re.compile(r'^[\s>*_-]*claims?\s*:(.*)$', re.I | re.M)
+CLAIMS_LINE = re.compile(r'^[ \t*_-]*claims?\s*:(.*)$', re.I | re.M)
+# where a description shows a Claims: line rather than makes one: code blocks, HTML comments, quotes
+EXAMPLES = re.compile(r'^[ \t]*(```|~~~).*?(^[ \t]*\1[^\n]*$|\Z)|<!--.*?(-->|\Z)|^[ \t]*>[^\n]*$', re.M | re.S)
 
 
 def claims(prs):
     """The leaderboard (docs/CONTRIBUTE.md, "Claiming an entry"), from the repository's merged pull
     requests (`gh pr list --state merged --json number,title,body,author,mergedAt,url`): each entry id on
-    a "Claims:" line of a pull request's description is that author's, one point an entry. An entry is
-    the first merged claim's; a later claim on it scores nothing. -> {'claims': [...], 'board': [...]}"""
+    a "Claims:" line of a pull request's description is that author's, one point an entry; a line in a
+    code block, an HTML comment or a quote is an example, not a claim. An entry is the first merged
+    claim's; a later claim on it scores nothing. -> {'claims': [...], 'board': [...]}"""
     got = {}
     for pr in sorted((p for p in prs if p.get('mergedAt')), key=lambda p: (p['mergedAt'], p['number'])):
         login = ((pr.get('author') or {}).get('login') or '').strip()
         if not login:
             continue
-        for line in CLAIMS_LINE.findall(pr.get('body') or ''):
+        for line in CLAIMS_LINE.findall(EXAMPLES.sub('', pr.get('body') or '')):
             for eid in ENTRY_ID.findall(line):
                 head, _, addr = eid.rpartition(':')
                 eid = '%s:0x%s' % (head, addr[2:].lower())      # the address as sdk.bounties writes it

@@ -661,6 +661,17 @@ def test_merged_pull_requests_claim_entries_for_the_leaderboard():
     assert [(b['login'], b['points'], [c['pr'] for c in b['claims']]) for b in r['board']] == [
         ('ann', 2, [5, 5]), ('bob', 1, [6])]
     assert build_web.claims([]) == {'claims': [], 'board': []}
+    # a Claims: line shown as an example claims nothing: in a code block, a comment or a quote
+    # (#126's own description showed one in a code block, and scored it)
+    shown = build_web.claims([
+        pr(10, '2026-10-24T00:00:00Z', 'dan', 'How to claim:\n\n```\nClaims: digitakt-mk1@1.53:0x400d553e\n```\n'
+                                            '~~~md\nClaims: digitakt-mk1@1.53:0x40000438\n~~~\n'
+                                            '<!-- Claims: digitakt-mk1@1.53:0x40008904 -->\n'
+                                            '> Claims: digitakt-mk1@1.53:0x40008d40\n'
+                                            '```\nClaims: digitakt-mk1@1.53:0x40025338 (a block never closed)'),
+        pr(11, '2026-10-25T00:00:00Z', 'dan', '```\nexample\n```\n\nClaims: `digitakt-mk1@1.53:0x40025344`'),
+    ])
+    assert [(c['id'], c['pr']) for c in shown['claims']] == [('digitakt-mk1@1.53:0x40025344', 11)]
 
 
 if __name__ == '__main__':
