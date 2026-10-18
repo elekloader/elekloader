@@ -149,6 +149,41 @@ python -m elekloader.sdk.coresites <folder of .elemod files> --stock Digitakt_OS
 Without `--stock` it groups sites at most `--window` bytes apart (64)
 instead of by routine.
 
+## What is left to do
+
+`elekloader.sdk.bounties` is the community's to-do list for the core. It
+lists every piece of stock code a mod still hooks itself, shared or not,
+one entry per stock routine. Each entry is something anyone can pick up.
+There is no reward but credit: your name on the pull request, in the
+core's changelog.
+
+```bash
+python -m elekloader.sdk.bounties <folder of .elemod files> --stock Digitakt_OS1.53.syx --stock Digitakt_OS1.54_dist.zip [--json]
+```
+
+For each device it prints:
+
+- a score: how many mods hook no stock code of their own;
+- one line per routine:
+  - its id: the device, the oldest OS and its lowest site, as in
+    `digitakt-mk1@1.53:0x400d553e`;
+  - its kind: **core** means the core needs an event there;
+    **migration** means the core or a companion already hooks that routine,
+    so the mods there can move onto what exists;
+  - the mods that hook it, each site named by the symbols it jumps to.
+
+A routine is listed once for all the OS versions of a device: a mod's site
+on a later OS is paired with its site on the oldest by those symbols.
+The JSON (`--json`) gives each OS's addresses under `at`, and `missing_os`
+names an OS the entry has no address for. A core event needs one there
+too (section 3).
+
+Give it the stock file of each OS, and the cores and companions when you
+have them: without a stock file it groups sites by distance, as
+`coresites` does. To pick an entry up, follow sections 3 and 4. The pull
+request is done when that routine leaves the list, because the mods there
+were rebuilt on the new event.
+
 ## Checklist
 
 - [ ] Nothing in the core already does it (section 1).

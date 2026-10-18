@@ -554,6 +554,41 @@ def test_coresites_groups_the_sites_mods_share():
     assert shared_sites(two, same)[0]['kind'] == 'same routine'
 
 
+def test_bounties_lists_each_routine_once_across_oses():
+    from elekloader.sdk.bounties import bounties
+    dev = type('Dev', (), {'key': 'dt', 'name': 'DT'})()
+
+    def mod2(mod_id, os_, *sites):
+        m = link.Mod2.__new__(link.Mod2)
+        m.id, m.version, m.dev = mod_id, '1.0', dev
+        m.rel = type('Rel', (), {'version': os_})()
+        m.sites = [{'addr': a, 'len': 6, 'kind': 'code', 'relocs': [(2, 'abs32', 'sym:' + s, 0)]}
+                   for a, s in sites]
+        return m
+    mods = [mod2('a', '1.53', (0x100, 'a1'), (0x400, 'a2')),
+            mod2('a', '1.54', (0x200, 'a1'), (0x500, 'a2')),      # the same mod, moved on 1.54
+            mod2('b', '1.53', (0x10c, 'b1')),                      # near a1: one routine
+            mod2('c', '1.53', (0x800, 'c1')),
+            mod2('c', '1.54'),                                     # its 1.54 build lacks c1
+            mod2('d', '1.53'),                                     # hooks nothing itself
+            mod2('machine-pages', '1.53', (0x402, 'mp')),          # a companion is core
+            mod2('core', '1.53', (0x900, 'x'))]
+    [r] = bounties(mods)
+    assert r['oses'] == ['1.53', '1.54']
+    assert r['score'] == {'mods': 4, 'no_own_code': 1, 'pure': ['d']}
+    assert [(e['id'], e['kind'], e['mods'], e['missing_os']) for e in r['entries']] == [
+        ('dt@1.53:0x00000100', 'core', ['a', 'b'], []),
+        ('dt@1.53:0x00000800', 'core', ['c'], ['1.54']),
+        ('dt@1.53:0x00000400', 'migration', ['a'], [])]
+    first = r['entries'][0]['at']
+    assert (first['1.53']['lo'], first['1.53']['hi'], first['1.54']['lo']) == (
+        '0x00000100', '0x00000112', '0x00000200')
+    assert [s['label'] for s in first['1.53']['sites']] == ['a1', 'b1']
+    assert (r['routines'], r['shared']) == (3, 1)
+    # without the window, a and b are two routines
+    assert bounties(mods, window=0)[0]['routines'] == 4
+
+
 if __name__ == '__main__':
     import traceback
     ok = failed = 0

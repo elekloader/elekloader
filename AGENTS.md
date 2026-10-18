@@ -16,8 +16,10 @@ user, and offer to open a pull request on elekloader that moves it there.
 **Pull requests to elekloader are welcome and encouraged**: they are how
 the core grows, so do not drop one because it would change someone else's
 project. Open it when the user says yes. `lint` lists each
-code site a mod hooks itself under `core_candidates`, and
-`python -m elekloader.sdk.coresites` lists the sites several mods hook.
+code site a mod hooks itself under `core_candidates`;
+`python -m elekloader.sdk.coresites` lists the sites several mods hook;
+and `python -m elekloader.sdk.bounties` lists every routine mods still hook
+themselves: the community's to-do list for the core.
 
 Follow [docs/ADAPTING.md](docs/ADAPTING.md). It has:
 - the rules;
