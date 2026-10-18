@@ -112,6 +112,16 @@
       "sha256": "05bd7c0a505188380fcd2ccfd41ab03bbc77640c7186644862aed2db2a2bf13e"
     },
     {
+      "repo": "irpina/elekloader", "tag": "core-dn1-v4.1", "file": "core-dn1-4.1.elemod", "kind": "core",
+      "device": "digitone-mk1",
+      "sha256": "8d3fbe93a47ace1de40e3b08ade654d56a09e882df6b815fcb4659abbe5c2612"
+    },
+    {
+      "repo": "irpina/elekloader", "tag": "core-dn1-v4.1", "file": "core-dn1-4.1-os1.44.elemod", "kind": "core",
+      "device": "digitone-mk1",
+      "sha256": "616714428ca824824efd2bc67eb7b80155ae5547d83abdd60914b063a28b83a9"
+    },
+    {
       "repo": "irpina/elekloader", "tag": "machines-dn1-v0.1", "file": "machines-0.1.elemod",
       "device": "digitone-mk1", "needs_core": "3.1",
       "sha256": "4cd0962454c67b5045ee131a5da38725b9ca7f75c49471cc161e3407b65686bf",
@@ -124,6 +134,20 @@
       "summary": "Machines for the Digitone: sounds that play a machine mod's voice in place of FM, through the Digitone's own filter, mixer and effects, with the AMP page's envelope. MACHINES in the Mod Menu (hold a track key) picks the held track's machine, and a machine track's SYN1 and SYN2 knobs become the machine's. On its own it adds the menu and nothing else: a machine mod built for it ticks it here. Needs core-dn1 3.1, which the shop takes for it."
     },
     {
+      "repo": "irpina/elekloader", "tag": "fxkit-v0.1", "file": "fxkit-0.1.elemod",
+      "device": "digitone-mk1", "needs_core": "4.1",
+      "sha256": "427eeb94fa5c0cd65949ca26b2942758431eca6e2f1ac03145c5e9ea6a5cc043",
+      "summary": "What the Digitone's effect mods share (DigiSwarm, DigiPrism, DigiTide, DigiTriad, DigiReel, DigiHoard, DigiHalo from 0.2): one effect at a time owns the audio, with a mixer around it (input levels as loud as the Digitone's own input), two LFOs on the stock LFO page, p-locks kept in the pattern and the MIDI hand-off. On its own it adds nothing: an effect that needs it ticks it here. Needs core-dn1 4.1, which the shop takes for it.",
+      "on_unit": "Tested on a Digitone mk1 by its author with the 0.2 effects (Oct 2026); still a beta. Also checked in digikit's emulator on OS 1.43 and 1.44. Not yet run on a Digitone Keys."
+    },
+    {
+      "repo": "irpina/elekloader", "tag": "fxkit-v0.1", "file": "fxkit-0.1-os1.44.elemod",
+      "device": "digitone-mk1", "needs_core": "4.1",
+      "sha256": "321c2135140a1f5c5a4152e7b73d3818de2f1bf6da3714d04c39dc8bdadf0dd4",
+      "summary": "What the Digitone's effect mods share (DigiSwarm, DigiPrism, DigiTide, DigiTriad, DigiReel, DigiHoard, DigiHalo from 0.2): one effect at a time owns the audio, with a mixer around it (input levels as loud as the Digitone's own input), two LFOs on the stock LFO page, p-locks kept in the pattern and the MIDI hand-off. On its own it adds nothing: an effect that needs it ticks it here. Needs core-dn1 4.1, which the shop takes for it.",
+      "on_unit": "Tested on a Digitone mk1 by its author with the 0.2 effects (Oct 2026); still a beta. Also checked in digikit's emulator on OS 1.43 and 1.44. Not yet run on a Digitone Keys."
+    },
+    {
       "repo": "irpina/digitables", "tag": "v1.3", "file": "digitables-1.3.elemod",
       "device": "digitone-mk1", "needs_core": "2.2",
       "sha256": "a9a2335d0f0c80c17103062bb731a3560af5aca3b05b1b4650713dd273ca5511",
@@ -131,102 +155,102 @@
       "on_unit": "Tested on a Digitone mk1 (3-4 Oct 2026): the TBL page, the table editor, the fast speeds, the Mod Menu and ADD steps. Not yet checked: the tables restored at power-up, and the arpeggiator with tables."
     },
     {
-      "repo": "irpina/digiswarm", "tag": "v0.1.2", "file": "digiswarm-0.1.2.elemod",
-      "device": "digitone-mk1", "needs_core": "3.2",
-      "sha256": "d6440a1e501d438a967847711b19ae33e75b65a14cf06bcd08a4972226e6e99c",
-      "summary": "An effects engine for the audio inputs: eleven engines with four variations, a 60-second looper, Hold, Reverse and MIDI CCs, on a page like the Digitone's own. The synths are silent while it is open.",
-      "on_unit": "0.1 tested on a Digitone mk1 (Oct 2026): it runs and works. 0.1.1 changed only a mono input and 0.1.2 only the names, both checked in digikit's emulator on OS 1.43 and 1.44. Not yet run on a Digitone Keys."
+      "repo": "irpina/digiswarm", "tag": "v0.2", "file": "digiswarm-0.2.elemod",
+      "device": "digitone-mk1", "needs_core": "4.1",
+      "sha256": "1355e20b538631dd1c07111a4e0b764dd3d1dc4b4d2179fe977c2a7563c44fc2",
+      "summary": "An effects engine for the audio inputs: eleven engines with four variations, a 60-second looper, Hold, Reverse and MIDI CCs, on a page like the Digitone's own. With fxkit (0.2): a mixer, two LFOs on the stock LFO page aimed at its controls, p-locks kept in the pattern, and the MIDI tracks editable while it plays. The synths are silent while it is the active effect.",
+      "on_unit": "0.2 tested on a Digitone mk1 by its author (Oct 2026), built before the effects' rename, which changed only names; still a beta. Also checked in digikit's emulator on OS 1.43 and 1.44. Not yet run on a Digitone Keys."
     },
     {
-      "repo": "irpina/digiswarm", "tag": "v0.1.2", "file": "digiswarm-0.1.2-os1.44.elemod",
-      "device": "digitone-mk1", "needs_core": "3.2",
-      "sha256": "b2aac4017a9d040bc8497c702764cba678ecc8101961bc26bb32d97cf5def8a8",
-      "summary": "An effects engine for the audio inputs: eleven engines with four variations, a 60-second looper, Hold, Reverse and MIDI CCs, on a page like the Digitone's own. The synths are silent while it is open.",
-      "on_unit": "0.1 tested on a Digitone mk1 (Oct 2026): it runs and works. 0.1.1 changed only a mono input and 0.1.2 only the names, both checked in digikit's emulator on OS 1.43 and 1.44. Not yet run on a Digitone Keys."
+      "repo": "irpina/digiswarm", "tag": "v0.2", "file": "digiswarm-0.2-os1.44.elemod",
+      "device": "digitone-mk1", "needs_core": "4.1",
+      "sha256": "d1efc7fd94ea3bb6137611d04a162cead75492a808c4f772731c378e7fe62aac",
+      "summary": "An effects engine for the audio inputs: eleven engines with four variations, a 60-second looper, Hold, Reverse and MIDI CCs, on a page like the Digitone's own. With fxkit (0.2): a mixer, two LFOs on the stock LFO page aimed at its controls, p-locks kept in the pattern, and the MIDI tracks editable while it plays. The synths are silent while it is the active effect.",
+      "on_unit": "0.2 tested on a Digitone mk1 by its author (Oct 2026), built before the effects' rename, which changed only names; still a beta. Also checked in digikit's emulator on OS 1.43 and 1.44. Not yet run on a Digitone Keys."
     },
     {
-      "repo": "irpina/digiprism", "tag": "v0.1.1", "file": "digiprism-0.1.1.elemod",
-      "device": "digitone-mk1", "needs_core": "3.2",
-      "sha256": "f5c5ba677893ae663238e8451a7bc2595f88a859591218a2b11269762d726430",
-      "summary": "A pedal for the audio inputs: four modules of five effects in any order, GESTURE, CAPTURE (a 30-second looper) and MIDI CCs, on a page like the Digitone's own. The synths are silent while it is open.",
-      "on_unit": "0.1 tested on a Digitone mk1 by its author (14 Oct 2026): it loads and works as expected; still a beta. 0.1.1 changes only the names, checked in digikit's emulator on OS 1.43 and 1.44."
+      "repo": "irpina/digiprism", "tag": "v0.2", "file": "digiprism-0.2.elemod",
+      "device": "digitone-mk1", "needs_core": "4.1",
+      "sha256": "7243ab7ea3ad14f74aacb09f83d299bb41dbd27a43e2c1b9f529af99e446566d",
+      "summary": "A pedal for the audio inputs: four modules of five effects in any order, GESTURE, CAPTURE (a 30-second looper) and MIDI CCs, on a page like the Digitone's own. With fxkit (0.2): a mixer, two LFOs on the stock LFO page aimed at its controls, p-locks kept in the pattern, and the MIDI tracks editable while it plays. The synths are silent while it is the active effect.",
+      "on_unit": "0.2 tested on a Digitone mk1 by its author (Oct 2026), built before the effects' rename, which changed only names; still a beta. Also checked in digikit's emulator on OS 1.43 and 1.44. Not yet run on a Digitone Keys."
     },
     {
-      "repo": "irpina/digiprism", "tag": "v0.1.1", "file": "digiprism-0.1.1-os1.44.elemod",
-      "device": "digitone-mk1", "needs_core": "3.2",
-      "sha256": "fcd2f9f845b35c0af76a20ba6f795127eb68512d09ee1ff3b27b643a10e24aef",
-      "summary": "A pedal for the audio inputs: four modules of five effects in any order, GESTURE, CAPTURE (a 30-second looper) and MIDI CCs, on a page like the Digitone's own. The synths are silent while it is open.",
-      "on_unit": "0.1 tested on a Digitone mk1 by its author (14 Oct 2026): it loads and works as expected; still a beta. 0.1.1 changes only the names, checked in digikit's emulator on OS 1.43 and 1.44."
+      "repo": "irpina/digiprism", "tag": "v0.2", "file": "digiprism-0.2-os1.44.elemod",
+      "device": "digitone-mk1", "needs_core": "4.1",
+      "sha256": "da66c4101e7ab8ab08837a426ecc2b449dea4ea292781d198bc200660e4198b5",
+      "summary": "A pedal for the audio inputs: four modules of five effects in any order, GESTURE, CAPTURE (a 30-second looper) and MIDI CCs, on a page like the Digitone's own. With fxkit (0.2): a mixer, two LFOs on the stock LFO page aimed at its controls, p-locks kept in the pattern, and the MIDI tracks editable while it plays. The synths are silent while it is the active effect.",
+      "on_unit": "0.2 tested on a Digitone mk1 by its author (Oct 2026), built before the effects' rename, which changed only names; still a beta. Also checked in digikit's emulator on OS 1.43 and 1.44. Not yet run on a Digitone Keys."
     },
     {
-      "repo": "irpina/digitide", "tag": "v0.1.1", "file": "digitide-0.1.1.elemod",
-      "device": "digitone-mk1", "needs_core": "3.2",
-      "sha256": "b915ddd7489e8eeeaa5eaba6c63e1eaf5aad7d0d6565247f3d948ce971f30936",
-      "summary": "A two-channel pedal for the audio inputs: a wet channel (reverb, delay, grab) and a micro-looper that always listens (envelope, tape, stretch), CLOCK as a sample-rate clock, and MIDI CCs. The synths are silent while it is open.",
-      "on_unit": "0.1 tested on a Digitone mk1 by its author (14 Oct 2026): it loads and works as expected; still a beta. 0.1.1 changes only the names, checked in digikit's emulator on OS 1.43 and 1.44."
+      "repo": "irpina/digitide", "tag": "v0.2", "file": "digitide-0.2.elemod",
+      "device": "digitone-mk1", "needs_core": "4.1",
+      "sha256": "37b087b1b2de413f1c236821d96ed67126e104cf93dc69de44751185c5068f2a",
+      "summary": "A two-channel pedal for the audio inputs: a wet channel (reverb, delay, grab) and a micro-looper that always listens (envelope, tape, stretch), CLOCK as a sample-rate clock, and MIDI CCs. With fxkit (0.2): a mixer, two LFOs on the stock LFO page aimed at its controls, p-locks kept in the pattern, and the MIDI tracks editable while it plays. The synths are silent while it is the active effect.",
+      "on_unit": "0.2 tested on a Digitone mk1 by its author (Oct 2026), built before the effects' rename, which changed only names; still a beta. Also checked in digikit's emulator on OS 1.43 and 1.44. Not yet run on a Digitone Keys."
     },
     {
-      "repo": "irpina/digitide", "tag": "v0.1.1", "file": "digitide-0.1.1-os1.44.elemod",
-      "device": "digitone-mk1", "needs_core": "3.2",
-      "sha256": "f256b6b99880ad36a1f532c737138a131a18acd06f7ea1dd2456cfa33c7ac6bb",
-      "summary": "A two-channel pedal for the audio inputs: a wet channel (reverb, delay, grab) and a micro-looper that always listens (envelope, tape, stretch), CLOCK as a sample-rate clock, and MIDI CCs. The synths are silent while it is open.",
-      "on_unit": "0.1 tested on a Digitone mk1 by its author (14 Oct 2026): it loads and works as expected; still a beta. 0.1.1 changes only the names, checked in digikit's emulator on OS 1.43 and 1.44."
+      "repo": "irpina/digitide", "tag": "v0.2", "file": "digitide-0.2-os1.44.elemod",
+      "device": "digitone-mk1", "needs_core": "4.1",
+      "sha256": "9139d071e18a24b8d30012824f5a1db6adc2d8e6608503d7b29aadf33e4f8605",
+      "summary": "A two-channel pedal for the audio inputs: a wet channel (reverb, delay, grab) and a micro-looper that always listens (envelope, tape, stretch), CLOCK as a sample-rate clock, and MIDI CCs. With fxkit (0.2): a mixer, two LFOs on the stock LFO page aimed at its controls, p-locks kept in the pattern, and the MIDI tracks editable while it plays. The synths are silent while it is the active effect.",
+      "on_unit": "0.2 tested on a Digitone mk1 by its author (Oct 2026), built before the effects' rename, which changed only names; still a beta. Also checked in digikit's emulator on OS 1.43 and 1.44. Not yet run on a Digitone Keys."
     },
     {
-      "repo": "irpina/digitriad", "tag": "v0.1.1", "file": "digitriad-0.1.1.elemod",
-      "device": "digitone-mk1", "needs_core": "3.2",
-      "sha256": "a0df72d5cc6406455f8e4abdb960bd829deee5bbaf57d3d361fbf45678025ae9",
-      "summary": "A pitch shifter for the audio inputs: three voices in a key and scale (or chromatic), each through its own delay, four delay modes, rhythms and MIDI CCs. The synths are silent while it is open.",
-      "on_unit": "0.1 tested on a Digitone mk1 by its author (14 Oct 2026): it loads and works as expected; still a beta. 0.1.1 changes only the names, checked in digikit's emulator on OS 1.43 and 1.44."
+      "repo": "irpina/digitriad", "tag": "v0.2", "file": "digitriad-0.2.elemod",
+      "device": "digitone-mk1", "needs_core": "4.1",
+      "sha256": "3a3459c3bd8ee469573f4dacc5706833837c7245aef4b4f4af4eb700a9e19a51",
+      "summary": "A pitch shifter for the audio inputs: three voices in a key and scale (or chromatic), each through its own delay, four delay modes, rhythms and MIDI CCs. With fxkit (0.2): a mixer, two LFOs on the stock LFO page aimed at its controls, p-locks kept in the pattern, and the MIDI tracks editable while it plays. The synths are silent while it is the active effect.",
+      "on_unit": "0.2 tested on a Digitone mk1 by its author (Oct 2026), built before the effects' rename, which changed only names; still a beta. Also checked in digikit's emulator on OS 1.43 and 1.44. Not yet run on a Digitone Keys."
     },
     {
-      "repo": "irpina/digitriad", "tag": "v0.1.1", "file": "digitriad-0.1.1-os1.44.elemod",
-      "device": "digitone-mk1", "needs_core": "3.2",
-      "sha256": "83749e747e2e0f48cba3116c57498ee00f08de1d2d3c2ba6d2e6ca921f26583a",
-      "summary": "A pitch shifter for the audio inputs: three voices in a key and scale (or chromatic), each through its own delay, four delay modes, rhythms and MIDI CCs. The synths are silent while it is open.",
-      "on_unit": "0.1 tested on a Digitone mk1 by its author (14 Oct 2026): it loads and works as expected; still a beta. 0.1.1 changes only the names, checked in digikit's emulator on OS 1.43 and 1.44."
+      "repo": "irpina/digitriad", "tag": "v0.2", "file": "digitriad-0.2-os1.44.elemod",
+      "device": "digitone-mk1", "needs_core": "4.1",
+      "sha256": "af56ad2e7cbfd1956b0b8d5a09ab3a72afee95d98f7f119c04fecf191f3d4cc1",
+      "summary": "A pitch shifter for the audio inputs: three voices in a key and scale (or chromatic), each through its own delay, four delay modes, rhythms and MIDI CCs. With fxkit (0.2): a mixer, two LFOs on the stock LFO page aimed at its controls, p-locks kept in the pattern, and the MIDI tracks editable while it plays. The synths are silent while it is the active effect.",
+      "on_unit": "0.2 tested on a Digitone mk1 by its author (Oct 2026), built before the effects' rename, which changed only names; still a beta. Also checked in digikit's emulator on OS 1.43 and 1.44. Not yet run on a Digitone Keys."
     },
     {
-      "repo": "irpina/digireel", "tag": "v0.1.1", "file": "digireel-0.1.1.elemod",
-      "device": "digitone-mk1", "needs_core": "3.2",
-      "sha256": "0851ca682fc6de4d719acf9ac74909cbbfeb376a20f6c2c39ae8c9af1c776270",
-      "summary": "A time-warp pedal for the audio inputs: tape speed from -2x to +2x in tempo windows, pitch apart from speed, HOLD, TAPE STOP, random events, a slicer and MIDI CCs. The synths are silent while it is open.",
-      "on_unit": "0.1 tested on a Digitone mk1 by its author (14 Oct 2026): it loads and works as expected; still a beta. 0.1.1 changes only the names, checked in digikit's emulator on OS 1.43 and 1.44."
+      "repo": "irpina/digireel", "tag": "v0.2", "file": "digireel-0.2.elemod",
+      "device": "digitone-mk1", "needs_core": "4.1",
+      "sha256": "cf833ca138037ff5f011f664776da9371ae466ba66898f5d4f4b479653eef19f",
+      "summary": "A time-warp pedal for the audio inputs: tape speed from -2x to +2x in tempo windows, pitch apart from speed, HOLD, TAPE STOP, random events, a slicer and MIDI CCs. With fxkit (0.2): a mixer, two LFOs on the stock LFO page aimed at its controls, p-locks kept in the pattern, and the MIDI tracks editable while it plays. The synths are silent while it is the active effect.",
+      "on_unit": "0.2 tested on a Digitone mk1 by its author (Oct 2026), built before the effects' rename, which changed only names; still a beta. Also checked in digikit's emulator on OS 1.43 and 1.44. Not yet run on a Digitone Keys."
     },
     {
-      "repo": "irpina/digireel", "tag": "v0.1.1", "file": "digireel-0.1.1-os1.44.elemod",
-      "device": "digitone-mk1", "needs_core": "3.2",
-      "sha256": "4eab0537936fc1ada7a0d8ae0a381248b991950f62b84875588613180a51ccca",
-      "summary": "A time-warp pedal for the audio inputs: tape speed from -2x to +2x in tempo windows, pitch apart from speed, HOLD, TAPE STOP, random events, a slicer and MIDI CCs. The synths are silent while it is open.",
-      "on_unit": "0.1 tested on a Digitone mk1 by its author (14 Oct 2026): it loads and works as expected; still a beta. 0.1.1 changes only the names, checked in digikit's emulator on OS 1.43 and 1.44."
+      "repo": "irpina/digireel", "tag": "v0.2", "file": "digireel-0.2-os1.44.elemod",
+      "device": "digitone-mk1", "needs_core": "4.1",
+      "sha256": "2e71c3feae3403954770a3d43268acea5e86b58b310eb5c3df0be0922bec224d",
+      "summary": "A time-warp pedal for the audio inputs: tape speed from -2x to +2x in tempo windows, pitch apart from speed, HOLD, TAPE STOP, random events, a slicer and MIDI CCs. With fxkit (0.2): a mixer, two LFOs on the stock LFO page aimed at its controls, p-locks kept in the pattern, and the MIDI tracks editable while it plays. The synths are silent while it is the active effect.",
+      "on_unit": "0.2 tested on a Digitone mk1 by its author (Oct 2026), built before the effects' rename, which changed only names; still a beta. Also checked in digikit's emulator on OS 1.43 and 1.44. Not yet run on a Digitone Keys."
     },
     {
-      "repo": "irpina/digihoard", "tag": "v0.1.1", "file": "digihoard-0.1.1.elemod",
-      "device": "digitone-mk1", "needs_core": "3.2",
-      "sha256": "76fc01666df193c2d53fd9cad67a911bfb22381f58fb0bcf3561e1b3ad1d82ce",
-      "summary": "An echo collector for the audio inputs: echoes with SCAN and SPREAD from a 3-minute memory, six modifiers, LOOP and MIDI CCs. The synths are silent while it is open.",
-      "on_unit": "0.1 tested on a Digitone mk1 by its author (14 Oct 2026): it loads and works as expected; still a beta. 0.1.1 changes only the names, checked in digikit's emulator on OS 1.43 and 1.44."
+      "repo": "irpina/digihoard", "tag": "v0.2", "file": "digihoard-0.2.elemod",
+      "device": "digitone-mk1", "needs_core": "4.1",
+      "sha256": "671b0d176cb75152a9d75686cd2af87b60257843d4016a74880e5a940d3f2aaf",
+      "summary": "An echo collector for the audio inputs: echoes with SCAN and SPREAD from a 3-minute memory, six modifiers, LOOP and MIDI CCs. With fxkit (0.2): a mixer, two LFOs on the stock LFO page aimed at its controls, p-locks kept in the pattern, and the MIDI tracks editable while it plays. The synths are silent while it is the active effect.",
+      "on_unit": "0.2 tested on a Digitone mk1 by its author (Oct 2026), built before the effects' rename, which changed only names; still a beta. Also checked in digikit's emulator on OS 1.43 and 1.44. Not yet run on a Digitone Keys."
     },
     {
-      "repo": "irpina/digihoard", "tag": "v0.1.1", "file": "digihoard-0.1.1-os1.44.elemod",
-      "device": "digitone-mk1", "needs_core": "3.2",
-      "sha256": "5d7a3e507b83cdc4de1c129fbcf339dae4597f4e2cce59bcc5fe56c8ad075d44",
-      "summary": "An echo collector for the audio inputs: echoes with SCAN and SPREAD from a 3-minute memory, six modifiers, LOOP and MIDI CCs. The synths are silent while it is open.",
-      "on_unit": "0.1 tested on a Digitone mk1 by its author (14 Oct 2026): it loads and works as expected; still a beta. 0.1.1 changes only the names, checked in digikit's emulator on OS 1.43 and 1.44."
+      "repo": "irpina/digihoard", "tag": "v0.2", "file": "digihoard-0.2-os1.44.elemod",
+      "device": "digitone-mk1", "needs_core": "4.1",
+      "sha256": "2683e840e5afa1dd27f815a866929ebc9c1e7aefa3e123f57c5c77d235057a96",
+      "summary": "An echo collector for the audio inputs: echoes with SCAN and SPREAD from a 3-minute memory, six modifiers, LOOP and MIDI CCs. With fxkit (0.2): a mixer, two LFOs on the stock LFO page aimed at its controls, p-locks kept in the pattern, and the MIDI tracks editable while it plays. The synths are silent while it is the active effect.",
+      "on_unit": "0.2 tested on a Digitone mk1 by its author (Oct 2026), built before the effects' rename, which changed only names; still a beta. Also checked in digikit's emulator on OS 1.43 and 1.44. Not yet run on a Digitone Keys."
     },
     {
-      "repo": "irpina/digihalo", "tag": "v0.1.1", "file": "digihalo-0.1.1.elemod",
-      "device": "digitone-mk1", "needs_core": "3.2",
-      "sha256": "7ce1fdec96707a265761f31b23a96a75a83605c26e2bd5ffb0d44b894afa2091",
-      "summary": "A reverb for the audio inputs: twelve machines, ROOM to REFLECTIONS, with PARAM 1 and 2, FREEZE and INFINITE, and MIDI CCs. The synths are silent while it is open.",
-      "on_unit": "0.1 tested on a Digitone mk1 by its author (14 Oct 2026): it loads and works as expected; still a beta. 0.1.1 changes only the names, checked in digikit's emulator on OS 1.43 and 1.44."
+      "repo": "irpina/digihalo", "tag": "v0.2", "file": "digihalo-0.2.elemod",
+      "device": "digitone-mk1", "needs_core": "4.1",
+      "sha256": "0bf8f6a1b62399b6ee125674f24a09a3d4b6319c57a914201b4df76ade4a6147",
+      "summary": "A reverb for the audio inputs: twelve machines, ROOM to REFLECTIONS, with PARAM 1 and 2, FREEZE and INFINITE, and MIDI CCs. With fxkit (0.2): a mixer, two LFOs on the stock LFO page aimed at its controls, p-locks kept in the pattern, and the MIDI tracks editable while it plays. The synths are silent while it is the active effect.",
+      "on_unit": "0.2 tested on a Digitone mk1 by its author (Oct 2026), built before the effects' rename, which changed only names; still a beta. Also checked in digikit's emulator on OS 1.43 and 1.44. Not yet run on a Digitone Keys."
     },
     {
-      "repo": "irpina/digihalo", "tag": "v0.1.1", "file": "digihalo-0.1.1-os1.44.elemod",
-      "device": "digitone-mk1", "needs_core": "3.2",
-      "sha256": "fc606e3929ded779afae8f1c41d8fcc8628ed93b8290b399e9cd242dc20d8c80",
-      "summary": "A reverb for the audio inputs: twelve machines, ROOM to REFLECTIONS, with PARAM 1 and 2, FREEZE and INFINITE, and MIDI CCs. The synths are silent while it is open.",
-      "on_unit": "0.1 tested on a Digitone mk1 by its author (14 Oct 2026): it loads and works as expected; still a beta. 0.1.1 changes only the names, checked in digikit's emulator on OS 1.43 and 1.44."
+      "repo": "irpina/digihalo", "tag": "v0.2", "file": "digihalo-0.2-os1.44.elemod",
+      "device": "digitone-mk1", "needs_core": "4.1",
+      "sha256": "4c4fc5552bd2f71eff15042e9d6520f825348e424bd290914d7e5c135eb81e21",
+      "summary": "A reverb for the audio inputs: twelve machines, ROOM to REFLECTIONS, with PARAM 1 and 2, FREEZE and INFINITE, and MIDI CCs. With fxkit (0.2): a mixer, two LFOs on the stock LFO page aimed at its controls, p-locks kept in the pattern, and the MIDI tracks editable while it plays. The synths are silent while it is the active effect.",
+      "on_unit": "0.2 tested on a Digitone mk1 by its author (Oct 2026), built before the effects' rename, which changed only names; still a beta. Also checked in digikit's emulator on OS 1.43 and 1.44. Not yet run on a Digitone Keys."
     },
     {
       "repo": "irpina/digineighbor", "tag": "v0.6", "file": "digineighbor-0.6.elemod",
