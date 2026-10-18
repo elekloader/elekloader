@@ -33,7 +33,7 @@ where the stock files are, and only the cores are uploaded.
    The other mods (machine-pages, machines-dn1, seq-events-dn1, seq-events-dt1, dspbus-ot, digiswarm-dn1) are not
    cores. The apps and the page take only `core-*.elemod` from a release; a mod
    reaches the shop from its own release (DigiSwarm does, [WEB.md](WEB.md));
-   machine-pages from its pre-release here, `machine-pages-v1.1`, and
+   machine-pages from its pre-release here, `machine-pages-v1.2`, and
    machines-dn1 from `machines-dn1-v0.1`. seq-events-dn1, seq-events-dt1 and
    dspbus-ot are not in the shop yet.
 3. **The release.** Create it on that commit with the core files attached:
