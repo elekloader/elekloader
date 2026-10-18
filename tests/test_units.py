@@ -525,8 +525,9 @@ def test_lint_notes_the_code_sites_a_mod_hooks_itself():
              {'addr': 0x401ab9b0, 'len': 4, 'kind': 'data'}]
     assert core_candidates(mod2('my-mod', sites)) == [
         {'mod': 'my-mod', 'site': '0x400ea1a8', 'len': 6}]
-    # the core owns its sites; data sites are not events
+    # the core and its companions own their sites; data sites are not events
     assert core_candidates(mod2('core', sites)) == []
+    assert core_candidates(mod2('machine-pages', sites)) == []
     assert core_candidates(mod2('my-mod', sites[1:])) == []
 
 

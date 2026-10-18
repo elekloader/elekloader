@@ -17,9 +17,9 @@ It prints one "OK" or "PROBLEM:" line per finding, or JSON with --json.
 Exit status 0 means every check passed.
 
 It also lists, as "NOTE:" lines (`core_candidates` in the JSON), each code
-site a linkable mod hooks itself: a site another mod may want too belongs
-in the core as an event (docs/CORE-CONTRIBUTING.md). Notes never fail the
-check.
+site a linkable mod hooks itself (not the core's or a companion's): a site
+another mod may want too belongs in the core as an event
+(docs/CORE-CONTRIBUTING.md). Notes never fail the check.
 """
 import argparse
 import json
@@ -46,9 +46,18 @@ def describe(m):
     return d
 
 
+# Mods that own a group of sites once, for every mod (docs/CORES.md): they count as core.
+COMPANIONS = frozenset({'machine-pages', 'machines', 'seq-events', 'dspbus'})
+
+
+def is_core(mod_id):
+    """Whether a mod's own sites are the core's: the core's, or a companion's."""
+    return mod_id == 'core' or mod_id in COMPANIONS
+
+
 def core_candidates(m):
-    """The code sites a linkable mod other than the core hooks itself."""
-    if not isinstance(m, link.Mod2) or m.id == 'core':
+    """The code sites a linkable mod other than the core or a companion hooks itself."""
+    if not isinstance(m, link.Mod2) or is_core(m.id):
         return []
     return [{'mod': m.id, 'site': '0x%08x' % s['addr'], 'len': s['len']}
             for s in m.sites if s['kind'] == 'code']

@@ -140,7 +140,8 @@ the stock code more than one of them hooks for itself: sites that overlap,
 which those mods cannot be built together over, and, given that OS's stock
 file, sites in one stock routine. Each group it lists is a place where one
 core event could serve those mods. Of each mod only the newest version
-counts, and the core's own sites do not.
+counts, and the core's own sites do not, nor its companions' (machine-pages,
+machines, seq-events, dspbus).
 
 ```bash
 python -m elekloader.sdk.coresites <folder of .elemod files> --stock Digitakt_OS1.53.syx [--json]

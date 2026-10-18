@@ -5,8 +5,9 @@
 
 MODS are .elemod files or folders of them: the shop's mods, say. Of each
 mod (by id, for each device and OS) only the newest version counts, and
-the core's own sites do not. Each linkable mod's code sites (the ones
-`lint` notes as core candidates) are compared with every other mod's:
+the core's and its companions' own sites do not. Each linkable mod's code
+sites (the ones `lint` notes as core candidates) are compared with every
+other mod's:
 
 - **same bytes**: the sites overlap; the two mods cannot be built together;
 - **same routine**: with that OS's stock file given, the stock code runs
@@ -26,7 +27,7 @@ import os
 import sys
 
 from .. import devices, elemod, formats, link
-from ..lint import core_candidates
+from ..lint import core_candidates, is_core
 
 KINDS = ('same bytes', 'same routine', 'near')     # strongest first
 
@@ -40,7 +41,7 @@ def code_sites(paths):
     newest = {}
     for f in files:
         m = elemod.load_any(f)
-        if not isinstance(m, link.Mod2) or m.id == 'core':
+        if not isinstance(m, link.Mod2) or is_core(m.id):
             continue
         k = (m.dev.key, m.rel.version, m.id)
         if k not in newest or elemod.version_key(m.version) > elemod.version_key(newest[k].version):

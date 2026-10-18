@@ -36,14 +36,8 @@ import os
 import sys
 
 from .. import devices, elemod, formats, link
+from ..lint import COMPANIONS, is_core  # noqa: F401  (COMPANIONS: what counts as core)
 from .coresites import routine_test
-
-# Mods that own a group of sites once, for every mod: they count as core.
-COMPANIONS = frozenset({'machine-pages', 'machines', 'seq-events', 'dspbus'})
-
-
-def is_core(mod_id):
-    return mod_id == 'core' or mod_id in COMPANIONS
 
 
 def newest(paths):
