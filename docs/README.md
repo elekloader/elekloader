@@ -26,6 +26,9 @@ docs match its code.
 - **[Growing the core](CORE-CONTRIBUTING.md)**: when what your mod needs
   belongs in the core, how to build it so it can move there, and how to
   propose it. Pull requests to the core are welcome and encouraged.
+- **[Contribute to elekloader!](CONTRIBUTE.md)**: the ways to help, and the
+  community's to-do list for the core: each piece of stock code a mod still
+  hooks for itself.
 - **[The file format](FORMAT.md)**: `.elemod`, whole builds (format 1) and
   linkable mods (format 2).
 - **[Adding a device](DEVICES.md)**: a device profile, and what was found

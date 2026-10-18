@@ -724,7 +724,7 @@ function renderLibrary() {
   const all = libEntries();
   const sd = dev();
   const devs = pickable();
-  const inLib = location.hash !== '#build';
+  const inLib = view() === 'library';
   renderStart(all);
   const forDev = lib.device ? all.filter(en => en.device === lib.device) : all;
   const kinds = [...new Set(all.filter(en => !en.own).map(en => en.category).filter(Boolean))];
@@ -932,18 +932,87 @@ function toast(text) {
   setTimeout(() => t.remove(), 4600);
 }
 
-// ---- the frame: the two views, your setup, the counts ----
+// ---- the frame: the three views, your setup, the counts ----
+
+const VIEWS = { '#build': 'build', '#contribute': 'contribute' };
+const view = () => VIEWS[location.hash] || 'library';
 
 function route() {
-  const build = location.hash === '#build';
-  $('view-library').hidden = build;
-  $('view-build').hidden = !build;
-  document.title = build ? 'Build · elekloader' : 'Mods · elekloader';
+  const v = view();
+  for (const n of ['library', 'build', 'contribute']) $('view-' + n).hidden = v !== n;
+  document.title = { build: 'Build', contribute: 'Contribute', library: 'Mods' }[v] + ' · elekloader';
   $('content').scrollTop = 0;
   $('topbar').classList.remove('solid');
   window.scrollTo(0, 0);
   renderLibrary();
   renderChrome();
+  if (v === 'contribute') renderTodo();
+}
+
+// ---- Contribute: the community's to-do list for the core (shop/bounties.json) ----
+
+const todo = { data: null, open: new Set() };
+const KIND = { core: 'A core event', partly: 'Partly: some sites move onto the core',
+  migration: 'Move onto the core' };
+
+async function renderTodo() {
+  if (!todo.data) {
+    try {
+      const r = await fetch(new URL('shop/bounties.json', import.meta.url));
+      todo.data = r.ok ? await r.json() : { devices: [] };
+    } catch {
+      todo.data = { devices: [] };
+    }
+  }
+  const devs = (todo.data.devices || []).filter(d => d.score.mods > 0);
+  if (!devs.length) {
+    $('todo').replaceChildren(el('p', { class: 'muted' }, 'The list is not on this site yet.'));
+    return;
+  }
+  $('todo').replaceChildren(...devs.map(todoDevice),
+    el('p', { class: 'muted small lib-foot' }, `Made on ${todo.data.made} from the ${todo.data.files} files on this site: the shop's mods and the cores. `
+      + 'The site holds no firmware, so sites are grouped by distance rather than by routine.'));
+}
+
+// a mod's sites in an entry: the symbols they jump to, a few of them
+function todoHooks(e) {
+  const by = new Map();
+  for (const w of Object.values(e.at)) {
+    for (const s of w.sites) {
+      if (!by.has(s.mod)) by.set(s.mod, []);
+      for (const x of s.label.split(',')) if (!by.get(s.mod).includes(x)) by.get(s.mod).push(x);
+    }
+  }
+  return [...by].sort((a, b) => a[0].localeCompare(b[0])).map(([m, xs]) =>
+    el('span', { class: 'hook' }, el('strong', {}, m), ' ', xs.slice(0, 3).join(', '),
+      xs.length > 3 ? ` +${xs.length - 3}` : ''));
+}
+
+function todoDevice(d) {
+  const sc = d.score, pct = Math.round(100 * sc.no_own_code / sc.mods);
+  const all = d.entries, open = todo.open.has(d.device), shown = open ? all : all.slice(0, 8);
+  const fill = el('span', { class: 'fill' });
+  fill.style.width = pct + '%';
+  const meter = el('div', { class: 'meter', role: 'img', 'aria-label': `${pct}% of the mods use only the core` },
+    el('span', { class: 'track' }, fill));
+  return el('section', { class: 'todo-dev' },
+    el('div', { class: 'todo-head' },
+      el('h3', {}, d.device, el('span', { class: 'muted small' }, ` OS ${d.oses.join(', ')}`)),
+      el('p', { class: 'todo-score' }, el('strong', {}, `${sc.no_own_code} of ${sc.mods}`),
+        ' mods use only the core', el('span', { class: 'muted' },
+          ` · ${d.routines} to do, ${d.shared} hooked by more than one mod`)),
+      meter),
+    all.length ? el('ol', { class: 'todo-list' }, shown.map(e => el('li', {},
+      el('div', { class: 'todo-top' },
+        el('span', { class: 'kind ' + e.kind }, KIND[e.kind] || e.kind),
+        el('code', { class: 'todo-id', title: 'Put this id in your pull request\'s title' }, e.id),
+        el('span', { class: 'muted small' }, `${e.mods.length} mod${e.mods.length === 1 ? '' : 's'}`
+          + (e.missing_os.length ? ` · no address on ${e.missing_os.join(', ')}` : ''))),
+      el('div', { class: 'hooks' }, todoHooks(e))))) : el('p', { class: 'muted' }, 'Nothing left to do here.'),
+    all.length > 8 ? el('button', { type: 'button', class: 'btn outline small', onclick: () => {
+      if (open) todo.open.delete(d.device); else todo.open.add(d.device);
+      renderTodo();
+    } }, open ? 'Show fewer' : `Show all ${all.length}`) : '');
 }
 
 // a row in Your setup: a square, a title, a line under it
@@ -959,12 +1028,13 @@ function setupRow({ thumb, title, sub, n = null, on, current, need, label, href,
 function renderChrome() {
   const s = st.stock, sd = dev();
   const n = [...st.enabled].map(desc).filter(d => d && !d.builtin).length;   // your mods; the core comes with them
-  const build = location.hash === '#build';
+  const v = view(), build = v === 'build';
   for (const id of ['cfg-count', 'nav-count', 'tab-count']) {
     $(id).textContent = String(n);
     $(id).classList.toggle('on', n > 0);
   }
-  for (const [id, on] of [['nav-library', !build], ['nav-build', build], ['tab-library', !build], ['tab-build', build]]) {
+  for (const [id, on] of [['nav-library', v === 'library'], ['nav-build', build], ['nav-contribute', v === 'contribute'],
+    ['tab-library', v === 'library'], ['tab-build', build], ['tab-contribute', v === 'contribute']]) {
     $(id).classList.toggle('on', on);
     if (on) $(id).setAttribute('aria-current', 'page'); else $(id).removeAttribute('aria-current');
   }
@@ -1826,7 +1896,7 @@ function wire() {
   });
   $('search').addEventListener('input', e => {
     lib.query = e.target.value;
-    if (location.hash === '#build') location.hash = '#library';
+    if (view() !== 'library') location.hash = '#library';
     renderLibrary();
   });
   $('f-sort').addEventListener('change', e => setFilter('sort', e.target.value || 'collection'));

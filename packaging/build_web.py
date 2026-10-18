@@ -22,7 +22,9 @@ The site holds:
     catalog pins, and listed in shop/index.json with what its file says
     about it. A mod goes in only under a licence that allows passing it on
     (SHOP_LICENCES); one whose file is not there (a draft release) is listed
-    as not available;
+    as not available. shop/bounties.json is the community's to-do list for
+    the core, made from those files and the cores (elekloader.sdk.bounties,
+    grouped by distance: the site has no stock file);
   - pyodide/: the pinned Pyodide's runtime, five files from its core
     tarball, which is checked against its sha256 first;
   - LICENSE.txt, NOTICE.txt, pyodide/NOTICE.txt, and build.json (what went in).
@@ -33,6 +35,7 @@ user's browser, each core is checked to be a core mod, and each of the
 shop's files to be the one the catalog names.
 """
 import argparse
+import datetime
 import hashlib
 import io
 import json
@@ -48,6 +51,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
 from elekloader import elemod, link  # noqa: E402
+from elekloader.sdk import bounties  # noqa: E402
 
 PYODIDE_VERSION = '314.0.7'
 PYODIDE_SHA256 = '2abdcc2e35208af406e07724cffa85bc582ced97e9028383ecf5462541393f95'
@@ -223,6 +227,19 @@ def shop(path, folder):
     return cs, out
 
 
+def to_do(core_paths, folder, items, cs):
+    """The community's to-do list for the core (elekloader.sdk.bounties) over
+    the shop's files and the cores, grouped by distance."""
+    paths = [os.path.join(folder, e['file']) for e, raw in items if raw is not None]
+    paths += list(core_paths) + [os.path.join(folder, c['file']) for c, _ in cs
+                                 if folder and os.path.exists(os.path.join(folder, c['file']))]
+    paths = sorted({os.path.basename(p): p for p in paths}.values())     # a core given twice counts once
+    mods = bounties.newest(paths)
+    return {'made': datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%d'),
+            'grouped': 'by distance', 'window': 64, 'files': len(paths),
+            'devices': bounties.bounties(mods)}
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split('\n')[0])
     ap.add_argument('--pyodide-url', action='store_true', help='print the pinned Pyodide\'s URL')
@@ -279,6 +296,7 @@ def main(argv=None):
         if raw is not None:
             site['shop/' + e['file']] = raw
     site['shop/index.json'] = json.dumps([e for e, _ in items], indent=1).encode()
+    site['shop/bounties.json'] = json.dumps(to_do(a.core, a.catalog_dir, items, cs), indent=1).encode()
     commit = git('rev-parse', 'HEAD').decode().strip()
     dirty = bool(git('status', '--porcelain', '--', 'elekloader').strip())
     tree = git('rev-parse', 'HEAD:elekloader').decode().strip()

@@ -11,7 +11,8 @@ Good things to send:
 - **A core addition**: an event, a table or a firmware export your mod
   needed and the core lacked. This is the main way the core grows:
   [docs/CORE-CONTRIBUTING.md](docs/CORE-CONTRIBUTING.md) says how to build
-  it so it moves into the core cleanly.
+  it so it moves into the core cleanly. Looking for one to take on?
+  [docs/CONTRIBUTE.md](docs/CONTRIBUTE.md) has the community's to-do list.
 - **A new device or OS version**: [docs/DEVICES.md](docs/DEVICES.md).
 - **A mod for the shop**: an item in `web/catalog.json` pointing at your
   release ([docs/WEB.md](docs/WEB.md)).

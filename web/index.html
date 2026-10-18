@@ -27,6 +27,8 @@
       <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></svg>Mods</a>
     <a class="nav-link" id="nav-build" href="#build">
       <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M13.5 3.5 6.5 13h5l-1 7.5 7-9.5h-5z"/></svg>Build<span class="badge" id="nav-count">0</span></a>
+    <a class="nav-link" id="nav-contribute" href="#contribute">
+      <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/></svg>Contribute</a>
     <h3 class="side-h">Categories</h3>
     <ul class="side-list" id="nav-types"></ul>
     <h3 class="side-h">Profiles
@@ -109,6 +111,31 @@
       against the site's list. Your own <code>.elemod</code> files appear here too, under Your files.</p>
   </section>
 
+  <section class="view" id="view-contribute" aria-labelledby="contrib-title" hidden>
+    <header class="page-head">
+      <p class="eyebrow">Help build it</p>
+      <h1 id="contrib-title">Contribute to elekloader!</h1>
+      <p class="sub">elekloader is a passion project, and it grows from what people bring to it. Pull requests
+        are welcome and encouraged, and you don't need to ask first. There is no reward but credit: your name on
+        the pull request, and in the release notes of the version that takes it.</p>
+    </header>
+    <ul class="ways">
+      <li><strong>Take an entry from the to-do list below.</strong> Each is stock code a mod still hooks for
+        itself. As a core event, any number of mods can use it, and none of them needs its own port for the next
+        OS. <a href="https://github.com/irpina/elekloader/blob/main/docs/CORE-CONTRIBUTING.md" rel="noreferrer" target="_blank">How to grow the core</a></li>
+      <li><strong>Write a mod</strong> on the core and offer it to the shop.
+        <a href="https://github.com/irpina/elekloader/blob/main/docs/ADAPTING.md" rel="noreferrer" target="_blank">Adapting your mod</a></li>
+      <li><strong>Add a device or an OS version</strong>, fix a step that didn't work, or make a page clearer.
+        <a href="https://github.com/irpina/elekloader/blob/main/CONTRIBUTING.md" rel="noreferrer" target="_blank">Contributing</a></li>
+    </ul>
+    <h2 class="list-h">The to-do list</h2>
+    <p class="device-note">One entry per stock routine that mods hook themselves. <strong>A core event</strong>:
+      the core has nothing there yet. <strong>Move onto the core</strong>: the core or a companion already hooks
+      the same bytes, so those mods can use it (that pull request goes to the mod's author). Put the entry's id in
+      your pull request's title, and open it as a draft early so others see it is taken.
+      <a href="https://github.com/irpina/elekloader/blob/main/docs/CONTRIBUTE.md" rel="noreferrer" target="_blank">More in the docs</a></p>
+    <div id="todo"><p class="muted">Loading the list&hellip;</p></div>
+  </section>
   <section class="view" id="view-build" aria-labelledby="build-title" hidden>
     <header class="page-head head-build">
       <div class="tile" id="build-cover"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13.5 3.5 6.5 13h5l-1 7.5 7-9.5h-5z"/></svg></div>
@@ -207,6 +234,8 @@
     <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></svg>Mods</a>
   <a class="tab" id="tab-build" href="#build">
     <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M13.5 3.5 6.5 13h5l-1 7.5 7-9.5h-5z"/></svg>Build<span class="badge" id="tab-count">0</span></a>
+  <a class="tab" id="tab-contribute" href="#contribute">
+    <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/></svg>Contribute</a>
   <button type="button" class="tab" id="tab-about">
     <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 11v5M12 8v.01"/></svg>About</button>
 </nav>

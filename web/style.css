@@ -394,6 +394,29 @@ pre.error { white-space: pre-wrap; color: var(--bad); font-family: var(--mono); 
 details summary { cursor: pointer; color: var(--muted); }
 details summary:hover { color: var(--text); }
 
+/* ---- Contribute: the ways to help, and the to-do list ---- */
+.ways { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: 12px; margin: 4px 0 0; padding: 0;
+  list-style: none; }
+.ways li { padding: 14px 16px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r);
+  color: var(--muted); font-size: 13.5px; }
+.ways li strong { color: var(--text); }
+.ways li a { display: block; margin-top: 6px; }
+.todo-dev { margin: 18px 0 26px; }
+.todo-head h3 { margin: 0 0 4px; font-size: 17px; }
+.todo-score { margin: 0; font-size: 13.5px; }
+.todo-head .meter .track { flex-basis: 320px; }
+.todo-list { display: grid; gap: 8px; margin: 10px 0 12px; padding: 0; list-style: none; }
+.todo-list li { padding: 10px 14px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); min-width: 0; }
+.todo-top { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
+.todo-id { color: var(--accent); overflow-wrap: anywhere; user-select: all; }
+.kind { padding: 2px 9px; border-radius: 999px; font: 600 11.5px var(--sans); background: var(--raised); color: var(--muted); }
+.kind.core { background: var(--accent-soft); color: var(--accent); }
+.kind.partly { color: var(--warn); }
+.kind.migration { color: var(--ok); }
+.hooks { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-top: 6px; color: var(--muted); font: 12px var(--mono);
+  overflow-wrap: anywhere; }
+.hook strong { color: var(--text); font-weight: 600; }
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }

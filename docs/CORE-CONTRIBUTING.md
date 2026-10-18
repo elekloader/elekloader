@@ -154,11 +154,12 @@ instead of by routine.
 `elekloader.sdk.bounties` is the community's to-do list for the core. It
 lists every piece of stock code a mod still hooks itself, shared or not,
 one entry per stock routine. Each entry is something anyone can pick up.
-There is no reward but credit: your name on the pull request, in the
-core's changelog.
+There is no reward but credit: your name on the pull request and in the
+release notes. [Contribute](CONTRIBUTE.md) has the list for the shop's
+mods, and the web page's Contribute view keeps it current.
 
 ```bash
-python -m elekloader.sdk.bounties <folder of .elemod files> --stock Digitakt_OS1.53.syx --stock Digitakt_OS1.54_dist.zip [--json]
+python -m elekloader.sdk.bounties <folder of .elemod files> --stock Digitakt_OS1.53.syx --stock Digitakt_OS1.54_dist.zip [--json | --markdown]
 ```
 
 For each device it prints:
@@ -167,16 +168,19 @@ For each device it prints:
 - one line per routine:
   - its id: the device, the oldest OS and its lowest site, as in
     `digitakt-mk1@1.53:0x400d553e`;
-  - its kind: **core** means the core needs an event there;
-    **migration** means the core or a companion already hooks that routine,
-    so the mods there can move onto what exists;
+  - its kind. **core** means the core needs an event there. **migration**
+    means the core or a companion already hooks the same bytes as every
+    site there, so the mods can move onto what exists. **partly** means
+    some of the sites are covered that way and the rest need an event;
   - the mods that hook it, each site named by the symbols it jumps to.
 
 A routine is listed once for all the OS versions of a device: a mod's site
 on a later OS is paired with its site on the oldest by those symbols.
-The JSON (`--json`) gives each OS's addresses under `at`, and `missing_os`
-names an OS the entry has no address for. A core event needs one there
-too (section 3).
+The JSON (`--json`) gives each OS's addresses under `at`, with `covered`
+on each site, and `missing_os` names an OS the entry has no address for.
+A core event needs one there too (section 3). `--update FILE.md` writes
+the Markdown tables (`--markdown`) between the markers in a page, as in
+[CONTRIBUTE.md](CONTRIBUTE.md).
 
 Give it the stock file of each OS, and the cores and companions when you
 have them: without a stock file it groups sites by distance, as

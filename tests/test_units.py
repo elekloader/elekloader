@@ -4,6 +4,7 @@ import os
 import random
 import struct
 import sys
+import tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(HERE))
@@ -571,22 +572,41 @@ def test_bounties_lists_each_routine_once_across_oses():
             mod2('c', '1.53', (0x800, 'c1')),
             mod2('c', '1.54'),                                     # its 1.54 build lacks c1
             mod2('d', '1.53'),                                     # hooks nothing itself
-            mod2('machine-pages', '1.53', (0x402, 'mp')),          # a companion is core
+            mod2('f', '1.53', (0xc00, 'f1'), (0xc10, 'f2')),       # one site covered, one not
+            mod2('f', '1.54', (0xd00, 'f1'), (0xd10, 'f2')),
+            mod2('machine-pages', '1.53', (0x402, 'mp'), (0xc00, 'mp2')),   # a companion is core
+            mod2('machine-pages', '1.54', (0x502, 'mp'), (0xd00, 'mp2')),
             mod2('core', '1.53', (0x900, 'x'))]
     [r] = bounties(mods)
     assert r['oses'] == ['1.53', '1.54']
-    assert r['score'] == {'mods': 4, 'no_own_code': 1, 'pure': ['d']}
+    assert r['score'] == {'mods': 5, 'no_own_code': 1, 'pure': ['d']}
     assert [(e['id'], e['kind'], e['mods'], e['missing_os']) for e in r['entries']] == [
         ('dt@1.53:0x00000100', 'core', ['a', 'b'], []),
         ('dt@1.53:0x00000800', 'core', ['c'], ['1.54']),
+        ('dt@1.53:0x00000c00', 'partly', ['f'], []),
         ('dt@1.53:0x00000400', 'migration', ['a'], [])]
+    assert [x['covered'] for x in r['entries'][2]['at']['1.54']['sites']] == [True, False]
     first = r['entries'][0]['at']
     assert (first['1.53']['lo'], first['1.53']['hi'], first['1.54']['lo']) == (
         '0x00000100', '0x00000112', '0x00000200')
     assert [s['label'] for s in first['1.53']['sites']] == ['a1', 'b1']
-    assert (r['routines'], r['shared']) == (3, 1)
-    # without the window, a and b are two routines
-    assert bounties(mods, window=0)[0]['routines'] == 4
+    assert (r['routines'], r['shared']) == (4, 1)
+    # without the window, a and b are two routines, and so are f's sites
+    assert bounties(mods, window=0)[0]['routines'] == 6
+    # the Markdown, written between the markers of a page
+    from elekloader.sdk.bounties import START, END, markdown, update
+    md = markdown([r])
+    assert md.startswith(START) and md.rstrip().endswith(END)
+    assert '| `dt@1.53:0x00000800` | a core event (no address on 1.54) | 1 | c: c1 |' in md
+    with tempfile.TemporaryDirectory() as d:
+        page = os.path.join(d, 'page.md')
+        with open(page, 'w') as fh:
+            fh.write('# Page\n\n%s\nold\n%s\n\nafter\n' % (START, END))
+        update(page, md)
+        with open(page) as fh:
+            text = fh.read()
+        assert text.startswith('# Page\n\n' + START) and text.endswith(END + '\n\nafter\n')
+        assert 'old' not in text and 'c: c1' in text
 
 
 if __name__ == '__main__':
