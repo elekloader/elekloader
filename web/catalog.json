@@ -432,6 +432,11 @@
       "on_unit": "Version 0.4 tested on a Digitakt mk1 by its author."
     },
     {
+      "repo": "irpina/elekloader", "tag": "core-ot-v0.3.1", "file": "core-ot-0.3.1.elemod", "kind": "core",
+      "device": "octatrack",
+      "sha256": "bd466e036022e78f22ad786906edce457f9ebb4934dde6a9775c483141032c06"
+    },
+    {
       "repo": "irpina/octabam2elemod", "tag": "v1.0", "file": "octabam-tuner-363861e.elemod",
       "device": "octatrack", "needs_core": "0.1",
       "sha256": "1e2447d88c953b09584bcd0b84a9b7733bb87264b6542169d0f2686f9762dff6",

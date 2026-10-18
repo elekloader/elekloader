@@ -35,7 +35,7 @@ There is one core file per device and OS:
 | Digitakt II | 1.17 | `core-dt2-1.0.elemod` | not released yet: build it ([below](#building-a-core)) |
 | Analog Rytm MKII | 1.73, 1.74 | `core-0.1.elemod`, `core-0.1-os1.74.elemod` (mods/core-ar2) | a proof of concept, not released: build it ([below](#building-a-core)) |
 | Octatrack MKI, MKII | 1.40C | `core-ot-0.1.elemod` | the latest release (v0.4.0); PURGE SAMPLES freezes the unit with it, fixed in 0.3.1 |
-| Octatrack MKI, MKII | 1.40C | `core-ot-0.3.1.elemod` | on main, not released yet (0.2, with the hook bus, and 0.3 are not either) |
+| Octatrack MKI, MKII | 1.40C | `core-ot-0.3.1.elemod` | the [core-ot-v0.3.1](https://github.com/irpina/elekloader/releases/tag/core-ot-v0.3.1) pre-release, and the shop: with the hook bus (0.2) and the sized reserve (0.3), neither released on its own |
 | Model:Cycles | 1.13 | `core-mc-0.1.elemod` | on main, not released yet: build it ([below](#building-a-core)) |
 | Model:Samples | 1.13 | `core-ms-0.1.elemod` | on main, not released yet: build it ([below](#building-a-core)) |
 
