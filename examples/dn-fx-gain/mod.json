@@ -1,0 +1,26 @@
+{
+ "id": "dnfxgain", "version": "1.0",
+ "license": "GPL-2.0-or-later",
+ "title": "GAIN (Digitone effect)", "category": "Effect", "author": "irpina",
+ "description": "GAIN, the smallest effect on fxkit for the Digitone mk1: a level, a tone and the right side's phase on the inputs. GAIN in core-dn1's Mod Menu (hold a track key) makes it the active effect (the synths muted) and opens its page: SYN1 its knobs, AMP fxkit's mixer, LFO its two LFOs, RECORD the LOCK mode (hold a trig, turn a knob: a p-lock on that step), MIDI the stock UI for the MIDI tracks while it plays, NO off. A template for an effect mod: it names no firmware address, so its OS 1.44 port is empty (docs/ADAPTING.md, \"fxkit\"). Needs fxkit.",
+ "device": "digitone-mk1", "os": "1.43",
+ "ports": {"1.44": {}},
+ "sources": ["gain.c"],
+ "cflags": ["-Os", "-fno-tree-loop-distribute-patterns"],
+ "subscribe": [
+  {"event": "ev_key", "fn": "gain_key", "order": 7},
+  {"event": "ev_enc", "fn": "gain_enc", "order": 7},
+  {"event": "ev_tick", "fn": "gain_tick", "order": 62},
+  {"event": "ev_draw", "fn": "gain_draw", "order": 92}
+ ],
+ "contribute": [
+  {"to": "core_menu", "order": 39, "data": "00000000",
+   "relocs": [[0, "abs32", "sym:gain_menu", 0]]},
+  {"to": "core_projdata", "order": 79, "data": "00000000",
+   "relocs": [[0, "abs32", "sym:gain_projdata", 0]]},
+  {"to": "fx_effects", "order": 50, "data": "00000000",
+   "relocs": [[0, "abs32", "sym:gain_effect", 0]]}
+ ],
+ "resources": {"core": "4.1", "names": ["projdata:GAN1"]},
+ "requires": ["core", "fxkit"]
+}

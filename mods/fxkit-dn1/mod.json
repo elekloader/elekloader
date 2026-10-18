@@ -1,0 +1,25 @@
+{
+ "id": "fxkit", "version": "0.1",
+ "license": "GPL-2.0-or-later",
+ "title": "fxkit", "category": "Framework", "author": "irpina",
+ "description": "What the Digitone mk1's effect mods share: one effect at a time has the audio (exclusive, the synths muted), with a mixer around it (the inputs' levels and pans, mix, balance, volume, width), two LFOs with the stock LFO's rates and waves aimed only at its knobs, and p-locks kept in the pattern, in one track's lock table (T4 unless the effect's SETUP says otherwise), that play on their steps and save with the pattern. Each effect stays a mod of its own, with its own Mod Menu entry and page; fxkit draws its MIXER and LFO pages and keeps its LOCK mode. On its own it adds nothing to the screen. Needs core-dn1 4.1.",
+ "device": "digitone-mk1", "os": "1.43",
+ "sources": ["fxkit.c"],
+ "cflags": ["-Os", "-fno-tree-loop-distribute-patterns"],
+ "ports": {"1.44": {}},
+ "subscribe": [
+  {"event": "ev_tick", "fn": "fxt_tick", "order": 30},
+  {"event": "ev_note_queue", "fn": "fxt_queue", "order": 50},
+  {"event": "ev_render_in", "fn": "fxt_rin", "order": 40},
+  {"event": "ev_render_out", "fn": "fxt_rout", "order": 40}
+ ],
+ "contribute": [
+  {"to": "core_audio", "order": 40, "data": "00000000",
+   "relocs": [[0, "abs32", "sym:fxt_owner", 0]]},
+  {"to": "core_projdata", "order": 40, "data": "00000000",
+   "relocs": [[0, "abs32", "sym:fxt_projdata", 0]]}
+ ],
+ "collections": {"fx_effects": 4},
+ "resources": {"core": "4.1", "names": ["projdata:FXKT"]},
+ "requires": ["core"]
+}

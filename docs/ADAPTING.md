@@ -959,7 +959,7 @@ The first step's event as PLAY starts (kind 1) has no p-lock list, and a
 lock trig on that step makes no event then: the stock applies that step
 another way, so a mod reads its locks from the lock table when the
 transport starts. A mod that plays a track's locks itself (an effect's
-p-locks, kept in a track's lock table: fxkit, below) takes the
+p-locks, kept in a track's lock table: fxkit, "Effects" below) takes the
 step's locks here and applies
 them when `fw_timeline` reaches `time`: the step's own time, to within a
 block. Interrupt level or
@@ -1034,6 +1034,118 @@ glide with it.
 
 With no handler each site costs a test and a jump: the stock call runs as
 it was, by a tail jump with the stack as it came.
+
+### Effects (fxkit, Digitone mk1)
+
+An effect on the Digitone mk1 (a pedal on the audio inputs, say) is a whole
+mod: its own Mod Menu entry opens its page, and while it is active it owns
+the audio (`core_audio`, exclusive, the synths muted). The `fxkit` mod
+(`mods/fxkit-dn1`, needs core-dn1 4.1) gives every such effect in the build
+what it would otherwise each build itself: a mixer around it, two LFOs on its
+knobs, p-locks that follow the pattern, and their pages. One effect is the
+active one at a time; opening another's entry hands it the audio.
+
+- **The audio.** fxkit owns the output for the active effect: the inputs
+  through the mixer's input stage (IN L, IN R: their levels, on the stock
+  mixer's law for its input levels, 16 (v / 127)², so 32 is unity and 127
+  +24 dB; L PAN, R PAN: where each sits), the effect's `render`, then MIX
+  (the dry against the effect, for an effect that leaves the dry to fxkit),
+  WDTH, BAL and VOL (100 unity). A CPU guard (DMA timer 0) bypasses the effect when the render
+  has no time left (`fx_overload`). An effect that plays as an insert of its
+  own (DigiPrism with SOURCE DIGITONE) turns fxkit's owner off for itself
+  (`fx_chain(e, 0)`) and keeps its values.
+- **Its values**, each block at the render's entry, the effect's `values(val,
+  flags)`: each knob by its slot (8.8), its own value, or the p-lock of the
+  step that plays, with the LFOs on them; `FX_V_BYPASS` when BYP or the guard
+  bypassed it (an effect with `FX_OWN_BYPASS` gets the call all the same, for
+  its tails).
+- **The LFOs** are the stock LFO page's eight controls (SPD, MULT, FADE,
+  DEST, WAVE, SPH, MODE, DEP), run with the stock LFO's arithmetic: its
+  phase step `tempo × (SPD − 64.0) × 2 >> (11 − MULT)` (14400 for the tempo
+  from MULT 12, the free rates), a turn of 0x5265c000, the stock waves,
+  fades and modes, a trig of the lock track as their TRIG. DEST lists only
+  the effect's knobs and the mixer's, by their names.
+- **The p-locks are the pattern's.** fxkit keeps them in one synth track's
+  lock table (the lock track: T4 unless the effect's SETUP says otherwise,
+  `fx_lock_track_set`), as the firmware's lock setter (0x40024236) does: the
+  value at `fw_pattern + 0x1e80 + 10319 × track + 160 × step + 2 × slot`, the
+  row's count of locks at +0x9e (as 0x40023ed2 counts them), the slot's used
+  byte at +0x2800 (0x400241f6), and a lock trig on a step with no trig. So
+  the stock saves, loads, copies and pastes them with the pattern, and the
+  sequencer fires them: `ev_note_queue` hands fxkit each trig of the lock
+  track with its time, and its locks hold until the track's next trig (the
+  first step's, as PLAY starts, fxkit reads from the lock table). The lock
+  track should play nothing of its own in a pattern where the effect has
+  locks: its notes would take them too, and an arpeggiator on it turns its
+  trigs into the arpeggiator's events (the default project's T4 has one).
+- **LOCK mode.** `fx_lock_key` gives an effect's page the stock's way of
+  locking: the trig keys are the steps of a 16-step page (PAGE the next,
+  as many as the pattern has), a trig held and a knob turned
+  (`fx_turned`) is that step's lock, FUNC + a trig clears the step's locks
+  of the effect's, and while a trig is held `fx_view` shows its locks.
+  `fx_lock_strip` draws the page's 16 steps for a title bar (the LEDs are the
+  stock's).
+- **The pages.** `fx_page_draw`, `fx_page_turn` and `fx_page_push` are the
+  MIXER (page 0) and the LFOs (1, 2) as the stock FLTR, AMP and LFO pages are
+  laid out: two rows of four controls over their labels; `fx_draw_controls`,
+  `fx_knob_turn` and `fx_knob_push` the same for eight slots of the effect's
+  own. The LFO pages are the stock LFO page: its own knob graphics (fxkit
+  calls the stock's drawers from the parameters' UI records, `fw_uirecs` by
+  `fw_slot_ids`), WAVE and SPH as one picture of the wave from its start
+  phase, DEST's box and its list (a turn opens it, YES picks with
+  "Confirmed!" in the title, NO closes it), SPD and DEP in the stock's fine
+  steps, and the stock's defaults. On the MIXER and LFO pages a turned
+  knob's value shows under it for a while, in the stock's text, as on the
+  stock pages. While one of them is on screen an effect gives its keys to
+  `fx_page_key` first (DEST's list takes YES, NO, UP and DOWN), adds
+  `fx_page_state()` to what makes it draw again, and shows an LFO page's
+  title as it is ("LFO (1/2)", as the stock's). The effect draws its title
+  bar and its left column.
+- **Saving.** `fx_pack` and `fx_unpack` put an effect's mixer and LFOs in
+  `FX_PACK` (23) bytes of its own project data, last in its block (a block
+  saved with fewer loads with the rest zero, which `fx_unpack` reads as the
+  format before); pack again when `fx_serial(e)` (a count of the changes to
+  its values) moves, not every tick: the UI task's time is the firmware's
+  too. fxkit's own block (`FXKT`) holds the lock track. The locks are the
+  pattern's.
+
+An effect mod contributes to the table `fx_effects` a pointer to a `struct
+fx_effect` (`digitone-mk1/fxkit.h`): its name, its knobs (each a slot, a
+kind: `FX_KNOB` 0-127, `FX_BIP` -64..+63 or `FX_OPT` with its options'
+texts, a default, a label and a long name), flags (`FX_OWN_MIX`: it mixes
+the dry itself; `FX_OWN_BYPASS`: it bypasses itself, with its tails) and
+three calls: `init()` once, before fxkit reads its knobs, `values()` and
+`render(out, in)`, 32 frames L,R in Q1.31, at interrupt level. Its knobs'
+slots: page 1 17-24 (`FX_S_P1`), page 2 27-34 (`FX_S_P2`), settings
+50-53, 35-37, 25 and 38-40 (`FX_S_SET(0)`-`FX_S_SET(10)`), 54-64; the
+mixer's are 66-76 and the LFOs' 1-16. From the UI task the effect calls
+`fx_activate` from its entry's `open` and `fx_deactivate` on NO; `fx_get`
+and `fx_set` reach its own values, and `fx_set_later` does from the MIDI
+task. `examples/dn-fx-gain` (GAIN) is the smallest: a level, a tone and the
+right side's phase, with its page (SYN1 its knobs, AMP the MIXER, LFO the
+LFOs, RECORD the LOCK mode, MIDI the stock UI with GAIN playing, NO off). It
+names no firmware address, so its 1.44 port is empty:
+
+```c
+static const struct fx_param gain_params[] = {
+    { FX_S_P1, FX_KNOB, 0, 100, "GAIN", "Gain", 0 },
+    { FX_S_P1 + 1, FX_KNOB, 0, 127, "TONE", "Tone", 0 },
+    { FX_S_P1 + 2, FX_OPT, 2, 0, "PHAS", "Phase R", gain_phase },
+    { 0 }
+};
+const struct fx_effect gain_effect = {
+    FX_ABI, "GAIN", gain_params, 0, 0, gain_values, gain_render,
+};
+```
+
+```json
+"contribute": [{"to": "core_menu", "order": 39, "data": "00000000",
+                "relocs": [[0, "abs32", "sym:gain_menu", 0]]},
+               {"to": "fx_effects", "order": 50, "data": "00000000",
+                "relocs": [[0, "abs32", "sym:gain_effect", 0]]}],
+"requires": ["core", "fxkit"],
+"resources": {"core": "4.1"}
+```
 
 ### Step-fire events (seq-events, Digitone mk1 and Digitakt mk1)
 

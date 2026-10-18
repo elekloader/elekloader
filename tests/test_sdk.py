@@ -1140,6 +1140,45 @@ def test_gas_pedals_build_and_link():
             assert rc == 1 and any('core 4.0 or newer gives them' in x for x in r['problems']), r['problems']
 
 
+def test_fxkit_and_gain_build_and_link():
+    """mods/fxkit-dn1 (what the effects share) and examples/dn-fx-gain (GAIN, the smallest effect): neither
+    patches a site; fxkit needs core-dn1 4.1 (its note queue) and takes the audio and its project data from
+    core's tables, GAIN needs fxkit; each carries the same code for 1.43 and 1.44 (an empty port: they name
+    only core's exports), and they link together with the tree's core; beside the released 4.0 fxkit is
+    refused."""
+    if not DN_STOCK or not os.path.exists(DN_STOCK):
+        raise Skip('missing ELEKLOADER_DN_SYX')
+    tc = [x for x in devices.devices() if x.key == 'digitone-mk1'][0].toolchain
+    if not shutil.which(os.environ.get('ELEKLOADER_CROSS', tc['prefix']) + 'gcc'):
+        raise Skip('no m68k cross compiler')
+    with tempfile.TemporaryDirectory() as tmp:
+        core = dn_core(tmp)
+        fpath, f = build.build(os.path.join(ROOT, 'mods', 'fxkit-dn1'), DN_STOCK, tmp)
+        gpath, g = build.build(os.path.join(ROOT, 'examples', 'dn-fx-gain'), DN_STOCK, tmp)
+        assert os.path.basename(fpath) == 'fxkit-0.1.elemod' and os.path.basename(gpath) == 'dnfxgain-1.0.elemod'
+        assert f.needs_core == '4.1' and not f.sites and g.needs_core == '4.1' and not g.sites
+        assert {'fw_pattern', 'fw_timeline', 'fw_tempo', 'fw_transport', 'fx_effects'} <= set(f.imports), f.imports
+        assert {'fx_activate', 'fx_deactivate', 'fx_lock_key', 'fx_page_draw', 'fx_pack', 'fx_unpack'} \
+            <= set(g.imports), g.imports
+        assert {'fx_activate', 'fx_set', 'fx_turned', 'fx_lock_mask', 'fx_pack'} <= set(f.exports), f.exports
+        rc, r = lint_json(gpath, '--stock', DN_STOCK, '--with', core, '--with', fpath)
+        assert rc == 0, r['problems']
+        assert r['link']['order'] == ['core ' + DN_VERSION, 'dnfxgain 1.0', 'fxkit 0.1'], r['link']['order']
+        if CORE_DN40 and os.path.exists(CORE_DN40):
+            rc, r = lint_json(fpath, '--stock', DN_STOCK, '--with', CORE_DN40)
+            assert rc == 1 and 'fxkit 0.1 needs core 4.1 or newer, and this build has core 4.0' \
+                in r['problems'], r['problems']
+        if DN_STOCK_144 and os.path.exists(DN_STOCK_144):
+            for d, x in ((os.path.join(ROOT, 'mods', 'fxkit-dn1'), f), (os.path.join(ROOT, 'examples', 'dn-fx-gain'), g)):
+                path4, x4 = build.build(d, DN_STOCK_144, tmp)
+                images = []
+                for st, y in ((DN_STOCK, x), (DN_STOCK_144, x4)):
+                    sd, dv, _rel = formats.load(st)
+                    images.append(bytes(elemod.parts_bytes(y.sections['.run']['parts'],
+                                                           formats.main_image(sd, dv), dv)))
+                assert images[0] == images[1] and x.relocs == x4.relocs, d
+
+
 def test_example_builds_and_links():
     tc = devices.devices()[0].toolchain
     if not shutil.which(os.environ.get('ELEKLOADER_CROSS', tc['prefix']) + 'gcc'):
