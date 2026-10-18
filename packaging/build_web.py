@@ -25,9 +25,14 @@ The site holds:
     as not available. shop/bounties.json is the community's to-do list for
     the core, made from those files and the cores (elekloader.sdk.bounties,
     grouped by distance: the site has no stock file);
+  - devices.json: the devices the engine knows, for the page before it loads;
   - pyodide/: the pinned Pyodide's runtime, five files from its core
     tarball, which is checked against its sha256 first;
   - LICENSE.txt, NOTICE.txt, pyodide/NOTICE.txt, and build.json (what went in).
+
+index.html names app.js and style.css with the site's version (?v=, a hash of
+every other file), and the page and its worker pass it on to every file they
+load, so a browser's cache never mixes two deploys.
 
 Everything the page loads is in the site: it fetches nothing from anywhere
 else. No firmware goes in. The stock OS file is only ever read in the
@@ -50,7 +55,7 @@ import zipfile
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
-from elekloader import elemod, link  # noqa: E402
+from elekloader import devices, elemod, link  # noqa: E402
 from elekloader.sdk import bounties  # noqa: E402
 
 PYODIDE_VERSION = '314.0.7'
@@ -227,6 +232,24 @@ def shop(path, folder):
     return cs, out
 
 
+def device_list():
+    """-> devices.json: each device the engine knows, as bridge.info lists them (key, name, releases), so the
+    page shows them all before the engine has loaded."""
+    return [{'key': d.key, 'name': d.name, 'releases': sorted(d.releases)} for d in devices.devices()]
+
+
+def stamp(html, token):
+    """index.html with its script and stylesheet named as app.js?v=TOKEN and style.css?v=TOKEN: a deploy
+    changes the names, so a browser never runs one deploy's page with another's files from its cache (app.js
+    and worker.js pass the same ?v= on to every file they load)."""
+    out = html
+    for a in ('src="app.js"', 'href="style.css"'):
+        if out.count(a) != 1:
+            sys.exit('web/index.html: expected one %s' % a)
+        out = out.replace(a, a[:-1] + '?v=%s"' % token)
+    return out
+
+
 def to_do(core_paths, folder, items, cs):
     """The community's to-do list for the core (elekloader.sdk.bounties) over
     the shop's files and the cores, grouped by distance."""
@@ -297,6 +320,11 @@ def main(argv=None):
             site['shop/' + e['file']] = raw
     site['shop/index.json'] = json.dumps([e for e, _ in items], indent=1).encode()
     site['shop/bounties.json'] = json.dumps(to_do(a.core, a.catalog_dir, items, cs), indent=1).encode()
+    site['devices.json'] = json.dumps(device_list(), indent=1).encode()
+    # the site's version: its files but the page, which names it
+    token = sha(''.join('%s %s\n' % (n, sha(b)) for n, b in sorted(site.items()) if n != 'index.html')
+                .encode())[:12]
+    site['index.html'] = stamp(site['index.html'].decode('utf-8'), token).encode('utf-8')
     commit = git('rev-parse', 'HEAD').decode().strip()
     dirty = bool(git('status', '--porcelain', '--', 'elekloader').strip())
     tree = git('rev-parse', 'HEAD:elekloader').decode().strip()
@@ -305,7 +333,7 @@ def main(argv=None):
             == tree)
     from elekloader import __version__
     site['build.json'] = json.dumps({
-        'elekloader': __version__, 'commit': commit,
+        'elekloader': __version__, 'commit': commit, 'site_version': token,
         'commit_date': git('log', '-1', '--format=%cI').decode().strip(),
         # the zip is HEAD's package; a working tree with changes there is not in it
         'package_changes_not_in_zip': dirty,

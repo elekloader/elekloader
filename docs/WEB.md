@@ -191,13 +191,14 @@ shows them as one card (the same repository, mod, version and device).
 
 | path | what |
 |---|---|
-| `index.html`, `style.css`, `app.js`, `worker.js`, `bridge.py` | `web/`, as committed |
+| `index.html`, `style.css`, `app.js`, `worker.js`, `bridge.py` | `web/`, as committed, but for one change: index.html names `app.js?v=` and `style.css?v=` with the site's version (a hash of every other file), and the page and its worker pass that `?v=` on to every file they load, so a browser's cache never mixes two deploys |
+| `devices.json` | the devices the engine knows (key, name, OS versions), so the page lists them all before the engine has loaded |
 | `elekloader.zip` | the elekloader package, exactly as the commit has it (`git archive HEAD elekloader`), stored, sorted, fixed dates: its sha256 follows from the commit |
 | `core/*.elemod`, `core/index.json` | the cores of the latest release, and the cores the catalog lists, with their sha256; the worker loads the newest of each device and OS and checks it |
 | `shop/*.elemod`, `shop/index.json` | the shop: the catalog's mods, from their authors' releases, with what each file says about itself |
 | `shop/bounties.json` | the community's to-do list for the core, from the shop's files and the cores (`elekloader.sdk.bounties`, grouped by distance: the site has no stock file), shown in the page's Contribute view ([CONTRIBUTE.md](CONTRIBUTE.md)) |
 | `pyodide/` | five files from Pyodide's core tarball (`pyodide.mjs`, `pyodide.asm.mjs`, `pyodide.asm.wasm`, `python_stdlib.zip`, `pyodide-lock.json`), and `NOTICE.txt` with their licences |
-| `build.json` | the commit, the package's sha256 and git tree, the release the cores come from and whether the package is that release's, Pyodide's version, every file's sha256 |
+| `build.json` | the commit, the site's version, the package's sha256 and git tree, the release the cores come from and whether the package is that release's, Pyodide's version, every file's sha256 |
 | `LICENSE.txt`, `NOTICE.txt` | elekloader's |
 
 The Pyodide release is pinned by version and sha256 in `build_web.py`

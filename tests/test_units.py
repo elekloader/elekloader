@@ -610,6 +610,30 @@ def test_bounties_lists_each_routine_once_across_oses():
         assert 'old' not in text and 'c: c1' in text
 
 
+def test_the_site_names_its_files_with_its_version_and_lists_the_devices():
+    pack = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'packaging')
+    if not os.path.exists(os.path.join(pack, 'build_web.py')):
+        return      # under Pyodide (tests/test_web.mjs) the site has the package only: nothing to build
+    sys.path.insert(0, pack)
+    import build_web
+    with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'web', 'index.html'),
+              encoding='utf-8') as fh:
+        html = fh.read()
+    out = build_web.stamp(html, 'abc123')
+    assert 'src="app.js?v=abc123"' in out and 'href="style.css?v=abc123"' in out
+    assert out.replace('?v=abc123', '') == html
+    try:
+        build_web.stamp(html.replace('src="app.js"', 'src="main.js"'), 'x')
+    except SystemExit:
+        pass
+    else:
+        raise AssertionError('a page without app.js was stamped')
+    # the same list the engine gives the page (bridge.info: key, name, releases), every device
+    ds = build_web.device_list()
+    assert [d['key'] for d in ds] == [d.key for d in devices.devices()]
+    assert all(set(d) == {'key', 'name', 'releases'} and d['releases'] == sorted(d['releases']) for d in ds)
+
+
 if __name__ == '__main__':
     import traceback
     ok = failed = 0

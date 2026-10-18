@@ -9,6 +9,11 @@
 
 const $ = id => document.getElementById(id);
 
+// The site's version, as index.html names this file (app.js?v=...): every file the page and the worker
+// load from the site carries it, so a tab never mixes one deploy's files with another's from the cache.
+const V = new URL(import.meta.url).search;
+const site = path => new URL(path + V, import.meta.url);
+
 // Elements are built with text only: a mod's title and description come from
 // its file, so nothing from a file is ever parsed as HTML.
 function el(tag, attrs = {}, ...kids) {
@@ -36,7 +41,7 @@ const base = p => p.slice(p.lastIndexOf('/') + 1);
 
 class Engine {
   constructor() {
-    this.worker = new Worker(new URL('./worker.js', import.meta.url), { type: 'module' });
+    this.worker = new Worker(site('./worker.js'), { type: 'module' });
     this.next = 1;
     this.waiting = new Map();
     this.worker.onmessage = e => {
@@ -144,7 +149,7 @@ const desc = p => st.mods.find(d => d.path === p);
 // their files are on this site, next to it) and the mods you added yourself,
 // as one collection of cards, one per mod.
 
-const shop = { items: [] };
+const shop = { items: [], devices: null };
 const lib = { device: S.libDevice || (S.profiles.find(p => p.id === S.current) || {}).device || null,
   type: S.libType || null, sort: S.libSort || 'collection', query: '' };
 const OWN = '\u0000own';                         // the "Your files" kind
@@ -229,19 +234,26 @@ function entryState(en) {
 }
 
 async function loadShop() {
-  try {
-    const r = await fetch(new URL('shop/index.json', import.meta.url));
-    shop.items = r.ok ? await r.json() : [];
-  } catch {
-    shop.items = [];
-  }
+  const json = async p => {
+    try {
+      const r = await fetch(site(p));
+      return r.ok ? await r.json() : null;
+    } catch {
+      return null;
+    }
+  };
+  const [items, devices] = await Promise.all([json('shop/index.json'), json('devices.json')]);
+  shop.items = items || [];
+  shop.devices = devices;
   renderMods();
 }
 
-// the devices to pick from: the engine's, or (before it loads) the shop's
+// the devices to pick from: the engine's, or (before it loads) the site's devices.json, the same list;
+// without that file, the shop's devices
 function pickable() {
-  if (st.info) {
-    return st.info.devices.map(d => ({ key: d.key, name: d.name, os: d.releases.join(' or '),
+  const list = st.info ? st.info.devices : shop.devices;
+  if (list) {
+    return list.map(d => ({ key: d.key, name: d.name, os: d.releases.join(' or '),
       latest: d.releases[d.releases.length - 1] }));
   }
   const seen = new Map();                         // before the engine: the shop's devices and OS versions
@@ -889,7 +901,7 @@ async function shopAdd(files, btn) {
   try {
     let ticked = false;
     for (const x of [...extra, ...files]) {
-      const r0 = await fetch(new URL('shop/' + x.file, import.meta.url));
+      const r0 = await fetch(site('shop/' + x.file));
       if (!r0.ok) throw new Error(`${x.file}: ${r0.status} ${r0.statusText}`);
       const r = await addMod(x.file, await r0.arrayBuffer(), false, x.sha256);
       if (!r.ok) throw new Error(r.error);
@@ -958,7 +970,7 @@ const KIND = { core: 'A core event', partly: 'Partly: some sites move onto the c
 async function renderTodo() {
   if (!todo.data) {
     try {
-      const r = await fetch(new URL('shop/bounties.json', import.meta.url));
+      const r = await fetch(site('shop/bounties.json'));
       todo.data = r.ok ? await r.json() : { devices: [] };
     } catch {
       todo.data = { devices: [] };

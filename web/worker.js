@@ -41,8 +41,12 @@ for (const k of ['WebSocket', 'WebSocketStream', 'EventSource', 'WebTransport', 
 let py = null;
 let bridge = null;
 
+// the site's version, as the page names this file (worker.js?v=...): the engine's files carry it too
+const V = new URL(import.meta.url).search;
+const site = path => new URL(path + V, import.meta.url);
+
 async function bytes(path) {
-  const r = await fetch(new URL(path, import.meta.url));
+  const r = await fetch(site(path));
   if (!r.ok) throw new Error(`${path}: ${r.status} ${r.statusText}`);
   return new Uint8Array(await r.arrayBuffer());
 }
@@ -64,8 +68,8 @@ async function init() {
   const t1 = performance.now();
   const [zip, src, cores, build] = await Promise.all([
     bytes('elekloader.zip'), bytes('bridge.py'),
-    fetch(new URL('core/index.json', import.meta.url)).then(r => r.json()),
-    fetch(new URL('build.json', import.meta.url)).then(r => r.json()),
+    fetch(site('core/index.json')).then(r => r.json()),
+    fetch(site('build.json')).then(r => r.json()),
   ]);
   py.unpackArchive(zip, 'zip', { extractDir: '/elek' });
   py.FS.mkdirTree('/work');
