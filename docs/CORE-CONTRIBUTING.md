@@ -155,8 +155,9 @@ instead of by routine.
 `elekloader.sdk.bounties` is the community's to-do list for the core. It
 lists every piece of stock code a mod still hooks itself, shared or not,
 one entry per stock routine. Each entry is something anyone can pick up.
-There is no reward but credit: your name on the pull request and in the
-release notes. [Contribute](CONTRIBUTE.md) has the list for the shop's
+There is no reward but credit: your name on the pull request, in the
+release notes and, for an entry you claim with a `Claims:` line, on the
+web page's leaderboard ([CONTRIBUTE.md](CONTRIBUTE.md#claiming-an-entry)). [Contribute](CONTRIBUTE.md) has the list for the shop's
 mods, and the web page's Contribute view keeps it current.
 
 ```bash

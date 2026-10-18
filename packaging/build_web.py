@@ -26,6 +26,8 @@ The site holds:
     the core, made from those files and the cores (elekloader.sdk.bounties,
     grouped by distance: the site has no stock file);
   - devices.json: the devices the engine knows, for the page before it loads;
+  - shop/claims.json: the leaderboard, the to-do list's entries claimed by
+    merged pull requests (--prs: gh pr list --state merged --json ...);
   - pyodide/: the pinned Pyodide's runtime, five files from its core
     tarball, which is checked against its sha256 first;
   - LICENSE.txt, NOTICE.txt, pyodide/NOTICE.txt, and build.json (what went in).
@@ -263,6 +265,38 @@ def to_do(core_paths, folder, items, cs):
             'devices': bounties.bounties(mods)}
 
 
+# an entry of the to-do list, as sdk.bounties names it: device@os:lowest site
+ENTRY_ID = re.compile(r'\b([a-z0-9][a-z0-9-]*@[0-9][0-9A-Za-z.]*:0x[0-9a-fA-F]{8})\b')
+CLAIMS_LINE = re.compile(r'^[\s>*_-]*claims?\s*:(.*)$', re.I | re.M)
+
+
+def claims(prs):
+    """The leaderboard (docs/CONTRIBUTE.md, "Claiming an entry"), from the repository's merged pull
+    requests (`gh pr list --state merged --json number,title,body,author,mergedAt,url`): each entry id on
+    a "Claims:" line of a pull request's description is that author's, one point an entry. An entry is
+    the first merged claim's; a later claim on it scores nothing. -> {'claims': [...], 'board': [...]}"""
+    got = {}
+    for pr in sorted((p for p in prs if p.get('mergedAt')), key=lambda p: (p['mergedAt'], p['number'])):
+        login = ((pr.get('author') or {}).get('login') or '').strip()
+        if not login:
+            continue
+        for line in CLAIMS_LINE.findall(pr.get('body') or ''):
+            for eid in ENTRY_ID.findall(line):
+                head, _, addr = eid.rpartition(':')
+                eid = '%s:0x%s' % (head, addr[2:].lower())      # the address as sdk.bounties writes it
+                if eid not in got:
+                    got[eid] = {'id': eid, 'pr': pr['number'], 'url': pr.get('url', ''), 'title': pr.get('title', ''),
+                                'login': login, 'merged': pr['mergedAt']}
+    board = {}
+    for c in got.values():
+        b = board.setdefault(c['login'], {'login': c['login'], 'points': 0, 'claims': [], 'first': c['merged']})
+        b['points'] += 1
+        b['claims'].append({'id': c['id'], 'pr': c['pr'], 'url': c['url']})
+        b['first'] = min(b['first'], c['merged'])
+    return {'claims': sorted(got.values(), key=lambda c: (c['merged'], c['id'])),
+            'board': sorted(board.values(), key=lambda b: (-b['points'], b['first'], b['login']))}
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split('\n')[0])
     ap.add_argument('--pyodide-url', action='store_true', help='print the pinned Pyodide\'s URL')
@@ -275,6 +309,8 @@ def main(argv=None):
     ap.add_argument('--catalog-list', metavar='CATALOG',
                     help='print each item as "release repo tag file" or "commit repo '
                          'commit path", for the download')
+    ap.add_argument('--prs', help="the repository's merged pull requests (gh pr list --state merged --json "
+                                  "number,title,body,author,mergedAt,url), for the leaderboard")
     ap.add_argument('--out', help='the site folder to write (emptied first)')
     a = ap.parse_args(argv)
     if a.pyodide_url:
@@ -321,6 +357,11 @@ def main(argv=None):
     site['shop/index.json'] = json.dumps([e for e, _ in items], indent=1).encode()
     site['shop/bounties.json'] = json.dumps(to_do(a.core, a.catalog_dir, items, cs), indent=1).encode()
     site['devices.json'] = json.dumps(device_list(), indent=1).encode()
+    prs = []
+    if a.prs:
+        with open(a.prs, encoding='utf-8') as fh:
+            prs = json.load(fh)
+    site['shop/claims.json'] = json.dumps(claims(prs), indent=1).encode()
     # the site's version: its files but the page, which names it
     token = sha(''.join('%s %s\n' % (n, sha(b)) for n, b in sorted(site.items()) if n != 'index.html')
                 .encode())[:12]

@@ -7,9 +7,11 @@ the core's events came from mods that needed them, and support for
 Digitakt II came from an outside contributor. Pull requests are welcome
 and encouraged, and you don't need to ask first.
 
-There is no reward but credit. Your name goes on your pull request and in
-the release notes of the version that takes it. The list on this page is
-the community's to-do list.
+There is no reward but credit: your name on your pull request, in the
+release notes of the version that takes it, and on the web page's
+leaderboard for each entry of the to-do list you claim
+([below](#claiming-an-entry)). The list on this page is the community's
+to-do list.
 
 ## Ways to help
 
@@ -37,10 +39,37 @@ Each entry is one stock routine that one or more mods hook themselves. Its
   above, in one routine.
 
 The entry's id names the device, the oldest OS and the routine's lowest
-site. Put the id in your pull request's title and open it as a draft
-early: that way others see the entry is taken. An entry is done when it
-leaves the list, which happens when the mods there are rebuilt on the core
-and the shop has the new files.
+site. An entry is done when it leaves the list, which happens when the
+mods there are rebuilt on the core and the shop has the new files.
+
+## Claiming an entry
+
+Put a line in your pull request's description that names the entries it
+does, by their ids:
+
+```
+Claims: digitakt-mk1@1.53:0x400d553e, digitakt-mk1@1.53:0x400721e6
+```
+
+When the pull request is merged, the next build of the web page counts it:
+each entry it names is a point beside your GitHub name on the
+**leaderboard** in the page's Contribute view, and the entry shows who
+claimed it until it leaves the list.
+
+- **One point an entry.** The first merged pull request that claims an
+  entry takes it; a later claim on the same entry scores nothing.
+- **Open it as a draft early,** with its `Claims:` line, so others see the
+  entry is taken.
+- **A "move onto the core" entry** is done in the mod's own repository; its
+  claim goes on the pull request here that brings the rebuilt mod into the
+  shop (`web/catalog.json`).
+- **Your merge is the review:** a claim counts only on a merged pull
+  request here, and the maintainers merge what does the entry.
+
+The board is made from the merged pull requests themselves (the pages
+workflow lists them, `packaging/build_web.py` reads their `Claims:`
+lines), so nobody keeps it by hand. A fork's board counts the fork's own
+pull requests.
 
 The web page's **Contribute** view always shows the list for the shop's
 current files ([irpina.github.io/elekloader/#contribute](https://irpina.github.io/elekloader/#contribute)).

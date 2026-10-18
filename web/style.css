@@ -416,6 +416,17 @@ details summary:hover { color: var(--text); }
 .hooks { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-top: 6px; color: var(--muted); font: 12px var(--mono);
   overflow-wrap: anywhere; }
 .hook strong { color: var(--text); font-weight: 600; }
+.claimed { padding: 2px 9px; border-radius: 999px; background: var(--raised); color: var(--ok); font-size: 12px; }
+.board { display: grid; gap: 6px; margin: 4px 0 8px; padding: 0; list-style: none; max-width: 760px; }
+.board li { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; align-items: center; gap: 4px 12px;
+  padding: 9px 14px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); }
+.board .rank { color: var(--faint); font: 700 15px var(--mono); text-align: center; }
+.board .who { font-weight: 700; min-width: 0; overflow-wrap: anywhere; }
+.board .pts { font: 600 13px var(--mono); color: var(--accent); }
+.board .claims { grid-column: 2 / -1; display: flex; flex-wrap: wrap; gap: 4px 10px; font: 12px var(--mono); color: var(--muted); }
+.board li.top1 { border-color: var(--accent); background: var(--accent-soft); }
+.board li.top1 .rank { color: var(--accent); }
+.board li.top2 .rank, .board li.top3 .rank { color: var(--text); }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }

@@ -634,6 +634,35 @@ def test_the_site_names_its_files_with_its_version_and_lists_the_devices():
     assert all(set(d) == {'key', 'name', 'releases'} and d['releases'] == sorted(d['releases']) for d in ds)
 
 
+def test_merged_pull_requests_claim_entries_for_the_leaderboard():
+    pack = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'packaging')
+    if not os.path.exists(os.path.join(pack, 'build_web.py')):
+        return      # under Pyodide (tests/test_web.mjs): no packaging/
+    sys.path.insert(0, pack)
+    import build_web
+
+    def pr(n, when, who, body):
+        return {'number': n, 'mergedAt': when, 'url': 'https://github.com/o/r/pull/%d' % n,
+                'title': 't', 'author': {'login': who} if who else None, 'body': body}
+    r = build_web.claims([
+        pr(6, '2026-10-21T00:00:00Z', 'bob', '- **Claims:** digitakt-mk1@1.53:0x400d553e\n'
+                                            'claims: digitone-mk1@1.43:0x40000438'),
+        pr(5, '2026-10-20T00:00:00Z', 'ann', 'The live note.\n\nClaims: digitakt-mk1@1.53:0x400D553E, '
+                                            'octatrack@1.40C:0x4000d99a'),
+        pr(7, None, 'eve', 'Claims: digitakt-mk1@1.53:0x40077d72'),              # not merged
+        pr(8, '2026-10-22T00:00:00Z', 'eve', 'mentions digitakt-mk1@1.53:0x40077d72'),   # no Claims: line
+        pr(9, '2026-10-23T00:00:00Z', None, 'Claims: digitakt-mk1@1.53:0x40000438'),     # no author
+    ])
+    # the first merged claim takes an entry (ann's, though bob's is listed first); the address in
+    # lower case as sdk.bounties writes it, the OS as it is ("1.40C")
+    assert [(c['id'], c['login'], c['pr']) for c in r['claims']] == [
+        ('digitakt-mk1@1.53:0x400d553e', 'ann', 5), ('octatrack@1.40C:0x4000d99a', 'ann', 5),
+        ('digitone-mk1@1.43:0x40000438', 'bob', 6)]
+    assert [(b['login'], b['points'], [c['pr'] for c in b['claims']]) for b in r['board']] == [
+        ('ann', 2, [5, 5]), ('bob', 1, [6])]
+    assert build_web.claims([]) == {'claims': [], 'board': []}
+
+
 if __name__ == '__main__':
     import traceback
     ok = failed = 0

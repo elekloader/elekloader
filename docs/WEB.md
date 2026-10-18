@@ -196,6 +196,7 @@ shows them as one card (the same repository, mod, version and device).
 | `elekloader.zip` | the elekloader package, exactly as the commit has it (`git archive HEAD elekloader`), stored, sorted, fixed dates: its sha256 follows from the commit |
 | `core/*.elemod`, `core/index.json` | the cores of the latest release, and the cores the catalog lists, with their sha256; the worker loads the newest of each device and OS and checks it |
 | `shop/*.elemod`, `shop/index.json` | the shop: the catalog's mods, from their authors' releases, with what each file says about itself |
+| `shop/claims.json` | the leaderboard: the to-do list's entries claimed by the repository's merged pull requests (`Claims:` lines; [CONTRIBUTE.md](CONTRIBUTE.md#claiming-an-entry)), from `gh pr list --state merged` |
 | `shop/bounties.json` | the community's to-do list for the core, from the shop's files and the cores (`elekloader.sdk.bounties`, grouped by distance: the site has no stock file), shown in the page's Contribute view ([CONTRIBUTE.md](CONTRIBUTE.md)) |
 | `pyodide/` | five files from Pyodide's core tarball (`pyodide.mjs`, `pyodide.asm.mjs`, `pyodide.asm.wasm`, `python_stdlib.zip`, `pyodide-lock.json`), and `NOTICE.txt` with their licences |
 | `build.json` | the commit, the site's version, the package's sha256 and git tree, the release the cores come from and whether the package is that release's, Pyodide's version, every file's sha256 |
@@ -213,13 +214,15 @@ then build and run the checks below.
    (`gh release download`), and fetches that release's tag;
 3. downloads the shop's files, each from its author's release or commit
    (one it cannot get is a warning, and the shop lists it as not available);
-4. downloads the pinned Pyodide core tarball;
-5. assembles the site (`build_web.py` checks the tarball's sha256, and
+4. lists the repository's merged pull requests (`gh pr list --state
+   merged`) for the leaderboard; without them the board is empty;
+5. downloads the pinned Pyodide core tarball;
+6. assembles the site (`build_web.py` checks the tarball's sha256, and
    the shop's files against the catalog);
-6. runs `tests/test_web.mjs` on the assembled site: the unit tests under
+7. runs `tests/test_web.mjs` on the assembled site: the unit tests under
    Pyodide with the site's own `elekloader.zip`, the bridge loaded as the
    worker loads it, and every shop file through the bridge;
-7. deploys it with `actions/upload-pages-artifact` and `actions/deploy-pages`.
+8. deploys it with `actions/upload-pages-artifact` and `actions/deploy-pages`.
 
 No firmware reaches the workflow. Pages has to be on, with **GitHub
 Actions** as its source (Settings > Pages). When a new release carries its

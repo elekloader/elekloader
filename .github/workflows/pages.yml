@@ -26,6 +26,7 @@ on:
 
 permissions:
   contents: read
+  pull-requests: read       # the merged pull requests' "Claims:" lines, for the leaderboard
 
 # one deployment at a time; a newer run waits rather than cancelling one midway
 concurrency:
@@ -75,10 +76,17 @@ jobs:
                 || echo "::warning::$repo $ref $path: not downloadable; the shop lists it as not available"
             fi
           done
+      - name: The leaderboard's claims, from the merged pull requests
+        run: |
+          # each "Claims: <entry id>" line of a merged pull request's description (docs/CONTRIBUTE.md);
+          # without the list the board is empty, and the site still builds
+          gh pr list --repo "$GITHUB_REPOSITORY" --state merged --limit 1000 \
+            --json number,title,body,author,mergedAt,url > build/prs.json \
+            || { echo "::warning::merged pull requests not listed: the leaderboard is empty"; echo '[]' > build/prs.json; }
       - name: Pyodide, the pinned release
         run: curl -fsSL --retry 3 --create-dirs -o build/pyodide-core.tar.bz2 "$(python packaging/build_web.py --pyodide-url)"
       - name: Assemble the site
-        run: python packaging/build_web.py --pyodide build/pyodide-core.tar.bz2 --core build/core/core-*.elemod --release "$TAG" --catalog web/catalog.json --catalog-dir build/shop --out build/site
+        run: python packaging/build_web.py --pyodide build/pyodide-core.tar.bz2 --core build/core/core-*.elemod --release "$TAG" --catalog web/catalog.json --catalog-dir build/shop --prs build/prs.json --out build/site
       - name: The engine under Pyodide, from the assembled site
         run: node tests/test_web.mjs build/site
       - uses: actions/upload-pages-artifact@v5

@@ -961,21 +961,30 @@ function route() {
   if (v === 'contribute') renderTodo();
 }
 
-// ---- Contribute: the community's to-do list for the core (shop/bounties.json) ----
+// ---- Contribute: the leaderboard (shop/claims.json) and the to-do list for the core (shop/bounties.json) ----
 
-const todo = { data: null, open: new Set() };
+const todo = { data: null, claims: null, open: new Set() };
 const KIND = { core: 'A core event', partly: 'Partly: some sites move onto the core',
   migration: 'Move onto the core' };
+// the board's links go to GitHub only (the data is the pull requests' own)
+const gh = (path, text) => el('a', { href: 'https://github.com/' + path, rel: 'noreferrer', target: '_blank' }, text);
+const ghPr = c => /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/pull\/\d+$/.test(c.url || '')
+  ? el('a', { href: c.url, rel: 'noreferrer', target: '_blank' }, `#${c.pr}`) : `#${c.pr}`;
 
 async function renderTodo() {
   if (!todo.data) {
-    try {
-      const r = await fetch(site('shop/bounties.json'));
-      todo.data = r.ok ? await r.json() : { devices: [] };
-    } catch {
-      todo.data = { devices: [] };
-    }
+    const json = async (p, empty) => {
+      try {
+        const r = await fetch(site(p));
+        return r.ok ? await r.json() : empty;
+      } catch {
+        return empty;
+      }
+    };
+    [todo.data, todo.claims] = await Promise.all([json('shop/bounties.json', { devices: [] }),
+      json('shop/claims.json', { claims: [], board: [] })]);
   }
+  renderBoard();
   const devs = (todo.data.devices || []).filter(d => d.score.mods > 0);
   if (!devs.length) {
     $('todo').replaceChildren(el('p', { class: 'muted' }, 'The list is not on this site yet.'));
@@ -984,6 +993,27 @@ async function renderTodo() {
   $('todo').replaceChildren(...devs.map(todoDevice),
     el('p', { class: 'muted small lib-foot' }, `Made on ${todo.data.made} from the ${todo.data.files} files on this site: the shop's mods and the cores. `
       + 'The site holds no firmware, so sites are grouped by distance rather than by routine.'));
+}
+
+// the leaderboard: one row a contributor, most points first (a tie: the earlier first claim)
+function renderBoard() {
+  const board = (todo.claims && todo.claims.board) || [];
+  if (!board.length) {
+    $('board').replaceChildren(el('p', { class: 'muted' }, 'No claims yet. The first merged claim tops the board.'));
+    return;
+  }
+  let rank = 0, last = null;
+  $('board').replaceChildren(el('ol', { class: 'board' }, board.map((b, i) => {
+    if (b.points !== last) { rank = i + 1; last = b.points; }
+    return el('li', { class: rank <= 3 ? 'top' + rank : '' },
+      el('span', { class: 'rank' }, String(rank)),
+      el('span', { class: 'who' }, gh(encodeURIComponent(b.login), b.login)),
+      el('span', { class: 'pts' }, `${b.points} point${b.points === 1 ? '' : 's'}`),
+      el('span', { class: 'claims' }, [...b.claims.reduce((m, c) => m.set(c.pr, [...(m.get(c.pr) || []), c]),
+        new Map()).values()].map(cs =>
+        el('span', { class: 'claim', title: cs.map(c => c.id).join('\n') }, ghPr(cs[0]),
+          cs.length > 1 ? ` ×${cs.length}` : ''))));
+  })));
 }
 
 // a mod's sites in an entry: the symbols they jump to, a few of them
@@ -1007,6 +1037,7 @@ function todoDevice(d) {
   fill.style.width = pct + '%';
   const meter = el('div', { class: 'meter', role: 'img', 'aria-label': `${pct}% of the mods use only the core` },
     el('span', { class: 'track' }, fill));
+  const claimed = new Map(((todo.claims && todo.claims.claims) || []).map(c => [c.id, c]));
   return el('section', { class: 'todo-dev' },
     el('div', { class: 'todo-head' },
       el('h3', {}, d.device, el('span', { class: 'muted small' }, ` OS ${d.oses.join(', ')}`)),
@@ -1017,9 +1048,11 @@ function todoDevice(d) {
     all.length ? el('ol', { class: 'todo-list' }, shown.map(e => el('li', {},
       el('div', { class: 'todo-top' },
         el('span', { class: 'kind ' + e.kind }, KIND[e.kind] || e.kind),
-        el('code', { class: 'todo-id', title: 'Put this id in your pull request\'s title' }, e.id),
+        el('code', { class: 'todo-id', title: 'Claim it: put "Claims: ' + e.id + '" in your pull request\'s description' }, e.id),
         el('span', { class: 'muted small' }, `${e.mods.length} mod${e.mods.length === 1 ? '' : 's'}`
-          + (e.missing_os.length ? ` · no address on ${e.missing_os.join(', ')}` : ''))),
+          + (e.missing_os.length ? ` · no address on ${e.missing_os.join(', ')}` : '')),
+        claimed.has(e.id) ? el('span', { class: 'claimed' }, 'Claimed by ',
+          gh(encodeURIComponent(claimed.get(e.id).login), claimed.get(e.id).login), ' in ', ghPr(claimed.get(e.id))) : ''),
       el('div', { class: 'hooks' }, todoHooks(e))))) : el('p', { class: 'muted' }, 'Nothing left to do here.'),
     all.length > 8 ? el('button', { type: 'button', class: 'btn outline small', onclick: () => {
       if (open) todo.open.delete(d.device); else todo.open.add(d.device);
