@@ -1,8 +1,8 @@
 {
- "id": "digitriad", "version": "0.1.1",
+ "id": "digitriad", "version": "0.2",
  "license": "GPL-2.0-or-later",
  "title": "DigiTriad", "category": "Effect", "author": "irpina",
- "description": "A three-voice rhythmic pitch shifter for the Digitone mk1's audio inputs: three voices from -2 to +2 octaves, chromatic or in a key and scale (Major, Minor, Melodic Minor, Harmonic Minor, Double Harmonic, Lydian and Minor Pentatonic) from the note a pitch detector hears, with microtune, glide and pitch correction, each behind its own time division of a delay in time with the Digitone's tempo, in four delay modes (pitch feedback, series, dual with cross feedback, dual), rhythm patterns, half speed, swell, freeze, eight presets and MIDI CCs. DIGITRIAD in core-dn1's Mod Menu (hold a track key) opens its page; while it is open it owns the audio engine (the synths are muted) and processes the inputs, and NO gives both back. Needs core-dn1 3.2.",
+ "description": "A three-voice rhythmic pitch shifter for the Digitone mk1's audio inputs: three voices from -2 to +2 octaves, chromatic or in a key and scale (Major, Minor, Melodic Minor, Harmonic Minor, Double Harmonic, Lydian and Minor Pentatonic) from the note a pitch detector hears, with microtune, glide and pitch correction, each behind its own time division of a delay in time with the Digitone's tempo, in four delay modes (pitch feedback, series, dual with cross feedback, dual), rhythm patterns, half speed, swell, freeze, and MIDI CCs. DIGITRIAD in core-dn1's Mod Menu (hold a track key) makes it the active effect and opens its page; while it is active it owns the audio engine (the synths are muted) and processes the inputs, through fxkit's MIXER (AMP), with two LFOs aimed at its controls (LFO) and p-locks on the pattern's steps (RECORD: hold a trig, turn a control). MIDI leaves the page to edit the MIDI tracks while it plays; NO turns it off. Needs fxkit (core-dn1 4.1).",
  "device": "digitone-mk1", "os": "1.43",
  "ports": {"1.44": {}},
  "sources": ["dsp.c", "ui.c"],
@@ -19,15 +19,15 @@
  "contribute": [
   {"to": "core_menu", "order": 33, "data": "00000000",
    "relocs": [[0, "abs32", "sym:dtriad_menu", 0]]},
-  {"to": "core_audio", "order": 62, "data": "00000000",
-   "relocs": [[0, "abs32", "sym:dtriad_owner", 0]]},
+  {"to": "fx_effects", "order": 62, "data": "00000000",
+   "relocs": [[0, "abs32", "sym:dtriad_effect", 0]]},
   {"to": "core_projdata", "order": 72, "data": "00000000",
    "relocs": [[0, "abs32", "sym:dtriad_projdata", 0]]}
  ],
  "resources": {
-  "core": "3.2",
+  "core": "4.1",
   "names": ["projdata:DHED"],
   "regions": [{"name": "digitriad lines", "lo": "0x47B00000", "hi": "0x47BE0000"}]
  },
- "requires": ["core"]
+ "requires": ["core", "fxkit"]
 }

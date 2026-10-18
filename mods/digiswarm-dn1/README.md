@@ -3,16 +3,37 @@
 An effects engine for the Digitone mk1's two audio inputs:
 eleven engines with four variations each, a 60-second looper, Hold, Reverse,
 a resonant filter, pitch modulation and a reverb with four rooms, all in time
-with the Digitone's tempo, and MIDI CCs for its controls and looper. DigiSwarm is an elekloader mod for core-dn1 3.2.
+with the Digitone's tempo, and MIDI CCs for its controls and looper. DigiSwarm is an elekloader mod on fxkit (core-dn1 4.1).
 
 Its MIDI CCs follow the Hologram Electronics Microcosm's published CC chart, so a controller set up for that pedal works with it too. DigiSwarm is not affiliated with Hologram Electronics and uses none of its code.
 
-DIGISWARM is an entry in core-dn1's Mod Menu (hold a track key). While its
-page is open, DigiSwarm owns the audio engine (core-dn1 3.2's `core_audio`):
+DIGISWARM is an entry in core-dn1's Mod Menu (hold a track key). While it is the
+active effect, DigiSwarm owns the audio engine (fxkit's `core_audio` owner):
 the synths are silent, the Digitone's own effects are off, and everything
-you hear is the inputs through DigiSwarm. NO gives the audio and the screen
-back. The sequencer keeps running, so DigiSwarm follows its tempo and PLAY,
+you hear is the inputs through DigiSwarm. NO turns it off and gives the audio and the screen back. The sequencer keeps running, so DigiSwarm follows its tempo and PLAY,
 STOP and TEMPO still work.
+
+## 0.2: on fxkit
+
+From 0.2 DigiSwarm is an effect on fxkit ([../fxkit-dn1](../fxkit-dn1)), as every
+effect in the build is: one at a time is active. Its Mod Menu entry makes it
+the active effect and opens its page; while it is active it owns the audio,
+page or no page, and opening another effect's entry hands that one the audio.
+
+| key | on DigiSwarm's page |
+|---|---|
+| SYN1, SYN2, FLTR | its three pages (EFFECT, SHIFT and LOOPER) |
+| AMP | the MIXER: IN L, IN R (the inputs' levels, as the stock mixer's: 32 unity, up to +24 dB), L PAN, R PAN (where each input sits), BAL, VOL, WDTH (the output's width) |
+| LFO | LFO 1, pressed again LFO 2: the stock LFO page (its knobs, WAVE and SPH as one wave, a turned knob's value under it), at the stock rates; turning DEST opens its list (DigiSwarm's controls and the mixer's), YES picks, NO closes |
+| RECORD | LOCK mode: hold a trig and turn a control, and that step has a p-lock of it (the title bar shows the 16 steps, filled where DigiSwarm has a lock); FUNC + a trig clears the step; PAGE the next 16 steps. RECORD again (or NO) leaves it |
+| MIDI | the stock UI, for the MIDI tracks and the rest, with DigiSwarm playing on; its Mod Menu entry brings the page back |
+| NO | DigiSwarm off: the synths again |
+
+The p-locks are the pattern's: they are kept in one synth track's lock table
+(SETUP's LOCK TRACK, T4 unless you pick another), saved and copied with the
+pattern, and play on their steps; that track should play nothing of its own
+(no notes, no arpeggiator) in a pattern with DigiSwarm's locks, or its trigs go astray. 0.1's presets are gone: the
+project keeps DigiSwarm's controls, mixer and LFOs (tag `DCSM`, 44 bytes).
 
 ## The page
 
@@ -40,7 +61,7 @@ sequencer plays the engines' grid is its timeline.
 | Hold | HOLD on page 3, or trig key 12 (latching, or momentary in SETUP) |
 | Looper: record / play / overdub, hold for undo; stop, hold to erase | page 3, or T1 and T2 as two footswitches (hold T1 to undo, T2 to erase) |
 | Reverse, Bypass (with trails) | REV and BYP on page 3 |
-| Presets | sixteen: FUNC + trig key 1-16 recalls one; in SETUP a trig key saves the page as that preset (the engine, the variation and knobs A-H). They are saved with the project |
+| Presets | none from 0.2: the project keeps the controls, and p-locks (RECORD) follow the pattern |
 | Settings | YES opens SETUP (input mono/stereo, loop route, looper only, quantize, burst, hold mode, loop order, MIDI channel); UP and DOWN pick a row, LEFT or RIGHT changes it |
 | MIDI CCs | on the Digitone's auto channel (see MIDI below) |
 | Tempo | the Digitone's own tempo (TEMPO) |
@@ -77,8 +98,8 @@ Time steps, a bar down to 1/32; the loop speeds are its five, 1/4X to 4X,
 with 8x as 4X. The looper's CCs act on a value of 64 or more.
 
 CC 22 (looper on/off), 45 and 46 (copy and save preset) and 93 (tap tempo)
-have nothing to do here: the looper is always on, presets are saved from
-SETUP and the tempo is the Digitone's. DigiSwarm takes them anyway while it
+have nothing to do here: the looper is always on, there are no presets
+and the tempo is the Digitone's. DigiSwarm takes them anyway while it
 is open, so they don't change the active track's sound. Program changes (preset
 recall) are not mapped: core-dn1 passes DigiSwarm the CCs only.
 
@@ -119,23 +140,22 @@ core-dn1's render; the UI (`ui.c`) runs in the Digitone's UI task.
 - **CPU:** DigiSwarm times its own render with DMA timer 0 and shows its share
   of a block in the corner (`C`). Over 45% it starts fewer new grains; under
   30% it allows more again, up to sixteen heads.
-- **Project data:** the page (engine, variation, knobs, FUNC's knobs, SETUP)
-  and the sixteen presets are saved with the project (tag `DCSM`, 132 bytes:
-  a preset keeps the knobs at 6 bits). Mods share 480 bytes there;
-  digitables' tables take 328 of them, and DigiSwarm fits beside them. Loops
-  are not saved.
+- **Project data:** DigiSwarm's controls, its latches and SETUP, with fxkit's mixer and LFOs
+  (`fx_pack`), are saved with the project (tag `DCSM`, 44 bytes; mods share 480 there,
+  and the seven effects, GAIN and fxkit take about 470). The p-locks are the
+  pattern's. Loops are not saved.
 
 ## Build
 
 With the SDK and a stock OS file:
 
 ```bash
-python -m elekloader.sdk.build mods/digiswarm-dn1 --stock Digitone_and_Digitone_Keys_OS1.43.syx   # out/digiswarm-0.1.2.elemod
-python -m elekloader.sdk.build mods/digiswarm-dn1 --stock Digitone_and_Digitone_Keys_OS1.44.syx   # out/digiswarm-0.1.2-os1.44.elemod
+python -m elekloader.sdk.build mods/digiswarm-dn1 --stock Digitone_and_Digitone_Keys_OS1.43.syx   # out/digiswarm-0.2.elemod
+python -m elekloader.sdk.build mods/digiswarm-dn1 --stock Digitone_and_Digitone_Keys_OS1.44.syx   # out/digiswarm-0.2-os1.44.elemod
 ```
 
-It names no firmware address, so its 1.44 port is empty. It needs core-dn1
-3.2 (`"resources": {"core": "3.2"}`; its page uses 3.2's `fw_font_label` and
+It names no firmware address, so its 1.44 port is empty. It needs fxkit and core-dn1
+4.1 (`"requires": ["core", "fxkit"]`, `"resources": {"core": "4.1"}`; its page uses 3.2's `fw_font_label` and
 `fw_font_title`) and an elekloader with the profile's
 `bulk` area. `gentables.py` makes `tables.h`.
 

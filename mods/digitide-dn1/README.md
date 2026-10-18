@@ -4,21 +4,43 @@ A two-channel pedal for the Digitone mk1's audio inputs: a wet channel
 (REVERB, DELAY, GRAB, with FREEZE) and an always-listening micro-looper
 (ENV, TAPE, STRETCH, with OVERDUB) that pass sound to each other as
 ROUTING says, a CLOCK that lowers the sample rate of both, extra options
-and switches, presets and MIDI CCs. DigiTide is an elekloader mod for
-core-dn1 3.2.
+and switches, and MIDI CCs. DigiTide is an elekloader mod on fxkit
+(core-dn1 4.1).
 
 Its MIDI CCs follow the Chase Bliss MOOD MKII's published CC chart, so a
 controller set up for that pedal works with it too. DigiTide is not
 affiliated with Chase Bliss and uses none of its code.
 
-DIGITIDE is an entry in core-dn1's Mod Menu (hold a track key). While its
-page is open, DigiTide owns the audio engine, as DigiSwarm and DigiPrism
-do (core-dn1 3.2's `core_audio`): the synths are silent, the Digitone's own
+DIGITIDE is an entry in core-dn1's Mod Menu (hold a track key). While it is the
+active effect, DigiTide owns the audio engine, as DigiSwarm and DigiPrism
+do (fxkit's `core_audio` owner): the synths are silent, the Digitone's own
 effects are off, and what you hear is the inputs through the pedal. NO
-gives the audio and the screen back. The sequencer keeps running, so PLAY,
+turns it off and gives the audio and the screen back. The sequencer keeps running, so PLAY,
 STOP and TEMPO still work and the clock can follow the Digitone's tempo.
 Opening the page steps the pedal on; BYPASS (trig 16) passes the inputs
 through dry, with the wet channel's tail.
+
+## 0.2: on fxkit
+
+From 0.2 DigiTide is an effect on fxkit ([../fxkit-dn1](../fxkit-dn1)), as every
+effect in the build is: one at a time is active. Its Mod Menu entry makes it
+the active effect and opens its page; while it is active it owns the audio,
+page or no page, and opening another effect's entry hands that one the audio.
+
+| key | on DigiTide's page |
+|---|---|
+| SYN1, SYN2, FLTR | its three pages (page 1, 2 and the toggles) |
+| AMP | the MIXER: IN L, IN R (the inputs' levels, as the stock mixer's: 32 unity, up to +24 dB), L PAN, R PAN (where each input sits), BAL, VOL, WDTH (the output's width) |
+| LFO | LFO 1, pressed again LFO 2: the stock LFO page (its knobs, WAVE and SPH as one wave, a turned knob's value under it), at the stock rates; turning DEST opens its list (DigiTide's controls and the mixer's), YES picks, NO closes |
+| RECORD | LOCK mode: hold a trig and turn a control, and that step has a p-lock of it (the title bar shows the 16 steps, filled where DigiTide has a lock); FUNC + a trig clears the step; PAGE the next 16 steps. RECORD again (or NO) leaves it |
+| MIDI | the stock UI, for the MIDI tracks and the rest, with DigiTide playing on; its Mod Menu entry brings the page back |
+| NO | DigiTide off: the synths again |
+
+The p-locks are the pattern's: they are kept in one synth track's lock table
+(SETUP's LOCK TRACK, T4 unless you pick another), saved and copied with the
+pattern, and play on their steps; that track should play nothing of its own
+(no notes, no arpeggiator) in a pattern with DigiTide's locks, or its trigs go astray. 0.1's presets are gone: the
+project keeps DigiTide's controls, mixer and LFOs (tag `DMOD`, 52 bytes).
 
 ## The two channels
 
@@ -111,7 +133,7 @@ hi-cut on the wet channel from open (127) down to 600 Hz.
 | page 3 | LATCH, DRY KILL, NO DUB |
 | SETUP | SMOOTH CLK, INPUT (MONO: input L to both sides), BYPASS (TRAILS or CUT) |
 | trig 15 | tap tempo |
-| presets | 8: in SETUP a trig key 1-8 saves the pedal there; FUNC + a trig key 1-8 recalls it |
+| presets | none from 0.2: the project keeps the pedal, and p-locks (RECORD) follow the pattern |
 | trig 1-6, 7-12, 13 and 14 | TIME's six divisions; LENGTH's six; CLOCK a step down, up |
 
 With SPREAD each mode makes its own stereo: REVERB widens its tail (WDTH,
@@ -180,23 +202,22 @@ feedback matrix) with its allpasses' coefficient on MODIFY. The UI
   every block, and if the unit stays over 93% for 0.2 s it bypasses the
   pedal at once (no trails) and says so in the title ("CPU full:
   bypassed"); BYPASS turns it back on.
-- **Project data:** the pedal (the knobs, the extra options, the toggles,
-  the channels' latches and SETUP) and the eight presets are saved with the
-  project (tag `DMOD`, 136 bytes). A preset keeps the eight knobs of page 1
-  and the eight toggles; the extra options are the project's. The loop is
-  not saved: the Digitone's +Drive has no files for mods.
+- **Project data:** DigiTide's controls, its latches and SETUP, with fxkit's mixer and LFOs
+  (`fx_pack`), are saved with the project (tag `DMOD`, 52 bytes; mods share 480 there,
+  and the seven effects, GAIN and fxkit take about 470). The p-locks are the
+  pattern's. The loop is not saved: the Digitone's +Drive has no files for mods.
 
 ## Build
 
 With the SDK and a stock OS file:
 
 ```bash
-python -m elekloader.sdk.build mods/digitide-dn1 --stock Digitone_and_Digitone_Keys_OS1.43.syx   # out/digitide-0.1.1.elemod
-python -m elekloader.sdk.build mods/digitide-dn1 --stock Digitone_and_Digitone_Keys_OS1.44.syx   # out/digitide-0.1.1-os1.44.elemod
+python -m elekloader.sdk.build mods/digitide-dn1 --stock Digitone_and_Digitone_Keys_OS1.43.syx   # out/digitide-0.2.elemod
+python -m elekloader.sdk.build mods/digitide-dn1 --stock Digitone_and_Digitone_Keys_OS1.44.syx   # out/digitide-0.2-os1.44.elemod
 ```
 
-It names no firmware address, so its 1.44 port is empty. It needs core-dn1
-3.2 (`"resources": {"core": "3.2"}`) and an elekloader with the profile's
+It names no firmware address, so its 1.44 port is empty. It needs fxkit and core-dn1
+4.1 (`"requires": ["core", "fxkit"]`, `"resources": {"core": "4.1"}`) and an elekloader with the profile's
 `bulk` area. `gentables.py` makes `tables.h`.
 
 ## Checked
@@ -249,7 +270,7 @@ compiled for a computer and fed test signals (`tests.sh`):
   CLOCK bounces (RAMP, a triangle).
 - A classic mode (noise, degrading loops, a ringing reverb, a bendy
   delay).
-- A synth mode, program changes and more than eight presets.
+- A synth mode, program changes and presets (the project keeps one).
 - An ENV where the loop's level follows the input; here ENV holds a slice
   while the input is loud.
 

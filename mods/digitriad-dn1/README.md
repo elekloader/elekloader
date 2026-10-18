@@ -6,20 +6,42 @@ key and scale from the note a pitch detector hears in what you play, with
 MICROTUNE, GLIDE and pitch CORRECTION; each voice behind its own division of
 a delay in time with the Digitone's tempo, in four delay modes
 (PITCH FEEDBACK, SERIES, DUAL + CROSS, DUAL), with rhythm patterns, HALF
-SPEED, SWELL, FREEZE, presets and MIDI CCs. DigiTriad is an
-elekloader mod for core-dn1 3.2.
+SPEED, SWELL, FREEZE and MIDI CCs. DigiTriad is an
+elekloader mod on fxkit (core-dn1 4.1).
 
 Its MIDI CCs follow the Meris Hedra's published CC chart, so a controller set
 up for that pedal works with it too. DigiTriad is not affiliated with Meris
 and uses none of its code.
 
-DIGITRIAD is an entry in core-dn1's Mod Menu (hold a track key). While its
-page is open, DigiTriad owns the audio engine, as DigiSwarm and DigiPrism do
-(core-dn1 3.2's `core_audio`): the synths are silent, the Digitone's own
-effects are off, and what you hear is the inputs through the pedal. NO gives
-the audio and the screen back. The sequencer keeps running, so PLAY, STOP and
+DIGITRIAD is an entry in core-dn1's Mod Menu (hold a track key). While it is the
+active effect, DigiTriad owns the audio engine, as DigiSwarm and DigiPrism do
+(fxkit's `core_audio` owner): the synths are silent, the Digitone's own
+effects are off, and what you hear is the inputs through the pedal. NO turns
+it off and gives the audio and the screen back. The sequencer keeps running, so PLAY, STOP and
 TEMPO still work and the delay can follow the Digitone's tempo. BYPASS
 (trig 16) passes the inputs through dry, with the delay's tails.
+
+## 0.2: on fxkit
+
+From 0.2 DigiTriad is an effect on fxkit ([../fxkit-dn1](../fxkit-dn1)), as every
+effect in the build is: one at a time is active. Its Mod Menu entry makes it
+the active effect and opens its page; while it is active it owns the audio,
+page or no page, and opening another effect's entry hands that one the audio.
+
+| key | on DigiTriad's page |
+|---|---|
+| SYN1, SYN2, FLTR | its three pages (page 1, 2 and 3) |
+| AMP | the MIXER: IN L, IN R (the inputs' levels, as the stock mixer's: 32 unity, up to +24 dB), L PAN, R PAN (where each input sits), BAL, VOL, WDTH (the output's width) |
+| LFO | LFO 1, pressed again LFO 2: the stock LFO page (its knobs, WAVE and SPH as one wave, a turned knob's value under it), at the stock rates; turning DEST opens its list (DigiTriad's controls and the mixer's), YES picks, NO closes |
+| RECORD | LOCK mode: hold a trig and turn a control, and that step has a p-lock of it (the title bar shows the 16 steps, filled where DigiTriad has a lock); FUNC + a trig clears the step; PAGE the next 16 steps. RECORD again (or NO) leaves it |
+| MIDI | the stock UI, for the MIDI tracks and the rest, with DigiTriad playing on; its Mod Menu entry brings the page back |
+| NO | DigiTriad off: the synths again |
+
+The p-locks are the pattern's: they are kept in one synth track's lock table
+(SETUP's LOCK TRACK, T4 unless you pick another), saved and copied with the
+pattern, and play on their steps; that track should play nothing of its own
+(no notes, no arpeggiator) in a pattern with DigiTriad's locks, or its trigs go astray. 0.1's presets are gone: the
+project keeps DigiTriad's controls, mixer and LFOs (tag `DHED`, 52 bytes).
 
 ## The page
 
@@ -54,7 +76,7 @@ its default.
 | HALF SPEED | T3, or HALF on page 3 |
 | MODE | four delay modes, on page 3 |
 | BYPASS, SMTH | trig 16; pitch knob smoothing, SMTH on page 3 |
-| Presets | 8: in SETUP a trig key 1-8 saves the pedal there; FUNC + a trig key 1-8 recalls it |
+| Presets | none from 0.2: the project keeps the pedal, and p-locks (RECORD) follow the pattern |
 | Expression pedal, MIDI notes setting the voices | not here (see Not yet) |
 
 ## Track keys
@@ -178,21 +200,22 @@ Digitone's UI task.
   timer 0 every block, and if the unit stays over 93% for 0.2 s it bypasses
   the pedal at once (no trails) and says so in the title ("CPU full:
   bypassed"); BYPASS turns it back on.
-- **Project data:** the pedal (the knobs, page 2, the settings, the latches
-  and SETUP) and the eight presets are saved with the project (tag `DHED`,
-  136 bytes). A preset keeps the page 1 knobs and the page 3 settings.
+- **Project data:** DigiTriad's controls, its latches and SETUP, with fxkit's mixer and LFOs
+  (`fx_pack`), are saved with the project (tag `DHED`, 52 bytes; mods share 480 there,
+  and the seven effects, GAIN and fxkit take about 470). The p-locks are the
+  pattern's.
 
 ## Build
 
 With the SDK and a stock OS file:
 
 ```bash
-python -m elekloader.sdk.build mods/digitriad-dn1 --stock Digitone_and_Digitone_Keys_OS1.43.syx   # out/digitriad-0.1.1.elemod
-python -m elekloader.sdk.build mods/digitriad-dn1 --stock Digitone_and_Digitone_Keys_OS1.44.syx   # out/digitriad-0.1.1-os1.44.elemod
+python -m elekloader.sdk.build mods/digitriad-dn1 --stock Digitone_and_Digitone_Keys_OS1.43.syx   # out/digitriad-0.2.elemod
+python -m elekloader.sdk.build mods/digitriad-dn1 --stock Digitone_and_Digitone_Keys_OS1.44.syx   # out/digitriad-0.2-os1.44.elemod
 ```
 
-It names no firmware address, so its 1.44 port is empty. It needs core-dn1
-3.2. `gentables.py` makes `tables.h` (the PITCH, KEY and time
+It names no firmware address, so its 1.44 port is empty. It needs fxkit and core-dn1
+4.1. `gentables.py` makes `tables.h` (the PITCH, KEY and time
 division charts are there as tables).
 
 ## Checked
@@ -257,7 +280,7 @@ compiled for a computer and fed test signals (`tests.sh`):
 - MIDI notes setting the voices (tuning them to notes played on a
   keyboard): core-dn1 passes mods the CCs only.
 - An expression pedal's morph between two settings, and 16 presets (the
-  project has room for eight).
+  project keeps one).
 - Which scale "Double Harmonic" is: the name comes without its notes;
   DigiTriad uses the double harmonic major (1, b2, 3, 4, 5, b6, 7).
 - PFB's repeat time (TIME plus the voice's division) is this mod's reading

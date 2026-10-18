@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
-/* DigiHoard's UI, on the pedal shell (pedal_ui.inc: the pages, SETUP, presets, TAP, BYPASS, the owner):
+/* DigiHoard's UI, on the pedal shell (pedal_ui.inc: the pages, fxkit's MIXER, LFOs and LOCK mode, SETUP, TAP, BYPASS):
  *
  *   1 HOARD     VOLUME REPEATS SIZE MOD / SPREAD SCAN RAMP MIX
  *   2 SECONDARY WIDTH KEEP (COLLECT's) M-DRY (the memory dry's level) OUT / TONE GLIDE STAY (AUTO's) INPUT
@@ -110,7 +110,7 @@ static void fx_tkey(int t, int ev)
         }
     } else {                                /* the modifiers off and on; held, WIPE */
         if (ev == TK_TAP) {
-            ST.opt[O_BANK] = ST.opt[O_BANK] == BANK_OFF ? last_bank : BANK_OFF;
+            set_opt(O_BANK, OPT(O_BANK) == BANK_OFF ? last_bank : BANK_OFF);
             flash(2, O_BANK);
         } else if (ev == TK_HOLD) {
             ST.sw[SW_WIPE] = 1;
@@ -123,26 +123,26 @@ static void fx_tkey(int t, int ev)
 static void fx_trig(int n)
 {
     if (n < 6) {                            /* A1-A3, B1-B3 */
-        ST.opt[O_BANK] = n < 3 ? BANK_A : BANK_B;
-        ST.opt[O_NUM] = (u8)(n % 3);
+        set_opt(O_BANK, n < 3 ? BANK_A : BANK_B);
+        set_opt(O_NUM, (n % 3));
         flash(2, O_BANK);
     } else if (n == 6) {
-        ST.opt[O_BANK] = BANK_OFF;
+        set_opt(O_BANK, BANK_OFF);
         flash(2, O_BANK);
     } else if (n < 10) {
-        ST.opt[O_MODE] = (u8)(n - 7);
+        set_opt(O_MODE, (n - 7));
         flash(2, O_MODE);
     } else if (n == 10) {
-        ST.opt[O_SCAN] = !ST.opt[O_SCAN];
+        set_opt(O_SCAN, !OPT(O_SCAN));
         flash(2, O_SCAN);
     } else if (n == 11) {
-        ST.opt[O_MEM] ^= 1;                 /* COLLECT */
+        set_opt(O_MEM, OPT(O_MEM) ^ 1);                 /* COLLECT */
         flash(2, O_MEM);
     } else if (n == 12) {
-        ST.opt[O_MEM] ^= 2;                 /* ALWAYS */
+        set_opt(O_MEM, OPT(O_MEM) ^ 2);                 /* ALWAYS */
         flash(2, O_MEM);
     } else {
-        ST.opt[O_LOOP] = !ST.opt[O_LOOP];
+        set_opt(O_LOOP, !OPT(O_LOOP));
         flash(2, O_LOOP);
     }
 }
@@ -183,7 +183,7 @@ static int fx_cc(int cc, int v)
     } else if (cc == 28) {
         set_ctl(2, O_SCAN, v >= 64);
     } else if (cc == 29) {
-        set_ctl(2, O_MEM, (ST.opt[O_MEM] & 2) | (v >= 64));
+        set_ctl(2, O_MEM, (OPT(O_MEM) & 2) | (v >= 64));
     } else {
         return 0;
     }
@@ -204,7 +204,7 @@ static int fx_value(void *bmp, const void *font, int x, int y, int pg, int i)
     int v;
     if (pg != 0)
         return 0;
-    v = ST.knob[i];
+    v = ctl(0, i);
     if (i == K_SIZE) {
         if (dhoard_tempo()) {
             int d = v * 13 / 128;

@@ -1,8 +1,8 @@
 {
- "id": "digihalo", "version": "0.1.1",
+ "id": "digihalo", "version": "0.2",
  "license": "GPL-2.0-or-later",
  "title": "DigiHalo", "category": "Effect", "author": "irpina",
- "description": "A reverb pedal for the Digitone mk1's audio inputs: twelve machines on trig 1-12 (ROOM, HALL, PLATE, SPRING, SWELL, SWIRL, NEBULA, VOWEL, SHIMMER, TAPE, NONLINEAR, REFLECTIONS) around one eight-line feedback delay network, each with its own diffusers, damping, modulation, size and its own PARAM 1 and PARAM 2 (shimmer intervals, dwell and springs, rise time, swirl length and feedback, vowels, tape heads, nonlinear shapes, room shape and position), DECAY, PRE-DELAY (or the tempo's divisions), MIX, TONE, MOD, LOW END, BOOST, HOLD as FREEZE or INFINITE on T1, PERSIST, SPILLOVER, a cab filter, eight presets and MIDI CCs. DIGIHALO in core-dn1's Mod Menu (hold a track key) opens its page; while it is open it owns the audio engine (the synths are muted) and processes the inputs, and NO gives both back. Needs core-dn1 3.2.",
+ "description": "A reverb pedal for the Digitone mk1's audio inputs: twelve machines on trig 1-12 (ROOM, HALL, PLATE, SPRING, SWELL, SWIRL, NEBULA, VOWEL, SHIMMER, TAPE, NONLINEAR, REFLECTIONS) around one eight-line feedback delay network, each with its own diffusers, damping, modulation, size and its own PARAM 1 and PARAM 2 (shimmer intervals, dwell and springs, rise time, swirl length and feedback, vowels, tape heads, nonlinear shapes, room shape and position), DECAY, PRE-DELAY (or the tempo's divisions), MIX, TONE, MOD, LOW END, BOOST, HOLD as FREEZE or INFINITE on T1, PERSIST, SPILLOVER, a cab filter, and MIDI CCs. DIGIHALO in core-dn1's Mod Menu (hold a track key) makes it the active effect and opens its page; while it is active it owns the audio engine (the synths are muted) and processes the inputs, through fxkit's MIXER (AMP), with two LFOs aimed at its controls (LFO) and p-locks on the pattern's steps (RECORD: hold a trig, turn a control). MIDI leaves the page to edit the MIDI tracks while it plays; NO turns it off. Needs fxkit (core-dn1 4.1).",
  "device": "digitone-mk1", "os": "1.43",
  "ports": {"1.44": {}},
  "sources": ["dsp.c", "ui.c"],
@@ -19,15 +19,15 @@
  "contribute": [
   {"to": "core_menu", "order": 36, "data": "00000000",
    "relocs": [[0, "abs32", "sym:dhalo_menu", 0]]},
-  {"to": "core_audio", "order": 65, "data": "00000000",
-   "relocs": [[0, "abs32", "sym:dhalo_owner", 0]]},
+  {"to": "fx_effects", "order": 65, "data": "00000000",
+   "relocs": [[0, "abs32", "sym:dhalo_effect", 0]]},
   {"to": "core_projdata", "order": 75, "data": "00000000",
    "relocs": [[0, "abs32", "sym:dhalo_projdata", 0]]}
  ],
  "resources": {
-  "core": "3.2",
+  "core": "4.1",
   "names": ["projdata:DSKY"],
   "regions": [{"name": "digihalo reverb", "lo": "0x47900000", "hi": "0x47B00000"}]
  },
- "requires": ["core"]
+ "requires": ["core", "fxkit"]
 }

@@ -1,8 +1,8 @@
 {
- "id": "digireel", "version": "0.1.1",
+ "id": "digireel", "version": "0.2",
  "license": "GPL-2.0-or-later",
  "title": "DigiReel", "category": "Effect", "author": "irpina",
- "description": "A time-warp pedal for the Digitone mk1's audio inputs: a 10-second tape that always listens, played back at -2x to +2x (reverse included) in windows in time with the Digitone's tempo, pitch apart from speed (STRETCH) or with it (TAPE), HOLD (loop the last or the next window, forwards, backwards or back and forth), TAPE STOP, random speed, pitch, reverse and stutter events, a step slicer, eight presets and MIDI CCs. DIGIREEL in core-dn1's Mod Menu (hold a track key) opens its page; while it is open it owns the audio engine (the synths are muted) and processes the inputs, and NO gives both back. Needs core-dn1 3.2.",
+ "description": "A time-warp pedal for the Digitone mk1's audio inputs: a 10-second tape that always listens, played back at -2x to +2x (reverse included) in windows in time with the Digitone's tempo, pitch apart from speed (STRETCH) or with it (TAPE), HOLD (loop the last or the next window, forwards, backwards or back and forth), TAPE STOP, random speed, pitch, reverse and stutter events, a step slicer, and MIDI CCs. DIGIREEL in core-dn1's Mod Menu (hold a track key) makes it the active effect and opens its page; while it is active it owns the audio engine (the synths are muted) and processes the inputs, through fxkit's MIXER (AMP), with two LFOs aimed at its controls (LFO) and p-locks on the pattern's steps (RECORD: hold a trig, turn a control). MIDI leaves the page to edit the MIDI tracks while it plays; NO turns it off. Needs fxkit (core-dn1 4.1).",
  "device": "digitone-mk1", "os": "1.43",
  "ports": {"1.44": {}},
  "sources": ["dsp.c", "ui.c"],
@@ -19,15 +19,15 @@
  "contribute": [
   {"to": "core_menu", "order": 34, "data": "00000000",
    "relocs": [[0, "abs32", "sym:dreel_menu", 0]]},
-  {"to": "core_audio", "order": 63, "data": "00000000",
-   "relocs": [[0, "abs32", "sym:dreel_owner", 0]]},
+  {"to": "fx_effects", "order": 63, "data": "00000000",
+   "relocs": [[0, "abs32", "sym:dreel_effect", 0]]},
   {"to": "core_projdata", "order": 73, "data": "00000000",
    "relocs": [[0, "abs32", "sym:dreel_projdata", 0]]}
  ],
  "resources": {
-  "core": "3.2",
+  "core": "4.1",
   "names": ["projdata:DTEN"],
   "regions": [{"name": "digireel tape", "lo": "0x47700000", "hi": "0x47900000"}]
  },
- "requires": ["core"]
+ "requires": ["core", "fxkit"]
 }

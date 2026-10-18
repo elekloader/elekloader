@@ -25,7 +25,7 @@ static void fx_cmd(int c);
 enum { PD_RUN, PD_TAILS, PD_IDLE };
 
 struct pd_state PD(st);
-struct core_audio_owner PD(owner) = { 0, PD(render), CORE_AUDIO_MUTE_VOICES };
+volatile u8 PD(on);
 #define ST PD(st)
 
 /* ---- helpers ---------------------------------------------------------------------------------------- */
@@ -123,7 +123,8 @@ static void knobs_block(void)
 /* ---- the CPU guard ------------------------------------------------------------------------------- */
 /* The whole render, from its entry to its exit, against the time from one block to the next, on DMA timer 0.
  * Over 93% for 300 blocks running (0.2 s) the unit has no time left for its UI: the guard bypasses the pedal,
- * at once (no trails), and says so. The emulator has no DMA timer 0: there the guard sees nothing. */
+ * at once (no trails), and says so, until BYPASS is pressed or BYP turned (fxkit has a guard of its own, which
+ * bypasses with the trails). The emulator has no DMA timer 0: there the guard sees nothing. */
 static u32 r_in, r_prev, r_over;
 
 void PD(rin)(void)
@@ -139,10 +140,9 @@ void PD(rout)(void)
         return;
     l = busy * 1000u / per;
     ST.load = (u16)l;
-    if (l > 930 && PD(owner).on && !ST.bypass) {
+    if (l > 930 && PD(on) && !ST.bypass && !ST.overload) {
         if (++r_over >= 300) {
             ST.overload = 1;
-            ST.bypass = 1;
             r_over = 0;
         }
     } else if (r_over) {
@@ -169,7 +169,7 @@ void PD(render)(int32_t *out, const int32_t *in)
     static s32 x[2 * N], w[2 * N];
     u32 t0 = DTCN0, tempo = PD(tempo)();
     s32 pk0 = 0, pk1 = 0, tail = 0, ov, md, mw;
-    int i, byp = ST.bypass, mode;
+    int i, byp = ST.bypass || ST.overload, mode;
 
     ST.blocks++;
     qfr = tempo ? 345600000u / tempo : 0;

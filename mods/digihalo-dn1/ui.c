@@ -1,19 +1,19 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
-/* DigiHalo's UI, on the pedal shell (pedal_ui.inc: the pages, SETUP, presets, TAP, BYPASS, the owner):
+/* DigiHalo's UI, on the pedal shell (pedal_ui.inc: the pages, fxkit's MIXER, LFOs and LOCK mode, SETUP, TAP, BYPASS):
  *
  *   1 (the machine's name)  DECAY PRE-DELAY MIX TONE / PARAM 1 PARAM 2 MOD LOW END
  *                           (TAPE and NONLINEAR: TIME and FEEDBACK for DECAY and PRE-DELAY)
  *   2 PARAMS                the machine's other parameters (up to three) BOOST / DIFFUSION MOD RATE WIDTH DRY
  *   3 SETUP                 TYPE HOLD (FREEZE, INFINITE) PERSIST SYNC / CAB SPILLOVER
  *   PARAM 1, PARAM 2 and the extras are the machine's own: their labels follow TYPE,
- *   and choosing a machine puts them at that machine's starting values (recalling a preset keeps its own).
+ *   and choosing a machine puts them at that machine's starting values (a project loaded keeps its own).
  *   T1 the footswitch's hold: held, HOLD while held; tapped, HOLD latched on or off (FREEZE or INFINITE)
- *   T2 tapped: the next saved preset; held: the wet out, swelling back on release
+ *   T2 tapped: the next machine (0.1: the next saved preset); held: the wet out, swelling back on release
  *   T3, T4 the machine down, up
  *   trig 1-12 the machines;  trig 13 HOLD latched on or off;  trig 14 HOLD's mode
  *   MIDI (the chart in README.md): TYPE 19, DECAY 17, PRE-DELAY 18, MIX 15, TONE 3, MOD 14, PARAM 1 9,
  *   PARAM 2 16, BOOST 23, PERSIST 22, HOLD MODE 70, MIDI CLOCK (SYNC) 71, HOLD 97, TAP 93, BYPASS 102,
- *   footswitches A, B, C 80, 82, 81 (down: presets 1-3), and each machine's parameters (24-69) */
+ *   footswitches A, B, C 80, 82, 81 (taken: 0.1's presets), and each machine's parameters (24-69) */
 #pragma GCC optimize ("no-tree-loop-distribute-patterns")
 #include "dhalo.h"
 #include "tables.h"
@@ -92,15 +92,18 @@ static const u8 p_cc[][3] = {
     { 48, MC_NONLIN, P_X2 }, { 43, MC_NONLIN, P_X3 },
     { 52, MC_REFL, 5 }, { 49, MC_REFL, P_P1 }, { 50, MC_REFL, P_P2 }, { 51, MC_REFL, P_X1 } };
 
-static int mc_now(void)
+static int mc_now(void)                         /* the machine the page shows (the pedal's own TYPE) */
 {
-    return ST.opt[O_TYPE] % MC_N;
+    int t = OPT(O_TYPE);
+    return t < 0 ? 0 : t % MC_N;
 }
 
-static volatile u8 *slot_ctl(int slot)          /* a slot's control: knob E, F, page 2's A-C, or LOW END */
+static void slot_set(int slot, int v)           /* a slot's control: knob E, F, page 2's A-C, or LOW END */
 {
-    return slot == P_P1 ? &ST.knob[K_P1] : slot == P_P2 ? &ST.knob[K_P2] : slot == 5 ? &ST.knob[K_LOW]
-                                                                                    : &ST.sec[S_X1 + slot - P_X1];
+    if (slot == P_P1 || slot == P_P2 || slot == 5)
+        set_ctl(0, slot == P_P1 ? K_P1 : slot == P_P2 ? K_P2 : K_LOW, v);
+    else
+        set_ctl(1, S_X1 + slot - P_X1, v);
 }
 
 static void labels(int mc)
@@ -116,18 +119,17 @@ static void labels(int mc)
 }
 
 /* A machine chosen: its extras at its starting steps, and PARAM 1 and 2 too unless the knobs came with it (a
- * preset recalled) */
+ * project loaded) */
 static void machine_defaults(int mc, int params)
 {
     int s;
     for (s = params ? P_P1 : P_X1; s <= P_X3; s++) {
         int n = sky_pn[mc][s];
-        *slot_ctl(s) = (u8)(n ? sky_knob(p_def[mc][s], n) : 0);
+        slot_set(s, n ? sky_knob(p_def[mc][s], n) : 0);
     }
 }
 
 static u8 last_type = 0xff, last_knob[8], last_prst = 0xff, last_trails = 0xff;
-static u8 cur_preset;
 static u32 t1_at;                              /* T1's press, in blocks */
 
 static void fx_defaults(void)
@@ -143,7 +145,7 @@ static void fx_tick(void)
     if (mc != last_type) {
         if (last_type != 0xff) {
             for (k = 0; k < 8; k++)
-                if (ST.knob[k] != last_knob[k])
+                if (KNOB(k) != last_knob[k])
                     same = 0;
             machine_defaults(mc, same);
         }
@@ -151,13 +153,13 @@ static void fx_tick(void)
         labels(mc);
     }
     for (k = 0; k < 8; k++)
-        last_knob[k] = ST.knob[k];
+        last_knob[k] = (u8)KNOB(k);
     /* PERSIST (page 3) is the shell's TRAILS (SETUP's BYPASS): whichever moved */
-    if (ST.opt[O_PERSIST] != last_prst)
-        ST.trails = ST.opt[O_PERSIST];
+    if (OPT(O_PERSIST) != last_prst)
+        ST.trails = (u8)OPT(O_PERSIST);
     else if (ST.trails != last_trails)
-        ST.opt[O_PERSIST] = ST.trails;
-    last_prst = ST.opt[O_PERSIST];
+        set_opt(O_PERSIST, ST.trails);
+    last_prst = (u8)OPT(O_PERSIST);
     last_trails = ST.trails;
 }
 
@@ -172,19 +174,9 @@ static void type_set(int mc)
     flash(2, O_TYPE);
 }
 
-static void next_preset(void)                   /* T2: the next saved preset after the last one */
+static void next_preset(void)                   /* T2: the next machine (0.1: the next saved preset) */
 {
-    int i;
-    for (i = 1; i <= NPRESET; i++) {
-        int n = (cur_preset + i) % NPRESET;
-        if (save.preset[n][0] & 0x80) {
-            cur_preset = (u8)n;
-            preset_recall(n);
-            message(2, n);
-            return;
-        }
-    }
-    message(3, cur_preset);
+    type_set(mc_now() + 1);
 }
 
 static void fx_tkey(int t, int ev)
@@ -214,7 +206,7 @@ static void fx_trig(int n)
     } else if (n == 12) {
         ST.sw[SW_HOLD] = !ST.sw[SW_HOLD];
     } else {
-        set_ctl(2, O_HOLD, !ST.opt[O_HOLD]);
+        set_ctl(2, O_HOLD, !OPT(O_HOLD));
         flash(2, O_HOLD);
     }
 }
@@ -242,18 +234,15 @@ static int fx_cc(int cc, int v)
         tap();
     } else if (cc == 102) {
         bypass_set(v < 64);
-    } else if (cc == 80 || cc == 82 || cc == 81) {    /* A, B, C down: presets 1, 2, 3 */
-        if (v < 64) {
-            int n = cc == 80 ? 0 : cc == 82 ? 1 : 2;
-            cur_preset = (u8)n;
-            message(preset_recall(n) ? 2 : 3, n);
-        }
+    } else if (cc == 80 || cc == 82 || cc == 81) {    /* A, B, C: 0.1's presets; taken, and they
+                                                       do nothing else */
+        ;
     } else {
         for (k = 0; k < sizeof p_cc / sizeof p_cc[0]; k++)
             if (p_cc[k][0] == cc) {
                 int mc = p_cc[k][1], s = p_cc[k][2], n = s == 5 ? 21 : sky_pn[mc][s];
                 if (mc == mc_now() && n)
-                    *slot_ctl(s) = (u8)sky_knob(v >= n ? n - 1 : v, n);
+                    slot_set(s, sky_knob(v >= n ? n - 1 : v, n));
                 return 1;                       /* another machine's: taken, and ignored */
             }
         return 0;
@@ -313,7 +302,7 @@ static int fx_value(void *bmp, const void *font, int x, int y, int pg, int i)
 {
     int mc = mc_now(), v;
     if (pg == 0) {
-        v = ST.knob[i];
+        v = ctl(0, i);
         if (i == K_DECAY) {
             u32 ms = ST.val[V_RT];
             if (ms < 1000)
@@ -338,7 +327,7 @@ static int fx_value(void *bmp, const void *font, int x, int y, int pg, int i)
         return 1;
     }
     if (pg == 1) {
-        v = ST.sec[i];
+        v = ctl(1, i);
         if (i <= S_X3)
             return slot_text(bmp, font, x, y, mc, P_X1 + i, v);
         if (i == S_BOOST) {                     /* the shell's output level: 64 is 0 dB */

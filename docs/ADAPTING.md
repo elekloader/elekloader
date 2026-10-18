@@ -1147,6 +1147,15 @@ const struct fx_effect gain_effect = {
 "resources": {"core": "4.1"}
 ```
 
+DigiSwarm, DigiPrism and the five pedals (DigiTide, DigiTriad, DigiReel,
+DigiHoard, DigiHalo) are effects on fxkit from their 0.2, with the same keys
+as GAIN: SYN1, SYN2 and FLTR their three pages, AMP the MIXER, LFO the LFOs,
+RECORD the LOCK mode, MIDI the stock UI with the effect playing, NO off; their
+SETUP has the LOCK TRACK. The pedals share theirs through the pedal shell
+(`pedal_ui.inc`); DigiSwarm's engine, Hold and Reverse lock too, and
+DigiPrism's modules and their order. DigiPrism's SOURCE DIGITONE stays an
+insert of its own (`fx_chain(e, 0)`), with fxkit's values all the same.
+
 ### Step-fire events (seq-events, Digitone mk1 and Digitakt mk1)
 
 Mods that change what the sequencer plays (rhythm and melody generators,

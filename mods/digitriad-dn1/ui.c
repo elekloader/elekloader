@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
-/* DigiTriad's UI, on the pedal shell (pedal_ui.inc: the pages, SETUP, presets, TAP, BYPASS, the owner):
+/* DigiTriad's UI, on the pedal shell (pedal_ui.inc: the pages, fxkit's MIXER, LFOs and LOCK mode, SETUP, TAP, BYPASS):
  *
  *   1 TRIAD     PITCH 1 PITCH 2 PITCH 3 MIX / TIME FEEDBACK KEY MICROTUNE
  *   2 ALT       TIME DIVISION 1-3 GLIDE / the voices' LEVELs, OUT
@@ -77,7 +77,7 @@ static void fx_tkey(int t, int ev)              /* T1, T2, T4: a tap latches (a 
     if (ev != TK_TAP || ST.blocks - t_at[t] > 450)  /* down 0.3 s or more: a hold, even without ev_hold */
         return;
     if (t == SW_HALF)
-        ST.opt[O_HALF] = (u8)!ST.opt[O_HALF];
+        set_opt(O_HALF, !OPT(O_HALF));
     else
         ST.sw[t] = (u8)!ST.sw[t];
 }
@@ -91,7 +91,7 @@ static void fx_trig(int n)
         set_ctl(0, K_KEY, 127);
         flash(0, K_KEY);
     } else {
-        ST.opt[O_SCALE] = (u8)((ST.opt[O_SCALE] + 1) % 7);
+        set_opt(O_SCALE, ((OPT(O_SCALE) + 1) % 7));
         flash(2, O_SCALE);
     }
 }
@@ -120,7 +120,7 @@ static int fx_cc(int cc, int v)
     } else if (cc >= 25 && cc <= 27) {
         set_ctl(1, S_TD1 + cc - 25, v);
     } else if (cc == 9) {
-        ST.opt[O_HALF] = (u8)on;
+        set_opt(O_HALF, on);
     } else if (cc == 14) {
         bypass_set(!on);
     } else if (cc == 28) {
@@ -129,7 +129,7 @@ static int fx_cc(int cc, int v)
     } else if (cc == 29) {
         cc_opt(O_MODE, v);
     } else if (cc == 30) {
-        ST.opt[O_SMOOTH] = (u8)on;
+        set_opt(O_SMOOTH, on);
     } else if (cc == 31) {
         ST.sw[SW_SWELL] = (u8)on;
     } else {
@@ -181,7 +181,7 @@ static int fx_value(void *bmp, const void *font, int x, int y, int pg, int i)
 {
     int v;
     if (pg == 0) {
-        v = ST.knob[i];
+        v = ctl(0, i);
         if (i <= K_P3) {
             interval_text(bmp, font, x, y, v);
         } else if (i == K_MIX || i == K_FDBK) {
@@ -201,7 +201,7 @@ static int fx_value(void *bmp, const void *font, int x, int y, int pg, int i)
         return 1;
     }
     if (pg == 1 && i <= S_TD3) {
-        int d = dh_tdiv[ST.sec[i]];
+        int d = dh_tdiv[ctl(1, i)];
         if (ST.opt[O_RHYTHM])
             TEXTF(bmp, font, x, y, -1, "RHYTHM");
         else if (!d)

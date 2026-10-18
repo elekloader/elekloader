@@ -1,8 +1,8 @@
 {
- "id": "digihoard", "version": "0.1.1",
+ "id": "digihoard", "version": "0.2",
  "license": "GPL-2.0-or-later",
  "title": "DigiHoard", "category": "Effect", "author": "irpina",
- "description": "An echo collector for the Digitone mk1's audio inputs: a 3-minute memory that always records what you play (COLLECT overdubs it, ALWAYS keeps it recording while bypassed), an echo with REPEATS and SIZE (in time with the Digitone's tempo), SCAN (auto: it wanders off into the past and plays old fragments into the echoes; manual: you pick the moment), SPREAD (a second echo further back, placed apart in stereo), six modifiers (stepped and smooth speed, stability, trimmer, filter, dropper) after the echo, in its feedback or round the memory (IN, OUT, FEED), LOOP, CLEAR, RAMP and bounce, eight presets and MIDI CCs. DIGIHOARD in core-dn1's Mod Menu (hold a track key) opens its page; while it is open it owns the audio engine (the synths are muted) and processes the inputs, and NO gives both back. Needs core-dn1 3.2.",
+ "description": "An echo collector for the Digitone mk1's audio inputs: a 3-minute memory that always records what you play (COLLECT overdubs it, ALWAYS keeps it recording while bypassed), an echo with REPEATS and SIZE (in time with the Digitone's tempo), SCAN (auto: it wanders off into the past and plays old fragments into the echoes; manual: you pick the moment), SPREAD (a second echo further back, placed apart in stereo), six modifiers (stepped and smooth speed, stability, trimmer, filter, dropper) after the echo, in its feedback or round the memory (IN, OUT, FEED), LOOP, CLEAR, RAMP and bounce, and MIDI CCs. DIGIHOARD in core-dn1's Mod Menu (hold a track key) makes it the active effect and opens its page; while it is active it owns the audio engine (the synths are muted) and processes the inputs, through fxkit's MIXER (AMP), with two LFOs aimed at its controls (LFO) and p-locks on the pattern's steps (RECORD: hold a trig, turn a control). MIDI leaves the page to edit the MIDI tracks while it plays; NO turns it off. Needs fxkit (core-dn1 4.1).",
  "device": "digitone-mk1", "os": "1.43",
  "ports": {"1.44": {}},
  "sources": ["dsp.c", "ui.c"],
@@ -19,15 +19,15 @@
  "contribute": [
   {"to": "core_menu", "order": 35, "data": "00000000",
    "relocs": [[0, "abs32", "sym:dhoard_menu", 0]]},
-  {"to": "core_audio", "order": 64, "data": "00000000",
-   "relocs": [[0, "abs32", "sym:dhoard_owner", 0]]},
+  {"to": "fx_effects", "order": 64, "data": "00000000",
+   "relocs": [[0, "abs32", "sym:dhoard_effect", 0]]},
   {"to": "core_projdata", "order": 74, "data": "00000000",
    "relocs": [[0, "abs32", "sym:dhoard_projdata", 0]]}
  ],
  "resources": {
-  "core": "3.2",
+  "core": "4.1",
   "names": ["projdata:DHAB"],
   "regions": [{"name": "digihoard memory", "lo": "0x46200000", "hi": "0x47300000"}]
  },
- "requires": ["core"]
+ "requires": ["core", "fxkit"]
 }

@@ -23,6 +23,7 @@
 
 struct dh_state dprism;
 struct core_audio_owner dprism_owner = { 0, dprism_render, CORE_AUDIO_MUTE_VOICES };   /* the UI sets flags */
+volatile u8 dprism_on;
 
 /* The modules' orders: 0 Color, 1 Motion, 2 Ambience, 3 Grit; order 0 is the default. */
 const u8 ch_order[24][4] = {
@@ -1328,10 +1329,9 @@ void dprism_rout(void)
         return;
     l = busy * 1000u / per;
     dprism.load = (u16)l;
-    if (l > 930 && dprism_owner.on && !dprism.bypass) {
+    if (l > 930 && dprism_on && !dprism.bypass && !dprism.overload) {
         if (++r_over >= 300) {
             dprism.overload = 1;
-            dprism.bypass = 1;
             r_over = 0;
         }
     } else if (r_over) {
@@ -1379,7 +1379,7 @@ void dprism_render(int32_t *out, const int32_t *in)
     static s32 x[2 * N], w[2 * N];
     u32 t0 = DTCN0, tempo = dprism_tempo();
     s32 md, mw_, ov, pk0 = 0, pk1 = 0, tail = 0;
-    int i, k, pre = dprism.croute, byp = dprism.bypass;
+    int i, k, pre = dprism.croute, byp = dprism.bypass || dprism.overload;
 
     dprism.blocks++;
     hq = !(dprism_owner.flags & CORE_AUDIO_INSERT);

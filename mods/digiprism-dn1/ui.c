@@ -1,24 +1,31 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
-/* DigiPrism's UI: its Mod Menu entry, its screen, its keys and knobs, its MIDI CCs, its project data. While
- * it is open it owns the screen. With the source INPUTS (the default) it owns the audio while it is open, as
- * DigiSwarm does, and NO gives it back; with DIGITONE the pedal stays on after NO (dprism_owner.on) until BYPASS.
+/* DigiPrism's UI: its effect for fxkit, its Mod Menu entry, its screen, its keys and knobs, its MIDI CCs, its
+ * project data. DIGIPRISM in the Mod Menu makes it fxkit's active effect and opens its page; MIDI leaves the
+ * page with DigiPrism playing (its entry brings it back), NO turns it off. With the source INPUTS (the default)
+ * it owns the audio through fxkit (the synths muted, fxkit's mixer around it); with DIGITONE it is an insert on
+ * everything the Digitone plays (its own core_audio owner; fxkit's mixer is not in that path), with fxkit's
+ * LFOs and p-locks on its controls all the same.
  *
- *   three pages, as the Digitone's own (LEFT, RIGHT or PAGE moves between them):
- *     1 PRIMARY    TILT RATE TIME MIX / AMOUNT x4 (each named by its module's effect)   push: its default
- *     2 SECONDARY  SENS DRIFT DRIFT OUT / VOL x4  (also FUNC + a knob on page 1)
- *     3 MODULES    the four effects / ORDER, FILTER style, CAPTURE route, input LEVEL   push A-D: on/off
+ *   six pages, as the Digitone's own (LEFT, RIGHT or PAGE moves between them):
+ *     SYN1  1 PRIMARY    TILT RATE TIME MIX / AMOUNT x4 (each named by its module's effect)   push: its default
+ *     SYN2  2 SECONDARY  SENS DRIFT DRIFT OUT / VOL x4  (also FUNC + a knob on page 1)
+ *     FLTR  3 MODULES    the four effects / ORDER, FILTER style, CAPTURE route, input LEVEL   push A-D: on/off
+ *     AMP   the MIXER;  LFO  LFO 1, again LFO 2 (fxkit's: DEST lists DigiPrism's controls and the mixer's)
+ *   RECORD     LOCK mode: hold a trig and turn a control, that step's p-lock (FUNC + trig clears it, PAGE the
+ *              next 16 steps); the modules' effects, ORDER and the rest lock too
  *   T1-T4      the four module buttons: press for the module's next effect, hold to bypass it
  *   trig 13    GESTURE: record the knobs you turn; again to play them (FUNC + 13 erases every gesture)
  *   trig 15    the TAP footswitch: tap a tempo; hold to CAPTURE, release to play it; tap to stop it
  *   trig 16    the BYPASS footswitch (with DUAL BYPASS the chosen modules; twice quickly, everything)
- *   YES SETUP, NO back (from a page: close);  PLAY, STOP, RECORD, TEMPO and LEVEL/DATA stay stock
- *   presets: in SETUP a trig key 1-8 saves that preset; FUNC + a trig key 1-8 recalls one
- *   MIDI: its CCs, on the auto channel (or any, in SETUP), while the page is open (or
+ *   YES SETUP, NO back (from LOCK mode: out of it; from a page: DigiPrism off);  PLAY, STOP, TEMPO and
+ *   LEVEL/DATA stay stock
+ *   MIDI: its CCs, on the auto channel (or any, in SETUP), while DigiPrism is active (or
  *   always, in SETUP) */
 #pragma GCC optimize ("no-tree-loop-distribute-patterns")
 #include "dprism.h"
 
 #define KEY_FUNC    1
+#define KEY_MIDI    2
 #define KEY_TEMPO   9
 #define KEY_RECORD  10
 #define KEY_PLAY    11
@@ -30,6 +37,8 @@
 #define KEY_LEFT    17
 #define KEY_RIGHT   18
 #define KEY_PAGE    19
+#define KEY_SYN1    21
+#define KEY_LFO     25
 #define KEY_STEP1   26
 #define KEY_T1      42
 #define KEY_PUSH_A  46
@@ -47,7 +56,7 @@ typedef void (*text_fn)(void *bmp, const void *font, int x, int y, int maxlen, c
 #define FONT_LBL  ((const void *)fw_font_label)     /* the stock labels' */
 #define FONT_TTL  ((const void *)fw_font_title)     /* the stock title bar's */
 
-enum { G_SOURCE, G_INPUT, G_CLOCK, G_BYPASS, G_DUAL, G_MIDI, G_CLOSED, G_COUNT };   /* SETUP's rows */
+enum { G_SOURCE, G_INPUT, G_CLOCK, G_BYPASS, G_DUAL, G_MIDI, G_CLOSED, G_LOCK, G_COUNT };   /* SETUP's rows */
 
 static const u8 knob_def[8] = { 64, 48, 48, 127, 30, 40, 45, 64 };
 static const u8 sec_def[8] = { 64, 0, 0, 64, 64, 64, 64, 64 };
@@ -65,12 +74,13 @@ static const char *const styles[3] = { "TILT", "LPF", "HPF" };
 static const char *const levels[4] = { "LOW", "MED", "HIGH", "VHI" };
 static const char *const pg3_lbl[8] = { "COLR", "MOTN", "AMBI", "GRIT", "ORDR", "FLTR", "CAPT", "LEVL" };
 static const char *const cfg_lbl[G_COUNT] = { "SOURCE", "INPUT", "CLOCK", "BYPASS", "DUAL BYPASS", "MIDI CC",
-                                              "CC CLOSED" };
+                                              "CC CLOSED", "LOCK TRACK" };
 
-static u8 ui_open, ui_setup, ui_pg, ui_func, ui_ready, ui_inited, ui_row;
+static u8 ui_open, ui_setup, ui_pg, ui_func, ui_ready, ui_inited, ui_row, ui_pending;
 static u8 ui_flash_ticks, ui_flash_pg, ui_flash_i;   /* a control's value in the title bar after a turn */
-#define NPAGE 3
-static u8 ui_msg_ticks, ui_msg_preset, ui_msg_kind;   /* a message for a second: 1 saved, 2 recalled, 3 empty */
+#define NPAGE 6                             /* PRIMARY, SECONDARY, MODULES, the MIXER, LFO 1, LFO 2 */
+static u8 in_cc;                            /* the MIDI task: the controls change at the next tick */
+#define EFF (&dprism_effect)
 static u8 ui_fx_ticks, ui_fx_m;                       /* a module's new effect, by name, for a second */
 static u8 cfg_midi_any, cfg_closed, dual;             /* SETUP: CCs on any channel, CCs while closed, DUAL BYPASS */
 static u32 clear_at;                        /* the next address to clear, 0 when nothing is */
@@ -81,40 +91,148 @@ static u32 cap_at, tap_last, tap_iv[3], tap_n;
 static u32 byp_at;
 static u8 byp_undo;                         /* trig 16: the modules the last press toggled (DUAL BYPASS) */
 
-/* ---- project data: the pedal and eight presets, saved with the project --------------------------------
- * 136 bytes: the gap mods share in a project holds 480, digitables' tables take 328 of it with its header,
- * and this block 144 with its own. A preset is the effects, which run, their order, FILTER's style, the
- * CAPTURE route and the eight primary knobs; the secondary controls and SETUP are the project's. */
-#define NPRESET 8
+/* ---- the effect: DigiPrism's controls as fxkit's slots ---------------------------------------------- */
+static const char *const off_on[2] = { "OFF", "ON" };
+static const char *const routes[2] = { "POST", "PRE" };
+static const struct fx_param dprism_params[] = {
+    { DH_S_KNOB(K_TILT), FX_BIP, 0, 64, "TILT", "Tilt", 0 },
+    { DH_S_KNOB(K_RATE), FX_KNOB, 0, 48, "RATE", "Rate", 0 },
+    { DH_S_KNOB(K_TIME), FX_KNOB, 0, 48, "TIME", "Time", 0 },
+    { DH_S_KNOB(K_MIX), FX_KNOB, 0, 127, "MIX", "Mix", 0 },
+    { DH_S_KNOB(K_CAMT), FX_KNOB, 0, 30, "CAMT", "Color Amt", 0 },
+    { DH_S_KNOB(K_MAMT), FX_KNOB, 0, 40, "MAMT", "Motion Amt", 0 },
+    { DH_S_KNOB(K_AAMT), FX_KNOB, 0, 45, "AAMT", "Ambience Amt", 0 },
+    { DH_S_KNOB(K_GAMT), FX_KNOB, 0, 64, "GAMT", "Grit Amt", 0 },
+    { DH_S_SEC(S_SENS), FX_BIP, 0, 64, "SENS", "Sensitivity", 0 },
+    { DH_S_SEC(S_MDRIFT), FX_KNOB, 0, 0, "MDRF", "Move Drift", 0 },
+    { DH_S_SEC(S_DDRIFT), FX_KNOB, 0, 0, "ADRF", "Amb Drift", 0 },
+    { DH_S_SEC(S_OUT), FX_BIP, 0, 64, "OUT", "Output", 0 },
+    { DH_S_SEC(S_CVOL), FX_BIP, 0, 64, "CVOL", "Color Vol", 0 },
+    { DH_S_SEC(S_MVOL), FX_BIP, 0, 64, "MVOL", "Motion Vol", 0 },
+    { DH_S_SEC(S_AVOL), FX_BIP, 0, 64, "AVOL", "Ambience Vol", 0 },
+    { DH_S_SEC(S_GVOL), FX_BIP, 0, 64, "GVOL", "Grit Vol", 0 },
+    { DH_S_FX(M_CHAR), FX_OPT, 5, FX_DRIVE, "COLR", "Color", fx_lbl[M_CHAR] },
+    { DH_S_FX(M_MOVE), FX_OPT, 5, FX_DOUBLER, "MOTN", "Motion", fx_lbl[M_MOVE] },
+    { DH_S_FX(M_DIFF), FX_OPT, 5, FX_SPACE, "AMBI", "Ambience", fx_lbl[M_DIFF] },
+    { DH_S_FX(M_TEX), FX_OPT, 5, FX_FILTER, "GRIT", "Grit", fx_lbl[M_TEX] },
+    { DH_S_ON(M_CHAR), FX_OPT, 2, 1, "C ON", "Color On", off_on },
+    { DH_S_ON(M_MOVE), FX_OPT, 2, 1, "M ON", "Motion On", off_on },
+    { DH_S_ON(M_DIFF), FX_OPT, 2, 1, "D ON", "Ambience On", off_on },
+    { DH_S_ON(M_TEX), FX_OPT, 2, 1, "T ON", "Grit On", off_on },
+    { DH_S_ORDER, FX_OPT, 24, 0, "ORDR", "Order", 0 },
+    { DH_S_STYLE, FX_OPT, 3, ST_TILT, "FLTR", "Filter Style", styles },
+    { DH_S_CROUTE, FX_OPT, 2, 0, "CAPT", "Capture Route", routes },
+    { DH_S_LEVEL, FX_OPT, 4, 2, "LEVL", "Input Level", levels },
+    { 0 }
+};
+
+static s32 clamp(s32 v, s32 hi)
+{
+    return v < 0 ? 0 : v > hi ? hi : v;
+}
+
+/* The render's: this block's values (DigiPrism's own, a step's lock, an LFO on it) into its controls */
+static void dprism_values(const int16_t *val, uint32_t flags)
+{
+    int i;
+    for (i = 0; i < 8; i++) {
+        dprism.knob[i] = (u8)clamp(val[DH_S_KNOB(i)] >> 8, 127);
+        dprism.sec[i] = (u8)clamp(val[DH_S_SEC(i)] >> 8, 127);
+    }
+    for (i = 0; i < 4; i++) {
+        dprism.fx[i] = (u8)clamp(val[DH_S_FX(i)] >> 8, 4);
+        dprism.on[i] = (u8)(val[DH_S_ON(i)] >= 128);
+    }
+    dprism.order = (u8)clamp(val[DH_S_ORDER] >> 8, 23);
+    dprism.style = (u8)clamp(val[DH_S_STYLE] >> 8, 2);
+    dprism.croute = (u8)(val[DH_S_CROUTE] >= 128);
+    dprism.level = (u8)clamp(val[DH_S_LEVEL] >> 8, 3);
+    dprism.bypass = (u8)((flags & FX_V_BYPASS) != 0);
+}
+
+const struct fx_effect dprism_effect = {
+    FX_ABI, "DIGIPRISM", dprism_params, FX_OWN_MIX | FX_OWN_BYPASS, 0, dprism_values, dprism_render,
+};
+
+static int own(s32 slot)                    /* a control's own value (what it plays without locks or LFOs) */
+{
+    return (int)(fx_get(EFF, slot) >> 8);
+}
+
+static int shown(s32 slot)                  /* what its control shows: its own value, or the held step's lock */
+{
+    return (int)clamp(fx_view(slot, fx_get(EFF, slot)) >> 8, 127);
+}
+
+/* A control's own value (from the MIDI task, at the next tick); turned on the page in LOCK mode with a step held,
+ * that step's lock */
+static void set_slot(s32 slot, s32 v)
+{
+    if (in_cc)
+        fx_set_later(EFF, slot, v << 8);
+    else
+        fx_set(EFF, slot, v << 8);
+}
+
+static void turn_slot(s32 slot, s32 v)
+{
+    if (fx_held_step() >= 0)
+        fx_turned(EFF, slot, v << 8);
+    else
+        set_slot(slot, v);
+}
+
+static void set_on(int m, int on)
+{
+    dprism.on[m] = (u8)on;
+    set_slot(DH_S_ON(m), on);
+}
+
+static void set_fx(int m, int fx)
+{
+    dprism.fx[m] = (u8)fx;
+    set_slot(DH_S_FX(m), fx);
+}
+
+static void set_bypass(int on)
+{
+    dprism.bypass = (u8)on;
+    if (!on)
+        dprism.overload = 0;
+    set_slot(FX_M_BYP, on);
+}
+
+/* ---- project data: the pedal, its mixer and LFOs, SETUP, saved with the project -------------------------
+ * 56 bytes (the gap mods share in a project holds 480: core leaves out a block that does not fit). The p-locks
+ * are the pattern's. */
 struct dh_save {
     u8 ver, order, style, croute;
-    u8 fx[4], on[4];
+    u8 fxon[4];                         /* each module's effect | on << 3 */
     u8 knob[8], sec[8];
-    u8 level, bypass, trails, clock;
-    u8 cfg, pad[3];
-    u32 tap;
-    u8 preset[NPRESET][12];             /* [0] 0x80 once saved | order; [1] fx 0,1; [2] fx 2,3; [3] on bits,
-                                           style, route; [4-11] the knobs */
+    u8 level, trails, clock, cfg;       /* cfg: MIDI ANY, CC CLOSED, SOURCE, MONO, DUAL BYPASS << 4 */
+    u16 tap;
+    u8 pad[2];
+    u8 fx[FX_PACK];                     /* fxkit's: the mixer, the LFOs */
 } __attribute__((aligned(4)));
 static struct dh_save save;
-#define SAVE_VER 1
+#define SAVE_VER 2
 
 static void defaults(void)
 {
     int i;
     for (i = 0; i < 8; i++) {
-        dprism.knob[i] = knob_def[i];
-        dprism.sec[i] = sec_def[i];
+        set_slot(DH_S_KNOB(i), knob_def[i]);
+        set_slot(DH_S_SEC(i), sec_def[i]);
     }
     for (i = 0; i < 4; i++) {
-        dprism.fx[i] = fx_def[i];
-        dprism.on[i] = 1;
+        set_fx(i, fx_def[i]);
+        set_on(i, 1);
     }
-    dprism.order = 0;
-    dprism.style = ST_TILT;
-    dprism.croute = 0;
-    dprism.level = 2;
-    dprism.bypass = 1;                     /* off until it is opened: a project keeps its sound */
+    set_slot(DH_S_ORDER, 0);
+    set_slot(DH_S_STYLE, ST_TILT);
+    set_slot(DH_S_CROUTE, 0);
+    set_slot(DH_S_LEVEL, 2);
+    fx_unpack(EFF, 0);
     dprism.trails = 1;
     dprism.clock = CL_FREE;
     dprism.tap = 14400;
@@ -128,22 +246,20 @@ static void dprism_loaded(int found)
     int i;
     if (!found || save.ver != SAVE_VER || save.order >= 24) {
         defaults();
-        for (i = 0; i < NPRESET; i++)
-            save.preset[i][0] = 0;
     } else {
         for (i = 0; i < 8; i++) {
-            dprism.knob[i] = save.knob[i] & 127;
-            dprism.sec[i] = save.sec[i] & 127;
+            set_slot(DH_S_KNOB(i), save.knob[i] & 127);
+            set_slot(DH_S_SEC(i), save.sec[i] & 127);
         }
         for (i = 0; i < 4; i++) {
-            dprism.fx[i] = save.fx[i] < 5 ? save.fx[i] : 0;
-            dprism.on[i] = save.on[i] & 1;
+            set_fx(i, (save.fxon[i] & 7) < 5 ? save.fxon[i] & 7 : 0);
+            set_on(i, (save.fxon[i] >> 3) & 1);
         }
-        dprism.order = save.order;
-        dprism.style = save.style < 3 ? save.style : 0;
-        dprism.croute = save.croute & 1;
-        dprism.level = save.level & 3;
-        dprism.bypass = save.bypass & 1;
+        set_slot(DH_S_ORDER, save.order);
+        set_slot(DH_S_STYLE, save.style < 3 ? save.style : 0);
+        set_slot(DH_S_CROUTE, save.croute & 1);
+        set_slot(DH_S_LEVEL, save.level & 3);
+        fx_unpack(EFF, save.fx);
         dprism.trails = save.trails & 1;
         dprism.clock = save.clock < 3 ? save.clock : 0;
         dprism.tap = save.tap >= 2400 && save.tap <= 48000 ? save.tap : 14400;
@@ -159,77 +275,54 @@ static void dprism_loaded(int found)
 const struct core_projdata dprism_projdata = { 0x44434852u /* "DCHR" */, sizeof(struct dh_save), &save,
                                                 dprism_loaded };
 
-static void keep_save(void)                 /* the pedal into the project's copy (the presets are there) */
+static u32 saved_serial = ~0u;
+
+static void keep_save(void)                 /* the pedal into the project's copy (its controls when they moved) */
 {
     int i;
     save.ver = SAVE_VER;
-    for (i = 0; i < 8; i++) {
-        save.knob[i] = dprism.knob[i];
-        save.sec[i] = dprism.sec[i];
+    if (fx_serial(EFF) != saved_serial) {
+        saved_serial = fx_serial(EFF);
+        for (i = 0; i < 8; i++) {
+            save.knob[i] = (u8)own(DH_S_KNOB(i));
+            save.sec[i] = (u8)own(DH_S_SEC(i));
+        }
+        for (i = 0; i < 4; i++)
+            save.fxon[i] = (u8)(own(DH_S_FX(i)) | own(DH_S_ON(i)) << 3);
+        save.order = (u8)own(DH_S_ORDER);
+        save.style = (u8)own(DH_S_STYLE);
+        save.croute = (u8)own(DH_S_CROUTE);
+        save.level = (u8)own(DH_S_LEVEL);
+        fx_pack(EFF, save.fx);
     }
-    for (i = 0; i < 4; i++) {
-        save.fx[i] = dprism.fx[i];
-        save.on[i] = dprism.on[i];
-    }
-    save.order = dprism.order;
-    save.style = dprism.style;
-    save.croute = dprism.croute;
-    save.level = dprism.level;
-    save.bypass = dprism.bypass;
     save.trails = dprism.trails;
     save.clock = dprism.clock;
-    save.tap = dprism.tap;
+    save.tap = (u16)dprism.tap;
     save.cfg = (u8)(cfg_midi_any | cfg_closed << 1 | dprism.source << 2 | dprism.mono << 3 | dual << 4);
 }
 
-static void preset_save(int n)
-{
-    u8 *p = save.preset[n];
-    int i;
-    p[0] = (u8)(0x80 | dprism.order);
-    p[1] = (u8)(dprism.fx[0] | dprism.fx[1] << 3);
-    p[2] = (u8)(dprism.fx[2] | dprism.fx[3] << 3);
-    p[3] = (u8)(dprism.on[0] | dprism.on[1] << 1 | dprism.on[2] << 2 | dprism.on[3] << 3 | dprism.style << 4
-                | dprism.croute << 6);
-    for (i = 0; i < 8; i++)
-        p[4 + i] = dprism.knob[i];
-}
-
-static int preset_recall(int n)             /* -> 0 when the slot is empty */
-{
-    const u8 *p = save.preset[n];
-    int i;
-    if (!(p[0] & 0x80) || (p[0] & 0x7f) >= 24)
-        return 0;
-    dprism.order = p[0] & 0x7f;
-    dprism.fx[0] = p[1] & 7;
-    dprism.fx[1] = (p[1] >> 3) & 7;
-    dprism.fx[2] = p[2] & 7;
-    dprism.fx[3] = (p[2] >> 3) & 7;
-    for (i = 0; i < 4; i++) {
-        if (dprism.fx[i] > 4)
-            dprism.fx[i] = 0;
-        dprism.on[i] = (p[3] >> i) & 1;
-    }
-    dprism.style = (p[3] >> 4) & 3;
-    if (dprism.style > 2)
-        dprism.style = 0;
-    dprism.croute = (p[3] >> 6) & 1;
-    for (i = 0; i < 8; i++) {
-        dprism.knob[i] = p[4 + i] & 127;
-        dprism.gkill[i] = 1;               /* a preset's knobs, not the gestures over the old ones */
-    }
-    return 1;
-}
-
-static void message(int kind, int n)
-{
-    ui_msg_kind = (u8)kind;
-    ui_msg_preset = (u8)(n + 1);
-    ui_msg_ticks = 30;
-}
-
 /* ---- opening and closing -------------------------------------------------------------------------- */
+static int can_insert(void);
+
+static void chain(void)                     /* fxkit's audio for the inputs; SOURCE DIGITONE: DigiPrism's insert */
+{
+    int ins = dprism.source == SRC_DIGITONE && can_insert();
+    fx_chain(EFF, !ins);
+    dprism_owner.flags = ins ? CORE_AUDIO_INSERT : CORE_AUDIO_MUTE_VOICES;
+    dprism_owner.on = ins && dprism_on && ui_ready;
+}
+
+static void activate(void)
+{
+    if (fx_active() != EFF) {               /* (back from MIDI: as it was) */
+        set_bypass(0);                      /* switching it on steps on it */
+        fx_activate(EFF);
+    }
+    dprism_on = 1;
+    ui_pending = 0;
+    chain();
+}
+
 static void dprism_open(void *brain, void *ev, int track)
 {
     (void)brain, (void)ev, (void)track;
@@ -237,15 +330,27 @@ static void dprism_open(void *brain, void *ev, int track)
     ui_setup = 0;
     ui_pg = 0;
     ui_func = 0;
-    dprism.bypass = 0;                     /* opening it steps on it */
-    dprism.overload = 0;
+    if (ui_ready)
+        activate();
+    else
+        ui_pending = 1;                     /* the buffers are not cleared yet: at the tick that ends it */
 }
 
-static void dprism_close(void)
+static void dprism_hide(void)              /* the page gone (MIDI), DigiPrism playing on */
 {
     ui_open = 0;
+    fx_lock_mode_set(0);
     dprism.grec = 0;
     cap_down = 0;
+}
+
+static void dprism_close(void)             /* NO: DigiPrism off */
+{
+    dprism_hide();
+    ui_pending = 0;
+    fx_deactivate(EFF);
+    dprism_on = 0;
+    chain();
 }
 
 /* The Mod Menu's DIGIPRISM, with its icon: a pedal, eight knobs over four buttons and two footswitches. */
@@ -273,7 +378,7 @@ static void knob_moved(int i)
         dprism.gkill[i] = 1;
 }
 
-static void set_knob(int i, int sec, s32 v)
+static void set_knob(int i, int sec, s32 v)   /* a knob's own value */
 {
     if (v < 0) v = 0;
     if (v > 127) v = 127;
@@ -283,6 +388,15 @@ static void set_knob(int i, int sec, s32 v)
         dprism.knob[i] = (u8)v;
         knob_moved(i);
     }
+    set_slot(sec ? DH_S_SEC(i) : DH_S_KNOB(i), v);
+}
+
+static void turn_knob(int i, int sec, s32 v)  /* turned on the page: in LOCK mode with a step held, its lock */
+{
+    if (fx_held_step() < 0)
+        set_knob(i, sec, v);
+    else
+        turn_slot(sec ? DH_S_SEC(i) : DH_S_KNOB(i), clamp(v, 127));
 }
 
 static int can_insert(void)                   /* the core takes the source DIGITONE (core-dn1 3.4) */
@@ -290,9 +404,9 @@ static int can_insert(void)                   /* the core takes the source DIGIT
     return (core_audio_caps & CORE_AUDIO_INSERT) != 0;
 }
 
-static int page_now(void)                    /* FUNC held shows page 2 */
+static int page_now(void)                    /* FUNC held on DigiPrism's pages shows page 2 */
 {
-    return ui_func ? 1 : ui_pg;
+    return ui_func && ui_pg < 3 ? 1 : ui_pg;
 }
 
 static void show_fx(int m)
@@ -304,36 +418,37 @@ static void show_fx(int m)
 
 static void next_fx(int m)                    /* a module's button: its next effect, and it runs */
 {
-    dprism.fx[m] = (u8)((dprism.fx[m] + 1) % 5);
-    dprism.on[m] = 1;
+    set_fx(m, (own(DH_S_FX(m)) + 1) % 5);
+    set_on(m, 1);
     show_fx(m);
 }
 
-static void step_setting(int i, int d)        /* page 3's controls */
+static void step_setting(int i, int d)        /* page 3's controls (a lock, with a step held in LOCK mode) */
 {
     if (i < 4) {
-        dprism.fx[i] = (u8)((dprism.fx[i] + 5 + d) % 5);
+        turn_slot(DH_S_FX(i), (shown(DH_S_FX(i)) + 5 + d) % 5);
         show_fx(i);
     } else if (i == 4) {
-        dprism.order = (u8)((dprism.order + 24 + d) % 24);
+        turn_slot(DH_S_ORDER, (shown(DH_S_ORDER) + 24 + d) % 24);
     } else if (i == 5) {
-        dprism.style = (u8)((dprism.style + 3 + d) % 3);
+        turn_slot(DH_S_STYLE, (shown(DH_S_STYLE) + 3 + d) % 3);
     } else if (i == 6) {
-        dprism.croute = (u8)(d > 0);
+        turn_slot(DH_S_CROUTE, d > 0);
     } else {
-        s32 v = dprism.level + d;
-        dprism.level = (u8)(v < 0 ? 0 : v > 3 ? 3 : v);
+        turn_slot(DH_S_LEVEL, clamp(shown(DH_S_LEVEL) + d, 3));
     }
 }
 
 static void push(int i)                      /* an encoder pushed */
 {
     int pg = page_now();
-    if (pg < 2) {
-        set_knob(i, pg, pg ? sec_def[i] : knob_def[i]);
+    if (pg >= 3) {
+        fx_page_push(EFF, pg - 3, i);       /* its value under the knob, as the stock's */
+    } else if (pg < 2) {
+        turn_knob(i, pg, pg ? sec_def[i] : knob_def[i]);
         flash(pg, i);
     } else if (i < 4) {
-        dprism.on[i] = !dprism.on[i];
+        turn_slot(DH_S_ON(i), !shown(DH_S_ON(i)));
     }
 }
 
@@ -356,24 +471,22 @@ static void tap(void)                        /* the TAP footswitch: the mean of 
 static void bypass_key(void)                 /* trig 16 */
 {
     u32 now = dprism.blocks;
-    int m;
+    int m, b = own(FX_M_BYP);
     if (dual && now - byp_at < 600 && byp_undo) {   /* a double press: everything */
         for (m = 0; m < 4; m++)
             if (byp_undo & (1 << m))
-                dprism.on[m] = !dprism.on[m];
+                set_on(m, !own(DH_S_ON(m)));
         byp_undo = 0;
-        dprism.bypass = !dprism.bypass;
-    } else if (dual && !dprism.bypass) {
+        set_bypass(!b);
+    } else if (dual && !b) {
         for (m = 0; m < 4; m++)
             if (dual & (1 << m))
-                dprism.on[m] = !dprism.on[m];
+                set_on(m, !own(DH_S_ON(m)));
         byp_undo = dual;
     } else {
-        dprism.bypass = !dprism.bypass;
+        set_bypass(!b);
         byp_undo = 0;
     }
-    if (!dprism.bypass)
-        dprism.overload = 0;
     byp_at = now;
 }
 
@@ -391,8 +504,12 @@ int dprism_key(void *brain, void *ev)
     }
     if (fl & 2)                             /* another key's event: FUNC is held */
         ui_func = 1;
-    if (key == KEY_PLAY || key == KEY_STOP || key == KEY_TEMPO || key == KEY_RECORD)
+    if (key == KEY_PLAY || key == KEY_STOP || key == KEY_TEMPO)
         return 0;                           /* the sequencer and its tempo stay the Digitone's */
+    if (!ui_setup && page_now() >= 3 && fx_page_key(EFF, page_now() - 3, key, fl))
+        return 1;                           /* DEST's list on an LFO page */
+    if (!ui_setup && fx_lock_key(EFF, key, fl, ui_func))
+        return 1;                           /* LOCK mode's trigs and PAGE */
     if (released) {
         if (key >= KEY_T1 && key < KEY_T1 + 4) {
             int m = (int)(key - KEY_T1);
@@ -413,14 +530,14 @@ int dprism_key(void *brain, void *ev)
     }
     if (!press)
         return 1;                           /* repeats; ev_hold sees the track keys held */
-    if (key >= KEY_STEP1 && key < KEY_STEP1 + NPRESET && (ui_setup || ui_func)) {
-        int n = (int)(key - KEY_STEP1);
-        if (ui_setup) {                     /* SETUP: save the pedal as preset n */
-            preset_save(n);
-            message(1, n);
-        } else {                            /* FUNC: recall it */
-            message(preset_recall(n) ? 2 : 3, n);
-        }
+    if (key == KEY_MIDI) {
+        dprism_hide();
+        return 0;                           /* the stock's MIDI mode, DigiPrism playing on */
+    } else if (key == KEY_RECORD) {
+        if (!ui_setup)
+            fx_lock_mode_set(!fx_lock_mode());
+    } else if (key >= KEY_STEP1 && key < KEY_STEP1 + 8 && ui_setup) {
+        ;                                   /* (0.1's presets) */
     } else if (key >= KEY_T1 && key < KEY_T1 + 4) {
         t_down[key - KEY_T1] = 1;
         t_held[key - KEY_T1] = 0;
@@ -445,6 +562,8 @@ int dprism_key(void *brain, void *ev)
     } else if (key == KEY_NO) {
         if (ui_setup)
             ui_setup = 0;
+        else if (fx_lock_mode())
+            fx_lock_mode_set(0);
         else
             dprism_close();
     } else if (ui_setup && (key == KEY_UP || key == KEY_DOWN)) {
@@ -463,12 +582,19 @@ int dprism_key(void *brain, void *ev)
             dual = (u8)((dual + 16 + d) % 16);
         else if (ui_row == G_MIDI)
             cfg_midi_any = !cfg_midi_any;
-        else
+        else if (ui_row == G_CLOSED)
             cfg_closed = !cfg_closed;
+        else
+            fx_lock_track_set((fx_lock_track() + 4 + d) % 4);
+    } else if (ui_setup) {
+        ;
+    } else if (key >= KEY_SYN1 && key <= KEY_LFO) {
+        ui_pg = (u8)(key == KEY_LFO ? (ui_pg == 4 ? 5 : 4) : key - KEY_SYN1);
+        ui_flash_ticks = 0;
     } else if (key == KEY_LEFT || key == KEY_RIGHT || key == KEY_PAGE) {
         ui_pg = (u8)((ui_pg + (key == KEY_LEFT ? NPAGE - 1 : 1)) % NPAGE);
         ui_flash_ticks = 0;
-    } else if (key >= KEY_PUSH_A && key < KEY_PUSH_A + 8 && !ui_setup) {
+    } else if (key >= KEY_PUSH_A && key < KEY_PUSH_A + 8) {
         push((int)(key - KEY_PUSH_A));
     }
     return 1;
@@ -480,7 +606,7 @@ int dprism_hold(void *brain, void *ev, int track)
     (void)brain, (void)ev;
     if (!ui_open || track < 0 || track > 3)
         return 0;
-    dprism.on[track] = !dprism.on[track];
+    set_on(track, !own(DH_S_ON(track)));
     t_held[track] = 1;
     return 1;
 }
@@ -502,8 +628,10 @@ int dprism_enc(void *brain, void *ev)
     if (!d)
         return 1;
     pg = page_now();
-    if (pg < 2) {
-        set_knob(i, pg, (pg ? dprism.sec[i] : dprism.knob[i]) + d);
+    if (pg >= 3) {
+        fx_page_turn(EFF, pg - 3, i, d);    /* its value under the knob, as the stock's */
+    } else if (pg < 2) {
+        turn_knob(i, pg, shown(pg ? DH_S_SEC(i) : DH_S_KNOB(i)) + d);
         flash(pg, i);
     } else {
         step_setting(i, d > 0 ? 1 : -1);
@@ -512,54 +640,60 @@ int dprism_enc(void *brain, void *ev)
 }
 
 /* ---- MIDI: its CC chart (core-dn1 3.2's ev_midi_cc, the MIDI task) --------------------
- * While the page is open (or always, with SETUP's CC CLOSED on) the CCs below are DigiPrism's when they come
+ * While DigiPrism is active (or always, with SETUP's CC CLOSED on) the CCs below are its own when they come
  * on the auto channel (or on a track's channel too, with SETUP's MIDI CC: ANY CH): the Digitone does not
  * apply them. Every other CC goes on to the Digitone. */
 static const u8 cc_knob[8] = { K_TILT, K_CAMT, K_RATE, K_MAMT, K_TIME, K_AAMT, K_MIX, K_GAMT };      /* 64-71 */
 static const u8 cc_sec[8] = { S_SENS, S_CVOL, S_MDRIFT, S_MVOL, S_DDRIFT, S_AVOL, S_OUT, S_GVOL };  /* 72-79 */
 
+static int cc_take(int cc, int value);
+
 int dprism_cc(int track, int cc, int value, int flags)
 {
-    int on = value >= 64;
+    int took;
     (void)track;
-    if (!ui_ready || (!ui_open && !cfg_closed) || (!(flags & CORE_MIDI_CC_AUTO) && !cfg_midi_any))
+    if (!ui_ready || (!dprism_on && !cfg_closed) || (!(flags & CORE_MIDI_CC_AUTO) && !cfg_midi_any))
         return 0;
     if (value < 0 || value > 127)
         return 0;
+    in_cc = 1;
+    took = cc_take(cc, value);
+    in_cc = 0;
+    return took;
+}
+
+static int cc_take(int cc, int value)
+{
+    int on = value >= 64;
     if (cc >= 64 && cc <= 71) {
-        int k = cc_knob[cc - 64];
-        dprism.knob[k] = (u8)value;
-        knob_moved(k);
+        set_knob(cc_knob[cc - 64], 0, value);
     } else if (cc >= 72 && cc <= 79) {
-        dprism.sec[cc_sec[cc - 72]] = (u8)value;
+        set_knob(cc_sec[cc - 72], 1, value);
     } else if (cc >= 16 && cc <= 19) {          /* a module's effect: five bands of 22, then off */
         int m = cc - 16;
         if (value >= 110) {
-            dprism.on[m] = 0;
+            set_on(m, 0);
         } else {
-            dprism.fx[m] = (u8)(value / 22);
-            dprism.on[m] = 1;
+            set_fx(m, value / 22);
+            set_on(m, 1);
         }
     } else if (cc == 91) {                      /* bypass below 64 */
-        dprism.bypass = (u8)!on;
-        if (on)
-            dprism.overload = 0;
+        set_bypass(!on);
     } else if (cc == 92) {                      /* total bypass, dual bypass, total engage */
         int m;
         if (value < 32) {
-            dprism.bypass = 1;
+            set_bypass(1);
         } else if (value < 64) {
             for (m = 0; m < 4; m++)
                 if (dual & (1 << m))
-                    dprism.on[m] = 0;
+                    set_on(m, 0);
         } else {
-            dprism.bypass = 0;
-            dprism.overload = 0;
+            set_bypass(0);
             for (m = 0; m < 4; m++)
-                dprism.on[m] = 1;
+                set_on(m, 1);
         }
     } else if (cc >= 103 && cc <= 106) {        /* a module's bypass */
-        dprism.on[cc - 103] = (u8)on;
+        set_on(cc - 103, on);
     } else if (cc == 80) {                      /* GESTURE: record from 64, play below */
         dprism.grec = (u8)on;
     } else if (cc == 81) {                      /* GESTURE: erase */
@@ -575,13 +709,13 @@ int dprism_cc(int track, int cc, int value, int flags)
         else
             dprism.ccmd = CC_REC;
     } else if (cc == 83) {                      /* CAPTURE route: post below 64 */
-        dprism.croute = (u8)on;
+        set_slot(DH_S_CROUTE, on);
     } else if (cc == 84) {                      /* FILTER: LPF, TILT, HPF */
-        dprism.style = (u8)(value < 44 ? ST_LPF : value < 88 ? ST_TILT : ST_HPF);
+        set_slot(DH_S_STYLE, value < 44 ? ST_LPF : value < 88 ? ST_TILT : ST_HPF);
     } else if (cc == 93) {                      /* TAP */
         tap();
     } else if (cc == 94) {                      /* the input level, in four bands */
-        dprism.level = (u8)(value >> 5);
+        set_slot(DH_S_LEVEL, value >> 5);
     } else if (cc == 95) {
         /* the calibration menu: DigiPrism has none (LEVL on page 3 sets the input level), but taken, so the
          * Digitone does not apply it to the active track meanwhile */
@@ -591,19 +725,33 @@ int dprism_cc(int track, int cc, int value, int flags)
     return 1;
 }
 
-/* ---- the UI task: clearing, the owner, the footswitches, redraws ------------------------------------ */
+/* ---- the UI task: clearing, the effect, the footswitches, redraws ------------------------------------ */
 static u32 ui_sig, ui_ticks;
 
 static u32 signature(void)                  /* what the page shows, but the meter, folded into a word */
 {
-    u32 h = (u32)(page_now() | ui_setup << 2 | ui_row << 3 | (ui_flash_ticks != 0) << 6 | (ui_msg_ticks != 0) << 7
+    int pg = page_now();
+    u32 h = (u32)(pg | ui_setup << 3 | ui_row << 4 | (ui_flash_ticks != 0) << 7
                   | (ui_fx_ticks != 0) << 8 | dprism.order << 9 | dprism.style << 14 | dprism.croute << 16
                   | dprism.level << 17 | dprism.bypass << 19 | dprism.overload << 20 | dprism.grec << 21
                   | dprism.cstate << 22 | dual << 24 | dprism.clock << 28 | dprism.trails << 30
                   | (u32)dprism.source << 31);
     int k;
     for (k = 0; k < 8; k++)
-        h = h * 31 + dprism.eff[k] + (dprism.sec[k] << 8) + (dprism.gstate[k] << 16);
+        h = h * 31 + dprism.eff[k] + (shown(DH_S_SEC(k)) << 8) + (dprism.gstate[k] << 16)
+            + ((u32)shown(DH_S_KNOB(k)) << 20);
+    if (pg >= 3)
+        h = h * 31 + fx_page_state();
+    for (k = 0; k < 8 && pg >= 3; k++) {
+        s32 s = fx_page_slot(pg - 3, k);
+        h = h * 31 + (u32)fx_view(s, fx_get(EFF, s));
+    }
+    h = h * 31 + (u32)(fx_lock_mode() | fx_overload() << 1 | fx_lock_page() << 2 | fx_lock_track() << 4
+                       | (fx_held_step() + 1) << 6) + (fx_lock_mode() ? fx_lock_mask(EFF, fx_lock_page()) << 13 : 0);
+    for (k = 0; k < 11; k++)
+        h = h * 31 + (u32)shown(k < 4 ? DH_S_FX(k) : k < 8 ? DH_S_ON(k - 4) : k == 8 ? DH_S_ORDER
+                                : k == 9 ? DH_S_STYLE : DH_S_CROUTE);
+    h = h * 31 + (u32)shown(DH_S_LEVEL);
     for (k = 0; k < 4; k++)
         h = h * 31 + dprism.fx[k] + (dprism.on[k] << 4);
     h = h * 31 + (dprism.cstate == C_REC ? dprism.crec : dprism.clen) / 48000;
@@ -634,18 +782,15 @@ void dprism_tick(void *ctrl)
             ui_ready = 1;
         }
     }
-    if (dprism.source == SRC_DIGITONE && can_insert()) {   /* an insert: on until BYPASS, open or not */
-        dprism_owner.flags = CORE_AUDIO_INSERT;
-        dprism_owner.on = ui_ready && (!dprism.bypass || dprism.active);
-    } else {                                /* the inputs: the audio is DigiPrism's while the page is open */
-        dprism_owner.flags = CORE_AUDIO_MUTE_VOICES;
-        dprism_owner.on = ui_ready && ui_open;
-    }
+    if (ui_pending && ui_ready)
+        activate();
+    dprism_on = (u8)(fx_active() == EFF);
+    if (ui_open && !dprism_on && !ui_pending)
+        dprism_hide();                     /* another effect took the audio */
+    chain();                                /* the inputs (fxkit's audio) or the insert, as SOURCE says */
     dprism.meter[0] = (u16)(dprism.meter[0] - (dprism.meter[0] >> 3));
     dprism.meter[1] = (u16)(dprism.meter[1] - (dprism.meter[1] >> 3));
     keep_save();
-    if (ui_msg_ticks)
-        ui_msg_ticks--;
     if (ui_flash_ticks)
         ui_flash_ticks--;
     if (ui_fx_ticks)
@@ -663,7 +808,15 @@ void dprism_tick(void *ctrl)
 /* ---- the screen: 128 x 64, y = 0 the bottom row ------------------------------------------------------ */
 static void value_text(void *bmp, const void *font, int x, int y, int i, int sec)
 {
-    int v = sec ? dprism.sec[i] : dprism.eff[i];
+    int v;
+    if (sec >= 3) {                             /* the MIXER's, the LFOs' */
+        char buf[8];
+        s32 s = fx_page_slot(sec - 3, i);
+        fx_text(EFF, s, fx_view(s, fx_get(EFF, s)), buf);
+        TEXTF(bmp, font, x, y, -1, "%s", buf);
+        return;
+    }
+    v = sec ? shown(DH_S_SEC(i)) : fx_held_step() >= 0 ? shown(DH_S_KNOB(i)) : dprism.eff[i];
     if (!sec && i == K_TILT) {
         TEXTF(bmp, font, x, y, -1, "%c%d", v >= 64 ? '+' : '-', v >= 64 ? v - 64 : 64 - v);
     } else if (!sec && i == K_RATE && dprism.fx[M_MOVE] == FX_PITCH) {
@@ -822,9 +975,10 @@ static void title_bar(void *bmp, int pg)
     if (ui_fx_ticks && !ui_setup) {
         TEXTF(bmp, FONT_TTL, 19, 56, -1, "%s%s", dprism.on[ui_fx_m] ? "" : "(off) ",
               fx_name[ui_fx_m][dprism.fx[ui_fx_m] % 5]);
-    } else if (ui_msg_ticks) {
-        TEXTF(bmp, FONT_TTL, 19, 56, -1, "%s P%d", ui_msg_kind == 1 ? "Saved" : ui_msg_kind == 2 ? "Loaded" : "Empty",
-              ui_msg_preset);
+    } else if (ui_flash_ticks && !ui_setup && ui_flash_pg >= 3) {
+        const char *l = fx_page_label(EFF, ui_flash_pg - 3, ui_flash_i);
+        TEXTF(bmp, FONT_TTL, 19, 56, -1, "%s", l);
+        value_text(bmp, FONT_TTL, 19 + text_w(l) + 6, 56, ui_flash_i, ui_flash_pg);
     } else if (ui_flash_ticks && !ui_setup) {
         if (ui_flash_pg < 2) {
             const char *l = ui_flash_pg ? sec_lbl[ui_flash_i]
@@ -833,18 +987,26 @@ static void title_bar(void *bmp, int pg)
             value_text(bmp, FONT_TTL, 19 + text_w(l) + 6, 56, ui_flash_i, ui_flash_pg);
         }
     } else if (ui_setup) {
-        TEXTF(bmp, FONT_TTL, 19, 56, -1, "Setup (trig: save)");
-    } else if (dprism.overload) {
+        TEXTF(bmp, FONT_TTL, 19, 56, -1, "Setup");
+    } else if (fx_lock_mode()) {
+        TEXTF(bmp, FONT_TTL, 19, 56, -1, "Lock %d/%d", fx_lock_page() + 1, fx_lock_pages());
+    } else if (dprism.overload || fx_overload()) {
         TEXTF(bmp, FONT_TTL, 19, 56, -1, "CPU full: bypassed");
+    } else if (pg >= 4) {
+        TEXTF(bmp, FONT_TTL, 19, 56, -1, "%s", fx_page_title(pg - 3));     /* "LFO (1/2)", as the stock's */
     } else if (dprism.grec) {
         TEXTF(bmp, FONT_TTL, 19, 56, -1, "Gesture: rec");
     } else if (dprism.bypass) {
         TEXTF(bmp, FONT_TTL, 19, 56, -1, "Bypassed (%d/%d)", pg + 1, NPAGE);
     } else {
-        TEXTF(bmp, FONT_TTL, 19, 56, -1, "%s (%d/%d)", pg == 0 ? "Prism" : pg == 1 ? "Secondary" : "Modules",
+        TEXTF(bmp, FONT_TTL, 19, 56, -1, "%s (%d/%d)", pg == 0 ? "Prism" : pg == 1 ? "Secondary" : pg == 2 ? "Modules"
+              : pg == 3 && dprism.source == SRC_DIGITONE && can_insert() ? "Mixer: inputs" : fx_page_title(pg - 3),
               pg + 1, NPAGE);
     }
-    TEXTF(bmp, FONT_TTL, 110, 56, -1, "C%d", dprism.load / 10);   /* the whole render's share */
+    if (fx_lock_mode() && !ui_setup)
+        fx_lock_strip(EFF, bmp, 62, 55);    /* the page's 16 steps: filled, a lock of DigiPrism's */
+    else
+        TEXTF(bmp, FONT_TTL, 110, 56, -1, "C%d", dprism.load / 10);   /* the whole render's share */
     FILLRECT(bmp, 17, 54, 127, 63, -1);
     corners(bmp, 17, 54, 127, 63, 0);
 }
@@ -878,12 +1040,12 @@ static void left_column(void *bmp)
     label(bmp, 7, -1, "OUT");
 }
 
-static void order_text(char *b)              /* the order as four letters: CMAG */
+static void order_text(char *b, int order)   /* the order as four letters: CMAG */
 {
     static const char L[4] = { 'C', 'M', 'A', 'G' };
     int k;
     for (k = 0; k < 4; k++)
-        b[k] = L[ch_order[dprism.order % 24][k]];
+        b[k] = L[ch_order[order % 24][k]];
     b[4] = 0;
 }
 
@@ -896,29 +1058,29 @@ static void control(void *bmp, int pg, int i)
         if (r == 0 && i < 3 && !dprism.on[i])
             off = 1;
         lbl = r ? fx_lbl[m][dprism.fx[m]] : knob_lbl[i];
-        knob(bmp, cx, cy, dprism.eff[i], i == K_TILT || (i == K_RATE && dprism.fx[M_MOVE] == FX_PITCH)
+        knob(bmp, cx, cy, fx_held_step() >= 0 ? shown(DH_S_KNOB(i)) : dprism.eff[i], i == K_TILT || (i == K_RATE && dprism.fx[M_MOVE] == FX_PITCH)
              || (i == K_TIME && dprism.fx[M_DIFF] == FX_REVERSE), off);
         if (dprism.gstate[i] == G_PLAY)    /* a gesture plays it: a dot over the knob */
             FILLRECT(bmp, cx - 1, cy + 10, cx + 1, cy + 11, 1);
     } else if (pg == 1) {
         lbl = sec_lbl[i];
-        knob(bmp, cx, cy, dprism.sec[i], i == S_SENS || i >= S_OUT, 0);
+        knob(bmp, cx, cy, shown(DH_S_SEC(i)), i == S_SENS || i >= S_OUT, 0);
     } else {
         char b[5];
         lbl = pg3_lbl[i];
-        if (i < 4) {
-            box(bmp, cx, cy, fx_lbl[i][dprism.fx[i]], 0);
-            if (!dprism.on[i])
+        if (i < 4) {                        /* the module's own setting (a held step's lock in LOCK mode) */
+            box(bmp, cx, cy, fx_lbl[i][shown(DH_S_FX(i)) % 5], 0);
+            if (!shown(DH_S_ON(i)))
                 line(bmp, cx - 7, cy - 7, cx + 7, cy + 7);
         } else if (i == 4) {
-            order_text(b);
+            order_text(b, shown(DH_S_ORDER));
             box(bmp, cx, cy, b, 0);
         } else if (i == 5) {
-            box(bmp, cx, cy, styles[dprism.style % 3], 0);
+            box(bmp, cx, cy, styles[shown(DH_S_STYLE) % 3], 0);
         } else if (i == 6) {
-            box(bmp, cx, cy, dprism.croute ? "PRE" : "POST", 0);
+            box(bmp, cx, cy, shown(DH_S_CROUTE) ? "PRE" : "POST", 0);
         } else {
-            box(bmp, cx, cy, levels[dprism.level & 3], 0);
+            box(bmp, cx, cy, levels[shown(DH_S_LEVEL) & 3], 0);
         }
     }
     label(bmp, cx, LBL_Y(r), lbl);
@@ -927,9 +1089,10 @@ static void control(void *bmp, int pg, int i)
 static void draw_setup(void *bmp)
 {
     static const char *const clocks[3] = { "FREE", "DIGITONE", "TAP" };
+    static const char *const tracks[4] = { "T1", "T2", "T3", "T4" };
     int i;
     for (i = 0; i < G_COUNT; i++) {
-        int y = 47 - 7 * i;
+        int y = 49 - 6 * i;
         TEXTF(bmp, FONT5, 3, y, -1, "%s", cfg_lbl[i]);
         if (i == G_SOURCE) {
             TEXTF(bmp, FONT5, 76, y, -1, "%s", !can_insert() ? "INPUTS ONLY" : dprism.source ? "DIGITONE" : "INPUTS");
@@ -947,8 +1110,10 @@ static void draw_setup(void *bmp)
                       dual & 4 ? 'D' : '-', dual & 8 ? 'T' : '-');
         } else if (i == G_MIDI) {
             TEXTF(bmp, FONT5, 76, y, -1, "%s", cfg_midi_any ? "ANY CH" : "AUTO CH");
-        } else {
+        } else if (i == G_CLOSED) {
             TEXTF(bmp, FONT5, 76, y, -1, "%s", cfg_closed ? "ON" : "OFF");
+        } else {
+            TEXTF(bmp, FONT5, 76, y, -1, "%s", tracks[fx_lock_track() & 3]);
         }
         if (i == ui_row)
             FILLRECT(bmp, 1, y - 1, 126, y + 4, -1);
@@ -972,6 +1137,9 @@ void dprism_draw(void *bmp, void *ctrl)
         return;
     }
     left_column(bmp);
-    for (i = 0; i < 8; i++)
-        control(bmp, pg, i);
+    if (pg >= 3)
+        fx_page_draw(EFF, bmp, pg - 3);
+    else
+        for (i = 0; i < 8; i++)
+            control(bmp, pg, i);
 }

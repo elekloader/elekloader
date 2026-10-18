@@ -1,8 +1,8 @@
 {
- "id": "digiprism", "version": "0.1.1",
+ "id": "digiprism", "version": "0.2",
  "license": "GPL-2.0-or-later",
  "title": "DigiPrism", "category": "Effect", "author": "irpina",
- "description": "An effects pedal for the Digitone mk1's audio inputs: four modules, Color (DRIVE, WARMTH, FUZZ, WAIL, SWELL), Motion (DOUBLER, VIBRATO, PHASER, TREMOLO, PITCH), Ambience (ECHOES, TAPE, SPACE, SCATTER, REVERSE) and Grit (FILTER, COMP, LO-FI, GLITCH, STATIC), in any order, with TILT, RATE, TIME, MIX and four AMOUNTs on the encoders, their secondary controls, GESTURE (knob recordings), CAPTURE (a 30-second looper and sustainer), eight presets and MIDI CCs. DIGIPRISM in core-dn1's Mod Menu (hold a track key) opens its page; while it is open it owns the audio engine (the synths are muted) and processes the inputs, and NO gives both back. With SETUP's SOURCE on DIGITONE and core-dn1 3.4 it processes everything the Digitone plays instead, and stays on after NO. Needs core-dn1 3.2.",
+ "description": "An effects pedal for the Digitone mk1's audio inputs: four modules, Color (DRIVE, WARMTH, FUZZ, WAIL, SWELL), Motion (DOUBLER, VIBRATO, PHASER, TREMOLO, PITCH), Ambience (ECHOES, TAPE, SPACE, SCATTER, REVERSE) and Grit (FILTER, COMP, LO-FI, GLITCH, STATIC), in any order, with TILT, RATE, TIME, MIX and four AMOUNTs on the encoders, their secondary controls, GESTURE (knob recordings), CAPTURE (a 30-second looper and sustainer) and MIDI CCs. DIGIPRISM in core-dn1's Mod Menu (hold a track key) makes it the active effect and opens its page; while it is active it owns the audio engine (the synths are muted) and processes the inputs, through fxkit's MIXER (AMP), with two LFOs aimed at its controls (LFO) and p-locks on the pattern's steps (RECORD: hold a trig, turn a control; the modules' effects and order lock too). With SETUP's SOURCE on DIGITONE it processes everything the Digitone plays instead, with the same LFOs and p-locks. MIDI leaves the page to edit the MIDI tracks while it plays; NO turns it off. Needs fxkit (core-dn1 4.1).",
  "device": "digitone-mk1", "os": "1.43",
  "ports": {"1.44": {}},
  "sources": ["dsp.c", "ui.c"],
@@ -22,13 +22,15 @@
    "relocs": [[0, "abs32", "sym:dprism_menu", 0]]},
   {"to": "core_audio", "order": 60, "data": "00000000",
    "relocs": [[0, "abs32", "sym:dprism_owner", 0]]},
+  {"to": "fx_effects", "order": 60, "data": "00000000",
+   "relocs": [[0, "abs32", "sym:dprism_effect", 0]]},
   {"to": "core_projdata", "order": 70, "data": "00000000",
    "relocs": [[0, "abs32", "sym:dprism_projdata", 0]]}
  ],
  "resources": {
-  "core": "3.2",
+  "core": "4.1",
   "names": ["projdata:DCHR"],
   "regions": [{"name": "digiprism buffers", "lo": "0x45B00000", "hi": "0x46200000"}]
  },
- "requires": ["core"]
+ "requires": ["core", "fxkit"]
 }

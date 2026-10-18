@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
-/* DigiReel's UI, on the pedal shell (pedal_ui.inc: the pages, SETUP, presets, TAP, BYPASS, the owner):
+/* DigiReel's UI, on the pedal shell (pedal_ui.inc: the pages, fxkit's MIXER, LFOs and LOCK mode, SETUP, TAP, BYPASS):
  *
  *   1 REEL      SPEED PITCH TIME BLEND / RANDOM GLIDE TONE SLICE
  *   2 SECONDARY GRAIN XFADE R-SPD R-PCH / R-REV R-STU WIDTH OUT  (the random events' weights)
@@ -148,7 +148,7 @@ static int fx_value(void *bmp, const void *font, int x, int y, int pg, int i)
     int v;
     if (pg != 0)
         return 0;
-    v = ST.knob[i];
+    v = ctl(0, i);
     if (i == K_SPEED) {
         int c = (v - 64) * 100 / 32, a = c < 0 ? -c : c;
         TEXTF(bmp, font, x, y, -1, "%s%d.%d%dX", c < 0 ? "-" : "", a / 100, a / 10 % 10, a % 10);

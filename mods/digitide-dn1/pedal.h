@@ -1,18 +1,22 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
 /* The pedal shell: what the GAS-killer pedals for the Digitone mk1 share (DigiTide, DigiTriad, DigiReel,
- * DigiHoard, DigiHalo), as DigiSwarm and DigiPrism do it. A pedal is a whole mod on core-dn1 3.2's core_audio:
- * its Mod Menu entry opens its page, and while the page is open it owns the audio (the synths are muted) and
- * processes the Digitone's inputs; NO gives both back. Each mod carries an identical copy of pedal.h,
- * pedal_dsp.inc, pedal_ui.inc and pedal_tables.py; its own header defines PD() (its symbols' prefix) and its
- * buffers, then includes this.
+ * DigiHoard, DigiHalo), as DigiSwarm and DigiPrism do it. A pedal is a whole mod and an effect on fxkit
+ * (digitone-mk1/fxkit.h): its Mod Menu entry makes it the active effect and opens its page; while it is active it
+ * owns the audio (the synths are muted) and processes the Digitone's inputs, through fxkit's mixer, with fxkit's
+ * LFOs and p-locks on its controls. MIDI leaves the page with the pedal playing; NO turns it off. Each mod carries
+ * an identical copy of pedal.h, pedal_dsp.inc, pedal_ui.inc and pedal_tables.py; its own header defines PD() (its
+ * symbols' prefix) and its buffers, then includes this.
  *
  * The render side (dsp.c, interrupt level) and the UI side (ui.c, the UI task) share struct pd_state: bytes
- * either side writes whole, and a ring of one-shot commands from the UI to the render. */
+ * either side writes whole, and a ring of one-shot commands from the UI to the render. The controls' values
+ * (knob, sec, opt) are what plays, fxkit's each block (the pedal's own, a step's p-lock, an LFO on it); the UI
+ * changes the pedal's own through set_ctl (fx_set). */
 #ifndef PEDAL_H
 #define PEDAL_H
 
 #include <stdint.h>
 #include "digitone-mk1/core3.h"
+#include "digitone-mk1/fxkit.h"
 
 typedef int32_t s32;
 typedef uint32_t u32;
@@ -49,11 +53,17 @@ struct pd_state {
 };
 
 extern struct pd_state PD(st);
-extern struct core_audio_owner PD(owner);
+extern volatile u8 PD(on);              /* the pedal is the active effect (the UI's, for the render's guard) */
+extern const struct fx_effect PD(effect);
 void PD(render)(int32_t *out, const int32_t *in);
 void PD(rin)(void);                     /* ev_render_in, ev_render_out: the CPU guard's clock */
 void PD(rout)(void);
 void PD(dsp_reset)(void);
 u32 PD(tempo)(void);                    /* the clock's tempo, BPM x 120 (0 when free) */
+
+/* The controls' slots (fxkit's): page 1 A-H, page 2 A-H, page 3's settings */
+#define PD_S_KNOB(i)    (FX_S_P1 + (i))
+#define PD_S_SEC(i)     (FX_S_P2 + (i))
+#define PD_S_OPT(i)     FX_S_SET(i)
 
 #endif

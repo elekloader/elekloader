@@ -4,19 +4,41 @@ A reverb pedal for the Digitone mk1's audio inputs: twelve reverb
 machines (ROOM, HALL, PLATE, SPRING, SWELL, SWIRL, NEBULA, VOWEL, SHIMMER,
 TAPE, NONLINEAR, REFLECTIONS), each with its own DECAY range, its
 PARAM 1 and PARAM 2 and the rest of its parameters, HOLD as FREEZE or INFINITE on
-a footswitch, PERSIST, SPILLOVER, a cab filter, presets and MIDI CCs. DigiHalo
-is an elekloader mod for core-dn1 3.2.
+a footswitch, PERSIST, SPILLOVER, a cab filter and MIDI CCs. DigiHalo is an
+elekloader mod on fxkit (core-dn1 4.1).
 
 Its MIDI CCs follow the Strymon BigSky's published CC chart (as listed on [midi.guide](https://midi.guide/d/strymon/bigsky/)), so a controller set up for that pedal works with it too. DigiHalo is not affiliated with Strymon and uses none of its code.
 
-DIGIHALO is an entry in core-dn1's Mod Menu (hold a track key). While its
-page is open, DigiHalo owns the audio engine, as DigiSwarm and DigiPrism do
-(core-dn1 3.2's `core_audio`): the synths are silent, the Digitone's own
-effects are off, and what you hear is the inputs through the pedal. NO gives
-the audio and the screen back. The sequencer keeps running, so PLAY, STOP
+DIGIHALO is an entry in core-dn1's Mod Menu (hold a track key). While it is the
+active effect, DigiHalo owns the audio engine, as DigiSwarm and DigiPrism do
+(fxkit's `core_audio` owner): the synths are silent, the Digitone's own
+effects are off, and what you hear is the inputs through the pedal. NO turns
+it off and gives the audio and the screen back. The sequencer keeps running, so PLAY, STOP
 and TEMPO still work and PRE-DELAY can follow the Digitone's tempo. BYPASS
 (trig 16) passes the inputs through dry; with PERSIST on, the reverb's tail
 rings out.
+
+## 0.2: on fxkit
+
+From 0.2 DigiHalo is an effect on fxkit ([../fxkit-dn1](../fxkit-dn1)), as every
+effect in the build is: one at a time is active. Its Mod Menu entry makes it
+the active effect and opens its page; while it is active it owns the audio,
+page or no page, and opening another effect's entry hands that one the audio.
+
+| key | on DigiHalo's page |
+|---|---|
+| SYN1, SYN2, FLTR | its three pages (the machine, PARAMS and SETUP's page) |
+| AMP | the MIXER: IN L, IN R (the inputs' levels, as the stock mixer's: 32 unity, up to +24 dB), L PAN, R PAN (where each input sits), BAL, VOL, WDTH (the output's width) |
+| LFO | LFO 1, pressed again LFO 2: the stock LFO page (its knobs, WAVE and SPH as one wave, a turned knob's value under it), at the stock rates; turning DEST opens its list (DigiHalo's controls and the mixer's), YES picks, NO closes |
+| RECORD | LOCK mode: hold a trig and turn a control, and that step has a p-lock of it (the title bar shows the 16 steps, filled where DigiHalo has a lock); FUNC + a trig clears the step; PAGE the next 16 steps. RECORD again (or NO) leaves it |
+| MIDI | the stock UI, for the MIDI tracks and the rest, with DigiHalo playing on; its Mod Menu entry brings the page back |
+| NO | DigiHalo off: the synths again |
+
+The p-locks are the pattern's: they are kept in one synth track's lock table
+(SETUP's LOCK TRACK, T4 unless you pick another), saved and copied with the
+pattern, and play on their steps; that track should play nothing of its own
+(no notes, no arpeggiator) in a pattern with DigiHalo's locks, or its trigs go astray. 0.1's presets are gone: the
+project keeps DigiHalo's controls, mixer and LFOs (tag `DSKY`, 52 bytes).
 
 ## The page
 
@@ -60,26 +82,26 @@ rest are on page 2. LOW END is knob H for every machine.
 | REFLECTIONS | 133 - 400 ms (the room's size) | LOCATION X: L3 .. C .. R3 | LOCATION Y: F3 .. C .. B3 | SHAPE: SQUARE, RECT, OBLONG |
 
 Choosing a machine (trig, T3/T4, TYPE, CC 19) puts its parameters at their
-starting values; recalling a preset keeps the preset's PARAM 1 and 2. The parameters are one
-set of knobs shared by the machines, not twelve sets: the project has room
-for the shell's 136 bytes only.
+starting values; a project loaded keeps its own PARAM 1 and 2. The parameters are one set of
+knobs shared by the machines, not twelve sets: the project has room for the
+shell's 52 bytes only.
 
 ## The keys
 
 | key | on DigiHalo |
 |---|---|
 | T1 | held, HOLD while held (from the press); pressed for under 0.4 s, HOLD latched on or off. HOLD's mode is page 3's HOLD (or trig 14) |
-| T2 tapped | the next saved preset (P1-P8, in turn) |
+| T2 tapped | the next machine (0.1: the next saved preset) |
 | T2 held | the wet out; on release it swells back over SWELL's RISE TIME (1 s on the other machines) |
 | T3, T4 | the machine down, up |
 | trig 1-12 | the machines, in TYPE order |
 | trig 13, 14 | HOLD latched on or off; HOLD's mode |
-| trig 1-8 in SETUP, FUNC + trig 1-8 | eight presets: in SETUP a trig key 1-8 saves the pedal there; FUNC + a trig key 1-8 recalls it (the knobs and page 3) |
 | trig 15 | TAP (the clock becomes TAP) |
 | trig 16 | BYPASS |
 
-The global settings are on page 3 (PERSIST, SPILLOVER, CAB) and in YES's
-SETUP (INPUT, CLOCK, BYPASS, MIDI CC, CC CLOSED).
+There are no presets from 0.2: the project keeps the pedal, and p-locks
+(RECORD) follow the pattern. The global settings are on page 3 (PERSIST,
+SPILLOVER, CAB) and in YES's SETUP (INPUT, CLOCK, BYPASS, MIDI CC, CC CLOSED).
 
 ## The machines
 
@@ -223,8 +245,10 @@ is fixed point in C, the lines holding their samples at half scale. The UI
   so 18-28%. The emulator's timing assumes memory without wait states, so a
   unit runs slower: the shell's guard bypasses the pedal (no trails) if the
   whole render stays over 93% for 0.2 s, and says so in the title.
-- **Project data:** the pedal and eight presets are saved with the project
-  (tag `DSKY`, the shell's 136 bytes).
+- **Project data:** DigiHalo's controls, its latches and SETUP, with fxkit's mixer and LFOs
+  (`fx_pack`), are saved with the project (tag `DSKY`, 52 bytes; mods share 480 there,
+  and the seven effects, GAIN and fxkit take about 470). The p-locks are the
+  pattern's.
 
 ## Build
 
@@ -233,8 +257,8 @@ python -m elekloader.sdk.build mods/digihalo-dn1 --stock Digitone_and_Digitone_K
 python -m elekloader.sdk.build mods/digihalo-dn1 --stock Digitone_and_Digitone_Keys_OS1.44.syx
 ```
 
-It names no firmware address, so its 1.44 port is empty. It needs core-dn1
-3.2. `gentables.py` makes `tables.h`; `tests.sh` runs the render on a
+It names no firmware address, so its 1.44 port is empty. It needs fxkit and core-dn1
+4.1. `gentables.py` makes `tables.h`; `tests.sh` runs the render on a
 computer (the shell's `host.c`) and measures it with `host_an.py`.
 
 ## Checked
@@ -279,8 +303,8 @@ compiled for a computer and fed test signals (`tests.sh`, `host_an.py`):
 
 ## Limits
 
-- Preset names, banks, and program changes: eight presets, by trig key or
-  T2.
+- Presets, preset names, banks, and program changes: the project keeps
+  one, and p-locks change it on the pattern's steps.
 - Twelve machines' worth of parameters at once: one shared set of knobs,
   set to the machine's starting values when you choose it.
 - Assignable PARAM knobs: each machine's two are fixed.

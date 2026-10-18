@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
-/* DigiTide's UI, on the pedal shell (pedal_ui.inc: the pages, SETUP, presets, TAP, BYPASS, the owner):
+/* DigiTide's UI, on the pedal shell (pedal_ui.inc: the pages, fxkit's MIXER, LFOs and LOCK mode, SETUP, TAP, BYPASS):
  *
  *   1 TIDE      TIME MIX LENGTH BALANCE / MODIFY (wet) CLOCK MODIFY (looper) TONE   (the wet side left, the
  *               shared knobs in the middle, the looper's right)
@@ -120,18 +120,18 @@ static void fx_tkey(int t, int ev)
         }
     } else if (t == 2) {                        /* the next wet mode; held, the next ROUTING */
         if (ev == TK_TAP) {
-            ST.opt[O_WET] = (u8)((ST.opt[O_WET] + 1) % 3);
+            set_opt(O_WET, ((OPT(O_WET) + 1) % 3));
             flash(2, O_WET);
         } else if (ev == TK_HOLD) {
-            ST.opt[O_ROUT] = (u8)((ST.opt[O_ROUT] + 1) % 3);
+            set_opt(O_ROUT, ((OPT(O_ROUT) + 1) % 3));
             flash(2, O_ROUT);
         }
     } else {                                    /* the next loop mode; held, the next SYNC */
         if (ev == TK_TAP) {
-            ST.opt[O_LOOP] = (u8)((ST.opt[O_LOOP] + 1) % 3);
+            set_opt(O_LOOP, ((OPT(O_LOOP) + 1) % 3));
             flash(2, O_LOOP);
         } else if (ev == TK_HOLD) {
-            ST.opt[O_SYNC] = (u8)((ST.opt[O_SYNC] + 1) % 3);
+            set_opt(O_SYNC, ((OPT(O_SYNC) + 1) % 3));
             flash(2, O_SYNC);
         }
     }
@@ -182,7 +182,7 @@ static int fx_cc(int cc, int v)
     } else if (cc == 72) {
         ST.mono = (u8)on;
     } else if (cc == 73) {
-        set_ctl(2, O_SPRD, on ? (ST.opt[O_SPRD] ? ST.opt[O_SPRD] : SP_BOTH) : SP_OFF);
+        set_ctl(2, O_SPRD, on ? (OPT(O_SPRD) ? OPT(O_SPRD) : SP_BOTH) : SP_OFF);
     } else if (cc == 74) {
         set_ctl(2, O_DRYK, on);
     } else if (cc == 75) {
@@ -218,7 +218,7 @@ static int fx_cc(int cc, int v)
 
 static int fx_value(void *bmp, const void *font, int x, int y, int pg, int i)
 {
-    int v = pg == 0 ? ST.knob[i] : ST.sec[i], synced = dtide_tempo() != 0;
+    int v = pg == 0 ? ctl(0, i) : ctl(1, i), synced = dtide_tempo() != 0;
     if (pg == 0 && i == K_TIME) {
         if (ST.opt[O_WET] == WET_REV)
             TEXTF(bmp, font, x, y, -1, "SIZE %d%%", v * 100 / 127);

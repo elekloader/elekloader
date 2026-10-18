@@ -8,6 +8,7 @@
 
 #include <stdint.h>
 #include "digitone-mk1/core3.h"
+#include "digitone-mk1/fxkit.h"
 #ifndef CORE_AUDIO_INSERT
 #define CORE_AUDIO_INSERT       2u      /* core-dn1 3.4's insert */
 #endif
@@ -88,7 +89,20 @@ struct dh_state {
     volatile u8 mono;                   /* 1: input L to both sides (a mono source on one jack) */
 };
 extern struct dh_state dprism;
-extern struct core_audio_owner dprism_owner;
+extern struct core_audio_owner dprism_owner;   /* SOURCE DIGITONE's insert; the inputs go through fxkit's audio */
+extern volatile u8 dprism_on;          /* DigiPrism is fxkit's active effect (the UI's, for the render's guard) */
+extern const struct fx_effect dprism_effect;
+
+/* The controls' slots (fxkit's): the primary knobs on page 1, the secondaries on page 2, then the modules'
+ * effects and their on/off, the order, FILTER's style, CAPTURE's route and the input level as settings */
+#define DH_S_KNOB(i)    (FX_S_P1 + (i))
+#define DH_S_SEC(i)     (FX_S_P2 + (i))
+#define DH_S_FX(m)      FX_S_SET(m)
+#define DH_S_ON(m)      FX_S_SET(4 + (m))
+#define DH_S_ORDER      FX_S_SET(8)
+#define DH_S_STYLE      FX_S_SET(9)
+#define DH_S_CROUTE     FX_S_SET(10)
+#define DH_S_LEVEL      54
 extern const u8 ch_order[24][4];
 
 void dprism_render(int32_t *out, const int32_t *in);
