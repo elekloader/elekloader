@@ -131,102 +131,102 @@
       "on_unit": "Tested on a Digitone mk1 (3-4 Oct 2026): the TBL page, the table editor, the fast speeds, the Mod Menu and ADD steps. Not yet checked: the tables restored at power-up, and the arpeggiator with tables."
     },
     {
-      "repo": "irpina/digicosm", "tag": "v0.1.1", "file": "digicosm-0.1.1.elemod",
+      "repo": "irpina/digiswarm", "tag": "v0.1.2", "file": "digiswarm-0.1.2.elemod",
       "device": "digitone-mk1", "needs_core": "3.2",
-      "sha256": "fb54af2a00ecdb02be9a843aa03f147a6bb3270dcf300f2d848e3c68f703d67e",
-      "summary": "A Microcosm-style effects engine for the audio inputs: eleven engines with four variations, a 60-second looper, Hold, Reverse and the Microcosm's MIDI CCs, on a page like the Digitone's own. The synths are silent while it is open.",
-      "on_unit": "0.1 tested on a Digitone mk1 (Oct 2026): it runs and works. 0.1.1 changes only a mono input (it now comes out of both sides), checked in digikit's emulator on OS 1.43 and 1.44. Not yet run on a Digitone Keys."
+      "sha256": "d6440a1e501d438a967847711b19ae33e75b65a14cf06bcd08a4972226e6e99c",
+      "summary": "An effects engine for the audio inputs: eleven engines with four variations, a 60-second looper, Hold, Reverse and MIDI CCs, on a page like the Digitone's own. The synths are silent while it is open.",
+      "on_unit": "0.1 tested on a Digitone mk1 (Oct 2026): it runs and works. 0.1.1 changed only a mono input and 0.1.2 only the names, both checked in digikit's emulator on OS 1.43 and 1.44. Not yet run on a Digitone Keys."
     },
     {
-      "repo": "irpina/digicosm", "tag": "v0.1.1", "file": "digicosm-0.1.1-os1.44.elemod",
+      "repo": "irpina/digiswarm", "tag": "v0.1.2", "file": "digiswarm-0.1.2-os1.44.elemod",
       "device": "digitone-mk1", "needs_core": "3.2",
-      "sha256": "b83da6c8a2cc96b9f86eee258adb4fae5e5c9937d551f5d1904bdf7f9fcbbcb6",
-      "summary": "A Microcosm-style effects engine for the audio inputs: eleven engines with four variations, a 60-second looper, Hold, Reverse and the Microcosm's MIDI CCs, on a page like the Digitone's own. The synths are silent while it is open.",
-      "on_unit": "0.1 tested on a Digitone mk1 (Oct 2026): it runs and works. 0.1.1 changes only a mono input (it now comes out of both sides), checked in digikit's emulator on OS 1.43 and 1.44. Not yet run on a Digitone Keys."
+      "sha256": "b2aac4017a9d040bc8497c702764cba678ecc8101961bc26bb32d97cf5def8a8",
+      "summary": "An effects engine for the audio inputs: eleven engines with four variations, a 60-second looper, Hold, Reverse and MIDI CCs, on a page like the Digitone's own. The synths are silent while it is open.",
+      "on_unit": "0.1 tested on a Digitone mk1 (Oct 2026): it runs and works. 0.1.1 changed only a mono input and 0.1.2 only the names, both checked in digikit's emulator on OS 1.43 and 1.44. Not yet run on a Digitone Keys."
     },
     {
-      "repo": "irpina/digichroma", "tag": "v0.1", "file": "digichroma-0.1.elemod",
+      "repo": "irpina/digiprism", "tag": "v0.1.1", "file": "digiprism-0.1.1.elemod",
       "device": "digitone-mk1", "needs_core": "3.2",
-      "sha256": "81d52f67ac731aee7b2dc16c59798835f3ab2cc5c1f14030fe1699b648d9bcbb",
-      "summary": "A Chroma Console-style pedal for the audio inputs: four modules of five effects in any order, GESTURE, CAPTURE (a 30-second looper) and the Chroma Console's MIDI CCs, on a page like the Digitone's own. The synths are silent while it is open.",
-      "on_unit": "Tested on a Digitone mk1 by its author (14 Oct 2026): it loads and works as expected; still a beta. Also checked in digikit's emulator on OS 1.43 and 1.44."
+      "sha256": "f5c5ba677893ae663238e8451a7bc2595f88a859591218a2b11269762d726430",
+      "summary": "A pedal for the audio inputs: four modules of five effects in any order, GESTURE, CAPTURE (a 30-second looper) and MIDI CCs, on a page like the Digitone's own. The synths are silent while it is open.",
+      "on_unit": "0.1 tested on a Digitone mk1 by its author (14 Oct 2026): it loads and works as expected; still a beta. 0.1.1 changes only the names, checked in digikit's emulator on OS 1.43 and 1.44."
     },
     {
-      "repo": "irpina/digichroma", "tag": "v0.1", "file": "digichroma-0.1-os1.44.elemod",
+      "repo": "irpina/digiprism", "tag": "v0.1.1", "file": "digiprism-0.1.1-os1.44.elemod",
       "device": "digitone-mk1", "needs_core": "3.2",
-      "sha256": "c982d2b9318ed73e55eb3bf246a745ba0fa643fbc053fd3f85f46479e9416814",
-      "summary": "A Chroma Console-style pedal for the audio inputs: four modules of five effects in any order, GESTURE, CAPTURE (a 30-second looper) and the Chroma Console's MIDI CCs, on a page like the Digitone's own. The synths are silent while it is open.",
-      "on_unit": "Tested on a Digitone mk1 by its author (14 Oct 2026): it loads and works as expected; still a beta. Also checked in digikit's emulator on OS 1.43 and 1.44."
+      "sha256": "fcd2f9f845b35c0af76a20ba6f795127eb68512d09ee1ff3b27b643a10e24aef",
+      "summary": "A pedal for the audio inputs: four modules of five effects in any order, GESTURE, CAPTURE (a 30-second looper) and MIDI CCs, on a page like the Digitone's own. The synths are silent while it is open.",
+      "on_unit": "0.1 tested on a Digitone mk1 by its author (14 Oct 2026): it loads and works as expected; still a beta. 0.1.1 changes only the names, checked in digikit's emulator on OS 1.43 and 1.44."
     },
     {
-      "repo": "irpina/digimood", "tag": "v0.1", "file": "digimood-0.1.elemod",
+      "repo": "irpina/digitide", "tag": "v0.1.1", "file": "digitide-0.1.1.elemod",
       "device": "digitone-mk1", "needs_core": "3.2",
-      "sha256": "91d73f225fbdf8ad42bfb8d35bad3ca45a87ff219e75404c678e57c7912c3bee",
-      "summary": "A MOOD MkII-style pedal for the audio inputs: a wet channel (reverb, delay, slip) and a micro-looper that always listens (envelope, tape, stretch), CLOCK as the pedal's sample-rate clock, and its MIDI CCs. The synths are silent while it is open.",
-      "on_unit": "Tested on a Digitone mk1 by its author (14 Oct 2026): it loads and works as expected; still a beta. Also checked in digikit's emulator on OS 1.43 and 1.44."
+      "sha256": "b915ddd7489e8eeeaa5eaba6c63e1eaf5aad7d0d6565247f3d948ce971f30936",
+      "summary": "A two-channel pedal for the audio inputs: a wet channel (reverb, delay, grab) and a micro-looper that always listens (envelope, tape, stretch), CLOCK as a sample-rate clock, and MIDI CCs. The synths are silent while it is open.",
+      "on_unit": "0.1 tested on a Digitone mk1 by its author (14 Oct 2026): it loads and works as expected; still a beta. 0.1.1 changes only the names, checked in digikit's emulator on OS 1.43 and 1.44."
     },
     {
-      "repo": "irpina/digimood", "tag": "v0.1", "file": "digimood-0.1-os1.44.elemod",
+      "repo": "irpina/digitide", "tag": "v0.1.1", "file": "digitide-0.1.1-os1.44.elemod",
       "device": "digitone-mk1", "needs_core": "3.2",
-      "sha256": "dabba9aeba3245a3f4426173303b3be718aff57bafb6010c28ccccf1e4895490",
-      "summary": "A MOOD MkII-style pedal for the audio inputs: a wet channel (reverb, delay, slip) and a micro-looper that always listens (envelope, tape, stretch), CLOCK as the pedal's sample-rate clock, and its MIDI CCs. The synths are silent while it is open.",
-      "on_unit": "Tested on a Digitone mk1 by its author (14 Oct 2026): it loads and works as expected; still a beta. Also checked in digikit's emulator on OS 1.43 and 1.44."
+      "sha256": "f256b6b99880ad36a1f532c737138a131a18acd06f7ea1dd2456cfa33c7ac6bb",
+      "summary": "A two-channel pedal for the audio inputs: a wet channel (reverb, delay, grab) and a micro-looper that always listens (envelope, tape, stretch), CLOCK as a sample-rate clock, and MIDI CCs. The synths are silent while it is open.",
+      "on_unit": "0.1 tested on a Digitone mk1 by its author (14 Oct 2026): it loads and works as expected; still a beta. 0.1.1 changes only the names, checked in digikit's emulator on OS 1.43 and 1.44."
     },
     {
-      "repo": "irpina/digihedra", "tag": "v0.1", "file": "digihedra-0.1.elemod",
+      "repo": "irpina/digitriad", "tag": "v0.1.1", "file": "digitriad-0.1.1.elemod",
       "device": "digitone-mk1", "needs_core": "3.2",
-      "sha256": "f9645b8fb8d8accfb4290b3b59c3f517f43b7b2149532f71ff9b575d8fb68791",
-      "summary": "A Hedra-style pitch shifter for the audio inputs: three voices in a key and scale (or chromatic), each through its own delay, four delay modes, rhythms and the Hedra's MIDI CCs. The synths are silent while it is open.",
-      "on_unit": "Tested on a Digitone mk1 by its author (14 Oct 2026): it loads and works as expected; still a beta. Also checked in digikit's emulator on OS 1.43 and 1.44."
+      "sha256": "a0df72d5cc6406455f8e4abdb960bd829deee5bbaf57d3d361fbf45678025ae9",
+      "summary": "A pitch shifter for the audio inputs: three voices in a key and scale (or chromatic), each through its own delay, four delay modes, rhythms and MIDI CCs. The synths are silent while it is open.",
+      "on_unit": "0.1 tested on a Digitone mk1 by its author (14 Oct 2026): it loads and works as expected; still a beta. 0.1.1 changes only the names, checked in digikit's emulator on OS 1.43 and 1.44."
     },
     {
-      "repo": "irpina/digihedra", "tag": "v0.1", "file": "digihedra-0.1-os1.44.elemod",
+      "repo": "irpina/digitriad", "tag": "v0.1.1", "file": "digitriad-0.1.1-os1.44.elemod",
       "device": "digitone-mk1", "needs_core": "3.2",
-      "sha256": "f5ffd14c0453cc5e09062ea8d2f715653a45aa57ed137ec948ebe7837e6a2574",
-      "summary": "A Hedra-style pitch shifter for the audio inputs: three voices in a key and scale (or chromatic), each through its own delay, four delay modes, rhythms and the Hedra's MIDI CCs. The synths are silent while it is open.",
-      "on_unit": "Tested on a Digitone mk1 by its author (14 Oct 2026): it loads and works as expected; still a beta. Also checked in digikit's emulator on OS 1.43 and 1.44."
+      "sha256": "83749e747e2e0f48cba3116c57498ee00f08de1d2d3c2ba6d2e6ca921f26583a",
+      "summary": "A pitch shifter for the audio inputs: three voices in a key and scale (or chromatic), each through its own delay, four delay modes, rhythms and MIDI CCs. The synths are silent while it is open.",
+      "on_unit": "0.1 tested on a Digitone mk1 by its author (14 Oct 2026): it loads and works as expected; still a beta. 0.1.1 changes only the names, checked in digikit's emulator on OS 1.43 and 1.44."
     },
     {
-      "repo": "irpina/digitensor", "tag": "v0.1", "file": "digitensor-0.1.elemod",
+      "repo": "irpina/digireel", "tag": "v0.1.1", "file": "digireel-0.1.1.elemod",
       "device": "digitone-mk1", "needs_core": "3.2",
-      "sha256": "05938ff58091fe843c8d53aec113b3e2dd087657dd8d2539499a6c784b8b62cb",
-      "summary": "A Tensor-style time-warp pedal for the audio inputs: tape speed from -2x to +2x in tempo windows, pitch apart from speed, HOLD, TAPE STOP, random events, a slicer and MIDI CCs. The synths are silent while it is open.",
-      "on_unit": "Tested on a Digitone mk1 by its author (14 Oct 2026): it loads and works as expected; still a beta. Also checked in digikit's emulator on OS 1.43 and 1.44."
+      "sha256": "0851ca682fc6de4d719acf9ac74909cbbfeb376a20f6c2c39ae8c9af1c776270",
+      "summary": "A time-warp pedal for the audio inputs: tape speed from -2x to +2x in tempo windows, pitch apart from speed, HOLD, TAPE STOP, random events, a slicer and MIDI CCs. The synths are silent while it is open.",
+      "on_unit": "0.1 tested on a Digitone mk1 by its author (14 Oct 2026): it loads and works as expected; still a beta. 0.1.1 changes only the names, checked in digikit's emulator on OS 1.43 and 1.44."
     },
     {
-      "repo": "irpina/digitensor", "tag": "v0.1", "file": "digitensor-0.1-os1.44.elemod",
+      "repo": "irpina/digireel", "tag": "v0.1.1", "file": "digireel-0.1.1-os1.44.elemod",
       "device": "digitone-mk1", "needs_core": "3.2",
-      "sha256": "6dbd81c28f88994d157c8bca8469f230addbf124b18d528c746199e585e77a74",
-      "summary": "A Tensor-style time-warp pedal for the audio inputs: tape speed from -2x to +2x in tempo windows, pitch apart from speed, HOLD, TAPE STOP, random events, a slicer and MIDI CCs. The synths are silent while it is open.",
-      "on_unit": "Tested on a Digitone mk1 by its author (14 Oct 2026): it loads and works as expected; still a beta. Also checked in digikit's emulator on OS 1.43 and 1.44."
+      "sha256": "4eab0537936fc1ada7a0d8ae0a381248b991950f62b84875588613180a51ccca",
+      "summary": "A time-warp pedal for the audio inputs: tape speed from -2x to +2x in tempo windows, pitch apart from speed, HOLD, TAPE STOP, random events, a slicer and MIDI CCs. The synths are silent while it is open.",
+      "on_unit": "0.1 tested on a Digitone mk1 by its author (14 Oct 2026): it loads and works as expected; still a beta. 0.1.1 changes only the names, checked in digikit's emulator on OS 1.43 and 1.44."
     },
     {
-      "repo": "irpina/digihabit", "tag": "v0.1", "file": "digihabit-0.1.elemod",
+      "repo": "irpina/digihoard", "tag": "v0.1.1", "file": "digihoard-0.1.1.elemod",
       "device": "digitone-mk1", "needs_core": "3.2",
-      "sha256": "daff2881e1c100ced66130afe22b7c0943301877e6d4912fb8a5bab3b6547bc1",
-      "summary": "A Habit-style echo collector for the audio inputs: echoes with SCAN and SPREAD from a 3-minute memory, the Habit's six modifiers, LOOP and its MIDI CCs. The synths are silent while it is open.",
-      "on_unit": "Tested on a Digitone mk1 by its author (14 Oct 2026): it loads and works as expected; still a beta. Also checked in digikit's emulator on OS 1.43 and 1.44."
+      "sha256": "76fc01666df193c2d53fd9cad67a911bfb22381f58fb0bcf3561e1b3ad1d82ce",
+      "summary": "An echo collector for the audio inputs: echoes with SCAN and SPREAD from a 3-minute memory, six modifiers, LOOP and MIDI CCs. The synths are silent while it is open.",
+      "on_unit": "0.1 tested on a Digitone mk1 by its author (14 Oct 2026): it loads and works as expected; still a beta. 0.1.1 changes only the names, checked in digikit's emulator on OS 1.43 and 1.44."
     },
     {
-      "repo": "irpina/digihabit", "tag": "v0.1", "file": "digihabit-0.1-os1.44.elemod",
+      "repo": "irpina/digihoard", "tag": "v0.1.1", "file": "digihoard-0.1.1-os1.44.elemod",
       "device": "digitone-mk1", "needs_core": "3.2",
-      "sha256": "19080d0f692fccb43d6d2c0a03e65dc7b5cb0053d4f347b80c23ff4aec59a23a",
-      "summary": "A Habit-style echo collector for the audio inputs: echoes with SCAN and SPREAD from a 3-minute memory, the Habit's six modifiers, LOOP and its MIDI CCs. The synths are silent while it is open.",
-      "on_unit": "Tested on a Digitone mk1 by its author (14 Oct 2026): it loads and works as expected; still a beta. Also checked in digikit's emulator on OS 1.43 and 1.44."
+      "sha256": "5d7a3e507b83cdc4de1c129fbcf339dae4597f4e2cce59bcc5fe56c8ad075d44",
+      "summary": "An echo collector for the audio inputs: echoes with SCAN and SPREAD from a 3-minute memory, six modifiers, LOOP and MIDI CCs. The synths are silent while it is open.",
+      "on_unit": "0.1 tested on a Digitone mk1 by its author (14 Oct 2026): it loads and works as expected; still a beta. 0.1.1 changes only the names, checked in digikit's emulator on OS 1.43 and 1.44."
     },
     {
-      "repo": "irpina/digisky", "tag": "v0.1", "file": "digisky-0.1.elemod",
+      "repo": "irpina/digihalo", "tag": "v0.1.1", "file": "digihalo-0.1.1.elemod",
       "device": "digitone-mk1", "needs_core": "3.2",
-      "sha256": "b7f974e1c3b194c8c5eda3c49293ada7af57e8c2a4d2c7b7ffc3c6b457c8b463",
-      "summary": "A BigSky-style reverb for the audio inputs: its twelve machines, ROOM to REFLECTIONS, with PARAM 1 and 2, FREEZE and INFINITE, and the BigSky's MIDI CCs. The synths are silent while it is open.",
-      "on_unit": "Tested on a Digitone mk1 by its author (14 Oct 2026): it loads and works as expected; still a beta. Also checked in digikit's emulator on OS 1.43 and 1.44."
+      "sha256": "7ce1fdec96707a265761f31b23a96a75a83605c26e2bd5ffb0d44b894afa2091",
+      "summary": "A reverb for the audio inputs: twelve machines, ROOM to REFLECTIONS, with PARAM 1 and 2, FREEZE and INFINITE, and MIDI CCs. The synths are silent while it is open.",
+      "on_unit": "0.1 tested on a Digitone mk1 by its author (14 Oct 2026): it loads and works as expected; still a beta. 0.1.1 changes only the names, checked in digikit's emulator on OS 1.43 and 1.44."
     },
     {
-      "repo": "irpina/digisky", "tag": "v0.1", "file": "digisky-0.1-os1.44.elemod",
+      "repo": "irpina/digihalo", "tag": "v0.1.1", "file": "digihalo-0.1.1-os1.44.elemod",
       "device": "digitone-mk1", "needs_core": "3.2",
-      "sha256": "ba9f27c2281446087e02d537fc3c3a743151ab18e0e00480adf9334c939835c0",
-      "summary": "A BigSky-style reverb for the audio inputs: its twelve machines, ROOM to REFLECTIONS, with PARAM 1 and 2, FREEZE and INFINITE, and the BigSky's MIDI CCs. The synths are silent while it is open.",
-      "on_unit": "Tested on a Digitone mk1 by its author (14 Oct 2026): it loads and works as expected; still a beta. Also checked in digikit's emulator on OS 1.43 and 1.44."
+      "sha256": "fc606e3929ded779afae8f1c41d8fcc8628ed93b8290b399e9cd242dc20d8c80",
+      "summary": "A reverb for the audio inputs: twelve machines, ROOM to REFLECTIONS, with PARAM 1 and 2, FREEZE and INFINITE, and MIDI CCs. The synths are silent while it is open.",
+      "on_unit": "0.1 tested on a Digitone mk1 by its author (14 Oct 2026): it loads and works as expected; still a beta. 0.1.1 changes only the names, checked in digikit's emulator on OS 1.43 and 1.44."
     },
     {
       "repo": "irpina/digineighbor", "tag": "v0.6", "file": "digineighbor-0.6.elemod",
