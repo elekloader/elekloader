@@ -1,8 +1,8 @@
 {
- "id": "machines", "version": "0.1",
+ "id": "machines", "version": "0.2",
  "license": "GPL-2.0-or-later",
  "title": "machines", "category": "Framework", "author": "irpina",
- "description": "Machines for the Digitone mk1 and Digitone Keys: sounds that play a machine mod's voice in place of FM, through the Digitone's own filter, mixer and effects, with the AMP page's envelope. MACHINES in core-dn1's Mod Menu (hold a track key) picks the held track's machine; a machine track's SYN1 and SYN2 knobs are the machine's parameters, relabelled. On its own it adds the menu and nothing else: machines come in mods of their own. Needs core-dn1 3.1.",
+ "description": "Machines for the Digitone mk1 and Digitone Keys: sounds that play a machine mod's voice in place of FM, through the Digitone's own filter, mixer and effects, with the AMP page's envelope. MACHINES in core-dn1's Mod Menu (hold a track key) picks the held track's machine; a machine track's SYN1 and SYN2 knobs are the machine's parameters, relabelled, and from 0.2 their second pages too for a machine that takes them (27 knobs). On its own it adds the menu and nothing else: machines come in mods of their own. Needs core-dn1 3.1.",
  "device": "digitone-mk1", "os": "1.43",
  "ports": {"1.44": {}},
  "sources": ["machines.c"],

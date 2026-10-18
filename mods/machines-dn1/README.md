@@ -18,6 +18,7 @@ the mod shop, beside the cores: a machine mod that requires it (`"requires": ["c
 | sites | none: it uses core's `ev_voice_on`, `ev_render_voices`, `core_param_override`, `core_sound_set` and `core_menu_open` |
 | table | `dn_machines`: a machine mod contributes a pointer to its `struct dnm_machine` |
 | exports | `dnm_knob`, `dnm_knob_range`, `dnm_phase_inc`, `dnm_sin` (`digitone-mk1/machines.h`) |
+| version | 0.2: a machine may take the SYN pages' second pages (`DNM_PAGES2`) |
 | claims | `soundslot:0` |
 | RAM | 3.8 KB code, 2.8 KB data |
 
@@ -36,7 +37,15 @@ the mod shop, beside the cores: a machine mod that requires it (`"requires": ["c
   value texts, on plain knobs that turn as the stock ones do
   (`core_param_override`, `core_param_ui_make`). The values stay the stock
   parameters', in their slots and ranges. The second pages are FM's alone,
-  and show no labels or values.
+  and show no labels or values, unless the machine takes them.
+- **The second pages (0.2).** A machine with `DNM_PAGES2` in its flags owns
+  SYN1's and SYN2's second pages as well: knobs 16-31, 27 knobs in all (the
+  pages have five empty positions). They are FM's ratio offsets (0-127.99 in
+  1/256 steps), the operators' delays (0-127), their trig and reset switches
+  (0-1) and the phase reset (0-4), relabelled the same way, saved with the
+  sound and p-lockable; on FM they mean nothing while the machine plays. A
+  switch away from such a machine, to FM or to a machine without them, sets
+  them back to FM's defaults.
 - **The sound.** Each block (`ev_render_voices`) every voice playing a
   machine gets the machine's 32 samples in place of the FM voice's. The DSP
   applies the AMP envelope to FM before its output, so this applies it to
@@ -55,8 +64,14 @@ note (G4, 392 Hz, no harmonics), FOLD adds odd harmonics, OCT +1 moves it an
 octave up, the AMP page's release fades it; track 2 stays FM; back to FM sets
 FM's defaults. Turning a knob on a machine track moves its value as on FM
 (ALGO, under OCT, about four detents a step). A machine voice that peaks at
-`DNM_PEAK` plays about as loud as FM at the stock defaults. Not yet on a
-unit.
+`DNM_PEAK` plays about as loud as FM at the stock defaults.
+
+0.2, OS 1.43 and 1.44, with SINE 1.1: picked through MACHINES, SINE's FINE
+(SYN1's second page, knob A) turned up to 127.99 and down to 0 moves SINE's
+oscillator by x1.0592 and x0.9439 (FINE asks x1.0595 and x0.9439), and the
+pop-up shows FINE's value text ("+11" at 71.6); SYN2's second page shows its
+seven knobs unused, as SINE leaves them; MACHINES back to FM sets the second
+pages to FM's defaults again (COFF 64.00, ATRG on). Not yet on a unit.
 
 ## Not yet
 
@@ -64,7 +79,9 @@ unit.
   follows ALGO, a machine's knob A), the group headings ("RATIO", "RATIO
   OFFSET"), and SYN2's envelope graphs over its first page, whose labels
   show three characters. Core-dn1 3.1 cannot change a stock page's drawing
-  per track.
+  per track. So SYN1's second page shows no labels for a machine's four
+  knobs there (its heading stands over them); their values show in the
+  pop-up as they turn.
 - A knob a machine leaves unused still turns, and changes the FM parameter
   under it (unseen, and unheard while the machine plays).
 - The pop-up's long name and the LFO destination lists keep FM's names.

@@ -688,7 +688,8 @@ build; picking one sets the held track's sound slot 0 (with
 for FM. On a machine track the SYN1 and SYN2 knobs are the machine's
 (`core_param_override`): its labels and value texts, on plain knobs that
 turn as the stock ones do. SYN1's and SYN2's second pages are FM's alone and
-show no labels. Each block (`ev_render_voices`) a voice playing a machine
+show no labels, unless the machine takes them (machines 0.2, `DNM_PAGES2`,
+below). Each block (`ev_render_voices`) a voice playing a machine
 gets the machine's render in place of the FM voice, then the AMP page's
 envelope (ATK, DEC, SUS and REL, the voice's slots 66-69) and the note's
 velocity.
@@ -701,17 +702,30 @@ pointer to a `struct dnm_machine` (`digitone-mk1/machines.h`):
 | +0 | id | 1-127: claim it as the resource `dnmachine:<id>` |
 | +4 | name | its label in the submenu, 14 characters |
 | +8 | icon | 16 rows of 16 pixels for its tile, or 0 |
-| +12 | knobs | 16 `struct dnm_knob`: SYN1 A-H, then SYN2 A-H |
+| +12 | knobs | 16 `struct dnm_knob`: SYN1 A-H, then SYN2 A-H; 32 with `DNM_PAGES2`: then SYN1's second page A-H and SYN2's |
 | +16 | render | `void f(int voice, int *block, const struct dnm_voice *v)`: the voice's 32 samples, Q1.31; `block` holds the FM voice's on entry |
-| +20 | flags | 1 (`DNM_OWN_ENV`): the machine applies its own envelope |
-| +24 | defaults | 16 values (8.8; -1 leaves one) set when a track switches to it, or 0 |
+| +20 | flags | 1 (`DNM_OWN_ENV`): the machine applies its own envelope; 2 (`DNM_PAGES2`, machines 0.2): it takes the second pages too |
+| +24 | defaults | as many values as knobs (8.8; -1 leaves one) set when a track switches to it, or 0 |
 
 A knob is a label (5 characters; 0 leaves the knob unused), a formatter for
 its value text (0: the number) and a stock id whose graphic it borrows (0: a
 plain knob). Its value is the stock parameter's, in that parameter's range:
 SYN1 A ALGO 0-7, B-D the ratios (as indices), E HARM -26..26, F DTUN 0-127,
-G FDBK 0-127, H MIX -63..63, and SYN2 A-H 0-127. `dnm_knob(voice, k)`
-reads knob k for a voice; `dnm_phase_inc(pitch)` and `dnm_sin(phase)` are a
+G FDBK 0-127, H MIX -63..63, and SYN2 A-H 0-127.
+
+**The second pages (machines 0.2).** A Digitone sound has room for 79
+parameters, and the only three no stock parameter uses are taken ("Sound
+slots are scarce", above). A machine sound's FM parameters, though, mean
+nothing while the machine plays: with `DNM_PAGES2` a machine also owns the
+SYN pages' second pages, knobs 16-31, eleven more parameters, saved with the
+sound and p-lockable like the rest. Their ranges are FM's, because the DSP
+still renders FM with them: 16-19 SYN1 2/2 A-D the ratio offsets, 0-127.99
+in 1/256 steps (64 the middle); 24 ADEL and 28 BDEL 0-127; 25 ATRG, 26 ARST,
+29 BTRG and 30 BRST 0-1; 27 PHRT 0-4. Knobs 20-23 and 31 have no parameter
+and stay empty. A switch away from such a machine sets them back to FM's
+defaults. An older machines mod (0.1) reads 16 knobs only.
+
+`dnm_knob(voice, k)` reads knob k (0-31) for a voice; `dnm_phase_inc(pitch)` and `dnm_sin(phase)` are a
 phase step a sample at 48 kHz and a sine. A voice that peaks at `DNM_PEAK`
 (0x08000000) is about as loud as an FM voice at the stock defaults. The
 render runs at interrupt level for every voice playing the machine, every
@@ -719,8 +733,9 @@ block (667 us): in digikit's emulator SINE takes about 3,000 instructions a
 voice a block.
 
 `examples/dn-sine-machine` is a whole machine in C to start from: a sine at
-the note that OCT shifts by octaves, FOLD folds and SUB doubles an octave
-down. It names no firmware address, so its 1.44 port is empty:
+the note that OCT shifts by octaves, FOLD folds, SUB doubles an octave down
+and FINE (SYN1's second page, from 1.1) tunes by up to a semitone. It names
+no firmware address, so its 1.44 port is empty:
 
 ```json
 "contribute": [{"to": "dn_machines", "order": 50, "data": "00000000",

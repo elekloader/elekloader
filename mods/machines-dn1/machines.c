@@ -33,19 +33,27 @@
 
 extern const struct dnm_machine *const dn_machines[];      /* this mod's table, ending in 0 */
 
-/* The SYN knobs, A-H of SYN1's first page and of SYN2's: their parameter ids. */
-static const uint8_t knob_id[DNM_KNOBS] = {
+/* The SYN knobs' parameter ids: A-H of SYN1's first page and of SYN2's, then (DNM_PAGES2) of SYN1's second page
+ * and of SYN2's; 0 where a page has no parameter. */
+static const uint8_t knob_id[DNM_KNOBS_ALL] = {
     107, 108, 109, 110, 111, 112, 113, 114,
     119, 120, 121, 122, 123, 124, 125, 126,
+    115, 116, 117, 118, 0, 0, 0, 0,
+    127, 128, 129, 133, 130, 131, 132, 0,
 };
 
 static int32_t knob_of(int32_t id)
 {
-    if (id >= 107 && id <= 114)
-        return id - 107;
-    if (id >= 119 && id <= 126)
-        return id - 119 + 8;
+    int32_t k;
+    for (k = 0; k < DNM_KNOBS_ALL; k++)
+        if (id && knob_id[k] == id)
+            return k;
     return -1;
+}
+
+static int32_t pages2(const struct dnm_machine *m)
+{
+    return m && (m->flags & DNM_PAGES2);
 }
 
 static const int32_t *param_rec(int32_t id)
@@ -64,12 +72,19 @@ static const struct dnm_machine *find(int32_t id)
 
 int32_t dnm_knob(int32_t voice, int32_t knob)
 {
-    return FW_VOICE_PARAM(voice, param_rec(knob_id[knob & 15])[1]);
+    if ((uint32_t)knob >= DNM_KNOBS_ALL || !knob_id[knob])
+        return 0;
+    return FW_VOICE_PARAM(voice, param_rec(knob_id[knob])[1]);
 }
 
 void dnm_knob_range(int32_t knob, int32_t *min, int32_t *max)
 {
-    const int32_t *r = param_rec(knob_id[knob & 15]);
+    const int32_t *r;
+    if ((uint32_t)knob >= DNM_KNOBS_ALL || !knob_id[knob]) {
+        *min = *max = 0;
+        return;
+    }
+    r = param_rec(knob_id[knob]);
     *min = r[2];
     *max = r[3];
 }
@@ -202,7 +217,7 @@ static int32_t active_machine(void)
     return FW_SOUND_SLOT(kit, t, MACH_SLOT) >> 8;
 }
 
-static uint32_t ui_rec[DNM_KNOBS][UREC / 4];
+static uint32_t ui_rec[DNM_KNOBS_ALL][UREC / 4];
 static int32_t ui_for = -1;                 /* the machine ui_rec was made for */
 
 static void no_value(int32_t value, char *buf)
@@ -215,9 +230,11 @@ static void no_value(int32_t value, char *buf)
  * a knob the machine leaves unused looks unused. */
 static void make_ui(const struct dnm_machine *m)
 {
-    int32_t k;
-    for (k = 0; k < DNM_KNOBS; k++) {
+    int32_t k, n = pages2(m) ? DNM_KNOBS_ALL : DNM_KNOBS;
+    for (k = 0; k < n; k++) {
         const struct dnm_knob *kn = &m->knobs[k];
+        if (!knob_id[k])
+            continue;
         if (kn->name)
             core_param_ui_make(ui_rec[k], knob_id[k], kn->look, kn->fmt);
         else
@@ -227,22 +244,17 @@ static void make_ui(const struct dnm_machine *m)
 }
 
 /* SYN1's and SYN2's second pages (the ratio offsets, the operators' delays, trigs and resets) are FM's
- * alone: on a machine track they look unused. */
-static int32_t fm_only(int32_t id)
-{
-    return (id >= 115 && id <= 118) || (id >= 127 && id <= 133);
-}
-
-static uint32_t blank_rec[11][UREC / 4];
+ * alone: on the track of a machine without DNM_PAGES2 they look unused. */
+static uint32_t blank_rec[DNM_KNOBS_ALL - DNM_KNOBS][UREC / 4];
 
 static void *dnm_ui(int32_t id)
 {
     int32_t k = knob_of(id), mid;
     const struct dnm_machine *m;
-    if ((k < 0 && !fm_only(id)) || (mid = active_machine()) <= 0 || !(m = find(mid)))
+    if (k < 0 || (mid = active_machine()) <= 0 || !(m = find(mid)))
         return 0;
-    if (k < 0) {
-        uint32_t *r = blank_rec[id <= 118 ? id - 115 : id - 127 + 4];
+    if (k >= DNM_KNOBS && !pages2(m)) {
+        uint32_t *r = blank_rec[k - DNM_KNOBS];
         if (!r[0x14 / 4])
             core_param_ui_make(r, id, CORE_LOOK_NONE, no_value);
         return r;
@@ -256,9 +268,9 @@ static const char *dnm_name(int32_t id, int32_t field)
 {
     int32_t k = knob_of(id), mid;
     const struct dnm_machine *m;
-    if (field != 0x30 || (k < 0 && !fm_only(id)) || (mid = active_machine()) <= 0 || !(m = find(mid)))
+    if (field != 0x30 || k < 0 || (mid = active_machine()) <= 0 || !(m = find(mid)))
         return 0;
-    if (k < 0)
+    if (k >= DNM_KNOBS && !pages2(m))
         return "";
     return m->knobs[k].name ? m->knobs[k].name : "";
 }
@@ -280,19 +292,26 @@ static const uint16_t fm_icon[16] = {           /* two operators, one into the o
 static struct core_menu_item items[1 + MAX_MACHINES];
 static const struct core_menu_item *list[1 + MAX_MACHINES + 1];
 
-/* A switch sets the track's SYN knobs: the machine's defaults, or FM's (the stock records') for FM. */
-static void set_knobs(int32_t track, const struct dnm_machine *m)
+/* A switch sets the track's SYN knobs: the machine's defaults, or FM's (the stock records') for FM. The
+ * second pages: the machine's defaults when it takes them (DNM_PAGES2), else FM's when the machine switched
+ * from had them, else as they are. */
+static void set_knobs(int32_t track, const struct dnm_machine *m, const struct dnm_machine *was)
 {
     int32_t k;
-    for (k = 0; k < DNM_KNOBS; k++) {
-        const int32_t *r = param_rec(knob_id[k]);
+    for (k = 0; k < DNM_KNOBS_ALL; k++) {
+        const int32_t *r;
         int32_t v;
-        if (m) {
+        if (!knob_id[k])
+            continue;
+        r = param_rec(knob_id[k]);
+        if (m && (k < DNM_KNOBS || pages2(m))) {
             if (!m->defaults || m->defaults[k] == -1)
                 continue;
             v = m->defaults[k];
-        } else {
+        } else if (k < DNM_KNOBS || pages2(was)) {
             v = r[4];
+        } else {
+            continue;
         }
         core_sound_set(track, r[1], v);
     }
@@ -308,7 +327,7 @@ static void machines_pick(void *brain, void *event, int32_t track, int32_t index
     if (!kit || track < 0 || track >= SYNTHS)
         return;
     if ((FW_SOUND_SLOT(kit, track, MACH_SLOT) >> 8) != id)
-        set_knobs(track, m);
+        set_knobs(track, m, find(FW_SOUND_SLOT(kit, track, MACH_SLOT) >> 8));
     core_sound_set(track, MACH_SLOT, id << 8);
     ui_for = -1;
 }

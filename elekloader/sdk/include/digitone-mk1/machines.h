@@ -11,6 +11,7 @@
  * AMP page's envelope and the note's velocity after it. A machine's parameters are the SYN1 and SYN2
  * knobs of its sounds, relabelled: their values keep their sound slots and their stock ranges, so p-locks,
  * MIDI CC, the LFOs and sound presets work on them as on FM, and FM stays valid if the sound goes back.
+ * A machine with DNM_PAGES2 takes the two pages' second pages too (machines 0.2): 27 knobs in place of 16.
  * The machine a sound plays is in its sound slot 0 (the id << 8); 0 is FM. */
 #ifndef ELEKLOADER_DIGITONE_MK1_MACHINES_H
 #define ELEKLOADER_DIGITONE_MK1_MACHINES_H
@@ -18,10 +19,14 @@
 #include "digitone-mk1/core3.h"
 
 #define DNM_KNOBS 16                /* SYN1 A-H, then SYN2 A-H */
+#define DNM_KNOBS_ALL 32            /* with DNM_PAGES2: then SYN1's second page A-H, then SYN2's */
 
 /* One knob. Its value is the stock parameter's: an 8.8 number within that parameter's range
  * (dnm_knob_range): SYN1 A ALGO 0-7, B-D the ratios (indices), E HARM -26..26, F DTUN 0-127, G FDBK 0-127,
- * H MIX -63..63; SYN2 A-H 0-127. */
+ * H MIX -63..63; SYN2 A-H 0-127. With DNM_PAGES2, knobs 16-31 are the second pages, which FM alone uses:
+ * 16-19 SYN1 2/2 A-D (the ratio offsets, 0-127.99 in 1/256 steps, FM's default 64), 20-23 none;
+ * 24 ADEL and 28 BDEL 0-127, 25 ATRG, 26 ARST, 29 BTRG and 30 BRST off and on (0-1), 27 PHRT 0-4,
+ * 31 none (SYN2 2/2 A-H). A knob with no parameter behind it stays empty whatever the machine says. */
 struct dnm_knob {
     const char *name;               /* +0  its label (5 characters); 0: unused (blank) on this machine */
     void (*fmt)(int32_t value, char *buf);  /* +4 its value's text from the 8.8 value; 0: the number */
@@ -37,6 +42,8 @@ struct dnm_voice {                  /* the companion's account of a voice, for t
 };
 
 #define DNM_OWN_ENV 1               /* flags: the machine applies its own envelope (no AMP envelope) */
+#define DNM_PAGES2  2               /* flags: knobs and defaults are DNM_KNOBS_ALL long, the second pages
+                                       the machine's too (machines 0.2; an older companion reads 16) */
 
 /* How loud to write: a voice that peaks about here is as loud as an FM voice at the stock defaults (a sine
  * peaking at DNM_PEAK is a Q15 sine << 12). The track's level, the AMP page and the mixer follow as for FM. */
@@ -46,19 +53,21 @@ struct dnm_machine {                /* what a mod contributes to the table dn_ma
     int32_t id;                     /* +0  1-127, claimed as the resource dnmachine:<id> */
     const char *name;               /* +4  its name in the MACHINES menu (14 characters fit) */
     const uint16_t *icon;           /* +8  16 rows of 16 pixels for its tile (bit 15 the left), or 0 */
-    const struct dnm_knob *knobs;   /* +12 DNM_KNOBS of them */
+    const struct dnm_knob *knobs;   /* +12 DNM_KNOBS of them, or DNM_KNOBS_ALL with DNM_PAGES2 */
     /* +16 32 samples, Q1.31, for one block of a voice playing one of its sounds; block holds the FM voice's
      * on entry. Interrupt level, every block: keep it short (the main CPU also runs the filters and
      * effects). */
     void (*render)(int32_t voice, int32_t *block, const struct dnm_voice *v);
-    uint32_t flags;                 /* +20 DNM_OWN_ENV */
+    uint32_t flags;                 /* +20 DNM_OWN_ENV, DNM_PAGES2 */
     /* +24 what its knobs are set to when a track switches to it (8.8, within each knob's stock range; -1
-     * leaves a knob as it is), or 0 for none. A switch back to FM sets the SYN knobs to FM's defaults. */
+     * leaves a knob as it is), as many as its knobs, or 0 for none. A switch back to FM sets the SYN knobs
+     * to FM's defaults, and the second pages too when the machine had them; so does a switch to a machine
+     * without them. */
     const int16_t *defaults;
 } __attribute__((aligned(4)));
 
 /* From the companion. */
-extern int32_t dnm_knob(int32_t voice, int32_t knob);           /* the voice's knob value, 8.8 */
+extern int32_t dnm_knob(int32_t voice, int32_t knob);           /* the voice's knob value, 8.8 (0-31) */
 extern void dnm_knob_range(int32_t knob, int32_t *min, int32_t *max);   /* its stock range, 8.8 */
 extern uint32_t dnm_phase_inc(int32_t pitch);                   /* a phase step a sample at 48 kHz */
 extern int32_t dnm_sin(uint32_t phase);                         /* sin(2 pi phase / 2^32), Q15 */

@@ -2,10 +2,12 @@
  * Copyright (C) 2026 irpina and contributors */
 /* SINE: the smallest machine for the Digitone mk1 (the machines companion, digitone-mk1/machines.h). A
  * sine at the note, folded brighter by FOLD, with a sub-oscillator an octave down. It names no firmware
- * address, so its OS 1.44 port is empty. Its knobs, on its sounds' SYN1 page:
+ * address, so its OS 1.44 port is empty. Its knobs, on its sounds' SYN1 pages:
  *   A  OCT   the octave, from ALGO (0-7): -3 to +4
  *   F  FOLD  0-100%, from DTUN (0-127)
- *   G  SUB   0-100%, from FDBK (0-127) */
+ *   G  SUB   0-100%, from FDBK (0-127)
+ *   SYN1's second page, A  FINE  -100 to +100 cents, from COFF (0-127.99 in 1/256 steps, 64 the middle): a
+ *   second-page knob (DNM_PAGES2, machines 0.2) */
 #include "digitone-mk1/machines.h"
 
 static uint32_t phase[8], sub_phase[8];
@@ -46,17 +48,28 @@ static void pct_text(int32_t value, char *buf)
     buf[n + 1] = 0;
 }
 
-static const struct dnm_knob knobs[DNM_KNOBS] = {
+/* FINE: COFF's 8.8 value less its middle (64.00), in cents: 64 steps of 1/256 make a cent and a half. */
+static void cents_text(int32_t value, char *buf)
+{
+    int32_t c = (value - (64 << 8)) * 100 / (64 << 8);
+    if (c > 0)
+        *buf++ = '+';
+    put_int(buf, c);
+}
+
+static const struct dnm_knob knobs[DNM_KNOBS_ALL] = {
     [0] = { "OCT", oct_text, 0 },
     [5] = { "FOLD", pct_text, 0 },
     [6] = { "SUB", pct_text, 0 },
+    [16] = { "FINE", cents_text, 0 },
 };
 
 static void sine_render(int32_t voice, int32_t *block, const struct dnm_voice *v)
 {
     int32_t oct = (dnm_knob(voice, 0) >> 8) - 3, fold = dnm_knob(voice, 5) >> 8;
     int32_t sub = dnm_knob(voice, 6) >> 8, gain = 128 + fold * 3, i;
-    uint32_t inc = dnm_phase_inc(v->pitch), p, q;
+    int32_t fine = (dnm_knob(voice, 16) - (64 << 8)) * 4;     /* +-64.00 -> +-1 semitone in the pitch word */
+    uint32_t inc = dnm_phase_inc(v->pitch + fine), p, q;
     inc = oct >= 0 ? inc << oct : inc >> -oct;
     if (v->fresh)
         phase[voice] = sub_phase[voice] = 0;
@@ -80,4 +93,4 @@ static const uint16_t sine_icon[16] = {
     0x4041, 0x0022, 0x0022, 0x0014, 0x0008, 0x0000, 0x0000, 0x0000,
 };
 
-const struct dnm_machine sine_machine = { 2, "SINE", sine_icon, knobs, sine_render, 0 };
+const struct dnm_machine sine_machine = { 2, "SINE", sine_icon, knobs, sine_render, DNM_PAGES2 };

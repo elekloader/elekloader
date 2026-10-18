@@ -161,6 +161,12 @@ def test_core_builds_and_lints():
     assert rc == 0 and r['link']['order'][0].startswith('core')
 
 
+with open(os.path.join(ROOT, 'mods', 'machines-dn1', 'mod.json')) as _fh:
+    MACH_VERSION = json.load(_fh)['version']          # the machines mod's version, for the link orders below
+with open(os.path.join(ROOT, 'examples', 'dn-sine-machine', 'mod.json')) as _fh:
+    SINE_VERSION = json.load(_fh)['version']
+
+
 CORE_21 = os.environ.get('ELEKLOADER_CORE_21', '')
 
 
@@ -774,17 +780,17 @@ def test_digitone_machines_build_and_link():
         core3 = dn_core(tmp)
         mpath, m = build.build(os.path.join(ROOT, 'mods', 'machines-dn1'), DN_STOCK, tmp)
         spath, sm = build.build(os.path.join(ROOT, 'examples', 'dn-sine-machine'), DN_STOCK, tmp)
-        assert os.path.basename(mpath) == 'machines-0.1.elemod'
+        assert os.path.basename(mpath) == 'machines-%s.elemod' % MACH_VERSION
         assert m.needs_core == '3.1' and sm.needs_core == '3.1' and not m.sites and not sm.sites
         assert {'core_sound_set', 'core_param_ui_make', 'core_menu_open', 'fw_params',
                 'fw_active_track'} <= set(m.imports)
         assert {'dnm_knob', 'dnm_phase_inc', 'dnm_sin'} <= set(m.exports)
         rc, r = lint_json(spath, '--stock', DN_STOCK, '--with', core3, '--with', mpath)
         assert rc == 0, r['problems']
-        assert r['link']['order'] == ['core ' + DN_VERSION, 'dnsine 1.0', 'machines 0.1']
+        assert r['link']['order'] == ['core ' + DN_VERSION, 'dnsine ' + SINE_VERSION, 'machines ' + MACH_VERSION]
         if CORE_DN23 and os.path.exists(CORE_DN23):
             rc, r = lint_json(mpath, '--stock', DN_STOCK, '--with', CORE_DN23)
-            assert rc == 1 and 'machines 0.1 needs core 3.1 or newer, and this build has core 2.3' \
+            assert rc == 1 and 'machines %s needs core 3.1 or newer, and this build has core 2.3' % MACH_VERSION \
                 in r['problems'], r['problems']
         if DN_STOCK_144 and os.path.exists(DN_STOCK_144):
             for src, mod in (('mods/machines-dn1', m), ('examples/dn-sine-machine', sm)):
@@ -827,7 +833,7 @@ def test_digitone_exclusive_audio_example():
         assert set(t.imports) <= {'fw_fillrect', 'fw_textf', 'fw_font5'}, t.imports
         rc, r = lint_json(tpath, '--stock', DN_STOCK, '--with', core3, '--with', mpath)
         assert rc == 0, r['problems']
-        assert r['link']['order'] == ['core ' + DN_VERSION, 'dnthru 1.0', 'machines 0.1']
+        assert r['link']['order'] == ['core ' + DN_VERSION, 'dnthru 1.0', 'machines ' + MACH_VERSION]
         if CORE_DN23 and os.path.exists(CORE_DN23):
             rc, r = lint_json(tpath, '--stock', DN_STOCK, '--with', CORE_DN23)
             assert rc == 1 and 'dnthru 1.0 needs core 3.2 or newer, and this build has core 2.3' \
@@ -862,7 +868,7 @@ def test_digitone_insert_audio_example():
         assert t.needs_core == '4.0' and not t.sites and not t.imports
         rc, r = lint_json(path, '--stock', DN_STOCK, '--with', core3, '--with', tpath, '--with', mpath)
         assert rc == 0, r['problems']
-        assert r['link']['order'] == ['core ' + DN_VERSION, 'dnthru 1.0', 'dntrem 1.0', 'machines 0.1']
+        assert r['link']['order'] == ['core ' + DN_VERSION, 'dnthru 1.0', 'dntrem 1.0', 'machines ' + MACH_VERSION]
         if CORE_DN32 and os.path.exists(CORE_DN32):
             rc, r = lint_json(path, '--stock', DN_STOCK, '--with', CORE_DN32)
             assert rc == 1 and 'dntrem 1.0 needs core 4.0 or newer, and this build has core 3.2' \
@@ -900,7 +906,7 @@ def test_digiswarm_builds_and_links():
         assert [(g['area'], g['lo'], g['hi']) for g in d.regions] == [('bulk', 0x44000000, 0x45B00000)]
         rc, r = lint_json(dpath, '--stock', DN_STOCK, '--with', core3, '--with', tpath, '--with', mpath)
         assert rc == 0, r['problems']
-        assert r['link']['order'] == ['core ' + DN_VERSION, 'digiswarm 0.1.2', 'dnthru 1.0', 'machines 0.1']
+        assert r['link']['order'] == ['core ' + DN_VERSION, 'digiswarm 0.1.2', 'dnthru 1.0', 'machines ' + MACH_VERSION]
         if CORE_DN23 and os.path.exists(CORE_DN23):
             rc, r = lint_json(dpath, '--stock', DN_STOCK, '--with', CORE_DN23)
             assert rc == 1 and 'digiswarm 0.1.2 needs core 3.2 or newer, and this build has core 2.3' \
@@ -943,7 +949,7 @@ def test_digiprism_builds_and_links():
                           '--with', mpath)
         assert rc == 0, r['problems']
         assert r['link']['order'] == ['core ' + DN_VERSION, 'digiprism 0.1.1', 'digiswarm 0.1.2', 'dnthru 1.0',
-                                       'machines 0.1']
+                                       'machines ' + MACH_VERSION]
         if CORE_DN23 and os.path.exists(CORE_DN23):
             rc, r = lint_json(hpath, '--stock', DN_STOCK, '--with', CORE_DN23)
             assert rc == 1 and 'digiprism 0.1.1 needs core 3.2 or newer, and this build has core 2.3' \

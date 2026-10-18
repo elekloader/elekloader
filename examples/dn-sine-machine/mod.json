@@ -1,8 +1,8 @@
 {
- "id": "dnsine", "version": "1.0",
+ "id": "dnsine", "version": "1.1",
  "license": "GPL-2.0-or-later",
  "title": "SINE (Digitone machine)", "category": "Sound", "author": "irpina",
- "description": "SINE, the smallest machine for the Digitone mk1: a sine at the note, which FOLD folds into brighter waves, with a sub-oscillator an octave down (SUB) and the octave on OCT, on its sounds' SYN1 page. A template for a machine mod: it names no firmware address, so its OS 1.44 port is empty (docs/ADAPTING.md, \"Machines on the Digitone\"). Needs the machines mod and core-dn1 3.0.",
+ "description": "SINE, the smallest machine for the Digitone mk1: a sine at the note, which FOLD folds into brighter waves, with a sub-oscillator an octave down (SUB) and the octave on OCT, on its sounds' SYN1 page, and FINE on SYN1's second page (a second-page knob: needs the machines mod 0.2). A template for a machine mod: it names no firmware address, so its OS 1.44 port is empty (docs/ADAPTING.md, \"Machines on the Digitone\"). Needs the machines mod and core-dn1 3.0.",
  "device": "digitone-mk1", "os": "1.43",
  "ports": {"1.44": {}},
  "sources": ["sine.c"],
