@@ -323,8 +323,8 @@ for 2.x builds with it too.
 | `fw_pattern` (3.3) | 0x4138e214 | 0x4138f214 | -> the active pattern's data: track t at +976 t, its step words at +2 s (bit 0 a note trig, bit 1 a lock trig), NOTE +0x3c0, the per-track length +0x3c5 (big-endian), the keyboard's ROOT +0x3cb and SCALE +0x3ce (`core3.h`'s `FW_TRACK` macros) |
 | `fw_project` (3.3) | 0x419efde0 | 0x419f0de0 | -> the project |
 
-A name marked 3.1, 3.2, 3.3 or 4.0 needs that core-dn1 (`"resources": {"core": "3.1"}`,
-`"3.2"`, `"3.3"` or `"4.0"`).
+A name marked 3.1, 3.2, 3.3, 4.0 or 4.1 needs that core-dn1 (`"resources": {"core": "3.1"}`,
+`"3.2"`, `"3.3"`, `"4.0"` or `"4.1"`).
 
 gcc calls libgcc's `__ashldi3`, `__lshrdi3` and `__ashrdi3` for a 64-bit value shifted by a
 variable count, and a mod links no libgcc. From core-dn1 3.3, core exports the firmware's
@@ -932,6 +932,41 @@ int32_t prog_pc(int32_t channel, int32_t program, int32_t flags)
 "subscribe": [{"event": "ev_midi_pc", "fn": "prog_pc", "order": 50}, ...],
 "resources": {"core": "4.0"}
 ```
+
+### The note queue (core-dn1 4.1, Digitone mk1)
+
+**`ev_note_queue`.** The sequencer fires a step about one step before it
+plays: the fire builds the step's event (its note, or none for a lock trig,
+and the step's p-locks) and queues it for the time the step plays,
+microtiming and swing in. At that time the render starts the event's voices
+with its locks, or puts a lock trig's locks into the track's voices. Every
+note source queues its events through one routine (0x400fff04; 0x40100178 in
+1.44): the sequencer's fires, a trig's or the keyboard's note, MIDI in, the
+arpeggiator. Core takes its entry (by `jmp`, its first two instructions run
+after the handlers) and calls each handler first, `void f(void *event,
+uint32_t time)`, with the interrupts masked, as the routine then masks them:
+`time` is on the timeline (`fw_timeline`'s units), and the event is 0x48
+bytes (`core3.h`'s `FW_EVENT_*` macros):
+
+| offset | | |
+|---|---|---|
+| +0 | kind | 0 a step's fire (its trig: a note or a lock trig), 1 the first step's, made as PLAY starts; 5 and 6 the arpeggiator's and the sequencer's own, not trigs |
+| +8 | track | 0-3 the synth tracks |
+| +0x28 | a fire's step word | bit 0 a note trig, bit 1 a lock trig |
+| +0x38 | its p-lock list, or 0 | +8 the count, then from +0x14 `{u16 slot, s16 value}` 8 bytes apart |
+
+The first step's event as PLAY starts (kind 1) has no p-lock list, and a
+lock trig on that step makes no event then: the stock applies that step
+another way, so a mod reads its locks from the lock table when the
+transport starts. A mod that plays a track's locks itself (an effect's
+p-locks, kept in a track's lock table: fxkit, below) takes the
+step's locks here and applies
+them when `fw_timeline` reaches `time`: the step's own time, to within a
+block. Interrupt level or
+a task: keep it short, only read the event, and call no firmware.
+
+Core-dn1 4.1 owns one more site, 0x400fff04 (`core_note_queue`, by jmp). It
+is 4.0 and this, and `tests/test_sdk.py` checks it against the released 4.0.
 
 ### The mods' RAM (core-dn1 4.0, Digitone mk1; core 4.0, Digitakt mk1)
 

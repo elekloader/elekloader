@@ -156,19 +156,26 @@ the Digitone needs it. On its own it changes nothing the unit does.
   in 1.44), MIDI CONFIG's receive test in the firmware's handler.
   [examples/dn-progchange](../../examples/dn-progchange) is the smallest
   such mod.
+- **From 4.1, the note queue** ([queue.s](queue.s); docs/ADAPTING.md, "The
+  note queue"): `ev_note_queue` gives a mod each event a note source queues
+  for the render (the sequencer's fires a step ahead, with the step's
+  p-locks), with the time it plays, at the queue's entry 0x400fff04
+  (0x40100178 in 1.44). fxkit ([../fxkit-dn1](../fxkit-dn1)) is built on it:
+  an effect's p-locks, kept in a track's lock table, on their steps.
 - **OS 1.44:** every site has its port (`ports` in mod.json): the same
   code, moved, and RAM 0x1000 further on.
 
 Build it with the SDK (it needs m68k binutils):
 
 ```bash
-python -m elekloader.sdk.build mods/core-dn1 --stock Digitone_and_Digitone_Keys_OS1.43.syx   # out/core-4.0.elemod
-python -m elekloader.sdk.build mods/core-dn1 --stock Digitone_and_Digitone_Keys_OS1.44.syx   # out/core-4.0-os1.44.elemod
-python -m elekloader.lint mods/core-dn1/out/core-4.0-os1.44.elemod --stock Digitone_and_Digitone_Keys_OS1.44.syx
+python -m elekloader.sdk.build mods/core-dn1 --stock Digitone_and_Digitone_Keys_OS1.43.syx   # out/core-4.1.elemod
+python -m elekloader.sdk.build mods/core-dn1 --stock Digitone_and_Digitone_Keys_OS1.44.syx   # out/core-4.1-os1.44.elemod
+python -m elekloader.lint mods/core-dn1/out/core-4.1-os1.44.elemod --stock Digitone_and_Digitone_Keys_OS1.44.syx
 ```
 
-A release names them `core-dn1-4.0.elemod` and `core-dn1-4.0-os1.44.elemod`.
-3.3 and 4.0 are not released yet;
+A release names them `core-dn1-4.1.elemod` and `core-dn1-4.1-os1.44.elemod`.
+4.1 is not released yet; 4.0's are on the [core-dn1-v4.0](https://github.com/irpina/elekloader/releases/tag/core-dn1-v4.0) pre-release
+(3.3 was not released);
 3.2's are on the [core-dn1-v3.2](https://github.com/irpina/elekloader/releases/tag/core-dn1-v3.2) pre-release
 (3.0 and 3.1 were not released), and
 2.3's on the [core-dn1-v2.3](https://github.com/irpina/elekloader/releases/tag/core-dn1-v2.3) pre-release.
@@ -238,7 +245,8 @@ the stock sound back; on the cycle clock, the stock master stage takes
 53,240 cycles of a block, core's conversion in and out 602 and TREMOLO
 926.
 `tests/test_sdk.py` checks that 4.0 keeps all of 3.2: the same sites,
-tables, contributions and exports, with 3.3's and 4.0's added.
+tables, contributions and exports, with 3.3's and 4.0's added; and that 4.1
+keeps all of the released 4.0, with the note queue's site and table added.
 
 4.0 was checked the same way on 1.43 and 1.44: every stage passes and every
 screen is identical, alone, with PROG, and with seven effects mods at once

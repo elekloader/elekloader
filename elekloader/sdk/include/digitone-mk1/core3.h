@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
-/* core-dn1 3.0 to 4.0 for the Digitone mk1, in C: the firmware locations core exports, and core-dn1's
+/* core-dn1 3.0 to 4.1 for the Digitone mk1, in C: the firmware locations core exports, and core-dn1's
  * own tables and calls (docs/ADAPTING.md, "Firmware locations", "Parameter slots", "Mod pages", "Project
  * data", "The Mod Menu" and "Machines and stock parameters"). The SDK puts this folder on the include
  * path:
@@ -8,8 +8,8 @@
  *
  * Every fw_ name here is resolved by the linker against the core in the build, so a mod that uses only
  * these rebuilds for another OS version without a change (its port in mod.json is empty). Declaring one
- * makes the mod need core-dn1 3.0, or 3.1, 3.2, 3.3 or 4.0 for the names marked so: say so with "resources":
- * {"core": "3.0"} (or "3.1", "3.2", "3.3", "4.0"). From 4.0 the mods' code, tables and variables
+ * makes the mod need core-dn1 3.0, or 3.1, 3.2, 3.3, 4.0 or 4.1 for the names marked so: say so with
+ * "resources": {"core": "3.0"} (or "3.1", "3.2", "3.3", "4.0", "4.1"). From 4.0 the mods' code, tables and variables
  * have 1.25 MB (from 0x43EC0000) in place of 128 KB: a build that needs more than 128 KB needs core 4.0. digitone-mk1/core3.inc has the same for assembly. Functions that return a pointer
  * are declared to return uint32_t: the firmware returns it in d0, where gcc for m68k looks in a0. */
 #ifndef ELEKLOADER_DIGITONE_MK1_CORE3_H
@@ -230,5 +230,29 @@ typedef void (*ev_render_params_fn)(int16_t *words);
  * takes it: the stock does not change the pattern. The MIDI task, not interrupt level. */
 #define CORE_MIDI_PC_STOCK  2u
 typedef int32_t (*ev_midi_pc_fn)(int32_t channel, int32_t program, int32_t flags);
+/* 4.1: each event a note source queues for the render (the sequencer's fires, a trig's or the keyboard's note, MIDI
+ * in, the arpeggiator), with the time it plays, before it is queued. The sequencer fires a step about one step
+ * before it plays and queues its event for the step's time (microtiming and swing in); the render then starts its
+ * voices with its p-locks, or puts a lock trig's locks into the track's voices. A mod that plays a track's locks
+ * itself (an effect's p-locks, stored as a track's) takes the step's locks here and applies them when fw_timeline
+ * reaches time.
+ * Interrupt level or a task, with the interrupts masked: keep it short, only read the event, call no firmware. */
+typedef void (*ev_note_queue_fn)(void *event, uint32_t time);
+#define FW_EVENT_KIND(ev)       (((volatile uint32_t *)(ev))[0])    /* +0: what it is: */
+#define FW_EVENT_FIRE           0u                                  /*   a step's fire (its trig, note or lock) */
+#define FW_EVENT_FIRST          1u                                  /*   the first step's, made before PLAY: it
+                                                                     *   has no p-lock list (and a lock trig there
+                                                                     *   makes no event): read that step's locks
+                                                                     *   from the lock table */
+                                                                    /*   others (5, 6): the arpeggiator's and
+                                                                     *   the sequencer's own, not trigs */
+#define FW_EVENT_TRACK(ev)      (((volatile int32_t *)(ev))[2])     /* +8: its track, 0-3 the synth tracks */
+#define FW_EVENT_STEP(ev)       (((volatile uint32_t *)(ev))[10])   /* +0x28: a fire's step word: */
+#define FW_EVENT_NOTE_TRIG      1u                                  /*   a note trig */
+#define FW_EVENT_LOCK_TRIG      2u                                  /*   a lock trig */
+#define FW_EVENT_LOCKS(ev)      (((uint8_t *volatile *)(ev))[14])   /* +0x38: its p-lock list, or 0: */
+#define FW_LOCKS_COUNT(l)       (*(volatile uint32_t *)((l) + 8))
+#define FW_LOCK_SLOT(l, i)      (*(volatile uint16_t *)((l) + 0x14 + 8 * (i)))      /* a sound slot, 0-78 */
+#define FW_LOCK_VALUE(l, i)     (*(volatile int16_t *)((l) + 0x16 + 8 * (i)))       /* its value, 8.8 */
 
 #endif

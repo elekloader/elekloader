@@ -1,12 +1,13 @@
 | SPDX-License-Identifier: GPL-2.0-or-later
-| core-dn1 3.0 to 4.0 for the Digitone mk1, in assembly: the layouts that go
+| core-dn1 3.0 to 4.1 for the Digitone mk1, in assembly: the layouts that go
 | with the firmware locations core exports (core3.h has the same in C).
 | Assembly names the locations directly: fw_voice_pitch, fw_kit, fw_fillrect,
 | ... A mod that uses them needs core-dn1 3.0: "resources": {"core": "3.0"};
 | one that uses a 3.1 name (fw_voices, core_sound_set, ...) needs 3.1, a
 | 3.2 one (fw_tempo, core_audio, ev_midi_cc) 3.2, and a 3.3 one
 | (ev_key_leds, ev_render_params, fw_memcpy, fw_textbox, fw_pattern,
-| __ashldi3, ...) 3.3, and CORE_AUDIO_INSERT and ev_midi_pc's CORE_MIDI_PC_STOCK 4.0.
+| __ashldi3, ...) 3.3, CORE_AUDIO_INSERT and ev_midi_pc's CORE_MIDI_PC_STOCK 4.0,
+| and ev_note_queue's event (FW_EVENT_*) 4.1.
 | The SDK puts this folder on the include path:
 |
 |       .include "digitone-mk1/core3.inc"
@@ -45,3 +46,11 @@
         .equ    FW_TRACK_LENGTH,  0x3c5         | the per-track length, big-endian, unaligned
         .equ    FW_TRACK_ROOT,    0x3cb         | the keyboard's ROOT
         .equ    FW_TRACK_SCALE,   0x3ce         | its SCALE, -1 chromatic
+| 4.1: ev_note_queue's event and its p-lock list
+        .equ    FW_EVENT_KIND,    0             | what it is, a long: 0 a step's fire, 1 the first step's before PLAY
+        .equ    FW_EVENT_TRACK,   8             | its track, a long
+        .equ    FW_EVENT_STEP,    0x28          | the step word it came from: bit 0 a note trig, bit 1 a lock trig
+        .equ    FW_EVENT_LOCKS,   0x38          | -> its p-lock list, or 0
+        .equ    FW_LOCKS_COUNT,   8             | the list's entries, a long
+        .equ    FW_LOCKS_PAIRS,   0x14          | from here {u16 slot, s16 value}, FW_LOCKS_STRIDE apart
+        .equ    FW_LOCKS_STRIDE,  8
