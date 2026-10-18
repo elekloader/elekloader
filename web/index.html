@@ -244,8 +244,8 @@ python -m elekloader.patch --stock Digitakt_OS1.53.syx --mod mods/core/out/core-
       <p>A group of places only one kind of mod uses has a companion beside the core: <strong>machine-pages</strong>
         draws the Digitakt's SRC and LFO pages for machine mods, <strong>machines</strong> plays a machine mod's voice
         on the Digitone, <strong>seq-events</strong> turns the sequencer's steps into events, and on the Octatrack
-        <strong>takes</strong> gives places one mod at a time takes (MIDI notes, the CHROMATIC keyboard, locks, the
-        project file) to whichever mod claims them. The to-do list counts them as core.</p>
+        <strong>intercepts</strong> gives places a mod intercepts (MIDI notes, the CHROMATIC keyboard, locks, the
+        project file) to the one mod that claims each. The to-do list counts them as core.</p>
       <h2>Versions</h2>
       <p>Each core keeps everything the one before it had, so a mod built for an older core links with the newest,
         and a build takes the newest: core 4.x on the Digitakt mk1, core-dn1 4.x on the Digitone mk1, core-ot 0.3.x on

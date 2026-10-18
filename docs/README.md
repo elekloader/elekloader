@@ -47,7 +47,7 @@ docs match its code.
   the Digitakt mk1's in [mods/seq-events-dt1](../mods/seq-events-dt1)),
   [mods/core-dt2](../mods/core-dt2) (Digitakt II), and
   [mods/core-ot](../mods/core-ot) with [mods/dspbus-ot](../mods/dspbus-ot)
-  and [mods/takes-ot](../mods/takes-ot) (Octatrack).
+  and [mods/intercepts-ot](../mods/intercepts-ot) (Octatrack).
 - **A whole mod on core-dn1 3.2's exclusive audio:**
   [mods/digiswarm-dn1](../mods/digiswarm-dn1), DigiSwarm, an effects
   engine for the Digitone mk1's audio inputs (grains, micro-loops, a

@@ -367,25 +367,25 @@ def test_the_core_bus_sites():
     assert at + 24 == DEV.image_free[0][1]          # the run's end: its start is octabam's SPECTRUM's
 
 
-def test_the_take_events_replay_their_sites():
-    """mods/takes-ot: each event's site is whole stock instructions, its stub's stock path
+def test_the_intercepts_replay_their_sites():
+    """mods/intercepts-ot: each event's site is whole stock instructions, its stub's stock path
     replays them as they are (the stock words, a short branch at the end as the same branch
     to its absolute target), then goes back to the instruction after the site (a jmp event)
-    or returns (a jsr event); the converter's TAKES names the same sites, kinds and lengths."""
+    or returns (a jsr event); the converter's INTERCEPTS names the same sites, kinds and lengths."""
     import re
     from elekloader.sdk import octabam
     st, img = stock()
-    with open(os.path.join(ROOT, 'mods', 'takes-ot', 'mod.json')) as fh:
+    with open(os.path.join(ROOT, 'mods', 'intercepts-ot', 'mod.json')) as fh:
         j = json.load(fh)
-    with open(os.path.join(ROOT, 'mods', 'takes-ot', 'takes.s')) as fh:
+    with open(os.path.join(ROOT, 'mods', 'intercepts-ot', 'intercepts.s')) as fh:
         src = fh.read()
-    blocks = dict(re.findall(r'^\s+TAKE\s+(\w+),\s*\w+\n(.*?)(?=^\s+TAKE\s|\Z)', src, re.M | re.S))
-    assert len(j['sites']) == len(blocks) == len(octabam.TAKES) == 19
+    blocks = dict(re.findall(r'^\s+INTERCEPT\s+(\w+),\s*\w+\n(.*?)(?=^\s+INTERCEPT\s|\Z)', src, re.M | re.S))
+    assert len(j['sites']) == len(blocks) == len(octabam.INTERCEPTS) == 19
     for s in j['sites']:
-        ev, addr, n = s['target'][len('take_'):], int(s['addr'], 16), len(s['stock']) // 2
+        ev, addr, n = s['target'][len('intercept_'):], int(s['addr'], 16), len(s['stock']) // 2
         o = addr - DEV.main_load
         assert img[o:o + n].hex() == s['stock'], ev
-        assert octabam.TAKES[addr] == (ev, s['op'], n), ev
+        assert octabam.INTERCEPTS[addr] == (ev, s['op'], n), ev
         assert j['collections'][ev] == 8, ev                      # {claims, entry}
         lines = [x.split('|')[0].strip() for x in blocks[ev].splitlines()]
         lines = [x for x in lines if x]

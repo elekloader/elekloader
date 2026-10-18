@@ -3,8 +3,8 @@
 
     python -m elekloader.sdk.octabam --octabam PATH --stock OCTATRACK_OS1.40C.syx
                                      [--module NAME ...] [--remix NAME ...] [--reference IMAGE]
-                                     --out DIR [--core CORE.elemod] [--bus] [--takes]
-                                     [--dspbus DSPBUS.elemod] [--takes-mod TAKES.elemod]
+                                     --out DIR [--core CORE.elemod] [--bus] [--intercepts]
+                                     [--dspbus DSPBUS.elemod] [--intercepts-mod INTERCEPTS.elemod]
 
 octabam (MIT) declares each module in modules/<name>/manifest.py, in the
 vocabulary of its tools/remix/schema.py. This reads the manifests of a
@@ -42,7 +42,7 @@ these:
 | Claims (part window, SRAM) | named resources, one per 16-byte block, so mods whose claims overlap are refused together |
 | a hook in BUS, with --bus | its site left stock; generated glue subscribes its code to the core's event (core-ot 0.2) |
 | a DspHook in DSP_BUS, in a remix, with --bus | its DSP source in the mod; it subscribes to the DSP bus's event (mods/dspbus-ot) |
-| a detour at a site in TAKES, with --takes | its site left stock; a record {0, the detour's label} in the take event's table (mods/takes-ot): the label is entered as the detour entered it |
+| a detour at a site in INTERCEPTS, with --intercepts | its site left stock; a record {0, the detour's label} in the intercept's table (mods/intercepts-ot): the label is entered as the detour entered it |
 
 Anything else refuses the module, with the reason:
 - DSP code or an FX menu entry (only ColdFire-only modules convert);
@@ -369,14 +369,15 @@ DSP_BUS = {
 }
 DSPBUS_DIR = os.path.join(os.path.dirname(CORE_DIR), 'dspbus-ot')
 
-# ---- the take events (mods/takes-ot, --takes) -------------------------------------------
-# Sites mods/takes-ot owns, each an event that gives its site to one mod (Modwerk's Octatrack
-# base names them the same): its stub enters the taker's entry with every register and the
-# stack as at the site, as a detour's jmp or jsr enters its label. With --takes, a detour of
+# ---- the intercepts (mods/intercepts-ot, --intercepts) ----------------------------------
+# Sites mods/intercepts-ot owns, each an event that gives its site to the one mod whose record
+# intercepts the call (Modwerk's Octatrack base has the same events as "take" events): its stub
+# enters the record's entry with every register and the stack as at the site, as a detour's
+# jmp or jsr enters its label. With --intercepts, a detour of
 # the same kind and length at one of these sites is left stock, and the mod adds the record
-# {claims 0, entry: the detour's label} to the event's table instead: it takes every call,
-# and its code runs as it did. Such a mod is versioned <commit>-takes and requires takes.
-TAKES = {
+# {claims 0, entry: the detour's label} to the event's table instead: it intercepts every call,
+# and its code runs as it did. Such a mod is versioned <commit>-intercepts and requires intercepts.
+INTERCEPTS = {
     0x4000E746: ('ev_midi_note_on', 'jmp', 6), 0x4000DFD4: ('ev_midi_note_off', 'jmp', 8),
     0x40045918: ('ev_octave_key', 'jmp', 8), 0x40044968: ('ev_keyboard_draw', 'jmp', 8),
     0x4004FBDE: ('ev_chromatic_release', 'jmp', 6), 0x4004FBFE: ('ev_chromatic_held', 'jmp', 8),
@@ -388,8 +389,8 @@ TAKES = {
     0x400866CC: ('ev_project_load', 'jmp', 8), 0x400867A2: ('ev_project_line', 'jmp', 8),
     0x400888AA: ('ev_project_write', 'jmp', 8),
 }
-TAKE_ORDER = 50
-TAKES_DIR = os.path.join(os.path.dirname(CORE_DIR), 'takes-ot')
+INTERCEPT_ORDER = 50
+INTERCEPTS_DIR = os.path.join(os.path.dirname(CORE_DIR), 'intercepts-ot')
 
 
 def _bus_glue(ob, mkey, hooks):
@@ -552,7 +553,7 @@ def _collect(ob, rel, files, pool, seen):
     return out
 
 
-def convert(ob, name, image, dev, rx=None, bus=False, takes=False):
+def convert(ob, name, image, dev, rx=None, bus=False, intercepts=False):
     """-> a plan: {'id', 'name', 'members', 'json' (mod.json), 'files' ({relpath: bytes}),
     'caves', 'tables', 'skip', 'notes', 'relocs', 'remix', 'bus'}. Raises Refused.
 
@@ -561,8 +562,8 @@ def convert(ob, name, image, dev, rx=None, bus=False, takes=False):
     build writes in the OS image (remix_sites).
 
     With `bus`: the hooks in BUS subscribe to core-ot's events instead (the plan's 'bus').
-    With `takes`: the detours at TAKES sites add records to mods/takes-ot's events instead (the
-    plan's 'takes')."""
+    With `intercepts`: the detours at INTERCEPTS sites add records to mods/intercepts-ot's
+    events instead (the plan's 'intercepts')."""
     if rx is None:
         why = refusal(ob, name)
         if why:
@@ -590,7 +591,7 @@ def convert(ob, name, image, dev, rx=None, bus=False, takes=False):
     defsym, caves, tables, names, fixed = {}, [], [], [], []
     relocs = {}                             # relocatable data's address -> its served copy
     hooks, rewritten = [], {}               # --bus: hooks the bus serves; sources rewritten
-    took = []                               # --takes: detours a take event serves
+    took = []                               # --intercepts: detours an intercept serves
 
     def bus_hook(n, spec, site_, len_, entry, expect=None, **kw):
         h = dict(spec, module=n, site=site_, len=len_, entry=entry, expect=expect,
@@ -793,16 +794,16 @@ def convert(ob, name, image, dev, rx=None, bus=False, takes=False):
                               % (d.site, d.unit))
             if _stock(image, dev, d.site, len(d.expect)) != d.expect:
                 raise Refused('the detour site 0x%08x is not stock' % d.site)
-            tk = TAKES.get(d.site) if takes else None
+            tk = INTERCEPTS.get(d.site) if intercepts else None
             if tk is not None:
                 ev, kind, ln_ = tk
                 if d.target is not None or d.kind != kind or (d.pad_to or 6) != ln_:
-                    raise Refused('the detour at 0x%08x is not the %s %d-byte one %s takes'
+                    raise Refused('the detour at 0x%08x is not the %s %d-byte one %s intercepts'
                                   % (d.site, kind, ln_, ev))
                 took.append({'module': n, 'site': d.site, 'len': ln_, 'event': ev,
                               'kind': kind, 'entry': d.symbol})
-                notes.append('its detour at 0x%08x (%s) is left stock: %s gives the site to its '
-                             'record (takes)' % (d.site, d.symbol, ev))
+                notes.append('its detour at 0x%08x (%s) is left stock: its record in %s, an '
+                             'intercept, gets the call' % (d.site, d.symbol, ev))
                 continue
             spec = BUS.get((d.site, d.symbol)) if bus else None
             if spec is not None:
@@ -952,7 +953,7 @@ def convert(ob, name, image, dev, rx=None, bus=False, takes=False):
         taken = [(int(s['addr'], 16), int(s['addr'], 16) + len(s['stock']) // 2)
                  for s in sites] + _core_spans() + [(h['site'], h['site'] + h['len'])
                                                     for h in hooks]   # left stock: the bus
-        taken += [(t['site'], t['site'] + t['len']) for t in took]           # and the takes
+        taken += [(t['site'], t['site'] + t['len']) for t in took]           # and the intercepts
         if dsp_subs:
             taken += _dspbus_spans(image, dev)      # the DSP bus's: compared by the check
         taken.append((PURGE_BANKS_END, PURGE_BANKS_END + 4))  # left stock: compared by the check
@@ -1029,15 +1030,15 @@ def convert(ob, name, image, dev, rx=None, bus=False, takes=False):
     if hooks:
         desc += ' It runs on the Octatrack core\'s hook bus: it needs core 0.2 or newer.'
     if took:
-        desc += (' It takes its places in the firmware through the take events (takes), so it '
-                 'combines with other mods that take them.')
-        requires.append('takes')
+        desc += (' Its places in the firmware come to it through the intercepts companion, so it '
+                 'combines with other mods that use them.')
+        requires.append('intercepts')
     if dsp_subs:
         desc += (' Its DSP code runs on the DSP bus, which takes %s off both FX menus: it '
                  'needs the DSP bus.' % ', '.join(rx['harvested']))
     doc = {
         'id': mid, 'version': ob.commit + ('-bus' if hooks or dsp_subs else '')
-        + ('-takes' if took else ''),
+        + ('-intercepts' if took else ''),
         'title': title,
         'description': desc,
         'category': cat,
@@ -1060,8 +1061,8 @@ def convert(ob, name, image, dev, rx=None, bus=False, takes=False):
         doc['subscribe_dsp'] = [{'event': d['event'], 'fn': d['label'],
                                  'addend': len(d['stock']), 'order': BUS_ORDER}
                                 for d in dsp_subs]
-    if took:                                # {claims 0, entry}: it takes every call
-        doc['contribute'] = [{'to': t['event'], 'order': TAKE_ORDER, 'data': '00' * 8,
+    if took:                                # {claims 0, entry}: it intercepts every call
+        doc['contribute'] = [{'to': t['event'], 'order': INTERCEPT_ORDER, 'data': '00' * 8,
                               'relocs': [[4, 'abs32', 'sym:' + t['entry'], 0]]} for t in took]
     if names:
         doc['resources'] = {'names': names}
@@ -1073,7 +1074,7 @@ def convert(ob, name, image, dev, rx=None, bus=False, takes=False):
                         'bytes': bytes(r['bytes']), 'pokes': r['pokes']}
                        for lo, r in sorted(relocs.items())],
             'remix': rx, 'remix_sites': remix_sites,
-            'bus': hooks, 'bus_sources': rewritten, 'dsp_bus': dsp_subs, 'takes': took}
+            'bus': hooks, 'bus_sources': rewritten, 'dsp_bus': dsp_subs, 'intercepts': took}
 
 
 def write(ob, plan, out):
@@ -1161,9 +1162,9 @@ def _dspbus_spans(image, dev):
     return list(_DSPBUS)
 
 
-def check(ob, plan, mod_path, core_path, stock_path, work, dspbus_path=None, takes_path=None):
+def check(ob, plan, mod_path, core_path, stock_path, work, dspbus_path=None, intercepts_path=None):
     """The converted mod, linked with the core (and the DSP bus, for DSP code on it, and the
-    take events, for detours they take), against octabam's account -> [lines]."""
+    intercepts, for detours they serve), against octabam's account -> [lines]."""
     st, dev, rel = formats.load(stock_path)
     image = formats.main_image(st, dev)
     mod, core = elemod.load_any(mod_path), elemod.load_any(core_path)
@@ -1174,11 +1175,11 @@ def check(ob, plan, mod_path, core_path, stock_path, work, dspbus_path=None, tak
                              '(mods/dspbus-ot)')
         dbus = elemod.load_any(dspbus_path)
         given.insert(1, dbus)
-    if plan.get('takes'):
-        if not takes_path:
-            raise CheckError('it takes places through the take events, so the check needs them '
-                             '(mods/takes-ot)')
-        given.insert(1, elemod.load_any(takes_path))
+    if plan.get('intercepts'):
+        if not intercepts_path:
+            raise CheckError('its places come to it through the intercepts, so the check needs them '
+                             '(mods/intercepts-ot)')
+        given.insert(1, elemod.load_any(intercepts_path))
     ln = link.link(given, image)
     run_off = ln.layout['run_load'] - dev.main_load
     ddr0 = ln.layout['ddr'][0]
@@ -1206,7 +1207,7 @@ def check(ob, plan, mod_path, core_path, stock_path, work, dspbus_path=None, tak
 
     base = ln.map['arena_base']
     lines = []
-    busy = {h['site'] for h in plan.get('bus', ())} | {t['site'] for t in plan.get('takes', ())}
+    busy = {h['site'] for h in plan.get('bus', ())} | {t['site'] for t in plan.get('intercepts', ())}
     for mn in plan['members']:
         m = ob.modules[mn]
         pc = [c for c in plan['caves'] if c['module'] == mn]
@@ -1296,7 +1297,7 @@ def check(ob, plan, mod_path, core_path, stock_path, work, dspbus_path=None, tak
                          'writes them%s%s%s' % (mn, len(dets), len(m.symbol_refs), len(m.tables),
                                                 len(m.pokes) - nm,
                                                 ' (%d stood in for)' % stood if stood else '',
-                                                ' (%d on the bus or taken, below)' % onbus
+                                                ' (%d on the bus or intercepted, below)' % onbus
                                                 if onbus else '',
                                                 '; %d poke(s) into a served copy (below)' % nm
                                                 if nm else ''))
@@ -1331,12 +1332,12 @@ def check(ob, plan, mod_path, core_path, stock_path, work, dspbus_path=None, tak
                                  % (u.label, ra, elemod.sha(rb)[:16], rsha[:16]))
             lines.append('unit "%s": its source links to the author\'s reference' % u.label)
 
-    # the takes: each detour's site is the take event's (its stub, nop-padded as the detour was),
+    # the intercepts: each detour's site is the intercept's (its stub, nop-padded as the detour was),
     # and the event's table holds {0, the detour's label}: the label is entered as before
-    for t in plan.get('takes', ()):
-        stub = ln.map.get('takes:take_' + t['event'], ln.map.get('take_' + t['event']))
+    for t in plan.get('intercepts', ()):
+        stub = ln.map.get('intercepts:intercept_' + t['event'], ln.map.get('intercept_' + t['event']))
         if stub is None:
-            raise CheckError('take_%s is not linked: the take events are not given'
+            raise CheckError('intercept_%s is not linked: the intercepts are not given'
                              % t['event'])
         want = OPS[t['kind']] + stub.to_bytes(4, 'big') + NOP * ((t['len'] - 6) // 2)
         if img(t['site'], t['len']) != want:
@@ -1348,7 +1349,7 @@ def check(ob, plan, mod_path, core_path, stock_path, work, dspbus_path=None, tak
         recs = [(_u32(ram(at, 8 * n), 8 * k), _u32(ram(at, 8 * n), 8 * k + 4)) for k in range(n)]
         if (0, sym(t['entry'])) not in recs:
             raise CheckError('%s does not hold the record {0, %s}' % (t['event'], t['entry']))
-        lines.append('0x%08x (%s): the site is %s\'s %s; its record {0, %s} takes every call'
+        lines.append('0x%08x (%s): the site is %s\'s %s; its record {0, %s} intercepts every call'
                      % (t['site'], t['entry'], t['event'], t['kind'], t['entry']))
 
     # the bus: each hook's site left stock and its glue in the event's table; a stub entered
@@ -1581,13 +1582,13 @@ def main(argv=None):
                          'is versioned <commit>-bus and needs core 0.2 or newer')
     ap.add_argument('--dspbus', help='the DSP bus .elemod, for mods whose DSP code runs on it '
                                      '(default: build mods/dspbus-ot)')
-    ap.add_argument('--takes', action='store_true',
-                    help='leave the detours at the take events\' sites (TAKES: the MIDI notes, the '
+    ap.add_argument('--intercepts', action='store_true',
+                    help='leave the detours at the intercepts\' sites (INTERCEPTS: the MIDI notes, the '
                          'CHROMATIC keyboard, locks, knobs, settings, the project file) stock and add '
-                         'records to the events instead; such a mod is versioned <commit>-takes and '
-                         'requires takes (mods/takes-ot)')
-    ap.add_argument('--takes-mod', help='the take events\' .elemod, for the check (default: build '
-                                        'mods/takes-ot)')
+                         'records to the events instead; such a mod is versioned <commit>-intercepts and '
+                         'requires intercepts (mods/intercepts-ot)')
+    ap.add_argument('--intercepts-mod', help='the intercepts\' .elemod, for the check (default: build '
+                                        'mods/intercepts-ot)')
     ap.add_argument('--no-check', action='store_true', help='build, but skip the check')
     a = ap.parse_args(argv)
     if inside_checkout(a.out):
@@ -1624,7 +1625,7 @@ def main(argv=None):
               'Such code assembles longer here: the same code, not the same bytes, and a unit '
               'whose author pinned its bytes (USB MIDI) fails its check. Install m68k-elf '
               'binutils (it is used when found), or set ELEKLOADER_CROSS=m68k-elf-.')
-    failed, dspbus, takes = 0, a.dspbus, a.takes_mod
+    failed, dspbus, icpt = 0, a.dspbus, a.intercepts_mod
     for n, is_remix in [(n, False) for n in names] + [(r, True) for r in a.remix or ()]:
         if n in ob.broken:
             print('REFUSED   %-30s its manifest does not load (%s)' % (n, ob.broken[n]))
@@ -1638,9 +1639,9 @@ def main(argv=None):
                         rx['ref'] = fh.read()
                 else:
                     rx['ref'] = build_reference(ob, n, image)
-                plan = convert(ob, n, image, dev, rx, bus=a.bus, takes=a.takes)
+                plan = convert(ob, n, image, dev, rx, bus=a.bus, intercepts=a.intercepts)
             else:
-                plan = convert(ob, n, image, dev, bus=a.bus, takes=a.takes)
+                plan = convert(ob, n, image, dev, bus=a.bus, intercepts=a.intercepts)
         except Refused as e:
             print('REFUSED   %-30s %s' % (n, e))
             continue
@@ -1649,11 +1650,11 @@ def main(argv=None):
             path, mod = sdkbuild.build(d, a.stock, a.out)
             if plan.get('dsp_bus') and not dspbus and not a.no_check:
                 dspbus, _m = sdkbuild.build(DSPBUS_DIR, a.stock, os.path.join(a.out, 'dspbus'))
-            if plan.get('takes') and not takes and not a.no_check:
-                takes, _m = sdkbuild.build(TAKES_DIR, a.stock, os.path.join(a.out, 'takes'))
+            if plan.get('intercepts') and not icpt and not a.no_check:
+                icpt, _m = sdkbuild.build(INTERCEPTS_DIR, a.stock, os.path.join(a.out, 'intercepts'))
             lines = [] if a.no_check else check(ob, plan, path, core, a.stock,
                                                 os.path.join(a.out, plan['id'] + '.check'),
-                                                dspbus, takes)
+                                                dspbus, icpt)
         except (sdkbuild.BuildError, CheckError, elemod.ModError, OSError) as e:
             print('FAILED    %-30s %s' % (n, str(e).strip().replace('\n', '\n          ')))
             failed += 1

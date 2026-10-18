@@ -766,45 +766,45 @@ def test_real_modules_on_the_bus():
                                                done['quantizer'][0]['files'])
 
 
-def test_real_modules_on_the_take_events():
-    """--takes: SCALE QUANTIZER's 17 detours and the SYNTH MACHINE's 2 at the take events' sites
-    are left stock and become records {0, the detour's label} in the events' tables; each mod
-    requires takes, is versioned <commit>-takes and passes the check linked with mods/takes-ot,
-    which proves each site is the event's jump to its stub and the table holds the record. A
-    module with no detour there converts exactly as without --takes, and the check refuses a
-    take without the take events."""
+def test_real_modules_on_the_intercepts():
+    """--intercepts: SCALE QUANTIZER's 17 detours and the SYNTH MACHINE's 2 at the intercepts'
+    sites are left stock and become records {0, the detour's label} in the events' tables;
+    each mod requires intercepts, is versioned <commit>-intercepts and passes the check linked
+    with mods/intercepts-ot, which proves each site is the event's jump to its stub and the
+    table holds the record. A module with no detour there converts exactly as without
+    --intercepts, and the check refuses a record without the intercepts."""
     ob, img = real(), stock()
     if not octabam.bare_metal(DEV):
         raise Skip('the configured assembler is not bare metal (ELEKLOADER_CROSS=m68k-elf-)')
     tools()
     out = tempfile.mkdtemp()
-    takes, _m = build.build(octabam.TAKES_DIR, SYX, os.path.join(out, 'takes'))
+    icpt, _m = build.build(octabam.INTERCEPTS_DIR, SYX, os.path.join(out, 'intercepts'))
     want = {'quantizer': 17, 'synth': 2, 'tuner': 0}
     for n, count in want.items():
-        plan = octabam.convert(ob, n, img, DEV, takes=True)
-        assert len(plan['takes']) == count, (n, len(plan['takes']))
+        plan = octabam.convert(ob, n, img, DEV, intercepts=True)
+        assert len(plan['intercepts']) == count, (n, len(plan['intercepts']))
         if not count:
             plan0 = octabam.convert(ob, n, img, DEV)
             assert (plan0['json'], plan0['files']) == (plan['json'], plan['files']), n
             continue
-        assert plan['json']['version'] == ob.commit + '-takes'
-        assert 'takes' in plan['json']['requires']
+        assert plan['json']['version'] == ob.commit + '-intercepts'
+        assert 'intercepts' in plan['json']['requires']
         recs = plan['json']['contribute']
-        assert sorted(c['to'] for c in recs) == sorted(t['event'] for t in plan['takes'])
+        assert sorted(c['to'] for c in recs) == sorted(t['event'] for t in plan['intercepts'])
         assert all(c['data'] == '00' * 8 and c['relocs'][0][:3] == [4, 'abs32', 'sym:' + t['entry']]
-                   for c, t in zip(recs, plan['takes']))
+                   for c, t in zip(recs, plan['intercepts']))
         path, mod = build.build(octabam.write(ob, plan, out), SYX, out)
-        assert not {s['addr'] for s in mod.sites} & {t['site'] for t in plan['takes']}   # left stock
+        assert not {s['addr'] for s in mod.sites} & {t['site'] for t in plan['intercepts']}   # left stock
         lines = octabam.check(ob, plan, path, core(out), SYX, os.path.join(out, n + '.check'),
-                              takes_path=takes)
-        assert sum('takes every call' in x for x in lines) == count, lines
+                              intercepts_path=icpt)
+        assert sum('intercepts every call' in x for x in lines) == count, lines
         if n == 'synth':
             try:
                 octabam.check(ob, plan, path, core(out), SYX, os.path.join(out, 'nt.check'))
             except octabam.CheckError as e:
-                assert 'needs them (mods/takes-ot)' in str(e), str(e)
+                assert 'needs them (mods/intercepts-ot)' in str(e), str(e)
             else:
-                raise AssertionError('checked without the take events')
+                raise AssertionError('checked without the intercepts')
 
 
 def test_real_bus_glue_is_checked():

@@ -1,17 +1,18 @@
-# takes
+# intercepts
 
-Places in the Octatrack's firmware (OS 1.40C) that one mod at a time
-takes, as events: MIDI notes on a listening track, the CHROMATIC keyboard,
-p-locks and knobs, the settings and the project file. A companion beside
-the core (core-ot 0.3.1 or newer), like machine-pages on the Digitakt mk1:
-it is only in a build when a mod requires it.
+Places in the Octatrack's firmware (OS 1.40C) that a mod intercepts, one
+mod at a time, as events: MIDI notes on a listening track, the CHROMATIC
+keyboard, p-locks and knobs, the settings and the project file. A companion
+beside the core (core-ot 0.3.1 or newer), like machine-pages on the
+Digitakt mk1: it is only in a build when a mod requires it.
 
 Without it, a mod that needs one of these places patches it, and no other
 mod can have it. With it, the place has one owner, and a mod adds a
 **record** to the event instead. The events, their sites, kinds and
-arguments are the ones Modwerk's Octatrack base gives the same names
-(repeat98/modwerk, `sdk/machines/octatrack/EVENTS.md`), so a record means
-the same thing on both. The code is elekloader's own (GPL-2.0-or-later).
+arguments are the ones Modwerk's Octatrack base gives the same names (it
+calls them "take" events: repeat98/modwerk,
+`sdk/machines/octatrack/EVENTS.md`), so a record means the same thing on
+both. The code is elekloader's own (GPL-2.0-or-later).
 
 On its own it changes nothing the unit does.
 
@@ -21,11 +22,11 @@ Each event's table holds 8-byte records, `{claims, entry}`, in (order,
 mod id) order:
 
 ```c
-struct take { int (*claims)(unsigned arg); void *entry; };
+struct intercept { int (*claims)(unsigned arg); void *entry; };
 ```
 
 The first record whose `claims` is 0, or returns nonzero for the call (the
-C convention), takes the site:
+C convention), intercepts it:
 
 - its `entry` runs with every register, the condition codes and the stack
   as they were at the site, as if the site had jumped there (a **jmp**
@@ -34,17 +35,18 @@ C convention), takes the site:
   and goes back to stock itself;
 - with `entry` 0, the stock instructions run at once.
 
-With no taker, the stock instructions run and stock goes on. In `mod.json`:
+When no record intercepts the call, the stock instructions run and stock
+goes on. In `mod.json`:
 
 ```json
-"requires": ["core", "takes"],
+"requires": ["core", "intercepts"],
 "contribute": [{"to": "ev_knob_store", "order": 50, "data": "0000000000000000",
                 "relocs": [[4, "abs32", "sym:my_knob", 0]]}]
 ```
 
-`sdk.octabam --takes` writes these records for octabam's modules: a detour at one of
-these sites becomes `{0, the detour's label}`, which takes every call and runs the
-detour's code exactly as before.
+`sdk.octabam --intercepts` writes these records for octabam's modules: a
+detour at one of these sites becomes `{0, the detour's label}`, which
+intercepts every call and runs the detour's code exactly as before.
 
 ## The events
 
@@ -71,7 +73,7 @@ detour's code exactly as before.
 | `ev_project_write` | 0x400888aa | jmp | none | the project writer writes the settings lines |
 
 Each runs in a firmware task (the UI, MIDI or project file), after core's
-`.boot` has put `.run` in place. A taker's entry runs there too: keep it
+`.boot` has put `.run` in place. A record's entry runs there too: keep it
 short, and call nothing that can block.
 
 Not here (yet) of Modwerk's: `ev_octave_number` (octabam's quantizer patches
@@ -80,15 +82,16 @@ an instruction that overlaps its site), and the call events and tables
 
 ## Checked
 
-- `tests/test_octatrack.py`, `test_the_take_events_replay_their_sites`:
+- `tests/test_octatrack.py`, `test_the_intercepts_replay_their_sites`:
   every site is whole stock instructions, and each stub's stock path
   replays them byte for byte, a short branch at the end as the same branch
   to its absolute target.
 - In octabam's `ot_emu`, the same session (creating a set and a project,
   MIDI notes, a knob turn, a p-lock, the CHROMATIC keyboard with held keys,
-  octave keys and live recording, then a boot from the saved card) on stock
-  and on core + takes with no takers: the same screen and the same memory
-  (the Part, its shadow, the settings, the octave word); 16 of the 19 sites
-  ran (not the project load and line, nor the settings sanitise).
-- octabam's quantizer and synth converted with `--takes` against their own
-  detours, the same session: see the pull request.
+  octave keys and live recording, then a boot from the saved card), each
+  pair compared by the screen and memory (the Part, its shadow, the
+  settings, the octave word):
+  - stock against core + intercepts with no records: identical; 16 of the
+    19 sites ran (not the project load and line, nor the settings sanitise);
+  - octabam's quantizer and synth with their own detours against the same
+    converted with `--intercepts`: identical.

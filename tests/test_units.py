@@ -556,6 +556,33 @@ def test_coresites_groups_the_sites_mods_share():
     assert shared_sites(two, same)[0]['kind'] == 'same routine'
 
 
+def test_bounties_count_only_the_newest_version_of_each_mod():
+    """The to-do list counts each mod's newest version, for each device and OS on its own: an
+    older file beside it adds nothing (a converted 363861e-intercepts outranks 363861e)."""
+    from elekloader.sdk import bounties
+    dev = type('Dev', (), {'key': 'dt', 'name': 'DT'})()
+    made = {}
+
+    def fake(path):
+        mid, ver, os_ = os.path.basename(path)[:-len('.elemod')].split('_')
+        m = link.Mod2.__new__(link.Mod2)
+        m.id, m.version, m.dev, m.sites = mid, ver, dev, []
+        m.rel = type('Rel', (), {'version': os_})()
+        return m
+    with tempfile.TemporaryDirectory() as d:
+        for n in ('slicer_2.1_1.53', 'slicer_2.2_1.53', 'slicer_2.1_1.54',
+                  'quant_363861e_1.40C', 'quant_363861e-intercepts_1.40C', 'mono_0.13_1.53', 'mono_0.13b_1.53',
+                  'eq_2.9_1.53', 'eq_2.10_1.53'):
+            open(os.path.join(d, n + '.elemod'), 'w').close()
+        was, bounties.elemod.load_any = bounties.elemod.load_any, fake
+        try:
+            got = sorted((m.id, m.version, m.rel.version) for m in bounties.newest([d]))
+        finally:
+            bounties.elemod.load_any = was
+    assert got == [('eq', '2.10', '1.53'), ('mono', '0.13b', '1.53'), ('quant', '363861e-intercepts', '1.40C'),
+                   ('slicer', '2.1', '1.54'), ('slicer', '2.2', '1.53')], got
+
+
 def test_bounties_lists_each_routine_once_across_oses():
     from elekloader.sdk.bounties import bounties
     dev = type('Dev', (), {'key': 'dt', 'name': 'DT'})()

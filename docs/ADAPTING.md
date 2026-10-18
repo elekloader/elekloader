@@ -180,31 +180,32 @@ mods' DSP code, and takes SPATIALIZER off both FX menus to do it
 |---|---|---|---|
 | `ev_dsp_rx` | DSP core 0, the head of every audio frame (2,756 a second), before anything reads the current RX block | DSP code, reached by `jsr`, ending in `rts` | the RX block is at `x:>$202`: 16 samples x 4 slots (2 input A, 3 input B, 0 and 1 C and D). Use `a`, `x1`, `r0`, `r1` and the condition codes; keep every other register. Subscribe with `subscribe_dsp` |
 
-### Take events on the Octatrack (takes 0.1)
+### Intercepts on the Octatrack (intercepts 0.1)
 
-`mods/takes-ot` is a companion beside core-ot 0.3.1 for places one mod at a
-time takes: MIDI notes on a listening track, the CHROMATIC keyboard,
-p-locks and knobs, the settings and the project file (19 events; the table
-is in mods/takes-ot/README.md). Modwerk's Octatrack base has the same
-events under the same names, so a record means the same thing on both.
+`mods/intercepts-ot` is a companion beside core-ot 0.3.1 for places in the
+firmware a mod intercepts, one mod at a time: MIDI notes on a listening
+track, the CHROMATIC keyboard, p-locks and knobs, the settings and the
+project file (19 events; the table is in mods/intercepts-ot/README.md).
+Modwerk's Octatrack base has the same events under the same names (its
+"take" events), so a record means the same thing on both.
 
-Instead of patching one of these sites, a mod requires takes and adds a
+Instead of patching one of these sites, a mod requires intercepts and adds a
 record `{claims, entry}` (8 bytes) to the event's table. The first record
 whose `claims` is 0 or returns nonzero for the call (`int claims(unsigned
-arg)`) takes the site: its `entry` runs with every register, the condition
+arg)`) intercepts it: its `entry` runs with every register, the condition
 codes and the stack as at the site, as a detour's `jmp` (a jmp event) or
 `jsr` (a jsr event) would have entered it, does what the site's stock
-instructions did, and goes back to stock itself. With no taker, or a taker
-whose entry is 0, stock runs.
+instructions did, and goes back to stock itself. When no record intercepts
+the call, or its entry is 0, stock runs.
 
 ```json
-"requires": ["core", "takes"],
+"requires": ["core", "intercepts"],
 "contribute": [{"to": "ev_knob_store", "order": 50, "data": "0000000000000000",
                 "relocs": [[4, "abs32", "sym:my_knob", 0]]}]
 ```
 
 A detour you already have converts unchanged: its label is the entry, and
-claims 0. `sdk.octabam --takes` does this for octabam's modules (4b).
+claims 0. `sdk.octabam --intercepts` does this for octabam's modules (4b).
 
 ### SRC machines (core 2.1, Digitakt mk1)
 
@@ -1621,25 +1622,27 @@ python -m elekloader.sdk.octabam --octabam octabam --stock OCTATRACK_OS1.40C.syx
   A remix that gives up another effect, or a DSP hook elsewhere, is refused
   with `--bus`.
 
-**On the take events** (`--takes`): a detour at one of the take events'
-sites (the converter's `TAKES`: mods/takes-ot's 19 events, "Take events on
-the Octatrack" above) leaves its site stock and adds the record `{0, the
-detour's label}` to the event's table instead. The stub enters the label as
-the detour's own `jmp` or `jsr` did, so its code runs unchanged; claims 0
-takes every call.
+**On the intercepts** (`--intercepts`): a detour at one of the intercepts'
+sites (the converter's `INTERCEPTS`: mods/intercepts-ot's 19 events,
+"Intercepts on the Octatrack" above) leaves its site stock and adds the
+record `{0, the detour's label}` to the event's table instead. The stub
+enters the label as the detour's own `jmp` or `jsr` did, so its code runs
+unchanged; claims 0 intercepts every call.
 - **Which detours.** The same kind and length as the event's site; any other
-  detour there is refused with `--takes`. Today: SCALE QUANTIZER's 17 (the
+  detour there is refused with `--intercepts`. Today: SCALE QUANTIZER's 17 (the
   CHROMATIC keyboard, its octave key and drawer, the p-lock and knob
   stores, the settings, the project defaults, load, line and write) and the
   SYNTH MACHINE's two (MIDI note on and off). The quantizer's `qz_octnum`
-  overlaps Modwerk's `ev_octave_number` site, which takes does not have, so
-  it stays a site.
-- **Versions.** Such a mod is versioned `<commit>-takes` (`-bus-takes` with
-  both) and requires takes: `"requires": ["core", "takes"]`.
-- **The check** links it with the take events (built from `mods/takes-ot`,
-  or `--takes-mod`) and proves, for each: the site is the event's `jmp` or
-  `jsr` to its stub, nop-padded as the detour was, and the event's table
-  holds `{0, the label}`. Every other byte is checked as without `--takes`.
+  overlaps Modwerk's `ev_octave_number` site, which intercepts does not
+  have, so it stays a site.
+- **Versions.** Such a mod is versioned `<commit>-intercepts`
+  (`-bus-intercepts` with both) and requires intercepts:
+  `"requires": ["core", "intercepts"]`.
+- **The check** links it with the intercepts (built from
+  `mods/intercepts-ot`, or `--intercepts-mod`) and proves, for each: the site
+  is the event's `jmp` or `jsr` to its stub, nop-padded as the detour was,
+  and the event's table holds `{0, the label}`. Every other byte is checked
+  as without `--intercepts`.
 
 What does not convert, and why:
 - **DSP code.** Modules with DSP code or an FX menu entry are out of scope,

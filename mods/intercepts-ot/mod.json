@@ -1,15 +1,15 @@
 {
- "id": "takes",
+ "id": "intercepts",
  "version": "0.1",
  "license": "GPL-2.0-or-later",
- "title": "takes",
+ "title": "intercepts",
  "category": "Framework",
  "author": "irpina",
- "description": "Places in the Octatrack's firmware that one mod at a time takes: MIDI notes on a listening track, the CHROMATIC keyboard, p-locks and knobs, the settings and the project file. A mod adds a record to the event instead of patching the place, so mods that need these places combine, and a record means what it means on Modwerk's Octatrack base, whose events these are. On its own it changes nothing the unit does.",
+ "description": "Places in the Octatrack's firmware that a mod intercepts, one mod at a time: MIDI notes on a listening track, the CHROMATIC keyboard, p-locks and knobs, the settings and the project file. A mod adds a record to the event instead of patching the place, so mods that need these places combine, and a record means what it means on Modwerk's Octatrack base, whose events these are. On its own it changes nothing the unit does.",
  "device": "octatrack",
  "os": "1.40C",
  "sources": [
-  "takes.s"
+  "intercepts.s"
  ],
  "collections": {
   "ev_midi_note_on": 8,
@@ -37,115 +37,115 @@
    "addr": "0x4000dfd4",
    "stock": "73107113b081661c",
    "op": "jmp",
-   "target": "take_ev_midi_note_off"
+   "target": "intercept_ev_midi_note_off"
   },
   {
    "addr": "0x4000e746",
    "stock": "721d2b812c00",
    "op": "jmp",
-   "target": "take_ev_midi_note_on"
+   "target": "intercept_ev_midi_note_on"
   },
   {
    "addr": "0x40010212",
    "stock": "4a39100b14ae",
    "op": "jsr",
-   "target": "take_ev_settings_sanitise"
+   "target": "intercept_ev_settings_sanitise"
   },
   {
    "addr": "0x40025ac2",
    "stock": "42b9100b14d4",
    "op": "jsr",
-   "target": "take_ev_project_defaults"
+   "target": "intercept_ev_project_defaults"
   },
   {
    "addr": "0x40044968",
    "stock": "7201b2b9460d16fc",
    "op": "jmp",
-   "target": "take_ev_keyboard_draw"
+   "target": "intercept_ev_keyboard_draw"
   },
   {
    "addr": "0x40045918",
    "stock": "7401b5b9460d16fc",
    "op": "jmp",
-   "target": "take_ev_octave_key"
+   "target": "intercept_ev_octave_key"
   },
   {
    "addr": "0x4004fbde",
    "stock": "73b02800200a",
    "op": "jmp",
-   "target": "take_ev_chromatic_release"
+   "target": "intercept_ev_chromatic_release"
   },
   {
    "addr": "0x4004fbfe",
    "stock": "4ab946c7dd26663e",
    "op": "jmp",
-   "target": "take_ev_chromatic_held"
+   "target": "intercept_ev_chromatic_held"
   },
   {
    "addr": "0x4004fc58",
    "stock": "45f2ac0471b9100b14cf",
    "op": "jsr",
-   "target": "take_ev_chromatic_pitch"
+   "target": "intercept_ev_chromatic_pitch"
   },
   {
    "addr": "0x4004fc94",
    "stock": "4ab946c7dd266716",
    "op": "jmp",
-   "target": "take_ev_chromatic_trig"
+   "target": "intercept_ev_chromatic_trig"
   },
   {
    "addr": "0x4004fce0",
    "stock": "4ab946c7dd266710",
    "op": "jmp",
-   "target": "take_ev_chromatic_record"
+   "target": "intercept_ev_chromatic_record"
   },
   {
    "addr": "0x4004fd06",
    "stock": "508f4a806d32",
    "op": "jmp",
-   "target": "take_ev_chromatic_recorded"
+   "target": "intercept_ev_chromatic_recorded"
   },
   {
    "addr": "0x4004fd20",
    "stock": "4fef00146018",
    "op": "jmp",
-   "target": "take_ev_chromatic_locked"
+   "target": "intercept_ev_chromatic_locked"
   },
   {
    "addr": "0x40050254",
    "stock": "2039460d16fc2200",
    "op": "jmp",
-   "target": "take_ev_chromatic_index"
+   "target": "intercept_ev_chromatic_index"
   },
   {
    "addr": "0x40050e60",
    "stock": "1384885973b9100b14cc",
    "op": "jsr",
-   "target": "take_ev_plock_store"
+   "target": "intercept_ev_plock_store"
   },
   {
    "addr": "0x40055170",
    "stock": "14821a82320e",
    "op": "jsr",
-   "target": "take_ev_knob_store"
+   "target": "intercept_ev_knob_store"
   },
   {
    "addr": "0x400866cc",
    "stock": "2c2f05c0202f05c4",
    "op": "jmp",
-   "target": "take_ev_project_load"
+   "target": "intercept_ev_project_load"
   },
   {
    "addr": "0x400867a2",
    "stock": "122f048f71017a23",
    "op": "jmp",
-   "target": "take_ev_project_line"
+   "target": "intercept_ev_project_line"
   },
   {
    "addr": "0x400888aa",
    "stock": "73398000004f2f01",
    "op": "jmp",
-   "target": "take_ev_project_write"
+   "target": "intercept_ev_project_write"
   }
  ],
  "requires": [

@@ -115,9 +115,9 @@ core.
   bus with the Octatrack's events; from 0.3 it reserves only the RAM the mods
   use, at most 10 MB. Beside it,
   [mods/dspbus-ot](../mods/dspbus-ot) is an optional bus for mods' DSP code,
-  and [mods/takes-ot](../mods/takes-ot) (takes, with 0.3.1) gives places one
-  mod at a time takes (MIDI notes, the CHROMATIC keyboard, locks and knobs,
-  the project file) to the mod whose record claims them, with Modwerk's
+  and [mods/intercepts-ot](../mods/intercepts-ot) (intercepts, with 0.3.1) gives
+  places a mod intercepts (MIDI notes, the CHROMATIC keyboard, locks and knobs,
+  the project file) to the one mod whose record claims each, with Modwerk's
   Octatrack base's events and names.
 - **Model:Cycles, Model:Samples** ([mods/core-mc](../mods/core-mc),
   [mods/core-ms](../mods/core-ms)): the shared core.s with the hook bus's
