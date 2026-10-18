@@ -175,7 +175,9 @@
           asks for. elekloader recognises each release by its hash.</li>
         <li><strong>The cross compiler,</strong> for a mod with code. On the Digitakt mk1 and the Digitone mk1 that is m68k
           binutils and gcc: on Debian or Ubuntu <code>apt install binutils-m68k-linux-gnu gcc-m68k-linux-gnu</code>; on
-          Windows, the same inside WSL. A mod that only changes a byte or two needs none.</li>
+          Windows, the same inside WSL; on a Mac, with Homebrew, <code>brew install m68k-elf-binutils m68k-elf-gcc</code>,
+          then <code>export ELEKLOADER_CROSS=m68k-elf-</code> (Homebrew's tools have that prefix). A mod that only
+          changes a byte or two needs none.</li>
         <li><strong>Optional:</strong> <a href="https://github.com/irpina/digiemu" rel="noreferrer" target="_blank">digiemu</a>,
           to run and check your build without a unit (<a href="#contribute/test">Test before you flash</a>).</li>
       </ul>

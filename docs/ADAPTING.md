@@ -28,7 +28,9 @@ monolithic build; section 4 says how to go from A to B.
 - For code (Path B with sources): the device's cross toolchain, from its
   profile's `toolchain`. For the Digitakt mk1 that is m68k binutils and
   gcc: on Debian or Ubuntu, `apt install binutils-m68k-linux-gnu
-  gcc-m68k-linux-gnu`; on Windows, inside WSL. Set `ELEKLOADER_CROSS` if
+  gcc-m68k-linux-gnu`; on Windows, inside WSL; on a Mac, with Homebrew,
+  `brew install m68k-elf-binutils m68k-elf-gcc`, then
+  `export ELEKLOADER_CROSS=m68k-elf-`. Set `ELEKLOADER_CROSS` whenever
   your tools have another prefix.
 - For linkable mods: the **core** mod for your device (`core-*.elemod`).
   It owns the shared hook sites, copies every mod's code into RAM at boot,
