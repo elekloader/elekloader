@@ -82,7 +82,10 @@ core.
   machines list, where mods add SRC machines. From 3.0, with
   [machine-pages](../mods/machine-pages), a machine describes its own SRC
   page, so machine mods combine ([ADAPTING.md](ADAPTING.md), "Machine
-  pages").
+  pages"). From 4.1 the master output (`ev_render_master`), pages of the
+  mods' own among the master pages (`core_mpages`) and rows in SETTINGS >
+  GLOBAL FX/MIX (`ev_fxmix`), so master effects combine
+  ([ADAPTING.md](ADAPTING.md), "The master output and the master pages").
 - **Digitone mk1** ([mods/core-dn1](../mods/core-dn1)): the same hook bus,
   plus a voice note-on event, parameter slots, mod pages and project data
   (2.1), and the Mod Menu (2.2, a grid of icons from 2.3):

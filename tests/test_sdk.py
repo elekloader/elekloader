@@ -148,18 +148,34 @@ FW = ['fw_active_track', 'fw_amp_env', 'fw_bitmap_vt', 'fw_blit', 'fw_fillrect',
       'fw_voice_start', 'fw_voice_vel']
 
 
+# What core 4.1 (Digitakt mk1) adds, in master.s after everything 4.0 has: the master output
+# (ev_render_master), the SETTINGS > GLOBAL FX/MIX rows (ev_fxmix) and the master pages
+# (core_mpages: four pointers of the master view's vtables).
+CORE_41_SITES = ['core_render_master', 'core_fxmix', 'core_mview_key', 'core_mview_draw',
+                 'core_mview_title', 'core_mview_enc']
+CORE_41_TABLES = ['ev_render_master', 'core_mpages', 'ev_fxmix']
+CORE_41_EXPORTS = ['core_mpage_shown', 'core_mview', 'core_mview_draws', 'fw_invalidate']
+
+
+def site_targets(sites):
+    """The routine each built site calls or points to (its relocation's symbol)."""
+    return [[r[2][4:] for r in x.get('relocs', []) if r[2].startswith('sym:')][-1:] for x in sites]
+
+
 def test_core_builds_and_lints():
-    """core (3.0 and 4.0, the same code): the hook bus (core.s, 8 sites), the SRC machine slots
+    """core (3.0 and 4.0, the same code, and 4.1): the hook bus (core.s, 8 sites), the SRC machine slots
     (machines.s, Digitakt mk1 only: 31 sites and the table core_machines),
-    the machine page reader (core_machine_ui) and the firmware locations
-    (fw.s: absolute exports, no site)."""
+    the machine page reader (core_machine_ui), the firmware locations
+    (fw.s: absolute exports, no site) and from 4.1 the master output and pages (master.s: 6 sites
+    and three tables)."""
     path = built_core()
     with open(path) as fh:
         doc = json.load(fh)
     assert doc['id'] == 'core' and doc['version'] == DT_VERSION
-    assert '.boot' in doc['sections'] and len(doc['sites']) == 39
-    assert sorted(doc['collections']) == sorted(HOOK_BUS + ['core_machines'])
-    assert set(FW + ['core_machine', 'core_machine_ui']) <= set(doc['exports'])
+    assert '.boot' in doc['sections'] and len(doc['sites']) == 39 + len(CORE_41_SITES)
+    assert site_targets(doc['sites'][39:]) == [[x] for x in CORE_41_SITES]
+    assert sorted(doc['collections']) == sorted(HOOK_BUS + ['core_machines'] + CORE_41_TABLES)
+    assert set(FW + CORE_41_EXPORTS + ['core_machine', 'core_machine_ui']) <= set(doc['exports'])
     assert all(doc['symbols'][x][0] == 'abs' for x in FW)
     rc, r = lint_json(path, '--stock', stock())
     assert rc == 0 and r['link']['order'][0].startswith('core')
@@ -184,11 +200,10 @@ def check_superset(old_path, new_path, st):
         new = json.load(fh)
     assert old['version'] == '2.1' and new['version'] == DT_VERSION
     assert old['target'] == new['target']
-    assert new['sites'] == old['sites'] and new['collections'] == old['collections']
+    check_41_adds(old, new)
     assert new['contribute'] == old['contribute'] and new['resources'] == old['resources']
     assert set(old['exports']) <= set(new['exports'])
     assert all(new['symbols'][k] == v for k, v in old['symbols'].items())
-    assert old['sections']['.bss'] == new['sections']['.bss']
     stock_, dev, _rel = formats.load(st)
     image = formats.main_image(stock_, dev)
     m_old, m_new = link.Mod2(old, 'old'), link.Mod2(new, 'new')
@@ -196,6 +211,41 @@ def check_superset(old_path, new_path, st):
     run_new = elemod.parts_bytes(m_new.sections['.run']['parts'], image, dev)
     assert run_new[:len(run_old)] == run_old and len(run_new) > len(run_old)
     assert [r for r in new['relocs'] if r[1] < len(run_old) or r[0] != '.run'] == old['relocs']
+
+
+def check_41_adds(old, new):
+    """What 4.1 adds to a core before it (2.1, 3.0, 4.0: the same sites and tables): its sites
+    after the old ones, its tables, and its words of .bss after the old .bss."""
+    n = len(old['sites'])
+    assert new['sites'][:n] == old['sites']
+    assert site_targets(new['sites'][n:]) == [[x] for x in CORE_41_SITES]
+    assert new['collections'] == dict(old['collections'], **{c: {'entry': 4} for c in CORE_41_TABLES})
+    ob, nb = old['sections']['.bss'], new['sections']['.bss']
+    assert ob['align'] == nb['align'] and nb['size'] == ob['size'] + 8, (ob, nb)
+
+
+CORE_40 = os.environ.get('ELEKLOADER_CORE_40', '')
+
+
+def test_digitakt_core_4_1_is_4_0_and_more():
+    """core 4.1 is 4.0 and the master output and pages: 4.0's sites with the same bytes, its
+    tables and exports, every symbol where it was, 4.0's .run at the start of 4.1's."""
+    if not CORE_40 or not os.path.exists(CORE_40):
+        raise Skip('missing ELEKLOADER_CORE_40 (the released core-4.0.elemod)')
+    new_path = built_core()
+    with open(CORE_40) as fh:
+        old = json.load(fh)
+    with open(new_path) as fh:
+        new = json.load(fh)
+    assert old['version'] == '4.0' and new['version'] == DT_VERSION
+    check_41_adds(old, new)
+    assert sorted(set(new['exports']) - set(old['exports'])) == sorted(CORE_41_EXPORTS + CORE_41_SITES)
+    assert all(new['symbols'][k] == v for k, v in old['symbols'].items())
+    stock_, dev, _rel = formats.load(stock())
+    image = formats.main_image(stock_, dev)
+    run_old = elemod.parts_bytes(link.Mod2(old, 'old').sections['.run']['parts'], image, dev)
+    run_new = elemod.parts_bytes(link.Mod2(new, 'new').sections['.run']['parts'], image, dev)
+    assert run_new[:len(run_old)] == run_old and len(run_new) > len(run_old)
 
 
 def test_core_3_is_core_2_1_and_more():
@@ -393,6 +443,34 @@ def test_the_sine_machine_example_builds_for_each_os_unchanged():
         rc, r = lint_json(path, '--stock', stock(), '--with', built_core(),
                           '--with', machine_pages(stock(), tmp))
         assert rc == 0, r['problems']
+        if STOCK_154 and os.path.exists(STOCK_154):
+            path4, m4 = build.build(src, STOCK_154, tmp)
+            images = []
+            for st, mod in ((stock(), m), (STOCK_154, m4)):
+                s, dev, _rel = formats.load(st)
+                images.append(bytes(elemod.parts_bytes(mod.sections['.run']['parts'],
+                                                       formats.main_image(s, dev), dev)))
+            assert images[0] == images[1] and m.relocs == m4.relocs
+
+
+def test_the_master_mono_example_builds_for_each_os_unchanged():
+    """examples/master-mono, on core 4.1's master output and master pages: it
+    patches no site, names no firmware address (its 1.54 port is empty and
+    both builds carry the same code), links with core 4.1 and is refused
+    with 4.0, which has neither table."""
+    tc = devices.devices()[0].toolchain
+    if not shutil.which(os.environ.get('ELEKLOADER_CROSS', tc['prefix']) + 'gcc'):
+        raise Skip('no m68k cross compiler')
+    src = os.path.join(ROOT, 'examples', 'master-mono')
+    with tempfile.TemporaryDirectory() as tmp:
+        path, m = build.build(src, stock(), tmp)
+        assert not m.sites and m.needs_core == '4.1'
+        assert sorted(c['to'] for c in m.contribute) == ['core_mpages', 'ev_render_master']
+        rc, r = lint_json(path, '--stock', stock(), '--with', built_core())
+        assert rc == 0, r['problems']
+        if CORE_40 and os.path.exists(CORE_40):
+            rc, r = lint_json(path, '--stock', stock(), '--with', CORE_40)
+            assert rc == 1, r
         if STOCK_154 and os.path.exists(STOCK_154):
             path4, m4 = build.build(src, STOCK_154, tmp)
             images = []

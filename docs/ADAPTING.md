@@ -1054,6 +1054,50 @@ the OS compares against) and the ring at 0x47C00000. No instruction operand
 points into it, and in an emulator run nothing writes there. As on the
 Digitone, a build takes 4.0, the newest core, for every selection.
 
+### The master output and the master pages (core 4.1, Digitakt mk1)
+
+Mods that work on the whole mix (a master EQ, a master effect suite) used to
+patch the same places: the instruction that hands the master pair to the
+outputs (0x400721e6 in 1.53 and 1.54) and the master view's draw, keys,
+knobs and title in its vtables. Only one of them could be in a build. Core
+4.1 owns those places once and offers them to any number of mods:
+
+- **`ev_render_master`**: `void f(int32_t *pair)`, once a block in the
+  render (interrupt level), with the block's master pair, 32 frames of
+  {L, R} 32-bit samples, before it goes to the main outputs, the headphones
+  and the 12-channel bus the USB stream is built from. A handler changes it
+  in place, and the scope, spectrum and tuner show the change. Handlers run
+  by their `order`, each on what the one before left. With none, core runs
+  four instructions more than the stock (the call, a test, a branch and
+  the return).
+- **`core_mpages`**: pages of the master view (FUNC+LFO steps through
+  them). Contribute a pointer to a `struct core_mpage` (`core3.h`): the stock
+  page it follows (11 COMP, 12 internal mixer, 13 external mixer; any other
+  value puts it last), its short name and title, and `draw`, `key` and
+  `enc` (any may be 0). Core puts the page in the view's list, as kind 0
+  (the firmware's "None" page, which has no knobs), and while it is shown
+  gives the title bar and the pop-up its names ("Master EQ (2/4)") and
+  calls `draw(view, bmp)` after the stock draw (the title bar, and below
+  it kind 0's eight empty knob boxes, which the page clears where it
+  draws: `fw_fillrect(bmp, 0, 0, 127, 52, 0)` clears them all),
+  `key(view, event)` and
+  `enc(view, event)` before the stock handlers: nonzero takes the event.
+  Pages that follow the same stock page keep their `order`. A mod that
+  reads keys or knobs itself (`ev_key`, `ev_enc`) asks
+  `core_mpage_shown(view)` which page is up; `core_mview` is the master
+  view and `core_mview_draws` counts its draws, so a tick that sees the
+  count move knows the view is on the screen. `fw_invalidate(view)` has a
+  page drawn again after a change.
+- **`ev_fxmix`**: `void f(void *menu)` when SETTINGS > GLOBAL FX/MIX is
+  built, after its last row: add rows with `core_additem(menu, row)`, as
+  `ev_settings` handlers do.
+
+The descriptor lives in `.data` (core writes its last two words, the view
+and the page's place in its list). The smallest mod that uses all of it is
+[examples/master-mono](../examples/master-mono): a page after the internal
+mixer whose knob A sends the outputs stereo, mono or swapped. Digi EQ and
+Tone+FX are built on it, and combine.
+
 ### Key LEDs and each block's sound parameters (core-dn1 3.3, Digitone mk1)
 
 Two events for mods that perform over the stock pages rather than replace

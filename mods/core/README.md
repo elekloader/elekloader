@@ -4,7 +4,7 @@ The boot copier and the hook bus for Digitakt mk1 OS 1.53 and 1.54. Every
 set of linkable (format 2) mods needs exactly one core. On its own it
 changes nothing the unit does.
 
-`core.s`, `settings.s`, `render.s`, `machines.s` and `fw.s` have no addresses:
+`core.s`, `settings.s`, `render.s`, `machines.s`, `fw.s` and `master.s` have no addresses:
 `mod.json` gives them (`defsym`), with the sites, for 1.53, and again for
 1.54 under `ports`. The stock file you build with picks them.
 [../core-dn1](../core-dn1) builds the same `core.s`, `settings.s` and
@@ -45,19 +45,35 @@ are 1.53's.
   128 KB (the profile's `core_ddr`; nothing in core's code changes for it).
   A builder takes the newest core, 4.0, for every selection.
   [docs/ADAPTING.md](../../docs/ADAPTING.md), "The mods' RAM".
+- **4.1: core 4.0 and the master output** (Digitakt mk1, `master.s`, last
+  in `sources`, so 4.0's code and symbols keep their places). Six sites
+  more, which mods that work on the whole mix hooked for themselves:
+  - `ev_render_master` (0x400721e6): the block's master pair, before it
+    goes to the outputs and the USB stream;
+  - `core_mpages`: pages of the master view (FUNC+LFO), through its draw,
+    keys, knobs and title (four pointers in its vtables), with
+    `core_mpage_shown`, `core_mview` and `core_mview_draws`;
+  - `ev_fxmix` (0x40044acc): rows in SETTINGS > GLOBAL FX/MIX;
+  - and `fw_invalidate(view)`.
+
+  With no subscriber the unit is stock. Digi EQ and Tone+FX, which took
+  the same places, combine on it; [examples/master-mono](../../examples/master-mono)
+  is the smallest mod that uses it. [docs/ADAPTING.md](../../docs/ADAPTING.md),
+  "The master output and the master pages".
 
 Build it with the SDK (it needs m68k binutils):
 
 ```bash
-python -m elekloader.sdk.build mods/core --stock Digitakt_OS1.53.syx      # out/core-4.0.elemod
-python -m elekloader.sdk.build mods/core --stock Digitakt_OS1.54.syx      # out/core-4.0-os1.54.elemod
-python -m elekloader.lint mods/core/out/core-4.0-os1.54.elemod --stock Digitakt_OS1.54.syx
+python -m elekloader.sdk.build mods/core --stock Digitakt_OS1.53.syx      # out/core-4.1.elemod
+python -m elekloader.sdk.build mods/core --stock Digitakt_OS1.54.syx      # out/core-4.1-os1.54.elemod
+python -m elekloader.lint mods/core/out/core-4.1-os1.54.elemod --stock Digitakt_OS1.54.syx
 ```
 
 Core 3.0's files are on the
 [core-v3.0](https://github.com/irpina/elekloader/releases/tag/core-v3.0)
 pre-release and in the mod shop; 2.1's are in the latest release (v0.4.0);
-4.0 is on main, not released yet.
+4.0's are on the [core-v4.0](https://github.com/irpina/elekloader/releases/tag/core-v4.0)
+pre-release; 4.1 is on main, not released yet.
 
 The 1.54 port is the same core: the same code, sites and sections, built
 with 1.54's addresses. Of its 39 sites, 38 are where 1.53 has them, and
