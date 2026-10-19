@@ -74,3 +74,11 @@
         .balign 4
         .long   \after, \short, \title, \draw, \key, \enc, 0, 0, \clear
         .endm
+
+| Core 4.2: core_audio's owner record (core3.h, struct core_audio_owner) is
+| three longs: on, render, flags; core_menu's descriptor four: name, open,
+| CORE_MENU_ICON, icon. The line core lends an owner: CORE_LEND_LO-HI.
+        .equ    CORE_AUDIO_LEND, 4
+        .equ    CORE_LEND_LO,   0x47C00000
+        .equ    CORE_LEND_HI,   0x48000000
+        .equ    CORE_MENU_ICON, 0x49434F4E      | "ICON"

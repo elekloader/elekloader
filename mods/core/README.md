@@ -4,7 +4,8 @@ The boot copier and the hook bus for Digitakt mk1 OS 1.53 and 1.54. Every
 set of linkable (format 2) mods needs exactly one core. On its own it
 changes nothing the unit does.
 
-`core.s`, `settings.s`, `render.s`, `machines.s`, `fw.s` and `master.s` have no addresses:
+`core.s`, `settings.s`, `render.s`, `machines.s`, `fw.s`, `master.s`, `audio.s` and `menu.s` have no
+addresses:
 `mod.json` gives them (`defsym`), with the sites, for 1.53, and again for
 1.54 under `ports`. The stock file you build with picks them.
 [../core-dn1](../core-dn1) builds the same `core.s`, `settings.s` and
@@ -62,20 +63,41 @@ are 1.53's.
   the same places, combine on it; [examples/master-mono](../../examples/master-mono)
   is the smallest mod that uses it. [docs/ADAPTING.md](../../docs/ADAPTING.md),
   "The master output and the master pages".
+- **4.2: core 4.1, exclusive audio and the Mod Menu** (Digitakt mk1,
+  `audio.s` and `menu.s`, after `master.s` in `sources`, so 4.1's code and
+  symbols keep their places). One site more and two tables, their state in
+  `.run`:
+  - `core_audio` (`audio.s`): a mod that wants the whole audio contributes
+    an owner record, as on the Digitone. While one is on, the Digitakt's
+    engine stops (0x40077e94, the instruction that starts it: the render
+    skips to just past the mixer's call, so the master stage and
+    `ev_render_master` do not run either), and the owner's `render` turns
+    the inputs into the output; the sequencer, MIDI, USB and the sampler
+    run on. Core lends the owner the delay's 4 MB line meanwhile (the
+    profile's `lend` area), clearing it before and after;
+  - `core_menu` (`menu.s`): core-dn1's Mod Menu, its grid of tiles, shown
+    by `core_menu_show(track)` (machine-pages 1.7's command rows, fxkit's
+    PEDALS); its key, knob, tick and draw handlers are core's own
+    subscriptions;
+  - `fw_tempo`, `fw_timeline` and `fw_transport` as exports.
+
+  With no owner on and the menu closed, the unit is stock.
+  [docs/ADAPTING.md](../../docs/ADAPTING.md), "Exclusive audio and the Mod
+  Menu (core 4.2, Digitakt mk1)"; `examples/dt-thru` is the smallest owner.
 
 Build it with the SDK (it needs m68k binutils):
 
 ```bash
-python -m elekloader.sdk.build mods/core --stock Digitakt_OS1.53.syx      # out/core-4.1.elemod
-python -m elekloader.sdk.build mods/core --stock Digitakt_OS1.54.syx      # out/core-4.1-os1.54.elemod
-python -m elekloader.lint mods/core/out/core-4.1-os1.54.elemod --stock Digitakt_OS1.54.syx
+python -m elekloader.sdk.build mods/core --stock Digitakt_OS1.53.syx      # out/core-4.2.elemod
+python -m elekloader.sdk.build mods/core --stock Digitakt_OS1.54.syx      # out/core-4.2-os1.54.elemod
+python -m elekloader.lint mods/core/out/core-4.2-os1.54.elemod --stock Digitakt_OS1.54.syx
 ```
 
 Core 3.0's files are on the
 [core-v3.0](https://github.com/irpina/elekloader/releases/tag/core-v3.0)
 pre-release and in the mod shop; 2.1's are in the latest release (v0.4.0);
 4.0's are on the [core-v4.0](https://github.com/irpina/elekloader/releases/tag/core-v4.0)
-pre-release; 4.1 is on main, not released yet.
+pre-release; 4.1 and 4.2 are on main, not released yet.
 
 The 1.54 port is the same core: the same code, sites and sections, built
 with 1.54's addresses. Of its 39 sites, 38 are where 1.53 has them, and
@@ -109,3 +131,20 @@ from the silent end; NEIGHBOR 0.6 on 3.0 against 0.6 on 2.1, through its
 menu, page and LFO page: every screen and the audio identical. On a unit
 (OS 1.54), with machine-pages and every machine mod built for it, as
 [../machine-pages](../machine-pages) describes: everything worked.
+
+4.2, on 1.53 and on 1.54: `tests/test_sdk.py` checks it against the
+released 2.1 and 4.0 and against a 4.1 built from main
+(`ELEKLOADER_CORE_41`): every older site with its bytes, table,
+contribution and symbol where it was, the older `.run` at the start of
+4.2's and 4.1's `.bss`, then one site, two tables and the Mod Menu's
+four handlers. The shop's Digitakt mods, alone and in pairs (105
+selections on 1.53, 91 on 1.54), link or are refused with 4.2 exactly as
+with 4.1. The TypeScript build is byte-identical to Python's in 17
+builds and refusals (the two pedal builds, THRU, the lent line refused
+beside 2.1 and 4.1). In digikit's emulator: fwcheck of 4.2 alone against
+stock passes every stage, its nine screens are the stock's and it
+differs where released core 4.0 does (a boot frame, and on 1.53 one 100
+ms audio window); so do the two pedal builds; with fxkit and the pedals,
+each pedal from PEDALS gets the audio and the cleared line, plays the
+inputs and gives both back on NO, and the stock render (61% of a block)
+comes back after it (`mods/fxkit-dt1`, "Checked"). Not on a unit.

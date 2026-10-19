@@ -1,0 +1,25 @@
+{
+ "id": "dtthru", "version": "1.0",
+ "license": "GPL-2.0-or-later",
+ "title": "THRU (Digitakt exclusive audio)", "category": "Sound", "author": "irpina",
+ "description": "THRU, the smallest exclusive-audio mod for the Digitakt mk1: THRU in core's Mod Menu gives it the audio (the Digitakt's engine stops), and the audio inputs go straight to the output at knob A's level, with an echo at knob B's in the memory core lends meanwhile; NO gives the audio back. A template for a mod that wants the whole audio engine: it names no firmware address, so its OS 1.54 port is empty (docs/ADAPTING.md, \"Exclusive audio and the Mod Menu (core 4.2, Digitakt mk1)\"). Needs core 4.2.",
+ "device": "digitakt-mk1", "os": "1.53",
+ "ports": {"1.54": {}},
+ "sources": ["thru.c"],
+ "subscribe": [
+  {"event": "ev_key", "fn": "thru_key", "order": 50},
+  {"event": "ev_enc", "fn": "thru_enc", "order": 50},
+  {"event": "ev_draw", "fn": "thru_draw", "order": 50}
+ ],
+ "contribute": [
+  {"to": "core_menu", "order": 50, "data": "00000000",
+   "relocs": [[0, "abs32", "sym:thru_menu", 0]]},
+  {"to": "core_audio", "order": 50, "data": "00000000",
+   "relocs": [[0, "abs32", "sym:thru_owner", 0]]}
+ ],
+ "resources": {
+  "core": "4.2",
+  "regions": [{"name": "THRU's echo", "lo": "0x47C00000", "hi": "0x47C0BB80"}]
+ },
+ "requires": ["core"]
+}

@@ -181,4 +181,53 @@ extern struct core_mpage *core_mpage_shown(void *view);
 extern void *volatile core_mview;
 extern volatile uint32_t core_mview_draws;
 
+/* ---- core 4.2: the sequencer's time (say "resources": {"core": "4.2"}) ----------------------------- */
+extern volatile int32_t fw_tempo;               /* the tempo x 120 (87.0 BPM: 10440), as the sequencer runs it */
+extern volatile uint32_t fw_timeline;           /* 5,400,000 units a 16th; the render moves it twice the tempo a block */
+extern volatile uint32_t fw_transport;          /* 0 stopped, 1 playing */
+
+/* ---- core 4.2: exclusive audio (core_audio) and the memory it lends -------------------------------- */
+/* A mod that wants the audio contributes a pointer to one of these to the table core_audio. A build may hold
+ * several: each block core takes the first record whose on is set (the table's order). The Digitakt renders
+ * everything on one CPU, so while there is an owner its engine stops: the sound of the tracks, the filters, the
+ * delay, reverb and compressor, and the mixer with its master stage (ev_render_master does not run meanwhile). The
+ * sequencer, MIDI, USB and the sampler go on (the MIDI tracks keep playing, and the
+ * sampler is handed the input and, as the main mix, what the owner plays). render(out, in) gets the block's input,
+ * 32 frames L,R in Q1.31, and writes all 64 words of out, 32 frames L,R in Q1.31, in the input's polarity: core
+ * sends them to the codec (as the stock's mixer would the inputs) and to USB's main pair. Interrupt level, inside the
+ * render: keep it short, and keep MACSR as it was if the EMAC is used. Set and clear on from the UI task.
+ * The memory: while a record has the audio, core lends it the delay's line, CORE_LEND_LO to CORE_LEND_HI (4 MB, a
+ * region its mod claims in the profile's 'lend' area: the regions of several such mods may overlap there). Core
+ * clears the line before it hands it over and again after the owner lets go, a part a block (about 85 ms each way,
+ * the output silent meanwhile); core_audio_live names the record that has it, from the block its render first runs
+ * to the moment on is cleared. A mod touches the line only while core_audio_live is its record. */
+#define CORE_AUDIO_LEND         4u              /* core_audio_caps: the line is lent */
+#define CORE_LEND_LO            0x47C00000u
+#define CORE_LEND_HI            0x48000000u
+extern const uint32_t core_audio_caps;
+extern void *volatile core_audio_live;          /* the record that has the audio and the line, or 0 */
+struct core_audio_owner {
+    volatile int32_t on;            /* +0 nonzero: this mod wants the audio */
+    void (*render)(int32_t *out, const int32_t *in);    /* +4 each block it has it */
+    uint32_t flags;                 /* +8 0 */
+} __attribute__((aligned(4)));
+
+/* ---- core 4.2: the Mod Menu (core_menu), core-dn1's on the Digitakt --------------------------------- */
+#define CORE_MENU_ICON  0x49434F4Eu /* "ICON" */
+struct core_menu_item {             /* core_menu: the Mod Menu's entries */
+    const char *name;               /* +0  its label, 14 characters */
+    void (*open)(void *brain, void *event, int32_t track);  /* +4 picked */
+    uint32_t tag;                   /* +8  CORE_MENU_ICON when an icon follows */
+    const uint16_t *icon;           /* +12 -> its icon, 16 rows of 16 pixels, the top row first and bit 15 the left
+                                       pixel; 0 for core's own */
+} __attribute__((aligned(4)));
+/* Show the Mod Menu: core_menu's entries from the root, at the entry it had (machine-pages' PEDALS row in the machine
+ * menu calls it). The UI task. track: what the entries' open() get. */
+extern void core_menu_show(int32_t track);
+/* From an entry's open(), show another list in the same grid (a submenu): entries as core_menu's, ending in 0; sel:
+ * the one to select first; a pick calls pick(brain, event, track, index) in place of the entry's open(), the menu
+ * closed first (so pick may open another list). */
+extern void core_menu_open(const void *const *list, int32_t sel,
+                           void (*pick)(void *brain, void *event, int32_t track, int32_t index));
+
 #endif

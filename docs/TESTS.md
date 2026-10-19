@@ -116,7 +116,10 @@ More inputs some suites take:
 - `ELEKLOADER_DN_SYX` and `ELEKLOADER_DN_SYX_144` (the Digitone's 1.43 and
   1.44 files) for test_sdk's Digitone core and its 1.44 port;
   `ELEKLOADER_CORE_21` (a released `core-2.1.elemod`) for its core 3.0
-  checks.
+  checks; `ELEKLOADER_CORE_40` (the released `core-4.0.elemod`) and
+  `ELEKLOADER_CORE_41` (a `core-4.1.elemod` built from main before 4.2, with
+  its `-os1.54` file beside it) for the Digitakt mk1 core's checks against
+  4.0 and 4.1.
 - `ELEKLOADER_DSP_ASM` (octabam's `dsp_asm`) for test_octatrack's and
   test_octabam's DSP code.
 - `ELEKLOADER_OT_EMU` (octabam's built `ot_emu`; or `ELEKLOADER_OCTABAM`, a
