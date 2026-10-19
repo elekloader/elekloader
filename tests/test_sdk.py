@@ -20,6 +20,10 @@ missing is skipped, not passed:
                         core-dn1-v3.2 pre-release), with
                         core-dn1-3.2-os1.44.elemod beside it: core-dn1 3.4
                         must keep all of it too
+  ELEKLOADER_CORE_DN1_40, ELEKLOADER_CORE_DN1_41  optional: the released
+                        core-dn1-4.0.elemod and core-dn1-4.1.elemod, with
+                        their -os1.44 files beside them, which the newest
+                        must keep too
 Building mods/core or the example also needs the cross toolchain
 (m68k-linux-gnu-as, -gcc and -ld).
 """
@@ -457,8 +461,8 @@ def test_digitone_core_builds_and_links():
         # each of its labels where core 2.1 has it.
         assert sorted(dn['build']['sources']) == ['audio.s', 'block.s', 'core.s', 'fw.s', 'leds.s',
                                                   'menu.s', 'midi.s', 'pages.s', 'params.s',
-                                                  'projdata.s', 'queue.s', 'render.s', 'settings.s',
-                                                  'voice.s', 'voices.s']
+                                                  'projdata.s', 'queue.s', 'render.s', 'rows.s',
+                                                  'settings.s', 'voice.s', 'voices.s']
         assert dn['build']['sources']['core.s'] == dt['build']['sources']['core.s']
         placed = {k: v for k, v in dn['symbols'].items() if v[0] != 'abs'}
         shared = {k: v for k, v in placed.items() if k in dt['symbols']}
@@ -500,6 +504,7 @@ FW_DN = ['fw_active_track', 'fw_blit', 'fw_ev_alloc', 'fw_ev_free', 'fw_ev_queue
          'fw_memcpy', 'fw_memset', 'fw_memchr', 'fw_strcmp', 'fw_strncmp', 'fw_strchr', 'fw_strncpy', 'fw_crc32',
          '__ashldi3', '__lshrdi3', '__ashrdi3', 'fw_textbox', 'fw_transport', 'fw_pattern', 'fw_project']
 CORE_DN41 = ['core_note_queue']   # 4.1's
+CORE_DN411 = ['core_row_add', 'core_row_new']   # 4.1.1's: the SETTINGS rows' storage
 CORE_DN3 = ['core_note_queue', 'core_audio_caps', 'core_key_leds', 'core_menu_open', 'core_midi_cc', 'core_midi_pc', 'core_param_short',
             'core_param_ui_make', 'core_render_master', 'core_render_params', 'core_render_voices', 'core_sound_set',
             'core_voices_gate']
@@ -512,7 +517,8 @@ def check_dn_superset(old_path, new_path):
     exclusive audio and the MIDI CCs (3.2: three sites, two tables), the
     key LEDs and the block's parameters (3.3: two sites, two tables), their
     calls and 3.3's firmware exports, the program changes (4.0: a site,
-    a table) and the note queue (4.1: a site, a table)."""
+    a table), the note queue (4.1: a site, a table) and the rows' storage
+    (4.1.1: two routines)."""
     with open(old_path) as fh:
         old = json.load(fh)
     with open(new_path) as fh:
@@ -526,7 +532,7 @@ def check_dn_superset(old_path, new_path):
         'core_audio', 'core_param_override', 'ev_key_leds', 'ev_midi_cc', 'ev_midi_pc', 'ev_note_queue',
         'ev_render_params', 'ev_render_voices']
     assert all(new['collections'][k] == v for k, v in old['collections'].items())
-    assert sorted(set(new['exports']) - set(old['exports'])) == sorted(CORE_DN3 + FW_DN)
+    assert sorted(set(new['exports']) - set(old['exports'])) == sorted(CORE_DN3 + FW_DN + CORE_DN411)
     assert all(new['symbols'][k][0] == v[0] for k, v in old['symbols'].items())
 
 
@@ -617,8 +623,9 @@ def check_dn_32(old_path, new_path):
     adds 3.3's (the key LEDs and the block's parameters: two sites, two
     tables, their calls and the firmware exports), 4.0's insert
     audio (a flag and core_audio_caps, with no site) and program changes (a
-    site and a table) (its bigger area is the profile's, not the core's), and
-    4.1's note queue (a site and a table)."""
+    site and a table) (its bigger area is the profile's, not the core's),
+    4.1's note queue (a site and a table) and 4.1.1's rows' storage (two
+    routines)."""
     with open(old_path) as fh:
         old = json.load(fh)
     with open(new_path) as fh:
@@ -631,7 +638,7 @@ def check_dn_32(old_path, new_path):
     assert all(new['collections'][k] == v for k, v in old['collections'].items())
     assert sorted(set(new['exports']) - set(old['exports'])) == sorted(DN33_EXPORTS + ['core_audio_caps',
                                                                                      'core_midi_pc']
-                                                                       + CORE_DN41)
+                                                                       + CORE_DN41 + CORE_DN411)
 
     def what(d):
         return [(s['addr'], s['len'], s['kind'], s['new'], s.get('relocs')) for s in d['sites']]
@@ -656,7 +663,8 @@ CORE_DN40 = os.environ.get('ELEKLOADER_CORE_DN1_40', '')
 def check_dn_40(old_path, new_path):
     """core-dn1 4.1 keeps all of 4.0: its sites, tables, contributions, resources
     and exports, every symbol of 4.0's in the same section; it adds the note
-    queue (a site at the queue's entry, the table ev_note_queue)."""
+    queue (a site at the queue's entry, the table ev_note_queue), and 4.1.1
+    the rows' storage (two routines)."""
     with open(old_path) as fh:
         old = json.load(fh)
     with open(new_path) as fh:
@@ -666,7 +674,7 @@ def check_dn_40(old_path, new_path):
         assert new[k] == old[k], k
     assert sorted(set(new['collections']) - set(old['collections'])) == ['ev_note_queue']
     assert all(new['collections'][k] == v for k, v in old['collections'].items())
-    assert sorted(set(new['exports']) - set(old['exports'])) == sorted(CORE_DN41)
+    assert sorted(set(new['exports']) - set(old['exports'])) == sorted(CORE_DN41 + CORE_DN411)
 
     def what(d):
         return [(s['addr'], s['len'], s['kind'], s['new'], s.get('relocs')) for s in d['sites']]
@@ -683,6 +691,39 @@ def test_digitone_core_4_1_is_4_0_and_more():
         if DN_STOCK_144 and os.path.exists(DN_STOCK_144) and os.path.exists(other):
             path4, _m = build.build(os.path.join(ROOT, 'mods', 'core-dn1'), DN_STOCK_144, tmp)
             check_dn_40(other, path4)
+
+
+CORE_DN41_REL = os.environ.get('ELEKLOADER_CORE_DN1_41', '')
+
+
+def check_dn_41(old_path, new_path):
+    """core-dn1 4.1.1 is 4.1 with the SETTINGS rows kept off the heap: the same
+    sites, tables, contributions and resources, every symbol of 4.1's in the
+    same section, and core_additem where it was; it adds core_row_new and
+    core_row_add (rows.s) and their row pool in .bss."""
+    with open(old_path) as fh:
+        old = json.load(fh)
+    with open(new_path) as fh:
+        new = json.load(fh)
+    assert old['version'] == '4.1' and new['version'] == DN_VERSION
+    for k in ('target', 'contribute', 'resources', 'collections', 'sites'):
+        assert new[k] == old[k], k
+    assert sorted(set(new['exports']) - set(old['exports'])) == sorted(CORE_DN411)
+    assert all(new['symbols'][k] == v for k, v in old['symbols'].items()
+               if k in ('core_settings', 'core_additem'))
+    assert all(new['symbols'][k][0] == v[0] for k, v in old['symbols'].items())
+    assert new['symbols']['core_row_new'][0] == '.run' and new['symbols']['row_pool'][0] == '.bss'
+
+
+def test_digitone_core_4_1_1_is_4_1_and_rows_off_the_heap():
+    if not CORE_DN41_REL or not os.path.exists(CORE_DN41_REL):
+        raise Skip('missing ELEKLOADER_CORE_DN1_41 (the released core-dn1-4.1.elemod)')
+    with tempfile.TemporaryDirectory() as tmp:
+        check_dn_41(CORE_DN41_REL, dn_core(tmp))
+        other = CORE_DN41_REL.replace('core-dn1-4.1.elemod', 'core-dn1-4.1-os1.44.elemod')
+        if DN_STOCK_144 and os.path.exists(DN_STOCK_144) and os.path.exists(other):
+            path4, _m = build.build(os.path.join(ROOT, 'mods', 'core-dn1'), DN_STOCK_144, tmp)
+            check_dn_41(other, path4)
 
 
 def test_digitone_core_4_gives_the_mods_1_25_mb():
