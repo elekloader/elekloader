@@ -43,7 +43,13 @@
   {"addr": "0x4000cd2e", "stock": "4fefffd448d77cfc", "op": "jmp", "target": "st_proj_load"},
   {"addr": "0x40034d86", "stock": "4eb94000d10e", "op": "keep2", "target": "st_file_save"},
   {"addr": "0x400b0804", "stock": "4eb94000d10e", "op": "keep2", "target": "st_file_save"},
-  {"addr": "0x40035000", "stock": "4eb94000cd2e", "op": "keep2", "target": "st_file_load"}
+  {"addr": "0x40035000", "stock": "4eb94000cd2e", "op": "keep2", "target": "st_file_load"},
+  {"addr": "0x4018b6ec", "stock": "4eb940098b54", "op": "keep2", "target": "st_song_copy"},
+  {"addr": "0x4018c09a", "stock": "4eb940098b54", "op": "keep2", "target": "st_song_copy"},
+  {"addr": "0x4018c2bc", "stock": "45f940098b54", "op": "keep2", "target": "st_song_copy"},
+  {"addr": "0x4018ba90", "stock": "4eb940098b54", "op": "keep2", "target": "st_pattern_copy"},
+  {"addr": "0x4018c736", "stock": "4eb940098b54", "op": "keep2", "target": "st_pattern_copy"},
+  {"addr": "0x4018c968", "stock": "45f940098b54", "op": "keep2", "target": "st_pattern_copy"}
  ],
  "ports": {
   "1.74": {
@@ -85,7 +91,13 @@
     {"addr": "0x4000cd2e", "stock": "4fefffd448d77cfc", "op": "jmp", "target": "st_proj_load"},
     {"addr": "0x40034d86", "stock": "4eb94000d10e", "op": "keep2", "target": "st_file_save"},
     {"addr": "0x400b0870", "stock": "4eb94000d10e", "op": "keep2", "target": "st_file_save"},
-    {"addr": "0x40035000", "stock": "4eb94000cd2e", "op": "keep2", "target": "st_file_load"}
+    {"addr": "0x40035000", "stock": "4eb94000cd2e", "op": "keep2", "target": "st_file_load"},
+    {"addr": "0x4018b8b8", "stock": "4eb940098bc0", "op": "keep2", "target": "st_song_copy"},
+    {"addr": "0x4018c266", "stock": "4eb940098bc0", "op": "keep2", "target": "st_song_copy"},
+    {"addr": "0x4018c488", "stock": "45f940098bc0", "op": "keep2", "target": "st_song_copy"},
+    {"addr": "0x4018bc5c", "stock": "4eb940098bc0", "op": "keep2", "target": "st_pattern_copy"},
+    {"addr": "0x4018c902", "stock": "4eb940098bc0", "op": "keep2", "target": "st_pattern_copy"},
+    {"addr": "0x4018cb34", "stock": "45f940098bc0", "op": "keep2", "target": "st_pattern_copy"}
    ]
   }
  },

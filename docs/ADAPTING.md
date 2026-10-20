@@ -163,7 +163,7 @@ The sites core owns (do not patch them):
   0x400a4816, 0x400db87e, 0x4011fb02, 0x40121656;
 - Analog Rytm MKII 1.74: 0x400008c0, 0x400a2c5a, 0x400a2cc2, 0x400a4838,
   0x400a4882, 0x400db8ea, 0x4011fb6e, 0x401216c2;
-- from core-ar2 0.2, on both Rytm releases, 16 more for mod storage
+- from core-ar2 0.2, on both Rytm releases, 22 more for mod storage
   (listed under "Mod storage").
 
 A firmware routine your mod calls has its own address on each device and
@@ -704,14 +704,19 @@ sets things up per project, subscribes to `ev_project`:
 |---|---|---|---|
 | `ev_project` | Analog Rytm MKII only (core-ar2 0.2): after CREATE NEW or the project reset (`how` 0, `CORE_PROJECT_NEW`), and after every project load (`how` 1, `CORE_PROJECT_LOADED`: at boot too); the stored project and its mod data are in place | `void f(int how, unsigned dropped)` | `dropped` has `STORE_DROPPED(scope)` set for each of `STORE_GLOBAL`, `STORE_TRACK`, `STORE_PATTERN` and `STORE_PROJECT` that loaded as zeros: saved by another layout, or with no mods. Sounds and kits are checked one by one as they load, so they are not in it. It comes from inside the load: keep it short, and don't start another load or save from it |
 
-Core-ar2 0.2 owns 16 more sites, the same on 1.73 and 1.74 except the file
-save (0x400b0804 on 1.73, 0x400b0870 on 1.74): 0x4000937c and 0x40009146
+Core-ar2 0.2 owns 22 more sites, the same on 1.73 and 1.74 except the file
+save (0x400b0804 on 1.73, 0x400b0870 on 1.74) and the SysEx copies: 0x4000937c and 0x40009146
 (the pattern serializers), 0x4000843a and 0x400081f6 (sounds), 0x400088d6
 and 0x4000863e (kits), 0x40007a5c and 0x4000763c (global slots), 0x40011ab8
 and 0x400118e8 (pattern and track init), 0x400122b6 (sound init),
 0x40011d38 (CREATE NEW and the project reset), 0x4000cd2e (every project
 load), 0x40034d86 (Total Recall's buffer save), the file save, and
-0x40035000 (the file load). `examples/store-check-ar2` uses a field in each
+0x40035000 (the file load), and the three calls through which the SysEx
+project commands copy, write and swap whole stored songs (0x4018b6ec,
+0x4018c09a, 0x4018c2bc on 1.73; 0x4018b8b8, 0x4018c266, 0x4018c488 on 1.74)
+and whole stored patterns (0x4018ba90, 0x4018c736, 0x4018c968 on 1.73;
+0x4018bc5c, 0x4018c902, 0x4018cb34 on 1.74).
+`examples/store-check-ar2` uses a field in each
 scope and shows which no longer read back.
 
 ### The Mod Menu (core-dn1 2.2, Digitone mk1)

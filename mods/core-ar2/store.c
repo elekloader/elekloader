@@ -30,6 +30,11 @@
  * stored project (the working copy at 0x405c8f20) carries the build's own
  * store; a project file, Total Recall's buffer and the like carry theirs.
  *
+ * The SysEx project commands that copy, swap or write whole stored songs go
+ * through st_song_copy, which leaves the target's store bytes, and those for
+ * whole stored patterns through st_pattern_copy, which clears the target
+ * slot's fields (three sites each, at different addresses on 1.73 and 1.74).
+ *
  * Data is used only when it was written by this layout or one of its
  * ancestors (core_store_ids) and its scope's generation is this build's:
  * sounds and kits by their own copy of the ID, everything else by the header
@@ -451,6 +456,46 @@ int st_file_load(void *live, unsigned char *src, void *progress)
     r = PROJECT_LOAD(live, src, progress);   /* through st_proj_load */
     st_image = S;
     return r;
+}
+
+/* ---- the SysEx project commands: whole stored songs ----
+ * The SysEx handler copies, swaps and writes stored song records (0x518 B,
+ * song slots 1..16 of a project image) with memcpy. Byte +2 of each of a
+ * record's 256 entries is the tagged store, which belongs to the image, not
+ * the song: copy everything else and leave the target's store bytes. In a
+ * swap the temporary buffer keeps its own (garbage) bytes, so both slots end
+ * with their own. Any other length is a plain copy. */
+
+void *st_song_copy(unsigned char *dst, const unsigned char *src, unsigned n)
+{
+    unsigned i;
+    for (i = 0; i < n; i++)
+        if (n != 0x518 || i < 0x116 || i >= 0x116 + 4 * 256 || ((i - 0x116) & 3))
+            dst[i] = src[i];
+    return dst;
+}
+
+/* The same commands copy, write and swap whole stored patterns (13,101 B)
+ * with memcpy. A pattern's track and pattern fields are kept by slot in the
+ * image's store, so they can't follow it: clear the target slot's, so the
+ * pattern loads with its mods' defaults instead of the slot's old values. A
+ * swap's temporary buffer is in no image and is left alone. */
+
+void *st_pattern_copy(unsigned char *dst, const unsigned char *src, unsigned n)
+{
+    unsigned char *img;
+    unsigned i, t, j, T = SPLIT_T, P = SPLIT_P;
+    int k;
+    for (i = 0; i < n; i++)
+        dst[i] = src[i];
+    if (n != 13101 || !(img = pattern_image(dst)) || (k = pattern_index(img, dst)) < 0)
+        return dst;
+    for (t = 0; t < 13; t++)
+        for (j = 0; j < T; j++)
+            B(store_byte(img, HEADER + (13 * k + t) * T + j)) = 0;
+    for (j = 0; j < P; j++)
+        B(store_byte(img, PATTERNS_AT + P * k + j)) = 0;
+    return dst;
 }
 
 /* ---- for mods: a field's value in an item ----
