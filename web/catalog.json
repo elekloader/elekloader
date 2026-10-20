@@ -35,27 +35,29 @@
       "repo": "irpina/elekloader", "tag": "machine-pages-v1.2", "file": "machine-pages-1.2.elemod",
       "device": "digitakt-mk1", "needs_core": "3.0",
       "sha256": "8526d61694c798bc765ae07b48ff613126d071813e887df516281c17a56c6c94",
-      "summary": "Lets machine mods built for it share one build: it draws each machine's SRC and LFO pages from what the machine describes, and from 1.2 gives a machine seven more SRC values per sound and lets a page knob be a stock sound parameter. Needs core 3.0 or newer, which the shop takes for it; on its own it changes nothing. DT-FM 1.2.1, DIGISLICER 2.4 and digi1_mods' machines (Digi Mono, Digi Poly, Digi Macro, DH-101) are built for it. Not with the shop's machine mods that draw their own pages: NEIGHBOR 0.6 and SOPHIE.",
+      "summary": "Lets machine mods built for it share one build: it draws each machine's SRC and LFO pages from what the machine describes, and from 1.2 gives a machine seven more SRC values per sound and lets a page knob be a stock sound parameter. Needs core 3.0 or newer, which the shop takes for it; on its own it changes nothing. DT-FM 1.2.1, DIGISLICER 2.5 and digi1_mods' machines (Digi Mono, Digi Poly, Digi Macro, DH-101) are built for it. Not with the shop's machine mods that draw their own pages: NEIGHBOR 0.6 and SOPHIE.",
       "on_unit": "1.2 ran on a Digitakt mk1, tested by the author with no problems, as did 1.0 (on OS 1.54 with core 3.0 and six machine mods built for it). 1.2 is also checked in digikit's emulator on OS 1.53 and 1.54 with core 4.0: every screen and the audio the same as stock."
     },
     {
       "repo": "irpina/elekloader", "tag": "machine-pages-v1.2", "file": "machine-pages-1.2-os1.54.elemod",
       "device": "digitakt-mk1", "needs_core": "3.0",
       "sha256": "d716bbeb70c8f7c9e8acc8bdb81681217eb8eb25ce700fe9a6ab786fed02d1f0",
-      "summary": "Lets machine mods built for it share one build: it draws each machine's SRC and LFO pages from what the machine describes, and from 1.2 gives a machine seven more SRC values per sound and lets a page knob be a stock sound parameter. Needs core 3.0 or newer, which the shop takes for it; on its own it changes nothing. DT-FM 1.2.1, DIGISLICER 2.4 and digi1_mods' machines (Digi Mono, Digi Poly, Digi Macro, DH-101) are built for it. Not with the shop's machine mods that draw their own pages: NEIGHBOR 0.6 and SOPHIE.",
+      "summary": "Lets machine mods built for it share one build: it draws each machine's SRC and LFO pages from what the machine describes, and from 1.2 gives a machine seven more SRC values per sound and lets a page knob be a stock sound parameter. Needs core 3.0 or newer, which the shop takes for it; on its own it changes nothing. DT-FM 1.2.1, DIGISLICER 2.5 and digi1_mods' machines (Digi Mono, Digi Poly, Digi Macro, DH-101) are built for it. Not with the shop's machine mods that draw their own pages: NEIGHBOR 0.6 and SOPHIE.",
       "on_unit": "1.2 ran on a Digitakt mk1, tested by the author with no problems, as did 1.0 (on OS 1.54 with core 3.0 and six machine mods built for it). 1.2 is also checked in digikit's emulator on OS 1.53 and 1.54 with core 4.0: every screen and the audio the same as stock."
     },
     {
-      "repo": "irpina/digislicer", "tag": "v2.4", "file": "digislicer-2.4.elemod",
+      "repo": "irpina/digislicer", "tag": "v2.5", "file": "digislicer-2.5.elemod",
       "device": "digitakt-mk1", "needs_core": "3.0",
-      "sha256": "5753b5ea77a8c920bc090e0ce75da1b7d74babd62bf383da7fc61e7322e95c86",
-      "summary": "A slicing machine with a slice editor: cut a sample where you want, and play the slices from the trig keys and the keyboard. Built for machine-pages, which the shop ticks with it, so it shares a build with the other machines made for it, such as DT-FM; not with the shop's NEIGHBOR 0.6 or SOPHIE. Needs core 3.0 or newer, which the shop takes for it."
+      "sha256": "846a2ec329d5ebd490a5201169d053c7a9b4645a33469f4b33021a38167e658a",
+      "summary": "A slicing machine with a slice editor: cut a sample where you want, and play the slices from the trig keys and the keyboard, stretched in time if you like without changing their pitch (STRETCH, on knob G). Built for machine-pages, which the shop ticks with it, so it shares a build with the other machines made for it, such as DT-FM; not with the shop's NEIGHBOR 0.6 or SOPHIE. Needs core 3.0 or newer, which the shop takes for it.",
+      "on_unit": "2.5 ran on a Digitakt mk1, tried by the author, in a build of these files with core 4.0, machine-pages 1.2 and digihealth. Also checked in digikit's emulator on OS 1.53 and 1.54."
     },
     {
-      "repo": "irpina/digislicer", "tag": "v2.4", "file": "digislicer-2.4-os1.54.elemod",
+      "repo": "irpina/digislicer", "tag": "v2.5", "file": "digislicer-2.5-os1.54.elemod",
       "device": "digitakt-mk1", "needs_core": "3.0",
-      "sha256": "8af30cc443e0a26dcb5dff413c15cab25d4197d07183bcc3ba57e11b8f9bef9b",
-      "summary": "A slicing machine with a slice editor: cut a sample where you want, and play the slices from the trig keys and the keyboard. Built for machine-pages, which the shop ticks with it, so it shares a build with the other machines made for it, such as DT-FM; not with the shop's NEIGHBOR 0.6 or SOPHIE. Needs core 3.0 or newer, which the shop takes for it."
+      "sha256": "6dd4c6d97db4d2de14a1461175651155f2f344e4f4e39019810378fd145ad6f8",
+      "summary": "A slicing machine with a slice editor: cut a sample where you want, and play the slices from the trig keys and the keyboard, stretched in time if you like without changing their pitch (STRETCH, on knob G). Built for machine-pages, which the shop ticks with it, so it shares a build with the other machines made for it, such as DT-FM; not with the shop's NEIGHBOR 0.6 or SOPHIE. Needs core 3.0 or newer, which the shop takes for it.",
+      "on_unit": "2.5 ran on a Digitakt mk1, tried by the author, in a build of these files with core 4.0, machine-pages 1.2 and digihealth. Also checked in digikit's emulator on OS 1.53 and 1.54."
     },
     {
       "repo": "irpina/digihealth", "tag": "v1.1.1", "file": "digihealth-1.0.elemod",
