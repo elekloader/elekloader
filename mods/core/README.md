@@ -46,12 +46,12 @@ are 1.53's.
   A builder takes the newest core, 4.0, for every selection.
   [docs/ADAPTING.md](../../docs/ADAPTING.md), "The mods' RAM".
 - **4.1: core 4.0 and the master output** (Digitakt mk1, `master.s`, last
-  in `sources`, so 4.0's code and symbols keep their places). Six sites
+  in `sources`, so 4.0's code and symbols keep their places). Seven sites
   more, which mods that work on the whole mix hooked for themselves:
   - `ev_render_master` (0x400721e6): the block's master pair, before it
     goes to the outputs and the USB stream;
   - `core_mpages`: pages of the master view (FUNC+LFO), through its draw,
-    keys, knobs and title (four pointers in its vtables), with
+    keys, knobs, title and page clear (five pointers in its vtables), with
     `core_mpage_shown`, `core_mview` and `core_mview_draws`;
   - `ev_fxmix` (0x40044acc): rows in SETTINGS > GLOBAL FX/MIX;
   - and `fw_invalidate(view)`.

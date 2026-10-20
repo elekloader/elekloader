@@ -59,7 +59,8 @@
   "MV_ENC": "0x400388ee",
   "MV_NAMES": "0x4197cf88",
   "FXMIX_RET": "0x40044ad2",
-  "FW_INVALIDATE": "0x400c9812"
+  "FW_INVALIDATE": "0x400c9812",
+  "MV_CLEAR": "0x40039982"
  },
  "sites": [
   {"addr": "0x40000538", "stock": "4eb940001c94", "op": "jsr", "target": "boot"},
@@ -106,7 +107,8 @@
   {"addr": "0x401845e4", "stock": "40038b36", "op": "ptr", "target": "core_mview_key"},
   {"addr": "0x401845ec", "stock": "400395dc", "op": "ptr", "target": "core_mview_draw"},
   {"addr": "0x40184628", "stock": "40030930", "op": "ptr", "target": "core_mview_title"},
-  {"addr": "0x401846bc", "stock": "400388ee", "op": "ptr", "target": "core_mview_enc"}
+  {"addr": "0x401846bc", "stock": "400388ee", "op": "ptr", "target": "core_mview_enc"},
+  {"addr": "0x40184698", "stock": "40039982", "op": "ptr", "target": "core_mview_clear"}
  ],
  "ports": {
   "1.54": {
@@ -164,7 +166,8 @@
     "MV_ENC": "0x400388ee",
     "MV_NAMES": "0x4197df88",
     "FXMIX_RET": "0x40044ad2",
-    "FW_INVALIDATE": "0x400c9a3a"
+    "FW_INVALIDATE": "0x400c9a3a",
+    "MV_CLEAR": "0x40039982"
    },
    "sites": [
     {"addr": "0x40000538", "stock": "4eb940001c94", "op": "jsr", "target": "boot"},
@@ -211,7 +214,8 @@
     {"addr": "0x401848e4", "stock": "40038b36", "op": "ptr", "target": "core_mview_key"},
     {"addr": "0x401848ec", "stock": "400395dc", "op": "ptr", "target": "core_mview_draw"},
     {"addr": "0x40184928", "stock": "40030930", "op": "ptr", "target": "core_mview_title"},
-    {"addr": "0x401849bc", "stock": "400388ee", "op": "ptr", "target": "core_mview_enc"}
+    {"addr": "0x401849bc", "stock": "400388ee", "op": "ptr", "target": "core_mview_enc"},
+    {"addr": "0x40184998", "stock": "40039982", "op": "ptr", "target": "core_mview_clear"}
    ]
   }
  },

@@ -60,4 +60,12 @@ static int32_t mono_enc(void *view, void *event)
     return 1;
 }
 
-struct core_mpage mono_page = {12, "MONO", "Master mono", mono_draw, 0, mono_enc, 0, 0};
+/* FUNC + held LFO + PLAY (CLEAR) on the page: back to STEREO */
+static void mono_clear(void *view)
+{
+    mode = STEREO;
+    turned = 0;
+    fw_invalidate(view);
+}
+
+struct core_mpage mono_page = {12, "MONO", "Master mono", mono_draw, 0, mono_enc, 0, 0, mono_clear};

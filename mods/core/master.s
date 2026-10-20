@@ -12,6 +12,7 @@
 |   MV_DRAW      its draw (slot 4)
 |   MV_TITLE     its title (slot 19)
 |   MV_ENC       its knob handler, as its +4 subobject's vtable has it
+|   MV_CLEAR     its page clear (slot 47): FUNC + a held LFO + PLAY (CLEAR)
 |   MV_NAMES     the page kind 0's short and long name (two char pointers)
 |   FXMIX_RET    where the GLOBAL FX/MIX item builder goes on after its site
 
@@ -80,15 +81,18 @@ core_render_master:
 |               notch; +20 set while the knob is pushed); nonzero takes it
 |   +24 view    core writes the view whose list has the page
 |   +28 pos     core writes its place in that list
+|   +32 clear   void clear(void *view), or 0: the page cleared, FUNC + a
+|               held LFO + PLAY (CLEAR), as the stock pages are; called
+|               after the stock clear has shown its "CLEAR PAGE" pop-up
 | The first time the view is drawn with a list that has no kind 0 in it,
 | core puts the pages in (and again if the firmware ever rebuilds the list),
 | keeping the page shown where it was. While one is shown, core gives kind 0
 | its names, for the title bar and the title pop-up, and calls its draw, key
-| and enc. core_mpage_shown(view) says which page is shown, for a mod that
+| and enc, and clear. core_mpage_shown(view) says which page is shown, for a mod that
 | reads the keys or knobs itself (an ev_key or ev_enc handler), and
 | core_mview is the master view, core_mview_draws a count of its draws: a
 | tick that sees the count move knows the view is on the screen. All of it
-| runs in the UI task. With the table empty, each of the view's four
+| runs in the UI task. With the table empty, each of the view's five
 | entries goes straight to the stock one.
         .equ    MP_AFTER,  0
         .equ    MP_SHORT,  4
@@ -98,6 +102,7 @@ core_render_master:
         .equ    MP_ENC,    20
         .equ    MP_VIEW,   24
         .equ    MP_POS,    28
+        .equ    MP_CLEAR,  32
         .equ    MV_LIST,   124
         .equ    MV_END,    128
         .equ    MV_CAP,    132
@@ -321,6 +326,39 @@ core_mview_enc:
         bne.s   1f
 9:      jmp     MV_ENC
 1:      rts
+
+| Page clear, at 0x40184698 (slot 47, was 0x40039982): int clear(view, page),
+| what FUNC + a held LFO + PLAY (CLEAR) calls, page -1 for the one shown.
+| The stock clear runs first (its pop-up; on kind 0 it clears nothing), then
+| the shown mod page's clear, when the page asked for is the one shown (-1)
+| or kind 0. The stock's result is returned.
+        .globl  core_mview_clear
+core_mview_clear:
+        tst.l   core_mpages
+        beq.s   8f
+        move.l  8(%sp), -(%sp)
+        move.l  8(%sp), -(%sp)
+        jsr     MV_CLEAR
+        addq.l  #8, %sp
+        move.l  %d0, -(%sp)             | (sp) result, 4 return, 8 view, 12 page
+        move.l  12(%sp), %d1
+        beq.s   1f
+        addq.l  #1, %d1
+        bne.s   9f
+1:      move.l  8(%sp), -(%sp)
+        bsr.w   core_mpage_shown
+        addq.l  #4, %sp
+        tst.l   %d0
+        beq.s   9f
+        move.l  MP_CLEAR(%a0), %d0
+        beq.s   9f
+        movea.l %d0, %a0
+        move.l  8(%sp), -(%sp)          | the view
+        jsr     (%a0)
+        addq.l  #4, %sp
+9:      move.l  (%sp)+, %d0
+        rts
+8:      jmp     MV_CLEAR
 
 | ---- ev_fxmix: the SETTINGS > GLOBAL FX/MIX menu's rows -------------------
 | At 0x40044acc in its item builder (was: movea.l (a4),a0 ; pea 2.w), by

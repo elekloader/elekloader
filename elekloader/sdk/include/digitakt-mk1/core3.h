@@ -150,7 +150,8 @@ typedef void (*ev_fxmix_fn)(void *menu);
  * other: last), names it and, while it is shown, calls draw (after the stock draw: the title bar, rows 53-63,
  * and below it kind 0's eight empty knob boxes, to clear where the page draws; bmp is 128 x 64, y 0 the
  * bottom row), key and enc (the view's events: nonzero takes one, 0 leaves it
- * to the stock handler). Any of the three may be 0. The UI task. */
+ * to the stock handler), and clear when the page is cleared (FUNC + held LFO + PLAY). Any of the four may be 0.
+ * The UI task. */
 struct core_mpage {
     int32_t after;                                  /* +0 */
     const char *short_title, *title;                /* +4, +8: "EQ", "Master EQ" */
@@ -159,6 +160,7 @@ struct core_mpage {
     int32_t (*enc)(void *view, void *event);        /* +20 event +12 knob 1-8 = A-H, 9 LEVEL; +16 the turn */
     void *view;                                     /* +24 core writes the view whose list has the page */
     int32_t pos;                                    /* +28 core writes its place in that list */
+    void (*clear)(void *view);                      /* +32 FUNC + held LFO + PLAY (CLEAR): after the stock's pop-up */
 } __attribute__((aligned(4)));
 /* The mod page the view shows, or 0 (returned in d0 and a0): for a mod that reads keys or knobs itself. */
 extern struct core_mpage *core_mpage_shown(void *view);

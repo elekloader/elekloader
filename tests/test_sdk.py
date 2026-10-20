@@ -152,7 +152,7 @@ FW = ['fw_active_track', 'fw_amp_env', 'fw_bitmap_vt', 'fw_blit', 'fw_fillrect',
 # (ev_render_master), the SETTINGS > GLOBAL FX/MIX rows (ev_fxmix) and the master pages
 # (core_mpages: four pointers of the master view's vtables).
 CORE_41_SITES = ['core_render_master', 'core_fxmix', 'core_mview_key', 'core_mview_draw',
-                 'core_mview_title', 'core_mview_enc']
+                 'core_mview_title', 'core_mview_enc', 'core_mview_clear']
 CORE_41_TABLES = ['ev_render_master', 'core_mpages', 'ev_fxmix']
 CORE_41_EXPORTS = ['core_mpage_shown', 'core_mview', 'core_mview_draws', 'fw_invalidate']
 
@@ -166,7 +166,7 @@ def test_core_builds_and_lints():
     """core (3.0 and 4.0, the same code, and 4.1): the hook bus (core.s, 8 sites), the SRC machine slots
     (machines.s, Digitakt mk1 only: 31 sites and the table core_machines),
     the machine page reader (core_machine_ui), the firmware locations
-    (fw.s: absolute exports, no site) and from 4.1 the master output and pages (master.s: 6 sites
+    (fw.s: absolute exports, no site) and from 4.1 the master output and pages (master.s: 7 sites
     and three tables)."""
     path = built_core()
     with open(path) as fh:

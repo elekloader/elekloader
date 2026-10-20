@@ -66,9 +66,9 @@
 | core 4.1: a page of the master view (FUNC+LFO), for the table core_mpages
 | (in .data: core writes its last two words). after: the stock page it
 | follows (11 COMP, 12 internal mixer, 13 external mixer; any other: last);
-| draw(view, bmp), key(view, event), enc(view, event): 0 for none.
-        .equ    CORE_MPAGE_SIZE, 32
-        .macro  CORE_MPAGE after, short, title, draw=0, key=0, enc=0
+| draw(view, bmp), key(view, event), enc(view, event), clear(view): 0 for none.
+        .equ    CORE_MPAGE_SIZE, 36
+        .macro  CORE_MPAGE after, short, title, draw=0, key=0, enc=0, clear=0
         .balign 4
-        .long   \after, \short, \title, \draw, \key, \enc, 0, 0
+        .long   \after, \short, \title, \draw, \key, \enc, 0, 0, \clear
         .endm

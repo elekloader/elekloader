@@ -1073,15 +1073,17 @@ knobs and title in its vtables. Only one of them could be in a build. Core
 - **`core_mpages`**: pages of the master view (FUNC+LFO steps through
   them). Contribute a pointer to a `struct core_mpage` (`core3.h`): the stock
   page it follows (11 COMP, 12 internal mixer, 13 external mixer; any other
-  value puts it last), its short name and title, and `draw`, `key` and
-  `enc` (any may be 0). Core puts the page in the view's list, as kind 0
+  value puts it last), its short name and title, and `draw`, `key`, `enc`
+  and `clear` (any may be 0). Core puts the page in the view's list, as kind 0
   (the firmware's "None" page, which has no knobs), and while it is shown
   gives the title bar and the pop-up its names ("Master EQ (2/4)") and
   calls `draw(view, bmp)` after the stock draw (the title bar, and below
   it kind 0's eight empty knob boxes, which the page clears where it
   draws: `fw_fillrect(bmp, 0, 0, 127, 52, 0)` clears them all),
   `key(view, event)` and
-  `enc(view, event)` before the stock handlers: nonzero takes the event.
+  `enc(view, event)` before the stock handlers: nonzero takes the event,
+  and `clear(view)` when the page is cleared (FUNC + a held LFO + PLAY,
+  as on the stock pages), after the stock clear has shown its pop-up.
   Pages that follow the same stock page keep their `order`. A mod that
   reads keys or knobs itself (`ev_key`, `ev_enc`) asks
   `core_mpage_shown(view)` which page is up; `core_mview` is the master
