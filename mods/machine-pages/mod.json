@@ -1,5 +1,5 @@
 {
- "id": "machine-pages", "version": "1.2",
+ "id": "machine-pages", "version": "1.2.1",
  "license": "GPL-2.0-or-later",
  "title": "machine pages", "category": "Framework", "author": "irpina",
  "description": "Draws the SRC and LFO pages of the SRC machines that describe their own (core 3.0), and gives the render an event for machines that make or take a track's sound, so several machine mods combine. On its own, and for machines that do not describe a page, it changes nothing the unit does.",
@@ -50,7 +50,8 @@
   "SOUND_LOAD_ON": "0x4007a23e",
   "SOUND_SAVE_ON": "0x4007a5a8",
   "SOUND_UPGRADE_ON": "0x4007f710",
-  "SAVE_MAP": "0x401ac1d4"
+  "SAVE_MAP": "0x401ac1d4",
+  "SYNC_LOOP_ON": "0x40022858", "SYNC_DONE": "0x40022996"
  },
  "sites": [
   {"addr": "0x40184988", "stock": "4003a824", "op": "ptr", "target": "mp_src_copy_s"},
@@ -149,7 +150,9 @@
   {"addr": "0x4007a0e2", "stock": "45f9401abfd0", "op": "keep2", "target": "mp_legacy_tables", "addend": 228},
   {"addr": "0x40079796", "stock": "41f9401ac074", "op": "keep2", "target": "mp_legacy_tables", "addend": 392},
   {"addr": "0x4007a08a", "stock": "41f9401ac074", "op": "keep2", "target": "mp_legacy_tables", "addend": 392},
-  {"addr": "0x4007a098", "stock": "b1fc401ac144", "op": "keep2", "target": "mp_legacy_tables", "addend": 600}
+  {"addr": "0x4007a098", "stock": "b1fc401ac144", "op": "keep2", "target": "mp_legacy_tables", "addend": 600},
+  {"addr": "0x400228a4", "stock": "37835a1c60ae", "op": "jmp", "target": "mp_sync_loop_s"},
+  {"addr": "0x4002291a", "stock": "37823a1c6076", "op": "jmp", "target": "mp_sync_one_s"}
  ],
  "ports": {
   "1.54": {
@@ -198,7 +201,8 @@
     "SOUND_LOAD_ON": "0x4007a23e",
     "SOUND_SAVE_ON": "0x4007a5a8",
     "SOUND_UPGRADE_ON": "0x4007f710",
-    "SAVE_MAP": "0x401ac4d4"
+    "SAVE_MAP": "0x401ac4d4",
+    "SYNC_LOOP_ON": "0x40022858", "SYNC_DONE": "0x40022996"
    },
    "contribute": [{"to": "ev_tick", "order": 20, "data": "00000000", "relocs": [[0, "abs32", "sym:mp_tick", 0]], "claims": [["0x401ac1ec", "0x401ac358"]]}],
    "sites": [
@@ -298,7 +302,9 @@
     {"addr": "0x4007a0e2", "stock": "45f9401ac2d0", "op": "keep2", "target": "mp_legacy_tables", "addend": 228},
     {"addr": "0x40079796", "stock": "41f9401ac374", "op": "keep2", "target": "mp_legacy_tables", "addend": 392},
     {"addr": "0x4007a08a", "stock": "41f9401ac374", "op": "keep2", "target": "mp_legacy_tables", "addend": 392},
-    {"addr": "0x4007a098", "stock": "b1fc401ac444", "op": "keep2", "target": "mp_legacy_tables", "addend": 600}
+    {"addr": "0x4007a098", "stock": "b1fc401ac444", "op": "keep2", "target": "mp_legacy_tables", "addend": 600},
+    {"addr": "0x400228a4", "stock": "37835a1c60ae", "op": "jmp", "target": "mp_sync_loop_s"},
+    {"addr": "0x4002291a", "stock": "37823a1c6076", "op": "jmp", "target": "mp_sync_one_s"}
    ]
   }
  },

@@ -138,12 +138,19 @@ static int payload_offset(int bit)
     return byte < 96 ? 28 + byte : 31 + byte;
 }
 
-static void pack(uint8_t *saved, int *bit, uint16_t value, int width)
+static void store(uint8_t *saved, int bit, uint16_t value, int width)
 {
     while (width--) {
-        saved[payload_offset(*bit)] |= ((value >> width) & 1) << (7 - (*bit & 7));
-        ++*bit;
+        uint8_t *b = saved + payload_offset(bit), m = (uint8_t)(1 << (7 - (bit & 7)));
+        *b = (value >> width) & 1 ? *b | m : *b & ~m;
+        ++bit;
     }
+}
+
+static void pack(uint8_t *saved, int *bit, uint16_t value, int width)
+{
+    store(saved, *bit, value, width);
+    *bit += width;
 }
 
 static uint16_t unpack(const uint8_t *saved, int *bit, int width)
@@ -240,6 +247,32 @@ uint32_t mp_sound_load(uint8_t *sound, const uint8_t *saved)
             sound[k] = native_sound[k];
     }
     return result;
+}
+
+/* The firmware writes one slot of a stored sound in place (its native word at 28 + 2 index) whenever
+ * that parameter changes; for the extras the index is 0, slot 0's word. A version-4 record keeps the
+ * slot in its bit stream instead, from the live sound the owner's getter returns, as mp_sound_save
+ * packs it. */
+void mp_record_sync(uint8_t *saved, int32_t slot, int32_t index, int32_t native, void *owner)
+{
+    if (!packed_sound(saved) || slot < 0 || slot > MP_EXTRA_SLOT(CM_EXTRAS - 1)) {
+        put(saved + 28 + 2 * index, (uint16_t)native);
+        return;
+    }
+    const uint8_t *sound = (*(const uint8_t *(**)(void *))(*(uint8_t **)owner + 40))(owner);
+    uint16_t value = word(sound + 20 + 2 * slot);
+    if (slot >= MP_EXTRA_SLOT(0)) {
+        int k = slot - MP_EXTRA_SLOT(0);
+        store(saved, 45 * 15 + 8 + 15 * k, (uint16_t)extra_value(mp_src_for(saved[124]), sound, k), 15);
+    } else if (!slot) {
+        store(saved, 45 * 15 + 8 + 15 * CM_EXTRAS, value, 16);
+    } else {
+        int src = slot >= 17 && slot <= 24;
+        if (!src && (int16_t)value < 0)
+            value = 0;
+        /* 15 bits a slot, plus one for each 16-bit SRC slot before it */
+        store(saved, 15 * (slot - 1) + (slot > 17 ? (slot > 25 ? 8 : slot - 17) : 0), value, src ? 16 : 15);
+    }
 }
 
 uint32_t mp_sound_upgrade(uint8_t *saved, uint8_t *changed, int32_t target)

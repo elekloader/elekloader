@@ -713,6 +713,27 @@ def probe_storage(stock_path, Machine, call, pc_register):
     assert updates[-1] == (reference, 0, struct.pack('>2h', 13, 29))
     m.uc.mem_write(reference, struct.pack('>I', 0x40181330 + relocation))
 
+    # A changed parameter is synced into the stored sound in place, through a
+    # single-slot parameter object. A version-4 record keeps it in its bit stream;
+    # any other record keeps the native word.
+    single = reference + 0x80
+    for machine, slots in ((121, ((1, 0x1234), (4, 46 << 8), (17, -2), (26, 0x4000),
+                                  (46, 0x2100), (52, 0x700), (0, 0x5A5B))),
+                           (3, ((1, 0x1234), (26, 0x4000)))):
+        initialize(machine)
+        assert native(0x4007A5A0, [saved, sound, 0]) & 255 == 1
+        assert bytes(m.uc.mem_read(saved + 4, 4)) == struct.pack('>I', 4 if machine == 121 else 3)
+        for slot, value in slots:
+            m.uc.mem_write(sound + 20 + 2 * slot, struct.pack('>h', value))
+            m.uc.mem_write(single, struct.pack('>2I', 0x4017EA88 + relocation, slot))
+            native(0x400227F2, [reference, saved, single])
+            if machine != 121:
+                index = native(0x40079772, [0, slot])
+                assert bytes(m.uc.mem_read(saved + 28 + 2 * index, 2)) == struct.pack('>h', value)
+        if machine == 121:
+            assert load(bytes(m.uc.mem_read(saved, 160)))[0] == 1
+            assert bytes(m.uc.mem_read(loaded + 20, 106)) == bytes(m.uc.mem_read(sound + 20, 106))
+
     # Pattern lock records hold 79 usable parameter/track lanes. Preserve
     # ordinary/MIDI permutations and round-trip the seven added audio lanes (and slot 0's).
     lock_runtime, lock_saved, lock_loaded = 0x43700100, 0x43800100, 0x43900100
@@ -780,5 +801,6 @@ def probe_storage(stock_path, Machine, call, pc_register):
         '79_persisted_lock_lanes_include_seven_extras_on_first_and_last_audio_tracks': True,
         'ordinary_and_midi_lock_permutations_preserved': True,
         'native_machine_reset_uses_metadata_defaults': True,
+        'native_parameter_sync_keeps_version_4_records_packed': True,
         'randomize_reload_extra_ownership_is_machine_specific': True,
     }

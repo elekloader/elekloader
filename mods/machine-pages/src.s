@@ -79,3 +79,28 @@ mp_lock_save_s:
 2:      move.b  %d3, 1(%a3)
         move.l  (%sp)+, %d0
         rts
+
+| The firmware's in-place update of a stored sound's slot, both stores of its sync routine: each
+| replaces "move.w value,0x1c(record,index.l*2)" and the branch after it. A2 is the sound's owner,
+| A3 the stored record. The loop's store: D2 the slot, D3 its native value, D5 its index.
+        .globl mp_sync_loop_s, mp_sync_one_s
+mp_sync_loop_s:
+        move.l  %a2, -(%sp)
+        move.l  %d3, -(%sp)
+        move.l  %d5, -(%sp)
+        move.l  %d2, -(%sp)
+        move.l  %a3, -(%sp)
+        jsr     mp_record_sync
+        lea     20(%sp), %sp
+        jmp     SYNC_LOOP_ON
+
+| The single parameter's store: 4(A4) the slot, D2 its native value, D3 its index.
+mp_sync_one_s:
+        move.l  %a2, -(%sp)
+        move.l  %d2, -(%sp)
+        move.l  %d3, -(%sp)
+        move.l  4(%a4), -(%sp)
+        move.l  %a3, -(%sp)
+        jsr     mp_record_sync
+        lea     20(%sp), %sp
+        jmp     SYNC_DONE
