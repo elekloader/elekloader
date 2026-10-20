@@ -35,27 +35,27 @@
       "repo": "irpina/elekloader", "tag": "machine-pages-v1.2", "file": "machine-pages-1.2.elemod",
       "device": "digitakt-mk1", "needs_core": "3.0",
       "sha256": "8526d61694c798bc765ae07b48ff613126d071813e887df516281c17a56c6c94",
-      "summary": "Lets machine mods built for it share one build: it draws each machine's SRC and LFO pages from what the machine describes, and from 1.2 gives a machine seven more SRC values per sound and lets a page knob be a stock sound parameter. Needs core 3.0 or newer, which the shop takes for it; on its own it changes nothing. DT-FM 1.2.1 is built for it. Not with the shop's machine mods that draw their own pages: DIGISLICER 2.2, NEIGHBOR 0.6, SOPHIE, and digichain (so not Digi Mono, Digi Poly or Digi Macro).",
+      "summary": "Lets machine mods built for it share one build: it draws each machine's SRC and LFO pages from what the machine describes, and from 1.2 gives a machine seven more SRC values per sound and lets a page knob be a stock sound parameter. Needs core 3.0 or newer, which the shop takes for it; on its own it changes nothing. DT-FM 1.2.1, DIGISLICER 2.4 and digi1_mods' machines (Digi Mono, Digi Poly, Digi Macro, DH-101) are built for it. Not with the shop's machine mods that draw their own pages: NEIGHBOR 0.6 and SOPHIE.",
       "on_unit": "1.2 ran on a Digitakt mk1, tested by the author with no problems, as did 1.0 (on OS 1.54 with core 3.0 and six machine mods built for it). 1.2 is also checked in digikit's emulator on OS 1.53 and 1.54 with core 4.0: every screen and the audio the same as stock."
     },
     {
       "repo": "irpina/elekloader", "tag": "machine-pages-v1.2", "file": "machine-pages-1.2-os1.54.elemod",
       "device": "digitakt-mk1", "needs_core": "3.0",
       "sha256": "d716bbeb70c8f7c9e8acc8bdb81681217eb8eb25ce700fe9a6ab786fed02d1f0",
-      "summary": "Lets machine mods built for it share one build: it draws each machine's SRC and LFO pages from what the machine describes, and from 1.2 gives a machine seven more SRC values per sound and lets a page knob be a stock sound parameter. Needs core 3.0 or newer, which the shop takes for it; on its own it changes nothing. DT-FM 1.2.1 is built for it. Not with the shop's machine mods that draw their own pages: DIGISLICER 2.2, NEIGHBOR 0.6, SOPHIE, and digichain (so not Digi Mono, Digi Poly or Digi Macro).",
+      "summary": "Lets machine mods built for it share one build: it draws each machine's SRC and LFO pages from what the machine describes, and from 1.2 gives a machine seven more SRC values per sound and lets a page knob be a stock sound parameter. Needs core 3.0 or newer, which the shop takes for it; on its own it changes nothing. DT-FM 1.2.1, DIGISLICER 2.4 and digi1_mods' machines (Digi Mono, Digi Poly, Digi Macro, DH-101) are built for it. Not with the shop's machine mods that draw their own pages: NEIGHBOR 0.6 and SOPHIE.",
       "on_unit": "1.2 ran on a Digitakt mk1, tested by the author with no problems, as did 1.0 (on OS 1.54 with core 3.0 and six machine mods built for it). 1.2 is also checked in digikit's emulator on OS 1.53 and 1.54 with core 4.0: every screen and the audio the same as stock."
     },
     {
-      "repo": "irpina/digislicer", "tag": "v2.2", "file": "digislicer-2.2.elemod",
-      "device": "digitakt-mk1", "needs_core": "2.1",
-      "sha256": "20cfd79492c40289653c62667003e4a60eda7cc4ceed7abdb7fbde9e051a3527",
-      "summary": "A slicing machine with a slice editor: cut a sample where you want, and play the slices from the trig keys and the keyboard."
+      "repo": "irpina/digislicer", "tag": "v2.4", "file": "digislicer-2.4.elemod",
+      "device": "digitakt-mk1", "needs_core": "3.0",
+      "sha256": "5753b5ea77a8c920bc090e0ce75da1b7d74babd62bf383da7fc61e7322e95c86",
+      "summary": "A slicing machine with a slice editor: cut a sample where you want, and play the slices from the trig keys and the keyboard. Built for machine-pages, which the shop ticks with it, so it shares a build with the other machines made for it, such as DT-FM; not with the shop's NEIGHBOR 0.6 or SOPHIE. Needs core 3.0 or newer, which the shop takes for it."
     },
     {
-      "repo": "irpina/digislicer", "tag": "v2.2", "file": "digislicer-2.2-os1.54.elemod",
-      "device": "digitakt-mk1", "needs_core": "2.1",
-      "sha256": "c660a7232a5986a677696d61a18688256cfe208510d146c3ea876df50c738c27",
-      "summary": "A slicing machine with a slice editor: cut a sample where you want, and play the slices from the trig keys and the keyboard."
+      "repo": "irpina/digislicer", "tag": "v2.4", "file": "digislicer-2.4-os1.54.elemod",
+      "device": "digitakt-mk1", "needs_core": "3.0",
+      "sha256": "8af30cc443e0a26dcb5dff413c15cab25d4197d07183bcc3ba57e11b8f9bef9b",
+      "summary": "A slicing machine with a slice editor: cut a sample where you want, and play the slices from the trig keys and the keyboard. Built for machine-pages, which the shop ticks with it, so it shares a build with the other machines made for it, such as DT-FM; not with the shop's NEIGHBOR 0.6 or SOPHIE. Needs core 3.0 or newer, which the shop takes for it."
     },
     {
       "repo": "irpina/digihealth", "tag": "v1.1.1", "file": "digihealth-1.0.elemod",
@@ -431,29 +431,29 @@
       "repo": "mtalikka/DT-FM", "tag": "v1.2.1", "file": "dt-fm-1.2.1-os1.53.elemod",
       "device": "digitakt-mk1", "needs_core": "3.0",
       "sha256": "7f0f01f29a87d6a102915f55fcdee57e68eeb747512a904991411c5c0b6643d5",
-      "summary": "A four-operator FM synth machine: eight algorithms, drawn on ALGO's knob, with each operator's ratio, level and envelope, and feedback on operator 4. Built for machine-pages, which the shop ticks with it, so it shares a build with other machines made for it. Not with the shop's DIGISLICER, NEIGHBOR, SOPHIE or digichain (nor Digi Mono and Digi Poly, which need it). From 1.2.0 DT-FM is machine 9: tracks saved as DT-FM by 1.1.0 or earlier load as another machine (SOPHIE if it is installed, else ONESHOT), so select DT-FM on them again.",
+      "summary": "A four-operator FM synth machine: eight algorithms, drawn on ALGO's knob, with each operator's ratio, level and envelope, and feedback on operator 4. Built for machine-pages, which the shop ticks with it, so it shares a build with other machines made for it. Not with the shop's NEIGHBOR or SOPHIE. From 1.2.0 DT-FM is machine 9: tracks saved as DT-FM by 1.1.0 or earlier load as another machine (SOPHIE if it is installed, else ONESHOT), so select DT-FM on them again.",
       "on_unit": "Tested on a Digitakt mk1 by its author: 1.2.1 on OS 1.54 with core 3.0, machine-pages 1.1 and digihealth. Earlier, on OS 1.53, four tracks together used about 95% CPU, about 85% with digihealth's FAST AUDIO on. Eight tracks are not claimed."
     },
     {
       "repo": "mtalikka/DT-FM", "tag": "v1.2.1", "file": "dt-fm-1.2.1-os1.54.elemod",
       "device": "digitakt-mk1", "needs_core": "3.0",
       "sha256": "336612bce704d2b52b39cf9a8fbb0b9dcaf3b95367c753a3e3e0c1d4ae360b3e",
-      "summary": "A four-operator FM synth machine: eight algorithms, drawn on ALGO's knob, with each operator's ratio, level and envelope, and feedback on operator 4. Built for machine-pages, which the shop ticks with it, so it shares a build with other machines made for it. Not with the shop's DIGISLICER, NEIGHBOR, SOPHIE or digichain (nor Digi Mono and Digi Poly, which need it). From 1.2.0 DT-FM is machine 9: tracks saved as DT-FM by 1.1.0 or earlier load as another machine (SOPHIE if it is installed, else ONESHOT), so select DT-FM on them again.",
+      "summary": "A four-operator FM synth machine: eight algorithms, drawn on ALGO's knob, with each operator's ratio, level and envelope, and feedback on operator 4. Built for machine-pages, which the shop ticks with it, so it shares a build with other machines made for it. Not with the shop's NEIGHBOR or SOPHIE. From 1.2.0 DT-FM is machine 9: tracks saved as DT-FM by 1.1.0 or earlier load as another machine (SOPHIE if it is installed, else ONESHOT), so select DT-FM on them again.",
       "on_unit": "Tested on a Digitakt mk1 by its author: 1.2.1 on OS 1.54 with core 3.0, machine-pages 1.1 and digihealth. Earlier, on OS 1.53, four tracks together used about 95% CPU, about 85% with digihealth's FAST AUDIO on. Eight tracks are not claimed."
     },
     {
-      "repo": "simonjohansson/elektrob-1", "tag": "ob1-v0.4", "file": "ob1-0.4-os1.53.elemod",
+      "repo": "simonjohansson/elektrob-1", "tag": "ob1-v0.5", "file": "ob1-0.5-os1.53.elemod",
       "device": "digitakt-mk1", "needs_core": "3.0",
-      "sha256": "5207ec84572d42b782ae7a255cee798774d6192792674dca28ee415aec59027c",
-      "summary": "An Oberheim OB-1 oscillator section as an SRC machine: two VCOs, each with saw type (triangle to saw) and pulse type (narrow pulse to square) and a sub-octave, hard sync and cross mod, noise, and the OB-1's mixer (ON, -3 dB or OFF).",
-      "on_unit": "Version 0.4 tested on a Digitakt mk1 by its author."
+      "sha256": "ba0cf68479c27ec071d487077495cffb9ecaa82710b80f65d4adff1770d3a23e",
+      "summary": "An Oberheim OB-1 oscillator section as an SRC machine: two VCOs, each with saw type (triangle to saw) and pulse type (narrow pulse to square) and a sub-octave, hard sync and cross mod, noise, and the OB-1's mixer (ON, -3 dB or OFF). Two SRC pages provide independent coarse/fine tuning, waveform family/shape, source levels and routing switches. Version 0.5 replaces the earlier parameter layout: older sounds, locks and LFO assignments are not migrated. Newly saved sounds require compatible custom firmware.",
+      "on_unit": "Version 0.4 tested on a Digitakt mk1 by its author. The sound-engine source used in 0.5 has audio and CPU checks on OS 1.54 with two OB-1 tracks; full device qualification was not repeated for this release."
     },
     {
-      "repo": "simonjohansson/elektrob-1", "tag": "ob1-v0.4", "file": "ob1-0.4-os1.54.elemod",
+      "repo": "simonjohansson/elektrob-1", "tag": "ob1-v0.5", "file": "ob1-0.5-os1.54.elemod",
       "device": "digitakt-mk1", "needs_core": "3.0",
-      "sha256": "611757a2457c702d65dea65cfea0c8854bd74e793e5e90f59d6f3b9093e43d12",
-      "summary": "An Oberheim OB-1 oscillator section as an SRC machine: two VCOs, each with saw type (triangle to saw) and pulse type (narrow pulse to square) and a sub-octave, hard sync and cross mod, noise, and the OB-1's mixer (ON, -3 dB or OFF).",
-      "on_unit": "Version 0.4 tested on a Digitakt mk1 by its author."
+      "sha256": "b133bc10c8f2ee60965850e60d6d5a651efe168c6571b1d48b1b33701502274b",
+      "summary": "An Oberheim OB-1 oscillator section as an SRC machine: two VCOs, each with saw type (triangle to saw) and pulse type (narrow pulse to square) and a sub-octave, hard sync and cross mod, noise, and the OB-1's mixer (ON, -3 dB or OFF). Two SRC pages provide independent coarse/fine tuning, waveform family/shape, source levels and routing switches. Version 0.5 replaces the earlier parameter layout: older sounds, locks and LFO assignments are not migrated. Newly saved sounds require compatible custom firmware.",
+      "on_unit": "Version 0.4 tested on a Digitakt mk1 by its author. The sound-engine source used in 0.5 has audio and CPU checks on OS 1.54 with two OB-1 tracks; full device qualification was not repeated for this release."
     },
     {
       "repo": "irpina/elekloader", "tag": "core-ot-v0.3.1", "file": "core-ot-0.3.1.elemod", "kind": "core",

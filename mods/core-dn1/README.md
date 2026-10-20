@@ -162,19 +162,32 @@ the Digitone needs it. On its own it changes nothing the unit does.
   p-locks), with the time it plays, at the queue's entry 0x400fff04
   (0x40100178 in 1.44). fxkit ([../fxkit-dn1](../fxkit-dn1)) is built on it:
   an effect's p-locks, kept in a track's lock table, on their steps.
+- **4.1.1, SETTINGS rows off the heap** ([rows.s](rows.s)): a row a mod
+  adds with `core_additem` is no longer allocated from the firmware's heap.
+  Its MenuItem and the shared_ptr's control block live in core's RAM (eight
+  rows; a ninth comes from the heap, as before), with a control block that
+  frees nothing when the menu drops the row. Before, each row kept 0x54 +
+  16 bytes of the heap, a buddy allocator, for good, and that changed the
+  rest of the boot's heap: on a first boot (FACTORY PROJECT >> +DRIVE) the
+  progress screen's allocations then split and merged blocks on every
+  frame, and the factory project's format upgrade, a lower-priority task,
+  starved. In digikit's emulator, two rows on 1.43 or 1.44 never got past
+  that screen. The calls in `core_additem` changed (`ROW_POOL`), not its
+  place or its arguments: mods need no change.
 - **OS 1.44:** every site has its port (`ports` in mod.json): the same
   code, moved, and RAM 0x1000 further on.
 
 Build it with the SDK (it needs m68k binutils):
 
 ```bash
-python -m elekloader.sdk.build mods/core-dn1 --stock Digitone_and_Digitone_Keys_OS1.43.syx   # out/core-4.1.elemod
-python -m elekloader.sdk.build mods/core-dn1 --stock Digitone_and_Digitone_Keys_OS1.44.syx   # out/core-4.1-os1.44.elemod
-python -m elekloader.lint mods/core-dn1/out/core-4.1-os1.44.elemod --stock Digitone_and_Digitone_Keys_OS1.44.syx
+python -m elekloader.sdk.build mods/core-dn1 --stock Digitone_and_Digitone_Keys_OS1.43.syx   # out/core-4.1.1.elemod
+python -m elekloader.sdk.build mods/core-dn1 --stock Digitone_and_Digitone_Keys_OS1.44.syx   # out/core-4.1.1-os1.44.elemod
+python -m elekloader.lint mods/core-dn1/out/core-4.1.1-os1.44.elemod --stock Digitone_and_Digitone_Keys_OS1.44.syx
 ```
 
-A release names them `core-dn1-4.1.elemod` and `core-dn1-4.1-os1.44.elemod`.
-4.1 is not released yet; 4.0's are on the [core-dn1-v4.0](https://github.com/irpina/elekloader/releases/tag/core-dn1-v4.0) pre-release
+A release names them `core-dn1-4.1.1.elemod` and `core-dn1-4.1.1-os1.44.elemod`.
+4.1.1 is not released yet; 4.1's are on the [core-dn1-v4.1](https://github.com/irpina/elekloader/releases/tag/core-dn1-v4.1) pre-release,
+4.0's on the [core-dn1-v4.0](https://github.com/irpina/elekloader/releases/tag/core-dn1-v4.0) pre-release
 (3.3 was not released);
 3.2's are on the [core-dn1-v3.2](https://github.com/irpina/elekloader/releases/tag/core-dn1-v3.2) pre-release
 (3.0 and 3.1 were not released), and
@@ -262,3 +275,16 @@ receive off the stock ignored them and PROG still saw them, flags 1 on the
 auto channel; with it on, PROG CH IN's channel (AUTO, then channel 3) went on
 to the stock with `CORE_MIDI_PC_STOCK` set, and another channel did not. The
 TypeScript engine's build of the seven is byte for byte the Python's.
+
+4.1.1 was checked by a first boot in digikit's emulator (`first_run`, which
+waits for the UI to settle, 3000M instructions at most), with digihealth's
+rows and its key-observer test fixture. With 4.1, one row settled at 1450M,
+none at 1200M, and two (1.43 and 1.44), or one row and 0x64 bytes allocated
+at the same point, never did: the upgrade's 14 steps took 14M instructions
+each, then 48M, then 250M and more, while the UI task spent three times as
+long in the allocator (3.3 splits a malloc against 0.8). With 4.1.1, two
+rows on 1.43 and two and three on 1.44 settle at 1200-1250M, as none do; in
+SETTINGS each row draws after SYSTEM and YES toggles it (SYSTEM INFO's
+readout shows, REMOTE KEYS clears its box). `tests/test_sdk.py` checks that
+4.1.1 keeps all of the released 4.1, with `core_additem` where it was, and
+the Digitakt's core is the same build without `ROW_POOL`.

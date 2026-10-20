@@ -9,6 +9,11 @@
 |   MENU_ADD     Menu::addItem(menu, item)
 |   FN_MGR       a std::function manager for a 4-byte function pointer
 |   SETTINGS_RET where the SETTINGS item builder goes on after its site
+|
+| With ROW_POOL set (core-dn1, from 4.1.1), core_additem takes the item's
+| storage from core_row_new and adds it with core_row_add (rows.s), which
+| keep the rows off the heap: see rows.s for why. The calls are as long as
+| the ones they replace, so every label here stays where it was.
 
         .section .run, "ax"
 
@@ -71,7 +76,11 @@ core_additem:
         move.l  12(%a3), %d0
         move.l  %d0, 12(%a0)
         pea     0x54.w
+        .ifdef  ROW_POOL
+        jsr     core_row_new
+        .else
         jsr     OP_NEW
+        .endif
         addq.l  #4, %sp
         move.l  %d0, %d2
         pea     8.w
@@ -85,7 +94,11 @@ core_additem:
         lea     28(%sp), %sp
         move.l  %d2, -(%sp)
         move.l  %a2, -(%sp)
+        .ifdef  ROW_POOL
+        jsr     core_row_add
+        .else
         jsr     MENU_ADD
+        .endif
         addq.l  #8, %sp
         movem.l -76(%a6), %d2/%a2-%a3
         unlk    %a6

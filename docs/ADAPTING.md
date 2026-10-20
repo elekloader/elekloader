@@ -108,7 +108,7 @@ event (lower first; the shipped mods use 10-90).
 | `ev_draw` | after each frame is drawn | `void f(void *bmp, void *ctrl)` | draw over the frame; y = 0 is the bottom row |
 | `ev_key` | each key event | `int f(void *brain, void *ev)` | return nonzero to take it: nothing later sees it. `ev+12` key id, `ev+16` flags (1 pressed, 8 repeat, 2 FUNC held; measured on the Digitone mk1: 8 comes once, about 0.4 s into a key held on its own, 4 marks a double press, 0x10 a release) |
 | `ev_enc` | each encoder turn | `int f(void *brain, void *ev)` | `ev+12` encoder 1-8 (A-H), `ev+16` delta |
-| `ev_settings` | the SETTINGS menu is built | `void f(void *menu)` | add a row with `core_additem(menu, row)`; `row` is four callbacks (label, select, draw, change) in the firmware's MenuItem conventions, which this guide does not document yet |
+| `ev_settings` | the SETTINGS menu is built | `void f(void *menu)` | add a row with `core_additem(menu, row)`; `row` is four callbacks (label, select, draw, change) in the firmware's MenuItem conventions, which this guide does not document yet. On the Digitone, from core-dn1 4.1.1, the rows take none of the heap (mods/core-dn1/rows.s): with 4.1 and before, two rows could stall a first boot |
 | `ev_render_in` | audio render entry, 1500 times a second | `void f(void)` | interrupt level: keep it short |
 | `ev_render_out` | audio render exit | `void f(void)` | the same |
 | `ev_hold` | Digitone mk1 only (core-dn1 2.2): a track key held on its own, UI task | `int f(void *brain, void *event, int track)` | return nonzero to take it; when none does, core opens the Mod Menu ("The Mod Menu" below) |
