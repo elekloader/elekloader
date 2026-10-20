@@ -111,11 +111,13 @@ What it does not do:
 - **Pattern tracks** are limited to 16 bits each: three bytes a track would
   not fit in the store.
 - **Projects saved before OS 1.70** are not supported.
-- **Patterns copied by the SysEx project commands** from a stored pattern
-  into a stored pattern of another project don't take their pattern-track
-  and pattern fields with them: those are kept by pattern slot in the tagged
-  store. Core clears the target slot's fields instead, so the pattern loads
-  with its mods' defaults, as a pattern received as a SysEx dump does.
+- **Patterns copied by the SysEx project commands** between stored patterns
+  (in one project or two), swapped, or written into one from a received
+  record don't take their pattern-track and pattern fields with them: those
+  are kept by pattern slot in the tagged store. Core clears the target
+  slot's fields instead, so the pattern loads with its mods' defaults, as a
+  pattern received as a SysEx dump does. A target project saved with another
+  mod layout keeps its store as it is.
 
 ## Checked so far
 

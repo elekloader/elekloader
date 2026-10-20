@@ -478,8 +478,11 @@ void *st_song_copy(unsigned char *dst, const unsigned char *src, unsigned n)
 /* The same commands copy, write and swap whole stored patterns (13,101 B)
  * with memcpy. A pattern's track and pattern fields are kept by slot in the
  * image's store, so they can't follow it: clear the target slot's, so the
- * pattern loads with its mods' defaults instead of the slot's old values. A
- * swap's temporary buffer is in no image and is left alone. */
+ * pattern loads with its mods' defaults instead of the slot's old values.
+ * Only a scope this layout reads there is cleared: another layout places its
+ * fields elsewhere, and this layout's offsets would hit other slots' fields
+ * or the project's. A swap's temporary buffer is in no image and is left
+ * alone. */
 
 void *st_pattern_copy(unsigned char *dst, const unsigned char *src, unsigned n)
 {
@@ -490,11 +493,13 @@ void *st_pattern_copy(unsigned char *dst, const unsigned char *src, unsigned n)
         dst[i] = src[i];
     if (n != 13101 || !(img = pattern_image(dst)) || (k = pattern_index(img, dst)) < 0)
         return dst;
-    for (t = 0; t < 13; t++)
-        for (j = 0; j < T; j++)
-            B(store_byte(img, HEADER + (13 * k + t) * T + j)) = 0;
-    for (j = 0; j < P; j++)
-        B(store_byte(img, PATTERNS_AT + P * k + j)) = 0;
+    if (store_ok(img, SC_TRACK))
+        for (t = 0; t < 13; t++)
+            for (j = 0; j < T; j++)
+                B(store_byte(img, HEADER + (13 * k + t) * T + j)) = 0;
+    if (store_ok(img, SC_PATTERN))
+        for (j = 0; j < P; j++)
+            B(store_byte(img, PATTERNS_AT + P * k + j)) = 0;
     return dst;
 }
 
