@@ -17,7 +17,7 @@ the mod shop: tick it there and the page takes the newest core for it.
 | | |
 |---|---|
 | needs | core 3.0 (`resources.core`), and refuses beside digichain, which owns the same places |
-| sites | 97, listed in `mod.json`. 1.1's 20: 7 on the SRC page, 4 range lookups, 5 on the LFO page, 2 SAMP compares, the machine menu's icon row and the render point 0x40077fba. 1.2's extra values add 77: 50 one-byte bounds (the parameter-id compares, 164 to 171), and 27 hooks: the SRC page's page flip, title and copy/clear/paste, the id-slot maps, the descriptor table and its 7 readers, defaults, Randomize, locks and the sound file's save/load/upgrade and LFO destinations |
+| sites | 99, listed in `mod.json`. 1.1's 20: 7 on the SRC page, 4 range lookups, 5 on the LFO page, 2 SAMP compares, the machine menu's icon row and the render point 0x40077fba. 1.2's extra values add 77: 50 one-byte bounds (the parameter-id compares, 164 to 171), and 27 hooks: the SRC page's page flip, title and copy/clear/paste, the id-slot maps, the descriptor table and its 7 readers, defaults, Randomize, locks and the sound file's save/load/upgrade and LFO destinations. 1.3 adds 2: MIDI's range lookups, the CC's (0x40010d50) and the NRPN's (0x40010154) |
 | exports | `cm_ui_v3`, from 1.1 `cm_ui_v31`, from 1.2 `cm_ui_v32`: the markers a machine's page names; from 1.2 `cm_src_value` |
 | claims | from 1.2, `soundslot:46` to `soundslot:52`, the extra values' slots |
 | declares | `ev_render_voices`, the render event |
@@ -107,7 +107,11 @@ pages, P1-P15, and the amp's VOL as page 2's knob H.
   page asks for it with its own track's machine before it draws or turns
   a knob, and the layout is copied once per machine.
 - **Ranges** (the setter's clamp, a turn's scaling, a list's stepper and
-  the validator): the machine of the sound the parameter belongs to.
+  the validator): the machine of the sound the parameter belongs to. From
+  1.3 also MIDI's (an incoming CC or NRPN on a track's channel): the
+  track's machine, so a page's knob takes its whole range from MIDI too.
+  Up to 1.2 MIDI kept the stock range of the id: knob B, on PLAY's id,
+  took only 0-3 from CC 17.
 - **The LFO page** (the DEST list, its narrow rows, the DEST box's two
   lines and the destination's label): the active track's machine.
 
@@ -148,6 +152,12 @@ with each shop mod that does, on OS 1.53 and 1.54.
 | machine-pages | | 20, owned once |
 
 ## Checked
+
+1.3 (MIDI's ranges), in digiemu on OS 1.54, a build of core 4.1, 1.3,
+Digi Mono and Digi Macro (MACRO's page: knob B 0-127): CC 17 at 40 and at
+127 on MACRO's track set knob B to 40 and 127 (1.2: 3, PLAY's stock
+maximum); NRPN 1:1 at 100 set it to 100; CC 18 set knob C as before; CC
+17 at 40 on a ONESHOT track still set PLAY to 3, its stock range.
 
 On a unit: the owner's Digitakt on OS 1.54 ran a build of core 3.0 and
 machine-pages with NEIGHBOR 0.7, DIGISLICER 2.3, SOPHIE, Digi Mono, Digi

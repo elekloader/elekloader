@@ -302,6 +302,32 @@ mp_prange_reset_s:
         movea.l 28(%sp), %a1
         range_lookup mp_reset_range
 
+| MIDI setting a track's parameter clamps the value with the range lookup,
+| by jsr, a0 the result, d3 the track (0-15), and no parameter object: a CC
+| at 0x40010d50 (in 0x40010cea(object, cc, value, track)), an NRPN at
+| 0x40010154 (in 0x40010112(object, ?, value, track)). The
+| machine is the track's sound's in the UI kit (mp_track_machine), so a
+| page's knob takes the whole range it describes from MIDI too (knob B on
+| PLAY's id, 0-3 stock, 0-127 on a page that says so).
+        .globl  mp_prange_cc_s
+mp_prange_cc_s:
+        move.l  %d3, -(%sp)             | the track
+        move.l  %a0, -(%sp)             | the result's place
+        move.l  12(%sp), -(%sp)         | the id
+        jsr     PRANGE_FN
+        addq.l  #4, %sp
+        move.l  4(%sp), -(%sp)          | [track][out][track]
+        jsr     mp_track_machine        | d0 = its machine, or -1
+        addq.l  #4, %sp
+        move.l  %d0, 4(%sp)             | [out][machine]
+        move.l  12(%sp), -(%sp)         | [id][out][machine]
+        jsr     mp_range
+        addq.l  #4, %sp
+        movea.l (%sp), %a0
+        addq.l  #8, %sp
+        move.l  %a0, %d0
+        rts
+
 | a1 = a parameter object -> d0 = its sound's machine, or -1 when it is not
 | a sound's parameter. Changes d0 and a1.
         .globl  mp_rmach

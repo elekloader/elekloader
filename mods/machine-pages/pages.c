@@ -268,6 +268,15 @@ void mp_reset_range(uint32_t id, int32_t *out, int32_t machine)
         mp_range(id, out, machine);
 }
 
+/* An audio track's machine in the UI kit, or -1 (a MIDI track, no kit): MIDI's parameter setter's. */
+int32_t mp_track_machine(uint32_t track)
+{
+    const uint8_t *kit = fw_kit;
+    if (track > 7 || !kit)
+        return -1;
+    return FW_SOUND(kit, track)[FW_SOUND_MACHINE];
+}
+
 /* ---- the LFO page ---------------------------------------------------------------------------------- */
 
 static const struct page *active_page(void)
