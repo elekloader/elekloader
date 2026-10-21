@@ -1208,9 +1208,12 @@ knobs and title in its vtables. Only one of them could be in a build. Core
   {L, R} 32-bit samples, before it goes to the main outputs, the headphones
   and the 12-channel bus the USB stream is built from. A handler changes it
   in place, and the scope, spectrum and tuner show the change. Handlers run
-  by their `order`, each on what the one before left. With none, core runs
-  four instructions more than the stock (the call, a test, a branch and
-  the return).
+  by their `order`, each on what the one before left. The EMAC is the
+  stage's: MACSR is 0xA0 (fractional, saturating), and its loop right
+  after the event accumulates into ACC0 and ACC1 from 0. A handler may use
+  the EMAC: core puts MACSR back and clears ACC0 and ACC1 after the
+  handlers. With none, core runs four instructions more than the stock
+  (the call, a test, a branch and the return).
 - **`core_mpages`**: pages of the master view (FUNC+LFO steps through
   them). Contribute a pointer to a `struct core_mpage` (`core3.h`): the stock
   page it follows (11 COMP, 12 internal mixer, 13 external mixer; any other

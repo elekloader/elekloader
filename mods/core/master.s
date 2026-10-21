@@ -32,14 +32,20 @@
 | keep it short. Handlers run in their order, each on what the one before it
 | left. The stage's registers are live here (d0-d2 its mix coefficients, d3,
 | a2, a3): core keeps d0-d1/a0-a2 around the handlers, which keep the rest
-| as C does. With none: four instructions more than stock (the jsr, a test,
-| a branch and the rts).
+| as C does. So is its EMAC: MACSR is 0xA0 (fractional, saturating; the
+| stage set it at 0x40072052) and its loop right after this starts with
+| msac into ACC0 and ACC1, so both must be 0, as the stock leaves them
+| after each use (movclr). Core puts MACSR back and clears ACC0 and ACC1 after the
+| handlers, so a handler may use the EMAC freely. With none: four
+| instructions more than stock (the jsr, a test, a branch and the rts).
         .globl  core_render_master
 core_render_master:
         tst.l   ev_render_master
         beq.s   9f
-        lea     -20(%sp), %sp
+        lea     -24(%sp), %sp
         movem.l %d0-%d1/%a0-%a2, (%sp)
+        move.l  %macsr, %d0
+        move.l  %d0, 20(%sp)            | the stage's MACSR
         lea     ev_render_master, %a2
 1:      move.l  (%a2)+, %d0
         beq.s   2f
@@ -48,8 +54,12 @@ core_render_master:
         jsr     (%a0)
         addq.l  #4, %sp
         bra.s   1b
-2:      movem.l (%sp), %d0-%d1/%a0-%a2
-        lea     20(%sp), %sp
+2:      move.l  20(%sp), %d0
+        move.l  %d0, %macsr
+        move.l  #0, %acc0               | the stage's loop accumulates into both
+        move.l  #0, %acc1
+        movem.l (%sp), %d0-%d1/%a0-%a2
+        lea     24(%sp), %sp
 9:      move.l  #MASTER_PAIR, %d4       | the instruction this replaced (and its CCR)
         rts
 

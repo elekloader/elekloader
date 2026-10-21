@@ -140,7 +140,8 @@ typedef void (*ev_render_voices_fn)(int32_t *blocks);   /* blocks = fw_track_blo
 
 /* ---- core 4.1: the master output and the master pages (FUNC+LFO) --------------------------------- */
 /* ev_render_master: the block's master pair before it goes to the outputs and the USB stream, 32 frames of
- * {L, R}, changed in place. The render, at interrupt level: keep it short. */
+ * {L, R}, changed in place. The render, at interrupt level: keep it short. The EMAC's MACSR is 0xA0 there
+ * (fractional, saturating); core puts it back and clears ACC0 and ACC1 after the handlers. */
 typedef void (*ev_render_master_fn)(int32_t *pair);
 /* ev_fxmix: SETTINGS > GLOBAL FX/MIX is built; add rows with core_additem(menu, row), as for ev_settings. */
 typedef void (*ev_fxmix_fn)(void *menu);

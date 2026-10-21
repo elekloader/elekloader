@@ -49,7 +49,9 @@ are 1.53's.
   in `sources`, so 4.0's code and symbols keep their places). Seven sites
   more, which mods that work on the whole mix hooked for themselves:
   - `ev_render_master` (0x400721e6): the block's master pair, before it
-    goes to the outputs and the USB stream;
+    goes to the outputs and the USB stream; core puts the stage's MACSR
+    back and clears ACC0 and ACC1 after the handlers, so they may use the
+    EMAC;
   - `core_mpages`: pages of the master view (FUNC+LFO), through its draw,
     keys, knobs, title and page clear (five pointers in its vtables), with
     `core_mpage_shown`, `core_mview` and `core_mview_draws`;
