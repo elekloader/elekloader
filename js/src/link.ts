@@ -476,7 +476,7 @@ export function link(mods: Mod2[], image: Uint8Array, lock: store.Lock | null = 
   }
   if (keeps) {
     if (!tables.has(store.IDS_TABLE)) throw new ModError(`${core.label()} imports ${store.GEN_SYMS[0]} but declares no table ${store.IDS_TABLE}`)
-    ;[newLock, storeNotes] = store.allocate(lock, decls, dev.key)
+    ;[newLock, storeNotes] = store.allocate(lock, decls, dev.key, core.version)
     let ids: Uint8Array[]
     ;[storeSyms, ids] = store.symbols(newLock)
     const taken = new Set(order.flatMap(m => m.exports))

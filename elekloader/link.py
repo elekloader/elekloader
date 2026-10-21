@@ -457,7 +457,7 @@ def link(mods, image, lock=None):
         if store.IDS_TABLE not in tables:
             raise ModError('%s imports %s but declares no table %s'
                            % (core.label(), store.GEN_SYMS[0], store.IDS_TABLE))
-        new_lock, store_notes = store.allocate(lock, decls, dev.key)
+        new_lock, store_notes = store.allocate(lock, decls, dev.key, core.version)
         store_syms, ids = store.symbols(new_lock, dev.key)
         taken = {nm for m in order for nm in m.exports}
         for nm in store_syms:

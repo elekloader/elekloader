@@ -33,13 +33,14 @@ There is one core file per device and OS:
 | Digitone mk1, Digitone Keys | 1.44 | `core-dn1-3.2-os1.44.elemod` | the same pre-release |
 | Digitone mk1, Digitone Keys | 1.43, 1.44 | `core-dn1-4.0.elemod`, `core-dn1-4.0-os1.44.elemod` | the [core-dn1-v4.0](https://github.com/irpina/elekloader/releases/tag/core-dn1-v4.0) pre-release |
 | Digitakt II | 1.17 | `core-dt2-1.0.elemod` | not released yet: build it ([below](#building-a-core)) |
-| Analog Rytm MKII | 1.73, 1.74 | `core-ar2-0.1.elemod`, `core-ar2-0.1-os1.74.elemod` | a proof of concept, not released: build it ([below](#building-a-core)) |
+| Analog Rytm MKII | 1.73 | `core-ar2-0.2.elemod` | a proof of concept, not released: the last core with 1.73; build it from commit 92a99c9 ([below](#building-a-core)) |
+| Analog Rytm MKII | 1.74 | `core-ar2-0.3.elemod` | a proof of concept, not released: build it ([below](#building-a-core)); 1.74 only |
 | Octatrack MKI, MKII | 1.40C | `core-ot-0.1.elemod` | the latest release (v0.4.0); PURGE SAMPLES freezes the unit with it, fixed in 0.3.1 |
 | Octatrack MKI, MKII | 1.40C | `core-ot-0.3.1.elemod` | the [core-ot-v0.3.1](https://github.com/irpina/elekloader/releases/tag/core-ot-v0.3.1) pre-release, and the shop: with the hook bus (0.2) and the sized reserve (0.3), neither released on its own |
 | Model:Cycles | 1.13 | `core-mc-0.1.elemod` | on main, not released yet: build it ([below](#building-a-core)) |
 | Model:Samples | 1.13 | `core-ms-0.1.elemod` | on main, not released yet: build it ([below](#building-a-core)) |
 
-Each core keeps all of the one before it: the same sites with the same
+Each core keeps all of the one before it, on each OS both support: the same sites with the same
 bytes, the same events and tables, and every symbol where the older core
 has it (`tests/test_sdk.py` checks the Digitakt mk1's against the released
 2.1 and the Digitone's against the released 2.3). So a mod built for an
@@ -82,7 +83,10 @@ core.
   machines list, where mods add SRC machines. From 3.0, with
   [machine-pages](../mods/machine-pages), a machine describes its own SRC
   page, so machine mods combine ([ADAPTING.md](ADAPTING.md), "Machine
-  pages").
+  pages"). From 4.1 the master output (`ev_render_master`), pages of the
+  mods' own among the master pages (`core_mpages`) and rows in SETTINGS >
+  GLOBAL FX/MIX (`ev_fxmix`), so master effects combine
+  ([ADAPTING.md](ADAPTING.md), "The master output and the master pages").
 - **Digitone mk1** ([mods/core-dn1](../mods/core-dn1)): the same hook bus,
   plus a voice note-on event, parameter slots, mod pages and project data
   (2.1), and the Mod Menu (2.2, a grid of icons from 2.3):
@@ -119,7 +123,10 @@ core.
   track, pattern or project, kept in bytes the stock OS never uses and
   placed from the build's lockfile, and an event after every project load
   and CREATE NEW ("Mod storage (core-ar2 0.2, Analog Rytm MKII)" in
-  ADAPTING.md). No machines and no firmware exports.
+  ADAPTING.md). From 0.3, 56 bits a sound (24 with 0.2), in the velocity
+  routes' amount low bytes too, and pattern-track and pattern fields kept
+  by stock's saves of one edited track, a pattern's settings or its locks,
+  not only by whole-pattern saves. No machines and no firmware exports.
 - **Octatrack** ([mods/core-ot](../mods/core-ot)): a source of its own. It
   reserves RAM for mods, copies their code there, and from 0.2 has a hook
   bus with the Octatrack's events; from 0.3 it reserves only the RAM the mods
@@ -165,7 +172,7 @@ toolchain ([ADAPTING.md](ADAPTING.md), "What you need"):
 python -m elekloader.sdk.build mods/core --stock Digitakt_OS1.54.syx                          # the Digitakt mk1's (or 1.53)
 python -m elekloader.sdk.build mods/core-dn1 --stock Digitone_and_Digitone_Keys_OS1.44.syx   # the Digitone mk1's (or 1.43)
 python -m elekloader.sdk.build mods/core-dt2 --stock Digitakt_II_OS1.17.syx                      # the Digitakt II's
-python -m elekloader.sdk.build mods/core-ar2 --stock Analog-Rytm_MKII_OS1.74.syx                  # the Analog Rytm MKII's (or 1.73)
+python -m elekloader.sdk.build mods/core-ar2 --stock Analog-Rytm_MKII_OS1.74.syx                  # the Analog Rytm MKII's (1.74 only from 0.3)
 python -m elekloader.sdk.build mods/core-ot --stock OCTATRACK_OS1.40C.syx                    # the Octatrack's
 python -m elekloader.sdk.build mods/core-mc --stock Model_Cycles_OS1.13.syx                  # the Model:Cycles'
 python -m elekloader.sdk.build mods/core-ms --stock Model_Samples_OS1.13.syx                 # the Model:Samples'
@@ -174,3 +181,12 @@ python -m elekloader.sdk.build mods/dspbus-ot --stock OCTATRACK_OS1.40C.syx     
 
 The SDK writes `out/core-<version>.elemod`; a release renames each as the
 table above does ([RELEASING.md](RELEASING.md)).
+
+A new core version may drop an old OS: core-ar2 0.3 builds for the Analog
+Rytm MKII 1.74 only, and 0.2 is the last core with 1.73. A build takes the
+newest core it has for the stock OS ([above](#how-a-build-picks-one)), so a
+1.73 build takes 0.2 when it is given, and a mod that needs 0.3 is refused
+on 1.73 (*"needs core ... or newer"*). Build 0.2 for 1.73 from the tree it
+was last in, commit 92a99c9 (`git worktree add ../core-ar2-0.2 92a99c9`,
+then its `mods/core-ar2` with the 1.73 stock file); the SDK writes
+`core-0.2.elemod` there.

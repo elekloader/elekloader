@@ -1,23 +1,21 @@
 {
  "id": "store-check",
- "version": "1.0",
+ "version": "1.1",
  "title": "Store check",
  "category": "Examples",
  "license": "GPL-2.0-or-later",
  "author": "Iced-Cream",
  "description": "The smallest user of core-ar2's mod storage: it declares a field in every scope, and STORE CHECK in SETTINGS writes a marker into each of them, in every pattern track, pattern, sound, kit and global slot and in the project. Columns at the bottom of the screen show how many markers no longer read back.",
  "device": "analog-rytm-mk2",
- "os": "1.73",
+ "os": "1.74",
  "sources": ["check.c", "label.s"],
- "cflags": ["-DFILLRECT_AT=0x400706ba"],
- "defsym": {"STRING_CTOR": "0x401bcd4c"},
- "ports": {
-  "1.74": {"cflags": ["-DFILLRECT_AT=0x40070726"], "defsym": {"STRING_CTOR": "0x401bcff0"}}
- },
+ "cflags": ["-DFILLRECT_AT=0x40070726"],
+ "defsym": {"STRING_CTOR": "0x401bcff0"},
  "storage": [
   {"sym": "sc_track", "scope": "track", "bits": 16},
   {"sym": "sc_pattern", "scope": "pattern", "bits": 32},
   {"sym": "sc_sound", "scope": "sound", "bits": 24},
+  {"sym": "sc_sound_b", "scope": "sound", "bits": 32},
   {"sym": "sc_kit_a", "scope": "kit", "bits": 32},
   {"sym": "sc_kit_b", "scope": "kit", "bits": 32},
   {"sym": "sc_global_a", "scope": "global", "bits": 32},
@@ -31,6 +29,6 @@
   {"event": "ev_settings", "fn": "sc_settings", "order": 60},
   {"event": "ev_project", "fn": "sc_project", "order": 60}
  ],
- "resources": {"names": ["settings:STORE CHECK"], "core": "0.2"},
+ "resources": {"names": ["settings:STORE CHECK"], "core": "0.3"},
  "requires": ["core"]
 }

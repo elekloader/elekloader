@@ -9,7 +9,7 @@
 // no field has used, a scope that runs out is repacked under a new generation, and any change gives the lockfile its
 // new layout's ID (a hash of the layout) with the old one kept as an ancestor. Nothing here is random.
 import { sha } from './bytes.ts'
-import { ModError, int } from './elemod.ts'
+import { ModError, cmpVersions, int } from './elemod.ts'
 import { dumps as pyDumps, repr, str } from './py.ts'
 
 export const FORMAT = 1
@@ -29,10 +29,11 @@ export type Lock = {
 }
 export type Decl = [string, string, string, number]          // mod id, sym, scope, bits
 
-type Spec = { fixed: Record<string, number>; live: Record<string, number>; store: number; items: Record<string, number>; split: { track: number; pattern: number } }
+type Spec = { fixed: Record<string, number>; coreFixed: [string, Record<string, number>][]; live: Record<string, number>; store: number; items: Record<string, number>; split: { track: number; pattern: number } }
 const DEVICES: Record<string, Spec> = {
   'analog-rytm-mk2': {
     fixed: { sound: 24, kit: 64, global: 40 },
+    coreFixed: [['0.3', { sound: 56 }]],      // from that core's version on (0.3: OS 1.74 only)
     live: { track: 512, pattern: 512 },        // the most the split can give an item
     store: 4352 - 10,                           // bytes after the header
     items: { track: 129 * 13, pattern: 129 },
@@ -47,9 +48,11 @@ function spec(devKey: string): Spec {
   return DEVICES[devKey]
 }
 
-export function capacity(devKey: string, split: { track: number; pattern: number }): Record<string, number> {
+/** -> {scope: bits} for a split, with a core of that version (null: the newest core's room). store.capacity. */
+export function capacity(devKey: string, split: { track: number; pattern: number }, core: string | null = null): Record<string, number> {
   const sp = spec(devKey)
   const cap: Record<string, number> = { ...sp.fixed }
+  for (const [v, f] of sp.coreFixed) if (core === null || cmpVersions(core, v) >= 0) Object.assign(cap, f)
   cap.track = 8 * split.track
   cap.pattern = 8 * split.pattern
   cap.project = 8 * (sp.store - sp.items.track * split.track - sp.items.pattern * split.pattern)
@@ -171,7 +174,7 @@ const ceilDiv = (a: number, b: number) => Math.floor((a + b - 1) / b)
 
 /** lock: a lockfile, or null for a new one; decls: [mod id, sym, scope, bits]. -> [the new lockfile, notes]. The
  * lockfile given is not changed. store.allocate. */
-export function allocate(lock0: Lock | null, decls: Decl[], devKey: string): [Lock, string[]] {
+export function allocate(lock0: Lock | null, decls: Decl[], devKey: string, core: string | null = null): [Lock, string[]] {
   const notes: string[] = []
   let lock: Lock
   let isNew: boolean
@@ -216,7 +219,7 @@ export function allocate(lock0: Lock | null, decls: Decl[], devKey: string): [Lo
   }
   for (const f of gone) lock.freed.push({ ...f })
   const fields = [...kept, ...added] as Field[]
-  let cap = capacity(devKey, lock.split)
+  let cap = capacity(devKey, lock.split, core)
   const repacked = new Set<string>()
 
   const repack = (scope: string) => {
@@ -246,14 +249,21 @@ export function allocate(lock0: Lock | null, decls: Decl[], devKey: string): [Lo
     // the pattern tracks come first in the store: they move only when their own size changes
     const moved = split.track !== lock.split.track ? ['track', 'pattern', 'project'] : ['pattern', 'project']
     lock.split = split
-    cap = capacity(devKey, split)
+    cap = capacity(devKey, split, core)
     if (cap.project < need('project'))
       throw new ModError(`the mods need ${sp.items.track * split.track + sp.items.pattern * split.pattern + ceilDiv(need('project'), 8)} bytes of pattern-track, pattern and project storage; the ${devKey} has ${sp.store}`)
     notes.push(`the tagged store now keeps ${split.track} B per pattern track and ${split.pattern} B per pattern`)
     for (const k of moved) repack(k)
   }
   for (const s of SCOPES) {
-    if (need(s) > cap[s]) throw new ModError(`the mods need ${need(s)} bits of ${s} storage; the ${devKey} has ${cap[s]}`)
+    if (need(s) > cap[s]) {
+      const more = capacity(devKey, lock.split)[s]
+      throw new ModError(`the mods need ${need(s)} bits of ${s} storage; the ${devKey} has ${cap[s]}${more > cap[s] ? ` with core ${core} (${more} with a newer core)` : ''}`)
+    }
+    if (fields.some(f => f.scope === s && f.offset !== null && f.offset + f.bits > cap[s])) {
+      repack(s)                   // placed by a newer core, past what this one keeps
+      continue
+    }
     const pend = pending(s)
     if (!pend.length) continue
     if (lock.next[s] + pend.reduce((a, f) => a + f.bits, 0) <= cap[s]) {

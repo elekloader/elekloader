@@ -163,8 +163,9 @@ The sites core owns (do not patch them):
   0x400a4816, 0x400db87e, 0x4011fb02, 0x40121656;
 - Analog Rytm MKII 1.74: 0x400008c0, 0x400a2c5a, 0x400a2cc2, 0x400a4838,
   0x400a4882, 0x400db8ea, 0x4011fb6e, 0x401216c2;
-- from core-ar2 0.2, on both Rytm releases, 22 more for mod storage
-  (listed under "Mod storage").
+- from core-ar2 0.2, on both Rytm releases, 22 more for mod storage, and
+  from 0.3, which is for 1.74 only (0.2 is the last core with 1.73), 10
+  more (32 in all; listed under "Mod storage").
 
 A firmware routine your mod calls has its own address on each device and
 each OS version: look it up for the release you target, and build one
@@ -614,9 +615,15 @@ the template copy of slot -1's load (by jsr).
 ### Mod storage (core-ar2 0.2, Analog Rytm MKII)
 
 From core-ar2 0.2 a Rytm mod can keep its own values with the project:
-per sound, kit, global slot, pattern track, pattern or project. They live in
-bytes the stock OS never reads or writes, so a project saved with mods still
-loads on the stock OS, and no stock function gives up any space. A mod
+per sound, kit, global slot, pattern track, pattern or project. Core-ar2
+0.3 is for OS 1.74 only; 0.2 is the last core with 1.73, and stays as it
+was released. A 1.73 build takes 0.2, the newest core for that OS, with
+0.2's room and saves; a mod that needs 0.3 (`"core": "0.3"` in
+`resources`) builds for 1.74 only. They live in
+bytes the stock OS never reads or writes (from 0.3 also in bytes it only
+ever holds at 0, read where it matters through sites core hooks), so a
+project saved with mods still loads on the stock OS, and no stock function
+gives up any space. A mod
 declares each field in its mod.json:
 
 ```json
@@ -637,12 +644,18 @@ core_store_set(STORE(my_accent), live_pattern, track, v + 1);
 
 | scope | item | index | room per item | kept in |
 |---|---|---|---|---|
-| `sound` | the live sound (a kit's, or the pool's) | unused | 24 bits | the sound's own spare bytes, so it travels with the sound (library, SysEx, copy and paste) |
+| `sound` | the live sound (a kit's, or the pool's) | unused | 56 bits (24 with core-ar2 0.2, so on 1.73) | the sound's own spare bytes, so it travels with the sound (library, SysEx, copy and paste); bits 24..55 sit in the velocity routes' amount low bytes, which stock holds at 0 |
 | `kit` | the live kit | unused | 64 bits | the kit's own spare bytes, so it travels with the kit |
 | `global` | unused | the slot, 0-3 | 40 bits | the global slot's spare bytes |
 | `track` | the live pattern | the track, 0-12 | 8 x T bits | the project's tagged store |
 | `pattern` | the live pattern | unused | 8 x P bits | the project's tagged store |
 | `project` | unused | unused | what is left | the project's tagged store |
+
+A sound's room depends on the core: 0.3 keeps 56 bits, 0.2 24, and the
+allocator gives a build what its core keeps (a mod that needs more than 24
+says `"core": "0.3"` in `resources`). Bits 0..23 are the same bytes with
+either core, so a 0.2 build's lockfile keeps its places with 0.3, and the
+sounds it saved load there with the new bits at 0.
 
 Zero is always the default: a field reads 0 in a new project, in a project
 saved by another layout, and after its scope was reset (below). Core exports
@@ -664,6 +677,16 @@ and the project's regions, so their data in older projects loads as zeros;
 the pattern tracks come first and keep theirs. The stock OS does not keep these
 bytes in a project file, so core also hooks the file save and load
 (Transfer's `.arprj` and the card) and Total Recall's buffer.
+
+**When a field reaches the project.** A live item's fields go into the
+stored project when stock saves that item there. A sound's or kit's go with
+the stock save of that sound or kit. Pattern-track and pattern fields go
+whenever stock saves any part of that pattern (from core-ar2 0.3: an edited
+track, the pattern's settings, its parameter locks; with 0.2, so on 1.73,
+only the whole pattern, at SAVE PROJECT or into a project file), and then the whole
+pattern's. A field a mod sets from its own page with no stock edit is
+kept by the next of those saves, as stock's own data is; until then a power
+cycle loses it, as it loses an unsaved stock edit.
 
 **The lockfile.** Where each field sits is decided once and then kept, in a
 JSON file: `elekloader.patch --lockfile FILE` (default:
@@ -702,7 +725,7 @@ sets things up per project, subscribes to `ev_project`:
 
 | event | when | C prototype | notes |
 |---|---|---|---|
-| `ev_project` | Analog Rytm MKII only (core-ar2 0.2): after CREATE NEW or the project reset (`how` 0, `CORE_PROJECT_NEW`), and after every project load (`how` 1, `CORE_PROJECT_LOADED`: at boot too); the stored project and its mod data are in place | `void f(int how, unsigned dropped)` | `dropped` has `STORE_DROPPED(scope)` set for each of `STORE_GLOBAL`, `STORE_TRACK`, `STORE_PATTERN` and `STORE_PROJECT` that loaded as zeros: saved by another layout, or with no mods. Sounds and kits are checked one by one as they load, so they are not in it. It comes from inside the load: keep it short, and don't start another load or save from it |
+| `ev_project` | Analog Rytm MKII only (core-ar2 from 0.2): after CREATE NEW or the project reset (`how` 0, `CORE_PROJECT_NEW`), and after every project load (`how` 1, `CORE_PROJECT_LOADED`: at boot too); the stored project and its mod data are in place | `void f(int how, unsigned dropped)` | `dropped` has `STORE_DROPPED(scope)` set for each of `STORE_GLOBAL`, `STORE_TRACK`, `STORE_PATTERN` and `STORE_PROJECT` that loaded as zeros: saved by another layout, or with no mods. Sounds and kits are checked one by one as they load, so they are not in it. It comes from inside the load: keep it short, and don't start another load or save from it |
 
 Core-ar2 0.2 owns 22 more sites, the same on 1.73 and 1.74 except the file
 save (0x400b0804 on 1.73, 0x400b0870 on 1.74) and the SysEx copies: 0x4000937c and 0x40009146
@@ -716,6 +739,13 @@ project commands copy, write and swap whole stored songs (0x4018b6ec,
 0x4018c09a, 0x4018c2bc on 1.73; 0x4018b8b8, 0x4018c266, 0x4018c488 on 1.74)
 and whole stored patterns (0x4018ba90, 0x4018c736, 0x4018c968 on 1.73;
 0x4018bc5c, 0x4018c902, 0x4018cb34 on 1.74).
+Core-ar2 0.3, on 1.74 only, owns those 22 at their 1.74 addresses and 10
+more: the calls through which stock saves an edited pattern track, a
+pattern's settings and its parameter locks by themselves (0x400bf818,
+0x400aacc4, 0x400ac2ce and 0x400ac2ec), and the velocity routes' push to
+the engine (0x4011f6a8), the VELOCITY MOD menu's getAmount (0x400c5326),
+setAmount (0x400c52b2), setRoute (0x400c51b4) and reset (0x400c542c), and
+the aftertouch menu's setRoute (0x4003391e).
 `examples/store-check-ar2` uses a field in each
 scope and shows which no longer read back.
 
@@ -1164,6 +1194,52 @@ gap between the pool's end (0x47BAF640 in 1.53, 0x47BBF640 in 1.54, which
 the OS compares against) and the ring at 0x47C00000. No instruction operand
 points into it, and in an emulator run nothing writes there. As on the
 Digitone, a build takes 4.0, the newest core, for every selection.
+
+### The master output and the master pages (core 4.1, Digitakt mk1)
+
+Mods that work on the whole mix (a master EQ, a master effect suite) used to
+patch the same places: the instruction that hands the master pair to the
+outputs (0x400721e6 in 1.53 and 1.54) and the master view's draw, keys,
+knobs and title in its vtables. Only one of them could be in a build. Core
+4.1 owns those places once and offers them to any number of mods:
+
+- **`ev_render_master`**: `void f(int32_t *pair)`, once a block in the
+  render (interrupt level), with the block's master pair, 32 frames of
+  {L, R} 32-bit samples, before it goes to the main outputs, the headphones
+  and the 12-channel bus the USB stream is built from. A handler changes it
+  in place, and the scope, spectrum and tuner show the change. Handlers run
+  by their `order`, each on what the one before left. With none, core runs
+  four instructions more than the stock (the call, a test, a branch and
+  the return).
+- **`core_mpages`**: pages of the master view (FUNC+LFO steps through
+  them). Contribute a pointer to a `struct core_mpage` (`core3.h`): the stock
+  page it follows (11 COMP, 12 internal mixer, 13 external mixer; any other
+  value puts it last), its short name and title, and `draw`, `key`, `enc`
+  and `clear` (any may be 0). Core puts the page in the view's list, as kind 0
+  (the firmware's "None" page, which has no knobs), and while it is shown
+  gives the title bar and the pop-up its names ("Master EQ (2/4)") and
+  calls `draw(view, bmp)` after the stock draw (the title bar, and below
+  it kind 0's eight empty knob boxes, which the page clears where it
+  draws: `fw_fillrect(bmp, 0, 0, 127, 52, 0)` clears them all),
+  `key(view, event)` and
+  `enc(view, event)` before the stock handlers: nonzero takes the event,
+  and `clear(view)` when the page is cleared (FUNC + a held LFO + PLAY,
+  as on the stock pages), after the stock clear has shown its pop-up.
+  Pages that follow the same stock page keep their `order`. A mod that
+  reads keys or knobs itself (`ev_key`, `ev_enc`) asks
+  `core_mpage_shown(view)` which page is up; `core_mview` is the master
+  view and `core_mview_draws` counts its draws, so a tick that sees the
+  count move knows the view is on the screen. `fw_invalidate(view)` has a
+  page drawn again after a change.
+- **`ev_fxmix`**: `void f(void *menu)` when SETTINGS > GLOBAL FX/MIX is
+  built, after its last row: add rows with `core_additem(menu, row)`, as
+  `ev_settings` handlers do.
+
+The descriptor lives in `.data` (core writes its last two words, the view
+and the page's place in its list). The smallest mod that uses all of it is
+[examples/master-mono](../examples/master-mono): a page after the internal
+mixer whose knob A sends the outputs stereo, mono or swapped. Digi EQ and
+Tone+FX are built on it, and combine.
 
 ### Key LEDs and each block's sound parameters (core-dn1 3.3, Digitone mk1)
 

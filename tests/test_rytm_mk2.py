@@ -8,7 +8,7 @@ variable; a test whose input is missing is skipped, not passed:
 
 The addresses below are 1.73's. 1.74's main OS is 1.73's with code added in
 two places (Outbox 8's main-output routing), so what follows each moved:
-see moved().
+see moved(). Core-ar2 0.3 is for 1.74 only (0.2 is the last core with 1.73).
 """
 import json
 import os
@@ -112,11 +112,22 @@ def test_the_os_stores_from_0x300000():
 
 
 def test_core_ar2_sites():
-    """Every site's stock bytes, and that each covers whole instructions."""
+    """Every site's stock bytes, and that each covers whole instructions.
+    Core-ar2 0.3 is for 1.74 only (0.2 is the last core with 1.73): on 1.73
+    its build is refused."""
     _r, _s, img = stock()
     with open(os.path.join(ROOT, 'mods', 'core-ar2', 'mod.json')) as fh:
-        mod, _port = build.for_release(json.load(fh), DEV, REL)
-    assert mod['device'] == DEV.key and mod['os'] == REL.version
+        j = json.load(fh)
+    assert j['os'] == '1.74' and not j.get('ports')
+    if REL.version != '1.74':
+        try:
+            build.for_release(j, DEV, REL)
+        except build.BuildError as e:
+            assert 'is for analog-rytm-mk2 1.74' in str(e), e
+            return
+        raise AssertionError('core-ar2 %s built for %s' % (j['version'], REL.version))
+    mod, port = build.for_release(j, DEV, REL)
+    assert not port and mod['device'] == DEV.key and mod['os'] == REL.version
     for s in mod['sites']:
         a, want = int(s['addr'], 16), bytes.fromhex(s['stock'])
         assert img[a - DEV.main_load:a - DEV.main_load + len(want)] == want, s
@@ -127,12 +138,19 @@ def test_core_ar2_sites():
     assert at(img, 0x4011fafa, 4) == bytes.fromhex('4e56') + (-int(d['RENDER_FRAME'], 16) & 0xffff).to_bytes(2, 'big')
     # SETTINGS: the jmp's 6 bytes, then where core_settings rejoins
     assert int(d['SETTINGS_RET'], 16) == moved(0x400db87e) + 6
-    # and the rest are where 1.73's are, moved
-    with open(os.path.join(ROOT, 'mods', 'core-ar2', 'mod.json')) as fh:
-        d73 = json.load(fh)['defsym']
-    for k, v in d73.items():
-        if v.lower().startswith('0x4'):
-            assert int(d[k], 16) == moved(int(v, 16)), k
+    # SoundConfigChangedInfo's vtable (data, which moves otherwise): the
+    # immediate the velocity setAmount site displaces
+    vset = [x for x in mod['sites'] if x['target'] == 'st_vel_set'][0]
+    assert d['SOUND_CHANGED'] == '0x' + vset['stock'][-8:]
+    # each jmp stub's resume address: its site plus the bytes it displaces
+    # (st_vel_get also does the read after them and resumes at the exit)
+    for k, t in (('VEL_PUSH_RET', 'st_vel_push'), ('VEL_SET_RET', 'st_vel_set'),
+                 ('VEL_ROUTE_RET', 'st_vel_route'), ('AT_ROUTE_RET', 'st_at_route')):
+        x = [x for x in mod['sites'] if x['target'] == t][0]
+        assert int(d[k], 16) == int(x['addr'], 16) + len(x['stock']) // 2, k
+    # mod storage's sites (core-ar2 0.3: 32 of the 40)
+    assert len(mod['sites']) == 40
+    assert len([x for x in mod['sites'] if x['target'].startswith('st_')]) == 32
 
 
 def test_no_copy_of_the_bootstrap_in_the_main_os():

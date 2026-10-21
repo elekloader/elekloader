@@ -1,7 +1,7 @@
 | SPDX-License-Identifier: GPL-2.0-or-later
 | core-ar2 0.2, mod storage (store.c): each hooked routine's first
 | instructions (the bytes its jmp site replaces), then a jump to the next.
-| Called like the stock routine. The same in OS 1.73 and 1.74.
+| Called like the stock routine. The same in OS 1.73 (core 0.2) and 1.74.
         .text
         .globl  st_sound_save_body, st_sound_load_body, st_pat_save_body, st_pat_load_body
         .globl  st_kit_save_body, st_kit_load_body, st_glob_save_body, st_glob_load_body

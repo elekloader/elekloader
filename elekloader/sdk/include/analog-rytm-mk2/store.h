@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
-/* core-ar2 0.2: mod storage (docs/ADAPTING.md, "Mod storage (core-ar2 0.2,
- * Analog Rytm MKII)"). Declare each field in mod.json:
+/* core-ar2 0.2 and 0.3: mod storage (docs/ADAPTING.md, "Mod storage
+ * (core-ar2 0.2, Analog Rytm MKII)"). Declare each field in mod.json:
  *
  *     "storage": [{"sym": "my_accent", "scope": "track", "bits": 4}]
  *
@@ -15,7 +15,8 @@
  * interrupts while they read or write the field: use them from any context,
  * the audio interrupt too.
  *
- * item and index, by scope:
+ * item and index, by scope (room per item: sound 56 bits with core 0.3, 24
+ * with 0.2; kit 64; global 40; track and pattern the store's split):
  *   sound    the live sound (a kit's or the pool's)     index unused
  *   kit      the live kit                               index unused
  *   global   unused (0)                                 the slot, 0..3

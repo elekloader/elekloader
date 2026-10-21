@@ -1,0 +1,16 @@
+{
+ "id": "master-mono",
+ "version": "1.0",
+ "title": "Master mono",
+ "category": "Examples",
+ "license": "GPL-2.0-or-later",
+ "description": "A master page (FUNC+LFO) after the internal mixer whose knob A sends the outputs STEREO, MONO or with left and right swapped (page CLEAR: back to STEREO). A template for core 4.1's master output (ev_render_master) and master pages (core_mpages): it names no firmware address, so its 1.54 port is empty (docs/ADAPTING.md, \"The master output and the master pages\").",
+ "device": "digitakt-mk1",
+ "os": "1.53",
+ "sources": ["mono.c"],
+ "ports": {"1.54": {}},
+ "subscribe": [{"event": "ev_render_master", "fn": "mono_render", "order": 50}],
+ "contribute": [{"to": "core_mpages", "order": 50, "data": "00000000", "relocs": [[0, "abs32", "sym:mono_page", 0]]}],
+ "requires": ["core"],
+ "resources": {"names": ["ui:master page MONO"], "core": "4.1"}
+}

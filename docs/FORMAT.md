@@ -144,10 +144,15 @@ Nothing is built unless all of these pass:
 A mod's `storage` lists fields: `sym` (a C name), `scope` (`sound`, `kit`,
 `global`, `track`, `pattern` or `project`) and `bits` (1-32). Only a core
 that imports `__store_gen` takes them (core-ar2 from 0.2); with another
-core a mod that declares storage is refused. The linker:
+core a mod that declares storage is refused. A scope's room can depend on
+the core's version (a sound's: 24 bits with core-ar2 0.2, 56 from 0.3,
+which is for OS 1.74 only: a 1.73 build has 0.2's 24). The
+linker:
 
 - reads the build's lockfile, or starts one, and places every field
-  (`elekloader/store.py`, `js/src/store.ts`: the same bytes from both);
+  (`elekloader/store.py`, `js/src/store.ts`: the same bytes from both)
+  within what the build's core keeps; a field an earlier build placed past
+  that (with a newer core) repacks its scope;
 - defines each `sym` as `scope << 28 | bits << 22 | offset`, the offset
   in bits from the start of the scope's bytes, most significant bit first;
 - defines `__store_gen` (the sound, kit, global and track generations,
@@ -228,8 +233,8 @@ The Analog Rytm MKII's core (core-ar2) has `ev_tick`, `ev_draw`,
 `ev_key`, `ev_enc`, `ev_settings`, `ev_render_in` and `ev_render_out`, at
 0x400a2bee, 0x400a2c56, 0x400a47cc, 0x400a4816, 0x400db87e, 0x4011fb02 and
 0x40121656 in 1.73, and 0x400a2c5a, 0x400a2cc2, 0x400a4838, 0x400a4882,
-0x400db8ea, 0x4011fb6e and 0x401216c2 in 1.74 (`mods/core-ar2/mod.json`,
-its `ports`). It declares those seven events and, from 0.2, the event
+0x400db8ea, 0x4011fb6e and 0x401216c2 in 1.74 (`mods/core-ar2/mod.json`;
+from 0.3 the core is for 1.74 only, and 0.2 is the last with 1.73). It declares those seven events and, from 0.2, the event
 `ev_project` (after CREATE NEW and every project load, docs/ADAPTING.md)
 and the table `core_store_ids` (entry 4, filled by the linker: below); no
 `.fast` copy table, so no `.fast` code.

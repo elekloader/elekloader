@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
-/* core-ar2 0.2: mod storage on the Analog Rytm MKII (OS 1.73 and 1.74, the
- * same addresses in both).
+/* core-ar2 0.3: mod storage on the Analog Rytm MKII, OS 1.74 only (core 0.2
+ * is the last with 1.73). Every address here is 1.74's.
  *
  * Mods declare fields in their mod.json ("storage"); elekloader places them
  * at build time from the build's lockfile (docs/ADAPTING.md, "Mod storage")
@@ -12,8 +12,9 @@
  *
  *   scope     live home                         persisted in
  *   sound     live sound +0x6d..+0x6f (3 B)     stored sound +0x70..+0x72, with
- *                                               the layout ID (+0x73) and the
- *                                               sound generation (+0x77)
+ *             and the 4 velocity routes' amount the layout ID (+0x73) and the
+ *             low bytes +0x71, +0x74, +0x77,    sound generation (+0x77), and
+ *             +0x7a (from 0.3; route.s)         +0x78..+0x7b
  *   kit       live kit FX words 38..41          stored kit +0x7c6+0x50..+0x57,
  *             (+0x796..+0x79d, 8 B)             with the layout ID (+0x58) and
  *                                               the kit generation (+0x5c)
@@ -33,7 +34,12 @@
  * The SysEx project commands that copy, swap or write whole stored songs go
  * through st_song_copy, which leaves the target's store bytes, and those for
  * whole stored patterns through st_pattern_copy, which clears the target
- * slot's fields (three sites each, at different addresses on 1.73 and 1.74).
+ * slot's fields (three sites each).
+ *
+ * Stock saves an edited pattern track, a pattern's settings and its
+ * parameter locks into the stored project one part at a time, not through
+ * the pattern serializer (from 0.3: st_track_save and the others below), so
+ * each of those saves also writes the pattern's track and pattern fields.
  *
  * Data is used only when it was written by this layout or one of its
  * ancestors (core_store_ids) and its scope's generation is this build's:
@@ -55,6 +61,8 @@
 
 #define SOUND_HOME 0x6d
 #define SOUND_SPARE 0x70
+#define SOUND_SPARE2 0x78       /* the route bytes' copies, 0.3 */
+#define SOUND_BYTES 7
 #define KIT_HOME 0x796
 #define KIT_SPARE (0x7c6 + 0x50)
 #define TRACK_HOME 785
@@ -78,6 +86,22 @@ typedef int (*psave_t)(void *dst, void *live, int a, int flags, void *progress);
 typedef int (*pload_t)(void *live, void *src, void *progress);
 #define PROJECT_SAVE ((psave_t)0x4000d10e)
 #define PROJECT_LOAD ((pload_t)0x4000cd2e)
+
+/* the pattern serializer's parts that stock also calls on their own, each
+ * (stored part, live part, ...) -> nonzero when done */
+typedef int (*part_t)(unsigned char *dst, unsigned char *live, int a, int b, int c);
+#define TRACK_SAVE ((part_t)0x40008dc8)         /* stored track (641 B), live track (917 B) */
+#define SETTINGS_SAVE ((part_t)0x40008b06)      /* pattern +13089, live pattern +85683 */
+#define LOCK_SAVE ((part_t)0x4000940c)          /* pattern +8337, live +11921, a, param, track */
+#define LOCKS_SAVE ((part_t)0x40009216)         /* pattern +8337, live +11921, a */
+#define REC_TRACKS 4                            /* the stored pattern's first track */
+#define REC_TRACK 641
+#define REC_LOCKS 8337
+#define REC_SETTINGS 13089
+#define LIVE_TRACK 917
+#define LIVE_LOCKS 11921
+#define LIVE_SETTINGS 85683
+#define ROUTE_DEFAULTS ((void (*)(unsigned char *))0x4001224e)  /* a velocity route set's */
 
 /* store.s: each routine's displaced first instructions, then a jump back */
 extern int st_sound_save_body(void *dst, void *live, int a);
@@ -129,6 +153,13 @@ static unsigned gen(int scope)
 static volatile unsigned char *store_byte(unsigned char *img, unsigned k)
 {
     return img + 0x1eecfb + 1304 * (k >> 8) + 0x116 + 4 * (k & 255);
+}
+
+/* sound byte k (0..6) of the live sound's fields, from +0x6d: its 3 spare
+ * bytes, then the 4 velocity routes' amount low bytes (+0x71 + 3i) */
+static unsigned sound_at(unsigned k)
+{
+    return k < 3 ? k : 3 * k - 5;
 }
 
 static unsigned rd32(const volatile unsigned char *p)
@@ -251,18 +282,26 @@ static int global_slot(const unsigned char *live)
 
 /* ---- the pattern serializers: pattern-track, pattern and project data ---- */
 
+/* a live pattern's track and pattern fields into pattern n of an image's store */
+static void pattern_out(unsigned char *img, int n, const unsigned char *live, int tracks, int pattern)
+{
+    unsigned t, j, T = SPLIT_T, P = SPLIT_P;
+    if (tracks)
+        for (t = 0; t < 13; t++)
+            for (j = 0; j < T; j++)
+                B(store_byte(img, HEADER + (13 * n + t) * T + j)) = live[LIVE_TRACK * t + TRACK_HOME + j];
+    if (pattern)
+        for (j = 0; j < P; j++)
+            B(store_byte(img, PATTERNS_AT + P * n + j)) = live[PATTERN_HOME + j];
+}
+
 int st_pat_save(unsigned char *dst, unsigned char *live, int a)
 {
     unsigned char *img = pattern_image(dst);
     int r = st_pat_save_body(dst, live, a), n = pattern_index(img, dst);
-    unsigned t, j, T = SPLIT_T, P = SPLIT_P;
     if (n < 0 || !live)
         return r;
-    for (t = 0; t < 13; t++)
-        for (j = 0; j < T; j++)
-            B(store_byte(img, HEADER + (13 * n + t) * T + j)) = live[917 * t + TRACK_HOME + j];
-    for (j = 0; j < P; j++)
-        B(store_byte(img, PATTERNS_AT + P * n + j)) = live[PATTERN_HOME + j];
+    pattern_out(img, n, live, 1, 1);
     if (n == 0 && img != S) {           /* a whole project leaves: its header and project data */
         store_copy(img, S, 0, HEADER);
         store_copy(img, S, PROJECT_AT, STORE_BYTES);
@@ -293,15 +332,82 @@ int st_pat_load(unsigned char *live, unsigned char *src)
     return r;
 }
 
+/* ---- the parts of a pattern stock saves on their own ----
+ * After a front-panel edit and on a pattern change, stock saves each edited
+ * track (st_track_save), a pattern's settings (st_settings_save) and its
+ * parameter locks (st_lock_save, st_locks_save) into the stored project, each
+ * by itself. Each of those saves also writes the whole pattern's track and
+ * pattern fields: their live homes are what a mod last set, and they have no
+ * edit marks of their own. Only into an image whose header is this layout's
+ * (the stored project's always is, from the first project load at boot). No
+ * stock routine loads one of these parts by itself: a pattern comes back
+ * whole, through st_pat_load. */
+
+static void part_out(unsigned char *rec, unsigned char *live)
+{
+    unsigned char *img = pattern_image(rec);
+    int n = pattern_index(img, rec);
+    if (n < 0 || !live)
+        return;
+    pattern_out(img, n, live, store_ok(img, SC_TRACK), store_ok(img, SC_PATTERN));
+}
+
+/* 0x400bf818's call: (stored track, live track, a, b, c); the track is found
+ * from where its record sits */
+int st_track_save(unsigned char *dst, unsigned char *live, int a, int b, int c)
+{
+    int r = TRACK_SAVE(dst, live, a, b, c), t;
+    unsigned char *rec;
+    if (!dst || !live)
+        return r;
+    for (t = 0; t < 13; t++) {
+        rec = dst - REC_TRACKS - REC_TRACK * t;
+        if (pattern_index(pattern_image(rec), rec) >= 0) {
+            part_out(rec, live - LIVE_TRACK * t);
+            break;
+        }
+    }
+    return r;
+}
+
+/* 0x400aacc4's call: (stored pattern +13089, live pattern +85683) */
+int st_settings_save(unsigned char *dst, unsigned char *live, int a)
+{
+    int r = SETTINGS_SAVE(dst, live, a, 0, 0);
+    if (dst && live)
+        part_out(dst - REC_SETTINGS, live - LIVE_SETTINGS);
+    return r;
+}
+
+/* 0x400ac2ce's call: one parameter's locks on one track */
+int st_lock_save(unsigned char *dst, unsigned char *live, int a, int param, int track)
+{
+    int r = LOCK_SAVE(dst, live, a, param, track);
+    if (dst && live)
+        part_out(dst - REC_LOCKS, live - LIVE_LOCKS);
+    return r;
+}
+
+/* 0x400ac2ec's call: all of a pattern's locks */
+int st_locks_save(unsigned char *dst, unsigned char *live, int a)
+{
+    int r = LOCKS_SAVE(dst, live, a, 0, 0);
+    if (dst && live)
+        part_out(dst - REC_LOCKS, live - LIVE_LOCKS);
+    return r;
+}
+
 /* ---- sounds and kits: their own bytes, with their own copy of the ID ---- */
 
 int st_sound_save(unsigned char *dst, unsigned char *live, int a)
 {
     int r = st_sound_save_body(dst, live, a);
     if (dst && live) {
-        dst[SOUND_SPARE] = live[SOUND_HOME];
-        dst[SOUND_SPARE + 1] = live[SOUND_HOME + 1];
-        dst[SOUND_SPARE + 2] = live[SOUND_HOME + 2];
+        int j;
+        for (j = 0; j < 3; j++)
+            dst[SOUND_SPARE + j] = live[SOUND_HOME + j];
+        for (j = 3; j < SOUND_BYTES; j++)
+            dst[SOUND_SPARE2 + j - 3] = live[SOUND_HOME + sound_at(j)];
         wr32(dst + SOUND_SPARE + 3, core_store_ids[0]);
         dst[SOUND_SPARE + 7] = gen(SC_SOUND);
     }
@@ -314,8 +420,10 @@ int st_sound_load(unsigned char *live, unsigned char *src)
     if (live && src) {
         int ok = st_image && known_id(rd32(src + SOUND_SPARE + 3)) &&
                  src[SOUND_SPARE + 7] == gen(SC_SOUND);
-        for (j = 0; j < 3; j++)
-            live[SOUND_HOME + j] = ok ? src[SOUND_SPARE + j] : 0;
+        /* after the body: its route load wrote each amount's low byte 0 */
+        for (j = 0; j < SOUND_BYTES; j++)
+            live[SOUND_HOME + sound_at(j)] =
+                ok ? src[j < 3 ? SOUND_SPARE + j : SOUND_SPARE2 + j - 3] : 0;
     }
     return r;
 }
@@ -392,9 +500,27 @@ int st_sound_init(unsigned char *sound, int a, int b, int c)
 {
     int r = st_sound_init_body(sound, a, b, c), j;
     if (sound)
-        for (j = 0; j < 3; j++)
-            sound[SOUND_HOME + j] = 0;
+        for (j = 0; j < SOUND_BYTES; j++)
+            sound[SOUND_HOME + sound_at(j)] = 0;
     return r;
+}
+
+/* 0x400c542c's call, the VELOCITY MOD menu's reset of a sound's velocity
+ * routes (routes: the live sound +0x70): the routes go to stock's defaults,
+ * the fields in their low bytes stay */
+void st_vel_defaults(unsigned char *routes)
+{
+    unsigned char keep[4];
+    int i;
+    if (!routes) {
+        ROUTE_DEFAULTS(routes);
+        return;
+    }
+    for (i = 0; i < 4; i++)
+        keep[i] = routes[3 * i + 1];
+    ROUTE_DEFAULTS(routes);
+    for (i = 0; i < 4; i++)
+        routes[3 * i + 1] = keep[i];
 }
 
 /* CREATE NEW and the project reset: a fresh store, and no global data */
@@ -547,6 +673,8 @@ static volatile unsigned char *field_base(unsigned scope, unsigned char *item, i
 
 static volatile unsigned char *field_byte(unsigned scope, volatile unsigned char *base, unsigned k)
 {
+    if (scope == SC_SOUND)
+        return base + sound_at(k);
     return scope == SC_PROJECT ? store_byte(S, PROJECT_AT + k) : base + k;
 }
 

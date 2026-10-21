@@ -23,6 +23,11 @@ field where it was from one build to the next:
 - when a scope's never-used bits run out, its generation goes up and its
   fields are packed again from bit 0: projects and library sounds from older
   generations load that scope at defaults;
+- a scope's room can depend on the core's version (core-ar2 0.3 keeps 56
+  bits a sound, 0.2 24; 0.3 is for OS 1.74 only, so a 1.73 build has 0.2's
+  room): bits a newer core added come after the older
+  core's, so its placements keep their meaning; a field that lies past what
+  the build's core keeps repacks its scope;
 - the tagged store's split (bytes per pattern track and per pattern) grows
   when its fields need it, which moves the store's regions after it, so the
   generations of the scopes that move go up (the patterns and the project;
@@ -52,7 +57,7 @@ import hashlib
 import json
 import re
 
-from .elemod import ModError, _int
+from .elemod import ModError, _int, version_key
 
 FORMAT = 1
 SCOPES = ('sound', 'kit', 'global', 'track', 'pattern', 'project')
@@ -66,6 +71,7 @@ IDS_TABLE = 'core_store_ids'
 DEVICES = {
     'analog-rytm-mk2': {
         'fixed': {'sound': 24, 'kit': 64, 'global': 40},
+        'core_fixed': (('0.3', {'sound': 56}),),     # from that core's version on (0.3: OS 1.74 only)
         'live': {'track': 512, 'pattern': 512},     # the most the split can give an item
         'store': 4352 - 10,                          # bytes after the header
         'items': {'track': 129 * 13, 'pattern': 129},
@@ -84,10 +90,19 @@ def _spec(dev_key):
     return DEVICES[dev_key]
 
 
-def capacity(dev_key, split):
-    """-> {scope: bits} for a split."""
+def _fixed(sp, core):
+    fixed = dict(sp['fixed'])
+    for v, f in sp.get('core_fixed', ()):
+        if core is None or version_key(core) >= version_key(v):
+            fixed.update(f)
+    return fixed
+
+
+def capacity(dev_key, split, core=None):
+    """-> {scope: bits} for a split, with a core of that version (None: the
+    newest core's room)."""
     sp = _spec(dev_key)
-    cap = dict(sp['fixed'])
+    cap = _fixed(sp, core)
     cap['track'] = 8 * split['track']
     cap['pattern'] = 8 * split['pattern']
     left = sp['store'] - sp['items']['track'] * split['track'] - sp['items']['pattern'] * split['pattern']
@@ -217,9 +232,10 @@ def _bump(g):
     return 1 if g >= 255 else g + 1
 
 
-def allocate(lock, decls, dev_key):
+def allocate(lock, decls, dev_key, core=None):
     """lock: a lockfile (dict) or None for a new one; decls: [(mod id, sym,
-    scope, bits)]. -> (the new lockfile, [notes]). The lockfile given is not
+    scope, bits)]; core: the build's core's version (None: the newest core's
+    room). -> (the new lockfile, [notes]). The lockfile given is not
     changed."""
     notes = []
     if lock is None:
@@ -256,7 +272,7 @@ def allocate(lock, decls, dev_key):
     for f in gone:
         lock['freed'].append(dict(f))
     fields = kept + added
-    cap = capacity(dev_key, lock['split'])
+    cap = capacity(dev_key, lock['split'], core)
     repacked = set()
 
     def repack(scope):
@@ -294,7 +310,7 @@ def allocate(lock, decls, dev_key):
         moved = ('track', 'pattern', 'project') if split['track'] != lock['split']['track'] \
             else ('pattern', 'project')
         lock['split'] = split
-        cap = capacity(dev_key, split)
+        cap = capacity(dev_key, split, core)
         if cap['project'] < need('project'):
             raise ModError('the mods need %d bytes of pattern-track, pattern and project storage; '
                            'the %s has %d' % ((sp['items']['track'] * split['track']
@@ -306,8 +322,15 @@ def allocate(lock, decls, dev_key):
             repack(k)
     for s in SCOPES:
         if need(s) > cap[s]:
-            raise ModError('the mods need %d bits of %s storage; the %s has %d'
-                           % (need(s), s, dev_key, cap[s]))
+            more = capacity(dev_key, lock['split'])[s]
+            raise ModError('the mods need %d bits of %s storage; the %s has %d%s'
+                           % (need(s), s, dev_key, cap[s],
+                              ' with core %s (%d with a newer core)' % (core, more)
+                              if more > cap[s] else ''))
+        if any(f['offset'] is not None and f['offset'] + f['bits'] > cap[s]
+               for f in fields if f['scope'] == s):
+            repack(s)                   # placed by a newer core, past what this one keeps
+            continue
         pend = pending(s)
         if not pend:
             continue

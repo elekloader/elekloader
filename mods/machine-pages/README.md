@@ -17,7 +17,7 @@ the mod shop: tick it there and the page takes the newest core for it.
 | | |
 |---|---|
 | needs | core 3.0 (`resources.core`), and refuses beside digichain, which owns the same places |
-| sites | 99, listed in `mod.json`. 1.1's 20: 7 on the SRC page, 4 range lookups, 5 on the LFO page, 2 SAMP compares, the machine menu's icon row and the render point 0x40077fba. 1.2's extra values add 77: 50 one-byte bounds (the parameter-id compares, 164 to 171), and 27 hooks: the SRC page's page flip, title and copy/clear/paste, the id-slot maps, the descriptor table and its 7 readers, defaults, Randomize, locks and the sound file's save/load/upgrade and LFO destinations. 1.3 adds 2: MIDI's range lookups, the CC's (0x40010d50) and the NRPN's (0x40010154) |
+| sites | 101, listed in `mod.json`. 1.1's 20: 7 on the SRC page, 4 range lookups, 5 on the LFO page, 2 SAMP compares, the machine menu's icon row and the render point 0x40077fba. 1.2's extra values add 77: 50 one-byte bounds (the parameter-id compares, 164 to 171), and 27 hooks: the SRC page's page flip, title and copy/clear/paste, the id-slot maps, the descriptor table and its 7 readers, defaults, Randomize, locks and the sound file's save/load/upgrade and LFO destinations. 1.2.1 adds 2: the stores of the firmware's in-place parameter sync. 1.3 adds 2: MIDI's range lookups, the CC's (0x40010d50) and the NRPN's (0x40010154) |
 | exports | `cm_ui_v3`, from 1.1 `cm_ui_v31`, from 1.2 `cm_ui_v32`: the markers a machine's page names; from 1.2 `cm_src_value` |
 | claims | from 1.2, `soundslot:46` to `soundslot:52`, the extra values' slots |
 | declares | `ev_render_voices`, the render event |
@@ -90,6 +90,9 @@ the firmware leaves unregistered: they lock, the LFOs reach them from
 the stock DEST list, Randomize takes them, and `cm_src_value(track, k)`
 reads value k (0-14) after locks and LFOs. A sound of such a machine is
 saved as version 4 of the 160-byte record, which only machine-pages reads.
+When a parameter changes, the firmware also writes it into the stored
+record in place; from 1.2.1 that write lands in a version-4 record's bit
+stream instead of over it.
 Slot 0 is not used: it is kept for a machine's id, and version 4 carries
 it as it is. Only a machine whose params machine is 3 (SLICE's bank) can
 have extras. The page a view shows is its own track's: the layout's

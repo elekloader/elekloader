@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
-/* store-check: the smallest user of core-ar2's mod storage (core 0.2).
+/* store-check: the smallest user of core-ar2's mod storage (core 0.3).
  *
  * mod.json declares a field in every scope, and elekloader gives each one a
  * symbol whose value is the field's descriptor. STORE CHECK in SETTINGS
@@ -31,6 +31,7 @@ typedef void (*fillrect_t)(void *bmp, int x0, int y0, int x1, int y1, int colour
 STORE_FIELD(sc_track);
 STORE_FIELD(sc_pattern);
 STORE_FIELD(sc_sound);
+STORE_FIELD(sc_sound_b);
 STORE_FIELD(sc_kit_a);
 STORE_FIELD(sc_kit_b);
 STORE_FIELD(sc_global_a);
@@ -90,12 +91,16 @@ static int walk(int col, int mode)
         break;
     case 2:
         for (a = -1; a < 128; a++)
-            for (b = 0; b < 12; b++)
+            for (b = 0; b < 12; b++) {
                 bad += one(STORE(sc_sound), LIVE_KIT_SOUND(a, b), 0, 12 * (a + 1) + b, mode);
+                bad += one(STORE(sc_sound_b), LIVE_KIT_SOUND(a, b), 0, 12 * (a + 1) + b, mode);
+            }
         break;
     case 3:
-        for (a = 0; a < 128; a++)
+        for (a = 0; a < 128; a++) {
             bad += one(STORE(sc_sound), LIVE_POOL(a), 0, 2000 + a, mode);
+            bad += one(STORE(sc_sound_b), LIVE_POOL(a), 0, 2000 + a, mode);
+        }
         break;
     case 4:
         for (a = -1; a < 128; a++) {

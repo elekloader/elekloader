@@ -241,6 +241,7 @@
      ]
     ]
    ],
+   "core": null,
    "results": [
     {
      "lock": {
@@ -873,6 +874,7 @@
      ]
     ]
    ],
+   "core": null,
    "results": [
     {
      "lock": {
@@ -1089,6 +1091,7 @@
      ]
     ]
    ],
+   "core": null,
    "results": [
     {
      "lock": {
@@ -1221,6 +1224,7 @@
      ]
     ]
    ],
+   "core": null,
    "results": [
     {
      "error": "the mods need 54180 bytes of pattern-track, pattern and project storage; the analog-rytm-mk2 has 4342"
@@ -1334,6 +1338,7 @@
      ]
     ]
    ],
+   "core": null,
    "results": [
     {
      "error": "the mods need 544 bits per track; the analog-rytm-mk2 keeps at most 512"
@@ -1357,6 +1362,7 @@
      ]
     ]
    ],
+   "core": null,
    "results": [
     {
      "error": "the storage field x is declared by two mods"
@@ -1370,19 +1376,164 @@
       "a",
       "s",
       "sound",
+      48
+     ],
+     [
+      "b",
+      "s2",
+      "sound",
+      9
+     ]
+    ]
+   ],
+   "core": null,
+   "results": [
+    {
+     "error": "the mods need 57 bits of sound storage; the analog-rytm-mk2 has 56"
+    }
+   ]
+  },
+  "sound past 24 bits": {
+   "steps": [
+    [
+     [
+      "a",
+      "s",
+      "sound",
+      24
+     ]
+    ],
+    [
+     [
+      "a",
+      "s",
+      "sound",
       24
      ],
      [
       "b",
       "s2",
       "sound",
-      1
+      32
      ]
     ]
    ],
+   "core": null,
    "results": [
     {
-     "error": "the mods need 25 bits of sound storage; the analog-rytm-mk2 has 24"
+     "lock": {
+      "elekloader_store": 1,
+      "device": "analog-rytm-mk2",
+      "id": "0x266c25f1",
+      "ancestors": [],
+      "split": {
+       "track": 2,
+       "pattern": 4
+      },
+      "generation": {
+       "sound": 1,
+       "kit": 1,
+       "global": 1,
+       "track": 1,
+       "pattern": 1,
+       "project": 1
+      },
+      "next": {
+       "sound": 24,
+       "kit": 0,
+       "global": 0,
+       "track": 0,
+       "pattern": 0,
+       "project": 0
+      },
+      "fields": [
+       {
+        "mod": "a",
+        "sym": "s",
+        "scope": "sound",
+        "offset": 0,
+        "bits": 24
+       }
+      ],
+      "freed": []
+     },
+     "notes": [
+      "a new lockfile, layout ID 0x266c25f1: projects and sounds saved by builds with other layouts load their mod data at defaults",
+      "a s: 24 bits of sound storage at bit 0"
+     ],
+     "symbols": {
+      "__store_gen": 16843009,
+      "__store_gen2": 16843268,
+      "s": 369098752
+     },
+     "ids": [
+      "266c25f1"
+     ],
+     "json": "{\n \"elekloader_store\": 1,\n \"device\": \"analog-rytm-mk2\",\n \"id\": \"0x266c25f1\",\n \"ancestors\": [],\n \"split\": {\n  \"track\": 2,\n  \"pattern\": 4\n },\n \"generation\": {\n  \"sound\": 1,\n  \"kit\": 1,\n  \"global\": 1,\n  \"track\": 1,\n  \"pattern\": 1,\n  \"project\": 1\n },\n \"next\": {\n  \"sound\": 24,\n  \"kit\": 0,\n  \"global\": 0,\n  \"track\": 0,\n  \"pattern\": 0,\n  \"project\": 0\n },\n \"fields\": [\n  {\n   \"mod\": \"a\",\n   \"sym\": \"s\",\n   \"scope\": \"sound\",\n   \"offset\": 0,\n   \"bits\": 24\n  }\n ],\n \"freed\": []\n}\n",
+     "layout_id": 644621809
+    },
+    {
+     "lock": {
+      "elekloader_store": 1,
+      "device": "analog-rytm-mk2",
+      "id": "0x3a6c729b",
+      "ancestors": [
+       "0x266c25f1"
+      ],
+      "split": {
+       "track": 2,
+       "pattern": 4
+      },
+      "generation": {
+       "sound": 1,
+       "kit": 1,
+       "global": 1,
+       "track": 1,
+       "pattern": 1,
+       "project": 1
+      },
+      "next": {
+       "sound": 56,
+       "kit": 0,
+       "global": 0,
+       "track": 0,
+       "pattern": 0,
+       "project": 0
+      },
+      "fields": [
+       {
+        "mod": "a",
+        "sym": "s",
+        "scope": "sound",
+        "offset": 0,
+        "bits": 24
+       },
+       {
+        "mod": "b",
+        "sym": "s2",
+        "scope": "sound",
+        "offset": 24,
+        "bits": 32
+       }
+      ],
+      "freed": []
+     },
+     "notes": [
+      "b s2: 32 bits of sound storage at bit 24",
+      "layout ID 0x3a6c729b (from 0x266c25f1, whose projects it still reads)"
+     ],
+     "symbols": {
+      "__store_gen": 16843009,
+      "__store_gen2": 16843268,
+      "s": 369098752,
+      "s2": 402653208
+     },
+     "ids": [
+      "3a6c729b",
+      "266c25f1"
+     ],
+     "json": "{\n \"elekloader_store\": 1,\n \"device\": \"analog-rytm-mk2\",\n \"id\": \"0x3a6c729b\",\n \"ancestors\": [\n  \"0x266c25f1\"\n ],\n \"split\": {\n  \"track\": 2,\n  \"pattern\": 4\n },\n \"generation\": {\n  \"sound\": 1,\n  \"kit\": 1,\n  \"global\": 1,\n  \"track\": 1,\n  \"pattern\": 1,\n  \"project\": 1\n },\n \"next\": {\n  \"sound\": 56,\n  \"kit\": 0,\n  \"global\": 0,\n  \"track\": 0,\n  \"pattern\": 0,\n  \"project\": 0\n },\n \"fields\": [\n  {\n   \"mod\": \"a\",\n   \"sym\": \"s\",\n   \"scope\": \"sound\",\n   \"offset\": 0,\n   \"bits\": 24\n  },\n  {\n   \"mod\": \"b\",\n   \"sym\": \"s2\",\n   \"scope\": \"sound\",\n   \"offset\": 24,\n   \"bits\": 32\n  }\n ],\n \"freed\": []\n}\n",
+     "layout_id": 980185755
     }
    ]
   },
@@ -2451,6 +2602,7 @@
      ]
     ]
    ],
+   "core": null,
    "results": [
     {
      "lock": {
@@ -4936,6 +5088,7 @@
     [],
     []
    ],
+   "core": null,
    "results": [
     {
      "lock": {
@@ -5082,6 +5235,7 @@
      ]
     ]
    ],
+   "core": null,
    "results": [
     {
      "lock": {
@@ -5425,6 +5579,7 @@
      ]
     ]
    ],
+   "core": null,
    "results": [
     {
      "lock": {
@@ -5641,6 +5796,7 @@
      ]
     ]
    ],
+   "core": null,
    "results": [
     {
      "lock": {
@@ -5807,6 +5963,7 @@
      ]
     ]
    ],
+   "core": null,
    "results": [
     {
      "lock": {
@@ -5942,6 +6099,476 @@
      ],
      "json": "{\n \"elekloader_store\": 1,\n \"device\": \"analog-rytm-mk2\",\n \"id\": \"0x918dc8cf\",\n \"ancestors\": [\n  \"0x977ac929\"\n ],\n \"split\": {\n  \"track\": 2,\n  \"pattern\": 5\n },\n \"generation\": {\n  \"sound\": 1,\n  \"kit\": 1,\n  \"global\": 1,\n  \"track\": 1,\n  \"pattern\": 2,\n  \"project\": 2\n },\n \"next\": {\n  \"sound\": 0,\n  \"kit\": 0,\n  \"global\": 0,\n  \"track\": 4,\n  \"pattern\": 40,\n  \"project\": 0\n },\n \"fields\": [\n  {\n   \"mod\": \"a\",\n   \"sym\": \"t\",\n   \"scope\": \"track\",\n   \"offset\": 0,\n   \"bits\": 4\n  },\n  {\n   \"mod\": \"a\",\n   \"sym\": \"p\",\n   \"scope\": \"pattern\",\n   \"offset\": 0,\n   \"bits\": 32\n  },\n  {\n   \"mod\": \"a\",\n   \"sym\": \"q\",\n   \"scope\": \"pattern\",\n   \"offset\": 32,\n   \"bits\": 8\n  }\n ],\n \"freed\": []\n}\n",
      "layout_id": 2441988303
+    }
+   ]
+  },
+  "core 0.2: sound full": {
+   "steps": [
+    [
+     [
+      "a",
+      "s",
+      "sound",
+      24
+     ],
+     [
+      "b",
+      "s2",
+      "sound",
+      1
+     ]
+    ]
+   ],
+   "core": "0.2",
+   "results": [
+    {
+     "error": "the mods need 25 bits of sound storage; the analog-rytm-mk2 has 24 with core 0.2 (56 with a newer core)"
+    }
+   ]
+  },
+  "core 0.3: sound past 24 bits": {
+   "steps": [
+    [
+     [
+      "a",
+      "s",
+      "sound",
+      24
+     ]
+    ],
+    [
+     [
+      "a",
+      "s",
+      "sound",
+      24
+     ],
+     [
+      "b",
+      "s2",
+      "sound",
+      32
+     ]
+    ]
+   ],
+   "core": "0.3",
+   "results": [
+    {
+     "lock": {
+      "elekloader_store": 1,
+      "device": "analog-rytm-mk2",
+      "id": "0x266c25f1",
+      "ancestors": [],
+      "split": {
+       "track": 2,
+       "pattern": 4
+      },
+      "generation": {
+       "sound": 1,
+       "kit": 1,
+       "global": 1,
+       "track": 1,
+       "pattern": 1,
+       "project": 1
+      },
+      "next": {
+       "sound": 24,
+       "kit": 0,
+       "global": 0,
+       "track": 0,
+       "pattern": 0,
+       "project": 0
+      },
+      "fields": [
+       {
+        "mod": "a",
+        "sym": "s",
+        "scope": "sound",
+        "offset": 0,
+        "bits": 24
+       }
+      ],
+      "freed": []
+     },
+     "notes": [
+      "a new lockfile, layout ID 0x266c25f1: projects and sounds saved by builds with other layouts load their mod data at defaults",
+      "a s: 24 bits of sound storage at bit 0"
+     ],
+     "symbols": {
+      "__store_gen": 16843009,
+      "__store_gen2": 16843268,
+      "s": 369098752
+     },
+     "ids": [
+      "266c25f1"
+     ],
+     "json": "{\n \"elekloader_store\": 1,\n \"device\": \"analog-rytm-mk2\",\n \"id\": \"0x266c25f1\",\n \"ancestors\": [],\n \"split\": {\n  \"track\": 2,\n  \"pattern\": 4\n },\n \"generation\": {\n  \"sound\": 1,\n  \"kit\": 1,\n  \"global\": 1,\n  \"track\": 1,\n  \"pattern\": 1,\n  \"project\": 1\n },\n \"next\": {\n  \"sound\": 24,\n  \"kit\": 0,\n  \"global\": 0,\n  \"track\": 0,\n  \"pattern\": 0,\n  \"project\": 0\n },\n \"fields\": [\n  {\n   \"mod\": \"a\",\n   \"sym\": \"s\",\n   \"scope\": \"sound\",\n   \"offset\": 0,\n   \"bits\": 24\n  }\n ],\n \"freed\": []\n}\n",
+     "layout_id": 644621809
+    },
+    {
+     "lock": {
+      "elekloader_store": 1,
+      "device": "analog-rytm-mk2",
+      "id": "0x3a6c729b",
+      "ancestors": [
+       "0x266c25f1"
+      ],
+      "split": {
+       "track": 2,
+       "pattern": 4
+      },
+      "generation": {
+       "sound": 1,
+       "kit": 1,
+       "global": 1,
+       "track": 1,
+       "pattern": 1,
+       "project": 1
+      },
+      "next": {
+       "sound": 56,
+       "kit": 0,
+       "global": 0,
+       "track": 0,
+       "pattern": 0,
+       "project": 0
+      },
+      "fields": [
+       {
+        "mod": "a",
+        "sym": "s",
+        "scope": "sound",
+        "offset": 0,
+        "bits": 24
+       },
+       {
+        "mod": "b",
+        "sym": "s2",
+        "scope": "sound",
+        "offset": 24,
+        "bits": 32
+       }
+      ],
+      "freed": []
+     },
+     "notes": [
+      "b s2: 32 bits of sound storage at bit 24",
+      "layout ID 0x3a6c729b (from 0x266c25f1, whose projects it still reads)"
+     ],
+     "symbols": {
+      "__store_gen": 16843009,
+      "__store_gen2": 16843268,
+      "s": 369098752,
+      "s2": 402653208
+     },
+     "ids": [
+      "3a6c729b",
+      "266c25f1"
+     ],
+     "json": "{\n \"elekloader_store\": 1,\n \"device\": \"analog-rytm-mk2\",\n \"id\": \"0x3a6c729b\",\n \"ancestors\": [\n  \"0x266c25f1\"\n ],\n \"split\": {\n  \"track\": 2,\n  \"pattern\": 4\n },\n \"generation\": {\n  \"sound\": 1,\n  \"kit\": 1,\n  \"global\": 1,\n  \"track\": 1,\n  \"pattern\": 1,\n  \"project\": 1\n },\n \"next\": {\n  \"sound\": 56,\n  \"kit\": 0,\n  \"global\": 0,\n  \"track\": 0,\n  \"pattern\": 0,\n  \"project\": 0\n },\n \"fields\": [\n  {\n   \"mod\": \"a\",\n   \"sym\": \"s\",\n   \"scope\": \"sound\",\n   \"offset\": 0,\n   \"bits\": 24\n  },\n  {\n   \"mod\": \"b\",\n   \"sym\": \"s2\",\n   \"scope\": \"sound\",\n   \"offset\": 24,\n   \"bits\": 32\n  }\n ],\n \"freed\": []\n}\n",
+     "layout_id": 980185755
+    }
+   ]
+  },
+  "core 0.3 then 0.2": {
+   "start": {
+    "elekloader_store": 1,
+    "device": "analog-rytm-mk2",
+    "id": "0xbd531f6e",
+    "ancestors": [],
+    "split": {
+     "track": 2,
+     "pattern": 4
+    },
+    "generation": {
+     "sound": 1,
+     "kit": 1,
+     "global": 1,
+     "track": 1,
+     "pattern": 1,
+     "project": 1
+    },
+    "next": {
+     "sound": 32,
+     "kit": 0,
+     "global": 0,
+     "track": 0,
+     "pattern": 0,
+     "project": 0
+    },
+    "fields": [
+     {
+      "mod": "a",
+      "sym": "s",
+      "scope": "sound",
+      "offset": 0,
+      "bits": 24
+     },
+     {
+      "mod": "b",
+      "sym": "s2",
+      "scope": "sound",
+      "offset": 24,
+      "bits": 8
+     }
+    ],
+    "freed": []
+   },
+   "steps": [
+    [
+     [
+      "b",
+      "s2",
+      "sound",
+      8
+     ]
+    ]
+   ],
+   "core": "0.2",
+   "results": [
+    {
+     "lock": {
+      "elekloader_store": 1,
+      "device": "analog-rytm-mk2",
+      "id": "0x92ecec18",
+      "ancestors": [
+       "0xbd531f6e"
+      ],
+      "split": {
+       "track": 2,
+       "pattern": 4
+      },
+      "generation": {
+       "sound": 2,
+       "kit": 1,
+       "global": 1,
+       "track": 1,
+       "pattern": 1,
+       "project": 1
+      },
+      "next": {
+       "sound": 8,
+       "kit": 0,
+       "global": 0,
+       "track": 0,
+       "pattern": 0,
+       "project": 0
+      },
+      "fields": [
+       {
+        "mod": "b",
+        "sym": "s2",
+        "scope": "sound",
+        "offset": 0,
+        "bits": 8
+       }
+      ],
+      "freed": []
+     },
+     "notes": [
+      "sound storage repacked (generation 2): older projects and sounds load it at defaults",
+      "a s (sound): no longer in the build, its data is dropped",
+      "layout ID 0x92ecec18 (from 0xbd531f6e, whose projects it still reads)"
+     ],
+     "symbols": {
+      "__store_gen": 33620225,
+      "__store_gen2": 16843268,
+      "s2": 301989888
+     },
+     "ids": [
+      "92ecec18",
+      "bd531f6e"
+     ],
+     "json": "{\n \"elekloader_store\": 1,\n \"device\": \"analog-rytm-mk2\",\n \"id\": \"0x92ecec18\",\n \"ancestors\": [\n  \"0xbd531f6e\"\n ],\n \"split\": {\n  \"track\": 2,\n  \"pattern\": 4\n },\n \"generation\": {\n  \"sound\": 2,\n  \"kit\": 1,\n  \"global\": 1,\n  \"track\": 1,\n  \"pattern\": 1,\n  \"project\": 1\n },\n \"next\": {\n  \"sound\": 8,\n  \"kit\": 0,\n  \"global\": 0,\n  \"track\": 0,\n  \"pattern\": 0,\n  \"project\": 0\n },\n \"fields\": [\n  {\n   \"mod\": \"b\",\n   \"sym\": \"s2\",\n   \"scope\": \"sound\",\n   \"offset\": 0,\n   \"bits\": 8\n  }\n ],\n \"freed\": []\n}\n",
+     "layout_id": 2465000472
+    }
+   ]
+  },
+  "core 0.3 then 0.2, too big": {
+   "start": {
+    "elekloader_store": 1,
+    "device": "analog-rytm-mk2",
+    "id": "0xbd531f6e",
+    "ancestors": [],
+    "split": {
+     "track": 2,
+     "pattern": 4
+    },
+    "generation": {
+     "sound": 1,
+     "kit": 1,
+     "global": 1,
+     "track": 1,
+     "pattern": 1,
+     "project": 1
+    },
+    "next": {
+     "sound": 32,
+     "kit": 0,
+     "global": 0,
+     "track": 0,
+     "pattern": 0,
+     "project": 0
+    },
+    "fields": [
+     {
+      "mod": "a",
+      "sym": "s",
+      "scope": "sound",
+      "offset": 0,
+      "bits": 24
+     },
+     {
+      "mod": "b",
+      "sym": "s2",
+      "scope": "sound",
+      "offset": 24,
+      "bits": 8
+     }
+    ],
+    "freed": []
+   },
+   "steps": [
+    [
+     [
+      "a",
+      "s",
+      "sound",
+      24
+     ],
+     [
+      "b",
+      "s2",
+      "sound",
+      8
+     ]
+    ]
+   ],
+   "core": "0.2",
+   "results": [
+    {
+     "error": "the mods need 32 bits of sound storage; the analog-rytm-mk2 has 24 with core 0.2 (56 with a newer core)"
+    }
+   ]
+  },
+  "core 0.3 then 0.2, fits": {
+   "start": {
+    "elekloader_store": 1,
+    "device": "analog-rytm-mk2",
+    "id": "0x016bada8",
+    "ancestors": [],
+    "split": {
+     "track": 2,
+     "pattern": 4
+    },
+    "generation": {
+     "sound": 1,
+     "kit": 1,
+     "global": 1,
+     "track": 1,
+     "pattern": 1,
+     "project": 1
+    },
+    "next": {
+     "sound": 16,
+     "kit": 0,
+     "global": 0,
+     "track": 0,
+     "pattern": 0,
+     "project": 0
+    },
+    "fields": [
+     {
+      "mod": "a",
+      "sym": "s",
+      "scope": "sound",
+      "offset": 0,
+      "bits": 8
+     },
+     {
+      "mod": "b",
+      "sym": "s2",
+      "scope": "sound",
+      "offset": 8,
+      "bits": 8
+     }
+    ],
+    "freed": []
+   },
+   "steps": [
+    [
+     [
+      "a",
+      "s",
+      "sound",
+      8
+     ],
+     [
+      "b",
+      "s2",
+      "sound",
+      8
+     ]
+    ]
+   ],
+   "core": "0.2",
+   "results": [
+    {
+     "lock": {
+      "elekloader_store": 1,
+      "device": "analog-rytm-mk2",
+      "id": "0x016bada8",
+      "ancestors": [],
+      "split": {
+       "track": 2,
+       "pattern": 4
+      },
+      "generation": {
+       "sound": 1,
+       "kit": 1,
+       "global": 1,
+       "track": 1,
+       "pattern": 1,
+       "project": 1
+      },
+      "next": {
+       "sound": 16,
+       "kit": 0,
+       "global": 0,
+       "track": 0,
+       "pattern": 0,
+       "project": 0
+      },
+      "fields": [
+       {
+        "mod": "a",
+        "sym": "s",
+        "scope": "sound",
+        "offset": 0,
+        "bits": 8
+       },
+       {
+        "mod": "b",
+        "sym": "s2",
+        "scope": "sound",
+        "offset": 8,
+        "bits": 8
+       }
+      ],
+      "freed": []
+     },
+     "notes": [],
+     "symbols": {
+      "__store_gen": 16843009,
+      "__store_gen2": 16843268,
+      "s": 301989888,
+      "s2": 301989896
+     },
+     "ids": [
+      "016bada8"
+     ],
+     "json": "{\n \"elekloader_store\": 1,\n \"device\": \"analog-rytm-mk2\",\n \"id\": \"0x016bada8\",\n \"ancestors\": [],\n \"split\": {\n  \"track\": 2,\n  \"pattern\": 4\n },\n \"generation\": {\n  \"sound\": 1,\n  \"kit\": 1,\n  \"global\": 1,\n  \"track\": 1,\n  \"pattern\": 1,\n  \"project\": 1\n },\n \"next\": {\n  \"sound\": 16,\n  \"kit\": 0,\n  \"global\": 0,\n  \"track\": 0,\n  \"pattern\": 0,\n  \"project\": 0\n },\n \"fields\": [\n  {\n   \"mod\": \"a\",\n   \"sym\": \"s\",\n   \"scope\": \"sound\",\n   \"offset\": 0,\n   \"bits\": 8\n  },\n  {\n   \"mod\": \"b\",\n   \"sym\": \"s2\",\n   \"scope\": \"sound\",\n   \"offset\": 8,\n   \"bits\": 8\n  }\n ],\n \"freed\": []\n}\n",
+     "layout_id": 23834024
     }
    ]
   }
@@ -6169,7 +6796,7 @@
      "project": 1
     },
     "next": {
-     "sound": 25,
+     "sound": 57,
      "kit": 0,
      "global": 0,
      "track": 0,
@@ -6179,7 +6806,7 @@
     "fields": [],
     "freed": []
    },
-   "error": "lockfile: next bit 25 of sound"
+   "error": "lockfile: next bit 57 of sound"
   },
   "bad field": {
    "lock": {

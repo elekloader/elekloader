@@ -31,6 +31,9 @@
 |   fw_font5           0x40200b0c  the stock 5-pixel font
 |   fw_blit            0x400c2960  blit(dst, src, x, y, centre)
 |   fw_op_new          0x400d4180  operator new(size) -> d0, 0 when the heap is full
+| From 4.1 (master.s):
+|   fw_invalidate      0x400c9812  invalidate(view): the view is drawn again (after a
+|                                  change a mod page shows)
 
         .macro  FW name, value
         .globl  \name
@@ -56,3 +59,4 @@
         FW      fw_font5, FW_FONT5
         FW      fw_blit, BLIT
         FW      fw_op_new, OP_NEW
+        FW      fw_invalidate, FW_INVALIDATE

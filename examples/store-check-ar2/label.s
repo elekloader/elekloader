@@ -2,7 +2,7 @@
 | store-check: the SETTINGS row's label callback. The firmware's MenuItem
 | calls it as a std::function returning a std::string: the string to build
 | is at a0 (the return slot), and d0 returns a0. The Rytm's own labels
-| (MIDI CONFIG's at 0x400da008) are this routine with their own text:
+| (MIDI CONFIG's at 0x400da074) are this routine with their own text:
 | std::string(a0, text, allocator) through STRING_CTOR (mod.json defsym).
         .text
         .globl  sc_label

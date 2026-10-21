@@ -39,6 +39,7 @@ extern int32_t fw_textf(void *bmp, const void *font, int32_t x, int32_t y, int32
 extern const char fw_font5[];
 extern void fw_blit(void *dst, const void *src, int32_t x, int32_t y, int32_t centre);
 extern uint32_t fw_op_new(uint32_t size);       /* the firmware's heap; 0 when it is full */
+extern void fw_invalidate(void *view);          /* core 4.1: the view is drawn again */
 
 /* ---- SRC machines (core 2.1), and the page a machine describes (core 3.0 + machine-pages) -------- */
 #define CM_UI_TAG   0x55493330u                 /* "UI30": a descriptor's tail */
@@ -136,5 +137,36 @@ extern uint32_t core_machine_ui(int32_t id);        /* core 3.0: -> its struct c
 /* machine-pages' render event: after playback has written every track's block, before the overdrive.
  * Subscribe with order 10-49 to make a track's sound, 50-89 to take or change one already made. */
 typedef void (*ev_render_voices_fn)(int32_t *blocks);   /* blocks = fw_track_blocks */
+
+/* ---- core 4.1: the master output and the master pages (FUNC+LFO) --------------------------------- */
+/* ev_render_master: the block's master pair before it goes to the outputs and the USB stream, 32 frames of
+ * {L, R}, changed in place. The render, at interrupt level: keep it short. */
+typedef void (*ev_render_master_fn)(int32_t *pair);
+/* ev_fxmix: SETTINGS > GLOBAL FX/MIX is built; add rows with core_additem(menu, row), as for ev_settings. */
+typedef void (*ev_fxmix_fn)(void *menu);
+
+/* What a mod contributes to core_mpages points to (in .data: core writes view and pos). Core puts the page
+ * in the master view's list after the stock page `after` (11 COMP, 12 internal mixer, 13 external mixer; any
+ * other: last), names it and, while it is shown, calls draw (after the stock draw: the title bar, rows 53-63,
+ * and below it kind 0's eight empty knob boxes, to clear where the page draws; bmp is 128 x 64, y 0 the
+ * bottom row), key and enc (the view's events: nonzero takes one, 0 leaves it
+ * to the stock handler), and clear when the page is cleared (FUNC + held LFO + PLAY). Any of the four may be 0.
+ * The UI task. */
+struct core_mpage {
+    int32_t after;                                  /* +0 */
+    const char *short_title, *title;                /* +4, +8: "EQ", "Master EQ" */
+    void (*draw)(void *view, void *bmp);            /* +12 */
+    int32_t (*key)(void *view, void *event);        /* +16 event +12 the key's id, +16 flags (bit 0 pressed) */
+    int32_t (*enc)(void *view, void *event);        /* +20 event +12 knob 1-8 = A-H, 9 LEVEL; +16 the turn */
+    void *view;                                     /* +24 core writes the view whose list has the page */
+    int32_t pos;                                    /* +28 core writes its place in that list */
+    void (*clear)(void *view);                      /* +32 FUNC + held LFO + PLAY (CLEAR): after the stock's pop-up */
+} __attribute__((aligned(4)));
+/* The mod page the view shows, or 0 (returned in d0 and a0): for a mod that reads keys or knobs itself. */
+extern struct core_mpage *core_mpage_shown(void *view);
+/* The master view, once drawn with a page in core_mpages, and a count of its draws since: a tick that sees the
+ * count move knows the view is on the screen. */
+extern void *volatile core_mview;
+extern volatile uint32_t core_mview_draws;
 
 #endif

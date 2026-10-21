@@ -23,7 +23,7 @@ where the stock files are, and only the cores are uploaded.
    | `mods/core` | `core-<version>.elemod`, `core-<version>-os1.54.elemod` |
    | `mods/core-dn1` | `core-dn1-<version>.elemod`, `core-dn1-<version>-os1.44.elemod` |
    | `mods/core-dt2` | `core-dt2-<version>.elemod` |
-   | `mods/core-ar2` | `core-ar2-<version>.elemod`, `core-ar2-<version>-os1.74.elemod` |
+   | `mods/core-ar2` | `core-ar2-<version>.elemod` (1.74 only from 0.3; for 1.73, `core-ar2-0.2.elemod` built from commit 92a99c9, [CORES.md](CORES.md#building-a-core)) |
    | `mods/core-ot` | `core-ot-<version>.elemod` |
    | `mods/core-mc` | `core-mc-<version>.elemod` |
    | `mods/core-ms` | `core-ms-<version>.elemod` |

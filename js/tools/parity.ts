@@ -91,10 +91,11 @@ function plan(configPath: string, casesPath: string) {
     add('ar173 version too long', 'ar173', [core], 'TOOLONG')
     add('ar173 check only', 'ar173', [core, hooks], 'TEST', { check_only: true })
   }
-  // and its 1.74 ports (optional: stocks.ar174, with the *-os1.74.elemod builds in dirs.ar)
+  // and 1.74 (optional: stocks.ar174, with the *-os1.74.elemod builds in dirs.ar: core 0.3, which is 1.74 only,
+  // and store-check 1.1, which needs it)
   if (cfg.stocks.ar174 && cfg.dirs.ar) {
-    const core = f('ar', 'core-0.2-os1.74.elemod'), hello = f('ar', 'hello-marker-1.0-os1.74.elemod')
-    const hooks = f('ar', 'hooks-check-0.1-os1.74.elemod'), store = f('ar', 'store-check-1.0-os1.74.elemod')
+    const core = f('ar', 'core-0.3-os1.74.elemod'), hello = f('ar', 'hello-marker-1.0-os1.74.elemod')
+    const hooks = f('ar', 'hooks-check-0.1-os1.74.elemod'), store = f('ar', 'store-check-1.1-os1.74.elemod')
     add('ar174 core alone', 'ar174', [core])
     add('ar174 core + hello-marker', 'ar174', [core, hello])
     add('ar174 core + hooks-check', 'ar174', [core, hooks])
@@ -103,6 +104,7 @@ function plan(configPath: string, casesPath: string) {
     add('ar174 core for 1.73', 'ar174', [f('ar', 'core-0.2.elemod')])
     add('ar174 core + store-check', 'ar174', [core, store])
     add('ar174 store-check without core', 'ar174', [store])
+    if (cfg.stocks.ar173) add('ar173 core 0.3, made for 1.74', 'ar173', [core])
   }
 
   const scratch = cfg.scratch

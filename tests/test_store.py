@@ -122,11 +122,32 @@ def test_the_split_grows_and_moves_the_store():
 
 
 def test_what_does_not_fit_is_refused():
-    assert 'sound' in refused(store.allocate, None, [('a', 'x', 'sound', 25)], DEV)
+    assert 'sound' in refused(store.allocate, None, [('a', 'x', 'sound', 32), ('a', 'y', 'sound', 25)], DEV)
+    # core-ar2 0.2 keeps 24 bits a sound, 0.3 (OS 1.74 only) 56
+    assert 'with core 0.2 (56 with a newer core)' in refused(store.allocate, None,
+                                                             [('a', 'x', 'sound', 25)], DEV, '0.2')
     # three bytes a pattern track would not fit in the store
     assert refused(store.allocate, None, [('a', 'x', 'track', 17)], DEV)
     assert 'two mods' in refused(store.allocate, None, [('a', 'x', 'kit', 1), ('b', 'x', 'kit', 1)],
                                  DEV)
+
+
+def test_a_sounds_room_is_its_cores():
+    assert store.capacity(DEV, {'track': 2, 'pattern': 4}, '0.2')['sound'] == 24
+    assert store.capacity(DEV, {'track': 2, 'pattern': 4}, '0.3')['sound'] == 56
+    assert store.capacity(DEV, {'track': 2, 'pattern': 4})['sound'] == 56
+    # bits 0..23 mean the same with either core: a 0.2 build's fields keep their places with 0.3
+    l2, _ = store.allocate(None, [('a', 'x', 'sound', 24)], DEV, '0.2')
+    l3, notes = store.allocate(l2, [('a', 'x', 'sound', 24), ('b', 'y', 'sound', 32)], DEV, '0.3')
+    assert where(l3) == {'x': ('sound', 0, 24), 'y': ('sound', 24, 32)}
+    assert l3['generation']['sound'] == l2['generation']['sound']
+    # a field a 0.3 build placed past bit 24 repacks the scope when built with 0.2
+    back, notes = store.allocate(l3, [('b', 'y', 'sound', 8)], DEV, '0.2')
+    assert where(back) == {'y': ('sound', 0, 8)} and back['generation']['sound'] == 2
+    assert any('repacked' in n for n in notes)
+    # and one that fits stays where it is
+    l4, _ = store.allocate(None, [('a', 'x', 'sound', 8)], DEV, '0.3')
+    assert store.allocate(l4, [('a', 'x', 'sound', 8)], DEV, '0.2')[0] == l4
 
 
 def test_ancestors_keep_the_newest_15():
