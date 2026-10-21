@@ -505,22 +505,31 @@ int st_sound_init(unsigned char *sound, int a, int b, int c)
     return r;
 }
 
+static unsigned short irq_mask(void);
+static void irq_restore(unsigned short sr);
+
 /* 0x400c542c's call, the VELOCITY MOD menu's reset of a sound's velocity
  * routes (routes: the live sound +0x70): the routes go to stock's defaults,
- * the fields in their low bytes stay */
+ * the fields in their low bytes stay. Interrupts are masked from the low
+ * bytes' read to their write back, as core_store_set writes them, so a field
+ * the audio interrupt sets meanwhile is not lost; the defaults are a leaf of
+ * 14 instructions. */
 void st_vel_defaults(unsigned char *routes)
 {
     unsigned char keep[4];
+    unsigned short sr;
     int i;
     if (!routes) {
         ROUTE_DEFAULTS(routes);
         return;
     }
+    sr = irq_mask();
     for (i = 0; i < 4; i++)
         keep[i] = routes[3 * i + 1];
     ROUTE_DEFAULTS(routes);
     for (i = 0; i < 4; i++)
         routes[3 * i + 1] = keep[i];
+    irq_restore(sr);
 }
 
 /* CREATE NEW and the project reset: a fresh store, and no global data */

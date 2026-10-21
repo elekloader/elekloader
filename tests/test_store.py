@@ -124,8 +124,9 @@ def test_the_split_grows_and_moves_the_store():
 def test_what_does_not_fit_is_refused():
     assert 'sound' in refused(store.allocate, None, [('a', 'x', 'sound', 32), ('a', 'y', 'sound', 25)], DEV)
     # core-ar2 0.2 keeps 24 bits a sound, 0.3 (OS 1.74 only) 56
-    assert 'with core 0.2 (56 with a newer core)' in refused(store.allocate, None,
-                                                             [('a', 'x', 'sound', 25)], DEV, '0.2')
+    # (the core named exists: on 1.73, which 0.3 is not made for, building with it says so)
+    assert 'with core 0.2 (56 with core 0.3)' in refused(store.allocate, None,
+                                                         [('a', 'x', 'sound', 25)], DEV, '0.2')
     # three bytes a pattern track would not fit in the store
     assert refused(store.allocate, None, [('a', 'x', 'track', 17)], DEV)
     assert 'two mods' in refused(store.allocate, None, [('a', 'x', 'kit', 1), ('b', 'x', 'kit', 1)],
@@ -148,6 +149,14 @@ def test_a_sounds_room_is_its_cores():
     # and one that fits stays where it is
     l4, _ = store.allocate(None, [('a', 'x', 'sound', 8)], DEV, '0.3')
     assert store.allocate(l4, [('a', 'x', 'sound', 8)], DEV, '0.2')[0] == l4
+    # the same mods rebuilt with 0.2: the repack alone moves a field, so the layout takes its new ID
+    l5, _ = store.allocate(None, [('a', 'x', 'sound', 24)], DEV, '0.3')
+    l6, _ = store.allocate(l5, [('b', 'y', 'sound', 8)], DEV, '0.3')
+    assert where(l6) == {'y': ('sound', 24, 8)}
+    l7, notes = store.allocate(l6, [('b', 'y', 'sound', 8)], DEV, '0.2')
+    assert where(l7) == {'y': ('sound', 0, 8)} and l7['generation']['sound'] == l6['generation']['sound'] + 1
+    assert l7['id'] == '0x%08x' % store.layout_id(l7) and l7['id'] != l6['id']
+    assert l7['ancestors'][0] == l6['id'] and any('layout ID' in n for n in notes)
 
 
 def test_ancestors_keep_the_newest_15():

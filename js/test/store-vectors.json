@@ -6122,7 +6122,7 @@
    "core": "0.2",
    "results": [
     {
-     "error": "the mods need 25 bits of sound storage; the analog-rytm-mk2 has 24 with core 0.2 (56 with a newer core)"
+     "error": "the mods need 25 bits of sound storage; the analog-rytm-mk2 has 24 with core 0.2 (56 with core 0.3)"
     }
    ]
   },
@@ -6447,7 +6447,7 @@
    "core": "0.2",
    "results": [
     {
-     "error": "the mods need 32 bits of sound storage; the analog-rytm-mk2 has 24 with core 0.2 (56 with a newer core)"
+     "error": "the mods need 32 bits of sound storage; the analog-rytm-mk2 has 24 with core 0.2 (56 with core 0.3)"
     }
    ]
   },
@@ -6569,6 +6569,124 @@
      ],
      "json": "{\n \"elekloader_store\": 1,\n \"device\": \"analog-rytm-mk2\",\n \"id\": \"0x016bada8\",\n \"ancestors\": [],\n \"split\": {\n  \"track\": 2,\n  \"pattern\": 4\n },\n \"generation\": {\n  \"sound\": 1,\n  \"kit\": 1,\n  \"global\": 1,\n  \"track\": 1,\n  \"pattern\": 1,\n  \"project\": 1\n },\n \"next\": {\n  \"sound\": 16,\n  \"kit\": 0,\n  \"global\": 0,\n  \"track\": 0,\n  \"pattern\": 0,\n  \"project\": 0\n },\n \"fields\": [\n  {\n   \"mod\": \"a\",\n   \"sym\": \"s\",\n   \"scope\": \"sound\",\n   \"offset\": 0,\n   \"bits\": 8\n  },\n  {\n   \"mod\": \"b\",\n   \"sym\": \"s2\",\n   \"scope\": \"sound\",\n   \"offset\": 8,\n   \"bits\": 8\n  }\n ],\n \"freed\": []\n}\n",
      "layout_id": 23834024
+    }
+   ]
+  },
+  "core 0.3 then 0.2, a repack alone": {
+   "start": {
+    "elekloader_store": 1,
+    "device": "analog-rytm-mk2",
+    "id": "0xf4c1ea85",
+    "ancestors": [
+     "0x266c25f1"
+    ],
+    "split": {
+     "track": 2,
+     "pattern": 4
+    },
+    "generation": {
+     "sound": 1,
+     "kit": 1,
+     "global": 1,
+     "track": 1,
+     "pattern": 1,
+     "project": 1
+    },
+    "next": {
+     "sound": 32,
+     "kit": 0,
+     "global": 0,
+     "track": 0,
+     "pattern": 0,
+     "project": 0
+    },
+    "fields": [
+     {
+      "mod": "b",
+      "sym": "s2",
+      "scope": "sound",
+      "offset": 24,
+      "bits": 8
+     }
+    ],
+    "freed": [
+     {
+      "mod": "a",
+      "sym": "s",
+      "scope": "sound",
+      "offset": 0,
+      "bits": 24
+     }
+    ]
+   },
+   "steps": [
+    [
+     [
+      "b",
+      "s2",
+      "sound",
+      8
+     ]
+    ]
+   ],
+   "core": "0.2",
+   "results": [
+    {
+     "lock": {
+      "elekloader_store": 1,
+      "device": "analog-rytm-mk2",
+      "id": "0x92ecec18",
+      "ancestors": [
+       "0xf4c1ea85",
+       "0x266c25f1"
+      ],
+      "split": {
+       "track": 2,
+       "pattern": 4
+      },
+      "generation": {
+       "sound": 2,
+       "kit": 1,
+       "global": 1,
+       "track": 1,
+       "pattern": 1,
+       "project": 1
+      },
+      "next": {
+       "sound": 8,
+       "kit": 0,
+       "global": 0,
+       "track": 0,
+       "pattern": 0,
+       "project": 0
+      },
+      "fields": [
+       {
+        "mod": "b",
+        "sym": "s2",
+        "scope": "sound",
+        "offset": 0,
+        "bits": 8
+       }
+      ],
+      "freed": []
+     },
+     "notes": [
+      "sound storage repacked (generation 2): older projects and sounds load it at defaults",
+      "layout ID 0x92ecec18 (from 0xf4c1ea85, whose projects it still reads)"
+     ],
+     "symbols": {
+      "__store_gen": 33620225,
+      "__store_gen2": 16843268,
+      "s2": 301989888
+     },
+     "ids": [
+      "92ecec18",
+      "f4c1ea85",
+      "266c25f1"
+     ],
+     "json": "{\n \"elekloader_store\": 1,\n \"device\": \"analog-rytm-mk2\",\n \"id\": \"0x92ecec18\",\n \"ancestors\": [\n  \"0xf4c1ea85\",\n  \"0x266c25f1\"\n ],\n \"split\": {\n  \"track\": 2,\n  \"pattern\": 4\n },\n \"generation\": {\n  \"sound\": 2,\n  \"kit\": 1,\n  \"global\": 1,\n  \"track\": 1,\n  \"pattern\": 1,\n  \"project\": 1\n },\n \"next\": {\n  \"sound\": 8,\n  \"kit\": 0,\n  \"global\": 0,\n  \"track\": 0,\n  \"pattern\": 0,\n  \"project\": 0\n },\n \"fields\": [\n  {\n   \"mod\": \"b\",\n   \"sym\": \"s2\",\n   \"scope\": \"sound\",\n   \"offset\": 0,\n   \"bits\": 8\n  }\n ],\n \"freed\": []\n}\n",
+     "layout_id": 2465000472
     }
    ]
   }

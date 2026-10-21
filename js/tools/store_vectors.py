@@ -66,6 +66,10 @@ LATE = {'core 0.3 then 0.2': ([F('a', 's', 'sound', 24), F('b', 's2', 'sound', 8
                                        '0.2', [F('a', 's', 'sound', 24), F('b', 's2', 'sound', 8)]),
         'core 0.3 then 0.2, fits': ([F('a', 's', 'sound', 8), F('b', 's2', 'sound', 8)],
                                     '0.2', [F('a', 's', 'sound', 8), F('b', 's2', 'sound', 8)])}
+# the same, from a lockfile several core 0.3 builds made: a field freed, and a new one past bit 24, then the
+# same mods built with core 0.2, so the repack alone changes the layout (and its ID)
+LATE_STEPS = {'core 0.3 then 0.2, a repack alone': ([[F('a', 's', 'sound', 24)], [F('b', 's2', 'sound', 8)]],
+                                                    '0.2', [F('b', 's2', 'sound', 8)])}
 LOCKS = {
     'not a dict': [1], 'not ours': {'x': 1}, 'newer': {'elekloader_store': 2},
     'device': dict(store.fresh(DEV), device='digitakt-mk1'),
@@ -112,6 +116,11 @@ def main():
         out['runs'][name] = {'steps': steps, 'core': core, 'results': run(None, steps, core)}
     for name, (first, core, then) in LATE.items():
         lock, _ = store.allocate(None, [tuple(d) for d in first], DEV, '0.3')
+        out['runs'][name] = {'start': lock, 'steps': [then], 'core': core, 'results': run(lock, [then], core)}
+    for name, (firsts, core, then) in LATE_STEPS.items():
+        lock = None
+        for first in firsts:
+            lock, _ = store.allocate(lock, [tuple(d) for d in first], DEV, '0.3')
         out['runs'][name] = {'start': lock, 'steps': [then], 'core': core, 'results': run(lock, [then], core)}
     for name, lock in LOCKS.items():
         try:

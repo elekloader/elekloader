@@ -59,6 +59,15 @@ export function capacity(devKey: string, split: { track: number; pattern: number
   return cap
 }
 
+/** The oldest core after `core` that gives `scope` the newest core's room, for a message: a version that exists, so the
+ * message stays true on an OS that core is not made for (whose refusal then says so). store._room_core. */
+function roomCore(devKey: string, split: { track: number; pattern: number }, scope: string, core: string): string | null {
+  const most = capacity(devKey, split)[scope]
+  for (const [v] of [...spec(devKey).coreFixed].sort((a, b) => cmpVersions(a[0], b[0])))
+    if (cmpVersions(v, core) > 0 && capacity(devKey, split, v)[scope] === most) return v
+  return null
+}
+
 const isDict = (v: unknown): v is Record<string, any> => typeof v === 'object' && v !== null && !Array.isArray(v) && !(v instanceof Uint8Array)
 const whole = (v: unknown): v is number => typeof v === 'number' && Number.isInteger(v)
 const idStr = (v: number) => '0x' + (v >>> 0).toString(16).padStart(8, '0')
@@ -258,7 +267,7 @@ export function allocate(lock0: Lock | null, decls: Decl[], devKey: string, core
   for (const s of SCOPES) {
     if (need(s) > cap[s]) {
       const more = capacity(devKey, lock.split)[s]
-      throw new ModError(`the mods need ${need(s)} bits of ${s} storage; the ${devKey} has ${cap[s]}${more > cap[s] ? ` with core ${core} (${more} with a newer core)` : ''}`)
+      throw new ModError(`the mods need ${need(s)} bits of ${s} storage; the ${devKey} has ${cap[s]}${more > cap[s] ? ` with core ${core} (${more} with core ${roomCore(devKey, lock.split, s, core as string)})` : ''}`)
     }
     if (fields.some(f => f.scope === s && f.offset !== null && f.offset + f.bits > cap[s])) {
       repack(s)                   // placed by a newer core, past what this one keeps
@@ -288,7 +297,7 @@ export function allocate(lock0: Lock | null, decls: Decl[], devKey: string, core
   if (isNew) {
     lock.id = idStr(layoutId(lock))
     notes.unshift(`a new lockfile, layout ID ${lock.id}: projects and sounds saved by builds with other layouts load their mod data at defaults`)
-  } else if (gone.length || added.length) {
+  } else if (gone.length || added.length || repacked.size) {   // a repack alone (a field past an older core's room) moves fields too
     const old = lock.id
     lock.id = idStr(layoutId(lock))
     const seen = new Set([idVal(lock.id, 'id')]), anc: string[] = []

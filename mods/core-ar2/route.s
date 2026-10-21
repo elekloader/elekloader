@@ -42,15 +42,22 @@ st_vel_get:
 
 | setAmount (0x400c52b2): `movew %d1,%a0@(0,%d0:l); movel #SOUND_CHANGED,%d0`
 | with d1 the new (clamped, whole-step) amount; the route's low byte goes
-| back into it first.
+| back into it first, with interrupts masked from its read to the write, as
+| core_store_set writes it: a field the audio interrupt sets meanwhile is
+| not lost.
 st_vel_set:
-        move.l  %d2,-(%sp)
+        lea     -8(%sp),%sp
+        movem.l %d2-%d3,(%sp)
+        move.w  %sr,%d3
+        move.w  #0x2700,%sr
         mvz.b   1(%a0,%d0.l),%d2
         and.l   #0xffffff00,%d1
         or.l    %d2,%d1
-        move.l  (%sp)+,%d2
         move.w  %d1,(%a0,%d0.l)
-        move.l  #SOUND_CHANGED,%d0
+        move.w  %d3,%sr
+        movem.l (%sp),%d2-%d3
+        lea     8(%sp),%sp
+        move.l  #SOUND_CHANGED,%d0      | and its CCR, as stock
         jmp     VEL_SET_RET
 
 | setRoute (0x400c51b4 velocity, 0x4003391e aftertouch): `movew

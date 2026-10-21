@@ -137,9 +137,9 @@ in `store.s` or `route.s` (0.3 hooks them on 1.74; the 1.73 column is
 | locks save, one parameter / all (`keep2`, 0.3) | 0x400ac2ce / 0x400ac2ec | — | the same, for the parameter locks (0x4000940c, 0x40009216) |
 | velocity push to the engine (0.3) | 0x4011f6a8 | — | the engine gets the amount with its low byte 0 |
 | VELOCITY MOD getAmount (0.3) | 0x400c5326 | — | the menu reads the amount with its low byte 0 |
-| VELOCITY MOD setAmount (0.3) | 0x400c52b2 | — | an edit keeps the low byte |
+| VELOCITY MOD setAmount (0.3) | 0x400c52b2 | — | an edit keeps the low byte (interrupts masked from its read to the write) |
 | setRoute, velocity / aftertouch (0.3) | 0x400c51b4 / 0x4003391e | — | a pasted or undone route stores only the amount's high byte |
-| VELOCITY MOD reset (`keep2`, 0.3) | 0x400c542c | — | the defaults (0x4001224e) keep the low bytes |
+| VELOCITY MOD reset (`keep2`, 0.3) | 0x400c542c | — | the defaults (0x4001224e) keep the low bytes (interrupts masked meanwhile) |
 
 After CREATE NEW and after every project load (the project init and
 project load sites), core calls the mods' `ev_project` handlers with what

@@ -110,6 +110,17 @@ def capacity(dev_key, split, core=None):
     return cap
 
 
+def _room_core(dev_key, split, scope, core):
+    """The oldest core after `core` that gives `scope` the newest core's room,
+    for a message: a version that exists, so the message stays true on an OS
+    that core is not made for (whose refusal then says so)."""
+    most = capacity(dev_key, split)[scope]
+    for v, _f in sorted(_spec(dev_key).get('core_fixed', ()), key=lambda c: version_key(c[0])):
+        if version_key(v) > version_key(core) and capacity(dev_key, split, v)[scope] == most:
+            return v
+    return None
+
+
 def _idstr(v):
     return '0x%08x' % v
 
@@ -325,7 +336,8 @@ def allocate(lock, decls, dev_key, core=None):
             more = capacity(dev_key, lock['split'])[s]
             raise ModError('the mods need %d bits of %s storage; the %s has %d%s'
                            % (need(s), s, dev_key, cap[s],
-                              ' with core %s (%d with a newer core)' % (core, more)
+                              ' with core %s (%d with core %s)'
+                              % (core, more, _room_core(dev_key, lock['split'], s, core))
                               if more > cap[s] else ''))
         if any(f['offset'] is not None and f['offset'] + f['bits'] > cap[s]
                for f in fields if f['scope'] == s):
@@ -360,7 +372,7 @@ def allocate(lock, decls, dev_key, core=None):
         lock['id'] = _idstr(layout_id(lock))
         notes.insert(0, 'a new lockfile, layout ID %s: projects and sounds saved by builds with '
                         'other layouts load their mod data at defaults' % lock['id'])
-    elif gone or added:
+    elif gone or added or repacked:     # a repack alone (a field past an older core's room) moves fields too
         old = lock['id']
         lock['id'] = _idstr(layout_id(lock))
         seen, anc = {_idval(lock['id'], 'id')}, []
