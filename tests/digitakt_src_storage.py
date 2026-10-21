@@ -381,6 +381,12 @@ def probe_storage(stock_path, Machine, call, pc_register):
             key(20, 1)
             key(20, 16)
             assert long_at(view + 144) == 0
+        # A one-page machine that plays no sample (knob D CM_NOT_SAMPLE) has no
+        # waveform to show: SRC keeps its page, and brings it back from the waveform.
+        initialize(116)
+        for start in (0, 0, 1):
+            put_long(view + 144, start)
+            click()                                  # the release leaves the view on page 0
         initialize(120)
         # Native clipboard collectors retain explicit IDs, even when pasting
         # after changing pages. Only the source object's machine selects values.
@@ -791,6 +797,7 @@ def probe_storage(stock_path, Machine, call, pc_register):
         'processed_accessor_keeps_seven_extra_identities_and_tracks': True,
         'native_src_view_knobs_follow_per_track_page_selection': True,
         'native_src_release_cycles_while_held_copy_clear_paste_keep_the_page': True,
+        'src_keeps_the_page_of_a_one_page_machine_that_plays_no_sample': True,
         'native_lfo_cycle_and_long_press_behavior_preserved': True,
         'src_page_release_marks_view_dirty_and_resets_all_native_knob_caches': True,
         'native_src_copy_clear_randomize_use_visible_controls_and_keep_clipboard_ids': True,

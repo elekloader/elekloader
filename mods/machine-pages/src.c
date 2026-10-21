@@ -259,7 +259,8 @@ void mp_record_sync(uint8_t *saved, int32_t slot, int32_t index, int32_t native,
         put(saved + 28 + 2 * index, (uint16_t)native);
         return;
     }
-    const uint8_t *sound = (*(const uint8_t *(**)(void *))(*(uint8_t **)owner + 40))(owner);
+    /* The getter returns the sound in d0: declared uint32_t, as gcc for m68k looks for a pointer in a0. */
+    const uint8_t *sound = (const uint8_t *)(*(uint32_t (**)(void *))(*(uint8_t **)owner + 40))(owner);
     uint16_t value = word(sound + 20 + 2 * slot);
     if (slot >= MP_EXTRA_SLOT(0)) {
         int k = slot - MP_EXTRA_SLOT(0);

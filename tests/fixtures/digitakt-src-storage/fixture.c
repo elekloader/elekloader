@@ -32,6 +32,13 @@ static const struct cm_ui legacy_ui = {
                 .flags=CM_RANGE|CM_DEFAULT, .max=0x7f00, .def=13}},
 };
 MACHINE(122, &legacy_ui);
+/* One page, and knob D plays no sample (CM_NOT_SAMPLE): SRC keeps the page (machine-pages 1.3). */
+static const struct cm_ui no_sample_ui = {
+    .abi=cm_ui_v3, .page_from=3,
+    .knob={[3]={.name="ENG", .lname="Engine", .look=134,
+                .flags=CM_RANGE|CM_DEFAULT|CM_NOT_SAMPLE, .max=0x7f00}},
+};
+MACHINE(116, &no_sample_ui);
 MACHINE(123, &bad_count.base);
 MACHINE(124, &bad_range.base);
 MACHINE(125, &bad_look.base);

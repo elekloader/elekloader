@@ -172,9 +172,13 @@ int32_t mp_src_key(void *view, const uint32_t *event)
     if (track >= 8)
         return 0;
     mp_view_knob(view, 0);                 /* Resolve the view's sound, including sound locks. */
-    if (!page_now || !page_now->extended)
+    if (!page_now)
         return 0;
-    selected[track] = (selected[track] + 1) % page_now->extended->page_count;
+    if (page_now->extended)
+        selected[track] = (selected[track] + 1) % page_now->extended->page_count;
+    else if (!(page_now->ui->knob[3].flags & CM_NOT_SAMPLE))
+        return 0;                           /* a sample machine: the stock step to its waveform */
+    /* else a one-page machine that plays no sample: no waveform to step to, so SRC keeps its page */
     mp_page_changed(view, (void *)event);
     return 1;
 }

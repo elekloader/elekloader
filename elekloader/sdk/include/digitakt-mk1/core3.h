@@ -48,7 +48,8 @@ enum {
     CM_HIDDEN     = 1,      /* the knob is blank on the SRC page: it shows and turns nothing */
     CM_RANGE      = 2,      /* min and max replace the stock range */
     CM_DEFAULT    = 4,      /* def replaces the stock default (a switch to the machine, a new sound) */
-    CM_NOT_SAMPLE = 8,      /* knob D: turning it changes it, and does not open the sample list */
+    CM_NOT_SAMPLE = 8,      /* knob D: turning it changes it, and does not open the sample list; from
+                               machine-pages 1.3, SRC keeps a one-page machine's page (no waveform view) */
     CM_DRAW       = 16,     /* draw, not gfx: the machine draws the knob's graphic (a page naming cm_ui_v31;
                                on a cm_ui_v3 page the stock graphic is drawn and +36 is not called) */
 };

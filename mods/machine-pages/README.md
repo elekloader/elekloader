@@ -108,7 +108,11 @@ pages, P1-P15, and the amp's VOL as page 2's knob H.
 - **The SRC page** (layout, labels, values, graphics, UI records, the
   pop-up, knob D): the machine whose layout the page asked for last. The
   page asks for it with its own track's machine before it draws or turns
-  a knob, and the layout is copied once per machine.
+  a knob, and the layout is copied once per machine. SRC on the page: a
+  two-page machine (1.2) steps to its other page; from 1.3 a one-page
+  machine whose knob D is `CM_NOT_SAMPLE` (it plays no sample) keeps its
+  page, where the stock went on to the waveform view, empty for it; a
+  sample machine still shows its waveform.
 - **Ranges** (the setter's clamp, a turn's scaling, a list's stepper and
   the validator): the machine of the sound the parameter belongs to. From
   1.3 also MIDI's (an incoming CC or NRPN on a track's channel): the
@@ -161,6 +165,13 @@ Digi Mono and Digi Macro (MACRO's page: knob B 0-127): CC 17 at 40 and at
 127 on MACRO's track set knob B to 40 and 127 (1.2: 3, PLAY's stock
 maximum); NRPN 1:1 at 100 set it to 100; CC 18 set knob C as before; CC
 17 at 40 on a ONESHOT track still set PLAY to 3, its stock range.
+
+1.3, in `tests/probe_digitakt_src.py --storage` on OS 1.53 and 1.54: SRC
+on a one-page machine whose knob D is `CM_NOT_SAMPLE` keeps its page (and
+brings it back from the waveform view), while a sample machine still steps
+to its waveform and back; and 1.2.1's parameter sync keeps a version-4
+record packed (it reads the owner's sound as `uint32_t`: the firmware
+returns it in d0).
 
 On a unit: the owner's Digitakt on OS 1.54 ran a build of core 3.0 and
 machine-pages with NEIGHBOR 0.7, DIGISLICER 2.3, SOPHIE, Digi Mono, Digi
