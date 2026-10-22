@@ -436,7 +436,7 @@ The page (`struct cm_ui`, 336 bytes; `digitakt-mk1/core3.h`):
 
 | offset | field | |
 |---|---|---|
-| +0 | abi | `cm_ui_v3`, which machine-pages exports: the machine links only beside it; `cm_ui_v31` for a page with a knob that draws itself (`CM_DRAW`), which only machine-pages 1.1 and newer export; `cm_ui_v32` for a page with extra values (below), machine-pages 1.2 and newer |
+| +0 | abi | `cm_ui_v3`, which machine-pages exports: the machine links only beside it; `cm_ui_v31` for a page with a knob that draws itself (`CM_DRAW`), which only machine-pages 1.1 and newer export; `cm_ui_v32` for a page with extra values (below), machine-pages 1.2 and newer; `cm_ui_v33` for one whose extra values have MIDI CCs, 1.4 and newer |
 | +4 | page_from | the stock machine whose SRC page it copies (byte): 3 SLICE, 0 ONESHOT |
 | +5, +6 | | 0 |
 | +8 | group | the LFO page's group for its parameters, or 0 for the stock one |
@@ -451,6 +451,8 @@ A knob (`struct cm_knob`); a 0 field is the stock one:
 | +8, +12 | lfo, lfo_long | its names on the LFO page: the DEST box's, and the DEST list's (0: name and lname; a blank knob reads "Unused") |
 | +16 | look | the parameter id whose UI record and graphic it borrows (byte): how a turn moves it, its knob |
 | +17 | flags | 1 blank (it shows and turns nothing), 2 the range min-max, 4 the default def, 8 knob D is not a sample (turning it does not open the sample list; from machine-pages 1.3, SRC keeps a one-page machine's page instead of stepping to the empty waveform view), 16 the machine draws the knob's graphic (`draw`; a `cm_ui_v31` page: on a `cm_ui_v3` page the stock graphic is drawn, and +36 is not called) |
+| +18 | cc | on an extra value of a `cm_ui_v33` page: the MIDI CC that sets it (below); else 0 |
+| +19 | | 0 |
 | +20, +24, +28 | min, max, def | 8.8 |
 | +32 | fmt | `int f(char *buf, int value, int ctx, int machine)`: its value's text into buf, returning nonzero (0: the stock text). ctx 0 is the value under a turning knob, about 5 characters; 1 the pop-up, up to 15 |
 | +36 | gfx | `int f(int value)`: the value its graphic shows, from the one the firmware gives it (both 8.8) |
@@ -504,6 +506,24 @@ and a sound with them saves as version 4 of the 160-byte record (machine-pages
 packs it; the firmware alone cannot read it back). In the render task
 `cm_src_value(track, k)` is value k after locks and LFOs. machine-pages
 claims `soundslot:46` to `soundslot:52` for them.
+
+**MIDI CCs for the extra values (machine-pages 1.4).** A page that names
+`cm_ui_v33` is a `struct cm_ui32` whose extra values may each give `cc`
+(+18), the CC that sets the value on the machine's tracks, on the track's
+channel. It is clamped to the value's range, as knobs A-H are from 1.3.
+Knobs A-H keep their stock CCs, 16-23, and give none. A CC given twice,
+or one that MIDI or a stock parameter of a track already uses, refuses
+the page. Those left are 8, 9, 11, 12, 24-31, 35-37, 39-59, 64-69, 89-92
+and 111. FX, the MIDI tracks and other machines keep the stock answer.
+NRPNs and sending a value's CC out are not given. The PARAM fixture
+(`tests/fixtures/digitakt-src-parameters`) gives its extras CC 24-30:
+
+```c
+.extra = { { .name = "P9", .look = 134, .flags = CM_RANGE | CM_DEFAULT,
+             .max = 0x7f00, .cc = 24 }, ... },
+```
+
+In assembly, `CM_KNOB cc=24`.
 
 **Sound slots on the Digitakt mk1.** A sound has 53 slots (+0x14, s16);
 stock parameters use 1-45. Slot 0 is no parameter's (an LFO's "no
