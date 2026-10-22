@@ -458,6 +458,26 @@ A knob (`struct cm_knob`); a 0 field is the stock one:
 | +36 | gfx | `int f(int value)`: the value its graphic shows, from the one the firmware gives it (both 8.8) |
 | +36 | draw | with flag 16 on a `cm_ui_v31` page, in gfx's place: `int f(void *bmp, int x, int y, int value, int flag)` draws the knob's graphic into the page's Bitmap, in x + 1 to x + 17 and y to y + 16 (y = 0 is the bottom row), from its value (8.8), and returns nonzero; 0 draws the stock graphic. flag is the firmware's, for a stock drawer it calls |
 
+**A graphic that reads another knob (machine-pages 1.5).** Inside a
+knob's `gfx` or `draw`, `int cm_src_shown(int k)` gives value k (0-7 the
+knobs, 8-14 the extras) of the sound the page shows, 8.8, as the page
+shows it: a held step's lock, a sound lock, or the sound's own. That's the
+value the sibling knob's own graphic is drawn with. It gives `CM_NO_VALUE`
+outside a graphic call, for a k the page has no value for, or when no page
+view draws the knob; draw a default then. A machine that calls it links
+only beside machine-pages 1.5 and newer. `examples/linked-knobs` draws its
+SHAPE knob as a ramp or a pulse by its FORM knob:
+
+```c
+static int32_t draw_shape(void *bmp, int32_t x, int32_t y, int32_t value, int32_t flag)
+{
+    int32_t form = cm_src_shown(2);                     /* knob C, as the page shows it */
+    if (form == CM_NO_VALUE)
+        return 0;                                       /* the stock graphic */
+    ...
+}
+```
+
 In assembly `digitakt-mk1/core3.inc` has `CM_MACHINE`, `CM_UI` and
 `CM_KNOB`; digineighbor 0.7, digislicer 2.3 and SOPHIE's core 3.0 build use
 them. `examples/sine-machine` is a whole machine in C to start from: a sine

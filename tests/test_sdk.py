@@ -465,6 +465,42 @@ def test_extra_values_with_ccs_need_machine_pages_1_4():
             'src-parameters-test 0.1 imports cm_ui_v33, which no given mod exports'], r['problems']
 
 
+def test_a_graphic_that_reads_another_knob_needs_machine_pages_1_5():
+    """examples/linked-knobs: SHAPE's draw reads FORM with cm_src_shown, which
+    only machine-pages 1.5 and newer export. It links beside 1.5 and is refused
+    beside 1.4. It names no firmware address: its 1.54 port is the same code."""
+    tc = devices.devices()[0].toolchain
+    if not shutil.which(os.environ.get('ELEKLOADER_CROSS', tc['prefix']) + 'gcc'):
+        raise Skip('no m68k cross compiler')
+    src = os.path.join(ROOT, 'examples', 'linked-knobs')
+    with tempfile.TemporaryDirectory() as tmp:
+        path, m = build.build(src, stock(), tmp)
+        assert not m.sites and m.names == ['machine:121']
+        assert set(m.imports) == {'cm_src_shown', 'cm_ui_v31', 'fw_fillrect'}, m.imports
+        mp = machine_pages(stock(), tmp)
+        with open(mp) as fh:
+            doc = json.load(fh)
+        assert 'cm_src_shown' in doc['exports']
+        rc, r = lint_json(path, '--stock', stock(), '--with', built_core(), '--with', mp)
+        assert rc == 0, r['problems']
+        # machine-pages 1.4: the same mod but for the export
+        doc.update(version='1.4', exports=[x for x in doc['exports'] if x != 'cm_src_shown'])
+        mp14 = os.path.join(tmp, 'machine-pages-1.4.elemod')
+        with open(mp14, 'w') as fh:
+            json.dump(doc, fh)
+        rc, r = lint_json(path, '--stock', stock(), '--with', built_core(), '--with', mp14)
+        assert rc == 1 and r['problems'] == [
+            'linked-knobs 1.0 imports cm_src_shown, which no given mod exports'], r['problems']
+        if STOCK_154 and os.path.exists(STOCK_154):
+            path4, m4 = build.build(src, STOCK_154, tmp)
+            images = []
+            for st, mod in ((stock(), m), (STOCK_154, m4)):
+                s, dev, _rel = formats.load(st)
+                images.append(bytes(elemod.parts_bytes(mod.sections['.run']['parts'],
+                                                       formats.main_image(s, dev), dev)))
+            assert images[0] == images[1] and m.relocs == m4.relocs
+
+
 def test_the_sine_machine_example_builds_for_each_os_unchanged():
     """examples/sine-machine names no firmware address: its 1.54 port is
     empty, and both builds carry the same code."""

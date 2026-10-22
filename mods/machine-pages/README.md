@@ -17,11 +17,11 @@ the mod shop: tick it there and the page takes the newest core for it.
 | | |
 |---|---|
 | needs | core 3.0 (`resources.core`), and refuses beside digichain, which owns the same places |
-| sites | 102, listed in `mod.json`. 1.1's 20: 7 on the SRC page, 4 range lookups, 5 on the LFO page, 2 SAMP compares, the machine menu's icon row and the render point 0x40077fba. 1.2's extra values add 77: 50 one-byte bounds (the parameter-id compares, 164 to 171), and 27 hooks: the SRC page's page flip, title and copy/clear/paste, the id-slot maps, the descriptor table and its 7 readers, defaults, Randomize, locks and the sound file's save/load/upgrade and LFO destinations. 1.2.1 adds 2: the stores of the firmware's in-place parameter sync. 1.3 adds 2: MIDI's range lookups, the CC's (0x40010d50) and the NRPN's (0x40010154). 1.4 adds 1: the CC lookup's table for an audio track (0x400791fe) |
-| exports | `cm_ui_v3`, from 1.1 `cm_ui_v31`, from 1.2 `cm_ui_v32`, from 1.4 `cm_ui_v33`: the markers a machine's page names; from 1.2 `cm_src_value` |
+| sites | 102, listed in `mod.json`. 1.1's 20: 7 on the SRC page, 4 range lookups, 5 on the LFO page, 2 SAMP compares, the machine menu's icon row and the render point 0x40077fba. 1.2's extra values add 77: 50 one-byte bounds (the parameter-id compares, 164 to 171), and 27 hooks: the SRC page's page flip, title and copy/clear/paste, the id-slot maps, the descriptor table and its 7 readers, defaults, Randomize, locks and the sound file's save/load/upgrade and LFO destinations. 1.2.1 adds 2: the stores of the firmware's in-place parameter sync. 1.3 adds 2: MIDI's range lookups, the CC's (0x40010d50) and the NRPN's (0x40010154). 1.4 adds 1: the CC lookup's table for an audio track (0x400791fe). 1.5 adds none: it reads the view at the knob-graphic site it already has |
+| exports | `cm_ui_v3`, from 1.1 `cm_ui_v31`, from 1.2 `cm_ui_v32`, from 1.4 `cm_ui_v33`: the markers a machine's page names; from 1.2 `cm_src_value`; from 1.5 `cm_src_shown` |
 | claims | from 1.2, `soundslot:46` to `soundslot:52`, the extra values' slots |
 | declares | `ev_render_voices`, the render event |
-| RAM | 9.1 KB code, 4.5 KB for up to 32 machines' pages (1.1: 2.4 KB and 2 KB) |
+| RAM | 9.3 KB code, 4.5 KB for up to 32 machines' pages (1.1: 2.4 KB and 2 KB) |
 
 ## What a machine describes
 
@@ -76,6 +76,19 @@ ALGO diagram and OP number are drawn this way. 1.1 still reads every
 `cm_ui_v3` page as 1.0 did. A knob with flag 16 on a `cm_ui_v3` page (one
 that forgot `cm_ui_v31`) gets the stock graphic: its +36 is never called,
 as a `gfx` or as a `draw`.
+
+**A graphic that reads another knob (1.5).** Inside a knob's `gfx` or
+`draw`, `cm_src_shown(k)` is value k (0-7 the knobs, 8-14 the extras) of
+the sound the page shows, 8.8, as the page shows it: a held step's lock, a
+sound lock, or the sound's own. It's for a graphic that depends on a
+sibling knob, such as a waveform that depends on a family knob. The page
+view's knob draw (0x40030c0c) calls the graphic with the view in a4, and
+machine-pages keeps it for the call. `cm_src_shown` asks the view
+(0x4003171c, the page views' own value method). Outside a graphic call,
+for a k the page has no value for, or when no page view draws the knob, it
+gives `CM_NO_VALUE`. A machine that calls it imports it, so it links only
+beside 1.5 and newer. `examples/linked-knobs` is the example: SHAPE draws
+a ramp or a pulse by FORM.
 
 **A second page of seven more values (1.2).** A page naming `cm_ui_v32`
 is a `struct cm_ui32`: `extra[7]` knobs after the eight, and one or two
@@ -172,6 +185,30 @@ with each shop mod that does, on OS 1.53 and 1.54.
 | machine-pages | | 20, owned once |
 
 ## Checked
+
+1.5 (`cm_src_shown`), on OS 1.53 and 1.54. `tests/probe_digitakt_shown.py`
+boots core 4.1, 1.5 and `examples/linked-knobs` in digiemu and drives the
+panel:
+- SHAPE's draw reads FORM at 0 and 1, and its own value through
+  `cm_src_shown` equals the value it's drawn with, at 0, a middle and
+  0x7f00.
+- With trig 1 held in grid recording and FORM turned, it reads the lock
+  while the sound keeps 0, and after the release it reads 0.
+- A second track on LINK with FORM 1 is read on its own page.
+- Under GLOBAL's menu, SHAPE isn't drawn.
+
+`probe_digitakt_src.py --storage`: `cm_src_shown` gives `CM_NO_VALUE`
+outside a graphic. `tests/test_sdk.py`: the example links beside 1.5 and
+is refused beside 1.4.
+
+OB-1, with its view walk, `ui.s` and `ev_draw` overlay taken out and its
+shape knobs reading their family with `cm_src_shown`, gives the same 16
+screens as before, pixel for pixel: both families, the shape's ends and
+middle, both oscillators, both pages and a held-step lock. The one
+exception is a value readout's timeout on one 1.54 screen. `emu.fwcheck`,
+core 4.1 with 1.5 against core 4.1 with 1.4 on 1.54: the nine screens and
+7.9 s of audio identical. Each of the shop's Digitakt mods links or is
+refused beside 1.5 as beside 1.4.
 
 1.4 (CCs for the extra values), on OS 1.53 and 1.54:
 `tests/probe_digitakt_src.py --storage` calls the firmware's CC lookup

@@ -128,6 +128,10 @@ def probe_storage(stock_path, Machine, call, pc_register):
     stock_ok = [i for i in range(172) if native(linked.map['mp_stock_sound_parameter'], [i])]
     assert stock_ok == list(range(30, 70)), stock_ok
 
+    # cm_src_shown (machine-pages 1.5) answers only while a page view draws a knob's graphic.
+    for k in (0, 7, 8, 14, 15, 0xFFFFFFFF):
+        assert native(linked.map['cm_src_shown'], [k]) == 0x80000000, k
+
     # MIDI CCs (machine-pages 1.4) through the lookup 0x4007919e(source, machine, cc), whose tables
     # the constructor above built. An extra's CC answers only on an audio track, outside knobs A-H
     # (16-23, core's bank), where the stock's generic table has nothing.
@@ -847,5 +851,6 @@ def probe_storage(stock_path, Machine, call, pc_register):
         'midi_cc_lookup_answers_declared_extras_on_audio_tracks_only_where_stock_has_none': True,
         'midi_cc_lookup_unchanged_for_stock_machines_midi_tracks_fx_and_knobs_a_h': True,
         'invalid_cc_declarations_rejected_by_companion': True,
+        'cm_src_shown_has_no_value_outside_a_graphic': True,
         'ccs_free_on_an_audio_track': free_ccs,
     }

@@ -129,6 +129,12 @@ struct cm_ui32 {                    /* params=3 only (SLICE's bank): fifteen val
 
 extern const char cm_ui_v32[];                      /* machine-pages 1.2's: a page with extra values names it */
 extern const char cm_ui_v33[];                      /* machine-pages 1.4's: one whose extra values have CCs (cc) */
+/* machine-pages 1.5, UI task, inside a knob's gfx or draw: value k (0-7 the knobs, 8-14 the extras) of
+ * the sound the SRC page shows, 8.8, as the page shows it: a held step's lock, a sound lock, or the
+ * sound's own. CM_NO_VALUE outside a graphic call, for a k the page has no value for, or when no page
+ * view draws the knob. */
+#define CM_NO_VALUE ((int32_t)0x80000000)
+extern int32_t cm_src_shown(int32_t parameter);
 /* Render task: final values after native locks, smoothing and LFOs, for parameters 0-14. Invalid
  * track/index, or an extra parameter of a machine without them, returns 0. */
 extern int32_t cm_src_value(int32_t track, int32_t parameter);

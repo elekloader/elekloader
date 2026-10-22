@@ -78,6 +78,8 @@ docs match its code.
     without [FUNC];
   - `sine-machine`, an SRC machine for core 3.0 that names no firmware
     address, so its OS 1.54 port is empty;
+  - `linked-knobs`, a silent SRC machine whose SHAPE knob draws by its
+    FORM knob, read with `cm_src_shown` (machine-pages 1.5);
   - `dn-sine-machine`, the same for the Digitone mk1: a machine for the
     machines mod and core-dn1 3.1, with an empty OS 1.44 port;
   - `dn-thru`, the smallest Digitone mk1 mod that takes the whole output

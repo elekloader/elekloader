@@ -23,6 +23,7 @@
         .equ    CM_DEFAULT,     4
         .equ    CM_NOT_SAMPLE,  8
         .equ    CM_DRAW,        16              | draw, not gfx (a page whose abi is cm_ui_v31)
+        .equ    CM_NO_VALUE,    0x80000000      | cm_src_shown: no value (machine-pages 1.5)
         .equ    CM_KNOB_SIZE,   40              | struct cm_knob
         .equ    CM_UI_SIZE,     336             | struct cm_ui: 16 + 8 knobs
 

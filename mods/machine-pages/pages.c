@@ -43,6 +43,8 @@ static uint8_t selected[8];
 extern const struct cm_machine *const core_machines[];   /* core 2.1's table, 0 at its end */
 extern uint32_t mp_stock_layout(int32_t machine);        /* pages.s: the stock layout of machine 0-3 */
 extern uint32_t mp_view_knob(void *view, int32_t knob);
+extern int32_t mp_shown_value(void *view, uint32_t id, uint8_t *locked);
+void *mp_shown_view;                                     /* pages.s: the view drawing a knob's graphic, or 0 */
 extern uint32_t mp_view_track(void *view);
 extern void mp_page_changed(void *view, void *event);
 
@@ -235,6 +237,17 @@ int32_t mp_knob(int32_t *a)
     if (k->look)
         a[0] = k->look;
     return 0;
+}
+
+/* Value k of the sound the page shows, as it shows it, while a page view draws one of its knobs. */
+int32_t cm_src_shown(int32_t k)
+{
+    const struct page *p = page_now;
+    uint8_t locked;
+    if (!mp_shown_view || !p || k < 0 || k >= (p->extended ? 8 + CM_EXTRAS : 8))
+        return CM_NO_VALUE;
+    uint32_t id = k >= 8 ? MP_EXTRA_ID + (uint32_t)k - 8 : ID_BASE(p->extended ? p->params : p->ui->page_from) + (uint32_t)k;
+    return mp_shown_value(mp_shown_view, id, &locked);
 }
 
 uint32_t mp_look(uint32_t id)

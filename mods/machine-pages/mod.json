@@ -1,5 +1,5 @@
 {
- "id": "machine-pages", "version": "1.4",
+ "id": "machine-pages", "version": "1.5",
  "license": "GPL-2.0-or-later",
  "title": "machine pages", "category": "Framework", "author": "irpina",
  "description": "Draws the SRC and LFO pages of the SRC machines that describe their own (core 3.0), and gives the render an event for machines that make or take a track's sound, so several machine mods combine. On its own, and for machines that do not describe a page, it changes nothing the unit does.",
@@ -52,7 +52,8 @@
   "SOUND_UPGRADE_ON": "0x4007f710",
   "SAVE_MAP": "0x401ac1d4",
   "SYNC_LOOP_ON": "0x40022858", "SYNC_DONE": "0x40022996",
-  "CC_AUDIO_TAB": "0x4199f85c", "CC_LOOKUP_DONE": "0x40079214"
+  "CC_AUDIO_TAB": "0x4199f85c", "CC_LOOKUP_DONE": "0x40079214",
+  "KNOB_DRAW_RET": "0x40030c98", "SHOWN_FN": "0x4003171c"
  },
  "sites": [
   {"addr": "0x40184988", "stock": "4003a824", "op": "ptr", "target": "mp_src_copy_s"},
@@ -207,7 +208,8 @@
     "SOUND_UPGRADE_ON": "0x4007f710",
     "SAVE_MAP": "0x401ac4d4",
     "SYNC_LOOP_ON": "0x40022858", "SYNC_DONE": "0x40022996",
-    "CC_AUDIO_TAB": "0x419a085c", "CC_LOOKUP_DONE": "0x40079214"
+    "CC_AUDIO_TAB": "0x419a085c", "CC_LOOKUP_DONE": "0x40079214",
+    "KNOB_DRAW_RET": "0x40030c98", "SHOWN_FN": "0x4003171c"
    },
    "contribute": [{"to": "ev_tick", "order": 20, "data": "00000000", "relocs": [[0, "abs32", "sym:mp_tick", 0]], "claims": [["0x401ac1ec", "0x401ac358"]]}],
    "sites": [

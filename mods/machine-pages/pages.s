@@ -65,6 +65,12 @@ mp_stock_layout:
         move.l  4(%sp), %d0
         jmp     LAYOUT_ON
 
+| mp_shown_value(view, id, &locked): the value a page view shows for id, a
+| held step's lock first (0x4003171c, the page views' own).
+        .globl  mp_shown_value
+mp_shown_value:
+        jmp     SHOWN_FN
+
         .globl  mp_view_track, mp_view_knob
 mp_view_track:
         movea.l 4(%sp), %a0
@@ -217,12 +223,19 @@ mp_val_text_s:
 | 0x4000f2bc(obj, id, value, flag, -, bmp, x, y): a knob's graphic (was:
 | lea -20(sp),sp ; movem.l d2-d6,(sp)), by jmp. pages.c may draw it with the
 | machine's own drawer (CM_DRAW), or give it another parameter's graphic, and
-| another value, in its arguments.
+| another value, in its arguments. Called by a page view's knob draw
+| (0x40030c0c, returning to KNOB_DRAW_RET), a4 is that view: cm_src_shown
+| reads the page's other values through it while the graphic is drawn (1.5).
         .globl  mp_knob_gfx_s
 mp_knob_gfx_s:
-        pea     8(%sp)                  | -> [id, value, flag, -, bmp, x, y]
+        move.l  (%sp), %d0
+        cmpi.l  #KNOB_DRAW_RET, %d0
+        bne.s   1f
+        move.l  %a4, mp_shown_view
+1:      pea     8(%sp)                  | -> [id, value, flag, -, bmp, x, y]
         jsr     mp_knob                 | -> nonzero when the machine drew it
         addq.l  #4, %sp
+        clr.l   mp_shown_view
         tst.l   %d0
         bne.s   9f
         lea     -20(%sp), %sp

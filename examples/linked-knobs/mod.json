@@ -1,0 +1,15 @@
+{
+ "id": "linked-knobs",
+ "version": "1.0",
+ "title": "Linked knobs",
+ "category": "Examples",
+ "license": "GPL-2.0-or-later",
+ "description": "LINK, a silent SRC machine whose SHAPE knob draws a ramp or a pulse by its FORM knob, which it reads with cm_src_shown (machine-pages 1.5): the value the page shows, a held step's lock included. It names no firmware address, so its 1.54 port is empty (docs/ADAPTING.md, \"Machine pages\").",
+ "device": "digitakt-mk1",
+ "os": "1.53",
+ "sources": ["linked.c"],
+ "ports": {"1.54": {}},
+ "machines": [{"id": 121, "descriptor": "link_machine"}],
+ "requires": ["core", "machine-pages"],
+ "resources": {"core": "3.0"}
+}
