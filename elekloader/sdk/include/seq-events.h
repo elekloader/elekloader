@@ -60,6 +60,11 @@ typedef void (*ev_fire_vel_fn)(int32_t track, int32_t step, int32_t *vel);
 #define SQ_LOCKS 8
 struct sq_lock { uint16_t slot; int16_t value; };      /* a sound slot, its value 8.8 */
 typedef int32_t (*ev_fire_locks_fn)(int32_t track, int32_t step, struct sq_lock *out, int32_t room);
+/* ev_fire_len (0.3, the Digitakt mk1 on OS 1.53): the note's length, the firmware's LEN as an index,
+ * 0-126 (0.125 steps up to 128, as the TRIG page lists them) or 127 INF; *len: the step's own, or the
+ * track's default when it has none (clamped after each handler) */
+#define SQ_LEN_INF 127
+typedef void (*ev_fire_len_fn)(int32_t track, int32_t step, int32_t *len);
 
 /* The step clock: per track the last real step the fire loaded and a parity that flips on each
  * wrap (a smaller step than the last; every step on a 1-step track), so mods agree on which loop

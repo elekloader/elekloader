@@ -2719,7 +2719,8 @@ its length, the master length, NOTE, the keyboard's ROOT and SCALE;
 sequencer for tracks a mod changed (`sq_rearm`, UI task). From 0.2 it also
 tells a handler which pattern buffer the fire is reading (`sq_fire_pattern`:
 at a switch, possibly the next pattern before the active pointer names it),
-for settings kept per pattern. A device that
+for settings kept per pattern. From 0.3, on the Digitakt mk1 (OS 1.53), `ev_fire_len` gives a
+fired note's length (the firmware's LEN index, 127 INF) to change. A device that
 keeps no key for a track gives `root` `SQ_ROOT_NONE` (0xff) and `scale`
 `SQ_SCALE_NONE` (-2; -1 is chromatic): a mod that needs a key checks
 `root`. The Digitone never gives them; the Digitakt always does.

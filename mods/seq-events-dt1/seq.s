@@ -329,6 +329,38 @@ sq_site_mvel:
         moveq   #-1, %d1
         rts
 
+| ---- length (ev_fire_len) ----------------------------------------------
+
+| 0x4006f77c (audio, OS 1.53), over `lea 0x40191290,a0` (LEN's table, which
+| the fire indexes with its 44(sp), the LEN index, two instructions on); d0 is
+| the velocity, shifted after; a1 and d1 are reloaded after
+        .globl  sq_site_slen
+sq_site_slen:
+        move.l  %d0, -(%sp)
+        move.l  52(%sp), -(%sp)         | LEN (the fire's 44(sp))
+        move.l  %d4, -(%sp)
+        move.l  %d5, -(%sp)
+        jsr     sq_on_len
+        move.l  %d0, 64(%sp)
+        lea     12(%sp), %sp
+        move.l  (%sp)+, %d0
+        lea     0x40191290, %a0
+        rts
+
+| 0x4006fb5a (MIDI, OS 1.53), over `lea 0x40191290,a0`: a4 = LEN, d6 = track
+| - 8 by now (the fire's subq), d0 and d1 set again after
+        .globl  sq_site_mlen
+sq_site_mlen:
+        move.l  %a4, -(%sp)
+        move.l  %d4, -(%sp)
+        move.l  %d6, -(%sp)
+        addq.l  #8, (%sp)
+        jsr     sq_on_len
+        lea     12(%sp), %sp
+        movea.l %d0, %a4
+        lea     0x40191290, %a0
+        rts
+
 | ---- locks (ev_fire_locks) ----------------------------------------------
 
 | 0x4006f750, over `move.l #1500,d0` (after the lock resolve 0x4006f46e, and

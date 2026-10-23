@@ -1,6 +1,6 @@
 {
  "id": "seq-events",
- "version": "0.2",
+ "version": "0.3",
  "license": "GPL-2.0-or-later",
  "title": "seq events",
  "category": "Framework",
@@ -17,7 +17,8 @@
   "-DSQ_PATTERN_PP=0x4199dc38",
   "-DSQ_NEXT_PP=0x4199dc40",
   "-DSQ_TRANSPORT=0x4199dc2c",
-  "-DSQ_REARM=0x4006fb82"
+  "-DSQ_REARM=0x4006fb82",
+  "-DSQ_FIRE_LEN"
  ],
  "sites": [
   {
@@ -69,6 +70,12 @@
    "target": "sq_site_svel"
   },
   {
+   "addr": "0x4006f77c",
+   "stock": "41f940191290",
+   "op": "jsr",
+   "target": "sq_site_slen"
+  },
+  {
    "addr": "0x4006f864",
    "stock": "282f0054266f0058",
    "op": "jsr",
@@ -109,6 +116,12 @@
    "stock": "41f2380072ff",
    "op": "jsr",
    "target": "sq_site_mvel"
+  },
+  {
+   "addr": "0x4006fb5a",
+   "stock": "41f940191290",
+   "op": "jsr",
+   "target": "sq_site_mlen"
   }
  ],
  "ports": {
@@ -118,7 +131,8 @@
     "-DSQ_PATTERN_PP=0x4199ec38",
     "-DSQ_NEXT_PP=0x4199ec40",
     "-DSQ_TRANSPORT=0x4199ec2c",
-    "-DSQ_REARM=0x4006fb82"
+    "-DSQ_REARM=0x4006fb82",
+    "-DSQ_FIRE_LEN"
    ],
    "sites": [
     {
@@ -234,7 +248,8 @@
   "ev_gen_notes": 4,
   "ev_fire_notes": 4,
   "ev_fire_vel": 4,
-  "ev_fire_locks": 4
+  "ev_fire_locks": 4,
+  "ev_fire_len": 4
  },
  "requires": [
   "core"

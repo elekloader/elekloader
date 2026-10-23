@@ -9,6 +9,7 @@
  *     sq_on_notes: the stored notes, or a generated trig's NOTE, in a buffer of ours:
  *       ev_gen_notes' handlers, then ev_fire_notes'.
  *     sq_on_vel: ev_fire_vel's; sq_on_locks: ev_fire_locks' (audio tracks).
+ *     sq_on_len: ev_fire_len's (SQ_FIRE_LEN: the Digitakt mk1's device layer).
  *   sq_track_info, sq_stored: the pattern the device layer names, read as data when asked (no
  *     object methods: a handler may run before the project objects are built).
  *   ev_tick: the clocks' lengths (order 10), and the re-arms asked for (order 90). */
@@ -23,6 +24,9 @@ extern const ev_gen_notes_fn ev_gen_notes[];
 extern const ev_fire_notes_fn ev_fire_notes[];
 extern const ev_fire_vel_fn ev_fire_vel[];
 extern const ev_fire_locks_fn ev_fire_locks[];
+#ifdef SQ_FIRE_LEN
+extern const ev_fire_len_fn ev_fire_len[];
+#endif
 
 struct sq_clock sq_clock[SQ_TRACKS];
 static int32_t clock_len[SQ_TRACKS];    /* the UI task's: a 1-step track wraps at every step */
@@ -232,6 +236,20 @@ int32_t sq_on_vel(int32_t track, int32_t step, int32_t vel)
     }
     return vel;
 }
+
+#ifdef SQ_FIRE_LEN
+int32_t sq_on_len(int32_t track, int32_t step, int32_t len)
+{
+    const ev_fire_len_fn *h;
+    if ((uint32_t)track >= SQ_TRACKS || !ev_fire_len[0])
+        return len;
+    for (h = ev_fire_len; *h; h++) {
+        (*h)(track, step, &len);
+        len = len < 0 ? 0 : len > SQ_LEN_INF ? SQ_LEN_INF : len;
+    }
+    return len;
+}
+#endif
 
 /* The audio tracks' fire's lock list (0: none), after its own locks */
 void sq_on_locks(int32_t track, int32_t step, void *list)
