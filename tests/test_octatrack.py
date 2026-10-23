@@ -843,6 +843,98 @@ def test_the_example_subscribes_to_the_bus():
     assert struct.unpack('>II', ln.image[o:o + 8]) == (ln.map['hello_draw'], 0)
 
 
+# ---- USB (usb-ot and its functions) ------------------------------------------------------
+
+def test_the_usb_companion_sites():
+    """mods/usb-ot: each site is whole stock instructions of the USB stack and keeps clear of
+    core-ot's bus; the stock device descriptor has one reference, the site that serves
+    usb-ot's copy through the uncached alias."""
+    with open(os.path.join(ROOT, 'mods', 'usb-ot', 'mod.json')) as fh:
+        j = json.load(fh)
+    st, img = stock()
+    assert j['id'] == 'usb' and j['collections'] == {'ot_usb_functions': 4}
+    assert j['resources']['names'] == ['usb:stack'] and j['requires'] == ['core']
+    for s in j['sites']:
+        addr, n = int(s['addr'], 16), len(s['stock']) // 2
+        o = addr - DEV.main_load
+        assert img[o:o + n].hex() == s['stock'], s['addr']
+        ok, note = elemod.insn_check(img, addr, n, DEV)
+        assert ok, (s['addr'], note)
+        for a, h, _e in BUS_SITES.values():
+            assert not (a < addr + n and addr < a + len(h) // 2), s['addr']
+    assert img.count(struct.pack('>I', 0x400e2000)) == 1
+    (dev,) = [s for s in j['sites'] if s['op'] == 'keep2']
+    assert (dev['addr'], dev['target'], dev['addend']) == ('0x4001d82c', 'otu_dev', 0x08000000)
+
+
+def test_usb_midi_is_a_usb_function():
+    """usb-ot alone has an empty function table; with usb-midi-ot its record is the one
+    entry and its handlers are on ev_midi_out and ev_midi_out_rt. The device descriptor's
+    reference serves usb-ot's copy, uncached. A function needs usb-ot, and core-ot 0.4."""
+    import shutil
+    from elekloader.sdk import build
+    need(SYX)
+    if not shutil.which(os.environ.get('ELEKLOADER_CROSS', DEV.toolchain['prefix']) + 'gcc'):
+        raise Skip('no m68k cross compiler')
+    st, img = stock()
+    with tempfile.TemporaryDirectory() as tmp:
+        core, usb, midi = (elemod.load_any(build.build(os.path.join(ROOT, 'mods', d), SYX, tmp)[0])
+                           for d in ('core-ot', 'usb-ot', 'usb-midi-ot'))
+        alone = link.link([core, usb], img)
+        ln = link.link([core, usb, midi], img)
+
+    def table(ln, name, n):
+        o = ln.layout['run_load'] + (ln.tables[name][0] - DEV.ddr[0]) - DEV.main_load
+        return struct.unpack('>%dI' % n, ln.image[o:o + 4 * n])
+
+    assert alone.tables['ot_usb_functions'][1] == 0 and table(alone, 'ot_usb_functions', 1) == (0,)
+    assert ln.tables['ot_usb_functions'][1] == 1
+    assert table(ln, 'ot_usb_functions', 2) == (ln.map['usb_midi'], 0)
+    assert table(ln, 'ev_midi_out', 2) == (ln.map['usbmidi_out'], 0)
+    assert table(ln, 'ev_midi_out_rt', 2) == (ln.map['usbmidi_out_rt'], 0)
+    o = 0x4001d82c - DEV.main_load
+    assert ln.image[o:o + 6] == b'\x48\x79' + struct.pack('>I', ln.map['otu_dev'] + 0x08000000)
+    assert any('requires usb' in p for p in link.check([core, midi], img))
+
+
+USB_AUDIO = ('usb-audio-ot', 'usb-audio-tracks-ot', 'usb-audio-master-ot', 'usb-audio-main-cue-ot',
+             'usb-audio-main-ot')
+
+
+def test_usb_audio_is_a_usb_function():
+    """mods/usb-audio-ot and its four other layouts (one source, USBA_LAYOUT): each hooks no
+    stock code, and links on usb-ot with its record in ot_usb_functions and its producer on
+    core-ot 0.4's ev_frame_end; beside USB MIDI, MIDI's record comes first by order whatever
+    order the mods come in (its interfaces 1-2, audio's 3-4). Two layouts share EP3 IN and are
+    refused together; a layout needs usb-ot."""
+    import shutil
+    from elekloader.sdk import build
+    need(SYX)
+    if not shutil.which(os.environ.get('ELEKLOADER_CROSS', DEV.toolchain['prefix']) + 'gcc'):
+        raise Skip('no m68k cross compiler')
+    st, img = stock()
+    with tempfile.TemporaryDirectory() as tmp:
+        core, usb, midi = (elemod.load_any(build.build(os.path.join(ROOT, 'mods', d), SYX, tmp)[0])
+                           for d in ('core-ot', 'usb-ot', 'usb-midi-ot'))
+        audio = [elemod.load_any(build.build(os.path.join(ROOT, 'mods', d), SYX, tmp)[0]) for d in USB_AUDIO]
+
+    def table(ln, name, n):
+        o = ln.layout['run_load'] + (ln.tables[name][0] - DEV.ddr[0]) - DEV.main_load
+        return struct.unpack('>%dI' % n, ln.image[o:o + 4 * n])
+
+    assert [a.id for a in audio] == ['usb-audio', 'usb-audio-tracks', 'usb-audio-master',
+                                     'usb-audio-main-cue', 'usb-audio-main']
+    for a in audio:
+        assert not a.sites and a.names == ['usb:ep3-in'], a.id
+        ln = link.link([core, usb, a], img)
+        assert table(ln, 'ot_usb_functions', 2) == (ln.map['usb_audio'], 0), a.id
+        assert table(ln, 'ev_frame_end', 2) == (ln.map['usba_frame'], 0), a.id
+        both = link.link([core, usb, a, midi], img)
+        assert table(both, 'ot_usb_functions', 3) == (both.map['usb_midi'], both.map['usb_audio'], 0), a.id
+    assert any('both claim usb:ep3-in' in p for p in link.check([core, usb, audio[0], audio[3]], img))
+    assert any('requires usb' in p for p in link.check([core, audio[0]], img))
+
+
 # ---- DSP code ---------------------------------------------------------------------------
 
 HOOK = 0x400ef758               # payload A's P:0x88, move r2,x:>$204 (627000 000204)

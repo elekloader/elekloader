@@ -49,7 +49,8 @@ docs match its code.
   [mods/core-ar2](../mods/core-ar2) (Analog Rytm MKII),
   [mods/core-a4](../mods/core-a4) (Analog Four MKII), and
   [mods/core-ot](../mods/core-ot) with [mods/dspbus-ot](../mods/dspbus-ot)
-  and [mods/intercepts-ot](../mods/intercepts-ot) (Octatrack).
+  and [mods/intercepts-ot](../mods/intercepts-ot) and
+  [mods/usb-ot](../mods/usb-ot) (Octatrack).
 - **A whole mod on core-dn1 3.2's exclusive audio:**
   [mods/digiswarm-dn1](../mods/digiswarm-dn1), DigiSwarm, an effects
   engine for the Digitone mk1's audio inputs (grains, micro-loops, a

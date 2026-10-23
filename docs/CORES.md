@@ -164,6 +164,11 @@ core.
   Octatrack base's events and names. [mods/settings-ot](../mods/settings-ot)
   (settings, with 0.6) puts every mod's settings in a MODS category of the
   MAIN MENU and keeps them on the card or with the project.
+  [mods/usb-ot](../mods/usb-ot) (usb, with 0.3.1) owns the stock USB
+  stack's places for USB functions, mods of their own that combine:
+  [mods/usb-midi-ot](../mods/usb-midi-ot) (USB MIDI, with 0.4) is the first,
+  and [mods/usb-audio-ot](../mods/usb-audio-ot) (USB audio out, with 0.4) the
+  second.
 - **Model:Cycles, Model:Samples** ([mods/core-mc](../mods/core-mc),
   [mods/core-ms](../mods/core-ms)): the shared core.s with the hook bus's
   tick, draw, key and encoder events. Their OS entry makes its SRAM copy and
@@ -207,6 +212,7 @@ python -m elekloader.sdk.build mods/core-ot --stock OCTATRACK_OS1.40C.syx       
 python -m elekloader.sdk.build mods/core-mc --stock Model_Cycles_OS1.13.syx                  # the Model:Cycles'
 python -m elekloader.sdk.build mods/core-ms --stock Model_Samples_OS1.13.syx                 # the Model:Samples'
 python -m elekloader.sdk.build mods/dspbus-ot --stock OCTATRACK_OS1.40C.syx                  # its DSP bus (optional)
+python -m elekloader.sdk.build mods/usb-ot --stock OCTATRACK_OS1.40C.syx                     # its USB companion (optional)
 ```
 
 The SDK writes `out/core-<version>.elemod`; a release renames each as the
