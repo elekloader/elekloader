@@ -69,12 +69,18 @@ ot_stock_render:
 | ---- the page resolver, case 0 (the track's PLAYBACK page) --------------------
 | 0x40031e74 jmp (mvs.b %d5,%d0 ; lea 0x400d5f38,%a0 ; bra.s 0x40031ece): a0 is
 | the track's machine byte, d5 that byte. An owned track's page -> the
-| resolver's exit with it in d0; else stock's load from the grown table.
+| resolver's exit with it in d0; else stock's load from the grown table. d1
+| (the part) and a1 (the bank) are kept for the hooks at the load (SYNTH
+| MACHINE's reads them there).
         .globl  otm_resolve
 otm_resolve:
+        lea     -8(%sp), %sp
+        movem.l %d1/%a1, (%sp)
         move.l  %a0, -(%sp)
         jsr     otm_page
         addq.l  #4, %sp
+        movem.l (%sp), %d1/%a1
+        lea     8(%sp), %sp
         tst.l   %d0
         beq.s   1f
         jmp     0x40031ed6

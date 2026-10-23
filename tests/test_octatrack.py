@@ -562,7 +562,8 @@ def test_the_example_subscribes_to_the_bus():
 def test_the_machines_sites():
     """mods/machines-ot: its 32 sites are stock, whole instructions, and none is core-ot's or the
     intercepts'; the two places that enter machines.c with the caller's stack (the Part validator
-    and the FLEX renderer) are the prologues seams.s replays."""
+    and the FLEX renderer) are the prologues seams.s replays; the page resolver keeps the
+    registers the hooks after it read."""
     st, img = stock()
 
     def sites(name):
@@ -589,6 +590,12 @@ def test_the_machines_sites():
         assert img[o:o + 2] == b'\x4f\xef' and img[o + 4:o + 8] == b'\x48\xd7\x7c\xfc', hex(site)
         body = src.split('%s:\n' % stub, 1)[1].split('\n\n', 1)[0]
         assert 'lea     %d(%%sp), %%sp' % frame in body and 'jmp     %#x' % back in body, stub
+    # the page resolver's case 0 calls C, then goes on to the PLAYBACK load (0x40031ece), where
+    # SYNTH MACHINE's and OCTA303's hooks read the part (d1) and the bank (a1): it keeps both
+    body = src.split('otm_resolve:\n', 1)[1].split('\n\n', 1)[0]
+    at = [body.find(x) for x in ('movem.l %d1/%a1, (%sp)', 'jsr     otm_page', 'movem.l (%sp), %d1/%a1',
+                                 'jmp     0x40031ece')]
+    assert -1 not in at and at == sorted(at), at
 
 
 def test_the_machines_companion_lists_a_machine():

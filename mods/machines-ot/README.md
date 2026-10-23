@@ -145,8 +145,10 @@ written for one describes itself to the other the same way. Only `abi`,
 
 None is a byte a mod of octabam2elemod v1.0 writes. SYNTH MACHINE v1.0
 keeps the renderer table's entry (0x400d6438) and the resolver's tail
-(0x40031ece). The companion's commit seam is one instruction past
-octabam's own 0x4007981c, so it ends where SYNTH's 0x40079816 begins.
+(0x40031ece). The companion's resolver stub keeps d1 (the part) and a1 (the
+bank) for a hook at that tail, which reads them (SYNTH MACHINE's does). The
+companion's commit seam is one instruction past octabam's own 0x4007981c, so
+it ends where SYNTH's 0x40079816 begins.
 
 ## Checked
 
