@@ -24,6 +24,7 @@ and a hook bus of its own.
 | `container`, `version_len` | the file family (`'ele3'`, `'elek'`) and the version field's length | the container header |
 | `protected` | main OS ranges no mod may change, with the reason | none on the mk1 |
 | `relocatable` | data inside a protected range that the OS reaches only through the listed 4-byte operands and never writes, so a mod may serve its own copy through them (sdk.octabam does, for a poke there) | none on the mk1 |
+| `keep` | main OS ranges that look free (they read zero, nothing points at them) but that the OS reads, with the reason: no site may write them, and every build must leave them stock | none on the mk1 |
 | `blob_max` | a cap on the appended blob, if the DDR areas do not give one | none on the mk1 |
 | `image_free` | zero runs inside the main OS that `fixed` code may take (sdk.build) | none on the mk1 |
 | `reserve` | (unit, {name: (a, b)}): for a core that sizes its RAM reserve to the mods, the symbols the linker defines from n, the units the mods' RAM fills: a + b·n each | none on the mk1 (its `ddr` is free RAM) |
@@ -276,13 +277,29 @@ below was found again in 1.17.
     CC FEEDBACK, CC MAP, USB AUDIO OUT's producer) subscribe to its events
     instead of patching their sites.
 - **Free space inside the image** (`image_free`, octabam's measured zero
-  runs): `0x400c45b0-0x400c4702`, `0x400d24d0-0x400d2ce0` and
+  runs): `0x400c45b0-0x400c4702`, `0x400d24e0-0x400d2ce0` and
   `0x400d64e0-0x400d7c3c`. octabam pins code in these runs, and `fixed`
   code may use them.
+  - The second run starts at `0x400d24d0` in stock. Its first 16 bytes are
+    kept stock (`keep`, below).
   - The third run starts at `0x400d64da` in stock. Its first six bytes are
     left out: they follow the table at `0x400d64a0`.
   - Left out entirely: `0x400d2ee6-0x400d3020` (a live descriptor), and
     everything above `0x400d8000` (the PROJECT subsystem's RAM).
+- **Bytes kept stock** (`keep`): `0x400d24d0-0x400d24df`. The stock DELAY
+  reads them, so a write there changes its output (octabam issue #771,
+  measured under octabam's emulator port, not on a unit).
+  - The DELAY reads `0x400d1ce0 + 4 * (x >> 6)` (`0x40003526`,
+    `0x40003540`). That table has 508 words and ends at `0x400d24d0`.
+  - At a slow tempo with a long TIME the index reaches 508, past the table,
+    into these zeros. octabam puts its cap at 511, unmeasured; hence the 16
+    bytes.
+  - In octabam, SYNTH MACHINE's page cave, pinned at `0x400d24d0`, changed
+    the stock DELAY's output. octabam's fix moved the page to DRAM (its
+    `PLACE` setting) and keeps these bytes stock.
+  - The linker refuses any site that writes them, sdk.build refuses
+    `fixed` code over them, and the build's verify checks them against
+    stock (tests/test_octatrack.py).
 - **DSP code** (`dsp_payloads`, `dsp_areas`): the main OS uploads payload A
   (`0x400e2324`, 0x136cb bytes) to DSP core 0 and B (`0x400f59ef`, 0x12d05
   bytes) to core 1 at boot. Payload A's P memory is full, so the one area

@@ -51,6 +51,10 @@ what you see when it is broken (section 5 has the fixes).
 
 1. **Only the main OS changes.** A mod has no way to touch the bootloader
    or any other section, so the stock OS file always recovers the device.
+   Some main OS bytes stay stock too: the Octatrack's copy of its
+   bootloader, and 16 zero bytes after a table that its stock DELAY reads
+   (docs/DEVICES.md, `protected` and `keep`). *"protected on the ..."*,
+   *"stays stock on the ..."*.
 2. **Ship no firmware bytes.** Call firmware routines by address; do not
    copy stock code into your sources. When your bytes do repeat stock bytes
    (the instruction a hook displaced, say), runs of 8 bytes or more are
@@ -1718,7 +1722,7 @@ free space inside its image (`image_free`: on the Octatrack, the zero runs
 octabam measured):
 
 ```json
-"fixed": [{"source": "page.s", "addr": "0x400d24d0", "symbol": "page"}]
+"fixed": [{"source": "page.s", "addr": "0x400d24e0", "symbol": "page"}]
 ```
 
 This assembles `page.s` for that address.
@@ -2066,6 +2070,10 @@ What does not convert, and why:
   inside data the device marks `relocatable` (below). The 16 KB below
   `0x400e21e0` stay stock; octabam also places the bootstrap copy there
   (`~0x400de7dc`).
+- **Writes into bytes the device keeps stock** (`keep`), and caves pinned
+  there. These are the 16 bytes at `0x400d24d0`, which the stock DELAY
+  reads (octabam #771). SYNTH MACHINE before octabam's `PLACE` setting
+  (363861e) pins its page cave there, so it is refused.
 - **Modules that serve DSP modules only.** These are MODE DEFAULTS, RIG
   HOSTS and TEMPO BUS (`SERVES_DSP` in the converter, with the reasons).
   Converted alone, they would be inert, or they would point parts at
@@ -2113,6 +2121,8 @@ Some differences from an octabam build, by design:
 |---|---|---|
 | `made for a firmware elekloader does not know` | the target or stock file is not a supported release | use the exact stock file; check its hash against `devices/` |
 | `is made for <device> 1.53; the stock file is <device> 1.54` / `mod.json is for ... 1.53; the stock file is ... 1.54` | the mod is for another OS version | build it for that OS: a port (3.10) |
+| `is inside 0x...-0x..., ...: protected on the <device>` | the site writes bytes the device protects (the Octatrack's bootloader copy) | move it; the device's profile (docs/DEVICES.md) gives the range and the reason |
+| `writes into 0x...-0x..., which stays stock on the <device>: ...` | the site, or `fixed` code (SDK), writes bytes that look free but the OS reads: the Octatrack's 16 bytes at `0x400d24d0`, read by the stock DELAY | put the code in `.run`, or `fixed` past the range (`0x400d24e0` on); the message gives the reason |
 | `the stock bytes are ..., not ...` (SDK) / `not the ones it expects` | the address is wrong, or the OS version differs | re-read the stock bytes at that address |
 | `ends mid-instruction`, `sweeps land on the start`, `does not decode` | the site does not cover whole instructions | move or widen the site to instruction boundaries (disassemble the stock main OS) |
 | `... overlap (0x...-0x...)` | another mod patches or claims those bytes | subscribe to an event instead, agree with that mod's author, or propose the site as a core event ([CORE-CONTRIBUTING.md](CORE-CONTRIBUTING.md)) |

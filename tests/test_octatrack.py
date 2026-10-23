@@ -167,6 +167,94 @@ def test_refuses_the_protected_bootloader_copy():
     expect(lambda: formats.verify(outputs, st, bytes(bad), DEV, 'x'), 'not stock')
 
 
+def test_the_kept_bytes_follow_the_stock_delays_table():
+    """The profile's `keep`, against the stock image: the 16 bytes at 0x400d24d0 read zero, so
+    they look free, but they follow the stock DELAY's 508-word coefficient table, which it
+    reads as 0x400d1ce0 + 4 * (x >> 6) (lsr/asr #6, then lea 0x400d1ce0, twice). An index
+    of 508 or more reads them (octabam #771, measured under octabam's emulator port)."""
+    st, img = stock()
+    (lo, hi, _why), = DEV.keep
+
+    def at(a, n):
+        return img[a - DEV.main_load:a - DEV.main_load + n]
+    assert at(lo, hi - lo) == bytes(hi - lo)
+    assert 0x400d1ce0 + 4 * 508 == lo and at(lo - 4, 4) != bytes(4)    # the table's last word
+    assert at(0x40003528, 8).hex() == 'ec8843f9400d1ce0'      # lsr.l #6,d0; lea 0x400d1ce0,a1
+    assert at(0x40003542, 8).hex() == 'ec8047f9400d1ce0'      # asr.l #6,d0; lea 0x400d1ce0,a3
+
+
+def test_a_build_leaves_the_kept_bytes_stock():
+    """A whole build that writes any of the kept bytes is refused, with the range and the
+    reason; the same write 16 bytes on builds and verifies. A main OS whose kept bytes
+    changed some other way fails the verify."""
+    (lo, hi, why), = DEV.keep
+    need(SYX)
+    with tempfile.TemporaryDirectory() as tmp:
+        for at, n in ((lo, 1812), (hi - 4, 4), (lo - 4, 8)):
+            p = write_mod(tmp, bundle([(at, b'\xff' * n)]))
+            expect(lambda: patch.build(SYX, [p], version='x', log=lambda *a: None),
+                   'site 0x%08x writes into 0x400d24d0-0x400d24e0, which stays stock on the '
+                   'Octatrack: %s' % (at, why))
+        p = write_mod(tmp, bundle([(hi, b'\xff' * 1812)]))
+        outputs, _man = patch.build(SYX, [p], version='x', log=lambda *a: None)
+    new = formats.main_image(formats.parse(outputs['syx'], DEV), DEV)
+    assert new[hi - DEV.main_load:][:1812] == b'\xff' * 1812
+    assert new[lo - DEV.main_load:hi - DEV.main_load] == bytes(hi - lo)
+    st, img = stock()
+    bad = bytearray(img)
+    bad[hi - 1 - DEV.main_load] = 1
+    outputs = formats.write(st, formats.pack_main(bytes(bad), DEV), DEV, 'x')
+    expect(lambda: formats.verify(outputs, st, bytes(bad), DEV, 'x'),
+           '0x400d24d0-0x400d24e0', 'is not stock')
+
+
+def test_fixed_code_past_the_kept_bytes_links():
+    """sdk.build refuses `fixed` code over the kept bytes, with the reason. 16 bytes on, the
+    same code builds, links with core-ot and verifies, and the kept bytes stay stock. A
+    format-2 mod that carries a site over them anyway (as the shop's octabam-synth 363861e
+    does, 1,812 bytes at 0x400d24d0) is refused by the linker."""
+    import shutil
+    from elekloader.sdk import build
+    need(SYX)
+    if not shutil.which(os.environ.get('ELEKLOADER_CROSS', DEV.toolchain['prefix']) + 'as'):
+        raise Skip('no m68k cross assembler to build mods/core-ot')
+    (lo, hi, why), = DEV.keep
+    with tempfile.TemporaryDirectory() as tmp:
+        core, _m = build.build(os.path.join(ROOT, 'mods', 'core-ot'), SYX, tmp)
+
+        def fixed(addr):
+            d = os.path.join(tmp, 'kp')
+            os.makedirs(d, exist_ok=True)
+            with open(os.path.join(d, 'kp.s'), 'w') as fh:
+                fh.write('        .text\n        moveq   #1,%d0\n        rts\n'
+                         '        .long   0x4b454550\n')
+            with open(os.path.join(d, 'mod.json'), 'w') as fh:
+                json.dump({'id': 'kp', 'version': '1', 'device': 'octatrack', 'os': '1.40C',
+                           'fixed': [{'source': 'kp.s', 'addr': '0x%08x' % addr,
+                                      'symbol': 'kp_start'}], 'requires': ['core']}, fh)
+            return build.build(d, SYX, tmp)
+        try:
+            fixed(lo)
+        except build.BuildError as e:
+            assert '0x400d24d0-0x400d24d8 writes into 0x400d24d0-0x400d24e0, which stays stock ' \
+                   'on the Octatrack: %s' % why in str(e), str(e)
+        else:
+            raise AssertionError('fixed code over the kept bytes was built')
+        kp, m = fixed(hi)
+        assert [(s['addr'], s['len']) for s in m.sites] == [(hi, 8)]
+        outputs, _man = patch.build(SYX, [core, kp], version='KEEP TEST', log=lambda *a: None)
+        with open(kp) as fh:
+            doc = json.load(fh)
+        doc['sites'][0]['addr'] = '0x%08x' % lo           # the same zeros' hash: only the place
+        moved = write_mod(tmp, doc, 'kp-moved.elemod')
+        expect(lambda: patch.build(SYX, [core, moved], version='x', log=lambda *a: None),
+               'kp 1 site 0x400d24d0 writes into 0x400d24d0-0x400d24e0, which stays stock on '
+               'the Octatrack')
+    new = formats.main_image(formats.parse(outputs['syx'], DEV), DEV)
+    assert new[hi - DEV.main_load:][:8].hex() == '70014e754b454550'
+    assert new[lo - DEV.main_load:hi - DEV.main_load] == bytes(hi - lo)
+
+
 def test_relocatable_data_is_reached_only_through_its_references():
     """The profile's `relocatable` facts, against the stock image: the data lies in a
     protected range, each reference holds its address, and no other four bytes outside

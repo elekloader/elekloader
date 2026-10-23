@@ -522,6 +522,49 @@ def test_a_machine_claims_its_slot():
     assert not [p for p in link.check([mod('c', 36), mod('d', 37)], image) if 'claim' in p]
     assert mod('e', 53).implied_names(image) == []
 
+def test_kept_bytes_refuse_every_write():
+    """A device's `keep`: main OS bytes that look free but the OS reads, on the Octatrack the
+    16 the stock DELAY reads past its coefficient table (octabam #771). A site that writes one
+    of them is refused, in a whole build (format 1) and by the linker (format 2), with the
+    range and its reason; the same site 16 bytes on is not. No free image area or relocatable
+    data includes kept bytes, and the other devices keep none."""
+    for d in devices.devices():
+        for lo, hi, why in d.keep:
+            assert d.main_load <= lo < hi and why, d.key
+            assert not any(a < hi and lo < b for a, b in d.image_free), (d.key, hex(lo))
+            assert not any(a < hi and lo < a + n for a, n, _r, _w in d.relocatable), (d.key, hex(lo))
+            assert not any(a < hi and lo < b for a, b, _w in d.protected), (d.key, hex(lo))
+    assert [d.key for d in devices.devices() if d.keep] == ['octatrack']
+    ot = [d for d in devices.devices() if d.key == 'octatrack'][0]
+    r = ot.releases['1.40C']
+    (lo, hi, why), = ot.keep
+    assert (lo, hi) == (0x400d24d0, 0x400d24e0) and 'DELAY' in why
+    assert ot.image_free[1] == (0x400d24e0, 0x400d2ce0)        # octabam's run, past the kept bytes
+    image = bytes(r.main_len)                                  # the kept bytes read zero in stock
+
+    def sites(at, n):
+        return [{'addr': '0x%08x' % at, 'len': n, 'new': 'ff' * n, 'kind': 'data',
+                 'stock_sha256': elemod.sha(bytes(n))}]
+
+    def whole(at, n):
+        return elemod.Mod({'elemod': 1, 'id': 'w', 'version': '1', 'target': devices.target_of(ot, r),
+                           'sites': sites(at, n)}, 'w')
+
+    def mod2(at, n):
+        return link.Mod2({'elemod': 2, 'id': 'm', 'version': '1', 'target': devices.target_of(ot, r),
+                          'sections': {}, 'sites': sites(at, n)}, 'm')
+    core = link.Mod2({'elemod': 2, 'id': 'core', 'version': '0.3', 'target': devices.target_of(ot, r),
+                      'sections': {'.boot': {'align': 4, 'parts': [['hex', '4e75']]}}}, 'core')
+    for at, n in ((0x400d24d0, 1812), (0x400d24dc, 4), (0x400d24c0, 17)):
+        want = ('m 1 site 0x%08x writes into 0x400d24d0-0x400d24e0, which stays stock on the '
+                'Octatrack: %s' % (at, why))
+        assert link.check([core, mod2(at, n)], image) == [want]
+        assert elemod.check([whole(at, n)], image) == [want.replace('m 1', 'w 1')]
+    assert link.check([core, mod2(0x400d24e0, 1812)], image) == []
+    assert elemod.check([whole(0x400d24e0, 1812)], image) == []
+    assert elemod.check([whole(0x400d24c0, 16)], image) == []   # just before them
+
+
 def test_parts_stay_in_the_image():
     d, r = devices.identify(devices.devices()[0].releases['1.53'].syx_sha256)
     ok = elemod.parse_parts([['hex', '00ff'], ['stock', '0x40000400', 8]], 't', d, r)

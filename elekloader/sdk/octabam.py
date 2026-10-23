@@ -48,6 +48,9 @@ Anything else refuses the module, with the reason:
 - DSP code or an FX menu entry (only ColdFire-only modules convert);
 - a cave or unit pinned outside the device's free image areas;
 - a write into a protected range, other than a poke wholly inside relocatable data;
+- a write into bytes the device keeps stock (`keep`), or a cave pinned there: on the
+  Octatrack the 16 bytes at 0x400d24d0 the stock DELAY reads, where SYNTH MACHINE pins its
+  page before octabam's PLACE setting;
 - a cave with no source that writes bytes of its own;
 - a formatter registered on another module's knob (a DSP module's);
 - a loader-appended Runtime (Octakit), an ArenaReserve, or a bridge over a
@@ -632,11 +635,19 @@ def convert(ob, name, image, dev, rx=None, bus=False, intercepts=False):
             if addr < hi and lo < addr + len(stock):
                 raise Refused('it writes 0x%08x-0x%08x, inside %s (0x%08x-0x%08x), which '
                               'elekloader protects' % (addr, addr + len(stock), what, lo, hi))
+        for lo, hi, why in dev.keep:
+            if addr < hi and lo < addr + len(stock):
+                raise Refused('it writes 0x%08x-0x%08x, into 0x%08x-0x%08x, which stays stock on '
+                              'the %s: %s' % (addr, addr + len(stock), lo, hi, dev.name, why))
         s = {'addr': '0x%08x' % addr, 'stock': stock.hex()}
         s.update(kw)
         sites.append(s)
 
     def place(what, at):
+        for lo, hi, why in dev.keep:
+            if lo <= at < hi:
+                raise Refused('%s is pinned at 0x%08x, inside 0x%08x-0x%08x, which stays stock on '
+                              'the %s: %s' % (what, at, lo, hi, dev.name, why))
         if not any(a <= at < b for a, b in dev.image_free):
             raise Refused('%s is pinned at 0x%08x, outside the free areas of the %s image'
                           % (what, at, dev.name))

@@ -576,15 +576,32 @@ def test_real_modules_convert_and_check():
     them), defsyms with a ratified reference(), DRAM units with detours, a
     floating unit with symbol refs and pokes."""
     done = convert_all(['recorder-hold', 'rlen-plen', 'direct-jump', 'cc-map', 'tuner',
-                        'repitch', 'quantizer', 'synth', 'lofi-amf-fix'])
+                        'repitch', 'quantizer', 'lofi-amf-fix'])
     assert len(done['recorder-hold'].sites) == 3 and 'arena_base' in done['recorder-hold'].imports
-    # pinned code, at octabam's addresses: SYNTH's page, QUANTIZER's two units
-    assert done['synth'].symbols['ob_synth_synth_page'] == ('abs', 0x400d24d0)
+    # pinned code, at octabam's addresses: QUANTIZER's two units
     assert {s['addr'] for s in done['quantizer'].sites} >= {0x400d2ca8, 0x400d2cb0}
     assert not done['lofi-amf-fix'].size('.run') and len(done['lofi-amf-fix'].sites) == 2
     # the category as octabam titles it for people, not its enum value
     assert done['tuner'].doc['category'] == 'Machines and the sequencer'
     assert done['lofi-amf-fix'].doc['category'] == 'Fixes'
+
+
+def test_real_synth_is_refused_over_the_kept_bytes():
+    """SYNTH MACHINE, before octabam's PLACE setting, pins its page cave at 0x400d24d0, over
+    the 16 bytes the stock DELAY reads (the profile's `keep`, octabam #771): it is refused,
+    with the range and the reason."""
+    ob, img = real(), stock()
+    m = ob.modules.get('synth')
+    if m is None or not any(c.cave_addr == 0x400d24d0 for c in m.cf_patches):
+        raise Skip('this checkout\'s SYNTH MACHINE does not pin a cave at 0x400d24d0')
+    (lo, hi, why), = DEV.keep
+    try:
+        octabam.convert(ob, 'synth', img, DEV)
+    except octabam.Refused as e:
+        assert 'its cave "synth page" is pinned at 0x400d24d0, inside 0x400d24d0-0x400d24e0, ' \
+               'which stays stock on the Octatrack: %s' % why in str(e), str(e)
+    else:
+        raise AssertionError('SYNTH MACHINE converted with its page over the kept bytes')
 
 
 def test_real_usb_midi_with_a_bare_metal_assembler():
@@ -767,9 +784,8 @@ def test_real_modules_on_the_bus():
 
 
 def test_real_modules_on_the_intercepts():
-    """--intercepts: SCALE QUANTIZER's 17 detours and the SYNTH MACHINE's 2 at the intercepts'
-    sites are left stock and become records {0, the detour's label} in the events' tables;
-    each mod requires intercepts, is versioned <commit>-intercepts and passes the check linked
+    """--intercepts: SCALE QUANTIZER's 17 detours at the intercepts' sites are left stock and
+    become records {0, the detour's label} in the events' tables; each mod requires intercepts, is versioned <commit>-intercepts and passes the check linked
     with mods/intercepts-ot, which proves each site is the event's jump to its stub and the
     table holds the record. A module with no detour there converts exactly as without
     --intercepts, and the check refuses a record without the intercepts."""
@@ -779,7 +795,7 @@ def test_real_modules_on_the_intercepts():
     tools()
     out = tempfile.mkdtemp()
     icpt, _m = build.build(octabam.INTERCEPTS_DIR, SYX, os.path.join(out, 'intercepts'))
-    want = {'quantizer': 17, 'synth': 2, 'tuner': 0}
+    want = {'quantizer': 17, 'tuner': 0}
     for n, count in want.items():
         plan = octabam.convert(ob, n, img, DEV, intercepts=True)
         assert len(plan['intercepts']) == count, (n, len(plan['intercepts']))
@@ -798,7 +814,7 @@ def test_real_modules_on_the_intercepts():
         lines = octabam.check(ob, plan, path, core(out), SYX, os.path.join(out, n + '.check'),
                               intercepts_path=icpt)
         assert sum('intercepts every call' in x for x in lines) == count, lines
-        if n == 'synth':
+        if n == 'quantizer':
             try:
                 octabam.check(ob, plan, path, core(out), SYX, os.path.join(out, 'nt.check'))
             except octabam.CheckError as e:
