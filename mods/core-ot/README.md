@@ -82,6 +82,40 @@ changes nothing else the unit does.
   may use the EMAC there too. The MIDI-out events run where the sender
   runs (a task or an interrupt). USB MIDI mirrors the DIN port's output
   through them; so can a MIDI monitor or router.
+- **0.5: the transport, the frame's head, main's end, the 120 Hz tick and
+  exports** (`bus.s`, `exports.c`, `elekloader/sdk/include/octatrack/core.h`).
+  Five more events, then what the core exports. Each site is again a whole
+  stock instruction (or the two of the frame interrupt's entry) that no
+  octabam2elemod v1.0 mod patches, and its stub replays it:
+
+  | event | site (was) | when |
+  |---|---|---|
+  | `ev_frame_begin` | 0x4000aad0 (`lea -252(sp),sp ; movem.l d0-fp,(sp)`), a jmp | the frame interrupt's first point; the EMAC state is not yet saved: handlers must not use it |
+  | `ev_transport(what, playing)` | 0x4009c3d4 (start), 0x4009c4d4 (resume) and 0x4009f5c6 (stop), each a jmp over `move.l d0,0x800065b8` | right after the sequencer's word is stored: START (1), RESUME (1), STOP (2) |
+  | `ev_boot_done` | 0x4001fc96 (main's last init call, `jsr 0x40098a2c`), a jsr | once, with the OS's tasks made and no project loaded |
+  | `ev_idle` | the same stub | main's idle loop, only in a build that has a handler |
+  | `ev_tick120` | 0x40055966 (`jsr (a2) ; addq.l #4,sp ; bra.s loop` in the key-repeat task), a jmp | 120 times a second |
+
+  - **Stop is the STOP routine, not 0x4000b2c8.** The frame builder's
+    `clrl 0x46c80350` there (SYNTH v1.0's `po_stop`) clears the DSP's
+    restart word. Octabam's notes for SYNTH say it never ran for a STOP in
+    its tests.
+    The STOP key and MIDI stop both go through 0x4009f5bc, whose first store
+    is `PLAYING = 2`.
+  - **Main's idle** is the stock `bras .` unless a mod subscribes to
+    `ev_idle`. Then the stub is the loop and never returns. That one site
+    is a jsr: octabam's emulator reads a jmp at 0x4001fc96 as a detoured
+    park and skips its code (`Rtos::atSpin`, for CF METER IDLE), and
+    this way a build without an idle handler parks in the stock loop.
+  - **The frame budget meter** needs no subscriber: `ot_meter` times every
+    frame interrupt from its first instruction to its last on DMA timer 3
+    (`core.h`, `struct ot_frame_meter`).
+  - **`ot_page2_write`** and **`ot_midi_send_paced`** (`exports.c`) are the
+    two routines octabam's CC MAP, TEMPO BUS and MODE DEFAULTS, and its
+    CC FEEDBACK, each hand-roll (docs/ADAPTING.md, "What core-ot 0.5
+    exports").
+  - Core is C from 0.5: `exports.c` needs the cross compiler (`m68k-linux-gnu-gcc`)
+    as well as the assembler.
 - **The draw gate** (`gate.s`). The OS composes the screen twice before the
   boot site, so before `.run` is in the reserve. The draw site therefore
   calls `core_draw_gate`, which `mod.json` places (`fixed`) in the last 24
@@ -116,7 +150,7 @@ OUT's producer in every layout and `usb-io-*` remix. Those mods
 
 ## Build
 
-Build it with the SDK (it needs m68k binutils):
+Build it with the SDK (it needs m68k binutils, and from 0.5 the m68k gcc):
 
 ```bash
 python -m elekloader.sdk.build mods/core-ot --stock OCTATRACK_OS1.40C.syx
@@ -154,6 +188,46 @@ script:
   every one of the 34 mods alone links with 0.2. Each image differs from
   its 0.1 build only at core's new sites, and in pointers that point at the
   same symbol plus offset as before.
+
+0.5, in ot_emu (the checks are a probe mod that logs each event, and a copy
+of ot_emu whose park range for main can be set, for the idle loop):
+- **Core alone matches stock.** After a session of 9 key presses (two
+  track keys, the AMP, FX1, FX2 and LFO page keys, PLAY and STOP) and 36
+  encoder turns, the current bank's RAM (635,712 bytes), the CS1
+  window (729,088), the engine's RAM (26,688), the Part and its copy, and
+  both frame buffers are byte for byte stock's. The one byte that differs is
+  the OS's free-page count, one lower for the page core takes.
+- **The transport events** fire for the PLAY and STOP keys, for the
+  `--sequencer` start and for calls of the start and STOP routines, and for
+  MIDI stop, continue and start (with transport receive on): START, RESUME
+  and STOP, with `playing` as the word was stored, which the handler reads
+  back as stored, in the task that made the call.
+- **Frames.** `ev_frame_begin` ran before `ev_frame_end` in every frame
+  (46,028 of 46,028 in a 17 s run). The meter read about 10,600 counts a
+  frame (80 us in the emulator, which is not hardware's time), `tpf` measured
+  47,891 over a 1,024-frame window (132 MHz and 44.1 kHz exactly). A handler
+  that spent 80,000 counts in one frame's begin showed as `worst` 96,564,
+  `overruns` 1 and `late` 1.
+- **`ev_tick120`** ran 120 times a second (2,047 times in 17.05 s).
+- **`ev_boot_done`** ran once, before the first frame, and ten tasks were
+  made as in stock. `ev_idle` ran from main's loop, with ot_emu given main's
+  loop as its park range (its own reading of the stub's jmp is why the site is
+  a jsr).
+- **`ot_page2_write`** against the four stock editors, from the same state:
+  for each of the 6 slots of AMP, FX1 and FX2, and of PLAYBACK for three
+  machines (36 cases), on tracks 0, 2, 5 and 7, the editor and
+  `ot_page2_write` changed the same bytes to the same values (the Part, its copy, the part-changed bits, the
+  bank's and the project's dirty flags, the live lane and its two copies the
+  frame builder makes, the redraw marker). The editor also marks one more
+  cell when the slot is 0, a redraw bookkeeping this does not make. A
+  value out of range is clamped as the editor clamps it.
+- **`ot_midi_send_paced`** took 289 of 362 messages (the queue holds 127
+  three-byte ones), refused the 73 that did not fit and a length of 0 and 256,
+  and sent each it took once, in order, byte for byte (one 255 bytes long,
+  across the queue's end), at a median 8.33 ms apart, with the firmware's own
+  sends between.
+- Tests: test_octatrack 28/28, test_units 30/30, test_octabam (with a
+  bare-metal assembler) 21/21.
 
 On a unit (an Octatrack MKII, 3 Oct 2026): 0.1 alone, and 0.1 with 19 of the
 converted octabam mods in seven groups, flashed from the card. Every build

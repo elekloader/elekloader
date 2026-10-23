@@ -1,14 +1,17 @@
 {
- "id": "core", "version": "0.4",
+ "id": "core", "version": "0.5",
  "license": "GPL-2.0-or-later",
  "title": "core", "category": "Framework", "author": "irpina",
- "description": "The boot copier and the hook bus for the Octatrack: it reserves the bottom of the sample and recorder memory for mods, only the 6 KB pages their RAM fills (0.2 took 10 MB), copies their code there at boot, and calls them on the UI tick, the screen, the keys, the encoders, MIDI in and out, the audio frame and its end. Every linkable Octatrack mod needs it. On its own it changes nothing else the unit does.",
+ "description": "The boot copier and the hook bus for the Octatrack: it reserves the bottom of the sample and recorder memory for mods, only the 6 KB pages their RAM fills (0.2 took 10 MB), copies their code there at boot, and calls them on the UI tick, the screen, the keys, the encoders, MIDI in and out, the audio frame, its start and its end, the transport, the end of boot, the idle loop and a 120 Hz tick. It times every audio frame, writes page-2 knobs the way the panel does, and paces MIDI out. Every linkable Octatrack mod needs it. On its own it changes nothing else the unit does.",
  "device": "octatrack", "os": "1.40C",
- "sources": ["core-ot.s", "bus.s"],
+ "sources": ["core-ot.s", "bus.s", "exports.c"],
  "fixed": [{"source": "gate.s", "addr": "0x400c46ea"}],
  "defsym": {"BOOT_CONTINUE": "0x40001e50", "UNCACHED": "0x08000000",
   "TICK_NEXT": "0x40031970", "KEYFN": "0x40031734", "ENCFN": "0x40031944",
-  "FRAME_PTR": "0x400b9710", "ISR_FLAG": "0x46104d08"},
+  "FRAME_PTR": "0x400b9710", "ISR_FLAG": "0x46104d08",
+  "PLAYING": "0x800065b8", "DTCN3": "0xfc07c00c", "FRAME_COUNTS": "47891",
+  "FRAME_BEGIN_NEXT": "0x4000aad8", "T_START_NEXT": "0x4009c3da", "T_RESUME_NEXT": "0x4009c4da",
+  "T_STOP_NEXT": "0x4009f5cc", "IDLE_INIT": "0x40098a2c", "TICK120_LOOP": "0x4005595c"},
  "sites": [
   {"addr": "0x4000050c", "stock": "4eb940001e50", "op": "jsr", "target": "boot"},
   {"addr": "0x40061e94", "stock": "4eb940031970", "op": "jsr", "target": "core_tick"},
@@ -20,6 +23,12 @@
   {"addr": "0x4000d9a6", "stock": "4cd77fff4fef00fc", "op": "jmp", "target": "core_frame_end"},
   {"addr": "0x40010bd0", "stock": "246f001c4ab9460ba978", "op": "jmp", "target": "core_midi_out"},
   {"addr": "0x400108c4", "stock": "40c246fc2700", "op": "jmp", "target": "core_midi_out_rt"},
+  {"addr": "0x4000aad0", "stock": "4fefff0448d77fff", "op": "jmp", "target": "core_frame_begin"},
+  {"addr": "0x4009c3d4", "stock": "23c0800065b8", "op": "jmp", "target": "core_t_start"},
+  {"addr": "0x4009c4d4", "stock": "23c0800065b8", "op": "jmp", "target": "core_t_resume"},
+  {"addr": "0x4009f5c6", "stock": "23c0800065b8", "op": "jmp", "target": "core_t_stop"},
+  {"addr": "0x4001fc96", "stock": "4eb940098a2c", "op": "jsr", "target": "core_main_end"},
+  {"addr": "0x40055966", "stock": "4e92588f60f0", "op": "jmp", "target": "core_tick120"},
   {"addr": "0x4000045e", "stock": "40a955e0", "op": "ptr", "target": "arena_base"},
   {"addr": "0x4000046c", "stock": "40a955e0", "op": "ptr", "target": "arena_base"},
   {"addr": "0x400004c8", "stock": "40a955e0", "op": "ptr", "target": "arena_base"},
@@ -49,6 +58,7 @@
   {"addr": "0x40097126", "stock": "0000390a", "op": "ptr", "target": "__arena_pages"}
  ],
  "collections": {"ev_tick": 4, "ev_draw": 4, "ev_key": 4, "ev_enc": 4, "ev_midi": 4, "ev_frame": 4,
-  "ev_frame_end": 4, "ev_midi_out": 4, "ev_midi_out_rt": 4},
+  "ev_frame_end": 4, "ev_midi_out": 4, "ev_midi_out_rt": 4,
+  "ev_frame_begin": 4, "ev_transport": 4, "ev_boot_done": 4, "ev_idle": 4, "ev_tick120": 4},
  "resources": {"names": ["arena:bottom"]}
 }

@@ -25,6 +25,8 @@
 | recording returns the base). BOOT_CONTINUE and UNCACHED come from
 | mod.json (defsym).
 
+        .include "meter.inc"
+
 | ============================ .boot =======================================
         .section .boot, "ax"
         .globl  boot
@@ -45,7 +47,9 @@ boot:
 3:      clr.l   (%a1)+
         subq.l  #1, %d0
         bne.s   3b
-4:      moveq   #1, %d0                 | the draw gate may call into .run now
+4:      movea.l #ot_meter + M_TPF + UNCACHED, %a1
+        move.l  #FRAME_COUNTS, (%a1)    | the frame meter's first guess
+        moveq   #1, %d0                 | the draw gate may call into .run now
         move.b  %d0, core_up
         movem.l (%sp), %d0/%a0-%a1
         lea     12(%sp), %sp
@@ -57,3 +61,6 @@ boot:
 | What a weak import resolves to when no mod provides it: reads as zero.
         .globl  core_zero
 core_zero:  .skip 16
+| The frame budget meter (bus.s, core.h's struct ot_frame_meter).
+        .globl  ot_meter
+ot_meter:   .skip OT_METER_SIZE

@@ -211,12 +211,61 @@ declares"*).
 | `ev_frame_end` (0.4) | the frame interrupt's last point, every 16 samples | `void f(void)` | after `ev_frame`, TUNER's counter store and USB audio's tail. The interrupt's EMAC restore runs again after the handlers, so it may use the EMAC too |
 | `ev_midi_out` (0.4) | each MIDI message the firmware sends (midi_send) | `void f(const unsigned char *msg, unsigned len)` | before stock sends it; it runs where the sender runs (a task or an interrupt): keep it short |
 | `ev_midi_out_rt` (0.4) | each realtime byte the firmware sends (the priority sender) | `void f(unsigned byte)` | the same |
+| `ev_frame_begin` (0.5) | the frame interrupt's first point, every 16 samples | `void f(void)` | before the interrupt saves the interrupted task's EMAC state: a handler must not touch the EMAC. Core's frame meter stamps first, so a handler's time counts in the meter |
+| `ev_transport` (0.5) | the sequencer starts, resumes or stops | `void f(unsigned what, unsigned playing)` | `what` is `OT_TRANSPORT_START` (0), `_RESUME` (1) or `_STOP` (2); `playing` the sequencer's word as stored (1, 1, 2). It runs in the task that called the transport routine (the sys task for the panel's keys; MIDI start, continue and stop come in another), right after the store: do not call into the sequencer or send MIDI from it |
+| `ev_boot_done` (0.5) | once, when main has made its last init call | `void f(void)` | the OS's tasks exist, no project is loaded yet. In the main task |
+| `ev_idle` (0.5) | main's idle loop, over and over | `void f(void)` | the lowest priority: runs when nothing else does. It must not wait for anything: if main blocks, nothing is left to run. A build with an `ev_idle` handler runs main's idle loop in the core; without one main parks in the stock `bras .` |
+| `ev_tick120` (0.5) | the key-repeat task, 120 times a second | `void f(void)` | after the key-repeat step; that task has 2 KB of stack. Core's paced MIDI drains first |
 
 The sites core-ot owns (Octatrack 1.40C): the boot site 0x4000050c, the 28
 arena writes listed in its `mod.json`, 0x40061e94, 0x40013cae, 0x40061dc8,
-0x40061e00, 0x40005572 and 0x4000d94e, from 0.4 0x4000d9a6, 0x40010bd0 and
-0x400108c4, and its draw gate at 0x400c46ea-0x400c4702. They keep clear of every byte that the converted
-octabam modules (4b) patch.
+0x40061e00, 0x40005572 and 0x4000d94e; from 0.4 0x4000d9a6, 0x40010bd0 and
+0x400108c4; from 0.5 0x4000aad0, 0x4009c3d4, 0x4009c4d4, 0x4009f5c6,
+0x4001fc96 and 0x40055966; and its draw gate at 0x400c46ea-0x400c4702. They
+keep clear of every byte that the converted octabam modules (4b) patch.
+
+The transport events are the sequencer's own start, resume and STOP routines
+(0x4009b964 and 0x4009f5bc): the keys, MIDI start/continue/stop and the
+`--sequencer` start all come through them. The sequencer's timer interrupt
+(0x400a1e0c) also sets its word to 1 at three places in its own state machine
+(0x400a220a, 0x400a24d0 and 0x400a27e2; the first sends MIDI start): starts
+the sequencer makes itself, which are not events in 0.5.
+
+#### What core-ot 0.5 exports (`octatrack/core.h`)
+
+```c
+#include "octatrack/core.h"
+```
+
+- **Where the panel is.** `OT_UI_TRACK` (0x100b14cc), `OT_PART`
+  (0x80000003), `OT_PATTERN` (0x80000004), `OT_BANK`; `OT_PLAYING_BANK(t)`
+  and `OT_PLAYING_PART(t)` (0x8000182a, 0x80001832: the bank and Part each
+  track plays, 0xff while it is not); `OT_PLAYING` (0x800065b8: 0 stopped,
+  1 playing, 2 what the STOP routine leaves it at). The edits you make with
+  `ot_page2_write` go to `OT_PART`, which is not the Part a track plays when
+  a pattern change is queued; `OT_PART_FX1(p, t)`, `OT_PART_FX2(p, t)` and
+  `OT_PART_MACHINE(p, t)` read what is on a track in a Part.
+- **The frame budget meter.** `ot_meter` (`struct ot_frame_meter`) is kept
+  in every build: each frame interrupt's length in DMA timer 3 counts
+  (132 MHz; a frame is 47,891), from `ev_frame_begin`'s first instruction to
+  `ev_frame_end`'s last, so it includes every handler and the DMA interrupt
+  nested in it. `last`, `worst`, `total`/`frames` (the mean), `overruns`
+  (frames longer than a frame), `late` (frames that began 1.5 frames after
+  the one before) and `tpf` (the counts a frame takes, measured over the last
+  1,024). `ot_meter_reset()` starts the counts again. OT HEALTH can read it
+  instead of stamping the timer itself.
+- **`ot_page2_write(trk, page, slot, val)`** writes a page-2 knob the way the
+  panel's editor does: the Part's byte, its battery-backed copy, the dirty
+  flags and the engine's live lane, with the value clamped to the knob's
+  range. `page` is `OT_P2_PLAYBACK`, `_AMP`, `_FX1` or `_FX2`; it returns the
+  value stored, or `OT_P2_REFUSED`. CC MAP, TEMPO BUS and MODE DEFAULTS in
+  octabam each make these stores by hand.
+- **`ot_midi_send_paced(msg, len)`** queues a MIDI message (1-255 bytes) and
+  core sends one per 120 Hz tick, while the DIN ring has room and the engine
+  is idle. The firmware's `midi_send` has no flow control: a burst larger than
+  its 4 KB ring hangs the unit (it waits with interrupts masked for an
+  interrupt to empty the ring), and a controller that gets hundreds of
+  messages a second locks up. Returns 0 when the queue (512 bytes) is full.
 
 ### The DSP bus on the Octatrack (dspbus 0.1)
 

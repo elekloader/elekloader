@@ -17,8 +17,13 @@
 |   ENCFN       enc(encoder, delta) (0x40031944), the encoder dispatch
 |   FRAME_PTR   the long holding the frame the compositor builds (0x400b9710)
 |   ISR_FLAG    the long the frame interrupt's tail tests (0x46104d08)
+|
+| From 0.5 also (see each event below): PLAYING (0x800065b8), DTCN3 (DMA timer
+| 3's counter), and the addresses the new jmp sites go back to.
 
         .section .run, "ax"
+
+        .include "meter.inc"
 
 | ---- ev_tick: the sys task's tick, 60 times a second ------------------------
 | At 0x40061e94 (was: jsr 0x40031970), in the sys loop's case for message
@@ -162,7 +167,19 @@ core_frame_end:
         movea.l %d0, %a0
         jsr     (%a0)
         bra.s   1b
-2:      lea     220(%sp), %a0           | the EMAC restore, as the interrupt does it
+2:      move.l  DTCN3, %d0              | the frame budget meter: this frame's
+        lea     ot_meter, %a0           | interrupt, entry to here, handlers' time in
+        sub.l   M_T0(%a0), %d0
+        move.l  %d0, M_LAST(%a0)
+        add.l   %d0, M_TOTAL(%a0)
+        cmp.l   M_WORST(%a0), %d0
+        bls.s   3f
+        move.l  %d0, M_WORST(%a0)
+3:      cmp.l   M_TPF(%a0), %d0
+        bls.s   4f
+        addq.l  #1, M_OVER(%a0)
+4:      addq.l  #1, M_FRAMES(%a0)
+        lea     220(%sp), %a0           | the EMAC restore, as the interrupt does it
         move.l  #0, %macsr
         movem.l (%a0), %d0-%d7
         move.l  %d0, %acc0
@@ -226,3 +243,163 @@ core_midi_out_rt:
         move.w  %sr, %d2                | the instructions this replaced
         move.w  #0x2700, %sr
         jmp     0x400108ca
+
+| ---- ev_frame_begin: the head of the frame interrupt (core-ot 0.5) -------------
+| At 0x4000aad0, the frame interrupt's entry (vector 0x41, level 5; was: lea
+| -252(%sp),%sp ; movem.l %d0-%fp,(%sp)): the stub makes the interrupt's frame,
+| as the two instructions did, and the handlers run before it does anything
+| else. The interrupted task's EMAC state is NOT saved yet: a handler must not
+| touch the EMAC (ev_frame, later, may). Handlers: void f(void), at interrupt
+| level: keep them short. Core's own first handler is the frame budget meter:
+| it stamps DMA timer 3 before any other.
+        .globl  core_frame_begin
+core_frame_begin:
+        lea     -252(%sp), %sp
+        movem.l %d0-%d7/%a0-%a6, (%sp)  | what the two instructions did
+        move.l  DTCN3, %d0              | d0 = now
+        lea     ot_meter, %a0
+        move.l  %d0, M_T0(%a0)          | the meter: this frame began
+        move.l  M_PREV(%a0), %d1        | d1 = when the last one began
+        move.l  %d0, M_PREV(%a0)
+        move.l  M_FRAMES(%a0), %d2
+        bne.s   1f
+        move.l  %d0, M_WIN(%a0)         | the first frame: start the window
+        clr.l   M_WINN(%a0)
+        bra.s   5f
+1:      move.l  %d0, %d3
+        sub.l   %d1, %d3                | d3 = it began this long after the last
+        move.l  M_TPF(%a0), %d1
+        move.l  %d1, %d2
+        lsr.l   #1, %d2
+        add.l   %d2, %d1                | d1 = a frame and a half
+        cmp.l   %d1, %d3
+        bls.s   2f
+        addq.l  #1, M_LATE(%a0)         | at least one frame went missing
+2:      move.l  M_WINN(%a0), %d2
+        addq.l  #1, %d2
+        move.l  %d2, M_WINN(%a0)
+        cmpi.l  #1024, %d2
+        bne.s   5f
+        move.l  %d0, %d3                | 1,024 frames are over: they took
+        sub.l   M_WIN(%a0), %d3         | this many counts
+        lsr.l   #8, %d3
+        lsr.l   #2, %d3                 | / 1,024
+        beq.s   3f
+        move.l  %d3, M_TPF(%a0)         | the counts one frame takes
+3:      clr.l   M_WINN(%a0)
+        move.l  %d0, M_WIN(%a0)
+5:      lea     ev_frame_begin, %a2
+4:      move.l  (%a2)+, %d0
+        beq.s   6f
+        movea.l %d0, %a0
+        jsr     (%a0)
+        bra.s   4b
+6:      jmp     FRAME_BEGIN_NEXT
+
+| ---- ev_transport: start, resume and stop (core-ot 0.5) ---------------------
+| Three sites that store the sequencer's PLAYING word (0x800065b8: 0 stopped,
+| 1 playing, 2 what the STOP routine leaves); each is the store itself, so a
+| jmp replaces it and the stub makes it first: handlers see the new word.
+|
+|   0x4009c3d4  START     the cold start (the PLAY key, MIDI start), in the
+|                         transport routine 0x4009b964 (was: move.l %d0,PLAYING)
+|   0x4009c4d4  RESUME    the same routine's resume path
+|   0x4009f5c6  STOP      the STOP routine 0x4009f5bc, at its head
+|
+| Handlers: void f(unsigned what, unsigned playing): what is 0 start, 1 resume,
+| 2 stop; playing the word as stored (1, 1, 2). They run in the task that
+| called the transport routine; they must not call into the sequencer or send
+| MIDI (the routine is half done). Every register and the flags come back as
+| the store left them.
+        .globl  core_t_start, core_t_resume, core_t_stop
+core_t_start:
+        move.l  %d0, PLAYING            | the store this replaced (d0 = 1)
+        move.l  %d1, -(%sp)
+        moveq   #0, %d1
+        bsr.s   transport
+        move.l  (%sp)+, %d1
+        tst.l   %d0                     | the flags the store left
+        jmp     T_START_NEXT
+core_t_resume:
+        move.l  %d0, PLAYING            | d0 = 1
+        move.l  %d1, -(%sp)
+        moveq   #1, %d1
+        bsr.s   transport
+        move.l  (%sp)+, %d1
+        tst.l   %d0
+        jmp     T_RESUME_NEXT
+core_t_stop:
+        move.l  %d0, PLAYING            | d0 = 2
+        move.l  %d1, -(%sp)
+        moveq   #2, %d1
+        bsr.s   transport
+        move.l  (%sp)+, %d1
+        tst.l   %d0
+        jmp     T_STOP_NEXT
+transport:                              | d1 = what, d0 = playing; keeps d0, a0, a1
+        lea     -16(%sp), %sp
+        movem.l %d0-%d1/%a0-%a1, (%sp)
+        move.l  %a3, -(%sp)
+        lea     ev_transport, %a3
+1:      move.l  (%a3)+, %d0
+        beq.s   2f
+        move.l  4(%sp), -(%sp)          | playing (d0 saved: 4 past a3's)
+        move.l  12(%sp), -(%sp)         | what (d1 saved: 8 past, and 4 pushed)
+        movea.l %d0, %a0
+        jsr     (%a0)
+        addq.l  #8, %sp
+        bra.s   1b
+2:      movea.l (%sp)+, %a3
+        movem.l (%sp), %d0-%d1/%a0-%a1
+        lea     16(%sp), %sp
+        rts
+
+| ---- ev_boot_done and ev_idle: main's end (core-ot 0.5) ----------------------
+| At 0x4001fc96, main's last init call (was: jsr 0x40098a2c, which makes the
+| flex-analysis task); the `bras .` after it is main's idle. A jsr to this stub
+| makes the call, then runs ev_boot_done once: the OS's tasks exist, no project
+| is loaded yet. With no ev_idle handler in the build the stub returns, and
+| main parks in the stock `bras .` as before. With one it does not return: it is
+| main's idle loop, calling ev_idle over and over. Handlers: void f(void), in
+| the main task; ev_idle's must not wait for anything: if main blocks, nothing
+| is left to run at the lowest priority.
+        .globl  core_main_end
+core_main_end:
+        jsr     IDLE_INIT               | the call this replaced
+        move.l  %a2, -(%sp)             | main's a2 stays as it was, if it parks
+        lea     ev_boot_done, %a2
+1:      move.l  (%a2)+, %d0
+        beq.s   2f
+        movea.l %d0, %a0
+        jsr     (%a0)
+        bra.s   1b
+2:      tst.l   ev_idle                 | a handler? (the table's first word)
+        beq.s   5f
+3:      lea     ev_idle, %a2            | main's idle loop
+4:      move.l  (%a2)+, %d0
+        beq.s   3b
+        movea.l %d0, %a0
+        jsr     (%a0)
+        bra.s   4b
+5:      movea.l (%sp)+, %a2
+        rts                             | to the stock `bras .`
+
+| ---- ev_tick120: the key-repeat task's tick, 120 times a second (core-ot 0.5) --
+| At 0x40055966 in the key-repeat task's loop (was: jsr (%a2) ; addq.l #4,%sp ;
+| bra 0x4005595c), after the wait for the UI tick event (DMA timer 1's handler
+| signals it at 120 Hz) and the key-repeat step. Handlers: void f(void), in
+| that task (2 KB of stack): keep them short. core's paced MIDI out drains here.
+        .globl  core_tick120
+core_tick120:
+        jsr     (%a2)                   | the key-repeat step, as the loop did
+        addq.l  #4, %sp
+        jsr     otp_drain               | core's paced MIDI out (exports.c): one message
+        move.l  %a4, -(%sp)
+        lea     ev_tick120, %a4
+1:      move.l  (%a4)+, %d0
+        beq.s   2f
+        movea.l %d0, %a0
+        jsr     (%a0)
+        bra.s   1b
+2:      movea.l (%sp)+, %a4
+        jmp     TICK120_LOOP

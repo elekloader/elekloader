@@ -40,6 +40,7 @@ There is one core file per device and OS:
 | Octatrack MKI, MKII | 1.40C | `core-ot-0.1.elemod` | the latest release (v0.4.0); PURGE SAMPLES freezes the unit with it, fixed in 0.3.1 |
 | Octatrack MKI, MKII | 1.40C | `core-ot-0.3.1.elemod` | the [core-ot-v0.3.1](https://github.com/irpina/elekloader/releases/tag/core-ot-v0.3.1) pre-release, and the shop: with the hook bus (0.2) and the sized reserve (0.3), neither released on its own |
 | Octatrack MKI, MKII | 1.40C | `core-ot-0.4.elemod` | not released yet: the frame's end and MIDI out (`ev_frame_end`, `ev_midi_out`, `ev_midi_out_rt`) |
+| Octatrack MKI, MKII | 1.40C | `core-ot-0.5.elemod` | not released yet: the transport, the frame's head, the end of boot, idle and a 120 Hz tick (`ev_transport`, `ev_frame_begin`, `ev_boot_done`, `ev_idle`, `ev_tick120`), a frame budget meter, and the exports in `octatrack/core.h` (the context, `ot_page2_write`, `ot_midi_send_paced`). Built with the m68k gcc as well as the assembler |
 | Model:Cycles | 1.13 | `core-mc-0.1.elemod` | on main, not released yet: build it ([below](#building-a-core)) |
 | Model:Samples | 1.13 | `core-ms-0.1.elemod` | on main, not released yet: build it ([below](#building-a-core)) |
 

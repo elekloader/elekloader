@@ -272,6 +272,13 @@ same conventions (docs/ADAPTING.md, "The hook bus on the Octatrack"):
 | `ev_enc` | 0x40061e00, `enc(encoder, delta)` | `int f(encoder, delta)`; nonzero: taken |
 | `ev_midi` | 0x40005572, the MIDI thread's handler call | `int f(msg)`; nonzero: taken |
 | `ev_frame` | 0x4000d94e, the frame interrupt, every 16 samples | `void f(void)` |
+| `ev_frame_end` (0.4) | 0x4000d9a6, the frame interrupt's last point | `void f(void)` |
+| `ev_midi_out` (0.4) | 0x40010bd0, in `midi_send` | `void f(msg, len)` |
+| `ev_midi_out_rt` (0.4) | 0x400108c4, the priority sender | `void f(byte)` |
+| `ev_frame_begin` (0.5) | 0x4000aad0, the frame interrupt's entry | `void f(void)` |
+| `ev_transport` (0.5) | 0x4009c3d4, 0x4009c4d4 and 0x4009f5c6, the sequencer's start, resume and stop | `void f(what, playing)` |
+| `ev_boot_done`, `ev_idle` (0.5) | 0x4001fc96, main's last init call and idle loop | `void f(void)` |
+| `ev_tick120` (0.5) | 0x40055966, the key-repeat task's loop, 120 Hz | `void f(void)` |
 
 An optional mod, the DSP bus (`mods/dspbus-ot`, dspbus 0.1), adds an event on
 DSP core 0. It is a DSP table, so its handlers are DSP code (`subscribe_dsp`):

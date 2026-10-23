@@ -339,12 +339,28 @@ BUS_SITES = {
     'core_frame_end': (0x4000d9a6, '4cd77fff4fef00fc', 'ev_frame_end'),       # the frame interrupt's epilogue
     'core_midi_out': (0x40010bd0, '246f001c4ab9460ba978', 'ev_midi_out'),     # midi_send past its prologue
     'core_midi_out_rt': (0x400108c4, '40c246fc2700', 'ev_midi_out_rt'),       # the priority sender
+    # core-ot 0.5: the frame's head, the transport, main's end, the 120 Hz tick
+    'core_frame_begin': (0x4000aad0, '4fefff0448d77fff', 'ev_frame_begin'),   # the frame interrupt's entry
+    'core_t_start': (0x4009c3d4, '23c0800065b8', 'ev_transport'),             # move.l d0,PLAYING (1): start
+    'core_t_resume': (0x4009c4d4, '23c0800065b8', 'ev_transport'),            # the same, resume
+    'core_t_stop': (0x4009f5c6, '23c0800065b8', 'ev_transport'),              # the same (2), the STOP routine
+    'core_main_end': (0x4001fc96, '4eb940098a2c', 'ev_boot_done'),            # main's last init call
+    'core_tick120': (0x40055966, '4e92588f60f0', 'ev_tick120'),               # the key-repeat task's step
 }
+# The sites that are jmps (a stub replays what it displaced and goes back to stock itself); the
+# others are jsrs. ev_idle shares core_main_end's site with ev_boot_done, so it is no site's event.
+JMP_SITES = {'core_frame_end', 'core_midi_out', 'core_midi_out_rt', 'core_frame_begin', 'core_t_start',
+             'core_t_resume', 'core_t_stop', 'core_tick120'}
+# Where each jmp stub goes back to: the instruction after the site. The same numbers are mod.json's
+# defsym, so the stubs and the sites cannot drift apart.
+JMP_BACK = {'T_START_NEXT': 'core_t_start', 'T_RESUME_NEXT': 'core_t_resume', 'T_STOP_NEXT': 'core_t_stop',
+            'FRAME_BEGIN_NEXT': 'core_frame_begin'}
 # Instructions the converted octabam mods of irpina/octabam2elemod v1.0 hook in the same
 # routines (TUNER, CC FEEDBACK, CC MAP, the USB audio mods, USB MIDI): the bus keeps clear
 # of every one, so those files link with core 0.2 as they did with 0.1.
 V10_NEIGHBOURS = ((0x40056c72, 6), (0x4000d99a, 6), (0x4000d9a0, 6), (0x4005595c, 6),
-                  (0x400d64a0, 4), (0x4001e606, 6), (0x40059ef0, 6), (0x40010bc8, 8), (0x400108b0, 6))
+                  (0x400d64a0, 4), (0x4001e606, 6), (0x40059ef0, 6), (0x40010bc8, 8), (0x400108b0, 6),
+                  (0x4000b2c8, 6))      # SYNTH's po_stop: not a transport stop, but its bytes (0.5 keeps clear)
 
 
 def test_the_core_bus_sites():
@@ -360,7 +376,7 @@ def test_the_core_bus_sites():
         s = sites[target]
         n = len(stock_hex) // 2
         assert (int(s['addr'], 16), s['stock']) == (addr, stock_hex), target
-        assert s['op'] == ('jmp' if target in ('core_frame_end', 'core_midi_out', 'core_midi_out_rt') else 'jsr'), target
+        assert s['op'] == ('jmp' if target in JMP_SITES else 'jsr'), target
         o = addr - DEV.main_load
         assert img[o:o + n].hex() == stock_hex, target
         ok, note = elemod.insn_check(img, addr, n, DEV)
@@ -368,11 +384,109 @@ def test_the_core_bus_sites():
         assert j['collections'][event] == 4, event
         for a, m in V10_NEIGHBOURS:
             assert not (a < addr + n and addr < a + m), (target, hex(a))
-    assert sorted(j['collections']) == sorted(e for _a, _s, e in BUS_SITES.values())
+    # ev_idle is called by the stub that calls ev_boot_done; every other event has a site of its own
+    assert sorted(j['collections']) == sorted({e for _a, _s, e in BUS_SITES.values()} | {'ev_idle'})
+    assert j['collections']['ev_idle'] == 4
+    for sym, target in JMP_BACK.items():       # a jmp stub goes back to the instruction after its site
+        addr, stock_hex, _ev = BUS_SITES[target]
+        assert int(j['defsym'][sym], 16) == addr + len(stock_hex) // 2, sym
+    # the key-repeat site displaces `jsr (a2) ; addq.l #4,sp ; bra.s loop`: its stub goes to the loop head
+    addr, stock_hex, _ev = BUS_SITES['core_tick120']
+    assert bytes.fromhex(stock_hex[:8]) == bytes.fromhex('4e92588f') and stock_hex[8:10] == '60'
+    disp = int(stock_hex[10:12], 16) - 256
+    assert int(j['defsym']['TICK120_LOOP'], 16) == addr + 6 + disp
+    assert int(j['defsym']['IDLE_INIT'], 16) == int(BUS_SITES['core_main_end'][1][4:], 16)   # replayed
+    assert int(j['defsym']['PLAYING'], 16) == 0x800065b8
     (fx,) = j['fixed']
     at = int(fx['addr'], 16)
     assert any(a <= at and at + 24 <= b for a, b in DEV.image_free)
     assert at + 24 == DEV.image_free[0][1]          # the run's end: its start is octabam's SPECTRUM's
+
+
+def _c_defs(path):
+    """name -> int for the `#define NAME 0x...u` lines of a C source"""
+    import re
+    with open(path) as fh:
+        src = fh.read()
+    out = {}
+    for m in re.finditer(r'^#define\s+(\w+)\s+(.*)$', src, re.M):
+        n = re.search(r'0x[0-9a-fA-F]+|(?<!\w)[0-9]+', m.group(2))
+        if n:
+            out[m.group(1)] = int(n.group(0), 0)
+    return out
+
+
+def test_page2_write_follows_the_stock_editors():
+    """core-ot 0.5's ot_page2_write (exports.c) makes the stores of the four page-2 editors: each
+    page's Part offset, its battery-backed copy, its live lane, the dirty flags, the bank pointer and
+    the Part size are the immediates in the stock image's editors (PLAYBACK 0x4003a474, AMP 0x4003adec,
+    FX1 0x4003abe4, FX2 0x4003a9dc), at the places the editors make each store."""
+    import re
+    st, img = stock()
+    with open(os.path.join(ROOT, 'mods', 'core-ot', 'exports.c')) as fh:
+        src = fh.read()
+    d = _c_defs(os.path.join(ROOT, 'mods', 'core-ot', 'exports.c'))
+    rows = re.findall(r'\{\s*(0x[0-9a-f]+),\s*(0x[0-9a-f]+),\s*(\d)\s*\},\s*/\*\s*(\w+)', src)
+    pages = {name: (int(store, 16), int(lane, 16), int(kind)) for store, lane, kind, name in rows}
+    assert sorted(pages) == ['AMP', 'FX1', 'FX2', 'PLAYBACK'], pages
+    # where each editor stores: `addal #off,a0` (the Part), `addal #mirror+off,a1` (its copy) and
+    # `lea 0x80000810+lane,a0` (the engine's lane)
+    at = {'PLAYBACK': (0x4003a5b4, 0x4003a5bc, 0x4003a60a), 'AMP': (0x4003aeb4, 0x4003aebc, 0x4003af0a),
+          'FX1': (0x4003acac, 0x4003acb4, 0x4003ad02), 'FX2': (0x4003aaa4, 0x4003aaac, 0x4003aafa)}
+    kinds = {'PLAYBACK': 0, 'AMP': 2, 'FX1': 3, 'FX2': 4}                 # the resolver's page kinds
+
+    def bytes_at(a, n=6):
+        o = a - DEV.main_load
+        return img[o:o + n]
+    for name, (store, lane, kind) in pages.items():
+        a_store, a_shadow, a_lane = at[name]
+        assert kind == kinds[name], name
+        assert bytes_at(a_store) == bytes.fromhex('d1fc') + struct.pack('>I', store), name
+        assert bytes_at(a_shadow) == bytes.fromhex('d3fc') + struct.pack('>I', d['MIRROR'] + store), name
+        assert bytes_at(a_lane) == bytes.fromhex('41f9') + struct.pack('>I', d['LANE'] + lane), name
+    # the flags every editor sets, the pointer and the size it indexes by (FX2's editor)
+    fx2 = bytes_at(0x4003a9e0, 0x140)
+    for const, opcode in ((d['DIRTY_PARTS'], '207c'), (d['DIRTY_BANK'], '203c'),
+                          (d['DIRTY_PARTS_CS1'], '13c1'), (d['DIRTY_PROJECT'], '23c1'),
+                          (d['PART_SIZE'], '223c'), (d['DB'], '2279'), (d['REDRAW'], '41f9')):
+        assert bytes.fromhex(opcode) + struct.pack('>I', const) in fx2, hex(const)
+    # the resolver the descriptors come from (its first two instructions), where a descriptor keeps a
+    # knob's range (minimums from byte 0x6a, counts from 0x9a, four bytes a knob, page 2's are 6-11),
+    # and the Part byte it takes the machine from
+    assert bytes_at(d['RESOLVE'], 8) == bytes.fromhex('4feffff048d7003c')
+    assert bytes.fromhex('22342c6a') in bytes_at(0x4003ac60, 0x20)        # movel a4@(0x6a,d2.l*4),d1
+    assert bytes.fromhex('d2a8009a') in bytes_at(0x4003ac78, 0x10)        # addl a0@(154),d1
+    assert bytes.fromhex('d1fc') + struct.pack('>I', d['MACHINE'] + 0) in bytes_at(0x40031e20, 0x10)
+
+
+def test_core_h_names_the_places_the_image_uses():
+    """core.h's context: each location is read or written by the stock image as an absolute address
+    (an `abs.l` operand: the opcode word's low six bits are 0x39), and the meter's struct is the
+    layout bus.s keeps (meter.inc)."""
+    import re
+    st, img = stock()
+    h = os.path.join(ROOT, 'elekloader', 'sdk', 'include', 'octatrack', 'core.h')
+    with open(h) as fh:
+        src = fh.read()
+    for a in (0x100b14cc, 0x100b14ce, 0x100b14cf, 0x80000000, 0x80000002, 0x80000003, 0x80000004,
+              0x8000182a, 0x80001832, 0x800065b8, 0x46c82456, 0xfc07c00c):
+        assert ('0x%08x' % a) in src.lower(), hex(a)
+        pat = struct.pack('>I', a)
+        hits = [i for i in range(2, len(img) - 3) if img[i:i + 4] == pat and (img[i - 1] & 0x3f) == 0x39]
+        assert hits, hex(a)
+    with open(os.path.join(ROOT, 'mods', 'core-ot', 'meter.inc')) as fh:
+        inc = dict((k, int(v)) for k, v in re.findall(r'\.equ\s+(\w+),\s*(\d+)', fh.read()))
+    fields = re.search(r'struct ot_frame_meter \{(.*?)\};', src, re.S).group(1)
+    names = re.findall(r'uint32_t\s+(\w+)(\[\d+\])?;', fields)
+    public = [n for n, arr in names if not arr]
+    assert public == ['frames', 'last', 'worst', 'overruns', 'late', 'tpf', 'total'], public
+    offsets = [inc[k] for k in ('M_FRAMES', 'M_LAST', 'M_WORST', 'M_OVER', 'M_LATE', 'M_TPF', 'M_TOTAL')]
+    assert offsets == [4 * i for i in range(7)]
+    assert inc['OT_METER_SIZE'] == 4 * (len(public) + 4)                 # the private_[4] after them
+    assert (inc['M_T0'], inc['M_PREV'], inc['M_WIN'], inc['M_WINN']) == (28, 32, 36, 40)
+    with open(os.path.join(ROOT, 'mods', 'core-ot', 'mod.json')) as fh:
+        j = json.load(fh)
+    assert re.search(r'OT_FRAME_COUNTS\s+%su' % j['defsym']['FRAME_COUNTS'], src)     # one number, twice
 
 
 def test_the_intercepts_replay_their_sites():
@@ -561,7 +675,9 @@ def test_the_example_subscribes_to_the_bus():
         ln = link.link([elemod.load_any(core), elemod.load_any(ex)], img)
     counts = {t: ln.tables[t][1] for t in ln.tables}
     assert counts == {'ev_draw': 1, 'ev_enc': 0, 'ev_frame': 0, 'ev_key': 0, 'ev_midi': 0,
-                      'ev_tick': 0, 'ev_frame_end': 0, 'ev_midi_out': 0, 'ev_midi_out_rt': 0}, counts
+                      'ev_tick': 0, 'ev_frame_end': 0, 'ev_midi_out': 0, 'ev_midi_out_rt': 0,
+                      'ev_frame_begin': 0, 'ev_transport': 0, 'ev_boot_done': 0, 'ev_idle': 0,
+                      'ev_tick120': 0}, counts
     at = ln.tables['ev_draw'][0]
     o = ln.layout['run_load'] + (at - DEV.ddr[0]) - DEV.main_load
     assert struct.unpack('>II', ln.image[o:o + 8]) == (ln.map['hello_draw'], 0)
