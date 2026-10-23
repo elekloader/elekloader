@@ -327,6 +327,62 @@ def test_the_reserve_fits_the_mods():
     assert ln.map['arena_base'] == DEV.ddr[1]               # the fixed core's own
 
 
+def test_the_run_hash_is_the_images_and_only_the_core_boot_names_it():
+    """`__run_hash`, the hash a core takes of its copy of the RAM image (core-ot 0.7.1): the
+    linker computes it over exactly the bytes `.boot` copies (a rolling x33 over the 32-bit
+    words from 5381), it changes with any byte of them, and the core's `.boot` is where it is
+    resolved: a `.run` section or a table entry that refers to it is refused, because it is
+    part of what the hash covers; a site is not, and may name it."""
+    st, img = stock()
+    tgt = devices.target_of(DEV, REL)
+    o = 0x4000045e - DEV.main_load
+
+    def docs(run, run_reloc=False, entry=False, site=False):
+        core = {'elemod': 2, 'id': 'core', 'version': '0', 'target': tgt,
+                'sections': {'.boot': {'align': 4, 'parts': [['hex', '00000000' + '4e75']]}},
+                'relocs': [['.boot', 0, 'abs32', 'sym:__run_hash', 0]],
+                'imports': ['__run_hash'], 'collections': {'ev_t': {'entry': 4}}}
+        mod = {'elemod': 2, 'id': 'ram', 'version': '0', 'target': tgt, 'requires': ['core'],
+               'sections': {'.run': {'align': 4, 'parts': [['hex', run.hex()]]}},
+               'symbols': {'t': ['.run', 0]}}
+        if run_reloc:
+            mod['relocs'] = [['.run', 4, 'abs32', 'sym:__run_hash', 0]]
+        if entry:
+            mod['contribute'] = [{'to': 'ev_t', 'data': '00000000',
+                                  'relocs': [[0, 'abs32', 'sym:__run_hash', 0]]}]
+        if site:
+            mod['sites'] = [{'addr': '0x4000045e', 'len': 4, 'kind': 'data', 'new': '00000000',
+                             'stock_sha256': sha(img[o:o + 4]),
+                             'relocs': [[0, 'abs32', 'sym:__run_hash', 0]]}]
+        return [link.Mod2(core, 'core'), link.Mod2(mod, 'ram')]
+
+    def hash_of(ln):                                    # written out again, not link.run_hash
+        at = ln.layout['run_load'] - DEV.main_load
+        h = 5381
+        for i in range(at, at + ln.layout['ddr'][1] - ln.layout['ddr'][0], 4):
+            h = (h * 33 + int.from_bytes(ln.image[i:i + 4], 'big')) % 2 ** 32
+        return h
+    seen = set()
+    for run in (bytes(8), bytes(7) + b'', b'' + bytes(7), bytes(range(1, 9)) * 5):
+        ln = link.link(docs(run), img)
+        h = ln.map['__run_hash']
+        assert h == hash_of(ln), run
+        at = ln.layout['boot'][0] - DEV.main_load
+        assert ln.image[at:at + 4] == struct.pack('>I', h)           # the immediate .boot compares with
+        assert h not in seen
+        seen.add(h)
+    # the core alone: the image is its tables' zero entry
+    ln = link.link(docs(bytes(4))[:1], img)
+    assert ln.layout['ddr'][1] - ln.layout['ddr'][0] == 4 and ln.map['__run_hash'] == hash_of(ln)
+    # a .run and a table entry that name it are refused; a site that names it links
+    expect(lambda: link.link(docs(bytes(8), run_reloc=True), img),
+           'ram 0: .run+0x4 refers to __run_hash, which nothing defines')
+    expect(lambda: link.link(docs(bytes(8), entry=True), img),
+           'ram 0: an entry of ev_t refers to __run_hash, which nothing defines')
+    ln = link.link(docs(bytes(8), site=True), img)
+    assert ln.image[o:o + 4] == struct.pack('>I', ln.map['__run_hash'])
+
+
 # The hook bus (core-ot 0.2): each site, the instruction it replaces, and its event.
 BUS_SITES = {
     'core_tick': (0x40061e94, '4eb940031970', 'ev_tick'),        # jsr 0x40031970, sys loop kind 5

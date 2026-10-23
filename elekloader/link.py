@@ -48,11 +48,23 @@ def _dsp_tag(dev, sec):
 FAST_ENTRY = 16                   # a .fast copy entry: src, dst, len, 0
 MAX_ALIGN = 4096                  # a section's alignment: a power of two up to this
 LINKER_SYMS = {'__run_load', '__run_start', '__run_words', '__bss_start', '__bss_end',
-               '__bss_words'}
+               '__bss_words', '__run_hash'}
+HASH_SEED, HASH_MUL = 5381, 33    # __run_hash: h = seed; h = h * 33 + word (mod 2^32), per word
 
 
 def _align(v, a):
     return (v + a - 1) // a * a
+
+
+def run_hash(ddr):
+    """The hash of the RAM image a core copies at boot (`__run_hash`): a rolling x33 over its
+    32-bit big-endian words, from the seed 5381. A core hashes the copy it made and halts on a
+    mismatch (core-ot's `.boot`). Each word changes the result: the multiplier is odd, so a
+    single wrong word never cancels; the seed makes leading zero words count too."""
+    h = HASH_SEED
+    for (w,) in struct.iter_unpack('>I', bytes(ddr)):
+        h = (h * HASH_MUL + w) & 0xFFFFFFFF
+    return h
 
 
 class Mod2:
@@ -630,12 +642,15 @@ def link(mods, image, lock=None):
                 raise ModError('%s: a 16-bit PC-relative reference spans %d bytes' % (where, d))
             struct.pack_into('>h', buf, off, d)
 
-    content = {}
+    content, boot_relocs = {}, []
     for m in order:
         for sec in m.sections:
             if sec != '.bss' and m.size(sec):
                 content[(m.id, sec)] = parts_bytes(m.sections[sec]['parts'], image, dev)
         for sec, off, typ, tgt, add in m.relocs:
+            if sec == '.boot':                 # after the RAM image: it may name its hash
+                boot_relocs.append((m, off, typ, tgt, add))
+                continue
             where = '%s+0x%x' % (sec, off)
             place(m, content[(m.id, sec)], off, typ, tgt, add, base[(m.id, sec)] + off, where)
     tab = {}
@@ -668,6 +683,10 @@ def link(mods, image, lock=None):
             continue
         o = tab_at[c] - ddr_base
         ddr[o:o + len(tab[c])] = tab[c]
+    glob['__run_hash'] = run_hash(ddr)
+    for m, off, typ, tgt, add in boot_relocs:
+        place(m, content[(m.id, '.boot')], off, typ, tgt, add, base[(m.id, '.boot')] + off,
+              '.boot+0x%x' % off)
     blob = bytearray(content[(core.id, '.boot')])
     blob += bytes(run_load - image_end - len(blob))
     blob += ddr

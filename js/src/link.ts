@@ -32,9 +32,19 @@ const RTYPES = ['abs32', 'pc32', 'pc16', 'dsp24']
 const DSP = '.dsp.'                         // a DSP section: '.dsp.' + its payload's tag
 const FAST_ENTRY = 16                       // a .fast copy entry: src, dst, len, 0
 const MAX_ALIGN = 4096                      // a section's alignment: a power of two up to this
-const LINKER_SYMS = new Set(['__run_load', '__run_start', '__run_words', '__bss_start', '__bss_end', '__bss_words'])
+const LINKER_SYMS = new Set(['__run_load', '__run_start', '__run_words', '__bss_start', '__bss_end', '__bss_words', '__run_hash'])
+export const HASH_SEED = 5381, HASH_MUL = 33       // __run_hash: h = seed; h = h * 33 + word (mod 2^32), per word
 
 const align = (v: number, a: number) => Math.ceil(v / a) * a
+
+/** The hash of the RAM image a core copies at boot (`__run_hash`): a rolling x33 over its 32-bit
+ *  big-endian words, from the seed 5381. A core hashes the copy it made and halts on a mismatch. */
+export function runHash(ddr: Uint8Array): number {
+  const v = new DataView(ddr.buffer, ddr.byteOffset, ddr.byteLength)
+  let h = HASH_SEED
+  for (let o = 0; o + 4 <= ddr.length; o += 4) h = (Math.imul(h, HASH_MUL) + v.getUint32(o)) >>> 0
+  return h
+}
 const cmp = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0)
 const hexw = (v: number, w: number) => v.toString(16).padStart(w, '0')
 
@@ -677,11 +687,16 @@ export function link(mods: Mod2[], image: Uint8Array, lock: store.Lock | null = 
   }
 
   const content = new Map<string, Uint8Array>()
+  const bootRelocs: [Mod2, number, string, string, number][] = []
   for (const m of order) {
     for (const sec of m.sections.keys()) {
       if (sec !== '.bss' && m.size(sec)) content.set(key(m.id, sec), partsBytes(m.sections.get(sec)!.parts!, image, dev).slice())
     }
     for (const [sec, off, typ, tgt, add] of m.relocs) {
+      if (sec === '.boot') {                   // after the RAM image: it may name its hash
+        bootRelocs.push([m, off, typ, tgt, add])
+        continue
+      }
       const where = `${sec}+0x${off.toString(16)}`
       place(m, content.get(key(m.id, sec))!, off, typ, tgt, add, base.get(key(m.id, sec))! + off, where)
     }
@@ -720,6 +735,9 @@ export function link(mods: Mod2[], image: Uint8Array, lock: store.Lock | null = 
     if (fload.has(m.id)) ddr.set(content.get(key(m.id, '.fast'))!, fload.get(m.id)! - ddrBase)
   }
   for (const c of tables.keys()) if (!dspTables.has(c)) ddr.set(tab.get(c)!, tabAt.get(c)! - ddrBase)
+  glob.set('__run_hash', runHash(ddr))
+  for (const [m, off, typ, tgt, add] of bootRelocs)
+    place(m, content.get(key(m.id, '.boot'))!, off, typ, tgt, add, base.get(key(m.id, '.boot'))! + off, `.boot+0x${off.toString(16)}`)
   const boot = content.get(key(core.id, '.boot'))
   if (!boot) throw new KeyError(`(${repr(core.id)}, '.boot')`)
   const blob = concat([boot, new Uint8Array(runLoad - end - boot.length), ddr])

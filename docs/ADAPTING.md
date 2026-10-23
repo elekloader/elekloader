@@ -280,6 +280,12 @@ the sequencer makes itself, which are not events in 0.5.
   range. `page` is `OT_P2_PLAYBACK`, `_AMP`, `_FX1` or `_FX2`; it returns the
   value stored, or `OT_P2_REFUSED`. CC MAP, TEMPO BUS and MODE DEFAULTS in
   octabam each make these stores by hand.
+- **`ot_boot_info`** (`struct ot_boot_info`: `state`, `want`, `got`) is what
+  `.boot` found when it checked its copy of the RAM image (core-ot 0.7.1).
+  The linker computes `want` (`__run_hash`) from the image; `.boot` hashes what
+  it copied into the reserve (`got`) and halts, before any mod code runs, if
+  they differ. A mod that runs sees `state == OT_BOOT_OK` and `want == got`; the
+  halted state, `OT_BOOT_FAIL`, is for an emulator or a debugger.
 - **`ot_midi_send_paced(msg, len)`** queues a MIDI message (1-255 bytes) and
   core sends one per 120 Hz tick, while the DIN ring has room and the engine
   is idle. The firmware's `midi_send` has no flow control: a burst larger than

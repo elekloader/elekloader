@@ -15,6 +15,7 @@ ELEKLOADER_RELEASES=folder/of/stock/files python tests/test_releases.py   # ever
 ELEKLOADER_STOCK=... ELEKLOADER_BUNDLE=bundle.elemod ELEKLOADER_CTOOL_SYX=its-build.syx python tests/test_patcher.py
 ELEKLOADER_OT_SYX=OCTATRACK_OS1.40C.syx ELEKLOADER_OT_BIN=OCTATRACK_OS1.40C.bin python tests/test_octatrack.py
 ELEKLOADER_OT_SYX=... ELEKLOADER_OCTABAM=path/to/octabam python tests/test_octabam.py   # octabam optional
+ELEKLOADER_OT_SYX=... ELEKLOADER_OT_EMU=path/to/octabam/out/emu/ot_emu python tests/test_octatrack_boot.py   # the boot gate
 ELEKLOADER_DN_SYX=Digitone_and_Digitone_Keys_OS1.43.syx python tests/test_digitone.py
 ELEKLOADER_DT2_SYX=Digitakt_II_OS1.17.syx python tests/test_digitakt2.py
 ELEKLOADER_AR2_SYX=Analog-Rytm_MKII_OS1.74.syx python tests/test_rytm_mk2.py   # or 1.73
@@ -35,10 +36,45 @@ More inputs some suites take:
   checks.
 - `ELEKLOADER_DSP_ASM` (octabam's `dsp_asm`) for test_octatrack's and
   test_octabam's DSP code.
+- `ELEKLOADER_OT_EMU` (octabam's built `ot_emu`; or `ELEKLOADER_OCTABAM`, a
+  checkout that has `out/emu/ot_emu`) for test_octatrack_boot. Without it the
+  suite's emulator tests are skipped, and its no-emulator ones run.
 - `ELEKLOADER_DN_MODS`, a folder of Digitone mods, for test_gui.
 - `ELEKLOADER_MODS` for test_gui: `core-2.1.elemod` and `core-2.1-os1.54.elemod`,
   and, for the two-core test, `core-3.0.elemod` and the newest
   `machine-pages-*.elemod` for 1.53.
+
+## The boot gate
+
+`tests/test_octatrack_boot.py` boots a linked Octatrack image in octabam's
+emulator (`ot_emu`, built from octabam's `tools/emu`) and checks what the
+build can claim only by reading its own bytes: that they are the bytes that
+run. It builds `mods/core-ot` and some mods, links them, and boots the image
+with `--watch-pc` on `boot` and `--mem-dump` at the stop.
+
+| check | how |
+|---|---|
+| `.boot` ran once, and the RTOS handoff was reached | the watch's hit count; the stop line says `HANDOFF` |
+| the reserve holds the linked RAM image | the dump against the blob the linker appended, byte for byte, except the bytes a test declares mutable (none for the RAM image) |
+| `.bss` holds zeros | the same dump, except the bytes core writes itself: its boot record and the meter's counts-per-frame guess |
+| the hash `.boot` took is the linker's | `ot_boot_info` against `__run_hash` and the test's own x33 over the dump |
+| a wrong copy halts the boot | one byte of the image inverted at its first, middle and last word: the stop is the emulator's `FAULT -- unrecognised spin` inside `core_boot_fatal`, never `HANDOFF`, and the record says `OT_BOOT_FAIL` with the linker's hash and the planted copy's |
+| the pages the reserve gave back hold nothing | the dump from the reserve's end to the end of the profile's `ddr`, all zero at the handoff |
+
+The tests that need no emulator (the comparison with planted differences, the
+hash against the linker's) always run; the rest are skipped without
+`ELEKLOADER_OT_EMU`, and say so. The checks were tried against code made
+wrong: with `.boot`'s seed changed the clean boots halt, and with its compare
+removed the planted copies run on.
+
+What it cannot see: the caches (the emulator has none, so it says nothing of
+`.boot`'s use of the uncached alias for the copy and the read-back), the recorder,
+anything after the handoff, and who wrote a byte. The built `ot_emu` of octabam 363861e has no
+`--foreign-writes`, which octabam's gate uses to tell a store from stock's code
+from a store from a module's; so a write into the given-back pages is seen only
+when it is nonzero at the handoff. A mod's own writes to its `.run` after the
+handoff are out of sight too: a mod that keeps state there declares it in a
+test as mutable.
 
 The TypeScript engine has its own tests, which need no firmware, and a
 parity run that compares it with the Python on your own files

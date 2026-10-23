@@ -49,6 +49,21 @@ changes nothing else the unit does.
   - `boot` makes the call it replaced first, as octabam's loader does.
   - It then copies the RAM image into the reserve and zeroes `.bss`, both
     through the uncached alias (+0x08000000).
+  - **0.7.1 checks the copy.** It reads the reserve back (through the alias)
+    and hashes it: a rolling x33 over the image's 32-bit words from the seed
+    5381, the same function as the linker's `run_hash` (elekloader/link.py).
+    The linker puts the hash of what it linked in the symbol `__run_hash`.
+    The mods' sites already point into that image, so a copy that is not the
+    linked one cannot be run around; `.boot` halts instead, in
+    `core_boot_fatal`, with interrupts masked and before `.bss` is cleared or
+    any mod code has run. The stock file recovers a unit that stops there
+    (the bootloader is never changed). `ot_boot_info` (3 words: state, the
+    linked hash, the hash of the copy; `octatrack/core.h`) records what `.boot`
+    found, `OT_BOOT_OK` or `OT_BOOT_FAIL`, for an emulator or a debugger to
+    read. A mod that runs has seen it say OK. What this does not catch: a copy
+    that is right at boot and changes later, and a unit that stops before the
+    boot site. Octabam's loader hashes its payloads the same way and stops in
+    a loop of its own.
   - It sets `core_up` (below) and returns with every register as that call
     left it.
 - **The hook bus** (0.2, `bus.s`). Six sites become events that mods
@@ -449,6 +464,22 @@ are CPU-side checks and not audio):
   and the probe's tables; with the bare-metal binutils 31/32, where
   `test_core_builds_and_links` fails on 0.6 too), test_units 30/30,
   test_octabam (bare-metal binutils) 21/21.
+
+0.7.1, in ot_emu (tests/test_octatrack_boot.py, docs/TESTS.md, "The boot gate"):
+- core alone, with hello-marker-ot, and with intercepts-ot and hello-marker-ot:
+  `.boot` ran once, the handoff was reached, the reserve holds the linked RAM
+  image byte for byte, `.bss` holds zeros apart from `ot_boot_info` and the
+  meter's counts-per-frame, and the hash `.boot` took is the linker's
+  `__run_hash` (recomputed in the test, not by `link.run_hash`);
+- one byte of the image wrong at its first word, its middle and its last (a
+  planted copy): `.boot` halts in `core_boot_fatal` (the emulator calls the loop
+  a spin there), `ot_boot_info` says `OT_BOOT_FAIL` with the linker's hash and
+  the planted copy's, and the handoff is never reached;
+- the pages the reserve gave back, up to the end of the profile's `ddr`, hold
+  zeros at the handoff;
+- the checks fail when the code is wrong: with the seed changed in `.boot`
+  the clean boots halt, and with the compare removed the planted copies are
+  run.
 
 On a unit (an Octatrack MKII, 3 Oct 2026): 0.1 alone, and 0.1 with 19 of the
 converted octabam mods in seven groups, flashed from the card. Every build

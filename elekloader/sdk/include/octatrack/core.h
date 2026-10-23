@@ -13,6 +13,7 @@
  * - ot_midi_send_paced: MIDI out that cannot hang the unit or flood a controller.
  * - the project's lifecycle events, mods' project and card data, battery RAM (0.6);
  * - the voice events: what the frame interrupt does to a track's voice (0.7).
+ * - ot_boot_info: what the core's boot check found (0.7.1).
  *
  * Locations are for OS 1.40C; a mod that uses only these names rebuilds for another OS by the core's
  * port, not by a change here. Where octabam's docs/firmware says how a location was found, the
@@ -79,6 +80,21 @@ extern volatile struct ot_frame_meter ot_meter;
 #define OT_DTCN3            OT_L(0xfc07c00c)    /* the counter itself */
 #define OT_FRAME_COUNTS     47891u              /* tpf until the first 1,024 frames are measured */
 void ot_meter_reset(void);
+
+/* ---- the boot check ----------------------------------------------------------------------------
+ * .boot copies the RAM image the linker built into the reserve and hashes the copy against the
+ * linker's __run_hash (link.py, run_hash: a rolling x33 over its 32-bit words, seed 5381). When
+ * they differ it halts rather than run mod code that is not the code that was linked. A mod that
+ * runs at all has therefore seen state == OT_BOOT_OK and want == got. The same record is left in
+ * the reserve's .bss when it does halt, for an emulator or a debugger to read. */
+#define OT_BOOT_OK          0x424f4f54u         /* 'BOOT': the copy matched */
+#define OT_BOOT_FAIL        0x4641494cu         /* 'FAIL': the copy did not match; the boot halted */
+struct ot_boot_info {
+    uint32_t state;             /* OT_BOOT_OK, or 0 before .boot has run */
+    uint32_t want;              /* the linker's hash of the RAM image */
+    uint32_t got;               /* the hash of the copy in the reserve */
+};
+extern volatile struct ot_boot_info ot_boot_info;
 
 /* ---- the Parts ----------------------------------------------------------------------------------
  * The current bank's RAM is OT_BANK_RAM; its four Parts (6,322 bytes each) start at +0x8ed80. In a

@@ -84,6 +84,13 @@ A format-2 mod is a relocatable object:
    - The core's `boot` copies the RAM image and zeroes `.bss`, using the
      symbols the linker defines: `__run_load`, `__run_start`,
      `__run_words`, `__bss_start`, `__bss_end`, `__bss_words`.
+   - `__run_hash` is the hash of the RAM image (everything `boot` copies, as
+     32-bit big-endian words): h = 5381, then h = h·33 + word, mod 2³² per
+     word (`link.run_hash`). A core can read its copy back and halt on a
+     mismatch (core-ot 0.7.1). Only the core's `.boot` (and a site) can name
+     it: it is computed from the RAM image, so a `.run`, `.fast` or table
+     entry that refers to it is refused as "refers to `__run_hash`, which
+     nothing defines".
    - On a device whose RAM for mods is taken from the OS (the profile's
      `reserve`: the Octatrack's sample memory), a core may take only what
      the mods use. When a mod imports one of the profile's reserve
