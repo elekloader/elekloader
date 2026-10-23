@@ -897,16 +897,14 @@ def test_usb_midi_is_a_usb_function():
     assert any('requires usb' in p for p in link.check([core, midi], img))
 
 
-USB_AUDIO = ('usb-audio-ot', 'usb-audio-tracks-ot', 'usb-audio-master-ot', 'usb-audio-main-cue-ot',
-             'usb-audio-main-ot')
-
-
-def test_usb_audio_is_a_usb_function():
-    """mods/usb-audio-ot and its four other layouts (one source, USBA_LAYOUT): each hooks no
-    stock code, and links on usb-ot with its record in ot_usb_functions and its producer on
-    core-ot 0.4's ev_frame_end; beside USB MIDI, MIDI's record comes first by order whatever
-    order the mods come in (its interfaces 1-2, audio's 3-4). Two layouts share EP3 IN and are
-    refused together; a layout needs usb-ot."""
+def test_usb_audio_is_a_usb_function_with_its_layout_a_setting():
+    """mods/usb-audio-ot, one mod: its record is in ot_usb_functions (ABI 2: the last word, `enabled`,
+    is set; USB MIDI's record is ABI 1 and has none), its producer on core-ot's ev_frame_end and its
+    layout in ot_settings as an early card option (OFF, MAIN, M+C, MSTR, TRKS, ALL: labels short
+    enough for the menu's value column; the default ALL). It links with and without settings-ot,
+    beside USB MIDI whatever the order the mods come in (MIDI's record first by order: its interfaces
+    1-2, audio's 3-4), and hooks no stock code. It needs usb-ot; the four folders of 0.1's other
+    layouts are gone."""
     import shutil
     from elekloader.sdk import build
     need(SYX)
@@ -914,25 +912,52 @@ def test_usb_audio_is_a_usb_function():
         raise Skip('no m68k cross compiler')
     st, img = stock()
     with tempfile.TemporaryDirectory() as tmp:
-        core, usb, midi = (elemod.load_any(build.build(os.path.join(ROOT, 'mods', d), SYX, tmp)[0])
-                           for d in ('core-ot', 'usb-ot', 'usb-midi-ot'))
-        audio = [elemod.load_any(build.build(os.path.join(ROOT, 'mods', d), SYX, tmp)[0]) for d in USB_AUDIO]
+        core, usb, midi, sets, audio = (elemod.load_any(build.build(os.path.join(ROOT, 'mods', d), SYX, tmp)[0])
+                                        for d in ('core-ot', 'usb-ot', 'usb-midi-ot', 'settings-ot', 'usb-audio-ot'))
+    assert not [d for d in os.listdir(os.path.join(ROOT, 'mods')) if d.startswith('usb-audio-') and d != 'usb-audio-ot']
+
+    def at(ln, addr):
+        return ln.layout['run_load'] + (addr - DEV.ddr[0]) - DEV.main_load
 
     def table(ln, name, n):
-        o = ln.layout['run_load'] + (ln.tables[name][0] - DEV.ddr[0]) - DEV.main_load
+        o = at(ln, ln.tables[name][0])
         return struct.unpack('>%dI' % n, ln.image[o:o + 4 * n])
 
-    assert [a.id for a in audio] == ['usb-audio', 'usb-audio-tracks', 'usb-audio-master',
-                                     'usb-audio-main-cue', 'usb-audio-main']
-    for a in audio:
-        assert not a.sites and a.names == ['usb:ep3-in'], a.id
-        ln = link.link([core, usb, a], img)
-        assert table(ln, 'ot_usb_functions', 2) == (ln.map['usb_audio'], 0), a.id
-        assert table(ln, 'ev_frame_end', 2) == (ln.map['usba_frame'], 0), a.id
-        both = link.link([core, usb, a, midi], img)
-        assert table(both, 'ot_usb_functions', 3) == (both.map['usb_midi'], both.map['usb_audio'], 0), a.id
-    assert any('both claim usb:ep3-in' in p for p in link.check([core, usb, audio[0], audio[3]], img))
-    assert any('requires usb' in p for p in link.check([core, audio[0]], img))
+    def string(ln, addr):
+        o = at(ln, addr)
+        return ln.image[o:ln.image.index(b'\0', o)].decode()
+
+    assert audio.id == 'usb-audio' and not audio.sites and audio.names == ['usb:ep3-in']
+    assert audio.version == '0.2' and usb.version == '0.2'
+    ln = link.link([core, usb, audio], img)
+    assert table(ln, 'ot_usb_functions', 2) == (ln.map['usb_audio'], 0)
+    assert table(ln, 'ev_frame_end', 2) == (ln.map['usba_frame'], 0)
+    assert table(ln, 'ot_settings', 2) == (ln.map['usba_setting'], 0)
+    both = link.link([core, usb, audio, midi], img)
+    assert table(both, 'ot_usb_functions', 3) == (both.map['usb_midi'], both.map['usb_audio'], 0)
+    full = link.link([core, usb, audio, sets, midi], img)
+    assert table(full, 'ot_settings', 2) == (full.map['usba_setting'], 0)
+    assert link.check([core, usb, midi, sets, audio], img) == []
+
+    defs = _c_defs(os.path.join(ROOT, 'elekloader', 'sdk', 'include', 'octatrack', 'usb.h'))
+    assert (defs['OT_USB_ABI'], defs['OT_USB_ABI_1']) == (2, 1)
+    rec = struct.unpack('>13I', both.image[at(both, both.map['usb_audio']):][:52])
+    assert rec[0] == 2 and rec[12] != 0                              # abi, enabled
+    old = struct.unpack('>13I', both.image[at(both, both.map['usb_midi']):][:52])
+    assert old[0] == 1 and old[12] == 0                              # abi 1: always on
+
+    o = at(ln, ln.map['usba_setting'])
+    abi, tag, key_kind_scope, group, name, lo, hi, labels, var, dflt, changed =         struct.unpack('>IIIIIiiIIiI', ln.image[o:o + 44])
+    assert (abi, tag) == (1, int.from_bytes(b'USBA', 'big'))
+    assert (key_kind_scope >> 16, (key_kind_scope >> 8) & 0xff, key_kind_scope & 0xff) == (1, 1, 0x80)   # key 1, OPTION, CARD | EARLY
+    assert (string(ln, group), string(ln, name)) == ('USB AUDIO', 'LAYOUT')
+    assert (lo, hi, dflt, changed) == (0, 5, 5, 0)
+    names = [string(ln, struct.unpack('>I', ln.image[at(ln, labels) + 4 * k:][:4])[0]) for k in range(6)]
+    assert names == ['OFF', 'MAIN', 'M+C', 'MSTR', 'TRKS', 'ALL'], names
+    assert all(len(n) <= 4 for n in names)                           # the menu's value column
+    o = at(ln, var)
+    assert struct.unpack('>i', ln.image[o:o + 4])[0] == 5            # the default, until the companion sets it
+    assert any('requires usb' in p for p in link.check([core, audio], img))
 
 
 # ---- DSP code ---------------------------------------------------------------------------

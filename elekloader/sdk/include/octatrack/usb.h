@@ -27,7 +27,8 @@
 
 #include <stdint.h>
 
-#define OT_USB_ABI          1u
+#define OT_USB_ABI          2u          /* the record below; a function built for 1 (no `enabled`) is always on */
+#define OT_USB_ABI_1        1u
 #define OT_USB_FS           0u          /* speeds, as PORTSC1 bits 27:26 read */
 #define OT_USB_HS           2u
 
@@ -54,7 +55,7 @@
 #define OT_USB_WLENGTH      OT_USB_W(6)
 
 struct ot_usb_function {
-    uint32_t abi;                       /* OT_USB_ABI */
+    uint32_t abi;                       /* OT_USB_ABI; OT_USB_ABI_1 ends the record before `enabled` */
     const char *name;
     uint8_t interfaces;                 /* how many it adds */
     uint8_t iad_class, iad_subclass, iad_protocol;  /* an interface association before them; class 0: none */
@@ -69,6 +70,11 @@ struct ot_usb_function {
     unsigned (*get_interface)(unsigned rel);
     int (*setup)(const volatile uint8_t *pkt);  /* a request for it: >0 answered (sent or ACKed), else 0 */
     void (*irq)(uint32_t complete);     /* ENDPTCOMPLETE & its endpoints: clear the bits it takes */
+    /* ABI 2. Called once at the controller's init, before the function's other calls. A 0 result
+     * leaves the function out of this boot: no interfaces, no descriptors, none of the calls above.
+     * A null pointer is always on. An early setting (OT_SET_EARLY) is in place by then, so this is
+     * where to read one and latch what descriptors() needs; it takes effect at the next boot. */
+    int (*enabled)(void);
 };
 
 /* What usb-ot exports. */

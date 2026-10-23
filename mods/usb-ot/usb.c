@@ -139,14 +139,17 @@ static unsigned compose(uint8_t *table, unsigned hs, unsigned type)
     return n;
 }
 
-/* The controller's init (0x4001e030). */
+/* The controller's init (0x4001e030). A function with an `enabled` hook (ABI 2) is asked first, in
+ * table order: 0 leaves it out of this boot, so it adds no interface and gets no call. */
 void otu_init(void)
 {
     unsigned next = 1, iad = 0, k;
     nfn = 0;
     for (const struct ot_usb_function *const *p = ot_usb_functions; *p && nfn < MAXF; ++p) {
         const struct ot_usb_function *f = *p;
-        if (f->abi != OT_USB_ABI || !f->descriptors)
+        if ((f->abi != OT_USB_ABI && f->abi != OT_USB_ABI_1) || !f->descriptors)
+            continue;
+        if (f->abi >= 2 && f->enabled && !f->enabled())     /* switched off for this boot */
             continue;
         fn[nfn] = f;
         first[nfn++] = next;

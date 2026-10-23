@@ -7,17 +7,20 @@
  * terminal) and AudioStreaming (alt 0 idle, alt 1 streaming) under an
  * interface association.
  *
- * One source, five layouts; USBA_LAYOUT comes from each variant's mod.json:
+ * What the stream carries is a setting (usba_layout, an early card setting of
+ * settings-ot: set at ev_boot_done, so in place when usb-ot composes the
+ * descriptors at the controller's init). enabled() latches it for the boot:
  *
- *   0  TRACKS MAIN CUE  20 channels: tracks 1-8 L/R, MAIN L/R, CUE L/R
- *   1  TRACKS           16 channels: tracks 1-8 L/R
- *   2  MASTER            2 channels: track 8 L/R
- *   3  MAIN CUE          4 channels: MAIN L/R, CUE L/R
- *   4  MAIN              2 channels: MAIN L/R
+ *   OFF                  no function: usb-ot adds no interfaces
+ *   MAIN                  2 channels: MAIN L/R
+ *   M+C  (MAIN+CUE)       4 channels: MAIN L/R, CUE L/R
+ *   MSTR (MASTER)         2 channels: track 8 L/R
+ *   TRKS (TRACKS)        16 channels: tracks 1-8 L/R
+ *   ALL  (TRACKS+MAIN+CUE) 20 channels: tracks 1-8 L/R, MAIN L/R, CUE L/R (the default)
  *
  * At high speed a packet every 250 us (bInterval 2) carries those channels;
  * at full speed one every 1 ms carries a stereo pair: the eight tracks' sum
- * (layouts 0 and 1), track 8 (2) or MAIN (3 and 4).
+ * (TRKS, ALL), track 8 (MSTR) or MAIN (MAIN, M+C).
  *
  * Facts from sambanks/octabam's USB audio modules (MIT; built on
  * markandrus/octemu's USB audio, MAIN and CUE found by Bryan T): the
@@ -28,43 +31,42 @@
  * ev_frame_end, where octabam patched the frame interrupt's tail.
  */
 #include <stdint.h>
+#include "octatrack/core.h"
 #include "octatrack/usb.h"
 
-#ifndef USBA_LAYOUT
-#define USBA_LAYOUT 0
-#endif
-#if USBA_LAYOUT == 0
-#define HAS_TRACKS      1
-#define HAS_MAIN        1
-#define HAS_CUE         1
-#elif USBA_LAYOUT == 1
-#define HAS_TRACKS      1
-#elif USBA_LAYOUT == 2
-#define HAS_T8          1
-#elif USBA_LAYOUT == 3
-#define HAS_MAIN        1
-#define HAS_CUE         1
-#elif USBA_LAYOUT == 4
-#define HAS_MAIN        1
-#else
-#error "USBA_LAYOUT is 0-4"
-#endif
-#ifndef HAS_TRACKS
-#define HAS_TRACKS      0
-#endif
-#ifndef HAS_T8
-#define HAS_T8          0
-#endif
-#ifndef HAS_MAIN
-#define HAS_MAIN        0
-#endif
-#ifndef HAS_CUE
-#define HAS_CUE         0
-#endif
+/* The values the setting stores on the card: append new layouts at the end. */
+enum { L_OFF, L_MAIN, L_MAIN_CUE, L_MASTER, L_TRACKS, L_ALL, L_N };
+#define L_DEFAULT       L_ALL
 
-#define NCH             (16 * HAS_TRACKS + 2 * HAS_T8 + 2 * HAS_MAIN + 2 * HAS_CUE)
-#define MAIN_AT         (16 * HAS_TRACKS)               /* MAIN's first channel, from 0 */
-#define CUE_AT          (MAIN_AT + 2 * HAS_MAIN)
+struct layout {
+    uint8_t tracks, t8, main, cue;      /* the sources, 1 when in the stream */
+    uint8_t nch;                        /* channels at high speed */
+};
+static const struct layout layouts[L_N] = {
+    [L_OFF]      = { 0, 0, 0, 0, 0 },
+    [L_MAIN]     = { 0, 0, 1, 0, 2 },
+    [L_MAIN_CUE] = { 0, 0, 1, 1, 4 },
+    [L_MASTER]   = { 0, 1, 0, 0, 2 },
+    [L_TRACKS]   = { 1, 0, 0, 0, 16 },
+    [L_ALL]      = { 1, 0, 1, 1, 20 },
+};
+#define NCH_MAX         20u
+
+/* The setting. The variable is the default until settings-ot sets it from battery RAM at
+ * ev_boot_done; without that companion it stays the default. The menu's value column shows four
+ * characters: OFF, MAIN, M+C (MAIN+CUE), MSTR (MASTER: track 8), TRKS (TRACKS), ALL (TRACKS+MAIN+CUE). */
+static const char *const layout_names[] = { "OFF", "MAIN", "M+C", "MSTR", "TRKS", "ALL" };
+volatile int32_t usba_layout = L_DEFAULT;
+const struct ot_setting usba_setting = {
+    OT_SETTING_ABI, OT_TAG('U', 'S', 'B', 'A'), 1,      /* tag + key: the identity on the card */
+    OT_SET_OPTION, OT_SET_CARD | OT_SET_EARLY,          /* early: read before the card is */
+    "USB AUDIO", "LAYOUT",
+    0, L_N - 1, layout_names, &usba_layout, L_DEFAULT, 0,
+};
+
+/* What this boot uses (enabled() latches it); the taps' places follow the layout. */
+static const struct layout *lay = &layouts[L_OFF];
+static uint8_t main_at, cue_at, lag;    /* MAIN's and CUE's first channel from 0; MAIN's lag (below) */
 
 #define U8(a)           (*(volatile uint8_t *)(uintptr_t)(a))
 #define U32(a)          (*(volatile uint32_t *)(uintptr_t)(a))
@@ -84,19 +86,18 @@
 
 /* MAIN and CUE of a frame interrupt are the mix of the tracks one block before the track
  * words read beside them, so with tracks in the stream they go into the ring one block
- * behind. With MASTER TRACK on, CUE leads MAIN by two blocks (the mix sends MAIN through
- * track 8), so CUE goes two blocks ahead of MAIN's place. (octabam measured both.) */
-#define LAG             (HAS_TRACKS && HAS_MAIN ? BLOCK : 0u)
+ * behind (`lag`). With MASTER TRACK on, CUE leads MAIN by two blocks (the mix sends MAIN
+ * through track 8), so CUE goes two blocks ahead of MAIN's place. (octabam measured both.) */
 #define CUE_LEAD        (2u * BLOCK)
 
-/* The ring: FRAMES frames of NCH words at high speed, of 2 at full speed, filled once a
+/* The ring: FRAMES frames of nch words at high speed, of 2 at full speed, filled once a
  * frame interrupt and drained into the packets. The servo holds it TARGET frames deep. */
 #define FRAMES          512u
 #define TARGET          64u
 #define NSLOT           4u              /* transfers kept queued: 1 ms of polls at high speed */
-#define PKT_HS          (12u * 4u * NCH)        /* 12 frames, the most a 250 us packet takes */
+#define PKT_HS_MAX      (12u * 4u * NCH_MAX)    /* 12 frames, the most a 250 us packet takes */
 #define PKT_FS          (45u * 8u)              /* 45 stereo frames, the most of a 1 ms one */
-#define PKT_MAX         (PKT_HS > PKT_FS ? PKT_HS : PKT_FS)
+#define PKT_MAX         (PKT_HS_MAX > PKT_FS ? PKT_HS_MAX : PKT_FS)
 #define STEP_HS         11025u          /* frames a packet x1000: 44.1 kHz at 250 us */
 #define STEP_FS         44100u          /* ... at 1 ms */
 #define SERVO_MAX       200             /* the correction's clamp, x1000 frames a packet */
@@ -125,7 +126,7 @@ struct usba_counters {
 struct usba_counters usba_counters = { .lastbank = 0xffffffffu };
 #define C               usba_counters
 
-static uint32_t ring[FRAMES * NCH];
+static uint32_t ring[FRAMES * NCH_MAX];
 static uint32_t dtds[NSLOT][8] __attribute__((aligned(32)));
 static uint32_t bufs[NSLOT][PKT_MAX / 4] __attribute__((aligned(32)));
 
@@ -135,6 +136,26 @@ static uint32_t bufs[NSLOT][PKT_MAX / 4] __attribute__((aligned(32)));
 static volatile uint8_t req, gen;
 static uint8_t running, run_gen, hs, tail, await;
 static uint32_t step;
+
+/* usb-ot's enabled(), once at the controller's init and before descriptors(): the layout this
+ * boot uses. A value outside the table (a poke, a card from a newer build) is the default.
+ * OFF leaves the function out: no interfaces, nothing for the host to see. */
+static int enabled(void)
+{
+    int32_t v = usba_layout;
+    if ((uint32_t)v >= L_N)
+        v = L_DEFAULT;
+    lay = &layouts[v];
+    main_at = 16 * lay->tracks + 2 * lay->t8;
+    cue_at = main_at + 2 * lay->main;
+    lag = lay->tracks && lay->main ? BLOCK : 0;
+    return lay->nch != 0;
+}
+
+static unsigned pkt_hs(void)
+{
+    return 12u * 4u * lay->nch;
+}
 
 static unsigned put(uint8_t *o, const uint8_t *b, unsigned n)
 {
@@ -146,7 +167,7 @@ static unsigned put(uint8_t *o, const uint8_t *b, unsigned n)
 static unsigned descriptors(uint8_t *o, unsigned first, unsigned speed)
 {
     unsigned high = speed == OT_USB_HS;
-    unsigned nch = high ? NCH : 2, pkt = high ? PKT_HS : PKT_FS, n = 0;
+    unsigned nch = high ? lay->nch : 2, pkt = high ? pkt_hs() : PKT_FS, n = 0;
     uint8_t lr = nch == 2 ? 3 : 0;      /* bmChannelConfig: front left and right */
     const uint8_t ac[] = {
         9, 4, first, 0, 0, 1, 1, 0x20, 0,                       /* AudioControl */
@@ -175,7 +196,6 @@ static inline uint32_t le24(uint32_t w)        /* a read-back word -> its subslo
     return w;
 }
 
-#if HAS_TRACKS
 static inline uint32_t le24_sum(int32_t s)     /* a sum of samples (24-bit units), saturated */
 {
     if (s > 0x7fffff)
@@ -184,9 +204,7 @@ static inline uint32_t le24_sum(int32_t s)     /* a sum of samples (24-bit units
         s = -0x800000;
     return le24((uint32_t)s << 8);
 }
-#endif
 
-#if HAS_TRACKS || HAS_T8
 static const volatile uint32_t *bank(void)
 {
     uint32_t b = U32(RB_PREV);
@@ -195,68 +213,61 @@ static const volatile uint32_t *bank(void)
     C.lastbank = b;
     return (const volatile uint32_t *)(RB_BASE + (b & 1) * 1024);
 }
-#endif
 
 static uint32_t *slot(uint32_t frame)
 {
-    return ring + (frame & (FRAMES - 1)) * (hs ? NCH : 2);
+    return ring + (frame & (FRAMES - 1)) * (hs ? lay->nch : 2);
 }
 
 /* One block into the ring: every channel at high speed, the pair at full speed. */
 static void produce(void)
 {
     const volatile uint32_t *mc = (const volatile uint32_t *)MC_BASE;
+    const volatile uint32_t *rb = lay->tracks || lay->t8 ? bank() : 0;
     uint32_t at = C.produced;
-#if HAS_TRACKS || HAS_T8
-    const volatile uint32_t *rb = bank();
-#endif
-    (void)mc;
     if (!hs) {
         for (unsigned f = 0; f < BLOCK; ++f) {
             uint32_t *s = slot(at + f);
-#if HAS_TRACKS
-            int32_t l = 0, r = 0;
-            for (unsigned t = 0; t < 8; ++t) {
-                l += (int32_t)rb[t * 32 + 2 * f] >> 8;
-                r += (int32_t)rb[t * 32 + 2 * f + 1] >> 8;
+            if (lay->tracks) {
+                int32_t l = 0, r = 0;
+                for (unsigned t = 0; t < 8; ++t) {
+                    l += (int32_t)rb[t * 32 + 2 * f] >> 8;
+                    r += (int32_t)rb[t * 32 + 2 * f + 1] >> 8;
+                }
+                s[0] = le24_sum(l);
+                s[1] = le24_sum(r);
+            } else if (lay->t8) {
+                s[0] = le24(rb[7 * 32 + 2 * f]);
+                s[1] = le24(rb[7 * 32 + 2 * f + 1]);
+            } else {
+                s[0] = le24(mc[2 * f]);
+                s[1] = le24(mc[2 * f + 1]);
             }
-            s[0] = le24_sum(l);
-            s[1] = le24_sum(r);
-#elif HAS_T8
-            s[0] = le24(rb[7 * 32 + 2 * f]);
-            s[1] = le24(rb[7 * 32 + 2 * f + 1]);
-#else
-            s[0] = le24(mc[2 * f]);
-            s[1] = le24(mc[2 * f + 1]);
-#endif
         }
         return;
     }
-#if HAS_CUE
-    uint32_t lead = U8(MASTER_ON) ? CUE_LEAD : 0;
-#endif
+    uint32_t lead = lay->cue && U8(MASTER_ON) ? CUE_LEAD : 0;
     for (unsigned f = 0; f < BLOCK; ++f) {
         uint32_t *s = slot(at + f);
-#if HAS_TRACKS
-        for (unsigned t = 0; t < 8; ++t) {
-            s[2 * t] = le24(rb[t * 32 + 2 * f]);
-            s[2 * t + 1] = le24(rb[t * 32 + 2 * f + 1]);
+        if (lay->tracks) {
+            for (unsigned t = 0; t < 8; ++t) {
+                s[2 * t] = le24(rb[t * 32 + 2 * f]);
+                s[2 * t + 1] = le24(rb[t * 32 + 2 * f + 1]);
+            }
+        } else if (lay->t8) {
+            s[0] = le24(rb[7 * 32 + 2 * f]);
+            s[1] = le24(rb[7 * 32 + 2 * f + 1]);
         }
-#elif HAS_T8
-        s[0] = le24(rb[7 * 32 + 2 * f]);
-        s[1] = le24(rb[7 * 32 + 2 * f + 1]);
-#endif
-#if HAS_MAIN
-        s = slot(at + f - LAG);
-        s[MAIN_AT] = le24(mc[2 * f]);
-        s[MAIN_AT + 1] = le24(mc[2 * f + 1]);
-#endif
-#if HAS_CUE
-        s = slot(at + f - LAG + lead);
-        s[CUE_AT] = le24(mc[32 + 2 * f]);
-        s[CUE_AT + 1] = le24(mc[32 + 2 * f + 1]);
-#endif
-        (void)s;
+        if (lay->main) {
+            s = slot(at + f - lag);
+            s[main_at] = le24(mc[2 * f]);
+            s[main_at + 1] = le24(mc[2 * f + 1]);
+        }
+        if (lay->cue) {
+            s = slot(at + f - lag + lead);
+            s[cue_at] = le24(mc[32 + 2 * f]);
+            s[cue_at + 1] = le24(mc[32 + 2 * f + 1]);
+        }
     }
 }
 
@@ -348,7 +359,7 @@ static int build(void)
     C.lastn = n;
     C.lastfill = fill;
     b = UNC32(bufs[tail]);
-    words = hs ? NCH : 2;
+    words = hs ? lay->nch : 2;
     for (uint32_t i = 0; i < n; ++i) {
         const uint32_t *s = slot(C.consumed + i);
         for (uint32_t w = 0; w < words; ++w)
@@ -388,14 +399,14 @@ static void ep_up(void)
         qh[w] = 0;
     hs = ot_usb_speed() == OT_USB_HS;
     step = hs ? STEP_HS : STEP_FS;
-    qh[0] = 0x60000000u | (hs ? PKT_HS : PKT_FS) << 16;     /* one packet a frame, no ZLT */
+    qh[0] = 0x60000000u | (hs ? pkt_hs() : PKT_FS) << 16;   /* one packet a frame, no ZLT */
     qh[2] = 1;
     clear_dtds();
     OT_USB_ENDPTCTRL(3) = (OT_USB_ENDPTCTRL(3) & 0x0000ffffu) | 0x00840000u;   /* TX iso, on */
     start = C.produced - TARGET - NSLOT * (step / 1000);
-    for (at = start - LAG; at != C.produced + CUE_LEAD; ++at) {
+    for (at = start - lag; at != C.produced + CUE_LEAD; ++at) {
         uint32_t *s = slot(at);
-        for (unsigned w = 0; w < (hs ? NCH : 2u); ++w)
+        for (unsigned w = 0; w < (hs ? lay->nch : 2u); ++w)
             s[w] = 0;
     }
     C.consumed = start;
@@ -449,7 +460,8 @@ static void kick(void)
 }
 
 /* core-ot's ev_frame_end: once a frame interrupt, 16 frames. Nothing runs while the host
- * has not asked for the stream. */
+ * has not asked for the stream (and with the layout OFF it never does: usb-ot has no
+ * function to give it the request). */
 void usba_frame(void)
 {
     if (running && (!req || run_gen != gen))
@@ -557,4 +569,5 @@ const struct ot_usb_function usb_audio = {
     .get_interface = get_interface,
     .setup = setup,
     .irq = irq,
+    .enabled = enabled,
 };

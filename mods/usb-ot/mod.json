@@ -1,5 +1,5 @@
 {
- "id": "usb", "version": "0.1",
+ "id": "usb", "version": "0.2",
  "license": "GPL-2.0-or-later",
  "title": "USB", "category": "Framework", "author": "irpina",
  "description": "The Octatrack's USB stack, one owner for it: USB functions (USB MIDI, USB audio and others) are mods of their own that combine, each adding its record to the ot_usb_functions table. It numbers their interfaces after the stock mass-storage one, composes the configuration descriptors at the controller's init, and gives each request and endpoint completion to the function it belongs to. On its own it changes nothing the unit does.",

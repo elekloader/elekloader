@@ -355,6 +355,16 @@ The mod reads its variable as it likes. With `mods/settings-ot` (id
 Without the companion the variable keeps its default. mods/settings-ot/README.md has
 an example.
 
+A choice the firmware makes early in the boot needs an early setting
+(`OT_SET_CARD | OT_SET_EARLY`). A card setting that is not early reaches
+its variable after the project load, once the card is read; an early one is
+set from battery RAM at `ev_boot_done`, before it. USB's descriptors are
+composed at the controller's init, which the firmware runs in its system
+task. In ot_emu that is some 440,000 instructions after main's end, so a USB
+function reads an early setting there (`mods/usb-audio-ot`'s layout is one).
+It takes effect at the next boot, and the value reaches battery RAM when it
+is edited or loaded.
+
 A stock routine that returns a pointer returns it in d0. GCC's m68k ABI
 reads a returned pointer from a0, so declare such a routine as returning an
 integer, and cast.
@@ -398,7 +408,7 @@ the call, or its entry is 0, stock runs.
 A detour you already have converts unchanged: its label is the entry, and
 claims 0. `sdk.octabam --intercepts` does this for octabam's modules (4b).
 
-### USB functions on the Octatrack (usb 0.1)
+### USB functions on the Octatrack (usb 0.2)
 
 `mods/usb-ot` is a companion beside core-ot 0.3.1 that owns the stock USB
 device stack's places once. A USB function (USB MIDI, USB audio, ...) is a
@@ -417,7 +427,7 @@ The record is `struct ot_usb_function` (`#include "octatrack/usb.h"`):
 
 | field | what |
 |---|---|
-| `abi` | `OT_USB_ABI` |
+| `abi` | `OT_USB_ABI` (2). A record built for `OT_USB_ABI_1` (usb 0.1's) ends before `enabled` and is always on |
 | `interfaces` | how many interfaces it adds; usb-ot numbers them after mass storage's 0, in table order |
 | `iad_class`, `iad_subclass`, `iad_protocol` | an interface association before them (class 0: none); with one in the build the device class becomes EF/02/01 |
 | `endpoints` | its bits in the ENDPT* registers (`OT_USB_EP_OUT(n)`, `OT_USB_EP_IN(n)`): CLEAR_FEATURE and completions go by them |
@@ -428,6 +438,7 @@ The record is `struct ot_usb_function` (`#include "octatrack/usb.h"`):
 | `set_interface(rel, alt)`, `get_interface(rel)` | its interface `rel` (0 = its first); a negative return STALLs. Without them alt 0 is the only one |
 | `setup(pkt)` | a class or vendor request for it (by interface or endpoint, or any for the device): return >0 once it sent or ACKed |
 | `irq(complete)` | its endpoints' completions, from the USB interrupt; clear the bits it takes in `OT_USB_ENDPTCOMPLETE` |
+| `enabled()` | ABI 2. Once at the controller's init, before anything else of the function's: 0 leaves it out of this boot, with no interfaces, no association, no descriptors and none of the calls above; a null pointer is always on. Read an early setting here and latch what `descriptors` needs |
 
 usb-ot exports `ot_usb_speed`, `ot_usb_first_interface`, `ot_usb_flush`
 (a bounded flush, then the completions cleared), `ot_usb_ack`,
@@ -439,8 +450,9 @@ under an association, EP2 both ways. `mods/usb-audio-ot` is an
 isochronous one: a UAC2 AudioControl and AudioStreaming interface (alt 0
 and alt 1, through `set_interface` and `get_interface`), its clock's
 requests through `setup`, and EP3 IN fed from core-ot 0.4's
-`ev_frame_end`. One source builds its five layouts: the variants' folders
-hold a `mod.json` each, with the layout in `cflags`.
+`ev_frame_end`. What its stream carries (MAIN, MAIN+CUE, MASTER, TRACKS,
+TRACKS+MAIN+CUE, or OFF) is an early card setting, `enabled()` reads it at
+the controller's init, and with OFF it adds no interfaces.
 
 The USB files of irpina/octabam2elemod v1.0 patch these places themselves,
 so the linker refuses usb-ot beside them.

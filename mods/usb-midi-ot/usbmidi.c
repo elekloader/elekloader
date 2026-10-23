@@ -214,7 +214,7 @@ static void irq(uint32_t c)
 }
 
 const struct ot_usb_function usb_midi = {
-    .abi = OT_USB_ABI,
+    .abi = OT_USB_ABI_1,                /* always on: it needs nothing past usb 0.1's record */
     .name = "USB MIDI",
     .interfaces = 2,
     .iad_class = 1,                     /* audio (AudioControl + MIDIStreaming) */

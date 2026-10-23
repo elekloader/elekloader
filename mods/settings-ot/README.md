@@ -15,7 +15,11 @@ PROJECT, SYSTEM, CONTROL and MIDI. It needs the Octatrack's core 0.6
   tag and the setting's key, so it survives a build that leaves the mod
   out, or puts the settings in another order.
 - **Early settings** are also kept in battery RAM (`SETE`) and set at
-  `ev_boot_done`, before the card is read.
+  `ev_boot_done`, before the card is read. A choice the firmware makes in
+  its start-up needs one: USB audio's layout (`mods/usb-audio-ot`) is read
+  when usb-ot composes the USB descriptors, which the firmware does after
+  main's end and before the project is loaded. The value applies at the next
+  boot.
 - **Without this companion** a mod's settings stay at their defaults: the
   table is core's, so a mod builds the same with or without it.
 

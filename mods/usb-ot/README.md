@@ -2,7 +2,7 @@
 
 The Octatrack's USB companion (MKI and MKII), OS 1.40C. Mods add USB
 functions to the unit's USB port with it: USB MIDI (`mods/usb-midi-ot`),
-USB audio (`mods/usb-audio-ot`, in five layouts) and others to come.
+USB audio (`mods/usb-audio-ot`, its layout a setting) and others to come.
 Several functions combine in one build:
 each is a mod of its own. It needs the Octatrack's core (`mods/core-ot`,
 0.3.1 or newer).
@@ -19,6 +19,14 @@ the unit does: every reply is stock's, byte for byte.
   (`elekloader/sdk/include/octatrack/usb.h`). At the controller's init,
   usb-ot numbers their interfaces after the mass-storage one, in table
   order.
+- **A function can be off for a boot (0.2).** At the controller's init,
+  before the composition, usb-ot calls a function's `enabled()` (the record's
+  last field, ABI 2). With 0 the function is left out: it gets no
+  interfaces (the numbers go to the next function), no association, no
+  descriptors, and none of the requests and completions. Without it, or with
+  an ABI 1 record, a function is always on. A function reads a setting
+  there: an early one (settings-ot) is set at `ev_boot_done`, before the
+  controller's init.
 - **The descriptors, composed at boot.** It writes four configuration
   descriptors: full speed, high speed, and each as OTHER_SPEED. Each is
   stock's header and mass-storage interface, then each function's interface
@@ -75,6 +83,12 @@ In octabam's emulator (`ot_emu --usb-host` with its
 speeds, with every descriptor reply (device, configuration, OTHER_SPEED)
 byte-identical to stock's, mass storage answering INQUIRY, and no EP0
 stall.
+
+A function whose `enabled()` returns 0 (USB audio with its layout OFF, set
+in the MODS menu and read after a reboot) leaves the build as a build
+without it: alone, usb-ot's configuration is stock's byte for byte; beside
+USB MIDI (an ABI 1 record, always on) MIDI keeps its interfaces 1 and 2, with
+no association or endpoint for audio.
 
 Facts from sambanks/octabam's `usb` module and markandrus/octemu's USB MIDI
 (both MIT); the code is elekloader's own.
