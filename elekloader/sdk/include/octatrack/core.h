@@ -125,4 +125,110 @@ int32_t ot_page2_write(unsigned trk, unsigned page, unsigned slot, int32_t val);
 int ot_midi_send_paced(const uint8_t *msg, unsigned len);
 unsigned ot_midi_paced_space(void);     /* bytes the queue can take: a message needs len + 1 */
 
+/* ==== core-ot 0.6: the project, the card and CS1 ================================================== */
+
+/* ---- ev_project(how, dropped), as core-ar2's and core-a4's ------------------------------------------
+ * After the firmware's engine task has loaded a whole project (LOAD PROJECT, the power-up's load,
+ * RELOAD) or made a new one (CREATE EMPTY PROJECT), when the job has ended: the banks, the Parts and
+ * the mods' blocks below are in place. It runs in the engine task: a mod may use the file calls. */
+#define CORE_PROJECT_NEW    0
+#define CORE_PROJECT_LOADED 1
+#define OT_DROPPED_PROJECT  1u          /* dropped: the project's blocks hold zeros (no file, or new) */
+#define OT_DROPPED_CARD     2u          /* the card's blocks hold zeros (the first event after boot only) */
+
+/* The Octatrack's own lifecycle events, handlers void f(unsigned a, unsigned b), in the task that
+ * made the call (the engine task's for the first four):
+ *   ev_banks_load(pre, mask)     a load of banks (mask: bit n, bank n): 1 before, 0 after
+ *   ev_banks_write(pre, mask)    the bank writer (background save, SAVE PROJECT, SAVE AS, a new
+ *                                project): 1 before the first bank file, 0 after
+ *   ev_project_store(pre, 0)     the project store (SAVE PROJECT: each .work copied to .strd)
+ *   ev_project_reload(pre, 0)    the project reload (each .strd copied back to .work)
+ *   ev_cs1_bank(to, bank)        a bank's working copy into battery RAM (to 1, before) or back from
+ *                                it at power-up (to 0, after)
+ *   ev_part_saved(part, 0)       Part Save (the current bank; Part Clear ends in it too)
+ *   ev_part_cleared(part, 0)     Part Clear, before */
+
+/* ---- project and card data: the Digitone's descriptor --------------------------------------------
+ * A mod contributes to core_projdata (kept with the project) or core_carddata (kept on the card, for
+ * every project) a pointer to one of these, and claims "projdata:<tag>" / "carddata:<tag>":
+ *
+ *     "contribute": [{"to": "core_projdata", "order": 50, "data": "00000000",
+ *                     "relocs": [[0, "abs32", "sym:my_block", 0]]}],
+ *
+ * After each project load core puts the block's saved bytes in data and calls loaded(1); with none
+ * saved (a new project, one saved without the mod, or a block of another size) data holds zeros and
+ * loaded(0). A mod changes data as it likes and calls core_projdata_dirty(tag): core writes the
+ * file about 2 s after the last change, and at SAVE PROJECT, from the engine task. */
+struct core_projdata {              /* core_projdata and core_carddata */
+    uint32_t tag;                   /* +0  four characters */
+    uint32_t size;                  /* +4  bytes, a multiple of 4 */
+    void *data;                     /* +8  the mod's copy */
+    void (*loaded)(int32_t found);  /* +12 after a load (engine task); or 0 */
+} __attribute__((aligned(4)));
+void core_projdata_dirty(uint32_t tag);
+void core_carddata_dirty(uint32_t tag);
+#define OT_TAG(a, b, c, d)  ((uint32_t)(a) << 24 | (uint32_t)(b) << 16 | (uint32_t)(c) << 8 | (uint32_t)(d))
+
+/* ---- battery RAM --------------------------------------------------------------------------------
+ * CS1 keeps the firmware's working copy of the project across a power cycle; 0x100f859c..0x100fff00
+ * (31,076 bytes) is a range stock never reads or writes. A mod contributes to ot_sram a pointer to an
+ * ot_sram claim: at main's end (before ev_boot_done) core writes the claim's address to *where, or 0
+ * when the range is full. The bytes are kept from one boot to the next while the build keeps the
+ * same claims in the same order; a claim that moved is zeroed. Until then *where is 0. */
+struct ot_sram {
+    uint32_t tag;                   /* four characters */
+    uint32_t size;                  /* bytes */
+    void **where;                   /* core writes the address here */
+};
+
+/* ---- the engine task ----------------------------------------------------------------------------
+ * The firmware does its card I/O in its engine task (priority 1), one job at a time; a file call from
+ * the UI task races it. ot_engine_post queues fn(arg) to run there, between the firmware's jobs, and
+ * returns 1, or 0 when core's queue (8) is full. Call it from a task, not an interrupt. */
+int ot_engine_post(void (*fn)(uint32_t arg), uint32_t arg);
+
+/* The firmware's buffered file calls, for the engine task (and ev_project, ev_banks_*,
+ * ev_project_store and ev_project_reload, which run there). Paths are absolute ("/SET/PROJECT/x").
+ * ot_file_read and ot_file_write return 1 when they moved all n bytes. */
+struct ot_file { uint8_t obj[24]; uint8_t iob[4096]; } __attribute__((aligned(4)));
+int ot_file_open(struct ot_file *f, const char *path, const char *mode);   /* "r", "w": <0 failed */
+int ot_file_read(struct ot_file *f, void *dst, uint32_t n);
+int ot_file_write(struct ot_file *f, const void *src, uint32_t n);
+void ot_file_close(struct ot_file *f);
+int ot_file_copy(const char *dst, const char *src);                          /* <0 failed */
+int ot_mkdir(const char *path);
+const char *ot_project_dir(void);   /* the loaded project's folder, "" with none */
+
+/* What core's store has done, for a diagnostics page. */
+enum {
+    OTS_C_LOADED, OTS_C_NEW, OTS_C_WRITES, OTS_C_STRD, OTS_C_WRITE_ERR, OTS_C_RECOVERED,
+    OTS_C_REFUSED, OTS_C_FRESH, OTS_C_KEPT_FULL, OTS_C_JOBS_FULL, OTS_C_CS1_FULL,
+    OTS_C_LAST_ERR,                 /* the last failed open's result */
+    OTS_C_N
+};
+extern uint32_t ots_counts[16];
+extern char ots_last_path[64];      /* and its path */
+
+/* ---- settings -----------------------------------------------------------------------------------
+ * A mod contributes to ot_settings a pointer to each of its settings. The variable holds the
+ * default and the mod reads it as it likes; with the settings companion (mods/settings-ot) in the
+ * build the user edits it on the unit and it is kept on the card or with the project; without it
+ * it stays the default. Core only declares the table. */
+#define OT_SETTING_ABI      1u
+enum { OT_SET_BINARY, OT_SET_OPTION, OT_SET_NUMBER };
+enum { OT_SET_CARD = 0, OT_SET_PROJECT = 1, OT_SET_EARLY = 0x80 };   /* scope; | EARLY: also in CS1 */
+struct ot_setting {
+    uint32_t abi;                   /* OT_SETTING_ABI */
+    uint32_t tag;                   /* the mod's four characters: with key, the setting's identity */
+    uint16_t key;                   /* 1..65535, never reused for another meaning */
+    uint8_t kind, scope;
+    const char *group;              /* the menu's heading: the mod's name */
+    const char *name;               /* the row's label */
+    int32_t min, max;               /* NUMBER's range; OPTION: 0..labels-1; BINARY: 0..1 */
+    const char *const *labels;      /* OPTION's labels (append new ones at the end), or 0 */
+    volatile int32_t *value;        /* the mod's variable */
+    int32_t def;                    /* its default */
+    void (*changed)(const struct ot_setting *s);    /* after an edit or a load; or 0 */
+};
+
 #endif

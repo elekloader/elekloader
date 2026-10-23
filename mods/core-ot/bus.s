@@ -33,6 +33,7 @@
         .globl  core_tick
 core_tick:
         move.l  %a2, -(%sp)
+        jsr     ots_tick                | core's store first (store.c, 0.6)
         lea     ev_tick, %a2
 1:      move.l  (%a2)+, %d0
         beq.s   2f
@@ -82,6 +83,9 @@ core_key:
 1:      rts
 
 core_enc:
+        jsr     ots_ui_enc              | a prompt of core's store (0.6) takes the turn
+        tst.l   %d0
+        bne.s   2f
         move.l  %a2, -(%sp)
         lea     ev_enc, %a2
         bsr.s   dispatch
@@ -90,6 +94,7 @@ core_enc:
         bne.s   1f
         jmp     ENCFN
 1:      rts
+2:      rts
 
 | dispatch: a2 = the table; 12(sp) the first argument, 16(sp) the second
 | (after its return address and the caller's saved a2). -> d0 = the first
@@ -366,6 +371,7 @@ transport:                              | d1 = what, d0 = playing; keeps d0, a0,
         .globl  core_main_end
 core_main_end:
         jsr     IDLE_INIT               | the call this replaced
+        jsr     ots_boot                | the CS1 claims (store.c, 0.6), before ev_boot_done
         move.l  %a2, -(%sp)             | main's a2 stays as it was, if it parks
         lea     ev_boot_done, %a2
 1:      move.l  (%a2)+, %d0

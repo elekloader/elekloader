@@ -269,7 +269,7 @@ def test_the_core_moves_the_arena_past_its_reserve():
     assert all(int(s['addr'], 16) != PURGE_BANKS_END + 2 for s in j['sites'])
     calls = {s['target']: int(s['addr'], 16) for s in j['sites'] if s['op'] in ('jsr', 'jmp')}
     assert calls.pop('boot') == 0x4000050c
-    assert set(calls) == set(BUS_SITES), calls             # the rest are the hook bus's
+    assert set(calls) == set(BUS_SITES) | set(STORE_SITES), calls   # the rest are the bus's and the store's
 
 
 def reserve_docs(img, bss, fixed=False):
@@ -355,6 +355,25 @@ JMP_SITES = {'core_frame_end', 'core_midi_out', 'core_midi_out_rt', 'core_frame_
 # defsym, so the stubs and the sites cannot drift apart.
 JMP_BACK = {'T_START_NEXT': 'core_t_start', 'T_RESUME_NEXT': 'core_t_resume', 'T_STOP_NEXT': 'core_t_stop',
             'FRAME_BEGIN_NEXT': 'core_frame_begin'}
+# The project's lifecycle (core-ot 0.6, store.s): each site, the bytes it displaces, its event, and
+# where its stub goes back to (a jmp site; the jsr site and the one that ends in the rts it displaces
+# have none). The census and the displaced bytes are octabam's STORE module's (MIT).
+STORE_SITES = {
+    'core_job_switch': (0x4008485e, '7192722db280', None, 'JOB_SWITCH_NEXT'),     # mvz.b (a2),d0 ; moveq ; cmp
+    'core_job_loop': (0x4008484e, '4879460d17ce', 'ev_project', 'JOB_LOOP_NEXT'),  # pea the engine queue
+    'core_loadall': (0x40090504, '4feffeb848d77cfc', 'ev_banks_load', 'LOADALL_NEXT'),
+    'core_loadmask': (0x400905d4, '4feffeb848d77cfc', 'ev_banks_load', 'LOADMASK_NEXT'),
+    'core_bankw': (0x400917c8, '4e56febc48d73cfc', 'ev_banks_write', 'BANKW_NEXT'),
+    'core_bankw_mid': (0x400918aa, '45f9400e21e0', 'ev_banks_write', 'BANKW_MID_NEXT'),
+    'core_pstore': (0x4008ee74, '4e56fdd048d73cfc', 'ev_project_store', 'PSTORE_NEXT'),
+    'core_preload': (0x4008f180, '4e56fdd048d73cfc', 'ev_project_reload', 'PRELOAD_NEXT'),
+    'core_tocs1': (0x4000faf0, '2f0a2f022f3c0008ed80', 'ev_cs1_bank', 'TOCS1_NEXT'),
+    'core_fromcs1': (0x40025808, '4eb94000fbb4', 'ev_cs1_bank', None),
+    'core_partsaved': (0x4004a9c4, '4cd70c1c4fef00144e75', 'ev_part_saved', None),
+    'core_partclear': (0x4004a9d0, '4feffff048d70c0c', 'ev_part_cleared', 'PARTCLEAR_NEXT'),
+}
+STORE_TABLES = ('core_projdata', 'core_carddata', 'ot_sram', 'ot_settings')
+
 # Instructions the converted octabam mods of irpina/octabam2elemod v1.0 hook in the same
 # routines (TUNER, CC FEEDBACK, CC MAP, the USB audio mods, USB MIDI): the bus keeps clear
 # of every one, so those files link with core 0.2 as they did with 0.1.
@@ -385,7 +404,9 @@ def test_the_core_bus_sites():
         for a, m in V10_NEIGHBOURS:
             assert not (a < addr + n and addr < a + m), (target, hex(a))
     # ev_idle is called by the stub that calls ev_boot_done; every other event has a site of its own
-    assert sorted(j['collections']) == sorted({e for _a, _s, e in BUS_SITES.values()} | {'ev_idle'})
+    assert sorted(j['collections']) == sorted({e for _a, _s, e in BUS_SITES.values()} | {'ev_idle'}
+                                              | {v[2] for v in STORE_SITES.values() if v[2]}
+                                              | set(STORE_TABLES))
     assert j['collections']['ev_idle'] == 4
     for sym, target in JMP_BACK.items():       # a jmp stub goes back to the instruction after its site
         addr, stock_hex, _ev = BUS_SITES[target]
@@ -401,6 +422,98 @@ def test_the_core_bus_sites():
     at = int(fx['addr'], 16)
     assert any(a <= at and at + 24 <= b for a, b in DEV.image_free)
     assert at + 24 == DEV.image_free[0][1]          # the run's end: its start is octabam's SPECTRUM's
+
+
+def test_the_core_store_sites():
+    """core-ot 0.6's lifecycle sites: each displaces whole stock instructions, no branch in the
+    image lands inside one, a jmp stub goes back to the instruction after its site, and none meets
+    the v1.0 conversions' bytes, the intercepts' or the bus's. Every reference to a wrapped routine
+    is a jsr's operand: a wrapper keeps one return slot, and an indirect entry would pass it by."""
+    with open(os.path.join(ROOT, 'mods', 'core-ot', 'mod.json')) as fh:
+        j = json.load(fh)
+    with open(os.path.join(ROOT, 'mods', 'intercepts-ot', 'mod.json')) as fh:
+        icpt = [(int(x['addr'], 16), len(x['stock']) // 2) for x in json.load(fh)['sites']]
+    st, img = stock()
+    sites = {s['target']: s for s in j['sites'] if s['op'] in ('jsr', 'jmp')}
+    taken = [(a, len(h) // 2) for a, h, _e in BUS_SITES.values()] + icpt + list(V10_NEIGHBOURS)
+    inside = {}
+    for target, (addr, stock_hex, event, back) in STORE_SITES.items():
+        s, n = sites[target], len(stock_hex) // 2
+        assert (int(s['addr'], 16), s['stock']) == (addr, stock_hex), target
+        assert s['op'] == ('jsr' if target == 'core_fromcs1' else 'jmp'), target
+        o = addr - DEV.main_load
+        assert img[o:o + n].hex() == stock_hex, target
+        ok, note = elemod.insn_check(img, addr, n, DEV)
+        assert ok, (target, note)
+        if back:
+            assert int(j['defsym'][back], 16) == addr + n, target
+        if event:
+            assert j['collections'][event] == 4, event
+        for a, m in taken:
+            assert not (a < addr + n and addr < a + m), (target, hex(a))
+        for t in range(addr + 1, addr + n):
+            inside[t] = target
+    assert int(j['defsym']['JOB_LOOP'], 16) == STORE_SITES['core_job_loop'][0]
+    assert int(j['defsym']['ENGINE_Q'], 16) == 0x460d17ce
+    assert int(j['defsym']['FROMCS1_FN'], 16) == int(STORE_SITES['core_fromcs1'][1][4:], 16)
+    for t in STORE_TABLES:
+        assert j['collections'][t] == 4, t
+    for o in range(0, len(img) - 6, 2):         # bra/bsr/bcc, jmp/jsr absolute or pc-relative
+        w = struct.unpack('>H', img[o:o + 2])[0]
+        pc, tgt = DEV.main_load + o, None
+        if w & 0xf000 == 0x6000:
+            d8 = w & 0xff
+            if d8 == 0:
+                tgt = pc + 2 + struct.unpack('>h', img[o + 2:o + 4])[0]
+            elif d8 == 0xff:
+                tgt = pc + 2 + struct.unpack('>i', img[o + 2:o + 6])[0]
+            else:
+                tgt = pc + 2 + (d8 - 256 if d8 & 0x80 else d8)
+        elif w in (0x4ef9, 0x4eb9):
+            tgt = struct.unpack('>I', img[o + 2:o + 6])[0]
+        elif w in (0x4efa, 0x4eba):
+            tgt = pc + 2 + struct.unpack('>h', img[o + 2:o + 4])[0]
+        assert tgt not in inside, (hex(pc), hex(tgt), inside.get(tgt))
+    for target in ('core_loadall', 'core_loadmask', 'core_bankw', 'core_pstore', 'core_preload'):
+        pat, k, refs = struct.pack('>I', STORE_SITES[target][0]), 0, 0
+        while True:
+            k = img.find(pat, k)
+            if k < 0:
+                break
+            assert img[k - 2:k] == bytes.fromhex('4eb9'), (target, hex(DEV.main_load + k))
+            refs += 1
+            k += 1
+        assert refs, target
+
+
+def test_the_store_probe_links():
+    """tests/fixtures/octatrack-store with core-ot 0.6: its blocks, its CS1 claim and its
+    handlers are the entries of core's tables; core-ot alone has none."""
+    import shutil
+    from elekloader.sdk import build
+    need(SYX)
+    if not shutil.which(os.environ.get('ELEKLOADER_CROSS', DEV.toolchain['prefix']) + 'gcc'):
+        raise Skip('no m68k cross compiler')
+    st, img = stock()
+    with tempfile.TemporaryDirectory() as tmp:
+        core = elemod.load_any(build.build(os.path.join(ROOT, 'mods', 'core-ot'), SYX, tmp)[0])
+        probe, m = build.build(os.path.join(HERE, 'fixtures', 'octatrack-store'), SYX, tmp)
+        assert sorted(m.imports) == ['core_carddata_dirty', 'core_projdata_dirty', 'ot_engine_post'], m.imports
+        alone = link.link([core], img)
+        ln = link.link([core, elemod.load_any(probe)], img)
+
+    def table(ln, name, n):
+        o = ln.layout['run_load'] + (ln.tables[name][0] - DEV.ddr[0]) - DEV.main_load
+        return struct.unpack('>%dI' % n, ln.image[o:o + 4 * n])
+
+    for t in STORE_TABLES + ('ev_project', 'ev_banks_load', 'ev_part_saved'):
+        assert alone.tables[t][1] == 0, t
+    assert table(ln, 'core_projdata', 2) == (ln.map['stp_proj'], 0)
+    assert table(ln, 'core_carddata', 2) == (ln.map['stp_card'], 0)
+    assert table(ln, 'ot_sram', 2) == (ln.map['stp_sram'], 0)
+    assert table(ln, 'ev_project', 2) == (ln.map['stp_project'], 0)
+    assert table(ln, 'ev_banks_write', 2) == (ln.map['stp_banks_write'], 0)
+    assert ln.tables['ot_settings'][1] == 0
 
 
 def _c_defs(path):
@@ -637,7 +750,8 @@ def test_core_builds_and_links():
         with open(os.path.join(d, 'mod.json'), 'w') as fh:
             json.dump({'id': 'ot-marker', 'version': '1', 'device': 'octatrack', 'os': '1.40C',
                        'sources': ['marker.s'], 'requires': ['core']}, fh)
-        marker, _m = build.build(d, SYX, tmp)
+        marker, m2 = build.build(d, SYX, tmp)
+        m1 = elemod.load_any(core)
         outputs, man = patch.build(SYX, [core, marker], version='CORE TEST',
                                    log=lambda *a: None)
     new = formats.main_image(formats.parse(outputs['syx'], DEV), DEV)
@@ -647,9 +761,14 @@ def test_core_builds_and_links():
     o = 0x4000050c - DEV.main_load
     assert new[o:o + 6] == b'\x4e\xb9' + struct.pack('>I', boot)
     assert new[len(img):].find(b'ELEKLOADER MARKER') > 0
-    o = 0x4000045e - DEV.main_load              # the arena's base, past the pages the mods fill
-    assert new[o:o + 4] == struct.pack('>I', DEV.ddr[0] + PAGE)
-    assert man['link']['layout']['reserve'] == {'units': 1, 'end': DEV.ddr[0] + PAGE}
+    # the arena's base, past the pages the mods fill: their run images and RAM (core-ot 0.6's store
+    # keeps about 100 KB of buffers, so core alone takes more than one page from 0.6)
+    need_bytes = sum(m.size('.run') + m.size('.bss') for m in (m1, m2))
+    units = man['link']['layout']['reserve']['units']
+    assert units * PAGE >= need_bytes > (units - 1) * PAGE - 64 * units, (units, need_bytes)
+    o = 0x4000045e - DEV.main_load
+    assert new[o:o + 4] == struct.pack('>I', DEV.ddr[0] + units * PAGE)
+    assert man['link']['layout']['reserve'] == {'units': units, 'end': DEV.ddr[0] + units * PAGE}
     # the draw site calls the gate in the image (tst.b core_up), whose flag starts clear
     gate = 0x400c46ea
     o = 0x40013cae - DEV.main_load
@@ -677,7 +796,10 @@ def test_the_example_subscribes_to_the_bus():
     assert counts == {'ev_draw': 1, 'ev_enc': 0, 'ev_frame': 0, 'ev_key': 0, 'ev_midi': 0,
                       'ev_tick': 0, 'ev_frame_end': 0, 'ev_midi_out': 0, 'ev_midi_out_rt': 0,
                       'ev_frame_begin': 0, 'ev_transport': 0, 'ev_boot_done': 0, 'ev_idle': 0,
-                      'ev_tick120': 0}, counts
+                      'ev_tick120': 0, 'ev_project': 0, 'ev_banks_load': 0, 'ev_banks_write': 0,
+                      'ev_project_store': 0, 'ev_project_reload': 0, 'ev_cs1_bank': 0, 'ev_part_saved': 0,
+                      'ev_part_cleared': 0, 'core_projdata': 0, 'core_carddata': 0, 'ot_sram': 0,
+                      'ot_settings': 0}, counts
     at = ln.tables['ev_draw'][0]
     o = ln.layout['run_load'] + (at - DEV.ddr[0]) - DEV.main_load
     assert struct.unpack('>II', ln.image[o:o + 8]) == (ln.map['hello_draw'], 0)

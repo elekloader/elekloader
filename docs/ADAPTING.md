@@ -216,12 +216,22 @@ declares"*).
 | `ev_boot_done` (0.5) | once, when main has made its last init call | `void f(void)` | the OS's tasks exist, no project is loaded yet. In the main task |
 | `ev_idle` (0.5) | main's idle loop, over and over | `void f(void)` | the lowest priority: runs when nothing else does. It must not wait for anything: if main blocks, nothing is left to run. A build with an `ev_idle` handler runs main's idle loop in the core; without one main parks in the stock `bras .` |
 | `ev_tick120` (0.5) | the key-repeat task, 120 times a second | `void f(void)` | after the key-repeat step; that task has 2 KB of stack. Core's paced MIDI drains first |
+| `ev_project` (0.6) | a whole project was loaded (LOAD PROJECT, the power-up's load, RELOAD) or made (CREATE EMPTY PROJECT), when the firmware's job has ended | `void f(int how, unsigned dropped)` | as core-ar2's and core-a4's: `how` is `CORE_PROJECT_NEW` (0) or `CORE_PROJECT_LOADED` (1); `dropped` has `OT_DROPPED_PROJECT` when the project's blocks hold zeros, `OT_DROPPED_CARD` (the first event only) when the card's do. In the engine task, which may use the file calls. One load can bring it more than once |
+| `ev_banks_load` (0.6) | a load of banks | `void f(unsigned pre, unsigned mask)` | 1 before, 0 after; `mask` bit n is bank n. Engine task |
+| `ev_banks_write` (0.6) | the bank writer (background saves, SAVE PROJECT, SAVE AS, a new project) | `void f(unsigned pre, unsigned mask)` | 1 before the first bank file, after the project folder is made; 0 after. Engine task |
+| `ev_project_store` (0.6) | SAVE PROJECT's copy of each `.work` file to `.strd` | `void f(unsigned pre, unsigned unused)` | 1 before, 0 after. Engine task |
+| `ev_project_reload` (0.6) | RELOAD's copy of each `.strd` back to `.work` | `void f(unsigned pre, unsigned unused)` | 1 before, 0 after; `ev_project` follows. Engine task |
+| `ev_cs1_bank` (0.6) | the current bank's working copy into battery RAM, or back from it at power-up | `void f(unsigned to, unsigned bank)` | `to` 1: before stock copies it in; 0: after it came back |
+| `ev_part_saved`, `ev_part_cleared` (0.6) | Part Save, and Part Clear | `void f(unsigned part, unsigned unused)` | the current bank. Part Clear ends in Part Save, so a clear brings both |
 
 The sites core-ot owns (Octatrack 1.40C): the boot site 0x4000050c, the 28
 arena writes listed in its `mod.json`, 0x40061e94, 0x40013cae, 0x40061dc8,
 0x40061e00, 0x40005572 and 0x4000d94e; from 0.4 0x4000d9a6, 0x40010bd0 and
 0x400108c4; from 0.5 0x4000aad0, 0x4009c3d4, 0x4009c4d4, 0x4009f5c6,
-0x4001fc96 and 0x40055966; and its draw gate at 0x400c46ea-0x400c4702. They
+0x4001fc96 and 0x40055966; from 0.6 the engine task's loop (0x4008484e,
+0x4008485e) and the routines its jobs call (0x40090504, 0x400905d4,
+0x400917c8, 0x400918aa, 0x4008ee74, 0x4008f180, 0x4000faf0, 0x40025808,
+0x4004a9c4, 0x4004a9d0); and its draw gate at 0x400c46ea-0x400c4702. They
 keep clear of every byte that the converted octabam modules (4b) patch.
 
 The transport events are the sequencer's own start, resume and STOP routines
@@ -266,6 +276,65 @@ the sequencer makes itself, which are not events in 0.5.
   its 4 KB ring hangs the unit (it waits with interrupts masked for an
   interrupt to empty the ring), and a controller that gets hundreds of
   messages a second locks up. Returns 0 when the queue (512 bytes) is full.
+
+#### Project data on the Octatrack (core-ot 0.6)
+
+A mod keeps its own bytes with the project, or on the card for every
+project, with the Digitone's descriptor (its code builds for both), in
+`octatrack/core.h`:
+
+```c
+static uint32_t my_bytes[16];
+static void my_loaded(int32_t found) { /* found 0: zeros, set your defaults */ }
+const struct core_projdata my_block = { OT_TAG('M', 'I', 'N', 'E'), sizeof my_bytes, my_bytes, my_loaded };
+/* after a change: */ core_projdata_dirty(my_block.tag);
+```
+
+```json
+"contribute": [{"to": "core_projdata", "order": 50, "data": "00000000",
+                "relocs": [[0, "abs32", "sym:my_block", 0]]}],
+"resources": {"core": "0.6", "names": ["projdata:MINE"]}
+```
+
+- **Where.** `core_projdata` blocks go in `<set>/<project>/elekloader.work`
+  and `.strd`, and `core_carddata` blocks in `/ELEKLOADER/card.work` and
+  `.strd`. The stock OS ignores these files.
+- **Loading.** After every project load core puts each block's bytes in
+  `data` and calls `loaded(1)`. When there are none (a new project, a
+  project saved without the mod, or a block of another size), `data` holds
+  zeros and core calls `loaded(0)`. This runs in the engine task, before
+  `ev_project`.
+- **Saving.** `.work` is written from the engine task about 2 s after the
+  last `core_projdata_dirty` call, and at SAVE PROJECT. `.strd` is copied
+  where stock copies its own `.work` files to `.strd` (SAVE PROJECT), and
+  copied back on RELOAD. After a SAVE AS, the next bank write puts the file
+  in the new folder.
+- **Damaged files.** A file that does not read back (its CRCs) is never
+  written over. Core uses `.strd` when `.work` is damaged. When neither
+  reads back, core asks at the next encoder turn: NO keeps the file (mods
+  run without it until the next load), YES starts fresh, with the old file
+  copied to `.bak` first.
+- **Other mods' records.** Records of mods that are not in the build are
+  kept, and written back.
+- **Battery RAM.** A mod contributes an `ot_sram` claim (`{tag, size,
+  &pointer}`, claimed as `cs1:<tag>`). At main's end, before
+  `ev_boot_done`, core writes the claim's address in battery RAM to the
+  pointer (0x100f859c..0x100fff00, a range stock never touches; 0 when it is
+  full). The bytes survive a power cycle while the build keeps the same
+  claims in the same order; a claim that moved is zeroed. Use it for state
+  that should outlive a power cycle without a save, as stock's own working
+  copy does, and for settings needed before the card mounts. Whether CS1
+  holds with the power off is to be measured on a unit.
+- **Card work of your own.** `ot_engine_post(fn, arg)` runs `fn(arg)` in the
+  firmware's engine task, between its own jobs. The file calls
+  (`ot_file_open`, `ot_file_read`, `ot_file_write`, `ot_file_close`,
+  `ot_file_copy`, `ot_mkdir`, `ot_project_dir`) are for there.
+- **Settings.** Core declares the `ot_settings` table (`struct ot_setting`)
+  for the settings companion.
+
+A stock routine that returns a pointer returns it in d0. GCC's m68k ABI
+reads a returned pointer from a0, so declare such a routine as returning an
+integer, and cast.
 
 ### The DSP bus on the Octatrack (dspbus 0.1)
 

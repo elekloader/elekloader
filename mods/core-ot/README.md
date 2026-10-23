@@ -116,6 +116,52 @@ changes nothing else the unit does.
     exports").
   - Core is C from 0.5: `exports.c` needs the cross compiler (`m68k-linux-gnu-gcc`)
     as well as the assembler.
+- **0.6: the project, the card and battery RAM** (`store.s`, `store.c`,
+  `core.h`). The firmware's engine task (priority 1) runs the project jobs,
+  one at a time, from its queue (0x460d17ce). Core takes two places in its
+  loop, and the routines those jobs call. Every caller reaches those
+  routines directly; octabam's STORE module took the census (MIT):
+
+  | event | site (was) | when |
+  |---|---|---|
+  | `ev_project(how, dropped)` | 0x4008484e (`pea 0x460d17ce`, the receive every job goes back to), a jmp; 0x4008485e (the job switch) notes the job | when a job that loads a whole project (3, 4 LOAD PROJECT, 5 the power-up, 19 RELOAD) or makes one (9, 10, 13) has ended; the same prototype and constants as core-ar2's and core-a4's |
+  | `ev_banks_load(pre, mask)` | 0x40090504 and 0x400905d4, the bank loads, wrapped | before and after |
+  | `ev_banks_write(pre, mask)` | 0x400918aa (inside the bank writer) and 0x400917c8 (around it) | before the first bank file, and after |
+  | `ev_project_store(pre)`, `ev_project_reload(pre)` | 0x4008ee74 and 0x4008f180, wrapped | SAVE PROJECT's `.work` to `.strd` copy, RELOAD's copy back |
+  | `ev_cs1_bank(to, bank)` | 0x4000faf0 (before) and the power-up's call at 0x40025808 (after) | the bank's working copy into battery RAM, and back |
+  | `ev_part_saved(part)`, `ev_part_cleared(part)` | 0x4004a9c4 (Part Save's tail), 0x4004a9d0 (Part Clear's entry) | stock's Part Clear ends in its Part Save |
+
+  - **`ot_engine_post(fn, arg)`** runs a mod's function on the engine
+    task, where the firmware does its own card I/O. Core's own job type is
+    0x42 (stock's are 0..45). The file calls (`ot_file_open` and the rest)
+    are for there.
+  - **Project and card data.** A mod contributes the Digitone's descriptor
+    (`{tag, size, data, loaded}`) to `core_projdata` or `core_carddata`.
+    - **Where:** core keeps each block in a file pair the stock OS
+      ignores: `<project>/elekloader.work` and `.strd`, and
+      `/ELEKLOADER/card.work` and `.strd`.
+    - **When:** `.work` is written about 2 s after a mod calls
+      `core_projdata_dirty`, and at SAVE PROJECT. `.strd` is copied where
+      stock copies its own, and copied back on RELOAD.
+    - **Damaged files:** the pair rules are octabam's (KITS and BRAIN): a
+      valid `.work`, else a valid `.strd`. A file that reads back as
+      neither is never written over. At the next encoder turn, core asks
+      whether to keep it (mods run without it) or start fresh, with the
+      old file copied to `.bak` first.
+    - **Records of mods not in the build** are kept and written back.
+  - **Battery RAM.** `ot_sram` claims get addresses in 0x100f859c..0x100fff00,
+    the range stock never touches, at main's end. A claim keeps its bytes
+    from boot to boot while the build keeps the same claims in order.
+  - **Settings.** Core declares `ot_settings` for the settings companion
+    (`core.h`, `struct ot_setting`); without it, each setting stays at its
+    default.
+  - **The cost.** With no block and no claim in the build, core reads and
+    writes nothing. Its buffers (a 64 KB file buffer, the kept records and
+    a file context) put about 100 KB in `.bss`, about 17 of the reserve's
+    6 KB pages.
+  - A stock routine that returns a pointer returns it in d0, where GCC's
+    m68k ABI expects a0: declare one as returning an integer, and cast
+    (`PROJDIR` in `store.c`).
 - **The draw gate** (`gate.s`). The OS composes the screen twice before the
   boot site, so before `.run` is in the reserve. The draw site therefore
   calls `core_draw_gate`, which `mod.json` places (`fixed`) in the last 24
@@ -228,6 +274,37 @@ of ot_emu whose park range for main can be set, for the idle loop):
   sends between.
 - Tests: test_octatrack 28/28, test_units 30/30, test_octabam (with a
   bare-metal assembler) 21/21.
+
+0.6, in ot_emu with a probe mod (tests/fixtures/octatrack-store): a project
+block, a card block, a battery-RAM claim, and a record of every lifecycle
+event. Its handler adds one to each block and marks it changed at every
+`ev_project`:
+- **A first boot on a card with an empty project folder.** LOAD PROJECT ran
+  as two loading jobs, and each fired `ev_project(LOADED, ...)` at its end.
+  Both blocks came with `loaded(0)`, dropped = project | card. The bank loads
+  fired before and after. 2 s later core wrote `OCTABAM/ONEAUX/elekloader.work`
+  and `ELEKLOADER/card.work`, valid containers holding the counters. The CS1
+  claim got 0x100f85b4, behind its directory.
+- **The next boot from that card** loaded both, `loaded(1)`, and the counters
+  carried on. RELOAD (the stock routine the menu's YES calls) fired
+  `ev_project_reload` before and after, then `ev_project(LOADED)` again.
+- **SAVE PROJECT** (the stock routine the menu's YES calls) fired
+  `ev_banks_write` and `ev_project_store` before and after, and core copied
+  `card.work` to `card.strd`. The emulator's card image comes out of a full
+  SAVE PROJECT damaged on stock as well (its project folder gone), so the
+  project's `.strd` copy is checked through the card pair, which takes the
+  same path.
+- **A damaged file.** With `elekloader.work` corrupted and no `.strd`, core
+  refused the pair: zeros, `loaded(0)`, no write. The next encoder turn
+  opened the prompt, and YES started fresh: the old file was copied to
+  `elekloader.work.bak`, and new `.work` and `.strd` files were written.
+- **Core alone matches stock.** After a boot, LOAD PROJECT, an encoder turn
+  and a page key, the card image is byte for byte stock's and CS1 is
+  untouched.
+- **Every one of the 34 shop mods** links with 0.6, each alone and in the
+  shop's two largest combinations.
+- Tests: test_octatrack 30/30 (two new: the store's sites, with a scan of the
+  image for branches into them, and the probe's tables), test_units 30/30.
 
 On a unit (an Octatrack MKII, 3 Oct 2026): 0.1 alone, and 0.1 with 19 of the
 converted octabam mods in seven groups, flashed from the card. Every build
