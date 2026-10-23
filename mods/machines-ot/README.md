@@ -108,8 +108,11 @@ written for one describes itself to the other the same way. Only `abi`,
   12 bytes while it runs, so it never clamps the machine's values; the
   machines' `validate` wrap it. A track signed by a machine octabam or
   Modwerk knows (`AB`, `TB`, `CX`, `FM`, `PL`, `S2`) that is not in the build
-  is protected the same way, and renders silence rather than FLEX reading
-  bytes that are not FLEX's.
+  is protected the same way (one value out of FLEX's ranges makes the boot's
+  battery restore refuse the whole Part); it plays as stock plays it.
+- **The signature is three knob bytes** of NEIGHBOR's that FLEX tracks keep
+  too, as octabam's machines have it: a FLEX track whose NEIGHBOR knobs were
+  left at a machine's signature reads as that machine.
 - **The sound.** The FLEX renderer (STATIC's and PICKUP's too) asks the
   companion first: an owned track goes to its machine's `render`, which
   calls `ot_stock_render` and changes the samples it shipped. SYNTH MACHINE

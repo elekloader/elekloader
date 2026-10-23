@@ -32,7 +32,6 @@
 #define NEIGHBOR_PAGE 0x400d34d2u   /* stock's spare rows 5 and 6 hold it */
 #define FLEX_DEFAULTS 0x400d320cu   /* stock's 12 FLEX defaults */
 #define NO_NAME     0x400b94f6u     /* what stock's name(row) gives past its five */
-#define SILENT      0x400047f0u     /* stock's silent source (the kinds past PICKUP) */
 #define ROWS        8u              /* machines listed at most: rows 5..12 */
 
 typedef volatile uint8_t Part;
@@ -59,7 +58,8 @@ static unsigned n_rows;
 
 /* The machines octabam and Modwerk sign tracks with. A track that still carries one
  * whose machine is not in the build keeps its 12 bytes from stock's validator (they
- * are that machine's, not FLEX's) and renders silence, never FLEX reading them. */
+ * are that machine's, not FLEX's: a Part with one out of FLEX's ranges would make
+ * the boot's battery restore refuse the whole Part). It plays as stock plays it. */
 static const uint8_t known[][4] = {
     {'A', 'B', 1, 1}, {'T', 'B', 1, 1}, {'C', 'X', 1, 1}, {'F', 'M', 1, 1}, {'P', 'L', 1, 1}, {'S', '2', 1, 2},
 };
@@ -112,11 +112,12 @@ static Part *mirror_of(Part *part)
     return (Part *)(uintptr_t)(MIRROR + ((uint32_t)(uintptr_t)part - U32(BANK) - PART_OFF));
 }
 
-/* Track t's machine in `part`: its row (5 on), or 0 for a stock track. */
+/* Track t's machine in `part`: its row (5 on), or 0 for a stock track. A machine's
+ * track is a FLEX track (0.1 serves no machine on STATIC's backing). */
 static unsigned owner(const Part *part, unsigned t, const struct ot_machine **who)
 {
     *who = 0;
-    if (t >= 8 || part[TYPES + t] > FLEX)
+    if (t >= 8 || part[TYPES + t] != FLEX)
         return 0;
     const Part *s = part + SIG + 30u * t;
     for (unsigned k = 0; k < n_rows; ++k) {
@@ -131,7 +132,7 @@ static unsigned owner(const Part *part, unsigned t, const struct ot_machine **wh
 
 static unsigned orphan(const Part *part, unsigned t)
 {
-    if (t >= 8 || part[TYPES + t] > FLEX)
+    if (t >= 8 || part[TYPES + t] != FLEX)
         return 0;
     const Part *s = part + SIG + 30u * t;
     for (unsigned k = 0; k < sizeof known / sizeof *known; ++k)
@@ -346,9 +347,7 @@ int otm_render(unsigned track, unsigned ping, unsigned start, unsigned end)
     if (part && owner(part, track, &who)) {
         if (who->render)
             return who->render(track, ping, start, end);
-    } else if (part && orphan(part, track)) {
-        return ((int (*)(unsigned, unsigned, unsigned, unsigned))SILENT)(track, ping, start, end);
-    } else if (part && track < 8 && part[TYPES + track] == FLEX) {
+    } else if (part && track < 8 && part[TYPES + track] == FLEX && !orphan(part, track)) {
         for (unsigned k = 0; k < n_rows; ++k)
             if ((rows[k]->flags & OT_MACHINE_RENDER_FLEX) && rows[k]->render)
                 return rows[k]->render(track, ping, start, end);
