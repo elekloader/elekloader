@@ -145,3 +145,84 @@ core_frame:
         bra.s   1b
 2:      tst.l   ISR_FLAG                | the instruction this replaced: its
         rts                             | flags feed the interrupt's beq
+
+| ---- ev_frame_end: the end of the frame interrupt (core-ot 0.4) --------------
+| At 0x4000d9a6 (was: movem.l (%sp),%d0-%fp ; lea 252(%sp),%sp, then rte): the
+| frame interrupt's last point, past TUNER's counter store and USB audio's
+| tail (bytes of octabam2elemod v1.0's mods, 0x4000d99a..0x4000d9a5). The
+| interrupted task's EMAC state is already back by then, so after the handlers
+| the interrupt's own restore of it (0x4000d964..0x4000d980, from its frame)
+| runs again: a handler may use the EMAC. Every other register comes back from
+| the frame too. Handlers: void f(void), at interrupt level 5: keep them short.
+        .globl  core_frame_end
+core_frame_end:
+        lea     ev_frame_end, %a2
+1:      move.l  (%a2)+, %d0
+        beq.s   2f
+        movea.l %d0, %a0
+        jsr     (%a0)
+        bra.s   1b
+2:      lea     220(%sp), %a0           | the EMAC restore, as the interrupt does it
+        move.l  #0, %macsr
+        movem.l (%a0), %d0-%d7
+        move.l  %d0, %acc0
+        move.l  %d1, %acc1
+        move.l  %d2, %acc2
+        move.l  %d3, %acc3
+        move.l  %d4, %accext01
+        move.l  %d5, %accext23
+        move.l  %d6, %mask
+        move.l  %d7, %macsr
+        movem.l (%sp), %d0-%d7/%a0-%a6  | the instructions this replaced
+        lea     252(%sp), %sp
+        rte
+
+| ---- ev_midi_out: each message the firmware sends (core-ot 0.4) --------------
+| At 0x40010bd0 in midi_send (was: movea.l 28(%sp),%a2 ; tst.l 0x460ba978),
+| past its prologue (USB MIDI of octabam2elemod v1.0 patches the prologue,
+| 0x40010bc8..0x40010bcf): 24(sp) is the message's length, 28(sp) the
+| message. Handlers: void f(const unsigned char *msg, unsigned len), each in
+| turn, then stock sends it. They run where the sender runs (a task, or an
+| interrupt): keep them short.
+        .globl  core_midi_out
+core_midi_out:
+        lea     -20(%sp), %sp
+        movem.l %d0-%d1/%a0-%a1/%a3, (%sp)
+        lea     ev_midi_out, %a3
+1:      move.l  (%a3)+, %d0
+        beq.s   2f
+        move.l  44(%sp), -(%sp)         | the length (24 past the 20 saved)
+        move.l  52(%sp), -(%sp)         | the message (28, 20 saved, 4 pushed)
+        movea.l %d0, %a0
+        jsr     (%a0)
+        addq.l  #8, %sp
+        bra.s   1b
+2:      movem.l (%sp), %d0-%d1/%a0-%a1/%a3
+        lea     20(%sp), %sp
+        movea.l 28(%sp), %a2            | the instructions this replaced: the
+        tst.l   0x460ba978              | tst last, its flags for stock's bne
+        jmp     0x40010bda
+
+| ---- ev_midi_out_rt: each realtime byte the firmware sends (core-ot 0.4) -----
+| At 0x400108c4 in the priority sender (was: move.w %sr,%d2 ; move.w
+| #0x2700,%sr), past its wait for room in the queue (its entry is USB MIDI's
+| of octabam2elemod v1.0, 0x400108b0..0x400108b5): the byte is in d1.
+| Handlers: void f(unsigned byte), each in turn, then stock sends it.
+        .globl  core_midi_out_rt
+core_midi_out_rt:
+        lea     -20(%sp), %sp
+        movem.l %d0-%d1/%a0-%a1/%a3, (%sp)
+        lea     ev_midi_out_rt, %a3
+1:      move.l  (%a3)+, %d0
+        beq.s   2f
+        mvz.b   7(%sp), %d1             | the byte (d1's low byte, saved at 4)
+        move.l  %d1, -(%sp)
+        movea.l %d0, %a0
+        jsr     (%a0)
+        addq.l  #4, %sp
+        bra.s   1b
+2:      movem.l (%sp), %d0-%d1/%a0-%a1/%a3
+        lea     20(%sp), %sp
+        move.w  %sr, %d2                | the instructions this replaced
+        move.w  #0x2700, %sr
+        jmp     0x400108ca

@@ -208,11 +208,14 @@ declares"*).
 | `ev_enc` | each encoder turn | `int f(int encoder, int delta)` | the firmware's encoder index, 0-7; return nonzero to take it |
 | `ev_midi` | each MIDI message in, MIDI thread | `int f(const unsigned char *msg)` | `msg[0]` the status, then its data bytes; return nonzero to take it: the firmware's handler for it is not called |
 | `ev_frame` | the frame interrupt, every 16 samples (2,756 a second) | `void f(void)` | interrupt level: keep it short. It runs before the interrupted task's EMAC state is put back, so it may use the EMAC |
+| `ev_frame_end` (0.4) | the frame interrupt's last point, every 16 samples | `void f(void)` | after `ev_frame`, TUNER's counter store and USB audio's tail. The interrupt's EMAC restore runs again after the handlers, so it may use the EMAC too |
+| `ev_midi_out` (0.4) | each MIDI message the firmware sends (midi_send) | `void f(const unsigned char *msg, unsigned len)` | before stock sends it; it runs where the sender runs (a task or an interrupt): keep it short |
+| `ev_midi_out_rt` (0.4) | each realtime byte the firmware sends (the priority sender) | `void f(unsigned byte)` | the same |
 
 The sites core-ot owns (Octatrack 1.40C): the boot site 0x4000050c, the 28
 arena writes listed in its `mod.json`, 0x40061e94, 0x40013cae, 0x40061dc8,
-0x40061e00, 0x40005572 and 0x4000d94e, and its draw gate at
-0x400c46ea-0x400c4702. They keep clear of every byte that the converted
+0x40061e00, 0x40005572 and 0x4000d94e, from 0.4 0x4000d9a6, 0x40010bd0 and
+0x400108c4, and its draw gate at 0x400c46ea-0x400c4702. They keep clear of every byte that the converted
 octabam modules (4b) patch.
 
 ### The DSP bus on the Octatrack (dspbus 0.1)

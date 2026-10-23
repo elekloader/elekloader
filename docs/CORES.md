@@ -39,6 +39,7 @@ There is one core file per device and OS:
 | Analog Four MKII | 1.56 | `core-a4-0.1.elemod` | a proof of concept, not released: build it ([below](#building-a-core)) |
 | Octatrack MKI, MKII | 1.40C | `core-ot-0.1.elemod` | the latest release (v0.4.0); PURGE SAMPLES freezes the unit with it, fixed in 0.3.1 |
 | Octatrack MKI, MKII | 1.40C | `core-ot-0.3.1.elemod` | the [core-ot-v0.3.1](https://github.com/irpina/elekloader/releases/tag/core-ot-v0.3.1) pre-release, and the shop: with the hook bus (0.2) and the sized reserve (0.3), neither released on its own |
+| Octatrack MKI, MKII | 1.40C | `core-ot-0.4.elemod` | not released yet: the frame's end and MIDI out (`ev_frame_end`, `ev_midi_out`, `ev_midi_out_rt`) |
 | Model:Cycles | 1.13 | `core-mc-0.1.elemod` | on main, not released yet: build it ([below](#building-a-core)) |
 | Model:Samples | 1.13 | `core-ms-0.1.elemod` | on main, not released yet: build it ([below](#building-a-core)) |
 

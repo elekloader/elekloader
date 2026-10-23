@@ -267,7 +267,7 @@ def test_the_core_moves_the_arena_past_its_reserve():
     o = PURGE_BANKS_END - DEV.main_load
     assert img[o:o + 6] == bytes.fromhex('b5fc40a955e0')
     assert all(int(s['addr'], 16) != PURGE_BANKS_END + 2 for s in j['sites'])
-    calls = {s['target']: int(s['addr'], 16) for s in j['sites'] if s['op'] == 'jsr'}
+    calls = {s['target']: int(s['addr'], 16) for s in j['sites'] if s['op'] in ('jsr', 'jmp')}
     assert calls.pop('boot') == 0x4000050c
     assert set(calls) == set(BUS_SITES), calls             # the rest are the hook bus's
 
@@ -335,12 +335,16 @@ BUS_SITES = {
     'core_enc': (0x40061e00, '4eb940031944', 'ev_enc'),          # jsr enc(encoder, delta), kind 2
     'core_midi': (0x40005572, '20720c004e90', 'ev_midi'),        # the MIDI thread's handler call
     'core_frame': (0x4000d94e, '4ab946104d08', 'ev_frame'),      # tst.l 0x46104d08, frame interrupt
+    # core-ot 0.4: jmp sites (each stub replays what it displaced and goes back to stock itself)
+    'core_frame_end': (0x4000d9a6, '4cd77fff4fef00fc', 'ev_frame_end'),       # the frame interrupt's epilogue
+    'core_midi_out': (0x40010bd0, '246f001c4ab9460ba978', 'ev_midi_out'),     # midi_send past its prologue
+    'core_midi_out_rt': (0x400108c4, '40c246fc2700', 'ev_midi_out_rt'),       # the priority sender
 }
 # Instructions the converted octabam mods of irpina/octabam2elemod v1.0 hook in the same
 # routines (TUNER, CC FEEDBACK, CC MAP, the USB audio mods, USB MIDI): the bus keeps clear
 # of every one, so those files link with core 0.2 as they did with 0.1.
 V10_NEIGHBOURS = ((0x40056c72, 6), (0x4000d99a, 6), (0x4000d9a0, 6), (0x4005595c, 6),
-                  (0x400d64a0, 4), (0x4001e606, 6), (0x40059ef0, 6))
+                  (0x400d64a0, 4), (0x4001e606, 6), (0x40059ef0, 6), (0x40010bc8, 8), (0x400108b0, 6))
 
 
 def test_the_core_bus_sites():
@@ -351,15 +355,19 @@ def test_the_core_bus_sites():
     with open(os.path.join(ROOT, 'mods', 'core-ot', 'mod.json')) as fh:
         j = json.load(fh)
     st, img = stock()
-    sites = {s['target']: s for s in j['sites'] if s['op'] == 'jsr' and s['target'] != 'boot'}
+    sites = {s['target']: s for s in j['sites'] if s['op'] in ('jsr', 'jmp') and s['target'] != 'boot'}
     for target, (addr, stock_hex, event) in BUS_SITES.items():
         s = sites[target]
+        n = len(stock_hex) // 2
         assert (int(s['addr'], 16), s['stock']) == (addr, stock_hex), target
+        assert s['op'] == ('jmp' if target in ('core_frame_end', 'core_midi_out', 'core_midi_out_rt') else 'jsr'), target
         o = addr - DEV.main_load
-        assert img[o:o + 6].hex() == stock_hex, target
+        assert img[o:o + n].hex() == stock_hex, target
+        ok, note = elemod.insn_check(img, addr, n, DEV)
+        assert ok, (target, note)
         assert j['collections'][event] == 4, event
-        for a, n in V10_NEIGHBOURS:
-            assert not (a < addr + 6 and addr < a + n), (target, hex(a))
+        for a, m in V10_NEIGHBOURS:
+            assert not (a < addr + n and addr < a + m), (target, hex(a))
     assert sorted(j['collections']) == sorted(e for _a, _s, e in BUS_SITES.values())
     (fx,) = j['fixed']
     at = int(fx['addr'], 16)
@@ -553,7 +561,7 @@ def test_the_example_subscribes_to_the_bus():
         ln = link.link([elemod.load_any(core), elemod.load_any(ex)], img)
     counts = {t: ln.tables[t][1] for t in ln.tables}
     assert counts == {'ev_draw': 1, 'ev_enc': 0, 'ev_frame': 0, 'ev_key': 0, 'ev_midi': 0,
-                      'ev_tick': 0}, counts
+                      'ev_tick': 0, 'ev_frame_end': 0, 'ev_midi_out': 0, 'ev_midi_out_rt': 0}, counts
     at = ln.tables['ev_draw'][0]
     o = ln.layout['run_load'] + (at - DEV.ddr[0]) - DEV.main_load
     assert struct.unpack('>II', ln.image[o:o + 8]) == (ln.map['hello_draw'], 0)

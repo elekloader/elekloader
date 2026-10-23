@@ -65,6 +65,23 @@ changes nothing else the unit does.
 
   `ev_tick`, `ev_key`, `ev_enc` and, nearly always, `ev_draw` run in the same
   task, so their handlers never interrupt one another.
+- **0.4: the frame's end and MIDI out** (`bus.s`). Three more events, each on
+  the instruction after bytes an octabam2elemod v1.0 mod patches, so those
+  files still link. Their sites are `jmp`s: each stub replays what it
+  displaced and goes back to stock itself.
+
+  | event | site (was) | when |
+  |---|---|---|
+  | `ev_frame_end` | 0x4000d9a6 (`movem.l (sp),d0-a6 ; lea 252(sp),sp`, then `rte`) | the frame interrupt's last point, every 16 samples, past TUNER's and USB audio's tail |
+  | `ev_midi_out` | 0x40010bd0 (`movea.l 28(sp),a2 ; tst.l 0x460ba978`), in midi_send past its prologue | each MIDI message the firmware sends |
+  | `ev_midi_out_rt` | 0x400108c4 (`move.w sr,d2 ; move.w #0x2700,sr`), in the priority sender past its wait | each realtime byte the firmware sends |
+
+  At `ev_frame_end` the interrupted task's EMAC state is already back. So,
+  after the handlers, the stub runs the interrupt's own restore of it
+  (0x4000d964..0x4000d980, from the interrupt's frame) again, and a handler
+  may use the EMAC there too. The MIDI-out events run where the sender
+  runs (a task or an interrupt). USB MIDI mirrors the DIN port's output
+  through them; so can a MIDI monitor or router.
 - **The draw gate** (`gate.s`). The OS composes the screen twice before the
   boot site, so before `.run` is in the reserve. The draw site therefore
   calls `core_draw_gate`, which `mod.json` places (`fixed`) in the last 24
@@ -79,12 +96,17 @@ bus hooks the same routines one instruction away from them:
 - the MIDI thread's dispatch call, where CC MAP repoints the CC entry of the
   table that call reads (0x400d64a0);
 - the frame interrupt before the EMAC state is put back, where TUNER and
-  the USB audio mods hook its tail (0x4000d99a, 0x4000d9a0);
+  the USB audio mods hook its tail (0x4000d99a, 0x4000d9a0); and from 0.4
+  its epilogue (0x4000d9a6), the instruction after them;
+- from 0.4, midi_send past the prologue USB MIDI patches (0x40010bc8), and
+  the priority sender past its wait, whose entry USB MIDI patches
+  (0x400108b0);
 - the sys task's tick, where TUNER and CC FEEDBACK hook the UI task's loop
   head and the key-repeat task (0x40056c72, 0x4005595c).
 
-So the 34 mods of irpina/octabam2elemod v1.0 link with 0.2 as they did with
-0.1. Their code moves up by the size of core's own (216 bytes, rounded to
+So the 34 mods of irpina/octabam2elemod v1.0 link with 0.2 and 0.4 as they did
+with 0.1 (checked for 0.4: each alone, and the shop's two largest
+combinations). Their code moves up by the size of core's own (216 bytes, rounded to
 their alignment), and the linker relocates it.
 
 `elekloader.sdk.octabam --bus` converts those modules' hooks onto the bus
