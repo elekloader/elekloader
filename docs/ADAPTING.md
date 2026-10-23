@@ -330,7 +330,30 @@ const struct core_projdata my_block = { OT_TAG('M', 'I', 'N', 'E'), sizeof my_by
   (`ot_file_open`, `ot_file_read`, `ot_file_write`, `ot_file_close`,
   `ot_file_copy`, `ot_mkdir`, `ot_project_dir`) are for there.
 - **Settings.** Core declares the `ot_settings` table (`struct ot_setting`)
-  for the settings companion.
+  for the settings companion (below).
+
+#### Settings on the Octatrack (settings 0.1)
+
+A mod declares a setting by contributing a pointer to a `struct ot_setting`
+to core's `ot_settings` table. The struct holds:
+- its tag and key, the identity under which the value is stored;
+- its kind: binary, option or number;
+- its scope: the card, or the project, optionally `| OT_SET_EARLY`;
+- its heading and label;
+- its range and option labels;
+- the mod's variable and its default;
+- an optional `changed()`.
+
+The mod reads its variable as it likes. With `mods/settings-ot` (id
+`settings`) in the build:
+- the MAIN MENU gets a fifth category, MODS, listing every mod's settings
+  under its heading, with the value at the right;
+- YES steps a value and an encoder turns it;
+- values are kept through core's card and project data;
+- early ones are also kept in battery RAM and set at `ev_boot_done`.
+
+Without the companion the variable keeps its default. mods/settings-ot/README.md has
+an example.
 
 A stock routine that returns a pointer returns it in d0. GCC's m68k ABI
 reads a returned pointer from a0, so declare such a routine as returning an

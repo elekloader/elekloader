@@ -39,7 +39,7 @@ Each entry is one stock routine that one or more mods hook themselves. Its
 - **a core event**: the core has nothing there yet. Build the event as
   [Growing the core](CORE-CONTRIBUTING.md) describes, sections 3 and 4.
 - **move onto the core**: the core or a companion (machine-pages, machines,
-  seq-events, dspbus, intercepts) hooks the same bytes as every site there, so the
+  seq-events, dspbus, intercepts, settings) hooks the same bytes as every site there, so the
   mods can use it in place of their own sites.
 - **some sites move onto the core, the rest need an event**: both of the
   above, in one routine.

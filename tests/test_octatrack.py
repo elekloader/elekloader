@@ -516,6 +516,44 @@ def test_the_store_probe_links():
     assert ln.tables['ot_settings'][1] == 0
 
 
+def test_the_settings_companion():
+    """mods/settings-ot: its two sites are the MAIN MENU root's rows pointer (the one reference to
+    the stock root rows) and its row count (4 -> 5); with core-ot 0.6 and the probe's three
+    settings it links, the settings are ot_settings' entries in order, and the root points at the
+    companion's rows. It needs core 0.6."""
+    import shutil
+    from elekloader.sdk import build
+    with open(os.path.join(ROOT, 'mods', 'settings-ot', 'mod.json')) as fh:
+        j = json.load(fh)
+    st, img = stock()
+    rows_ptr, count = j['sites']
+    assert (rows_ptr['addr'], rows_ptr['stock'], rows_ptr['op'], rows_ptr['target']) == \
+        ('0x400cbda4', '400cc698', 'ptr', 'ots_root_rows')
+    assert (count['addr'], count['stock'], count['op'], count['new']) == ('0x400cbd8c', '00000004', 'bytes', '00000005')
+    for s in j['sites']:
+        o = int(s['addr'], 16) - DEV.main_load
+        assert img[o:o + 4].hex() == s['stock'], s['addr']
+    assert img.count(struct.pack('>I', 0x400cc698)) == 1          # only the rows pointer
+    assert 0x400cbda4 - 0x400cbd8c == 0x18                        # the descriptor's rows field
+    need(SYX)
+    if not shutil.which(os.environ.get('ELEKLOADER_CROSS', DEV.toolchain['prefix']) + 'gcc'):
+        raise Skip('no m68k cross compiler')
+    with tempfile.TemporaryDirectory() as tmp:
+        core = elemod.load_any(build.build(os.path.join(ROOT, 'mods', 'core-ot'), SYX, tmp)[0])
+        sets = elemod.load_any(build.build(os.path.join(ROOT, 'mods', 'settings-ot'), SYX, tmp)[0])
+        probe = elemod.load_any(build.build(os.path.join(HERE, 'fixtures', 'octatrack-settings'), SYX, tmp)[0])
+        ln = link.link([core, sets, probe], img)
+    o = ln.layout['run_load'] + (ln.tables['ot_settings'][0] - DEV.ddr[0]) - DEV.main_load
+    assert struct.unpack('>4I', ln.image[o:o + 16]) == (ln.map['sts_s1'], ln.map['sts_s2'], ln.map['sts_s3'], 0)
+    assert ln.tables['core_carddata'][1] == 1 and ln.tables['core_projdata'][1] == 1
+    assert ln.tables['ot_sram'][1] == 1
+    o = 0x400cbda4 - DEV.main_load
+    assert struct.unpack('>I', ln.image[o:o + 4])[0] == ln.map['ots_root_rows']
+    o = 0x400cbd8c - DEV.main_load
+    assert struct.unpack('>I', ln.image[o:o + 4])[0] == 5
+    assert j['resources']['core'] == '0.6'
+
+
 def _c_defs(path):
     """name -> int for the `#define NAME 0x...u` lines of a C source"""
     import re

@@ -141,7 +141,7 @@ which those mods cannot be built together over, and, given that OS's stock
 file, sites in one stock routine. Each group it lists is a place where one
 core event could serve those mods. Of each mod only the newest version
 counts, and the core's own sites do not, nor its companions' (machine-pages,
-machines, seq-events, dspbus, intercepts).
+machines, seq-events, dspbus, intercepts, settings).
 
 ```bash
 python -m elekloader.sdk.coresites <folder of .elemod files> --stock Digitakt_OS1.53.syx [--json]

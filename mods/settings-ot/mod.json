@@ -1,0 +1,24 @@
+{
+ "id": "settings", "version": "0.1",
+ "license": "GPL-2.0-or-later",
+ "title": "Settings", "category": "Framework", "author": "irpina",
+ "description": "The settings of every Octatrack mod in one place: a fifth MAIN MENU category, MODS, lists each mod's settings under its name, with the value in the row (YES steps it, an encoder turns it), and keeps them on the card or with the project through core's data. A mod declares its settings in core's ot_settings table; without this companion they stay at their defaults.",
+ "device": "octatrack", "os": "1.40C",
+ "sources": ["settings.c"],
+ "cflags": ["-fno-tree-loop-distribute-patterns"],
+ "sites": [
+  {"addr": "0x400cbda4", "stock": "400cc698", "op": "ptr", "target": "ots_root_rows"},
+  {"addr": "0x400cbd8c", "stock": "00000004", "op": "bytes", "new": "00000005"}
+ ],
+ "contribute": [
+  {"to": "core_carddata", "order": 10, "data": "00000000", "relocs": [[0, "abs32", "sym:ots_card_block", 0]]},
+  {"to": "core_projdata", "order": 10, "data": "00000000", "relocs": [[0, "abs32", "sym:ots_proj_block", 0]]},
+  {"to": "ot_sram", "order": 10, "data": "00000000", "relocs": [[0, "abs32", "sym:ots_early_claim", 0]]}
+ ],
+ "subscribe": [
+  {"event": "ev_boot_done", "fn": "ots_settings_boot", "order": 10},
+  {"event": "ev_enc", "fn": "ots_settings_enc", "order": 10}
+ ],
+ "requires": ["core"],
+ "resources": {"core": "0.6", "names": ["menu:root", "carddata:SETC", "projdata:SETP", "cs1:SETE"]}
+}
