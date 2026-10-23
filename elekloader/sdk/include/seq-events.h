@@ -95,5 +95,9 @@ extern uint64_t sq_stored(int32_t track);
  * prepares the first step again at the end of this UI tick (ev_tick order 90), once whatever
  * asked */
 extern void sq_rearm(uint32_t tracks);
+/* The pattern buffer track's fire reads (0.2): in a fire handler, the one this fire is reading (at a
+ * pattern switch possibly the next pattern, not yet the active one); outside a fire, the one its last
+ * fire read; 0 before any. For per-pattern settings: a pattern is known by its buffer */
+extern const void *sq_fire_pattern(int32_t track);
 
 #endif

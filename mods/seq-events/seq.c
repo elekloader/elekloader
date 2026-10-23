@@ -115,6 +115,16 @@ void sq_tick_end(void *ctrl)
 
 /* The step load: the clock sees the real step, the handlers pick the step read. pat: the pattern
  * this fire reads. -> the step to read */
+static const uint8_t *volatile fire_pat[SQ_TRACKS];
+
+/* The pattern buffer track's fire reads: in a fire (an ev_fire_step, ev_gen_trig, ... handler), the one
+ * it is reading, which at a pattern switch can be the next pattern while the active pointer still names
+ * the old; outside a fire, the one its last fire read. 0 before any fire. (0.2) */
+const void *sq_fire_pattern(int32_t track)
+{
+    return (uint32_t)track < SQ_TRACKS ? (const void *)fire_pat[track] : 0;
+}
+
 int32_t sq_on_step(int32_t track, int32_t real, const uint8_t *pat)
 {
     struct sq_clock *ck;
@@ -123,6 +133,7 @@ int32_t sq_on_step(int32_t track, int32_t real, const uint8_t *pat)
     if ((uint32_t)track >= SQ_TRACKS || (uint32_t)real >= SQ_STEPS)
         return real;
     dev_fire_begin(track, pat);
+    fire_pat[track] = pat;
     ck = &sq_clock[track];
     if (ck->last != SQ_CLOCK_NONE && ((uint32_t)real < ck->last || clock_len[track] == 1))
         ck->parity ^= 1;                /* a wrap: the parity before the step */
