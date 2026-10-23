@@ -299,7 +299,8 @@ below was found again in 1.17.
     `PLACE` setting) and keeps these bytes stock.
   - The linker refuses any site that writes them, sdk.build refuses
     `fixed` code over them, and the build's verify checks them against
-    stock (tests/test_octatrack.py).
+    stock (tests/test_octatrack.py). sdk.octabam puts a cave octabam pins
+    there in `.run` (docs/ADAPTING.md, 4b).
 - **DSP code** (`dsp_payloads`, `dsp_areas`): the main OS uploads payload A
   (`0x400e2324`, 0x136cb bytes) to DSP core 0 and B (`0x400f59ef`, 0x12d05
   bytes) to core 1 at boot. Payload A's P memory is full, so the one area

@@ -326,6 +326,110 @@ def test_pinned_code_stays_where_it_is_pinned():
     assert any('the same bytes for 5407 as for the chip' in x for x in lines), lines
 
 
+# A cave pinned where the device keeps the bytes stock (SYNTH MACHINE's page, before octabam's
+# PLACE setting): emit's one poke jumps to it from the PLAYBACK page resolver, as SYNTH's does.
+KEPT = '''
+from types import SimpleNamespace as NS
+PIN = {pin:#x}
+RATIFIED = bytes.fromhex("{hex}")
+
+def emit(addr):
+    assert addr == PIN, "the cave is pinned"
+    return b"", ((0x40031ece, bytes.fromhex("20300c006002"),
+                  bytes.fromhex("4ef9") + addr.to_bytes(4, "big")),)
+
+CAVE = NS(label="kcave", cave_addr=PIN, pinned=RATIFIED, source="modules/{name}/kcave.s",
+          hook_addr=None, hook_stock=None, registers_formatter=None, emit=emit, defsyms=(),
+          cpu="5475", reference=lambda addr: RATIFIED, pool_base_literals=0)
+MODULE = NS(name="{name}", key="{key}", doc="a pinned cave", dsp=None, menu=None, params=(),
+            runtime=None, arena=None, overrides=(), cf_patches=(CAVE,), linked=(), detours=(),
+            symbol_refs=(), tables=(), pokes=(), requires=(), claims=None, category=None,
+            author="test")
+'''
+
+# Its pointers into itself are labels, so they move with it ...
+KCAVE_S = '''
+        .text
+        lea     kc_list,%a1
+        move.l  (%a1),%d0
+        jmp     0x40031ed6
+        .balign 4
+kc_list:
+        .long   kc_name, 0x400d31ae
+kc_name:
+        .ascii  "KEPT"
+'''
+
+# ... unless the source writes one as a number: that one would still point at its pin.
+KPIN_S = KCAVE_S.replace('.long   kc_name', '.long   0x400d24e4')
+
+
+def kept_checkout(tmp, mods):
+    """A checkout of caves pinned at the given addresses: {name: (pin, source)}. Each
+    manifest ratifies its source as linked at its pin, as octabam's do."""
+    root = os.path.join(tmp, 'octabam')
+    for rel, text in (('tools/remix/schema.py', ''), ('LICENSE', 'MIT, for the test\n')):
+        os.makedirs(os.path.dirname(os.path.join(root, rel)), exist_ok=True)
+        with open(os.path.join(root, rel), 'w') as fh:
+            fh.write(text)
+    for name, (pin, src) in mods.items():
+        d = os.path.join(root, 'modules', name)
+        os.makedirs(d)
+        with open(os.path.join(d, 'kcave.s'), 'w') as fh:
+            fh.write(textwrap.dedent(src))
+        raw = octabam._gnu_link(DEV, root, 'modules/%s/kcave.s' % name, pin, '5475', (),
+                                os.path.join(tmp, 'ratify', name))
+        with open(os.path.join(d, 'manifest.py'), 'w') as fh:
+            fh.write(textwrap.dedent(KEPT).format(pin=pin, hex=raw.hex(), name=name,
+                                                  key=name.upper()))
+    return octabam.Octabam(root)
+
+
+def test_a_cave_pinned_on_kept_bytes_moves_to_run():
+    """A cave octabam pins on bytes the device keeps stock goes in .run, as a floating cave:
+    its emit's jump is a jmp site against its label, and nothing is written at the pin. The
+    check links it at its pin to the ratified bytes and proves that only its pointers into
+    itself change when it moves. A source that writes its own address as a number is
+    refused by the check; a cave pinned just past the kept bytes stays fixed."""
+    img = stock()
+    tools()
+    (lo, hi, _why), = DEV.keep
+    with tempfile.TemporaryDirectory() as tmp:
+        ob = kept_checkout(tmp, {'kept': (lo, KCAVE_S), 'keptpin': (lo, KPIN_S),
+                                 'keptnext': (hi, KCAVE_S)})
+        plan, mod, lines = build_and_check(ob, 'kept', tmp)
+        j = plan['json']
+        assert 'fixed' not in j and b'.include "modules/kept/kcave.s"' in \
+            plan['files']['glue/ob_kept_kcave.s']
+        assert j['sites'] == [{'addr': '0x40031ece', 'stock': '20300c006002', 'op': 'jmp',
+                               'target': 'ob_kept_kcave', 'addend': 0}]
+        assert mod.symbols['ob_kept_kcave'] == ('.run', 0)
+        assert any('which octabam pins at 0x400d24d0, is in .run' in x for x in plan['notes'])
+        assert any('in .run, as octabam links it there; from its link at its pin 0x400d24d0 '
+                   '(the bytes the manifest ratifies), only its' in x for x in lines), lines
+        ln = link.link([elemod.load_any(core(tmp)), mod], img)
+        a = ln.map['octabam-kept:ob_kept_kcave']
+        o = 0x40031ece - DEV.main_load
+        assert ln.image[o:o + 6] == bytes.fromhex('4ef9') + a.to_bytes(4, 'big')
+        assert ln.image[lo - DEV.main_load:hi - DEV.main_load] == bytes(hi - lo)
+
+        plan = octabam.convert(ob, 'keptpin', img, DEV)
+        d = octabam.write(ob, plan, tmp)
+        path, _m = build.build(d, SYX, tmp)
+        try:
+            octabam.check(ob, plan, path, core(tmp), SYX, os.path.join(tmp, 'keptpin.check'))
+        except octabam.CheckError as e:
+            assert 'holds 0x400d24e4, inside itself at its pin, and does not move with it' in \
+                str(e), str(e)
+        else:
+            raise AssertionError('a cave that pins its own address was moved')
+
+        plan, mod, lines = build_and_check(ob, 'keptnext', tmp)
+        assert plan['json']['fixed'] == [{'source': 'modules/keptnext/kcave.s',
+                                          'addr': '0x%08x' % hi, 'symbol': 'ob_keptnext_kcave'}]
+        assert mod.symbols['ob_keptnext_kcave'] == ('abs', hi)
+
+
 def test_a_poke_into_relocatable_data_is_served_from_a_copy():
     """USB AUDIO OUT's poke of the device descriptor's class (0x400e2004, inside the
     protected bootloader copy): the mod serves its own copy through the descriptor's one
@@ -576,32 +680,45 @@ def test_real_modules_convert_and_check():
     them), defsyms with a ratified reference(), DRAM units with detours, a
     floating unit with symbol refs and pokes."""
     done = convert_all(['recorder-hold', 'rlen-plen', 'direct-jump', 'cc-map', 'tuner',
-                        'repitch', 'quantizer', 'lofi-amf-fix'])
+                        'repitch', 'quantizer', 'synth', 'lofi-amf-fix'])
     assert len(done['recorder-hold'].sites) == 3 and 'arena_base' in done['recorder-hold'].imports
-    # pinned code, at octabam's addresses: QUANTIZER's two units
+    # pinned code, at octabam's addresses: QUANTIZER's two units; SYNTH's page, pinned on the
+    # bytes the stock DELAY reads, in .run (below)
     assert {s['addr'] for s in done['quantizer'].sites} >= {0x400d2ca8, 0x400d2cb0}
+    assert done['synth'].symbols['ob_synth_synth_page'][0] == '.run'
     assert not done['lofi-amf-fix'].size('.run') and len(done['lofi-amf-fix'].sites) == 2
     # the category as octabam titles it for people, not its enum value
     assert done['tuner'].doc['category'] == 'Machines and the sequencer'
     assert done['lofi-amf-fix'].doc['category'] == 'Fixes'
 
 
-def test_real_synth_is_refused_over_the_kept_bytes():
+def test_real_synth_page_moves_off_the_kept_bytes():
     """SYNTH MACHINE, before octabam's PLACE setting, pins its page cave at 0x400d24d0, over
-    the 16 bytes the stock DELAY reads (the profile's `keep`, octabam #771): it is refused,
-    with the range and the reason."""
+    the 16 bytes the stock DELAY reads (the profile's `keep`, octabam #771). The page goes in
+    .run, as octabam's PLACE = DRAM puts it in its runtime: the resolver at 0x40031ece jumps
+    to it, the check links it at its pin to the author's 1,812 ratified bytes and proves only
+    its pointers into itself move, and the kept bytes stay stock."""
     ob, img = real(), stock()
     m = ob.modules.get('synth')
     if m is None or not any(c.cave_addr == 0x400d24d0 for c in m.cf_patches):
         raise Skip('this checkout\'s SYNTH MACHINE does not pin a cave at 0x400d24d0')
-    (lo, hi, why), = DEV.keep
-    try:
-        octabam.convert(ob, 'synth', img, DEV)
-    except octabam.Refused as e:
-        assert 'its cave "synth page" is pinned at 0x400d24d0, inside 0x400d24d0-0x400d24e0, ' \
-               'which stays stock on the Octatrack: %s' % why in str(e), str(e)
-    else:
-        raise AssertionError('SYNTH MACHINE converted with its page over the kept bytes')
+    tools()
+    (lo, hi, _why), = DEV.keep
+    with tempfile.TemporaryDirectory() as tmp:
+        plan, mod, lines = build_and_check(ob, 'synth', tmp)
+        ln = link.link([elemod.load_any(core(tmp)), mod], img)
+    assert 'fixed' not in plan['json']
+    assert not [s for s in mod.sites if s['addr'] < hi and lo < s['addr'] + s['len']]
+    assert [s for s in plan['json']['sites'] if s['addr'] == '0x40031ece'] == [
+        {'addr': '0x40031ece', 'stock': '20300c006002', 'op': 'jmp',
+         'target': 'ob_synth_synth_page', 'addend': 0}]
+    assert any(x.startswith('cave "synth page": 1812 bytes at ') and 'in .run' in x
+               and 'from its link at its pin 0x400d24d0 (the bytes the manifest ratifies)' in x
+               for x in lines), lines
+    a = ln.map['octabam-synth:ob_synth_synth_page']
+    o = 0x40031ece - DEV.main_load
+    assert ln.image[o:o + 6] == bytes.fromhex('4ef9') + a.to_bytes(4, 'big')
+    assert ln.image[lo - DEV.main_load:hi - DEV.main_load] == bytes(hi - lo)
 
 
 def test_real_usb_midi_with_a_bare_metal_assembler():
@@ -784,8 +901,9 @@ def test_real_modules_on_the_bus():
 
 
 def test_real_modules_on_the_intercepts():
-    """--intercepts: SCALE QUANTIZER's 17 detours at the intercepts' sites are left stock and
-    become records {0, the detour's label} in the events' tables; each mod requires intercepts, is versioned <commit>-intercepts and passes the check linked
+    """--intercepts: SCALE QUANTIZER's 17 detours and the SYNTH MACHINE's 2 at the intercepts'
+    sites are left stock and become records {0, the detour's label} in the events' tables;
+    each mod requires intercepts, is versioned <commit>-intercepts and passes the check linked
     with mods/intercepts-ot, which proves each site is the event's jump to its stub and the
     table holds the record. A module with no detour there converts exactly as without
     --intercepts, and the check refuses a record without the intercepts."""
@@ -795,7 +913,7 @@ def test_real_modules_on_the_intercepts():
     tools()
     out = tempfile.mkdtemp()
     icpt, _m = build.build(octabam.INTERCEPTS_DIR, SYX, os.path.join(out, 'intercepts'))
-    want = {'quantizer': 17, 'tuner': 0}
+    want = {'quantizer': 17, 'synth': 2, 'tuner': 0}
     for n, count in want.items():
         plan = octabam.convert(ob, n, img, DEV, intercepts=True)
         assert len(plan['intercepts']) == count, (n, len(plan['intercepts']))
@@ -814,7 +932,7 @@ def test_real_modules_on_the_intercepts():
         lines = octabam.check(ob, plan, path, core(out), SYX, os.path.join(out, n + '.check'),
                               intercepts_path=icpt)
         assert sum('intercepts every call' in x for x in lines) == count, lines
-        if n == 'quantizer':
+        if n == 'synth':
             try:
                 octabam.check(ob, plan, path, core(out), SYX, os.path.join(out, 'nt.check'))
             except octabam.CheckError as e:

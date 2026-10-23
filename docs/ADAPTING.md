@@ -2070,10 +2070,9 @@ What does not convert, and why:
   inside data the device marks `relocatable` (below). The 16 KB below
   `0x400e21e0` stay stock; octabam also places the bootstrap copy there
   (`~0x400de7dc`).
-- **Writes into bytes the device keeps stock** (`keep`), and caves pinned
+- **Writes into bytes the device keeps stock** (`keep`), and units pinned
   there. These are the 16 bytes at `0x400d24d0`, which the stock DELAY
-  reads (octabam #771). SYNTH MACHINE before octabam's `PLACE` setting
-  (363861e) pins its page cave there, so it is refused.
+  reads (octabam #771). A cave pinned there goes in `.run` instead (below).
 - **Modules that serve DSP modules only.** These are MODE DEFAULTS, RIG
   HOSTS and TEMPO BUS (`SERVES_DSP` in the converter, with the reasons).
   Converted alone, they would be inert, or they would point parts at
@@ -2092,6 +2091,19 @@ Some differences from an octabam build, by design:
 - **Claims** (Part window, SRAM) become one named resource per 16-byte
   block. Overlapping claims share a name, so the linker refuses the pair,
   as octabam's ledger does for MIDI SCENES and SCENES P2.
+- **A cave pinned on bytes the device keeps stock** goes in `.run`, as a
+  floating cave would. SYNTH MACHINE before octabam's `PLACE` setting
+  (363861e) pins its page cave at `0x400d24d0`; octabam's own fix, `PLACE`
+  = DRAM, links the same `page.s` into its runtime.
+  - Emit's pokes are taken at the pin. One that holds an address in the
+    cave becomes a `jmp`/`jsr`/`ptr` site against it: SYNTH's resolver at
+    `0x40031ece` jumps to the page in `.run`.
+  - The check links the source at its pin, where it must equal the bytes
+    the manifest ratifies. It then proves that the copy in `.run` differs
+    from that only in pointers into itself, moved by the distance. A word
+    that points into the cave at its pin and stays put is an address the
+    source pins, and the check refuses it.
+  - The bytes at the pin stay stock.
 - **A `jmp` detour** whose six bytes end inside an instruction is
   nop-padded to that instruction's end.
 - **A poke into relocatable data** (the device profile's `relocatable`) is

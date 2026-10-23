@@ -25,6 +25,7 @@ these:
 |---|---|
 | CavePatch, floating, with a source | the source in .run, under a glue label; its hook a `jsr` site |
 | CavePatch, pinned, with a source | `fixed` code at its address, the label its first byte |
+| CavePatch, pinned on bytes the device keeps stock (`keep`), with a source | the source in .run under a glue label, as a floating cave; emit's pokes are taken at the pin, and a poke that holds an address in the cave is a jsr/jmp/ptr site against the label |
 | CavePatch, pinned, writing no bytes (no source) | its pokes only |
 | CavePatch.emit's pokes | sites; a poke that holds a floating cave's address is a jsr/jmp/ptr site against it |
 | CavePatch.defsyms | the assembler's --defsym, with the manifest's values |
@@ -48,9 +49,9 @@ Anything else refuses the module, with the reason:
 - DSP code or an FX menu entry (only ColdFire-only modules convert);
 - a cave or unit pinned outside the device's free image areas;
 - a write into a protected range, other than a poke wholly inside relocatable data;
-- a write into bytes the device keeps stock (`keep`), or a cave pinned there: on the
-  Octatrack the 16 bytes at 0x400d24d0 the stock DELAY reads, where SYNTH MACHINE pins its
-  page before octabam's PLACE setting;
+- a write into bytes the device keeps stock (`keep`: on the Octatrack the 16 bytes at
+  0x400d24d0 the stock DELAY reads), or a unit pinned there (a cave pinned there whose length
+  the manifest gives goes in .run, above: SYNTH MACHINE's page before octabam's PLACE setting);
 - a cave with no source that writes bytes of its own;
 - a formatter registered on another module's knob (a DSP module's);
 - a loader-appended Runtime (Octakit), an ArenaReserve, or a bridge over a
@@ -94,6 +95,10 @@ DEFAULTS), the converted mod keeps the manifest's own value.
   are counted and moved as octabam does.
 - Those bytes must equal the manifest's ratified ones (`reference(addr)`,
   or `pinned`), as octabam requires.
+- A cave moved off kept bytes is also linked at its pin, where it must equal the ratified
+  bytes. Its link in .run may differ from that only in pointers into itself, moved by the
+  distance: a word that points into it at its pin and stays put is an address its source
+  pins, and refuses it. The bytes at the pin must be stock.
 - Every site must hold what octabam would write, computed from the final
   addresses (hooks, emit's pokes, detours, symbol refs, pokes, tables).
 - The whole of the mod's RAM and its fixed code must equal GNU ld's link of
@@ -643,6 +648,18 @@ def convert(ob, name, image, dev, rx=None, bus=False, intercepts=False):
         s.update(kw)
         sites.append(s)
 
+    def moving_poke(c, sym, pa, stock, w, i, d):
+        """A poke whose word at i holds the cave's address + d -> a site against the cave."""
+        if i == 0 and len(w) == 4:
+            site(pa, stock, op='ptr', target=sym, addend=d)
+        elif i == 2 and w[:2] in OPS.values() and w[6:] == NOP * ((len(w) - 6) // 2):
+            site(pa, stock, op='jsr' if w[:2] == OPS['jsr'] else 'jmp', target=sym, addend=d)
+        elif i == 2 and len(w) == 6 and w[:2] == stock[:2]:
+            site(pa, stock, op='keep2', target=sym, addend=d)
+        else:
+            raise Refused('the cave "%s" emits a poke at 0x%08x that elekloader cannot '
+                          'express (%s)' % (c.label, pa, w.hex()))
+
     def place(what, at):
         for lo, hi, why in dev.keep:
             if lo <= at < hi:
@@ -663,12 +680,19 @@ def convert(ob, name, image, dev, rx=None, bus=False, intercepts=False):
             if ob.by_key[k] not in names_ and mod_id(ob.by_key[k]) not in requires:
                 requires.append(mod_id(ob.by_key[k]))
 
-        # caves: floating ones in .run under a label, pinned ones fixed; hooks; emit's pokes
+        # caves: floating ones in .run under a label, pinned ones fixed (or in .run, where the
+        # device keeps the bytes they are pinned on); hooks; emit's pokes
         for c in m.cf_patches:
             sym = 'ob_%s_%s' % (ms, _slug(c.label))
+            pin, span = None, 0             # a pinned cave moved off kept bytes: its pin, length
+            if c.source and c.cave_addr is not None:
+                span = len(c.pinned or (ob.call(c.reference, c.cave_addr) if c.reference else b''))
+                if span and any(c.cave_addr < hi and lo < c.cave_addr + span
+                                for lo, hi, _w in dev.keep):
+                    pin = c.cave_addr
             if not c.source:                # writes nothing of its own: only its pokes
                 sym = None
-            elif c.cave_addr is not None:
+            elif c.cave_addr is not None and pin is None:
                 place('its cave "%s"' % c.label, c.cave_addr)
                 fixed.append({'source': c.source, 'addr': '0x%08x' % c.cave_addr,
                               'symbol': sym})
@@ -678,6 +702,13 @@ def convert(ob, name, image, dev, rx=None, bus=False, intercepts=False):
                                '        .text\n        .globl  %s\n%s:\n        .include "%s"\n'
                                % (ob.commit, m.key, c.label, sym, sym, c.source)).encode()
                 sources.append(glue)
+            if pin is not None:
+                lo, hi, why = [k for k in dev.keep if pin < k[1] and k[0] < pin + span][0]
+                notes.append('its cave "%s" (%d bytes), which octabam pins at 0x%08x, is in .run, '
+                             'because the %s keeps 0x%08x-0x%08x stock: %s. The check links its '
+                             'source at the pin to the bytes the manifest ratifies, and proves '
+                             'that only its pointers into itself change when it moves'
+                             % (c.label, span, pin, dev.name, lo, hi, why))
             for dn, v in c.defsyms:
                 if defsym.get(dn, v) != v:
                     raise Refused('two caves give %s different values' % dn)
@@ -697,7 +728,13 @@ def convert(ob, name, image, dev, rx=None, bus=False, intercepts=False):
                 for pa, exp, w in pk:
                     if _stock(image, dev, pa, len(exp)) != exp:
                         raise Refused('the poke at 0x%08x is not stock' % pa)
-                    site(pa, _stock(image, dev, pa, len(w)), op='bytes', new=w.hex())
+                    stock = _stock(image, dev, pa, len(w))
+                    at = [i for i in range(0, len(w) - 3, 2)
+                          if pin is not None and pin <= _u32(w, i) < pin + span]
+                    if at:                  # it holds the pinned cave's address: it moves too
+                        moving_poke(c, sym, pa, stock, w, at[0], _u32(w, at[0]) - pin)
+                    else:
+                        site(pa, stock, op='bytes', new=w.hex())
             elif c.emit is not None:
                 (b1, p1), (b2, p2) = [ob.call(c.emit, a) for a in EMIT_AT]
                 if b1 or b2:
@@ -736,22 +773,11 @@ def convert(ob, name, image, dev, rx=None, bus=False, intercepts=False):
                     at = [i for i in range(0, len(w1) - 3, 2)
                           if w1[:i] == w2[:i] and w1[i + 4:] == w2[i + 4:]
                           and _u32(w1, i) - EMIT_AT[0] == _u32(w2, i) - EMIT_AT[1]]
-                    if at:
-                        i, d = at[0], _u32(w1, at[0]) - EMIT_AT[0]
-                        if i == 0 and len(w1) == 4:
-                            site(pa, stock, op='ptr', target=sym, addend=d)
-                            continue
-                        if i == 2 and w1[:2] in OPS.values() \
-                                and w1[6:] == NOP * ((len(w1) - 6) // 2):
-                            site(pa, stock, op='jsr' if w1[:2] == OPS['jsr'] else 'jmp',
-                                 target=sym, addend=d)
-                            continue
-                        if i == 2 and len(w1) == 6 and w1[:2] == stock[:2]:
-                            site(pa, stock, op='keep2', target=sym, addend=d)
-                            continue
-                    raise Refused('the cave "%s" emits a poke at 0x%08x that elekloader cannot '
-                                  'express (%s)' % (c.label, pa, w1.hex()))
-            caves.append({'module': n, 'label': c.label, 'sym': sym})
+                    if not at:
+                        raise Refused('the cave "%s" emits a poke at 0x%08x that elekloader '
+                                      'cannot express (%s)' % (c.label, pa, w1.hex()))
+                    moving_poke(c, sym, pa, stock, w1, at[0], _u32(w1, at[0]) - EMIT_AT[0])
+            caves.append({'module': n, 'label': c.label, 'sym': sym, 'pin': pin})
 
         # linked units; a generated include, for this mod's modules, beside each that has one
         for u in m.linked:
@@ -1154,6 +1180,41 @@ def _gnu_link(dev, root, src, at, cpu, defsyms, work, sections=('.text',), looku
         return fh.read()
 
 
+def _moves(label, gp, pin, gb, at):
+    """A cave's source linked at its pin (gp) and where it runs (gb, at `at`) -> the offsets of
+    its pointers into itself, which move with it. Refused (CheckError) if any other byte
+    differs, or if a word that points into it at its pin stays put: an address its source
+    pins, which would still point at the bytes it left."""
+    n = len(gp)
+    if len(gb) != n:
+        raise CheckError('"%s": %d bytes at its pin 0x%08x, %d at 0x%08x' % (label, n, pin,
+                                                                              len(gb), at))
+    words = [o for o in range(0, n - 3, 2) if gp[o:o + 4] != gb[o:o + 4]
+             and 0 <= _u32(gp, o) - pin < n and _u32(gb, o) - at == _u32(gp, o) - pin]
+    cover = {o + k for o in words for k in range(4)}
+    bad = [o for o in range(n) if gp[o] != gb[o] and o not in cover]
+    if bad:
+        raise CheckError('"%s": at 0x%08x its byte +%d differs from its link at its pin '
+                         '0x%08x, and is not part of a pointer into itself' % (label, at, bad[0],
+                                                                              pin))
+    stuck = [o for o in range(0, n - 3, 2)
+             if gp[o:o + 4] == gb[o:o + 4] and pin <= _u32(gp, o) < pin + n]
+    if stuck:
+        raise CheckError('"%s": the word at +%d holds 0x%08x, inside itself at its pin, and does '
+                         'not move with it: its source pins that address'
+                         % (label, stuck[0], _u32(gp, stuck[0])))
+    return words
+
+
+def _moved(w, pin, n, at):
+    """An emit poke for a cave pinned at `pin` (n bytes), with every word that points into it
+    pointing at the same place in it at `at`."""
+    out = bytearray(w)
+    for i in [i for i in range(0, len(w) - 3, 2) if pin <= _u32(w, i) < pin + n]:
+        out[i:i + 4] = (at + _u32(w, i) - pin).to_bytes(4, 'big')
+    return bytes(out)
+
+
 _DSPBUS = []
 
 
@@ -1230,16 +1291,23 @@ def check(ob, plan, mod_path, core_path, stock_path, work, dspbus_path=None, int
                         raise CheckError('"%s": the poke at 0x%08x' % (c.label, pa))
                 lines.append('"%s": %d pokes, as octabam writes them' % (c.label, len(pk)))
                 continue
-            a = sym(pc[i]['sym'])
-            if c.cave_addr is not None and a != c.cave_addr:
+            a, pin = sym(pc[i]['sym']), pc[i].get('pin')
+            if pin is None and c.cave_addr is not None and a != c.cave_addr:
                 raise CheckError('"%s" is at 0x%08x, not at 0x%08x' % (c.label, a, c.cave_addr))
+            if pin is not None and not dev.ddr[0] <= a < dev.ddr[1]:
+                raise CheckError('"%s" is at 0x%08x, not in the reserve' % (c.label, a))
             gb = _gnu_link(dev, ob.root, c.source, a, c.cpu, c.defsyms,
                            os.path.join(work, 'cave_%s_%d' % (_slug(mn), i)), lookup=known)
-            ref = (ob.call(c.reference, a) if c.reference is not None
-                   else c.pinned if c.emit is None else ob.call(c.emit, a)[0])
-            if ref and gb != ref:
+            rat = a if pin is None else pin     # where the manifest's ratified bytes are for
+            gr = gb if pin is None else _gnu_link(
+                dev, ob.root, c.source, pin, c.cpu, c.defsyms,
+                os.path.join(work, 'pin_%s_%d' % (_slug(mn), i)), lookup=known)
+            ref = (ob.call(c.reference, rat) if c.reference is not None
+                   else c.pinned if c.emit is None else ob.call(c.emit, rat)[0])
+            if ref and gr != ref:
                 raise CheckError('"%s": its source at 0x%08x no longer matches the bytes the '
-                                 'manifest ratifies' % (c.label, a))
+                                 'manifest ratifies' % (c.label, rat))
+            moved = _moves(c.label, gr, pin, gb, a) if pin is not None else ()
             want = bytearray(gb)
             for h in plan.get('bus', ()):          # its "not mine", moved to the bus glue
                 if h['kind'] == 'cc' and h['entry'] == pc[i]['sym']:
@@ -1264,11 +1332,24 @@ def check(ob, plan, mod_path, core_path, stock_path, work, dspbus_path=None, int
                 if img(c.hook_addr, n) != OPS['jsr'] + a.to_bytes(4, 'big') + NOP * ((n - 6) // 2):
                     raise CheckError('"%s": the hook at 0x%08x' % (c.label, c.hook_addr))
             if c.emit is not None:
-                for pa, _exp, w in ob.call(c.emit, a)[1]:
+                for pa, _exp, w in ob.call(c.emit, rat)[1]:
                     if pa in busy:
                         continue                # left stock: the bus (below)
+                    if pin is not None:
+                        w = _moved(w, pin, len(gb), a)
                     if img(pa, len(w)) != w:
                         raise CheckError('"%s": the poke at 0x%08x' % (c.label, pa))
+            if pin is not None:
+                if img(pin, len(gb)) != _stock(image, dev, pin, len(gb)):
+                    raise CheckError('"%s": the bytes it is pinned on, at 0x%08x, are not stock'
+                                     % (c.label, pin))
+                lines.append('cave "%s": %d bytes at 0x%08x in .run, as octabam links it there; '
+                             'from its link at its pin 0x%08x%s, only its %d pointer(s) into '
+                             'itself differ; the bytes at its pin are stock%s'
+                             % (c.label, len(gb), a, pin, ' (the bytes the manifest ratifies)'
+                                if ref else '', len(moved),
+                                ', %d arena-base literal(s) moved' % len(hits) if hits else ''))
+                continue
             lines.append('cave "%s": %d bytes at 0x%08x, as octabam links it%s%s'
                          % (c.label, len(gb), a, ' and as ratified' if ref else '',
                             ', %d arena-base literal(s) moved' % len(hits) if hits else ''))
