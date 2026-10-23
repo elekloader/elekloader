@@ -257,6 +257,48 @@ the call, or its entry is 0, stock runs.
 A detour you already have converts unchanged: its label is the entry, and
 claims 0. `sdk.octabam --intercepts` does this for octabam's modules (4b).
 
+### USB functions on the Octatrack (usb 0.1)
+
+`mods/usb-ot` is a companion beside core-ot 0.3.1 that owns the stock USB
+device stack's places once. A USB function (USB MIDI, USB audio, ...) is a
+mod of its own, and several combine in one build (mods/usb-ot/README.md).
+On its own usb-ot changes nothing: every reply is stock's. A function
+contributes a pointer to its record and claims its endpoints:
+
+```json
+"contribute": [{"to": "ot_usb_functions", "order": 20, "data": "00000000",
+                "relocs": [[0, "abs32", "sym:my_function", 0]]}],
+"requires": ["core", "usb"],
+"resources": {"names": ["usb:ep3-in"]}
+```
+
+The record is `struct ot_usb_function` (`#include "octatrack/usb.h"`):
+
+| field | what |
+|---|---|
+| `abi` | `OT_USB_ABI` |
+| `interfaces` | how many interfaces it adds; usb-ot numbers them after mass storage's 0, in table order |
+| `iad_class`, `iad_subclass`, `iad_protocol` | an interface association before them (class 0: none); with one in the build the device class becomes EF/02/01 |
+| `endpoints` | its bits in the ENDPT* registers (`OT_USB_EP_OUT(n)`, `OT_USB_EP_IN(n)`): CLEAR_FEATURE and completions go by them |
+| `descriptors(out, first, speed)` | writes its interface and endpoint descriptors (no association) for its first interface number `first`, at `speed` (`OT_USB_FS`, `OT_USB_HS`); returns their length. Called at the controller's init, once per configuration |
+| `init()` | the controller's init, after the composition |
+| `configured(speed)` | SET_CONFIGURATION: bring its endpoints up |
+| `down()` | a bus reset, a session end (the cable pulled), and before `configured` |
+| `set_interface(rel, alt)`, `get_interface(rel)` | its interface `rel` (0 = its first); a negative return STALLs. Without them alt 0 is the only one |
+| `setup(pkt)` | a class or vendor request for it (by interface or endpoint, or any for the device): return >0 once it sent or ACKed |
+| `irq(complete)` | its endpoints' completions, from the USB interrupt; clear the bits it takes in `OT_USB_ENDPTCOMPLETE` |
+
+usb-ot exports `ot_usb_speed`, `ot_usb_first_interface`, `ot_usb_flush`
+(a bounded flush, then the completions cleared), `ot_usb_ack`,
+`ot_usb_stall`, `ot_usb_send(len, data)` (EP0 data, at most wLength) and
+`ot_usb_irq_off` / `ot_usb_irq_restore`. Memory the controller reads or
+writes must be reached through `OT_USB_UNCACHED(p)`. EP0 is usb-ot's and
+EP1 is mass storage's. `mods/usb-midi-ot` is the example: two interfaces
+under an association, EP2 both ways.
+
+The USB files of irpina/octabam2elemod v1.0 patch these places themselves,
+so the linker refuses usb-ot beside them.
+
 ### SRC machines (core 2.1, Digitakt mk1)
 
 The Digitakt mk1 has four SRC machines: 0 ONESHOT, 1 WERP, 2 REPITCH and
