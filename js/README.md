@@ -1,7 +1,7 @@
 # elekloader in TypeScript
 
 elekloader's mod manager as a TypeScript package with no dependencies, for web pages and workers. It covers:
-- Elektron OS files: the Digitakt mk1 and II, the Digitone mk1, the Octatrack, the Analog Rytm MKII and the Analog Four MKII;
+- Elektron OS files: the Digitakt mk1 and II, the Digitone mk1 and II, the Octatrack, the Analog Rytm MKII and the Analog Four MKII;
 - the `.elemod` checks and the linker;
 - the build with its verification;
 - the web page's bridge.

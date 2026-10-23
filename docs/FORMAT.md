@@ -208,7 +208,7 @@ The linker places, in the area the claiming mod frees, every DSP section
 the payload's words in the image. Nothing else about the build changes: a
 set of mods without DSP code links to the same bytes as before.
 
-## The hook bus (Digitakt mk1, Digitone mk1, Digitakt II, Analog Rytm MKII, Analog Four MKII)
+## The hook bus (Digitakt mk1, Digitone mk1, Digitakt II, Digitone II, Analog Rytm MKII, Analog Four MKII)
 
 This is a convention between mods for these devices, not a rule of the
 loader. The table gives the Digitakt mk1 1.53's sites, which 1.54 has at
@@ -229,7 +229,12 @@ and `core_projdata` (project data); 2.2 the event `ev_hold` and the table
 0x40032b3a, 0x40033d94, 0x40033dde and 0x400a5eac, a Digitakt II-only
 `ev_personalize` (0x4009e2a2, the PERSONALIZE menu, `void f(menu)`), and no
 render events (its audio renders on the DSP). It declares the `.fast` copy table itself,
-`core_fast`, and copies it on the first `ev_tick` (`mods/core/fast.s`).
+`core_fast`, and copies it on the first `ev_tick` (`mods/core/fast.s`). The Digitone
+II 1.12's core (core-dn2 0.1, experimental) has the same six UI events at
+0x4002e464, 0x4002e4ca, 0x4002f20c, 0x4002f256, 0x4009ff88 and 0x400987a2,
+no render events and no `.fast` table (SRAM is not qualified there).
+It also provides `ev_sysex`, a MIDI-task observer before stock
+routing; its contract is in ADAPTING.md, "Remote panel input and SysEx".
 The Analog Rytm MKII's core (core-ar2) has `ev_tick`, `ev_draw`,
 `ev_key`, `ev_enc`, `ev_settings`, `ev_render_in` and `ev_render_out`, at
 0x400a2bee, 0x400a2c56, 0x400a47cc, 0x400a4816, 0x400db87e, 0x4011fb02 and

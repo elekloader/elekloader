@@ -25,6 +25,7 @@ export type Device = {
   stage: number | null                          // null: unknown, so the in-place unpack is not simulated
   flashAt: number
   flashLimit: number
+  updateMax: number | null                      // decoded ELE3 update bytes: 8-byte preamble + container
   trailer: null | 'hmac'
   isa: 'coldfire'
   hmacKeyFrom: [number, string] | null          // for 'hmac': the section and seed the key is derived from
@@ -54,7 +55,7 @@ const rel = (version: string, syxSha256: string, mainSha256: string, mainLen: nu
 const base = {
   mainSection: 3, mainLoad: 0x40000400, isa: 'coldfire' as const, hmacKeyFrom: null, container: 'ele3' as const,
   versionLen: 4, versionAt: 0x14, versionOptional: false, protected: [], relocatable: [], blobMax: null, sramCode: [0, 0] as Range, coreDdr: [] as [string, Range][], slotClaims: [] as [string, number, number, string][], fastTable: '',
-  imageFree: [], reserve: null, dspPayloads: {}, dspAreas: [], trailer: null,
+  imageFree: [], reserve: null, dspPayloads: {}, dspAreas: [], trailer: null, updateMax: null,
 }
 
 export const DIGITAKT_MK1: Device = {
@@ -184,8 +185,23 @@ export const ANALOG_FOUR_MK2: Device = {
     + 'then send the stock .syx over MIDI DIN (not USB)',
 }
 
+export const DIGITONE_MK2: Device = {
+  ...base,
+  updateMax: 0x200000,                           // conservative USB cap, measured on a unit; not found in code
+  key: 'digitone-mk2', name: 'Digitone II', sysexId: 0x15,
+  releases: [
+    rel('1.12', '7e5b8a733d4ab1fdf7e5d22757f7d8eddaa3cbf71d0858874a791844c02ceb35',
+      'a098f620019b2ad38fd7e0397df39501fb1cf6bc26d0283915f34c49446fdf1a', 3196288),
+  ],
+  stage: 0x40400000, flashAt: 0x80000, flashLimit: 0x380000, trailer: 'hmac', hmacKeyFrom: [2, 'Multiplier'],
+  areas: { ddr: [0x47f00000, 0x47f40000] },
+  ddr: [0x47f00000, 0x47f40000],
+  recovery: 'hold FUNC while powering on for the STARTUP menu, press TRIG 4 (OS UPGRADE), '
+    + 'then send the stock .syx over MIDI (not USB)',
+}
+
 const DEVICES: Device[] = [DIGITAKT_MK1, DIGITAKT_MK2, DIGITONE_MK1, OCTATRACK, MODEL_CYCLES, MODEL_SAMPLES,
-  ANALOG_RYTM_MK2, ANALOG_FOUR_MK2]
+  ANALOG_RYTM_MK2, ANALOG_FOUR_MK2, DIGITONE_MK2]
 
 export const devices = (): Device[] => DEVICES
 

@@ -188,7 +188,8 @@
 cd elekloader
 python tests/test_units.py</code></pre></li>
         <li>Copy the template, a complete mod that draws a small square in the corner of every screen. For the
-          Digitakt II start from <code>examples/hello-marker-dt2</code>, for the Octatrack <code>hello-marker-ot</code>,
+          Digitakt II start from <code>examples/hello-marker-dt2</code>, for the Digitone II <code>hello-marker-dn2</code>,
+          for the Octatrack <code>hello-marker-ot</code>,
           for the Models <code>hello-marker-model</code>:
           <pre><code>cp -r examples/hello-marker my-mod</code></pre></li>
         <li>Give it your own <code>id</code> in <code>my-mod/mod.json</code> (lowercase; it also prefixes your global
@@ -249,7 +250,7 @@ python -m elekloader.patch --stock Digitakt_OS1.53.syx --mod mods/core/out/core-
       <h2>Versions</h2>
       <p>Each core keeps everything the one before it had, so a mod built for an older core links with the newest,
         and a build takes the newest: core 4.x on the Digitakt mk1, core-dn1 4.x on the Digitone mk1, core-ot 0.3.x on
-        the Octatrack. The Digitakt II, the Analog Rytm MKII, the Analog Four MKII and the Models have early cores (the tick, the screen,
+        the Octatrack. The Digitakt II, the Digitone II (experimental), the Analog Rytm MKII, the Analog Four MKII and the Models have early cores (the tick, the screen,
         keys and encoders) with a lot left to add.</p>
       <h2>Growing it</h2>
       <p>Every event the core has came from a mod that needed it. When yours needs something the core lacks, build
@@ -312,13 +313,14 @@ python -m elekloader.patch --stock Digitakt_OS1.53.syx --mod mods/core/out/core-
         <li>Add your build as a firmware of its own to play it from the panel, or from a script with
           <code>digiemu-console.exe --add FILE.syx</code>.</li>
       </ul>
-      <p>The Octatrack, the Digitakt II, the Analog Rytm MKII and the Analog Four MKII aren't emulated: there, test on a unit.</p>
+      <p>digiemu does not support the Octatrack, the Digitakt II, the Digitone II, the Analog Rytm MKII or the Analog Four MKII: there, test on a unit.</p>
       <h2>On a unit</h2>
       <p>Send your <code>.syx</code> with Elektron Transfer like any OS update
         (<a href="https://github.com/irpina/elekloader/blob/main/docs/BUILDING.md#flash-it" rel="noreferrer" target="_blank">how to flash</a>).
-        The bootloader is never changed, so the stock OS file always gets the unit back: on a Digitakt mk1, Digitakt II
-        or Digitone mk1, hold <strong>FUNC</strong> while powering on and press <strong>TRIG 4</strong> for OS UPGRADE,
-        then send the stock file; on an Octatrack, hold <strong>FUNC</strong> and press <strong>TRIG 3</strong>, and send
+        The bootloader is never changed, so the stock OS file always gets the unit back: on a Digitakt mk1, Digitakt II,
+        Digitone mk1 or Digitone II, hold <strong>FUNC</strong> while powering on and press <strong>TRIG 4</strong> for OS UPGRADE,
+        then send the stock file (on the Digitakt II and Digitone II, over MIDI DIN, not USB);
+        on an Octatrack, hold <strong>FUNC</strong> and press <strong>TRIG 3</strong>, and send
         it over 5-pin MIDI (<a href="https://github.com/irpina/elekloader/blob/main/docs/BUILDING.md#recovery" rel="noreferrer" target="_blank">recovery</a>).</p>
       <p class="next">Back to the <a href="#contribute">to-do list and the leaderboard</a></p>
     </article>

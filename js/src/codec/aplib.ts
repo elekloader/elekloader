@@ -1,16 +1,17 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Ported from elekloader's codec/aplib.py (GPL-2.0-or-later; vendored there from digikit, dt2/aplib.py, by Em D,
 // with the match-finder and the compressed output by irpina). It writes the same bytes as the Python for any
-// input: the same greedy match-finder, ties broken the same way, the same terminator. See aplib.py for the
-// format and how each rule was confirmed against the device's own depacker.
+// input: the same cost-aware parse with one byte of look-ahead, ties broken the same way, the same terminator.
+// See aplib.py for the format and how each rule was confirmed against the device's own depacker.
 
 const BIAS = 767            // offset = ((g << 8) + byte) - 767
 const FAR = 3328            // past this, the decoder adds 1 to the length
 const REUSE = 2             // a gamma of 2 reuses the last offset
-const MIN_MATCH = 3         // below this a match costs more bits than literals
-const MAX_OFFSET = 1 << 16
+const MIN_MATCH = 3         // the hash key: candidates share their first three bytes
+const MAX_OFFSET = (1 << 20) - 1   // Elektron's own streams reach back up to just under 1 MiB, on every device
 const MAX_COUNT = 1 << 11   // Elektron's own streams never match more than 2048 bytes (issue #59)
-const CANDIDATES = 24
+const CANDIDATES = 8        // positions tried per hash chain
+const LITERAL_BITS = 9
 const TERMINATOR_GAMMA = (1 << 24) + 2     // with a trailing 0xFF byte: (2**24+2)*256 + 255 == 0x2FF mod 2**32
 const TERMINATOR_TRAILER = 0xff
 
@@ -69,49 +70,91 @@ function match(ev: Events, offset: number, count: number) {
   }
 }
 
-/** aplib.py _find_matches: greedy, non-overlapping [pos, offset, count] triples, in order. The three bytes at
- * each position index the positions they last appeared at (the newest 24); the newest candidate is tried first. */
-function findMatches(data: Uint8Array): [number, number, number][] {
-  const n = data.length
-  const out: [number, number, number][] = []
-  if (n < MIN_MATCH) return out
-  const table = new Map<number, number[]>()
-  const key = (p: number) => (data[p] << 16) | (data[p + 1] << 8) | data[p + 2]
-  const remember = (k: number, p: number) => {
-    let chain = table.get(k)
-    if (!chain) { chain = []; table.set(k, chain) }
-    chain.push(p)
-    if (chain.length > CANDIDATES) chain.splice(0, chain.length - CANDIDATES)
+/** aplib.py _reuse_events: a match that reuses the last offset, the reuse code in place of the offset. */
+function reuse(ev: Events, offset: number, count: number) {
+  const length = count - 1 - (offset > FAR ? 1 : 0)
+  if (length < 1) throw new Error(`count ${count} too small for offset ${offset}`)
+  ev.event(0)
+  ev.gamma(REUSE)
+  if (length <= 3) {
+    ev.event((length >> 1) & 1)
+    ev.event(length & 1)
+  } else {
+    ev.event(0)
+    ev.event(0)
+    ev.gamma(length - 2)
   }
-  let i = 0
-  while (i < n - MIN_MATCH) {
-    const k = key(i)
-    let bestOff = 0, bestLen = 0
-    const chain = table.get(k)
-    if (chain) {
-      for (let c = chain.length - 1; c >= 0; c--) {
-        const j = chain[c], off = i - j
-        if (off <= 0 || off > MAX_OFFSET) continue
-        const limit = Math.min(MAX_COUNT, n - i)
-        let len = 0
-        while (len < limit && data[j + len] === data[i + len]) len++
-        const need = MIN_MATCH + (off > FAR ? 1 : 0)
-        if (len >= need && len > bestLen) {
-          bestOff = off
-          bestLen = len
-          if (len >= 64) break
-        }
+}
+
+const gammaCost = (v: number) => 2 * (31 - Math.clz32(v))
+
+/** aplib.py _match_cost: the bits a match costs, or -1 when the decoder cannot express it. */
+function matchCost(offset: number, count: number, reuse: boolean): number {
+  const length = count - 1 - (offset > FAR ? 1 : 0)
+  if (length < 1) return -1
+  const lc = length <= 3 ? 2 : 2 + gammaCost(length - 2)
+  return 1 + (reuse ? gammaCost(REUSE) : gammaCost((offset + BIAS) >>> 8) + 8) + lc
+}
+
+type Step = [number, number, number]   // [kind 0 literal | 1 match | 2 reuse, byte or offset, count]
+
+/** aplib.py _parse: the bits-saved choice at each position (the last offset, then the newest CANDIDATES
+ * positions sharing the next three bytes), one byte of look-ahead, reuse only once a match set the offset. */
+function parse(data: Uint8Array): Step[] {
+  const n = data.length
+  const head = new Map<number, number>()
+  const prev = new Int32Array(n).fill(-1)
+  let hashed = 0
+  const hashTo = (p: number) => {
+    while (hashed <= p) {
+      const q = hashed
+      if (q + MIN_MATCH <= n) {
+        const k = (data[q] << 16) | (data[q + 1] << 8) | data[q + 2]
+        const h = head.get(k)
+        prev[q] = h === undefined ? -1 : h
+        head.set(k, q)
       }
+      hashed = q + 1
     }
-    remember(k, i)
-    if (bestLen) {
-      out.push([i, bestOff, bestLen])
-      for (let s = 1; s < bestLen; s++) {       // index the covered positions so later matches can reach in
-        const p = i + s
-        if (p < n - MIN_MATCH) remember(key(p), p)
-      }
-      i += bestLen
+  }
+  const run = (i: number, j: number, limit: number) => {
+    let k = 0
+    while (k < limit && data[i + k] === data[j + k]) k++
+    return k
+  }
+  const best = (i: number, last: number): [number, number, number, boolean] => {
+    hashTo(i)
+    const limit = Math.min(MAX_COUNT, n - i)
+    let out: [number, number, number, boolean] = [0, 0, 0, false]
+    if (last && last <= i) {
+      const k = run(i, i - last, limit)
+      const c = k >= 2 ? matchCost(last, k, true) : -1
+      if (c >= 0 && LITERAL_BITS * k - c > out[0]) out = [LITERAL_BITS * k - c, last, k, true]
+    }
+    let j = i + MIN_MATCH <= n ? prev[i] : -1
+    let tried = 0
+    while (j >= 0 && tried < CANDIDATES) {
+      const off = i - j
+      if (off > MAX_OFFSET) break
+      const k = run(i, j, limit)
+      const c = matchCost(off, k, off === last)
+      if (c >= 0 && LITERAL_BITS * k - c > out[0]) out = [LITERAL_BITS * k - c, off, k, off === last]
+      j = prev[j]
+      tried++
+    }
+    return out
+  }
+  const out: Step[] = []
+  let i = 0, last = 0
+  while (i < n) {
+    let [gain, off, count, isReuse] = best(i, last)
+    if (gain > 0 && i + 1 < n && best(i + 1, last)[0] > gain + LITERAL_BITS) gain = 0
+    if (gain > 0) {
+      out.push([isReuse ? 2 : 1, off, count])
+      last = off
+      i += count
     } else {
+      out.push([0, data[i], 1])
       i += 1
     }
   }
@@ -128,17 +171,10 @@ function terminate(ev: Events) {
 export function pack(data: Uint8Array, compress = true): Uint8Array {
   const ev = new Events(Math.ceil(data.length * 1.15) + 64)
   if (compress) {
-    const matches = findMatches(data)
-    let m = 0, i = 0
-    while (i < data.length) {
-      if (m < matches.length && matches[m][0] === i) {
-        const [, off, count] = matches[m++]
-        match(ev, off, count)
-        i += count
-      } else {
-        ev.event(1, data[i])
-        i += 1
-      }
+    for (const [kind, v, count] of parse(data)) {
+      if (kind === 0) ev.event(1, v)
+      else if (kind === 1) match(ev, v, count)
+      else reuse(ev, v, count)
     }
   } else {
     for (let i = 0; i < data.length; i++) ev.event(1, data[i])

@@ -40,7 +40,8 @@ monolithic build; section 4 says how to go from A to B.
   uses them); `mods/core` builds it for the Digitakt mk1
   (`python -m elekloader.sdk.build mods/core --stock Digitakt_OS1.53.syx`),
   `mods/core-dn1` for the Digitone mk1, `mods/core-dt2` for the
-  Digitakt II and `mods/core-ar2` for the Analog Rytm MKII. The
+  Digitakt II, `mods/core-dn2` for the Digitone II (experimental) and
+  `mods/core-ar2` for the Analog Rytm MKII. The
   Octatrack's core, `mods/core-ot`, has a hook bus of its own from 0.2, with the Octatrack's events ("The hook bus on the
   Octatrack" below).
 
@@ -96,7 +97,7 @@ what you see when it is broken (section 5 has the fixes).
 12. **One file, one release.** A mod targets one stock release by hash.
     Porting to another OS version means finding every address again.
 
-### The hook bus (core's events): the Digitakt mk1, the Digitone mk1, the Digitakt II, the Analog Rytm MKII and the Analog Four MKII
+### The hook bus (core's events): the Digitakt mk1, the Digitone mk1, the Digitakt II, the Digitone II, the Analog Rytm MKII and the Analog Four MKII
 
 Handlers are C functions (arguments on the stack; d0-d1/a0-a1 free,
 everything else kept; the result in d0). `order` sorts handlers of one
@@ -112,7 +113,7 @@ event (lower first; the shipped mods use 10-90).
 | `ev_render_in` | audio render entry, 1500 times a second | `void f(void)` | interrupt level: keep it short |
 | `ev_render_out` | audio render exit | `void f(void)` | the same |
 | `ev_hold` | Digitone mk1 only (core-dn1 2.2): a track key held on its own, UI task | `int f(void *brain, void *event, int track)` | return nonzero to take it; when none does, core opens the Mod Menu ("The Mod Menu" below) |
-| `ev_personalize` | Digitakt II only (core-dt2): SETTINGS > PERSONALIZE is built | `void f(void *menu)` | add a row with `core_additem(menu, row)`, after TRK SELECT; a row redraws the menu with `View::invalidate(menu + 0x38)`, as from SETTINGS; a checkbox is drawn as mods/core-dt2/README.md describes |
+| `ev_personalize` | Digitakt II (core-dt2) and Digitone II (core-dn2 0.1): SETTINGS > PERSONALIZE is built | `void f(void *menu)` | add a row with `core_additem(menu, row)`, after the last row (TRK SELECT on the Digitakt II, NOTE EDIT MENU on the Digitone II); a row redraws the menu with `View::invalidate(menu + 0x38)`, as from SETTINGS; a checkbox is drawn as mods/core-dt2/README.md describes |
 | `ev_voice_on` | Digitone mk1 only (core-dn1 2.1): a voice starts a note, in the render | `void f(int voice, int track, void *event)` | interrupt level. The voice's pitch word (`0x41391f80` + 4 x voice, the note << 16) is already written and may be changed: the render reads it every block. The voice's sound and the step's locks load after this, so read the voice's parameters from `ev_render_out` |
 | `ev_midi_cc` | Digitone mk1 only (core-dn1 3.2): each MIDI CC the unit receives on a track's channel or the auto channel, before the stock applies it; the MIDI task | `int f(int track, int cc, int value, int flags)` | `track` 0-8 (with MIDI CONFIG's default channels, channels 1-9); a CC on the auto channel comes as the active track, with `flags` bit 0 (`CORE_MIDI_CC_AUTO`) set. Return nonzero to take it: the stock does not apply it. Only what MIDI CONFIG lets in arrives (PORT CONFIG > INPUT FROM). A mod that patches the CC router's entry, 0x400ed94e (Tone+FX), sees a CC before core |
 | `ev_midi_pc` | Digitone mk1 only (core-dn1 4.0): each program change the unit receives, on any channel, before the stock applies it; the MIDI task | `int f(int channel, int program, int flags)` | `channel` 0-15, `program` 0-127; `flags` bit 0 (`CORE_MIDI_CC_AUTO`): it came on the auto channel; bit 1 (`CORE_MIDI_PC_STOCK`): the stock would apply it (MIDI CONFIG receives program changes, and it came on PROG CH IN's channel). Return nonzero to take it: the stock does not change the pattern. Only what MIDI CONFIG lets in arrives (PORT CONFIG > INPUT FROM) |
@@ -128,6 +129,32 @@ renders on the DSP. It copies `.fast` code into SRAM itself, on the first
 `ev_tick` (`core_fast`): subscribe only `.run` code to `ev_key` and
 `ev_enc` there, since a key can come before that tick (`ev_draw` cannot:
 the tick site runs first).
+
+The Digitone II's core (mods/core-dn2 0.1) has the same six UI events as the
+Digitakt II's, at the Digitone II's sites, and no render events (its audio
+renders on the DSP). It has no `.fast`: SRAM is not qualified there, so a
+mod with `.fast` code is refused. Its tick rate has not been measured.
+
+### Remote panel input and SysEx (core-dn2 0.1, Digitone II)
+
+Include `digitone-mk2/core.h` and require `resources.core: "0.1"`.
+On the UI task, `core_keys_set(group, synthetic_mask)` merges a group's
+synthetic buttons with the physical panel; `core_keys_clear()` releases
+only synthetic ownership. The result is `CORE_KEYS_OK`, `CORE_KEYS_INVALID`,
+`CORE_KEYS_BUSY` or `CORE_KEYS_OVERLAP`. Refuse overlap, retry a busy release on a later tick, and
+bound every hold using unsigned `core_millis()` differences. Its resolution
+is 8/9 ms from the stock periodic callback; it leaves DTIM0 stopped.
+`core_encoder_turn(encoder, detents)` accepts encoder 1..9 and nonzero
+-30..30 detents, subject to queue bounds. Driver acceptance does not prove
+that a view handled the input: read back the resulting state.
+
+`ev_sysex` is `void f(const unsigned char *message, unsigned length,
+unsigned source)` on the MIDI task, before stock routing. Every observer
+must validate its header, lengths and source (2/4 USB, 8/16 DIN). It cannot
+take a message: stock routing continues. `fw_sysex_send(data, length,
+abort, port)` is the stock sender; port 2 selects USB. Keep UI actions out
+of the MIDI task; queue bounded work for `ev_tick`. The DigiHealth DN2
+port is an example of using all of this without owning stock sites.
 
 The Analog Rytm MKII's core (mods/core-ar2) has `ev_tick`, `ev_draw`,
 `ev_key`, `ev_enc`, `ev_settings`, `ev_render_in` and `ev_render_out`, and
@@ -176,6 +203,9 @@ The sites core owns (do not patch them):
   0x400ea41c;
 - Digitakt II 1.17: 0x40000538, 0x40032ad4, 0x40032b3a, 0x40033d94,
   0x40033dde, 0x400a5eac, 0x4009e2a2;
+- Digitone II 1.12: 0x40000538, 0x4002e464, 0x4002e4ca, 0x4002f20c,
+  0x4002f256, 0x4009ff88, 0x400987a2, 0x4011fc8c, 0x4011f8c4,
+  0x4012197a;
 - Analog Rytm MKII 1.73: 0x400008c0, 0x400a2bee, 0x400a2c56, 0x400a47cc,
   0x400a4816, 0x400db87e, 0x4011fb02, 0x40121656;
 - Analog Rytm MKII 1.74: 0x400008c0, 0x400a2c5a, 0x400a2cc2, 0x400a4838,
@@ -1655,6 +1685,8 @@ of your own. It is a complete mod: a C handler on `ev_draw` that draws a
 small square in the top-right corner of every screen. For the Digitakt II,
 `examples/hello-marker-dt2/` builds the same source, and
 `examples/perform-direct/` is a real mod in one key handler. For the
+Digitone II, `examples/hello-marker-dn2/` builds the same source, and
+`examples/hooks-check-dn2/` subscribes to its core's six UI events. For the
 Analog Rytm MKII, `examples/hello-marker-ar2/` builds the same source for
 1.73 and 1.74, and `examples/hooks-check-ar2/` subscribes to every event its
 core has.

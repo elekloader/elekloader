@@ -8,6 +8,9 @@ variables; a test whose inputs are missing is skipped, not passed:
   ELEKLOADER_MODS       a folder with core-*.elemod (the cores the Windows app builds
                         in): core-2.1.elemod (1.53), core-2.1-os1.54.elemod (1.54)
   ELEKLOADER_DN_SYX, ELEKLOADER_DN_MODS   the Digitone's stock file, and its cores
+  ELEKLOADER_DN2_SYX, ELEKLOADER_DN2_MODS the Digitone II's stock file, and a folder with
+                        core-dn2 and its mods (and, to check the filter, another
+                        device's core and mods)
 """
 import glob
 import io
@@ -235,6 +238,62 @@ def test_a_digitone_set_checks_with_its_core():
         finally:
             root.destroy()
 
+
+
+DN2_SYX = os.environ.get('ELEKLOADER_DN2_SYX', '')
+DN2_MODS = os.environ.get('ELEKLOADER_DN2_MODS', '')
+
+
+def test_a_digitone_ii_set_takes_its_own_core_and_checks():
+    """The Digitone II: with other devices' cores bundled and their mods in
+    the library, only core-dn2 and the Digitone II's mods fit; core with
+    hooks-check checks, and the .fast bar says there is none (no SRAM)."""
+    need(DN2_SYX, 'ELEKLOADER_DN2_SYX')
+    folder = need(DN2_MODS, 'ELEKLOADER_DN2_MODS')
+    cores = sorted(glob.glob(os.path.join(folder, 'core*.elemod')))
+    mods = sorted(p for p in glob.glob(os.path.join(folder, '*.elemod')) if p not in cores)
+    if not cores or not mods:
+        raise Skip('ELEKLOADER_DN2_MODS needs core*.elemod and mods')
+    try:
+        import tkinter as tk
+        root = tk.Tk()
+    except Exception as e:
+        raise Skip('no Tk: %s' % e)
+    errors = []
+    root.report_callback_exception = lambda *exc: errors.append(exc[1])
+    with tempfile.TemporaryDirectory() as tmp:
+        bundled, lib = os.path.join(tmp, 'bundled'), os.path.join(tmp, 'lib')
+        os.makedirs(bundled)
+        os.makedirs(lib)
+        for c in cores:
+            shutil.copy(c, bundled)
+        for m in mods:
+            shutil.copy(m, lib)
+        root.withdraw()
+        w = gui.LoaderWindow(root, gui.LoaderModel(DN2_SYX, lib, [bundled],
+                                                   os.path.join(tmp, 'settings.json')))
+        try:
+            fit = {p: d for p, d in w.descs.items() if d.get('fits')}
+            core = [p for p, d in fit.items() if d.get('id') == 'core']
+            assert len(core) == 1 and w.model.dev.key == 'digitone-mk2', w.descs
+            assert all(json.load(open(p))['target']['device'] == 'digitone-mk2' for p in fit)
+            assert len(fit) < len(w.descs)                # another device's mods are there, unfit
+            hc = [p for p, d in fit.items() if d.get('id') == 'hooks-check']
+            assert len(hc) == 1, fit
+            for p in core + hc:
+                if p not in w.enabled:
+                    w.toggle(p)
+            w.changed()
+            w.result = None
+            t = time.time()
+            while time.time() - t < 60 and not (w.result is not None and w.pending is None):
+                root.update()
+                time.sleep(0.02)
+            assert w.result and w.result['ok'], w.result
+            assert w.bars['fast'][1].get() == 'none on this device'
+            assert not errors, errors
+        finally:
+            root.destroy()
 
 if __name__ == '__main__':
     import traceback

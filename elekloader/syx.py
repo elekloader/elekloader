@@ -297,6 +297,9 @@ def verify(out, stock, want_main, dev, version=None):
     if dev.flash_at + o.total > dev.flash_limit:
         raise SyxError('the container ends at flash 0x%x > 0x%x'
                        % (dev.flash_at + o.total, dev.flash_limit))
+    if dev.update_max is not None and 8 + o.total > dev.update_max:
+        raise SyxError('decoded update stream %d bytes exceeds the measured USB update limit of %d bytes'
+                       % (8 + o.total, dev.update_max))
     hd = [i for i in range(COUNT_OFF) if o.header[i] != stock.header[i]]
     if any(not dev.version_at <= i < dev.version_at + 4 for i in hd):
         raise SyxError('ELE3 header differs outside the version field: %s' % hd)

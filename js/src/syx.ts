@@ -281,6 +281,8 @@ export function verify(out: Uint8Array, stock: Syx, wantMain: Uint8Array, dev: D
   }
   if (dev.flashAt + o.total > dev.flashLimit)
     throw new SyxError(`the container ends at flash 0x${(dev.flashAt + o.total).toString(16)} > 0x${dev.flashLimit.toString(16)}`)
+  if (dev.updateMax !== null && 8 + o.total > dev.updateMax)
+    throw new SyxError(`decoded update stream ${8 + o.total} bytes exceeds the measured USB update limit of ${dev.updateMax} bytes`)
   const hd: number[] = []
   for (let i = 0; i < COUNT_OFF; i++) if (o.header[i] !== stock.header[i]) hd.push(i)
   if (hd.some(i => !(i >= dev.versionAt && i < dev.versionAt + 4))) throw new SyxError(`ELE3 header differs outside the version field: ${repr(hd)}`)

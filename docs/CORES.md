@@ -33,6 +33,7 @@ There is one core file per device and OS:
 | Digitone mk1, Digitone Keys | 1.44 | `core-dn1-3.2-os1.44.elemod` | the same pre-release |
 | Digitone mk1, Digitone Keys | 1.43, 1.44 | `core-dn1-4.0.elemod`, `core-dn1-4.0-os1.44.elemod` | the [core-dn1-v4.0](https://github.com/irpina/elekloader/releases/tag/core-dn1-v4.0) pre-release |
 | Digitakt II | 1.17 | `core-dt2-1.0.elemod` | not released yet: build it ([below](#building-a-core)) |
+| Digitone II | 1.12 | `core-dn2-0.1.elemod` | experimental, not released: build it ([below](#building-a-core)); six UI events and DigiHealth input/readback checked on a unit; longer project/audio qualification pending |
 | Analog Rytm MKII | 1.73 | `core-ar2-0.2.elemod` | not released: the last core with 1.73; build it from commit 92a99c9 ([below](#building-a-core)) |
 | Analog Rytm MKII | 1.74 | `core-ar2-0.3.elemod` | the [core-ar2-v0.3](https://github.com/irpina/elekloader/releases/tag/core-ar2-v0.3) pre-release, and the shop; 1.74 only |
 | Analog Rytm MKII | 1.74 | `core-ar2-0.5.elemod` | not released: build it ([below](#building-a-core)); 1.74 only. Mods with pages built for 0.3 (rytm2_mods v1.2's lfo-rnd, voice-dac, euclid-accents, velocity-humanise, comp-preview) do not link with it: their sites overlap core's page sites |
@@ -116,6 +117,18 @@ core.
   stock applies them (`ev_midi_pc`, "Program changes").
 - **Digitakt II** ([mods/core-dt2](../mods/core-dt2)): the hook bus's tick,
   draw, key and encoder events, and rows in SETTINGS > PERSONALIZE.
+- **Digitone II** ([mods/core-dn2](../mods/core-dn2), experimental): the
+  Digitakt II's events at the Digitone II's sites: tick, draw, key, encoder,
+  SETTINGS and PERSONALIZE rows. No `.fast` (SRAM is not qualified) and no
+  render events (its audio renders on the DSP). Checked in digikit's
+  emulator. Core 0.1 includes a physical/synthetic panel bridge, bounded
+  encoder turns, a monotonic input clock and SysEx observers (`ev_sysex`).
+  The core/DigiHealth showcase flashed over USB and
+  passed the six UI events, reopened menu callbacks, input consumption and
+  ordering on a unit; immutable runtime readback matched its exact build.
+  Longer project/audio qualification remains separate. See the core README
+  for the [DigiHealth fork branch](https://github.com/simonjohansson/digihealth/tree/codex/dn2-remote-control)
+  and the diagnostic overlay warning.
 - **Analog Rytm MKII** ([mods/core-ar2](../mods/core-ar2)): the Digitakt
   mk1's core.s, settings.s and render.s with the Rytm's addresses: the hook
   bus's tick (about 20 a second), draw, key, encoder and SETTINGS events,
@@ -184,6 +197,7 @@ One source, [mods/core/core.s](../mods/core/core.s), is built with each
 device's addresses ([mods/core](../mods/core) for the Digitakt mk1,
 [mods/core-dn1](../mods/core-dn1) for the Digitone mk1,
 [mods/core-dt2](../mods/core-dt2) for the Digitakt II,
+[mods/core-dn2](../mods/core-dn2) for the Digitone II,
 [mods/core-ar2](../mods/core-ar2) for the Analog Rytm MKII, [mods/core-a4](../mods/core-a4)
 for the Analog Four MKII, [mods/core-mc](../mods/core-mc)
 and [mods/core-ms](../mods/core-ms) for the Model:Cycles and the Model:Samples). Each `mod.json`
@@ -196,6 +210,7 @@ toolchain ([ADAPTING.md](ADAPTING.md), "What you need"):
 python -m elekloader.sdk.build mods/core --stock Digitakt_OS1.54.syx                          # the Digitakt mk1's (or 1.53)
 python -m elekloader.sdk.build mods/core-dn1 --stock Digitone_and_Digitone_Keys_OS1.44.syx   # the Digitone mk1's (or 1.43)
 python -m elekloader.sdk.build mods/core-dt2 --stock Digitakt_II_OS1.17.syx                      # the Digitakt II's
+python -m elekloader.sdk.build mods/core-dn2 --stock Digitone_II_OS1.12.syx                      # the Digitone II's
 python -m elekloader.sdk.build mods/core-ar2 --stock Analog-Rytm_MKII_OS1.74.syx                  # the Analog Rytm MKII's (1.74 only from 0.3)
 python -m elekloader.sdk.build mods/core-a4 --stock Analog-Four_MKII_OS1.56.syx                   # the Analog Four MKII's
 python -m elekloader.sdk.build mods/core-ot --stock OCTATRACK_OS1.40C.syx                    # the Octatrack's

@@ -1,6 +1,8 @@
 | SPDX-License-Identifier: GPL-2.0-or-later
 | core-dt2: ev_personalize, the Digitakt II's SETTINGS > PERSONALIZE menu.
 | ColdFire V4 (MCF5441x); assemble with -mcpu=54455. OS 1.17.
+| Also built unchanged for Digitone II OS 1.12; each target's mod.json owns
+| its site. The addresses and row names below describe the Digitakt II.
 |
 | The PERSONALIZE builder (0x4009daec) adds its rows with the same generic
 | MenuItem as SETTINGS (0x40115a44, then Menu::addItem 0x4011527a), the

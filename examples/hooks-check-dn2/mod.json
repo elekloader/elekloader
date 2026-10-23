@@ -1,0 +1,24 @@
+{
+ "id": "hooks-check",
+ "version": "0.1",
+ "title": "Hooks check",
+ "category": "Examples",
+ "license": "GPL-2.0-or-later",
+ "description": "A test for core-dn2 on the Digitone II: subscribes to the six UI events, draws what it counts as bars along the top of the screen, and adds a HOOK TEST row to SETTINGS and to PERSONALIZE. Selecting the PERSONALIZE row makes it take the TEMPO key.",
+ "device": "digitone-mk2",
+ "os": "1.12",
+ "sources": ["hooks.c", "../hooks-check-ar2/label.s"],
+ "cflags": ["-DFILLRECT_AT=0x40114b22", "-DSWALLOW_CODE=9"],
+ "defsym": {"STRING_CTOR": "0x401ceab8"},
+ "subscribe": [
+  {"event": "ev_tick", "fn": "hc_tick", "order": 60},
+  {"event": "ev_draw", "fn": "hc_draw", "order": 60},
+  {"event": "ev_key", "fn": "hc_first", "order": 40},
+  {"event": "ev_key", "fn": "hc_key", "order": 60},
+  {"event": "ev_enc", "fn": "hc_enc", "order": 60},
+  {"event": "ev_settings", "fn": "hc_settings", "order": 60},
+  {"event": "ev_personalize", "fn": "hc_personalize", "order": 60}
+ ],
+ "resources": {"names": ["settings:HOOK TEST", "personalize:HOOK TEST"]},
+ "requires": ["core"]
+}

@@ -1,8 +1,7 @@
 | SPDX-License-Identifier: GPL-2.0-or-later
 | core: the SETTINGS menu's hook (ev_settings) and core_additem. Built with
-| core.s by the cores whose device has the site: the Digitakt mk1 (mods/core),
-| the Digitone mk1 (mods/core-dn1) and the Digitakt II (mods/core-dt2). Its
-| addresses come from mod.json:
+| core.s by the cores whose device has the site. Addresses come from each
+| target's mod.json; the site comments below give the Digitakt mk1's:
 |
 |   OP_NEW       operator new(size) -> d0
 |   ITEM_CTOR    MenuItem(this, label, select, draw, change, id, step)

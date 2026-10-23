@@ -1,9 +1,7 @@
 | SPDX-License-Identifier: GPL-2.0-or-later
 | core: the boot copier and the hook bus every other mod builds on.
-| ColdFire V4 (MCF5441x); assemble with -mcpu=54455. One source for every
-| device with this hook bus: the Digitakt mk1 (OS 1.53, mods/core), the
-| Digitone mk1 (OS 1.43, mods/core-dn1) and the Digitakt II (OS 1.17,
-| mods/core-dt2). The SETTINGS and render hooks are in settings.s and
+| ColdFire V4 (MCF5441x); assemble with -mcpu=54455. Shared by the device
+| cores that use this hook bus. The SETTINGS and render hooks are in settings.s and
 | render.s, for the devices that have those sites. The addresses below are
 | not here: each device's mod.json gives them as "defsym", so a missing one
 | fails the build instead of using another device's.

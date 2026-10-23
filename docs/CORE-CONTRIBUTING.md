@@ -28,7 +28,8 @@ your device:
 
 - the events and tables: `collections` in the core's `mod.json`
   ([mods/core](../mods/core/mod.json), [mods/core-dn1](../mods/core-dn1/mod.json),
-  [mods/core-dt2](../mods/core-dt2/mod.json), [mods/core-ot](../mods/core-ot/mod.json));
+  [mods/core-dt2](../mods/core-dt2/mod.json), [mods/core-dn2](../mods/core-dn2/mod.json),
+  [mods/core-ot](../mods/core-ot/mod.json));
 - each event's handler, its arguments and what its return means: the
   comment over the code that calls it, in the core's `.s` files;
 - the firmware exports and the C names for all of it: the SDK's headers,

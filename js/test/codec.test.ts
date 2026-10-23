@@ -72,6 +72,15 @@ for (const c of V.aplib) {
   })
 }
 
+test('the packer reaches past 64 KiB', () => {
+  const data = new Uint8Array(70000 + 4096)
+  data.set(lcg(7, 70000))
+  data.set(data.slice(0, 4096), 70000)
+  const packed = packSection(data)
+  assert.deepEqual(depackSection(packed), data)
+  assert.ok(packed.length < 79000)     // literals for the distant repeat would exceed 83 KB
+})
+
 test('the transport encodes as the Python', () => {
   const t = V.transport
   const syx = encodeSyx(lcg(t.stream_seed, t.stream_len), 0x0a, fromHex(t.framing[0])!, fromHex(t.framing[1])!)

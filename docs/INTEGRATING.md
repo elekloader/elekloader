@@ -110,7 +110,7 @@ const log = buildLogText({ title: 'Your site build log', builder: describeBuilde
 
 ## Your ids and the catalog's
 
-- **Devices** are the engine's keys: `digitakt-mk1`, `digitakt-mk2`, `digitone-mk1`, `octatrack`, `analog-rytm-mk2`, `analog-four-mk2`. `ready.info.devices` lists them, with their OS versions and their recovery text. If your site names machines its own way, map them to these.
+- **Devices** are the engine's keys: `digitakt-mk1`, `digitakt-mk2`, `digitone-mk1`, `digitone-mk2`, `octatrack`, `analog-rytm-mk2`, `analog-four-mk2`. `ready.info.devices` lists them, with their OS versions and their recovery text. If your site names machines its own way, map them to these.
 - **Mods** are the `.elemod`'s own `id`: `catalog.mods[].id`. One id has a file per OS version; `releases(catalog, device, id)` lists those versions.
 - **The OS version** is the stock file's, as the builder recognises it: `stock.os` from `setStock`, or the `os` your site already verified.
 

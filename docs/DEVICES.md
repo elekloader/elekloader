@@ -14,6 +14,7 @@ and a hook bus of its own.
 | `main_section`, `main_load` | which container section is the main OS, and where it runs | the section table (id 3, `0x40000400`) |
 | `stage` | where the bootloader stages the main OS before unpacking it in place | the bootstrap's loader (`0x800005fe`: read to `0x40200000`, unpack to `0x40000400`) |
 | `flash_at`, `flash_limit` | where the container sits in flash and must end | the bootstrap (`0x80000` .. `0x380000`) |
+| `update_max` | maximum decoded ELE3 update bytes, including the 8-byte preamble and the container (seal included); `None` when unknown | unknown on the mk1; DN2's conservative USB cap is measured on a unit, not found in code |
 | `trailer` | how the file is sealed: `None`, or `'hmac'` | mk1 has none |
 | `hmac_key_from` | for `'hmac'`: the section and seed string the key is derived from (never the key itself) | none on the mk1 |
 | `isa` | the main CPU's instruction decoder, for the boundary checks | ColdFire (`isa/coldfire.py`) |
@@ -61,11 +62,11 @@ below was found again in 1.17.
   it from there to `0x40000400` with its depacker (`0x80000432`). The mk1
   stages at `0x40200000`; this image, 3.27 MB depacked, runs past that.
   Stock's in-place gap is 2,065,240 bytes.
-- **The unit's own depacker takes elekloader's stream.** Run in Unicorn
-  through digikit's harness (`emu/oracle.py`, with the 1.17 entry), the
-  bootstrap's depacker yields the stock main OS from both Elektron's
-  stream and elekloader's repack of it (1,385,586 bytes against
-  1,147,584).
+- **The unit's own depacker takes elekloader's stream.** Run in place in
+  digikit's ColdFire core (23 Oct 2026), the bootstrap's depacker yields
+  the stock main OS from elekloader's repack (1,179,664 stored bytes,
+  against Elektron's 1,147,584). The earlier packer was also checked in
+  Unicorn through digikit's harness (`emu/oracle.py`, with the 1.17 entry).
 - **Flash.** The container starts at `0x80000`: the bootstrap's read above,
   and digikit's map of the OS's own reads. The OS keeps a store at
   `0x380000`-`0x400000`, with the mk1's code at its own addresses: it reads
@@ -356,12 +357,13 @@ Digitakt's in the places elekloader depends on.
 - **Staging.** The bootstrap's loader (`0x80000590`) is the Digitakt mk1's call
   for call: section 3 from flash at its container offset + `0x80000`, to
   `0x40200000`, unpacked in place to `0x40000400` by the same depacker. Stock's
-  in-place gap is 401,261 bytes; elekloader's repack of stock, 533,073.
+  in-place gap on 1.74 is 401,995 bytes; elekloader's repack of 1.74,
+  436,273 (packer checked 23 Oct 2026).
 - **Flash.** `flash_limit` is `0x300000`. The OS keeps the Digitakt's store at
   `0x380000`-`0x400000`, and a second one of its own at `0x300000`-`0x380000`
   (a 0x1B072-byte block at `0x300000` or `0x340000`), read, written and erased
-  through the same routines. elekloader's repack of stock ends at `0x20A5D0`
-  (Elektron's at `0x1EA2F0`). The in-OS upgrade erases from `0x80000`, a
+  through the same routines. elekloader's repack of 1.74 ends at `0x1F2BB0`
+  (Elektron's at `0x1EA5D0`). The in-OS upgrade erases from `0x80000`, a
   sector at a time, only as far as the container it received reaches.
 - **No protected range.** The main OS holds no copy of the bootstrap: no 512
   bytes of section 2's first 0x7D94 are in it (after them come zero-padded
@@ -428,11 +430,11 @@ Recovery to stock worked on the unit (21 Oct 2026).
   call, with a byte-identical depacker: section 3 from flash at its container
   offset + `0x80000`, to `0x40200000`, unpacked in place to `0x40000400`.
   Stock's in-place gap is 540,192 bytes; elekloader's repack of stock,
-  649,113.
+  563,703 (packer checked 23 Oct 2026).
 - **Flash.** `flash_limit` is `0x300000`, where the OS keeps its voice
   calibration record (`RBOW`, 0xE56 bytes). The settings store is the
   Rytm's, `0x380000`-`0x400000`; there is no store at `0x340000`.
-  elekloader's repack of stock ends at `0x1A2D10` (Elektron's at
+  elekloader's repack of stock ends at `0x18DF70` (Elektron's at
   `0x188390`).
 - **No protected range.** Every call into the SPI NOR routines comes from
   the calibration record, the settings store, the factory console, the in-OS
@@ -475,11 +477,157 @@ Recovery to stock worked on the unit (21 Oct 2026).
   same files, messages and checks as the Python (21 Oct 2026). The web page's
   list of where to download each stock OS does not name the A4 yet.
 
+## The Digitone II (1.12)
+
+Experimental. The profile (`digitone_mk2.py`, where each fact's evidence
+is), whole builds, and linkable mods with a core (core-dn2 0.1: tick, draw,
+key, encoder, SETTINGS and PERSONALIZE; mods/core-dn2/README.md has its
+sites and evidence). The Digitone II
+runs on the Digitakt II's platform, but every address, size and count here
+was found again in DN2 1.12's own sections (23 Oct 2026), none copied from
+the Digitakt II. Stock 1.12 and MIDI recovery have worked on a unit.
+The first core builds stalled during USB transfer before flashing; the
+smaller core-only CO02 build then flashed and booted successfully (below).
+
+- **Files.** The Digitakt II's family, device byte `0x15`, the same six
+  sections (5, 2, 3, 4, 7, 8), main OS 3,196,288 bytes depacked. Sealed as
+  the Digitakt II: the key comes from section 2's seed `"Multiplier"` (no
+  other string there verifies the trailer). The OS's upgrade validator
+  (`0x400dbdb0`) checks the content checksum, then the seal, with its own
+  copy of the seed and constant (`0x40210a4a`, `0x4021b9ef`), which give
+  the same key. The writer reproduces the stock file byte for byte, seal
+  included; the profile also knows Elektron's zip of it.
+- **Staging.** The bootstrap is the Digitakt II 1.17's code instruction for
+  instruction, at the same addresses: the loader `0x80000596` reads section
+  3 from flash at its container offset + `0x80000` to `0x40400000`, and the
+  depacker `0x80000432` (byte-identical) unpacks it to `0x40000400`. Run
+  in place (in digikit's ColdFire core), that depacker yields the stock
+  image from Elektron's stream and from elekloader's repack, and from
+  builds grown by 256 KB of code, by 1 MB of random bytes, and past the
+  stage. These are isolated depacker probes; images above the USB cap below
+  are not eligible for physical USB transfer. On a stream whose output overtakes its unread input it faults,
+  the case `syx.verify` refuses. Stock's in-place gap is 2,128,334 bytes.
+- **Flash.** `flash_limit` is `0x380000`: the settings store
+  `0x380000`-`0x400000` (26 and 12 pushes of `0x380000` and `0x3c0000`). Stock
+  takes 1.80 MB of the 3 MB; elekloader's repack of stock ends at
+  `0x253ae0` (1,160,952 stored main-OS bytes; packer checked 23 Oct 2026).
+  The in-OS upgrade (`0x40139104`) erases from `0x80000` only as
+  far as the container it received. The bootstrap and the OS both read the
+  container's header at `0x80000` and want product `0x34`, which the
+  writer keeps.
+- **No protected range.** Every write and erase through the SPI NOR driver
+  comes from the settings store, the factory console, the in-OS upgrade or
+  a migration (`0x400f2022`) that erases only the `0x400000`, `0x800000` and
+  `0xc00000` sectors; none writes bytes of the main OS. The main OS holds no
+  copy of the bootstrap: they share only a font-width table and zero runs.
+- **At reset** (`0x400004e8`), the OS copies `0x402fd000-0x40305000` to SRAM
+  at `0x80000000` and `0x40305000-0x4030c980` to `0x80008000` (zeroing the
+  rest of the second half), clears DDR `0x402fd000-0x466b84d0` and runs its
+  stack down from `0x48000000`. Its heap (a buddy allocator, 32 MB at
+  `0x4464bbf0`) is inside the clear.
+- **Mods' area.** `0x47F00000`-`0x47F40000` (256 KB), the Digitakt II's,
+  the profile's one area and the linker's `ddr`: a whole build's regions
+  must lie in it, and its blob may be at most its size.
+  - Above the clear, the OS names only its DMA buffers, all through the
+    uncached alias (+0x08000000): `0x466c0000`-`0x46709340` in the cached
+    view. In its code, nothing names `0x47E00000`-`0x48000000` or its alias
+    but the stack top, stores to `0x48000000` itself (a reset) and `FLT_MAX`.
+  - In digikit's emulator (`regions_probe`, ColdFire only), a canary over
+    `0x46710000`-`0x48000000`, in both views, filled as the reset clear
+    returns: through a cold boot and two panel sessions (every page, mode,
+    arrow and encoder; PLAY, the 16 trigs, RECORD and MIDI notes) to 2.25G
+    instructions, the canary held everywhere but the stack's top 52 bytes,
+    and the final state (the regions cleared) was the same as a run that
+    filled them with zeros. The probe compares contents, not accesses: a
+    read whose value is unused, or a write later undone, would not show.
+    The area is 24 MB above the DMA buffers and 768 KB below the stack top.
+  - SRAM is not qualified: the profile has no SRAM area and no `.fast`.
+- **Checked in an emulator** (digikit's `boot_gate`, ColdFire only): a
+  repack of stock, whole builds with a data site and a blob (up to the
+  area's 256 KB) or a region, and one grown to 3.5 KB below the flash
+  limit, all boot as stock does, with the same instruction count to the
+  main screen and the same screen. These emulator probes do not establish
+  that builds above the USB cap can be transferred to a unit.
+- **The core** (mods/core-dn2 0.1) has the Digitakt II's six UI events at the
+  Digitone II's sites: boot (0x40000538), `ev_tick` (0x4002e464), `ev_draw`
+  (0x4002e4ca), `ev_key` (0x4002f20c), `ev_enc` (0x4002f256), `ev_settings`
+  (0x4009ff88) and `ev_personalize` (0x400987a2), found by the Digitakt II's
+  code and checked in the Digitone II's own (mods/core-dn2/README.md). In
+  the emulator, core alone shows the same screens as stock through a panel
+  session; examples/hooks-check-dn2 shows all six UI events firing, the row in
+  SETTINGS and in PERSONALIZE (once, after reopening), two `ev_key`
+  handlers in their order, and a taken key that the stock never sees.
+  The core includes the shared physical/synthetic panel bridge, bounded
+  encoder turns, a monotonic input clock and the `ev_sysex` observer and
+  stock sender export used by the DigiHealth DN2 fork. DTIM0 stays stopped.
+- **USB update size (measured, not found in code).** On a unit (23 Oct
+  2026), stock 1.12's decoded stream of 1,886,024 bytes transferred and
+  flashed with elektroid-cli. The first core build, 2,147,448 decoded
+  bytes, stalled before YES with both elektroid-cli and Transfer. The
+  last acknowledged SysEx offset (2,660,352 bytes) corresponds to
+  2,099,083 decoded bytes, within one USB block of 2 MiB. The profile's
+  `update_max=0x200000` conservatively caps the **8-byte preamble plus
+  container**, including its seal, at 2 MiB. `syx.verify` refuses larger
+  builds even when they fit flash. This is an operational cap inferred
+  from the stall, not proof of the exact receive-buffer boundary. The
+  bootstrap's MIDI receive limit remains unknown.
+- **On the unit** (23 Oct 2026): the core-only CO02,
+  sha256 `90cdea1d94cbc39907353bc1f3b70c710b0b0e2ef44423e3b5679fdd12cb1832`,
+  transferred over USB with elektroid-cli in 94.5 seconds and flashed.
+  The user confirmed reboot, and a fresh device-info readback reported
+  `CO02`. Its decoded update is 1,915,960 bytes, below the conservative
+  cap. The user then reported a cold boot after 10 seconds off.
+  A seeded one-minute MIDI exercise sent 6,974 scenario messages and 145
+  cleanup messages without transport or cleanup errors. Fresh device-info
+  (`CO02`) and 128-slot project-directory replies were identical before
+  and after; the user reported it "Playing and responsive" during the run.
+  No incoming MIDI messages were observed, so individual parameter changes
+  were not acknowledged or read back. This is a short smoke check, not an
+  audio-quality measurement or full event/workload qualification. It
+  establishes acceptance of this exact smaller build, not the exact
+  receive-buffer boundary. The earlier hello-marker HM02 and hooks-check
+  HC02 have not been flashed; the six UI events were subsequently checked
+  with the distinct DS03 showcase below. The ten-minute project/audio
+  workload remains pending.
+- **DigiHealth and the core on the unit** (23 Oct 2026): DS03 (core +
+  DigiHealth 1.3 + hooks-check) flashed and rebooted after physical YES.
+  Fresh version/helper replies and all 7,204 immutable runtime bytes
+  matched the exact linked build. The six UI events, encoder delivery,
+  reopened SETTINGS/PERSONALIZE callbacks, subscriber ordering and
+  consumed/pass-through TEMPO passed, with saved screens reviewed. Three
+  one-second input-clock comparisons differed from host time by at most
+  0.3%. The hooks-check bars deliberately erase parts of every screen;
+  framebuffer/counter comparison confirmed that they explain the reported
+  tearing appearance. Omit hooks-check for normal use.
+  The subsequent DH03 (core + DigiHealth only) installed using remote YES
+  after inspecting the update dialog. Its version and all 6,620 immutable
+  runtime bytes matched. Clean screens, normal TEMPO, encoder input,
+  bounded hold expiry and SYSTEM INFO on/off were verified. The
+  [DigiHealth fork branch](https://github.com/simonjohansson/digihealth/tree/codex/dn2-remote-control)
+  has the helper; no CPU/DSP-load or sample-memory measurement, FAST AUDIO,
+  SRAM or SHARC changes are included. This is functional control evidence,
+  not longer project/audio qualification.
+- **Recovery.** The STARTUP menu (FUNC at power-on), TRIG 4 for OS UPGRADE,
+  the stock file over MIDI DIN (the 1.12 manual, 14.4). Proven on the unit
+  with stock 1.12 (23 Oct 2026); about 15 minutes, followed by a normal
+  boot showing 1.12.
+- **The TypeScript engine** (js/) has the profile too (`DIGITONE_MK2`). A
+  DN2-only cases document for `tools/parity.ts` gives the same files,
+  messages and checks as the Python (23 Oct 2026), in 27 cases:
+  - whole builds from the `.syx` and the zip, and a check;
+  - core alone, with hello-marker, with hooks-check, with both, and a check;
+  - refusals: no version, a blob over the area, regions in SRAM and past
+    the area, a Digitakt II mod, a format-2 mod, hello-marker or
+    hooks-check without core, two cores, a site on core's draw site,
+    `.fast` code, an event core-dn2 lacks, two mods with one row name,
+    wrong stock bytes and the measured USB update cap;
+  - core with DigiHealth, and with DigiHealth plus hooks-check.
+
 ## What a new device needs besides its profile
 
 - **Sealed files.** `trailer='hmac'` with `hmac_key_from` (the Digitakt
-  II, above). Another sealed device needs its seed found in its bootstrap
-  (the Digitone II's is `"Multiplier"`, digikit), and the writer checked to
+  II and the Digitone II, above). Another sealed device needs its seed found
+  in its bootstrap, and the writer checked to
   reproduce its stock file, seal included.
 - **The packing format.** The loader repacks with the same codec
   (`codec/`). Check that the device's own depacker accepts it: every

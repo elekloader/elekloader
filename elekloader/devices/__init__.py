@@ -78,6 +78,7 @@ class Device:
     recovery: str = ''           # how to get back to stock, said to the user
     toolchain: dict = field(default_factory=dict)   # for the SDK: prefix, asflags, cflags
     notes: str = ''
+    update_max: int = None       # maximum decoded ELE3 update bytes (8-byte preamble + container)
 
     def release_for(self, syx_sha256=None, main_sha256=None):
         for r in self.releases.values():
@@ -112,10 +113,11 @@ class Device:
 
 
 def _all():
-    from . import (analog_four_mk2, analog_rytm_mk2, digitakt_mk1, digitakt_mk2, digitone_mk1, model_cycles,
-                   model_samples, octatrack)
+    from . import (analog_four_mk2, analog_rytm_mk2, digitakt_mk1, digitakt_mk2, digitone_mk1, digitone_mk2,
+                   model_cycles, model_samples, octatrack)
     return [digitakt_mk1.DEVICE, digitakt_mk2.DEVICE, digitone_mk1.DEVICE, octatrack.DEVICE,
-            model_cycles.DEVICE, model_samples.DEVICE, analog_rytm_mk2.DEVICE, analog_four_mk2.DEVICE]
+            model_cycles.DEVICE, model_samples.DEVICE, analog_rytm_mk2.DEVICE, analog_four_mk2.DEVICE,
+            digitone_mk2.DEVICE]
 
 
 DEVICES = None

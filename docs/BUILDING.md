@@ -48,13 +48,21 @@ verifies the file. With `pip install .` the command is `elekpatch`.
 Send the `.syx` to the unit the way Elektron describes for OS updates
 ([How to update your device](https://support.elektron.se/support/solutions/articles/43000662890-how-to-update-your-device)).
 For the Digitakt mk1, the Digitakt II, the Digitone mk1, the Analog Rytm
-MKII and the Analog Four MKII:
+MKII, the Analog Four MKII and the Digitone II:
 1. Connect it over USB and open Elektron Transfer.
 2. Select the unit and **Connect**.
 3. Drag the `.syx` onto **Drop files here**.
 4. Press **YES** on the unit.
 
 Don't turn the unit off until the upgrade is done.
+
+On the Digitone II, stock 1.12 and core/DigiHealth builds have flashed over
+USB. The six UI events, remote input and screen readback have been checked
+on a unit; longer project/audio qualification remains pending.
+The verifier caps the decoded update
+(8-byte preamble plus container, including its seal) at 2 MiB, based on a
+measured USB stall with larger builds. This conservative cap has not been
+located in the firmware code ([device evidence](DEVICES.md#the-digitone-ii-112)).
 
 For the Octatrack, from the card (back it up first):
 1. **PROJECT > SYSTEM > USB DISK MODE**, and copy the `.bin` to the root of
@@ -67,10 +75,11 @@ For the Octatrack, from the card (back it up first):
 
 The bootloader is never changed, so the stock OS file always
 restores the unit. If a custom OS will not start on a Digitakt mk1, a
-Digitakt II or a Digitone mk1, hold **FUNC** while powering on for the
-startup menu, and press **TRIG 4** for OS UPGRADE.
+Digitakt II, a Digitone mk1 or a Digitone II, hold **FUNC** while powering
+on for the startup menu, and press **TRIG 4** for OS UPGRADE.
 Then send the stock `.syx` with Transfer's legacy OS upgrade mode (on the
-Digitakt II, over its MIDI ports: not USB). On the
+Digitakt II and the Digitone II, over its MIDI ports: not USB). The Digitone
+II's recovery was checked on a unit with stock 1.12 (23 Oct 2026). On the
 Octatrack: hold **FUNC** while powering on, press **TRIG 3** for MIDI
 UPGRADE, and send the stock `.syx` over 5-pin DIN MIDI (USB MIDI does not
 work for this). On the Analog Rytm MKII: hold **FUNC** while powering on for
@@ -87,7 +96,7 @@ The output is refused unless every one of these holds:
   differs only in its 4-character version field; the framing only in its
   message count.
 - Every message checksum, counter and the content checksum are right, and
-  the container fits the device's flash budget.
+  the container fits the device's flash budget and any known update-size cap.
 - The main OS unpacks to exactly the patched image, simulated the way the
   bootloader does it: in place, over its own staged copy.
 
@@ -101,7 +110,7 @@ sections and no seal. From its own main OS stream, the writer reproduces the
 stock 1.73 and 1.74 files byte for byte. So are the Analog Four MKII's,
 whose stock 1.56 file the writer reproduces the same way.
 
-The Digitakt II's files are sealed: the container ends in an HMAC-SHA256 of
+The Digitakt II's and the Digitone II's files are sealed: the container ends in an HMAC-SHA256 of
 the rest, which its bootstrap checks before it flashes anything. elekloader
 derives the key from your stock file's bootstrap, as the unit does, seals
 the output, and checks the seal again. From its own main OS stream, the

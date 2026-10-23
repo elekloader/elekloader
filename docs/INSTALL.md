@@ -56,6 +56,9 @@ publishes it:
   [Elektron's Digitakt downloads](https://www.elektron.se/support-downloads/digitakt);
 - Digitakt II: `Digitakt_II_OS1.17.syx`, from
   [Elektron's Digitakt II downloads](https://www.elektron.se/support-downloads/digitakt-ii);
+- Digitone II (experimental): `Digitone_II_OS1.12.syx`, from
+  [Elektron's Digitone II downloads](https://www.elektron.se/support-downloads/digitone-ii)
+  (its zip, `Digitone_II_OS1.12_dist.zip`, works as it is);
 - Digitone mk1 or Digitone Keys: `Digitone_and_Digitone_Keys_OS1.44.syx` or
   `..._OS1.43.syx` (one file serves both), from Elektron's Digitone downloads;
 - Octatrack MKI or MKII: `OCTATRACK_OS1.40C.syx` or `OCTATRACK_OS1.40C.bin`
