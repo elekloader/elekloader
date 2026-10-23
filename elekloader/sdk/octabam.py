@@ -57,7 +57,8 @@ Anything else refuses the module, with the reason:
 - serving DSP modules only (SERVES_DSP: MODE DEFAULTS, RIG HOSTS, TEMPO BUS);
 - what octabam's later manifests declare and this does not serve yet: settings
   (octabam's build or BRAIN resolves them), needing BRAIN, ArenaReserves, DramRegions,
-  Keeps, a unit in octabam's loader.
+  Keeps, a unit in octabam's loader, a DSP build step (dsp_source). A submodule inside a
+  module's folder is another repository: its .asm files do not count.
 
 **Sites** (`--sites`). Nothing is converted: for every module of the checkout, whether or
 not it converts, the stock code it hooks, as its conversion's code sites (code_sites), and
@@ -232,10 +233,16 @@ def refusal(ob, name, _seen=(), hooks=False):
     dsp_ok = hooks and hooked_dsp(m)
     if not dsp_ok and (m.dsp is not None or m.menu is not None or m.params):
         return 'it has DSP code or an FX menu entry (only ColdFire-only modules convert)'
-    for _dp, _dns, fns in os.walk(os.path.join(ob.root, 'modules', name)):
+    for dp, dns, fns in os.walk(os.path.join(ob.root, 'modules', name)):
+        # a submodule is all of another repository, whose .asm can be other modules': the
+        # manifest names what of it this module builds (dsp, dsp_source)
+        dns[:] = [d for d in dns if not os.path.exists(os.path.join(dp, d, '.git'))]
         if not dsp_ok and any(f.endswith('.asm') for f in fns):
             return ('it carries DSP56300 code (.asm), which its build uploads (only '
                     'ColdFire-only modules convert)')
+    if getattr(m, 'dsp_source', '') and not dsp_ok:      # octabam's later schema
+        return ('its build integrates DSP code of its own (%s), which does not convert (only '
+                'ColdFire-only modules convert)' % m.dsp_source)
     # octabam 363861e's Runtime and ArenaReserve; its later schema replaced both
     runtime = getattr(m, 'runtime', None)
     if runtime is not None:

@@ -597,6 +597,16 @@ def test_refusals_of_octabams_later_schema():
                               ({'linked': (NS(**dict(vars(m.linked[0]), loader=True)),)}, 'octabam\'s loader')):
             ob.modules['fake'] = NS(**dict(bare, **change))
             assert words in (octabam.refusal(ob, 'fake') or ''), (words, octabam.refusal(ob, 'fake'))
+        # a submodule's .asm is another repository's (Zac Kyoti's modules check out all of theirs);
+        # the manifest's dsp_source says what DSP code the module builds
+        ob.modules['fake'] = NS(**bare)
+        sub = os.path.join(ob.root, 'modules', 'fake', 'upstream')
+        os.makedirs(os.path.join(sub, 'other'))
+        open(os.path.join(sub, '.git'), 'w').close()
+        open(os.path.join(sub, 'other', 'fx.asm'), 'w').close()
+        assert octabam.refusal(ob, 'fake') is None
+        ob.modules['fake'] = NS(**dict(bare, dsp_source='modules/fake/upstream/image.py'))
+        assert 'integrates DSP code' in octabam.refusal(ob, 'fake')
 
 
 # ---- a real checkout ------------------------------------------------------------------------

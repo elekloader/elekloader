@@ -3,60 +3,7 @@
  "commit": "b085c4d",
  "device": "octatrack",
  "os": "1.40C",
- "broken": [
-  {
-   "name": "batch-bugfixes",
-   "why": "FileNotFoundError: [Errno 2] No such file or directory: 'modules/batch-bugfixes/upstream/octabam-modules/batch-bugfixes/manifest.py'"
-  },
-  {
-   "name": "blackpyramids-303",
-   "why": "FileNotFoundError: [Errno 2] No such file or directory: 'modules/blackpyramids-303/upstream/octabam-modules/blackpyramids-303/manifest.py'"
-  },
-  {
-   "name": "direct-jump-kyoti",
-   "why": "FileNotFoundError: [Errno 2] No such file or directory: 'modules/direct-jump-kyoti/upstream/octabam-modules/direct-jump-kyoti/manifest.py'"
-  },
-  {
-   "name": "erase-empty-trigless-locks",
-   "why": "FileNotFoundError: [Errno 2] No such file or directory: 'modules/erase-empty-trigless-locks/upstream/octabam-modules/erase-empty-trigless-locks/manifest.py'"
-  },
-  {
-   "name": "midi-loopback",
-   "why": "FileNotFoundError: [Errno 2] No such file or directory: 'modules/midi-loopback/upstream/modules/midi-loopback/manifest.py'"
-  },
-  {
-   "name": "midi-part-state",
-   "why": "FileNotFoundError: [Errno 2] No such file or directory: 'modules/midi-loopback/upstream/modules/midi-part-state/manifest.py'"
-  },
-  {
-   "name": "midi-scales",
-   "why": "FileNotFoundError: [Errno 2] No such file or directory: 'modules/midi-scales/upstream/modules/midi-scales/manifest.py'"
-  },
-  {
-   "name": "mute-modes",
-   "why": "FileNotFoundError: [Errno 2] No such file or directory: 'modules/mute-modes/upstream/octabam-modules/mute-modes/manifest.py'"
-  },
-  {
-   "name": "quantize-live-rec-toggle",
-   "why": "FileNotFoundError: [Errno 2] No such file or directory: 'modules/quantize-live-rec-toggle/upstream/octabam-modules/quantize-live-rec-toggle/manifest.py'"
-  },
-  {
-   "name": "rec-trig-mute",
-   "why": "FileNotFoundError: [Errno 2] No such file or directory: 'modules/rec-trig-mute/upstream/octabam-modules/rec-trig-mute/manifest.py'"
-  },
-  {
-   "name": "reload-from-project",
-   "why": "FileNotFoundError: [Errno 2] No such file or directory: 'modules/reload-from-project/upstream/octabam-modules/reload-from-project/manifest.py'"
-  },
-  {
-   "name": "sidechain-compressor",
-   "why": "FileNotFoundError: [Errno 2] No such file or directory: 'modules/sidechain-compressor/upstream/octabam-modules/sidechain-compressor/manifest.py'"
-  },
-  {
-   "name": "varispeed",
-   "why": "FileNotFoundError: [Errno 2] No such file or directory: 'modules/varispeed/upstream/octabam-modules/varispeed/manifest.py'"
-  }
- ],
+ "broken": [],
  "mods": [
   {
    "id": "octabam-analog-bassdrum",
@@ -178,6 +125,35 @@
    "proof": "hardware"
   },
   {
+   "id": "octabam-batch-bugfixes",
+   "version": "b085c4d",
+   "name": "batch-bugfixes",
+   "title": "BATCH_BUGFIXES",
+   "sites": [
+    [
+     "0x400621da",
+     6,
+     "ob_batch_bugfixes_part_change_carryover_fix"
+    ],
+    [
+     "0x40062216",
+     6,
+     "ob_batch_bugfixes_part_change_carryover_fix"
+    ],
+    [
+     "0x4009a464",
+     6,
+     "ob_batch_bugfixes_empty_pattern_led_fix"
+    ],
+    [
+     "0x4009b6f2",
+     18,
+     "ob_batch_bugfixes_midi_plays_free_fix"
+    ]
+   ],
+   "proof": "hardware"
+  },
+  {
    "id": "octabam-bbd",
    "version": "b085c4d",
    "name": "bbd",
@@ -190,6 +166,236 @@
     ]
    ],
    "refused": "it has DSP code or an FX menu entry (only ColdFire-only modules convert)",
+   "proof": "hardware"
+  },
+  {
+   "id": "octabam-blackpyramids-303",
+   "version": "b085c4d",
+   "name": "blackpyramids-303",
+   "title": "BLACKPYRAMIDS_303",
+   "sites": [
+    [
+     "0x40002318",
+     8,
+     "ot_validate"
+    ],
+    [
+     "0x400047f0",
+     6,
+     "ot_idle_hook"
+    ],
+    [
+     "0x40005030",
+     8,
+     "ot_live_req_hook"
+    ],
+    [
+     "0x4000b4f6",
+     10,
+     "ot_live_rel_hook"
+    ],
+    [
+     "0x4000e746",
+     6,
+     "ot_live_midi_hook"
+    ],
+    [
+     "0x40031e74",
+     10,
+     "ot_resolve_pb"
+    ],
+    [
+     "0x400334d8",
+     6,
+     "ot_machine_name"
+    ],
+    [
+     "0x4003a52e",
+     8,
+     "ot_setup_edit6"
+    ],
+    [
+     "0x4003b33c",
+     8,
+     "ot_slic_a"
+    ],
+    [
+     "0x4003bff0",
+     10,
+     "ot_pmtr_pb"
+    ],
+    [
+     "0x4003c928",
+     6,
+     "ot_src_names"
+    ],
+    [
+     "0x4003c980",
+     6,
+     "ot_setup_row"
+    ],
+    [
+     "0x4003cd98",
+     8,
+     "ot_setup_draw6"
+    ],
+    [
+     "0x4003ce02",
+     20,
+     "ot_setup_value_hook"
+    ],
+    [
+     "0x4003d552",
+     6,
+     "ot_slot_rec"
+    ],
+    [
+     "0x4003d718",
+     6,
+     "ot_name_a"
+    ],
+    [
+     "0x4004012c",
+     16,
+     "ot_glyph"
+    ],
+    [
+     "0x40044006",
+     6,
+     "ot_led_hook"
+    ],
+    [
+     "0x40044968",
+     10,
+     "ot_chrom_img_hook"
+    ],
+    [
+     "0x40044dbe",
+     8,
+     "ot_slic_b"
+    ],
+    [
+     "0x40045918",
+     8,
+     "ot_oct_hook"
+    ],
+    [
+     "0x4004c1c0",
+     6,
+     "ot_slot_rec_ui"
+    ],
+    [
+     "0x4004c36a",
+     6,
+     "ot_name_b"
+    ],
+    [
+     "0x4004f8dc",
+     8,
+     "ot_slices_hook"
+    ],
+    [
+     "0x4004fa54",
+     8,
+     "ot_slots_hook"
+    ],
+    [
+     "0x4004fba8",
+     12,
+     "ot_chrom_limit_hook"
+    ],
+    [
+     "0x4004fc84",
+     16,
+     "ot_live_chrom_hook"
+    ],
+    [
+     "0x4004fd0c",
+     20,
+     "ot_rec_chrom_hook"
+    ],
+    [
+     "0x4004fde4",
+     10,
+     "ot_page_key_hook"
+    ],
+    [
+     "0x4004fee2",
+     8,
+     "ot_slic_c"
+    ],
+    [
+     "0x40050254",
+     6,
+     "ot_chrom_key_hook"
+    ],
+    [
+     "0x40050ce2",
+     8,
+     "ot_plock_hook"
+    ],
+    [
+     "0x4005221e",
+     10,
+     "ot_tick_hook"
+    ],
+    [
+     "0x400585dc",
+     10,
+     "ot_setup_open"
+    ],
+    [
+     "0x4005a616",
+     6,
+     "ot_src_commit"
+    ],
+    [
+     "0x4005a850",
+     6,
+     "ot_src_commit2"
+    ],
+    [
+     "0x40062604",
+     14,
+     "ot_rec_midi_hook"
+    ],
+    [
+     "0x400786c8",
+     6,
+     "ot_chooser_row"
+    ],
+    [
+     "0x40078886",
+     10,
+     "ot_chooser_open"
+    ],
+    [
+     "0x400788c4",
+     6,
+     "ot_chooser_level"
+    ],
+    [
+     "0x4007981c",
+     6,
+     "ot_main_commit"
+    ],
+    [
+     "0x4009d1e8",
+     8,
+     "ot_step_hook"
+    ],
+    [
+     "0x4009d422",
+     12,
+     "ot_note_hook"
+    ],
+    [
+     "0x4009d4a8",
+     6,
+     "ot_oneshot_hook"
+    ]
+   ],
+   "refused": "its build integrates DSP code of its own (modules/blackpyramids-303/upstream/octabam-modules/blackpyramids-303/bp_image.py), which does not convert (only ColdFire-only modules convert)",
    "proof": "hardware"
   },
   {
@@ -801,12 +1007,51 @@
    "proof": "hardware"
   },
   {
+   "id": "octabam-direct-jump-kyoti",
+   "version": "b085c4d",
+   "name": "direct-jump-kyoti",
+   "title": "DIRECT_JUMP_KYOTI",
+   "sites": [
+    [
+     "0x40043418",
+     6,
+     "dj_ptnrel"
+    ],
+    [
+     "0x400a1f72",
+     6,
+     "dj_land"
+    ],
+    [
+     "0x400a221c",
+     6,
+     "dj_nofa"
+    ]
+   ],
+   "refused": "it keeps stock bytes no other module may write (0x400bf0be, 0x400bf0c4), which elekloader has no claim for yet",
+   "proof": "hardware"
+  },
+  {
    "id": "octabam-distorx",
    "version": "b085c4d",
    "name": "distorx",
    "title": "DISTORX",
    "sites": [],
    "refused": "it has DSP code or an FX menu entry (only ColdFire-only modules convert)",
+   "proof": "hardware"
+  },
+  {
+   "id": "octabam-erase-empty-trigless-locks",
+   "version": "b085c4d",
+   "name": "erase-empty-trigless-locks",
+   "title": "ERASE_EMPTY_TRIGLESS_LOCKS",
+   "sites": [
+    [
+     "0x40038a5c",
+     6,
+     "ob_erase_empty_trigless_locks_erase_empty_trigless_locks_cave"
+    ]
+   ],
    "proof": "hardware"
   },
   {
@@ -998,6 +1243,108 @@
    "title": "MEMORY",
    "sites": [],
    "proof": "hardware"
+  },
+  {
+   "id": "octabam-midi-loopback",
+   "version": "b085c4d",
+   "name": "midi-loopback",
+   "title": "MIDI LOOPBACK",
+   "sites": [
+    [
+     "0x40005558",
+     8,
+     "lb_receive"
+    ],
+    [
+     "0x4000a3fe",
+     6,
+     "lb_rx_map"
+    ],
+    [
+     "0x4000a53a",
+     6,
+     "lb_rx_map"
+    ],
+    [
+     "0x4000a654",
+     6,
+     "lb_rx_map"
+    ],
+    [
+     "0x4000da58",
+     6,
+     "lb_rx_map"
+    ],
+    [
+     "0x4000e058",
+     6,
+     "lb_rx_map"
+    ],
+    [
+     "0x4000e7bc",
+     6,
+     "lb_rx_map"
+    ],
+    [
+     "0x4009f26e",
+     8,
+     "lb_control_tail"
+    ],
+    [
+     "0x4009f288",
+     8,
+     "lb_panic"
+    ],
+    [
+     "0x4009f794",
+     8,
+     "lb_tick"
+    ]
+   ],
+   "proof": "hardware"
+  },
+  {
+   "id": "octabam-midi-part-state",
+   "version": "b085c4d",
+   "name": "midi-part-state",
+   "title": "MIDI PART STATE",
+   "sites": [
+    [
+     "0x40000512",
+     6,
+     "mp_resident_activate"
+    ],
+    [
+     "0x40005638",
+     8,
+     "mp_init_entry"
+    ],
+    [
+     "0x40020898",
+     6,
+     "mp_copy_entry"
+    ]
+   ],
+   "proof": "hardware"
+  },
+  {
+   "id": "octabam-midi-scales",
+   "version": "b085c4d",
+   "name": "midi-scales",
+   "title": "MIDI SCALES",
+   "sites": [
+    [
+     "0x4007a3e2",
+     8,
+     "ms_encoder"
+    ],
+    [
+     "0x4009fb58",
+     6,
+     "ms_output"
+    ]
+   ],
+   "proof": "port"
   },
   {
    "id": "octabam-midi-scenes",
@@ -1199,6 +1546,46 @@
    "title": "MODULATION",
    "sites": [],
    "refused": "it has DSP code or an FX menu entry (only ColdFire-only modules convert)",
+   "proof": "hardware"
+  },
+  {
+   "id": "octabam-mute-modes",
+   "version": "b085c4d",
+   "name": "mute-modes",
+   "title": "MUTE_MODES",
+   "sites": [
+    [
+     "0x40004c72",
+     6,
+     "trigflag"
+    ],
+    [
+     "0x40004dc6",
+     6,
+     "pre"
+    ],
+    [
+     "0x40006820",
+     8,
+     "fresh_bind"
+    ],
+    [
+     "0x40006844",
+     6,
+     "mt_trig"
+    ],
+    [
+     "0x4000d498",
+     6,
+     "dt_trig"
+    ],
+    [
+     "0x4000f4dc",
+     8,
+     "mt_rebind"
+    ]
+   ],
+   "refused": "it has settings (PLACE), which octabam's build or BRAIN resolves; the converter does not read them yet",
    "proof": "hardware"
   },
   {
@@ -1508,6 +1895,25 @@
    "proof": "hardware"
   },
   {
+   "id": "octabam-quantize-live-rec-toggle",
+   "version": "b085c4d",
+   "name": "quantize-live-rec-toggle",
+   "title": "QUANTIZE_LIVE_REC_TOGGLE",
+   "sites": [
+    [
+     "0x4004883a",
+     6,
+     "ob_quantize_live_rec_toggle_quantize_live_rec_toggle_cave"
+    ],
+    [
+     "0x40061778",
+     6,
+     "ob_quantize_live_rec_toggle_quantize_live_rec_toggle_cave"
+    ]
+   ],
+   "proof": "hardware"
+  },
+  {
    "id": "octabam-quantizer",
    "version": "b085c4d",
    "name": "quantizer",
@@ -1672,6 +2078,35 @@
    "proof": "hardware"
   },
   {
+   "id": "octabam-rec-trig-mute",
+   "version": "b085c4d",
+   "name": "rec-trig-mute",
+   "title": "REC_TRIG_MUTE",
+   "sites": [
+    [
+     "0x4000f210",
+     6,
+     "rtm_cc"
+    ],
+    [
+     "0x4004bee2",
+     6,
+     "rtm_glyph"
+    ],
+    [
+     "0x4004c00c",
+     6,
+     "rtm_draw"
+    ],
+    [
+     "0x4009d9a4",
+     10,
+     "rtm_gate"
+    ]
+   ],
+   "proof": "hardware"
+  },
+  {
    "id": "octabam-recorder-loop-fix",
    "version": "b085c4d",
    "name": "recorder-loop-fix",
@@ -1716,6 +2151,45 @@
      "0x4000f8cc",
      6,
      "rlf_seekbind"
+    ]
+   ],
+   "proof": "hardware"
+  },
+  {
+   "id": "octabam-reload-from-project",
+   "version": "b085c4d",
+   "name": "reload-from-project",
+   "title": "RELOAD_FROM_PROJECT",
+   "sites": [
+    [
+     "0x40023c62",
+     6,
+     "rl_done"
+    ],
+    [
+     "0x40040250",
+     6,
+     "rl3_bank_trk"
+    ],
+    [
+     "0x4007af42",
+     6,
+     "rl3_bank_show"
+    ],
+    [
+     "0x4007b3e0",
+     8,
+     "rl3_bank_rel"
+    ],
+    [
+     "0x40083dc4",
+     6,
+     "rl3_ptn_trk"
+    ],
+    [
+     "0x40085864",
+     8,
+     "rl_job"
     ]
    ],
    "proof": "hardware"
@@ -1899,6 +2373,26 @@
    "name": "shatter",
    "title": "SHATTER",
    "sites": [],
+   "refused": "it has DSP code or an FX menu entry (only ColdFire-only modules convert)",
+   "proof": "hardware"
+  },
+  {
+   "id": "octabam-sidechain-compressor",
+   "version": "b085c4d",
+   "name": "sidechain-compressor",
+   "title": "SIDECHAIN_COMPRESSOR",
+   "sites": [
+    [
+     "0x40003d1c",
+     6,
+     "sc_norm"
+    ],
+    [
+     "0x4000cae8",
+     6,
+     "sc_norm"
+    ]
+   ],
    "refused": "it has DSP code or an FX menu entry (only ColdFire-only modules convert)",
    "proof": "hardware"
   },
@@ -2394,6 +2888,96 @@
     ]
    ],
    "refused": "it has DSP code or an FX menu entry (only ColdFire-only modules convert)",
+   "proof": "hardware"
+  },
+  {
+   "id": "octabam-varispeed",
+   "version": "b085c4d",
+   "name": "varispeed",
+   "title": "VARISPEED",
+   "sites": [
+    [
+     "0x40004100",
+     8,
+     "vem_frame"
+    ],
+    [
+     "0x40009094",
+     8,
+     "rp_apply1"
+    ],
+    [
+     "0x40009e00",
+     8,
+     "rp_apply2"
+    ],
+    [
+     "0x40027e4c",
+     8,
+     "vh_srcpaste"
+    ],
+    [
+     "0x40029a4c",
+     8,
+     "vh_partpaste"
+    ],
+    [
+     "0x4002b654",
+     8,
+     "vh_trkpaste"
+    ],
+    [
+     "0x40036698",
+     14,
+     "qdial1"
+    ],
+    [
+     "0x4003690c",
+     14,
+     "qdial2"
+    ],
+    [
+     "0x4003786a",
+     14,
+     "qdial3"
+    ],
+    [
+     "0x40037c06",
+     14,
+     "qdial4"
+    ],
+    [
+     "0x4004aab4",
+     8,
+     "rp_reload"
+    ],
+    [
+     "0x4006e71c",
+     10,
+     "attr_label"
+    ],
+    [
+     "0x4006ee48",
+     6,
+     "attr_up"
+    ],
+    [
+     "0x4006eef0",
+     8,
+     "attr_tail"
+    ],
+    [
+     "0x4006ef7c",
+     6,
+     "attr_down"
+    ],
+    [
+     "0x4006f026",
+     8,
+     "attr_tail"
+    ]
+   ],
+   "refused": "it has settings (PLACE), which octabam's build or BRAIN resolves; the converter does not read them yet",
    "proof": "hardware"
   },
   {
