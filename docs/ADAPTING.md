@@ -1676,9 +1676,56 @@ handler:
   none); an audio track plays a sample, and its raw PTCH is not a note. A lock
   on its AMP VOL (slot 15) is its accent. `ev_fire_locks` runs on the audio
   tracks only, as everywhere.
-- Not offered: the voice-time dispatch, the staged record after the builder,
-  the sequencer's MIDI packets, pattern and Part changes. [mods/seq-events-ot](../mods/seq-events-ot/README.md)
-  has the sites and what was checked.
+- Not offered: the staged record after the builder, the sequencer's MIDI
+  packets, pattern and Part changes. [mods/seq-events-ot](../mods/seq-events-ot/README.md)
+  has the sites and what was checked. The voice-time dispatch is
+  [trig-events](#trig-events-octatrack), below.
+
+### Trig events (Octatrack)
+
+A trig that reaches the Octatrack's sound is handed to the track's machine
+by the frame interrupt, once for every audio track that has one. The
+`trig-events` mod (`mods/trig-events-ot`, a companion of core-ot) owns that
+instruction and offers it as `ev_track_trig(track)`, the moment a trig
+starts, where [seq-events](#step-fire-events-seq-events-digitone-mk1-digitakt-mk1-and-octatrack)
+runs a step ahead, when the sequencer builds it. A mod that mutes a track's
+trigs, keys a sidechain from them or counts them subscribes to it.
+
+| event | prototype | |
+|---|---|---|
+| `ev_track_trig` | `int32_t f(int32_t track)` | `track` 0-7 (T1-T8) is about to have its trig started by its machine. Return nonzero to veto: the machine is not called, nothing after the handler sees the trig, and the interrupt goes on as for a machine that did nothing |
+
+```json
+"subscribe": [{"event": "ev_track_trig", "fn": "my_trig", "order": 50}],
+"requires": ["core", "trig-events"]
+```
+
+```c
+#include "octatrack/trig.h"
+
+int32_t my_trig(int32_t track)
+{
+    return track == 2 && my_muted;      /* T3's trigs never start */
+}
+```
+
+- It runs for a trigger trig and an audio track's one-shot trig; a trigless
+  or lock trig sets no trig bit and never comes. The MIDI tracks do not.
+- It is at interrupt level 5 inside the frame interrupt's loop over the
+  tracks: a few dozen instructions, no firmware call, nothing that waits.
+  Leave the EMAC (MACSR and the accumulators) as you found it, because the
+  machine's function that follows counts on the mode the interrupt set.
+- Handlers run in `order`, and the first to answer nonzero ends the walk:
+  an observer that must see the trigs another handler vetoes takes a smaller
+  `order`. A vetoed voice's trig is gone, a voice already sounding rings on
+  under its own envelope; the sequencer and everything the interrupt does
+  after the call are as for any trig.
+- With no handler it costs four instructions at each trig; the site is one
+  `jmp` over three instructions, the last pushes of the call's arguments
+  (`0x4000d496`), and it overlaps octabam's MUTE MODES hook (`0x4000d498`), so
+  the two cannot be built together: MUTE MODES, converted with `--bus`, is a
+  handler. [mods/trig-events-ot](../mods/trig-events-ot/README.md) has the
+  sites around it and what was checked.
 
 ## 3. Path B: a linkable mod
 

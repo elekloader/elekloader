@@ -18,7 +18,7 @@ that each can become a core event:
   later OS is paired with its site on the oldest by the symbols it jumps
   to, and an entry says which OS it has no address for;
 - a site is "covered" when the core or a companion (machine-pages,
-  machines, seq-events, dspbus, intercepts) hooks the same bytes: the mod can move onto
+  machines, seq-events, trig-events, dspbus, intercepts) hooks the same bytes: the mod can move onto
   what exists. An entry is "migration" when all its sites are covered,
   "core" when none is (the core needs an event there) and "partly" when
   some are;

@@ -161,7 +161,9 @@ core.
   Octatrack base's events and names.
   [mods/seq-events-ot](../mods/seq-events-ot) offers its step fire as the
   same events as the Digitone's and the Digitakt's, for mods that change what
-  the sequencer plays.
+  the sequencer plays, and [mods/trig-events-ot](../mods/trig-events-ot) the
+  moment the frame interrupt hands a trig to its machine, an event that may
+  veto the trig.
 - **Model:Cycles, Model:Samples** ([mods/core-mc](../mods/core-mc),
   [mods/core-ms](../mods/core-ms)): the shared core.s with the hook bus's
   tick, draw, key and encoder events. Their OS entry makes its SRAM copy and

@@ -715,6 +715,159 @@ def test_seq_events_ot_beside_the_companions():
         link.link(mods, img)
 
 
+# ---- trig-events (the machine trig dispatch in the frame interrupt) -----------------------
+
+# The frame interrupt goes through the audio tracks (d3 = 0..7, 0x4000d3fc-0x4000d55e). For a track
+# with a trig (bit 4 of the flag byte at 0x46104d0c + d3) it takes the track's machine's function
+# from the table at 0x400d6454 and calls it, pushing three words (0x4000d490, 0x4000d498,
+# 0x4000d49a); the three are popped at 0x4000d4ce. trig-events-ot hooks the three instructions at
+# 0x4000d496 (mvz.b (a1),d0; move.l d0,-(sp); move.l d3,-(sp)).
+TT_SITE = 0x4000d496
+TT_STOCK = '71912f002f03'
+# What the stock image has around it, which the stub relies on: (address, bytes)
+TT_CONTEXT = (
+    (0x4000d3da, '45f946104d0c'),       # lea 0x46104d0c,a2: the flag bytes
+    (0x4000d3ea, '2e3c80000eb4'),       # move.l #0x80000eb4,d7: the machine bytes
+    (0x4000d3f0, '2c3c400d6454'),       # move.l #0x400d6454,d6: the machines' functions
+    (0x4000d47a, '79012246'),           # mvs.b d1,d4; movea.l d6,a1
+    (0x4000d47e, '20714c00'),           # movea.l (0,a1,d4.l*4),a0
+    (0x4000d490, '2f00226f00ac'),       # move.l d0,-(sp); movea.l 172(sp),a1
+    (0x4000d49c, '4e90'),               # jsr (a0)
+    (0x4000d49e, '2239800000e0'),       # move.l 0x800000e0,d1: after the call, d1 is reloaded
+    (0x4000d4ce, '4fef000c'),           # lea 12(sp),sp: the caller pops the three words
+)
+# What the 34 v1.0 conversions (irpina/octabam2elemod) hook in the interrupt's loop and its
+# neighbourhood, 0x4000d3e0-0x4000d570: nothing. Octabam's newer modules (sambanks/octabam b085c4d)
+# are not in the shop: LOAD METER 0x4000d310 (6), MUTE MODES 0x4000d498 (6), cxosc 0x4000d514 (8), EUCLID 0x4000d562 (6).
+# trig-events takes MUTE MODES' bytes on purpose (its hook is this event); the other three it clears.
+TT_V10 = ()
+TT_UPSTREAM = ((0x4000d310, 6), (0x4000d514, 8), (0x4000d562, 6))
+TT_MUTE_MODES = (0x4000d498, 6)
+
+
+def tt_asm():
+    with open(os.path.join(ROOT, 'mods', 'trig-events-ot', 'trig.s')) as fh:
+        return fh.read()
+
+
+def test_trig_events_ot_site():
+    """mods/trig-events-ot: its one site replaces three whole stock instructions, the stub replays
+    them and goes on at the call (or, vetoed, after it), the stock image has the loop the stub
+    relies on, the stub keeps to the registers it saves and touches no EMAC state, and the site
+    clears the v1.0 conversions, the companions and the upstream modules around it but for the
+    one hook it is the event of (MUTE MODES')."""
+    import re
+    st, img = stock()
+    with open(os.path.join(ROOT, 'mods', 'trig-events-ot', 'mod.json')) as fh:
+        j = json.load(fh)
+    (s,) = j['sites']
+    assert (int(s['addr'], 16), s['stock'], s['op'], s['target']) == (TT_SITE, TT_STOCK, 'jmp', 'tt_site')
+    assert j['collections'] == {'ev_track_trig': 4} and j['requires'] == ['core'] and 'subscribe' not in j
+    for addr, hexs in TT_CONTEXT:
+        o = addr - DEV.main_load
+        assert img[o:o + len(hexs) // 2].hex() == hexs, hex(addr)
+    o = TT_SITE - DEV.main_load
+    assert img[o:o + 6].hex() == TT_STOCK
+    # three whole two-byte instructions, then the call at the site's end; no 32-bit word of the image
+    # (a jmp or jsr target) aims at the site's inside
+    assert img[o + 6:o + 8].hex() == '4e90'
+    assert all(struct.pack('>I', TT_SITE + k) not in img for k in (2, 4))
+    # the stub: its code without comments, whitespace squeezed
+    src = tt_asm()
+    code = [re.sub(r'\s+', ' ', l.split('|')[0]).strip() for l in re.search(r'^tt_site:\n(.*)', src, re.M | re.S).group(1).splitlines()]
+    code = [c for c in code if c]
+    assert code[:4] == ['.word 0x7191', 'move.l %d0, -(%sp)', 'move.l %d3, -(%sp)', 'tst.l ev_track_trig'], code[:4]
+    jumps = [m.group(1) for m in (re.match(r'(?:\d+: )?jmp (\S+)$', c) for c in code) if m]
+    assert jumps == ['0x4000d49c', '0x4000d49e', '0x4000d49c']      # the call; vetoed, past it; the call
+    # registers: d0-d1 and a0-a2 are saved and put back, d3 is only pushed, nothing else is named
+    assert set(re.findall(r'%([da][0-7]|sp)', ' '.join(code))) == {'d0', 'd1', 'd3', 'a0', 'a2', 'sp'}      # a1 as a0-a2
+    assert [c for c in code if '%d3' in c] == ['move.l %d3, -(%sp)'] * 2
+    # no EMAC instruction or register: the interrupt's mode (MACSR) and accumulators are not touched
+    emac = re.compile(r'\b(mac|macl|macw|msac|msacl|msacw|movclr|mov[a-z]*\.l .*%(macsr|acc|mask))|%(macsr|acc|accext|mask)', re.I)
+    assert not [c for c in code if emac.search(c)], code
+    # clear of the other mods' sites
+    others = [('v1.0', a, n) for a, n in TT_V10] + [('upstream', a, n) for a, n in TT_UPSTREAM]
+    for mod in ('core-ot', 'intercepts-ot', 'dspbus-ot', 'seq-events-ot'):
+        with open(os.path.join(ROOT, 'mods', mod, 'mod.json')) as fh:
+            for x in json.load(fh).get('sites', []):
+                others.append((mod, int(x['addr'], 16), len(x['stock']) // 2))
+    for who, a, n in others:
+        assert not (a < TT_SITE + 6 and TT_SITE < a + n), (who, hex(a))
+    a, n = TT_MUTE_MODES
+    assert a < TT_SITE + 6 and TT_SITE < a + n                      # the one hook it is the event of
+
+
+def test_trig_events_ot_header_names_what_the_dispatch_reads():
+    """octatrack/trig.h's absolute addresses are the ones the stock interrupt uses."""
+    import re
+    st, img = stock()
+    with open(os.path.join(ROOT, 'elekloader', 'sdk', 'include', 'octatrack', 'trig.h')) as fh:
+        h = fh.read()
+    for name, (addr, word) in {'OT_TRIG_FLAGS': (0x4000d3da, 0x46104d0c), 'OT_FRAME_KIND': (0x4000d3ea, 0x80000eb4),
+                               'OT_FRAME_SIDE': (0x4000d460, 0x800000e0)}.items():
+        m = re.search(r'#define %s\s+.*?(0x[0-9a-f]+)' % name, h)
+        assert m and int(m.group(1), 16) == word, name
+        o = addr - DEV.main_load
+        assert struct.pack('>I', word) in img[o:o + 6], name                 # the immediate the interrupt loads
+    assert 'OT_TRIG_TRACKS 8' in h
+
+
+def test_trig_events_ot_builds_and_links():
+    """mods/trig-events-ot with core-ot: no library call, the probe's two handlers land in its table
+    in order, the lot fits core's page, and linked with core alone the mod changes only its site:
+    the jmp the SDK promises, with the stub behind it."""
+    import shutil
+    from elekloader.sdk import build
+    need(SYX)
+    if not shutil.which(os.environ.get('ELEKLOADER_CROSS', DEV.toolchain['prefix']) + 'gcc'):
+        raise Skip('no m68k cross compiler')
+    st, img = stock()
+    with tempfile.TemporaryDirectory() as tmp:
+        core, _m = build.build(os.path.join(ROOT, 'mods', 'core-ot'), SYX, tmp)
+        tt, m = build.build(os.path.join(ROOT, 'mods', 'trig-events-ot'), SYX, tmp)
+        pr, p = build.build(os.path.join(ROOT, 'tests', 'fixtures', 'octatrack-track-trig'), SYX, tmp)
+        assert os.path.basename(tt) == 'trig-events-0.1.elemod'
+        assert sorted(m.imports) == ['ev_track_trig'] and 'tt_site' in m.symbols
+        assert not p.imports and not p.sites
+        mods = [elemod.load_any(x) for x in (core, tt, pr)]
+        assert link.check(mods, img) == []
+        ln = link.link(mods, img)
+        alone = link.link([elemod.load_any(core), elemod.load_any(tt)], img)
+        only_core = link.link([elemod.load_any(core)], img)
+        assert ln.layout['reserve']['units'] == 1
+    assert ln.tables['ev_track_trig'][1] == 2 and alone.tables['ev_track_trig'][1] == 0
+    at = ln.tables['ev_track_trig'][0]
+    o = ln.layout['run_load'] + (at - DEV.ddr[0]) - DEV.main_load
+    assert struct.unpack('>III', ln.image[o:o + 12]) == (ln.map['tp_handler_a'], ln.map['tp_handler_b'], 0)
+    # the alone table is just its zero word, which is all the stub tests
+    o = alone.layout['run_load'] + (alone.tables['ev_track_trig'][0] - DEV.ddr[0]) - DEV.main_load
+    assert alone.image[o:o + 4] == b'\0\0\0\0'
+    # only the site differs from core alone, in the stock image's own bytes
+    w = TT_SITE - DEV.main_load
+    for i in range(len(img)):
+        if alone.image[i] != only_core.image[i]:
+            assert w <= i < w + 6, hex(i + DEV.main_load)
+    assert alone.image[w:w + 6] == b'\x4e\xf9' + struct.pack('>I', alone.map['tt_site'])
+    # the stub is small: the no-handler path is these bytes, the walk the rest
+    assert m.sections['.run']['len'] <= 96, m.sections['.run']['len']
+
+
+def test_trig_events_ot_beside_the_companions():
+    """trig-events-ot links beside the Octatrack's other companions (seq-events, intercepts, the DSP bus)."""
+    import shutil
+    from elekloader.sdk import build
+    need(SYX)
+    if not shutil.which(os.environ.get('ELEKLOADER_CROSS', DEV.toolchain['prefix']) + 'gcc'):
+        raise Skip('no m68k cross compiler')
+    st, img = stock()
+    with tempfile.TemporaryDirectory() as tmp:
+        built = [build.build(os.path.join(ROOT, 'mods', d), SYX, tmp)[0]
+                 for d in ('core-ot', 'trig-events-ot', 'seq-events-ot', 'intercepts-ot', 'dspbus-ot')]
+        mods = [elemod.load_any(p) for p in built]
+        assert link.check(mods, img) == []
+        link.link(mods, img)
+
+
 # ---- DSP code ---------------------------------------------------------------------------
 
 HOOK = 0x400ef758               # payload A's P:0x88, move r2,x:>$204 (627000 000204)

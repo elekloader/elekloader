@@ -45,7 +45,8 @@ docs match its code.
   LFOs, p-locks in the pattern; core-dn1 4.1),
   [mods/seq-events-dn1](../mods/seq-events-dn1) (its step fire as events;
   the Digitakt mk1's in [mods/seq-events-dt1](../mods/seq-events-dt1), the
-  Octatrack's in [mods/seq-events-ot](../mods/seq-events-ot)),
+  Octatrack's in [mods/seq-events-ot](../mods/seq-events-ot), with its trig
+  dispatch as an event in [mods/trig-events-ot](../mods/trig-events-ot)),
   [mods/core-dt2](../mods/core-dt2) (Digitakt II),
   [mods/core-ar2](../mods/core-ar2) (Analog Rytm MKII),
   [mods/core-a4](../mods/core-a4) (Analog Four MKII), and

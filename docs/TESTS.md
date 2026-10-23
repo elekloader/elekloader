@@ -51,6 +51,18 @@ pending step records and in the MIDI out, and that the pattern is put back:
 python tests/probe_octatrack_seq_events.py --emulator path/to/octabam --stock OCTATRACK_OS1.40C.syx
 ```
 
+The Octatrack's trig-events (mods/trig-events-ot) is checked the same way:
+`tests/probe_octatrack_track_trig.py` (it borrows the seq-events probe's
+fixture and driver) runs the images in `ot_emu` with `--watch-pc` on the
+machine's trig call, and checks that alone it is stock (the registers and the
+stack at every call, the pending records, the frame records, the MIDI out),
+that a handler sees every trig, and that a veto stops the machine's call for
+that trig and nothing else:
+
+```bash
+python tests/probe_octatrack_track_trig.py --emulator path/to/octabam --stock OCTATRACK_OS1.40C.syx
+```
+
 The TypeScript engine has its own tests, which need no firmware, and a
 parity run that compares it with the Python on your own files
 ([js/README.md](../js/README.md)):

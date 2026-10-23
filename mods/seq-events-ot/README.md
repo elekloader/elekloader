@@ -159,7 +159,7 @@ stay where they are.
 
 Events of the Octatrack's own that mods ask for, none of them a step mod's:
 the voice-time dispatch in the frame interrupt (a trig's moment, not its
-build), the staged record after the stock builder has filled it (PLOCKS P2's
+build: [trig-events-ot](../trig-events-ot/README.md)), the staged record after the stock builder has filled it (PLOCKS P2's
 page-2 locks, MIDI SCENES' scene locks), the sequencer's MIDI packets (core-ot
 0.4's `ev_midi_out` sees them), and the pattern and Part changes. They are
 core-ot's or a companion's to add, each at its own sites.
