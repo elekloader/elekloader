@@ -559,6 +559,162 @@ def test_the_example_subscribes_to_the_bus():
     assert struct.unpack('>II', ln.image[o:o + 8]) == (ln.map['hello_draw'], 0)
 
 
+# ---- seq-events (the Octatrack's step fire as events) ------------------------------------
+
+# The sequencer builds each track's next step with two routines, builder(track, bank, pattern,
+# step, n): the audio tracks' at 0x4009d1e8 and the MIDI tracks' at 0x4009cf4c. seq-events-ot
+# hooks each one's entry (a jmp over two instructions, replayed) and the trig condition's answer.
+SEQ_OT_SITES = {
+    0x4009d1e8: ('4fefff9848d77cfc', 'jmp', 'sq_site_abuild'),
+    0x4009d354: ('4fef00104a80', 'jsr', 'sq_site_acond'),
+    0x4009cf4c: ('4fefffd848d73cfc', 'jmp', 'sq_site_mbuild'),
+    0x4009d036: ('4fef00104a80', 'jsr', 'sq_site_mcond'),
+}
+# Every site of the 34 v1.0 conversions (irpina/octabam2elemod) in the two builders and their
+# neighbourhood, 0x4009cc00-0x4009e500: MIDI SCENES' `plock`, the MIDI builder's last
+# instructions. The builder returns through sq_tramp, so that conversion works beside it.
+V10_BUILDERS = ((0x4009d1de, 10),)
+
+
+def seq_ot_asm():
+    with open(os.path.join(ROOT, 'mods', 'seq-events-ot', 'seq.s')) as fh:
+        return fh.read()
+
+
+def test_seq_events_ot_sites():
+    """mods/seq-events-ot: each site replaces the whole stock instructions it names, the entries
+    replay them from the stock words and go on at the instruction after, the condition sites
+    follow the stock condition's call and precede the branch that reads its flags, the frames the
+    C relies on are the stock code's, and no site overlaps the v1.0 conversions' or any
+    companion's."""
+    import re
+    st, img = stock()
+    with open(os.path.join(ROOT, 'mods', 'seq-events-ot', 'mod.json')) as fh:
+        j = json.load(fh)
+    src = seq_ot_asm()
+    assert len(j['sites']) == len(SEQ_OT_SITES) == 4
+    for s in j['sites']:
+        addr = int(s['addr'], 16)
+        stock_hex, op, target = SEQ_OT_SITES[addr]
+        assert (s['stock'], s['op'], s['target']) == (stock_hex, op, target), hex(addr)
+        o = addr - DEV.main_load
+        assert img[o:o + len(stock_hex) // 2].hex() == stock_hex, hex(addr)
+    # the condition: jsr 0x400a5164 (track, step, condition, immediate), then lea 16(sp),sp;
+    # tst.l d0 (the site), then bne.w
+    for addr in (0x4009d354, 0x4009d036):
+        o = addr - DEV.main_load
+        assert img[o - 6:o] == bytes.fromhex('4eb9400a5164'), hex(addr)
+        assert img[o + 6:o + 8] == b'\x66\x00', hex(addr)
+    # the entries: the stock words, replayed, then on at the third instruction
+    for label, addr, frame_hex, arg0 in (('sq_site_abuild', 0x4009d1e8, '4fefff9848d77cfc', '2e2f006c'),
+                                         ('sq_site_mbuild', 0x4009cf4c, '4fefffd848d73cfc', '262f002c')):
+        block = re.search(r'^%s:\n(.*?)(?=^\S|\Z)' % label, src, re.M | re.S).group(1)
+        words = b''.join(int(w, 16).to_bytes(2, 'big')
+                         for line in block.splitlines() if line.strip().startswith('.word')
+                         for w in line.split('|')[0].strip()[5:].split(','))
+        assert words.hex() == frame_hex, label
+        assert re.search(r'jmp\s+0x%08x' % (addr + 8), block), label
+        # the instruction after loads the first argument, at the frame's size + the return address
+        o = addr - DEV.main_load
+        assert img[o + 8:o + 12].hex() == arg0, label
+    # the condition stub frees the call's four words and returns the flags of tst.l d0; it finds the
+    # builder's return address above the builder's frame (the prologue's size), the call's four
+    # words and its own return
+    block = re.search(r'\.macro  COND name, retslot\n(.*?)\.endm', src, re.S).group(1)
+    assert 'lea     16(%sp), %sp' in block and 'tst.l   %d0' in block
+    for label, addr in (('sq_site_acond', 0x4009d1e8), ('sq_site_mcond', 0x4009cf4c)):
+        frame = -struct.unpack('>h', img[addr - DEV.main_load + 2:addr - DEV.main_load + 4])[0]    # lea -N(sp),sp
+        m = re.search(r'^\s+COND\s+%s,\s*(\d+)' % label, src, re.M)
+        assert int(m.group(1)) == 4 + 16 + frame, label
+    # the layout dev.h hard-codes, from the builders' own immediates
+    for addr, hexs in ((0x4009d1fc, '223c0009b340'), (0x4009d208, 'd7fc400e21e0'),   # bank stride, base
+                       (0x4009d212, '263c00008ed8'), (0x4009d2d8, '203c0000091a'),   # pattern, audio track
+                       (0x4009cf68, '223c0009b340'), (0x4009cf74, 'd5fc400e21e0'),   # the MIDI builder's
+                       (0x4009cfd2, '203c000008b0')):                                # a MIDI track
+        o = addr - DEV.main_load
+        assert img[o:o + 6].hex() == hexs, hex(addr)
+    # clear of the v1.0 conversions' sites, core's, and the companions'
+    others = list(V10_BUILDERS)
+    for mod in ('core-ot', 'intercepts-ot', 'dspbus-ot'):
+        with open(os.path.join(ROOT, 'mods', mod, 'mod.json')) as fh:
+            for s in json.load(fh).get('sites', []):
+                others.append((int(s['addr'], 16), len(s['stock']) // 2))
+    for addr, (stock_hex, _op, _t) in SEQ_OT_SITES.items():
+        n = len(stock_hex) // 2
+        for a, m in others:
+            assert not (a < addr + n and addr < a + m), (hex(addr), hex(a))
+    tables = ['ev_fire_step', 'ev_gen_trig', 'ev_fire_trig', 'ev_fire_cond', 'ev_gen_notes', 'ev_fire_notes',
+              'ev_fire_vel', 'ev_fire_locks']
+    assert sorted(j['collections']) == sorted(tables) and all(v == 4 for v in j['collections'].values())
+    assert [(x['event'], x['fn'], x['order']) for x in j['subscribe']] == [
+        ('ev_tick', 'sq_tick', 10), ('ev_tick', 'sq_tick_end', 90)]
+    assert j['requires'] == ['core']
+
+
+def test_seq_events_ot_builds_and_links():
+    """mods/seq-events-ot and examples/euclid-ot with core-ot: the build calls no library
+    function (it imports only its eight tables), the example names no firmware address, the
+    handler lands in its table, the lot fits core's page, and linked with core alone the mod
+    changes only its four sites: each is the jmp (padded) or jsr the SDK promises."""
+    import shutil
+    from elekloader.sdk import build
+    need(SYX)
+    if not shutil.which(os.environ.get('ELEKLOADER_CROSS', DEV.toolchain['prefix']) + 'gcc'):
+        raise Skip('no m68k cross compiler')
+    st, img = stock()
+    tables = ['ev_fire_step', 'ev_gen_trig', 'ev_fire_trig', 'ev_fire_cond', 'ev_gen_notes', 'ev_fire_notes',
+              'ev_fire_vel', 'ev_fire_locks']
+    with tempfile.TemporaryDirectory() as tmp:
+        core, _m = build.build(os.path.join(ROOT, 'mods', 'core-ot'), SYX, tmp)
+        sq, m = build.build(os.path.join(ROOT, 'mods', 'seq-events-ot'), SYX, tmp)
+        ex, e = build.build(os.path.join(ROOT, 'examples', 'euclid-ot'), SYX, tmp)
+        assert os.path.basename(sq) == 'seq-events-0.1.elemod'
+        assert sorted(m.imports) == sorted(tables), m.imports
+        for name in ('sq_clock', 'sq_track_info', 'sq_stored', 'sq_rearm', 'sq_tick', 'sq_tick_end',
+                     'sq_site_abuild', 'sq_site_mbuild', 'sq_site_acond', 'sq_site_mcond', 'sq_tramp0',
+                     'sq_tramp1', 'sq_tramp2'):
+            assert name in m.symbols, name
+        assert not e.imports and not e.sites and 'euclid_trig' in e.exports       # no firmware address
+        mods = [elemod.load_any(p) for p in (core, ex, sq)]
+        assert link.check(mods, img) == []
+        ln = link.link(mods, img)
+        alone = link.link([elemod.load_any(core)], img)
+        assert ln.layout['reserve']['units'] == 1                           # core's page holds the lot
+    counts = {t: ln.tables[t][1] for t in ln.tables}
+    assert counts['ev_gen_trig'] == 1 and counts['ev_tick'] == 2, counts
+    assert all(counts[t] == 0 for t in tables if t != 'ev_gen_trig'), counts
+    at = ln.tables['ev_gen_trig'][0]
+    o = ln.layout['run_load'] + (at - DEV.ddr[0]) - DEV.main_load
+    assert struct.unpack('>II', ln.image[o:o + 8]) == (ln.map['euclid_trig'], 0)
+    # only the four sites differ from core alone, in the stock image's own bytes
+    windows = [(a - DEV.main_load, len(h) // 2) for a, (h, _op, _t) in SEQ_OT_SITES.items()]
+    for i in range(len(img)):
+        if ln.image[i] != alone.image[i]:
+            assert any(w <= i < w + k for w, k in windows), hex(i + DEV.main_load)
+    for addr, (hexs, op, target) in SEQ_OT_SITES.items():
+        o = addr - DEV.main_load
+        want = (b'\x4e\xf9' if op == 'jmp' else b'\x4e\xb9') + struct.pack('>I', ln.map[target])
+        if op == 'jmp':
+            want += b'\x4e\x71'                                             # the pad over the 8 bytes
+        assert ln.image[o:o + len(want)] == want, hex(addr)
+
+
+def test_seq_events_ot_beside_the_companions():
+    """seq-events-ot links beside the Octatrack's other companions (intercepts, the DSP bus)."""
+    import shutil
+    from elekloader.sdk import build
+    need(SYX)
+    if not shutil.which(os.environ.get('ELEKLOADER_CROSS', DEV.toolchain['prefix']) + 'gcc'):
+        raise Skip('no m68k cross compiler')
+    st, img = stock()
+    with tempfile.TemporaryDirectory() as tmp:
+        built = [build.build(os.path.join(ROOT, 'mods', d), SYX, tmp)[0]
+                 for d in ('core-ot', 'seq-events-ot', 'intercepts-ot', 'dspbus-ot')]
+        mods = [elemod.load_any(p) for p in built]
+        assert link.check(mods, img) == []
+        link.link(mods, img)
+
+
 # ---- DSP code ---------------------------------------------------------------------------
 
 HOOK = 0x400ef758               # payload A's P:0x88, move r2,x:>$204 (627000 000204)

@@ -44,7 +44,8 @@ docs match its code.
   [mods/fxkit-dn1](../mods/fxkit-dn1) (what its effect mods share: a mixer,
   LFOs, p-locks in the pattern; core-dn1 4.1),
   [mods/seq-events-dn1](../mods/seq-events-dn1) (its step fire as events;
-  the Digitakt mk1's in [mods/seq-events-dt1](../mods/seq-events-dt1)),
+  the Digitakt mk1's in [mods/seq-events-dt1](../mods/seq-events-dt1), the
+  Octatrack's in [mods/seq-events-ot](../mods/seq-events-ot)),
   [mods/core-dt2](../mods/core-dt2) (Digitakt II),
   [mods/core-ar2](../mods/core-ar2) (Analog Rytm MKII),
   [mods/core-a4](../mods/core-a4) (Analog Four MKII), and
@@ -91,7 +92,7 @@ docs match its code.
     p-locks, and an empty OS 1.44 port;
   - `dn-euclid`, the smallest Digitone mk1 mod on seq-events: track 1 fires 5
     steps of every 16, with an empty OS 1.44 port; `euclid` the same on the
-    Digitakt mk1, with an empty OS 1.54 port;
+    Digitakt mk1, with an empty OS 1.54 port, and `euclid-ot` on the Octatrack;
   - `dsp-tone-ot`, the smallest mod with code on the Octatrack's DSP: a quiet
     sawtooth in place of input A, through the DSP bus.
 

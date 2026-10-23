@@ -40,6 +40,17 @@ More inputs some suites take:
   and, for the two-core test, `core-3.0.elemod` and the newest
   `machine-pages-*.elemod` for 1.53.
 
+The Octatrack's seq-events (mods/seq-events-ot) is also checked in octabam's
+ColdFire port, with the Octatrack's own sequencer running: the sites and the
+build are in test_octatrack, and `tests/probe_octatrack_seq_events.py` boots
+the images in `ot_emu` (build it with `make emu-cf` in an octabam checkout) and
+checks that alone it is stock, that each stage does what it says in the
+pending step records and in the MIDI out, and that the pattern is put back:
+
+```bash
+python tests/probe_octatrack_seq_events.py --emulator path/to/octabam --stock OCTATRACK_OS1.40C.syx
+```
+
 The TypeScript engine has its own tests, which need no firmware, and a
 parity run that compares it with the Python on your own files
 ([js/README.md](../js/README.md)):

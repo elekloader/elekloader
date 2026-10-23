@@ -1587,28 +1587,32 @@ SETUP has the LOCK TRACK. The pedals share theirs through the pedal shell
 DigiPrism's modules and their order. DigiPrism's SOURCE DIGITONE stays an
 insert of its own (`fx_chain(e, 0)`), with fxkit's values all the same.
 
-### Step-fire events (seq-events, Digitone mk1 and Digitakt mk1)
+### Step-fire events (seq-events, Digitone mk1, Digitakt mk1 and Octatrack)
 
 Mods that change what the sequencer plays (rhythm and melody generators,
 performance effects) need the same instructions of the step fire, and two
 mods may not patch one site. The `seq-events` mod (`mods/seq-events-dn1` on
-the Digitone mk1, `mods/seq-events-dt1` on the Digitakt mk1) owns the fire's sites, audio and MIDI tracks, once, and offers each stage of
-it as tables mods subscribe to. The names are one set for every device
-seq-events serves (`seq-events.h`); a mod includes its device's header,
-`digitone-mk1/seq.h` or `digitakt-mk1/seq.h`, which gives the sizes and
-includes it. Every handler runs at interrupt level, in the fire: keep it
-short and call no firmware. `track` counts the audio tracks first
-(`SQ_AUDIO`: the Digitone's 0-3, its synth tracks; the Digitakt's 0-7), then
-the MIDI tracks (`SQ_TRACKS` in all: 4-7; 8-15).
+the Digitone mk1, `mods/seq-events-dt1` on the Digitakt mk1,
+`mods/seq-events-ot` on the Octatrack) owns the fire's sites, audio and MIDI
+tracks, once, and offers each stage of it as tables mods subscribe to. The
+names are one set for every device seq-events serves (`seq-events.h`); a mod
+includes its device's header, `digitone-mk1/seq.h`, `digitakt-mk1/seq.h` or
+`octatrack/seq.h`, which gives the sizes and includes it. Every handler runs
+at interrupt level, in the fire (the Octatrack's: the sequencer's tick): keep
+it short and call no firmware. `track` counts the audio tracks first
+(`SQ_AUDIO`: the Digitone's 0-3, its synth tracks; the Digitakt's and the
+Octatrack's 0-7), then the MIDI tracks (`SQ_TRACKS` in all: 4-7; 8-15).
 
-| | Digitone mk1 | Digitakt mk1 |
-|---|---|---|
-| `SQ_AUDIO`, `SQ_TRACKS` | 4, 8 | 8, 16 |
-| `SQ_NOTES` | 8 | 4; an audio track plays `notes[0]` only |
-| `SQ_SLOTS` | 79 | 53 |
-| `SQ_TRIG`, `SQ_LOCK` | the step word's bits 0 and 1 | bit 0 with the SYN trig on, and without (FUNC + trig's lock trig) |
-| the key (`sq_track_info`) | the keyboard's ROOT and SCALE | none: `SQ_ROOT_NONE`, `SQ_SCALE_NONE` |
-| a limit | | a step word with 0x0004 set never fires, whatever a handler answers |
+| | Digitone mk1 | Digitakt mk1 | Octatrack |
+|---|---|---|---|
+| `SQ_AUDIO`, `SQ_TRACKS` | 4, 8 | 8, 16 | 8, 16 |
+| `SQ_NOTES` | 8 | 4; an audio track plays `notes[0]` only | 4, the MIDI tracks' NOTE and NOT2-NOT4; no notes on the audio tracks |
+| `SQ_SLOTS` | 79 | 53 | 30: the page-1 knobs, in order (AMP VOL is 15); the byte is the value >> 8 |
+| `SQ_TRIG`, `SQ_LOCK` | the step word's bits 0 and 1 | bit 0 with the SYN trig on, and without (FUNC + trig's lock trig) | a trigger or one-shot trig; a trigless or lock trig |
+| velocity | every track | every track | the MIDI tracks' VEL |
+| the key (`sq_track_info`) | the keyboard's ROOT and SCALE | none: `SQ_ROOT_NONE`, `SQ_SCALE_NONE` | none |
+| when it runs | at the step | at the step | a step ahead of the sound |
+| a limit | | a step word with 0x0004 set never fires, whatever a handler answers | a trig a handler adds does not end a slide |
 
 | event | prototype | |
 |---|---|---|
@@ -1639,14 +1643,42 @@ keeps no key for a track gives `root` `SQ_ROOT_NONE` (0xff) and `scale`
 `SQ_SCALE_NONE` (-2; -1 is chromatic): a mod that needs a key checks
 `root`. The Digitone never gives them; the Digitakt always does.
 
-`examples/dn-euclid` (Digitone) and `examples/euclid` (Digitakt) are a whole
-one: track 1 fires 5 steps of every 16, the same C with the device's header.
+`examples/dn-euclid` (Digitone), `examples/euclid` (Digitakt) and
+`examples/euclid-ot` (Octatrack) are a whole one: track 1 fires 5 steps of every 16,
+the same C with the device's header.
 It names no firmware address, so its port (1.44, 1.54) is empty:
 
 ```json
 "subscribe": [{"event": "ev_gen_trig", "fn": "euclid_trig", "order": 50}],
 "requires": ["core", "seq-events"]
 ```
+
+**On the Octatrack** (`examples/euclid-ot`, the same C) the sequencer does not
+read the pattern when a step fires: its tick, an interrupt, builds each
+track's next step into a record at the start of the step before it, from the
+pattern's masks, a timing halfword and 32 lock bytes. The events run in that
+build, so about one step ahead of the sound, and seq-events lets the stock
+builder do the rest: it writes what the handlers changed into the pattern for
+the one build and puts it back when the builder returns. What that means for a
+handler:
+
+- `first` is 1 for a build, and 0 for a repeat of an edit's build (the first
+  step is built twice when PLAY is pressed); an edit of a step is built again
+  with the events, playing or not.
+- `sq_clock` follows the tick's own builds, a step ahead of the sound.
+- `ev_fire_cond` gets the stock condition's answer, 1 or 0 (the Octatrack
+  folds its probabilities into its conditions: never -1), and is asked only
+  of a step that fires.
+- A step with nothing stored that a handler makes fire has no stored locks, no
+  condition and no micro-timing.
+- `ev_gen_notes`, `ev_fire_notes` and `ev_fire_vel` run on the MIDI tracks
+  (NOTE, NOT2-NOT4, VEL as lock bytes, or the Part's values where there are
+  none); an audio track plays a sample, and its raw PTCH is not a note. A lock
+  on its AMP VOL (slot 15) is its accent. `ev_fire_locks` runs on the audio
+  tracks only, as everywhere.
+- Not offered: the voice-time dispatch, the staged record after the builder,
+  the sequencer's MIDI packets, pattern and Part changes. [mods/seq-events-ot](../mods/seq-events-ot/README.md)
+  has the sites and what was checked.
 
 ## 3. Path B: a linkable mod
 
