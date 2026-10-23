@@ -71,6 +71,7 @@ Tests:
 
 ```bash
 python tests/test_units.py                                   # always
+python tests/test_link_refusals.py                           # always: a must-refuse and a must-pass fixture for every linker refusal
 ELEKLOADER_STOCK=... ELEKLOADER_MODS=... python tests/test_link.py
 ELEKLOADER_STOCK=... ELEKLOADER_MODS=... python tests/test_sdk.py    # the example needs the cross compiler
 ELEKLOADER_STOCK=... ELEKLOADER_BUNDLE=... ELEKLOADER_CTOOL_SYX=... python tests/test_patcher.py

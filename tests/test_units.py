@@ -788,6 +788,18 @@ def test_merged_pull_requests_claim_entries_for_the_leaderboard():
     assert [(c['id'], c['pr']) for c in shown['claims']] == [('digitakt-mk1@1.53:0x40025344', 11)]
 
 
+def test_every_refusal_of_the_linker_has_a_fixture_that_is_refused_and_one_that_links():
+    """tests/test_link_refusals.py, here too because this file is the one the workflows run: a
+    message the linker or the loader can refuse with and no fixture for it fails the build."""
+    sys.path.insert(0, HERE)
+    import test_link_refusals as refusals
+    refusals.test_every_refusal_has_a_fixture()
+    refusals.test_octatrack_fixtures()
+    refusals.test_digitakt_fixtures()
+    refusals.test_analog_rytm_fixtures()
+    refusals.test_the_image_check_refuses_a_protected_or_kept_byte_the_other_checks_let_through()
+
+
 if __name__ == '__main__':
     import traceback
     ok = failed = 0

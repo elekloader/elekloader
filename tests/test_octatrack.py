@@ -752,6 +752,11 @@ def test_dsp_code_is_refused_where_it_cannot_go():
     back['sections']['.run'] = {'len': 4, 'parts': [['hex', '00000000']]}
     back['relocs'].append(['.run', 0, 'abs32', 'sym:tst', 0])
     refused([core, bus, back], 'dsptest 0: .run+0x0 is a ColdFire reference to a DSP address')
+    wide = json.loads(json.dumps(sub))                  # a DSP word is 24 bits: 0xffffff links, one more does not
+    wide['relocs'][0] = ['.dsp.A', 6, 'dsp24', 'abs', 0x1000000]
+    refused([core, bus, wide], '.dsp.A+0x6: a DSP address out of range (0x1000000)')
+    wide['relocs'][0][4] = 0xffffff
+    link.link([link.Mod2(d, d['id']) for d in (core, bus, wide)], img)
     ent = json.loads(json.dumps(sub))
     ent['contribute'][0]['relocs'] = [[0, 'abs32', 'sym:tst', 0], [1, 'dsp24', 'sym:tst', 0]]
     refused([core, bus, ent], 'an entry for ev_dsp_rx has a abs32 relocation at +0; a DSP '
