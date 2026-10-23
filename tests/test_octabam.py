@@ -547,6 +547,68 @@ def test_refusals():
         assert 'DSP56300' in octabam.refusal(ob, 'fake')
 
 
+def _plan_code_sites(plan):
+    """A plan's code sites as sdk.bounties reads them from the built mod: (addr, len, label)."""
+    out = set()
+    for s in plan['json']['sites']:
+        n = len(s['stock']) // 2
+        if s['op'] in ('jsr', 'jmp', 'keep2'):
+            out.add((int(s['addr'], 16), n, s['target']))
+        elif s['op'] == 'bytes' and s.get('kind') == 'code':
+            out.add((int(s['addr'], 16), n, '?'))
+    return out
+
+
+def test_the_code_sites_of_a_module():
+    """--sites lists the stock code a module hooks as its conversion's code sites, for any
+    module: emit's data poke is not one, and a bridge's overridden detour is its own."""
+    img = stock()
+    with tempfile.TemporaryDirectory() as tmp:
+        ob = fake_checkout(tmp)
+        for n in ('fake', 'bridge'):
+            got, notes = octabam.code_sites(ob, n, img, DEV)
+            assert set(got) == _plan_code_sites(octabam.convert(ob, n, img, DEV)) and not notes, n
+        assert sorted(octabam.code_sites(ob, 'fake', img, DEV)[0]) == [
+            (0x4000f834, 8, 'fake_entry'), (0x4000f8cc, 6, 'ob_fake_a_cave'), (0x4002fb10, 6, 'ob_fake_a_cave')]
+        # a module that does not convert still has its stock code listed, with why it is refused
+        up = octabam.upstream(ob, img, DEV)
+        by = {e['name']: e for e in up['mods']}
+        assert by['hookmod']['sites'] == [['0x4001de6e', 6, 'hook_entry']] and 'DSP' in by['hookmod']['refused']
+        assert 'refused' not in by['fake'] and by['fake']['id'] == 'octabam-fake'
+        assert (up['device'], up['os'], up['from']) == ('octatrack', '1.40C', 'sambanks/octabam')
+
+
+def test_refusals_of_octabams_later_schema():
+    """What octabam's later manifests declare and the converter does not serve yet refuses the
+    module, by name; a manifest without those fields (octabam 363861e's) is as before."""
+    from types import SimpleNamespace as NS
+    img = stock()
+    with tempfile.TemporaryDirectory() as tmp:
+        ob = fake_checkout(tmp)
+        m = ob.modules['fake']
+        bare = {k: v for k, v in vars(m).items() if k not in ('runtime', 'arena')}
+        ob.modules['fake'] = NS(**bare)          # no runtime, no arena: the later schema's shape
+        assert octabam.refusal(ob, 'fake') is None
+        for change, words in (({'requires_brain': True}, 'needs BRAIN'),
+                              ({'settings': (NS(name='MODE'),)}, 'settings (MODE)'),
+                              ({'arena_reserves': (NS(label='stage'),)}, 'arena bytes of its own (stage)'),
+                              ({'dram_regions': (NS(symbol='ring'),)}, 'DRAM regions of its own (ring)'),
+                              ({'keeps': (NS(addr=0x400449be),)}, 'keeps stock bytes'),
+                              ({'linked': (NS(**dict(vars(m.linked[0]), loader=True)),)}, 'octabam\'s loader')):
+            ob.modules['fake'] = NS(**dict(bare, **change))
+            assert words in (octabam.refusal(ob, 'fake') or ''), (words, octabam.refusal(ob, 'fake'))
+        # a submodule's .asm is another repository's (Zac Kyoti's modules check out all of theirs);
+        # the manifest's dsp_source says what DSP code the module builds
+        ob.modules['fake'] = NS(**bare)
+        sub = os.path.join(ob.root, 'modules', 'fake', 'upstream')
+        os.makedirs(os.path.join(sub, 'other'))
+        open(os.path.join(sub, '.git'), 'w').close()
+        open(os.path.join(sub, 'other', 'fx.asm'), 'w').close()
+        assert octabam.refusal(ob, 'fake') is None
+        ob.modules['fake'] = NS(**dict(bare, dsp_source='modules/fake/upstream/image.py'))
+        assert 'integrates DSP code' in octabam.refusal(ob, 'fake')
+
+
 # ---- a real checkout ------------------------------------------------------------------------
 
 def real():
@@ -835,6 +897,23 @@ def test_real_bus_glue_is_checked():
         raise AssertionError('a stub entered past a replay it does not start with passed')
     finally:
         spec['skip'] = False
+
+
+def test_real_code_sites_are_the_conversions():
+    """For every module of the checkout that converts, --sites lists its conversion's code sites."""
+    ob, img = real(), stock()
+    seen = 0
+    for n in sorted(ob.modules):
+        if octabam.refusal(ob, n):
+            continue
+        try:
+            plan = octabam.convert(ob, n, img, DEV)
+        except octabam.Refused:
+            continue
+        got, _notes = octabam.code_sites(ob, n, img, DEV)
+        assert set(got) == _plan_code_sites(plan), n
+        seen += 1
+    assert seen, 'no module of the checkout converts'
 
 
 def test_real_overlapping_claims_do_not_combine():

@@ -5,6 +5,7 @@
                                      [--module NAME ...] [--remix NAME ...] [--reference IMAGE]
                                      --out DIR [--core CORE.elemod] [--bus] [--intercepts]
                                      [--dspbus DSPBUS.elemod] [--intercepts-mod INTERCEPTS.elemod]
+    python -m elekloader.sdk.octabam --octabam PATH --stock OCTATRACK_OS1.40C.syx --sites FILE.json
 
 octabam (MIT) declares each module in modules/<name>/manifest.py, in the
 vocabulary of its tools/remix/schema.py. This reads the manifests of a
@@ -53,7 +54,16 @@ Anything else refuses the module, with the reason:
 - a loader-appended Runtime (Octakit), an ArenaReserve, or a bridge over a
   runtime's writes;
 - needing (requires, or bridging) a module that does not convert;
-- serving DSP modules only (SERVES_DSP: MODE DEFAULTS, RIG HOSTS, TEMPO BUS).
+- serving DSP modules only (SERVES_DSP: MODE DEFAULTS, RIG HOSTS, TEMPO BUS);
+- what octabam's later manifests declare and this does not serve yet: settings
+  (octabam's build or BRAIN resolves them), needing BRAIN, ArenaReserves, DramRegions,
+  Keeps, a unit in octabam's loader, a DSP build step (dsp_source). A submodule inside a
+  module's folder is another repository: its .asm files do not count.
+
+**Sites** (`--sites`). Nothing is converted: for every module of the checkout, whether or
+not it converts, the stock code it hooks, as its conversion's code sites (code_sites), and
+why it is refused where it is. sdk.bounties reads that list (--upstream) as the stock code
+a newer octabam's modules hook (web/upstream/octabam.json).
 
 **Remixes** (`--remix`). An octabam remix converts as one mod: its modules (not the stock
 effects it lists), each converted as above, with the generated includes built for all of
@@ -223,14 +233,39 @@ def refusal(ob, name, _seen=(), hooks=False):
     dsp_ok = hooks and hooked_dsp(m)
     if not dsp_ok and (m.dsp is not None or m.menu is not None or m.params):
         return 'it has DSP code or an FX menu entry (only ColdFire-only modules convert)'
-    for _dp, _dns, fns in os.walk(os.path.join(ob.root, 'modules', name)):
+    for dp, dns, fns in os.walk(os.path.join(ob.root, 'modules', name)):
+        # a submodule is all of another repository, whose .asm can be other modules': the
+        # manifest names what of it this module builds (dsp, dsp_source)
+        dns[:] = [d for d in dns if not os.path.exists(os.path.join(dp, d, '.git'))]
         if not dsp_ok and any(f.endswith('.asm') for f in fns):
             return ('it carries DSP56300 code (.asm), which its build uploads (only '
                     'ColdFire-only modules convert)')
-    if m.runtime is not None:
-        return 'it is a loader-appended runtime (%s)' % m.runtime.recipe
-    if m.arena is not None:
+    if getattr(m, 'dsp_source', '') and not dsp_ok:      # octabam's later schema
+        return ('its build integrates DSP code of its own (%s), which does not convert (only '
+                'ColdFire-only modules convert)' % m.dsp_source)
+    # octabam 363861e's Runtime and ArenaReserve; its later schema replaced both
+    runtime = getattr(m, 'runtime', None)
+    if runtime is not None:
+        return 'it is a loader-appended runtime (%s)' % runtime.recipe
+    if getattr(m, 'arena', None) is not None:
         return 'it reserves arena pages of its own'
+    # what octabam's later schema added, which this does not place or serve yet
+    if getattr(m, 'requires_brain', False):
+        return 'it needs BRAIN, octabam\'s settings store on the unit, which does not convert'
+    if getattr(m, 'settings', ()):
+        return ('it has settings (%s), which octabam\'s build or BRAIN resolves; the converter '
+                'does not read them yet' % ', '.join(s.name for s in m.settings))
+    if getattr(m, 'arena_reserves', ()):
+        return 'it reserves arena bytes of its own (%s)' % ', '.join(r.label for r in m.arena_reserves)
+    if getattr(m, 'dram_regions', ()):
+        return ('it names DRAM regions of its own (%s), which the converter does not place yet'
+                % ', '.join(r.symbol for r in m.dram_regions))
+    if getattr(m, 'keeps', ()):
+        return ('it keeps stock bytes no other module may write (%s), which elekloader has no '
+                'claim for yet' % ', '.join('0x%08x' % k.addr for k in m.keeps))
+    for u in m.linked:
+        if getattr(u, 'loader', False):
+            return 'its unit "%s" goes in octabam\'s loader, which does not convert' % u.label
     for c in m.cf_patches:
         if not c.source and (c.cave_addr is None or c.pinned or c.hook_addr is not None):
             return 'its cave "%s" has no source' % c.label
@@ -238,7 +273,7 @@ def refusal(ob, name, _seen=(), hooks=False):
             return ('its cave "%s" draws a knob of %s (a formatter registration), a DSP module'
                     % (c.label, c.registers_formatter.module))
     for o in m.overrides:
-        if o.write is not None:
+        if getattr(o, 'write', None) is not None:
             return ('it bridges %s\'s runtime write %s, and runtimes do not convert'
                     % (o.module, o.write))
     for k in list(m.requires) + [o.module for o in m.overrides]:
@@ -263,6 +298,88 @@ def members(ob, name):
             if k not in out:
                 out.append(k)
     return out
+
+
+# ---- the stock code a module hooks (--sites: sdk.bounties' upstream list) -----------------
+
+def code_sites(ob, name, image, dev):
+    """-> ([(addr, len, label), ...], [note, ...]): the stock code module `name` hooks, as its
+    conversion's code sites (jsr, jmp, keep2, code bytes) are, each named by the symbol it
+    jumps to ('?' for a jump to stock code), whether or not the module converts. Data sites
+    (pokes, pointers, tables, a pinned cave's emitted pokes) and DSP code are left out, as
+    sdk.bounties leaves them out of a mod's."""
+    names_ = [name]
+    for n in names_:                        # members(), past an Override this checkout cannot name
+        for o in getattr(ob.modules[n], 'overrides', ()):
+            k = ob.by_key.get(o.module)
+            if k is not None and k not in names_:
+                names_.append(k)
+    mods = [ob.modules[n] for n in names_]
+    skip = {(o.site, o.module) for mm in mods for o in getattr(mm, 'overrides', ())}
+    out, notes = [], []
+
+    def add(addr, n, label, expect=None):
+        if expect is not None and _stock(image, dev, addr, len(expect)) != expect:
+            notes.append('0x%08x (%s) is not stock in this OS' % (addr, label))
+        out.append((addr, n, label))
+
+    for n, m in zip(names_, mods):
+        ms = _slug(n)
+        for c in getattr(m, 'cf_patches', ()):
+            sym = 'ob_%s_%s' % (ms, _slug(c.label)) if c.source else '?'
+            if c.hook_addr is not None:
+                add(c.hook_addr, len(c.hook_stock), sym, c.hook_stock)
+            if c.emit is None or c.cave_addr is not None:
+                continue                    # a pinned cave's pokes are data sites
+            try:
+                (_b1, p1), (_b2, p2) = [ob.call(c.emit, a) for a in EMIT_AT]
+            except Exception as e:           # a manifest's own code
+                notes.append('the cave "%s" did not emit (%s: %s)' % (c.label, type(e).__name__, e))
+                continue
+            for (pa, _exp, w1), (_pa, _exp2, w2) in zip(p1, p2):
+                if w1 == w2 or len(w1) != len(w2):
+                    continue
+                at = [i for i in range(0, len(w1) - 3, 2)
+                      if w1[:i] == w2[:i] and w1[i + 4:] == w2[i + 4:]
+                      and _u32(w1, i) - EMIT_AT[0] == _u32(w2, i) - EMIT_AT[1]]
+                if at and at[0] == 2 and (
+                        (w1[:2] in OPS.values() and w1[6:] == NOP * ((len(w1) - 6) // 2))
+                        or (len(w1) == 6 and w1[:2] == _stock(image, dev, pa, 2))):
+                    add(pa, len(w1), sym)   # a jsr/jmp or keep2 to the cave
+        for d in getattr(m, 'detours', ()):
+            if (d.site, m.key) in skip:
+                continue
+            dn = d.pad_to or 6
+            if d.kind == 'lea':
+                add(d.site, 6, d.symbol, d.expect)
+                continue
+            if d.kind == 'jmp':
+                dn = _boundary(image, d.site, dn, dev)
+            add(d.site, dn, '?' if d.target is not None else d.symbol, d.expect)
+    return out, notes
+
+
+def upstream(ob, image, dev):
+    """Every module of the checkout as sdk.bounties' upstream list (--sites)."""
+    mods = []
+    for n in sorted(ob.modules):
+        m = ob.modules[n]
+        sites, notes = code_sites(ob, n, image, dev)
+        why = refusal(ob, n)
+        e = {'id': mod_id(n), 'version': ob.commit, 'name': n, 'title': m.key,
+             'sites': [['0x%08x' % a, ln, lb] for a, ln, lb in sorted(set(sites))]}
+        if why:
+            e['refused'] = why              # the converter's first check, before any build
+        proof = getattr(getattr(m, 'proof', None), 'value', None)
+        if proof:
+            e['proof'] = proof
+        if notes:
+            e['notes'] = notes
+        mods.append(e)
+    return {'from': 'sambanks/octabam', 'commit': ob.commit, 'device': DEVICE, 'os': '1.40C',
+            'broken': [{'name': n, 'why': w.replace(ob.root + os.sep, '')}     # paths in the checkout
+                       for n, w in sorted(ob.broken.items())],
+            'mods': mods}
 
 
 def category(m):
@@ -1572,9 +1689,12 @@ def main(argv=None):
     ap.add_argument('--reference',
                     help='with one --remix: that build\'s out/mainos_bus.bin, instead of running '
                          'octabam\'s build here')
-    ap.add_argument('--out', required=True,
+    ap.add_argument('--out',
                     help='where the folders and .elemod go: outside the elekloader checkout, '
                          'since they carry octabam\'s sources')
+    ap.add_argument('--sites', metavar='FILE.json',
+                    help='convert nothing: write the stock code every module hooks, whether or not '
+                         'it converts, as sdk.bounties\' upstream list (web/upstream/octabam.json)')
     ap.add_argument('--core', help='the Octatrack core .elemod (default: build mods/core-ot)')
     ap.add_argument('--bus', action='store_true',
                     help='put the hooks the Octatrack core\'s hook bus serves (BUS: TUNER, CC '
@@ -1591,6 +1711,23 @@ def main(argv=None):
                                         'mods/intercepts-ot)')
     ap.add_argument('--no-check', action='store_true', help='build, but skip the check')
     a = ap.parse_args(argv)
+    if a.sites:
+        if not a.stock:
+            ap.error('--stock is required (or set ELEKLOADER_OT_SYX)')
+        st, dev, rel = formats.load(a.stock)
+        if dev.key != DEVICE:
+            ap.error('the stock file is for the %s, not the Octatrack' % dev.name)
+        ob = Octabam(a.octabam)
+        up = upstream(ob, formats.main_image(st, dev), dev)
+        with open(a.sites, 'w', encoding='utf-8', newline='\n') as fh:
+            json.dump(up, fh, indent=1)
+            fh.write('\n')
+        print('octabam %s: %d modules (%d refused), %d code sites; %d manifests do not load'
+              % (ob.commit, len(up['mods']), sum('refused' in e for e in up['mods']),
+                 sum(len(e['sites']) for e in up['mods']), len(up['broken'])))
+        return 0
+    if not a.out:
+        ap.error('--out is required')
     if inside_checkout(a.out):
         ap.error('%s is inside the elekloader checkout: converted mods carry octabam\'s '
                  'sources, so write them somewhere else' % a.out)

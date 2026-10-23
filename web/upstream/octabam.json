@@ -1,0 +1,3020 @@
+{
+ "from": "sambanks/octabam",
+ "commit": "b085c4d",
+ "device": "octatrack",
+ "os": "1.40C",
+ "broken": [],
+ "mods": [
+  {
+   "id": "octabam-analog-bassdrum",
+   "version": "b085c4d",
+   "name": "analog-bassdrum",
+   "title": "ANALOG BD",
+   "sites": [
+    [
+     "0x40002318",
+     8,
+     "ab_validate"
+    ],
+    [
+     "0x40031e74",
+     10,
+     "ab_resolve_pb"
+    ],
+    [
+     "0x400334d8",
+     6,
+     "ab_machine_name"
+    ],
+    [
+     "0x4003a52e",
+     8,
+     "ab_setup_edit6"
+    ],
+    [
+     "0x4003c928",
+     6,
+     "ab_src_names"
+    ],
+    [
+     "0x4003c980",
+     6,
+     "ab_setup_row"
+    ],
+    [
+     "0x4003cd98",
+     8,
+     "ab_setup_draw6"
+    ],
+    [
+     "0x4003d718",
+     6,
+     "ab_name_a"
+    ],
+    [
+     "0x4004c36a",
+     6,
+     "ab_name_b"
+    ],
+    [
+     "0x4005221e",
+     10,
+     "ab_tick_hook"
+    ],
+    [
+     "0x400585dc",
+     10,
+     "ab_setup_open"
+    ],
+    [
+     "0x4005a616",
+     6,
+     "ab_src_commit"
+    ],
+    [
+     "0x4005a850",
+     6,
+     "ab_src_commit2"
+    ],
+    [
+     "0x4006d784",
+     8,
+     "ab_list_draw"
+    ],
+    [
+     "0x40077b5c",
+     6,
+     "ab_pool_title"
+    ],
+    [
+     "0x400786c8",
+     6,
+     "ab_chooser_row"
+    ],
+    [
+     "0x40078886",
+     10,
+     "ab_chooser_open"
+    ],
+    [
+     "0x400791e4",
+     8,
+     "ab_pool_open"
+    ],
+    [
+     "0x4007981c",
+     6,
+     "ab_main_commit"
+    ]
+   ],
+   "refused": "it carries DSP56300 code (.asm), which its build uploads (only ColdFire-only modules convert)",
+   "proof": "hardware"
+  },
+  {
+   "id": "octabam-ata-write-guard",
+   "version": "b085c4d",
+   "name": "ata-write-guard",
+   "title": "ATA WRITE GUARD",
+   "sites": [
+    [
+     "0x40014d58",
+     6,
+     "ata_write_return"
+    ]
+   ],
+   "proof": "hardware"
+  },
+  {
+   "id": "octabam-batch-bugfixes",
+   "version": "b085c4d",
+   "name": "batch-bugfixes",
+   "title": "BATCH_BUGFIXES",
+   "sites": [
+    [
+     "0x400621da",
+     6,
+     "ob_batch_bugfixes_part_change_carryover_fix"
+    ],
+    [
+     "0x40062216",
+     6,
+     "ob_batch_bugfixes_part_change_carryover_fix"
+    ],
+    [
+     "0x4009a464",
+     6,
+     "ob_batch_bugfixes_empty_pattern_led_fix"
+    ],
+    [
+     "0x4009b6f2",
+     18,
+     "ob_batch_bugfixes_midi_plays_free_fix"
+    ]
+   ],
+   "proof": "hardware"
+  },
+  {
+   "id": "octabam-bbd",
+   "version": "b085c4d",
+   "name": "bbd",
+   "title": "BBD",
+   "sites": [
+    [
+     "0x40004d0c",
+     10,
+     "bbd_kill"
+    ]
+   ],
+   "refused": "it has DSP code or an FX menu entry (only ColdFire-only modules convert)",
+   "proof": "hardware"
+  },
+  {
+   "id": "octabam-blackpyramids-303",
+   "version": "b085c4d",
+   "name": "blackpyramids-303",
+   "title": "BLACKPYRAMIDS_303",
+   "sites": [
+    [
+     "0x40002318",
+     8,
+     "ot_validate"
+    ],
+    [
+     "0x400047f0",
+     6,
+     "ot_idle_hook"
+    ],
+    [
+     "0x40005030",
+     8,
+     "ot_live_req_hook"
+    ],
+    [
+     "0x4000b4f6",
+     10,
+     "ot_live_rel_hook"
+    ],
+    [
+     "0x4000e746",
+     6,
+     "ot_live_midi_hook"
+    ],
+    [
+     "0x40031e74",
+     10,
+     "ot_resolve_pb"
+    ],
+    [
+     "0x400334d8",
+     6,
+     "ot_machine_name"
+    ],
+    [
+     "0x4003a52e",
+     8,
+     "ot_setup_edit6"
+    ],
+    [
+     "0x4003b33c",
+     8,
+     "ot_slic_a"
+    ],
+    [
+     "0x4003bff0",
+     10,
+     "ot_pmtr_pb"
+    ],
+    [
+     "0x4003c928",
+     6,
+     "ot_src_names"
+    ],
+    [
+     "0x4003c980",
+     6,
+     "ot_setup_row"
+    ],
+    [
+     "0x4003cd98",
+     8,
+     "ot_setup_draw6"
+    ],
+    [
+     "0x4003ce02",
+     20,
+     "ot_setup_value_hook"
+    ],
+    [
+     "0x4003d552",
+     6,
+     "ot_slot_rec"
+    ],
+    [
+     "0x4003d718",
+     6,
+     "ot_name_a"
+    ],
+    [
+     "0x4004012c",
+     16,
+     "ot_glyph"
+    ],
+    [
+     "0x40044006",
+     6,
+     "ot_led_hook"
+    ],
+    [
+     "0x40044968",
+     10,
+     "ot_chrom_img_hook"
+    ],
+    [
+     "0x40044dbe",
+     8,
+     "ot_slic_b"
+    ],
+    [
+     "0x40045918",
+     8,
+     "ot_oct_hook"
+    ],
+    [
+     "0x4004c1c0",
+     6,
+     "ot_slot_rec_ui"
+    ],
+    [
+     "0x4004c36a",
+     6,
+     "ot_name_b"
+    ],
+    [
+     "0x4004f8dc",
+     8,
+     "ot_slices_hook"
+    ],
+    [
+     "0x4004fa54",
+     8,
+     "ot_slots_hook"
+    ],
+    [
+     "0x4004fba8",
+     12,
+     "ot_chrom_limit_hook"
+    ],
+    [
+     "0x4004fc84",
+     16,
+     "ot_live_chrom_hook"
+    ],
+    [
+     "0x4004fd0c",
+     20,
+     "ot_rec_chrom_hook"
+    ],
+    [
+     "0x4004fde4",
+     10,
+     "ot_page_key_hook"
+    ],
+    [
+     "0x4004fee2",
+     8,
+     "ot_slic_c"
+    ],
+    [
+     "0x40050254",
+     6,
+     "ot_chrom_key_hook"
+    ],
+    [
+     "0x40050ce2",
+     8,
+     "ot_plock_hook"
+    ],
+    [
+     "0x4005221e",
+     10,
+     "ot_tick_hook"
+    ],
+    [
+     "0x400585dc",
+     10,
+     "ot_setup_open"
+    ],
+    [
+     "0x4005a616",
+     6,
+     "ot_src_commit"
+    ],
+    [
+     "0x4005a850",
+     6,
+     "ot_src_commit2"
+    ],
+    [
+     "0x40062604",
+     14,
+     "ot_rec_midi_hook"
+    ],
+    [
+     "0x400786c8",
+     6,
+     "ot_chooser_row"
+    ],
+    [
+     "0x40078886",
+     10,
+     "ot_chooser_open"
+    ],
+    [
+     "0x400788c4",
+     6,
+     "ot_chooser_level"
+    ],
+    [
+     "0x4007981c",
+     6,
+     "ot_main_commit"
+    ],
+    [
+     "0x4009d1e8",
+     8,
+     "ot_step_hook"
+    ],
+    [
+     "0x4009d422",
+     12,
+     "ot_note_hook"
+    ],
+    [
+     "0x4009d4a8",
+     6,
+     "ot_oneshot_hook"
+    ]
+   ],
+   "refused": "its build integrates DSP code of its own (modules/blackpyramids-303/upstream/octabam-modules/blackpyramids-303/bp_image.py), which does not convert (only ColdFire-only modules convert)",
+   "proof": "hardware"
+  },
+  {
+   "id": "octabam-boot-trace",
+   "version": "b085c4d",
+   "name": "boot-trace",
+   "title": "BOOT TRACE",
+   "sites": [
+    [
+     "0x40000432",
+     6,
+     "tr_clock"
+    ],
+    [
+     "0x40000450",
+     6,
+     "tr_reprog_branch"
+    ],
+    [
+     "0x40000512",
+     6,
+     "tr_dsp_done"
+    ],
+    [
+     "0x40001b18",
+     8,
+     "tr_records"
+    ],
+    [
+     "0x40001b46",
+     6,
+     "tr_tx1"
+    ],
+    [
+     "0x40001b82",
+     6,
+     "tr_echo"
+    ],
+    [
+     "0x40001bb4",
+     8,
+     "tr_rececho"
+    ],
+    [
+     "0x40001c4c",
+     6,
+     "tr_tx3"
+    ],
+    [
+     "0x40001cf4",
+     6,
+     "tr_lastecho"
+    ],
+    [
+     "0x40001d4c",
+     8,
+     "tr_bootup"
+    ],
+    [
+     "0x40001e50",
+     8,
+     "tr_dsp"
+    ],
+    [
+     "0x4000aad0",
+     8,
+     "tr_frame"
+    ],
+    [
+     "0x4000d9a6",
+     10,
+     "tr_frame_end"
+    ],
+    [
+     "0x4000f9b4",
+     8,
+     "tr_reprog"
+    ],
+    [
+     "0x4001f4dc",
+     8,
+     "tr_handshake"
+    ],
+    [
+     "0x4001f834",
+     8,
+     "tr_panel"
+    ],
+    [
+     "0x40061c94",
+     6,
+     "tr_ui"
+    ]
+   ],
+   "proof": "hardware"
+  },
+  {
+   "id": "octabam-brain",
+   "version": "b085c4d",
+   "name": "brain",
+   "title": "BRAIN",
+   "sites": [
+    [
+     "0x40000554",
+     6,
+     "brain_sched"
+    ],
+    [
+     "0x40005572",
+     6,
+     "brain_on_midi"
+    ],
+    [
+     "0x40005a38",
+     8,
+     "brain_partinit"
+    ],
+    [
+     "0x4001513c",
+     8,
+     "brain_ata_in"
+    ],
+    [
+     "0x40015284",
+     6,
+     "brain_ata_out"
+    ],
+    [
+     "0x4004e474",
+     6,
+     "brain_klabel_hook"
+    ],
+    [
+     "0x4008485e",
+     6,
+     "brain_on_job"
+    ],
+    [
+     "0x40084d4a",
+     6,
+     "brain_on_bankload"
+    ],
+    [
+     "0x40085176",
+     6,
+     "brain_on_newproj"
+    ],
+    [
+     "0x40085342",
+     6,
+     "brain_on_load"
+    ],
+    [
+     "0x40085642",
+     6,
+     "brain_on_store"
+    ],
+    [
+     "0x400856dc",
+     6,
+     "brain_on_store"
+    ],
+    [
+     "0x40085780",
+     6,
+     "brain_on_store"
+    ]
+   ],
+   "refused": "it has settings (MIDI LOG, EVENT LOG, APPLY DFLTS), which octabam's build or BRAIN resolves; the converter does not read them yet",
+   "proof": "hardware"
+  },
+  {
+   "id": "octabam-buffer-saver",
+   "version": "b085c4d",
+   "name": "buffer-saver",
+   "title": "BUFFER SAVER",
+   "sites": [
+    [
+     "0x400069e4",
+     6,
+     "arm_mark"
+    ],
+    [
+     "0x40063618",
+     10,
+     "new_gate"
+    ],
+    [
+     "0x40063890",
+     6,
+     "save_gate"
+    ],
+    [
+     "0x4008534c",
+     6,
+     "load_clear"
+    ]
+   ],
+   "proof": "hardware"
+  },
+  {
+   "id": "octabam-busdelay",
+   "version": "b085c4d",
+   "name": "busdelay",
+   "title": "DELAY SERVER",
+   "sites": [],
+   "refused": "it has DSP code or an FX menu entry (only ColdFire-only modules convert)",
+   "proof": "hardware"
+  },
+  {
+   "id": "octabam-busverb",
+   "version": "b085c4d",
+   "name": "busverb",
+   "title": "REVERB SERVER",
+   "sites": [],
+   "refused": "it has DSP code or an FX menu entry (only ColdFire-only modules convert)",
+   "proof": "hardware"
+  },
+  {
+   "id": "octabam-cc-feedback",
+   "version": "b085c4d",
+   "name": "cc-feedback",
+   "title": "CC FEEDBACK",
+   "sites": [
+    [
+     "0x4005595c",
+     6,
+     "cf_tick"
+    ]
+   ],
+   "proof": "hardware"
+  },
+  {
+   "id": "octabam-cc-map",
+   "version": "b085c4d",
+   "name": "cc-map",
+   "title": "CC MAP",
+   "sites": [],
+   "proof": "hardware"
+  },
+  {
+   "id": "octabam-cfmeter",
+   "version": "b085c4d",
+   "name": "cfmeter",
+   "title": "CF METER",
+   "sites": [
+    [
+     "0x40004840",
+     8,
+     "m_e6"
+    ],
+    [
+     "0x40004bc8",
+     10,
+     "m_e6x"
+    ],
+    [
+     "0x4000a90c",
+     10,
+     "m_hc2"
+    ],
+    [
+     "0x4000ab26",
+     10,
+     "m_hc1"
+    ],
+    [
+     "0x4000d9a6",
+     10,
+     "m_tail"
+    ],
+    [
+     "0x4001fbf8",
+     6,
+     "m_isr"
+    ]
+   ],
+   "refused": "it has DSP code or an FX menu entry (only ColdFire-only modules convert)",
+   "proof": "hardware"
+  },
+  {
+   "id": "octabam-cfmeter-idle",
+   "version": "b085c4d",
+   "name": "cfmeter-idle",
+   "title": "CF METER IDLE",
+   "sites": [
+    [
+     "0x4001fc96",
+     6,
+     "m_idle"
+    ]
+   ],
+   "refused": "it needs CF METER, which does not convert: it has DSP code or an FX menu entry (only ColdFire-only modules convert)",
+   "proof": "hardware"
+  },
+  {
+   "id": "octabam-character",
+   "version": "b085c4d",
+   "name": "character",
+   "title": "CHARACTER",
+   "sites": [],
+   "refused": "it has DSP code or an FX menu entry (only ColdFire-only modules convert)",
+   "proof": "hardware"
+  },
+  {
+   "id": "octabam-character-txtr",
+   "version": "b085c4d",
+   "name": "character-txtr",
+   "title": "CHARACTER TXTR",
+   "sites": [],
+   "refused": "it has DSP code or an FX menu entry (only ColdFire-only modules convert)",
+   "proof": "hardware"
+  },
+  {
+   "id": "octabam-copy-project",
+   "version": "b085c4d",
+   "name": "copy-project",
+   "title": "COPY PROJECT",
+   "sites": [],
+   "proof": "hardware"
+  },
+  {
+   "id": "octabam-cxosc",
+   "version": "b085c4d",
+   "name": "cxosc",
+   "title": "CX OSC",
+   "sites": [
+    [
+     "0x40002318",
+     8,
+     "fm_validate"
+    ],
+    [
+     "0x4000685c",
+     6,
+     "po_kill"
+    ],
+    [
+     "0x4000b2c8",
+     6,
+     "po_stop"
+    ],
+    [
+     "0x4000b51a",
+     8,
+     "po_rel"
+    ],
+    [
+     "0x4000c634",
+     8,
+     "po_retrig"
+    ],
+    [
+     "0x4000d514",
+     8,
+     "po_fmsource"
+    ],
+    [
+     "0x4000de10",
+     6,
+     "po_mogate"
+    ],
+    [
+     "0x4000dfd4",
+     8,
+     "po_moff"
+    ],
+    [
+     "0x4000e452",
+     8,
+     "po_mgate"
+    ],
+    [
+     "0x4000e746",
+     6,
+     "po_mon"
+    ],
+    [
+     "0x40022686",
+     6,
+     "po_loadsel"
+    ],
+    [
+     "0x40027e98",
+     10,
+     "fm_page_store"
+    ],
+    [
+     "0x40029b54",
+     10,
+     "fm_part_undo"
+    ],
+    [
+     "0x40029b8a",
+     10,
+     "fm_part_paste"
+    ],
+    [
+     "0x4002b962",
+     10,
+     "fm_track_undo"
+    ],
+    [
+     "0x4002b99e",
+     10,
+     "fm_track_paste"
+    ],
+    [
+     "0x400334d8",
+     6,
+     "fm_machine_name"
+    ],
+    [
+     "0x4003685a",
+     12,
+     "po_ampdraw1"
+    ],
+    [
+     "0x400368ac",
+     12,
+     "po_ampdraw2"
+    ],
+    [
+     "0x40036946",
+     12,
+     "po_ampdraw3"
+    ],
+    [
+     "0x4003a52e",
+     8,
+     "fm_setup_edit6"
+    ],
+    [
+     "0x4003ae40",
+     12,
+     "po_ampedit"
+    ],
+    [
+     "0x4003af0a",
+     10,
+     "po_amplane"
+    ],
+    [
+     "0x4003c928",
+     6,
+     "fm_src_names"
+    ],
+    [
+     "0x4003c950",
+     6,
+     "ml_name_bound"
+    ],
+    [
+     "0x4003c980",
+     6,
+     "fm_setup_row"
+    ],
+    [
+     "0x4003cd98",
+     8,
+     "fm_setup_draw6"
+    ],
+    [
+     "0x4003d718",
+     6,
+     "fm_name_a"
+    ],
+    [
+     "0x40051fce",
+     6,
+     "po_octave"
+    ],
+    [
+     "0x4005221e",
+     10,
+     "fm_tick"
+    ],
+    [
+     "0x400585dc",
+     10,
+     "fm_setup_open"
+    ],
+    [
+     "0x400585fa",
+     8,
+     "ml_src_count"
+    ],
+    [
+     "0x40059d56",
+     6,
+     "po_ampstage"
+    ],
+    [
+     "0x4005a616",
+     6,
+     "fm_src_commit"
+    ],
+    [
+     "0x4005a848",
+     8,
+     "po_machlist"
+    ],
+    [
+     "0x4005a850",
+     6,
+     "fm_src_commit2"
+    ],
+    [
+     "0x400625e0",
+     10,
+     "po_mrec"
+    ],
+    [
+     "0x4006262a",
+     10,
+     "po_mtrig"
+    ],
+    [
+     "0x40078678",
+     12,
+     "ml_draw_bound"
+    ],
+    [
+     "0x400786c8",
+     6,
+     "fm_chooser_row"
+    ],
+    [
+     "0x400786ce",
+     6,
+     "ml_hi_bound"
+    ],
+    [
+     "0x40078886",
+     10,
+     "fm_chooser_open"
+    ],
+    [
+     "0x40078c22",
+     8,
+     "ml_clamp1"
+    ],
+    [
+     "0x40078cb0",
+     8,
+     "ml_clamp2"
+    ],
+    [
+     "0x40078d2e",
+     8,
+     "ml_clamp3"
+    ],
+    [
+     "0x40078dee",
+     8,
+     "ml_clamp4"
+    ],
+    [
+     "0x40078e7c",
+     8,
+     "ml_clamp5"
+    ],
+    [
+     "0x40079248",
+     8,
+     "ml_win_count"
+    ],
+    [
+     "0x400795ba",
+     8,
+     "po_assign"
+    ],
+    [
+     "0x40079816",
+     8,
+     "fm_main_commit"
+    ],
+    [
+     "0x40079904",
+     8,
+     "ml_cur_bound"
+    ],
+    [
+     "0x40096d22",
+     12,
+     "fm_preview"
+    ]
+   ],
+   "refused": "it has settings (PLACE), which octabam's build or BRAIN resolves; the converter does not read them yet",
+   "proof": "hardware"
+  },
+  {
+   "id": "octabam-direct-jump",
+   "version": "b085c4d",
+   "name": "direct-jump",
+   "title": "DIRECT JUMP",
+   "sites": [
+    [
+     "0x400a06d6",
+     12,
+     "ob_direct_jump_direct_jump_cave"
+    ],
+    [
+     "0x400a44e2",
+     18,
+     "ob_direct_jump_direct_jump_cave"
+    ]
+   ],
+   "proof": "hardware"
+  },
+  {
+   "id": "octabam-direct-jump-kyoti",
+   "version": "b085c4d",
+   "name": "direct-jump-kyoti",
+   "title": "DIRECT_JUMP_KYOTI",
+   "sites": [
+    [
+     "0x40043418",
+     6,
+     "dj_ptnrel"
+    ],
+    [
+     "0x400a1f72",
+     6,
+     "dj_land"
+    ],
+    [
+     "0x400a221c",
+     6,
+     "dj_nofa"
+    ]
+   ],
+   "refused": "it keeps stock bytes no other module may write (0x400bf0be, 0x400bf0c4), which elekloader has no claim for yet",
+   "proof": "hardware"
+  },
+  {
+   "id": "octabam-distorx",
+   "version": "b085c4d",
+   "name": "distorx",
+   "title": "DISTORX",
+   "sites": [],
+   "refused": "it has DSP code or an FX menu entry (only ColdFire-only modules convert)",
+   "proof": "hardware"
+  },
+  {
+   "id": "octabam-erase-empty-trigless-locks",
+   "version": "b085c4d",
+   "name": "erase-empty-trigless-locks",
+   "title": "ERASE_EMPTY_TRIGLESS_LOCKS",
+   "sites": [
+    [
+     "0x40038a5c",
+     6,
+     "ob_erase_empty_trigless_locks_erase_empty_trigless_locks_cave"
+    ]
+   ],
+   "proof": "hardware"
+  },
+  {
+   "id": "octabam-euclid",
+   "version": "b085c4d",
+   "name": "euclid",
+   "title": "EUCLID",
+   "sites": [
+    [
+     "0x4000d562",
+     6,
+     "eu_frame_hook"
+    ]
+   ],
+   "refused": "it has DSP code or an FX menu entry (only ColdFire-only modules convert)",
+   "proof": "hardware"
+  },
+  {
+   "id": "octabam-euclid-fill",
+   "version": "b085c4d",
+   "name": "euclid-fill",
+   "title": "EUCLID FILL",
+   "sites": [
+    [
+     "0x4004ffc4",
+     8,
+     "ef_page"
+    ]
+   ],
+   "proof": "hardware"
+  },
+  {
+   "id": "octabam-fx2-lock",
+   "version": "b085c4d",
+   "name": "fx2-lock",
+   "title": "FX2 LOCK",
+   "sites": [],
+   "proof": "hardware"
+  },
+  {
+   "id": "octabam-gateverb",
+   "version": "b085c4d",
+   "name": "gateverb",
+   "title": "GATE VERB",
+   "sites": [],
+   "refused": "it has DSP code or an FX menu entry (only ColdFire-only modules convert)",
+   "proof": "hardware"
+  },
+  {
+   "id": "octabam-kits",
+   "version": "b085c4d",
+   "name": "kits",
+   "title": "KITS",
+   "sites": [
+    [
+     "0x4001fb80",
+     6,
+     "kits_bootblank"
+    ],
+    [
+     "0x40026eb0",
+     10,
+     "kits_pcopy"
+    ],
+    [
+     "0x40026ef0",
+     8,
+     "kits_psnap"
+    ],
+    [
+     "0x4002b9b0",
+     8,
+     "kits_pstore_ptn"
+    ],
+    [
+     "0x4002dc9c",
+     6,
+     "kits_savekey"
+    ],
+    [
+     "0x4002e7b8",
+     6,
+     "kits_partkey"
+    ],
+    [
+     "0x4004c146",
+     6,
+     "kits_status"
+    ],
+    [
+     "0x400503c4",
+     8,
+     "kits_fright"
+    ],
+    [
+     "0x40056b2c",
+     8,
+     "kits_ptrig"
+    ],
+    [
+     "0x40058a64",
+     8,
+     "kits_mkisave"
+    ],
+    [
+     "0x4005e038",
+     10,
+     "kits_freload"
+    ],
+    [
+     "0x4005e3d8",
+     8,
+     "kits_funcyes"
+    ],
+    [
+     "0x40060db0",
+     8,
+     "kits_lpaste"
+    ],
+    [
+     "0x40060eb4",
+     8,
+     "kits_lclear"
+    ],
+    [
+     "0x40060f34",
+     8,
+     "kits_lcopy"
+    ],
+    [
+     "0x4009c634",
+     6,
+     "kits_chain"
+    ],
+    [
+     "0x400a0570",
+     8,
+     "kits_sched"
+    ]
+   ],
+   "proof": "hardware"
+  },
+  {
+   "id": "octabam-load-meter",
+   "version": "b085c4d",
+   "name": "load-meter",
+   "title": "LOAD METER",
+   "sites": [
+    [
+     "0x4000aad0",
+     8,
+     "lm_in"
+    ],
+    [
+     "0x4000d310",
+     6,
+     "lm_scrub"
+    ],
+    [
+     "0x4000d9a6",
+     10,
+     "lm_out"
+    ]
+   ],
+   "refused": "it has DSP code or an FX menu entry (only ColdFire-only modules convert)",
+   "proof": "hardware"
+  },
+  {
+   "id": "octabam-lofi-amf-fix",
+   "version": "b085c4d",
+   "name": "lofi-amf-fix",
+   "title": "LOFI AMF FIX",
+   "sites": [],
+   "proof": "hardware"
+  },
+  {
+   "id": "octabam-lofi2",
+   "version": "b085c4d",
+   "name": "lofi2",
+   "title": "LOFI2",
+   "sites": [],
+   "refused": "it has DSP code or an FX menu entry (only ColdFire-only modules convert)",
+   "proof": "hardware"
+  },
+  {
+   "id": "octabam-memory",
+   "version": "b085c4d",
+   "name": "memory",
+   "title": "MEMORY",
+   "sites": [],
+   "proof": "hardware"
+  },
+  {
+   "id": "octabam-midi-loopback",
+   "version": "b085c4d",
+   "name": "midi-loopback",
+   "title": "MIDI LOOPBACK",
+   "sites": [
+    [
+     "0x40005558",
+     8,
+     "lb_receive"
+    ],
+    [
+     "0x4000a3fe",
+     6,
+     "lb_rx_map"
+    ],
+    [
+     "0x4000a53a",
+     6,
+     "lb_rx_map"
+    ],
+    [
+     "0x4000a654",
+     6,
+     "lb_rx_map"
+    ],
+    [
+     "0x4000da58",
+     6,
+     "lb_rx_map"
+    ],
+    [
+     "0x4000e058",
+     6,
+     "lb_rx_map"
+    ],
+    [
+     "0x4000e7bc",
+     6,
+     "lb_rx_map"
+    ],
+    [
+     "0x4009f26e",
+     8,
+     "lb_control_tail"
+    ],
+    [
+     "0x4009f288",
+     8,
+     "lb_panic"
+    ],
+    [
+     "0x4009f794",
+     8,
+     "lb_tick"
+    ]
+   ],
+   "proof": "hardware"
+  },
+  {
+   "id": "octabam-midi-part-state",
+   "version": "b085c4d",
+   "name": "midi-part-state",
+   "title": "MIDI PART STATE",
+   "sites": [
+    [
+     "0x40000512",
+     6,
+     "mp_resident_activate"
+    ],
+    [
+     "0x40005638",
+     8,
+     "mp_init_entry"
+    ],
+    [
+     "0x40020898",
+     6,
+     "mp_copy_entry"
+    ]
+   ],
+   "proof": "hardware"
+  },
+  {
+   "id": "octabam-midi-scales",
+   "version": "b085c4d",
+   "name": "midi-scales",
+   "title": "MIDI SCALES",
+   "sites": [
+    [
+     "0x4007a3e2",
+     8,
+     "ms_encoder"
+    ],
+    [
+     "0x4009fb58",
+     6,
+     "ms_output"
+    ]
+   ],
+   "proof": "port"
+  },
+  {
+   "id": "octabam-midi-scenes",
+   "version": "b085c4d",
+   "name": "midi-scenes",
+   "title": "MIDI SCENES",
+   "sites": [
+    [
+     "0x40031f44",
+     8,
+     "scn_pad"
+    ],
+    [
+     "0x400343bc",
+     6,
+     "?"
+    ],
+    [
+     "0x400343e8",
+     6,
+     "scn_taddi"
+    ],
+    [
+     "0x4003445e",
+     6,
+     "?"
+    ],
+    [
+     "0x4003448e",
+     6,
+     "scn_paddi"
+    ],
+    [
+     "0x40034764",
+     6,
+     "scn_taddi"
+    ],
+    [
+     "0x40034950",
+     6,
+     "scn_taddi"
+    ],
+    [
+     "0x4003f3a2",
+     6,
+     "scn_morph"
+    ],
+    [
+     "0x400434ca",
+     6,
+     "scn_press"
+    ],
+    [
+     "0x4004e348",
+     6,
+     "scn_dial"
+    ],
+    [
+     "0x40052a10",
+     6,
+     "scn_done"
+    ],
+    [
+     "0x40052ae0",
+     6,
+     "scn_done"
+    ],
+    [
+     "0x40052ece",
+     10,
+     "scn_hold_b"
+    ],
+    [
+     "0x400534ce",
+     10,
+     "scn_hold_a"
+    ],
+    [
+     "0x40053a9e",
+     10,
+     "scn_enc_a"
+    ],
+    [
+     "0x40054392",
+     10,
+     "scn_enc_b"
+    ],
+    [
+     "0x4005538a",
+     8,
+     "scn_pwrite"
+    ],
+    [
+     "0x40061e78",
+     6,
+     "scn_xf1"
+    ],
+    [
+     "0x4006221c",
+     8,
+     "scn_evt"
+    ],
+    [
+     "0x40062c32",
+     6,
+     "scn_xf2"
+    ],
+    [
+     "0x40062e3c",
+     6,
+     "scn_paste"
+    ],
+    [
+     "0x40062f24",
+     6,
+     "scn_clear"
+    ],
+    [
+     "0x40062fbe",
+     6,
+     "scn_copy"
+    ],
+    [
+     "0x4009faaa",
+     6,
+     "scn_ccnote"
+    ],
+    [
+     "0x4009fe4e",
+     6,
+     "?"
+    ],
+    [
+     "0x400a169a",
+     6,
+     "scn_qcommit"
+    ],
+    [
+     "0x400a19da",
+     8,
+     "scn_snap1"
+    ],
+    [
+     "0x400a1d32",
+     6,
+     "scn_snap2"
+    ],
+    [
+     "0x400a3c2a",
+     6,
+     "scn_qrec"
+    ],
+    [
+     "0x400a44f4",
+     12,
+     "scn_switch"
+    ],
+    [
+     "0x400a4ba0",
+     6,
+     "scn_step"
+    ]
+   ],
+   "proof": "hardware"
+  },
+  {
+   "id": "octabam-miniverb",
+   "version": "b085c4d",
+   "name": "miniverb",
+   "title": "MINIVERB",
+   "sites": [],
+   "refused": "it has DSP code or an FX menu entry (only ColdFire-only modules convert)",
+   "proof": "hardware"
+  },
+  {
+   "id": "octabam-mode-defaults",
+   "version": "b085c4d",
+   "name": "mode-defaults",
+   "title": "MODE DEFAULTS",
+   "sites": [
+    [
+     "0x4003aaea",
+     6,
+     "fx2_hook"
+    ],
+    [
+     "0x4003acf2",
+     6,
+     "fx1_hook"
+    ]
+   ],
+   "refused": "it serves DSP modules, which do not convert: it re-defaults the knobs around a DSP engine's MODE select",
+   "proof": "hardware"
+  },
+  {
+   "id": "octabam-modulation",
+   "version": "b085c4d",
+   "name": "modulation",
+   "title": "MODULATION",
+   "sites": [],
+   "refused": "it has DSP code or an FX menu entry (only ColdFire-only modules convert)",
+   "proof": "hardware"
+  },
+  {
+   "id": "octabam-mute-modes",
+   "version": "b085c4d",
+   "name": "mute-modes",
+   "title": "MUTE_MODES",
+   "sites": [
+    [
+     "0x40004c72",
+     6,
+     "trigflag"
+    ],
+    [
+     "0x40004dc6",
+     6,
+     "pre"
+    ],
+    [
+     "0x40006820",
+     8,
+     "fresh_bind"
+    ],
+    [
+     "0x40006844",
+     6,
+     "mt_trig"
+    ],
+    [
+     "0x4000d498",
+     6,
+     "dt_trig"
+    ],
+    [
+     "0x4000f4dc",
+     8,
+     "mt_rebind"
+    ]
+   ],
+   "refused": "it has settings (PLACE), which octabam's build or BRAIN resolves; the converter does not read them yet",
+   "proof": "hardware"
+  },
+  {
+   "id": "octabam-octa303",
+   "version": "b085c4d",
+   "name": "octa303",
+   "title": "OCTA303",
+   "sites": [
+    [
+     "0x40002318",
+     8,
+     "o3_validate"
+    ],
+    [
+     "0x4000c634",
+     8,
+     "o3_retrig"
+    ],
+    [
+     "0x40031ece",
+     6,
+     "o3_page"
+    ],
+    [
+     "0x400334d8",
+     6,
+     "o3_machine_name"
+    ],
+    [
+     "0x4003a52e",
+     8,
+     "o3_setup_edit6"
+    ],
+    [
+     "0x4003c928",
+     6,
+     "o3_src_names"
+    ],
+    [
+     "0x4003c980",
+     6,
+     "o3_setup_row"
+    ],
+    [
+     "0x4003cd98",
+     8,
+     "o3_setup_draw6"
+    ],
+    [
+     "0x4003d718",
+     6,
+     "o3_name_a"
+    ],
+    [
+     "0x4004c36a",
+     6,
+     "o3_name_b"
+    ],
+    [
+     "0x4004fc58",
+     10,
+     "o3_chrom"
+    ],
+    [
+     "0x4005221e",
+     10,
+     "o3_tick"
+    ],
+    [
+     "0x400585dc",
+     10,
+     "o3_setup_open"
+    ],
+    [
+     "0x4005a616",
+     6,
+     "o3_src_commit"
+    ],
+    [
+     "0x4005a850",
+     6,
+     "o3_src_commit2"
+    ],
+    [
+     "0x400786c8",
+     6,
+     "o3_chooser_row"
+    ],
+    [
+     "0x40078886",
+     10,
+     "o3_chooser_open"
+    ],
+    [
+     "0x4007981c",
+     6,
+     "o3_main_commit"
+    ]
+   ],
+   "proof": "hardware"
+  },
+  {
+   "id": "octabam-persistent-buffers",
+   "version": "b085c4d",
+   "name": "persistent-buffers",
+   "title": "PERSISTENT BUFFERS",
+   "sites": [],
+   "proof": "hardware"
+  },
+  {
+   "id": "octabam-plocks-p2",
+   "version": "b085c4d",
+   "name": "plocks-p2",
+   "title": "PLOCKS P2",
+   "sites": [
+    [
+     "0x4000b770",
+     8,
+     "plk_note"
+    ],
+    [
+     "0x4000bafe",
+     8,
+     "plk_p2r"
+    ],
+    [
+     "0x4000c59e",
+     6,
+     "plk_apply"
+    ],
+    [
+     "0x400267e8",
+     6,
+     "plk_memcpy"
+    ],
+    [
+     "0x40026884",
+     6,
+     "plk_memcpy"
+    ],
+    [
+     "0x40026ece",
+     6,
+     "plk_memcpy"
+    ],
+    [
+     "0x40026f5e",
+     6,
+     "plk_memcpy"
+    ],
+    [
+     "0x40027764",
+     6,
+     "plk_memcpy"
+    ],
+    [
+     "0x40027834",
+     6,
+     "plk_memcpy"
+    ],
+    [
+     "0x4002924c",
+     6,
+     "plk_memcpy"
+    ],
+    [
+     "0x40029280",
+     6,
+     "plk_memcpy"
+    ],
+    [
+     "0x40029316",
+     6,
+     "plk_memcpy"
+    ],
+    [
+     "0x40029352",
+     6,
+     "plk_memcpy"
+    ],
+    [
+     "0x40029652",
+     6,
+     "plk_memcpy"
+    ],
+    [
+     "0x4002978e",
+     6,
+     "plk_memcpy"
+    ],
+    [
+     "0x40029980",
+     6,
+     "plk_memcpy"
+    ],
+    [
+     "0x4002b370",
+     6,
+     "plk_memcpy"
+    ],
+    [
+     "0x4002b42e",
+     6,
+     "plk_memcpy"
+    ],
+    [
+     "0x4002b4b2",
+     6,
+     "plk_memcpy"
+    ],
+    [
+     "0x4002b692",
+     6,
+     "plk_memcpy"
+    ],
+    [
+     "0x4002b9da",
+     6,
+     "plk_memcpy"
+    ],
+    [
+     "0x4002bf38",
+     8,
+     "plk_tcopy"
+    ],
+    [
+     "0x4002cb52",
+     6,
+     "plk_tpaste"
+    ],
+    [
+     "0x40037878",
+     6,
+     "plk_widget2"
+    ],
+    [
+     "0x40037c14",
+     6,
+     "plk_widget1"
+    ],
+    [
+     "0x40039df4",
+     8,
+     "plk_clrtrack"
+    ],
+    [
+     "0x4003de14",
+     6,
+     "plk_memcpy"
+    ],
+    [
+     "0x4003e036",
+     6,
+     "plk_memcpy"
+    ],
+    [
+     "0x40040e14",
+     8,
+     "plk_clrlocks"
+    ],
+    [
+     "0x400508e4",
+     8,
+     "plk_edit"
+    ],
+    [
+     "0x40058958",
+     6,
+     "plk_page_draw"
+    ],
+    [
+     "0x4006036e",
+     6,
+     "plk_place"
+    ],
+    [
+     "0x40060b38",
+     6,
+     "plk_page_draw"
+    ],
+    [
+     "0x4009b220",
+     8,
+     "plk_reset"
+    ],
+    [
+     "0x4009b858",
+     8,
+     "plk_s2p_a"
+    ],
+    [
+     "0x4009c038",
+     8,
+     "plk_s2p_b"
+    ],
+    [
+     "0x4009d704",
+     8,
+     "plk_fill_slide"
+    ],
+    [
+     "0x4009d8c6",
+     8,
+     "plk_fill_plain"
+    ]
+   ],
+   "proof": "hardware"
+  },
+  {
+   "id": "octabam-quantize-live-rec-toggle",
+   "version": "b085c4d",
+   "name": "quantize-live-rec-toggle",
+   "title": "QUANTIZE_LIVE_REC_TOGGLE",
+   "sites": [
+    [
+     "0x4004883a",
+     6,
+     "ob_quantize_live_rec_toggle_quantize_live_rec_toggle_cave"
+    ],
+    [
+     "0x40061778",
+     6,
+     "ob_quantize_live_rec_toggle_quantize_live_rec_toggle_cave"
+    ]
+   ],
+   "proof": "hardware"
+  },
+  {
+   "id": "octabam-quantizer",
+   "version": "b085c4d",
+   "name": "quantizer",
+   "title": "SCALE QUANTIZER",
+   "sites": [
+    [
+     "0x40010212",
+     6,
+     "qz_boot"
+    ],
+    [
+     "0x40025ac2",
+     6,
+     "qz_defaults"
+    ],
+    [
+     "0x40044968",
+     8,
+     "qz_octdraw"
+    ],
+    [
+     "0x400449b8",
+     6,
+     "qz_octnum"
+    ],
+    [
+     "0x40045918",
+     8,
+     "qz_octkey"
+    ],
+    [
+     "0x4004fbde",
+     6,
+     "qz_leg0"
+    ],
+    [
+     "0x4004fbfe",
+     8,
+     "qz_leg1"
+    ],
+    [
+     "0x4004fc58",
+     10,
+     "qz_chrom"
+    ],
+    [
+     "0x4004fc94",
+     8,
+     "qz_leg2"
+    ],
+    [
+     "0x4004fce0",
+     8,
+     "qz_leg3"
+    ],
+    [
+     "0x4004fd06",
+     6,
+     "qz_leg4"
+    ],
+    [
+     "0x4004fd20",
+     6,
+     "qz_leg5"
+    ],
+    [
+     "0x40050254",
+     8,
+     "qz_keyidx"
+    ],
+    [
+     "0x40050e60",
+     10,
+     "qz_plock"
+    ],
+    [
+     "0x40055170",
+     6,
+     "qz_knob"
+    ],
+    [
+     "0x40065bca",
+     6,
+     "qz_draw"
+    ],
+    [
+     "0x400866cc",
+     8,
+     "qz_ld_entry"
+    ],
+    [
+     "0x400867a2",
+     8,
+     "qz_ld_line"
+    ],
+    [
+     "0x400888aa",
+     8,
+     "qz_wr"
+    ]
+   ],
+   "refused": "it keeps stock bytes no other module may write (0x400449be), which elekloader has no claim for yet",
+   "proof": "hardware"
+  },
+  {
+   "id": "octabam-rec-threshold",
+   "version": "b085c4d",
+   "name": "rec-threshold",
+   "title": "REC THRESHOLD",
+   "sites": [
+    [
+     "0x4000ab72",
+     6,
+     "frame_check"
+    ],
+    [
+     "0x4002ef60",
+     6,
+     "edit_gate"
+    ],
+    [
+     "0x4002f0b4",
+     6,
+     "trig_init"
+    ],
+    [
+     "0x4002fb8e",
+     6,
+     "trig_screen"
+    ],
+    [
+     "0x4002fdbe",
+     6,
+     "draw_gate"
+    ],
+    [
+     "0x4004bee2",
+     6,
+     "blink_gate"
+    ],
+    [
+     "0x400835e2",
+     6,
+     "trig_gate"
+    ],
+    [
+     "0x4008364e",
+     6,
+     "idle_gate"
+    ],
+    [
+     "0x400837b6",
+     6,
+     "trig_gate_trk"
+    ],
+    [
+     "0x40083836",
+     6,
+     "idle_gate_trk"
+    ]
+   ],
+   "proof": "hardware"
+  },
+  {
+   "id": "octabam-rec-trig-mute",
+   "version": "b085c4d",
+   "name": "rec-trig-mute",
+   "title": "REC_TRIG_MUTE",
+   "sites": [
+    [
+     "0x4000f210",
+     6,
+     "rtm_cc"
+    ],
+    [
+     "0x4004bee2",
+     6,
+     "rtm_glyph"
+    ],
+    [
+     "0x4004c00c",
+     6,
+     "rtm_draw"
+    ],
+    [
+     "0x4009d9a4",
+     10,
+     "rtm_gate"
+    ]
+   ],
+   "proof": "hardware"
+  },
+  {
+   "id": "octabam-recorder-loop-fix",
+   "version": "b085c4d",
+   "name": "recorder-loop-fix",
+   "title": "RECORDER LOOP FIX",
+   "sites": [
+    [
+     "0x40006e0c",
+     6,
+     "rlf_spacing"
+    ],
+    [
+     "0x4000853e",
+     8,
+     "rlf_hold_xfade_a"
+    ],
+    [
+     "0x4000854e",
+     8,
+     "rlf_hold_xfade_b"
+    ],
+    [
+     "0x400085d8",
+     6,
+     "rlf_hold_xguard"
+    ],
+    [
+     "0x400086c2",
+     6,
+     "rlf_hold_copy"
+    ],
+    [
+     "0x40008716",
+     6,
+     "rlf_hold_guard"
+    ],
+    [
+     "0x4000f834",
+     8,
+     "rlf_seekbind_ctr"
+    ],
+    [
+     "0x4000f8cc",
+     6,
+     "rlf_seekbind"
+    ]
+   ],
+   "proof": "hardware"
+  },
+  {
+   "id": "octabam-reload-from-project",
+   "version": "b085c4d",
+   "name": "reload-from-project",
+   "title": "RELOAD_FROM_PROJECT",
+   "sites": [
+    [
+     "0x40023c62",
+     6,
+     "rl_done"
+    ],
+    [
+     "0x40040250",
+     6,
+     "rl3_bank_trk"
+    ],
+    [
+     "0x4007af42",
+     6,
+     "rl3_bank_show"
+    ],
+    [
+     "0x4007b3e0",
+     8,
+     "rl3_bank_rel"
+    ],
+    [
+     "0x40083dc4",
+     6,
+     "rl3_ptn_trk"
+    ],
+    [
+     "0x40085864",
+     8,
+     "rl_job"
+    ]
+   ],
+   "proof": "hardware"
+  },
+  {
+   "id": "octabam-remix-switch",
+   "version": "b085c4d",
+   "name": "remix-switch",
+   "title": "REMIX SWITCH",
+   "sites": [
+    [
+     "0x40000412",
+     6,
+     "osw_chain"
+    ],
+    [
+     "0x4002573e",
+     6,
+     "osw_bootfiles"
+    ],
+    [
+     "0x4002574c",
+     6,
+     "osw_bootproject"
+    ],
+    [
+     "0x40064c32",
+     6,
+     "osw_menu"
+    ]
+   ],
+   "refused": "it has DSP code or an FX menu entry (only ColdFire-only modules convert)",
+   "proof": "hardware"
+  },
+  {
+   "id": "octabam-resonator",
+   "version": "b085c4d",
+   "name": "resonator",
+   "title": "RESONATOR",
+   "sites": [],
+   "refused": "it has DSP code or an FX menu entry (only ColdFire-only modules convert)",
+   "proof": "hardware"
+  },
+  {
+   "id": "octabam-rig-hosts",
+   "version": "b085c4d",
+   "name": "rig-hosts",
+   "title": "RIG HOSTS",
+   "sites": [
+    [
+     "0x4000567e",
+     24,
+     "fx_ids"
+    ],
+    [
+     "0x40005830",
+     10,
+     "fx2_page1"
+    ],
+    [
+     "0x40005840",
+     10,
+     "fx2_page2"
+    ]
+   ],
+   "refused": "it serves DSP modules, which do not convert: it gives every new part BusDelay, BusVerb and SEND as its FX2",
+   "proof": "hardware"
+  },
+  {
+   "id": "octabam-rlen-plen",
+   "version": "b085c4d",
+   "name": "rlen-plen",
+   "title": "RLEN PLEN",
+   "sites": [
+    [
+     "0x40006da6",
+     6,
+     "plen_cave"
+    ],
+    [
+     "0x4002fb10",
+     6,
+     "plen_screen"
+    ]
+   ],
+   "proof": "hardware"
+  },
+  {
+   "id": "octabam-rnd-name",
+   "version": "b085c4d",
+   "name": "rnd-name",
+   "title": "RND NAME",
+   "sites": [],
+   "proof": "hardware"
+  },
+  {
+   "id": "octabam-scenes-p2",
+   "version": "b085c4d",
+   "name": "scenes-p2",
+   "title": "SCENES P2",
+   "sites": [
+    [
+     "0x4000cf40",
+     10,
+     "frame_hook"
+    ],
+    [
+     "0x40025b40",
+     12,
+     "scene_write_hook"
+    ],
+    [
+     "0x40037840",
+     8,
+     "dial2_hook"
+    ],
+    [
+     "0x40037bdc",
+     8,
+     "dial1_hook"
+    ],
+    [
+     "0x40038c30",
+     12,
+     "scene_clear_hook"
+    ],
+    [
+     "0x4003a9dc",
+     8,
+     "fx2_edit_hook"
+    ],
+    [
+     "0x4003abe4",
+     8,
+     "fx1_edit_hook"
+    ]
+   ],
+   "proof": "hardware"
+  },
+  {
+   "id": "octabam-send",
+   "version": "b085c4d",
+   "name": "send",
+   "title": "SEND",
+   "sites": [],
+   "refused": "it has DSP code or an FX menu entry (only ColdFire-only modules convert)",
+   "proof": "hardware"
+  },
+  {
+   "id": "octabam-sequencer-events",
+   "version": "b085c4d",
+   "name": "sequencer-events",
+   "title": "SEQUENCER EVENTS",
+   "sites": [
+    [
+     "0x4009c3d4",
+     6,
+     "seq_start"
+    ],
+    [
+     "0x4009c4d4",
+     6,
+     "seq_resume"
+    ],
+    [
+     "0x4009fbb2",
+     6,
+     "seq_sent_a"
+    ],
+    [
+     "0x4009fcfa",
+     6,
+     "seq_sent_b"
+    ]
+   ],
+   "proof": "check"
+  },
+  {
+   "id": "octabam-shatter",
+   "version": "b085c4d",
+   "name": "shatter",
+   "title": "SHATTER",
+   "sites": [],
+   "refused": "it has DSP code or an FX menu entry (only ColdFire-only modules convert)",
+   "proof": "hardware"
+  },
+  {
+   "id": "octabam-sidechain-compressor",
+   "version": "b085c4d",
+   "name": "sidechain-compressor",
+   "title": "SIDECHAIN_COMPRESSOR",
+   "sites": [
+    [
+     "0x40003d1c",
+     6,
+     "sc_norm"
+    ],
+    [
+     "0x4000cae8",
+     6,
+     "sc_norm"
+    ]
+   ],
+   "refused": "it has DSP code or an FX menu entry (only ColdFire-only modules convert)",
+   "proof": "hardware"
+  },
+  {
+   "id": "octabam-spectrum",
+   "version": "b085c4d",
+   "name": "spectrum",
+   "title": "SPECTRUM",
+   "sites": [],
+   "refused": "it has DSP code or an FX menu entry (only ColdFire-only modules convert)",
+   "proof": "hardware"
+  },
+  {
+   "id": "octabam-stems",
+   "version": "b085c4d",
+   "name": "stems",
+   "title": "STEM REC",
+   "sites": [
+    [
+     "0x40004b12",
+     8,
+     "stems_frame_hook"
+    ],
+    [
+     "0x40014cfe",
+     6,
+     "stems_ata_first"
+    ],
+    [
+     "0x40048774",
+     8,
+     "stems_rec_key"
+    ]
+   ],
+   "refused": "it names DRAM regions of its own (stems_ring, stems_stack, stems_buf), which the converter does not place yet",
+   "proof": "hardware"
+  },
+  {
+   "id": "octabam-store",
+   "version": "b085c4d",
+   "name": "store",
+   "title": "STORE",
+   "sites": [
+    [
+     "0x4000faf0",
+     10,
+     "store_tocs1"
+    ],
+    [
+     "0x40025808",
+     6,
+     "store_fromcs1"
+    ],
+    [
+     "0x4004a9c4",
+     10,
+     "store_partsaved"
+    ],
+    [
+     "0x4004a9d0",
+     8,
+     "store_partclear"
+    ],
+    [
+     "0x40061e00",
+     6,
+     "store_ctl"
+    ],
+    [
+     "0x4008ee42",
+     6,
+     "store_fcopy"
+    ],
+    [
+     "0x4008ee74",
+     8,
+     "store_pstore"
+    ],
+    [
+     "0x4008ef9a",
+     6,
+     "store_d5_ef9a"
+    ],
+    [
+     "0x4008f02e",
+     6,
+     "store_d5_f02e"
+    ],
+    [
+     "0x4008f14e",
+     6,
+     "store_fcopy"
+    ],
+    [
+     "0x4008f180",
+     8,
+     "store_preload"
+    ],
+    [
+     "0x4008f2a6",
+     6,
+     "store_d5_f2a6"
+    ],
+    [
+     "0x4008f33a",
+     6,
+     "store_d5_f33a"
+    ],
+    [
+     "0x40090504",
+     8,
+     "store_loadall"
+    ],
+    [
+     "0x400905d4",
+     8,
+     "store_loadmask"
+    ],
+    [
+     "0x400909d8",
+     10,
+     "store_newproj"
+    ],
+    [
+     "0x400917c8",
+     8,
+     "store_bankw"
+    ],
+    [
+     "0x400918aa",
+     6,
+     "store_bankw_mid"
+    ]
+   ],
+   "proof": "hardware"
+  },
+  {
+   "id": "octabam-stuttr",
+   "version": "b085c4d",
+   "name": "stuttr",
+   "title": "STUTTR",
+   "sites": [],
+   "refused": "it has DSP code or an FX menu entry (only ColdFire-only modules convert)",
+   "proof": "hardware"
+  },
+  {
+   "id": "octabam-synth",
+   "version": "b085c4d",
+   "name": "synth",
+   "title": "SYNTH MACHINE",
+   "sites": [
+    [
+     "0x40003ca4",
+     8,
+     "po_lfo3"
+    ],
+    [
+     "0x4000685c",
+     6,
+     "po_kill"
+    ],
+    [
+     "0x4000b2c8",
+     6,
+     "po_stop"
+    ],
+    [
+     "0x4000b51a",
+     8,
+     "po_rel"
+    ],
+    [
+     "0x4000c634",
+     8,
+     "po_retrig"
+    ],
+    [
+     "0x4000d03e",
+     8,
+     "po_lfo3b"
+    ],
+    [
+     "0x4000de10",
+     6,
+     "po_mogate"
+    ],
+    [
+     "0x4000dfd4",
+     8,
+     "po_moff"
+    ],
+    [
+     "0x4000e452",
+     8,
+     "po_mgate"
+    ],
+    [
+     "0x4000e746",
+     6,
+     "po_mon"
+    ],
+    [
+     "0x40022686",
+     6,
+     "po_loadsel"
+    ],
+    [
+     "0x40031e62",
+     8,
+     "po_lfopage"
+    ],
+    [
+     "0x4003685a",
+     12,
+     "po_ampdraw1"
+    ],
+    [
+     "0x400368ac",
+     12,
+     "po_ampdraw2"
+    ],
+    [
+     "0x40036946",
+     12,
+     "po_ampdraw3"
+    ],
+    [
+     "0x4003ae40",
+     12,
+     "po_ampedit"
+    ],
+    [
+     "0x4003af0a",
+     10,
+     "po_amplane"
+    ],
+    [
+     "0x40051fce",
+     6,
+     "po_octave"
+    ],
+    [
+     "0x40059d56",
+     6,
+     "po_ampstage"
+    ],
+    [
+     "0x4005a848",
+     8,
+     "po_machlist"
+    ],
+    [
+     "0x400625e0",
+     10,
+     "po_mrec"
+    ],
+    [
+     "0x4006262a",
+     10,
+     "po_mtrig"
+    ],
+    [
+     "0x400795ba",
+     8,
+     "po_assign"
+    ],
+    [
+     "0x40079816",
+     8,
+     "po_machwin"
+    ]
+   ],
+   "refused": "it has settings (PLACE), which octabam's build or BRAIN resolves; the converter does not read them yet",
+   "proof": "hardware"
+  },
+  {
+   "id": "octabam-tapeecho",
+   "version": "b085c4d",
+   "name": "tapeecho",
+   "title": "TAPE ECHO",
+   "sites": [
+    [
+     "0x40002f44",
+     8,
+     "te_cpu_reset"
+    ],
+    [
+     "0x4000361a",
+     10,
+     "te_cpu_hook"
+    ]
+   ],
+   "refused": "it has DSP code or an FX menu entry (only ColdFire-only modules convert)",
+   "proof": "hardware"
+  },
+  {
+   "id": "octabam-tempo-bus",
+   "version": "b085c4d",
+   "name": "tempo-bus",
+   "title": "TEMPO BUS",
+   "sites": [
+    [
+     "0x4004b528",
+     8,
+     "tb_draw"
+    ],
+    [
+     "0x40056930",
+     6,
+     "tb_close"
+    ],
+    [
+     "0x40059f2c",
+     6,
+     "tb_open"
+    ]
+   ],
+   "refused": "it serves DSP modules, which do not convert: it turns the TEMPO window into a page of BusDelay's and BusVerb's knobs",
+   "proof": "hardware"
+  },
+  {
+   "id": "octabam-tempo-sync",
+   "version": "b085c4d",
+   "name": "tempo-sync",
+   "title": "TEMPO SYNC",
+   "sites": [
+    [
+     "0x40004d40",
+     10,
+     "cave"
+    ]
+   ],
+   "refused": "it has settings (CAVE), which octabam's build or BRAIN resolves; the converter does not read them yet",
+   "proof": "hardware"
+  },
+  {
+   "id": "octabam-testgen",
+   "version": "b085c4d",
+   "name": "testgen",
+   "title": "TESTGEN",
+   "sites": [],
+   "refused": "it has DSP code or an FX menu entry (only ColdFire-only modules convert)",
+   "proof": "hardware"
+  },
+  {
+   "id": "octabam-transient",
+   "version": "b085c4d",
+   "name": "transient",
+   "title": "TRANSIENT",
+   "sites": [],
+   "refused": "it has DSP code or an FX menu entry (only ColdFire-only modules convert)",
+   "proof": "hardware"
+  },
+  {
+   "id": "octabam-tuner",
+   "version": "b085c4d",
+   "name": "tuner",
+   "title": "TUNER",
+   "sites": [
+    [
+     "0x4000d99a",
+     6,
+     "tu_frame"
+    ],
+    [
+     "0x40056c72",
+     6,
+     "tu_tick"
+    ],
+    [
+     "0x40059ef0",
+     6,
+     "tu_tempo"
+    ]
+   ],
+   "proof": "hardware"
+  },
+  {
+   "id": "octabam-usb",
+   "version": "b085c4d",
+   "name": "usb",
+   "title": "USB",
+   "sites": [
+    [
+     "0x40004bc0",
+     8,
+     "in_state7_shim"
+    ],
+    [
+     "0x4000d9a0",
+     6,
+     "audio_frame_shim"
+    ],
+    [
+     "0x400108b0",
+     6,
+     "usbmidi_prio_shim"
+    ],
+    [
+     "0x40010bc8",
+     8,
+     "usbmidi_send_shim"
+    ],
+    [
+     "0x4001d4b2",
+     6,
+     "audio_ep0page_shim"
+    ],
+    [
+     "0x4001d824",
+     6,
+     "audio_getiface_shim"
+    ],
+    [
+     "0x4001d858",
+     6,
+     "usbmidi_clamp1_shim"
+    ],
+    [
+     "0x4001d880",
+     8,
+     "stub_fs_config"
+    ],
+    [
+     "0x4001d888",
+     6,
+     "stub_hs_config"
+    ],
+    [
+     "0x4001d896",
+     6,
+     "usbmidi_clamp2_shim"
+    ],
+    [
+     "0x4001d8be",
+     8,
+     "stub_os_hs"
+    ],
+    [
+     "0x4001d8c6",
+     8,
+     "stub_os_fs"
+    ],
+    [
+     "0x4001d9ca",
+     6,
+     "usbmidi_rx_setcfg_shim"
+    ],
+    [
+     "0x4001daec",
+     6,
+     "usbmidi_clrfeat_shim"
+    ],
+    [
+     "0x4001dd04",
+     6,
+     "audio_setiface_shim"
+    ],
+    [
+     "0x4001dd0a",
+     6,
+     "in_setiface_shim"
+    ],
+    [
+     "0x4001de64",
+     6,
+     "audio_ctrl_shim"
+    ],
+    [
+     "0x4001de6e",
+     6,
+     "in_ctrl_shim"
+    ],
+    [
+     "0x4001e030",
+     6,
+     "crossbar_init_shim"
+    ],
+    [
+     "0x4001e606",
+     6,
+     "audio_isr_shim"
+    ],
+    [
+     "0x4001e91c",
+     6,
+     "audio_reset_shim"
+    ],
+    [
+     "0x4001e952",
+     6,
+     "audio_sessend_shim"
+    ]
+   ],
+   "refused": "it has DSP code or an FX menu entry (only ColdFire-only modules convert)",
+   "proof": "hardware"
+  },
+  {
+   "id": "octabam-varispeed",
+   "version": "b085c4d",
+   "name": "varispeed",
+   "title": "VARISPEED",
+   "sites": [
+    [
+     "0x40004100",
+     8,
+     "vem_frame"
+    ],
+    [
+     "0x40009094",
+     8,
+     "rp_apply1"
+    ],
+    [
+     "0x40009e00",
+     8,
+     "rp_apply2"
+    ],
+    [
+     "0x40027e4c",
+     8,
+     "vh_srcpaste"
+    ],
+    [
+     "0x40029a4c",
+     8,
+     "vh_partpaste"
+    ],
+    [
+     "0x4002b654",
+     8,
+     "vh_trkpaste"
+    ],
+    [
+     "0x40036698",
+     14,
+     "qdial1"
+    ],
+    [
+     "0x4003690c",
+     14,
+     "qdial2"
+    ],
+    [
+     "0x4003786a",
+     14,
+     "qdial3"
+    ],
+    [
+     "0x40037c06",
+     14,
+     "qdial4"
+    ],
+    [
+     "0x4004aab4",
+     8,
+     "rp_reload"
+    ],
+    [
+     "0x4006e71c",
+     10,
+     "attr_label"
+    ],
+    [
+     "0x4006ee48",
+     6,
+     "attr_up"
+    ],
+    [
+     "0x4006eef0",
+     8,
+     "attr_tail"
+    ],
+    [
+     "0x4006ef7c",
+     6,
+     "attr_down"
+    ],
+    [
+     "0x4006f026",
+     8,
+     "attr_tail"
+    ]
+   ],
+   "refused": "it has settings (PLACE), which octabam's build or BRAIN resolves; the converter does not read them yet",
+   "proof": "hardware"
+  },
+  {
+   "id": "octabam-vocoder",
+   "version": "b085c4d",
+   "name": "vocoder",
+   "title": "VOCODER",
+   "sites": [],
+   "refused": "it has DSP code or an FX menu entry (only ColdFire-only modules convert)",
+   "proof": "render"
+  },
+  {
+   "id": "octabam-void",
+   "version": "b085c4d",
+   "name": "void",
+   "title": "VOID",
+   "sites": [],
+   "refused": "it has DSP code or an FX menu entry (only ColdFire-only modules convert)",
+   "proof": "hardware"
+  },
+  {
+   "id": "octabam-wave",
+   "version": "b085c4d",
+   "name": "wave",
+   "title": "WAVE",
+   "sites": [],
+   "refused": "it has DSP code or an FX menu entry (only ColdFire-only modules convert)",
+   "proof": "hardware"
+  },
+  {
+   "id": "octabam-waveload",
+   "version": "b085c4d",
+   "name": "waveload",
+   "title": "WAVE LOAD",
+   "sites": [],
+   "refused": "it needs CF METER, which does not convert: it has DSP code or an FX menu entry (only ColdFire-only modules convert)",
+   "proof": "hardware"
+  }
+ ]
+}

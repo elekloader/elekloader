@@ -1969,6 +1969,30 @@ Every line of output is one of these:
 
 It needs the m68k cross binutils.
 
+The converted mods of the shop are from octabam's commit 363861e. octabam's
+later manifests declare more than the converter serves yet: settings
+(octabam's build, or BRAIN, its settings store on the unit, resolves
+them), modules that need BRAIN, DRAM regions, fixed arena bytes, stock
+bytes a module keeps (`Keep`), units in octabam's loader and a DSP build
+step of a module's own (`dsp_source`). A module that uses any of these is
+refused, with the reason. A submodule in a module's folder is another
+repository (Zac Kyoti's modules check out all of theirs): its `.asm` files
+are not the module's. So is a generated include
+written for octabam's later `include(modules, remix)`, and a module that
+links another's symbols (`CC_MODEDEF1`, `ARENA_BASE`) or requires one that
+does not convert (STORE) fails its link: nothing half-converted is written.
+
+`--sites FILE.json` converts nothing: it writes the stock code every module
+of the checkout hooks, whether or not it converts, as the code sites its
+conversion has (and the reason it is refused, if it is). That is the
+upstream list for the community's to-do list
+([Growing the core](CORE-CONTRIBUTING.md#what-is-left-to-do)):
+
+```bash
+python -m elekloader.sdk.octabam --octabam octabam --stock OCTATRACK_OS1.40C.syx \
+    --sites web/upstream/octabam.json
+```
+
 Where code goes:
 - **Floating code** goes in the core's RAM reserve. That includes the caves
   octabam floats in zero runs inside the OS image, so such a cave is the
