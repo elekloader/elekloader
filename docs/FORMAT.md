@@ -279,6 +279,14 @@ same conventions (docs/ADAPTING.md, "The hook bus on the Octatrack"):
 | `ev_transport` (0.5) | 0x4009c3d4, 0x4009c4d4 and 0x4009f5c6, the sequencer's start, resume and stop | `void f(what, playing)` |
 | `ev_boot_done`, `ev_idle` (0.5) | 0x4001fc96, main's last init call and idle loop | `void f(void)` |
 | `ev_tick120` (0.5) | 0x40055966, the key-repeat task's loop, 120 Hz | `void f(void)` |
+| `ev_voice_start` (0.7) | 0x4000c63c, the frame builder's copy of a track's DSP command byte | `unsigned f(trk, cmd)`; returns the command |
+| `ev_voice_release` (0.7) | 0x4000b4f6, the builder's AMP release | `void f(trk, word)` |
+| `ev_voice_kill` (0.7) | 0x40006862, in the voice reset routine 0x40006820 | `void f(trk)` |
+| `ev_voice_bind` (0.7) | 0x4000f4dc, in the binder 0x4000f450 | `int f(trk, voice)`; nonzero: the pointers are not written |
+| `ev_voice_seek` (0.7) | 0x4000f82c, in the binder | `int f(trk, voice, same)`; nonzero: the start counter is not bumped |
+| `ev_trig_apply` (0.7) | 0x4000c59e, where the builder's lock restore and apply paths join | `void f(trk, flags)` |
+| `ev_dsp_trig` (0.7) | 0x40004c72, in the voice record writer 0x40004bd4 | `int f(trk, flags)`; nonzero: no per-trig flag bits |
+| `ev_dsp_record` (0.7) | 0x40004d40, the same writer | `void f(trk, rec)` |
 
 An optional mod, the DSP bus (`mods/dspbus-ot`, dspbus 0.1), adds an event on
 DSP core 0. It is a DSP table, so its handlers are DSP code (`subscribe_dsp`):

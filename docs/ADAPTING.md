@@ -223,6 +223,14 @@ declares"*).
 | `ev_project_reload` (0.6) | RELOAD's copy of each `.strd` back to `.work` | `void f(unsigned pre, unsigned unused)` | 1 before, 0 after; `ev_project` follows. Engine task |
 | `ev_cs1_bank` (0.6) | the current bank's working copy into battery RAM, or back from it at power-up | `void f(unsigned to, unsigned bank)` | `to` 1: before stock copies it in; 0: after it came back |
 | `ev_part_saved`, `ev_part_cleared` (0.6) | Part Save, and Part Clear | `void f(unsigned part, unsigned unused)` | the current bank. Part Clear ends in Part Save, so a clear brings both |
+| `ev_voice_start` (0.7) | a DSP command was posted for a track this frame (not 0) | `unsigned f(unsigned trk, unsigned cmd)` | in the frame interrupt. Returns the command the next handler, the packer and the DSP get |
+| `ev_voice_release` (0.7) | the AMP release of a track | `void f(unsigned trk, unsigned word)` | frame interrupt; the mailbox word, bit 6 set |
+| `ev_voice_kill` (0.7) | a voice was reset (STOP, a pattern change, the loaders, the preview) | `void f(unsigned trk)` | every interrupt masked, from a task or the frame interrupt |
+| `ev_voice_bind` (0.7) | the binder is about to write a voice's arena pointers | `int f(unsigned trk, void *voice)` | frame interrupt; nonzero leaves them (the voice stays unbound and is reset once or twice a frame) |
+| `ev_voice_seek` (0.7) | the binder is about to count a (re)start of a voice | `int f(unsigned trk, void *voice, unsigned same)` | frame interrupt; nonzero leaves the counter, so the DSP seeks the voice |
+| `ev_trig_apply` (0.7) | a trig's locks reached the track's lane | `void f(unsigned trk, unsigned flags)` | frame interrupt |
+| `ev_dsp_trig` (0.7) | a track's per-trig flag bits are about to be built into its DSP word | `int f(unsigned trk, unsigned flags)` | frame interrupt; nonzero builds the word as for a frame with no trig |
+| `ev_dsp_record` (0.7) | a track's 64-byte record for the DSP has its FX ids | `void f(unsigned trk, uint16_t *rec)` | frame interrupt, 8 times a frame; a store here lands last |
 
 The sites core-ot owns (Octatrack 1.40C): the boot site 0x4000050c, the 28
 arena writes listed in its `mod.json`, 0x40061e94, 0x40013cae, 0x40061dc8,
@@ -231,8 +239,10 @@ arena writes listed in its `mod.json`, 0x40061e94, 0x40013cae, 0x40061dc8,
 0x4001fc96 and 0x40055966; from 0.6 the engine task's loop (0x4008484e,
 0x4008485e) and the routines its jobs call (0x40090504, 0x400905d4,
 0x400917c8, 0x400918aa, 0x4008ee74, 0x4008f180, 0x4000faf0, 0x40025808,
-0x4004a9c4, 0x4004a9d0); and its draw gate at 0x400c46ea-0x400c4702. They
-keep clear of every byte that the converted octabam modules (4b) patch.
+0x4004a9c4, 0x4004a9d0); from 0.7 the voice (0x4000c63c, 0x4000b4f6,
+0x40006862, 0x4000f4dc, 0x4000f82c, 0x4000c59e, 0x40004c72, 0x40004d40); and
+its draw gate at 0x400c46ea-0x400c4702. They keep clear of every byte that the
+converted octabam modules (4b) patch.
 
 The transport events are the sequencer's own start, resume and STOP routines
 (0x4009b964 and 0x4009f5bc): the keys, MIDI start/continue/stop and the
@@ -335,6 +345,68 @@ const struct core_projdata my_block = { OT_TAG('M', 'I', 'N', 'E'), sizeof my_by
 A stock routine that returns a pointer returns it in d0. GCC's m68k ABI
 reads a returned pointer from a0, so declare such a routine as returning an
 integer, and cast.
+
+#### Voice events on the Octatrack (core-ot 0.7)
+
+The frame interrupt's builder turns each track's mailbox word into the DSP
+command byte, the live lanes and the 64-byte record the DSP receives, and the
+binder ties a track's voice to its sample. Octabam's synth machines, MUTE
+MODES, TEMPO SYNC, PLOCKS P2 and the recorder fixes each detour a few of
+those places, and only one module can. The events (`octatrack/core.h` has
+their arguments' locations, `OT_DSP_CMD`, `OT_MAILBOX` and `OT_VOICE`):
+
+```c
+#include "octatrack/core.h"
+
+/* a synth track's START is always the panel key's clean form */
+unsigned my_start(unsigned trk, unsigned cmd)
+{
+    return (cmd & 0x30) && my_is_synth(trk) ? 0x30 : cmd;
+}
+```
+
+```json
+"subscribe": [{"event": "ev_voice_start", "fn": "my_start", "order": 50}],
+"resources": {"core": "0.7"}
+```
+
+| event | the call | what a handler may do |
+|---|---|---|
+| `ev_voice_start(trk, cmd)` | the builder has a DSP command for the track, `cmd` (not 0): a trig the sequencer posted (0x10 plus the sub-frame position), a panel key (0x30), a MIDI note | return the command to use; the next handler gets it, and so do the packer and the DSP. It cannot start a voice (no command, no call) |
+| `ev_voice_release(trk, word)` | the track's mailbox word has bit 6, the AMP release (the last key up, a note-off, whatever the sequencer posts); bit 2 is a START in the same word | read; the release bytes 0x80001828/9 are read after the handlers, so they can be changed |
+| `ev_voice_kill(trk)` | the reset routine 0x40006820 has cleared the voice's byte in the CF voice array: STOP, a pattern change, the loaders, the preview, a voice that has played to its end, a track with no sample | read. Every interrupt is masked, and the caller may be a task or the frame interrupt |
+| `ev_voice_bind(trk, voice)` | the binder is about to write the voice's arena pointers | return nonzero to leave them; the voice is then unbound, and the renderer resets it once or twice a frame |
+| `ev_voice_seek(trk, voice, same)` | the binder is about to count a (re)start (`OT_V_STARTS`); `same`: the voice already has this sample | return nonzero to leave the counter, so the frame builder does not send the voice as new (the DSP seeks it) |
+| `ev_trig_apply(trk, flags)` | a trig's locks reached the lane; `flags` bit 31 no apply, bit 6 no restore, bit 2 keep the record | read, and write the lane (0x80000810 + 72 t) |
+| `ev_dsp_trig(trk, flags)` | the writer is about to build the track's per-trig flag bits into its DSP word | return nonzero to build the word as for a frame with no trig |
+| `ev_dsp_record(trk, rec)` | the track's 64-byte DSP record has its FX ids | write it: a store lands last in the frame |
+
+Which octabam module needs what:
+
+| module | its detours | the events |
+|---|---|---|
+| CX OSC, SYNTH | the start rewrite (`po_retrig`), the release (`po_rel`), the kill (`po_kill`), `po_assign`, `po_machwin`, `po_machlist` | `ev_voice_start`, `ev_voice_release`, `ev_voice_kill`; the last three are machines-ot's (below) |
+| OCTA303 | the start rewrite (`o3_retrig`) | `ev_voice_start` |
+| BLACKPYRAMIDS-303 | the live release (0x4000b4f6) | `ev_voice_release` |
+| PLOCKS P2 | the join of the restore and apply paths | `ev_trig_apply` (its other places are the step events') |
+| MUTE MODES | the pointer stores (`mt_rebind`), the DSP word's flags (`trigflag`) and, in its other hooks, the reset's body | `ev_voice_bind`, `ev_dsp_trig`; not the reset's body (it would have to unwind two saved registers, and ordinary trigs do not pass through it) |
+| TEMPO SYNC | the FX id store | `ev_dsp_record` |
+| RECORDER LOOP FIX | the counter (FLEX SEEKBIND), with its same-sample test (0x4000f8cc) | `ev_voice_seek`; the same-sample test is still its own |
+
+**Not here: `ev_machine_set(trk, machine, slot)`.** The three places where a
+track's machine or slot is committed (0x400795ba, 0x40079816, 0x4005a848)
+belong to machines-ot, which owns the chooser's and SRC SETUP's commits right
+after them. It decides there whether a commit happens and what the final byte
+is, and reads a track's machine from the Part's signature. An event at the
+stock writes would run before that decision, with a byte machines-ot may
+still refuse. In machines-ot 0.2 it fires after the commit with the old and
+new machine and the slot.
+
+**The sites are not octabam's.** SYNTH (octabam2elemod v1.0) detours 0x4000c634,
+0x4000b51a, 0x4000685c, 0x400795ba, 0x40079816 and 0x4005a848, and FLEX
+SEEKBIND 0x4000f834. Each event is on the instruction beside the one they
+take, so those files link with core-ot 0.7 and a build with both runs both
+(SYNTH's `jmp` back into the builder ends at an event's stub).
 
 ### The DSP bus on the Octatrack (dspbus 0.1)
 

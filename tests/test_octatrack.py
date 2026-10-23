@@ -269,7 +269,7 @@ def test_the_core_moves_the_arena_past_its_reserve():
     assert all(int(s['addr'], 16) != PURGE_BANKS_END + 2 for s in j['sites'])
     calls = {s['target']: int(s['addr'], 16) for s in j['sites'] if s['op'] in ('jsr', 'jmp')}
     assert calls.pop('boot') == 0x4000050c
-    assert set(calls) == set(BUS_SITES) | set(STORE_SITES), calls   # the rest are the bus's and the store's
+    assert set(calls) == set(BUS_SITES) | set(STORE_SITES) | set(VOICE_SITES), calls   # the rest are the bus's, the store's and the voice's
 
 
 def reserve_docs(img, bss, fixed=False):
@@ -406,7 +406,7 @@ def test_the_core_bus_sites():
     # ev_idle is called by the stub that calls ev_boot_done; every other event has a site of its own
     assert sorted(j['collections']) == sorted({e for _a, _s, e in BUS_SITES.values()} | {'ev_idle'}
                                               | {v[2] for v in STORE_SITES.values() if v[2]}
-                                              | set(STORE_TABLES))
+                                              | set(STORE_TABLES) | {v[2] for v in VOICE_SITES.values()})
     assert j['collections']['ev_idle'] == 4
     for sym, target in JMP_BACK.items():       # a jmp stub goes back to the instruction after its site
         addr, stock_hex, _ev = BUS_SITES[target]
@@ -484,6 +484,145 @@ def test_the_core_store_sites():
             refs += 1
             k += 1
         assert refs, target
+
+
+# The voice events (core-ot 0.7, voice.s): each site, the bytes it displaces, its event and where its stub
+# goes back to. Every site is a jmp whose stub replays what it displaced. The routines are octabam's
+# (SYNTH, MUTE MODES, TEMPO SYNC, PLOCKS P2, the recorder fixes; MIT); each site is the instruction beside
+# the one they detour where irpina/octabam2elemod v1.0's SYNTH and FLEX SEEKBIND hold it.
+VOICE_SITES = {
+    'core_v_start': (0x4000c63c, '41f946104d0c', 'ev_voice_start', 'V_START_NEXT'),      # lea 0x46104d0c,a0
+    'core_v_release': (0x4000b4f6, '183980001828' '1f440076', 'ev_voice_release', 'V_REL_NEXT'),
+    'core_v_kill': (0x40006862, '2001e7882040', 'ev_voice_kill', 'V_KILL_NEXT'),        # move.l d1,d0 ; lsl.l #3,d0 ; movea.l d0,a0
+    'core_v_bind': (0x4000f4dc, '254d0004' '254c0008', 'ev_voice_bind', 'V_BIND_NEXT'),  # move.l a5,4(a2) ; move.l a4,8(a2)
+    'core_v_seek': (0x4000f82c, '266f0032' '27480038', 'ev_voice_seek', 'V_SEEK_BUMP'),  # movea.l 50(sp),a3 ; move.l a0,56(a3)
+    'core_v_trig': (0x4000c59e, '200c44c06b70', 'ev_trig_apply', 'V_TRIG_LONG'),        # move.l a4,d0 ; move.w d0,ccr ; bmi
+    'core_dsp_trig': (0x40004c72, '7003c0816738', 'ev_dsp_trig', 'V_FLAGS_TRIG'),       # moveq #3,d0 ; and.l d1,d0 ; beq
+    'core_dsp_record': (0x40004d40, '14280dbc' '4882' '35420038', 'ev_dsp_record', 'V_REC_NEXT'),
+}
+# What v1.0's SYNTH (po_retrig, po_rel, po_kill, po_assign, po_machwin, po_machlist) and FLEX SEEKBIND
+# (the counter, the same-sample test) write in the same routines: the voice events keep clear of every byte.
+V10_VOICE = ((0x4000c634, 8), (0x4000b51a, 8), (0x4000685c, 6), (0x400795ba, 8), (0x40079816, 8),
+             (0x4005a848, 8), (0x4000f834, 8), (0x4000f8cc, 6))
+# What the stubs and voice.s's comments rely on in the stock image: the track and the flags in the
+# registers and frame slots the stubs read, and where they go back to.
+VOICE_FACTS = (
+    (0x4000c634, '226f0072' '10309800'),     # a1 = the track, d0 = the command byte (what octabam's po_retrig replaces)
+    (0x4000c642, '11809800'),                # the start stub goes back here: move.b d0,0x46104d0c(a1.l)
+    (0x4000b4dc, '242f0072' '20312c00' '08000006' '660c'),  # d2 = the track, d0 = its mailbox word, bit 6 set
+    (0x4000b500, '1a398000' '1829'),         # the release bytes are read next (after the stub)
+    (0x40006824, '222f000c'),                # d1 = the track (the argument of the routine at 0x40006820)
+    (0x40006844, '40c2' '46fc2700'),         # the routine raises the interrupt level to 7 ...
+    (0x4000685c, '4200' '13808800'),         # ... clears the voice's byte in the CF voice array (SYNTH's site)
+    (0x40006868, '45f01a01'),                # the kill stub goes back here
+    (0x4000f474, '222f0040'),                # the binder: 64(sp) is the track
+    (0x4000f478, '243c000000a8'),            # the voice struct is 168 bytes
+    (0x4000f484, 'd5fc800049d8'),            # at 0x800049d8
+    (0x4000f568, '1f440037'),                # 55(sp) is the same-sample flag
+    (0x4000f834, '52aa0090' '25480098'),     # the counter's bump (FLEX SEEKBIND's site) follows the seek stub
+    (0x4000f83c, '202f0038'),                # a veto goes back here
+    (0x4000c42c, '200c' '08000006' '6600016a'),   # a4 = the trig's flags: bit 6 skips the restore
+    (0x4000c5a4, '222f0072'),                # the join's long continuation reads the track from 114(sp)
+    (0x4000c614, '220c' '08010001'),         # and the short one goes on
+    (0x40004c70, '7315'),                    # d1 = the byte at (a5)
+    (0x40004cb0, '44c1' '660a'),             # the no-trig exit tests d1's bit 2
+    (0x40004d38, '2044' 'd1fc80000110'),     # a0 = 0x80000110 + the track (d4)
+    (0x40004d4a, '2045' '7110'),             # the writer goes on
+)
+
+
+def test_the_core_voice_sites():
+    """core-ot 0.7's voice events: each site displaces whole stock instructions, no branch in the image
+    lands inside one, its stub goes back to the instruction after, and none meets a byte the v1.0
+    conversions (SYNTH, FLEX SEEKBIND), the bus, the store or the intercepts write. voice.s relies on
+    registers and frame slots whose stock instructions are checked here."""
+    with open(os.path.join(ROOT, 'mods', 'core-ot', 'mod.json')) as fh:
+        j = json.load(fh)
+    with open(os.path.join(ROOT, 'mods', 'intercepts-ot', 'mod.json')) as fh:
+        icpt = [(int(x['addr'], 16), len(x['stock']) // 2) for x in json.load(fh)['sites']]
+    st, img = stock()
+    sites = {s['target']: s for s in j['sites'] if s['op'] in ('jsr', 'jmp')}
+    taken = ([(a, len(h) // 2) for a, h, _e in BUS_SITES.values()]
+             + [(a, len(h) // 2) for a, h, _e, _b in STORE_SITES.values()] + icpt + list(V10_NEIGHBOURS)
+             + list(V10_VOICE))
+    inside = {}
+    for target, (addr, stock_hex, event, back) in VOICE_SITES.items():
+        s, n = sites[target], len(stock_hex) // 2
+        assert (int(s['addr'], 16), s['stock']) == (addr, stock_hex), target
+        assert s['op'] == 'jmp', target
+        o = addr - DEV.main_load
+        assert img[o:o + n].hex() == stock_hex, target
+        ok, note = elemod.insn_check(img, addr, n, DEV)
+        assert ok, (target, note)
+        assert j['collections'][event] == 4, event
+        assert int(j['defsym'][back], 16) == addr + n, target
+        for a, m in taken:
+            assert not (a < addr + n and addr < a + m), (target, hex(a))
+        for t in range(addr + 1, addr + n):
+            inside[t] = target
+    events = [v[2] for v in VOICE_SITES.values()]
+    assert len(set(events)) == len(events) == 8                          # each event has a site of its own
+    # the stubs that go somewhere else than past their site
+    d = {k: int(v, 16) for k, v in j['defsym'].items()}
+    assert d['V_SEEK_NEXT'] == d['V_SEEK_BUMP'] + 8                       # the counter's pair of stores
+    assert d['V_TRIG_SKIP'] == 0x4000c59e + 4 + 2 + 0x70                  # the bmi's target
+    assert d['V_FLAGS_NONE'] == 0x40004c72 + 4 + 2 + 0x38                 # the beq's target
+    assert d['DSPCMD'] == 0x46104d15
+    for addr, h in VOICE_FACTS:
+        o = addr - DEV.main_load
+        assert img[o:o + len(h) // 2].hex() == h, hex(addr)
+    for o in range(0, len(img) - 6, 2):         # bra/bsr/bcc, jmp/jsr absolute or pc-relative
+        w = struct.unpack('>H', img[o:o + 2])[0]
+        pc, tgt = DEV.main_load + o, None
+        if w & 0xf000 == 0x6000:
+            d8 = w & 0xff
+            if d8 == 0:
+                tgt = pc + 2 + struct.unpack('>h', img[o + 2:o + 4])[0]
+            elif d8 == 0xff:
+                tgt = pc + 2 + struct.unpack('>i', img[o + 2:o + 6])[0]
+            else:
+                tgt = pc + 2 + (d8 - 256 if d8 & 0x80 else d8)
+        elif w in (0x4ef9, 0x4eb9):
+            tgt = struct.unpack('>I', img[o + 2:o + 6])[0]
+        elif w in (0x4efa, 0x4eba):
+            tgt = pc + 2 + struct.unpack('>h', img[o + 2:o + 4])[0]
+        assert tgt not in inside, (hex(pc), hex(tgt), inside.get(tgt))
+    # core.h's voice locations are ones the image uses as absolute addresses
+    with open(os.path.join(ROOT, 'elekloader', 'sdk', 'include', 'octatrack', 'core.h')) as fh:
+        src = fh.read().lower()
+    for a in (0x46104d15, 0x46c80354, 0x800049d8):
+        assert ('0x%08xu' % a) in src or ('0x%xu' % a) in src, hex(a)
+        pat = struct.pack('>I', a)
+        assert any(img[i:i + 4] == pat and (img[i - 1] & 0x3f) == 0x39 for i in range(2, len(img) - 3)), hex(a)
+
+
+def test_the_voice_probe_links():
+    """tests/fixtures/octatrack-voice with core-ot 0.7: its handlers are the entries of the eight voice
+    tables (two on ev_voice_start, in order); core-ot alone has none."""
+    import shutil
+    from elekloader.sdk import build
+    need(SYX)
+    if not shutil.which(os.environ.get('ELEKLOADER_CROSS', DEV.toolchain['prefix']) + 'gcc'):
+        raise Skip('no m68k cross compiler')
+    st, img = stock()
+    with tempfile.TemporaryDirectory() as tmp:
+        core = elemod.load_any(build.build(os.path.join(ROOT, 'mods', 'core-ot'), SYX, tmp)[0])
+        probe, m = build.build(os.path.join(HERE, 'fixtures', 'octatrack-voice'), SYX, tmp)
+        assert not m.imports, m.imports
+        alone = link.link([core], img)
+        ln = link.link([core, elemod.load_any(probe)], img)
+
+    def table(ln, name, n):
+        o = ln.layout['run_load'] + (ln.tables[name][0] - DEV.ddr[0]) - DEV.main_load
+        return struct.unpack('>%dI' % n, ln.image[o:o + 4 * n])
+
+    for _a, _s, t, _b in VOICE_SITES.values():
+        assert alone.tables[t][1] == 0, t
+    assert table(ln, 'ev_voice_start', 3) == (ln.map['pr_start'], ln.map['pr_start2'], 0)
+    for t, fn in (('ev_voice_release', 'pr_release'), ('ev_voice_kill', 'pr_kill'), ('ev_voice_bind', 'pr_bind'),
+                  ('ev_voice_seek', 'pr_seek'), ('ev_trig_apply', 'pr_trig'), ('ev_dsp_trig', 'pr_dsp_trig'),
+                  ('ev_dsp_record', 'pr_dsp_record')):
+        assert table(ln, t, 2) == (ln.map[fn], 0), t
 
 
 def test_the_store_probe_links():
@@ -799,7 +938,9 @@ def test_the_example_subscribes_to_the_bus():
                       'ev_tick120': 0, 'ev_project': 0, 'ev_banks_load': 0, 'ev_banks_write': 0,
                       'ev_project_store': 0, 'ev_project_reload': 0, 'ev_cs1_bank': 0, 'ev_part_saved': 0,
                       'ev_part_cleared': 0, 'core_projdata': 0, 'core_carddata': 0, 'ot_sram': 0,
-                      'ot_settings': 0}, counts
+                      'ot_settings': 0, 'ev_voice_start': 0, 'ev_voice_release': 0, 'ev_voice_kill': 0,
+                      'ev_voice_bind': 0, 'ev_voice_seek': 0, 'ev_trig_apply': 0, 'ev_dsp_trig': 0,
+                      'ev_dsp_record': 0}, counts
     at = ln.tables['ev_draw'][0]
     o = ln.layout['run_load'] + (at - DEV.ddr[0]) - DEV.main_load
     assert struct.unpack('>II', ln.image[o:o + 8]) == (ln.map['hello_draw'], 0)
