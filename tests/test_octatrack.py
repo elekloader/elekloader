@@ -621,6 +621,44 @@ def test_usb_midi_is_a_usb_function():
     assert any('requires usb' in p for p in link.check([core, midi], img))
 
 
+USB_AUDIO = ('usb-audio-ot', 'usb-audio-tracks-ot', 'usb-audio-master-ot', 'usb-audio-main-cue-ot',
+             'usb-audio-main-ot')
+
+
+def test_usb_audio_is_a_usb_function():
+    """mods/usb-audio-ot and its four other layouts (one source, USBA_LAYOUT): each hooks no
+    stock code, and links on usb-ot with its record in ot_usb_functions and its producer on
+    core-ot 0.4's ev_frame_end; beside USB MIDI, MIDI's record comes first by order whatever
+    order the mods come in (its interfaces 1-2, audio's 3-4). Two layouts share EP3 IN and are
+    refused together; a layout needs usb-ot."""
+    import shutil
+    from elekloader.sdk import build
+    need(SYX)
+    if not shutil.which(os.environ.get('ELEKLOADER_CROSS', DEV.toolchain['prefix']) + 'gcc'):
+        raise Skip('no m68k cross compiler')
+    st, img = stock()
+    with tempfile.TemporaryDirectory() as tmp:
+        core, usb, midi = (elemod.load_any(build.build(os.path.join(ROOT, 'mods', d), SYX, tmp)[0])
+                           for d in ('core-ot', 'usb-ot', 'usb-midi-ot'))
+        audio = [elemod.load_any(build.build(os.path.join(ROOT, 'mods', d), SYX, tmp)[0]) for d in USB_AUDIO]
+
+    def table(ln, name, n):
+        o = ln.layout['run_load'] + (ln.tables[name][0] - DEV.ddr[0]) - DEV.main_load
+        return struct.unpack('>%dI' % n, ln.image[o:o + 4 * n])
+
+    assert [a.id for a in audio] == ['usb-audio', 'usb-audio-tracks', 'usb-audio-master',
+                                     'usb-audio-main-cue', 'usb-audio-main']
+    for a in audio:
+        assert not a.sites and a.names == ['usb:ep3-in'], a.id
+        ln = link.link([core, usb, a], img)
+        assert table(ln, 'ot_usb_functions', 2) == (ln.map['usb_audio'], 0), a.id
+        assert table(ln, 'ev_frame_end', 2) == (ln.map['usba_frame'], 0), a.id
+        both = link.link([core, usb, a, midi], img)
+        assert table(both, 'ot_usb_functions', 3) == (both.map['usb_midi'], both.map['usb_audio'], 0), a.id
+    assert any('both claim usb:ep3-in' in p for p in link.check([core, usb, audio[0], audio[3]], img))
+    assert any('requires usb' in p for p in link.check([core, audio[0]], img))
+
+
 # ---- DSP code ---------------------------------------------------------------------------
 
 HOOK = 0x400ef758               # payload A's P:0x88, move r2,x:>$204 (627000 000204)

@@ -2,7 +2,8 @@
 
 The Octatrack's USB companion (MKI and MKII), OS 1.40C. Mods add USB
 functions to the unit's USB port with it: USB MIDI (`mods/usb-midi-ot`),
-and USB audio and others to come. Several functions combine in one build:
+USB audio (`mods/usb-audio-ot`, in five layouts) and others to come.
+Several functions combine in one build:
 each is a mod of its own. It needs the Octatrack's core (`mods/core-ot`,
 0.3.1 or newer).
 

@@ -294,7 +294,12 @@ usb-ot exports `ot_usb_speed`, `ot_usb_first_interface`, `ot_usb_flush`
 `ot_usb_irq_off` / `ot_usb_irq_restore`. Memory the controller reads or
 writes must be reached through `OT_USB_UNCACHED(p)`. EP0 is usb-ot's and
 EP1 is mass storage's. `mods/usb-midi-ot` is the example: two interfaces
-under an association, EP2 both ways.
+under an association, EP2 both ways. `mods/usb-audio-ot` is an
+isochronous one: a UAC2 AudioControl and AudioStreaming interface (alt 0
+and alt 1, through `set_interface` and `get_interface`), its clock's
+requests through `setup`, and EP3 IN fed from core-ot 0.4's
+`ev_frame_end`. One source builds its five layouts: the variants' folders
+hold a `mod.json` each, with the layout in `cflags`.
 
 The USB files of irpina/octabam2elemod v1.0 patch these places themselves,
 so the linker refuses usb-ot beside them.

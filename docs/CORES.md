@@ -162,7 +162,8 @@ core.
   Octatrack base's events and names. [mods/usb-ot](../mods/usb-ot) (usb,
   with 0.3.1) owns the stock USB stack's places for USB functions, mods of
   their own that combine: [mods/usb-midi-ot](../mods/usb-midi-ot) (USB
-  MIDI, with 0.4) is the first.
+  MIDI, with 0.4) is the first, and [mods/usb-audio-ot](../mods/usb-audio-ot)
+  (USB audio out, with 0.4, in five layouts) the second.
 - **Model:Cycles, Model:Samples** ([mods/core-mc](../mods/core-mc),
   [mods/core-ms](../mods/core-ms)): the shared core.s with the hook bus's
   tick, draw, key and encoder events. Their OS entry makes its SRAM copy and
