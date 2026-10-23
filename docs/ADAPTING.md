@@ -303,7 +303,8 @@ const struct ot_machine my_machine = {
   each does, and which 0.1 does not serve yet (pools, DSP voices).
 
 Start from [examples/crush-machine-ot](../examples/crush-machine-ot): CRUSH
-plays its FLEX slot's sample through a 5-bit crusher.
+plays its FLEX slot's sample through a 5-bit crusher. octabam's OCTA303
+converts onto the companion with `sdk.octabam --machines` (section 4b).
 
 ### SRC machines (core 2.1, Digitakt mk1)
 
@@ -2129,6 +2130,82 @@ unchanged; claims 0 intercepts every call.
   is the event's `jmp` or `jsr` to its stub, nop-padded as the detour was,
   and the event's table holds `{0, the label}`. Every other byte is checked
   as without `--intercepts`.
+
+**As machines** (`--machines`): octabam's source machines (ANALOG BD,
+OCTA303, CXOSC, BLACKPYRAMIDS-303) each patch the same places to add their
+row to the machine chooser, so no two of them share a build. The machines
+companion (`mods/machines-ot`, "Machines on the Octatrack" above) owns
+those places for every machine. With `--machines`, a module that patches
+them becomes a machine on the companion:
+
+```bash
+python -m elekloader.sdk.octabam --octabam octabam --stock OCTATRACK_OS1.40C.syx \
+    --module octa303 --machines --out ~/octabam-mods
+```
+
+- **Which modules.** One that writes any of the machine row's places (the
+  converter's `MACHINE_SEAMS`: ANALOG BD's measured seams, which OCTA303 and
+  BLACKPYRAMIDS-303 reuse) and has an entry in `MACHINES`. Today that is
+  OCTA303 (octabam b085c4d). A module that writes those places with no
+  entry is refused with `--machines`; every other module converts exactly
+  as without it.
+- **What changes.** Its places of the row are left stock, for the
+  companion's sites. In OCTA303's case, 15 detours and 6 pokes:
+  - the Part validator;
+  - the names, by row and by machine byte;
+  - SRC SETUP's names, rows, opening row and two commits;
+  - SETUP's edit and draw columns;
+  - the chooser's row count, drawer, match, highlight, opening row, commit
+    and cursor bound;
+  - the UI loop where it published its page as row 5's.
+
+  Instead, the mod adds a record (`struct ot_machine`) to `ot_machines`,
+  generated in `glue/ob_<name>_machine.s` from what `MACHINES` reads in the
+  module's own source:
+
+  | field | OCTA303 |
+  |---|---|
+  | `sig`, `sig_lo`, `sig_hi` | "TB", 1, 1: the signature its tracks carry, as before |
+  | `label` | `o3_title`, "OCTA-303" |
+  | `flags` | `PROTECT` (what its validator wrap did) and `RENDER_FLEX` (its renderer also gets the FLEX tracks no machine owns: a TB303*-named sample plays the 303, as before) |
+  | `page` | the page record `o3_mdesc` builds, a clone of the user's FLEX record |
+  | `track_page`, `ui_tick` | `o3_mdesc`: the companion's 60 Hz tick builds the page, as its own tick did |
+  | `defaults` | `o3_mdefs` |
+  | `assign` | glue around `o3_sigwrite`, which signs and unsigns a track as before (the defaults, the battery copy, the live lane) |
+  | `render` | `sy_render`, which octabam put in the renderer kind table's FLEX entry (`0x400d6438`); that entry is left stock |
+- **Its source.** The one line that names the FLEX renderer it calls
+  (`STOCK_RENDER`, `0x40004008`, now the companion's site) names
+  `ot_stock_render`, so the renderer does not call itself. The names the
+  record needs are appended to the source as `ob_<name>_*` aliases of its
+  labels. Nothing else changes, and its code for the places it leaves stock
+  stays in it, unreached.
+- **The rest.** Its detours at the intercepts' sites go on the intercepts
+  (OCTA303's CHROMATIC pitch, `ev_chromatic_pitch`). Its other sites stay
+  its own: OCTA303's hook at the PLAYBACK page load (`0x40031ece`, for a
+  TB303*-named sample) and its retrig (`0x4000c634`). SYNTH MACHINE has
+  sites at both, so the two still do not combine.
+- **Versions.** Such a mod is versioned `<commit>-machines` and requires
+  `["core", "intercepts", "machines"]` (intercepts only when it has a
+  detour there).
+- **The check** links it with the core, the intercepts and the companion
+  (built from `mods/machines-ot`, or `--machines-mod`) and proves:
+  - each byte of its places of the row, and of the kind-table entry, is a
+    byte of one of the companion's sites or stock, and none is a site of
+    its own;
+  - the record holds what `MACHINES` says, field by field, and the name it
+    points at is the name;
+  - its source assembles to octabam's bytes but for its calls to the
+    renderer, which name `ot_stock_render`, and nothing in the linked mod
+    calls the renderer's entry.
+- **Checked in ot_emu**, with core-ot 0.3.1, the intercepts and the
+  companion, alone and with CRUSH beside it:
+  - the chooser lists OCTA-303 below PICKUP (and scrolls to it below CRUSH);
+  - YES signs track 1 "TB" 1, a FLEX track, in the Part and its battery
+    copy, with OCTA303's defaults;
+  - the SRC page reads TUNE CUT RES ENV DEC ACC under "OCTA-303", and
+    PLAYBACK SETUP reads WAVE GATE FINE SLID DRIV ACCV;
+  - a trig plays through `sy_render` on every render call;
+  - FLEX again unsigns the track.
 
 What does not convert, and why:
 - **DSP code.** Modules with DSP code or an FX menu entry are out of scope,

@@ -146,9 +146,10 @@ written for one describes itself to the other the same way. Only `abi`,
 None is a byte a mod of octabam2elemod v1.0 writes. SYNTH MACHINE v1.0
 keeps the renderer table's entry (0x400d6438) and the resolver's tail
 (0x40031ece). The companion's resolver stub keeps d1 (the part) and a1 (the
-bank) for a hook at that tail, which reads them (SYNTH MACHINE's does). The
-companion's commit seam is one instruction past octabam's own 0x4007981c, so
-it ends where SYNTH's 0x40079816 begins.
+bank) for a hook at that tail, which reads them (SYNTH MACHINE's does, and
+OCTA303's converted with `sdk.octabam --machines`). The companion's commit
+seam is one instruction past octabam's own 0x4007981c, so it ends where
+SYNTH's 0x40079816 begins.
 
 ## Checked
 
@@ -168,7 +169,11 @@ test machines:
   track (ANALOG BD absent) and a plain FLEX track, each with PTCH 0 and LOOP
   9: stock clamps all three, the companion only the plain FLEX track;
 - with no machine, a chooser commit, the SRC page and SRC SETUP leave the
-  same Part, battery copy and screen as stock.
+  same Part, battery copy and screen as stock;
+- octabam's OCTA303, converted with `sdk.octabam --machines`, alone and with
+  CRUSH: the chooser lists OCTA-303, YES signs the track "TB" 1 with its
+  defaults, its SRC page and PLAYBACK SETUP are its own, and a trig plays
+  through its renderer.
 
 Not yet run on a unit.
 
@@ -179,5 +184,6 @@ Not yet run on a unit.
 - DSP voices (`source_kind`): ANALOG BD and BLACKPYRAMIDS-303 render on the
   DSP, over SPRING REV's words, and need a DSP-side event at the source seam
   first.
-- `sdk.octabam --machines`, to move octabam's machines onto the table
-  (OCTA303 first: it uses ANALOG BD's seams, and renders on the ColdFire).
+- octabam's other machines on the table. `sdk.octabam --machines` converts
+  OCTA303 (docs/ADAPTING.md, 4b); CXOSC and SYNTH MACHINE are later steps,
+  and ANALOG BD and BLACKPYRAMIDS-303 need the DSP source stage above.

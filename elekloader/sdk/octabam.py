@@ -4,7 +4,9 @@
     python -m elekloader.sdk.octabam --octabam PATH --stock OCTATRACK_OS1.40C.syx
                                      [--module NAME ...] [--remix NAME ...] [--reference IMAGE]
                                      --out DIR [--core CORE.elemod] [--bus] [--intercepts]
-                                     [--dspbus DSPBUS.elemod] [--intercepts-mod INTERCEPTS.elemod]
+                                     [--machines] [--dspbus DSPBUS.elemod]
+                                     [--intercepts-mod INTERCEPTS.elemod]
+                                     [--machines-mod MACHINES.elemod]
     python -m elekloader.sdk.octabam --octabam PATH --stock OCTATRACK_OS1.40C.syx --sites FILE.json
 
 octabam (MIT) declares each module in modules/<name>/manifest.py, in the
@@ -44,6 +46,7 @@ these:
 | a hook in BUS, with --bus | its site left stock; generated glue subscribes its code to the core's event (core-ot 0.2) |
 | a DspHook in DSP_BUS, in a remix, with --bus | its DSP source in the mod; it subscribes to the DSP bus's event (mods/dspbus-ot) |
 | a detour at a site in INTERCEPTS, with --intercepts | its site left stock; a record {0, the detour's label} in the intercept's table (mods/intercepts-ot): the label is entered as the detour entered it |
+| a machine's row (detours and pokes at MACHINE_SEAMS), with --machines | its sites left stock, for mods/machines-ot's; a record in ot_machines (MACHINES: its signature, name, page, defaults, signing); its kind-table FLEX entry (a SymbolRef) the record's render; its detours at INTERCEPTS sites on the intercepts |
 
 Anything else refuses the module, with the reason:
 - DSP code or an FX menu entry (only ColdFire-only modules convert);
@@ -85,6 +88,23 @@ its replay of the displaced instruction. The bus's hook, menus and freed words a
 the bus, and the mod requires it. The check links it with the bus (built from
 mods/dspbus-ot, or `--dspbus`): the image must still equal octabam's build in every byte but
 for the hook's jump and the bus's table, so the DSP code is where octabam placed it.
+
+**Machines** (`--machines`). octabam's source machines (ANALOG BD, OCTA303, CXOSC,
+BLACKPYRAMIDS-303) each patch the same places to add their row to the track's machine
+chooser and SRC SETUP, so no two share a build. mods/machines-ot owns those places for every
+machine at once. With `--machines`, a module that writes them (MACHINE_SEAMS) leaves them all
+stock, and adds its record (`struct ot_machine`) to the companion's table `ot_machines`
+instead, generated from what MACHINES says of it: its signature, its name, its page, its
+defaults and the routine that signs its tracks, all read from its own source. The kind
+table's FLEX entry it took becomes the record's render; the one line of its source that
+names the FLEX renderer it calls (whose entry is now the companion's) names
+`ot_stock_render`, and lines appended to its source name what the record needs, under the
+converter's names. Its detours at the intercepts' sites go on the intercepts. Such a mod is
+versioned `<commit>-machines` and requires machines (and intercepts, when it has those
+detours). The check links it with them, and proves that its places are the companion's
+sites or stock, that the record holds what MACHINES says, and that its source assembles to
+its own bytes but for its calls to the renderer. A module that writes those places with no
+entry in MACHINES is refused with `--machines`; every other module converts as without it.
 
 A unit's generated `include` is built for the modules this mod carries.
 Where it would change with another module that converts, the mod conflicts
@@ -509,6 +529,119 @@ INTERCEPTS = {
 INTERCEPT_ORDER = 50
 INTERCEPTS_DIR = os.path.join(os.path.dirname(CORE_DIR), 'intercepts-ot')
 
+# ---- the machines (mods/machines-ot, --machines) ----------------------------------------
+# The places octabam's source machines patch to add a row to the track's machine chooser and
+# SRC SETUP: ANALOG BD's measured seams, which OCTA303 and BLACKPYRAMIDS-303 reuse (octabam
+# b085c4d), by the address a detour or poke writes. mods/machines-ot owns them for every
+# machine at once (its own sites are these or beside them: its commit is 0x4007981e). With
+# --machines, a module that writes any of them leaves them all stock, and its record in
+# ot_machines takes their place.
+MACHINE_SEAMS = {
+    0x40002318: 'the Part validator',
+    0x400334D8: 'name(row)',
+    0x4003A52E: 'SETUP\'s edit column',
+    0x4003C928: 'SRC SETUP\'s name table',
+    0x4003C950: 'SRC SETUP\'s name bound',
+    0x4003C980: 'SRC SETUP\'s row',
+    0x4003CD98: 'SETUP\'s draw column',
+    0x4003D718: 'a name by machine byte',
+    0x4004C36A: 'a name by machine byte',
+    0x4005221E: 'the UI loop, where it publishes its page as row 5\'s',
+    0x400585DC: 'SRC SETUP\'s opening row',
+    0x400585FA: 'SRC SETUP\'s row count',
+    0x4005A616: 'SRC SETUP\'s commit',
+    0x4005A850: 'SRC SETUP\'s second commit',
+    0x40078678: 'the chooser\'s row drawer',
+    0x400786C8: 'the chooser\'s row match',
+    0x400786CE: 'the chooser\'s highlight',
+    0x40078886: 'the chooser\'s opening row',
+    0x4007981C: 'the chooser\'s commit',
+    0x40079248: 'the chooser\'s row count',
+    0x40079904: 'the chooser\'s cursor bound',
+}
+KIND_FLEX = 0x400D6438          # the renderer kind table's FLEX entry: a machine's render
+STOCK_RENDER = 0x40004008       # the FLEX renderer, whose entry is machines-ot's site
+OT_PROTECT, OT_RENDER_FLEX = 1, 4
+MACHINE_ORDER = 50
+MACHINES_DIR = os.path.join(os.path.dirname(CORE_DIR), 'machines-ot')
+
+# Each machine's record (struct ot_machine, elekloader/sdk/include/octatrack/machines.h), by
+# module key, as its own source has it (OCTA303: octabam b085c4d's modules/octa303/octa303.s,
+# v7.0). The names are its labels (or an expression of them, for `page`):
+#   sig, versions   the signature its tracks carry (Part + 60 + 30 * track), the versions it takes
+#   label, title    its name's label, and the name
+#   flags           PROTECT does what its validator wrap did (0x40002318); RENDER_FLEX gives
+#                   its render the FLEX tracks of no machine too (OCTA303's TB303*-named samples,
+#                   which its renderer plays as it did from the kind table)
+#   defaults        the 12 FLEX bytes a track takes when it becomes the machine
+#   page            its page record, as its build routine leaves it (OCTA303 clones the user's
+#                   FLEX record at run time: o3_desc's second record)
+#   build           builds the page and returns it in d0, keeping d2-d7/a2-a6: the record's
+#                   track_page and ui_tick (the 60 Hz tick builds it, as its own tick did)
+#   assign          signs (d1 1) and unsigns (d1 0) track d0 of the Part at a0, keeping every
+#                   register: the record's assign, through glue, so the companion signs its
+#                   tracks as it did (the defaults, the battery copy, the live lane)
+#   stock_render    the one line that names the FLEX renderer it calls, whose entry is the
+#                   companion's: it names ot_stock_render instead
+MACHINES = {
+    'OCTA303': dict(sig='TB', versions=(1, 1), label='o3_title', title='OCTA-303',
+                    flags=OT_PROTECT | OT_RENDER_FLEX, defaults='o3_mdefs',
+                    page='o3_desc + O3_DLEN', build='o3_mdesc', assign='o3_sigwrite',
+                    stock_render=r'^(\s*\.set\s+STOCK_RENDER,\s*)0x40004008\b'),
+}
+# what the record names, and the converter's name for each (<ob_name>_<this>)
+MACHINE_NAMES = {'label': 'label', 'defaults': 'defaults', 'page': 'page', 'build': 'build',
+                 'assign': 'sign'}
+
+
+def _machine_writes(m):
+    """The MACHINE_SEAMS a module writes (its detours' sites and pokes' addresses)."""
+    return sorted({d.site for d in getattr(m, 'detours', ()) if d.site in MACHINE_SEAMS}
+                  | {p.addr for p in getattr(m, 'pokes', ()) if p.addr in MACHINE_SEAMS})
+
+
+def _machine_glue(ob, key, mach):
+    """The record and its assign glue -> source text."""
+    s = mach['sym'][:-len('_machine')]
+    fl = ', '.join(n for n, b in (('PROTECT', OT_PROTECT), ('RENDER_FLEX', OT_RENDER_FLEX))
+                   if mach['flags'] & b) or 'none'
+    lo, hi = mach['versions']
+    rows = (('.long', '1', ' 0 abi'),
+            ('.byte', ', '.join('0x%02x' % c for c in mach['sig'].encode('latin-1')) + ', %d, %d'
+             % (lo, hi), ' 4 its tracks\' signature "%s", versions %d-%d' % (mach['sig'], lo, hi)),
+            ('.long', s + '_label', ' 8 label: %s, "%s"' % (mach['label'], mach['title'])),
+            ('.long', '%d' % mach['flags'], '12 flags: ' + fl),
+            ('.long', s + '_page', '16 page: ' + mach['page']),
+            ('.long', s + '_defaults', '20 defaults: ' + mach['defaults']),
+            ('.long', s + '_assign', '24 assign: %s, below' % mach['assign']),
+            ('.long', '0, 0', '28 admit_track, chooser_type'),
+            ('.long', s + '_build', '36 track_page: ' + mach['build']),
+            ('.long', s + '_build', '40 ui_tick: ' + mach['build']),
+            ('.long', '0, 0, 0, 0, 0', '44 leave, pool_open, pool_left, choice_left, list_draw'),
+            ('.long', mach['render'], '64 render: the kind table\'s FLEX renderer'),
+            ('.long', '0', '68 validate'),
+            ('.long', '0, 0', '72 source_voice, source_engine, source_kind'))
+    w = max(len(a) for _o, a, _c in rows) + 2
+    return ('| generated by elekloader.sdk.octabam from octabam %s: %s\'s record in\n'
+            '| machines-ot\'s table ot_machines (struct ot_machine, version 1:\n'
+            '| elekloader/sdk/include/octatrack/machines.h). The names it holds are its own\n'
+            '| labels, under the converter\'s names (appended to its source).\n'
+            '        .text\n'
+            '        .balign 4\n'
+            '        .globl  %s\n'
+            '%s:\n' % (ob.commit, key, mach['sym'], mach['sym'])
+            + ''.join('        %-8s%s| %s\n' % (o, a.ljust(w), c) for o, a, c in rows)
+            + '\n'
+            '| unsigned assign(Part *part, unsigned track, unsigned on): %s signs or\n'
+            '| unsigns the track (a0 the Part, d0 the track, d1 on) -> the machine byte, FLEX\n'
+            '%s_assign:\n'
+            '        movea.l 4(%%sp), %%a0\n'
+            '        move.l  8(%%sp), %%d0\n'
+            '        move.l  12(%%sp), %%d1\n'
+            '        jsr     %s_sign\n'
+            '        moveq   #1, %%d0\n'
+            '        rts\n' % (mach['assign'], s, s)).encode()
+
 
 def _bus_glue(ob, mkey, hooks):
     """The glue for one mod's bus hooks -> its source text."""
@@ -670,9 +803,9 @@ def _collect(ob, rel, files, pool, seen):
     return out
 
 
-def convert(ob, name, image, dev, rx=None, bus=False, intercepts=False):
+def convert(ob, name, image, dev, rx=None, bus=False, intercepts=False, machines=False):
     """-> a plan: {'id', 'name', 'members', 'json' (mod.json), 'files' ({relpath: bytes}),
-    'caves', 'tables', 'skip', 'notes', 'relocs', 'remix', 'bus'}. Raises Refused.
+    'caves', 'tables', 'skip', 'notes', 'relocs', 'remix', 'bus', 'machine'}. Raises Refused.
 
     With `rx` (load_remix's dict, with 'ref', octabam's own build of the remix): one mod
     for the remix `name`, carrying its modules, and as data sites every other byte that
@@ -680,7 +813,10 @@ def convert(ob, name, image, dev, rx=None, bus=False, intercepts=False):
 
     With `bus`: the hooks in BUS subscribe to core-ot's events instead (the plan's 'bus').
     With `intercepts`: the detours at INTERCEPTS sites add records to mods/intercepts-ot's
-    events instead (the plan's 'intercepts')."""
+    events instead (the plan's 'intercepts').
+    With `machines`: a module that writes MACHINE_SEAMS is a machine on mods/machines-ot, its
+    record from MACHINES (the plan's 'machine'), and its detours at INTERCEPTS sites go on the
+    intercepts."""
     if rx is None:
         why = refusal(ob, name)
         if why:
@@ -709,6 +845,24 @@ def convert(ob, name, image, dev, rx=None, bus=False, intercepts=False):
     relocs = {}                             # relocatable data's address -> its served copy
     hooks, rewritten = [], {}               # --bus: hooks the bus serves; sources rewritten
     took = []                               # --intercepts: detours an intercept serves
+    mach = None                             # --machines: the machine on machines-ot
+    for n, mm in zip(names_, mods) if machines else ():
+        at = _machine_writes(mm)
+        if not at:
+            continue
+        where = ', '.join('0x%08x' % a for a in at)
+        if rx is not None:
+            raise Refused('%s writes the places of a machine row (%s): with --machines a machine '
+                          'converts alone, not in a remix' % (n, where))
+        spec = MACHINES.get(mm.key)
+        if spec is None:
+            raise Refused('it writes the places of a machine row (%s), which machines-ot owns, and '
+                          'the converter has no record for %s yet (MACHINES: %s)'
+                          % (where, mm.key, ', '.join(sorted(MACHINES))))
+        if mach is not None:
+            raise Refused('it carries two machines, %s and %s' % (mach['key'], mm.key))
+        mach = dict(spec, module=n, key=mm.key, served=at, render=None,
+                    sym='ob_%s_machine' % _slug(name))
 
     def bus_hook(n, spec, site_, len_, entry, expect=None, **kw):
         h = dict(spec, module=n, site=site_, len=len_, entry=entry, expect=expect,
@@ -765,6 +919,8 @@ def convert(ob, name, image, dev, rx=None, bus=False, intercepts=False):
         closure = {}
         for src in [c.source for c in m.cf_patches if c.source] + [u.source for u in m.linked]:
             closure[src] = _collect(ob, src, files, pool, set())
+        if mach is not None and mach['module'] == n:
+            mach['closure'] = closure
         for k in m.requires:
             if ob.by_key[k] not in names_ and mod_id(ob.by_key[k]) not in requires:
                 requires.append(mod_id(ob.by_key[k]))
@@ -911,7 +1067,10 @@ def convert(ob, name, image, dev, rx=None, bus=False, intercepts=False):
                               % (d.site, d.unit))
             if _stock(image, dev, d.site, len(d.expect)) != d.expect:
                 raise Refused('the detour site 0x%08x is not stock' % d.site)
-            tk = INTERCEPTS.get(d.site) if intercepts else None
+            own = mach is not None and mach['module'] == n          # the machine's own
+            if own and d.site in MACHINE_SEAMS:
+                continue                    # machines-ot's: its record stands in (below)
+            tk = INTERCEPTS.get(d.site) if intercepts or own else None
             if tk is not None:
                 ev, kind, ln_ = tk
                 if d.target is not None or d.kind != kind or (d.pad_to or 6) != ln_:
@@ -961,6 +1120,12 @@ def convert(ob, name, image, dev, rx=None, bus=False, intercepts=False):
             stock = r.expect.to_bytes(4, 'big')
             if _stock(image, dev, r.addr, 4) != stock:
                 raise Refused('the symbol ref at 0x%08x is not stock' % r.addr)
+            if mach is not None and mach['module'] == n and r.addr == KIND_FLEX:
+                if r.expect != STOCK_RENDER or r.addend:
+                    raise Refused('its kind-table FLEX entry is not the stock renderer\'s '
+                                  'address, plus nothing, made its own')
+                mach['render'], mach['unit'] = r.symbol, r.unit
+                continue                    # the record's render: the entry stays stock
             site(r.addr, stock, op='ptr', target=r.symbol, addend=r.addend)
 
         for t in m.tables:
@@ -986,6 +1151,8 @@ def convert(ob, name, image, dev, rx=None, bus=False, intercepts=False):
         for p in m.pokes:
             if _stock(image, dev, p.addr, len(p.expect)) != p.expect:
                 raise Refused('the poke at 0x%08x is not stock' % p.addr)
+            if mach is not None and mach['module'] == n and p.addr in MACHINE_SEAMS:
+                continue                    # machines-ot's
             rd = _relocatable(dev, p.addr, len(p.write))
             if rd is None:
                 site(p.addr, _stock(image, dev, p.addr, len(p.write)), op='bytes',
@@ -1029,6 +1196,77 @@ def convert(ob, name, image, dev, rx=None, bus=False, intercepts=False):
                      'protects: the mod serves its own copy of it (%s), with them applied, '
                      'through %s, and leaves the protected bytes stock'
                      % (at, what, sym, ', '.join('0x%08x' % a for a in refs)))
+
+    # --machines: the machine's record in machines-ot's table, in place of its row's places
+    if mach is not None:
+        mm = ob.modules[mach['module']]
+        if mach['render'] is None:
+            raise Refused('its sound does not come from the kind table\'s FLEX entry (0x%08x), '
+                          'which a machine\'s render stands in for' % KIND_FLEX)
+        u = [x for x in mm.linked if x.label == mach['unit']]
+        if len(u) != 1:
+            raise Refused('its renderer %s is in no unit of its own' % mach['render'])
+        src, files_ = u[0].source, mach.pop('closure')[u[0].source]
+        pat = mach['stock_render'].encode()
+        hit = [f for f in files_ if re.search(pat, files[f], re.M | re.I)]
+        count = sum(len(re.findall(pat, files[f], re.M | re.I)) for f in hit)
+        if count != 1:
+            raise Refused('the line that names the FLEX renderer (0x%08x) is in %d places of its '
+                          'source, not one' % (STOCK_RENDER, count))
+        defined = set()
+        for f in files_:
+            defined.update(x.decode() for x in re.findall(rb'^\s*([A-Za-z_.$][\w.$]*)\s*:',
+                                                           files[f], re.M))
+            defined.update(x.decode() for x in re.findall(
+                rb'^\s*\.(?:set|equ)\s+([A-Za-z_.$][\w.$]*)\s*,', files[f], re.M | re.I))
+        s = mach['sym'][:-len('_machine')]
+        sets = []
+        for field, alias in MACHINE_NAMES.items():
+            for tok in re.findall(r'[A-Za-z_.$][\w.$]*', mach[field]):
+                if tok not in defined:
+                    raise Refused('its source does not define %s, which its record names '
+                                  '(MACHINES: %s)' % (tok, field))
+            sets.append('        .set    %s_%s, %s\n' % (s, alias, mach[field]))
+        f = hit[0]
+        mach['before'] = {x: files[x] for x in (f, src)}      # as without --machines
+        files[f] = re.sub(pat, lambda mo: mo.group(1) + b'ot_stock_render', files[f],
+                          flags=re.M | re.I)
+        files[src] = files[src] + (b'' if files[src].endswith(b'\n') else b'\n') + (
+            '\n| generated by elekloader.sdk.octabam (--machines): what %s\'s record in '
+            'machines-ot\'s\n| ot_machines names, under the converter\'s names\n%s'
+            '        .globl  %s\n' % (mach['key'], ''.join(sets),
+                                     ', '.join('%s_%s' % (s, a) for a in MACHINE_NAMES.values()))
+        ).encode()
+        mach.update(source=src, rewritten=f, names={field: '%s_%s' % (s, a)
+                                                    for field, a in MACHINE_NAMES.items()})
+        glue = 'glue/%s.s' % mach['sym']
+        files[glue] = _machine_glue(ob, mach['key'], mach)
+        sources.append(glue)
+        with open(os.path.join(MACHINES_DIR, 'mod.json')) as fh:
+            theirs = [(int(x['addr'], 16), len(x['stock']) // 2) for x in json.load(fh)['sites']]
+        for x in sites:
+            a, ln_ = int(x['addr'], 16), len(x['stock']) // 2
+            for b, bn in theirs:
+                if a < b + bn and b < a + ln_:
+                    raise Refused('its site 0x%08x is inside machines-ot\'s site 0x%08x'
+                                  % (a, b))
+        unreached = [d.symbol for d in mm.detours if d.site in MACHINE_SEAMS and d.target is None]
+        notes.append('it is a source machine on the machines companion (mods/machines-ot): its %d '
+                     'places of the machine row (%s) are left stock, for the companion\'s, and its '
+                     'record %s in ot_machines has its tracks\' signature "%s" %d, its name "%s" '
+                     '(%s), its page %s, built by %s (which the companion\'s 60 Hz tick calls, as '
+                     'its own tick did), its defaults %s, its signing %s, and as its render %s, '
+                     'whose kind-table entry (0x%08x) is left stock'
+                     % (len(mach['served']), ', '.join('0x%08x' % a for a in mach['served']),
+                        mach['sym'], mach['sig'], mach['versions'][0], mach['title'], mach['label'],
+                        mach['page'], mach['build'], mach['defaults'], mach['assign'],
+                        mach['render'], KIND_FLEX))
+        notes.append('%s: the line that names the FLEX renderer (0x%08x), whose entry is the '
+                     'companion\'s, names ot_stock_render; the names the record needs are '
+                     'appended to %s; nothing else in the source changes' % (f, STOCK_RENDER, src))
+        if unreached:
+            notes.append('its code for the places it leaves stock stays in it, unreached: %s'
+                         % ', '.join(unreached))
 
     # --bus: a remix's hooked DSP code the DSP bus serves subscribes to it instead
     dsp_subs = []
@@ -1153,9 +1391,14 @@ def convert(ob, name, image, dev, rx=None, bus=False, intercepts=False):
     if dsp_subs:
         desc += (' Its DSP code runs on the DSP bus, which takes %s off both FX menus: it '
                  'needs the DSP bus.' % ', '.join(rx['harvested']))
+    if mach is not None:
+        desc += (' It is a source machine on the machines companion: its row in the machine '
+                 'chooser and SRC SETUP, its page, its commits and the Part validator are the '
+                 'companion\'s, so it combines with other machines.')
+        requires.append('machines')
     doc = {
         'id': mid, 'version': ob.commit + ('-bus' if hooks or dsp_subs else '')
-        + ('-intercepts' if took else ''),
+        + ('-machines' if mach is not None else '-intercepts' if took else ''),
         'title': title,
         'description': desc,
         'category': cat,
@@ -1181,6 +1424,10 @@ def convert(ob, name, image, dev, rx=None, bus=False, intercepts=False):
     if took:                                # {claims 0, entry}: it intercepts every call
         doc['contribute'] = [{'to': t['event'], 'order': INTERCEPT_ORDER, 'data': '00' * 8,
                               'relocs': [[4, 'abs32', 'sym:' + t['entry'], 0]]} for t in took]
+    if mach is not None:                    # a pointer to its record
+        doc.setdefault('contribute', []).append(
+            {'to': 'ot_machines', 'order': MACHINE_ORDER, 'data': '00' * 4,
+             'relocs': [[0, 'abs32', 'sym:' + mach['sym'], 0]]})
     if names:
         doc['resources'] = {'names': names}
     if conflicts:
@@ -1191,7 +1438,8 @@ def convert(ob, name, image, dev, rx=None, bus=False, intercepts=False):
                         'bytes': bytes(r['bytes']), 'pokes': r['pokes']}
                        for lo, r in sorted(relocs.items())],
             'remix': rx, 'remix_sites': remix_sites,
-            'bus': hooks, 'bus_sources': rewritten, 'dsp_bus': dsp_subs, 'intercepts': took}
+            'bus': hooks, 'bus_sources': rewritten, 'dsp_bus': dsp_subs, 'intercepts': took,
+            'machine': mach}
 
 
 def write(ob, plan, out):
@@ -1260,6 +1508,152 @@ def _gnu_link(dev, root, src, at, cpu, defsyms, work, sections=('.text',), looku
         return fh.read()
 
 
+def _assembled(dev, ws, root, f, side):
+    """`f` under `root`, assembled for the chip -> {'.text', '.data': bytes, 'relocs': {offset in
+    .text: symbol}, 'syms': {name: value}}."""
+    o = os.path.join(ws, side + '.o')
+    _gnu(dev, ws, ['as', '-mcpu=54455', '-o', o, f], cwd=root)
+    out = {}
+    for sec in ('.text', '.data'):
+        b = os.path.join(ws, side + sec + '.bin')
+        _gnu(dev, ws, ['objcopy', '-O', 'binary', '-j', sec, o, b])
+        with open(b, 'rb') as fh:
+            out[sec] = fh.read()
+    out['relocs'] = {int(x.split()[0], 16): x.split()[-1] for x in
+                     _gnu(dev, ws, ['objdump', '-r', '-j', '.text', o]).splitlines()
+                     if re.match(r'^[0-9a-f]{8} ', x)}
+    out['syms'] = {x.split()[2]: int(x.split()[0], 16) for x in
+                   _gnu(dev, ws, ['nm', o]).splitlines() if len(x.split()) == 3}
+    return out
+
+
+def _calls_render(b):
+    """The offsets in `b` of a jsr or jmp to the FLEX renderer's entry (an absolute operand)."""
+    w = STOCK_RENDER.to_bytes(4, 'big')
+    return [o for o in range(0, len(b) - 5, 2) if b[o:o + 2] in OPS.values() and b[o + 2:o + 6] == w]
+
+
+def _check_machine(ob, plan, mach, mod, ln, image, dev, work, mdir, sym, ram, img):
+    """A machine on machines-ot (convert's --machines): its row's places, its record and its
+    source -> [lines]."""
+    lines = []
+    m = ob.modules[mach['module']]
+    nm = mach['names']
+
+    # its places of the row: no site of its own there; each byte it wrote is the companion's
+    # (a byte of one of machines-ot's sites) or stock. So is the kind table's FLEX entry.
+    with open(os.path.join(MACHINES_DIR, 'mod.json')) as fh:
+        theirs = set()
+        for x in json.load(fh)['sites']:
+            a = int(x['addr'], 16)
+            theirs.update(range(a, a + len(x['stock']) // 2))
+    spans = [(KIND_FLEX, 4)]
+    for d in m.detours:
+        if d.site in mach['served']:
+            n = d.pad_to or 6
+            spans.append((d.site, _boundary(image, d.site, n, dev) if d.kind == 'jmp' else n))
+    spans += [(p.addr, len(p.write)) for p in m.pokes if p.addr in mach['served']]
+    companion = 0
+    for a, n in spans:
+        if any(s['addr'] < a + n and a < s['addr'] + s['len'] for s in mod.sites):
+            raise CheckError('0x%08x, which it leaves to machines-ot, is a site of its own' % a)
+        for x in range(a, a + n):
+            if x in theirs:
+                companion += 1
+            elif img(x, 1) != _stock(image, dev, x, 1):
+                raise CheckError('0x%08x, which it leaves to machines-ot, is not stock' % x)
+    lines.append('its %d places of the machine row and the kind table\'s FLEX entry (0x%08x): no '
+                 'site of its own; %d of their bytes are machines-ot\'s sites, the other %d stock'
+                 % (len(mach['served']), KIND_FLEX, companion, sum(n for _a, n in spans) - companion))
+
+    # its record, in ot_machines
+    if 'ot_machines' not in ln.tables:
+        raise CheckError('ot_machines is not linked: the machines are not given')
+    at, count, _w = ln.tables['ot_machines']
+    ptrs = [_u32(ram(at, 4 * count), 4 * k) for k in range(count)]
+    rec = sym(mach['sym'])
+    if rec not in ptrs:
+        raise CheckError('ot_machines does not point at %s' % mach['sym'])
+
+    def u32(v):
+        return v.to_bytes(4, 'big')
+    fields = [('abi', u32(1)), ('sig', mach['sig'].encode('latin-1') + bytes(mach['versions'])),
+              ('label', u32(sym(nm['label']))), ('flags', u32(mach['flags'])),
+              ('page', u32(sym(nm['page']))), ('defaults', u32(sym(nm['defaults']))),
+              ('assign', u32(sym(mach['sym'][:-len('machine')] + 'assign'))),
+              ('admit_track, chooser_type', bytes(8)), ('track_page', u32(sym(nm['build']))),
+              ('ui_tick', u32(sym(nm['build']))), ('leave and the pool', bytes(20)),
+              ('render', u32(sym(mach['render']))), ('validate and the DSP voice', bytes(12))]
+    r, o = ram(rec, 80), 0
+    for what, want in fields:
+        if r[o:o + len(want)] != want:
+            raise CheckError('its record %s: %s is %s, not %s' % (mach['sym'], what,
+                                                                  r[o:o + len(want)].hex(),
+                                                                  want.hex()))
+        o += len(want)
+    for field in ('label', 'defaults', 'build', 'assign'):
+        if sym(nm[field]) != sym(mach[field]):
+            raise CheckError('%s is not %s' % (nm[field], mach[field]))
+    page = eval(re.sub(r'[A-Za-z_.$][\w.$]*', lambda mo: str(sym(mo.group(0))), mach['page']),
+                {'__builtins__': {}})
+    if sym(nm['page']) != page:
+        raise CheckError('%s is not %s' % (nm['page'], mach['page']))
+    title = mach['title'].encode('latin-1') + b'\0'
+    if ram(sym(mach['label']), len(title)) != title:
+        raise CheckError('its name at %s is not "%s"' % (mach['label'], mach['title']))
+    dflt = ram(sym(mach['defaults']), 12)
+    lines.append('its record %s in ot_machines (%d of %d): signature "%s" %d-%d, name "%s" (%s), '
+                 'flags %d, page %s, defaults %s (%s | %s), assign %s, track_page and ui_tick '
+                 '%s, render %s; every other field 0'
+                 % (mach['sym'], ptrs.index(rec) + 1, count, mach['sig'], mach['versions'][0],
+                    mach['versions'][1], mach['title'], mach['label'], mach['flags'],
+                    mach['page'], mach['defaults'], ' '.join('%d' % b for b in dflt[:6]),
+                    ' '.join('%d' % b for b in dflt[6:]), mach['assign'], mach['build'],
+                    mach['render']))
+
+    # its source: octabam's bytes but for its calls to the FLEX renderer, which now name
+    # ot_stock_render; the appended names are the labels they alias
+    ws = os.path.join(work, 'machine_source')
+    if os.path.isdir(ws):
+        shutil.rmtree(ws)
+    shutil.copytree(mdir, os.path.join(ws, 'before'))
+    for f, b in mach['before'].items():
+        with open(os.path.join(ws, 'before', *f.split('/')), 'wb') as fh:
+            fh.write(b)
+    got = {side: _assembled(dev, ws, root, mach['source'], side)
+           for side, root in (('before', os.path.join(ws, 'before')), ('after', mdir))}
+    b, a_ = got['before'], got['after']
+    calls = set()
+    for sec in ('.text', '.data'):
+        if len(b[sec]) != len(a_[sec]):
+            raise CheckError('%s: the machines rewrite changes its %s\'s size' % (mach['source'], sec))
+        for o in [o for o in range(len(b[sec])) if b[sec][o] != a_[sec][o]]:
+            w = [s for s in range(max(0, o - 3), o + 1)
+                 if sec == '.text' and s % 2 == 0 and s + 4 <= len(b[sec])
+                 and _u32(b[sec], s) == STOCK_RENDER and _u32(a_[sec], s) == 0
+                 and a_['relocs'].get(s) == 'ot_stock_render']
+            if not w:
+                raise CheckError('%s: the machines rewrite changes byte %d of its %s, which is not '
+                                 'a call to the FLEX renderer' % (mach['source'], o, sec))
+            calls.add(w[0])
+    if not calls or _calls_render(a_['.text']):
+        raise CheckError('%s still calls the FLEX renderer\'s entry (0x%08x), which is the '
+                         'companion\'s: it would call itself' % (mach['source'], STOCK_RENDER))
+    for field in ('label', 'defaults', 'build', 'assign'):
+        if a_['syms'].get(nm[field]) != b['syms'].get(mach[field]):
+            raise CheckError('%s does not alias %s' % (nm[field], mach[field]))
+    lines.append('%s: assembles to its own bytes but for %d call(s) to the FLEX renderer '
+                 '(0x%08x), which name ot_stock_render; %s alias its labels'
+                 % (mach['source'], len(calls), STOCK_RENDER, ', '.join(nm.values())))
+
+    # the whole mod as linked: nothing in it jumps to the renderer's entry
+    run_at = ln.layout['sections'].get('%s .run' % plan['id'])
+    if run_at is not None and _calls_render(ram(run_at, mod.size('.run'))):
+        raise CheckError('its code calls the FLEX renderer\'s entry (0x%08x), which is the '
+                         'companion\'s' % STOCK_RENDER)
+    return lines
+
+
 _DSPBUS = []
 
 
@@ -1279,9 +1673,11 @@ def _dspbus_spans(image, dev):
     return list(_DSPBUS)
 
 
-def check(ob, plan, mod_path, core_path, stock_path, work, dspbus_path=None, intercepts_path=None):
-    """The converted mod, linked with the core (and the DSP bus, for DSP code on it, and the
-    intercepts, for detours they serve), against octabam's account -> [lines]."""
+def check(ob, plan, mod_path, core_path, stock_path, work, dspbus_path=None, intercepts_path=None,
+          machines_path=None):
+    """The converted mod, linked with the core (and the DSP bus, for DSP code on it, the
+    intercepts, for detours they serve, and the machines, for a machine on them), against
+    octabam's account -> [lines]."""
     st, dev, rel = formats.load(stock_path)
     image = formats.main_image(st, dev)
     mod, core = elemod.load_any(mod_path), elemod.load_any(core_path)
@@ -1297,6 +1693,12 @@ def check(ob, plan, mod_path, core_path, stock_path, work, dspbus_path=None, int
             raise CheckError('its places come to it through the intercepts, so the check needs them '
                              '(mods/intercepts-ot)')
         given.insert(1, elemod.load_any(intercepts_path))
+    mach = plan.get('machine')
+    if mach:
+        if not machines_path:
+            raise CheckError('it is a machine on the machines companion, so the check needs it '
+                             '(mods/machines-ot)')
+        given.insert(1, elemod.load_any(machines_path))
     ln = link.link(given, image)
     run_off = ln.layout['run_load'] - dev.main_load
     ddr0 = ln.layout['ddr'][0]
@@ -1325,6 +1727,8 @@ def check(ob, plan, mod_path, core_path, stock_path, work, dspbus_path=None, int
     base = ln.map['arena_base']
     lines = []
     busy = {h['site'] for h in plan.get('bus', ())} | {t['site'] for t in plan.get('intercepts', ())}
+    served = set(mach['served']) if mach else set()        # machines-ot's (below)
+    busy |= served
     for mn in plan['members']:
         m = ob.modules[mn]
         pc = [c for c in plan['caves'] if c['module'] == mn]
@@ -1388,7 +1792,9 @@ def check(ob, plan, mod_path, core_path, stock_path, work, dspbus_path=None, int
             extra = _boundary(image, d.site, n, dev) - n if d.kind == 'jmp' else 0
             if img(d.site + n, extra) != NOP * (extra // 2):
                 raise CheckError('the padding after the detour at 0x%08x' % d.site)
-        for r in m.symbol_refs:
+        own = mach is not None and mach['module'] == mn
+        refs = [r for r in m.symbol_refs if not (own and r.addr == KIND_FLEX)]
+        for r in refs:
             if _u32(img(r.addr, 4), 0) != sym(r.symbol) + r.addend:
                 raise CheckError('the symbol ref at 0x%08x' % r.addr)
         pt = [t for t in plan['tables'] if t['module'] == mn]
@@ -1403,21 +1809,26 @@ def check(ob, plan, mod_path, core_path, stock_path, work, dspbus_path=None, int
                 if _u32(img(ra, 4), 0) != at:
                     raise CheckError('table %s: the ref at 0x%08x' % (t.label, ra))
         moved = {a for r in plan['relocs'] for a, _w in r['pokes']}
-        for p in m.pokes:
+        pokes = [p for p in m.pokes if not (own and p.addr in served)]
+        for p in pokes:
             if p.addr not in moved and img(p.addr, len(p.write)) != p.write:
                 raise CheckError('the poke at 0x%08x' % p.addr)
         if m.detours or m.symbol_refs or m.tables or m.pokes:
-            nm = sum(p.addr in moved for p in m.pokes)
+            nm = sum(p.addr in moved for p in pokes)
             stood = sum((d.site, m.key) in plan['skip'] for d in m.detours)
-            onbus = sum(d.site in busy for d in m.detours)
+            onbus = sum(d.site in busy and d.site not in served for d in m.detours)
+            mine = len(m.pokes) - len(pokes) + len(m.symbol_refs) - len(refs) + sum(
+                d.site in served for d in m.detours) if own else 0
             lines.append('%s: %d detours, %d symbol refs, %d tables, %d pokes: as octabam '
-                         'writes them%s%s%s' % (mn, len(dets), len(m.symbol_refs), len(m.tables),
-                                                len(m.pokes) - nm,
-                                                ' (%d stood in for)' % stood if stood else '',
-                                                ' (%d on the bus or intercepted, below)' % onbus
-                                                if onbus else '',
-                                                '; %d poke(s) into a served copy (below)' % nm
-                                                if nm else ''))
+                         'writes them%s%s%s%s' % (mn, len(dets), len(refs), len(m.tables),
+                                                  len(pokes) - nm,
+                                                  ' (%d stood in for)' % stood if stood else '',
+                                                  ' (%d on the bus or intercepted, below)' % onbus
+                                                  if onbus else '',
+                                                  ' (%d machines-ot\'s, below)' % mine
+                                                  if mine else '',
+                                                  '; %d poke(s) into a served copy (below)' % nm
+                                                  if nm else ''))
 
         for u in m.linked:
             if not u.dram and u.cpu != '54455':
@@ -1468,6 +1879,9 @@ def check(ob, plan, mod_path, core_path, stock_path, work, dspbus_path=None, int
             raise CheckError('%s does not hold the record {0, %s}' % (t['event'], t['entry']))
         lines.append('0x%08x (%s): the site is %s\'s %s; its record {0, %s} intercepts every call'
                      % (t['site'], t['entry'], t['event'], t['kind'], t['entry']))
+
+    if mach:
+        lines += _check_machine(ob, plan, mach, mod, ln, image, dev, work, mdir, sym, ram, img)
 
     # the bus: each hook's site left stock and its glue in the event's table; a stub entered
     # past its replay starts with the displaced instruction; a rewritten source assembles to
@@ -1709,6 +2123,14 @@ def main(argv=None):
                          'requires intercepts (mods/intercepts-ot)')
     ap.add_argument('--intercepts-mod', help='the intercepts\' .elemod, for the check (default: build '
                                         'mods/intercepts-ot)')
+    ap.add_argument('--machines', action='store_true',
+                    help='make a source machine (a module that patches the machine chooser\'s places '
+                         'itself: MACHINE_SEAMS) a record in the machines companion\'s ot_machines '
+                         '(mods/machines-ot), so it combines with other machines; its detours at the '
+                         'intercepts\' sites go on the intercepts. Such a mod is versioned '
+                         '<commit>-machines and requires machines')
+    ap.add_argument('--machines-mod', help='the machines companion\'s .elemod, for the check (default: '
+                                       'build mods/machines-ot)')
     ap.add_argument('--no-check', action='store_true', help='build, but skip the check')
     a = ap.parse_args(argv)
     if a.sites:
@@ -1762,7 +2184,7 @@ def main(argv=None):
               'Such code assembles longer here: the same code, not the same bytes, and a unit '
               'whose author pinned its bytes (USB MIDI) fails its check. Install m68k-elf '
               'binutils (it is used when found), or set ELEKLOADER_CROSS=m68k-elf-.')
-    failed, dspbus, icpt = 0, a.dspbus, a.intercepts_mod
+    failed, dspbus, icpt, machs = 0, a.dspbus, a.intercepts_mod, a.machines_mod
     for n, is_remix in [(n, False) for n in names] + [(r, True) for r in a.remix or ()]:
         if n in ob.broken:
             print('REFUSED   %-30s its manifest does not load (%s)' % (n, ob.broken[n]))
@@ -1776,9 +2198,11 @@ def main(argv=None):
                         rx['ref'] = fh.read()
                 else:
                     rx['ref'] = build_reference(ob, n, image)
-                plan = convert(ob, n, image, dev, rx, bus=a.bus, intercepts=a.intercepts)
+                plan = convert(ob, n, image, dev, rx, bus=a.bus, intercepts=a.intercepts,
+                               machines=a.machines)
             else:
-                plan = convert(ob, n, image, dev, bus=a.bus, intercepts=a.intercepts)
+                plan = convert(ob, n, image, dev, bus=a.bus, intercepts=a.intercepts,
+                               machines=a.machines)
         except Refused as e:
             print('REFUSED   %-30s %s' % (n, e))
             continue
@@ -1789,9 +2213,11 @@ def main(argv=None):
                 dspbus, _m = sdkbuild.build(DSPBUS_DIR, a.stock, os.path.join(a.out, 'dspbus'))
             if plan.get('intercepts') and not icpt and not a.no_check:
                 icpt, _m = sdkbuild.build(INTERCEPTS_DIR, a.stock, os.path.join(a.out, 'intercepts'))
+            if plan.get('machine') and not machs and not a.no_check:
+                machs, _m = sdkbuild.build(MACHINES_DIR, a.stock, os.path.join(a.out, 'machines'))
             lines = [] if a.no_check else check(ob, plan, path, core, a.stock,
                                                 os.path.join(a.out, plan['id'] + '.check'),
-                                                dspbus, icpt)
+                                                dspbus, icpt, machs)
         except (sdkbuild.BuildError, CheckError, elemod.ModError, OSError) as e:
             print('FAILED    %-30s %s' % (n, str(e).strip().replace('\n', '\n          ')))
             failed += 1
