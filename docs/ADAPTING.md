@@ -254,6 +254,57 @@ the call, or its entry is 0, stock runs.
 A detour you already have converts unchanged: its label is the entry, and
 claims 0. `sdk.octabam --intercepts` does this for octabam's modules (4b).
 
+### Machines on the Octatrack (machines 0.1)
+
+`mods/machines-ot` (id `machines`) is a companion beside core-ot 0.3.1 for
+source machines: a machine mod adds a row to the track's machine chooser
+and to SRC SETUP, below PICKUP, with its own name, page, defaults and
+sound. The companion owns the places every source machine would otherwise
+patch (the chooser, SRC SETUP, the page resolver, the Part validator and the
+FLEX renderer), so machines combine; past six rows the chooser scrolls.
+
+A machine's track stays a FLEX track. What makes it the machine is its
+signature in the Part (three bytes at Part + 60 + 30 × track: two letters
+and a version, the form octabam's machines write), and its parameters are
+FLEX's 12 bytes of the track. The machine contributes a pointer to its
+record, `struct ot_machine` (`elekloader/sdk/include/octatrack/machines.h`),
+which has the layout and meaning of version 1 of Modwerk's record of the
+same name:
+
+```c
+#include "octatrack/machines.h"
+
+const struct ot_machine my_machine = {
+    .abi = OT_MACHINE_ABI, .sig = {'M', 'Y'}, .sig_lo = 1, .sig_hi = 1,
+    .label = "MINE", .flags = OT_MACHINE_PROTECT,
+    .defaults = my_defaults,        /* the 12 FLEX bytes a track takes when it becomes MINE */
+    .render = my_render,            /* calls ot_stock_render, then changes the samples it shipped */
+};
+```
+
+```json
+"contribute": [{"to": "ot_machines", "order": 50, "data": "00000000",
+                "relocs": [[0, "abs32", "sym:my_machine", 0]]}],
+"requires": ["core", "machines"]
+```
+
+- **`render(track, ping, start, end)`** is called for the machine's tracks
+  in place of the FLEX renderer, once a 16-sample frame (twice when a trig
+  splits it). Call `ot_stock_render` with the same arguments and hand back
+  its result; then `ot_render_header()` (read before the stock call) says
+  how many samples stock shipped (byte 3), from +16 each as two longs, L
+  and R, the 16-bit sample in the high half. The stock call needs a sample
+  in the track's FLEX slot to ship any.
+- **`PROTECT`** keeps stock's Part validator from clamping the 12 bytes to
+  FLEX's ranges, when they mean something else to the machine.
+- The other fields (`admit_track`, `assign`, `leave`, `chooser_type`,
+  `ui_tick`, `page`, `track_page`, `validate`) are optional; the table in
+  [mods/machines-ot/README.md](../mods/machines-ot/README.md) says what
+  each does, and which 0.1 does not serve yet (pools, DSP voices).
+
+Start from [examples/crush-machine-ot](../examples/crush-machine-ot): CRUSH
+plays its FLEX slot's sample through a 5-bit crusher.
+
 ### SRC machines (core 2.1, Digitakt mk1)
 
 The Digitakt mk1 has four SRC machines: 0 ONESHOT, 1 WERP, 2 REPITCH and

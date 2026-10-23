@@ -158,7 +158,10 @@ core.
   and [mods/intercepts-ot](../mods/intercepts-ot) (intercepts, with 0.3.1) gives
   places a mod intercepts (MIDI notes, the CHROMATIC keyboard, locks and knobs,
   the project file) to the one mod whose record claims each, with Modwerk's
-  Octatrack base's events and names.
+  Octatrack base's events and names. [mods/machines-ot](../mods/machines-ot)
+  (machines, with 0.3.1) gives source machines the chooser, SRC SETUP, the
+  page resolver, the Part validator and the FLEX renderer, so several combine
+  (`ot_machines`, the record of Modwerk's base of the same name).
 - **Model:Cycles, Model:Samples** ([mods/core-mc](../mods/core-mc),
   [mods/core-ms](../mods/core-ms)): the shared core.s with the hook bus's
   tick, draw, key and encoder events. Their OS entry makes its SRAM copy and
