@@ -38,6 +38,27 @@
 #define MASK_TRIGLESS   0x08            /* trigless trigs */
 #define MASK_LOCK       0x10            /* lock trigs (a locked step with no trig) */
 #define MASK_ONE        0x18            /* one-shot trigs (audio tracks) */
+/* The record a build stages (ev_step_built, fire.c). The builder writes a track's kind, length, span
+ * and time words into the tick's staging arrays, indexed by the track's number in its family (0-7;
+ * the tick copies them out right after, then clears kind and recorder, so a word that is 0 after a
+ * build was not staged); its lock bytes into the staging row (n = -1) or the pending slot n; the
+ * audio builder also the slide's steps and the recorder trig. The addresses are the builders' own
+ * (0x4009d1e8: kind 0x4009d422, length 0x4009d458, time 0x4009d3f2, span 0x4009d4d0, locks
+ * 0x4009d234 and 0x4009d25a, slide 0x4009d23e and 0x4009d264, recorder 0x4009d9fa and 0x4009d9e0;
+ * 0x4009cf4c: locks 0x4009cf7a and 0x4009cf8c). */
+#define ST_KIND         0x46c7a810u
+#define ST_LENGTH       0x46c7a14cu
+#define ST_SPAN         0x46c77bfau
+#define ST_TIME         0x46c7a830u
+#define ST_REC          0x46c7a6c0u     /* audio: the recorder trig's flags */
+#define ST_REC_TIME     0x46c7a9deu
+#define ST_ALOCKS       0x46c7aa24u     /* audio, n = -1: 8 rows of 32 bytes */
+#define ST_ADELTAS      0x46c77c32u
+#define PEND_ALOCKS     0x46c7ab30u     /* audio, slot n: 256 bytes each */
+#define PEND_ADELTAS    0x46c76ac0u
+#define ST_MLOCKS       0x46c7a6f0u     /* MIDI, n = -1 */
+#define PEND_MLOCKS     0x46c78960u     /* MIDI, slot n */
+
 /* the firmware's current bank and pattern, and whether it plays */
 #define FW_BANK         0x800065bdu
 #define FW_PATTERN      0x800065beu
@@ -265,6 +286,33 @@ static inline const void *dev_notes_out(int32_t track, int32_t step, const void 
         s->locks[SL_NOT2 + i - 1] = (uint8_t)(v < 0 ? 0 : v > 127 ? 127 : v);
     }
     return s;
+}
+
+/* The words track's build staged for the pending slot n (-1: the staging row), as the 8 pointers of
+ * struct sq_built (w[0] locks, w[1] deltas, w[2] kind, w[3] length, w[4] span, w[5] time, w[6] recorder,
+ * w[7] rec_time); 0 for an n the sequencer does not use */
+_Static_assert(sizeof(struct sq_built) == 32, "dev_staged fills struct sq_built's 8 pointers");
+
+static inline int32_t dev_staged(int32_t track, int32_t n, uint32_t w[8])
+{
+    static const uint32_t word[6] = { ST_KIND, ST_LENGTH, ST_SPAN, ST_TIME, ST_REC, ST_REC_TIME };
+    static const uint32_t row[3][4] = {                 /* by n + 1: a track's 32 bytes in the staging row, then slot 0-2 */
+        { ST_ALOCKS, PEND_ALOCKS, PEND_ALOCKS + 256, PEND_ALOCKS + 512 },
+        { ST_ADELTAS, PEND_ADELTAS, PEND_ADELTAS + 256, PEND_ADELTAS + 512 },
+        { ST_MLOCKS, PEND_MLOCKS, PEND_MLOCKS + 256, PEND_MLOCKS + 512 } };
+    uint32_t t = (uint32_t)track & 7, k = (uint32_t)(n + 1), i;
+    if (k > 3)
+        return 0;
+    for (i = 0; i < 6; i++)
+        w[2 + i] = word[i] + 4 * t;
+    if (track < SQ_AUDIO) {
+        w[0] = row[0][k] + 32 * t;
+        w[1] = row[1][k] + 32 * t;
+    } else {
+        w[0] = row[2][k] + 32 * t;
+        w[1] = w[6] = w[7] = 0;
+    }
+    return 1;
 }
 
 /* A lock into the step's lock bytes (list: struct dev_step's locks); the byte is the 8.8 value's

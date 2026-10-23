@@ -1,0 +1,25 @@
+{
+ "id": "builtprobe",
+ "version": "1",
+ "license": "GPL-2.0-or-later",
+ "title": "ev_step_built probe",
+ "category": "Examples",
+ "author": "irpina",
+ "description": "A handler for ev_step_built, configured by poking bp_cfg: the probe tests/probe_octatrack_step_built.py runs in the emulator. Not a mod to ship.",
+ "device": "octatrack",
+ "os": "1.40C",
+ "sources": [
+  "probe.c"
+ ],
+ "cflags": [
+  "-Os",
+  "-fno-tree-loop-distribute-patterns"
+ ],
+ "subscribe": [
+  {"event": "ev_step_built", "fn": "bp_built", "order": 50}
+ ],
+ "requires": [
+  "core",
+  "seq-events"
+ ]
+}

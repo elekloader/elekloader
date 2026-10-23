@@ -1,11 +1,11 @@
 {
  "id": "seq-events",
- "version": "0.1",
+ "version": "0.2",
  "license": "GPL-2.0-or-later",
  "title": "seq events",
  "category": "Framework",
  "author": "irpina",
- "description": "The Octatrack's step fire as events, so several mods that change what the sequencer plays combine: generators (does a step fire; the step it reads) and effects over what every build plays, audio and MIDI tracks (the trig, its condition, a MIDI track's notes and velocity, an audio track's locks), a step clock per track, and the playing pattern's facts when asked (docs/ADAPTING.md, \"Step-fire events\"). The same names as the Digitone's and the Digitakt's. On its own it changes nothing the unit does.",
+ "description": "The Octatrack's step fire as events, so several mods that change what the sequencer plays combine: generators (does a step fire; the step it reads) and effects over what every build plays, audio and MIDI tracks (the trig, its condition, a MIDI track's notes and velocity, an audio track's locks), a step clock per track, and the playing pattern's facts when asked (docs/ADAPTING.md, \"Step-fire events\"). The same names as the Digitone's and the Digitakt's. And, the Octatrack's only, ev_step_built: the record the stock builder has staged, for a mod that edits it (kind, time, lock bytes, recorder trigs) instead of hooking the builder. On its own it changes nothing the unit does.",
  "device": "octatrack",
  "os": "1.40C",
  "sources": [
@@ -63,7 +63,8 @@
   "ev_gen_notes": 4,
   "ev_fire_notes": 4,
   "ev_fire_vel": 4,
-  "ev_fire_locks": 4
+  "ev_fire_locks": 4,
+  "ev_step_built": 4
  },
  "requires": [
   "core"

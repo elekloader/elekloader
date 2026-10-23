@@ -644,7 +644,7 @@ def test_seq_events_ot_sites():
         for a, m in others:
             assert not (a < addr + n and addr < a + m), (hex(addr), hex(a))
     tables = ['ev_fire_step', 'ev_gen_trig', 'ev_fire_trig', 'ev_fire_cond', 'ev_gen_notes', 'ev_fire_notes',
-              'ev_fire_vel', 'ev_fire_locks']
+              'ev_fire_vel', 'ev_fire_locks', 'ev_step_built']
     assert sorted(j['collections']) == sorted(tables) and all(v == 4 for v in j['collections'].values())
     assert [(x['event'], x['fn'], x['order']) for x in j['subscribe']] == [
         ('ev_tick', 'sq_tick', 10), ('ev_tick', 'sq_tick_end', 90)]
@@ -663,12 +663,12 @@ def test_seq_events_ot_builds_and_links():
         raise Skip('no m68k cross compiler')
     st, img = stock()
     tables = ['ev_fire_step', 'ev_gen_trig', 'ev_fire_trig', 'ev_fire_cond', 'ev_gen_notes', 'ev_fire_notes',
-              'ev_fire_vel', 'ev_fire_locks']
+              'ev_fire_vel', 'ev_fire_locks', 'ev_step_built']
     with tempfile.TemporaryDirectory() as tmp:
         core, _m = build.build(os.path.join(ROOT, 'mods', 'core-ot'), SYX, tmp)
         sq, m = build.build(os.path.join(ROOT, 'mods', 'seq-events-ot'), SYX, tmp)
         ex, e = build.build(os.path.join(ROOT, 'examples', 'euclid-ot'), SYX, tmp)
-        assert os.path.basename(sq) == 'seq-events-0.1.elemod'
+        assert os.path.basename(sq) == 'seq-events-0.2.elemod'
         assert sorted(m.imports) == sorted(tables), m.imports
         for name in ('sq_clock', 'sq_track_info', 'sq_stored', 'sq_rearm', 'sq_tick', 'sq_tick_end',
                      'sq_site_abuild', 'sq_site_mbuild', 'sq_site_acond', 'sq_site_mcond', 'sq_tramp0',
@@ -697,6 +697,101 @@ def test_seq_events_ot_builds_and_links():
         if op == 'jmp':
             want += b'\x4e\x71'                                             # the pad over the 8 bytes
         assert ln.image[o:o + len(want)] == want, hex(addr)
+
+
+# The record a build stages (ev_step_built, mods/seq-events-ot/dev.h `dev_staged`): the arrays the two builders write
+# and the sequencer's tick copies out and clears. The immediates in the stock image, by what they are.
+STAGED = (
+    # (what, address, the instruction's stock bytes, the dev.h names whose value its immediate is)
+    ('audio builder: kind word', 0x4009d422, '41f946c7a810', ('ST_KIND',)),
+    ('audio builder: length index', 0x4009d458, '41f946c7a14c', ('ST_LENGTH',)),
+    ('audio builder: time', 0x4009d3f2, '41f946c7a830', ('ST_TIME',)),
+    ('audio builder: span', 0x4009d4d0, '41f946c77bfa', ('ST_SPAN',)),
+    ('audio builder: recorder flags', 0x4009d9fa, '41f946c7a6c0', ('ST_REC',)),
+    ('audio builder: recorder time', 0x4009d9e0, '41f946c7a9de', ('ST_REC_TIME',)),
+    ('audio builder: staging lock rows (n = -1)', 0x4009d234, '41f946c7aa24', ('ST_ALOCKS',)),
+    ('audio builder: staging slide steps (n = -1)', 0x4009d23e, '43f946c77c32', ('ST_ADELTAS',)),
+    ('audio builder: 256 bytes a pending slot (lsl #8)', 0x4009d256, 'e188', ()),
+    ('audio builder: pending lock rows', 0x4009d25a, 'd3fc46c7ab30', ('PEND_ALOCKS',)),
+    ('audio builder: pending slide steps, 256 bytes a slot', 0x4009d264, '068046c76ac0', ('PEND_ADELTAS',)),
+    ('audio builder: 32 bytes a track in the slide steps', 0x4009d704, '2807eb8c', ()),
+    ('MIDI builder: kind word', 0x4009d0f4, '41f946c7a810', ('ST_KIND',)),
+    ('MIDI builder: length index', 0x4009d126, '41f946c7a14c', ('ST_LENGTH',)),
+    ('MIDI builder: time', 0x4009d0e6, '41f946c7a830', ('ST_TIME',)),
+    ('MIDI builder: span', 0x4009d16c, '41f946c77bfa', ('ST_SPAN',)),
+    ('MIDI builder: staging lock rows (n = -1)', 0x4009cf7a, '4bf946c7a6f0', ('ST_MLOCKS',)),
+    ('MIDI builder: 256 bytes a pending slot (lsl #8)', 0x4009cf88, 'e188', ()),
+    ('MIDI builder: pending lock rows', 0x4009cf8c, 'dbfc46c78960', ('PEND_MLOCKS',)),
+    # the tick copies a build's words out right after it, then clears the kind and recorder words: a kind of 0
+    # after a build is "nothing staged"
+    ('tick: copies the kind word to the pending slot', 0x400a2e1c, '41f946c7a810', ('ST_KIND',)),
+    ('tick: copies the time', 0x400a2e02, '41f946c7a830', ('ST_TIME',)),
+    ('tick: copies the length index', 0x400a3342, '41f946c7a14c', ('ST_LENGTH',)),
+    ('tick: copies the span', 0x400a335a, '41f946c77bfa', ('ST_SPAN',)),
+    ('tick: clears the kind word (audio)', 0x400a336e, '41f946c7a81042b0d800', ('ST_KIND',)),
+    ('tick: clears the recorder flags (audio)', 0x400a3420, '41f946c7a6c042b0d800', ('ST_REC',)),
+    ('tick: clears the kind word (MIDI)', 0x400a3bc8, '41f946c7a81042b0d800', ('ST_KIND',)),
+)
+
+
+def test_seq_events_ot_staged_record():
+    """ev_step_built's pointers (mods/seq-events-ot/dev.h dev_staged) are the arrays the builders write and the tick
+    copies out: each immediate is in the stock image where the comment says, the names in dev.h have those values, and
+    struct sq_built (octatrack/seq.h) has the eight pointers dev_staged fills, in its order."""
+    import re
+    st, img = stock()
+    with open(os.path.join(ROOT, 'mods', 'seq-events-ot', 'dev.h')) as fh:
+        dev_h = fh.read()
+    defs = {m.group(1): int(m.group(2), 16)
+            for m in re.finditer(r'^#define\s+((?:ST|PEND)_\w+)\s+(0x[0-9a-fA-F]+)u?\b', dev_h, re.M)}
+    assert sorted(defs) == sorted(['ST_KIND', 'ST_LENGTH', 'ST_SPAN', 'ST_TIME', 'ST_REC', 'ST_REC_TIME', 'ST_ALOCKS',
+                                   'ST_ADELTAS', 'PEND_ALOCKS', 'PEND_ADELTAS', 'ST_MLOCKS', 'PEND_MLOCKS']), sorted(defs)
+    seen = set()
+    for what, addr, hexs, names in STAGED:
+        o = addr - DEV.main_load
+        assert img[o:o + len(hexs) // 2].hex() == hexs, (what, hex(addr))
+        for nm in names:
+            assert '%08x' % defs[nm] in hexs, (what, nm)
+            seen.add(nm)
+    assert seen == set(defs), sorted(set(defs) - seen)
+    # a pending slot is 256 bytes (8 tracks of 32), the staging row (n = -1) just before slot 0
+    assert 0 < defs['PEND_ALOCKS'] - defs['ST_ALOCKS'] < 256 + 32
+    # struct sq_built: the order dev_staged fills
+    with open(os.path.join(ROOT, 'elekloader', 'sdk', 'include', 'octatrack', 'seq.h')) as fh:
+        hdr = fh.read()
+    body = re.search(r'struct sq_built \{(.*?)\n\};', hdr, re.S).group(1)
+    members = re.findall(r'^\s+\w+\s+\*(\w+);', body, re.M)
+    assert members == ['locks', 'deltas', 'kind', 'length', 'span', 'time', 'recorder', 'rec_time'], members
+    assert 'sizeof(struct sq_built) == 32' in dev_h
+    # nothing but the stock builders' own arrays: the tick's other staging words are not offered
+    assert 'ev_step_built_fn' in hdr and 'const struct sq_built *rec' in hdr
+
+
+def test_seq_events_ot_step_built_links():
+    """The ev_step_built probe (tests/fixtures/octatrack-step-built) subscribes to the new table: one entry, the
+    handler, and no site of its own; with a step-stage example beside seq-events core's page still holds the lot
+    (units 1: the event's code did not push the mod over a page)."""
+    import shutil
+    from elekloader.sdk import build
+    need(SYX)
+    if not shutil.which(os.environ.get('ELEKLOADER_CROSS', DEV.toolchain['prefix']) + 'gcc'):
+        raise Skip('no m68k cross compiler')
+    st, img = stock()
+    with tempfile.TemporaryDirectory() as tmp:
+        core, _m = build.build(os.path.join(ROOT, 'mods', 'core-ot'), SYX, tmp)
+        sq, m = build.build(os.path.join(ROOT, 'mods', 'seq-events-ot'), SYX, tmp)
+        pb, p = build.build(os.path.join(ROOT, 'tests', 'fixtures', 'octatrack-step-built'), SYX, tmp)
+        ex, _e = build.build(os.path.join(ROOT, 'examples', 'euclid-ot'), SYX, tmp)
+        assert not p.imports and not p.sites and 'bp_built' in p.exports
+        mods = [elemod.load_any(x) for x in (core, sq, pb)]
+        assert link.check(mods, img) == []
+        ln = link.link(mods, img)
+        small = link.link([elemod.load_any(x) for x in (core, sq, ex)], img)
+    assert ln.tables['ev_step_built'][1] == 1 and ln.tables['ev_gen_trig'][1] == 0
+    at = ln.tables['ev_step_built'][0]
+    o = ln.layout['run_load'] + (at - DEV.ddr[0]) - DEV.main_load
+    assert struct.unpack('>II', ln.image[o:o + 8]) == (ln.map['bp_built'], 0)
+    assert small.layout['reserve']['units'] == 1, small.layout['reserve']
 
 
 def test_seq_events_ot_beside_the_companions():

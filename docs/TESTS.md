@@ -51,6 +51,18 @@ pending step records and in the MIDI out, and that the pattern is put back:
 python tests/probe_octatrack_seq_events.py --emulator path/to/octabam --stock OCTATRACK_OS1.40C.syx
 ```
 
+`tests/probe_octatrack_step_built.py` does the same for `ev_step_built`, the
+record the stock builder has staged: that a handler on it leaves the pending
+records stock's, is given the arguments and the words the tick later copies out,
+and can do what PLOCKS P2's fill, MIDI SCENES' staged row and REC TRIG MUTE do at
+the builders (cancel a step, set a lock, move a time, mute a recorder trig,
+snapshot a row, key a table by the build), also beside seq-events' own stages and
+in a build nested in a build:
+
+```bash
+python tests/probe_octatrack_step_built.py --emulator path/to/octabam --stock OCTATRACK_OS1.40C.syx
+```
+
 The TypeScript engine has its own tests, which need no firmware, and a
 parity run that compares it with the Python on your own files
 ([js/README.md](../js/README.md)):

@@ -16,11 +16,14 @@
  *         -> the lock bytes are written for the one build
  *
  * and returns through its frame's trampoline (sq_tramp0-2), whose sq_exit puts every byte it
- * wrote back and frees the frame. The builder, its timing and its slides are stock's, on the
- * step's data as the handlers left it: the pattern is the same before and after, and nothing reads
- * it in between but the interrupt that is running. With no handler anywhere, enter changes
- * nothing. The first step is built when PLAY is pressed, before the transport reports playing,
- * and a step is built again when it is edited: the events run in those builds too. */
+ * wrote back, then runs ev_step_built on the record the builder staged (dev.h dev_staged: the
+ * tick's staging words, which it copies out and clears right after) and frees the frame. The
+ * builder, its timing and its slides are stock's, on the step's data as the handlers left it: the
+ * pattern is the same before and after, and nothing reads it in between but the interrupt that is
+ * running. With no handler anywhere, enter changes nothing; with ev_step_built alone it only takes
+ * the frame, so the build returns through the trampoline. The first step is built when PLAY is
+ * pressed, before the transport reports playing, and a step is built again when it is edited: the
+ * events run in those builds too. */
 #include <stdint.h>
 #include "dev.h"
 
@@ -32,6 +35,7 @@ extern const ev_gen_notes_fn ev_gen_notes[];
 extern const ev_fire_notes_fn ev_fire_notes[];
 extern const ev_fire_vel_fn ev_fire_vel[];
 extern const ev_fire_locks_fn ev_fire_locks[];
+extern const ev_step_built_fn ev_step_built[];          /* the Octatrack's only: after the builder, below */
 
 /* seq.c's stages */
 extern int32_t sq_on_step(int32_t track, int32_t real, const uint8_t *pat);
@@ -55,6 +59,9 @@ static void (*const tramps[DEPTH])(void) = { sq_tramp0, sq_tramp1, sq_tramp2 };
 /* A build in flight. Everything written into the pattern is kept here, to put back. */
 struct frame {
     struct dev_step st;
+    int32_t n;                          /* the build's arguments, for ev_step_built */
+    uint8_t bank, ptn;
+    uint8_t ev;                         /* 1: ev_step_built has a handler */
     uint32_t ret;                       /* the builder's real return address */
     uint32_t saved;                     /* SAVED_TIMING, and a mask's bit in the low nibble <<8 */
     uint32_t mask_old;                  /* bit k: mask kind k's bit as it was */
@@ -65,8 +72,8 @@ struct frame {
 
 /* The last build of each track (a repeat of an edit is not a new fire) */
 struct built {
-    int32_t n, real;
-    uint32_t bank, ptn;
+    int8_t n, real;                     /* -1..2, 0..63 */
+    uint8_t bank, ptn;                  /* 0..15 */
 };
 
 static struct frame frames[DEPTH];
@@ -183,17 +190,33 @@ static void fire(struct frame *fr)
 static void enter(uint32_t *f, int32_t base)
 {
     uint32_t t = f[1], bank = f[2], ptn = f[3], real = f[4], kp = 0, kl = 0;
-    int32_t n = (int32_t)f[5], track, read, first = 1, i, k;
+    int32_t n = (int32_t)f[5], track, read, first = 1, i, k, full = stages();
     const uint8_t *pat, *src;
     struct frame *fr;
     struct built *b;
     struct dev_step *s;
-    if (t > 7 || bank > 15 || ptn > 15 || real >= SQ_STEPS || !stages() || (k = take()) < 0)
+    if (t > 7 || bank > 15 || ptn > 15 || real >= SQ_STEPS || (!full && !ev_step_built[0]) ||
+        (k = take()) < 0)
         return;
     track = base + (int32_t)t;
     pat = dev_bank((int32_t)bank) + PAT_STRIDE * ptn;
     fr = &frames[k];
     s = &fr->st;
+    fr->n = n;
+    fr->bank = (uint8_t)bank;
+    fr->ptn = (uint8_t)ptn;
+    fr->ev = ev_step_built[0] != 0;
+    s->pat = pat;
+    s->track = track;
+    fr->saved = fr->mask_old = fr->lock_chg = 0;
+    fr->ret = f[0];
+    f[0] = (uint32_t)tramps[k];
+    if (!full) {                        /* only ev_step_built: the build is stock's, and reported when it returns */
+        s->step = (int32_t)real;
+        s->word0 = s->word = 0;         /* sq_cond has nothing to ask */
+        s->generated = s->silent = 0;
+        return;
+    }
     b = &last[track];
     if (n < 0) {                        /* the first step, built when PLAY is pressed (before the transport reports
                                          * playing), or an edit of a step */
@@ -212,21 +235,16 @@ static void enter(uint32_t *f, int32_t base)
     b->bank = bank;
     b->ptn = ptn;
     b->real = (int32_t)real;
-    s->pat = pat;
-    s->track = track;
     s->step = read;
     s->word0 = dev_step_word(pat, track, read);
     s->word = sq_on_trig(track, read, first, s->word0);
     s->generated = !s->word0 && s->word;
     s->silent = 0;
-    fr->saved = fr->mask_old = fr->lock_chg = 0;
     src = dev_locks(pat, track, read);
     for (i = 0; i < 32; i++)
         s->locks[i] = s->generated ? NOLOCK : src[i];
     if (s->word != s->word0)
         materialize(fr);
-    fr->ret = f[0];
-    f[0] = (uint32_t)tramps[k];
     f[4] = (uint32_t)read;
 }
 
@@ -259,8 +277,19 @@ int32_t sq_cond(int32_t track, int32_t step, int32_t fails, const uint32_t *ret)
     return fails;
 }
 
-/* The builder's return, to frame i's trampoline: put back what enter and sq_cond wrote. -> the
- * builder's real return address */
+/* ev_step_built: the builder has staged the build's record and the pattern is as stored again */
+static void step_built(const struct frame *fr)
+{
+    const struct dev_step *s = &fr->st;
+    const ev_step_built_fn *h;
+    union { struct sq_built r; uint32_t w[8]; } u;
+    if (dev_staged(s->track, fr->n, u.w))
+        for (h = ev_step_built; *h; h++)
+            (*h)(s->track, fr->bank, fr->ptn, s->step, fr->n, &u.r);
+}
+
+/* The builder's return, to frame i's trampoline: put back what enter and sq_cond wrote, then report the
+ * record it staged. -> the builder's real return address */
 uint32_t sq_exit(int32_t i)
 {
     struct frame *fr = &frames[i];
@@ -282,6 +311,8 @@ uint32_t sq_exit(int32_t i)
             m = dev_mask(s->pat, s->track, kind_off[k], s->step);
             *m = (fr->mask_old >> k) & 1 ? *m | bit : *m & ~bit;
         }
+    if (fr->ev)
+        step_built(fr);
     give(i);                            /* the frame is free: nothing of it is read after this */
     return ret;
 }

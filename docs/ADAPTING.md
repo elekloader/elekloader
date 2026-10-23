@@ -1676,9 +1676,54 @@ handler:
   none); an audio track plays a sample, and its raw PTCH is not a note. A lock
   on its AMP VOL (slot 15) is its accent. `ev_fire_locks` runs on the audio
   tracks only, as everywhere.
-- Not offered: the voice-time dispatch, the staged record after the builder,
-  the sequencer's MIDI packets, pattern and Part changes. [mods/seq-events-ot](../mods/seq-events-ot/README.md)
+- `ev_step_built`, the Octatrack's own, is the record the builder has staged,
+  for a mod that edits it where it would otherwise hook the builder (below).
+- Not offered: the voice-time dispatch, the staging-to-pending copies and the
+  frame interrupt's trig record after the builder, the sequencer's MIDI packets,
+  pattern and Part changes. [mods/seq-events-ot](../mods/seq-events-ot/README.md)
   has the sites and what was checked.
+
+**`ev_step_built`** (Octatrack only; `octatrack/seq.h`):
+
+| event | prototype | |
+|---|---|---|
+| `ev_step_built` | `void f(int32_t track, int32_t bank, int32_t pattern, int32_t step, int32_t n, const struct sq_built *rec)` | after the builder has staged a build's record and the stages have run, with the pattern as stored: `rec` points at the words the tick copies out next |
+
+The tick builds each track's next step with `builder(track, bank, pattern,
+step, n)` and copies what the builder staged into the pending slot `n` (0-2; -1
+for the first step at PLAY and for an edit of a step). `step` is the step the
+build read. The event runs for every build of every track, also with no step stage
+subscribed, and a change in place is a change in the record:
+
+| `rec->` | |
+|---|---|
+| `kind`, `recorder` | always current: 0 nothing staged (for `recorder`, no recorder trig). Set to 0 and the step plays nothing, or starts no recording. `kind` is `0x1d` a trigger trig, `0x19` trigless, `0x3d` one-shot, 1 a lock trig |
+| `locks` | the 32 lock bytes (`0xff` none): an audio track's page-1 knobs, a MIDI track's NOTE page first |
+| `deltas` | audio tracks: each lock's difference to the next trig's, for a slide; null on a MIDI track |
+| `length`, `span`, `time` | the length index, the trig's length and its time offset (micro-timing and swing) |
+| `rec_time` | audio tracks: the recorder trig's time offset |
+
+The other words are the last staged build's when `*kind` is 0 (`*rec_time` when
+`*recorder` is 0): read them when `*kind` is not 0. The handler runs at interrupt
+level, or in the UI task for an edit's build, which the tick's build of the same
+track can interrupt; check `*kind` before an edit and keep it short. A handler
+cannot give a build a record it did not stage.
+
+```c
+/* REC TRIG MUTE: T1-T4's recorder trigs are not staged */
+void mute_built(int32_t track, int32_t bank, int32_t pattern, int32_t step, int32_t n,
+                const struct sq_built *rec)
+{
+    if (track < 4 && rec->recorder)
+        *rec->recorder = 0;
+}
+```
+
+with `{"event": "ev_step_built", "fn": "mute_built", "order": 50}` in `subscribe`.
+Three of octabam's modules hook the builders to do this: REC TRIG MUTE
+(`0x4009d9a4`), the shop's MIDI SCENES v1.0 (`0x4009d1de`), and the builder
+half of PLOCKS P2 (`0x4009d704`, `0x4009d8c6`); the mod's README says what
+each needs of the event and what it still needs elsewhere.
 
 ## 3. Path B: a linkable mod
 
