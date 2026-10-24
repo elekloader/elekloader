@@ -451,7 +451,8 @@ def kept_checkout(tmp, mods):
 
 def test_a_cave_pinned_on_kept_bytes_moves_to_run():
     """A cave octabam pins on bytes the device keeps stock goes in .run, as a floating cave:
-    its emit's jump is a jmp site against its label, and nothing is written at the pin. The
+    its emit's jump is a jmp site against its label (a code site for --sites too), and nothing
+    is written at the pin. The
     check links it at its pin to the ratified bytes and proves that only its pointers into
     itself change when it moves. A source that writes its own address as a number is
     refused by the check; a cave pinned just past the kept bytes stays fixed."""
@@ -469,6 +470,10 @@ def test_a_cave_pinned_on_kept_bytes_moves_to_run():
                                'target': 'ob_kept_kcave', 'addend': 0}]
         assert mod.symbols['ob_kept_kcave'] == ('.run', 0)
         assert any('which octabam pins at 0x400d24d0, is in .run' in x for x in plan['notes'])
+        # --sites lists its jump as a code site, as the conversion has it
+        got, notes = octabam.code_sites(ob, 'kept', img, DEV)
+        assert got == [(0x40031ece, 6, 'ob_kept_kcave')] and not notes, (got, notes)
+        assert set(got) == _plan_code_sites(plan)
         assert any('in .run, as octabam links it there; from its link at its pin 0x400d24d0 '
                    '(the bytes the manifest ratifies), only its' in x for x in lines), lines
         ln = link.link([elemod.load_any(core(tmp)), mod], img)

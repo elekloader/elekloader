@@ -804,6 +804,11 @@
      "fm_track_paste"
     ],
     [
+     "0x40031ece",
+     6,
+     "ob_cxosc_cxosc_page"
+    ],
+    [
      "0x400334d8",
      6,
      "fm_machine_name"
@@ -2603,6 +2608,11 @@
      "0x40031e62",
      8,
      "po_lfopage"
+    ],
+    [
+     "0x40031ece",
+     6,
+     "ob_synth_synth_page"
     ],
     [
      "0x4003685a",

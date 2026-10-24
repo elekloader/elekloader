@@ -330,12 +330,26 @@ def members(ob, name):
 
 # ---- the stock code a module hooks (--sites: sdk.bounties' upstream list) -----------------
 
+def _kept_pin(ob, c, dev):
+    """A cave octabam pins where the device keeps the bytes stock -> (its pin, its length): it
+    goes in .run instead. (None, 0) for any other cave."""
+    if not c.source or c.cave_addr is None:
+        return None, 0
+    span = len(c.pinned or (ob.call(c.reference, c.cave_addr) if c.reference else b''))
+    if span and any(c.cave_addr < hi and lo < c.cave_addr + span
+                    for lo, hi, _w in getattr(dev, 'keep', ())):
+        return c.cave_addr, span
+    return None, 0
+
+
 def code_sites(ob, name, image, dev):
     """-> ([(addr, len, label), ...], [note, ...]): the stock code module `name` hooks, as its
     conversion's code sites (jsr, jmp, keep2, code bytes) are, each named by the symbol it
     jumps to ('?' for a jump to stock code), whether or not the module converts. Data sites
     (pokes, pointers, tables, a pinned cave's emitted pokes) and DSP code are left out, as
-    sdk.bounties leaves them out of a mod's."""
+    sdk.bounties leaves them out of a mod's. A cave pinned on bytes the device keeps stock is
+    in .run (convert's `_kept_pin`), so its jumps to itself are code sites, as a floating
+    cave's are."""
     names_ = [name]
     for n in names_:                        # members(), past an Override this checkout cannot name
         for o in getattr(ob.modules[n], 'overrides', ()):
@@ -357,8 +371,23 @@ def code_sites(ob, name, image, dev):
             sym = 'ob_%s_%s' % (ms, _slug(c.label)) if c.source else '?'
             if c.hook_addr is not None:
                 add(c.hook_addr, len(c.hook_stock), sym, c.hook_stock)
-            if c.emit is None or c.cave_addr is not None:
-                continue                    # a pinned cave's pokes are data sites
+            if c.emit is None:
+                continue
+            if c.cave_addr is not None:
+                try:
+                    pin, span = _kept_pin(ob, c, dev)
+                    pk = ob.call(c.emit, c.cave_addr)[1] if pin is not None else ()
+                except Exception as e:       # a manifest's own code
+                    notes.append('the cave "%s" did not emit (%s: %s)'
+                                 % (c.label, type(e).__name__, e))
+                    continue
+                for pa, _exp, w in pk:      # else a pinned cave's pokes are data sites
+                    at = [i for i in range(0, len(w) - 3, 2) if pin <= _u32(w, i) < pin + span]
+                    if at and at[0] == 2 and (
+                            (w[:2] in OPS.values() and w[6:] == NOP * ((len(w) - 6) // 2))
+                            or (len(w) == 6 and w[:2] == _stock(image, dev, pa, 2))):
+                        add(pa, len(w), sym)    # a jsr/jmp or keep2 to the moved cave
+                continue
             try:
                 (_b1, p1), (_b2, p2) = [ob.call(c.emit, a) for a in EMIT_AT]
             except Exception as e:           # a manifest's own code
@@ -957,12 +986,7 @@ def convert(ob, name, image, dev, rx=None, bus=False, intercepts=False, machines
         # device keeps the bytes they are pinned on); hooks; emit's pokes
         for c in m.cf_patches:
             sym = 'ob_%s_%s' % (ms, _slug(c.label))
-            pin, span = None, 0             # a pinned cave moved off kept bytes: its pin, length
-            if c.source and c.cave_addr is not None:
-                span = len(c.pinned or (ob.call(c.reference, c.cave_addr) if c.reference else b''))
-                if span and any(c.cave_addr < hi and lo < c.cave_addr + span
-                                for lo, hi, _w in dev.keep):
-                    pin = c.cave_addr
+            pin, span = _kept_pin(ob, c, dev)    # a pinned cave moved off kept bytes
             if not c.source:                # writes nothing of its own: only its pokes
                 sym = None
             elif c.cave_addr is not None and pin is None:
