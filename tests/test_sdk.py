@@ -430,6 +430,41 @@ def test_a_knob_that_draws_itself_needs_machine_pages_1_1():
             'drawtest 1.0 imports cm_ui_v31, which no given mod exports'], r['problems']
 
 
+def test_extra_values_with_ccs_need_machine_pages_1_4():
+    """A page that names cm_ui_v33 gives its extra values MIDI CCs (+18 of
+    each knob): the PARAM fixture's are 24-30. It imports cm_ui_v33, which
+    only machine-pages 1.4 and newer export, and links beside it. Beside 1.3,
+    which would refuse the page for the byte, it is refused. machine-pages
+    answers the CCs at the lookup's generic audio-track table, 0x400791fe."""
+    tc = devices.devices()[0].toolchain
+    if not shutil.which(os.environ.get('ELEKLOADER_CROSS', tc['prefix']) + 'gcc'):
+        raise Skip('no m68k cross compiler')
+    with tempfile.TemporaryDirectory() as tmp:
+        path, m = build.build(os.path.join(ROOT, 'tests', 'fixtures', 'digitakt-src-parameters'), stock(), tmp)
+        assert 'cm_ui_v33' in m.imports and 'cm_ui_v32' not in m.imports, m.imports
+        s, dev, _rel = formats.load(stock())
+        run = bytes(elemod.parts_bytes(m.sections['.run']['parts'], formats.main_image(s, dev), dev))
+        extra = m.symbols['ui'][1] + 336
+        assert [run[extra + 40 * k + 18] for k in range(7)] == list(range(24, 31))
+        assert all(run[extra + 40 * k + 19] == 0 for k in range(7))
+        mp = machine_pages(stock(), tmp)
+        with open(mp) as fh:
+            doc = json.load(fh)
+        assert {'cm_ui_v32', 'cm_ui_v33'} <= set(doc['exports'])
+        assert [(x['new'][:4], x['relocs']) for x in doc['sites'] if x['addr'] == '0x400791fe'] == [
+            ('4ef9', [[2, 'abs32', 'sym:mp_cc_s', 0]])]
+        rc, r = lint_json(path, '--stock', stock(), '--with', built_core(), '--with', mp)
+        assert rc == 0, r['problems']
+        # machine-pages 1.3: the same mod but for the marker
+        doc.update(version='1.3', exports=[x for x in doc['exports'] if x != 'cm_ui_v33'])
+        mp13 = os.path.join(tmp, 'machine-pages-1.3.elemod')
+        with open(mp13, 'w') as fh:
+            json.dump(doc, fh)
+        rc, r = lint_json(path, '--stock', stock(), '--with', built_core(), '--with', mp13)
+        assert rc == 1 and r['problems'] == [
+            'src-parameters-test 0.1 imports cm_ui_v33, which no given mod exports'], r['problems']
+
+
 def test_the_sine_machine_example_builds_for_each_os_unchanged():
     """examples/sine-machine names no firmware address: its 1.54 port is
     empty, and both builds carry the same code."""

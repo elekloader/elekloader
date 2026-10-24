@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later
  *
- * core-ot 0.5 for the Octatrack (OS 1.40C): what the core knows and exports, for C mods.
+ * core-ot 0.7 for the Octatrack (OS 1.40C): what the core knows and exports, for C mods.
  * The SDK puts this folder on the include path:
  *
  *     #include "octatrack/core.h"
@@ -11,6 +11,9 @@
  * - the frame budget meter, which the core keeps in every build;
  * - ot_page2_write: a page-2 knob's value into the Part, its copy, the engine and the dirty flags;
  * - ot_midi_send_paced: MIDI out that cannot hang the unit or flood a controller.
+ * - the project's lifecycle events, mods' project and card data, battery RAM (0.6);
+ * - the voice events: what the frame interrupt does to a track's voice (0.7).
+ * - ot_boot_info: what the core's boot check found (0.7.1).
  *
  * Locations are for OS 1.40C; a mod that uses only these names rebuilds for another OS by the core's
  * port, not by a change here. Where octabam's docs/firmware says how a location was found, the
@@ -77,6 +80,21 @@ extern volatile struct ot_frame_meter ot_meter;
 #define OT_DTCN3            OT_L(0xfc07c00c)    /* the counter itself */
 #define OT_FRAME_COUNTS     47891u              /* tpf until the first 1,024 frames are measured */
 void ot_meter_reset(void);
+
+/* ---- the boot check ----------------------------------------------------------------------------
+ * .boot copies the RAM image the linker built into the reserve and hashes the copy against the
+ * linker's __run_hash (link.py, run_hash: a rolling x33 over its 32-bit words, seed 5381). When
+ * they differ it halts rather than run mod code that is not the code that was linked. A mod that
+ * runs at all has therefore seen state == OT_BOOT_OK and want == got. The same record is left in
+ * the reserve's .bss when it does halt, for an emulator or a debugger to read. */
+#define OT_BOOT_OK          0x424f4f54u         /* 'BOOT': the copy matched */
+#define OT_BOOT_FAIL        0x4641494cu         /* 'FAIL': the copy did not match; the boot halted */
+struct ot_boot_info {
+    uint32_t state;             /* OT_BOOT_OK, or 0 before .boot has run */
+    uint32_t want;              /* the linker's hash of the RAM image */
+    uint32_t got;               /* the hash of the copy in the reserve */
+};
+extern volatile struct ot_boot_info ot_boot_info;
 
 /* ---- the Parts ----------------------------------------------------------------------------------
  * The current bank's RAM is OT_BANK_RAM; its four Parts (6,322 bytes each) start at +0x8ed80. In a
@@ -230,5 +248,56 @@ struct ot_setting {
     int32_t def;                    /* its default */
     void (*changed)(const struct ot_setting *s);    /* after an edit or a load; or 0 */
 };
+
+/* ==== core-ot 0.7: voices ========================================================================= */
+
+/* The frame interrupt's builder turns the sequencer's, the panel's and MIDI's requests (each track's
+ * mailbox word) into the DSP command byte, the live lanes and the records the DSP receives; the voice
+ * struct's routines reset and bind a track's sample. Octabam's synth machines, MUTE MODES, TEMPO SYNC,
+ * PLOCKS P2 and the recorder fixes each detour a few of those places. Core gives each place an event.
+ * Handlers use the C convention (d0-d1/a0-a1 are free). Except ev_voice_kill (tasks reach it too, with
+ * every interrupt masked) they run in the frame interrupt (level 5, 362.8 us a frame, the worst near
+ * 92%): keep them to a few dozen instructions. None may use the EMAC: the interrupt has
+ * put the interrupted task's state away, but its builder goes on using the EMAC itself after them
+ * (ev_frame and ev_frame_end, at the end of the interrupt, are the events where a handler may).
+ *
+ *   unsigned ev_voice_start(trk, cmd)    a DSP command was posted for the track this frame (cmd != 0,
+ *                                        the byte at OT_DSP_CMD(trk)); return the command to use: the
+ *                                        next handler gets it, and so do the packer and the DSP
+ *   void ev_voice_release(trk, word)     the AMP release (OT_MBX_RELEASE in the track's mailbox word);
+ *                                        the release bytes 0x80001828/9 are read after the handlers
+ *   void ev_voice_kill(trk)              the voice was reset (the sequencer's STOP and pattern change,
+ *                                        the sample loaders, the preview, a voice that has played to its
+ *                                        end, a track with no sample): with every interrupt masked, from
+ *                                        a task or the frame interrupt
+ *   int ev_voice_bind(trk, voice)        the binder is about to write the voice's two arena pointers
+ *                                        (OT_V_ARENA0/1); return nonzero to leave them as they were. The
+ *                                        voice is then unbound: the renderer finds nothing left to play
+ *                                        and resets it (ev_voice_kill), once or twice a frame
+ *   int ev_voice_seek(trk, voice, same)  the binder is about to count a (re)start of the voice
+ *                                        (OT_V_STARTS), which the frame builder reads as "new voice";
+ *                                        same: the sample is the one the voice already has. Return
+ *                                        nonzero to leave the counter alone (the DSP seeks the voice)
+ *   void ev_trig_apply(trk, flags)       a trig's locks reached the track's live lane (the restore and
+ *                                        apply paths joined); flags: bit 31 no apply, bit 6 no restore,
+ *                                        bit 2 keep the trig's record (PLOCKS P2's reading of them)
+ *   int ev_dsp_trig(trk, flags)          the voice record writer is about to build the track's per-trig
+ *                                        flag bits in its DSP frame word (flags: bits 0-1 a trig, bit 2 a
+ *                                        release; the byte at 0x80004858 + 8 t); return nonzero to build
+ *                                        the word as for a frame with no trig
+ *   void ev_dsp_record(trk, rec)         the writer has put the FX ids into the track's 64-byte record
+ *                                        for the DSP (32 halfwords): a store here lands last in the frame
+ */
+#define OT_DSP_CMD(t)       OT_B(0x46104d15u + (t))     /* the DSP command byte posted for track t; 0: none */
+#define OT_MAILBOX(t)       OT_L(0x46c80354u + 4 * (t)) /* what the builder is asked to do on track t */
+#define OT_MBX_START        (1u << 2)
+#define OT_MBX_RELEASE      (1u << 6)
+
+/* The voice struct of track t (168 bytes), as longs: the arena entries the sample lives in, the count of
+ * starts the frame builder compares, and the position the voice starts from. */
+#define OT_VOICES           0x800049d8u
+#define OT_VOICE_SIZE       168u
+#define OT_VOICE(t)         ((volatile uint32_t *)(uintptr_t)(OT_VOICES + OT_VOICE_SIZE * (t)))
+enum { OT_V_ARENA0 = 1, OT_V_ARENA1 = 2, OT_V_STARTS = 36, OT_V_SEEKPTR = 38 };      /* +4, +8, +144, +152 */
 
 #endif

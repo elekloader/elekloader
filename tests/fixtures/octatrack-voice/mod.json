@@ -1,0 +1,23 @@
+{
+ "id": "voice-probe", "version": "1",
+ "license": "GPL-2.0-or-later",
+ "title": "voice probe", "category": "Test", "author": "irpina",
+ "description": "A probe of core-ot 0.7's voice events: counts every event, checks its arguments against the firmware's own memory, and vetoes or changes what a poked control says.",
+ "device": "octatrack", "os": "1.40C",
+ "sources": ["probe.c"],
+ "subscribe": [
+  {"event": "ev_voice_start", "fn": "pr_start", "order": 50},
+  {"event": "ev_voice_start", "fn": "pr_start2", "order": 60},
+  {"event": "ev_voice_release", "fn": "pr_release", "order": 50},
+  {"event": "ev_voice_kill", "fn": "pr_kill", "order": 50},
+  {"event": "ev_voice_bind", "fn": "pr_bind", "order": 50},
+  {"event": "ev_voice_seek", "fn": "pr_seek", "order": 50},
+  {"event": "ev_trig_apply", "fn": "pr_trig", "order": 50},
+  {"event": "ev_dsp_trig", "fn": "pr_dsp_trig", "order": 50},
+  {"event": "ev_dsp_record", "fn": "pr_dsp_record", "order": 50},
+  {"event": "ev_frame_begin", "fn": "pr_frame_begin", "order": 50},
+  {"event": "ev_frame_end", "fn": "pr_frame_end", "order": 50}
+ ],
+ "requires": ["core"],
+ "resources": {"core": "0.7"}
+}
