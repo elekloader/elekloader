@@ -10,6 +10,7 @@ _Static_assert(offsetof(struct cm_ui32, page_count) == 616, "page count");
 _Static_assert(offsetof(struct cm_ui32, pages) == 620, "pages pointer");
 
 const char cm_ui_v32[] = "machine-pages 3.2";
+const char cm_ui_v33[] = "machine-pages 3.3";
 extern const struct cm_machine *const core_machines[];
 extern const uint32_t SAVE_MAP[];
 extern uint32_t mp_descriptor_table[];                    /* params.s: the stock descriptors, 13 longs an id */
@@ -19,6 +20,21 @@ extern uint32_t mp_native_upgrade(uint8_t *, uint8_t *, int32_t);
 static const struct cm_ui32 *extended[128];
 static int ready;
 
+/* A CC an extra value may not take: one MIDI reserves (bank select's LSB, data steps, (N)RPN, channel
+ * modes), or one a stock parameter of a track or of the unit names (its descriptor's +24 or its LSB's +26;
+ * ids 70-107 are the FX channel's, 140-163 the MIDI tracks'). */
+static int stock_cc(uint32_t cc)
+{
+    if (cc == 32 || (cc >= 96 && cc <= 101) || cc >= 120)
+        return 1;
+    for (uint32_t id = 0; id < 140; id = id == 69 ? 108 : id + 1) {
+        uint32_t w = mp_descriptor_table[13 * id + 6];
+        if (w >> 16 == cc || (w & 0xffff) == cc)
+            return 1;
+    }
+    return 0;
+}
+
 static int valid(const struct cm_machine *m, const struct cm_ui32 *u)
 {
     /* shortcut: the POC uses SLICE's bank; add other banks when a consumer needs them. */
@@ -27,8 +43,16 @@ static int valid(const struct cm_machine *m, const struct cm_ui32 *u)
         u->page_count < 1 || u->page_count > 2 || !u->pages ||
         u->reserved[0] || u->reserved[1] || u->reserved[2])
         return 0;
+    for (int k = 0; k < 8; ++k)
+        if (u->base.knob[k].cc)                 /* A-H keep their stock CCs, 16-23 */
+            return 0;
     for (int k = 0; k < CM_EXTRAS; ++k) {
         const struct cm_knob *p = &u->extra[k];
+        if (p->cc && (u->base.abi != cm_ui_v33 || stock_cc(p->cc)))
+            return 0;
+        for (int j = 0; j < k; ++j)
+            if (p->cc && p->cc == u->extra[j].cc)
+                return 0;
         if (!p->look || p->look >= 164 || p->reserved || (p->flags & ~31) ||
             (p->flags & (CM_RANGE | CM_DEFAULT)) != (CM_RANGE | CM_DEFAULT) ||
             p->min != 0 || p->max != 0x7f00 || p->def < 0 || p->def > 0x7f00)
@@ -76,7 +100,7 @@ void mp_src_init(void)
             continue;
         }
         const struct cm_ui32 *u = (const struct cm_ui32 *)m->ui;
-        if (m->ui->abi == cm_ui_v32 && count < 32 && valid(m, u)) {
+        if ((m->ui->abi == cm_ui_v32 || m->ui->abi == cm_ui_v33) && count < 32 && valid(m, u)) {
             extended[m->id] = u;
             ++count;
         }
@@ -88,6 +112,17 @@ const struct cm_ui32 *mp_src_for(int32_t machine)
     if (!ready)
         mp_src_init();
     return machine >= 4 && machine < 128 ? extended[machine] : 0;
+}
+
+/* An audio track's CC that the stock assigns nothing: the extra value its machine gives that CC, as its
+ * parameter id, or 0. */
+int32_t mp_cc_id(int32_t machine, uint32_t cc)
+{
+    const struct cm_ui32 *u = mp_src_for(machine);
+    for (int k = 0; u && cc && k < CM_EXTRAS; ++k)
+        if (u->extra[k].cc == cc)
+            return MP_EXTRA_ID + k;
+    return 0;
 }
 
 uint32_t mp_ui32(int32_t machine)
