@@ -66,9 +66,22 @@ Facts taken from sambanks/octabam (MIT) and not re-derived here are marked
     starts. Its first six bytes follow the data at 0x400d64a0 (the MIDI
     handler vectors, then a table), and may be part of it. octabam's own
     placements there start at 0x400d64e0.
+  - The 2,064-byte run at 0x400d24d0 is taken from 0x400d24e0: its first
+    16 bytes are kept stock (`keep`, below).
   - Two ranges that read zero are left out: 0x400d2ee6-0x400d3020 is a live
     descriptor, and everything above 0x400d8000 is the PROJECT subsystem's
     RAM (octabam).
+- **Bytes kept stock** (`keep`): bytes that read as free but that the OS
+  reads. No mod may write them, and every build must leave them stock.
+  - 0x400d24d0-0x400d24df, read by the stock DELAY (octabam issue #771,
+    measured under octabam's emulator port, not on a unit). The DELAY
+    reads `0x400d1ce0 + 4 * (x >> 6)` (0x40003526, 0x40003540). That
+    table has 508 entries and ends at 0x400d24d0, but at a slow tempo with
+    a long TIME the index reaches 508, so the DELAY reads the zero words
+    after it. The index looks capped at 511, so these first four words are
+    the exposed ones (octabam: not measured). In octabam a cave pinned here
+    (SYNTH MACHINE's page) changed the stock DELAY's output; its fix moved
+    that page to DRAM and keeps these bytes stock.
 - **DSP code** (`dsp_payloads`, `dsp_areas`; elekloader/dsp.py). The main
   OS uploads two payloads to the DSP56721's two DSP56300 cores at boot:
   A (0x400e2324, 0x136cb bytes) to core 0, which runs tracks 5-8, the
@@ -109,12 +122,15 @@ DEVICE = Device(
     protected=((0x400de1e0, 0x400e21e0,
                 'the copy of the bootloader the OS can re-flash it from'),),
     relocatable=((0x400e2000, 18, (0x4001d82e,), 'the USB device descriptor'),),
+    keep=((0x400D24D0, 0x400D24E0,
+           "the stock DELAY reads them past the end of its coefficient table, so a write "
+           "there changes the DELAY's output (octabam #771)"),),
     blob_max=None,
     areas={
         'ddr': (0x40A955E0, 0x41495DE0),          # the arena's bottom 1,707 pages at most (core-ot)
     },
     ddr=(0x40A955E0, 0x41495DE0),
-    image_free=((0x400C45B0, 0x400C4702), (0x400D24D0, 0x400D2CE0), (0x400D64E0, 0x400D7C3C)),
+    image_free=((0x400C45B0, 0x400C4702), (0x400D24E0, 0x400D2CE0), (0x400D64E0, 0x400D7C3C)),
     reserve=(6144, {'arena_base': (0x40A955E0, 6144), '__arena_pages': (14602, -1),
                     '__arena_fill': (14603, -1), '__arena_clear': (0x05590800, -6144)}),
     dsp_payloads={'A': (0x400E2324, 0x136CB), 'B': (0x400F59EF, 0x12D05)},

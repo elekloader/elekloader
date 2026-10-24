@@ -501,6 +501,70 @@ def test_a_parameter_slot_claims_its_sound_slot():
     assert t.implied_names(b'') == []
 
 
+
+def test_a_machine_claims_its_slot():
+    """On the Analog Rytm MKII a mod that adds a machine (core-ar2 0.5's core_machines) claims
+    the machine slot its descriptor names at +0, as machine:<n>, so two mods that take one
+    slot never link together. Slots are 0..52."""
+    ar = [d for d in devices.devices() if d.key == 'analog-rytm-mk2'][0]
+    r = ar.releases['1.74']
+    image = bytes(r.main_len)
+
+    def mod(i, slot):
+        return link.Mod2({'elemod': 2, 'id': i, 'version': '1', 'target': devices.target_of(ar, r),
+                          'sections': {'.run': {'align': 4, 'parts': [['hex', '%08x' % slot + '00' * 92]]}},
+                          'symbols': {'m': ['.run', 0]},
+                          'contribute': [{'to': 'core_machines', 'data': '00000000',
+                                          'relocs': [[0, 'abs32', 'sym:m', 0]]}]}, i)
+    a, b = mod('a', 36), mod('b', 36)
+    assert a.implied_names(image) == ['machine:36']
+    assert 'a 1 and b 1 both claim machine:36' in link.check([a, b], image)
+    assert not [p for p in link.check([mod('c', 36), mod('d', 37)], image) if 'claim' in p]
+    assert mod('e', 53).implied_names(image) == []
+
+def test_kept_bytes_refuse_every_write():
+    """A device's `keep`: main OS bytes that look free but the OS reads, on the Octatrack the
+    16 the stock DELAY reads past its coefficient table (octabam #771). A site that writes one
+    of them is refused, in a whole build (format 1) and by the linker (format 2), with the
+    range and its reason; the same site 16 bytes on is not. No free image area or relocatable
+    data includes kept bytes, and the other devices keep none."""
+    for d in devices.devices():
+        for lo, hi, why in d.keep:
+            assert d.main_load <= lo < hi and why, d.key
+            assert not any(a < hi and lo < b for a, b in d.image_free), (d.key, hex(lo))
+            assert not any(a < hi and lo < a + n for a, n, _r, _w in d.relocatable), (d.key, hex(lo))
+            assert not any(a < hi and lo < b for a, b, _w in d.protected), (d.key, hex(lo))
+    assert [d.key for d in devices.devices() if d.keep] == ['octatrack']
+    ot = [d for d in devices.devices() if d.key == 'octatrack'][0]
+    r = ot.releases['1.40C']
+    (lo, hi, why), = ot.keep
+    assert (lo, hi) == (0x400d24d0, 0x400d24e0) and 'DELAY' in why
+    assert ot.image_free[1] == (0x400d24e0, 0x400d2ce0)        # octabam's run, past the kept bytes
+    image = bytes(r.main_len)                                  # the kept bytes read zero in stock
+
+    def sites(at, n):
+        return [{'addr': '0x%08x' % at, 'len': n, 'new': 'ff' * n, 'kind': 'data',
+                 'stock_sha256': elemod.sha(bytes(n))}]
+
+    def whole(at, n):
+        return elemod.Mod({'elemod': 1, 'id': 'w', 'version': '1', 'target': devices.target_of(ot, r),
+                           'sites': sites(at, n)}, 'w')
+
+    def mod2(at, n):
+        return link.Mod2({'elemod': 2, 'id': 'm', 'version': '1', 'target': devices.target_of(ot, r),
+                          'sections': {}, 'sites': sites(at, n)}, 'm')
+    core = link.Mod2({'elemod': 2, 'id': 'core', 'version': '0.3', 'target': devices.target_of(ot, r),
+                      'sections': {'.boot': {'align': 4, 'parts': [['hex', '4e75']]}}}, 'core')
+    for at, n in ((0x400d24d0, 1812), (0x400d24dc, 4), (0x400d24c0, 17)):
+        want = ('m 1 site 0x%08x writes into 0x400d24d0-0x400d24e0, which stays stock on the '
+                'Octatrack: %s' % (at, why))
+        assert link.check([core, mod2(at, n)], image) == [want]
+        assert elemod.check([whole(at, n)], image) == [want.replace('m 1', 'w 1')]
+    assert link.check([core, mod2(0x400d24e0, 1812)], image) == []
+    assert elemod.check([whole(0x400d24e0, 1812)], image) == []
+    assert elemod.check([whole(0x400d24c0, 16)], image) == []   # just before them
+
+
 def test_parts_stay_in_the_image():
     d, r = devices.identify(devices.devices()[0].releases['1.53'].syx_sha256)
     ok = elemod.parse_parts([['hex', '00ff'], ['stock', '0x40000400', 8]], 't', d, r)
@@ -638,6 +702,54 @@ def test_bounties_lists_each_routine_once_across_oses():
         assert 'old' not in text and 'c: c1' in text
 
 
+def test_bounties_take_an_upstream_list():
+    """An upstream list adds the stock code a newer upstream's modules hook: no entry of the files
+    changes its id, a file's own hook is not listed twice, and a module the files have from that
+    commit is left to its file."""
+    from elekloader.sdk.bounties import bounties, markdown
+    dev = type('Dev', (), {'key': 'ot', 'name': 'OT'})()
+
+    def mod2(mod_id, ver, *sites):
+        m = link.Mod2.__new__(link.Mod2)
+        m.id, m.version, m.dev = mod_id, ver, dev
+        m.rel = type('Rel', (), {'version': '1.40C'})()
+        m.sites = [{'addr': a, 'len': 6, 'kind': 'code', 'relocs': [(2, 'abs32', 'sym:' + s, 0)]}
+                   for a, s in sites]
+        return m
+    mods = [mod2('ob-a', 'old', (0x1000, 'a1'), (0x2000, 'a2')),
+            mod2('ob-b', 'new', (0x3000, 'b1')),               # converted from the upstream's commit
+            mod2('core', '0.3', (0x5000, 'ev'))]
+    up = {'from': 'up/stream', 'commit': 'new', 'device': 'ot', 'os': '1.40C', 'mods': [
+        {'id': 'ob-a', 'version': 'new', 'sites': [['0x00001000', 6, 'a1'],      # the file's own hook
+                                                   ['0x00000ff0', 6, 'a1x'],     # lower, in a1's routine
+                                                   ['0x00004000', 6, 'a3']]},    # a routine of its own
+        {'id': 'ob-b', 'version': 'new', 'sites': [['0x00003100', 6, 'b2']]},    # its file stands for it
+        {'id': 'ob-c', 'version': 'new', 'sites': [['0x00004010', 6, 'c1'],      # with a3
+                                                   ['0x00005000', 6, 'c2']]}]}   # on the core's site
+    [was] = bounties(mods)
+    [r] = bounties(mods, upstream=[up])
+    assert r['score'] == was['score']
+    old = {e['id']: e for e in was['entries']}
+    new = {e['id']: e for e in r['entries']}
+    assert set(old) <= set(new)
+    first = new['ot@1.40C:0x00001000']
+    assert [(s['site'], s['mod'], s.get('from')) for s in first['at']['1.40C']['sites']] == [
+        ('0x00000ff0', 'ob-a', 'up/stream@new'), ('0x00001000', 'ob-a', None)]
+    assert first['upstream'] == ['ob-a'] and 'upstream_only' not in first
+    assert first['at']['1.40C']['lo'] == '0x00000ff0'
+    assert 'upstream' not in new['ot@1.40C:0x00003000']         # nothing of ob-b's from the list
+    only = new['ot@1.40C:0x00004000']
+    assert only['upstream_only'] and only['mods'] == ['ob-a', 'ob-c'] and only['kind'] == 'core'
+    assert new['ot@1.40C:0x00005000']['kind'] == 'migration'     # the core hooks the same bytes
+    assert r['upstream'] == {'from': ['up/stream@new'], 'mods': 3, 'hooking': 2, 'not_here': 1,
+                             'entries': 3, 'only': 2}
+    md = markdown([r])
+    assert '| `ot@1.40C:0x00004000` | a core event (upstream only) | 2 | ob-a (upstream): a3; ob-c (upstream): c1 |' in md
+    assert 'ob-a: a1; ob-a (upstream): a1x' in md
+    # a device with only a core on it is left out of the Markdown
+    assert '### OT' not in markdown(bounties([mod2('core', '0.3', (0x5000, 'ev'))]))
+
+
 def test_the_site_names_its_files_with_its_version_and_lists_the_devices():
     pack = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'packaging')
     if not os.path.exists(os.path.join(pack, 'build_web.py')):
@@ -722,6 +834,18 @@ def test_merged_pull_requests_claim_entries_for_the_leaderboard():
         pr(11, '2026-10-25T00:00:00Z', 'dan', '```\nexample\n```\n\nClaims: `digitakt-mk1@1.53:0x40025344`'),
     ])
     assert [(c['id'], c['pr']) for c in shown['claims']] == [('digitakt-mk1@1.53:0x40025344', 11)]
+
+
+def test_every_refusal_of_the_linker_has_a_fixture_that_is_refused_and_one_that_links():
+    """tests/test_link_refusals.py, here too because this file is the one the workflows run: a
+    message the linker or the loader can refuse with and no fixture for it fails the build."""
+    sys.path.insert(0, HERE)
+    import test_link_refusals as refusals
+    refusals.test_every_refusal_has_a_fixture()
+    refusals.test_octatrack_fixtures()
+    refusals.test_digitakt_fixtures()
+    refusals.test_analog_rytm_fixtures()
+    refusals.test_the_image_check_refuses_a_protected_or_kept_byte_the_other_checks_let_through()
 
 
 if __name__ == '__main__':

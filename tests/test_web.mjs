@@ -36,6 +36,11 @@ console.log(`   Pyodide ${py.version} loaded in ${Math.round(performance.now() -
 // 1. the unit tests
 py.FS.mkdirTree('/work/tests');
 py.FS.writeFile('/work/tests/test_units.py', read(join(HERE, 'test_units.py')));
+// test_units runs tests/test_link_refusals.py, which reads by path, from the checkout's root,
+// the linker's and the loader's sources (the zip's) and test_octatrack.py's DSP fixtures
+py.FS.writeFile('/work/tests/test_link_refusals.py', read(join(HERE, 'test_link_refusals.py')));
+py.FS.writeFile('/work/tests/test_octatrack.py', read(join(HERE, 'test_octatrack.py')));
+py.FS.symlink('/elek/elekloader', '/work/elekloader');
 const code = py.runPython(`
 import runpy
 try:

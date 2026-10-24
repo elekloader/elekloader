@@ -1,0 +1,32 @@
+{
+ "id": "seqprobe",
+ "version": "1",
+ "license": "GPL-2.0-or-later",
+ "title": "seq-events probe",
+ "category": "Examples",
+ "author": "irpina",
+ "description": "A handler for every seq-events stage, configured by poking sp_cfg: the probe tests/probe_octatrack_seq_events.py runs in the emulator. Not a mod to ship.",
+ "device": "octatrack",
+ "os": "1.40C",
+ "sources": [
+  "probe.c"
+ ],
+ "cflags": [
+  "-Os",
+  "-fno-tree-loop-distribute-patterns"
+ ],
+ "subscribe": [
+  {"event": "ev_fire_step", "fn": "sp_step", "order": 50},
+  {"event": "ev_gen_trig", "fn": "sp_gen", "order": 50},
+  {"event": "ev_fire_trig", "fn": "sp_fire", "order": 50},
+  {"event": "ev_fire_cond", "fn": "sp_cond", "order": 50},
+  {"event": "ev_gen_notes", "fn": "sp_gnotes", "order": 50},
+  {"event": "ev_fire_notes", "fn": "sp_notes", "order": 50},
+  {"event": "ev_fire_vel", "fn": "sp_vel", "order": 50},
+  {"event": "ev_fire_locks", "fn": "sp_locks", "order": 50}
+ ],
+ "requires": [
+  "core",
+  "seq-events"
+ ]
+}

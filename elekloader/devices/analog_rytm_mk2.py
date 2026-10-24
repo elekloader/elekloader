@@ -100,6 +100,7 @@ DEVICE = Device(
     ddr=(0x47BE0000, 0x47C00000),
     recovery=('hold FUNC while powering on for the STARTUP menu, press TRIG 4 (OS UPGRADE), '
               'then send the stock .syx over MIDI DIN (not USB)'),
+    slot_claims=(('core_machines', 0, 53, 'machine'),),   # a machine's descriptor names its slot at +0
     toolchain={
         'prefix': 'm68k-linux-gnu-',              # or ELEKLOADER_CROSS=m68k-elf-
         'asflags': ['-mcpu=54455'],                 # ColdFire V4 (the MCF5441x's ISA), as the Digitakt mk1

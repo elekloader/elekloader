@@ -1,10 +1,11 @@
 # core-ar2
 
-The boot copier, the hook bus, mod storage and parameter pages for the Analog Rytm MKII. From
+The boot copier, the hook bus, mod storage, parameter pages and added machines for the Analog Rytm MKII. From
 0.3 it is for OS 1.74 only; 0.2 is the last core with 1.73 (below). It builds the Digitakt mk1's `core.s`, `settings.s` and
 `render.s` with the Rytm's addresses, which `mod.json` gives (`defsym`,
 `sites`), and from 0.2 its own `store.c` and `store.s` (Mod storage, below),
-from 0.3 with `route.s`, from 0.4 with `pages.s` (Parameter pages, below). On its own it changes nothing the unit does.
+from 0.3 with `route.s`, from 0.4 with `pages.s` (Parameter pages, below), from 0.5
+with `machines.c` (Machines, below), from 0.6 with page functions in `pages.s`. On its own it changes nothing the unit does.
 
 The Rytm runs on the Digitakt mk1's platform (a ColdFire MCF5441x), and its OS
 entry, bootstrap loader and UI loop are the Digitakt's, so each site below is
@@ -171,7 +172,7 @@ What it does not do:
   pattern received as a SysEx dump does. A target project saved with another
   mod layout keeps its store as it is.
 
-## Parameter pages (0.4)
+## Parameter pages (0.4, 0.6)
 
 `pages.s` takes the first instructions of the four routines every parameter
 page goes through and hands each call to the mods' entries in `core_pages`
@@ -190,6 +191,13 @@ untouched:
 
 A turn a mod takes is followed by core's call to the view's redraw
 (0x40078580), so the mod's own value shows at once.
+
+From 0.6 page_info asks `core_page_fns` first: `{page, info}`, where
+`info(page)` returns the `core_pages` entry to answer, or 0 to pass on to
+`core_pages` and stock. A page whose knobs change with the selected sound
+uses it (voice-dac 1.4's DAC FILTER leaves RES empty for LP1 and HP1, and
+FRQ and RES with TYP OFF). Additive: a build with no entries in it behaves
+as 0.5.
 
 The page keys' lists: each view's constructor passes its list to a setter
 (0x401a1e46) with `moveq #n,%d1; movel %d1,%sp@-; movel #list,%d0`, ten
@@ -247,6 +255,30 @@ included: they get less idle time, not less than they need (the knobs keep
 responding). With the guard the readings were 92% and a 94% peak, within a
 point of the build without it, so at these loads it rarely engages: it is a
 ceiling for heavier builds, not a fix for anything heard.
+
+## Machines (0.5)
+
+`machines.c` lets a mod add a machine in one of the hidden slots 34..43
+(docs/ADAPTING.md, "Machines (core-ar2 0.5, Analog Rytm MKII)"; the SDK
+header is `analog-rytm-mk2/machines.h`). The OS keeps its machines in three
+arrays indexed by the machine's number (names at 0x401bf254, home track and
+voice mask at 0x401bf42c, the engine at 0x402906dc, all data of the 1.74
+image) and in the parameter records each machine owns. Stock hides 34..52
+with a voice mask of 0. From `.boot` (core.s's `BOOT_INIT`), before the OS
+reads any of it, `core_boot_init` writes each `core_machines` entry's engine,
+home track, voices and names into the arrays, and its knobs' names, ranges
+and defaults into the slot's records. The OS then lists, stores and maps the
+machine as it does its own. elekloader names an entry's slot as the resource
+`machine:<n>` (the profile's `slot_claims`), so two mods that take one slot
+are refused at link.
+
+Slots 44..52 (the TEST machines) are not offered: mods use their records as
+spare parameters (fx-sends, voice-dac). A kit saved with an added machine
+loads on a build without the mod with that track's machine set to DISABLE,
+as stock does for a machine its voice may not run (checked on a unit, below).
+
+`examples/machine-ar2` is the smallest machine: BD COPY in slot 36, which
+runs BD CLASSIC with BD CLASSIC's knobs.
 
 ## Checked so far
 
@@ -357,10 +389,31 @@ stock bytes, and that each covers whole instructions.
   the preview's trace stopped now and then and came back by itself, knobs
   and values kept responding meanwhile, and nothing was audible.
 
+- **Machines (0.5)**, in an emulator (OS 1.74, 22 Oct 2026): with the
+  example, the tables held its engine, mask and names after boot and slot
+  36's Tune record its range 32..96 and default 58; the machine list on
+  the BD track showed BD COPY, and choosing it set the track's machine to
+  36 and the voice's engine to the example's; its SRC page matched BD
+  CLASSIC's. Not checked: its sound (the emulator's audio is too quiet to
+  compare), and a kit with it loading as DISABLE without the mod.
+
+- **Machines (0.5) on a unit** (22 Oct 2026), with the example and all
+  eleven rytm2_mods v1.3 mods (M5A4): BD COPY was in the BD track's machine
+  list, played as BD CLASSIC with its knobs, and came back after SAVE KIT, a
+  power cycle and RELOAD. On the same build without the example (M5N4) that
+  kit loaded with BD on DISABLE and the rest as saved.
+
+- **Page functions (0.6)**, in an emulator (OS 1.74, 23 Oct 2026): core 0.6
+  with all eleven rytm2_mods (voice-dac 1.4) shows DAC FILTER without RES
+  for LP1 and HP1 and without FRQ and RES for TYP OFF, the empty knobs take
+  no turn, and the page follows a track switch. With rytm2_mods v1.3 (no
+  `core_page_fns` entry) core 0.6 gives a 59-screen walk pixel-identical to
+  core 0.4's. Not yet on a unit.
+
 ## Building
 
-Core 0.4 builds with `Analog-Rytm_MKII_OS1.74.syx` only: the SDK writes
-`core-0.4.elemod` (1.74 is its `os`) and, for hello-marker-ar2 (whose `os`
+Core 0.6 builds with `Analog-Rytm_MKII_OS1.74.syx` only: the SDK writes
+`core-0.6.elemod` (1.74 is its `os`) and, for hello-marker-ar2 (whose `os`
 is 1.73, with a 1.74 port), `hello-marker-1.0-os1.74.elemod`. For 1.73,
 build core 0.2 from commit 92a99c9 (OS versions, above).
 
@@ -369,8 +422,8 @@ build core 0.2 from commit 92a99c9 (OS versions, above).
 python -m elekloader.sdk.build mods/core-ar2 --stock Analog-Rytm_MKII_OS1.74.syx
 python -m elekloader.sdk.build examples/hello-marker-ar2 --stock Analog-Rytm_MKII_OS1.74.syx
 python -m elekloader.lint examples/hello-marker-ar2/out/hello-marker-1.0-os1.74.elemod \
-    --stock Analog-Rytm_MKII_OS1.74.syx --with mods/core-ar2/out/core-0.4.elemod
+    --stock Analog-Rytm_MKII_OS1.74.syx --with mods/core-ar2/out/core-0.6.elemod
 python -m elekloader.patch --stock Analog-Rytm_MKII_OS1.74.syx \
-    --mod mods/core-ar2/out/core-0.4.elemod --mod examples/hello-marker-ar2/out/hello-marker-1.0-os1.74.elemod \
+    --mod mods/core-ar2/out/core-0.6.elemod --mod examples/hello-marker-ar2/out/hello-marker-1.0-os1.74.elemod \
     --out rytm-hello.syx --version HM74
 ```

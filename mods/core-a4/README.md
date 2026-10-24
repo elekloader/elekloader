@@ -48,6 +48,79 @@ What differs from the Rytm at these sites:
   digital path (effects and the inputs). Another vector 191 handler
   (0x401162a4) exists, as on the Rytm; core hooks only the main one.
 
+## Parameter pages (0.2)
+
+From 0.2, `pages.s` is core-ar2 0.4's parameter routines at the A4's
+(docs/ADAPTING.md, "Parameter pages (core-a4 0.2, Analog Four MKII)"), and
+core builds core-ar2's `load.s` for `core_audio_load`. Each A4 site is the
+Rytm 1.74 routine's counterpart, found by its code and its callers:
+
+| routine | A4 1.56 | Rytm 1.74 | displaced | note |
+|---|---|---|---|---|
+| page_info | 0x400f6212 | 0x400ff5e0 | `moveq #47,%d1; movel %sp@(4),%d0` | stock's pages are 0..47 (the Rytm's 0..11); an entry is 0x2c bytes, the name and ten knob ids, in a table at 0x401b31e8 |
+| page_get_value | 0x40023d54 | 0x40038462 | `lea %sp@(-12),%sp; moveml %d2-%d3/%a2,%sp@` | the Rytm's prologue and frame; slot 21 of each of the 9 page views' vtables |
+| param_apply_delta | 0x400232e2 | 0x400378a6 | the same | slot 22 |
+| param_value_text | 0x4009ea68 | 0x400a864c | `movel %d3,%sp@-; movel %d2,%sp@-; movel %sp@(20),%d2` | the same arguments; slot 30 of the ParameterSet vtables (the Rytm's 21) |
+
+The redraw after a turn a mod takes is VIEW_INVALIDATE, 0x40061a58 (the
+Rytm's 0x40078580, the same code). No page site overlaps one of 0.1's.
+
+core-ar2 0.4's page-key lists become views here. The A4's main screen
+makes one view per page, 29 in all (0x400c1366, indices 0..28), and each
+page key steps through a list of view indices for each track type (every
+track, synth, FX, CV), kept in maps at +0x1a4 of the main screen. Core
+hooks where the constructor has made its last view and not yet indexed
+them (0x400c2370, resuming at 0x400c2378): for each `core_view_pages`
+entry it makes a parameter page view as stock makes view 28 (operator
+new(0x1c4), the view's constructor 0x4002522c(obj, page, key), the shared
+pointer 0x40171460, the views map's slot 0x40171da8 at +0x1bc, 0x401713e0,
+0x40144764) and appends its index to the key's list (0x40172bae, 0x40171b9e,
+then stock's push_back or 0x40171558). Stock's loop after the hook gives
+every listed view its key, place and length. The page key's step
+(0x400c4202, resuming at 0x400c420a) skips a core view whose `shown`
+answers 0, then selects as stock does (0x400bea38).
+
+The current view is kept for each track type and saved: a signed byte
+each in the project settings (storage +8..+0xA, written by 0x4000aabe on
+project save and SysEx, and kept over power-off). The setter (0x400add08)
+keeps it to 0..28 and the loader (0x4000a6d2) takes anything above 28 to 0,
+PERFORMANCE. Core widens both to 0..44 (the moveqs at 0x400add22,
+0x400add28, 0x4000a758, 0x4000a774, 0x4000a790); an index with no view in
+a build falls back as stock's do (0x400c0470), and stock alone opens such a
+project on PERFORMANCE. Nothing else in the OS bounds a view index.
+
+The FX track already keeps its page when it is shown again, and each view
+shows its own title, so core-ar2's FX fix and title push have no
+counterpart.
+
+In rytm-emu's A4 build (22 Oct 2026), core 0.2 alone (A402) drew every
+screen checked (main, AMP, FILTERS, OSC1, an FX track's CHORUS, with
+knobs turned) identical to stock's, pixel for pixel; with pages-check-a4
+(PC56), AMP PAN read its value in hex (centre `40`), the bar counted each
+step, and every other knob was stock's. `core_audio_load` read about 0x7a
+(48%) there, an emulator figure. With the views, A402 drew all 90 screens
+of every page key (pressed one to three times, on synth, FX and CV tracks)
+as stock does; on PC56 the AMP key stepped AMP, then CHECK once PAN had
+turned, with CHECK's title and its knob A working; CHECK came back after a
+power cycle and through a SysEx settings dump. The same project opened on
+MIXER with core alone (the index kept, with no view: stock's own fallback,
+until a page key is pressed) and on PERFORMANCE with stock. The OS uses a
+view's page id only through page_info and to pick the parameter set
+(0x400a647c, which singles out pages 1, 3, 4, 5 and 47), so mod pages from
+48 are safe.
+
+On a unit (OS 1.56, 23 Oct 2026) [hw], PA56 (core 0.2 with pages-check-a4
+and analoghealth's remote keys) passed the same plan as in the emulator,
+every screen checked identical to the emulator's: every synth, FX and CV
+page as on stock; AMP staying on AMP until PAN turned; PAN in hex and the
+bar growing; CHECK with knob A as PAN and the others hatched; AMP, CHECK,
+AMP. A project saved on CHECK opened on CHECK after loading another
+project and loading it back, and after a power cycle (with the bar
+cleared, as it is not saved); stock 1.56 opened it on PERFORMANCE. On fast
+turns the bar grows once per accelerated turn update, not once per value
+step; on slow turns they match. The SysEx settings round trip and core
+alone (A402) were not run on the unit.
+
 ## Mod storage
 
 Mods declare fields in their mod.json (`storage`) and read and write them
@@ -169,7 +242,10 @@ synth tracks and the effects sounded the same by ear as before. With
 mods' area after the mods' data or in the two unused gaps, through a session
 of normal use (Overbridge included) and after a power cycle (21 Oct 2026).
 Recovery (the STARTUP menu, TRIG 4, the stock file over MIDI DIN) brought
-the unit back to stock 1.56 (21 Oct 2026).
+the unit back to stock 1.56 (21 Oct 2026). With core 0.2 and
+[pages-check-a4](../../examples/pages-check-a4) (PA56, 23 Oct 2026), the
+parameter routines and the views passed every check ("Parameter pages
+(0.2)" above).
 
 In an emulator (rytm-emu, with a local change that accepts modified A4
 images; 20 Oct 2026):
@@ -221,8 +297,8 @@ images; 20 Oct 2026):
 python -m elekloader.sdk.build mods/core-a4 --stock Analog-Four_MKII_OS1.56.syx
 python -m elekloader.sdk.build examples/store-check-a4 --stock Analog-Four_MKII_OS1.56.syx
 python -m elekloader.lint examples/store-check-a4/out/store-check-1.0.elemod \
-    --stock Analog-Four_MKII_OS1.56.syx --with mods/core-a4/out/core-0.1.elemod
+    --stock Analog-Four_MKII_OS1.56.syx --with mods/core-a4/out/core-0.2.elemod
 python -m elekloader.patch --stock Analog-Four_MKII_OS1.56.syx \
-    --mod mods/core-a4/out/core-0.1.elemod --mod examples/store-check-a4/out/store-check-1.0.elemod \
+    --mod mods/core-a4/out/core-0.2.elemod --mod examples/store-check-a4/out/store-check-1.0.elemod \
     --out a4-store.syx --version SC56 --lockfile a4-store.lock.json
 ```

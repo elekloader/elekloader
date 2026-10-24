@@ -59,6 +59,11 @@ boot:
         move.w  %d0, DTMR0              | bus clock, free running
 4:
         .endif
+        .ifdef  BOOT_INIT
+        | A device's own boot work, before the OS reads its data (core-ar2:
+        | the machines mods add, machines.c). The DDR image is in place.
+        jsr     core_boot_init
+        .endif
         .ifdef  VBR_FN2
         | Model:Cycles and Model:Samples: the site is two calls, the SRAM
         | copy (VBR_FN) and the .bss clear (VBR_FN2). The DDR image above

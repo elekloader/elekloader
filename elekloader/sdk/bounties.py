@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 """The community's to-do list for the core (docs/CORE-CONTRIBUTING.md).
 
-    python -m elekloader.sdk.bounties MODS... [--stock STOCK.syx ...] [--json]
+    python -m elekloader.sdk.bounties MODS... [--stock STOCK.syx ...] [--upstream LIST.json ...] [--json]
 
 MODS are .elemod files or folders of them: the shop's mods, say, and the
 cores and companions too when you have them. Of each mod (by id, for each
@@ -18,12 +18,28 @@ that each can become a core event:
   later OS is paired with its site on the oldest by the symbols it jumps
   to, and an entry says which OS it has no address for;
 - a site is "covered" when the core or a companion (machine-pages,
-  machines, seq-events, dspbus, intercepts) hooks the same bytes: the mod can move onto
+  machines, seq-events, trig-events, dspbus, intercepts) hooks the same bytes: the mod can move onto
   what exists. An entry is "migration" when all its sites are covered,
   "core" when none is (the core needs an event there) and "partly" when
   some are;
 - an entry's id is the device and its lowest site on the oldest OS that has
   one. It stays the same while the mods there do not change.
+
+An upstream list (--upstream: web/upstream/octabam.json, which
+`sdk.octabam --sites` writes from an octabam checkout) adds the stock code
+the modules of a newer upstream hook, as no file here has them yet:
+
+- a module the files have from that commit (its version is the commit, or
+  starts with it and a dash) is left out: the file says what it hooks;
+- a site a file of the same mod has (address, length and label) is left
+  out: it is that hook, and the file lists it;
+- every other site joins the entry of the files' sites it is in the same
+  routine with (by the rule above), so no entry of the files changes its
+  id; the rest are entries of their own, `upstream_only`, named by their
+  lowest site;
+- upstream sites carry `from` (the project and commit), entries the ids of
+  their mods with upstream sites (`upstream`); the score counts the files
+  only.
 
 A score per device says how many mods hook no stock code of their own.
 Nothing is changed or refused. There is no reward but credit: the list is
@@ -68,6 +84,56 @@ def code_sites(m):
     return out
 
 
+def load_upstream(paths):
+    """-> the upstream lists in `paths` (JSON: {'from', 'commit', 'device', 'os', 'mods': [{'id',
+    'version', 'sites': [[addr, len, label], ...], ...}, ...]})."""
+    out = []
+    for p in paths:
+        with open(p, encoding='utf-8') as fh:
+            u = json.load(fh)
+        for k in ('from', 'commit', 'device', 'os', 'mods'):
+            if k not in u:
+                raise OSError('%s: an upstream list needs "%s"' % (p, k))
+        out.append(u)
+    return out
+
+
+def upstream_sites(lists, mods):
+    """-> {(device key, OS): [site, ...]}: the upstream lists' sites the loaded `mods` do not
+    have (see the module's doc), in routines()'s form, each with 'from'."""
+    have = {}
+    for m in mods:
+        have.setdefault((m.dev.key, m.rel.version, m.id), []).append(m)
+    out = {}
+    for u in lists:
+        src = '%s@%s' % (u['from'], u['commit'])
+        for e in u['mods']:
+            ms = have.get((u['device'], u['os'], e['id']), [])
+            if is_core(e['id']) or any(m.version == u['commit'] or m.version.startswith(u['commit'] + '-')
+                                       for m in ms):
+                continue
+            taken = {(a, n, lb) for m in ms for a, n, lb in code_sites(m)}
+            seen = {}
+            for a, n, lb in e['sites']:
+                a = int(a, 16) if isinstance(a, str) else a
+                if (a, n, lb) in taken:
+                    continue
+                i = seen[lb] = seen.get(lb, -1) + 1
+                out.setdefault((u['device'], u['os']), []).append(
+                    {'mod': e['id'], 'version': e.get('version', u['commit']), 'addr': a, 'len': n,
+                     'label': lb, 'os': u['os'], 'key': ('upstream', src, e['id'], lb, i), 'from': src})
+    return out
+
+
+def _near(a, b, same, window):
+    """Are sites a and b in one routine, as routines() joins them?"""
+    lo, hi = sorted((a, b), key=lambda s: s['addr'])
+    if hi['addr'] < lo['addr'] + lo['len']:
+        return True
+    return same((lo['addr'], lo['len']), (hi['addr'], hi['len'])) if same \
+        else hi['addr'] - (lo['addr'] + lo['len']) <= window
+
+
 def routines(sites, same=None, window=64):
     """`sites`: [{'addr', 'len', ...}, ...] of one OS. -> lists of them, one per
     routine: sorted by address, each site joined to the one before it when
@@ -86,20 +152,25 @@ def routines(sites, same=None, window=64):
     return out
 
 
-def bounties(mods, tests=None, window=64):
+def bounties(mods, tests=None, window=64, upstream=()):
     """`mods`: loaded mods (see newest). `tests`: {(device name, OS): routine_test}.
+    `upstream`: upstream lists (load_upstream).
     -> [{'device', 'oses', 'score': {...}, 'entries': [...]}, ...], one per device."""
     tests = tests or {}
     by_dev = {}
     for m in mods:
         by_dev.setdefault(m.dev.key, []).append(m)
+    ups = upstream_sites(upstream, mods)
+    names = {d.key: d.name for d in devices.devices()}
     report = []
-    for key, ms in sorted(by_dev.items()):
-        name = ms[0].dev.name
-        oses = sorted({m.rel.version for m in ms}, key=elemod.version_key)
+    for key in sorted(set(by_dev) | {k for k, _o in ups}):
+        ms = by_dev.get(key, [])
+        name = ms[0].dev.name if ms else names.get(key, key)
+        oses = sorted({m.rel.version for m in ms} | {o for k, o in ups if k == key}, key=elemod.version_key)
         # every mod's sites, and each later OS's site paired with the oldest OS's
         own, covered = {o: [] for o in oses}, {o: [] for o in oses}
-        nth = {}
+        theirs = {o: ups.get((key, o), []) for o in oses}
+        nth = {s['key']: {s['os']: s} for o in oses for s in theirs[o]}
         for m in ms:
             seen = {}
             for addr, n, label in code_sites(m):
@@ -114,7 +185,13 @@ def bounties(mods, tests=None, window=64):
         entries, placed = [], set()
         for o in oses:
             same = tests.get((name, o))
-            for g in routines([s for s in own[o] if id(s) not in placed], same, window):
+            groups = routines([s for s in own[o] if id(s) not in placed], same, window)
+            # an upstream site joins the files' routine it is in, so their entries keep their ids
+            left = []
+            for u in sorted(theirs[o], key=lambda s: (s['addr'], s['mod'])):
+                g = next((g for g in groups if any(_near(u, s, same, window) for s in g)), None)
+                (g if g is not None else left).append(u)
+            for g in groups + routines(left, same, window):
                 # this routine's sites on every OS: each site's twins, by mod and symbol
                 at = {}
                 for s in g:
@@ -136,6 +213,8 @@ def bounties(mods, tests=None, window=64):
                         cov.add(c)
                         sites.append({'mod': s['mod'], 'version': s['version'], 'site': '0x%08x' % s['addr'],
                                       'len': s['len'], 'label': s['label'], 'covered': c})
+                        if 'from' in s:
+                            sites[-1]['from'] = s['from']
                     where[oo] = {'lo': '0x%08x' % ss[0]['addr'],
                                  'hi': '0x%08x' % max(s['addr'] + s['len'] for s in ss), 'sites': sites}
                 # an OS a mod here has no address for
@@ -144,11 +223,20 @@ def bounties(mods, tests=None, window=64):
                                       m.id == s['mod'] for m in ms if m.rel.version == oo)}
                                  | {oo for oo in oses if oo not in where},
                                  key=elemod.version_key)
-                first = next(oo for oo in oses if oo in where)
-                entries.append({'id': '%s@%s:%s' % (key, first, where[first]['lo']),
-                                'kind': 'partly' if len(cov) > 1 else 'migration' if True in cov else 'core',
-                                'mods': mods_here, 'sites': len(g), 'at': where,
-                                'missing_os': missing})
+                # named by the files' lowest site; by the upstream's where no file hooks it
+                mine = {oo: [s for s in at.get(oo, []) if 'from' not in s] for oo in oses}
+                named = mine if any(mine.values()) else at
+                first = next(oo for oo in oses if named.get(oo))
+                e = {'id': '%s@%s:0x%08x' % (key, first, min(s['addr'] for s in named[first])),
+                     'kind': 'partly' if len(cov) > 1 else 'migration' if True in cov else 'core',
+                     'mods': mods_here, 'sites': len(g), 'at': where,
+                     'missing_os': missing}
+                up = sorted({s['mod'] for s in g if 'from' in s})
+                if up:
+                    e['upstream'] = up
+                    if named is at:
+                        e['upstream_only'] = True
+                entries.append(e)
         entries.sort(key=lambda e: (-len(e['mods']), e['kind'] == 'migration', e['id']))
         ids, hooks = set(), set()
         for m in ms:
@@ -158,11 +246,21 @@ def bounties(mods, tests=None, window=64):
                 if not isinstance(m, link.Mod2) or code_sites(m):
                     hooks.add(m.id)
         pure = sorted(ids - hooks)
-        report.append({'device': name, 'oses': oses,
-                       'score': {'mods': len(ids), 'no_own_code': len(pure), 'pure': pure},
-                       'routines': len(entries),
-                       'shared': sum(1 for e in entries if len(e['mods']) > 1),
-                       'entries': entries})
+        d = {'device': name, 'oses': oses,
+             'score': {'mods': len(ids), 'no_own_code': len(pure), 'pure': pure},
+             'routines': len(entries),
+             'shared': sum(1 for e in entries if len(e['mods']) > 1),
+             'entries': entries}
+        lists = [u for u in upstream if u['device'] == key]
+        if lists:
+            got = {s['mod'] for o in oses for s in theirs[o]}
+            d['upstream'] = {'from': sorted({'%s@%s' % (u['from'], u['commit']) for u in lists}),
+                             'mods': len({e['id'] for u in lists for e in u['mods']}),
+                             'hooking': len(got),
+                             'not_here': len(got - ids),
+                             'entries': sum(1 for e in entries if e.get('upstream')),
+                             'only': sum(1 for e in entries if e.get('upstream_only'))}
+        report.append(d)
     return report
 
 
@@ -172,14 +270,16 @@ START, END = '<!-- bounties: generated by elekloader.sdk.bounties -->', '<!-- /b
 
 
 def hooks(e, most=3):
-    """An entry's sites in a few words: each mod with the symbols it jumps to."""
+    """An entry's sites in a few words: each mod with the symbols it jumps to (an upstream
+    list's sites apart, marked "(upstream)")."""
     by = {}
     for w in e['at'].values():
         for s in w['sites']:
-            by.setdefault(s['mod'], [])
+            k = s['mod'] + (' (upstream)' if 'from' in s else '')
+            by.setdefault(k, [])
             for x in s['label'].split(','):
-                if x not in by[s['mod']]:
-                    by[s['mod']].append(x)
+                if x not in by[k]:
+                    by[k].append(x)
     return '; '.join('%s: %s%s' % (m, ', '.join(xs[:most]), ' +%d' % (len(xs) - most) if len(xs) > most else '')
                      for m, xs in sorted(by.items()))
 
@@ -191,9 +291,16 @@ def markdown(report, how=''):
         out += [how, '']
     for d in report:
         sc = d['score']
+        if not sc['mods'] and not d['entries']:
+            continue                        # only a core here: nothing to do (the web page skips it too)
+        up = d.get('upstream')
         out += ['### %s (OS %s)' % (d['device'], ', '.join(d['oses'])), '',
                 '%d of %d mods hook no stock code of their own. %d routines to do, %d of them '
-                'hooked by more than one mod.' % (sc['no_own_code'], sc['mods'], d['routines'], d['shared']),
+                'hooked by more than one mod.' % (sc['no_own_code'], sc['mods'], d['routines'], d['shared'])
+                + (' Upstream (%s), %d mods hook stock code these files do not: %d of them are not '
+                   'here at all. Their sites are in %d entries, %d of which only they hook ("upstream '
+                   'only").' % (', '.join(up['from']), up['hooking'], up['not_here'], up['entries'], up['only'])
+                   if up else ''),
                 '']
         if not d['entries']:
             continue
@@ -202,6 +309,8 @@ def markdown(report, how=''):
             todo = TODO[e['kind']]
             if e['missing_os']:
                 todo += ' (no address on %s)' % ', '.join(e['missing_os'])
+            if e.get('upstream_only'):
+                todo += ' (upstream only)'
             out.append('| `%s` | %s | %d | %s |' % (e['id'], todo, len(e['mods']),
                                                    hooks(e).replace('|', '\\|')))
         out.append('')
@@ -228,6 +337,9 @@ def main(argv=None):
                     help='without a stock file: the most bytes between two sites in one entry')
     ap.add_argument('--reach', type=int, default=1024,
                     help='with one: the most bytes one routine is followed for')
+    ap.add_argument('--upstream', action='append', default=[], metavar='LIST.json',
+                    help='an upstream list (repeatable): the stock code a newer upstream\'s modules hook, '
+                         'which these files do not (web/upstream/octabam.json, from sdk.octabam --sites)')
     ap.add_argument('--json', action='store_true', help='machine-readable output')
     ap.add_argument('--markdown', action='store_true', help='Markdown tables')
     ap.add_argument('--update', metavar='FILE.md',
@@ -237,7 +349,7 @@ def main(argv=None):
     for p in a.stock:
         st, dev, rel = formats.load(p)
         tests[(dev.name, rel.version)] = routine_test(formats.main_image(st, dev), dev, a.reach)
-    report = bounties(newest(a.mods), tests, a.window)
+    report = bounties(newest(a.mods), tests, a.window, load_upstream(a.upstream))
     if a.json:
         print(json.dumps(report, indent=1))
         return 0
@@ -255,8 +367,13 @@ def main(argv=None):
         print('%s (%s): %d of %d mods hook no stock code of their own; %d routines to do, %d shared'
               % (d['device'], ', '.join(d['oses']), sc['no_own_code'], sc['mods'],
                  d['routines'], d['shared']))
+        if d.get('upstream'):
+            u = d['upstream']
+            print('  upstream %s: %d mods hook stock code these files do not (%d not here); %d entries, '
+                  '%d upstream only; their sites are marked ^' % (', '.join(u['from']), u['hooking'],
+                                                                  u['not_here'], u['entries'], u['only']))
         for e in d['entries']:
-            labels = sorted({'%s:%s' % (s['mod'], s['label'])
+            labels = sorted({'%s:%s%s' % (s['mod'], s['label'], '^' if 'from' in s else '')
                              for w in e['at'].values() for s in w['sites']})
             print('  %-34s %-9s %d mods, %2d sites%s  %s' % (
                 e['id'], e['kind'], len(e['mods']), e['sites'],

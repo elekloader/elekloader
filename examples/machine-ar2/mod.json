@@ -1,0 +1,17 @@
+{
+ "id": "machine-example",
+ "version": "1.0",
+ "title": "Machine example",
+ "category": "Examples",
+ "license": "GPL-2.0-or-later",
+ "description": "BD COPY, a machine in hidden slot 36 on the BD track that plays as BD CLASSIC: the smallest machine mod on the Analog Rytm MKII, a template to start from (docs/ADAPTING.md, \"Machines\").",
+ "device": "analog-rytm-mk2",
+ "os": "1.74",
+ "sources": ["machine.c"],
+ "contribute": [
+  {"to": "core_machines", "order": 50, "data": "00000000",
+   "relocs": [[0, "abs32", "sym:machine_bd_copy", 0]]}
+ ],
+ "resources": {"core": "0.5"},
+ "requires": ["core"]
+}

@@ -34,6 +34,7 @@ export type Device = {
   versionOptional: boolean                      // true: a build given no version keeps stock's field
   protected: [number, number, string][]        // main OS bytes no mod may change
   relocatable: [number, number, number[], string][]
+  keep: [number, number, string][]             // main OS bytes that look free but the OS reads: no site may write them
   blobMax: number | null
   areas: Record<string, Range>                  // in the profile's order
   ddr: Range
@@ -53,7 +54,7 @@ const rel = (version: string, syxSha256: string, mainSha256: string, mainLen: nu
 
 const base = {
   mainSection: 3, mainLoad: 0x40000400, isa: 'coldfire' as const, hmacKeyFrom: null, container: 'ele3' as const,
-  versionLen: 4, versionAt: 0x14, versionOptional: false, protected: [], relocatable: [], blobMax: null, sramCode: [0, 0] as Range, coreDdr: [] as [string, Range][], slotClaims: [] as [string, number, number, string][], fastTable: '',
+  versionLen: 4, versionAt: 0x14, versionOptional: false, protected: [], relocatable: [], keep: [], blobMax: null, sramCode: [0, 0] as Range, coreDdr: [] as [string, Range][], slotClaims: [] as [string, number, number, string][], fastTable: '',
   imageFree: [], reserve: null, dspPayloads: {}, dspAreas: [], trailer: null,
 }
 
@@ -115,9 +116,11 @@ export const OCTATRACK: Device = {
   stage: null, flashAt: 0x4000, flashLimit: 0x200000, container: 'elek', versionLen: 10,
   protected: [[0x400de1e0, 0x400e21e0, 'the copy of the bootloader the OS can re-flash it from']],
   relocatable: [[0x400e2000, 18, [0x4001d82e], 'the USB device descriptor']],
+  keep: [[0x400d24d0, 0x400d24e0, "the stock DELAY reads them past the end of its coefficient table, so a write "
+    + "there changes the DELAY's output (octabam #771)"]],
   areas: { ddr: [0x40a955e0, 0x41495de0] },
   ddr: [0x40a955e0, 0x41495de0],
-  imageFree: [[0x400c45b0, 0x400c4702], [0x400d24d0, 0x400d2ce0], [0x400d64e0, 0x400d7c3c]],
+  imageFree: [[0x400c45b0, 0x400c4702], [0x400d24e0, 0x400d2ce0], [0x400d64e0, 0x400d7c3c]],
   reserve: [6144, { arena_base: [0x40a955e0, 6144], __arena_pages: [14602, -1], __arena_fill: [14603, -1],
     __arena_clear: [0x05590800, -6144] }],
   dspPayloads: { A: [0x400e2324, 0x136cb], B: [0x400f59ef, 0x12d05] },
@@ -167,6 +170,7 @@ export const ANALOG_RYTM_MK2: Device = {
   ddr: [0x47be0000, 0x47c00000],
   recovery: 'hold FUNC while powering on for the STARTUP menu, press TRIG 4 (OS UPGRADE), '
     + 'then send the stock .syx over MIDI DIN (not USB)',
+  slotClaims: [['core_machines', 0, 53, 'machine']],   // a machine's descriptor names its slot at +0
 }
 
 export const ANALOG_FOUR_MK2: Device = {

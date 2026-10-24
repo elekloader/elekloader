@@ -1,0 +1,25 @@
+{
+ "id": "oteuclid",
+ "version": "1.0",
+ "license": "GPL-2.0-or-later",
+ "title": "EUCLID (Octatrack step-fire events)",
+ "category": "Sequencer",
+ "author": "irpina",
+ "description": "EUCLID, the smallest step-fire mod for the Octatrack: track 1 fires 5 steps of every 16, spread as evenly as they go, whatever its own trigs say; every other track plays as stock. The same C as the Digitone's and the Digitakt's, and a template for a mod that changes what the sequencer plays: it names no firmware address (docs/ADAPTING.md, \"Step-fire events\"). Needs seq-events.",
+ "device": "octatrack",
+ "os": "1.40C",
+ "sources": [
+  "euclid.c"
+ ],
+ "subscribe": [
+  {
+   "event": "ev_gen_trig",
+   "fn": "euclid_trig",
+   "order": 50
+  }
+ ],
+ "requires": [
+  "core",
+  "seq-events"
+ ]
+}
