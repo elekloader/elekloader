@@ -6,6 +6,9 @@ free one, is kept for a machine's id. P1–P15 range from
 0 to 127 and default to zero. It has no audio-render callback, oscillator,
 tick handler or custom graphics; only the shared parameter paths run.
 
+P9–P15 also take MIDI CCs 24–30 on their track's channel (a `cm_ui_v33`
+page, machine-pages 1.4).
+
 It uses experimental machine ID 120 on Digitakt mk1 OS 1.53/1.54. Build
 with this branch's core and machine-pages. For OS 1.53:
 

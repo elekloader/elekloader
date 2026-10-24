@@ -328,6 +328,22 @@ mp_prange_cc_s:
         move.l  %a0, %d0
         rts
 
+| An audio track's CC outside knobs A-H reaches the lookup's generic table
+| at 0x400791fe (core_mcc sends an added machine's there), a0 the CC and
+| the caller's machine at 12(sp). The stock's id wins; where it has none,
+| the extra value the machine gives that CC (mp_cc_id), or 0. FX, MIDI
+| tracks and knobs A-H never come here.
+        .globl  mp_cc_s
+mp_cc_s:
+        lea     CC_AUDIO_TAB, %a1
+        move.l  0(%a1,%a0.l*4), %d0
+        bne.s   1f
+        move.l  %a0, -(%sp)             | the CC
+        move.l  16(%sp), -(%sp)         | the machine
+        jsr     mp_cc_id
+        addq.l  #8, %sp
+1:      jmp     CC_LOOKUP_DONE          | the lookup's exit: d2 back, rts
+
 | a1 = a parameter object -> d0 = its sound's machine, or -1 when it is not
 | a sound's parameter. Changes d0 and a1.
         .globl  mp_rmach

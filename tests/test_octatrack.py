@@ -647,6 +647,88 @@ def test_the_example_subscribes_to_the_bus():
     assert struct.unpack('>II', ln.image[o:o + 8]) == (ln.map['hello_draw'], 0)
 
 
+def test_the_machines_sites():
+    """mods/machines-ot: its 32 sites are stock, whole instructions, and none is core-ot's or the
+    intercepts'; the two places that enter machines.c with the caller's stack (the Part validator
+    and the FLEX renderer) are the prologues seams.s replays; the page resolver keeps the
+    registers the hooks after it read."""
+    st, img = stock()
+
+    def sites(name):
+        with open(os.path.join(ROOT, 'mods', name, 'mod.json')) as fh:
+            return json.load(fh)['sites']
+    mine = sites('machines-ot')
+    assert len(mine) == 32
+    for s in mine:
+        a, n = int(s['addr'], 16), len(s['stock']) // 2
+        o = a - DEV.main_load
+        assert img[o:o + n].hex() == s['stock'], s['addr']
+        assert s['op'] in ('jmp', 'keep2'), s['addr']
+        ok, note = elemod.insn_check(img, a, n, DEV)
+        assert ok, (s['addr'], note)
+    others = [(int(s['addr'], 16), len(s['stock']) // 2) for m in ('core-ot', 'intercepts-ot') for s in sites(m)]
+    for s in mine:
+        a, n = int(s['addr'], 16), len(s['stock']) // 2
+        assert not any(b < a + n and a < b + m for b, m in others), s['addr']
+    with open(os.path.join(ROOT, 'mods', 'machines-ot', 'seams.s')) as fh:
+        src = fh.read()
+    for site, stub, back in ((0x40002318, 'otm_stock_validate', 0x40002320), (0x40004008, 'ot_stock_render', 0x40004010)):
+        o = site - DEV.main_load
+        frame = struct.unpack('>h', img[o + 2:o + 4])[0]
+        assert img[o:o + 2] == b'\x4f\xef' and img[o + 4:o + 8] == b'\x48\xd7\x7c\xfc', hex(site)
+        body = src.split('%s:\n' % stub, 1)[1].split('\n\n', 1)[0]
+        assert 'lea     %d(%%sp), %%sp' % frame in body and 'jmp     %#x' % back in body, stub
+    # the page resolver's case 0 calls C, then goes on to the PLAYBACK load (0x40031ece), where
+    # SYNTH MACHINE's and OCTA303's hooks read the part (d1) and the bank (a1): it keeps both
+    body = src.split('otm_resolve:\n', 1)[1].split('\n\n', 1)[0]
+    at = [body.find(x) for x in ('movem.l %d1/%a1, (%sp)', 'jsr     otm_page', 'movem.l (%sp), %d1/%a1',
+                                 'jmp     0x40031ece')]
+    assert -1 not in at and at == sorted(at), at
+
+
+def test_the_machines_companion_lists_a_machine():
+    """mods/machines-ot with examples/crush-machine-ot: ot_machines holds CRUSH's record, whose fields
+    sit where version 1 of the record has them; the grown name and page tables start as stock's;
+    the FLEX renderer and the Part validator go to machines.c."""
+    import shutil
+    from elekloader.sdk import build
+    need(SYX)
+    if not shutil.which(os.environ.get('ELEKLOADER_CROSS', DEV.toolchain['prefix']) + 'gcc'):
+        raise Skip('no m68k cross compiler')
+    st, img = stock()
+    with tempfile.TemporaryDirectory() as tmp:
+        core, _m = build.build(os.path.join(ROOT, 'mods', 'core-ot'), SYX, tmp)
+        mach, m = build.build(os.path.join(ROOT, 'mods', 'machines-ot'), SYX, tmp)
+        crush, c = build.build(os.path.join(ROOT, 'examples', 'crush-machine-ot'), SYX, tmp)
+        assert {'ot_stock_render', 'ot_part', 'ot_track_machine', 'ot_machine_row'} <= set(m.exports)
+        assert set(c.imports) == {'ot_stock_render'}, c.imports
+        ln = link.link([elemod.load_any(p) for p in (core, mach, crush)], img)
+    run = ln.layout['run_load'] - DEV.main_load
+
+    def ram(addr, n):
+        o = run + (addr - DEV.ddr[0])
+        return ln.image[o:o + n]
+    at, count, _entry = ln.tables['ot_machines']
+    assert count == 1
+    rec = ln.map['crush_machine']
+    assert struct.unpack('>II', ram(at, 8)) == (rec, 0)
+    r = ram(rec, 80)
+    assert struct.unpack('>I', r[0:4])[0] == 1 and r[4:8] == b'CR\x01\x01'      # abi, sig, versions
+    label = struct.unpack('>I', r[8:12])[0]
+    assert ram(label, 6) == b'CRUSH\0'
+    assert struct.unpack('>III', r[12:24]) == (1, 0, 0x400d320c)                # PROTECT, FLEX's page, FLEX's defaults
+    assert struct.unpack('>I', r[64:68])[0] == ln.map['crush_render']           # render
+    assert r[24:64] == bytes(40) and r[68:80] == bytes(12)
+    names, pages = ln.map['otm_names'], ln.map['otm_pages']
+    o = 0x400a78c8 - DEV.main_load
+    assert ram(names, 20) == img[o:o + 20]
+    o = 0x400d5f38 - DEV.main_load
+    assert ram(pages, 32) == img[o:o + 32]
+    for site, fn in ((0x40004008, 'otm_render'), (0x40002318, 'otm_validate')):
+        o = site - DEV.main_load
+        assert ln.image[o:o + 8] == b'\x4e\xf9' + struct.pack('>I', ln.map[fn]) + b'\x4e\x71', fn
+
+
 # ---- DSP code ---------------------------------------------------------------------------
 
 HOOK = 0x400ef758               # payload A's P:0x88, move r2,x:>$204 (627000 000204)
@@ -752,6 +834,11 @@ def test_dsp_code_is_refused_where_it_cannot_go():
     back['sections']['.run'] = {'len': 4, 'parts': [['hex', '00000000']]}
     back['relocs'].append(['.run', 0, 'abs32', 'sym:tst', 0])
     refused([core, bus, back], 'dsptest 0: .run+0x0 is a ColdFire reference to a DSP address')
+    wide = json.loads(json.dumps(sub))                  # a DSP word is 24 bits: 0xffffff links, one more does not
+    wide['relocs'][0] = ['.dsp.A', 6, 'dsp24', 'abs', 0x1000000]
+    refused([core, bus, wide], '.dsp.A+0x6: a DSP address out of range (0x1000000)')
+    wide['relocs'][0][4] = 0xffffff
+    link.link([link.Mod2(d, d['id']) for d in (core, bus, wide)], img)
     ent = json.loads(json.dumps(sub))
     ent['contribute'][0]['relocs'] = [[0, 'abs32', 'sym:tst', 0], [1, 'dsp24', 'sym:tst', 0]]
     refused([core, bus, ent], 'an entry for ev_dsp_rx has a abs32 relocation at +0; a DSP '

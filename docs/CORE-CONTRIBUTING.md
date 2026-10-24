@@ -191,6 +191,17 @@ have them: without a stock file it groups sites by distance, as
 request is done when that routine leaves the list, because the mods there
 were rebuilt on the new event.
 
+`--upstream LIST.json` adds the stock code a newer upstream's modules hook,
+where no file here has them yet: `web/upstream/octabam.json`, which
+`python -m elekloader.sdk.octabam --octabam <checkout> --stock OCTATRACK_OS1.40C.syx --sites FILE.json`
+reads from octabam's manifests, for every module, whether or not it
+converts. Those sites carry `from` (the project and commit). An entry the
+files have keeps its id when upstream sites join it, and an entry only they
+hook is `upstream_only`. A module the files have from that commit is left to
+its file, and a site a file of that mod has is not listed twice
+([CONTRIBUTE.md](CONTRIBUTE.md#upstream-octabams-newer-modules)). The web
+page reads every list in `web/upstream/`.
+
 ## Checklist
 
 - [ ] Nothing in the core already does it (section 1).

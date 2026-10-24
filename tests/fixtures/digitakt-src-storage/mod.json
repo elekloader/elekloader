@@ -15,7 +15,14 @@
   {"id": 127, "descriptor": "probe_machine127"},
   {"id": 117, "descriptor": "probe_machine117"},
   {"id": 118, "descriptor": "probe_machine118"},
-  {"id": 116, "descriptor": "probe_machine116"}
+  {"id": 116, "descriptor": "probe_machine116"},
+  {"id": 115, "descriptor": "probe_machine115"},
+  {"id": 114, "descriptor": "probe_machine114"},
+  {"id": 113, "descriptor": "probe_machine113"},
+  {"id": 112, "descriptor": "probe_machine112"},
+  {"id": 111, "descriptor": "probe_machine111"},
+  {"id": 110, "descriptor": "probe_machine110"},
+  {"id": 109, "descriptor": "probe_machine109"}
  ],
  "requires": ["core", "machine-pages"],
  "resources": {"core": "3.0"}

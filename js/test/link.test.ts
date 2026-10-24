@@ -5,7 +5,7 @@ import assert from 'node:assert/strict'
 import { ANALOG_RYTM_MK2, DIGITAKT_MK1, DIGITONE_MK1, OCTATRACK, devices, targetOf } from '../src/devices.ts'
 import { sha } from '../src/bytes.ts'
 import { Mod, check as check1 } from '../src/elemod.ts'
-import { Mod2, check } from '../src/link.ts'
+import { Mod2, check, imageProblems } from '../src/link.ts'
 
 test('a parameter slot claims its sound slot (soundslot:<n>), from its own bytes or the stock image', () => {
   const dn = DIGITONE_MK1, r = dn.releases.find(x => x.version === '1.43')!
@@ -82,4 +82,42 @@ test('a site in bytes the device keeps stock is refused, in both formats, with t
   assert.deepEqual(check([core, mod2(0x400d24e0, 1812)], image), [])
   assert.deepEqual(check1([whole(0x400d24e0, 1812)], image), [])
   assert.deepEqual(check1([whole(0x400d24c0, 16)], image), [])
+})
+
+test('the finished image against the stock one: link.py\'s image_problems, line for line', () => {
+  const ot = OCTATRACK, r = ot.releases.find(x => x.version === '1.40C')!
+  const stock = new Uint8Array(r.mainLen).fill(0x4e).map((_, i) => (i % 2 ? 0x71 : 0x4e))      // nops
+  const end = ot.mainLoad + stock.length
+  const problems = (img: Uint8Array, declared: [number, number, string][] = [], tailAt = end) => imageProblems(ot, stock, img, declared, tailAt)
+  const tail = (img: Uint8Array) => Uint8Array.from([...img, 0x74, 0x61, 0x69, 0x6c])
+  const stray = (at: number, n = 1, spacing = 1) => {
+    const img = stock.slice()
+    for (let i = 0; i < n; i++) img[at - ot.mainLoad + spacing * i] ^= 0xff
+    return tail(img)
+  }
+  const hx = (v: number) => '0x' + v.toString(16).padStart(8, '0')
+  // as it is: nothing differs but the tail
+  assert.deepEqual(problems(tail(stock)), [])
+  assert.deepEqual(problems(Uint8Array.from([...stock, 1])), [])
+  // the tail starts where the stock image ends; the image is not shorter
+  assert.deepEqual(problems(tail(stock), [], end + 4), [`the appended code starts at ${hx(end + 4)}, not at the end of the stock image, ${hx(end)}`])
+  assert.deepEqual(problems(stock.slice(0, -4)), [`the linked image (${stock.length - 4} bytes) is shorter than the stock main OS (${stock.length} bytes)`])
+  // a declaration inside the image
+  assert.deepEqual(problems(tail(stock), [[end - 8, end + 4, 'a site']]), ['a site lies outside the stock image'])
+  assert.deepEqual(problems(tail(stock), [[end - 8, end, 'a site']]), [])
+  // bytes that differ and nothing declares
+  const at = ot.mainLoad + 0x4000
+  const why = ', and no site, DSP section or table of the mods declares it'
+  assert.deepEqual(problems(stray(at, 6)), [`${hx(at)}-${hx(at + 6)} differs from stock${why}`])
+  assert.deepEqual(problems(stray(at, 6), [[at, at + 4, 'a site']]), [`${hx(at + 4)}-${hx(at + 6)} differs from stock${why}`])
+  assert.deepEqual(problems(stray(at, 6), [[at - 2, at + 8, 'a site']]), [])
+  const many = problems(stray(at, 10, 16))
+  assert.equal(many.length, 9)
+  assert.equal(many[8], '2 more runs of bytes differ from stock outside every declaration')
+  assert.deepEqual(problems(stray(at, 8, 16)).length, 8)
+  // a protected or a kept range is stock whatever declares it
+  const [plo, phi, pwhy] = ot.protected[0], [klo, khi, kwhy] = ot.keep[0]
+  assert.deepEqual(problems(stray(plo + 8, 2), [[plo + 8, plo + 10, 'a site']]), [`${hx(plo)}-${hx(phi)} (${pwhy}) is not stock in the linked image`])
+  assert.deepEqual(problems(stray(klo + 4, 2), [[klo + 4, klo + 6, 'a site']]), [`${hx(klo)}-${hx(khi)} (${kwhy}) is not stock in the linked image`])
+  assert.deepEqual(problems(stray(plo - 16, 2), [[plo - 16, plo - 14, 'a site']]), [])
 })

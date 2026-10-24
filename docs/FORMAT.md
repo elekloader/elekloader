@@ -107,7 +107,8 @@ A format-2 mod is a relocatable object:
    as an absolute symbol, its descriptor.
 4. **Relocates** the sections, the table entries and the sites.
 5. **Checks again** on the result: code sites are still whole
-   instructions, and the copied-block rules hold.
+   instructions, the copied-block rules hold, and the image is what the
+   mods declared ("The finished image" below).
 
 ### Checks
 
@@ -132,6 +133,18 @@ Nothing is built unless all of these pass:
   - avoid every byte a fix-up claims;
   - decode as whole instructions with no PC-relative operand and no relative
     branch, because it will run from the copy.
+- **The finished image.** The linker compares the main OS it built with the
+  stock one and builds nothing in which:
+  - a byte differs from stock outside every mod's site, every DSP section
+    and DSP table the linker placed, and the appended code (the core's
+    `.boot`, the RAM image, the lockfile's trailer);
+  - the appended code does not begin at the stock image's end;
+  - a declared span lies outside the stock image;
+  - a byte of the device's protected or kept ranges differs from stock.
+
+  This check trusts none of the layout that built the image, so it catches
+  the linker's own mistakes; a mod author meets it only through a bug
+  (docs/ADAPTING.md, section 5).
 - **DSP code** (below). A mod with DSP code or a DSP table needs the mod
   that frees that payload's area; no other mod's site may touch the area;
   the code and tables fit in it; `dsp24` relocations are only in DSP
@@ -242,7 +255,10 @@ and the table `core_store_ids` (entry 4, filled by the linker: below); no
 The Analog Four MKII's core (core-a4 0.1, OS 1.56) has core-ar2 0.3's
 events, `ev_project` and `core_store_ids`, at 0x40098898, 0x40098900,
 0x400999f8, 0x40099a40, 0x400d05d2, 0x401013c6 and 0x401040f6
-(`mods/core-a4/mod.json`), and no `.fast` code either.
+(`mods/core-a4/mod.json`), and no `.fast` code either. From 0.2 it declares
+`core_pages`, `core_params` and `core_view_pages` too (0x400f6212,
+0x40023d54, 0x400232e2 and 0x4009ea68; the views at 0x400c2370 and
+0x400c4202), its view entries the A4's own.
 
 The core mod patches each shared site once. It calls the handlers
 subscribed to that event, from a table built by the linker, in order.

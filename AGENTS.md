@@ -52,10 +52,11 @@ python -m elekloader.patch --stock <stock.syx> --mod <core.elemod> --mod <mod.el
 | `elekloader/codec/`, `elekloader/isa/` | code from digikit (GPL-2.0-or-later): change it only with a round-trip test |
 | `mods/core/`, `mods/core-dn1/`, `mods/core-dt2/` | the core mod (the hook bus every format-2 mod needs): one `core.s` (with `settings.s`, `render.s` and `fast.s` where the device uses them), each device's addresses and sites in its `mod.json`, each further OS version's in its `ports`. `elekloader/sdk/include/digitone-mk1/core3.h` and `core3.inc` describe core-dn1 3.0's exports and tables to mods |
 | `mods/core-ar2/` | the Analog Rytm MKII's core: `core.s`, `settings.s` and `render.s` with the Rytm's addresses; from 0.5 `machines.c`, machines mods add in the hidden slots 34..43 (`examples/machine-ar2`) |
-| `mods/core-a4/` | the Analog Four MKII's core, a proof of concept: core-ar2 0.3's hook bus (`core.s`, `settings.s`, `render.s`) and mod storage (`store.c`, `store.s`) with the A4's addresses |
+| `mods/core-a4/` | the Analog Four MKII's core, a proof of concept: core-ar2 0.3's hook bus (`core.s`, `settings.s`, `render.s`) and mod storage (`store.c`, `store.s`) with the A4's addresses; from 0.2 core-ar2 0.4's parameter routines (`pages.s`) and audio load (`../core-ar2/load.s`) |
 | `mods/core-ot/` | the Octatrack's core: its RAM reserve (from 0.3 sized to the mods by the linker: the profile's `reserve`) and `.boot`, and from 0.2 its own hook bus (`bus.s`, with the draw site's gate in `gate.s`) |
 | `mods/dspbus-ot/` | the Octatrack's optional DSP bus: frees SPATIALIZER's DSP words for mods' DSP code and declares `ev_dsp_rx` (data sites only, no code) |
 | `mods/intercepts-ot/` | the Octatrack's intercepts, a companion: 19 sites a mod intercepts, one mod at a time, each an event whose records `{claims, entry}` give it to one mod, with Modwerk's Octatrack base's names (docs/ADAPTING.md, "Intercepts on the Octatrack"); `sdk.octabam --intercepts` moves octabam's detours there |
+| `mods/machines-ot/` | the Octatrack's machines, a companion: the chooser, SRC SETUP, the page resolver, the Part validator and the FLEX renderer ask the machines in `ot_machines` (32 sites, `seams.s`; the logic in `machines.c`), whose record is Modwerk's of the same name (`elekloader/sdk/include/octatrack/machines.h`; docs/ADAPTING.md, "Machines on the Octatrack"); `examples/crush-machine-ot` is one machine; `sdk.octabam --machines` moves octabam's OCTA303 onto it |
 | `mods/machine-pages/` | the Digitakt mk1's machine page companion (core 3.0): owns the SRC page's, the LFO page's and the render point's sites once, and draws every added machine's page from its descriptor's tail; `elekloader/sdk/include/digitakt-mk1/core3.h` and `core3.inc` describe it to mods |
 | `mods/machines-dn1/` | the Digitone mk1's machines (core-dn1 3.1): a sound plays a machine mod's voice in place of FM (docs/ADAPTING.md, "Machines on the Digitone") |
 | `mods/digiswarm-dn1/` | DigiSwarm, a whole Digitone mod on core-dn1 3.2's exclusive audio: an effects engine for the inputs: grains, micro-loops and a looper (docs/ADAPTING.md, "Exclusive audio") |
@@ -65,12 +66,13 @@ python -m elekloader.patch --stock <stock.syx> --mod <core.elemod> --mod <mod.el
 | `packaging/`, `.github/workflows/windows-build.yml`, `macos-build.yml` | the apps: `elekloader-<version>-windows.exe`, and `elekloader-<version>-macos.dmg` (signed and notarized), with core built in (`elekloader/bundled`, never committed) |
 | `js/` | the engine in TypeScript (GPL-3.0-or-later; js/README.md): the formats, the checks, the linker, the build and the web bridge, ported from the Python and matching it byte for byte, messages included (`js/tools/parity.ts` checks with your stock files) |
 | `js/src/kit/`, `js/tools/kit.ts`, `js/examples/minimal/`, `packaging/build_kit.py`, `.github/workflows/kit-build.yml` | the kit for websites (docs/INTEGRATING.md): the builder worker, the page's client, the catalog format and elekloader's curated catalog, the lock and its checks. It names no website |
-| `web/`, `packaging/build_web.py`, `.github/workflows/pages.yml` | the web page (GitHub Pages): elekloader in Pyodide, in a worker; `bridge.py` is its only Python, a thin layer over `gui.LoaderModel` and `patch`; `catalog.json` is its mod shop's curated list (docs/WEB.md). Everything it loads comes from the site itself |
+| `web/`, `packaging/build_web.py`, `.github/workflows/pages.yml` | the web page (GitHub Pages): elekloader in Pyodide, in a worker; `bridge.py` is its only Python, a thin layer over `gui.LoaderModel` and `patch`; `catalog.json` is its mod shop's curated list (docs/WEB.md); `upstream/` holds the upstream lists for the to-do list (`sdk.octabam --sites`: the stock code octabam's newer modules hook). Everything it loads comes from the site itself |
 
 Tests:
 
 ```bash
 python tests/test_units.py                                   # always
+python tests/test_link_refusals.py                           # always: a must-refuse and a must-pass fixture for every linker refusal
 ELEKLOADER_STOCK=... ELEKLOADER_MODS=... python tests/test_link.py
 ELEKLOADER_STOCK=... ELEKLOADER_MODS=... python tests/test_sdk.py    # the example needs the cross compiler
 ELEKLOADER_STOCK=... ELEKLOADER_BUNDLE=... ELEKLOADER_CTOOL_SYX=... python tests/test_patcher.py
