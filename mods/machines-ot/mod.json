@@ -1,0 +1,228 @@
+{
+ "id": "machines",
+ "version": "0.1",
+ "license": "GPL-2.0-or-later",
+ "title": "machines",
+ "category": "Framework",
+ "author": "irpina",
+ "description": "Source machines for the Octatrack: a machine mod adds a row to the track's machine chooser and SRC SETUP, with its own name, page, defaults and sound, by adding its record to the ot_machines table. Several machines combine in one build, and a track keeps its machine in the Part the way octabam's machines sign it. On its own it changes nothing the unit does.",
+ "device": "octatrack",
+ "os": "1.40C",
+ "sources": [
+  "machines.c",
+  "seams.s"
+ ],
+ "collections": {
+  "ot_machines": 4
+ },
+ "subscribe": [
+  {
+   "event": "ev_tick",
+   "fn": "otm_tick",
+   "order": 50
+  }
+ ],
+ "sites": [
+  {
+   "addr": "0x40002318",
+   "stock": "4fefffa048d77cfc",
+   "op": "jmp",
+   "target": "otm_validate"
+  },
+  {
+   "addr": "0x40004008",
+   "stock": "4fefffd048d77cfc",
+   "op": "jmp",
+   "target": "otm_render"
+  },
+  {
+   "addr": "0x40031e74",
+   "stock": "710541f9400d5f386050",
+   "op": "jmp",
+   "target": "otm_resolve"
+  },
+  {
+   "addr": "0x400334d8",
+   "stock": "2f02222f0008",
+   "op": "jmp",
+   "target": "otm_name_fn"
+  },
+  {
+   "addr": "0x4003a524",
+   "stock": "41f9400d5f38",
+   "op": "keep2",
+   "target": "otm_pages"
+  },
+  {
+   "addr": "0x4003a52e",
+   "stock": "2002e788d4829082",
+   "op": "jmp",
+   "target": "otm_setup_edit"
+  },
+  {
+   "addr": "0x4003bff0",
+   "stock": "711041f9400d5f38605a",
+   "op": "jmp",
+   "target": "otm_pmtr"
+  },
+  {
+   "addr": "0x4003c8ca",
+   "stock": "41f9400d5f38",
+   "op": "keep2",
+   "target": "otm_pages"
+  },
+  {
+   "addr": "0x4003c928",
+   "stock": "4bf9400a78c8",
+   "op": "keep2",
+   "target": "otm_names"
+  },
+  {
+   "addr": "0x4003c950",
+   "stock": "7204b282650420352c00",
+   "op": "jmp",
+   "target": "otm_setup_name"
+  },
+  {
+   "addr": "0x4003c980",
+   "stock": "71104fef0018",
+   "op": "jmp",
+   "target": "otm_setup_row"
+  },
+  {
+   "addr": "0x4003cd98",
+   "stock": "2e06e78fdc869e86",
+   "op": "jmp",
+   "target": "otm_setup_draw"
+  },
+  {
+   "addr": "0x4003d134",
+   "stock": "41f9400d5f38",
+   "op": "keep2",
+   "target": "otm_pages"
+  },
+  {
+   "addr": "0x4003d718",
+   "stock": "41f9400a78c8",
+   "op": "jmp",
+   "target": "otm_name_a"
+  },
+  {
+   "addr": "0x4004c36a",
+   "stock": "41f9400a78c8",
+   "op": "jmp",
+   "target": "otm_name_b"
+  },
+  {
+   "addr": "0x400585dc",
+   "stock": "161079034879400bb704",
+   "op": "jmp",
+   "target": "otm_setup_open"
+  },
+  {
+   "addr": "0x400585ea",
+   "stock": "41f9400d5f38",
+   "op": "keep2",
+   "target": "otm_pages"
+  },
+  {
+   "addr": "0x400585fa",
+   "stock": "4878000548780005",
+   "op": "jmp",
+   "target": "otm_setup_rows"
+  },
+  {
+   "addr": "0x4005a616",
+   "stock": "2239460d5c30",
+   "op": "jmp",
+   "target": "otm_src_commit"
+  },
+  {
+   "addr": "0x4005a850",
+   "stock": "2239460d5c30",
+   "op": "jmp",
+   "target": "otm_src_commit2"
+  },
+  {
+   "addr": "0x40078678",
+   "stock": "7004b0826d242f0220434e90",
+   "op": "jmp",
+   "target": "otm_chooser_draw"
+  },
+  {
+   "addr": "0x400786c8",
+   "stock": "7110b480662e",
+   "op": "jmp",
+   "target": "otm_chooser_row"
+  },
+  {
+   "addr": "0x400786ce",
+   "stock": "7004b0826d28",
+   "op": "jmp",
+   "target": "otm_chooser_hilite"
+  },
+  {
+   "addr": "0x40078886",
+   "stock": "71102f004879460e7386",
+   "op": "jmp",
+   "target": "otm_chooser_open"
+  },
+  {
+   "addr": "0x40078c22",
+   "stock": "7205b2806c027005",
+   "op": "jmp",
+   "target": "otm_clamp1"
+  },
+  {
+   "addr": "0x40078cb0",
+   "stock": "7205b2806c027005",
+   "op": "jmp",
+   "target": "otm_clamp2"
+  },
+  {
+   "addr": "0x40078d2e",
+   "stock": "7205b2806c027005",
+   "op": "jmp",
+   "target": "otm_clamp3"
+  },
+  {
+   "addr": "0x40078dee",
+   "stock": "7205b2806c027005",
+   "op": "jmp",
+   "target": "otm_clamp4"
+  },
+  {
+   "addr": "0x40078e7c",
+   "stock": "7205b2806c027005",
+   "op": "jmp",
+   "target": "otm_clamp5"
+  },
+  {
+   "addr": "0x40079248",
+   "stock": "4878000548780006",
+   "op": "jmp",
+   "target": "otm_chooser_rows"
+  },
+  {
+   "addr": "0x4007981e",
+   "stock": "1084d08141f9100a4ef0",
+   "op": "jmp",
+   "target": "otm_main_commit"
+  },
+  {
+   "addr": "0x40079904",
+   "stock": "7604b6846c00fec2",
+   "op": "jmp",
+   "target": "otm_chooser_cursor"
+  }
+ ],
+ "requires": [
+  "core"
+ ],
+ "resources": {
+  "core": "0.3.1",
+  "names": [
+   "octatrack:machine-signatures"
+  ]
+ }
+}

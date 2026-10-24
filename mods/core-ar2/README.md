@@ -5,7 +5,7 @@ The boot copier, the hook bus, mod storage, parameter pages and added machines f
 `render.s` with the Rytm's addresses, which `mod.json` gives (`defsym`,
 `sites`), and from 0.2 its own `store.c` and `store.s` (Mod storage, below),
 from 0.3 with `route.s`, from 0.4 with `pages.s` (Parameter pages, below), from 0.5
-with `machines.c` (Machines, below). On its own it changes nothing the unit does.
+with `machines.c` (Machines, below), from 0.6 with page functions in `pages.s`. On its own it changes nothing the unit does.
 
 The Rytm runs on the Digitakt mk1's platform (a ColdFire MCF5441x), and its OS
 entry, bootstrap loader and UI loop are the Digitakt's, so each site below is
@@ -172,7 +172,7 @@ What it does not do:
   pattern received as a SysEx dump does. A target project saved with another
   mod layout keeps its store as it is.
 
-## Parameter pages (0.4)
+## Parameter pages (0.4, 0.6)
 
 `pages.s` takes the first instructions of the four routines every parameter
 page goes through and hands each call to the mods' entries in `core_pages`
@@ -191,6 +191,13 @@ untouched:
 
 A turn a mod takes is followed by core's call to the view's redraw
 (0x40078580), so the mod's own value shows at once.
+
+From 0.6 page_info asks `core_page_fns` first: `{page, info}`, where
+`info(page)` returns the `core_pages` entry to answer, or 0 to pass on to
+`core_pages` and stock. A page whose knobs change with the selected sound
+uses it (voice-dac 1.4's DAC FILTER leaves RES empty for LP1 and HP1, and
+FRQ and RES with TYP OFF). Additive: a build with no entries in it behaves
+as 0.5.
 
 The page keys' lists: each view's constructor passes its list to a setter
 (0x401a1e46) with `moveq #n,%d1; movel %d1,%sp@-; movel #list,%d0`, ten
@@ -396,10 +403,17 @@ stock bytes, and that each covers whole instructions.
   power cycle and RELOAD. On the same build without the example (M5N4) that
   kit loaded with BD on DISABLE and the rest as saved.
 
+- **Page functions (0.6)**, in an emulator (OS 1.74, 23 Oct 2026): core 0.6
+  with all eleven rytm2_mods (voice-dac 1.4) shows DAC FILTER without RES
+  for LP1 and HP1 and without FRQ and RES for TYP OFF, the empty knobs take
+  no turn, and the page follows a track switch. With rytm2_mods v1.3 (no
+  `core_page_fns` entry) core 0.6 gives a 59-screen walk pixel-identical to
+  core 0.4's. Not yet on a unit.
+
 ## Building
 
-Core 0.5 builds with `Analog-Rytm_MKII_OS1.74.syx` only: the SDK writes
-`core-0.5.elemod` (1.74 is its `os`) and, for hello-marker-ar2 (whose `os`
+Core 0.6 builds with `Analog-Rytm_MKII_OS1.74.syx` only: the SDK writes
+`core-0.6.elemod` (1.74 is its `os`) and, for hello-marker-ar2 (whose `os`
 is 1.73, with a 1.74 port), `hello-marker-1.0-os1.74.elemod`. For 1.73,
 build core 0.2 from commit 92a99c9 (OS versions, above).
 
@@ -408,8 +422,8 @@ build core 0.2 from commit 92a99c9 (OS versions, above).
 python -m elekloader.sdk.build mods/core-ar2 --stock Analog-Rytm_MKII_OS1.74.syx
 python -m elekloader.sdk.build examples/hello-marker-ar2 --stock Analog-Rytm_MKII_OS1.74.syx
 python -m elekloader.lint examples/hello-marker-ar2/out/hello-marker-1.0-os1.74.elemod \
-    --stock Analog-Rytm_MKII_OS1.74.syx --with mods/core-ar2/out/core-0.5.elemod
+    --stock Analog-Rytm_MKII_OS1.74.syx --with mods/core-ar2/out/core-0.6.elemod
 python -m elekloader.patch --stock Analog-Rytm_MKII_OS1.74.syx \
-    --mod mods/core-ar2/out/core-0.5.elemod --mod examples/hello-marker-ar2/out/hello-marker-1.0-os1.74.elemod \
+    --mod mods/core-ar2/out/core-0.6.elemod --mod examples/hello-marker-ar2/out/hello-marker-1.0-os1.74.elemod \
     --out rytm-hello.syx --version HM74
 ```

@@ -48,11 +48,23 @@ def _dsp_tag(dev, sec):
 FAST_ENTRY = 16                   # a .fast copy entry: src, dst, len, 0
 MAX_ALIGN = 4096                  # a section's alignment: a power of two up to this
 LINKER_SYMS = {'__run_load', '__run_start', '__run_words', '__bss_start', '__bss_end',
-               '__bss_words'}
+               '__bss_words', '__run_hash'}
+HASH_SEED, HASH_MUL = 5381, 33    # __run_hash: h = seed; h = h * 33 + word (mod 2^32), per word
 
 
 def _align(v, a):
     return (v + a - 1) // a * a
+
+
+def run_hash(ddr):
+    """The hash of the RAM image a core copies at boot (`__run_hash`): a rolling x33 over its
+    32-bit big-endian words, from the seed 5381. A core hashes the copy it made and halts on a
+    mismatch (core-ot's `.boot`). Each word changes the result: the multiplier is odd, so a
+    single wrong word never cancels; the seed makes leading zero words count too."""
+    h = HASH_SEED
+    for (w,) in struct.iter_unpack('>I', bytes(ddr)):
+        h = (h * HASH_MUL + w) & 0xFFFFFFFF
+    return h
 
 
 class Mod2:
@@ -413,6 +425,57 @@ def _copied_rules(mods, patched, dev):
     return bad
 
 
+# ---- the finished image against the stock one -------------------------------------------
+
+def image_problems(dev, stock, img, declared, tail_at):
+    """The linker's last check, on the image it built, against the stock one. It trusts none of
+    the layout that built the image; it only compares. -> [problems]
+    - the appended code (the core's `.boot`, the RAM image and the lockfile's trailer) begins
+      where the stock image ends, `tail_at`;
+    - every declared span lies inside the stock image;
+    - every byte in the stock image's range that differs from the stock image lies in a
+      declared span: `declared` is [(lo, hi, what)], the addresses of each mod's sites and each
+      DSP section and table the linker placed in a DSP area;
+    - the device's protected and kept ranges are stock (formats.verify checks the same on the
+      packed file; this is the linker's own account of it)."""
+    ml, n = dev.main_load, len(stock)
+    bad = []
+    if tail_at != ml + n:
+        bad.append('the appended code starts at 0x%08x, not at the end of the stock image, 0x%08x'
+                   % (tail_at, ml + n))
+    if len(img) < n:
+        bad.append('the linked image (%d bytes) is shorter than the stock main OS (%d bytes)'
+                   % (len(img), n))
+        return bad
+    probe = bytearray(img[:n])
+    for lo, hi, what in declared:
+        if lo < ml or hi > ml + n:
+            bad.append('%s lies outside the stock image' % what)
+            continue
+        probe[lo - ml:hi - ml] = stock[lo - ml:hi - ml]
+    if probe != stock:
+        runs, i = [], 0
+        while i < n:
+            if probe[i] == stock[i]:
+                i += 1
+                continue
+            j = i
+            while j < n and probe[j] != stock[j]:
+                j += 1
+            runs.append((ml + i, ml + j))
+            i = j
+        for lo, hi in runs[:8]:
+            bad.append('0x%08x-0x%08x differs from stock, and no site, DSP section or table of the '
+                       'mods declares it' % (lo, hi))
+        if len(runs) > 8:
+            bad.append('%d more runs of bytes differ from stock outside every declaration'
+                       % (len(runs) - 8))
+    for lo, hi, why in tuple(dev.protected) + tuple(dev.keep):
+        if bytes(img[lo - ml:hi - ml]) != bytes(stock[lo - ml:hi - ml]):
+            bad.append('0x%08x-0x%08x (%s) is not stock in the linked image' % (lo, hi, why))
+    return bad
+
+
 # ---- the link -------------------------------------------------------------------------
 
 class Linked:
@@ -630,12 +693,15 @@ def link(mods, image, lock=None):
                 raise ModError('%s: a 16-bit PC-relative reference spans %d bytes' % (where, d))
             struct.pack_into('>h', buf, off, d)
 
-    content = {}
+    content, boot_relocs = {}, []
     for m in order:
         for sec in m.sections:
             if sec != '.bss' and m.size(sec):
                 content[(m.id, sec)] = parts_bytes(m.sections[sec]['parts'], image, dev)
         for sec, off, typ, tgt, add in m.relocs:
+            if sec == '.boot':                 # after the RAM image: it may name its hash
+                boot_relocs.append((m, off, typ, tgt, add))
+                continue
             where = '%s+0x%x' % (sec, off)
             place(m, content[(m.id, sec)], off, typ, tgt, add, base[(m.id, sec)] + off, where)
     tab = {}
@@ -668,6 +734,10 @@ def link(mods, image, lock=None):
             continue
         o = tab_at[c] - ddr_base
         ddr[o:o + len(tab[c])] = tab[c]
+    glob['__run_hash'] = run_hash(ddr)
+    for m, off, typ, tgt, add in boot_relocs:
+        place(m, content[(m.id, '.boot')], off, typ, tgt, add, base[(m.id, '.boot')] + off,
+              '.boot+0x%x' % off)
     blob = bytearray(content[(core.id, '.boot')])
     blob += bytes(run_load - image_end - len(blob))
     blob += ddr
@@ -698,6 +768,18 @@ def link(mods, image, lock=None):
                 ok, note = insn_check(bytes(img), s['addr'], s['len'], dev, sweeps=0)
                 if not ok:
                     bad.append('%s site 0x%08x after relocation: %s' % (m.label(), s['addr'], note))
+    declared = [(s['addr'], s['addr'] + s['len'], '%s site 0x%08x' % (m.label(), s['addr']))
+                for m in order for s in m.sites]
+    for key, tag in sorted(dsp_secs.items(), key=lambda kv: base[kv[0]]):
+        words = len(content.get(key, b'')) // 3
+        if words:
+            at = dsp.p_span(image, dev, tag, base[key], base[key] + words)
+            declared.append((at, at + 3 * words, '%s %s' % key))
+    for c in sorted(dsp_tables):
+        tag, words = dsp_tables[c][0], len(tab[c]) // 3
+        at = dsp.p_span(image, dev, tag, tab_at[c], tab_at[c] + words)
+        declared.append((at, at + 3 * words, 'the table %s' % c))
+    bad += image_problems(dev, image, img, declared, image_end)
     if bad:
         raise ModError('the linked mods break a rule:\n  ' + '\n  '.join(bad))
 

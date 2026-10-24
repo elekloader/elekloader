@@ -223,12 +223,13 @@ they are. The event adds no site.
 
 Events of the Octatrack's own that mods ask for, none of them a step mod's:
 the voice-time dispatch in the frame interrupt (a trig's moment, not its
-build), the sequencer's MIDI packets (core-ot 0.4's `ev_midi_out` sees them), and
-the pattern and Part changes. They are core-ot's or a companion's to add, each at
-its own sites. Of the staged record, `ev_step_built` offers the builders' arrays,
-not the stock stages after them: the staging to pending copies at the transport
-start, the pending reset and the frame interrupt's trig record (PLOCKS P2 mirrors
-all of them).
+build: [trig-events-ot](../trig-events-ot/README.md)), the sequencer's MIDI
+packets (core-ot 0.4's `ev_midi_out` sees them), and the pattern and Part
+changes. They are core-ot's or a companion's to add, each at its own sites. Of
+the staged record, `ev_step_built` offers the builders' arrays, not the stock
+stages after them: the staging to pending copies at the transport start, the
+pending reset and the frame interrupt's trig record (PLOCKS P2 mirrors all of
+them).
 
 ## Checked
 
