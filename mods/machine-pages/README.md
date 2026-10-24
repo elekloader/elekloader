@@ -17,11 +17,11 @@ the mod shop: tick it there and the page takes the newest core for it.
 | | |
 |---|---|
 | needs | core 3.0 (`resources.core`), and refuses beside digichain, which owns the same places |
-| sites | 101, listed in `mod.json`. 1.1's 20: 7 on the SRC page, 4 range lookups, 5 on the LFO page, 2 SAMP compares, the machine menu's icon row and the render point 0x40077fba. 1.2's extra values add 77: 50 one-byte bounds (the parameter-id compares, 164 to 171), and 27 hooks: the SRC page's page flip, title and copy/clear/paste, the id-slot maps, the descriptor table and its 7 readers, defaults, Randomize, locks and the sound file's save/load/upgrade and LFO destinations. 1.2.1 adds 2: the stores of the firmware's in-place parameter sync. 1.3 adds 2: MIDI's range lookups, the CC's (0x40010d50) and the NRPN's (0x40010154) |
-| exports | `cm_ui_v3`, from 1.1 `cm_ui_v31`, from 1.2 `cm_ui_v32`: the markers a machine's page names; from 1.2 `cm_src_value` |
+| sites | 102, listed in `mod.json`. 1.1's 20: 7 on the SRC page, 4 range lookups, 5 on the LFO page, 2 SAMP compares, the machine menu's icon row and the render point 0x40077fba. 1.2's extra values add 77: 50 one-byte bounds (the parameter-id compares, 164 to 171), and 27 hooks: the SRC page's page flip, title and copy/clear/paste, the id-slot maps, the descriptor table and its 7 readers, defaults, Randomize, locks and the sound file's save/load/upgrade and LFO destinations. 1.2.1 adds 2: the stores of the firmware's in-place parameter sync. 1.3 adds 2: MIDI's range lookups, the CC's (0x40010d50) and the NRPN's (0x40010154). 1.4 adds 1: the CC lookup's table for an audio track (0x400791fe) |
+| exports | `cm_ui_v3`, from 1.1 `cm_ui_v31`, from 1.2 `cm_ui_v32`, from 1.4 `cm_ui_v33`: the markers a machine's page names; from 1.2 `cm_src_value` |
 | claims | from 1.2, `soundslot:46` to `soundslot:52`, the extra values' slots |
 | declares | `ev_render_voices`, the render event |
-| RAM | 7.6 KB code, 4.5 KB for up to 32 machines' pages (1.1: 2.4 KB and 2 KB) |
+| RAM | 9.1 KB code, 4.5 KB for up to 32 machines' pages (1.1: 2.4 KB and 2 KB) |
 
 ## What a machine describes
 
@@ -103,6 +103,19 @@ Johansson's PARAM machine
 (`tests/fixtures/digitakt-src-parameters`) is the example: silent, two
 pages, P1-P15, and the amp's VOL as page 2's knob H.
 
+**MIDI CCs for the extra values (1.4).** A page naming `cm_ui_v33` is a
+`cm_ui32` whose extra values may each name a CC (`cc`, +18 of the knob):
+that CC, on the track's channel, sets the value on the machine's tracks,
+clamped to its range as knobs A-H are (1.3). Knobs A-H keep CC 16-23 and
+give none. A page is refused if it gives a CC twice, or one that MIDI or
+a stock parameter of a track already uses. The CCs left are 8, 9, 11, 12,
+24-31, 35-37, 39-59, 64-69, 89-92 and 111. machine-pages answers at the
+CC lookup's table for an audio track (0x400791fe). Core's machine bank
+sends an added machine's CCs there, outside knobs A-H, so FX, the MIDI
+tracks and every other machine get the stock answer. The PARAM fixture's
+extras take CC 24-30. Without a `cm_ui_v33` page nothing changes. NRPNs
+and a value's CC out are not given.
+
 ## Whose machine a site answers for
 
 - **The SRC page** (layout, labels, values, graphics, UI records, the
@@ -159,6 +172,26 @@ with each shop mod that does, on OS 1.53 and 1.54.
 | machine-pages | | 20, owned once |
 
 ## Checked
+
+1.4 (CCs for the extra values), on OS 1.53 and 1.54:
+`tests/probe_digitakt_src.py --storage` calls the firmware's CC lookup
+(0x4007919e) on every source, every CC and seven machines. PARAM's CC
+24-30 give ids 164-170 on its tracks 0-7, and a second machine's CC 9
+gives its second extra. Every other answer is the stock's: knobs A-H (16-23)
+through core's bank, the audio tracks' table, the MIDI tracks and FX
+whatever the machine, and 0 past 127. Pages giving a CC twice, CC 120,
+94 (Mute), 74 (the filter's), a CC on knob A, or one on a `cm_ui_v32`
+page are refused. `tests/test_sdk.py`: a `cm_ui_v33` page links beside
+1.4 and is refused beside 1.3. OB-1 and ModelDigi, with their own lookup
+and range sites taken out and `.cc` on their pages, link together. OB-1's
+`tests/test_digitakt_midi.py` (MIDI in through the emulated DIN UART, the
+unit booted) passes on both releases: all fifteen values at 0-127, the
+ranges, the stock, MIDI-track and FX fallback, and the channels kept apart.
+ModelDigi's `tests/test_digitakt_controls.py` passes on 1.54 in a build
+with both. Each of the shop's Digitakt mods links or is refused beside 1.4
+as beside 1.3.
+`emu.fwcheck`, core 4.1 with 1.4 against core 4.1 with 1.3 on 1.54: the
+nine screens and 7.9 s of audio identical.
 
 1.3 (MIDI's ranges), in digiemu on OS 1.54, a build of core 4.1, 1.3,
 Digi Mono and Digi Macro (MACRO's page: knob B 0-127): CC 17 at 40 and at

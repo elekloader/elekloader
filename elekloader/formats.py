@@ -109,8 +109,8 @@ def write(stock, stored_main, dev, version=None):
 
 def verify(outputs, stock, want_main, dev, version=None):
     """Re-read every output with the decoder and refuse it unless only the
-    main OS (and the version field) changed, and the protected ranges are
-    stock's. -> facts."""
+    main OS (and the version field) changed, and the protected and kept
+    ranges are stock's. -> facts."""
     stock_main = main_image(stock, dev)
     try:
         if dev.container == 'ele3':
@@ -121,7 +121,7 @@ def verify(outputs, stock, want_main, dev, version=None):
             facts = elek.verify(outputs, stock, want_main, dev, stock_main, version)
     except (syx.SyxError, elek.ElekError) as e:
         raise FormatError(str(e))
-    for lo, hi, why in dev.protected:
+    for lo, hi, why in dev.protected + dev.keep:
         a, b = lo - dev.main_load, hi - dev.main_load
         if bytes(want_main[a:b]) != stock_main[a:b]:
             raise FormatError('0x%08x-0x%08x (%s) is not stock' % (lo, hi, why))

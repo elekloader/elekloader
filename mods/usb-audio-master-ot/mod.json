@@ -1,0 +1,17 @@
+{
+ "id": "usb-audio-master", "version": "0.1",
+ "license": "GPL-2.0-or-later",
+ "title": "USB Audio Out (track 8)", "category": "MIDI and USB", "author": "irpina",
+ "description": "The Octatrack as a stereo USB audio input (UAC2, 44.1 kHz, 24-bit) on its own USB port, as a function of usb-ot: track 8 post-FX before its level (the master track's output with MASTER TRACK on), at both speeds. It combines with USB MIDI. One of mods/usb-audio-ot's five layouts.",
+ "device": "octatrack", "os": "1.40C",
+ "sources": ["../usb-audio-ot/usbaudio.c"],
+ "cflags": ["-DUSBA_LAYOUT=2"],
+ "contribute": [
+  {"to": "ot_usb_functions", "order": 30, "data": "00000000", "relocs": [[0, "abs32", "sym:usb_audio", 0]]}
+ ],
+ "subscribe": [
+  {"event": "ev_frame_end", "fn": "usba_frame", "order": 50}
+ ],
+ "requires": ["core", "usb"],
+ "resources": {"core": "0.4", "names": ["usb:ep3-in"]}
+}

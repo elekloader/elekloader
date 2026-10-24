@@ -51,6 +51,10 @@ what you see when it is broken (section 5 has the fixes).
 
 1. **Only the main OS changes.** A mod has no way to touch the bootloader
    or any other section, so the stock OS file always recovers the device.
+   Some main OS bytes stay stock too: the Octatrack's copy of its
+   bootloader, and 16 zero bytes after a table that its stock DELAY reads
+   (docs/DEVICES.md, `protected` and `keep`). *"protected on the ..."*,
+   *"stays stock on the ..."*.
 2. **Ship no firmware bytes.** Call firmware routines by address; do not
    copy stock code into your sources. When your bytes do repeat stock bytes
    (the instruction a hook displaced, say), runs of 8 bytes or more are
@@ -159,8 +163,10 @@ the A4's sites: the same events, `ev_project` and mod storage ("Mod storage
 Digitakt mk1. On the A4, the SETTINGS menu is the GLOBAL key's, and its rows
 come after SYSTEM; the render events cover the audio interrupt's digital
 path (the effects and the inputs), since the voices are analog. core-a4
-exports no firmware locations either. `examples/hello-marker-a4`,
-`hooks-check-a4`, `store-check-a4` and `ddr-canary-a4` are mods for it.
+exports no firmware locations either. From 0.2 it has core-ar2 0.4's
+parameter routines and `core_audio_load` ("Parameter pages (core-a4 0.2,
+Analog Four MKII)"). `examples/hello-marker-a4`, `hooks-check-a4`,
+`store-check-a4`, `ddr-canary-a4` and `pages-check-a4` are mods for it.
 
 The sites core owns (do not patch them):
 - Digitakt mk1 1.53 and 1.54: 0x40000538, 0x4000a770, 0x4000a7d6,
@@ -185,7 +191,10 @@ The sites core owns (do not patch them):
   more (32 in all; listed under "Mod storage");
 - Analog Four MKII 1.56: 0x40001180, 0x40098898, 0x40098900, 0x400999f8,
   0x40099a40, 0x400d05d2, 0x401013c6, 0x401040f6, and 28 more for mod
-  storage (mods/core-a4/README.md lists them).
+  storage (mods/core-a4/README.md lists them); from core-a4 0.2, 0x400f6212,
+  0x40023d54, 0x400232e2 and 0x4009ea68 (the page routines), 0x400c2370
+  and 0x400c4202 (the views), and the bytes at 0x400add22, 0x400add28,
+  0x4000a758, 0x4000a774 and 0x4000a790 (the current view's range).
 
 A firmware routine your mod calls has its own address on each device and
 each OS version: look it up for the release you target, and build one
@@ -346,7 +355,30 @@ const struct core_projdata my_block = { OT_TAG('M', 'I', 'N', 'E'), sizeof my_by
   (`ot_file_open`, `ot_file_read`, `ot_file_write`, `ot_file_close`,
   `ot_file_copy`, `ot_mkdir`, `ot_project_dir`) are for there.
 - **Settings.** Core declares the `ot_settings` table (`struct ot_setting`)
-  for the settings companion.
+  for the settings companion (below).
+
+#### Settings on the Octatrack (settings 0.1)
+
+A mod declares a setting by contributing a pointer to a `struct ot_setting`
+to core's `ot_settings` table. The struct holds:
+- its tag and key, the identity under which the value is stored;
+- its kind: binary, option or number;
+- its scope: the card, or the project, optionally `| OT_SET_EARLY`;
+- its heading and label;
+- its range and option labels;
+- the mod's variable and its default;
+- an optional `changed()`.
+
+The mod reads its variable as it likes. With `mods/settings-ot` (id
+`settings`) in the build:
+- the MAIN MENU gets a fifth category, MODS, listing every mod's settings
+  under its heading, with the value at the right;
+- YES steps a value and an encoder turns it;
+- values are kept through core's card and project data;
+- early ones are also kept in battery RAM and set at `ev_boot_done`.
+
+Without the companion the variable keeps its default. mods/settings-ot/README.md has
+an example.
 
 A stock routine that returns a pointer returns it in d0. GCC's m68k ABI
 reads a returned pointer from a0, so declare such a routine as returning an
@@ -452,6 +484,105 @@ the call, or its entry is 0, stock runs.
 
 A detour you already have converts unchanged: its label is the entry, and
 claims 0. `sdk.octabam --intercepts` does this for octabam's modules (4b).
+
+### Machines on the Octatrack (machines 0.1)
+
+`mods/machines-ot` (id `machines`) is a companion beside core-ot 0.3.1 for
+source machines: a machine mod adds a row to the track's machine chooser
+and to SRC SETUP, below PICKUP, with its own name, page, defaults and
+sound. The companion owns the places every source machine would otherwise
+patch (the chooser, SRC SETUP, the page resolver, the Part validator and the
+FLEX renderer), so machines combine; past six rows the chooser scrolls.
+
+A machine's track stays a FLEX track. What makes it the machine is its
+signature in the Part (three bytes at Part + 60 + 30 × track: two letters
+and a version, the form octabam's machines write), and its parameters are
+FLEX's 12 bytes of the track. The machine contributes a pointer to its
+record, `struct ot_machine` (`elekloader/sdk/include/octatrack/machines.h`),
+which has the layout and meaning of version 1 of Modwerk's record of the
+same name:
+
+```c
+#include "octatrack/machines.h"
+
+const struct ot_machine my_machine = {
+    .abi = OT_MACHINE_ABI, .sig = {'M', 'Y'}, .sig_lo = 1, .sig_hi = 1,
+    .label = "MINE", .flags = OT_MACHINE_PROTECT,
+    .defaults = my_defaults,        /* the 12 FLEX bytes a track takes when it becomes MINE */
+    .render = my_render,            /* calls ot_stock_render, then changes the samples it shipped */
+};
+```
+
+```json
+"contribute": [{"to": "ot_machines", "order": 50, "data": "00000000",
+                "relocs": [[0, "abs32", "sym:my_machine", 0]]}],
+"requires": ["core", "machines"]
+```
+
+- **`render(track, ping, start, end)`** is called for the machine's tracks
+  in place of the FLEX renderer, once a 16-sample frame (twice when a trig
+  splits it). Call `ot_stock_render` with the same arguments and hand back
+  its result; then `ot_render_header()` (read before the stock call) says
+  how many samples stock shipped (byte 3), from +16 each as two longs, L
+  and R, the 16-bit sample in the high half. The stock call needs a sample
+  in the track's FLEX slot to ship any.
+- **`PROTECT`** keeps stock's Part validator from clamping the 12 bytes to
+  FLEX's ranges, when they mean something else to the machine.
+- The other fields (`admit_track`, `assign`, `leave`, `chooser_type`,
+  `ui_tick`, `page`, `track_page`, `validate`) are optional; the table in
+  [mods/machines-ot/README.md](../mods/machines-ot/README.md) says what
+  each does, and which 0.1 does not serve yet (pools, DSP voices).
+
+Start from [examples/crush-machine-ot](../examples/crush-machine-ot): CRUSH
+plays its FLEX slot's sample through a 5-bit crusher. octabam's OCTA303
+converts onto the companion with `sdk.octabam --machines` (section 4b).
+
+### USB functions on the Octatrack (usb 0.1)
+
+`mods/usb-ot` is a companion beside core-ot 0.3.1 that owns the stock USB
+device stack's places once. A USB function (USB MIDI, USB audio, ...) is a
+mod of its own, and several combine in one build (mods/usb-ot/README.md).
+On its own usb-ot changes nothing: every reply is stock's. A function
+contributes a pointer to its record and claims its endpoints:
+
+```json
+"contribute": [{"to": "ot_usb_functions", "order": 20, "data": "00000000",
+                "relocs": [[0, "abs32", "sym:my_function", 0]]}],
+"requires": ["core", "usb"],
+"resources": {"names": ["usb:ep3-in"]}
+```
+
+The record is `struct ot_usb_function` (`#include "octatrack/usb.h"`):
+
+| field | what |
+|---|---|
+| `abi` | `OT_USB_ABI` |
+| `interfaces` | how many interfaces it adds; usb-ot numbers them after mass storage's 0, in table order |
+| `iad_class`, `iad_subclass`, `iad_protocol` | an interface association before them (class 0: none); with one in the build the device class becomes EF/02/01 |
+| `endpoints` | its bits in the ENDPT* registers (`OT_USB_EP_OUT(n)`, `OT_USB_EP_IN(n)`): CLEAR_FEATURE and completions go by them |
+| `descriptors(out, first, speed)` | writes its interface and endpoint descriptors (no association) for its first interface number `first`, at `speed` (`OT_USB_FS`, `OT_USB_HS`); returns their length. Called at the controller's init, once per configuration |
+| `init()` | the controller's init, after the composition |
+| `configured(speed)` | SET_CONFIGURATION: bring its endpoints up |
+| `down()` | a bus reset, a session end (the cable pulled), and before `configured` |
+| `set_interface(rel, alt)`, `get_interface(rel)` | its interface `rel` (0 = its first); a negative return STALLs. Without them alt 0 is the only one |
+| `setup(pkt)` | a class or vendor request for it (by interface or endpoint, or any for the device): return >0 once it sent or ACKed |
+| `irq(complete)` | its endpoints' completions, from the USB interrupt; clear the bits it takes in `OT_USB_ENDPTCOMPLETE` |
+
+usb-ot exports `ot_usb_speed`, `ot_usb_first_interface`, `ot_usb_flush`
+(a bounded flush, then the completions cleared), `ot_usb_ack`,
+`ot_usb_stall`, `ot_usb_send(len, data)` (EP0 data, at most wLength) and
+`ot_usb_irq_off` / `ot_usb_irq_restore`. Memory the controller reads or
+writes must be reached through `OT_USB_UNCACHED(p)`. EP0 is usb-ot's and
+EP1 is mass storage's. `mods/usb-midi-ot` is the example: two interfaces
+under an association, EP2 both ways. `mods/usb-audio-ot` is an
+isochronous one: a UAC2 AudioControl and AudioStreaming interface (alt 0
+and alt 1, through `set_interface` and `get_interface`), its clock's
+requests through `setup`, and EP3 IN fed from core-ot 0.4's
+`ev_frame_end`. One source builds its five layouts: the variants' folders
+hold a `mod.json` each, with the layout in `cflags`.
+
+The USB files of irpina/octabam2elemod v1.0 patch these places themselves,
+so the linker refuses usb-ot beside them.
 
 ### SRC machines (core 2.1, Digitakt mk1)
 
@@ -635,7 +766,7 @@ The page (`struct cm_ui`, 336 bytes; `digitakt-mk1/core3.h`):
 
 | offset | field | |
 |---|---|---|
-| +0 | abi | `cm_ui_v3`, which machine-pages exports: the machine links only beside it; `cm_ui_v31` for a page with a knob that draws itself (`CM_DRAW`), which only machine-pages 1.1 and newer export; `cm_ui_v32` for a page with extra values (below), machine-pages 1.2 and newer |
+| +0 | abi | `cm_ui_v3`, which machine-pages exports: the machine links only beside it; `cm_ui_v31` for a page with a knob that draws itself (`CM_DRAW`), which only machine-pages 1.1 and newer export; `cm_ui_v32` for a page with extra values (below), machine-pages 1.2 and newer; `cm_ui_v33` for one whose extra values have MIDI CCs, 1.4 and newer |
 | +4 | page_from | the stock machine whose SRC page it copies (byte): 3 SLICE, 0 ONESHOT |
 | +5, +6 | | 0 |
 | +8 | group | the LFO page's group for its parameters, or 0 for the stock one |
@@ -650,6 +781,8 @@ A knob (`struct cm_knob`); a 0 field is the stock one:
 | +8, +12 | lfo, lfo_long | its names on the LFO page: the DEST box's, and the DEST list's (0: name and lname; a blank knob reads "Unused") |
 | +16 | look | the parameter id whose UI record and graphic it borrows (byte): how a turn moves it, its knob |
 | +17 | flags | 1 blank (it shows and turns nothing), 2 the range min-max, 4 the default def, 8 knob D is not a sample (turning it does not open the sample list; from machine-pages 1.3, SRC keeps a one-page machine's page instead of stepping to the empty waveform view), 16 the machine draws the knob's graphic (`draw`; a `cm_ui_v31` page: on a `cm_ui_v3` page the stock graphic is drawn, and +36 is not called) |
+| +18 | cc | on an extra value of a `cm_ui_v33` page: the MIDI CC that sets it (below); else 0 |
+| +19 | | 0 |
 | +20, +24, +28 | min, max, def | 8.8 |
 | +32 | fmt | `int f(char *buf, int value, int ctx, int machine)`: its value's text into buf, returning nonzero (0: the stock text). ctx 0 is the value under a turning knob, about 5 characters; 1 the pop-up, up to 15 |
 | +36 | gfx | `int f(int value)`: the value its graphic shows, from the one the firmware gives it (both 8.8) |
@@ -703,6 +836,24 @@ and a sound with them saves as version 4 of the 160-byte record (machine-pages
 packs it; the firmware alone cannot read it back). In the render task
 `cm_src_value(track, k)` is value k after locks and LFOs. machine-pages
 claims `soundslot:46` to `soundslot:52` for them.
+
+**MIDI CCs for the extra values (machine-pages 1.4).** A page that names
+`cm_ui_v33` is a `struct cm_ui32` whose extra values may each give `cc`
+(+18), the CC that sets the value on the machine's tracks, on the track's
+channel. It is clamped to the value's range, as knobs A-H are from 1.3.
+Knobs A-H keep their stock CCs, 16-23, and give none. A CC given twice,
+or one that MIDI or a stock parameter of a track already uses, refuses
+the page. Those left are 8, 9, 11, 12, 24-31, 35-37, 39-59, 64-69, 89-92
+and 111. FX, the MIDI tracks and other machines keep the stock answer.
+NRPNs and sending a value's CC out are not given. The PARAM fixture
+(`tests/fixtures/digitakt-src-parameters`) gives its extras CC 24-30:
+
+```c
+.extra = { { .name = "P9", .look = 134, .flags = CM_RANGE | CM_DEFAULT,
+             .max = 0x7f00, .cc = 24 }, ... },
+```
+
+In assembly, `CM_KNOB cc=24`.
 
 **Sound slots on the Digitakt mk1.** A sound has 53 slots (+0x14, s16);
 stock parameters use 1-45. Slot 0 is no parameter's (an LFO's "no
@@ -1045,7 +1196,33 @@ const struct core_param my_params = {449, 450, my_get, my_delta, my_text};
   stock parameter's text).
 
 Any of the three may be 0. Entries are asked in `order`; the first that
-answers wins, then stock. A page id must be one stock does not have
+answers wins, then stock.
+
+**A page whose knobs follow the sound (core-ar2 0.6).** A page that leaves a
+knob empty for some settings of the selected sound (voice-dac's DAC FILTER
+has no RES for its 1-pole types, and neither FRQ nor RES with TYP OFF)
+contributes to `core_page_fns` instead of `core_pages`:
+
+```json
+{"to": "core_page_fns", "order": 14, "data": "00000000",
+ "relocs": [[0, "abs32", "sym:my_page_fn", 0]]}
+```
+
+```c
+static const struct core_page *my_info(int32_t page)
+{
+    return my_type() ? &my_page : &my_page_short;
+}
+const struct core_page_fn my_page_fn = {14, my_info};
+```
+
+page_info asks `info(page)` on every call, before `core_pages`, and answers
+the entry it returns (its own `page` field is not read); 0 passes to
+`core_pages` and stock. Every reader of a page calls page_info afresh (the
+knobs' draw, the knob -> id lookup of a turn), so the page follows at its
+next redraw, and an empty knob draws stock's empty-knob mark and takes no
+turn, as on stock's REVERB and DISTORTION pages. `info` runs in the UI
+task, with the C convention (d0/d1/a0/a1 scratch). A page id must be one stock does not have
 (0..11) and no other mod in the build uses (rytm2_mods use 12 and 13, the
 AE ports 14 and 15). Core only passes calls on, so a build with no entries
 behaves as stock.
@@ -1083,6 +1260,54 @@ pages; rytm2_mods and the AE ports use 20 for a key's first added page and
 30 after it. A view holds 16 pages at most. Deeper hooks inside these routines (a mod that rewrites
 one value's text further in) still work: core resumes each routine where
 its own jump ends.
+
+### Parameter pages (core-a4 0.2, Analog Four MKII)
+
+core-a4 0.2 has core-ar2 0.4's `core_pages` and `core_params` at the A4's
+four routines, with the same calls and answers as above, and core-ar2's
+`core_audio_load`. With `elekloader/sdk/include/analog-four-mk2/pages.h`
+(and `load.h`):
+
+| routine | entry (OS 1.56) |
+|---|---|
+| page_info(page) | 0x400f6212 |
+| page_get_value(view, id, lock) | 0x40023d54 |
+| param_apply_delta(view, id, delta, func) | 0x400232e2 |
+| param_value_text(obj, id, value, buf) | 0x4009ea68 |
+
+What differs from the Rytm:
+- A page's entry has ten knobs, A..J: `struct core_page` is
+  `{page, name, ids[10]}`. Stock's pages are 0..47, so a mod's own page id
+  is 48 or more.
+- `core_view_pages` is the A4's own. Each A4 page is a view of its own (29
+  of them, indices 0..28, made by the main screen's constructor), and a
+  page key steps through a list of views for each track type. An entry is
+  `{type, key, page, shown}`: core makes a view for the page (a mod's own
+  from `core_pages`, or a stock one), gives it the next index from 29, and
+  appends it to that key's list for that track type, after stock's views
+  and in `order`:
+
+  ```c
+  const struct core_view_page my_view_page = {CORE_TRACK_SYNTH, CORE_KEY_AMP, 50, 0};
+  ```
+
+  The types are `CORE_TRACK_ALL` (MIX, PERF, ARP and NOTE), `SYNTH`, `FX`
+  and `CV`; the keys `CORE_KEY_PERF`, `ARP`, `NOTE`, `OSC1`, `OSC2` (not on
+  the FX track), `FILTERS`, `AMP`, `ENV`, `LFO` and `MIX`. `shown` works as
+  on the Rytm. A build holds 16 such views.
+- The current view is saved with the project, one index for each track
+  type. Core widens the range stock accepts for it, 0..28, to 0..44, so a
+  mod's view comes back after a power cycle or a project load; a project
+  saved on a view the build lacks opens on MIXER, stock's fallback for an
+  index with no view (stock alone opens it on PERFORMANCE).
+- Stock already keeps each track type's page when its view is shown again,
+  and shows each view's own title, so there is nothing to fix there.
+- A stock page's entry can be answered too (a `core_pages` entry with a
+  stock id), to retitle a page a mod's view follows.
+
+`examples/pages-check-a4` is the smallest mod on it: AMP PAN's value as two
+hex digits through `core_params`, and a CHECK page behind the AMP key. It
+was checked in rytm-emu's A4 build and on a unit (23 Oct 2026).
 
 ### Machines (core-ar2 0.5, Analog Rytm MKII)
 
@@ -1917,7 +2142,7 @@ free space inside its image (`image_free`: on the Octatrack, the zero runs
 octabam measured):
 
 ```json
-"fixed": [{"source": "page.s", "addr": "0x400d24d0", "symbol": "page"}]
+"fixed": [{"source": "page.s", "addr": "0x400d24e0", "symbol": "page"}]
 ```
 
 This assembles `page.s` for that address.
@@ -2117,6 +2342,30 @@ Every line of output is one of these:
 
 It needs the m68k cross binutils.
 
+The converted mods of the shop are from octabam's commit 363861e. octabam's
+later manifests declare more than the converter serves yet: settings
+(octabam's build, or BRAIN, its settings store on the unit, resolves
+them), modules that need BRAIN, DRAM regions, fixed arena bytes, stock
+bytes a module keeps (`Keep`), units in octabam's loader and a DSP build
+step of a module's own (`dsp_source`). A module that uses any of these is
+refused, with the reason. A submodule in a module's folder is another
+repository (Zac Kyoti's modules check out all of theirs): its `.asm` files
+are not the module's. So is a generated include
+written for octabam's later `include(modules, remix)`, and a module that
+links another's symbols (`CC_MODEDEF1`, `ARENA_BASE`) or requires one that
+does not convert (STORE) fails its link: nothing half-converted is written.
+
+`--sites FILE.json` converts nothing: it writes the stock code every module
+of the checkout hooks, whether or not it converts, as the code sites its
+conversion has (and the reason it is refused, if it is). That is the
+upstream list for the community's to-do list
+([Growing the core](CORE-CONTRIBUTING.md#what-is-left-to-do)):
+
+```bash
+python -m elekloader.sdk.octabam --octabam octabam --stock OCTATRACK_OS1.40C.syx \
+    --sites web/upstream/octabam.json
+```
+
 Where code goes:
 - **Floating code** goes in the core's RAM reserve. That includes the caves
   octabam floats in zero runs inside the OS image, so such a cave is the
@@ -2254,6 +2503,82 @@ unchanged; claims 0 intercepts every call.
   and the event's table holds `{0, the label}`. Every other byte is checked
   as without `--intercepts`.
 
+**As machines** (`--machines`): octabam's source machines (ANALOG BD,
+OCTA303, CXOSC, BLACKPYRAMIDS-303) each patch the same places to add their
+row to the machine chooser, so no two of them share a build. The machines
+companion (`mods/machines-ot`, "Machines on the Octatrack" above) owns
+those places for every machine. With `--machines`, a module that patches
+them becomes a machine on the companion:
+
+```bash
+python -m elekloader.sdk.octabam --octabam octabam --stock OCTATRACK_OS1.40C.syx \
+    --module octa303 --machines --out ~/octabam-mods
+```
+
+- **Which modules.** One that writes any of the machine row's places (the
+  converter's `MACHINE_SEAMS`: ANALOG BD's measured seams, which OCTA303 and
+  BLACKPYRAMIDS-303 reuse) and has an entry in `MACHINES`. Today that is
+  OCTA303 (octabam b085c4d). A module that writes those places with no
+  entry is refused with `--machines`; every other module converts exactly
+  as without it.
+- **What changes.** Its places of the row are left stock, for the
+  companion's sites. In OCTA303's case, 15 detours and 6 pokes:
+  - the Part validator;
+  - the names, by row and by machine byte;
+  - SRC SETUP's names, rows, opening row and two commits;
+  - SETUP's edit and draw columns;
+  - the chooser's row count, drawer, match, highlight, opening row, commit
+    and cursor bound;
+  - the UI loop where it published its page as row 5's.
+
+  Instead, the mod adds a record (`struct ot_machine`) to `ot_machines`,
+  generated in `glue/ob_<name>_machine.s` from what `MACHINES` reads in the
+  module's own source:
+
+  | field | OCTA303 |
+  |---|---|
+  | `sig`, `sig_lo`, `sig_hi` | "TB", 1, 1: the signature its tracks carry, as before |
+  | `label` | `o3_title`, "OCTA-303" |
+  | `flags` | `PROTECT` (what its validator wrap did) and `RENDER_FLEX` (its renderer also gets the FLEX tracks no machine owns: a TB303*-named sample plays the 303, as before) |
+  | `page` | the page record `o3_mdesc` builds, a clone of the user's FLEX record |
+  | `track_page`, `ui_tick` | `o3_mdesc`: the companion's 60 Hz tick builds the page, as its own tick did |
+  | `defaults` | `o3_mdefs` |
+  | `assign` | glue around `o3_sigwrite`, which signs and unsigns a track as before (the defaults, the battery copy, the live lane) |
+  | `render` | `sy_render`, which octabam put in the renderer kind table's FLEX entry (`0x400d6438`); that entry is left stock |
+- **Its source.** The one line that names the FLEX renderer it calls
+  (`STOCK_RENDER`, `0x40004008`, now the companion's site) names
+  `ot_stock_render`, so the renderer does not call itself. The names the
+  record needs are appended to the source as `ob_<name>_*` aliases of its
+  labels. Nothing else changes, and its code for the places it leaves stock
+  stays in it, unreached.
+- **The rest.** Its detours at the intercepts' sites go on the intercepts
+  (OCTA303's CHROMATIC pitch, `ev_chromatic_pitch`). Its other sites stay
+  its own: OCTA303's hook at the PLAYBACK page load (`0x40031ece`, for a
+  TB303*-named sample) and its retrig (`0x4000c634`). SYNTH MACHINE has
+  sites at both, so the two still do not combine.
+- **Versions.** Such a mod is versioned `<commit>-machines` and requires
+  `["core", "intercepts", "machines"]` (intercepts only when it has a
+  detour there).
+- **The check** links it with the core, the intercepts and the companion
+  (built from `mods/machines-ot`, or `--machines-mod`) and proves:
+  - each byte of its places of the row, and of the kind-table entry, is a
+    byte of one of the companion's sites or stock, and none is a site of
+    its own;
+  - the record holds what `MACHINES` says, field by field, and the name it
+    points at is the name;
+  - its source assembles to octabam's bytes but for its calls to the
+    renderer, which name `ot_stock_render`, and nothing in the linked mod
+    calls the renderer's entry.
+- **Checked in ot_emu**, with core-ot 0.3.1, the intercepts and the
+  companion, alone and with CRUSH beside it:
+  - the chooser lists OCTA-303 below PICKUP (and scrolls to it below CRUSH);
+  - YES signs track 1 "TB" 1, a FLEX track, in the Part and its battery
+    copy, with OCTA303's defaults;
+  - the SRC page reads TUNE CUT RES ENV DEC ACC under "OCTA-303", and
+    PLAYBACK SETUP reads WAVE GATE FINE SLID DRIV ACCV;
+  - a trig plays through `sy_render` on every render call;
+  - FLEX again unsigns the track.
+
 What does not convert, and why:
 - **DSP code.** Modules with DSP code or an FX menu entry are out of scope,
   but for hook-only DSP code in a remix (above).
@@ -2265,6 +2590,9 @@ What does not convert, and why:
   inside data the device marks `relocatable` (below). The 16 KB below
   `0x400e21e0` stay stock; octabam also places the bootstrap copy there
   (`~0x400de7dc`).
+- **Writes into bytes the device keeps stock** (`keep`), and units pinned
+  there. These are the 16 bytes at `0x400d24d0`, which the stock DELAY
+  reads (octabam #771). A cave pinned there goes in `.run` instead (below).
 - **Modules that serve DSP modules only.** These are MODE DEFAULTS, RIG
   HOSTS and TEMPO BUS (`SERVES_DSP` in the converter, with the reasons).
   Converted alone, they would be inert, or they would point parts at
@@ -2283,6 +2611,19 @@ Some differences from an octabam build, by design:
 - **Claims** (Part window, SRAM) become one named resource per 16-byte
   block. Overlapping claims share a name, so the linker refuses the pair,
   as octabam's ledger does for MIDI SCENES and SCENES P2.
+- **A cave pinned on bytes the device keeps stock** goes in `.run`, as a
+  floating cave would. SYNTH MACHINE before octabam's `PLACE` setting
+  (363861e) pins its page cave at `0x400d24d0`; octabam's own fix, `PLACE`
+  = DRAM, links the same `page.s` into its runtime.
+  - Emit's pokes are taken at the pin. One that holds an address in the
+    cave becomes a `jmp`/`jsr`/`ptr` site against it: SYNTH's resolver at
+    `0x40031ece` jumps to the page in `.run`.
+  - The check links the source at its pin, where it must equal the bytes
+    the manifest ratifies. It then proves that the copy in `.run` differs
+    from that only in pointers into itself, moved by the distance. A word
+    that points into the cave at its pin and stays put is an address the
+    source pins, and the check refuses it.
+  - The bytes at the pin stay stock.
 - **A `jmp` detour** whose six bytes end inside an instruction is
   nop-padded to that instruction's end.
 - **A poke into relocatable data** (the device profile's `relocatable`) is
@@ -2312,6 +2653,9 @@ Some differences from an octabam build, by design:
 |---|---|---|
 | `made for a firmware elekloader does not know` | the target or stock file is not a supported release | use the exact stock file; check its hash against `devices/` |
 | `is made for <device> 1.53; the stock file is <device> 1.54` / `mod.json is for ... 1.53; the stock file is ... 1.54` | the mod is for another OS version | build it for that OS: a port (3.10) |
+| `is inside 0x...-0x..., ...: protected on the <device>` | the site writes bytes the device protects (the Octatrack's bootloader copy) | move it; the device's profile (docs/DEVICES.md) gives the range and the reason |
+| `writes into 0x...-0x..., which stays stock on the <device>: ...` | the site, or `fixed` code (SDK), writes bytes that look free but the OS reads: the Octatrack's 16 bytes at `0x400d24d0`, read by the stock DELAY | put the code in `.run`, or `fixed` past the range (`0x400d24e0` on); the message gives the reason |
+| `0x...-0x... differs from stock, and no site, DSP section or table of the mods declares it` / `... is not stock in the linked image` | the linker built a main OS in which bytes changed that no mod declared, or that the device keeps stock: a bug in the linker, not in your mod | report it with the mods and the stock file's version; the build refuses rather than write the file |
 | `the stock bytes are ..., not ...` (SDK) / `not the ones it expects` | the address is wrong, or the OS version differs | re-read the stock bytes at that address |
 | `ends mid-instruction`, `sweeps land on the start`, `does not decode` | the site does not cover whole instructions | move or widen the site to instruction boundaries (disassemble the stock main OS) |
 | `... overlap (0x...-0x...)` | another mod patches or claims those bytes | subscribe to an event instead, agree with that mod's author, or propose the site as a core event ([CORE-CONTRIBUTING.md](CORE-CONTRIBUTING.md)) |

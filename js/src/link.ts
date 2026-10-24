@@ -11,7 +11,7 @@
 // sections of 24-bit little-endian words, and declare DSP tables (a collection with "space": "dsp.<payload>"). They are
 // placed in the P words of that payload a mod frees by claiming the area's name (the profile's dspAreas); a symbol there
 // is a DSP word address, and a `dsp24` relocation writes one as three little-endian bytes.
-import { concat, sha } from './bytes.ts'
+import { concat, equal, sha } from './bytes.ts'
 import { type Device, type Range, type Release, imageEnd, linkable } from './devices.ts'
 import { pSpan } from './dsp.ts'
 import {
@@ -398,6 +398,48 @@ export function check(mods: Mod2[], image: Uint8Array): string[] {
 
 /** Sites of other mods inside a copied block: no PC-relative operand, no relative branch, whole instructions in the
  * patched image. */
+/** The linker's last check, on the image it built, against the stock one. It trusts none of the layout that
+ *  built the image; it only compares (link.py's image_problems, the same lines). */
+export function imageProblems(dev: Device, stock: Uint8Array, img: Uint8Array, declared: [number, number, string][], tailAt: number): string[] {
+  const ml = dev.mainLoad, n = stock.length
+  const bad: string[] = []
+  if (tailAt !== ml + n) bad.push(`the appended code starts at ${hex8(tailAt)}, not at the end of the stock image, ${hex8(ml + n)}`)
+  if (img.length < n) {
+    bad.push(`the linked image (${img.length} bytes) is shorter than the stock main OS (${n} bytes)`)
+    return bad
+  }
+  const probe = img.slice(0, n)
+  for (const [lo, hi, what] of declared) {
+    if (lo < ml || hi > ml + n) {
+      bad.push(`${what} lies outside the stock image`)
+      continue
+    }
+    probe.set(stock.subarray(lo - ml, hi - ml), lo - ml)
+  }
+  if (!equal(probe, stock)) {
+    const runs: [number, number][] = []
+    let i = 0
+    while (i < n) {
+      if (probe[i] === stock[i]) {
+        i++
+        continue
+      }
+      let j = i
+      while (j < n && probe[j] !== stock[j]) j++
+      runs.push([ml + i, ml + j])
+      i = j
+    }
+    for (const [lo, hi] of runs.slice(0, 8))
+      bad.push(`${hex8(lo)}-${hex8(hi)} differs from stock, and no site, DSP section or table of the mods declares it`)
+    if (runs.length > 8) bad.push(`${runs.length - 8} more runs of bytes differ from stock outside every declaration`)
+  }
+  for (const [lo, hi, why] of [...dev.protected, ...dev.keep]) {
+    if (!equal(img.subarray(lo - ml, hi - ml), stock.subarray(lo - ml, hi - ml)))
+      bad.push(`${hex8(lo)}-${hex8(hi)} (${why}) is not stock in the linked image`)
+  }
+  return bad
+}
+
 function copiedRules(mods: Mod2[], patched: Uint8Array, dev: Device): string[] {
   const bad: string[] = []
   const read = readerAt(patched, dev.mainLoad)
@@ -768,6 +810,21 @@ export function link(mods: Mod2[], image: Uint8Array, lock: store.Lock | null = 
       }
     }
   }
+  const declared: [number, number, string][] = []
+  for (const m of order) for (const s of m.sites) declared.push([s.addr, s.addr + s.len, `${m.label()} site ${hex8(s.addr)}`])
+  for (const [k, tag] of [...dspSecs].sort((a, b) => base.get(a[0])! - base.get(b[0])!)) {
+    const words = Math.floor((content.get(k)?.length ?? 0) / 3)
+    if (words) {
+      const at = pSpan(image, dev, tag, base.get(k)!, base.get(k)! + words)
+      declared.push([at, at + 3 * words, k.replace('\0', ' ')])
+    }
+  }
+  for (const c of [...dspTables.keys()].sort(cmp)) {
+    const words = Math.floor(tab.get(c)!.length / 3)
+    const at = pSpan(image, dev, dspTables.get(c)![0], tabAt.get(c)!, tabAt.get(c)! + words)
+    declared.push([at, at + 3 * words, `the table ${c}`])
+  }
+  bad.push(...imageProblems(dev, image, img, declared, end))
   if (bad.length) throw new ModError('the linked mods break a rule:\n  ' + bad.join('\n  '))
 
   const map = new Map<string, number>()

@@ -91,7 +91,7 @@ export function write(stock: Parsed, storedMain: Uint8Array, dev: Device, versio
 }
 
 /** Re-read every output with the decoder and refuse it unless only the main OS (and the version field) changed,
- * and the protected ranges are stock's. -> facts. */
+ * and the protected and kept ranges are stock's. -> facts. */
 export function verify(outputs: Outputs, stock: Parsed, wantMain: Uint8Array, dev: Device, version: string | null = null) {
   const stockMain = mainImage(stock, dev)
   let facts: Record<string, any>
@@ -108,7 +108,7 @@ export function verify(outputs: Outputs, stock: Parsed, wantMain: Uint8Array, de
     if (e instanceof syx.SyxError || e instanceof elek.ElekError) throw new FormatError(e.message)
     throw e
   }
-  for (const [lo, hi, why] of dev.protected) {
+  for (const [lo, hi, why] of [...dev.protected, ...dev.keep]) {
     const a = lo - dev.mainLoad, b = hi - dev.mainLoad
     if (!equal(wantMain.subarray(a, b), stockMain.subarray(a, b)))
       throw new FormatError(`0x${hexw(lo)}-0x${hexw(hi)} (${why}) is not stock`)
