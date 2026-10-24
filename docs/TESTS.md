@@ -9,6 +9,7 @@ files never go in this repository.
 
 ```bash
 python tests/test_units.py        # needs nothing
+python tests/test_link_refusals.py   # needs nothing: every refusal of the linker, refused and passed
 ELEKLOADER_STOCK=Digitakt_OS1.53.syx ELEKLOADER_MODS=path/to/mods python tests/test_link.py
 ELEKLOADER_STOCK=... ELEKLOADER_STOCK_154=Digitakt_OS1.54.syx ELEKLOADER_MODS=... python tests/test_sdk.py   # the example needs the cross compiler
 ELEKLOADER_RELEASES=folder/of/stock/files python tests/test_releases.py   # every known release, and its cores
@@ -23,6 +24,30 @@ ELEKLOADER_CATALOG_DIR=folder/of/catalog/files ELEKLOADER_STOCK=... python tests
 ELEKLOADER_STOCK=... ELEKLOADER_STOCK_154=... ELEKLOADER_OT_SYX=... ELEKLOADER_MODS=... python tests/test_gui.py   # the window, hidden (Tk)
 node tests/test_web.mjs build/site   # the web page's engine, in Pyodide (packaging/build_web.py first)
 ```
+
+## The refusal fixtures
+
+`tests/test_link_refusals.py` needs no firmware. For every message the linker
+and the mod loader can refuse with (`link.py`, and the loader's functions in
+`elemod.py`) it holds a fixture that must be refused with that message and one
+that must link: the smallest change that makes the first one pass, through
+`link.link` whole, so the image check runs on it too. The fixtures run on made-up
+releases (an image of nops as long as the real one) of three real profiles, so
+the profile's protected and kept ranges, free areas, RAM and fast SRAM are the
+ones a build meets.
+
+`test_every_refusal_has_a_fixture` reads the messages out of the sources by
+their syntax and fails for a message no row names (and for a row whose message
+is gone), so a new refusal arrives with its fixtures. `test_units.py` runs it
+too, because that is the file the workflows run. The DSP refusals need the
+real payload and keep their fixtures in `tests/test_octatrack.py`; the test
+checks their text is still there. Whole builds (format 1) have their own tests
+(`test_patcher.py`, `test_octatrack.py`) and are listed in the test, not covered
+by it.
+
+When the check that refuses is itself the thing under test (the image check
+behind the site checks), the fixture makes the earlier check say nothing, as a
+bug in it would, and expects the later one to refuse.
 
 More inputs some suites take:
 - `ELEKLOADER_CROSS`: the cross toolchain's prefix, when it is not

@@ -1,0 +1,15 @@
+{
+ "id": "settings-probe", "version": "1",
+ "license": "GPL-2.0-or-later",
+ "title": "settings probe", "category": "Test", "author": "irpina",
+ "description": "Three settings (a binary, an option, a number) for tests of settings-ot.",
+ "device": "octatrack", "os": "1.40C",
+ "sources": ["probe.c"],
+ "contribute": [
+  {"to": "ot_settings", "order": 50, "data": "00000000", "relocs": [[0, "abs32", "sym:sts_s1", 0]]},
+  {"to": "ot_settings", "order": 51, "data": "00000000", "relocs": [[0, "abs32", "sym:sts_s2", 0]]},
+  {"to": "ot_settings", "order": 52, "data": "00000000", "relocs": [[0, "abs32", "sym:sts_s3", 0]]}
+ ],
+ "requires": ["core"],
+ "resources": {"core": "0.6"}
+}

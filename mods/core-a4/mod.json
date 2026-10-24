@@ -1,10 +1,14 @@
 {
- "id": "core", "version": "0.1",
+ "id": "core", "version": "0.2",
  "license": "GPL-2.0-or-later",
  "title": "core", "category": "Framework", "author": "irpina, Iced-Cream",
- "description": "The boot copier, the hook bus and mod storage for the Analog Four MKII: every other mod needs it. The Digitakt mk1's core.s, settings.s and render.s with the A4's addresses, as core-ar2 builds them for the Analog Rytm MKII, and store.c: fields mods declare, placed by elekloader from the build's lockfile and kept in bytes stock never uses or always holds at 0. On its own it changes nothing the unit does.",
+ "description": "The boot copier, the hook bus and mod storage for the Analog Four MKII: every other mod needs it. The Digitakt mk1's core.s, settings.s and render.s with the A4's addresses, as core-ar2 builds them for the Analog Rytm MKII, store.c: fields mods declare, placed by elekloader from the build's lockfile and kept in bytes stock never uses or always holds at 0; from 0.2, pages.s: the four routines every parameter page goes through, asked through core_pages and core_params, and views behind the page keys through core_view_pages, and core-ar2's load.s: the audio interrupt's load. On its own it changes nothing the unit does.",
  "device": "analog-four-mk2", "os": "1.56",
- "sources": ["../core/core.s", "../core/settings.s", "../core/render.s", "store.c", "store.s"],
+ "sources": ["../core/core.s", "../core/settings.s", "../core/render.s", "store.c", "store.s", "pages.s", "../core-ar2/load.s"],
+ "subscribe": [
+  {"event": "ev_render_in", "fn": "core_load_in", "order": 0},
+  {"event": "ev_render_out", "fn": "core_load_out", "order": 100}
+ ],
  "defsym": {
   "DRAWALL": "0x400625ca",
   "KEYDISP": "0x40098b36",
@@ -17,7 +21,23 @@
   "PPMSR0": "0xFC04002D",
   "VBR_FN": "0x40002064",
   "SETTINGS_RET": "0x400d05d8",
-  "RENDER_FRAME": "0xec"
+  "RENDER_FRAME": "0xec",
+  "PAGE_INFO_RET": "0x400f6218",
+  "GET_RET": "0x40023d5c",
+  "DELTA_RET": "0x400232ea",
+  "TEXT_RET": "0x4009ea70",
+  "VIEW_INVALIDATE": "0x40061a58",
+  "VIEW_CTOR": "0x4002522c",
+  "SP_MAKE": "0x40171460",
+  "MAP_SLOT": "0x40171da8",
+  "SP_MOVE": "0x401713e0",
+  "SP_RELEASE": "0x40144764",
+  "TYPE_MAP": "0x40172bae",
+  "KEY_MAP": "0x40171b9e",
+  "VEC_PUSH": "0x40171558",
+  "VIEWS_RET": "0x400c2378",
+  "SET_VIEW": "0x400bea38",
+  "CYCLE_RET": "0x400c420a"
  },
  "sites": [
   {"addr": "0x40001180", "stock": "4eb940002064", "op": "jsr", "target": "boot"},
@@ -55,8 +75,19 @@
   {"addr": "0x400b40ee", "stock": "4eb940009b9c", "op": "keep2", "target": "st_track_save"},
   {"addr": "0x400a19f6", "stock": "4eb940009834", "op": "keep2", "target": "st_settings_save"},
   {"addr": "0x400a2fda", "stock": "4eb94000a1e6", "op": "keep2", "target": "st_lock_save"},
-  {"addr": "0x400a2ff6", "stock": "4eb94000a02c", "op": "keep2", "target": "st_locks_save"}
+  {"addr": "0x400a2ff6", "stock": "4eb94000a02c", "op": "keep2", "target": "st_locks_save"},
+  {"addr": "0x400f6212", "stock": "722f202f0004", "op": "jmp", "target": "core_page_info"},
+  {"addr": "0x40023d54", "stock": "4feffff448d7040c", "op": "jmp", "target": "core_param_get"},
+  {"addr": "0x400232e2", "stock": "4feffff448d7040c", "op": "jmp", "target": "core_param_delta"},
+  {"addr": "0x4009ea68", "stock": "2f032f02242f0014", "op": "jmp", "target": "core_param_text"},
+  {"addr": "0x400c2370", "stock": "4fef000c206e0008", "op": "jmp", "target": "core_views"},
+  {"addr": "0x400c4202", "stock": "2f102f0a4ebaa830", "op": "jmp", "target": "core_cycle"},
+  {"addr": "0x400add22", "stock": "701c", "op": "bytes", "new": "702c", "kind": "code"},
+  {"addr": "0x400add28", "stock": "741c", "op": "bytes", "new": "742c", "kind": "code"},
+  {"addr": "0x4000a758", "stock": "701c", "op": "bytes", "new": "702c", "kind": "code"},
+  {"addr": "0x4000a774", "stock": "741c", "op": "bytes", "new": "742c", "kind": "code"},
+  {"addr": "0x4000a790", "stock": "701c", "op": "bytes", "new": "702c", "kind": "code"}
  ],
- "collections": {"ev_tick": 4, "ev_draw": 4, "ev_key": 4, "ev_enc": 4, "ev_settings": 4, "ev_render_in": 4, "ev_render_out": 4, "ev_project": 4, "core_store_ids": 4},
+ "collections": {"ev_tick": 4, "ev_draw": 4, "ev_key": 4, "ev_enc": 4, "ev_settings": 4, "ev_render_in": 4, "ev_render_out": 4, "ev_project": 4, "core_store_ids": 4, "core_pages": 4, "core_params": 4, "core_view_pages": 4},
  "resources": {"names": ["timer:DTIM0"]}
 }

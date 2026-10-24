@@ -1,0 +1,17 @@
+{
+ "id": "usb-audio", "version": "0.1",
+ "license": "GPL-2.0-or-later",
+ "title": "USB Audio Out (tracks, MAIN, CUE)", "category": "MIDI and USB", "author": "irpina",
+ "description": "The Octatrack as a 20-channel USB audio input (UAC2, 44.1 kHz, 24-bit) on its own USB port, as a function of usb-ot: tracks 1-8 post-FX before their level on channels 1-16, MAIN on 17-18 and CUE on 19-20 at high speed; the tracks' stereo sum at full speed. It combines with USB MIDI. Built on what sambanks/octabam's USB audio found (the taps, the MAIN and CUE alignment, the rate servo, the first poll's cushion).",
+ "device": "octatrack", "os": "1.40C",
+ "sources": ["usbaudio.c"],
+ "cflags": ["-DUSBA_LAYOUT=0"],
+ "contribute": [
+  {"to": "ot_usb_functions", "order": 30, "data": "00000000", "relocs": [[0, "abs32", "sym:usb_audio", 0]]}
+ ],
+ "subscribe": [
+  {"event": "ev_frame_end", "fn": "usba_frame", "order": 50}
+ ],
+ "requires": ["core", "usb"],
+ "resources": {"core": "0.4", "names": ["usb:ep3-in"]}
+}

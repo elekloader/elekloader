@@ -36,7 +36,7 @@ There is one core file per device and OS:
 | Analog Rytm MKII | 1.73 | `core-ar2-0.2.elemod` | not released: the last core with 1.73; build it from commit 92a99c9 ([below](#building-a-core)) |
 | Analog Rytm MKII | 1.74 | `core-ar2-0.3.elemod` | the [core-ar2-v0.3](https://github.com/irpina/elekloader/releases/tag/core-ar2-v0.3) pre-release, and the shop; 1.74 only |
 | Analog Rytm MKII | 1.74 | `core-ar2-0.5.elemod` | not released: build it ([below](#building-a-core)); 1.74 only. Mods with pages built for 0.3 (rytm2_mods v1.2's lfo-rnd, voice-dac, euclid-accents, velocity-humanise, comp-preview) do not link with it: their sites overlap core's page sites |
-| Analog Four MKII | 1.56 | `core-a4-0.1.elemod` | a proof of concept, not released: build it ([below](#building-a-core)) |
+| Analog Four MKII | 1.56 | `core-a4-0.2.elemod` | a proof of concept, not released: build it ([below](#building-a-core)) |
 | Octatrack MKI, MKII | 1.40C | `core-ot-0.1.elemod` | the latest release (v0.4.0); PURGE SAMPLES freezes the unit with it, fixed in 0.3.1 |
 | Octatrack MKI, MKII | 1.40C | `core-ot-0.3.1.elemod` | the [core-ot-v0.3.1](https://github.com/irpina/elekloader/releases/tag/core-ot-v0.3.1) pre-release, and the shop: with the hook bus (0.2) and the sized reserve (0.3), neither released on its own |
 | Octatrack MKI, MKII | 1.40C | `core-ot-0.4.elemod` | not released yet: the frame's end and MIDI out (`ev_frame_end`, `ev_midi_out`, `ev_midi_out_rt`) |
@@ -144,7 +144,9 @@ core.
   own in one of the hidden slots 34..43, written into the machine table and
   the slot's parameter records at boot, and the linker refuses two mods
   that take one slot ("Machines (core-ar2 0.5, Analog Rytm MKII)" in
-  ADAPTING.md). No firmware exports.
+  ADAPTING.md). From 0.6, a page's entry can come from a function
+  (`core_page_fns`), so its knobs can follow the selected sound. No
+  firmware exports.
 - **Analog Four MKII** ([mods/core-a4](../mods/core-a4)): core-ar2 0.3
   with the A4's addresses, every one measured on the A4's own image: the
   same hook bus (tick about 20 a second, draw, key, encoder, SETTINGS,
@@ -153,7 +155,12 @@ core.
   sounds, kits, global slots and songs that the stock OS never uses
   ([mods/core-a4](../mods/core-a4) has where). Checked in rytm-emu's A4
   build; on a unit, the hook bus with hooks-check-a4 and mod storage with
-  store-check-a4.
+  store-check-a4. From 0.2, core-ar2 0.4's parameter routines: core owns
+  the entries of the four page routines and asks the mods' `core_pages` and
+  `core_params` entries, adds the views mods list in `core_view_pages`
+  behind the page keys (each A4 page is a view of its own), and
+  `core_audio_load` ("Parameter pages (core-a4 0.2, Analog Four MKII)" in
+  ADAPTING.md).
 - **Octatrack** ([mods/core-ot](../mods/core-ot)): a source of its own. It
   reserves RAM for mods, copies their code there, and from 0.2 has a hook
   bus with the Octatrack's events; from 0.3 it reserves only the RAM the mods
@@ -162,7 +169,17 @@ core.
   and [mods/intercepts-ot](../mods/intercepts-ot) (intercepts, with 0.3.1) gives
   places a mod intercepts (MIDI notes, the CHROMATIC keyboard, locks and knobs,
   the project file) to the one mod whose record claims each, with Modwerk's
-  Octatrack base's events and names.
+  Octatrack base's events and names. [mods/machines-ot](../mods/machines-ot)
+  (machines, with 0.3.1) gives source machines the chooser, SRC SETUP, the
+  page resolver, the Part validator and the FLEX renderer, so several combine
+  (`ot_machines`, the record of Modwerk's base of the same name).
+  [mods/usb-ot](../mods/usb-ot) (usb, with 0.3.1) owns the stock USB stack's
+  places for USB functions, mods of their own that combine:
+  [mods/usb-midi-ot](../mods/usb-midi-ot) (USB MIDI, with 0.4) is the first,
+  and [mods/usb-audio-ot](../mods/usb-audio-ot) (USB audio out, with 0.4, in
+  five layouts) the second. [mods/settings-ot](../mods/settings-ot)
+  (settings, with 0.6) puts every mod's settings in a MODS category of the
+  MAIN MENU and keeps them on the card or with the project.
 - **Model:Cycles, Model:Samples** ([mods/core-mc](../mods/core-mc),
   [mods/core-ms](../mods/core-ms)): the shared core.s with the hook bus's
   tick, draw, key and encoder events. Their OS entry makes its SRAM copy and
@@ -206,6 +223,7 @@ python -m elekloader.sdk.build mods/core-ot --stock OCTATRACK_OS1.40C.syx       
 python -m elekloader.sdk.build mods/core-mc --stock Model_Cycles_OS1.13.syx                  # the Model:Cycles'
 python -m elekloader.sdk.build mods/core-ms --stock Model_Samples_OS1.13.syx                 # the Model:Samples'
 python -m elekloader.sdk.build mods/dspbus-ot --stock OCTATRACK_OS1.40C.syx                  # its DSP bus (optional)
+python -m elekloader.sdk.build mods/usb-ot --stock OCTATRACK_OS1.40C.syx                     # its USB companion (optional)
 ```
 
 The SDK writes `out/core-<version>.elemod`; a release renames each as the
