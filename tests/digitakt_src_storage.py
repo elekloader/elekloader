@@ -128,6 +128,40 @@ def probe_storage(stock_path, Machine, call, pc_register):
     stock_ok = [i for i in range(172) if native(linked.map['mp_stock_sound_parameter'], [i])]
     assert stock_ok == list(range(30, 70)), stock_ok
 
+    # MIDI CCs (machine-pages 1.4) through the lookup 0x4007919e(source, machine, cc), whose tables
+    # the constructor above built. An extra's CC answers only on an audio track, outside knobs A-H
+    # (16-23, core's bank), where the stock's generic table has nothing.
+    # Refused: a CC on a cm_ui_v32 page, on knob A, 120 (a channel mode), twice, 94 (Mute), 74 (Filter).
+    for machine in (109, 110, 111, 112, 113, 114):
+        assert native(linked.map['mp_src_for'], [machine]) == 0
+    assert native(linked.map['mp_src_for'], [115]) != 0
+    audio = 0x4199F85C if release.version == '1.53' else 0x419A085C
+    table = struct.unpack('>128I', m.uc.mem_read(audio, 512))
+    declared = {120: {24 + k: 164 + k for k in range(EXTRAS)}, 115: {9: 165}}
+    for machine in (0, 3, 115, 119, 120, 121, 122):
+        params = machine if machine <= 3 else 0 if machine == 119 else 3
+        for source in range(8):
+            for cc in range(128):
+                if 16 <= cc <= 23:
+                    want = 108 + 8 * params + cc - 16
+                else:
+                    want = table[cc] or declared.get(machine, {}).get(cc, 0)
+                assert native(0x4007919E, [source, machine, cc]) == want, (machine, source, cc)
+    for source in range(8, 17):  # MIDI tracks and FX: the machine never matters
+        for cc in range(128):
+            assert native(0x4007919E, [source, 120, cc]) == native(0x4007919E, [source, 0, cc])
+    for cc in (128, 255):
+        assert native(0x4007919E, [0, 120, cc]) == 0
+    assert native(0x4007919E, [16, 120, 24]) == 78   # the FX channel's CC 24: the reverb's pre-delay
+    # The CCs a page may give: none the generic table, a stock descriptor or MIDI itself assigns.
+    named = set()
+    for i in list(range(70)) + list(range(108, 140)):
+        named.update(struct.unpack('>2h', m.uc.mem_read(descriptor + 52 * i + 24, 4)))
+    free_ccs = [cc for cc in range(1, 120) if not table[cc] and cc not in named and
+                cc != 32 and not 96 <= cc <= 101]
+    assert free_ccs == [8, 9, 11, 12] + list(range(24, 32)) + list(range(35, 38)) + list(range(39, 60)) + \
+        list(range(64, 70)) + list(range(89, 93)) + [111], free_ccs
+
     # These are the native sound reference and parameter objects used by a
     # view; call its encoder scaler/setter, rather than writing sound words.
     parameter, reference = 0x43600100, 0x43600200
@@ -810,4 +844,8 @@ def probe_storage(stock_path, Machine, call, pc_register):
         'native_machine_reset_uses_metadata_defaults': True,
         'native_parameter_sync_keeps_version_4_records_packed': True,
         'randomize_reload_extra_ownership_is_machine_specific': True,
+        'midi_cc_lookup_answers_declared_extras_on_audio_tracks_only_where_stock_has_none': True,
+        'midi_cc_lookup_unchanged_for_stock_machines_midi_tracks_fx_and_knobs_a_h': True,
+        'invalid_cc_declarations_rejected_by_companion': True,
+        'ccs_free_on_an_audio_track': free_ccs,
     }
