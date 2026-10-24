@@ -1,0 +1,27 @@
+{
+ "id": "store-probe", "version": "1",
+ "license": "GPL-2.0-or-later",
+ "title": "store probe", "category": "Test", "author": "irpina",
+ "description": "A probe of core-ot 0.6's store and lifecycle events, for tests/probe_octatrack_store.py.",
+ "device": "octatrack", "os": "1.40C",
+ "sources": ["probe.c"],
+ "contribute": [
+  {"to": "core_projdata", "order": 50, "data": "00000000", "relocs": [[0, "abs32", "sym:stp_proj", 0]]},
+  {"to": "core_carddata", "order": 50, "data": "00000000", "relocs": [[0, "abs32", "sym:stp_card", 0]]},
+  {"to": "ot_sram", "order": 50, "data": "00000000", "relocs": [[0, "abs32", "sym:stp_sram", 0]]}
+ ],
+ "subscribe": [
+  {"event": "ev_project", "fn": "stp_project", "order": 50},
+  {"event": "ev_banks_load", "fn": "stp_banks_load", "order": 50},
+  {"event": "ev_banks_write", "fn": "stp_banks_write", "order": 50},
+  {"event": "ev_project_store", "fn": "stp_store", "order": 50},
+  {"event": "ev_project_reload", "fn": "stp_reload", "order": 50},
+  {"event": "ev_cs1_bank", "fn": "stp_cs1_bank", "order": 50},
+  {"event": "ev_part_saved", "fn": "stp_part_saved", "order": 50},
+  {"event": "ev_part_cleared", "fn": "stp_part_cleared", "order": 50},
+  {"event": "ev_boot_done", "fn": "stp_boot_done", "order": 50},
+  {"event": "ev_tick", "fn": "stp_tick", "order": 50}
+ ],
+ "requires": ["core"],
+ "resources": {"core": "0.6", "names": ["projdata:STPP", "carddata:STPC", "cs1:STPS"]}
+}

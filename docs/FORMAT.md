@@ -84,6 +84,13 @@ A format-2 mod is a relocatable object:
    - The core's `boot` copies the RAM image and zeroes `.bss`, using the
      symbols the linker defines: `__run_load`, `__run_start`,
      `__run_words`, `__bss_start`, `__bss_end`, `__bss_words`.
+   - `__run_hash` is the hash of the RAM image (everything `boot` copies, as
+     32-bit big-endian words): h = 5381, then h = h·33 + word, mod 2³² per
+     word (`link.run_hash`). A core can read its copy back and halt on a
+     mismatch (core-ot 0.7.1). Only the core's `.boot` (and a site) can name
+     it: it is computed from the RAM image, so a `.run`, `.fast` or table
+     entry that refers to it is refused as "refers to `__run_hash`, which
+     nothing defines".
    - On a device whose RAM for mods is taken from the OS (the profile's
      `reserve`: the Octatrack's sample memory), a core may take only what
      the mods use. When a mod imports one of the profile's reserve
@@ -107,7 +114,8 @@ A format-2 mod is a relocatable object:
    as an absolute symbol, its descriptor.
 4. **Relocates** the sections, the table entries and the sites.
 5. **Checks again** on the result: code sites are still whole
-   instructions, and the copied-block rules hold.
+   instructions, the copied-block rules hold, and the image is what the
+   mods declared ("The finished image" below).
 
 ### Checks
 
@@ -132,6 +140,18 @@ Nothing is built unless all of these pass:
   - avoid every byte a fix-up claims;
   - decode as whole instructions with no PC-relative operand and no relative
     branch, because it will run from the copy.
+- **The finished image.** The linker compares the main OS it built with the
+  stock one and builds nothing in which:
+  - a byte differs from stock outside every mod's site, every DSP section
+    and DSP table the linker placed, and the appended code (the core's
+    `.boot`, the RAM image, the lockfile's trailer);
+  - the appended code does not begin at the stock image's end;
+  - a declared span lies outside the stock image;
+  - a byte of the device's protected or kept ranges differs from stock.
+
+  This check trusts none of the layout that built the image, so it catches
+  the linker's own mistakes; a mod author meets it only through a bug
+  (docs/ADAPTING.md, section 5).
 - **DSP code** (below). A mod with DSP code or a DSP table needs the mod
   that frees that payload's area; no other mod's site may touch the area;
   the code and tables fit in it; `dsp24` relocations are only in DSP
@@ -247,7 +267,10 @@ and the table `core_store_ids` (entry 4, filled by the linker: below); no
 The Analog Four MKII's core (core-a4 0.1, OS 1.56) has core-ar2 0.3's
 events, `ev_project` and `core_store_ids`, at 0x40098898, 0x40098900,
 0x400999f8, 0x40099a40, 0x400d05d2, 0x401013c6 and 0x401040f6
-(`mods/core-a4/mod.json`), and no `.fast` code either.
+(`mods/core-a4/mod.json`), and no `.fast` code either. From 0.2 it declares
+`core_pages`, `core_params` and `core_view_pages` too (0x400f6212,
+0x40023d54, 0x400232e2 and 0x4009ea68; the views at 0x400c2370 and
+0x400c4202), its view entries the A4's own.
 
 The core mod patches each shared site once. It calls the handlers
 subscribed to that event, from a table built by the linker, in order.
@@ -277,6 +300,21 @@ same conventions (docs/ADAPTING.md, "The hook bus on the Octatrack"):
 | `ev_enc` | 0x40061e00, `enc(encoder, delta)` | `int f(encoder, delta)`; nonzero: taken |
 | `ev_midi` | 0x40005572, the MIDI thread's handler call | `int f(msg)`; nonzero: taken |
 | `ev_frame` | 0x4000d94e, the frame interrupt, every 16 samples | `void f(void)` |
+| `ev_frame_end` (0.4) | 0x4000d9a6, the frame interrupt's last point | `void f(void)` |
+| `ev_midi_out` (0.4) | 0x40010bd0, in `midi_send` | `void f(msg, len)` |
+| `ev_midi_out_rt` (0.4) | 0x400108c4, the priority sender | `void f(byte)` |
+| `ev_frame_begin` (0.5) | 0x4000aad0, the frame interrupt's entry | `void f(void)` |
+| `ev_transport` (0.5) | 0x4009c3d4, 0x4009c4d4 and 0x4009f5c6, the sequencer's start, resume and stop | `void f(what, playing)` |
+| `ev_boot_done`, `ev_idle` (0.5) | 0x4001fc96, main's last init call and idle loop | `void f(void)` |
+| `ev_tick120` (0.5) | 0x40055966, the key-repeat task's loop, 120 Hz | `void f(void)` |
+| `ev_voice_start` (0.7) | 0x4000c63c, the frame builder's copy of a track's DSP command byte | `unsigned f(trk, cmd)`; returns the command |
+| `ev_voice_release` (0.7) | 0x4000b4f6, the builder's AMP release | `void f(trk, word)` |
+| `ev_voice_kill` (0.7) | 0x40006862, in the voice reset routine 0x40006820 | `void f(trk)` |
+| `ev_voice_bind` (0.7) | 0x4000f4dc, in the binder 0x4000f450 | `int f(trk, voice)`; nonzero: the pointers are not written |
+| `ev_voice_seek` (0.7) | 0x4000f82c, in the binder | `int f(trk, voice, same)`; nonzero: the start counter is not bumped |
+| `ev_trig_apply` (0.7) | 0x4000c59e, where the builder's lock restore and apply paths join | `void f(trk, flags)` |
+| `ev_dsp_trig` (0.7) | 0x40004c72, in the voice record writer 0x40004bd4 | `int f(trk, flags)`; nonzero: no per-trig flag bits |
+| `ev_dsp_record` (0.7) | 0x40004d40, the same writer | `void f(trk, rec)` |
 
 An optional mod, the DSP bus (`mods/dspbus-ot`, dspbus 0.1), adds an event on
 DSP core 0. It is a DSP table, so its handlers are DSP code (`subscribe_dsp`):

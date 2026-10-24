@@ -1,0 +1,26 @@
+{
+ "id": "ttprobe",
+ "version": "1",
+ "license": "GPL-2.0-or-later",
+ "title": "trig-events probe",
+ "category": "Examples",
+ "author": "irpina",
+ "description": "Two ev_track_trig handlers that count, log and veto by a configuration poked into tp_cfg: the probe tests/probe_octatrack_track_trig.py runs in the emulator. Not a mod to ship.",
+ "device": "octatrack",
+ "os": "1.40C",
+ "sources": [
+  "probe.c"
+ ],
+ "cflags": [
+  "-Os",
+  "-fno-tree-loop-distribute-patterns"
+ ],
+ "subscribe": [
+  {"event": "ev_track_trig", "fn": "tp_handler_a", "order": 10},
+  {"event": "ev_track_trig", "fn": "tp_handler_b", "order": 90}
+ ],
+ "requires": [
+  "core",
+  "trig-events"
+ ]
+}

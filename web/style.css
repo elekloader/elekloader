@@ -441,6 +441,10 @@ details summary:hover { color: var(--text); }
   overflow-wrap: anywhere; }
 .hook strong { color: var(--text); font-weight: 600; }
 .claimed { padding: 2px 9px; border-radius: 999px; background: var(--raised); color: var(--ok); font-size: 12px; }
+/* an upstream list's sites and entries (sdk.bounties --upstream): octabam's newer modules, not in a shop file yet */
+.up { padding: 1px 7px; border: 1px dashed var(--line); border-radius: 999px; color: var(--warn); font: 600 10.5px var(--sans); }
+.hook .up { margin-left: 5px; }
+.todo-up { margin: 2px 0 0; }
 .board { display: grid; gap: 6px; margin: 4px 0 8px; padding: 0; list-style: none; max-width: 760px; }
 .board li { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; align-items: center; gap: 4px 12px;
   padding: 9px 14px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); }

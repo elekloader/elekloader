@@ -56,6 +56,9 @@ class Device:
     relocatable: tuple = ()      # ((lo, n, (ref, ...), what), ...): data in a protected range
                                  # the OS reaches only through the 4-byte operands at the refs,
                                  # and never writes, so a mod may serve its own copy instead
+    keep: tuple = ()             # ((lo, hi, why), ...): main OS bytes that look free but the OS
+                                 # reads: no site may write them (elemod.common_checks), and
+                                 # every build leaves them stock (formats.verify)
     blob_max: int = None         # the most a whole build may append (None: the flash budget)
     areas: dict = field(default_factory=dict)   # name -> (lo, hi): free at run time
     ddr: tuple = (0, 0)          # the linker's area for .run, tables and .bss

@@ -44,13 +44,17 @@ docs match its code.
   [mods/fxkit-dn1](../mods/fxkit-dn1) (what its effect mods share: a mixer,
   LFOs, p-locks in the pattern; core-dn1 4.1),
   [mods/seq-events-dn1](../mods/seq-events-dn1) (its step fire as events;
-  the Digitakt mk1's in [mods/seq-events-dt1](../mods/seq-events-dt1)),
+  the Digitakt mk1's in [mods/seq-events-dt1](../mods/seq-events-dt1), the
+  Octatrack's in [mods/seq-events-ot](../mods/seq-events-ot), with its trig
+  dispatch as an event in [mods/trig-events-ot](../mods/trig-events-ot)),
   [mods/core-dt2](../mods/core-dt2) (Digitakt II),
   [mods/core-dn2](../mods/core-dn2) (Digitone II, experimental),
   [mods/core-ar2](../mods/core-ar2) (Analog Rytm MKII),
   [mods/core-a4](../mods/core-a4) (Analog Four MKII), and
-  [mods/core-ot](../mods/core-ot) with [mods/dspbus-ot](../mods/dspbus-ot)
-  and [mods/intercepts-ot](../mods/intercepts-ot) (Octatrack).
+  [mods/core-ot](../mods/core-ot) with [mods/dspbus-ot](../mods/dspbus-ot),
+  [mods/intercepts-ot](../mods/intercepts-ot),
+  [mods/machines-ot](../mods/machines-ot) and [mods/usb-ot](../mods/usb-ot)
+  (Octatrack).
 - **A whole mod on core-dn1 3.2's exclusive audio:**
   [mods/digiswarm-dn1](../mods/digiswarm-dn1), DigiSwarm, an effects
   engine for the Digitone mk1's audio inputs (grains, micro-loops, a
@@ -75,9 +79,10 @@ docs match its code.
     subscribes to every event core-ar2 has and shows what it counts
     (`hooks-check-a4`: the same for core-a4 on the Analog Four MKII;
     `store-check-a4` checks its mod storage and `ddr-canary-a4` the DDR
-    the profile calls unused; `hooks-check-dn2` for core-dn2 on the
-    Digitone II, with rows in SETTINGS and PERSONALIZE, two key handlers in
-    order and a key it takes once armed);
+    the profile calls unused; `pages-check-a4` core-a4 0.2's parameter
+    routines; `hooks-check-dn2` for core-dn2 on the Digitone II, with rows in
+    SETTINGS and PERSONALIZE, two key handlers in order and a key it takes
+    once armed);
   - `perform-direct`, a real Digitakt II mod: [PRESET] toggles PERFORM
     without [FUNC];
   - `sine-machine`, an SRC machine for core 3.0 that names no firmware
@@ -95,7 +100,7 @@ docs match its code.
     p-locks, and an empty OS 1.44 port;
   - `dn-euclid`, the smallest Digitone mk1 mod on seq-events: track 1 fires 5
     steps of every 16, with an empty OS 1.44 port; `euclid` the same on the
-    Digitakt mk1, with an empty OS 1.54 port;
+    Digitakt mk1, with an empty OS 1.54 port, and `euclid-ot` on the Octatrack;
   - `dsp-tone-ot`, the smallest mod with code on the Octatrack's DSP: a quiet
     sawtooth in place of input A, through the DSP bus.
 

@@ -42,6 +42,6 @@ cycle).
 python -m elekloader.sdk.build mods/core-a4 --stock Analog-Four_MKII_OS1.56.syx
 python -m elekloader.sdk.build examples/ddr-canary-a4 --stock Analog-Four_MKII_OS1.56.syx
 python -m elekloader.patch --stock Analog-Four_MKII_OS1.56.syx \
-    --mod mods/core-a4/out/core-0.1.elemod --mod examples/ddr-canary-a4/out/ddr-canary-0.1.elemod \
+    --mod mods/core-a4/out/core-0.2.elemod --mod examples/ddr-canary-a4/out/ddr-canary-0.1.elemod \
     --out a4-canary.syx --version CA56
 ```

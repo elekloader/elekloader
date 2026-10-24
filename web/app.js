@@ -1070,7 +1070,8 @@ async function renderTodo() {
     return;
   }
   $('todo').replaceChildren(...devs.map(todoDevice),
-    el('p', { class: 'muted small lib-foot' }, `Made on ${todo.data.made} from the ${todo.data.files} files on this site: the shop's mods and the cores. `
+    el('p', { class: 'muted small lib-foot' }, `Made on ${todo.data.made} from the ${todo.data.files} files on this site: the shop's mods and the cores`
+      + ((todo.data.upstream || []).length ? `, and the stock code the newer modules of ${todo.data.upstream.map(u => `${u.from}@${u.commit}`).join(', ')} hook. ` : '. ')
       + 'The site holds no firmware, so sites are grouped by distance rather than by routine.'));
 }
 
@@ -1095,18 +1096,20 @@ function renderBoard() {
   })));
 }
 
-// a mod's sites in an entry: the symbols they jump to, a few of them
+// a mod's sites in an entry: the symbols they jump to, a few of them; an upstream list's sites apart, marked
 function todoHooks(e) {
   const by = new Map();
   for (const w of Object.values(e.at)) {
     for (const s of w.sites) {
-      if (!by.has(s.mod)) by.set(s.mod, []);
-      for (const x of s.label.split(',')) if (!by.get(s.mod).includes(x)) by.get(s.mod).push(x);
+      const k = s.mod + (s.from ? '\u0000' + s.from : '');
+      if (!by.has(k)) by.set(k, { mod: s.mod, from: s.from, xs: [] });
+      for (const x of s.label.split(',')) if (!by.get(k).xs.includes(x)) by.get(k).xs.push(x);
     }
   }
-  return [...by].sort((a, b) => a[0].localeCompare(b[0])).map(([m, xs]) =>
-    el('span', { class: 'hook' }, el('strong', {}, m), ' ', xs.slice(0, 3).join(', '),
-      xs.length > 3 ? ` +${xs.length - 3}` : ''));
+  return [...by].sort((a, b) => a[0].localeCompare(b[0])).map(([, { mod, from, xs }]) =>
+    el('span', { class: 'hook' }, el('strong', {}, mod),
+      from ? el('span', { class: 'up', title: `In ${from}'s newer modules, not in a shop file yet` }, 'upstream') : '',
+      ' ', xs.slice(0, 3).join(', '), xs.length > 3 ? ` +${xs.length - 3}` : ''));
 }
 
 function todoDevice(d) {
@@ -1123,6 +1126,9 @@ function todoDevice(d) {
       el('p', { class: 'todo-score' }, el('strong', {}, `${sc.no_own_code} of ${sc.mods}`),
         ' mods use only the core', el('span', { class: 'muted' },
           ` · ${d.routines} to do, ${d.shared} hooked by more than one mod`)),
+      d.upstream ? el('p', { class: 'muted small todo-up' }, `${d.upstream.only} of them only upstream: `
+        + `${d.upstream.hooking} newer modules of ${d.upstream.from.join(', ')} hook stock code the shop's files do not `
+        + `(${d.upstream.not_here} not in the shop yet). Their sites are marked upstream.`) : '',
       meter),
     all.length ? el('ol', { class: 'todo-list' }, shown.map(e => el('li', {},
       el('div', { class: 'todo-top' },
@@ -1130,6 +1136,8 @@ function todoDevice(d) {
         el('code', { class: 'todo-id', title: 'Claim it: put "Claims: ' + e.id + '" in your pull request\'s description' }, e.id),
         el('span', { class: 'muted small' }, `${e.mods.length} mod${e.mods.length === 1 ? '' : 's'}`
           + (e.missing_os.length ? ` · no address on ${e.missing_os.join(', ')}` : '')),
+        e.upstream_only ? el('span', { class: 'up', title: 'Only upstream\'s newer modules hook this: no shop file has it yet' },
+          'Upstream only') : '',
         claimed.has(e.id) ? el('span', { class: 'claimed' }, 'Claimed by ',
           gh(encodeURIComponent(claimed.get(e.id).login), claimed.get(e.id).login), ' in ', ghPr(claimed.get(e.id))) : ''),
       el('div', { class: 'hooks' }, todoHooks(e))))) : el('p', { class: 'muted' }, 'Nothing left to do here.'),

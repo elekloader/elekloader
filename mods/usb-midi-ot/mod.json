@@ -1,0 +1,17 @@
+{
+ "id": "usb-midi", "version": "0.1",
+ "license": "GPL-2.0-or-later",
+ "title": "USB MIDI", "category": "MIDI and USB", "author": "irpina",
+ "description": "Class-compliant USB MIDI in and out on the Octatrack's own USB port, mirroring the DIN ports, as a function of usb-ot: it combines with the other USB functions. Built on the firmware's own dormant USB-MIDI half, with what octabam found (512-byte packets at high speed, the FIFO kept from overflowing, transmit after a replug, USB clock timestamped).",
+ "device": "octatrack", "os": "1.40C",
+ "sources": ["usbmidi.c", "framer.s"],
+ "contribute": [
+  {"to": "ot_usb_functions", "order": 20, "data": "00000000", "relocs": [[0, "abs32", "sym:usb_midi", 0]]}
+ ],
+ "subscribe": [
+  {"event": "ev_midi_out", "fn": "usbmidi_out", "order": 50},
+  {"event": "ev_midi_out_rt", "fn": "usbmidi_out_rt", "order": 50}
+ ],
+ "requires": ["core", "usb"],
+ "resources": {"core": "0.4", "names": ["usb:ep2"]}
+}

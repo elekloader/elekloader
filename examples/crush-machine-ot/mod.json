@@ -1,0 +1,15 @@
+{
+ "id": "crush-machine",
+ "version": "0.1",
+ "title": "CRUSH machine",
+ "category": "Examples",
+ "license": "GPL-2.0-or-later",
+ "description": "A source machine for the Octatrack, the smallest one: a CRUSH track plays its FLEX slot's sample through a 5-bit crusher. A template for machines on machines-ot (docs/ADAPTING.md, \"Machines on the Octatrack\").",
+ "device": "octatrack",
+ "os": "1.40C",
+ "sources": ["crush.c"],
+ "contribute": [
+  {"to": "ot_machines", "order": 50, "data": "00000000", "relocs": [[0, "abs32", "sym:crush_machine", 0]]}
+ ],
+ "requires": ["core", "machines"]
+}

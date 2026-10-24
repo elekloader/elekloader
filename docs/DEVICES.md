@@ -25,6 +25,7 @@ and a hook bus of its own.
 | `container`, `version_len` | the file family (`'ele3'`, `'elek'`) and the version field's length | the container header |
 | `protected` | main OS ranges no mod may change, with the reason | none on the mk1 |
 | `relocatable` | data inside a protected range that the OS reaches only through the listed 4-byte operands and never writes, so a mod may serve its own copy through them (sdk.octabam does, for a poke there) | none on the mk1 |
+| `keep` | main OS ranges that look free (they read zero, nothing points at them) but that the OS reads, with the reason: no site may write them, and every build must leave them stock | none on the mk1 |
 | `blob_max` | a cap on the appended blob, if the DDR areas do not give one | none on the mk1 |
 | `image_free` | zero runs inside the main OS that `fixed` code may take (sdk.build) | none on the mk1 |
 | `reserve` | (unit, {name: (a, b)}): for a core that sizes its RAM reserve to the mods, the symbols the linker defines from n, the units the mods' RAM fills: a + b·n each | none on the mk1 (its `ddr` is free RAM) |
@@ -277,13 +278,30 @@ below was found again in 1.17.
     CC FEEDBACK, CC MAP, USB AUDIO OUT's producer) subscribe to its events
     instead of patching their sites.
 - **Free space inside the image** (`image_free`, octabam's measured zero
-  runs): `0x400c45b0-0x400c4702`, `0x400d24d0-0x400d2ce0` and
+  runs): `0x400c45b0-0x400c4702`, `0x400d24e0-0x400d2ce0` and
   `0x400d64e0-0x400d7c3c`. octabam pins code in these runs, and `fixed`
   code may use them.
+  - The second run starts at `0x400d24d0` in stock. Its first 16 bytes are
+    kept stock (`keep`, below).
   - The third run starts at `0x400d64da` in stock. Its first six bytes are
     left out: they follow the table at `0x400d64a0`.
   - Left out entirely: `0x400d2ee6-0x400d3020` (a live descriptor), and
     everything above `0x400d8000` (the PROJECT subsystem's RAM).
+- **Bytes kept stock** (`keep`): `0x400d24d0-0x400d24df`. The stock DELAY
+  reads them, so a write there changes its output (octabam issue #771,
+  measured under octabam's emulator port, not on a unit).
+  - The DELAY reads `0x400d1ce0 + 4 * (x >> 6)` (`0x40003526`,
+    `0x40003540`). That table has 508 words and ends at `0x400d24d0`.
+  - At a slow tempo with a long TIME the index reaches 508, past the table,
+    into these zeros. octabam puts its cap at 511, unmeasured; hence the 16
+    bytes.
+  - In octabam, SYNTH MACHINE's page cave, pinned at `0x400d24d0`, changed
+    the stock DELAY's output. octabam's fix moved the page to DRAM (its
+    `PLACE` setting) and keeps these bytes stock.
+  - The linker refuses any site that writes them, sdk.build refuses
+    `fixed` code over them, and the build's verify checks them against
+    stock (tests/test_octatrack.py). sdk.octabam puts a cave octabam pins
+    there in `.run` (docs/ADAPTING.md, 4b).
 - **DSP code** (`dsp_payloads`, `dsp_areas`): the main OS uploads payload A
   (`0x400e2324`, 0x136cb bytes) to DSP core 0 and B (`0x400f59ef`, 0x12d05
   bytes) to core 1 at boot. Payload A's P memory is full, so the one area
@@ -419,7 +437,10 @@ build, 20 Oct 2026), none copied from the Rytm. On a unit, a build of core-a4
 with hooks-check-a4 (HC56, 20 Oct 2026) booted and every event ran as
 expected, and one with store-check-a4 (SC56, 21 Oct 2026) kept every scope's
 fields through saves, loads, power cycles and a Transfer round trip.
-Recovery to stock worked on the unit (21 Oct 2026).
+Recovery to stock worked on the unit (21 Oct 2026). core-a4 0.2's
+parameter pages and views, with pages-check-a4 (PA56, 23 Oct 2026), drew
+every screen checked as in the emulator, and a mod's view came back after
+a project load and a power cycle.
 
 - **Files.** The Rytm's family (ELE3, the same SysEx transport), device byte
   `0x0B`, version field at `0x14`, no trailer. Five sections: 5, 2 (the
@@ -458,7 +479,9 @@ Recovery to stock worked on the unit (21 Oct 2026).
   pattern and read them back with no word changed, through a session of
   normal use (Overbridge included) and after a power cycle.
 - **The core** (mods/core-a4) has the Rytm's events at the A4's sites, and
-  mod storage in bytes of the A4's own structures (mods/core-a4/README.md).
+  mod storage in bytes of the A4's own structures (mods/core-a4/README.md);
+  from 0.2, core-ar2 0.4's parameter routines, and views added behind the
+  page keys.
   In rytm-emu (with a fallback added so it accepts a patched A4 image), a
   build with core alone runs as stock does, with the same frames and a
   byte-identical screen; hello-marker-a4 differs from stock only in its

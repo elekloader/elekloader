@@ -357,6 +357,10 @@ def common_checks(mods, image, spans):
                 if s['addr'] < hi and lo < s['addr'] + s['len']:
                     bad.append('%s site 0x%08x is inside 0x%08x-0x%08x, %s: protected on the %s'
                                % (m.label(), s['addr'], lo, hi, why, dev.name))
+            for lo, hi, why in dev.keep:
+                if s['addr'] < hi and lo < s['addr'] + s['len']:
+                    bad.append('%s site 0x%08x writes into 0x%08x-0x%08x, which stays stock on the '
+                               '%s: %s' % (m.label(), s['addr'], lo, hi, dev.name, why))
     for m in mods:
         for s in m.sites:
             o = s['addr'] - dev.main_load

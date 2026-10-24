@@ -1,0 +1,28 @@
+{
+ "id": "trig-events",
+ "version": "0.1",
+ "license": "GPL-2.0-or-later",
+ "title": "trig events",
+ "category": "Framework",
+ "author": "irpina",
+ "description": "The Octatrack's trig dispatch as an event: the moment the frame interrupt hands a track's trig to its machine, so mods that need a trig's own moment (a trig mute, a sidechain, a meter) combine. A handler sees the audio track and may veto the trig, so the machine never starts it. With no handler subscribed it costs a few instructions at each trig; on its own it changes nothing the unit does.",
+ "device": "octatrack",
+ "os": "1.40C",
+ "sources": [
+  "trig.s"
+ ],
+ "sites": [
+  {
+   "addr": "0x4000d496",
+   "stock": "71912f002f03",
+   "op": "jmp",
+   "target": "tt_site"
+  }
+ ],
+ "collections": {
+  "ev_track_trig": 4
+ },
+ "requires": [
+  "core"
+ ]
+}
