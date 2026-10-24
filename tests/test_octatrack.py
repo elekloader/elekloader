@@ -1392,8 +1392,8 @@ def test_trig_events_ot_header_names_what_the_dispatch_reads():
 
 def test_trig_events_ot_builds_and_links():
     """mods/trig-events-ot with core-ot: no library call, the probe's two handlers land in its table
-    in order, the lot fits core's page, and linked with core alone the mod changes only its site:
-    the jmp the SDK promises, with the stub behind it."""
+    in order, the lot fits what core alone reserves, and linked with core alone the mod changes
+    only its site: the jmp the SDK promises, with the stub behind it."""
     import shutil
     from elekloader.sdk import build
     need(SYX)
@@ -1412,7 +1412,10 @@ def test_trig_events_ot_builds_and_links():
         ln = link.link(mods, img)
         alone = link.link([elemod.load_any(core), elemod.load_any(tt)], img)
         only_core = link.link([elemod.load_any(core)], img)
-        assert ln.layout['reserve']['units'] == 1
+        core_sites = [(s['addr'] - DEV.main_load, s['len']) for s in elemod.load_any(core).sites]
+        # the lot takes no reserve unit of its own: it fits what core alone reserves
+        assert ln.layout['reserve']['units'] == only_core.layout['reserve']['units'], \
+            (ln.layout['reserve'], only_core.layout['reserve'])
     assert ln.tables['ev_track_trig'][1] == 2 and alone.tables['ev_track_trig'][1] == 0
     at = ln.tables['ev_track_trig'][0]
     o = ln.layout['run_load'] + (at - DEV.ddr[0]) - DEV.main_load
@@ -1420,11 +1423,15 @@ def test_trig_events_ot_builds_and_links():
     # the alone table is just its zero word, which is all the stub tests
     o = alone.layout['run_load'] + (alone.tables['ev_track_trig'][0] - DEV.ddr[0]) - DEV.main_load
     assert alone.image[o:o + 4] == b'\0\0\0\0'
-    # only the site differs from core alone, in the stock image's own bytes
+    # only the site differs from core alone, in the stock image's own bytes; and core's own
+    # sites when the reserve differs, since they hold the arena's place past it
     w = TT_SITE - DEV.main_load
+    windows = [(w, 6)]
+    if alone.layout['reserve'] != only_core.layout['reserve']:
+        windows += core_sites
     for i in range(len(img)):
         if alone.image[i] != only_core.image[i]:
-            assert w <= i < w + 6, hex(i + DEV.main_load)
+            assert any(a <= i < a + n for a, n in windows), hex(i + DEV.main_load)
     assert alone.image[w:w + 6] == b'\x4e\xf9' + struct.pack('>I', alone.map['tt_site'])
     # the stub is small: the no-handler path is these bytes, the walk the rest
     assert m.sections['.run']['len'] <= 96, m.sections['.run']['len']
