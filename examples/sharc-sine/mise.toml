@@ -1,0 +1,14 @@
+[tools]
+python = "3.12.13"
+
+[tasks.build-c]
+description = "Compile the current C sine and build DN2 firmware"
+run = "python build.py c"
+
+[tasks.build-asm]
+description = "Assemble the current SHARC sine and build DN2 firmware"
+run = "python build.py asm"
+
+[tasks.test]
+description = "Check the artifact producer without firmware or compilers"
+run = "python ../../tests/test_sharc_build.py"

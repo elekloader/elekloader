@@ -1,0 +1,17 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+// DN2 keyed bridge and 32 KiB reference mod; B1 cache-placement policy remains unqualified.
+ARCHITECTURE(ADSP-21569)
+$OBJECTS = $COMMAND_LINE_OBJECTS;
+MEMORY {
+ core { TYPE(BW RAM) START(0x002dd60c) END(0x002dd9bf) WIDTH(8) }
+ app { TYPE(BW RAM) START(0x01790000) END(0x01793fff) WIDTH(8) }
+ data { TYPE(BW RAM) START(0x20094000) END(0x20097fff) WIDTH(8) }
+}
+PROCESSOR p0 {
+ OUTPUT($COMMAND_LINE_OUTPUT_FILE)
+ SECTIONS {
+  bridge_code SW { INPUT_SECTION_ALIGN(2) INPUT_SECTIONS($OBJECTS(core_code)) } > core
+  probe_code SW { INPUT_SECTION_ALIGN(2) INPUT_SECTIONS($OBJECTS(seg_swco)) } > app
+  probe_data BW { INPUT_SECTION_ALIGN(4) INPUT_SECTIONS($OBJECTS(seg_dmda)) } > data
+ }
+}

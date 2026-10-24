@@ -143,7 +143,7 @@ class LoaderModel:
     def set_stock(self, path):
         """Choose the stock firmware: known by its hash, or refused."""
         info = {'path': path, 'ok': False}
-        self.img = self.dev = self.rel = None
+        self.img = self.dev = self.rel = self.sharc_stream = None
         if not path:
             info['error'] = 'no stock firmware chosen'
         else:
@@ -153,6 +153,8 @@ class LoaderModel:
                 img = formats.main_image(s, dev)
                 if elemod.sha(img) == rel.main_sha256:
                     self.img, self.dev, self.rel = img, dev, rel
+                    if rel.sharc:
+                        self.sharc_stream = s.section(rel.sharc['section'])
                     info.update(ok=True, device=dev.name, os=rel.version)
                 else:
                     info['error'] = 'its main OS is not the known image'
@@ -284,7 +286,8 @@ class LoaderModel:
                             'order': [m.label() for m in mods], 'status': status,
                             'blob': len(img) - len(self.img),
                             'sites': sum(len(m.sites) for m in mods)}
-                L = link.link(mods, self.img, self.store_lock())
+                L = link.link(mods, self.img, self.store_lock(),
+                              sharc_stream=self.sharc_stream if any(m.sharc for m in v2) else None)
             except (OSError, elemod.ModError) as e:
                 lines = [x.strip() for x in str(e).split('\n')[1:]] or [str(e)]
                 for p in paths:

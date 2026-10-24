@@ -503,9 +503,9 @@ a project load and a power cycle.
 ## The Digitone II (1.12)
 
 Experimental. The profile (`digitone_mk2.py`, where each fact's evidence
-is), whole builds, and linkable mods with a core (core-dn2 0.1: tick, draw,
-key, encoder, SETTINGS and PERSONALIZE; mods/core-dn2/README.md has its
-sites and evidence). The Digitone II
+is), whole builds, and linkable mods with a core (core-dn2 0.2: tick, draw,
+key, encoder, SETTINGS, PERSONALIZE and bounded SHARC mods;
+mods/core-dn2/README.md has its sites and evidence). The Digitone II
 runs on the Digitakt II's platform, but every address, size and count here
 was found again in DN2 1.12's own sections (23 Oct 2026), none copied from
 the Digitakt II. Stock 1.12 and MIDI recovery have worked on a unit.
@@ -520,6 +520,20 @@ smaller core-only CO02 build then flashed and booted successfully (below).
   copy of the seed and constant (`0x40210a4a`, `0x4021b9ef`), which give
   the same key. The writer reproduces the stock file byte for byte, seal
   included; the profile also knows Elektron's zip of it.
+- **SHARC mods.** Core-dn2 0.2 provides one master-output callback with a
+  32 KiB mod reservation at loader-byte `[0x20090000,0x20098000)`
+  in section 7. The profile also reserves `[0x282dd600,0x282dde00)` for
+  the pinned bridge and its pitch table.
+  It permits one exact six-byte stock instruction patch at `0x2838489a`.
+  Mod code and data may change within the
+  [callback contract](SHARC-DN2-ABI.md) without an executable allowlist update.
+  The SDK, linker and independent verifier enforce stock identity, ownership,
+  coverage, guards, stack declarations, firmware budgets and unchanged
+  sections. The [C/ASM starter](../examples/sharc-sine/README.md) compiles
+  current source with `mise run build-c` or `mise run build-asm`; packaging
+  an existing SHARC artifact needs no SHARC compiler. See the
+  [profile evidence and limits](SHARC-DN2.md) for memory provenance and
+  the boundaries of the runtime checks.
 - **Staging.** The bootstrap is the Digitakt II 1.17's code instruction for
   instruction, at the same addresses: the loader `0x80000596` reads section
   3 from flash at its container offset + `0x80000` to `0x40400000`, and the

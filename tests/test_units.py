@@ -881,6 +881,14 @@ def test_every_refusal_of_the_linker_has_a_fixture_that_is_refused_and_one_that_
     refusals.test_the_image_check_refuses_a_protected_or_kept_byte_the_other_checks_let_through()
 
 
+def test_sharc_suite():
+    import unittest
+    suite = unittest.TestLoader().discover(HERE, pattern='test_sharc*.py')
+    assert suite.countTestCases(), 'no SHARC tests discovered'
+    result = unittest.TextTestRunner().run(suite)
+    assert result.wasSuccessful(), 'SHARC suite failed'
+
+
 if __name__ == '__main__':
     import traceback
     ok = failed = 0

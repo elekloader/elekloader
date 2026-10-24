@@ -69,6 +69,52 @@ A format-2 mod is a relocatable object:
 | `contribute` | entries for tables: `{"to", "order", "data", "relocs", "claims"}` |
 | `copied` | `[{"lo", "hi", "to"}]`: a block of the image this mod copies elsewhere at run time |
 | `storage` | fields this mod keeps with the project: `[{"sym", "scope", "bits"}]` (the Analog Rytm MKII from core-ar2 0.2, the Analog Four MKII from core-a4 0.1; "Mod storage" below) |
+| `sharc` | Digitone II 1.12 only: a prelinked SHARC+ mod with the exact envelope below |
+
+### Digitone II SHARC mod
+
+The SDK accepts `"sharc": {"artifact": "sine.sharc.json"}` in a mod's
+`mod.json`. The path must stay inside that mod folder. The artifact becomes
+the format-2 mod's top-level `sharc` object; no SHARC compiler runs during
+SDK build, lint or patch. See [the starter](../examples/sharc-sine/README.md).
+
+The object has exactly `abi`, `segments`, `zero`, `entries`, and
+`stack_bytes`. Mods use `abi: "dn2-master-mono32-l2-v1"`. Each segment has exactly
+`offset_bytes`, `kind` (`code` or `data`), and `hex` (loader-order bytes).
+Each zero range has `offset_bytes` and `size_bytes`. Segments and zero ranges
+must be nonempty, four-byte aligned, disjoint, and together cover every byte
+of the 32 KiB mod reservation at loader `[0x20090000,0x20098000)`.
+Offsets are relative to that reservation. The core bridge keeps its internal
+`dn2-master-mono32-v1` ABI and L1 reservation; that ABI is not accepted for
+mods. The linker translates mod entrypoints through the profiled L2 PC16
+alias and installs the bridge's pitch table in its separate L1 reservation.
+An inert mod may still use `entries:null` and `stack_bytes:0`. The current
+keyed C starter declares init/render offsets 320/382 and 128 stack bytes.
+The assembly kernel variant declares 176/238 with the same conservative
+128-byte stack allowance, data layout and keyed entry wrapper.
+Its matching core supplies a separate 1 KiB bridge artifact with a hook entry
+at offset 12 and 116 stack bytes. The linker binds the two PC16 callback
+addresses itself; neither mod may supply core binding bytes or stock patches.
+With the keyed core, mod code, data and callback offsets may change
+without a byte allowlist update. The core bridge's bytes, entry and stack
+contribution remain pinned. The linker still requires the ABI, owned ranges,
+alignment, full coverage, callbacks inside owned code and a combined declared
+stack of at most 544 bytes. Each active mod code segment ends in a 64-byte
+short-word NOP guard; entries must precede it. The linker installs the fixed 48-byte pitch table and zero padding in the
+bridge's L1 reservation. Mods cannot override those bytes. The
+[callback contract](SHARC-DN2-ABI.md) specifies init/render, gate lifecycle,
+register/modifier preservation and the author-declared stack. These packaging
+checks do not prove instruction behavior, actual stack use or audio timing;
+qualify each compiled program separately.
+The reference producers reproduce the checked-in artifacts; a mod author may supply an artifact from any
+compatible compiler or assembler without running those development scripts.
+Only one SHARC mod may be selected. The linker checks stock section 7 by
+hash before adding the mod's and core's ordered LOAD/FILL records. The active
+path additionally replaces one exact six-byte master-output instruction inside its
+existing stock LOAD; the independent
+writer verifier checks the decoded stream, section sizes, HMAC, all outer
+budgets, and unchanged stock sections. A mod without `sharc` retains the
+existing byte-exact build path.
 
 ### The linker
 

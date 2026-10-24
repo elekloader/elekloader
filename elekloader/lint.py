@@ -106,7 +106,8 @@ def main(argv=None):
                         raise elemod.ModError('x:\n  a whole build (format 1) cannot be '
                                              'combined with format-2 mods')
                     if v2:
-                        L = link.link(loaded, img)
+                        dsp = st.section(rel.sharc['section']) if any(m.sharc for m in v2) else None
+                        L = link.link(loaded, img, sharc_stream=dsp)
                         lay = L.layout
                         report['link'] = {
                             'order': L.order,

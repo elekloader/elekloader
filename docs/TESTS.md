@@ -7,8 +7,12 @@ page) and takes its input files from environment variables. A test whose
 input files are not given is skipped, not passed: say which ran. Firmware
 files never go in this repository.
 
+`test_units.py` also discovers `test_sharc*.py`. Set `ELEKLOADER_DN2_SYX`
+to include their stock-backed checks and `ELEKLOADER_CROSS` for the active
+bridge build. The toolchain fixture test needs Git and skips without it.
+
 ```bash
-python tests/test_units.py        # needs nothing
+python tests/test_units.py        # includes SHARC; missing optional inputs are reported as skips
 python tests/test_link_refusals.py   # needs nothing: every refusal of the linker, refused and passed
 ELEKLOADER_STOCK=Digitakt_OS1.53.syx ELEKLOADER_MODS=path/to/mods python tests/test_link.py
 ELEKLOADER_STOCK=... ELEKLOADER_STOCK_154=Digitakt_OS1.54.syx ELEKLOADER_MODS=... python tests/test_sdk.py   # the example needs the cross compiler
@@ -26,6 +30,25 @@ ELEKLOADER_CATALOG_DIR=folder/of/catalog/files ELEKLOADER_STOCK=... python tests
 ELEKLOADER_STOCK=... ELEKLOADER_STOCK_154=... ELEKLOADER_OT_SYX=... ELEKLOADER_MODS=... python tests/test_gui.py   # the window, hidden (Tk)
 node tests/test_web.mjs build/site   # the web page's engine, in Pyodide (packaging/build_web.py first)
 ```
+
+The DN2 suite has four additional core-compatibility tests. Set
+`ELEKLOADER_DN2_CORE_01` to a historical core-dn2 0.1 `.elemod` and
+`ELEKLOADER_DN2_DIGIHEALTH` to an existing DN2 DigiHealth `.elemod` alongside
+the stock inputs above:
+
+```bash
+ELEKLOADER_DN2_SYX=Digitone_II_OS1.12.syx \
+ELEKLOADER_DN2_ZIP=Digitone_II_OS1.12_dist.zip \
+ELEKLOADER_DN2_CORE_01=path/to/core-dn2-0.1.elemod \
+ELEKLOADER_DN2_DIGIHEALTH=path/to/digihealth.elemod \
+python tests/test_digitone2.py
+```
+
+These check unchanged control-side firmware, existing DigiHealth builds and
+the SHARC examples' minimum-core selection. All four need the historical
+core; the DigiHealth comparison also needs that mod. Missing inputs skip the
+affected tests. The suite builds the current core and examples with the
+ColdFire cross toolchain; keep all `.elemod` inputs outside version control.
 
 ## The refusal fixtures
 

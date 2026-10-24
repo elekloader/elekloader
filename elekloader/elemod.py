@@ -4,10 +4,9 @@ instruction-boundary check, and apply for bundles. Format 2 (separate,
 linkable mods) is in link.py. The format itself is docs/FORMAT.md.
 
 A .elemod is JSON. It carries only its author's bytes plus hashes of the
-stock bytes it expects. It can only describe changes to the device's main
-OS: there is no field for any other section, so the bootloader and the
-other sections stay stock by construction (formats.verify checks the output
-again).
+stock bytes it expects. Format 2 may also carry a profiled DN2 SHARC mod;
+all other sections, including the bootloader, stay stock by construction
+(formats.verify checks the output again).
 
 Every mod names its "target": a stock release, by hash. The device profile
 for that release (devices/) supplies the addresses, the free areas and the

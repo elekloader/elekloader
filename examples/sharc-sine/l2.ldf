@@ -1,0 +1,15 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+// SW code uses twice the PC16 address; BW data uses its loader byte address.
+ARCHITECTURE(ADSP-21569)
+$OBJECTS = $COMMAND_LINE_OBJECTS;
+MEMORY {
+ code { TYPE(BW RAM) START(0x01790000) END(0x01793fff) WIDTH(8) }
+ data { TYPE(BW RAM) START(0x20094000) END(0x20097fff) WIDTH(8) }
+}
+PROCESSOR p0 {
+ OUTPUT($COMMAND_LINE_OUTPUT_FILE)
+ SECTIONS {
+  probe_code SW { INPUT_SECTION_ALIGN(2) INPUT_SECTIONS($OBJECTS(seg_swco)) } > code
+  probe_data BW { INPUT_SECTION_ALIGN(4) INPUT_SECTIONS($OBJECTS(seg_dmda)) } > data
+ }
+}

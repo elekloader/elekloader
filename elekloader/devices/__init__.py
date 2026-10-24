@@ -30,6 +30,7 @@ class Release:
     main_sha256: str             # its main OS section, depacked
     main_len: int                # ... and that section's length
     bin_sha256: str = ''         # the stock card file (.bin), where the device has one
+    sharc: dict = field(default_factory=dict)  # section-7 identity/limits; no ownership implied
 
 
 @dataclass

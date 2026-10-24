@@ -12,7 +12,8 @@ A message is a class. `test_every_refusal_has_a_fixture` reads the messages out 
 and the loader's functions in elekloader/elemod.py (by their syntax, each field blanked) and fails for
 one that no row below names, so a new refusal comes with its fixtures or is not merged. The DSP
 refusals have their fixtures in tests/test_octatrack.py, which needs the real Octatrack OS for the DSP
-payload; `external` says where, and the test checks the text is still there.
+payload. SHARC linker refusals are in tests/test_sharc_active.py with the owner's DN2 stock and
+cross compiler; `external` says where, and the test checks the text is still there.
 """
 import ast
 import copy
@@ -144,6 +145,20 @@ def row(fn, template, device='octatrack'):
 
 def external(fn, template, path, text):
     EXTERNAL[(fn, template)] = (path, text)
+
+
+external('check', 'only one SHARC mod may own the DN2 reservation', 'tests/test_sharc_active.py',
+         'only one SHARC mod may own the DN2 reservation')
+external('check', 'active SHARC mod requires a qualified matching core bridge', 'tests/test_sharc_active.py',
+         'active SHARC mod requires a qualified matching core bridge')
+external('check', '<> has unqualified active SHARC core bytes or entry', 'tests/test_sharc_active.py',
+         'unqualified active SHARC core bytes or entry')
+external('check', 'active SHARC stack exceeds the profile limit', 'tests/test_sharc_active.py',
+         'active SHARC stack exceeds the profile limit')
+external('link', 'SHARC mod needs the stock section-7 stream', 'tests/test_sharc_active.py',
+         'SHARC mod needs the stock section-7 stream')
+external('link', 'SHARC stored section exceeds the profile limit', 'tests/test_sharc_active.py',
+         'SHARC stored section exceeds the profile limit')
 
 
 def edit_region(name, lo, hi):

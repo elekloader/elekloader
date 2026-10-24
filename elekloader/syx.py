@@ -181,15 +181,20 @@ def _digest(key, data):
     return hmac.new(key, data, hashlib.sha256).digest()
 
 
-def write(stock, stored_main, dev, version=None):
+def write(stock, stored_main, dev, version=None, *, stored_sharc=None):
     """-> .syx bytes: `stock` (a Syx) with the main OS section's stored bytes
-    replaced by `stored_main` and, if given, the ELE3 version field set."""
+    replaced by `stored_main` and, if given, the ELE3 version field set.
+    `stored_sharc` replaces only the profiled SHARC section."""
     if dev.trailer not in (None, 'hmac'):
         raise SyxError('%s files are sealed (%s); elekloader cannot write them'
                        % (dev.name, dev.trailer))
     key = seal_key(stock, dev) if dev.trailer == 'hmac' else None
     if key is not None and _digest(key, stock.container[:-DIGEST]) != stock.container[-DIGEST:]:
         raise SyxError('the stock file\'s seal does not verify with the key its bootstrap gives')
+    rel = dev.release_for(syx_sha256=stock.sha256)
+    dsp_sid = rel.sharc['section'] if rel and rel.sharc else None
+    if stored_sharc is not None and (dsp_sid is None or dsp_sid not in stock.stored):
+        raise SyxError('the stock file has no profiled SHARC section')
     header = bytearray(stock.header)
     if version is not None:
         v = version.encode('ascii')
@@ -199,7 +204,8 @@ def write(stock, stored_main, dev, version=None):
     cont = bytearray(stock.container[:stock.data_start])   # the table area as stock has it
     cont[:COUNT_OFF] = header
     for i, (sid, _o, _l, dest) in enumerate(stock.table):
-        data = stored_main if sid == dev.main_section else stock.stored[sid]
+        data = (stored_main if sid == dev.main_section else
+                stored_sharc if sid == dsp_sid and stored_sharc is not None else stock.stored[sid])
         struct.pack_into('>IIII', cont, TABLE_OFF + ENTRY_SZ * i, sid, len(cont), len(data), dest)
         cont += data
         cont += bytes(-len(cont) % 16)
@@ -253,11 +259,16 @@ def inplace_depack(stored, dev):
     return bytes(out), gap
 
 
-def verify(out, stock, want_main, dev, version=None):
+def verify(out, stock, want_main, dev, version=None, *, want_sharc=None):
     """Refuse (SyxError) unless `out` (bytes) is `stock` (a Syx) with only the
-    main OS changed, and it depacks in place to `want_main`. -> facts."""
+    main OS and optional profiled SHARC section changed, and the main OS
+    depacks in place to `want_main`. -> facts."""
     o = Syx(out)                       # every message's shape and the ELE3 magic
     main = dev.main_section
+    rel = dev.release_for(syx_sha256=stock.sha256)
+    dsp_sid = rel.sharc['section'] if rel and rel.sharc else None
+    if want_sharc is not None and (dsp_sid is None or dsp_sid not in stock.stored):
+        raise SyxError('the stock file has no profiled SHARC section')
     for m in o.data:
         if m[4] != stock.device_id:
             raise SyxError('a data message has device id 0x%02x' % m[4])
@@ -309,7 +320,7 @@ def verify(out, stock, want_main, dev, version=None):
             stock.container[TABLE_OFF + ENTRY_SZ * len(stock.table):stock.data_start]:
         raise SyxError('the table area after the entries differs from stock')
     for sid in stock.stored:
-        if sid == main:
+        if sid == main or sid == dsp_sid and want_sharc is not None:
             continue
         if o.stored[sid] != stock.stored[sid]:
             raise SyxError('section %d is not stock' % sid)
@@ -323,6 +334,21 @@ def verify(out, stock, want_main, dev, version=None):
         raise SyxError('the main OS does not depack to the patched image')
     if elz.depack_section(s3) != img:
         raise SyxError('the main OS: the depacker disagrees with the in-place depack')
+    if want_sharc is not None:
+        s7 = o.stored[dsp_sid]
+        if classify(s7) != 'packed':
+            raise SyxError('the SHARC section is not a packed stream with a valid byte sum')
+        if len(s7) > rel.sharc['stored_max']:
+            raise SyxError('the SHARC stored section exceeds the profile limit')
+        dsp = elz.depack_section(s7)
+        if dsp != bytes(want_sharc):
+            raise SyxError('the SHARC section does not depack to the patched stream')
+        from . import sharc
+        from .elemod import ModError
+        try:
+            sharc.parse(dsp, rel.sharc)
+        except ModError as e:
+            raise SyxError(str(e)) from e
     if gap <= 0:
         raise SyxError('the main OS: the in-place depack overwrites unread input (gap %d)' % gap)
     return {
@@ -333,6 +359,7 @@ def verify(out, stock, want_main, dev, version=None):
         'ele3_version': o.version,
         'main': {'section': main, 'stored': len(s3), 'image': len(img), 'sha256': sha(img),
                  'staged_to': '0x%08x' % (dev.stage + len(s3)), 'inplace_min_gap': gap},
-        'sections': {str(s): {'stored': l, 'stored_sha256': sha(o.stored[s]), 'stock': s != main}
+        'sections': {str(s): {'stored': l, 'stored_sha256': sha(o.stored[s]),
+                              'stock': s != main and not (s == dsp_sid and want_sharc is not None)}
                      for s, _o, l, _d in o.table},
     }

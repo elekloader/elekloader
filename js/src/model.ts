@@ -128,6 +128,7 @@ export class LoaderModel {
   img: Uint8Array | null = null
   dev: Device | null = null
   rel: Release | null = null
+  sharcStream: Uint8Array | null = null
   private mods = new Map<string, [number, AnyMod]>()
 
   constructor(store: Store, library: string, also: string[] = []) {
@@ -139,7 +140,7 @@ export class LoaderModel {
   /** Choose the stock firmware: known by its hash, or refused. */
   async setStock(path: string | null): Promise<Stock> {
     const info: Stock = { path, ok: false }
-    this.img = this.dev = this.rel = null
+    this.img = this.dev = this.rel = this.sharcStream = null
     if (!path) {
       info.error = 'no stock firmware chosen'
     } else {
@@ -151,6 +152,7 @@ export class LoaderModel {
           this.img = img
           this.dev = dev
           this.rel = rel
+          if (rel.sharc) this.sharcStream = s.section(rel.sharc.section)
           Object.assign(info, { ok: true, device: dev.name, os: rel.version })
         } else {
           info.error = 'its main OS is not the known image'
@@ -275,7 +277,8 @@ export class LoaderModel {
           blob: img.length - this.img!.length, sites: mods.reduce((n, m) => n + m.sites.length, 0),
         }
       }
-      L = link(mods as Mod2[], this.img!)
+      L = link(mods as Mod2[], this.img!, null,
+        v2.some(m => (m as Mod2).sharc) ? this.sharcStream : null)
     } catch (e) {
       if (!(e instanceof ModError) && !(e instanceof OSError_)) throw e
       const lines0 = e.message.split('\n').slice(1).map(x => x.trim())

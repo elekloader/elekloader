@@ -6,7 +6,8 @@
 //   2. every mod must be made for that release, and every site's stock bytes must hash to what the mod expects;
 //   3. the static conflict check, including the device's protected ranges;
 //   4. apply the sites, or link the mods;
-//   5. repack the main OS and rebuild the OS file: only the main OS and the version field change;
+//   5. repack the main OS and rebuild the OS file: only the main OS, optional profiled SHARC section 7,
+//      and the version field change;
 //   6. verify every output with independent code (formats.verify);
 //   7. the .syx and, for a device with a card file (the Octatrack), the .bin; OUT.json (a manifest with every hash);
 //      and, for linked mods, OUT.map.json (every symbol's address).
@@ -82,7 +83,8 @@ export async function build(stock: File, modFiles: File[], version: string | nul
   try {
     if (v2.length) {
       if (v2.length !== mods.length) throw new ModError('a whole-build bundle (format 1) cannot be combined with separate mods (format 2)')
-      linked = link(v2, img0, lock)
+      const dsp = v2.some(m => m.sharc) ? parsed.section(rel.sharc!.section) : null
+      linked = link(v2, img0, lock, dsp)
       img = linked.image
     } else {
       img = apply(mods as Mod[], img0)
@@ -154,8 +156,8 @@ export async function build(stock: File, modFiles: File[], version: string | nul
   log(`packed the main OS: ${img.length} -> ${stored.length} bytes (${((now() - t) / 1000).toFixed(1)} s)`)
   let outputs: formats.Outputs, facts: Record<string, any>
   try {
-    outputs = formats.write(parsed, stored, dev, version)
-    facts = formats.verify(outputs, parsed, img, dev, version)
+    outputs = formats.write(parsed, stored, dev, version, linked?.sharcStored ?? null)
+    facts = formats.verify(outputs, parsed, img, dev, version, linked?.sharcStream ?? null)
   } catch (e) {
     if (e instanceof formats.FormatError) throw new PatchError(`the output failed verification: ${e.message}`)
     throw e

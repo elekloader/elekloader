@@ -1,0 +1,12 @@
+{
+ "id": "sharc-sine-asm",
+ "version": "0.1",
+ "title": "SHARC assembly sine",
+ "description": "Played monophonic assembly SHARC sine on the DN2 master output",
+ "license": "GPL-2.0-or-later",
+ "device": "digitone-mk2",
+ "os": "1.12",
+ "requires": ["core"],
+ "resources": {"core": "0.2"},
+ "sharc": {"artifact": "sine.sharc.json"}
+}

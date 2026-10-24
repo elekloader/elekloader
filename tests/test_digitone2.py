@@ -6,6 +6,8 @@ Needs the stock files, which never go in the repo, named by environment
 variables; a test whose input is missing is skipped, not passed:
   ELEKLOADER_DN2_SYX   Digitone_II_OS1.12.syx
   ELEKLOADER_DN2_ZIP   Digitone_II_OS1.12_dist.zip (Elektron's download)
+  ELEKLOADER_DN2_CORE_01  historical core-dn2 0.1 .elemod (compatibility)
+  ELEKLOADER_DN2_DIGIHEALTH  existing DigiHealth .elemod (compatibility)
 """
 import dataclasses
 import hashlib
@@ -24,6 +26,8 @@ from elekloader.elemod import sha                                   # noqa: E402
 
 SYX = os.environ.get('ELEKLOADER_DN2_SYX', '')
 ZIP = os.environ.get('ELEKLOADER_DN2_ZIP', '')
+CORE_01 = os.environ.get('ELEKLOADER_DN2_CORE_01', '')
+DIGIHEALTH = os.environ.get('ELEKLOADER_DN2_DIGIHEALTH', '')
 DEV = [d for d in devices.devices() if d.key == 'digitone-mk2'][0]
 REL = DEV.releases['1.12']
 DT2 = [d for d in devices.devices() if d.key == 'digitakt-mk2'][0]
@@ -480,6 +484,71 @@ def test_hooks_check_links_with_core():
         p = write_mod(tmp, d, 'hooks-check-2-0.1.elemod')
         expect(lambda: patch.build(SYX, [core, hc, p], version='HC01', log=lambda *a: None),
                'settings:HOOK TEST')
+
+
+def test_core_0_2_preserves_the_0_1_control_contract():
+    """0.2 adds its dormant SHARC bridge; every 0.1 control-side byte,
+    address, table and reservation stays the same."""
+    old = json.loads(need(CORE_01, 'ELEKLOADER_DN2_CORE_01'))
+    with tempfile.TemporaryDirectory() as tmp:
+        with open(built(os.path.join('mods', 'core-dn2'), tmp)) as fh:
+            new = json.load(fh)
+    assert old['version'] == '0.1' and new['version'] == '0.2'
+    for key in ('target', 'sites', 'sections', 'symbols', 'imports', 'exports',
+                'collections', 'contribute', 'relocs', 'resources', 'copied', 'weak'):
+        assert new[key] == old[key], key
+    assert 'sharc' not in old and new['sharc']['entries'] is not None
+
+
+def check_control_firmware_identical(old, new, mods):
+    """Keep the version label equal so only core selection can affect bytes."""
+    outputs = []
+    for core in (old, new):
+        output, _man = patch.build(SYX, [core] + list(mods), version='CP02', log=lambda *a: None)
+        parsed = formats.parse(output['syx'], DEV)
+        assert parsed.stored[7] == stock()[0].stored[7]
+        outputs.append(output)
+    assert outputs[0] == outputs[1]
+
+
+def test_core_0_2_keeps_existing_control_firmware_identical():
+    need(CORE_01, 'ELEKLOADER_DN2_CORE_01')
+    with tempfile.TemporaryDirectory() as tmp:
+        core = built(os.path.join('mods', 'core-dn2'), tmp)
+        check_control_firmware_identical(CORE_01, core, [])
+        for example in ('hello-marker-dn2', 'hooks-check-dn2'):
+            mod = built(os.path.join('examples', example), tmp)
+            check_control_firmware_identical(CORE_01, core, [mod])
+
+
+def test_core_0_2_keeps_existing_digihealth_firmware_identical():
+    need(CORE_01, 'ELEKLOADER_DN2_CORE_01')
+    need(DIGIHEALTH, 'ELEKLOADER_DN2_DIGIHEALTH')
+    with tempfile.TemporaryDirectory() as tmp:
+        core = built(os.path.join('mods', 'core-dn2'), tmp)
+        check_control_firmware_identical(CORE_01, core, [DIGIHEALTH])
+
+
+def test_sharc_examples_require_and_select_core_0_2():
+    """Both published examples refuse 0.1, build with 0.2, and choose it
+    in the GUI regardless of discovery order or an already selected 0.1."""
+    from elekloader import gui
+    need(CORE_01, 'ELEKLOADER_DN2_CORE_01')
+    with tempfile.TemporaryDirectory() as tmp:
+        core = built(os.path.join('mods', 'core-dn2'), tmp)
+        model = gui.LoaderModel(SYX, library=tmp, settings=os.path.join(tmp, 'settings.json'))
+        for example in ('sharc-sine', 'sharc-sine-asm'):
+            app = built(os.path.join('examples', example), tmp)
+            assert elemod.load_any(app).needs_core == '0.2'
+            expect(lambda: patch.build(SYX, [CORE_01, app], log=lambda *a: None),
+                   'needs core 0.2 or newer, and this build has core 0.1')
+            outputs, _man = patch.build(SYX, [core, app], version='SC02', log=lambda *a: None)
+            assert formats.parse(outputs['syx'], DEV).stored[7] != stock()[0].stored[7]
+            for order in ((CORE_01, core, app), (app, core, CORE_01)):
+                descs = {p: model.describe(p) for p in order}
+                assert all(d['fits'] and 'error' not in d for d in descs.values())
+                assert gui.with_core(descs, {app}) == {app, core}
+                assert gui.with_core(descs, {app, CORE_01}) == {app, core}
 
 
 # ---- the flash: what the firmware reads and writes there (docs/DEVICES.md) ------------------

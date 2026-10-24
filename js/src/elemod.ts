@@ -3,8 +3,8 @@
 // bundles. Format 2 (separate, linkable mods) is link.ts. Ported from elekloader's elemod.py (GPL-2.0-or-later);
 // the format is docs/FORMAT.md. Every refusal says what the Python says.
 //
-// A .elemod is JSON. It carries only its author's bytes plus hashes of the stock bytes it expects, and it can only
-// describe changes to the device's main OS: the bootloader and the other sections stay stock by construction.
+// A .elemod is JSON. It carries only its author's bytes plus hashes of the stock bytes it expects. Format 2 may
+// carry a profiled DN2 SHARC mod; all other sections, including the bootloader, stay stock.
 import { concat, encodeAsciiReplace, fromHex, sha } from './bytes.ts'
 import { type Device, type Release, UnknownFirmware, forTarget, imageEnd, linkable } from './devices.ts'
 import { ILLEGAL, LINEF, FPU, decodeColdFire, readerAt } from './isa/coldfire.ts'

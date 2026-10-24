@@ -13,8 +13,8 @@ In this order, stopping at the first failure:
   3. the static conflict check (elemod.check, link.check), including the
      device's protected ranges;
   4. apply the sites, or link the mods;
-  5. repack the main OS and rebuild the OS file: only the main OS and the
-     version field change;
+  5. repack the main OS and rebuild the OS file: only the main OS, optional
+     profiled SHARC section 7, and the version field change;
   6. verify every output with independent code (formats.verify): the rest
      of the file is stock, every checksum, the main OS depacks to the
      patched image (in place, where the device's bootloader staging is
@@ -86,7 +86,8 @@ def build(stock_path, mod_paths, version=None, check_only=False, log=print, lock
             if len(v2) != len(mods):
                 raise elemod.ModError('a whole-build bundle (format 1) cannot be combined '
                                       'with separate mods (format 2)')
-            linked = link.link(mods, img0, lock)
+            dsp = stock.section(rel.sharc['section']) if any(m.sharc for m in v2) else None
+            linked = link.link(mods, img0, lock, sharc_stream=dsp)
             img = linked.image
         else:
             img = elemod.apply(mods, img0)
@@ -145,8 +146,10 @@ def build(stock_path, mod_paths, version=None, check_only=False, log=print, lock
     stored = formats.pack_main(img, dev)
     log('packed the main OS: %d -> %d bytes (%.1f s)' % (len(img), len(stored), time.time() - t))
     try:
-        outputs = formats.write(stock, stored, dev, version)
-        facts = formats.verify(outputs, stock, img, dev, version)
+        outputs = formats.write(stock, stored, dev, version,
+                                stored_sharc=linked.sharc_stored if linked else None)
+        facts = formats.verify(outputs, stock, img, dev, version,
+                               want_sharc=linked.sharc_stream if linked else None)
     except formats.FormatError as e:
         raise PatchError('the output failed verification: %s' % e)
     gap = facts['main'].get('inplace_min_gap')

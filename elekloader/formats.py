@@ -96,28 +96,32 @@ def pack_main(image, dev):
     return elek.pack_main(image)
 
 
-def write(stock, stored_main, dev, version=None):
+def write(stock, stored_main, dev, version=None, *, stored_sharc=None):
     """-> {'syx': bytes} or, for a family with a card file too, {'syx', 'bin'}."""
     check_version(dev, version)
     try:
         if dev.container == 'ele3':
-            return {'syx': syx.write(stock, stored_main, dev, version)}
+            return {'syx': syx.write(stock, stored_main, dev, version, stored_sharc=stored_sharc)}
+        if stored_sharc is not None:
+            raise FormatError('the stock file has no profiled SHARC section')
         return elek.write(stock, stored_main, dev, version)
     except (syx.SyxError, elek.ElekError) as e:
         raise FormatError(str(e))
 
 
-def verify(outputs, stock, want_main, dev, version=None):
+def verify(outputs, stock, want_main, dev, version=None, *, want_sharc=None):
     """Re-read every output with the decoder and refuse it unless only the
-    main OS (and the version field) changed, and the protected and kept
-    ranges are stock's. -> facts."""
+    main OS, optional profiled SHARC section and version field changed,
+    and the protected and kept ranges are stock's. -> facts."""
     stock_main = main_image(stock, dev)
     try:
         if dev.container == 'ele3':
-            facts = syx.verify(outputs['syx'], stock, want_main, dev, version)
+            facts = syx.verify(outputs['syx'], stock, want_main, dev, version, want_sharc=want_sharc)
             facts['untouched'] = ['sections %s, byte for byte' % ', '.join(
                 s for s, v in sorted(facts['sections'].items()) if v['stock'])]
         else:
+            if want_sharc is not None:
+                raise FormatError('the stock file has no profiled SHARC section')
             facts = elek.verify(outputs, stock, want_main, dev, stock_main, version)
     except (syx.SyxError, elek.ElekError) as e:
         raise FormatError(str(e))

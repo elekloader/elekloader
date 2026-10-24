@@ -51,7 +51,50 @@ DEVICE = Device(
             version='1.12',
             syx_sha256='7e5b8a733d4ab1fdf7e5d22757f7d8eddaa3cbf71d0858874a791844c02ceb35',
             main_sha256='a098f620019b2ad38fd7e0397df39501fb1cf6bc26d0283915f34c49446fdf1a',
-            main_len=3196288)
+            main_len=3196288,
+            sharc={
+                'section': 7,
+                'processor': 'ADSP-21569',
+                'isa': 'sharc+-visa',
+                'silicon_revision': None,       # no chip-stepping observation; OS 1.12 is not a silicon revision
+                'stored_sha256': '5ff93df8747bdf9eb28acf50391fb484d6aa6782bfe969b2b3807a8412645660',
+                'stored_len': 602076,
+                'decoded_sha256': '336e340aa0cdcd34e314cfa44849f709a3134f6bd4cd57dfc7e15702c83115e2',
+                'decoded_len': 836956,
+                'stored_max': 0x100000,         # the sender's first 1 MiB staging buffer
+                'decoded_max': 0xfffff,         # second buffer also holds one command byte
+                'record_count': 95,
+                # (core-byte start, end, loader-byte start); physical capacity, not free RAM.
+                'l1_aliases': ((0x240000, 0x270000, 0x28240000),
+                               (0x2c0000, 0x2f0000, 0x282c0000),
+                               (0x300000, 0x320000, 0x28300000),
+                               (0x380000, 0x3a0000, 0x28380000)),
+                'l2_bytes': (0x20000000, 0x20100000),
+                'l2_pc16': (0xb80000, 0xc00000, 0x20000000),
+                'ddr_bytes': (0x80000000, 0xa0000000),
+                # Loader-byte ranges excluded from new code/data, independent of ownership.
+                'protected': ((0x200fa000, 0x200fe000, 'DN2 special window'),
+                              (0x200fe000, 0x20100000, 'Boot ROM workspace'),
+                              (0x282ec000, 0x282f0000, 'L1 block 1 cache'),
+                              (0x2831c000, 0x28320000, 'L1 block 2 cache'),
+                              (0x2839c000, 0x283a0000, 'L1 block 3 cache')),
+                # L1 bridge and pitch-table reservation; patch range is separate.
+                'abi': 'dn2-master-mono32-v1',
+                'pitch_range': (0x282dda00, 0x282dde00),  # linker-owned table and zero padding
+                # Bounded L2 mod reservation; not a general free-memory map.
+                'l2_abi': 'dn2-master-mono32-l2-v1',
+                'l2_app_range': (0x20090000, 0x20098000),
+                'core_range': (0x282dd600, 0x282dda00),
+                'stack_max': 544,
+                'code_guard_bytes': 64,
+                'keyed_pitch_table': (920, '314d5900969c5e00d23c6400b1326a004c837000073477009b4a7e0015cd8500e1c18d00c92f9600031e9f002e94a800'),
+                'owned_ranges': ((0x282dd600, 0x282dde00), (0x20090000, 0x20098000)),
+                'patch_ranges': ((0x2838489a, 0x283848a0),),
+                'active_keyed_core': {'segments': ((12, 'code', 'af2f375dc58a8ccd4b8abd89b1fb526441baa6fb5da9266c2b664e69d90fc829'),),
+                                      'zero': ((1008, 16),),
+                                      'entries': {'hook_offset_bytes': 12}, 'stack_bytes': 116},
+                'hook': (0x2838489a, '8715ffff78ff', '3e06160006eb'),
+            })
     },
     main_section=3,
     main_load=0x40000400,

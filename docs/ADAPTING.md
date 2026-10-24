@@ -45,13 +45,66 @@ monolithic build; section 4 says how to go from A to B.
   Octatrack's core, `mods/core-ot`, has a hook bus of its own from 0.2, with the Octatrack's events ("The hook bus on the
   Octatrack" below).
 
+### SHARC callbacks (core-dn2 0.2, Digitone II OS 1.12, experimental)
+
+Start with the [C/ASM source workflow](../examples/sharc-sine/README.md).
+Set `"resources": {"core": "0.2"}` in a SHARC mod's manifest; both examples
+already do this, so the loader selects a SHARC-capable DN2 core.
+After its one-time toolchain and stock-file setup, `mise run build-c` or
+`mise run build-asm` compiles the current source, generates its prelinked
+artifact, builds the core and mod, lints them and writes verified firmware.
+Both commands select the bounded 32 KiB layout automatically and run from
+`examples/sharc-sine`; no memory-location choice is required. They do not use
+the maintainer qualification scripts or a checked-in mod artifact as a build
+input.
+
+The callback processes one exclusive master-output block: 32 mono floats at
+48 kHz, copied to stereo. It does not add a selectable sound/filter machine,
+per-track routing or a polyphonic voice interface. The ordinary callback
+contract allows at most 428 declared mod stack bytes; more code/data does
+not add stack. Follow the [DN2 callback contract](SHARC-DN2-ABI.md), including register
+preservation, guard padding, pitch/gate behavior and actual stack bounds.
+
+Elekloader remains compiler-independent. Authors may use their own compiler
+or assembler and supply the [artifact envelope](FORMAT.md#digitone-ii-sharc-mod).
+The keyed core accepts changed mod bytes and callback offsets without a
+per-program allowlist update. The source workflow uses pinned Selache;
+Elekloader's SDK only packages its result. A consumer who already has the
+artifact needs no SHARC compiler:
+
+```sh
+python -m elekloader.sdk.build examples/sharc-sine --stock "$DN2_STOCK"
+python -m elekloader.lint examples/sharc-sine/out/sharc-sine-0.1.elemod --stock "$DN2_STOCK" --with "$DN2_CORE" --json
+python -m elekloader.patch --stock "$DN2_STOCK" --mod "$DN2_CORE" --mod examples/sharc-sine/out/sharc-sine-0.1.elemod --out sine.syx --version SK02
+```
+
+The first build prints `BUILT`, lint reports `"ok": true`, and patch prints
+`verified: sections 2, 4, 5, 8, byte for byte`. These commands package the
+checked-in reference artifact; they do not recompile an edited source file.
+A matching core `.elemod` remains necessary, as for other format-2 mods;
+building that core from source uses the ColdFire toolchain. The
+[assembly example](../examples/sharc-sine-asm/README.md) shares the core,
+note range and gain ramp; choose one mod per build. The separate `rebuild.py`
+scripts reproduce pinned reference artifacts for Elekloader development.
+
+The L2 ABI selects loader `[0x20090000,0x20098000)` with the same keyed core.
+Compile/link for this placement and emit offsets relative to its base;
+changing an ABI string does not relocate code linked for another address. The linker
+retains the bridge's fixed L1 pitch table. Code guards, full ownership
+coverage, stack and firmware limits still apply. Packaging checks these
+bounds; it does not prove arbitrary instructions, runtime writes or audio
+deadlines. C/ASM sine variants have bounded emulator and physical evidence; see
+[profile evidence and remaining limits](SHARC-DN2.md).
+
 ## 2. The rules
 
 The loader checks all of these before it builds anything; each rule says
 what you see when it is broken (section 5 has the fixes).
 
-1. **Only the main OS changes.** A mod has no way to touch the bootloader
-   or any other section, so the stock OS file always recovers the device.
+1. **Only profiled sections change.** Mods normally change the main OS.
+   Digitone II 1.12 also permits a bounded SHARC mod in section 7 (below).
+   The bootloader and other sections remain stock, so the stock OS file
+   remains the recovery path.
    Some main OS bytes stay stock too: the Octatrack's copy of its
    bootloader, and 16 zero bytes after a table that its stock DELAY reads
    (docs/DEVICES.md, `protected` and `keep`). *"protected on the ..."*,
@@ -134,7 +187,7 @@ renders on the DSP. It copies `.fast` code into SRAM itself, on the first
 `ev_enc` there, since a key can come before that tick (`ev_draw` cannot:
 the tick site runs first).
 
-The Digitone II's core (mods/core-dn2 0.1) has the same six UI events as the
+The Digitone II's core (mods/core-dn2, from 0.1) has the same six UI events as the
 Digitakt II's, at the Digitone II's sites, and no render events (its audio
 renders on the DSP). It has no `.fast`: SRAM is not qualified there, so a
 mod with `.fast` code is refused. Its tick rate has not been measured.
