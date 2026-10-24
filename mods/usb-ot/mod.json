@@ -1,0 +1,31 @@
+{
+ "id": "usb", "version": "0.1",
+ "license": "GPL-2.0-or-later",
+ "title": "USB", "category": "Framework", "author": "irpina",
+ "description": "The Octatrack's USB stack, one owner for it: USB functions (USB MIDI, USB audio and others) are mods of their own that combine, each adding its record to the ot_usb_functions table. It numbers their interfaces after the stock mass-storage one, composes the configuration descriptors at the controller's init, and gives each request and endpoint completion to the function it belongs to. On its own it changes nothing the unit does.",
+ "device": "octatrack", "os": "1.40C",
+ "sources": ["usb.c", "seams.s"],
+ "collections": {"ot_usb_functions": 4},
+ "sites": [
+  {"addr": "0x4001d4b2", "stock": "23d04ec95028", "op": "jmp", "target": "otu_seam_ep0page"},
+  {"addr": "0x4001d824", "stock": "4879400e20a1", "op": "jmp", "target": "otu_seam_getiface"},
+  {"addr": "0x4001d82c", "stock": "4879400e2000", "op": "keep2", "target": "otu_dev", "addend": 134217728},
+  {"addr": "0x4001d858", "stock": "7020b0826504", "op": "jmp", "target": "otu_seam_clamp1"},
+  {"addr": "0x4001d880", "stock": "4879400e201c6006", "op": "jmp", "target": "otu_seam_cfg_fs"},
+  {"addr": "0x4001d888", "stock": "4879400e203c", "op": "jmp", "target": "otu_seam_cfg_hs"},
+  {"addr": "0x4001d896", "stock": "7020b0826504", "op": "jmp", "target": "otu_seam_clamp2"},
+  {"addr": "0x4001d8be", "stock": "4879400e207c60c8", "op": "jmp", "target": "otu_seam_cfg_ohs"},
+  {"addr": "0x4001d8c6", "stock": "4879400e205c60c0", "op": "jmp", "target": "otu_seam_cfg_ofs"},
+  {"addr": "0x4001d9ca", "stock": "4879400b9868", "op": "jmp", "target": "otu_seam_setcfg"},
+  {"addr": "0x4001daec", "stock": "303946c8ce0c", "op": "jmp", "target": "otu_seam_clrfeat"},
+  {"addr": "0x4001dd04", "stock": "2039fc0b01c4008000400040", "op": "jmp", "target": "otu_seam_setiface"},
+  {"addr": "0x4001de64", "stock": "2039fc0b01c0", "op": "jmp", "target": "otu_seam_unknown"},
+  {"addr": "0x4001de6e", "stock": "23c0fc0b01c0", "op": "jmp", "target": "otu_seam_stall"},
+  {"addr": "0x4001e030", "stock": "203c08000000", "op": "jmp", "target": "otu_seam_init"},
+  {"addr": "0x4001e606", "stock": "2039fc0b01ac", "op": "jmp", "target": "otu_seam_irq"},
+  {"addr": "0x4001e91c", "stock": "4ebaed9a7040", "op": "jmp", "target": "otu_seam_reset"},
+  {"addr": "0x4001e952", "stock": "2039fc0b0140", "op": "jmp", "target": "otu_seam_sessend"}
+ ],
+ "requires": ["core"],
+ "resources": {"core": "0.3.1", "names": ["usb:stack"]}
+}

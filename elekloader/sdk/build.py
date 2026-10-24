@@ -406,6 +406,10 @@ def build(mdir, stock_path, out_dir=None, extra=None):
         at, src = fixed[s.name]
         if not s.size:
             raise BuildError('%s: no code to place' % src)
+        for lo, hi, why in dev.keep:
+            if at < hi and lo < at + s.size:
+                raise BuildError('%s: 0x%08x-0x%08x writes into 0x%08x-0x%08x, which stays stock '
+                                 'on the %s: %s' % (src, at, at + s.size, lo, hi, dev.name, why))
         if not any(a <= at and at + s.size <= b for a, b in dev.image_free):
             raise BuildError('%s: 0x%08x-0x%08x is not inside a free area of the %s image (%s)'
                              % (src, at, at + s.size, dev.name,

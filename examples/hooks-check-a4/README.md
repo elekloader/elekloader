@@ -23,6 +23,6 @@ screen taken.
 python -m elekloader.sdk.build mods/core-a4 --stock Analog-Four_MKII_OS1.56.syx
 python -m elekloader.sdk.build examples/hooks-check-a4 --stock Analog-Four_MKII_OS1.56.syx
 python -m elekloader.patch --stock Analog-Four_MKII_OS1.56.syx \
-    --mod mods/core-a4/out/core-0.1.elemod --mod examples/hooks-check-a4/out/hooks-check-0.1.elemod \
+    --mod mods/core-a4/out/core-0.2.elemod --mod examples/hooks-check-a4/out/hooks-check-0.1.elemod \
     --out a4-hooks.syx --version HC56
 ```

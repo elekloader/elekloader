@@ -87,6 +87,7 @@ def write_mod(tmp, doc, name='ot-test.elemod'):
 
 # ---- the file family ------------------------------------------------------------------
 
+
 def test_stock_files_parse_and_agree():
     st, img = stock()
     b = formats.parse(need(BIN), DEV)
@@ -133,6 +134,7 @@ def test_corruption_is_caught():
 
 # ---- whole builds ---------------------------------------------------------------------------
 
+
 def test_data_site_and_blob_build_and_verify():
     st, img = stock()
     blob = b'\x4e\x75' + bytes(range(256)) * 4        # stands in for a loader and its payloads
@@ -165,6 +167,94 @@ def test_refuses_the_protected_bootloader_copy():
     stored = formats.pack_main(bytes(bad), DEV)
     outputs = formats.write(st, stored, DEV, 'x')
     expect(lambda: formats.verify(outputs, st, bytes(bad), DEV, 'x'), 'not stock')
+
+
+def test_the_kept_bytes_follow_the_stock_delays_table():
+    """The profile's `keep`, against the stock image: the 16 bytes at 0x400d24d0 read zero, so
+    they look free, but they follow the stock DELAY's 508-word coefficient table, which it
+    reads as 0x400d1ce0 + 4 * (x >> 6) (lsr/asr #6, then lea 0x400d1ce0, twice). An index
+    of 508 or more reads them (octabam #771, measured under octabam's emulator port)."""
+    st, img = stock()
+    (lo, hi, _why), = DEV.keep
+
+    def at(a, n):
+        return img[a - DEV.main_load:a - DEV.main_load + n]
+    assert at(lo, hi - lo) == bytes(hi - lo)
+    assert 0x400d1ce0 + 4 * 508 == lo and at(lo - 4, 4) != bytes(4)    # the table's last word
+    assert at(0x40003528, 8).hex() == 'ec8843f9400d1ce0'      # lsr.l #6,d0; lea 0x400d1ce0,a1
+    assert at(0x40003542, 8).hex() == 'ec8047f9400d1ce0'      # asr.l #6,d0; lea 0x400d1ce0,a3
+
+
+def test_a_build_leaves_the_kept_bytes_stock():
+    """A whole build that writes any of the kept bytes is refused, with the range and the
+    reason; the same write 16 bytes on builds and verifies. A main OS whose kept bytes
+    changed some other way fails the verify."""
+    (lo, hi, why), = DEV.keep
+    need(SYX)
+    with tempfile.TemporaryDirectory() as tmp:
+        for at, n in ((lo, 1812), (hi - 4, 4), (lo - 4, 8)):
+            p = write_mod(tmp, bundle([(at, b'\xff' * n)]))
+            expect(lambda: patch.build(SYX, [p], version='x', log=lambda *a: None),
+                   'site 0x%08x writes into 0x400d24d0-0x400d24e0, which stays stock on the '
+                   'Octatrack: %s' % (at, why))
+        p = write_mod(tmp, bundle([(hi, b'\xff' * 1812)]))
+        outputs, _man = patch.build(SYX, [p], version='x', log=lambda *a: None)
+    new = formats.main_image(formats.parse(outputs['syx'], DEV), DEV)
+    assert new[hi - DEV.main_load:][:1812] == b'\xff' * 1812
+    assert new[lo - DEV.main_load:hi - DEV.main_load] == bytes(hi - lo)
+    st, img = stock()
+    bad = bytearray(img)
+    bad[hi - 1 - DEV.main_load] = 1
+    outputs = formats.write(st, formats.pack_main(bytes(bad), DEV), DEV, 'x')
+    expect(lambda: formats.verify(outputs, st, bytes(bad), DEV, 'x'),
+           '0x400d24d0-0x400d24e0', 'is not stock')
+
+
+def test_fixed_code_past_the_kept_bytes_links():
+    """sdk.build refuses `fixed` code over the kept bytes, with the reason. 16 bytes on, the
+    same code builds, links with core-ot and verifies, and the kept bytes stay stock. A
+    format-2 mod that carries a site over them anyway (as the shop's octabam-synth 363861e
+    does, 1,812 bytes at 0x400d24d0) is refused by the linker."""
+    import shutil
+    from elekloader.sdk import build
+    need(SYX)
+    if not shutil.which(os.environ.get('ELEKLOADER_CROSS', DEV.toolchain['prefix']) + 'as'):
+        raise Skip('no m68k cross assembler to build mods/core-ot')
+    (lo, hi, why), = DEV.keep
+    with tempfile.TemporaryDirectory() as tmp:
+        core, _m = build.build(os.path.join(ROOT, 'mods', 'core-ot'), SYX, tmp)
+
+        def fixed(addr):
+            d = os.path.join(tmp, 'kp')
+            os.makedirs(d, exist_ok=True)
+            with open(os.path.join(d, 'kp.s'), 'w') as fh:
+                fh.write('        .text\n        moveq   #1,%d0\n        rts\n'
+                         '        .long   0x4b454550\n')
+            with open(os.path.join(d, 'mod.json'), 'w') as fh:
+                json.dump({'id': 'kp', 'version': '1', 'device': 'octatrack', 'os': '1.40C',
+                           'fixed': [{'source': 'kp.s', 'addr': '0x%08x' % addr,
+                                      'symbol': 'kp_start'}], 'requires': ['core']}, fh)
+            return build.build(d, SYX, tmp)
+        try:
+            fixed(lo)
+        except build.BuildError as e:
+            assert '0x400d24d0-0x400d24d8 writes into 0x400d24d0-0x400d24e0, which stays stock ' \
+                   'on the Octatrack: %s' % why in str(e), str(e)
+        else:
+            raise AssertionError('fixed code over the kept bytes was built')
+        kp, m = fixed(hi)
+        assert [(s['addr'], s['len']) for s in m.sites] == [(hi, 8)]
+        outputs, _man = patch.build(SYX, [core, kp], version='KEEP TEST', log=lambda *a: None)
+        with open(kp) as fh:
+            doc = json.load(fh)
+        doc['sites'][0]['addr'] = '0x%08x' % lo           # the same zeros' hash: only the place
+        moved = write_mod(tmp, doc, 'kp-moved.elemod')
+        expect(lambda: patch.build(SYX, [core, moved], version='x', log=lambda *a: None),
+               'kp 1 site 0x400d24d0 writes into 0x400d24d0-0x400d24e0, which stays stock on '
+               'the Octatrack')
+    new = formats.main_image(formats.parse(outputs['syx'], DEV), DEV)
+    assert new[hi - DEV.main_load:][:8].hex() == '70014e754b454550'
+    assert new[lo - DEV.main_load:hi - DEV.main_load] == bytes(hi - lo)
 
 
 def test_relocatable_data_is_reached_only_through_its_references():
@@ -805,6 +895,181 @@ def test_the_example_subscribes_to_the_bus():
     assert struct.unpack('>II', ln.image[o:o + 8]) == (ln.map['hello_draw'], 0)
 
 
+# ---- USB (usb-ot and its functions) ------------------------------------------------------
+
+
+def test_the_usb_companion_sites():
+    """mods/usb-ot: each site is whole stock instructions of the USB stack and keeps clear of
+    core-ot's bus; the stock device descriptor has one reference, the site that serves
+    usb-ot's copy through the uncached alias."""
+    with open(os.path.join(ROOT, 'mods', 'usb-ot', 'mod.json')) as fh:
+        j = json.load(fh)
+    st, img = stock()
+    assert j['id'] == 'usb' and j['collections'] == {'ot_usb_functions': 4}
+    assert j['resources']['names'] == ['usb:stack'] and j['requires'] == ['core']
+    for s in j['sites']:
+        addr, n = int(s['addr'], 16), len(s['stock']) // 2
+        o = addr - DEV.main_load
+        assert img[o:o + n].hex() == s['stock'], s['addr']
+        ok, note = elemod.insn_check(img, addr, n, DEV)
+        assert ok, (s['addr'], note)
+        for a, h, _e in BUS_SITES.values():
+            assert not (a < addr + n and addr < a + len(h) // 2), s['addr']
+    assert img.count(struct.pack('>I', 0x400e2000)) == 1
+    (dev,) = [s for s in j['sites'] if s['op'] == 'keep2']
+    assert (dev['addr'], dev['target'], dev['addend']) == ('0x4001d82c', 'otu_dev', 0x08000000)
+
+
+def test_usb_midi_is_a_usb_function():
+    """usb-ot alone has an empty function table; with usb-midi-ot its record is the one
+    entry and its handlers are on ev_midi_out and ev_midi_out_rt. The device descriptor's
+    reference serves usb-ot's copy, uncached. A function needs usb-ot, and core-ot 0.4."""
+    import shutil
+    from elekloader.sdk import build
+    need(SYX)
+    if not shutil.which(os.environ.get('ELEKLOADER_CROSS', DEV.toolchain['prefix']) + 'gcc'):
+        raise Skip('no m68k cross compiler')
+    st, img = stock()
+    with tempfile.TemporaryDirectory() as tmp:
+        core, usb, midi = (elemod.load_any(build.build(os.path.join(ROOT, 'mods', d), SYX, tmp)[0])
+                           for d in ('core-ot', 'usb-ot', 'usb-midi-ot'))
+        alone = link.link([core, usb], img)
+        ln = link.link([core, usb, midi], img)
+
+    def table(ln, name, n):
+        o = ln.layout['run_load'] + (ln.tables[name][0] - DEV.ddr[0]) - DEV.main_load
+        return struct.unpack('>%dI' % n, ln.image[o:o + 4 * n])
+
+    assert alone.tables['ot_usb_functions'][1] == 0 and table(alone, 'ot_usb_functions', 1) == (0,)
+    assert ln.tables['ot_usb_functions'][1] == 1
+    assert table(ln, 'ot_usb_functions', 2) == (ln.map['usb_midi'], 0)
+    assert table(ln, 'ev_midi_out', 2) == (ln.map['usbmidi_out'], 0)
+    assert table(ln, 'ev_midi_out_rt', 2) == (ln.map['usbmidi_out_rt'], 0)
+    o = 0x4001d82c - DEV.main_load
+    assert ln.image[o:o + 6] == b'\x48\x79' + struct.pack('>I', ln.map['otu_dev'] + 0x08000000)
+    assert any('requires usb' in p for p in link.check([core, midi], img))
+
+
+USB_AUDIO = ('usb-audio-ot', 'usb-audio-tracks-ot', 'usb-audio-master-ot', 'usb-audio-main-cue-ot',
+             'usb-audio-main-ot')
+
+
+def test_usb_audio_is_a_usb_function():
+    """mods/usb-audio-ot and its four other layouts (one source, USBA_LAYOUT): each hooks no
+    stock code, and links on usb-ot with its record in ot_usb_functions and its producer on
+    core-ot 0.4's ev_frame_end; beside USB MIDI, MIDI's record comes first by order whatever
+    order the mods come in (its interfaces 1-2, audio's 3-4). Two layouts share EP3 IN and are
+    refused together; a layout needs usb-ot."""
+    import shutil
+    from elekloader.sdk import build
+    need(SYX)
+    if not shutil.which(os.environ.get('ELEKLOADER_CROSS', DEV.toolchain['prefix']) + 'gcc'):
+        raise Skip('no m68k cross compiler')
+    st, img = stock()
+    with tempfile.TemporaryDirectory() as tmp:
+        core, usb, midi = (elemod.load_any(build.build(os.path.join(ROOT, 'mods', d), SYX, tmp)[0])
+                           for d in ('core-ot', 'usb-ot', 'usb-midi-ot'))
+        audio = [elemod.load_any(build.build(os.path.join(ROOT, 'mods', d), SYX, tmp)[0]) for d in USB_AUDIO]
+
+    def table(ln, name, n):
+        o = ln.layout['run_load'] + (ln.tables[name][0] - DEV.ddr[0]) - DEV.main_load
+        return struct.unpack('>%dI' % n, ln.image[o:o + 4 * n])
+
+    assert [a.id for a in audio] == ['usb-audio', 'usb-audio-tracks', 'usb-audio-master',
+                                     'usb-audio-main-cue', 'usb-audio-main']
+    for a in audio:
+        assert not a.sites and a.names == ['usb:ep3-in'], a.id
+        ln = link.link([core, usb, a], img)
+        assert table(ln, 'ot_usb_functions', 2) == (ln.map['usb_audio'], 0), a.id
+        assert table(ln, 'ev_frame_end', 2) == (ln.map['usba_frame'], 0), a.id
+        both = link.link([core, usb, a, midi], img)
+        assert table(both, 'ot_usb_functions', 3) == (both.map['usb_midi'], both.map['usb_audio'], 0), a.id
+    assert any('both claim usb:ep3-in' in p for p in link.check([core, usb, audio[0], audio[3]], img))
+    assert any('requires usb' in p for p in link.check([core, audio[0]], img))
+
+
+def test_the_machines_sites():
+    """mods/machines-ot: its 32 sites are stock, whole instructions, and none is core-ot's or the
+    intercepts'; the two places that enter machines.c with the caller's stack (the Part validator
+    and the FLEX renderer) are the prologues seams.s replays; the page resolver keeps the
+    registers the hooks after it read."""
+    st, img = stock()
+
+    def sites(name):
+        with open(os.path.join(ROOT, 'mods', name, 'mod.json')) as fh:
+            return json.load(fh)['sites']
+    mine = sites('machines-ot')
+    assert len(mine) == 32
+    for s in mine:
+        a, n = int(s['addr'], 16), len(s['stock']) // 2
+        o = a - DEV.main_load
+        assert img[o:o + n].hex() == s['stock'], s['addr']
+        assert s['op'] in ('jmp', 'keep2'), s['addr']
+        ok, note = elemod.insn_check(img, a, n, DEV)
+        assert ok, (s['addr'], note)
+    others = [(int(s['addr'], 16), len(s['stock']) // 2) for m in ('core-ot', 'intercepts-ot') for s in sites(m)]
+    for s in mine:
+        a, n = int(s['addr'], 16), len(s['stock']) // 2
+        assert not any(b < a + n and a < b + m for b, m in others), s['addr']
+    with open(os.path.join(ROOT, 'mods', 'machines-ot', 'seams.s')) as fh:
+        src = fh.read()
+    for site, stub, back in ((0x40002318, 'otm_stock_validate', 0x40002320), (0x40004008, 'ot_stock_render', 0x40004010)):
+        o = site - DEV.main_load
+        frame = struct.unpack('>h', img[o + 2:o + 4])[0]
+        assert img[o:o + 2] == b'\x4f\xef' and img[o + 4:o + 8] == b'\x48\xd7\x7c\xfc', hex(site)
+        body = src.split('%s:\n' % stub, 1)[1].split('\n\n', 1)[0]
+        assert 'lea     %d(%%sp), %%sp' % frame in body and 'jmp     %#x' % back in body, stub
+    # the page resolver's case 0 calls C, then goes on to the PLAYBACK load (0x40031ece), where
+    # SYNTH MACHINE's and OCTA303's hooks read the part (d1) and the bank (a1): it keeps both
+    body = src.split('otm_resolve:\n', 1)[1].split('\n\n', 1)[0]
+    at = [body.find(x) for x in ('movem.l %d1/%a1, (%sp)', 'jsr     otm_page', 'movem.l (%sp), %d1/%a1',
+                                 'jmp     0x40031ece')]
+    assert -1 not in at and at == sorted(at), at
+
+
+def test_the_machines_companion_lists_a_machine():
+    """mods/machines-ot with examples/crush-machine-ot: ot_machines holds CRUSH's record, whose fields
+    sit where version 1 of the record has them; the grown name and page tables start as stock's;
+    the FLEX renderer and the Part validator go to machines.c."""
+    import shutil
+    from elekloader.sdk import build
+    need(SYX)
+    if not shutil.which(os.environ.get('ELEKLOADER_CROSS', DEV.toolchain['prefix']) + 'gcc'):
+        raise Skip('no m68k cross compiler')
+    st, img = stock()
+    with tempfile.TemporaryDirectory() as tmp:
+        core, _m = build.build(os.path.join(ROOT, 'mods', 'core-ot'), SYX, tmp)
+        mach, m = build.build(os.path.join(ROOT, 'mods', 'machines-ot'), SYX, tmp)
+        crush, c = build.build(os.path.join(ROOT, 'examples', 'crush-machine-ot'), SYX, tmp)
+        assert {'ot_stock_render', 'ot_part', 'ot_track_machine', 'ot_machine_row'} <= set(m.exports)
+        assert set(c.imports) == {'ot_stock_render'}, c.imports
+        ln = link.link([elemod.load_any(p) for p in (core, mach, crush)], img)
+    run = ln.layout['run_load'] - DEV.main_load
+
+    def ram(addr, n):
+        o = run + (addr - DEV.ddr[0])
+        return ln.image[o:o + n]
+    at, count, _entry = ln.tables['ot_machines']
+    assert count == 1
+    rec = ln.map['crush_machine']
+    assert struct.unpack('>II', ram(at, 8)) == (rec, 0)
+    r = ram(rec, 80)
+    assert struct.unpack('>I', r[0:4])[0] == 1 and r[4:8] == b'CR\x01\x01'      # abi, sig, versions
+    label = struct.unpack('>I', r[8:12])[0]
+    assert ram(label, 6) == b'CRUSH\0'
+    assert struct.unpack('>III', r[12:24]) == (1, 0, 0x400d320c)                # PROTECT, FLEX's page, FLEX's defaults
+    assert struct.unpack('>I', r[64:68])[0] == ln.map['crush_render']           # render
+    assert r[24:64] == bytes(40) and r[68:80] == bytes(12)
+    names, pages = ln.map['otm_names'], ln.map['otm_pages']
+    o = 0x400a78c8 - DEV.main_load
+    assert ram(names, 20) == img[o:o + 20]
+    o = 0x400d5f38 - DEV.main_load
+    assert ram(pages, 32) == img[o:o + 32]
+    for site, fn in ((0x40004008, 'otm_render'), (0x40002318, 'otm_validate')):
+        o = site - DEV.main_load
+        assert ln.image[o:o + 8] == b'\x4e\xf9' + struct.pack('>I', ln.map[fn]) + b'\x4e\x71', fn
+
+
 # ---- DSP code ---------------------------------------------------------------------------
 
 HOOK = 0x400ef758               # payload A's P:0x88, move r2,x:>$204 (627000 000204)
@@ -910,6 +1175,11 @@ def test_dsp_code_is_refused_where_it_cannot_go():
     back['sections']['.run'] = {'len': 4, 'parts': [['hex', '00000000']]}
     back['relocs'].append(['.run', 0, 'abs32', 'sym:tst', 0])
     refused([core, bus, back], 'dsptest 0: .run+0x0 is a ColdFire reference to a DSP address')
+    wide = json.loads(json.dumps(sub))                  # a DSP word is 24 bits: 0xffffff links, one more does not
+    wide['relocs'][0] = ['.dsp.A', 6, 'dsp24', 'abs', 0x1000000]
+    refused([core, bus, wide], '.dsp.A+0x6: a DSP address out of range (0x1000000)')
+    wide['relocs'][0][4] = 0xffffff
+    link.link([link.Mod2(d, d['id']) for d in (core, bus, wide)], img)
     ent = json.loads(json.dumps(sub))
     ent['contribute'][0]['relocs'] = [[0, 'abs32', 'sym:tst', 0], [1, 'dsp24', 'sym:tst', 0]]
     refused([core, bus, ent], 'an entry for ev_dsp_rx has a abs32 relocation at +0; a DSP '
