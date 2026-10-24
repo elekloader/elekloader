@@ -7,8 +7,9 @@ is skipped, not passed:
   ELEKLOADER_OCTABAM   optional: a sambanks/octabam checkout; without one, only
                        the synthetic module below is converted. The remix test
                        also runs octabam's own build there (its dsp_asm, m68k-elf).
+                       OCTA303's test needs a checkout that has it (b085c4d).
 Building and checking also needs the cross binutils (m68k-linux-gnu-as, -ld,
--objcopy).
+-objcopy); the machines tests also the cross compiler (mods/machines-ot is C).
 """
 import os
 import shutil
@@ -213,9 +214,72 @@ hook_entry:
 '''
 
 
+# A source machine: two of the machine row's places and the chooser's row count (all
+# machines-ot's), the kind table's FLEX entry, the CHROMATIC pitch (an intercept) and a site
+# of its own (OCTA303's shape, at its sites).
+MACHMOD = '''
+from types import SimpleNamespace as NS
+H = bytes.fromhex
+UNIT = NS(label="munit", source="modules/machmod/munit.s", cave_addr=None, cpu="54455",
+          reference=None, dram=True, include=None)
+
+def D(site, expect, symbol, kind="jmp", pad_to=None):
+    return NS(site=site, expect=H(expect), unit="munit", symbol=symbol, note="", kind=kind,
+              target=None, pad_to=pad_to, subst_return=False)
+
+MODULE = NS(name="machmod", key="MACHMOD", doc="a machine", dsp=None, menu=None, params=(),
+            runtime=None, arena=None, overrides=(), cf_patches=(), linked=(UNIT,),
+            detours=(D(0x400334d8, "2f02222f0008", "mm_name"),
+                     D(0x4007981c, "77101084d081", "mm_commit"),
+                     D(0x4004fc58, "45f2ac0471b9100b14cf", "mm_chrom", kind="jsr", pad_to=10),
+                     D(0x4000c634, "226f007210309800", "mm_retrig", pad_to=8)),
+            symbol_refs=(NS(addr=0x400d6438, expect=0x40004008, unit="munit", symbol="mm_render",
+                            addend=0, note=""),),
+            tables=(), pokes=(NS(addr=0x40079248, expect=H("48780005"), write=H("48780006"),
+                                 note=""),),
+            requires=(), claims=None, category=None, author="test")
+'''
+
+MUNIT_S = '''
+        .text
+        .set    STOCK_RENDER, 0x40004008        | the FLEX renderer
+        .set    MM_LEN, 16
+        .globl  mm_render, mm_name, mm_commit, mm_chrom, mm_retrig
+mm_render:
+        jmp     STOCK_RENDER
+mm_name:
+        rts
+mm_commit:
+        rts
+mm_chrom:
+        rts
+mm_retrig:
+        jmp     0x4000c63c
+mm_build:
+        lea     mm_desc, %a0
+        move.l  %a0, %d0
+        rts
+mm_sign:
+        rts
+mm_title:
+        .asciz  "MACH"
+mm_defaults:
+        .byte   1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12
+        .balign 4
+mm_desc:
+        .fill   2 * MM_LEN, 1, 0
+'''
+
+MACHMOD_RECORD = dict(sig='MM', versions=(1, 2), label='mm_title', title='MACH',
+                      flags=octabam.OT_PROTECT, defaults='mm_defaults', page='mm_desc + MM_LEN',
+                      build='mm_build', assign='mm_sign',
+                      stock_render=r'^(\s*\.set\s+STOCK_RENDER,\s*)0x40004008\b')
+
+
 def fake_checkout(tmp):
     root = os.path.join(tmp, 'octabam')
     for rel, text in (('tools/remix/schema.py', ''), ('modules/fake/manifest.py', MANIFEST),
+                      ('modules/machmod/manifest.py', MACHMOD), ('modules/machmod/munit.s', MUNIT_S),
                       ('modules/hookmod/manifest.py', HOOKMOD),
                       ('modules/hookmod/hunit.s', HUNIT_S),
                       ('modules/hookmod/inject.asm', '; DSP56300\n'),
@@ -324,6 +388,115 @@ def test_pinned_code_stays_where_it_is_pinned():
     assert not mod.size('.run')
     assert sum('fixed code' in x for x in lines) == 2, lines
     assert any('the same bytes for 5407 as for the chip' in x for x in lines), lines
+
+
+# A cave pinned where the device keeps the bytes stock (SYNTH MACHINE's page, before octabam's
+# PLACE setting): emit's one poke jumps to it from the PLAYBACK page resolver, as SYNTH's does.
+KEPT = '''
+from types import SimpleNamespace as NS
+PIN = {pin:#x}
+RATIFIED = bytes.fromhex("{hex}")
+
+def emit(addr):
+    assert addr == PIN, "the cave is pinned"
+    return b"", ((0x40031ece, bytes.fromhex("20300c006002"),
+                  bytes.fromhex("4ef9") + addr.to_bytes(4, "big")),)
+
+CAVE = NS(label="kcave", cave_addr=PIN, pinned=RATIFIED, source="modules/{name}/kcave.s",
+          hook_addr=None, hook_stock=None, registers_formatter=None, emit=emit, defsyms=(),
+          cpu="5475", reference=lambda addr: RATIFIED, pool_base_literals=0)
+MODULE = NS(name="{name}", key="{key}", doc="a pinned cave", dsp=None, menu=None, params=(),
+            runtime=None, arena=None, overrides=(), cf_patches=(CAVE,), linked=(), detours=(),
+            symbol_refs=(), tables=(), pokes=(), requires=(), claims=None, category=None,
+            author="test")
+'''
+
+# Its pointers into itself are labels, so they move with it ...
+KCAVE_S = '''
+        .text
+        lea     kc_list,%a1
+        move.l  (%a1),%d0
+        jmp     0x40031ed6
+        .balign 4
+kc_list:
+        .long   kc_name, 0x400d31ae
+kc_name:
+        .ascii  "KEPT"
+'''
+
+# ... unless the source writes one as a number: that one would still point at its pin.
+KPIN_S = KCAVE_S.replace('.long   kc_name', '.long   0x400d24e4')
+
+
+def kept_checkout(tmp, mods):
+    """A checkout of caves pinned at the given addresses: {name: (pin, source)}. Each
+    manifest ratifies its source as linked at its pin, as octabam's do."""
+    root = os.path.join(tmp, 'octabam')
+    for rel, text in (('tools/remix/schema.py', ''), ('LICENSE', 'MIT, for the test\n')):
+        os.makedirs(os.path.dirname(os.path.join(root, rel)), exist_ok=True)
+        with open(os.path.join(root, rel), 'w') as fh:
+            fh.write(text)
+    for name, (pin, src) in mods.items():
+        d = os.path.join(root, 'modules', name)
+        os.makedirs(d)
+        with open(os.path.join(d, 'kcave.s'), 'w') as fh:
+            fh.write(textwrap.dedent(src))
+        raw = octabam._gnu_link(DEV, root, 'modules/%s/kcave.s' % name, pin, '5475', (),
+                                os.path.join(tmp, 'ratify', name))
+        with open(os.path.join(d, 'manifest.py'), 'w') as fh:
+            fh.write(textwrap.dedent(KEPT).format(pin=pin, hex=raw.hex(), name=name,
+                                                  key=name.upper()))
+    return octabam.Octabam(root)
+
+
+def test_a_cave_pinned_on_kept_bytes_moves_to_run():
+    """A cave octabam pins on bytes the device keeps stock goes in .run, as a floating cave:
+    its emit's jump is a jmp site against its label (a code site for --sites too), and nothing
+    is written at the pin. The
+    check links it at its pin to the ratified bytes and proves that only its pointers into
+    itself change when it moves. A source that writes its own address as a number is
+    refused by the check; a cave pinned just past the kept bytes stays fixed."""
+    img = stock()
+    tools()
+    (lo, hi, _why), = DEV.keep
+    with tempfile.TemporaryDirectory() as tmp:
+        ob = kept_checkout(tmp, {'kept': (lo, KCAVE_S), 'keptpin': (lo, KPIN_S),
+                                 'keptnext': (hi, KCAVE_S)})
+        plan, mod, lines = build_and_check(ob, 'kept', tmp)
+        j = plan['json']
+        assert 'fixed' not in j and b'.include "modules/kept/kcave.s"' in \
+            plan['files']['glue/ob_kept_kcave.s']
+        assert j['sites'] == [{'addr': '0x40031ece', 'stock': '20300c006002', 'op': 'jmp',
+                               'target': 'ob_kept_kcave', 'addend': 0}]
+        assert mod.symbols['ob_kept_kcave'] == ('.run', 0)
+        assert any('which octabam pins at 0x400d24d0, is in .run' in x for x in plan['notes'])
+        # --sites lists its jump as a code site, as the conversion has it
+        got, notes = octabam.code_sites(ob, 'kept', img, DEV)
+        assert got == [(0x40031ece, 6, 'ob_kept_kcave')] and not notes, (got, notes)
+        assert set(got) == _plan_code_sites(plan)
+        assert any('in .run, as octabam links it there; from its link at its pin 0x400d24d0 '
+                   '(the bytes the manifest ratifies), only its' in x for x in lines), lines
+        ln = link.link([elemod.load_any(core(tmp)), mod], img)
+        a = ln.map['octabam-kept:ob_kept_kcave']
+        o = 0x40031ece - DEV.main_load
+        assert ln.image[o:o + 6] == bytes.fromhex('4ef9') + a.to_bytes(4, 'big')
+        assert ln.image[lo - DEV.main_load:hi - DEV.main_load] == bytes(hi - lo)
+
+        plan = octabam.convert(ob, 'keptpin', img, DEV)
+        d = octabam.write(ob, plan, tmp)
+        path, _m = build.build(d, SYX, tmp)
+        try:
+            octabam.check(ob, plan, path, core(tmp), SYX, os.path.join(tmp, 'keptpin.check'))
+        except octabam.CheckError as e:
+            assert 'holds 0x400d24e4, inside itself at its pin, and does not move with it' in \
+                str(e), str(e)
+        else:
+            raise AssertionError('a cave that pins its own address was moved')
+
+        plan, mod, lines = build_and_check(ob, 'keptnext', tmp)
+        assert plan['json']['fixed'] == [{'source': 'modules/keptnext/kcave.s',
+                                          'addr': '0x%08x' % hi, 'symbol': 'ob_keptnext_kcave'}]
+        assert mod.symbols['ob_keptnext_kcave'] == ('abs', hi)
 
 
 def test_a_poke_into_relocatable_data_is_served_from_a_copy():
@@ -547,6 +720,207 @@ def test_refusals():
         assert 'DSP56300' in octabam.refusal(ob, 'fake')
 
 
+def _plan_code_sites(plan):
+    """A plan's code sites as sdk.bounties reads them from the built mod: (addr, len, label)."""
+    out = set()
+    for s in plan['json']['sites']:
+        n = len(s['stock']) // 2
+        if s['op'] in ('jsr', 'jmp', 'keep2'):
+            out.add((int(s['addr'], 16), n, s['target']))
+        elif s['op'] == 'bytes' and s.get('kind') == 'code':
+            out.add((int(s['addr'], 16), n, '?'))
+    return out
+
+
+def test_the_code_sites_of_a_module():
+    """--sites lists the stock code a module hooks as its conversion's code sites, for any
+    module: emit's data poke is not one, and a bridge's overridden detour is its own."""
+    img = stock()
+    with tempfile.TemporaryDirectory() as tmp:
+        ob = fake_checkout(tmp)
+        for n in ('fake', 'bridge'):
+            got, notes = octabam.code_sites(ob, n, img, DEV)
+            assert set(got) == _plan_code_sites(octabam.convert(ob, n, img, DEV)) and not notes, n
+        assert sorted(octabam.code_sites(ob, 'fake', img, DEV)[0]) == [
+            (0x4000f834, 8, 'fake_entry'), (0x4000f8cc, 6, 'ob_fake_a_cave'), (0x4002fb10, 6, 'ob_fake_a_cave')]
+        # a module that does not convert still has its stock code listed, with why it is refused
+        up = octabam.upstream(ob, img, DEV)
+        by = {e['name']: e for e in up['mods']}
+        assert by['hookmod']['sites'] == [['0x4001de6e', 6, 'hook_entry']] and 'DSP' in by['hookmod']['refused']
+        assert 'refused' not in by['fake'] and by['fake']['id'] == 'octabam-fake'
+        assert (up['device'], up['os'], up['from']) == ('octatrack', '1.40C', 'sambanks/octabam')
+
+
+def test_refusals_of_octabams_later_schema():
+    """What octabam's later manifests declare and the converter does not serve yet refuses the
+    module, by name; a manifest without those fields (octabam 363861e's) is as before."""
+    from types import SimpleNamespace as NS
+    img = stock()
+    with tempfile.TemporaryDirectory() as tmp:
+        ob = fake_checkout(tmp)
+        m = ob.modules['fake']
+        bare = {k: v for k, v in vars(m).items() if k not in ('runtime', 'arena')}
+        ob.modules['fake'] = NS(**bare)          # no runtime, no arena: the later schema's shape
+        assert octabam.refusal(ob, 'fake') is None
+        for change, words in (({'requires_brain': True}, 'needs BRAIN'),
+                              ({'settings': (NS(name='MODE'),)}, 'settings (MODE)'),
+                              ({'arena_reserves': (NS(label='stage'),)}, 'arena bytes of its own (stage)'),
+                              ({'dram_regions': (NS(symbol='ring'),)}, 'DRAM regions of its own (ring)'),
+                              ({'keeps': (NS(addr=0x400449be),)}, 'keeps stock bytes'),
+                              ({'linked': (NS(**dict(vars(m.linked[0]), loader=True)),)}, 'octabam\'s loader')):
+            ob.modules['fake'] = NS(**dict(bare, **change))
+            assert words in (octabam.refusal(ob, 'fake') or ''), (words, octabam.refusal(ob, 'fake'))
+        # a submodule's .asm is another repository's (Zac Kyoti's modules check out all of theirs);
+        # the manifest's dsp_source says what DSP code the module builds
+        ob.modules['fake'] = NS(**bare)
+        sub = os.path.join(ob.root, 'modules', 'fake', 'upstream')
+        os.makedirs(os.path.join(sub, 'other'))
+        open(os.path.join(sub, '.git'), 'w').close()
+        open(os.path.join(sub, 'other', 'fx.asm'), 'w').close()
+        assert octabam.refusal(ob, 'fake') is None
+        ob.modules['fake'] = NS(**dict(bare, dsp_source='modules/fake/upstream/image.py'))
+        assert 'integrates DSP code' in octabam.refusal(ob, 'fake')
+
+
+class machines_record:
+    """MACHINES with MACHMOD's record while it is open."""
+
+    def __enter__(self):
+        octabam.MACHINES['MACHMOD'] = dict(MACHMOD_RECORD)
+        return octabam.MACHINES['MACHMOD']
+
+    def __exit__(self, *exc):
+        octabam.MACHINES.pop('MACHMOD', None)
+
+
+def test_a_machine_goes_on_the_machines_companion():
+    """--machines: a module that writes the machine row's places leaves them to machines-ot and
+    its kind-table entry stock, puts its CHROMATIC detour on the intercepts, keeps its other
+    sites, and adds its record to ot_machines; the line naming the FLEX renderer names
+    ot_stock_render, and the record's names are appended to its source. Without --machines,
+    or for a module that writes none of those places, nothing changes."""
+    img = stock()
+    with tempfile.TemporaryDirectory() as tmp, machines_record():
+        ob = fake_checkout(tmp)
+        plain = octabam.convert(ob, 'machmod', img, DEV)
+        plan = octabam.convert(ob, 'machmod', img, DEV, machines=True)
+        fake0, fake1 = (octabam.convert(ob, 'fake', img, DEV, machines=x) for x in (False, True))
+    assert not plain['machine'] and plain['json']['version'] == ob.commit
+    assert {s['addr'] for s in plain['json']['sites']} == {
+        '0x400334d8', '0x4007981c', '0x4004fc58', '0x4000c634', '0x400d6438', '0x40079248'}
+    j, mach = plan['json'], plan['machine']
+    assert [s['addr'] for s in j['sites']] == ['0x4000c634']           # its own, the rest left stock
+    assert j['version'] == ob.commit + '-machines'
+    assert j['requires'] == ['core', 'intercepts', 'machines']
+    assert [t['event'] for t in plan['intercepts']] == ['ev_chromatic_pitch']
+    assert j['contribute'][-1] == {'to': 'ot_machines', 'order': octabam.MACHINE_ORDER,
+                                   'data': '00000000',
+                                   'relocs': [[0, 'abs32', 'sym:ob_machmod_machine', 0]]}
+    assert mach['served'] == [0x400334d8, 0x40079248, 0x4007981c] and mach['render'] == 'mm_render'
+    src = plan['files']['modules/machmod/munit.s']
+    assert b'.set    STOCK_RENDER, ot_stock_render' in src
+    assert b'.set    ob_machmod_page, mm_desc + MM_LEN' in src
+    assert src.startswith(plain['files']['modules/machmod/munit.s'].replace(
+        b'STOCK_RENDER, 0x40004008', b'STOCK_RENDER, ot_stock_render'))
+    glue = plan['files']['glue/ob_machmod_machine.s']
+    assert b'.byte   0x4d, 0x4d, 1, 2' in glue and b'.long   mm_render' in glue
+    assert 'glue/ob_machmod_machine.s' in j['sources']
+    assert (fake0['json'], fake0['files']) == (fake1['json'], fake1['files'])
+
+
+def test_a_machine_without_a_record_or_its_source_is_refused():
+    """--machines refuses a module that writes the machine row's places with no record in
+    MACHINES, whose source no longer says what the record names, or that keeps a site inside
+    machines-ot's; a remix carrying it; and without --machines it converts as before."""
+    from types import SimpleNamespace as NS
+    img = stock()
+    with tempfile.TemporaryDirectory() as tmp:
+        ob = fake_checkout(tmp)
+        for args, words in (({'machines': True}, 'no record for MACHMOD'),
+                            ({'machines': True, 'rx': {'modules': ('MACHMOD',), 'stock': ()}},
+                             'not in a remix')):
+            try:
+                octabam.convert(ob, 'machmod', img, DEV, **args)
+            except octabam.Refused as e:
+                assert words in str(e), (words, str(e))
+            else:
+                raise AssertionError('not refused: %s' % words)
+        octabam.convert(ob, 'machmod', img, DEV)
+        m = ob.modules['machmod']
+        with machines_record() as rec:
+            resolver = NS(**dict(vars(m.detours[0]), site=0x40031e74,
+                                 expect=bytes.fromhex('710541f9400d5f386050'), pad_to=10))
+            for change, words in (
+                    (lambda: rec.update(defaults='mm_gone'), 'does not define mm_gone'),
+                    (lambda: rec.update(stock_render=r'^(\s*\.set\s+NO_SUCH,\s*)0x1\b'),
+                     'in 0 places'),
+                    (lambda: setattr(ob.modules['machmod'], 'detours', m.detours + (resolver,)),
+                     'inside machines-ot\'s site 0x40031e74')):
+                rec.clear()
+                rec.update(MACHMOD_RECORD)
+                ob.modules['machmod'] = NS(**vars(m))
+                change()
+                try:
+                    octabam.convert(ob, 'machmod', img, DEV, machines=True)
+                except octabam.Refused as e:
+                    assert words in str(e), (words, str(e))
+                else:
+                    raise AssertionError('not refused: %s' % words)
+
+
+def companions(out):
+    """mods/intercepts-ot and mods/machines-ot, built -> (intercepts, machines)."""
+    if not shutil.which(os.environ.get('ELEKLOADER_CROSS', DEV.toolchain['prefix']) + 'gcc'):
+        raise Skip('no m68k cross compiler (machines-ot is C)')
+    if 'companions' not in _c:
+        _c['companions'] = tuple(build.build(d, SYX, os.path.join(out, os.path.basename(d)))[0]
+                                 for d in (octabam.INTERCEPTS_DIR, octabam.MACHINES_DIR))
+    return _c['companions']
+
+
+def test_a_machine_builds_and_checks_on_the_companion():
+    """The machine links with core-ot, the intercepts and machines-ot, and the check proves its
+    places are the companion's sites or stock, its record holds what MACHINES says (name,
+    signature, flags, page, defaults, signing, render), and its source assembles to its own
+    bytes but for the call to the renderer. It refuses a record that is not what MACHINES says,
+    a source that still calls the renderer's entry, and a check without the companion."""
+    img = stock()
+    tools()
+    out = tempfile.mkdtemp()
+    icpt, machs = companions(out)
+    with machines_record():
+        ob = fake_checkout(out)
+        plan = octabam.convert(ob, 'machmod', img, DEV, machines=True)
+
+        def checked(p, tag, **kw):
+            path, _mod = build.build(octabam.write(ob, p, out), SYX, out)
+            return octabam.check(ob, p, path, core(out), SYX, os.path.join(out, tag),
+                                 **dict(dict(intercepts_path=icpt, machines_path=machs), **kw))
+        lines = checked(plan, 'm')
+        assert any('its 3 places of the machine row' in x and 'no site of its own' in x
+                   for x in lines), lines
+        assert any('its record ob_machmod_machine in ot_machines (1 of 1): signature "MM" 1-2, '
+                   'name "MACH" (mm_title), flags 1' in x and '(1 2 3 4 5 6 | 7 8 9 10 11 12)' in x
+                   for x in lines), lines
+        assert any('but for 1 call(s) to the FLEX renderer (0x40004008)' in x for x in lines), lines
+        for tamper, kw, words in (
+                (lambda p: None, {'machines_path': None}, 'needs it (mods/machines-ot)'),
+                (lambda p: p['files'].update({'glue/ob_machmod_machine.s': p['files'][
+                    'glue/ob_machmod_machine.s'].replace(b'0x4d, 0x4d, 1, 2', b'0x4d, 0x4e, 1, 2')}),
+                 {}, 'its record ob_machmod_machine: sig is 4d4e0102'),
+                (lambda p: p['files'].update({'modules/machmod/munit.s': p['files'][
+                    'modules/machmod/munit.s'].replace(b', ot_stock_render', b', 0x40004008')}),
+                 {}, 'still calls the FLEX renderer\'s entry')):
+            p = octabam.convert(ob, 'machmod', img, DEV, machines=True)
+            tamper(p)
+            try:
+                checked(p, 'x', **kw)
+            except octabam.CheckError as e:
+                assert words in str(e), (words, str(e))
+            else:
+                raise AssertionError('checked: %s' % words)
+
+
 # ---- a real checkout ------------------------------------------------------------------------
 
 def real():
@@ -578,13 +952,43 @@ def test_real_modules_convert_and_check():
     done = convert_all(['recorder-hold', 'rlen-plen', 'direct-jump', 'cc-map', 'tuner',
                         'repitch', 'quantizer', 'synth', 'lofi-amf-fix'])
     assert len(done['recorder-hold'].sites) == 3 and 'arena_base' in done['recorder-hold'].imports
-    # pinned code, at octabam's addresses: SYNTH's page, QUANTIZER's two units
-    assert done['synth'].symbols['ob_synth_synth_page'] == ('abs', 0x400d24d0)
+    # pinned code, at octabam's addresses: QUANTIZER's two units; SYNTH's page, pinned on the
+    # bytes the stock DELAY reads, in .run (below)
     assert {s['addr'] for s in done['quantizer'].sites} >= {0x400d2ca8, 0x400d2cb0}
+    assert done['synth'].symbols['ob_synth_synth_page'][0] == '.run'
     assert not done['lofi-amf-fix'].size('.run') and len(done['lofi-amf-fix'].sites) == 2
     # the category as octabam titles it for people, not its enum value
     assert done['tuner'].doc['category'] == 'Machines and the sequencer'
     assert done['lofi-amf-fix'].doc['category'] == 'Fixes'
+
+
+def test_real_synth_page_moves_off_the_kept_bytes():
+    """SYNTH MACHINE, before octabam's PLACE setting, pins its page cave at 0x400d24d0, over
+    the 16 bytes the stock DELAY reads (the profile's `keep`, octabam #771). The page goes in
+    .run, as octabam's PLACE = DRAM puts it in its runtime: the resolver at 0x40031ece jumps
+    to it, the check links it at its pin to the author's 1,812 ratified bytes and proves only
+    its pointers into itself move, and the kept bytes stay stock."""
+    ob, img = real(), stock()
+    m = ob.modules.get('synth')
+    if m is None or not any(c.cave_addr == 0x400d24d0 for c in m.cf_patches):
+        raise Skip('this checkout\'s SYNTH MACHINE does not pin a cave at 0x400d24d0')
+    tools()
+    (lo, hi, _why), = DEV.keep
+    with tempfile.TemporaryDirectory() as tmp:
+        plan, mod, lines = build_and_check(ob, 'synth', tmp)
+        ln = link.link([elemod.load_any(core(tmp)), mod], img)
+    assert 'fixed' not in plan['json']
+    assert not [s for s in mod.sites if s['addr'] < hi and lo < s['addr'] + s['len']]
+    assert [s for s in plan['json']['sites'] if s['addr'] == '0x40031ece'] == [
+        {'addr': '0x40031ece', 'stock': '20300c006002', 'op': 'jmp',
+         'target': 'ob_synth_synth_page', 'addend': 0}]
+    assert any(x.startswith('cave "synth page": 1812 bytes at ') and 'in .run' in x
+               and 'from its link at its pin 0x400d24d0 (the bytes the manifest ratifies)' in x
+               for x in lines), lines
+    a = ln.map['octabam-synth:ob_synth_synth_page']
+    o = 0x40031ece - DEV.main_load
+    assert ln.image[o:o + 6] == bytes.fromhex('4ef9') + a.to_bytes(4, 'big')
+    assert ln.image[lo - DEV.main_load:hi - DEV.main_load] == bytes(hi - lo)
 
 
 def test_real_usb_midi_with_a_bare_metal_assembler():
@@ -807,6 +1211,63 @@ def test_real_modules_on_the_intercepts():
                 raise AssertionError('checked without the intercepts')
 
 
+def test_real_modules_without_a_machine_row_convert_as_without_machines():
+    """--machines changes only modules that write the machine row's places: every other module
+    that converts is the same mod with it or without it (octabam 363861e: all of them)."""
+    ob, img = real(), stock()
+    seen = 0
+    for n in sorted(ob.modules):
+        if octabam.refusal(ob, n) or octabam._machine_writes(ob.modules[n]):
+            continue
+        try:
+            plan0 = octabam.convert(ob, n, img, DEV)
+        except octabam.Refused:
+            continue
+        plan1 = octabam.convert(ob, n, img, DEV, machines=True)
+        assert (plan0['json'], plan0['files']) == (plan1['json'], plan1['files']), n
+        seen += 1
+    assert seen
+
+
+def test_real_octa303_on_the_machines():
+    """--machines: OCTA303 (octabam b085c4d) leaves its 15 detours and 6 pokes of the machine row
+    and its kind-table entry to machines-ot, its CHROMATIC pitch to the intercepts, and keeps
+    its PLAYBACK hook (0x40031ece) and retrig (0x4000c634). It checks linked with core-ot, the
+    intercepts and machines-ot, and links beside the CRUSH example: ot_machines lists both. The
+    conversion without --machines is refused beside machines-ot."""
+    ob, img = real(), stock()
+    if 'octa303' not in ob.modules:
+        raise Skip('no OCTA303 in this checkout (octabam b085c4d has it)')
+    if not octabam.bare_metal(DEV):
+        raise Skip('the configured assembler is not bare metal (ELEKLOADER_CROSS=m68k-elf-)')
+    tools()
+    out = tempfile.mkdtemp()
+    icpt, machs = companions(out)
+    plan = octabam.convert(ob, 'octa303', img, DEV, machines=True)
+    j = plan['json']
+    assert sorted(s['addr'] for s in j['sites']) == ['0x4000c634', '0x40031ece']
+    assert j['version'] == ob.commit + '-machines'
+    assert j['requires'] == ['core', 'intercepts', 'machines']
+    assert [t['event'] for t in plan['intercepts']] == ['ev_chromatic_pitch']
+    assert len(plan['machine']['served']) == 21 and plan['machine']['render'] == 'sy_render'
+    path, mod = build.build(octabam.write(ob, plan, out), SYX, out)
+    lines = octabam.check(ob, plan, path, core(out), SYX, os.path.join(out, 'o3.check'),
+                          intercepts_path=icpt, machines_path=machs)
+    assert any('signature "TB" 1-1, name "OCTA-303" (o3_title), flags 5' in x for x in lines), lines
+    crush, _m = build.build(os.path.join(ROOT, 'examples', 'crush-machine-ot'), SYX, out)
+    mods = [elemod.load_any(p) for p in (core(out), icpt, machs, path, crush)]
+    assert link.check(mods, img) == []
+    ln = link.link(mods, img)
+    at, count, _w = ln.tables['ot_machines']
+    o = ln.layout['run_load'] - DEV.main_load + at - ln.layout['ddr'][0]
+    assert {int.from_bytes(ln.image[o + 4 * k:o + 4 * k + 4], 'big') for k in range(count)} == {
+        ln.map['crush_machine'], ln.map['ob_octa303_machine']}
+    plain = octabam.convert(ob, 'octa303', img, DEV)
+    p0, _m = build.build(octabam.write(ob, plain, os.path.join(out, 'plain')), SYX,
+                         os.path.join(out, 'plain'))
+    assert link.check([elemod.load_any(p) for p in (core(out), machs, p0)], img)
+
+
 def test_real_bus_glue_is_checked():
     """The check proves a source rewritten for the bus differs from octabam's only at its
     jumps back to the firmware, and that a stub entered past its replay starts with it:
@@ -835,6 +1296,23 @@ def test_real_bus_glue_is_checked():
         raise AssertionError('a stub entered past a replay it does not start with passed')
     finally:
         spec['skip'] = False
+
+
+def test_real_code_sites_are_the_conversions():
+    """For every module of the checkout that converts, --sites lists its conversion's code sites."""
+    ob, img = real(), stock()
+    seen = 0
+    for n in sorted(ob.modules):
+        if octabam.refusal(ob, n):
+            continue
+        try:
+            plan = octabam.convert(ob, n, img, DEV)
+        except octabam.Refused:
+            continue
+        got, _notes = octabam.code_sites(ob, n, img, DEV)
+        assert set(got) == _plan_code_sites(plan), n
+        seen += 1
+    assert seen, 'no module of the checkout converts'
 
 
 def test_real_overlapping_claims_do_not_combine():
