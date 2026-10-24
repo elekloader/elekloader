@@ -12,19 +12,19 @@ PERSONALIZE builder ends the same way. There is no `fast.s` (SRAM is not
 qualified, so there is no `.fast` area) and no `render.s` (the audio renders
 on the DSP).
 
-Core **0.2** adds the SHARC bridge while retaining 0.1's control-side
-sites, tables and exports. SHARC mods require `resources.core: "0.2"`;
-existing control mods may keep their 0.1 requirement.
+Core **0.2** adds the bridge for SHARC mods and keeps 0.1's control-side
+sites, tables and exports. A SHARC mod sets `resources.core: "0.2"`; mods
+made for 0.1 can keep asking for 0.1.
 
-`bridge.sharc.json` is the checked-in prelinked master-output bridge. The linker
-installs it and the exact six-byte stock hook only when an active SHARC mod
-passes the [ABI and ownership checks](../../docs/FORMAT.md#digitone-ii-sharc-mod).
-The keyed bridge stays pinned while mod code and callback offsets may change.
-Core-only and inert-mod builds leave stock DSP audio unchanged.
-The reference mod is [the played sine](../../examples/sharc-sine/README.md),
-with its slot and pitch reader in `sharc-bridge.s`.
-Building this core still needs only its normal ColdFire toolchain, not a
-SHARC compiler.
+`bridge.sharc.json` is the bridge, already compiled and linked from
+`sharc-bridge.s`, with the slot and pitch reader the
+[sine example](../../examples/sharc-sine/README.md) relies on. The linker
+adds it, and replaces the six-byte stock instruction that runs it, only for
+a SHARC mod with callbacks that passes the
+[checks](../../docs/FORMAT.md#digitone-ii-sharc-mod). The device profile pins
+the bridge's bytes; a mod's code and callback offsets may change. With core
+alone, or with an inert SHARC mod, the DSP's audio stays stock. Building
+this core needs only the ColdFire tools, no SHARC compiler.
 
 - **At boot** (the OS entry's call at 0x40000538, which called 0x400019b0,
   the Digitakt II's: it sets the VBR to 0x40000000 and returns), `boot`

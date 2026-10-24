@@ -1,35 +1,34 @@
 # Digitone II SHARC assembly sine
 
-This companion to the [C sine](../sharc-sine/README.md) implements the sample
-kernel in SHARC+ assembly. Both use the same C entry wrapper, phase table,
-0.125 peak amplitude, note range and gain ramp. Core-dn2 0.2 selects the note
-and copies the mono block to both master channels.
+The [C sine](../sharc-sine/README.md) with its sample loop written in SHARC+
+assembly. Both use the same C entry wrapper, phase table, 0.125 peak, note
+range and gain ramp. Core-dn2 0.2 picks the note and copies the mono block
+to both master channels.
 
 ## Build
 
-Follow the shared [source setup](../sharc-sine/README.md#build-c-or-assembly-source),
-then run from `examples/sharc-sine`:
+Set up as the C sine's [source build](../sharc-sine/README.md#build-c-or-assembly-source)
+says, then, in `examples/sharc-sine`:
 
 ```sh
 mise run build-asm
 ```
 
-The command assembles this directory's `sine.s`, compiles the shared
-`entry.c` and builds verified firmware through the normal SDK, lint and
-patcher. It selects the 32 KiB layout and writes `out/asm/firmware.syx` below
-`examples/sharc-sine`.
+It assembles this folder's `sine.s`, compiles the shared `entry.c`, and
+builds verified firmware with the normal SDK, lint and patcher, in the
+32 KiB layout. The firmware is `examples/sharc-sine/out/asm/firmware.syx`.
 
 The [callback contract](../../docs/SHARC-DN2-ABI.md) applies to every edited
-program. Only one mod may own the output and reservation. Emulator and
-bounded physical evidence are summarized in the
-[implementation guide](../../docs/SHARC-DN2.md#qualification); instruction
-counts are not hardware timing measurements.
+program. Only one mod can own the output and the 32 KiB.
+[SHARC-DN2.md](../../docs/SHARC-DN2.md#qualification) sums up what the
+emulator and the unit showed; instruction counts are not timings on the
+hardware.
 
 ## Package or reproduce the reference artifact
 
-The checked-in `sine.sharc.json` contains author-owned mod bytes in the 32 KiB
-layout. It can be packaged without a SHARC compiler, with `DN2_CORE` naming a
-built core-dn2 0.2 module:
+The checked-in `sine.sharc.json` is this mod's code, in the 32 KiB layout.
+Package it without a SHARC compiler, with `DN2_CORE` set to a built
+core-dn2 0.2 `.elemod`:
 
 ```sh
 python -m elekloader.sdk.build examples/sharc-sine-asm --stock "$DN2_STOCK"
@@ -37,21 +36,21 @@ python -m elekloader.lint examples/sharc-sine-asm/out/sharc-sine-asm-0.1.elemod 
 python -m elekloader.patch --stock "$DN2_STOCK" --mod "$DN2_CORE" --mod examples/sharc-sine-asm/out/sharc-sine-asm-0.1.elemod --out sine-asm.syx --version SINE
 ```
 
-To reproduce that exact artifact with the pinned Selache tools:
+To rebuild exactly that artifact with the pinned Selache tools:
 
 ```sh
 mise exec python@3.12.13 -- python examples/sharc-sine-asm/rebuild.py /path/to/selache
 ```
 
-The reference producer checks final sections, symbol closure, entrypoints,
-code/data bytes and arithmetic instruction fields before replacing the
-artifact. It retains the 128-byte stack declaration and rejects source
-changes. Use `mise run build-asm` when editing the source.
+Before it replaces the artifact, it checks the final sections, that every
+symbol resolves, the entry points, the code and data bytes, and the
+arithmetic instructions' fields. It keeps the 128-byte stack declaration
+and refuses any change to the source: use `mise run build-asm` to edit it.
 
-Arithmetic and register-shift checks use the
+The arithmetic and register-shift checks follow the
 [SHARC+ Core Programming Reference, revision 1.5](https://www.analog.com/media/en/dsp-documentation/processor-manuals/sc58x-2158x-prm.pdf),
-sections 18-3/4 and 18-10. The sign operation uses the fixed-point register
-field with the floating extension cleared (section 19-13); the shift count
-is held in a register. These checks cover this kernel's emitted instructions,
-not the whole ISA. Source and toolchain licensing match the
-[C example](../sharc-sine/README.md#source-and-toolchain).
+sections 18-3, 18-4 and 18-10. The sign operation uses the fixed-point
+register field with the floating extension cleared (section 19-13), and the
+shift count is held in a register. These checks cover this kernel's
+instructions, not the whole instruction set. Its sources and tools are
+licensed as the C example's are ([source and toolchain](../sharc-sine/README.md#source-and-toolchain)).

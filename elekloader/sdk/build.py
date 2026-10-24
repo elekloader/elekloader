@@ -249,7 +249,11 @@ def build(mdir, stock_path, out_dir=None, extra=None):
             raise BuildError('mod.json: sharc is {"artifact": "relative-file.sharc.json"}')
         root = os.path.realpath(mdir)
         artifact = os.path.realpath(os.path.join(root, spec['artifact']))
-        if os.path.commonpath((root, artifact)) != root:
+        try:
+            inside = os.path.commonpath((root, artifact)) == root
+        except ValueError:                  # on another drive (Windows): a path like "D:x"
+            inside = False
+        if not inside:
             raise BuildError('mod.json: SHARC artifact escapes the mod folder')
         try:
             with open(artifact, 'rb') as fh:

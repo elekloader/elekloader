@@ -7,9 +7,10 @@ page) and takes its input files from environment variables. A test whose
 input files are not given is skipped, not passed: say which ran. Firmware
 files never go in this repository.
 
-`test_units.py` also discovers `test_sharc*.py`. Set `ELEKLOADER_DN2_SYX`
-to include their stock-backed checks and `ELEKLOADER_CROSS` for the active
-bridge build. The toolchain fixture test needs Git and skips without it.
+`test_units.py` also runs the `test_sharc*.py` files. With
+`ELEKLOADER_DN2_SYX` they check the real stock file too, and with
+`ELEKLOADER_CROSS` they build core with its bridge. The toolchain test needs
+Git, and skips without it.
 
 ```bash
 python tests/test_units.py        # includes SHARC; missing optional inputs are reported as skips
@@ -31,10 +32,9 @@ ELEKLOADER_STOCK=... ELEKLOADER_STOCK_154=... ELEKLOADER_OT_SYX=... ELEKLOADER_M
 node tests/test_web.mjs build/site   # the web page's engine, in Pyodide (packaging/build_web.py first)
 ```
 
-The DN2 suite has four additional core-compatibility tests. Set
-`ELEKLOADER_DN2_CORE_01` to a historical core-dn2 0.1 `.elemod` and
-`ELEKLOADER_DN2_DIGIHEALTH` to an existing DN2 DigiHealth `.elemod` alongside
-the stock inputs above:
+Four tests in the Digitone II suite compare with core-dn2 0.1. Give them a
+core-dn2 0.1 `.elemod` in `ELEKLOADER_DN2_CORE_01`, and a DN2 DigiHealth
+`.elemod` in `ELEKLOADER_DN2_DIGIHEALTH`, with the stock files above:
 
 ```bash
 ELEKLOADER_DN2_SYX=Digitone_II_OS1.12.syx \
@@ -44,11 +44,12 @@ ELEKLOADER_DN2_DIGIHEALTH=path/to/digihealth.elemod \
 python tests/test_digitone2.py
 ```
 
-These check unchanged control-side firmware, existing DigiHealth builds and
-the SHARC examples' minimum-core selection. All four need the historical
-core; the DigiHealth comparison also needs that mod. Missing inputs skip the
-affected tests. The suite builds the current core and examples with the
-ColdFire cross toolchain; keep all `.elemod` inputs outside version control.
+They check that 0.2 keeps 0.1's control side, building the same firmware
+for mods without SHARC code, DigiHealth included, and that the SHARC
+examples pick core 0.2.
+All four need the 0.1 core, and the DigiHealth one needs that mod too; a
+missing file skips them. The suite builds the current core and examples
+with the ColdFire tools. Keep the `.elemod` files out of the repository.
 
 ## The refusal fixtures
 

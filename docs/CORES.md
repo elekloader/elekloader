@@ -131,10 +131,12 @@ core.
   The core/DigiHealth showcase flashed over USB and
   passed the six UI events, reopened menu callbacks, input consumption and
   ordering on a unit; immutable runtime readback matched its exact build.
-  Core 0.2 adds an optional bounded SHARC master-output callback, with
-  32 KiB code/data placement and C/ASM examples. Existing control mods remain
-  compatible; SHARC mods require core 0.2 or newer. See the
-  [callback contract](SHARC-DN2-ABI.md) and [source workflow](../examples/sharc-sine/README.md).
+  Core 0.2 adds the bridge for SHARC mods: one mod's code on the DSP, at
+  the master output, in 32 KiB, with a C and an assembly example. Mods
+  made for 0.1 work with it unchanged; SHARC mods need 0.2 or newer. See the
+  [callback contract](SHARC-DN2-ABI.md) and the [sine example](../examples/sharc-sine/README.md).
+  An elekloader from before SHARC support refuses a 0.2 file (its `sharc`
+  field is unknown to it), so release core 0.2 with an elekloader release.
   Wider project/audio qualification remains separate. See the core README
   for the [DigiHealth fork branch](https://github.com/simonjohansson/digihealth/tree/codex/dn2-remote-control)
   and the diagnostic overlay warning.
