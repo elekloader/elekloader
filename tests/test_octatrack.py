@@ -1225,8 +1225,9 @@ def test_seq_events_ot_sites():
 def test_seq_events_ot_builds_and_links():
     """mods/seq-events-ot and examples/euclid-ot with core-ot: the build calls no library
     function (it imports only its eight tables), the example names no firmware address, the
-    handler lands in its table, the lot fits core's page, and linked with core alone the mod
-    changes only its four sites: each is the jmp (padded) or jsr the SDK promises."""
+    handler lands in its table, the lot takes at most one reserve unit more than core alone,
+    and linked with core alone the mod changes only its four sites: each is the jmp (padded)
+    or jsr the SDK promises."""
     import shutil
     from elekloader.sdk import build
     need(SYX)
@@ -1250,15 +1251,21 @@ def test_seq_events_ot_builds_and_links():
         assert link.check(mods, img) == []
         ln = link.link(mods, img)
         alone = link.link([elemod.load_any(core)], img)
-        assert ln.layout['reserve']['units'] == 1                           # core's page holds the lot
+        core_sites = [(s['addr'] - DEV.main_load, s['len']) for s in elemod.load_any(core).sites]
+        # the lot takes at most one reserve unit past core's own (core 0.5 and later grow it)
+        assert ln.layout['reserve']['units'] <= alone.layout['reserve']['units'] + 1, \
+            (ln.layout['reserve'], alone.layout['reserve'])
     counts = {t: ln.tables[t][1] for t in ln.tables}
     assert counts['ev_gen_trig'] == 1 and counts['ev_tick'] == 2, counts
     assert all(counts[t] == 0 for t in tables if t != 'ev_gen_trig'), counts
     at = ln.tables['ev_gen_trig'][0]
     o = ln.layout['run_load'] + (at - DEV.ddr[0]) - DEV.main_load
     assert struct.unpack('>II', ln.image[o:o + 8]) == (ln.map['euclid_trig'], 0)
-    # only the four sites differ from core alone, in the stock image's own bytes
+    # only the four sites differ from core alone, in the stock image's own bytes; and core's
+    # own sites when the reserve differs, since they hold the arena's place past it
     windows = [(a - DEV.main_load, len(h) // 2) for a, (h, _op, _t) in SEQ_OT_SITES.items()]
+    if ln.layout['reserve'] != alone.layout['reserve']:
+        windows += core_sites
     for i in range(len(img)):
         if ln.image[i] != alone.image[i]:
             assert any(w <= i < w + k for w, k in windows), hex(i + DEV.main_load)
