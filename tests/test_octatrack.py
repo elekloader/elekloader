@@ -87,6 +87,7 @@ def write_mod(tmp, doc, name='ot-test.elemod'):
 
 # ---- the file family ------------------------------------------------------------------
 
+
 def test_stock_files_parse_and_agree():
     st, img = stock()
     b = formats.parse(need(BIN), DEV)
@@ -133,6 +134,7 @@ def test_corruption_is_caught():
 
 # ---- whole builds ---------------------------------------------------------------------------
 
+
 def test_data_site_and_blob_build_and_verify():
     st, img = stock()
     blob = b'\x4e\x75' + bytes(range(256)) * 4        # stands in for a loader and its payloads
@@ -165,6 +167,94 @@ def test_refuses_the_protected_bootloader_copy():
     stored = formats.pack_main(bytes(bad), DEV)
     outputs = formats.write(st, stored, DEV, 'x')
     expect(lambda: formats.verify(outputs, st, bytes(bad), DEV, 'x'), 'not stock')
+
+
+def test_the_kept_bytes_follow_the_stock_delays_table():
+    """The profile's `keep`, against the stock image: the 16 bytes at 0x400d24d0 read zero, so
+    they look free, but they follow the stock DELAY's 508-word coefficient table, which it
+    reads as 0x400d1ce0 + 4 * (x >> 6) (lsr/asr #6, then lea 0x400d1ce0, twice). An index
+    of 508 or more reads them (octabam #771, measured under octabam's emulator port)."""
+    st, img = stock()
+    (lo, hi, _why), = DEV.keep
+
+    def at(a, n):
+        return img[a - DEV.main_load:a - DEV.main_load + n]
+    assert at(lo, hi - lo) == bytes(hi - lo)
+    assert 0x400d1ce0 + 4 * 508 == lo and at(lo - 4, 4) != bytes(4)    # the table's last word
+    assert at(0x40003528, 8).hex() == 'ec8843f9400d1ce0'      # lsr.l #6,d0; lea 0x400d1ce0,a1
+    assert at(0x40003542, 8).hex() == 'ec8047f9400d1ce0'      # asr.l #6,d0; lea 0x400d1ce0,a3
+
+
+def test_a_build_leaves_the_kept_bytes_stock():
+    """A whole build that writes any of the kept bytes is refused, with the range and the
+    reason; the same write 16 bytes on builds and verifies. A main OS whose kept bytes
+    changed some other way fails the verify."""
+    (lo, hi, why), = DEV.keep
+    need(SYX)
+    with tempfile.TemporaryDirectory() as tmp:
+        for at, n in ((lo, 1812), (hi - 4, 4), (lo - 4, 8)):
+            p = write_mod(tmp, bundle([(at, b'\xff' * n)]))
+            expect(lambda: patch.build(SYX, [p], version='x', log=lambda *a: None),
+                   'site 0x%08x writes into 0x400d24d0-0x400d24e0, which stays stock on the '
+                   'Octatrack: %s' % (at, why))
+        p = write_mod(tmp, bundle([(hi, b'\xff' * 1812)]))
+        outputs, _man = patch.build(SYX, [p], version='x', log=lambda *a: None)
+    new = formats.main_image(formats.parse(outputs['syx'], DEV), DEV)
+    assert new[hi - DEV.main_load:][:1812] == b'\xff' * 1812
+    assert new[lo - DEV.main_load:hi - DEV.main_load] == bytes(hi - lo)
+    st, img = stock()
+    bad = bytearray(img)
+    bad[hi - 1 - DEV.main_load] = 1
+    outputs = formats.write(st, formats.pack_main(bytes(bad), DEV), DEV, 'x')
+    expect(lambda: formats.verify(outputs, st, bytes(bad), DEV, 'x'),
+           '0x400d24d0-0x400d24e0', 'is not stock')
+
+
+def test_fixed_code_past_the_kept_bytes_links():
+    """sdk.build refuses `fixed` code over the kept bytes, with the reason. 16 bytes on, the
+    same code builds, links with core-ot and verifies, and the kept bytes stay stock. A
+    format-2 mod that carries a site over them anyway (as the shop's octabam-synth 363861e
+    does, 1,812 bytes at 0x400d24d0) is refused by the linker."""
+    import shutil
+    from elekloader.sdk import build
+    need(SYX)
+    if not shutil.which(os.environ.get('ELEKLOADER_CROSS', DEV.toolchain['prefix']) + 'as'):
+        raise Skip('no m68k cross assembler to build mods/core-ot')
+    (lo, hi, why), = DEV.keep
+    with tempfile.TemporaryDirectory() as tmp:
+        core, _m = build.build(os.path.join(ROOT, 'mods', 'core-ot'), SYX, tmp)
+
+        def fixed(addr):
+            d = os.path.join(tmp, 'kp')
+            os.makedirs(d, exist_ok=True)
+            with open(os.path.join(d, 'kp.s'), 'w') as fh:
+                fh.write('        .text\n        moveq   #1,%d0\n        rts\n'
+                         '        .long   0x4b454550\n')
+            with open(os.path.join(d, 'mod.json'), 'w') as fh:
+                json.dump({'id': 'kp', 'version': '1', 'device': 'octatrack', 'os': '1.40C',
+                           'fixed': [{'source': 'kp.s', 'addr': '0x%08x' % addr,
+                                      'symbol': 'kp_start'}], 'requires': ['core']}, fh)
+            return build.build(d, SYX, tmp)
+        try:
+            fixed(lo)
+        except build.BuildError as e:
+            assert '0x400d24d0-0x400d24d8 writes into 0x400d24d0-0x400d24e0, which stays stock ' \
+                   'on the Octatrack: %s' % why in str(e), str(e)
+        else:
+            raise AssertionError('fixed code over the kept bytes was built')
+        kp, m = fixed(hi)
+        assert [(s['addr'], s['len']) for s in m.sites] == [(hi, 8)]
+        outputs, _man = patch.build(SYX, [core, kp], version='KEEP TEST', log=lambda *a: None)
+        with open(kp) as fh:
+            doc = json.load(fh)
+        doc['sites'][0]['addr'] = '0x%08x' % lo           # the same zeros' hash: only the place
+        moved = write_mod(tmp, doc, 'kp-moved.elemod')
+        expect(lambda: patch.build(SYX, [core, moved], version='x', log=lambda *a: None),
+               'kp 1 site 0x400d24d0 writes into 0x400d24d0-0x400d24e0, which stays stock on '
+               'the Octatrack')
+    new = formats.main_image(formats.parse(outputs['syx'], DEV), DEV)
+    assert new[hi - DEV.main_load:][:8].hex() == '70014e754b454550'
+    assert new[lo - DEV.main_load:hi - DEV.main_load] == bytes(hi - lo)
 
 
 def test_relocatable_data_is_reached_only_through_its_references():
@@ -267,9 +357,9 @@ def test_the_core_moves_the_arena_past_its_reserve():
     o = PURGE_BANKS_END - DEV.main_load
     assert img[o:o + 6] == bytes.fromhex('b5fc40a955e0')
     assert all(int(s['addr'], 16) != PURGE_BANKS_END + 2 for s in j['sites'])
-    calls = {s['target']: int(s['addr'], 16) for s in j['sites'] if s['op'] == 'jsr'}
+    calls = {s['target']: int(s['addr'], 16) for s in j['sites'] if s['op'] in ('jsr', 'jmp')}
     assert calls.pop('boot') == 0x4000050c
-    assert set(calls) == set(BUS_SITES), calls             # the rest are the hook bus's
+    assert set(calls) == set(BUS_SITES) | set(STORE_SITES) | set(VOICE_SITES), calls   # the rest are the bus's, the store's and the voice's
 
 
 def reserve_docs(img, bss, fixed=False):
@@ -327,6 +417,62 @@ def test_the_reserve_fits_the_mods():
     assert ln.map['arena_base'] == DEV.ddr[1]               # the fixed core's own
 
 
+def test_the_run_hash_is_the_images_and_only_the_core_boot_names_it():
+    """`__run_hash`, the hash a core takes of its copy of the RAM image (core-ot 0.7.1): the
+    linker computes it over exactly the bytes `.boot` copies (a rolling x33 over the 32-bit
+    words from 5381), it changes with any byte of them, and the core's `.boot` is where it is
+    resolved: a `.run` section or a table entry that refers to it is refused, because it is
+    part of what the hash covers; a site is not, and may name it."""
+    st, img = stock()
+    tgt = devices.target_of(DEV, REL)
+    o = 0x4000045e - DEV.main_load
+
+    def docs(run, run_reloc=False, entry=False, site=False):
+        core = {'elemod': 2, 'id': 'core', 'version': '0', 'target': tgt,
+                'sections': {'.boot': {'align': 4, 'parts': [['hex', '00000000' + '4e75']]}},
+                'relocs': [['.boot', 0, 'abs32', 'sym:__run_hash', 0]],
+                'imports': ['__run_hash'], 'collections': {'ev_t': {'entry': 4}}}
+        mod = {'elemod': 2, 'id': 'ram', 'version': '0', 'target': tgt, 'requires': ['core'],
+               'sections': {'.run': {'align': 4, 'parts': [['hex', run.hex()]]}},
+               'symbols': {'t': ['.run', 0]}}
+        if run_reloc:
+            mod['relocs'] = [['.run', 4, 'abs32', 'sym:__run_hash', 0]]
+        if entry:
+            mod['contribute'] = [{'to': 'ev_t', 'data': '00000000',
+                                  'relocs': [[0, 'abs32', 'sym:__run_hash', 0]]}]
+        if site:
+            mod['sites'] = [{'addr': '0x4000045e', 'len': 4, 'kind': 'data', 'new': '00000000',
+                             'stock_sha256': sha(img[o:o + 4]),
+                             'relocs': [[0, 'abs32', 'sym:__run_hash', 0]]}]
+        return [link.Mod2(core, 'core'), link.Mod2(mod, 'ram')]
+
+    def hash_of(ln):                                    # written out again, not link.run_hash
+        at = ln.layout['run_load'] - DEV.main_load
+        h = 5381
+        for i in range(at, at + ln.layout['ddr'][1] - ln.layout['ddr'][0], 4):
+            h = (h * 33 + int.from_bytes(ln.image[i:i + 4], 'big')) % 2 ** 32
+        return h
+    seen = set()
+    for run in (bytes(8), bytes(7) + b'', b'' + bytes(7), bytes(range(1, 9)) * 5):
+        ln = link.link(docs(run), img)
+        h = ln.map['__run_hash']
+        assert h == hash_of(ln), run
+        at = ln.layout['boot'][0] - DEV.main_load
+        assert ln.image[at:at + 4] == struct.pack('>I', h)           # the immediate .boot compares with
+        assert h not in seen
+        seen.add(h)
+    # the core alone: the image is its tables' zero entry
+    ln = link.link(docs(bytes(4))[:1], img)
+    assert ln.layout['ddr'][1] - ln.layout['ddr'][0] == 4 and ln.map['__run_hash'] == hash_of(ln)
+    # a .run and a table entry that name it are refused; a site that names it links
+    expect(lambda: link.link(docs(bytes(8), run_reloc=True), img),
+           'ram 0: .run+0x4 refers to __run_hash, which nothing defines')
+    expect(lambda: link.link(docs(bytes(8), entry=True), img),
+           'ram 0: an entry of ev_t refers to __run_hash, which nothing defines')
+    ln = link.link(docs(bytes(8), site=True), img)
+    assert ln.image[o:o + 4] == struct.pack('>I', ln.map['__run_hash'])
+
+
 # The hook bus (core-ot 0.2): each site, the instruction it replaces, and its event.
 BUS_SITES = {
     'core_tick': (0x40061e94, '4eb940031970', 'ev_tick'),        # jsr 0x40031970, sys loop kind 5
@@ -335,12 +481,51 @@ BUS_SITES = {
     'core_enc': (0x40061e00, '4eb940031944', 'ev_enc'),          # jsr enc(encoder, delta), kind 2
     'core_midi': (0x40005572, '20720c004e90', 'ev_midi'),        # the MIDI thread's handler call
     'core_frame': (0x4000d94e, '4ab946104d08', 'ev_frame'),      # tst.l 0x46104d08, frame interrupt
+    # core-ot 0.4: jmp sites (each stub replays what it displaced and goes back to stock itself)
+    'core_frame_end': (0x4000d9a6, '4cd77fff4fef00fc', 'ev_frame_end'),       # the frame interrupt's epilogue
+    'core_midi_out': (0x40010bd0, '246f001c4ab9460ba978', 'ev_midi_out'),     # midi_send past its prologue
+    'core_midi_out_rt': (0x400108c4, '40c246fc2700', 'ev_midi_out_rt'),       # the priority sender
+    # core-ot 0.5: the frame's head, the transport, main's end, the 120 Hz tick
+    'core_frame_begin': (0x4000aad0, '4fefff0448d77fff', 'ev_frame_begin'),   # the frame interrupt's entry
+    'core_t_start': (0x4009c3d4, '23c0800065b8', 'ev_transport'),             # move.l d0,PLAYING (1): start
+    'core_t_resume': (0x4009c4d4, '23c0800065b8', 'ev_transport'),            # the same, resume
+    'core_t_stop': (0x4009f5c6, '23c0800065b8', 'ev_transport'),              # the same (2), the STOP routine
+    'core_main_end': (0x4001fc96, '4eb940098a2c', 'ev_boot_done'),            # main's last init call
+    'core_tick120': (0x40055966, '4e92588f60f0', 'ev_tick120'),               # the key-repeat task's step
 }
+# The sites that are jmps (a stub replays what it displaced and goes back to stock itself); the
+# others are jsrs. ev_idle shares core_main_end's site with ev_boot_done, so it is no site's event.
+JMP_SITES = {'core_frame_end', 'core_midi_out', 'core_midi_out_rt', 'core_frame_begin', 'core_t_start',
+             'core_t_resume', 'core_t_stop', 'core_tick120'}
+# Where each jmp stub goes back to: the instruction after the site. The same numbers are mod.json's
+# defsym, so the stubs and the sites cannot drift apart.
+JMP_BACK = {'T_START_NEXT': 'core_t_start', 'T_RESUME_NEXT': 'core_t_resume', 'T_STOP_NEXT': 'core_t_stop',
+            'FRAME_BEGIN_NEXT': 'core_frame_begin'}
+# The project's lifecycle (core-ot 0.6, store.s): each site, the bytes it displaces, its event, and
+# where its stub goes back to (a jmp site; the jsr site and the one that ends in the rts it displaces
+# have none). The census and the displaced bytes are octabam's STORE module's (MIT).
+STORE_SITES = {
+    'core_job_switch': (0x4008485e, '7192722db280', None, 'JOB_SWITCH_NEXT'),     # mvz.b (a2),d0 ; moveq ; cmp
+    'core_job_loop': (0x4008484e, '4879460d17ce', 'ev_project', 'JOB_LOOP_NEXT'),  # pea the engine queue
+    'core_loadall': (0x40090504, '4feffeb848d77cfc', 'ev_banks_load', 'LOADALL_NEXT'),
+    'core_loadmask': (0x400905d4, '4feffeb848d77cfc', 'ev_banks_load', 'LOADMASK_NEXT'),
+    'core_bankw': (0x400917c8, '4e56febc48d73cfc', 'ev_banks_write', 'BANKW_NEXT'),
+    'core_bankw_mid': (0x400918aa, '45f9400e21e0', 'ev_banks_write', 'BANKW_MID_NEXT'),
+    'core_pstore': (0x4008ee74, '4e56fdd048d73cfc', 'ev_project_store', 'PSTORE_NEXT'),
+    'core_preload': (0x4008f180, '4e56fdd048d73cfc', 'ev_project_reload', 'PRELOAD_NEXT'),
+    'core_tocs1': (0x4000faf0, '2f0a2f022f3c0008ed80', 'ev_cs1_bank', 'TOCS1_NEXT'),
+    'core_fromcs1': (0x40025808, '4eb94000fbb4', 'ev_cs1_bank', None),
+    'core_partsaved': (0x4004a9c4, '4cd70c1c4fef00144e75', 'ev_part_saved', None),
+    'core_partclear': (0x4004a9d0, '4feffff048d70c0c', 'ev_part_cleared', 'PARTCLEAR_NEXT'),
+}
+STORE_TABLES = ('core_projdata', 'core_carddata', 'ot_sram', 'ot_settings')
+
 # Instructions the converted octabam mods of irpina/octabam2elemod v1.0 hook in the same
 # routines (TUNER, CC FEEDBACK, CC MAP, the USB audio mods, USB MIDI): the bus keeps clear
 # of every one, so those files link with core 0.2 as they did with 0.1.
 V10_NEIGHBOURS = ((0x40056c72, 6), (0x4000d99a, 6), (0x4000d9a0, 6), (0x4005595c, 6),
-                  (0x400d64a0, 4), (0x4001e606, 6), (0x40059ef0, 6))
+                  (0x400d64a0, 4), (0x4001e606, 6), (0x40059ef0, 6), (0x40010bc8, 8), (0x400108b0, 6),
+                  (0x4000b2c8, 6))      # SYNTH's po_stop: not a transport stop, but its bytes (0.5 keeps clear)
 
 
 def test_the_core_bus_sites():
@@ -351,20 +536,393 @@ def test_the_core_bus_sites():
     with open(os.path.join(ROOT, 'mods', 'core-ot', 'mod.json')) as fh:
         j = json.load(fh)
     st, img = stock()
-    sites = {s['target']: s for s in j['sites'] if s['op'] == 'jsr' and s['target'] != 'boot'}
+    sites = {s['target']: s for s in j['sites'] if s['op'] in ('jsr', 'jmp') and s['target'] != 'boot'}
     for target, (addr, stock_hex, event) in BUS_SITES.items():
         s = sites[target]
+        n = len(stock_hex) // 2
         assert (int(s['addr'], 16), s['stock']) == (addr, stock_hex), target
+        assert s['op'] == ('jmp' if target in JMP_SITES else 'jsr'), target
         o = addr - DEV.main_load
-        assert img[o:o + 6].hex() == stock_hex, target
+        assert img[o:o + n].hex() == stock_hex, target
+        ok, note = elemod.insn_check(img, addr, n, DEV)
+        assert ok, (target, note)
         assert j['collections'][event] == 4, event
-        for a, n in V10_NEIGHBOURS:
-            assert not (a < addr + 6 and addr < a + n), (target, hex(a))
-    assert sorted(j['collections']) == sorted(e for _a, _s, e in BUS_SITES.values())
+        for a, m in V10_NEIGHBOURS:
+            assert not (a < addr + n and addr < a + m), (target, hex(a))
+    # ev_idle is called by the stub that calls ev_boot_done; every other event has a site of its own
+    assert sorted(j['collections']) == sorted({e for _a, _s, e in BUS_SITES.values()} | {'ev_idle'}
+                                              | {v[2] for v in STORE_SITES.values() if v[2]}
+                                              | set(STORE_TABLES) | {v[2] for v in VOICE_SITES.values()})
+    assert j['collections']['ev_idle'] == 4
+    for sym, target in JMP_BACK.items():       # a jmp stub goes back to the instruction after its site
+        addr, stock_hex, _ev = BUS_SITES[target]
+        assert int(j['defsym'][sym], 16) == addr + len(stock_hex) // 2, sym
+    # the key-repeat site displaces `jsr (a2) ; addq.l #4,sp ; bra.s loop`: its stub goes to the loop head
+    addr, stock_hex, _ev = BUS_SITES['core_tick120']
+    assert bytes.fromhex(stock_hex[:8]) == bytes.fromhex('4e92588f') and stock_hex[8:10] == '60'
+    disp = int(stock_hex[10:12], 16) - 256
+    assert int(j['defsym']['TICK120_LOOP'], 16) == addr + 6 + disp
+    assert int(j['defsym']['IDLE_INIT'], 16) == int(BUS_SITES['core_main_end'][1][4:], 16)   # replayed
+    assert int(j['defsym']['PLAYING'], 16) == 0x800065b8
     (fx,) = j['fixed']
     at = int(fx['addr'], 16)
     assert any(a <= at and at + 24 <= b for a, b in DEV.image_free)
     assert at + 24 == DEV.image_free[0][1]          # the run's end: its start is octabam's SPECTRUM's
+
+
+def test_the_core_store_sites():
+    """core-ot 0.6's lifecycle sites: each displaces whole stock instructions, no branch in the
+    image lands inside one, a jmp stub goes back to the instruction after its site, and none meets
+    the v1.0 conversions' bytes, the intercepts' or the bus's. Every reference to a wrapped routine
+    is a jsr's operand: a wrapper keeps one return slot, and an indirect entry would pass it by."""
+    with open(os.path.join(ROOT, 'mods', 'core-ot', 'mod.json')) as fh:
+        j = json.load(fh)
+    with open(os.path.join(ROOT, 'mods', 'intercepts-ot', 'mod.json')) as fh:
+        icpt = [(int(x['addr'], 16), len(x['stock']) // 2) for x in json.load(fh)['sites']]
+    st, img = stock()
+    sites = {s['target']: s for s in j['sites'] if s['op'] in ('jsr', 'jmp')}
+    taken = [(a, len(h) // 2) for a, h, _e in BUS_SITES.values()] + icpt + list(V10_NEIGHBOURS)
+    inside = {}
+    for target, (addr, stock_hex, event, back) in STORE_SITES.items():
+        s, n = sites[target], len(stock_hex) // 2
+        assert (int(s['addr'], 16), s['stock']) == (addr, stock_hex), target
+        assert s['op'] == ('jsr' if target == 'core_fromcs1' else 'jmp'), target
+        o = addr - DEV.main_load
+        assert img[o:o + n].hex() == stock_hex, target
+        ok, note = elemod.insn_check(img, addr, n, DEV)
+        assert ok, (target, note)
+        if back:
+            assert int(j['defsym'][back], 16) == addr + n, target
+        if event:
+            assert j['collections'][event] == 4, event
+        for a, m in taken:
+            assert not (a < addr + n and addr < a + m), (target, hex(a))
+        for t in range(addr + 1, addr + n):
+            inside[t] = target
+    assert int(j['defsym']['JOB_LOOP'], 16) == STORE_SITES['core_job_loop'][0]
+    assert int(j['defsym']['ENGINE_Q'], 16) == 0x460d17ce
+    assert int(j['defsym']['FROMCS1_FN'], 16) == int(STORE_SITES['core_fromcs1'][1][4:], 16)
+    for t in STORE_TABLES:
+        assert j['collections'][t] == 4, t
+    for o in range(0, len(img) - 6, 2):         # bra/bsr/bcc, jmp/jsr absolute or pc-relative
+        w = struct.unpack('>H', img[o:o + 2])[0]
+        pc, tgt = DEV.main_load + o, None
+        if w & 0xf000 == 0x6000:
+            d8 = w & 0xff
+            if d8 == 0:
+                tgt = pc + 2 + struct.unpack('>h', img[o + 2:o + 4])[0]
+            elif d8 == 0xff:
+                tgt = pc + 2 + struct.unpack('>i', img[o + 2:o + 6])[0]
+            else:
+                tgt = pc + 2 + (d8 - 256 if d8 & 0x80 else d8)
+        elif w in (0x4ef9, 0x4eb9):
+            tgt = struct.unpack('>I', img[o + 2:o + 6])[0]
+        elif w in (0x4efa, 0x4eba):
+            tgt = pc + 2 + struct.unpack('>h', img[o + 2:o + 4])[0]
+        assert tgt not in inside, (hex(pc), hex(tgt), inside.get(tgt))
+    for target in ('core_loadall', 'core_loadmask', 'core_bankw', 'core_pstore', 'core_preload'):
+        pat, k, refs = struct.pack('>I', STORE_SITES[target][0]), 0, 0
+        while True:
+            k = img.find(pat, k)
+            if k < 0:
+                break
+            assert img[k - 2:k] == bytes.fromhex('4eb9'), (target, hex(DEV.main_load + k))
+            refs += 1
+            k += 1
+        assert refs, target
+
+
+# The voice events (core-ot 0.7, voice.s): each site, the bytes it displaces, its event and where its stub
+# goes back to. Every site is a jmp whose stub replays what it displaced. The routines are octabam's
+# (SYNTH, MUTE MODES, TEMPO SYNC, PLOCKS P2, the recorder fixes; MIT); each site is the instruction beside
+# the one they detour where irpina/octabam2elemod v1.0's SYNTH and FLEX SEEKBIND hold it.
+VOICE_SITES = {
+    'core_v_start': (0x4000c63c, '41f946104d0c', 'ev_voice_start', 'V_START_NEXT'),      # lea 0x46104d0c,a0
+    'core_v_release': (0x4000b4f6, '183980001828' '1f440076', 'ev_voice_release', 'V_REL_NEXT'),
+    'core_v_kill': (0x40006862, '2001e7882040', 'ev_voice_kill', 'V_KILL_NEXT'),        # move.l d1,d0 ; lsl.l #3,d0 ; movea.l d0,a0
+    'core_v_bind': (0x4000f4dc, '254d0004' '254c0008', 'ev_voice_bind', 'V_BIND_NEXT'),  # move.l a5,4(a2) ; move.l a4,8(a2)
+    'core_v_seek': (0x4000f82c, '266f0032' '27480038', 'ev_voice_seek', 'V_SEEK_BUMP'),  # movea.l 50(sp),a3 ; move.l a0,56(a3)
+    'core_v_trig': (0x4000c59e, '200c44c06b70', 'ev_trig_apply', 'V_TRIG_LONG'),        # move.l a4,d0 ; move.w d0,ccr ; bmi
+    'core_dsp_trig': (0x40004c72, '7003c0816738', 'ev_dsp_trig', 'V_FLAGS_TRIG'),       # moveq #3,d0 ; and.l d1,d0 ; beq
+    'core_dsp_record': (0x40004d40, '14280dbc' '4882' '35420038', 'ev_dsp_record', 'V_REC_NEXT'),
+}
+# What v1.0's SYNTH (po_retrig, po_rel, po_kill, po_assign, po_machwin, po_machlist) and FLEX SEEKBIND
+# (the counter, the same-sample test) write in the same routines: the voice events keep clear of every byte.
+V10_VOICE = ((0x4000c634, 8), (0x4000b51a, 8), (0x4000685c, 6), (0x400795ba, 8), (0x40079816, 8),
+             (0x4005a848, 8), (0x4000f834, 8), (0x4000f8cc, 6))
+# What the stubs and voice.s's comments rely on in the stock image: the track and the flags in the
+# registers and frame slots the stubs read, and where they go back to.
+VOICE_FACTS = (
+    (0x4000c634, '226f0072' '10309800'),     # a1 = the track, d0 = the command byte (what octabam's po_retrig replaces)
+    (0x4000c642, '11809800'),                # the start stub goes back here: move.b d0,0x46104d0c(a1.l)
+    (0x4000b4dc, '242f0072' '20312c00' '08000006' '660c'),  # d2 = the track, d0 = its mailbox word, bit 6 set
+    (0x4000b500, '1a398000' '1829'),         # the release bytes are read next (after the stub)
+    (0x40006824, '222f000c'),                # d1 = the track (the argument of the routine at 0x40006820)
+    (0x40006844, '40c2' '46fc2700'),         # the routine raises the interrupt level to 7 ...
+    (0x4000685c, '4200' '13808800'),         # ... clears the voice's byte in the CF voice array (SYNTH's site)
+    (0x40006868, '45f01a01'),                # the kill stub goes back here
+    (0x4000f474, '222f0040'),                # the binder: 64(sp) is the track
+    (0x4000f478, '243c000000a8'),            # the voice struct is 168 bytes
+    (0x4000f484, 'd5fc800049d8'),            # at 0x800049d8
+    (0x4000f568, '1f440037'),                # 55(sp) is the same-sample flag
+    (0x4000f834, '52aa0090' '25480098'),     # the counter's bump (FLEX SEEKBIND's site) follows the seek stub
+    (0x4000f83c, '202f0038'),                # a veto goes back here
+    (0x4000c42c, '200c' '08000006' '6600016a'),   # a4 = the trig's flags: bit 6 skips the restore
+    (0x4000c5a4, '222f0072'),                # the join's long continuation reads the track from 114(sp)
+    (0x4000c614, '220c' '08010001'),         # and the short one goes on
+    (0x40004c70, '7315'),                    # d1 = the byte at (a5)
+    (0x40004cb0, '44c1' '660a'),             # the no-trig exit tests d1's bit 2
+    (0x40004d38, '2044' 'd1fc80000110'),     # a0 = 0x80000110 + the track (d4)
+    (0x40004d4a, '2045' '7110'),             # the writer goes on
+)
+
+
+def test_the_core_voice_sites():
+    """core-ot 0.7's voice events: each site displaces whole stock instructions, no branch in the image
+    lands inside one, its stub goes back to the instruction after, and none meets a byte the v1.0
+    conversions (SYNTH, FLEX SEEKBIND), the bus, the store or the intercepts write. voice.s relies on
+    registers and frame slots whose stock instructions are checked here."""
+    with open(os.path.join(ROOT, 'mods', 'core-ot', 'mod.json')) as fh:
+        j = json.load(fh)
+    with open(os.path.join(ROOT, 'mods', 'intercepts-ot', 'mod.json')) as fh:
+        icpt = [(int(x['addr'], 16), len(x['stock']) // 2) for x in json.load(fh)['sites']]
+    st, img = stock()
+    sites = {s['target']: s for s in j['sites'] if s['op'] in ('jsr', 'jmp')}
+    taken = ([(a, len(h) // 2) for a, h, _e in BUS_SITES.values()]
+             + [(a, len(h) // 2) for a, h, _e, _b in STORE_SITES.values()] + icpt + list(V10_NEIGHBOURS)
+             + list(V10_VOICE))
+    inside = {}
+    for target, (addr, stock_hex, event, back) in VOICE_SITES.items():
+        s, n = sites[target], len(stock_hex) // 2
+        assert (int(s['addr'], 16), s['stock']) == (addr, stock_hex), target
+        assert s['op'] == 'jmp', target
+        o = addr - DEV.main_load
+        assert img[o:o + n].hex() == stock_hex, target
+        ok, note = elemod.insn_check(img, addr, n, DEV)
+        assert ok, (target, note)
+        assert j['collections'][event] == 4, event
+        assert int(j['defsym'][back], 16) == addr + n, target
+        for a, m in taken:
+            assert not (a < addr + n and addr < a + m), (target, hex(a))
+        for t in range(addr + 1, addr + n):
+            inside[t] = target
+    events = [v[2] for v in VOICE_SITES.values()]
+    assert len(set(events)) == len(events) == 8                          # each event has a site of its own
+    # the stubs that go somewhere else than past their site
+    d = {k: int(v, 16) for k, v in j['defsym'].items()}
+    assert d['V_SEEK_NEXT'] == d['V_SEEK_BUMP'] + 8                       # the counter's pair of stores
+    assert d['V_TRIG_SKIP'] == 0x4000c59e + 4 + 2 + 0x70                  # the bmi's target
+    assert d['V_FLAGS_NONE'] == 0x40004c72 + 4 + 2 + 0x38                 # the beq's target
+    assert d['DSPCMD'] == 0x46104d15
+    for addr, h in VOICE_FACTS:
+        o = addr - DEV.main_load
+        assert img[o:o + len(h) // 2].hex() == h, hex(addr)
+    for o in range(0, len(img) - 6, 2):         # bra/bsr/bcc, jmp/jsr absolute or pc-relative
+        w = struct.unpack('>H', img[o:o + 2])[0]
+        pc, tgt = DEV.main_load + o, None
+        if w & 0xf000 == 0x6000:
+            d8 = w & 0xff
+            if d8 == 0:
+                tgt = pc + 2 + struct.unpack('>h', img[o + 2:o + 4])[0]
+            elif d8 == 0xff:
+                tgt = pc + 2 + struct.unpack('>i', img[o + 2:o + 6])[0]
+            else:
+                tgt = pc + 2 + (d8 - 256 if d8 & 0x80 else d8)
+        elif w in (0x4ef9, 0x4eb9):
+            tgt = struct.unpack('>I', img[o + 2:o + 6])[0]
+        elif w in (0x4efa, 0x4eba):
+            tgt = pc + 2 + struct.unpack('>h', img[o + 2:o + 4])[0]
+        assert tgt not in inside, (hex(pc), hex(tgt), inside.get(tgt))
+    # core.h's voice locations are ones the image uses as absolute addresses
+    with open(os.path.join(ROOT, 'elekloader', 'sdk', 'include', 'octatrack', 'core.h')) as fh:
+        src = fh.read().lower()
+    for a in (0x46104d15, 0x46c80354, 0x800049d8):
+        assert ('0x%08xu' % a) in src or ('0x%xu' % a) in src, hex(a)
+        pat = struct.pack('>I', a)
+        assert any(img[i:i + 4] == pat and (img[i - 1] & 0x3f) == 0x39 for i in range(2, len(img) - 3)), hex(a)
+
+
+def test_the_voice_probe_links():
+    """tests/fixtures/octatrack-voice with core-ot 0.7: its handlers are the entries of the eight voice
+    tables (two on ev_voice_start, in order); core-ot alone has none."""
+    import shutil
+    from elekloader.sdk import build
+    need(SYX)
+    if not shutil.which(os.environ.get('ELEKLOADER_CROSS', DEV.toolchain['prefix']) + 'gcc'):
+        raise Skip('no m68k cross compiler')
+    st, img = stock()
+    with tempfile.TemporaryDirectory() as tmp:
+        core = elemod.load_any(build.build(os.path.join(ROOT, 'mods', 'core-ot'), SYX, tmp)[0])
+        probe, m = build.build(os.path.join(HERE, 'fixtures', 'octatrack-voice'), SYX, tmp)
+        assert not m.imports, m.imports
+        alone = link.link([core], img)
+        ln = link.link([core, elemod.load_any(probe)], img)
+
+    def table(ln, name, n):
+        o = ln.layout['run_load'] + (ln.tables[name][0] - DEV.ddr[0]) - DEV.main_load
+        return struct.unpack('>%dI' % n, ln.image[o:o + 4 * n])
+
+    for _a, _s, t, _b in VOICE_SITES.values():
+        assert alone.tables[t][1] == 0, t
+    assert table(ln, 'ev_voice_start', 3) == (ln.map['pr_start'], ln.map['pr_start2'], 0)
+    for t, fn in (('ev_voice_release', 'pr_release'), ('ev_voice_kill', 'pr_kill'), ('ev_voice_bind', 'pr_bind'),
+                  ('ev_voice_seek', 'pr_seek'), ('ev_trig_apply', 'pr_trig'), ('ev_dsp_trig', 'pr_dsp_trig'),
+                  ('ev_dsp_record', 'pr_dsp_record')):
+        assert table(ln, t, 2) == (ln.map[fn], 0), t
+
+
+def test_the_store_probe_links():
+    """tests/fixtures/octatrack-store with core-ot 0.6: its blocks, its CS1 claim and its
+    handlers are the entries of core's tables; core-ot alone has none."""
+    import shutil
+    from elekloader.sdk import build
+    need(SYX)
+    if not shutil.which(os.environ.get('ELEKLOADER_CROSS', DEV.toolchain['prefix']) + 'gcc'):
+        raise Skip('no m68k cross compiler')
+    st, img = stock()
+    with tempfile.TemporaryDirectory() as tmp:
+        core = elemod.load_any(build.build(os.path.join(ROOT, 'mods', 'core-ot'), SYX, tmp)[0])
+        probe, m = build.build(os.path.join(HERE, 'fixtures', 'octatrack-store'), SYX, tmp)
+        assert sorted(m.imports) == ['core_carddata_dirty', 'core_projdata_dirty', 'ot_engine_post'], m.imports
+        alone = link.link([core], img)
+        ln = link.link([core, elemod.load_any(probe)], img)
+
+    def table(ln, name, n):
+        o = ln.layout['run_load'] + (ln.tables[name][0] - DEV.ddr[0]) - DEV.main_load
+        return struct.unpack('>%dI' % n, ln.image[o:o + 4 * n])
+
+    for t in STORE_TABLES + ('ev_project', 'ev_banks_load', 'ev_part_saved'):
+        assert alone.tables[t][1] == 0, t
+    assert table(ln, 'core_projdata', 2) == (ln.map['stp_proj'], 0)
+    assert table(ln, 'core_carddata', 2) == (ln.map['stp_card'], 0)
+    assert table(ln, 'ot_sram', 2) == (ln.map['stp_sram'], 0)
+    assert table(ln, 'ev_project', 2) == (ln.map['stp_project'], 0)
+    assert table(ln, 'ev_banks_write', 2) == (ln.map['stp_banks_write'], 0)
+    assert ln.tables['ot_settings'][1] == 0
+
+
+def test_the_settings_companion():
+    """mods/settings-ot: its two sites are the MAIN MENU root's rows pointer (the one reference to
+    the stock root rows) and its row count (4 -> 5); with core-ot 0.6 and the probe's three
+    settings it links, the settings are ot_settings' entries in order, and the root points at the
+    companion's rows. It needs core 0.6."""
+    import shutil
+    from elekloader.sdk import build
+    with open(os.path.join(ROOT, 'mods', 'settings-ot', 'mod.json')) as fh:
+        j = json.load(fh)
+    st, img = stock()
+    rows_ptr, count = j['sites']
+    assert (rows_ptr['addr'], rows_ptr['stock'], rows_ptr['op'], rows_ptr['target']) == \
+        ('0x400cbda4', '400cc698', 'ptr', 'ots_root_rows')
+    assert (count['addr'], count['stock'], count['op'], count['new']) == ('0x400cbd8c', '00000004', 'bytes', '00000005')
+    for s in j['sites']:
+        o = int(s['addr'], 16) - DEV.main_load
+        assert img[o:o + 4].hex() == s['stock'], s['addr']
+    assert img.count(struct.pack('>I', 0x400cc698)) == 1          # only the rows pointer
+    assert 0x400cbda4 - 0x400cbd8c == 0x18                        # the descriptor's rows field
+    need(SYX)
+    if not shutil.which(os.environ.get('ELEKLOADER_CROSS', DEV.toolchain['prefix']) + 'gcc'):
+        raise Skip('no m68k cross compiler')
+    with tempfile.TemporaryDirectory() as tmp:
+        core = elemod.load_any(build.build(os.path.join(ROOT, 'mods', 'core-ot'), SYX, tmp)[0])
+        sets = elemod.load_any(build.build(os.path.join(ROOT, 'mods', 'settings-ot'), SYX, tmp)[0])
+        probe = elemod.load_any(build.build(os.path.join(HERE, 'fixtures', 'octatrack-settings'), SYX, tmp)[0])
+        ln = link.link([core, sets, probe], img)
+    o = ln.layout['run_load'] + (ln.tables['ot_settings'][0] - DEV.ddr[0]) - DEV.main_load
+    assert struct.unpack('>4I', ln.image[o:o + 16]) == (ln.map['sts_s1'], ln.map['sts_s2'], ln.map['sts_s3'], 0)
+    assert ln.tables['core_carddata'][1] == 1 and ln.tables['core_projdata'][1] == 1
+    assert ln.tables['ot_sram'][1] == 1
+    o = 0x400cbda4 - DEV.main_load
+    assert struct.unpack('>I', ln.image[o:o + 4])[0] == ln.map['ots_root_rows']
+    o = 0x400cbd8c - DEV.main_load
+    assert struct.unpack('>I', ln.image[o:o + 4])[0] == 5
+    assert j['resources']['core'] == '0.6'
+
+
+def _c_defs(path):
+    """name -> int for the `#define NAME 0x...u` lines of a C source"""
+    import re
+    with open(path) as fh:
+        src = fh.read()
+    out = {}
+    for m in re.finditer(r'^#define\s+(\w+)\s+(.*)$', src, re.M):
+        n = re.search(r'0x[0-9a-fA-F]+|(?<!\w)[0-9]+', m.group(2))
+        if n:
+            out[m.group(1)] = int(n.group(0), 0)
+    return out
+
+
+def test_page2_write_follows_the_stock_editors():
+    """core-ot 0.5's ot_page2_write (exports.c) makes the stores of the four page-2 editors: each
+    page's Part offset, its battery-backed copy, its live lane, the dirty flags, the bank pointer and
+    the Part size are the immediates in the stock image's editors (PLAYBACK 0x4003a474, AMP 0x4003adec,
+    FX1 0x4003abe4, FX2 0x4003a9dc), at the places the editors make each store."""
+    import re
+    st, img = stock()
+    with open(os.path.join(ROOT, 'mods', 'core-ot', 'exports.c')) as fh:
+        src = fh.read()
+    d = _c_defs(os.path.join(ROOT, 'mods', 'core-ot', 'exports.c'))
+    rows = re.findall(r'\{\s*(0x[0-9a-f]+),\s*(0x[0-9a-f]+),\s*(\d)\s*\},\s*/\*\s*(\w+)', src)
+    pages = {name: (int(store, 16), int(lane, 16), int(kind)) for store, lane, kind, name in rows}
+    assert sorted(pages) == ['AMP', 'FX1', 'FX2', 'PLAYBACK'], pages
+    # where each editor stores: `addal #off,a0` (the Part), `addal #mirror+off,a1` (its copy) and
+    # `lea 0x80000810+lane,a0` (the engine's lane)
+    at = {'PLAYBACK': (0x4003a5b4, 0x4003a5bc, 0x4003a60a), 'AMP': (0x4003aeb4, 0x4003aebc, 0x4003af0a),
+          'FX1': (0x4003acac, 0x4003acb4, 0x4003ad02), 'FX2': (0x4003aaa4, 0x4003aaac, 0x4003aafa)}
+    kinds = {'PLAYBACK': 0, 'AMP': 2, 'FX1': 3, 'FX2': 4}                 # the resolver's page kinds
+
+    def bytes_at(a, n=6):
+        o = a - DEV.main_load
+        return img[o:o + n]
+    for name, (store, lane, kind) in pages.items():
+        a_store, a_shadow, a_lane = at[name]
+        assert kind == kinds[name], name
+        assert bytes_at(a_store) == bytes.fromhex('d1fc') + struct.pack('>I', store), name
+        assert bytes_at(a_shadow) == bytes.fromhex('d3fc') + struct.pack('>I', d['MIRROR'] + store), name
+        assert bytes_at(a_lane) == bytes.fromhex('41f9') + struct.pack('>I', d['LANE'] + lane), name
+    # the flags every editor sets, the pointer and the size it indexes by (FX2's editor)
+    fx2 = bytes_at(0x4003a9e0, 0x140)
+    for const, opcode in ((d['DIRTY_PARTS'], '207c'), (d['DIRTY_BANK'], '203c'),
+                          (d['DIRTY_PARTS_CS1'], '13c1'), (d['DIRTY_PROJECT'], '23c1'),
+                          (d['PART_SIZE'], '223c'), (d['DB'], '2279'), (d['REDRAW'], '41f9')):
+        assert bytes.fromhex(opcode) + struct.pack('>I', const) in fx2, hex(const)
+    # the resolver the descriptors come from (its first two instructions), where a descriptor keeps a
+    # knob's range (minimums from byte 0x6a, counts from 0x9a, four bytes a knob, page 2's are 6-11),
+    # and the Part byte it takes the machine from
+    assert bytes_at(d['RESOLVE'], 8) == bytes.fromhex('4feffff048d7003c')
+    assert bytes.fromhex('22342c6a') in bytes_at(0x4003ac60, 0x20)        # movel a4@(0x6a,d2.l*4),d1
+    assert bytes.fromhex('d2a8009a') in bytes_at(0x4003ac78, 0x10)        # addl a0@(154),d1
+    assert bytes.fromhex('d1fc') + struct.pack('>I', d['MACHINE'] + 0) in bytes_at(0x40031e20, 0x10)
+
+
+def test_core_h_names_the_places_the_image_uses():
+    """core.h's context: each location is read or written by the stock image as an absolute address
+    (an `abs.l` operand: the opcode word's low six bits are 0x39), and the meter's struct is the
+    layout bus.s keeps (meter.inc)."""
+    import re
+    st, img = stock()
+    h = os.path.join(ROOT, 'elekloader', 'sdk', 'include', 'octatrack', 'core.h')
+    with open(h) as fh:
+        src = fh.read()
+    for a in (0x100b14cc, 0x100b14ce, 0x100b14cf, 0x80000000, 0x80000002, 0x80000003, 0x80000004,
+              0x8000182a, 0x80001832, 0x800065b8, 0x46c82456, 0xfc07c00c):
+        assert ('0x%08x' % a) in src.lower(), hex(a)
+        pat = struct.pack('>I', a)
+        hits = [i for i in range(2, len(img) - 3) if img[i:i + 4] == pat and (img[i - 1] & 0x3f) == 0x39]
+        assert hits, hex(a)
+    with open(os.path.join(ROOT, 'mods', 'core-ot', 'meter.inc')) as fh:
+        inc = dict((k, int(v)) for k, v in re.findall(r'\.equ\s+(\w+),\s*(\d+)', fh.read()))
+    fields = re.search(r'struct ot_frame_meter \{(.*?)\};', src, re.S).group(1)
+    names = re.findall(r'uint32_t\s+(\w+)(\[\d+\])?;', fields)
+    public = [n for n, arr in names if not arr]
+    assert public == ['frames', 'last', 'worst', 'overruns', 'late', 'tpf', 'total'], public
+    offsets = [inc[k] for k in ('M_FRAMES', 'M_LAST', 'M_WORST', 'M_OVER', 'M_LATE', 'M_TPF', 'M_TOTAL')]
+    assert offsets == [4 * i for i in range(7)]
+    assert inc['OT_METER_SIZE'] == 4 * (len(public) + 4)                 # the private_[4] after them
+    assert (inc['M_T0'], inc['M_PREV'], inc['M_WIN'], inc['M_WINN']) == (28, 32, 36, 40)
+    with open(os.path.join(ROOT, 'mods', 'core-ot', 'mod.json')) as fh:
+        j = json.load(fh)
+    assert re.search(r'OT_FRAME_COUNTS\s+%su' % j['defsym']['FRAME_COUNTS'], src)     # one number, twice
 
 
 def test_the_intercepts_replay_their_sites():
@@ -515,7 +1073,8 @@ def test_core_builds_and_links():
         with open(os.path.join(d, 'mod.json'), 'w') as fh:
             json.dump({'id': 'ot-marker', 'version': '1', 'device': 'octatrack', 'os': '1.40C',
                        'sources': ['marker.s'], 'requires': ['core']}, fh)
-        marker, _m = build.build(d, SYX, tmp)
+        marker, m2 = build.build(d, SYX, tmp)
+        m1 = elemod.load_any(core)
         outputs, man = patch.build(SYX, [core, marker], version='CORE TEST',
                                    log=lambda *a: None)
     new = formats.main_image(formats.parse(outputs['syx'], DEV), DEV)
@@ -525,9 +1084,14 @@ def test_core_builds_and_links():
     o = 0x4000050c - DEV.main_load
     assert new[o:o + 6] == b'\x4e\xb9' + struct.pack('>I', boot)
     assert new[len(img):].find(b'ELEKLOADER MARKER') > 0
-    o = 0x4000045e - DEV.main_load              # the arena's base, past the pages the mods fill
-    assert new[o:o + 4] == struct.pack('>I', DEV.ddr[0] + PAGE)
-    assert man['link']['layout']['reserve'] == {'units': 1, 'end': DEV.ddr[0] + PAGE}
+    # the arena's base, past the pages the mods fill: their run images and RAM (core-ot 0.6's store
+    # keeps about 100 KB of buffers, so core alone takes more than one page from 0.6)
+    need_bytes = sum(m.size('.run') + m.size('.bss') for m in (m1, m2))
+    units = man['link']['layout']['reserve']['units']
+    assert units * PAGE >= need_bytes > (units - 1) * PAGE - 64 * units, (units, need_bytes)
+    o = 0x4000045e - DEV.main_load
+    assert new[o:o + 4] == struct.pack('>I', DEV.ddr[0] + units * PAGE)
+    assert man['link']['layout']['reserve'] == {'units': units, 'end': DEV.ddr[0] + units * PAGE}
     # the draw site calls the gate in the image (tst.b core_up), whose flag starts clear
     gate = 0x400c46ea
     o = 0x40013cae - DEV.main_load
@@ -553,7 +1117,14 @@ def test_the_example_subscribes_to_the_bus():
         ln = link.link([elemod.load_any(core), elemod.load_any(ex)], img)
     counts = {t: ln.tables[t][1] for t in ln.tables}
     assert counts == {'ev_draw': 1, 'ev_enc': 0, 'ev_frame': 0, 'ev_key': 0, 'ev_midi': 0,
-                      'ev_tick': 0}, counts
+                      'ev_tick': 0, 'ev_frame_end': 0, 'ev_midi_out': 0, 'ev_midi_out_rt': 0,
+                      'ev_frame_begin': 0, 'ev_transport': 0, 'ev_boot_done': 0, 'ev_idle': 0,
+                      'ev_tick120': 0, 'ev_project': 0, 'ev_banks_load': 0, 'ev_banks_write': 0,
+                      'ev_project_store': 0, 'ev_project_reload': 0, 'ev_cs1_bank': 0, 'ev_part_saved': 0,
+                      'ev_part_cleared': 0, 'core_projdata': 0, 'core_carddata': 0, 'ot_sram': 0,
+                      'ot_settings': 0, 'ev_voice_start': 0, 'ev_voice_release': 0, 'ev_voice_kill': 0,
+                      'ev_voice_bind': 0, 'ev_voice_seek': 0, 'ev_trig_apply': 0, 'ev_dsp_trig': 0,
+                      'ev_dsp_record': 0}, counts
     at = ln.tables['ev_draw'][0]
     o = ln.layout['run_load'] + (at - DEV.ddr[0]) - DEV.main_load
     assert struct.unpack('>II', ln.image[o:o + 8]) == (ln.map['hello_draw'], 0)
@@ -654,8 +1225,9 @@ def test_seq_events_ot_sites():
 def test_seq_events_ot_builds_and_links():
     """mods/seq-events-ot and examples/euclid-ot with core-ot: the build calls no library
     function (it imports only its eight tables), the example names no firmware address, the
-    handler lands in its table, the lot fits core's page, and linked with core alone the mod
-    changes only its four sites: each is the jmp (padded) or jsr the SDK promises."""
+    handler lands in its table, the lot takes at most one reserve unit more than core alone,
+    and linked with core alone the mod changes only its four sites: each is the jmp (padded)
+    or jsr the SDK promises."""
     import shutil
     from elekloader.sdk import build
     need(SYX)
@@ -679,15 +1251,21 @@ def test_seq_events_ot_builds_and_links():
         assert link.check(mods, img) == []
         ln = link.link(mods, img)
         alone = link.link([elemod.load_any(core)], img)
-        assert ln.layout['reserve']['units'] == 1                           # core's page holds the lot
+        core_sites = [(s['addr'] - DEV.main_load, s['len']) for s in elemod.load_any(core).sites]
+        # the lot takes at most one reserve unit past core's own (core 0.5 and later grow it)
+        assert ln.layout['reserve']['units'] <= alone.layout['reserve']['units'] + 1, \
+            (ln.layout['reserve'], alone.layout['reserve'])
     counts = {t: ln.tables[t][1] for t in ln.tables}
     assert counts['ev_gen_trig'] == 1 and counts['ev_tick'] == 2, counts
     assert all(counts[t] == 0 for t in tables if t != 'ev_gen_trig'), counts
     at = ln.tables['ev_gen_trig'][0]
     o = ln.layout['run_load'] + (at - DEV.ddr[0]) - DEV.main_load
     assert struct.unpack('>II', ln.image[o:o + 8]) == (ln.map['euclid_trig'], 0)
-    # only the four sites differ from core alone, in the stock image's own bytes
+    # only the four sites differ from core alone, in the stock image's own bytes; and core's
+    # own sites when the reserve differs, since they hold the arena's place past it
     windows = [(a - DEV.main_load, len(h) // 2) for a, (h, _op, _t) in SEQ_OT_SITES.items()]
+    if ln.layout['reserve'] != alone.layout['reserve']:
+        windows += core_sites
     for i in range(len(img)):
         if ln.image[i] != alone.image[i]:
             assert any(w <= i < w + k for w, k in windows), hex(i + DEV.main_load)
@@ -868,6 +1446,206 @@ def test_trig_events_ot_beside_the_companions():
         link.link(mods, img)
 
 
+# ---- USB (usb-ot and its functions) ------------------------------------------------------
+
+
+def test_the_usb_companion_sites():
+    """mods/usb-ot: each site is whole stock instructions of the USB stack and keeps clear of
+    core-ot's bus; the stock device descriptor has one reference, the site that serves
+    usb-ot's copy through the uncached alias."""
+    with open(os.path.join(ROOT, 'mods', 'usb-ot', 'mod.json')) as fh:
+        j = json.load(fh)
+    st, img = stock()
+    assert j['id'] == 'usb' and j['collections'] == {'ot_usb_functions': 4}
+    assert j['resources']['names'] == ['usb:stack'] and j['requires'] == ['core']
+    for s in j['sites']:
+        addr, n = int(s['addr'], 16), len(s['stock']) // 2
+        o = addr - DEV.main_load
+        assert img[o:o + n].hex() == s['stock'], s['addr']
+        ok, note = elemod.insn_check(img, addr, n, DEV)
+        assert ok, (s['addr'], note)
+        for a, h, _e in BUS_SITES.values():
+            assert not (a < addr + n and addr < a + len(h) // 2), s['addr']
+    assert img.count(struct.pack('>I', 0x400e2000)) == 1
+    (dev,) = [s for s in j['sites'] if s['op'] == 'keep2']
+    assert (dev['addr'], dev['target'], dev['addend']) == ('0x4001d82c', 'otu_dev', 0x08000000)
+
+
+def test_usb_midi_is_a_usb_function():
+    """usb-ot alone has an empty function table; with usb-midi-ot its record is the one
+    entry and its handlers are on ev_midi_out and ev_midi_out_rt. The device descriptor's
+    reference serves usb-ot's copy, uncached. A function needs usb-ot, and core-ot 0.4."""
+    import shutil
+    from elekloader.sdk import build
+    need(SYX)
+    if not shutil.which(os.environ.get('ELEKLOADER_CROSS', DEV.toolchain['prefix']) + 'gcc'):
+        raise Skip('no m68k cross compiler')
+    st, img = stock()
+    with tempfile.TemporaryDirectory() as tmp:
+        core, usb, midi = (elemod.load_any(build.build(os.path.join(ROOT, 'mods', d), SYX, tmp)[0])
+                           for d in ('core-ot', 'usb-ot', 'usb-midi-ot'))
+        alone = link.link([core, usb], img)
+        ln = link.link([core, usb, midi], img)
+
+    def table(ln, name, n):
+        o = ln.layout['run_load'] + (ln.tables[name][0] - DEV.ddr[0]) - DEV.main_load
+        return struct.unpack('>%dI' % n, ln.image[o:o + 4 * n])
+
+    assert alone.tables['ot_usb_functions'][1] == 0 and table(alone, 'ot_usb_functions', 1) == (0,)
+    assert ln.tables['ot_usb_functions'][1] == 1
+    assert table(ln, 'ot_usb_functions', 2) == (ln.map['usb_midi'], 0)
+    assert table(ln, 'ev_midi_out', 2) == (ln.map['usbmidi_out'], 0)
+    assert table(ln, 'ev_midi_out_rt', 2) == (ln.map['usbmidi_out_rt'], 0)
+    o = 0x4001d82c - DEV.main_load
+    assert ln.image[o:o + 6] == b'\x48\x79' + struct.pack('>I', ln.map['otu_dev'] + 0x08000000)
+    assert any('requires usb' in p for p in link.check([core, midi], img))
+
+
+def test_usb_audio_is_a_usb_function_with_its_layout_a_setting():
+    """mods/usb-audio-ot, one mod: its record is in ot_usb_functions (ABI 2: the last word, `enabled`,
+    is set; USB MIDI's record is ABI 1 and has none), its producer on core-ot's ev_frame_end and its
+    layout in ot_settings as an early card option (OFF, MAIN, M+C, MSTR, TRKS, ALL: labels short
+    enough for the menu's value column; the default ALL). It links with and without settings-ot,
+    beside USB MIDI whatever the order the mods come in (MIDI's record first by order: its interfaces
+    1-2, audio's 3-4), and hooks no stock code. It needs usb-ot; the four folders of 0.1's other
+    layouts are gone."""
+    import shutil
+    from elekloader.sdk import build
+    need(SYX)
+    if not shutil.which(os.environ.get('ELEKLOADER_CROSS', DEV.toolchain['prefix']) + 'gcc'):
+        raise Skip('no m68k cross compiler')
+    st, img = stock()
+    with tempfile.TemporaryDirectory() as tmp:
+        core, usb, midi, sets, audio = (elemod.load_any(build.build(os.path.join(ROOT, 'mods', d), SYX, tmp)[0])
+                                        for d in ('core-ot', 'usb-ot', 'usb-midi-ot', 'settings-ot', 'usb-audio-ot'))
+    assert not [d for d in os.listdir(os.path.join(ROOT, 'mods')) if d.startswith('usb-audio-') and d != 'usb-audio-ot']
+
+    def at(ln, addr):
+        return ln.layout['run_load'] + (addr - DEV.ddr[0]) - DEV.main_load
+
+    def table(ln, name, n):
+        o = at(ln, ln.tables[name][0])
+        return struct.unpack('>%dI' % n, ln.image[o:o + 4 * n])
+
+    def string(ln, addr):
+        o = at(ln, addr)
+        return ln.image[o:ln.image.index(b'\0', o)].decode()
+
+    assert audio.id == 'usb-audio' and not audio.sites and audio.names == ['usb:ep3-in']
+    assert audio.version == '0.2' and usb.version == '0.2'
+    ln = link.link([core, usb, audio], img)
+    assert table(ln, 'ot_usb_functions', 2) == (ln.map['usb_audio'], 0)
+    assert table(ln, 'ev_frame_end', 2) == (ln.map['usba_frame'], 0)
+    assert table(ln, 'ot_settings', 2) == (ln.map['usba_setting'], 0)
+    both = link.link([core, usb, audio, midi], img)
+    assert table(both, 'ot_usb_functions', 3) == (both.map['usb_midi'], both.map['usb_audio'], 0)
+    full = link.link([core, usb, audio, sets, midi], img)
+    assert table(full, 'ot_settings', 2) == (full.map['usba_setting'], 0)
+    assert link.check([core, usb, midi, sets, audio], img) == []
+
+    defs = _c_defs(os.path.join(ROOT, 'elekloader', 'sdk', 'include', 'octatrack', 'usb.h'))
+    assert (defs['OT_USB_ABI'], defs['OT_USB_ABI_1']) == (2, 1)
+    rec = struct.unpack('>13I', both.image[at(both, both.map['usb_audio']):][:52])
+    assert rec[0] == 2 and rec[12] != 0                              # abi, enabled
+    old = struct.unpack('>13I', both.image[at(both, both.map['usb_midi']):][:52])
+    assert old[0] == 1 and old[12] == 0                              # abi 1: always on
+
+    o = at(ln, ln.map['usba_setting'])
+    abi, tag, key_kind_scope, group, name, lo, hi, labels, var, dflt, changed =         struct.unpack('>IIIIIiiIIiI', ln.image[o:o + 44])
+    assert (abi, tag) == (1, int.from_bytes(b'USBA', 'big'))
+    assert (key_kind_scope >> 16, (key_kind_scope >> 8) & 0xff, key_kind_scope & 0xff) == (1, 1, 0x80)   # key 1, OPTION, CARD | EARLY
+    assert (string(ln, group), string(ln, name)) == ('USB AUDIO', 'LAYOUT')
+    assert (lo, hi, dflt, changed) == (0, 5, 5, 0)
+    names = [string(ln, struct.unpack('>I', ln.image[at(ln, labels) + 4 * k:][:4])[0]) for k in range(6)]
+    assert names == ['OFF', 'MAIN', 'M+C', 'MSTR', 'TRKS', 'ALL'], names
+    assert all(len(n) <= 4 for n in names)                           # the menu's value column
+    o = at(ln, var)
+    assert struct.unpack('>i', ln.image[o:o + 4])[0] == 5            # the default, until the companion sets it
+    assert any('requires usb' in p for p in link.check([core, audio], img))
+
+
+def test_the_machines_sites():
+    """mods/machines-ot: its 32 sites are stock, whole instructions, and none is core-ot's or the
+    intercepts'; the two places that enter machines.c with the caller's stack (the Part validator
+    and the FLEX renderer) are the prologues seams.s replays; the page resolver keeps the
+    registers the hooks after it read."""
+    st, img = stock()
+
+    def sites(name):
+        with open(os.path.join(ROOT, 'mods', name, 'mod.json')) as fh:
+            return json.load(fh)['sites']
+    mine = sites('machines-ot')
+    assert len(mine) == 32
+    for s in mine:
+        a, n = int(s['addr'], 16), len(s['stock']) // 2
+        o = a - DEV.main_load
+        assert img[o:o + n].hex() == s['stock'], s['addr']
+        assert s['op'] in ('jmp', 'keep2'), s['addr']
+        ok, note = elemod.insn_check(img, a, n, DEV)
+        assert ok, (s['addr'], note)
+    others = [(int(s['addr'], 16), len(s['stock']) // 2) for m in ('core-ot', 'intercepts-ot') for s in sites(m)]
+    for s in mine:
+        a, n = int(s['addr'], 16), len(s['stock']) // 2
+        assert not any(b < a + n and a < b + m for b, m in others), s['addr']
+    with open(os.path.join(ROOT, 'mods', 'machines-ot', 'seams.s')) as fh:
+        src = fh.read()
+    for site, stub, back in ((0x40002318, 'otm_stock_validate', 0x40002320), (0x40004008, 'ot_stock_render', 0x40004010)):
+        o = site - DEV.main_load
+        frame = struct.unpack('>h', img[o + 2:o + 4])[0]
+        assert img[o:o + 2] == b'\x4f\xef' and img[o + 4:o + 8] == b'\x48\xd7\x7c\xfc', hex(site)
+        body = src.split('%s:\n' % stub, 1)[1].split('\n\n', 1)[0]
+        assert 'lea     %d(%%sp), %%sp' % frame in body and 'jmp     %#x' % back in body, stub
+    # the page resolver's case 0 calls C, then goes on to the PLAYBACK load (0x40031ece), where
+    # SYNTH MACHINE's and OCTA303's hooks read the part (d1) and the bank (a1): it keeps both
+    body = src.split('otm_resolve:\n', 1)[1].split('\n\n', 1)[0]
+    at = [body.find(x) for x in ('movem.l %d1/%a1, (%sp)', 'jsr     otm_page', 'movem.l (%sp), %d1/%a1',
+                                 'jmp     0x40031ece')]
+    assert -1 not in at and at == sorted(at), at
+
+
+def test_the_machines_companion_lists_a_machine():
+    """mods/machines-ot with examples/crush-machine-ot: ot_machines holds CRUSH's record, whose fields
+    sit where version 1 of the record has them; the grown name and page tables start as stock's;
+    the FLEX renderer and the Part validator go to machines.c."""
+    import shutil
+    from elekloader.sdk import build
+    need(SYX)
+    if not shutil.which(os.environ.get('ELEKLOADER_CROSS', DEV.toolchain['prefix']) + 'gcc'):
+        raise Skip('no m68k cross compiler')
+    st, img = stock()
+    with tempfile.TemporaryDirectory() as tmp:
+        core, _m = build.build(os.path.join(ROOT, 'mods', 'core-ot'), SYX, tmp)
+        mach, m = build.build(os.path.join(ROOT, 'mods', 'machines-ot'), SYX, tmp)
+        crush, c = build.build(os.path.join(ROOT, 'examples', 'crush-machine-ot'), SYX, tmp)
+        assert {'ot_stock_render', 'ot_part', 'ot_track_machine', 'ot_machine_row'} <= set(m.exports)
+        assert set(c.imports) == {'ot_stock_render'}, c.imports
+        ln = link.link([elemod.load_any(p) for p in (core, mach, crush)], img)
+    run = ln.layout['run_load'] - DEV.main_load
+
+    def ram(addr, n):
+        o = run + (addr - DEV.ddr[0])
+        return ln.image[o:o + n]
+    at, count, _entry = ln.tables['ot_machines']
+    assert count == 1
+    rec = ln.map['crush_machine']
+    assert struct.unpack('>II', ram(at, 8)) == (rec, 0)
+    r = ram(rec, 80)
+    assert struct.unpack('>I', r[0:4])[0] == 1 and r[4:8] == b'CR\x01\x01'      # abi, sig, versions
+    label = struct.unpack('>I', r[8:12])[0]
+    assert ram(label, 6) == b'CRUSH\0'
+    assert struct.unpack('>III', r[12:24]) == (1, 0, 0x400d320c)                # PROTECT, FLEX's page, FLEX's defaults
+    assert struct.unpack('>I', r[64:68])[0] == ln.map['crush_render']           # render
+    assert r[24:64] == bytes(40) and r[68:80] == bytes(12)
+    names, pages = ln.map['otm_names'], ln.map['otm_pages']
+    o = 0x400a78c8 - DEV.main_load
+    assert ram(names, 20) == img[o:o + 20]
+    o = 0x400d5f38 - DEV.main_load
+    assert ram(pages, 32) == img[o:o + 32]
+    for site, fn in ((0x40004008, 'otm_render'), (0x40002318, 'otm_validate')):
+        o = site - DEV.main_load
+        assert ln.image[o:o + 8] == b'\x4e\xf9' + struct.pack('>I', ln.map[fn]) + b'\x4e\x71', fn
+
+
 # ---- DSP code ---------------------------------------------------------------------------
 
 HOOK = 0x400ef758               # payload A's P:0x88, move r2,x:>$204 (627000 000204)
@@ -973,6 +1751,11 @@ def test_dsp_code_is_refused_where_it_cannot_go():
     back['sections']['.run'] = {'len': 4, 'parts': [['hex', '00000000']]}
     back['relocs'].append(['.run', 0, 'abs32', 'sym:tst', 0])
     refused([core, bus, back], 'dsptest 0: .run+0x0 is a ColdFire reference to a DSP address')
+    wide = json.loads(json.dumps(sub))                  # a DSP word is 24 bits: 0xffffff links, one more does not
+    wide['relocs'][0] = ['.dsp.A', 6, 'dsp24', 'abs', 0x1000000]
+    refused([core, bus, wide], '.dsp.A+0x6: a DSP address out of range (0x1000000)')
+    wide['relocs'][0][4] = 0xffffff
+    link.link([link.Mod2(d, d['id']) for d in (core, bus, wide)], img)
     ent = json.loads(json.dumps(sub))
     ent['contribute'][0]['relocs'] = [[0, 'abs32', 'sym:tst', 0], [1, 'dsp24', 'sym:tst', 0]]
     refused([core, bus, ent], 'an entry for ev_dsp_rx has a abs32 relocation at +0; a DSP '
