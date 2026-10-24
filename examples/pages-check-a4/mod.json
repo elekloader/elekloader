@@ -1,0 +1,25 @@
+{
+ "id": "pages-check",
+ "version": "0.1",
+ "title": "Pages check",
+ "category": "Examples",
+ "license": "GPL-2.0-or-later",
+ "description": "A test for core-a4 0.2's parameter routines on the Analog Four MKII: AMP PAN's value shows as two hex digits through core_params, each step it turns lengthens a bar along the bottom of the screen, and a CHECK page behind the AMP key appears once PAN has turned.",
+ "device": "analog-four-mk2",
+ "os": "1.56",
+ "sources": ["pages.c"],
+ "cflags": ["-DFILLRECT_AT=0x40059f1a"],
+ "subscribe": [
+  {"event": "ev_draw", "fn": "pc_draw", "order": 60}
+ ],
+ "contribute": [
+  {"to": "core_params", "order": 50, "data": "00000000",
+   "relocs": [[0, "abs32", "sym:pc_params", 0]]},
+  {"to": "core_pages", "order": 50, "data": "00000000",
+   "relocs": [[0, "abs32", "sym:pc_page", 0]]},
+  {"to": "core_view_pages", "order": 30, "data": "00000000",
+   "relocs": [[0, "abs32", "sym:pc_view", 0]]}
+ ],
+ "resources": {"core": "0.2"},
+ "requires": ["core"]
+}

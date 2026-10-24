@@ -20,7 +20,8 @@
 
 /* The markers a page's abi names: a machine whose page reads this layout links only beside this mod. 3.1
  * is 3 with knobs that draw their own graphic (CM_DRAW), which machine-pages 1.0 does not read; 3.2
- * (src.c) is 3.1 with up to seven extra values on a second page (struct cm_ui32), from machine-pages 1.2. */
+ * (src.c) is 3.1 with up to seven extra values on a second page (struct cm_ui32), from machine-pages 1.2;
+ * 3.3 is 3.2 whose extra values may name a MIDI CC (+18), from 1.4. */
 const char cm_ui_v3[] = "machine-pages 3";
 const char cm_ui_v31[] = "machine-pages 3.1";
 
@@ -55,11 +56,11 @@ static void find(void)
         const struct cm_machine *d = core_machines[i];
         const struct cm_ui *ui = (const struct cm_ui *)core_machine_ui(d->id);
         if (!ui || (ui->abi != cm_ui_v3 && ui->abi != cm_ui_v31 &&
-                    ui->abi != cm_ui_v32) ||
+                    ui->abi != cm_ui_v32 && ui->abi != cm_ui_v33) ||
             ui->page_from > 3 || d->id <= 3)
             continue;                          /* no page, or not one this mod reads */
         const struct cm_ui32 *extended = mp_src_for(d->id);
-        if (ui->abi == cm_ui_v32 && !extended)
+        if ((ui->abi == cm_ui_v32 || ui->abi == cm_ui_v33) && !extended)
             continue;
         pages[npages].id = d->id;
         pages[npages].ui = ui;

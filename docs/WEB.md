@@ -207,7 +207,7 @@ shows them as one card (the same repository, mod, version and device).
 | `core/*.elemod`, `core/index.json` | the cores of the latest release, and the cores the catalog lists, with their sha256; the worker loads the newest of each device and OS and checks it |
 | `shop/*.elemod`, `shop/index.json` | the shop: the catalog's mods, from their authors' releases, with what each file says about itself |
 | `shop/claims.json` | the leaderboard: the to-do list's entries claimed by the repository's merged pull requests (`Claims:` lines; [CONTRIBUTE.md](CONTRIBUTE.md#claiming-an-entry)), from `gh pr list --state merged` |
-| `shop/bounties.json` | the community's to-do list for the core, from the shop's files and the cores (`elekloader.sdk.bounties`, grouped by distance: the site has no stock file), shown in the page's Contribute view ([CONTRIBUTE.md](CONTRIBUTE.md)) |
+| `shop/bounties.json` | the community's to-do list for the core, from the shop's files and the cores (`elekloader.sdk.bounties`, grouped by distance: the site has no stock file), and from the upstream lists in `web/upstream/` (`--upstream`: the stock code octabam's newer modules hook), shown in the page's Contribute view ([CONTRIBUTE.md](CONTRIBUTE.md)) |
 | `pyodide/` | five files from Pyodide's core tarball (`pyodide.mjs`, `pyodide.asm.mjs`, `pyodide.asm.wasm`, `python_stdlib.zip`, `pyodide-lock.json`), and `NOTICE.txt` with their licences |
 | `build.json` | the commit, the site's version, the package's sha256 and git tree, the release the cores come from and whether the package is that release's, Pyodide's version, every file's sha256 |
 | `LICENSE.txt`, `NOTICE.txt` | elekloader's |
