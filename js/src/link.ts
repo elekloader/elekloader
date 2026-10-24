@@ -11,7 +11,7 @@
 // sections of 24-bit little-endian words, and declare DSP tables (a collection with "space": "dsp.<payload>"). They are
 // placed in the P words of that payload a mod frees by claiming the area's name (the profile's dspAreas); a symbol there
 // is a DSP word address, and a `dsp24` relocation writes one as three little-endian bytes.
-import { concat, sha } from './bytes.ts'
+import { concat, equal, sha } from './bytes.ts'
 import { type Device, type Range, type Release, imageEnd, linkable } from './devices.ts'
 import { pSpan } from './dsp.ts'
 import {
@@ -32,9 +32,19 @@ const RTYPES = ['abs32', 'pc32', 'pc16', 'dsp24']
 const DSP = '.dsp.'                         // a DSP section: '.dsp.' + its payload's tag
 const FAST_ENTRY = 16                       // a .fast copy entry: src, dst, len, 0
 const MAX_ALIGN = 4096                      // a section's alignment: a power of two up to this
-const LINKER_SYMS = new Set(['__run_load', '__run_start', '__run_words', '__bss_start', '__bss_end', '__bss_words'])
+const LINKER_SYMS = new Set(['__run_load', '__run_start', '__run_words', '__bss_start', '__bss_end', '__bss_words', '__run_hash'])
+export const HASH_SEED = 5381, HASH_MUL = 33       // __run_hash: h = seed; h = h * 33 + word (mod 2^32), per word
 
 const align = (v: number, a: number) => Math.ceil(v / a) * a
+
+/** The hash of the RAM image a core copies at boot (`__run_hash`): a rolling x33 over its 32-bit
+ *  big-endian words, from the seed 5381. A core hashes the copy it made and halts on a mismatch. */
+export function runHash(ddr: Uint8Array): number {
+  const v = new DataView(ddr.buffer, ddr.byteOffset, ddr.byteLength)
+  let h = HASH_SEED
+  for (let o = 0; o + 4 <= ddr.length; o += 4) h = (Math.imul(h, HASH_MUL) + v.getUint32(o)) >>> 0
+  return h
+}
 const cmp = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0)
 const hexw = (v: number, w: number) => v.toString(16).padStart(w, '0')
 
@@ -388,6 +398,48 @@ export function check(mods: Mod2[], image: Uint8Array): string[] {
 
 /** Sites of other mods inside a copied block: no PC-relative operand, no relative branch, whole instructions in the
  * patched image. */
+/** The linker's last check, on the image it built, against the stock one. It trusts none of the layout that
+ *  built the image; it only compares (link.py's image_problems, the same lines). */
+export function imageProblems(dev: Device, stock: Uint8Array, img: Uint8Array, declared: [number, number, string][], tailAt: number): string[] {
+  const ml = dev.mainLoad, n = stock.length
+  const bad: string[] = []
+  if (tailAt !== ml + n) bad.push(`the appended code starts at ${hex8(tailAt)}, not at the end of the stock image, ${hex8(ml + n)}`)
+  if (img.length < n) {
+    bad.push(`the linked image (${img.length} bytes) is shorter than the stock main OS (${n} bytes)`)
+    return bad
+  }
+  const probe = img.slice(0, n)
+  for (const [lo, hi, what] of declared) {
+    if (lo < ml || hi > ml + n) {
+      bad.push(`${what} lies outside the stock image`)
+      continue
+    }
+    probe.set(stock.subarray(lo - ml, hi - ml), lo - ml)
+  }
+  if (!equal(probe, stock)) {
+    const runs: [number, number][] = []
+    let i = 0
+    while (i < n) {
+      if (probe[i] === stock[i]) {
+        i++
+        continue
+      }
+      let j = i
+      while (j < n && probe[j] !== stock[j]) j++
+      runs.push([ml + i, ml + j])
+      i = j
+    }
+    for (const [lo, hi] of runs.slice(0, 8))
+      bad.push(`${hex8(lo)}-${hex8(hi)} differs from stock, and no site, DSP section or table of the mods declares it`)
+    if (runs.length > 8) bad.push(`${runs.length - 8} more runs of bytes differ from stock outside every declaration`)
+  }
+  for (const [lo, hi, why] of [...dev.protected, ...dev.keep]) {
+    if (!equal(img.subarray(lo - ml, hi - ml), stock.subarray(lo - ml, hi - ml)))
+      bad.push(`${hex8(lo)}-${hex8(hi)} (${why}) is not stock in the linked image`)
+  }
+  return bad
+}
+
 function copiedRules(mods: Mod2[], patched: Uint8Array, dev: Device): string[] {
   const bad: string[] = []
   const read = readerAt(patched, dev.mainLoad)
@@ -677,11 +729,16 @@ export function link(mods: Mod2[], image: Uint8Array, lock: store.Lock | null = 
   }
 
   const content = new Map<string, Uint8Array>()
+  const bootRelocs: [Mod2, number, string, string, number][] = []
   for (const m of order) {
     for (const sec of m.sections.keys()) {
       if (sec !== '.bss' && m.size(sec)) content.set(key(m.id, sec), partsBytes(m.sections.get(sec)!.parts!, image, dev).slice())
     }
     for (const [sec, off, typ, tgt, add] of m.relocs) {
+      if (sec === '.boot') {                   // after the RAM image: it may name its hash
+        bootRelocs.push([m, off, typ, tgt, add])
+        continue
+      }
       const where = `${sec}+0x${off.toString(16)}`
       place(m, content.get(key(m.id, sec))!, off, typ, tgt, add, base.get(key(m.id, sec))! + off, where)
     }
@@ -720,6 +777,9 @@ export function link(mods: Mod2[], image: Uint8Array, lock: store.Lock | null = 
     if (fload.has(m.id)) ddr.set(content.get(key(m.id, '.fast'))!, fload.get(m.id)! - ddrBase)
   }
   for (const c of tables.keys()) if (!dspTables.has(c)) ddr.set(tab.get(c)!, tabAt.get(c)! - ddrBase)
+  glob.set('__run_hash', runHash(ddr))
+  for (const [m, off, typ, tgt, add] of bootRelocs)
+    place(m, content.get(key(m.id, '.boot'))!, off, typ, tgt, add, base.get(key(m.id, '.boot'))! + off, `.boot+0x${off.toString(16)}`)
   const boot = content.get(key(core.id, '.boot'))
   if (!boot) throw new KeyError(`(${repr(core.id)}, '.boot')`)
   const blob = concat([boot, new Uint8Array(runLoad - end - boot.length), ddr])
@@ -750,6 +810,21 @@ export function link(mods: Mod2[], image: Uint8Array, lock: store.Lock | null = 
       }
     }
   }
+  const declared: [number, number, string][] = []
+  for (const m of order) for (const s of m.sites) declared.push([s.addr, s.addr + s.len, `${m.label()} site ${hex8(s.addr)}`])
+  for (const [k, tag] of [...dspSecs].sort((a, b) => base.get(a[0])! - base.get(b[0])!)) {
+    const words = Math.floor((content.get(k)?.length ?? 0) / 3)
+    if (words) {
+      const at = pSpan(image, dev, tag, base.get(k)!, base.get(k)! + words)
+      declared.push([at, at + 3 * words, k.replace('\0', ' ')])
+    }
+  }
+  for (const c of [...dspTables.keys()].sort(cmp)) {
+    const words = Math.floor(tab.get(c)!.length / 3)
+    const at = pSpan(image, dev, dspTables.get(c)![0], tabAt.get(c)!, tabAt.get(c)! + words)
+    declared.push([at, at + 3 * words, `the table ${c}`])
+  }
+  bad.push(...imageProblems(dev, image, img, declared, end))
   if (bad.length) throw new ModError('the linked mods break a rule:\n  ' + bad.join('\n  '))
 
   const map = new Map<string, number>()
