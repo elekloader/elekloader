@@ -20,9 +20,10 @@ screen as stock).
 
 | | |
 |---|---|
-| needs | core-ot 0.3.1 (`resources.core`): its `ev_tick` runs the machines' `ui_tick` |
-| sites | 32, none a byte octabam2elemod v1.0's mods write, SYNTH MACHINE's included (seams.s) |
+| needs | core-ot 0.3.1 (`resources.core`) |
+| sites | 35, none a byte octabam2elemod v1.0's mods write, SYNTH MACHINE's included (seams.s) |
 | table | `ot_machines`: a machine contributes a pointer to its `struct ot_machine` |
+| event | `ev_machine_set(part, track, from, to)` (0.2): a track's machine changed |
 | exports | `ot_stock_render`, `ot_part`, `ot_track_machine`, `ot_machine_row` |
 | header | `elekloader/sdk/include/octatrack/machines.h` |
 | claims | `octatrack:machine-signatures` |
@@ -120,6 +121,34 @@ written for one describes itself to the other the same way. Only `abi`,
   renderer for tracks it does not play, which comes here: both work in one
   build.
 
+## 0.2
+
+Octabam's machines each still hooked a few places 0.1 did not own; four of
+them share the tick, and BLACKPYRAMIDS-303 the chooser's level. 0.2 owns
+those and adds the commit 0.1 missed:
+- **The tick** (0x4005221e, in the UI task's tick body 0x40052200): the
+  machines' `ui_tick` runs here, before the screen's builders after it read
+  the page table (0.1 ran it from core's `ev_tick`, after them). A machine
+  with `track_page` then has the current track's page in its row of
+  `otm_pages`, which SRC SETUP and the parameter names read. ANALOG BD,
+  OCTA303, CXOSC and BLACKPYRAMIDS-303 each publish their page from this
+  place; `sdk.octabam --machines` already leaves it to the companion.
+- **The chooser's level** (0x400788c4): the machine window opens on the
+  sample-slot list for a STATIC or FLEX track. A machine with
+  `OT_MACHINE_LIST_FIRST` (16, elekloader's flag: Modwerk's record has
+  1-8) has its tracks open on the machine list, as BLACKPYRAMIDS-303 does.
+- **The slot assigner's commit** (0x40079520): picking a slot in a list
+  that changes the track's machine byte (a STATIC slot on a machine's
+  track) now goes through `otm_assign`, so the machine's `leave` runs. Stock
+  then resets the track's bytes, the signature among them, as it did with
+  0.1, which never called `leave` there.
+- **`ev_machine_set(part, track, from, to)`**: after every commit that
+  changes a track's row (the chooser, SRC SETUP, a slot pick): the machine
+  byte and its battery copy already hold the new one. Rows 0-4 are stock's
+  (STATIC FLEX THRU NEIGHBOR PICKUP), 5 on a machine's. In the UI task.
+- **BLACKPYRAMIDS-303's signature** (`OT`, 1) is a known one: its tracks keep
+  their 12 bytes from stock's validator when it is not in the build.
+
 ## The sites
 
 | site | what |
@@ -142,6 +171,9 @@ written for one describes itself to the other the same way. Only `abi`,
 | 0x40078c22, 0x40078cb0, 0x40078d2e, 0x40078dee, 0x40078e7c | the chooser's row clamps |
 | 0x4003bff0 | the parameter page by machine byte |
 | 0x4003a524, 0x4003c8ca, 0x4003d134, 0x400585ea (keep2) | the page table's readers |
+| 0x4005221e (0.2) | the UI task's tick body: the machines' tick and page |
+| 0x400788c4 (0.2) | the machine window's level: slot list or machine list |
+| 0x40079520 (0.2) | the slot assigner's machine byte |
 
 None is a byte a mod of octabam2elemod v1.0 writes. SYNTH MACHINE v1.0
 keeps the renderer table's entry (0x400d6438) and the resolver's tail
@@ -174,6 +206,24 @@ test machines:
   CRUSH: the chooser lists OCTA-303, YES signs the track "TB" 1 with its
   defaults, its SRC page and PLAYBACK SETUP are its own, and a trig plays
   through its renderer.
+
+0.2, in ot_emu with a probe machine (tests/fixtures/octatrack-machine-probe:
+PROBE, with `OT_MACHINE_LIST_FIRST`, a `track_page` giving STATIC's page,
+and counters on its `ui_tick`, `track_page`, `leave` and `ev_machine_set`):
+- the chooser commits PROBE on track 1 (`ev_machine_set` 0 to 5), its
+  `ui_tick` runs from the tick seam (637 calls in a 10 s session), and its
+  row of `otm_pages` holds the page its `track_page` gives; the PLAYBACK
+  page shows it;
+- the window reopened on that track opens on the machine list (level 0);
+  with TEST2 (no flag) on the sample-slot list (level 1);
+- STATIC chosen in the list, RIGHT and a slot picked: `leave` ran once,
+  `ev_machine_set` 5 to 0, and the track is STATIC with no signature and
+  FLEX's defaults. With 0.1 the same keys leave the same Part (stock resets
+  those bytes itself) without calling `leave`;
+- tests: test_octatrack 53/53 (two new: the 0.2 seams, with the image scan
+  for branches into them and the stock instructions they rely on, and the
+  probe's tables), test_units 35/35, test_octabam 30/30 with octabam
+  363861e (OCTA303's conversion runs with b085c4d's checkout).
 
 Not yet run on a unit.
 

@@ -471,14 +471,14 @@ Which octabam module needs what:
 | TEMPO SYNC | the FX id store | `ev_dsp_record` |
 | RECORDER LOOP FIX | the counter (FLEX SEEKBIND), with its same-sample test (0x4000f8cc) | `ev_voice_seek`; the same-sample test is still its own |
 
-**Not here: `ev_machine_set(trk, machine, slot)`.** The three places where a
-track's machine or slot is committed (0x400795ba, 0x40079816, 0x4005a848)
-belong to machines-ot, which owns the chooser's and SRC SETUP's commits right
-after them. It decides there whether a commit happens and what the final byte
-is, and reads a track's machine from the Part's signature. An event at the
-stock writes would run before that decision, with a byte machines-ot may
-still refuse. In machines-ot 0.2 it fires after the commit with the old and
-new machine and the slot.
+**Not here: `ev_machine_set`.** The three places where a track's machine or
+slot is committed (0x400795ba, 0x40079816, 0x4005a848) belong to machines-ot,
+which owns the chooser's and SRC SETUP's commits right after them and, from
+0.2, the slot assigner's (0x40079520). It decides there whether a commit
+happens and what the final byte is, and reads a track's machine from the
+Part's signature. An event at the stock writes would run before that
+decision, with a byte machines-ot may still refuse. machines-ot 0.2 fires
+`ev_machine_set(part, track, from, to)` after the commit (below).
 
 **The sites are not octabam's.** SYNTH (octabam2elemod v1.0) detours 0x4000c634,
 0x4000b51a, 0x4000685c, 0x400795ba, 0x40079816 and 0x4005a848, and FLEX
@@ -525,7 +525,7 @@ the call, or its entry is 0, stock runs.
 A detour you already have converts unchanged: its label is the entry, and
 claims 0. `sdk.octabam --intercepts` does this for octabam's modules (4b).
 
-### Machines on the Octatrack (machines 0.1)
+### Machines on the Octatrack (machines 0.2)
 
 `mods/machines-ot` (id `machines`) is a companion beside core-ot 0.3.1 for
 source machines: a machine mod adds a row to the track's machine chooser
@@ -576,6 +576,32 @@ const struct ot_machine my_machine = {
 Start from [examples/crush-machine-ot](../examples/crush-machine-ot): CRUSH
 plays its FLEX slot's sample through a 5-bit crusher. octabam's OCTA303
 converts onto the companion with `sdk.octabam --machines` (section 4b).
+
+From machines 0.2:
+- **`ui_tick`** runs in the UI task's tick body (0x4005221e), before the
+  screen's builders read the page table, where octabam's machines publish
+  their page. A machine with `track_page` has the current track's page
+  published there too, so SRC SETUP and the parameter names follow a page
+  that differs by track.
+- **`OT_MACHINE_LIST_FIRST`** (elekloader's flag, not Modwerk's): the machine
+  window opens on the machine list for the machine's tracks, not on the
+  sample-slot list, for a machine that does not play a slot's sample.
+- **A sample slot picked in a list** that changes the track's machine (a
+  STATIC slot on a machine's track) goes through the companion too: the
+  machine's `leave` runs before stock resets the track.
+- **`ev_machine_set`**: a track's machine changed, after the commit (the
+  machine byte and its battery copy hold the new one), from the chooser,
+  SRC SETUP or a slot pick. `from` and `to` are rows: 0-4 stock's, 5 on a
+  machine's.
+
+```c
+void my_machine_set(volatile uint8_t *part, unsigned track, unsigned from, unsigned to);
+```
+
+```json
+"subscribe": [{"event": "ev_machine_set", "fn": "my_machine_set", "order": 50}],
+"requires": ["core", "machines"]
+```
 
 ### USB functions on the Octatrack (usb 0.2)
 
