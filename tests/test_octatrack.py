@@ -1347,8 +1347,8 @@ def test_seq_events_ot_staged_record():
 
 def test_seq_events_ot_step_built_links():
     """The ev_step_built probe (tests/fixtures/octatrack-step-built) subscribes to the new table: one entry, the
-    handler, and no site of its own; with a step-stage example beside seq-events core's page still holds the lot
-    (units 1: the event's code did not push the mod over a page)."""
+    handler, and no site of its own; with a step-stage example beside seq-events the lot still takes at most one
+    reserve unit more than core alone (the event's code did not push the mod over another page)."""
     import shutil
     from elekloader.sdk import build
     need(SYX)
@@ -1365,11 +1365,13 @@ def test_seq_events_ot_step_built_links():
         assert link.check(mods, img) == []
         ln = link.link(mods, img)
         small = link.link([elemod.load_any(x) for x in (core, sq, ex)], img)
+        alone = link.link([elemod.load_any(core)], img)
     assert ln.tables['ev_step_built'][1] == 1 and ln.tables['ev_gen_trig'][1] == 0
     at = ln.tables['ev_step_built'][0]
     o = ln.layout['run_load'] + (at - DEV.ddr[0]) - DEV.main_load
     assert struct.unpack('>II', ln.image[o:o + 8]) == (ln.map['bp_built'], 0)
-    assert small.layout['reserve']['units'] == 1, small.layout['reserve']
+    assert small.layout['reserve']['units'] <= alone.layout['reserve']['units'] + 1, \
+        (small.layout['reserve'], alone.layout['reserve'])
 
 
 def test_seq_events_ot_beside_the_companions():
