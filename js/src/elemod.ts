@@ -369,6 +369,10 @@ export function commonChecks(mods: AnyMod[], image: Uint8Array, spans: Span<AnyM
         if (s.addr < hi && lo < s.addr + s.len)
           bad.push(`${m.label()} site ${hex8(s.addr)} is inside ${hex8(lo)}-${hex8(hi)}, ${why}: protected on the ${dev.name}`)
       }
+      for (const [lo, hi, why] of dev.keep) {
+        if (s.addr < hi && lo < s.addr + s.len)
+          bad.push(`${m.label()} site ${hex8(s.addr)} writes into ${hex8(lo)}-${hex8(hi)}, which stays stock on the ${dev.name}: ${why}`)
+      }
     }
   }
   for (const m of mods) {

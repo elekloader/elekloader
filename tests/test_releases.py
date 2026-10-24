@@ -117,7 +117,8 @@ def mod_dirs(dev, rel):
 
 def test_each_core_builds_and_lints_for_each_release_it_names():
     """Each core alone, and each companion in mods/ with the core built for
-    its release."""
+    its release, and with the other mods in mods/ it requires (usb-midi-ot
+    needs usb-ot)."""
     built = 0
     for dev, rel, path, raw in each_release():
         cores, others = mod_dirs(dev, rel)
@@ -127,7 +128,7 @@ def test_each_core_builds_and_lints_for_each_release_it_names():
         if not shutil.which(os.environ.get('ELEKLOADER_CROSS', tc.get('prefix', '')) + 'as'):
             raise Skip('no cross assembler for the %s' % dev.name)
         with tempfile.TemporaryDirectory() as tmp:
-            core = None
+            done = {}                       # id -> (folder, .elemod, Mod2)
             for d in cores + others:
                 out, m = build.build(d, path, tmp)
                 with open(out) as fh:
@@ -137,14 +138,15 @@ def test_each_core_builds_and_lints_for_each_release_it_names():
                     primary = json.load(fh).get('os') == rel.version
                 assert os.path.basename(out) == '%s-%s%s.elemod' % (
                     m.id, m.version, '' if primary else '-os' + rel.version)
+                done[m.id] = (d, out, m)
+            for d, out, m in done.values():
+                withs = [] if m.id == 'core' else ['core'] + [r for r in m.requires if r != 'core' and r in done]
                 buf = io.StringIO()
                 with contextlib.redirect_stdout(buf):
                     rc = lint.main([out, '--stock', path, '--json']
-                                   + (['--with', core] if m.id != 'core' else []))
+                                   + sum((['--with', done[r][1]] for r in withs), []))
                 r = json.loads(buf.getvalue())
                 assert rc == 0, (d, rel.version, r['problems'])
-                if m.id == 'core':
-                    core = out
                 built += 1
     if not built:
         raise Skip('no core names a release in %s' % DIR)

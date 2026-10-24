@@ -24,7 +24,9 @@ The site holds:
     (SHOP_LICENCES); one whose file is not there (a draft release) is listed
     as not available. shop/bounties.json is the community's to-do list for
     the core, made from those files and the cores (elekloader.sdk.bounties,
-    grouped by distance: the site has no stock file);
+    grouped by distance: the site has no stock file), and from the upstream
+    lists (--upstream, by default web/upstream/*.json: the stock code
+    octabam's newer modules hook, which the shop's files do not);
   - devices.json: the devices the engine knows, for the page before it loads;
   - shop/claims.json: the leaderboard, the to-do list's entries claimed by
     merged pull requests (--prs: gh pr list --state merged --json ...);
@@ -270,17 +272,20 @@ def stamp(html, token):
     return out
 
 
-def to_do(core_paths, folder, items, cs):
+def to_do(core_paths, folder, items, cs, upstream=()):
     """The community's to-do list for the core (elekloader.sdk.bounties) over
-    the shop's files and the cores, grouped by distance."""
+    the shop's files and the cores, and the upstream lists' paths, grouped by distance."""
     paths = [os.path.join(folder, e['file']) for e, raw in items if raw is not None]
     paths += list(core_paths) + [os.path.join(folder, c['file']) for c, _ in cs
                                  if folder and os.path.exists(os.path.join(folder, c['file']))]
     paths = sorted({os.path.basename(p): p for p in paths}.values())     # a core given twice counts once
     mods = bounties.newest(paths)
+    ups = bounties.load_upstream(upstream)
     return {'made': datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%d'),
             'grouped': 'by distance', 'window': 64, 'files': len(paths),
-            'devices': bounties.bounties(mods)}
+            'upstream': [{'from': u['from'], 'commit': u['commit'], 'device': u['device'],
+                          'file': os.path.relpath(p, ROOT).replace(os.sep, '/')} for u, p in zip(ups, upstream)],
+            'devices': bounties.bounties(mods, upstream=ups)}
 
 
 # an entry of the to-do list, as sdk.bounties names it: device@os:lowest site
@@ -332,6 +337,8 @@ def main(argv=None):
                          'commit path", for the download')
     ap.add_argument('--prs', help="the repository's merged pull requests (gh pr list --state merged --json "
                                   "number,title,body,author,mergedAt,url), for the leaderboard")
+    ap.add_argument('--upstream', nargs='*', default=None, metavar='LIST.json',
+                    help='upstream lists for the to-do list (default: web/upstream/*.json)')
     ap.add_argument('--out', help='the site folder to write (emptied first)')
     a = ap.parse_args(argv)
     if a.pyodide_url:
@@ -376,7 +383,12 @@ def main(argv=None):
         if raw is not None:
             site['shop/' + e['file']] = raw
     site['shop/index.json'] = json.dumps([e for e, _ in items], indent=1).encode()
-    site['shop/bounties.json'] = json.dumps(to_do(a.core, a.catalog_dir, items, cs), indent=1).encode()
+    if a.upstream is None:                  # the upstream lists the repository has
+        up = os.path.join(ROOT, 'web', 'upstream')
+        a.upstream = sorted(os.path.join(up, n) for n in os.listdir(up)
+                            if n.endswith('.json')) if os.path.isdir(up) else []
+    site['shop/bounties.json'] = json.dumps(to_do(a.core, a.catalog_dir, items, cs, a.upstream),
+                                            indent=1).encode()
     site['devices.json'] = json.dumps(device_list(), indent=1).encode()
     prs = []
     if a.prs:

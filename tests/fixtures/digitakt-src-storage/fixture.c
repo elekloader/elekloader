@@ -24,6 +24,24 @@ static const struct cm_ui32 bad_trig = {BASE, .extra={EXTRA(0), REST}, .page_cou
 static const struct cm_ui32 bad_bank = {BASE, .extra={EXTRA(0), REST}, .page_count=1, .pages=bank_pages};
 #define MACHINE(n, ui) const struct cm_machine probe_machine##n = \
     {n, "Storage probe", "TEST", 0, 3, n, CM_UI_TAG, ui}
+/* CCs (machine-pages 1.4): 9 is free; a stock parameter's CC, like the filter's 74, refuses the page. */
+#define CC(c) {.look=134, .flags=CM_RANGE|CM_DEFAULT, .cc=(c), .max=0x7f00}
+#define BASE33 .base={.abi=cm_ui_v33, .page_from=3}
+static const struct cm_ui32 cc_ui = {BASE33, .extra={EXTRA(0), CC(9), REST}, .page_count=1, .pages=pages};
+static const struct cm_ui32 bad_cc_filter = {BASE33, .extra={CC(74), REST}, .page_count=1, .pages=pages};
+static const struct cm_ui32 bad_cc_twice = {BASE33, .extra={CC(40), CC(40), REST}, .page_count=1, .pages=pages};
+static const struct cm_ui32 bad_cc_high = {BASE33, .extra={CC(120), REST}, .page_count=1, .pages=pages};
+static const struct cm_ui32 bad_cc_stock = {BASE33, .extra={CC(94), REST}, .page_count=1, .pages=pages};  /* Mute */
+static const struct cm_ui32 bad_cc_knob = {.base={.abi=cm_ui_v33, .page_from=3, .knob={[0]={.cc=40}}},
+                                           .extra={EXTRA(0), REST}, .page_count=1, .pages=pages};
+static const struct cm_ui32 bad_cc_v32 = {BASE, .extra={CC(40), REST}, .page_count=1, .pages=pages};
+MACHINE(115, &cc_ui.base);
+MACHINE(114, &bad_cc_twice.base);
+MACHINE(113, &bad_cc_high.base);
+MACHINE(112, &bad_cc_knob.base);
+MACHINE(111, &bad_cc_v32.base);
+MACHINE(110, &bad_cc_stock.base);
+MACHINE(109, &bad_cc_filter.base);
 MACHINE(121, &probe_ui.base);
 const struct cm_machine probe_machine119 = {119, "Other bank", "BANK", 0, 0, 119, CM_UI_TAG, &probe_ui.base};
 static const struct cm_ui legacy_ui = {

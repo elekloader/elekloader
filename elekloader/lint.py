@@ -47,7 +47,7 @@ def describe(m):
 
 
 # Mods that own a group of sites once, for every mod (docs/CORES.md): they count as core.
-COMPANIONS = frozenset({'machine-pages', 'machines', 'seq-events', 'dspbus', 'intercepts', 'settings'})
+COMPANIONS = frozenset({'machine-pages', 'machines', 'seq-events', 'dspbus', 'intercepts', 'usb', 'settings'})
 
 
 def is_core(mod_id):

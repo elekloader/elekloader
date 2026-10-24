@@ -3,6 +3,9 @@
 
 #define PARAMETER(n, extra_flags) { .name = "P" #n, .lname = "Parameter " #n, \
     .look = 134, .flags = CM_RANGE | CM_DEFAULT | (extra_flags), .max = 0x7f00 }
+/* P9-P15 also take MIDI CCs 24-30 on their track's channel (machine-pages 1.4). */
+#define EXTRA(n) { .name = "P" #n, .lname = "Parameter " #n, \
+    .look = 134, .flags = CM_RANGE | CM_DEFAULT, .cc = 15 + (n), .max = 0x7f00 }
 
 static const struct cm_src_page pages[] = {
     { "PARAM 1/2", {0, 1, 2, 3, 4, 5, 6, 7} },
@@ -11,7 +14,7 @@ static const struct cm_src_page pages[] = {
 
 static const struct cm_ui32 ui = {
     .base = {
-        .abi = cm_ui_v32, .page_from = 3, .group = "PARAM",
+        .abi = cm_ui_v33, .page_from = 3, .group = "PARAM",
         .knob = {
             PARAMETER(1, 0), PARAMETER(2, 0), PARAMETER(3, 0),
             PARAMETER(4, CM_NOT_SAMPLE),
@@ -19,8 +22,7 @@ static const struct cm_ui32 ui = {
         },
     },
     .extra = {
-        PARAMETER(9, 0), PARAMETER(10, 0), PARAMETER(11, 0), PARAMETER(12, 0),
-        PARAMETER(13, 0), PARAMETER(14, 0), PARAMETER(15, 0),
+        EXTRA(9), EXTRA(10), EXTRA(11), EXTRA(12), EXTRA(13), EXTRA(14), EXTRA(15),
     },
     .page_count = 2, .pages = pages,
 };
