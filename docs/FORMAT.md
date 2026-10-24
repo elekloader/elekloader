@@ -315,6 +315,16 @@ same conventions (docs/ADAPTING.md, "The hook bus on the Octatrack"):
 | `ev_trig_apply` (0.7) | 0x4000c59e, where the builder's lock restore and apply paths join | `void f(trk, flags)` |
 | `ev_dsp_trig` (0.7) | 0x40004c72, in the voice record writer 0x40004bd4 | `int f(trk, flags)`; nonzero: no per-trig flag bits |
 | `ev_dsp_record` (0.7) | 0x40004d40, the same writer | `void f(trk, rec)` |
+| `ev_clip` (0.8) | 0x40026eb0, 0x40026ef0, 0x4002b9b0, 0x40029754 and 0x4002b654: the pattern's and the track's copy, snapshot and store | `int f(pre, clip)`; nonzero before a PASTE or an UNDO refuses it |
+| `ev_part_saving` (0.8) | 0x4004a908, Part Save's entry | `void f(part, 0)` |
+| `ev_part_reload` (0.8) | 0x4004aab4, Part Reload | `void f(how, part)` |
+| `ev_part_select` (0.8) | 0x400621da and 0x40062216, the sys task's Part change | `void f(phase, select)` |
+| `ev_part_init` (0.8) | 0x40005638 and 0x40005a38, the Part initialiser's entry and end | `void f(pre, part)` |
+| `ev_project_init` (0.8) | 0x400909d8, the empty project's RAM | `void f(job, 0)` |
+| `ev_voice_reset` (0.8) | 0x40006820, the voice reset's entry | `int f(trk)`; nonzero: the reset is not made |
+| `ev_boot_early` (0.8) | 0x40000512, the boot's SRAM init | `void f(void)` |
+| `ev_track_icon`, `ev_track_icon_draw` (0.8) | 0x4004bee2 and 0x4004c00c, the track icons' renderer | `unsigned f(trk, state)`; `int f(trk, state, x, y)`, nonzero: drawn |
+| `ev_setup_dial` (0.8) | 0x4003786a, 0x40037c06 and 0x4003690c: the FX2, FX1 and AMP SETUP knobs | `void f(dial)` |
 
 An optional mod, the DSP bus (`mods/dspbus-ot`, dspbus 0.1), adds an event on
 DSP core 0. It is a DSP table, so its handlers are DSP code (`subscribe_dsp`):

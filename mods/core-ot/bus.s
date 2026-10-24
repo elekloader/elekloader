@@ -390,6 +390,26 @@ core_main_end:
 5:      movea.l (%sp)+, %a2
         rts                             | to the stock `bras .`
 
+| ---- ev_boot_early: the boot, before the OS (core-ot 0.8) -------------------
+| At 0x40000512 (was: jsr 0x4000f938, the on-chip SRAM's init), the instruction
+| after core's own boot site: .run is in place and checked, .bss is clear. The
+| stub makes the init, then runs ev_boot_early: no task, interrupt or OS call
+| exists yet, and stock clears 0x46025de0-0x4763d580 next (the reserve is
+| below it). Octabam's MIDI PART STATE and BOOT TRACE both take this
+| instruction (MIT). Handlers: void f(void).
+        .globl  core_boot_early
+core_boot_early:
+        jsr     BOOT_SRAM_INIT          | the call this replaced
+        move.l  %a2, -(%sp)
+        lea     ev_boot_early, %a2
+1:      move.l  (%a2)+, %d0
+        beq.s   2f
+        movea.l %d0, %a0
+        jsr     (%a0)
+        bra.s   1b
+2:      movea.l (%sp)+, %a2
+        rts
+
 | ---- ev_tick120: the key-repeat task's tick, 120 times a second (core-ot 0.5) --
 | At 0x40055966 in the key-repeat task's loop (was: jsr (%a2) ; addq.l #4,%sp ;
 | bra 0x4005595c), after the wait for the UI tick event (DMA timer 1's handler

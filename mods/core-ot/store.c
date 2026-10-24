@@ -50,7 +50,8 @@
 
 typedef void (*ev2)(unsigned, unsigned);
 extern const ev2 ev_banks_load[], ev_banks_write[], ev_project_store[], ev_project_reload[],
-    ev_cs1_bank[], ev_part_saved[], ev_part_cleared[];
+    ev_cs1_bank[], ev_part_saved[], ev_part_cleared[], ev_part_saving[], ev_part_reload[],
+    ev_part_init[], ev_project_init[];
 extern void (*const ev_project[])(int32_t, uint32_t);
 extern const struct core_projdata *const core_projdata[], *const core_carddata[];
 extern const struct ot_sram *const ot_sram[];
@@ -476,11 +477,13 @@ void ots_job_end(void)
 }
 
 static const ev2 *const tables[] = { ev_banks_load, ev_banks_write, ev_project_store,
-                                     ev_project_reload, ev_cs1_bank, ev_part_saved, ev_part_cleared };
+                                     ev_project_reload, ev_cs1_bank, ev_part_saved, ev_part_cleared,
+                                     ev_part_saving, ev_part_reload, ev_part_init, ev_project_init };
 enum { EV_BANKS_LOAD, EV_BANKS_WRITE, EV_PROJECT_STORE, EV_PROJECT_RELOAD, EV_CS1_BANK,
-       EV_PART_SAVED, EV_PART_CLEARED };
+       EV_PART_SAVED, EV_PART_CLEARED,
+       EV_PART_SAVING, EV_PART_RELOAD, EV_PART_INIT, EV_PROJECT_INIT };     /* 0.8: edit.s */
 
-/* store.s: core's part of the event, then its handlers. */
+/* store.s and edit.s: core's part of the event, then its handlers. */
 void ots_event(unsigned ev, unsigned a, unsigned b)
 {
     struct pair *p = &pairs[PAIR_PROJECT], *c = &pairs[PAIR_CARD];

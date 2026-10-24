@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later
  *
- * core-ot 0.7 for the Octatrack (OS 1.40C): what the core knows and exports, for C mods.
+ * core-ot 0.8 for the Octatrack (OS 1.40C): what the core knows and exports, for C mods.
  * The SDK puts this folder on the include path:
  *
  *     #include "octatrack/core.h"
@@ -14,6 +14,8 @@
  * - the project's lifecycle events, mods' project and card data, battery RAM (0.6);
  * - the voice events: what the frame interrupt does to a track's voice (0.7).
  * - ot_boot_info: what the core's boot check found (0.7.1).
+ * - the edits a mod's data must follow (the clipboard, the undo buffer, the Parts), the voice's
+ *   reset, the boot's start, the track icons and the SETUP knobs (0.8).
  *
  * Locations are for OS 1.40C; a mod that uses only these names rebuilds for another OS by the core's
  * port, not by a change here. Where octabam's docs/firmware says how a location was found, the
@@ -299,5 +301,109 @@ struct ot_setting {
 #define OT_VOICE_SIZE       168u
 #define OT_VOICE(t)         ((volatile uint32_t *)(uintptr_t)(OT_VOICES + OT_VOICE_SIZE * (t)))
 enum { OT_V_ARENA0 = 1, OT_V_ARENA1 = 2, OT_V_STARTS = 36, OT_V_SEEKPTR = 38 };      /* +4, +8, +144, +152 */
+
+/* ==== core-ot 0.8: edits, Parts, the voice's reset, the boot, the screen ========================= */
+
+/* ---- ev_clip: a pattern or an audio track through the clipboard or the undo buffer -----------------
+ * The firmware moves a whole pattern (OT_PATTERN_SIZE bytes) or an audio track (OT_TRACK_SIZE) of the
+ * current bank into its clipboard (FUNC+REC: COPY) or its undo buffer (the SNAPSHOT a paste or a
+ * clear takes first), and back (PASTE, UNDO). A mod that keeps data per pattern or per track keeps a
+ * clipboard and an undo copy of its own the same way, from these calls:
+ *   int ev_clip(unsigned pre, const struct ot_clip *c)    in the sys task; pre 1 before, 0 after
+ * Before a PASTE or an UNDO, a handler may return nonzero to refuse it: the bank is left as it was,
+ * no later handler is asked, no "after" call comes, and stock goes on as when there is nothing to
+ * paste or undo (an undo that finds nothing pastes the clipboard instead: that paste comes here too).
+ * Any other return is ignored, and so is a refusal of a call stock did not make itself. A handler
+ * must not call the copy and store routines. MIDI tracks and the other clipboard kinds (trigs,
+ * Parts, slots) do not come here. */
+enum { OT_CLIP_PATTERN = 0, OT_CLIP_TRACK = 1 };
+enum {
+    OT_CLIP_COPY     = 0,       /* bank -> clipboard */
+    OT_CLIP_SNAPSHOT = 1,       /* bank -> undo buffer, before stock changes the pattern or track */
+    OT_CLIP_PASTE    = 2,       /* clipboard -> bank */
+    OT_CLIP_UNDO     = 3,       /* undo buffer -> bank */
+};
+struct ot_clip {
+    uint8_t what;               /* OT_CLIP_PATTERN or OT_CLIP_TRACK */
+    uint8_t how;                /* OT_CLIP_COPY .. OT_CLIP_UNDO */
+    uint8_t bank;               /* the current bank, 0-15 */
+    uint8_t pattern;            /* 0-15 */
+    uint8_t track;              /* 0-7; 0xff for a pattern */
+    uint8_t op;                 /* SNAPSHOT and UNDO: why stock took the snapshot, the number it keeps
+                                   with the undo buffer (0x11 a pattern paste, 0x12 a pattern clear,
+                                   7 a track paste); 0 for COPY and PASTE */
+    uint8_t pad[2];
+    void *buf;                  /* OT_CLIPBOARD or OT_UNDO_BUFFER */
+};
+#define OT_CLIPBOARD        ((void *)0x460c8122u)
+#define OT_UNDO_BUFFER      ((void *)0x460bf218u)
+#define OT_PATTERN_SIZE     0x8ed8u
+#define OT_TRACK_SIZE       0x91au
+
+/* ---- the Parts, and the project's start (0.8) ------------------------------------------------------
+ * Handlers void f(unsigned a, unsigned b), in the sys task unless said:
+ *   ev_part_saving(part, 0)      Part Save is about to copy the current bank's Part to its saved copy
+ *                                (SAVE, SAVE ALL, and Part Clear's end); ev_part_saved follows
+ *   ev_part_reload(how, part)    Part Reload (RELOAD, FUNC+CUE): how 1 before; after, 0 when it
+ *                                reloaded and 2 when the Part had no saved copy ("SAVE PART FIRST!")
+ *   ev_part_init(pre, part)      a Part is set to its defaults (part: a pointer, OT_PART_SIZE bytes in
+ *                                any bank's RAM): the bank init of the engine task's project jobs, and
+ *                                Part Clear. pre 1 before, 0 after, before stock's Part validator
+ *   ev_project_init(job, 0)      in the engine task: it is about to empty every bank and set the
+ *                                project's defaults, at the start of LOAD PROJECT (job 4), a new project
+ *                                (9, 10, 13) and job 12, before anything is loaded; job: the stock job */
+
+/* void ev_part_select(unsigned phase, const struct ot_part_select *s): the panel's Part change, in the
+ * sys task, when the Part does change. BEGIN before anything moves (OT_PART is still the old Part);
+ * APPLIED when every track has gone to the new Part, before the screen is redrawn; DONE after the
+ * redraw and the track's machine page. machines: the old Part's eight machine bytes, from APPLIED. */
+enum { OT_PSEL_BEGIN = 0, OT_PSEL_APPLIED = 1, OT_PSEL_DONE = 2 };
+struct ot_part_select {
+    uint8_t from, to;           /* the old Part and the new, 0-3 */
+    uint8_t pad[2];
+    const int8_t *machines;     /* 0 at BEGIN */
+};
+
+/* ---- the voice's reset, and the boot's start (0.8) --------------------------------------------------
+ *   int ev_voice_reset(trk)      the track's voice is about to be reset (the routine ev_voice_kill fires
+ *                                in, at its entry): return nonzero to leave the voice as it is. From the
+ *                                frame interrupt and from tasks, with interrupts not yet masked: a
+ *                                handler must be quick and may be entered again from the interrupt
+ *   void ev_boot_early(void)     once, at boot: the core's code and data are in place and the on-chip
+ *                                SRAM (0x80000000-0x80007fff) has its stock values. No task, interrupt
+ *                                or OS call exists yet, and stock clears 0x46025de0-0x4763d580 next.
+ *                                ev_boot_done comes later, with the tasks */
+
+/* ---- the track icons (0.8) --------------------------------------------------------------------------
+ * The eight audio tracks' boxes on the screen: each shows a state, which stock draws as a glyph and
+ * draws again when it changes. In the task that draws the screen.
+ *   unsigned ev_track_icon(trk, state)        return the state the box shows (chained). Stock's: bit 0
+ *                                             the track plays, bits 1-2 its recorder; it has glyphs for
+ *                                             0-3 and draws an empty box for the rest
+ *   int ev_track_icon_draw(trk, state, x, y)  a state above 3: draw it (ot_blit at x, y; stock draws its
+ *                                             7-wide glyphs at x, its 3-wide ones at x + 2) and return
+ *                                             nonzero, or return 0 to leave the box empty */
+struct ot_bitmap {
+    uint32_t w, h;              /* at most 32 high */
+    uint32_t one;               /* 1 */
+    const uint32_t *bits;       /* w longs, a column each, its top pixel at bit 31 */
+    const uint32_t *mask;       /* the same shape: the pixels drawn (set or cleared) */
+};
+#define OT_SCREEN_PLANE     ((void *)0x400bf10au)
+#define ot_blit             ((void (*)(const struct ot_bitmap *, void *, int, int))0x400128a8u)
+
+/* ---- the SETUP windows' knobs (0.8) -----------------------------------------------------------------
+ * void ev_setup_dial(struct ot_dial *d): the SETUP window of AMP, FX1 or FX2 (the page-2 knobs) is
+ * about to draw knob d->slot; a handler may change what it shows: the value, the widget's flags,
+ * the widget itself. Handlers are chained. In the task that draws the screen, once a knob a draw. */
+struct ot_dial {
+    uint8_t page;               /* OT_P2_AMP, OT_P2_FX1 or OT_P2_FX2 */
+    uint8_t slot;               /* 0-5 */
+    uint8_t track, part;        /* OT_TRACK and OT_PART */
+    int32_t value;              /* the value the knob shows: a signed byte (stock: the Part's) */
+    uint32_t flags;             /* the widget's flags: stock passes 0 or 8 */
+    const void *fmt;            /* the knob's formatter */
+    void *widget;               /* widget(x, y, knob, value, flags, fmt, canvas) */
+};
 
 #endif

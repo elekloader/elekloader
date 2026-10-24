@@ -359,7 +359,7 @@ def test_the_core_moves_the_arena_past_its_reserve():
     assert all(int(s['addr'], 16) != PURGE_BANKS_END + 2 for s in j['sites'])
     calls = {s['target']: int(s['addr'], 16) for s in j['sites'] if s['op'] in ('jsr', 'jmp')}
     assert calls.pop('boot') == 0x4000050c
-    assert set(calls) == set(BUS_SITES) | set(STORE_SITES) | set(VOICE_SITES), calls   # the rest are the bus's, the store's and the voice's
+    assert set(calls) == set(BUS_SITES) | set(STORE_SITES) | set(VOICE_SITES) | set(EDIT_SITES), calls
 
 
 def reserve_docs(img, bss, fixed=False):
@@ -552,7 +552,8 @@ def test_the_core_bus_sites():
     # ev_idle is called by the stub that calls ev_boot_done; every other event has a site of its own
     assert sorted(j['collections']) == sorted({e for _a, _s, e in BUS_SITES.values()} | {'ev_idle'}
                                               | {v[2] for v in STORE_SITES.values() if v[2]}
-                                              | set(STORE_TABLES) | {v[2] for v in VOICE_SITES.values()})
+                                              | set(STORE_TABLES) | {v[2] for v in VOICE_SITES.values()}
+                                              | {v[2] for v in EDIT_SITES.values()})
     assert j['collections']['ev_idle'] == 4
     for sym, target in JMP_BACK.items():       # a jmp stub goes back to the instruction after its site
         addr, stock_hex, _ev = BUS_SITES[target]
@@ -768,6 +769,172 @@ def test_the_voice_probe_links():
     for t, fn in (('ev_voice_release', 'pr_release'), ('ev_voice_kill', 'pr_kill'), ('ev_voice_bind', 'pr_bind'),
                   ('ev_voice_seek', 'pr_seek'), ('ev_trig_apply', 'pr_trig'), ('ev_dsp_trig', 'pr_dsp_trig'),
                   ('ev_dsp_record', 'pr_dsp_record')):
+        assert table(ln, t, 2) == (ln.map[fn], 0), t
+
+
+# core-ot 0.8 (edit.s, screen.s, and one site each in voice.s and bus.s): each site, the bytes it
+# displaces, its event and the defsym its stub goes back to (None: it returns, or goes elsewhere).
+# The routines are octabam's (KITS, PLOCKS P2, VARISPEED, CXOSC, BATCH BUGFIXES, MIDI SCENES, MIDI PART
+# STATE, BRAIN, BUFFER SAVER, STORE, MUTE MODES, BOOT TRACE, REC THRESHOLD, REC TRIG MUTE, SCENES P2; MIT).
+DIAL_BYTES = '206b00304a88660641f9400479b4'    # movea.l 48(a3),a0 ; tst.l a0 ; bne.s ; lea 0x400479b4,a0
+EDIT_SITES = {
+    'core_clip_pcopy': (0x40026eb0, '202f0004223c00008ed8', 'ev_clip', 'CL_PCOPY_NEXT'),
+    'core_clip_psnap': (0x40026ef0, '202f000841ef0004', 'ev_clip', 'CL_PSNAP_NEXT'),
+    'core_clip_pstore': (0x4002b9b0, '4feffff048d7041c', 'ev_clip', 'CL_PSTORE_NEXT'),
+    'core_clip_tcopy': (0x40029754, '4fefffe448d73c1c', 'ev_clip', 'CL_TCOPY_NEXT'),
+    'core_clip_tstore': (0x4002b654, '4fefffbc48d77cfc', 'ev_clip', 'CL_TSTORE_NEXT'),
+    'core_partsave': (0x4004a908, '4fefffec48d70c1c', 'ev_part_saving', 'PARTSAVE_NEXT'),
+    'core_partreload': (0x4004aab4, '4fefffe048d70c3c', 'ev_part_reload', 'PARTRELOAD_NEXT'),
+    'core_psel_begin': (0x400621da, '4eb940020898', 'ev_part_select', None),       # jsr memcpy
+    'core_psel_done': (0x40062216, '4eb9400326a0' '42a7' '4eb940078850', 'ev_part_select', 'PSEL_NEXT'),
+    'core_pinit': (0x40005638, '4fefffa848d77cfc', 'ev_part_init', 'PINIT_NEXT'),
+    'core_pinit_end': (0x40005a38, '2f4a005c4cd77cfc', 'ev_part_init', 'PINIT_END_NEXT'),
+    'core_projinit': (0x400909d8, '2f0a42a74eb94000fd34', 'ev_project_init', 'PROJINIT_NEXT'),
+    'core_v_reset': (0x40006820, '2f0a2f02222f000c', 'ev_voice_reset', 'V_RESET_NEXT'),
+    'core_boot_early': (0x40000512, '4eb94000f938', 'ev_boot_early', None),        # jsr the SRAM init
+    'core_icon': (0x4004bee2, '41f9400c0cb8', 'ev_track_icon', 'ICON_NEXT'),
+    'core_icon_draw': (0x4004c00c, '7003b08c6618', 'ev_track_icon_draw', None),
+    'core_dial_fx2': (0x4003786a, DIAL_BYTES + '2f032f132f09', 'ev_setup_dial', 'DIAL_FX2_NEXT'),
+    'core_dial_fx1': (0x40037c06, DIAL_BYTES + '2f032f132f09', 'ev_setup_dial', 'DIAL_FX1_NEXT'),
+    'core_dial_amp': (0x4003690c, DIAL_BYTES + '2f052f132f09', 'ev_setup_dial', 'DIAL_AMP_NEXT'),
+}
+EDIT_JSR = ('core_psel_begin', 'core_boot_early')
+# Routines a 0.8 stub wraps (a return slot each: entered again before they return, the slot is lost).
+EDIT_WRAPPED = ('core_clip_pcopy', 'core_clip_psnap', 'core_clip_pstore', 'core_clip_tcopy', 'core_clip_tstore',
+                'core_partreload')
+# What v1.0's conversions write in the same routines or their callers: SCENES P2's two page-2 loads beside
+# the FX dials, MIDI SCENES' Part Save and Reload calls. The 0.8 sites keep clear of every byte.
+V10_EDIT = ((0x40037840, 8), (0x40037bdc, 8), (0x4002dcd4, 6), (0x4002dd12, 6), (0x4002dd56, 6),
+            (0x4005e05a, 6))
+# What the stubs rely on in the stock image.
+EDIT_FACTS = (
+    (0x4002ba76, '2f02' '4879460bf218' '4ebaff30'),     # the pattern undo pushes two longs, calls the store ...
+    (0x4002ba94, '4280' '241f' '4e75'),                 # ... whose return is CL_PUNDO_RET; its "nothing" exit
+    (0x4002baaa, '2f2f0004' '4879460c8122' '4ebafefa' '7001'),   # the pattern paste: two longs, then d0 = 1
+    (0x4002b95e, '2f022f03' '4879460bf218' '4ebafcea'), # the track undo pushes three longs (return CL_TUNDO_RET)
+    (0x4002b980, '4280' '241f' '261f' '4e75'),          # its "nothing" exit
+    (0x4002b996, '2f2f00082f2f0008' '4879460c8122' '4ebafcae' '7001'),   # the track paste
+    (0x40029936, '6000fe1c'),                           # the track snapshot reaches the copy by a bra
+    (0x4004aad4, '4280'), (0x4004abbe, '7001'),         # Part Reload: d0 0 with no saved copy, 1 reloaded
+    (0x400621a6, '528a' '7312'),                        # a2 -> the new Part's number
+    (0x400621d6, '486efff7'),                           # the old Part's machines go to -9(fp)
+    (0x40062224, '588f'),                               # the long pushed for the page refresh is dropped here
+    (0x40005a20, '6716'),                               # the initialiser's only way to its end site
+    (0x40006830, '45faffee'),                           # the voice reset recurses through its own entry
+    (0x4000050c, '4eb940001e50'),                       # core's boot site, the instruction before
+    (0x4004bede, '49f18a00'),                           # a4 = the box's state
+    (0x4004c012, '486a0031' '2f0b'),                    # state 3's glyph at (a3, 49(a2))
+    (0x4004c024, '4e95' '4fef0010'),                    # the blit, through a5
+    (0x40037846, '1c10'), (0x40037be2, '1c10'),         # d6 = the FX2 and FX1 knob's value
+    (0x4003787e, '7d06' '2f06' '2f04'), (0x40037c1a, '7d06' '2f06' '2f04'), (0x40036920, '7d06' '2f06' '2f04'),
+)
+
+
+def test_the_core_edit_sites():
+    """core-ot 0.8's sites: each displaces whole stock instructions, no branch from outside it lands
+    inside, its stub goes back past it, and none meets a byte of the v1.0 conversions, the bus, the
+    store, the voice events or the intercepts. Every reference to a routine a stub wraps is a call
+    or a branch to its entry. The stubs' stock facts are checked."""
+    with open(os.path.join(ROOT, 'mods', 'core-ot', 'mod.json')) as fh:
+        j = json.load(fh)
+    with open(os.path.join(ROOT, 'mods', 'intercepts-ot', 'mod.json')) as fh:
+        icpt = [(int(x['addr'], 16), len(x['stock']) // 2) for x in json.load(fh)['sites']]
+    st, img = stock()
+    sites = {s['target']: s for s in j['sites'] if s['op'] in ('jsr', 'jmp')}
+    taken = ([(a, len(h) // 2) for a, h, _e in BUS_SITES.values()]
+             + [(a, len(h) // 2) for a, h, _e, _b in STORE_SITES.values()]
+             + [(a, len(h) // 2) for a, h, _e, _b in VOICE_SITES.values()]
+             + icpt + list(V10_NEIGHBOURS) + list(V10_VOICE) + list(V10_BUILDERS) + list(V10_EDIT))
+    inside, owner = {}, {}
+    for target, (addr, stock_hex, event, back) in EDIT_SITES.items():
+        s, n = sites[target], len(stock_hex) // 2
+        assert (int(s['addr'], 16), s['stock']) == (addr, stock_hex), target
+        assert s['op'] == ('jsr' if target in EDIT_JSR else 'jmp'), target
+        o = addr - DEV.main_load
+        assert img[o:o + n].hex() == stock_hex, target
+        ok, note = elemod.insn_check(img, addr, n, DEV)
+        assert ok, (target, note)
+        assert j['collections'][event] == 4, event
+        if back:
+            assert int(j['defsym'][back], 16) == addr + n, target
+        for a, m in taken:
+            assert not (a < addr + n and addr < a + m), (target, hex(a))
+        for t in range(addr, addr + n):
+            owner[t] = target
+            if t > addr:
+                inside[t] = target
+    d = {k: int(v, 16) for k, v in j['defsym'].items()}
+    assert (d['CL_PUNDO_RET'], d['CL_PUNDO_NONE']) == (0x4002ba82, 0x4002ba94)
+    assert (d['CL_TUNDO_RET'], d['CL_TUNDO_NONE']) == (0x4002b96c, 0x4002b980)
+    assert d['ICON_GLYPH3'] == 0x4004c012 and d['ICON_DONE'] == 0x4004c02a == 0x4004c00c + 6 + 0x18
+    assert d['ICON_CACHE'] == int(EDIT_SITES['core_icon'][1][4:], 16)
+    assert d['DIAL_WIDGET'] == int(DIAL_BYTES[-8:], 16)
+    for sym, site, k in (('PSEL_MEMCPY', 'core_psel_begin', 0), ('PSEL_REDRAW', 'core_psel_done', 0),
+                         ('PSEL_PAGE', 'core_psel_done', 8), ('PROJINIT_FN', 'core_projinit', 4),
+                         ('BOOT_SRAM_INIT', 'core_boot_early', 0)):
+        h = EDIT_SITES[site][1]
+        assert h[2 * k:2 * k + 4] == '4eb9' and d[sym] == int(h[2 * k + 4:2 * k + 12], 16), sym
+    for addr, h in EDIT_FACTS:
+        o = addr - DEV.main_load
+        assert img[o:o + len(h) // 2].hex() == h, hex(addr)
+    wrapped = {EDIT_SITES[t][0]: t for t in EDIT_WRAPPED}
+    for o in range(0, len(img) - 6, 2):         # bra/bsr/bcc, jmp/jsr absolute or pc-relative
+        w = struct.unpack('>H', img[o:o + 2])[0]
+        pc, tgt = DEV.main_load + o, None
+        if w & 0xf000 == 0x6000:
+            d8 = w & 0xff
+            if d8 == 0:
+                tgt = pc + 2 + struct.unpack('>h', img[o + 2:o + 4])[0]
+            elif d8 == 0xff:
+                tgt = pc + 2 + struct.unpack('>i', img[o + 2:o + 6])[0]
+            else:
+                tgt = pc + 2 + (d8 - 256 if d8 & 0x80 else d8)
+        elif w in (0x4ef9, 0x4eb9):
+            tgt = struct.unpack('>I', img[o + 2:o + 6])[0]
+        elif w in (0x4efa, 0x4eba) or w & 0xf1ff == 0x41fa or w == 0x487a:
+            tgt = pc + 2 + struct.unpack('>h', img[o + 2:o + 4])[0]
+            assert not (tgt in wrapped and (w & 0xf1ff == 0x41fa or w == 0x487a)), (hex(pc), wrapped.get(tgt))
+        if tgt in inside:                       # a site's own branches (a dial's bne) go with it
+            assert owner.get(pc) == inside[tgt], (hex(pc), hex(tgt), inside[tgt])
+    for addr, t in wrapped.items():
+        pat, k = struct.pack('>I', addr), 0
+        while True:
+            k = img.find(pat, k)
+            if k < 0:
+                break
+            assert img[k - 2:k] == bytes.fromhex('4eb9'), (t, hex(DEV.main_load + k))
+            k += 1
+
+
+def test_the_edit_probe_links():
+    """tests/fixtures/octatrack-edit with core-ot 0.8: its handlers are the entries of the eleven 0.8
+    tables; core-ot alone has none. (The probe's runs in ot_emu are in the pull request.)"""
+    import shutil
+    from elekloader.sdk import build
+    need(SYX)
+    if not shutil.which(os.environ.get('ELEKLOADER_CROSS', DEV.toolchain['prefix']) + 'gcc'):
+        raise Skip('no m68k cross compiler')
+    st, img = stock()
+    with tempfile.TemporaryDirectory() as tmp:
+        core = elemod.load_any(build.build(os.path.join(ROOT, 'mods', 'core-ot'), SYX, tmp)[0])
+        probe, m = build.build(os.path.join(HERE, 'fixtures', 'octatrack-edit'), SYX, tmp)
+        assert not m.imports, m.imports
+        alone = link.link([core], img)
+        ln = link.link([core, elemod.load_any(probe)], img)
+
+    def table(ln, name, n):
+        o = ln.layout['run_load'] + (ln.tables[name][0] - DEV.ddr[0]) - DEV.main_load
+        return struct.unpack('>%dI' % n, ln.image[o:o + 4 * n])
+
+    events = sorted({v[2] for v in EDIT_SITES.values()})
+    assert len(events) == 11
+    for t in events:
+        assert alone.tables[t][1] == 0, t
+    for t, fn in (('ev_clip', 'ed_clip'), ('ev_part_saving', 'ed_part_saving'), ('ev_part_reload', 'ed_part_reload'),
+                  ('ev_part_select', 'ed_part_select'), ('ev_part_init', 'ed_part_init'),
+                  ('ev_project_init', 'ed_project_init'), ('ev_voice_reset', 'ed_voice_reset'),
+                  ('ev_boot_early', 'ed_boot_early'), ('ev_track_icon', 'ed_track_icon'),
+                  ('ev_track_icon_draw', 'ed_track_icon_draw'), ('ev_setup_dial', 'ed_setup_dial')):
         assert table(ln, t, 2) == (ln.map[fn], 0), t
 
 
@@ -1124,7 +1291,9 @@ def test_the_example_subscribes_to_the_bus():
                       'ev_part_cleared': 0, 'core_projdata': 0, 'core_carddata': 0, 'ot_sram': 0,
                       'ot_settings': 0, 'ev_voice_start': 0, 'ev_voice_release': 0, 'ev_voice_kill': 0,
                       'ev_voice_bind': 0, 'ev_voice_seek': 0, 'ev_trig_apply': 0, 'ev_dsp_trig': 0,
-                      'ev_dsp_record': 0}, counts
+                      'ev_dsp_record': 0, 'ev_clip': 0, 'ev_part_saving': 0, 'ev_part_reload': 0,
+                      'ev_part_select': 0, 'ev_part_init': 0, 'ev_project_init': 0, 'ev_voice_reset': 0,
+                      'ev_boot_early': 0, 'ev_track_icon': 0, 'ev_track_icon_draw': 0, 'ev_setup_dial': 0}, counts
     at = ln.tables['ev_draw'][0]
     o = ln.layout['run_load'] + (at - DEV.ddr[0]) - DEV.main_load
     assert struct.unpack('>II', ln.image[o:o + 8]) == (ln.map['hello_draw'], 0)
