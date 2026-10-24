@@ -434,7 +434,10 @@ build, 20 Oct 2026), none copied from the Rytm. On a unit, a build of core-a4
 with hooks-check-a4 (HC56, 20 Oct 2026) booted and every event ran as
 expected, and one with store-check-a4 (SC56, 21 Oct 2026) kept every scope's
 fields through saves, loads, power cycles and a Transfer round trip.
-Recovery to stock worked on the unit (21 Oct 2026).
+Recovery to stock worked on the unit (21 Oct 2026). core-a4 0.2's
+parameter pages and views, with pages-check-a4 (PA56, 23 Oct 2026), drew
+every screen checked as in the emulator, and a mod's view came back after
+a project load and a power cycle.
 
 - **Files.** The Rytm's family (ELE3, the same SysEx transport), device byte
   `0x0B`, version field at `0x14`, no trailer. Five sections: 5, 2 (the
@@ -473,7 +476,9 @@ Recovery to stock worked on the unit (21 Oct 2026).
   pattern and read them back with no word changed, through a session of
   normal use (Overbridge included) and after a power cycle.
 - **The core** (mods/core-a4) has the Rytm's events at the A4's sites, and
-  mod storage in bytes of the A4's own structures (mods/core-a4/README.md).
+  mod storage in bytes of the A4's own structures (mods/core-a4/README.md);
+  from 0.2, core-ar2 0.4's parameter routines, and views added behind the
+  page keys.
   In rytm-emu (with a fallback added so it accepts a patched A4 image), a
   build with core alone runs as stock does, with the same frames and a
   byte-identical screen; hello-marker-a4 differs from stock only in its

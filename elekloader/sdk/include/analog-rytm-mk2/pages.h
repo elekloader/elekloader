@@ -20,6 +20,21 @@
  * A page id must be one stock does not have (stock's are 0..11) and no other
  * mod uses. A function left 0 passes.
  *
+ * From core-ar2 0.6 a page whose knobs change with the sound (a knob that
+ * means nothing for the selected type left empty) contributes to
+ * core_page_fns instead: page_info asks info(page) on each call, before
+ * core_pages, and answers the entry it returns; 0 passes.
+ *
+ *     {"to": "core_page_fns", "order": 14, "data": "00000000",
+ *      "relocs": [[0, "abs32", "sym:my_page_fn", 0]]}
+ *
+ *     static const struct core_page *my_info(int32_t page)
+ *     { return selected_type() ? &my_page : &my_page_short; }
+ *     const struct core_page_fn my_page_fn = {14, my_info};
+ *
+ * Every reader of the page (the knobs' draw, the knob -> id lookup of a
+ * turn) calls page_info afresh, so the knobs follow at the next redraw.
+ *
  * The page key reaches the page through core_view_pages: its view, and the
  * page. Each view's list is stock's pages, then the mods' entries in order:
  *
@@ -42,6 +57,12 @@ struct core_page {
     int32_t page;
     const char *name;
     int32_t ids[8];         /* knobs A..H, 0 for none */
+};
+
+/* core-ar2 0.6: the entry page_info answers for page, asked on each call */
+struct core_page_fn {
+    int32_t page;
+    const struct core_page *(*info)(int32_t page);   /* 0: pass */
 };
 
 /* param_value_text's own arguments */

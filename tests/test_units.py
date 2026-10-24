@@ -702,6 +702,54 @@ def test_bounties_lists_each_routine_once_across_oses():
         assert 'old' not in text and 'c: c1' in text
 
 
+def test_bounties_take_an_upstream_list():
+    """An upstream list adds the stock code a newer upstream's modules hook: no entry of the files
+    changes its id, a file's own hook is not listed twice, and a module the files have from that
+    commit is left to its file."""
+    from elekloader.sdk.bounties import bounties, markdown
+    dev = type('Dev', (), {'key': 'ot', 'name': 'OT'})()
+
+    def mod2(mod_id, ver, *sites):
+        m = link.Mod2.__new__(link.Mod2)
+        m.id, m.version, m.dev = mod_id, ver, dev
+        m.rel = type('Rel', (), {'version': '1.40C'})()
+        m.sites = [{'addr': a, 'len': 6, 'kind': 'code', 'relocs': [(2, 'abs32', 'sym:' + s, 0)]}
+                   for a, s in sites]
+        return m
+    mods = [mod2('ob-a', 'old', (0x1000, 'a1'), (0x2000, 'a2')),
+            mod2('ob-b', 'new', (0x3000, 'b1')),               # converted from the upstream's commit
+            mod2('core', '0.3', (0x5000, 'ev'))]
+    up = {'from': 'up/stream', 'commit': 'new', 'device': 'ot', 'os': '1.40C', 'mods': [
+        {'id': 'ob-a', 'version': 'new', 'sites': [['0x00001000', 6, 'a1'],      # the file's own hook
+                                                   ['0x00000ff0', 6, 'a1x'],     # lower, in a1's routine
+                                                   ['0x00004000', 6, 'a3']]},    # a routine of its own
+        {'id': 'ob-b', 'version': 'new', 'sites': [['0x00003100', 6, 'b2']]},    # its file stands for it
+        {'id': 'ob-c', 'version': 'new', 'sites': [['0x00004010', 6, 'c1'],      # with a3
+                                                   ['0x00005000', 6, 'c2']]}]}   # on the core's site
+    [was] = bounties(mods)
+    [r] = bounties(mods, upstream=[up])
+    assert r['score'] == was['score']
+    old = {e['id']: e for e in was['entries']}
+    new = {e['id']: e for e in r['entries']}
+    assert set(old) <= set(new)
+    first = new['ot@1.40C:0x00001000']
+    assert [(s['site'], s['mod'], s.get('from')) for s in first['at']['1.40C']['sites']] == [
+        ('0x00000ff0', 'ob-a', 'up/stream@new'), ('0x00001000', 'ob-a', None)]
+    assert first['upstream'] == ['ob-a'] and 'upstream_only' not in first
+    assert first['at']['1.40C']['lo'] == '0x00000ff0'
+    assert 'upstream' not in new['ot@1.40C:0x00003000']         # nothing of ob-b's from the list
+    only = new['ot@1.40C:0x00004000']
+    assert only['upstream_only'] and only['mods'] == ['ob-a', 'ob-c'] and only['kind'] == 'core'
+    assert new['ot@1.40C:0x00005000']['kind'] == 'migration'     # the core hooks the same bytes
+    assert r['upstream'] == {'from': ['up/stream@new'], 'mods': 3, 'hooking': 2, 'not_here': 1,
+                             'entries': 3, 'only': 2}
+    md = markdown([r])
+    assert '| `ot@1.40C:0x00004000` | a core event (upstream only) | 2 | ob-a (upstream): a3; ob-c (upstream): c1 |' in md
+    assert 'ob-a: a1; ob-a (upstream): a1x' in md
+    # a device with only a core on it is left out of the Markdown
+    assert '### OT' not in markdown(bounties([mod2('core', '0.3', (0x5000, 'ev'))]))
+
+
 def test_the_site_names_its_files_with_its_version_and_lists_the_devices():
     pack = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'packaging')
     if not os.path.exists(os.path.join(pack, 'build_web.py')):

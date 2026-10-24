@@ -255,7 +255,10 @@ and the table `core_store_ids` (entry 4, filled by the linker: below); no
 The Analog Four MKII's core (core-a4 0.1, OS 1.56) has core-ar2 0.3's
 events, `ev_project` and `core_store_ids`, at 0x40098898, 0x40098900,
 0x400999f8, 0x40099a40, 0x400d05d2, 0x401013c6 and 0x401040f6
-(`mods/core-a4/mod.json`), and no `.fast` code either.
+(`mods/core-a4/mod.json`), and no `.fast` code either. From 0.2 it declares
+`core_pages`, `core_params` and `core_view_pages` too (0x400f6212,
+0x40023d54, 0x400232e2 and 0x4009ea68; the views at 0x400c2370 and
+0x400c4202), its view entries the A4's own.
 
 The core mod patches each shared site once. It calls the handlers
 subscribed to that event, from a table built by the linker, in order.

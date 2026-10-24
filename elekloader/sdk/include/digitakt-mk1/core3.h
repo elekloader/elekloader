@@ -71,7 +71,9 @@ struct cm_knob {                    /* 40 bytes; knobs A-H by their place on the
     const char *lfo_long;           /* +12 in its DEST list; 0 for lname */
     uint8_t look;                   /* +16 the parameter id whose UI record and graphic it borrows; 0 its own */
     uint8_t flags;                  /* +17 CM_HIDDEN, CM_RANGE, CM_DEFAULT, CM_NOT_SAMPLE */
-    uint16_t reserved;              /* +18 0 */
+    uint8_t cc;                     /* +18 cm_ui_v33, an extra value only: the MIDI CC that sets it on its track's
+                                       channel, one no stock parameter of a track uses; 0 none */
+    uint8_t reserved;               /* +19 0 */
     int32_t min, max, def;          /* +20 8.8, with CM_RANGE and CM_DEFAULT */
     cm_fmt fmt;                     /* +32 its value's text; 0 for the stock one */
     union {
@@ -81,7 +83,8 @@ struct cm_knob {                    /* 40 bytes; knobs A-H by their place on the
 } __attribute__((aligned(4)));
 
 struct cm_ui {                      /* 336 bytes */
-    const void *abi;                /* +0  cm_ui_v3, cm_ui_v31 for CM_DRAW, cm_ui_v32 for extra values (struct cm_ui32):
+    const void *abi;                /* +0  cm_ui_v3, cm_ui_v31 for CM_DRAW, cm_ui_v32 for extra values (struct cm_ui32),
+                                       cm_ui_v33 for extra values with CCs:
                                        links only beside a machine-pages that reads it */
     uint8_t page_from;              /* +4  the stock machine whose SRC page it copies: 0 ONESHOT ... 3 SLICE */
     uint8_t flags;                  /* +5  0 */
@@ -117,7 +120,7 @@ struct cm_src_page {                /* 16 bytes: fixed logical parameter referen
 } __attribute__((aligned(4)));
 
 struct cm_ui32 {                    /* params=3 only (SLICE's bank): fifteen values across up to two pages */
-    struct cm_ui base;              /* +0: abi=cm_ui_v32; original eight logical parameters */
+    struct cm_ui base;              /* +0: abi=cm_ui_v32, or cm_ui_v33 for extras with CCs; the eight */
     struct cm_knob extra[CM_EXTRAS]; /* +336: parameters 8-14; look 1-163, CM_RANGE|CM_DEFAULT, 0..0x7f00 */
     uint8_t page_count;             /* +616: 1 or 2 */
     uint8_t reserved[3];            /* zero */
@@ -125,6 +128,7 @@ struct cm_ui32 {                    /* params=3 only (SLICE's bank): fifteen val
 } __attribute__((aligned(4)));
 
 extern const char cm_ui_v32[];                      /* machine-pages 1.2's: a page with extra values names it */
+extern const char cm_ui_v33[];                      /* machine-pages 1.4's: one whose extra values have CCs (cc) */
 /* Render task: final values after native locks, smoothing and LFOs, for parameters 0-14. Invalid
  * track/index, or an extra parameter of a machine without them, returns 0. */
 extern int32_t cm_src_value(int32_t track, int32_t parameter);
