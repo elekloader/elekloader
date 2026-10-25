@@ -368,3 +368,10 @@ DSP core 0. It is a DSP table, so its handlers are DSP code (`subscribe_dsp`):
 | event | site | handler |
 |---|---|---|
 | `ev_dsp_rx` | payload A's P:0x88 (0x400ef758), the head of every audio frame | DSP code from `jsr`, ending in `rts`; it may change `a`, `x1`, `r0`, `r1` |
+
+The USB companion (`mods/usb-ot`, usb 0.3) adds one on the ColdFire, beside
+the DSP (docs/ADAPTING.md, "USB functions on the Octatrack"):
+
+| event | site | handler |
+|---|---|---|
+| `ev_dsp_feed` | 0x40004bc0, state 7 of the frame interrupt's transfer chain (eDMA channel 0's interrupt, level 6) | `void f(void)`; may call `ot_dsp_feed(block, words)` once: one more block to DSP core 0, at the frame's bank + $320 |

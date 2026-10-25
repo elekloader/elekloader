@@ -29,10 +29,17 @@
  * host's first poll sets, the clock-source replies. The code is elekloader's
  * own: the producer and the packet builder run on core-ot 0.4's
  * ev_frame_end, where octabam patched the frame interrupt's tail.
+ *
+ * Audio in (0.3): with usb-audio-in in the build (mods/usb-audio-in-ot, its record `usba_in`) and
+ * its setting on, the function also takes the host's stream: a USB streaming input terminal and a
+ * line output terminal on the same clock, a third interface (AudioStreaming, EP3 OUT), and EP3 IN
+ * marked as its implicit feedback (the host sizes each OUT packet from the IN packets). Its
+ * requests are answered here; the add-on runs EP3 OUT. Without it nothing here changes.
  */
 #include <stdint.h>
 #include "octatrack/core.h"
 #include "octatrack/usb.h"
+#include "octatrack/usbaudio.h"
 
 /* The values the setting stores on the card: append new layouts at the end. */
 enum { L_OFF, L_MAIN, L_MAIN_CUE, L_MASTER, L_TRACKS, L_ALL, L_N };
@@ -56,11 +63,12 @@ static const struct layout layouts[L_N] = {
  * ev_boot_done; without that companion it stays the default. The menu's value column shows four
  * characters: OFF, MAIN, M+C (MAIN+CUE), MSTR (MASTER: track 8), TRKS (TRACKS), ALL (TRACKS+MAIN+CUE). */
 static const char *const layout_names[] = { "OFF", "MAIN", "M+C", "MSTR", "TRKS", "ALL" };
+const char usba_group[] = "USB AUDIO";  /* audio in's setting goes under the same heading */
 volatile int32_t usba_layout = L_DEFAULT;
 const struct ot_setting usba_setting = {
     OT_SETTING_ABI, OT_TAG('U', 'S', 'B', 'A'), 1,      /* tag + key: the identity on the card */
     OT_SET_OPTION, OT_SET_CARD | OT_SET_EARLY,          /* early: read before the card is */
-    "USB AUDIO", "LAYOUT",
+    usba_group, "LAYOUT",
     0, L_N - 1, layout_names, &usba_layout, L_DEFAULT, 0,
 };
 
@@ -103,6 +111,7 @@ static uint8_t main_at, cue_at, lag;    /* MAIN's and CUE's first channel from 0
 #define SERVO_MAX       200             /* the correction's clamp, x1000 frames a packet */
 
 #define EP3IN           OT_USB_EP_IN(3)
+#define EP3OUT          OT_USB_EP_OUT(3)
 #define USBCMD          OT_USB_REG(0x140)
 #define ATDTW           0x00004000u     /* USBCMD: the add-dTD tripwire */
 #define TD_ACTIVE       0x80u
@@ -110,12 +119,19 @@ static uint8_t main_at, cue_at, lag;    /* MAIN's and CUE's first channel from 0
 #define AC_CLOCK        0x10            /* the UAC2 entities */
 #define AC_IT           0x11
 #define AC_OT           0x12
+#define AC_IN_IT        0x13            /* audio in: the host's stream ... */
+#define AC_IN_OT        0x14            /* ... to the unit's inputs */
 
 /* SET CUR's data stage, on stock's EP0 OUT transfer descriptor and buffer. */
 #define EP0_OUT_DTD     0x4ec95000u
 #define EP0_OUT_BUF     0x4ec96000u
 
-extern const struct ot_usb_function usb_audio;
+extern struct ot_usb_function usb_audio;
+
+/* Audio in's record: a weak import, so without usb-audio-in it is core's zeros (abi 0). */
+extern const struct usba_in usba_in;
+static const struct usba_in *in;        /* this boot's, when audio in is on */
+static uint8_t in_ch;                   /* the host's channels then: 2 or 4 */
 
 /* The counters, in the order and shape (big-endian longs) of octabam's, so its tools read
  * them: the vendor request 0xC0/0x55 returns them. lastsamp and srcjump stay 0 here. */
@@ -149,6 +165,14 @@ static int enabled(void)
     main_at = 16 * lay->tracks + 2 * lay->t8;
     cue_at = main_at + 2 * lay->main;
     lag = lay->tracks && lay->main ? BLOCK : 0;
+    in = 0, in_ch = 0;
+    if (lay->nch && usba_in.abi == USBA_IN_ABI) {   /* audio in needs this stream: its feedback */
+        unsigned c = usba_in.channels();
+        if (c == 2 || c == 4)
+            in = &usba_in, in_ch = c;
+    }
+    usb_audio.interfaces = in ? 3 : 2;
+    usb_audio.endpoints = in ? EP3IN | EP3OUT : EP3IN;
     return lay->nch != 0;
 }
 
@@ -164,28 +188,53 @@ static unsigned put(uint8_t *o, const uint8_t *b, unsigned n)
     return n;
 }
 
+/* Audio in's packets, at most: 12 frames every 250 us at high speed, 45 every 1 ms at full speed,
+ * what EP3 IN's carry at most, which the host's follow. */
+unsigned usba_in_packet(unsigned speed)
+{
+    return (speed == OT_USB_HS ? 12u : 45u) * 4u * in_ch;
+}
+
 static unsigned descriptors(uint8_t *o, unsigned first, unsigned speed)
 {
     unsigned high = speed == OT_USB_HS;
     unsigned nch = high ? lay->nch : 2, pkt = high ? pkt_hs() : PKT_FS, n = 0;
+    unsigned ipkt = usba_in_packet(speed);
     uint8_t lr = nch == 2 ? 3 : 0;      /* bmChannelConfig: front left and right */
+    uint8_t ilr = in_ch == 2 ? 3 : 0;
     const uint8_t ac[] = {
         9, 4, first, 0, 0, 1, 1, 0x20, 0,                       /* AudioControl */
-        9, 0x24, 1, 0x00, 0x02, 0x0a, 46, 0, 0,                 /* header: UAC 2.0, pro audio */
+        9, 0x24, 1, 0x00, 0x02, 0x0a, in ? 75 : 46, 0, 0,       /* header: UAC 2.0, pro audio */
         8, 0x24, 0x0a, AC_CLOCK, 0x01, 0x05, 0, 0,              /* clock: internal fixed, read-only */
         17, 0x24, 0x02, AC_IT, 0x03, 0x06, 0, AC_CLOCK, nch, lr, 0, 0, 0, 0, 0, 0, 0,   /* line in */
         12, 0x24, 0x03, AC_OT, 0x01, 0x01, 0, AC_IT, AC_CLOCK, 0, 0, 0,             /* USB out */
+    };
+    const uint8_t ac_in[] = {
+        17, 0x24, 0x02, AC_IN_IT, 0x01, 0x01, 0, AC_CLOCK, in_ch, ilr, 0, 0, 0, 0, 0, 0, 0,  /* USB in */
+        12, 0x24, 0x03, AC_IN_OT, 0x03, 0x06, 0, AC_IN_IT, AC_CLOCK, 0, 0, 0,        /* the inputs */
     };
     const uint8_t as[] = {
         9, 4, first + 1, 0, 0, 1, 2, 0x20, 0,                   /* AudioStreaming alt 0: idle */
         9, 4, first + 1, 1, 1, 1, 2, 0x20, 0,                   /* alt 1: EP3 IN */
         16, 0x24, 1, AC_OT, 0, 1, 1, 0, 0, 0, nch, lr, 0, 0, 0, 0,  /* AS_GENERAL: PCM */
         6, 0x24, 2, 1, 4, 24,                                   /* FORMAT_TYPE_I: 4-byte subslots, 24 bits */
-        7, 5, 0x83, 0x05, pkt & 0xff, pkt >> 8, high ? 2 : 1,  /* iso, asynchronous */
+        7, 5, 0x83, in ? 0x25 : 0x05, pkt & 0xff, pkt >> 8, high ? 2 : 1,  /* iso, async (+ implicit feedback) */
+        8, 0x25, 1, 0, 0, 0, 0, 0,
+    };
+    const uint8_t as_in[] = {
+        9, 4, first + 2, 0, 0, 1, 2, 0x20, 0,                   /* audio in's AudioStreaming alt 0: idle */
+        9, 4, first + 2, 1, 1, 1, 2, 0x20, 0,                   /* alt 1: EP3 OUT */
+        16, 0x24, 1, AC_IN_IT, 0, 1, 1, 0, 0, 0, in_ch, ilr, 0, 0, 0, 0,
+        6, 0x24, 2, 1, 4, 24,
+        7, 5, 0x03, 0x05, ipkt & 0xff, ipkt >> 8, high ? 2 : 1,    /* iso, asynchronous */
         8, 0x25, 1, 0, 0, 0, 0, 0,
     };
     n += put(o + n, ac, sizeof ac);
+    if (in)
+        n += put(o + n, ac_in, sizeof ac_in);
     n += put(o + n, as, sizeof as);
+    if (in)
+        n += put(o + n, as_in, sizeof as_in);
     return n;
 }
 
@@ -387,6 +436,15 @@ static void clear_dtds(void)
     tail = 0;
 }
 
+/* ENDPTCTRL3's TX half. Its RX half is EP3 OUT's, which audio in changes from the frame transfer's
+ * state 7 (level 6), which may interrupt this (level 5). */
+static void ctrl3(uint32_t keep, uint32_t set)
+{
+    unsigned sr = ot_usb_irq_off();
+    OT_USB_ENDPTCTRL(3) = (OT_USB_ENDPTCTRL(3) & keep) | set;
+    ot_usb_irq_restore(sr);
+}
+
 /* SET_INTERFACE alt 1, seen in the frame interrupt: EP3 up at the port's speed, the ring
  * cleared where the stream starts, the reading cursor far enough behind for the cushion and
  * the first transfers. */
@@ -402,7 +460,7 @@ static void ep_up(void)
     qh[0] = 0x60000000u | (hs ? pkt_hs() : PKT_FS) << 16;   /* one packet a frame, no ZLT */
     qh[2] = 1;
     clear_dtds();
-    OT_USB_ENDPTCTRL(3) = (OT_USB_ENDPTCTRL(3) & 0x0000ffffu) | 0x00840000u;   /* TX iso, on */
+    ctrl3(0x0000ffffu, 0x00840000u);    /* TX iso, on */
     start = C.produced - TARGET - NSLOT * (step / 1000);
     for (at = start - lag; at != C.produced + CUE_LEAD; ++at) {
         uint32_t *s = slot(at);
@@ -423,7 +481,7 @@ static void ep_up(void)
 static void ep_down(void)
 {
     ot_usb_flush(EP3IN);
-    OT_USB_ENDPTCTRL(3) &= 0x0000ffffu;  /* the TX half; RX is EP3 OUT's */
+    ctrl3(0x0000ffffu, 0);              /* the TX half off; RX is EP3 OUT's */
     clear_dtds();
     running = 0;
 }
@@ -482,6 +540,8 @@ static void down(void)
     req = 0;
     ++gen;
     ot_usb_flush(EP3IN);
+    if (in)
+        in->set_alt(0);
 }
 
 static int set_interface(unsigned rel, unsigned alt)
@@ -490,6 +550,10 @@ static int set_interface(unsigned rel, unsigned alt)
         return alt == 0 ? 0 : -1;
     if (alt > 1)
         return -1;
+    if (rel == 2) {                     /* audio in's: its state 7 brings EP3 OUT up or down */
+        in->set_alt(alt);
+        return 0;
+    }
     req = alt;                          /* the frame interrupt brings EP3 up or down */
     if (!alt)
         ot_usb_flush(EP3IN);            /* nothing queued answers a poll after alt 0 */
@@ -498,7 +562,7 @@ static int set_interface(unsigned rel, unsigned alt)
 
 static unsigned get_interface(unsigned rel)
 {
-    return rel ? req : 0;
+    return rel == 2 ? in->get_alt() : rel ? req : 0;
 }
 
 /* SET CUR of the clock's rate. It is read-only, but some hosts set it to the rate they read
@@ -536,6 +600,8 @@ static int setup(const volatile uint8_t *p)
         ot_usb_send(sizeof C, &C);
         return 1;
     }
+    if (in && in->setup(p) > 0)         /* audio in's (its counters) */
+        return 1;
     if ((bm != 0xa1 && bm != 0x21) || p[4] != ot_usb_first_interface(&usb_audio) || p[5] != AC_CLOCK)
         return 0;
     if (bm == 0x21)
@@ -553,13 +619,14 @@ static int setup(const volatile uint8_t *p)
 
 static void irq(uint32_t c)
 {
-    OT_USB_ENDPTCOMPLETE = c & EP3IN;   /* none asked for (no IOC): kept from going stale */
+    OT_USB_ENDPTCOMPLETE = c & usb_audio.endpoints;    /* none asked for (no IOC): kept from going stale */
 }
 
-const struct ot_usb_function usb_audio = {
+/* Not const: enabled() sets the interfaces and endpoints audio in adds. */
+struct ot_usb_function usb_audio = {
     .abi = OT_USB_ABI,
     .name = "USB audio",
-    .interfaces = 2,
+    .interfaces = 2,                    /* 3 with audio in (enabled()) */
     .iad_class = 1,                     /* audio, UAC2 (protocol 0x20) */
     .iad_protocol = 0x20,
     .endpoints = EP3IN,

@@ -2,7 +2,8 @@
 
 The Octatrack's USB companion (MKI and MKII), OS 1.40C. Mods add USB
 functions to the unit's USB port with it: USB MIDI (`mods/usb-midi-ot`),
-USB audio (`mods/usb-audio-ot`, its layout a setting) and others to come.
+USB audio (`mods/usb-audio-ot`, its layout a setting, with audio in from
+`mods/usb-audio-in-ot`) and others to come.
 Several functions combine in one build:
 each is a mod of its own. It needs the Octatrack's core (`mods/core-ot`,
 0.3.1 or newer).
@@ -41,6 +42,15 @@ the unit does: every reply is stock's, byte for byte.
   endpoints up at the speed the port came up at. At a bus reset or a session
   end (the cable pulled) each takes them down. Endpoint completions go to
   the function that owns the endpoint, from the USB interrupt.
+- **The DSP feed (0.3).** It also holds the last state of the frame
+  interrupt's transfer chain to the DSP (state 7, 0x40004bc0, in eDMA
+  channel 0's interrupt), and runs the event `ev_dsp_feed` there once a
+  frame. A handler may send DSP core 0 one more block, up to 160 words,
+  with `ot_dsp_feed`; it lands in the frame's bank at + $320, where a DSP bus
+  handler reads it, and the frame interrupt is unmasked once it has. With no
+  handler, or none that sends, state 7 is stock's. USB audio in is the first
+  user; the feed is not USB's (docs/ADAPTING.md, "USB functions on the
+  Octatrack", has the details).
 - **Two stock fixes** that only matter with a function in the build: the
   controller's bus priority on the SDRAM and SRAM slaves goes to USB (its
   16-byte RX FIFO loses packet tails under a busy project otherwise, as
@@ -65,16 +75,17 @@ has the struct and the exports.
 
 ## The sites
 
-18 places in the stock USB stack (0x4001d4b2-0x4001e952, listed in
-mod.json), each whole instructions; `tests/test_octatrack.py` checks them
-against the stock image. Its claim is `usb:stack`.
+18 places in the stock USB stack (0x4001d4b2-0x4001e952), and from 0.3 the
+transfer chain's state 7 (0x40004bc0), listed in mod.json, each whole
+instructions; `tests/test_octatrack.py` checks them against the stock image.
+Its claim is `usb:stack`; a mod that feeds the DSP claims `dsp:feed`.
 
 ## Conflicts
 
 Each USB file of irpina/octabam2elemod v1.0 (`octabam-usb-*`: USB MIDI, the
 USB audio and USB IO mods, the crossbar) patches one of these places too, so
-the linker refuses usb-ot beside any of them. A build takes either those
-files or usb-ot and its functions.
+the linker refuses usb-ot beside any of them (the USB IO ones patch state 7
+too). A build takes either those files or usb-ot and its functions.
 
 ## Checked
 
@@ -90,5 +101,11 @@ without it: alone, usb-ot's configuration is stock's byte for byte; beside
 USB MIDI (an ABI 1 record, always on) MIDI keeps its interfaces 1 and 2, with
 no association or endpoint for audio.
 
+With USB audio in (mods/usb-audio-in-ot, which has the details), the feed
+runs once a frame while the host's stream is open, every feed completes
+before the next frame interrupt, and with the stream closed state 7 runs as
+stock's again after the closing blocks.
+
 Facts from sambanks/octabam's `usb` module and markandrus/octemu's USB MIDI
-(both MIT); the code is elekloader's own.
+(both MIT), and its USB audio in (state 7 and the transfer); the code is
+elekloader's own.

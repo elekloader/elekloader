@@ -1,10 +1,11 @@
 {
- "id": "usb-audio", "version": "0.2",
+ "id": "usb-audio", "version": "0.3",
  "license": "GPL-2.0-or-later",
  "title": "USB Audio Out", "category": "MIDI and USB", "author": "irpina",
- "description": "The Octatrack as a USB audio input (UAC2, 44.1 kHz, 24-bit) on its own USB port, as a function of usb-ot. What the stream carries is a setting, USB AUDIO LAYOUT in the MODS menu (with the settings companion; otherwise the default): MAIN, MAIN+CUE, MASTER (track 8), TRACKS (1-8, 16 channels), TRACKS+MAIN+CUE (20 channels, the default) or OFF (no USB audio interface at all). It applies at the next power-up. It combines with USB MIDI. Built on what sambanks/octabam's USB audio found (the taps, the MAIN and CUE alignment, the rate servo, the first poll's cushion).",
+ "description": "The Octatrack as a USB audio input (UAC2, 44.1 kHz, 24-bit) on its own USB port, as a function of usb-ot. What the stream carries is a setting, USB AUDIO LAYOUT in the MODS menu (with the settings companion; otherwise the default): MAIN, MAIN+CUE, MASTER (track 8), TRACKS (1-8, 16 channels), TRACKS+MAIN+CUE (20 channels, the default) or OFF (no USB audio interface at all). It applies at the next power-up. It combines with USB MIDI. With USB Audio In (usb-audio-in) in the build, the same function also takes a stream from the computer into the inputs. Built on what sambanks/octabam's USB audio found (the taps, the MAIN and CUE alignment, the rate servo, the first poll's cushion).",
  "device": "octatrack", "os": "1.40C",
  "sources": ["usbaudio.c"],
+ "weak": ["usba_in"],
  "contribute": [
   {"to": "ot_usb_functions", "order": 30, "data": "00000000", "relocs": [[0, "abs32", "sym:usb_audio", 0]]},
   {"to": "ot_settings", "order": 30, "data": "00000000", "relocs": [[0, "abs32", "sym:usba_setting", 0]]}

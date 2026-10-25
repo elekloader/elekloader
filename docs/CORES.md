@@ -195,7 +195,9 @@ core.
   places for USB functions, mods of their own that combine:
   [mods/usb-midi-ot](../mods/usb-midi-ot) (USB MIDI, with 0.4) is the first,
   and [mods/usb-audio-ot](../mods/usb-audio-ot) (USB audio out, with 0.4, in
-  five layouts) the second. [mods/settings-ot](../mods/settings-ot)
+  five layouts) the second; [mods/usb-audio-in-ot](../mods/usb-audio-in-ot)
+  adds audio in to it, with the DSP bus and usb-ot 0.3's DSP feed (the frame
+  transfer's last state). [mods/settings-ot](../mods/settings-ot)
   (settings, with 0.6) puts every mod's settings in a MODS category of the
   MAIN MENU and keeps them on the card or with the project.
   [mods/seq-events-ot](../mods/seq-events-ot) offers its step fire as the

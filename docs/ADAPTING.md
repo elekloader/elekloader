@@ -551,6 +551,13 @@ mods' DSP code, and takes SPATIALIZER off both FX menus to do it
 |---|---|---|---|
 | `ev_dsp_rx` | DSP core 0, the head of every audio frame (2,756 a second), before anything reads the current RX block | DSP code, reached by `jsr`, ending in `rts` | the RX block is at `x:>$202`: 16 samples x 4 slots (2 input A, 3 input B, 0 and 1 C and D). Use `a`, `x1`, `r0`, `r1` and the condition codes; keep every other register. Subscribe with `subscribe_dsp` |
 
+DSP code that wants data from the ColdFire every frame gets it through
+usb-ot's DSP feed (usb 0.3, "USB functions on the Octatrack" below): a
+block of up to 160 words that lands at `r6 + $320` in the frame's bank.
+`mods/usb-audio-in-ot` is the example: its `ev_dsp_feed` handler sends the
+host's samples, its `ev_dsp_rx` handler (`inject.asm`) writes them over the
+inputs.
+
 ### Intercepts on the Octatrack (intercepts 0.1)
 
 `mods/intercepts-ot` is a companion beside core-ot 0.3.1 for places in the
@@ -630,7 +637,7 @@ Start from [examples/crush-machine-ot](../examples/crush-machine-ot): CRUSH
 plays its FLEX slot's sample through a 5-bit crusher. octabam's OCTA303
 converts onto the companion with `sdk.octabam --machines` (section 4b).
 
-### USB functions on the Octatrack (usb 0.2)
+### USB functions on the Octatrack (usb 0.3)
 
 `mods/usb-ot` is a companion beside core-ot 0.3.1 that owns the stock USB
 device stack's places once. A USB function (USB MIDI, USB audio, ...) is a
@@ -660,7 +667,7 @@ The record is `struct ot_usb_function` (`#include "octatrack/usb.h"`):
 | `set_interface(rel, alt)`, `get_interface(rel)` | its interface `rel` (0 = its first); a negative return STALLs. Without them alt 0 is the only one |
 | `setup(pkt)` | a class or vendor request for it (by interface or endpoint, or any for the device): return >0 once it sent or ACKed |
 | `irq(complete)` | its endpoints' completions, from the USB interrupt; clear the bits it takes in `OT_USB_ENDPTCOMPLETE` |
-| `enabled()` | ABI 2. Once at the controller's init, before anything else of the function's: 0 leaves it out of this boot, with no interfaces, no association, no descriptors and none of the calls above; a null pointer is always on. Read an early setting here and latch what `descriptors` needs |
+| `enabled()` | ABI 2. Once at the controller's init, before anything else of the function's: 0 leaves it out of this boot, with no interfaces, no association, no descriptors and none of the calls above; a null pointer is always on. Read an early setting here and latch what `descriptors` needs. usb-ot reads `interfaces` and `endpoints` after it, so a function whose interfaces follow a setting sets them here (its record is then not `const`); they are the same at both speeds |
 
 usb-ot exports `ot_usb_speed`, `ot_usb_first_interface`, `ot_usb_flush`
 (a bounded flush, then the completions cleared), `ot_usb_ack`,
@@ -676,8 +683,36 @@ requests through `setup`, and EP3 IN fed from core-ot 0.4's
 TRACKS+MAIN+CUE, or OFF) is an early card setting, `enabled()` reads it at
 the controller's init, and with OFF it adds no interfaces.
 
-The USB files of irpina/octabam2elemod v1.0 patch these places themselves,
-so the linker refuses usb-ot beside them.
+`mods/usb-audio-in-ot` (usb-audio-in) adds a stream from the host to
+usb-audio's function, into the inputs: a USB streaming input terminal, a
+third interface with EP3 OUT, and EP3 IN marked as its implicit feedback.
+It is an add-on rather than part of usb-audio because its DSP side needs the
+DSP bus, which takes SPATIALIZER off the FX menus: without it usb-audio is
+what it was. usb-audio imports its record `usba_in` weakly
+(`"weak": ["usba_in"]`, `elekloader/sdk/include/octatrack/usbaudio.h`), and
+asks it at `enabled()` how many channels the host sends (0, 2 or 4, its
+early setting USB AUDIO / IN), then describes the stream and passes the IN
+interface's alternate setting and the vendor request 0xC0/0x56 to it. The
+add-on runs EP3 OUT from the DSP feed, below, and writes the samples over
+the inputs on the DSP bus's `ev_dsp_rx`.
+
+**The DSP feed (usb 0.3).** Each frame interrupt starts a chain of eDMA
+transfers to the DSP; its last state, state 7 (0x40004bc0, eDMA channel 0's
+interrupt, level 6), unmasks the frame interrupt. usb-ot holds that place
+and runs the event `ev_dsp_feed` there (`void f(void)`, `"subscribe"`),
+once a frame after the frame's stock transfers. A handler may call
+`ot_dsp_feed(block, words)` once: one more transfer of `words` 16-bit words
+(32, 64, ... 160) to DSP core 0, which lands in the frame's bank at + $320,
+where an `ev_dsp_rx` handler finds it at `r6 + $320`. The unmask waits for
+it. Write the block through `OT_USB_UNCACHED`; the DSP reads each word with a
+stale top byte. A block stays in its bank until the next lands there, and
+the banks alternate: a feeder that stops sends its "nothing" block to both.
+One mod feeds: claim `dsp:feed`. The handlers run above the frame interrupt
+and may interrupt it: no EMAC, few instructions. The feed is not USB's; USB
+audio in is its first user.
+
+The USB files of irpina/octabam2elemod v1.0 patch these places themselves
+(the USB IO ones state 7 too), so the linker refuses usb-ot beside them.
 
 ### SRC machines (core 2.1, Digitakt mk1)
 
@@ -2417,7 +2452,9 @@ refused.
   origin holds an address in your code, so it becomes a relocation, and the
   linker writes the address where the code lands. A short or packed address
   (one that is not a whole word) cannot be moved, and the build refuses it.
-  Branches (`bra`, `bsr`, `bcc`) are relative and need nothing.
+  Branches (`bra`, `bsr`, `bcc`) are relative and need nothing. dsp_asm
+  assembles `jsr` only with a short address, which the linker cannot move:
+  call a routine of your own with `bsr`. `jclr` and `do` take whole words.
 - `subscribe_dsp` adds `jsr >fn` (plus `addend` words) to a DSP table, in
   `order`. A DSP table is declared as `{"entry": 6, "space": "dsp.A",
   "head": hex, "end": hex}` under `collections`: its words are the head,

@@ -1554,13 +1554,13 @@ def test_trig_events_ot_beside_the_companions():
 
 
 def test_the_usb_companion_sites():
-    """mods/usb-ot: each site is whole stock instructions of the USB stack and keeps clear of
-    core-ot's bus; the stock device descriptor has one reference, the site that serves
-    usb-ot's copy through the uncached alias."""
+    """mods/usb-ot: each site is whole stock instructions of the USB stack (and from 0.3 the frame
+    transfer's state 7) and keeps clear of core-ot's bus; the stock device descriptor has one
+    reference, the site that serves usb-ot's copy through the uncached alias."""
     with open(os.path.join(ROOT, 'mods', 'usb-ot', 'mod.json')) as fh:
         j = json.load(fh)
     st, img = stock()
-    assert j['id'] == 'usb' and j['collections'] == {'ot_usb_functions': 4}
+    assert j['id'] == 'usb' and j['collections'] == {'ot_usb_functions': 4, 'ev_dsp_feed': 4}
     assert j['resources']['names'] == ['usb:stack'] and j['requires'] == ['core']
     for s in j['sites']:
         addr, n = int(s['addr'], 16), len(s['stock']) // 2
@@ -1573,6 +1573,37 @@ def test_the_usb_companion_sites():
     assert img.count(struct.pack('>I', 0x400e2000)) == 1
     (dev,) = [s for s in j['sites'] if s['op'] == 'keep2']
     assert (dev['addr'], dev['target'], dev['addend']) == ('0x4001d82c', 'otu_dev', 0x08000000)
+    core = {int(s['addr'], 16): len(s['stock']) // 2 for s in json.load(open(os.path.join(ROOT, 'mods', 'core-ot', 'mod.json')))['sites']}
+    assert not any(a < S7_SITE + 8 and S7_SITE < a + n for a, n in core.items())
+
+
+S7_SITE = 0x40004bc0            # the transfer chain's state 7: moveq #1,%d1 ; move.b %d1,0xfc04801d
+
+
+def test_the_transfer_chains_state_7():
+    """usb-ot 0.3's DSP feed: eDMA channel 0's interrupt (0x40004840) saves d0-d1/a0-a1, clears the
+    request and jumps by the state at 0x46104d3e through the table at 0x400ab61a, whose entry 7 is
+    the site; stock's state 7 unmasks the frame interrupt (INTC0 CIMR <- 1) and goes to the restore
+    and rte without moving the state on, so a transfer started there comes back to it. The channel's
+    interrupt is level 6, the frame interrupt's 5 (the levels usb-audio's ENDPTCTRL3 guard is for)."""
+    st, img = stock()
+
+    def at(a, n):
+        return img[a - DEV.main_load:a - DEV.main_load + n]
+    assert at(0x40004840, 26).hex() == '4feffff048d70303420013c0fc04401c20394610' \
+                                       '4d3e41f9400a'
+    assert at(0x4000485a, 8).hex() == 'b61a20700c004ed0'               # lea 0x400ab61a ; movea (a0,d0*4) ; jmp (a0)
+    assert struct.unpack('>I', at(0x400ab61a + 4 * 7, 4))[0] == S7_SITE
+    assert at(S7_SITE, 8).hex() == '720113c1fc04801d'
+    assert at(S7_SITE + 8, 10).hex() == '4cd703034fef00104e73'            # the restore, rte
+    assert img.count(bytes.fromhex('52b946104d3e')) == 7 and img.count(bytes.fromhex('42b946104d3e')) == 1
+    assert at(0x400097bc, 8).hex() == '740613c2fc048048'               # ICR8 (eDMA 0) <- 6
+    assert at(0x4001fc2e, 8).hex() == '700513c0fc048041'               # ICR1 (the frame) <- 5
+    with open(os.path.join(ROOT, 'mods', 'usb-ot', 'mod.json')) as fh:
+        (site,) = [x for x in json.load(fh)['sites'] if int(x['addr'], 16) == S7_SITE]
+    assert (site['op'], site['target'], site['stock']) == ('jmp', 'otu_seam_state7', '720113c1fc04801d')
+    ok, note = elemod.insn_check(img, S7_SITE, 8, DEV)
+    assert ok, note
 
 
 def test_usb_midi_is_a_usb_function():
@@ -1622,7 +1653,8 @@ def test_usb_audio_is_a_usb_function_with_its_layout_a_setting():
     with tempfile.TemporaryDirectory() as tmp:
         core, usb, midi, sets, audio = (elemod.load_any(build.build(os.path.join(ROOT, 'mods', d), SYX, tmp)[0])
                                         for d in ('core-ot', 'usb-ot', 'usb-midi-ot', 'settings-ot', 'usb-audio-ot'))
-    assert not [d for d in os.listdir(os.path.join(ROOT, 'mods')) if d.startswith('usb-audio-') and d != 'usb-audio-ot']
+    assert not [d for d in os.listdir(os.path.join(ROOT, 'mods'))
+                if d.startswith('usb-audio-') and d not in ('usb-audio-ot', 'usb-audio-in-ot')]
 
     def at(ln, addr):
         return ln.layout['run_load'] + (addr - DEV.ddr[0]) - DEV.main_load
@@ -1636,8 +1668,13 @@ def test_usb_audio_is_a_usb_function_with_its_layout_a_setting():
         return ln.image[o:ln.image.index(b'\0', o)].decode()
 
     assert audio.id == 'usb-audio' and not audio.sites and audio.names == ['usb:ep3-in']
-    assert audio.version == '0.2' and usb.version == '0.2'
+    assert audio.version == '0.3' and usb.version == '0.3' and audio.weak == {'usba_in'}
     ln = link.link([core, usb, audio], img)
+    # without audio in, its record is core's zeros (abi 0)
+    refs = [(o, add) for sec, o, t, g, add in audio.relocs if g == 'sym:usba_in']
+    run = ln.layout['sections']['usb-audio .run']
+    assert refs and all(struct.unpack('>I', ln.image[at(ln, run + o):][:4])[0] == ln.map['core_zero'] + add
+                        for o, add in refs)
     assert table(ln, 'ot_usb_functions', 2) == (ln.map['usb_audio'], 0)
     assert table(ln, 'ev_frame_end', 2) == (ln.map['usba_frame'], 0)
     assert table(ln, 'ot_settings', 2) == (ln.map['usba_setting'], 0)
@@ -1658,7 +1695,7 @@ def test_usb_audio_is_a_usb_function_with_its_layout_a_setting():
     abi, tag, key_kind_scope, group, name, lo, hi, labels, var, dflt, changed =         struct.unpack('>IIIIIiiIIiI', ln.image[o:o + 44])
     assert (abi, tag) == (1, int.from_bytes(b'USBA', 'big'))
     assert (key_kind_scope >> 16, (key_kind_scope >> 8) & 0xff, key_kind_scope & 0xff) == (1, 1, 0x80)   # key 1, OPTION, CARD | EARLY
-    assert (string(ln, group), string(ln, name)) == ('USB AUDIO', 'LAYOUT')
+    assert (string(ln, group), string(ln, name)) == ('USB AUDIO', 'LAYOUT') and group == ln.map['usba_group']
     assert (lo, hi, dflt, changed) == (0, 5, 5, 0)
     names = [string(ln, struct.unpack('>I', ln.image[at(ln, labels) + 4 * k:][:4])[0]) for k in range(6)]
     assert names == ['OFF', 'MAIN', 'M+C', 'MSTR', 'TRKS', 'ALL'], names
@@ -1666,6 +1703,79 @@ def test_usb_audio_is_a_usb_function_with_its_layout_a_setting():
     o = at(ln, var)
     assert struct.unpack('>i', ln.image[o:o + 4])[0] == 5            # the default, until the companion sets it
     assert any('requires usb' in p for p in link.check([core, audio], img))
+
+
+def test_usb_audio_in_is_an_add_on():
+    """mods/usb-audio-in-ot: usb-audio's audio in, a mod of its own because its DSP side needs the DSP
+    bus. usb-audio's weak import of its record resolves to it; its feed is usb-ot's one ev_dsp_feed
+    handler, its inject an ev_dsp_rx handler whose words are dsp_asm's for where it lands; its setting
+    IN (OFF, AB, CD, ABCD; OFF by default, early, on the card) follows LAYOUT under usb-audio's
+    heading. It claims EP3 OUT and the feed, hooks no stock code itself, and is refused without
+    usb-audio, without the DSP bus, and beside a second feeder."""
+    import shutil
+    import subprocess
+    from elekloader.sdk import build
+    need(SYX)
+    if not shutil.which(os.environ.get('ELEKLOADER_CROSS', DEV.toolchain['prefix']) + 'gcc'):
+        raise Skip('no m68k cross compiler')
+    asm = os.environ.get('ELEKLOADER_DSP_ASM', '')
+    if not os.path.isfile(asm):
+        raise Skip('ELEKLOADER_DSP_ASM (octabam\'s dsp_asm) not given')
+    st, img = stock()
+    ex = os.path.join(ROOT, 'mods', 'usb-audio-in-ot')
+    with tempfile.TemporaryDirectory() as tmp:
+        core, usb, sets, audio, bus, ain = (elemod.load_any(build.build(os.path.join(ROOT, 'mods', d), SYX, tmp)[0])
+                                            for d in ('core-ot', 'usb-ot', 'settings-ot', 'usb-audio-ot', 'dspbus-ot',
+                                                      'usb-audio-in-ot'))
+    assert ain.id == 'usb-audio-in' and not ain.sites and sorted(ain.names) == ['dsp:feed', 'usb:ep3-out']
+    assert ain.requires == ['core', 'usb', 'usb-audio', 'dspbus']
+    ln = link.link([core, usb, audio, bus, ain, sets], img)
+
+    def at(addr):
+        return ln.layout['run_load'] + (addr - DEV.ddr[0]) - DEV.main_load
+
+    def long(addr):
+        return struct.unpack('>I', ln.image[at(addr):][:4])[0]
+
+    def table(name, n):
+        return tuple(long(ln.tables[name][0] + 4 * k) for k in range(n))
+
+    def string(addr):
+        o = at(addr)
+        return ln.image[o:ln.image.index(b'\0', o)].decode()
+
+    refs = [(o, add) for sec, o, t, g, add in audio.relocs if g == 'sym:usba_in']
+    assert refs and all(long(ln.layout['sections']['usb-audio .run'] + o) == ln.map['usba_in'] + add for o, add in refs)
+    rec = struct.unpack('>5I', ln.image[at(ln.map['usba_in']):][:20])
+    assert rec[0] == 1 and all(rec[1:])                              # USBA_IN_ABI, four calls
+    assert table('ev_dsp_feed', 2) == (ln.map['usbi_feed'], 0)
+    assert table('ot_settings', 3) == (ln.map['usba_setting'], ln.map['usbi_setting'], 0)
+    o = at(ln.map['usbi_setting'])
+    abi, tag, kks, group, name, lo, hi, labels, var, dflt, changed = struct.unpack('>IIIIIiiIIiI', ln.image[o:o + 44])
+    assert (abi, tag, kks) == (1, int.from_bytes(b'USBI', 'big'), 1 << 16 | 1 << 8 | 0x80)    # key 1, OPTION, CARD | EARLY
+    assert group == ln.map['usba_group'] and string(name) == 'IN'
+    assert (lo, hi, dflt, changed) == (0, 3, 0, 0) and ln.layout['bss'][0] <= var < ln.layout['bss'][1]   # 0: OFF
+    assert [string(long(labels + 4 * k)) for k in range(4)] == ['OFF', 'AB', 'CD', 'ABCD']
+    # the state-7 site is usb-ot's: a jmp to its seam, nop-padded
+    s7 = S7_SITE - DEV.main_load
+    assert ln.image[s7:s7 + 8] == b'\x4e\xf9' + struct.pack('>I', ln.map['otu_seam_state7']) + b'\x4e\x71'
+    # the inject, where the linker put it: dsp_asm's own words for that address, after the bus's table
+    w = ln.layout['dsp']['A']['sections']['usb-audio-in .dsp.A']
+    with tempfile.TemporaryDirectory() as tmp:
+        blob = os.path.join(tmp, 'inject.bin')
+        subprocess.run([asm, '-in', os.path.join(ex, 'inject.asm'), '-org', '%x' % w, '-out', blob],
+                       check=True, capture_output=True)
+        with open(blob, 'rb') as fh:
+            want = fh.read()
+    o = AREA + 3 * (w - 0xaa8) - DEV.main_load
+    assert ln.image[o:o + len(want)] == want
+    rx, n_rx, _e = ln.tables['ev_dsp_rx']
+    assert n_rx == 1 and words(ln.image, AREA + 3 * (rx - 0xaa8), 5) == [0x627000, 0x000204, 0x0bf080, w, 0x0c]
+    # refused without what it needs, and beside another feeder
+    assert any('requires usb-audio' in p for p in link.check([core, usb, bus, ain], img))
+    assert any('requires dspbus' in p for p in link.check([core, usb, audio, ain], img))
+    twin = link.Mod2(dict(json.loads(json.dumps(ain.doc)), id='usb-audio-in2'), 'twin')
+    assert any('dsp:feed' in p for p in link.check([core, usb, audio, bus, ain, twin], img))
 
 
 def test_the_machines_sites():
