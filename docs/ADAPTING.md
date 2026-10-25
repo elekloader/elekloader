@@ -197,7 +197,7 @@ come after SYSTEM; the render events cover the audio interrupt's digital
 path (the effects and the inputs), since the voices are analog. core-a4
 exports no firmware locations either. From 0.2 it has core-ar2 0.4's
 parameter routines and `core_audio_load` ("Parameter pages (core-a4 0.2,
-Analog Four MKII)"). `examples/hello-marker-a4`, `hooks-check-a4`,
+Analog Four MKII)"), and from 0.3 core-ar2 0.6's `core_page_fns`. `examples/hello-marker-a4`, `hooks-check-a4`,
 `store-check-a4`, `ddr-canary-a4` and `pages-check-a4` are mods for it.
 
 The sites core owns (do not patch them):
@@ -526,14 +526,14 @@ Which octabam module needs what:
 | TEMPO SYNC | the FX id store | `ev_dsp_record` |
 | RECORDER LOOP FIX | the counter (FLEX SEEKBIND), with its same-sample test (0x4000f8cc) | `ev_voice_seek`; the same-sample test is still its own |
 
-**Not here: `ev_machine_set(trk, machine, slot)`.** The three places where a
-track's machine or slot is committed (0x400795ba, 0x40079816, 0x4005a848)
-belong to machines-ot, which owns the chooser's and SRC SETUP's commits right
-after them. It decides there whether a commit happens and what the final byte
-is, and reads a track's machine from the Part's signature. An event at the
-stock writes would run before that decision, with a byte machines-ot may
-still refuse. In machines-ot 0.2 it fires after the commit with the old and
-new machine and the slot.
+**Not here: `ev_machine_set`.** The three places where a track's machine or
+slot is committed (0x400795ba, 0x40079816, 0x4005a848) belong to machines-ot,
+which owns the chooser's and SRC SETUP's commits right after them and, from
+0.2, the slot assigner's (0x40079520). It decides there whether a commit
+happens and what the final byte is, and reads a track's machine from the
+Part's signature. An event at the stock writes would run before that
+decision, with a byte machines-ot may still refuse. machines-ot 0.2 fires
+`ev_machine_set(part, track, from, to)` after the commit (below).
 
 **The sites are not octabam's.** SYNTH (octabam2elemod v1.0) detours 0x4000c634,
 0x4000b51a, 0x4000685c, 0x400795ba, 0x40079816 and 0x4005a848, and FLEX
@@ -580,7 +580,7 @@ the call, or its entry is 0, stock runs.
 A detour you already have converts unchanged: its label is the entry, and
 claims 0. `sdk.octabam --intercepts` does this for octabam's modules (4b).
 
-### Machines on the Octatrack (machines 0.1)
+### Machines on the Octatrack (machines 0.2)
 
 `mods/machines-ot` (id `machines`) is a companion beside core-ot 0.3.1 for
 source machines: a machine mod adds a row to the track's machine chooser
@@ -631,6 +631,32 @@ const struct ot_machine my_machine = {
 Start from [examples/crush-machine-ot](../examples/crush-machine-ot): CRUSH
 plays its FLEX slot's sample through a 5-bit crusher. octabam's OCTA303
 converts onto the companion with `sdk.octabam --machines` (section 4b).
+
+From machines 0.2:
+- **`ui_tick`** runs in the UI task's tick body (0x4005221e), before the
+  screen's builders read the page table, where octabam's machines publish
+  their page. A machine with `track_page` has the current track's page
+  published there too, so SRC SETUP and the parameter names follow a page
+  that differs by track.
+- **`OT_MACHINE_LIST_FIRST`** (elekloader's flag, not Modwerk's): the machine
+  window opens on the machine list for the machine's tracks, not on the
+  sample-slot list, for a machine that does not play a slot's sample.
+- **A sample slot picked in a list** that changes the track's machine (a
+  STATIC slot on a machine's track) goes through the companion too: the
+  machine's `leave` runs before stock resets the track.
+- **`ev_machine_set`**: a track's machine changed, after the commit (the
+  machine byte and its battery copy hold the new one), from the chooser,
+  SRC SETUP or a slot pick. `from` and `to` are rows: 0-4 stock's, 5 on a
+  machine's.
+
+```c
+void my_machine_set(volatile uint8_t *part, unsigned track, unsigned from, unsigned to);
+```
+
+```json
+"subscribe": [{"event": "ev_machine_set", "fn": "my_machine_set", "order": 50}],
+"requires": ["core", "machines"]
+```
 
 ### USB functions on the Octatrack (usb 0.2)
 
@@ -1421,10 +1447,21 @@ What differs from the Rytm:
   and shows each view's own title, so there is nothing to fix there.
 - A stock page's entry can be answered too (a `core_pages` entry with a
   stock id), to retitle a page a mod's view follows.
+- From core-a4 0.3, `core_page_fns` works as core-ar2 0.6's ("A page whose
+  knobs follow the sound", above): `struct core_page_fn` is `{page, info}`,
+  and `info(page)` returns the `core_pages` entry to answer, or 0 to pass.
+  The knobs' draw, a knob's touch and a turn each look the knob up through
+  page_info afresh, so the knobs follow at the next redraw. A page's view
+  reads the name once, when core makes it at boot, so every entry `info`
+  returns should carry the same name.
 
 `examples/pages-check-a4` is the smallest mod on it: AMP PAN's value as two
-hex digits through `core_params`, and a CHECK page behind the AMP key. It
-was checked in rytm-emu's A4 build and on a unit (23 Oct 2026).
+hex digits through `core_params`, and a CHECK page behind the AMP key. Its
+0.1, for core-a4 0.2, was checked in rytm-emu's A4 build and on a unit (23
+Oct 2026). From 0.2 (for core-a4 0.3) CHECK comes from `core_page_fns`, and
+its knob B, AMP PAN again, is shown while the count of PAN's turn updates
+(the bar) is odd and empty while it is even. Checked in rytm-emu's A4 build
+and on a unit (24 Oct 2026).
 
 ### Machines (core-ar2 0.5, Analog Rytm MKII)
 

@@ -440,6 +440,9 @@ details summary:hover { color: var(--text); }
 .hooks { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-top: 6px; color: var(--muted); font: 12px var(--mono);
   overflow-wrap: anywhere; }
 .hook strong { color: var(--text); font-weight: 600; }
+/* the core's sites in the entry's routine on other bytes (sdk.bounties' near) */
+.beside { margin-top: 4px; color: var(--ok); font: 12px var(--mono); overflow-wrap: anywhere; }
+.beside strong { font-weight: 600; }
 .claimed { padding: 2px 9px; border-radius: 999px; background: var(--raised); color: var(--ok); font-size: 12px; }
 /* an upstream list's sites and entries (sdk.bounties --upstream): octabam's newer modules, not in a shop file yet */
 .up { padding: 1px 7px; border: 1px dashed var(--line); border-radius: 999px; color: var(--warn); font: 600 10.5px var(--sans); }

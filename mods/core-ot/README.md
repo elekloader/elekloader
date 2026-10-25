@@ -231,10 +231,10 @@ changes nothing else the unit does.
     there whether the commit happens (`admit_track`, `assign`) and what the
     final byte is, and it reads a track's machine from the Part's signature,
     not from the machine byte alone. An event at the stock writes would run
-    before that decision, with a byte machines-ot may still refuse. In
-    machines-ot it fires after the commit, with the old and new machine and
-    the slot. The five source machines are its only consumers, and nothing
-    in a build adds machines without it.
+    before that decision, with a byte machines-ot may still refuse.
+    machines-ot 0.2 fires it after the commit, with the Part, the track and
+    the old and new rows. The five source machines are its only consumers,
+    and nothing in a build adds machines without it.
   - **Not here: MUTE MODES' veto of the reset** (0x40006844). It is a veto
     before the reset routine's body runs, which has to unwind that routine's
     two saved registers; and the trigs of the test project (below) bind and

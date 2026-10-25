@@ -1,11 +1,11 @@
 {
  "id": "machines",
- "version": "0.1",
+ "version": "0.2",
  "license": "GPL-2.0-or-later",
  "title": "machines",
  "category": "Framework",
  "author": "irpina",
- "description": "Source machines for the Octatrack: a machine mod adds a row to the track's machine chooser and SRC SETUP, with its own name, page, defaults and sound, by adding its record to the ot_machines table. Several machines combine in one build, and a track keeps its machine in the Part the way octabam's machines sign it. On its own it changes nothing the unit does.",
+ "description": "Source machines for the Octatrack: a machine mod adds a row to the track's machine chooser and SRC SETUP, with its own name, page, defaults and sound, by adding its record to the ot_machines table. Several machines combine in one build, and a track keeps its machine in the Part the way octabam's machines sign it. From 0.2 it publishes a machine's page per track where the tick builds the screen, lets a machine open the chooser on its list, unsigns a track a sample pick makes STATIC, and tells mods of each machine change (ev_machine_set). On its own it changes nothing the unit does.",
  "device": "octatrack",
  "os": "1.40C",
  "sources": [
@@ -13,15 +13,9 @@
   "seams.s"
  ],
  "collections": {
-  "ot_machines": 4
+  "ot_machines": 4,
+  "ev_machine_set": 4
  },
- "subscribe": [
-  {
-   "event": "ev_tick",
-   "fn": "otm_tick",
-   "order": 50
-  }
- ],
  "sites": [
   {
    "addr": "0x40002318",
@@ -114,6 +108,12 @@
    "target": "otm_name_b"
   },
   {
+   "addr": "0x4005221e",
+   "stock": "4ebaff1c4eb94007e940",
+   "op": "jmp",
+   "target": "otm_tick_seam"
+  },
+  {
    "addr": "0x400585dc",
    "stock": "161079034879400bb704",
    "op": "jmp",
@@ -168,6 +168,12 @@
    "target": "otm_chooser_open"
   },
   {
+   "addr": "0x400788c4",
+   "stock": "71907401b480",
+   "op": "jmp",
+   "target": "otm_chooser_level"
+  },
+  {
    "addr": "0x40078c22",
    "stock": "7205b2806c027005",
    "op": "jmp",
@@ -202,6 +208,12 @@
    "stock": "4878000548780006",
    "op": "jmp",
    "target": "otm_chooser_rows"
+  },
+  {
+   "addr": "0x40079520",
+   "stock": "79101082d089",
+   "op": "jmp",
+   "target": "otm_slot_commit"
   },
   {
    "addr": "0x4007981e",

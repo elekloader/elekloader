@@ -83,7 +83,7 @@ docs match its code.
     subscribes to every event core-ar2 has and shows what it counts
     (`hooks-check-a4`: the same for core-a4 on the Analog Four MKII;
     `store-check-a4` checks its mod storage and `ddr-canary-a4` the DDR
-    the profile calls unused; `pages-check-a4` core-a4 0.2's parameter
+    the profile calls unused; `pages-check-a4` core-a4's parameter
     routines; `hooks-check-dn2` for core-dn2 on the Digitone II, with rows in
     SETTINGS and PERSONALIZE, two key handlers in order and a key it takes
     once armed);

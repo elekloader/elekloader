@@ -337,7 +337,8 @@ events, `ev_project` and `core_store_ids`, at 0x40098898, 0x40098900,
 (`mods/core-a4/mod.json`), and no `.fast` code either. From 0.2 it declares
 `core_pages`, `core_params` and `core_view_pages` too (0x400f6212,
 0x40023d54, 0x400232e2 and 0x4009ea68; the views at 0x400c2370 and
-0x400c4202), its view entries the A4's own.
+0x400c4202), its view entries the A4's own; from 0.3 `core_page_fns`
+as well (core-ar2 0.6's), asked from the same page_info site.
 
 The core mod patches each shared site once. It calls the handlers
 subscribed to that event, from a table built by the linker, in order.
