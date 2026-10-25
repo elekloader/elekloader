@@ -325,6 +325,17 @@ declares"*).
 | `ev_trig_apply` (0.7) | a trig's locks reached the track's lane | `void f(unsigned trk, unsigned flags)` | frame interrupt |
 | `ev_dsp_trig` (0.7) | a track's per-trig flag bits are about to be built into its DSP word | `int f(unsigned trk, unsigned flags)` | frame interrupt; nonzero builds the word as for a frame with no trig |
 | `ev_dsp_record` (0.7) | a track's 64-byte record for the DSP has its FX ids | `void f(unsigned trk, uint16_t *rec)` | frame interrupt, 8 times a frame; a store here lands last |
+| `ev_clip` (0.8) | a pattern or an audio track goes between the bank and the clipboard or the undo buffer: COPY, SNAPSHOT, PASTE, UNDO | `int f(unsigned pre, const struct ot_clip *c)` | sys task; 1 before, 0 after. Before a PASTE or an UNDO that stock asked for, nonzero refuses it (below) |
+| `ev_part_saving` (0.8) | Part Save is about to copy a Part to its saved copy | `void f(unsigned part, unsigned unused)` | sys task; `ev_part_saved` follows |
+| `ev_part_reload` (0.8) | Part Reload (RELOAD, FUNC+CUE) | `void f(unsigned how, unsigned part)` | sys task; `how` 1 before; after, 0 when it reloaded, 2 when the Part had no saved copy |
+| `ev_part_select` (0.8) | the panel's Part change | `void f(unsigned phase, const struct ot_part_select *s)` | sys task, when the Part does change: `OT_PSEL_BEGIN`, `_APPLIED`, `_DONE` |
+| `ev_part_init` (0.8) | a Part is set to its defaults (the bank init, Part Clear) | `void f(unsigned pre, unsigned part)` | `part` a pointer to it, in any bank's RAM; 1 before, 0 after |
+| `ev_project_init` (0.8) | every bank is about to be emptied: the start of LOAD PROJECT and of a new project | `void f(unsigned job, unsigned unused)` | engine task; `job` is the stock job (4 LOAD PROJECT; 9, 10, 13 a new project; 12) |
+| `ev_voice_reset` (0.8) | a track's voice is about to be reset (the routine `ev_voice_kill` fires in, at its entry) | `int f(unsigned trk)` | a task or the frame interrupt, interrupts not yet masked; nonzero keeps the voice, and no `ev_voice_kill` follows |
+| `ev_boot_early` (0.8) | once, at boot, before the OS | `void f(void)` | core's code and data are in place and the on-chip SRAM has its stock values; no task, interrupt or OS call yet |
+| `ev_track_icon` (0.8) | an audio track's box on the screen | `unsigned f(unsigned trk, unsigned state)` | returns the state the box shows (chained). Stock's: bit 0 the track plays, bits 1-2 its recorder |
+| `ev_track_icon_draw` (0.8) | a box in a state stock has no glyph for (above 3) | `int f(unsigned trk, unsigned state, int x, int y)` | draw it (`ot_blit`) and return nonzero; 0 leaves the box empty |
+| `ev_setup_dial` (0.8) | a page-2 knob of AMP, FX1 or FX2 SETUP is about to be drawn | `void f(struct ot_dial *d)` | change the value, the widget's flags or the widget (chained) |
 
 The sites core-ot owns (Octatrack 1.40C): the boot site 0x4000050c, the 28
 arena writes listed in its `mod.json`, 0x40061e94, 0x40013cae, 0x40061dc8,
@@ -334,8 +345,13 @@ arena writes listed in its `mod.json`, 0x40061e94, 0x40013cae, 0x40061dc8,
 0x4008485e) and the routines its jobs call (0x40090504, 0x400905d4,
 0x400917c8, 0x400918aa, 0x4008ee74, 0x4008f180, 0x4000faf0, 0x40025808,
 0x4004a9c4, 0x4004a9d0); from 0.7 the voice (0x4000c63c, 0x4000b4f6,
-0x40006862, 0x4000f4dc, 0x4000f82c, 0x4000c59e, 0x40004c72, 0x40004d40); and
-its draw gate at 0x400c46ea-0x400c4702. They keep clear of every byte that the
+0x40006862, 0x4000f4dc, 0x4000f82c, 0x4000c59e, 0x40004c72, 0x40004d40); from
+0.8 the clipboard's and the undo buffer's routines (0x40026eb0, 0x40026ef0,
+0x4002b9b0, 0x40029754, 0x4002b654), the Parts (0x4004a908, 0x4004aab4,
+0x400621da, 0x40062216, 0x40005638, 0x40005a38), the empty project
+(0x400909d8), the voice reset's entry (0x40006820), the boot (0x40000512),
+the track icons (0x4004bee2, 0x4004c00c) and the SETUP knobs (0x4003786a,
+0x40037c06, 0x4003690c); and its draw gate at 0x400c46ea-0x400c4702. They keep clear of every byte that the
 converted octabam modules (4b) patch.
 
 The transport events are the sequencer's own start, resume and STOP routines
@@ -541,6 +557,115 @@ SEEKBIND 0x4000f834. Each event is on the instruction beside the one they
 take, so those files link with core-ot 0.7 and a build with both runs both
 (SYNTH's `jmp` back into the builder ends at an event's stub).
 
+#### Edits, Parts and the screen on the Octatrack (core-ot 0.8)
+
+A mod that keeps data of its own beside a pattern, a track or a Part has to
+follow what the firmware does to them: a copy, a paste, an undo, a Part
+saved, reloaded, changed or reset. Octabam's KITS, PLOCKS P2, VARISPEED, CX
+OSC, MIDI SCENES and BATCH BUGFIXES each detour those routines, and only one
+module can take a place. Core-ot 0.8 gives each place an event, and does the
+same for four more places several modules want: the voice reset's entry, the
+boot before the OS, the track icons and the SETUP windows' knobs. The
+structures are in `octatrack/core.h`.
+
+A mod that keeps a byte per pattern, and follows the clipboard:
+
+```c
+#include "octatrack/core.h"
+
+static uint8_t mine[16][16];            /* [bank][pattern] */
+static uint8_t on_clip, on_undo;        /* what the clipboard and the undo buffer hold of it */
+
+int my_clip(unsigned pre, const struct ot_clip *c)
+{
+    if (pre || c->what != OT_CLIP_PATTERN)
+        return 0;
+    uint8_t *b = &mine[c->bank][c->pattern];
+    switch (c->how) {
+    case OT_CLIP_COPY:     on_clip = *b; break;
+    case OT_CLIP_SNAPSHOT: on_undo = *b; break;
+    case OT_CLIP_PASTE:    *b = on_clip; break;
+    case OT_CLIP_UNDO:     *b = on_undo; break;
+    }
+    return 0;
+}
+```
+
+```json
+"subscribe": [{"event": "ev_clip", "fn": "my_clip", "order": 50}],
+"resources": {"core": "0.8"}
+```
+
+- **The clipboard.** `ev_clip` comes for the five routines that move a whole
+  pattern or audio track: the copy (FUNC+REC), the snapshot a paste or a
+  clear takes first, and the two stores that paste and undo. `op` says why a
+  snapshot was taken (the number stock keeps with its undo buffer: 0x11 a
+  pattern paste, 0x12 a pattern clear, 7 a track paste). MIDI tracks and the
+  other clipboard kinds (trigs, Parts, slots) do not come here.
+- **Refusing a paste.** Before a PASTE or an UNDO, a handler may return
+  nonzero: the bank is left as it was, no later handler is asked, no "after"
+  call comes, and stock goes on as when there is nothing to paste or undo
+  (an undo that finds nothing pastes the clipboard instead, and that paste
+  comes here too). Only stock's own paste and undo can be refused: a refusal
+  of a call another mod made is ignored. A handler must not call the copy
+  and store routines itself.
+- **The Parts.** `ev_part_saving` comes before Part Save (SAVE, SAVE ALL,
+  and the end of Part Clear) and `ev_part_saved` (0.6) after it.
+  `ev_part_reload` says whether the Part had a saved copy. `ev_part_select`
+  comes in three steps, only when the Part changes: BEGIN before anything
+  moves; APPLIED when every track has gone to the new Part, with the old
+  Part's machine bytes; DONE after the screen and the machine page.
+  `ev_part_init` comes for each Part set to its defaults (264 of them in a
+  power-up's load), with a pointer to it.
+- **The project's start.** `ev_project_init` comes in the engine task before
+  every bank is emptied, at the start of LOAD PROJECT and of a new project:
+  the place to drop what a mod holds of the old project. `ev_project` (0.6)
+  comes when the job has ended.
+- **The voice reset.** `ev_voice_reset` comes at the entry of the routine
+  `ev_voice_kill` fires in, before it masks the interrupts: a handler may keep
+  the voice (MUTE MODES keeps a muted track's). The call that resets every
+  track comes once for each.
+- **The boot.** `ev_boot_early` comes once, after the on-chip SRAM's init and
+  before stock clears its RAM above 0x46025de0: no task, interrupt or OS call
+  exists yet. Core's reserve is below that RAM, so a mod's own data set here
+  stays.
+- **The track icons.** `ev_track_icon` may change the state an audio track's
+  box shows; stock draws it again when it changes. For a state above 3
+  `ev_track_icon_draw` draws it: `ot_blit(&bitmap, OT_SCREEN_PLANE, x, y)`
+  with a `struct ot_bitmap` (a long a column, the top pixel at bit 31).
+  REC THRESHOLD blinks an armed track's box and REC TRIG MUTE shows a muted
+  one with its own glyph: as two handlers they no longer exclude each other.
+- **The SETUP knobs.** `ev_setup_dial` comes for each page-2 knob AMP, FX1 and
+  FX2 SETUP draw (the knob's enable bit set). A handler may show another
+  value (a signed byte: SCENES P2 shows a held scene's lock, PLOCKS P2 a held
+  step's), mark it with the widget's flags, or draw it with another widget
+  (VARISPEED's quantised dial).
+
+Which octabam module needs what:
+
+| module | its detours | the events |
+|---|---|---|
+| KITS | the pattern copy, snapshot and store | `ev_clip`; its FUNC+PART and FUNC+CUE handlers replace stock's and stay its own |
+| PLOCKS P2 | 21 memcpy calls, told apart by their length | `ev_clip` for patterns and audio tracks; `ev_setup_dial` for its mark |
+| VARISPEED | the track store, Part Reload, three SETUP knobs | `ev_clip`, `ev_part_reload`, `ev_setup_dial` |
+| CX OSC | its guard before a track paste or undo | `ev_clip`'s refusal |
+| BATCH BUGFIXES | the Part change's start and its tail | `ev_part_select`: BEGIN and APPLIED |
+| MIDI SCENES | after the Part change (the newest); SAVE, SAVE ALL and RELOAD's calls (octabam2elemod v1.0's) | `ev_part_select` DONE; `ev_part_saving`, `ev_part_reload` |
+| MIDI PART STATE | the Part initialiser, the boot after core's | `ev_part_init`, `ev_boot_early` |
+| BRAIN, BUFFER SAVER, STORE | the Part initialiser's end; LOAD PROJECT's call of the empty project's RAM; the routine itself | `ev_part_init`, `ev_project_init` |
+| MUTE MODES | the voice reset's entry | `ev_voice_reset` |
+| BOOT TRACE | the boot after core's | `ev_boot_early` |
+| REC THRESHOLD, REC TRIG MUTE | the track icons | `ev_track_icon`, `ev_track_icon_draw` |
+| SCENES P2 | the FX SETUP knobs' Part byte | `ev_setup_dial` |
+
+**Not in 0.8.** The ATTRIBUTES page and the playback rate (REPITCH in
+octabam2elemod v1.0 patches those bytes), the TEMPO window's opener (TUNER),
+the pattern switch (DIRECT JUMP) and the MIDI step builder's end (MIDI SCENES
+v1.0) are places where a shop file holds the bytes, so core leaves them. The
+OS's entry (REMIX SWITCH's chainloader), the scheduler (BRAIN), MIDI injected
+as input (MIDI LOOPBACK) and the bank pointer's stores (MIDI SCENES v1.0) are
+one module's each.
+
 ### The DSP bus on the Octatrack (dspbus 0.1)
 
 `mods/dspbus-ot` is a second, optional bus, for code that runs on DSP core
@@ -552,6 +677,13 @@ mods' DSP code, and takes SPATIALIZER off both FX menus to do it
 | event | when | handler | notes |
 |---|---|---|---|
 | `ev_dsp_rx` | DSP core 0, the head of every audio frame (2,756 a second), before anything reads the current RX block | DSP code, reached by `jsr`, ending in `rts` | the RX block is at `x:>$202`: 16 samples x 4 slots (2 input A, 3 input B, 0 and 1 C and D). Use `a`, `x1`, `r0`, `r1` and the condition codes; keep every other register. Subscribe with `subscribe_dsp` |
+
+DSP code that wants data from the ColdFire every frame gets it through
+usb-ot's DSP feed (usb 0.3, "USB functions on the Octatrack" below): a
+block of up to 160 words that lands at `r6 + $320` in the frame's bank.
+`mods/usb-audio-in-ot` is the example: its `ev_dsp_feed` handler sends the
+host's samples, its `ev_dsp_rx` handler (`inject.asm`) writes them over the
+inputs.
 
 ### Intercepts on the Octatrack (intercepts 0.1)
 
@@ -658,7 +790,7 @@ void my_machine_set(volatile uint8_t *part, unsigned track, unsigned from, unsig
 "requires": ["core", "machines"]
 ```
 
-### USB functions on the Octatrack (usb 0.2)
+### USB functions on the Octatrack (usb 0.3)
 
 `mods/usb-ot` is a companion beside core-ot 0.3.1 that owns the stock USB
 device stack's places once. A USB function (USB MIDI, USB audio, ...) is a
@@ -688,7 +820,7 @@ The record is `struct ot_usb_function` (`#include "octatrack/usb.h"`):
 | `set_interface(rel, alt)`, `get_interface(rel)` | its interface `rel` (0 = its first); a negative return STALLs. Without them alt 0 is the only one |
 | `setup(pkt)` | a class or vendor request for it (by interface or endpoint, or any for the device): return >0 once it sent or ACKed |
 | `irq(complete)` | its endpoints' completions, from the USB interrupt; clear the bits it takes in `OT_USB_ENDPTCOMPLETE` |
-| `enabled()` | ABI 2. Once at the controller's init, before anything else of the function's: 0 leaves it out of this boot, with no interfaces, no association, no descriptors and none of the calls above; a null pointer is always on. Read an early setting here and latch what `descriptors` needs |
+| `enabled()` | ABI 2. Once at the controller's init, before anything else of the function's: 0 leaves it out of this boot, with no interfaces, no association, no descriptors and none of the calls above; a null pointer is always on. Read an early setting here and latch what `descriptors` needs. usb-ot reads `interfaces` and `endpoints` after it, so a function whose interfaces follow a setting sets them here (its record is then not `const`); they are the same at both speeds |
 
 usb-ot exports `ot_usb_speed`, `ot_usb_first_interface`, `ot_usb_flush`
 (a bounded flush, then the completions cleared), `ot_usb_ack`,
@@ -704,8 +836,36 @@ requests through `setup`, and EP3 IN fed from core-ot 0.4's
 TRACKS+MAIN+CUE, or OFF) is an early card setting, `enabled()` reads it at
 the controller's init, and with OFF it adds no interfaces.
 
-The USB files of irpina/octabam2elemod v1.0 patch these places themselves,
-so the linker refuses usb-ot beside them.
+`mods/usb-audio-in-ot` (usb-audio-in) adds a stream from the host to
+usb-audio's function, into the inputs: a USB streaming input terminal, a
+third interface with EP3 OUT, and EP3 IN marked as its implicit feedback.
+It is an add-on rather than part of usb-audio because its DSP side needs the
+DSP bus, which takes SPATIALIZER off the FX menus: without it usb-audio is
+what it was. usb-audio imports its record `usba_in` weakly
+(`"weak": ["usba_in"]`, `elekloader/sdk/include/octatrack/usbaudio.h`), and
+asks it at `enabled()` how many channels the host sends (0, 2 or 4, its
+early setting USB AUDIO / IN), then describes the stream and passes the IN
+interface's alternate setting and the vendor request 0xC0/0x56 to it. The
+add-on runs EP3 OUT from the DSP feed, below, and writes the samples over
+the inputs on the DSP bus's `ev_dsp_rx`.
+
+**The DSP feed (usb 0.3).** Each frame interrupt starts a chain of eDMA
+transfers to the DSP; its last state, state 7 (0x40004bc0, eDMA channel 0's
+interrupt, level 6), unmasks the frame interrupt. usb-ot holds that place
+and runs the event `ev_dsp_feed` there (`void f(void)`, `"subscribe"`),
+once a frame after the frame's stock transfers. A handler may call
+`ot_dsp_feed(block, words)` once: one more transfer of `words` 16-bit words
+(32, 64, ... 160) to DSP core 0, which lands in the frame's bank at + $320,
+where an `ev_dsp_rx` handler finds it at `r6 + $320`. The unmask waits for
+it. Write the block through `OT_USB_UNCACHED`; the DSP reads each word with a
+stale top byte. A block stays in its bank until the next lands there, and
+the banks alternate: a feeder that stops sends its "nothing" block to both.
+One mod feeds: claim `dsp:feed`. The handlers run above the frame interrupt
+and may interrupt it: no EMAC, few instructions. The feed is not USB's; USB
+audio in is its first user.
+
+The USB files of irpina/octabam2elemod v1.0 patch these places themselves
+(the USB IO ones state 7 too), so the linker refuses usb-ot beside them.
 
 ### SRC machines (core 2.1, Digitakt mk1)
 
@@ -2456,7 +2616,9 @@ refused.
   origin holds an address in your code, so it becomes a relocation, and the
   linker writes the address where the code lands. A short or packed address
   (one that is not a whole word) cannot be moved, and the build refuses it.
-  Branches (`bra`, `bsr`, `bcc`) are relative and need nothing.
+  Branches (`bra`, `bsr`, `bcc`) are relative and need nothing. dsp_asm
+  assembles `jsr` only with a short address, which the linker cannot move:
+  call a routine of your own with `bsr`. `jclr` and `do` take whole words.
 - `subscribe_dsp` adds `jsr >fn` (plus `addend` words) to a DSP table, in
   `order`. A DSP table is declared as `{"entry": 6, "space": "dsp.A",
   "head": hex, "end": hex}` under `collections`: its words are the head,

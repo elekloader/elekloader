@@ -242,7 +242,47 @@ changes nothing else the unit does.
     MUTE MODES hooks for a silenced track that are voice events are here:
     the binder's pointer stores and its start counter, the DSP word's
     flags, and the command byte (a handler may return 0). What they do to
-    the sound is not checked: the runs below have no DSP.
+    the sound is not checked: the runs below have no DSP. 0.8 has the veto
+    at the routine's entry (0x40006820), before it saves anything:
+    `ev_voice_reset`.
+- **0.8: edits, Parts, the reset, the boot, the screen** (`edit.s`,
+  `edit.c`, `screen.s`, `screen.c`, `core.h`). Mods that keep data beside a
+  pattern, a track or a Part follow what the firmware does to them; octabam's
+  KITS, PLOCKS P2, VARISPEED, CX OSC, MIDI SCENES, BATCH BUGFIXES, MIDI PART
+  STATE, BRAIN, BUFFER SAVER and STORE each detour those routines, and MUTE
+  MODES, BOOT TRACE, REC THRESHOLD, REC TRIG MUTE and SCENES P2 four more
+  places. Eleven events on 19 sites, each a place two or more of those
+  modules take (the to-do list's shared entries):
+
+  | event | site (was) | when | handler |
+  |---|---|---|---|
+  | `ev_clip` | 0x40026eb0 the pattern copy, 0x40026ef0 the pattern snapshot, 0x4002b9b0 the pattern store, 0x40029754 the track copy and snapshot, 0x4002b654 the track store (each routine's entry) | before and after a pattern or an audio track moves between the bank and the clipboard or the undo buffer | `int f(pre, clip)`: nonzero before a PASTE or an UNDO refuses it |
+  | `ev_part_saving` | 0x4004a908 (`lea -20(sp),sp ; movem.l`), Part Save's entry | before Part Save (SAVE, SAVE ALL, Part Clear's end) | `void f(part, 0)` |
+  | `ev_part_reload` | 0x4004aab4 (`lea -32(sp),sp ; movem.l`), Part Reload | before, and after: reloaded or no saved copy | `void f(how, part)` |
+  | `ev_part_select` | 0x400621da (`jsr` memcpy) and 0x40062216 (`jsr 0x400326a0 ; clr.l -(sp) ; jsr 0x40078850`), the sys task's Part change | BEGIN, APPLIED, DONE | `void f(phase, select)` |
+  | `ev_part_init` | 0x40005638 (entry) and 0x40005a38 (`move.l a2,92(sp) ; movem.l`), the Part initialiser | before and after a Part is set to its defaults | `void f(pre, part)` |
+  | `ev_project_init` | 0x400909d8 (`move.l a2,-(sp) ; clr.l -(sp) ; jsr 0x4000fd34`), the empty project's RAM | the engine task is about to empty every bank: LOAD PROJECT, a new project | `void f(job, 0)` |
+  | `ev_voice_reset` | 0x40006820 (`move.l a2,-(sp) ; move.l d2,-(sp) ; move.l 12(sp),d1`), the reset's entry | a track's voice is about to be reset | `int f(trk)`: nonzero keeps it |
+  | `ev_boot_early` | 0x40000512 (`jsr 0x4000f938`), the SRAM init after core's boot | once, before the OS | `void f(void)` |
+  | `ev_track_icon` | 0x4004bee2 (`lea 0x400c0cb8,a0`), the audio tracks' boxes | the state a box shows, before the redraw test | `unsigned f(trk, state)`: the state |
+  | `ev_track_icon_draw` | 0x4004c00c (`moveq #3,d0 ; cmp.l a4,d0 ; bne.s`), the glyph switch's last case | a state above 3 | `int f(trk, state, x, y)`: nonzero when drawn |
+  | `ev_setup_dial` | 0x4003786a, 0x40037c06, 0x4003690c (the widget's resolve and the call's first three pushes), FX2, FX1 and AMP SETUP | a page-2 knob is about to be drawn | `void f(dial)`: change its value, flags or widget |
+
+  - **Wrappers.** The five clipboard routines and Part Reload are wrapped: a
+    stub calls the routine with its own return address in a slot, so it can
+    come after. A handler must not call the routine it was called from, and
+    every reference in the image to these routines is a call or a branch to
+    their entry (checked by the tests).
+  - **A refusal** goes where stock goes when there is nothing to paste or
+    undo: the undo's own exit (0x4002ba94, 0x4002b980) or the paste's `d0 = 0`,
+    with the caller's arguments dropped. Only those four calls can be
+    refused; any other caller's paste goes ahead.
+  - **Where they run.** `ev_clip`, the Part events and the screen's in the
+    sys task (the panel's keys) and the task that draws the screen;
+    `ev_project_init` and `ev_part_init` in the engine task's project jobs
+    too; `ev_voice_reset` in tasks and the frame interrupt, with the
+    interrupts not yet masked; `ev_boot_early` before the OS. None but the
+    reset is on the frame interrupt's path.
 - **The draw gate** (`gate.s`). The OS composes the screen twice before the
   boot site, so before `.run` is in the reserve. The draw site therefore
   calls `core_draw_gate`, which `mod.json` places (`fixed`) in the last 24
@@ -270,9 +310,13 @@ bus hooks the same routines one instruction away from them:
   0x40006862, 0x4000f82c), and `jmp` to the instruction an event's stub is
   at (SYNTH's start rewrite ends in `jmp 0x4000c63c`), so a build with both
   sees both.
+- from 0.8, SCENES P2's loads of the FX SETUP knobs' Part byte (0x40037840,
+  0x40037bdc) are just before the knob sites, and MIDI SCENES' calls of Part
+  Save and Part Reload (0x4002dcd4, 0x4002dd12, 0x4002dd56, 0x4005e05a) are
+  their callers: 0.8 hooks the routines themselves.
 
 So the 34 mods of irpina/octabam2elemod v1.0 link with 0.2 and 0.4 as they did
-with 0.1 (checked for 0.4 and 0.7: each alone, and the shop's two largest
+with 0.1 (checked for 0.4, 0.7 and 0.8: each alone, and the shop's two largest
 combinations). Their code moves up by the size of core's own (216 bytes, rounded to
 their alignment), and the linker relocates it.
 
@@ -480,6 +524,48 @@ are CPU-side checks and not audio):
 - the checks fail when the code is wrong: with the seed changed in `.boot`
   the clean boots halt, and with the compare removed the planted copies are
   run.
+
+0.8, in ot_emu (the checks are a probe mod, tests/fixtures/octatrack-edit,
+which logs each event, refuses or changes what poked controls say, and runs
+a poked list of stock calls from `ev_tick`, the sys task the panel's keys run
+in), from a card with an empty project:
+- **The boot.** `ev_boot_early` came once; a value it set was still there at
+  `ev_boot_done`. `ev_project_init` came once, for job 4 (the power-up's
+  LOAD PROJECT), and `ev_part_init` 264 times before and 264 after, each
+  "after" for the Part its "before" named.
+- **The clipboard,** by calling the key handlers' routines in their order:
+  the pattern copy, snapshot, paste and undo, the track copy, snapshot, paste
+  and undo each came before and after, with the right pattern, track, buffer
+  and `op` (0x11 for the pattern paste's snapshot, 7 for the track's). A byte
+  set in pattern 0 and track 2 was in pattern 1 and track 3 after the
+  pastes.
+- **Refusals.** With PASTE and UNDO refused, the four stores came "before"
+  only, the calls returned 0 and the bytes of pattern 1 and track 3 were as
+  before.
+- **The same calls on 0.7.1 and 0.8** (a mod with only the call list): the
+  same results and the same bank bytes. (A pattern undo right after a paste
+  finds nothing on both: stock's.)
+- **Parts.** Part Reload of a Part with no saved copy came with 2 after, and
+  after Part Save (`ev_part_saving`, then the 0.6 event) with 0. PART, DOWN,
+  YES on the panel: `ev_part_select` BEGIN (OT_PART still the old Part),
+  APPLIED (the new, the machine bytes given) and DONE.
+- **The voice reset.** With track 5 kept: resets of 5, of 6 and of all eight
+  came 10 times, track 5 twice kept, and `ev_voice_kill` came for every track
+  but 5.
+- **The screen.** FUNC+AMP, FUNC+FX1 and FUNC+FX2: `ev_setup_dial` came for
+  the 5, 6 and 6 knobs each window shows. AMP SETUP's first knob, forced to
+  69 (outside its options), drew empty where it showed RTRG. With track 2's
+  icon state turned to 8, `ev_track_icon_draw` came once and the box shows
+  the probe's ". . []" glyph; the other boxes stock's.
+- **Core alone** (0.8 and 0.7.1, the same keys: AMP SETUP, a Part change):
+  the same screen, display buffers and voice structs.
+- **Every one of the 34 shop mods** links with 0.8 as with 0.3.1 and 0.7.1:
+  33 alone (SYNTH v1.0 is refused for the DELAY's kept bytes, octabam #771,
+  with any core), and the shop's two largest combinations without it.
+- Tests: test_octatrack 53/53 (two new: the 0.8 sites, with the image scan
+  for branches into them, for references to the wrapped routines and the
+  stock instructions the stubs rely on, and the probe's tables),
+  test_octatrack_boot 5/5, test_units 35/35, test_link_refusals 5/5.
 
 On a unit (an Octatrack MKII, 3 Oct 2026): 0.1 alone, and 0.1 with 19 of the
 converted octabam mods in seven groups, flashed from the card. Every build

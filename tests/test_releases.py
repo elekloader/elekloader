@@ -118,7 +118,8 @@ def mod_dirs(dev, rel):
 def test_each_core_builds_and_lints_for_each_release_it_names():
     """Each core alone, and each companion in mods/ with the core built for
     its release, and with the other mods in mods/ it requires (usb-midi-ot
-    needs usb-ot)."""
+    needs usb-ot). A mod with DSP code is built only with octabam's dsp_asm
+    (ELEKLOADER_DSP_ASM), and left out without it."""
     built = 0
     for dev, rel, path, raw in each_release():
         cores, others = mod_dirs(dev, rel)
@@ -127,9 +128,15 @@ def test_each_core_builds_and_lints_for_each_release_it_names():
         tc = dev.toolchain
         if not shutil.which(os.environ.get('ELEKLOADER_CROSS', tc.get('prefix', '')) + 'as'):
             raise Skip('no cross assembler for the %s' % dev.name)
+        asm = os.environ.get('ELEKLOADER_DSP_ASM', 'dsp_asm')
+        has_asm = os.path.isfile(asm) or shutil.which(asm)
         with tempfile.TemporaryDirectory() as tmp:
             done = {}                       # id -> (folder, .elemod, Mod2)
             for d in cores + others:
+                with open(os.path.join(d, 'mod.json')) as fh:
+                    if json.load(fh).get('dsp') and not has_asm:
+                        print('  (%s: DSP code, and no dsp_asm: ELEKLOADER_DSP_ASM)' % os.path.basename(d))
+                        continue
                 out, m = build.build(d, path, tmp)
                 with open(out) as fh:
                     doc = json.load(fh)

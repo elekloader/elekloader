@@ -91,6 +91,34 @@ The layouts, the taps and what each carries:
   smaller layouts took less (MAIN alone about 6 KB). With OFF the producer
   still runs once a frame interrupt and returns at once.
 
+## Audio in (0.3)
+
+With USB Audio In (`mods/usb-audio-in-ot`) in the build and its setting on,
+the same function also takes a stream from the computer into the inputs.
+usb-audio describes it and answers its requests; the add-on runs it
+(its README has how):
+
+- a USB streaming input terminal (0x13, the host's 2 or 4 channels) and a
+  line output terminal (0x14) on the same clock;
+- a third interface, AudioStreaming alt 0 and alt 1, with EP3 OUT,
+  isochronous and asynchronous: at high speed 12 frames at most every
+  250 us (96 or 192 bytes), at full speed 45 every 1 ms;
+- EP3 IN marked as the implicit feedback (bmAttributes 0x25): the host sizes
+  each packet it sends from the one it read, so it sends at the unit's rate
+  with no feedback endpoint (there is no free one);
+- SET_INTERFACE and GET_INTERFACE on the third interface, a bus reset and a
+  session end go to the add-on, and so does the vendor request 0xC0/0x56
+  (its counters).
+
+It is an add-on, not part of this mod, because its DSP side needs the DSP
+bus, which takes SPATIALIZER off the FX menus. usb-audio imports its record
+weakly: without it the function is what it was in 0.2, byte for byte. Audio
+in needs this stream for its feedback, so with LAYOUT OFF there is neither.
+Two things changed for every build: the record is not `const` (`enabled()`
+sets the interface count and the endpoints), and ENDPTCTRL3's TX half is
+written with the interrupts masked, since audio in writes its RX half from a
+higher interrupt level.
+
 ## Counters
 
 A vendor request (bmRequestType 0xC0, bRequest 0x55, wLength 60) returns 15

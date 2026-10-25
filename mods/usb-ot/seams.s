@@ -193,6 +193,38 @@ otu_seam_irq:
         jmp     0x4001e60c
 
 | ---- for the functions -------------------------------------------------------------
+| ---- the frame transfer's last state (usb-ot 0.3) -------------------------------------
+| 0x40004bc0 jmp (moveq #1,%d1 ; move.b %d1,0xfc04801d): state 7 of the transfer chain the
+| frame interrupt starts, in eDMA channel 0's interrupt (0x40004840, level 6: it saved
+| d0-d1/a0-a1, cleared the request and jumped by the state at 0x46104d3e). Stock's state 7
+| unmasks the frame interrupt (INTC0 CIMR <- 1) and leaves the state at 7, so a transfer
+| started here comes back here when it completes. The first visit runs ev_dsp_feed's
+| handlers; when one of them started a feed (ot_dsp_feed, usb.c), the unmask waits for the
+| visit its completion makes. 0x40004bc8 restores d0-d1/a0-a1 and returns.
+        .globl  otu_seam_state7
+otu_seam_state7:
+        tst.b   otu_feeding
+        bne.s   3f
+        move.l  %a2, -(%sp)
+        moveq   #1, %d0
+        move.b  %d0, otu_in_feed
+        lea     ev_dsp_feed, %a2
+1:      move.l  (%a2)+, %d0
+        beq.s   2f
+        movea.l %d0, %a0
+        jsr     (%a0)
+        bra.s   1b
+2:      clr.b   otu_in_feed
+        movea.l (%sp)+, %a2
+        tst.b   otu_feeding
+        bne.s   5f                      | a feed is on its way: its completion unmasks
+4:      moveq   #1, %d1                 | stock's state 7
+        move.b  %d1, 0xfc04801d
+5:      jmp     0x40004bc8
+3:      clr.b   otu_feeding             | the feed's completion
+        addq.l  #1, ot_dsp_fed
+        bra.s   4b
+
         .globl  ot_usb_irq_off, ot_usb_irq_restore
 ot_usb_irq_off:
         move.w  %sr, %d0

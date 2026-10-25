@@ -1,0 +1,20 @@
+{
+ "id": "usb-audio-in", "version": "0.1",
+ "license": "GPL-2.0-or-later",
+ "title": "USB Audio In", "category": "MIDI and USB", "author": "irpina",
+ "description": "A stream from the computer into the Octatrack's inputs over its own USB port (UAC2, 44.1 kHz, 24-bit), beside USB Audio Out in the same USB audio device: what it stands in for is a setting, USB AUDIO IN in the MODS menu (with the settings companion): OFF (the default), AB (channels 1-2 for inputs A/B), CD (for C/D) or ABCD (1-4 for A-D). It applies at the next power-up and needs a USB AUDIO LAYOUT other than OFF. It needs the DSP bus, which takes SPATIALIZER off the FX menus. Built on what sambanks/octabam's USB audio in found.",
+ "device": "octatrack", "os": "1.40C",
+ "sources": ["usbin.c"],
+ "dsp": [{"source": "inject.asm", "payload": "A"}],
+ "contribute": [
+  {"to": "ot_settings", "order": 31, "data": "00000000", "relocs": [[0, "abs32", "sym:usbi_setting", 0]]}
+ ],
+ "subscribe": [
+  {"event": "ev_dsp_feed", "fn": "usbi_feed", "order": 50}
+ ],
+ "subscribe_dsp": [
+  {"event": "ev_dsp_rx", "fn": "usbi_inject", "order": 50}
+ ],
+ "requires": ["core", "usb", "usb-audio", "dspbus"],
+ "resources": {"core": "0.6", "names": ["usb:ep3-out", "dsp:feed"]}
+}

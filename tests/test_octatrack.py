@@ -359,7 +359,7 @@ def test_the_core_moves_the_arena_past_its_reserve():
     assert all(int(s['addr'], 16) != PURGE_BANKS_END + 2 for s in j['sites'])
     calls = {s['target']: int(s['addr'], 16) for s in j['sites'] if s['op'] in ('jsr', 'jmp')}
     assert calls.pop('boot') == 0x4000050c
-    assert set(calls) == set(BUS_SITES) | set(STORE_SITES) | set(VOICE_SITES), calls   # the rest are the bus's, the store's and the voice's
+    assert set(calls) == set(BUS_SITES) | set(STORE_SITES) | set(VOICE_SITES) | set(EDIT_SITES), calls
 
 
 def reserve_docs(img, bss, fixed=False):
@@ -552,7 +552,8 @@ def test_the_core_bus_sites():
     # ev_idle is called by the stub that calls ev_boot_done; every other event has a site of its own
     assert sorted(j['collections']) == sorted({e for _a, _s, e in BUS_SITES.values()} | {'ev_idle'}
                                               | {v[2] for v in STORE_SITES.values() if v[2]}
-                                              | set(STORE_TABLES) | {v[2] for v in VOICE_SITES.values()})
+                                              | set(STORE_TABLES) | {v[2] for v in VOICE_SITES.values()}
+                                              | {v[2] for v in EDIT_SITES.values()})
     assert j['collections']['ev_idle'] == 4
     for sym, target in JMP_BACK.items():       # a jmp stub goes back to the instruction after its site
         addr, stock_hex, _ev = BUS_SITES[target]
@@ -768,6 +769,172 @@ def test_the_voice_probe_links():
     for t, fn in (('ev_voice_release', 'pr_release'), ('ev_voice_kill', 'pr_kill'), ('ev_voice_bind', 'pr_bind'),
                   ('ev_voice_seek', 'pr_seek'), ('ev_trig_apply', 'pr_trig'), ('ev_dsp_trig', 'pr_dsp_trig'),
                   ('ev_dsp_record', 'pr_dsp_record')):
+        assert table(ln, t, 2) == (ln.map[fn], 0), t
+
+
+# core-ot 0.8 (edit.s, screen.s, and one site each in voice.s and bus.s): each site, the bytes it
+# displaces, its event and the defsym its stub goes back to (None: it returns, or goes elsewhere).
+# The routines are octabam's (KITS, PLOCKS P2, VARISPEED, CXOSC, BATCH BUGFIXES, MIDI SCENES, MIDI PART
+# STATE, BRAIN, BUFFER SAVER, STORE, MUTE MODES, BOOT TRACE, REC THRESHOLD, REC TRIG MUTE, SCENES P2; MIT).
+DIAL_BYTES = '206b00304a88660641f9400479b4'    # movea.l 48(a3),a0 ; tst.l a0 ; bne.s ; lea 0x400479b4,a0
+EDIT_SITES = {
+    'core_clip_pcopy': (0x40026eb0, '202f0004223c00008ed8', 'ev_clip', 'CL_PCOPY_NEXT'),
+    'core_clip_psnap': (0x40026ef0, '202f000841ef0004', 'ev_clip', 'CL_PSNAP_NEXT'),
+    'core_clip_pstore': (0x4002b9b0, '4feffff048d7041c', 'ev_clip', 'CL_PSTORE_NEXT'),
+    'core_clip_tcopy': (0x40029754, '4fefffe448d73c1c', 'ev_clip', 'CL_TCOPY_NEXT'),
+    'core_clip_tstore': (0x4002b654, '4fefffbc48d77cfc', 'ev_clip', 'CL_TSTORE_NEXT'),
+    'core_partsave': (0x4004a908, '4fefffec48d70c1c', 'ev_part_saving', 'PARTSAVE_NEXT'),
+    'core_partreload': (0x4004aab4, '4fefffe048d70c3c', 'ev_part_reload', 'PARTRELOAD_NEXT'),
+    'core_psel_begin': (0x400621da, '4eb940020898', 'ev_part_select', None),       # jsr memcpy
+    'core_psel_done': (0x40062216, '4eb9400326a0' '42a7' '4eb940078850', 'ev_part_select', 'PSEL_NEXT'),
+    'core_pinit': (0x40005638, '4fefffa848d77cfc', 'ev_part_init', 'PINIT_NEXT'),
+    'core_pinit_end': (0x40005a38, '2f4a005c4cd77cfc', 'ev_part_init', 'PINIT_END_NEXT'),
+    'core_projinit': (0x400909d8, '2f0a42a74eb94000fd34', 'ev_project_init', 'PROJINIT_NEXT'),
+    'core_v_reset': (0x40006820, '2f0a2f02222f000c', 'ev_voice_reset', 'V_RESET_NEXT'),
+    'core_boot_early': (0x40000512, '4eb94000f938', 'ev_boot_early', None),        # jsr the SRAM init
+    'core_icon': (0x4004bee2, '41f9400c0cb8', 'ev_track_icon', 'ICON_NEXT'),
+    'core_icon_draw': (0x4004c00c, '7003b08c6618', 'ev_track_icon_draw', None),
+    'core_dial_fx2': (0x4003786a, DIAL_BYTES + '2f032f132f09', 'ev_setup_dial', 'DIAL_FX2_NEXT'),
+    'core_dial_fx1': (0x40037c06, DIAL_BYTES + '2f032f132f09', 'ev_setup_dial', 'DIAL_FX1_NEXT'),
+    'core_dial_amp': (0x4003690c, DIAL_BYTES + '2f052f132f09', 'ev_setup_dial', 'DIAL_AMP_NEXT'),
+}
+EDIT_JSR = ('core_psel_begin', 'core_boot_early')
+# Routines a 0.8 stub wraps (a return slot each: entered again before they return, the slot is lost).
+EDIT_WRAPPED = ('core_clip_pcopy', 'core_clip_psnap', 'core_clip_pstore', 'core_clip_tcopy', 'core_clip_tstore',
+                'core_partreload')
+# What v1.0's conversions write in the same routines or their callers: SCENES P2's two page-2 loads beside
+# the FX dials, MIDI SCENES' Part Save and Reload calls. The 0.8 sites keep clear of every byte.
+V10_EDIT = ((0x40037840, 8), (0x40037bdc, 8), (0x4002dcd4, 6), (0x4002dd12, 6), (0x4002dd56, 6),
+            (0x4005e05a, 6))
+# What the stubs rely on in the stock image.
+EDIT_FACTS = (
+    (0x4002ba76, '2f02' '4879460bf218' '4ebaff30'),     # the pattern undo pushes two longs, calls the store ...
+    (0x4002ba94, '4280' '241f' '4e75'),                 # ... whose return is CL_PUNDO_RET; its "nothing" exit
+    (0x4002baaa, '2f2f0004' '4879460c8122' '4ebafefa' '7001'),   # the pattern paste: two longs, then d0 = 1
+    (0x4002b95e, '2f022f03' '4879460bf218' '4ebafcea'), # the track undo pushes three longs (return CL_TUNDO_RET)
+    (0x4002b980, '4280' '241f' '261f' '4e75'),          # its "nothing" exit
+    (0x4002b996, '2f2f00082f2f0008' '4879460c8122' '4ebafcae' '7001'),   # the track paste
+    (0x40029936, '6000fe1c'),                           # the track snapshot reaches the copy by a bra
+    (0x4004aad4, '4280'), (0x4004abbe, '7001'),         # Part Reload: d0 0 with no saved copy, 1 reloaded
+    (0x400621a6, '528a' '7312'),                        # a2 -> the new Part's number
+    (0x400621d6, '486efff7'),                           # the old Part's machines go to -9(fp)
+    (0x40062224, '588f'),                               # the long pushed for the page refresh is dropped here
+    (0x40005a20, '6716'),                               # the initialiser's only way to its end site
+    (0x40006830, '45faffee'),                           # the voice reset recurses through its own entry
+    (0x4000050c, '4eb940001e50'),                       # core's boot site, the instruction before
+    (0x4004bede, '49f18a00'),                           # a4 = the box's state
+    (0x4004c012, '486a0031' '2f0b'),                    # state 3's glyph at (a3, 49(a2))
+    (0x4004c024, '4e95' '4fef0010'),                    # the blit, through a5
+    (0x40037846, '1c10'), (0x40037be2, '1c10'),         # d6 = the FX2 and FX1 knob's value
+    (0x4003787e, '7d06' '2f06' '2f04'), (0x40037c1a, '7d06' '2f06' '2f04'), (0x40036920, '7d06' '2f06' '2f04'),
+)
+
+
+def test_the_core_edit_sites():
+    """core-ot 0.8's sites: each displaces whole stock instructions, no branch from outside it lands
+    inside, its stub goes back past it, and none meets a byte of the v1.0 conversions, the bus, the
+    store, the voice events or the intercepts. Every reference to a routine a stub wraps is a call
+    or a branch to its entry. The stubs' stock facts are checked."""
+    with open(os.path.join(ROOT, 'mods', 'core-ot', 'mod.json')) as fh:
+        j = json.load(fh)
+    with open(os.path.join(ROOT, 'mods', 'intercepts-ot', 'mod.json')) as fh:
+        icpt = [(int(x['addr'], 16), len(x['stock']) // 2) for x in json.load(fh)['sites']]
+    st, img = stock()
+    sites = {s['target']: s for s in j['sites'] if s['op'] in ('jsr', 'jmp')}
+    taken = ([(a, len(h) // 2) for a, h, _e in BUS_SITES.values()]
+             + [(a, len(h) // 2) for a, h, _e, _b in STORE_SITES.values()]
+             + [(a, len(h) // 2) for a, h, _e, _b in VOICE_SITES.values()]
+             + icpt + list(V10_NEIGHBOURS) + list(V10_VOICE) + list(V10_BUILDERS) + list(V10_EDIT))
+    inside, owner = {}, {}
+    for target, (addr, stock_hex, event, back) in EDIT_SITES.items():
+        s, n = sites[target], len(stock_hex) // 2
+        assert (int(s['addr'], 16), s['stock']) == (addr, stock_hex), target
+        assert s['op'] == ('jsr' if target in EDIT_JSR else 'jmp'), target
+        o = addr - DEV.main_load
+        assert img[o:o + n].hex() == stock_hex, target
+        ok, note = elemod.insn_check(img, addr, n, DEV)
+        assert ok, (target, note)
+        assert j['collections'][event] == 4, event
+        if back:
+            assert int(j['defsym'][back], 16) == addr + n, target
+        for a, m in taken:
+            assert not (a < addr + n and addr < a + m), (target, hex(a))
+        for t in range(addr, addr + n):
+            owner[t] = target
+            if t > addr:
+                inside[t] = target
+    d = {k: int(v, 16) for k, v in j['defsym'].items()}
+    assert (d['CL_PUNDO_RET'], d['CL_PUNDO_NONE']) == (0x4002ba82, 0x4002ba94)
+    assert (d['CL_TUNDO_RET'], d['CL_TUNDO_NONE']) == (0x4002b96c, 0x4002b980)
+    assert d['ICON_GLYPH3'] == 0x4004c012 and d['ICON_DONE'] == 0x4004c02a == 0x4004c00c + 6 + 0x18
+    assert d['ICON_CACHE'] == int(EDIT_SITES['core_icon'][1][4:], 16)
+    assert d['DIAL_WIDGET'] == int(DIAL_BYTES[-8:], 16)
+    for sym, site, k in (('PSEL_MEMCPY', 'core_psel_begin', 0), ('PSEL_REDRAW', 'core_psel_done', 0),
+                         ('PSEL_PAGE', 'core_psel_done', 8), ('PROJINIT_FN', 'core_projinit', 4),
+                         ('BOOT_SRAM_INIT', 'core_boot_early', 0)):
+        h = EDIT_SITES[site][1]
+        assert h[2 * k:2 * k + 4] == '4eb9' and d[sym] == int(h[2 * k + 4:2 * k + 12], 16), sym
+    for addr, h in EDIT_FACTS:
+        o = addr - DEV.main_load
+        assert img[o:o + len(h) // 2].hex() == h, hex(addr)
+    wrapped = {EDIT_SITES[t][0]: t for t in EDIT_WRAPPED}
+    for o in range(0, len(img) - 6, 2):         # bra/bsr/bcc, jmp/jsr absolute or pc-relative
+        w = struct.unpack('>H', img[o:o + 2])[0]
+        pc, tgt = DEV.main_load + o, None
+        if w & 0xf000 == 0x6000:
+            d8 = w & 0xff
+            if d8 == 0:
+                tgt = pc + 2 + struct.unpack('>h', img[o + 2:o + 4])[0]
+            elif d8 == 0xff:
+                tgt = pc + 2 + struct.unpack('>i', img[o + 2:o + 6])[0]
+            else:
+                tgt = pc + 2 + (d8 - 256 if d8 & 0x80 else d8)
+        elif w in (0x4ef9, 0x4eb9):
+            tgt = struct.unpack('>I', img[o + 2:o + 6])[0]
+        elif w in (0x4efa, 0x4eba) or w & 0xf1ff == 0x41fa or w == 0x487a:
+            tgt = pc + 2 + struct.unpack('>h', img[o + 2:o + 4])[0]
+            assert not (tgt in wrapped and (w & 0xf1ff == 0x41fa or w == 0x487a)), (hex(pc), wrapped.get(tgt))
+        if tgt in inside:                       # a site's own branches (a dial's bne) go with it
+            assert owner.get(pc) == inside[tgt], (hex(pc), hex(tgt), inside[tgt])
+    for addr, t in wrapped.items():
+        pat, k = struct.pack('>I', addr), 0
+        while True:
+            k = img.find(pat, k)
+            if k < 0:
+                break
+            assert img[k - 2:k] == bytes.fromhex('4eb9'), (t, hex(DEV.main_load + k))
+            k += 1
+
+
+def test_the_edit_probe_links():
+    """tests/fixtures/octatrack-edit with core-ot 0.8: its handlers are the entries of the eleven 0.8
+    tables; core-ot alone has none. (The probe's runs in ot_emu are in the pull request.)"""
+    import shutil
+    from elekloader.sdk import build
+    need(SYX)
+    if not shutil.which(os.environ.get('ELEKLOADER_CROSS', DEV.toolchain['prefix']) + 'gcc'):
+        raise Skip('no m68k cross compiler')
+    st, img = stock()
+    with tempfile.TemporaryDirectory() as tmp:
+        core = elemod.load_any(build.build(os.path.join(ROOT, 'mods', 'core-ot'), SYX, tmp)[0])
+        probe, m = build.build(os.path.join(HERE, 'fixtures', 'octatrack-edit'), SYX, tmp)
+        assert not m.imports, m.imports
+        alone = link.link([core], img)
+        ln = link.link([core, elemod.load_any(probe)], img)
+
+    def table(ln, name, n):
+        o = ln.layout['run_load'] + (ln.tables[name][0] - DEV.ddr[0]) - DEV.main_load
+        return struct.unpack('>%dI' % n, ln.image[o:o + 4 * n])
+
+    events = sorted({v[2] for v in EDIT_SITES.values()})
+    assert len(events) == 11
+    for t in events:
+        assert alone.tables[t][1] == 0, t
+    for t, fn in (('ev_clip', 'ed_clip'), ('ev_part_saving', 'ed_part_saving'), ('ev_part_reload', 'ed_part_reload'),
+                  ('ev_part_select', 'ed_part_select'), ('ev_part_init', 'ed_part_init'),
+                  ('ev_project_init', 'ed_project_init'), ('ev_voice_reset', 'ed_voice_reset'),
+                  ('ev_boot_early', 'ed_boot_early'), ('ev_track_icon', 'ed_track_icon'),
+                  ('ev_track_icon_draw', 'ed_track_icon_draw'), ('ev_setup_dial', 'ed_setup_dial')):
         assert table(ln, t, 2) == (ln.map[fn], 0), t
 
 
@@ -1124,7 +1291,9 @@ def test_the_example_subscribes_to_the_bus():
                       'ev_part_cleared': 0, 'core_projdata': 0, 'core_carddata': 0, 'ot_sram': 0,
                       'ot_settings': 0, 'ev_voice_start': 0, 'ev_voice_release': 0, 'ev_voice_kill': 0,
                       'ev_voice_bind': 0, 'ev_voice_seek': 0, 'ev_trig_apply': 0, 'ev_dsp_trig': 0,
-                      'ev_dsp_record': 0}, counts
+                      'ev_dsp_record': 0, 'ev_clip': 0, 'ev_part_saving': 0, 'ev_part_reload': 0,
+                      'ev_part_select': 0, 'ev_part_init': 0, 'ev_project_init': 0, 'ev_voice_reset': 0,
+                      'ev_boot_early': 0, 'ev_track_icon': 0, 'ev_track_icon_draw': 0, 'ev_setup_dial': 0}, counts
     at = ln.tables['ev_draw'][0]
     o = ln.layout['run_load'] + (at - DEV.ddr[0]) - DEV.main_load
     assert struct.unpack('>II', ln.image[o:o + 8]) == (ln.map['hello_draw'], 0)
@@ -1554,13 +1723,13 @@ def test_trig_events_ot_beside_the_companions():
 
 
 def test_the_usb_companion_sites():
-    """mods/usb-ot: each site is whole stock instructions of the USB stack and keeps clear of
-    core-ot's bus; the stock device descriptor has one reference, the site that serves
-    usb-ot's copy through the uncached alias."""
+    """mods/usb-ot: each site is whole stock instructions of the USB stack (and from 0.3 the frame
+    transfer's state 7) and keeps clear of core-ot's bus; the stock device descriptor has one
+    reference, the site that serves usb-ot's copy through the uncached alias."""
     with open(os.path.join(ROOT, 'mods', 'usb-ot', 'mod.json')) as fh:
         j = json.load(fh)
     st, img = stock()
-    assert j['id'] == 'usb' and j['collections'] == {'ot_usb_functions': 4}
+    assert j['id'] == 'usb' and j['collections'] == {'ot_usb_functions': 4, 'ev_dsp_feed': 4}
     assert j['resources']['names'] == ['usb:stack'] and j['requires'] == ['core']
     for s in j['sites']:
         addr, n = int(s['addr'], 16), len(s['stock']) // 2
@@ -1573,6 +1742,37 @@ def test_the_usb_companion_sites():
     assert img.count(struct.pack('>I', 0x400e2000)) == 1
     (dev,) = [s for s in j['sites'] if s['op'] == 'keep2']
     assert (dev['addr'], dev['target'], dev['addend']) == ('0x4001d82c', 'otu_dev', 0x08000000)
+    core = {int(s['addr'], 16): len(s['stock']) // 2 for s in json.load(open(os.path.join(ROOT, 'mods', 'core-ot', 'mod.json')))['sites']}
+    assert not any(a < S7_SITE + 8 and S7_SITE < a + n for a, n in core.items())
+
+
+S7_SITE = 0x40004bc0            # the transfer chain's state 7: moveq #1,%d1 ; move.b %d1,0xfc04801d
+
+
+def test_the_transfer_chains_state_7():
+    """usb-ot 0.3's DSP feed: eDMA channel 0's interrupt (0x40004840) saves d0-d1/a0-a1, clears the
+    request and jumps by the state at 0x46104d3e through the table at 0x400ab61a, whose entry 7 is
+    the site; stock's state 7 unmasks the frame interrupt (INTC0 CIMR <- 1) and goes to the restore
+    and rte without moving the state on, so a transfer started there comes back to it. The channel's
+    interrupt is level 6, the frame interrupt's 5 (the levels usb-audio's ENDPTCTRL3 guard is for)."""
+    st, img = stock()
+
+    def at(a, n):
+        return img[a - DEV.main_load:a - DEV.main_load + n]
+    assert at(0x40004840, 26).hex() == '4feffff048d70303420013c0fc04401c20394610' \
+                                       '4d3e41f9400a'
+    assert at(0x4000485a, 8).hex() == 'b61a20700c004ed0'               # lea 0x400ab61a ; movea (a0,d0*4) ; jmp (a0)
+    assert struct.unpack('>I', at(0x400ab61a + 4 * 7, 4))[0] == S7_SITE
+    assert at(S7_SITE, 8).hex() == '720113c1fc04801d'
+    assert at(S7_SITE + 8, 10).hex() == '4cd703034fef00104e73'            # the restore, rte
+    assert img.count(bytes.fromhex('52b946104d3e')) == 7 and img.count(bytes.fromhex('42b946104d3e')) == 1
+    assert at(0x400097bc, 8).hex() == '740613c2fc048048'               # ICR8 (eDMA 0) <- 6
+    assert at(0x4001fc2e, 8).hex() == '700513c0fc048041'               # ICR1 (the frame) <- 5
+    with open(os.path.join(ROOT, 'mods', 'usb-ot', 'mod.json')) as fh:
+        (site,) = [x for x in json.load(fh)['sites'] if int(x['addr'], 16) == S7_SITE]
+    assert (site['op'], site['target'], site['stock']) == ('jmp', 'otu_seam_state7', '720113c1fc04801d')
+    ok, note = elemod.insn_check(img, S7_SITE, 8, DEV)
+    assert ok, note
 
 
 def test_usb_midi_is_a_usb_function():
@@ -1622,7 +1822,8 @@ def test_usb_audio_is_a_usb_function_with_its_layout_a_setting():
     with tempfile.TemporaryDirectory() as tmp:
         core, usb, midi, sets, audio = (elemod.load_any(build.build(os.path.join(ROOT, 'mods', d), SYX, tmp)[0])
                                         for d in ('core-ot', 'usb-ot', 'usb-midi-ot', 'settings-ot', 'usb-audio-ot'))
-    assert not [d for d in os.listdir(os.path.join(ROOT, 'mods')) if d.startswith('usb-audio-') and d != 'usb-audio-ot']
+    assert not [d for d in os.listdir(os.path.join(ROOT, 'mods'))
+                if d.startswith('usb-audio-') and d not in ('usb-audio-ot', 'usb-audio-in-ot')]
 
     def at(ln, addr):
         return ln.layout['run_load'] + (addr - DEV.ddr[0]) - DEV.main_load
@@ -1636,8 +1837,13 @@ def test_usb_audio_is_a_usb_function_with_its_layout_a_setting():
         return ln.image[o:ln.image.index(b'\0', o)].decode()
 
     assert audio.id == 'usb-audio' and not audio.sites and audio.names == ['usb:ep3-in']
-    assert audio.version == '0.2' and usb.version == '0.2'
+    assert audio.version == '0.3' and usb.version == '0.3' and audio.weak == {'usba_in'}
     ln = link.link([core, usb, audio], img)
+    # without audio in, its record is core's zeros (abi 0)
+    refs = [(o, add) for sec, o, t, g, add in audio.relocs if g == 'sym:usba_in']
+    run = ln.layout['sections']['usb-audio .run']
+    assert refs and all(struct.unpack('>I', ln.image[at(ln, run + o):][:4])[0] == ln.map['core_zero'] + add
+                        for o, add in refs)
     assert table(ln, 'ot_usb_functions', 2) == (ln.map['usb_audio'], 0)
     assert table(ln, 'ev_frame_end', 2) == (ln.map['usba_frame'], 0)
     assert table(ln, 'ot_settings', 2) == (ln.map['usba_setting'], 0)
@@ -1658,7 +1864,7 @@ def test_usb_audio_is_a_usb_function_with_its_layout_a_setting():
     abi, tag, key_kind_scope, group, name, lo, hi, labels, var, dflt, changed =         struct.unpack('>IIIIIiiIIiI', ln.image[o:o + 44])
     assert (abi, tag) == (1, int.from_bytes(b'USBA', 'big'))
     assert (key_kind_scope >> 16, (key_kind_scope >> 8) & 0xff, key_kind_scope & 0xff) == (1, 1, 0x80)   # key 1, OPTION, CARD | EARLY
-    assert (string(ln, group), string(ln, name)) == ('USB AUDIO', 'LAYOUT')
+    assert (string(ln, group), string(ln, name)) == ('USB AUDIO', 'LAYOUT') and group == ln.map['usba_group']
     assert (lo, hi, dflt, changed) == (0, 5, 5, 0)
     names = [string(ln, struct.unpack('>I', ln.image[at(ln, labels) + 4 * k:][:4])[0]) for k in range(6)]
     assert names == ['OFF', 'MAIN', 'M+C', 'MSTR', 'TRKS', 'ALL'], names
@@ -1666,6 +1872,79 @@ def test_usb_audio_is_a_usb_function_with_its_layout_a_setting():
     o = at(ln, var)
     assert struct.unpack('>i', ln.image[o:o + 4])[0] == 5            # the default, until the companion sets it
     assert any('requires usb' in p for p in link.check([core, audio], img))
+
+
+def test_usb_audio_in_is_an_add_on():
+    """mods/usb-audio-in-ot: usb-audio's audio in, a mod of its own because its DSP side needs the DSP
+    bus. usb-audio's weak import of its record resolves to it; its feed is usb-ot's one ev_dsp_feed
+    handler, its inject an ev_dsp_rx handler whose words are dsp_asm's for where it lands; its setting
+    IN (OFF, AB, CD, ABCD; OFF by default, early, on the card) follows LAYOUT under usb-audio's
+    heading. It claims EP3 OUT and the feed, hooks no stock code itself, and is refused without
+    usb-audio, without the DSP bus, and beside a second feeder."""
+    import shutil
+    import subprocess
+    from elekloader.sdk import build
+    need(SYX)
+    if not shutil.which(os.environ.get('ELEKLOADER_CROSS', DEV.toolchain['prefix']) + 'gcc'):
+        raise Skip('no m68k cross compiler')
+    asm = os.environ.get('ELEKLOADER_DSP_ASM', '')
+    if not os.path.isfile(asm):
+        raise Skip('ELEKLOADER_DSP_ASM (octabam\'s dsp_asm) not given')
+    st, img = stock()
+    ex = os.path.join(ROOT, 'mods', 'usb-audio-in-ot')
+    with tempfile.TemporaryDirectory() as tmp:
+        core, usb, sets, audio, bus, ain = (elemod.load_any(build.build(os.path.join(ROOT, 'mods', d), SYX, tmp)[0])
+                                            for d in ('core-ot', 'usb-ot', 'settings-ot', 'usb-audio-ot', 'dspbus-ot',
+                                                      'usb-audio-in-ot'))
+    assert ain.id == 'usb-audio-in' and not ain.sites and sorted(ain.names) == ['dsp:feed', 'usb:ep3-out']
+    assert ain.requires == ['core', 'usb', 'usb-audio', 'dspbus']
+    ln = link.link([core, usb, audio, bus, ain, sets], img)
+
+    def at(addr):
+        return ln.layout['run_load'] + (addr - DEV.ddr[0]) - DEV.main_load
+
+    def long(addr):
+        return struct.unpack('>I', ln.image[at(addr):][:4])[0]
+
+    def table(name, n):
+        return tuple(long(ln.tables[name][0] + 4 * k) for k in range(n))
+
+    def string(addr):
+        o = at(addr)
+        return ln.image[o:ln.image.index(b'\0', o)].decode()
+
+    refs = [(o, add) for sec, o, t, g, add in audio.relocs if g == 'sym:usba_in']
+    assert refs and all(long(ln.layout['sections']['usb-audio .run'] + o) == ln.map['usba_in'] + add for o, add in refs)
+    rec = struct.unpack('>5I', ln.image[at(ln.map['usba_in']):][:20])
+    assert rec[0] == 1 and all(rec[1:])                              # USBA_IN_ABI, four calls
+    assert table('ev_dsp_feed', 2) == (ln.map['usbi_feed'], 0)
+    assert table('ot_settings', 3) == (ln.map['usba_setting'], ln.map['usbi_setting'], 0)
+    o = at(ln.map['usbi_setting'])
+    abi, tag, kks, group, name, lo, hi, labels, var, dflt, changed = struct.unpack('>IIIIIiiIIiI', ln.image[o:o + 44])
+    assert (abi, tag, kks) == (1, int.from_bytes(b'USBI', 'big'), 1 << 16 | 1 << 8 | 0x80)    # key 1, OPTION, CARD | EARLY
+    assert group == ln.map['usba_group'] and string(name) == 'IN'
+    assert (lo, hi, dflt, changed) == (0, 3, 0, 0) and ln.layout['bss'][0] <= var < ln.layout['bss'][1]   # 0: OFF
+    assert [string(long(labels + 4 * k)) for k in range(4)] == ['OFF', 'AB', 'CD', 'ABCD']
+    # the state-7 site is usb-ot's: a jmp to its seam, nop-padded
+    s7 = S7_SITE - DEV.main_load
+    assert ln.image[s7:s7 + 8] == b'\x4e\xf9' + struct.pack('>I', ln.map['otu_seam_state7']) + b'\x4e\x71'
+    # the inject, where the linker put it: dsp_asm's own words for that address, after the bus's table
+    w = ln.layout['dsp']['A']['sections']['usb-audio-in .dsp.A']
+    with tempfile.TemporaryDirectory() as tmp:
+        blob = os.path.join(tmp, 'inject.bin')
+        subprocess.run([asm, '-in', os.path.join(ex, 'inject.asm'), '-org', '%x' % w, '-out', blob],
+                       check=True, capture_output=True)
+        with open(blob, 'rb') as fh:
+            want = fh.read()
+    o = AREA + 3 * (w - 0xaa8) - DEV.main_load
+    assert ln.image[o:o + len(want)] == want
+    rx, n_rx, _e = ln.tables['ev_dsp_rx']
+    assert n_rx == 1 and words(ln.image, AREA + 3 * (rx - 0xaa8), 5) == [0x627000, 0x000204, 0x0bf080, w, 0x0c]
+    # refused without what it needs, and beside another feeder
+    assert any('requires usb-audio' in p for p in link.check([core, usb, bus, ain], img))
+    assert any('requires dspbus' in p for p in link.check([core, usb, audio, ain], img))
+    twin = link.Mod2(dict(json.loads(json.dumps(ain.doc)), id='usb-audio-in2'), 'twin')
+    assert any('dsp:feed' in p for p in link.check([core, usb, audio, bus, ain, twin], img))
 
 
 def test_the_machines_sites():

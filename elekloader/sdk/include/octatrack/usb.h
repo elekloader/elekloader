@@ -73,7 +73,10 @@ struct ot_usb_function {
     /* ABI 2. Called once at the controller's init, before the function's other calls. A 0 result
      * leaves the function out of this boot: no interfaces, no descriptors, none of the calls above.
      * A null pointer is always on. An early setting (OT_SET_EARLY) is in place by then, so this is
-     * where to read one and latch what descriptors() needs; it takes effect at the next boot. */
+     * where to read one and latch what descriptors() needs; it takes effect at the next boot.
+     * usb-ot reads `interfaces` and `endpoints` after this call, so a function whose interfaces
+     * follow a setting may set them here (its record is then not const). They are the same at
+     * both speeds: the interfaces are numbered once. */
     int (*enabled)(void);
 };
 
@@ -86,5 +89,27 @@ void ot_usb_stall(void);                            /* EP0 STALL, both direction
 void ot_usb_send(unsigned len, const void *data);   /* EP0 IN data, min(len, wLength), copied to its reply buffer */
 unsigned ot_usb_irq_off(void);                      /* -> the SR before, with interrupts masked */
 void ot_usb_irq_restore(unsigned sr);
+
+/* ---- the DSP feed (usb-ot 0.3) ---------------------------------------------------------------
+ *
+ * Each frame interrupt (16 samples) starts a chain of eDMA transfers between the ColdFire and the
+ * DSP; their completions (eDMA channel 0's interrupt, level 6) step it on, and its last state,
+ * state 7 (0x40004bc0), unmasks the frame interrupt. usb-ot holds that place: its handlers, the
+ * event ev_dsp_feed (void f(void)), run there once a frame, after every stock transfer of the frame.
+ * One of them may start one more transfer, a block of 16-bit words for DSP core 0: it lands in the
+ * core's X memory beside the frame's stock transfers, in the same bank, at + $320, where a DSP bus
+ * handler (ev_dsp_rx) of the frame that bank serves finds it, at r6 + $320. Stock's unmask then
+ * waits for that transfer to complete.
+ *
+ * The block is read by the eDMA: write it through OT_USB_UNCACHED. `words` is 32, 64, ... up to
+ * OT_DSP_FEED_MAX (X:$x320..$x39f). The host port carries 16 bits a word; the DSP reads each with a
+ * stale top byte. Only one mod may feed: claim the name `dsp:feed`. A block stays in the DSP's bank
+ * until another lands there, and the banks alternate frame by frame: a feeder that stops sends its
+ * "nothing" block twice at least. USB audio in (mods/usb-audio-in-ot) is the first feeder; the feed
+ * is not USB's, and could move to the DSP bus. Handlers run at level 6, above the frame interrupt
+ * (level 5), which they may interrupt: no EMAC, and keep them short. */
+#define OT_DSP_FEED_MAX     160u
+int ot_dsp_feed(const volatile void *block, unsigned words);   /* in an ev_dsp_feed handler: -> 1 started */
+extern volatile uint32_t ot_dsp_fed;                /* feeds completed */
 
 #endif

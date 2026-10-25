@@ -37,7 +37,7 @@ older ones people still have:
 | Analog Rytm MKII | 1.73 | `core-ar2-0.2.elemod` | not released: the last core with 1.73; build it from commit 92a99c9 ([below](#building-a-core)) |
 | Analog Four MKII | 1.56 | `core-a4-0.3.elemod` | a proof of concept, not released: build it ([below](#building-a-core)) |
 | Octatrack MKI, MKII | 1.40C | `core-ot-0.3.1.elemod` | the [core-ot-v0.3.1](https://github.com/irpina/elekloader/releases/tag/core-ot-v0.3.1) pre-release, and the shop |
-| Octatrack MKI, MKII | 1.40C | `core-ot-0.7.1.elemod` | on main, not released: build it ([below](#building-a-core)) |
+| Octatrack MKI, MKII | 1.40C | `core-ot-0.8.elemod` | on main, not released: build it ([below](#building-a-core)) |
 | Octatrack MKI, MKII | 1.40C | `core-ot-0.1.elemod` | the v0.4.0 release: PURGE SAMPLES freezes the unit with it, so use 0.3.1 or newer |
 | Model:Cycles | 1.13 | `core-mc-0.1.elemod` | on main, not released: build it ([below](#building-a-core)) |
 | Model:Samples | 1.13 | `core-ms-0.1.elemod` | on main, not released: build it ([below](#building-a-core)) |
@@ -150,7 +150,8 @@ the one a mod that uses it names in `resources.core`.
 - **Octatrack** ([mods/core-ot](../mods/core-ot)): a source of its own. It
   takes the mods' RAM from the sample and recorder memory, only what they
   use and at most 10 MB, and has a hook bus of the Octatrack's own: the UI,
-  MIDI, the audio frame, the transport, the project and the voices
+  MIDI, the audio frame, the transport, the project and the edits mods'
+  data must follow, the voices, the track icons and the SETUP knobs
   (ADAPTING.md, "The hook bus on the Octatrack", and the sections after it,
   which name the core-ot each part needs). Its companions:
   - [dspbus-ot](../mods/dspbus-ot): the mods' DSP code;
@@ -160,8 +161,9 @@ the one a mod that uses it names in `resources.core`.
   - [machines-ot](../mods/machines-ot): source machines, several in one
     build (`ot_machines`, Modwerk's record of the same name);
   - [usb-ot](../mods/usb-ot): USB functions, mods of their own that
-    combine, [usb-midi-ot](../mods/usb-midi-ot) and
-    [usb-audio-ot](../mods/usb-audio-ot);
+    combine, [usb-midi-ot](../mods/usb-midi-ot),
+    [usb-audio-ot](../mods/usb-audio-ot) and
+    [usb-audio-in-ot](../mods/usb-audio-in-ot) (audio in, with the DSP bus);
   - [settings-ot](../mods/settings-ot): every mod's settings, in a MODS
     category of the MAIN MENU;
   - [trig-events-ot](../mods/trig-events-ot): each trig as the frame

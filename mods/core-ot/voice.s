@@ -310,3 +310,38 @@ core_dsp_record:
 2:      movem.l (%sp), %d0-%d1/%a0-%a1/%a3
         lea     20(%sp), %sp
 9:      jmp     V_REC_NEXT
+
+| ---- ev_voice_reset: a voice about to be reset (core-ot 0.8) --------------------
+| At 0x40006820, the entry of the reset routine above (was: move.l a2,-(sp) ;
+| move.l d2,-(sp) ; move.l 12(sp),d1), before it masks the interrupts: (sp) =
+| the return, 4 the track. An argument above 7 recurses over the eight tracks
+| through this entry (lea of 0x40006820), so it is passed on unasked and each
+| track comes back here. Octabam's MUTE MODES drops the reset of a muted track
+| here (MIT). d0-d1/a0-a1 are free at a routine's entry. Handlers: int f(unsigned
+| trk), nonzero to keep the voice: the routine returns and ev_voice_kill does not
+| fire; the later handlers are not asked.
+        .globl  core_v_reset
+core_v_reset:
+        tst.l   ev_voice_reset
+        beq.s   9f
+        move.l  4(%sp), %d0
+        moveq   #7, %d1
+        cmp.l   %d0, %d1
+        bcs.s   9f                      | every track: stock's loop calls back for each
+        move.l  %a2, -(%sp)
+        lea     ev_voice_reset, %a2
+1:      move.l  (%a2)+, %d1
+        beq.s   2f
+        move.l  8(%sp), -(%sp)          | the track (4 past a2 and the return)
+        movea.l %d1, %a0
+        jsr     (%a0)
+        addq.l  #4, %sp
+        tst.l   %d0
+        beq.s   1b
+        movea.l (%sp)+, %a2
+        rts                             | kept: the reset is not made
+2:      movea.l (%sp)+, %a2
+9:      move.l  %a2, -(%sp)             | the instructions this replaced
+        move.l  %d2, -(%sp)
+        move.l  12(%sp), %d1
+        jmp     V_RESET_NEXT
