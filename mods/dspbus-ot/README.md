@@ -1,8 +1,8 @@
 # DSP bus for the Octatrack
 
 The DSP hook bus for the Octatrack (MKI and MKII), OS 1.40C. Mods can run
-code on the DSP with it. It needs the Octatrack's core (`mods/core-ot`, 0.1
-or 0.2), and every Octatrack mod with DSP code needs it.
+code on the DSP with it. It needs the Octatrack's core (`mods/core-ot`),
+and every Octatrack mod with DSP code needs it.
 
 The main OS uploads its DSP code to the DSP56721's two cores at boot:
 - payload A to core 0, which runs tracks 5-8, the inputs, the mix and the
