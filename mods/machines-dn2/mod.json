@@ -1,0 +1,260 @@
+{
+ "id": "machines-dn2",
+ "version": "0.1",
+ "license": "GPL-2.0-or-later",
+ "title": "DN2 synth and filter machines",
+ "description": "Native synth/filter clones and SHARC voice synths/filters in the Digitone II machine selector. Needs core 0.1.",
+ "device": "digitone-mk2",
+ "os": "1.12",
+ "sources": [
+  "machines.c",
+  "hooks.s"
+ ],
+ "defsym": {
+  "STOCK_NAMES": "0x401f7c04",
+  "STOCK_PERMIT": "0x401f7d42",
+  "STOCK_DESCRIPTORS": "0x42433b24",
+  "UNKNOWN_NAME": "0x40218ea9",
+  "UNKNOWN_LABEL": "0x40211156",
+  "CACHE_BEGIN": "0x405cdfb0",
+  "LIST_ALLOC_CONTINUE": "0x4004d8ea",
+  "LIST_END_CONTINUE": "0x4004d90a",
+  "GROUP_CONTINUE": "0x40059280",
+  "GROUP_SYNTH": "0x4005928a",
+  "PAGE_COUNT_CONTINUE": "0x400c263c",
+  "PAGE_CONTINUE": "0x400c265e",
+  "PARAM_CONTINUE": "0x400dc19e",
+  "FRAME_CONTINUE": "0x40027582",
+  "READER_FN": "0x4004b7f2",
+  "READER_EPILOGUE": "0x4004b81e",
+  "OWNER_CONTINUE": "0x40036c2a",
+  "RC0": "0x4004d9dc",
+  "RC1": "0x4004daaa",
+  "RC2": "0x4002db32",
+  "RC3": "0x40071918",
+  "RC4": "0x40071ebc",
+  "RC5": "0x4005cd68",
+  "RC6": "0x400d5bdc",
+  "RC7": "0x400d68c8",
+  "RC8": "0x400d7312",
+  "FILTER_NAMES": "0x401f7bbc",
+  "FILTER_DESCRIPTORS": "0x424339cc",
+  "FILTER_CACHE_BEGIN": "0x405cdfa4",
+  "FILTER_LIST_ALLOC_CONTINUE": "0x4004db16",
+  "FILTER_LIST_END_CONTINUE": "0x4004db36",
+  "FILTER_FRAME_CONTINUE": "0x4002758c",
+  "FILTER_READER_FN": "0x4004b860",
+  "FILTER_READER_EPILOGUE": "0x4004b88c",
+  "FRC0": "0x40045940",
+  "FRC1": "0x40045a5e",
+  "FRC2": "0x40045b34",
+  "FRC3": "0x4004607a",
+  "FRC4": "0x40071ece",
+  "FRC5": "0x400d5be8",
+  "FRC6": "0x400d68fc",
+  "FRC7": "0x400d7324"
+ },
+ "sites": [
+  {
+   "addr": "0x400c25f2",
+   "stock": "7204202f0004",
+   "op": "jmp",
+   "target": "dn2_descriptor"
+  },
+  {
+   "addr": "0x4004d8e0",
+   "stock": "4878001442b9405cdfb0",
+   "op": "jmp",
+   "target": "dn2_list_alloc"
+  },
+  {
+   "addr": "0x4004d900",
+   "stock": "4879401de17c41e80014",
+   "op": "jmp",
+   "target": "dn2_list_end"
+  },
+  {
+   "addr": "0x4005927a",
+   "stock": "7203b2806c0a",
+   "op": "jmp",
+   "target": "dn2_group"
+  },
+  {
+   "addr": "0x400dc496",
+   "stock": "7204202f0004",
+   "op": "jmp",
+   "target": "dn2_name"
+  },
+  {
+   "addr": "0x400dc4bc",
+   "stock": "7204202f0004",
+   "op": "jmp",
+   "target": "dn2_label"
+  },
+  {
+   "addr": "0x400dc4e2",
+   "stock": "7204202f0004",
+   "op": "jmp",
+   "target": "dn2_hint"
+  },
+  {
+   "addr": "0x400dc2fe",
+   "stock": "2f027404202f0008",
+   "op": "jmp",
+   "target": "dn2_permit"
+  },
+  {
+   "addr": "0x400c2636",
+   "stock": "7204202f0004",
+   "op": "jmp",
+   "target": "dn2_page_count"
+  },
+  {
+   "addr": "0x400c2656",
+   "stock": "222f0008202f000c",
+   "op": "jmp",
+   "target": "dn2_page"
+  },
+  {
+   "addr": "0x400dc196",
+   "stock": "202f000c226f0010",
+   "op": "jmp",
+   "target": "dn2_parameter"
+  },
+  {
+   "addr": "0x4002757c",
+   "stock": "10280d8c4880",
+   "op": "jmp",
+   "target": "dn2_frame_type"
+  },
+  {
+   "addr": "0x4004b816",
+   "stock": "712800de6002",
+   "op": "jmp",
+   "target": "dn2_reader"
+  },
+  {
+   "addr": "0x40036c24",
+   "stock": "772800de2f02",
+   "op": "jmp",
+   "target": "dn2_owner"
+  },
+  {
+   "addr": "0x4004d90a",
+   "stock": "4879401de168",
+   "op": "keep2",
+   "target": "dn2_list"
+  },
+  {
+   "addr": "0x40031394",
+   "stock": "4ef94004b7f2",
+   "op": "keep2",
+   "target": "dn2_real_reader"
+  },
+  {
+   "addr": "0x400dd3ea",
+   "stock": "7406",
+   "op": "bytes",
+   "new": "7421",
+   "kind": "code"
+  },
+  {
+   "addr": "0x400c2614",
+   "stock": "7205202f0004",
+   "op": "jmp",
+   "target": "dn2_filter_descriptor"
+  },
+  {
+   "addr": "0x4004db0c",
+   "stock": "4878001842b9405cdfa4",
+   "op": "jmp",
+   "target": "dn2_filter_list_alloc"
+  },
+  {
+   "addr": "0x4004db2c",
+   "stock": "4879401de16841e80018",
+   "op": "jmp",
+   "target": "dn2_filter_list_end"
+  },
+  {
+   "addr": "0x4004db36",
+   "stock": "4879401de150",
+   "op": "keep2",
+   "target": "dn2_filter_list"
+  },
+  {
+   "addr": "0x400dc508",
+   "stock": "7205202f0004",
+   "op": "jmp",
+   "target": "dn2_filter_name"
+  },
+  {
+   "addr": "0x400dc52e",
+   "stock": "7205202f0004",
+   "op": "jmp",
+   "target": "dn2_filter_label"
+  },
+  {
+   "addr": "0x40027586",
+   "stock": "10280d8d2046",
+   "op": "jmp",
+   "target": "dn2_filter_frame_type"
+  },
+  {
+   "addr": "0x4004b884",
+   "stock": "712800df6002",
+   "op": "jmp",
+   "target": "dn2_filter_reader"
+  },
+  {
+   "addr": "0x40036478",
+   "stock": "712800de4e75",
+   "op": "jmp",
+   "target": "dn2_synth_parameter_type"
+  },
+  {
+   "addr": "0x4003649c",
+   "stock": "712800df4e75",
+   "op": "jmp",
+   "target": "dn2_filter_parameter_type"
+  },
+  {
+   "addr": "0x400313e6",
+   "stock": "4ef94004b860",
+   "op": "keep2",
+   "target": "dn2_filter_real_reader"
+  },
+  {
+   "addr": "0x400dd420",
+   "stock": "143c0007",
+   "op": "bytes",
+   "new": "143c0021",
+   "kind": "code"
+  }
+ ],
+ "collections": {
+  "mk2_synths": 4,
+  "mk2_voice_synths": 4,
+  "mk2_filters": 4,
+  "mk2_voice_filters": 4
+ },
+ "resources": {
+  "core": "0.1",
+  "names": [
+   "mk2-synth:0",
+   "mk2-synth:1",
+   "mk2-synth:2",
+   "mk2-synth:3",
+   "mk2-synth:4",
+   "mk2-filter:0",
+   "mk2-filter:1",
+   "mk2-filter:2",
+   "mk2-filter:3",
+   "mk2-filter:4",
+   "mk2-filter:5"
+  ]
+ },
+ "requires": [
+  "core"
+ ]
+}

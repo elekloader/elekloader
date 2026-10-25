@@ -88,7 +88,7 @@ class SharcTests(unittest.TestCase):
         self.assertIsInstance(rebuilt, bytes)
         mutable[16] = 0
         self.assertEqual(records[1].raw, ORIGINAL[16:36])
-        # Exclusions govern new allocation; they do not rewrite valid historical loads.
+        # Exclusions govern new allocation; stock boot loads may use these ranges.
         case = next(c for c in CORPUS['parse_cases'] if c['name'] == 'original_protected_load')
         data = bytes.fromhex(case['hex'])
         profile = dict(SYNTHETIC, decoded_sha256=sha(data))

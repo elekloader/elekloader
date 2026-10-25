@@ -190,3 +190,116 @@ test('SHARC owner-stock exact no-op', { skip: !process.env.ELEKLOADER_DN2_SYX },
   assert.deepEqual(Buffer.from(outputs.syx), raw)
   formats.verify(outputs, parsed, formats.mainImage(parsed, device), device)
 })
+
+function machineArtifact(kind: 'voice' | 'filter', id = 6) {
+  const prefix = JSON.parse(readFileSync(new URL(`../../elekloader/sdk/include/digitone-mk2/${kind}-bridge.json`, import.meta.url), 'utf8'))
+  return { abi: profile[`${kind}Abi`], machine_id: id, stack_bytes: profile[`${kind}StackMax`]!,
+    entries: { render_offset_bytes: 2048 } as { render_offset_bytes: number } | null,
+    segments: [prefix, { offset_bytes: 2048, kind: 'code', hex: '0100'.repeat(3072) },
+      { offset_bytes: 8192, kind: 'data', hex: '00000000' }],
+    zero: [{ offset_bytes: 8196, size_bytes: 7164 }, { offset_bytes: 15360, size_bytes: 1024 }] }
+}
+
+for (const kind of ['voice', 'filter'] as const) test(`DN2 ${kind} artifacts pin only the adapter and bound the author kernel`, () => {
+  const artifact = machineArtifact(kind)
+  const payload = sharc.modulePayload(artifact, profile)
+  assert.equal(payload.machineId, 6)
+  assert.equal(payload.machineKind, kind)
+  assert.deepEqual(payload.owner, profile[`${kind}Range`])
+  const first = kind === 'voice' ? 5 : 6
+  for (const [change, error] of [
+    [(d: any) => { d.machine_id = first - 1 }, `SHARC ${kind} machine_id must be ${first}..31`],
+    [(d: any) => { d.machine_id = 32 }, `SHARC ${kind} machine_id must be ${first}..31`],
+    [(d: any) => { d.machine_id = true }, `SHARC ${kind} machine_id must be ${first}..31`],
+    [(d: any) => { d.stack_bytes += 1 }, `SHARC ${kind} stack exceeds the profile limit`],
+    [(d: any) => { d.entries = null }, `SHARC ${kind} payload needs a render entry`],
+    [(d: any) => { d.entries.render_offset_bytes = 0 }, `SHARC ${kind} mod overlaps the adapter reservation`],
+    [(d: any) => { d.entries.render_offset_bytes = 8128 }, 'SHARC entry is in the instruction read-ahead guard'],
+    [(d: any) => { d.entries.render_offset_bytes = 8192 }, 'SHARC entry is not in owned code'],
+    [(d: any) => { d.segments[0].hex = '0000' + d.segments[0].hex.slice(4) }, `SHARC ${kind} adapter does not match the qualified prefix`],
+    [(d: any) => { d.segments[1].hex = d.segments[1].hex.slice(0, -4) + '0000' }, 'SHARC mod code needs its profiled NOP read-ahead guard'],
+    [(d: any) => { d.zero[1].size_bytes += 4 }, 'SHARC zero range is unaligned or exceeds its owner'],
+    [(d: any) => { d.segments[2].offset_bytes -= 4 }, 'SHARC payload has a gap or overlap in its owner'],
+    [(d: any) => { d.zero = [{ offset_bytes: 8196, size_bytes: 8188 }] }, `SHARC ${kind} mod overlaps the adapter reservation`],
+  ] as const) {
+    const bad = structuredClone(artifact)
+    change(bad)
+    refusal(() => sharc.modulePayload(bad, profile), error)
+  }
+  artifact.segments[1].hex = '0000' + artifact.segments[1].hex.slice(4)
+  sharc.modulePayload(artifact, profile)
+  // A stateless filter may have no data segment; its complete owner is still initialized.
+  artifact.segments.pop()
+  artifact.zero[0] = { offset_bytes: 8192, size_bytes: 7168 }
+  sharc.modulePayload(artifact, profile)
+})
+
+test('DN2 combines one synth and one filter with matching independent identities', () => {
+  const rel = DIGITONE_MK2.releases[0], target = targetOf(DIGITONE_MK2, rel)
+  const image = new Uint8Array(rel.mainLen)
+  const core = new Mod2({ elemod: 2, id: 'core', version: '0.1', target,
+    sections: { '.boot': { align: 4, parts: [['hex', '00000000']] } },
+    collections: { mk2_voice_synths: { entry: 4 }, mk2_voice_filters: { entry: 4 },
+      mk2_synths: { entry: 4 }, mk2_filters: { entry: 4 } } }, 'core')
+  const doc = (kind: 'voice' | 'filter', id = 6, name: string = kind): Record<string, any> => ({
+    elemod: 2, id: name, version: '0.1', target,
+    sections: { '.run': { align: 4, parts: [['hex', id.toString(16).padStart(8, '0') + '00'.repeat(12)]] } },
+    symbols: { descriptor: ['.run', 0] },
+    contribute: [{ to: profile[`${kind}Table`], data: '00000000', relocs: [[0, 'abs32', 'sym:descriptor', 0]] }],
+    sharc: machineArtifact(kind, id),
+  })
+  const voice = () => new Mod2(doc('voice'), 'voice'), filter = () => new Mod2(doc('filter'), 'filter')
+  assert.deepEqual(check([core, voice(), filter()], image), [])
+  assert.deepEqual(check([core, filter(), voice()], image), [])
+  assert.deepEqual(check([core, voice()], image), [])
+  assert.deepEqual(check([core, filter()], image), [])
+  const collision = 'SHARC mods may combine only one DN2 voice and one DN2 filter'
+  for (const kind of ['voice', 'filter'] as const) {
+    const a = new Mod2(doc(kind), kind), b = new Mod2(doc(kind, 7, 'second'), 'second')
+    assert(check([core, a, b], image).includes(collision))
+    const absent = doc(kind); delete absent.sharc
+    assert(check([core, new Mod2(absent, kind)], image).includes(
+      `${kind} 0.1: DN2 ${kind} registration requires a matching SHARC ${kind} payload`))
+    const mismatch = doc(kind); mismatch.sharc.machine_id = 7
+    assert(check([core, new Mod2(mismatch, kind)], image).includes(
+      `${kind} 0.1: SHARC ${kind} machine_id must match its single native ${kind} registration`))
+    const both = doc(kind)
+    both.contribute.push({ ...both.contribute[0], to: profile[`${kind}CloneTable`] })
+    assert(check([core, new Mod2(both, kind)], image).includes(
+      `${kind} 0.1: SHARC ${kind} machine_id must match its single native ${kind} registration`))
+    const master = new Mod2({ elemod: 2, id: 'master', version: '0.1', target,
+      sections: {}, sharc: inertArtifact }, 'master')
+    assert(check([core, a, master], image).includes(collision))
+  }
+  assert(check([core, voice(), filter(), new Mod2(doc('voice', 7, 'second'), 'second')], image).includes(collision))
+  const wrongRole = doc('filter'); wrongRole.sharc = machineArtifact('voice')
+  assert(check([core, new Mod2(wrongRole, 'filter')], image).includes(
+    'filter 0.1: DN2 filter registration requires a matching SHARC filter payload'))
+})
+
+test('DN2 machine IDs can span stored parts without losing the SHARC registration', () => {
+  const dn = DIGITONE_MK2, rel = dn.releases[0], target = targetOf(dn, rel)
+  const image = new Uint8Array(rel.mainLen), machineId = bytes('00000005')
+  image.set(machineId, 0x100)
+  const core = new Mod2({ elemod: 2, id: 'core', version: '0.1', target,
+    sections: { '.boot': { align: 4, parts: [['hex', '00000000']] } },
+    collections: { mk2_voice_synths: { entry: 4 } } }, 'core')
+  const mod = (parts: unknown[], relocs: unknown[] = []) => new Mod2({
+    elemod: 2, id: 'voice', version: '0.1', target,
+    sections: { '.run': { align: 4, parts } }, symbols: { descriptor: ['.run', 0] }, relocs,
+    contribute: [{ to: 'mk2_voice_synths', data: '00000000', relocs: [[0, 'abs32', 'sym:descriptor', 0]] }],
+    sharc: machineArtifact('voice', 5),
+  }, 'voice')
+  for (const split of [1, 2, 3]) for (const leftStock of [false, true]) for (const rightStock of [false, true]) {
+    const parts = [leftStock ? ['stock', dn.mainLoad + 0x100, split] : ['hex', Buffer.from(machineId.slice(0, split)).toString('hex')],
+      rightStock ? ['stock', dn.mainLoad + 0x100 + split, 4 - split] : ['hex', Buffer.from(machineId.slice(split)).toString('hex')],
+      ['hex', '00'.repeat(12)]]
+    const voice = mod(parts)
+    assert.deepEqual(voice.impliedNames(image), ['mk2-synth:5'])
+    assert.deepEqual(check([core, voice], image), [])
+    const relocated = mod(parts, [['.run', 0, 'abs32', 'abs', 5]])
+    assert.deepEqual(relocated.impliedNames(image), [])
+    assert(check([core, relocated], image).includes(
+      'voice 0.1: SHARC voice machine_id must match its single native voice registration'))
+  }
+})

@@ -12,9 +12,8 @@ PERSONALIZE builder ends the same way. There is no `fast.s` (SRAM is not
 qualified, so there is no `.fast` area) and no `render.s` (the audio renders
 on the DSP).
 
-Core **0.2** adds the bridge for SHARC mods and keeps 0.1's control-side
-sites, tables and exports. A SHARC mod sets `resources.core: "0.2"`; mods
-made for 0.1 can keep asking for 0.1.
+The core includes the SHARC bridge. A DSP mod requires this core and
+provides a prelinked artifact following its callback contract.
 
 `bridge.sharc.json` is the bridge, already compiled and linked from
 `sharc-bridge.s`, with the slot and pitch reader the
@@ -82,14 +81,14 @@ Build it with the SDK (it needs m68k binutils; with Homebrew's
 `m68k-elf-binutils`, set `ELEKLOADER_CROSS=m68k-elf-`):
 
 ```bash
-python -m elekloader.sdk.build mods/core-dn2 --stock Digitone_II_OS1.12.syx      # out/core-0.2.elemod
-python -m elekloader.lint mods/core-dn2/out/core-0.2.elemod --stock Digitone_II_OS1.12.syx
+python -m elekloader.sdk.build mods/core-dn2 --stock Digitone_II_OS1.12.syx      # out/core-0.1.elemod
+python -m elekloader.lint mods/core-dn2/out/core-0.1.elemod --stock Digitone_II_OS1.12.syx
 ```
 
 ## Input bridge and SysEx observers
 
-DigiHealth's DN2 port uses these shared facilities; it owns no stock code
-sites. The six UI events and their existing implementations remain intact.
+DigiHealth's DN2 port uses these shared facilities for remote input and
+SysEx requests.
 
 - `input.c` merges physical and synthetic key masks and refuses physical
   overlap or a full UI queue. `core_keys_set` and `core_keys_clear` run only
@@ -107,9 +106,8 @@ sites. The six UI events and their existing implementations remain intact.
   `0x401200c4` with mask 1. PIT2's stock setup has prescaler 6 and modulus
   17187: approximately 120 Hz at the derived 132 MHz bus clock. The bridge
   adds 25 ms per three callbacks (8/9 ms resolution), separately from the
-  stock counter that wraps at 4096. It starts no timer. On the physical
-  DS03 build, three one-second comparisons with the host clock differed
-  by at most 0.3%. A stalled scheduler can delay input cleanup.
+  stock counter that wraps at 4096. It starts no timer. A stalled scheduler
+  can delay input cleanup.
 - `ev_sysex`: `void f(const unsigned char *message, unsigned length,
   unsigned source)`, on the MIDI task before stock routing. It preserves
   the router ABI at `0x4012197a` and always continues stock routing. Handlers
@@ -119,27 +117,14 @@ sites. The six UI events and their existing implementations remain intact.
 The C declarations are in `elekloader/sdk/include/digitone-mk2/core.h`.
 No arbitrary memory-write or function-call command is added.
 
-## Validation and limits
+## Checks
 
-Core 0.2 is experimental. `tests/test_digitone2.py` checks the stock sites,
-stack/queue contracts, clock setup and exact patch boundaries.
-`tests/test_dn2_input.py` checks ownership and input/queue bounds without
-firmware. Digikit's ColdFire emulator checks stock-identical core-only
-screens, the marker, all six UI events, reopened menu callbacks, subscriber
-order and key consumption. It does not emulate DSP audio.
+`tests/test_digitone2.py` checks stock sites, stack/queue contracts, clock
+setup and exact patch boundaries. `tests/test_dn2_input.py` checks input
+ownership and queue bounds without firmware. The coupled emulator checks
+native machine selection and DSP output with the external consumer.
+Hardware workload and timing qualification remain separate.
 
-On a physical unit, the DS03 showcase (core + DigiHealth + hooks-check)
-passed the six UI events, encoder delivery, reopened menu callbacks,
-subscriber ordering and consumed/pass-through TEMPO. The DH03 build
-(core + DigiHealth) passed clean-screen, normal TEMPO, encoder, bounded
-hold-expiry and SYSTEM INFO checks. Both installed builds matched their
-exact immutable runtime bytes through read-only diagnostics. These are
-functional checks; longer project/audio qualification remains pending.
-The [device guide](../../docs/DEVICES.md#the-digitone-ii-112) records the
-candidate identities, measured 2 MiB USB update cap and separate emulator
-and physical evidence.
-
-DigiHealth is available on the [DN2 fork branch](https://github.com/simonjohansson/digihealth/tree/codex/dn2-remote-control).
-The hooks-check showcase draws five bars over the top of every screen;
-these deliberately erase parts of the stock interface. They are diagnostic
-drawing, not a display-tearing symptom. Omit hooks-check for normal use.
+Use the owner's [DigiHealth DN2 fork](https://github.com/simonjohansson/digihealth/tree/codex/dn2-remote-control)
+for device interaction. The hooks-check example deliberately overlays the
+stock interface; omit it from normal mod builds.

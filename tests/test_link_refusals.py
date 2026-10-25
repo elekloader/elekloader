@@ -12,8 +12,9 @@ A message is a class. `test_every_refusal_has_a_fixture` reads the messages out 
 and the loader's functions in elekloader/elemod.py (by their syntax, each field blanked) and fails for
 one that no row below names, so a new refusal comes with its fixtures or is not merged. The DSP
 refusals have their fixtures in tests/test_octatrack.py, which needs the real Octatrack OS for the DSP
-payload. SHARC linker refusals are in tests/test_sharc_active.py with the owner's DN2 stock and
-cross compiler; `external` says where, and the test checks the text is still there.
+payload. SHARC linker refusals are in tests/test_sharc_active.py and tests/test_sharc_filter.py
+with the owner's DN2 stock and cross compiler; `external` says where, and the test checks the text
+is still there.
 """
 import ast
 import copy
@@ -147,14 +148,21 @@ def external(fn, template, path, text):
     EXTERNAL[(fn, template)] = (path, text)
 
 
-external('check', 'only one SHARC mod may own the DN2 reservation', 'tests/test_sharc_active.py',
-         'only one SHARC mod may own the DN2 reservation')
+external('check', 'SHARC mods may combine only one DN2 voice and one DN2 filter',
+         'tests/test_sharc_filter.py', ['SHARC mods may combine only one DN2 voice and one DN2 filter',
+                                      'test_pair_binds_both_hooks_and_is_order_independent'])
 external('check', 'active SHARC mod requires a qualified matching core bridge', 'tests/test_sharc_active.py',
          'active SHARC mod requires a qualified matching core bridge')
 external('check', '<> has unqualified active SHARC core bytes or entry', 'tests/test_sharc_active.py',
          'unqualified active SHARC core bytes or entry')
 external('check', 'active SHARC stack exceeds the profile limit', 'tests/test_sharc_active.py',
          'active SHARC stack exceeds the profile limit')
+external('check', '<>: DN2 <> registration requires a matching SHARC <> payload',
+         'tests/test_sharc_filter.py', ['DN2 %s registration requires a matching SHARC %s payload',
+                                      'test_pair_binds_both_hooks_and_is_order_independent'])
+external('check', '<>: SHARC <> machine_id must match its single native <> registration',
+         'tests/test_sharc_filter.py', ['SHARC %s machine_id must match its single native %s registration',
+                                      'test_pair_binds_both_hooks_and_is_order_independent'])
 external('link', 'SHARC mod needs the stock section-7 stream', 'tests/test_sharc_active.py',
          'SHARC mod needs the stock section-7 stream')
 external('link', 'SHARC stored section exceeds the profile limit', 'tests/test_sharc_active.py',

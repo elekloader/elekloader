@@ -78,7 +78,7 @@ class ActiveSineTests(unittest.TestCase):
             large_stack = copy.deepcopy(app.doc)
             large_stack['sharc']['stack_bytes'] = rel.sharc['stack_max']
             for message, mods in (
-                ('only one SHARC mod may own the DN2 reservation', [core, app, asm]),
+                ('SHARC mods may combine only one DN2 voice and one DN2 filter', [core, app, asm]),
                 ('active SHARC mod requires a qualified matching core bridge',
                  [link.Mod2(old_core, 'old-core'), app]),
                 ('unqualified active SHARC core bytes or entry',

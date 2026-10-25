@@ -210,12 +210,19 @@ def module_payload(doc, profile, core=False):
     """Validate the narrow prelinked format-2 payload; offsets are owner bytes."""
     if not profile or not profile.get('abi'):
         raise ModError('SHARC payload has no supported device ABI')
-    if not isinstance(doc, dict) or set(doc) != {'abi', 'segments', 'zero', 'entries', 'stack_bytes'}:
+    machine_kind = next((k for k in ('voice', 'filter') if not core and isinstance(doc, dict)
+                 and profile.get(k + '_abi') and doc.get('abi') == profile[k + '_abi']), None)
+    keys = {'abi', 'segments', 'zero', 'entries', 'stack_bytes'}
+    if machine_kind:
+        keys.add('machine_id')
+    if not isinstance(doc, dict) or set(doc) != keys:
+        if machine_kind:
+            raise ModError('SHARC %s payload needs exactly abi, segments, zero, entries, stack_bytes, machine_id' % machine_kind)
         raise ModError('SHARC payload needs exactly abi, segments, zero, entries, stack_bytes')
-    abi = profile['abi'] if core else profile.get('l2_abi')
+    abi = profile['abi'] if core else profile[machine_kind + '_abi'] if machine_kind else profile.get('l2_abi')
     if not abi or doc['abi'] != abi:
         raise ModError('SHARC ABI does not match the device profile')
-    owner = profile['core_range'] if core else profile['l2_app_range']
+    owner = profile['core_range'] if core else profile[machine_kind + '_range'] if machine_kind else profile['l2_app_range']
     size = owner[1] - owner[0]
     spans, segments, zeros = [], [], []
     if not isinstance(doc['segments'], list) or not doc['segments']:
@@ -253,7 +260,7 @@ def module_payload(doc, profile, core=False):
         raise ModError('SHARC payload has a gap or overlap in its owner')
     entries = doc['entries']
     if entries is not None:
-        keys = {'hook_offset_bytes'} if core else {'init_offset_bytes', 'render_offset_bytes'}
+        keys = {'hook_offset_bytes'} if core else {'render_offset_bytes'} if machine_kind else {'init_offset_bytes', 'render_offset_bytes'}
         if not isinstance(entries, dict) or set(entries) != keys:
             raise ModError('SHARC entries do not match core/mod role')
         for off in entries.values():
@@ -271,10 +278,33 @@ def module_payload(doc, profile, core=False):
                 raise ModError('SHARC mod code needs its profiled NOP read-ahead guard')
             if any(start + len(data) - guard <= off < start + len(data) for off in entries.values()):
                 raise ModError('SHARC entry is in the instruction read-ahead guard')
+    if machine_kind:
+        machine = doc['machine_id']
+        prefix = profile[machine_kind + '_adapter_bytes']
+        state = size - profile[machine_kind + '_state_bytes']
+        first = 5 if machine_kind == 'voice' else 6
+        if not _uint32(machine) or not first <= machine < 32:
+            raise ModError('SHARC %s machine_id must be %d..31' % (machine_kind, first))
+        if entries is None:
+            raise ModError('SHARC %s payload needs a render entry' % machine_kind)
+        if segments[0][:2] != (0, 'code') or len(segments[0][2]) != prefix \
+                or sha(segments[0][2]) != profile[machine_kind + '_adapter_sha256']:
+            raise ModError('SHARC %s adapter does not match the qualified prefix' % machine_kind)
+        if (state, profile[machine_kind + '_state_bytes']) not in zeros \
+                or any(off < prefix or off + len(data) > state for off, _kind, data in segments[1:]) \
+                or any(off < prefix or off + count > state for off, count in zeros if off != state) \
+                or entries['render_offset_bytes'] < prefix:
+            raise ModError('SHARC %s mod overlaps the adapter reservation' % machine_kind)
     stack = doc['stack_bytes']
+    if machine_kind and (not _uint32(stack) or stack > profile[machine_kind + '_stack_max']):
+        raise ModError('SHARC %s stack exceeds the profile limit' % machine_kind)
     if not _uint32(stack) or stack > profile['stack_max']:
         raise ModError('SHARC stack contribution exceeds the profile limit')
     if entries is None and stack:
         raise ModError('inert SHARC payload must declare zero stack')
-    return {'segments': segments, 'zero': zeros, 'entries': entries, 'stack_bytes': stack,
-            'owner': owner}
+    result = {'segments': segments, 'zero': zeros, 'entries': entries, 'stack_bytes': stack,
+              'owner': owner}
+    if machine_kind:
+        result['machine_id'] = doc['machine_id']
+        result['machine_kind'] = machine_kind
+    return result

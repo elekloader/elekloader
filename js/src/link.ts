@@ -208,13 +208,14 @@ export class Mod2 implements AnyMod {
    * so or not. `image` is the stock main OS the mod is for: a descriptor's bytes may be stock parts. A descriptor
    * this cannot read (outside the mod's own bytes, or relocated there) claims nothing. check() adds them to the
    * mod's names. link.Mod2.implied_names. */
-  impliedNames(image: Uint8Array): string[] {
+  impliedNames(image: Uint8Array, onlyTable?: string): string[] {
     const out: string[] = []
     for (const [table, at, count, prefix] of this.dev.slotClaims) {
+      if (onlyTable !== undefined && table !== onlyTable) continue
       for (const c of this.contribute) {
         if (c.to !== table) continue
         for (const [off, typ, tgt, add] of c.relocs) {
-          if (off !== 0 || typ !== 'abs32') continue
+          if (off % 4 || typ !== 'abs32') continue
           let sec: string, base: number
           if (tgt.startsWith('sym:') && this.symbols.has(tgt.slice(4))) [sec, base] = this.symbols.get(tgt.slice(4))!
           else if (tgt.startsWith('sec:')) [sec, base] = [tgt.slice(4), 0]
@@ -228,21 +229,23 @@ export class Mod2 implements AnyMod {
     return out
   }
 
-  /** The big-endian long at sec+off of this mod's bytes, or null: in a section without bytes, split across parts,
+  /** The big-endian long at sec+off of this mod's bytes, or null: in a section without bytes
    * or under a relocation. */
   private long(sec: string, off: number, image: Uint8Array): number | null {
     const d = this.sections.get(sec)
     if (!d || !d.parts || d.len === undefined || off < 0 || off + 4 > d.len) return null
     if (this.relocs.some(([s, o, t]) => s === sec && o < off + 4 && off < o + (RSIZE.get(t) ?? 0))) return null
+    const raw: number[] = []
     let at = 0
     for (const p of d.parts) {
       const n = p[0] === 'hex' ? p[1].length : p[2]
-      if (at <= off && off + 4 <= at + n) {
-        const [b, i] = p[0] === 'hex' ? [p[1], off - at] : [image, p[1] - this.dev.mainLoad + off - at]
-        if (i < 0 || i + 4 > b.length) return null
-        return ((b[i] << 24) | (b[i + 1] << 16) | (b[i + 2] << 8) | b[i + 3]) >>> 0
+      const lo = Math.max(off, at), hi = Math.min(off + 4, at + n)
+      if (lo < hi) {
+        const [b, i] = p[0] === 'hex' ? [p[1], lo - at] : [image, p[1] - this.dev.mainLoad + lo - at]
+        if (i < 0 || i + hi - lo > b.length) return null
+        raw.push(...b.subarray(i, i + hi - lo))
+        if (raw.length === 4) return ((raw[0] << 24) | (raw[1] << 16) | (raw[2] << 8) | raw[3]) >>> 0
       }
-      if (at < off + 4 && off < at + n) return null           // split across parts
       at += n
     }
     return null
@@ -341,8 +344,27 @@ export function check(mods: Mod2[], image: Uint8Array): string[] {
         bad.push(`${m.label()} needs core ${m.needsCore} or newer, and this build has core ${cores[0].version}`)
   }
   const sharcMods = mods.filter(m => m.sharc && !m.sections.has('.boot'))
-  if (sharcMods.length > 1) bad.push('only one SHARC mod may own the DN2 reservation')
+  if (sharcMods.length > 1 && sharcMods.map(m => m.sharc!.machineKind).sort().join(',') !== 'filter,voice')
+    bad.push('SHARC mods may combine only one DN2 voice and one DN2 filter')
+  for (const kind of ['voice', 'filter'] as const) {
+    const table = mods[0].rel.sharc?.[`${kind}Table`]
+    for (const m of mods)
+      if (table && m.contribute.some(c => c.to === table) && m.sharc?.machineKind !== kind)
+        bad.push(`${m.label()}: DN2 ${kind} registration requires a matching SHARC ${kind} payload`)
+  }
   for (const app of sharcMods) {
+    const kind = app.sharc!.machineKind
+    if (kind) {
+      const profile = app.rel.sharc!, table = profile[`${kind}Table`], cloneTable = profile[`${kind}CloneTable`]
+      const contributions = app.contribute.filter(c => c.to === table)
+      const expected = app.dev.slotClaims.filter(([name]) => name === table)
+        .map(([, , , prefix]) => `${prefix}:${app.sharc!.machineId}`)
+      if (contributions.length !== 1 || contributions[0].data.length !== 4 ||
+        !expected.length || JSON.stringify(app.impliedNames(image, table)) !== JSON.stringify(expected) ||
+        expected.some(name => app.impliedNames(image, cloneTable).includes(name)))
+        bad.push(`${app.label()}: SHARC ${kind} machine_id must match its single native ${kind} registration`)
+      continue
+    }
     if (app.sharc!.entries === null) continue
     const core = cores.length === 1 ? cores[0] : null
     if (!core?.sharc) { bad.push('active SHARC mod requires a qualified matching core bridge'); continue }
@@ -500,8 +522,9 @@ export type Layout = {
   blob_len: number; sections: Record<string, number>; ddr_spare: number; fast_spare: number; ddr_size: number; fast_size: number
   reserve?: { units: number; end: number }   // a core sized to the mods: the pages it takes, and where they end
   dsp?: Record<string, DspLayout>              // words: P addresses of each payload's area
-  sharc?: { owner: [number, number]; decoded: number; decoded_sha256: string;
-    stored: number; stored_sha256: string; app: string; core?: [number, number]; hook?: number }
+  sharc?: { decoded: number; decoded_sha256: string; stored: number; stored_sha256: string;
+    mods?: { id: string; owner: [number, number]; hook: number }[];
+    owner?: [number, number]; app?: string; core?: [number, number]; hook?: number }
 }
 
 export type Linked = {
@@ -541,28 +564,45 @@ export function link(mods: Mod2[], image: Uint8Array, lock: store.Lock | null = 
   let dspStream: Uint8Array | null = null, dspStored: Uint8Array | null = null
   if (sharcMods.length) {
     if (sharcStream === null) throw new ModError('SHARC mod needs the stock section-7 stream')
-    const payload = sharcMods[0].sharc!, base = payload.owner[0]
-    let loads: [number, Uint8Array][] = payload.segments.map(([off, , data]) => [base + off, data])
-    let fills: [number, number, number][] = payload.zero.map(([off, count]) => [base + off, count, 0])
-    let patches: [number, Uint8Array, Uint8Array][] = []
-    if (payload.entries !== null) {
-      const bridge = core.sharc!
-      const pc16 = (off: number) => sharcRecords.pc16(rel.sharc!, base + off)
-      const binding = new Uint8Array(12), words = new DataView(binding.buffer)
-      words.setUint32(0, pc16(payload.entries.init_offset_bytes), true)
-      words.setUint32(4, pc16(payload.entries.render_offset_bytes), true)
-      const coreBase = bridge.owner[0]
-      const [lo, hi] = rel.sharc!.pitchRange!, [at, expected] = rel.sharc!.keyedPitchTable!
-      const table = hexBytes(expected, 'SHARC keyed pitch table')
-      loads.push([lo + at, table])
-      fills.push([lo, at, 0], [lo + at + table.length, hi - lo - at - table.length, 0])
-      loads = [[coreBase, binding], ...bridge.segments.map(([off, , data]) => [coreBase + off, data] as [number, Uint8Array]), ...loads]
-      fills = [...bridge.zero.map(([off, count]) => [coreBase + off, count, 0] as [number, number, number]), ...fills]
-      const [site, old, replacement] = rel.sharc!.hook!
-      patches = [[site, hexBytes(old, 'SHARC stock hook'), hexBytes(replacement, 'SHARC bridge hook')]]
+    const allLoads: [number, Uint8Array][] = [], allFills: [number, number, number][] = []
+    const allPatches: [number, Uint8Array, Uint8Array][] = []
+    for (const mod of sharcMods) {
+      const payload = mod.sharc!, base = payload.owner[0]
+      let loads: [number, Uint8Array][] = payload.segments.map(([off, , data]) => [base + off, data])
+      let fills: [number, number, number][] = payload.zero.map(([off, count]) => [base + off, count, 0])
+      let patches: [number, Uint8Array, Uint8Array][] = []
+      const kind = payload.machineKind
+      if (kind) {
+        const at = rel.sharc![`${kind}BindingOffset`]!
+        const binding = new Uint8Array(8), words = new DataView(binding.buffer)
+        words.setUint32(0, sharcRecords.pc16(rel.sharc!, base + payload.entries!.render_offset_bytes), true)
+        words.setUint32(4, payload.machineId!, true)
+        const lo = payload.owner[1] - rel.sharc![`${kind}StateBytes`]!
+        fills = fills.filter(([address]) => address !== lo)
+        fills.push([lo, base + at - lo, 0], [base + at + 8, payload.owner[1] - base - at - 8, 0])
+        loads.push([base + at, binding])
+        const [site, old, replacement] = rel.sharc![`${kind}Hook`]!
+        patches = [[site, hexBytes(old, 'SHARC stock hook'), hexBytes(replacement, 'SHARC bridge hook')]]
+      } else if (payload.entries !== null) {
+        const bridge = core.sharc!
+        const pc16 = (off: number) => sharcRecords.pc16(rel.sharc!, base + off)
+        const binding = new Uint8Array(12), words = new DataView(binding.buffer)
+        words.setUint32(0, pc16(payload.entries.init_offset_bytes), true)
+        words.setUint32(4, pc16(payload.entries.render_offset_bytes), true)
+        const coreBase = bridge.owner[0]
+        const [lo, hi] = rel.sharc!.pitchRange!, [at, expected] = rel.sharc!.keyedPitchTable!
+        const table = hexBytes(expected, 'SHARC keyed pitch table')
+        loads.push([lo + at, table])
+        fills.push([lo, at, 0], [lo + at + table.length, hi - lo - at - table.length, 0])
+        loads = [[coreBase, binding], ...bridge.segments.map(([off, , data]) => [coreBase + off, data] as [number, Uint8Array]), ...loads]
+        fills = [...bridge.zero.map(([off, count]) => [coreBase + off, count, 0] as [number, number, number]), ...fills]
+        const [site, old, replacement] = rel.sharc!.hook!
+        patches = [[site, hexBytes(old, 'SHARC stock hook'), hexBytes(replacement, 'SHARC bridge hook')]]
+      }
+      allLoads.push(...loads); allFills.push(...fills); allPatches.push(...patches)
     }
     dspStream = sharcRecords.insert(sharcStream, rel.sharc!,
-      loads, fills, patches)
+      allLoads, allFills, allPatches)
     dspStored = syx.packMain(dspStream)
     if (dspStored.length > rel.sharc!.storedMax) throw new ModError('SHARC stored section exceeds the profile limit')
   }
@@ -902,12 +942,20 @@ export function link(mods: Mod2[], image: Uint8Array, lock: store.Lock | null = 
     blob_len: blob.length, sections, ddr_spare: ddrEnd - bssEnd, fast_spare: fastEnd - fastAt, ddr_size: ddrEnd - ddrBase,
     fast_size: fastEnd - fastBase,
   }
-  if (sharcMods.length) layout.sharc = { owner: sharcMods[0].sharc!.owner,
-    decoded: dspStream!.length, decoded_sha256: sha(dspStream!),
-    stored: dspStored!.length, stored_sha256: sha(dspStored!), app: sharcMods[0].id }
-  if (sharcMods.length && sharcMods[0].sharc!.entries !== null) {
-    layout.sharc!.core = core.sharc!.owner
-    layout.sharc!.hook = rel.sharc!.hook![0]
+  if (sharcMods.length) {
+    layout.sharc = { decoded: dspStream!.length, decoded_sha256: sha(dspStream!),
+      stored: dspStored!.length, stored_sha256: sha(dspStored!) }
+    if (sharcMods[0].sharc!.machineKind) {
+      layout.sharc.mods = sharcMods.map(m => ({ id: m.id, owner: m.sharc!.owner,
+        hook: rel.sharc![`${m.sharc!.machineKind!}Hook`]![0] }))
+    } else {
+      layout.sharc.owner = sharcMods[0].sharc!.owner
+      layout.sharc.app = sharcMods[0].id
+      if (sharcMods[0].sharc!.entries !== null) {
+        layout.sharc.core = core.sharc!.owner
+        layout.sharc.hook = rel.sharc!.hook![0]
+      }
+    }
   }
   if (units !== null) layout.reserve = { units, end: ddrBase + units * dev.reserve![0] }   // the reserve the core takes
   if (areas.size) {

@@ -555,6 +555,88 @@ def test_a_machine_claims_its_slot():
     assert not [p for p in link.check([mod('c', 36), mod('d', 37)], image) if 'claim' in p]
     assert mod('e', 53).implied_names(image) == []
 
+def test_dn2_synth_claims_its_stable_type():
+    dn = next(d for d in devices.devices() if d.key == 'digitone-mk2')
+    r = dn.releases['1.12']
+    image = bytes(r.main_len)
+
+    def mod(i, slot, table='mk2_synths'):
+        return link.Mod2({'elemod': 2, 'id': i, 'version': '1', 'target': devices.target_of(dn, r),
+                          'sections': {'.run': {'align': 4, 'parts': [['hex', '%08x' % slot + '00' * 12]]}},
+                          'symbols': {'m': ['.run', 0]},
+                          'contribute': [{'to': table, 'data': '00000000',
+                                          'relocs': [[0, 'abs32', 'sym:m', 0]]}]}, i)
+    assert mod('a', 5).implied_names(image) == ['mk2-synth:5']
+    assert 'a 1 and b 1 both claim mk2-synth:5' in link.check([mod('a', 5), mod('b', 5)], image)
+    assert not [p for p in link.check([mod('a', 5), mod('b', 31)], image) if 'claim' in p]
+    assert mod('outside', 32).implied_names(image) == []
+    assert mod('filter', 6, 'mk2_filters').implied_names(image) == ['mk2-filter:6']
+    assert 'a 1 and b 1 both claim mk2-filter:6' in link.check(
+        [mod('a', 6, 'mk2_filters'), mod('b', 6, 'mk2_filters')], image)
+    assert not [p for p in link.check(
+        [mod('synth', 6), mod('filter', 6, 'mk2_filters')], image) if 'claim' in p]
+
+
+def test_dn2_machine_bundles_claim_every_pointer_entry():
+    dn = next(d for d in devices.devices() if d.key == 'digitone-mk2')
+    r = dn.releases['1.12']
+    image = bytes(r.main_len)
+
+    def mod(i, slots, table):
+        return link.Mod2({'elemod': 2, 'id': i, 'version': '1', 'target': devices.target_of(dn, r),
+                          'sections': {'.run': {'align': 4, 'parts': [
+                              ['hex', ''.join('%08x' % slot + '00' * 12 for slot in slots)]]}},
+                          'symbols': {'m%d' % n: ['.run', n * 16] for n in range(len(slots))},
+                          'contribute': [{'to': table, 'data': '00000000' * len(slots),
+                                          'relocs': [[n * 4, 'abs32', 'sym:m%d' % n, 0]
+                                                     for n in range(len(slots))]}]}, i)
+
+    for clone, voice, prefix in (('mk2_synths', 'mk2_voice_synths', 'mk2-synth'),
+                                ('mk2_filters', 'mk2_voice_filters', 'mk2-filter')):
+        bundle = mod('bundle', [6, 7], clone)
+        assert bundle.implied_names(image) == [prefix + ':6', prefix + ':7']
+        problems = link.check([bundle, mod('custom', [7], voice)], image)
+        assert 'bundle 1 and custom 1 both claim %s:7' % prefix in problems, problems
+        problems = link.check([mod('bundle', [6, 7], clone), mod('custom', [8], voice)], image)
+        assert not [p for p in problems if 'claim' in p], problems
+
+
+def test_dn2_machine_ids_can_span_stored_parts():
+    from elekloader.sdk.sharc import voice_artifact
+    dn = next(d for d in devices.devices() if d.key == 'digitone-mk2')
+    r = dn.releases['1.12']
+    target = devices.target_of(dn, r)
+    image = bytearray(r.main_len)
+    machine_id = (5).to_bytes(4, 'big')
+    image[0x100:0x104] = machine_id
+    core = link.Mod2({'elemod': 2, 'id': 'core', 'version': '0.1', 'target': target,
+                      'sections': {'.boot': {'align': 4, 'parts': [['hex', '00000000']]}},
+                      'collections': {'mk2_voice_synths': {'entry': 4}}}, 'core')
+
+    def mod(parts, relocs=()):
+        return link.Mod2({'elemod': 2, 'id': 'voice', 'version': '0.1', 'target': target,
+                          'sections': {'.run': {'align': 4, 'parts': parts}},
+                          'symbols': {'descriptor': ['.run', 0]}, 'relocs': list(relocs),
+                          'contribute': [{'to': 'mk2_voice_synths', 'data': '00000000',
+                                          'relocs': [[0, 'abs32', 'sym:descriptor', 0]]}],
+                          'sharc': voice_artifact(bytes(4), b'', 0, 5, 0)}, 'voice')
+
+    for split in (1, 2, 3):
+        for left_stock in (False, True):
+            for right_stock in (False, True):
+                parts = [(['stock', dn.main_load + 0x100, split] if left_stock
+                          else ['hex', machine_id[:split].hex()]),
+                         (['stock', dn.main_load + 0x100 + split, 4 - split] if right_stock
+                          else ['hex', machine_id[split:].hex()]), ['hex', '00' * 12]]
+                voice = mod(parts)
+                assert voice.implied_names(image) == ['mk2-synth:5'], parts
+                assert link.check([core, voice], image) == [], parts
+                relocated = mod(parts, [('.run', 0, 'abs32', 'abs', 5)])
+                assert relocated.implied_names(image) == []
+                assert 'voice 0.1: SHARC voice machine_id must match its single native voice registration' in link.check(
+                    [core, relocated], image)
+
+
 def test_kept_bytes_refuse_every_write():
     """A device's `keep`: main OS bytes that look free but the OS reads, on the Octatrack the
     16 the stock DELAY reads past its coefficient table (octabam #771). A site that writes one
@@ -934,6 +1016,14 @@ def test_every_refusal_of_the_linker_has_a_fixture_that_is_refused_and_one_that_
     refusals.test_digitakt_fixtures()
     refusals.test_analog_rytm_fixtures()
     refusals.test_the_image_check_refuses_a_protected_or_kept_byte_the_other_checks_let_through()
+
+
+def test_dn2_machines_suite():
+    import unittest
+    suite = unittest.TestLoader().discover(HERE, pattern='test_dn2_machines.py')
+    assert suite.countTestCases(), 'no DN2 machine registry tests discovered'
+    result = unittest.TextTestRunner().run(suite)
+    assert result.wasSuccessful(), 'DN2 machine registry suite failed'
 
 
 def test_sharc_suite():

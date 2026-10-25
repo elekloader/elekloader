@@ -2,7 +2,7 @@
 // The linker's checks that need no firmware: tests/test_units.py's counterparts.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { ANALOG_RYTM_MK2, DIGITAKT_MK1, DIGITONE_MK1, OCTATRACK, devices, targetOf } from '../src/devices.ts'
+import { ANALOG_RYTM_MK2, DIGITONE_MK2, DIGITAKT_MK1, DIGITONE_MK1, OCTATRACK, devices, targetOf } from '../src/devices.ts'
 import { sha } from '../src/bytes.ts'
 import { Mod, check as check1 } from '../src/elemod.ts'
 import { Mod2, check, imageProblems } from '../src/link.ts'
@@ -50,6 +50,42 @@ test('a machine claims its slot (machine:<n>) on the Analog Rytm MKII', () => {
   assert.ok(check([mod('a', 36), mod('b', 36)], image).includes('a 1 and b 1 both claim machine:36'))
   assert.ok(!check([mod('c', 36), mod('d', 37)], image).some(p => p.includes('claim')))
   assert.deepEqual(mod('e', 53).impliedNames(image), [])
+})
+
+test('DN2 synth and filter claims use separate stable ID namespaces', () => {
+  const dn = DIGITONE_MK2, r = dn.releases[0], image = new Uint8Array(r.mainLen)
+  const mod = (id: string, type: number, table = 'mk2_synths') => new Mod2({
+    elemod: 2, id, version: '1', target: targetOf(dn, r),
+    sections: { '.run': { align: 4, parts: [['hex', type.toString(16).padStart(8, '0') + '00'.repeat(12)]] } },
+    symbols: { m: ['.run', 0] },
+    contribute: [{ to: table, data: '00000000', relocs: [[0, 'abs32', 'sym:m', 0]] }],
+  }, id)
+  assert.deepEqual(mod('a', 5).impliedNames(image), ['mk2-synth:5'])
+  assert.ok(check([mod('a', 5), mod('b', 5)], image).includes('a 1 and b 1 both claim mk2-synth:5'))
+  assert.ok(!check([mod('a', 5), mod('b', 31)], image).some(p => p.includes('claim')))
+  assert.deepEqual(mod('outside', 32).impliedNames(image), [])
+  assert.deepEqual(mod('filter', 6, 'mk2_filters').impliedNames(image), ['mk2-filter:6'])
+  assert.ok(check([mod('a', 6, 'mk2_filters'), mod('b', 6, 'mk2_filters')], image)
+    .includes('a 1 and b 1 both claim mk2-filter:6'))
+  assert.ok(!check([mod('synth', 6), mod('filter', 6, 'mk2_filters')], image).some(p => p.includes('claim')))
+})
+
+test('DN2 machine bundles claim every pointer entry', () => {
+  const dn = DIGITONE_MK2, r = dn.releases[0], image = new Uint8Array(r.mainLen)
+  const mod = (id: string, slots: number[], table: string) => new Mod2({
+    elemod: 2, id, version: '1', target: targetOf(dn, r),
+    sections: { '.run': { align: 4, parts: [['hex', slots.map(slot => slot.toString(16).padStart(8, '0') + '00'.repeat(12)).join('')]] } },
+    symbols: Object.fromEntries(slots.map((_, n) => [`m${n}`, ['.run', n * 16]])),
+    contribute: [{ to: table, data: '00000000'.repeat(slots.length),
+      relocs: slots.map((_, n) => [n * 4, 'abs32', `sym:m${n}`, 0]) }],
+  }, id)
+  for (const [clone, voice, prefix] of [['mk2_synths', 'mk2_voice_synths', 'mk2-synth'],
+    ['mk2_filters', 'mk2_voice_filters', 'mk2-filter']]) {
+    const bundle = mod('bundle', [6, 7], clone)
+    assert.deepEqual(bundle.impliedNames(image), [`${prefix}:6`, `${prefix}:7`])
+    assert(check([bundle, mod('custom', [7], voice)], image).includes(`bundle 1 and custom 1 both claim ${prefix}:7`))
+    assert(!check([mod('bundle', [6, 7], clone), mod('custom', [8], voice)], image).some(p => p.includes('claim')))
+  }
 })
 
 test('a site in bytes the device keeps stock is refused, in both formats, with the range and its reason', () => {

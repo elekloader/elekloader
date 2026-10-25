@@ -177,21 +177,23 @@ class Mod2:
         self.conflicts = [str(x) for x in doc.get('conflicts', [])]
         self.blob = None                       # (format 1 only)
 
-    def implied_names(self, image):
+    def implied_names(self, image, only_table=None):
         """The names this mod claims by what it contributes (the profile's slot_claims): a
-        contribution to such a table points at a descriptor whose long at a known offset is a
-        sound slot, and the mod claims that slot (digitables' TBL parameter: soundslot:26), so
+        contribution to such a table holds four-byte pointers to descriptors whose long at a
+        known offset is a sound slot, and the mod claims that slot (digitables' TBL parameter: soundslot:26), so
         two mods that store in one slot never link together, whether their files say so or not.
         `image` is the stock main OS the mod is for: a descriptor's bytes may be stock parts. A
         descriptor this cannot read (outside the mod's own bytes, or relocated there) claims
         nothing. check() adds them to the mod's names."""
         out = []
         for table, at, count, prefix in self.dev.slot_claims:
+            if only_table is not None and table != only_table:
+                continue
             for c in self.contribute:
                 if c['to'] != table:
                     continue
                 for off, typ, tgt, add in c['relocs']:
-                    if off != 0 or typ != 'abs32':
+                    if off % 4 or typ != 'abs32':
                         continue
                     if tgt.startswith('sym:') and tgt[4:] in self.symbols:
                         sec, base = self.symbols[tgt[4:]]
@@ -206,24 +208,24 @@ class Mod2:
 
     def _long(self, sec, off, image):
         """The big-endian long at `sec`+`off` of this mod's bytes, or None: in a section
-        without bytes, split across parts, or under a relocation."""
+        without bytes or under a relocation."""
         d = self.sections.get(sec)
         if not d or 'parts' not in d or off < 0 or off + 4 > d['len']:
             return None
         if any(s == sec and o < off + 4 and off < o + RSIZE[t] for s, o, t, _g, _a in self.relocs):
             return None
-        at = 0
+        raw, at = bytearray(), 0
         for p in d['parts']:
             n = len(p[1]) if p[0] == 'hex' else p[2]
-            if at <= off and off + 4 <= at + n:
-                if p[0] == 'hex':
-                    raw = p[1][off - at:off - at + 4]
-                else:
-                    o = p[1] - self.dev.main_load + off - at
-                    raw = image[o:o + 4]
-                return struct.unpack('>I', raw)[0] if len(raw) == 4 else None
-            if at < off + 4 and off < at + n:
-                return None                     # split across parts
+            lo, hi = max(off, at), min(off + 4, at + n)
+            if lo < hi:
+                source, start = (p[1], lo - at) if p[0] == 'hex' else (image, p[1] - self.dev.main_load + lo - at)
+                chunk = source[start:start + hi - lo]
+                if len(chunk) != hi - lo:
+                    return None
+                raw += chunk
+                if len(raw) == 4:
+                    return struct.unpack('>I', raw)[0]
             at += n
         return None
 
@@ -330,9 +332,30 @@ def check(mods, image):
                 bad.append('%s needs core %s or newer, and this build has core %s'
                            % (m.label(), m.needs_core, cores[0].version))
     sharc_mods = [m for m in mods if m.sharc and '.boot' not in m.sections]
-    if len(sharc_mods) > 1:
-        bad.append('only one SHARC mod may own the DN2 reservation')
+    if len(sharc_mods) > 1 and (len(sharc_mods) != 2 or
+            {m.sharc.get('machine_kind') for m in sharc_mods} != {'voice', 'filter'}):
+        bad.append('SHARC mods may combine only one DN2 voice and one DN2 filter')
+    for kind in ('voice', 'filter'):
+        table = (mods[0].rel.sharc or {}).get(kind + '_table')
+        for m in mods:
+            if table and any(c['to'] == table for c in m.contribute) \
+                    and (not m.sharc or m.sharc.get('machine_kind') != kind):
+                bad.append('%s: DN2 %s registration requires a matching SHARC %s payload'
+                           % (m.label(), kind, kind))
     for app in sharc_mods:
+        kind = app.sharc.get('machine_kind')
+        if kind:
+            profile = app.rel.sharc
+            table = profile[kind + '_table']
+            contributions = [c for c in app.contribute if c['to'] == table]
+            expected = ['%s:%d' % (prefix, app.sharc['machine_id'])
+                        for name, _at, _count, prefix in app.dev.slot_claims if name == table]
+            if len(contributions) != 1 or len(contributions[0]['data']) != 4 \
+                    or not expected or app.implied_names(image, table) != expected \
+                    or any(name in app.implied_names(image, profile[kind + '_clone_table']) for name in expected):
+                bad.append('%s: SHARC %s machine_id must match its single native %s registration'
+                           % (app.label(), kind, kind))
+            continue
         if app.sharc['entries'] is None:
             continue
         core = cores[0] if len(cores) == 1 else None
@@ -529,28 +552,40 @@ def link(mods, image, lock=None, *, sharc_stream=None):
     if sharc_mods:
         if sharc_stream is None:
             raise ModError('SHARC mod needs the stock section-7 stream')
-        payload = sharc_mods[0].sharc
-        base = payload['owner'][0]
-        loads = [(base + off, data) for off, _kind, data in payload['segments']]
-        fills = [(base + off, count, 0) for off, count in payload['zero']]
-        patches = []
-        if payload['entries'] is not None:
-            bridge = core.sharc
-            def pc16(off):
-                return sharc.pc16(rel.sharc, base + off)
-            binding = struct.pack('<III', pc16(payload['entries']['init_offset_bytes']),
-                                  pc16(payload['entries']['render_offset_bytes']), 0)
-            core_base = bridge['owner'][0]
-            # The pinned bridge reads its pitch table from the L1 reservation.
-            lo, hi = rel.sharc['pitch_range']
-            at, table = rel.sharc['keyed_pitch_table']
-            table = bytes.fromhex(table)
-            loads.append((lo + at, table))
-            fills += [(lo, at, 0), (lo + at + len(table), hi - lo - at - len(table), 0)]
-            loads = [(core_base, binding)] + [(core_base + off, data) for off, _kind, data in bridge['segments']] + loads
-            fills = [(core_base + off, count, 0) for off, count in bridge['zero']] + fills
-            site, old, new = rel.sharc['hook']
-            patches = [(site, bytes.fromhex(old), bytes.fromhex(new))]
+        loads, fills, patches = [], [], []
+        for mod in sharc_mods:
+            payload = mod.sharc
+            base = payload['owner'][0]
+            loads += [(base + off, data) for off, _kind, data in payload['segments']]
+            fills += [(base + off, count, 0) for off, count in payload['zero']]
+            kind = payload.get('machine_kind')
+            if kind:
+                at = rel.sharc[kind + '_binding_offset']
+                binding = struct.pack('<II', sharc.pc16(rel.sharc, base + payload['entries']['render_offset_bytes']),
+                                      payload['machine_id'])
+                lo = payload['owner'][1] - rel.sharc[kind + '_state_bytes']
+                fills = [f for f in fills if f[0] != lo]
+                fills += [(lo, base + at - lo, 0), (base + at + 8, payload['owner'][1] - base - at - 8, 0)]
+                loads.append((base + at, binding))
+                site, old, new = rel.sharc[kind + '_hook']
+                patches.append((site, bytes.fromhex(old), bytes.fromhex(new)))
+            elif payload['entries'] is not None:
+                bridge = core.sharc
+                def pc16(off):
+                    return sharc.pc16(rel.sharc, base + off)
+                binding = struct.pack('<III', pc16(payload['entries']['init_offset_bytes']),
+                                      pc16(payload['entries']['render_offset_bytes']), 0)
+                core_base = bridge['owner'][0]
+                # The pinned bridge reads its pitch table from the L1 reservation.
+                lo, hi = rel.sharc['pitch_range']
+                at, table = rel.sharc['keyed_pitch_table']
+                table = bytes.fromhex(table)
+                loads.append((lo + at, table))
+                fills += [(lo, at, 0), (lo + at + len(table), hi - lo - at - len(table), 0)]
+                loads = [(core_base, binding)] + [(core_base + off, data) for off, _kind, data in bridge['segments']] + loads
+                fills = [(core_base + off, count, 0) for off, count in bridge['zero']] + fills
+                site, old, new = rel.sharc['hook']
+                patches.append((site, bytes.fromhex(old), bytes.fromhex(new)))
         dsp_stream = sharc.insert(sharc_stream, rel.sharc,
                                   loads=loads, fills=fills, patches=patches)
         dsp_stored = syx.pack_main(dsp_stream)
@@ -863,12 +898,16 @@ def link(mods, image, lock=None, *, sharc_stream=None):
         'ddr_size': ddr_end - ddr_base, 'fast_size': fast_end - fast_base,
     }
     if sharc_mods:
-        out.layout['sharc'] = {'owner': list(payload['owner']), 'decoded': len(dsp_stream),
-                               'decoded_sha256': sha(dsp_stream), 'stored': len(dsp_stored),
-                               'stored_sha256': sha(dsp_stored), 'app': sharc_mods[0].id}
-        if payload['entries'] is not None:
-            out.layout['sharc']['core'] = list(core.sharc['owner'])
-            out.layout['sharc']['hook'] = rel.sharc['hook'][0]
+        info = out.layout['sharc'] = {'decoded': len(dsp_stream), 'decoded_sha256': sha(dsp_stream),
+                                      'stored': len(dsp_stored), 'stored_sha256': sha(dsp_stored)}
+        if sharc_mods[0].sharc.get('machine_kind'):
+            info['mods'] = [{'id': m.id, 'owner': list(m.sharc['owner']),
+                             'hook': rel.sharc[m.sharc['machine_kind'] + '_hook'][0]}
+                            for m in sharc_mods]
+        else:
+            info.update(owner=list(payload['owner']), app=sharc_mods[0].id)
+            if payload['entries'] is not None:
+                info.update(core=list(core.sharc['owner']), hook=rel.sharc['hook'][0])
     out.store, out.store_notes = new_lock, store_notes
     if units is not None:                      # the reserve the core takes: units of dev.reserve
         out.layout['reserve'] = {'units': units, 'end': ddr_base + units * dev.reserve[0]}

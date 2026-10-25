@@ -11,6 +11,13 @@ files never go in this repository.
 `ELEKLOADER_DN2_SYX` they check the real stock file too, and with
 `ELEKLOADER_CROSS` they build core with its bridge. The toolchain test needs
 Git, and skips without it.
+The same command checks the DN2 machine registry. The
+[external C example](https://github.com/simonjohansson/digitone-2-mod-hack)
+checks its producer and kernels with `mise run test`.
+With `ELEKLOADER_DN2_SYX`, `ELEKLOADER_CROSS` and `ELEKLOADER_CF_CALL` set
+to DigiKit's `cf_call` executable, the registry suite also executes the
+compiled filter reader: parameter lookup maps clones, identity reads keep
+saved IDs, and registers and the stack are preserved.
 
 ```bash
 python tests/test_units.py        # includes SHARC; missing optional inputs are reported as skips
@@ -32,24 +39,8 @@ ELEKLOADER_STOCK=... ELEKLOADER_STOCK_154=... ELEKLOADER_OT_SYX=... ELEKLOADER_M
 node tests/test_web.mjs build/site   # the web page's engine, in Pyodide (packaging/build_web.py first)
 ```
 
-Four tests in the Digitone II suite compare with core-dn2 0.1. Give them a
-core-dn2 0.1 `.elemod` in `ELEKLOADER_DN2_CORE_01`, and a DN2 DigiHealth
-`.elemod` in `ELEKLOADER_DN2_DIGIHEALTH`, with the stock files above:
-
-```bash
-ELEKLOADER_DN2_SYX=Digitone_II_OS1.12.syx \
-ELEKLOADER_DN2_ZIP=Digitone_II_OS1.12_dist.zip \
-ELEKLOADER_DN2_CORE_01=path/to/core-dn2-0.1.elemod \
-ELEKLOADER_DN2_DIGIHEALTH=path/to/digihealth.elemod \
-python tests/test_digitone2.py
-```
-
-They check that 0.2 keeps 0.1's control side, building the same firmware
-for mods without SHARC code, DigiHealth included, and that the SHARC
-examples pick core 0.2.
-All four need the 0.1 core, and the DigiHealth one needs that mod too; a
-missing file skips them. The suite builds the current core and examples
-with the ColdFire tools. Keep the `.elemod` files out of the repository.
+The Digitone II suite builds the current core and examples with the
+ColdFire tools. Keep all built `.elemod` files out of the repository.
 
 ## The refusal fixtures
 

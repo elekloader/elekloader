@@ -1,6 +1,6 @@
 # The Digitone II SHARC callbacks
 
-This is the contract between core-dn2 0.2's bridge and a SHARC mod on the
+This is the contract between core-dn2 0.1's bridge and a SHARC mod on the
 Digitone II OS 1.12, ABI `dn2-master-mono32-l2-v1`: what the bridge does,
 and what the mod's code must do. It is experimental.
 
@@ -132,8 +132,6 @@ range, and the size limits are still checked on every build.
 The packaging checks are the same whatever made the code, and they check the
 file's shape, not the program. Test each executable for its calling
 convention, its real stack use and writes, its output, interrupts and audio
-deadlines. [SHARC-DN2.md](SHARC-DN2.md#qualification) separates the
-emulator checks of the current sources from the tests on a unit, which ran
-sine variants with this bridge and layout. Emulator instruction counts
-and short captures are not hardware cycle measurements, sustained stress
-tests or a guarantee for the whole instruction set.
+deadlines. The [runtime limits](SHARC-DN2.md#runtime-limits) apply to each
+changed program. Emulator instruction counts and short captures do not
+measure hardware cycle margin or sustained workload behavior.

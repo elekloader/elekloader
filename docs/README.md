@@ -23,6 +23,9 @@ docs match its code.
 - **[Adapting your mod](ADAPTING.md)**: the path to take, the rules, every
   command with the output it should print, every refusal with its fix, and a
   definition of done. Coding agents: start with [AGENTS.md](../AGENTS.md).
+- **[Digitone II machines](MACHINES-DN2.md)**: register synth clones,
+  [SHARC voices](MACHINES-DN2-VOICE.md) and [filters](MACHINES-DN2-FILTER.md),
+  with a [paired C example](https://github.com/simonjohansson/digitone-2-mod-hack).
 - **[Digitone II SHARC mods](../examples/sharc-sine/README.md)**
   (experimental): code for the DSP, at the master output, from C or
   assembly, built with the normal SDK. The
@@ -123,8 +126,8 @@ docs match its code.
 ## Maintaining elekloader
 
 - **[Digitone II SHARC](SHARC-DN2.md)**: the stock file, the memory the
-  mods and the bridge use, the size limits, the sources, and what was
-  checked.
+  mods and the bridge use, size limits, source provenance and runtime
+  constraints.
 - **[SHARC boot records](SHARC-BOOT.md)**: how section 7 is read and added
   to, with test cases shared by the Python and the TypeScript.
 - **[SHARC reference checks](../examples/sharc-sine-probe/README.md)**: the
