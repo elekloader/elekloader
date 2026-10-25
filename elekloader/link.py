@@ -88,7 +88,8 @@ class Mod2:
         if format_of(doc) != FORMAT2:
             raise ModError('%s: not a format-2 .elemod file' % name)
         extra = set(doc) - COMMON - {'sections', 'symbols', 'exports', 'imports', 'weak',
-                                     'relocs', 'collections', 'contribute', 'copied', 'storage', 'sharc'}
+                                     'relocs', 'collections', 'contribute', 'copied', 'storage', 'sharc',
+                                     'sharc_raw'}
         if extra:
             raise ModError('%s: unknown fields %s' % (name, sorted(extra)))
         for k in ('id', 'version', 'target', 'sections'):
@@ -126,6 +127,8 @@ class Mod2:
             self.sharc = sharc.kernel_payload(doc['sharc'], self.rel.sharc)
         else:
             self.sharc = sharc.module_payload(doc['sharc'], self.rel.sharc, '.boot' in self.sections)
+        self.sharc_raw = (sharc.raw_payload(doc['sharc_raw'], self.rel.sharc)
+                          if 'sharc_raw' in doc else None)
         self.symbols = {}
         for nm, v in doc.get('symbols', {}).items():
             if not isinstance(v, list) or len(v) != 2:
@@ -738,6 +741,25 @@ def link(mods, image, lock=None, *, sharc_stream=None):
         dsp_stored = syx.pack_main(dsp_stream)
         if len(dsp_stored) > rel.sharc['stored_max']:
             raise ModError('SHARC stored section exceeds the profile limit')
+    raw_mods = [m for m in order if m.sharc_raw]
+    if raw_mods:
+        if sharc_mods:
+            raise ModError('raw SHARC mods do not combine with a SHARC bridge mod')
+        if sharc_stream is None:
+            raise ModError('SHARC mod needs the stock section-7 stream')
+        loads = [x for m in raw_mods for x in m.sharc_raw['loads']]
+        patches = [x for m in raw_mods for x in m.sharc_raw['patches']]
+        spans = sorted((a, a + len(o)) for a, o, _n in patches)
+        for (a0, a1), (b0, _b1) in zip(spans, spans[1:]):
+            if b0 < a1:
+                raise ModError('two raw SHARC patches overlap at 0x%x' % b0)
+        dsp_stream = sharc.insert(sharc_stream, rel.sharc, loads=loads, patches=patches)
+        dsp_stored = syx.pack_main(dsp_stream)
+        if len(dsp_stored) > rel.sharc['stored_max']:
+            raise ModError('SHARC stored section exceeds the profile limit')
+        payload = {'owner': (min(a for a, _d in loads), max(a + len(d) for a, d in loads))
+                   if loads else (0, 0), 'entries': None}
+        sharc_mods = raw_mods
     tables = {c: (m, e) for m in order for c, e in m.collections.items()}
 
     entries = {c: [] for c in tables}

@@ -490,3 +490,38 @@ def place_kernels(payloads, profile):
         loads.append((s_lo, struct.pack('<I', profile['stack_guard'])))
         fills.append((s_lo + 4, s_hi - s_lo - 4, 0))
     return loads, fills, patches, {'pool': [lo, hi], 'used': at - lo, 'mods': layout}
+
+
+def raw_payload(doc, profile):
+    """A raw SHARC payload (`sharc_raw`): loads into owned L2 and whole-instruction patches of
+    stock L1 code, checked against the profile; the stream is checked again by insert()."""
+    if not profile or not profile.get('raw'):
+        raise ModError('this device takes no raw SHARC payload')
+    if not isinstance(doc, dict) or not set(doc) <= {'loads', 'patches'}:
+        raise ModError('sharc_raw needs only loads and patches')
+    loads, patches = [], []
+    for item in doc.get('loads', []):
+        if not isinstance(item, dict) or set(item) != {'addr', 'hex'}:
+            raise ModError('sharc_raw load needs exactly addr, hex')
+        addr, h = int(item['addr'], 16), item['hex']
+        if not re.fullmatch(r'(?:[0-9a-fA-F]{2})+', h):
+            raise ModError('sharc_raw load has invalid hex')
+        data = bytes.fromhex(h)
+        lo, hi = byte_span(profile, addr, len(data))
+        if addr % 4 or len(data) % 4 or not any(s <= lo and hi <= e for s, e in profile['owned_ranges']):
+            raise ModError('sharc_raw load 0x%x is unaligned or outside the owned L2' % addr)
+        loads.append((addr, data))
+    for item in doc.get('patches', []):
+        if not isinstance(item, dict) or set(item) != {'addr', 'stock', 'new'}:
+            raise ModError('sharc_raw patch needs exactly addr, stock, new')
+        addr = int(item['addr'], 16)
+        old, new = bytes.fromhex(item['stock']), bytes.fromhex(item['new'])
+        if not old or len(old) != len(new) or addr % 2 or len(old) % 2:
+            raise ModError('sharc_raw patch 0x%x needs equal, even, nonempty stock and new' % addr)
+        lo, hi = byte_span(profile, addr, len(old), check_protected=False)
+        if not any(s <= lo and hi <= e for s, e in profile['patch_ranges']):
+            raise ModError('sharc_raw patch 0x%x is outside the profile patch range' % addr)
+        patches.append((addr, old, new))
+    if not loads and not patches:
+        raise ModError('sharc_raw is empty')
+    return {'loads': loads, 'patches': patches}
