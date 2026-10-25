@@ -7,8 +7,13 @@ page) and takes its input files from environment variables. A test whose
 input files are not given is skipped, not passed: say which ran. Firmware
 files never go in this repository.
 
+`test_units.py` also runs the `test_sharc*.py` files. With
+`ELEKLOADER_DN2_SYX` they check the real stock file too, and with
+`ELEKLOADER_CROSS` they build core with its bridge. The toolchain test needs
+Git, and skips without it.
+
 ```bash
-python tests/test_units.py        # needs nothing
+python tests/test_units.py        # includes SHARC; missing optional inputs are reported as skips
 python tests/test_link_refusals.py   # needs nothing: every refusal of the linker, refused and passed
 ELEKLOADER_STOCK=Digitakt_OS1.53.syx ELEKLOADER_MODS=path/to/mods python tests/test_link.py
 ELEKLOADER_STOCK=... ELEKLOADER_STOCK_154=Digitakt_OS1.54.syx ELEKLOADER_MODS=... python tests/test_sdk.py   # the example needs the cross compiler
@@ -26,6 +31,25 @@ ELEKLOADER_CATALOG_DIR=folder/of/catalog/files ELEKLOADER_STOCK=... python tests
 ELEKLOADER_STOCK=... ELEKLOADER_STOCK_154=... ELEKLOADER_OT_SYX=... ELEKLOADER_MODS=... python tests/test_gui.py   # the window, hidden (Tk)
 node tests/test_web.mjs build/site   # the web page's engine, in Pyodide (packaging/build_web.py first)
 ```
+
+Four tests in the Digitone II suite compare with core-dn2 0.1. Give them a
+core-dn2 0.1 `.elemod` in `ELEKLOADER_DN2_CORE_01`, and a DN2 DigiHealth
+`.elemod` in `ELEKLOADER_DN2_DIGIHEALTH`, with the stock files above:
+
+```bash
+ELEKLOADER_DN2_SYX=Digitone_II_OS1.12.syx \
+ELEKLOADER_DN2_ZIP=Digitone_II_OS1.12_dist.zip \
+ELEKLOADER_DN2_CORE_01=path/to/core-dn2-0.1.elemod \
+ELEKLOADER_DN2_DIGIHEALTH=path/to/digihealth.elemod \
+python tests/test_digitone2.py
+```
+
+They check that 0.2 keeps 0.1's control side, building the same firmware
+for mods without SHARC code, DigiHealth included, and that the SHARC
+examples pick core 0.2.
+All four need the 0.1 core, and the DigiHealth one needs that mod too; a
+missing file skips them. The suite builds the current core and examples
+with the ColdFire tools. Keep the `.elemod` files out of the repository.
 
 ## The refusal fixtures
 

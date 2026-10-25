@@ -33,6 +33,8 @@
 #define OT_MACHINE_POOL         2u  /* its row has a pool or engine list (not served by machines-ot 0.1) */
 #define OT_MACHINE_RENDER_FLEX  4u  /* its render is also offered the FLEX tracks no machine owns */
 #define OT_MACHINE_BACKING      8u  /* its page is STATIC's on a STATIC backing pool (not served by 0.1) */
+#define OT_MACHINE_LIST_FIRST   16u /* (machines-ot 0.2, not Modwerk's) the machine window opens on the
+                                       machine list for its tracks, not on the sample-slot list */
 
 struct ot_machine {
     uint32_t abi;                       /*  0 OT_MACHINE_ABI */
@@ -59,6 +61,16 @@ struct ot_machine {
     uint16_t source_voice, source_engine;                                    /* 72 a DSP voice's price: 0.1 skips a machine */
     uint8_t source_kind, reserved[3];                                        /* 76 that has one (no DSP source stage yet) */
 };
+
+/* ev_machine_set (machines-ot 0.2): a track's machine changed, after the commit (the machine byte
+ * and its battery copy hold the new one): the machine chooser, SRC SETUP, or a sample slot picked
+ * in a list. `from` and `to` are rows: 0-4 stock's (STATIC FLEX THRU NEIGHBOR PICKUP), 5 on a
+ * machine's (ot_machine_row). In the UI task:
+ *     void f(volatile uint8_t *part, unsigned track, unsigned from, unsigned to);
+ *     "subscribe": [{"event": "ev_machine_set", "fn": "my_machine_set", "order": 50}]
+ *
+ * ui_tick (0.2) runs in the UI task's tick body, before the screen's builders read the page
+ * table; a machine with track_page has the current track's page published there too. */
 
 /* What machines-ot exports to machine mods. */
 int ot_stock_render(unsigned track, unsigned ping, unsigned start, unsigned end);  /* the FLEX renderer */

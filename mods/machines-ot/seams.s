@@ -3,6 +3,9 @@
 | the machines (machines.c). ColdFire V4 (MCF5445x); assemble with
 | -mcpu=54455.
 |
+| 0.2 adds the tick (0x4005221e), the chooser's level (0x400788c4) and the slot
+| assigner's commit (0x40079520).
+|
 | A machine's track stays a FLEX track; the places below that read a track's
 | machine byte read it as the machine's row (5 on) instead, the places that
 | bound the rows at stock's five bound them at 5 + n, and the readers of
@@ -337,6 +340,61 @@ otm_clamp4:
         CLAMP   0x40078df6
 otm_clamp5:
         CLAMP   0x40078e84
+
+| ---- the tick (0.2) ----------------------------------------------------------------
+| 0x4005221e jmp (jsr 0x4005213c ; jsr 0x4007e940), in the UI task's 60 Hz tick body
+| 0x40052200, before the screen's builders after it read the page table: the
+| machines' ui_tick, then each per-track page of the current track's machine
+| (machines.c's otm_tick). The beq at 0x40052214 lands on the site's first
+| byte. Octabam's ANALOG BD, OCTA303, CXOSC and BLACKPYRAMIDS all publish their
+| page here (MIT); Modwerk's base has its tick hook here too.
+        .globl  otm_tick_seam
+otm_tick_seam:
+        jsr     0x4005213c              | the two calls this replaced
+        jsr     0x4007e940
+        jsr     otm_tick
+        jmp     0x40052228
+
+| ---- the chooser's level (0.2) -----------------------------------------------------
+| 0x400788c4 jmp (mvz.b (%a0),%d0 ; moveq #1,%d2 ; cmp.l %d0,%d2): the machine
+| window opens on the sample-slot list for a STATIC or FLEX track (the byte at
+| (a0) is 0 or 1), on the machine list for any other. A machine with
+| OT_MACHINE_LIST_FIRST has its tracks read as its row, so they open on the list.
+        .globl  otm_chooser_level
+otm_chooser_level:
+        TYPE    otm_level
+        moveq   #1, %d2
+        cmp.l   %d0, %d2
+        jmp     0x400788ca
+
+| ---- the slot assigner's commit (0.2) ----------------------------------------------
+| 0x40079520 jmp (mvs.b (%a0),%d4 ; move.b %d2,(%a0) ; add.l %a1,%d0): a sample
+| slot picked in either window's list makes the track's machine d2 (0 STATIC,
+| 1 FLEX, 4 PICKUP). a0 is the track's machine byte, a1 the track, a2 the bank,
+| d0 part * 6322; d4 keeps the old byte for stock. When the byte changes,
+| machines.c's otm_assign is told (a machine's track that becomes STATIC is
+| unsigned, and ev_machine_set fires); stock's stores follow.
+        .globl  otm_slot_commit
+otm_slot_commit:
+        mvs.b   (%a0), %d4
+        cmp.b   %d4, %d2
+        beq.s   1f
+        lea     -16(%sp), %sp
+        movem.l %d0-%d1/%a0-%a1, (%sp)
+        mvz.b   %d2, %d1
+        move.l  %d1, -(%sp)             | the new byte, as a row (0-4)
+        move.l  %a1, -(%sp)             | the track
+        move.l  %a2, %d1
+        add.l   %d0, %d1
+        addi.l  #0x8ed80, %d1
+        move.l  %d1, -(%sp)             | the Part
+        jsr     otm_assign
+        lea     12(%sp), %sp
+        movem.l (%sp), %d0-%d1/%a0-%a1
+        lea     16(%sp), %sp
+1:      move.b  %d2, (%a0)
+        add.l   %a1, %d0
+        jmp     0x40079526
 
 | ---- the parameter page by machine byte -----------------------------------------
 | 0x4003bff0 jmp (mvs.b (%a0),%d0 ; lea 0x400d5f38,%a0 ; bra.s 0x4003c054): a0

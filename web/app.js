@@ -1112,6 +1112,24 @@ function todoHooks(e) {
       ' ', xs.slice(0, 3).join(', '), xs.length > 3 ? ` +${xs.length - 3}` : ''));
 }
 
+// the core's and companions' sites in an entry's routine on other bytes (its near), on the oldest OS it has one for,
+// as sdk.bounties' beside_text words them: "core hooks this routine at 0x40010bd0 (core_midi_out)"
+function todoBeside(e) {
+  const near = e.near || [];
+  if (!near.length) return '';
+  const os = near[0].os, by = new Map();
+  for (const x of near.filter(x => x.os === os)) {
+    if (!by.has(x.mod)) by.set(x.mod, []);
+    by.get(x.mod).push(x.site + (x.target === '?' ? '' : ` (${x.target.replace(/,/g, ', ')})`));
+  }
+  const named = e.id.slice(e.id.indexOf('@') + 1, e.id.lastIndexOf(':'));     // the OS the entry's id names
+  return el('div', { class: 'beside', title: 'Hooked beside these sites, on other bytes, so the kind stays: '
+    + 'the event there may already be what these mods need' },
+  [...by].map(([mod, xs], i) => [i ? '; ' : '', el('strong', {}, mod), i ? ' at ' : ' hooks this routine at ',
+    xs.slice(0, 3).join(', '), xs.length > 3 ? ` +${xs.length - 3}` : '']),
+  os === named ? '' : ` (on ${os})`);
+}
+
 function todoDevice(d) {
   const sc = d.score, pct = Math.round(100 * sc.no_own_code / sc.mods);
   const all = d.entries, open = todo.open.has(d.device), shown = open ? all : all.slice(0, 8);
@@ -1140,7 +1158,7 @@ function todoDevice(d) {
           'Upstream only') : '',
         claimed.has(e.id) ? el('span', { class: 'claimed' }, 'Claimed by ',
           gh(encodeURIComponent(claimed.get(e.id).login), claimed.get(e.id).login), ' in ', ghPr(claimed.get(e.id))) : ''),
-      el('div', { class: 'hooks' }, todoHooks(e))))) : el('p', { class: 'muted' }, 'Nothing left to do here.'),
+      el('div', { class: 'hooks' }, todoHooks(e)), todoBeside(e)))) : el('p', { class: 'muted' }, 'Nothing left to do here.'),
     all.length > 8 ? el('button', { type: 'button', class: 'btn outline small', onclick: () => {
       if (open) todo.open.delete(d.device); else todo.open.add(d.device);
       renderTodo();

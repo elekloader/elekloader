@@ -481,7 +481,7 @@ a project load and a power cycle.
 - **The core** (mods/core-a4) has the Rytm's events at the A4's sites, and
   mod storage in bytes of the A4's own structures (mods/core-a4/README.md);
   from 0.2, core-ar2 0.4's parameter routines, and views added behind the
-  page keys.
+  page keys; from 0.3, core-ar2 0.6's page functions (`core_page_fns`).
   In rytm-emu (with a fallback added so it accepts a patched A4 image), a
   build with core alone runs as stock does, with the same frames and a
   byte-identical screen; hello-marker-a4 differs from stock only in its
@@ -503,9 +503,9 @@ a project load and a power cycle.
 ## The Digitone II (1.12)
 
 Experimental. The profile (`digitone_mk2.py`, where each fact's evidence
-is), whole builds, and linkable mods with a core (core-dn2 0.1: tick, draw,
-key, encoder, SETTINGS and PERSONALIZE; mods/core-dn2/README.md has its
-sites and evidence). The Digitone II
+is), whole builds, and linkable mods with a core (core-dn2 0.2: tick, draw,
+key, encoder, SETTINGS, PERSONALIZE and bounded SHARC mods;
+mods/core-dn2/README.md has its sites and evidence). The Digitone II
 runs on the Digitakt II's platform, but every address, size and count here
 was found again in DN2 1.12's own sections (23 Oct 2026), none copied from
 the Digitakt II. Stock 1.12 and MIDI recovery have worked on a unit.
@@ -520,6 +520,20 @@ smaller core-only CO02 build then flashed and booted successfully (below).
   copy of the seed and constant (`0x40210a4a`, `0x4021b9ef`), which give
   the same key. The writer reproduces the stock file byte for byte, seal
   included; the profile also knows Elektron's zip of it.
+- **SHARC mods.** With core-dn2 0.2, one mod can run code on the DSP at
+  the master output: section 7 changes for it, and only for it. The mod
+  gets 32 KiB at loader bytes `[0x20090000,0x20098000)`; core's pinned
+  bridge and its pitch table get `[0x282dd600,0x282dde00)`; and one
+  six-byte stock instruction at `0x2838489a` is replaced. A mod's code and
+  data may change within the [callback contract](SHARC-DN2-ABI.md) with
+  nothing added to elekloader. The SDK, the linker and the verifier check
+  the stock file, who owns which range, full coverage, the guard, the
+  declared stack, the size limits and that every other section is stock.
+  The [sine example](../examples/sharc-sine/README.md) builds from C or
+  assembly with `mise run build-c` or `mise run build-asm`; packaging a mod
+  that is already compiled needs no SHARC compiler.
+  [SHARC-DN2.md](SHARC-DN2.md) has where the memory comes from and what the
+  checks cannot show.
 - **Staging.** The bootstrap is the Digitakt II 1.17's code instruction for
   instruction, at the same addresses: the loader `0x80000596` reads section
   3 from flash at its container offset + `0x80000` to `0x40400000`, and the

@@ -1,15 +1,17 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
-/* pages-check: a test for core-a4 0.2's parameter routines on the Analog
- * Four MKII (OS 1.56). It contributes one core_params entry, for AMP PAN
+/* pages-check: a test for core-a4's parameter routines on the Analog
+ * Four MKII (OS 1.56), from 0.2 for core-a4 0.3. It contributes one core_params entry, for AMP PAN
  * (parameter 97), and changes nothing else:
  *   - text: the value is shown as two hex digits (its whole part, 8.8),
  *     "00" to "7F", where stock shows its own text;
  *   - delta: counts each turn and passes it on, so the knob still turns;
  *   - get: passes.
  * and a page of its own, CHECK (page 48), on a synth track behind the AMP
- * key after stock's AMP page, through core_pages and core_view_pages. Its
- * knob A is AMP PAN again, the rest are empty. The AMP key steps over it
- * until PAN has been turned once.
+ * key after stock's AMP page, through core_page_fns (core-a4 0.3) and
+ * core_view_pages. Its knob A is AMP PAN again; its knob B is AMP PAN too
+ * after an odd number of PAN's steps and empty after an even number, so
+ * each step shows or hides it at the next redraw (page functions); the rest
+ * are empty. The AMP key steps over it until PAN has been turned once.
  * Each step PAN turns (a value step, not an encoder count) also lengthens a
  * 2-pixel bar along the bottom of the screen (mod 128), so a turn that
  * reaches core shows even where stock draws no text. (The top rows are the
@@ -47,7 +49,16 @@ static int pc_text(struct core_text *t)
 
 const struct core_param pc_params = {PAN, PAN, 0, pc_delta, pc_text};
 
-const struct core_page pc_page = {48, "CHECK", {PAN}};
+static const struct core_page pc_page = {48, "CHECK", {PAN}};
+static const struct core_page pc_page_b = {48, "CHECK", {PAN, PAN}};
+
+static const struct core_page *pc_info(int32_t page)
+{
+    (void)page;
+    return (pc_turns & 1) ? &pc_page_b : &pc_page;
+}
+
+const struct core_page_fn pc_page_fn = {48, pc_info};
 
 static int32_t pc_shown(void *view)
 {

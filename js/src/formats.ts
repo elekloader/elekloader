@@ -79,10 +79,12 @@ export const packMain = (image: Uint8Array, dev: Device): Uint8Array =>
 export type Outputs = { syx: Uint8Array; bin?: Uint8Array }
 
 /** -> {syx} or, for a family with a card file too, {syx, bin}. */
-export function write(stock: Parsed, storedMain: Uint8Array, dev: Device, version: string | null = null): Outputs {
+export function write(stock: Parsed, storedMain: Uint8Array, dev: Device, version: string | null = null,
+  storedSharc: Uint8Array | null = null): Outputs {
   checkVersion(dev, version)
   try {
-    if (dev.container === 'ele3') return { syx: syx.write(stock as syx.Syx, storedMain, dev, version) }
+    if (dev.container === 'ele3') return { syx: syx.write(stock as syx.Syx, storedMain, dev, version, storedSharc) }
+    if (storedSharc !== null) throw new FormatError('the stock file has no profiled SHARC section')
     return elek.write(stock as elek.ElekFile, storedMain, dev, version)
   } catch (e) {
     if (e instanceof syx.SyxError || e instanceof elek.ElekError) throw new FormatError(e.message)
@@ -90,18 +92,21 @@ export function write(stock: Parsed, storedMain: Uint8Array, dev: Device, versio
   }
 }
 
-/** Re-read every output with the decoder and refuse it unless only the main OS (and the version field) changed,
+/** Re-read every output with the decoder and refuse it unless only the main OS, optional profiled SHARC section,
+ * and version field changed,
  * and the protected and kept ranges are stock's. -> facts. */
-export function verify(outputs: Outputs, stock: Parsed, wantMain: Uint8Array, dev: Device, version: string | null = null) {
+export function verify(outputs: Outputs, stock: Parsed, wantMain: Uint8Array, dev: Device, version: string | null = null,
+  wantSharc: Uint8Array | null = null) {
   const stockMain = mainImage(stock, dev)
   let facts: Record<string, any>
   try {
     if (dev.container === 'ele3') {
-      facts = syx.verify(outputs.syx, stock as syx.Syx, wantMain, dev, version)
+      facts = syx.verify(outputs.syx, stock as syx.Syx, wantMain, dev, version, wantSharc)
       const same = [...(facts.sections as Map<string, syx.Section>)].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
         .filter(([, v]) => v.stock).map(([s]) => s)
       facts.untouched = [`sections ${same.join(', ')}, byte for byte`]
     } else {
+      if (wantSharc !== null) throw new FormatError('the stock file has no profiled SHARC section')
       facts = elek.verify(outputs as Record<string, Uint8Array>, stock as elek.ElekFile, wantMain, dev, stockMain, version)
     }
   } catch (e) {

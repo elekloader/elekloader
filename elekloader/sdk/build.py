@@ -241,6 +241,26 @@ def build(mdir, stock_path, out_dir=None, extra=None):
     except (devices.UnknownFirmware, formats.FormatError) as e:
         raise BuildError(str(e))
     mod, ported = for_release(mod, dev, rel)
+    sharc_doc = None
+    if 'sharc' in mod:
+        spec = mod['sharc']
+        if not isinstance(spec, dict) or set(spec) != {'artifact'} or not isinstance(spec['artifact'], str) \
+                or not spec['artifact'] or os.path.isabs(spec['artifact']):
+            raise BuildError('mod.json: sharc is {"artifact": "relative-file.sharc.json"}')
+        root = os.path.realpath(mdir)
+        artifact = os.path.realpath(os.path.join(root, spec['artifact']))
+        try:
+            inside = os.path.commonpath((root, artifact)) == root
+        except ValueError:                  # on another drive (Windows): a path like "D:x"
+            inside = False
+        if not inside:
+            raise BuildError('mod.json: SHARC artifact escapes the mod folder')
+        try:
+            with open(artifact, 'rb') as fh:
+                artifact_raw = fh.read()
+            sharc_doc = json.loads(artifact_raw)
+        except (OSError, ValueError) as e:
+            raise BuildError('SHARC artifact: %s' % e) from e
     image = formats.main_image(stock, dev)
     if sha(image) != rel.main_sha256:
         raise BuildError('the stock main OS is not the known image')
@@ -261,7 +281,7 @@ def build(mdir, stock_path, out_dir=None, extra=None):
                      'str_name: .asciz "%s %s"\n        .balign 2\n' % (mod['name_string'], version))
         srcs.append(p)
     if not srcs and not mod.get('sites') and not extra.get('sites') and not mod.get('fixed') \
-            and not mod.get('dsp'):
+            and not mod.get('dsp') and sharc_doc is None:
         raise BuildError('mod.json names no sources and no sites: nothing to build')
     defs = []
     for k, v in mod.get('defsym', {}).items():
@@ -509,6 +529,11 @@ def build(mdir, stock_path, out_dir=None, extra=None):
     weak = list(mod.get('weak', []))
     imports |= set(weak)
 
+    source_hashes = {}
+    for s in srcs + dsrcs:
+        with open(s, 'rb') as fh:
+            source_hashes[os.path.basename(s)] = sha(fh.read())
+
     doc = {
         'elemod': 2, 'id': mid, 'version': version,
         'title': mod.get('title', mid), 'description': mod.get('description', ''),
@@ -523,10 +548,12 @@ def build(mdir, stock_path, out_dir=None, extra=None):
         'contribute': contrib, 'copied': mod.get('copied', []),
         'resources': resources,
         'requires': mod.get('requires', []), 'conflicts': mod.get('conflicts', []),
-        'build': {'sources': {os.path.basename(s): sha(open(s, 'rb').read())
-                              for s in srcs + dsrcs}},
+        'build': {'sources': source_hashes},
         'signature': None,
     }
+    if sharc_doc is not None:
+        doc['sharc'] = sharc_doc
+        doc['build']['sharc_artifact_sha256'] = sha(artifact_raw)
     if mod.get('storage'):                  # mod storage: fields elekloader places (store.py)
         doc['storage'] = mod['storage']
     raw = (json.dumps(doc, indent=1) + '\n').encode()

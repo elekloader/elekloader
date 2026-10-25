@@ -106,13 +106,13 @@ function plan(configPath: string, casesPath: string) {
     add('ar174 store-check without core', 'ar174', [store])
     if (cfg.stocks.ar173) add('ar173 core 0.3, made for 1.74', 'ar173', [core])
   }
-  // the Analog Four MKII 1.56 (optional: stocks.a456, and dirs.a4 with core-0.2.elemod, hello-marker-1.0.elemod,
-  // hooks-check-0.1.elemod, store-check-1.0.elemod, ddr-canary-0.1.elemod and pages-check-0.1.elemod built from mods/core-a4 and
+  // the Analog Four MKII 1.56 (optional: stocks.a456, and dirs.a4 with core-0.3.elemod, hello-marker-1.0.elemod,
+  // hooks-check-0.1.elemod, store-check-1.0.elemod, ddr-canary-0.1.elemod and pages-check-0.2.elemod built from mods/core-a4 and
   // examples/*-a4)
   if (cfg.stocks.a456 && cfg.dirs.a4) {
-    const core = f('a4', 'core-0.2.elemod'), hello = f('a4', 'hello-marker-1.0.elemod')
+    const core = f('a4', 'core-0.3.elemod'), hello = f('a4', 'hello-marker-1.0.elemod')
     const hooks = f('a4', 'hooks-check-0.1.elemod'), store = f('a4', 'store-check-1.0.elemod')
-    const canary = f('a4', 'ddr-canary-0.1.elemod'), pages = f('a4', 'pages-check-0.1.elemod')
+    const canary = f('a4', 'ddr-canary-0.1.elemod'), pages = f('a4', 'pages-check-0.2.elemod')
     add('a456 core alone', 'a456', [core])
     add('a456 core + hello-marker', 'a456', [core, hello])
     add('a456 core + hooks-check', 'a456', [core, hooks])

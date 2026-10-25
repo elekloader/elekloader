@@ -91,8 +91,9 @@ power-on, **TRIG 4**, the stock `.syx` over 5-pin DIN MIDI.
 
 The output is refused unless every one of these holds:
 
-- It is your stock file with only the main OS section changed. The other
-  sections, bootloader included, are byte for byte stock. The header
+- It is your stock file with only the main OS section changed, and for a
+  Digitone II SHARC mod section 7. The other sections, bootloader
+  included, are byte for byte stock. The header
   differs only in its 4-character version field; the framing only in its
   message count.
 - Every message checksum, counter and the content checksum are right, and

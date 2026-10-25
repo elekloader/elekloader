@@ -22,6 +22,12 @@ that each can become a core event:
   what exists. An entry is "migration" when all its sites are covered,
   "core" when none is (the core needs an event there) and "partly" when
   some are;
+- an entry's `near` lists the core's and companions' sites in its routine
+  (by the rule above) that overlap none of its sites, each with the
+  symbol it jumps to: the core hooks that routine beside the mods' bytes
+  (core-ot does so on purpose, so that a shop file holding those bytes
+  still links), and its event there may already serve them. It changes
+  no kind;
 - an entry's id is the device and its lowest site on the oldest OS that has
   one. It stays the same while the mods there do not change.
 
@@ -134,6 +140,23 @@ def _near(a, b, same, window):
         else hi['addr'] - (lo['addr'] + lo['len']) <= window
 
 
+def beside(sites, cores, same=None, window=64):
+    """`sites`: an entry's sites on one OS; `cores`: the core's and companions' there, as
+    [(addr, len, mod, label), ...]. -> those of `cores` in one routine with a site of `sites` (as
+    _near decides) that overlap none of them."""
+    reach = window if same is None else getattr(same, 'reach', None)
+    out = []
+    for a, n, mod, label in cores:
+        if any(a < s['addr'] + s['len'] and s['addr'] < a + n for s in sites):
+            continue
+        # a site farther than the test follows a routine (and an instruction more) is in another one
+        c = {'addr': a, 'len': n}
+        if any(_near(c, s, same, window) for s in sites
+               if reach is None or max(s['addr'] - (a + n), a - (s['addr'] + s['len'])) <= reach + 32):
+            out.append((a, n, mod, label))
+    return out
+
+
 def routines(sites, same=None, window=64):
     """`sites`: [{'addr', 'len', ...}, ...] of one OS. -> lists of them, one per
     routine: sorted by address, each site joined to the one before it when
@@ -176,7 +199,7 @@ def bounties(mods, tests=None, window=64, upstream=()):
             for addr, n, label in code_sites(m):
                 i = seen[label] = seen.get(label, -1) + 1
                 if is_core(m.id):
-                    covered[m.rel.version].append((addr, n))
+                    covered[m.rel.version].append((addr, n, m.id, label))
                 else:
                     s = {'mod': m.id, 'version': m.version, 'addr': addr, 'len': n, 'label': label,
                          'os': m.rel.version, 'key': (m.id, label, i)}
@@ -202,14 +225,14 @@ def bounties(mods, tests=None, window=64, upstream=()):
                 for t in g:
                     placed.add(id(t))
                 mods_here = sorted({s['mod'] for s in g})
-                where, cov = {}, set()
+                where, cov, near = {}, set(), []
                 for oo in oses:
                     ss = sorted(at.get(oo, []), key=lambda s: s['addr'])
                     if not ss:
                         continue
                     sites = []
                     for s in ss:
-                        c = any(a < s['addr'] + s['len'] and s['addr'] < a + n for a, n in covered[oo])
+                        c = any(a < s['addr'] + s['len'] and s['addr'] < a + n for a, n, _m, _l in covered[oo])
                         cov.add(c)
                         sites.append({'mod': s['mod'], 'version': s['version'], 'site': '0x%08x' % s['addr'],
                                       'len': s['len'], 'label': s['label'], 'covered': c})
@@ -217,6 +240,9 @@ def bounties(mods, tests=None, window=64, upstream=()):
                             sites[-1]['from'] = s['from']
                     where[oo] = {'lo': '0x%08x' % ss[0]['addr'],
                                  'hi': '0x%08x' % max(s['addr'] + s['len'] for s in ss), 'sites': sites}
+                    # the core's sites in this routine on other bytes: what it may offer here already
+                    near += [{'os': oo, 'site': '0x%08x' % a, 'len': n, 'mod': mod, 'target': label}
+                             for a, n, mod, label in sorted(beside(ss, covered[oo], tests.get((name, oo)), window))]
                 # an OS a mod here has no address for
                 missing = sorted({oo for s in g for oo in oses
                                   if oo not in nth[s['key']] and any(
@@ -230,7 +256,7 @@ def bounties(mods, tests=None, window=64, upstream=()):
                 e = {'id': '%s@%s:0x%08x' % (key, first, min(s['addr'] for s in named[first])),
                      'kind': 'partly' if len(cov) > 1 else 'migration' if True in cov else 'core',
                      'mods': mods_here, 'sites': len(g), 'at': where,
-                     'missing_os': missing}
+                     'missing_os': missing, 'near': near}
                 up = sorted({s['mod'] for s in g if 'from' in s})
                 if up:
                     e['upstream'] = up
@@ -284,6 +310,24 @@ def hooks(e, most=3):
                      for m, xs in sorted(by.items()))
 
 
+def beside_text(e, most=3):
+    """An entry's `near` in a few words, on the oldest OS it has one for: "core hooks this routine
+    at 0x40010bd0 (core_midi_out)", each site with the symbols it jumps to ('' when there is none)."""
+    if not e.get('near'):
+        return ''
+    os_ = e['near'][0]['os']
+    by = {}
+    for x in e['near']:
+        if x['os'] == os_:
+            by.setdefault(x['mod'], []).append(x['site'] + ('' if x['target'] == '?' else
+                                                            ' (%s)' % x['target'].replace(',', ', ')))
+    parts = ['%s %s %s%s' % (m, 'at' if i else 'hooks this routine at', ', '.join(xs[:most]),
+                             ' +%d' % (len(xs) - most) if len(xs) > most else '')
+             for i, (m, xs) in enumerate(by.items())]
+    named = e['id'].split('@', 1)[1].rsplit(':', 1)[0]       # the OS the entry's id names
+    return '; '.join(parts) + ('' if os_ == named else ' (on %s)' % os_)
+
+
 def markdown(report, how=''):
     """The report as Markdown: per device a score and a table, core entries first."""
     out = [START, '']
@@ -311,6 +355,8 @@ def markdown(report, how=''):
                 todo += ' (no address on %s)' % ', '.join(e['missing_os'])
             if e.get('upstream_only'):
                 todo += ' (upstream only)'
+            if e.get('near'):
+                todo += '; ' + beside_text(e)
             out.append('| `%s` | %s | %d | %s |' % (e['id'], todo, len(e['mods']),
                                                    hooks(e).replace('|', '\\|')))
         out.append('')
@@ -379,6 +425,8 @@ def main(argv=None):
                 e['id'], e['kind'], len(e['mods']), e['sites'],
                 ' (no address on %s)' % ', '.join(e['missing_os']) if e['missing_os'] else '',
                 ' '.join(labels)))
+            if e['near']:
+                print('  %-34s beside: %s' % ('', beside_text(e)))
     return 0
 
 

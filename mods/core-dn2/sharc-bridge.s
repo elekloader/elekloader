@@ -1,0 +1,258 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+// Experimental DN2 H1 bridge: preserve full R0-R8 through PX; no MODE/bank changes.
+// Entry requires the measured stock runtime modifier constants and bounded circular stack.
+.SECTION/SW core_code;
+.GLOBAL bridge;
+.GLOBAL bridge_restored;
+bridge:
+    I7=MODIFY(I7,-29)(NW);
+    DM(-2,I6)=PX1;
+    DM(-3,I6)=PX2;
+    PX=R0;
+    DM(-4,I6)=PX1;
+    DM(-5,I6)=PX2;
+    PX=R1;
+    DM(-6,I6)=PX1;
+    DM(-7,I6)=PX2;
+    PX=R2;
+    DM(-8,I6)=PX1;
+    DM(-9,I6)=PX2;
+    PX=R3;
+    DM(-10,I6)=PX1;
+    DM(-11,I6)=PX2;
+    PX=R4;
+    DM(-12,I6)=PX1;
+    DM(-13,I6)=PX2;
+    PX=R5;
+    DM(-14,I6)=PX1;
+    DM(-15,I6)=PX2;
+    PX=R6;
+    DM(-16,I6)=PX1;
+    DM(-17,I6)=PX2;
+    PX=R7;
+    DM(-18,I6)=PX1;
+    DM(-19,I6)=PX2;
+    PX=R8;
+    DM(-20,I6)=PX1;
+    DM(-21,I6)=PX2;
+    R0=I4;
+    DM(-22,I6)=R0;
+    R0=I5;
+    DM(-23,I6)=R0;
+    R0=I12;
+    DM(-24,I6)=R0;
+    R0=L4;
+    DM(-25,I6)=R0;
+    R0=L5;
+    DM(-26,I6)=R0;
+    R0=ASTATX;
+    DM(-27,I6)=R0;
+    R0=ASTATY;
+    DM(-28,I6)=R0;
+    R0=STKYX;
+    DM(-29,I6)=R0;
+    R0=STKYY;
+    DM(-30,I6)=R0;
+    R0=DM(0x2dd604);
+    R1=0;
+    COMP(R0,R1);
+    IF EQ JUMP restore;
+    L4=0;
+    L5=0;
+render:
+    // Two stock trigger/release halfword pairs. New triggers win ties.
+    R7=-16;
+    R0=DM(0x25c4ac);
+    R0=LSHIFT R0 BY R7;
+    R1=DM(0x25c4b0);
+    R1=LSHIFT R1 BY R7;
+    R0=R0 OR R1;
+    R2=DM(0x25c4b0);
+    R1=0xffff;
+    R2=R2 AND R1;
+    R3=DM(0x25c4b4);
+    R3=R3 AND R1;
+    R2=R2 OR R3;
+    R2=NOT R2;
+    R3=DM(0x2dd9f0);
+    R3=R3 AND R2;
+    DM(0x2dd9f0)=R3;
+    R0=PASS R0;
+    IF EQ JUMP no_trigger;
+    R4=R0;
+highest:
+    R5=R4-1;
+    R6=R4 AND R5;
+    R6=PASS R6;
+    IF EQ JUMP selected;
+    R4=R6;
+    JUMP highest;
+selected:
+    DM(0x2dd9f4)=R4;
+    R0=0;
+    DM(0x2dd9f0)=R0;
+    JUMP ready;
+no_trigger:
+    R4=DM(0x2dd9f4);
+    R4=PASS R4;
+    IF EQ JUMP ready;
+    R3=R4 AND R2;
+    R3=PASS R3;
+    IF EQ JUMP clear_pending;
+    R5=0;
+    R6=1;
+slot:
+    COMP(R4,R6);
+    IF EQ JUMP slot_found;
+    R6=LSHIFT R6 BY 1;
+    R5=R5+1;
+    R0=0x10;
+    COMP(R5,R0);
+    IF GE JUMP unsupported;
+    JUMP slot;
+slot_found:
+    R0=R5+1;
+    R1=0xfffe;
+    R1=R0 AND R1;
+    R1=LSHIFT R1 BY 1;
+    R2=0x25c48c;
+    R1=R1+R2;
+    I4=R1;
+    R1=DM(0,I4);
+    R2=1;
+    R2=R0 AND R2;
+    R2=PASS R2;
+    IF EQ JUMP pitch_low;
+    R1=LSHIFT R1 BY R7;
+pitch_low:
+    R2=0xffff;
+    R1=R1 AND R2;
+    R7=-8;
+    R1=LSHIFT R1 BY R7;
+    R2=0x24;
+    R1=R1-R2;
+    R1=PASS R1;
+    IF LT JUMP unsupported;
+    R2=0x30;
+    COMP(R1,R2);
+    IF GT JUMP unsupported;
+    R5=0;
+octave:
+    R2=0x0c;
+    COMP(R1,R2);
+    IF LT JUMP table;
+    R1=R1-R2;
+    R5=R5+1;
+    JUMP octave;
+table:
+    R1=LSHIFT R1 BY 2;
+    R2=0x2ddd98;
+    R1=R1+R2;
+    I4=R1;
+    R4=DM(0,I4);
+    R4=LSHIFT R4 BY R5;
+    I12=DM(0x2dd600);
+    R2=I6;
+    I6=I7;
+    JUMP(M13,I12) (DB);
+    DM(I7,M7)=R2;
+    DM(I7,M7)=after_pitch-1;
+after_pitch:
+    R4=DM(0x2dd9f4);
+    DM(0x2dd9f0)=R4;
+clear_pending:
+    R0=0;
+    DM(0x2dd9f4)=R0;
+ready:
+    R4=0x268438;
+    I12=DM(0x2dd604);
+    R2=I6;
+    I6=I7;
+    JUMP(M13,I12) (DB);
+    DM(I7,M7)=R2;
+    DM(I7,M7)=after_render-1;
+after_render:
+    I4=0x268438;
+    I5=0x2684b8;
+    R3=0;
+copy:
+    R0=DM(I4,M6);
+    DM(I5,M6)=R0;
+    R3=R3+1;
+    R1=0x20;
+    COMP(R3,R1);
+    IF LT JUMP copy;
+    JUMP restore;
+zero:
+    I4=0x268438;
+    R0=0;
+    R3=0;
+zero_loop:
+    DM(I4,M6)=R0;
+    R3=R3+1;
+    R1=0x20;
+    COMP(R3,R1);
+    IF LT JUMP zero_loop;
+    JUMP after_render;
+unsupported:
+    R0=0;
+    DM(0x2dd9f0)=R0;
+    DM(0x2dd9f4)=R0;
+    JUMP zero;
+restore:
+    R0=DM(-22,I6);
+    I4=R0;
+    R0=DM(-23,I6);
+    I5=R0;
+    R0=DM(-24,I6);
+    I12=R0;
+    R0=DM(-25,I6);
+    L4=R0;
+    R0=DM(-26,I6);
+    L5=R0;
+    R0=DM(-27,I6);
+    ASTATX=R0;
+    R0=DM(-28,I6);
+    ASTATY=R0;
+    R0=DM(-29,I6);
+    STKYX=R0;
+    R0=DM(-30,I6);
+    STKYY=R0;
+    PX1=DM(-6,I6);
+    PX2=DM(-7,I6);
+    R1=PX;
+    PX1=DM(-8,I6);
+    PX2=DM(-9,I6);
+    R2=PX;
+    PX1=DM(-10,I6);
+    PX2=DM(-11,I6);
+    R3=PX;
+    PX1=DM(-12,I6);
+    PX2=DM(-13,I6);
+    R4=PX;
+    PX1=DM(-14,I6);
+    PX2=DM(-15,I6);
+    R5=PX;
+    PX1=DM(-16,I6);
+    PX2=DM(-17,I6);
+    R6=PX;
+    PX1=DM(-18,I6);
+    PX2=DM(-19,I6);
+    R7=PX;
+    PX1=DM(-20,I6);
+    PX2=DM(-21,I6);
+    R8=PX;
+    PX1=DM(-4,I6);
+    PX2=DM(-5,I6);
+    R0=PX;
+    PX1=DM(-2,I6);
+    PX2=DM(-3,I6);
+    I7=MODIFY(I7,29)(NW);
+bridge_restored:
+    I7=MODIFY(I7,-0x88)(NW);
+    JUMP 0x1c2450;
+    NOP;
+    NOP;
+    NOP;
+    NOP;
+.ENDSEG;

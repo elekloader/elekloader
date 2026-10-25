@@ -69,6 +69,73 @@ A format-2 mod is a relocatable object:
 | `contribute` | entries for tables: `{"to", "order", "data", "relocs", "claims"}` |
 | `copied` | `[{"lo", "hi", "to"}]`: a block of the image this mod copies elsewhere at run time |
 | `storage` | fields this mod keeps with the project: `[{"sym", "scope", "bits"}]` (the Analog Rytm MKII from core-ar2 0.2, the Analog Four MKII from core-a4 0.1; "Mod storage" below) |
+| `sharc` | Digitone II 1.12 only: compiled code for the DSP ("Digitone II SHARC mod" below) |
+
+### Digitone II SHARC mod
+
+On the Digitone II 1.12 a format-2 mod may also carry code for the DSP, an
+ADSP-21569 SHARC+, in a top-level `sharc` object. This is experimental. The
+[callback contract](SHARC-DN2-ABI.md) says what the code must do, and
+[SHARC-DN2.md](SHARC-DN2.md) what has been checked.
+
+**In mod.json**, `"sharc": {"artifact": "sine.sharc.json"}` names a file in
+the mod's folder; the SDK refuses a path outside it. The SDK copies the file
+into the `.elemod` as `sharc` and records its hash in
+`build.sharc_artifact_sha256`. The artifact is already compiled and linked,
+so no SHARC compiler runs during build, lint or patch. Any compiler or
+assembler can make one; the [sine example](../examples/sharc-sine/README.md)
+makes one from C or assembly.
+
+**The object** has exactly these fields:
+
+| field | value |
+|---|---|
+| `abi` | `"dn2-master-mono32-l2-v1"`. Core's bridge uses `"dn2-master-mono32-v1"`, which a mod may not |
+| `segments` | `[{"offset_bytes", "kind", "hex"}]`: `kind` is `"code"` or `"data"`, `hex` is the bytes in loader order. At least one is code |
+| `zero` | `[{"offset_bytes", "size_bytes"}]`: ranges the DSP's loader fills with zeros |
+| `entries` | `{"init_offset_bytes", "render_offset_bytes"}`: the two callbacks. `null` makes an inert mod, which nothing calls |
+| `stack_bytes` | the stack the callbacks use, as the author declares it. 0 for an inert mod |
+
+Offsets count bytes from the start of the mod's 32 KiB area, loader
+`[0x20090000,0x20098000)`. Link the code for that address: nothing
+relocates it. The C example's callbacks are at 320 and 382, the assembly
+example's at 176 and 238; both declare 128 bytes of stack.
+
+**The checks.** elekloader refuses the mod when it loads it, unless:
+- the segments and zero ranges are 4-byte aligned, do not overlap, and
+  together cover all 32 KiB, with no gap;
+- each entry is 2-byte aligned and inside a code segment;
+- in a mod with entries, each code segment ends in 64 bytes of NOPs (`0100`
+  repeated), with no entry inside them, because the DSP fetches instructions
+  ahead.
+
+When it links the mods, it also refuses unless:
+- only one mod in the build has `sharc`;
+- a mod with entries has a core whose bridge is the one the device profile
+  pins: its bytes, its entry and its stack. That is core-dn2 0.2 or newer;
+  set `"resources": {"core": "0.2"}` so the loader picks it;
+- the declared stacks fit: the bridge declares 116 bytes and the two
+  together may not pass 544, so a mod has at most 428.
+
+**What the linker does.** It checks the stock DSP section (section 7) by
+its hash. Then it adds the mod's segments and zero ranges as new load and
+fill records, before the stream's FINAL record. For a mod with entries it
+also adds:
+- core's 1 KiB bridge, with the two callback addresses in its first 12
+  bytes. The linker writes those; a mod cannot;
+- the bridge's 48-byte pitch table, and zeros over the rest of its 1 KiB;
+- one patch: the six-byte stock instruction at the master output
+  (`0x2838489a`) is replaced so that the bridge runs.
+
+The writer packs section 7 again. The verifier checks that it depacks to the
+linked stream and fits its limits, that the seal and the update size are
+right, and that every other section is stock. Without a SHARC mod, section 7
+stays stock, with core 0.2 too.
+
+A mod's code, data and callback offsets may change from build to build with
+no change to elekloader: only the bridge is pinned. These checks cover the
+packaging. They cannot prove what the instructions do, how much stack they
+really use, or that they finish in time, so test each program on its own.
 
 ### The linker
 
@@ -270,7 +337,8 @@ events, `ev_project` and `core_store_ids`, at 0x40098898, 0x40098900,
 (`mods/core-a4/mod.json`), and no `.fast` code either. From 0.2 it declares
 `core_pages`, `core_params` and `core_view_pages` too (0x400f6212,
 0x40023d54, 0x400232e2 and 0x4009ea68; the views at 0x400c2370 and
-0x400c4202), its view entries the A4's own.
+0x400c4202), its view entries the A4's own; from 0.3 `core_page_fns`
+as well (core-ar2 0.6's), asked from the same page_info site.
 
 The core mod patches each shared site once. It calls the handlers
 subscribed to that event, from a table built by the linker, in order.

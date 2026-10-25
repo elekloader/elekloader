@@ -40,7 +40,7 @@ core-a4's README.
 python -m elekloader.sdk.build mods/core-a4 --stock Analog-Four_MKII_OS1.56.syx
 python -m elekloader.sdk.build examples/store-check-a4 --stock Analog-Four_MKII_OS1.56.syx
 python -m elekloader.patch --stock Analog-Four_MKII_OS1.56.syx \
-    --mod mods/core-a4/out/core-0.2.elemod --mod examples/store-check-a4/out/store-check-1.0.elemod \
+    --mod mods/core-a4/out/core-0.3.elemod --mod examples/store-check-a4/out/store-check-1.0.elemod \
     --out a4-store.syx --version SC56 --lockfile a4-store.lock.json
 ```
 

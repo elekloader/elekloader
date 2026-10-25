@@ -1,0 +1,6 @@
+[env]
+DN2_STOCK = "/absolute/path/to/Digitone_II_OS1.12.syx"
+SELACHE = "/absolute/path/to/selache"
+ELEKLOADER_CROSS = "m68k-elf-"
+# Optional: include remote controls and diagnostics in the firmware.
+# DN2_DIGIHEALTH = "/absolute/path/to/digihealth.elemod"

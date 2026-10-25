@@ -48,7 +48,7 @@ What differs from the Rytm at these sites:
   digital path (effects and the inputs). Another vector 191 handler
   (0x401162a4) exists, as on the Rytm; core hooks only the main one.
 
-## Parameter pages (0.2)
+## Parameter pages (0.2, 0.3)
 
 From 0.2, `pages.s` is core-ar2 0.4's parameter routines at the A4's
 (docs/ADAPTING.md, "Parameter pages (core-a4 0.2, Analog Four MKII)"), and
@@ -92,6 +92,48 @@ project on PERFORMANCE. Nothing else in the OS bounds a view index.
 The FX track already keeps its page when it is shown again, and each view
 shows its own title, so core-ar2's FX fix and title push have no
 counterpart.
+
+From 0.3 page_info asks `core_page_fns` first, as core-ar2 0.6 does:
+`{page, info}`, where `info(page)` returns the `core_pages` entry to
+answer, or 0 to pass on to `core_pages` and stock. A page whose knobs
+change with the selected sound uses it. Every reader of a knob asks
+page_info afresh (traced in the 1.56 image): the view's knob lookup
+(0x400231be, slot 41 of the page view's vtable 0x4018d650) reads the id
+from page_info on each call, and the knobs' draw (0x40024ff6), a knob's
+touch key (0x400261da) and an encoder turn (0x4002598c) each call that
+lookup, so the knobs follow at the next redraw. The view's constructor
+(0x4002522c) copies only the page's name, once, when core makes the view
+at boot, so the name stays the first entry's. Additive: no new sites, and
+a build with no entries in it behaves as 0.2.
+
+pages-check-a4 0.2 (for core 0.3) answers CHECK through `core_page_fns`,
+with knob B (AMP PAN again) shown while its count of PAN's turns is odd.
+The count is one per delta call, that is per turn update (the bar's
+length), not per value step.
+
+In rytm-emu's A4 build (24 Oct 2026) [emu], core 0.3 alone (A403, with
+analoghealth's remote keys) drew every screen of Check 4's stock steps
+(a new project; track 1's OSC1, OSC2, FLTR, AMP, ENV and LFO pages, turned;
+the FX track's and the CV track's pages; AMP pressed three times) identical
+to stock's references, pixel for pixel. With pages-check-a4 0.2 (PF56,
+with the remote keys) the AMP key stayed on AMP until PAN turned, then
+stepped AMP, CHECK, AMP, CHECK, with CHECK's title CHECK each time; PAN
+read in hex (`7F` at the end stop) and the bar grew with each turn update.
+On CHECK, knob A turned PAN, and knob B was PAN at counts 13, 27 and 41 and
+empty at 14, 28 and 42, changing at the redraw after each turn; a turn of
+the shown B moved PAN (41 to 42) and hid B; turns of the empty B changed
+nothing on the screen and left the count as it was.
+
+On a unit (OS 1.56, 24 Oct 2026) [hw], the same two plans passed. A403H
+(core 0.3 alone, with analoghealth 1.2's remote keys) matched stock's
+references on every screen of Check 4's stock steps. On PF56H (core 0.3,
+pages-check-a4 0.2, analoghealth 1.2) the AMP key stayed on AMP until PAN
+turned, then stepped AMP, CHECK, AMP, CHECK with CHECK's title each time;
+PAN read in hex (`7F` at the end stop, `75` after a turn back) and the bar
+grew with each turn update. On CHECK, knob A turned PAN, and knob B was PAN
+at counts 19, 21 and 53 and empty at 36, 38 and 54; a turn of the shown B
+moved PAN (53 to 54) and hid B, and a turn of the empty B left the count
+at 54.
 
 In rytm-emu's A4 build (22 Oct 2026), core 0.2 alone (A402) drew every
 screen checked (main, AMP, FILTERS, OSC1, an FX track's CHORUS, with
@@ -245,7 +287,10 @@ Recovery (the STARTUP menu, TRIG 4, the stock file over MIDI DIN) brought
 the unit back to stock 1.56 (21 Oct 2026). With core 0.2 and
 [pages-check-a4](../../examples/pages-check-a4) (PA56, 23 Oct 2026), the
 parameter routines and the views passed every check ("Parameter pages
-(0.2)" above).
+(0.2)" above). With core 0.3 (24 Oct 2026), core alone (A403H) drew Check
+4's stock screens as stock, and with pages-check-a4 0.2 (PF56H) CHECK's
+knob B followed `core_page_fns` at each redraw and an empty B took no turn
+("Parameter pages (0.2, 0.3)" above).
 
 In an emulator (rytm-emu, with a local change that accepts modified A4
 images; 20 Oct 2026):
@@ -284,6 +329,10 @@ images; 20 Oct 2026):
   save, the load and a session of playback, song mode, chain, pattern keys
   and encoder edits saw no stock access to them other than core's own and a
   memcpy of a whole pool sound.
+- **Page functions** [emu] (core 0.3, 24 Oct 2026): core alone (A403) as
+  stock on every screen of Check 4's stock steps; with pages-check-a4 0.2
+  (PF56) CHECK's knob B followed `core_page_fns` at each redraw, and an
+  empty B took no turn ("Parameter pages (0.2, 0.3)" above).
 - Statically, against the stock image (python, no toolchain): every site's
   stock bytes, that each covers whole instructions, that each body in
   `store.s` jumps back to its site plus the 8 bytes it displaced, and that
@@ -297,8 +346,8 @@ images; 20 Oct 2026):
 python -m elekloader.sdk.build mods/core-a4 --stock Analog-Four_MKII_OS1.56.syx
 python -m elekloader.sdk.build examples/store-check-a4 --stock Analog-Four_MKII_OS1.56.syx
 python -m elekloader.lint examples/store-check-a4/out/store-check-1.0.elemod \
-    --stock Analog-Four_MKII_OS1.56.syx --with mods/core-a4/out/core-0.2.elemod
+    --stock Analog-Four_MKII_OS1.56.syx --with mods/core-a4/out/core-0.3.elemod
 python -m elekloader.patch --stock Analog-Four_MKII_OS1.56.syx \
-    --mod mods/core-a4/out/core-0.2.elemod --mod examples/store-check-a4/out/store-check-1.0.elemod \
+    --mod mods/core-a4/out/core-0.3.elemod --mod examples/store-check-a4/out/store-check-1.0.elemod \
     --out a4-store.syx --version SC56 --lockfile a4-store.lock.json
 ```

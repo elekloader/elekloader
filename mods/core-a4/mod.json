@@ -1,8 +1,8 @@
 {
- "id": "core", "version": "0.2",
+ "id": "core", "version": "0.3",
  "license": "GPL-2.0-or-later",
  "title": "core", "category": "Framework", "author": "irpina, Iced-Cream",
- "description": "The boot copier, the hook bus and mod storage for the Analog Four MKII: every other mod needs it. The Digitakt mk1's core.s, settings.s and render.s with the A4's addresses, as core-ar2 builds them for the Analog Rytm MKII, store.c: fields mods declare, placed by elekloader from the build's lockfile and kept in bytes stock never uses or always holds at 0; from 0.2, pages.s: the four routines every parameter page goes through, asked through core_pages and core_params, and views behind the page keys through core_view_pages, and core-ar2's load.s: the audio interrupt's load. On its own it changes nothing the unit does.",
+ "description": "The boot copier, the hook bus and mod storage for the Analog Four MKII: every other mod needs it. The Digitakt mk1's core.s, settings.s and render.s with the A4's addresses, as core-ar2 builds them for the Analog Rytm MKII, store.c: fields mods declare, placed by elekloader from the build's lockfile and kept in bytes stock never uses or always holds at 0; from 0.2, pages.s: the four routines every parameter page goes through, asked through core_pages and core_params (and from 0.3 core_page_fns, a page whose knobs follow the sound), and views behind the page keys through core_view_pages, and core-ar2's load.s: the audio interrupt's load. On its own it changes nothing the unit does.",
  "device": "analog-four-mk2", "os": "1.56",
  "sources": ["../core/core.s", "../core/settings.s", "../core/render.s", "store.c", "store.s", "pages.s", "../core-ar2/load.s"],
  "subscribe": [
@@ -88,6 +88,6 @@
   {"addr": "0x4000a774", "stock": "741c", "op": "bytes", "new": "742c", "kind": "code"},
   {"addr": "0x4000a790", "stock": "701c", "op": "bytes", "new": "702c", "kind": "code"}
  ],
- "collections": {"ev_tick": 4, "ev_draw": 4, "ev_key": 4, "ev_enc": 4, "ev_settings": 4, "ev_render_in": 4, "ev_render_out": 4, "ev_project": 4, "core_store_ids": 4, "core_pages": 4, "core_params": 4, "core_view_pages": 4},
+ "collections": {"ev_tick": 4, "ev_draw": 4, "ev_key": 4, "ev_enc": 4, "ev_settings": 4, "ev_render_in": 4, "ev_render_out": 4, "ev_project": 4, "core_store_ids": 4, "core_pages": 4, "core_params": 4, "core_view_pages": 4, "core_page_fns": 4},
  "resources": {"names": ["timer:DTIM0"]}
 }

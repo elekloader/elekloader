@@ -143,7 +143,7 @@ class LoaderModel:
     def set_stock(self, path):
         """Choose the stock firmware: known by its hash, or refused."""
         info = {'path': path, 'ok': False}
-        self.img = self.dev = self.rel = None
+        self.img = self.dev = self.rel = self._parsed = self._sharc = None
         if not path:
             info['error'] = 'no stock firmware chosen'
         else:
@@ -152,7 +152,7 @@ class LoaderModel:
                 info['sha256'] = s.sha256
                 img = formats.main_image(s, dev)
                 if elemod.sha(img) == rel.main_sha256:
-                    self.img, self.dev, self.rel = img, dev, rel
+                    self.img, self.dev, self.rel, self._parsed = img, dev, rel, s
                     info.update(ok=True, device=dev.name, os=rel.version)
                 else:
                     info['error'] = 'its main OS is not the known image'
@@ -163,6 +163,12 @@ class LoaderModel:
             self.settings['stock'] = path
             self.save_settings()
         return info
+
+    def sharc_stream(self):
+        """The stock SHARC section, decoded the first time a build has a SHARC mod."""
+        if self._sharc is None and self.rel and self.rel.sharc:
+            self._sharc = self._parsed.section(self.rel.sharc['section'])
+        return self._sharc
 
     # the library
     def files(self):
@@ -284,7 +290,8 @@ class LoaderModel:
                             'order': [m.label() for m in mods], 'status': status,
                             'blob': len(img) - len(self.img),
                             'sites': sum(len(m.sites) for m in mods)}
-                L = link.link(mods, self.img, self.store_lock())
+                L = link.link(mods, self.img, self.store_lock(),
+                              sharc_stream=self.sharc_stream() if any(m.sharc for m in v2) else None)
             except (OSError, elemod.ModError) as e:
                 lines = [x.strip() for x in str(e).split('\n')[1:]] or [str(e)]
                 for p in paths:

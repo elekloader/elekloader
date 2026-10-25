@@ -783,6 +783,61 @@ def test_bounties_take_an_upstream_list():
     assert '### OT' not in markdown(bounties([mod2('core', '0.3', (0x5000, 'ev'))]))
 
 
+def test_bounties_name_the_core_sites_beside_an_entry():
+    """An entry's `near` is the core's and companions' sites in its routine on other bytes, with the
+    symbols they jump to; its kind stays. A core site on the entry's bytes covers them instead, and one
+    in another routine (as routines() decides: by the stock code, else by distance) is not listed."""
+    from elekloader.sdk.bounties import bounties, markdown
+    from elekloader.sdk.coresites import routine_test
+
+    def mod2(dev, mod_id, os_, *sites):
+        m = link.Mod2.__new__(link.Mod2)
+        m.id, m.version, m.dev = mod_id, '1.0', dev
+        m.rel = type('Rel', (), {'version': os_})()
+        m.sites = [{'addr': s[0], 'len': s[2] if len(s) > 2 else 6, 'kind': 'code',
+                    'relocs': [(2, 'abs32', 'sym:' + s[1], 0)] if s[1] else []} for s in sites]
+        return m
+    ot = type('Dev', (), {'key': 'ot', 'name': 'OT'})()
+    mods = [mod2(ot, 'a', '1.0', (0x1000, 'a1')),                  # the core beside it, in its routine
+            mod2(ot, 'b', '1.0', (0x2000, 'b1'), (0x2010, 'b2')),  # the core on b1's bytes
+            mod2(ot, 'c', '1.0', (0x3000, 'c1')),                  # the core 256 bytes on: another routine
+            mod2(ot, 'core', '1.0', (0x1008, 'core_midi_out'), (0x2002, 'core_x'), (0x3106, 'core_far')),
+            mod2(ot, 'usb', '1.0', (0x0ff0, None))]                # a companion's, jumping to no symbol
+    [r] = bounties(mods)
+    by = {e['id']: e for e in r['entries']}
+    a = by['ot@1.0:0x00001000']
+    assert a['kind'] == 'core' and not a['at']['1.0']['sites'][0]['covered']
+    assert a['near'] == [{'os': '1.0', 'site': '0x00000ff0', 'len': 6, 'mod': 'usb', 'target': '?'},
+                         {'os': '1.0', 'site': '0x00001008', 'len': 6, 'mod': 'core', 'target': 'core_midi_out'}]
+    b = by['ot@1.0:0x00002000']
+    assert b['kind'] == 'partly' and b['near'] == []           # core_x is on b1's bytes: covered, not beside
+    assert by['ot@1.0:0x00003000']['kind'] == 'core' and by['ot@1.0:0x00003000']['near'] == []
+    # nothing else changes: the same report as without the sites beside
+    [was] = bounties(mods[:3] + [mod2(ot, 'core', '1.0', (0x2002, 'core_x'))])
+    assert [{k: v for k, v in e.items() if k != 'near'} for e in r['entries']] == \
+        [{k: v for k, v in e.items() if k != 'near'} for e in was['entries']]
+    md = markdown([r])
+    assert ('| `ot@1.0:0x00001000` | a core event; usb hooks this routine at 0x00000ff0; '
+            'core at 0x00001008 (core_midi_out) | 1 | a: a1 |') in md
+    assert '| `ot@1.0:0x00003000` | a core event | 1 | c: c1 |' in md
+    # by the stock code: an rts between the entry's site and the core's parts them, however close
+    code = bytes.fromhex('4e714e714e714e714e754e714e714e71')       # nop x4, rts, nop x3
+    same = routine_test(code, type('Dev', (), {'main_load': 0x1000, 'decoder': lambda self: __import__(
+        'elekloader.isa.coldfire', fromlist=['x'])})())
+    assert same.reach == 1024
+    mods = [mod2(ot, 'a', '1.0', (0x1000, 'a1', 2)),
+            mod2(ot, 'core', '1.0', (0x1004, 'before', 2), (0x100a, 'after', 2), (0x5000, 'far', 2))]
+    assert [x['target'] for x in bounties(mods, {('OT', '1.0'): same})[0]['entries'][0]['near']] == ['before']
+    assert [x['target'] for x in bounties(mods)[0]['entries'][0]['near']] == ['before', 'after']
+    # each OS's own: an OS other than the one the id names is said
+    dt = type('Dev', (), {'key': 'dt', 'name': 'DT'})()
+    mods = [mod2(dt, 'e', '1.53', (0x100, 'e1')), mod2(dt, 'e', '1.54', (0x200, 'e1')),
+            mod2(dt, 'core', '1.54', (0x208, 'ev'))]
+    [r] = bounties(mods)
+    assert r['entries'][0]['near'] == [{'os': '1.54', 'site': '0x00000208', 'len': 6, 'mod': 'core', 'target': 'ev'}]
+    assert '| a core event; core hooks this routine at 0x00000208 (ev) (on 1.54) |' in markdown([r])
+
+
 def test_the_site_names_its_files_with_its_version_and_lists_the_devices():
     pack = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'packaging')
     if not os.path.exists(os.path.join(pack, 'build_web.py')):
@@ -879,6 +934,14 @@ def test_every_refusal_of_the_linker_has_a_fixture_that_is_refused_and_one_that_
     refusals.test_digitakt_fixtures()
     refusals.test_analog_rytm_fixtures()
     refusals.test_the_image_check_refuses_a_protected_or_kept_byte_the_other_checks_let_through()
+
+
+def test_sharc_suite():
+    import unittest
+    suite = unittest.TestLoader().discover(HERE, pattern='test_sharc*.py')
+    assert suite.countTestCases(), 'no SHARC tests discovered'
+    result = unittest.TextTestRunner().run(suite)
+    assert result.wasSuccessful(), 'SHARC suite failed'
 
 
 if __name__ == '__main__':

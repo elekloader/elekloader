@@ -21,3 +21,6 @@ js/dist/
 # the minimal example's built kit and catalog copy (js/examples/minimal/main.js)
 js/examples/minimal/elekloader/
 js/examples/minimal/catalog/
+
+# Local inputs for the editable SHARC examples.
+/examples/sharc-sine/mise.local.toml

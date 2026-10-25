@@ -1,0 +1,13 @@
+{
+ "id": "machine-probe", "version": "1",
+ "license": "GPL-2.0-or-later",
+ "title": "machine probe", "category": "Test", "author": "irpina",
+ "description": "A probe of machines-ot 0.2: a machine whose tracks open the chooser on the machine list and show a page of their own, which counts its ui_tick and logs every ev_machine_set.",
+ "device": "octatrack", "os": "1.40C",
+ "sources": ["probe.c"],
+ "contribute": [
+  {"to": "ot_machines", "order": 50, "data": "00000000", "relocs": [[0, "abs32", "sym:mp_machine", 0]]}
+ ],
+ "subscribe": [{"event": "ev_machine_set", "fn": "mp_machine_set", "order": 50}],
+ "requires": ["core", "machines"]
+}

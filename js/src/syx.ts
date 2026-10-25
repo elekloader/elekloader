@@ -14,6 +14,8 @@ import { BIAS, Bits, FAR, Out, REUSE, depackSection } from './codec/elz.ts'
 import { CHUNK_SIZE, FIRST_COUNTER, MFR, contentChecksum, encodeSyx, packetChecksum } from './codec/transport.ts'
 import type { Device } from './devices.ts'
 import { versionAt } from './devices.ts'
+import * as sharc from './sharc.ts'
+import { ModError } from './elemod.ts'
 import { hexw, repr } from './py.ts'
 
 export const COUNT_OFF = 0x1c, TABLE_OFF = 0x20, ENTRY_SZ = 16
@@ -166,12 +168,17 @@ export function sealKey(stock: Syx, dev: Device): Uint8Array {
 
 /** -> .syx bytes: `stock` with the main OS section's stored bytes replaced by `storedMain` and, if given, the
  * ELE3 version field set. */
-export function write(stock: Syx, storedMain: Uint8Array, dev: Device, version: string | null = null): Uint8Array {
+export function write(stock: Syx, storedMain: Uint8Array, dev: Device, version: string | null = null,
+  storedSharc: Uint8Array | null = null): Uint8Array {
   if (dev.trailer !== null && dev.trailer !== 'hmac')
     throw new SyxError(`${dev.name} files are sealed (${dev.trailer}); elekloader cannot write them`)
   const key = dev.trailer === 'hmac' ? sealKey(stock, dev) : null
   if (key && !equal(hmacSha256(key, stock.container.subarray(0, -DIGEST)), stock.container.subarray(-DIGEST)))
     throw new SyxError('the stock file\'s seal does not verify with the key its bootstrap gives')
+  const profile = dev.releases.find(r => r.syxSha256 === stock.sha256)?.sharc
+  const dspSid = profile?.section
+  if (storedSharc !== null && (dspSid === undefined || !stock.stored.has(dspSid)))
+    throw new SyxError('the stock file has no profiled SHARC section')
   const header = stock.header.slice()
   if (version !== null) {
     const v = ascii(version)
@@ -184,7 +191,7 @@ export function write(stock: Syx, storedMain: Uint8Array, dev: Device, version: 
   parts.push(head)
   let len = head.length
   stock.table.forEach(([sid, , , dest], i) => {
-    const data = sid === dev.mainSection ? storedMain : stock.stored.get(sid)!
+    const data = sid === dev.mainSection ? storedMain : sid === dspSid && storedSharc !== null ? storedSharc : stock.stored.get(sid)!
     const at = TABLE_OFF + ENTRY_SZ * i
     putU32(head, at, sid)
     putU32(head, at + 4, len)
@@ -243,11 +250,17 @@ export function inplaceDepack(stored: Uint8Array, dev: Device): [Uint8Array, num
 
 const hx = (n: number, w = 8) => '0x' + hexw(n, w)
 
-/** Refuse (SyxError) unless `out` is `stock` with only the main OS changed, and it depacks in place to `wantMain`.
+/** Refuse (SyxError) unless `out` is `stock` with only the main OS and optional profiled SHARC section changed,
+ * and the main OS depacks in place to `wantMain`.
  * -> facts (the manifest's "output"). */
-export function verify(out: Uint8Array, stock: Syx, wantMain: Uint8Array, dev: Device, version: string | null = null) {
+export function verify(out: Uint8Array, stock: Syx, wantMain: Uint8Array, dev: Device, version: string | null = null,
+  wantSharc: Uint8Array | null = null) {
   const o = new Syx(out)                 // every message's shape and the ELE3 magic
   const main = dev.mainSection
+  const profile = dev.releases.find(r => r.syxSha256 === stock.sha256)?.sharc
+  const dspSid = profile?.section
+  if (wantSharc !== null && (dspSid === undefined || !stock.stored.has(dspSid)))
+    throw new SyxError('the stock file has no profiled SHARC section')
   for (const m of o.data) if (m[4] !== stock.deviceId) throw new SyxError(`a data message has device id 0x${hexw(m[4], 2)}`)
   const bad = o.data.filter(m => packetChecksum(m.subarray(1, -1), o.k) !== m[m.length - 2]).length
   if (bad) throw new SyxError(`${bad} data messages fail their checksum`)
@@ -291,7 +304,7 @@ export function verify(out: Uint8Array, stock: Syx, wantMain: Uint8Array, dev: D
     stock.container.subarray(TABLE_OFF + ENTRY_SZ * stock.table.length, stock.dataStart)))
     throw new SyxError('the table area after the entries differs from stock')
   for (const sid of stock.stored.keys()) {
-    if (sid === main) continue
+    if (sid === main || sid === dspSid && wantSharc !== null) continue
     if (!o.stored.has(sid) || !equal(o.stored.get(sid)!, stock.stored.get(sid)!)) throw new SyxError(`section ${sid} is not stock`)
     if (!equal(o.section(sid), stock.section(sid))) throw new SyxError(`section ${sid} does not depack as stock`)
   }
@@ -300,10 +313,22 @@ export function verify(out: Uint8Array, stock: Syx, wantMain: Uint8Array, dev: D
   const [img, gap] = inplaceDepack(s3, dev)
   if (!equal(img, wantMain)) throw new SyxError('the main OS does not depack to the patched image')
   if (!equal(depackSection(s3), img)) throw new SyxError('the main OS: the depacker disagrees with the in-place depack')
+  if (wantSharc !== null) {
+    const s7 = o.stored.get(dspSid!)!
+    if (classify(s7) !== 'packed') throw new SyxError('the SHARC section is not a packed stream with a valid byte sum')
+    if (s7.length > profile!.storedMax) throw new SyxError('the SHARC stored section exceeds the profile limit')
+    const dsp = depackSection(s7)
+    if (!equal(dsp, wantSharc)) throw new SyxError('the SHARC section does not depack to the patched stream')
+    try { sharc.parse(dsp, profile!) } catch (e) {
+      if (e instanceof ModError) throw new SyxError(e.message)
+      throw e
+    }
+  }
   if (gap! <= 0) throw new SyxError(`the main OS: the in-place depack overwrites unread input (gap ${gap})`)
   // 'sections' is keyed by section id in table order, which a plain object would sort: a Map keeps it
   const sections = new Map<string, Section>()
-  for (const [s, , l] of o.table) sections.set(String(s), { stored: l, stored_sha256: sha(o.stored.get(s)!), stock: s !== main })
+  for (const [s, , l] of o.table) sections.set(String(s), { stored: l, stored_sha256: sha(o.stored.get(s)!),
+    stock: s !== main && !(s === dspSid && wantSharc !== null) })
   const facts: Facts = {
     sha256: sha(out), bytes: out.length, messages: o.data.length + 2,
     content_checksum: hx(o.checksum), container_len: o.total,
