@@ -115,6 +115,9 @@ Rules:
   its pages or its accounts. A change to a call or a reply raises `PROTOCOL`
   (js/src/kit/protocol.ts); a change to the catalog format raises
   `CATALOG_SCHEMA`. docs/INTEGRATING.md changes with them.
+- **Docs say how things are now, once, in their home.** Before you add to
+  them, see .claude/skills/doc-hygiene/SKILL.md, and run its audit after
+  you move a heading.
 - **A change to the file format** needs docs/FORMAT.md, docs/ADAPTING.md and
   tests updated with it. Keep reading older files: the legacy `.dtmod`
   extension and `"dtmod"` key are still accepted.

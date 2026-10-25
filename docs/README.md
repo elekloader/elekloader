@@ -135,3 +135,6 @@ docs match its code.
 - **[The apps](APPS.md)**: building the Windows and macOS apps, by hand or
   in the workflows, and the signing secrets.
 - **[Tests](TESTS.md)**: each suite and the files it needs.
+- **[Doc hygiene](../.claude/skills/doc-hygiene/SKILL.md)**: where each
+  kind of fact goes, the bloat these docs grow, and an audit of their size,
+  links and section references.
