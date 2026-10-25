@@ -28,6 +28,98 @@ class RegistryTests(unittest.TestCase):
                 subprocess.run([str(executable)], check=True)
 
 
+class ParameterTableSitesTests(unittest.TestCase):
+    def test_bounds_and_references_match_the_appended_rows(self):
+        source = (ROOT / 'mods/machines-dn2/machines.c').read_text()
+        define = {name: int(value, 0) for name, value in
+                  (line.split()[1:3] for line in source.splitlines() if line.startswith('#define '))}
+        mod = json.loads((ROOT / 'mods/machines-dn2/mod.json').read_text())
+        self.assertEqual(int(mod['defsym']['T1_ROWS']), define['ROWS'])
+        bounds = [s for s in mod['sites'] if s['op'] == 'bytes' and len(s['stock']) == 12]
+        self.assertEqual(len(bounds), 54)
+        for site in bounds:
+            stock, new = bytes.fromhex(site['stock']), bytes.fromhex(site['new'])
+            self.assertEqual(stock[:2], new[:2], site['addr'])
+            self.assertIn(int.from_bytes(stock[2:], 'big'), (define['ROWS'], define['ROWS'] - 1))
+            self.assertEqual(int.from_bytes(new[2:], 'big') - int.from_bytes(stock[2:], 'big'),
+                             define['ADDED'], site['addr'])
+        self.assertEqual(sum(s.get('target') == 'dn2_t1' for s in mod['sites']), 56)
+
+
+@unittest.skipUnless(CF_CALL and STOCK and os.environ.get('ELEKLOADER_CROSS'),
+                     'needs DN2 stock, cross compiler and ELEKLOADER_CF_CALL')
+class VoicePagesTests(unittest.TestCase):
+    def test_stock_readers_see_the_pages_and_their_rows(self):
+        from elekloader import patch, syx
+        from elekloader.sdk import build as sdk
+        from elekloader.sdk.sharc import voice_artifact
+
+        stock = syx.Syx.load(STOCK)
+        with tempfile.TemporaryDirectory() as tmp:
+            work = Path(tmp)
+            base = [sdk.build(str(ROOT / 'mods' / source), STOCK, str(work / source))[0]
+                    for source in ('core-dn2', 'machines-dn2')]
+            stage = work / 'paged'
+            stage.mkdir()
+            (stage / 'machine.c').write_text(
+                '#include "mk2/machines.h"\n'
+                'const struct mk2_synth voice = {8, 0, "PAGED", "PAGED"};\n'
+                'const struct mk2_synth clone = {5, 1, "CLONE", "CLONE"};\n'
+                'static const struct mk2_param a = {"ALPH", 100}, b = {"BETA", 3};\n'
+                'static const struct mk2_page two[2] = {{{&a, 0, &b}}, {{0}}};\n'
+                'const struct mk2_voice_pages pages = {8, 2, two};\n')
+            (stage / 'kernel.json').write_text(json.dumps(voice_artifact(bytes(4), bytes(4), 0, 8, 20)))
+            (stage / 'mod.json').write_text(json.dumps({
+                'id': 'paged', 'version': '0.1', 'device': 'digitone-mk2', 'os': '1.12',
+                'sources': ['machine.c'], 'sharc': {'artifact': 'kernel.json'},
+                'resources': {'core': '0.1'}, 'requires': ['core', 'machines-dn2'],
+                'contribute': [{'to': table, 'data': '00000000', 'relocs': [[0, 'abs32', 'sym:' + symbol, 0]]}
+                               for table, symbol in (('mk2_voice_synths', 'voice'), ('mk2_synths', 'clone'),
+                                                     ('mk2_voice_pages', 'pages'))]}))
+            mod = sdk.build(str(stage), STOCK, str(stage / 'build'))[0]
+            outputs, _manifest = patch.build(STOCK, base + [mod], 'TEST', log=lambda *args: None)
+            firmware = stage / 'test.syx'
+            firmware.write_bytes(outputs['syx'])
+            page_count, slot_code, row_slot, row_cc, value_class, cc_code, nrpn_code = (
+                0x400c2636, 0x400dc18e, 0x400dbe28, 0x400dc406, 0x400c257c, 0x400dc978, 0x400dca5a)
+            # Stock synths keep their counts (FM TONE 4, WAVETONE 3, FM DRUM 4, SWARMER 1, MIDI 1);
+            # a clone has its original's.
+            checks = [(page_count, [8], 2), (page_count, [0], 4), (page_count, [1], 3),
+                      (page_count, [2], 4), (page_count, [3], 1), (page_count, [4], 1),
+                      (page_count, [5], 3),
+                      (slot_code, [25, 8, 0], 321), (slot_code, [26, 8, 0], 0),
+                      (slot_code, [27, 8, 0], 323), (slot_code, [33, 8, 0], 0),
+                      (slot_code, [41, 8, 0], 0),
+                      (row_slot, [321], 25), (row_slot, [323], 27), (row_slot, [0xd5], 36),
+                      (row_cc, [321], 40), (row_cc, [0xd5], 49),
+                      # CC/NRPN by position: FM TONE's CC 40/41/42 and NRPN 201/202/203 are slots
+                      # 25/26/27, ALPH, empty and BETA on the clone of FM TONE; stock FM TONE unchanged.
+                      (cc_code, [0, 8, 0, 40], 321), (cc_code, [0, 8, 0, 41], 0),
+                      (cc_code, [0, 8, 0, 42], 323), (cc_code, [0, 0, 0, 40], 200),
+                      (nrpn_code, [0, 8, 0, 201], 321), (nrpn_code, [0, 8, 0, 202], 0),
+                      (nrpn_code, [0, 8, 0, 203], 323), (nrpn_code, [0, 0, 0, 201], 200),
+                      (row_cc, [323], 42),
+                      # A missing synth (9) keeps its type: MIDI's CC 70 (slot 33) is not its parameter.
+                      (cc_code, [0, 4, 0, 70], 168), (cc_code, [0, 9, 0, 70], 0),
+                      (value_class, [321], None), (value_class, [0xd5], None),
+                      (value_class, [361], None), (value_class, [0], None)]
+            request = stage / 'request.json'
+            request.write_text(json.dumps({'calls': [{'pc': hex(pc), 'args': [str(a) for a in args]}
+                                                     for pc, args, _ in checks]}))
+            result = subprocess.run([CF_CALL, str(firmware), str(request), '--base-sha', stock.sha256],
+                                    capture_output=True, text=True, timeout=300)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            rows = [json.loads(line) for line in result.stdout.splitlines() if line.startswith('{')]
+            self.assertEqual(len(rows), len(checks))
+            for row, (pc, args, want) in zip(rows, checks):
+                self.assertTrue(row['ok'], row)
+                if want is not None:
+                    self.assertEqual(row['d'][0], want, (hex(pc), args))
+            classes = [row['d'][0] for row in rows[-4:]]
+            self.assertEqual(classes[0], classes[1])          # an added row shares its template's object
+            self.assertEqual(classes[2], classes[3])          # past the added rows: the stock clamp to 0
+
+
 @unittest.skipUnless(CF_CALL and STOCK and os.environ.get('ELEKLOADER_CROSS'),
                      'needs DN2 stock, cross compiler and ELEKLOADER_CF_CALL')
 class ParameterDispatchTests(unittest.TestCase):
@@ -84,7 +176,9 @@ class ParameterDispatchTests(unittest.TestCase):
                         for parameter in (False, True):
                             calls.append({'pc': hex(getter_pc if parameter else manifest['_map'][reader]),
                                           'args': [hex(owner if parameter else address)]})
-                            mapped = (0 if machine_id == first else (4 if kind == 'synth' else 0))
+                            # A missing synth keeps its own type for MIDI (no stock synth map has it);
+                            # a missing filter falls back to MULTI-MODE.
+                            mapped = (0 if machine_id == first else (machine_id if kind == 'synth' else 0))
                             expected.append(mapped if parameter and first <= machine_id < 32 and machine_id != 8
                                             else machine_id)
                     # Native MIDI handlers must reach the setter through the real owner getters.

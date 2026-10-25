@@ -6,13 +6,33 @@
 /* machines-dn2 0.1: contribute a pointer to mk2_synths for a stock clone.
  * mk2_voice_synths registers a SHARC voice with the same descriptor;
  * its module carries the matching artifact (digitone-mk2/voice.h). SYN has
- * one empty page named after the mod; clone selects stock defaults/permissions.
+ * one empty page named after the mod unless mk2_voice_pages gives it pages;
+ * clone selects stock defaults/permissions.
  * DN2 IDs 5..31 are permanent across builds; never derive them from load order or reuse them
  * for a different mod. clone is 0=FM TONE, 1=WAVETONE, 2=FM DRUM, 3=SWARMER.
  * Names are ASCII (31 characters), labels at most 7. Requires core 0.1. */
 struct mk2_synth {
     uint32_t id, clone;
     const char *name, *label;
+};
+
+/* machines-dn2 0.1: contribute a pointer to mk2_voice_pages to give a SHARC
+ * synth (mk2_voice_synths) its own SYN pages, 1..5 of 8 knobs. Page p, knob k
+ * is sound slot 25 + 8p + k, saved with the sound. A NULL knob is an empty
+ * slot. Labels are ASCII, 1..5 characters; defaults 0..127. SYN steps
+ * through the pages, headed "NAME (p/n)". A knob answers the MIDI CC/NRPN
+ * the clone has for its slot. An invalid entry is ignored
+ * and the synth keeps one empty page. */
+struct mk2_param {
+    const char *label;
+    uint32_t def;
+};
+struct mk2_page {
+    const struct mk2_param *knob[8];
+};
+struct mk2_voice_pages {
+    uint32_t id, count;
+    const struct mk2_page *page;
 };
 
 /* machines-dn2 0.1: contribute a pointer to mk2_filters for a stock filter

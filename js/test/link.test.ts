@@ -68,6 +68,11 @@ test('DN2 synth and filter claims use separate stable ID namespaces', () => {
   assert.ok(check([mod('a', 6, 'mk2_filters'), mod('b', 6, 'mk2_filters')], image)
     .includes('a 1 and b 1 both claim mk2-filter:6'))
   assert.ok(!check([mod('synth', 6), mod('filter', 6, 'mk2_filters')], image).some(p => p.includes('claim')))
+  assert.deepEqual(mod('pages', 7, 'mk2_voice_pages').impliedNames(image), ['mk2-pages:7'])
+  assert.ok(check([mod('a', 7, 'mk2_voice_pages'), mod('b', 7, 'mk2_voice_pages')], image)
+    .includes('a 1 and b 1 both claim mk2-pages:7'))
+  assert.ok(!check([mod('synth', 7, 'mk2_voice_synths'), mod('pages', 7, 'mk2_voice_pages')], image)
+    .some(p => p.includes('claim')))
 })
 
 test('DN2 machine bundles claim every pointer entry', () => {

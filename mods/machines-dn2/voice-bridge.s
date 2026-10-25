@@ -208,6 +208,43 @@ pitch_low:
 R3=0xffff;
 R2=R2 AND R3;
 DM(0x20093d08)=R2;
+// The voice's 40 knob words, frame halfwords 0x6d + 0x49 v + i, into param[i].
+R1=LSHIFT R0 BY 6;
+R2=LSHIFT R0 BY 3;
+R1=R1+R2;
+R1=R1+R0;
+R2=0x6d;
+R1=R1+R2;
+R6=0x20093d14;
+R5=0;
+params:
+R2=0xfffe;
+R2=R1 AND R2;
+R2=LSHIFT R2 BY 1;
+R3=0x25c48c;
+R2=R2+R3;
+I4=R2;
+R2=DM(0,I4);
+R3=1;
+R3=R1 AND R3;
+R3=PASS R3;
+IF EQ JUMP param_low;
+R3=-16;
+R2=LSHIFT R2 BY R3;
+param_low:
+R3=0xffff;
+R2=R2 AND R3;
+I5=R6;
+DM(0,I5)=R2;
+R3=4;
+R6=R6+R3;
+R1=R1+1;
+R5=R5+1;
+R3=40;
+COMP(R5,R3);
+IF LT JUMP params;
+R2=0x20093d14;
+DM(0x20093d10)=R2;
 // Pin the C context, preserving the firmware register bank and interrupt setup.
 M5=0;
 M6=1;

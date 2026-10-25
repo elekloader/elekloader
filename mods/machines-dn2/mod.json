@@ -3,12 +3,13 @@
  "version": "0.1",
  "license": "GPL-2.0-or-later",
  "title": "DN2 synth and filter machines",
- "description": "Native synth/filter clones and SHARC voice synths/filters in the Digitone II machine selector. Needs core 0.1.",
+ "description": "Native synth/filter clones and SHARC voice synths/filters in the Digitone II machine selector. SHARC synths may have their own SYN pages. Needs core 0.1.",
  "device": "digitone-mk2",
  "os": "1.12",
  "sources": [
   "machines.c",
-  "hooks.s"
+  "hooks.s",
+  "start.s"
  ],
  "defsym": {
   "STOCK_NAMES": "0x401f7c04",
@@ -52,7 +53,13 @@
   "FRC4": "0x40071ece",
   "FRC5": "0x400d5be8",
   "FRC6": "0x400d68fc",
-  "FRC7": "0x400d7324"
+  "FRC7": "0x400d7324",
+  "STOCK_T1": "0x401f83a4",
+  "T1_ROWS": "321",
+  "T2_CONTINUE": "0x400c2586",
+  "OS_MAIN": "0x40186fa2",
+  "CC_CONTINUE": "0x400dc980",
+  "NRPN_CONTINUE": "0x400dca62"
  },
  "sites": [
   {
@@ -230,13 +237,755 @@
    "op": "bytes",
    "new": "143c0021",
    "kind": "code"
+  },
+  {
+   "addr": "0x40000568",
+   "stock": "4eb940186fa2",
+   "op": "jsr",
+   "target": "dn2_start"
+  },
+  {
+   "addr": "0x400c257c",
+   "stock": "202f00040c8000000141",
+   "op": "jmp",
+   "target": "dn2_t2"
+  },
+  {
+   "addr": "0x400174de",
+   "stock": "41f9401f83a4",
+   "op": "keep2",
+   "target": "dn2_t1"
+  },
+  {
+   "addr": "0x400365e0",
+   "stock": "41f9401f83a4",
+   "op": "keep2",
+   "target": "dn2_t1"
+  },
+  {
+   "addr": "0x400366c2",
+   "stock": "d5fc401f83a4",
+   "op": "keep2",
+   "target": "dn2_t1"
+  },
+  {
+   "addr": "0x400372e6",
+   "stock": "41f9401f83a4",
+   "op": "keep2",
+   "target": "dn2_t1"
+  },
+  {
+   "addr": "0x4003753a",
+   "stock": "41f9401f83a4",
+   "op": "keep2",
+   "target": "dn2_t1"
+  },
+  {
+   "addr": "0x400375dc",
+   "stock": "41f9401f83a4",
+   "op": "keep2",
+   "target": "dn2_t1"
+  },
+  {
+   "addr": "0x40037690",
+   "stock": "41f9401f83a4",
+   "op": "keep2",
+   "target": "dn2_t1"
+  },
+  {
+   "addr": "0x40037746",
+   "stock": "41f9401f83a4",
+   "op": "keep2",
+   "target": "dn2_t1"
+  },
+  {
+   "addr": "0x40038c0a",
+   "stock": "41f9401f83a4",
+   "op": "keep2",
+   "target": "dn2_t1"
+  },
+  {
+   "addr": "0x40038cac",
+   "stock": "41f9401f83a4",
+   "op": "keep2",
+   "target": "dn2_t1"
+  },
+  {
+   "addr": "0x40038d58",
+   "stock": "41f9401f83a4",
+   "op": "keep2",
+   "target": "dn2_t1"
+  },
+  {
+   "addr": "0x40038e28",
+   "stock": "41f9401f83a4",
+   "op": "keep2",
+   "target": "dn2_t1"
+  },
+  {
+   "addr": "0x400397be",
+   "stock": "d1fc401f83a4",
+   "op": "keep2",
+   "target": "dn2_t1"
+  },
+  {
+   "addr": "0x40039ac8",
+   "stock": "45f9401f83a4",
+   "op": "keep2",
+   "target": "dn2_t1"
+  },
+  {
+   "addr": "0x40039cea",
+   "stock": "45f9401f83a4",
+   "op": "keep2",
+   "target": "dn2_t1"
+  },
+  {
+   "addr": "0x40039ee8",
+   "stock": "45f9401f83a4",
+   "op": "keep2",
+   "target": "dn2_t1"
+  },
+  {
+   "addr": "0x4004483c",
+   "stock": "41f9401f83a4",
+   "op": "keep2",
+   "target": "dn2_t1"
+  },
+  {
+   "addr": "0x4004b0ca",
+   "stock": "47f9401f83a4",
+   "op": "keep2",
+   "target": "dn2_t1"
+  },
+  {
+   "addr": "0x40062bf0",
+   "stock": "41f9401f83a4",
+   "op": "keep2",
+   "target": "dn2_t1"
+  },
+  {
+   "addr": "0x40065ac0",
+   "stock": "41f9401f83a4",
+   "op": "keep2",
+   "target": "dn2_t1"
+  },
+  {
+   "addr": "0x400672f2",
+   "stock": "41f9401f83a4",
+   "op": "keep2",
+   "target": "dn2_t1"
+  },
+  {
+   "addr": "0x400674e6",
+   "stock": "49f9401f83a4",
+   "op": "keep2",
+   "target": "dn2_t1"
+  },
+  {
+   "addr": "0x400679da",
+   "stock": "41f9401f83a4",
+   "op": "keep2",
+   "target": "dn2_t1"
+  },
+  {
+   "addr": "0x40068254",
+   "stock": "2a3c401f83a4",
+   "op": "keep2",
+   "target": "dn2_t1"
+  },
+  {
+   "addr": "0x40068330",
+   "stock": "41f9401f83a4",
+   "op": "keep2",
+   "target": "dn2_t1"
+  },
+  {
+   "addr": "0x4006e892",
+   "stock": "41f9401f83a4",
+   "op": "keep2",
+   "target": "dn2_t1"
+  },
+  {
+   "addr": "0x4006eba8",
+   "stock": "41f9401f83a4",
+   "op": "keep2",
+   "target": "dn2_t1"
+  },
+  {
+   "addr": "0x4006f6ae",
+   "stock": "41f9401f83a4",
+   "op": "keep2",
+   "target": "dn2_t1"
+  },
+  {
+   "addr": "0x400bd57c",
+   "stock": "41f9401f83a4",
+   "op": "keep2",
+   "target": "dn2_t1"
+  },
+  {
+   "addr": "0x400c25b6",
+   "stock": "41f9401f83a4",
+   "op": "keep2",
+   "target": "dn2_t1"
+  },
+  {
+   "addr": "0x400c27ce",
+   "stock": "41f9401f83a4",
+   "op": "keep2",
+   "target": "dn2_t1"
+  },
+  {
+   "addr": "0x400d5a92",
+   "stock": "41f9401f83a4",
+   "op": "keep2",
+   "target": "dn2_t1"
+  },
+  {
+   "addr": "0x400dbe34",
+   "stock": "41f9401f83a4",
+   "op": "keep2",
+   "target": "dn2_t1"
+  },
+  {
+   "addr": "0x400dbe58",
+   "stock": "41f9401f83a4",
+   "op": "keep2",
+   "target": "dn2_t1"
+  },
+  {
+   "addr": "0x400dbe8a",
+   "stock": "41f9401f83a4",
+   "op": "keep2",
+   "target": "dn2_t1"
+  },
+  {
+   "addr": "0x400dbefa",
+   "stock": "41f9401f83a4",
+   "op": "keep2",
+   "target": "dn2_t1"
+  },
+  {
+   "addr": "0x400dbf68",
+   "stock": "41f9401f83a4",
+   "op": "keep2",
+   "target": "dn2_t1"
+  },
+  {
+   "addr": "0x400dbfce",
+   "stock": "41f9401f83a4",
+   "op": "keep2",
+   "target": "dn2_t1"
+  },
+  {
+   "addr": "0x400dbffa",
+   "stock": "41f9401f83a4",
+   "op": "keep2",
+   "target": "dn2_t1"
+  },
+  {
+   "addr": "0x400dc026",
+   "stock": "41f9401f83a4",
+   "op": "keep2",
+   "target": "dn2_t1"
+  },
+  {
+   "addr": "0x400dc066",
+   "stock": "41f9401f83a4",
+   "op": "keep2",
+   "target": "dn2_t1"
+  },
+  {
+   "addr": "0x400dc0be",
+   "stock": "41f9401f83a4",
+   "op": "keep2",
+   "target": "dn2_t1"
+  },
+  {
+   "addr": "0x400dc0f2",
+   "stock": "41f9401f83a4",
+   "op": "keep2",
+   "target": "dn2_t1"
+  },
+  {
+   "addr": "0x400dc12c",
+   "stock": "41f9401f83a4",
+   "op": "keep2",
+   "target": "dn2_t1"
+  },
+  {
+   "addr": "0x400dc174",
+   "stock": "0681401f83ac",
+   "op": "keep2",
+   "target": "dn2_t1",
+   "addend": 8
+  },
+  {
+   "addr": "0x400dc292",
+   "stock": "0680401f83c4",
+   "op": "keep2",
+   "target": "dn2_t1",
+   "addend": 32
+  },
+  {
+   "addr": "0x400dc29e",
+   "stock": "2039401f83c4",
+   "op": "keep2",
+   "target": "dn2_t1",
+   "addend": 32
+  },
+  {
+   "addr": "0x400dc38e",
+   "stock": "41f9401f83a4",
+   "op": "keep2",
+   "target": "dn2_t1"
+  },
+  {
+   "addr": "0x400dc3e8",
+   "stock": "41f9401f83a4",
+   "op": "keep2",
+   "target": "dn2_t1"
+  },
+  {
+   "addr": "0x400dc412",
+   "stock": "41f9401f83a4",
+   "op": "keep2",
+   "target": "dn2_t1"
+  },
+  {
+   "addr": "0x400dc436",
+   "stock": "41f9401f83a4",
+   "op": "keep2",
+   "target": "dn2_t1"
+  },
+  {
+   "addr": "0x400dc45a",
+   "stock": "41f9401f83a4",
+   "op": "keep2",
+   "target": "dn2_t1"
+  },
+  {
+   "addr": "0x400dc47e",
+   "stock": "41f9401f83a4",
+   "op": "keep2",
+   "target": "dn2_t1"
+  },
+  {
+   "addr": "0x400dc6a2",
+   "stock": "45f9401f83a4",
+   "op": "keep2",
+   "target": "dn2_t1"
+  },
+  {
+   "addr": "0x40105e40",
+   "stock": "41f9401f83a4",
+   "op": "keep2",
+   "target": "dn2_t1"
+  },
+  {
+   "addr": "0x40107862",
+   "stock": "41f9401f83a4",
+   "op": "keep2",
+   "target": "dn2_t1"
+  },
+  {
+   "addr": "0x400174d6",
+   "stock": "0c8200000141",
+   "op": "bytes",
+   "new": "0c8200000169",
+   "kind": "code"
+  },
+  {
+   "addr": "0x400365d0",
+   "stock": "0c8100000141",
+   "op": "bytes",
+   "new": "0c8100000169",
+   "kind": "code"
+  },
+  {
+   "addr": "0x400366aa",
+   "stock": "0c8000000140",
+   "op": "bytes",
+   "new": "0c8000000168",
+   "kind": "code"
+  },
+  {
+   "addr": "0x40036af4",
+   "stock": "0c8400000140",
+   "op": "bytes",
+   "new": "0c8400000168",
+   "kind": "code"
+  },
+  {
+   "addr": "0x40036bbc",
+   "stock": "0c8200000140",
+   "op": "bytes",
+   "new": "0c8200000168",
+   "kind": "code"
+  },
+  {
+   "addr": "0x400372de",
+   "stock": "0c8000000141",
+   "op": "bytes",
+   "new": "0c8000000169",
+   "kind": "code"
+  },
+  {
+   "addr": "0x40037540",
+   "stock": "0c8000000141",
+   "op": "bytes",
+   "new": "0c8000000169",
+   "kind": "code"
+  },
+  {
+   "addr": "0x400375e2",
+   "stock": "0c8000000141",
+   "op": "bytes",
+   "new": "0c8000000169",
+   "kind": "code"
+  },
+  {
+   "addr": "0x40037696",
+   "stock": "0c8000000141",
+   "op": "bytes",
+   "new": "0c8000000169",
+   "kind": "code"
+  },
+  {
+   "addr": "0x40037736",
+   "stock": "0c8000000140",
+   "op": "bytes",
+   "new": "0c8000000168",
+   "kind": "code"
+  },
+  {
+   "addr": "0x400379ec",
+   "stock": "0c8200000140",
+   "op": "bytes",
+   "new": "0c8200000168",
+   "kind": "code"
+  },
+  {
+   "addr": "0x40038c10",
+   "stock": "0c8000000141",
+   "op": "bytes",
+   "new": "0c8000000169",
+   "kind": "code"
+  },
+  {
+   "addr": "0x40038cb2",
+   "stock": "0c8000000141",
+   "op": "bytes",
+   "new": "0c8000000169",
+   "kind": "code"
+  },
+  {
+   "addr": "0x40038d5e",
+   "stock": "0c8000000141",
+   "op": "bytes",
+   "new": "0c8000000169",
+   "kind": "code"
+  },
+  {
+   "addr": "0x40038e2e",
+   "stock": "0c8000000141",
+   "op": "bytes",
+   "new": "0c8000000169",
+   "kind": "code"
+  },
+  {
+   "addr": "0x400397a6",
+   "stock": "0c8200000140",
+   "op": "bytes",
+   "new": "0c8200000168",
+   "kind": "code"
+  },
+  {
+   "addr": "0x40044828",
+   "stock": "b3fc00000140",
+   "op": "bytes",
+   "new": "b3fc00000168",
+   "kind": "code"
+  },
+  {
+   "addr": "0x40062be8",
+   "stock": "0c8300000141",
+   "op": "bytes",
+   "new": "0c8300000169",
+   "kind": "code"
+  },
+  {
+   "addr": "0x40065ab8",
+   "stock": "0c8200000141",
+   "op": "bytes",
+   "new": "0c8200000169",
+   "kind": "code"
+  },
+  {
+   "addr": "0x400672de",
+   "stock": "0c8300000140",
+   "op": "bytes",
+   "new": "0c8300000168",
+   "kind": "code"
+  },
+  {
+   "addr": "0x400674d4",
+   "stock": "0c8000000140",
+   "op": "bytes",
+   "new": "0c8000000168",
+   "kind": "code"
+  },
+  {
+   "addr": "0x400676cc",
+   "stock": "0c8200000140",
+   "op": "bytes",
+   "new": "0c8200000168",
+   "kind": "code"
+  },
+  {
+   "addr": "0x400679c8",
+   "stock": "0c8300000140",
+   "op": "bytes",
+   "new": "0c8300000168",
+   "kind": "code"
+  },
+  {
+   "addr": "0x40068290",
+   "stock": "0c8000000140",
+   "op": "bytes",
+   "new": "0c8000000168",
+   "kind": "code"
+  },
+  {
+   "addr": "0x4006831e",
+   "stock": "0c8200000141",
+   "op": "bytes",
+   "new": "0c8200000169",
+   "kind": "code"
+  },
+  {
+   "addr": "0x4006e88a",
+   "stock": "0c8200000141",
+   "op": "bytes",
+   "new": "0c8200000169",
+   "kind": "code"
+  },
+  {
+   "addr": "0x4006eb9e",
+   "stock": "bdfc00000141",
+   "op": "bytes",
+   "new": "bdfc00000169",
+   "kind": "code"
+  },
+  {
+   "addr": "0x4006f6a6",
+   "stock": "0c8300000141",
+   "op": "bytes",
+   "new": "0c8300000169",
+   "kind": "code"
+  },
+  {
+   "addr": "0x400bd582",
+   "stock": "0c8000000141",
+   "op": "bytes",
+   "new": "0c8000000169",
+   "kind": "code"
+  },
+  {
+   "addr": "0x400c25a4",
+   "stock": "0c8000000141",
+   "op": "bytes",
+   "new": "0c8000000169",
+   "kind": "code"
+  },
+  {
+   "addr": "0x400c27c6",
+   "stock": "0c8200000141",
+   "op": "bytes",
+   "new": "0c8200000169",
+   "kind": "code"
+  },
+  {
+   "addr": "0x400d5a8a",
+   "stock": "0c8200000141",
+   "op": "bytes",
+   "new": "0c8200000169",
+   "kind": "code"
+  },
+  {
+   "addr": "0x400dbe2c",
+   "stock": "0c8000000141",
+   "op": "bytes",
+   "new": "0c8000000169",
+   "kind": "code"
+  },
+  {
+   "addr": "0x400dbe50",
+   "stock": "0c8000000141",
+   "op": "bytes",
+   "new": "0c8000000169",
+   "kind": "code"
+  },
+  {
+   "addr": "0x400dbe76",
+   "stock": "0c8000000140",
+   "op": "bytes",
+   "new": "0c8000000168",
+   "kind": "code"
+  },
+  {
+   "addr": "0x400dbee6",
+   "stock": "0c8000000140",
+   "op": "bytes",
+   "new": "0c8000000168",
+   "kind": "code"
+  },
+  {
+   "addr": "0x400dbf54",
+   "stock": "0c8000000140",
+   "op": "bytes",
+   "new": "0c8000000168",
+   "kind": "code"
+  },
+  {
+   "addr": "0x400dbfc6",
+   "stock": "0c8000000141",
+   "op": "bytes",
+   "new": "0c8000000169",
+   "kind": "code"
+  },
+  {
+   "addr": "0x400dbff2",
+   "stock": "0c8000000141",
+   "op": "bytes",
+   "new": "0c8000000169",
+   "kind": "code"
+  },
+  {
+   "addr": "0x400dc01e",
+   "stock": "0c8000000141",
+   "op": "bytes",
+   "new": "0c8000000169",
+   "kind": "code"
+  },
+  {
+   "addr": "0x400dc052",
+   "stock": "0c8200000140",
+   "op": "bytes",
+   "new": "0c8200000168",
+   "kind": "code"
+  },
+  {
+   "addr": "0x400dc0b6",
+   "stock": "0c8000000141",
+   "op": "bytes",
+   "new": "0c8000000169",
+   "kind": "code"
+  },
+  {
+   "addr": "0x400dc0ea",
+   "stock": "0c8000000141",
+   "op": "bytes",
+   "new": "0c8000000169",
+   "kind": "code"
+  },
+  {
+   "addr": "0x400dc124",
+   "stock": "0c8000000141",
+   "op": "bytes",
+   "new": "0c8000000169",
+   "kind": "code"
+  },
+  {
+   "addr": "0x400dc15a",
+   "stock": "0c8100000141",
+   "op": "bytes",
+   "new": "0c8100000169",
+   "kind": "code"
+  },
+  {
+   "addr": "0x400dc282",
+   "stock": "0c8000000140",
+   "op": "bytes",
+   "new": "0c8000000168",
+   "kind": "code"
+  },
+  {
+   "addr": "0x400dc380",
+   "stock": "0c8000000140",
+   "op": "bytes",
+   "new": "0c8000000168",
+   "kind": "code"
+  },
+  {
+   "addr": "0x400dc3e0",
+   "stock": "0c8000000141",
+   "op": "bytes",
+   "new": "0c8000000169",
+   "kind": "code"
+  },
+  {
+   "addr": "0x400dc40a",
+   "stock": "0c8000000141",
+   "op": "bytes",
+   "new": "0c8000000169",
+   "kind": "code"
+  },
+  {
+   "addr": "0x400dc42e",
+   "stock": "0c8000000141",
+   "op": "bytes",
+   "new": "0c8000000169",
+   "kind": "code"
+  },
+  {
+   "addr": "0x400dc452",
+   "stock": "0c8000000141",
+   "op": "bytes",
+   "new": "0c8000000169",
+   "kind": "code"
+  },
+  {
+   "addr": "0x400dc476",
+   "stock": "0c8000000141",
+   "op": "bytes",
+   "new": "0c8000000169",
+   "kind": "code"
+  },
+  {
+   "addr": "0x40105e38",
+   "stock": "0c8200000141",
+   "op": "bytes",
+   "new": "0c8200000169",
+   "kind": "code"
+  },
+  {
+   "addr": "0x4010784e",
+   "stock": "bbfc00000140",
+   "op": "bytes",
+   "new": "bbfc00000168",
+   "kind": "code"
+  },
+  {
+   "addr": "0x400dc978",
+   "stock": "4feffff448d7001c",
+   "op": "jmp",
+   "target": "dn2_cc_code"
+  },
+  {
+   "addr": "0x400dca5a",
+   "stock": "4feffff448d7001c",
+   "op": "jmp",
+   "target": "dn2_nrpn_code"
   }
  ],
  "collections": {
   "mk2_synths": 4,
   "mk2_voice_synths": 4,
   "mk2_filters": 4,
-  "mk2_voice_filters": 4
+  "mk2_voice_filters": 4,
+  "mk2_voice_pages": 4
  },
  "resources": {
   "core": "0.1",

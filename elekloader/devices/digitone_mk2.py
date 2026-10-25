@@ -88,7 +88,7 @@ DEVICE = Device(
                 'voice_range': (0x20090000, 0x20094000),
                 'voice_table': 'mk2_voice_synths',
                 'voice_clone_table': 'mk2_synths',
-                'voice_adapter_sha256': '46afad21d9f24483a645ec1b3c70a9df99c40285cdf73cf83b0f0467828572f8',
+                'voice_adapter_sha256': '11cb0abb8a60cd9e97253ff7a8c063b90bd70f110a1cee95c52c98a98dbbcef1',
                 'voice_adapter_bytes': 2048,
                 'voice_state_bytes': 1024,
                 'voice_binding_offset': 15872,
@@ -133,7 +133,8 @@ DEVICE = Device(
     slot_claims=(('mk2_synths', 0, 32, 'mk2-synth'),
                  ('mk2_voice_synths', 0, 32, 'mk2-synth'),  # shared stable synth IDs
                  ('mk2_filters', 0, 32, 'mk2-filter'),
-                 ('mk2_voice_filters', 0, 32, 'mk2-filter')),
+                 ('mk2_voice_filters', 0, 32, 'mk2-filter'),
+                 ('mk2_voice_pages', 0, 32, 'mk2-pages')),   # one pages entry per synth ID
     recovery=('hold FUNC while powering on for the STARTUP menu, press TRIG 4 (OS UPGRADE), '
               'then send the stock .syx over MIDI (not USB)'),
     toolchain={

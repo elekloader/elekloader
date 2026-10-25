@@ -7,9 +7,23 @@
 struct names { const char *name, *label, *hint; };
 struct descriptor { const char *name, *label; uint32_t params[9]; };
 struct string_rep { uint32_t length, capacity; int32_t references; char text[32]; };
+/* The stock parameter table's 60-byte row; the bound sites in mod.json allow ROWS + ADDED. */
+struct row {
+    int32_t owner, slot, min, max, def, flag;
+    int16_t cc, cc_low;
+    uint32_t kind, unknown, mask;
+    const char *name, *owner_name, *label;
+    uint32_t format, end;
+};
+#define ROWS 321
+#define ADDED 40                    /* five pages of eight knobs */
+#define TEMPLATE 0xd5               /* A Env Decay: a plain 0..127 knob */
+#define SLOT 25
+#define PAGE_END 10                 /* Track Level ends a stock page */
 
 extern const struct mk2_synth *const mk2_synths[];
 extern const struct mk2_synth *const mk2_voice_synths[];
+extern const struct mk2_voice_pages *const mk2_voice_pages[];
 extern const struct names dn2_stock_names[5];
 extern const uint32_t dn2_stock_permit[5];
 extern const struct descriptor dn2_stock_descriptors[5];
@@ -21,6 +35,12 @@ static uint8_t voices[COUNT];
 static struct descriptor descriptors[COUNT];
 static struct string_rep strings[COUNT][2];
 static uint32_t ready;
+struct row dn2_t1[ROWS + ADDED];    /* the stock rows are copied in at boot (start.s) */
+static struct descriptor pages[ADDED / 8];
+static uint8_t first_page[COUNT], page_count[COUNT];
+static struct string_rep tabs[ADDED / 8];
+static struct string_rep labels[ADDED];
+static unsigned used_pages;
 
 static const char *representation(struct string_rep *r, const char *s, unsigned max)
 {
@@ -33,6 +53,82 @@ static const char *representation(struct string_rep *r, const char *s, unsigned 
     r->length = r->capacity = n;
     r->references = -1;             /* Stock std::string must not free this representation. */
     return r->text;
+}
+
+/* 1..5 printable ASCII characters, or 0. */
+static unsigned label_length(const char *s)
+{
+    unsigned n = 0;
+    while (s && n < 6 && s[n] >= ' ' && s[n] <= '~')
+        ++n;
+    return s && !s[n] && n <= 5 ? n : 0;
+}
+
+static int valid_pages(const struct mk2_voice_pages *p)
+{
+    if (p->id >= COUNT || !registered[p->id] || !voices[p->id] || page_count[p->id]
+            || !p->page || !p->count || used_pages + p->count > ADDED / 8)
+        return 0;
+    for (unsigned i = 0; i < p->count; ++i)
+        for (unsigned k = 0; k < 8; ++k) {
+            const struct mk2_param *m = p->page[i].knob[k];
+            if (m && (m->def > 127 || !label_length(m->label)))
+                return 0;
+        }
+    return 1;
+}
+
+/* The MIDI CC the clone's stock row for `slot` has, or -1: a knob takes its position's CC. */
+static int16_t clone_cc(int32_t clone, int32_t slot)
+{
+    for (unsigned code = 1; code < ROWS; ++code)
+        if (dn2_t1[code].owner == clone && dn2_t1[code].slot == slot)
+            return dn2_t1[code].cc;
+    return -1;
+}
+
+/* Each declared knob gets a parameter row after the stock ones, copied from TEMPLATE. */
+static void build_pages(void)
+{
+    const struct mk2_voice_pages *const *e;
+    for (e = mk2_voice_pages; *e; ++e) {
+        const struct mk2_voice_pages *p = *e;
+        if (!valid_pages(p))
+            continue;
+        first_page[p->id] = used_pages;
+        page_count[p->id] = p->count;
+        for (unsigned i = 0; i < p->count; ++i, ++used_pages) {
+            const char tab[] = {'S', 'Y', 'N', '1' + i, 0};
+            struct descriptor *d = &pages[used_pages];
+            d->name = representation(&tabs[used_pages], tab, 4);
+            d->label = strings[p->id][0].text;
+            for (unsigned k = 0; k < 8; ++k) {
+                const struct mk2_param *m = p->page[i].knob[k];
+                unsigned code = ROWS + 8 * used_pages + k;
+                d->params[k] = m ? code : 0;
+                if (!m)
+                    continue;
+                struct row *r = &dn2_t1[code];
+                const struct row *t = &dn2_t1[TEMPLATE];      /* field by field: a struct copy is a call to memcpy */
+                r->flag = t->flag;
+                r->cc_low = t->cc_low;
+                r->kind = t->kind;
+                r->unknown = t->unknown;
+                r->mask = t->mask;
+                r->format = t->format;
+                r->end = t->end;
+                r->owner = registered[p->id]->clone;
+                r->slot = SLOT + 8 * i + k;
+                r->min = 0;
+                r->max = 127 << 8;
+                r->def = m->def << 8;
+                r->cc = clone_cc(r->owner, r->slot);
+                r->name = r->label = representation(&labels[code - ROWS], m->label, 5);
+                r->owner_name = strings[p->id][0].text;
+            }
+            d->params[8] = PAGE_END;
+        }
+    }
 }
 
 void dn2_ensure(void)
@@ -55,6 +151,7 @@ void dn2_ensure(void)
         descriptors[s->id].name = representation(&strings[s->id][0], s->name, 31);
         descriptors[s->id].label = representation(&strings[s->id][1], s->label, 7);
     }
+    build_pages();
     /* Stock ordering puts FM DRUM before WAVETONE and MIDI last. */
     dn2_list[0] = 0; dn2_list[1] = 2; dn2_list[2] = 1; dn2_list[3] = 3;
     unsigned n = 4;
@@ -86,11 +183,74 @@ uint32_t dn2_dsp_type(uint32_t type)
     return dn2_is_voice(type) ? type : dn2_clone_type(type);
 }
 
+uint32_t dn2_voice_page_count(uint32_t type)
+{
+    if (!dn2_is_voice(type))
+        return 0;
+    return page_count[type] ? page_count[type] : 1;
+}
+
+/* The synth type MIDI parameter lookups see: a clone's stock type; a voice or a missing ID its
+ * own, which no stock synth map has, so their synth CCs reach only a paged voice's knobs and never
+ * a MIDI track's parameters stored in the same slots. */
+uint32_t dn2_midi_type(uint32_t type)
+{
+    dn2_ensure();
+    return type >= FIRST && type < COUNT && registered[type] && !voices[type]
+           ? registered[type]->clone : type;
+}
+
 uintptr_t dn2_voice_page(uint32_t type, uint32_t page)
 {
     if (!dn2_is_voice(type))
         return 0;
-    return (uintptr_t)(page ? &dn2_stock_descriptors[4] : &descriptors[type]);
+    if (page >= dn2_voice_page_count(type))
+        return (uintptr_t)&dn2_stock_descriptors[4];
+    return (uintptr_t)(page_count[type] ? &pages[first_page[type] + page] : &descriptors[type]);
+}
+
+/* The parameter code of a voice's sound slot 25..64, 0 for an empty one. */
+uint32_t dn2_voice_code(uint32_t type, uint32_t slot)
+{
+    uint32_t page = (slot - SLOT) / 8;
+    if (!dn2_is_voice(type) || slot < SLOT || page >= page_count[type])
+        return 0;
+    return pages[first_page[type] + page].params[(slot - SLOT) % 8];
+}
+
+/* MIDI CC and NRPN lookups (track, synth, filter, number) -> parameter code. The stock maps
+ * know no voice type, so a paged voice asks its clone's: a clone synth row there stands for its
+ * slot, which is the voice's knob in that position (0 when the slot is empty). */
+typedef uint32_t lookup(uint32_t track, uint32_t synth, uint32_t filter, uint32_t key);
+extern lookup dn2_stock_cc, dn2_stock_nrpn;
+
+static uint32_t voice_lookup(lookup *stock, uint32_t track, uint32_t synth, uint32_t filter,
+                             uint32_t key)
+{
+    if (dn2_is_voice(synth) && page_count[synth]) {
+        int32_t clone = registered[synth]->clone;
+        uint32_t code = stock(track, clone, filter, key);
+        if (code < ROWS && dn2_t1[code].owner == clone && dn2_t1[code].slot >= SLOT
+                && dn2_t1[code].slot < SLOT + ADDED)
+            return dn2_voice_code(synth, dn2_t1[code].slot);
+    }
+    return stock(track, synth, filter, key);
+}
+
+uint32_t dn2_cc_code(uint32_t track, uint32_t synth, uint32_t filter, uint32_t cc)
+{
+    return voice_lookup(dn2_stock_cc, track, synth, filter, cc);
+}
+
+uint32_t dn2_nrpn_code(uint32_t track, uint32_t synth, uint32_t filter, uint32_t nrpn)
+{
+    return voice_lookup(dn2_stock_nrpn, track, synth, filter, nrpn);
+}
+
+/* An added row's value-class object is its template's. */
+uint32_t dn2_value_code(uint32_t code)
+{
+    return code >= ROWS && code < ROWS + ADDED ? TEMPLATE : code;
 }
 
 uintptr_t dn2_descriptor(uint32_t type)

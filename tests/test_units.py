@@ -575,6 +575,11 @@ def test_dn2_synth_claims_its_stable_type():
         [mod('a', 6, 'mk2_filters'), mod('b', 6, 'mk2_filters')], image)
     assert not [p for p in link.check(
         [mod('synth', 6), mod('filter', 6, 'mk2_filters')], image) if 'claim' in p]
+    assert mod('pages', 7, 'mk2_voice_pages').implied_names(image) == ['mk2-pages:7']
+    assert 'a 1 and b 1 both claim mk2-pages:7' in link.check(
+        [mod('a', 7, 'mk2_voice_pages'), mod('b', 7, 'mk2_voice_pages')], image)
+    assert not [p for p in link.check(
+        [mod('synth', 7, 'mk2_voice_synths'), mod('pages', 7, 'mk2_voice_pages')], image) if 'claim' in p]
 
 
 def test_dn2_machine_bundles_claim_every_pointer_entry():
