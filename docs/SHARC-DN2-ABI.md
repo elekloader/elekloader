@@ -1,109 +1,139 @@
-# DN2 keyed SHARC callback contract
+# The Digitone II SHARC callbacks
 
-This covers `dn2-master-mono32-l2-v1`, provided by core-dn2 0.2 on Digitone II
-OS 1.12. It provides one exclusive master-output mod. It does not
-register a selectable machine, per-voice processor or stereo effect.
-The [artifact envelope](FORMAT.md#digitone-ii-sharc-mod) defines the packaged bytes.
-The [C/ASM source workflow](../examples/sharc-sine/README.md) uses
-the 32 KiB layout with a 428-byte mod stack ceiling.
+This is the contract between core-dn2 0.2's bridge and a SHARC mod on the
+Digitone II OS 1.12, ABI `dn2-master-mono32-l2-v1`: what the bridge does,
+and what the mod's code must do. It is experimental.
 
-## Calls and audio
+One mod at a time owns the master output. It is not a machine you pick for a
+sound, a per-voice processor or a stereo effect. [FORMAT.md](FORMAT.md#digitone-ii-sharc-mod)
+describes the file, and the [sine example](../examples/sharc-sine/README.md)
+is a working mod in C and in assembly.
+
+## The two calls
 
 ```c
 void sharc_init(uint32_t phase_increment);
 void sharc_render(float *mono32);
 ```
 
-The first argument arrives in R4. `phase_increment` advances a uint32 phase
-accumulator at 48 kHz. `mono32` is the core-byte pointer `0x268438`, to 32
-binary32 floats (128 bytes); its loader alias is `0x28268438`. The callback
-may replace those samples or process them in place. On return, the bridge
-copies this block to the right channel at core-byte address `0x2684b8`.
-It offers no additional audio-buffer ownership. Both callbacks return void.
+**render** normally runs once per block of 32 samples at 48 kHz, after the
+stock master processing. A block lasts about 0.667 ms and the stock work
+shares it: that is not the mod's time budget. `mono32` points to the
+block, 32 binary32 floats (128 bytes) at core byte `0x268438` (loader
+`0x28268438`). Replace them, or change them in place. When render returns,
+the bridge copies the block over the right channel, at core byte
+`0x2684b8`, so the output is mono. The mod owns no other audio buffer.
 
-The bridge runs after stock master processing at the profiled output hook.
-Render normally runs once per 32-sample block at 48 kHz. A block lasts about
-0.667 ms, shared with stock work; that is not an available DSP time budget.
-Render may run before the first init, so cold-zero state must be valid.
-Init is a pitch-change call, not a boot callback: the bridge selects the
-newest allocated triggered slot, waits until the following render block for
-its settled pitch, then calls init. A new simultaneous trigger selects the
-highest allocated slot bit. Only MIDI notes 36..84 are supported by this
-reader; an unsupported pitch clears its state and emits a silent block.
+**init** is called when the pitch changes; it is not a boot call. Its
+argument, in R4, is a phase step: add it to a uint32 phase once per sample
+at 48 kHz. Render may run before the first init, so state that starts at
+zero must be valid.
 
-Read the uint32 gate at core-byte `0x2dd9f0` (loader `0x282dd9f0`): nonzero
-means the selected slot remains held. A matching release clears it; another
-slot's release does not. Init sees the old/cleared gate; the bridge publishes
-the selected gate after init returns. Render continues with gate zero for
-release tails. The supplied entry wrapper uses a 32-sample attack/release
-ramp. Authors must not write the bridge state or its binding words.
+Both return nothing.
 
-## Register, stack and system-state obligations
+## Which note
 
-The pinned bridge saves/restores full R0..R8 via PX, both original PX halves,
-I4/I5/I12, L4/L5, ASTATX/ASTATY and STKYX/STKYY. Callbacks may clobber the
-saved data/index/status registers. L4/L5 are cleared before entering mod
-code and must return as zero: the bridge uses them for the stereo copy
-before restoring the stock values. The bridge does not save every register
-on behalf of arbitrary programs.
+The bridge follows the stock voices:
+- it picks the newest allocated voice slot that was triggered. When several
+  trigger at once, it picks the highest slot bit;
+- it waits for the next block, when that slot's pitch has settled, then
+  calls init;
+- it handles MIDI notes 36 to 84. For any other pitch it clears its state,
+  and the block is silent.
 
-Callbacks must preserve all other live registers and state they use,
-including R9..R15, the other processing element, unsaved DAG index/base/length
-registers, modifier registers, accumulators, FIFO state and bank selection.
-Preserve MODE1/MODE2, MMASK, IMASK, cache/memory configuration and hardware
-PC/loop/status stack contents and depth. Do not assume inactive banks, DAG
-lengths or stack bases are zero. Changing SIMD, memory widths, interrupts or
-peripherals needs separate context and concurrency qualification.
+## The gate
 
-Calls use the existing Selache short-word function convention: the bridge
-sets I6 from I7 and pushes the old frame pointer and return PC minus one.
-Return with the matching frame restoration and indirect delayed return;
-the C wrapper and assembly kernel show the working sequence. M6=1, M7=-1,
-M13=0 and M14=1 are required stock modifier values and must remain unchanged.
-I6/I7 must return to their pre-call values. Both stack bases/lengths remain
-the stock circular configuration; do not replace them with a flat stack.
-The bridge's declared contribution is 116 bytes. The combined declared limit
-is 544 bytes, leaving at most 428 for mod calls, locals and spills. The
-examples declare 128 mod bytes. This declaration is not a measured high-water
-mark and the checker cannot infer actual stack use from machine code.
+A uint32 at core byte `0x2dd9f0` (loader `0x282dd9f0`) is nonzero while the
+selected slot is held. Releasing that slot clears it; releasing another slot
+does not. Init sees the old gate, or a cleared one: the bridge sets the new
+gate after init returns. Render keeps running with the gate at zero, for
+release tails. The examples' entry wrapper ramps over 32 samples on attack
+and release.
 
-## Owned bytes and read-ahead
+Do not write the bridge's state or its binding words.
 
-The mod owns loader bytes `[0x20090000,0x20098000)` (32 KiB). Artifact
-offsets are relative to that base. Compile code for PC16 `0xbc8000` and use
-L2 byte addresses for data. The source layout uses 16 KiB for code, including
-the guard, and 16 KiB for data. The larger area supplies no extra stack.
+## Registers
 
-The last 64 bytes of every active mod code segment must be repeated
-short-word NOPs (`0100` in loader order). Callback entries must precede that
-tail, leaving at most 16,320 linked instruction bytes in the example layout.
-Inert mods execute no code. The bridge and its pitch table stay in the
-separately owned L1 reservation; mod artifacts cannot write there.
+The bridge saves and restores:
+- R0 to R8 in full (through PX), and both halves of PX;
+- I4, I5 and I12; L4 and L5;
+- ASTATX, ASTATY, STKYX and STKYY.
 
-The 64-byte margin is a conservative policy, not proof of every cache or
-prefetch mode. The SHARC+ programming reference, revision 1.5, sections
-4-5/4-6, describes the VISA alignment buffer, in-flight fetches and fetches
-continuing at memory boundaries:
-[Analog Devices programming reference](https://www.analog.com/media/en/dsp-documentation/processor-manuals/sc58x-2158x-prm.pdf).
-The checker validates padding and entry bounds; it does not decode arbitrary
-instructions or prove that branches and writes remain within the contract.
+A callback may change these, with one exception: the bridge clears L4 and
+L5 before it calls the mod, and they must be zero again when the call
+returns. The bridge uses them for the stereo copy before it restores
+stock's values.
 
-The keyed bridge reads twelve fixed uint32 phase steps at core-byte
-`0x2ddd98` (loader `0x282ddd98`). The linker installs these 48 bytes from
-the device profile and zeroes the surrounding L1 pitch-table reservation.
-They represent notes 36..47; higher octaves shift the step.
-Other mod code and data may change without adding executable hashes. Keep
-state within owned bytes and the supplied output buffer; preserve stock
-memory everywhere else. The bridge's core range, six-byte stock master-output hook,
-owner identities and firmware budgets remain independently checked.
+Leave everything else you use as you found it. That includes:
+- R9 to R15, and the other processing element;
+- the DAG index, base and length registers the bridge does not save, and
+  the modifier registers;
+- the accumulators, the FIFO state and the bank selection;
+- MODE1, MODE2, MMASK, IMASK, and the cache and memory configuration;
+- the hardware PC, loop and status stacks: their contents and their depth.
 
-## Qualification
+Do not assume that an inactive bank, a DAG length or a stack base is zero.
+Changing SIMD, memory widths, interrupts or peripherals needs its own
+testing for context and concurrency.
 
-Packaging is compiler-independent and certifies the envelope, not the
-program. Qualify each generated executable for calling-convention behavior,
-actual stack and writes, numerical output, interrupts and audio deadlines.
-The [implementation guide](SHARC-DN2.md#qualification) distinguishes
-current-source emulator checks from bounded physical tests of sine variants
-using this bridge and the 32 KiB reservation.
-Emulator instruction counts and short captures are not hardware cycle
-measurements, sustained stress or a full ISA guarantee.
+## The calling convention and the stack
+
+The calls use Selache's short-word function convention. The bridge sets I6
+from I7 and pushes the old frame pointer and the return PC minus one. Return
+with the matching frame restore and an indirect delayed return; the C
+wrapper and the assembly kernel show the sequence.
+- M6 = 1, M7 = -1, M13 = 0 and M14 = 1 are stock's values; keep them.
+- I6 and I7 must be back at their values from before the call.
+- Keep both stacks' bases and lengths in stock's circular configuration: do
+  not switch to a flat stack.
+
+The bridge declares 116 bytes of stack, and the bridge and the mod together
+may declare at most 544, so a mod has at most 428 for its calls, locals and
+spills. The examples declare 128. A declaration is not a measurement: the
+checker cannot work out real stack use from machine code. A larger code or
+data area gives no more stack.
+
+## Memory
+
+| what | where |
+|---|---|
+| the mod's 32 KiB | loader `[0x20090000,0x20098000)`. Link code for PC16 `0xbc8000`; data uses L2 byte addresses. Offsets in the file count from the start |
+| the audio block | core byte `0x268438`, 128 bytes; the bridge writes the right channel at `0x2684b8` |
+| the gate | core byte `0x2dd9f0` |
+| the pitch table | core byte `0x2ddd98` (loader `0x282ddd98`), 48 bytes |
+
+Keep your state in your 32 KiB and the audio block, and leave all other
+memory as stock has it. The examples split the area into 16 KiB of code,
+guard included, and 16 KiB of data.
+
+**The guard.** The last 64 bytes of every code segment of an active mod
+must be short-word NOPs (`0100` in loader order), and the entries must come
+before them. In the examples' layout that leaves 16,320 bytes of
+instructions. An inert mod runs no code. The 64 bytes are a conservative
+rule, not a proof for every cache or prefetch mode: the
+[SHARC+ programming reference](https://www.analog.com/media/en/dsp-documentation/processor-manuals/sc58x-2158x-prm.pdf),
+revision 1.5, sections 4-5 and 4-6, describes the VISA alignment buffer,
+fetches in flight, and fetches that continue at memory boundaries. The
+checker checks the padding and where the entries are. It does not decode
+instructions, so it cannot prove that branches and writes stay inside the
+contract.
+
+**The pitch table** holds twelve uint32 phase steps, for notes 36 to 47;
+higher octaves shift the step. The linker writes these 48 bytes from the
+device profile and zeros the rest of the table's 1 KiB. The bridge and its
+table live in their own L1 reservation, which a mod cannot write to.
+
+The mod's code and data may change without any hash being added to
+elekloader. The bridge's range, the six-byte hook, which mod owns which
+range, and the size limits are still checked on every build.
+
+## Testing a program
+
+The packaging checks are the same whatever made the code, and they check the
+file's shape, not the program. Test each executable for its calling
+convention, its real stack use and writes, its output, interrupts and audio
+deadlines. [SHARC-DN2.md](SHARC-DN2.md#qualification) separates the
+emulator checks of the current sources from the tests on a unit, which ran
+sine variants with this bridge and layout. Emulator instruction counts
+and short captures are not hardware cycle measurements, sustained stress
+tests or a guarantee for the whole instruction set.

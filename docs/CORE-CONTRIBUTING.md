@@ -176,12 +176,23 @@ For each device it prints:
     means the core or a companion already hooks the same bytes as every
     site there, so the mods can move onto what exists. **partly** means
     some of the sites are covered that way and the rest need an event;
-  - the mods that hook it, each site named by the symbols it jumps to.
+  - the mods that hook it, each site named by the symbols it jumps to;
+  - where the core or a companion hooks the same routine on other bytes,
+    as in "core hooks this routine at 0x40010bd0 (core_midi_out)". The
+    core does that on purpose where a shop file holds the bytes (core-ot
+    beside octabam2elemod's files), so that file keeps linking with the
+    newest core. The event there may already be what the mods need, so
+    look at it before you build another. It changes no kind: the mods
+    still hook their own bytes, and the entry stays until they move.
 
 A routine is listed once for all the OS versions of a device: a mod's site
 on a later OS is paired with its site on the oldest by those symbols.
 The JSON (`--json`) gives each OS's addresses under `at`, with `covered`
 on each site, and `missing_os` names an OS the entry has no address for.
+`near` lists the core's and companions' sites in the entry's routine (by
+the same rule that groups the entry: the stock code, or the distance)
+that overlap none of its sites, each as `{os, site, len, mod, target}`,
+`target` being the symbols it jumps to (`?` for none).
 A core event needs one there too (section 3). `--update FILE.md` writes
 the Markdown tables (`--markdown`) between the markers in a page, as in
 [CONTRIBUTE.md](CONTRIBUTE.md).

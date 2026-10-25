@@ -55,7 +55,7 @@ def code_sites(paths):
 
 def routine_test(image, dev, reach=1024):
     """-> same(lo, hi): whether stock code runs from site lo to site hi
-    (each (addr, len), lo first) inside one routine."""
+    (each (addr, len), lo first) inside one routine; `same.reach` is `reach`."""
     isa = dev.decoder()
     read = isa.reader(image, dev.main_load)
     bad = isa.ILLEGAL | isa.LINEF | isa.FPU
@@ -72,6 +72,7 @@ def routine_test(image, dev, reach=1024):
                 return False
             pc += ins.length
         return True
+    same.reach = reach      # sites farther apart are never one routine (sdk.bounties skips them)
     return same
 
 

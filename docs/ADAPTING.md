@@ -44,67 +44,19 @@ monolithic build; section 4 says how to go from A to B.
   `mods/core-ar2` for the Analog Rytm MKII. The
   Octatrack's core, `mods/core-ot`, has a hook bus of its own from 0.2, with the Octatrack's events ("The hook bus on the
   Octatrack" below).
-
-### SHARC callbacks (core-dn2 0.2, Digitone II OS 1.12, experimental)
-
-Start with the [C/ASM source workflow](../examples/sharc-sine/README.md).
-Set `"resources": {"core": "0.2"}` in a SHARC mod's manifest; both examples
-already do this, so the loader selects a SHARC-capable DN2 core.
-After its one-time toolchain and stock-file setup, `mise run build-c` or
-`mise run build-asm` compiles the current source, generates its prelinked
-artifact, builds the core and mod, lints them and writes verified firmware.
-Both commands select the bounded 32 KiB layout automatically and run from
-`examples/sharc-sine`; no memory-location choice is required. They do not use
-the maintainer qualification scripts or a checked-in mod artifact as a build
-input.
-
-The callback processes one exclusive master-output block: 32 mono floats at
-48 kHz, copied to stereo. It does not add a selectable sound/filter machine,
-per-track routing or a polyphonic voice interface. The ordinary callback
-contract allows at most 428 declared mod stack bytes; more code/data does
-not add stack. Follow the [DN2 callback contract](SHARC-DN2-ABI.md), including register
-preservation, guard padding, pitch/gate behavior and actual stack bounds.
-
-Elekloader remains compiler-independent. Authors may use their own compiler
-or assembler and supply the [artifact envelope](FORMAT.md#digitone-ii-sharc-mod).
-The keyed core accepts changed mod bytes and callback offsets without a
-per-program allowlist update. The source workflow uses pinned Selache;
-Elekloader's SDK only packages its result. A consumer who already has the
-artifact needs no SHARC compiler:
-
-```sh
-python -m elekloader.sdk.build examples/sharc-sine --stock "$DN2_STOCK"
-python -m elekloader.lint examples/sharc-sine/out/sharc-sine-0.1.elemod --stock "$DN2_STOCK" --with "$DN2_CORE" --json
-python -m elekloader.patch --stock "$DN2_STOCK" --mod "$DN2_CORE" --mod examples/sharc-sine/out/sharc-sine-0.1.elemod --out sine.syx --version SK02
-```
-
-The first build prints `BUILT`, lint reports `"ok": true`, and patch prints
-`verified: sections 2, 4, 5, 8, byte for byte`. These commands package the
-checked-in reference artifact; they do not recompile an edited source file.
-A matching core `.elemod` remains necessary, as for other format-2 mods;
-building that core from source uses the ColdFire toolchain. The
-[assembly example](../examples/sharc-sine-asm/README.md) shares the core,
-note range and gain ramp; choose one mod per build. The separate `rebuild.py`
-scripts reproduce pinned reference artifacts for Elekloader development.
-
-The L2 ABI selects loader `[0x20090000,0x20098000)` with the same keyed core.
-Compile/link for this placement and emit offsets relative to its base;
-changing an ABI string does not relocate code linked for another address. The linker
-retains the bridge's fixed L1 pitch table. Code guards, full ownership
-coverage, stack and firmware limits still apply. Packaging checks these
-bounds; it does not prove arbitrary instructions, runtime writes or audio
-deadlines. C/ASM sine variants have bounded emulator and physical evidence; see
-[profile evidence and remaining limits](SHARC-DN2.md).
+- For a SHARC mod on the Digitone II: its compiled code, or the tools the
+  sine example uses to make it ("SHARC mods (core-dn2 0.2, Digitone II)"
+  below).
 
 ## 2. The rules
 
 The loader checks all of these before it builds anything; each rule says
 what you see when it is broken (section 5 has the fixes).
 
-1. **Only profiled sections change.** Mods normally change the main OS.
-   Digitone II 1.12 also permits a bounded SHARC mod in section 7 (below).
-   The bootloader and other sections remain stock, so the stock OS file
-   remains the recovery path.
+1. **Only the main OS changes**, and on the Digitone II 1.12 the DSP's
+   section 7 for a SHARC mod ("SHARC mods" below). The bootloader and the
+   other sections stay stock, so the stock OS file always recovers the
+   device.
    Some main OS bytes stay stock too: the Octatrack's copy of its
    bootloader, and 16 zero bytes after a table that its stock DELAY reads
    (docs/DEVICES.md, `protected` and `keep`). *"protected on the ..."*,
@@ -245,7 +197,7 @@ come after SYSTEM; the render events cover the audio interrupt's digital
 path (the effects and the inputs), since the voices are analog. core-a4
 exports no firmware locations either. From 0.2 it has core-ar2 0.4's
 parameter routines and `core_audio_load` ("Parameter pages (core-a4 0.2,
-Analog Four MKII)"). `examples/hello-marker-a4`, `hooks-check-a4`,
+Analog Four MKII)"), and from 0.3 core-ar2 0.6's `core_page_fns`. `examples/hello-marker-a4`, `hooks-check-a4`,
 `store-check-a4`, `ddr-canary-a4` and `pages-check-a4` are mods for it.
 
 The sites core owns (do not patch them):
@@ -283,6 +235,56 @@ A firmware routine your mod calls has its own address on each device and
 each OS version: look it up for the release you target, and build one
 `.elemod` per device and OS (a mod's `device` and `os`, or one of its
 `ports`, pick the stock file: 3.10).
+
+### SHARC mods (core-dn2 0.2, Digitone II)
+
+Experimental. On the Digitone II 1.12 a mod can run code on the DSP, at the
+master output. Core-dn2 0.2's bridge calls it once a block with 32 mono
+samples at 48 kHz, which it may replace or change, and then copies them to
+both channels. A build has at most one such mod. It is not a machine you
+pick for a sound, an effect on a track or a polyphonic voice. The
+[callback contract](SHARC-DN2-ABI.md) says what its code must do: the
+registers it keeps, the NOP guard, the pitch and the gate, and its stack (at
+most 428 bytes declared; more code or data adds none).
+
+**Start from the [sine example](../examples/sharc-sine/README.md).** After a
+one-time setup of the tools and your stock file, `mise run build-c` or
+`mise run build-asm`, in `examples/sharc-sine`, compiles the current source,
+makes the artifact, builds core and the mod, lints them and writes verified
+firmware. Both use the 32 KiB layout, so you choose no addresses, and
+neither uses the maintainers' reference scripts or the checked-in artifact.
+Set `"resources": {"core": "0.2"}` in your mod.json, as the examples do, so
+the loader picks a core with the bridge.
+
+**Any compiler will do.** elekloader takes the compiled code as an artifact
+([FORMAT.md](FORMAT.md#digitone-ii-sharc-mod)); its SDK only packages it.
+Link the code for the mod's area, loader `[0x20090000,0x20098000)`, and give
+offsets from its start: changing the `abi` string does not move code linked
+for another address. Your code, data and callback offsets may change from
+build to build with nothing added to elekloader; only core's bridge is
+pinned. With an artifact in hand you need no SHARC compiler:
+
+```sh
+python -m elekloader.sdk.build examples/sharc-sine --stock "$DN2_STOCK"
+python -m elekloader.lint examples/sharc-sine/out/sharc-sine-0.1.elemod --stock "$DN2_STOCK" --with "$DN2_CORE" --json
+python -m elekloader.patch --stock "$DN2_STOCK" --mod "$DN2_CORE" --mod examples/sharc-sine/out/sharc-sine-0.1.elemod --out sine.syx --version SK02
+```
+
+The build prints `BUILT`, lint reports `"ok": true`, and patch prints
+`verified: sections 2, 4, 5, 8, byte for byte`. These package the
+checked-in artifact; they do not compile an edited source. As for every
+format-2 mod, you need a matching core `.elemod`, and building it from
+source needs the ColdFire tools. The
+[assembly example](../examples/sharc-sine-asm/README.md) shares the core, the
+note range and the gain ramp; pick one of the two per build. The
+`rebuild.py` scripts rebuild the reference artifacts exactly, for
+elekloader's own development.
+
+The checks cover the packaging: the guard, the 32 KiB covered in full, the
+stack and the firmware's size limits. They cannot prove what the
+instructions do, what they write, or that they meet the audio deadline.
+[SHARC-DN2.md](SHARC-DN2.md) has what the emulator and a unit showed for
+the sine variants, and the limits that remain.
 
 ### The hook bus on the Octatrack (core-ot 0.2)
 
@@ -524,14 +526,14 @@ Which octabam module needs what:
 | TEMPO SYNC | the FX id store | `ev_dsp_record` |
 | RECORDER LOOP FIX | the counter (FLEX SEEKBIND), with its same-sample test (0x4000f8cc) | `ev_voice_seek`; the same-sample test is still its own |
 
-**Not here: `ev_machine_set(trk, machine, slot)`.** The three places where a
-track's machine or slot is committed (0x400795ba, 0x40079816, 0x4005a848)
-belong to machines-ot, which owns the chooser's and SRC SETUP's commits right
-after them. It decides there whether a commit happens and what the final byte
-is, and reads a track's machine from the Part's signature. An event at the
-stock writes would run before that decision, with a byte machines-ot may
-still refuse. In machines-ot 0.2 it fires after the commit with the old and
-new machine and the slot.
+**Not here: `ev_machine_set`.** The three places where a track's machine or
+slot is committed (0x400795ba, 0x40079816, 0x4005a848) belong to machines-ot,
+which owns the chooser's and SRC SETUP's commits right after them and, from
+0.2, the slot assigner's (0x40079520). It decides there whether a commit
+happens and what the final byte is, and reads a track's machine from the
+Part's signature. An event at the stock writes would run before that
+decision, with a byte machines-ot may still refuse. machines-ot 0.2 fires
+`ev_machine_set(part, track, from, to)` after the commit (below).
 
 **The sites are not octabam's.** SYNTH (octabam2elemod v1.0) detours 0x4000c634,
 0x4000b51a, 0x4000685c, 0x400795ba, 0x40079816 and 0x4005a848, and FLEX
@@ -585,7 +587,7 @@ the call, or its entry is 0, stock runs.
 A detour you already have converts unchanged: its label is the entry, and
 claims 0. `sdk.octabam --intercepts` does this for octabam's modules (4b).
 
-### Machines on the Octatrack (machines 0.1)
+### Machines on the Octatrack (machines 0.2)
 
 `mods/machines-ot` (id `machines`) is a companion beside core-ot 0.3.1 for
 source machines: a machine mod adds a row to the track's machine chooser
@@ -636,6 +638,32 @@ const struct ot_machine my_machine = {
 Start from [examples/crush-machine-ot](../examples/crush-machine-ot): CRUSH
 plays its FLEX slot's sample through a 5-bit crusher. octabam's OCTA303
 converts onto the companion with `sdk.octabam --machines` (section 4b).
+
+From machines 0.2:
+- **`ui_tick`** runs in the UI task's tick body (0x4005221e), before the
+  screen's builders read the page table, where octabam's machines publish
+  their page. A machine with `track_page` has the current track's page
+  published there too, so SRC SETUP and the parameter names follow a page
+  that differs by track.
+- **`OT_MACHINE_LIST_FIRST`** (elekloader's flag, not Modwerk's): the machine
+  window opens on the machine list for the machine's tracks, not on the
+  sample-slot list, for a machine that does not play a slot's sample.
+- **A sample slot picked in a list** that changes the track's machine (a
+  STATIC slot on a machine's track) goes through the companion too: the
+  machine's `leave` runs before stock resets the track.
+- **`ev_machine_set`**: a track's machine changed, after the commit (the
+  machine byte and its battery copy hold the new one), from the chooser,
+  SRC SETUP or a slot pick. `from` and `to` are rows: 0-4 stock's, 5 on a
+  machine's.
+
+```c
+void my_machine_set(volatile uint8_t *part, unsigned track, unsigned from, unsigned to);
+```
+
+```json
+"subscribe": [{"event": "ev_machine_set", "fn": "my_machine_set", "order": 50}],
+"requires": ["core", "machines"]
+```
 
 ### USB functions on the Octatrack (usb 0.3)
 
@@ -1454,10 +1482,21 @@ What differs from the Rytm:
   and shows each view's own title, so there is nothing to fix there.
 - A stock page's entry can be answered too (a `core_pages` entry with a
   stock id), to retitle a page a mod's view follows.
+- From core-a4 0.3, `core_page_fns` works as core-ar2 0.6's ("A page whose
+  knobs follow the sound", above): `struct core_page_fn` is `{page, info}`,
+  and `info(page)` returns the `core_pages` entry to answer, or 0 to pass.
+  The knobs' draw, a knob's touch and a turn each look the knob up through
+  page_info afresh, so the knobs follow at the next redraw. A page's view
+  reads the name once, when core makes it at boot, so every entry `info`
+  returns should carry the same name.
 
 `examples/pages-check-a4` is the smallest mod on it: AMP PAN's value as two
-hex digits through `core_params`, and a CHECK page behind the AMP key. It
-was checked in rytm-emu's A4 build and on a unit (23 Oct 2026).
+hex digits through `core_params`, and a CHECK page behind the AMP key. Its
+0.1, for core-a4 0.2, was checked in rytm-emu's A4 build and on a unit (23
+Oct 2026). From 0.2 (for core-a4 0.3) CHECK comes from `core_page_fns`, and
+its knob B, AMP PAN again, is shown while the count of PAN's turn updates
+(the bar) is odd and empty while it is even. Checked in rytm-emu's A4 build
+and on a unit (24 Oct 2026).
 
 ### Machines (core-ar2 0.5, Analog Rytm MKII)
 
@@ -2957,6 +2996,13 @@ Some differences from an octabam build, by design:
 | `is a DSP reference to a ColdFire address` (or the reverse) | a `dsp24` relocation names a ColdFire symbol, or a ColdFire one a DSP label | name the right symbol; DSP labels are word addresses on the DSP |
 | `dsp_asm is not installed` | the SDK needs octabam's DSP assembler | build octabam's `vendor/dsp56300` and set `ELEKLOADER_DSP_ASM` |
 | `the label N is part of a longer word here` (SDK) | dsp_asm would put N's address inside that word | rename the label |
+| `SHARC ABI does not match the device profile` | a SHARC mod's `abi` is not `dn2-master-mono32-l2-v1` | set it; the other ABI is core's bridge's |
+| `SHARC payload has a gap or overlap in its owner` | the segments and zero ranges do not cover the mod's 32 KiB exactly once | add a `zero` range for the bytes you do not use; fix overlapping offsets |
+| `SHARC mod code needs its profiled NOP read-ahead guard` | a code segment does not end in 64 bytes of NOPs (`0100` repeated) | pad the end of each code segment |
+| `SHARC entry is in the instruction read-ahead guard` / `SHARC entry is not in owned code` | a callback offset is in the guard, outside the code, or odd | link the callbacks inside a code segment, before its guard |
+| `active SHARC mod requires a qualified matching core bridge` / `has unqualified active SHARC core bytes or entry` | the core is older than core-dn2 0.2, or its bridge is not the one the profile pins | build with core-dn2 0.2 or newer, its bridge unchanged; set `"resources": {"core": "0.2"}` |
+| `active SHARC stack exceeds the profile limit` | the mod declares more than 428 bytes of stack (the bridge's 116 and yours may not pass 544) | use less stack, and declare what you use |
+| `only one SHARC mod may own the DN2 reservation` | two SHARC mods in one build | pick one |
 
 ## 6. Definition of done
 

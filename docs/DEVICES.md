@@ -481,7 +481,7 @@ a project load and a power cycle.
 - **The core** (mods/core-a4) has the Rytm's events at the A4's sites, and
   mod storage in bytes of the A4's own structures (mods/core-a4/README.md);
   from 0.2, core-ar2 0.4's parameter routines, and views added behind the
-  page keys.
+  page keys; from 0.3, core-ar2 0.6's page functions (`core_page_fns`).
   In rytm-emu (with a fallback added so it accepts a patched A4 image), a
   build with core alone runs as stock does, with the same frames and a
   byte-identical screen; hello-marker-a4 differs from stock only in its
@@ -520,20 +520,20 @@ smaller core-only CO02 build then flashed and booted successfully (below).
   copy of the seed and constant (`0x40210a4a`, `0x4021b9ef`), which give
   the same key. The writer reproduces the stock file byte for byte, seal
   included; the profile also knows Elektron's zip of it.
-- **SHARC mods.** Core-dn2 0.2 provides one master-output callback with a
-  32 KiB mod reservation at loader-byte `[0x20090000,0x20098000)`
-  in section 7. The profile also reserves `[0x282dd600,0x282dde00)` for
-  the pinned bridge and its pitch table.
-  It permits one exact six-byte stock instruction patch at `0x2838489a`.
-  Mod code and data may change within the
-  [callback contract](SHARC-DN2-ABI.md) without an executable allowlist update.
-  The SDK, linker and independent verifier enforce stock identity, ownership,
-  coverage, guards, stack declarations, firmware budgets and unchanged
-  sections. The [C/ASM starter](../examples/sharc-sine/README.md) compiles
-  current source with `mise run build-c` or `mise run build-asm`; packaging
-  an existing SHARC artifact needs no SHARC compiler. See the
-  [profile evidence and limits](SHARC-DN2.md) for memory provenance and
-  the boundaries of the runtime checks.
+- **SHARC mods.** With core-dn2 0.2, one mod can run code on the DSP at
+  the master output: section 7 changes for it, and only for it. The mod
+  gets 32 KiB at loader bytes `[0x20090000,0x20098000)`; core's pinned
+  bridge and its pitch table get `[0x282dd600,0x282dde00)`; and one
+  six-byte stock instruction at `0x2838489a` is replaced. A mod's code and
+  data may change within the [callback contract](SHARC-DN2-ABI.md) with
+  nothing added to elekloader. The SDK, the linker and the verifier check
+  the stock file, who owns which range, full coverage, the guard, the
+  declared stack, the size limits and that every other section is stock.
+  The [sine example](../examples/sharc-sine/README.md) builds from C or
+  assembly with `mise run build-c` or `mise run build-asm`; packaging a mod
+  that is already compiled needs no SHARC compiler.
+  [SHARC-DN2.md](SHARC-DN2.md) has where the memory comes from and what the
+  checks cannot show.
 - **Staging.** The bootstrap is the Digitakt II 1.17's code instruction for
   instruction, at the same addresses: the loader `0x80000596` reads section
   3 from flash at its container offset + `0x80000` to `0x40400000`, and the

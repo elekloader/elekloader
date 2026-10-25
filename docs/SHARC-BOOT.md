@@ -1,99 +1,103 @@
 # Digitone II SHARC boot records
 
-`elekloader/sharc.py` and `js/src/sharc.ts` implement the record subset
-observed in Digitone II OS 1.12. They preserve original headers, payloads,
-ordering and legal boot-phase overwrites while inserting the profiled mod
-and core bridge.
+The Digitone II's DSP code, section 7, is a stream of ADI boot records.
+`elekloader/sharc.py` and its port `js/src/sharc.ts` read the kinds of
+record that OS 1.12 uses, and add the mod's and the bridge's records to the
+stream. They keep the original headers, payloads and order, including the
+loads that overwrite earlier ones during boot.
 
-The format reference is the
+The format is in the
 [ADI ADSP-2156x Hardware Reference, boot chapter](https://www.analog.com/media/en/dsp-documentation/processor-manuals/adsp-2156x_hwr.pdf).
-The implementation and synthetic vectors are original; the vectors were
-independently checked using Digikit's external
-[manual-derived checker](https://github.com/ElekLabs/digikit/blob/38dfbe4ae88263511eed95691c07fc07e17b6f26/tools/sharc_dev/sharc_bootcheck.py).
-No checker source is included. Structural correctness does not establish
-runtime memory ownership or successful hardware execution.
+The code and the synthetic test vectors are elekloader's own. The vectors
+were also checked with digikit's separate
+[checker written from the manual](https://github.com/ElekLabs/digikit/blob/38dfbe4ae88263511eed95691c07fc07e17b6f26/tools/sharc_dev/sharc_bootcheck.py);
+none of its code is included. A well-formed stream does not show that the
+memory is free at run time, or that the code runs on the hardware.
 
-## Supported records
+## The records
 
-Each header contains four little-endian uint32 values: block code, target,
-byte count and argument. The block code has signature byte `0xad`, an XOR
-byte at offset 2, and flags in its low 16 bits. XOR over all 16 header bytes
-must be zero. Every supported flag combination includes bit 0; other
-combinations, including standalone ignored records, are refused.
+Each header is four little-endian uint32s: the block code, the target, the
+byte count and the argument. The block code's top byte is `0xad`, its byte
+at offset 2 makes the XOR of all 16 header bytes zero, and its low 16 bits
+are the flags. Every flag value below has bit 0 set; any other value,
+including a record that is only IGNORE, is refused.
 
-| Flags | Meaning | Bytes following the header |
+| flags | meaning | after the header |
 |---|---|---|
-| `0x0001` | Load to loader-byte target; argument is zero | `count` payload bytes |
-| `0x0101` | Fill loader-byte target with the uint32 argument | None |
-| `0x5001` | FIRST + IGNORE; target is entry PC16; argument links boot images | None; count is zero |
-| `0x0801` | INIT at the preceding FIRST entry | None; count and argument are zero |
-| `0x8001` | FINAL at the preceding FIRST entry | None; count and argument are zero |
+| `0x0001` | LOAD: copy to the target, a loader byte address; the argument is zero | `count` bytes |
+| `0x0101` | FILL: fill the target with the argument, a uint32 | nothing |
+| `0x5001` | FIRST + IGNORE: starts a boot image; the target is its entry (PC16), the argument links to the next image | nothing; the count is zero |
+| `0x0801` | INIT, at the entry of the FIRST before it | nothing; count and argument are zero |
+| `0x8001` | FINAL, at that entry; it ends the stream | nothing; count and argument are zero |
 
-Each boot image begins with FIRST and ends in INIT or FINAL. INIT permits
-another boot image; FINAL ends the stream. INIT/FINAL targets match their
-FIRST target. FIRST links are relative to the end of their own headers:
+A boot image starts with FIRST and ends with INIT or FINAL, whose target is
+the FIRST's. After INIT another image may follow; FINAL is the last record.
+A FIRST's argument counts from the end of its own header:
 
 ```
-next FIRST offset (or stream end) = FIRST offset + 16 + FIRST argument
+next FIRST's offset (or the stream's end) = FIRST's offset + 16 + its argument
 ```
 
-The parser rejects malformed counts, headers, links, ordering and trailing
-bytes. Loads/fills must be nonempty; addresses and byte counts must be
-multiples of four. Entries count two-byte instruction parcels (PC16): an odd
-numeric PC16 value still maps to an aligned physical instruction address.
-The stock final entry `0x1c12e2` maps to loader byte `0x283825c4`.
+The parser refuses a bad count, header, link or order, and bytes after
+FINAL. A load or fill is not empty, and its address and count are multiples
+of four. Entries count two-byte instruction parcels (PC16), so an odd PC16
+value still maps to an aligned instruction address: the stock final entry
+`0x1c12e2` is loader byte `0x283825c4`.
 
-`byte_span` / `byteSpan` converts explicit `loader-byte`, `core-byte` or
-`pc16` addresses into half-open loader-byte intervals. Sizes are always in
-bytes. It rejects other units, out-of-capacity spans, wraparound and
-protected ranges. Original records are parsed without the new-allocation
-exclusion check; a protected stock load must be preserved, not discarded.
+`byte_span` (`byteSpan`) turns a `loader-byte`, `core-byte` or `pc16`
+address and a size, always in bytes, into a half-open range of loader
+bytes. It refuses any other unit, a range past the memory's end, a range
+that wraps around, and protected memory. Stock's own records are read
+without the protected-memory check: a stock load into protected memory is
+kept, not dropped.
 
-## Insertion and hook patch
+## Adding records, and the hook
 
-`insert` accepts loads `(address, bytes)` and fills
-`(address, byte_count, uint32_word)` in loader-byte coordinates. It checks
-the exact decoded-stock hash before modifying anything. New spans must lie
-inside a profile-owned interval, avoid protected memory and not overlap
-original or new loads/fills. Existing ordered overlaps remain intact.
+`insert` takes loads `(address, bytes)` and fills
+`(address, byte count, uint32 word)`, in loader bytes. It first checks that
+the decoded stream is stock's, by its hash. A new range must lie inside one
+the profile owns, keep out of protected memory, and not overlap any load or
+fill, stock's or new. Stock's own overlaps stay as they are.
 
-Loads and fills are inserted immediately before the original FINAL. Only
-the last FIRST header changes: its argument grows by the insertion length
-and its XOR is recomputed. Every other original byte stays exact. The result
-is parsed again. Calling without additions returns the original bytes.
+The new records go just before stock's FINAL. Only the last FIRST header
+changes: its argument grows by the length added, and its XOR byte is
+recomputed. Every other byte stays stock's, and the result is parsed again.
+With nothing to add, `insert` returns the stream unchanged.
 
-The core bridge also replaces one six-byte stock instruction.
-`insert(..., patches=...)` takes `(address, expected, replacement)` tuples.
-The profile must explicitly grant that range, the expected bytes must match,
-and exactly one LOAD record must contain it. Headers, sizes, record order
-and unrelated stock bytes remain unchanged.
+For the bridge, `insert(..., patches=...)` also replaces stock
+instructions, given as `(address, expected, replacement)`. The profile must
+grant that range, the expected bytes must be there, and exactly one LOAD
+must contain them. Headers, sizes, the order of the records and every other
+byte stay stock's.
 
-The DN2 profile grants the L1 bridge/pitch-table reservation, a 32 KiB L2 mod
-reservation and the separate instruction patch described in the
-[implementation guide](SHARC-DN2.md). The linker pins the keyed core bridge;
-mods using its callback contract may change within the validated envelope.
-A capacity map or boot-unloaded interval alone never grants memory.
+The Digitone II profile grants the bridge's L1 range with its pitch table,
+the mod's 32 KiB in L2, and one six-byte patch, all described in
+[SHARC-DN2.md](SHARC-DN2.md). The linker pins the bridge's bytes; a mod's
+bytes may change within the [callback contract](SHARC-DN2-ABI.md). Memory
+never counts as owned because it exists or because the boot loads nothing
+there.
 
-The record layer enforces the decoded-stream budget. The container writer
-independently checks stored size, transfer/flash limits, compression, HMAC
-and unchanged protected sections.
+The record code checks the decoded size limit. The container's writer checks
+the stored size, the update and flash limits, the packing, the seal (HMAC)
+and the protected sections again, on its own.
 
 ## Tests
 
-The [shared corpus](../tests/fixtures/sharc.json) is synthetic and contains
-no stock firmware. Its 104-byte input contains two boot images with an
-intentional ordered overwrite. Adding a four-byte load and eight-byte fill
-adds 36 serialized bytes: the first FIRST argument stays 36 and the last
-grows from 36 to 72. Literal expected output is shared by Python and
-TypeScript, independently of the implementation under test. Both consume
-the same valid/invalid records, alias cases, boundaries and refusal messages.
+The [shared test vectors](../tests/fixtures/sharc.json) are synthetic: no
+stock firmware. The 104-byte input has two boot images, with a deliberate
+load over an earlier one. Adding a four-byte load and an eight-byte fill
+adds 36 bytes: the first FIRST's argument stays 36, and the last one's grows
+from 36 to 72. The expected output is written out literally, so it does not
+come from the code under test. Python and TypeScript read the same valid
+and invalid records, address cases, boundaries and refusal messages.
 
 ```sh
 python tests/test_units.py
 node --test "js/test/*.test.ts"
 ```
 
-Setting `ELEKLOADER_DN2_SYX` enables exact-stock checks; missing input is
-reported as a skip. These checks preserve all 95 stock records and 15
-ordered load/fill overlaps, then reproduce and verify the original firmware
-in memory. No extracted data or firmware is saved by these round-trip tests.
+With `ELEKLOADER_DN2_SYX` set, the tests also check the real stock stream:
+all 95 records and the 15 loads and fills that overlap in order are kept,
+and the stock firmware is written back and verified, in memory. These tests
+save no firmware or extracted data. Without the file they are reported as
+skipped.

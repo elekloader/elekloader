@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
-/* core-a4 0.2: parameter pages and parameter overrides (docs/ADAPTING.md,
+/* core-a4 0.2, 0.3: parameter pages and parameter overrides (docs/ADAPTING.md,
  * "Parameter pages (core-a4 0.2, Analog Four MKII)"): core-ar2 0.4's
  * (analog-rytm-mk2/pages.h) at the A4's routines. Core owns the entries of
  * stock's four page routines (page_info, page_get_value, param_apply_delta,
@@ -20,6 +20,23 @@
  * Entries are asked in table order (by "order"); the first that answers wins.
  * A page id must be one stock does not have (stock's are 0..47) and no other
  * mod uses. A function left 0 passes.
+ *
+ * From core-a4 0.3 (core-ar2 0.6's) a page whose knobs change with the
+ * sound (a knob that means nothing for the selected type left empty)
+ * contributes to core_page_fns instead: page_info asks info(page) on each
+ * call, before core_pages, and answers the entry it returns; 0 passes.
+ *
+ *     {"to": "core_page_fns", "order": 50, "data": "00000000",
+ *      "relocs": [[0, "abs32", "sym:my_page_fn", 0]]}
+ *
+ *     static const struct core_page *my_info(int32_t page)
+ *     { return selected_type() ? &my_page : &my_page_short; }
+ *     const struct core_page_fn my_page_fn = {50, my_info};
+ *
+ * The knobs' draw, a knob's touch and a turn each look the knob's id up
+ * through page_info afresh, so the knobs follow at the next redraw. The
+ * page's view reads the name once, when core makes it at boot: keep the
+ * same name in every entry info returns.
  *
  * What differs from the Rytm: a page has ten knobs (A..J), not eight, and
  * each A4 page is a view of its own. A page key steps through a list of
@@ -46,6 +63,12 @@ struct core_page {
     int32_t page;
     const char *name;
     int32_t ids[10];        /* knobs A..J, 0 for none */
+};
+
+/* core-a4 0.3: the entry page_info answers for page, asked on each call */
+struct core_page_fn {
+    int32_t page;
+    const struct core_page *(*info)(int32_t page);   /* 0: pass */
 };
 
 /* param_value_text's own arguments */

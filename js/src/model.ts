@@ -128,7 +128,8 @@ export class LoaderModel {
   img: Uint8Array | null = null
   dev: Device | null = null
   rel: Release | null = null
-  sharcStream: Uint8Array | null = null
+  private parsed: formats.Parsed | null = null
+  private sharc: Uint8Array | null = null
   private mods = new Map<string, [number, AnyMod]>()
 
   constructor(store: Store, library: string, also: string[] = []) {
@@ -140,7 +141,7 @@ export class LoaderModel {
   /** Choose the stock firmware: known by its hash, or refused. */
   async setStock(path: string | null): Promise<Stock> {
     const info: Stock = { path, ok: false }
-    this.img = this.dev = this.rel = this.sharcStream = null
+    this.img = this.dev = this.rel = this.parsed = this.sharc = null
     if (!path) {
       info.error = 'no stock firmware chosen'
     } else {
@@ -152,7 +153,7 @@ export class LoaderModel {
           this.img = img
           this.dev = dev
           this.rel = rel
-          if (rel.sharc) this.sharcStream = s.section(rel.sharc.section)
+          this.parsed = s
           Object.assign(info, { ok: true, device: dev.name, os: rel.version })
         } else {
           info.error = 'its main OS is not the known image'
@@ -163,6 +164,12 @@ export class LoaderModel {
     }
     this.stock = info
     return info
+  }
+
+  /** The stock SHARC section, decoded the first time a build has a SHARC mod. */
+  sharcStream(): Uint8Array | null {
+    if (this.sharc === null && this.rel?.sharc) this.sharc = this.parsed!.section(this.rel.sharc.section)
+    return this.sharc
   }
 
   files(): string[] {
@@ -278,7 +285,7 @@ export class LoaderModel {
         }
       }
       L = link(mods as Mod2[], this.img!, null,
-        v2.some(m => (m as Mod2).sharc) ? this.sharcStream : null)
+        v2.some(m => (m as Mod2).sharc) ? this.sharcStream() : null)
     } catch (e) {
       if (!(e instanceof ModError) && !(e instanceof OSError_)) throw e
       const lines0 = e.message.split('\n').slice(1).map(x => x.trim())

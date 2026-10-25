@@ -1,37 +1,35 @@
 # SHARC sine reference checks
 
-These modules are shared by the current C/ASM reference producers and their
-unit tests. For mod development, use the
-[normal source workflow](../sharc-sine/README.md); authors do not call these
-helpers.
+Helpers for the C and assembly reference builds (`rebuild.py`) and their
+unit tests. Mod authors do not call them: develop a mod with the
+[normal source build](../sharc-sine/README.md).
 
-| Module | Current use |
+| module | what it does |
 |---|---|
-| `qualify.py` | Pinned tool options, executable-section inspection, symbol/data checks and reference table validation |
-| `execute.py` | Reject SHARC stores that combine a DAG address with a source register from the same DAG |
-| `h1_spills.py` | Verify the core bridge's full-width PX saves and restoration, including both PX halves and low register bits |
+| `qualify.py` | pins the tool options; inspects the executable sections; checks symbols, data and the reference table |
+| `execute.py` | refuses a SHARC store whose address and source register come from the same DAG |
+| `h1_spills.py` | checks that the bridge saves and restores PX in full width: both halves, and the registers' low bits |
 
-The [C reference producer](../sharc-sine/rebuild.py) rebuilds the current
-bridge and sine. The [ASM reference producer](../sharc-sine-asm/rebuild.py)
-rebuilds the assembly sine with the shared C entry wrapper. Both require the
-[pinned Selache setup](../sharc-sine/README.md#build-c-or-assembly-source),
-inspect final sections and reject changes to the reference bytes. The
-normal `build-c` and `build-asm` commands accept source edits within the mod
-contract.
+The [C reference build](../sharc-sine/rebuild.py) rebuilds the bridge and
+the sine; the [assembly reference build](../sharc-sine-asm/rebuild.py)
+rebuilds the assembly sine with the shared C entry wrapper. Both need the
+[pinned Selache](../sharc-sine/README.md#build-c-or-assembly-source),
+inspect the final sections, and refuse any change to the reference bytes.
+The `build-c` and `build-asm` tasks are the ones that take your edits.
 
-The register and instruction checks run through:
+The register and instruction checks run with:
 
 ```sh
 python tests/test_units.py
 ```
 
-They include deliberate malformed stores and spill mutations. These are
-byte/encoding checks, not an emulator or hardware timing test. Instruction
-fields and full-width preservation use the
+They include stores and spills broken on purpose. They check bytes and
+encodings: they are not an emulator or a timing test. The instruction
+fields and the full-width saves follow the
 [SHARC+ Core Programming Reference, revision 1.5](https://www.analog.com/media/en/dsp-documentation/processor-manuals/sc58x-2158x-prm.pdf).
-The [callback contract](../../docs/SHARC-DN2-ABI.md) states the mod's register,
-stack and memory obligations.
+The [callback contract](../../docs/SHARC-DN2-ABI.md) says what a mod must
+keep: registers, stack and memory.
 
-The helper and example sources are GPL-2.0-or-later. Source/tool licensing
-and compiler limitations are described with the
+These helpers are GPL-2.0-or-later. The licences of the sources and tools,
+and Selache's limits, are with the
 [C example](../sharc-sine/README.md#source-and-toolchain).

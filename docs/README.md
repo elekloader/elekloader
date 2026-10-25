@@ -23,11 +23,10 @@ docs match its code.
 - **[Adapting your mod](ADAPTING.md)**: the path to take, the rules, every
   command with the output it should print, every refusal with its fix, and a
   definition of done. Coding agents: start with [AGENTS.md](../AGENTS.md).
-- **[DN2 SHARC C/ASM starter](../examples/sharc-sine/README.md)**: compile
-  current source and build experimental Digitone II OS 1.12 firmware with
-  the ordinary SDK and a 32 KiB code/data layout. The
-  [callback contract](SHARC-DN2-ABI.md) covers the exclusive master output
-  and stack limits.
+- **[Digitone II SHARC mods](../examples/sharc-sine/README.md)**
+  (experimental): code for the DSP, at the master output, from C or
+  assembly, built with the normal SDK. The
+  [callback contract](SHARC-DN2-ABI.md) says what the code must do.
 - **[Growing the core](CORE-CONTRIBUTING.md)**: when what your mod needs
   belongs in the core, how to build it so it can move there, and how to
   propose it. Pull requests to the core are welcome and encouraged.
@@ -84,7 +83,7 @@ docs match its code.
     subscribes to every event core-ar2 has and shows what it counts
     (`hooks-check-a4`: the same for core-a4 on the Analog Four MKII;
     `store-check-a4` checks its mod storage and `ddr-canary-a4` the DDR
-    the profile calls unused; `pages-check-a4` core-a4 0.2's parameter
+    the profile calls unused; `pages-check-a4` core-a4's parameter
     routines; `hooks-check-dn2` for core-dn2 on the Digitone II, with rows in
     SETTINGS and PERSONALIZE, two key handlers in order and a key it takes
     once armed);
@@ -123,13 +122,13 @@ docs match its code.
 
 ## Maintaining elekloader
 
-- **[DN2 SHARC profile](SHARC-DN2.md)**: stock identity, memory reservations,
-  build limits, source provenance and runtime validation limits.
-- **[SHARC boot records](SHARC-BOOT.md)**: record parsing and insertion,
-  with shared Python/TypeScript refusal cases.
-- **[SHARC reference checks](../examples/sharc-sine-probe/README.md)**:
-  the source inspection and register-preservation checks used to reproduce
-  the checked-in bridge and example artifacts.
+- **[Digitone II SHARC](SHARC-DN2.md)**: the stock file, the memory the
+  mods and the bridge use, the size limits, the sources, and what was
+  checked.
+- **[SHARC boot records](SHARC-BOOT.md)**: how section 7 is read and added
+  to, with test cases shared by the Python and the TypeScript.
+- **[SHARC reference checks](../examples/sharc-sine-probe/README.md)**: the
+  checks that rebuild the checked-in bridge and examples exactly.
 - **[Releasing](RELEASING.md)**: the version, the core files a release
   carries, the workflows that build the apps, the kit and the site, and
   pre-releases.

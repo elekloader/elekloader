@@ -551,6 +551,18 @@ def test_sharc_examples_require_and_select_core_0_2():
                 assert gui.with_core(descs, {app, CORE_01}) == {app, core}
 
 
+def test_the_window_decodes_section_7_only_for_a_sharc_build():
+    """Choosing the stock file leaves the DSP section packed; the first
+    build with a SHARC mod decodes it, once, and it is stock's."""
+    from elekloader import gui
+    stock()
+    with tempfile.TemporaryDirectory() as tmp:
+        model = gui.LoaderModel(SYX, library=tmp, settings=os.path.join(tmp, 'settings.json'))
+        assert model.stock['ok'] and model._sharc is None
+        dsp = model.sharc_stream()
+        assert sha(dsp) == REL.sharc['decoded_sha256'] and model.sharc_stream() is dsp
+
+
 # ---- the flash: what the firmware reads and writes there (docs/DEVICES.md) ------------------
 
 def refs_to(img, target):

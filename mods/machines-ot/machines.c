@@ -37,6 +37,7 @@
 typedef volatile uint8_t Part;
 
 extern const struct ot_machine *const ot_machines[];   /* the table: pointers, then 0 */
+extern void (*const ev_machine_set[])(volatile uint8_t *, unsigned, unsigned, unsigned);
 int otm_stock_validate(uint8_t *part);                  /* seams.s */
 
 /* The grown tables the firmware's readers are pointed at (seams.s): stock's own until
@@ -62,6 +63,7 @@ static unsigned n_rows;
  * the boot's battery restore refuse the whole Part). It plays as stock plays it. */
 static const uint8_t known[][4] = {
     {'A', 'B', 1, 1}, {'T', 'B', 1, 1}, {'C', 'X', 1, 1}, {'F', 'M', 1, 1}, {'P', 'L', 1, 1}, {'S', '2', 1, 2},
+    {'O', 'T', 1, 1},                   /* BLACKPYRAMIDS-303 (0.2) */
 };
 
 /* Which records are listed: version 1, and nothing 0.1 cannot serve (a DSP voice). */
@@ -245,16 +247,45 @@ static void leave(Part *part, Part *mirror, unsigned track, const struct ot_mach
         set_flex(part, mirror, track, (const uint8_t *)FLEX_DEFAULTS);
 }
 
-/* A chooser commits `row` for `track` of `part`: -> the machine byte to store, or -1 to
- * refuse (the track stays as it was). A machine's admission comes before any change. */
+/* The track's row in `part`: its machine's (5 on), or its machine byte. */
+static unsigned row_of(const Part *part, unsigned track)
+{
+    const struct ot_machine *who;
+    unsigned row = owner(part, track, &who);
+    return row ? row : part[TYPES + track];
+}
+
+static unsigned assign(Part *part, unsigned track, unsigned row);
+
+/* A chooser or the slot assigner commits `row` for `track` of `part`: -> the machine byte to
+ * store, or -1 to refuse (the track stays as it was). The byte and its battery copy are stored
+ * here as well (the seam stores the same), then ev_machine_set tells mods, when the row changed. */
 unsigned otm_assign(Part *part, unsigned track, unsigned row)
+{
+    unsigned from, type;
+    ready();
+    if (!valid_bank() || track >= 8)
+        return row < 5 ? row : FLEX;
+    from = row_of(part, track);
+    type = assign(part, track, row);
+    if (type != (unsigned)-1) {
+        uint32_t off = (uint32_t)(uintptr_t)part - U32(BANK) - PART_OFF;
+        if (off % PART_SIZE == 0 && off / PART_SIZE < 4) {
+            part[TYPES + track] = mirror_of(part)[TYPES + track] = (uint8_t)type;
+            unsigned to = row_of(part, track);
+            if (to != from)
+                for (void (*const *f)(volatile uint8_t *, unsigned, unsigned, unsigned) = ev_machine_set; *f; ++f)
+                    (*f)(part, track, from, to);
+        }
+    }
+    return type;
+}
+
+static unsigned assign(Part *part, unsigned track, unsigned row)
 {
     const struct ot_machine *old, *next = 0;
     Part *mirror;
     uint32_t off;
-    ready();
-    if (!valid_bank() || track >= 8)
-        return row < 5 ? row : FLEX;
     off = (uint32_t)(uintptr_t)part - U32(BANK) - PART_OFF;
     if (off % PART_SIZE || off / PART_SIZE >= 4)
         return (unsigned)-1;
@@ -355,11 +386,30 @@ int otm_render(unsigned track, unsigned ping, unsigned start, unsigned end)
     return ot_stock_render(track, ping, start, end);
 }
 
-/* ev_tick (core-ot's bus): each machine's ui_tick, 60 times a second in the UI task. */
+/* The chooser's level (seams.s): a track of a machine with OT_MACHINE_LIST_FIRST reads as its
+ * row, so the window opens on the machine list; any other as its byte. */
+unsigned otm_level(unsigned type, const volatile uint8_t *ptr)
+{
+    unsigned row = otm_type(type, ptr);
+    return row >= 5 && (rows[row - 5]->flags & OT_MACHINE_LIST_FIRST) ? row : type;
+}
+
+/* The tick (seams.s, in the UI task's tick body, 60 times a second): each machine's ui_tick,
+ * then the current track's machine's page, where the screen's builders that follow read it. */
 void otm_tick(void)
 {
+    const struct ot_machine *who;
+    Part *part;
+    unsigned t, row;
     ready();
     for (unsigned k = 0; k < n_rows; ++k)
         if (rows[k]->ui_tick)
             rows[k]->ui_tick();
+    part = ot_part();
+    t = U8(CUR_TRACK);
+    if (part && t < 8 && (row = owner(part, t, &who)) != 0 && who->track_page) {
+        uint32_t page = who->track_page(part + TYPES + t);
+        if (page)
+            otm_pages[row] = page;
+    }
 }

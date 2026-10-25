@@ -1,5 +1,5 @@
 | SPDX-License-Identifier: GPL-2.0-or-later
-| core-a4 0.2: parameter pages and parameter overrides for mods, core-ar2
+| core-a4 0.2, 0.3: parameter pages and parameter overrides for mods, core-ar2
 | 0.4's (mods/core-ar2/pages.s) at the Analog Four MKII's routines (OS 1.56).
 |
 | A parameter page goes through four stock routines: page_info(page), its
@@ -10,10 +10,15 @@
 |
 |   core_pages   a page of the mod's own: {page, name, ids A..J}. page_info
 |                answers its entry for that page id (stock's are 0..47).
+|   core_page_fns  (0.3) {page, info}: page_info asks info(page) first and
+|                answers the core_pages entry it returns, so a page's knobs
+|                can follow the sound (0 passes, to core_pages and stock).
 |   core_params  {first id, last id, get, delta, text}: answers for the ids
 |                in the range, the mod's own pages' knobs or stock ones.
 |
 | C convention throughout (analog-four-mk2/pages.h), as on the Rytm:
+|   const struct core_page *info(int32_t page)
+|       the entry to answer, in d0, or 0 to pass
 |   int get(int32_t id, int32_t *value)
 |       1 and *value (8.8) when it answers, 0 to pass
 |   int delta(void *view, int32_t id, int32_t delta, int32_t func)
@@ -41,10 +46,27 @@
         .equ    P_TEXT, 16
 
 | page_info (0x400f6212): `moveq #47,%d1; movel %sp@(4),%d0`. A page in
-| core_pages answers its entry, after the page id.
+| core_page_fns answers the entry its info returns, then a page in core_pages
+| its entry, after the page id.
 core_page_info:
-        move.l  4(%sp),%d0
-        lea     core_pages,%a1
+        lea     core_page_fns,%a1
+1:      move.l  4(%sp),%d0
+        move.l  (%a1)+,%d1
+        beq.s   3f
+        move.l  %d1,%a0
+        cmp.l   (%a0),%d0
+        bne.s   1b
+        move.l  %a1,-(%sp)                      | the cursor
+        move.l  %d0,-(%sp)
+        move.l  4(%a0),%a0
+        jsr     (%a0)
+        addq.l  #4,%sp
+        move.l  (%sp)+,%a1
+        tst.l   %d0
+        beq.s   1b
+        addq.l  #4,%d0
+        rts
+3:      lea     core_pages,%a1
 1:      move.l  (%a1)+,%d1
         beq.s   9f
         move.l  %d1,%a0

@@ -69,52 +69,73 @@ A format-2 mod is a relocatable object:
 | `contribute` | entries for tables: `{"to", "order", "data", "relocs", "claims"}` |
 | `copied` | `[{"lo", "hi", "to"}]`: a block of the image this mod copies elsewhere at run time |
 | `storage` | fields this mod keeps with the project: `[{"sym", "scope", "bits"}]` (the Analog Rytm MKII from core-ar2 0.2, the Analog Four MKII from core-a4 0.1; "Mod storage" below) |
-| `sharc` | Digitone II 1.12 only: a prelinked SHARC+ mod with the exact envelope below |
+| `sharc` | Digitone II 1.12 only: compiled code for the DSP ("Digitone II SHARC mod" below) |
 
 ### Digitone II SHARC mod
 
-The SDK accepts `"sharc": {"artifact": "sine.sharc.json"}` in a mod's
-`mod.json`. The path must stay inside that mod folder. The artifact becomes
-the format-2 mod's top-level `sharc` object; no SHARC compiler runs during
-SDK build, lint or patch. See [the starter](../examples/sharc-sine/README.md).
+On the Digitone II 1.12 a format-2 mod may also carry code for the DSP, an
+ADSP-21569 SHARC+, in a top-level `sharc` object. This is experimental. The
+[callback contract](SHARC-DN2-ABI.md) says what the code must do, and
+[SHARC-DN2.md](SHARC-DN2.md) what has been checked.
 
-The object has exactly `abi`, `segments`, `zero`, `entries`, and
-`stack_bytes`. Mods use `abi: "dn2-master-mono32-l2-v1"`. Each segment has exactly
-`offset_bytes`, `kind` (`code` or `data`), and `hex` (loader-order bytes).
-Each zero range has `offset_bytes` and `size_bytes`. Segments and zero ranges
-must be nonempty, four-byte aligned, disjoint, and together cover every byte
-of the 32 KiB mod reservation at loader `[0x20090000,0x20098000)`.
-Offsets are relative to that reservation. The core bridge keeps its internal
-`dn2-master-mono32-v1` ABI and L1 reservation; that ABI is not accepted for
-mods. The linker translates mod entrypoints through the profiled L2 PC16
-alias and installs the bridge's pitch table in its separate L1 reservation.
-An inert mod may still use `entries:null` and `stack_bytes:0`. The current
-keyed C starter declares init/render offsets 320/382 and 128 stack bytes.
-The assembly kernel variant declares 176/238 with the same conservative
-128-byte stack allowance, data layout and keyed entry wrapper.
-Its matching core supplies a separate 1 KiB bridge artifact with a hook entry
-at offset 12 and 116 stack bytes. The linker binds the two PC16 callback
-addresses itself; neither mod may supply core binding bytes or stock patches.
-With the keyed core, mod code, data and callback offsets may change
-without a byte allowlist update. The core bridge's bytes, entry and stack
-contribution remain pinned. The linker still requires the ABI, owned ranges,
-alignment, full coverage, callbacks inside owned code and a combined declared
-stack of at most 544 bytes. Each active mod code segment ends in a 64-byte
-short-word NOP guard; entries must precede it. The linker installs the fixed 48-byte pitch table and zero padding in the
-bridge's L1 reservation. Mods cannot override those bytes. The
-[callback contract](SHARC-DN2-ABI.md) specifies init/render, gate lifecycle,
-register/modifier preservation and the author-declared stack. These packaging
-checks do not prove instruction behavior, actual stack use or audio timing;
-qualify each compiled program separately.
-The reference producers reproduce the checked-in artifacts; a mod author may supply an artifact from any
-compatible compiler or assembler without running those development scripts.
-Only one SHARC mod may be selected. The linker checks stock section 7 by
-hash before adding the mod's and core's ordered LOAD/FILL records. The active
-path additionally replaces one exact six-byte master-output instruction inside its
-existing stock LOAD; the independent
-writer verifier checks the decoded stream, section sizes, HMAC, all outer
-budgets, and unchanged stock sections. A mod without `sharc` retains the
-existing byte-exact build path.
+**In mod.json**, `"sharc": {"artifact": "sine.sharc.json"}` names a file in
+the mod's folder; the SDK refuses a path outside it. The SDK copies the file
+into the `.elemod` as `sharc` and records its hash in
+`build.sharc_artifact_sha256`. The artifact is already compiled and linked,
+so no SHARC compiler runs during build, lint or patch. Any compiler or
+assembler can make one; the [sine example](../examples/sharc-sine/README.md)
+makes one from C or assembly.
+
+**The object** has exactly these fields:
+
+| field | value |
+|---|---|
+| `abi` | `"dn2-master-mono32-l2-v1"`. Core's bridge uses `"dn2-master-mono32-v1"`, which a mod may not |
+| `segments` | `[{"offset_bytes", "kind", "hex"}]`: `kind` is `"code"` or `"data"`, `hex` is the bytes in loader order. At least one is code |
+| `zero` | `[{"offset_bytes", "size_bytes"}]`: ranges the DSP's loader fills with zeros |
+| `entries` | `{"init_offset_bytes", "render_offset_bytes"}`: the two callbacks. `null` makes an inert mod, which nothing calls |
+| `stack_bytes` | the stack the callbacks use, as the author declares it. 0 for an inert mod |
+
+Offsets count bytes from the start of the mod's 32 KiB area, loader
+`[0x20090000,0x20098000)`. Link the code for that address: nothing
+relocates it. The C example's callbacks are at 320 and 382, the assembly
+example's at 176 and 238; both declare 128 bytes of stack.
+
+**The checks.** elekloader refuses the mod when it loads it, unless:
+- the segments and zero ranges are 4-byte aligned, do not overlap, and
+  together cover all 32 KiB, with no gap;
+- each entry is 2-byte aligned and inside a code segment;
+- in a mod with entries, each code segment ends in 64 bytes of NOPs (`0100`
+  repeated), with no entry inside them, because the DSP fetches instructions
+  ahead.
+
+When it links the mods, it also refuses unless:
+- only one mod in the build has `sharc`;
+- a mod with entries has a core whose bridge is the one the device profile
+  pins: its bytes, its entry and its stack. That is core-dn2 0.2 or newer;
+  set `"resources": {"core": "0.2"}` so the loader picks it;
+- the declared stacks fit: the bridge declares 116 bytes and the two
+  together may not pass 544, so a mod has at most 428.
+
+**What the linker does.** It checks the stock DSP section (section 7) by
+its hash. Then it adds the mod's segments and zero ranges as new load and
+fill records, before the stream's FINAL record. For a mod with entries it
+also adds:
+- core's 1 KiB bridge, with the two callback addresses in its first 12
+  bytes. The linker writes those; a mod cannot;
+- the bridge's 48-byte pitch table, and zeros over the rest of its 1 KiB;
+- one patch: the six-byte stock instruction at the master output
+  (`0x2838489a`) is replaced so that the bridge runs.
+
+The writer packs section 7 again. The verifier checks that it depacks to the
+linked stream and fits its limits, that the seal and the update size are
+right, and that every other section is stock. Without a SHARC mod, section 7
+stays stock, with core 0.2 too.
+
+A mod's code, data and callback offsets may change from build to build with
+no change to elekloader: only the bridge is pinned. These checks cover the
+packaging. They cannot prove what the instructions do, how much stack they
+really use, or that they finish in time, so test each program on its own.
 
 ### The linker
 
@@ -316,7 +337,8 @@ events, `ev_project` and `core_store_ids`, at 0x40098898, 0x40098900,
 (`mods/core-a4/mod.json`), and no `.fast` code either. From 0.2 it declares
 `core_pages`, `core_params` and `core_view_pages` too (0x400f6212,
 0x40023d54, 0x400232e2 and 0x4009ea68; the views at 0x400c2370 and
-0x400c4202), its view entries the A4's own.
+0x400c4202), its view entries the A4's own; from 0.3 `core_page_fns`
+as well (core-ar2 0.6's), asked from the same page_info site.
 
 The core mod patches each shared site once. It calls the handlers
 subscribed to that event, from a table built by the linker, in order.

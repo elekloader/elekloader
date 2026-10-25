@@ -37,7 +37,7 @@ There is one core file per device and OS:
 | Analog Rytm MKII | 1.73 | `core-ar2-0.2.elemod` | not released: the last core with 1.73; build it from commit 92a99c9 ([below](#building-a-core)) |
 | Analog Rytm MKII | 1.74 | `core-ar2-0.3.elemod` | the [core-ar2-v0.3](https://github.com/irpina/elekloader/releases/tag/core-ar2-v0.3) pre-release, and the shop; 1.74 only |
 | Analog Rytm MKII | 1.74 | `core-ar2-0.5.elemod` | not released: build it ([below](#building-a-core)); 1.74 only. Mods with pages built for 0.3 (rytm2_mods v1.2's lfo-rnd, voice-dac, euclid-accents, velocity-humanise, comp-preview) do not link with it: their sites overlap core's page sites |
-| Analog Four MKII | 1.56 | `core-a4-0.2.elemod` | a proof of concept, not released: build it ([below](#building-a-core)) |
+| Analog Four MKII | 1.56 | `core-a4-0.3.elemod` | a proof of concept, not released: build it ([below](#building-a-core)) |
 | Octatrack MKI, MKII | 1.40C | `core-ot-0.1.elemod` | the latest release (v0.4.0); PURGE SAMPLES freezes the unit with it, fixed in 0.3.1 |
 | Octatrack MKI, MKII | 1.40C | `core-ot-0.3.1.elemod` | the [core-ot-v0.3.1](https://github.com/irpina/elekloader/releases/tag/core-ot-v0.3.1) pre-release, and the shop: with the hook bus (0.2) and the sized reserve (0.3), neither released on its own |
 | Octatrack MKI, MKII | 1.40C | `core-ot-0.4.elemod` | not released yet: the frame's end and MIDI out (`ev_frame_end`, `ev_midi_out`, `ev_midi_out_rt`) |
@@ -131,10 +131,12 @@ core.
   The core/DigiHealth showcase flashed over USB and
   passed the six UI events, reopened menu callbacks, input consumption and
   ordering on a unit; immutable runtime readback matched its exact build.
-  Core 0.2 adds an optional bounded SHARC master-output callback, with
-  32 KiB code/data placement and C/ASM examples. Existing control mods remain
-  compatible; SHARC mods require core 0.2 or newer. See the
-  [callback contract](SHARC-DN2-ABI.md) and [source workflow](../examples/sharc-sine/README.md).
+  Core 0.2 adds the bridge for SHARC mods: one mod's code on the DSP, at
+  the master output, in 32 KiB, with a C and an assembly example. Mods
+  made for 0.1 work with it unchanged; SHARC mods need 0.2 or newer. See the
+  [callback contract](SHARC-DN2-ABI.md) and the [sine example](../examples/sharc-sine/README.md).
+  An elekloader from before SHARC support refuses a 0.2 file (its `sharc`
+  field is unknown to it), so release core 0.2 with an elekloader release.
   Wider project/audio qualification remains separate. See the core README
   for the [DigiHealth fork branch](https://github.com/simonjohansson/digihealth/tree/codex/dn2-remote-control)
   and the diagnostic overlay warning.
@@ -178,7 +180,8 @@ core.
   `core_params` entries, adds the views mods list in `core_view_pages`
   behind the page keys (each A4 page is a view of its own), and
   `core_audio_load` ("Parameter pages (core-a4 0.2, Analog Four MKII)" in
-  ADAPTING.md).
+  ADAPTING.md). From 0.3, core-ar2 0.6's `core_page_fns`, so a page's knobs
+  can follow the selected sound.
 - **Octatrack** ([mods/core-ot](../mods/core-ot)): a source of its own. It
   reserves RAM for mods, copies their code there, and from 0.2 has a hook
   bus with the Octatrack's events; from 0.3 it reserves only the RAM the mods

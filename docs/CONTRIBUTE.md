@@ -44,6 +44,14 @@ Each entry is one stock routine that one or more mods hook themselves. Its
 - **some sites move onto the core, the rest need an event**: both of the
   above, in one routine.
 
+An entry may also say what the core already hooks in that routine, on
+other bytes: "core hooks this routine at 0x40010bd0 (core_midi_out)",
+with the symbols that site jumps to. The core puts some events beside the
+bytes a shop file holds, so that file keeps working with the newest core.
+The event there may already be what those mods need: look at it before
+you build another. The entry's "to do" stays as it is, because the mods
+still hook their own bytes until they are rebuilt on the core.
+
 The entry's id names the device, the oldest OS and the routine's lowest
 site. An entry is done when it leaves the list, which happens when the
 mods there are rebuilt on the core and the shop has the new files.

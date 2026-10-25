@@ -1779,7 +1779,7 @@ def test_usb_audio_in_is_an_add_on():
 
 
 def test_the_machines_sites():
-    """mods/machines-ot: its 32 sites are stock, whole instructions, and none is core-ot's or the
+    """mods/machines-ot: its 35 sites are stock, whole instructions, and none is core-ot's or the
     intercepts'; the two places that enter machines.c with the caller's stack (the Part validator
     and the FLEX renderer) are the prologues seams.s replays; the page resolver keeps the
     registers the hooks after it read."""
@@ -1789,7 +1789,7 @@ def test_the_machines_sites():
         with open(os.path.join(ROOT, 'mods', name, 'mod.json')) as fh:
             return json.load(fh)['sites']
     mine = sites('machines-ot')
-    assert len(mine) == 32
+    assert len(mine) == 35
     for s in mine:
         a, n = int(s['addr'], 16), len(s['stock']) // 2
         o = a - DEV.main_load
@@ -1815,6 +1815,104 @@ def test_the_machines_sites():
     at = [body.find(x) for x in ('movem.l %d1/%a1, (%sp)', 'jsr     otm_page', 'movem.l (%sp), %d1/%a1',
                                  'jmp     0x40031ece')]
     assert -1 not in at and at == sorted(at), at
+
+
+# machines-ot 0.2's three seams: the site, the bytes, the stub and where it goes back to.
+MACHINES_02 = {
+    'otm_tick_seam': (0x4005221e, '4ebaff1c' '4eb94007e940', 0x40052228),       # jsr 0x4005213c ; jsr 0x4007e940
+    'otm_chooser_level': (0x400788c4, '7190' '7401' 'b480', 0x400788ca),       # mvz.b (a0),d0 ; moveq #1,d2 ; cmp.l
+    'otm_slot_commit': (0x40079520, '7910' '1082' 'd089', 0x40079526),         # mvs.b (a0),d4 ; move.b d2,(a0) ; add.l
+}
+MACHINES_02_FACTS = (
+    (0x40052214, '6708'),                   # the beq that lands on the tick site's first byte
+    (0x40052228, '4eb9400316a0'),           # the screen's builders come after it
+    (0x400788ca, '55c0' '7100' '5280' '23c0460e739a'),   # the window's level from the compare
+    (0x40079510, '4c030800'),               # d0 = part * 6322 (d3 the Part)
+    (0x40079514, '41f20800' 'd1c9' 'd1fc0008eda2'),      # a0 = bank (a2) + d0 + track (a1) + Part 0 + 0x22
+    (0x40079526, '41f9100a4ef0' '11820800'),  # then stock stores d2 in the battery copy
+)
+
+
+def test_the_machines_02_seams():
+    """machines-ot 0.2's tick, chooser level and slot commit: each site is its mod.json's, whole
+    stock instructions that no branch from outside lands inside; its stub in seams.s goes back to
+    the instruction after; no other Octatrack core, companion or v1.0 conversion takes its bytes;
+    and the registers the stubs read are what the stock code leaves there."""
+    st, img = stock()
+    with open(os.path.join(ROOT, 'mods', 'machines-ot', 'mod.json')) as fh:
+        mine = {s['target']: s for s in json.load(fh)['sites']}
+    with open(os.path.join(ROOT, 'mods', 'machines-ot', 'seams.s')) as fh:
+        src = fh.read()
+    others = []
+    for m in os.listdir(os.path.join(ROOT, 'mods')):
+        if m.endswith('-ot') and m != 'machines-ot':
+            with open(os.path.join(ROOT, 'mods', m, 'mod.json')) as fh:
+                others += [(int(x['addr'], 16), len(x.get('stock', '')) // 2 or 4) for x in json.load(fh).get('sites', [])]
+    others += list(V10_NEIGHBOURS) + list(V10_VOICE) + list(V10_BUILDERS)
+    inside = {}
+    for stub, (addr, stock_hex, back) in MACHINES_02.items():
+        s, n = mine[stub], len(stock_hex) // 2
+        assert (int(s['addr'], 16), s['stock'], s['op']) == (addr, stock_hex, 'jmp'), stub
+        o = addr - DEV.main_load
+        assert img[o:o + n].hex() == stock_hex, stub
+        ok, note = elemod.insn_check(img, addr, n, DEV)
+        assert ok, (stub, note)
+        body = src.split('%s:\n' % stub, 1)[1].split('\n\n', 1)[0]
+        assert 'jmp     %#x' % back in body and back == addr + n, stub
+        for a, m in others:
+            assert not (a < addr + n and addr < a + m), (stub, hex(a))
+        for t in range(addr + 1, addr + n):
+            inside[t] = stub
+    for addr, h in MACHINES_02_FACTS:
+        o = addr - DEV.main_load
+        assert img[o:o + len(h) // 2].hex() == h, hex(addr)
+    for o in range(0, len(img) - 6, 2):         # bra/bsr/bcc, jmp/jsr absolute or pc-relative
+        w = struct.unpack('>H', img[o:o + 2])[0]
+        pc, tgt = DEV.main_load + o, None
+        if w & 0xf000 == 0x6000:
+            d8 = w & 0xff
+            if d8 == 0:
+                tgt = pc + 2 + struct.unpack('>h', img[o + 2:o + 4])[0]
+            elif d8 == 0xff:
+                tgt = pc + 2 + struct.unpack('>i', img[o + 2:o + 6])[0]
+            else:
+                tgt = pc + 2 + (d8 - 256 if d8 & 0x80 else d8)
+        elif w in (0x4ef9, 0x4eb9):
+            tgt = struct.unpack('>I', img[o + 2:o + 6])[0]
+        elif w in (0x4efa, 0x4eba):
+            tgt = pc + 2 + struct.unpack('>h', img[o + 2:o + 4])[0]
+        assert tgt not in inside, (hex(pc), hex(tgt), inside.get(tgt))
+    # the tick site's first instruction is pc-relative: the stub calls its target absolutely
+    o = 0x4005221e - DEV.main_load
+    assert 0x4005221e + 2 + struct.unpack('>h', img[o + 2:o + 4])[0] == 0x4005213c
+    assert 'jsr     0x4005213c' in src.split('otm_tick_seam:\n', 1)[1].split('\n\n', 1)[0]
+
+
+def test_the_machine_probe_links():
+    """tests/fixtures/octatrack-machine-probe with machines-ot 0.2: its record is ot_machines' entry
+    and its handler ev_machine_set's; machines-ot alone has an empty ev_machine_set and no ev_tick
+    handler (0.2 runs the machines' ui_tick from its own tick seam)."""
+    import shutil
+    from elekloader.sdk import build
+    need(SYX)
+    if not shutil.which(os.environ.get('ELEKLOADER_CROSS', DEV.toolchain['prefix']) + 'gcc'):
+        raise Skip('no m68k cross compiler')
+    st, img = stock()
+    with tempfile.TemporaryDirectory() as tmp:
+        core = elemod.load_any(build.build(os.path.join(ROOT, 'mods', 'core-ot'), SYX, tmp)[0])
+        mach = elemod.load_any(build.build(os.path.join(ROOT, 'mods', 'machines-ot'), SYX, tmp)[0])
+        probe, m = build.build(os.path.join(HERE, 'fixtures', 'octatrack-machine-probe'), SYX, tmp)
+        alone = link.link([core, mach], img)
+        ln = link.link([core, mach, elemod.load_any(probe)], img)
+
+    def table(ln, name, n):
+        o = ln.layout['run_load'] + (ln.tables[name][0] - DEV.ddr[0]) - DEV.main_load
+        return struct.unpack('>%dI' % n, ln.image[o:o + 4 * n])
+
+    assert alone.tables['ev_machine_set'][1] == 0 and alone.tables['ot_machines'][1] == 0
+    assert alone.tables['ev_tick'][1] == 0
+    assert table(ln, 'ev_machine_set', 2) == (ln.map['mp_machine_set'], 0)
+    assert table(ln, 'ot_machines', 2) == (ln.map['mp_machine'], 0)
 
 
 def test_the_machines_companion_lists_a_machine():
