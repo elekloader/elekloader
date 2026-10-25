@@ -86,7 +86,7 @@ This is experimental.
 
 | field | value |
 |---|---|
-| `loads` | `[{"addr", "hex"}]`: new load records; each inside the profile's owned L2 (`[0x2001ab7c, 0x200fa000)`), 4-byte aligned |
+| `loads` | `[{"addr", "hex"}]` or `[{"addr", "parts"}]`: new load records; each inside the profile's owned L2 (`[0x2001ab7c, 0x200fa000)`), 4-byte aligned. `parts` is a list of `["hex", "..."]` and `["stock", "0x...", n]`, the latter `n` bytes the stock stream loads at that address, read from the user's file when linking |
 | `patches` | `[{"addr", "stock", "new"}]`: whole stock instructions replaced in one stock load inside the profile's L1 patch range; `stock` must match the stock stream, `new` has its length |
 
 The linker checks the stock section by its hash, applies the patches, adds

@@ -216,6 +216,10 @@ def test_the_areas_are_outside_what_the_os_clears_and_copies():
     second = 0x80008000 + (0x4031ff60 - 0x40318e80)
     assert DEV.areas['sram-block'][0] >= first and DEV.areas['sram-block'][1] == 0x80008000
     assert DEV.areas['sram-tail'][0] >= second and DEV.areas['sram-tail'][1] == 0x80010000
+    # ddr-low (fixed-address code, e.g. patchkit's expansion region): above the clear and the DSP's
+    # buffers (their cached alias ends at 0x47E7AE80), below the linker's area
+    lo, hi = DEV.areas['ddr-low']
+    assert clear_end <= 0x47E7AE80 <= lo and hi == DEV.ddr[0]
 
 
 def built(moddir, tmp):
@@ -316,12 +320,14 @@ def stock_dsp(addr, n):
 
 
 def raw_mod(tmp, core, name, loads=(), patches=()):
-    """A format-2 mod with only a sharc_raw payload: core's target, no code."""
+    """A format-2 mod with only a sharc_raw payload: core's target, no code. A load's data is
+    bytes, or a list of parts as the format has them."""
     with open(core) as fh:
         target = json.load(fh)['target']
     doc = {'elemod': 2, 'id': name, 'version': '1', 'target': target, 'sections': {},
            'requires': ['core'],
-           'sharc_raw': {'loads': [{'addr': '0x%08x' % a, 'hex': d.hex()} for a, d in loads],
+           'sharc_raw': {'loads': [{'addr': '0x%08x' % a, 'hex': d.hex()} if isinstance(d, bytes)
+                                   else {'addr': '0x%08x' % a, 'parts': d} for a, d in loads],
                          'patches': [{'addr': '0x%08x' % a, 'stock': o.hex(), 'new': n.hex()}
                                      for a, o, n in patches]}}
     return write_mod(tmp, doc, name + '.elemod')
@@ -343,6 +349,25 @@ def test_raw_sharc_loads_and_patches_link_and_land_in_section_7():
     assert any(r.flags == sharc.LOAD and r.target == RAW_LOAD and r.raw[16:] == data for r in recs)
     at = [r for r in recs if r.flags == sharc.LOAD and r.target <= RAW_PATCH < r.target + r.count][0]
     assert at.raw[16 + RAW_PATCH - at.target:16 + RAW_PATCH - at.target + 6] == new
+
+
+def test_a_raw_sharc_load_takes_stock_parts_from_the_users_file():
+    """A load of ["hex"] and ["stock", addr, n] parts: the stock bytes come from the stock DSP
+    stream at link time, so the mod does not carry them."""
+    from elekloader import sharc
+    stock_part = stock_dsp(RAW_PATCH, 8)
+    with tempfile.TemporaryDirectory() as tmp:
+        core = built(os.path.join('mods', 'core-dt2'), tmp)
+        raw = raw_mod(tmp, core, 'raw-parts', loads=[(RAW_LOAD, [['hex', '01020304'],
+                                                                 ['stock', '0x%08x' % RAW_PATCH, 8],
+                                                                 ['hex', '05060708']])])
+        outputs, man = patch.build(SYX, [core, raw], version='DT13', log=lambda *a: None)
+        bad = raw_mod(tmp, core, 'raw-bad', loads=[(RAW_LOAD, [['stock', '0x200f0000', 8]])])
+        expect(lambda: patch.build(SYX, [core, bad], version='DT13', log=lambda *x: None),
+               'not inside one stock load')
+    recs = sharc.parse(formats.parse(outputs['syx'], DEV).section(REL.sharc['section']), REL.sharc)
+    want = bytes.fromhex('01020304') + stock_part + bytes.fromhex('05060708')
+    assert any(r.flags == sharc.LOAD and r.target == RAW_LOAD and r.raw[16:] == want for r in recs)
 
 
 def test_two_raw_sharc_patches_of_one_instruction_are_refused():

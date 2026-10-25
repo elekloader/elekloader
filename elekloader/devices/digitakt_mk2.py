@@ -98,6 +98,10 @@ DEVICE = Device(
     isa='coldfire',
     areas={
         'ddr': (0x47F00000, 0x47F40000),          # above the DSP buffers, below the boot stack
+        # below the linker's area, above the DSP buffers (0x47E30000-0x47E7AE80): what mods that place
+        # code at fixed addresses claim (`resources.regions`); digikit's patchkit puts its expansion
+        # region at 0x47E8B000
+        'ddr-low': (0x47E7B000, 0x47F00000),
         'sram-tail': (0x8000F100, 0x80010000),    # the SRAM's free tail
         'sram-block': (0x80006E80, 0x80008000),   # free SRAM after the first half's data
     },

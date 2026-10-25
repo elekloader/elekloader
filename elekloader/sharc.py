@@ -501,16 +501,27 @@ def raw_payload(doc, profile):
         raise ModError('sharc_raw needs only loads and patches')
     loads, patches = [], []
     for item in doc.get('loads', []):
-        if not isinstance(item, dict) or set(item) != {'addr', 'hex'}:
-            raise ModError('sharc_raw load needs exactly addr, hex')
-        addr, h = int(item['addr'], 16), item['hex']
-        if not re.fullmatch(r'(?:[0-9a-fA-F]{2})+', h):
-            raise ModError('sharc_raw load has invalid hex')
-        data = bytes.fromhex(h)
-        lo, hi = byte_span(profile, addr, len(data))
-        if addr % 4 or len(data) % 4 or not any(s <= lo and hi <= e for s, e in profile['owned_ranges']):
+        if not isinstance(item, dict) or set(item) not in ({'addr', 'hex'}, {'addr', 'parts'}):
+            raise ModError('sharc_raw load needs exactly addr and hex or parts')
+        addr = int(item['addr'], 16)
+        parts = [['hex', item['hex']]] if 'hex' in item else item['parts']
+        data, n = [], 0
+        for part in parts if isinstance(parts, list) else [None]:
+            if isinstance(part, list) and len(part) == 2 and part[0] == 'hex' and isinstance(part[1], str) \
+                    and re.fullmatch(r'(?:[0-9a-fA-F]{2})+', part[1]):
+                data.append(bytes.fromhex(part[1]))
+                n += len(data[-1])
+            elif isinstance(part, list) and len(part) == 3 and part[0] == 'stock' \
+                    and isinstance(part[2], int) and part[2] > 0:
+                # bytes of the stock DSP stream's loads, read from the user's file at link time
+                data.append((int(part[1], 16), part[2]))
+                n += part[2]
+            else:
+                raise ModError('sharc_raw load part must be ["hex", "..."] or ["stock", "0x...", n]')
+        lo, hi = byte_span(profile, addr, n)
+        if addr % 4 or n % 4 or not any(s <= lo and hi <= e for s, e in profile['owned_ranges']):
             raise ModError('sharc_raw load 0x%x is unaligned or outside the owned L2' % addr)
-        loads.append((addr, data))
+        loads.append((addr, data[0] if len(data) == 1 and isinstance(data[0], bytes) else data))
     for item in doc.get('patches', []):
         if not isinstance(item, dict) or set(item) != {'addr', 'stock', 'new'}:
             raise ModError('sharc_raw patch needs exactly addr, stock, new')
@@ -525,3 +536,18 @@ def raw_payload(doc, profile):
     if not loads and not patches:
         raise ModError('sharc_raw is empty')
     return {'loads': loads, 'patches': patches}
+
+
+def stock_bytes(stream, profile, addr, n):
+    """-> `n` bytes the stock DSP stream loads at loader address `addr` (one stock load holds them)."""
+    for r in parse(stream, profile):
+        if r.flags == LOAD and r.target <= addr and addr + n <= r.target + r.count:
+            return r.raw[16 + addr - r.target:16 + addr - r.target + n]
+    raise ModError('sharc_raw stock part 0x%x+%d is not inside one stock load' % (addr, n))
+
+
+def resolve_load(stream, profile, data):
+    """A raw load's data: bytes, or its parts with each stock part read from `stream`."""
+    if isinstance(data, bytes):
+        return data
+    return b''.join(p if isinstance(p, bytes) else stock_bytes(stream, profile, p[0], p[1]) for p in data)

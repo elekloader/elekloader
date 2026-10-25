@@ -747,7 +747,7 @@ def link(mods, image, lock=None, *, sharc_stream=None):
         # refuses a profile without 'raw', and module_payload one without the bridge's ABI)
         if sharc_stream is None:
             raise ModError('SHARC mod needs the stock section-7 stream')
-        loads = [x for m in raw_mods for x in m.sharc_raw['loads']]
+        loads = [(a, sharc.resolve_load(sharc_stream, rel.sharc, d)) for m in raw_mods for a, d in m.sharc_raw['loads']]
         patches = [x for m in raw_mods for x in m.sharc_raw['patches']]
         spans = sorted((a, a + len(o)) for a, o, _n in patches)
         for (a0, a1), (b0, _b1) in zip(spans, spans[1:]):
