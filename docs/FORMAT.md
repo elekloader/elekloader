@@ -75,6 +75,24 @@ A format-2 mod is a relocatable object:
 | `copied` | `[{"lo", "hi", "to"}]`: a block of the image this mod copies elsewhere at run time |
 | `storage` | fields this mod keeps with the project: `[{"sym", "scope", "bits"}]` (the Analog Rytm MKII from core-ar2 0.2, the Analog Four MKII from core-a4 0.1; "Mod storage" below) |
 | `sharc` | Digitone II 1.12 only: compiled code for the DSP ("Digitone II SHARC mod" below) |
+| `sharc_raw` | Digitakt II 1.17 only: raw additions to the DSP's boot stream ("Digitakt II raw SHARC payload" below) |
+
+### Digitakt II raw SHARC payload
+
+On the Digitakt II 1.17 a format-2 mod may carry `sharc_raw`, raw changes to
+the DSP's boot stream (section 7) with no bridge and no callbacks: the mod
+brings DSP code that stock code reaches through instructions it patches.
+This is experimental.
+
+| field | value |
+|---|---|
+| `loads` | `[{"addr", "hex"}]`: new load records; each inside the profile's owned L2 (`[0x2001ab7c, 0x200fa000)`), 4-byte aligned |
+| `patches` | `[{"addr", "stock", "new"}]`: whole stock instructions replaced in one stock load inside the profile's L1 patch range; `stock` must match the stock stream, `new` has its length |
+
+The linker checks the stock section by its hash, applies the patches, adds
+the loads before FINAL, and parses the result again. It refuses two patches
+that overlap (from any mods), a load over another load, and anything outside
+the profile's ranges.
 
 ### Digitone II SHARC mod
 

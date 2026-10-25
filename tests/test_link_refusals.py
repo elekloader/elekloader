@@ -176,6 +176,8 @@ external('link', 'SHARC mod needs the stock section-7 stream', 'tests/test_sharc
          'SHARC mod needs the stock section-7 stream')
 external('link', 'SHARC stored section exceeds the profile limit', 'tests/test_sharc_active.py',
          'SHARC stored section exceeds the profile limit')
+external('link', 'two raw SHARC patches overlap at 0x<>', 'tests/test_digitakt2.py',
+         'two raw SHARC patches overlap')
 
 
 def edit_region(name, lo, hi):

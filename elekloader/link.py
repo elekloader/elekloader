@@ -743,8 +743,8 @@ def link(mods, image, lock=None, *, sharc_stream=None):
             raise ModError('SHARC stored section exceeds the profile limit')
     raw_mods = [m for m in order if m.sharc_raw]
     if raw_mods:
-        if sharc_mods:
-            raise ModError('raw SHARC mods do not combine with a SHARC bridge mod')
+        # (a device's profile takes raw payloads or a bridge's modules, never both: raw_payload
+        # refuses a profile without 'raw', and module_payload one without the bridge's ABI)
         if sharc_stream is None:
             raise ModError('SHARC mod needs the stock section-7 stream')
         loads = [x for m in raw_mods for x in m.sharc_raw['loads']]

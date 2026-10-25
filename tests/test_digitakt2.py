@@ -298,6 +298,65 @@ def test_perform_direct_links_with_core():
     assert changed <= sites
 
 
+# ---- raw SHARC payloads (sharc_raw: section-7 loads and L1 patches) ------------------------
+
+RAW_LOAD = 0x2001ab80          # in the profile's owned L2
+RAW_PATCH = 0x283827cc         # the start of the profile's L1 patch range
+
+
+def stock_dsp(addr, n):
+    """-> `n` bytes of the stock DSP stream's load at loader address `addr`."""
+    from elekloader import sharc
+    st, img = stock()
+    stream = st.section(REL.sharc['section'])
+    for r in sharc.parse(stream, REL.sharc):
+        if r.flags == sharc.LOAD and r.target <= addr and addr + n <= r.target + r.count:
+            return r.raw[16 + addr - r.target:16 + addr - r.target + n]
+    raise AssertionError('no stock load at 0x%x' % addr)
+
+
+def raw_mod(tmp, core, name, loads=(), patches=()):
+    """A format-2 mod with only a sharc_raw payload: core's target, no code."""
+    with open(core) as fh:
+        target = json.load(fh)['target']
+    doc = {'elemod': 2, 'id': name, 'version': '1', 'target': target, 'sections': {},
+           'requires': ['core'],
+           'sharc_raw': {'loads': [{'addr': '0x%08x' % a, 'hex': d.hex()} for a, d in loads],
+                         'patches': [{'addr': '0x%08x' % a, 'stock': o.hex(), 'new': n.hex()}
+                                     for a, o, n in patches]}}
+    return write_mod(tmp, doc, name + '.elemod')
+
+
+def test_raw_sharc_loads_and_patches_link_and_land_in_section_7():
+    """A raw payload: one L2 load and one L1 instruction patch; the built
+    section 7 holds both, and the main OS has only core's sites."""
+    from elekloader import sharc
+    old = stock_dsp(RAW_PATCH, 6)
+    new = bytes(6) if old != bytes(6) else b'\x01' * 6
+    data = bytes(range(16))
+    with tempfile.TemporaryDirectory() as tmp:
+        core = built(os.path.join('mods', 'core-dt2'), tmp)
+        raw = raw_mod(tmp, core, 'raw-test', loads=[(RAW_LOAD, data)], patches=[(RAW_PATCH, old, new)])
+        outputs, man = patch.build(SYX, [core, raw], version='DT11', log=lambda *a: None)
+    built_st = formats.parse(outputs['syx'], DEV)
+    recs = sharc.parse(built_st.section(REL.sharc['section']), REL.sharc)
+    assert any(r.flags == sharc.LOAD and r.target == RAW_LOAD and r.raw[16:] == data for r in recs)
+    at = [r for r in recs if r.flags == sharc.LOAD and r.target <= RAW_PATCH < r.target + r.count][0]
+    assert at.raw[16 + RAW_PATCH - at.target:16 + RAW_PATCH - at.target + 6] == new
+
+
+def test_two_raw_sharc_patches_of_one_instruction_are_refused():
+    """Two mods patching the same instruction: refused by name; either alone links."""
+    old = stock_dsp(RAW_PATCH, 6)
+    with tempfile.TemporaryDirectory() as tmp:
+        core = built(os.path.join('mods', 'core-dt2'), tmp)
+        a = raw_mod(tmp, core, 'raw-a', patches=[(RAW_PATCH, old, bytes(6))])
+        b = raw_mod(tmp, core, 'raw-b', patches=[(RAW_PATCH + 2, old[2:6], bytes(4))])
+        expect(lambda: patch.build(SYX, [core, a, b], version='DT12', log=lambda *x: None),
+               'two raw SHARC patches overlap')
+        patch.build(SYX, [core, b], version='DT12', log=lambda *x: None)
+
+
 # ---- the flash: what the firmware reads and writes there (docs/DEVICES.md) ------------------
 
 def calls_to(img, target):
