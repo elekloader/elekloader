@@ -347,7 +347,8 @@ queued, then calls 0x40001bce as stock does, with interrupts masked. It runs
 only when a build on this core is the OS being replaced, so it protects the
 upgrade away from a custom build (to stock, or to another build), not one
 away from stock. The addresses come from `mod.json` (`FINISH_PANEL`,
-`FINISH_UART`, `FINISH_DRAIN`).
+`FINISH_UART`, `FINISH_DRAIN`); core-a4 0.4 uses the same file with the
+A4's.
 
 Checked in analog-emu (25 Oct 2026; each flash a fresh headless emulator
 booted on the source OS, then `elkflash upgrade --no-confirm --wait` of a
@@ -359,7 +360,8 @@ divider (the unit's 158.7 kbaud, where it had run about 6 times faster), none
 of 30 hung, from the fixed, the unfixed and the stock source alike, so on a
 unit the race is likely rare. On a unit (25 Oct 2026), the flashes away
 from builds on this core (to other builds and to stock, five flashes)
-restarted in 15 s; with a race this rare that is no
+restarted in 15 s, and on an Analog Four MKII a flash from core-a4 0.4
+back to stock 1.56 restarted in 21 s; with a race this rare that is no
 proof the hang is gone, only that the routine does no harm.
 
 ## Checked so far

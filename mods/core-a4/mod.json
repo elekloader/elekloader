@@ -1,15 +1,16 @@
 {
- "id": "core", "version": "0.3",
+ "id": "core", "version": "0.4",
  "license": "GPL-2.0-or-later",
  "title": "core", "category": "Framework", "author": "irpina, Iced-Cream",
- "description": "The boot copier, the hook bus and mod storage for the Analog Four MKII: every other mod needs it. The Digitakt mk1's core.s, settings.s and render.s with the A4's addresses, as core-ar2 builds them for the Analog Rytm MKII, store.c: fields mods declare, placed by elekloader from the build's lockfile and kept in bytes stock never uses or always holds at 0; from 0.2, pages.s: the four routines every parameter page goes through, asked through core_pages and core_params (and from 0.3 core_page_fns, a page whose knobs follow the sound), and views behind the page keys through core_view_pages, and core-ar2's load.s: the audio interrupt's load. On its own it changes nothing the unit does.",
+ "description": "The boot copier, the hook bus and mod storage for the Analog Four MKII: every other mod needs it. The Digitakt mk1's core.s, settings.s and render.s with the A4's addresses, as core-ar2 builds them for the Analog Rytm MKII, store.c: fields mods declare, placed by elekloader from the build's lockfile and kept in bytes stock never uses or always holds at 0; from 0.2, pages.s: the four routines every parameter page goes through, asked through core_pages and core_params (and from 0.3 core_page_fns, a page whose knobs follow the sound), and views behind the page keys through core_view_pages, and core-ar2's load.s: the audio interrupt's load. On its own it changes nothing the unit does. And core-ar2's finish.s: an OS upgrade's restart sends the panel link's and the UART's queued bytes before it masks interrupts, where stock can hang on SUCCESS! REBOOTING.",
  "device": "analog-four-mk2", "os": "1.56",
- "sources": ["../core/core.s", "../core/settings.s", "../core/render.s", "store.c", "store.s", "pages.s", "../core-ar2/load.s"],
+ "sources": ["../core/core.s", "../core/settings.s", "../core/render.s", "store.c", "store.s", "pages.s", "../core-ar2/load.s", "../core-ar2/finish.s"],
  "subscribe": [
   {"event": "ev_render_in", "fn": "core_load_in", "order": 0},
   {"event": "ev_render_out", "fn": "core_load_out", "order": 100}
  ],
  "defsym": {
+  "FINISH_PANEL": "0x4133cfc0", "FINISH_UART": "0x4133cfd0", "FINISH_DRAIN": "0x40002766",
   "DRAWALL": "0x400625ca",
   "KEYDISP": "0x40098b36",
   "ENCDISP": "0x40098bec",
@@ -40,6 +41,7 @@
   "CYCLE_RET": "0x400c420a"
  },
  "sites": [
+  {"addr": "0x4007db24", "stock": "46fc27004eb940002766", "op": "jsr", "target": "core_finish_drain"},
   {"addr": "0x40001180", "stock": "4eb940002064", "op": "jsr", "target": "boot"},
   {"addr": "0x40098898", "stock": "4eb940062594", "op": "jsr", "target": "core_tick"},
   {"addr": "0x40098900", "stock": "4eb9400625ca", "op": "jsr", "target": "core_draw"},

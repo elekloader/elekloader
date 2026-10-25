@@ -481,7 +481,8 @@ a project load and a power cycle.
 - **The core** (mods/core-a4) has the Rytm's events at the A4's sites, and
   mod storage in bytes of the A4's own structures (mods/core-a4/README.md);
   from 0.2, core-ar2 0.4's parameter routines, and views added behind the
-  page keys; from 0.3, core-ar2 0.6's page functions (`core_page_fns`).
+  page keys; from 0.3, core-ar2 0.6's page functions (`core_page_fns`); from
+  0.4, core-ar2 0.7's OS upgrade restart (`finish.s`).
   In rytm-emu (with a fallback added so it accepts a patched A4 image), a
   build with core alone runs as stock does, with the same frames and a
   byte-identical screen; hello-marker-a4 differs from stock only in its

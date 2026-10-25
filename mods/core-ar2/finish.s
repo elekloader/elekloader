@@ -1,5 +1,5 @@
 | SPDX-License-Identifier: GPL-2.0-or-later
-| core-ar2: an OS upgrade's restart that cannot hang on the
+| core-ar2 and core-a4: an OS upgrade's restart that cannot hang on the
 | panel link.
 |
 | After writing a new OS, stock waits 3 s, masks every interrupt

@@ -157,8 +157,10 @@ def test_core_a4_sites():
         assert x['stock'][2:] == '1c' and x['new'] == x['stock'][:2] + '2c', x
         assert x['stock'][0] == '7' and int(x['stock'][1], 16) % 2 == 0, x     # moveq #28,Dn
     # mod storage's sites (core-a4 0.1: 28 of the 36), and 0.2's 4 page
-    # sites, 2 view sites and 5 range bytes
-    assert len(mod['sites']) == 47
+    # sites, 2 view sites and 5 range bytes, and 0.4's OS upgrade restart
+    assert len(mod['sites']) == 48
+    x = [x for x in mod['sites'] if x.get('target') == 'core_finish_drain'][0]
+    assert x['op'] == 'jsr' and x['stock'] == '46fc27004eb9' + d['FINISH_DRAIN'][2:], x
     assert len([x for x in mod['sites'] if x.get('target', '').startswith('st_')]) == 28
 
 
