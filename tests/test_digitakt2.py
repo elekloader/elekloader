@@ -382,6 +382,71 @@ def test_two_raw_sharc_patches_of_one_instruction_are_refused():
         patch.build(SYX, [core, b], version='DT12', log=lambda *x: None)
 
 
+def raw_doc_mod(tmp, core, name, raw):
+    """A format-2 mod whose only payload is the sharc_raw document `raw`."""
+    with open(core) as fh:
+        target = json.load(fh)['target']
+    doc = {'elemod': 2, 'id': name, 'version': '1', 'target': target, 'sections': {},
+           'requires': ['core'], 'sharc_raw': raw}
+    return write_mod(tmp, doc, name + '.elemod')
+
+
+def test_raw_sharc_objects_tables_and_relocated_patches_link_across_mods():
+    """A relocatable object the linker places in the owned L2, a list and an indexed table, rows from
+    another mod with a symbol of its own object in them, and a patch whose jump names a symbol: each
+    lands with the address the linker chose. A row given twice, or a name no mod defines, is refused."""
+    from elekloader import sharc
+    old = stock_dsp(RAW_PATCH, 6)
+    txt = lambda n: {'name': 'text', 'kind': 'text', 'align': 8, 'hex': '00' * n}
+    a = {'objects': [{'name': 'a', 'sections': [txt(16)],
+                      'symbols': [{'name': 'a_fn', 'section': 'text', 'value': 3, 'global': True}], 'relocs': []}],
+         'tables': {'t_list': {'kind': 'list', 'row': 8, 'max': 4, 'end': '00' * 8},
+                    't_ix': {'kind': 'indexed', 'row': 4, 'rows': 4, 'default': [['hex', 'eeeeeeee']]}},
+         'patches': [{'addr': '0x%08x' % RAW_PATCH, 'stock': old.hex(), 'new': '3e0600000000',
+                      'relocs': [[0, 'sharc.abs24', 'sym:a_fn', 0]]}]}
+    b = {'objects': [{'name': 'b', 'sections': [txt(12), {'name': 'd', 'kind': 'data', 'align': 4, 'hex': '11223344'},
+                                                {'name': 'z', 'kind': 'bss', 'align': 4, 'size': 64}],
+                      'symbols': [{'name': 'b_fn', 'section': 'text', 'value': 0, 'global': True},
+                                  {'name': 'b_data', 'section': 'd', 'value': 0, 'global': True}],
+                      'relocs': [{'section': 'text', 'offset': 0, 'type': 'sharc.abs24', 'symbol': 'a_fn', 'addend': 0},
+                                 {'section': 'text', 'offset': 3, 'type': 'sharc.abs32', 'symbol': 'b_data', 'addend': 0}]}],
+         'contribute': [{'to': 't_list', 'parts': [['hex', '07000000' + '00000000']],
+                         'relocs': [[4, 'le32', 'sym:b_fn', 0]]},
+                        {'to': 't_ix', 'index': 2, 'parts': [['hex', '01020304']]}]}
+    with tempfile.TemporaryDirectory() as tmp:
+        core = built(os.path.join('mods', 'core-dt2'), tmp)
+        ma, mb = raw_doc_mod(tmp, core, 'raw-a', a), raw_doc_mod(tmp, core, 'raw-b', b)
+        outputs, man = patch.build(SYX, [core, ma, mb], version='DT14', log=lambda *x: None)
+        dup = raw_doc_mod(tmp, core, 'raw-c', {'contribute': [{'to': 't_ix', 'index': 2, 'parts': [['hex', '00' * 4]]}]})
+        expect(lambda: patch.build(SYX, [core, ma, mb, dup], version='DT14', log=lambda *x: None),
+               'both give row 2')
+        lost = raw_doc_mod(tmp, core, 'raw-d', {'patches': [{'addr': '0x%08x' % RAW_PATCH, 'stock': old.hex(),
+                                                             'new': '3e0600000000',
+                                                             'relocs': [[0, 'sharc.abs24', 'sym:nobody', 0]]}]})
+        expect(lambda: patch.build(SYX, [core, lost], version='DT14', log=lambda *x: None),
+               'defined by no mod')
+    recs = sharc.parse(formats.parse(outputs['syx'], DEV).section(REL.sharc['section']), REL.sharc)
+    lo = REL.sharc['owned_ranges'][0][0]
+    new = {r.target: r.raw[16:] for r in recs if r.flags == sharc.LOAD and r.target >= lo}
+    a_at = (lo + 7) // 8 * 8                                    # a's object: the first free, 8-aligned
+    a_fn = 0xb80000 + (a_at - 0x20000000) // 2 + 3
+    assert new[a_at] == bytes(16)
+    b_at = a_at + 16                                            # then b's: text, data (bss reserved)
+    blob = new[b_at]
+    assert blob[2] == a_fn >> 16 and blob[4:6] == (a_fn & 0xffff).to_bytes(2, 'little')
+    d_at = b_at + 12                                            # the data at its own 4-byte alignment
+    assert blob[12:16] == bytes.fromhex('11223344')
+    assert int.from_bytes(blob[8:10], 'little') << 16 | int.from_bytes(blob[10:12], 'little') == d_at
+    lst = b_at + 12 + 4 + 64                                    # then the tables, by declaring mod
+    b_fn = 0xb80000 + (b_at - 0x20000000) // 2
+    assert new[lst] == bytes.fromhex('07000000') + b_fn.to_bytes(4, 'little') + bytes(8)   # the rows, the end
+    ix = lst + 8 * 4 + 8
+    assert new[ix] == bytes.fromhex('eeeeeeee' * 2 + '01020304' + 'eeeeeeee')
+    at = [r for r in recs if r.flags == sharc.LOAD and r.target <= RAW_PATCH < r.target + r.count][0]
+    got = at.raw[16 + RAW_PATCH - at.target:16 + RAW_PATCH - at.target + 6]
+    assert got[2] == a_fn >> 16 and got[4:6] == (a_fn & 0xffff).to_bytes(2, 'little')
+
+
 # ---- the flash: what the firmware reads and writes there (docs/DEVICES.md) ------------------
 
 def calls_to(img, target):

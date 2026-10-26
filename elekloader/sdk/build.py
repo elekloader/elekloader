@@ -296,6 +296,29 @@ def build(mdir, stock_path, out_dir=None, extra=None):
             raw_doc = json.loads(raw_raw)
         except (OSError, ValueError) as e:
             raise BuildError('sharc_raw: %s' % e) from e
+        objs = []
+        for ob in raw_doc.get('objects', []):   # {"dko": "file.dko.json", "name", "externs", "rename"}:
+            if isinstance(ob, dict) and 'dko' in ob:    # a digikit object from the mod folder
+                dp = os.path.realpath(os.path.join(root, ob['dko']))
+                if os.path.commonpath((root, dp)) != root:
+                    raise BuildError('sharc_raw: the object %s escapes the mod folder' % ob['dko'])
+                try:
+                    with open(dp, 'rb') as fh:
+                        dko = json.loads(fh.read())
+                except (OSError, ValueError) as e:
+                    raise BuildError('sharc_raw object: %s' % e) from e
+                if dko.get('arch') != 'sharc' or dko.get('format') != 1:
+                    raise BuildError('sharc_raw: %s is not a SHARC object' % ob['dko'])
+                ren = ob.get('rename', {})
+                syms = [x for x in dko['symbols'] if x.get('section') is not None]
+                syms += [{'name': k, 'section': None, 'abs': int(v, 16) if isinstance(v, str) else v,
+                          'global': False} for k, v in ob.get('externs', {}).items()]
+                ob = {'name': ob.get('name', os.path.basename(ob['dko'])), 'sections': dko['sections'],
+                      'symbols': syms,
+                      'relocs': [dict(r, symbol=ren.get(r['symbol'], r['symbol'])) for r in dko['relocs']]}
+            objs.append(ob)
+        if objs:
+            raw_doc = dict(raw_doc, objects=objs)
     image = formats.main_image(stock, dev)
     if sha(image) != rel.main_sha256:
         raise BuildError('the stock main OS is not the known image')
