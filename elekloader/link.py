@@ -1095,6 +1095,21 @@ def link(mods, image, lock=None, *, sharc_stream=None):
     if new_lock is not None:
         img += store.trailer(new_lock)
     bad = _copied_rules(order, bytes(img), dev)
+    if dev.isa == 'coldfire':
+        # ColdFire stops with an address error on an odd jump target (an emulator may not): a jsr or jmp
+        # abs.l in the mods' code, in a site or in the RAM image, must name an even address
+        code = [(s['addr'], bytes(img[s['addr'] - dev.main_load:s['addr'] - dev.main_load + s['len']]),
+                 '%s site 0x%08x' % (m.label(), s['addr'])) for m in order for s in m.sites if s['kind'] == 'code']
+        code += [(base[(m.id, '.run')], bytes(ddr[base[(m.id, '.run')] - ddr_base:
+                                                  base[(m.id, '.run')] - ddr_base + m.size('.run')]),
+                  '%s .run' % m.label()) for m in order if m.size('.run')]
+        for at, data, what in code:
+            for i in range(0, len(data) - 5, 2):
+                if data[i:i + 2] in (b'\x4e\xb9', b'\x4e\xf9'):
+                    t = int.from_bytes(data[i + 2:i + 6], 'big')
+                    if t % 2 and ddr_base <= t < bss_end:
+                        bad.append('%s: a jsr/jmp at 0x%08x goes to the odd address 0x%08x (align the code: '
+                                   '.balign 2 at the start of each .run section)' % (what, at + i, t))
     for m in order:
         for s in m.sites:
             if s['kind'] == 'code':
