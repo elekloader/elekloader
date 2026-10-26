@@ -475,13 +475,6 @@
       "on_unit": "Tested on an Octatrack MKII (3 Oct 2026): it boots and works, in one build with the other mods tested that day."
     },
     {
-      "repo": "irpina/octabam2elemod", "tag": "v1.0", "file": "octabam-synth-363861e.elemod",
-      "device": "octatrack", "needs_core": "0.1",
-      "sha256": "6d5b9ff2a9f2d957fea17b556415e76d7b8ebbc39a2f8f720f4273e4eba72a43",
-      "summary": "A FLEX track with an FMSYNTH* sample plays a two-operator FM voice.",
-      "on_unit": "Tested on an Octatrack MKII (3 Oct 2026): it boots and works, in one build with the other mods tested that day."
-    },
-    {
       "repo": "irpina/octabam2elemod", "tag": "v1.0", "file": "octabam-quantizer-363861e.elemod",
       "device": "octatrack", "needs_core": "0.1",
       "sha256": "cabc7e126796ab3bd4574e78ab9c0ea69031128278f95a2f8b03e0d6e655f1b6",
