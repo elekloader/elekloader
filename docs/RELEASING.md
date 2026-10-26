@@ -63,6 +63,12 @@ where the stock files are, and only the cores are uploaded.
 A pre-release is never the latest, so the apps and the page's own cores
 stay the latest release's.
 
+Tick **pre-release** when publishing one (`gh release create --prerelease`).
+A full release without core files becomes the latest, and then pages and
+kit-build stop with "no assets match the file pattern" until it is a
+pre-release again and the last full release is the latest
+(`gh release edit vX.Y.Z --latest`). kit-v0.6.0 and kit-v0.7.0 both did this.
+
 - **The kit alone (`kit-vX.Y.Z`):** kit-build builds the kit and the
   catalog with the latest release's cores. The version is still
   elekloader's at that tag, so a second kit pre-release needs a new version.
