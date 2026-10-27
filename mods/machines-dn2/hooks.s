@@ -301,8 +301,15 @@ dn2_filter_reader:
     jmp FILTER_READER_EPILOGUE
 
 | The FLTR page's curve dispatch: stock types keep their curves; others draw a custom filter's own.
+| D4 is the saved ID: a missing filter's becomes MULTI-MODE, whose curve it then draws.
     .globl dn2_filter_curve
 dn2_filter_curve:
+    SAVE
+    move.l %d4,-(%sp)
+    jsr dn2_filter_dsp_type
+    addq.l #4,%sp
+    move.l %d0,%d4
+    RESTORE
     moveq #5,%d0
     cmp.l %d4,%d0
     bcs.s 1f

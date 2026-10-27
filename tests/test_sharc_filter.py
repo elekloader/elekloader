@@ -202,8 +202,15 @@ class PairLinkTests(unittest.TestCase):
         adapter = bytes.fromhex(json.loads((Path(__file__).resolve().parents[1]
                                             / 'elekloader/sdk/include/digitone-mk2/filter-bridge.json').read_text())['hex'])
         self.assertTrue(0 < offset < PROFILE['filter_adapter_bytes'] - PROFILE['code_guard_bytes'])
-        jump = bytes.fromhex('3e06') + (stock_arm >> 16).to_bytes(2, 'little') + (stock_arm & 0xffff).to_bytes(2, 'little')
-        self.assertIn(jump, adapter[offset:offset + 80])  # JUMP to the arm the stock table named
+        def word(value):  # a 32-bit operand: high half first, each half little-endian
+            return (value >> 16).to_bytes(2, 'little') + (value & 0xffff).to_bytes(2, 'little')
+        jump = adapter.find(bytes.fromhex('3e06') + word(stock_arm), offset)
+        self.assertTrue(offset < jump < offset + 80)  # JUMP to the arm the stock table named
+        # Before it: ASTATX kept, the capture arrays' base loaded (the stores), ASTATX back.
+        at = offset
+        for address in (0x20097d38, 0x20097d40, 0x20097d38):
+            at = adapter.find(word(address), at + 1, jump)
+            self.assertNotEqual(at, -1, hex(address))
 
     def test_changed_filter_code_links_without_an_allowlist_update(self):
         doc = copy.deepcopy(self.mods['filter-6'].doc)

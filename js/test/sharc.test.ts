@@ -5,7 +5,7 @@ import { test } from 'node:test'
 import { sha } from '../src/bytes.ts'
 import { DIGITONE_MK2, targetOf } from '../src/devices.ts'
 import { ModError } from '../src/elemod.ts'
-import { Mod2, check } from '../src/link.ts'
+import { Mod2, check, link } from '../src/link.ts'
 import * as formats from '../src/formats.ts'
 import * as sharc from '../src/sharc.ts'
 
@@ -254,6 +254,27 @@ test('DN2 filter G: a valid one links and an invalid one is refused', () => {
   assert.deepEqual(check([core, mod(null, 0, false)], image), [])
   for (const [label, def] of [['MODE', 128], ['TOOWIDE', 1], ['', 1], ['M\tX', 1], [null, 1]] as const)
     assert.deepEqual(check([core, mod(label, def)], image), [refusal], `${label} ${def}`)
+})
+
+test('a DN2 filter build sends the filter setup table to the capture entry', { skip: !process.env.ELEKLOADER_DN2_SYX }, async () => {
+  const [parsed, device, release] = await formats.load(readFileSync(process.env.ELEKLOADER_DN2_SYX!))
+  const image = formats.mainImage(parsed, device), stream = parsed.section(profile.section), target = targetOf(device, release)
+  const core = new Mod2({ elemod: 2, id: 'core', version: '0.2', target,
+    sections: { '.boot': { align: 4, parts: [['hex', '4e75']] } },
+    collections: { mk2_voice_synths: { entry: 4 }, mk2_voice_filters: { entry: 4 } } }, 'core')
+  const machine = (kind: 'voice' | 'filter') => new Mod2({ elemod: 2, id: kind, version: '0.1', target,
+    sections: { '.run': { align: 4, parts: [['hex', '00000008' + '00'.repeat(20)]] } },
+    symbols: { descriptor: ['.run', 0] },
+    contribute: [{ to: profile[`${kind}Table`]!, data: '00000000', relocs: [[0, 'abs32', 'sym:descriptor', 0]] }],
+    sharc: machineArtifact(kind, 8) }, kind)
+  const [site, stock, capture] = profile.filterCapture!
+  const entry = (decoded: Uint8Array) => {
+    const r = sharc.parse(decoded, profile).find(r => r.flags === sharc.LOAD && r.target <= site && site + 4 <= r.target + r.count)!
+    return Buffer.from(r.raw.subarray(16 + site - r.target, 20 + site - r.target)).toString('hex')
+  }
+  assert.equal(entry(stream), stock)
+  assert.equal(entry(link([core, machine('filter')], image, null, stream).sharcStream!), capture)
+  assert.equal(entry(link([core, machine('voice')], image, null, stream).sharcStream!), stock)
 })
 
 test('DN2 combines one synth and one filter with matching independent identities', () => {

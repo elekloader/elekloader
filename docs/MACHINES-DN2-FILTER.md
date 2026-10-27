@@ -69,7 +69,8 @@ G's as the page reads the others (`0x4006538e`). Fill one entry
 per graph column, left to right, with 0 (bottom) to 16 (top), or `0xff`
 for no dot; the core draws values above 16 at the top and nothing outside
 the graph (screen x 21..71, y 40..56). It hooks the page's curve dispatch
-at `0x4006eca0`, which stock filter types pass through unchanged. Keep it
+at `0x4006eca0`, which stock filter types pass through unchanged; a missing
+filter draws MULTI-MODE's curve, its fallback. Keep it
 short: it runs on every redraw of the page.
 
 G is an `mk2_param`: a label of 1..5 printable ASCII characters, shown in
