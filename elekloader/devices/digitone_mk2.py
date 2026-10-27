@@ -84,12 +84,34 @@ DEVICE = Device(
                 # Bounded L2 mod reservation; not a general free-memory map.
                 'l2_abi': 'dn2-master-mono32-l2-v1',
                 'l2_app_range': (0x20090000, 0x20098000),
+                'voice_abi': 'dn2-voice-mono32-l2-v1',
+                'voice_range': (0x20090000, 0x20094000),
+                'voice_table': 'mk2_voice_synths',
+                'voice_adapter_sha256': '11cb0abb8a60cd9e97253ff7a8c063b90bd70f110a1cee95c52c98a98dbbcef1',
+                'voice_adapter_bytes': 2048,
+                'voice_state_bytes': 1024,
+                'voice_binding_offset': 15872,
+                'voice_stack_max': 128,
+                'voice_hook': (0x20004a36, '8715ffffeeff', '3e06bc000080'),
+                'filter_abi': 'dn2-filter-mono32-l2-v1',
+                'filter_range': (0x20094000, 0x20098000),
+                'filter_table': 'mk2_voice_filters',
+                'filter_g_at': 16,              # mk2_filter's g (mk2/machines.h)
+                'filter_adapter_sha256': '25ecf301d2dfc322b5311afa58cd00f89316f0afe7df66a45e62c0aca590538c',
+                'filter_adapter_bytes': 2048,
+                'filter_state_bytes': 1024,
+                'filter_binding_offset': 15872,
+                'filter_stack_max': 20,
+                'filter_hook': (0x28392b0e, '140f5280c0db', '3e06bc0000a0'),
+                # The filter setup table's internal type 0 entry, sent to the adapter's capture entry.
+                'filter_capture': (0x8052dba4, '7e921c00', '2aa3bc00'),
                 'core_range': (0x282dd600, 0x282dda00),
                 'stack_max': 544,
                 'code_guard_bytes': 64,
                 'keyed_pitch_table': (920, '314d5900969c5e00d23c6400b1326a004c837000073477009b4a7e0015cd8500e1c18d00c92f9600031e9f002e94a800'),
                 'owned_ranges': ((0x282dd600, 0x282dde00), (0x20090000, 0x20098000)),
-                'patch_ranges': ((0x2838489a, 0x283848a0),),
+                'patch_ranges': ((0x2838489a, 0x283848a0), (0x20004a36, 0x20004a3c),
+                                 (0x28392b0e, 0x28392b14), (0x8052dba4, 0x8052dba8)),
                 'active_keyed_core': {'segments': ((12, 'code', 'af2f375dc58a8ccd4b8abd89b1fb526441baa6fb5da9266c2b664e69d90fc829'),),
                                       'zero': ((1008, 16),),
                                       'entries': {'hook_offset_bytes': 12}, 'stack_bytes': 116},
@@ -109,6 +131,9 @@ DEVICE = Device(
         'ddr': (0x47F00000, 0x47F40000),          # above the DMA buffers, below the boot stack
     },
     ddr=(0x47F00000, 0x47F40000),
+    slot_claims=(('mk2_voice_synths', 0, 32, 'mk2-synth'),  # stable synth IDs
+                 ('mk2_voice_filters', 0, 32, 'mk2-filter'),
+                 ('mk2_voice_pages', 0, 32, 'mk2-pages')),   # one pages entry per synth ID
     recovery=('hold FUNC while powering on for the STARTUP menu, press TRIG 4 (OS UPGRADE), '
               'then send the stock .syx over MIDI (not USB)'),
     toolchain={

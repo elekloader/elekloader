@@ -6,8 +6,6 @@ Needs the stock files, which never go in the repo, named by environment
 variables; a test whose input is missing is skipped, not passed:
   ELEKLOADER_DN2_SYX   Digitone_II_OS1.12.syx
   ELEKLOADER_DN2_ZIP   Digitone_II_OS1.12_dist.zip (Elektron's download)
-  ELEKLOADER_DN2_CORE_01  historical core-dn2 0.1 .elemod (compatibility)
-  ELEKLOADER_DN2_DIGIHEALTH  existing DigiHealth .elemod (compatibility)
 """
 import dataclasses
 import hashlib
@@ -26,8 +24,6 @@ from elekloader.elemod import sha                                   # noqa: E402
 
 SYX = os.environ.get('ELEKLOADER_DN2_SYX', '')
 ZIP = os.environ.get('ELEKLOADER_DN2_ZIP', '')
-CORE_01 = os.environ.get('ELEKLOADER_DN2_CORE_01', '')
-DIGIHEALTH = os.environ.get('ELEKLOADER_DN2_DIGIHEALTH', '')
 DEV = [d for d in devices.devices() if d.key == 'digitone-mk2'][0]
 REL = DEV.releases['1.12']
 DT2 = [d for d in devices.devices() if d.key == 'digitakt-mk2'][0]
@@ -299,7 +295,7 @@ def built(moddir, tmp):
     return sdkbuild.build(os.path.join(os.path.dirname(HERE), moddir), SYX, tmp)[0]
 
 
-# core's sites (core-dn2 0.1): boot, UI events, menu builders, panel input/clock and SysEx observer
+# core's sites: boot, UI events, menu builders, panel input/clock and SysEx observer
 CORE_SITES = ((0x40000538, '4eb9400019b0'), (0x4002e464, '4eb94011d5d4'),
               (0x4002e4ca, '4eb94011d60a'), (0x4002f20c, '4eb94002c5c8'),
               (0x4002f256, '4eb94002c55c'), (0x4009ff88, '205248780002'),
@@ -486,71 +482,6 @@ def test_hooks_check_links_with_core():
                'settings:HOOK TEST')
 
 
-def test_core_0_2_preserves_the_0_1_control_contract():
-    """0.2 adds its dormant SHARC bridge; every 0.1 control-side byte,
-    address, table and reservation stays the same."""
-    old = json.loads(need(CORE_01, 'ELEKLOADER_DN2_CORE_01'))
-    with tempfile.TemporaryDirectory() as tmp:
-        with open(built(os.path.join('mods', 'core-dn2'), tmp)) as fh:
-            new = json.load(fh)
-    assert old['version'] == '0.1' and new['version'] == '0.2'
-    for key in ('target', 'sites', 'sections', 'symbols', 'imports', 'exports',
-                'collections', 'contribute', 'relocs', 'resources', 'copied', 'weak'):
-        assert new[key] == old[key], key
-    assert 'sharc' not in old and new['sharc']['entries'] is not None
-
-
-def check_control_firmware_identical(old, new, mods):
-    """Keep the version label equal so only core selection can affect bytes."""
-    outputs = []
-    for core in (old, new):
-        output, _man = patch.build(SYX, [core] + list(mods), version='CP02', log=lambda *a: None)
-        parsed = formats.parse(output['syx'], DEV)
-        assert parsed.stored[7] == stock()[0].stored[7]
-        outputs.append(output)
-    assert outputs[0] == outputs[1]
-
-
-def test_core_0_2_keeps_existing_control_firmware_identical():
-    need(CORE_01, 'ELEKLOADER_DN2_CORE_01')
-    with tempfile.TemporaryDirectory() as tmp:
-        core = built(os.path.join('mods', 'core-dn2'), tmp)
-        check_control_firmware_identical(CORE_01, core, [])
-        for example in ('hello-marker-dn2', 'hooks-check-dn2'):
-            mod = built(os.path.join('examples', example), tmp)
-            check_control_firmware_identical(CORE_01, core, [mod])
-
-
-def test_core_0_2_keeps_existing_digihealth_firmware_identical():
-    need(CORE_01, 'ELEKLOADER_DN2_CORE_01')
-    need(DIGIHEALTH, 'ELEKLOADER_DN2_DIGIHEALTH')
-    with tempfile.TemporaryDirectory() as tmp:
-        core = built(os.path.join('mods', 'core-dn2'), tmp)
-        check_control_firmware_identical(CORE_01, core, [DIGIHEALTH])
-
-
-def test_sharc_examples_require_and_select_core_0_2():
-    """Both published examples refuse 0.1, build with 0.2, and choose it
-    in the GUI regardless of discovery order or an already selected 0.1."""
-    from elekloader import gui
-    need(CORE_01, 'ELEKLOADER_DN2_CORE_01')
-    with tempfile.TemporaryDirectory() as tmp:
-        core = built(os.path.join('mods', 'core-dn2'), tmp)
-        model = gui.LoaderModel(SYX, library=tmp, settings=os.path.join(tmp, 'settings.json'))
-        for example in ('sharc-sine', 'sharc-sine-asm'):
-            app = built(os.path.join('examples', example), tmp)
-            assert elemod.load_any(app).needs_core == '0.2'
-            expect(lambda: patch.build(SYX, [CORE_01, app], log=lambda *a: None),
-                   'needs core 0.2 or newer, and this build has core 0.1')
-            outputs, _man = patch.build(SYX, [core, app], version='SC02', log=lambda *a: None)
-            assert formats.parse(outputs['syx'], DEV).stored[7] != stock()[0].stored[7]
-            for order in ((CORE_01, core, app), (app, core, CORE_01)):
-                descs = {p: model.describe(p) for p in order}
-                assert all(d['fits'] and 'error' not in d for d in descs.values())
-                assert gui.with_core(descs, {app}) == {app, core}
-                assert gui.with_core(descs, {app, CORE_01}) == {app, core}
-
-
 def test_the_window_decodes_section_7_only_for_a_sharc_build():
     """Choosing the stock file leaves the DSP section packed; the first
     build with a SHARC mod decodes it, once, and it is stock's."""
@@ -644,7 +575,7 @@ def test_the_version_the_unit_reports_is_the_containers():
 
 
 def test_remote_input_uses_the_stock_panel_queue_and_periodic_callback():
-    """Core 0.1: addresses follow producers and consumer, not nearby globals.
+    """Input addresses follow producers and consumer, not nearby globals.
     The panel's queue pointer cell is not the queue object used for bounds.
     PIT2's callback advances the separate monotonic clock; DTIM0 stays off.
     """

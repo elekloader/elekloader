@@ -21,7 +21,7 @@ file on your own machine, and you flash it the way you flash any OS update.
 | Digitakt (mk1) | 1.53, 1.54 | supported |
 | Digitakt II | 1.17 | experimental: whole builds (format-1 mods) and linkable mods with its own core (the hook bus's tick, draw, key and encoder events), sealed as the unit checks them; boots in digikit's emulator; core with a key-swap mod works on a unit (Transfer over USB) |
 | Digitone (mk1) and Digitone Keys | 1.43, 1.44 | supported |
-| Digitone II | 1.12 | experimental: whole builds, linkable mods, and SHARC mods (one mod's code on the DSP, at the master output, in mono); UI events and remote input checked on a unit, and sine variants with the same DSP bridge and layout ran ten-minute note sweeps and limited project/effects checks there ([device evidence](docs/DEVICES.md#the-digitone-ii-112), [DSP evidence and limits](docs/SHARC-DN2.md)) |
+| Digitone II | 1.12 | experimental: whole builds, linkable mods, bounded SHARC DSP code and selectable synth/filter mods through the [mk2 machine interface](docs/MACHINES-DN2.md); [build instructions and limits](docs/DEVICES.md#the-digitone-ii-112) |
 | Octatrack (MKI and MKII) | 1.40C | supported: whole builds (format-1 mods); linkable mods with its own core: boots on an MKII, not yet run on an MKI |
 | Model:Cycles, Model:Samples | 1.13 | supported: linkable mods with their own core (the hook bus's tick, draw, key and encoder events); builds work on both units (Transfer over USB) |
 | Analog Rytm MKII | 1.74 | supported: linkable mods with its own core (the hook bus's tick, draw, key, encoder, SETTINGS and render events); builds with the core work on a unit (Transfer over USB) |

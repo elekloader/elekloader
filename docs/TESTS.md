@@ -11,6 +11,23 @@ files never go in this repository.
 `ELEKLOADER_DN2_SYX` they check the real stock file too, and with
 `ELEKLOADER_CROSS` they build core with its bridge. The toolchain test needs
 Git, and skips without it.
+The same command checks the DN2 machine registry. The
+[external C example](https://github.com/simonjohansson/digitone-2-mod-hack)
+checks its producer and kernels with `mise run test`.
+With `ELEKLOADER_DN2_SYX`, `ELEKLOADER_CROSS` and `ELEKLOADER_CF_CALL` set
+to DigiKit's `cf_call` executable, the registry suite also executes the
+compiled readers: parameter lookup maps a custom filter to its host type,
+LOWPASS 4, identity reads keep saved IDs, and registers and the
+stack are preserved. It also boots a build with a paged SHARC synth and
+reads its pages and rows through the stock accessors, and one with a full
+40-knob synth and a filter with G, whose row must follow the synth's and
+leave the stock filters' slot 66 alone. With DigiKit
+(`ELEKLOADER_DIGIKIT`, its `ELEKLOADER_DIGI_EMUD` and the ready inputs in
+`ELEKLOADER_DN2_EMU_READY`), `test_dn2_filter_capture.py` plays stock
+LOWPASS 4 and a custom filter side by side in the coupled emulator, with the
+filter envelope and an LFO moving the cutoff: the custom voice's captured
+cutoff and resonance must equal the stock voice's in every block, and its
+input must carry the G that CC 18 set.
 
 ```bash
 python tests/test_units.py        # includes SHARC; missing optional inputs are reported as skips
@@ -28,29 +45,14 @@ ELEKLOADER_AR2_SYX=Analog-Rytm_MKII_OS1.74.syx python tests/test_rytm_mk2.py   #
 ELEKLOADER_A4_SYX=Analog-Four_MKII_OS1.56.syx python tests/test_analog_four_mk2.py
 ELEKLOADER_DN2_SYX=Digitone_II_OS1.12.syx ELEKLOADER_DN2_ZIP=Digitone_II_OS1.12_dist.zip python tests/test_digitone2.py
 ELEKLOADER_MC_SYX=Model_Cycles_OS1.13.syx python tests/test_model_cycles.py   # core-mc 0.2 against 0.1, its exports
+ELEKLOADER_DN2_SYX=... ELEKLOADER_CROSS=... ELEKLOADER_DIGIKIT=... ELEKLOADER_DIGI_EMUD=... ELEKLOADER_DN2_EMU_READY=... python tests/test_dn2_filter_capture.py
 ELEKLOADER_CATALOG_DIR=folder/of/catalog/files ELEKLOADER_STOCK=... python tests/test_catalog_link.py   # the catalog against core 3.0
 ELEKLOADER_STOCK=... ELEKLOADER_STOCK_154=... ELEKLOADER_OT_SYX=... ELEKLOADER_MODS=... python tests/test_gui.py   # the window, hidden (Tk)
 node tests/test_web.mjs build/site   # the web page's engine, in Pyodide (packaging/build_web.py first)
 ```
 
-Four tests in the Digitone II suite compare with core-dn2 0.1. Give them a
-core-dn2 0.1 `.elemod` in `ELEKLOADER_DN2_CORE_01`, and a DN2 DigiHealth
-`.elemod` in `ELEKLOADER_DN2_DIGIHEALTH`, with the stock files above:
-
-```bash
-ELEKLOADER_DN2_SYX=Digitone_II_OS1.12.syx \
-ELEKLOADER_DN2_ZIP=Digitone_II_OS1.12_dist.zip \
-ELEKLOADER_DN2_CORE_01=path/to/core-dn2-0.1.elemod \
-ELEKLOADER_DN2_DIGIHEALTH=path/to/digihealth.elemod \
-python tests/test_digitone2.py
-```
-
-They check that 0.2 keeps 0.1's control side, building the same firmware
-for mods without SHARC code, DigiHealth included, and that the SHARC
-examples pick core 0.2.
-All four need the 0.1 core, and the DigiHealth one needs that mod too; a
-missing file skips them. The suite builds the current core and examples
-with the ColdFire tools. Keep the `.elemod` files out of the repository.
+The Digitone II suite builds the current core and examples with the
+ColdFire tools. Keep all built `.elemod` files out of the repository.
 
 ## The refusal fixtures
 
