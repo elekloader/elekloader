@@ -1746,16 +1746,14 @@ entry opens one (below).
 
 ### Synth and filter machines (machines-dn2 0.1, Digitone II)
 
-The experimental `machines-dn2` companion adds external stock synth clones
-in **FUNC+SYN** on OS 1.12. A mod contributes a stable ID, stock synth type
-and names; its firmware hooks live in the companion. See
-[Digitone II synth clones](MACHINES-DN2.md) for the descriptor and build.
-This uses stock synthesis and pages; per-voice custom DSP is separate.
-
-A mod can also register a filter in the FLTR category, independently of
-its synth. Use the [track-synth contract](MACHINES-DN2-VOICE.md) or
-[filter contract](MACHINES-DN2-FILTER.md) for custom DSP, registration and
-missing-mod behavior. One custom synth and one custom filter can share a
+The experimental `machines-dn2` companion adds external synths in
+**FUNC+SYN** on OS 1.12, and filters in its FLTR category, independently of
+the synth. A mod contributes a stable ID and names, and its DSP code; the
+firmware hooks live in the companion, which shows the stock OS each custom
+machine as a fixed stock host type. See
+[Digitone II machines](MACHINES-DN2.md) for IDs, host types and missing
+mods, and the [track-synth contract](MACHINES-DN2-VOICE.md) or
+[filter contract](MACHINES-DN2-FILTER.md) for registration and custom DSP. One custom synth and one custom filter can share a
 build; their SDK helpers package the compiled code in separate regions.
 The producer's build handles compilation and placement. The external
 `digitone-2-mod-hack` example's `mise run build-c` builds SINE, LOWPASS and

@@ -523,7 +523,7 @@ addresses and bounds are checked against its own stock file.
 - **Machine registration.** The `machines-dn2` companion owns the native
   SYN/FLTR hooks. Mods use `mk2/machines.h` to register synths and filters
   with independent saved IDs. The external C workflow builds SINE and
-  LOWPASS with DigiHealth; see [synth clones](MACHINES-DN2.md) and
+  LOWPASS with DigiHealth; see [machines](MACHINES-DN2.md) and
   [filters](MACHINES-DN2-FILTER.md).
 - **Staging.** The bootstrap loader `0x80000596` reads section 3 from flash
   at the container offset plus `0x80000` to `0x40400000`. Its depacker

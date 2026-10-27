@@ -44,6 +44,13 @@ PROCESSOR p0 {OUTPUT($COMMAND_LINE_OUTPUT_FILE) SECTIONS {
         target = here.parents[1] / ('elekloader/sdk/include/digitone-mk2/' + kind + '-bridge.json')
         target.write_text(json.dumps({'offset_bytes': 0, 'kind': 'code', 'hex': code.hex()}, indent=1) + '\n')
         print(kind, 'adapter:', size, 'bytes; padded SHA-256:', hashlib.sha256(code).hexdigest())
+        symtab = next(s for s in sections if s[1] == 2)
+        names = sections[symtab[6]]
+        for at in range(symtab[4], symtab[4] + symtab[5], 16):
+            name, value = struct.unpack_from('<II', raw, at)
+            name = raw[names[4] + name:raw.index(b'\0', names[4] + name)].decode()
+            if name == 'dn2_filter_capture':
+                print(kind, 'capture entry: PC16', hex(value), 'at byte', 2 * value - start)  # symbols are PC16
 
 
 if __name__ == '__main__':

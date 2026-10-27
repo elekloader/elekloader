@@ -54,7 +54,7 @@ test('a machine claims its slot (machine:<n>) on the Analog Rytm MKII', () => {
 
 test('DN2 synth and filter claims use separate stable ID namespaces', () => {
   const dn = DIGITONE_MK2, r = dn.releases[0], image = new Uint8Array(r.mainLen)
-  const mod = (id: string, type: number, table = 'mk2_synths') => new Mod2({
+  const mod = (id: string, type: number, table = 'mk2_voice_synths') => new Mod2({
     elemod: 2, id, version: '1', target: targetOf(dn, r),
     sections: { '.run': { align: 4, parts: [['hex', type.toString(16).padStart(8, '0') + '00'.repeat(12)]] } },
     symbols: { m: ['.run', 0] },
@@ -64,10 +64,10 @@ test('DN2 synth and filter claims use separate stable ID namespaces', () => {
   assert.ok(check([mod('a', 5), mod('b', 5)], image).includes('a 1 and b 1 both claim mk2-synth:5'))
   assert.ok(!check([mod('a', 5), mod('b', 31)], image).some(p => p.includes('claim')))
   assert.deepEqual(mod('outside', 32).impliedNames(image), [])
-  assert.deepEqual(mod('filter', 6, 'mk2_filters').impliedNames(image), ['mk2-filter:6'])
-  assert.ok(check([mod('a', 6, 'mk2_filters'), mod('b', 6, 'mk2_filters')], image)
+  assert.deepEqual(mod('filter', 6, 'mk2_voice_filters').impliedNames(image), ['mk2-filter:6'])
+  assert.ok(check([mod('a', 6, 'mk2_voice_filters'), mod('b', 6, 'mk2_voice_filters')], image)
     .includes('a 1 and b 1 both claim mk2-filter:6'))
-  assert.ok(!check([mod('synth', 6), mod('filter', 6, 'mk2_filters')], image).some(p => p.includes('claim')))
+  assert.ok(!check([mod('synth', 6), mod('filter', 6, 'mk2_voice_filters')], image).some(p => p.includes('claim')))
   assert.deepEqual(mod('pages', 7, 'mk2_voice_pages').impliedNames(image), ['mk2-pages:7'])
   assert.ok(check([mod('a', 7, 'mk2_voice_pages'), mod('b', 7, 'mk2_voice_pages')], image)
     .includes('a 1 and b 1 both claim mk2-pages:7'))
@@ -84,12 +84,11 @@ test('DN2 machine bundles claim every pointer entry', () => {
     contribute: [{ to: table, data: '00000000'.repeat(slots.length),
       relocs: slots.map((_, n) => [n * 4, 'abs32', `sym:m${n}`, 0]) }],
   }, id)
-  for (const [clone, voice, prefix] of [['mk2_synths', 'mk2_voice_synths', 'mk2-synth'],
-    ['mk2_filters', 'mk2_voice_filters', 'mk2-filter']]) {
-    const bundle = mod('bundle', [6, 7], clone)
+  for (const [table, prefix] of [['mk2_voice_synths', 'mk2-synth'], ['mk2_voice_filters', 'mk2-filter']]) {
+    const bundle = mod('bundle', [6, 7], table)
     assert.deepEqual(bundle.impliedNames(image), [`${prefix}:6`, `${prefix}:7`])
-    assert(check([bundle, mod('custom', [7], voice)], image).includes(`bundle 1 and custom 1 both claim ${prefix}:7`))
-    assert(!check([mod('bundle', [6, 7], clone), mod('custom', [8], voice)], image).some(p => p.includes('claim')))
+    assert(check([bundle, mod('custom', [7], table)], image).includes(`bundle 1 and custom 1 both claim ${prefix}:7`))
+    assert(!check([mod('bundle', [6, 7], table), mod('custom', [8], table)], image).some(p => p.includes('claim')))
   }
 })
 

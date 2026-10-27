@@ -560,7 +560,7 @@ def test_dn2_synth_claims_its_stable_type():
     r = dn.releases['1.12']
     image = bytes(r.main_len)
 
-    def mod(i, slot, table='mk2_synths'):
+    def mod(i, slot, table='mk2_voice_synths'):
         return link.Mod2({'elemod': 2, 'id': i, 'version': '1', 'target': devices.target_of(dn, r),
                           'sections': {'.run': {'align': 4, 'parts': [['hex', '%08x' % slot + '00' * 12]]}},
                           'symbols': {'m': ['.run', 0]},
@@ -570,11 +570,11 @@ def test_dn2_synth_claims_its_stable_type():
     assert 'a 1 and b 1 both claim mk2-synth:5' in link.check([mod('a', 5), mod('b', 5)], image)
     assert not [p for p in link.check([mod('a', 5), mod('b', 31)], image) if 'claim' in p]
     assert mod('outside', 32).implied_names(image) == []
-    assert mod('filter', 6, 'mk2_filters').implied_names(image) == ['mk2-filter:6']
+    assert mod('filter', 6, 'mk2_voice_filters').implied_names(image) == ['mk2-filter:6']
     assert 'a 1 and b 1 both claim mk2-filter:6' in link.check(
-        [mod('a', 6, 'mk2_filters'), mod('b', 6, 'mk2_filters')], image)
+        [mod('a', 6, 'mk2_voice_filters'), mod('b', 6, 'mk2_voice_filters')], image)
     assert not [p for p in link.check(
-        [mod('synth', 6), mod('filter', 6, 'mk2_filters')], image) if 'claim' in p]
+        [mod('synth', 6), mod('filter', 6, 'mk2_voice_filters')], image) if 'claim' in p]
     assert mod('pages', 7, 'mk2_voice_pages').implied_names(image) == ['mk2-pages:7']
     assert 'a 1 and b 1 both claim mk2-pages:7' in link.check(
         [mod('a', 7, 'mk2_voice_pages'), mod('b', 7, 'mk2_voice_pages')], image)
@@ -596,14 +596,64 @@ def test_dn2_machine_bundles_claim_every_pointer_entry():
                                           'relocs': [[n * 4, 'abs32', 'sym:m%d' % n, 0]
                                                      for n in range(len(slots))]}]}, i)
 
-    for clone, voice, prefix in (('mk2_synths', 'mk2_voice_synths', 'mk2-synth'),
-                                ('mk2_filters', 'mk2_voice_filters', 'mk2-filter')):
-        bundle = mod('bundle', [6, 7], clone)
+    for table, prefix in (('mk2_voice_synths', 'mk2-synth'), ('mk2_voice_filters', 'mk2-filter')):
+        bundle = mod('bundle', [6, 7], table)
         assert bundle.implied_names(image) == [prefix + ':6', prefix + ':7']
-        problems = link.check([bundle, mod('custom', [7], voice)], image)
+        problems = link.check([bundle, mod('custom', [7], table)], image)
         assert 'bundle 1 and custom 1 both claim %s:7' % prefix in problems, problems
-        problems = link.check([mod('bundle', [6, 7], clone), mod('custom', [8], voice)], image)
+        problems = link.check([mod('bundle', [6, 7], table), mod('custom', [8], table)], image)
         assert not [p for p in problems if 'claim' in p], problems
+
+
+def test_dn2_machines_declares_only_custom_machine_tables():
+    """The old registration tables are gone: an entry there is refused as an undeclared table."""
+    dn = next(d for d in devices.devices() if d.key == 'digitone-mk2')
+    r = dn.releases['1.12']
+    image = bytes(r.main_len)
+    declared = json.load(open(os.path.join(os.path.dirname(HERE), 'mods/machines-dn2/mod.json')))['collections']
+    machines = link.Mod2({'elemod': 2, 'id': 'machines-dn2', 'version': '1', 'target': devices.target_of(dn, r),
+                          'sections': {}, 'collections': {c: {'entry': e} for c, e in declared.items()}},
+                         'machines-dn2')
+
+    def registration(table):
+        return link.Mod2({'elemod': 2, 'id': 'x', 'version': '1', 'target': devices.target_of(dn, r),
+                          'sections': {'.run': {'align': 4, 'parts': [['hex', '00000006' + '00' * 12]]}},
+                          'symbols': {'m': ['.run', 0]},
+                          'contribute': [{'to': table, 'data': '00000000',
+                                          'relocs': [[0, 'abs32', 'sym:m', 0]]}]}, 'x')
+    for table in ('mk2_synths', 'mk2_filters'):
+        assert 'x 1 adds to table %s, which no given mod declares' % table \
+            in link.check([machines, registration(table)], image)
+    for table in ('mk2_voice_synths', 'mk2_voice_filters'):
+        assert not [p for p in link.check([machines, registration(table)], image) if 'adds to table' in p]
+
+
+def test_dn2_filter_g_is_refused_unless_valid():
+    from elekloader.sdk.sharc import filter_artifact
+    dn = next(d for d in devices.devices() if d.key == 'digitone-mk2')
+    r = dn.releases['1.12']
+    target, image = devices.target_of(dn, r), bytes(r.main_len)
+    core = link.Mod2({'elemod': 2, 'id': 'core', 'version': '0.1', 'target': target,
+                      'sections': {'.boot': {'align': 4, 'parts': [['hex', '00000000']]}},
+                      'collections': {'mk2_voice_filters': {'entry': 4}}}, 'core')
+
+    def mod(label, default, g=True):
+        """The descriptor {8, name, label, curve, g} at 0, G {label, default} at 20 and its label at 28."""
+        text = '00000008' + '00' * 20 + '%08x' % default + (label or '').encode('latin1').hex() + '00'
+        return link.Mod2({'elemod': 2, 'id': 'g', 'version': '0.1', 'target': target,
+                          'sections': {'.run': {'align': 4, 'parts': [['hex', text]]}},
+                          'symbols': {'descriptor': ['.run', 0], 'g': ['.run', 20], 'label': ['.run', 28]},
+                          'relocs': ([['.run', 16, 'abs32', 'sym:g', 0]] if g else [])
+                          + ([['.run', 20, 'abs32', 'sym:label', 0]] if label is not None else []),
+                          'contribute': [{'to': 'mk2_voice_filters', 'data': '00000000',
+                                          'relocs': [[0, 'abs32', 'sym:descriptor', 0]]}],
+                          'sharc': filter_artifact(bytes(4), bytes(4), 0, 8, 12)}, 'g')
+    refusal = 'g 0.1: DN2 filter G needs a label of 1..5 printable ASCII characters and a default of 0..127'
+    for label, default in (('MODE', 0), ('HIGH5', 127)):
+        assert link.check([core, mod(label, default)], image) == []
+    assert link.check([core, mod(None, 0, g=False)], image) == []
+    for label, default in (('MODE', 128), ('TOOWIDE', 1), ('', 1), ('M\tX', 1), (None, 1)):
+        assert link.check([core, mod(label, default)], image) == [refusal], (label, default)
 
 
 def test_dn2_machine_ids_can_span_stored_parts():

@@ -3,7 +3,7 @@
  "version": "0.1",
  "license": "GPL-2.0-or-later",
  "title": "DN2 synth and filter machines",
- "description": "Native synth/filter clones and SHARC voice synths/filters in the Digitone II machine selector. SHARC synths may have their own SYN pages. Needs core 0.1.",
+ "description": "SHARC voice synths and filters in the Digitone II machine selector. SHARC synths may have their own SYN pages. Needs core 0.1.",
  "device": "digitone-mk2",
  "os": "1.12",
  "sources": [
@@ -59,7 +59,14 @@
   "T2_CONTINUE": "0x400c2586",
   "OS_MAIN": "0x40186fa2",
   "CC_CONTINUE": "0x400dc980",
-  "NRPN_CONTINUE": "0x400dca62"
+  "NRPN_CONTINUE": "0x400dca62",
+  "FRC8": "0x4006ec9a",
+  "FRC9": "0x4006efce",
+  "FRC10": "0x4006f006",
+  "PIXEL": "0x40113e70",
+  "SHOWN": "0x4006538e",
+  "CURVE_STOCK": "0x4006eca8",
+  "CURVE_SKIP": "0x4006ed3a"
  },
  "sites": [
   {
@@ -212,12 +219,6 @@
    "stock": "712800df6002",
    "op": "jmp",
    "target": "dn2_filter_reader"
-  },
-  {
-   "addr": "0x40036478",
-   "stock": "712800de4e75",
-   "op": "jmp",
-   "target": "dn2_synth_parameter_type"
   },
   {
    "addr": "0x4003649c",
@@ -593,378 +594,378 @@
    "addr": "0x400174d6",
    "stock": "0c8200000141",
    "op": "bytes",
-   "new": "0c8200000169",
+   "new": "0c820000016a",
    "kind": "code"
   },
   {
    "addr": "0x400365d0",
    "stock": "0c8100000141",
    "op": "bytes",
-   "new": "0c8100000169",
+   "new": "0c810000016a",
    "kind": "code"
   },
   {
    "addr": "0x400366aa",
    "stock": "0c8000000140",
    "op": "bytes",
-   "new": "0c8000000168",
+   "new": "0c8000000169",
    "kind": "code"
   },
   {
    "addr": "0x40036af4",
    "stock": "0c8400000140",
    "op": "bytes",
-   "new": "0c8400000168",
+   "new": "0c8400000169",
    "kind": "code"
   },
   {
    "addr": "0x40036bbc",
    "stock": "0c8200000140",
    "op": "bytes",
-   "new": "0c8200000168",
+   "new": "0c8200000169",
    "kind": "code"
   },
   {
    "addr": "0x400372de",
    "stock": "0c8000000141",
    "op": "bytes",
-   "new": "0c8000000169",
+   "new": "0c800000016a",
    "kind": "code"
   },
   {
    "addr": "0x40037540",
    "stock": "0c8000000141",
    "op": "bytes",
-   "new": "0c8000000169",
+   "new": "0c800000016a",
    "kind": "code"
   },
   {
    "addr": "0x400375e2",
    "stock": "0c8000000141",
    "op": "bytes",
-   "new": "0c8000000169",
+   "new": "0c800000016a",
    "kind": "code"
   },
   {
    "addr": "0x40037696",
    "stock": "0c8000000141",
    "op": "bytes",
-   "new": "0c8000000169",
+   "new": "0c800000016a",
    "kind": "code"
   },
   {
    "addr": "0x40037736",
    "stock": "0c8000000140",
    "op": "bytes",
-   "new": "0c8000000168",
+   "new": "0c8000000169",
    "kind": "code"
   },
   {
    "addr": "0x400379ec",
    "stock": "0c8200000140",
    "op": "bytes",
-   "new": "0c8200000168",
+   "new": "0c8200000169",
    "kind": "code"
   },
   {
    "addr": "0x40038c10",
    "stock": "0c8000000141",
    "op": "bytes",
-   "new": "0c8000000169",
+   "new": "0c800000016a",
    "kind": "code"
   },
   {
    "addr": "0x40038cb2",
    "stock": "0c8000000141",
    "op": "bytes",
-   "new": "0c8000000169",
+   "new": "0c800000016a",
    "kind": "code"
   },
   {
    "addr": "0x40038d5e",
    "stock": "0c8000000141",
    "op": "bytes",
-   "new": "0c8000000169",
+   "new": "0c800000016a",
    "kind": "code"
   },
   {
    "addr": "0x40038e2e",
    "stock": "0c8000000141",
    "op": "bytes",
-   "new": "0c8000000169",
+   "new": "0c800000016a",
    "kind": "code"
   },
   {
    "addr": "0x400397a6",
    "stock": "0c8200000140",
    "op": "bytes",
-   "new": "0c8200000168",
+   "new": "0c8200000169",
    "kind": "code"
   },
   {
    "addr": "0x40044828",
    "stock": "b3fc00000140",
    "op": "bytes",
-   "new": "b3fc00000168",
+   "new": "b3fc00000169",
    "kind": "code"
   },
   {
    "addr": "0x40062be8",
    "stock": "0c8300000141",
    "op": "bytes",
-   "new": "0c8300000169",
+   "new": "0c830000016a",
    "kind": "code"
   },
   {
    "addr": "0x40065ab8",
    "stock": "0c8200000141",
    "op": "bytes",
-   "new": "0c8200000169",
+   "new": "0c820000016a",
    "kind": "code"
   },
   {
    "addr": "0x400672de",
    "stock": "0c8300000140",
    "op": "bytes",
-   "new": "0c8300000168",
+   "new": "0c8300000169",
    "kind": "code"
   },
   {
    "addr": "0x400674d4",
    "stock": "0c8000000140",
    "op": "bytes",
-   "new": "0c8000000168",
+   "new": "0c8000000169",
    "kind": "code"
   },
   {
    "addr": "0x400676cc",
    "stock": "0c8200000140",
    "op": "bytes",
-   "new": "0c8200000168",
+   "new": "0c8200000169",
    "kind": "code"
   },
   {
    "addr": "0x400679c8",
    "stock": "0c8300000140",
    "op": "bytes",
-   "new": "0c8300000168",
+   "new": "0c8300000169",
    "kind": "code"
   },
   {
    "addr": "0x40068290",
    "stock": "0c8000000140",
    "op": "bytes",
-   "new": "0c8000000168",
+   "new": "0c8000000169",
    "kind": "code"
   },
   {
    "addr": "0x4006831e",
    "stock": "0c8200000141",
    "op": "bytes",
-   "new": "0c8200000169",
+   "new": "0c820000016a",
    "kind": "code"
   },
   {
    "addr": "0x4006e88a",
    "stock": "0c8200000141",
    "op": "bytes",
-   "new": "0c8200000169",
+   "new": "0c820000016a",
    "kind": "code"
   },
   {
    "addr": "0x4006eb9e",
    "stock": "bdfc00000141",
    "op": "bytes",
-   "new": "bdfc00000169",
+   "new": "bdfc0000016a",
    "kind": "code"
   },
   {
    "addr": "0x4006f6a6",
    "stock": "0c8300000141",
    "op": "bytes",
-   "new": "0c8300000169",
+   "new": "0c830000016a",
    "kind": "code"
   },
   {
    "addr": "0x400bd582",
    "stock": "0c8000000141",
    "op": "bytes",
-   "new": "0c8000000169",
+   "new": "0c800000016a",
    "kind": "code"
   },
   {
    "addr": "0x400c25a4",
    "stock": "0c8000000141",
    "op": "bytes",
-   "new": "0c8000000169",
+   "new": "0c800000016a",
    "kind": "code"
   },
   {
    "addr": "0x400c27c6",
    "stock": "0c8200000141",
    "op": "bytes",
-   "new": "0c8200000169",
+   "new": "0c820000016a",
    "kind": "code"
   },
   {
    "addr": "0x400d5a8a",
    "stock": "0c8200000141",
    "op": "bytes",
-   "new": "0c8200000169",
+   "new": "0c820000016a",
    "kind": "code"
   },
   {
    "addr": "0x400dbe2c",
    "stock": "0c8000000141",
    "op": "bytes",
-   "new": "0c8000000169",
+   "new": "0c800000016a",
    "kind": "code"
   },
   {
    "addr": "0x400dbe50",
    "stock": "0c8000000141",
    "op": "bytes",
-   "new": "0c8000000169",
+   "new": "0c800000016a",
    "kind": "code"
   },
   {
    "addr": "0x400dbe76",
    "stock": "0c8000000140",
    "op": "bytes",
-   "new": "0c8000000168",
+   "new": "0c8000000169",
    "kind": "code"
   },
   {
    "addr": "0x400dbee6",
    "stock": "0c8000000140",
    "op": "bytes",
-   "new": "0c8000000168",
+   "new": "0c8000000169",
    "kind": "code"
   },
   {
    "addr": "0x400dbf54",
    "stock": "0c8000000140",
    "op": "bytes",
-   "new": "0c8000000168",
+   "new": "0c8000000169",
    "kind": "code"
   },
   {
    "addr": "0x400dbfc6",
    "stock": "0c8000000141",
    "op": "bytes",
-   "new": "0c8000000169",
+   "new": "0c800000016a",
    "kind": "code"
   },
   {
    "addr": "0x400dbff2",
    "stock": "0c8000000141",
    "op": "bytes",
-   "new": "0c8000000169",
+   "new": "0c800000016a",
    "kind": "code"
   },
   {
    "addr": "0x400dc01e",
    "stock": "0c8000000141",
    "op": "bytes",
-   "new": "0c8000000169",
+   "new": "0c800000016a",
    "kind": "code"
   },
   {
    "addr": "0x400dc052",
    "stock": "0c8200000140",
    "op": "bytes",
-   "new": "0c8200000168",
+   "new": "0c8200000169",
    "kind": "code"
   },
   {
    "addr": "0x400dc0b6",
    "stock": "0c8000000141",
    "op": "bytes",
-   "new": "0c8000000169",
+   "new": "0c800000016a",
    "kind": "code"
   },
   {
    "addr": "0x400dc0ea",
    "stock": "0c8000000141",
    "op": "bytes",
-   "new": "0c8000000169",
+   "new": "0c800000016a",
    "kind": "code"
   },
   {
    "addr": "0x400dc124",
    "stock": "0c8000000141",
    "op": "bytes",
-   "new": "0c8000000169",
+   "new": "0c800000016a",
    "kind": "code"
   },
   {
    "addr": "0x400dc15a",
    "stock": "0c8100000141",
    "op": "bytes",
-   "new": "0c8100000169",
+   "new": "0c810000016a",
    "kind": "code"
   },
   {
    "addr": "0x400dc282",
    "stock": "0c8000000140",
    "op": "bytes",
-   "new": "0c8000000168",
+   "new": "0c8000000169",
    "kind": "code"
   },
   {
    "addr": "0x400dc380",
    "stock": "0c8000000140",
    "op": "bytes",
-   "new": "0c8000000168",
+   "new": "0c8000000169",
    "kind": "code"
   },
   {
    "addr": "0x400dc3e0",
    "stock": "0c8000000141",
    "op": "bytes",
-   "new": "0c8000000169",
+   "new": "0c800000016a",
    "kind": "code"
   },
   {
    "addr": "0x400dc40a",
    "stock": "0c8000000141",
    "op": "bytes",
-   "new": "0c8000000169",
+   "new": "0c800000016a",
    "kind": "code"
   },
   {
    "addr": "0x400dc42e",
    "stock": "0c8000000141",
    "op": "bytes",
-   "new": "0c8000000169",
+   "new": "0c800000016a",
    "kind": "code"
   },
   {
    "addr": "0x400dc452",
    "stock": "0c8000000141",
    "op": "bytes",
-   "new": "0c8000000169",
+   "new": "0c800000016a",
    "kind": "code"
   },
   {
    "addr": "0x400dc476",
    "stock": "0c8000000141",
    "op": "bytes",
-   "new": "0c8000000169",
+   "new": "0c800000016a",
    "kind": "code"
   },
   {
    "addr": "0x40105e38",
    "stock": "0c8200000141",
    "op": "bytes",
-   "new": "0c8200000169",
+   "new": "0c820000016a",
    "kind": "code"
   },
   {
    "addr": "0x4010784e",
    "stock": "bbfc00000140",
    "op": "bytes",
-   "new": "bbfc00000168",
+   "new": "bbfc00000169",
    "kind": "code"
   },
   {
@@ -978,12 +979,16 @@
    "stock": "4feffff448d7001c",
    "op": "jmp",
    "target": "dn2_nrpn_code"
+  },
+  {
+   "addr": "0x4006eca0",
+   "stock": "7005b08465000094",
+   "op": "jmp",
+   "target": "dn2_filter_curve"
   }
  ],
  "collections": {
-  "mk2_synths": 4,
   "mk2_voice_synths": 4,
-  "mk2_filters": 4,
   "mk2_voice_filters": 4,
   "mk2_voice_pages": 4
  },

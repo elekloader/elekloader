@@ -209,25 +209,64 @@ class Mod2:
     def _long(self, sec, off, image):
         """The big-endian long at `sec`+`off` of this mod's bytes, or None: in a section
         without bytes or under a relocation."""
+        raw = self._bytes(sec, off, 4, image)
+        return None if raw is None else struct.unpack('>I', raw)[0]
+
+    def _bytes(self, sec, off, size, image):
+        """The `size` bytes at `sec`+`off` of this mod's bytes, or None, as _long."""
         d = self.sections.get(sec)
-        if not d or 'parts' not in d or off < 0 or off + 4 > d['len']:
+        if not d or 'parts' not in d or off < 0 or off + size > d['len']:
             return None
-        if any(s == sec and o < off + 4 and off < o + RSIZE[t] for s, o, t, _g, _a in self.relocs):
+        if any(s == sec and o < off + size and off < o + RSIZE[t] for s, o, t, _g, _a in self.relocs):
             return None
         raw, at = bytearray(), 0
         for p in d['parts']:
             n = len(p[1]) if p[0] == 'hex' else p[2]
-            lo, hi = max(off, at), min(off + 4, at + n)
+            lo, hi = max(off, at), min(off + size, at + n)
             if lo < hi:
                 source, start = (p[1], lo - at) if p[0] == 'hex' else (image, p[1] - self.dev.main_load + lo - at)
                 chunk = source[start:start + hi - lo]
                 if len(chunk) != hi - lo:
                     return None
                 raw += chunk
-                if len(raw) == 4:
-                    return struct.unpack('>I', raw)[0]
+                if len(raw) == size:
+                    return bytes(raw)
             at += n
         return None
+
+    def _target(self, typ, tgt, add):
+        """Where an abs32 relocation points in this mod's bytes, as (section, offset), or None."""
+        if typ == 'abs32' and tgt.startswith('sym:') and tgt[4:] in self.symbols:
+            target, base = self.symbols[tgt[4:]]
+            return target, base + add
+        if typ == 'abs32' and tgt.startswith('sec:'):
+            return tgt[4:], add
+        return None
+
+    def _pointer(self, sec, off):
+        """Where the four-byte pointer at `sec`+`off` points in this mod's bytes, or None."""
+        return next((self._target(t, g, a) for s, o, t, g, a in self.relocs if s == sec and o == off), None)
+
+    def dn2_filter_g_ok(self, contribution, image):
+        """A DN2 filter descriptor's optional G (mk2/machines.h): NULL, or an mk2_param in this
+        mod's bytes with a label of 1..5 printable ASCII characters and a default of 0..127."""
+        at = self.rel.sharc['filter_g_at']
+        descriptor = next((self._target(t, g, a) for o, t, g, a in contribution['relocs'] if o == 0), None)
+        if descriptor is None:
+            return True                      # the registration checks refuse it
+        param = self._pointer(descriptor[0], descriptor[1] + at)
+        if param is None:
+            return self._long(descriptor[0], descriptor[1] + at, image) == 0
+        default, label = self._long(param[0], param[1] + 4, image), self._pointer(*param)
+        if default is None or default > 127 or label is None:
+            return False
+        for n in range(6):
+            c = self._bytes(label[0], label[1] + n, 1, image)
+            if c is None or c[0] and not 32 <= c[0] <= 126:
+                return False
+            if not c[0]:
+                return 1 <= n <= 5
+        return False
 
     def _reloc_ok(self, sec, off, typ, tgt):
         if sec not in self.sections or sec == '.bss':
@@ -351,10 +390,12 @@ def check(mods, image):
             expected = ['%s:%d' % (prefix, app.sharc['machine_id'])
                         for name, _at, _count, prefix in app.dev.slot_claims if name == table]
             if len(contributions) != 1 or len(contributions[0]['data']) != 4 \
-                    or not expected or app.implied_names(image, table) != expected \
-                    or any(name in app.implied_names(image, profile[kind + '_clone_table']) for name in expected):
+                    or not expected or app.implied_names(image, table) != expected:
                 bad.append('%s: SHARC %s machine_id must match its single native %s registration'
                            % (app.label(), kind, kind))
+            elif kind == 'filter' and not app.dn2_filter_g_ok(contributions[0], image):
+                bad.append('%s: DN2 filter G needs a label of 1..5 printable ASCII characters and '
+                           'a default of 0..127' % app.label())
             continue
         if app.sharc['entries'] is None:
             continue
@@ -567,8 +608,10 @@ def link(mods, image, lock=None, *, sharc_stream=None):
                 fills = [f for f in fills if f[0] != lo]
                 fills += [(lo, base + at - lo, 0), (base + at + 8, payload['owner'][1] - base - at - 8, 0)]
                 loads.append((base + at, binding))
-                site, old, new = rel.sharc[kind + '_hook']
-                patches.append((site, bytes.fromhex(old), bytes.fromhex(new)))
+                for hook in (kind + '_hook', kind + '_capture'):
+                    if hook in rel.sharc:
+                        site, old, new = rel.sharc[hook]
+                        patches.append((site, bytes.fromhex(old), bytes.fromhex(new)))
             elif payload['entries'] is not None:
                 bridge = core.sharc
                 def pc16(off):

@@ -163,6 +163,8 @@ external('check', '<>: DN2 <> registration requires a matching SHARC <> payload'
 external('check', '<>: SHARC <> machine_id must match its single native <> registration',
          'tests/test_sharc_filter.py', ['SHARC %s machine_id must match its single native %s registration',
                                       'test_pair_binds_both_hooks_and_is_order_independent'])
+external('check', '<>: DN2 filter G needs a label of 1..5 printable ASCII characters and a default of 0..127',
+         'tests/test_sharc_filter.py', ['DN2 filter G needs a label', 'test_refuses_an_invalid_g_and_links_a_valid_one'])
 external('link', 'SHARC mod needs the stock section-7 stream', 'tests/test_sharc_active.py',
          'SHARC mod needs the stock section-7 stream')
 external('link', 'SHARC stored section exceeds the profile limit', 'tests/test_sharc_active.py',

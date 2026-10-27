@@ -111,7 +111,7 @@ class PairLinkTests(unittest.TestCase):
                 p = root / name
                 p.mkdir()
                 (p / 'machine.c').write_text('#include "mk2/machines.h"\n'
-                    'const struct mk2_%s %s = {%d,0,"PAIR","PAIR"};\n' % (native, symbol, machine_id))
+                    'const struct mk2_%s %s = {%d,"PAIR","PAIR"};\n' % (native, symbol, machine_id))
                 (p / 'kernel.json').write_text(json.dumps(producer(bytes(4), bytes(4), 0, machine_id,
                                                                   128 if kind == 'voice' else 12)))
                 (p / 'mod.json').write_text(json.dumps({
@@ -125,11 +125,36 @@ class PairLinkTests(unittest.TestCase):
     def linked(self, *mods):
         return link.link(self.base + list(mods), self.image, sharc_stream=self.stream)
 
-    def at(self, stream, address):
+    def test_refuses_an_invalid_g_and_links_a_valid_one(self):
+        refusal = 'g-%s 0.1: DN2 filter G needs a label of 1..5 printable ASCII characters and a default of 0..127'
+        cases = {'valid': ('"MODE", 0', True), 'top': ('"HIGH5", 127', True), 'none': (None, True),
+                 'default': ('"MODE", 128', False), 'long': ('"TOOWIDE", 1', False),
+                 'empty': ('"", 1', False), 'unprintable': ('"M\\tX", 1', False), 'nolabel': ('0, 1', False)}
+        for name, (param, ok) in cases.items():
+            with self.subTest(name=name):
+                p = Path(self.tmp.name) / ('g-' + name)
+                p.mkdir()
+                g = 'static const struct mk2_param g = {%s};\n' % param if param else ''
+                (p / 'machine.c').write_text('#include "mk2/machines.h"\n' + g +
+                    'const struct mk2_filter f = {8, "G", "G", 0, %s};\n' % ('&g' if param else '0'))
+                (p / 'kernel.json').write_text(json.dumps(filter_artifact(bytes(4), bytes(4), 0, 8, 12)))
+                (p / 'mod.json').write_text(json.dumps({
+                    'id': 'g-' + name, 'version': '0.1', 'device': 'digitone-mk2', 'os': '1.12',
+                    'sources': ['machine.c'], 'sharc': {'artifact': 'kernel.json'},
+                    'resources': {'core': '0.1'}, 'requires': ['core', 'machines-dn2'],
+                    'contribute': [{'to': PROFILE['filter_table'], 'data': '00000000',
+                                    'relocs': [[0, 'abs32', 'sym:f', 0]]}]}))
+                mod = elemod.load_any(sdk.build(str(p), STOCK, str(p / 'build'))[0])
+                errors = link.check(self.base + [mod], self.image)
+                self.assertEqual(errors == [], ok, errors)
+                if not ok:
+                    self.assertEqual(errors, [refusal % name])
+
+    def at(self, stream, address, size=6):
         rec = next(r for r in sharc.parse(stream, PROFILE) if r.flags == sharc.LOAD
-                   and r.target <= address and address + 6 <= r.target + r.count)
+                   and r.target <= address and address + size <= r.target + r.count)
         offset = 16 + address - rec.target
-        return rec.raw[offset:offset + 6]
+        return rec.raw[offset:offset + size]
 
     def owned_records(self, stream, kind):
         lo, hi = PROFILE[kind + '_range']
@@ -151,6 +176,8 @@ class PairLinkTests(unittest.TestCase):
             site, _old, new = PROFILE[kind + '_hook']
             self.assertEqual(self.at(out.sharc_stream, site), bytes.fromhex(new))
         self.assertEqual(self.at(out.sharc_stream, PROFILE['hook'][0]), self.at(self.stream, PROFILE['hook'][0]))
+        site, _old, new = PROFILE['filter_capture']
+        self.assertEqual(self.at(out.sharc_stream, site, 4), bytes.fromhex(new))
         self.assertEqual(out.layout['sharc']['mods'], [
             {'id': 'filter-6', 'owner': list(PROFILE['filter_range']), 'hook': PROFILE['filter_hook'][0]},
             {'id': 'voice-6', 'owner': list(PROFILE['voice_range']), 'hook': PROFILE['voice_hook'][0]}])
@@ -165,6 +192,18 @@ class PairLinkTests(unittest.TestCase):
                 self.assertEqual(self.owned_records(out.sharc_stream, other), self.owned_records(self.stream, other))
                 self.assertEqual(self.at(out.sharc_stream, PROFILE[kind + '_hook'][0]), bytes.fromhex(PROFILE[kind + '_hook'][2]))
                 self.assertEqual(self.at(out.sharc_stream, PROFILE[other + '_hook'][0]), self.at(self.stream, PROFILE[other + '_hook'][0]))
+                site, old, new = PROFILE['filter_capture']
+                self.assertEqual(self.at(out.sharc_stream, site, 4), bytes.fromhex(new if kind == 'filter' else old))
+
+    def test_the_capture_entry_is_in_the_adapter_and_continues_to_the_stock_arm(self):
+        _site, old, new = PROFILE['filter_capture']
+        stock_arm, entry = (int.from_bytes(bytes.fromhex(h), 'little') for h in (old, new))
+        offset = 2 * (entry - sharc.pc16(PROFILE, PROFILE['filter_range'][0]))
+        adapter = bytes.fromhex(json.loads((Path(__file__).resolve().parents[1]
+                                            / 'elekloader/sdk/include/digitone-mk2/filter-bridge.json').read_text())['hex'])
+        self.assertTrue(0 < offset < PROFILE['filter_adapter_bytes'] - PROFILE['code_guard_bytes'])
+        jump = bytes.fromhex('3e06') + (stock_arm >> 16).to_bytes(2, 'little') + (stock_arm & 0xffff).to_bytes(2, 'little')
+        self.assertIn(jump, adapter[offset:offset + 80])  # JUMP to the arm the stock table named
 
     def test_changed_filter_code_links_without_an_allowlist_update(self):
         doc = copy.deepcopy(self.mods['filter-6'].doc)
@@ -208,7 +247,6 @@ class PairLinkTests(unittest.TestCase):
                 (lambda d: d['sharc'].update(machine_id=7), mismatch),
                 (lambda d: d.update(contribute=[]), mismatch),
                 (lambda d: d['contribute'][0].update(to=PROFILE[other + '_table']), mismatch),
-                (lambda d: d['contribute'].append(dict(d['contribute'][0], to=PROFILE[kind + '_clone_table'])), mismatch),
             ]
             for change, error in cases:
                 doc = copy.deepcopy(original.doc)
@@ -219,12 +257,11 @@ class PairLinkTests(unittest.TestCase):
                     if doc['contribute'] and doc['contribute'][0]['to'] == PROFILE[other + '_table']:
                         self.assertIn('%s: DN2 %s registration requires a matching SHARC %s payload'
                                       % (original.label(), other, other), errors)
-            clone = copy.deepcopy(original.doc)
-            clone['id'] = kind + '-clone'
-            del clone['sharc']
-            clone['contribute'][0]['to'] = PROFILE[kind + '_clone_table']
-            errors = link.check(self.base + [original, link.Mod2(clone, 'clone')], self.image)
-            namespace = 'mk2-synth' if kind == 'voice' else 'mk2-filter'
-            self.assertTrue(any('both claim %s:6' % namespace in s for s in errors), errors)
+            # The old registration tables are gone: the generic check refuses an entry there.
+            legacy = copy.deepcopy(original.doc)
+            table = 'mk2_synths' if kind == 'voice' else 'mk2_filters'
+            legacy['contribute'].append(dict(legacy['contribute'][0], to=table))
+            self.assertIn('%s adds to table %s, which no given mod declares' % (original.label(), table),
+                          link.check(self.base + [link.Mod2(legacy, 'legacy')], self.image))
         errors = link.check([self.base[0], self.mods['filter-6']], self.image)
         self.assertTrue(any('requires machines-dn2' in s for s in errors), errors)

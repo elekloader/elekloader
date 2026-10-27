@@ -23,7 +23,7 @@ docs match its code.
 - **[Adapting your mod](ADAPTING.md)**: the path to take, the rules, every
   command with the output it should print, every refusal with its fix, and a
   definition of done. Coding agents: start with [AGENTS.md](../AGENTS.md).
-- **[Digitone II machines](MACHINES-DN2.md)**: register synth clones,
+- **[Digitone II machines](MACHINES-DN2.md)**: register
   [SHARC voices](MACHINES-DN2-VOICE.md) and [filters](MACHINES-DN2-FILTER.md),
   with a [paired C example](https://github.com/simonjohansson/digitone-2-mod-hack).
 - **[Digitone II SHARC mods](../examples/sharc-sine/README.md)**

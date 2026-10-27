@@ -114,7 +114,7 @@ DM(0x20097cf8)=R0;
 R0=STKYY;
 DM(0x20097cfc)=R0;
 R0=LCNTR;
-DM(0x20097d0c)=R0;
+DM(0x20097d18)=R0;
 R6=R2;
 R0=16;
 R0=R0-R15;
@@ -183,6 +183,18 @@ IF LE JUMP flags_ready;
 R3=1;
 flags_ready:
 DM(0x20097d08)=R3;
+// This block's cutoff, resonance and G, kept for the slot by dn2_filter_capture.
+R1=DM(0x20097d04);
+R1=LSHIFT R1 BY 2;
+R2=0x20097d40;
+R1=R1+R2;
+I4=R1;
+R2=DM(0,I4);
+DM(0x20097d0c)=R2;
+R2=DM(16,I4);
+DM(0x20097d10)=R2;
+R2=DM(32,I4);
+DM(0x20097d14)=R2;
 // Pin the C context, preserving the firmware register bank and interrupt setup.
 M5=0;
 M6=1;
@@ -266,7 +278,7 @@ R0=DM(0x20097ce4);
 L4=R0;
 R0=DM(0x20097ce8);
 L5=R0;
-R0=DM(0x20097d0c);
+R0=DM(0x20097d18);
 LCNTR=R0;
 R0=DM(0x20097cec);
 MODE1=R0;
@@ -331,4 +343,29 @@ PX1=DM(0x20097c00);
 PX2=DM(0x20097c04);
 I4=0x8052dbc0;
 JUMP 0x1c958a;
+
+// The filter setup table's internal type 0 entry: every voice with a custom filter
+// comes here with its final normalized cutoff in F8, resonance at DM(-22,I5), G (slot 66)
+// at DM(-24,I5) and its slot in R3. Keep the three for the slot, then continue as stock. The continuation
+// overwrites R2, R4 and I4 before reading them.
+.GLOBAL dn2_filter_capture;
+dn2_filter_capture:
+R2=ASTATX;
+DM(0x20097d38)=R2;
+R2=15;
+COMPU(R3,R2);
+IF GT JUMP captured;
+R2=LSHIFT R3 BY 2;
+R4=0x20097d40;
+R2=R2+R4;
+I4=R2;
+DM(0,I4)=R8;
+R2=DM(-22,I5);
+DM(16,I4)=R2;
+R2=DM(-24,I5);
+DM(32,I4)=R2;
+captured:
+R2=DM(0x20097d38);
+ASTATX=R2;
+JUMP 0x1c927e;
 .ENDSEG;

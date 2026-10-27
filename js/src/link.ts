@@ -232,23 +232,63 @@ export class Mod2 implements AnyMod {
   /** The big-endian long at sec+off of this mod's bytes, or null: in a section without bytes
    * or under a relocation. */
   private long(sec: string, off: number, image: Uint8Array): number | null {
+    const raw = this.bytes(sec, off, 4, image)
+    return raw === null ? null : ((raw[0] << 24) | (raw[1] << 16) | (raw[2] << 8) | raw[3]) >>> 0
+  }
+
+  /** The `size` bytes at sec+off of this mod's bytes, or null, as long(). */
+  private bytes(sec: string, off: number, size: number, image: Uint8Array): number[] | null {
     const d = this.sections.get(sec)
-    if (!d || !d.parts || d.len === undefined || off < 0 || off + 4 > d.len) return null
-    if (this.relocs.some(([s, o, t]) => s === sec && o < off + 4 && off < o + (RSIZE.get(t) ?? 0))) return null
+    if (!d || !d.parts || d.len === undefined || off < 0 || off + size > d.len) return null
+    if (this.relocs.some(([s, o, t]) => s === sec && o < off + size && off < o + (RSIZE.get(t) ?? 0))) return null
     const raw: number[] = []
     let at = 0
     for (const p of d.parts) {
       const n = p[0] === 'hex' ? p[1].length : p[2]
-      const lo = Math.max(off, at), hi = Math.min(off + 4, at + n)
+      const lo = Math.max(off, at), hi = Math.min(off + size, at + n)
       if (lo < hi) {
         const [b, i] = p[0] === 'hex' ? [p[1], lo - at] : [image, p[1] - this.dev.mainLoad + lo - at]
         if (i < 0 || i + hi - lo > b.length) return null
         raw.push(...b.subarray(i, i + hi - lo))
-        if (raw.length === 4) return ((raw[0] << 24) | (raw[1] << 16) | (raw[2] << 8) | raw[3]) >>> 0
+        if (raw.length === size) return raw
       }
       at += n
     }
     return null
+  }
+
+  /** Where an abs32 relocation points in this mod's bytes, as [section, offset], or null. */
+  private target(typ: string, tgt: string, add: number): [string, number] | null {
+    if (typ === 'abs32' && tgt.startsWith('sym:') && this.symbols.has(tgt.slice(4))) {
+      const [sec, base] = this.symbols.get(tgt.slice(4))!
+      return [sec, base + add]
+    }
+    return typ === 'abs32' && tgt.startsWith('sec:') ? [tgt.slice(4), add] : null
+  }
+
+  /** Where the four-byte pointer at sec+off points in this mod's bytes, or null. */
+  private pointer(sec: string, off: number): [string, number] | null {
+    const r = this.relocs.find(([s, o]) => s === sec && o === off)
+    return r ? this.target(r[2], r[3], r[4]) : null
+  }
+
+  /** A DN2 filter descriptor's optional G (mk2/machines.h): NULL, or an mk2_param in this mod's bytes with a
+   * label of 1..5 printable ASCII characters and a default of 0..127. link.Mod2.dn2_filter_g_ok. */
+  dn2FilterGOk(contribution: Contribution, image: Uint8Array): boolean {
+    const at = this.rel.sharc!.filterGAt!
+    const r = contribution.relocs.find(([o]) => o === 0)
+    const descriptor = r ? this.target(r[1], r[2], r[3]) : null
+    if (!descriptor) return true                    // the registration checks refuse it
+    const param = this.pointer(descriptor[0], descriptor[1] + at)
+    if (!param) return this.long(descriptor[0], descriptor[1] + at, image) === 0
+    const def = this.long(param[0], param[1] + 4, image), label = this.pointer(param[0], param[1])
+    if (def === null || def > 127 || !label) return false
+    for (let n = 0; n < 6; n++) {
+      const c = this.bytes(label[0], label[1] + n, 1, image)
+      if (c === null || (c[0] && !(c[0] >= 32 && c[0] <= 126))) return false
+      if (!c[0]) return n >= 1 && n <= 5
+    }
+    return false
   }
 
   private relocOk(sec: unknown, off: number, typ: unknown, tgt: unknown) {
@@ -355,14 +395,15 @@ export function check(mods: Mod2[], image: Uint8Array): string[] {
   for (const app of sharcMods) {
     const kind = app.sharc!.machineKind
     if (kind) {
-      const profile = app.rel.sharc!, table = profile[`${kind}Table`], cloneTable = profile[`${kind}CloneTable`]
+      const profile = app.rel.sharc!, table = profile[`${kind}Table`]
       const contributions = app.contribute.filter(c => c.to === table)
       const expected = app.dev.slotClaims.filter(([name]) => name === table)
         .map(([, , , prefix]) => `${prefix}:${app.sharc!.machineId}`)
       if (contributions.length !== 1 || contributions[0].data.length !== 4 ||
-        !expected.length || JSON.stringify(app.impliedNames(image, table)) !== JSON.stringify(expected) ||
-        expected.some(name => app.impliedNames(image, cloneTable).includes(name)))
+        !expected.length || JSON.stringify(app.impliedNames(image, table)) !== JSON.stringify(expected))
         bad.push(`${app.label()}: SHARC ${kind} machine_id must match its single native ${kind} registration`)
+      else if (kind === 'filter' && !app.dn2FilterGOk(contributions[0], image))
+        bad.push(`${app.label()}: DN2 filter G needs a label of 1..5 printable ASCII characters and a default of 0..127`)
       continue
     }
     if (app.sharc!.entries === null) continue
@@ -581,8 +622,9 @@ export function link(mods: Mod2[], image: Uint8Array, lock: store.Lock | null = 
         fills = fills.filter(([address]) => address !== lo)
         fills.push([lo, base + at - lo, 0], [base + at + 8, payload.owner[1] - base - at - 8, 0])
         loads.push([base + at, binding])
-        const [site, old, replacement] = rel.sharc![`${kind}Hook`]!
-        patches = [[site, hexBytes(old, 'SHARC stock hook'), hexBytes(replacement, 'SHARC bridge hook')]]
+        const capture = kind === 'filter' ? rel.sharc!.filterCapture : undefined
+        patches = [rel.sharc![`${kind}Hook`]!, ...(capture ? [capture] : [])].map(([site, old, replacement]) =>
+          [site, hexBytes(old, 'SHARC stock hook'), hexBytes(replacement, 'SHARC bridge hook')])
       } else if (payload.entries !== null) {
         const bridge = core.sharc!
         const pc16 = (off: number) => sharcRecords.pc16(rel.sharc!, base + off)

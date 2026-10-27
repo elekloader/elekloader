@@ -8,10 +8,20 @@ are unqualified.
 
 ## Author interface
 
-Use the existing four-field `mk2_synth` descriptor from
-`mk2/machines.h`, contributing its pointer to `mk2_voice_synths`
-instead of `mk2_synths`. The fields remain stable ID, stock defaults type,
-name and short label. Use permanent IDs 5..31; clones share that namespace.
+Register an `mk2_synth` descriptor from `mk2/machines.h`: its permanent
+ID (5..31, see [Digitone II machines](MACHINES-DN2.md)), its name (ASCII,
+at most 31 characters) and its short label (at most 7). Contribute its
+pointer to `mk2_voice_synths`:
+
+```c
+#include "mk2/machines.h"
+const struct mk2_synth sine = {7, "SINE", "SINE"};
+```
+
+```json
+{"to": "mk2_voice_synths", "data": "00000000", "relocs": [[0, "abs32", "sym:sine", 0]]}
+```
+
 The companion supplies a named empty SYN page and stock AMP controls,
 unless the mod declares its own pages (below). FLTR controls belong to the
 selected filter.
@@ -39,10 +49,10 @@ Page `p`, knob `k` is sound slot `25 + 8p + k`. The value is saved with
 the sound and copied with it, as a stock synth's. SYN steps through the
 pages, as on a stock synth; the header reads the synth's name and the page,
 such as `SINE (2/2)`. MIDI CC and NRPN reach a knob by position:
-a knob uses the number the clone's stock synth has for the same slot (for
-an FM TONE clone, SYN1 knob A is CC 40 and NRPN 1:73), turning it sends
-that CC, and a number whose slot is empty does nothing. A slot the clone
-gives no CC (FM TONE: 34 and 50..57) has none. Knobs take parameter locks as on a
+a knob uses the number FM TONE, the host type, has for the same slot
+(SYN1 knob A is CC 40 and NRPN 1:73), turning it sends
+that CC, and a number whose slot is empty does nothing. A slot FM TONE
+gives no CC (34 and 49..57) has none. Knobs take parameter locks as on a
 stock synth (hold a step and turn): the OS puts the locked value in the
 voice that plays the trig, so a kernel needs no code for them.
 
@@ -59,7 +69,7 @@ and the synth keeps its empty page. The linker refuses two mods that give pages 
 The same mod must carry a `dn2-voice-mono32-l2-v1` artifact with a matching
 `machine_id` and `entries: {"render_offset_bytes": ...}`. Require `core`
 (core 0.1) and `machines-dn2`. The linker refuses a missing/mismatched
-payload, conflicting IDs or registering the voice's ID as a clone too.
+payload or conflicting IDs.
 A build accepts at most one SHARC synth and one SHARC filter, in separate memory
 regions. Neither can be combined with a master-output SHARC mod.
 

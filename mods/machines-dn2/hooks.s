@@ -7,7 +7,9 @@
     .set dn2_stock_descriptors, STOCK_DESCRIPTORS
     .set dn2_unknown_name, UNKNOWN_NAME
     .set dn2_unknown_label, UNKNOWN_LABEL
-    .globl dn2_stock_filter_names, dn2_stock_filter_descriptors
+    .globl dn2_stock_filter_names, dn2_stock_filter_descriptors, dn2_pixel, dn2_shown
+    .set dn2_pixel, PIXEL
+    .set dn2_shown, SHOWN
     .set dn2_stock_filter_names, FILTER_NAMES
     .set dn2_stock_filter_descriptors, FILTER_DESCRIPTORS
 
@@ -55,7 +57,7 @@ dn2_group:
 2:  jmp GROUP_SYNTH
 
 | Map only the stock function's own argument slot. Keep the live page/slot registers.
-    .macro MAP off,fn=dn2_clone_type
+    .macro MAP off,fn=dn2_host_type
     SAVE
     move.l (16+\off,%sp),-(%sp)
     jsr \fn
@@ -123,9 +125,20 @@ dn2_parameter:
     move.l (%sp)+,%d2
     rts
 1:  RESTORE
-2:
+2:  SAVE                         | a custom filter's G: a slot its host has no row for
+    move.l 32(%sp),-(%sp)
+    move.l %a0,-(%sp)
+    jsr dn2_filter_code
+    addq.l #8,%sp
+    tst.l %d0
+    beq.s 3f
+    move.l %d0,(%sp)
+    RESTORE
+    move.l (%sp)+,%d2
+    rts
+3:  RESTORE
     MAP 12
-    MAP 16,dn2_filter_dsp_type
+    MAP 16,dn2_filter_host_type
     move.l 12(%sp),%d0
     movea.l 16(%sp),%a1
     jmp PARAM_CONTINUE
@@ -153,7 +166,7 @@ dn2_t2:
     cmpi.l #T1_ROWS,%d0
     jmp T2_CONTINUE
 
-| Audio mirror identity stays real; only the transmitted DSP type is the stock clone.
+| Audio mirror identity stays real; only the transmitted DSP type is mapped (dn2_dsp_type).
     .globl dn2_frame_type
 dn2_frame_type:
     lea -12(%sp),%sp
@@ -192,7 +205,7 @@ dn2_reader:
     beq.s 2f
     move.l (%sp),%d0
     bra.s 3f
-2:  jsr dn2_clone_type
+2:  jsr dn2_host_type
 3:
     addq.l #4,%sp
     movem.l (%sp),%a0-%a1
@@ -205,7 +218,7 @@ dn2_owner:
     SAVE
     mvs.b 0xde(%a0),%d0
     move.l %d0,-(%sp)
-    jsr dn2_clone_type
+    jsr dn2_host_type
     addq.l #4,%sp
     move.l %d0,%d3
     RESTORE
@@ -253,18 +266,8 @@ dn2_filter_real_return:
     addq.l #4,%sp
     rts
 
-| MIDI parameter owners read the sound directly, outside the identity readers.
-    .globl dn2_synth_parameter_type
-dn2_synth_parameter_type:
-    SAVE
-    mvs.b 0xde(%a0),%d0
-    move.l %d0,-(%sp)
-    jsr dn2_midi_type
-    addq.l #4,%sp
-    move.l %d0,(%sp)
-    RESTORE
-    rts
-
+| The MIDI filter parameter owner reads the sound directly, outside the identity readers. Its
+| only callers pass the type to dn2_cc_code and dn2_nrpn_code, which map a custom filter (G).
     .globl dn2_filter_parameter_type
 dn2_filter_parameter_type:
     SAVE
@@ -276,22 +279,41 @@ dn2_filter_parameter_type:
     RESTORE
     rts
 
-| Custom filters keep their empty page; clones and missing IDs use stock defaults.
+| Pages, defaults and parameters use the host type; missing IDs use MULTI-MODE's.
+| FRC9 and FRC10 are the FLTR page's knob lookups: a custom filter's own descriptor has G.
     .globl dn2_filter_reader
 dn2_filter_reader:
     mvs.b 0xdf(%a0),%d0
     move.l %d1,-(%sp)
     move.l 8(%sp),%d1
-    .irp caller,FRC0,FRC1,FRC2,FRC3,FRC4,FRC5,FRC6,FRC7,dn2_filter_real_return
+    .irp caller,FRC0,FRC1,FRC2,FRC3,FRC4,FRC5,FRC6,FRC7,FRC8,FRC9,FRC10,dn2_filter_real_return
     cmpi.l #\caller,%d1
     beq.w 1f
     .endr
     lea -8(%sp),%sp
     movem.l %a0-%a1,(%sp)
     move.l %d0,-(%sp)
-    jsr dn2_filter_dsp_type
+    jsr dn2_filter_host_type
     addq.l #4,%sp
     movem.l (%sp),%a0-%a1
     lea 8(%sp),%sp
 1:  move.l (%sp)+,%d1
     jmp FILTER_READER_EPILOGUE
+
+| The FLTR page's curve dispatch: stock types keep their curves; others draw a custom filter's own.
+    .globl dn2_filter_curve
+dn2_filter_curve:
+    moveq #5,%d0
+    cmp.l %d4,%d0
+    bcs.s 1f
+    jmp CURVE_STOCK
+1:  SAVE
+    move.l %a2,-(%sp)
+    move.l %d7,-(%sp)
+    move.l %d6,-(%sp)
+    move.l %d3,-(%sp)
+    move.l %d4,-(%sp)
+    jsr dn2_filter_draw_curve
+    lea 20(%sp),%sp
+    RESTORE
+    jmp CURVE_SKIP

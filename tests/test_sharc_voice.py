@@ -90,16 +90,13 @@ class LinkTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             p = Path(tmp)
             (p / 'voice.c').write_text('#include "mk2/machines.h"\n'
-                                      'const struct mk2_synth sine = {5,0,"SINE","SINE"};\n'
-                                      'const struct mk2_filter filter = {6,0,"CLONE FILTER","CLONE"};\n')
+                                      'const struct mk2_synth sine = {5,"SINE","SINE"};\n')
             (p / 'voice.json').write_text(json.dumps(artifact()))
             manifest = {'id': 'voice-test', 'version': '0.1', 'device': 'digitone-mk2', 'os': '1.12',
                         'sources': ['voice.c'], 'sharc': {'artifact': 'voice.json'},
                         'resources': {'core': '0.1'}, 'requires': ['core', 'machines-dn2'],
                         'contribute': [{'to': 'mk2_voice_synths', 'data': '00000000',
-                                        'relocs': [[0,'abs32','sym:sine',0]]},
-                                       {'to': 'mk2_filters', 'data': '00000000',
-                                        'relocs': [[0,'abs32','sym:filter',0]]}]}
+                                        'relocs': [[0,'abs32','sym:sine',0]]}]}
             (p / 'mod.json').write_text(json.dumps(manifest))
             paths = [sdk.build(str(src), STOCK, str(p / name))[0] for name, src in
                      (('core', ROOT/'mods/core-dn2'), ('machines', ROOT/'mods/machines-dn2'), ('voice',p))]
@@ -111,10 +108,9 @@ class LinkTests(unittest.TestCase):
             # Every filter/parameter detour must land on its own handler.
             detours = {s['addr']: s['target'] for s in json.loads(
                 (ROOT/'mods/machines-dn2/mod.json').read_text())['sites']
-                if s.get('op') == 'jmp' and (s.get('target', '').startswith('dn2_filter_')
-                    or s.get('target') == 'dn2_synth_parameter_type')}
+                if s.get('op') == 'jmp' and s.get('target', '').startswith('dn2_filter_')}
             self.assertEqual(len(detours), 9)
-            self.assertEqual(detours['0x40036478'], 'dn2_synth_parameter_type')
+            self.assertEqual(detours['0x4006eca0'], 'dn2_filter_curve')
             self.assertEqual(detours['0x4003649c'], 'dn2_filter_parameter_type')
             for addr, target in detours.items():
                 off = int(addr, 0) - dev.main_load
@@ -136,11 +132,9 @@ class LinkTests(unittest.TestCase):
             self.assertIn('voice-test 0.1: SHARC voice machine_id must match its single native voice registration',
                           link.check([core,machines,link.Mod2(bad,'bad')], image))
             bad = copy.deepcopy(voice.doc)
-            clone = copy.deepcopy(bad['contribute'][0])
-            clone['to'] = 'mk2_synths'
-            bad['contribute'].append(clone)
-            self.assertIn('voice-test 0.1: SHARC voice machine_id must match its single native voice registration',
-                          link.check([core,machines,link.Mod2(bad,'dual-role')], image))
+            bad['contribute'].append(dict(bad['contribute'][0], to='mk2_synths'))
+            self.assertIn('voice-test 0.1 adds to table mk2_synths, which no given mod declares',
+                          link.check([core,machines,link.Mod2(bad,'legacy')], image))
             bad = copy.deepcopy(voice.doc)
             del bad['sharc']
             self.assertIn('voice-test 0.1: DN2 voice registration requires a matching SHARC voice payload',

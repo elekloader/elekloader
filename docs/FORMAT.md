@@ -96,7 +96,7 @@ makes one from C or assembly.
 | `dn2-voice-mono32-l2-v1` | 5..31 | `mk2_voice_synths` |
 | `dn2-filter-mono32-l2-v1` | 6..31 | `mk2_voice_filters` |
 
-IDs share their kind's clone namespace. A build accepts at most one of
+Each kind has its own ID namespace. A build accepts at most one of
 each kind, with separate 16 KiB owners, and cannot mix them with a
 master-output mod. Each machine artifact starts with the profiled 2 KiB
 adapter and ends with exactly 1 KiB of zeroed adapter state. Author bytes

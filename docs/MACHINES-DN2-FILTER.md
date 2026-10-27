@@ -1,7 +1,7 @@
 # Digitone II filters
 
-Experimental, OS 1.12 only. `machines-dn2` 0.1 registers stock filter
-clones and custom SHARC filters in **FUNC+SYN → FLTR**. Filter selection
+Experimental, OS 1.12 only. `machines-dn2` 0.1 registers custom SHARC
+filters in **FUNC+SYN → FLTR**. Filter selection
 is independent of the synth: a custom filter can process SINE or a stock
 synth. Require core-dn2 0.1. Timing, full-polyphony and long-duration
 stability are unqualified.
@@ -10,29 +10,27 @@ stability are unqualified.
 
 ```c
 #include "mk2/machines.h"
-const struct mk2_filter my_filter = {6, 0, "CLONE FILTER", "CLONE"};
+const struct mk2_filter my_filter = {8, "LOWPASS", "LOWPASS"};
 ```
 
-Contribute its pointer to `mk2_filters`, with the normal SDK manifest:
+Contribute its pointer to `mk2_voice_filters`, with the normal SDK manifest:
 
 ```json
 "contribute": [
- {"to": "mk2_filters", "data": "00000000",
+ {"to": "mk2_voice_filters", "data": "00000000",
   "relocs": [[0, "abs32", "sym:my_filter", 0]]}
 ]
 ```
 
 Require `core` and `machines-dn2`, and set `resources.core` to `"0.1"`.
-The fields are permanent ID **6..31**, stock filter **0..5**, name (ASCII,
-at most 31 characters) and label (at most 7). Stock types are MULTI-MODE,
-LOWPASS 4, EQUALIZER, COMB-, LEGACY LP/HP and COMB+, respectively. The linker
+The fields are permanent ID **6..31**, name (ASCII, at most 31 characters),
+label (at most 7) and an optional `curve` (below). The linker
 refuses duplicate filter IDs and stock-ID conflicts. A synth and filter may
 use the same numeric ID: their namespaces and stored bytes are separate.
 Never reuse a distributed filter's ID for a different filter.
 
 The selector lists the six stock filters in their native order, followed
-by registered filters in ID order. For clones, pages, defaults, parameters
-and audio use the chosen stock filter. Saving and copying retain the ID.
+by registered filters in ID order. Saving and copying retain the ID.
 A missing registration keeps its saved ID, disappears from the selector
 and uses **MULTI-MODE**, with the existing parameter values. This can change
 the sound. Keep project backups when changing installed mods. Removing the
@@ -44,29 +42,69 @@ needs independently qualified firmware adapters and limits. Synths use
 
 ## Custom DSP
 
-Contribute the same four-field descriptor to `mk2_voice_filters` instead
-of `mk2_filters`. The stock-type field must still be 0..5, but custom
-filters use only the common stock defaults; filter-specific parameter
-slots 66..68 have no mapping. Its FLTR page has no controls, but the common
-stock envelope graphic remains. The same mod must carry a
+LOWPASS 4, the host type, supplies the FLTR page, defaults, knobs, CC and
+NRPN, but not the audio: the stock algorithm never runs for the custom ID.
+Its page shows ATK/DEC/SUS/REL, FREQ/RESO, G and ENV under the
+stock envelope graphic, and FUNC+A edits pre-delay. G is a dotted empty
+cell unless the descriptor's optional `g` declares it (below). The
+response graph stays empty unless the descriptor's optional `curve` draws
+it. The kernel receives the resulting cutoff and resonance, and G; it
+does not implement pre-delay, the envelope or ENV itself. The same mod
+must carry a
 `dn2-filter-mono32-l2-v1` artifact with the matching `machine_id` and
 `entries: {"render_offset_bytes": ...}`. The linker refuses a missing or
-mismatched payload, conflicting filter IDs, or the same ID registered as
-both a clone and a custom filter.
+mismatched payload and conflicting filter IDs.
 
 ```c
 #include "digitone-mk2/filter.h"
 void sharc_filter_render(const struct dn2_filter_input *in);
 ```
 
-The twelve-byte input contains `float *samples`, `uint32_t slot` and
-`uint32_t flags`.
+The `curve` callback runs on the ColdFire when the FLTR page draws:
+`void curve(uint32_t freq, uint32_t reso, uint32_t g, uint8_t y[51])`. `freq`,
+`reso` and `g` are the shown FREQ, RESO and G, including a lock being edited,
+as 16-bit words (the whole value in the high byte: 64.00 is `0x4000`); `g`
+is 0 without a declared G, and a curve may ignore it. The companion reads
+G's as the page reads the others (`0x4006538e`). Fill one entry
+per graph column, left to right, with 0 (bottom) to 16 (top), or `0xff`
+for no dot; the core draws values above 16 at the top and nothing outside
+the graph (screen x 21..71, y 40..56). It hooks the page's curve dispatch
+at `0x4006eca0`, which stock filter types pass through unchanged. Keep it
+short: it runs on every redraw of the page.
+
+G is an `mk2_param`: a label of 1..5 printable ASCII characters, shown in
+capitals, and a default of 0..127. It is sound slot 66, the slot of the
+stock filters' third knob (MULTI-MODE's TYPE), so it answers their CC 18
+and NRPN 1:22, takes locks and is saved with the sound. Selecting the
+filter keeps the sound's slot-66 value, as the stock filters do, so the
+kernel should treat any value as valid:
+
+```c
+static const struct mk2_param mode = {"MODE", 0};
+const struct mk2_filter my_filter = {8, "LOWPASS", "LOWPASS", curve, &mode};
+```
+
+The linker refuses an invalid G. The companion adds one parameter row for
+it, after the synths' 40: a copy of MULTI-MODE's slot-66 row owned by
+LOWPASS 4, which the stock filters never show. A build has one custom
+filter, so one row serves it. The cell shows its label and value; the
+picture above it stays empty.
+
+The 24-byte input contains `float *samples`, `uint32_t slot`,
+`uint32_t flags`, `float cutoff`, `float resonance` and `float g`.
 Process 32 mono floats at 48 kHz in place before the stock AMP stage and
 return nothing. Slot is 0..15, not a track number; keep independent state
 per slot. `DN2_FILTER_RESET` is set on the first callback after entering this filter
 and on a new trigger edge. Clear that slot's history before processing
 the block when this flag is set. Keep history between ordinary callbacks.
-The callback receives no pitch or filter controls.
+
+`cutoff` and `resonance` are the stock values for this slot in this
+block, once per 32 samples and not smoothed; smoothing belongs to the
+kernel. `cutoff` is normalized: FREQ/128, plus the stock filter envelope
+(pre-delay, ATK/DEC/SUS/REL scaled by ENV, which is bipolar) and key
+tracking, clamped to 0..1.
+`resonance` is RESO/128 (0..0.992). `g` is G/127 (0..1) when the filter
+declares G; otherwise ignore it. The callback receives no pitch.
 One custom synth and one custom filter can coexist; a master-output mod
 cannot be combined with either.
 
@@ -97,6 +135,17 @@ stack_bytes)` with the prelinked bytes. Its arguments follow
 allowed. Compilation belongs to the producer. Keep writes in the author
 data area and supplied sample buffer.
 
+The controls come from the stock filter preparation, which runs for every
+voice before the render loop and leaves the final cutoff in F8. The
+linker points entry 0 of its setup table (`0x8052dba4`, internal type 0,
+which only custom filters use) at the adapter's capture entry instead of
+PC16 `0x1c927e`. That entry keeps F8, the resonance word and slot 66's
+word, two words below it, for the voice (R3, the same slot the render hook
+sees) in three 16-entry arrays at `0x20097d40`, `0x20097d80` and
+`0x20097dc0`, preserves ASTATX, and continues at
+`0x1c927e`. It makes no identity check; the render gate below is the only
+one.
+
 The linker binds the render PC and ID at `0x20097e00`. Its hook replaces
 the six-byte table-pointer load at `0x28392b0e` and continues at PC16
 `0x1c958a` after restoring that load. A matching raw filter ID dispatches
@@ -104,9 +153,9 @@ the callback when the stock internal filter type has settled to zero.
 The first block after selection may still use the previous stock filter.
 Other IDs follow the stock path.
 
-`mods/machines-dn2/filter-bridge.s` produces 1,566 code bytes, padded to
+`mods/machines-dn2/filter-bridge.s` produces 1,698 code bytes, padded to
 2 KiB, SHA-256
-`dea368ada96b1b08665e6f3399111aef43c84281a2fe4f85f585acd288e9dd32`.
+`25ecf301d2dfc322b5311afa58cd00f89316f0afe7df66a45e62c0aca590538c`.
 The [adapter rebuild instructions](MACHINES-DN2-VOICE.md#context-and-memory)
 cover both machine adapters. Native sites are declared in
 `mods/machines-dn2/mod.json`; the DSP hook and limits live in the device
@@ -120,9 +169,13 @@ and [DSP stage research](https://github.com/angellinares/dn2_firmware_explore/bl
 
 Build the [paired C example](https://github.com/simonjohansson/digitone-2-mod-hack); its
 firmware includes SINE (synth ID 6), LOWPASS (filter ID 8) and DigiHealth.
-LOWPASS uses per-slot history and a fixed coefficient of 1/16 at 48 kHz
-(about 493 Hz cutoff). Compare its response with the input and check RESET
-on retriggers, slot reuse and returning from a stock filter.
+LOWPASS is a resonant 2-pole state-variable filter, in assembly so that
+it needs no stack, with per-slot state. Its cutoff follows FREQ like a
+MIDI note (69/128 is 440 Hz) and the stock envelope; RESO sets its damping,
+and its G, MODE, picks the low-pass (0..63) or the high-pass (64..127),
+which its curve draws too.
+Compare its response with the input and check RESET on retriggers, slot
+reuse and returning from a stock filter.
 Removing the filter must retain the synth and saved filter ID; reinstalling it
 must restore selection. Check stock filter controls with MULTI-MODE.
 

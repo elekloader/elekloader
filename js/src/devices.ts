@@ -33,7 +33,6 @@ export type SharcProfile = {
   voiceAbi?: string
   voiceRange?: Range
   voiceTable?: string
-  voiceCloneTable?: string
   voiceAdapterSha256?: string
   voiceAdapterBytes?: number
   voiceStateBytes?: number
@@ -43,13 +42,14 @@ export type SharcProfile = {
   filterAbi?: string
   filterRange?: Range
   filterTable?: string
-  filterCloneTable?: string
+  filterGAt?: number
   filterAdapterSha256?: string
   filterAdapterBytes?: number
   filterStateBytes?: number
   filterBindingOffset?: number
   filterStackMax?: number
   filterHook?: [number, string, string]
+  filterCapture?: [number, string, string]      // the filter setup table's internal type 0 entry, sent to the adapter
   coreRange?: Range
   stackMax?: number
   codeGuardBytes?: number
@@ -262,19 +262,21 @@ export const DIGITONE_MK2: Device = {
         abi: 'dn2-master-mono32-v1', pitchRange: [0x282dda00, 0x282dde00],
         l2Abi: 'dn2-master-mono32-l2-v1', l2AppRange: [0x20090000, 0x20098000],
         voiceAbi: 'dn2-voice-mono32-l2-v1', voiceRange: [0x20090000, 0x20094000],
-        voiceTable: 'mk2_voice_synths', voiceCloneTable: 'mk2_synths',
+        voiceTable: 'mk2_voice_synths',
         voiceAdapterSha256: '11cb0abb8a60cd9e97253ff7a8c063b90bd70f110a1cee95c52c98a98dbbcef1',
         voiceAdapterBytes: 2048, voiceStateBytes: 1024, voiceBindingOffset: 15872, voiceStackMax: 128,
         voiceHook: [0x20004a36, '8715ffffeeff', '3e06bc000080'],
         filterAbi: 'dn2-filter-mono32-l2-v1', filterRange: [0x20094000, 0x20098000],
-        filterTable: 'mk2_voice_filters', filterCloneTable: 'mk2_filters',
-        filterAdapterSha256: 'dea368ada96b1b08665e6f3399111aef43c84281a2fe4f85f585acd288e9dd32',
+        filterTable: 'mk2_voice_filters', filterGAt: 16,
+        filterAdapterSha256: '25ecf301d2dfc322b5311afa58cd00f89316f0afe7df66a45e62c0aca590538c',
         filterAdapterBytes: 2048, filterStateBytes: 1024, filterBindingOffset: 15872, filterStackMax: 20,
         filterHook: [0x28392b0e, '140f5280c0db', '3e06bc0000a0'],
+        filterCapture: [0x8052dba4, '7e921c00', '2aa3bc00'],
         coreRange: [0x282dd600, 0x282dda00], stackMax: 544, codeGuardBytes: 64,
         keyedPitchTable: [920, '314d5900969c5e00d23c6400b1326a004c837000073477009b4a7e0015cd8500e1c18d00c92f9600031e9f002e94a800'],
         ownedRanges: [[0x282dd600, 0x282dde00], [0x20090000, 0x20098000]],
-        patchRanges: [[0x2838489a, 0x283848a0], [0x20004a36, 0x20004a3c], [0x28392b0e, 0x28392b14]],
+        patchRanges: [[0x2838489a, 0x283848a0], [0x20004a36, 0x20004a3c], [0x28392b0e, 0x28392b14],
+          [0x8052dba4, 0x8052dba8]],
         activeKeyedCore: { segments: [[12, 'code', 'af2f375dc58a8ccd4b8abd89b1fb526441baa6fb5da9266c2b664e69d90fc829']],
           zero: [[1008, 16]], entries: { hook_offset_bytes: 12 }, stackBytes: 116 },
         hook: [0x2838489a, '8715ffff78ff', '3e06160006eb'],
@@ -284,8 +286,7 @@ export const DIGITONE_MK2: Device = {
   stage: 0x40400000, flashAt: 0x80000, flashLimit: 0x380000, trailer: 'hmac', hmacKeyFrom: [2, 'Multiplier'],
   areas: { ddr: [0x47f00000, 0x47f40000] },
   ddr: [0x47f00000, 0x47f40000],
-  slotClaims: [['mk2_synths', 0, 32, 'mk2-synth'], ['mk2_voice_synths', 0, 32, 'mk2-synth'],
-    ['mk2_filters', 0, 32, 'mk2-filter'], ['mk2_voice_filters', 0, 32, 'mk2-filter'],
+  slotClaims: [['mk2_voice_synths', 0, 32, 'mk2-synth'], ['mk2_voice_filters', 0, 32, 'mk2-filter'],
     ['mk2_voice_pages', 0, 32, 'mk2-pages']],   // one pages entry per synth ID
   recovery: 'hold FUNC while powering on for the STARTUP menu, press TRIG 4 (OS UPGRADE), '
     + 'then send the stock .syx over MIDI (not USB)',
