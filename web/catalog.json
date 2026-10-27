@@ -468,6 +468,11 @@
       "sha256": "6b97dfb3d65ca7d9d292e4ed61dd845e43b2d4f6dc71e7e7d235f27abc4b3e58"
     },
     {
+      "repo": "irpina/elekloader", "tag": "core-ar2-v0.7", "file": "core-ar2-0.7.elemod", "kind": "core",
+      "device": "analog-rytm-mk2",
+      "sha256": "f1e9cb2c39eb52af15e7cf8ad25596e46f550e4f748bc9dd60d63a44da2dd9c1"
+    },
+    {
       "repo": "irpina/octabam2elemod", "tag": "v1.0", "file": "octabam-tuner-363861e.elemod",
       "device": "octatrack", "needs_core": "0.1",
       "sha256": "1e2447d88c953b09584bcd0b84a9b7733bb87264b6542169d0f2686f9762dff6",
