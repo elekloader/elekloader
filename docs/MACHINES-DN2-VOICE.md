@@ -68,7 +68,7 @@ and the synth keeps its empty page. The linker refuses two mods that give pages 
 
 The same mod must carry a `dn2-voice-mono32-l2-v1` artifact with a matching
 `machine_id` and `entries: {"render_offset_bytes": ...}`. Require `core`
-(core 0.1) and `machines-dn2`. The linker refuses a missing/mismatched
+(core 0.2) and `machines-dn2`. The linker refuses a missing/mismatched
 payload or conflicting IDs.
 A build accepts at most one SHARC synth and one SHARC filter, in separate memory
 regions. Neither can be combined with a master-output SHARC mod.

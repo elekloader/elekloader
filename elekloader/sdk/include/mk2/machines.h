@@ -9,7 +9,7 @@
  * The stock firmware sees every custom synth as its host type, FM TONE: its
  * permissions, and its parameter ownership and MIDI CCs for the knobs.
  * DN2 IDs 5..31 are permanent across builds; never derive them from load order or reuse them
- * for a different mod. Names are ASCII (31 characters), labels at most 7. Requires core 0.1. */
+ * for a different mod. Names are ASCII (31 characters), labels at most 7. Requires core 0.2. */
 struct mk2_synth {
     uint32_t id;
     const char *name, *label;

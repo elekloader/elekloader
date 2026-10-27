@@ -45,7 +45,7 @@ monolithic build; section 4 says how to go from A to B.
   Octatrack's core, `mods/core-ot`, has a hook bus of its own from 0.2, with the Octatrack's events ("The hook bus on the
   Octatrack" below).
 - For a SHARC mod on the Digitone II: its compiled code, or the tools the
-  sine example uses to make it ("SHARC mods (core-dn2 0.1, Digitone II)"
+  sine example uses to make it ("SHARC mods (core-dn2 0.2, Digitone II)"
   below).
 
 ## 2. The rules
@@ -236,10 +236,10 @@ each OS version: look it up for the release you target, and build one
 `.elemod` per device and OS (a mod's `device` and `os`, or one of its
 `ports`, pick the stock file: 3.10).
 
-### SHARC mods (core-dn2 0.1, Digitone II)
+### SHARC mods (core-dn2 0.2, Digitone II)
 
 Experimental. On the Digitone II 1.12 a mod can run code on the DSP, at the
-master output. Core-dn2 0.1's bridge calls it once a block with 32 mono
+master output. Core-dn2 0.2's bridge calls it once a block with 32 mono
 samples at 48 kHz, which it may replace or change, and then copies them to
 both channels. A build has at most one such mod. It is not a machine you
 pick for a sound, an effect on a track or a polyphonic voice. The
@@ -253,7 +253,7 @@ one-time setup of the tools and your stock file, `mise run build-c` or
 makes the artifact, builds core and the mod, lints them and writes verified
 firmware. Both use the 32 KiB layout, so you choose no addresses, and
 neither uses the maintainers' reference scripts or the checked-in artifact.
-Set `"resources": {"core": "0.1"}` in your mod.json, as the examples do, so
+Set `"resources": {"core": "0.2"}` in your mod.json, as the examples do, so
 the loader picks a core with the bridge.
 
 **Any compiler will do.** elekloader takes the compiled code as an artifact
@@ -283,8 +283,8 @@ elekloader's own development.
 The checks cover the packaging: the guard, the 32 KiB covered in full, the
 stack and the firmware's size limits. They cannot prove what the
 instructions do, what they write, or that they meet the audio deadline.
-[SHARC-DN2.md](SHARC-DN2.md) describes the current memory and runtime
-limits. Qualify each changed workload before using it on the device.
+[SHARC-DN2.md](SHARC-DN2.md) has what the emulator and a unit showed for
+the sine variants, and the limits that remain.
 
 ### The hook bus on the Octatrack (core-ot 0.2)
 
@@ -3201,10 +3201,11 @@ Some differences from an octabam build, by design:
 | `SHARC filter machine_id must match its single native filter registration` / `DN2 filter registration requires a matching SHARC filter payload` | a filter descriptor and DSP artifact disagree, or the artifact is absent | package one matching descriptor and payload as the [filter contract](MACHINES-DN2-FILTER.md) describes |
 | `SHARC voice stack exceeds the profile limit` | the callback declares more than 128 stack bytes | reduce its stack use and declaration, then qualify the real workload |
 | `SHARC filter stack exceeds the profile limit` | the callback declares more than 20 stack bytes | reduce its stack use and declaration, then qualify the real workload |
+| `DN2 filter G needs a label of 1..5 printable ASCII characters and a default of 0..127` | a filter descriptor's `g` has an empty, too long or non-printable label, or a default above 127 | give G a label of one to five printable ASCII characters and a default of 0..127, or leave `g` out ([filter contract](MACHINES-DN2-FILTER.md)) |
 | `SHARC payload has a gap or overlap in its owner` | the segments and zero ranges do not cover the mod's owner exactly once | add a `zero` range for the bytes you do not use; fix overlapping offsets |
 | `SHARC mod code needs its profiled NOP read-ahead guard` | a code segment does not end in 64 bytes of NOPs (`0100` repeated) | pad the end of each code segment |
 | `SHARC entry is in the instruction read-ahead guard` / `SHARC entry is not in owned code` | a callback offset is in the guard, outside the code, or odd | link the callbacks inside a code segment, before its guard |
-| `active SHARC mod requires a qualified matching core bridge` / `has unqualified active SHARC core bytes or entry` | the bridge is not the one the device profile pins | build with core-dn2 0.1, its bridge unchanged; set `"resources": {"core": "0.1"}` |
+| `active SHARC mod requires a qualified matching core bridge` / `has unqualified active SHARC core bytes or entry` | the core is older than core-dn2 0.2, or its bridge is not the one the profile pins | build with core-dn2 0.2 or newer, its bridge unchanged; set `"resources": {"core": "0.2"}` |
 | `active SHARC stack exceeds the profile limit` | the mod declares more than 428 bytes of stack (the bridge's 116 and yours may not pass 544) | use less stack, and declare what you use |
 | `SHARC mods may combine only one DN2 voice and one DN2 filter` | the build has two mods of one kind, or mixes a master-output mod with a machine | use at most one synth and one filter, or one master-output mod |
 

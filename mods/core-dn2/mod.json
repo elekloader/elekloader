@@ -1,5 +1,5 @@
 {
- "id": "core", "version": "0.1",
+ "id": "core", "version": "0.2",
  "license": "GPL-2.0-or-later",
  "title": "core", "category": "Framework", "author": "irpina",
  "description": "The boot copier and the hook bus for the Digitone II: every other mod needs it. On its own it changes nothing the unit does.",

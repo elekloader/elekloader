@@ -3,7 +3,7 @@
 Experimental, OS 1.12 only. `machines-dn2` 0.1 registers custom SHARC
 filters in **FUNC+SYN → FLTR**. Filter selection
 is independent of the synth: a custom filter can process SINE or a stock
-synth. Require core-dn2 0.1. Timing, full-polyphony and long-duration
+synth. Require core-dn2 0.2. Timing, full-polyphony and long-duration
 stability are unqualified.
 
 ## Registration

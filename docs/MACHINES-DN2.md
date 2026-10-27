@@ -1,6 +1,6 @@
 # Digitone II machines
 
-Experimental, OS 1.12 only. `machines-dn2` is a companion to core-dn2 0.1.
+Experimental, OS 1.12 only. `machines-dn2` is a companion to core-dn2 0.2.
 It puts [SHARC track synths](MACHINES-DN2-VOICE.md) in the native
 **FUNC+SYN** selector and [filters](MACHINES-DN2-FILTER.md) in its FLTR
 category, using the `mk2_*` interface in `mk2/machines.h`. A mod registers

@@ -2,7 +2,7 @@
 
 The [C sine](../sharc-sine/README.md) with its sample loop written in SHARC+
 assembly. Both use the same C entry wrapper, phase table, 0.125 peak, note
-range and gain ramp. Core-dn2 0.1 picks the note and copies the mono block
+range and gain ramp. Core-dn2 0.2 picks the note and copies the mono block
 to both master channels.
 
 ## Build
@@ -20,14 +20,15 @@ builds verified firmware with the normal SDK, lint and patcher, in the
 
 The [callback contract](../../docs/SHARC-DN2-ABI.md) applies to every edited
 program. Only one mod can own the output and the 32 KiB.
-[SHARC-DN2.md](../../docs/SHARC-DN2.md#runtime-limits) describes the runtime
-limits. Qualify each changed executable and its timing on the target device.
+[SHARC-DN2.md](../../docs/SHARC-DN2.md#qualification) sums up what the
+emulator and the unit showed; instruction counts are not timings on the
+hardware.
 
 ## Package or reproduce the reference artifact
 
 The checked-in `sine.sharc.json` is this mod's code, in the 32 KiB layout.
 Package it without a SHARC compiler, with `DN2_CORE` set to a built
-core-dn2 0.1 `.elemod`:
+core-dn2 0.2 `.elemod`:
 
 ```sh
 python -m elekloader.sdk.build examples/sharc-sine-asm --stock "$DN2_STOCK"

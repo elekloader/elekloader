@@ -77,7 +77,8 @@ On the Digitone II 1.12 a format-2 mod may also carry code for the DSP, an
 ADSP-21569 SHARC+, in a top-level `sharc` object. This is experimental. Use
 the callback contract for a [master-output mod](SHARC-DN2-ABI.md), a
 [track synth](MACHINES-DN2-VOICE.md) or a
-[track filter](MACHINES-DN2-FILTER.md).
+[track filter](MACHINES-DN2-FILTER.md); [SHARC-DN2.md](SHARC-DN2.md) says what
+has been checked.
 
 **In mod.json**, `"sharc": {"artifact": "sine.sharc.json"}` names a file in
 the mod's folder; the SDK refuses a path outside it. The SDK copies the file
@@ -131,8 +132,8 @@ example's at 176 and 238; both declare 128 bytes of stack.
 For master-output mods, linking also refuses unless:
 - only one mod in the build has `sharc`;
 - a mod with entries has a core whose bridge is the one the device profile
-  pins: its bytes, its entry and its stack. That is core-dn2 0.1;
-  set `"resources": {"core": "0.1"}` so the loader picks it;
+  pins: its bytes, its entry and its stack. That is core-dn2 0.2 or newer;
+  set `"resources": {"core": "0.2"}` so the loader picks it;
 - the declared stacks fit: the bridge declares 116 bytes and the two
   together may not pass 544, so a mod has at most 428.
 
@@ -149,7 +150,7 @@ also adds:
 The writer packs section 7 again. The verifier checks that it depacks to the
 linked stream and fits its limits, that the seal and the update size are
 right, and that every other section is stock. Without a SHARC mod, section 7
-stays stock, with core 0.1 too.
+stays stock, with core 0.2 too.
 
 A mod's code, data and callback offsets may change from build to build with
 no change to elekloader: only its core bridge or machine adapter is pinned.

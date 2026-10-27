@@ -31,7 +31,7 @@ older ones people still have:
 | Digitone mk1, Digitone Keys | 1.43, 1.44 | `core-dn1-4.1.1.elemod`, `core-dn1-4.1.1-os1.44.elemod` | on main, not released: build it ([below](#building-a-core)) |
 | Digitone mk1, Digitone Keys | 1.43, 1.44 | `core-dn1-2.0a.elemod`, `core-dn1-2.0a-os1.44.elemod` | the v0.4.0 release, built into its apps |
 | Digitakt II | 1.17 | `core-dt2-1.0.elemod` | not released: build it ([below](#building-a-core)) |
-| Digitone II | 1.12 | `core-dn2-0.1.elemod` | experimental, not released: build it ([below](#building-a-core)) |
+| Digitone II | 1.12 | `core-dn2-0.2.elemod` | experimental, not released: build it ([below](#building-a-core)) |
 | Analog Rytm MKII | 1.74 | `core-ar2-0.3.elemod` | the [core-ar2-v0.3](https://github.com/irpina/elekloader/releases/tag/core-ar2-v0.3) pre-release, and the shop |
 | Analog Rytm MKII | 1.74 | `core-ar2-0.7.elemod` | on main, not released: build it ([below](#building-a-core)). Mods with pages built for 0.3 (rytm2_mods v1.2's lfo-rnd, voice-dac, euclid-accents, velocity-humanise, comp-preview) do not link with it: their sites overlap core's page sites |
 | Analog Rytm MKII | 1.73 | `core-ar2-0.2.elemod` | not released: the last core with 1.73; build it from commit 92a99c9 ([below](#building-a-core)) |
@@ -124,16 +124,17 @@ the one a mod that uses it names in `resources.core`.
 - **Digitakt II** ([mods/core-dt2](../mods/core-dt2)): SETTINGS and
   PERSONALIZE rows, and `.fast` code in SRAM. No render events: its audio
   renders on the DSP.
-- **Digitone II** ([mods/core-dn2](../mods/core-dn2), experimental): tick,
-  draw, key and encoder events, SETTINGS/PERSONALIZE rows, panel input,
-  bounded encoder turns, a monotonic clock and SysEx observers for
-  DigiHealth. Its audio runs on SHARC; there is no `.fast` area or
-  ColdFire audio-render event. DSP mods provide a prelinked artifact for
-  the [master-output contract](SHARC-DN2-ABI.md), or a
-  [selectable track synth](MACHINES-DN2-VOICE.md) and
-  [custom filter](MACHINES-DN2-FILTER.md). The
-  [machines companion](MACHINES-DN2.md) adds synth and filter registration
-  through the `mk2_*` tables. See the core README for build and API details.
+- **Digitone II** ([mods/core-dn2](../mods/core-dn2), experimental): the
+  Digitakt II's events and rows, without `.fast`; remote panel input and
+  SysEx observers (ADAPTING.md, "Remote panel input and SysEx"); and SHARC
+  mods, one mod's code on the DSP at the master output (core-dn2 0.2;
+  ADAPTING.md, "SHARC mods"; the [callback contract](SHARC-DN2-ABI.md) and
+  the [sine example](../examples/sharc-sine/README.md)). The
+  [machines companion](MACHINES-DN2.md) adds a
+  [selectable track synth](MACHINES-DN2-VOICE.md) and a
+  [custom filter](MACHINES-DN2-FILTER.md) through the `mk2_*` tables. An
+  elekloader without SHARC support, such as the 0.4.0 apps, refuses a 0.2
+  file, so 0.2 is released with an elekloader release.
 - **Analog Rytm MKII** ([mods/core-ar2](../mods/core-ar2)): SETTINGS rows
   and the render's entry and exit, which cover the digital path only (the
   sample voices, the delay and the reverb), not the analog voices. No

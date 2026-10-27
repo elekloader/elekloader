@@ -51,8 +51,24 @@ ELEKLOADER_STOCK=... ELEKLOADER_STOCK_154=... ELEKLOADER_OT_SYX=... ELEKLOADER_M
 node tests/test_web.mjs build/site   # the web page's engine, in Pyodide (packaging/build_web.py first)
 ```
 
-The Digitone II suite builds the current core and examples with the
-ColdFire tools. Keep all built `.elemod` files out of the repository.
+Four tests in the Digitone II suite compare with core-dn2 0.1. Give them a
+core-dn2 0.1 `.elemod` in `ELEKLOADER_DN2_CORE_01`, and a DN2 DigiHealth
+`.elemod` in `ELEKLOADER_DN2_DIGIHEALTH`, with the stock files above:
+
+```bash
+ELEKLOADER_DN2_SYX=Digitone_II_OS1.12.syx \
+ELEKLOADER_DN2_ZIP=Digitone_II_OS1.12_dist.zip \
+ELEKLOADER_DN2_CORE_01=path/to/core-dn2-0.1.elemod \
+ELEKLOADER_DN2_DIGIHEALTH=path/to/digihealth.elemod \
+python tests/test_digitone2.py
+```
+
+They check that 0.2 keeps 0.1's control side, building the same firmware
+for mods without SHARC code, DigiHealth included, and that the SHARC
+examples pick core 0.2.
+All four need the 0.1 core, and the DigiHealth one needs that mod too; a
+missing file skips them. The suite builds the current core and examples
+with the ColdFire tools. Keep the `.elemod` files out of the repository.
 
 ## The refusal fixtures
 

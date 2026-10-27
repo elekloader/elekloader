@@ -9,7 +9,7 @@
  "requires": [
   "core"
  ],
- "resources": {"core": "0.1"},
+ "resources": {"core": "0.2"},
  "sharc": {
   "artifact": "sine.sharc.json"
  }

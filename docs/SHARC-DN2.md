@@ -1,13 +1,15 @@
-# Digitone II SHARC implementation
+# Digitone II SHARC: how it works and what was checked
 
-Core-dn2 0.1 lets one mod run code on the Digitone II's DSP, at the master
+Core-dn2 0.2 lets one mod run code on the Digitone II's DSP, at the master
 output, on OS 1.12. The DSP is an ADSP-21569 running SHARC+ VISA
 instructions; its silicon stepping has not been observed. This page is for
 maintainers. Mod authors start with the
 [sine example](../examples/sharc-sine/README.md); the
 [callback contract](SHARC-DN2-ABI.md) says what a mod's code must do, and
 [FORMAT](FORMAT.md#digitone-ii-sharc-mod) what the file holds.
-Selectable synths use the [voice contract](MACHINES-DN2-VOICE.md).
+Selectable synths and filters (machines-dn2) use the same 32 KiB, split in
+two, with the [voice](MACHINES-DN2-VOICE.md) and [filter](MACHINES-DN2-FILTER.md)
+contracts; a build has either those or one master-output mod.
 
 ## The stock file and the writer
 
@@ -83,20 +85,51 @@ of the receive buffer. None of these limits is about mod RAM or stack. The
 writer also checks the packing, the seal (HMAC), the flash bounds, and that
 the main OS can be unpacked in place safely.
 
-## Runtime limits
+## How sure we are the memory is free
 
-The reservation is limited to 32 KiB. Static address analysis and emulator
-checks do not prove that arbitrary DSP code is safe: indirect, SIMD and
-circular accesses, cache behavior and physical deadlines require workload
-qualification. The implementation changes no cache, interrupt or memory
-controller settings. The NOP guard and declared stack are packaging bounds,
-not measurements of every instruction fetch or runtime stack use.
+The last byte the stock boot loads into L2 is at `0x2008823c`. Nothing being
+loaded somewhere does not prove it is free. A static analysis of the exact
+stock code, with
+[digikit's corrected access-width analysis](https://github.com/simonjohansson/digikit/commit/3ed5849c1fe55a7c1926c023e5617a51a1564989),
+found no direct access, data reference or resolved pointer range that
+touches the mod's 32 KiB. It resolved 2,979 pointer rows and left 192
+unknown, out of 25,878 indirect accesses. Indirect, SIMD and circular
+addressing are not fully analysed, so this is not a complete proof.
 
-Run the stock-file, writer, allocation, callback-binding and refusal tests
-with your stock file, and compare Python/TypeScript results. Exercise each
-changed DSP workload in the coupled emulator before device qualification.
-Detailed investigation evidence belongs in
-[the issue tracker](https://github.com/simonjohansson/elekloader/issues).
+In the coupled emulator, a canary over unmodified stock stayed intact at 44
+checkpoints over 5,136 DSP blocks, with MIDI, transport, pattern, page and
+effect-send requests; corrupting a byte on purpose was detected. That cannot
+see reads, writes of the same value, or a write undone before the next
+checkpoint, and it says nothing about the real cache. The implementation
+changes no cache, interrupt or memory-controller setting. The area stays
+experimental and limited to 32 KiB.
+
+## Qualification
+
+The current C and assembly sources were checked with fresh builds,
+Python/TypeScript parity, and the coupled emulator. The C and assembly
+builds gave identical 99,904-frame captures for notes 60, 69 and 72: finite
+samples, equal stereo channels, a peak of 0.125, silence after release, and
+no halt or missing block in the emulator. A clean checkout at a path with
+spaces built the same firmware bytes from the same inputs.
+
+On a unit, over USB, sine variants in C and assembly ran with the same
+bridge and the same placement, some with doubled phase steps. Each L2
+variant ran ten minutes of changing notes and releases over notes 36 to 84:
+392 note/release pairs, equal finite stereo channels, silence at the end,
+and no capture drops reported by the host. Limited checks of pattern and
+page changes, raised effect sends and project loads also completed. That is
+evidence for the implementation and the placement. The unit ran those
+variants; the firmware the current examples build was checked in the
+emulator, as above.
+
+The sine replaces the master output, so its capture cannot show how the
+stock voices or effects sound underneath. None of this establishes that any
+program is safe, how the DAC behaves, stress with heavy stock projects, the
+real cache and interrupt behaviour, the total DSP load or the cycle margin.
+Test each changed program on its own, including its timing. The 64-byte
+guard and the declared stack are packaging rules, not proofs of what the
+DSP really fetches or how much stack a program really uses.
 
 ## Sources and licences
 

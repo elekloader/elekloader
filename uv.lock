@@ -1,8 +1,0 @@
-version = 1
-revision = 5
-requires-python = ">=3.9"
-
-[[package]]
-name = "elekloader"
-version = "0.7.0"
-source = { editable = "." }
