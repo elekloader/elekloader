@@ -8,7 +8,7 @@ and release ramp, and the bridge copies them to both master channels.
 Releasing a different slot leaves the note playing.
 
 There is a C version (here) and an [assembly version](../sharc-sine-asm/README.md).
-Both need core-dn2 0.2 or newer (`resources.core`), and their build commands
+Both need core-dn2 0.1 (`resources.core`), and their build commands
 build that core too. This is one processor that owns the output, not a
 machine you pick for a sound or an effect on a track.
 
@@ -82,10 +82,9 @@ gate and memory. The packaging checks what is declared; it cannot prove
 what the instructions do, what they write, or that they meet the audio
 deadline.
 
-[SHARC-DN2.md](../../docs/SHARC-DN2.md#qualification) says what was checked
-in builds, in the emulator and on a unit, and where that stops. The
-examples are no general guarantee about a compiler or about timing on the
-hardware.
+[SHARC-DN2.md](../../docs/SHARC-DN2.md#runtime-limits) describes the memory
+and runtime limits. Qualify each changed executable in the emulator and on
+the target device, including its timing.
 
 ## Package or reproduce the reference artifact
 

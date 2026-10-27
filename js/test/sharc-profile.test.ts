@@ -10,7 +10,8 @@ test('DN2 SHARC profile grants the H1 core and mod reservation', () => {
   assert.equal(profile.isa, 'sharc+-visa')
   assert.equal(profile.siliconRevision, null)
   assert.deepEqual(profile.ownedRanges, [[0x282dd600, 0x282dde00], [0x20090000, 0x20098000]])
-  assert.deepEqual(profile.patchRanges, [[0x2838489a, 0x283848a0]])
+  assert.deepEqual(profile.patchRanges, [[0x2838489a, 0x283848a0], [0x20004a36, 0x20004a3c],
+    [0x28392b0e, 0x28392b14], [0x8052dba4, 0x8052dba8]])
   assert.equal(profile.abi, 'dn2-master-mono32-v1')
   assert.equal(profile.l2Abi, 'dn2-master-mono32-l2-v1')
   assert.deepEqual(profile.pitchRange, [0x282dda00, 0x282dde00])

@@ -35,7 +35,8 @@ class ProfileTests(unittest.TestCase):
         self.assertEqual(PROFILE['isa'], 'sharc+-visa')
         self.assertIsNone(PROFILE['silicon_revision'])
         self.assertEqual(PROFILE['owned_ranges'], ((0x282dd600, 0x282dde00), (0x20090000, 0x20098000)))
-        self.assertEqual(PROFILE['patch_ranges'], ((0x2838489a, 0x283848a0),))
+        self.assertEqual(PROFILE['patch_ranges'], ((0x2838489a, 0x283848a0), (0x20004a36, 0x20004a3c),
+                                                  (0x28392b0e, 0x28392b14), (0x8052dba4, 0x8052dba8)))
         self.assertEqual(PROFILE['abi'], 'dn2-master-mono32-v1')
         self.assertEqual(PROFILE['l2_abi'], 'dn2-master-mono32-l2-v1')
         self.assertEqual(PROFILE['pitch_range'], (0x282dda00, 0x282dde00))

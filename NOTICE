@@ -51,6 +51,17 @@ from a checkout the user supplies, and copies their sources into the mod
 folders it writes, with octabam's licence beside them. No octabam code is
 included here.
 
+Digitone II synth registration
+-----------------------------
+mods/machines-dn2 uses the OS 1.12 machine-path research and hook conventions
+from ElekLabs/digikit (GPL-2.0-or-later), revision
+38dfbe4ae88263511eed95691c07fc07e17b6f26, modules/core/machines and findings 02,
+33 and 52. It implements a smaller static machine registry using elekloader's
+existing contribution tables. The sound-reader and persistence corrections
+were cross-checked against angellinares/dn2_firmware_explore, revision
+39815895720b84c59ce2fa0ff5b13bd47dc415d2, docs/machine-list.md. All hook bytes
+are checked against the user's OS 1.12 file at build time.
+
 Elektron
 --------
 Elektron, Digitakt, Digitone, Syntakt and Analog are trademarks of Elektron
