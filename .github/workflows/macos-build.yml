@@ -12,7 +12,13 @@
 # self-tests it the same way. The .dmg is kept as the run's artifact and nothing
 # is attached to a release: for checking the signing before a release.
 #
-# Secrets (Settings > Secrets and variables > Actions):
+# The signing secrets belong to the `release` environment (Settings > Environments > release),
+# not to the repository: anyone with write access can run this workflow from a branch of their own
+# with the steps changed, and a repository secret would be theirs to read. The environment limits
+# deployment branches to main and the release tags and needs a maintainer's approval for each run,
+# so only the workflow as it is on main ever sees the certificate.
+#
+# Secrets (Settings > Environments > release > Environment secrets):
 #   MACOS_CERTIFICATE           the Developer ID Application certificate and its
 #                               private key, exported as a .p12, base64-encoded
 #   MACOS_CERTIFICATE_PASSWORD  the .p12's password
@@ -43,6 +49,7 @@ concurrency:
 jobs:
   macos-build:
     runs-on: macos-15
+    environment: release
     env:
       GH_TOKEN: ${{ github.token }}
       TAG: ${{ inputs.tag }}

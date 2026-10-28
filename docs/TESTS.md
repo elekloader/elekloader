@@ -29,6 +29,11 @@ filter envelope and an LFO moving the cutoff: the custom voice's captured
 cutoff and resonance must equal the stock voice's in every block, and its
 input must carry the G that CC 18 set.
 
+The **tests** workflow runs `test_units.py`, `test_link_refusals.py` and the
+TypeScript engine's tests (`node --test "js/test/*.test.ts"`) on every pull
+request and every push to `main`. The suites that need stock files do not run
+there, so say in the pull request which of them you ran.
+
 ```bash
 python tests/test_units.py        # includes SHARC; missing optional inputs are reported as skips
 python tests/test_link_refusals.py   # needs nothing: every refusal of the linker, refused and passed

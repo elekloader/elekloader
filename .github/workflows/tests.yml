@@ -1,0 +1,56 @@
+# The tests that need no firmware, on every pull request and every push to main.
+#
+# What pages.yml runs on a push to main, run before the merge instead: a pull request that breaks
+# the engine, the linker or the TypeScript port shows red here, and main can require this check
+# (Settings > Rules > Rulesets, or Branches: require status checks, "python" and "node").
+#
+# A test whose input files are not given is skipped, not passed (docs/TESTS.md): the suites that
+# need stock files (test_link, test_sdk, test_patcher, ...) do not run here, so say in the pull
+# request which of them you ran by hand.
+#
+# It holds no secrets and never checks out a fork's code with a token that can write: the token is
+# read-only (permissions below) and a fork's run needs a maintainer's approval the first time.
+name: tests
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# a new push to a pull request replaces its running tests
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  python:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Unit tests
+        run: python tests/test_units.py
+      - name: The linker's refusals
+        run: python tests/test_link_refusals.py
+
+  node:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          package-manager-cache: false
+      - name: The TypeScript engine
+        run: node --test "js/test/*.test.ts"

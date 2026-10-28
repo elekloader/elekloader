@@ -40,7 +40,10 @@ windows-build) does all of that on GitHub's macOS runner and attaches the
 ticked, it builds the branch it is run on with the given release's cores,
 signs, notarizes and self-tests it the same way, and keeps the `.dmg` as the
 run's artifact instead of attaching it: a check of the signing before a
-release. It needs these repository secrets:
+release. It runs in the `release` environment (Settings > Environments),
+limited to `main` and the release tags and approved by a maintainer for each
+run, and needs these environment secrets there, not repository secrets: a
+repository secret is readable by a workflow run from any branch.
 
 | secret | what |
 |---|---|
