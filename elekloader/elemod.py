@@ -103,6 +103,11 @@ def parts_bytes(parts, image, dev):
     return out
 
 
+def sharc_site(rel, address):
+    """An exact DSP data site the profile permits a format-2 companion to own."""
+    return (rel.sharc or {}).get('data_sites', {}).get(address)
+
+
 def parse_sites(doc, name, dev, rel, relocs=False):
     lo, hi = dev.main_load, dev.image_end(rel)
     out = []
@@ -112,7 +117,8 @@ def parse_sites(doc, name, dev, rel, relocs=False):
         new = _hex(s.get('new'), what)
         if len(new) != n or n <= 0:
             raise ModError('%s: "new" is not %d bytes' % (what, n))
-        if addr < lo or addr + n > hi:
+        dsp_site = sharc_site(rel, addr) if relocs else None
+        if (addr < lo or addr + n > hi) and not dsp_site:
             raise ModError('%s: 0x%08x +%d is outside the stock image' % (what, addr, n))
         if s.get('kind') not in ('code', 'data'):
             raise ModError('%s: kind is "code" or "data"' % what)
@@ -130,6 +136,10 @@ def parse_sites(doc, name, dev, rel, relocs=False):
                 if size is None or off < 0 or off + size > n:
                     raise ModError('%s: bad relocation %r' % (what, r))
                 site['relocs'].append((off, typ, tgt, _int(add, what)))
+        if dsp_site and (s['kind'] != 'data' or site['relocs'] or
+                         sha(bytes.fromhex(dsp_site[0])) != h.lower() or
+                         new != bytes.fromhex(dsp_site[1])):
+            raise ModError('%s: unqualified SHARC data site' % what)
         out.append(site)
     return out
 
@@ -363,7 +373,9 @@ def common_checks(mods, image, spans):
     for m in mods:
         for s in m.sites:
             o = s['addr'] - dev.main_load
-            if sha(image[o:o + s['len']]) != s['stock_sha256']:
+            dsp_site = sharc_site(m.rel, s['addr'])
+            stock = bytes.fromhex(dsp_site[0]) if dsp_site else image[o:o + s['len']]
+            if sha(stock) != s['stock_sha256']:
                 bad.append('%s site 0x%08x: the stock bytes are not the ones it expects'
                            % (m.label(), s['addr']))
             elif s['kind'] == 'code':

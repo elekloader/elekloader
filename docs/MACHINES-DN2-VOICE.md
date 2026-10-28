@@ -78,8 +78,8 @@ regions. Neither can be combined with a master-output SHARC mod.
 void sharc_voice_render(const struct dn2_voice_input *in);
 ```
 
-The 20-byte input is an output pointer, slot, unsigned 8.8 pitch, flags
-and `param`, this voice's 40 knob values (page p, knob k at `param[8p + k]`).
+The 24-byte input is an output pointer, slot, unsigned 8.8 pitch, flags,
+`param` and `state`. `param` is this voice's 40 knob values (page p, knob k at `param[8p + k]`).
 They are unsigned 8.8 (0..32512 = 0..127.0), the words the stock engines
 get: the voice's own values from its note-on, then live edits, parameter
 locks, LFOs and MIDI modulation, smoothed by the OS. An empty knob holds
@@ -88,6 +88,20 @@ Write all 32 mono floats at 48 kHz and return nothing. Slot is 0..15,
 **not the track number**: keep independent state per slot. A trigger edge's
 block is silent; the next block has settled pitch and `DN2_VOICE_START`.
 Reset phase on START. The stock envelope supplies release.
+
+For per-voice state, declare its type once, at file scope:
+
+```c
+struct voice { uint32_t phase; };
+DN2_VOICE_STATE(struct voice);
+```
+
+`in->state` then points at this slot's `struct voice`. There are 16, one
+per slot, zeroed when the DSP loads and kept between calls and across
+notes: the adapter never clears them, so reset what needs it on START.
+Without the macro `state` is null. `machine_from_executable` reads the
+size from the executable and reserves the 16 after the data, in the
+31 KiB data area; it refuses with the sizes when they do not fit.
 
 ## Context and memory
 
@@ -103,37 +117,56 @@ FIFO, other DAG registers, MODE2, interrupt masks, stack bases/lengths and
 the contents/depth of the hardware PC, loop and status stacks. Do not mask
 interrupts. Use the short-word C call/return convention (input in R4),
 return I6/I7 unchanged and retain the pinned constants needed by that
-convention. The callback may declare at most **128 stack bytes**; its
-adapter adds an eight-byte call frame. A declaration is not a measurement
-or an instruction sandbox.
+convention.
 
-The synth owns the first 16 KiB of the L2 reservation:
+The callback runs on its own 4 KiB stack in L1, `0x2de000..0x2df000`
+(loader `0x282de000`), not on the stock Audio Task's. It is in L1 like
+stock's stacks: a FreeRTOS context switch saves the task's registers onto
+the running stack, partly through the PM bus. The adapter points I7 at its
+top, with B7 at its base and L7 = 0 (linear), and puts stock's I7, B7 and
+L7 back afterwards. Writing B7 also loads I7, so it writes B7 first, with
+interrupts off for those few instructions. The callback may declare at
+most **2,048 stack bytes**, plus the adapter's eight-byte call frame. The
+rest is for interrupts: one taken during the call (its dispatcher, its C
+handler, a context switch's 516-byte save) pushes onto the same stack.
+
+The linker zero-fills the stack and writes a guard word at its base. The
+adapter checks the guard before and after every call. Once an overrun has
+broken it, the machine is called no more until the DSP reloads and its
+slots play silence; a tool reads the guard to see that. The overrun
+itself has already written below the stack by then. A declaration is not
+a measurement or an instruction sandbox.
+
+The synth owns 64 KiB of L2:
 
 | Part | Loader byte range | Size |
 |---|---|---|
 | Pinned adapter, including guard | `0x20090000..0x20090800` | 2 KiB |
-| Author code, including 64-byte guard | `0x20090800..0x20092000` | 6 KiB |
-| Author data | `0x20092000..0x20093c00` | 7 KiB |
-| Zeroed adapter state | `0x20093c00..0x20094000` | 1 KiB |
+| Author code, including 64-byte guard | `0x20090800..0x20098000` | 30 KiB |
+| Author data | `0x20098000..0x2009fc00` | 31 KiB |
+| Zeroed adapter state | `0x2009fc00..0x200a0000` | 1 KiB |
 
-Ranges exclude their end. A producer's build script reads
-`elekloader.sdk.sharc.machine_layout('voice')` for the compiler-independent
-`code_pc16`, `code_bytes`, `data_address` and `data_bytes` bounds. Link the
-kernel and data at those addresses, then call
-`voice_artifact(code, data, render_offset_bytes, machine_id, stack_bytes)`.
-The entry offset counts from the start of the supplied kernel; data may
-be empty. The SDK adds the pinned adapter, NOP padding and zero ranges;
-the producer owns compilation. The linker writes the render PC and ID at
-`0x20093e00`. Keep writes in the author data area and supplied voice buffer.
+Ranges exclude their end. A mod's build never names them: it compiles the
+kernel, links it with the script `elekloader.sdk.sharc.machine_linker_script('voice')`
+writes (code from `seg_swco`, data from `seg_dmda`, entry
+`sharc_voice_render`), and passes the linked executable to
+`machine_from_executable('voice', executable, machine_id)`. That checks the
+placement, guard and entry and returns the artifact; `stack_bytes` defaults to
+the limit below. Compilation belongs to the mod. A producer that links some other
+way can call `voice_artifact(code, data, render_offset_bytes, machine_id,
+stack_bytes)` with the bounds `machine_layout('voice')` gives. The SDK adds the
+pinned adapter, the code's NOP guard and the zero ranges (zeroed words are NOPs, so unused code
+space costs no update bytes). The linker writes the render PC and ID at
+`0x2009fe00`, and the voice state's address and one voice's size at `0x2009fe20`. Keep writes in the author data area and supplied voice buffer.
 
 The exact OS 1.12 hook is PC16 `0xb8251b`, loader `0x20004a36`, called by
 the voice pipeline at `0x1c9459`. Its guarded six-byte stack adjustment is
 `8715ffffeeff`; the adapter executes it and continues at `0xb8251e`.
 Rebuild both machine adapters from `mods/machines-dn2/*-bridge.s` with
 `rebuild_voice.py`; the Selache pin is
-`2b26d3b75c53063575bc5c820fa0d38879335187`. The voice adapter's 1,840 code
+`2b26d3b75c53063575bc5c820fa0d38879335187`. The voice adapter's 1,980 code
 bytes are padded to 2 KiB, SHA-256
-`11cb0abb8a60cd9e97253ff7a8c063b90bd70f110a1cee95c52c98a98dbbcef1`.
+`5bbf8b98c5ff13d4121a17e2d7a8ca550f05821b4564a67c0ce84737319da3f0`.
 
 The adapter uses register counts for right shifts. This Selache pin omits
 the required sign-extension bits in negative immediate shifts, which can

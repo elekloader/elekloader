@@ -304,7 +304,8 @@ CORE_SITES = ((0x40000538, '4eb9400019b0'), (0x4002e464, '4eb94011d5d4'),
               (0x4002e4ca, '4eb94011d60a'), (0x4002f20c, '4eb94002c5c8'),
               (0x4002f256, '4eb94002c55c'), (0x4009ff88, '205248780002'),
               (0x400987a2, '4cef7c7c0018'), (0x4011fc8c, '4fefffbc48d77cfc'),
-              (0x4011f8c4, '52b9466768b0'), (0x4012197a, '47f940207f9e'))
+              (0x4011f8c4, '52b9466768b0'), (0x4012197a, '47f940207f9e'),
+              (0x40025e9e, '4eb9400cf922'))
 
 
 def at(img, addr, n):
@@ -371,7 +372,8 @@ CORE_HOOKS = {0x40000538: ('4eb9', 'boot'), 0x4002e464: ('4eb9', 'core_tick'),
               0x400987a2: ('4ef9', 'core_personalize'),
               0x4011fc8c: ('4ef9', 'core_panel_buttons'),
               0x4011f8c4: ('4eb9', 'core_panel_clock'),
-              0x4012197a: ('4eb9', 'core_sysex')}
+              0x4012197a: ('4eb9', 'core_sysex'),
+              0x40025e9e: ('4eb9', 'core_dsp_frame')}
 
 
 def assert_hooked(new, man):
@@ -486,47 +488,66 @@ def test_hooks_check_links_with_core():
                'settings:HOOK TEST')
 
 
-def test_core_0_2_preserves_the_0_1_control_contract():
-    """0.2 adds its dormant SHARC bridge; every 0.1 control-side byte,
-    address, table and reservation stays the same."""
+PEEK_SITE = 0x40025e9e          # 0.3: the frame sender's call of the SPI driver
+PEEK_EXPORTS = {'core_dsp_frame', 'core_dsp_peek', 'core_dsp_peek_status', 'core_dsp_peek_data',
+                'core_dsp_peek_stop', 'core_dsp_span'}
+
+
+def test_core_0_3_keeps_the_0_1_control_contract_and_adds_only_the_peek():
+    """0.2 added its dormant SHARC bridge and 0.3 the DSP peek: one site at the frame sender,
+    and its code after 0.1's. Every 0.1 site, symbol, relocation, table and reservation stays."""
     old = json.loads(need(CORE_01, 'ELEKLOADER_DN2_CORE_01'))
     with tempfile.TemporaryDirectory() as tmp:
         with open(built(os.path.join('mods', 'core-dn2'), tmp)) as fh:
             new = json.load(fh)
-    assert old['version'] == '0.1' and new['version'] == '0.2'
-    for key in ('target', 'sites', 'sections', 'symbols', 'imports', 'exports',
-                'collections', 'contribute', 'relocs', 'resources', 'copied', 'weak'):
+    assert old['version'] == '0.1' and new['version'] == '0.3'
+    for key in ('target', 'imports', 'collections', 'contribute', 'resources', 'copied', 'weak'):
         assert new[key] == old[key], key
+    added = [x for x in new['sites'] if x not in old['sites']]
+    assert [x for x in new['sites'] if x in old['sites']] == old['sites']
+    assert [(int(x['addr'], 0), x['relocs']) for x in added] == [(PEEK_SITE, [[2, 'abs32', 'sym:core_dsp_frame', 0]])]
+    assert all(new['symbols'].get(k) == v for k, v in old['symbols'].items())   # 0.1's code has not moved
+    assert set(new['exports']) - set(old['exports']) == PEEK_EXPORTS
+    assert all(r in new['relocs'] for r in old['relocs'])
     assert 'sharc' not in old and new['sharc']['entries'] is not None
 
 
-def check_control_firmware_identical(old, new, mods):
-    """Keep the version label equal so only core selection can affect bytes."""
-    outputs = []
+def check_control_firmware_adds_only_the_peek(old, new, mods):
+    """The same build with core 0.1 and with this core, the version label equal: the DSP stays
+    stock, and in the stock image only the peek's site differs, and the other mods' sites,
+    whose handlers move up with core's larger code and RAM."""
+    images = []
     for core in (old, new):
         output, _man = patch.build(SYX, [core] + list(mods), version='CP02', log=lambda *a: None)
         parsed = formats.parse(output['syx'], DEV)
         assert parsed.stored[7] == stock()[0].stored[7]
-        outputs.append(output)
-    assert outputs[0] == outputs[1]
+        images.append(formats.main_image(parsed, DEV))
+    sites = [(PEEK_SITE, 6)]
+    for mod in mods:
+        with open(mod) as fh:
+            sites += [(int(x['addr'], 0), x['len']) for x in json.load(fh)['sites']]
+    sites = [(a - DEV.main_load, n) for a, n in sites]
+    changed = [i for i in range(len(stock()[1])) if images[0][i] != images[1][i]]
+    assert changed and all(any(a <= i < a + n for a, n in sites) for i in changed)
+    assert at(images[1], PEEK_SITE, 2) == '4eb9'
 
 
-def test_core_0_2_keeps_existing_control_firmware_identical():
+def test_core_0_3_changes_existing_control_firmware_only_by_the_peek():
     need(CORE_01, 'ELEKLOADER_DN2_CORE_01')
     with tempfile.TemporaryDirectory() as tmp:
         core = built(os.path.join('mods', 'core-dn2'), tmp)
-        check_control_firmware_identical(CORE_01, core, [])
+        check_control_firmware_adds_only_the_peek(CORE_01, core, [])
         for example in ('hello-marker-dn2', 'hooks-check-dn2'):
             mod = built(os.path.join('examples', example), tmp)
-            check_control_firmware_identical(CORE_01, core, [mod])
+            check_control_firmware_adds_only_the_peek(CORE_01, core, [mod])
 
 
-def test_core_0_2_keeps_existing_digihealth_firmware_identical():
+def test_core_0_3_changes_existing_digihealth_firmware_only_by_the_peek():
     need(CORE_01, 'ELEKLOADER_DN2_CORE_01')
     need(DIGIHEALTH, 'ELEKLOADER_DN2_DIGIHEALTH')
     with tempfile.TemporaryDirectory() as tmp:
         core = built(os.path.join('mods', 'core-dn2'), tmp)
-        check_control_firmware_identical(CORE_01, core, [DIGIHEALTH])
+        check_control_firmware_adds_only_the_peek(CORE_01, core, [DIGIHEALTH])
 
 
 def test_sharc_examples_require_and_select_core_0_2():

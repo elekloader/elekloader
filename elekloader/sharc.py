@@ -50,6 +50,20 @@ def byte_span(profile, address, size, unit='loader-byte', *, check_protected=Tru
     raise ModError('SHARC byte span is outside the supported address map')
 
 
+def suspect_shifts(code):
+    """Byte offsets in CODE (loader order) of what look like shifts by an immediate count whose
+    sign is not extended (Type 6b: a negative count needs DATAEX 0xf). One halts a real DSP; the
+    pinned Selache emits it for `LSHIFT/ASHIFT ... BY -n`. The scan tries every halfword without
+    instruction boundaries, so a hit is a lead to check in the listing, not proof."""
+    offsets = []
+    for offset in range(0, len(code) - 5, 2):
+        a, b, c = struct.unpack_from('<3H', code, offset)
+        word = (a << 32) | (b << 16) | c
+        if word & 0xffc187ff0000 == 0x020000000000 and (word >> 27) & 15 != (15 if word & 0x8000 else 0):
+            offsets.append(offset)
+    return offsets
+
+
 def pc16(profile, address):
     """Map a loader byte address to an instruction pointer, without truncation."""
     byte_span(profile, address, 2)
@@ -170,7 +184,9 @@ def insert(stream, profile, *, loads=(), fills=(), patches=()):
                 or target % 2 or len(old) % 2:
             raise ModError('SHARC patch needs equal nonempty instruction bytes')
         lo, hi = byte_span(profile, target, len(old), check_protected=False)
-        if not any(start <= lo and hi <= end for start, end in profile.get('patch_ranges', ())):
+        qualified = profile.get('data_sites', {}).get(target)
+        if qualified != (old.hex(), new.hex()) and not any(
+                start <= lo and hi <= end for start, end in profile.get('patch_ranges', ())):
             raise ModError('SHARC patch is outside the profile patch range')
         overlaps = [r for r in records if r.flags in (LOAD, FILL)
                     and r.target < hi and lo < r.target + r.count]
@@ -215,7 +231,8 @@ def module_payload(doc, profile, core=False):
     keys = {'abi', 'segments', 'zero', 'entries', 'stack_bytes'}
     if machine_kind:
         keys.add('machine_id')
-    if not isinstance(doc, dict) or set(doc) != keys:
+    given = set(doc) - {'voice_state'} if isinstance(doc, dict) and machine_kind else set(doc) if isinstance(doc, dict) else None
+    if given != keys:
         if machine_kind:
             raise ModError('SHARC %s payload needs exactly abi, segments, zero, entries, stack_bytes, machine_id' % machine_kind)
         raise ModError('SHARC payload needs exactly abi, segments, zero, entries, stack_bytes')
@@ -295,10 +312,18 @@ def module_payload(doc, profile, core=False):
                 or any(off < prefix or off + count > state for off, count in zeros if off != state) \
                 or entries['render_offset_bytes'] < prefix:
             raise ModError('SHARC %s mod overlaps the adapter reservation' % machine_kind)
+        voice = doc.get('voice_state')
+        if 'voice_state' in doc:
+            if not isinstance(voice, dict) or set(voice) != {'offset_bytes', 'voice_bytes'}:
+                raise ModError('SHARC %s voice_state needs exactly offset_bytes, voice_bytes' % machine_kind)
+            off, each = voice['offset_bytes'], voice['voice_bytes']
+            if not _uint32(off) or not _uint32(each) or not each or off % 8 or each % 4 \
+                    or not any(z <= off and off + 16 * each <= z + n for z, n in zeros if z != state):
+                raise ModError('SHARC %s voice_state must be 16 zeroed voices inside the mod' % machine_kind)
     stack = doc['stack_bytes']
     if machine_kind and (not _uint32(stack) or stack > profile[machine_kind + '_stack_max']):
         raise ModError('SHARC %s stack exceeds the profile limit' % machine_kind)
-    if not _uint32(stack) or stack > profile['stack_max']:
+    if not machine_kind and (not _uint32(stack) or stack > profile['stack_max']):   # machines run on their own stack
         raise ModError('SHARC stack contribution exceeds the profile limit')
     if entries is None and stack:
         raise ModError('inert SHARC payload must declare zero stack')
@@ -307,4 +332,6 @@ def module_payload(doc, profile, core=False):
     if machine_kind:
         result['machine_id'] = doc['machine_id']
         result['machine_kind'] = machine_kind
+        voice = doc.get('voice_state')
+        result['voice_state'] = (voice['offset_bytes'], voice['voice_bytes']) if voice else None
     return result

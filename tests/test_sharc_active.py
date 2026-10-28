@@ -103,7 +103,7 @@ class ActiveSineTests(unittest.TestCase):
                     with self.assertRaisesRegex(elemod.ModError, 'SHARC stored section exceeds the profile limit'):
                         link.link([core, selected], image, sharc_stream=stock.section(7))
                 records = sharc.parse(linked.sharc_stream, profile)
-                self.assertEqual(len(records), profile['record_count'] + 9)
+                self.assertEqual(len(records), profile['record_count'] + 9 + 2)   # + the DSP peek's load and fill
                 self.assertEqual(linked.layout['sharc']['hook'], profile['hook'][0])
                 self.assertEqual(linked.layout['sharc']['core'], list(profile['core_range']))
                 self.assertEqual(linked.layout['sharc']['owner'], [0x20090000, 0x20098000])

@@ -37,6 +37,11 @@ A **site** is a change to the stock main OS:
 - A `code` site must be whole instructions: the end exactly, and the start
   by linear sweeps that must all land on it.
 - `relocs` exist in format 2 only.
+- On the Digitone II, format 2 also accepts the profile's exact SHARC
+  `data_sites`: fixed data sites with no relocations. Their stock hash,
+  length and replacement must match the profile. They patch section 7
+  through the SHARC writer, require a SHARC mod, and share the usual
+  overlap checks. Other addresses outside the main OS are refused.
 
 Wherever a mod's bytes repeat the firmware, it can say
 `["stock", "0x40071998", 58]` in place of the bytes. The loader then copies
@@ -98,12 +103,17 @@ makes one from C or assembly.
 | `dn2-filter-mono32-l2-v1` | 6..31 | `mk2_voice_filters` |
 
 Each kind has its own ID namespace. A build accepts at most one of
-each kind, with separate 16 KiB owners, and cannot mix them with a
+each kind, with separate 64 KiB owners, and cannot mix them with a
 master-output mod. Each machine artifact starts with the profiled 2 KiB
 adapter and ends with exactly 1 KiB of zeroed adapter state. Author bytes
-and the render entry must stay outside those reservations. The linker
-writes each callback's address and ID into its adapter state and patches
-that kind's stock hook. It leaves the master hook and L1 bridge untouched.
+and the render entry must stay outside those reservations. An optional
+`voice_state: {"offset_bytes", "voice_bytes"}` reserves state for each of
+the 16 voices: `offset_bytes` is 8-byte aligned, `voice_bytes` a whole
+number of words, and the 16 voices lie inside one of the mod's `zero`
+ranges. The linker writes each callback's address and ID into its adapter
+state, the voice state's address and one voice's size 32 bytes after them,
+zero-fills that kind's 4 KiB stack in L1 with a guard word at its base,
+and patches that kind's stock hook. It leaves the master hook and L1 bridge untouched.
 The callback references above define the memory bounds and stack limits.
 
 **The master-output object** has exactly these fields:

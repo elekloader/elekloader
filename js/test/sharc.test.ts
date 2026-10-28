@@ -50,6 +50,10 @@ test('active DN2 keyed callbacks accept bounded mods and require the pinned brid
     else changed.stack_bytes -= 4
     assert(problems(changed, original).some(p => p.includes('unqualified active SHARC core bytes or entry')), mutation)
   }
+  // The master-output mod runs on the stock Audio Task's stack; only machines get their own.
+  const over = structuredClone(original)
+  over.stack_bytes = profile.stackMax! + 4
+  refusal(() => sharc.modulePayload(over, profile), 'SHARC stack contribution exceeds the profile limit')
   const large = structuredClone(original)
   large.stack_bytes = profile.stackMax
   assert(problems(bridge, large).includes('active SHARC stack exceeds the profile limit'))
@@ -158,6 +162,10 @@ test('SHARC instruction patch requires exact unique stock load', () => {
   const p = { ...synthetic, decodedSha256: sha(data), patchRanges: [[0x20001000, 0x20001004] as [number, number]] }
   const patched = sharc.insert(data, p, [], [], [[0x20001000, bytes('0506'), bytes('aabb')]])
   assert.equal(Buffer.from(patched.subarray(84, 88)).toString('hex'), 'aabb0708')
+  const companion = { ...p, patchRanges: [], dataSites: { 0x20001000: ['0506', 'aabb'] as [string, string] } }
+  assert.deepEqual(sharc.insert(data, companion, [], [], [[0x20001000, bytes('0506'), bytes('aabb')]]), patched)
+  refusal(() => sharc.insert(data, companion, [], [], [[0x20001000, bytes('0506'), bytes('aacc')]]),
+    'SHARC patch is outside the profile patch range')
   refusal(() => sharc.insert(data, p, [], [], [[0x20001000, bytes('0006'), bytes('aabb')]]),
     'SHARC patch stock instruction does not match')
   refusal(() => sharc.insert(data, { ...p, patchRanges: [] }, [], [], [[0x20001000, bytes('0506'), bytes('aabb')]]),
@@ -181,11 +189,19 @@ test('SHARC owner-stock exact no-op', { skip: !process.env.ELEKLOADER_DN2_SYX },
   const spans = records.filter(r => r.flags === sharc.LOAD || r.flags === sharc.FILL)
     .map(r => sharc.byteSpan(profile, r.target, r.count, 'loader-byte', false))
   assert.equal(spans.reduce((n, [a, b], i) => n + spans.slice(i+1).filter(([c, d]) => a < d && c < b).length, 0), 15)
-  refusal(() => sharc.insert(decoded, profile, [], [[0x20098000, 4, 0]]), 'SHARC new load or fill is outside the profile-owned ranges')
+  refusal(() => sharc.insert(decoded, profile, [], [[0x200b0000, 4, 0]]), 'SHARC new load or fill is outside the profile-owned ranges')
   const patched = sharc.insert(decoded, profile, [], [], [[0x2838489a, bytes('8715ffff78ff'), bytes('3e06160006eb')]])
   const changed = [...decoded.keys()].filter(i => decoded[i] !== patched[i])
   assert.equal(changed.length, 6)
   assert.equal(Buffer.from(patched.subarray(changed[0], changed[0] + 6)).toString('hex'), '3e06160006eb')
+  // core-dn2's DSP peek, as the linker inserts it with any SHARC mod: owned, and its hook matches stock.
+  const [peekLo, peekHi] = profile.peekRange!, peek = bytes(profile.peekCode!), [site, old, replacement] = profile.peekHook!
+  const [idleAddress, [idleOld, idleNew]] = Object.entries(profile.dataSites!)[0]
+  const idleSite = Number(idleAddress)
+  const withPeek = sharc.insert(decoded, profile, [[peekLo, peek]], [[peekLo + peek.length, peekHi - peekLo - peek.length, 0]],
+    [[site, bytes(old), bytes(replacement)], [idleSite, bytes(idleOld), bytes(idleNew)]])
+  const peekRecords = sharc.parse(withPeek, profile)
+  assert(peekRecords.some(r => r.flags === sharc.LOAD && r.target === peekLo && Buffer.from(r.raw.subarray(16, 16 + peek.length)).equals(peek)))
   const outputs = formats.write(parsed, parsed.stored.get(device.mainSection)!, device)
   assert.deepEqual(Buffer.from(outputs.syx), raw)
   formats.verify(outputs, parsed, formats.mainImage(parsed, device), device)
@@ -196,8 +212,9 @@ function machineArtifact(kind: 'voice' | 'filter', id = 6) {
   return { abi: profile[`${kind}Abi`], machine_id: id, stack_bytes: profile[`${kind}StackMax`]!,
     entries: { render_offset_bytes: 2048 } as { render_offset_bytes: number } | null,
     segments: [prefix, { offset_bytes: 2048, kind: 'code', hex: '0100'.repeat(3072) },
-      { offset_bytes: 8192, kind: 'data', hex: '00000000' }],
-    zero: [{ offset_bytes: 8196, size_bytes: 7164 }, { offset_bytes: 15360, size_bytes: 1024 }] }
+      { offset_bytes: 32768, kind: 'data', hex: '00000000' }],
+    zero: [{ offset_bytes: 8192, size_bytes: 24576 }, { offset_bytes: 32772, size_bytes: 31740 },
+      { offset_bytes: 64512, size_bytes: 1024 }] }
 }
 
 for (const kind of ['voice', 'filter'] as const) test(`DN2 ${kind} artifacts pin only the adapter and bound the author kernel`, () => {
@@ -218,19 +235,29 @@ for (const kind of ['voice', 'filter'] as const) test(`DN2 ${kind} artifacts pin
     [(d: any) => { d.entries.render_offset_bytes = 8192 }, 'SHARC entry is not in owned code'],
     [(d: any) => { d.segments[0].hex = '0000' + d.segments[0].hex.slice(4) }, `SHARC ${kind} adapter does not match the qualified prefix`],
     [(d: any) => { d.segments[1].hex = d.segments[1].hex.slice(0, -4) + '0000' }, 'SHARC mod code needs its profiled NOP read-ahead guard'],
-    [(d: any) => { d.zero[1].size_bytes += 4 }, 'SHARC zero range is unaligned or exceeds its owner'],
+    [(d: any) => { d.zero[2].size_bytes += 4 }, 'SHARC zero range is unaligned or exceeds its owner'],
     [(d: any) => { d.segments[2].offset_bytes -= 4 }, 'SHARC payload has a gap or overlap in its owner'],
-    [(d: any) => { d.zero = [{ offset_bytes: 8196, size_bytes: 8188 }] }, `SHARC ${kind} mod overlaps the adapter reservation`],
+    [(d: any) => { d.zero = [d.zero[0], { offset_bytes: 32772, size_bytes: 32764 }] }, `SHARC ${kind} mod overlaps the adapter reservation`],
   ] as const) {
     const bad = structuredClone(artifact)
     change(bad)
     refusal(() => sharc.modulePayload(bad, profile), error)
   }
   artifact.segments[1].hex = '0000' + artifact.segments[1].hex.slice(4)
-  sharc.modulePayload(artifact, profile)
+  assert.equal(sharc.modulePayload(artifact, profile).voiceState, null)
+  const shape = `SHARC ${kind} voice_state needs exactly offset_bytes, voice_bytes`
+  const inside = `SHARC ${kind} voice_state must be 16 zeroed voices inside the mod`
+  for (const [voice, error] of [
+    [null, shape], [{ offset_bytes: 32776, voice_bytes: 12, extra: 1 }, shape], [[32776, 12], shape],
+    [{ offset_bytes: 32780, voice_bytes: 12 }, inside], [{ offset_bytes: 32776, voice_bytes: 0 }, inside],
+    [{ offset_bytes: 32776, voice_bytes: 6 }, inside], [{ offset_bytes: 32776, voice_bytes: 1984 }, inside],
+    [{ offset_bytes: 64512, voice_bytes: 4 }, inside], [{ offset_bytes: 32768, voice_bytes: 4 }, inside],
+  ] as const) refusal(() => sharc.modulePayload({ ...artifact, voice_state: voice }, profile), error)
+  assert.deepEqual(sharc.modulePayload({ ...artifact, voice_state: { offset_bytes: 32776, voice_bytes: 12 } }, profile).voiceState,
+    [32776, 12])
   // A stateless filter may have no data segment; its complete owner is still initialized.
   artifact.segments.pop()
-  artifact.zero[0] = { offset_bytes: 8192, size_bytes: 7168 }
+  artifact.zero = [{ offset_bytes: 8192, size_bytes: 56320 }, { offset_bytes: 64512, size_bytes: 1024 }]
   sharc.modulePayload(artifact, profile)
 })
 
@@ -344,5 +371,24 @@ test('DN2 machine IDs can span stored parts without losing the SHARC registratio
     assert.deepEqual(relocated.impliedNames(image), [])
     assert(check([core, relocated], image).includes(
       'voice 0.1: SHARC voice machine_id must match its single native voice registration'))
+  }
+})
+
+test('DN2 busy companion accepts only its exact data site and requires a SHARC payload', () => {
+  const rel = DIGITONE_MK2.releases[0], target = targetOf(DIGITONE_MK2, rel)
+  const [address, [old, replacement]] = Object.entries(profile.dataSites!)[0]
+  const doc = { elemod: 2, id: 'busy', version: '0.1', target, sections: {},
+    sites: [{ addr: Number(address), len: bytes(old).length, kind: 'data', stock_sha256: sha(bytes(old)), new: replacement }] }
+  const busy = new Mod2(doc, 'busy')
+  const image = new Uint8Array(rel.mainLen)
+  assert.ok(check([busy], image).includes('busy 0.1: SHARC data site requires a SHARC mod'))
+  const core = new Mod2({ elemod: 2, id: 'core', version: '0.3', target,
+    sections: { '.boot': { parts: [['hex', '4e75']] } } }, 'core')
+  const app = new Mod2({ elemod: 2, id: 'app', version: '0.1', target, sections: {}, sharc: inertArtifact }, 'app')
+  assert.deepEqual(check([core, busy, app], image), [])
+  for (const change of [{ new: old }, { kind: 'code' }, { stock_sha256: '0'.repeat(64) },
+    { relocs: [[0, 'abs32', 'abs', 0]] }, { len: 4, new: replacement.slice(0, 8) }]) {
+    refusal(() => new Mod2({ ...doc, sites: [{ ...doc.sites[0], ...change }] }, 'busy'),
+      'busy site 0: unqualified SHARC data site')
   }
 })
