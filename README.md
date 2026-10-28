@@ -30,7 +30,7 @@ file on your own machine, and you flash it the way you flash any OS update.
 
 ## Get started
 
-- **In your browser, nothing to install:** <https://irpina.github.io/elekloader/>.
+- **In your browser, nothing to install:** <https://elekloader.github.io/elekloader/>.
   Drop in your stock OS file, add mods from its shop or your own, build, and
   download the result. Your files are never uploaded.
 - **Windows or macOS:** the apps on

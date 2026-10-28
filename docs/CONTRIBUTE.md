@@ -14,10 +14,10 @@ notes of the version that takes it. The list on this page is the
 community's to-do list.
 
 New to it? The web page's Contribute view has short guides:
-[Get started developing](https://irpina.github.io/elekloader/#contribute/start),
-[What is a core mod?](https://irpina.github.io/elekloader/#contribute/core),
-[Your first pull request](https://irpina.github.io/elekloader/#contribute/pr) and
-[Test before you flash](https://irpina.github.io/elekloader/#contribute/test).
+[Get started developing](https://elekloader.github.io/elekloader/#contribute/start),
+[What is a core mod?](https://elekloader.github.io/elekloader/#contribute/core),
+[Your first pull request](https://elekloader.github.io/elekloader/#contribute/pr) and
+[Test before you flash](https://elekloader.github.io/elekloader/#contribute/test).
 
 ## Ways to help
 
@@ -122,7 +122,7 @@ lines), so nobody keeps it by hand. A fork's board counts the fork's own
 pull requests.
 
 The web page's **Contribute** view always shows the list for the shop's
-current files ([irpina.github.io/elekloader/#contribute](https://irpina.github.io/elekloader/#contribute)).
+current files ([elekloader.github.io/elekloader/#contribute](https://elekloader.github.io/elekloader/#contribute)).
 The site holds no firmware, so it groups sites by distance rather than
 by routine, and so it shows a few more entries than the copy below. To
 make this copy again, with the shop's files, the upstream list and the

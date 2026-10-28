@@ -1,6 +1,6 @@
 # elekloader in the browser
 
-<https://irpina.github.io/elekloader/> is elekloader's patcher as a static
+<https://elekloader.github.io/elekloader/> is elekloader's patcher as a static
 web page. You pick mods from its library or add your own `.elemod` files,
 drop in your stock OS file, tick mods, and download the patched `.syx` (and,
 for the Octatrack, the `.bin`), with the build manifest. The build runs in

@@ -7,7 +7,7 @@ needs the stock OS file for your device ([below](#the-stock-os-file)).
 
 ## In your browser
 
-Nothing to install: <https://irpina.github.io/elekloader/>.
+Nothing to install: <https://elekloader.github.io/elekloader/>.
 Drop in your stock OS file, add mods from its library or your own, tick them,
 build, and download the `.syx` (and, for the Octatrack, the `.bin`). The build runs in the page, in
 Python compiled to WebAssembly ([Pyodide](https://pyodide.org)), with
