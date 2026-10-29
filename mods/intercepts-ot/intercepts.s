@@ -1,6 +1,6 @@
 | SPDX-License-Identifier: GPL-2.0-or-later
 | intercepts for the Octatrack, OS 1.40C: places in the stock firmware a mod
-| intercepts, one mod at a time (intercepts 0.1). ColdFire V4 (MCF5445x);
+| intercepts, one mod at a time (intercepts 0.2). ColdFire V4 (MCF5445x);
 | assemble with -mcpu=54455.
 |
 | An intercept gives its site to one mod. Its table holds 8-byte records,
@@ -63,7 +63,7 @@ intercept_find:
         rts
 
 | INTERCEPT event, arg: the stub the event's site jumps to (or calls). arg is
-| the claims argument: none (0), d2, or track (the byte at TRACK). When a
+| the claims argument: none (0), d2, d7, or track (the byte at TRACK). When a
 | record intercepts the call it leaves through the slot it reserved, into the
 | record's entry; otherwise it falls through, everything as at the site, into
 | the stock instructions written after it.
@@ -78,9 +78,13 @@ intercept_\event:
         .ifc    \arg, d2
         move.l  %d2, %d1
         .else
+        .ifc    \arg, d7
+        move.l  %d7, %d1
+        .else
         moveq   #0, %d1
         .ifc    \arg, track
         move.b  TRACK, %d1
+        .endif
         .endif
         .endif
         lea     \event, %a0
@@ -248,3 +252,19 @@ intercept_\event:
         .word   0x7339, 0x8000, 0x004f  | mvs.b   0x8000004f, %d1
         .word   0x2f01                  | move.l  %d1, -(%sp)
         jmp     0x400888b2
+
+| ---- the MIDI tracks' notes ------------------------------------------------------
+| 0x4009fb58 jmp (tst.l -64(%fp) ; ble.s 0x4009fb80): the sequencer tick's note sender
+| (0x4009f794, an interrupt) is about to correct a note to the track's KEY (ARP SETUP) and
+| send it. It comes here four times for a trig (one for each of the track's chord notes,
+| NOTE and NOT2-NOT4, whether or not a chord is set: in the emulator, with no chord, all four
+| hold the note and stock sends it once). d7 is the MIDI track, 0-7 (M1 = 0), a2 points at
+| the note byte (0-127; -1 is no note, and stock sends none), -64(%fp) is stock's KEY root offset. The
+| record's entry may rewrite the note, then goes to 0x4009fb80 to send it as it is, or
+| replays these two instructions to have stock correct it. The stub runs in the tick: a few
+| microseconds, no firmware call, nothing that waits.
+        INTERCEPT    ev_midi_note_key, d7
+        .word   0x4aae, 0xffc0          | tst.l   -64(%fp)
+        bgt.s   2f
+        jmp     0x4009fb80              | the ble.s
+2:      jmp     0x4009fb5e

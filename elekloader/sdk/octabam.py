@@ -561,7 +561,7 @@ INTERCEPTS = {
     0x40050E60: ('ev_plock_store', 'jsr', 10), 0x40055170: ('ev_knob_store', 'jsr', 6),
     0x40010212: ('ev_settings_sanitise', 'jsr', 6), 0x40025AC2: ('ev_project_defaults', 'jsr', 6),
     0x400866CC: ('ev_project_load', 'jmp', 8), 0x400867A2: ('ev_project_line', 'jmp', 8),
-    0x400888AA: ('ev_project_write', 'jmp', 8),
+    0x400888AA: ('ev_project_write', 'jmp', 8), 0x4009FB58: ('ev_midi_note_key', 'jmp', 6),
 }
 INTERCEPT_ORDER = 50
 INTERCEPTS_DIR = os.path.join(os.path.dirname(CORE_DIR), 'intercepts-ot')

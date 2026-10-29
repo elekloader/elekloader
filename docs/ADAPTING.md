@@ -685,12 +685,13 @@ block of up to 160 words that lands at `r6 + $320` in the frame's bank.
 host's samples, its `ev_dsp_rx` handler (`inject.asm`) writes them over the
 inputs.
 
-### Intercepts on the Octatrack (intercepts 0.1)
+### Intercepts on the Octatrack (intercepts 0.2)
 
 `mods/intercepts-ot` is a companion beside core-ot 0.3.1 for places in the
 firmware a mod intercepts, one mod at a time: MIDI notes on a listening
 track, the CHROMATIC keyboard, p-locks and knobs, the settings and the
-project file (19 events; the table is in mods/intercepts-ot/README.md).
+project file (20 events; the table is in mods/intercepts-ot/README.md). 0.2
+adds the MIDI tracks' notes on their way out, `ev_midi_note_key`.
 Modwerk's Octatrack base has the same events under the same names (its
 "take" events), so a record means the same thing on both.
 
@@ -2999,7 +3000,7 @@ python -m elekloader.sdk.octabam --octabam octabam --stock OCTATRACK_OS1.40C.syx
   with `--bus`.
 
 **On the intercepts** (`--intercepts`): a detour at one of the intercepts'
-sites (the converter's `INTERCEPTS`: mods/intercepts-ot's 19 events,
+sites (the converter's `INTERCEPTS`: mods/intercepts-ot's 20 events,
 "Intercepts on the Octatrack" above) leaves its site stock and adds the
 record `{0, the detour's label}` to the event's table instead. The stub
 enters the label as the detour's own `jmp` or `jsr` did, so its code runs

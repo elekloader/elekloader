@@ -145,6 +145,17 @@ that trig and nothing else:
 python tests/probe_octatrack_track_trig.py --emulator path/to/octabam --stock OCTATRACK_OS1.40C.syx
 ```
 
+The Octatrack's intercepts get the same treatment for `ev_midi_note_key`, the
+one that runs in the sequencer tick: `tests/probe_octatrack_note_key.py`
+(`tests/fixtures/octatrack-note-key` is its record) checks that alone it is
+stock (the registers and the stack at every pass, the MIDI out, the frame
+records), that claims is given the MIDI track, and that a record can rewrite a
+note, drop it, send it or hand it to stock's KEY correction:
+
+```bash
+python tests/probe_octatrack_note_key.py --emulator path/to/octabam --stock OCTATRACK_OS1.40C.syx
+```
+
 `tests/probe_octatrack_step_built.py` does the same for `ev_step_built`, the
 record the stock builder has staged: that a handler on it leaves the pending
 records stock's, is given the arguments and the words the tick later copies out,

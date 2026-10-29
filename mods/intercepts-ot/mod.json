@@ -1,11 +1,11 @@
 {
  "id": "intercepts",
- "version": "0.1",
+ "version": "0.2",
  "license": "GPL-2.0-or-later",
  "title": "intercepts",
  "category": "Framework",
  "author": "irpina",
- "description": "Places in the Octatrack's firmware that a mod intercepts, one mod at a time: MIDI notes on a listening track, the CHROMATIC keyboard, p-locks and knobs, the settings and the project file. A mod adds a record to the event instead of patching the place, so mods that need these places combine, and a record means what it means on Modwerk's Octatrack base, whose events these are. On its own it changes nothing the unit does.",
+ "description": "Places in the Octatrack's firmware that a mod intercepts, one mod at a time: MIDI notes on a listening track and the MIDI tracks' notes on their way out, the CHROMATIC keyboard, p-locks and knobs, the settings and the project file. A mod adds a record to the event instead of patching the place, so mods that need these places combine, and a record means what it means on Modwerk's Octatrack base, whose events these are. On its own it changes nothing the unit does.",
  "device": "octatrack",
  "os": "1.40C",
  "sources": [
@@ -30,7 +30,8 @@
   "ev_project_defaults": 8,
   "ev_project_load": 8,
   "ev_project_line": 8,
-  "ev_project_write": 8
+  "ev_project_write": 8,
+  "ev_midi_note_key": 8
  },
  "sites": [
   {
@@ -146,6 +147,12 @@
    "stock": "73398000004f2f01",
    "op": "jmp",
    "target": "intercept_ev_project_write"
+  },
+  {
+   "addr": "0x4009fb58",
+   "stock": "4aaeffc06f22",
+   "op": "jmp",
+   "target": "intercept_ev_midi_note_key"
   }
  ],
  "requires": [

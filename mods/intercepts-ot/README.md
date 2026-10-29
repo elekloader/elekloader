@@ -71,10 +71,27 @@ intercepts every call and runs the detour's code exactly as before.
 | `ev_project_load` | 0x400866cc | jmp | none | a project load starts |
 | `ev_project_line` | 0x400867a2 | jmp | none | the project loader meets a line |
 | `ev_project_write` | 0x400888aa | jmp | none | the project writer writes the settings lines |
+| `ev_midi_note_key` | 0x4009fb58 | jmp | d7, the MIDI track 0-7 | a MIDI track's note, from its trig, chord or arpeggiator, is about to be corrected to the track's KEY and sent |
 
 Each runs in a firmware task (the UI, MIDI or project file), after core's
 `.boot` has put `.run` in place. A record's entry runs there too: keep it
-short, and call nothing that can block.
+short, and call nothing that can block. The exception is `ev_midi_note_key`,
+which runs in the sequencer tick (an interrupt, vector 0x60): a few
+microseconds, no firmware call, nothing that waits or allocates.
+
+`ev_midi_note_key` comes four times for a trig, once for each of the track's
+chord notes (NOTE and NOT2-NOT4), whether or not a chord is set: in the
+emulator, a trig with no chord came four times with the same note byte, and
+stock sent the note once. A handler does not count the calls, and a rewrite
+applies to every one. It hands its entry the MIDI track in `d7` (0-7, M1 = 0),
+a pointer to the note byte in `a2` (0-127; -1 is no note, and storing -1 drops
+that pass's note) and stock's KEY root offset at `-64(%fp)`. The entry rewrites the note, then goes to `0x4009fb80` to send it
+as it now is, or replays the site's two instructions (`tst.l -64(%fp)`, then
+`ble.s 0x4009fb80`) to have stock correct it to KEY. Stock keeps the note it
+sends for that note's note-off. A taker that stores into the pattern or the
+Part writes the bank and its battery-backed copy and sets the edited flags, as
+stock's writers do. The site is the one octabam's MIDI SCALES (`ms_output`)
+detours today.
 
 Not here (yet) of Modwerk's: `ev_octave_number` (octabam's quantizer patches
 an instruction that overlaps its site), and the call events and tables
@@ -95,3 +112,17 @@ an instruction that overlaps its site), and the call events and tables
     19 sites ran (not the project load and line, nor the settings sanitise);
   - octabam's quantizer and synth with their own detours against the same
     converted with `--intercepts`: identical.
+- `ev_midi_note_key` (0.2), in `ot_emu` with the sequencer playing M1's two
+  notes (`tests/probe_octatrack_note_key.py`, 17 checks; emulator only, not run
+  on a unit):
+  - stock, core, core + intercepts and a probe record that claims nothing:
+    every pass reaches stock's exit (`0x4009fb80`) with the registers and the
+    stack stock has, and the MIDI out and the frame records are stock's;
+    the stub takes 31 instructions from the site to the send where stock
+    takes 2, and 53 with one record asked;
+  - claims is given the MIDI track in `d7` (M1 is 0), four times for each trig;
+    a record that claims another track is not entered;
+  - an entry can add two to the note (the note-off follows), store -1 (nothing
+    is sent), jump to the send, or replay the site for stock's KEY correction:
+    with a KEY offset of 1 the notes sent are the ones the stock image's own
+    table gives.

@@ -1,0 +1,27 @@
+{
+ "id": "nkprobe",
+ "version": "1",
+ "license": "GPL-2.0-or-later",
+ "title": "intercepts note-key probe",
+ "category": "Examples",
+ "author": "irpina",
+ "description": "One ev_midi_note_key record whose claims and entry count, log, rewrite or drop a MIDI track's note by a configuration poked into nk_cfg: the probe tests/probe_octatrack_note_key.py runs in the emulator. Not a mod to ship.",
+ "device": "octatrack",
+ "os": "1.40C",
+ "sources": [
+  "probe.c",
+  "entry.s"
+ ],
+ "cflags": [
+  "-Os",
+  "-fno-tree-loop-distribute-patterns"
+ ],
+ "contribute": [
+  {"to": "ev_midi_note_key", "order": 50, "data": "0000000000000000",
+   "relocs": [[0, "abs32", "sym:nk_claims", 0], [4, "abs32", "sym:nk_entry", 0]]}
+ ],
+ "requires": [
+  "core",
+  "intercepts"
+ ]
+}

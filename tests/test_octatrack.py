@@ -1105,7 +1105,7 @@ def test_the_intercepts_replay_their_sites():
     with open(os.path.join(ROOT, 'mods', 'intercepts-ot', 'intercepts.s')) as fh:
         src = fh.read()
     blocks = dict(re.findall(r'^\s+INTERCEPT\s+(\w+),\s*\w+\n(.*?)(?=^\s+INTERCEPT\s|\Z)', src, re.M | re.S))
-    assert len(j['sites']) == len(blocks) == len(octabam.INTERCEPTS) == 19
+    assert len(j['sites']) == len(blocks) == len(octabam.INTERCEPTS) == 20
     for s in j['sites']:
         ev, addr, n = s['target'][len('intercept_'):], int(s['addr'], 16), len(s['stock']) // 2
         o = addr - DEV.main_load
@@ -1132,7 +1132,7 @@ def test_the_intercepts_replay_their_sites():
         if cc == 0:                                               # bra.s
             assert lines == ['jmp     0x%08x' % target], (ev, lines)
             continue
-        inverse = {0x6: 'beq.s', 0x7: 'bne.s', 0xd: 'bge.s'}[cc]  # bne, beq, blt
+        inverse = {0x6: 'beq.s', 0x7: 'bne.s', 0xd: 'bge.s', 0xf: 'bgt.s'}[cc]  # bne, beq, blt, ble
         assert lines == ['%s   2f' % inverse, 'jmp     0x%08x' % target,
                          '2:      jmp     0x%08x' % after], (ev, lines)
 
