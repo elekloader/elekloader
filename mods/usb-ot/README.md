@@ -56,6 +56,14 @@ the unit does: every reply is stock's, byte for byte.
   16-byte RX FIFO loses packet tails under a busy project otherwise, as
   sambanks/octabam measured), and an EP0 reply that crosses a 4 KB page is
   sent whole.
+  - **The bus priority is set whenever any function is in the build**, USB
+    MIDI alone included, though the measurement was of the receive path. It
+    changes how the card's DMA and USB share the bus. octabam's
+    FAILURE_MODES.md records one bank file written with a 64-byte burst
+    missing on an image that had its USB crossbar module (the cause is
+    inferred, one incident, not reproduced). Modwerk's USB MIDI and audio out
+    do not set it and ran on a unit. Nothing here has been run on a unit
+    with it set or unset to tell; it is left as it was.
 
 ## Writing a function
 
