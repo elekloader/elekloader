@@ -1,5 +1,5 @@
 | SPDX-License-Identifier: GPL-2.0-or-later
-| core-dn1 3.0 to 4.1 for the Digitone mk1, in assembly: the layouts that go
+| core-dn1 3.0 to 4.2 for the Digitone mk1, in assembly: the layouts that go
 | with the firmware locations core exports (core3.h has the same in C).
 | Assembly names the locations directly: fw_voice_pitch, fw_kit, fw_fillrect,
 | ... A mod that uses them needs core-dn1 3.0: "resources": {"core": "3.0"};
@@ -54,3 +54,18 @@
         .equ    FW_LOCKS_COUNT,   8             | the list's entries, a long
         .equ    FW_LOCKS_PAIRS,   0x14          | from here {u16 slot, s16 value}, FW_LOCKS_STRIDE apart
         .equ    FW_LOCKS_STRIDE,  8
+
+| 4.2, OS1.44: core_sound_set also notifies persistent SoundRef.
+| core_step_selection(two_words) and core_lock_selected(track,slot,value).
+| Names use core_param_override; optional format/visibility providers
+| contribute 16-byte {&core_param_present_v2,name,format,visible} to core_param_presenters.
+| fw_view_param_value(view,param_id,locked_byte) reads a native parameter view.
+| locked_byte must be non-null. UI task; normal gcc integer ABI. See core3.h.
+| fw_voice_pitch_processed[voice] is the IRQ's processed pitch; fw_project_get,
+| fw_sound_ref, fw_ui_get, fw_ui_grid_edit, fw_ui_step_edit, fw_key_held,
+| fw_track_get/length/has_note/has_lock/set_trig/set_lock, fw_ui_refresh,
+| fw_syn_key, fw_syn1_draw/fw_syn2_draw, fw_sound_change_event_vtable,
+| fw_param_value_text and fw_lfo_name_format are the measured native exports.
+| Firmware pointer results are in D0. fw_string_ctor(result,text,allocator)
+| constructs the native string; fw_lfo_choices(owner,id) has a hidden result
+| in A0, returns it in D0, and is not a gcc C pointer-return call.

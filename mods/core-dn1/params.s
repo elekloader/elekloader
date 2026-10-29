@@ -319,7 +319,11 @@ core_sound_set:
         move.l  8(%sp), -(%sp)          | SOUND_LIVE(value, track, slot)
         move.l  8(%sp), -(%sp)
         move.l  20(%sp), -(%sp)
+        .ifdef CORE_NATIVE_UI
+        jsr     core_sound_apply        | live update + persistent cache notification
+        .else
         jsr     SOUND_LIVE
+        .endif
         lea     12(%sp), %sp
 9:      rts
 

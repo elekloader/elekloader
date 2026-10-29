@@ -1,0 +1,33 @@
+{
+  "id": "dnsoundedit",
+  "version": "1.0",
+  "title": "Persistent Sound edit example",
+  "description": "Select SET ATTACK in the held track Mod Menu to persistently set AMP attack to 32. Uses core directly, without machines.",
+  "license": "GPL-2.0-or-later",
+  "category": "Example",
+  "device": "digitone-mk1",
+  "os": "1.44",
+  "sources": [
+    "edit.c"
+  ],
+  "resources": {
+    "core": "4.2"
+  },
+  "requires": [
+    "core"
+  ],
+  "contribute": [
+    {
+      "to": "core_menu",
+      "data": "00000000",
+      "relocs": [
+        [
+          0,
+          "abs32",
+          "sym:sound_edit",
+          0
+        ]
+      ]
+    }
+  ]
+}

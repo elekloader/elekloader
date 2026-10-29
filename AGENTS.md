@@ -75,6 +75,7 @@ python -m elekloader.patch --stock <stock.syx> --mod <core.elemod> --mod <mod.el
 Tests:
 
 ```bash
+python tests/test_core_dn1_sound.py                          # native Sound core logic, host fixtures
 python tests/test_units.py                                   # always
 python tests/test_link_refusals.py                           # always: a must-refuse and a must-pass fixture for every linker refusal
 ELEKLOADER_STOCK=... ELEKLOADER_MODS=... python tests/test_link.py

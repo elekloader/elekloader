@@ -1,0 +1,13 @@
+{
+  "id": "dnlabels",
+  "version": "0.1",
+  "license": "GPL-2.0-or-later",
+  "device": "digitone-mk1",
+  "os": "1.44",
+  "sources": ["labels.c"],
+  "requires": ["core"],
+  "resources": {"core": "4.2"},
+  "contribute": [
+    {"to": "core_param_presenters", "data": "00000000", "relocs": [[0, "abs32", "sym:presentation", 0]]}
+  ]
+}

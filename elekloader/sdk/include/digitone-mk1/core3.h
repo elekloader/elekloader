@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
-/* core-dn1 3.0 to 4.1 for the Digitone mk1, in C: the firmware locations core exports, and core-dn1's
+/* core-dn1 3.0 to 4.2 for the Digitone mk1, in C: the firmware locations core exports, and core-dn1's
  * own tables and calls (docs/ADAPTING.md, "Firmware locations", "Parameter slots", "Mod pages", "Project
  * data", "The Mod Menu" and "Machines and stock parameters"). The SDK puts this folder on the include
  * path:
@@ -8,8 +8,8 @@
  *
  * Every fw_ name here is resolved by the linker against the core in the build, so a mod that uses only
  * these rebuilds for another OS version without a change (its port in mod.json is empty). Declaring one
- * makes the mod need core-dn1 3.0, or 3.1, 3.2, 3.3, 4.0 or 4.1 for the names marked so: say so with
- * "resources": {"core": "3.0"} (or "3.1", "3.2", "3.3", "4.0", "4.1"). From 4.0 the mods' code, tables and variables
+ * makes the mod need core-dn1 3.0, or 3.1, 3.2, 3.3, 4.0, 4.1 or 4.2 for the names marked so: say so with
+ * "resources": {"core": "3.0"} (or "3.1", "3.2", "3.3", "4.0", "4.1", "4.2"). The 4.2 native helpers/exports are OS1.44 only. From 4.0 the mods' code, tables and variables
  * have 1.25 MB (from 0x43EC0000) in place of 128 KB: a build that needs more than 128 KB needs core 4.0. digitone-mk1/core3.inc has the same for assembly. Functions that return a pointer
  * are declared to return uint32_t: the firmware returns it in d0, where gcc for m68k looks in a0. */
 #ifndef ELEKLOADER_DIGITONE_MK1_CORE3_H
@@ -74,6 +74,49 @@ extern uint8_t *volatile fw_pattern;            /* 3.3: the active pattern's dat
 #define FW_TRACK_ROOT(trk)       ((trk)[0x3cb]) /* the keyboard's ROOT, a MIDI note */
 #define FW_TRACK_SCALE(trk)      ((int8_t)(trk)[0x3ce])  /* its SCALE: -1 chromatic, 0-34 */
 #define FW_TRACK_LENGTH(trk)     ((trk)[0x3c5] << 8 | (trk)[0x3c6])  /* in per-track mode: 1-64 */
+
+/* ---- 4.2: native Sound/UI helpers, OS1.44 only; UI task unless noted --------------------------- */
+/* No OS1.43 exports until that native interface is measured. Importing one
+ * requires core 4.2 and an implemented OS port. Invalid track/slot: no-op/0. */
+/* On OS1.44 core_sound_set also notifies the native SoundRef (persistent cache).
+ * On OS1.43 it only updates kit/live voices; resources.core=4.2 does not imply persistence.
+ * The existing track/slot validation and UI-task contract still apply. */
+extern int32_t core_step_selection(uint32_t steps[2]); /* bits0..31 /32..63; clears outside GRID/STEP */
+/* Absolute Sound-slot lock on held steps of a native track (fw_track_get).
+ * >0 writes, 0 no selection, -1 invalid/no eligible step/allocation failure.
+ * No base fallback/default/FUNC/brain policy. On failure prior writes/trigs remain,
+ * with no partial count. Retrying the same absolute edit reuses those trigs. */
+extern int32_t core_lock_selected(void *track, int32_t slot, int32_t value);
+extern void fw_sound_live(int32_t value, int32_t track, int32_t slot); /* low-level; core_sound_set notifies SoundRef on OS1.44 only */
+/* Low-level firmware ABI. Pointer-valued results return in D0. */
+extern volatile int32_t fw_voice_pitch_processed[]; /* [voice 0-7], render IRQ: portamento/transpose pitch */
+extern uint32_t fw_project_get(void);          /* project accessor; distinct from fw_project storage pointer */
+extern uint32_t fw_sound_ref(uint32_t owner, int32_t track); /* owner's shared SoundRef object */
+extern const uint32_t fw_sound_change_event_vtable;
+/* Native parameter-page display getter: view must be a live native parameter
+ * view, id a parameter ID (not a Sound slot), locked a non-null byte pointer.
+ * Uses the native held-selection/Sound context; not DSP modulation. UI task. */
+extern int32_t fw_view_param_value(void *view, int32_t id, uint8_t *locked);
+/* Native bool returns use D0.b; upper D0 bits need not be cleared. */
+extern uint32_t fw_ui_get(void);
+extern uint8_t fw_ui_grid_edit(void *ui);
+extern uint8_t fw_ui_step_edit(void *ui);
+extern uint8_t fw_key_held(uint32_t key);
+extern uint32_t fw_track_get(void *owner);
+extern uint32_t fw_track_length(void *track);
+extern uint8_t fw_track_has_note(void *track, uint32_t step);
+extern uint8_t fw_track_has_lock(void *track, uint32_t step);
+extern void fw_track_set_trig(void *track, uint32_t step, uint32_t enabled);
+extern uint8_t fw_track_set_lock(void *track, uint32_t step, uint32_t slot, uint32_t value);
+extern void fw_ui_refresh(void *ui, uint32_t changed);
+extern volatile int32_t fw_syn_key;
+extern void fw_syn1_draw(void *view, void *bitmap);
+extern void fw_syn2_draw(void *view, void *bitmap);
+extern uint32_t fw_param_value_text(int32_t id, int32_t value);
+extern const char fw_lfo_name_format[];
+/* Assembly-only native C++ exports: fw_string_ctor(result,text,allocator)
+ * and fw_lfo_choices(owner,id), the latter with a hidden result in A0.
+ * See core3.inc; these are not ordinary gcc C pointer-return functions. */
 
 /* ---- 3.3: the firmware's C library (newlib's and libgcc's, with their contracts); any task ------- */
 extern uint32_t fw_memcpy(void *dst, const void *src, uint32_t n);   /* -> dst */
@@ -188,6 +231,27 @@ struct core_param_override {
     void *(*ui)(int32_t id);
     const char *(*name)(int32_t id, int32_t field);
 } __attribute__((aligned(4)));
+
+/* OS1.44: the 16-byte presentation descriptor handles LONG/GROUP/SHORT names,
+ * formatting and visibility. Each query walks core_param_presenters in collection
+ * order; the first answer wins independently for that query. Null callbacks abstain.
+ * A name miss falls back to the 8-byte core_param_override ONLY for SHORT, then
+ * to the native name. Old name callbacks are never called with LONG or GROUP. */
+#define CORE_PARAM_LONG 0x28
+#define CORE_PARAM_GROUP 0x2c
+#define CORE_PARAM_SHORT 0x30
+#define CORE_PARAM_TEXT 16
+extern const uint32_t core_param_present_v2;
+struct core_param_presenter {
+    const uint32_t *abi; /* &core_param_present_v2; incompatible layouts need another marker */
+    const char *(*name)(int32_t id, int32_t field); /* C pointer return; 0 abstains */
+    int32_t (*format)(int32_t id, int32_t value, char text[CORE_PARAM_TEXT]); /* 1 handled; max15 chars+NUL; 0 fallback */
+    int32_t (*visible)(int32_t id); /* parameter ID, -1 abstain, 0 hide in LFO DEST, 1 show */
+} __attribute__((aligned(4)));
+/* Native string bridge results use D0. All are UI-task calls; value text is borrowed until next call. */
+extern uint32_t core_param_name(int32_t id, int32_t field);
+extern uint32_t core_param_value_text(int32_t id, int32_t value);
+extern int32_t core_param_dest_visible(int32_t id);
 
 /* Make a UI record for an override's ui() (from 3.1): stock parameter id's, which says how a turn moves
  * its value (its steps and speed), with the knob graphic of the stock parameter look (0: PTIM, a plain
