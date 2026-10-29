@@ -45,6 +45,15 @@ in it: the Digitakt II renders its audio on the DSP.
   tail (0x8000F100-0x80010000) on the first tick, once: the OS zeroes SRAM
   after the boot copier runs.
 
+It also builds `fw.s`, `frame.s`, `leds.s`, `store.s`, `store.c`,
+`rows.s` and `rows.c` (1.1), which the Digitone II's core shares:
+the events `ev_frame_params` and `ev_key_leds`, the mods' project and kit
+data (`core_projdata`, `core_kitdata`), value rows (`core_addvalue`), the
+header's message and the firmware locations as exports. Their sites, format
+and checks: [docs/ADAPTING.md](../../docs/ADAPTING.md), "Frames, LEDs,
+project and kit data, value rows"; the C names:
+[mk2/core.h](../../elekloader/sdk/include/mk2/core.h).
+
 Each site and routine was found by the mk1's code, with the addresses
 masked: the UI loop's dirty check and frame composition, the key and
 encoder events built from the UI queue's message, and the SETTINGS
@@ -57,8 +66,8 @@ Build it with the SDK (it needs m68k binutils; with Homebrew's
 `m68k-elf-binutils`, set `ELEKLOADER_CROSS=m68k-elf-`):
 
 ```bash
-python -m elekloader.sdk.build mods/core-dt2 --stock Digitakt_II_OS1.17.syx      # out/core-1.0.elemod
-python -m elekloader.lint mods/core-dt2/out/core-1.0.elemod --stock Digitakt_II_OS1.17.syx
+python -m elekloader.sdk.build mods/core-dt2 --stock Digitakt_II_OS1.17.syx      # out/core-1.1.elemod
+python -m elekloader.lint mods/core-dt2/out/core-1.1.elemod --stock Digitakt_II_OS1.17.syx
 ```
 
 Checked by cold-booting it in digikit's emulator (`emu.checkpoint`, then

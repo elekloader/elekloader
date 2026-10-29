@@ -318,6 +318,18 @@ export function insnCheck(image: Uint8Array, addr: number, n: number, dev: Devic
 
 export type Span<M> = [number, number, M | null, string]
 
+// A resource name that is a range of something: SPACE:0xLO-0xHI, half-open
+// (card:0x2df0e00-0x2df0e02, two card sectors). Two mods' ranges in one space
+// may not overlap, whatever each one's name says.
+const CLAIM_RANGE = /^([a-z][a-z0-9-]*(?::[a-z][a-z0-9-]*)*):0x([0-9a-fA-F]+)-0x([0-9a-fA-F]+)$/
+
+export function claimRange(name: string): [string, bigint, bigint] | null {
+  const m = CLAIM_RANGE.exec(name)
+  if (!m) return null
+  const lo = BigInt('0x' + m[2]), hi = BigInt('0x' + m[3])
+  return lo < hi ? [m[1], lo, hi] : null
+}
+
 /** [(lo, hi, ...)] -> every pair that shares a byte. */
 export function overlaps<T extends [number, number, ...unknown[]]>(spans: T[]): [T, T][] {
   const s = spans.map((x, i) => [x, i] as const).sort((a, b) => a[0][0] - b[0][0] || a[0][1] - b[0][1] || a[1] - b[1]).map(([x]) => x)
@@ -359,6 +371,15 @@ export function commonChecks(mods: AnyMod[], image: Uint8Array, spans: Span<AnyM
     for (const nm of m.names) {
       if (owner.has(nm) && owner.get(nm) !== m) bad.push(`${owner.get(nm)!.label()} and ${m.label()} both claim ${nm}`)
       owner.set(nm, m)
+    }
+  }
+  const ranges: [[string, bigint, bigint], string, AnyMod][] = []
+  for (const m of mods) for (const nm of m.names) { const r = claimRange(nm); if (r) ranges.push([r, nm, m]) }
+  for (let i = 0; i < ranges.length; i++) {
+    const [a, an, am] = ranges[i]
+    for (const [b, bn, bm] of ranges.slice(i + 1)) {
+      if (am !== bm && an !== bn && a[0] === b[0] && a[1] < b[2] && b[1] < a[2])
+        bad.push(`${am.label()} claims ${an} and ${bm.label()} claims ${bn}: the ranges overlap`)
     }
   }
   if (bad.length && bad[0].startsWith('the mods are for different firmware')) return bad

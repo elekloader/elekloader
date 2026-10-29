@@ -540,6 +540,18 @@ def _(B):
     return B.pair('m 1 and n 1 both claim x', claims('x', 'x'), claims('x', 'y'))
 
 
+@row('common_checks', '<> claims <> and <> claims <>: the ranges overlap')
+def _(B):
+    def claims(a, b):
+        def f(d):
+            d[1].update(resources={'names': [a]})
+            d.append(B.other('n', resources={'names': [b]}))
+        return f
+    # the same space, overlapping; then one byte apart, and another space
+    return B.pair('m 1 claims card:0x100-0x110 and n 1 claims card:0x10f-0x120: the ranges overlap',
+                  claims('card:0x100-0x110', 'card:0x10f-0x120'), claims('card:0x100-0x110', 'card:0x110-0x120'))
+
+
 @row('common_checks', '<> site 0x<> is inside 0x<>-0x<>, <>: protected on the <>')
 def _(B):
     lo, hi, _why = B.dev.protected[0]

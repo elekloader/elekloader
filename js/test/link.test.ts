@@ -161,3 +161,17 @@ test('the finished image against the stock one: link.py\'s image_problems, line 
   assert.deepEqual(problems(stray(klo + 4, 2), [[klo + 4, klo + 6, 'a site']]), [`${hx(klo)}-${hx(khi)} (${kwhy}) is not stock in the linked image`])
   assert.deepEqual(problems(stray(plo - 16, 2), [[plo - 16, plo - 14, 'a site']]), [])
 })
+
+test('two mods that claim overlapping ranges of one space are refused (SPACE:0xLO-0xHI, half-open)', () => {
+  const dn = DIGITONE_MK1, r = dn.releases.find(x => x.version === '1.43')!
+  const image = new Uint8Array(r.mainLen)
+  const mod = (id: string, names: string[]) => new Mod2({
+    elemod: 2, id, version: '1', target: targetOf(dn, r),
+    sections: { '.run': { align: 4, parts: [['hex', '00000000']] } }, symbols: {}, relocs: [],
+    resources: { names },
+  }, id)
+  const msg = 'a 1 claims card:0x100-0x110 and b 1 claims card:0x10f-0x120: the ranges overlap'
+  assert.ok(check([mod('a', ['card:0x100-0x110']), mod('b', ['card:0x10f-0x120'])], image).includes(msg))
+  for (const other of ['card:0x110-0x120', 'drive:0x100-0x110', 'card:0x120-0x100'])
+    assert.ok(!check([mod('a', ['card:0x100-0x110']), mod('b', [other])], image).some(x => x.includes('ranges overlap')), other)
+})

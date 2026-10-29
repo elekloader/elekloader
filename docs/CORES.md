@@ -31,7 +31,9 @@ older ones people still have:
 | Digitone mk1, Digitone Keys | 1.43, 1.44 | `core-dn1-4.1.1.elemod`, `core-dn1-4.1.1-os1.44.elemod` | on main, not released: build it ([below](#building-a-core)) |
 | Digitone mk1, Digitone Keys | 1.43, 1.44 | `core-dn1-2.0a.elemod`, `core-dn1-2.0a-os1.44.elemod` | the v0.4.0 release, built into its apps |
 | Digitakt II | 1.17 | `core-dt2-1.0.elemod` | not released: build it ([below](#building-a-core)) |
+| Digitakt II | 1.17 | `core-dt2-1.1.elemod` | on main, not released: build it ([below](#building-a-core)) |
 | Digitone II | 1.12 | `core-dn2-0.2.elemod` | experimental, not released: build it ([below](#building-a-core)) |
+| Digitone II | 1.12 | `core-dn2-0.3.elemod` | experimental, on main, not released: build it ([below](#building-a-core)) |
 | Analog Rytm MKII | 1.74 | `core-ar2-0.3.elemod` | the [core-ar2-v0.3](https://github.com/irpina/elekloader/releases/tag/core-ar2-v0.3) pre-release, and the shop |
 | Analog Rytm MKII | 1.74 | `core-ar2-0.7.elemod` | the [core-ar2-v0.7](https://github.com/irpina/elekloader/releases/tag/core-ar2-v0.7) pre-release, and the shop. Mods with pages built for 0.3 (rytm2_mods v1.2's lfo-rnd, voice-dac, euclid-accents, velocity-humanise, comp-preview) do not link with it: their sites overlap core's page sites |
 | Analog Rytm MKII | 1.74 | `core-ar2-0.8.elemod` | on main, not released: build it ([below](#building-a-core)). Mods with pages built for 0.3 (rytm2_mods v1.2's lfo-rnd, voice-dac, euclid-accents, velocity-humanise, comp-preview) do not link with it: their sites overlap core's page sites |
@@ -124,13 +126,20 @@ the one a mod that uses it names in `resources.core`.
     ADAPTING.md, "The note queue").
 - **Digitakt II** ([mods/core-dt2](../mods/core-dt2)): SETTINGS and
   PERSONALIZE rows, and `.fast` code in SRAM. No render events: its audio
-  renders on the DSP.
+  renders on the DSP. Also:
+  - each frame's per-track parameter values (`ev_frame_params`) and key
+    LEDs over the stock views' (`ev_key_leds`), 1.1;
+  - the mods' project and kit data, saved with the project and its kits
+    and copied with the kits; value rows; firmware locations as exports
+    (1.1; ADAPTING.md, "Frames, LEDs, project and kit data, value rows").
 - **Digitone II** ([mods/core-dn2](../mods/core-dn2), experimental): the
   Digitakt II's events and rows, without `.fast`; remote panel input and
   SysEx observers (ADAPTING.md, "Remote panel input and SysEx"); and SHARC
   mods, one mod's code on the DSP at the master output (core-dn2 0.2;
   ADAPTING.md, "SHARC mods"; the [callback contract](SHARC-DN2-ABI.md) and
-  the [sine example](../examples/sharc-sine/README.md)). The
+  the [sine example](../examples/sharc-sine/README.md)); and core-dt2
+  1.1's frame values, key LEDs, project and kit data, value rows and
+  exports (core-dn2 0.3). The
   [machines companion](MACHINES-DN2.md) adds a
   [selectable track synth](MACHINES-DN2-VOICE.md) and a
   [custom filter](MACHINES-DN2-FILTER.md) through the `mk2_*` tables. An

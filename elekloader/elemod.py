@@ -300,6 +300,21 @@ def insn_check(image, addr, n, dev, sweeps=32):
 
 # ---- the static check, and apply for bundles ----------------------------------------
 
+# A resource name that is a range of something: SPACE:0xLO-0xHI, half-open
+# (card:0x2df0e00-0x2df0e02, two card sectors). Two mods' ranges in one space
+# may not overlap, whatever each one's name says.
+CLAIM_RANGE = re.compile(r'^([a-z][a-z0-9-]*(?::[a-z][a-z0-9-]*)*):0x([0-9a-fA-F]+)-0x([0-9a-fA-F]+)$')
+
+
+def claim_range(name):
+    """-> (space, lo, hi) of a range-shaped resource name, or None."""
+    m = CLAIM_RANGE.match(name)
+    if not m:
+        return None
+    lo, hi = int(m.group(2), 16), int(m.group(3), 16)
+    return (m.group(1), lo, hi) if lo < hi else None
+
+
 def overlaps(spans):
     """[(lo, hi, ...)] -> every pair that shares a byte."""
     spans = sorted(spans, key=lambda x: (x[0], x[1]))
@@ -347,6 +362,12 @@ def common_checks(mods, image, spans):
             if nm in owner and owner[nm] is not m:
                 bad.append('%s and %s both claim %s' % (owner[nm].label(), m.label(), nm))
             owner[nm] = m
+    ranges = [(claim_range(nm), nm, m) for m in mods for nm in m.names if claim_range(nm)]
+    for i, (a, an, am) in enumerate(ranges):
+        for b, bn, bm in ranges[i + 1:]:
+            if am is not bm and an != bn and a[0] == b[0] and a[1] < b[2] and b[1] < a[2]:
+                bad.append('%s claims %s and %s claims %s: the ranges overlap'
+                           % (am.label(), an, bm.label(), bn))
     if bad and bad[0].startswith('the mods are for different firmware'):
         return bad
     dev = mods[0].dev
