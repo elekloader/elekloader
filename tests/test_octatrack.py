@@ -1588,6 +1588,26 @@ TT_V10 = ()
 TT_UPSTREAM = ((0x4000d310, 6), (0x4000d514, 8), (0x4000d562, 6))
 TT_MUTE_MODES = (0x4000d498, 6)
 
+# trig-events 0.2: STOP's tail kill, in the record builder (0x40004bd4). For a track d4 in the held
+# mask (the byte at 0x8000184b, read into the stack word sp@(50) at 0x40004bf2) the builder tests
+# the halfword at +56 of the track's record (a2) against stock's three reverbs and zeroes their
+# tails; trig-events-ot hooks the two instructions at 0x40004d0c that load it.
+TK_SITE = 0x40004d0c
+TK_STOCK = '302a00380680ffffffec'
+TK_CONTEXT = (
+    (0x40004bf2, '2f410032'),               # move.l d1,sp@(50): the held mask, from the byte below
+    (0x40004bec, '73b98000184b'),           # mvz.b 0x8000184b,d1
+    (0x40004d04, '242f0032'),               # move.l sp@(50),d2
+    (0x40004d08, '09026722'),               # btst d4,d2; beq.s 0x40004d2e: not held, past the test
+    (0x40004d16, '71c07202b2806510'),       # mvz.w d0,d0; moveq #2,d1; cmp.l d0,d1; bcs.s 0x40004d2e
+    (0x40004d1e, '42423542001835420022'),   # clr.w d2; move.w d2,24(a2); move.w d2,34(a2)
+    (0x40004d28, '420015400035'),           # clr.b d0; move.b d0,53(a2)
+)
+# the shop's v1.0 conversions (octabam 363861e) have nothing in 0x40004cf0-0x40004d30; octabam's newer
+# BBD (b085c4d, not in the shop) detours these ten bytes, on purpose (its kill is this event).
+TK_V10 = ()
+TK_UPSTREAM_SAME = (0x40004d0c, 10)
+
 
 def tt_asm():
     with open(os.path.join(ROOT, 'mods', 'trig-events-ot', 'trig.s')) as fh:
@@ -1604,9 +1624,10 @@ def test_trig_events_ot_site():
     st, img = stock()
     with open(os.path.join(ROOT, 'mods', 'trig-events-ot', 'mod.json')) as fh:
         j = json.load(fh)
-    (s,) = j['sites']
+    assert len(j['sites']) == 2
+    s = [x for x in j['sites'] if int(x['addr'], 16) == TT_SITE][0]
     assert (int(s['addr'], 16), s['stock'], s['op'], s['target']) == (TT_SITE, TT_STOCK, 'jmp', 'tt_site')
-    assert j['collections'] == {'ev_track_trig': 4} and j['requires'] == ['core'] and 'subscribe' not in j
+    assert j['collections'] == {'ev_track_trig': 4, 'ev_tail_kill': 4} and j['requires'] == ['core'] and 'subscribe' not in j
     for addr, hexs in TT_CONTEXT:
         o = addr - DEV.main_load
         assert img[o:o + len(hexs) // 2].hex() == hexs, hex(addr)
@@ -1618,7 +1639,8 @@ def test_trig_events_ot_site():
     assert all(struct.pack('>I', TT_SITE + k) not in img for k in (2, 4))
     # the stub: its code without comments, whitespace squeezed
     src = tt_asm()
-    code = [re.sub(r'\s+', ' ', l.split('|')[0]).strip() for l in re.search(r'^tt_site:\n(.*)', src, re.M | re.S).group(1).splitlines()]
+    body = re.search(r'^tt_site:\n(.*)', src, re.M | re.S).group(1).split('| ---- the tail kill')[0]
+    code = [re.sub(r'\s+', ' ', l.split('|')[0]).strip() for l in body.splitlines()]
     code = [c for c in code if c]
     assert code[:4] == ['.word 0x7191', 'move.l %d0, -(%sp)', 'move.l %d3, -(%sp)', 'tst.l ev_track_trig'], code[:4]
     jumps = [m.group(1) for m in (re.match(r'(?:\d+: )?jmp (\S+)$', c) for c in code) if m]
@@ -1639,6 +1661,60 @@ def test_trig_events_ot_site():
         assert not (a < TT_SITE + 6 and TT_SITE < a + n), (who, hex(a))
     a, n = TT_MUTE_MODES
     assert a < TT_SITE + 6 and TT_SITE < a + n                      # the one hook it is the event of
+
+
+def test_trig_events_ot_tail_kill_site():
+    """mods/trig-events-ot 0.2: the tail kill's site replaces two whole stock instructions (the load
+    of the FX2 id and the subtraction the reverb test starts with), the stub calls each handler with
+    (record, track) as the C convention has it, keeps the interrupt's live registers and the EMAC, replays
+    the two instructions after the handlers and goes on at the next instruction; the stock image has
+    the held-mask test the site sits behind, and the site clears every other mod's, the companions'
+    and the v1.0 conversions' but for octabam's newer BBD, whose kill it is the event of."""
+    import re
+    st, img = stock()
+    with open(os.path.join(ROOT, 'mods', 'trig-events-ot', 'mod.json')) as fh:
+        j = json.load(fh)
+    s = [x for x in j['sites'] if int(x['addr'], 16) == TK_SITE][0]
+    assert (s['stock'], s['op'], s['target']) == (TK_STOCK, 'jmp', 'tk_site')
+    o = TK_SITE - DEV.main_load
+    assert img[o:o + 10].hex() == TK_STOCK
+    for addr, hexs in TK_CONTEXT:
+        q = addr - DEV.main_load
+        assert img[q:q + len(hexs) // 2].hex() == hexs, hex(addr)
+    ok, note = elemod.insn_check(img, TK_SITE, 10, DEV)
+    assert ok, note
+    # no 32-bit word of the image (a jmp or jsr target) aims at the site's inside
+    assert all(struct.pack('>I', TK_SITE + k) not in img for k in (2, 4, 6, 8))
+    # the stub
+    src = tt_asm()
+    body = src.split('| ---- the tail kill')[1]
+    body = body[body.index('tk_site:') + len('tk_site:'):]
+    code = [re.sub(r'^\d+: ', '', re.sub(r'\s+', ' ', l.split('|')[0]).strip()) for l in body.splitlines()]
+    code = [c for c in code if c]
+    assert code[:2] == ['tst.l ev_tail_kill', 'beq.s 2f'], code[:2]
+    assert code[-3:] == ['.word 0x302a, 0x0038', '.word 0x0680, 0xffff, 0xffec', 'jmp 0x40004d16'], code[-3:]
+    assert bytes.fromhex(TK_STOCK) == b''.join(
+        int(w, 16).to_bytes(2, 'big') for c in code[-3:-1] for w in c[5:].split(','))
+    # arguments, pushed right to left: the track (d4) and then the record (a2)
+    k = code.index('move.l %d4, -(%sp)')
+    assert code[k:k + 4] == ['move.l %d4, -(%sp)', 'move.l %a2, -(%sp)', 'movea.l %d0, %a0', 'jsr (%a0)'], code[k:k + 4]
+    assert 'addq.l #8, %sp' in code
+    # a3 walks the table and survives the handlers (callee-saved): it is saved; d2-d7, a2, a4-a6 are never named
+    names = set(re.findall(r'%([da][0-7]|sp)', ' '.join(code)))
+    assert names == {'d0', 'd1', 'd4', 'a0', 'a1', 'a2', 'a3', 'sp'}, names
+    assert [c for c in code if c.startswith('movem.l')] == ['movem.l %d0-%d1/%a0-%a1/%a3, (%sp)', 'movem.l (%sp), %d0-%d1/%a0-%a1/%a3']
+    emac = re.compile(r'\b(mac|macl|macw|msac|msacl|msacw|movclr|mov[a-z]*\.l .*%(macsr|acc|mask))|%(macsr|acc|accext|mask)', re.I)
+    assert not [c for c in code if emac.search(c)], code
+    # clear of every other site
+    others = [('v1.0', a, n) for a, n in TK_V10]
+    for mod in ('core-ot', 'intercepts-ot', 'dspbus-ot', 'seq-events-ot', 'usb-ot', 'machines-ot', 'settings-ot'):
+        with open(os.path.join(ROOT, 'mods', mod, 'mod.json')) as fh:
+            for x in json.load(fh).get('sites', []):
+                others.append((mod, int(x['addr'], 16), len(x['stock']) // 2))
+    for who, a, n in others:
+        assert not (a < TK_SITE + 10 and TK_SITE < a + n), (who, hex(a))
+    a, n = TK_UPSTREAM_SAME
+    assert (a, n) == (TK_SITE, 10)                                  # BBD's bytes, exactly
 
 
 def test_trig_events_ot_header_names_what_the_dispatch_reads():
@@ -1670,8 +1746,8 @@ def test_trig_events_ot_builds_and_links():
         core, _m = build.build(os.path.join(ROOT, 'mods', 'core-ot'), SYX, tmp)
         tt, m = build.build(os.path.join(ROOT, 'mods', 'trig-events-ot'), SYX, tmp)
         pr, p = build.build(os.path.join(ROOT, 'tests', 'fixtures', 'octatrack-track-trig'), SYX, tmp)
-        assert os.path.basename(tt) == 'trig-events-0.1.elemod'
-        assert sorted(m.imports) == ['ev_track_trig'] and 'tt_site' in m.symbols
+        assert os.path.basename(tt) == 'trig-events-0.2.elemod'
+        assert sorted(m.imports) == ['ev_tail_kill', 'ev_track_trig'] and {'tt_site', 'tk_site'} <= set(m.symbols)
         assert not p.imports and not p.sites
         mods = [elemod.load_any(x) for x in (core, tt, pr)]
         assert link.check(mods, img) == []
@@ -1692,15 +1768,19 @@ def test_trig_events_ot_builds_and_links():
     # only the site differs from core alone, in the stock image's own bytes; and core's own
     # sites when the reserve differs, since they hold the arena's place past it
     w = TT_SITE - DEV.main_load
-    windows = [(w, 6)]
+    w2 = TK_SITE - DEV.main_load
+    windows = [(w, 6), (w2, 10)]
     if alone.layout['reserve'] != only_core.layout['reserve']:
         windows += core_sites
     for i in range(len(img)):
         if alone.image[i] != only_core.image[i]:
             assert any(a <= i < a + n for a, n in windows), hex(i + DEV.main_load)
     assert alone.image[w:w + 6] == b'\x4e\xf9' + struct.pack('>I', alone.map['tt_site'])
-    # the stub is small: the no-handler path is these bytes, the walk the rest
-    assert m.sections['.run']['len'] <= 96, m.sections['.run']['len']
+    assert alone.image[w2:w2 + 6] == b'\x4e\xf9' + struct.pack('>I', alone.map['tk_site'])
+    assert alone.image[w2 + 6:w2 + 10] == b'\x4e\x71\x4e\x71'           # the ten bytes: the jmp, two nops
+    assert ln.tables['ev_tail_kill'][1] == 0 and alone.tables['ev_tail_kill'][1] == 0
+    # the stubs are small: the no-handler paths are a few of these bytes, the walks the rest
+    assert m.sections['.run']['len'] <= 192, m.sections['.run']['len']
 
 
 def test_trig_events_ot_beside_the_companions():

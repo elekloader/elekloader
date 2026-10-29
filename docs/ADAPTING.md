@@ -2585,6 +2585,18 @@ int32_t my_trig(int32_t track)
   handler. [mods/trig-events-ot](../mods/trig-events-ot/README.md) has the
   sites around it and what was checked.
 
+From trig-events 0.2 the mod also tells of STOP's tail kill:
+
+| event | prototype | |
+|---|---|---|
+| `ev_tail_kill` | `void f(uint8_t *record, unsigned track)` | STOP, STOP, STOP holds `track` (0-7), each frame, before stock tests its FX2 against its three reverbs and zeroes their tails. `record` is the track's 64-byte record its DSP instances read: the halfword at +56 (`OT_REC_FX2_ID`) is the FX2 id stock tests, the byte at +53 (`OT_REC_FX2_SLOT11`) is FX2 SETUP's slot 11, which stock zeroes for its reverbs |
+
+Every handler runs, in `order`; none stops the kill. A handler for an effect
+of its own zeroes that effect's bytes in the record the same way, after
+checking +56. It is the same interrupt level and the same rules as above. The
+event is the one of the same name in Modwerk's Octatrack base; octabam's BBD
+detours its site (`0x40004d0c`) and, converted, is a handler.
+
 ## 3. Path B: a linkable mod
 
 **3.1 Start from the template.** Copy `examples/hello-marker/` to a folder

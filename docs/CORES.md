@@ -170,7 +170,8 @@ the one a mod that uses it names in `resources.core`.
   - [settings-ot](../mods/settings-ot): every mod's settings, in a MODS
     category of the MAIN MENU;
   - [trig-events-ot](../mods/trig-events-ot): each trig as the frame
-    interrupt hands it to its machine, which a mod may veto.
+    interrupt hands it to its machine, which a mod may veto, and (0.2) STOP's
+    tail kill.
 - **Model:Cycles, Model:Samples** ([mods/core-mc](../mods/core-mc),
   [mods/core-ms](../mods/core-ms)): the hook bus. They leave DMA timer 0
   as the stock OS has it (`NO_DTIM0`), so a mod cannot count on it as a

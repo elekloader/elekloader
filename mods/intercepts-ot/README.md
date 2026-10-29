@@ -78,7 +78,8 @@ short, and call nothing that can block.
 
 Not here (yet) of Modwerk's: `ev_octave_number` (octabam's quantizer patches
 an instruction that overlaps its site), and the call events and tables
-(`ev_play_increment`, `ev_voice_bind`, `ev_tail_kill`, `ot_machines`, ...).
+(`ev_play_increment`, `ev_voice_bind`, `ot_machines`, ...). Modwerk's
+`ev_tail_kill` is in trig-events-ot (0.2).
 
 ## Checked
 

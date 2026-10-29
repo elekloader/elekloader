@@ -5,7 +5,7 @@
  *     #include "octatrack/trig.h"
  *
  * with "requires": ["core", "trig-events"] and "subscribe": [{"event": "ev_track_trig", "fn": "...",
- * "order": 50}]. */
+ * "order": 50}]. From trig-events 0.2 it also declares ev_tail_kill (below). */
 #ifndef ELEKLOADER_OCTATRACK_TRIG_H
 #define ELEKLOADER_OCTATRACK_TRIG_H
 
@@ -45,5 +45,24 @@ static inline int32_t ot_trig_machine(int32_t track)
 {
     return OT_FRAME_KIND[8 * OT_FRAME_SIDE + track];
 }
+
+/* ev_tail_kill (trig-events 0.2): STOP's tail kill (STOP, STOP, STOP) holds a track. For each held
+ * track, each frame, before stock tests the track's FX2 against its three reverbs and zeroes their
+ * tails, every handler is told, in order: nobody can stop it, and stock's own test follows.
+ *
+ * record is the track's 64-byte record its DSP instances read (32 halfwords) as the builder has it
+ * when it reaches the test; the halfword at OT_REC_FX2_ID is the FX2 id stock tests (the one this
+ * record was given when it was last built, two frames back: check it first), and the byte at
+ * OT_REC_FX2_SLOT11 is FX2 SETUP's slot 11, which stock zeroes for its reverbs while the kill holds.
+ * A handler for an effect of its own may zero that effect's bytes there the same way. track is 0-7.
+ *
+ * Runs at interrupt level 5 in the frame interrupt's record builder (0x40004bd4): a few dozen
+ * instructions, no firmware routine, nothing that waits, the EMAC as you found it, d2-d7/a2-a6 kept
+ * as the C convention has it. "subscribe": [{"event": "ev_tail_kill", "fn": "...", "order": 50}]. */
+typedef void (*ev_tail_kill_fn)(uint8_t *record, unsigned track);
+
+#define OT_REC_FX2_SLOT11   53          /* the byte: FX2 SETUP's slot 11 */
+#define OT_REC_FX2_ID       56          /* the halfword: the FX2 effect id */
+#define OT_TAIL_KILL_HELD   (*(volatile uint8_t *)0x8000184b)   /* the tracks the kill holds: bit t */
 
 #endif

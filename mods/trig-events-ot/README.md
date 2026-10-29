@@ -4,14 +4,15 @@ The moment the frame interrupt hands a track's trig to its machine, as an
 event, OS 1.40C. A mod that needs a trig at the instant it sounds (a trig
 mute, a sidechain's key, a meter, a machine that starts its own voice) gets
 `ev_track_trig(track)` and may veto the trig. On its own it changes nothing
-the unit does.
+the unit does. From 0.2 it also tells the mods of STOP's tail kill, as
+`ev_tail_kill(record, track)` (below).
 
 | | |
 |---|---|
 | needs | core-ot (checked with 0.3.1 and 0.5: it uses only the boot copier, not the bus) |
-| site | 1: `0x4000d496`, three stock instructions before the call (below) |
-| table | `ev_track_trig`, `int32_t f(int32_t track)`, nonzero vetoes (`octatrack/trig.h`) |
-| RAM | 80 bytes of code: with core, one 6 KB page |
+| sites | 2: `0x4000d496`, three stock instructions before the call (below), and from 0.2 `0x40004d0c` (the tail kill) |
+| tables | `ev_track_trig`, `int32_t f(int32_t track)`, nonzero vetoes; from 0.2 `ev_tail_kill`, `void f(uint8_t *record, unsigned track)`, tells (`octatrack/trig.h`) |
+| RAM | 144 bytes of code: with core, one 6 KB page |
 | sources | [trig.s](trig.s) |
 
 Compare [seq-events-ot](../seq-events-ot/README.md), which runs when the
@@ -91,6 +92,42 @@ second argument, so that the three instructions are whole; MUTE MODES' hook is t
 shop file; converted with `sdk.octabam --bus` its `dt_trig` becomes a handler.
 No byte of any shop file is touched.
 
+## The tail kill (0.2)
+
+STOP, STOP, STOP holds a track's effect tails. The frame interrupt's record
+builder (`0x40004bd4`) builds, for each track, the 64-byte record its DSP
+instances read. The tracks the kill holds are the bits of the byte at
+`0x8000184b`; for each one the builder tests the halfword at +56 of the
+record, the FX2 effect id, against stock's three reverbs (ids 20-22) and, for
+them, zeroes the halfwords at +24 and +34 and the byte at +53, FX2 SETUP's slot
+11. `ev_tail_kill(record, track)` is told of each held track, each frame,
+before that test:
+
+| | 1.40C | over |
+|---|---|---|
+| the test | `0x40004d0c` | `move.w 56(a2),d0; addi.l #-20,d0` |
+
+A `jmp` over two whole instructions (10 bytes: the jump, two nops). At the site
+`a2` is the record and `d4` the track (0-7). The stub replays the two
+instructions after the handlers, which run in `order`; every handler runs, none
+can stop the kill, and stock's own test follows. A handler for an effect of its
+own zeroes that effect's bytes in the record the same way (it checks +56
+first): a byte it stores is what the next handler finds, and it goes on to the
+copies of the record the DSP is sent. The builder rebuilds the record in the
+next frame, so the kill's zeroing is renewed each frame while it holds. With no
+handler the stub is a `tst`, the two instructions and a `jmp`: 6
+instructions from the site to the next where stock has 2, at each held track.
+
+It runs at interrupt level 5, in the builder's loop over the tracks: a few
+dozen instructions, no firmware call, nothing that waits, the EMAC as you found
+it, `d2-d7`/`a2-a6` as the C convention has it.
+
+The event is Modwerk's Octatrack base's `ev_tail_kill` (repeat98/modwerk,
+`sdk/machines/octatrack/HOOKS.md`) at the same site, with the same arguments
+and the same stock bytes; the code is elekloader's own. Octabam's BBD
+(`bbd/kill.s`) detours exactly these ten bytes (not in the shop), so it and
+this event cannot be built together; BBD's kill is a handler.
+
 ## Cost
 
 In `ot_emu`, from the site to the call: stock 3 instructions, no handler 7, two small
@@ -126,6 +163,22 @@ handlers:
   registers and that it names no EMAC instruction, the header's addresses against the image, the
   build, the table, and that linked with core alone it changes only its six bytes; it also links
   beside seq-events, intercepts and the DSP bus.
+- **The tail kill (0.2), in `ot_emu`** (`tests/probe_octatrack_tail_kill.py`, 19 checks;
+  emulator only, not run on a unit): with the held byte poked to every track and the
+  sequencer running, stock passes the site 13,060 times in 2,576 frames, for six of the
+  eight tracks (T1 and T4 have trigs in the fixture and leave the mask at their first;
+  a held track is released at its next trig).
+  - Alone it is stock: with core, with trig-events and no handler, and with two
+    handlers that change nothing, every pass reaches the next instruction (`0x40004d16`)
+    with stock's registers and stack (the stack's address left out: core shifts which
+    task the interrupt lands on), and the MIDI out and frame records are stock's.
+  - Both handlers are told of every pass, in order, with the record (a2) and the track
+    (d4); with nothing held they are never called.
+  - A handler's marker in slot 11 is found by the next handler; at the end of the
+    run the only differences from stock are the marker, in the record and in the
+    copies of it the DSP is sent (6 bytes for one track, 24 for six).
+  - From the site to the next instruction stock runs 2 instructions, no handler 6,
+    two small handlers 54 to 65.
 
 ## Not here
 

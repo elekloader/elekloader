@@ -157,6 +157,15 @@ in a build nested in a build:
 python tests/probe_octatrack_step_built.py --emulator path/to/octabam --stock OCTATRACK_OS1.40C.syx
 ```
 
+`tests/probe_octatrack_tail_kill.py` does it for trig-events 0.2's `ev_tail_kill`, with
+the held-track byte poked so that STOP's tail kill is on: that alone it is stock, that the
+handlers are told of each pass with the record and the track, and that a byte a handler
+stores in the record reaches the next handler and the DSP's copies:
+
+```bash
+python tests/probe_octatrack_tail_kill.py --emulator path/to/octabam --stock OCTATRACK_OS1.40C.syx
+```
+
 ## The boot gate
 
 `tests/test_octatrack_boot.py` boots a linked Octatrack image in octabam's
