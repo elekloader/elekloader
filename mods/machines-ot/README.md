@@ -135,8 +135,13 @@ those and adds the commit 0.1 missed:
   place; `sdk.octabam --machines` already leaves it to the companion.
 - **The chooser's level** (0x400788c4): the machine window opens on the
   sample-slot list for a STATIC or FLEX track. A machine with
-  `OT_MACHINE_LIST_FIRST` (16, elekloader's flag: Modwerk's record has
-  1-8) has its tracks open on the machine list, as BLACKPYRAMIDS-303 does.
+  `OT_MACHINE_LIST_FIRST` (16, elekloader's flag) has its tracks open on the
+  machine list, as BLACKPYRAMIDS-303 does. **Bit 16 means something else in
+  Modwerk's record**: their flags are 1-8 as here, then 16 `SETUP_ALL`, 32 `LIST`
+  (their name for the same behaviour), 64 `SETUP_PAGE`. A machine built for their
+  base with `SETUP_ALL` set would open on the machine list here, and a
+  `LIST_FIRST` machine of ours would unhide SRC SETUP's encoder E there; the flag is
+  not portable between the two.
 - **The slot assigner's commit** (0x40079520): picking a slot in a list
   that changes the track's machine byte (a STATIC slot on a machine's
   track) now goes through `otm_assign`, so the machine's `leave` runs. Stock

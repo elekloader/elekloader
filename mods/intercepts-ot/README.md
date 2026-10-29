@@ -80,6 +80,22 @@ Not here (yet) of Modwerk's: `ev_octave_number` (octabam's quantizer patches
 an instruction that overlaps its site), and the call events and tables
 (`ev_play_increment`, `ev_voice_bind`, `ev_tail_kill`, `ot_machines`, ...).
 
+## Names against Modwerk's base
+
+The events in the table above are Modwerk's events under their names: the
+same site, length, jmp or jsr, stock bytes and claims argument. A name in
+elekloader's other OT mods is not always theirs:
+
+| Modwerk | elekloader | |
+|---|---|---|
+| `ev_voice_bind(track)`, `0x40006820`, the voice reset's entry: 0 pass, 1 drop the reset, 2 run stock's at once | `ev_voice_reset(trk)` (core-ot 0.8), the same 8 bytes: nonzero keeps the voice | no result 2 |
+| `ev_voice_bind_run(track)`, at that entry before the interrupts are masked | `ev_voice_kill(trk)` (core-ot 0.7), at `0x40006862`, interrupts masked, after the voice's active byte is cleared | called for a track, not for the "every track" call |
+| `ev_play_increment`, `ev_octave_number`, `ev_arp_setup_knob`, `ev_arp_setup_text`, `ev_mute_keep`, `ev_trig_muted` | none | |
+
+**`ev_voice_bind` is a different event here**: core-ot's is the binder
+(`0x4000f4dc`), which writes the voice's two arena pointers. A mod written for
+Modwerk's `ev_voice_bind` subscribes to `ev_voice_reset` here.
+
 ## Checked
 
 - `tests/test_octatrack.py`, `test_the_intercepts_replay_their_sites`:

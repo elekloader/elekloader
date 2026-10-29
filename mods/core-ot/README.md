@@ -220,6 +220,10 @@ changes nothing else the unit does.
     MUTE MODES does for a silenced track (its `mt_rebind`, there an untested
     guess about what the DSP watches). A mod that takes it should know its
     voice is not just muted.
+  - **Modwerk's `ev_voice_bind` is not this one.** The name there is the voice
+    reset's entry (`0x40006820`), which is `ev_voice_reset` here (0.8); their
+    `ev_voice_bind_run` is close to `ev_voice_kill`. The table is in
+    [intercepts-ot](../intercepts-ot/README.md#names-against-modwerks-base).
   - **`ev_voice_seek`'s veto** is FLEX SEEKBIND's: the voice's start counter
     is left alone on a re-bind of the same sample, so the frame builder does
     not send the voice as new and the DSP seeks it.

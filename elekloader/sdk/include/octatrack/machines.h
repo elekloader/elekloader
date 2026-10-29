@@ -33,8 +33,10 @@
 #define OT_MACHINE_POOL         2u  /* its row has a pool or engine list (not served by machines-ot 0.1) */
 #define OT_MACHINE_RENDER_FLEX  4u  /* its render is also offered the FLEX tracks no machine owns */
 #define OT_MACHINE_BACKING      8u  /* its page is STATIC's on a STATIC backing pool (not served by 0.1) */
-#define OT_MACHINE_LIST_FIRST   16u /* (machines-ot 0.2, not Modwerk's) the machine window opens on the
-                                       machine list for its tracks, not on the sample-slot list */
+#define OT_MACHINE_LIST_FIRST   16u /* (machines-ot 0.2) the machine window opens on the machine list for
+                                       its tracks, not on the sample-slot list. NOT portable: bit 16 is
+                                       SETUP_ALL in Modwerk's record (their LIST is 32, the same
+                                       behaviour) */
 
 struct ot_machine {
     uint32_t abi;                       /*  0 OT_MACHINE_ABI */

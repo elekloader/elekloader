@@ -49,7 +49,11 @@ mods/core-ot makes the same 27 arena writes as octabam's platform, for the
 same reservation. elekloader/sdk/octabam.py reads octabam's module manifests
 from a checkout the user supplies, and copies their sources into the mod
 folders it writes, with octabam's licence beside them. No octabam code is
-included here.
+included here but one sequence: the eight instructions of
+mods/usb-midi-ot/framer.s that run the firmware's MIDI framer once are those
+of octabam's usbmidi_rx_run_framer (modules/usb/usbmidi_rx.s, MIT, (c) 2026
+Sam Banks), as the exception frame the framer's rte pops leaves no other way
+to enter it.
 
 Digitone II synth registration
 -----------------------------
