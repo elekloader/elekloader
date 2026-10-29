@@ -2100,6 +2100,81 @@ stock edit or another sound reloads it. From the UI task.
 Core-dn1 3.1 owns two more sites: 0x4009e078 (`core_render_voices`, by jsr)
 and 0x400207b8 (`core_param_short`, by jmp).
 
+### Persistent Sound edits and held steps (core-dn1 4.2, Digitone mk1)
+
+On **OS1.44**, `core_sound_set(track, slot, value)` writes the active kit,
+updates live voices and notifies the native Sound reference to invalidate its
+packed cache. Track0-3, slot0-78, value8.8; UI task. Invalid track/slot or
+absent kit is a no-op. A missing project/reference leaves kit/live updated
+without notification. OS1.43 retains its kit/live implementation until that
+native notification path is measured. `resources.core = 4.2` alone does not
+guarantee SoundRef notification: require OS1.44 for that behavior. There is
+no separate `core_sound_edit`.
+
+`core_step_selection(steps)` snapshots held GRID/STEP indices into two32-bit
+words: steps0-31 in word0,32-63 in word1. Returns1 when nonempty, otherwise0
+and clears both words. The caller supplies a two-word array.
+`core_lock_selected(track, slot, value)` writes an absolute Sound-slot lock
+(value0-32767) to held steps of the native track returned by `fw_track_get`.
+It preserves note/lock trigs, creates a trig when needed and refreshes native
+UI. Return is a positive write count,0 for no selection,-1 for invalid
+context/no selected step within track length or allocation failure. On failure,
+earlier writes/trig creation may remain; it is not transactional and the
+return does not report a partial count. After capacity is restored, retrying
+the same selection/value overwrites the existing locks and reuses its trigs. It never
+writes the base Sound. The caller owns defaults/FUNC, base fallback and its
+screen-dirty policy. Neither helper requires machines or a brain object.
+
+`fw_view_param_value(view, id, &locked_byte)` exports the native parameter-page
+display getter. It accepts a live native view and parameter ID, not a Sound
+slot. The output is a **non-null `uint8_t *`**. Native selection/Sound context
+determines the result, including mixed selections. It may allocate temporary
+native callback storage while held; it reports no DSP modulation and does
+not validate arbitrary/null views.
+
+The existing8-byte `core_param_override.name(id,field)` is **SHORT-only**:
+core calls it with `CORE_PARAM_SHORT`0x30. Providers may ignore `field` as
+before. LONG/GROUP never reach this table.
+
+Contribute a pointer to the16-byte `struct core_param_presenter` in
+`core_param_presenters`, with `abi = &core_param_present_v2`, for shared
+presentation. `name(id,field)` answers `CORE_PARAM_LONG`0x28,
+`CORE_PARAM_GROUP`0x2c or `CORE_PARAM_SHORT`0x30 with a borrowed string;
+NULL abstains. It uses the SDK C pointer-return ABI, unlike the existing
+D0-return callback. `format(id,value,text)` returns1 when handled,0 to
+abstain; text holds at most15 characters plus NUL (`CORE_PARAM_TEXT=16`).
+`visible(id)` returns-1 to abstain,0 to hide,1 to show that original ID in
+LFO DEST. Any callback may be NULL. An incompatible layout needs a different
+marker; the earlier12-byte draft marker is not accepted.
+
+Each query walks the same collection order; the first non-abstaining answer
+wins **independently for each field/capability**. A provider claiming LONG
+may leave SHORT, formatting or visibility to later providers. Thus the name
+and format can intentionally come from different descriptors; a descriptor
+does not reserve an entire parameter. SHORT then falls back to the original
+override table; other name fields go directly to native records. Unhandled
+formatting/visibility also retain native behavior. The native short-name
+hook on1.44 uses this same resolver; the exported original helper and1.43
+path retain their original short-only contract. All callbacks are UI-task
+calls; value text is borrowed until the next call. See
+[dn-param-presentation](../examples/dn-param-presentation) for a core-only
+provider.
+
+Core owns notification name/value and both LFOs' list/current label, choice
+filter and relative-step bridges. Filtering compacts only a fresh native UI
+vector; IDs/capacity and saved assignments are unchanged. Relative edits skip
+hidden targets; merely loading an old hidden destination does not rewrite it.
+Without providers these hooks use native labels/formatting/choices. Compact
+DEST uses short names. The list initially uses LONG, but its native width
+fallback asks only for SHORT; notifications use LONG.
+
+The SDK declares measured firmware bindings. Native bool results use D0.b
+(`uint8_t`); pointer-valued native results use D0 and `uint32_t`. String and
+choices constructors keep their native C++ hidden-result ABI for assembly.
+`fw_voice_pitch_processed` includes portamento/transpose, while raw pitch
+stays available. The new API/table/hooks exist only on OS1.44; importing them
+on OS1.43 is refused. No address relocation is assumed.
+
 ### Machines on the Digitone (machines, Digitone mk1)
 
 The `machines` mod (`mods/machines-dn1`) makes core-dn1 3.1's pieces into
@@ -2108,7 +2183,8 @@ machine is its slot 0, which no stock parameter uses: the machine's id << 8,
 0 for FM. The voice loads it with the rest of the sound at each note.
 MACHINES in the Mod Menu opens a submenu of FM and the machines in the
 build; picking one sets the held track's sound slot 0 (with
-`core_sound_set`) and its SYN knobs to the machine's defaults, or to FM's
+`core_sound_set`, or persistent `dnm_sound_edit` on OS 1.44) and its SYN
+knobs to the machine's defaults, or to FM's
 for FM. On a machine track the SYN1 and SYN2 knobs are the machine's
 (`core_param_override`): its labels and value texts, on plain knobs that
 turn as the stock ones do. SYN1's and SYN2's second pages are FM's alone and
@@ -2168,8 +2244,60 @@ no firmware address, so its 1.44 port is empty:
 "resources": {"names": ["dnmachine:2"], "core": "3.1"}
 ```
 
-The machines mod claims sound slot 0 as the resource `soundslot:0`; what it
-does not do yet is in its README.
+With machines 0.3 on **OS 1.44**, the companion requires core-dn1 4.2.
+It supplies processed pitch (including native portamento/transpose), uses
+machine names/value formatters in notifications and LFO DEST, and handles
+unused knobs and FUNC+turn defaults with native GRID/STEP selections through
+step 64. Existing machine/knob descriptor layouts remain unchanged.
+
+A persistent UI change uses `dnm_sound_edit(track, slot, value)`, a wrapper
+for `core_sound_set` above. `dnm_knob_value` maps a physical knob to its native SYN view and parameter
+ID, then calls `fw_view_param_value`. FUNC+turn applies the machine default
+in the companion, using `core_lock_selected` for held steps or
+`core_sound_set` for the base. Machine ownership/default policy stays there. Do not use persistent edits for temporary sequencer modulation.
+
+A machine may contribute a pointer to `struct dnm_page` to `dn_machine_pages`
+for native SYN content replacement. Its `abi` is `&dnm_ui_v1`, `id` identifies
+a registered machine, `pages[2]` sets SYN1/2 counts (0 native, 1 or 2 existing
+subpages), and `draw(view, bitmap, syn, page)` returns nonzero when it draws
+the content. The callback runs at the native page position before menus and
+notifications. A zero result retains native drawing. Machines without a
+descriptor keep native navigation; FM restores its page count/cursor.
+
+`dnm_knob_value(knob, &locked)` returns the active track's base value or its
+native GRID/STEP display value and lock flag. Before its SYN view has first
+been drawn, it returns the kit base value with no lock flag. `dnm_syn_page(brain)` answers the
+visible SYN1/2 or 0; `dnm_syn_view(syn)` returns its last native view. These
+functions are UI-task calls. Knob indices keep the same physical 0-31 mapping
+as `dnm_knob`; the five empty positions return 0 with `locked = 0`. The
+companion handles FUNC+turn defaults and consumes unused controls on both
+subpages. Page counts affect navigation only: `DNM_PAGES2` determines whether
+a machine owns second-page parameters.
+
+For full labels, contribute a pointer to `struct dnm_names` to
+`dn_machine_names`: `abi = &dnm_names_v1`, the registered machine `id`,
+`count = DNM_KNOBS` or `DNM_KNOBS_ALL`, and `long_names` pointing to that many
+string pointers. Null or empty entries, absent metadata, invalid counts,
+and indices beyond `count` fall back to the short `dnm_knob.name`.
+Notifications and the LFO list use full names; compact knobs and current
+DEST use short names. Unused controls (null/empty short names), unowned
+second-page controls and extra FM operator destinations are hidden in the
+list and skipped on relative DEST turns. Target IDs and saved assignments
+are unchanged, including old assignments to a hidden control.
+
+Descriptors and strings must stay valid for the firmware's lifetime, with
+one descriptor of each kind per machine id. Use designated initializers.
+The machine/knob/voice layouts are unchanged (28/12/20 bytes on ColdFire);
+the optional page/names layouts are 20/16 bytes. Each extension references
+its own marker, so names alone do not require a page descriptor. A formatter
+must terminate its text within the native 16-byte buffer.
+`examples/dn-native-machine` shows both extensions with `DNM_PAGES2`;
+`examples/dn-sine-machine` remains portable without them.
+
+The `dnm_ui_v1` reference refuses a new page built with an older companion or
+on an OS whose native UI is not implemented. OS 1.43 retains its existing
+machine support, without these native integrations. The machines mod claims
+sound slot 0 as `soundslot:0`; CPU limits remain in its README.
 
 ### Exclusive audio (core-dn1 3.2, Digitone mk1)
 

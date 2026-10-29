@@ -1,22 +1,171 @@
 {
- "id": "machines", "version": "0.2",
- "license": "GPL-2.0-or-later",
- "title": "machines", "category": "Framework", "author": "irpina",
- "description": "Machines for the Digitone mk1 and Digitone Keys: sounds that play a machine mod's voice in place of FM, through the Digitone's own filter, mixer and effects, with the AMP page's envelope. MACHINES in core-dn1's Mod Menu (hold a track key) picks the held track's machine; a machine track's SYN1 and SYN2 knobs are the machine's parameters, relabelled, and from 0.2 their second pages too for a machine that takes them (27 knobs). On its own it adds the menu and nothing else: machines come in mods of their own. Needs core-dn1 3.1.",
- "device": "digitone-mk1", "os": "1.43",
- "ports": {"1.44": {}},
- "sources": ["machines.c"],
- "subscribe": [
-  {"event": "ev_voice_on", "fn": "dnm_voice_on", "order": 20},
-  {"event": "ev_render_voices", "fn": "dnm_render", "order": 50}
- ],
- "contribute": [
-  {"to": "core_menu", "order": 40, "data": "00000000",
-   "relocs": [[0, "abs32", "sym:dnm_menu", 0]]},
-  {"to": "core_param_override", "order": 50, "data": "00000000",
-   "relocs": [[0, "abs32", "sym:dnm_override", 0]]}
- ],
- "collections": {"dn_machines": 4},
- "resources": {"names": ["soundslot:0"], "core": "3.1"},
- "requires": ["core"]
+  "id": "machines",
+  "version": "0.3",
+  "license": "GPL-2.0-or-later",
+  "title": "machines",
+  "category": "Framework",
+  "author": "irpina",
+  "description": "Machines for the Digitone mk1 and Digitone Keys: sounds that play a machine mod's voice in place of FM, through the Digitone's own filter, mixer and effects, with the AMP page's envelope. MACHINES in core-dn1's Mod Menu (hold a track key) picks the held track's machine; a machine track's SYN1 and SYN2 knobs are the machine's parameters, relabelled, and their second pages too for a machine that takes them (27 knobs). On its own it adds the menu and nothing else: machines come in mods of their own. Needs core-dn1 3.1.",
+  "device": "digitone-mk1",
+  "os": "1.43",
+  "ports": {
+    "1.44": {
+      "sources": [
+        "machines.c",
+        "native.c",
+        "pages.c"
+      ],
+      "cflags": [
+        "-DDNM_NATIVE_UI=1"
+      ],
+      "collections": {
+        "dn_machines": 4,
+        "dn_machine_pages": 4,
+        "dn_machine_names": 4
+      },
+      "subscribe": [
+        {
+          "event": "ev_voice_on",
+          "fn": "dnm_voice_on",
+          "order": 20
+        },
+        {
+          "event": "ev_render_voices",
+          "fn": "dnm_render",
+          "order": 50
+        },
+        {
+          "event": "ev_tick",
+          "fn": "dnm_pages_tick",
+          "order": 40
+        },
+        {
+          "event": "ev_key",
+          "fn": "dnm_pages_input",
+          "order": 5
+        },
+        {
+          "event": "ev_enc",
+          "fn": "dnm_pages_enc",
+          "order": 5
+        }
+      ],
+      "sites": [
+        {
+          "addr": "0x40199ac4",
+          "stock": "4004c12c",
+          "op": "ptr",
+          "target": "dnm_syn1_draw"
+        },
+        {
+          "addr": "0x40199804",
+          "stock": "4004b6a0",
+          "op": "ptr",
+          "target": "dnm_syn2_draw"
+        }
+      ],
+      "resources": {
+        "names": [
+          "soundslot:0"
+        ],
+        "core": "4.2"
+      },
+      "contribute": [
+        {
+          "to": "core_menu",
+          "order": 40,
+          "data": "00000000",
+          "relocs": [
+            [
+              0,
+              "abs32",
+              "sym:dnm_menu",
+              0
+            ]
+          ]
+        },
+        {
+          "to": "core_param_override",
+          "order": 50,
+          "data": "00000000",
+          "relocs": [
+            [
+              0,
+              "abs32",
+              "sym:dnm_override",
+              0
+            ]
+          ]
+        },
+        {
+          "to": "core_param_presenters",
+          "order": 50,
+          "data": "00000000",
+          "relocs": [
+            [
+              0,
+              "abs32",
+              "sym:dnm_presenter",
+              0
+            ]
+          ]
+        }
+      ]
+    }
+  },
+  "sources": [
+    "machines.c"
+  ],
+  "subscribe": [
+    {
+      "event": "ev_voice_on",
+      "fn": "dnm_voice_on",
+      "order": 20
+    },
+    {
+      "event": "ev_render_voices",
+      "fn": "dnm_render",
+      "order": 50
+    }
+  ],
+  "contribute": [
+    {
+      "to": "core_menu",
+      "order": 40,
+      "data": "00000000",
+      "relocs": [
+        [
+          0,
+          "abs32",
+          "sym:dnm_menu",
+          0
+        ]
+      ]
+    },
+    {
+      "to": "core_param_override",
+      "order": 50,
+      "data": "00000000",
+      "relocs": [
+        [
+          0,
+          "abs32",
+          "sym:dnm_override",
+          0
+        ]
+      ]
+    }
+  ],
+  "collections": {
+    "dn_machines": 4
+  },
+  "resources": {
+    "names": [
+      "soundslot:0"
+    ],
+    "core": "3.1"
+  },
+  "requires": [
+    "core"
+  ]
 }

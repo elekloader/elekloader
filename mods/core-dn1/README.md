@@ -7,6 +7,16 @@ Digitone's addresses and sites (`mod.json`: 1.43's, and 1.44's under
 `ports`). Every set of linkable (format 2) mods for
 the Digitone needs it. On its own it changes nothing the unit does.
 
+- **Sound, selection and parameter presentation** (core4.2, OS1.44):
+  `core_sound_set` also invalidates the native packed Sound cache. Core reads
+  GRID/STEP selection, writes held-step locks and exports the native display
+  getter. Shared notification/LFO hooks ask name/format/visibility providers;
+  machines contributes policy, other mods can use the same API. Existing
+  parameter-override descriptors stay compatible. See
+  [the API](../../docs/ADAPTING.md#persistent-sound-edits-and-held-steps-core-dn1-42-digitone-mk1),
+  [dn-sound-edit](../../examples/dn-sound-edit) and
+  [dn-param-presentation](../../examples/dn-param-presentation).
+
 - **At boot** (the OS entry's call at 0x40000538, as on the Digitakt),
   `boot` copies the RAM image the linker built to its area (0x43EC0000
   from 4.0, 0x47BE0000 before), zeroes
@@ -288,3 +298,11 @@ SETTINGS each row draws after SYSTEM and YES toggles it (SYSTEM INFO's
 readout shows, REMOTE KEYS clears its box). `tests/test_sdk.py` checks that
 4.1.1 keeps all of the released 4.1, with `core_additem` where it was, and
 the Digitakt's core is the same build without `ROW_POOL`.
+
+Check the extension with `python tests/test_core_dn1_sound.py` (actual shared C
+logic) and `python tests/test_sdk.py`, supplying `ELEKLOADER_DN_SYX`,
+`ELEKLOADER_DN_SYX_144` and `ELEKLOADER_CORE_DN1_411`. The last names the pinned
+upstream4.1.1 baseline, with its `-os1.44.elemod` beside it. The strict append
+test checks every old symbol/relocation, exact old boot/run bytes and BSS,
+unchanged hook/table resources, core-only linking, the independent example
+and old-core refusal. Missing compatibility inputs are skipped explicitly.

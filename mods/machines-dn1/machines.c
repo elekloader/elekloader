@@ -20,6 +20,9 @@
 #include "digitone-mk1/core3.h"
 #include "digitone-mk1/machines.h"
 #include "tables.h"
+#ifdef DNM_NATIVE_UI
+#include "native.h"
+#endif
 
 #define VOICES      8
 #define SYNTHS      4
@@ -140,7 +143,7 @@ static int32_t amp(int32_t voice, int32_t slot)
 /* The block times the envelope (ramped from the last block's level) and the velocity. */
 static void envelope(int32_t voice, int32_t *block)
 {
-    int32_t l0 = vs[voice].level, l1 = l0, sus = amp(voice, S_SUS) * 258, g0, step, i;
+    int32_t l0 = vs[voice].level, l1 = l0, sus = amp(voice, S_SUS) * 258, g0, g1, step, i;
     switch (vs[voice].stage) {
     case ATK:
         l1 += dnm_rate[amp(voice, S_ATK)];
@@ -173,7 +176,17 @@ static void envelope(int32_t voice, int32_t *block)
         l1 = 32767;
     vs[voice].level = l1;
     g0 = l0 * vs[voice].v.velocity / 127;
-    step = (l1 * vs[voice].v.velocity / 127 - g0) / 32;
+    g1 = l1 == l0 ? g0 : l1 * vs[voice].v.velocity / 127;
+    step = (g1 - g0) / 32;
+    if (!step) {
+        for (i = 0; i < 32; i += 4) {
+            block[i]     = ((block[i]     >> 16) * g0) << 1;
+            block[i + 1] = ((block[i + 1] >> 16) * g0) << 1;
+            block[i + 2] = ((block[i + 2] >> 16) * g0) << 1;
+            block[i + 3] = ((block[i + 3] >> 16) * g0) << 1;
+        }
+        return;
+    }
     for (i = 0; i < 32; i++) {
         block[i] = ((block[i] >> 16) * g0) << 1;
         g0 += step;
@@ -199,7 +212,11 @@ void dnm_render(int32_t *voices)
                 block[i] = 0;               /* silent: no FM either */
             continue;
         }
+#ifdef DNM_NATIVE_UI
+        vs[v].v.pitch = fw_voice_pitch_processed[v];
+#else
         vs[v].v.pitch = fw_voice_pitch[v];
+#endif
         m->render(v, block, &vs[v].v);
         vs[v].v.fresh = 0;
         if (!(m->flags & DNM_OWN_ENV))
@@ -264,6 +281,50 @@ static void *dnm_ui(int32_t id)
     return ui_rec[k];
 }
 
+#ifdef DNM_NATIVE_UI
+extern const struct dnm_names *const dn_machine_names[];
+const uint32_t dnm_names_v1 = 1;
+
+/* Extra FM operator controls do not affect a replacement oscillator. */
+static int32_t unused_syn(int32_t id)
+{
+    return id >= 135 && id <= 141;
+}
+
+static const char *dnm_name(int32_t id, int32_t field)
+{
+    int32_t k = knob_of(id), mid;
+    const struct dnm_machine *m;
+    if ((field != 0x28 && field != 0x30) || (k < 0 && !unused_syn(id)) ||
+        (mid = active_machine()) <= 0 || !(m = find(mid)))
+        return 0;
+    if (k < 0 || (k >= DNM_KNOBS && !pages2(m)) || !m->knobs[k].name || !m->knobs[k].name[0])
+        return "UNUSED";
+    if (field == 0x28) {
+        const struct dnm_names *const *p;
+        for (p = dn_machine_names; *p; p++) {
+            const struct dnm_names *names = *p;
+            if (names->abi == &dnm_names_v1 && names->id == mid &&
+                (names->count == DNM_KNOBS || names->count == DNM_KNOBS_ALL) &&
+                k < names->count && names->long_names &&
+                names->long_names[k] && names->long_names[k][0])
+                return names->long_names[k];
+        }
+    }
+    return m->knobs[k].name;
+}
+
+int32_t dnm_lfo_visible(int32_t id)
+{
+    const struct dnm_machine *m = find(active_machine());
+    int32_t k = knob_of(id);
+    if (!m) return 1;
+    if (unused_syn(id) || (k >= DNM_KNOBS && !pages2(m))) return 0;
+    return k < 0 || (m->knobs[k].name && m->knobs[k].name[0]);
+}
+
+
+#else
 static const char *dnm_name(int32_t id, int32_t field)
 {
     int32_t k = knob_of(id), mid;
@@ -275,7 +336,49 @@ static const char *dnm_name(int32_t id, int32_t field)
     return m->knobs[k].name ? m->knobs[k].name : "";
 }
 
+#endif
+
+#ifdef DNM_NATIVE_UI
+const struct core_param_override dnm_override = { dnm_ui, 0 };
+#else
 const struct core_param_override dnm_override = { dnm_ui, dnm_name };
+#endif
+
+#ifdef DNM_NATIVE_UI
+const struct dnm_machine *dnm_active(void)
+{
+    return find(active_machine());
+}
+
+/* Internal native-UI mapping; -1 for invalid/padding positions. */
+int32_t dnm_knob_slot(int32_t knob)
+{
+    return (uint32_t)knob < DNM_KNOBS_ALL && knob_id[knob] ? param_rec(knob_id[knob])[1] : -1;
+}
+
+int32_t dnm_machine_id(void)
+{
+    const struct dnm_machine *m = dnm_active();
+    return m ? m->id : 0;
+}
+
+/* Core owns notification/LFO bridges; the companion only supplies policy. */
+static int32_t dnm_dest_visible(int32_t id)
+{
+    return dnm_active() ? dnm_lfo_visible(id) : -1;
+}
+static int32_t dnm_format_value(int32_t id, int32_t value, char text[CORE_PARAM_TEXT])
+{
+    int32_t k = knob_of(id);
+    const struct dnm_machine *m = dnm_active();
+    if (!m || k < 0 || (k >= DNM_KNOBS && !pages2(m)) || !m->knobs[k].name || !m->knobs[k].fmt)
+        return 0;
+    m->knobs[k].fmt(value, text);
+    return 1;
+}
+const struct core_param_presenter dnm_presenter = {&core_param_present_v2, dnm_name, dnm_format_value, dnm_dest_visible};
+
+#endif
 
 /* ---- MACHINES in the Mod Menu ------------------------------------------------------------------ */
 #define MAX_MACHINES 15
@@ -313,7 +416,11 @@ static void set_knobs(int32_t track, const struct dnm_machine *m, const struct d
         } else {
             continue;
         }
+#ifdef DNM_NATIVE_UI
+        dnm_sound_edit(track, r[1], v);
+#else
         core_sound_set(track, r[1], v);
+#endif
     }
 }
 
@@ -328,7 +435,11 @@ static void machines_pick(void *brain, void *event, int32_t track, int32_t index
         return;
     if ((FW_SOUND_SLOT(kit, track, MACH_SLOT) >> 8) != id)
         set_knobs(track, m, find(FW_SOUND_SLOT(kit, track, MACH_SLOT) >> 8));
+#ifdef DNM_NATIVE_UI
+    dnm_sound_edit(track, MACH_SLOT, id << 8);
+#else
     core_sound_set(track, MACH_SLOT, id << 8);
+#endif
     ui_for = -1;
 }
 

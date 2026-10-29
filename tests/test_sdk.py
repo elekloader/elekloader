@@ -553,6 +553,8 @@ def test_the_master_mono_example_builds_for_each_os_unchanged():
 
 
 DN_STOCK = os.environ.get('ELEKLOADER_DN_SYX', '')
+with open(os.path.join(ROOT, 'mods', 'machines-dn1', 'mod.json')) as _fh:
+    MACH_VERSION = json.load(_fh)['version']
 
 
 def dn_core(tmp, drop=None):
@@ -608,10 +610,10 @@ def test_digitone_core_builds_and_links():
                         'ev_note_queue'])
         # The same core.s as core 2.1's, with the Digitone's addresses, and
         # each of its labels where core 2.1 has it.
-        assert sorted(dn['build']['sources']) == ['audio.s', 'block.s', 'core.s', 'fw.s', 'leds.s',
+        assert sorted(dn['build']['sources']) == sorted(['audio.s', 'block.s', 'core.s', 'fw.s', 'leds.s',
                                                   'menu.s', 'midi.s', 'pages.s', 'params.s',
                                                   'projdata.s', 'queue.s', 'render.s', 'rows.s',
-                                                  'settings.s', 'voice.s', 'voices.s']
+                                                  'settings.s', 'voice.s', 'voices.s', 'sound.c', 'selection.c', 'param_names.c', 'param_names.s'])
         assert dn['build']['sources']['core.s'] == dt['build']['sources']['core.s']
         placed = {k: v for k, v in dn['symbols'].items() if v[0] != 'abs'}
         shared = {k: v for k, v in placed.items() if k in dt['symbols']}
@@ -652,6 +654,18 @@ FW_DN = ['fw_active_track', 'fw_blit', 'fw_ev_alloc', 'fw_ev_free', 'fw_ev_queue
          'fw_tempo', 'fw_font_label', 'fw_font_title', 'fw_voice_len', 'fw_voice_params', 'fw_voice_pitch', 'fw_voice_track', 'fw_voices',
          'fw_memcpy', 'fw_memset', 'fw_memchr', 'fw_strcmp', 'fw_strncmp', 'fw_strchr', 'fw_strncpy', 'fw_crc32',
          '__ashldi3', '__lshrdi3', '__ashrdi3', 'fw_textbox', 'fw_transport', 'fw_pattern', 'fw_project']
+FW_DN42 = ['fw_sound_live', 'fw_voice_pitch_processed', 'fw_project_get', 'fw_sound_ref', 'fw_sound_change_event_vtable',
+           'fw_ui_get', 'fw_view_param_value', 'fw_ui_grid_edit', 'fw_ui_step_edit', 'fw_key_held', 'fw_track_get',
+           'fw_track_length', 'fw_track_has_note', 'fw_track_has_lock', 'fw_track_set_trig',
+           'fw_track_set_lock', 'fw_ui_refresh', 'fw_syn_key', 'fw_syn1_draw', 'fw_syn2_draw',
+           'fw_string_ctor', 'fw_param_value_text', 'fw_lfo_name_format', 'fw_lfo_choices']
+CORE_DN42 = ['core_lock_selected', 'core_param_dest_visible', 'core_param_lfo_choices', 'core_param_lfo_filter', 'core_param_lfo_knob_name', 'core_param_lfo_list_fallback', 'core_param_lfo_list_name', 'core_param_lfo_name', 'core_param_lfo_step', 'core_param_lfo_step_bridge', 'core_param_lfo_value_name', 'core_param_long_name', 'core_param_name', 'core_param_name_call', 'core_param_short_native', 'core_param_notification_value', 'core_param_present_v2', 'core_param_value_text', 'core_sound_apply', 'core_step_selection']
+
+
+def dn42_exports(doc):
+    return CORE_DN42 + FW_DN42 if doc['target']['os'] == '1.44' else []
+
+
 CORE_DN41 = ['core_note_queue']   # 4.1's
 CORE_DN411 = ['core_row_add', 'core_row_new']   # 4.1.1's: the SETTINGS rows' storage
 CORE_DN3 = ['core_note_queue', 'core_audio_caps', 'core_key_leds', 'core_menu_open', 'core_midi_cc', 'core_midi_pc', 'core_param_short',
@@ -681,7 +695,7 @@ def check_dn_superset(old_path, new_path):
         'core_audio', 'core_param_override', 'ev_key_leds', 'ev_midi_cc', 'ev_midi_pc', 'ev_note_queue',
         'ev_render_params', 'ev_render_voices']
     assert all(new['collections'][k] == v for k, v in old['collections'].items())
-    assert sorted(set(new['exports']) - set(old['exports'])) == sorted(CORE_DN3 + FW_DN + CORE_DN411)
+    assert sorted(set(new['exports']) - set(old['exports'])) == sorted(CORE_DN3 + FW_DN + CORE_DN411 + dn42_exports(new))
     assert all(new['symbols'][k][0] == v[0] for k, v in old['symbols'].items())
 
 
@@ -694,6 +708,69 @@ def test_digitone_core_is_2_3_and_more():
         if DN_STOCK_144 and os.path.exists(DN_STOCK_144) and os.path.exists(other):
             path, _m = build.build(os.path.join(ROOT, 'mods', 'core-dn1'), DN_STOCK_144, tmp)
             check_dn_superset(other, path)
+
+
+CORE_DN411_REL = os.environ.get('ELEKLOADER_CORE_DN1_411', '')
+
+
+def test_digitone_core_4_2_preserves_4_1_1_with_sound_set_fix():
+    """Old offsets/ABI/hooks stay. OS1.44 changes one setter JSR operand,
+    adds eight shared name/LFO hooks, one optional table and16B value buffer.
+    OS1.43 retains exact4.1.1 payload; no native port is assumed."""
+    if not CORE_DN411_REL or not os.path.exists(CORE_DN411_REL):
+        raise Skip('missing ELEKLOADER_CORE_DN1_411 (pinned upstream 4.1.1 baseline)')
+    for st, baseline in ((DN_STOCK, CORE_DN411_REL),
+                         (DN_STOCK_144, CORE_DN411_REL.replace('.elemod', '-os1.44.elemod'))):
+        if not st or not os.path.exists(st) or not os.path.exists(baseline):
+            raise Skip('missing core4.2 compatibility stock/baseline')
+        with tempfile.TemporaryDirectory() as tmp:
+            path, candidate = build.build(os.path.join(ROOT, 'mods/core-dn1'), st, tmp)
+            old = elemod.load_any(baseline)
+            with open(baseline) as fh: before = json.load(fh)
+            with open(path) as fh: after = json.load(fh)
+            assert before['version'] == '4.1.1' and after['version'] == '4.2'
+            native = after['target']['os'] == '1.44'
+            for key in ('target', 'contribute', 'resources'):
+                assert after[key] == before[key], key
+            expected_sites = json.loads(json.dumps(before['sites']))
+            if native:
+                short, = [site for site in expected_sites if site['addr'] == '0x400207b8']
+                assert short['relocs'] == [[2, 'abs32', 'sym:core_param_short', 0]]
+                short['relocs'] = [[2, 'abs32', 'sym:core_param_short_native', 0]]
+            assert after['sites'][:len(before['sites'])] == expected_sites
+            assert len(after['sites']) == len(before['sites']) + (8 if native else 0)
+            assert after['collections'] == dict(before['collections'], **({'core_param_presenters': {'entry': 4}} if native else {}))
+            assert set(after['imports']) == set(before['imports']) | ({'core_param_presenters'} if native else set())
+            assert all(after['symbols'][k] == v for k, v in before['symbols'].items())
+            assert sorted(set(after['exports']) - set(before['exports'])) == sorted(dn42_exports(after))
+            assert set(before['exports']) <= set(after['exports'])
+            assert after['sections']['.bss']['size'] == before['sections']['.bss']['size'] + (16 if native else 0)
+            s, dev, _release = formats.load(st)
+            image = formats.main_image(s, dev)
+            for section in ('.boot', '.run'):
+                previous = bytes(elemod.parts_bytes(old.sections[section]['parts'], image, dev))
+                current = bytes(elemod.parts_bytes(candidate.sections[section]['parts'], image, dev))
+                if native and section == '.run':
+                    pos = previous.index(bytes.fromhex('4eb94009c992'), before['symbols']['core_sound_set'][1])
+                    assert current[:pos] == previous[:pos]
+                    assert current[pos:pos+6] == bytes.fromhex('4eb900000000')
+                    assert current[pos+6:len(previous)] == previous[pos+6:]
+                    assert ['.run', pos+2, 'abs32', 'sec:.run', after['symbols']['core_sound_apply'][1]] in after['relocs']
+                else:
+                    assert current[:len(previous)] == previous, section
+                if after['target']['os'] == '1.43' or section == '.boot':
+                    assert current == previous
+            assert all(reloc in after['relocs'] for reloc in before['relocs'])
+            rc, report = lint_json(path, '--stock', st)
+            assert rc == 0, report['problems']
+            if after['target']['os'] == '1.44':
+                ex, mod = build.build(os.path.join(ROOT, 'examples/dn-sound-edit'), st, tmp)
+                assert not mod.sites and mod.needs_core == '4.2'
+                assert set(mod.imports) <= {'core_sound_set'}
+                rc, report = lint_json(ex, '--stock', st, '--with', path)
+                assert rc == 0, report['problems']
+                rc, report = lint_json(ex, '--stock', st, '--with', baseline)
+                assert rc == 1 and any('needs core 4.2' in x for x in report['problems']), report['problems']
 
 
 C_DN = """
@@ -787,7 +864,7 @@ def check_dn_32(old_path, new_path):
     assert all(new['collections'][k] == v for k, v in old['collections'].items())
     assert sorted(set(new['exports']) - set(old['exports'])) == sorted(DN33_EXPORTS + ['core_audio_caps',
                                                                                      'core_midi_pc']
-                                                                       + CORE_DN41 + CORE_DN411)
+                                                                       + CORE_DN41 + CORE_DN411 + dn42_exports(new))
 
     def what(d):
         return [(s['addr'], s['len'], s['kind'], s['new'], s.get('relocs')) for s in d['sites']]
@@ -823,7 +900,7 @@ def check_dn_40(old_path, new_path):
         assert new[k] == old[k], k
     assert sorted(set(new['collections']) - set(old['collections'])) == ['ev_note_queue']
     assert all(new['collections'][k] == v for k, v in old['collections'].items())
-    assert sorted(set(new['exports']) - set(old['exports'])) == sorted(CORE_DN41 + CORE_DN411)
+    assert sorted(set(new['exports']) - set(old['exports'])) == sorted(CORE_DN41 + CORE_DN411 + dn42_exports(new))
 
     def what(d):
         return [(s['addr'], s['len'], s['kind'], s['new'], s.get('relocs')) for s in d['sites']]
@@ -857,7 +934,7 @@ def check_dn_41(old_path, new_path):
     assert old['version'] == '4.1' and new['version'] == DN_VERSION
     for k in ('target', 'contribute', 'resources', 'collections', 'sites'):
         assert new[k] == old[k], k
-    assert sorted(set(new['exports']) - set(old['exports'])) == sorted(CORE_DN411)
+    assert sorted(set(new['exports']) - set(old['exports'])) == sorted(CORE_DN411 + dn42_exports(new))
     assert all(new['symbols'][k] == v for k, v in old['symbols'].items()
                if k in ('core_settings', 'core_additem'))
     assert all(new['symbols'][k][0] == v[0] for k, v in old['symbols'].items())
@@ -997,9 +1074,9 @@ def test_digitone_program_change_example():
 
 def test_digitone_machines_build_and_link():
     """The machines mod (mods/machines-dn1) and its example machine
-    (examples/dn-sine-machine), in C on core-dn1 3.1's names: they patch no
-    site, need 3.1, carry the same code for 1.43 and 1.44 (empty ports), link
-    with core-dn1 3.2, and are refused beside 2.3."""
+    (examples/dn-sine-machine) retain their descriptor ABI and core 3.1
+    requirement. Native UI sites are owned only on 1.44; SINE's portable
+    machine code still matches between OS versions."""
     if not DN_STOCK or not os.path.exists(DN_STOCK):
         raise Skip('missing ELEKLOADER_DN_SYX')
     tc = [x for x in devices.devices() if x.key == 'digitone-mk1'][0].toolchain
@@ -1010,7 +1087,9 @@ def test_digitone_machines_build_and_link():
         mpath, m = build.build(os.path.join(ROOT, 'mods', 'machines-dn1'), DN_STOCK, tmp)
         spath, sm = build.build(os.path.join(ROOT, 'examples', 'dn-sine-machine'), DN_STOCK, tmp)
         assert os.path.basename(mpath) == 'machines-%s.elemod' % MACH_VERSION
-        assert m.needs_core == '3.1' and sm.needs_core == '3.1' and not m.sites and not sm.sites
+        assert m.needs_core == ('4.2' if formats.load(DN_STOCK)[2].version == '1.44' else '3.1')
+        assert len(m.sites) == (10 if formats.load(DN_STOCK)[2].version == '1.44' else 0)
+        assert sm.needs_core == '3.1' and not sm.sites
         assert {'core_sound_set', 'core_param_ui_make', 'core_menu_open', 'fw_params',
                 'fw_active_track'} <= set(m.imports)
         assert {'dnm_knob', 'dnm_phase_inc', 'dnm_sin'} <= set(m.exports)
@@ -1029,7 +1108,100 @@ def test_digitone_machines_build_and_link():
                     s, dev, _rel = formats.load(st)
                     images.append(bytes(elemod.parts_bytes(x.sections['.run']['parts'],
                                                            formats.main_image(s, dev), dev)))
-                assert images[0] == images[1] and mod.relocs == mod4.relocs, src
+                if src == 'examples/dn-sine-machine':
+                    assert images[0] == images[1] and mod.relocs == mod4.relocs, src
+                else:
+                    assert len(mod4.sites) == 2 and 'dnm_ui_v1' in mod4.exports
+
+
+def test_digitone_native_machine_pages():
+    """A native-page descriptor needs the new companion, on OS 1.44 only."""
+    if not DN_STOCK_144 or not os.path.exists(DN_STOCK_144):
+        raise Skip('missing ELEKLOADER_DN_SYX_144')
+    tc = [x for x in devices.devices() if x.key == 'digitone-mk1'][0].toolchain
+    if not shutil.which(os.environ.get('ELEKLOADER_CROSS', tc['prefix']) + 'gcc'):
+        raise Skip('no m68k cross compiler')
+    with tempfile.TemporaryDirectory() as tmp:
+        core4, _c = build.build(os.path.join(ROOT, 'mods/core-dn1'), DN_STOCK_144, tmp)
+        companion, m = build.build(os.path.join(ROOT, 'mods/machines-dn1'), DN_STOCK_144, tmp)
+        assert len(m.sites) == 2 and {'dnm_ui_v1', 'dnm_names_v1'} <= set(m.exports)
+        assert {'dnm_sound_edit', 'dnm_syn_page', 'dnm_knob_value'} <= set(m.exports)
+        if CORE_DN411_REL and os.path.exists(CORE_DN411_REL):
+            baseline144 = CORE_DN411_REL.replace('.elemod', '-os1.44.elemod')
+            if os.path.exists(baseline144):
+                rc, report = lint_json(companion, '--stock', DN_STOCK_144, '--with', baseline144)
+                assert rc == 1 and any('needs core 4.2' in x for x in report['problems']), report['problems']
+        fixture = os.path.join(tmp, 'page')
+        os.mkdir(fixture)
+        with open(os.path.join(fixture, 'page.c'), 'w') as fh:
+            fh.write('#include "digitone-mk1/machines.h"\n'
+                     'static int32_t draw(void *v, void *b, int32_t s, int32_t p) {\n'
+                     '  int32_t locked; (void)b; (void)s; (void)p;\n'
+                     '  if (dnm_syn_page(v)) dnm_sound_edit(0, 0, 512);\n'
+                     '  return dnm_knob_value(0, &locked); }\n'
+                     '#include <stddef.h>\n'
+                     'typedef char machine_size[(sizeof(struct dnm_machine) == 28) ? 1 : -1];\n'
+                     'typedef char knob_size[(sizeof(struct dnm_knob) == 12) ? 1 : -1];\n'
+                     'typedef char voice_size[(sizeof(struct dnm_voice) == 20) ? 1 : -1];\n'
+                     'typedef char page_size[(sizeof(struct dnm_page) == 20) ? 1 : -1];\n'
+                     'typedef char names_size[(sizeof(struct dnm_names) == 16) ? 1 : -1];\n'
+                     'typedef char names_ptr[(offsetof(struct dnm_names, long_names) == 12) ? 1 : -1];\n'
+                     'const struct dnm_page page = {&dnm_ui_v1, 2, {1, 2}, draw};\n'
+                     'static const char *const labels[DNM_KNOBS] = {"Osc2 Coarse"};\n'
+                     'const struct dnm_names names = {&dnm_names_v1, 2, DNM_KNOBS, labels};\n')
+        doc = {'id': 'nativepage', 'version': '1.0', 'device': 'digitone-mk1',
+               'os': '1.44', 'sources': ['page.c'], 'requires': ['core', 'machines'],
+               'resources': {'core': '3.1'},
+               'contribute': [{'to': 'dn_machine_pages', 'data': '00000000',
+                               'relocs': [[0, 'abs32', 'sym:page', 0]]},
+                              {'to': 'dn_machine_names', 'data': '00000000',
+                               'relocs': [[0, 'abs32', 'sym:names', 0]]}]}
+        with open(os.path.join(fixture, 'mod.json'), 'w') as fh:
+            json.dump(doc, fh)
+        page, _p = build.build(fixture, DN_STOCK_144, tmp)
+        assert 'dnm_names_v1' in _p.imports
+        rc, report = lint_json(page, '--stock', DN_STOCK_144, '--with', core4, '--with', companion)
+        assert rc == 0, report['problems']
+        example, ex = build.build(os.path.join(ROOT, 'examples/dn-native-machine'), DN_STOCK_144, tmp)
+        assert not ex.sites and {'dnm_ui_v1', 'dnm_names_v1'} <= set(ex.imports)
+        rc, report = lint_json(example, '--stock', DN_STOCK_144, '--with', core4, '--with', companion)
+        assert rc == 0, report['problems']
+        old = os.path.join(tmp, 'old')
+        os.mkdir(old)
+        with open(os.path.join(old, 'old.c'), 'w') as fh:
+            fh.write('const int old_machine_api = 1;\n')
+        with open(os.path.join(old, 'mod.json'), 'w') as fh:
+            json.dump({'id': 'machines', 'version': '0.1', 'device': 'digitone-mk1',
+                       'os': '1.44', 'sources': ['old.c'], 'collections': {'dn_machines': 4},
+                       'requires': ['core'], 'resources': {'core': '3.1'}}, fh)
+        old_companion, _o = build.build(old, DN_STOCK_144, tmp)
+        rc, report = lint_json(page, '--stock', DN_STOCK_144, '--with', core4, '--with', old_companion)
+        assert rc == 1 and any('dnm_ui_v1' in problem or 'dn_machine_pages' in problem
+                              for problem in report['problems']), report['problems']
+
+        # Independently require the names marker; no page descriptor is involved.
+        names_doc = dict(doc, id='nativenames', contribute=[doc['contribute'][1]])
+        names_src = 'const struct dnm_names names = {&dnm_names_v1, 2, DNM_KNOBS, 0};\n'
+        with open(os.path.join(fixture, 'page.c'), 'w') as fh:
+            fh.write('#include "digitone-mk1/machines.h"\n' + names_src)
+        with open(os.path.join(fixture, 'mod.json'), 'w') as fh:
+            json.dump(names_doc, fh)
+        names_only, _n = build.build(fixture, DN_STOCK_144, tmp)
+        rc, report = lint_json(names_only, '--stock', DN_STOCK_144, '--with', core4, '--with', old_companion)
+        assert rc == 1 and any('dnm_names_v1' in x or 'dn_machine_names' in x
+                              for x in report['problems']), report['problems']
+        rc, report = lint_json(names_only, '--stock', DN_STOCK_144, '--with', core4, '--with', companion)
+        assert rc == 0, report['problems']
+        if DN_STOCK and formats.load(DN_STOCK)[2].version == '1.43':
+            names_doc['os'] = '1.43'
+            with open(os.path.join(fixture, 'mod.json'), 'w') as fh:
+                json.dump(names_doc, fh)
+            names143, _n = build.build(fixture, DN_STOCK, tmp)
+            machine143, m143 = build.build(os.path.join(ROOT, 'mods/machines-dn1'), DN_STOCK, tmp)
+            assert not m143.sites and 'dnm_names_v1' not in m143.exports
+            rc, report = lint_json(names143, '--stock', DN_STOCK, '--with', dn_core(tmp), '--with', machine143)
+            assert rc == 1 and any('dnm_names_v1' in x or 'dn_machine_names' in x
+                                  for x in report['problems']), report['problems']
 
 
 def test_digitone_exclusive_audio_example():
@@ -1437,8 +1609,8 @@ DN_STOCK_144 = os.environ.get('ELEKLOADER_DN_SYX_144', '')
 
 
 def test_digitone_core_port_to_144_is_the_same_core():
-    """mods/core-dn1's 1.44 port: the same code and the same sites, at 1.44's
-    addresses; a 1.43 core-dn1 is refused on 1.44."""
+    """Shared core sites/layout stay equal. Only 1.44 has the appended 4.2
+    native helpers; the 1.43 build is still refused as a 1.44 core."""
     if not DN_STOCK_144 or not os.path.exists(DN_STOCK_144):
         raise Skip('missing ELEKLOADER_DN_SYX_144')
     with tempfile.TemporaryDirectory() as tmp:
@@ -1450,19 +1622,52 @@ def test_digitone_core_port_to_144_is_the_same_core():
         with open(old_path) as fh:
             old = json.load(fh)
         assert new['target']['os'] == '1.44' and old['target']['os'] == '1.43'
-        for k in ('exports', 'collections', 'contribute', 'resources', 'build'):
+        for k in ('contribute', 'resources'):
             assert new[k] == old[k], k
+        assert new['collections'] == dict(old['collections'], core_param_presenters={'entry': 4})
         def sizes(d):
             return {s: v.get('len', v.get('size')) for s, v in d['sections'].items()}
-        assert sizes(new) == sizes(old)
+        assert sorted(set(new['exports']) - set(old['exports'])) == sorted(CORE_DN42 + FW_DN42)
+        assert set(old['exports']) <= set(new['exports'])
+        assert new['build']['sources'] == old['build']['sources']
+        assert sizes(new)['.bss'] == sizes(old)['.bss'] + 16
+        assert sizes(new)['.boot'] == sizes(old)['.boot']
+        assert sizes(new)['.run'] > sizes(old)['.run']
+        assert all(new['symbols'][k] == v for k, v in old['symbols'].items() if v[0] != 'abs')
 
         def what(d):                # each site's new bytes and targets, not where it is
             return [(s['len'], s['kind'], s['new'], s.get('relocs')) for s in d['sites']]
-        assert len(new['sites']) == 88 and what(new) == what(old)
+        expected = json.loads(json.dumps(old))
+        short, = [site for site in expected['sites'] if site['addr'] == '0x400207b8']
+        assert short['relocs'] == [[2, 'abs32', 'sym:core_param_short', 0]]
+        short['relocs'] = [[2, 'abs32', 'sym:core_param_short_native', 0]]
+        assert len(new['sites']) == 96 and what(new)[:88] == what(expected)
         rc, r = lint_json(path, '--stock', DN_STOCK_144)
         assert rc == 0, r['problems']
         rc, r = lint_json(old_path, '--stock', DN_STOCK_144)
         assert rc == 1 and any('1.43' in x and '1.44' in x for x in r['problems']), r['problems']
+
+
+def test_digitone_core_parameter_presentation_without_machines():
+    if not DN_STOCK_144 or not CORE_DN411_REL:
+        raise Skip('missing explicit native compatibility inputs')
+    with tempfile.TemporaryDirectory() as tmp:
+        core, _c = build.build(os.path.join(ROOT, 'mods/core-dn1'), DN_STOCK_144, tmp)
+        example, mod = build.build(os.path.join(ROOT, 'examples/dn-param-presentation'), DN_STOCK_144, tmp)
+        assert not mod.sites and mod.needs_core == '4.2'
+        assert set(mod.requires) == {'core'}
+        assert 'core_param_present_v2' in mod.imports
+        # An earlier 12-byte draft consumer must not link to this 16-byte ABI.
+        with open(example) as fh: prior_marker = fh.read().replace('core_param_present_v2', 'core_param_present_v1')
+        prior_example = os.path.join(tmp, 'prior-presenter.elemod')
+        with open(prior_example, 'w') as fh: fh.write(prior_marker)
+        rc, report = lint_json(prior_example, '--stock', DN_STOCK_144, '--with', core)
+        assert rc == 1 and any('core_param_present_v1' in x for x in report['problems']), report['problems']
+        rc, report = lint_json(example, '--stock', DN_STOCK_144, '--with', core)
+        assert rc == 0, report['problems']
+        baseline = CORE_DN411_REL.replace('.elemod', '-os1.44.elemod')
+        rc, report = lint_json(example, '--stock', DN_STOCK_144, '--with', baseline)
+        assert rc == 1 and any('needs core 4.2' in x for x in report['problems']), report['problems']
 
 
 if __name__ == '__main__':

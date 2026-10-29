@@ -1,0 +1,64 @@
+{
+  "id": "dnnative",
+  "version": "1.0",
+  "license": "GPL-2.0-or-later",
+  "title": "Native SYN machine example",
+  "category": "Sound",
+  "description": "A sine with a second-page FINE control, native SYN drawing and separate full names. OS 1.44; machines 0.3.",
+  "device": "digitone-mk1",
+  "os": "1.44",
+  "sources": [
+    "machine.c"
+  ],
+  "requires": [
+    "core",
+    "machines"
+  ],
+  "resources": {
+    "core": "4.2",
+    "names": [
+      "dnmachine:3"
+    ]
+  },
+  "contribute": [
+    {
+      "to": "dn_machines",
+      "order": 60,
+      "data": "00000000",
+      "relocs": [
+        [
+          0,
+          "abs32",
+          "sym:native_machine",
+          0
+        ]
+      ]
+    },
+    {
+      "to": "dn_machine_pages",
+      "order": 60,
+      "data": "00000000",
+      "relocs": [
+        [
+          0,
+          "abs32",
+          "sym:native_pages",
+          0
+        ]
+      ]
+    },
+    {
+      "to": "dn_machine_names",
+      "order": 60,
+      "data": "00000000",
+      "relocs": [
+        [
+          0,
+          "abs32",
+          "sym:native_names",
+          0
+        ]
+      ]
+    }
+  ]
+}

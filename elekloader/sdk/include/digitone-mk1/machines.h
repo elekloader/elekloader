@@ -29,12 +29,13 @@
  * 31 none (SYN2 2/2 A-H). A knob with no parameter behind it stays empty whatever the machine says. */
 struct dnm_knob {
     const char *name;               /* +0  its label (5 characters); 0: unused (blank) on this machine */
-    void (*fmt)(int32_t value, char *buf);  /* +4 its value's text from the 8.8 value; 0: the number */
+    void (*fmt)(int32_t value, char *buf);  /* +4 8.8 value text; terminate within 16 bytes; 0: number */
     int32_t look;                   /* +8  the stock id whose knob graphic it borrows; 0 a plain knob (PTIM) */
 };
 
 struct dnm_voice {                  /* the companion's account of a voice, for the machine's render */
-    int32_t pitch;                  /* +0  its pitch word now: the note << 16, with portamento and the rest */
+    int32_t pitch;                  /* +0 OS 1.44/machines 0.3: processed pitch including portamento;
+                                          earlier companions and OS 1.43: raw note word */
     int32_t velocity;               /* +4  its note's velocity, 1-127 */
     int32_t fresh;                  /* +8  1 on the first block of a note: start its phases */
     int32_t track;                  /* +12 0-3 */
@@ -72,4 +73,49 @@ extern void dnm_knob_range(int32_t knob, int32_t *min, int32_t *max);   /* its s
 extern uint32_t dnm_phase_inc(int32_t pitch);                   /* a phase step a sample at 48 kHz */
 extern int32_t dnm_sin(uint32_t phase);                         /* sin(2 pi phase / 2^32), Q15 */
 
+/* Optional native SYN UI, machines 0.3 + core4.2 on OS 1.44. Referencing this marker
+ * refuses an older companion or an OS whose native UI has not been ported.
+ * Existing dnm_machine/knob/voice layouts are unchanged. One descriptor per
+ * machine id, static lifetime; use designated initializers. UI task only. */
+extern const uint32_t dnm_ui_v1;
+struct dnm_page {
+    const uint32_t *abi;            /* &dnm_ui_v1 */
+    int32_t id;                    /* a registered machine */
+    int32_t pages[2];              /* SYN1/2: 0 native count, 1 or 2 available pages */
+    /* Return nonzero after drawing; 0 retains the native renderer.
+     * syn is 1 or 2, page is zero-based. Notifications draw afterwards. */
+    int32_t (*draw)(void *view, void *bitmap, int32_t syn, int32_t page);
+};
+/* Contribute a pointer to dnm_page to dn_machine_pages. Without a descriptor,
+ * native drawing/navigation stay available. UI task only, except machine_id. */
+extern int32_t dnm_machine_id(void);             /* registered active machine, 0 for FM */
+extern void *dnm_syn_view(int32_t syn);          /* last native SYN view, or 0 */
+extern int32_t dnm_syn_page(void *brain);        /* visible SYN1/2, or 0 below menus */
+/* Active track's knob (0-31, same physical mapping as dnm_knob), with the
+ * native parameter-view GRID/STEP value. Until its SYN view is drawn, kit
+ * base value/no lock. Five padding positions return 0. A null locked is OK.
+ * *locked is 1 for an explicit lock, otherwise 0; invalid knob/track/kit: 0. */
+extern int32_t dnm_knob_value(int32_t knob, int32_t *locked);
+/* A persistent UI edit: kit/live update and native SoundRef change event.
+ * Track 0-3, slot 0-78. Do not use for temporary playback modulation. */
+extern void dnm_sound_edit(int32_t track, int32_t slot, int32_t value);
+/* On both SYN subpages the companion consumes unused knobs and handles
+ * FUNC+turn using defaults, including all selected GRID/STEP steps 1-64. */
+
+/* Optional long labels, machines 0.3 on OS 1.44; existing descriptor ABI stays unchanged. */
+#ifndef DNM_NAMES_V1_API
+#define DNM_NAMES_V1_API
+extern const uint32_t dnm_names_v1;
+struct dnm_names {
+    const uint32_t *abi;            /* &dnm_names_v1 */
+    int32_t id;
+    int32_t count;                 /* DNM_KNOBS or DNM_KNOBS_ALL; bounds long_names reads */
+    const char *const *long_names;  /* count entries; null/empty falls back to the short label */
+};
+#endif
+/* Contribute a pointer to dn_machine_names. One descriptor per machine id,
+ * static lifetime; use designated initializers. Invalid count or missing/empty
+ * long_names entry falls back to the short name. Long labels are used in
+ * notifications and the LFO list; compact controls retain dnm_knob.name.
+ * Unused SYN controls are omitted from LFO choices, keeping native target IDs. */
 #endif

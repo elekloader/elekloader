@@ -75,6 +75,28 @@ All four need the 0.1 core, and the DigiHealth one needs that mod too; a
 missing file skips them. The suite builds the current core and examples
 with the ColdFire tools. Keep the `.elemod` files out of the repository.
 
+## Digitone native Sound/UI fixtures
+
+```sh
+python tests/test_core_dn1_sound.py
+python tests/test_machines_dn1.py
+```
+
+The core fixtures compile actual Sound, selection and presentation code without machines.
+They check notifications/bounds, both selection words, partial lock-write failure/retry,
+SHORT-only callbacks, versioned providers, priority and width fallbacks.
+The companion fixture checks native pages, labels, PAGES2 ownership,
+native getter/byte flag adaptation, reset refusal and processed pitches.
+Linux low-address non-PIE objects model native32-bit pointers; other platforms skip.
+Host fixtures do not establish ColdFire ABI, device timing or storage.
+
+The SDK suite accepts `ELEKLOADER_CORE_DN1_411`, the unpatched core 4.1.1
+baseline built from main, with `-os1.44.elemod` beside it. Along with explicit
+`ELEKLOADER_DN_SYX` and `ELEKLOADER_DN_SYX_144` stock files it checks unchanged old symbols/offsets and the exact1.43 payload. On1.44
+it checks the setter JSR change, existing short-name hook retarget, eight
+additional hooks, presenter table and16B text buffer.
+No baseline binaries are committed. Native extensions are OS 1.44 only.
+
 ## The refusal fixtures
 
 `tests/test_link_refusals.py` needs no firmware. For every message the linker

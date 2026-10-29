@@ -28,7 +28,7 @@ older ones people still have:
 | Digitakt mk1 | 1.53, 1.54 | `core-4.1.elemod`, `core-4.1-os1.54.elemod` | on main, not released: build it ([below](#building-a-core)) |
 | Digitakt mk1 | 1.53, 1.54 | `core-2.1.elemod`, `core-2.1-os1.54.elemod` | the v0.4.0 release, built into its apps |
 | Digitone mk1, Digitone Keys | 1.43, 1.44 | `core-dn1-4.1.elemod`, `core-dn1-4.1-os1.44.elemod` | the [core-dn1-v4.1](https://github.com/irpina/elekloader/releases/tag/core-dn1-v4.1) pre-release, and the web page |
-| Digitone mk1, Digitone Keys | 1.43, 1.44 | `core-dn1-4.1.1.elemod`, `core-dn1-4.1.1-os1.44.elemod` | on main, not released: build it ([below](#building-a-core)) |
+| Digitone mk1, Digitone Keys | 1.43, 1.44 | `core-dn1-4.2.elemod`, `core-dn1-4.2-os1.44.elemod` | on main, not released: build it ([below](#building-a-core)) |
 | Digitone mk1, Digitone Keys | 1.43, 1.44 | `core-dn1-2.0a.elemod`, `core-dn1-2.0a-os1.44.elemod` | the v0.4.0 release, built into its apps |
 | Digitakt II | 1.17 | `core-dt2-1.0.elemod` | not released: build it ([below](#building-a-core)) |
 | Digitone II | 1.12 | `core-dn2-0.2.elemod` | experimental, not released: build it ([below](#building-a-core)) |
@@ -121,7 +121,9 @@ the one a mod that uses it names in `resources.core`.
     ADAPTING.md, "Key LEDs and each block's sound parameters");
   - the note queue: each note with the time it plays and its step's
     p-locks, which [fxkit](../mods/fxkit-dn1) is built on (4.1;
-    ADAPTING.md, "The note queue").
+    ADAPTING.md, "The note queue");
+  - persistent Sound edits, held-step display/edit helpers and native UI/processed-pitch
+    exports (4.2, OS1.44 only; ADAPTING.md, "Persistent Sound edits and held steps").
 - **Digitakt II** ([mods/core-dt2](../mods/core-dt2)): SETTINGS and
   PERSONALIZE rows, and `.fast` code in SRAM. No render events: its audio
   renders on the DSP.

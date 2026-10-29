@@ -129,3 +129,31 @@
         FW      fw_transport, FW_TRANSPORT
         FW      fw_pattern, FW_PATTERN
         FW      fw_project, FW_PROJECT
+
+| OS 1.44 UI and processed-pitch exports; these bindings are not ported to 1.43.
+        .ifdef CORE_NATIVE_UI
+        FW      fw_voice_pitch_processed, FW_VOICE_PITCH_PROCESSED
+        FW      fw_sound_live, SOUND_LIVE
+        FW      fw_project_get, FW_PROJECT_GET
+        FW      fw_sound_ref, FW_SOUND_REF
+        FW      fw_sound_change_event_vtable, FW_SOUND_CHANGE_EVENT_VTABLE
+        FW      fw_ui_get, FW_UI_GET
+        FW      fw_view_param_value, FW_VIEW_PARAM_VALUE
+        FW      fw_ui_grid_edit, FW_UI_GRID_EDIT
+        FW      fw_ui_step_edit, FW_UI_STEP_EDIT
+        FW      fw_key_held, FW_KEY_HELD
+        FW      fw_track_get, FW_TRACK_GET
+        FW      fw_track_length, FW_TRACK_LENGTH
+        FW      fw_track_has_note, FW_TRACK_HAS_NOTE
+        FW      fw_track_has_lock, FW_TRACK_HAS_LOCK
+        FW      fw_track_set_trig, FW_TRACK_SET_TRIG
+        FW      fw_track_set_lock, FW_TRACK_SET_LOCK
+        FW      fw_ui_refresh, FW_UI_REFRESH
+        FW      fw_syn_key, FW_SYN_KEY
+        FW      fw_syn1_draw, FW_SYN1_DRAW
+        FW      fw_syn2_draw, FW_SYN2_DRAW
+        FW      fw_string_ctor, FW_STRING_CTOR
+        FW      fw_param_value_text, FW_PARAM_VALUE_TEXT
+        FW      fw_lfo_name_format, FW_LFO_NAME_FORMAT
+        FW      fw_lfo_choices, FW_LFO_CHOICES
+        .endif
