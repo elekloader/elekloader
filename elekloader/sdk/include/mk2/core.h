@@ -57,7 +57,7 @@ extern volatile uint32_t core_store_conflicts;
 /* ---- value rows in SETTINGS > PERSONALIZE (and SETTINGS) --------------------
  * From ev_personalize (or ev_settings): core_addvalue(menu, &row) adds a row
  * that shows label and, on the right as LED INTENSITY does, values[get()].
- * YES cycles it, LEFT and RIGHT step it; each change calls set(new) and
+ * Only LEFT and RIGHT step it (YES does nothing); each change calls set(new) and
  * redraws the menu. row stays the mod's (static). */
 typedef struct {
     const char *label;

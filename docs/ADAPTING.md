@@ -349,8 +349,8 @@ tool's, a later OS's) as it was, counting it in `core_store_conflicts`.
 
 **Value rows.** From `ev_personalize` (or `ev_settings`),
 `core_addvalue(menu, &row)` adds a row that shows `label` and, on the right
-as LED INTENSITY does, `values[get()]`; YES cycles it, LEFT and RIGHT step
-it, and each change calls `set(new)` and redraws. Claim the row as
+as LED INTENSITY does, `values[get()]`; LEFT and RIGHT step it (YES does
+nothing), and each change calls `set(new)` and redraws. Claim the row as
 `settings:<label>`. `core_notice(msg)` shows a message in the header, as a
 page's title; `core_view_top()` gives the vtable of the view on top
 (`fw_vt_main` on the main screen and pages).

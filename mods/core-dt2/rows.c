@@ -20,10 +20,10 @@ static void set(cell_t *c, uint32_t v)
     fw_invalidate((char *)c->menu + 0x38);
 }
 
+/* YES does nothing: only LEFT and RIGHT change the value. */
 static void select(cell_t **storage)
 {
-    cell_t *c = *storage;
-    set(c, (c->row->get() + 1) % c->row->count);
+    (void)storage;
 }
 
 static void draw(cell_t **storage, void *item, void *bmp, int x, int y)
