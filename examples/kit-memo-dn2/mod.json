@@ -1,0 +1,21 @@
+{
+ "id": "kit-memo",
+ "version": "1.0",
+ "title": "Kit memo",
+ "category": "Examples",
+ "license": "GPL-2.0-or-later",
+ "description": "A memo (OFF, A, B, C) for each kit, set in PERSONALIZE: kept with the kit, the pattern's copies and the project. The smallest mod on core 0.3's kit data, project data and value rows (docs/ADAPTING.md).",
+ "device": "digitone-mk2",
+ "os": "1.12",
+ "sources": ["../kit-memo/memo.c"],
+ "subscribe": [
+  {"event": "ev_personalize", "fn": "memo_personalize", "order": 60},
+  {"event": "ev_tick", "fn": "memo_tick", "order": 60}
+ ],
+ "contribute": [
+  {"to": "core_kitdata", "order": 50, "data": "00000000", "relocs": [[0, "abs32", "sym:memo_kitdata", 0]]},
+  {"to": "core_projdata", "order": 50, "data": "00000000", "relocs": [[0, "abs32", "sym:memo_projdata", 0]]}
+ ],
+ "resources": {"core": "0.3", "names": ["kitdata:MEMO", "projdata:MEML", "personalize:KIT MEMO"]},
+ "requires": ["core"]
+}

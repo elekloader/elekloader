@@ -231,12 +231,17 @@ def built(moddir, tmp):
 CORE_SITES = ((0x40000538, '4eb9400019b0'), (0x40032ad4, '4eb94011bc60'),
               (0x40032b3a, '4eb94011bc96'), (0x40033d94, '4eb940030bd0'),
               (0x40033dde, '4eb940030b64'), (0x400a5eac, '205248780002'),
-              (0x4009e2a2, '4cef7c7c0018'))
+              (0x4009e2a2, '4cef7c7c0018'),
+              # 1.1: frames, LEDs, kit and project data, kit copies
+              (0x4002e90c, '4eb9400d9508'), (0x400311a2, '4ebaf7ea2f02'),
+              (0x400dbee4, '223cbacef00c'), (0x400db8be, '223cbacef00c'),
+              (0x400df932, '26bcbeefbace'), (0x400df99c, '203cbeefbace'),
+              (0x40136388, '226f0004206f0008202f000c'))
 
 
 def test_core_builds_links_and_verifies():
     """mods/core-dt2 built with the SDK, then a build with it alone: its
-    seven sites, and nothing else in the image changed."""
+    fourteen sites, and nothing else in the image changed."""
     with tempfile.TemporaryDirectory() as tmp:
         core = built(os.path.join('mods', 'core-dt2'), tmp)
         outputs, man = patch.build(SYX, [core], version='DT03', log=lambda *a: None)
@@ -244,12 +249,13 @@ def test_core_builds_links_and_verifies():
     new = formats.main_image(formats.parse(outputs['syx'], DEV), DEV)
     changed = [i for i in range(len(img)) if new[i] != img[i]]
     for site, stock_bytes in CORE_SITES:
-        a = site - DEV.main_load
-        assert img[a:a + 6].hex() == stock_bytes
+        a, n = site - DEV.main_load, len(stock_bytes) // 2
+        assert img[a:a + n].hex() == stock_bytes
         assert new[a:a + 2] in (b'\x4e\xb9', b'\x4e\xf9') and new[a:a + 6] != img[a:a + 6], hex(site)
-    sites = [s - DEV.main_load for s, _ in CORE_SITES]
-    assert all(any(s <= i < s + 6 for s in sites) for i in changed), [hex(DEV.main_load + i)
-                                                                      for i in changed[:8]]
+        assert new[a + 6:a + n] == b'\x4e\x71' * ((n - 6) // 2), hex(site)    # the rest NOP-padded
+    sites = [(s - DEV.main_load, len(b) // 2) for s, b in CORE_SITES]
+    assert all(any(s <= i < s + n for s, n in sites) for i in changed), [hex(DEV.main_load + i)
+                                                                         for i in changed[:8]]
     assert man['link']['layout']['ddr'][0] == DEV.ddr[0]
     assert man['output']['main']['inplace_min_gap'] > 0
 
@@ -294,7 +300,7 @@ def test_perform_direct_links_with_core():
     st, img = stock()
     new = formats.main_image(formats.parse(outputs['syx'], DEV), DEV)
     changed = {i for i in range(len(img)) if new[i] != img[i]}
-    sites = {s - DEV.main_load + k for s, _ in CORE_SITES for k in range(6)}
+    sites = {s - DEV.main_load + k for s, b in CORE_SITES for k in range(len(b) // 2)}
     assert changed <= sites
 
 

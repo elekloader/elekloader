@@ -304,7 +304,13 @@ CORE_SITES = ((0x40000538, '4eb9400019b0'), (0x4002e464, '4eb94011d5d4'),
               (0x4002e4ca, '4eb94011d60a'), (0x4002f20c, '4eb94002c5c8'),
               (0x4002f256, '4eb94002c55c'), (0x4009ff88, '205248780002'),
               (0x400987a2, '4cef7c7c0018'), (0x4011fc8c, '4fefffbc48d77cfc'),
-              (0x4011f8c4, '52b9466768b0'), (0x4012197a, '47f940207f9e'))
+              (0x4011f8c4, '52b9466768b0'), (0x4012197a, '47f940207f9e'),
+              # 0.3: frames, LEDs, kit and project data, kit copies
+              (0x40027196, '4eb9400db390'), (0x4002c87a, '4ebafb4a2f02'),
+              (0x400de0d4, '223cbacef00c'), (0x400ddddc, '223cbacef00c'),
+              (0x400e18be, '26bcbeefbace'), (0x400e1928, '203cbeefbace'),
+              (0x40134770, '226f0004206f0008202f000c'))
+SITES_0_3 = CORE_SITES[10:]
 
 
 def at(img, addr, n):
@@ -371,7 +377,11 @@ CORE_HOOKS = {0x40000538: ('4eb9', 'boot'), 0x4002e464: ('4eb9', 'core_tick'),
               0x400987a2: ('4ef9', 'core_personalize'),
               0x4011fc8c: ('4ef9', 'core_panel_buttons'),
               0x4011f8c4: ('4eb9', 'core_panel_clock'),
-              0x4012197a: ('4eb9', 'core_sysex')}
+              0x4012197a: ('4eb9', 'core_sysex'),
+              0x40027196: ('4eb9', 'core_frame'), 0x4002c87a: ('4eb9', 'core_key_leds'),
+              0x400de0d4: ('4eb9', 'core_kit_save'), 0x400ddddc: ('4eb9', 'core_kit_load'),
+              0x400e18be: ('4eb9', 'core_proj_save'), 0x400e1928: ('4eb9', 'core_proj_load'),
+              0x40134770: ('4ef9', 'core_memcpy')}
 
 
 def assert_hooked(new, man):
@@ -384,6 +394,8 @@ def assert_hooked(new, man):
         assert at(new, a, 6) == want, (hex(a), target, at(new, a, 6), want)
         if a == 0x4011fc8c:
             assert at(new, a + 6, 2) == '4e71'  # the eight-byte prologue, NOP-padded
+        if a == 0x40134770:
+            assert at(new, a + 6, 6) == '4e71' * 3  # memcpy's twelve bytes, NOP-padded
 
 
 def test_core_builds_links_and_verifies():
@@ -486,47 +498,62 @@ def test_hooks_check_links_with_core():
                'settings:HOOK TEST')
 
 
-def test_core_0_2_preserves_the_0_1_control_contract():
-    """0.2 adds its dormant SHARC bridge; every 0.1 control-side byte,
-    address, table and reservation stays the same."""
+def test_core_keeps_the_0_1_control_contract():
+    """Each later core keeps every 0.1 site, symbol, table, export and claim as
+    it was: 0.2 added the dormant SHARC bridge, 0.3 the sites SITES_0_3 and
+    what they need (its new sources come last, so nothing of 0.1 moves)."""
     old = json.loads(need(CORE_01, 'ELEKLOADER_DN2_CORE_01'))
     with tempfile.TemporaryDirectory() as tmp:
         with open(built(os.path.join('mods', 'core-dn2'), tmp)) as fh:
             new = json.load(fh)
-    assert old['version'] == '0.1' and new['version'] == '0.2'
-    for key in ('target', 'sites', 'sections', 'symbols', 'imports', 'exports',
-                'collections', 'contribute', 'relocs', 'resources', 'copied', 'weak'):
+    assert old['version'] == '0.1' and new['version'] == '0.3'
+    for key in ('target', 'contribute', 'resources', 'copied', 'weak'):
         assert new[key] == old[key], key
+    assert new['sites'][:len(old['sites'])] == old['sites']
+    assert [int(x['addr'], 0) if isinstance(x['addr'], str) else x['addr']
+            for x in new['sites'][len(old['sites']):]] == [a for a, _ in SITES_0_3]
+    assert all(new['symbols'].get(k) == v for k, v in old['symbols'].items())
+    assert set(old['imports']) <= set(new['imports']) and set(old['exports']) <= set(new['exports'])
+    assert all(new['collections'].get(k) == v for k, v in old['collections'].items())
     assert 'sharc' not in old and new['sharc']['entries'] is not None
 
 
-def check_control_firmware_identical(old, new, mods):
-    """Keep the version label equal so only core selection can affect bytes."""
-    outputs = []
+def check_control_side_kept(old, new, mods):
+    """The same mods built with an older core and with this one: the stock
+    image is the same but at 0.3's sites and at the mods' own (whose targets
+    moved with core's larger RAM image), and the DSP section is stock."""
+    images = []
     for core in (old, new):
         output, _man = patch.build(SYX, [core] + list(mods), version='CP02', log=lambda *a: None)
         parsed = formats.parse(output['syx'], DEV)
         assert parsed.stored[7] == stock()[0].stored[7]
-        outputs.append(output)
-    assert outputs[0] == outputs[1]
+        images.append(formats.main_image(parsed, DEV))
+    st, img = stock()
+    skip = {a - DEV.main_load + k for a, b in SITES_0_3 for k in range(len(b) // 2)}
+    for m in mods:
+        for site in elemod.load_any(m).sites:
+            addr = int(site['addr'], 0) if isinstance(site['addr'], str) else site['addr']
+            skip |= {addr - DEV.main_load + k for k in range(site['len'])}
+    differ = [i for i in range(len(img)) if images[0][i] != images[1][i] and i not in skip]
+    assert not differ, [hex(DEV.main_load + i) for i in differ[:8]]
 
 
-def test_core_0_2_keeps_existing_control_firmware_identical():
+def test_core_keeps_existing_control_firmware():
     need(CORE_01, 'ELEKLOADER_DN2_CORE_01')
     with tempfile.TemporaryDirectory() as tmp:
         core = built(os.path.join('mods', 'core-dn2'), tmp)
-        check_control_firmware_identical(CORE_01, core, [])
+        check_control_side_kept(CORE_01, core, [])
         for example in ('hello-marker-dn2', 'hooks-check-dn2'):
             mod = built(os.path.join('examples', example), tmp)
-            check_control_firmware_identical(CORE_01, core, [mod])
+            check_control_side_kept(CORE_01, core, [mod])
 
 
-def test_core_0_2_keeps_existing_digihealth_firmware_identical():
+def test_core_keeps_existing_digihealth_firmware():
     need(CORE_01, 'ELEKLOADER_DN2_CORE_01')
     need(DIGIHEALTH, 'ELEKLOADER_DN2_DIGIHEALTH')
     with tempfile.TemporaryDirectory() as tmp:
         core = built(os.path.join('mods', 'core-dn2'), tmp)
-        check_control_firmware_identical(CORE_01, core, [DIGIHEALTH])
+        check_control_side_kept(CORE_01, core, [DIGIHEALTH])
 
 
 def test_sharc_examples_require_and_select_core_0_2():

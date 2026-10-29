@@ -18,6 +18,12 @@ made for 0.1 can keep asking for 0.1. The [machines-dn2](../machines-dn2)
 companion adds selectable synths and filters on top of it
 ([MACHINES-DN2.md](../../docs/MACHINES-DN2.md)).
 
+Core **0.3** also builds the Digitakt II core 1.1's shared sources
+([../core-dt2/store.c](../core-dt2/store.c) and the others) with the
+Digitone II's addresses: frame values, key LEDs, project and kit data, value
+rows and firmware exports ([docs/ADAPTING.md](../../docs/ADAPTING.md),
+"Frames, LEDs, project and kit data, value rows").
+
 `bridge.sharc.json` is the bridge, already compiled and linked from
 `sharc-bridge.s`, with the slot and pitch reader the
 [sine example](../../examples/sharc-sine/README.md) relies on. The linker
@@ -84,8 +90,8 @@ Build it with the SDK (it needs m68k binutils; with Homebrew's
 `m68k-elf-binutils`, set `ELEKLOADER_CROSS=m68k-elf-`):
 
 ```bash
-python -m elekloader.sdk.build mods/core-dn2 --stock Digitone_II_OS1.12.syx      # out/core-0.2.elemod
-python -m elekloader.lint mods/core-dn2/out/core-0.2.elemod --stock Digitone_II_OS1.12.syx
+python -m elekloader.sdk.build mods/core-dn2 --stock Digitone_II_OS1.12.syx      # out/core-0.3.elemod
+python -m elekloader.lint mods/core-dn2/out/core-0.3.elemod --stock Digitone_II_OS1.12.syx
 ```
 
 ## Input bridge and SysEx observers

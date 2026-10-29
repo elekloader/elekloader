@@ -21,7 +21,7 @@ made for different releases.
 | `title`, `description`, `category`, `author` | for people |
 | `license` | an SPDX identifier for the mod's own bytes, e.g. `GPL-2.0-or-later`; shown in the loader and by `lint` |
 | `sites` | changes to the stock image (below) |
-| `resources` | `regions`: run-time memory it claims, each inside one of the device's free areas; `names`: named resources such as `sysex:0x7d`, `settings:FAST AUDIO`, `drive:/cfw/slices.a`; `core` (format 2): the oldest core version it links with, such as `"3.0"` (elekloader 0.4.0 and older ignore it) |
+| `resources` | `regions`: run-time memory it claims, each inside one of the device's free areas; `names`: named resources such as `sysex:0x7d`, `settings:FAST AUDIO`, `drive:/cfw/slices.a`, each owned by one mod; a name `SPACE:0xLO-0xHI` (`card:0x2df0e00-0x2df0e02`) claims that half-open range of the space, and two mods' ranges in one space may not overlap; `core` (format 2): the oldest core version it links with, such as `"3.0"` (elekloader 0.4.0 and older ignore it) |
 | `requires`, `conflicts` | lists of mod ids |
 | `signature` | reserved; `null` |
 
@@ -355,6 +355,11 @@ II 1.12's core (core-dn2 0.1, experimental) has the same six UI events at
 no render events and no `.fast` table (SRAM is not qualified there).
 It also provides `ev_sysex`, a MIDI-task observer before stock
 routing; its contract is in ADAPTING.md, "Remote panel input and SysEx".
+Core-dt2 1.1 and core-dn2 0.3 add, on both, the events `ev_frame_params` and
+`ev_key_leds`, the tables `core_projdata` and `core_kitdata` (project data in
+the project file's header, kit data after each kit record), value rows
+(`core_addvalue`) and firmware locations as exports (`fw_*`); ADAPTING.md,
+"Frames, LEDs, project and kit data, value rows", has their sites.
 The Analog Rytm MKII's core (core-ar2) has `ev_tick`, `ev_draw`,
 `ev_key`, `ev_enc`, `ev_settings`, `ev_render_in` and `ev_render_out`, at
 0x400a2bee, 0x400a2c56, 0x400a47cc, 0x400a4816, 0x400db87e, 0x4011fb02 and

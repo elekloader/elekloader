@@ -93,8 +93,10 @@ what you see when it is broken (section 5 has the fixes).
 9. **Claim what you use.** List named resources in `resources.names`: SysEx
    device ids (`sysex:0x7d`), SETTINGS rows (`settings:MY ROW`), +Drive
    paths (`drive:/cfw/mine.bin`), key combinations (`ui:SRC page:hold YES`).
+   A name `SPACE:0xLO-0xHI` claims a range, half-open (`card:0x2df0e00-0x2df0e02`,
+   two card sectors): it may not overlap another mod's range in the same space.
    Memory you use outside the linker's areas goes in `resources.regions`.
-   *"both claim ..."*.
+   *"both claim ..."*, *"... the ranges overlap"*.
 10. **Inside another mod's copied block, be absolute.** FAST AUDIO copies the
     render block 0x400716c0-0x4007629a to SRAM at run time. A site of yours
     in that block runs from the copy too, so it may not be PC-relative and
@@ -126,12 +128,15 @@ event (lower first; the shipped mods use 10-90).
 | `ev_voice_on` | Digitone mk1 only (core-dn1 2.1): a voice starts a note, in the render | `void f(int voice, int track, void *event)` | interrupt level. The voice's pitch word (`0x41391f80` + 4 x voice, the note << 16) is already written and may be changed: the render reads it every block. The voice's sound and the step's locks load after this, so read the voice's parameters from `ev_render_out` |
 | `ev_midi_cc` | Digitone mk1 only (core-dn1 3.2): each MIDI CC the unit receives on a track's channel or the auto channel, before the stock applies it; the MIDI task | `int f(int track, int cc, int value, int flags)` | `track` 0-8 (with MIDI CONFIG's default channels, channels 1-9); a CC on the auto channel comes as the active track, with `flags` bit 0 (`CORE_MIDI_CC_AUTO`) set. Return nonzero to take it: the stock does not apply it. Only what MIDI CONFIG lets in arrives (PORT CONFIG > INPUT FROM). A mod that patches the CC router's entry, 0x400ed94e (Tone+FX), sees a CC before core |
 | `ev_midi_pc` | Digitone mk1 only (core-dn1 4.0): each program change the unit receives, on any channel, before the stock applies it; the MIDI task | `int f(int channel, int program, int flags)` | `channel` 0-15, `program` 0-127; `flags` bit 0 (`CORE_MIDI_CC_AUTO`): it came on the auto channel; bit 1 (`CORE_MIDI_PC_STOCK`): the stock would apply it (MIDI CONFIG receives program changes, and it came on PROG CH IN's channel). Return nonzero to take it: the stock does not change the pattern. Only what MIDI CONFIG lets in arrives (PORT CONFIG > INPUT FROM) |
-| `ev_key_leds` | Digitone mk1 only (core-dn1 3.3): the key-LED frame, every UI frame, after the frame clears the LEDs and before the stock views set theirs; UI task | `void f(void *mgr)` | `mgr` the LedManager. The first setter of an LED wins, so what a handler sets stays over the stock view's: a mod shows its state on the keys while the stock page keeps the rest |
+| `ev_key_leds` | Digitone mk1 (core-dn1 3.3), Digitakt II (core-dt2 1.1) and Digitone II (core-dn2 0.3): the key-LED frame, every UI frame, after the frame clears the LEDs and before the stock views set theirs; UI task | `void f(void *mgr)` | `mgr` the LedManager. The first setter of an LED wins, so what a handler sets stays over the stock view's: a mod shows its state on the keys while the stock page keeps the rest |
+| `ev_frame_params` | Digitakt II (core-dt2 1.1) and Digitone II (core-dn2 0.3): each frame's per-track parameter values, before the stock modulators add theirs; the frame interrupt | `void f(int16_t *values, int stride)` | interrupt level, once a frame. Track t's value j at `values[stride * t + j]` (stride 71 on the Digitakt II, 101 on the Digitone II); add to them, held in each parameter's range. The kit and the pages are untouched ("Frames, LEDs, project and kit data, value rows" below) |
 | `ev_render_params` | Digitone mk1 only (core-dn1 3.3): each block's sound parameter words, before the controller stage and the LFOs, in the render | `void f(int16_t *words)` | interrupt level, ~1500 times a second. Voice v's slot k at `words[79 * v + k]` (8.8, `CORE_PARAMS_VOICE`), the global FX at record 8; the smoother writes them again every block, so a change lasts one block and the kit is untouched. The words of a block are rendered in the next two; `fw_voice_track[v]` is voice v's track ("Each block's sound parameters" below) |
 
 The events, their prototypes and their conventions are the same on every
-device; only the sites differ, and `ev_voice_on`, `ev_midi_cc`, `ev_key_leds`,
-`ev_render_params` and `ev_midi_pc` exist on the Digitone only. The Digitakt II's core (mods/core-dt2 1.0) has `ev_tick`, `ev_draw`,
+device; only the sites differ, and `ev_voice_on`, `ev_midi_cc`,
+`ev_render_params` and `ev_midi_pc` exist on the Digitone mk1 only, `ev_key_leds` on it
+and, from core-dt2 1.1 and core-dn2 0.3, on the Digitakt II and the Digitone II, and
+`ev_frame_params` on those two only. The Digitakt II's core (mods/core-dt2 1.0) has `ev_tick`, `ev_draw`,
 `ev_key`, `ev_enc`, `ev_settings` and its own `ev_personalize`, and no
 render events: its audio
 renders on the DSP. It copies `.fast` code into SRAM itself, on the first
@@ -285,6 +290,83 @@ stack and the firmware's size limits. They cannot prove what the
 instructions do, what they write, or that they meet the audio deadline.
 [SHARC-DN2.md](SHARC-DN2.md) has what the emulator and a unit showed for
 the sine variants, and the limits that remain.
+
+### Frames, LEDs, project and kit data, value rows (core-dt2 1.1, core-dn2 0.3)
+
+Core-dt2 1.1 (Digitakt II 1.17) and core-dn2 0.3 (Digitone II 1.12) add the
+same things on both units, from the same sources in `mods/core-dt2`
+(`fw.s`, `frame.s`, `leds.s`, `store.s`, `store.c`, `rows.s`, `rows.c`). Their
+C declarations are in `elekloader/sdk/include/mk2/core.h`; the smallest mod
+that uses them is [examples/kit-memo](../examples/kit-memo) (one source,
+`examples/kit-memo-dt2` and `-dn2` build it for each unit).
+
+**Events.** `ev_frame_params` and `ev_key_leds` (the hook bus table above).
+
+**Firmware locations** (`fw_*`, `fw.s`): drawing, keys, LEDs, the encoder
+filter, the header's message, views, strings, the card, `memcpy` and the
+project in RAM, each with the Digitakt II's and the Digitone II's address.
+A mod that names these builds for both units unchanged. The firmware returns
+a pointer in d0, where GCC reads a pointer result from a0, so core.h
+declares those routines as returning `uintptr_t`.
+
+**Project data.** As on core-dn1 2.1 ("Project data" below): a mod
+contributes a `core_projdata_t` to `core_projdata` and claims
+`projdata:<tag>`. A Digitakt II or Digitone II project file starts with a
+header (0xBEEFBACE, version 5); its bytes +0x1c to +0x200 are written as
+zeros and never read. Core puts `ELKP` and the blocks there on each save of
+the project (the site is the header's mark, `move.l #0xbeefbace,(a3)`) and
+takes them out on each load (the load's check of that mark), then calls
+`loaded(found)`.
+
+**Kit data.** Kit n is pattern n's, and each kit record ends with bytes the
+stock OS writes as zeros and never reads (Digitakt II 194 bytes at record
++0x573e, Digitone II 337 at +0x28af). A mod contributes a `core_kitdata_t`
+to `core_kitdata` and claims `kitdata:<tag>`:
+
+| offset | field | |
+|---|---|---|
+| +0 | tag | four characters |
+| +4 | size | bytes per kit |
+| +8 | data | `CORE_KITS` (128) blocks, kit n's at data + n * size |
+| +12 | changed | `void changed(int kit, int found)`, or 0: kit's block was loaded or copied; `found` 0 when the kit had none for this layout, and the block holds zeros |
+
+The area holds `K`, a 16-bit layout id (a CRC of every block's tag and size,
+in the table's order) and the blocks; a block that does not fit is left out
+(`core_kitdata_room()`: 191 and 334 bytes). Core fills it when the firmware
+writes a kit record (a project save, SAVE KIT) and reads it when one is
+loaded (the end mark's instruction `move.l #0xbacef00c,d1` in the kit
+serializer and the loader). It follows the firmware's copies of a kit in RAM
+(the `memcpy` site, for copies of a kit's size): pattern copy and paste,
+PASTE KIT and undo. A kit copied into a buffer outside the project's kits
+(the clipboard, the undo copy) keeps its blocks in one of eight shadows until
+it is copied back. `core_kit_on()` gives the kit on (the pattern on's),
+`core_kit_index(kit)` a kit in RAM's number.
+
+Both areas stay compatible with the stock OS: it loads such a project, and
+keeps the bytes when it saves a project it loaded. Core writes only where
+the area holds zeros or its own data, and leaves anything else (another
+tool's, a later OS's) as it was, counting it in `core_store_conflicts`.
+
+**Value rows.** From `ev_personalize` (or `ev_settings`),
+`core_addvalue(menu, &row)` adds a row that shows `label` and, on the right
+as LED INTENSITY does, `values[get()]`; LEFT and RIGHT step it (YES does
+nothing), and each change calls `set(new)` and redraws. Claim the row as
+`settings:<label>`. `core_notice(msg)` shows a message in the header, as a
+page's title; `core_view_top()` gives the vtable of the view on top
+(`fw_vt_main` on the main screen and pages).
+
+The new sites, each a whole instruction the shim runs too (jsr, except
+`memcpy`'s first 12 bytes, by jmp):
+
+| | Digitakt II 1.17 | Digitone II 1.12 |
+|---|---|---|
+| `ev_frame_params` | 0x4002e90c | 0x40027196 |
+| `ev_key_leds` | 0x400311a2 | 0x4002c87a |
+| kit save | 0x400dbee4 | 0x400de0d4 |
+| kit load | 0x400db8be | 0x400ddddc |
+| project save | 0x400df932 | 0x400e18be |
+| project load | 0x400df99c | 0x400e1928 |
+| `memcpy` | 0x40136388 | 0x40134770 |
 
 ### The hook bus on the Octatrack (core-ot 0.2)
 
@@ -3435,6 +3517,7 @@ Some differences from an octabam build, by design:
 | `has .fast code, which needs ...` | `.fast` is copied in by FAST AUDIO | require `fast-audio`, or use `.run` |
 | `PC-relative, inside ... copied block` | a site in FAST AUDIO's block branches relatively | use an absolute `jmp`/`jsr` |
 | `both claim N` | two mods use the same named resource | pick another SysEx id, row name or path |
+| `A claims SPACE:0x..-0x.. and B claims SPACE:0x..-0x..: the ranges overlap` | two mods claim ranges of one space (card sectors, say) that share a unit | move yours to a range no other mod claims |
 | `is a whole build: it cannot be combined` | a format-1 mod was mixed with format-2 mods | use one or the other; see section 4 |
 | `has DSP code for payload A, which needs a mod that frees DSP memory there` | nothing frees P memory for DSP code | add the mod that claims the name the message gives |
 | `the DSP code for payload A needs P words to ...` | the DSP code and tables do not fit in the freed words | shrink your DSP code |
