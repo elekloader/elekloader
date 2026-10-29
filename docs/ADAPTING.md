@@ -857,8 +857,9 @@ once a frame after the frame's stock transfers. A handler may call
 `ot_dsp_feed(block, words)` once: one more transfer of `words` 16-bit words
 (32, 64, ... 160) to DSP core 0, which lands in the frame's bank at + $320,
 where an `ev_dsp_rx` handler finds it at `r6 + $320`. The unmask waits for
-it. Write the block through `OT_USB_UNCACHED`; the DSP reads each word with a
-stale top byte. A block stays in its bank until the next lands there, and
+it. Write the block through `OT_USB_UNCACHED`, aligned to 16 bytes (the eDMA
+reads in 16-byte bursts; `ot_dsp_feed` answers 0 for a block that is not);
+the DSP reads each word with a stale top byte. A block stays in its bank until the next lands there, and
 the banks alternate: a feeder that stops sends its "nothing" block to both.
 One mod feeds: claim `dsp:feed`. The handlers run above the frame interrupt
 and may interrupt it: no EMAC, few instructions. The feed is not USB's; USB

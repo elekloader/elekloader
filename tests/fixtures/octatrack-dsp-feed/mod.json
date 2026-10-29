@@ -1,0 +1,25 @@
+{
+ "id": "dfprobe",
+ "version": "1",
+ "license": "GPL-2.0-or-later",
+ "title": "dsp feed probe",
+ "category": "Examples",
+ "author": "irpina",
+ "description": "One ev_dsp_feed handler that calls ot_dsp_feed with a block at an offset poked into df_cfg and logs what it returns: the probe tests/probe_octatrack_dsp_feed.py runs in the emulator. Not a mod to ship.",
+ "device": "octatrack",
+ "os": "1.40C",
+ "sources": [
+  "probe.c"
+ ],
+ "cflags": [
+  "-Os",
+  "-fno-tree-loop-distribute-patterns"
+ ],
+ "subscribe": [
+  {"event": "ev_dsp_feed", "fn": "df_feed", "order": 50}
+ ],
+ "requires": [
+  "core",
+  "usb"
+ ]
+}

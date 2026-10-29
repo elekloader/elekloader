@@ -34,9 +34,15 @@ volatile uint8_t otu_feeding;           /* a feed is on its way (seams.s clears 
 volatile uint8_t otu_in_feed;           /* seams.s is running ev_dsp_feed's handlers */
 volatile uint32_t ot_dsp_fed;
 
+/* The eDMA reads the block in 16-byte bursts and faults on a source that is not 16-byte aligned: on
+ * an Octatrack MKII a source 4 bytes off stopped channel 0 at its start, the frame chain never
+ * unmasked the frame interrupt, and nothing played until a power cycle (Modwerk's hardware traps,
+ * OCTATRACK_HARDWARE_TRAPS.md). ot_emu does not model the fault. A block that is not aligned is
+ * refused here, before anything is written to the controller. */
 int ot_dsp_feed(const volatile void *block, unsigned words)
 {
-    if (!otu_in_feed || otu_feeding || !words || words > OT_DSP_FEED_MAX || words % (LOOP / 2))
+    if (!otu_in_feed || otu_feeding || !words || words > OT_DSP_FEED_MAX || words % (LOOP / 2) ||
+        ((uintptr_t)block & 15))
         return 0;
     CORE_SEL = 0;
     TCD0_NBYTES = LOOP;

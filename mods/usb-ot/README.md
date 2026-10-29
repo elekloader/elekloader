@@ -95,6 +95,13 @@ speeds, with every descriptor reply (device, configuration, OTHER_SPEED)
 byte-identical to stock's, mass storage answering INQUIRY, and no EP0
 stall.
 
+`ot_dsp_feed` refuses a block that is not 16-byte aligned, and answers 0 (the
+eDMA reads in 16-byte bursts). In `ot_emu` (`tests/probe_octatrack_dsp_feed.py`,
+6 checks; emulator only, which does not model the eDMA fault): an `ev_dsp_feed`
+handler is called each frame; blocks at 0 and 16 bytes from a 32-byte buffer are
+taken and aim eDMA channel 0 at them; blocks 4, 8 and 12 bytes off are refused
+every time and channel 0 is never aimed at them.
+
 A function whose `enabled()` returns 0 (USB audio with its layout OFF, set
 in the MODS menu and read after a reboot) leaves the build as a build
 without it: alone, usb-ot's configuration is stock's byte for byte; beside

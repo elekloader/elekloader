@@ -101,7 +101,9 @@ void ot_usb_irq_restore(unsigned sr);
  * handler (ev_dsp_rx) of the frame that bank serves finds it, at r6 + $320. Stock's unmask then
  * waits for that transfer to complete.
  *
- * The block is read by the eDMA: write it through OT_USB_UNCACHED. `words` is 32, 64, ... up to
+ * The block is read by the eDMA: write it through OT_USB_UNCACHED, and align it to 16 bytes (the eDMA
+ * reads in 16-byte bursts and a source off a boundary stops the frame chain on the unit until a power
+ * cycle: ot_dsp_feed refuses it and answers 0). `words` is 32, 64, ... up to
  * OT_DSP_FEED_MAX (X:$x320..$x39f). The host port carries 16 bits a word; the DSP reads each with a
  * stale top byte. Only one mod may feed: claim the name `dsp:feed`. A block stays in the DSP's bank
  * until another lands there, and the banks alternate frame by frame: a feeder that stops sends its

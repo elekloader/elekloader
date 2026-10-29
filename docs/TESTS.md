@@ -133,6 +133,14 @@ pending step records and in the MIDI out, and that the pattern is put back:
 python tests/probe_octatrack_seq_events.py --emulator path/to/octabam --stock OCTATRACK_OS1.40C.syx
 ```
 
+`tests/probe_octatrack_dsp_feed.py` runs usb-ot's `ot_dsp_feed` in `ot_emu` with a
+block at each offset from a 32-byte buffer: an aligned block is taken, one that is not
+16-byte aligned is refused:
+
+```bash
+python tests/probe_octatrack_dsp_feed.py --emulator path/to/octabam --stock OCTATRACK_OS1.40C.syx
+```
+
 The Octatrack's trig-events (mods/trig-events-ot) is checked the same way:
 `tests/probe_octatrack_track_trig.py` (it borrows the seq-events probe's
 fixture and driver) runs the images in `ot_emu` with `--watch-pc` on the
