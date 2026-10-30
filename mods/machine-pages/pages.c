@@ -62,6 +62,11 @@ static void find(void)
     for (i = 0; core_machines[i] && npages < PAGES; i++) {
         const struct cm_machine *d = core_machines[i];
         const struct cm_ui *ui = (const struct cm_ui *)core_machine_ui(d->id);
+#ifdef SDK_ALPHA_DT1
+        const struct cm_ui32 *alpha = sdk_alpha_ui(d->id);
+        if (alpha)
+            ui = &alpha->base;
+#endif
         if (!ui || (ui->abi != cm_ui_v3 && ui->abi != cm_ui_v31 &&
                     ui->abi != cm_ui_v32 && ui->abi != cm_ui_v33) ||
             ui->page_from > 3 || d->id <= 3)
@@ -208,6 +213,11 @@ uint32_t mp_src_title(void *view)
     mp_view_knob(view, 0);
     if (track >= 8 || !page_now || !page_now->extended)
         return 0;
+#ifdef SDK_ALPHA_DT1
+    const struct elek_machine *alpha = sdk_alpha_machine(page_now->id);
+    if (alpha)
+        sdk_alpha_snapshot(alpha, selected[track], view);
+#endif
     return (uint32_t)page_now->extended->pages[selected[track]].title;
 }
 
@@ -222,12 +232,20 @@ uint32_t mp_label(uint32_t id, int32_t long_name)
 int32_t mp_value_text(uint32_t id, int32_t value, char *buf)
 {
     const struct cm_knob *k = page_knob(id);
+#ifdef SDK_ALPHA_DT1
+    if (k && sdk_alpha_value_text(page_now->id, knob_of(page_now, id), value, buf, 0))
+        return 1;
+#endif
     return k && k->fmt && k->fmt(buf, value, 0, page_now->id);
 }
 
 uint32_t mp_pop_text(uint32_t id, int32_t value)
 {
     const struct cm_knob *k = page_knob(id);
+#ifdef SDK_ALPHA_DT1
+    if (k && sdk_alpha_value_text(page_now->id, knob_of(page_now, id), value, pop, 1))
+        return (uint32_t)pop;
+#endif
     if (!k || !k->fmt)
         return 0;
     pop[0] = 0;
@@ -245,6 +263,14 @@ int32_t mp_knob(int32_t *a)
     const struct cm_knob *k = page_knob((uint32_t)a[0]);
     if (!k)
         return 0;
+#ifdef SDK_ALPHA_DT1
+    const struct elek_machine *alpha = sdk_alpha_machine(page_now->id);
+    if (alpha && mp_shown_view) {
+        uint32_t track = mp_view_track(mp_shown_view);
+        if (track < 8)
+            sdk_alpha_snapshot(alpha, selected[track], mp_shown_view);
+    }
+#endif
     if (k->flags & CM_DRAW) {
         if (page_now->ui->abi != cm_ui_v3 && k->draw && k->draw((void *)a[4], a[5], a[6], a[1], a[2]))
             return 1;

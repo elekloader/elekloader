@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
-"""Private PR-1 tests. Optional build checks need ELEKLOADER_STOCK_154 and a cross compiler."""
+"""Private machine UI tests. Optional build checks need ELEKLOADER_STOCK_154 and a cross compiler."""
 import json
 import os
 from pathlib import Path
@@ -29,6 +29,26 @@ def sdk_alpha_test_document():
            'relocs': [['.run', o, 'abs32', 'sec:.run', a]
                       for o, a in ((4, 72), (8, 80), (28, 32), (36, 40), (44, 72), (48, 80))] +
                      [['.run', 32, 'abs32', 'sym:sdk_alpha_dt1_empty_ui', 0]]}
+    return doc, raw
+
+
+def sdk_alpha_test_controls_document():
+    doc, raw = sdk_alpha_test_document()
+    raw.extend(bytes(1200))
+    doc['relocs'][-1][3] = 'sym:sdk_alpha_dt1_ui_v3'
+    struct.pack_into('>I', raw, 56, 2)
+    doc['relocs'] += [['.run', 52, 'abs32', 'sec:.run', 512]]
+    for i in range(15):
+        struct.pack_into('>I', raw, 96 + 24 * i, i)
+        doc['relocs'].append(['.run', 100 + 24 * i, 'abs32', 'sec:.run', 72])
+    for page in range(2):
+        doc['relocs'].append(['.run', 512 + 36 * page, 'abs32', 'sec:.run', 72])
+        for encoder in range(8):
+            # Logical zero is D on page 0; page 1 shares it at H.
+            logical = ([2, 3, 4, 0, 5, 6, 7, 1] if page == 0 else
+                       [8, 9, 10, 11, 12, 13, 14, 0])[encoder]
+            doc['relocs'].append(['.run', 516 + 36 * page + 4 * encoder,
+                                  'abs32', 'sec:.run', 96 + 24 * logical])
     return doc, raw
 
 
@@ -79,6 +99,77 @@ class SdkAlphaTests(unittest.TestCase):
                             '-o', exe], check=True)
             subprocess.run([exe], check=True)
 
+    def test_sdk_alpha_pages_logical_identity_and_capacity(self):
+        doc, raw = sdk_alpha_test_controls_document()
+        self.assertEqual(sdk_alpha_registrations(doc, {'.run': raw}),
+                         [('sdk_alpha_registration_empty', 120)])
+        # A blank position cannot alias logical zero. Zero can appear on both pages.
+        doc['relocs'] = [r for r in doc['relocs'] if r[1] != 580]
+        self.assertEqual(len(sdk_alpha_registrations(doc, {'.run': raw})), 1)
+        for offset, value, message in ((56, 3, 'at most 2 pages'),
+                                       (96, 15, '15 knobs'),
+                                       (96, 0xffffffff, '15 knobs'),
+                                       (120, 0, 'cannot share'),
+                                       (108, 2, 'supplied'),
+                                       (104, 128, 'min exceeds max')):
+            with self.subTest(offset=offset):
+                doc, raw = sdk_alpha_test_controls_document()
+                struct.pack_into('>I', raw, offset, value)
+                if offset == 104:
+                    struct.pack_into('>I', raw, 108, 1)
+                with self.assertRaisesRegex(build.BuildError, message):
+                    sdk_alpha_registrations(doc, {'.run': raw})
+        # A unique descriptor may live outside any common array or section.
+        doc, raw = sdk_alpha_test_controls_document()
+        descriptor = raw[96:120]
+        label = next(r for r in doc['relocs'] if r[1] == 100)
+        doc['relocs'].remove(label)
+        doc['relocs'].append(['.other', 4, 'abs32', 'sec:.run', 72])
+        for r in doc['relocs']:
+            if r[4] == 96:
+                r[3:5] = ['sec:.other', 0]
+        self.assertEqual(len(sdk_alpha_registrations(doc, {'.run': raw, '.other': descriptor})), 1)
+        for target in (97, len(raw) - 20):
+            doc, raw = sdk_alpha_test_controls_document()
+            next(r for r in doc['relocs'] if r[1] == 516)[4] = target
+            with self.assertRaises(build.BuildError):
+                sdk_alpha_registrations(doc, {'.run': raw})
+        doc, raw = sdk_alpha_test_controls_document()
+        next(r for r in doc['relocs'] if r[1] == 516)[3] = 'sym:external_knob'
+        with self.assertRaisesRegex(build.BuildError, 'own mod'):
+            sdk_alpha_registrations(doc, {'.run': raw})
+        doc, raw = sdk_alpha_test_controls_document()
+        doc['relocs'] = [r for r in doc['relocs'] if r[1] != 516]
+        with self.assertRaisesRegex(build.BuildError, 'contiguous'):
+            sdk_alpha_registrations(doc, {'.run': raw})
+        # Label-only pages need no knob list; stale page records must be rebuilt.
+        doc, raw = sdk_alpha_test_controls_document()
+        doc['relocs'] = [r for r in doc['relocs'] if not 516 <= r[1] <= 580 or r[1] == 548]
+        self.assertEqual(len(sdk_alpha_registrations(doc, {'.run': raw})), 1)
+        next(r for r in doc['relocs'] if r[1] == 32)[3] = 'sym:sdk_alpha_dt1_ui_v2'
+        with self.assertRaisesRegex(build.BuildError, 'ABI'):
+            sdk_alpha_registrations(doc, {'.run': raw})
+
+    def test_sdk_alpha_mapping_and_instance_snapshots(self):
+        cc = shutil.which('cc')
+        if not cc:
+            self.skipTest('no host C compiler')
+        with tempfile.TemporaryDirectory() as tmp:
+            exe = str(Path(tmp) / 'values')
+            subprocess.run([cc, '-std=c99', '-Wno-int-to-pointer-cast', '-Wno-pointer-to-int-cast',
+                            '-I', str(ROOT / 'elekloader/sdk/include'),
+                            str(ROOT / 'mods/machine-pages/sdk_alpha.c'),
+                            str(ROOT / 'tests/fixtures/sdk-alpha-controls-machine/values-test.c'),
+                            '-o', exe], check=True)
+            subprocess.run([exe], check=True)
+            readonly = subprocess.run([cc, '-std=c99', '-fsyntax-only', '-x', 'c',
+                                       '-I', str(ROOT / 'elekloader/sdk/include'), '-'],
+                                      input='#include "elekloader/sdk_alpha_machine.h"\n'
+                                            'void bad(const struct elek_ui_context *ctx) {'
+                                            'ctx->knob[0]->value = 1;}\n',
+                                      capture_output=True, text=True)
+            self.assertNotEqual(readonly.returncode, 0, 'callback snapshot became writable')
+
     def test_sdk_alpha_build_links_and_keeps_slot_conflicts(self):
         stock = os.environ.get('ELEKLOADER_STOCK_154', '')
         cross = os.environ.get('ELEKLOADER_CROSS', 'm68k-linux-gnu-')
@@ -89,6 +180,13 @@ class SdkAlphaTests(unittest.TestCase):
             pages_path, pages = build.build(str(ROOT / 'mods/machine-pages'), stock, tmp)
             path, empty = sdk_alpha_build(str(ROOT / 'tests/fixtures/sdk-alpha-empty-machine'), stock, tmp)
             hello_path, hello = sdk_alpha_build(str(ROOT / 'examples/sdk-hello-world'), stock, tmp)
+            for fixture in ('sdk-alpha-controls-machine', 'sdk-alpha-one-page-machine',
+                            'sdk-alpha-callback-machine'):
+                fixture_path, _ = sdk_alpha_build(str(ROOT / 'tests/fixtures' / fixture), stock, tmp)
+                result = subprocess.run([sys.executable, '-m', 'elekloader.lint', fixture_path,
+                                         '--stock', stock, '--with', core_path, '--with', pages_path, '--json'],
+                                        cwd=ROOT, capture_output=True, text=True)
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             self.assertEqual(empty.names, ['machine:120'])
             self.assertEqual(empty.requires, ['core', 'machine-pages'])
             self.assertEqual(hello.names, ['machine:122'])
