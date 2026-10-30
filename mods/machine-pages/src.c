@@ -100,7 +100,12 @@ void mp_src_init(void)
             continue;
         }
         const struct cm_ui32 *u = (const struct cm_ui32 *)m->ui;
-        if ((m->ui->abi == cm_ui_v32 || m->ui->abi == cm_ui_v33) && count < 32 && valid(m, u)) {
+#ifdef SDK_ALPHA_DT1
+        const struct cm_ui32 *alpha = sdk_alpha_ui(m->id);
+        if (alpha)
+            u = alpha;
+#endif
+        if ((u->base.abi == cm_ui_v32 || u->base.abi == cm_ui_v33) && count < 32 && valid(m, u)) {
             extended[m->id] = u;
             ++count;
         }
