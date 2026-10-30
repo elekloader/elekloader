@@ -4,13 +4,13 @@
 
 enum { PITCH, ZERO, AMOUNT, FIXED, FOUR, FIVE, SIX, SEVEN, OTHER, KNOB_COUNT };
 static const struct elek_ui_knob knobs[KNOB_COUNT] = {
-    [PITCH] = { .label = "PITCH", .min = ELEK_UI_BOUND(10), .max = ELEK_UI_BOUND(20) },
-    [ZERO] = { .label = "ZERO", .max = ELEK_UI_BOUND(0) },
-    [AMOUNT] = { .label = "AMOUNT" },
-    [FIXED] = { .label = "FIXED", .min = ELEK_UI_BOUND(7), .max = ELEK_UI_BOUND(7) },
-    [FOUR] = { .label = "FOUR" }, [FIVE] = { .label = "FIVE" },
-    [SIX] = { .label = "SIX" }, [SEVEN] = { .label = "SEVEN" },
-    [OTHER] = { .label = "OTHER", .min = ELEK_UI_BOUND(-10), .max = ELEK_UI_BOUND(10) },
+    [PITCH] = { .id = PITCH, .label = "PITCH", .min = ELEK_UI_BOUND(10), .max = ELEK_UI_BOUND(20) },
+    [ZERO] = { .id = ZERO, .label = "ZERO", .max = ELEK_UI_BOUND(0) },
+    [AMOUNT] = { .id = AMOUNT, .label = "AMOUNT" },
+    [FIXED] = { .id = FIXED, .label = "FIXED", .min = ELEK_UI_BOUND(7), .max = ELEK_UI_BOUND(7) },
+    [FOUR] = { .id = FOUR, .label = "FOUR" }, [FIVE] = { .id = FIVE, .label = "FIVE" },
+    [SIX] = { .id = SIX, .label = "SIX" }, [SEVEN] = { .id = SEVEN, .label = "SEVEN" },
+    [OTHER] = { .id = OTHER, .label = "OTHER", .min = ELEK_UI_BOUND(-10), .max = ELEK_UI_BOUND(10) },
 };
 static const struct elek_ui_page pages[] = {
     { .label = "CONTROLS", .knob = { [ELEK_ENCODER_A] = &knobs[AMOUNT],
@@ -39,7 +39,7 @@ static void controls_present(const struct elek_ui_context *ctx, struct elek_ui_p
 }
 static const struct elek_machine controls = {
     .id = 123, .name = "Alpha Controls", .short_name = "CTRL",
-    .pages = pages, .page_count = 2, .knobs = knobs, .knob_count = KNOB_COUNT,
+    .pages = pages, .page_count = 2,
     .present = controls_present,
 };
 ELEK_REGISTER_MACHINE(controls);
