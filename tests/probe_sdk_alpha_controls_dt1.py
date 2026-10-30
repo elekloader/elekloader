@@ -183,6 +183,29 @@ def sdk_alpha_main():
             default = sdk_alpha_labels('labels-default-page-0')
             assert default['text'] == 'PITCH' and default['visible'] == [1, 1]
             sdk_alpha_tap(20)
+            # A changing H's label must not clear A's native temporary value display.
+            def sdk_alpha_source_text():
+                f = e.frame()[1]
+                return bytes((f[7 - y // 8 + 8 * x] >> (y % 8)) & 1
+                             for y in range(30, 39) for x in range(18, 51))
+            e.step(600_000_000)
+            source_label = sdk_alpha_source_text()
+            active_labels = []
+            for i in range(24):
+                e.turn(1, 4)
+                e.step(4_500_000)
+                pixels = sdk_alpha_source_text()
+                active_labels.append(pixels == source_label)
+                if i >= 6: # allow the initial input/render latency
+                    assert any(pixels) and pixels != source_label, 'source label flickered during turns'
+            e.step(132_000_000)
+            assert sdk_alpha_source_text() != source_label, 'source value disappeared before timeout'
+            sdk_alpha_screen('labels-source-value-after-one-second')
+            e.step(528_000_000)
+            assert sdk_alpha_source_text() == source_label, 'source label did not return after timeout'
+            sdk_alpha_screen('labels-source-label-after-five-seconds')
+            report['source_value_display'] = {'active_label_frames': active_labels,
+                                               'one_second_value': True, 'five_second_label': True}
             sdk_alpha_turn(1, 24) # page 1's A is AMOUNT; H is the dependent PITCH.
             changed = sdk_alpha_labels('labels-live-page-1')
             assert 0 < changed['amount'] < 127 and changed['text'] == f"AMT {changed['amount']:03}"

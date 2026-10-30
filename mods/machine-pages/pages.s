@@ -588,14 +588,12 @@ mp_mtype:
         rts
 
         .ifdef SDK_ALPHA_DT1
-| Presentation changes invalidate all native knob caches, including a dependent knob.
+| Redraw presentation without resetting the native temporary value-display timers.
         .globl sdk_alpha_redraw
 sdk_alpha_redraw:
         move.l  %a2, -(%sp)
         movea.l 8(%sp), %a2
-        pea     148(%a2)
-        jsr     SRC_KNOBS_RESET_FN
-        move.l  %a2, (%sp)
+        move.l  %a2, -(%sp)
         jsr     SRC_DIRTY_FN
         move.l  108(%a2), (%sp)
         jsr     SRC_INVALIDATE_FN
