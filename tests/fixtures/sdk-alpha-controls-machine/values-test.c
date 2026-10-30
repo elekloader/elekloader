@@ -4,7 +4,7 @@
 #include <limits.h>
 #include "elekloader/sdk_alpha_machine.h"
 int32_t sdk_alpha_map(const struct elek_ui_knob *, int32_t raw);
-void sdk_alpha_snapshot(const struct elek_machine *, int32_t page, void *view);
+int32_t sdk_alpha_snapshot(const struct elek_machine *, int32_t page, void *view);
 const char cm_ui_v32[] = "host stub";
 uint32_t core_machine_ui(int32_t id) { (void)id; return 0; }
 uint32_t mp_stock_layout(int32_t id) { (void)id; return 0; }
@@ -37,7 +37,9 @@ static int expected_page, calls;
 static void present(const struct elek_ui_context *ctx, struct elek_ui_presentation *out)
 {
     assert(ctx->page_count == 2 && ctx->knob_count == 9 && ctx->page == expected_page);
-    assert(!out->knob_count && !out->knob);
+    assert(out->knob_count == 9 && out->knob);
+    for (int k = 0; k < 9; ++k)
+        assert(out->knob[k]->label == knobs[k].label);
     for (int k = 0; k < 9; ++k) {
         int32_t raw = expected[k] < 0 ? 0 : expected[k] > ELEK_UI_RAW_MAX ? ELEK_UI_RAW_MAX : expected[k];
         assert(ctx->knob[k]->raw_value == raw);

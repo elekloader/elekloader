@@ -39,14 +39,25 @@ mp_layout_s:
         move.l  (%sp), %d0
         cmpi.l  #VIEW_LAYOUT_RET, %d0
         bne.s   1f
+        .ifdef SDK_ALPHA_DT1
+        move.l  %a2, -(%sp)             | third argument: the native view (1.54 alpha only)
+        move.l  8(%sp), -(%sp)
+        .else
         move.l  4(%sp), -(%sp)          | [machine]
+        .endif
         move.l  %a2, -(%sp)
         jsr     mp_view_track           | d0 = the view's track
         addq.l  #4, %sp
         move.l  %d0, -(%sp)             | [track][machine]
         move.l  4(%sp), -(%sp)          | [machine][track][machine]
+        .ifdef SDK_ALPHA_DT1
+        move.l  12(%sp), 8(%sp)        | replace saved machine with third argument: view
+        jsr     sdk_alpha_layout_view
+        lea     16(%sp), %sp
+        .else
         jsr     mp_layout_track         | -> the machine's own layout, or 0
         lea     12(%sp), %sp
+        .endif
         bra.s   2f
 1:      move.l  4(%sp), -(%sp)
         jsr     mp_layout               | -> the machine's own layout, or 0
@@ -575,3 +586,20 @@ mp_mtype:
         jmp     M_TYPE_FN               | 0-3: the stock types
 1:      addq.l  #5, %d0
         rts
+
+        .ifdef SDK_ALPHA_DT1
+| Presentation changes invalidate all native knob caches, including a dependent knob.
+        .globl sdk_alpha_redraw
+sdk_alpha_redraw:
+        move.l  %a2, -(%sp)
+        movea.l 8(%sp), %a2
+        pea     148(%a2)
+        jsr     SRC_KNOBS_RESET_FN
+        move.l  %a2, (%sp)
+        jsr     SRC_DIRTY_FN
+        move.l  108(%a2), (%sp)
+        jsr     SRC_INVALIDATE_FN
+        addq.l  #4, %sp
+        movea.l (%sp)+, %a2
+        rts
+        .endif

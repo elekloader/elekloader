@@ -16,6 +16,7 @@ def sdk_alpha_main():
     for name in ('digikit', 'daemon', 'stock', 'firmware', 'out'):
         ap.add_argument('--' + name, type=Path, required=True)
     ap.add_argument('--baseline', type=Path)
+    ap.add_argument('--labels', action='store_true', help='also exercise PR-3 labels and visibility')
     a = ap.parse_args()
     a.out = a.out.resolve()
     a.out.mkdir(parents=True, exist_ok=True)
@@ -26,7 +27,7 @@ def sdk_alpha_main():
     assert sha == 'f78ba80fa7b1da5fb0e1ff61ad61e9e71aafe79f4364fc49679f3651353e3cf6'
     report = {'stock_sha256': sha, 'firmware_sha256': hashlib.sha256(a.firmware.read_bytes()).hexdigest(),
               'daemon_sha256': hashlib.sha256(a.daemon.read_bytes()).hexdigest(), 'events': []}
-    rows = {0: 0, 1: 1, 2: 2, 3: 3, 30: 4, 120: 5, 121: 6, 122: 7, 123: 8, 124: 9}
+    rows = {0: 0, 1: 1, 2: 2, 3: 3, 30: 4, 120: 5, 121: 6, 122: 7, 123: 8, 124: 9, 125: 10}
     with Emu.spawn(str(a.stock.resolve()), binary=str(a.daemon.resolve()), run_dir=a.out / 'run') as e:
         def sdk_alpha_read(name, offset=0):
             return e.peek32(int(symbols[name], 16) + offset)
@@ -82,7 +83,7 @@ def sdk_alpha_main():
                 e.step(1_000_000)
             e.step(60_000_000)
 
-        print('Booting PR-2 firmware', flush=True)
+        print('Booting SDK controls firmware', flush=True)
         report['boot'] = e.load(a.firmware.resolve(), base_sha256=sha)
         e.step(20_000_000)
         sdk_alpha_tap(20)
@@ -159,6 +160,66 @@ def sdk_alpha_main():
         sdk_alpha_turn(1, 32)
         sdk_alpha_tap(20)
         sdk_alpha_screen('hello-page-1')
+        if a.labels:
+            sdk_alpha_select(125)
+            def sdk_alpha_bytes(addr, count):
+                start = addr & ~3
+                data = b''.join(e.peek32(p).to_bytes(4, 'big') for p in range(start, addr + count, 4))
+                return data[addr - start:addr - start + count]
+            def sdk_alpha_labels(label):
+                assert sdk_alpha_read('alpha_labels_bad_context') == 0
+                page = sdk_alpha_read('alpha_labels_page')
+                amount = sdk_alpha_read('alpha_labels_amount')
+                # The SDK owns a bounded copy; no callback buffer pointer is retained.
+                addr = int(symbols['sdk_alpha_labels'], 16)
+                text = sdk_alpha_bytes(addr, 9).split(b'\0')[0].decode('ascii')
+                visible = sdk_alpha_bytes(int(symbols['sdk_alpha_visibility'], 16), 2)
+                result = {'label': label, 'page': page, 'amount': amount, 'text': text,
+                          'visible': list(visible)}
+                report['events'].append(result)
+                print(result, flush=True)
+                sdk_alpha_screen(label)
+                return result
+            default = sdk_alpha_labels('labels-default-page-0')
+            assert default['text'] == 'PITCH' and default['visible'] == [1, 1]
+            sdk_alpha_tap(20)
+            sdk_alpha_turn(1, 24) # page 1's A is AMOUNT; H is the dependent PITCH.
+            changed = sdk_alpha_labels('labels-live-page-1')
+            assert 0 < changed['amount'] < 127 and changed['text'] == f"AMT {changed['amount']:03}"
+            sdk_alpha_tap(20)
+            cross = sdk_alpha_labels('labels-cross-page-0')
+            assert cross['page'] == 0 and cross['text'] == changed['text']
+            sdk_alpha_tap(20)
+            sdk_alpha_turn(1, 512)
+            hidden = sdk_alpha_labels('labels-hidden-page-1')
+            assert hidden['amount'] == 127 and hidden['visible'] == [0, 1]
+            pitch_address = int(symbols['fw_kit'], 16)
+            def pitch_raw():
+                kit = e.peek32(pitch_address)
+                return sdk_alpha_bytes(kit + 0x20 + 0x36, 2)
+            before = pitch_raw()
+            sdk_alpha_turn(8, 32)
+            assert pitch_raw() == before, 'hidden H still edited PITCH'
+            sdk_alpha_tap(20)
+            sdk_alpha_labels('labels-hidden-page-0')
+            sdk_alpha_turn(1, 32)
+            assert pitch_raw() == before, 'hidden A still edited PITCH'
+            sdk_alpha_tap(20)
+            sdk_alpha_turn(1, -512)
+            restored = sdk_alpha_labels('labels-restored-page-1')
+            assert restored['amount'] == 0 and restored['text'] == 'PITCH' and restored['visible'] == [1, 1]
+            sdk_alpha_turn(8, 24)
+            assert pitch_raw() != before, 'shown H did not edit PITCH'
+            sdk_alpha_turn(1, 24)
+            first = sdk_alpha_labels('labels-first-track')
+            sdk_alpha_chord(2, 25)
+            sdk_alpha_select(125)
+            # Track 2 starts with a separate sound and static presentation.
+            assert sdk_alpha_read('alpha_labels_amount', 4) == 0
+            sdk_alpha_screen('labels-second-track')
+            sdk_alpha_chord(2, 24)
+            returned = sdk_alpha_labels('labels-first-track-return')
+            assert returned['text'] == first['text'] and returned['amount'] == first['amount']
         sdk_alpha_select(120)
         sdk_alpha_tap(20)
         sdk_alpha_screen('empty')
