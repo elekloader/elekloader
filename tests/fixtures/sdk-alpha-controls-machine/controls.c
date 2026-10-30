@@ -2,8 +2,8 @@
 /* Test-only snapshots; the normal example has no probes or callback. */
 #include "elekloader/sdk_alpha_machine.h"
 
-enum { PITCH, ZERO, AMOUNT, FIXED, FOUR, FIVE, SIX, SEVEN, OTHER, KNOB_COUNT };
-static const struct elek_ui_knob knobs[KNOB_COUNT] = {
+enum { PITCH, ZERO, AMOUNT, FIXED, FOUR, FIVE, SIX, SEVEN, OTHER };
+static const struct elek_ui_knob knobs[] = {
     [PITCH] = { .id = PITCH, .label = "PITCH", .min = ELEK_UI_BOUND(10), .max = ELEK_UI_BOUND(20) },
     [ZERO] = { .id = ZERO, .label = "ZERO", .max = ELEK_UI_BOUND(0) },
     [AMOUNT] = { .id = AMOUNT, .label = "AMOUNT" },
@@ -21,18 +21,20 @@ static const struct elek_ui_page pages[] = {
         [ELEK_ENCODER_B] = &knobs[PITCH], [ELEK_ENCODER_H] = &knobs[FIXED] } },
 };
 volatile uint32_t alpha_controls_calls, alpha_controls_bad_context;
-volatile int32_t alpha_controls_page[8], alpha_controls_raw[8][KNOB_COUNT], alpha_controls_value[8][KNOB_COUNT];
+volatile int32_t alpha_controls_page[8];
+volatile int32_t alpha_controls_raw[8][sizeof knobs / sizeof *knobs];
+volatile int32_t alpha_controls_value[8][sizeof knobs / sizeof *knobs];
 static void controls_present(const struct elek_ui_context *ctx, struct elek_ui_presentation *out)
 {
     ++alpha_controls_calls;
     uint32_t track = fw_active_track;
     if (track >= 8 || ctx->page < 0 || ctx->page >= 2 || ctx->page_count != 2 ||
-        ctx->knob_count != KNOB_COUNT || !ctx->knob || out->knob_count || out->knob) {
+        ctx->knob_count != sizeof knobs / sizeof *knobs || !ctx->knob || out->knob_count || out->knob) {
         ++alpha_controls_bad_context;
         return;
     }
     alpha_controls_page[track] = ctx->page;
-    for (int k = 0; k < KNOB_COUNT; ++k) {
+    for (int k = 0; k < sizeof knobs / sizeof *knobs; ++k) {
         alpha_controls_raw[track][k] = ctx->knob[k]->raw_value;
         alpha_controls_value[track][k] = ctx->knob[k]->value;
     }
