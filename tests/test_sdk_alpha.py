@@ -35,21 +35,20 @@ def sdk_alpha_test_document():
 def sdk_alpha_test_controls_document():
     doc, raw = sdk_alpha_test_document()
     raw.extend(bytes(1200))
-    doc['relocs'][-1][3] = 'sym:sdk_alpha_dt1_ui_v2'
+    doc['relocs'][-1][3] = 'sym:sdk_alpha_dt1_ui_v3'
     struct.pack_into('>I', raw, 56, 2)
-    struct.pack_into('>I', raw, 64, 15)
-    doc['relocs'] += [['.run', 52, 'abs32', 'sec:.run', 400],
-                      ['.run', 60, 'abs32', 'sec:.run', 96]]
+    doc['relocs'] += [['.run', 52, 'abs32', 'sec:.run', 512]]
     for i in range(15):
-        doc['relocs'].append(['.run', 96 + 20 * i, 'abs32', 'sec:.run', 72])
+        struct.pack_into('>I', raw, 96 + 24 * i, i)
+        doc['relocs'].append(['.run', 100 + 24 * i, 'abs32', 'sec:.run', 72])
     for page in range(2):
-        doc['relocs'].append(['.run', 400 + 36 * page, 'abs32', 'sec:.run', 72])
+        doc['relocs'].append(['.run', 512 + 36 * page, 'abs32', 'sec:.run', 72])
         for encoder in range(8):
             # Logical zero is D on page 0; page 1 shares it at H.
             logical = ([2, 3, 4, 0, 5, 6, 7, 1] if page == 0 else
                        [8, 9, 10, 11, 12, 13, 14, 0])[encoder]
-            doc['relocs'].append(['.run', 404 + 36 * page + 4 * encoder,
-                                  'abs32', 'sec:.run', 96 + 20 * logical])
+            doc['relocs'].append(['.run', 516 + 36 * page + 4 * encoder,
+                                  'abs32', 'sec:.run', 96 + 24 * logical])
     return doc, raw
 
 
@@ -105,27 +104,50 @@ class SdkAlphaTests(unittest.TestCase):
         self.assertEqual(sdk_alpha_registrations(doc, {'.run': raw}),
                          [('sdk_alpha_registration_empty', 120)])
         # A blank position cannot alias logical zero. Zero can appear on both pages.
-        doc['relocs'] = [r for r in doc['relocs'] if r[1] != 468]
+        doc['relocs'] = [r for r in doc['relocs'] if r[1] != 580]
         self.assertEqual(len(sdk_alpha_registrations(doc, {'.run': raw})), 1)
         for offset, value, message in ((56, 3, 'at most 2 pages'),
-                                       (64, 16, '15 knobs'),
-                                       (104, 2, 'supplied'),
-                                       (100, 128, 'min exceeds max')):
+                                       (96, 15, '15 knobs'),
+                                       (96, 0xffffffff, '15 knobs'),
+                                       (120, 0, 'cannot share'),
+                                       (108, 2, 'supplied'),
+                                       (104, 128, 'min exceeds max')):
             with self.subTest(offset=offset):
                 doc, raw = sdk_alpha_test_controls_document()
                 struct.pack_into('>I', raw, offset, value)
-                if offset == 100:
-                    struct.pack_into('>I', raw, 104, 1)
+                if offset == 104:
+                    struct.pack_into('>I', raw, 108, 1)
                 with self.assertRaisesRegex(build.BuildError, message):
                     sdk_alpha_registrations(doc, {'.run': raw})
-        for target in (97, 396, 999):
+        # A unique descriptor may live outside any common array or section.
+        doc, raw = sdk_alpha_test_controls_document()
+        descriptor = raw[96:120]
+        label = next(r for r in doc['relocs'] if r[1] == 100)
+        doc['relocs'].remove(label)
+        doc['relocs'].append(['.other', 4, 'abs32', 'sec:.run', 72])
+        for r in doc['relocs']:
+            if r[4] == 96:
+                r[3:5] = ['sec:.other', 0]
+        self.assertEqual(len(sdk_alpha_registrations(doc, {'.run': raw, '.other': descriptor})), 1)
+        for target in (97, len(raw) - 20):
             doc, raw = sdk_alpha_test_controls_document()
-            next(r for r in doc['relocs'] if r[1] == 404)[4] = target
-            with self.assertRaisesRegex(build.BuildError, 'must reference'):
+            next(r for r in doc['relocs'] if r[1] == 516)[4] = target
+            with self.assertRaises(build.BuildError):
                 sdk_alpha_registrations(doc, {'.run': raw})
         doc, raw = sdk_alpha_test_controls_document()
-        doc['relocs'] = [r for r in doc['relocs'] if r[1] != 404]
-        with self.assertRaisesRegex(build.BuildError, 'each knob must appear'):
+        next(r for r in doc['relocs'] if r[1] == 516)[3] = 'sym:external_knob'
+        with self.assertRaisesRegex(build.BuildError, 'own mod'):
+            sdk_alpha_registrations(doc, {'.run': raw})
+        doc, raw = sdk_alpha_test_controls_document()
+        doc['relocs'] = [r for r in doc['relocs'] if r[1] != 516]
+        with self.assertRaisesRegex(build.BuildError, 'contiguous'):
+            sdk_alpha_registrations(doc, {'.run': raw})
+        # Label-only pages need no knob list; stale page records must be rebuilt.
+        doc, raw = sdk_alpha_test_controls_document()
+        doc['relocs'] = [r for r in doc['relocs'] if not 516 <= r[1] <= 580 or r[1] == 548]
+        self.assertEqual(len(sdk_alpha_registrations(doc, {'.run': raw})), 1)
+        next(r for r in doc['relocs'] if r[1] == 32)[3] = 'sym:sdk_alpha_dt1_ui_v2'
+        with self.assertRaisesRegex(build.BuildError, 'ABI'):
             sdk_alpha_registrations(doc, {'.run': raw})
 
     def test_sdk_alpha_mapping_and_instance_snapshots(self):
