@@ -161,6 +161,8 @@
  ],
  "ports": {
   "1.54": {
+   "sources": ["pages.s", "pages.c", "src.s", "src.c", "params.s", "params.c", "sdk_alpha.c"],
+   "cflags": ["-DSDK_ALPHA_DT1"],
    "defsym": {
     "SRC_TRACK_FN": "0x4001d24e",
     "VIEW_LAYOUT_RET": "0x4003ab2c",
