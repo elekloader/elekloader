@@ -6,7 +6,9 @@ Track 1 plays stock LOWPASS 4 and track 2 a custom filter registered on it, with
 controls and the same note in the same block. LOWPASS 4's setup-table entry is pointed at the
 adapter's capture entry too, so both voices' stock cutoffs land in the capture arrays in the
 same preparation pass; they must be equal in every block while the envelope moves them. The
-custom filter declares G, which CC 18 sets; the kernel's input carries it.
+custom filter declares G, which CC 18 sets; the kernel's input carries it, and its voice's
+state: the reserved base plus its slot times one voice's size. The kernel is larger than the old
+16 KiB machine area: 12 KB of NOPs run into its return, after which come 13 KB of data.
 """
 import json
 import os
@@ -22,7 +24,7 @@ DIGIKIT = os.environ.get('ELEKLOADER_DIGIKIT')
 EMUD = os.environ.get('ELEKLOADER_DIGI_EMUD')
 READY = os.environ.get('ELEKLOADER_DN2_EMU_READY')
 MS = 132000  # emulated instructions per millisecond
-CUTOFF, RESONANCE, G, INPUT = 0x20097d40, 0x20097d80, 0x20097dc0, 0x20097d00
+CUTOFF, RESONANCE, G, INPUT = 0x200afd40, 0x200afd80, 0x200afdc0, 0x200afd00
 # DigiKit's DN2 panel codes (tools/patchkit/pk_harness.py).
 SYN, YES, UP, NO, DOWN, RIGHT, TRK, FUNC, STOP = 2, 10, 11, 12, 14, 15, 16, 17, 21
 FLTR_LIST = [0, 1, 4, 3, 5, 2, 8]  # MACHINE SEL's FLTR side, in screen order
@@ -48,7 +50,11 @@ class CaptureTests(unittest.TestCase):
         (stage / 'machine.c').write_text('#include "mk2/machines.h"\n'
                                          'static const struct mk2_param g = {"MODE", 0};\n'
                                          'const struct mk2_filter custom = {8,"CUSTOM","CUSTOM",0,&g};\n')
-        (stage / 'kernel.json').write_text(json.dumps(filter_artifact(bytes.fromhex(RETURN), b'', 0, 8, 0)))
+        sled, data = b'\x01\x00' * 6144, bytes(range(256)) * 52        # 12 KiB of NOPs, 13 KiB of data
+        kernel = filter_artifact(sled + bytes.fromhex(RETURN), data, 0, 8, 0, voice_bytes=12)
+        cls.data = cls.profile['filter_range'][0] + kernel['segments'][2]['offset_bytes'], data
+        cls.voice_state = cls.profile['filter_range'][0] + kernel['voice_state']['offset_bytes']
+        (stage / 'kernel.json').write_text(json.dumps(kernel))
         (stage / 'mod.json').write_text(json.dumps({
             'id': 'capture-test', 'version': '0.1', 'device': 'digitone-mk2', 'os': '1.12',
             'sources': ['machine.c'], 'sharc': {'artifact': 'kernel.json'}, 'resources': {'core': '0.1'},
@@ -141,6 +147,10 @@ class CaptureTests(unittest.TestCase):
         given = self.words(INPUT + 12, 3, 'f')
         self.assertEqual(given, tuple(self.words(array + 4 * custom, 1, 'f')[0] for array in (CUTOFF, RESONANCE, G)))
         self.assertAlmostEqual(given[2], 100 / 127, places=6)
+        self.assertEqual(custom, 1, 'the state check needs a slot past 0')
+        self.assertEqual(self.words(INPUT + 0x18, 1)[0], self.voice_state + 12 * custom)
+        at, data = self.data
+        self.assertEqual(bytes.fromhex(self.emu.call('dsp.peek', addr=at + len(data) - 64, len=64)['hex']), data[-64:])
         status = self.emu.status()
         self.assertIsNone(status['cf'].get('error'))
         self.assertIsNone(status['audio']['halted'])

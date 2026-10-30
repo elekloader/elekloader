@@ -446,9 +446,16 @@ def build(mdir, stock_path, out_dir=None, extra=None):
         addr = int(s['addr'], 16) if isinstance(s['addr'], str) else s['addr']
         stockb = bytes.fromhex(s['stock'])
         o = addr - dev.main_load
-        if image[o:o + len(stockb)] != stockb:
+        actual = image[o:o + len(stockb)]
+        if elemod.sharc_site(rel, addr):
+            from .. import sharc
+            actual = next((r.raw[16 + addr - r.target:16 + addr - r.target + len(stockb)]
+                           for r in sharc.parse(stock.section(rel.sharc['section']), rel.sharc)
+                           if r.flags == sharc.LOAD and r.target <= addr
+                           and addr + len(stockb) <= r.target + r.count), b'')
+        if actual != stockb:
             raise BuildError('site 0x%08x: the stock bytes are %s, not %s'
-                             % (addr, image[o:o + len(stockb)].hex(), s['stock']))
+                             % (addr, actual.hex(), s['stock']))
         op, rel_ = s['op'], []
         add = int(s.get('addend', 0))
         if add and op not in OPS and op not in ('keep2', 'ptr', 'dsp_jsr'):

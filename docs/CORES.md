@@ -31,7 +31,7 @@ older ones people still have:
 | Digitone mk1, Digitone Keys | 1.43, 1.44 | `core-dn1-4.1.1.elemod`, `core-dn1-4.1.1-os1.44.elemod` | on main, not released: build it ([below](#building-a-core)) |
 | Digitone mk1, Digitone Keys | 1.43, 1.44 | `core-dn1-2.0a.elemod`, `core-dn1-2.0a-os1.44.elemod` | the v0.4.0 release, built into its apps |
 | Digitakt II | 1.17 | `core-dt2-1.0.elemod` | not released: build it ([below](#building-a-core)) |
-| Digitone II | 1.12 | `core-dn2-0.2.elemod` | experimental, not released: build it ([below](#building-a-core)) |
+| Digitone II | 1.12 | `core-dn2-0.3.elemod` | experimental, not released: build it ([below](#building-a-core)) |
 | Analog Rytm MKII | 1.74 | `core-ar2-0.3.elemod` | the [core-ar2-v0.3](https://github.com/irpina/elekloader/releases/tag/core-ar2-v0.3) pre-release, and the shop |
 | Analog Rytm MKII | 1.74 | `core-ar2-0.7.elemod` | the [core-ar2-v0.7](https://github.com/irpina/elekloader/releases/tag/core-ar2-v0.7) pre-release, and the shop. Mods with pages built for 0.3 (rytm2_mods v1.2's lfo-rnd, voice-dac, euclid-accents, velocity-humanise, comp-preview) do not link with it: their sites overlap core's page sites |
 | Analog Rytm MKII | 1.74 | `core-ar2-0.8.elemod` | on main, not released: build it ([below](#building-a-core)). Mods with pages built for 0.3 (rytm2_mods v1.2's lfo-rnd, voice-dac, euclid-accents, velocity-humanise, comp-preview) do not link with it: their sites overlap core's page sites |
@@ -130,7 +130,10 @@ the one a mod that uses it names in `resources.core`.
   SysEx observers (ADAPTING.md, "Remote panel input and SysEx"); and SHARC
   mods, one mod's code on the DSP at the master output (core-dn2 0.2;
   ADAPTING.md, "SHARC mods"; the [callback contract](SHARC-DN2-ABI.md) and
-  the [sine example](../examples/sharc-sine/README.md)). The
+  the [sine example](../examples/sharc-sine/README.md)); from 0.3 a DSP
+  memory peek (ADAPTING.md, "The DSP peek"). The optional
+  [dspbusy-dn2 companion](../mods/dspbusy-dn2/README.md) enables the busy
+  measure for a build with a SHARC mod. The
   [machines companion](MACHINES-DN2.md) adds a
   [selectable track synth](MACHINES-DN2-VOICE.md) and a
   [custom filter](MACHINES-DN2-FILTER.md) through the `mk2_*` tables. An

@@ -165,6 +165,28 @@ abort, port)` is the stock sender; port 2 selects USB. Keep UI actions out
 of the MIDI task; queue bounded work for `ev_tick`. The DigiHealth DN2
 port is an example of using all of this without owning stock sites.
 
+### The DSP peek (core-dn2 0.3, Digitone II)
+
+A build with a SHARC mod lets the ColdFire read the DSP's memory; a mod
+that calls the peek sets `"resources": {"core": "0.3"}`. From any
+task, `core_dsp_peek(address, count)` starts a read of 1..`CORE_DSP_PEEK_MAX`
+(1024) words from a word-aligned L1 or L2 address and ends the last one;
+`core_dsp_peek_status(&received, &total)` says how many halfwords have
+arrived (`CORE_DSP_PEEK_BUSY` until all have, `CORE_DSP_PEEK_REFUSED` for an
+address outside L1 and L2 RAM), and `core_dsp_peek_data()` gives them, low
+halfword of each word first. One halfword arrives per audio block, about
+3 KB/s. Without a SHARC mod the DSP side is absent and a read stays busy.
+`core_dsp_span(&latest, &peak)` gives the block handler's span as stock
+measures it (EMUCLK cycles); it is not the DSP's load. DigiHealth's
+`dsppeek` uses these. The protocol is in [SHARC-DN2.md](SHARC-DN2.md#the-dsp-peek).
+`CORE_DSP_BUSY_RECORD` is the DSP address of a record, read with the peek,
+of how busy the DSP is: the share of cycles outside FreeRTOS's idle task
+over the last 1024 blocks and over the busiest such window. Add the
+code-free [dspbusy-dn2 companion](../mods/dspbusy-dn2/README.md) to enable
+it; it requires core 0.3 and a SHARC mod. Without it the record stays zero
+and the peek still works. It is not headroom (SHARC-DN2.md says why);
+DigiHealth's `dspbusy` reads it.
+
 The Analog Rytm MKII's core (mods/core-ar2) has `ev_tick`, `ev_draw`,
 `ev_key`, `ev_enc`, `ev_settings`, `ev_render_in` and `ev_render_out`, and
 from 0.2 mod storage and the event `ev_project` ("Mod storage (core-ar2 0.2,
@@ -283,6 +305,15 @@ elekloader's own development.
 The checks cover the packaging: the guard, the 32 KiB covered in full, the
 stack and the firmware's size limits. They cannot prove what the
 instructions do, what they write, or that they meet the audio deadline.
+
+Two things the pinned Selache gets wrong halt a real DSP while the emulator
+runs them. A shift by a negative immediate (`LSHIFT R1 BY -16`) is encoded
+without its sign extension: put the count in a register (`R2=-16; R1=LSHIFT
+R1 BY R2;`). lint notes each place in a mod's own SHARC code that looks like
+one; the scan cannot see instruction boundaries, so check each in the
+listing. A C function whose locals sit more than about 63 words from its
+frame pointer, such as one large local array, is compiled wrongly: keep
+large buffers static or in the voice state.
 [SHARC-DN2.md](SHARC-DN2.md) has what the emulator and a unit showed for
 the sine variants, and the limits that remain.
 
@@ -3442,11 +3473,15 @@ Some differences from an octabam build, by design:
 | `is a DSP reference to a ColdFire address` (or the reverse) | a `dsp24` relocation names a ColdFire symbol, or a ColdFire one a DSP label | name the right symbol; DSP labels are word addresses on the DSP |
 | `dsp_asm is not installed` | the SDK needs octabam's DSP assembler | build octabam's `vendor/dsp56300` and set `ELEKLOADER_DSP_ASM` |
 | `the label N is part of a longer word here` (SDK) | dsp_asm would put N's address inside that word | rename the label |
+| `unqualified SHARC data site` | a companion's data site differs from the profile's exact stock hash, length or replacement, uses code or has relocations | rebuild the unmodified [dspbusy-dn2 companion](../mods/dspbusy-dn2/README.md) with a matching loader |
+| `SHARC data site requires a SHARC mod` | the idle hook would jump into absent DSP code | add a SHARC mod or omit dspbusy-dn2 |
 | `SHARC ABI does not match the device profile` | the artifact does not name a supported master-output, track-synth or track-filter contract | build for the matching [SHARC contract](FORMAT.md#digitone-ii-sharc-mod); changing only the ABI string does not relocate code |
 | `SHARC voice machine_id must match its single native voice registration` / `DN2 voice registration requires a matching SHARC voice payload` | a voice descriptor and DSP artifact disagree, or the artifact is absent | package one matching descriptor and payload as the [track-synth contract](MACHINES-DN2-VOICE.md) describes |
 | `SHARC filter machine_id must match its single native filter registration` / `DN2 filter registration requires a matching SHARC filter payload` | a filter descriptor and DSP artifact disagree, or the artifact is absent | package one matching descriptor and payload as the [filter contract](MACHINES-DN2-FILTER.md) describes |
-| `SHARC voice stack exceeds the profile limit` | the callback declares more than 128 stack bytes | reduce its stack use and declaration, then qualify the real workload |
-| `SHARC filter stack exceeds the profile limit` | the callback declares more than 20 stack bytes | reduce its stack use and declaration, then qualify the real workload |
+| `SHARC voice voice_state needs exactly offset_bytes, voice_bytes` / `SHARC filter voice_state needs exactly offset_bytes, voice_bytes` | the artifact's `voice_state` is not an object of those two fields | make the artifact with the SDK, or write the object [FORMAT.md](FORMAT.md) describes |
+| `SHARC voice voice_state must be 16 zeroed voices inside the mod` / `SHARC filter voice_state must be 16 zeroed voices inside the mod` | the state is unaligned, empty, not whole words, or not inside one of the mod's zero ranges | make the artifact with the SDK, which places it after the data |
+| `SHARC voice stack exceeds the profile limit` | the callback declares more than 2,048 stack bytes (it has a 4 KiB stack of its own and shares the rest with interrupts) | reduce its stack use and declaration, then qualify the real workload |
+| `SHARC filter stack exceeds the profile limit` | the callback declares more than 2,048 stack bytes (as a synth's) | reduce its stack use and declaration, then qualify the real workload |
 | `DN2 filter G needs a label of 1..5 printable ASCII characters and a default of 0..127` | a filter descriptor's `g` has an empty, too long or non-printable label, or a default above 127 | give G a label of one to five printable ASCII characters and a default of 0..127, or leave `g` out ([filter contract](MACHINES-DN2-FILTER.md)) |
 | `SHARC payload has a gap or overlap in its owner` | the segments and zero ranges do not cover the mod's owner exactly once | add a `zero` range for the bytes you do not use; fix overlapping offsets |
 | `SHARC mod code needs its profiled NOP read-ahead guard` | a code segment does not end in 64 bytes of NOPs (`0100` repeated) | pad the end of each code segment |

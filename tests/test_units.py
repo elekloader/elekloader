@@ -1073,6 +1073,15 @@ def test_every_refusal_of_the_linker_has_a_fixture_that_is_refused_and_one_that_
     refusals.test_the_image_check_refuses_a_protected_or_kept_byte_the_other_checks_let_through()
 
 
+def test_dn2_dsp_peek_ignores_idle_replies():
+    import unittest
+    sys.path.insert(0, HERE)
+    from test_dn2_dsp_peek import ColdFirePeekTests
+    suite = unittest.TestLoader().loadTestsFromTestCase(ColdFirePeekTests)
+    result = unittest.TextTestRunner().run(suite)
+    assert result.wasSuccessful(), 'DN2 DSP peek sequence regression failed'
+
+
 def test_dn2_machines_suite():
     import unittest
     suite = unittest.TestLoader().discover(HERE, pattern='test_dn2_machines.py')
