@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
-/* Test-only snapshots; the normal example has no probes or callback. */
+/* Test-only snapshots; the normal example has no probes. */
 #include "elekloader/sdk_alpha_machine.h"
 
 enum { PITCH, ZERO, AMOUNT, FIXED, FOUR, FIVE, SIX, SEVEN, OTHER };
@@ -29,7 +29,8 @@ static void controls_present(const struct elek_ui_context *ctx, struct elek_ui_p
     ++alpha_controls_calls;
     uint32_t track = fw_active_track;
     if (track >= 8 || ctx->page < 0 || ctx->page >= 2 || ctx->page_count != 2 ||
-        ctx->knob_count != sizeof knobs / sizeof *knobs || !ctx->knob || out->knob_count || out->knob) {
+        ctx->knob_count != sizeof knobs / sizeof *knobs || !ctx->knob ||
+        out->knob_count != ctx->knob_count || !out->knob) {
         ++alpha_controls_bad_context;
         return;
     }

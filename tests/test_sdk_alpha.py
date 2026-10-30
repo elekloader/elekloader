@@ -170,6 +170,19 @@ class SdkAlphaTests(unittest.TestCase):
                                       capture_output=True, text=True)
             self.assertNotEqual(readonly.returncode, 0, 'callback snapshot became writable')
 
+    def test_sdk_alpha_label_assignments(self):
+        cc = shutil.which('cc')
+        if not cc:
+            self.skipTest('no host C compiler')
+        with tempfile.TemporaryDirectory() as tmp:
+            exe = str(Path(tmp) / 'labels')
+            subprocess.run([cc, '-std=c99', '-Wno-int-to-pointer-cast', '-Wno-pointer-to-int-cast',
+                            '-I', str(ROOT / 'elekloader/sdk/include'),
+                            str(ROOT / 'mods/machine-pages/sdk_alpha.c'),
+                            str(ROOT / 'tests/fixtures/sdk-alpha-labels-machine/labels-test.c'),
+                            '-o', exe], check=True)
+            subprocess.run([exe], check=True)
+
     def test_sdk_alpha_build_links_and_keeps_slot_conflicts(self):
         stock = os.environ.get('ELEKLOADER_STOCK_154', '')
         cross = os.environ.get('ELEKLOADER_CROSS', 'm68k-linux-gnu-')
@@ -181,7 +194,7 @@ class SdkAlphaTests(unittest.TestCase):
             path, empty = sdk_alpha_build(str(ROOT / 'tests/fixtures/sdk-alpha-empty-machine'), stock, tmp)
             hello_path, hello = sdk_alpha_build(str(ROOT / 'examples/sdk-hello-world'), stock, tmp)
             for fixture in ('sdk-alpha-controls-machine', 'sdk-alpha-one-page-machine',
-                            'sdk-alpha-callback-machine'):
+                            'sdk-alpha-callback-machine', 'sdk-alpha-labels-machine'):
                 fixture_path, _ = sdk_alpha_build(str(ROOT / 'tests/fixtures' / fixture), stock, tmp)
                 result = subprocess.run([sys.executable, '-m', 'elekloader.lint', fixture_path,
                                          '--stock', stock, '--with', core_path, '--with', pages_path, '--json'],

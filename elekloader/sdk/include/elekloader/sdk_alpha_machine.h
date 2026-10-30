@@ -31,9 +31,16 @@ struct elek_ui_context {
     uint32_t page_count, knob_count;
     const struct elek_ui_value *const *knob; /* indexed by machine-wide logical ID, all pages */
 };
+/* Assign literals or caller-owned storage that remains readable after callback return.
+ * The SDK copies immediately on return: at most 8 characters, nonprintable bytes become ?.
+ * Automatic callback-local arrays have expired by then; use static/caller-owned buffers. */
+struct elek_ui_knob_presentation {
+    const char *label;
+    uint32_t visible;              /* defaults to 1; zero blanks every position, retaining its value */
+};
 struct elek_ui_presentation {
     uint32_t knob_count;
-    void *knob;                    /* null; presentation assignments belong to the next slice */
+    struct elek_ui_knob_presentation *const *knob; /* logical IDs; defaults reset each call */
 };
 struct elek_machine {
     int32_t id;                    /* native machine slot, 4..127; declared only here */
