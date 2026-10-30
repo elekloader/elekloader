@@ -17,6 +17,9 @@ struct sdk_alpha_page {
 };
 static struct sdk_alpha_page sdk_alpha_pages[32]; /* same machine capacity as pages.c */
 static uint32_t sdk_alpha_page_count;
+static const struct elek_machine *sdk_alpha_presented;
+static char sdk_alpha_labels[15][9];
+static uint8_t sdk_alpha_visibility[15];
 
 const struct elek_machine *sdk_alpha_machine(int32_t id)
 {
@@ -105,14 +108,14 @@ const struct cm_ui32 *sdk_alpha_ui(int32_t id)
     return &p->ui;
 }
 
-void sdk_alpha_snapshot(const struct elek_machine *m, int32_t page, void *view)
+int32_t sdk_alpha_snapshot(const struct elek_machine *m, int32_t page, void *view)
 {
-    if (!m->present)
-        return;
     const struct elek_ui_knob *descriptors[15];
     int32_t knob_count = sdk_alpha_knobs(m, descriptors);
     if (knob_count < 0)
-        return;
+        return 0;
+    struct elek_ui_knob_presentation presentation[15];
+    struct elek_ui_knob_presentation *output[15];
     struct elek_ui_value values[15];
     const struct elek_ui_value *knobs[15];
     for (uint32_t k = 0; k < (uint32_t)knob_count; ++k) {
@@ -124,13 +127,57 @@ void sdk_alpha_snapshot(const struct elek_machine *m, int32_t page, void *view)
         values[k].raw_value = raw;
         values[k].value = sdk_alpha_map(descriptors[k], raw);
         knobs[k] = &values[k];
+        presentation[k].label = descriptors[k]->label;
+        presentation[k].visible = 1;
+        output[k] = &presentation[k];
     }
     const struct elek_ui_context ctx = {
         .page = page, .page_count = m->page_count, .knob_count = knob_count,
         .knob = knob_count ? knobs : 0,
     };
-    struct elek_ui_presentation out = {0};
-    m->present(&ctx, &out);
+    struct elek_ui_presentation out = {
+        .knob_count = knob_count, .knob = knob_count ? output : 0,
+    };
+    if (m->present)
+        m->present(&ctx, &out);
+    int32_t changed = sdk_alpha_presented != m;
+    for (uint32_t k = 0; k < (uint32_t)knob_count; ++k) {
+        const char *label = presentation[k].label;
+        if (!label) label = descriptors[k]->label;
+        uint32_t n = 0;
+        for (; n < 8 && label[n]; ++n) {
+            unsigned char c = label[n];
+            char next = c >= 32 && c <= 126 ? c : '?';
+            changed |= sdk_alpha_labels[k][n] != next;
+            sdk_alpha_labels[k][n] = next;
+        }
+        changed |= sdk_alpha_labels[k][n] != 0;
+        sdk_alpha_labels[k][n] = 0;
+        uint8_t visible = presentation[k].visible != 0;
+        changed |= sdk_alpha_visibility[k] != visible;
+        sdk_alpha_visibility[k] = visible;
+    }
+    sdk_alpha_presented = m;
+    return changed;
+}
+
+const char *sdk_alpha_label(const struct elek_machine *m, uint32_t k)
+{
+    if (!m)
+        return 0;
+    const struct elek_ui_knob *knobs[15];
+    int32_t count = sdk_alpha_knobs(m, knobs);
+    if (count < 0 || k >= (uint32_t)count)
+        return 0;
+    return m == sdk_alpha_presented ? sdk_alpha_labels[k] : knobs[k]->label;
+}
+
+int32_t sdk_alpha_visible(const struct elek_machine *m, uint32_t k)
+{
+    const struct elek_ui_knob *knobs[15];
+    int32_t count = sdk_alpha_knobs(m, knobs);
+    return count >= 0 && k < (uint32_t)count &&
+        (m != sdk_alpha_presented || sdk_alpha_visibility[k]);
 }
 
 void sdk_alpha_present(const struct elek_machine *machine)

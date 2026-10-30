@@ -15,6 +15,8 @@ int mp_stock_sound_parameter(uint32_t id);
 #include "elekloader/sdk_alpha_machine.h"
 const struct elek_machine *sdk_alpha_machine(int32_t id);
 const struct cm_ui32 *sdk_alpha_ui(int32_t id);
-void sdk_alpha_snapshot(const struct elek_machine *, int32_t page, void *view);
+int32_t sdk_alpha_snapshot(const struct elek_machine *, int32_t page, void *view);
+int32_t sdk_alpha_visible(const struct elek_machine *, uint32_t knob);
+const char *sdk_alpha_label(const struct elek_machine *, uint32_t knob);
 int32_t sdk_alpha_value_text(int32_t machine, int32_t knob, int32_t raw, char *buf, int popup);
 #endif
