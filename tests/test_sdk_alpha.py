@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
-"""Private PR-1 tests. Optional build checks need ELEKLOADER_STOCK_154 and a cross compiler."""
+"""Private machine UI tests. Optional build checks need ELEKLOADER_STOCK_154 and a cross compiler."""
 import json
 import os
 from pathlib import Path
@@ -29,6 +29,27 @@ def sdk_alpha_test_document():
            'relocs': [['.run', o, 'abs32', 'sec:.run', a]
                       for o, a in ((4, 72), (8, 80), (28, 32), (36, 40), (44, 72), (48, 80))] +
                      [['.run', 32, 'abs32', 'sym:sdk_alpha_dt1_empty_ui', 0]]}
+    return doc, raw
+
+
+def sdk_alpha_test_controls_document():
+    doc, raw = sdk_alpha_test_document()
+    raw.extend(bytes(1200))
+    doc['relocs'][-1][3] = 'sym:sdk_alpha_dt1_ui_v2'
+    struct.pack_into('>I', raw, 56, 2)
+    struct.pack_into('>I', raw, 64, 15)
+    doc['relocs'] += [['.run', 52, 'abs32', 'sec:.run', 400],
+                      ['.run', 60, 'abs32', 'sec:.run', 96]]
+    for i in range(15):
+        doc['relocs'].append(['.run', 96 + 20 * i, 'abs32', 'sec:.run', 72])
+    for page in range(2):
+        doc['relocs'].append(['.run', 400 + 36 * page, 'abs32', 'sec:.run', 72])
+        for encoder in range(8):
+            # Logical zero is D on page 0; page 1 shares it at H.
+            logical = ([2, 3, 4, 0, 5, 6, 7, 1] if page == 0 else
+                       [8, 9, 10, 11, 12, 13, 14, 0])[encoder]
+            doc['relocs'].append(['.run', 404 + 36 * page + 4 * encoder,
+                                  'abs32', 'sec:.run', 96 + 20 * logical])
     return doc, raw
 
 
@@ -79,6 +100,54 @@ class SdkAlphaTests(unittest.TestCase):
                             '-o', exe], check=True)
             subprocess.run([exe], check=True)
 
+    def test_sdk_alpha_pages_logical_identity_and_capacity(self):
+        doc, raw = sdk_alpha_test_controls_document()
+        self.assertEqual(sdk_alpha_registrations(doc, {'.run': raw}),
+                         [('sdk_alpha_registration_empty', 120)])
+        # A blank position cannot alias logical zero. Zero can appear on both pages.
+        doc['relocs'] = [r for r in doc['relocs'] if r[1] != 468]
+        self.assertEqual(len(sdk_alpha_registrations(doc, {'.run': raw})), 1)
+        for offset, value, message in ((56, 3, 'at most 2 pages'),
+                                       (64, 16, '15 knobs'),
+                                       (104, 2, 'supplied'),
+                                       (100, 128, 'min exceeds max')):
+            with self.subTest(offset=offset):
+                doc, raw = sdk_alpha_test_controls_document()
+                struct.pack_into('>I', raw, offset, value)
+                if offset == 100:
+                    struct.pack_into('>I', raw, 104, 1)
+                with self.assertRaisesRegex(build.BuildError, message):
+                    sdk_alpha_registrations(doc, {'.run': raw})
+        for target in (97, 396, 999):
+            doc, raw = sdk_alpha_test_controls_document()
+            next(r for r in doc['relocs'] if r[1] == 404)[4] = target
+            with self.assertRaisesRegex(build.BuildError, 'must reference'):
+                sdk_alpha_registrations(doc, {'.run': raw})
+        doc, raw = sdk_alpha_test_controls_document()
+        doc['relocs'] = [r for r in doc['relocs'] if r[1] != 404]
+        with self.assertRaisesRegex(build.BuildError, 'each knob must appear'):
+            sdk_alpha_registrations(doc, {'.run': raw})
+
+    def test_sdk_alpha_mapping_and_instance_snapshots(self):
+        cc = shutil.which('cc')
+        if not cc:
+            self.skipTest('no host C compiler')
+        with tempfile.TemporaryDirectory() as tmp:
+            exe = str(Path(tmp) / 'values')
+            subprocess.run([cc, '-std=c99', '-Wno-int-to-pointer-cast', '-Wno-pointer-to-int-cast',
+                            '-I', str(ROOT / 'elekloader/sdk/include'),
+                            str(ROOT / 'mods/machine-pages/sdk_alpha.c'),
+                            str(ROOT / 'tests/fixtures/sdk-alpha-controls-machine/values-test.c'),
+                            '-o', exe], check=True)
+            subprocess.run([exe], check=True)
+            readonly = subprocess.run([cc, '-std=c99', '-fsyntax-only', '-x', 'c',
+                                       '-I', str(ROOT / 'elekloader/sdk/include'), '-'],
+                                      input='#include "elekloader/sdk_alpha_machine.h"\n'
+                                            'void bad(const struct elek_ui_context *ctx) {'
+                                            'ctx->knob[0]->value = 1;}\n',
+                                      capture_output=True, text=True)
+            self.assertNotEqual(readonly.returncode, 0, 'callback snapshot became writable')
+
     def test_sdk_alpha_build_links_and_keeps_slot_conflicts(self):
         stock = os.environ.get('ELEKLOADER_STOCK_154', '')
         cross = os.environ.get('ELEKLOADER_CROSS', 'm68k-linux-gnu-')
@@ -89,6 +158,13 @@ class SdkAlphaTests(unittest.TestCase):
             pages_path, pages = build.build(str(ROOT / 'mods/machine-pages'), stock, tmp)
             path, empty = sdk_alpha_build(str(ROOT / 'tests/fixtures/sdk-alpha-empty-machine'), stock, tmp)
             hello_path, hello = sdk_alpha_build(str(ROOT / 'examples/sdk-hello-world'), stock, tmp)
+            for fixture in ('sdk-alpha-controls-machine', 'sdk-alpha-one-page-machine',
+                            'sdk-alpha-callback-machine'):
+                fixture_path, _ = sdk_alpha_build(str(ROOT / 'tests/fixtures' / fixture), stock, tmp)
+                result = subprocess.run([sys.executable, '-m', 'elekloader.lint', fixture_path,
+                                         '--stock', stock, '--with', core_path, '--with', pages_path, '--json'],
+                                        cwd=ROOT, capture_output=True, text=True)
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             self.assertEqual(empty.names, ['machine:120'])
             self.assertEqual(empty.requires, ['core', 'machine-pages'])
             self.assertEqual(hello.names, ['machine:122'])

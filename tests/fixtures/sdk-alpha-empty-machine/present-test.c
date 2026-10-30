@@ -18,6 +18,10 @@ static void empty_present(const struct elek_ui_context *ctx, struct elek_ui_pres
 uint32_t core_machine_ui(int32_t id) { (void)id; return 0; }
 uint32_t mp_stock_layout(int32_t id) { (void)id; return 0; }
 
+const char cm_ui_v32[] = "host stub";
+int32_t mp_shown_value(void *view, uint32_t id, uint8_t *locked)
+{ (void)view; (void)id; (void)locked; assert(0); return 0; }
+
 int main(void)
 {
     const struct elek_machine without = { .id = 120, .name = "Empty", .short_name = "EMPT" };
