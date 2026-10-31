@@ -2,11 +2,14 @@
 /* Host-only mapping oracle and instance snapshots. */
 #include <assert.h>
 #include <limits.h>
+#include <string.h>
 #include "elekloader/sdk_alpha_machine.h"
 int32_t sdk_alpha_map(const struct elek_ui_knob *, int32_t raw);
 int32_t sdk_alpha_snapshot(const struct elek_machine *, int32_t page, void *view);
 const char cm_ui_v32[] = "host stub";
 uint32_t core_machine_ui(int32_t id) { (void)id; return 0; }
+volatile uint32_t fw_active_track;
+uint8_t *volatile fw_kit;
 uint32_t mp_stock_layout(int32_t id) { (void)id; return 0; }
 int32_t mp_shown_value(void *view, uint32_t id, uint8_t *locked)
 {
@@ -86,5 +89,25 @@ int main(void)
     sdk_alpha_snapshot(&m, 0, first); assert(calls == 4);
     m.pages = pages;
     m.present = 0; sdk_alpha_snapshot(&m, 0, first); assert(calls == 4);
+    /* An LFO label has no SRC view: read the active sound, retaining logical IDs. */
+    uint8_t kit[0x20 + 8 * 0xa2] = {0};
+    fw_kit = kit;
+    fw_active_track = 7;
+    for (int k = 0; k < 9; ++k) {
+        int slot = k < 8 ? 17 + k : 46 + k - 8;
+        uint8_t *word = FW_SOUND(kit, 7) + 20 + 2 * slot;
+        word[0] = (uint32_t)first[k] >> 8;
+        word[1] = first[k];
+    }
+    first[7] = -1; first[8] = (int16_t)50000;
+    m.present = present;
+    expected_page = ELEK_UI_NO_PAGE;
+    uint8_t before[sizeof kit]; memcpy(before, kit, sizeof kit);
+    sdk_alpha_snapshot(&m, ELEK_UI_NO_PAGE, 0);
+    assert(calls == 5 && !memcmp(before, kit, sizeof kit));
+    fw_active_track = 8;
+    sdk_alpha_snapshot(&m, ELEK_UI_NO_PAGE, 0); assert(calls == 5);
+    fw_active_track = 0; fw_kit = 0;
+    sdk_alpha_snapshot(&m, ELEK_UI_NO_PAGE, 0); assert(calls == 5);
     return 0;
 }

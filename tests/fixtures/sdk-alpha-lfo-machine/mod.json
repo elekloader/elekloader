@@ -1,0 +1,6 @@
+{
+ "id": "sdk-alpha-lfo-machine", "version": "0.1",
+ "license": "GPL-2.0-or-later",
+ "device": "digitakt-mk1", "os": "1.54",
+ "sources": ["lfo.c"]
+}
