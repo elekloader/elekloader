@@ -194,7 +194,8 @@ class SdkAlphaTests(unittest.TestCase):
             path, empty = sdk_alpha_build(str(ROOT / 'tests/fixtures/sdk-alpha-empty-machine'), stock, tmp)
             hello_path, hello = sdk_alpha_build(str(ROOT / 'examples/sdk-hello-world'), stock, tmp)
             for fixture in ('sdk-alpha-controls-machine', 'sdk-alpha-one-page-machine',
-                            'sdk-alpha-callback-machine', 'sdk-alpha-labels-machine'):
+                            'sdk-alpha-callback-machine', 'sdk-alpha-labels-machine',
+                            'sdk-alpha-lfo-machine'):
                 fixture_path, _ = sdk_alpha_build(str(ROOT / 'tests/fixtures' / fixture), stock, tmp)
                 result = subprocess.run([sys.executable, '-m', 'elekloader.lint', fixture_path,
                                          '--stock', stock, '--with', core_path, '--with', pages_path, '--json'],

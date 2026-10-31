@@ -16,6 +16,8 @@ static void empty_present(const struct elek_ui_context *ctx, struct elek_ui_pres
 
 /* Unused target routines: this harness exercises callback dispatch, not the native UI. */
 uint32_t core_machine_ui(int32_t id) { (void)id; return 0; }
+volatile uint32_t fw_active_track;
+uint8_t *volatile fw_kit;
 uint32_t mp_stock_layout(int32_t id) { (void)id; return 0; }
 
 const char cm_ui_v32[] = "host stub";

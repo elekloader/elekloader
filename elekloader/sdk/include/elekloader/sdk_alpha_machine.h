@@ -13,6 +13,7 @@ enum { ELEK_ENCODER_A, ELEK_ENCODER_B, ELEK_ENCODER_C, ELEK_ENCODER_D,
 
 /* An omitted bound is distinct from ELEK_UI_BOUND(0). Defaults: min 0, max 127. */
 struct elek_ui_bound { int32_t value; uint32_t supplied; };
+/* Every logical knob is an LFO target; presentation labels never change its ID. */
 struct elek_ui_knob {
     uint32_t id;                   /* machine-wide logical ID, contiguous from zero */
     const char *label;             /* 1..8 printable ASCII characters */
@@ -27,7 +28,7 @@ struct elek_ui_value {
     int32_t raw_value;             /* native 8.8, 0..ELEK_UI_RAW_MAX */
 };
 struct elek_ui_context {
-    int32_t page;                  /* zero-based displayed page, or ELEK_UI_NO_PAGE */
+    int32_t page;                  /* displayed SRC page, or ELEK_UI_NO_PAGE (e.g. LFO labels) */
     uint32_t page_count, knob_count;
     const struct elek_ui_value *const *knob; /* indexed by machine-wide logical ID, all pages */
 };
