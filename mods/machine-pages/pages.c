@@ -396,6 +396,15 @@ uint32_t mp_lfo(uint32_t id, int32_t what, uint32_t stock)
     }
     if (what == 0)
         return p->ui->group ? (uint32_t)p->ui->group : stock;
+#ifdef SDK_ALPHA_DT1
+    const struct elek_machine *alpha = sdk_alpha_machine(p->id);
+    if (alpha) {
+        sdk_alpha_snapshot(alpha, ELEK_UI_NO_PAGE, 0);
+        const char *label = sdk_alpha_label(alpha, i);
+        if (label)
+            return (uint32_t)label;
+    }
+#endif
     k = knob(p, i);
     s = what == 1 ? (k->lfo_long ? k->lfo_long : k->lname) : (k->lfo ? k->lfo : k->name);
     if (!s && (k->flags & CM_HIDDEN))

@@ -17,6 +17,7 @@ def sdk_alpha_main():
         ap.add_argument('--' + name, type=Path, required=True)
     ap.add_argument('--baseline', type=Path)
     ap.add_argument('--labels', action='store_true', help='also exercise PR-3 labels and visibility')
+    ap.add_argument('--lfo', action='store_true', help='also exercise all 15 SDK LFO targets')
     a = ap.parse_args()
     a.out = a.out.resolve()
     a.out.mkdir(parents=True, exist_ok=True)
@@ -27,7 +28,7 @@ def sdk_alpha_main():
     assert sha == 'f78ba80fa7b1da5fb0e1ff61ad61e9e71aafe79f4364fc49679f3651353e3cf6'
     report = {'stock_sha256': sha, 'firmware_sha256': hashlib.sha256(a.firmware.read_bytes()).hexdigest(),
               'daemon_sha256': hashlib.sha256(a.daemon.read_bytes()).hexdigest(), 'events': []}
-    rows = {0: 0, 1: 1, 2: 2, 3: 3, 30: 4, 120: 5, 121: 6, 122: 7, 123: 8, 124: 9, 125: 10}
+    rows = {0: 0, 1: 1, 2: 2, 3: 3, 30: 4, 120: 5, 121: 6, 122: 7, 123: 8, 124: 9, 125: 10, 126: 11}
     with Emu.spawn(str(a.stock.resolve()), binary=str(a.daemon.resolve()), run_dir=a.out / 'run') as e:
         def sdk_alpha_read(name, offset=0):
             return e.peek32(int(symbols[name], 16) + offset)
@@ -243,6 +244,11 @@ def sdk_alpha_main():
             sdk_alpha_chord(2, 24)
             returned = sdk_alpha_labels('labels-first-track-return')
             assert returned['text'] == first['text'] and returned['amount'] == first['amount']
+        if a.lfo:
+            from probe_sdk_alpha_lfo_dt1 import sdk_alpha_probe_lfo_panel
+            sdk_alpha_select(126)
+            report['lfo'] = sdk_alpha_probe_lfo_panel(
+                e, symbols, sdk_alpha_tap, sdk_alpha_turn, sdk_alpha_screen)
         sdk_alpha_select(120)
         sdk_alpha_tap(20)
         sdk_alpha_screen('empty')
