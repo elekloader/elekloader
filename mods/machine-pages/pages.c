@@ -188,7 +188,7 @@ uint32_t mp_layout(int32_t m)
     return mp_layout_track(m, fw_active_track);
 }
 
-/* Native SRC copy, clear and randomize collect the visible eight controls. */
+/* Native SRC actions collect the page's declared controls, regardless of alpha presentation. */
 uint32_t mp_action_layout(uint32_t page, int32_t machine)
 {
     uint32_t track = fw_active_track;
@@ -200,7 +200,26 @@ uint32_t mp_action_layout(uint32_t page, int32_t machine)
             return 0;
         machine = FW_SOUND(kit, track)[FW_SOUND_MACHINE];
     }
-    return mp_src_for(machine) ? mp_layout_track(machine, track) : 0;
+    const struct cm_ui32 *ui = mp_src_for(machine);
+    if (!ui)
+        return 0;
+    uint32_t layout = mp_layout_track(machine, track);
+#ifdef SDK_ALPHA_DT1
+    if (sdk_alpha_machine(machine)) {
+        static uint32_t actions[LAY_LONGS];
+        const uint32_t *shown = (const uint32_t *)layout;
+        for (int i = 0; i < LAY_LONGS; ++i)
+            actions[i] = shown[i];
+        const struct cm_src_page *pg = &ui->pages[selected[track]];
+        for (int i = 0; i < KNOBS; ++i) {
+            int k = pg->parameter[i];
+            actions[2 + i] = k == CM_SRC_BLANK ? 0 :
+                k < 8 ? ID_BASE(ui->base.page_from) + k : MP_EXTRA_ID + k - 8;
+        }
+        return (uint32_t)actions;
+    }
+#endif
+    return layout;
 }
 
 int32_t mp_src_key(void *view, const uint32_t *event)

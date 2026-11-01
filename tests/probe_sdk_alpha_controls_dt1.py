@@ -243,6 +243,29 @@ def sdk_alpha_main():
             sdk_alpha_chord(2, 24)
             returned = sdk_alpha_labels('labels-first-track-return')
             assert returned['text'] == first['text'] and returned['amount'] == first['amount']
+            # Page actions retain declared parameters even while their encoders are hidden.
+            sdk_alpha_turn(1, 512)
+            assert pitch_raw() != b'\0\0'
+            def sdk_alpha_page_action(key):
+                sdk_alpha_chord(20, key)  # SRC + RECORD/PLAY/STOP: copy/clear/paste
+                assert sdk_alpha_read('alpha_labels_page') == page, 'page action cycled SRC'
+            for page in (1, 0):
+                assert sdk_alpha_read('alpha_labels_page') == page
+                assert sdk_alpha_read('alpha_labels_amount') == 127
+                saved_pitch = pitch_raw()
+                sdk_alpha_page_action(9)
+                sdk_alpha_page_action(10)
+                assert pitch_raw() == b'\0\0', 'clear skipped hidden PITCH'
+                assert sdk_alpha_read('alpha_labels_amount') == (0 if page else 127)
+                sdk_alpha_page_action(11)
+                assert pitch_raw() == saved_pitch, 'paste did not restore hidden PITCH'
+                assert sdk_alpha_read('alpha_labels_amount') == 127
+                assert sdk_alpha_bytes(int(symbols['sdk_alpha_visibility'], 16), 2) == b'\0\1'
+                sdk_alpha_turn(8 if page else 1, 16)
+                assert pitch_raw() == saved_pitch, 'page action enabled a hidden encoder'
+                sdk_alpha_screen('labels-hidden-actions-page-%d' % page)
+                sdk_alpha_tap(20)
+            report['hidden_parameter_copy_clear_paste'] = True
         sdk_alpha_select(120)
         sdk_alpha_tap(20)
         sdk_alpha_screen('empty')
