@@ -9,7 +9,8 @@ in one build. With it, those places have one owner, and each machine only
 describes its page: SOPHIE, NEIGHBOR and DIGISLICER, built for it, combine.
 
 On its own, and for machines that describe no page (every core 2.1
-machine mod), it changes nothing the unit does.
+machine mod), it changes nothing the unit does, but the machine menu's look
+and its filter tab (below).
 
 1.2's files are on the [machine-pages-v1.2](https://github.com/irpina/elekloader/releases/tag/machine-pages-v1.2) pre-release, and it is in
 the mod shop: tick it there and the page takes the newest core for it.
@@ -17,7 +18,7 @@ the mod shop: tick it there and the page takes the newest core for it.
 | | |
 |---|---|
 | needs | core 3.0 (`resources.core`), and refuses beside digichain, which owns the same places |
-| sites | 102, listed in `mod.json`. 1.1's 20: 7 on the SRC page, 4 range lookups, 5 on the LFO page, 2 SAMP compares, the machine menu's icon row and the render point 0x40077fba. 1.2's extra values add 77: 50 one-byte bounds (the parameter-id compares, 164 to 171), and 27 hooks: the SRC page's page flip, title and copy/clear/paste, the id-slot maps, the descriptor table and its 7 readers, defaults, Randomize, locks and the sound file's save/load/upgrade and LFO destinations. 1.2.1 adds 2: the stores of the firmware's in-place parameter sync. 1.3 adds 2: MIDI's range lookups, the CC's (0x40010d50) and the NRPN's (0x40010154). 1.4 adds 1: the CC lookup's table for an audio track (0x400791fe). 1.5 adds none: it reads the view at the knob-graphic site it already has |
+| sites | 109, listed in `mod.json`. 1.1's 20: 7 on the SRC page, 4 range lookups, 5 on the LFO page, 2 SAMP compares, the machine menu's icon row and the render point 0x40077fba. 1.2's extra values add 77: 50 one-byte bounds (the parameter-id compares, 164 to 171), and 27 hooks: the SRC page's page flip, title and copy/clear/paste, the id-slot maps, the descriptor table and its 7 readers, defaults, Randomize, locks and the sound file's save/load/upgrade and LFO destinations. 1.2.1 adds 2: the stores of the firmware's in-place parameter sync. 1.3 adds 2: MIDI's range lookups, the CC's (0x40010d50) and the NRPN's (0x40010154). 1.4 adds 1: the CC lookup's table for an audio track (0x400791fe). 1.5 adds none: it reads the view at the knob-graphic site it already has. 1.6 adds 7, for the machine menu's filter tab |
 | exports | `cm_ui_v3`, from 1.1 `cm_ui_v31`, from 1.2 `cm_ui_v32`, from 1.4 `cm_ui_v33`: the markers a machine's page names; from 1.2 `cm_src_value`; from 1.5 `cm_src_shown` |
 | claims | from 1.2, `soundslot:46` to `soundslot:52`, the extra values' slots |
 | declares | `ev_render_voices`, the render event |
@@ -129,6 +130,17 @@ tracks and every other machine get the stock answer. The PARAM fixture's
 extras take CC 24-30. Without a `cm_ui_v33` page nothing changes. NRPNs
 and a value's CC out are not given.
 
+## The machine menu's filter tab (1.6)
+
+FUNC+SRC works as on the Digitakt II. The panel beside the list shows
+`< SRC >` and two page dots; RIGHT shows the filter list, `< FLTR >` with a
+filter curve, and LEFT goes back. FUNC+SRC on the FLTR page opens on the
+filter list, and YES or NO then go back to FLTR; a page key goes to its own
+page, as stock. The list has one row for now, MULTI-MODE, the stock filter, and
+nothing about it is stored: YES closes the menu and writes nothing, unless
+a machine was stepped to first, which it commits as on the machine list.
+NO cancels as stock does. `tests/probe_digitakt_filter_menu.py` drives it.
+
 ## Whose machine a site answers for
 
 - **The SRC page** (layout, labels, values, graphics, UI records, the
@@ -185,6 +197,12 @@ with each shop mod that does, on OS 1.53 and 1.54.
 | machine-pages | | 20, owned once |
 
 ## Checked
+
+1.6 (the filter tab), on OS 1.53 and 1.54: `tests/probe_digitakt_filter_menu.py`
+boots core 4.1 and 1.6 in digiemu and drives the panel. RIGHT and LEFT swap
+the lists and back, UP and DOWN leave the filter list as it is, FUNC+SRC from
+FLTR gives the same screen as RIGHT, YES and NO go back to the FLTR page, a page key goes to its own page, and from AMP or SRC the machine list, and
+the screens are the same on both releases.
 
 1.5 (`cm_src_shown`), on OS 1.53 and 1.54. `tests/probe_digitakt_shown.py`
 boots core 4.1, 1.5 and `examples/linked-knobs` in digiemu and drives the
