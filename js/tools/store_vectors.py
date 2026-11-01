@@ -126,6 +126,11 @@ LOCKS = {
                                                            {'mod': 'a', 'sym': 'y', 'cc': 8}]),
     'cc for no code': dict(store.fresh(DEV), ccs=[{'mod': 'a', 'sym': 'x', 'cc': 8}], freed_ccs=[]),
     'freed cc kept': dict(store.fresh(DEV), ccs=[], freed_ccs=[{'mod': 'a', 'sym': 'x', 'cc': 9}]),
+    # a kit field (the FX track's) with a CC stock uses on the FX channel
+    'kit cc taken': dict(store.fresh(DEV), fields=[{'mod': 'a', 'sym': 'x', 'scope': 'kit', 'offset': 0, 'bits': 4}],
+                         codes=[{'mod': 'a', 'sym': 'x', 'code': 42}], freed_codes=[], next_code=43,
+                         ccs=[{'mod': 'a', 'sym': 'x', 'cc': 84}], freed_ccs=[],
+                         next=dict(store.fresh(DEV)['next'], kit=4)),
     # an older lockfile, with an ID not from a hash: kept while nothing changes
     'random id': dict(store.fresh(DEV), id='0x5a17c0de', ancestors=['0x00000007']),
 }
@@ -139,7 +144,9 @@ DECLS = {
     'bits': {'storage': [{'sym': 'a', 'scope': 'kit', 'bits': 33}]},
     'bits bool': {'storage': [{'sym': 'a', 'scope': 'kit', 'bits': True}]},
     'lock': {'storage': [{'sym': 'a', 'scope': 'sound', 'bits': 3, 'lock': True}]},
-    'lock kit': {'storage': [{'sym': 'a', 'scope': 'kit', 'bits': 3, 'lock': True}]},
+    'lock kit': {'storage': [{'sym': 'a', 'scope': 'kit', 'bits': 3, 'lock': True, 'cc': True, 'lfo': True}]},
+    'lock global': {'storage': [{'sym': 'a', 'scope': 'global', 'bits': 3, 'lock': True}]},
+    'mod kit': {'storage': [{'sym': 'a', 'scope': 'kit', 'bits': 3, 'lock': True, 'mod': True}]},
     'lock type': {'storage': [{'sym': 'a', 'scope': 'sound', 'bits': 3, 'lock': 1}]},
     'cc': {'storage': [{'sym': 'a', 'scope': 'sound', 'bits': 3, 'lock': True, 'cc': True},
                        {'sym': 'b', 'scope': 'sound', 'bits': 3, 'lock': True, 'cc': False}]},

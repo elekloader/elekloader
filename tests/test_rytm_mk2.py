@@ -132,9 +132,13 @@ def test_core_ar2_sites():
         a, want = int(s['addr'], 16), bytes.fromhex(s['stock'])
         assert img[a - DEV.main_load:a - DEV.main_load + len(want)] == want, s
         if s['op'] == 'ptr':            # data: the sound set's vtable entries, not code: +76
-            # (0.8, the slot id) and +60..+72 (0.8, the lock get, set, clear and turn)
-            ptrs = {76: 0x400a86dc, 60: 0x400a98b4, 64: 0x400a9926, 68: 0x400a99c2, 72: 0x400a8560}
-            assert a - 0x401dce24 in ptrs and want == ptrs[a - 0x401dce24].to_bytes(4, 'big'), s
+            # (0.8, the slot id) and +60..+72 (0.8, the lock get, set, clear and turn); and from
+            # 0.9 the FX set's (vtable 0x401dcea0), the same five
+            ptrs = {0x401dce24 + o: v for o, v in
+                    ((76, 0x400a86dc), (60, 0x400a98b4), (64, 0x400a9926), (68, 0x400a99c2), (72, 0x400a8560))}
+            ptrs.update({0x401dcea0 + o: v for o, v in
+                         ((76, 0x400a870c), (60, 0x400a9a26), (64, 0x400a9a98), (68, 0x400a9b0e), (72, 0x400a8560))})
+            assert a in ptrs and want == ptrs[a].to_bytes(4, 'big'), s
             continue
         ok, note = elemod.insn_check(img, a, len(want), DEV)
         assert ok, (s, note)
@@ -190,8 +194,13 @@ def test_core_ar2_sites():
     # the 10 view sites, the step and the FX keep, 0.7's OS upgrade restart, the 13 lock
     # sites (0.8), the 18 lock row sites (0.8), the 7 scene and performance sites (0.8)
     # and the NRPN and CC in sites (0.8), and the engine push's velocity and
-    # aftertouch index sites and the routes' knob label (0.9)
-    assert len(mod['sites']) == 100
+    # aftertouch index sites and the routes' knob label (0.9), the FX set's five vtable entries,
+    # the FX words' save and the FX and sound edits' write into the stored kit (0.9)
+    assert len(mod['sites']) == 108
+    for t, addr, was in (('st_fx_through', 0x400a5692, '4fefffc448d73c1c'),
+                         ('st_sound_through', 0x400bd412, '4fefffbc48d77c3c')):
+        x = [x for x in mod['sites'] if x.get('target') == t][0]
+        assert x['op'] == 'jmp' and int(x['addr'], 16) == addr and x['stock'] == was, x
     # 0.9: each index site is the route's code load and its add, 6 bytes,
     # rejoining at the index's store
     for addr, target, want in ((0x4011f6b2, 'core_vel_index', '7729006fd680'),
@@ -249,7 +258,8 @@ def test_core_ar2_sites():
                     0x401dce60: ('ptr', 'core_lock_get_vt', '400a98b4'),
                     0x401dce64: ('ptr', 'core_lock_set_vt', '400a9926'),
                     0x401dce68: ('ptr', 'core_lock_clear_vt', '400a99c2'),
-                    0x401dce6c: ('ptr', 'core_lock_turn_vt', '400a8560')}, rows
+                    0x401dce6c: ('ptr', 'core_lock_turn_vt', '400a8560'),
+                    0x401dcee8: ('ptr', 'core_lock_turn_vt', '400a8560')}, rows   # the FX set's turn (0.9)
     for a, (_op, _t, b) in rows.items():
         assert img[a - DEV.main_load:a - DEV.main_load + len(b) // 2] == bytes.fromhex(b), hex(a)
     # scenes and performances (0.8): a knob's turn and push on a parameter
@@ -279,7 +289,8 @@ def test_core_ar2_sites():
     sub = {x['event']: x for x in mod['subscribe']}
     assert sub['ev_render_in']['fn'] == 'core_load_in' and sub['ev_render_in']['order'] == 0
     assert sub['ev_render_out']['fn'] == 'core_load_out' and sub['ev_render_out']['order'] == 100
-    assert len([x for x in mod['sites'] if x.get('target', '').startswith('st_')]) == 32
+    # mod storage's own sites, with the FX and sound edits' writes into the stored kit (0.9)
+    assert len([x for x in mod['sites'] if x.get('target', '').startswith('st_')]) == 34
 
 
 

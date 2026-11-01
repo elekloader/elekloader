@@ -6,7 +6,7 @@
         .globl  st_sound_save_body, st_sound_load_body, st_pat_save_body, st_pat_load_body
         .globl  st_kit_save_body, st_kit_load_body, st_glob_save_body, st_glob_load_body
         .globl  st_pat_init_body, st_track_init_body, st_sound_init_body, st_proj_init_body
-        .globl  st_proj_load_body
+        .globl  st_proj_load_body, st_fx_through_body, st_sound_through_body
         .align  2
 st_sound_save_body:                     | 0x4000843a
         lea     -24(%sp),%sp
@@ -28,6 +28,14 @@ st_kit_save_body:                       | 0x400088d6
         lea     -28(%sp),%sp
         movem.l %d2-%d4/%a2-%a5,(%sp)
         jmp     0x400088de
+st_fx_through_body:                     | 0x400a5692
+        lea     -60(%sp),%sp
+        movem.l %d2-%d4/%a2-%a5,(%sp)
+        jmp     0x400a569a
+st_sound_through_body:                  | 0x400bd412
+        lea     -68(%sp),%sp
+        movem.l %d2-%d5/%a2-%a6,(%sp)
+        jmp     0x400bd41a
 st_kit_load_body:                       | 0x4000863e
         lea     -36(%sp),%sp
         movem.l %d2-%d5/%a2-%a6,(%sp)

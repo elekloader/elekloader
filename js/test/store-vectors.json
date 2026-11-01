@@ -13687,7 +13687,7 @@
     "freed_codes": [],
     "next_code": 43
    },
-   "error": "lockfile: a code for a field that is not a placed sound field"
+   "error": "lockfile: a code for a field that is not a placed sound or kit field"
   },
   "cc not in the pool": {
    "lock": {
@@ -13885,6 +13885,62 @@
      }
     ]
    }
+  },
+  "kit cc taken": {
+   "lock": {
+    "elekloader_store": 1,
+    "device": "analog-rytm-mk2",
+    "id": "0x828a73b9",
+    "ancestors": [],
+    "split": {
+     "track": 2,
+     "pattern": 4
+    },
+    "generation": {
+     "sound": 1,
+     "kit": 1,
+     "global": 1,
+     "track": 1,
+     "pattern": 1,
+     "project": 1
+    },
+    "next": {
+     "sound": 0,
+     "kit": 4,
+     "global": 0,
+     "track": 0,
+     "pattern": 0,
+     "project": 0
+    },
+    "fields": [
+     {
+      "mod": "a",
+      "sym": "x",
+      "scope": "kit",
+      "offset": 0,
+      "bits": 4
+     }
+    ],
+    "freed": [],
+    "codes": [
+     {
+      "mod": "a",
+      "sym": "x",
+      "code": 42
+     }
+    ],
+    "freed_codes": [],
+    "next_code": 43,
+    "ccs": [
+     {
+      "mod": "a",
+      "sym": "x",
+      "cc": 84
+     }
+    ],
+    "freed_ccs": []
+   },
+   "error": "lockfile: a kit field with a CC stock uses on the FX channel"
   },
   "random id": {
    "lock": {
@@ -14094,11 +14150,57 @@
       "sym": "a",
       "scope": "kit",
       "bits": 3,
+      "lock": true,
+      "cc": true,
+      "lfo": true
+     }
+    ]
+   },
+   "ok": [
+    [
+     "a",
+     "kit",
+     3
+    ]
+   ],
+   "locks": [
+    "a"
+   ],
+   "ccs": [
+    "a"
+   ],
+   "lfos": [
+    "a"
+   ],
+   "rough": [],
+   "routes": []
+  },
+  "lock global": {
+   "doc": {
+    "storage": [
+     {
+      "sym": "a",
+      "scope": "global",
+      "bits": 3,
       "lock": true
      }
     ]
    },
-   "error": "storage field 'a': only sound fields can be lockable"
+   "error": "storage field 'a': only sound and kit fields can be lockable"
+  },
+  "mod kit": {
+   "doc": {
+    "storage": [
+     {
+      "sym": "a",
+      "scope": "kit",
+      "bits": 3,
+      "lock": true,
+      "mod": true
+     }
+    ]
+   },
+   "error": "storage field 'a': a kit field (the FX track's) cannot be a velocity or aftertouch destination: the FX track has no routes"
   },
   "lock type": {
    "doc": {

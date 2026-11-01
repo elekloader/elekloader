@@ -57,7 +57,8 @@ core_id_slot:
 | the LFO destinations, and from 0.9 in the velocity and aftertouch lists
 | (0x200) the "mod" ones, whose routes core's apply sites take out of the
 | audio side's parameter table (routes.c), where a code above 41 would be
-| another track's parameter.
+| another track's parameter. From 0.9 the FX set (its +76 core's FX one)
+| gets the kit parameters with LFO in the FX LFO's list.
 core_dst_list_end:
         move.l  32(%sp),%d0
         and.l   #0x600,%d0
@@ -65,11 +66,17 @@ core_dst_list_end:
         move.l  (%a4),%a0
         move.l  76(%a0),%d1
         cmp.l   #core_dst_slot_id,%d1
+        beq.s   2f
+        cmp.l   #core_fx_slot_id,%d1
         bne.s   1f
+        moveq   #1,%d1
+        bra.s   3f
+2:      moveq   #0,%d1
+3:      move.l  %d1,-(%sp)
         move.l  %d0,-(%sp)
         move.l  %a2,-(%sp)
         jsr     core_dst_append
-        addq.l  #8,%sp
+        lea     12(%sp),%sp
 1:      move.l  %a2,%d0
         movem.l (%sp),%a2-%a6
         lea     24(%sp),%sp

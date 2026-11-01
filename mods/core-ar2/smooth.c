@@ -6,7 +6,8 @@
  * lockable parameter (lock.c), in 8.8 steps of the field, in stock's order
  * (the audio interrupt, 0x40120d26 onwards):
  *
- *   1. the target: the sound's value in the kit the audio side plays; the
+ *   1. the target: the sound's value in the kit the audio side plays (on
+ *      the FX track, track 12, a kit parameter's value in that kit); the
  *      playing trig's p-lock (core_lock_value) in its place; the active
  *      scene's lock (core_scene_value) in place of that;
  *   2. smoothed with stock's own one-pole, s = 0.030 t + 0.970 s a block
@@ -47,6 +48,7 @@ int core_lock_min(const struct core_lock_param *p);
 int core_lock_max(const struct core_lock_param *p);
 int core_lock_code(unsigned field);
 int core_lock_value(int track, unsigned field);
+int core_lock_on_track(const struct core_lock_param *p, int track);
 int core_scene_value(int track, unsigned field);
 int core_perf_offset(int track, unsigned field);
 int core_lfo_offset(int track, unsigned field);
@@ -135,14 +137,14 @@ int core_param_value_ex(int track, unsigned field, unsigned flags)
     const struct core_lock_param *p = core_lock_by_code(code);
     const unsigned char *s;
     unsigned slot;
-    if (!p || (unsigned)track >= TRACKS)
-        return NONE;
+    if (!core_lock_on_track(p, track))
+        return NONE;                          /* a kit parameter on the FX track, a sound's on a drum track */
     if (!flags_made)
         make();
     min = core_lock_min(p);
     max = core_lock_max(p);
-    if (track >= 12 || !(s = core_audio_sound(track)))
-        return NONE;                          /* the FX track: core-ar2 0.9's FX item */
+    if (!(s = core_audio_sound(track)))       /* the sound, or on the FX track the kit */
+        return NONE;
     /* the target, in whole steps */
     v = core_store_get(field, (void *)s, 0);
     if ((off = core_lock_value(track, field)) >= 0)
