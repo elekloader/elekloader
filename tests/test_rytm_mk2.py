@@ -190,8 +190,8 @@ def test_core_ar2_sites():
     # the 10 view sites, the step and the FX keep, 0.7's OS upgrade restart, the 13 lock
     # sites (0.8), the 18 lock row sites (0.8), the 7 scene and performance sites (0.8)
     # and the NRPN and CC in sites (0.8), and the engine push's velocity and
-    # aftertouch index sites (0.9)
-    assert len(mod['sites']) == 99
+    # aftertouch index sites and the routes' knob label (0.9)
+    assert len(mod['sites']) == 100
     # 0.9: each index site is the route's code load and its add, 6 bytes,
     # rejoining at the index's store
     for addr, target, want in ((0x4011f6b2, 'core_vel_index', '7729006fd680'),
@@ -199,6 +199,10 @@ def test_core_ar2_sites():
         x = [x for x in mod['sites'] if x.get('target') == target][0]
         assert (int(x["addr"], 16), x["op"], x["stock"]) == (addr, "jmp", want), x
         assert img[addr - DEV.main_load:addr + 6 - DEV.main_load].hex() == want, x
+    x = [x for x in mod['sites'] if x.get('target') == 'core_route_label'][0]
+    assert (x['addr'], x['op']) == ('0x4004b81a', 'jmp'), x
+    assert img[0x4004b81a - DEV.main_load:0x4004b82a - DEV.main_load].hex() == x['stock'] == \
+        '2f06' '4eb940006eca' '2f00' '4eb940007296', x
     lock = {int(x['addr'], 16): (x['op'], x['target']) for x in mod['sites']
             if x.get('target') in ('core_lfo_apply', 'core_id_slot', 'core_dst_list_end', 'core_dst_label',
                                    'core_dst_text', 'core_dst_slot_id', 'core_rand_param', 'core_reload',

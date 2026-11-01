@@ -637,7 +637,7 @@ above 0.
 
 ## Velocity and aftertouch destinations (0.9)
 
-`routes.c` and `routes.s`, two sites (docs/ADAPTING.md, "Lockable
+`routes.c` and `routes.s`, three sites (docs/ADAPTING.md, "Lockable
 parameters", Velocity and aftertouch destination; the trace is the
 knowledge base's core-ar2 0.9 note). A lockable field declared `"mod":
 true` has 0x400 in its code in `core_lock_codes`.
@@ -646,7 +646,10 @@ true` has 0x400 in its code in `core_lock_codes`.
   list builder (0x400aa280) with kind 0x200, the LFO's with 0x600.
   `core_dst_list_end` (lock.s) appends the LFO destinations when 0x400 is
   set and, from 0.9, the `"mod"` ones when only 0x200 is; their pseudo ids,
-  names and slot (the code) are lock.c's, as for the LFO.
+  names and slot (the code) are lock.c's, as for the LFO. The views draw a
+  route's knob from the id's record (0x4004b7f2: record 0, ERR, for an id
+  above 468); `core_route_label` (0x4004b81a) gives a pseudo id's knob its
+  category (MOD when it has none) and short name instead.
 - **Save and load.** A route's destination byte goes through 0x40007602 on
   save and 0x400075c8 on load with track 0, which 0.8's `core_code_id` and
   `core_id_code` already pass for 42..127: the code stays itself with no
@@ -667,6 +670,23 @@ true` has 0x400 in its code in `core_lock_codes`.
   for aftertouch 0x800067de[t]. `core_mod_offset` sums g × amount >> 15 over
   the track's routes to the field's code, in 8.8 steps of a 0..127 knob;
   `core_param_value` adds it after the smoother, scaled as the LFO's.
+
+Checked in the emulator only (analog-emu from the PC copy, OS 1.74, 1 Nov
+2026), with [lock-check 1.8](../../examples/lock-check-ar2) (A and C
+`"mod"`, B and D not): both lists end with Lock Check A and C; a knob turned
+to C and YES writes code 44 in the route's byte and the knob reads LCHK /
+LCC; the push gives the route index 25, amount 0, and `core_routes` holds
+{amount, 44}. With a velocity route at +64 and an aftertouch route at +16
+to C, a note at velocity 127 and channel pressure 64 give
+`core_param_value(C)` 144125, g × amount >> 15 for each summed (18304) and
+scaled by 1000 / 127, exactly; with a route at +127 to A, velocities 100
+and 64 give 25400 and 16256. The codes come back after a power-off save and
+a cold boot; stock 1.74 cold-booting the same card shows them as code 0
+(the unused route's META), with the amount kept. Not checked: a sound
+loaded with a code the build lacks (the scrub), kit save and reload,
+SysEx and Overbridge transfers, a unit, listening. The amounts here were
+written into the live sound (the emulator's knob path to the amount was
+not found); a poked amount is not saved by the power-off save.
 
 ## Checked so far
 

@@ -63,3 +63,30 @@ core_at_index:
         clr.w   -4(%a0)
         movea.w #25,%a1
         jmp     0x4011f6de
+
+| 0x4004b81a, a route's knob in the VELOCITY MOD and AFTERTOUCH views (the
+| destination's id in %d6, its short label already at 44(%sp), from record 0
+| for an id above 468): `move.l %d6,-(%sp); jsr 0x40006eca; move.l
+| %d0,-(%sp); jsr 0x40007296`, the id's category name, in %d0, with the two
+| arguments left on the stack for the caller's later pop. A pseudo id's knob
+| shows its category (MOD when it has none) and its short name, where stock
+| would show record 0's (ERR, ERR).
+        .globl  core_route_label
+core_route_label:
+        cmp.l   #469,%d6
+        bcs.s   1f
+        move.l  %d6,-(%sp)
+        jsr     core_pseudo_short
+        addq.l  #4,%sp
+        tst.l   %d0
+        beq.s   1f
+        move.l  %d0,44(%sp)
+        move.l  %d6,-(%sp)
+        jsr     core_pseudo_category
+        move.l  %d0,-(%sp)               | in place of stock's second argument
+        jmp     0x4004b82a
+1:      move.l  %d6,-(%sp)
+        jsr     0x40006eca
+        move.l  %d0,-(%sp)
+        jsr     0x40007296
+        jmp     0x4004b82a

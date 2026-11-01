@@ -1722,7 +1722,8 @@ What core does with it:
 - **Velocity and aftertouch destination** (core-ar2 0.9). A lockable field
   declared with `"mod": true` as well (a `"mod"` field must be lockable)
   is listed after stock's in each sound's VELOCITY MOD and AFTERTOUCH
-  lists, named there as in the DST menu; one flag covers both, as stock
+  lists, named there as in the DST menu, and a route to it shows its
+  category and short name on its knob; one flag covers both, as stock
   builds both lists with one routine. A route to it keeps the field's code
   in the route's own byte, which the sound's save and load already pass, so
   it takes no room; every route of a sound can take one. Stock's apply
