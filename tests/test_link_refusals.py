@@ -938,6 +938,37 @@ def test_a_field_declared_smooth_false_gets_smooth_off_in_its_code():
             raise AssertionError('"smooth" without "lock" was accepted')
 
 
+def test_a_field_declared_mod_gets_route_flag_in_its_code():
+    """"mod": true (core-ar2 0.9): the field is a velocity and aftertouch destination, and its code
+    carries ROUTE_FLAG in core_lock_codes, beside LFO_FLAG; "mod": false and no "mod" leave it out. The
+    flag is not stored data, so the layout is the same either way. "mod" without "lock" is refused."""
+    with Bench('analog-rytm-mk2') as B:
+        core = keeper(B)
+        core['collections']['core_lock_codes'] = {'entry': 8}
+        layouts = set()
+        for routed in (True, False, None):
+            a = {'sym': 'st_a', 'scope': 'sound', 'bits': 4, 'lock': True, 'lfo': True}
+            if routed is not None:
+                a['mod'] = routed
+            mod = B.other('m', storage=[a, {'sym': 'st_b', 'scope': 'sound', 'bits': 4, 'lock': True}])
+            m = link.Mod2(mod, 'm')
+            out = link.link([link.Mod2(d, d['id']) for d in (copy.deepcopy(core), mod)], B.img)
+            codes = {(c['mod'], c['sym']): c['code'] for c in out.store['codes']}
+            entries = sorted(int.from_bytes(e[4:], 'big')
+                             for e in store.code_entries(out.store, [('m', 'st_a')], (), [('m', x) for x in m.routes]))
+            want = codes[('m', 'st_a')] | store.LFO_FLAG | (store.ROUTE_FLAG if routed else 0)
+            assert entries == sorted([want, codes[('m', 'st_b')]]), (routed, entries)
+            layouts.add(store.layout_id(out.store))
+        assert len(layouts) == 1, layouts
+        mod = B.other('m', storage=[{'sym': 'st_a', 'scope': 'sound', 'bits': 4, 'mod': True}])
+        try:
+            link.link([link.Mod2(d, d['id']) for d in (copy.deepcopy(core), mod)], B.img)
+        except ModError as e:
+            assert 'only a lockable field ("lock": true) can be a velocity or aftertouch destination' in str(e), e
+        else:
+            raise AssertionError('"mod" without "lock" was accepted')
+
+
 def test_the_image_check_refuses_a_protected_or_kept_byte_the_other_checks_let_through():
     """The checks that refuse a write to a protected or kept range run before the link. With them
     made to say nothing (as a bug in them would), the image check refuses the same site, so it

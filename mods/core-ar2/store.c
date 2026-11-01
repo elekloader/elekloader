@@ -450,6 +450,7 @@ extern char core_lfo_dst[];
 #define DST_NONE 41
 struct core_lock_param;
 const struct core_lock_param *core_lock_lfo(unsigned code);
+void core_routes_load(unsigned char *live, int ok);      /* routes.c, 0.9 */
 unsigned core_store_get(unsigned field, void *item, int index);
 void core_store_set(unsigned field, void *item, int index, unsigned value);
 
@@ -484,6 +485,7 @@ int st_sound_load(unsigned char *live, unsigned char *src)
         for (j = 0; j < SOUND_BYTES; j++)
             live[SOUND_HOME + sound_at(j)] =
                 ok ? src[j < 3 ? SOUND_SPARE + j : SOUND_SPARE2 + j - 3] : 0;
+        core_routes_load(live, ok);
         if (core_lfo_dst) {
             if (live[LIVE_DST] >= 42 && live[LIVE_DST] <= 127)
                 live[LIVE_DST] = 0;

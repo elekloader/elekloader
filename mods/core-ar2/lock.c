@@ -21,6 +21,11 @@
  *
  * and any of them, with a page id, gets RANDOMIZE PAGE and RELOAD PAGE on
  * its knob (lock.s), and its short name as the knob's label.
+ *
+ * core-ar2 0.9: one with ROUTE (0x400, "mod": true) set gets the same pseudo
+ * id in each sound's VELOCITY MOD and AFTERTOUCH lists, which stock builds
+ * with the same routine (kind 0x200); a route keeps the code in its own
+ * byte, and routes.c applies it.
  */
 
 #include <stdint.h>
@@ -29,6 +34,7 @@
 #define FIRST_CODE 42
 #define LAST_CODE 127
 #define LFO 0x100                             /* in core_lock_codes: an LFO destination */
+#define ROUTE 0x400                           /* in core_lock_codes: a velocity/aftertouch destination */
 #define SOUND_SLOT_ID ((int (*)(void *, int))0x400a86dc)   /* sound vtable +76, stock's */
 #define LIST_APPEND ((void (*)(void *, int *))0x40197a94)   /* (vector, &id) */
 #define RANDOM ((unsigned (*)(void))0x4002a6e0)   /* as stock's randomize uses */
@@ -57,6 +63,7 @@ volatile int16_t core_lfo_value[13];
 /* each code's parameter, made once, on the first ask */
 static const struct core_lock_param *by_code[LAST_CODE + 1];
 static unsigned char lfo_ok[LAST_CODE + 1];
+static unsigned char route_ok[LAST_CODE + 1];
 static volatile int made;
 
 /* and its strings, cut to what stock shows: stock draws a short name with a
@@ -89,6 +96,7 @@ static void make(void)
                 if ((*p)->field == c[0]) {
                     by_code[code] = *p;
                     lfo_ok[code] = !!(c[1] & LFO);
+                    route_ok[code] = !!(c[1] & ROUTE);
                     cut(shorts[code - FIRST_CODE], (*p)->short_name, SHORT_MAX);
                     cut(names[code - FIRST_CODE], (*p)->name, NAME_MAX);
                     cut(categories[code - FIRST_CODE], (*p)->category, CATEGORY_MAX);
@@ -108,6 +116,18 @@ static const struct core_lock_param *param(unsigned code)
 static const struct core_lock_param *lfo_param(unsigned code)
 {
     return param(code) && lfo_ok[code] ? by_code[code] : 0;
+}
+
+/* a velocity and aftertouch destination's parameter, or 0 */
+static const struct core_lock_param *route_param(unsigned code)
+{
+    return param(code) && route_ok[code] ? by_code[code] : 0;
+}
+
+/* a parameter that has a pseudo id: in some destination list */
+static const struct core_lock_param *listed_param(unsigned code)
+{
+    return lfo_param(code) ? by_code[code] : route_param(code);
 }
 
 int core_lock_code(unsigned field)
@@ -132,14 +152,14 @@ int core_lfo_offset(int track, unsigned field)
 static unsigned pseudo_code(int id)
 {
     unsigned code = id - PSEUDO + FIRST_CODE;
-    return id >= PSEUDO && lfo_param(code) ? code : 0;
+    return id >= PSEUDO && listed_param(code) ? code : 0;
 }
 
 /* sound vtable +76 (ptr site): a slot that is a mod parameter's code gives
  * its pseudo id, any other slot stock's id */
 int core_dst_slot_id(void *set, int slot)
 {
-    if (slot >= FIRST_CODE && slot <= LAST_CODE && lfo_param(slot))
+    if (slot >= FIRST_CODE && slot <= LAST_CODE && listed_param(slot))
         return PSEUDO + slot - FIRST_CODE;
     return SOUND_SLOT_ID(set, slot);
 }
@@ -153,12 +173,13 @@ int core_pseudo_slot(int id)
 }
 
 /* the destination list's end (lock.s), for a sound's parameter set: the mod
- * parameters, by code */
-void core_dst_append(void **list)
+ * parameters, by code; the LFO's list (kind 0x600, 0x400 set) those with
+ * LFO, the velocity and aftertouch lists (kind 0x200) those with ROUTE */
+void core_dst_append(void **list, unsigned kind)
 {
     int code, id;
     for (code = FIRST_CODE; code <= LAST_CODE; code++)
-        if (lfo_param(code)) {
+        if (kind & 0x400 ? lfo_param(code) != 0 : route_param(code) != 0) {
             id = PSEUDO + code - FIRST_CODE;
             LIST_APPEND(*list, &id);
         }
@@ -210,6 +231,13 @@ const struct core_lock_param *core_lock_by_id(int id, unsigned *code)
 const struct core_lock_param *core_lock_by_code(unsigned code)
 {
     return param(code);
+}
+
+/* for routes.c and store.c: a velocity and aftertouch destination's
+ * parameter, or 0 */
+const struct core_lock_param *core_lock_route(unsigned code)
+{
+    return route_param(code);
 }
 
 /* for store.c: an LFO destination's parameter, or 0 */

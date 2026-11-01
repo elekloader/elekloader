@@ -189,8 +189,16 @@ def test_core_ar2_sites():
     # mod storage's sites (core-ar2 0.3: 32 of the 40), the 4 page sites,
     # the 10 view sites, the step and the FX keep, 0.7's OS upgrade restart, the 13 lock
     # sites (0.8), the 18 lock row sites (0.8), the 7 scene and performance sites (0.8)
-    # and the NRPN and CC in sites (0.8)
-    assert len(mod['sites']) == 97
+    # and the NRPN and CC in sites (0.8), and the engine push's velocity and
+    # aftertouch index sites (0.9)
+    assert len(mod['sites']) == 99
+    # 0.9: each index site is the route's code load and its add, 6 bytes,
+    # rejoining at the index's store
+    for addr, target, want in ((0x4011f6b2, 'core_vel_index', '7729006fd680'),
+                                (0x4011f6d8, 'core_at_index', '752a008bd3c2')):
+        x = [x for x in mod['sites'] if x.get('target') == target][0]
+        assert (int(x["addr"], 16), x["op"], x["stock"]) == (addr, "jmp", want), x
+        assert img[addr - DEV.main_load:addr + 6 - DEV.main_load].hex() == want, x
     lock = {int(x['addr'], 16): (x['op'], x['target']) for x in mod['sites']
             if x.get('target') in ('core_lfo_apply', 'core_id_slot', 'core_dst_list_end', 'core_dst_label',
                                    'core_dst_text', 'core_dst_slot_id', 'core_rand_param', 'core_reload',

@@ -1,11 +1,11 @@
 {
  "id": "lock-check",
- "version": "1.7",
+ "version": "1.8",
  "title": "Lock check",
  "category": "Examples",
  "license": "GPL-2.0-or-later",
  "author": "Iced-Cream",
- "description": "The smallest user of core-ar2's lockable parameters (core 0.8): three lockable sound fields, LOCK CHECK A, B and C (0..1000, a value above 127); A and C are also LFO destinations and appear at the end of every sound's LFO destination list, B is not. A bar along the bottom of the screen shows the offset track 1's LFO gives A or C, from the middle. A LOCK CHECK page behind the LFO key shows A on knob A and C on knob B, for track 1's sound, so RANDOMIZE PAGE and RELOAD PAGE can be tried on it, and with a trig held its p-lock, which a second bar shows while the trig plays. From 1.6 a fourth field, D, an LFO destination whose short name, name and category are longer than core shows, to check core's cut; and two more bars for C: its value as the active scene and the performances leave it, and the lock of the trig track 1 plays. From 1.7 (core 0.9) B is declared \"smooth\": false, and every audio block it records core_param_value of A, B and C on track 1 with the targets of A and C in a ring of 512 blocks (lc_ring, after the magic SMCK), with what the three calls cost in DMA timer 0's ticks, for the emulator's checks of the smoothed value.",
+ "description": "The smallest user of core-ar2's lockable parameters (core 0.8): three lockable sound fields, LOCK CHECK A, B and C (0..1000, a value above 127); A and C are also LFO destinations and appear at the end of every sound's LFO destination list, B is not. A bar along the bottom of the screen shows the offset track 1's LFO gives A or C, from the middle. A LOCK CHECK page behind the LFO key shows A on knob A and C on knob B, for track 1's sound, so RANDOMIZE PAGE and RELOAD PAGE can be tried on it, and with a trig held its p-lock, which a second bar shows while the trig plays. From 1.6 a fourth field, D, an LFO destination whose short name, name and category are longer than core shows, to check core's cut; and two more bars for C: its value as the active scene and the performances leave it, and the lock of the trig track 1 plays. From 1.7 (core 0.9) B is declared \"smooth\": false, and every audio block it records core_param_value of A, B and C on track 1 with the targets of A and C in a ring of 512 blocks (lc_ring, after the magic SMCK), with what the three calls cost in DMA timer 0's ticks, for the emulator's checks of the smoothed value. From 1.8 A and C are also declared \"mod\": true, so they end every sound's VELOCITY MOD and AFTERTOUCH lists, and the ring's values of A and C carry what a route to them adds (core_mod_offset), B is not.",
  "device": "analog-rytm-mk2",
  "os": "1.74",
  "sources": [
@@ -21,7 +21,8 @@
    "bits": 7,
    "lock": true,
    "cc": true,
-   "lfo": true
+   "lfo": true,
+   "mod": true
   },
   {
    "sym": "lc_b",
@@ -36,7 +37,8 @@
    "bits": 10,
    "lock": true,
    "cc": true,
-   "lfo": true
+   "lfo": true,
+   "mod": true
   },
   {
    "sym": "lc_d",

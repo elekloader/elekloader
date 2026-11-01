@@ -92,6 +92,7 @@ export class Mod2 implements AnyMod {
   ccs: string[]
   lfos: string[]
   rough: string[]
+  routes: string[]
   regions: Region[]
   names: string[]
   needsCore: string | null
@@ -196,6 +197,7 @@ export class Mod2 implements AnyMod {
       this.ccs = store.parseCcs(doc)
       this.lfos = store.parseLfos(doc)
       this.rough = store.parseRough(doc)
+      this.routes = store.parseRoutes(doc)
     } catch (e) {
       if (e instanceof ModError) throw new ModError(`${name}: ${e.message}`)
       throw e
@@ -680,6 +682,7 @@ export function link(mods: Mod2[], image: Uint8Array, lock: store.Lock | null = 
     }
     const lfos = order.flatMap(m => m.lfos.map(sym => [m.id, sym] as [string, string]))
     const rough = order.flatMap(m => m.rough.map(sym => [m.id, sym] as [string, string]))
+    const routes = order.flatMap(m => m.routes.map(sym => [m.id, sym] as [string, string]))
     if (lfos.length && core.imports.includes(store.LOCK_DST) && store.lockDstBits(dev.key))
       // the core keeps a code as an LFO destination
       decls.push([core.id, store.LOCK_DST, 'sound', store.lockDstBits(dev.key)])
@@ -692,7 +695,7 @@ export function link(mods: Mod2[], image: Uint8Array, lock: store.Lock | null = 
     let ids: Uint8Array[]
     ;[storeSyms, ids] = store.symbols(newLock)
     if (!storeSyms.has(store.LOCK_DST)) storeSyms.set(store.LOCK_DST, 0)    // not placed: no LFO field
-    for (const [table, made] of [[store.CODES_TABLE, (l: store.Lock) => store.codeEntries(l, lfos, rough)], [store.CCS_TABLE, store.ccEntries]] as const)
+    for (const [table, made] of [[store.CODES_TABLE, (l: store.Lock) => store.codeEntries(l, lfos, rough, routes)], [store.CCS_TABLE, store.ccEntries]] as const)
       if (tables.has(table))
         made(newLock).forEach((data, i) => entries.get(table)!.push([-1, '', i, core, { to: table, order: -1, data, relocs: [], claims: [], i }]))
     const taken = new Set(order.flatMap(m => m.exports))

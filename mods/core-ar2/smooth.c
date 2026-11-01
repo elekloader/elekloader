@@ -11,10 +11,11 @@
  *      scene's lock (core_scene_value) in place of that;
  *   2. smoothed with stock's own one-pole, s = 0.030 t + 0.970 s a block
  *      (0x03d7 and 0x7c29 of 0x8000, 0x40120d26): 90% of a step in 50 ms;
- *   3. then, unsmoothed, the performances (core_perf_offset) and the LFO
- *      (core_lfo_offset, scaled from a 0..127 knob's steps to the field's
- *      range; core_param_value_ex with CORE_PARAM_LFO_RAW adds it as it
- *      is), and clamped to min..max.
+ *   3. then, unsmoothed, the performances (core_perf_offset), the velocity
+ *      and aftertouch routes (core_mod_offset, routes.c) and the LFO
+ *      (core_lfo_offset), the last two scaled from a 0..127 knob's steps to
+ *      the field's range (core_param_value_ex with CORE_PARAM_MOD_RAW or
+ *      CORE_PARAM_LFO_RAW adds one as it is), and clamped to min..max.
  *
  * A field declared "smooth": false (SMOOTH_OFF in core_lock_codes) skips 2:
  * a type or a mode jumps.
@@ -49,6 +50,7 @@ int core_lock_value(int track, unsigned field);
 int core_scene_value(int track, unsigned field);
 int core_perf_offset(int track, unsigned field);
 int core_lfo_offset(int track, unsigned field);
+int core_mod_offset(int track, unsigned field);
 const unsigned char *core_audio_sound(int track);
 unsigned core_store_get(unsigned field, void *item, int index);
 
@@ -125,10 +127,11 @@ static int32_t step(struct state *st, int32_t t)
 }
 
 #define LFO_RAW 1                             /* core_param_value_ex: the LFO's offset as it is */
+#define MOD_RAW 2                             /* and the velocity and aftertouch routes' */
 
 int core_param_value_ex(int track, unsigned field, unsigned flags)
 {
-    int code = core_lock_code(field), v, min, max, off, lfo;
+    int code = core_lock_code(field), v, min, max, off, lfo, mod;
     const struct core_lock_param *p = core_lock_by_code(code);
     const unsigned char *s;
     unsigned slot;
@@ -154,6 +157,8 @@ int core_param_value_ex(int track, unsigned field, unsigned flags)
         v *= 256;
     /* the modulations, after the smoother as stock adds them */
     v += core_perf_offset(track, field);
+    if ((mod = core_mod_offset(track, field)) != 0)
+        v += flags & MOD_RAW ? mod : mod * (max - min) / 127;
     if ((lfo = core_lfo_offset(track, field)) != 0)
         v += flags & LFO_RAW ? lfo : lfo * (max - min) / 127;
     min *= 256;

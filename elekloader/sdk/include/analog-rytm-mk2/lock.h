@@ -85,13 +85,24 @@ int core_scene_value(int track, unsigned field);
  * mod adds it to the value it uses, as it adds core_lfo_offset. */
 int core_perf_offset(int track, unsigned field);
 
+/* core-ar2 0.9: the offset the sound's velocity and aftertouch routes give
+ * the field on drum track (0..11) now, in 8.8 steps of a stock 0..127 knob
+ * (one step is 256), or 0 when no route is to it: each route's amount times
+ * the trig's velocity or the pressure, as stock adds a route's to a stock
+ * parameter. A field declared "mod": true (and "lock": true) is listed at
+ * the end of each sound's VELOCITY MOD and AFTERTOUCH lists; a route to it
+ * keeps the field's lock code in its own byte. Audio side, like
+ * core_lfo_offset; the mod scales it to its own range and adds it. */
+int core_mod_offset(int track, unsigned field);
+
 /* core-ar2 0.9: the value stock would play for the lockable field on drum
  * track (0..11) now, in 8.8 steps of the field (one step is 256), clamped to
  * min..max. Its target is the sound's value in the kit the audio side plays,
  * the trig's p-lock (core_lock_value) in its place, and the active scene's
  * lock (core_scene_value) in place of that; the target is smoothed with
  * stock's own one-pole (90% of a step in 50 ms, 99% in 100 ms), and the
- * performances (core_perf_offset) and the LFO (core_lfo_offset, scaled from a
+ * performances (core_perf_offset), the velocity and aftertouch routes
+ * (core_mod_offset) and the LFO (core_lfo_offset; these two scaled from a
  * 0..127 knob's steps to min..max) are added after it, unsmoothed, as stock
  * adds them to its own parameters. A field declared "smooth": false jumps to
  * its target. Audio side only (ev_render_in, ev_render_out, a mod's engine
@@ -104,6 +115,9 @@ int core_param_value(int track, unsigned field);
  * LFO's offset as core_lfo_offset gives it (8.8 steps of a 0..127 knob), not
  * scaled to min..max, for a mod that wants a stock knob's swing. */
 #define CORE_PARAM_LFO_RAW 1
+/* and CORE_PARAM_MOD_RAW the velocity and aftertouch routes' offset as
+ * core_mod_offset gives it */
+#define CORE_PARAM_MOD_RAW 2
 int core_param_value_ex(int track, unsigned field, unsigned flags);
 
 /* core-ar2 0.9: core_param_value rounded to whole steps (CORE_PARAM_NONE as

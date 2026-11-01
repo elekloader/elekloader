@@ -635,6 +635,39 @@ adds one before any mod's handler. The state is 13 tracks × 32 parameters
 without walking the kit's 48 entries while no performance's pressure is
 above 0.
 
+## Velocity and aftertouch destinations (0.9)
+
+`routes.c` and `routes.s`, two sites (docs/ADAPTING.md, "Lockable
+parameters", Velocity and aftertouch destination; the trace is the
+knowledge base's core-ar2 0.9 note). A lockable field declared `"mod":
+true` has 0x400 in its code in `core_lock_codes`.
+
+- **The lists.** VELOCITY MOD and AFTERTOUCH are built by the destination
+  list builder (0x400aa280) with kind 0x200, the LFO's with 0x600.
+  `core_dst_list_end` (lock.s) appends the LFO destinations when 0x400 is
+  set and, from 0.9, the `"mod"` ones when only 0x200 is; their pseudo ids,
+  names and slot (the code) are lock.c's, as for the LFO.
+- **Save and load.** A route's destination byte goes through 0x40007602 on
+  save and 0x400075c8 on load with track 0, which 0.8's `core_code_id` and
+  `core_id_code` already pass for 42..127: the code stays itself with no
+  further site. After a sound's load (store.c), `core_routes_load` makes a
+  route to a code above 41 that is not a `"mod"` parameter of this build,
+  or any in a sound of another layout, code 0 with amount 0, keeping a
+  velocity route's amount low byte (route.s, mod storage).
+- **The apply.** The engine push (0x4011f60a) writes each drum track's 8
+  entries {s16 amount, s16 index} at 0x8000ea3c + 0x20 t, index =
+  t × 42 + 26 + code. `core_vel_index` (0x4011f6b2) and `core_at_index`
+  (0x4011f6d8) take each route's code there: up to 41 stock's add; above,
+  the entry gets index 25 and amount 0 (stock's empty entry, as its scene
+  and performance builds give it) and core keeps {amount, code} in
+  `core_routes`, laid out as the entries. The audio interrupt adds
+  g × amount to each entry's word (0x4011de2a, EMAC fractional: 2 g a, high
+  half); g is, for velocity, the track's engine word 39 when bit 3 of
+  0x8000e53c + 4t is set, plus 0x800067c4[t], saturated (0x40120f10), and
+  for aftertouch 0x800067de[t]. `core_mod_offset` sums g × amount >> 15 over
+  the track's routes to the field's code, in 8.8 steps of a 0..127 knob;
+  `core_param_value` adds it after the smoother, scaled as the LFO's.
+
 ## Checked so far
 
 On a unit (OS 1.73). With test images built by rytm-mods-src (its `elemod`

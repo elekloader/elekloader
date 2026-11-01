@@ -95,6 +95,13 @@ value as stock smooths its own; a lockable field declared `"smooth": false`
 jumps (a type, a mode). Its code has SMOOTH_OFF set in core_lock_codes. Like
 LFO_FLAG it is not stored data, so it is not part of the layout ID.
 
+Velocity and aftertouch destinations (core-ar2 0.9). A lockable field
+declared `"mod": true` is also a destination in each sound's VELOCITY MOD and
+AFTERTOUCH lists (one flag for both: stock builds them with one routine). A
+route keeps its destination as a code in its own byte, which the core's
+code-to-file hook already passes, so the field needs no room. Its code has
+ROUTE_FLAG set in core_lock_codes; not stored data either.
+
 Nothing here is random: the same lockfile (or none) and mods always link to
 the same bytes.
 """
@@ -117,6 +124,7 @@ CCS_TABLE = 'core_lock_ccs'
 LOCK_DST = 'core_lfo_dst'
 LFO_FLAG = 0x100                                # in core_lock_codes: the field is an LFO destination
 SMOOTH_OFF = 0x200                              # in core_lock_codes: the field's value jumps (core-ar2 0.9)
+ROUTE_FLAG = 0x400                              # in core_lock_codes: a velocity/aftertouch destination (core-ar2 0.9)
 FIRST_CODE, LAST_CODE = 42, 127
 LOCK_SCOPES = ('sound',)
 
@@ -217,6 +225,12 @@ def parse_rough(m):
     return [f['sym'] for f in m.get('storage', []) if isinstance(f, dict) and f.get('smooth') is False]
 
 
+def parse_routes(m):
+    """A mod document's "storage" -> the syms of its fields declared "mod": true (velocity and aftertouch
+    destinations), in order."""
+    return [f['sym'] for f in m.get('storage', []) if isinstance(f, dict) and f.get('mod') is True]
+
+
 def parse_ccs(m):
     """A mod document's "storage" -> the syms of its fields with a CC, in order."""
     return [f['sym'] for f in m.get('storage', []) if isinstance(f, dict) and f.get('cc') is True]
@@ -229,9 +243,9 @@ def parse_decls(m):
     if not isinstance(st, list):
         raise ModError('"storage" is a list of fields')
     for f in st:
-        if not isinstance(f, dict) or set(f) - {'sym', 'scope', 'bits', 'lock', 'cc', 'lfo', 'smooth'}:
+        if not isinstance(f, dict) or set(f) - {'sym', 'scope', 'bits', 'lock', 'cc', 'lfo', 'smooth', 'mod'}:
             raise ModError('a storage field is {"sym", "scope", "bits"}, and "lock" for a lockable one')
-        for k in ('lock', 'cc', 'lfo', 'smooth'):
+        for k in ('lock', 'cc', 'lfo', 'smooth', 'mod'):
             if k in f and not isinstance(f[k], bool):
                 raise ModError('storage field %r: "%s" is true or false' % (f.get('sym'), k))
         if f.get('cc') and not f.get('lock'):
@@ -240,6 +254,9 @@ def parse_decls(m):
         if f.get('lfo') and not f.get('lock'):
             raise ModError('storage field %r: only a lockable field ("lock": true) can be an LFO destination'
                            % (f.get('sym'),))
+        if f.get('mod') and not f.get('lock'):
+            raise ModError('storage field %r: only a lockable field ("lock": true) can be a velocity or aftertouch '
+                           'destination' % (f.get('sym'),))
         if 'smooth' in f and not f.get('lock'):
             raise ModError('storage field %r: only a lockable field ("lock": true) is smoothed'
                            % (f.get('sym'),))
@@ -630,16 +647,17 @@ def symbols(lock, dev_key):
     return out, [i.to_bytes(4, 'big') for i in ids]
 
 
-def code_entries(lock, lfos=(), rough=()):
+def code_entries(lock, lfos=(), rough=(), routes=()):
     """-> the table core_lock_codes' entries: {field descriptor, code}, 8 bytes
     each, by code; the code of a field in lfos ((mod, sym)) has LFO_FLAG set,
-    of one in rough SMOOTH_OFF."""
+    of one in rough SMOOTH_OFF, of one in routes ROUTE_FLAG."""
     desc = {(f['mod'], f['sym']): SCOPE_NUM[f['scope']] << 28 | f['bits'] << 22 | f['offset']
             for f in lock['fields']}
-    lfos, rough = set(lfos), set(rough)
+    lfos, rough, routes = set(lfos), set(rough), set(routes)
     return [desc[(c['mod'], c['sym'])].to_bytes(4, 'big')
             + (c['code'] | (LFO_FLAG if (c['mod'], c['sym']) in lfos else 0)
-               | (SMOOTH_OFF if (c['mod'], c['sym']) in rough else 0)).to_bytes(4, 'big')
+               | (SMOOTH_OFF if (c['mod'], c['sym']) in rough else 0)
+               | (ROUTE_FLAG if (c['mod'], c['sym']) in routes else 0)).to_bytes(4, 'big')
             for c in lock.get('codes', [])]
 
 

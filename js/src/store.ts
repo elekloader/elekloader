@@ -14,6 +14,8 @@
 // A lockable field declared with "lfo": true is also an LFO destination: its code has LFO_FLAG in core_lock_codes, and
 // a build with one places the core's own field core_lfo_dst. A lockable field declared with "smooth": false jumps where the
 // core smooths the others (core-ar2 0.9): its code has SMOOTH_OFF in core_lock_codes, not part of the layout ID either.
+// A lockable field declared with "mod": true is also a velocity and aftertouch destination (core-ar2 0.9): its code has
+// ROUTE_FLAG in core_lock_codes, and a route keeps the code in its own byte, so it needs no room.
 // Nothing here is random.
 import { sha } from './bytes.ts'
 import { ModError, cmpVersions, int } from './elemod.ts'
@@ -32,6 +34,7 @@ export const CCS_TABLE = 'core_lock_ccs'
 export const LOCK_DST = 'core_lfo_dst'
 export const LFO_FLAG = 0x100                  // in core_lock_codes: the field is an LFO destination
 export const SMOOTH_OFF = 0x200                // in core_lock_codes: the field's value jumps (core-ar2 0.9)
+export const ROUTE_FLAG = 0x400                // in core_lock_codes: a velocity/aftertouch destination (core-ar2 0.9)
 const FIRST_CODE = 42, LAST_CODE = 127
 const LOCK_SCOPES = ['sound']
 
@@ -136,6 +139,13 @@ export function parseRough(m: Record<string, any>): string[] {
   return st.filter((f: unknown) => isDict(f) && f.smooth === false).map((f: Record<string, any>) => f.sym)
 }
 
+/** A mod document's "storage" -> the syms of its fields declared "mod": true (velocity and aftertouch destinations), in
+ * order. */
+export function parseRoutes(m: Record<string, any>): string[] {
+  const st = Object.hasOwn(m, 'storage') && Array.isArray(m.storage) ? m.storage : []
+  return st.filter((f: unknown) => isDict(f) && f.mod === true).map((f: Record<string, any>) => f.sym)
+}
+
 /** A mod document's "storage" -> the syms of its fields with a CC, in order. */
 export function parseCcs(m: Record<string, any>): string[] {
   const st = Object.hasOwn(m, 'storage') && Array.isArray(m.storage) ? m.storage : []
@@ -149,15 +159,17 @@ export function parseDecls(m: Record<string, any>): [string, string, number][] {
   const st = Object.hasOwn(m, 'storage') ? m.storage : []
   if (!Array.isArray(st)) throw new ModError('"storage" is a list of fields')
   for (const f of st) {
-    if (!isDict(f) || Object.keys(f).some(k => !['sym', 'scope', 'bits', 'lock', 'cc', 'lfo', 'smooth'].includes(k)))
+    if (!isDict(f) || Object.keys(f).some(k => !['sym', 'scope', 'bits', 'lock', 'cc', 'lfo', 'smooth', 'mod'].includes(k)))
       throw new ModError('a storage field is {"sym", "scope", "bits"}, and "lock" for a lockable one')
-    for (const k of ['lock', 'cc', 'lfo', 'smooth'])
+    for (const k of ['lock', 'cc', 'lfo', 'smooth', 'mod'])
       if (Object.hasOwn(f, k) && typeof f[k] !== 'boolean')
         throw new ModError(`storage field ${repr(Object.hasOwn(f, 'sym') ? f.sym : null)}: "${k}" is true or false`)
     if (f.cc && !f.lock)
       throw new ModError(`storage field ${repr(Object.hasOwn(f, 'sym') ? f.sym : null)}: only a lockable field ("lock": true) can have a CC`)
     if (f.lfo && !f.lock)
       throw new ModError(`storage field ${repr(Object.hasOwn(f, 'sym') ? f.sym : null)}: only a lockable field ("lock": true) can be an LFO destination`)
+    if (f.mod && !f.lock)
+      throw new ModError(`storage field ${repr(Object.hasOwn(f, 'sym') ? f.sym : null)}: only a lockable field ("lock": true) can be a velocity or aftertouch destination`)
     if (Object.hasOwn(f, 'smooth') && !f.lock)
       throw new ModError(`storage field ${repr(Object.hasOwn(f, 'sym') ? f.sym : null)}: only a lockable field ("lock": true) is smoothed`)
     if (f.lock && !LOCK_SCOPES.includes(f.scope))
@@ -529,15 +541,16 @@ export function symbols(lock: Lock): [Map<string, number>, Uint8Array[]] {
 }
 
 /** -> the table core_lock_codes' entries: {field descriptor, code}, 8 bytes each, by code; the code of a field in lfos
- * ([mod, sym]) has LFO_FLAG set, of one in rough SMOOTH_OFF. store.code_entries. */
-export function codeEntries(lock: Lock, lfos: [string, string][] = [], rough: [string, string][] = []): Uint8Array[] {
+ * ([mod, sym]) has LFO_FLAG set, of one in rough SMOOTH_OFF, of one in routes ROUTE_FLAG. store.code_entries. */
+export function codeEntries(lock: Lock, lfos: [string, string][] = [], rough: [string, string][] = [], routes: [string, string][] = []): Uint8Array[] {
   const desc = new Map(lock.fields.map(f => [f.mod + '\0' + f.sym, ((SCOPE_NUM[f.scope] << 28) | (f.bits << 22) | f.offset) >>> 0]))
   const lfo = new Set(lfos.map(([m, sy]) => m + '\0' + sy))
   const jump = new Set(rough.map(([m, sy]) => m + '\0' + sy))
+  const route = new Set(routes.map(([m, sy]) => m + '\0' + sy))
   return (lock.codes ?? []).map(c => {
     const out = new Uint8Array(8), dv = new DataView(out.buffer)
     dv.setUint32(0, desc.get(c.mod + '\0' + c.sym)!)
-    dv.setUint32(4, c.code | (lfo.has(c.mod + '\0' + c.sym) ? LFO_FLAG : 0) | (jump.has(c.mod + '\0' + c.sym) ? SMOOTH_OFF : 0))
+    dv.setUint32(4, c.code | (lfo.has(c.mod + '\0' + c.sym) ? LFO_FLAG : 0) | (jump.has(c.mod + '\0' + c.sym) ? SMOOTH_OFF : 0) | (route.has(c.mod + '\0' + c.sym) ? ROUTE_FLAG : 0))
     return out
   })
 }

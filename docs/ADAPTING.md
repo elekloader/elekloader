@@ -1718,7 +1718,25 @@ What core does with it:
   mod scales it to its range and adds it where it uses the value. It is
   updated in the audio interrupt, before `ev_render_out`. RANDOMIZE on DST,
   its step and its validity check follow the list. The velocity and
-  aftertouch modulation lists don't list them.
+  aftertouch lists list only the `"mod"` ones (next).
+- **Velocity and aftertouch destination** (core-ar2 0.9). A lockable field
+  declared with `"mod": true` as well (a `"mod"` field must be lockable)
+  is listed after stock's in each sound's VELOCITY MOD and AFTERTOUCH
+  lists, named there as in the DST menu; one flag covers both, as stock
+  builds both lists with one routine. A route to it keeps the field's code
+  in the route's own byte, which the sound's save and load already pass, so
+  it takes no room; every route of a sound can take one. Stock's apply
+  would read a code above 41 as another track's parameter, so core gives
+  such a route stock's empty entry and keeps it, and
+  `core_mod_offset(track, field)` gives the mod what stock would have added:
+  each route's amount times the trig's velocity or the pressure, summed, in
+  8.8 steps of a stock 0..127 knob, 0 when no route is to it; the mod scales
+  it and adds it, as the LFO's. A sound loaded with a route to a code the
+  build has no `"mod"` parameter for (or from another layout) gets that
+  route back as stock's unused one (code 0, amount 0). Stock 1.74, or a
+  build of another layout, reads such a sound's mod route as a route to a
+  stock parameter with its amount: a sound with mod routes is for this
+  build.
 - **RANDOMIZE PAGE** gives a knob whose id is a parameter's `id` a value in
   `min..max`, written with `core_store_set` into the knob's sound.
 - **RELOAD PAGE** takes it back from the same sound in the current kit's
@@ -1831,14 +1849,17 @@ int i = v >> 8, frac = v & 0xff;                     /* a table, interpolated */
 sound's value in the kit the audio side plays, with the playing trig's
 p-lock in its place and the active scene's lock in place of that; smooths
 it with stock's own one-pole (90% of a step in 50 ms, 99% in 100 ms, as
-stock's knobs move); then adds the performances and the LFO, unsmoothed,
+stock's knobs move); then adds the performances, the velocity and
+aftertouch routes (`core_mod_offset`) and the LFO, unsmoothed,
 as stock adds them to its own parameters, and clamps the sum to
 `min..max`. The result is in 8.8 steps of the field (one step is 256), so
 a mod that interpolates keeps the fraction; `core_param_int` rounds it to
 whole steps. The LFO's offset is scaled from a 0..127 knob's steps to the
 parameter's range (`max - min` steps for the LFO's full depth);
 `core_param_value_ex(track, field, CORE_PARAM_LFO_RAW)` adds it as it is,
-a stock knob's swing in the parameter's own steps. Track 12
+a stock knob's swing in the parameter's own steps. The routes' offset is
+scaled the same way, or added as it is with `CORE_PARAM_MOD_RAW` (the two
+flags combine). Track 12
 (the FX track) and a field with no lock code give `CORE_PARAM_NONE`.
 
 A field whose value must not glide, a type or a mode, is declared

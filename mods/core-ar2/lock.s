@@ -53,21 +53,23 @@ core_id_slot:
 | 0x400aa31e, the destination list builder's end (the parameter set in %a4,
 | the result in %a2, the list's kind at 32(%sp)): `move.l %a2,%d0; movem.l
 | (%sp),%a2-%a6`. A sound's set (its vtable +76 is core's) gets the mod
-| parameters after stock's in the LFO's list (kind 0x600, with 0x400 set);
-| the velocity and aftertouch lists (0x200) don't: their routes index the
-| audio side's parameter table by code (0x4011f60a), where a code above 41
-| is another track's parameter.
+| parameters after stock's: in the LFO's list (kind 0x600, with 0x400 set)
+| the LFO destinations, and from 0.9 in the velocity and aftertouch lists
+| (0x200) the "mod" ones, whose routes core's apply sites take out of the
+| audio side's parameter table (routes.c), where a code above 41 would be
+| another track's parameter.
 core_dst_list_end:
         move.l  32(%sp),%d0
-        and.l   #0x400,%d0
+        and.l   #0x600,%d0
         beq.s   1f
         move.l  (%a4),%a0
-        move.l  76(%a0),%d0
-        cmp.l   #core_dst_slot_id,%d0
+        move.l  76(%a0),%d1
+        cmp.l   #core_dst_slot_id,%d1
         bne.s   1f
+        move.l  %d0,-(%sp)
         move.l  %a2,-(%sp)
         jsr     core_dst_append
-        addq.l  #4,%sp
+        addq.l  #8,%sp
 1:      move.l  %a2,%d0
         movem.l (%sp),%a2-%a6
         lea     24(%sp),%sp
