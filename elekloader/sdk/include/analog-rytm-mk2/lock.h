@@ -24,6 +24,12 @@
  * uses. With id, the page knob that shows the parameter (core_params),
  * RANDOMIZE PAGE gives the knob a value in min..max and RELOAD PAGE takes it
  * back from the saved kit, as they do stock knobs.
+ *
+ * core-ar2 0.9: a kit-scope field can be lockable too. It is the FX track's
+ * (track 12) parameter: listed in the FX LFO's destination menu, p-locked on
+ * the FX track, locked in scenes and performances there, on MIDI on the FX
+ * track's channel, and read with track 12 in the calls below. It cannot be a
+ * velocity or aftertouch destination ("mod"): the FX track has no routes.
  */
 #ifndef ELEKLOADER_AR2_LOCK_H
 #define ELEKLOADER_AR2_LOCK_H
@@ -31,7 +37,8 @@
 #include <stdint.h>
 
 struct core_lock_param {
-    unsigned field;             /* STORE(sym): a lockable sound field */
+    unsigned field;             /* STORE(sym): a lockable sound field (a drum track's) or
+                                 * kit field (the FX track's) */
     int32_t id;                 /* its page knob's id, or 0 */
     int16_t min, max;           /* the values the field takes (locks: to 16383) */
     const char *short_name;     /* the DST value and the knob's label: up to 4 characters */
@@ -50,9 +57,9 @@ struct core_lock_param {
 /* the field's lock code (42..127), or 0 when it has none */
 int core_lock_code(unsigned field);
 
-/* the offset track's LFO (0..12) adds to the field this audio block, in 8.8
- * steps of a stock 0..127 knob (one step is 256), or 0 when the LFO's
- * destination is another parameter. Updated in the audio interrupt, before
+/* the offset track's LFO (0..12; for a kit field the FX LFO, track 12, 0.9)
+ * adds to the field this audio block, in 8.8 steps of a stock 0..127 knob
+ * (one step is 256), or 0 when the LFO's destination is another parameter. Updated in the audio interrupt, before
  * ev_render_out; the mod scales it to its own range. */
 int core_lfo_offset(int track, unsigned field);
 
@@ -67,7 +74,7 @@ int core_lfo_offset(int track, unsigned field);
 int core_lock_value(int track, unsigned field);
 
 /* core-ar2 0.8: the field's lock in the active scene of the kit track
- * (0..11) plays, in min..max, or -1 when the scene has none (or no scene is
+ * (0..11; 12 for a kit field, 0.9) plays, in min..max, or -1 when the scene has none (or no scene is
  * active). A scene lock is set like a stock one: the scene's pad held in
  * scene edit, the parameter's knob turned. It is an entry with the field's
  * lock code in the kit's 48 scene locks, shared with stock's. Above 127 it
@@ -76,8 +83,8 @@ int core_lock_value(int track, unsigned field);
  * value while the scene is active. */
 int core_scene_value(int track, unsigned field);
 
-/* core-ar2 0.8: the offset the performances give the field on track (0..11)
- * now, in 8.8 steps of the field (one step is 256): each performance's depth
+/* core-ar2 0.8: the offset the performances give the field on track (0..11;
+ * 12 for a kit field, 0.9) now, in 8.8 steps of the field (one step is 256): each performance's depth
  * for it times its pad's pressure, as stock adds a performance's to a stock
  * parameter. The depth is set like a stock one, the performance's pad held
  * in its edit and the knob turned; it is an entry in the kit's 48
@@ -95,9 +102,9 @@ int core_perf_offset(int track, unsigned field);
  * core_lfo_offset; the mod scales it to its own range and adds it. */
 int core_mod_offset(int track, unsigned field);
 
-/* core-ar2 0.9: the value stock would play for the lockable field on drum
- * track (0..11) now, in 8.8 steps of the field (one step is 256), clamped to
- * min..max. Its target is the sound's value in the kit the audio side plays,
+/* core-ar2 0.9: the value stock would play for the lockable field on its
+ * track (a sound field on a drum track, 0..11; a kit field on the FX track, 12) now, in 8.8 steps of the field (one step is 256), clamped to
+ * min..max. Its target is the sound's (the kit's) value in the kit the audio side plays,
  * the trig's p-lock (core_lock_value) in its place, and the active scene's
  * lock (core_scene_value) in place of that; the target is smoothed with
  * stock's own one-pole (90% of a step in 50 ms, 99% in 100 ms), and the
@@ -106,8 +113,10 @@ int core_mod_offset(int track, unsigned field);
  * 0..127 knob's steps to min..max) are added after it, unsmoothed, as stock
  * adds them to its own parameters. A field declared "smooth": false jumps to
  * its target. Audio side only (ev_render_in, ev_render_out, a mod's engine
- * hook): the call steps the smoother, lazily, to the current block. Track 12
- * (the FX track) and a field with no lock code give CORE_PARAM_NONE. */
+ * hook): the call steps the smoother, lazily, to the current block. A field
+ * on the other kind of track (a sound field on 12, a kit field on 0..11) and
+ * a field with no lock code give CORE_PARAM_NONE; on the FX track the routes
+ * add nothing. */
 #define CORE_PARAM_NONE ((int)0x80000000)
 int core_param_value(int track, unsigned field);
 

@@ -1654,7 +1654,8 @@ codes, below.)
 
 A sound-scope storage field declared with `"lock": true` gets a **lock
 code**, 42..127, from the build's lockfile, the number core knows the
-parameter by. Only sound fields can be lockable. Codes follow their fields
+parameter by. Only sound fields can be lockable, and from core-ar2 0.9 kit
+fields, which are the FX track's ("The FX track's parameters", below). Codes follow their fields
 as bits do: a field keeps its code while it keeps its place; a field that
 leaves the build keeps its code reserved and gets it back when it returns
 to its old place; a resized field gets a new code. Once the never-used
@@ -1832,6 +1833,8 @@ call.
 
 A kit's SysEx dump leaves the mod entries out, and a kit of a layout the
 build doesn't read loads without them: lock codes are a build's own.
+Stock 1.74 loads a mod entry as a lock on the track's first parameter
+(slot 0): a kit with mod scene or performance locks is for this build.
 Checked in the emulator only.
 
 ### The smoothed value (core-ar2 0.9, Analog Rytm MKII)
@@ -1860,8 +1863,8 @@ parameter's range (`max - min` steps for the LFO's full depth);
 `core_param_value_ex(track, field, CORE_PARAM_LFO_RAW)` adds it as it is,
 a stock knob's swing in the parameter's own steps. The routes' offset is
 scaled the same way, or added as it is with `CORE_PARAM_MOD_RAW` (the two
-flags combine). Track 12
-(the FX track) and a field with no lock code give `CORE_PARAM_NONE`.
+flags combine). A sound field on track 12, a kit field on 0..11 and a
+field with no lock code give `CORE_PARAM_NONE`.
 
 A field whose value must not glide, a type or a mode, is declared
 `"smooth": false` (only a lockable field takes it): its value jumps to the
@@ -1875,6 +1878,42 @@ stock's ramp block by block. Read it from the audio side only
 smoother. A read costs about 0.5% of a block. Core keeps a smoother for 32
 lockable parameters a track; a build with more gives the rest their
 target unsmoothed.
+
+### The FX track's parameters (core-ar2 0.9, Analog Rytm MKII)
+
+A kit-scope storage field declared `"lock": true` is a parameter of the FX
+track (track 12), as a lockable sound field is a drum track's. It takes
+everything above with track 12, and the kit as its item:
+
+```c
+#include "analog-rytm-mk2/lock.h"
+
+STORE_FIELD(my_mix);                     /* "scope": "kit", "lock": true, "lfo": true, "cc": true */
+const struct core_lock_param my_mix_param =
+    {STORE(my_mix), 3, 0, 127, "MIX", "My Mix", CORE_LOCK_CATEGORY("MINE")};
+
+int v = core_param_value(12, STORE(my_mix));   /* the FX track's value, 8.8 */
+```
+
+- Its page goes on an FX view (`CORE_VIEW_DELAY` ... `CORE_VIEW_FX_LFO`,
+  `analog-rytm-mk2/pages.h`), and the knob's `get` and `delta` read and
+  write the field in the current kit. Borrow an id no FX slot takes (1..7,
+  as on a sound's page): the FX setter takes any id whose slot is 0..41.
+- With `"lfo"`, the FX LFO's DST menu lists it after stock's, and
+  `core_lfo_offset(12, field)` gives the FX LFO's offset. Core keeps the
+  code in a 7-bit kit field of its own, `core_fx_lfo_dst`, placed in a
+  build with a kit `"lfo"` field; the saved kit holds stock's None there,
+  as for a sound's LFO.
+- A p-lock with a trig held on the FX track, a scene lock and a
+  performance depth on the FX track, read with `core_lock_value(12, ...)`,
+  `core_scene_value(12, ...)` and `core_perf_offset(12, ...)`.
+- MIDI on the FX track's channel: NRPN 4 / code - 42, and with `"cc"` a CC
+  from the pool, never 84 or 85, which stock uses on the FX channel.
+- `"smooth"` as on a sound field; `"mod"` is refused, as the FX track has
+  no velocity or aftertouch routes.
+
+A build whose core does not keep FX parameters (no `core_fx_lfo_dst`) refuses
+lockable kit fields. [lock-check](../examples/lock-check-ar2) has one, K.
 
 ### Mod parameters on MIDI (core-ar2 0.8, Analog Rytm MKII)
 
