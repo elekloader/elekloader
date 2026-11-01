@@ -203,6 +203,7 @@ boots core 4.1 and 1.6 in digiemu and drives the panel. RIGHT and LEFT swap
 the lists and back, UP and DOWN leave the filter list as it is, FUNC+SRC from
 FLTR gives the same screen as RIGHT, YES and NO go back to the FLTR page, a page key goes to its own page, and from AMP or SRC the machine list, and
 the screens are the same on both releases.
+On a unit: the owner's Digitakt ran it on OS 1.54, a build of core 4.1 and 1.6, and it worked.
 
 1.5 (`cm_src_shown`), on OS 1.53 and 1.54. `tests/probe_digitakt_shown.py`
 boots core 4.1, 1.5 and `examples/linked-knobs` in digiemu and drives the
