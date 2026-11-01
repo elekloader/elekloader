@@ -12,7 +12,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-from elekloader import elemod, link                 # noqa: E402
+from elekloader import elemod, formats, link        # noqa: E402
 from elekloader.sdk import build                    # noqa: E402
 from elekloader.sdk.sdk_alpha_build import sdk_alpha_build, sdk_alpha_registrations  # noqa: E402
 
@@ -32,23 +32,24 @@ def sdk_alpha_test_document():
     return doc, raw
 
 
-def sdk_alpha_test_controls_document():
+def sdk_alpha_test_controls_document(glyphs=False):
     doc, raw = sdk_alpha_test_document()
     raw.extend(bytes(1200))
-    doc['relocs'][-1][3] = 'sym:sdk_alpha_dt1_ui_v3'
+    doc['relocs'][-1][3] = 'sym:sdk_alpha_dt1_ui_v4' if glyphs else 'sym:sdk_alpha_dt1_ui_v3'
+    stride, pages = (28, 600) if glyphs else (24, 512)
     struct.pack_into('>I', raw, 56, 2)
-    doc['relocs'] += [['.run', 52, 'abs32', 'sec:.run', 512]]
+    doc['relocs'] += [['.run', 52, 'abs32', 'sec:.run', pages]]
     for i in range(15):
-        struct.pack_into('>I', raw, 96 + 24 * i, i)
-        doc['relocs'].append(['.run', 100 + 24 * i, 'abs32', 'sec:.run', 72])
+        struct.pack_into('>I', raw, 96 + stride * i, i)
+        doc['relocs'].append(['.run', 100 + stride * i, 'abs32', 'sec:.run', 72])
     for page in range(2):
-        doc['relocs'].append(['.run', 512 + 36 * page, 'abs32', 'sec:.run', 72])
+        doc['relocs'].append(['.run', pages + 36 * page, 'abs32', 'sec:.run', 72])
         for encoder in range(8):
             # Logical zero is D on page 0; page 1 shares it at H.
             logical = ([2, 3, 4, 0, 5, 6, 7, 1] if page == 0 else
                        [8, 9, 10, 11, 12, 13, 14, 0])[encoder]
-            doc['relocs'].append(['.run', 516 + 36 * page + 4 * encoder,
-                                  'abs32', 'sec:.run', 96 + 24 * logical])
+            doc['relocs'].append(['.run', pages + 4 + 36 * page + 4 * encoder,
+                                  'abs32', 'sec:.run', 96 + stride * logical])
     return doc, raw
 
 
@@ -170,6 +171,30 @@ class SdkAlphaTests(unittest.TestCase):
                                       capture_output=True, text=True)
             self.assertNotEqual(readonly.returncode, 0, 'callback snapshot became writable')
 
+    def test_sdk_alpha_glyph_registration(self):
+        for supplied in (False, True):
+            doc, raw = sdk_alpha_test_controls_document(glyphs=True)
+            if supplied:
+                doc['relocs'].append(['.run', 120, 'abs32', 'sec:.run', 1000])
+            self.assertEqual(len(sdk_alpha_registrations(doc, {'.run': raw})), 1)
+        for kind in ('truncated', 'external', 'unrelocated', 'duplicate', 'unaligned'):
+            with self.subTest(kind=kind):
+                doc, raw = sdk_alpha_test_controls_document(glyphs=True)
+                doc['relocs'].append(['.run', 120, 'abs32', 'sec:.run', 1000])
+                if kind == 'truncated':
+                    raw = raw[:1031]
+                elif kind == 'external':
+                    doc['relocs'][-1][3] = 'sym:external_glyph'
+                elif kind == 'unrelocated':
+                    doc['relocs'].pop()
+                    struct.pack_into('>I', raw, 120, 1000)
+                elif kind == 'duplicate':
+                    doc['relocs'].append(doc['relocs'][-1][:])
+                elif kind == 'unaligned':
+                    doc['relocs'][-1][4] += 1
+                with self.assertRaises(build.BuildError):
+                    sdk_alpha_registrations(doc, {'.run': raw})
+
     def test_sdk_alpha_label_assignments(self):
         cc = shutil.which('cc')
         if not cc:
@@ -193,14 +218,24 @@ class SdkAlphaTests(unittest.TestCase):
             pages_path, pages = build.build(str(ROOT / 'mods/machine-pages'), stock, tmp)
             path, empty = sdk_alpha_build(str(ROOT / 'tests/fixtures/sdk-alpha-empty-machine'), stock, tmp)
             hello_path, hello = sdk_alpha_build(str(ROOT / 'examples/sdk-hello-world'), stock, tmp)
-            for fixture in ('sdk-alpha-controls-machine', 'sdk-alpha-one-page-machine',
-                            'sdk-alpha-callback-machine', 'sdk-alpha-labels-machine',
-                            'sdk-alpha-lfo-machine'):
-                fixture_path, _ = sdk_alpha_build(str(ROOT / 'tests/fixtures' / fixture), stock, tmp)
+            fixtures = [ROOT / 'tests/fixtures' / name for name in (
+                'sdk-alpha-controls-machine', 'sdk-alpha-one-page-machine',
+                'sdk-alpha-callback-machine', 'sdk-alpha-labels-machine', 'sdk-alpha-lfo-machine')]
+            fixtures.append(ROOT / 'examples/sdk-glyphs')
+            firmware, dev, _ = formats.load(stock)
+            image = formats.main_image(firmware, dev)
+            with open(pages_path) as fh:
+                older_pages = json.load(fh)
+            older_pages['exports'].remove('sdk_alpha_dt1_ui_v4')
+            with self.assertRaisesRegex(elemod.ModError, 'sdk_alpha_dt1_ui_v4'):
+                link.link([core, link.Mod2(older_pages, 'older-pages'), empty], image)
+            for fixture in fixtures:
+                fixture_path, fixture_mod = sdk_alpha_build(str(fixture), stock, tmp)
                 result = subprocess.run([sys.executable, '-m', 'elekloader.lint', fixture_path,
                                          '--stock', stock, '--with', core_path, '--with', pages_path, '--json'],
                                         cwd=ROOT, capture_output=True, text=True)
                 self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                link.link([core, pages, fixture_mod], image)
             self.assertEqual(empty.names, ['machine:120'])
             self.assertEqual(empty.requires, ['core', 'machine-pages'])
             self.assertEqual(hello.names, ['machine:122'])
@@ -214,9 +249,6 @@ class SdkAlphaTests(unittest.TestCase):
             # Removing exports isolates the named-slot refusal from export collisions.
             duplicate['exports'] = []
             other = link.Mod2(duplicate, 'conflict')
-            from elekloader import formats
-            firmware, dev, _ = formats.load(stock)
-            image = formats.main_image(firmware, dev)
             with self.assertRaisesRegex(elemod.ModError, 'machine:120'):
                 link.link([core, pages, empty, other], image)
 

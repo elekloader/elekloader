@@ -5,6 +5,7 @@
 
 const char sdk_alpha_dt1_empty_ui[] = "sdk alpha dt1 empty";
 const char sdk_alpha_dt1_ui_v3[] = "sdk alpha dt1 pages 3";
+const char sdk_alpha_dt1_ui_v4[] = "sdk alpha dt1 glyphs 4";
 static const struct elek_machine *sdk_alpha_current;
 static uint32_t sdk_alpha_empty_layout[11];
 extern uint32_t mp_stock_layout(int32_t machine);
@@ -20,11 +21,20 @@ static uint32_t sdk_alpha_page_count;
 static const struct elek_machine *sdk_alpha_presented;
 static char sdk_alpha_labels[15][9];
 static uint8_t sdk_alpha_visibility[15];
+static const struct elek_ui_glyph *sdk_alpha_glyphs[15];
+
+/* Older compiled descriptors end before the glyph pointer. */
+static int sdk_alpha_has_glyphs(const struct elek_machine *m)
+{
+    const struct sdk_alpha_machine_ui *u = (const void *)core_machine_ui(m->id);
+    return u && u->abi == sdk_alpha_dt1_ui_v4;
+}
 
 const struct elek_machine *sdk_alpha_machine(int32_t id)
 {
     const struct sdk_alpha_machine_ui *u = (const void *)core_machine_ui(id);
-    if (!u || (u->abi != sdk_alpha_dt1_empty_ui && u->abi != sdk_alpha_dt1_ui_v3))
+    if (!u || (u->abi != sdk_alpha_dt1_empty_ui && u->abi != sdk_alpha_dt1_ui_v3 &&
+               u->abi != sdk_alpha_dt1_ui_v4))
         return 0;
     const struct elek_machine *m = u->machine;
     if (!m || m->id != id || m->page_count > 2 || m->_reserved[0] || m->_reserved[1] ||
@@ -126,6 +136,7 @@ int32_t sdk_alpha_snapshot(const struct elek_machine *m, int32_t page, void *vie
     struct elek_ui_knob_presentation *output[15];
     struct elek_ui_value values[15];
     const struct elek_ui_value *knobs[15];
+    int has_glyphs = sdk_alpha_has_glyphs(m);
     for (uint32_t k = 0; k < (uint32_t)knob_count; ++k) {
         uint8_t locked;
         uint32_t id = k < 8 ? 0x84 + k : MP_EXTRA_ID + k - 8;
@@ -139,6 +150,7 @@ int32_t sdk_alpha_snapshot(const struct elek_machine *m, int32_t page, void *vie
         knobs[k] = &values[k];
         presentation[k].label = descriptors[k]->label;
         presentation[k].visible = 1;
+        presentation[k].glyph = has_glyphs ? descriptors[k]->glyph : 0;
         output[k] = &presentation[k];
     }
     const struct elek_ui_context ctx = {
@@ -166,6 +178,8 @@ int32_t sdk_alpha_snapshot(const struct elek_machine *m, int32_t page, void *vie
         uint8_t visible = presentation[k].visible != 0;
         changed |= sdk_alpha_visibility[k] != visible;
         sdk_alpha_visibility[k] = visible;
+        changed |= sdk_alpha_glyphs[k] != presentation[k].glyph;
+        sdk_alpha_glyphs[k] = presentation[k].glyph;
     }
     sdk_alpha_presented = m;
     return changed;
@@ -180,6 +194,17 @@ const char *sdk_alpha_label(const struct elek_machine *m, uint32_t k)
     if (count < 0 || k >= (uint32_t)count)
         return 0;
     return m == sdk_alpha_presented ? sdk_alpha_labels[k] : knobs[k]->label;
+}
+
+const struct elek_ui_glyph *sdk_alpha_glyph(const struct elek_machine *m, uint32_t k)
+{
+    const struct elek_ui_knob *knobs[15];
+    int32_t count = sdk_alpha_knobs(m, knobs);
+    if (count < 0 || k >= (uint32_t)count)
+        return 0;
+    if (m == sdk_alpha_presented)
+        return sdk_alpha_glyphs[k];
+    return sdk_alpha_has_glyphs(m) ? knobs[k]->glyph : 0;
 }
 
 int32_t sdk_alpha_visible(const struct elek_machine *m, uint32_t k)
