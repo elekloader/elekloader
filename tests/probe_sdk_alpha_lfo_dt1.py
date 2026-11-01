@@ -207,7 +207,9 @@ def sdk_alpha_main():
                 samples.append(actual[slot])
             assert samples[0] == samples[1], (lfo, logical, samples)
             results.append({'lfo': lfo + 1, 'logical': logical, 'slot': slot, 'value': samples[0]})
-    print(json.dumps({'all_names_and_ids': True, 'rename_preserves_destinations': True,
+    from probe_sdk_alpha_state_dt1 import sdk_alpha_probe_state
+    state = sdk_alpha_probe_state(m, linked, native, put, label, kit, sound, slots)
+    print(json.dumps({'state': state, 'all_names_and_ids': True, 'rename_preserves_destinations': True,
                       'track_isolation': True, 'modulation': results}, indent=1))
 
 
