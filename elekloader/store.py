@@ -90,6 +90,11 @@ symbol is 0) and the mods have the whole room. The core reads the flag from
 core_lock_codes: an `"lfo"` field's code has LFO_FLAG set. The flag is not
 stored data, so it is not part of the layout ID.
 
+The smoothed value (core-ar2 0.9). The core smooths a lockable parameter's
+value as stock smooths its own; a lockable field declared `"smooth": false`
+jumps (a type, a mode). Its code has SMOOTH_OFF set in core_lock_codes. Like
+LFO_FLAG it is not stored data, so it is not part of the layout ID.
+
 Nothing here is random: the same lockfile (or none) and mods always link to
 the same bytes.
 """
@@ -111,6 +116,7 @@ CODES_TABLE = 'core_lock_codes'
 CCS_TABLE = 'core_lock_ccs'
 LOCK_DST = 'core_lfo_dst'
 LFO_FLAG = 0x100                                # in core_lock_codes: the field is an LFO destination
+SMOOTH_OFF = 0x200                              # in core_lock_codes: the field's value jumps (core-ar2 0.9)
 FIRST_CODE, LAST_CODE = 42, 127
 LOCK_SCOPES = ('sound',)
 
@@ -206,6 +212,11 @@ def parse_lfos(m):
     return [f['sym'] for f in m.get('storage', []) if isinstance(f, dict) and f.get('lfo') is True]
 
 
+def parse_rough(m):
+    """A mod document's "storage" -> the syms of its fields declared "smooth": false, in order."""
+    return [f['sym'] for f in m.get('storage', []) if isinstance(f, dict) and f.get('smooth') is False]
+
+
 def parse_ccs(m):
     """A mod document's "storage" -> the syms of its fields with a CC, in order."""
     return [f['sym'] for f in m.get('storage', []) if isinstance(f, dict) and f.get('cc') is True]
@@ -218,9 +229,9 @@ def parse_decls(m):
     if not isinstance(st, list):
         raise ModError('"storage" is a list of fields')
     for f in st:
-        if not isinstance(f, dict) or set(f) - {'sym', 'scope', 'bits', 'lock', 'cc', 'lfo'}:
+        if not isinstance(f, dict) or set(f) - {'sym', 'scope', 'bits', 'lock', 'cc', 'lfo', 'smooth'}:
             raise ModError('a storage field is {"sym", "scope", "bits"}, and "lock" for a lockable one')
-        for k in ('lock', 'cc', 'lfo'):
+        for k in ('lock', 'cc', 'lfo', 'smooth'):
             if k in f and not isinstance(f[k], bool):
                 raise ModError('storage field %r: "%s" is true or false' % (f.get('sym'), k))
         if f.get('cc') and not f.get('lock'):
@@ -228,6 +239,9 @@ def parse_decls(m):
                            % (f.get('sym'),))
         if f.get('lfo') and not f.get('lock'):
             raise ModError('storage field %r: only a lockable field ("lock": true) can be an LFO destination'
+                           % (f.get('sym'),))
+        if 'smooth' in f and not f.get('lock'):
+            raise ModError('storage field %r: only a lockable field ("lock": true) is smoothed'
                            % (f.get('sym'),))
         if f.get('lock') and f.get('scope') not in LOCK_SCOPES:
             raise ModError('storage field %r: only %s fields can be lockable'
@@ -616,14 +630,16 @@ def symbols(lock, dev_key):
     return out, [i.to_bytes(4, 'big') for i in ids]
 
 
-def code_entries(lock, lfos=()):
+def code_entries(lock, lfos=(), rough=()):
     """-> the table core_lock_codes' entries: {field descriptor, code}, 8 bytes
-    each, by code; the code of a field in lfos ((mod, sym)) has LFO_FLAG set."""
+    each, by code; the code of a field in lfos ((mod, sym)) has LFO_FLAG set,
+    of one in rough SMOOTH_OFF."""
     desc = {(f['mod'], f['sym']): SCOPE_NUM[f['scope']] << 28 | f['bits'] << 22 | f['offset']
             for f in lock['fields']}
-    lfos = set(lfos)
+    lfos, rough = set(lfos), set(rough)
     return [desc[(c['mod'], c['sym'])].to_bytes(4, 'big')
-            + (c['code'] | (LFO_FLAG if (c['mod'], c['sym']) in lfos else 0)).to_bytes(4, 'big')
+            + (c['code'] | (LFO_FLAG if (c['mod'], c['sym']) in lfos else 0)
+               | (SMOOTH_OFF if (c['mod'], c['sym']) in rough else 0)).to_bytes(4, 'big')
             for c in lock.get('codes', [])]
 
 

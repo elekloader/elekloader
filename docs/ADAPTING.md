@@ -1808,10 +1808,49 @@ what the performances add now, in 8.8 steps of the parameter: each depth
 times its pad's pressure, as stock adds a performance's to a stock
 parameter. Which of the trig's lock and the
 scene's wins is the mod's choice; the order above is one.
+`core_param_value` (below) takes stock's order and its smoothing in one
+call.
 
 A kit's SysEx dump leaves the mod entries out, and a kit of a layout the
 build doesn't read loads without them: lock codes are a build's own.
 Checked in the emulator only.
+
+### The smoothed value (core-ar2 0.9, Analog Rytm MKII)
+
+A mod that uses a lockable parameter in the audio interrupt reads the
+value stock would play for it with one call:
+
+```c
+#include "analog-rytm-mk2/lock.h"
+
+int v = core_param_value(track, STORE(my_freq));   /* 8.8 steps, min..max */
+int i = v >> 8, frac = v & 0xff;                     /* a table, interpolated */
+```
+
+`core_param_value(track, field)` takes the parameter's target, the
+sound's value in the kit the audio side plays, with the playing trig's
+p-lock in its place and the active scene's lock in place of that; smooths
+it with stock's own one-pole (90% of a step in 50 ms, 99% in 100 ms, as
+stock's knobs move); then adds the performances and the LFO, unsmoothed,
+as stock adds them to its own parameters, and clamps the sum to
+`min..max`. The result is in 8.8 steps of the field (one step is 256), so
+a mod that interpolates keeps the fraction; `core_param_int` rounds it to
+whole steps. The LFO's offset is scaled from a 0..127 knob's steps to the
+parameter's range (`max - min` steps for the LFO's full depth). Track 12
+(the FX track) and a field with no lock code give `CORE_PARAM_NONE`.
+
+A field whose value must not glide, a type or a mode, is declared
+`"smooth": false` (only a lockable field takes it): its value jumps to the
+target, with the performances and the LFO still added.
+
+The smoothing is computed when the mod asks, from the blocks since its
+last call (`core_block`, `analog-rytm-mk2/load.h`), so a parameter no mod
+reads costs nothing, and a mod that reads its parameter every block sees
+stock's ramp block by block. Read it from the audio side only
+(`ev_render_in`, `ev_render_out`, a machine's render): each call steps the
+smoother. A read costs about 0.5% of a block. Core keeps a smoother for 32
+lockable parameters a track; a build with more gives the rest their
+target unsmoothed.
 
 ### Mod parameters on MIDI (core-ar2 0.8, Analog Rytm MKII)
 

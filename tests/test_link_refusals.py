@@ -907,6 +907,37 @@ def test_the_lfo_destination_field_is_placed_only_with_an_lfo_field():
             raise AssertionError('"lfo" without "lock" was accepted')
 
 
+def test_a_field_declared_smooth_false_gets_smooth_off_in_its_code():
+    """"smooth": false (core-ar2 0.9): the field's code carries SMOOTH_OFF in core_lock_codes, beside
+    LFO_FLAG; "smooth": true and no "smooth" leave it out. The flag is not stored data, so the layout is
+    the same either way. "smooth" without "lock" is refused."""
+    with Bench('analog-rytm-mk2') as B:
+        core = keeper(B)
+        core['collections']['core_lock_codes'] = {'entry': 8}
+        layouts = set()
+        for smooth in (False, True, None):
+            a = {'sym': 'st_a', 'scope': 'sound', 'bits': 4, 'lock': True, 'lfo': True}
+            if smooth is not None:
+                a['smooth'] = smooth
+            mod = B.other('m', storage=[a, {'sym': 'st_b', 'scope': 'sound', 'bits': 4, 'lock': True}])
+            m = link.Mod2(mod, 'm')
+            out = link.link([link.Mod2(d, d['id']) for d in (copy.deepcopy(core), mod)], B.img)
+            codes = {(c['mod'], c['sym']): c['code'] for c in out.store['codes']}
+            entries = sorted(int.from_bytes(e[4:], 'big')
+                             for e in store.code_entries(out.store, [('m', 'st_a')], [('m', x) for x in m.rough]))
+            want = codes[('m', 'st_a')] | store.LFO_FLAG | (store.SMOOTH_OFF if smooth is False else 0)
+            assert entries == sorted([want, codes[('m', 'st_b')]]), (smooth, entries)
+            layouts.add(store.layout_id(out.store))
+        assert len(layouts) == 1, layouts
+        mod = B.other('m', storage=[{'sym': 'st_a', 'scope': 'sound', 'bits': 4, 'smooth': False}])
+        try:
+            link.link([link.Mod2(d, d['id']) for d in (copy.deepcopy(core), mod)], B.img)
+        except ModError as e:
+            assert 'only a lockable field ("lock": true) is smoothed' in str(e), e
+        else:
+            raise AssertionError('"smooth" without "lock" was accepted')
+
+
 def test_the_image_check_refuses_a_protected_or_kept_byte_the_other_checks_let_through():
     """The checks that refuse a write to a protected or kept range run before the link. With them
     made to say nothing (as a bug in them would), the image check refuses the same site, so it

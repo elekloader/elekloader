@@ -27,6 +27,7 @@
 #include "analog-rytm-mk2/store.h"
 #include "analog-rytm-mk2/lock.h"
 #include "analog-rytm-mk2/pages.h"
+#include "analog-rytm-mk2/load.h"
 
 typedef void (*fillrect_t)(void *bmp, int x0, int y0, int x1, int y1, int colour);
 #define FILLRECT ((fillrect_t)FILLRECT_AT)
@@ -164,3 +165,50 @@ static int lc_text(struct core_text *t)
 }
 
 const struct core_param lc_params = {1, 2, lc_get, lc_delta, lc_text};
+
+/* 1.7 (core 0.9): every audio block, core_param_value of A, B ("smooth":
+ * false) and C on track 1, with A's and C's values in the sound, the
+ * offsets the LFO and the performances give A and A's p-lock and scene lock,
+ * in a ring the emulator's
+ * checks read (after the magic SMCK: the next index, then the three calls'
+ * cost in DMA timer 0's ticks, the most and the sum, and the number of
+ * blocks) */
+#define DTCN0 (*(volatile unsigned *)0xfc07000c)
+#define RING 512
+
+struct lc_rec {
+    unsigned block;
+    int a, b, c;
+    short ta, tc;
+    short lfo_a, perf_a;
+    short lock_a, scene_a;
+};
+
+struct {
+    char magic[4];
+    unsigned next, cost_max, cost_sum, blocks;
+    struct lc_rec rec[RING];
+} lc_ring = {{'S', 'M', 'C', 'K'}};
+
+void lc_render(void)
+{
+    struct lc_rec *r = &lc_ring.rec[lc_ring.next % RING];
+    void *s = sound1();
+    unsigned t0 = DTCN0, t;
+    r->a = core_param_value(0, STORE(lc_a));
+    r->b = core_param_value(0, STORE(lc_b));
+    r->c = core_param_value(0, STORE(lc_c));
+    t = DTCN0 - t0;
+    r->block = core_block;
+    r->ta = s ? (short)core_store_get(STORE(lc_a), s, 0) : -1;
+    r->tc = s ? (short)core_store_get(STORE(lc_c), s, 0) : -1;
+    r->lfo_a = core_lfo_offset(0, STORE(lc_a));
+    r->perf_a = core_perf_offset(0, STORE(lc_a));
+    r->lock_a = core_lock_value(0, STORE(lc_a));
+    r->scene_a = core_scene_value(0, STORE(lc_a));
+    if (t > lc_ring.cost_max)
+        lc_ring.cost_max = t;
+    lc_ring.cost_sum += t;
+    lc_ring.blocks++;
+    lc_ring.next++;
+}

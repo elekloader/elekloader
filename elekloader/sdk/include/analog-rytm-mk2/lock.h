@@ -85,4 +85,23 @@ int core_scene_value(int track, unsigned field);
  * mod adds it to the value it uses, as it adds core_lfo_offset. */
 int core_perf_offset(int track, unsigned field);
 
+/* core-ar2 0.9: the value stock would play for the lockable field on drum
+ * track (0..11) now, in 8.8 steps of the field (one step is 256), clamped to
+ * min..max. Its target is the sound's value in the kit the audio side plays,
+ * the trig's p-lock (core_lock_value) in its place, and the active scene's
+ * lock (core_scene_value) in place of that; the target is smoothed with
+ * stock's own one-pole (90% of a step in 50 ms, 99% in 100 ms), and the
+ * performances (core_perf_offset) and the LFO (core_lfo_offset, scaled from a
+ * 0..127 knob's steps to min..max) are added after it, unsmoothed, as stock
+ * adds them to its own parameters. A field declared "smooth": false jumps to
+ * its target. Audio side only (ev_render_in, ev_render_out, a mod's engine
+ * hook): the call steps the smoother, lazily, to the current block. Track 12
+ * (the FX track) and a field with no lock code give CORE_PARAM_NONE. */
+#define CORE_PARAM_NONE ((int)0x80000000)
+int core_param_value(int track, unsigned field);
+
+/* core-ar2 0.9: core_param_value rounded to whole steps (CORE_PARAM_NONE as
+ * it is) */
+int core_param_int(int track, unsigned field);
+
 #endif

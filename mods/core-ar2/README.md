@@ -614,6 +614,26 @@ rows; in performance edit knob B gives C a depth of 19 coarse steps (entry
 `13 00 00 2c 01`). Not checked: the value C plays with that performance's
 pad pressed (no bar shows C).
 
+## The smoothed value (0.9)
+
+`smooth.c`, with no sites of its own (docs/ADAPTING.md, "The smoothed
+value (core-ar2 0.9, Analog Rytm MKII)"). `core_param_value(track, field)`
+follows stock's order in the audio interrupt: the target (the sound in the
+kit at 0x800067b8, then `core_lock_value`, then `core_scene_value`) through
+stock's one-pole, s = 0x03d7 t + 0x7c29 s over 0x8000 a block (0x40120d26),
+then `core_perf_offset` (0x40120fde) and `core_lfo_offset` (0x4012101a,
+scaled by `(max - min) / 127`), clamped to `min..max`, in 8.8.
+
+It is lazy: per track and smoothed parameter, core keeps the value (16.16)
+and the block it was stepped to, and a call steps it k blocks at once,
+s = t + (s - t) 0.97^k, from a table of 0.97^k in Q15 (k ≥ 256 in steps of
+255). The block count, `core_block`, is load.s's: core's `ev_render_in`
+adds one before any mod's handler. The state is 13 tracks × 32 parameters
+× 8 bytes (3.3 KB of .bss); a field declared `"smooth": false` (0x200 in
+`core_lock_codes`) takes no slot and jumps. `core_perf_offset` returns 0
+without walking the kit's 48 entries while no performance's pressure is
+above 0.
+
 ## Checked so far
 
 On a unit (OS 1.73). With test images built by rytm-mods-src (its `elemod`
@@ -848,6 +868,17 @@ stock bytes, and that each covers whole instructions.
   Unit run T54 (27 Oct, L8C4): with Euclid on (PL1 4) and C and the
   filter's FRQ locked on hit step 5, TRO -15 and FREEZE TRACK move both
   locks to step 6 and leave step 5 with neither.
+
+- **The smoothed value (0.9)**, in an emulator only (analog-emu, OS 1.74,
+  1 Nov 2026), with [lock-check 1.7](../../examples/lock-check-ar2)'s
+  per-block record of A, B and C on track 1: a step of the sound's value
+  (NRPN), a p-lock played in and out, a scene lock activated over a playing
+  p-lock and released, and a performance's pressure (CC 36) each follow
+  stock's one-pole block by block to within 1/256 of a step (90% in 76
+  blocks, 50 ms); the LFO and the performance add to it exactly, with no
+  lag; B (`"smooth": false`) jumps in the block its NRPN lands. Three reads
+  a block cost 1,290 DMA timer ticks on average (2,005 at most), about 430
+  a read. Not yet on a unit or by ear.
   The load prompt after a mod-only edit, in an emulator (27 Oct, OS 1.74,
   lock-check 1.6): on the LOCK CHECK page a turn of A (0 to 30), CC 8 and
   NRPN 4:0 each mark the project modified and LOAD PROJECT then asks SAVE

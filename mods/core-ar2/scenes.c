@@ -89,6 +89,14 @@ static const unsigned char *audio_kit(void)
     return k < 128 ? (const unsigned char *)LIVE_KITS + LIVE_KIT_SIZE * k : 0;
 }
 
+/* for smooth.c (core-ar2 0.9): drum track's sound in the kit the audio side
+ * plays, or 0 */
+const unsigned char *core_audio_sound(int track)
+{
+    const unsigned char *kit = audio_kit();
+    return kit && (unsigned)track < 12 ? kit + 42 + 152 * track : 0;
+}
+
 int core_scene_value(int track, unsigned field)
 {
     const unsigned char *kit = audio_kit(), *e;
@@ -109,6 +117,10 @@ int core_perf_offset(int track, unsigned field)
     const unsigned char *kit = audio_kit(), *e;
     int code = core_lock_code(field), i, sum = 0;
     if (!kit || !code || (unsigned)track >= 12 || PERF_OFF)
+        return 0;
+    for (i = 0; i < 12 && !PRESSURE[i]; i++)
+        ;
+    if (i == 12)                                /* (0.9) no pad pressed: nothing to add */
         return 0;
     for (i = 0, e = kit + PERF_LIST; i < ENTRIES; i++, e += ENTRY)
         if (e[2] == track && e[3] == code && e[4] < 12)

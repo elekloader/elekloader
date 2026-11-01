@@ -149,6 +149,11 @@ DECLS = {
                         {'sym': 'b', 'scope': 'sound', 'bits': 3, 'lock': True, 'lfo': False}]},
     'lfo without lock': {'storage': [{'sym': 'a', 'scope': 'sound', 'bits': 3, 'lfo': True}]},
     'lfo type': {'storage': [{'sym': 'a', 'scope': 'sound', 'bits': 3, 'lock': True, 'lfo': 1}]},
+    'smooth': {'storage': [{'sym': 'a', 'scope': 'sound', 'bits': 3, 'lock': True, 'smooth': False},
+                           {'sym': 'b', 'scope': 'sound', 'bits': 3, 'lock': True, 'smooth': True},
+                           {'sym': 'c', 'scope': 'sound', 'bits': 3, 'lock': True}]},
+    'smooth without lock': {'storage': [{'sym': 'a', 'scope': 'sound', 'bits': 3, 'smooth': False}]},
+    'smooth type': {'storage': [{'sym': 'a', 'scope': 'sound', 'bits': 3, 'lock': True, 'smooth': 0}]},
     'twice': {'storage': [{'sym': 'a', 'scope': 'kit', 'bits': 1}, {'sym': 'a', 'scope': 'kit', 'bits': 2}]},
 }
 
@@ -198,6 +203,8 @@ def main():
                                              [tuple(k) for k in ccs])
                 res.append({'lock': lock, 'notes': notes, 'codes': [t.hex() for t in store.code_entries(lock)],
                             'lfo_codes': [t.hex() for t in store.code_entries(lock, [tuple(k) for k in ccs])],
+                            'rough_codes': [t.hex() for t in store.code_entries(lock, [tuple(k) for k in ccs][:1],
+                                                                                [tuple(k) for k in ccs][1:])],
                             'ccs': [t.hex() for t in store.cc_entries(lock)],
                             'json': store.dumps(lock), 'layout_id': store.layout_id(lock)})
             except ModError as e:
@@ -212,7 +219,8 @@ def main():
     for name, doc in DECLS.items():
         try:
             out['decls'][name] = {'doc': doc, 'ok': store.parse_decls(doc), 'locks': store.parse_locks(doc),
-                                  'ccs': store.parse_ccs(doc), 'lfos': store.parse_lfos(doc)}
+                                  'ccs': store.parse_ccs(doc), 'lfos': store.parse_lfos(doc),
+                                  'rough': store.parse_rough(doc)}
         except ModError as e:
             out['decls'][name] = {'doc': doc, 'error': str(e)}
     path = os.path.join(ROOT, 'js', 'test', 'store-vectors.json')

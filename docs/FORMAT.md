@@ -252,8 +252,9 @@ Nothing is built unless all of these pass:
 A mod's `storage` lists fields: `sym` (a C name), `scope` (`sound`, `kit`,
 `global`, `track`, `pattern` or `project`) and `bits` (1-32), and on a
 sound field `"lock": true` for a lockable parameter (core-ar2 0.8), with
-`"cc": true` for one that also gets a MIDI CC and `"lfo": true` for one that
-is also an LFO destination. Only a core
+`"cc": true` for one that also gets a MIDI CC, `"lfo": true` for one that
+is also an LFO destination and `"smooth": false` for one whose value jumps
+where core-ar2 0.9 smooths the others. Only a core
 that imports `__store_gen` takes them (core-ar2 from 0.2, core-a4); with another
 core a mod that declares storage is refused. A scope's room can depend on
 the core's version (a sound's: 24 bits with core-ar2 0.2, 56 from 0.3,
@@ -271,7 +272,8 @@ linker:
   generations, then T and P);
 - adds entries to `core_store_ids`: the layout's ID, then its ancestors,
   newest first; to `core_lock_codes`, `{field descriptor, code}` for each
-  lockable field; and to `core_lock_ccs`, `{field descriptor, CC}` for each
+  lockable field (0x100 set in the code of an `"lfo"` field, 0x200 in that
+  of a `"smooth": false` one; neither is part of the layout ID); and to `core_lock_ccs`, `{field descriptor, CC}` for each
   that has a CC (a lockable field or a CC with a core that has no such table
   is refused);
 - appends the lockfile to the image, after the mods' image: `ELKSTORE`,
