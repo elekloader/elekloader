@@ -100,6 +100,12 @@ int core_perf_offset(int track, unsigned field);
 #define CORE_PARAM_NONE ((int)0x80000000)
 int core_param_value(int track, unsigned field);
 
+/* core-ar2 0.9: core_param_value with flags. CORE_PARAM_LFO_RAW adds the
+ * LFO's offset as core_lfo_offset gives it (8.8 steps of a 0..127 knob), not
+ * scaled to min..max, for a mod that wants a stock knob's swing. */
+#define CORE_PARAM_LFO_RAW 1
+int core_param_value_ex(int track, unsigned field, unsigned flags);
+
 /* core-ar2 0.9: core_param_value rounded to whole steps (CORE_PARAM_NONE as
  * it is) */
 int core_param_int(int track, unsigned field);

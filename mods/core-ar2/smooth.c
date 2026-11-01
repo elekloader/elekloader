@@ -13,7 +13,8 @@
  *      (0x03d7 and 0x7c29 of 0x8000, 0x40120d26): 90% of a step in 50 ms;
  *   3. then, unsmoothed, the performances (core_perf_offset) and the LFO
  *      (core_lfo_offset, scaled from a 0..127 knob's steps to the field's
- *      range), and clamped to min..max.
+ *      range; core_param_value_ex with CORE_PARAM_LFO_RAW adds it as it
+ *      is), and clamped to min..max.
  *
  * A field declared "smooth": false (SMOOTH_OFF in core_lock_codes) skips 2:
  * a type or a mode jumps.
@@ -123,7 +124,9 @@ static int32_t step(struct state *st, int32_t t)
     return st->s;
 }
 
-int core_param_value(int track, unsigned field)
+#define LFO_RAW 1                             /* core_param_value_ex: the LFO's offset as it is */
+
+int core_param_value_ex(int track, unsigned field, unsigned flags)
 {
     int code = core_lock_code(field), v, min, max, off, lfo;
     const struct core_lock_param *p = core_lock_by_code(code);
@@ -152,10 +155,15 @@ int core_param_value(int track, unsigned field)
     /* the modulations, after the smoother as stock adds them */
     v += core_perf_offset(track, field);
     if ((lfo = core_lfo_offset(track, field)) != 0)
-        v += lfo * (max - min) / 127;
+        v += flags & LFO_RAW ? lfo : lfo * (max - min) / 127;
     min *= 256;
     max *= 256;
     return v < min ? min : v > max ? max : v;
+}
+
+int core_param_value(int track, unsigned field)
+{
+    return core_param_value_ex(track, field, 0);
 }
 
 int core_param_int(int track, unsigned field)

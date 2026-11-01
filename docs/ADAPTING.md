@@ -1836,7 +1836,9 @@ as stock adds them to its own parameters, and clamps the sum to
 `min..max`. The result is in 8.8 steps of the field (one step is 256), so
 a mod that interpolates keeps the fraction; `core_param_int` rounds it to
 whole steps. The LFO's offset is scaled from a 0..127 knob's steps to the
-parameter's range (`max - min` steps for the LFO's full depth). Track 12
+parameter's range (`max - min` steps for the LFO's full depth);
+`core_param_value_ex(track, field, CORE_PARAM_LFO_RAW)` adds it as it is,
+a stock knob's swing in the parameter's own steps. Track 12
 (the FX track) and a field with no lock code give `CORE_PARAM_NONE`.
 
 A field whose value must not glide, a type or a mode, is declared

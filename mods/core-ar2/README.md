@@ -622,7 +622,8 @@ follows stock's order in the audio interrupt: the target (the sound in the
 kit at 0x800067b8, then `core_lock_value`, then `core_scene_value`) through
 stock's one-pole, s = 0x03d7 t + 0x7c29 s over 0x8000 a block (0x40120d26),
 then `core_perf_offset` (0x40120fde) and `core_lfo_offset` (0x4012101a,
-scaled by `(max - min) / 127`), clamped to `min..max`, in 8.8.
+scaled by `(max - min) / 127`, or as it is with `core_param_value_ex`'s
+`CORE_PARAM_LFO_RAW`), clamped to `min..max`, in 8.8.
 
 It is lazy: per track and smoothed parameter, core keeps the value (16.16)
 and the block it was stepped to, and a call steps it k blocks at once,
