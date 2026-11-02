@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
-"""Private empty-machine experiment; emits ordinary format-2 mods."""
+"""Private machine UI experiment; emits ordinary format-2 mods."""
 import argparse
 import json
 import os
@@ -44,7 +44,7 @@ def sdk_alpha_registrations(doc, sections):
             if b < 32 or b > 126 or i == limit:
                 break
             text.append(b)
-        raise build.BuildError('sdk alpha: machine names need 1..%d printable ASCII characters' % limit)
+        raise build.BuildError('sdk alpha: names and labels need 1..%d printable ASCII characters' % limit)
 
     registrations, ids = [], set()
     for name in sorted(doc['exports']):
@@ -57,15 +57,56 @@ def sdk_alpha_registrations(doc, sections):
             raise build.BuildError('sdk alpha: duplicate or invalid machine slot %d (expected 4..127)' % mid)
         ui = sdk_alpha_pointer(at, 28)
         abi = [r for r in doc['relocs'] if r[:2] == [ui[0], ui[1]]]
-        if len(abi) != 1 or abi[0][2:] != ['abs32', 'sym:sdk_alpha_dt1_empty_ui', 0]:
-            raise build.BuildError('sdk alpha: invalid empty-machine ABI')
+        if len(abi) != 1 or abi[0][2:] not in (
+                ['abs32', 'sym:sdk_alpha_dt1_empty_ui', 0],
+                ['abs32', 'sym:sdk_alpha_dt1_ui_v3', 0]):
+            raise build.BuildError('sdk alpha: invalid machine UI ABI')
         machine = sdk_alpha_pointer(ui, 4)
         data = sdk_alpha_bytes(machine, 32)
         if struct.unpack_from('>i', data)[0] != mid or struct.unpack_from('>iii', raw, 16) != (3, mid, 0x55493330):
             raise build.BuildError('sdk alpha: inconsistent machine adapter')
-        if any(data[12:28]) or any(r[0] == machine[0] and machine[1] + 12 <= r[1] < machine[1] + 28
-                                   for r in doc['relocs']):
-            raise build.BuildError('sdk alpha: this slice requires zero pages and zero knobs')
+        page_count, = struct.unpack_from('>I', data, 16)
+        if page_count > 2:
+            raise build.BuildError('sdk alpha: Digitakt supports at most 2 pages')
+        if any(data[20:28]) or any(
+                r[0] == machine[0] and machine[1] + 20 <= r[1] < machine[1] + 28
+                for r in doc['relocs']):
+            raise build.BuildError('sdk alpha: reserved machine fields must be zero')
+        if not page_count:
+            if any(data[12:16]) or any(
+                    r[0] == machine[0] and r[1] == machine[1] + 12 for r in doc['relocs']):
+                raise build.BuildError('sdk alpha: empty machines require zero pages')
+        else:
+            if abi[0][3] != 'sym:sdk_alpha_dt1_ui_v3':
+                raise build.BuildError('sdk alpha: pages require the pages ABI')
+            pages = sdk_alpha_pointer(machine, 12)
+            knobs = {}
+            for page in range(page_count):
+                at_page = (pages[0], pages[1] + 36 * page)
+                pd = sdk_alpha_bytes(at_page, 36)
+                sdk_alpha_name(at_page, 0, 16)
+                for encoder in range(8):
+                    offset = 4 + 4 * encoder
+                    relocated = any(r[0] == pages[0] and r[1] == at_page[1] + offset
+                                    for r in doc['relocs'])
+                    if not relocated and not any(pd[offset:offset + 4]):
+                        continue
+                    ref = sdk_alpha_pointer(at_page, offset)
+                    kd = sdk_alpha_bytes(ref, 24)
+                    kid, = struct.unpack_from('>I', kd)
+                    if kid >= 15:
+                        raise build.BuildError('sdk alpha: knob IDs must be in 0..14 (at most 15 knobs)')
+                    if kid in knobs and knobs[kid] != ref:
+                        raise build.BuildError('sdk alpha: different knobs cannot share a logical ID')
+                    knobs[kid] = ref
+                    sdk_alpha_name(ref, 4, 8)
+                    low, has_low, high, has_high = struct.unpack_from('>iIiI', kd, 8)
+                    if has_low not in (0, 1) or has_high not in (0, 1):
+                        raise build.BuildError('sdk alpha: bound supplied must be 0 or 1')
+                    if (low if has_low else 0) > (high if has_high else 127):
+                        raise build.BuildError('sdk alpha: knob min exceeds max')
+            if set(knobs) != set(range(len(knobs))):
+                raise build.BuildError('sdk alpha: knob IDs must be contiguous from zero')
         sdk_alpha_name(machine, 4, 16)
         sdk_alpha_name(machine, 8, 4)
         ids.add(mid)
