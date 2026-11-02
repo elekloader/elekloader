@@ -1,8 +1,8 @@
 {
- "id": "machine-pages", "version": "1.6",
+ "id": "machine-pages", "version": "1.7",
  "license": "GPL-2.0-or-later",
  "title": "machine pages", "category": "Framework", "author": "irpina",
- "description": "Draws the SRC and LFO pages of the SRC machines that describe their own (core 3.0), and gives the render an event for machines that make or take a track's sound, so several machine mods combine. On its own, and for machines that do not describe a page, it changes nothing the unit does.",
+ "description": "Draws the SRC and LFO pages of the SRC machines that describe their own (core 3.0), and gives the render an event for machines that make or take a track's sound, so several machine mods combine. A track that turns back from such a machine to one without its page gets its knobs' values back. On its own, and for machines that do not describe a page, it changes nothing the unit does.",
  "device": "digitakt-mk1", "os": "1.53",
  "sources": ["pages.s", "pages.c", "src.s", "src.c", "params.s", "params.c", "menu.s", "menu.c"],
  "defsym": {

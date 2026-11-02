@@ -44,6 +44,7 @@ static int npages, found;
 static struct page *page_now;                  /* the SRC page's machine, if it has a page */
 static char pop[16];                           /* the pop-up's text */
 static uint8_t selected[8];
+extern uint8_t core_samp_tab[];               /* core's: the sample list's SAMP id, by machine (CM_SAMPLE) */
 
 extern const struct cm_machine *const core_machines[];   /* core 2.1's table, 0 at its end */
 extern uint32_t mp_stock_layout(int32_t machine);        /* pages.s: the stock layout of machine 0-3 */
@@ -364,6 +365,43 @@ int32_t mp_not_sample(void)
     return page_now && (page_now->ui->knob[3].flags & CM_NOT_SAMPLE) != 0;
 }
 
+/* ---- the sample list for a knob but D (CM_SAMPLE) -------------------------------------------------- */
+
+/* The sample list finds the parameter it shows and sets by the machine: core points its six lookups at
+ * core_samp_tab, an added machine's entry its params machine's SAMP (knob D). While a CM_SAMPLE knob has
+ * the list, its machine's entry is that knob's id instead: the list shows its slot, a pick (and a lock, on
+ * a held trig) writes it, the pop-up names its sample. The next compare puts knob D back. Only an added
+ * machine's entry changes, so a stock page never sees another. */
+static int32_t samp_moved = -1;                /* the machine whose entry is a CM_SAMPLE knob's, or -1 */
+
+static void samp_reset(void)
+{
+    const struct page *p;
+    if (samp_moved < 0)
+        return;
+    p = page_of((uint32_t)samp_moved);
+    if (p)
+        core_samp_tab[samp_moved] = (uint8_t)(ID_BASE(p->params) + 3);
+    samp_moved = -1;
+}
+
+/* The SRC page's two compares (a knob turned, a knob pressed): id the knob's parameter. -> 0 when the
+ * sample list is for it (the compare says "SAMP"): knob D unless CM_NOT_SAMPLE, or a CM_SAMPLE knob. */
+int32_t mp_samp_not(uint32_t id)
+{
+    const struct page *p = page_now;
+    int k;
+    samp_reset();
+    if (p && p->id < 128 && (k = knob_of(p, id)) >= 0 && k != 3 && (p->ui->knob[k].flags & CM_SAMPLE)) {
+        core_samp_tab[p->id] = (uint8_t)(ID_BASE(p->ui->page_from) + (uint32_t)k);
+        samp_moved = p->id;
+        return 0;
+    }
+    if (id != 0x87)
+        return 1;
+    return mp_not_sample();
+}
+
 /* ---- ranges -------------------------------------------------------------------------------------- */
 
 /* out = {min, max, default}, the stock range; machine: the sound's, or -1. */
@@ -448,23 +486,123 @@ uint32_t mp_lfo52(uint32_t off, int32_t what, uint32_t stock)
     return off % 52 ? stock : mp_lfo(off / 52, what, stock);
 }
 
-/* ---- a track that turns to a machine with a page (ev_tick, 30 Hz) --------------------------------- */
+/* ---- a track that turns to a machine with a page, or away from one (ev_tick, 30 Hz) ----------------- */
+
+/* A machine with a page that takes a stock machine's parameters gives some of knobs A-H other meanings:
+ * GRAIN's MODE 4 is a PLAY ONESHOT does not have (ERR), its SIZE a heavy BR. A track that turns back to a
+ * stock machine would keep those values read the stock way. So while a track's machine lends nothing its
+ * knob values are kept, every tick; when it turns back from one that lends, the knobs lent on the way get
+ * the kept values again, written into the kit and through the knobs' own path into the engine
+ * (fw_set_param). ONESHOT -> GRAIN -> ONESHOT comes back as it was, through any number of such machines.
+ *
+ * A knob is lent if the page gives it its own look, flags (range, default, graphic), text or graphic; a
+ * stock knob only renamed (FLIP's LEV) is not.
+ *
+ * Only a switch is undone, not a load: a switch changes the machine and nothing else of the sound in one
+ * tick, a sound loaded changes it all. A snapshot of each sound (one track a tick: eight sounds compared
+ * and copied every tick starved the OS's first boot, src-views 1.2's lesson) tells them apart: more than 8
+ * bytes changed beside the machine and knobs A-H is a load. A track loaded on a lending machine has nothing
+ * kept; turned to a stock one, of the knobs lent its PLAY goes back to 0 if past the stock list (no ERR),
+ * BR to 0 and LEV to 100. (Was src-views', a separate mod, before 1.7.) */
+#define SND_SIZE    0xa2
+#define SND_SLOT0   17                         /* fw_set_param's slot of knob A */
+#define K_PLAY      1
+#define K_BR        2
+#define K_LEV       7
 
 static const uint8_t *seen_kit;
-static uint8_t seen[8];
+static uint8_t seen[8], keep_ok[8], lent[8], snap_next;
+static int16_t keep[8][KNOBS];
+static uint8_t snap[8][SND_SIZE];
+
+/* the knobs machine m lends (bit k: knob k), 0 for a stock machine or one without a page */
+static uint8_t lends(uint8_t m)
+{
+    const struct page *p = page_of(m);
+    uint8_t b = 0;
+    int k;
+    for (k = 0; p && k < KNOBS; k++) {
+        const struct cm_knob *n = &p->ui->knob[k];
+        if (n->look || n->flags || n->fmt || n->gfx)
+            b |= (uint8_t)(1u << k);
+    }
+    return b;
+}
+
+static int16_t *knob_word(uint8_t *snd, int k)
+{
+    return (int16_t *)(snd + FW_SOUND_PARAM(k));
+}
+
+static void snap_take(int t, const uint8_t *snd)
+{
+    int i;
+    for (i = 0; i < SND_SIZE; i++)
+        snap[t][i] = snd[i];
+}
+
+/* the bytes of the sound that changed since its snapshot, the machine and knobs A-H aside */
+static int changed_rest(int t, const uint8_t *snd)
+{
+    int i, n = 0;
+    for (i = 0; i < SND_SIZE; i++) {
+        if (i == FW_SOUND_MACHINE || (i >= FW_SOUND_PARAM(0) && i < FW_SOUND_PARAM(KNOBS)))
+            continue;
+        n += snd[i] != snap[t][i];
+    }
+    return n;
+}
+
+static void put_knob(int t, uint8_t *snd, int k, int16_t v)
+{
+    *knob_word(snd, k) = v;
+    fw_set_param(v, t, SND_SLOT0 + k);
+}
+
+/* track t's machine turned to m: back from lending, the knobs as they were */
+static void turned(int t, uint8_t *snd, uint8_t m)
+{
+    uint8_t l = lends(m);
+    int k;
+    if (changed_rest(t, snd) > 8) {            /* a sound loaded: taken as it is */
+        keep_ok[t] = 0;
+        lent[t] = l;
+        return;
+    }
+    if (lent[t] && !l) {
+        for (k = 0; k < KNOBS; k++) {
+            if (!(lent[t] & (1u << k)))
+                continue;
+            if (keep_ok[t])
+                put_knob(t, snd, k, keep[t][k]);
+            else if (k == K_PLAY && *knob_word(snd, k) > (3 << 8))
+                put_knob(t, snd, k, 0);
+            else if (k == K_BR)
+                put_knob(t, snd, k, 0);         /* no bit reduction */
+            else if (k == K_LEV)
+                put_knob(t, snd, k, 100 << 8);
+        }
+        lent[t] = 0;
+    }
+    lent[t] |= l;
+}
 
 void mp_tick(void *ctrl)
 {
     uint8_t *kit = fw_kit;
-    int t;
+    int t, k;
     (void)ctrl;
     if (!kit)
         return;
     if (kit != seen_kit) {                     /* another kit: taken as it is */
-        for (t = 0; t < 8; t++)
-            seen[t] = FW_SOUND(kit, t)[FW_SOUND_MACHINE];
-        for (t = 0; t < 8; t++)
+        for (t = 0; t < 8; t++) {
+            uint8_t *snd = FW_SOUND(kit, t);
+            seen[t] = snd[FW_SOUND_MACHINE];
             selected[t] = 0;
+            keep_ok[t] = 0;
+            lent[t] = lends(seen[t]);
+            snap_take(t, snd);
+        }
         seen_kit = kit;
         return;
     }
@@ -472,12 +610,22 @@ void mp_tick(void *ctrl)
         uint8_t *snd = FW_SOUND(kit, t);
         uint8_t m = snd[FW_SOUND_MACHINE], from = seen[t];
         const struct page *p;
-        if (m == from)
+        if (m == from) {
+            if (!lent[t]) {                    /* lending nothing: kept as they are now */
+                for (k = 0; k < KNOBS; k++)
+                    keep[t][k] = *knob_word(snd, k);
+                keep_ok[t] = 1;
+            }
             continue;
+        }
         seen[t] = m;
         selected[t] = 0;
+        turned(t, snd, m);
         p = page_of(m);
         if (p && p->ui->on_switch)
             p->ui->on_switch(t, from, snd);
+        snap_take(t, snd);
     }
+    t = snap_next++ & 7;
+    snap_take(t, FW_SOUND(kit, t));
 }

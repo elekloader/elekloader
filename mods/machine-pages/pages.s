@@ -532,40 +532,32 @@ mp_lfo_bname_s:
         lea     60(%sp), %sp
         rts
 
-| ---- knob D, when it is not a sample -----------------------------------------
-| The SRC page's knob handlers compare the turned knob's id with SAMP's
-| (0x87) and open the sample list instead of changing it: at 0x4003b314
-| (was: cmpi.l #135,d0) and 0x4003b5b2 (was: cmpi.l #135,d2), by jsr. When
-| the page's machine marks knob D CM_NOT_SAMPLE, the compare says "not
-| SAMP" (Z clear); otherwise it is the stock compare. Every register is
-| kept; only the condition codes are read after it.
+| ---- the sample list: knob D, and the CM_SAMPLE knobs -----------------------
+| The SRC page's knob handlers compare the turned (or pressed) knob's id
+| with SAMP's (0x87, after the other machines' 0x6f, 0x77, 0x7f) and open
+| the sample list instead of changing it: at 0x4003b314 (was: cmpi.l
+| #135,d0) and 0x4003b5b2 (was: cmpi.l #135,d2), by jsr. mp_samp_not
+| answers: Z set (the list) for knob D unless the page's machine marks it
+| CM_NOT_SAMPLE, and for a knob it marks CM_SAMPLE (pointing the list's
+| table, mp_samp_tab, at that knob); Z clear for any other. Every register
+| is kept; only the condition codes are read after it.
         .globl  mp_samp_d0_s, mp_samp_d2_s
 mp_samp_d0_s:
-        cmpi.l  #0x87, %d0
-        bne.s   9f                      | not SAMP: Z clear
-        bsr.s   mp_samp_ours
-        beq.s   1f
-        tst.l   %d0                     | 0x87: Z clear, no sample list
-        rts
-1:      cmpi.l  #0x87, %d0              | SAMP's own: Z set
-9:      rts
-
-mp_samp_d2_s:
-        cmpi.l  #0x87, %d2
-        bne.s   9f
-        bsr.s   mp_samp_ours
-        beq.s   1f
-        tst.l   %d2
-        rts
-1:      cmpi.l  #0x87, %d2
-9:      rts
-
-| -> Z clear when knob D on the page is not a sample. Every register kept.
-mp_samp_ours:
         lea     -16(%sp), %sp
         movem.l %d0-%d1/%a0-%a1, (%sp)
-        jsr     mp_not_sample
-        tst.l   %d0
+        move.l  %d0, -(%sp)
+        bra.s   mp_samp_ask
+
+mp_samp_d2_s:
+        lea     -16(%sp), %sp
+        movem.l %d0-%d1/%a0-%a1, (%sp)
+        move.l  %d2, -(%sp)
+
+| (sp) the id, 4(sp) the saved registers. -> Z set when the list is for it.
+mp_samp_ask:
+        jsr     mp_samp_not
+        addq.l  #4, %sp
+        tst.l   %d0                     | 0: the list, Z set
         movem.l (%sp), %d0-%d1/%a0-%a1  | the flags stay
         lea     16(%sp), %sp
         rts

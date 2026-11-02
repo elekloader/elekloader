@@ -18,11 +18,11 @@ the mod shop: tick it there and the page takes the newest core for it.
 | | |
 |---|---|
 | needs | core 3.0 (`resources.core`), and refuses beside digichain, which owns the same places |
-| sites | 109, listed in `mod.json`. 1.1's 20: 7 on the SRC page, 4 range lookups, 5 on the LFO page, 2 SAMP compares, the machine menu's icon row and the render point 0x40077fba. 1.2's extra values add 77: 50 one-byte bounds (the parameter-id compares, 164 to 171), and 27 hooks: the SRC page's page flip, title and copy/clear/paste, the id-slot maps, the descriptor table and its 7 readers, defaults, Randomize, locks and the sound file's save/load/upgrade and LFO destinations. 1.2.1 adds 2: the stores of the firmware's in-place parameter sync. 1.3 adds 2: MIDI's range lookups, the CC's (0x40010d50) and the NRPN's (0x40010154). 1.4 adds 1: the CC lookup's table for an audio track (0x400791fe). 1.5 adds none: it reads the view at the knob-graphic site it already has. 1.6 adds 7, for the machine menu's filter tab |
+| sites | 109, listed in `mod.json`. 1.1's 20: 7 on the SRC page, 4 range lookups, 5 on the LFO page, 2 SAMP compares (knob D, and from 1.7 the CM_SAMPLE knobs), the machine menu's icon row and the render point 0x40077fba. 1.2's extra values add 77: 50 one-byte bounds (the parameter-id compares, 164 to 171), and 27 hooks: the SRC page's page flip, title and copy/clear/paste, the id-slot maps, the descriptor table and its 7 readers, defaults, Randomize, locks and the sound file's save/load/upgrade and LFO destinations. 1.2.1 adds 2: the stores of the firmware's in-place parameter sync. 1.3 adds 2: MIDI's range lookups, the CC's (0x40010d50) and the NRPN's (0x40010154). 1.4 adds 1: the CC lookup's table for an audio track (0x400791fe). 1.5 adds none: it reads the view at the knob-graphic site it already has. 1.6 adds 7, for the machine menu's filter tab. 1.7 adds none |
 | exports | `cm_ui_v3`, from 1.1 `cm_ui_v31`, from 1.2 `cm_ui_v32`, from 1.4 `cm_ui_v33`: the markers a machine's page names; from 1.2 `cm_src_value`; from 1.5 `cm_src_shown` |
 | claims | from 1.2, `soundslot:46` to `soundslot:52`, the extra values' slots |
 | declares | `ev_render_voices`, the render event |
-| RAM | 9.3 KB code, 4.5 KB for up to 32 machines' pages (1.1: 2.4 KB and 2 KB) |
+| RAM | 11.8 KB code, 6.1 KB: 4.5 KB for up to 32 machines' pages, the rest the tracks' kept knobs and sound snapshots (1.1: 2.4 KB and 2 KB) |
 
 ## What a machine describes
 
@@ -129,6 +129,36 @@ sends an added machine's CCs there, outside knobs A-H, so FX, the MIDI
 tracks and every other machine get the stock answer. The PARAM fixture's
 extras take CC 24-30. Without a `cm_ui_v33` page nothing changes. NRPNs
 and a value's CC out are not given.
+
+**A second sample knob (1.7).** A knob other than D with `CM_SAMPLE` in its
+flags opens the stock sample list when it is turned or pressed, as SAMP
+does: its value is a slot, and the list shows, previews, picks and (on a
+held trig) locks it. The SRC page's two SAMP compares (the sites above)
+answer "SAMP" for it, and the list's parameter is the knob's: core points
+the list's six lookups at `core_samp_tab`, an added machine's entry its
+params machine's SAMP, and while a `CM_SAMPLE` knob has the list
+machine-pages puts that knob's id in the machine's entry; the next compare
+(any knob) puts SAMP's back. Only an added machine's entry changes, so a
+stock page never sees it. No new sites: it works wherever core's table and
+the compares are, 1.53 and 1.54. A machine built with the flag beside
+machine-pages 1.1 gets a plain knob there, as 1.1 ignores it. BERN's SMPB
+(sample B) is the first.
+
+**The knobs given back (1.7).** A machine that takes a stock machine's
+parameters gives some of knobs A-H other meanings (GRAIN's MODE is a PLAY
+past ONESHOT's list), which a track turned back to a stock machine would
+keep. machine-pages' tick keeps a track's knob values while its machine
+lends nothing and writes them back (into the kit and through `fw_set_param`)
+when it returns from one that lends, through any number of such machines in
+between. A knob is lent if the page gives it its own look, flags, text or
+graphic; a stock knob only renamed is not. A sound loaded (more than 8 of
+its other bytes changed against a snapshot) is taken as it is; one loaded
+on a lending machine and turned to a stock one gets PLAY 0 if past the
+stock list, BR 0 and LEV 100. The snapshot is one track a tick: compared
+and copied for all eight every tick, it starved the OS's first boot of a
+blank +Drive (src-views 1.2, which did this before, never let the larger
+builds finish it in digiemu). This was the src-views mod's job, with each
+machine listing its knobs in `srcv_borrow`; that table is no longer read.
 
 ## The machine menu's filter tab (1.6)
 

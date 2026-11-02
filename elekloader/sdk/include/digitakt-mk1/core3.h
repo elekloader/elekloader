@@ -52,6 +52,8 @@ enum {
                                machine-pages 1.3, SRC keeps a one-page machine's page (no waveform view) */
     CM_DRAW       = 16,     /* draw, not gfx: the machine draws the knob's graphic (a page naming cm_ui_v31;
                                on a cm_ui_v3 page the stock graphic is drawn and +36 is not called) */
+    CM_SAMPLE     = 32,     /* a knob but D: turning or pressing it opens the stock sample list for it, as
+                               SAMP's does; its value is a sample slot (machine-pages 1.7) */
 };
 
 /* A value's text: write it into buf and return nonzero, or return 0 for the stock text. ctx is 0 for the
