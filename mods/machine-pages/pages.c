@@ -315,6 +315,18 @@ int32_t mp_knob(int32_t *a)
         if (track < 8 && sdk_alpha_snapshot(alpha, selected[track], mp_shown_view))
             sdk_alpha_redraw(mp_shown_view);
     }
+    const struct elek_ui_glyph *glyph = alpha ? sdk_alpha_glyph(alpha, knob_of(page_now, a[0])) : 0;
+    if (glyph) {
+        void *bmp = (void *)a[4];
+        int32_t x = a[5], y = a[6];
+        fw_fillrect(bmp, x + 1, y, x + 17, y + 16, 0);
+        for (int row = 0; row < 16; ++row)
+            for (int col = 0; col < 16; ++col)
+                if (glyph->rows[row] & (0x8000u >> col))
+                    fw_fillrect(bmp, x + 1 + col, y + 16 - row,
+                                x + 1 + col, y + 16 - row, 1);
+        return 1;
+    }
 #endif
     if (k->flags & CM_DRAW) {
         if (page_now->ui->abi != cm_ui_v3 && k->draw && k->draw((void *)a[4], a[5], a[6], a[1], a[2]))

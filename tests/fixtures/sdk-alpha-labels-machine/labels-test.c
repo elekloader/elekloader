@@ -5,6 +5,7 @@
 int32_t sdk_alpha_snapshot(const struct elek_machine *, int32_t, void *);
 int32_t sdk_alpha_visible(const struct elek_machine *, uint32_t);
 const char *sdk_alpha_label(const struct elek_machine *, uint32_t);
+const struct elek_ui_glyph *sdk_alpha_glyph(const struct elek_machine *, uint32_t);
 const char cm_ui_v32[] = "host stub";
 uint32_t core_machine_ui(int32_t id) { (void)id; return 0; }
 volatile uint32_t fw_active_track;
@@ -19,10 +20,14 @@ static const struct elek_ui_page pages[2] = {
 };
 static char buffer[16] = "COPIED";
 static int mode;
+static const struct elek_ui_glyph glyphs[2] = { { .rows = { 0x8000 } }, { .rows = { 0x0001 } } };
 static void present(const struct elek_ui_context *ctx, struct elek_ui_presentation *out)
 {
     assert(out->knob_count == 2 && out->knob);
     assert(out->knob[1]->label == knobs[1].label && out->knob[1]->visible == 1);
+    assert(!out->knob[1]->glyph);
+    if (mode == 6) out->knob[1]->glyph = &glyphs[ctx->knob[0]->value == 127];
+    if (mode == 7) out->knob[1]->glyph = 0;
     if (ctx->knob[0]->value == 127) out->knob[1]->visible = 0;
     if (ctx->knob[0]->value) {
         if (mode == 0) out->knob[1]->label = buffer;
@@ -68,5 +73,21 @@ int main(void)
     sdk_alpha_snapshot(&without, 0, first);
     assert(!strcmp(sdk_alpha_label(&without, 1), "TARGET"));
     assert(!sdk_alpha_label(&without, 2));
+    mode = 6;
+    first[0] = 256;
+    assert(sdk_alpha_snapshot(&m, 0, first));
+    assert(sdk_alpha_glyph(&m, 1) == &glyphs[0]);
+    assert(!sdk_alpha_snapshot(&m, 0, first));
+    first[0] = ELEK_UI_RAW_MAX;
+    assert(sdk_alpha_snapshot(&m, 0, first));
+    assert(sdk_alpha_glyph(&m, 1) == &glyphs[1]);
+    mode = 7;
+    assert(sdk_alpha_snapshot(&m, 0, first));
+    assert(!sdk_alpha_glyph(&m, 1)); /* explicit stock fallback */
+    mode = 6;
+    sdk_alpha_snapshot(&m, 0, first);
+    sdk_alpha_snapshot(&without, 0, first);
+    assert(!sdk_alpha_glyph(&without, 1)); /* callback omission resets defaults */
+    assert(!sdk_alpha_glyph(&without, 2));
     return 0;
 }

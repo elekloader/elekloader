@@ -18,5 +18,6 @@ const struct cm_ui32 *sdk_alpha_ui(int32_t id);
 int32_t sdk_alpha_snapshot(const struct elek_machine *, int32_t page, void *view);
 int32_t sdk_alpha_visible(const struct elek_machine *, uint32_t knob);
 const char *sdk_alpha_label(const struct elek_machine *, uint32_t knob);
+const struct elek_ui_glyph *sdk_alpha_glyph(const struct elek_machine *, uint32_t knob);
 int32_t sdk_alpha_value_text(int32_t machine, int32_t knob, int32_t raw, char *buf, int popup);
 #endif

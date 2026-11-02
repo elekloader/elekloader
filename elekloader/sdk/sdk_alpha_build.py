@@ -59,7 +59,8 @@ def sdk_alpha_registrations(doc, sections):
         abi = [r for r in doc['relocs'] if r[:2] == [ui[0], ui[1]]]
         if len(abi) != 1 or abi[0][2:] not in (
                 ['abs32', 'sym:sdk_alpha_dt1_empty_ui', 0],
-                ['abs32', 'sym:sdk_alpha_dt1_ui_v3', 0]):
+                ['abs32', 'sym:sdk_alpha_dt1_ui_v3', 0],
+                ['abs32', 'sym:sdk_alpha_dt1_ui_v4', 0]):
             raise build.BuildError('sdk alpha: invalid machine UI ABI')
         machine = sdk_alpha_pointer(ui, 4)
         data = sdk_alpha_bytes(machine, 32)
@@ -77,7 +78,8 @@ def sdk_alpha_registrations(doc, sections):
                     r[0] == machine[0] and r[1] == machine[1] + 12 for r in doc['relocs']):
                 raise build.BuildError('sdk alpha: empty machines require zero pages')
         else:
-            if abi[0][3] != 'sym:sdk_alpha_dt1_ui_v3':
+            glyphs = abi[0][3] == 'sym:sdk_alpha_dt1_ui_v4'
+            if abi[0][3] not in ('sym:sdk_alpha_dt1_ui_v3', 'sym:sdk_alpha_dt1_ui_v4'):
                 raise build.BuildError('sdk alpha: pages require the pages ABI')
             pages = sdk_alpha_pointer(machine, 12)
             knobs = {}
@@ -92,7 +94,7 @@ def sdk_alpha_registrations(doc, sections):
                     if not relocated and not any(pd[offset:offset + 4]):
                         continue
                     ref = sdk_alpha_pointer(at_page, offset)
-                    kd = sdk_alpha_bytes(ref, 24)
+                    kd = sdk_alpha_bytes(ref, 28 if glyphs else 24)
                     kid, = struct.unpack_from('>I', kd)
                     if kid >= 15:
                         raise build.BuildError('sdk alpha: knob IDs must be in 0..14 (at most 15 knobs)')
@@ -105,6 +107,14 @@ def sdk_alpha_registrations(doc, sections):
                         raise build.BuildError('sdk alpha: bound supplied must be 0 or 1')
                     if (low if has_low else 0) > (high if has_high else 127):
                         raise build.BuildError('sdk alpha: knob min exceeds max')
+                    if glyphs:
+                        relocated = any(r[0] == ref[0] and r[1] == ref[1] + 24
+                                        for r in doc['relocs'])
+                        if relocated or any(kd[24:28]):
+                            glyph = sdk_alpha_pointer(ref, 24)
+                            if glyph[1] % 2:
+                                raise build.BuildError('sdk alpha: glyph must be word-aligned')
+                            sdk_alpha_bytes(glyph, 32)
             if set(knobs) != set(range(len(knobs))):
                 raise build.BuildError('sdk alpha: knob IDs must be contiguous from zero')
         sdk_alpha_name(machine, 4, 16)
