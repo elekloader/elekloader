@@ -183,7 +183,10 @@ extern void core_menu_open(const void *const *list, int32_t sel,
 
 /* core_param_override: a mod answering for a stock parameter, while it wants to (from 3.1). ui returns a UI
  * record (84 bytes, the stock layout: the value text's formatter at +0x14, the knob graphic) or 0 for
- * the stock one; name returns the label for field 0x30 or 0. Either may be 0; the first answer wins. */
+ * the stock one. name returns the short label for field 0x30, or 0 for stock. In 4.2 the LFO list and
+ * DEST box also ask for 0x28 (destination name) and 0x2c (group); an over-wide list row falls back to
+ * 0x30. With no destination-name override the box keeps its stock short name. Either callback may be
+ * 0; the first answer wins. These change text only: native slots and destination order stay intact. */
 struct core_param_override {
     void *(*ui)(int32_t id);
     const char *(*name)(int32_t id, int32_t field);
@@ -195,6 +198,13 @@ struct core_param_override {
  * bytes, 4-aligned, the mod's; build it once, outside the render. */
 #define CORE_LOOK_NONE  (-1)
 extern void core_param_ui_make(void *ui, int32_t id, int32_t look, void (*fmt)(int32_t value, char *buf));
+
+/* 4.2: the page list of the page key whose stock list starts with page first (SYN1 2, SYN2 4, FLTR 6, AMP 8,
+ * LFO 10), replaced by list[0..n-1] (page indices: stock's 1-26, or a mod page's), or put back with n 0.
+ * Never longer than the stock list. The page shown goes back to the first when it is past the new end; the
+ * caller redraws (ev_tick's ctrl). 1, or 0 when that view is not built yet or the list is too long. From the
+ * UI task (ev_tick, ev_key); the last call wins, so one mod answers for a key. */
+extern int32_t core_page_list(int32_t first, const int32_t *list, int32_t n);
 
 /* Open a mod page from a key handler (its key's code: AMP 24, say); 0 when the view was never built. */
 extern int32_t core_page_open(void *brain, void *event, int32_t key, void *page);

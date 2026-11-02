@@ -30,6 +30,7 @@
         .equ    EVLEN,    32            | a key event, with room to spare
         .equ    VIEW_CUR, 144           | a view's page: its place in its list
         .equ    PRESSES,  8             | the most core_page_open sends
+        .equ    VIEWS,    16            | the views core_views notes (4.2)
 
         .section .run, "ax"
 
@@ -69,7 +70,7 @@ core_view_init:
         move.l  4(%a0), %d2             | its end
         sub.l   %a1, %d2
         cmpi.l  #4 * (LISTMAX - PAGES), %d2
-        bhi.s   5f
+        bhi.w   5f
         add.l   %a1, %d2
         lea     core_view_buf, %a2
 1:      cmp.l   %a1, %d2                | each stock index ...
@@ -89,7 +90,21 @@ core_view_init:
         asr.l   #2, %d1
         move.l  %d1, 56(%a0)            | the place in its list
         bra.s   2b
-4:      lea     core_view_buf, %a0      | the copy as a vector
+4:      move.l  28(%sp), %d0            | 4.2: note the view and its first page
+        move.l  core_view_buf, %d1      | (stock's first: mod pages follow theirs)
+        lea     core_views, %a0
+        moveq   #VIEWS, %d2
+7:      tst.l   (%a0)                   | a free entry, or this view's again
+        beq.s   8f
+        cmp.l   (%a0), %d0
+        beq.s   8f
+        addq.l  #8, %a0
+        subq.l  #1, %d2
+        bne.s   7b
+        bra.s   3f                      | full: not noted
+8:      move.l  %d0, (%a0)+
+        move.l  %d1, (%a0)
+3:      lea     core_view_buf, %a0      | the copy as a vector
         move.l  %a0, (%sp)
         move.l  %a2, 4(%sp)
         move.l  %a2, 8(%sp)
@@ -190,3 +205,8 @@ core_view_buf:
         .skip   4 * LISTMAX
 core_page_ev:
         .skip   EVLEN
+| 4.2: each view VIEW_INIT built, and the first page of its stock list
+| (lists.c's core_page_list finds a page key's view by it).
+        .globl  core_views
+core_views:
+        .skip   8 * VIEWS

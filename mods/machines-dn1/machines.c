@@ -32,6 +32,11 @@
 #define PREC        60
 
 extern const struct dnm_machine *const dn_machines[];      /* this mod's table, ending in 0 */
+const struct dnm_machine *dnm_sdk_machine(int32_t i);      /* sdk_alpha.c: the SDK alpha's, after them */
+void dnm_sdk_present(const struct dnm_machine *m, int force);
+const char *dnm_sdk_lfo_name(const struct dnm_machine *m, int32_t k, int32_t field);
+void dnm_sdk_tick(const struct dnm_machine *m, void *ctrl);
+const char *dnm_sdk_label(const struct dnm_machine *m, int32_t k);
 
 /* The SYN knobs' parameter ids: A-H of SYN1's first page and of SYN2's, then (DNM_PAGES2) of SYN1's second page
  * and of SYN2's; 0 where a page has no parameter. */
@@ -61,12 +66,33 @@ static const int32_t *param_rec(int32_t id)
     return (const int32_t *)(fw_params + PREC * id);
 }
 
+int32_t dnm_sdk_raw(int32_t track, int32_t encoder)
+{
+    return FW_SOUND_SLOT(fw_kit, track, param_rec(knob_id[encoder])[1]);
+}
+
+int32_t dnm_sdk_param(int32_t k)
+{
+    return knob_id[k];
+}
+
+/* Machine i of the build: the table's, then the SDK alpha's; 0 past the last. */
+static const struct dnm_machine *machine_at(int32_t i)
+{
+    int32_t n;
+    for (n = 0; dn_machines[n]; n++)
+        if (n == i)
+            return dn_machines[n];
+    return dnm_sdk_machine(i - n);
+}
+
 static const struct dnm_machine *find(int32_t id)
 {
-    const struct dnm_machine *const *p;
-    for (p = dn_machines; *p; p++)
-        if ((*p)->id == id)
-            return *p;
+    const struct dnm_machine *m;
+    int32_t i;
+    for (i = 0; (m = machine_at(i)); i++)
+        if (m->id == id)
+            return m;
     return 0;
 }
 
@@ -187,8 +213,8 @@ void dnm_render(int32_t *voices)
     for (v = 0; v < VOICES; v++) {
         int32_t id = FW_VOICE_PARAM(v, MACH_SLOT) >> 8, *block = voices + 32 * v;
         const struct dnm_machine *m;
-        if (id <= 0 || !(m = find(id)))
-            continue;                       /* FM, or a machine not in this build: the FM voice */
+        if (id <= 0 || !(m = find(id)) || !m->render)
+            continue;                       /* FM, a machine not in this build or one with no render: FM */
         if (released & (1u << v)) {
             vs[v].v.gate = 0;
             if (vs[v].stage != OFF)
@@ -241,6 +267,7 @@ static void make_ui(const struct dnm_machine *m)
             core_param_ui_make(ui_rec[k], knob_id[k], CORE_LOOK_NONE, no_value);
     }
     ui_for = m->id;
+    dnm_sdk_present(m, 1);
 }
 
 /* SYN1's and SYN2's second pages (the ratio offsets, the operators' delays, trigs and resets) are FM's
@@ -268,14 +295,28 @@ static const char *dnm_name(int32_t id, int32_t field)
 {
     int32_t k = knob_of(id), mid;
     const struct dnm_machine *m;
-    if (field != 0x30 || k < 0 || (mid = active_machine()) <= 0 || !(m = find(mid)))
+    if (k < 0 || (mid = active_machine()) <= 0 || !(m = find(mid)))
+        return 0;
+    if (field == 0x28 || field == 0x2c)
+        return dnm_sdk_lfo_name(m, k, field);
+    if (field != 0x30)
         return 0;
     if (k >= DNM_KNOBS && !pages2(m))
         return "";
+    const char *label = dnm_sdk_label(m, k);
+    if (label)
+        return label;
     return m->knobs[k].name ? m->knobs[k].name : "";
 }
 
 const struct core_param_override dnm_override = { dnm_ui, dnm_name };
+
+/* ev_tick, the UI task: an SDK machine's pages and values follow the active track (sdk_alpha.c). */
+void dnm_tick(void *ctrl)
+{
+    int32_t mid = active_machine();
+    dnm_sdk_tick(mid > 0 ? find(mid) : 0, ctrl);
+}
 
 /* ---- MACHINES in the Mod Menu ------------------------------------------------------------------ */
 #define MAX_MACHINES 15
@@ -320,7 +361,7 @@ static void set_knobs(int32_t track, const struct dnm_machine *m, const struct d
 static void machines_pick(void *brain, void *event, int32_t track, int32_t index)
 {
     uint8_t *kit = fw_kit;
-    const struct dnm_machine *m = index > 0 ? dn_machines[index - 1] : 0;
+    const struct dnm_machine *m = index > 0 ? machine_at(index - 1) : 0;
     int32_t id = m ? m->id : 0;
     (void)brain;
     (void)event;
@@ -335,7 +376,8 @@ static void machines_pick(void *brain, void *event, int32_t track, int32_t index
 static void machines_open(void *brain, void *event, int32_t track)
 {
     int32_t n = 0, sel = 0, cur = 0;
-    const struct dnm_machine *const *p;
+    const struct dnm_machine *m;
+    int32_t i;
     uint8_t *kit = fw_kit;
     (void)brain;
     (void)event;
@@ -347,12 +389,12 @@ static void machines_open(void *brain, void *event, int32_t track)
     items[0].icon = fm_icon;
     list[n] = &items[n];
     n++;
-    for (p = dn_machines; *p && n <= MAX_MACHINES; p++) {
-        items[n].name = (*p)->name;
+    for (i = 0; (m = machine_at(i)) && n <= MAX_MACHINES; i++) {
+        items[n].name = m->name;
         items[n].open = 0;
-        items[n].tag = (*p)->icon ? CORE_MENU_ICON : 0;
-        items[n].icon = (*p)->icon;
-        if ((*p)->id == cur)
+        items[n].tag = m->icon ? CORE_MENU_ICON : 0;
+        items[n].icon = m->icon;
+        if (m->id == cur)
             sel = n;
         list[n] = &items[n];
         n++;

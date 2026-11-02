@@ -3,6 +3,14 @@
 #include "elekloader/sdk_alpha_machine.h"
 #include "src.h"
 
+/* ELEK_REGISTER_MACHINE emits struct sdk_alpha_registration; core reads it as a struct cm_machine. */
+_Static_assert(sizeof(struct sdk_alpha_registration) == sizeof(struct cm_machine) &&
+               __builtin_offsetof(struct sdk_alpha_registration, render) ==
+               __builtin_offsetof(struct cm_machine, render) &&
+               __builtin_offsetof(struct sdk_alpha_registration, ui) ==
+               __builtin_offsetof(struct cm_machine, ui) &&
+               SDK_ALPHA_UI_TAG == CM_UI_TAG, "registration layout");
+
 const char sdk_alpha_dt1_empty_ui[] = "sdk alpha dt1 empty";
 const char sdk_alpha_dt1_ui_v3[] = "sdk alpha dt1 pages 3";
 const char sdk_alpha_dt1_ui_v4[] = "sdk alpha dt1 glyphs 4";
@@ -19,7 +27,7 @@ struct sdk_alpha_page {
 static struct sdk_alpha_page sdk_alpha_pages[32]; /* same machine capacity as pages.c */
 static uint32_t sdk_alpha_page_count;
 static const struct elek_machine *sdk_alpha_presented;
-static char sdk_alpha_labels[15][9];
+static char sdk_alpha_labels[15][ELEK_UI_LABEL_MAX + 1];
 static uint8_t sdk_alpha_visibility[15];
 static const struct elek_ui_glyph *sdk_alpha_glyphs[15];
 
@@ -155,7 +163,7 @@ int32_t sdk_alpha_snapshot(const struct elek_machine *m, int32_t page, void *vie
     }
     const struct elek_ui_context ctx = {
         .page = page, .page_count = m->page_count, .knob_count = knob_count,
-        .knob = knob_count ? knobs : 0,
+        .knob = knob_count ? knobs : 0, .track = fw_active_track,
     };
     struct elek_ui_presentation out = {
         .knob_count = knob_count, .knob = knob_count ? output : 0,
@@ -167,7 +175,7 @@ int32_t sdk_alpha_snapshot(const struct elek_machine *m, int32_t page, void *vie
         const char *label = presentation[k].label;
         if (!label) label = descriptors[k]->label;
         uint32_t n = 0;
-        for (; n < 8 && label[n]; ++n) {
+        for (; n < ELEK_UI_LABEL_MAX && label[n]; ++n) {
             unsigned char c = label[n];
             char next = c >= 32 && c <= 126 ? c : '?';
             changed |= sdk_alpha_labels[k][n] != next;

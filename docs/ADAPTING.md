@@ -1342,9 +1342,24 @@ page, and returns 0 if the view was never built: from a Mod Menu entry,
 say (below). `int core_page_shown(void *brain, descriptor *page)` is 1
 while the page is on screen with nothing (a menu, a browser) over it.
 
+From core-dn1 4.2, `int32_t core_page_list(int32_t first, const int32_t *list,
+int32_t n)` gives a page key another list of pages for a while: the key
+whose stock list starts with page `first` (SYN1 2, SYN2 4, FLTR 6, AMP 8,
+LFO 10) steps through `list[0..n-1]` instead, stock pages or mod pages, and
+heads the screen with their titles; `n` 0 puts the stock list back. A list
+is never longer than the stock one (with the mod pages core put in it), and
+the page shown goes back to the first when it is past the new end. Call it
+from the UI task (`ev_tick`, `ev_key`), set `ev_tick`'s redraw flag after a
+change, and keep one mod per key: the last call wins. A mod page that only
+such a list shows takes an `after` no stock list holds (-1). It returns 0
+while the key's view is not built yet. machines-dn1 uses it to show an SDK
+alpha machine's pages behind SYN2 in place of FM's envelope page, whose
+graphs are drawn for page 4 whatever its knobs.
+
 Core-dn1 2.1 owns two more sites, by jmp at their entries: 0x40089a2c, the
 page record lookup (`core_page_rec`), and 0x40044490, the routine each
-view's constructor gives its page list to (`core_view_init`).
+view's constructor gives its page list to (`core_view_init`; from 4.2 it
+also notes the view for `core_page_list`).
 
 ### Project data (core-dn1 2.1, Digitone mk1)
 
@@ -2099,7 +2114,7 @@ wants to (on its own tracks, say) by contributing to the table
 | offset | field | |
 |---|---|---|
 | +0 | ui | `void *ui(int id)`: a UI record (84 bytes, the stock layout) for the id, or 0 for the stock one |
-| +4 | name | `const char *name(int id, int field)`: the label for field 0x30 (the knob's short name), or 0 |
+| +4 | name | `const char *name(int id, int field)`: the label for field 0x30 (the knob's short name), or 0; core-dn1 4.2 also asks for 0x28 (LFO destination name) and 0x2c (its group) |
 
 Either may be 0; the first mod that answers wins. The value, its sound slot
 and its range stay the stock parameter's. A UI record holds the knob's kind
@@ -2114,10 +2129,12 @@ from another parameter brings that parameter's turn along: a plain knob's
 over ALGO jumps two algorithms a detent. Core consults the table in the UI
 record lookups (0x400899c8 and 0x400899e6) and replaces the routine that
 makes a knob's label (0x400207b8, by jmp; the same address in 1.44). The
-pop-up's long name, the LFO destination lists and a page's group headings
-read the parameter records on their own and keep the stock names, and a
-page view's own drawing stays (SYN1's algorithm diagram, SYN2's envelope
-graphs).
+LFO destination list and DEST box also consult the table: 0x28 names the
+destination, 0x2c its group. An over-wide list row falls back to 0x30; the
+box keeps its stock short name when no 0x28 override answers. Native sound
+slots, destination order and modulation stay unchanged. The value pop-up's
+long name and a page's group headings keep their stock names, and a page
+view's own drawing stays (SYN1's algorithm diagram, SYN2's envelope graphs).
 
 **`core_sound_set`.** `void core_sound_set(int track, int slot, int value)`
 sets the sound slot (0-78) of synth track `track` (0-3) to `value` (8.8)

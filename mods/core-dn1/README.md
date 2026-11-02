@@ -82,7 +82,8 @@ the Digitone needs it. On its own it changes nothing the unit does.
     ([../machines-dn1](../machines-dn1)) plays its machines there.
   - `core_param_override` ([params.s](params.s)): a mod answers for a stock
     parameter while it wants to: its UI record (value text, knob graphic,
-    how a turn moves it) and its label. Core consults the table in its UI
+    how a turn moves it), its label and the LFO destination names and groups
+    ([names.s](names.s), 4.2). Core consults the table in its UI
     record lookups, and replaces the routine that makes a knob's label
     (0x400207b8, the same in 1.44). `core_param_ui_make` builds a UI
     record from a stock parameter's turn and another one's graphic.
@@ -174,19 +175,33 @@ the Digitone needs it. On its own it changes nothing the unit does.
   starved. In digikit's emulator, two rows on 1.43 or 1.44 never got past
   that screen. The calls in `core_additem` changed (`ROW_POOL`), not its
   place or its arguments: mods need no change.
+- **From 4.2, page lists** ([lists.c](lists.c), [pages.s](pages.s);
+  docs/ADAPTING.md, "Mod pages"): `core_page_list(first, list, n)` gives a
+  page key another list of pages for a while (SYN2 = page 4: its stock
+  list starts there), or its stock list back with `n` 0. machines-dn1 shows
+  an SDK alpha machine's pages behind SYN2 with it, in place of FM's
+  envelope pages. No new site: `core_view_init` notes each view it builds.
 - **OS 1.44:** every site has its port (`ports` in mod.json): the same
   code, moved, and RAM 0x1000 further on.
 
 Build it with the SDK (it needs m68k binutils):
 
 ```bash
-python -m elekloader.sdk.build mods/core-dn1 --stock Digitone_and_Digitone_Keys_OS1.43.syx   # out/core-4.1.1.elemod
-python -m elekloader.sdk.build mods/core-dn1 --stock Digitone_and_Digitone_Keys_OS1.44.syx   # out/core-4.1.1-os1.44.elemod
-python -m elekloader.lint mods/core-dn1/out/core-4.1.1-os1.44.elemod --stock Digitone_and_Digitone_Keys_OS1.44.syx
+python -m elekloader.sdk.build mods/core-dn1 --stock Digitone_and_Digitone_Keys_OS1.43.syx   # out/core-4.2.elemod
+python -m elekloader.sdk.build mods/core-dn1 --stock Digitone_and_Digitone_Keys_OS1.44.syx   # out/core-4.2-os1.44.elemod
+python -m elekloader.lint mods/core-dn1/out/core-4.2-os1.44.elemod --stock Digitone_and_Digitone_Keys_OS1.44.syx
 ```
 
-A release names them `core-dn1-4.1.1.elemod` and `core-dn1-4.1.1-os1.44.elemod`.
-4.1.1 is not released yet; 4.1's are on the [core-dn1-v4.1](https://github.com/irpina/elekloader/releases/tag/core-dn1-v4.1) pre-release,
+The LFO name hooks have ColdFire ABI probes (stock fallback, first answer,
+arguments and registers). Run with digiemu's Python (`unicorn`); no stock
+file is needed:
+
+```bash
+ELEKLOADER_CROSS=m68k-elf- python tests/test_digitone_lfo_names.py
+```
+
+A release names them `core-dn1-4.2.elemod` and `core-dn1-4.2-os1.44.elemod`.
+4.2 and 4.1.1 are not released yet; 4.1's are on the [core-dn1-v4.1](https://github.com/irpina/elekloader/releases/tag/core-dn1-v4.1) pre-release,
 4.0's on the [core-dn1-v4.0](https://github.com/irpina/elekloader/releases/tag/core-dn1-v4.0) pre-release
 (3.3 was not released);
 3.2's are on the [core-dn1-v3.2](https://github.com/irpina/elekloader/releases/tag/core-dn1-v3.2) pre-release

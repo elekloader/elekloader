@@ -5,7 +5,7 @@ enum { PITCH, AMOUNT };
 static const struct elek_ui_knob pitch = {
     .id = PITCH, .label = "PITCH", .min = ELEK_UI_BOUND(10), .max = ELEK_UI_BOUND(20),
 };
-static const struct elek_ui_knob amount = { .id = AMOUNT, .label = "AMOUNT" }; /* 0..127 */
+static const struct elek_ui_knob amount = { .id = AMOUNT, .label = "AMNT" }; /* 0..127 */
 static const struct elek_ui_page pages[] = {
     { .label = "MAIN", .knob = { [ELEK_ENCODER_A] = &pitch } },
     { .label = "AMOUNT", .knob = { [ELEK_ENCODER_A] = &amount,
@@ -13,12 +13,12 @@ static const struct elek_ui_page pages[] = {
 };
 static void hello_present(const struct elek_ui_context *ctx, struct elek_ui_presentation *out)
 {
-    static char text[] = "AMT 000";
+    static char text[] = "A 000";
     unsigned amount = ctx->knob[AMOUNT]->value;
     if (amount) {
-        text[4] = '0' + amount / 100;
-        text[5] = '0' + amount / 10 % 10;
-        text[6] = '0' + amount % 10;
+        text[2] = '0' + amount / 100;
+        text[3] = '0' + amount / 10 % 10;
+        text[4] = '0' + amount % 10;
         out->knob[PITCH]->label = text;
         if (amount == 127)
             out->knob[PITCH]->visible = 0;

@@ -28,7 +28,7 @@ older ones people still have:
 | Digitakt mk1 | 1.53, 1.54 | `core-4.1.elemod`, `core-4.1-os1.54.elemod` | on main, not released: build it ([below](#building-a-core)) |
 | Digitakt mk1 | 1.53, 1.54 | `core-2.1.elemod`, `core-2.1-os1.54.elemod` | the v0.4.0 release, built into its apps |
 | Digitone mk1, Digitone Keys | 1.43, 1.44 | `core-dn1-4.1.elemod`, `core-dn1-4.1-os1.44.elemod` | the [core-dn1-v4.1](https://github.com/irpina/elekloader/releases/tag/core-dn1-v4.1) pre-release, and the web page |
-| Digitone mk1, Digitone Keys | 1.43, 1.44 | `core-dn1-4.1.1.elemod`, `core-dn1-4.1.1-os1.44.elemod` | on main, not released: build it ([below](#building-a-core)) |
+| Digitone mk1, Digitone Keys | 1.43, 1.44 | `core-dn1-4.2.elemod`, `core-dn1-4.2-os1.44.elemod` | on main, not released: build it ([below](#building-a-core)) |
 | Digitone mk1, Digitone Keys | 1.43, 1.44 | `core-dn1-2.0a.elemod`, `core-dn1-2.0a-os1.44.elemod` | the v0.4.0 release, built into its apps |
 | Digitakt II | 1.17 | `core-dt2-1.0.elemod` | not released: build it ([below](#building-a-core)) |
 | Digitone II | 1.12 | `core-dn2-0.3.elemod` | experimental, not released: build it ([below](#building-a-core)) |
@@ -108,8 +108,9 @@ the one a mod that uses it names in `resources.core`.
     1.44 (3.0, and 3.3 for the C library, the transport, the pattern and
     the project; ADAPTING.md, "Firmware locations (core-dn1 3.0)");
   - what machines need: the voices' sound before the filter, stock
-    parameters a mod relabels, sound edits the voices hear and submenus in
-    the Mod Menu (3.1; ADAPTING.md, "Machines and stock parameters"). With
+    parameters a mod relabels (including LFO destinations in 4.2), sound
+    edits the voices hear and submenus in the Mod Menu (3.1;
+    ADAPTING.md, "Machines and stock parameters"). With
     them, the companion [machines](../mods/machines-dn1) plays a machine
     mod's voice in place of FM (ADAPTING.md, "Machines on the Digitone");
   - exclusive audio, one mod taking the whole output (3.2;

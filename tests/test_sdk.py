@@ -654,6 +654,8 @@ FW_DN = ['fw_active_track', 'fw_blit', 'fw_ev_alloc', 'fw_ev_free', 'fw_ev_queue
          '__ashldi3', '__lshrdi3', '__ashrdi3', 'fw_textbox', 'fw_transport', 'fw_pattern', 'fw_project']
 CORE_DN41 = ['core_note_queue']   # 4.1's
 CORE_DN411 = ['core_row_add', 'core_row_new']   # 4.1.1's: the SETTINGS rows' storage
+CORE_DN42 = ['core_page_list', 'core_views', 'core_lfo_list', 'core_lfo_compact',
+             'core_lfo_group', 'core_lfo_name']   # 4.2's: page lists and destination names
 CORE_DN3 = ['core_note_queue', 'core_audio_caps', 'core_key_leds', 'core_menu_open', 'core_midi_cc', 'core_midi_pc', 'core_param_short',
             'core_param_ui_make', 'core_render_master', 'core_render_params', 'core_render_voices', 'core_sound_set',
             'core_voices_gate']
@@ -666,8 +668,8 @@ def check_dn_superset(old_path, new_path):
     exclusive audio and the MIDI CCs (3.2: three sites, two tables), the
     key LEDs and the block's parameters (3.3: two sites, two tables), their
     calls and 3.3's firmware exports, the program changes (4.0: a site,
-    a table), the note queue (4.1: a site, a table) and the rows' storage
-    (4.1.1: two routines)."""
+    a table), the note queue (4.1: a site, a table), the rows' storage
+    (4.1.1: two routines), page lists and LFO names (4.2: four sites)."""
     with open(old_path) as fh:
         old = json.load(fh)
     with open(new_path) as fh:
@@ -676,12 +678,12 @@ def check_dn_superset(old_path, new_path):
     for k in ('target', 'contribute', 'resources'):
         assert new[k] == old[k], k
     assert all(s in new['sites'] for s in old['sites'])
-    assert len(new['sites']) == len(old['sites']) + 9
+    assert len(new['sites']) == len(old['sites']) + 13
     assert sorted(set(new['collections']) - set(old['collections'])) == [
         'core_audio', 'core_param_override', 'ev_key_leds', 'ev_midi_cc', 'ev_midi_pc', 'ev_note_queue',
         'ev_render_params', 'ev_render_voices']
     assert all(new['collections'][k] == v for k, v in old['collections'].items())
-    assert sorted(set(new['exports']) - set(old['exports'])) == sorted(CORE_DN3 + FW_DN + CORE_DN411)
+    assert sorted(set(new['exports']) - set(old['exports'])) == sorted(CORE_DN3 + FW_DN + CORE_DN411 + CORE_DN42)
     assert all(new['symbols'][k][0] == v[0] for k, v in old['symbols'].items())
 
 
@@ -846,10 +848,11 @@ CORE_DN41_REL = os.environ.get('ELEKLOADER_CORE_DN1_41', '')
 
 
 def check_dn_41(old_path, new_path):
-    """core-dn1 4.1.1 is 4.1 with the SETTINGS rows kept off the heap: the same
+    """core-dn1 4.1.1 and on is 4.1 with the SETTINGS rows kept off the heap: the same
     sites, tables, contributions and resources, every symbol of 4.1's in the
     same section, and core_additem where it was; it adds core_row_new and
-    core_row_add (rows.s) and their row pool in .bss."""
+    core_row_add (rows.s) and their row pool in .bss, and from 4.2 core_page_list
+    (lists.c) and the views it finds (core_views)."""
     with open(old_path) as fh:
         old = json.load(fh)
     with open(new_path) as fh:
@@ -857,7 +860,7 @@ def check_dn_41(old_path, new_path):
     assert old['version'] == '4.1' and new['version'] == DN_VERSION
     for k in ('target', 'contribute', 'resources', 'collections', 'sites'):
         assert new[k] == old[k], k
-    assert sorted(set(new['exports']) - set(old['exports'])) == sorted(CORE_DN411)
+    assert sorted(set(new['exports']) - set(old['exports'])) == sorted(CORE_DN411 + CORE_DN42)
     assert all(new['symbols'][k] == v for k, v in old['symbols'].items()
                if k in ('core_settings', 'core_additem'))
     assert all(new['symbols'][k][0] == v[0] for k, v in old['symbols'].items())

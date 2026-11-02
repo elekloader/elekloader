@@ -14,13 +14,13 @@ the mod shop, beside the cores: a machine mod that requires it (`"requires": ["c
 
 | | |
 |---|---|
-| needs | core-dn1 3.1 (`resources.core`) |
-| sites | none: it uses core's `ev_voice_on`, `ev_render_voices`, `core_param_override`, `core_sound_set` and `core_menu_open` |
-| table | `dn_machines`: a machine mod contributes a pointer to its `struct dnm_machine` |
+| needs | core-dn1 4.2 (`resources.core`; 0.2: 3.1) |
+| sites | none: it uses core's `ev_voice_on`, `ev_render_voices`, `ev_tick` and `ev_enc` (0.3, an SDK machine's presentation), `core_param_override`, `core_sound_set` and `core_menu_open` |
+| table | `dn_machines`: a machine mod contributes a pointer to its `struct dnm_machine`; `sdk_alpha_machines` (0.3): the SDK alpha builder contributes each registration (`elekloader/sdk_alpha_machine.h`) |
 | exports | `dnm_knob`, `dnm_knob_range`, `dnm_phase_inc`, `dnm_sin` (`digitone-mk1/machines.h`) |
-| version | 0.2: a machine may take the SYN pages' second pages (`DNM_PAGES2`) |
-| claims | `soundslot:0` |
-| RAM | 3.8 KB code, 2.8 KB data |
+| version | 0.3: SDK alpha machines, empty or with up to two pages and fifteen knobs, each knob kept in one SYN parameter (SYN2's first page's eight, then DTUN, FDBK, MIX, ADEL, BDEL and two ratio offsets) whichever page shows it, on pages of their own which SYN2 shows in place of its pages on the machine's track (`core_page_list`), each track keeping its page, with the SDK labels, a four-column grid without FM's algorithm diagram, and blank positions for undeclared knobs; `.present` runs again when a value changes, applies five-character labels, visibility and optional 16×16 glyphs, and blocks hidden encoders while retaining their values in native page copy, clear/undo and paste. Both native LFOs target its logical knobs with current labels, even while hidden; destination naming calls `.present` with `ELEK_UI_NO_PAGE`. A machine with no render plays FM. 0.2: a machine may take the SYN pages' second pages (`DNM_PAGES2`) |
+| claims | `soundslot:0`, `page:30` and `page:29` (0.3: the SDK pages) |
+| RAM | OS 1.44: 9.3 KB code and initialized data, 13.4 KB zero-initialized data |
 
 ## How it works
 
@@ -75,7 +75,13 @@ pages to FM's defaults again (COFF 64.00, ATRG on). Not yet on a unit.
 
 ## Not yet
 
-- The SYN pages still draw FM's pictures: SYN1's algorithm diagram (which
+- The SDK pages claim `page:30` and `page:29`, two of core-dn1's four mod
+  page indices (27-30): a build with another mod on either refuses to link.
+  And SYN2's
+  list follows `core_page_list`, where the last call wins: machines-dn1
+  must be the only mod that changes it.
+- Outside the SDK page, the SYN pages still draw FM's pictures: SYN1's
+  algorithm diagram (which
   follows ALGO, a machine's knob A), the group headings ("RATIO", "RATIO
   OFFSET"), and SYN2's envelope graphs over its first page, whose labels
   show three characters. Core-dn1 3.1 cannot change a stock page's drawing
@@ -84,7 +90,8 @@ pages to FM's defaults again (COFF 64.00, ATRG on). Not yet on a unit.
   pop-up as they turn.
 - A knob a machine leaves unused still turns, and changes the FM parameter
   under it (unseen, and unheard while the machine plays).
-- The pop-up's long name and the LFO destination lists keep FM's names.
+- The value pop-up's long name keeps FM's name. Non-SDK machines also keep
+  FM's long destination names and groups in the LFO list and DEST box.
 - The DSP still renders FM for a machine's voices, and its AMP envelope is
   repeated here.
 - SYN1's knobs keep their stock ranges (ALGO 0-7, the ratios as indices, HARM
