@@ -17,7 +17,7 @@ static void hello_present(const struct elek_ui_context *ctx, struct elek_ui_pres
 {
     ++alpha_labels_calls;
     uint32_t track = fw_active_track;
-    if (track >= 8 || ctx->page < 0 || ctx->page > 1 || ctx->knob_count != 2 ||
+    if (track >= 8 || ctx->page < ELEK_UI_NO_PAGE || ctx->page > 1 || ctx->knob_count != 2 ||
         out->knob_count != 2 || !out->knob) { ++alpha_labels_bad_context; return; }
     alpha_labels_page[track] = ctx->page;
     alpha_labels_amount[track] = ctx->knob[AMOUNT]->value;

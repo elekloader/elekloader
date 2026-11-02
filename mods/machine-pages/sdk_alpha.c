@@ -114,6 +114,14 @@ int32_t sdk_alpha_snapshot(const struct elek_machine *m, int32_t page, void *vie
     int32_t knob_count = sdk_alpha_knobs(m, descriptors);
     if (knob_count < 0)
         return 0;
+    const uint8_t *sound = 0;
+    if (!view && knob_count) {
+        uint32_t track = fw_active_track;
+        const uint8_t *kit = fw_kit;
+        if (track >= 8 || !kit)
+            return 0;
+        sound = FW_SOUND(kit, track);
+    }
     struct elek_ui_knob_presentation presentation[15];
     struct elek_ui_knob_presentation *output[15];
     struct elek_ui_value values[15];
@@ -121,7 +129,9 @@ int32_t sdk_alpha_snapshot(const struct elek_machine *m, int32_t page, void *vie
     for (uint32_t k = 0; k < (uint32_t)knob_count; ++k) {
         uint8_t locked;
         uint32_t id = k < 8 ? 0x84 + k : MP_EXTRA_ID + k - 8;
-        int32_t raw = mp_shown_value(view, id, &locked);
+        uint32_t slot = k < 8 ? 17 + k : MP_EXTRA_SLOT(k - 8);
+        int32_t raw = view ? mp_shown_value(view, id, &locked) :
+            (int16_t)((sound[20 + 2 * slot] << 8) | sound[21 + 2 * slot]);
         if (raw < 0) raw = 0;
         if (raw > ELEK_UI_RAW_MAX) raw = ELEK_UI_RAW_MAX;
         values[k].raw_value = raw;

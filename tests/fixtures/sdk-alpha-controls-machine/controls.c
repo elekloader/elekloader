@@ -28,7 +28,7 @@ static void controls_present(const struct elek_ui_context *ctx, struct elek_ui_p
 {
     ++alpha_controls_calls;
     uint32_t track = fw_active_track;
-    if (track >= 8 || ctx->page < 0 || ctx->page >= 2 || ctx->page_count != 2 ||
+    if (track >= 8 || ctx->page < ELEK_UI_NO_PAGE || ctx->page >= 2 || ctx->page_count != 2 ||
         ctx->knob_count != sizeof knobs / sizeof *knobs || !ctx->knob ||
         out->knob_count != ctx->knob_count || !out->knob) {
         ++alpha_controls_bad_context;

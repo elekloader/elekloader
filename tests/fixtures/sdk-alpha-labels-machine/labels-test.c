@@ -7,6 +7,8 @@ int32_t sdk_alpha_visible(const struct elek_machine *, uint32_t);
 const char *sdk_alpha_label(const struct elek_machine *, uint32_t);
 const char cm_ui_v32[] = "host stub";
 uint32_t core_machine_ui(int32_t id) { (void)id; return 0; }
+volatile uint32_t fw_active_track;
+uint8_t *volatile fw_kit;
 uint32_t mp_stock_layout(int32_t id) { (void)id; return 0; }
 int32_t mp_shown_value(void *view, uint32_t id, uint8_t *locked)
 { (void)locked; return ((int32_t *)view)[id - 0x84]; }
