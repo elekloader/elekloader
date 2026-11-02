@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 """Boot core and machine-pages in a digiemu checkout and drive the machine
-menu's filter tab (machine-pages 1.6) through the panel only:
+menu's filter tab (machine-pages 1.6) through the panel, reading the track's
+sound from RAM:
 
     python tests/probe_digitakt_filter_menu.py --emulator /path/to/digiemu \\
         --stock Digitakt_OS1.53.syx --stock Digitakt_OS1.54.syx --out /tmp/menu
@@ -11,12 +12,17 @@ import argparse
 import contextlib
 import glob
 import hashlib
+import json
 import os
 from pathlib import Path
+import struct
 import subprocess
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+
+from elekloader import formats  # noqa: E402
 
 
 def firmware(stock, out):
@@ -38,6 +44,10 @@ def probe(stock, out):
     from emu.longrun import never_fake_set_posts
     from emu.session import Session
 
+    _s, _dev, release = formats.load(str(stock))
+    core = json.loads((ROOT / 'mods/core/mod.json').read_text())
+    defs = core['defsym'] | core.get('ports', {}).get(release.version, {}).get('defsym', {})
+    fw_kit, fw_active_track = int(defs['FW_KIT'], 0), int(defs['FW_ACTIVE_TRACK'], 0)
     out.mkdir(parents=True, exist_ok=True)
     syx = firmware(stock, out)
     with (out / 'boot.log').open('w') as log, contextlib.redirect_stdout(log):
@@ -45,6 +55,13 @@ def probe(stock, out):
         os.environ.update(paths.env())
         session = Session(first_run(paths), paths.syx, hle=False)
         never_fake_set_posts(session.m, session.ev, session.profile.set_post)
+    uc = session.m.uc
+
+    def sound():
+        """The active track's sound in the UI kit: 162 bytes, its machine at +126."""
+        kit = struct.unpack('>I', uc.mem_read(fw_kit, 4))[0]
+        track = struct.unpack('>I', uc.mem_read(fw_active_track, 4))[0]
+        return bytes(uc.mem_read(kit + 0x20 + 162 * track, 162))
 
     def run(ms):
         session.run_ms(ms)
@@ -78,6 +95,7 @@ def probe(stock, out):
     tap('NO')
     src_page = screen('src-page')           # as the menu leaves it: SRC on the page itself steps to the wave
     assert machines != src_page
+    before = sound()
     menu()
     tap('RIGHT')
     filters = screen('filters')
@@ -92,6 +110,7 @@ def probe(stock, out):
     tap('RIGHT')
     tap('YES')
     assert screen('yes') == src_page, 'YES closes and the machine stays'
+    assert sound() == before, 'YES on the filter tab writes nothing'
     menu()
     assert screen('machines-again') == machines, 'a menu opens on its machines'
     tap('NO')
@@ -99,10 +118,12 @@ def probe(stock, out):
     tap('FLTR')
     screen('fltr-page')
     fltr_page = body()
+    before = sound()
     menu()
     assert screen('from-fltr') == filters, 'from FLTR: the filter list'
     tap('YES')
     screen('from-fltr-yes')
+    assert sound() == before, 'from FLTR too'
     assert body() == fltr_page, 'YES goes back to FLTR'
     menu()
     tap('NO')
@@ -131,6 +152,25 @@ def probe(stock, out):
     tap('NO')
     screen('after-page-key')
     assert body() != fltr_page, 'and leaves nothing to go back to'
+
+    # A machine stepped to on the machine list, then RIGHT and YES: committed as YES on the list commits it.
+    start = sound()[126]
+    menu()
+    tap('DOWN')
+    tap('YES')
+    stepped = sound()[126]
+    assert stepped != start, 'DOWN and YES on the machine list commit the next machine'
+    menu()
+    tap('UP')
+    tap('YES')
+    assert sound()[126] == start
+    menu()
+    tap('DOWN')
+    tap('RIGHT')
+    screen('stepped-filters')
+    tap('YES')
+    screen('stepped-yes')
+    assert sound()[126] == stepped, 'the filter tab\'s YES commits the machine stepped to'
     return machines, filters
 
 
