@@ -13,6 +13,11 @@
  * 0x6c + 8 page_from on, A-H), or else by its params machine (the ids MIDI, the LFOs and Randomize use). */
 #include "src.h"
 
+#ifdef SDK_ALPHA_DT1
+extern uint32_t sdk_alpha_layout(int32_t machine, uint32_t track);
+extern int32_t sdk_alpha_empty_selected(void);
+#endif
+
 #define KNOBS       8
 #define ID_BASE(p)  (0x6cu + 8u * (uint32_t)(p))
 #define PAGES       32                         /* added machines with a page; more get the stock page */
@@ -118,6 +123,11 @@ uint32_t mp_layout_track(int32_t m, uint32_t track)
     struct page *p = page_of((uint32_t)m);
     int i;
     page_now = p;
+#ifdef SDK_ALPHA_DT1
+    uint32_t empty = sdk_alpha_layout(m, track);
+    if (empty)
+        return empty;
+#endif
     if (!p)
         return 0;
     if (!p->ready) {
@@ -175,6 +185,12 @@ int32_t mp_src_key(void *view, const uint32_t *event)
     if (track >= 8)
         return 0;
     mp_view_knob(view, 0);                 /* Resolve the view's sound, including sound locks. */
+#ifdef SDK_ALPHA_DT1
+    if (sdk_alpha_empty_selected()) {
+        mp_page_changed(view, (void *)event);
+        return 1;
+    }
+#endif
     if (!page_now)
         return 0;
     if (page_now->extended)
@@ -258,6 +274,10 @@ uint32_t mp_look(uint32_t id)
 
 int32_t mp_not_sample(void)
 {
+#ifdef SDK_ALPHA_DT1
+    if (sdk_alpha_empty_selected())
+        return 1;
+#endif
     return page_now && (page_now->ui->knob[3].flags & CM_NOT_SAMPLE) != 0;
 }
 
