@@ -3,6 +3,7 @@
 #ifndef ELEKLOADER_SDK_ALPHA_MACHINE_H
 #define ELEKLOADER_SDK_ALPHA_MACHINE_H
 
+#include <stddef.h>
 #include "digitakt-mk1/core3.h"
 
 #define ELEK_UI_NO_PAGE (-1)
@@ -32,7 +33,8 @@ struct elek_ui_value {
     int32_t raw_value;             /* native 8.8, 0..ELEK_UI_RAW_MAX */
 };
 struct elek_ui_context {
-    int32_t page;                  /* displayed SRC page, or ELEK_UI_NO_PAGE (e.g. LFO labels) */
+    int32_t page;                  /* displayed SRC page, or ELEK_UI_NO_PAGE (e.g. LFO labels),
+                                    * also for machines with pages: check before indexing */
     uint32_t page_count, knob_count;
     const struct elek_ui_value *const *knob; /* indexed by machine-wide logical ID, all pages */
 };
@@ -42,7 +44,8 @@ struct elek_ui_context {
 struct elek_ui_knob_presentation {
     const char *label;
     uint32_t visible;              /* defaults to 1; zero blanks every position, retaining its value */
-    const struct elek_ui_glyph *glyph; /* descriptor's default each call; null selects stock */
+    const struct elek_ui_glyph *glyph; /* descriptor's default each call; null selects stock.
+                                        * Drawn after return: never automatic storage */
 };
 struct elek_ui_presentation {
     uint32_t knob_count;
@@ -63,6 +66,15 @@ struct sdk_alpha_machine_ui {
     const void *abi;
     const struct elek_machine *machine;
 };
+#if __SIZEOF_POINTER__ == 4 /* the target; sdk_alpha_build.py reads these offsets */
+_Static_assert(sizeof(struct elek_ui_knob) == 28 && offsetof(struct elek_ui_knob, glyph) == 24,
+               "elek_ui_knob layout");
+_Static_assert(sizeof(struct elek_ui_page) == 36, "elek_ui_page layout");
+_Static_assert(sizeof(struct elek_machine) == 32 && offsetof(struct elek_machine, pages) == 12 &&
+               offsetof(struct elek_machine, page_count) == 16 &&
+               offsetof(struct elek_machine, _reserved) == 20, "elek_machine layout");
+_Static_assert(sizeof(struct sdk_alpha_machine_ui) == 8, "sdk_alpha_machine_ui layout");
+#endif
 extern const char sdk_alpha_dt1_empty_ui[], sdk_alpha_dt1_ui_v3[], sdk_alpha_dt1_ui_v4[];
 
 #define ELEK_REGISTER_MACHINE(machine) \

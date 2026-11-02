@@ -170,6 +170,7 @@ class SdkAlphaTests(unittest.TestCase):
                                             'ctx->knob[0]->value = 1;}\n',
                                       capture_output=True, text=True)
             self.assertNotEqual(readonly.returncode, 0, 'callback snapshot became writable')
+            self.assertRegex(readonly.stderr, 'read-only|const', 'failed for another reason')
 
     def test_sdk_alpha_glyph_registration(self):
         for supplied in (False, True):

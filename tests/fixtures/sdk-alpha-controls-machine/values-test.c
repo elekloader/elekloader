@@ -6,6 +6,7 @@
 #include "elekloader/sdk_alpha_machine.h"
 int32_t sdk_alpha_map(const struct elek_ui_knob *, int32_t raw);
 int32_t sdk_alpha_snapshot(const struct elek_machine *, int32_t page, void *view);
+void sdk_alpha_format(int32_t value, char *buf, int popup);
 const char cm_ui_v32[] = "host stub";
 uint32_t core_machine_ui(int32_t id) { (void)id; return 0; }
 volatile uint32_t fw_active_track;
@@ -109,5 +110,16 @@ int main(void)
     sdk_alpha_snapshot(&m, ELEK_UI_NO_PAGE, 0); assert(calls == 5);
     fw_active_track = 0; fw_kit = 0;
     sdk_alpha_snapshot(&m, ELEK_UI_NO_PAGE, 0); assert(calls == 5);
+    /* The value field holds five characters, the sign included; the popup holds any value. */
+    static const struct { int32_t value; const char *field, *popup; } texts[] = {
+        { 0, "0", "0" }, { 99999, "99999", "99999" }, { 100000, "#", "100000" },
+        { -9999, "-9999", "-9999" }, { -10000, "#", "-10000" },
+        { INT32_MAX, "#", "2147483647" }, { INT32_MIN, "#", "-2147483648" },
+    };
+    for (unsigned i = 0; i < sizeof texts / sizeof texts[0]; ++i) {
+        char buf[12];
+        sdk_alpha_format(texts[i].value, buf, 0); assert(!strcmp(buf, texts[i].field));
+        sdk_alpha_format(texts[i].value, buf, 1); assert(!strcmp(buf, texts[i].popup));
+    }
     return 0;
 }
