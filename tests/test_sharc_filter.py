@@ -8,7 +8,7 @@ import struct
 import tempfile
 import unittest
 
-from elekloader import elemod, formats, link, sharc
+from elekloader import devices, elemod, formats, link, sharc
 from elekloader.devices.digitone_mk2 import DEVICE
 from elekloader.sdk import build as sdk
 from elekloader.sdk.sharc import filter_artifact, machine_layout, voice_artifact
@@ -23,24 +23,45 @@ def artifact():
 
 
 class EnvelopeTests(unittest.TestCase):
+    def test_only_the_exact_profiled_sharc_data_site_is_accepted(self):
+        address, (old, new) = next(iter(PROFILE['data_sites'].items()))
+        doc = {'elemod': 2, 'id': 'busy', 'version': '0.1',
+               'target': devices.target_of(DEVICE, DEVICE.releases['1.12']), 'sections': {},
+               'sites': [{'addr': address, 'len': len(bytes.fromhex(old)), 'kind': 'data',
+                          'stock_sha256': elemod.sha(bytes.fromhex(old)), 'new': new}]}
+        self.assertEqual(len(link.Mod2(doc).sites), 1)
+        for change in ({'new': old}, {'kind': 'code'}, {'stock_sha256': '0' * 64},
+                       {'relocs': [[0, 'abs32', 'abs', 0]]}, {'len': 4, 'new': new[:8]}):
+            bad = copy.deepcopy(doc)
+            bad['sites'][0].update(change)
+            with self.subTest(change=change), self.assertRaisesRegex(elemod.ModError, 'unqualified SHARC data site'):
+                link.Mod2(bad)
+        bad = copy.deepcopy(doc)
+        bad['sites'][0]['addr'] += 2
+        with self.assertRaisesRegex(elemod.ModError, 'outside the stock image'):
+            link.Mod2(bad)
+        with self.assertRaisesRegex(elemod.ModError, 'outside the stock image'):
+            elemod.parse_sites(doc, 'format-1', DEVICE, DEVICE.releases['1.12'])
+
     def test_filter_layout_and_producer_bounds(self):
         payload = sharc.module_payload(artifact(), PROFILE)
-        self.assertEqual(payload['owner'], (0x20094000, 0x20098000))
+        self.assertEqual(payload['owner'], (0x200a0000, 0x200b0000))
         self.assertEqual(payload['machine_kind'], 'filter')
         self.assertEqual(payload['machine_id'], 6)
         self.assertEqual(payload['entries'], {'render_offset_bytes': 2048})
         self.assertEqual(machine_layout('filter'), {
-            'code_pc16': 0xbca400, 'code_bytes': 6144,
-            'data_address': 0x20096000, 'data_bytes': 7168})
+            'code_pc16': 0xbd0400, 'code_bytes': 30720,
+            'data_address': 0x200a8000, 'data_bytes': 31744})
         self.assertEqual(machine_layout('voice'), {
-            'code_pc16': 0xbc8400, 'code_bytes': 6144,
-            'data_address': 0x20092000, 'data_bytes': 7168})
-        for code, data in ((bytes(6), bytes(4)), (bytes(6080), bytes(7168)), (bytes(4), b'')):
+            'code_pc16': 0xbc8400, 'code_bytes': 30720,
+            'data_address': 0x20098000, 'data_bytes': 31744})
+        for code, data in ((bytes(6), bytes(4)), (bytes(30656), bytes(31744)), (bytes(4), b'')):
             doc = filter_artifact(code, data, 0, 31, 12)
-            self.assertEqual(len(bytes.fromhex(doc['segments'][1]['hex'])), 6144)
-            self.assertEqual(doc['zero'][-1], {'offset_bytes': 15360, 'size_bytes': 1024})
-        for code, data in ((b'', bytes(4)), (bytes(3), bytes(4)), (bytes(6082), bytes(4)),
-                           (bytes(4), bytes(7172)), (bytes(4), bytes(3))):
+            # The code ends at its NOP guard, rounded to whole words; zeros fill the rest.
+            self.assertEqual(len(bytes.fromhex(doc['segments'][1]['hex'])), len(code) + 64 + len(code) % 4)
+            self.assertEqual(doc['zero'][-1], {'offset_bytes': 64512, 'size_bytes': 1024})
+        for code, data in ((b'', bytes(4)), (bytes(3), bytes(4)), (bytes(30658), bytes(4)),
+                           (bytes(4), bytes(31748)), (bytes(4), bytes(3))):
             with self.subTest(code=len(code), data=len(data)), self.assertRaises(ValueError):
                 filter_artifact(code, data, 0, 6, 12)
 
@@ -60,16 +81,16 @@ class EnvelopeTests(unittest.TestCase):
             (lambda d: d.update(machine_id=True), 'machine_id'),
             (lambda d: d.update(machine_id=5), 'machine_id'),
             (lambda d: d.update(machine_id=32), 'machine_id'),
-            (lambda d: d.update(stack_bytes=21), 'filter stack'),
+            (lambda d: d.update(stack_bytes=2049), 'filter stack'),
             (lambda d: d.update(entries=None), 'render entry'),
             (lambda d: d['entries'].update(render_offset_bytes=0), 'adapter reservation'),
-            (lambda d: d['entries'].update(render_offset_bytes=8128), 'read-ahead guard'),
-            (lambda d: d['entries'].update(render_offset_bytes=8192), 'not in owned code'),
+            (lambda d: d['entries'].update(render_offset_bytes=2052), 'read-ahead guard'),
+            (lambda d: d['entries'].update(render_offset_bytes=2116), 'not in owned code'),
             (lambda d: d['segments'][0].update(hex='0000' + d['segments'][0]['hex'][4:]), 'qualified prefix'),
             (lambda d: d['segments'][1].update(hex=d['segments'][1]['hex'][:-4] + '0000'), 'read-ahead guard'),
-            (lambda d: d['segments'][2].update(offset_bytes=16384), 'exceeds its owner'),
-            (lambda d: d['zero'][0].update(offset_bytes=8192), 'gap or overlap'),
-            (lambda d: d['zero'][-1].update(offset_bytes=15364, size_bytes=1020), 'gap or overlap'),
+            (lambda d: d['segments'][2].update(offset_bytes=65536), 'exceeds its owner'),
+            (lambda d: d['zero'][0].update(offset_bytes=32768), 'gap or overlap'),
+            (lambda d: d['zero'][-1].update(offset_bytes=64516, size_bytes=1020), 'gap or overlap'),
         ]
         for change, error in cases:
             doc = artifact()
@@ -80,8 +101,8 @@ class EnvelopeTests(unittest.TestCase):
     def test_adapter_state_cannot_be_replaced_with_author_data(self):
         # Preserve complete owner coverage, but write inside the adapter's state.
         doc = artifact()
-        doc['segments'].append({'offset_bytes': 15360, 'kind': 'data', 'hex': '00000000'})
-        doc['zero'][-1] = {'offset_bytes': 15364, 'size_bytes': 1020}
+        doc['segments'].append({'offset_bytes': 64512, 'kind': 'data', 'hex': '00000000'})
+        doc['zero'][-1] = {'offset_bytes': 64516, 'size_bytes': 1020}
         with self.assertRaisesRegex(elemod.ModError, 'adapter reservation'):
             sharc.module_payload(doc, PROFILE)
 
@@ -103,6 +124,7 @@ class PairLinkTests(unittest.TestCase):
         cls.stream = cls.stock.section(7)
         cls.base = [elemod.load_any(sdk.build(str(ROOT / 'mods' / src), STOCK, str(root / src))[0])
                     for src in ('core-dn2', 'machines-dn2')]
+        cls.busy = elemod.load_any(sdk.build(str(ROOT / 'mods/dspbusy-dn2'), STOCK, str(root / 'busy'))[0])
         cls.mods = {}
         for kind, producer, native in (('voice', voice_artifact, 'synth'), ('filter', filter_artifact, 'filter')):
             for machine_id in (6, 7):
@@ -113,7 +135,8 @@ class PairLinkTests(unittest.TestCase):
                 (p / 'machine.c').write_text('#include "mk2/machines.h"\n'
                     'const struct mk2_%s %s = {%d,"PAIR","PAIR"};\n' % (native, symbol, machine_id))
                 (p / 'kernel.json').write_text(json.dumps(producer(bytes(4), bytes(4), 0, machine_id,
-                                                                  128 if kind == 'voice' else 12)))
+                                                                  128 if kind == 'voice' else 12,
+                                                                  voice_bytes=8 if machine_id == 7 else 0)))
                 (p / 'mod.json').write_text(json.dumps({
                     'id': name, 'version': '0.1', 'device': 'digitone-mk2', 'os': '1.12',
                     'sources': ['machine.c'], 'sharc': {'artifact': 'kernel.json'},
@@ -171,7 +194,7 @@ class PairLinkTests(unittest.TestCase):
         self.assertEqual(out.sharc_stored, reverse.sharc_stored)
         self.assertEqual(out.layout, reverse.layout)
         records = sharc.parse(out.sharc_stream, PROFILE)
-        for kind, binding, pc in (('voice', 0x20093e00, 0xbc8400), ('filter', 0x20097e00, 0xbca400)):
+        for kind, binding, pc in (('voice', 0x2009fe00, 0xbc8400), ('filter', 0x200afe00, 0xbd0400)):
             self.assertEqual(next(r.raw[16:] for r in records if r.target == binding), struct.pack('<II', pc, 6))
             site, _old, new = PROFILE[kind + '_hook']
             self.assertEqual(self.at(out.sharc_stream, site), bytes.fromhex(new))
@@ -182,6 +205,62 @@ class PairLinkTests(unittest.TestCase):
             {'id': 'filter-6', 'owner': list(PROFILE['filter_range']), 'hook': PROFILE['filter_hook'][0]},
             {'id': 'voice-6', 'owner': list(PROFILE['voice_range']), 'hook': PROFILE['voice_hook'][0]}])
         self.assertNotIn('app', out.layout['sharc'])
+
+    def test_a_sharc_build_carries_core_dn2s_dsp_peek(self):
+        out = self.linked(self.mods['voice-6'])
+        lo, hi = PROFILE['peek_range']
+        code = bytes.fromhex(PROFILE['peek_code'])
+        self.assertEqual(self.at(out.sharc_stream, lo, len(code)), code)
+        site, old, new = PROFILE['peek_hook']
+        self.assertEqual(self.at(self.stream, site), bytes.fromhex(old))
+        self.assertEqual(self.at(out.sharc_stream, site), bytes.fromhex(new))
+        for site, (old, _new) in PROFILE['data_sites'].items():
+            self.assertEqual(self.at(out.sharc_stream, site), bytes.fromhex(old))
+        records = sharc.parse(out.sharc_stream, PROFILE)
+        self.assertTrue(any(r.flags == sharc.FILL and r.target == lo + len(code) and r.count == hi - lo - len(code)
+                            for r in records))
+
+    def test_busy_companion_requires_a_sharc_mod_and_owns_only_its_site(self):
+        self.assertEqual(self.busy.sections, {})
+        self.assertIsNone(self.busy.sharc)
+        self.assertEqual(link.check(self.base + [self.busy], self.image),
+                         ['dspbusy-dn2 0.1: SHARC data site requires a SHARC mod'])
+        mods = self.base + [self.mods['voice-6'], self.busy]
+        self.assertEqual(link.check(mods, self.image), [])
+        plain = self.linked(self.mods['voice-6'])
+        busy = self.linked(self.mods['voice-6'], self.busy)
+        self.assertEqual(plain.image, busy.image)
+        address, (old, new) = next(iter(PROFILE['data_sites'].items()))
+        self.assertEqual(self.at(plain.sharc_stream, address), bytes.fromhex(old))
+        self.assertEqual(self.at(busy.sharc_stream, address), bytes.fromhex(new))
+        changed = [i for i, (a, b) in enumerate(zip(plain.sharc_stream, busy.sharc_stream)) if a != b]
+        record = next(r for r in sharc.parse(self.stream, PROFILE)
+                      if r.flags == sharc.LOAD and r.target <= address < r.target + r.count)
+        offset = record.offset + 16 + address - record.target
+        self.assertEqual(changed, [offset + i for i, (a, b) in enumerate(zip(bytes.fromhex(old), bytes.fromhex(new))) if a != b])
+        duplicate = copy.deepcopy(self.busy.doc)
+        duplicate['id'] = 'other-busy'
+        self.assertTrue(any('overlap' in e for e in link.check(mods + [link.Mod2(duplicate)], self.image)))
+
+    def test_each_machine_gets_its_own_guarded_stack_in_l1(self):
+        for kind, other in (('voice', 'filter'), ('filter', 'voice')):
+            lo, hi = PROFILE[kind + '_stack']
+            with self.subTest(kind=kind):
+                records = sharc.parse(self.linked(self.mods[kind + '-6']).sharc_stream, PROFILE)
+                self.assertEqual(self.at(self.linked(self.mods[kind + '-6']).sharc_stream, lo, 4),
+                                 struct.pack('<I', PROFILE['stack_guard']))
+                self.assertTrue(any(r.flags == sharc.FILL and r.target == lo + 4 and r.count == hi - lo - 4
+                                    for r in records))
+                self.assertFalse(any(r.flags in (sharc.LOAD, sharc.FILL) and r.target < PROFILE[other + '_stack'][1]
+                                     and PROFILE[other + '_stack'][0] < r.target + r.count for r in records))
+
+    def test_the_binding_names_the_voice_state(self):
+        for kind in ('voice', 'filter'):
+            lo, binding = PROFILE[kind + '_range'][0], PROFILE[kind + '_range'][0] + PROFILE[kind + '_binding_offset']
+            with self.subTest(kind=kind):
+                stateful = self.linked(self.mods[kind + '-7']).sharc_stream
+                self.assertEqual(self.at(stateful, binding + 0x20, 8), struct.pack('<II', lo + 32776, 8))
+                self.assertEqual(self.at(self.linked(self.mods[kind + '-6']).sharc_stream, binding + 0x20, 8), bytes(8))
 
     def test_each_role_is_unchanged_when_the_other_is_absent(self):
         pair = self.linked(self.mods['voice-6'], self.mods['filter-6'])
@@ -217,7 +296,7 @@ class PairLinkTests(unittest.TestCase):
         doc['sharc']['segments'][1]['hex'] = '01000100' + doc['sharc']['segments'][1]['hex'][8:]
         changed = link.Mod2(doc, 'changed-filter')
         out = self.linked(self.mods['voice-6'], changed)
-        record = next(r for r in sharc.parse(out.sharc_stream, PROFILE) if r.target == 0x20094800)
+        record = next(r for r in sharc.parse(out.sharc_stream, PROFILE) if r.target == 0x200a0800)
         self.assertEqual(record.raw[16:20], bytes.fromhex('01000100'))
 
     def test_refuses_second_role_and_master_mix(self):

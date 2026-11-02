@@ -5,7 +5,7 @@
 //
 // A .elemod is JSON. It carries only its author's bytes plus hashes of the stock bytes it expects. Format 2 may
 // carry a profiled DN2 SHARC mod; all other sections, including the bootloader, stay stock.
-import { concat, encodeAsciiReplace, fromHex, sha } from './bytes.ts'
+import { concat, encodeAsciiReplace, equal, fromHex, sha } from './bytes.ts'
 import { type Device, type Release, UnknownFirmware, forTarget, imageEnd, linkable } from './devices.ts'
 import { ILLEGAL, LINEF, FPU, decodeColdFire, readerAt } from './isa/coldfire.ts'
 import { AttributeError, PyFloat, TypeError_, ValueError, hex8, pyInt, pyType, repr, str, truthy } from './py.ts'
@@ -100,6 +100,10 @@ export type Reloc = [number, string, string, number]          // offset, type, t
 export const RSIZE = new Map([['abs32', 4], ['pc32', 4], ['pc16', 2], ['dsp24', 3]])
 export type Site = { addr: number; len: number; new: Uint8Array; kind: string; stock_sha256: string; relocs: Reloc[] }
 
+export function sharcSite(rel: Release, address: number): [string, string] | undefined {
+  return rel.sharc?.dataSites?.[address]
+}
+
 export function parseSites(doc: Record<string, any>, name: string, dev: Device, rel: Release, relocs = false): Site[] {
   const lo = dev.mainLoad, hi = imageEnd(dev, rel)
   const out: Site[] = []
@@ -108,7 +112,8 @@ export function parseSites(doc: Record<string, any>, name: string, dev: Device, 
     const addr = int(get(s, 'addr'), what), n = int(get(s, 'len'), what)
     const nw = hexBytes(get(s, 'new'), what)
     if (nw.length !== n || n <= 0) throw new ModError(`${what}: "new" is not ${n} bytes`)
-    if (addr < lo || addr + n > hi) throw new ModError(`${what}: ${hex8(addr)} +${n} is outside the stock image`)
+    const dspSite = relocs ? sharcSite(rel, addr) : undefined
+    if ((addr < lo || addr + n > hi) && !dspSite) throw new ModError(`${what}: ${hex8(addr)} +${n} is outside the stock image`)
     const kind = get(s, 'kind')
     if (kind !== 'code' && kind !== 'data') throw new ModError(`${what}: kind is "code" or "data"`)
     const h = get(s, 'stock_sha256')
@@ -123,6 +128,8 @@ export function parseSites(doc: Record<string, any>, name: string, dev: Device, 
         site.relocs.push([off, typ as string, tgt as string, int(add, what)])
       }
     }
+    if (dspSite && (kind !== 'data' || site.relocs.length || sha(hexBytes(dspSite[0], what)) !== h.toLowerCase() ||
+      !equal(nw, hexBytes(dspSite[1], what)))) throw new ModError(`${what}: unqualified SHARC data site`)
     out.push(site)
   })
   return out
@@ -378,7 +385,9 @@ export function commonChecks(mods: AnyMod[], image: Uint8Array, spans: Span<AnyM
   for (const m of mods) {
     for (const s of m.sites) {
       const o = s.addr - dev.mainLoad
-      if (sha(image.subarray(o, o + s.len)) !== s.stock_sha256) {
+      const dspSite = sharcSite(m.rel, s.addr)
+      const stock = dspSite ? hexBytes(dspSite[0], m.name) : image.subarray(o, o + s.len)
+      if (sha(stock) !== s.stock_sha256) {
         bad.push(`${m.label()} site ${hex8(s.addr)}: the stock bytes are not the ones it expects`)
       } else if (s.kind === 'code') {
         const [ok, note] = insnCheck(image, s.addr, s.len, dev)

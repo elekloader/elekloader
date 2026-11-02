@@ -17,7 +17,7 @@ import { pSpan } from './dsp.ts'
 import {
   type AnyMod, type Part, type Region, type Site, type Span, COMMON, ModError, RSIZE, cmpVersions, commonChecks, formatOf, get,
   hexBytes, insnCheck, int, isDict, iter, overlaps, parseNeedsCore, parseParts, parseResources, parseSites, partsBytes, partsLen,
-  pyEq, resolveTarget, summarize, unpack,
+  pyEq, resolveTarget, sharcSite, summarize, unpack,
 } from './elemod.ts'
 import { PCREL, decodeColdFire, readerAt } from './isa/coldfire.ts'
 import { AttributeError, KeyError, PyException, ValueError, hex8, pyType, repr, str } from './py.ts'
@@ -390,6 +390,9 @@ export function check(mods: Mod2[], image: Uint8Array): string[] {
         bad.push(`${m.label()} needs core ${m.needsCore} or newer, and this build has core ${cores[0].version}`)
   }
   const sharcMods = mods.filter(m => m.sharc && !m.sections.has('.boot'))
+  for (const m of mods)
+    if (!sharcMods.length && m.sites.some(s => sharcSite(m.rel, s.addr)))
+      bad.push(`${m.label()}: SHARC data site requires a SHARC mod`)
   if (sharcMods.length > 1 && sharcMods.map(m => m.sharc!.machineKind).sort().join(',') !== 'filter,voice')
     bad.push('SHARC mods may combine only one DN2 voice and one DN2 filter')
   for (const kind of ['voice', 'filter'] as const) {
@@ -624,10 +627,23 @@ export function link(mods: Mod2[], image: Uint8Array, lock: store.Lock | null = 
         const binding = new Uint8Array(8), words = new DataView(binding.buffer)
         words.setUint32(0, sharcRecords.pc16(rel.sharc!, base + payload.entries!.render_offset_bytes), true)
         words.setUint32(4, payload.machineId!, true)
+        // At +0x20 the adapter finds the per-voice state: its address and one voice's size.
+        const state = new Uint8Array(8), stateWords = new DataView(state.buffer)
+        if (payload.voiceState) {
+          stateWords.setUint32(0, base + payload.voiceState[0], true)
+          stateWords.setUint32(4, payload.voiceState[1], true)
+        }
         const lo = payload.owner[1] - rel.sharc![`${kind}StateBytes`]!
         fills = fills.filter(([address]) => address !== lo)
-        fills.push([lo, base + at - lo, 0], [base + at + 8, payload.owner[1] - base - at - 8, 0])
-        loads.push([base + at, binding])
+        fills.push([lo, base + at - lo, 0], [base + at + 8, 0x18, 0],
+          [base + at + 0x28, payload.owner[1] - base - at - 0x28, 0])
+        loads.push([base + at, binding], [base + at + 0x20, state])
+        // The callback's own stack, in L1: zeroed, with the guard word the adapter checks at its base.
+        const [stackLo, stackHi] = rel.sharc![`${kind}Stack`]!
+        const guard = new Uint8Array(4)
+        new DataView(guard.buffer).setUint32(0, rel.sharc!.stackGuard!, true)
+        fills.push([stackLo + 4, stackHi - stackLo - 4, 0])
+        loads.push([stackLo, guard])
         const capture = kind === 'filter' ? rel.sharc!.filterCapture : undefined
         patches = [rel.sharc![`${kind}Hook`]!, ...(capture ? [capture] : [])].map(([site, old, replacement]) =>
           [site, hexBytes(old, 'SHARC stock hook'), hexBytes(replacement, 'SHARC bridge hook')])
@@ -648,6 +664,16 @@ export function link(mods: Mod2[], image: Uint8Array, lock: store.Lock | null = 
         patches = [[site, hexBytes(old, 'SHARC stock hook'), hexBytes(replacement, 'SHARC bridge hook')]]
       }
       allLoads.push(...loads); allFills.push(...fills); allPatches.push(...patches)
+    }
+    // core-dn2's DSP peek rides along whenever section 7 changes (mods/core-dn2/peek.s).
+    const [peekLo, peekHi] = rel.sharc!.peekRange!, peek = hexBytes(rel.sharc!.peekCode!, 'SHARC peek')
+    allLoads.push([peekLo, peek])
+    allFills.push([peekLo + peek.length, peekHi - peekLo - peek.length, 0])
+    const [site, old, replacement] = rel.sharc!.peekHook!
+    allPatches.push([site, hexBytes(old, 'SHARC stock hook'), hexBytes(replacement, 'SHARC peek hook')])
+    for (const m of order) for (const s of m.sites) {
+      const qualified = sharcSite(rel, s.addr)
+      if (qualified) allPatches.push([s.addr, hexBytes(qualified[0], 'SHARC site'), s.new])
     }
     dspStream = sharcRecords.insert(sharcStream, rel.sharc!,
       allLoads, allFills, allPatches)
@@ -955,6 +981,7 @@ export function link(mods: Mod2[], image: Uint8Array, lock: store.Lock | null = 
   for (const [c, [tag]] of dspTables) dspPut(tag, tabAt.get(c)!, tab.get(c)!)
   for (const m of order) {
     for (const s of m.sites) {
+      if (sharcSite(rel, s.addr)) continue
       const nw = s.new.slice()
       for (const [off, typ, tgt, add] of s.relocs) place(m, nw, off, typ, tgt, add, s.addr + off, `site ${hex8(s.addr)}`)
       img.set(nw, s.addr - dev.mainLoad)
@@ -972,7 +999,7 @@ export function link(mods: Mod2[], image: Uint8Array, lock: store.Lock | null = 
     }
   }
   const declared: [number, number, string][] = []
-  for (const m of order) for (const s of m.sites) declared.push([s.addr, s.addr + s.len, `${m.label()} site ${hex8(s.addr)}`])
+  for (const m of order) for (const s of m.sites) if (!sharcSite(rel, s.addr)) declared.push([s.addr, s.addr + s.len, `${m.label()} site ${hex8(s.addr)}`])
   for (const [k, tag] of [...dspSecs].sort((a, b) => base.get(a[0])! - base.get(b[0])!)) {
     const words = Math.floor((content.get(k)?.length ?? 0) / 3)
     if (words) {

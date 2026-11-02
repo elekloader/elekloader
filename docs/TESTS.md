@@ -27,7 +27,13 @@ leave the stock filters' slot 66 alone. With DigiKit
 LOWPASS 4 and a custom filter side by side in the coupled emulator, with the
 filter envelope and an LFO moving the cutoff: the custom voice's captured
 cutoff and resonance must equal the stock voice's in every block, and its
-input must carry the G that CC 18 set.
+input must carry the G that CC 18 set. `test_dn2_machine_memory.py` fills
+both 64 KiB machine areas and both L1 stacks with a pattern, plays every track with sweeps,
+and checks that stock wrote none of it. `test_dn2_machine_stack.py` runs a
+filter that uses 1 KB of stack, and one that overruns its 4 KiB stack and
+must be muted while the emulator keeps running. `test_dn2_dsp_peek.py`
+reads a stack guard and a known data pattern back through core-dn2's DSP
+peek and checks that a peripheral address is refused.
 
 The **tests** workflow runs `test_units.py`, `test_link_refusals.py` and the
 TypeScript engine's tests (`node --test "js/test/*.test.ts"`) on every pull
@@ -51,6 +57,9 @@ ELEKLOADER_A4_SYX=Analog-Four_MKII_OS1.56.syx python tests/test_analog_four_mk2.
 ELEKLOADER_DN2_SYX=Digitone_II_OS1.12.syx ELEKLOADER_DN2_ZIP=Digitone_II_OS1.12_dist.zip python tests/test_digitone2.py
 ELEKLOADER_MC_SYX=Model_Cycles_OS1.13.syx python tests/test_model_cycles.py   # core-mc 0.3 against 0.2 and 0.1, its exports and ev_boot
 ELEKLOADER_DN2_SYX=... ELEKLOADER_CROSS=... ELEKLOADER_DIGIKIT=... ELEKLOADER_DIGI_EMUD=... ELEKLOADER_DN2_EMU_READY=... python tests/test_dn2_filter_capture.py
+ELEKLOADER_DN2_SYX=... ELEKLOADER_CROSS=... ELEKLOADER_DIGIKIT=... ELEKLOADER_DIGI_EMUD=... ELEKLOADER_DN2_EMU_READY=... python tests/test_dn2_machine_memory.py
+ELEKLOADER_DN2_SYX=... ELEKLOADER_CROSS=... ELEKLOADER_DIGIKIT=... ELEKLOADER_DIGI_EMUD=... ELEKLOADER_DN2_EMU_READY=... python tests/test_dn2_machine_stack.py
+ELEKLOADER_DN2_SYX=... ELEKLOADER_CROSS=... ELEKLOADER_DIGIKIT=... ELEKLOADER_DIGI_EMUD=... ELEKLOADER_DN2_EMU_READY=... python tests/test_dn2_dsp_peek.py
 ELEKLOADER_CATALOG_DIR=folder/of/catalog/files ELEKLOADER_STOCK=... python tests/test_catalog_link.py   # the catalog against core 3.0
 ELEKLOADER_STOCK=... ELEKLOADER_STOCK_154=... ELEKLOADER_OT_SYX=... ELEKLOADER_MODS=... python tests/test_gui.py   # the window, hidden (Tk)
 node tests/test_web.mjs build/site   # the web page's engine, in Pyodide (packaging/build_web.py first)

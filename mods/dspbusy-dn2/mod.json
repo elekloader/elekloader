@@ -1,0 +1,12 @@
+{
+ "id": "dspbusy-dn2", "version": "0.1",
+ "license": "GPL-2.0-or-later",
+ "title": "DSP busy", "category": "Framework", "author": "simonjohansson",
+ "description": "Enable the Digitone II DSP busy measure read by DigiHealth. Requires a SHARC mod; omit it for faster coupled emulation.",
+ "device": "digitone-mk2", "os": "1.12",
+ "requires": ["core"],
+ "resources": {"core": "0.3"},
+ "sites": [
+  {"addr": "0x20011576", "stock": "3e07ff00f0ff", "op": "bytes", "new": "3e0617004501"}
+ ]
+}

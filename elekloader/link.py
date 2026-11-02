@@ -31,7 +31,7 @@ from . import dsp, sharc, store, syx
 from .elemod import (ModError, sha, _int, _hex, common_checks, insn_check, overlaps, summarize,
                     parse_needs_core, parse_parts, parse_resources, parse_sites, parts_bytes,
                     resolve_target, format_of, version_key,
-                    COMMON)
+                    COMMON, sharc_site)
 
 FORMAT2 = 2
 SECTIONS = ('.boot', '.run', '.fast', '.bss')
@@ -374,6 +374,9 @@ def check(mods, image):
                 bad.append('%s needs core %s or newer, and this build has core %s'
                            % (m.label(), m.needs_core, cores[0].version))
     sharc_mods = [m for m in mods if m.sharc and '.boot' not in m.sections]
+    for m in mods:
+        if not sharc_mods and any(sharc_site(m.rel, s['addr']) for s in m.sites):
+            bad.append('%s: SHARC data site requires a SHARC mod' % m.label())
     if len(sharc_mods) > 1 and (len(sharc_mods) != 2 or
             {m.sharc.get('machine_kind') for m in sharc_mods} != {'voice', 'filter'}):
         bad.append('SHARC mods may combine only one DN2 voice and one DN2 filter')
@@ -607,10 +610,18 @@ def link(mods, image, lock=None, *, sharc_stream=None):
                 at = rel.sharc[kind + '_binding_offset']
                 binding = struct.pack('<II', sharc.pc16(rel.sharc, base + payload['entries']['render_offset_bytes']),
                                       payload['machine_id'])
+                # At +0x20 the adapter finds the per-voice state: its address and one voice's size.
+                voice = payload['voice_state']
+                state = struct.pack('<II', base + voice[0], voice[1]) if voice else bytes(8)
                 lo = payload['owner'][1] - rel.sharc[kind + '_state_bytes']
                 fills = [f for f in fills if f[0] != lo]
-                fills += [(lo, base + at - lo, 0), (base + at + 8, payload['owner'][1] - base - at - 8, 0)]
-                loads.append((base + at, binding))
+                fills += [(lo, base + at - lo, 0), (base + at + 8, 0x18, 0),
+                          (base + at + 0x28, payload['owner'][1] - base - at - 0x28, 0)]
+                loads += [(base + at, binding), (base + at + 0x20, state)]
+                # The callback's own stack, in L1: zeroed, with the guard word the adapter checks at its base.
+                stack = rel.sharc[kind + '_stack']
+                fills.append((stack[0] + 4, stack[1] - stack[0] - 4, 0))
+                loads.append((stack[0], struct.pack('<I', rel.sharc['stack_guard'])))
                 for hook in (kind + '_hook', kind + '_capture'):
                     if hook in rel.sharc:
                         site, old, new = rel.sharc[hook]
@@ -632,6 +643,18 @@ def link(mods, image, lock=None, *, sharc_stream=None):
                 fills = [(core_base + off, count, 0) for off, count in bridge['zero']] + fills
                 site, old, new = rel.sharc['hook']
                 patches.append((site, bytes.fromhex(old), bytes.fromhex(new)))
+        # core-dn2's DSP peek rides along whenever section 7 changes (mods/core-dn2/peek.s).
+        lo, hi = rel.sharc['peek_range']
+        code = bytes.fromhex(rel.sharc['peek_code'])
+        loads.append((lo, code))
+        fills.append((lo + len(code), hi - lo - len(code), 0))
+        site, old, new = rel.sharc['peek_hook']
+        patches.append((site, bytes.fromhex(old), bytes.fromhex(new)))
+        for m in order:
+            for s in m.sites:
+                qualified = sharc_site(rel, s['addr'])
+                if qualified:
+                    patches.append((s['addr'], bytes.fromhex(qualified[0]), s['new']))
         dsp_stream = sharc.insert(sharc_stream, rel.sharc,
                                   loads=loads, fills=fills, patches=patches)
         dsp_stored = syx.pack_main(dsp_stream)
@@ -909,6 +932,8 @@ def link(mods, image, lock=None, *, sharc_stream=None):
         dsp_put(dsp_tables[c][0], tab_at[c], tab[c])
     for m in order:
         for s in m.sites:
+            if sharc_site(rel, s['addr']):
+                continue
             new = bytearray(s['new'])
             for off, typ, tgt, add in s['relocs']:
                 place(m, new, off, typ, tgt, add, s['addr'] + off, 'site 0x%08x' % s['addr'])
@@ -925,7 +950,7 @@ def link(mods, image, lock=None, *, sharc_stream=None):
                 if not ok:
                     bad.append('%s site 0x%08x after relocation: %s' % (m.label(), s['addr'], note))
     declared = [(s['addr'], s['addr'] + s['len'], '%s site 0x%08x' % (m.label(), s['addr']))
-                for m in order for s in m.sites]
+                for m in order for s in m.sites if not sharc_site(rel, s['addr'])]
     for key, tag in sorted(dsp_secs.items(), key=lambda kv: base[kv[0]]):
         words = len(content.get(key, b'')) // 3
         if words:
