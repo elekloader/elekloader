@@ -72,6 +72,7 @@ python -m elekloader.patch --stock <stock.syx> --mod <core.elemod> --mod <mod.el
 | `js/` | the engine in TypeScript (GPL-3.0-or-later; js/README.md): the formats, the checks, the linker, the build and the web bridge, ported from the Python and matching it byte for byte, messages included (`js/tools/parity.ts` checks with your stock files) |
 | `js/src/kit/`, `js/tools/kit.ts`, `js/examples/minimal/`, `packaging/build_kit.py`, `.github/workflows/kit-build.yml` | the kit for websites (docs/INTEGRATING.md): the builder worker, the page's client, the catalog format and elekloader's curated catalog, the lock and its checks. It names no website |
 | `web/`, `packaging/build_web.py`, `.github/workflows/pages.yml` | the web page (GitHub Pages): elekloader in Pyodide, in a worker; `bridge.py` is its only Python, a thin layer over `gui.LoaderModel` and `patch`; `catalog.json` is its mod shop's curated list (docs/WEB.md); `upstream/` holds the upstream lists for the to-do list (`sdk.octabam --sites`: the stock code octabam's newer modules hook). Everything it loads comes from the site itself |
+| `packaging/submit_mod.py`, `.github/workflows/mod-submission.yml`, `.github/ISSUE_TEMPLATE/submit-mod.yml` | the shop's Submit a mod form: the check reads the release's files, refuses a mod whose core or required mods the site can't supply (cores only from elekloader's releases), and opens the pull request that writes `web/catalog.json` in its own layout (docs/WEB.md, "Submitting a mod") |
 
 Tests:
 

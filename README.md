@@ -75,6 +75,9 @@ Menu, where you pick what your mods add ([docs/CORES.md](docs/CORES.md)):
 
 Find mods in the web page's shop, or write your own:
 [docs/ADAPTING.md](docs/ADAPTING.md) takes you from the first build to done.
+Made one? Publish it in a GitHub release and fill in the
+[Submit a mod](https://github.com/elekloader/elekloader/issues/new?template=submit-mod.yml)
+form: a check reads your files and opens the shop's pull request for you.
 
 **Contributions are welcome and encouraged.** The core grows from what mods
 need: when yours needs an event, a table or a firmware address the core

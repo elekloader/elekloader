@@ -1,6 +1,7 @@
 # A mod submitted with the "Submit a mod" issue form (.github/ISSUE_TEMPLATE/submit-mod.yml):
 # 1. packaging/submit_mod.py checks the release:
-#    - it compares with the shop's current files, downloaded as pages.yml does;
+#    - it compares with the shop's current files and the latest release's cores, downloaded as pages.yml does, so
+#      a mod whose core or required mods the site can't supply is refused;
 #    - it writes web/catalog.json when files pass.
 # 2. The result goes in a comment on the issue.
 # 3. When files pass, a pull request adds them to the shop, for a maintainer to review. Nothing reaches main without
@@ -30,7 +31,7 @@ jobs:
     if: >-
       github.event.issue.state == 'open' &&
       (contains(github.event.issue.labels.*.name, 'mod-submission') || startsWith(github.event.issue.title, 'Submit a mod'))
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     env:
       GH_TOKEN: ${{ github.token }}
       ISSUE: ${{ github.event.issue.number }}
@@ -42,6 +43,10 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
+      - name: The cores, from the latest release
+        run: |
+          tag=$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName --jq .tagName)
+          gh release download "$tag" --repo "$GITHUB_REPOSITORY" --pattern "core-*.elemod" --dir build/core
       - name: The shop's files, to compare with
         run: |
           mkdir -p build/shop
@@ -61,7 +66,7 @@ jobs:
         run: |
           printf '%s' "$BODY" > "$RUNNER_TEMP/body.md"
           set +e
-          python packaging/submit_mod.py --issue-body "$RUNNER_TEMP/body.md" --files-dir build/shop \
+          python packaging/submit_mod.py --issue-body "$RUNNER_TEMP/body.md" --files-dir build/shop --cores-dir build/core \
             --report "$RUNNER_TEMP/report.md" --result "$RUNNER_TEMP/result.json"
           echo "status=$?" >> "$GITHUB_OUTPUT"
       - name: The pull request

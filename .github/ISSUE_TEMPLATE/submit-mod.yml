@@ -6,9 +6,10 @@ body:
   - type: markdown
     attributes:
       value: |
-        Publish your mod's `.elemod` files in a GitHub release first (published, not a draft or a pre-release). When you submit this form, a check:
+        Publish your mod's `.elemod` files in a GitHub release first (a release or a pre-release, not a draft). When you submit this form, a check:
         - downloads the release's files and checks each against the sha256 GitHub lists;
         - reads each with elekloader: its id, version, device, OS, licence and requirements;
+        - checks that the site has what each mod needs: a core for its device and OS, as new as the one it names, and any mod it requires (the shop's, or one from your release, which comes along);
         - comments here with what it found.
 
         If files pass, it opens a pull request that adds them to the shop, and a maintainer reviews and merges it. Edit this issue to fix anything, and the check runs again.
@@ -49,7 +50,7 @@ body:
     id: files
     attributes:
       label: Only these files
-      description: The .elemod files to submit, one per line, if not all of the release's. The cores they need come with them.
+      description: The .elemod files to submit, one per line, if not all of the release's. Mods they require from the release come with them.
   - type: checkboxes
     id: checks
     attributes:

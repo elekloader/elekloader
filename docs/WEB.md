@@ -156,7 +156,9 @@ stock file.
   (core-dn1 4.0's 1.25 MB on the Digitone, core 4.0's 256 KB on the
   Digitakt mk1, in place of 128 KB).
 
-To add a mod to the shop, publish its `.elemod` in a GitHub release, add an
+To add a mod to the shop, publish its `.elemod` in a GitHub release and
+submit it with the **Submit a mod** form ([Submitting a mod](#submitting-a-mod)):
+a check opens the pull request for you. By hand, add an
 item to `web/catalog.json` with the asset's sha256 (the release page shows
 it, or `gh release view --json assets`), and merge: the next deploy takes
 it. A mod whose author keeps its `.elemod` files in their repository
@@ -171,7 +173,8 @@ shows them as one card (the same repository, mod, version and device).
 Authors don't need to edit the list themselves. The shop's **Submit a mod** button opens the
 [issue form](../.github/ISSUE_TEMPLATE/submit-mod.yml): the repository, the release tag, a
 one-sentence summary, what has been tested on a unit, the licence if the files name none, and
-optionally which of the release's files to submit.
+optionally which of the release's files to submit. A release or a pre-release; a draft is refused
+until it is published.
 
 When the issue is opened (or edited), `.github/workflows/mod-submission.yml` runs
 `packaging/submit_mod.py` on it:
@@ -180,28 +183,39 @@ When the issue is opened (or edited), `.github/workflows/mod-submission.yml` run
   refuses a licence that doesn't allow the site to pass the file on (`SHOP_LICENCES`).
 - **The comparison.** It compares the files with the shop's, downloaded as the pages workflow does:
   - **an update:** the same mod, device and OS from the same repository replaces the old entry, in
-    its place;
+    its place (a repository that moved counts as the same; the entry takes its new name);
   - **a clash:** another repository's file for a mod the shop lists is flagged and left out. A
     release sometimes bundles someone else's mod; the submitter can name the file in "Only these
-    files" to add it anyway, and the review decides;
-  - **a core:** a core of the release goes in with the mods that need it, if the shop doesn't list
-    it.
+    files" to add it anyway, and the review decides.
+- **What each mod needs.** A mod goes in only if the site can build it:
+  - **its core:** the site has a core for its device and OS (the latest release's, or the shop's)
+    at least as new as the one the file names (`resources.core`), or as the core its release
+    carries. That version becomes the entry's `needs_core`. Cores come from elekloader's own
+    releases only: the page builds with the newest core for a device and OS, so a core from a
+    mod's release would become every build's. A mod's release that carries one is fine; the core
+    stays out;
+  - **the mods it requires** (machine-pages, fxkit, machines, ...): the shop's for its device and
+    OS, or else the release's own, which comes along even when "Only these files" leaves it out
+    (with the summary its file gives). A mod whose requirement is in neither is refused.
 - **The answer.** It comments on the issue with a table of what it found, and labels the issue
   `needs-changes` if nothing could be added. Editing the issue runs the check again.
 - **The pull request.** When files pass, it writes them into `web/catalog.json` (in the list's own
   layout, which `tests/test_units.py` keeps exact) and opens a pull request from branch
   `mod-submission/<issue>`. The pull request closes the issue when a maintainer merges it, and the
-  next deploy puts the mods on the site.
+  next deploy puts the mods on the site. A pull request the workflow opens doesn't start the
+  tests workflow (GitHub's rule for its own token): close and reopen it to run them.
 
 Nothing reaches `main` without that review, and nothing in a submitted file runs. The issue's text
 reaches the script as a file, never the shell. The repository needs **Settings > Actions > General
-> Allow GitHub Actions to create and approve pull requests**.
+> Allow GitHub Actions to create and approve pull requests** (in an organisation, allowed in the
+organisation's settings first).
 
-The same check runs locally, on a copy of the list:
+The same check runs locally, on a copy of the list, with the shop's files and the latest release's
+cores downloaded as pages.yml does:
 
 ```bash
 python packaging/submit_mod.py --repo owner/name --tag v1.0 --summary "One sentence." \
-    --catalog /tmp/catalog.json --files-dir build/shop
+    --catalog /tmp/catalog.json --files-dir build/shop --cores-dir build/core
 ```
 
 ## What stays private, and how
