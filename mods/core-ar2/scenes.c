@@ -34,6 +34,12 @@
  * The LFO destination list holds mod parameters (lock.c); the velocity and
  * aftertouch lists, built by the same routine, do not (lock.s), since their
  * routes index the same table.
+ *
+ * core-ar2 0.9: the FX track's (track 12) kit parameters too. Stock indexes
+ * the FX track's entries as track 12's (12 x 42 + 26 + code), so the same
+ * skip keeps them out of its table; the kit's save and load pass a code of
+ * 42..127 with track 12 through (scenes.s); a FX knob's turn and push with a
+ * pad held set the entry from the kit's value.
  */
 
 #include <stdint.h>
@@ -54,13 +60,16 @@
 #define SCENE_VT 0x401df974u
 #define PERF_VT 0x401ddfe8u
 #define CURRENT_TRACK ((int (*)(unsigned))0x400b693e)
+#define FX_TRACK 12
 #define KIT_DUMP ((int (*)(unsigned char *, unsigned char *, int))0x400088d6)
 #define DUMP_PERF 2114                          /* the SysEx kit's lists: 4 bytes an entry */
 #define DUMP_SCENE 2327
 
 struct core_lock_param;
-const struct core_lock_param *core_lock_by_id(int id, unsigned *code);
+const struct core_lock_param *core_lock_by_id_in(int id, unsigned *code, int kit);
 int core_lock_stock_takes(int id, const unsigned char *s);
+int core_lock_fx_takes(int id);
+int core_lock_on_track(const struct core_lock_param *p, int track);
 unsigned core_lock_field(const struct core_lock_param *p);
 int core_lock_min(const struct core_lock_param *p);
 int core_lock_max(const struct core_lock_param *p);
@@ -89,12 +98,26 @@ static const unsigned char *audio_kit(void)
     return k < 128 ? (const unsigned char *)LIVE_KITS + LIVE_KIT_SIZE * k : 0;
 }
 
+/* for smooth.c (core-ar2 0.9): drum track's sound in the kit the audio side
+ * plays, or the kit itself for the FX track, or 0 */
+const unsigned char *core_audio_sound(int track)
+{
+    const unsigned char *kit = audio_kit();
+    return kit && (unsigned)track < 12 ? kit + 42 + 152 * track : kit && track == FX_TRACK ? kit : 0;
+}
+
+/* does the field's parameter belong on the track (lock.c)? */
+static int on_track(int code, int track)
+{
+    return core_lock_on_track(core_lock_by_code(code), track);
+}
+
 int core_scene_value(int track, unsigned field)
 {
     const unsigned char *kit = audio_kit(), *e;
     int code = core_lock_code(field), i;
     signed char scene;
-    if (!kit || !code || (unsigned)track >= 12 || (scene = kit[ACTIVE_SCENE]) < 0)
+    if (!kit || !code || !on_track(code, track) || (scene = kit[ACTIVE_SCENE]) < 0)
         return -1;
     for (i = 0, e = kit + SCENE_LIST; i < ENTRIES; i++, e += ENTRY)
         if ((signed char)e[4] == scene && e[2] == track && e[3] == code)
@@ -108,7 +131,11 @@ int core_perf_offset(int track, unsigned field)
 {
     const unsigned char *kit = audio_kit(), *e;
     int code = core_lock_code(field), i, sum = 0;
-    if (!kit || !code || (unsigned)track >= 12 || PERF_OFF)
+    if (!kit || !code || !on_track(code, track) || PERF_OFF)
+        return 0;
+    for (i = 0; i < 12 && !PRESSURE[i]; i++)
+        ;
+    if (i == 12)                                /* (0.9) no pad pressed: nothing to add */
         return 0;
     for (i = 0, e = kit + PERF_LIST; i < ENTRIES; i++, e += ENTRY)
         if (e[2] == track && e[3] == code && e[4] < 12)
@@ -130,21 +157,21 @@ static void *held(void *view)
     return vt == SCENE_VT || vt == PERF_VT ? o : 0;
 }
 
-/* the knob's mod parameter on the view's track, with its code and sound
- * (midi.c too) */
+/* the knob's mod parameter on the view's track, with its code and sound,
+ * or (0.9) on the FX track a kit parameter's, with the kit (midi.c too) */
 const struct core_lock_param *core_lock_knob(void *view, int id, int *track, unsigned *code,
                                                unsigned char **s)
 {
     unsigned k = (unsigned)WORKING_KIT_INDEX[0] << 24 | (unsigned)WORKING_KIT_INDEX[1] << 16 |
                  (unsigned)WORKING_KIT_INDEX[2] << 8 | WORKING_KIT_INDEX[3];
-    const struct core_lock_param *p = core_lock_by_id(id, code);
-    if (!p || k >= 128)
+    const struct core_lock_param *p;
+    if (k >= 128)
         return 0;
     *track = CURRENT_TRACK(*(unsigned *)((char *)view + 116));
-    if ((unsigned)*track >= 12)
+    if ((unsigned)*track >= 13 || !(p = core_lock_by_id_in(id, code, *track == FX_TRACK)))
         return 0;
-    *s = (unsigned char *)LIVE_KITS + LIVE_KIT_SIZE * k + 42 + 152 * *track;
-    return core_lock_stock_takes(id, *s) ? 0 : p;
+    *s = (unsigned char *)LIVE_KITS + LIVE_KIT_SIZE * k + (*track == FX_TRACK ? 0 : 42 + 152 * *track);
+    return (*track == FX_TRACK ? core_lock_fx_takes(id) : core_lock_stock_takes(id, *s)) ? 0 : p;
 }
 
 static int clamp(int v, int lo, int hi)

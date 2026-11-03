@@ -90,6 +90,29 @@ symbol is 0) and the mods have the whole room. The core reads the flag from
 core_lock_codes: an `"lfo"` field's code has LFO_FLAG set. The flag is not
 stored data, so it is not part of the layout ID.
 
+The smoothed value (core-ar2 0.9). The core smooths a lockable parameter's
+value as stock smooths its own; a lockable field declared `"smooth": false`
+jumps (a type, a mode). Its code has SMOOTH_OFF set in core_lock_codes. Like
+LFO_FLAG it is not stored data, so it is not part of the layout ID.
+
+Velocity and aftertouch destinations (core-ar2 0.9). A lockable field
+declared `"mod": true` is also a destination in each sound's VELOCITY MOD and
+AFTERTOUCH lists (one flag for both: stock builds them with one routine). A
+route keeps its destination as a code in its own byte, which the core's
+code-to-file hook already passes, so the field needs no room. Its code has
+ROUTE_FLAG set in core_lock_codes; not stored data either.
+
+The FX track (core-ar2 0.9). A kit-scope field can be lockable too: it is a
+parameter of the FX track (track 12), which the kit holds, with a lock code
+from the same 42..127. It can have a CC, from the same pool less the CCs
+stock maps on the FX channel (`fx_ccs_taken`), and be an LFO destination of
+the FX LFO, but not a velocity or aftertouch destination: the FX track has
+no routes. The FX LFO keeps its destination in a kit byte through a table
+of the FX parameters, with no entry for a code either, so a core that keeps
+a kit-scope "lfo" field there imports core_fx_lfo_dst: the linker places it,
+as the core's own kit field of the device's `fx_lock_dst` bits, in a build
+with a kit-scope "lfo" field (0 otherwise).
+
 Nothing here is random: the same lockfile (or none) and mods always link to
 the same bytes.
 """
@@ -110,9 +133,12 @@ IDS_TABLE = 'core_store_ids'
 CODES_TABLE = 'core_lock_codes'
 CCS_TABLE = 'core_lock_ccs'
 LOCK_DST = 'core_lfo_dst'
+FX_LOCK_DST = 'core_fx_lfo_dst'                 # core-ar2 0.9: the FX LFO's code, a kit field
 LFO_FLAG = 0x100                                # in core_lock_codes: the field is an LFO destination
+SMOOTH_OFF = 0x200                              # in core_lock_codes: the field's value jumps (core-ar2 0.9)
+ROUTE_FLAG = 0x400                              # in core_lock_codes: a velocity/aftertouch destination (core-ar2 0.9)
 FIRST_CODE, LAST_CODE = 42, 127
-LOCK_SCOPES = ('sound',)
+LOCK_SCOPES = ('sound', 'kit')
 
 # Per device: each scope's bits in its live home, and the tagged store.
 DEVICES = {
@@ -127,6 +153,9 @@ DEVICES = {
         # the performances' (0x401de1f4), in the order fields get them
         'ccs': (8, 9) + tuple(range(48, 64)) + tuple(range(65, 70)) + (84, 85) + tuple(range(110, 117)) + (119,),
         'lock_dst': 7,                              # core_lfo_dst: a code - 41, 0 for none
+        'fx_lock_dst': 7,                           # core_fx_lfo_dst (core-ar2 0.9): the same, for the FX LFO
+        # of the pool, the CCs stock maps on the FX channel (0x413dcb14): a kit field (the FX track's) gets none of them
+        'fx_ccs_taken': (84, 85),
     },
     'analog-four-mk2': {                            # core-a4 (mods/core-a4/store.c)
         'fixed': {'sound': 32, 'kit': 128, 'global': 64},
@@ -145,6 +174,11 @@ def supports(dev_key):
 def lock_dst_bits(dev_key):
     """The bits of core_lfo_dst on the device, 0 where the core keeps none."""
     return _spec(dev_key).get('lock_dst', 0)
+
+
+def fx_lock_dst_bits(dev_key):
+    """The bits of core_fx_lfo_dst on the device, 0 where the core keeps none."""
+    return _spec(dev_key).get('fx_lock_dst', 0)
 
 
 def _spec(dev_key):
@@ -206,6 +240,17 @@ def parse_lfos(m):
     return [f['sym'] for f in m.get('storage', []) if isinstance(f, dict) and f.get('lfo') is True]
 
 
+def parse_rough(m):
+    """A mod document's "storage" -> the syms of its fields declared "smooth": false, in order."""
+    return [f['sym'] for f in m.get('storage', []) if isinstance(f, dict) and f.get('smooth') is False]
+
+
+def parse_routes(m):
+    """A mod document's "storage" -> the syms of its fields declared "mod": true (velocity and aftertouch
+    destinations), in order."""
+    return [f['sym'] for f in m.get('storage', []) if isinstance(f, dict) and f.get('mod') is True]
+
+
 def parse_ccs(m):
     """A mod document's "storage" -> the syms of its fields with a CC, in order."""
     return [f['sym'] for f in m.get('storage', []) if isinstance(f, dict) and f.get('cc') is True]
@@ -218,9 +263,9 @@ def parse_decls(m):
     if not isinstance(st, list):
         raise ModError('"storage" is a list of fields')
     for f in st:
-        if not isinstance(f, dict) or set(f) - {'sym', 'scope', 'bits', 'lock', 'cc', 'lfo'}:
+        if not isinstance(f, dict) or set(f) - {'sym', 'scope', 'bits', 'lock', 'cc', 'lfo', 'smooth', 'mod'}:
             raise ModError('a storage field is {"sym", "scope", "bits"}, and "lock" for a lockable one')
-        for k in ('lock', 'cc', 'lfo'):
+        for k in ('lock', 'cc', 'lfo', 'smooth', 'mod'):
             if k in f and not isinstance(f[k], bool):
                 raise ModError('storage field %r: "%s" is true or false' % (f.get('sym'), k))
         if f.get('cc') and not f.get('lock'):
@@ -229,9 +274,18 @@ def parse_decls(m):
         if f.get('lfo') and not f.get('lock'):
             raise ModError('storage field %r: only a lockable field ("lock": true) can be an LFO destination'
                            % (f.get('sym'),))
+        if f.get('mod') and not f.get('lock'):
+            raise ModError('storage field %r: only a lockable field ("lock": true) can be a velocity or aftertouch '
+                           'destination' % (f.get('sym'),))
+        if 'smooth' in f and not f.get('lock'):
+            raise ModError('storage field %r: only a lockable field ("lock": true) is smoothed'
+                           % (f.get('sym'),))
         if f.get('lock') and f.get('scope') not in LOCK_SCOPES:
             raise ModError('storage field %r: only %s fields can be lockable'
                            % (f.get('sym'), ' and '.join(LOCK_SCOPES)))
+        if f.get('mod') and f.get('scope') == 'kit':
+            raise ModError('storage field %r: a kit field (the FX track\'s) cannot be a velocity or aftertouch '
+                           'destination: the FX track has no routes' % (f.get('sym'),))
         sym, scope, bits = f.get('sym'), f.get('scope'), f.get('bits')
         if not isinstance(sym, str) or not re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]*', sym):
             raise ModError('storage field %r: "sym" is a C name' % (sym,))
@@ -344,7 +398,7 @@ def check_lock(lock, dev_key):
                 seen.add(c['code'])
         placed = {(f['mod'], f['sym']) for f in lock['fields'] if f['scope'] in LOCK_SCOPES}
         if any((c['mod'], c['sym']) not in placed for c in lock['codes']):
-            raise ModError('lockfile: a code for a field that is not a placed sound field')
+            raise ModError('lockfile: a code for a field that is not a placed sound or kit field')
     if 'ccs' in lock or 'freed_ccs' in lock:
         pool, seen = _spec(dev_key).get('ccs', ()), set()
         for k in ('ccs', 'freed_ccs'):
@@ -357,6 +411,10 @@ def check_lock(lock, dev_key):
                         or not _whole(c['cc']) or c['cc'] not in pool or c['cc'] in seen:
                     raise ModError('lockfile: a bad entry in "%s"' % k)
                 seen.add(c['cc'])
+        kits = {(f['mod'], f['sym']) for f in lock['fields'] if f['scope'] == 'kit'}
+        if any((c['mod'], c['sym']) in kits and c['cc'] in _spec(dev_key).get('fx_ccs_taken', ())
+               for c in lock['ccs']):
+            raise ModError('lockfile: a kit field with a CC stock uses on the FX channel')
         coded = {(c['mod'], c['sym']) for c in lock.get('codes', [])}
         if any((c['mod'], c['sym']) not in coded for c in lock['ccs']):
             raise ModError('lockfile: a CC for a field that has no lock code')
@@ -498,7 +556,8 @@ def allocate(lock, decls, dev_key, core=None, locks=(), ccs=()):
     lock['fields'] = sorted(fields, key=lambda f: (SCOPE_NUM[f['scope']], f['offset']))
     recoded = _codes(lock, set(locks), {(f['mod'], f['sym']) for f in kept},
                      {(f['mod'], f['sym']) for f in added if (f['mod'], f['sym']) in back}, notes)
-    _ccs(lock, set(ccs), _spec(dev_key).get('ccs', ()), notes)
+    _ccs(lock, set(ccs), _spec(dev_key).get('ccs', ()), notes,
+         {(f['mod'], f['sym']) for f in fields if f['scope'] == 'kit'}, _spec(dev_key).get('fx_ccs_taken', ()))
     if new:
         lock['id'] = _idstr(layout_id(lock))
         notes.insert(0, 'a new lockfile, layout ID %s: projects and sounds saved by builds with '
@@ -564,15 +623,16 @@ def _codes(lock, want, kept, back, notes):
     return changed
 
 
-def _ccs(lock, want, pool, notes):
+def _ccs(lock, want, pool, notes, kits=(), fx_taken=()):
     """Give each field (mod, sym) in want its CC from pool, in lock (changed
-    in place). Not part of the layout ID: a CC says nothing of where data is."""
+    in place); a field in kits (the FX track's) none in fx_taken. Not part of
+    the layout ID: a CC says nothing of where data is."""
     had = lock.get('ccs', []), lock.get('freed_ccs', [])
     if not want and not had[0] and not had[1]:
         return
     ccs, freed = [], [dict(c) for c in had[1]]
     for c in had[0]:
-        if (c['mod'], c['sym']) in want:
+        if (c['mod'], c['sym']) in want and not ((c['mod'], c['sym']) in kits and c['cc'] in fx_taken):
             ccs.append(dict(c))
         else:
             freed.append(dict(c))
@@ -582,16 +642,21 @@ def _ccs(lock, want, pool, notes):
     unused = [cc for cc in pool if cc not in used]
     have = {(c['mod'], c['sym']) for c in ccs}
     for k in sorted(want - have):
-        same = [c for c in freed if (c['mod'], c['sym']) == k]
+        ok = (lambda cc: cc not in fx_taken) if k in kits else (lambda cc: True)
+        same = [c for c in freed if (c['mod'], c['sym']) == k and ok(c['cc'])]
+        new = [cc for cc in unused if ok(cc)]
+        old = [c for c in freed if ok(c['cc'])]
         if same:
             c = same[-1]
             freed.remove(c)
             notes.append('%s %s: back with CC %d' % (k[0], k[1], c['cc']))
-        elif unused:
-            c = {'mod': k[0], 'sym': k[1], 'cc': unused.pop(0)}
+        elif new:
+            unused.remove(new[0])
+            c = {'mod': k[0], 'sym': k[1], 'cc': new[0]}
             notes.append('%s %s: CC %d' % (k[0], k[1], c['cc']))
-        elif freed:                     # the never-used CCs are gone: the one freed longest ago
-            old = freed.pop(0)
+        elif old:                       # the never-used CCs are gone: the one freed longest ago
+            old = old[0]
+            freed.remove(old)
             c = {'mod': k[0], 'sym': k[1], 'cc': old['cc']}
             notes.append('%s %s: CC %d (was %s %s\'s)' % (k[0], k[1], c['cc'], old['mod'], old['sym']))
         else:
@@ -616,14 +681,17 @@ def symbols(lock, dev_key):
     return out, [i.to_bytes(4, 'big') for i in ids]
 
 
-def code_entries(lock, lfos=()):
+def code_entries(lock, lfos=(), rough=(), routes=()):
     """-> the table core_lock_codes' entries: {field descriptor, code}, 8 bytes
-    each, by code; the code of a field in lfos ((mod, sym)) has LFO_FLAG set."""
+    each, by code; the code of a field in lfos ((mod, sym)) has LFO_FLAG set,
+    of one in rough SMOOTH_OFF, of one in routes ROUTE_FLAG."""
     desc = {(f['mod'], f['sym']): SCOPE_NUM[f['scope']] << 28 | f['bits'] << 22 | f['offset']
             for f in lock['fields']}
-    lfos = set(lfos)
+    lfos, rough, routes = set(lfos), set(rough), set(routes)
     return [desc[(c['mod'], c['sym'])].to_bytes(4, 'big')
-            + (c['code'] | (LFO_FLAG if (c['mod'], c['sym']) in lfos else 0)).to_bytes(4, 'big')
+            + (c['code'] | (LFO_FLAG if (c['mod'], c['sym']) in lfos else 0)
+               | (SMOOTH_OFF if (c['mod'], c['sym']) in rough else 0)
+               | (ROUTE_FLAG if (c['mod'], c['sym']) in routes else 0)).to_bytes(4, 'big')
             for c in lock.get('codes', [])]
 
 

@@ -730,6 +730,19 @@ def _(B):
              [keeper(B), locking])], [codes, locking]
 
 
+@row('link', "<> declare<> lockable kit fields (the FX track's), which <> does not keep", device='analog-rytm-mk2')
+def _(B):
+    # a lockable kit field needs a core that keeps the FX track's parameters (it imports core_fx_lfo_dst)
+    kit = B.other('m', storage=[{'sym': 'st_k', 'scope': 'kit', 'bits': 4, 'lock': True}])
+    codes = keeper(B)
+    codes['collections']['core_lock_codes'] = {'entry': 8}
+    fx = keeper(B)
+    fx['imports'] = fx['imports'] + ['core_fx_lfo_dst']
+    fx['collections']['core_lock_codes'] = {'entry': 8}
+    return [("m declares lockable kit fields (the FX track's), which core 1 does not keep", [codes, kit])], \
+        [fx, kit]
+
+
 @row('link', '<> give<> lockable parameters CCs, which <> does not keep (no table <>)', device='analog-rytm-mk2')
 def _(B):
     cc = B.other('m', storage=[{'sym': 'st_a', 'scope': 'sound', 'bits': 4, 'lock': True, 'cc': True}])
@@ -876,7 +889,7 @@ def test_digitakt_fixtures():
 
 
 def test_analog_rytm_fixtures():
-    assert run_rows('analog-rytm-mk2') == 7
+    assert run_rows('analog-rytm-mk2') == 8
 
 
 def test_the_lfo_destination_field_is_placed_only_with_an_lfo_field():
@@ -909,6 +922,106 @@ def test_the_lfo_destination_field_is_placed_only_with_an_lfo_field():
             assert 'only a lockable field ("lock": true) can be an LFO destination' in str(e), e
         else:
             raise AssertionError('"lfo" without "lock" was accepted')
+
+
+def test_a_field_declared_smooth_false_gets_smooth_off_in_its_code():
+    """"smooth": false (core-ar2 0.9): the field's code carries SMOOTH_OFF in core_lock_codes, beside
+    LFO_FLAG; "smooth": true and no "smooth" leave it out. The flag is not stored data, so the layout is
+    the same either way. "smooth" without "lock" is refused."""
+    with Bench('analog-rytm-mk2') as B:
+        core = keeper(B)
+        core['collections']['core_lock_codes'] = {'entry': 8}
+        layouts = set()
+        for smooth in (False, True, None):
+            a = {'sym': 'st_a', 'scope': 'sound', 'bits': 4, 'lock': True, 'lfo': True}
+            if smooth is not None:
+                a['smooth'] = smooth
+            mod = B.other('m', storage=[a, {'sym': 'st_b', 'scope': 'sound', 'bits': 4, 'lock': True}])
+            m = link.Mod2(mod, 'm')
+            out = link.link([link.Mod2(d, d['id']) for d in (copy.deepcopy(core), mod)], B.img)
+            codes = {(c['mod'], c['sym']): c['code'] for c in out.store['codes']}
+            entries = sorted(int.from_bytes(e[4:], 'big')
+                             for e in store.code_entries(out.store, [('m', 'st_a')], [('m', x) for x in m.rough]))
+            want = codes[('m', 'st_a')] | store.LFO_FLAG | (store.SMOOTH_OFF if smooth is False else 0)
+            assert entries == sorted([want, codes[('m', 'st_b')]]), (smooth, entries)
+            layouts.add(store.layout_id(out.store))
+        assert len(layouts) == 1, layouts
+        mod = B.other('m', storage=[{'sym': 'st_a', 'scope': 'sound', 'bits': 4, 'smooth': False}])
+        try:
+            link.link([link.Mod2(d, d['id']) for d in (copy.deepcopy(core), mod)], B.img)
+        except ModError as e:
+            assert 'only a lockable field ("lock": true) is smoothed' in str(e), e
+        else:
+            raise AssertionError('"smooth" without "lock" was accepted')
+
+
+def test_a_field_declared_mod_gets_route_flag_in_its_code():
+    """"mod": true (core-ar2 0.9): the field is a velocity and aftertouch destination, and its code
+    carries ROUTE_FLAG in core_lock_codes, beside LFO_FLAG; "mod": false and no "mod" leave it out. The
+    flag is not stored data, so the layout is the same either way. "mod" without "lock" is refused."""
+    with Bench('analog-rytm-mk2') as B:
+        core = keeper(B)
+        core['collections']['core_lock_codes'] = {'entry': 8}
+        layouts = set()
+        for routed in (True, False, None):
+            a = {'sym': 'st_a', 'scope': 'sound', 'bits': 4, 'lock': True, 'lfo': True}
+            if routed is not None:
+                a['mod'] = routed
+            mod = B.other('m', storage=[a, {'sym': 'st_b', 'scope': 'sound', 'bits': 4, 'lock': True}])
+            m = link.Mod2(mod, 'm')
+            out = link.link([link.Mod2(d, d['id']) for d in (copy.deepcopy(core), mod)], B.img)
+            codes = {(c['mod'], c['sym']): c['code'] for c in out.store['codes']}
+            entries = sorted(int.from_bytes(e[4:], 'big')
+                             for e in store.code_entries(out.store, [('m', 'st_a')], (), [('m', x) for x in m.routes]))
+            want = codes[('m', 'st_a')] | store.LFO_FLAG | (store.ROUTE_FLAG if routed else 0)
+            assert entries == sorted([want, codes[('m', 'st_b')]]), (routed, entries)
+            layouts.add(store.layout_id(out.store))
+        assert len(layouts) == 1, layouts
+        mod = B.other('m', storage=[{'sym': 'st_a', 'scope': 'sound', 'bits': 4, 'mod': True}])
+        try:
+            link.link([link.Mod2(d, d['id']) for d in (copy.deepcopy(core), mod)], B.img)
+        except ModError as e:
+            assert 'only a lockable field ("lock": true) can be a velocity or aftertouch destination' in str(e), e
+        else:
+            raise AssertionError('"mod" without "lock" was accepted')
+
+
+def test_a_lockable_kit_field_is_the_fx_tracks():
+    """A lockable kit field (core-ar2 0.9) is the FX track's: with "lfo" the core's kit field
+    core_fx_lfo_dst is placed (and core_lfo_dst is not, with no sound "lfo" field); its CC is never one
+    stock uses on the FX channel, and a lockfile that gives it one is refused; "mod" is refused (the FX
+    track has no velocity or aftertouch routes)."""
+    with Bench('analog-rytm-mk2') as B:
+        core = keeper(B)
+        core['imports'] = core['imports'] + ['core_fx_lfo_dst', 'core_lfo_dst']
+        core['collections'].update({'core_lock_codes': {'entry': 8}, 'core_lock_ccs': {'entry': 8}})
+        k = {'sym': 'st_k', 'scope': 'kit', 'bits': 7, 'lock': True, 'cc': True, 'lfo': True}
+        # 23 sound fields with CCs take the pool up to 69, so 84 and 85 come next: the kit field skips them
+        sounds = [{'sym': 'st_%d' % i, 'scope': 'sound', 'bits': 1, 'lock': True, 'cc': True} for i in range(23)]
+        mod = B.other('m', storage=sounds + [k])
+        out = link.link([link.Mod2(d, d['id']) for d in (copy.deepcopy(core), mod)], B.img)
+        placed = {(f['mod'], f['sym']) for f in out.store['fields']}
+        assert ('core', 'core_fx_lfo_dst') in placed and ('core', 'core_lfo_dst') not in placed, placed
+        taken = store._spec('analog-rytm-mk2')['fx_ccs_taken']
+        cc = {(c['mod'], c['sym']): c['cc'] for c in out.store['ccs']}[('m', 'st_k')]
+        assert cc not in taken and cc == 110, cc
+        bad = copy.deepcopy(out.store)
+        for c in bad['ccs']:
+            if (c['mod'], c['sym']) == ('m', 'st_k'):
+                c['cc'] = taken[0]
+        try:
+            store.check_lock(bad, 'analog-rytm-mk2')
+        except ModError as e:
+            assert 'a kit field with a CC stock uses on the FX channel' in str(e), e
+        else:
+            raise AssertionError('a kit field with CC %d was accepted' % taken[0])
+        mod = B.other('m', storage=[dict(k, mod=True)])
+        try:
+            link.link([link.Mod2(d, d['id']) for d in (copy.deepcopy(core), mod)], B.img)
+        except ModError as e:
+            assert 'cannot be a velocity or aftertouch destination: the FX track has no routes' in str(e), e
+        else:
+            raise AssertionError('"mod" on a kit field was accepted')
 
 
 def test_the_image_check_refuses_a_protected_or_kept_byte_the_other_checks_let_through():

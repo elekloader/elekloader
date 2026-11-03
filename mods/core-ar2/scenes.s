@@ -64,7 +64,8 @@ core_scene_entry:
 | 0x40007602 and 0x400075c8, a lock's code to the kit file's number and
 | back (track, n): `move.l %d2,-(%sp); moveq #12,%d2; move.l 8(%sp),%d1`.
 | A drum track's 42..127 (a mod parameter's code; stock's numbers are
-| 0..41) stays itself, so a saved kit keeps its mod entries.
+| 0..41) stays itself, so a saved kit keeps its mod entries; from 0.9 the FX
+| track's (12) too.
 core_code_id:
         bsr.s   pass
         tst.l   %d1
@@ -86,10 +87,11 @@ core_id_code:
         jmp     0x400075d0
 
 | (track at 8(%sp), n at 12(%sp), past the return): %d1 = 0 and %d0 = n for
-| a drum track's 42..127, else %d1 = 1
+| a track's 42..127 (from 0.9 the FX track's too, 12: its scene and
+| performance entries; stock's FX range is 0..37), else %d1 = 1
 pass:
         moveq   #1,%d1
-        moveq   #12,%d0
+        moveq   #13,%d0
         cmp.l   8(%sp),%d0
         bls.s   9f
         move.l  12(%sp),%d0

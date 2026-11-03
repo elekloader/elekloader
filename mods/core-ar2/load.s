@@ -12,11 +12,15 @@
 | A mod with optional work in the interrupt (a meter, an estimate) skips it
 | while the load is high, so the stock audio and the UI keep their time:
 |     if (core_audio_load > CORE_AUDIO_BUSY) return;
+|
+| core_block (0.9) counts the blocks, from 1 at the first: the smoothed
+| value (smooth.c) steps its smoothers by it.
         .equ    DTCN0, 0xfc07000c
 
         .section .run, "ax"
         .globl  core_load_in, core_load_out
 core_load_in:
+        addq.l  #1, core_block
         move.l  DTCN0, %d0
         move.l  load_t0, %d1
         move.l  %d0, load_t0
@@ -43,8 +47,10 @@ core_load_out:
 
         .bss
         .align  2
-        .globl  core_audio_load
+        .globl  core_audio_load, core_block
 core_audio_load:
+        .space  4
+core_block:
         .space  4
 load_t0:
         .space  4

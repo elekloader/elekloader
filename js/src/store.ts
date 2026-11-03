@@ -12,7 +12,10 @@
 // lockfile has only once a build had a lockable field. A lockable field declared with "cc": true also gets a CC from the
 // device's pool, kept in "ccs" and "freed_ccs" by the field whatever its place or code, and not part of the layout ID.
 // A lockable field declared with "lfo": true is also an LFO destination: its code has LFO_FLAG in core_lock_codes, and
-// a build with one places the core's own field core_lfo_dst.
+// a build with one places the core's own field core_lfo_dst. A lockable field declared with "smooth": false jumps where the
+// core smooths the others (core-ar2 0.9): its code has SMOOTH_OFF in core_lock_codes, not part of the layout ID either.
+// A lockable field declared with "mod": true is also a velocity and aftertouch destination (core-ar2 0.9): its code has
+// ROUTE_FLAG in core_lock_codes, and a route keeps the code in its own byte, so it needs no room.
 // Nothing here is random.
 import { sha } from './bytes.ts'
 import { ModError, cmpVersions, int } from './elemod.ts'
@@ -29,9 +32,12 @@ export const IDS_TABLE = 'core_store_ids'
 export const CODES_TABLE = 'core_lock_codes'
 export const CCS_TABLE = 'core_lock_ccs'
 export const LOCK_DST = 'core_lfo_dst'
+export const FX_LOCK_DST = 'core_fx_lfo_dst'   // core-ar2 0.9: the FX LFO's code, a kit field
 export const LFO_FLAG = 0x100                  // in core_lock_codes: the field is an LFO destination
+export const SMOOTH_OFF = 0x200                // in core_lock_codes: the field's value jumps (core-ar2 0.9)
+export const ROUTE_FLAG = 0x400                // in core_lock_codes: a velocity/aftertouch destination (core-ar2 0.9)
 const FIRST_CODE = 42, LAST_CODE = 127
-const LOCK_SCOPES = ['sound']
+const LOCK_SCOPES = ['sound', 'kit']
 
 export type Field = { mod: string; sym: string; scope: string; offset: number; bits: number }
 export type Lock = {
@@ -45,7 +51,7 @@ export type Code = { mod: string; sym: string; code: number }
 export type Cc = { mod: string; sym: string; cc: number }
 export type Decl = [string, string, string, number]          // mod id, sym, scope, bits
 
-type Spec = { fixed: Record<string, number>; coreFixed: [string, Record<string, number>][]; live: Record<string, number>; store: number; items: Record<string, number>; split: { track: number; pattern: number }; ccs?: number[]; lockDst?: number }
+type Spec = { fixed: Record<string, number>; coreFixed: [string, Record<string, number>][]; live: Record<string, number>; store: number; items: Record<string, number>; split: { track: number; pattern: number }; ccs?: number[]; lockDst?: number; fxLockDst?: number; fxCcsTaken?: number[] }
 const range = (a: number, b: number) => Array.from({ length: b - a }, (_, i) => a + i)
 const DEVICES: Record<string, Spec> = {
   'analog-rytm-mk2': {
@@ -59,6 +65,9 @@ const DEVICES: Record<string, Spec> = {
     // order fields get them
     ccs: [8, 9, ...range(48, 64), ...range(65, 70), 84, 85, ...range(110, 117), 119],
     lockDst: 7,                                 // core_lfo_dst: a code - 41, 0 for none
+    fxLockDst: 7,                               // core_fx_lfo_dst (core-ar2 0.9): the same, for the FX LFO
+    // of the pool, the CCs stock maps on the FX channel (0x413dcb14): a kit field (the FX track's) gets none of them
+    fxCcsTaken: [84, 85],
   },
   'analog-four-mk2': {                          // core-a4 (mods/core-a4/store.c)
     fixed: { sound: 32, kit: 128, global: 64 },
@@ -75,6 +84,11 @@ export const supports = (devKey: string) => Object.hasOwn(DEVICES, devKey)
 /** The bits of core_lfo_dst on the device, 0 where the core keeps none. store.lock_dst_bits. */
 export function lockDstBits(devKey: string): number {
   return spec(devKey).lockDst ?? 0
+}
+
+/** The bits of core_fx_lfo_dst on the device, 0 where the core keeps none. store.fx_lock_dst_bits. */
+export function fxLockDstBits(devKey: string): number {
+  return spec(devKey).fxLockDst ?? 0
 }
 
 function spec(devKey: string): Spec {
@@ -128,6 +142,19 @@ export function parseLfos(m: Record<string, any>): string[] {
   return st.filter((f: unknown) => isDict(f) && f.lfo === true).map((f: Record<string, any>) => f.sym)
 }
 
+/** A mod document's "storage" -> the syms of its fields declared "smooth": false, in order. */
+export function parseRough(m: Record<string, any>): string[] {
+  const st = Object.hasOwn(m, 'storage') && Array.isArray(m.storage) ? m.storage : []
+  return st.filter((f: unknown) => isDict(f) && f.smooth === false).map((f: Record<string, any>) => f.sym)
+}
+
+/** A mod document's "storage" -> the syms of its fields declared "mod": true (velocity and aftertouch destinations), in
+ * order. */
+export function parseRoutes(m: Record<string, any>): string[] {
+  const st = Object.hasOwn(m, 'storage') && Array.isArray(m.storage) ? m.storage : []
+  return st.filter((f: unknown) => isDict(f) && f.mod === true).map((f: Record<string, any>) => f.sym)
+}
+
 /** A mod document's "storage" -> the syms of its fields with a CC, in order. */
 export function parseCcs(m: Record<string, any>): string[] {
   const st = Object.hasOwn(m, 'storage') && Array.isArray(m.storage) ? m.storage : []
@@ -141,17 +168,23 @@ export function parseDecls(m: Record<string, any>): [string, string, number][] {
   const st = Object.hasOwn(m, 'storage') ? m.storage : []
   if (!Array.isArray(st)) throw new ModError('"storage" is a list of fields')
   for (const f of st) {
-    if (!isDict(f) || Object.keys(f).some(k => !['sym', 'scope', 'bits', 'lock', 'cc', 'lfo'].includes(k)))
+    if (!isDict(f) || Object.keys(f).some(k => !['sym', 'scope', 'bits', 'lock', 'cc', 'lfo', 'smooth', 'mod'].includes(k)))
       throw new ModError('a storage field is {"sym", "scope", "bits"}, and "lock" for a lockable one')
-    for (const k of ['lock', 'cc', 'lfo'])
+    for (const k of ['lock', 'cc', 'lfo', 'smooth', 'mod'])
       if (Object.hasOwn(f, k) && typeof f[k] !== 'boolean')
         throw new ModError(`storage field ${repr(Object.hasOwn(f, 'sym') ? f.sym : null)}: "${k}" is true or false`)
     if (f.cc && !f.lock)
       throw new ModError(`storage field ${repr(Object.hasOwn(f, 'sym') ? f.sym : null)}: only a lockable field ("lock": true) can have a CC`)
     if (f.lfo && !f.lock)
       throw new ModError(`storage field ${repr(Object.hasOwn(f, 'sym') ? f.sym : null)}: only a lockable field ("lock": true) can be an LFO destination`)
+    if (f.mod && !f.lock)
+      throw new ModError(`storage field ${repr(Object.hasOwn(f, 'sym') ? f.sym : null)}: only a lockable field ("lock": true) can be a velocity or aftertouch destination`)
+    if (Object.hasOwn(f, 'smooth') && !f.lock)
+      throw new ModError(`storage field ${repr(Object.hasOwn(f, 'sym') ? f.sym : null)}: only a lockable field ("lock": true) is smoothed`)
     if (f.lock && !LOCK_SCOPES.includes(f.scope))
       throw new ModError(`storage field ${repr(Object.hasOwn(f, 'sym') ? f.sym : null)}: only ${LOCK_SCOPES.join(' and ')} fields can be lockable`)
+    if (f.mod && f.scope === 'kit')
+      throw new ModError(`storage field ${repr(Object.hasOwn(f, 'sym') ? f.sym : null)}: a kit field (the FX track's) cannot be a velocity or aftertouch destination: the FX track has no routes`)
     const sym = Object.hasOwn(f, 'sym') ? f.sym : null
     const scope = Object.hasOwn(f, 'scope') ? f.scope : null
     const bits = Object.hasOwn(f, 'bits') ? f.bits : null
@@ -255,7 +288,7 @@ export function checkLock(lock: unknown, devKey: string): asserts lock is Lock {
     }
     const placed = new Set((lock.fields as Field[]).filter(f => LOCK_SCOPES.includes(f.scope)).map(f => f.mod + '\0' + f.sym))
     if ((lock.codes as Code[]).some(c => !placed.has(c.mod + '\0' + c.sym)))
-      throw new ModError('lockfile: a code for a field that is not a placed sound field')
+      throw new ModError('lockfile: a code for a field that is not a placed sound or kit field')
   }
   if (Object.hasOwn(lock, 'ccs') || Object.hasOwn(lock, 'freed_ccs')) {
     const pool = spec(devKey).ccs ?? [], seen = new Set<number>()
@@ -269,6 +302,10 @@ export function checkLock(lock: unknown, devKey: string): asserts lock is Lock {
         seen.add(c.cc)
       }
     }
+    const kits = new Set((lock.fields as Field[]).filter(f => f.scope === 'kit').map(f => f.mod + '\0' + f.sym))
+    const fxTaken = spec(devKey).fxCcsTaken ?? []
+    if ((lock.ccs as Cc[]).some(c => kits.has(c.mod + '\0' + c.sym) && fxTaken.includes(c.cc)))
+      throw new ModError('lockfile: a kit field with a CC stock uses on the FX channel')
     const coded = new Set(((lock.codes ?? []) as Code[]).map(c => c.mod + '\0' + c.sym))
     if ((lock.ccs as Cc[]).some(c => !coded.has(c.mod + '\0' + c.sym)))
       throw new ModError('lockfile: a CC for a field that has no lock code')
@@ -396,7 +433,8 @@ export function allocate(lock0: Lock | null, decls: Decl[], devKey: string, core
   lock.fields = fields.sort((a, b) => SCOPE_NUM[a.scope] - SCOPE_NUM[b.scope] || a.offset - b.offset)
   const recoded = setCodes(lock, new Set(locks.map(([m, sy]) => keyOf(m, sy))), new Set(kept.map(f => keyOf(f.mod, f.sym))),
     new Set(added.filter(f => back.has(keyOf(f.mod, f.sym))).map(f => keyOf(f.mod, f.sym))), notes)
-  setCcs(lock, new Set(ccs.map(([m, sy]) => keyOf(m, sy))), spec(devKey).ccs ?? [], notes)
+  setCcs(lock, new Set(ccs.map(([m, sy]) => keyOf(m, sy))), spec(devKey).ccs ?? [], notes,
+    new Set(fields.filter(f => f.scope === 'kit').map(f => keyOf(f.mod, f.sym))), spec(devKey).fxCcsTaken ?? [])
   if (isNew) {
     lock.id = idStr(layoutId(lock))
     notes.unshift(`a new lockfile, layout ID ${lock.id}: projects and sounds saved by builds with other layouts load their mod data at defaults`)
@@ -464,15 +502,15 @@ function setCodes(lock: Lock, want: Set<string>, kept: Set<string>, back: Set<st
   return changed
 }
 
-/** Give each field (keys mod\0sym in want) its CC from pool, in lock (changed in place). Not part of the layout ID: a
- * CC says nothing of where data is. store._ccs. */
-function setCcs(lock: Lock, want: Set<string>, pool: number[], notes: string[]): void {
+/** Give each field (keys mod\0sym in want) its CC from pool, in lock (changed in place); a field in kits (the FX
+ * track's) none in fxTaken. Not part of the layout ID: a CC says nothing of where data is. store._ccs. */
+function setCcs(lock: Lock, want: Set<string>, pool: number[], notes: string[], kits: Set<string> = new Set(), fxTaken: number[] = []): void {
   const had = lock.ccs ?? [], hadFreed = lock.freed_ccs ?? []
   if (!want.size && !had.length && !hadFreed.length) return
   const key = (c: { mod: string; sym: string }) => c.mod + '\0' + c.sym
   const ccs: Cc[] = [], freed: Cc[] = hadFreed.map(c => ({ ...c }))
   for (const c of had) {
-    if (want.has(key(c))) ccs.push({ ...c })
+    if (want.has(key(c)) && !(kits.has(key(c)) && fxTaken.includes(c.cc))) ccs.push({ ...c })
     else {
       freed.push({ ...c })
       notes.push(`${c.mod} ${c.sym}: CC ${c.cc} freed, and kept for it until the unused CCs run out`)
@@ -484,17 +522,21 @@ function setCcs(lock: Lock, want: Set<string>, pool: number[], notes: string[]):
   const todo = [...want].filter(k => !have.has(k)).map(k => { const [mod, sym] = k.split('\0'); return { mod, sym } }).sort(byModSym)
   for (const { mod, sym } of todo) {
     const k = mod + '\0' + sym
-    const same = freed.filter(c => key(c) === k)
+    const ok = (cc: number) => !(kits.has(k) && fxTaken.includes(cc))
+    const same = freed.filter(c => key(c) === k && ok(c.cc))
+    const fresh = unused.filter(ok), older = freed.filter(c => ok(c.cc))
     let c: Cc
     if (same.length) {
       c = same[same.length - 1]
       freed.splice(freed.indexOf(c), 1)
       notes.push(`${mod} ${sym}: back with CC ${c.cc}`)
-    } else if (unused.length) {
-      c = { mod, sym, cc: unused.shift()! }
+    } else if (fresh.length) {
+      unused.splice(unused.indexOf(fresh[0]), 1)
+      c = { mod, sym, cc: fresh[0] }
       notes.push(`${mod} ${sym}: CC ${c.cc}`)
-    } else if (freed.length) {                  // the never-used CCs are gone: the one freed longest ago
-      const old = freed.shift()!
+    } else if (older.length) {                  // the never-used CCs are gone: the one freed longest ago
+      const old = older[0]
+      freed.splice(freed.indexOf(old), 1)
       c = { mod, sym, cc: old.cc }
       notes.push(`${mod} ${sym}: CC ${c.cc} (was ${old.mod} ${old.sym}'s)`)
     } else {
@@ -519,14 +561,16 @@ export function symbols(lock: Lock): [Map<string, number>, Uint8Array[]] {
 }
 
 /** -> the table core_lock_codes' entries: {field descriptor, code}, 8 bytes each, by code; the code of a field in lfos
- * ([mod, sym]) has LFO_FLAG set. store.code_entries. */
-export function codeEntries(lock: Lock, lfos: [string, string][] = []): Uint8Array[] {
+ * ([mod, sym]) has LFO_FLAG set, of one in rough SMOOTH_OFF, of one in routes ROUTE_FLAG. store.code_entries. */
+export function codeEntries(lock: Lock, lfos: [string, string][] = [], rough: [string, string][] = [], routes: [string, string][] = []): Uint8Array[] {
   const desc = new Map(lock.fields.map(f => [f.mod + '\0' + f.sym, ((SCOPE_NUM[f.scope] << 28) | (f.bits << 22) | f.offset) >>> 0]))
   const lfo = new Set(lfos.map(([m, sy]) => m + '\0' + sy))
+  const jump = new Set(rough.map(([m, sy]) => m + '\0' + sy))
+  const route = new Set(routes.map(([m, sy]) => m + '\0' + sy))
   return (lock.codes ?? []).map(c => {
     const out = new Uint8Array(8), dv = new DataView(out.buffer)
     dv.setUint32(0, desc.get(c.mod + '\0' + c.sym)!)
-    dv.setUint32(4, c.code | (lfo.has(c.mod + '\0' + c.sym) ? LFO_FLAG : 0))
+    dv.setUint32(4, c.code | (lfo.has(c.mod + '\0' + c.sym) ? LFO_FLAG : 0) | (jump.has(c.mod + '\0' + c.sym) ? SMOOTH_OFF : 0) | (route.has(c.mod + '\0' + c.sym) ? ROUTE_FLAG : 0))
     return out
   })
 }
