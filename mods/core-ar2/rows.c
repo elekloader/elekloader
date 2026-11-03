@@ -687,6 +687,22 @@ void core_rows_trig(int track, unsigned step)
     now_n[track] = n;
 }
 
+/* a new or loaded project (st_proj_init, st_proj_load): no trig has played
+ * in it yet, so no track has a playing trig's locks; stock drops its own
+ * held locks at CREATE NEW too (it keeps them through STOP and a pattern or
+ * kit change, until the track's next trig, and so does core) */
+void core_rows_now_reset(void)
+{
+    unsigned short sr = irq_mask();
+    int t, i;
+    for (t = 0; t < 13; t++) {
+        for (i = 0; i < CODES; i++)
+            core_lock_now[t][i] = 0;
+        now_n[t] = 0;
+    }
+    irq_restore(sr);
+}
+
 int core_lock_value(int track, unsigned field)
 {
     int code = core_lock_code(field), v;

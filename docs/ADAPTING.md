@@ -1813,7 +1813,9 @@ int depth = v >= 0 ? v : core_store_get(STORE(my_depth), sound, 0);
 
 `core_lock_value(track, field)` is the lock of the trig last played on the
 track (0..12), set with the trig's other locks before it sounds, or -1 when
-that trig has none. A set or a turn moves in whole steps from the sound's
+that trig has none. It stays through STOP and a pattern or kit change until
+the track's next trig, as stock's own locks do, and a project load or CREATE
+NEW clears it (-1) on every track. A set or a turn moves in whole steps from the sound's
 value, clamped to the parameter's `min..max`. A lock above 127 takes two of
 the pattern's rows for its track.
 

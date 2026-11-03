@@ -768,10 +768,14 @@ void st_vel_defaults(unsigned char *routes)
     irq_restore(sr);
 }
 
-/* CREATE NEW and the project reset: a fresh store, and no global data */
+void core_rows_now_reset(void);
+
+/* CREATE NEW and the project reset: a fresh store, no global data, and no
+ * playing trig's mod locks (rows.c) */
 int st_proj_init(void *project, int a, int b, int c)
 {
     int r = st_proj_init_body(project, a, b, c), g, j;
+    core_rows_now_reset();
     store_clear(S, 0, STORE_BYTES);
     store_header(S);
     for (g = 0; g < 4; g++)
@@ -793,9 +797,11 @@ int st_proj_load(void *live, unsigned char *src, void *progress)
     int r = st_proj_load_body(live, src, progress), g, j, s;
     unsigned char *from = is_image(src) ? src : st_image;
     unsigned dropped = 0;
-    /* its mod p-locks' codes are its layout's (rows.c, 0.8) */
+    /* its mod p-locks' codes are its layout's (rows.c, 0.8); no trig of it
+     * has played yet */
     if (!from || !known_id(store_id(from)))
         core_rows_forget();
+    core_rows_now_reset();
     for (s = SC_GLOBAL; s <= SC_PROJECT; s++)
         if (!store_ok(from, s))
             dropped |= 1 << s;

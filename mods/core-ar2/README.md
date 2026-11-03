@@ -452,7 +452,7 @@ writes them into the stored pattern as rows, as stock's rebuild would.
 | lock set | 0x400c058c (`jmp`) | a listed lock with a code above 41, as a paste sets it, is a mod lock |
 | row load | 0x40008f98 (`jmp`) | after stock, the rows with codes 42..127 and a track below 13 become the lock store's mod locks |
 | rebuild | 0x40009216 (`jmp`) | after stock's rows, the lock store's mod locks as rows, in code then track order, while fewer than 71 rows are used, so stock's locks always fit first |
-| trig locks | 0x4009a954 (`jmp`) | after stock reads a trig's locks, core notes that trig's mod locks for its track (`core_lock_value`), clearing only the codes the track's last trig set |
+| trig locks | 0x4009a954 (`jmp`) | after stock reads a trig's locks, core notes that trig's mod locks for its track (`core_lock_value`), clearing only the codes the track's last trig set; they stay through STOP and a pattern or kit change until the track's next trig, as stock's do, and a project load or CREATE NEW (`st_proj_load`, `st_proj_init`) clears every track's, as stock does at CREATE NEW |
 | lock get, set, clear, turn | sound set vtable +60..+72, 0x401dce60..0x401dce6c (`ptr`) | a mod parameter's knob (its page id) with a trig held: the lock goes into the ledger; any other id goes to stock's routine |
 | dump out | 0x4000eff2 (`jsr`) | stock's pattern save into a SysEx dump's buffer, then a marker row for its mod rows (code 127, track 0xfe, the layout ID), or, with no free row, no mod rows |
 | dump in | 0x4000d79c (`jmp`) | a received pattern, once stock has checked it: its mod rows stay only with a marker holding this build's own layout ID; the marker goes |
