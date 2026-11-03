@@ -15,7 +15,7 @@ def main():
     args = parser.parse_args()
     here = Path(__file__).resolve().parent
     tools = args.selache / 'target/release'
-    for kind, start in (('voice', 0x1790000), ('filter', 0x1794000)):
+    for kind, start in (('voice', 0x1790000), ('filter', 0x17a0000)):
         rebuild(here, tools, kind, start)
 
 

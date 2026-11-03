@@ -13,6 +13,11 @@
  * 0x6c + 8 page_from on, A-H), or else by its params machine (the ids MIDI, the LFOs and Randomize use). */
 #include "src.h"
 
+#ifdef SDK_ALPHA_DT1
+extern uint32_t sdk_alpha_layout(int32_t machine, uint32_t track);
+extern int32_t sdk_alpha_empty_selected(void);
+#endif
+
 #define KNOBS       8
 #define ID_BASE(p)  (0x6cu + 8u * (uint32_t)(p))
 #define PAGES       32                         /* added machines with a page; more get the stock page */
@@ -57,6 +62,11 @@ static void find(void)
     for (i = 0; core_machines[i] && npages < PAGES; i++) {
         const struct cm_machine *d = core_machines[i];
         const struct cm_ui *ui = (const struct cm_ui *)core_machine_ui(d->id);
+#ifdef SDK_ALPHA_DT1
+        const struct cm_ui32 *alpha = sdk_alpha_ui(d->id);
+        if (alpha)
+            ui = &alpha->base;
+#endif
         if (!ui || (ui->abi != cm_ui_v3 && ui->abi != cm_ui_v31 &&
                     ui->abi != cm_ui_v32 && ui->abi != cm_ui_v33) ||
             ui->page_from > 3 || d->id <= 3)
@@ -118,8 +128,18 @@ uint32_t mp_layout_track(int32_t m, uint32_t track)
     struct page *p = page_of((uint32_t)m);
     int i;
     page_now = p;
+#ifdef SDK_ALPHA_DT1
+    uint32_t empty = sdk_alpha_layout(m, track);
+    if (empty)
+        return empty;
+#endif
     if (!p)
         return 0;
+#ifdef SDK_ALPHA_DT1
+    const struct elek_machine *alpha = sdk_alpha_machine(m);
+    if (alpha)
+        p->ready = 0; /* Presentation may change without changing the machine descriptor. */
+#endif
     if (!p->ready) {
         const uint32_t *s = (const uint32_t *)mp_stock_layout(p->ui->page_from);
         int count = p->extended ? p->extended->page_count : 1;
@@ -131,7 +151,11 @@ uint32_t mp_layout_track(int32_t m, uint32_t track)
                 int k = pg ? pg->parameter[i] : i;
                 if (pg && (pg->stock & CM_SRC_STOCK(i)))
                     p->lay[page][2 + i] = k;   /* a stock sound parameter: the firmware's own knob */
-                else if (k == CM_SRC_BLANK || (knob(p, k)->flags & CM_HIDDEN))
+                else if (k == CM_SRC_BLANK || (knob(p, k)->flags & CM_HIDDEN)
+#ifdef SDK_ALPHA_DT1
+                         || (alpha && !sdk_alpha_visible(alpha, k))
+#endif
+                         )
                     p->lay[page][2 + i] = 0;
                 else if (p->extended)
                     p->lay[page][2 + i] = k < 8 ? ID_BASE(p->params) + k : MP_EXTRA_ID + k - 8;
@@ -147,12 +171,24 @@ uint32_t mp_layout_track(int32_t m, uint32_t track)
     return (uint32_t)p->lay[0];
 }
 
+#ifdef SDK_ALPHA_DT1
+extern void sdk_alpha_redraw(void *view);
+uint32_t sdk_alpha_layout_view(int32_t machine, uint32_t track, void *view)
+{
+    const struct elek_machine *m = sdk_alpha_machine(machine);
+    if (m && m->page_count && track < 8 &&
+        sdk_alpha_snapshot(m, selected[track] < m->page_count ? selected[track] : 0, view))
+        sdk_alpha_redraw(view);
+    return mp_layout_track(machine, track);
+}
+#endif
+
 uint32_t mp_layout(int32_t m)
 {
     return mp_layout_track(m, fw_active_track);
 }
 
-/* Native SRC copy, clear and randomize collect the visible eight controls. */
+/* Native SRC actions collect the page's declared controls, regardless of alpha presentation. */
 uint32_t mp_action_layout(uint32_t page, int32_t machine)
 {
     uint32_t track = fw_active_track;
@@ -164,7 +200,26 @@ uint32_t mp_action_layout(uint32_t page, int32_t machine)
             return 0;
         machine = FW_SOUND(kit, track)[FW_SOUND_MACHINE];
     }
-    return mp_src_for(machine) ? mp_layout_track(machine, track) : 0;
+    const struct cm_ui32 *ui = mp_src_for(machine);
+    if (!ui)
+        return 0;
+    uint32_t layout = mp_layout_track(machine, track);
+#ifdef SDK_ALPHA_DT1
+    if (sdk_alpha_machine(machine)) {
+        static uint32_t actions[LAY_LONGS];
+        const uint32_t *shown = (const uint32_t *)layout;
+        for (int i = 0; i < LAY_LONGS; ++i)
+            actions[i] = shown[i];
+        const struct cm_src_page *pg = &ui->pages[selected[track]];
+        for (int i = 0; i < KNOBS; ++i) {
+            int k = pg->parameter[i];
+            actions[2 + i] = k == CM_SRC_BLANK ? 0 :
+                k < 8 ? ID_BASE(ui->base.page_from) + k : MP_EXTRA_ID + k - 8;
+        }
+        return (uint32_t)actions;
+    }
+#endif
+    return layout;
 }
 
 int32_t mp_src_key(void *view, const uint32_t *event)
@@ -175,6 +230,12 @@ int32_t mp_src_key(void *view, const uint32_t *event)
     if (track >= 8)
         return 0;
     mp_view_knob(view, 0);                 /* Resolve the view's sound, including sound locks. */
+#ifdef SDK_ALPHA_DT1
+    if (sdk_alpha_empty_selected()) {
+        mp_page_changed(view, (void *)event);
+        return 1;
+    }
+#endif
     if (!page_now)
         return 0;
     if (page_now->extended)
@@ -192,6 +253,11 @@ uint32_t mp_src_title(void *view)
     mp_view_knob(view, 0);
     if (track >= 8 || !page_now || !page_now->extended)
         return 0;
+#ifdef SDK_ALPHA_DT1
+    const struct elek_machine *alpha = sdk_alpha_machine(page_now->id);
+    if (alpha && sdk_alpha_snapshot(alpha, selected[track], view))
+        sdk_alpha_redraw(view);
+#endif
     return (uint32_t)page_now->extended->pages[selected[track]].title;
 }
 
@@ -200,18 +266,31 @@ uint32_t mp_label(uint32_t id, int32_t long_name)
     const struct cm_knob *k = page_knob(id);
     if (!k)
         return 0;
+#ifdef SDK_ALPHA_DT1
+    const struct elek_machine *alpha = sdk_alpha_machine(page_now->id);
+    if (alpha)
+        return (uint32_t)sdk_alpha_label(alpha, knob_of(page_now, id));
+#endif
     return (uint32_t)(long_name ? k->lname : k->name);
 }
 
 int32_t mp_value_text(uint32_t id, int32_t value, char *buf)
 {
     const struct cm_knob *k = page_knob(id);
+#ifdef SDK_ALPHA_DT1
+    if (k && sdk_alpha_value_text(page_now->id, knob_of(page_now, id), value, buf, 0))
+        return 1;
+#endif
     return k && k->fmt && k->fmt(buf, value, 0, page_now->id);
 }
 
 uint32_t mp_pop_text(uint32_t id, int32_t value)
 {
     const struct cm_knob *k = page_knob(id);
+#ifdef SDK_ALPHA_DT1
+    if (k && sdk_alpha_value_text(page_now->id, knob_of(page_now, id), value, pop, 1))
+        return (uint32_t)pop;
+#endif
     if (!k || !k->fmt)
         return 0;
     pop[0] = 0;
@@ -229,6 +308,26 @@ int32_t mp_knob(int32_t *a)
     const struct cm_knob *k = page_knob((uint32_t)a[0]);
     if (!k)
         return 0;
+#ifdef SDK_ALPHA_DT1
+    const struct elek_machine *alpha = sdk_alpha_machine(page_now->id);
+    if (alpha && mp_shown_view) {
+        uint32_t track = mp_view_track(mp_shown_view);
+        if (track < 8 && sdk_alpha_snapshot(alpha, selected[track], mp_shown_view))
+            sdk_alpha_redraw(mp_shown_view);
+    }
+    const struct elek_ui_glyph *glyph = alpha ? sdk_alpha_glyph(alpha, knob_of(page_now, a[0])) : 0;
+    if (glyph) {
+        void *bmp = (void *)a[4];
+        int32_t x = a[5], y = a[6];
+        fw_fillrect(bmp, x + 1, y, x + 17, y + 16, 0);
+        for (int row = 0; row < 16; ++row)
+            for (int col = 0; col < 16; ++col)
+                if (glyph->rows[row] & (0x8000u >> col))
+                    fw_fillrect(bmp, x + 1 + col, y + 16 - row,
+                                x + 1 + col, y + 16 - row, 1);
+        return 1;
+    }
+#endif
     if (k->flags & CM_DRAW) {
         if (page_now->ui->abi != cm_ui_v3 && k->draw && k->draw((void *)a[4], a[5], a[6], a[1], a[2]))
             return 1;
@@ -258,6 +357,10 @@ uint32_t mp_look(uint32_t id)
 
 int32_t mp_not_sample(void)
 {
+#ifdef SDK_ALPHA_DT1
+    if (sdk_alpha_empty_selected())
+        return 1;
+#endif
     return page_now && (page_now->ui->knob[3].flags & CM_NOT_SAMPLE) != 0;
 }
 
@@ -324,6 +427,15 @@ uint32_t mp_lfo(uint32_t id, int32_t what, uint32_t stock)
     }
     if (what == 0)
         return p->ui->group ? (uint32_t)p->ui->group : stock;
+#ifdef SDK_ALPHA_DT1
+    const struct elek_machine *alpha = sdk_alpha_machine(p->id);
+    if (alpha) {
+        sdk_alpha_snapshot(alpha, ELEK_UI_NO_PAGE, 0);
+        const char *label = sdk_alpha_label(alpha, i);
+        if (label)
+            return (uint32_t)label;
+    }
+#endif
     k = knob(p, i);
     s = what == 1 ? (k->lfo_long ? k->lfo_long : k->lname) : (k->lfo ? k->lfo : k->name);
     if (!s && (k->flags & CM_HIDDEN))

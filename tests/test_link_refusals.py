@@ -165,6 +165,10 @@ external('check', '<>: SHARC <> machine_id must match its single native <> regis
                                       'test_pair_binds_both_hooks_and_is_order_independent'])
 external('check', '<>: DN2 filter G needs a label of 1..5 printable ASCII characters and a default of 0..127',
          'tests/test_sharc_filter.py', ['DN2 filter G needs a label', 'test_refuses_an_invalid_g_and_links_a_valid_one'])
+external('parse_sites', '<>: unqualified SHARC data site', 'tests/test_sharc_filter.py',
+         ['unqualified SHARC data site', 'test_only_the_exact_profiled_sharc_data_site_is_accepted'])
+external('check', '<>: SHARC data site requires a SHARC mod', 'tests/test_sharc_filter.py',
+         ['SHARC data site requires a SHARC mod', 'test_busy_companion_requires_a_sharc_mod_and_owns_only_its_site'])
 external('link', 'SHARC mod needs the stock section-7 stream', 'tests/test_sharc_active.py',
          'SHARC mod needs the stock section-7 stream')
 external('link', 'SHARC stored section exceeds the profile limit', 'tests/test_sharc_active.py',

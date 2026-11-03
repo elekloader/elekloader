@@ -20,12 +20,17 @@ It also lists, as "NOTE:" lines (`core_candidates` in the JSON), each code
 site a linkable mod hooks itself (not the core's or a companion's): a site
 another mod may want too belongs in the core as an event
 (docs/CORE-CONTRIBUTING.md). Notes never fail the check.
+
+A NOTE also marks (`sharc_shifts`) what looks like a shift by a negative immediate count in a
+mod's own SHARC code (elekloader.sharc.suspect_shifts): the pinned Selache encodes one so that
+it halts a real DSP, though the emulator runs it. The scan has no instruction boundaries, so
+check each one in the listing; a register count avoids it.
 """
 import argparse
 import json
 import sys
 
-from . import devices, elemod, formats, link
+from . import devices, elemod, formats, link, sharc
 
 
 def describe(m):
@@ -63,6 +68,18 @@ def core_candidates(m):
             for s in m.sites if s['kind'] == 'code']
 
 
+def sharc_shifts(m):
+    """Leads to shifts by a negative immediate in a mod's own SHARC code, past a machine's
+    pinned adapter: byte offsets in its area."""
+    payload = getattr(m, 'sharc', None)
+    if not payload:
+        return []
+    kind = payload.get('machine_kind')
+    skip = m.rel.sharc[kind + '_adapter_bytes'] if kind else 0
+    return [{'mod': m.id, 'offset': off + at} for off, k, data in payload['segments']
+            if k == 'code' and off >= skip for at in sharc.suspect_shifts(data)]
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(prog='elekloader.lint', description=__doc__.split('\n')[0])
     ap.add_argument('mods', nargs='+', help='the .elemod files to check')
@@ -71,7 +88,7 @@ def main(argv=None):
                     help='another mod to check together with (repeatable), e.g. core')
     ap.add_argument('--json', action='store_true', help='machine-readable output')
     a = ap.parse_args(argv)
-    report = {'ok': True, 'mods': [], 'problems': [], 'core_candidates': []}
+    report = {'ok': True, 'mods': [], 'problems': [], 'core_candidates': [], 'sharc_shifts': []}
 
     def problem(text):
         report['ok'] = False
@@ -88,6 +105,7 @@ def main(argv=None):
         if p in a.mods:
             report['mods'].append(describe(m))
             report['core_candidates'] += core_candidates(m)
+            report['sharc_shifts'] += sharc_shifts(m)
     if a.stock and loaded and report['ok']:
         try:
             st, dev, rel = formats.load(a.stock)
@@ -142,6 +160,10 @@ def main(argv=None):
                       'belongs in the core as an event, and a pull request that adds it is '
                       'welcome (docs/CORE-CONTRIBUTING.md)'
                       % (d['id'], len(at), '' if len(at) == 1 else 's', ', '.join(at)))
+        for x in report['sharc_shifts']:
+            print('NOTE: %s: its SHARC code at byte %d of its area looks like a shift by a negative '
+                  'immediate count, which halts a real DSP; check the listing and use a register '
+                  'count (docs/ADAPTING.md)' % (x['mod'], x['offset']))
         for x in report['problems']:
             print('PROBLEM: %s' % x)
         if report['ok'] and not a.stock:

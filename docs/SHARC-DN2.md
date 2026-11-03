@@ -7,8 +7,8 @@ maintainers. Mod authors start with the
 [sine example](../examples/sharc-sine/README.md); the
 [callback contract](SHARC-DN2-ABI.md) says what a mod's code must do, and
 [FORMAT](FORMAT.md#digitone-ii-sharc-mod) what the file holds.
-Selectable synths and filters (machines-dn2) use the same 32 KiB, split in
-two, with the [voice](MACHINES-DN2-VOICE.md) and [filter](MACHINES-DN2-FILTER.md)
+Selectable synths and filters (machines-dn2) own 64 KiB each from the same
+start, with the [voice](MACHINES-DN2-VOICE.md) and [filter](MACHINES-DN2-FILTER.md)
 contracts; a build has either those or one master-output mod.
 
 ## The stock file and the writer
@@ -41,6 +41,11 @@ Every range is half-open, in loader bytes:
 | core's bridge and its state | `[0x282dd600,0x282dda00)` |
 | the bridge's pitch table and padding | `[0x282dda00,0x282dde00)` |
 | the mod | `[0x20090000,0x20098000)` (L2) |
+| a selectable synth | `[0x20090000,0x200a0000)` (L2) |
+| a selectable filter | `[0x200a0000,0x200b0000)` (L2) |
+| a synth's stack | `[0x282de000,0x282df000)` (L1) |
+| a filter's stack | `[0x282df000,0x282e0000)` (L1) |
+| core-dn2's DSP peek, with any SHARC mod | `[0x282e0000,0x282e0800)` (L1) |
 | the stock instruction the bridge replaces | `[0x2838489a,0x283848a0)` |
 
 The examples split the mod's 32 KiB into 16 KiB of code and 16 KiB of data.
@@ -103,6 +108,56 @@ see reads, writes of the same value, or a write undone before the next
 checkpoint, and it says nothing about the real cache. The implementation
 changes no cache, interrupt or memory-controller setting. The area stays
 experimental and limited to 32 KiB.
+
+## The DSP peek
+
+core-dn2 lets the ColdFire read DSP memory ([ADAPTING.md](ADAPTING.md),
+"The DSP peek"); the linker adds its DSP side to every build that has a
+SHARC mod, and builds without one keep a stock DSP.
+
+- **The request** rides in the SPI frame's tail. core-dn2 hooks the frame
+  sender's call of the stock driver (`0x40025e9e`). The driver's transmit
+  queue at `0x80002510` holds one 32-bit entry per frame halfword, command
+  half first; it writes data halves only for the 0xa80 data bytes it is
+  given and only command halves for the rest of the 0xabc-byte frame, so
+  the tail's data halves keep what core writes there before the call. The
+  DSP reads word k of the tail (byte `0xa80` of the frame) as halfword
+  2k + 1 above halfword 2k. The request is four words: `0xd5ee | seq << 16`,
+  address, count (1..1024 words), and the first three xor `0x5a5a5a5a`.
+  Sequences whose low four bits are zero are skipped, reserving reply tag zero for idle.
+  Stock leaves the tail zero, and stock DSP code ignores it.
+- **The answer** comes from a stub at the end of the block handler: the
+  hook replaces the store at PC16 `0x1c9e5f` (`mods/core-dn2/peek.s`, rebuilt
+  by `rebuild_peek.py`, pinned as `peek_code`). Each block it writes one
+  word into reply word 2 (record offset 8), which no stock code writes or
+  reads: `tag << 16 | halfword`, the tag `(seq & 15) << 12 | index`; index
+  `0xfff` refuses the request, and 0 means none. It reads only L1 blocks 0
+  to 3 below their caches and L2 below the special window. The ColdFire
+  keeps the halfwords whose tag matches its request.
+- **Cost:** about a dozen DSP instructions per block when idle and about 60
+  during a read; eight halfword stores and two reads per frame on the
+  ColdFire. One halfword per block is about 3 KB/s.
+- **Ownership:** the frame tail and reply word 2 are the peek's. DigiKit's
+  `core/dsp-link` and the `sharc` branch's metrics core use the same places;
+  only one can be in a build.
+
+On a unit (OS 1.12) the peek reads the machine stacks' guard words and its
+own code back exactly, and refuses a peripheral address; audio is unchanged.
+
+**How busy the DSP is.** The optional, code-free
+[dspbusy-dn2 companion](../mods/dspbusy-dn2/README.md) owns a second hook
+at the idle task's jump back (PC16 `0xb88abb`, loader `0x20011576`): each
+pass adds the cycles since the last one to an idle total, unless the gap is 3000 cycles or more, which was
+other work. Every 1024 blocks the stub publishes the window's idle and
+total cycles, and the busiest window's, at `0x2e0630` (`CORE_DSP_BUSY_RECORD`),
+between two copies of a sequence number. Without the companion the idle
+loop stays stock, the busy record stays zero, and the peek still works;
+omit it for faster coupled emulation. The DSP runs at 1 GHz: 666,706
+cycles a block on a unit. There, the share outside the idle task was about
+80% with nothing playing and 65% with 64 notes held: stock's audio task
+holds the DSP for most of each block and less of it under load, so the
+share counts waiting and is not headroom. Stock's reply word 0, the block
+handler's span, behaves the same way (79% and 68%).
 
 ## Qualification
 

@@ -18,6 +18,14 @@ made for 0.1 can keep asking for 0.1. The [machines-dn2](../machines-dn2)
 companion adds selectable synths and filters on top of it
 ([MACHINES-DN2.md](../../docs/MACHINES-DN2.md)).
 
+Core **0.3** adds the DSP peek (`peek.c` on the ColdFire, `peek.s` on the
+DSP; [SHARC-DN2.md](../../docs/SHARC-DN2.md#the-dsp-peek)): one more site,
+the frame sender's call of the SPI driver, and nothing else changes on the
+control side. A mod that calls the peek sets `resources.core: "0.3"`.
+The optional [dspbusy-dn2 companion](../dspbusy-dn2/README.md) enables the
+busy measure in builds with a SHARC mod; without it the record stays zero
+and the peek still works.
+
 `bridge.sharc.json` is the bridge, already compiled and linked from
 `sharc-bridge.s`, with the slot and pitch reader the
 [sine example](../../examples/sharc-sine/README.md) relies on. The linker
@@ -84,8 +92,8 @@ Build it with the SDK (it needs m68k binutils; with Homebrew's
 `m68k-elf-binutils`, set `ELEKLOADER_CROSS=m68k-elf-`):
 
 ```bash
-python -m elekloader.sdk.build mods/core-dn2 --stock Digitone_II_OS1.12.syx      # out/core-0.2.elemod
-python -m elekloader.lint mods/core-dn2/out/core-0.2.elemod --stock Digitone_II_OS1.12.syx
+python -m elekloader.sdk.build mods/core-dn2 --stock Digitone_II_OS1.12.syx      # out/core-0.3.elemod
+python -m elekloader.lint mods/core-dn2/out/core-0.3.elemod --stock Digitone_II_OS1.12.syx
 ```
 
 ## Input bridge and SysEx observers
@@ -123,7 +131,7 @@ No arbitrary memory-write or function-call command is added.
 
 ## Validation and limits
 
-Core 0.2 is experimental. `tests/test_digitone2.py` checks the stock sites,
+Core 0.3 is experimental. `tests/test_digitone2.py` checks the stock sites,
 stack/queue contracts, clock setup and exact patch boundaries.
 `tests/test_dn2_input.py` checks ownership and input/queue bounds without
 firmware. Digikit's ColdFire emulator checks stock-identical core-only

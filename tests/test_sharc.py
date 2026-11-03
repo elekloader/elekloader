@@ -103,6 +103,11 @@ class SharcTests(unittest.TestCase):
         patched = sharc.insert(data, profile, patches=[(0x20001000, b'\x05\x06', b'\xaa\xbb')])
         self.assertEqual(patched[84:88], b'\xaa\xbb\x07\x08')
         self.assertEqual(patched[:84] + patched[88:], data[:84] + data[88:])
+        companion = dict(profile, patch_ranges=(), data_sites={0x20001000: ('0506', 'aabb')})
+        self.assertEqual(sharc.insert(data, companion, patches=[(0x20001000, b'\x05\x06', b'\xaa\xbb')]), patched)
+        self.refusal(lambda: sharc.insert(data, companion,
+                     patches=[(0x20001000, b'\x05\x06', b'\xaa\xcc')]),
+                     'SHARC patch is outside the profile patch range')
         self.refusal(lambda: sharc.insert(data, profile,
                      patches=[(0x20001000, b'\x00\x06', b'\xaa\xbb')]),
                      'SHARC patch stock instruction does not match')
@@ -129,7 +134,7 @@ class SharcTests(unittest.TestCase):
         spans = [sharc.byte_span(PROFILE, r.target, r.count, check_protected=False)
                  for r in records if r.flags in (sharc.LOAD, sharc.FILL)]
         self.assertEqual(sum(a < d and c < b for i, (a, b) in enumerate(spans) for c, d in spans[i+1:]), 15)
-        self.refusal(lambda: sharc.insert(decoded, PROFILE, fills=[(0x20098000, 4, 0)]),
+        self.refusal(lambda: sharc.insert(decoded, PROFILE, fills=[(0x200b0000, 4, 0)]),
                      'SHARC new load or fill is outside the profile-owned ranges')
         patched = sharc.insert(decoded, PROFILE, patches=[
             (0x2838489a, bytes.fromhex('8715ffff78ff'), bytes.fromhex('3e06160006eb'))])
@@ -172,6 +177,10 @@ class SharcTests(unittest.TestCase):
         bad['zero'][0]['size_bytes'] += 4
         self.refusal(lambda: sharc.module_payload(bad, PROFILE),
                      'SHARC zero range is unaligned or exceeds its owner')
+        # The master-output mod runs on the stock Audio Task's stack; only machines get their own.
+        bad = copy.deepcopy(artifact)
+        bad['stack_bytes'] = PROFILE['stack_max'] + 4
+        self.refusal(lambda: sharc.module_payload(bad, PROFILE), 'SHARC stack contribution exceeds the profile limit')
         bad = copy.deepcopy(artifact)
         bad['abi'] = PROFILE['abi']
         self.refusal(lambda: sharc.module_payload(bad, PROFILE),
