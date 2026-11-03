@@ -16,7 +16,8 @@ Good things to send:
 - **A new device or OS version**: [docs/DEVICES.md](docs/DEVICES.md).
 - **A mod for the shop**: publish it in a GitHub release and fill in the
   [Submit a mod](https://github.com/elekloader/elekloader/issues/new?template=submit-mod.yml)
-  form; a check opens the pull request. Or add an item to
+  form; a check opens the pull request, and your later releases follow by
+  themselves ([docs/SHOP.md](docs/SHOP.md)). Or add an item to
   `web/catalog.json` pointing at your release yourself
   ([docs/WEB.md](docs/WEB.md#submitting-a-mod)).
 - **Fixes and docs**: a refusal message that misled you, a step that did

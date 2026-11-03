@@ -170,23 +170,28 @@ shows them as one card (the same repository, mod, version and device).
 
 ### Submitting a mod
 
-Authors don't need to edit the list themselves. The shop's **Submit a mod** button opens the
-[issue form](../.github/ISSUE_TEMPLATE/submit-mod.yml): the repository, the release tag, a
-one-sentence summary, what has been tested on a unit, the licence if the files name none, and
-optionally which of the release's files to submit. A release or a pre-release; a draft is refused
-until it is published.
+Authors don't need to edit the list themselves; [SHOP.md](SHOP.md) is their page. The shop's
+**Submit a mod** button opens the [issue form](../.github/ISSUE_TEMPLATE/submit-mod.yml): the
+repository, the release tag or a commit, a one-sentence summary, what has been tested on a unit, the
+licence if the files name none, and optionally which of the files to submit. A release or a
+pre-release; a draft is refused until it is published. With a commit (its whole id), the files are
+the `.elemod` files in the commit's tree, and the entries pin the commit and each file's path.
+`python -m elekloader.sdk.publish` (in the package) builds a mod for each stock file, makes the
+release with `gh`, and opens this form filled in from its address.
 
 When the issue is opened (or edited), `.github/workflows/mod-submission.yml` runs
 `packaging/submit_mod.py` on it:
-- **The check.** It downloads the release's `.elemod` files and checks each against the sha256
-  GitHub lists. It reads each with elekloader (id, version, device, OS, licence, requirements) and
-  refuses a licence that doesn't allow the site to pass the file on (`SHOP_LICENCES`).
+- **The check.** It downloads the release's (or the commit's) `.elemod` files and checks each
+  against the sha256 GitHub lists. It reads each with elekloader (id, version, device, OS, licence,
+  requirements) and refuses a licence that doesn't allow the site to pass the file on
+  (`SHOP_LICENCES`). A file the shop lists already, byte for byte, is just that.
 - **The comparison.** It compares the files with the shop's, downloaded as the pages workflow does:
   - **an update:** the same mod, device and OS from the same repository replaces the old entry, in
     its place (a repository that moved counts as the same; the entry takes its new name);
-  - **a clash:** another repository's file for a mod the shop lists is flagged and left out. A
-    release sometimes bundles someone else's mod; the submitter can name the file in "Only these
-    files" to add it anyway, and the review decides.
+  - **a clash:** another repository's file for a mod the shop lists for that device, for any OS
+    (the mod is that repository's on the device), is flagged and left out. A release sometimes
+    bundles someone else's mod; the submitter can name the file in "Only these files" to add it
+    anyway, and the review decides.
 - **What each mod needs.** A mod goes in only if the site can build it:
   - **its core:** the site has a core for its device and OS (the latest release's, or the shop's)
     at least as new as the one the file names (`resources.core`), or as the core its release
@@ -198,7 +203,10 @@ When the issue is opened (or edited), `.github/workflows/mod-submission.yml` run
     OS, or else the release's own, which comes along even when "Only these files" leaves it out
     (with the summary its file gives). A mod whose requirement is in neither is refused.
 - **The answer.** It comments on the issue with a table of what it found, and labels the issue
-  `needs-changes` if nothing could be added. Editing the issue runs the check again.
+  `needs-changes` if nothing could be added. Editing the issue runs the check again. Under "Good to
+  know" it says, for each file that goes in, the core it builds with, its RAM, and the shop's mods
+  for its device and OS it can't share a build with (`build_web.clash`, the page's rules); that is
+  never a refusal. A note says when the issue isn't from the repository's owner.
 - **The pull request.** When files pass, it writes them into `web/catalog.json` (in the list's own
   layout, which `tests/test_units.py` keeps exact) and opens a pull request from branch
   `mod-submission/<issue>`. The pull request closes the issue when it merges, and the next deploy
@@ -208,6 +216,12 @@ When the issue is opened (or edited), `.github/workflows/mod-submission.yml` run
   change is a newer file of a mod that repository already has in the shop (no new mod, no clash,
   no core, no held entry), the unit tests run and the pull request merges, and pages redeploys.
   Everything else waits for a maintainer.
+
+The **Remove a mod** form ([remove-mod.yml](../.github/ISSUE_TEMPLATE/remove-mod.yml)) goes through
+the same workflow (`submit_mod.py --remove`): the repository's entries, all or the files it names,
+leave the list (cores stay: a maintainer removes those), and the report names every other shop mod
+for the same device and OS that requires a mod that goes. It merges by itself when the repository's
+owner opened it, nothing else needs what goes, and no entry was held.
 
 An update keeps the card's text: the summary, and the hardware note, marked "As of <the old
 version>" so it doesn't claim a run of the new file. New text comes from the form, or from lines in

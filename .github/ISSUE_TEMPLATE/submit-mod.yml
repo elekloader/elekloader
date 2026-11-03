@@ -6,8 +6,8 @@ body:
   - type: markdown
     attributes:
       value: |
-        Publish your mod's `.elemod` files in a GitHub release first (a release or a pre-release, not a draft). When you submit this form, a check:
-        - downloads the release's files and checks each against the sha256 GitHub lists;
+        Publish your mod's `.elemod` files in a GitHub release first (a release or a pre-release, not a draft), or commit them to your repository and give the commit. More in [docs/SHOP.md](https://github.com/elekloader/elekloader/blob/main/docs/SHOP.md). When you submit this form, a check:
+        - downloads the files and checks each against the sha256 GitHub lists;
         - reads each with elekloader: its id, version, device, OS, licence and requirements;
         - checks that the site has what each mod needs: a core for its device and OS, as new as the one it names, and any mod it requires (the shop's, or one from your release, which comes along);
         - comments here with what it found.
@@ -27,10 +27,13 @@ body:
     id: tag
     attributes:
       label: Release tag
-      description: The release that carries the .elemod files, such as v1.0.
+      description: The release that carries the .elemod files, such as v1.0. Leave it empty if you give a commit instead.
       placeholder: v1.0
-    validations:
-      required: true
+  - type: input
+    id: commit
+    attributes:
+      label: Or a commit
+      description: If you keep your .elemod files in the repository rather than in a release, the whole 40-character id of the commit to take them from. The shop pins that commit; later commits come in through this form again.
   - type: input
     id: summary
     attributes:

@@ -1311,6 +1311,106 @@ def test_shop_updates_take_only_newer_files_of_the_repositorys_own_mods():
     finally:
         submit_mod.get, submit_mod.facts = real
     assert submit_mod.as_of('Ran on a unit.', '1.0') == 'As of 1.0: Ran on a unit.'
+    assert submit_mod.release_text('') == {}
+
+
+def test_publish_fills_in_the_form_and_writes_notes_the_shop_reads():
+    """elekloader.sdk.publish: the repository from a git remote, the release's notes (which the shop's check reads
+    back), the filled-in Submit a mod form, and whether the shop lists a mod already."""
+    from urllib.parse import parse_qs, urlparse
+    from elekloader.sdk import publish
+    for url in ('https://github.com/me/my-mod.git', 'git@github.com:me/my-mod.git', 'https://github.com/me/my-mod\n',
+                'ssh://git@github.com/me/my-mod.git'):
+        assert publish.repo_from_remote(url) == 'me/my-mod', url
+    assert publish.repo_from_remote('https://gitlab.com/me/my-mod.git') is None
+    notes = publish.release_notes('A  delay.', 'Ran on a\nDigitakt.')
+    assert notes == 'Shop summary: A delay.\nTested on a unit: Ran on a Digitakt.\n'
+    assert publish.release_notes() == 'Built with elekloader.\n'
+    submit_mod = submit_mod_module()
+    if submit_mod is not None:
+        assert submit_mod.release_text(notes) == {'summary': 'A delay.', 'on_unit': 'Ran on a Digitakt.'}
+    q = parse_qs(urlparse(publish.form_url('me/my-mod', 'v1.0', 'My Mod', 'One sentence.')).query)
+    assert {k: v[0] for k, v in q.items()} == {'template': 'submit-mod.yml', 'title': 'Submit a mod: My Mod',
+                                               'repo': 'me/my-mod', 'tag': 'v1.0', 'summary': 'One sentence.'}
+    items = [{'repo': 'Me/My-Mod', 'id': 'my-mod', 'file': 'my-mod-0.9.elemod'},
+             {'repo': 'me/my-mod', 'id': 'my-mod-extra', 'file': 'my-extra-1.elemod'},
+             {'repo': 'other/x', 'id': 'my-mod', 'file': 'my-mod-1.elemod'}]
+    assert publish.in_shop(items, 'me/my-mod', 'my-mod') and not publish.in_shop(items, 'me/my-mod', 'my')
+    assert not publish.in_shop(items, 'other/y', 'my-mod')
+
+
+def test_a_commit_pin_and_a_removal_through_the_forms():
+    """The Submit a mod form with a commit instead of a release (the files in its tree), a bundled copy of another
+    author's mod flagged for every OS of the device, and the Remove a mod form. GitHub and the files are faked."""
+    submit_mod = submit_mod_module()
+    if submit_mod is None:
+        return
+    def mod(id_, version, os_='1.53', requires=('core',)):
+        return {'id': id_, 'version': version, 'device': 'digitakt-mk1', 'os': os_, 'license': 'MIT', 'named_license': True,
+                'title': id_.upper(), 'core': id_ == 'core', 'requires': [] if id_ == 'core' else list(requires),
+                'needs_core': None, 'description': ''}
+    FACTS = {'core-4.1.elemod': mod('core', '4.1'), 'core-4.1-os1.54.elemod': mod('core', '4.1', '1.54'),
+             's-1.elemod': mod('s', '1'), 's-1-os1.54.elemod': mod('s', '1', '1.54'), 'c-1-os1.54.elemod': mod('c', '1', '1.54'),
+             'm-1.elemod': mod('m', '1'), 'n-1.elemod': mod('n', '1', requires=('core', 'm'))}
+    SHA = 'ab' * 20
+    def get(url, accept='', limit=0):
+        if '/commits/' in url:
+            if not url.endswith(SHA):
+                raise submit_mod.urllib.error.HTTPError(url, 422, 'No commit', {}, None)
+            return json.dumps({'html_url': 'https://github.com/owner/c/commit/' + SHA}).encode()
+        if '/git/trees/' in url:
+            return json.dumps({'tree': [{'path': p, 'type': 'blob'} for p in
+                                        ('README.md', 'elemods/c-1-os1.54.elemod', 'elemods/s-1-os1.54.elemod')]}).encode()
+        if '/contents/' in url:
+            return ('file ' + url.split('?')[0].rsplit('/', 1)[1]).encode()
+        if url.startswith('https://api.github.com/repos/') and url.count('/') == 5:
+            return json.dumps({'full_name': url.split('/repos/')[1]}).encode()
+        raise AssertionError(url)
+    real = submit_mod.get, submit_mod.facts
+    submit_mod.get, submit_mod.facts = get, lambda path, license='': dict(FACTS[os.path.basename(path)])
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            shop, cores = os.path.join(tmp, 'shop'), os.path.join(tmp, 'core')
+            for d, names in ((shop, ['s-1.elemod', 'm-1.elemod', 'n-1.elemod']),
+                             (cores, ['core-4.1.elemod', 'core-4.1-os1.54.elemod'])):
+                os.mkdir(d)
+                for n in names:
+                    open(os.path.join(d, n), 'wb').close()
+            catalog = os.path.join(tmp, 'catalog.json')
+            items = [{'repo': 'owner/%s' % f[0], 'tag': 'v1', 'file': f, 'device': 'digitakt-mk1', 'sha256': '0' * 64}
+                     for f in ('s-1.elemod', 'm-1.elemod', 'n-1.elemod')]
+            def fresh():
+                with open(catalog, 'w', encoding='utf-8') as fh:
+                    fh.write(submit_mod.render({'about': '', 'items': items}))
+            def got():
+                with open(catalog, encoding='utf-8') as fh:
+                    return {submit_mod.os.path.basename(i.get('file') or i['path']): i for i in json.load(fh)['items']}
+            # a commit: its tree's .elemod files; the bundled copy of owner/s's mod is flagged though the shop has
+            # s only for 1.53
+            fresh()
+            status, r = submit_mod.submit({'repo': 'owner/c', 'commit': SHA, 'summary': 'C.'}, catalog, shop, cores)
+            res = {row['file']: row['result'] for row in r['rows']}
+            assert status == 0 and res['c-1-os1.54.elemod'] == 'added', res
+            assert res['s-1-os1.54.elemod'].startswith('flagged, left out: the shop has s from owner/s for digitakt-mk1')
+            c = got()['c-1-os1.54.elemod']
+            assert (c['commit'], c['path'], 'tag' in c, 'file' in c) == (SHA, 'elemods/c-1-os1.54.elemod', False, False)
+            for bad in ({'tag': 'v1', 'commit': SHA}, {'commit': 'abc1234'}):
+                assert submit_mod.submit(dict(bad, repo='owner/c', summary='C.'), catalog, shop, cores)[0] == 1
+            assert submit_mod.submit({'repo': 'owner/c', 'commit': 'cd' * 20, 'summary': 'C.'}, catalog, shop, cores)[0] == 1
+            # removals: one another shop mod needs waits for a review; a self-contained one doesn't
+            fresh()
+            status, r = submit_mod.remove({'repo': 'owner/m', 'why': 'Moved on.'}, catalog, shop)
+            assert status == 0 and not r['own_only'] and 'm-1.elemod' not in got(), r
+            assert r['rows'][0]['result'] == 'removed; N 1 from owner/n needs m', r['rows']
+            assert 'Why, from the issue: Moved on.' in submit_mod.report_md(status, r)
+            fresh()
+            status, r = submit_mod.remove({'repo': 'owner/s'}, catalog, shop)
+            assert status == 0 and r['own_only'] and sorted(got()) == ['m-1.elemod', 'n-1.elemod']
+            fresh()
+            assert submit_mod.remove({'repo': 'owner/nobody'}, catalog, shop)[0] == 1
+            assert submit_mod.remove({'repo': 'owner/s', 'files': 'x.elemod'}, catalog, shop)[0] == 1
+    finally:
+        submit_mod.get, submit_mod.facts = real
     assert submit_mod.as_of('As of 0.9: Ran.', '1.0') == 'As of 0.9: Ran.'
     assert submit_mod.release_text('Shop summary: One line.\n* Tested on a unit: yes') == {'summary': 'One line.', 'on_unit': 'yes'}
 

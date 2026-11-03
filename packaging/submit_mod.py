@@ -44,6 +44,7 @@ import shutil
 import sys
 import tempfile
 import urllib.error
+import urllib.parse
 import urllib.request
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -51,19 +52,23 @@ sys.path.insert(0, ROOT)
 sys.path.insert(0, os.path.join(ROOT, 'packaging'))
 
 from elekloader import elemod  # noqa: E402
-from build_web import SHOP_LICENCES  # noqa: E402
+from build_web import SHOP_LICENCES, clash, footprint  # noqa: E402
+from elekloader import link  # noqa: E402
 
 CATALOG = os.path.join(ROOT, 'web', 'catalog.json')
 REPO = re.compile(r'[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+')
 TAG = re.compile(r'[A-Za-z0-9_.+-]{1,100}')
 FILE = re.compile(r'[\w.-]+\.(elemod|dtmod)')
+PATH = re.compile(r'[\w.-]+(/[\w.-]+)*')       # a commit's file, as build_web.py takes it
+COMMIT = re.compile(r'[0-9a-f]{40}')
 # the repositories whose releases may bring a core: elekloader's, under its old name too
 CORE_REPOS = {(os.environ.get('GITHUB_REPOSITORY') or 'elekloader/elekloader').lower(), 'elekloader/elekloader'}
 # repositories that moved, by their old names (the shop's list still names some by these)
 MOVED = {'irpina/elekloader': 'elekloader/elekloader'}
 # the issue form's fields (.github/ISSUE_TEMPLATE/submit-mod.yml), by their labels
-FIELDS = {'Repository': 'repo', 'Release tag': 'tag', 'Summary': 'summary', 'Tested on a unit': 'on_unit',
-          'Licence, for files that name none': 'license', 'Only these files': 'files'}
+FIELDS = {'Repository': 'repo', 'Release tag': 'tag', 'Or a commit': 'commit', 'Summary': 'summary',
+          'Tested on a unit': 'on_unit', 'Licence, for files that name none': 'license', 'Only these files': 'files',
+          'Why': 'why'}
 # web/catalog.json's layout: these keys share a line, in this order; any other key gets a line of its own
 LINES = (('repo', 'tag', 'file', 'kind', 'commit'), ('path',), ('device', 'needs_core', 'title', 'version', 'license'),
          ('sha256',), ('summary',), ('on_unit',))
@@ -110,12 +115,39 @@ def get(url, accept='application/octet-stream', limit=8 << 20):
 
 
 def facts(path, license=''):
-    """What a file says about itself, read by elekloader."""
+    """What a file says about itself, read by elekloader: with what it holds that no other mod in a build may
+    share (build_web.footprint) and the RAM it takes."""
     m = elemod.load_any(path)
+    v2 = isinstance(m, link.Mod2)
     return {'id': m.id, 'version': str(m.version), 'device': m.dev.key, 'os': m.rel.version,
             'license': m.doc.get('license') or license, 'named_license': bool(m.doc.get('license')),
             'title': m.doc.get('title', m.id), 'core': m.id == 'core', 'requires': list(m.requires),
-            'needs_core': getattr(m, 'needs_core', None), 'description': ' '.join(str(m.doc.get('description', '')).split())}
+            'needs_core': getattr(m, 'needs_core', None), 'description': ' '.join(str(m.doc.get('description', '')).split()),
+            'footprint': dict(footprint(m), id=m.id),
+            'ram': (m.size('.run') + m.size('.bss')) if v2 else (m.blob['len'] if m.blob else 0)}
+
+
+def heads_up(f, known, site_cores):
+    """What the author may want to know about a file that goes in: the core it builds with, its RAM, and the shop's
+    mods for its device and OS it can't share a build with (the page greys them out beside it)."""
+    out = []
+    top = newest(site_cores.get((f['device'], f['os']), []))
+    if 'core' in f['requires'] and top:
+        out.append('builds with core %s' % top)
+    if f.get('ram'):
+        out.append('%.1f KB of RAM' % (f['ram'] / 1024.0))
+    if f.get('footprint'):
+        gone = {it.get('file') or it['path'].rsplit('/', 1)[-1] for it in f.get('older') or []}
+        cant = {}
+        for name, k in sorted(known.items()):
+            if (k['core'] or name in gone or k['id'] == f['id'] or (k['device'], k['os']) != (f['device'], f['os'])
+                    or not k.get('footprint')):
+                continue
+            why = clash(f['footprint'], k['footprint'])
+            if why:
+                cant.setdefault(why, []).append('%s %s' % (k['title'], k['version']))
+        out += ["can't go in one build with %s (%s)" % (', '.join(sorted(set(v))), why) for why, v in sorted(cant.items())]
+    return out
 
 
 def same_repo(name):
@@ -151,16 +183,21 @@ def submit(fields, catalog=CATALOG, files_dir=None, cores_dir=None, update=False
     whether every change is such an update, in either mode."""
     r = {'repo': '', 'tag': '', 'rows': [], 'errors': [], 'changed': False, 'prerelease': False, 'same_repo_update': False}
     repo, tag = fields.get('repo', '').strip(), fields.get('tag', '').strip()
+    commit = fields.get('commit', '').strip().lower()
     repo = re.sub(r'^https://github\.com/|/$|\.git$', '', repo)
     summary = ' '.join(fields.get('summary', '').split())
     on_unit = ' '.join(fields.get('on_unit', '').split())
     license = fields.get('license', '').strip()
     only = [f.strip() for f in re.split(r'[\s,]+', fields.get('files', '')) if f.strip()]
-    r['repo'], r['tag'] = repo, tag
+    r['repo'], r['tag'] = repo, tag or commit[:7]
     if not REPO.fullmatch(repo):
         r['errors'].append('The repository is owner/name, as on GitHub (for example irpina/digislicer).')
-    if not TAG.fullmatch(tag):
-        r['errors'].append('The release tag is a tag of that repository, such as v2.1.')
+    if commit and tag:
+        r['errors'].append('Give a release tag or a commit, not both.')
+    elif commit and not COMMIT.fullmatch(commit):
+        r['errors'].append('The commit is its whole 40-character id.')
+    elif not commit and not TAG.fullmatch(tag):
+        r['errors'].append('The release tag is a tag of that repository, such as v2.1 (or give a commit instead).')
     if (not summary and not update) or len(summary) > 300:
         r['errors'].append('The summary is one sentence of up to 300 characters.')
     if len(on_unit) > 600:
@@ -172,25 +209,46 @@ def submit(fields, catalog=CATALOG, files_dir=None, cores_dir=None, update=False
         r['errors'].append('"Only these files" lists .elemod file names, one per line: not %s.' % ', '.join(bad))
     if r['errors']:
         return 1, r
-    try:
-        release = json.loads(get('https://api.github.com/repos/%s/releases/tags/%s' % (repo, tag), 'application/vnd.github+json', 2 << 20))
-    except urllib.error.HTTPError as e:
-        r['errors'].append('GitHub has no release %s in %s (a draft is not one until it is published).' % (tag, repo)
-                           if e.code == 404 else 'GitHub answered %d.' % e.code)
-        return 1, r
-    if release.get('draft'):
-        r['errors'].append('%s %s is a draft: publish it (a pre-release is fine).' % (repo, tag))
-        return 1, r
+    api = 'https://api.github.com/repos/'
+    if commit:                                     # files kept in the repository: those in the commit's tree
+        try:
+            found = json.loads(get(api + '%s/commits/%s' % (repo, commit), 'application/vnd.github+json', 4 << 20))
+            tree = json.loads(get(api + '%s/git/trees/%s?recursive=1' % (repo, commit), 'application/vnd.github+json',
+                                  16 << 20))
+        except urllib.error.HTTPError as e:
+            r['errors'].append('GitHub has no commit %s in %s.' % (commit, repo) if e.code in (404, 422)
+                               else 'GitHub answered %d.' % e.code)
+            return 1, r
+        canonical = re.match(r'https://github\.com/([^/]+/[^/]+)/commit/', found.get('html_url', ''))
+        release = {}
+        assets = [{'name': e['path'].rsplit('/', 1)[-1], 'path': e['path']} for e in tree.get('tree', [])
+                  if e.get('type') == 'blob' and FILE.fullmatch(e['path'].rsplit('/', 1)[-1])
+                  and PATH.fullmatch(e['path']) and '..' not in e['path'].split('/')]
+        names = [a['name'] for a in assets]
+        twice = sorted({n for n in names if names.count(n) > 1})
+        if twice:
+            r['errors'].append('The commit has more than one %s: the shop names a file by its name.' % ', '.join(twice))
+            return 1, r
+    else:
+        try:
+            release = json.loads(get(api + '%s/releases/tags/%s' % (repo, tag), 'application/vnd.github+json', 2 << 20))
+        except urllib.error.HTTPError as e:
+            r['errors'].append('GitHub has no release %s in %s (a draft is not one until it is published).' % (tag, repo)
+                               if e.code == 404 else 'GitHub answered %d.' % e.code)
+            return 1, r
+        if release.get('draft'):
+            r['errors'].append('%s %s is a draft: publish it (a pre-release is fine).' % (repo, tag))
+            return 1, r
+        canonical = re.match(r'https://github\.com/([^/]+/[^/]+)/releases/', release.get('html_url', ''))
+        assets = [a for a in release.get('assets', []) if FILE.fullmatch(a['name'])]
     r['prerelease'] = bool(release.get('prerelease'))
-    canonical = re.match(r'https://github\.com/([^/]+/[^/]+)/releases/', release.get('html_url', ''))
     if canonical:                                  # the name GitHub gives it now, if it moved
         repo = r['repo'] = canonical.group(1)
     notes = release_text(release.get('body'))      # the form's text first, then the release's notes
     summary = summary or notes.get('summary', '')[:300]
     on_unit = on_unit or notes.get('on_unit', '')[:600]
-    assets = [a for a in release.get('assets', []) if FILE.fullmatch(a['name'])]
     if not assets:
-        r['errors'].append('%s %s has no .elemod files attached.' % (repo, tag))
+        r['errors'].append('%s %s has no .elemod files %s.' % (repo, r['tag'], 'in it' if commit else 'attached'))
         return 1, r
     missing = [f for f in only if f not in {a['name'] for a in assets}]
     if missing:
@@ -247,12 +305,14 @@ def submit(fields, catalog=CATALOG, files_dir=None, cores_dir=None, update=False
 
     tmp = tempfile.mkdtemp()
     try:
-        files, aside = [], []                     # the files to decide on; those "Only these files" left out
+        files, aside, listed_cores = [], [], []   # the files to decide on; those "Only these files" left out; listed cores
         for a in assets:
-            row = {'file': a['name'], 'result': ''}
+            row = {'file': a['name'], 'path': a.get('path'), 'result': ''}
             r['rows'].append(row)
             try:
-                data = get('https://github.com/%s/releases/download/%s/%s' % (repo, tag, a['name']))
+                data = (get(api + '%s/contents/%s?ref=%s' % (repo, urllib.parse.quote(a['path']), commit),
+                            'application/vnd.github.raw') if commit
+                        else get('https://github.com/%s/releases/download/%s/%s' % (repo, tag, a['name'])))
             except (urllib.error.URLError, ValueError) as e:
                 row['result'] = 'refused: could not be downloaded (%s)' % e
                 continue
@@ -270,11 +330,15 @@ def submit(fields, catalog=CATALOG, files_dir=None, cores_dir=None, update=False
                 continue
             row.update(f)
             row['sha256'] = sha
+            listed = by_name.get(a['name'])
+            if listed and listed['sha256'] == sha:     # the very file (whatever licence it names, the shop has one)
+                row['result'] = 'already in the shop'
+                if f['core']:
+                    listed_cores.append(row)           # still the core the release's mods were built with
+                continue
             licensed = f['license'] in SHOP_LICENCES
             if only and a['name'] not in only and not f['core']:   # cores and required mods may still come along
-                listed = by_name.get(a['name'])
-                row['result'] = ('already in the shop' if listed and listed['sha256'] == sha
-                                 else 'left out: not in "Only these files"')
+                row['result'] = 'left out: not in "Only these files"'
                 if licensed:
                     aside.append(row)
                 continue
@@ -283,36 +347,30 @@ def submit(fields, catalog=CATALOG, files_dir=None, cores_dir=None, update=False
                                  if f['license'] else 'refused: it names no licence; give the repository\'s in "Licence"')
                 continue
             files.append(row)
-        cores = {(f['device'], f['os']): f for f in files if f['core']}
+        cores = {(f['device'], f['os']): f for f in files + listed_cores if f['core']}
         ours = same_repo(repo) in CORE_REPOS
         release_mods = {key(f): f for f in files + aside if not f['core']}
-
-        for f in aside:
-            if f['result'] == 'already in the shop':
-                shop_mods.add(key(f))
 
         # the mods: each decided on its own, then what each requires (each file once)
         queue, taken = [f for f in files if not f['core']], []
         seen = {f['file'] for f in queue}
         while queue:
             f = queue.pop(0)
-            listed = by_name.get(f['file'])
-            if listed:
-                f['result'] = ('already in the shop' if listed['sha256'] == f['sha256']
-                               else 'refused: the shop lists another file by this name')
-                if listed['sha256'] == f['sha256']:
-                    shop_mods.add(key(f))
+            if f['file'] in by_name:
+                f['result'] = 'refused: the shop lists another file by this name'
                 continue
+            # the shop's entries of this mod for this device: another repository's (any OS: the mod is theirs on this
+            # device) clash; this repository's for this OS are what the file replaces
             same = [(it, known[name(it)]) for it in items if name(it) in known and not known[name(it)]['core']
-                    and key(known[name(it)]) == key(f)]
+                    and (known[name(it)]['id'], known[name(it)]['device']) == (f['id'], f['device'])]
             f['clash'] = [it for it, k in same if same_repo(it['repo']) != same_repo(repo)]
-            f['older'] = [it for it, k in same if same_repo(it['repo']) == same_repo(repo)]
+            f['older'] = [it for it, k in same if same_repo(it['repo']) == same_repo(repo) and k['os'] == f['os']]
             if f['clash'] and update:
                 f['result'] = 'left out: the shop takes %s from %s' % (f['id'], f['clash'][0]['repo'])
                 continue
             if f['clash'] and f['file'] not in only:
-                f['result'] = ('flagged, left out: the shop has %s from %s for %s %s; name this file in "Only these files" '
-                               'to add a second build anyway' % (f['id'], f['clash'][0]['repo'], f['device'], f['os']))
+                f['result'] = ('flagged, left out: the shop has %s from %s for %s; name this file in "Only these files" '
+                               'to add a second build anyway' % (f['id'], f['clash'][0]['repo'], f['device']))
                 continue
             # what it updates: the entry for the same OS, or else this repository's entry for another OS
             mine = own_entries.get((f['id'], f['device']), [])
@@ -377,7 +435,8 @@ def submit(fields, catalog=CATALOG, files_dir=None, cores_dir=None, update=False
 
         new, needed = [], set()
         for f in taken:
-            entry = {'repo': repo, 'tag': tag, 'file': f['file'], 'device': f['device']}
+            entry = dict(repo=repo, commit=commit, path=f['path']) if commit else dict(repo=repo, tag=tag, file=f['file'])
+            entry['device'] = f['device']
             if f['held']:                              # a held entry's update (through the form) stays held
                 entry['hold'] = f['held']
             if f['need']:
@@ -397,9 +456,10 @@ def submit(fields, catalog=CATALOG, files_dir=None, cores_dir=None, update=False
             at = items.index(f['older'][0]) if f['older'] else None       # an update takes the old entry's place
             for it in f['older']:
                 items.remove(it)
-            f['result'] = (('replaces ' + ', '.join(it['file'] for it in f['older'])) if f['older']
+            f['result'] = (('replaces ' + ', '.join(name(it) for it in f['older'])) if f['older']
                            else 'added, beside %s from %s' % (f['id'], f['clash'][0]['repo']) if f['clash']
                            else 'added: %s needs it' % f['brought_by'] if f.get('brought_by') else 'added')
+            f['notes'] = heads_up(f, known, site_cores)
             new.append((entry, at))
         # a core of the release goes in when it is elekloader's and a mod of it needs that core
         for (device, os_), c in cores.items():
@@ -412,7 +472,8 @@ def submit(fields, catalog=CATALOG, files_dir=None, cores_dir=None, update=False
             elif not ours:
                 c['result'] = 'left out: cores come from elekloader\'s own releases'
             else:
-                new.append(({'repo': repo, 'tag': tag, 'file': c['file'], 'kind': 'core', 'device': device, 'sha256': c['sha256']}, None))
+                pin = dict(repo=repo, commit=commit, path=c['path']) if commit else dict(repo=repo, tag=tag, file=c['file'])
+                new.append((dict(pin, kind='core', device=device, sha256=c['sha256']), None))
                 c['result'] = 'added: the core this release\'s mods need'
         if new:
             for e, at in new:                      # in the old entry's place, or after the shop's last item for its device
@@ -441,6 +502,79 @@ def submit(fields, catalog=CATALOG, files_dir=None, cores_dir=None, update=False
     return 2, r
 
 
+def remove(fields, catalog=CATALOG, files_dir=None):
+    """The "Remove a mod" form: the shop's entries from one repository (all, or those "Only these files" names) leave
+    web/catalog.json. Cores stay (a maintainer removes those). The report's own_only says whether nothing else is
+    touched: no held entry, and no other shop mod for the same device and OS needs a mod that goes.
+    -> (status, report): 0 entries removed, 1 refused, 2 nothing to remove."""
+    r = {'repo': '', 'tag': '', 'rows': [], 'errors': [], 'changed': False, 'removal': True, 'own_only': False}
+    repo = re.sub(r'^https://github\.com/|/$|\.git$', '', fields.get('repo', '').strip())
+    only = [f.strip() for f in re.split(r'[\s,]+', fields.get('files', '')) if f.strip()]
+    r['repo'], r['why'] = repo, ' '.join(fields.get('why', '').split())[:600]
+    if not REPO.fullmatch(repo):
+        r['errors'].append('The repository is owner/name, as on GitHub (for example irpina/digislicer).')
+        return 1, r
+    try:                                           # its name now, if it moved (a deleted one keeps the name given)
+        repo = r['repo'] = json.loads(get('https://api.github.com/repos/' + repo, 'application/vnd.github+json',
+                                          2 << 20)).get('full_name') or repo
+    except (urllib.error.URLError, ValueError):
+        pass
+    with open(catalog, encoding='utf-8') as fh:
+        doc = json.load(fh)
+    items = doc['items']
+    name = lambda it: it['file'] if 'file' in it else it['path'].rsplit('/', 1)[-1]
+    mine = [it for it in items if same_repo(it['repo']) in (same_repo(repo), same_repo(fields.get('repo', '').strip()))]
+    missing = [f for f in only if f not in {name(it) for it in mine}]
+    if not mine or missing:
+        r['errors'].append('The shop lists no %s from %s.' % (', '.join(missing) if missing else 'files', repo))
+        return 1, r
+    known = {}
+    for it in items:
+        p = os.path.join(files_dir, name(it)) if files_dir else ''
+        if p and os.path.exists(p):
+            try:
+                known[name(it)] = facts(p)
+            except (OSError, elemod.ModError):
+                pass
+    going = []
+    for it in mine:
+        row = dict(known.get(name(it), {}), file=name(it), result='')
+        row.pop('notes', None)
+        r['rows'].append(row)
+        if only and name(it) not in only:
+            row['result'] = 'stays: not in "Only these files"'
+        elif it.get('kind') == 'core':
+            row['result'] = 'stays: a maintainer removes cores'
+        else:
+            going.append(it)
+            row['result'] = 'removed' + (' (held: %s)' % it['hold'] if isinstance(it.get('hold'), str) else
+                                         ' (held)' if it.get('hold') else '')
+    if not going:
+        return 2, r
+    left = [it for it in items if it not in going]
+    gone = {(known[name(it)]['id'], known[name(it)]['device'], known[name(it)]['os']) for it in going if name(it) in known}
+    still = {(k['id'], k['device'], k['os']) for n, k in known.items() if n in {name(it) for it in left}}
+    needed = []
+    for it in left:
+        k = known.get(name(it))
+        for req in (k or {}).get('requires', []):
+            if (req, k['device'], k['os']) in gone - still:
+                needed.append('%s %s from %s needs %s' % (k['title'], k['version'], it['repo'], req))
+    for row in r['rows']:
+        if row['result'].startswith('removed') and row.get('id'):
+            who = [n for n in needed if n.endswith(' needs ' + row['id'])]
+            if who:
+                row['result'] += '; ' + ', '.join(sorted(set(who)))
+    doc['items'] = left
+    out = render(doc)
+    with open(catalog, 'w', encoding='utf-8', newline='\n') as fh:
+        fh.write(out)
+    r['changed'] = True
+    r['titles'] = sorted({row.get('title') or row['file'] for row in r['rows'] if row['result'].startswith('removed')})
+    r['own_only'] = not needed and not any(it.get('hold') for it in going)
+    return 0, r
+
+
 def report_md(status, r):
     lines = ['### %s %s%s' % (r['repo'] or '?', r['tag'] or '?', ' (a pre-release)' if r.get('prerelease') else ''), '']
     lines += ['- %s' % e for e in r['errors']]
@@ -452,7 +586,20 @@ def report_md(status, r):
             lines.append('| `%s` | %s | %s | %s | %s | %s |' % (
                 row['file'], (row.get('title', '') + ' ' + row.get('version', '')).strip(),
                 ('%s %s' % (row.get('device', ''), row.get('os', ''))).strip(), needs, row.get('license', ''), row['result']))
+    noted = [row for row in r['rows'] if row.get('notes')]
+    if noted:
+        lines += ['', 'Good to know (not a refusal):']
+        lines += ['- `%s`: %s' % (row['file'], '; '.join(row['notes'])) for row in noted]
     lines.append('')
+    if r.get('removal'):
+        if r.get('why'):
+            lines += ['Why, from the issue: ' + r['why'], '']
+        lines.append({0: 'These leave the shop in a pull request.' + ('' if r['own_only'] else
+                                                                       ' Other shop mods need some of them, or they are '
+                                                                       'held: a maintainer decides.'),
+                      1: 'Nothing was removed. Edit the issue to fix it, and the check runs again.',
+                      2: 'Nothing to remove.'}[status])
+        return '\n'.join(lines) + '\n'
     lines.append({0: 'These go to the shop in a pull request.' + (' Each is a newer file of a mod this repository already '
                                                                   'has in the shop.' if r.get('same_repo_update') else ''),
                   1: 'Nothing was added. Edit the issue to fix it, and the check runs again.',
@@ -477,16 +624,22 @@ def main(argv=None):
                                         'core the site doesn\'t have is refused')
     ap.add_argument('--update', action='store_true', help='only newer files of mods this repository already has in '
                                                            'the shop (packaging/shop_updates.py); the text may be empty')
+    ap.add_argument('--remove', action='store_true', help='the "Remove a mod" form: take the repository\'s files out')
+    ap.add_argument('--commit', default='', help='instead of --tag: the commit whose .elemod files to take')
     ap.add_argument('--report', help='write the report (Markdown) here')
-    ap.add_argument('--result', help='write the result (JSON) here: status, changed, titles, same_repo_update')
+    ap.add_argument('--result', help='write the result (JSON) here: status, changed, titles, removal, auto_ok (the '
+                                     'change touches only the repository\'s own entries: an update, or a removal)')
     a = ap.parse_args(argv)
     if a.issue_body:
         with open(a.issue_body, encoding='utf-8') as fh:
             fields = parse_issue(fh.read())
     else:
-        fields = {'repo': a.repo or '', 'tag': a.tag or '', 'summary': a.summary, 'on_unit': a.on_unit,
-                  'license': a.license, 'files': a.files}
-    status, r = submit(fields, a.catalog, a.files_dir, a.cores_dir, a.update)
+        fields = {'repo': a.repo or '', 'tag': a.tag or '', 'commit': a.commit, 'summary': a.summary,
+                  'on_unit': a.on_unit, 'license': a.license, 'files': a.files}
+    if a.remove:
+        status, r = remove(fields, a.catalog, a.files_dir)
+    else:
+        status, r = submit(fields, a.catalog, a.files_dir, a.cores_dir, a.update)
     text = report_md(status, r)
     if a.report:
         with open(a.report, 'w', encoding='utf-8') as fh:
@@ -494,7 +647,8 @@ def main(argv=None):
     if a.result:
         with open(a.result, 'w', encoding='utf-8') as fh:
             json.dump({'status': status, 'changed': r['changed'], 'repo': r['repo'], 'tag': r['tag'],
-                       'titles': r.get('titles', []), 'same_repo_update': r['same_repo_update']}, fh)
+                       'titles': r.get('titles', []), 'removal': bool(r.get('removal')),
+                       'auto_ok': bool(r['own_only'] if r.get('removal') else r['same_repo_update'])}, fh)
     sys.stdout.write(text)
     return status
 

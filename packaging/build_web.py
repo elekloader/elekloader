@@ -254,6 +254,26 @@ def footprint(m):
             'regions': sorted([g['lo'], g['hi']] for g in m.regions)}
 
 
+def clash(a, b):
+    """Why two footprints can never go in one build, or '': app.js's clash(), which the page greys cards by
+    (packaging/submit_mod.py reports the same to a mod's author)."""
+    meets = lambda p, q: any(lo < h and l < hi for lo, hi in p for l, h in q)
+    both = lambda p, q: next((x for x in p if x in q), None)
+    if a['format'] != b['format']:
+        return 'a whole build combines with no separate mod'
+    if a.get('id') in b['conflicts'] or b.get('id') in a['conflicts']:
+        return 'one names the other as incompatible'
+    if meets(a['spans'], b['spans']):
+        return 'both patch the same place in the firmware'
+    for key, say in (('names', 'both claim %s'), ('exports', 'both export %s'), ('tables', 'both declare the table %s')):
+        x = both(a[key], b[key])
+        if x is not None:
+            return say % x
+    if meets(a['regions'], b['regions']):
+        return 'both use the same memory'
+    return ''
+
+
 def device_list():
     """-> devices.json: each device the engine knows, as bridge.info lists them (key, name, releases), so the
     page shows them all before the engine has loaded."""
