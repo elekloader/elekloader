@@ -1214,11 +1214,11 @@ def test_a_submission_brings_what_its_mods_need_or_is_refused():
             # an update, from a pre-release: in the old entry's place, needs_core from the file
             status, r, res, got = run('owner/a', 'v1.1')
             assert status == 0 and r['prerelease'] and res['a-1.1.elemod'] == 'replaces a-1.0.elemod', res
-            assert 'a-1.0.elemod' not in got and got['a-1.1.elemod']['needs_core'] == '4.1'
+            assert 'a-1.0.elemod' not in got and got['a-1.1.elemod']['needs_core'] == '4.1' and r['same_repo_update']
             assert '(a pre-release)' in submit_mod.report_md(status, r)
             # a required mod "Only these files" left out comes along, with its own description
             status, r, res, got = run('owner/b', 'v1', 'b-1.elemod')
-            assert status == 0 and res['kit-1.elemod'] == 'added: B needs it', res
+            assert status == 0 and res['kit-1.elemod'] == 'added: B needs it' and not r['same_repo_update'], res
             assert got['kit-1.elemod']['summary'] == 'What kit does.' and got['b-1.elemod']['summary'] == 'One sentence.'
             # a core newer than the site's is refused, and a core from a mod's release never goes in
             status, r, res, got = run('owner/c', 'v1')
@@ -1231,13 +1231,88 @@ def test_a_submission_brings_what_its_mods_need_or_is_refused():
             status, r, res, got = run('owner/f', 'v1')
             assert status == 1 and 'a draft is not one' in r['errors'][0]
             status, r, res, got = run('owner/g', 'v1')
-            assert status == 1 and res['g-1.elemod'] == 'refused: a mod it needs from this release was refused', res
+            assert status == 1 and res['g-1.elemod'] == 'refused: a mod it needs from this release can\'t go in', res
             # a repository that moved updates its own entries, under its new name
             status, r, res, got = run('irpina/elekloader', 'mp-v1.3')
             assert status == 0 and res['mp-1.3.elemod'] == 'replaces mp-1.2.elemod', res
             assert got['mp-1.3.elemod']['repo'] == 'elekloader/elekloader' and 'mp-1.2.elemod' not in got
     finally:
         submit_mod.get, submit_mod.facts = real
+
+
+def test_shop_updates_take_only_newer_files_of_the_repositorys_own_mods():
+    """packaging/shop_updates.py: the newer releases of a shop repository, oldest first, each through submit_mod's
+    update check. GitHub and the files are faked."""
+    submit_mod = submit_mod_module()
+    if submit_mod is None:
+        return
+    import shop_updates
+    def mod(id_, version, os_='1.53'):
+        return {'id': id_, 'version': version, 'device': 'digitakt-mk1', 'os': os_, 'license': 'MIT', 'named_license': True,
+                'title': id_.upper(), 'core': id_ == 'core', 'requires': [] if id_ == 'core' else ['core'],
+                'needs_core': None, 'description': ''}
+    FACTS = {'core-4.1.elemod': mod('core', '4.1'), 'core-4.1-os1.54.elemod': mod('core', '4.1', '1.54'),
+             'core-9.elemod': mod('core', '9'), 'x-1.0.elemod': mod('x', '1.0'), 'y-1.0.elemod': mod('y', '1.0'),
+             'x-1.1.elemod': mod('x', '1.1'), 'x-1.1-os1.54.elemod': mod('x', '1.1', '1.54'), 'y-1.1.elemod': mod('y', '1.1'),
+             'z-1.elemod': mod('z', '1'), 'x-1.2.elemod': mod('x', '1.2'), 'x-1.0.1.elemod': mod('x', '1.0.1')}
+    # tag, published, pre-release, files, notes (v0.9 is older than what the shop takes; cores-only is all cores)
+    RELEASES = [('v0.9', '2026-10-01', False, ['x-1.0.elemod'], ''), ('v1.0', '2026-10-02', False, ['x-1.0.elemod', 'y-1.0.elemod'], ''),
+                ('v1.1', '2026-10-03', False, ['x-1.1.elemod', 'x-1.1-os1.54.elemod', 'y-1.1.elemod', 'z-1.elemod', 'core-4.1.elemod'],
+                 'Fixes.\n\n- **Tested on a unit:** 1.1 ran on my Digitakt.\n'),
+                ('v1.2b', '2026-10-04', True, ['x-1.2.elemod'], ''), ('v1.0.1', '2026-10-05', False, ['x-1.0.1.elemod'], ''),
+                ('cores-only', '2026-10-06', False, ['core-9.elemod'], '')]
+    def release(t):
+        tag, when, pre, files, body = next(x for x in RELEASES if x[0] == t)
+        return {'tag_name': tag, 'published_at': when + 'T00:00:00Z', 'prerelease': pre, 'draft': False, 'body': body,
+                'html_url': 'https://github.com/owner/x/releases/tag/' + tag, 'assets': [{'name': n} for n in files]}
+    def get(url, accept='', limit=0):
+        if url.endswith('/releases?per_page=100'):
+            return json.dumps([release(t[0]) for t in reversed(RELEASES)]).encode()
+        if '/releases/tags/' in url:
+            return json.dumps(release(url.rsplit('/', 1)[1])).encode()
+        return ('file ' + url.rsplit('/', 1)[1]).encode()
+    real = submit_mod.get, submit_mod.facts
+    submit_mod.get, submit_mod.facts = get, lambda path, license='': dict(FACTS[os.path.basename(path)])
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            shop, cores = os.path.join(tmp, 'shop'), os.path.join(tmp, 'core')
+            for d, names in ((shop, ['x-1.0.elemod', 'y-1.0.elemod']), (cores, ['core-4.1.elemod', 'core-4.1-os1.54.elemod'])):
+                os.mkdir(d)
+                for n in names:
+                    open(os.path.join(d, n), 'wb').close()
+            catalog = os.path.join(tmp, 'catalog.json')
+            items = [{'repo': 'owner/x', 'tag': 'v1.0', 'file': 'x-1.0.elemod', 'device': 'digitakt-mk1', 'sha256': '0' * 64,
+                      'summary': 'X.', 'on_unit': 'Ran on a unit.'},
+                     {'repo': 'owner/x', 'tag': 'v1.0', 'file': 'y-1.0.elemod', 'device': 'digitakt-mk1', 'sha256': '1' * 64,
+                      'summary': 'Y.', 'hold': 'kept for its users'}]
+            with open(catalog, 'w', encoding='utf-8') as fh:
+                fh.write(submit_mod.render({'about': '', 'items': items}))
+            assert shop_updates.newer_releases('owner/x', {'v1.0'}) == ['v1.1', 'v1.2b', 'v1.0.1']
+            out = os.path.join(tmp, 'result.json')
+            import contextlib
+            import io
+            with contextlib.redirect_stdout(io.StringIO()):
+                assert shop_updates.main(['--apply', 'owner/x', '--catalog', catalog, '--files-dir', shop, '--cores-dir',
+                                          cores, '--result', out, '--report', os.path.join(tmp, 'report.md')]) == 0
+            with open(out) as fh:
+                result = json.load(fh)
+            assert result['same_repo_update'] and result['tags'] == ['v1.1'], result
+            with open(catalog, encoding='utf-8') as fh:
+                got = {i['file']: i for i in json.load(fh)['items']}
+            assert sorted(got) == ['x-1.1-os1.54.elemod', 'x-1.1.elemod', 'y-1.0.elemod'], sorted(got)
+            # the card's summary carries over; the release's notes give the hardware note; a held entry stays
+            assert got['x-1.1.elemod']['summary'] == 'X.' and got['x-1.1.elemod']['on_unit'] == '1.1 ran on my Digitakt.'
+            assert got['x-1.1-os1.54.elemod']['summary'] == 'X.' and got['y-1.0.elemod']['hold']
+            with open(os.path.join(tmp, 'report.md'), encoding='utf-8') as fh:
+                report = fh.read()
+            for said in ('left out: the shop holds y', 'left out: not in the shop yet', 'left out: cores come from elekloader',
+                         'left out: a pre-release replaces a release only', 'left out: the shop has a newer version (1.1)'):
+                assert said in report, said
+    finally:
+        submit_mod.get, submit_mod.facts = real
+    assert submit_mod.as_of('Ran on a unit.', '1.0') == 'As of 1.0: Ran on a unit.'
+    assert submit_mod.as_of('As of 0.9: Ran.', '1.0') == 'As of 0.9: Ran.'
+    assert submit_mod.release_text('Shop summary: One line.\n* Tested on a unit: yes') == {'summary': 'One line.', 'on_unit': 'yes'}
 
 if __name__ == '__main__':
     import traceback

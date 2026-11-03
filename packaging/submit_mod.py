@@ -24,6 +24,11 @@ What a mod requires must be there for it to build:
   a core from a mod's release would become every build's. A mod's entry gets "needs_core" from its file, or else from
   the core its release carries.
 
+An update keeps its card's text: the summary, and the hardware note marked "As of <the old version>", unless the
+form or the release's notes give new ones ("Shop summary: ..." and "Tested on a unit: ..." lines). A file older than
+the one the shop lists is left out. With --update (packaging/shop_updates.py) only newer files of mods this
+repository already has go in, and a pre-release replaces only what came from a pre-release.
+
 web/catalog.json keeps its own layout (render() reproduces it byte for byte). Nothing in the release is run.
 
 Exit 0: entries added or changed (the report says what); 1: nothing added, refused (the report says why);
@@ -122,9 +127,29 @@ def newest(versions):
     return max(versions, key=elemod.version_key) if versions else None
 
 
-def submit(fields, catalog=CATALOG, files_dir=None, cores_dir=None):
-    """-> (status, report). Writes the catalog when entries are added or changed."""
-    r = {'repo': '', 'tag': '', 'rows': [], 'errors': [], 'changed': False, 'prerelease': False}
+def release_text(body):
+    """The shop's text a release's notes may give: 'Shop summary: ...' and 'Tested on a unit: ...' lines."""
+    out = {}
+    for line in (body or '').replace('\r\n', '\n').split('\n'):
+        m = re.match(r'^[\s>*_-]*(shop summary|tested on a unit)[*_]*\s*:[*_]*\s*(.+)$', line, re.I)
+        if m:
+            out['summary' if m.group(1).lower() == 'shop summary' else 'on_unit'] = ' '.join(m.group(2).split())
+    return out
+
+
+def as_of(text, version):
+    """An earlier version's hardware note, kept for a newer file: it says which version it was about."""
+    return text if not text or text.startswith('As of ') else 'As of %s: %s' % (version, text)
+
+
+def submit(fields, catalog=CATALOG, files_dir=None, cores_dir=None, update=False):
+    """-> (status, report). Writes the catalog when entries are added or changed.
+
+    update: only newer files of mods this repository already has in the shop go in (for any OS of the same mod and
+    device); the summary and the hardware note come from the release's notes or else the entry they replace, so the
+    fields may be empty; a pre-release replaces only what came from a pre-release. The report's same_repo_update says
+    whether every change is such an update, in either mode."""
+    r = {'repo': '', 'tag': '', 'rows': [], 'errors': [], 'changed': False, 'prerelease': False, 'same_repo_update': False}
     repo, tag = fields.get('repo', '').strip(), fields.get('tag', '').strip()
     repo = re.sub(r'^https://github\.com/|/$|\.git$', '', repo)
     summary = ' '.join(fields.get('summary', '').split())
@@ -136,7 +161,7 @@ def submit(fields, catalog=CATALOG, files_dir=None, cores_dir=None):
         r['errors'].append('The repository is owner/name, as on GitHub (for example irpina/digislicer).')
     if not TAG.fullmatch(tag):
         r['errors'].append('The release tag is a tag of that repository, such as v2.1.')
-    if not summary or len(summary) > 300:
+    if (not summary and not update) or len(summary) > 300:
         r['errors'].append('The summary is one sentence of up to 300 characters.')
     if len(on_unit) > 600:
         r['errors'].append('"Tested on a unit" is up to 600 characters.')
@@ -160,6 +185,9 @@ def submit(fields, catalog=CATALOG, files_dir=None, cores_dir=None):
     canonical = re.match(r'https://github\.com/([^/]+/[^/]+)/releases/', release.get('html_url', ''))
     if canonical:                                  # the name GitHub gives it now, if it moved
         repo = r['repo'] = canonical.group(1)
+    notes = release_text(release.get('body'))      # the form's text first, then the release's notes
+    summary = summary or notes.get('summary', '')[:300]
+    on_unit = on_unit or notes.get('on_unit', '')[:600]
     assets = [a for a in release.get('assets', []) if FILE.fullmatch(a['name'])]
     if not assets:
         r['errors'].append('%s %s has no .elemod files attached.' % (repo, tag))
@@ -197,6 +225,25 @@ def submit(fields, catalog=CATALOG, files_dir=None, cores_dir=None):
     for k in known.values():
         if k['core']:
             site_cores.setdefault((k['device'], k['os']), []).append(k['version'])
+    own_entries = {}                              # (id, device) -> this repository's entries in the shop, any OS
+    for it in items:
+        k = known.get(name(it))
+        if k and not k['core'] and same_repo(it['repo']) == same_repo(repo):
+            own_entries.setdefault((k['id'], k['device']), []).append(it)
+    pre_tags = {}
+
+    def from_prerelease(it):
+        """Whether a listed entry's release is a pre-release (a commit pin counts as a release)."""
+        if 'tag' not in it:
+            return False
+        if (it['repo'], it['tag']) not in pre_tags:
+            try:
+                rel = json.loads(get('https://api.github.com/repos/%s/releases/tags/%s' % (it['repo'], it['tag']),
+                                     'application/vnd.github+json', 2 << 20))
+                pre_tags[(it['repo'], it['tag'])] = bool(rel.get('prerelease'))
+            except (urllib.error.URLError, ValueError):
+                pre_tags[(it['repo'], it['tag'])] = False
+        return pre_tags[(it['repo'], it['tag'])]
 
     tmp = tempfile.mkdtemp()
     try:
@@ -260,9 +307,30 @@ def submit(fields, catalog=CATALOG, files_dir=None, cores_dir=None):
                     and key(known[name(it)]) == key(f)]
             f['clash'] = [it for it, k in same if same_repo(it['repo']) != same_repo(repo)]
             f['older'] = [it for it, k in same if same_repo(it['repo']) == same_repo(repo)]
+            if f['clash'] and update:
+                f['result'] = 'left out: the shop takes %s from %s' % (f['id'], f['clash'][0]['repo'])
+                continue
             if f['clash'] and f['file'] not in only:
                 f['result'] = ('flagged, left out: the shop has %s from %s for %s %s; name this file in "Only these files" '
                                'to add a second build anyway' % (f['id'], f['clash'][0]['repo'], f['device'], f['os']))
+                continue
+            # what it updates: the entry for the same OS, or else this repository's entry for another OS
+            mine = own_entries.get((f['id'], f['device']), [])
+            f['update_of'] = (f['older'] or mine or [None])[0]
+            if update and f['update_of'] is None:
+                f['result'] = 'left out: not in the shop yet; submit it with the Submit a mod form'
+                continue
+            f['held'] = next((it['hold'] for it in f['older'] or mine if it.get('hold')), None)
+            if update and f['held']:
+                f['result'] = 'left out: the shop holds %s; a maintainer updates it' % f['id']
+                continue
+            if f['older']:
+                was = known[name(f['older'][0])]['version']
+                if elemod.version_key(f['version']) < elemod.version_key(was):
+                    f['result'] = 'left out: the shop has a newer version (%s)' % was
+                    continue
+            if update and r['prerelease'] and not all(from_prerelease(it) for it in f['older'] or mine):
+                f['result'] = 'left out: a pre-release replaces a release only through the Submit a mod form'
                 continue
             # the core: the version the file names, or else the one its release carries
             f['need'] = None
@@ -305,11 +373,13 @@ def submit(fields, catalog=CATALOG, files_dir=None, cores_dir=None):
                 break
             for f in drop:
                 taken.remove(f)
-                f['result'] = 'refused: a mod it needs from this release was refused'
+                f['result'] = 'refused: a mod it needs from this release can\'t go in'
 
         new, needed = [], set()
         for f in taken:
             entry = {'repo': repo, 'tag': tag, 'file': f['file'], 'device': f['device']}
+            if f['held']:                              # a held entry's update (through the form) stays held
+                entry['hold'] = f['held']
             if f['need']:
                 entry['needs_core'] = f['need']
             if 'core' in f['requires']:
@@ -317,9 +387,13 @@ def submit(fields, catalog=CATALOG, files_dir=None, cores_dir=None):
             if not f['named_license']:
                 entry['license'] = f['license']
             own = f.get('brought_by') and f['file'] not in only and only
-            entry.update({'sha256': f['sha256'], 'summary': (f['description'][:300] or summary) if own else summary})
-            if on_unit:
-                entry['on_unit'] = on_unit
+            old = f['update_of'] or {}                 # an update keeps its card's text unless it is given anew
+            was = ((known.get(name(old)) or {}).get('version') or old.get('tag', '')) if old else ''
+            text = summary or old.get('summary') or f['description'][:300]
+            entry.update({'sha256': f['sha256'], 'summary': (f['description'][:300] or text) if own else text})
+            note = on_unit or as_of(old.get('on_unit', ''), was)
+            if note:
+                entry['on_unit'] = note
             at = items.index(f['older'][0]) if f['older'] else None       # an update takes the old entry's place
             for it in f['older']:
                 items.remove(it)
@@ -352,6 +426,12 @@ def submit(fields, catalog=CATALOG, files_dir=None, cores_dir=None):
                 fh.write(out)
             r['changed'] = True
             r['titles'] = sorted({f.get('title', f['file']) for f in r['rows'] if f['result'].startswith(('added', 'replaces'))})
+            # every change a newer file of a mod this repository already has: no new mod, no clash, no core, none held
+            r['same_repo_update'] = (all(f['update_of'] is not None and not f['clash'] and not f['held'] for f in taken)
+                                     and len(new) == len(taken))
+            if files_dir:                          # a later check in the same run knows these files
+                for f in taken:
+                    shutil.copyfile(os.path.join(tmp, f['file']), os.path.join(files_dir, f['file']))
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
     if r['changed']:
@@ -373,9 +453,12 @@ def report_md(status, r):
                 row['file'], (row.get('title', '') + ' ' + row.get('version', '')).strip(),
                 ('%s %s' % (row.get('device', ''), row.get('os', ''))).strip(), needs, row.get('license', ''), row['result']))
     lines.append('')
-    lines.append({0: 'These go to the shop in a pull request, for a maintainer to review.',
+    lines.append({0: 'These go to the shop in a pull request.' + (' Each is a newer file of a mod this repository already '
+                                                                  'has in the shop.' if r.get('same_repo_update') else ''),
                   1: 'Nothing was added. Edit the issue to fix it, and the check runs again.',
-                  2: 'Nothing new: the shop has these files already.'}[status])
+                  2: 'Nothing new: the shop has these files already.' if all(row['result'] == 'already in the shop'
+                                                                             for row in r['rows'])
+                     else 'Nothing to add.'}[status])
     return '\n'.join(lines) + '\n'
 
 
@@ -392,8 +475,10 @@ def main(argv=None):
     ap.add_argument('--files-dir', help='the shop\'s files, as pages.yml downloads them, to compare with')
     ap.add_argument('--cores-dir', help='the latest release\'s cores, as pages.yml downloads them: a mod that needs a '
                                         'core the site doesn\'t have is refused')
+    ap.add_argument('--update', action='store_true', help='only newer files of mods this repository already has in '
+                                                           'the shop (packaging/shop_updates.py); the text may be empty')
     ap.add_argument('--report', help='write the report (Markdown) here')
-    ap.add_argument('--result', help='write the result (JSON) here: status, changed, titles')
+    ap.add_argument('--result', help='write the result (JSON) here: status, changed, titles, same_repo_update')
     a = ap.parse_args(argv)
     if a.issue_body:
         with open(a.issue_body, encoding='utf-8') as fh:
@@ -401,7 +486,7 @@ def main(argv=None):
     else:
         fields = {'repo': a.repo or '', 'tag': a.tag or '', 'summary': a.summary, 'on_unit': a.on_unit,
                   'license': a.license, 'files': a.files}
-    status, r = submit(fields, a.catalog, a.files_dir, a.cores_dir)
+    status, r = submit(fields, a.catalog, a.files_dir, a.cores_dir, a.update)
     text = report_md(status, r)
     if a.report:
         with open(a.report, 'w', encoding='utf-8') as fh:
@@ -409,7 +494,7 @@ def main(argv=None):
     if a.result:
         with open(a.result, 'w', encoding='utf-8') as fh:
             json.dump({'status': status, 'changed': r['changed'], 'repo': r['repo'], 'tag': r['tag'],
-                       'titles': r.get('titles', [])}, fh)
+                       'titles': r.get('titles', []), 'same_repo_update': r['same_repo_update']}, fh)
     sys.stdout.write(text)
     return status
 

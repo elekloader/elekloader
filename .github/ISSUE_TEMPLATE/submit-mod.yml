@@ -13,6 +13,8 @@ body:
         - comments here with what it found.
 
         If files pass, it opens a pull request that adds them to the shop, and a maintainer reviews and merges it. Edit this issue to fix anything, and the check runs again.
+
+        After that you only publish releases: a daily check finds your newer releases and updates your mods in the shop by itself. Lines `Shop summary: ...` and `Tested on a unit: ...` in a release's notes change your card's text.
   - type: input
     id: repo
     attributes:

@@ -4,8 +4,13 @@
 #      a mod whose core or required mods the site can't supply is refused;
 #    - it writes web/catalog.json when files pass.
 # 2. The result goes in a comment on the issue.
-# 3. When files pass, a pull request adds them to the shop, for a maintainer to review. Nothing reaches main without
-#    that review.
+# 3. When files pass, a pull request adds them to the shop, for a maintainer to review. One exception: when the
+#    repository's owner opened the issue and every change is a newer file of a mod that repository already has in
+#    the shop (no new mod, no clash, no core, no held entry), the unit tests run and the pull request merges itself,
+#    then pages redeploys. The repository variable SHOP_AUTO_MERGE set to false stops that.
+#
+# The workflow's token starts no other workflow, so it starts the tests workflow on a pull request left for review,
+# and pages after a merge.
 #
 # The issue's text is untrusted: it reaches the script as a file, never the shell, and the script only reads the
 # release's files (nothing in them runs). Editing the issue runs the check again and updates the same pull request.
@@ -21,6 +26,7 @@ permissions:
   contents: write
   pull-requests: write
   issues: write
+  actions: write            # to start the tests and pages workflows
 
 concurrency:
   group: mod-submission-${{ github.event.issue.number }}
@@ -92,16 +98,44 @@ jobs:
             url=$(gh pr create --base "$BASE" --head "$branch" --title "$title" --body-file "$RUNNER_TEMP/pr.md")
           fi
           echo "url=$url" >> "$GITHUB_OUTPUT"
+      - name: Merge an author's own update
+        id: merge
+        if: steps.pr.outputs.url != ''
+        env:
+          PR: ${{ steps.pr.outputs.url }}
+          OPENER: ${{ github.event.issue.user.login }}
+          AUTO_MERGE: ${{ vars.SHOP_AUTO_MERGE != 'false' }}
+        run: |
+          # the repository's owner, updating mods it already has in the shop (the check's same_repo_update)
+          own=$(python -c "import json, os, sys; r = json.load(open(os.environ['RUNNER_TEMP'] + '/result.json')); print('yes' if r['same_repo_update'] and r['repo'].split('/')[0].lower() == sys.argv[1].lower() else '')" "$OPENER")
+          if [ "$AUTO_MERGE" = true ] && [ -n "$own" ]; then
+            if python tests/test_units.py > "$RUNNER_TEMP/units.txt" 2>&1; then
+              gh pr merge "$PR" --squash --delete-branch
+              gh workflow run pages.yml --ref "$BASE"
+              echo "merged=yes" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            tail -n 40 "$RUNNER_TEMP/units.txt"
+            echo "failed=yes" >> "$GITHUB_OUTPUT"
+          fi
+          gh workflow run tests.yml --ref "mod-submission/$ISSUE"
       - name: The comment and labels
         if: always() && steps.check.outputs.status != ''
         env:
           STATUS: ${{ steps.check.outputs.status }}
           PR: ${{ steps.pr.outputs.url }}
+          MERGED: ${{ steps.merge.outputs.merged }}
+          FAILED: ${{ steps.merge.outputs.failed }}
         run: |
           gh label create mod-submission --color 1d76db --description "Submitted with the Submit a mod form" --force >/dev/null
           gh label create needs-changes --color e99695 --description "The check found something to fix" --force >/dev/null
           { cat "$RUNNER_TEMP/report.md"
-            if [ -n "$PR" ]; then printf '\nPull request: %s\n' "$PR"; fi; } > "$RUNNER_TEMP/comment.md"
+            if [ -n "$MERGED" ]; then
+              printf '\nMerged: %s. These update mods your repository already has in the shop, so they go in without a review; the site redeploys in a few minutes.\n' "$PR"
+            elif [ -n "$PR" ]; then
+              printf '\nPull request: %s\n' "$PR"
+              if [ -n "$FAILED" ]; then printf 'The unit tests failed on it, so it waits for a maintainer.\n'; fi
+            fi; } > "$RUNNER_TEMP/comment.md"
           gh issue comment "$ISSUE" --edit-last --body-file "$RUNNER_TEMP/comment.md" 2>/dev/null \
             || gh issue comment "$ISSUE" --body-file "$RUNNER_TEMP/comment.md"
           if [ "$STATUS" = 1 ]; then

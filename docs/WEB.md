@@ -201,14 +201,28 @@ When the issue is opened (or edited), `.github/workflows/mod-submission.yml` run
   `needs-changes` if nothing could be added. Editing the issue runs the check again.
 - **The pull request.** When files pass, it writes them into `web/catalog.json` (in the list's own
   layout, which `tests/test_units.py` keeps exact) and opens a pull request from branch
-  `mod-submission/<issue>`. The pull request closes the issue when a maintainer merges it, and the
-  next deploy puts the mods on the site. A pull request the workflow opens doesn't start the
-  tests workflow (GitHub's rule for its own token): close and reopen it to run them.
+  `mod-submission/<issue>`. The pull request closes the issue when it merges, and the next deploy
+  puts the mods on the site. The workflow starts the tests workflow on it (its own token's pushes
+  start none).
+- **An author's own update merges itself.** When the repository's owner opened the issue and every
+  change is a newer file of a mod that repository already has in the shop (no new mod, no clash,
+  no core, no held entry), the unit tests run and the pull request merges, and pages redeploys.
+  Everything else waits for a maintainer.
 
-Nothing reaches `main` without that review, and nothing in a submitted file runs. The issue's text
-reaches the script as a file, never the shell. The repository needs **Settings > Actions > General
-> Allow GitHub Actions to create and approve pull requests** (in an organisation, allowed in the
-organisation's settings first).
+An update keeps the card's text: the summary, and the hardware note, marked "As of <the old
+version>" so it doesn't claim a run of the new file. New text comes from the form, or from lines in
+the release's notes:
+
+```
+Shop summary: One sentence the card shows.
+Tested on a unit: What ran on hardware, and what not yet.
+```
+
+A file older than the one the shop lists is left out.
+
+Nothing in a submitted file runs. The issue's text reaches the script as a file, never the shell.
+The repository needs **Settings > Actions > General > Allow GitHub Actions to create and approve
+pull requests** (in an organisation, allowed in the organisation's settings first).
 
 The same check runs locally, on a copy of the list, with the shop's files and the latest release's
 cores downloaded as pages.yml does:
@@ -216,6 +230,40 @@ cores downloaded as pages.yml does:
 ```bash
 python packaging/submit_mod.py --repo owner/name --tag v1.0 --summary "One sentence." \
     --catalog /tmp/catalog.json --files-dir build/shop --cores-dir build/core
+```
+
+### Updates, by themselves
+
+Once a mod is in the shop, its author only publishes releases. Every day
+`.github/workflows/shop-updates.yml` runs `packaging/shop_updates.py`:
+
+- **It finds the newer releases.** For each repository the shop takes mods from by a release tag,
+  the releases GitHub published after the earliest one the shop takes (no drafts, and none whose
+  `.elemod` files are all cores).
+- **It checks them, oldest first,** with the submission's check in its update mode: only newer
+  files of mods the repository already has in the shop go in, for any OS of the same mod (a new OS
+  version's file joins its card). It leaves out new mods (they come through the form), clashes,
+  cores, older files, held entries, and a pre-release over a file that came from a release.
+- **It opens a pull request** from branch `shop-update/<owner>-<name>`, or refreshes the one open,
+  and closes one that main has caught up with. When every change is such an update, the unit tests
+  run and it merges, and pages redeploys; otherwise it waits for a maintainer, with the tests
+  workflow started on it.
+
+Two switches, for maintainers:
+
+- **`"hold"`** on an entry in `web/catalog.json` (true, or a reason) keeps that mod's file where it
+  is: the daily check leaves it, and an update through the form waits for a review (and stays
+  held). For a mod others build on, such as machine-pages, when a new version needs a look first.
+- **The repository variable `SHOP_AUTO_MERGE`** set to `false` (Settings > Secrets and variables >
+  Actions > Variables) stops both workflows merging; their pull requests still open.
+
+Run it by hand from Actions > Shop updates > Run workflow (one repository, if you name it), or
+locally on a copy of the list:
+
+```bash
+python packaging/shop_updates.py --list --catalog /tmp/catalog.json
+python packaging/shop_updates.py --apply owner/name --catalog /tmp/catalog.json \
+    --files-dir build/shop --cores-dir build/core
 ```
 
 ## What stays private, and how
