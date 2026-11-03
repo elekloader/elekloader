@@ -32,7 +32,9 @@
  *     code above 41, sets a mod lock;
  *   - the sound parameter set's lock calls (vtable +60 get, +64 set, +68
  *     clear, +72 turn) take a mod parameter's knob (its page id, lock.c)
- *     with a trig held;
+ *     with a trig held; from 0.9 the FX set's too (vtable 0x401dcea0), for a
+ *     kit parameter's knob on the FX track (track 12): stock's FX calls find
+ *     the step as the sound's do, on the current track;
  *   - live recording: a mod parameter's knob turned and its NRPN or CC
  *     received (pages.s, midi.c) lock the value on the step the track
  *     plays, as stock's live record (0x400af762) locks its own;
@@ -72,7 +74,10 @@
 #define STOCK_LOCK_GET ((int (*)(void *, int, int))0x400a98b4)
 #define STOCK_LOCK_SET ((int (*)(void *, int, int, int))0x400a9926)
 #define STOCK_LOCK_CLEAR ((int (*)(void *, int, int))0x400a99c2)
-#define STOCK_LOCK_TURN ((int (*)(void *, int, int, int))0x400a8560)
+#define STOCK_LOCK_TURN ((int (*)(void *, int, int, int))0x400a8560)   /* the FX set's too */
+#define FX_LOCK_GET ((int (*)(void *, int, int))0x400a9a26)           /* the FX set's (0.9) */
+#define FX_LOCK_SET ((int (*)(void *, int, int, int))0x400a9a98)
+#define FX_LOCK_CLEAR ((int (*)(void *, int, int))0x400a9b0e)
 #define REC_STATE ((unsigned (*)(void))0x401816f4)
 #define LIVE_RECORDING ((unsigned char (*)(unsigned))0x40036370)
 #define SEQUENCER ((unsigned (*)(void))0x40181790)
@@ -121,8 +126,7 @@ struct ledger {
 struct core_lock_param;
 const struct core_lock_param *core_lock_by_id(int id, unsigned *code);
 const struct core_lock_param *core_lock_by_code(unsigned code);
-unsigned char *core_lock_sound(void *set);
-int core_lock_stock_takes(int id, const unsigned char *s);
+const struct core_lock_param *core_lock_set_param(void *set, int id, unsigned *code, unsigned char **item);
 int core_lock_code(unsigned field);
 unsigned core_lock_field(const struct core_lock_param *p);
 int core_lock_min(const struct core_lock_param *p);
@@ -683,6 +687,22 @@ void core_rows_trig(int track, unsigned step)
     now_n[track] = n;
 }
 
+/* a new or loaded project (st_proj_init, st_proj_load): no trig has played
+ * in it yet, so no track has a playing trig's locks; stock drops its own
+ * held locks at CREATE NEW too (it keeps them through STOP and a pattern or
+ * kit change, until the track's next trig, and so does core) */
+void core_rows_now_reset(void)
+{
+    unsigned short sr = irq_mask();
+    int t, i;
+    for (t = 0; t < 13; t++) {
+        for (i = 0; i < CODES; i++)
+            core_lock_now[t][i] = 0;
+        now_n[t] = 0;
+    }
+    irq_restore(sr);
+}
+
 int core_lock_value(int track, unsigned field)
 {
     int code = core_lock_code(field), v;
@@ -757,14 +777,11 @@ static int put(unsigned addr, int code, int v)
     return 1;
 }
 
-/* the knob's mod parameter, or 0 for stock's */
-static const struct core_lock_param *ours(void *set, int id, unsigned *code)
+/* the knob's mod parameter, or 0 for stock's; *s its item (the sound, or
+ * the FX set's kit) */
+static const struct core_lock_param *ours(void *set, int id, unsigned *code, unsigned char **s)
 {
-    const struct core_lock_param *p = core_lock_by_id(id, code);
-    unsigned char *s;
-    if (!p || !(s = core_lock_sound(set)) || core_lock_stock_takes(id, s))
-        return 0;
-    return p;
+    return core_lock_set_param(set, id, code, s);
 }
 
 static int clamp(const struct core_lock_param *p, int v)
@@ -773,54 +790,69 @@ static int clamp(const struct core_lock_param *p, int v)
     return v < lo ? lo : v > hi ? hi : v;
 }
 
-/* sound set vtable +60: (set, id, step) -> the lock (8.8) or -1 */
-int core_lock_get_vt(void *set, int id, int step)
+/* sound set vtable +60: (set, id, step) -> the lock (8.8) or -1; the FX
+ * set's the same (0.9), with stock's FX call for a knob not core's */
+static int lock_get(void *set, int id, int step, int (*stock)(void *, int, int))
 {
     unsigned code, a;
-    if (!ours(set, id, &code))
-        return STOCK_LOCK_GET(set, id, step);
+    unsigned char *s;
+    if (!ours(set, id, &code, &s))
+        return stock(set, id, step);
     if (!(a = where(step)))
         return -1;
     step = get(a, code);
     return step < 0 ? -1 : step << 8;
 }
 
+int core_lock_get_vt(void *set, int id, int step) { return lock_get(set, id, step, STOCK_LOCK_GET); }
+int core_fx_lock_get_vt(void *set, int id, int step) { return lock_get(set, id, step, FX_LOCK_GET); }
+
 /* +64: (set, id, value 8.8, step) */
-int core_lock_set_vt(void *set, int id, int value, int step)
+static int lock_set(void *set, int id, int value, int step, int (*stock)(void *, int, int, int))
 {
     const struct core_lock_param *p;
     unsigned code, a;
-    if (!(p = ours(set, id, &code)))
-        return STOCK_LOCK_SET(set, id, value, step);
+    unsigned char *s;
+    if (!(p = ours(set, id, &code, &s)))
+        return stock(set, id, value, step);
     if (!(a = where(step)))
         return 0;
     return put(a, code, clamp(p, value >> 8));
 }
 
+int core_lock_set_vt(void *set, int id, int value, int step) { return lock_set(set, id, value, step, STOCK_LOCK_SET); }
+int core_fx_lock_set_vt(void *set, int id, int value, int step) { return lock_set(set, id, value, step, FX_LOCK_SET); }
+
 /* +68: (set, id, step) */
-int core_lock_clear_vt(void *set, int id, int step)
+static int lock_clear(void *set, int id, int step, int (*stock)(void *, int, int))
 {
     unsigned code, a;
-    if (!ours(set, id, &code))
-        return STOCK_LOCK_CLEAR(set, id, step);
+    unsigned char *s;
+    if (!ours(set, id, &code, &s))
+        return stock(set, id, step);
     if (!(a = where(step)))
         return 0;
     return put(a, code, -1);
 }
 
+int core_lock_clear_vt(void *set, int id, int step) { return lock_clear(set, id, step, STOCK_LOCK_CLEAR); }
+int core_fx_lock_clear_vt(void *set, int id, int step) { return lock_clear(set, id, step, FX_LOCK_CLEAR); }
+
 /* +72: (set, id, delta 8.8, step) -> the new lock (8.8): a whole step at
- * least, from the lock or, on the first turn, the sound's value */
+ * least, from the lock or, on the first turn, the item's value. Stock's
+ * sound and FX sets share the routine, so one site each takes this. */
 int core_lock_turn_vt(void *set, int id, int delta, int step)
 {
     const struct core_lock_param *p;
     unsigned code, a;
+    unsigned char *s;
     int v;
-    if (!(p = ours(set, id, &code)))
+    if (!(p = ours(set, id, &code, &s)))
         return STOCK_LOCK_TURN(set, id, delta, step);
     if (!(a = where(step)))
         return -1;
     if ((v = get(a, code)) < 0)
-        v = core_store_get(core_lock_field(p), core_lock_sound(set), 0);
+        v = core_store_get(core_lock_field(p), s, 0);
     v = clamp(p, v + (delta > 0 ? (delta + 255) >> 8 : delta < 0 ? -((255 - delta) >> 8) : 0));
     put(a, code, v);
     return v << 8;

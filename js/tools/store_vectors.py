@@ -126,6 +126,11 @@ LOCKS = {
                                                            {'mod': 'a', 'sym': 'y', 'cc': 8}]),
     'cc for no code': dict(store.fresh(DEV), ccs=[{'mod': 'a', 'sym': 'x', 'cc': 8}], freed_ccs=[]),
     'freed cc kept': dict(store.fresh(DEV), ccs=[], freed_ccs=[{'mod': 'a', 'sym': 'x', 'cc': 9}]),
+    # a kit field (the FX track's) with a CC stock uses on the FX channel
+    'kit cc taken': dict(store.fresh(DEV), fields=[{'mod': 'a', 'sym': 'x', 'scope': 'kit', 'offset': 0, 'bits': 4}],
+                         codes=[{'mod': 'a', 'sym': 'x', 'code': 42}], freed_codes=[], next_code=43,
+                         ccs=[{'mod': 'a', 'sym': 'x', 'cc': 84}], freed_ccs=[],
+                         next=dict(store.fresh(DEV)['next'], kit=4)),
     # an older lockfile, with an ID not from a hash: kept while nothing changes
     'random id': dict(store.fresh(DEV), id='0x5a17c0de', ancestors=['0x00000007']),
 }
@@ -139,7 +144,9 @@ DECLS = {
     'bits': {'storage': [{'sym': 'a', 'scope': 'kit', 'bits': 33}]},
     'bits bool': {'storage': [{'sym': 'a', 'scope': 'kit', 'bits': True}]},
     'lock': {'storage': [{'sym': 'a', 'scope': 'sound', 'bits': 3, 'lock': True}]},
-    'lock kit': {'storage': [{'sym': 'a', 'scope': 'kit', 'bits': 3, 'lock': True}]},
+    'lock kit': {'storage': [{'sym': 'a', 'scope': 'kit', 'bits': 3, 'lock': True, 'cc': True, 'lfo': True}]},
+    'lock global': {'storage': [{'sym': 'a', 'scope': 'global', 'bits': 3, 'lock': True}]},
+    'mod kit': {'storage': [{'sym': 'a', 'scope': 'kit', 'bits': 3, 'lock': True, 'mod': True}]},
     'lock type': {'storage': [{'sym': 'a', 'scope': 'sound', 'bits': 3, 'lock': 1}]},
     'cc': {'storage': [{'sym': 'a', 'scope': 'sound', 'bits': 3, 'lock': True, 'cc': True},
                        {'sym': 'b', 'scope': 'sound', 'bits': 3, 'lock': True, 'cc': False}]},
@@ -149,6 +156,16 @@ DECLS = {
                         {'sym': 'b', 'scope': 'sound', 'bits': 3, 'lock': True, 'lfo': False}]},
     'lfo without lock': {'storage': [{'sym': 'a', 'scope': 'sound', 'bits': 3, 'lfo': True}]},
     'lfo type': {'storage': [{'sym': 'a', 'scope': 'sound', 'bits': 3, 'lock': True, 'lfo': 1}]},
+    'smooth': {'storage': [{'sym': 'a', 'scope': 'sound', 'bits': 3, 'lock': True, 'smooth': False},
+                           {'sym': 'b', 'scope': 'sound', 'bits': 3, 'lock': True, 'smooth': True},
+                           {'sym': 'c', 'scope': 'sound', 'bits': 3, 'lock': True}]},
+    'mod': {'storage': [{'sym': 'a', 'scope': 'sound', 'bits': 3, 'lock': True, 'mod': True},
+                        {'sym': 'b', 'scope': 'sound', 'bits': 3, 'lock': True, 'mod': False},
+                        {'sym': 'c', 'scope': 'sound', 'bits': 3, 'lock': True, 'lfo': True, 'mod': True}]},
+    'mod without lock': {'storage': [{'sym': 'a', 'scope': 'sound', 'bits': 3, 'mod': True}]},
+    'mod type': {'storage': [{'sym': 'a', 'scope': 'sound', 'bits': 3, 'lock': True, 'mod': 1}]},
+    'smooth without lock': {'storage': [{'sym': 'a', 'scope': 'sound', 'bits': 3, 'smooth': False}]},
+    'smooth type': {'storage': [{'sym': 'a', 'scope': 'sound', 'bits': 3, 'lock': True, 'smooth': 0}]},
     'twice': {'storage': [{'sym': 'a', 'scope': 'kit', 'bits': 1}, {'sym': 'a', 'scope': 'kit', 'bits': 2}]},
 }
 
@@ -198,6 +215,10 @@ def main():
                                              [tuple(k) for k in ccs])
                 res.append({'lock': lock, 'notes': notes, 'codes': [t.hex() for t in store.code_entries(lock)],
                             'lfo_codes': [t.hex() for t in store.code_entries(lock, [tuple(k) for k in ccs])],
+                            'rough_codes': [t.hex() for t in store.code_entries(lock, [tuple(k) for k in ccs][:1],
+                                                                                [tuple(k) for k in ccs][1:])],
+                            'route_codes': [t.hex() for t in store.code_entries(lock, (), [tuple(k) for k in ccs][1:],
+                                                                                [tuple(k) for k in ccs][:2])],
                             'ccs': [t.hex() for t in store.cc_entries(lock)],
                             'json': store.dumps(lock), 'layout_id': store.layout_id(lock)})
             except ModError as e:
@@ -212,7 +233,8 @@ def main():
     for name, doc in DECLS.items():
         try:
             out['decls'][name] = {'doc': doc, 'ok': store.parse_decls(doc), 'locks': store.parse_locks(doc),
-                                  'ccs': store.parse_ccs(doc), 'lfos': store.parse_lfos(doc)}
+                                  'ccs': store.parse_ccs(doc), 'lfos': store.parse_lfos(doc),
+                                  'rough': store.parse_rough(doc), 'routes': store.parse_routes(doc)}
         except ModError as e:
             out['decls'][name] = {'doc': doc, 'error': str(e)}
     path = os.path.join(ROOT, 'js', 'test', 'store-vectors.json')

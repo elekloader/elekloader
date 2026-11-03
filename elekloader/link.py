@@ -170,6 +170,8 @@ class Mod2:
             self.locks = store.parse_locks(doc)
             self.ccs = store.parse_ccs(doc)
             self.lfos = store.parse_lfos(doc)
+            self.rough = store.parse_rough(doc)
+            self.routes = store.parse_routes(doc)
         except ModError as e:
             raise ModError('%s: %s' % (name, e))
         self.copied = [(_int(c['lo'], name), _int(c['hi'], name), _int(c['to'], name))
@@ -447,7 +449,7 @@ def check(mods, image):
                            % (m.label(), sym))
             fields[sym] = m
     if store.IDS_TABLE in tables:
-        fields.update({x: None for x in store.GEN_SYMS + (store.LOCK_DST,)})
+        fields.update({x: None for x in store.GEN_SYMS + (store.LOCK_DST, store.FX_LOCK_DST)})
     for m in mods:
         for x in m.imports:
             if x in owner or x in tables or x in LINKER_SYMS or x in sized or x in m.weak \
@@ -685,9 +687,18 @@ def link(mods, image, lock=None, *, sharc_stream=None):
                            % (', '.join(sorted({k[0] for k in locks})), 's' if len({k[0] for k in locks}) == 1
                               else '', core.label(), store.CODES_TABLE))
         lfos = [(m.id, sym) for m in order for sym in m.lfos]
-        if lfos and store.LOCK_DST in core.imports and store.lock_dst_bits(dev.key):
-            # the core keeps a code as an LFO destination
-            decls.append((core.id, store.LOCK_DST, 'sound', store.lock_dst_bits(dev.key)))
+        rough = [(m.id, sym) for m in order for sym in m.rough]
+        routes = [(m.id, sym) for m in order for sym in m.routes]
+        scope_of = {(d[0], d[1]): d[2] for d in decls}
+        fx = sorted({k[0] for k in locks if scope_of.get(k) == 'kit'})
+        if fx and store.FX_LOCK_DST not in core.imports:
+            raise ModError('%s declare%s lockable kit fields (the FX track\'s), which %s does not keep'
+                           % (', '.join(fx), 's' if len(fx) == 1 else '', core.label()))
+        for dst, scope, bits in ((store.LOCK_DST, 'sound', store.lock_dst_bits(dev.key)),
+                                 (store.FX_LOCK_DST, 'kit', store.fx_lock_dst_bits(dev.key))):
+            if any(scope_of.get(k) == scope for k in lfos) and dst in core.imports and bits:
+                # the core keeps a code as an LFO destination: the sound's LFO, the FX LFO
+                decls.append((core.id, dst, scope, bits))
         ccs = [(m.id, sym) for m in order for sym in m.ccs]
         if ccs and store.CCS_TABLE not in tables:
             raise ModError('%s give%s lockable parameters CCs, which %s does not keep (no table %s)'
@@ -696,7 +707,8 @@ def link(mods, image, lock=None, *, sharc_stream=None):
         new_lock, store_notes = store.allocate(lock, decls, dev.key, core.version, locks, ccs)
         store_syms, ids = store.symbols(new_lock, dev.key)
         store_syms.setdefault(store.LOCK_DST, 0)    # not placed: no LFO field
-        for table, made in ((store.CODES_TABLE, lambda l: store.code_entries(l, lfos)),
+        store_syms.setdefault(store.FX_LOCK_DST, 0)
+        for table, made in ((store.CODES_TABLE, lambda l: store.code_entries(l, lfos, rough, routes)),
                             (store.CCS_TABLE, store.cc_entries)):
             if table in tables:
                 for i, data in enumerate(made(new_lock)):

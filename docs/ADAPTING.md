@@ -1700,7 +1700,8 @@ codes, below.)
 
 A sound-scope storage field declared with `"lock": true` gets a **lock
 code**, 42..127, from the build's lockfile, the number core knows the
-parameter by. Only sound fields can be lockable. Codes follow their fields
+parameter by. Only sound fields can be lockable, and from core-ar2 0.9 kit
+fields, which are the FX track's ("The FX track's parameters", below). Codes follow their fields
 as bits do: a field keeps its code while it keeps its place; a field that
 leaves the build keeps its code reserved and gets it back when it returns
 to its old place; a resized field gets a new code. Once the never-used
@@ -1764,7 +1765,26 @@ What core does with it:
   mod scales it to its range and adds it where it uses the value. It is
   updated in the audio interrupt, before `ev_render_out`. RANDOMIZE on DST,
   its step and its validity check follow the list. The velocity and
-  aftertouch modulation lists don't list them.
+  aftertouch lists list only the `"mod"` ones (next).
+- **Velocity and aftertouch destination** (core-ar2 0.9). A lockable field
+  declared with `"mod": true` as well (a `"mod"` field must be lockable)
+  is listed after stock's in each sound's VELOCITY MOD and AFTERTOUCH
+  lists, named there as in the DST menu, and a route to it shows its
+  category and short name on its knob; one flag covers both, as stock
+  builds both lists with one routine. A route to it keeps the field's code
+  in the route's own byte, which the sound's save and load already pass, so
+  it takes no room; every route of a sound can take one. Stock's apply
+  would read a code above 41 as another track's parameter, so core gives
+  such a route stock's empty entry and keeps it, and
+  `core_mod_offset(track, field)` gives the mod what stock would have added:
+  each route's amount times the trig's velocity or the pressure, summed, in
+  8.8 steps of a stock 0..127 knob, 0 when no route is to it; the mod scales
+  it and adds it, as the LFO's. A sound loaded with a route to a code the
+  build has no `"mod"` parameter for (or from another layout) gets that
+  route back as stock's unused one (code 0, amount 0). Stock 1.74, or a
+  build of another layout, reads such a sound's mod route as a route to a
+  stock parameter with its amount: a sound with mod routes is for this
+  build.
 - **RANDOMIZE PAGE** gives a knob whose id is a parameter's `id` a value in
   `min..max`, written with `core_store_set` into the knob's sound.
 - **RELOAD PAGE** takes it back from the same sound in the current kit's
@@ -1808,7 +1828,9 @@ int depth = v >= 0 ? v : core_store_get(STORE(my_depth), sound, 0);
 
 `core_lock_value(track, field)` is the lock of the trig last played on the
 track (0..12), set with the trig's other locks before it sounds, or -1 when
-that trig has none. A set or a turn moves in whole steps from the sound's
+that trig has none. It stays through STOP and a pattern or kit change until
+the track's next trig, as stock's own locks do, and a project load or CREATE
+NEW clears it (-1) on every track. A set or a turn moves in whole steps from the sound's
 value, clamped to the parameter's `min..max`. A lock above 127 takes two of
 the pattern's rows for its track.
 
@@ -1854,10 +1876,92 @@ what the performances add now, in 8.8 steps of the parameter: each depth
 times its pad's pressure, as stock adds a performance's to a stock
 parameter. Which of the trig's lock and the
 scene's wins is the mod's choice; the order above is one.
+`core_param_value` (below) takes stock's order and its smoothing in one
+call.
 
 A kit's SysEx dump leaves the mod entries out, and a kit of a layout the
 build doesn't read loads without them: lock codes are a build's own.
+Stock 1.74 loads a mod entry as a lock on the track's first parameter
+(slot 0): a kit with mod scene or performance locks is for this build.
 Checked in the emulator only.
+
+### The smoothed value (core-ar2 0.9, Analog Rytm MKII)
+
+A mod that uses a lockable parameter in the audio interrupt reads the
+value stock would play for it with one call:
+
+```c
+#include "analog-rytm-mk2/lock.h"
+
+int v = core_param_value(track, STORE(my_freq));   /* 8.8 steps, min..max */
+int i = v >> 8, frac = v & 0xff;                     /* a table, interpolated */
+```
+
+`core_param_value(track, field)` takes the parameter's target, the
+sound's value in the kit the audio side plays, with the playing trig's
+p-lock in its place and the active scene's lock in place of that; smooths
+it with stock's own one-pole (90% of a step in 50 ms, 99% in 100 ms, as
+stock's knobs move); then adds the performances, the velocity and
+aftertouch routes (`core_mod_offset`) and the LFO, unsmoothed,
+as stock adds them to its own parameters, and clamps the sum to
+`min..max`. The result is in 8.8 steps of the field (one step is 256), so
+a mod that interpolates keeps the fraction; `core_param_int` rounds it to
+whole steps. The LFO's offset is scaled from a 0..127 knob's steps to the
+parameter's range (`max - min` steps for the LFO's full depth);
+`core_param_value_ex(track, field, CORE_PARAM_LFO_RAW)` adds it as it is,
+a stock knob's swing in the parameter's own steps. The routes' offset is
+scaled the same way, or added as it is with `CORE_PARAM_MOD_RAW` (the two
+flags combine). A sound field on track 12, a kit field on 0..11 and a
+field with no lock code give `CORE_PARAM_NONE`.
+
+A field whose value must not glide, a type or a mode, is declared
+`"smooth": false` (only a lockable field takes it): its value jumps to the
+target, with the performances and the LFO still added.
+
+The smoothing is computed when the mod asks, from the blocks since its
+last call (`core_block`, `analog-rytm-mk2/load.h`), so a parameter no mod
+reads costs nothing, and a mod that reads its parameter every block sees
+stock's ramp block by block. Read it from the audio side only
+(`ev_render_in`, `ev_render_out`, a machine's render): each call steps the
+smoother. A read costs about 0.5% of a block. Core keeps a smoother for 32
+lockable parameters a track; a build with more gives the rest their
+target unsmoothed.
+
+### The FX track's parameters (core-ar2 0.9, Analog Rytm MKII)
+
+A kit-scope storage field declared `"lock": true` is a parameter of the FX
+track (track 12), as a lockable sound field is a drum track's. It takes
+everything above with track 12, and the kit as its item:
+
+```c
+#include "analog-rytm-mk2/lock.h"
+
+STORE_FIELD(my_mix);                     /* "scope": "kit", "lock": true, "lfo": true, "cc": true */
+const struct core_lock_param my_mix_param =
+    {STORE(my_mix), 3, 0, 127, "MIX", "My Mix", CORE_LOCK_CATEGORY("MINE")};
+
+int v = core_param_value(12, STORE(my_mix));   /* the FX track's value, 8.8 */
+```
+
+- Its page goes on an FX view (`CORE_VIEW_DELAY` ... `CORE_VIEW_FX_LFO`,
+  `analog-rytm-mk2/pages.h`), and the knob's `get` and `delta` read and
+  write the field in the current kit. Borrow an id no FX slot takes (1..7,
+  as on a sound's page): the FX setter takes any id whose slot is 0..41.
+- With `"lfo"`, the FX LFO's DST menu lists it after stock's, and
+  `core_lfo_offset(12, field)` gives the FX LFO's offset. Core keeps the
+  code in a 7-bit kit field of its own, `core_fx_lfo_dst`, placed in a
+  build with a kit `"lfo"` field; the saved kit holds stock's None there,
+  as for a sound's LFO.
+- A p-lock with a trig held on the FX track, a scene lock and a
+  performance depth on the FX track, read with `core_lock_value(12, ...)`,
+  `core_scene_value(12, ...)` and `core_perf_offset(12, ...)`.
+- MIDI on the FX track's channel: NRPN 4 / code - 42, and with `"cc"` a CC
+  from the pool, never 84 or 85, which stock uses on the FX channel.
+- `"smooth"` as on a sound field; `"mod"` is refused, as the FX track has
+  no velocity or aftertouch routes.
+
+A build whose core does not keep FX parameters (no `core_fx_lfo_dst`) refuses
+lockable kit fields. [lock-check](../examples/lock-check-ar2) has one, K.
 
 ### Mod parameters on MIDI (core-ar2 0.8, Analog Rytm MKII)
 

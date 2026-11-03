@@ -19,4 +19,8 @@
 
 extern volatile uint32_t core_audio_load;
 
+/* core-ar2 0.9: the audio blocks rendered since boot, from 1 at the first
+ * (core's ev_render_in counts them, before any mod's) */
+extern volatile uint32_t core_block;
+
 #endif

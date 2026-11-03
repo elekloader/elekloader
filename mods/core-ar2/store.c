@@ -450,6 +450,7 @@ extern char core_lfo_dst[];
 #define DST_NONE 41
 struct core_lock_param;
 const struct core_lock_param *core_lock_lfo(unsigned code);
+void core_routes_load(unsigned char *live, int ok);      /* routes.c, 0.9 */
 unsigned core_store_get(unsigned field, void *item, int index);
 void core_store_set(unsigned field, void *item, int index, unsigned value);
 
@@ -484,6 +485,7 @@ int st_sound_load(unsigned char *live, unsigned char *src)
         for (j = 0; j < SOUND_BYTES; j++)
             live[SOUND_HOME + sound_at(j)] =
                 ok ? src[j < 3 ? SOUND_SPARE + j : SOUND_SPARE2 + j - 3] : 0;
+        core_routes_load(live, ok);
         if (core_lfo_dst) {
             if (live[LIVE_DST] >= 42 && live[LIVE_DST] <= 127)
                 live[LIVE_DST] = 0;
@@ -494,9 +496,161 @@ int st_sound_load(unsigned char *live, unsigned char *src)
     return r;
 }
 
+/* 0x400bd412: stock's write of a sound edit into the stored sound (the
+ * sound parameters' object, the stored sound, the edit). It saves the DST
+ * byte through 0x40007602 too, which passes a drum track's code (for its
+ * scene and performance entries), so a code would reach the stored sound,
+ * where stock's load reads it through its unbounded table (0.8 left it
+ * there). The object's words are the edit's own copy, not the live sound,
+ * so after it core reads the code from the stored byte (stock's numbers are
+ * 0..41), puts DST_NONE there, and keeps the code in core_lfo_dst of the
+ * live sound the stored one is kept from (0.9). */
+extern int st_sound_through_body(void *obj, unsigned char *dst, void *edit);
+
+/* the live sound a stored sound is kept from (write_through's inverse), or 0 */
+static unsigned char *live_of_stored(const unsigned char *dst)
+{
+    unsigned o, k, n, t;
+    o = dst - (S + POOL_AT);
+    if (dst >= S + POOL_AT && o % SOUND_STORED == 0 && o / SOUND_STORED < 128)
+        return LIVE_POOL + LIVE_SOUND_SIZE * (o / SOUND_STORED);
+    o = dst - (S + WORKING_KIT + STORED_KIT_SOUNDS);
+    k = rd32(S + WORKING_KIT_INDEX);
+    if (dst >= S + WORKING_KIT + STORED_KIT_SOUNDS && o % SOUND_STORED == 0 &&
+        (t = o / SOUND_STORED) < 12)
+        return k < 128 ? LIVE_KITS + LIVE_KIT_SIZE * k + LIVE_KIT_SOUNDS + LIVE_SOUND_SIZE * t : 0;
+    if (dst < S + KITS_AT + STORED_KIT_SOUNDS)
+        return 0;
+    o = dst - (S + KITS_AT + STORED_KIT_SOUNDS);
+    n = o / KIT_STORED;
+    o %= KIT_STORED;
+    if (n >= 128 || o % SOUND_STORED || (t = o / SOUND_STORED) >= 12)
+        return 0;
+    return LIVE_KITS + LIVE_KITS_SAVED + LIVE_KIT_SIZE * n + LIVE_KIT_SOUNDS + LIVE_SOUND_SIZE * t;
+}
+
+int st_sound_through(void *obj, unsigned char *dst, void *edit)
+{
+    int r = st_sound_through_body(obj, dst, edit);
+    unsigned f = (unsigned)core_lfo_dst, c, v;
+    unsigned char *live;
+    if (!f || !dst)
+        return r;
+    c = dst[STORED_DST];
+    if (c < 42 || c > 127) {
+        /* a stock destination: the live sound's code goes */
+        if ((live = live_of_stored(dst)) != 0 && core_store_get(f, live, 0) &&
+            !(live[LIVE_DST] >= 42 && live[LIVE_DST] <= 127))
+            core_store_set(f, live, 0, 0);
+        return r;
+    }
+    dst[STORED_DST] = DST_NONE;
+    v = core_lock_lfo(c) ? c - 41 : 0;
+    if ((live = live_of_stored(dst)) != 0 && core_store_get(f, live, 0) != v)
+        core_store_set(f, live, 0, v);
+    return r;
+}
+
+/* a parameter object's words (vtable +40; stock returns them in %d0, where
+ * gcc would read a pointer from %a0) */
+static unsigned char *words_of(void *obj)
+{
+    return (unsigned char *)((unsigned (*)(void *))(*(void ***)obj)[10])(obj);
+}
+
+/* The FX LFO's destination (0.9): the FX LFO's DST is the high byte of the
+ * live kit's FX code-4 word (+0x752), a FX slot, and stock saves and loads
+ * it through two 38-entry tables with no bound (0x401c5b4c, 0x401c5be4), so a
+ * code would read past them. As for a sound's LFO, core keeps a kit
+ * parameter's code, less 41, in its kit field core_fx_lfo_dst (placed in a
+ * build with a kit-scope "lfo" field), and stock saves stock's None (slot 0)
+ * in its place: the live byte is None while stock's save runs, and the code
+ * again after. On load, a slot of 42..127 (none stock's) becomes None, and
+ * core_fx_lfo_dst gives the code back. Stock writes a FX edit straight into
+ * the stored kit's FX words (0x400a545c, a jsr of the FX words' save
+ * 0x40007f58 with the live FX block), not through the kit's save, so core
+ * takes that call too (core_fx_words_save). */
+extern char core_fx_lfo_dst[];
+#define LIVE_FX_DST 0x752
+#define LIVE_FX 0x74a
+#define FX_DST_NONE 0
+#define FX_WORDS_SAVE ((int (*)(unsigned char *, unsigned char *, int))0x40007f58)
+const struct core_lock_param *core_lock_fx_lfo(unsigned code);
+
+/* before a save of the live kit's FX words: the FX LFO's code into
+ * core_fx_lfo_dst and None into the byte; the code, or 0 when there is
+ * nothing to put back */
+static unsigned fx_dst_out(unsigned char *live)
+{
+    unsigned f = (unsigned)core_fx_lfo_dst, c = live ? live[LIVE_FX_DST] : 0;
+    int mine = f && c >= 42 && c <= 127 && core_lock_fx_lfo(c);
+    if (f && live)
+        core_store_set(f, live, 0, mine ? c - 41 : 0);
+    if (!mine)
+        return 0;
+    live[LIVE_FX_DST] = FX_DST_NONE;
+    return c;
+}
+
+static void fx_dst_back(unsigned char *live, unsigned c)
+{
+    if (c)
+        live[LIVE_FX_DST] = c;
+}
+
+static int live_kit(const unsigned char *k)
+{
+    unsigned o = k - LIVE_KITS;
+    return k >= LIVE_KITS && o % LIVE_KIT_SIZE == 0 && o / LIVE_KIT_SIZE < 128;
+}
+
+/* 0x400a545c: a FX edit's write into the stored kit (stored FX words, live
+ * FX block, a) */
+int core_fx_words_save(unsigned char *dst, unsigned char *fx, int a)
+{
+    unsigned char *live = fx && live_kit(fx - LIVE_FX) ? fx - LIVE_FX : 0;
+    unsigned c = fx_dst_out(live);
+    int r = FX_WORDS_SAVE(dst, fx, a);
+    fx_dst_back(live, c);
+    return r;
+}
+
+/* 0x400a5692: stock's write of a FX edit into the stored kit (the FX
+ * parameters' object, the stored kit's FX words, the edit), the FX track's
+ * counterpart of a sound's: it saves the DST byte through 0x40007602, which
+ * passes a code (core_code_id, for the FX track's scene and performance
+ * entries), so after it a code in the live byte becomes the stored None
+ * (stock's number 37, slot 0's) and goes into core_fx_lfo_dst, which
+ * core_store_set writes through; a stock slot clears core_fx_lfo_dst */
+#define STORED_FX_DST 0x44
+#define STORED_FX_NONE 37
+extern int st_fx_through_body(void *obj, unsigned char *dst, void *edit);
+
+int st_fx_through(void *obj, unsigned char *dst, void *edit)
+{
+    int r = st_fx_through_body(obj, dst, edit);
+    unsigned f = (unsigned)core_fx_lfo_dst, c, v;
+    unsigned char *fx, *live;
+    if (!f || !obj || !dst)
+        return r;
+    fx = words_of(obj);
+    live = fx && live_kit(fx - LIVE_FX) ? fx - LIVE_FX : 0;
+    if (!live)
+        return r;
+    c = live[LIVE_FX_DST];
+    v = c >= 42 && c <= 127 && core_lock_fx_lfo(c) ? c - 41 : 0;
+    if (v)
+        dst[STORED_FX_DST] = STORED_FX_NONE;
+    if (core_store_get(f, live, 0) != v)
+        core_store_set(f, live, 0, v);
+    return r;
+}
+
 int st_kit_save(unsigned char *dst, unsigned char *live, int a)
 {
+    unsigned c = fx_dst_out(live);
     int r = st_kit_save_body(dst, live, a), j;
+    fx_dst_back(live, c);
     if (dst && live) {
         for (j = 0; j < 8; j++)
             dst[KIT_SPARE + j] = live[KIT_HOME + j];
@@ -516,6 +670,12 @@ int st_kit_load(unsigned char *live, unsigned char *src)
                  src[KIT_SPARE + 12] == gen(SC_KIT);
         for (j = 0; j < 8; j++)
             live[KIT_HOME + j] = ok ? src[KIT_SPARE + j] : 0;
+        if (core_fx_lfo_dst) {
+            if (live[LIVE_FX_DST] >= 42 && live[LIVE_FX_DST] <= 127)
+                live[LIVE_FX_DST] = FX_DST_NONE;
+            if ((j = core_store_get((unsigned)core_fx_lfo_dst, live, 0)) && core_lock_fx_lfo(j + 41))
+                live[LIVE_FX_DST] = j + 41;
+        }
         /* its scenes' and performances' mod entries are its layout's codes
          * (scenes.c, 0.8) */
         if (!ok)
@@ -608,10 +768,14 @@ void st_vel_defaults(unsigned char *routes)
     irq_restore(sr);
 }
 
-/* CREATE NEW and the project reset: a fresh store, and no global data */
+void core_rows_now_reset(void);
+
+/* CREATE NEW and the project reset: a fresh store, no global data, and no
+ * playing trig's mod locks (rows.c) */
 int st_proj_init(void *project, int a, int b, int c)
 {
     int r = st_proj_init_body(project, a, b, c), g, j;
+    core_rows_now_reset();
     store_clear(S, 0, STORE_BYTES);
     store_header(S);
     for (g = 0; g < 4; g++)
@@ -633,9 +797,11 @@ int st_proj_load(void *live, unsigned char *src, void *progress)
     int r = st_proj_load_body(live, src, progress), g, j, s;
     unsigned char *from = is_image(src) ? src : st_image;
     unsigned dropped = 0;
-    /* its mod p-locks' codes are its layout's (rows.c, 0.8) */
+    /* its mod p-locks' codes are its layout's (rows.c, 0.8); no trig of it
+     * has played yet */
     if (!from || !known_id(store_id(from)))
         core_rows_forget();
+    core_rows_now_reset();
     for (s = SC_GLOBAL; s <= SC_PROJECT; s++)
         if (!store_ok(from, s))
             dropped |= 1 << s;
