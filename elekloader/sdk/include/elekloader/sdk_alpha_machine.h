@@ -9,10 +9,13 @@
 #define ELEK_UI_LABEL_MAX 5   /* a knob label's characters: what fits under a knob on the Digitakt and Digitone */
 #define ELEK_UI_RAW_MAX (127 << 8) /* Native 8.8 units: 0..32512, independent of mapped bounds. */
 #define ELEK_UI_BOUND(v) { .value = (v), .supplied = 1 }
+#define ELEK_VOICES_MAX 8      /* voice slots on every device */
+#define ELEK_VOICE_FRAMES 32   /* samples a render call */
+#define ELEK_SAMPLE_RATE 48000
 enum { ELEK_ENCODER_A, ELEK_ENCODER_B, ELEK_ENCODER_C, ELEK_ENCODER_D,
        ELEK_ENCODER_E, ELEK_ENCODER_F, ELEK_ENCODER_G, ELEK_ENCODER_H };
 
-/* An omitted bound is distinct from ELEK_UI_BOUND(0). Defaults: min 0, max 127. */
+/* An omitted bound is distinct from ELEK_UI_BOUND(0). Defaults: min 0, max 127, def min. */
 struct elek_ui_bound { int32_t value; uint32_t supplied; };
 /* 16 x 16 monochrome pixels: top row first, bit 15 leftmost; 1 lights a pixel.
  * Glyphs must remain readable while displayed (normally static const storage). */
@@ -23,6 +26,7 @@ struct elek_ui_knob {
     const char *label;             /* 1..ELEK_UI_LABEL_MAX printable ASCII characters (sdk_alpha_build refuses more) */
     struct elek_ui_bound min, max;
     const struct elek_ui_glyph *glyph; /* null uses the stock encoder graphic */
+    struct elek_ui_bound def;      /* the value a track starts with when it switches to the machine */
 };
 struct elek_ui_page {
     const char *label;             /* 1..16 printable ASCII characters */
@@ -50,6 +54,13 @@ struct elek_ui_presentation {
     uint32_t knob_count;
     struct elek_ui_knob_presentation *const *knob; /* logical IDs; defaults reset each call */
 };
+struct elek_voice {
+    uint32_t voice;                /* a slot, 0..ELEK_VOICES_MAX-1: index the machine's state with it */
+    int32_t pitch;                 /* semitones, 16.16: 60 << 16 is middle C (261.63 Hz) */
+    int32_t velocity;              /* 1..127 */
+    uint32_t fresh;                /* 1 on a note's first block: reset phases */
+    uint32_t gate;                 /* 1 until the note is released */
+};
 struct elek_machine {
     int32_t id;                    /* native machine slot, 4..127; declared only here */
     const char *name, *short_name; /* 1..16 and 1..4 ASCII characters */
@@ -58,7 +69,15 @@ struct elek_machine {
     uint32_t _reserved[2];         /* zero; preserves the original empty-machine ABI */
     /* ctx and its values are read-only snapshots, valid only during this call. */
     void (*present)(const struct elek_ui_context *, struct elek_ui_presentation *);
+    /* Optional: the machine's sound, one voice at a time; without it the device's default plays. */
+    void (*render)(const struct elek_ui_context *, const struct elek_voice *, int32_t *out);
 };
+
+/* Render callback: interrupt level, every block; keep it short. ctx has every knob's value for this voice
+ * (ctx->page is ELEK_UI_NO_PAGE, ctx->track the voice's track). out takes ELEK_VOICE_FRAMES samples, Q31; full
+ * scale is as loud as a full-scale sample on the Digitakt and an FM voice at its defaults on the Digitone. The
+ * track's filter and amp envelope follow, as for the device's own sound. */
+uint32_t elek_phase_inc(int32_t pitch);   /* a phase step a sample (2^32 a cycle) at ELEK_SAMPLE_RATE */
 
 /* Private adapter; the existing core descriptor and UI layouts stay intact. */
 struct sdk_alpha_machine_ui {
@@ -77,11 +96,11 @@ struct sdk_alpha_registration {
     uint32_t tag;
     const struct sdk_alpha_machine_ui *ui;
 };
-extern const char sdk_alpha_dt1_empty_ui[], sdk_alpha_dt1_ui_v3[], sdk_alpha_dt1_ui_v4[];
+extern const char sdk_alpha_dt1_empty_ui[], sdk_alpha_dt1_ui_v3[], sdk_alpha_dt1_ui_v4[], sdk_alpha_dt1_ui_v5[];
 
 #define ELEK_REGISTER_MACHINE(machine) \
     static const struct sdk_alpha_machine_ui sdk_alpha_ui_##machine = { \
-        sdk_alpha_dt1_ui_v4, &(machine) \
+        sdk_alpha_dt1_ui_v5, &(machine) \
     }; \
     const struct sdk_alpha_registration sdk_alpha_registration_##machine = { \
         .id = (machine).id, .name = (machine).name, .sname = (machine).short_name, \

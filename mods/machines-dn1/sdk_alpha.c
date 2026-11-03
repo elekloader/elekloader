@@ -3,7 +3,7 @@
  * sdk_alpha_build contributes its registration to the table sdk_alpha_machines. Its pages (two at most)
  * replace SYN2's pages while the track plays the machine (core_page_list): FM's envelope graphs belong to
  * page 4, not to its knobs. Each logical knob keeps its value in one SYN parameter, whichever page shows it.
- * No render: FM plays. */
+ * A machine with .render plays it in place of FM; without, FM plays. */
 #include "digitone-mk1/core3.h"
 #include "digitone-mk1/machines.h"
 #include "elekloader/sdk_alpha_machine.h"
@@ -12,6 +12,7 @@
 const char sdk_alpha_dt1_empty_ui[] = "sdk alpha dn1 empty";
 const char sdk_alpha_dt1_ui_v3[] = "sdk alpha dn1 pages 3";
 const char sdk_alpha_dt1_ui_v4[] = "sdk alpha dn1 glyphs 4";
+const char sdk_alpha_dt1_ui_v5[] = "sdk alpha dn1 render 5";
 
 extern const struct sdk_alpha_registration *const sdk_alpha_machines[];   /* the table, ending in 0 */
 
@@ -21,7 +22,7 @@ static struct dnm_machine machines[SDK_MACHINES];
 static const struct elek_machine *declared[SDK_MACHINES];
 static const struct elek_ui_knob *by_id[SDK_MACHINES][SDK_KNOBS];   /* each machine's knobs, by logical id */
 static uint8_t knob_count[SDK_MACHINES];
-static uint8_t has_glyphs[SDK_MACHINES];
+static uint8_t has_glyphs[SDK_MACHINES], is_v5[SDK_MACHINES];   /* v5: .def and .render */
 static struct dnm_knob knobs[SDK_MACHINES][DNM_KNOBS_ALL];
 static int16_t defaults[SDK_MACHINES][DNM_KNOBS_ALL];
 static int32_t count = -1;
@@ -95,6 +96,31 @@ static void sdk_value(int32_t value, char *buf)
     buf[n] = 0;
 }
 
+/* Knob k's mapped value from its raw one, as on the Digitakt: split the product to avoid a 64-bit runtime. */
+static int32_t map(const struct elek_ui_knob *knob, int32_t raw)
+{
+    int32_t min = knob->min.supplied ? knob->min.value : 0;
+    int32_t max = knob->max.supplied ? knob->max.value : 127;
+    uint32_t span = (uint32_t)max - (uint32_t)min;
+    uint32_t offset = (span / ELEK_UI_RAW_MAX) * (uint32_t)raw +
+        ((span % ELEK_UI_RAW_MAX) * (uint32_t)raw + ELEK_UI_RAW_MAX / 2) / ELEK_UI_RAW_MAX;
+    return (int32_t)((uint32_t)min + offset);
+}
+
+/* The smallest raw value that maps to value or above: map only rises. */
+static int32_t unmap(const struct elek_ui_knob *knob, int32_t value)
+{
+    int32_t lo = 0, hi = ELEK_UI_RAW_MAX;
+    while (lo < hi) {
+        int32_t mid = (lo + hi) / 2;
+        if (map(knob, mid) < value) lo = mid + 1;
+        else hi = mid;
+    }
+    return lo;
+}
+
+static void render(int32_t voice, int32_t *block, const struct dnm_voice *v);
+
 /* Built on first use. The UI and the render may both get here first: they write the same values, and
  * count goes last, so a reader never sees a half-built machine. */
 static void init(void)
@@ -110,7 +136,10 @@ static void init(void)
         machines[n].knobs = knobs[n];
         machines[n].flags = DNM_PAGES2;
         declared[n] = e;
-        has_glyphs[n] = (*p)->ui->abi == sdk_alpha_dt1_ui_v4;
+        is_v5[n] = (*p)->ui->abi == sdk_alpha_dt1_ui_v5;
+        has_glyphs[n] = (*p)->ui->abi == sdk_alpha_dt1_ui_v4 || is_v5[n];
+        if (is_v5[n] && e->render)
+            machines[n].render = render;
         for (int k = 0; k < DNM_KNOBS_ALL; ++k)
             defaults[n][k] = -1;
         for (uint32_t page = 0; page < e->page_count && page < 2; ++page)
@@ -124,7 +153,8 @@ static void init(void)
         for (int i = 0; i < knob_count[n]; ++i) {
             knobs[n][sdk_pos[i]].name = by_id[n][i]->label;
             knobs[n][sdk_pos[i]].fmt = sdk_value;
-            defaults[n][sdk_pos[i]] = 0;
+            defaults[n][sdk_pos[i]] = is_v5[n] && by_id[n][i]->def.supplied ?
+                unmap(by_id[n][i], by_id[n][i]->def.value) : 0;
         }
         if (e->page_count)
             machines[n].defaults = defaults[n];
@@ -179,14 +209,8 @@ static void snapshot(const struct dnm_machine *m, int32_t page, int force)
             int32_t raw = dnm_sdk_raw(ctx.track, sdk_pos[id]);
             if (raw < 0) raw = 0;
             if (raw > ELEK_UI_RAW_MAX) raw = ELEK_UI_RAW_MAX;
-            int32_t min = knob->min.supplied ? knob->min.value : 0;
-            int32_t max = knob->max.supplied ? knob->max.value : 127;
-            uint32_t span = (uint32_t)max - (uint32_t)min;
-            /* As on the Digitakt, split the product to avoid a 64-bit runtime. */
-            uint32_t offset = (span / ELEK_UI_RAW_MAX) * (uint32_t)raw +
-                ((span % ELEK_UI_RAW_MAX) * (uint32_t)raw + ELEK_UI_RAW_MAX / 2) / ELEK_UI_RAW_MAX;
             values[id].raw_value = raw;
-            values[id].value = (int32_t)((uint32_t)min + offset);
+            values[id].value = map(knob, raw);
             input[id] = &values[id];
             presentation[id].label = knob->label;
             presentation[id].visible = 1;
@@ -416,4 +440,41 @@ void dnm_sdk_tick(const struct dnm_machine *m, void *ctrl)
         ((uint8_t *)ctrl)[0x20] = 1;    /* redraw without resetting the temporary value display */
         dirty = 0;
     }
+}
+
+uint32_t elek_phase_inc(int32_t pitch)
+{
+    return dnm_phase_inc(pitch);
+}
+
+/* machines.c's render for a voice playing an SDK machine with .render: the voice's own knob values (its
+ * p-locks in), and the block scaled from the SDK's full scale to DNM_PEAK (FM's level at its defaults). */
+static void render(int32_t voice, int32_t *block, const struct dnm_voice *v)
+{
+    int32_t id = FW_VOICE_PARAM(voice, 0) >> 8, i = 0;      /* sound slot 0: the machine */
+    while (i < count && machines[i].id != id)
+        ++i;
+    if (i == count)
+        return;
+    const struct elek_machine *e = declared[i];
+    struct elek_ui_value values[SDK_KNOBS];
+    const struct elek_ui_value *input[SDK_KNOBS];
+    for (int k = 0; k < knob_count[i]; ++k) {
+        int32_t raw = dnm_knob(voice, sdk_pos[k]);
+        if (raw < 0) raw = 0;
+        if (raw > ELEK_UI_RAW_MAX) raw = ELEK_UI_RAW_MAX;
+        values[k].raw_value = raw;
+        values[k].value = map(by_id[i][k], raw);
+        input[k] = &values[k];
+    }
+    const struct elek_ui_context ctx = {
+        .page = ELEK_UI_NO_PAGE, .page_count = e->page_count, .knob_count = knob_count[i],
+        .knob = knob_count[i] ? input : 0, .track = v->track,
+    };
+    const struct elek_voice sv = {
+        .voice = voice, .pitch = v->pitch, .velocity = v->velocity, .fresh = v->fresh != 0, .gate = v->gate != 0,
+    };
+    e->render(&ctx, &sv, block);
+    for (int k = 0; k < ELEK_VOICE_FRAMES; ++k)
+        block[k] >>= 4;                                     /* Q31 full scale -> DNM_PEAK */
 }
