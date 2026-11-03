@@ -290,7 +290,10 @@ extern uint32_t fw_param_uirec(int32_t id);
 typedef int32_t (*ev_param_turn_fn)(void *view, int32_t id, int32_t delta, int32_t knob);
 /* The value a page shows on a knob for parameter id, asked every frame it draws its knobs. Nonzero answers:
  * *value (8.8) is shown, drawn inverted as a held step's p-lock when *locked is 1 (core clears it before
- * asking). Otherwise the stock answers: the held steps' lock, or the sound's value. The UI task. */
+ * asking). Otherwise the stock answers: the held steps' lock, or the sound's value. Core also asks where the
+ * pages read the track's sound for what they draw themselves (SYN2's envelopes, SYN1's algorithm, the knob
+ * handlers' redraws: the views' value routine) and *locked is not used there; and on SYN2's envelope page,
+ * which draws its knobs itself, *locked inverts the knob as on the other pages. The UI task. */
 typedef int32_t (*ev_param_value_fn)(void *view, int32_t id, int32_t *value, uint8_t *locked);
 /* A page's own answers, for these handlers (its C++ methods; the same in 1.43 and 1.44): the parameter on
  * knob 0-7, and the value the stock would show with no trig held (the track's sound). The UI task. */

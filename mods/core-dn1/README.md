@@ -184,7 +184,11 @@ the Digitone needs it. On its own it changes nothing the unit does.
     shows its pop-up. GRID REC's held trigs keep their turns.
   - `ev_param_value(view, id, &value, &locked)`: the value a page shows on a
     knob, at the pages' value getter (0x40043dd0, the same in 1.44); a
-    handler may answer, inverted as a p-lock when `locked` is 1.
+    handler may answer, inverted as a p-lock when `locked` is 1. Core asks
+    the same handlers at the views' value routine (0x400432dc), which the
+    SYN pages draw their envelopes and algorithm from, and at SYN2's
+    envelope page's own call of it (0x4004b462, 1.44 0x4004b482), which
+    draws that page's knobs.
   - `ev_voice_ready(voice, track, event)`: each voice starting a note, once
     it holds its sound and the event's p-locks, at the note-on loop's last
     instruction for it (0x4009eadc, 1.44 0x4009eafc), after `ev_voice_on`.

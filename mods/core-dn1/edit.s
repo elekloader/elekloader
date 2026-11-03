@@ -6,6 +6,7 @@
 |   HELD_STEPS  held(mgr): steps are held on the page's trig-hold manager
 |   TURN_DONE   the knob handler's exit, returning 1 (the turn handled)
 |   VALUE_FN    the pages' value getter, which this file's second site enters
+|   VALUE58     the views' value routine (+0x58), the third site's
 |
 | Every parameter page, the stock ones and the mods' (27-30), is one class
 | in the firmware with one knob handler (0x400452da) and one value getter
@@ -71,18 +72,91 @@ core_param_turn:
 |
 | Handlers: f(void *view, int id, int32_t *value, uint8_t *locked) ->
 | nonzero: answered. The UI task, every frame: keep them short.
+|
+| Not every picture on a page comes from that getter. The pages read a
+| parameter's value from the track's sound through the view's value routine,
+| VALUE58 (+0x58: value(view, id, sound), 0x400432dc, the same in 1.44) for
+| what they draw themselves (SYN2's envelope page draws its knobs and both
+| envelopes so, SYN1 its algorithm, a knob handler what to draw again), and
+| the getter falls back to it. Core asks the handlers at its entry too, for
+| the track's own sound (sound -1; a pool sound a step locks is the stock's);
+| there `locked` is not used. And at the SYN envelope page's own call of it
+| (0x4004b462, 1.44 0x4004b482; was: movea.l 88(a0),a0; jsr (a0)), where
+| the page keeps the locked flag it draws a knob with, core asks them and
+| sets that flag from their answer.
         .globl  core_param_value
 core_param_value:
         tst.l   ev_param_value
         beq.s   9f
+        move.l  8(%sp), -(%sp)          | the id
+        move.l  8(%sp), -(%sp)          | the view
+        bsr.w   ask
+        addq.l  #8, %sp
+        tst.l   %d0
+        beq.s   9f
+        movea.l 12(%sp), %a0            | answered: its locked flag, its value
+        move.b  ask_locked, %d0
+        move.b  %d0, (%a0)
+        move.l  %d1, %d0
+        rts
+9:      lea     -44(%sp), %sp           | the two instructions this replaced
+        moveq   #-1, %d0
+        jmp     VALUE_FN + 6
+
+        .globl  core_param_value58
+core_param_value58:
+        tst.l   ev_param_value
+        beq.s   9f
+        moveq   #-1, %d0
+        cmp.l   12(%sp), %d0            | the track's own sound
+        bne.s   9f
+        move.l  8(%sp), -(%sp)
+        move.l  8(%sp), -(%sp)
+        bsr.w   ask
+        addq.l  #8, %sp
+        tst.l   %d0
+        beq.s   9f
+        move.l  %d1, %d0
+        rts
+9:      lea     -12(%sp), %sp           | the two instructions this replaced
+        moveq   #9, %d0
+        jmp     VALUE58 + 6
+
+| At the SYN envelope page's call: 4(sp) the view, 8(sp) the id, 12(sp) the
+| sound; the page's locked flag at 103(sp) (its sp+87 before the call).
+        .equ    SYN_LOCKED, 103
+        .globl  core_param_value_syn
+core_param_value_syn:
+        moveq   #-1, %d0
+        cmp.l   12(%sp), %d0
+        bne.s   8f
+        tst.l   ev_param_value
+        beq.s   8f
+        move.l  8(%sp), -(%sp)
+        move.l  8(%sp), -(%sp)
+        bsr.w   ask
+        addq.l  #8, %sp
+        tst.l   %d0
+        beq.s   8f
+        move.b  ask_locked, %d0
+        move.b  %d0, SYN_LOCKED(%sp)
+        move.l  %d1, %d0
+        rts
+8:      movea.l 4(%sp), %a0             | what this replaced: the view's +0x58
+        movea.l (%a0), %a0
+        movea.l 88(%a0), %a0
+        jmp     (%a0)
+
+| ask: 4(sp) the view, 8(sp) the id -> d0 nonzero when a handler answered,
+| then d1 = its value and ask_locked its flag (cleared first). Keeps a2.
+ask:
         lea     -8(%sp), %sp
-        move.l  %a2, (%sp)              | 4: the value; 12 view, 16 id, 20 locked
+        move.l  %a2, (%sp)              | 4: the value; 12 view, 16 id
+        clr.b   ask_locked
         lea     ev_param_value, %a2
-        movea.l 20(%sp), %a0
-        clr.b   (%a0)
 1:      move.l  (%a2)+, %d0
         beq.s   2f
-        move.l  20(%sp), -(%sp)         | locked
+        pea     ask_locked
         pea     8(%sp)                  | &value
         move.l  24(%sp), -(%sp)         | the id
         move.l  24(%sp), -(%sp)         | the view
@@ -91,12 +165,11 @@ core_param_value:
         lea     16(%sp), %sp
         tst.l   %d0
         beq.s   1b
-        move.l  4(%sp), %d0             | answered
+2:      move.l  4(%sp), %d1
         movea.l (%sp), %a2
         addq.l  #8, %sp
         rts
-2:      movea.l (%sp), %a2
-        addq.l  #8, %sp
-9:      lea     -44(%sp), %sp           | the two instructions this replaced
-        moveq   #-1, %d0
-        jmp     VALUE_FN + 6
+
+        .section .bss
+ask_locked:
+        .skip   2

@@ -2552,7 +2552,14 @@ parameter, and put them into the voices that start notes:
 - **`ev_param_value(view, id, &value, &locked)`**, at the getter's entry
   (by jmp). The first handler that returns nonzero answers: `value` is shown,
   inverted when `locked` is 1 (core clears it first). Otherwise the stock
-  answers. A page asks for each knob every frame it draws, and draws only
+  answers. Not every picture comes from the getter: the SYN pages draw from
+  the views' value routine (+0x58, 0x400432dc, the same in 1.44), as SYN2's
+  envelope page does its knobs and both envelopes, SYN1 its algorithm, and
+  the knob handlers what to draw again; the getter falls back to it too.
+  Core asks the handlers at its entry for the track's own sound (`locked` is
+  not used there), and at the envelope page's own call of it (0x4004b462;
+  0x4004b482 in 1.44), where it sets the page's flag for an inverted knob
+  from `locked`. A page asks for each knob every frame it draws, and draws only
   when something on it changed: a mod that changes what it answers sets
   `ctrl + 0x20` in `ev_tick` to have the frame drawn again.
 - `core3.h` gives a page's own answers for these handlers:
@@ -2580,8 +2587,9 @@ A value written into a voice outside its start (an edit the held note should
 hear) goes into `fw_voice_params` from the render, with the slot's bit set
 in `fw_voice_locked` for the next note to put it back.
 
-Core-dn1 4.2 owns three more sites, 0x400455ba (`core_param_turn`),
-0x40043dd0 (`core_param_value`) and 0x4009eadc (`core_voice_ready`), and adds
+Core-dn1 4.2 owns five more sites, 0x400455ba (`core_param_turn`),
+0x40043dd0 (`core_param_value`), 0x400432dc (`core_param_value58`),
+0x4004b462 (`core_param_value_syn`) and 0x4009eadc (`core_voice_ready`), and adds
 variable project data blocks (above). `tests/test_sdk.py` checks it keeps
 all of the released 4.1, 4.0, 3.2 and 2.3.
 
