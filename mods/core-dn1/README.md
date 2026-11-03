@@ -174,19 +174,38 @@ the Digitone needs it. On its own it changes nothing the unit does.
   starved. In digikit's emulator, two rows on 1.43 or 1.44 never got past
   that screen. The calls in `core_additem` changed (`ROW_POOL`), not its
   place or its arguments: mods need no change.
+- **From 4.2, the parameter pages and the starting voice** ([edit.s](edit.s),
+  [voice.s](voice.s); docs/ADAPTING.md, "Parameter pages and the starting
+  voice"), for a mod that keeps values of its own for stock parameters:
+  - `ev_param_turn(view, id, delta, knob)`: a knob turn on a parameter page
+    that the stock would put into the sound (no trig held), at the knob
+    handler's held-steps question (0x400455ba, the same in 1.44); a handler
+    that returns nonzero takes it, and the stock neither edits the sound nor
+    shows its pop-up. GRID REC's held trigs keep their turns.
+  - `ev_param_value(view, id, &value, &locked)`: the value a page shows on a
+    knob, at the pages' value getter (0x40043dd0, the same in 1.44); a
+    handler may answer, inverted as a p-lock when `locked` is 1.
+  - `ev_voice_ready(voice, track, event)`: each voice starting a note, once
+    it holds its sound and the event's p-locks, at the note-on loop's last
+    instruction for it (0x4009eadc, 1.44 0x4009eafc), after `ev_voice_on`.
+    With `fw_voice_locks` (the render's own routine) a handler puts more
+    locks into the voice as the render puts a step's; `fw_voice_locked` is
+    each voice's locked slots, and `fw_param_uirec` a parameter's UI record.
+  - Project data blocks that save only what they hold: `CORE_PROJDATA_VARIABLE`
+    in a descriptor's size (projdata.s).
 - **OS 1.44:** every site has its port (`ports` in mod.json): the same
   code, moved, and RAM 0x1000 further on.
 
 Build it with the SDK (it needs m68k binutils):
 
 ```bash
-python -m elekloader.sdk.build mods/core-dn1 --stock Digitone_and_Digitone_Keys_OS1.43.syx   # out/core-4.1.1.elemod
-python -m elekloader.sdk.build mods/core-dn1 --stock Digitone_and_Digitone_Keys_OS1.44.syx   # out/core-4.1.1-os1.44.elemod
-python -m elekloader.lint mods/core-dn1/out/core-4.1.1-os1.44.elemod --stock Digitone_and_Digitone_Keys_OS1.44.syx
+python -m elekloader.sdk.build mods/core-dn1 --stock Digitone_and_Digitone_Keys_OS1.43.syx   # out/core-4.2.elemod
+python -m elekloader.sdk.build mods/core-dn1 --stock Digitone_and_Digitone_Keys_OS1.44.syx   # out/core-4.2-os1.44.elemod
+python -m elekloader.lint mods/core-dn1/out/core-4.2-os1.44.elemod --stock Digitone_and_Digitone_Keys_OS1.44.syx
 ```
 
-A release names them `core-dn1-4.1.1.elemod` and `core-dn1-4.1.1-os1.44.elemod`.
-4.1.1 is not released yet; 4.1's are on the [core-dn1-v4.1](https://github.com/irpina/elekloader/releases/tag/core-dn1-v4.1) pre-release,
+A release names them `core-dn1-4.2.elemod` and `core-dn1-4.2-os1.44.elemod`.
+4.2 and 4.1.1 are not released yet; 4.1's are on the [core-dn1-v4.1](https://github.com/irpina/elekloader/releases/tag/core-dn1-v4.1) pre-release,
 4.0's on the [core-dn1-v4.0](https://github.com/irpina/elekloader/releases/tag/core-dn1-v4.0) pre-release
 (3.3 was not released);
 3.2's are on the [core-dn1-v3.2](https://github.com/irpina/elekloader/releases/tag/core-dn1-v3.2) pre-release

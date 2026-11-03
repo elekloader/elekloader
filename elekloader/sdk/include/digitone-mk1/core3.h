@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
-/* core-dn1 3.0 to 4.1 for the Digitone mk1, in C: the firmware locations core exports, and core-dn1's
+/* core-dn1 3.0 to 4.2 for the Digitone mk1, in C: the firmware locations core exports, and core-dn1's
  * own tables and calls (docs/ADAPTING.md, "Firmware locations", "Parameter slots", "Mod pages", "Project
  * data", "The Mod Menu" and "Machines and stock parameters"). The SDK puts this folder on the include
  * path:
@@ -8,8 +8,8 @@
  *
  * Every fw_ name here is resolved by the linker against the core in the build, so a mod that uses only
  * these rebuilds for another OS version without a change (its port in mod.json is empty). Declaring one
- * makes the mod need core-dn1 3.0, or 3.1, 3.2, 3.3, 4.0 or 4.1 for the names marked so: say so with
- * "resources": {"core": "3.0"} (or "3.1", "3.2", "3.3", "4.0", "4.1"). From 4.0 the mods' code, tables and variables
+ * makes the mod need core-dn1 3.0, or 3.1, 3.2, 3.3, 4.0, 4.1 or 4.2 for the names marked so: say so with
+ * "resources": {"core": "3.0"} (or "3.1", "3.2", "3.3", "4.0", "4.1", "4.2"). From 4.0 the mods' code, tables and variables
  * have 1.25 MB (from 0x43EC0000) in place of 128 KB: a build that needs more than 128 KB needs core 4.0. digitone-mk1/core3.inc has the same for assembly. Functions that return a pointer
  * are declared to return uint32_t: the firmware returns it in d0, where gcc for m68k looks in a0. */
 #ifndef ELEKLOADER_DIGITONE_MK1_CORE3_H
@@ -159,9 +159,13 @@ struct core_page {                  /* core_pages: pages 27-30 */
     int32_t pos;                    /* +56 core writes it */
 } __attribute__((aligned(4)));
 
+/* 4.2: in a core_projdata's size, a block that saves only what it holds (the rest of size is the most it may
+ * hold): the first long of its data is the bytes it holds now, that long included (rounded up to 4; 0, or
+ * more than the most, saves all of it). A load copies what was saved and zeroes the rest, as for any block. */
+#define CORE_PROJDATA_VARIABLE  0x80000000u
 struct core_projdata {              /* core_projdata: saved and loaded with the project */
     uint32_t tag;                   /* +0  four characters, claimed as projdata:<tag> */
-    uint32_t size;                  /* +4  bytes, a multiple of 4 */
+    uint32_t size;                  /* +4  bytes, a multiple of 4 (| CORE_PROJDATA_VARIABLE, 4.2) */
     void *data;                     /* +8  the mod's copy */
     void (*loaded)(int32_t found);  /* +12 after a load; found 0: none, data holds zeros */
 } __attribute__((aligned(4)));
@@ -254,5 +258,45 @@ typedef void (*ev_note_queue_fn)(void *event, uint32_t time);
 #define FW_LOCKS_COUNT(l)       (*(volatile uint32_t *)((l) + 8))
 #define FW_LOCK_SLOT(l, i)      (*(volatile uint16_t *)((l) + 0x14 + 8 * (i)))      /* a sound slot, 0-78 */
 #define FW_LOCK_VALUE(l, i)     (*(volatile int16_t *)((l) + 0x16 + 8 * (i)))       /* its value, 8.8 */
+#define FW_EVENT_MODE(ev)       (((volatile int32_t *)(ev))[3])     /* +0xc: where it came from: */
+#define FW_EVENT_KEYBOARD       2                                   /*   the trig keys in KEYBOARD mode */
+
+/* ---- 4.2: a starting voice's locks, and the parameter pages ------------------------------------ */
+/* Each voice as it starts a note, once it holds its sound and the event's p-locks (after ev_voice_on, in the
+ * same pass of the render): what the voice has here is what plays. voice 0-7, track, the note event (its
+ * p-locks at FW_EVENT_LOCKS, FW_EVENT_MODE where it came from); the note is fw_voice_pitch[voice] >> 16.
+ * Interrupt level, inside the render: keep it short. */
+typedef void (*ev_voice_ready_fn)(int32_t voice, int32_t track, void *event);
+/* The firmware's own: a p-lock list (the layout of FW_EVENT_LOCKS's: +8 the count, from +0x14 {slot, value}
+ * 8 bytes apart) into a starting voice, as the render puts a step's locks there: each slot's target in
+ * fw_voice_params, the smoother's value (so the note starts at it) and the slot's bit in fw_voice_locked.
+ * params: fw_voice_params. From ev_voice_ready. */
+extern void fw_voice_locks(int32_t voice, const void *list, volatile int16_t *params);
+/* Each voice's slots that locks set as it started: 3 longs a voice, slot k at bit k & 31 of long k >> 5. A
+ * voice's next note of the same sound loads these slots from the sound again (a new sound loads them all),
+ * so a mod that writes a voice's parameters outside its start sets the slot's bit for it to come back. */
+extern volatile uint32_t fw_voice_locked[];
+#define FW_VOICE_LOCKED(v, k)   (fw_voice_locked[3 * (v) + ((k) >> 5)])
+/* The UI record the pages use for parameter id (fw_uirecs', or a parameter slot's, 182-184): bit 0 of its
+ * first long set when the parameter takes no p-locks. The UI task. */
+extern uint32_t fw_param_uirec(int32_t id);
+#define CORE_PARAM_LOCKABLE(id) ((*(volatile uint32_t *)fw_param_uirec(id) & 1) == 0)
+
+/* A knob turn on a parameter page (a stock page or a mod's) that the stock would put into the track's sound:
+ * no trig is held (GRID REC's held steps take their turns into their p-locks, as stock, and are never asked).
+ * view: the page; id: the parameter; delta: the step the stock would add (8.8, a coarse parameter's whole
+ * step 256, acceleration in); knob 0-7 for A-H. Nonzero takes it: the stock neither edits the sound nor
+ * shows its pop-up. The UI task. */
+typedef int32_t (*ev_param_turn_fn)(void *view, int32_t id, int32_t delta, int32_t knob);
+/* The value a page shows on a knob for parameter id, asked every frame it draws its knobs. Nonzero answers:
+ * *value (8.8) is shown, drawn inverted as a held step's p-lock when *locked is 1 (core clears it before
+ * asking). Otherwise the stock answers: the held steps' lock, or the sound's value. The UI task. */
+typedef int32_t (*ev_param_value_fn)(void *view, int32_t id, int32_t *value, uint8_t *locked);
+/* A page's own answers, for these handlers (its C++ methods; the same in 1.43 and 1.44): the parameter on
+ * knob 0-7, and the value the stock would show with no trig held (the track's sound). The UI task. */
+#define CORE_VIEW_KNOB_ID(view, knob) \
+    (((int32_t (*)(void *, int32_t))(*(void *const *const *)(view))[0xa0 / 4])((view), (knob)))
+#define CORE_VIEW_SOUND_VALUE(view, id) \
+    (((int32_t (*)(void *, int32_t, int32_t))(*(void *const *const *)(view))[0x58 / 4])((view), (id), -1))
 
 #endif

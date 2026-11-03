@@ -128,10 +128,14 @@ event (lower first; the shipped mods use 10-90).
 | `ev_midi_pc` | Digitone mk1 only (core-dn1 4.0): each program change the unit receives, on any channel, before the stock applies it; the MIDI task | `int f(int channel, int program, int flags)` | `channel` 0-15, `program` 0-127; `flags` bit 0 (`CORE_MIDI_CC_AUTO`): it came on the auto channel; bit 1 (`CORE_MIDI_PC_STOCK`): the stock would apply it (MIDI CONFIG receives program changes, and it came on PROG CH IN's channel). Return nonzero to take it: the stock does not change the pattern. Only what MIDI CONFIG lets in arrives (PORT CONFIG > INPUT FROM) |
 | `ev_key_leds` | Digitone mk1 only (core-dn1 3.3): the key-LED frame, every UI frame, after the frame clears the LEDs and before the stock views set theirs; UI task | `void f(void *mgr)` | `mgr` the LedManager. The first setter of an LED wins, so what a handler sets stays over the stock view's: a mod shows its state on the keys while the stock page keeps the rest |
 | `ev_render_params` | Digitone mk1 only (core-dn1 3.3): each block's sound parameter words, before the controller stage and the LFOs, in the render | `void f(int16_t *words)` | interrupt level, ~1500 times a second. Voice v's slot k at `words[79 * v + k]` (8.8, `CORE_PARAMS_VOICE`), the global FX at record 8; the smoother writes them again every block, so a change lasts one block and the kit is untouched. The words of a block are rendered in the next two; `fw_voice_track[v]` is voice v's track ("Each block's sound parameters" below) |
+| `ev_voice_ready` | Digitone mk1 only (core-dn1 4.2): a voice starting a note, once it holds its sound and the event's p-locks, in the render | `void f(int voice, int track, void *event)` | interrupt level, after `ev_voice_on` in the same pass. What the voice has here is what plays; `fw_voice_locks` puts more locks into it as the render puts a step's ("Parameter pages and the starting voice" below) |
+| `ev_param_turn` | Digitone mk1 only (core-dn1 4.2): a knob turn on a parameter page that the stock would put into the track's sound (no trig held); UI task | `int f(void *view, int id, int delta, int knob)` | return nonzero to take it: the stock neither edits the sound nor shows its pop-up. `delta` is the stock's step (8.8). GRID REC's held trigs keep their turns and are never asked |
+| `ev_param_value` | Digitone mk1 only (core-dn1 4.2): the value a parameter page shows on a knob, every frame it draws them; UI task | `int f(void *view, int id, int32_t *value, uint8_t *locked)` | return nonzero to answer: `*value` is shown, inverted as a p-lock when `*locked` is 1 |
 
 The events, their prototypes and their conventions are the same on every
 device; only the sites differ, and `ev_voice_on`, `ev_midi_cc`, `ev_key_leds`,
-`ev_render_params` and `ev_midi_pc` exist on the Digitone only. The Digitakt II's core (mods/core-dt2 1.0) has `ev_tick`, `ev_draw`,
+`ev_render_params`, `ev_midi_pc`, `ev_voice_ready`, `ev_param_turn` and
+`ev_param_value` exist on the Digitone only. The Digitakt II's core (mods/core-dt2 1.0) has `ev_tick`, `ev_draw`,
 `ev_key`, `ev_enc`, `ev_settings` and its own `ev_personalize`, and no
 render events: its audio
 renders on the DSP. It copies `.fast` code into SRAM itself, on the first
@@ -1044,9 +1048,12 @@ for 2.x builds with it too.
 | `fw_transport` (3.3) | 0x4138e208 | 0x4138f208 | the transport, a long: 0 stopped, 1 playing, 2 paused |
 | `fw_pattern` (3.3) | 0x4138e214 | 0x4138f214 | -> the active pattern's data: track t at +976 t, its step words at +2 s (bit 0 a note trig, bit 1 a lock trig), NOTE +0x3c0, the per-track length +0x3c5 (big-endian), the keyboard's ROOT +0x3cb and SCALE +0x3ce (`core3.h`'s `FW_TRACK` macros) |
 | `fw_project` (3.3) | 0x419efde0 | 0x419f0de0 | -> the project |
+| `fw_voice_locks` (4.2) | 0x4009bec8 | 0x4009bee8 | `locks(voice, list, fw_voice_params)`: a p-lock list into a starting voice, as the render puts a step's (`ev_voice_ready`) |
+| `fw_voice_locked` (4.2) | 0x431f16b4 | 0x431f26b4 | each voice's slots that locks set as it started, 3 longs a voice: its next note of the same sound loads them from the sound again |
+| `fw_param_uirec` (4.2) | 0x400899c4 | 0x400899e4 | `uirec(id)`: a parameter's UI record as the pages use it; bit 0 of its first long: it takes no p-locks |
 
-A name marked 3.1, 3.2, 3.3, 4.0 or 4.1 needs that core-dn1 (`"resources": {"core": "3.1"}`,
-`"3.2"`, `"3.3"`, `"4.0"` or `"4.1"`).
+A name marked 3.1, 3.2, 3.3, 4.0, 4.1 or 4.2 needs that core-dn1 (`"resources": {"core": "3.1"}`,
+`"3.2"`, `"3.3"`, `"4.0"`, `"4.1"` or `"4.2"`).
 
 gcc calls libgcc's `__ashldi3`, `__lshrdi3` and `__ashrdi3` for a 64-bit value shifted by a
 variable count, and a mod links no libgcc. From core-dn1 3.3, core exports the firmware's
@@ -1361,7 +1368,7 @@ From core-dn1 2.1 mods keep data there. A mod contributes to the table
 | offset | field | |
 |---|---|---|
 | +0 | tag | four characters: claim it as the resource `projdata:<tag>` |
-| +4 | size | bytes, a multiple of 4 |
+| +4 | size | bytes, a multiple of 4. From core-dn1 4.2, with bit 31 set (`CORE_PROJDATA_VARIABLE`), a block that saves only what it holds: the rest of size is the most it may hold, and the first long of its data the bytes it holds now (that long included) |
 | +8 | data | the mod's copy in RAM, which it reads and writes as it likes |
 | +12 | loaded | `void loaded(int found)`, or 0: called after a project's data is in RAM; `found` is 0 when the project has none for this tag (saved without the mod, or a new project), and data then holds zeros for the mod to fill with its defaults |
 
@@ -1371,6 +1378,12 @@ takes them out when one is deserialized or a new one is made: the gap holds
 project saved this way loads on the stock OS, which ignores the gap, and the
 stock OS keeps a gap it loaded when it saves. The macro mod keeps its 16
 tables there (`TBL1`, 320 bytes).
+
+Blocks go into the gap in the table's order, and one that does not fit in
+what is left is left out of that save. A block whose size changes with what
+the mod keeps can be a variable one from core-dn1 4.2: it takes only the room it uses, so the blocks after it keep theirs, and
+a load copies what was saved and zeroes the rest of the mod's copy, as for
+any block. Put such a block late in the table (a high `order`).
 
 Core-dn1 2.1 owns five more sites: 0x4000eb10, the serializer's entry (by
 jmp: every save, to a slot, to the temp area or the working copy);
@@ -2514,6 +2527,63 @@ a task: keep it short, only read the event, and call no firmware.
 
 Core-dn1 4.1 owns one more site, 0x400fff04 (`core_note_queue`, by jmp). It
 is 4.0 and this, and `tests/test_sdk.py` checks it against the released 4.0.
+
+A note from the trig keys in KEYBOARD mode does not come here: in digikit's
+emulator its voice started with no call to the queue's entry (its event at
+the voice, `FW_EVENT_MODE` 2). `ev_voice_on` and `ev_voice_ready` see every
+voice a note starts, whatever played it.
+
+### Parameter pages and the starting voice (core-dn1 4.2, Digitone mk1)
+
+Every parameter page, stock or a mod's (27-30), is one class in the firmware
+with one knob handler (0x400452da) and one value getter (0x40043dd0), at the
+same addresses in 1.44. A knob turn goes into the held steps' p-locks when
+trig keys are held in GRID REC, and into the track's sound otherwise; each
+knob shows its value from the same two places, a held step's lock drawn
+inverted. Core-dn1 4.2 lets a mod keep values of its own for a stock
+parameter, and put them into the voices that start notes:
+
+- **`ev_param_turn(view, id, delta, knob)`**, at the handler's question
+  "are steps held?" (0x400455ba, by jsr). With steps held, the stock edits
+  their locks and the handlers are not asked. Otherwise the first handler
+  that returns nonzero takes the turn: the stock neither edits the sound nor
+  shows its pop-up. `delta` is the step the stock would add (8.8; a coarse
+  parameter's whole step is 256, acceleration in), `knob` 0-7 for A-H.
+- **`ev_param_value(view, id, &value, &locked)`**, at the getter's entry
+  (by jmp). The first handler that returns nonzero answers: `value` is shown,
+  inverted when `locked` is 1 (core clears it first). Otherwise the stock
+  answers. A page asks for each knob every frame it draws, and draws only
+  when something on it changed: a mod that changes what it answers sets
+  `ctrl + 0x20` in `ev_tick` to have the frame drawn again.
+- `core3.h` gives a page's own answers for these handlers:
+  `CORE_VIEW_KNOB_ID(view, knob)` (the parameter on a knob) and
+  `CORE_VIEW_SOUND_VALUE(view, id)` (the value with no trig held: the
+  sound's), and `CORE_PARAM_LOCKABLE(id)` (from `fw_param_uirec`). A
+  parameter id is a sound slot when `fw_slot_ids[k] == id` for its record's
+  slot k (`fw_params + 60 id + 4`); FX, track and trig parameters have slots
+  of their own sets.
+- **`ev_voice_ready(voice, track, event)`**, at the note-on loop's last
+  instruction for a voice (0x4009eadc; 0x4009eafc in 1.44, by jsr), after
+  `ev_voice_on`. The voice holds its sound by now (all of it for another
+  sound, or the slots in `fw_voice_locked` again for the same one) and the
+  event's p-locks over it. `fw_voice_locks(voice, list, fw_voice_params)`,
+  the render's own routine, puts a list in the event's layout (+8 the
+  count, from +0x14 `{u16 slot, s16 value}` 8 bytes apart) into the voice
+  as it does a step's: each slot's target, the smoother's value (the note
+  starts there) and the slot's bit in `fw_voice_locked`, so the voice's next
+  note loads it from the sound again. The note is `fw_voice_pitch[voice] >>
+  16`; `FW_EVENT_MODE(event)` is 2 for the trig keys in KEYBOARD mode. The
+  first step's event as PLAY starts has no list (above): its step's locks
+  are in the lock table.
+
+A value written into a voice outside its start (an edit the held note should
+hear) goes into `fw_voice_params` from the render, with the slot's bit set
+in `fw_voice_locked` for the next note to put it back.
+
+Core-dn1 4.2 owns three more sites, 0x400455ba (`core_param_turn`),
+0x40043dd0 (`core_param_value`) and 0x4009eadc (`core_voice_ready`), and adds
+variable project data blocks (above). `tests/test_sdk.py` checks it keeps
+all of the released 4.1, 4.0, 3.2 and 2.3.
 
 ### The mods' RAM (core-dn1 4.0, Digitone mk1; core 4.0, Digitakt mk1)
 
