@@ -45,9 +45,13 @@ class ParameterTableSitesTests(unittest.TestCase):
         ret = int(manifest['defsym']['SYN_TITLE_RETURN'], 0)
         self.assertEqual(data(ret - 12, 12), bytes.fromhex('2f2a00902f004eb9400c2652'))
         # 60 primary methods, then a secondary-base table. Method 4 paints, method 19 names it.
+        self.assertEqual(int(manifest['defsym']['SYN_METHODS'], 0), 0x401d4db0)   # SYN's view at power-on
         self.assertEqual(data(0x401d4db0 + 4 * 4, 4), bytes.fromhex('40018118'))
         self.assertEqual(data(0x401d4db0 + 19 * 4, 4), bytes.fromhex('400177b2'))
         self.assertEqual(data(0x401d4db0 + 60 * 4, 4), bytes.fromhex('fffffffc'))
+        # The Brain's pointer, which the SDK reads for the page stack: stock tests it there.
+        self.assertEqual(int(manifest['defsym']['BRAIN'], 0), 0x44648900)
+        self.assertEqual(data(0x4003b7c6, 6), bytes.fromhex('4ab944648900'))
 
     def test_bounds_and_references_match_the_appended_rows(self):
         source = ((ROOT / 'mods/machines-dn2/dn2.h').read_text()

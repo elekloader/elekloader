@@ -125,29 +125,31 @@ static const struct elek_ui_glyph *glyphs[SDK_KNOBS];
 static int32_t shown_track = -1;
 static int32_t seen = -1, seen_track = -1, seen_page = ELEK_UI_NO_PAGE, seen_raw[SDK_KNOBS];
 static int dirty;
-static const uint8_t *panel_brain;
+extern const uint8_t *volatile dn2_brain;   /* the panel's Brain (hooks.s): set from boot, before any key */
 static void (*draw_page)(void *view, void *bmp);
 static void sdk_draw(void *view, void *bmp);
 
-/* Brain's page stack, as core-dn1's core_page_shown: no menu above the page manager's SYN view. */
-static int syn_shown(void)
+extern const uint32_t dn2_syn_methods[];  /* SYN's stock method table (hooks.s) */
+
+/* The view the page manager shows with no menu above it (Brain's page stack, as core-dn1's
+ * core_page_shown), or 0. */
+static uint8_t *shown_view(void)
 {
-    if (!panel_brain || !dn2_syn_view)
+    const uint8_t *brain = dn2_brain;
+    if (!brain)
         return 0;
-    const uint8_t *bottom = *(const uint8_t *const *)(panel_brain + 0x54);
-    if (!bottom || bottom != *(const uint8_t *const *)(panel_brain + 0x5c))
+    const uint8_t *bottom = *(const uint8_t *const *)(brain + 0x54);
+    if (!bottom || bottom != *(const uint8_t *const *)(brain + 0x5c))
         return 0;
     const uint8_t *manager = *(const uint8_t *const *)(bottom + 8);
     /* The manager keeps the owning View handle; its object starts after the 16-byte header. */
-    const uint8_t *shown = manager ? *(const uint8_t *const *)(manager + 0xc0) : 0;
-    return shown && shown + 16 == dn2_syn_view;
+    uint8_t *shown = manager ? *(uint8_t *const *)(manager + 0xc0) : 0;
+    return shown ? shown + 16 : 0;
 }
 
-int dn2_sdk_key(void *brain, const int32_t *event)
+static int syn_shown(void)
 {
-    (void)event;
-    panel_brain = brain;
-    return 0;
+    return dn2_syn_view && shown_view() == dn2_syn_view;
 }
 
 /* SYN's native method table, including RTTI and its 60 primary methods (OS 1.12). */
@@ -277,6 +279,12 @@ static const struct elek_ui_knob *shown_knob(int32_t i, int32_t k)
 void dn2_sdk_tick(uint8_t *ctrl)
 {
     uint32_t t = *dn2_active_track;
+    /* At power-on SYN shows under the project's name: its title accessor (hooks.s) has not run yet. */
+    if (!dn2_syn_view) {
+        uint8_t *view = shown_view();
+        if (view && *(const uint32_t **)view == dn2_syn_methods)
+            dn2_syn_view = view;
+    }
     int32_t i = track_machine(t);
     if (page_layout(i >= 0))
         ctrl[0x20] = 1;
@@ -356,7 +364,7 @@ void dn2_sdk_draw(void *bmp, void *ctrl)
 /* ev_enc: a hidden knob's encoder does nothing while SYN shows it. */
 int dn2_sdk_enc(void *brain, const int32_t *event)
 {
-    panel_brain = brain;
+    (void)brain;
     int32_t encoder = event[3] - 1;
     int32_t i = track_machine(*dn2_active_track);
     const struct elek_ui_knob *knob;

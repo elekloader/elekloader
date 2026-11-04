@@ -353,3 +353,8 @@ dn2_load_type:
     .set dn2_shown_page, SHOWN_PAGE
     .set dn2_sounds, SOUNDS
     .set dn2_fillrect, FILLRECT
+| The Brain's pointer, which stock reads at 0x4003b7c6 (tst.l): the ev_key/ev_enc brain, already set
+| at power-on, so a glyph draws before the first key (checked on a unit with DigiHealth).
+    .globl dn2_brain, dn2_syn_methods
+    .set dn2_brain, BRAIN
+    .set dn2_syn_methods, SYN_METHODS

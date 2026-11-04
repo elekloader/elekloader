@@ -69,6 +69,8 @@
   "CURVE_STOCK": "0x4006eca8",
   "CURVE_SKIP": "0x4006ed3a",
   "LOAD_TYPE_CONTINUE": "0x400dd426",
+  "BRAIN": "0x44648900",
+  "SYN_METHODS": "0x401d4db0",
   "ACTIVE_TRACK": "0x42432a6c",
   "SHOWN_PAGE": "0x42432a74",
   "SOUNDS": "0x4210d0c0",
@@ -994,7 +996,6 @@
   }
  ],
  "subscribe": [
-  {"event": "ev_key", "fn": "dn2_sdk_key", "order": 50},
   {"event": "ev_draw", "fn": "dn2_sdk_draw", "order": 50},
   {"event": "ev_tick", "fn": "dn2_sdk_tick", "order": 50},
   {"event": "ev_enc", "fn": "dn2_sdk_enc", "order": 50}
