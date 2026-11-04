@@ -508,6 +508,7 @@ CORE_DN1_50_EVENTS = [
     'ev_plock_clear', 'ev_step_clear', 'ev_track_length', 'ev_param_set', 'ev_sound_live',
     'ev_render_fx', 'ev_tempo', 'ev_pattern_switch', 'ev_arp_step', 'ev_voice_steal',
     'ev_keyboard_note', 'ev_mute', 'ev_pattern_op', 'ev_view', 'ev_track_reload', 'ev_sound_op', 'ev_sound_load', 'ev_sound_clear']
+# ev_idle is left out: a handler on it keeps digiemu's cold boot, which waits for the stock idle spin, from settling.
 
 
 def test_digitone_core_5_events_take_a_handler_each():
@@ -638,7 +639,7 @@ def test_digitone_core_builds_and_links():
         # setter, the sound's way to the voices and four effect stages, the tempo setter
         # and the pattern switch, the arpeggiator's step, the voice allocator's steal,
         # KEYBOARD mode's note-on and note-off and the mute setter.
-        assert dn['target']['device'] == 'digitone-mk1' and len(dn['sites']) == 144
+        assert dn['target']['device'] == 'digitone-mk1' and len(dn['sites']) == 147
         assert sorted(dn['collections']) == sorted(
             HOOK_BUS + ['core_menu', 'core_pages', 'core_params', 'core_projdata',
                         'ev_hold', 'ev_voice_on', 'core_param_override', 'ev_render_voices',
@@ -1508,7 +1509,7 @@ def test_digitone_core_port_to_144_is_the_same_core():
 
         def what(d):                # each site's new bytes and targets, not where it is
             return [(s['len'], s['kind'], s['new'], s.get('relocs')) for s in d['sites']]
-        assert len(new['sites']) == 144 and what(new) == what(old)
+        assert len(new['sites']) == 147 and what(new) == what(old)
         rc, r = lint_json(path, '--stock', DN_STOCK_144)
         assert rc == 0, r['problems']
         rc, r = lint_json(old_path, '--stock', DN_STOCK_144)

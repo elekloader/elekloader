@@ -76,9 +76,13 @@
         .equ    CORE_VIEW_PUSH, 0
         .equ    CORE_VIEW_REPLACE, 1
         .equ    CORE_VIEW_POP, 2
+        .equ    CORE_MUTE_GLOBAL, 0
+        .equ    CORE_MUTE_PATTERN, 1
+        .equ    CORE_MUTE_SONG_ROW, 2
         .equ    CORE_SOUND_COPY_POOL, 0
         .equ    CORE_SOUND_COPY_BANK, 1
         .equ    CORE_SOUND_COPY_OTHER, 2
         .equ    CORE_SOUND_DELETE, 3
         .equ    CORE_SOUND_SEND_SYSEX, 4
         .equ    CORE_SOUND_PROTECT, 5
+        .equ    CORE_SOUND_PASTE, 6

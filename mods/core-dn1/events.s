@@ -72,7 +72,20 @@
         .globl  core_boot_ui
 core_boot_ui:
         CALLV   ev_boot_ui, #0
-        jmp     UI_SPAWN
+        jsr     UI_SPAWN
+| ev_idle: f(void), over and over in the init task once the UI task is up: the
+| lowest priority task that runs (RTOS priority 1), so only when no other task
+| is ready. With no handler the stub returns to the stock spin (0x4008d3cc).
+| A handler must not wait for anything; it never runs at interrupt level.
+        tst.l   ev_idle
+        beq.s   9f
+7:      lea     ev_idle, %a2
+8:      move.l  (%a2)+, %d1
+        beq.s   7b
+        movea.l %d1, %a0
+        jsr     (%a0)
+        bra.s   8b
+9:      rts
 
 | ev_usb: f(int configured). The USB device was configured by the host (1) or
 | its configuration was dropped (0): the gate for USB MIDI out. The USB
@@ -505,15 +518,70 @@ core_kbd_off:
         moveq   #7, %d1
         jmp     KBD_OFF + 6
 
-| ev_mute: f(void *state, int track, int muted, int a4). A track's mute is
-| about to be set or cleared (0x4002f994: the bit per track the quick mute
-| writes, FUNC + a track key). The UI task.
-        .globl  core_mute
+| ev_mute: f(int where, int track, int muted, int row). A track's mute is
+| about to be set or cleared, in the UI task: where 0 the global mute (FUNC +
+| a track key, 0x4002f994), 1 the pattern's mutes (quick mute in "Pattern
+| mutes" mode, 0x400238ee), 2 a song row's mutes (row; 0x40033bee: a row the
+| firmware refuses, none or past 98, is not reported). row is -1 for 0 and 1.
+        .globl  core_mute, core_mute_pattern, core_mute_song
 core_mute:
-        NOTIFY  ev_mute, 4
+        pea     -1.w
+        move.l  16(%sp), -(%sp)
+        move.l  16(%sp), -(%sp)
+        clr.l   -(%sp)
+        bsr.s   core_mute_ev
+        lea     16(%sp), %sp
         link.w  %fp, #-48
         movem.l %d2-%d6/%a2-%a5, (%sp)
         jmp     MUTE_SET + 8
+core_mute_pattern:
+        pea     -1.w
+        move.l  16(%sp), -(%sp)
+        move.l  16(%sp), -(%sp)
+        pea     1.w
+        bsr.s   core_mute_ev
+        lea     16(%sp), %sp
+        link.w  %fp, #-48
+        movem.l %d2-%d7/%a2-%a4, (%sp)
+        jmp     MUTE_PATTERN + 8
+core_mute_song:
+        move.l  8(%sp), -(%sp)
+        move.l  20(%sp), -(%sp)
+        move.l  20(%sp), -(%sp)
+        pea     2.w
+        bsr.s   core_mute_ev
+        lea     16(%sp), %sp
+        lea     -16(%sp), %sp
+        movem.l %d2-%d4/%a2, (%sp)
+        jmp     MUTE_SONG + 8
+
+core_mute_ev:
+        tst.l   ev_mute
+        beq.s   9f
+        lea     -20(%sp), %sp
+        movem.l %d0-%d1/%a0-%a2, (%sp)
+        move.l  24(%sp), %d0
+        cmpi.l  #2, %d0
+        bne.s   1f
+        move.l  36(%sp), %d0
+        cmpi.l  #99, %d0
+        bcc.s   4f
+1:      move.l  36(%sp), -(%sp)
+        move.l  36(%sp), %d0
+        andi.l  #0xff, %d0
+        move.l  %d0, -(%sp)
+        move.l  36(%sp), -(%sp)
+        move.l  36(%sp), -(%sp)
+        lea     ev_mute, %a2
+2:      move.l  (%a2)+, %d1
+        beq.s   3f
+        movea.l %d1, %a0
+        jsr     (%a0)
+        bra.s   2b
+3:      lea     16(%sp), %sp
+4:      movem.l (%sp), %d0-%d1/%a0-%a2
+        lea     20(%sp), %sp
+9:      rts
 
 | ev_pattern_op: f(int op, int index, int what). FUNC+YES saves (op 0,
 | 0x40027a00) and FUNC+NO reloads (op 1, 0x40027e4a) the pattern, kit or
@@ -643,10 +711,18 @@ core_track_reload:
 | SOUNDS) runs an action on the ticked sounds (UI task): op 0 copy to the sound
 | pool, 1 copy to the +Drive or a bank, 2 the other copy (not seen run): a = the
 | menu view, b = the selection; 3 delete (b = nonzero once confirmed), 4 send
-| SysEx, 5 toggle write protection: a = the selection. The selection points at
-| a vector of the ticked sounds' indices.
+| SysEx, 5 toggle write protection, 6 paste into a pool slot (the SOUND
+| BROWSER's FUNC+STOP: how a copied track sound is saved): a = the selection
+| (6: b = nonzero once confirmed). The selection points at a vector of the
+| ticked sounds' indices.
         .globl  core_snd_pool, core_snd_bank, core_snd_copy, core_snd_delete
-        .globl  core_snd_sysex, core_snd_protect
+        .globl  core_snd_sysex, core_snd_protect, core_snd_paste
+core_snd_paste:
+        moveq   #6, %d0
+        bsr.w   core_sound_op
+        link.w  %fp, #-16
+        movea.l 8(%fp), %a0
+        jmp     SND_PASTE + 8
 core_snd_pool:
         moveq   #0, %d0
         bsr.w   core_sound_op

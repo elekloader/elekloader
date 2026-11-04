@@ -367,7 +367,10 @@ typedef void (*ev_voice_steal_fn)(int32_t voice, int32_t old_track);
  * firmware's. The UI task. */
 typedef int32_t (*ev_keyboard_note_fn)(void *state, int32_t on, int32_t track, int32_t note);
 /* A track's mute is about to be set (muted 1) or cleared (FUNC + a track key). The UI task. */
-typedef void (*ev_mute_fn)(void *state, int32_t track, int32_t muted, int32_t a4);
+#define CORE_MUTE_GLOBAL        0       /* FUNC + a track key */
+#define CORE_MUTE_PATTERN       1       /* quick mute in "Pattern mutes" mode */
+#define CORE_MUTE_SONG_ROW      2       /* a song row's mutes; row says which */
+typedef void (*ev_mute_fn)(int32_t where, int32_t track, int32_t muted, int32_t row);
 
 /* The UI task's messages, each as it takes it, before it switches on msg[0] (a type past 34 is dropped). */
 typedef void (*ev_ui_msg_fn)(uint8_t *msg);
@@ -417,6 +420,7 @@ typedef void (*ev_track_reload_fn)(int32_t track, int32_t pattern, void *params)
 #define CORE_SOUND_DELETE       3
 #define CORE_SOUND_SEND_SYSEX   4
 #define CORE_SOUND_PROTECT      5       /* toggle write protection */
+#define CORE_SOUND_PASTE        6       /* the SOUND BROWSER's FUNC+STOP into a pool slot (b: confirmed) */
 typedef void (*ev_sound_op_fn)(int32_t op, void *a, void *b);
 
 /* Before the kit puts a sound on a track (UI task): the SOUND BROWSER's FUNC+YES load. sound is the
@@ -426,6 +430,10 @@ typedef void (*ev_sound_load_fn)(int32_t track, void *sound, void *kit);
 /* Before a track's sound is initialised and named (UI task): SOUNDS > CLEAR TRACK SOUND. slot is the
  * track's sound, kit + 0x60 + track * 0x328. */
 typedef void (*ev_sound_clear_fn)(void *slot, const char *name);
+
+/* Over and over in the init task once the UI task is up: the lowest priority task that runs (RTOS priority 1),
+ * so only while no other task is ready. Never at interrupt level; a handler must not wait for anything. */
+typedef void (*ev_idle_fn)(void);
 
 /* The view stack, before it changes (UI task). Push: a = &new view, b = nonzero to first close views of the
  * same name; replace (the page keys): a = &old, b = &new; pop (NO, FUNC release): a = the matcher.

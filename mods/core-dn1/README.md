@@ -235,8 +235,9 @@ the Digitone needs it. On its own it changes nothing the unit does.
   - the UI task: `ev_ui_msg(msg)` for each message it takes (0x40019cda);
   - KEYBOARD mode and mutes: `ev_keyboard_note(state, on, track, note)`, may
     take a press, at the note-on dispatcher (0x4003b198) and the note-off
-    (0x4003b26e), and `ev_mute(state, track, muted, a4)` at the mute setter
-    (0x4002f994);
+    (0x4003b26e), and `ev_mute(where, track, muted, row)` before a track's
+    mute is set: the global mute (FUNC + a track key, 0x4002f994), the
+    pattern's mutes (0x400238ee) or a song row's (0x40033bee);
   - the pattern menu: `ev_pattern_op(op, index, what)` as FUNC+YES saves
     (op 0, 0x40027a00) or FUNC+NO reloads (op 1, 0x40027e4a) the pattern,
     its kit (what 1), its sequence (2) or both (3), before the stock checks,
@@ -246,10 +247,15 @@ the Digitone needs it. On its own it changes nothing the unit does.
     before it copies the ticked sounds to the pool (op 0, 0x400d33ce), to the
     +Drive or a bank (1, 0x400d3604), deletes them (3, 0x400d3a42), sends
     them as SysEx (4, 0x400d3854) or toggles their write protection (5,
-    0x400d3d90); op 2 is its third copy routine (0x400d31ec); and
+    0x400d3d90), or the SOUND BROWSER pastes into a pool slot (6,
+    0x400d5a7a: how a copied track sound is saved); op 2 is the manager's
+    third copy routine (0x400d31ec); and
     `ev_sound_load(track, sound, kit)` before the kit puts a sound on a track
     (the SOUND BROWSER's FUNC+YES, 0x4001d710), and `ev_sound_clear(slot,
     name)` before CLEAR TRACK SOUND initialises one (0x400328f6);
+  - `ev_idle()`, over and over in the init task (the lowest priority task
+    that runs) once the UI task is up, from the ev_boot_ui stub: with no
+    handler the stock idle spin runs;
   - the view stack: `ev_view(op, container, a, b)` before a view is pushed
     (op 0, 0x400e60de), replaced by a page key (1, 0x400e6ad4) or popped
     (2, 0x400e63c0), and `fw_view()`, the view on top (keys go to it);
