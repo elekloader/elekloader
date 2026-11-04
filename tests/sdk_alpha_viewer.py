@@ -41,17 +41,18 @@ class Viewer:
 
     def attach(self, session, name, device):
         """Show a new session; the window keeps to its emulated clock."""
-        self.session, self.seen, self.deadline = session, 0, time.time()
+        self.session, self.seen, self.deadline = session, None, time.time()
         self.test.config(text='%s\n%s' % (device, name))
         self.said.config(text='')
         self.input.config(text='')
         self.result.config(text='')
-        chunk = session._chunk
+        hook = '_chunk' if hasattr(session, '_chunk') else 'run_ms'
+        chunk = getattr(session, hook)
 
         def stepped(ms):
             chunk(ms)
             self.step(ms)
-        session._chunk = stepped        # run_ms steps through here
+        setattr(session, hook, stepped)
 
     def say(self, text):
         """What the test is doing, in its own words."""
@@ -63,13 +64,16 @@ class Viewer:
         if self.closed:
             return
         frames = self.session.frames
-        if len(frames) != self.seen:
-            self.seen = len(frames)
-            from emu import panel
-            png = panel.png_bytes(frames[-1][1], SCALE)
+        if frames and frames[-1][0] != self.seen:
+            self.seen = frames[-1][0]
+            if hasattr(self.session, 'png_bytes'):
+                png = self.session.png_bytes(frames[-1][1], SCALE)
+            else:
+                from emu import panel
+                png = panel.png_bytes(frames[-1][1], SCALE)
             self.image = tk.PhotoImage(data=base64.b64encode(png))
             self.screen.config(image=self.image)
-        if self.session.inputs:
+        if getattr(self.session, 'inputs', None):
             self.input.config(text='input: %s   (%.1f s)' % (self.session.inputs[-1][1], self.session.ms / 1000))
         self.root.update()
         self.deadline += ms / 1000.0 / self.speed       # keep to the chosen speed

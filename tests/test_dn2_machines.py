@@ -5,10 +5,12 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 import tempfile
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
 CC = shutil.which('cc')
 CF_CALL = os.environ.get('ELEKLOADER_CF_CALL')
 STOCK = os.environ.get('ELEKLOADER_DN2_SYX')
@@ -29,13 +31,34 @@ class RegistryTests(unittest.TestCase):
 
 
 class ParameterTableSitesTests(unittest.TestCase):
+    @unittest.skipUnless(STOCK, 'needs DN2 stock')
+    def test_syn_view_contract_matches_stock(self):
+        from elekloader import formats
+        firmware, device, _ = formats.load(STOCK)
+        image = formats.main_image(firmware, device)
+
+        def data(addr, n):
+            return image[addr - device.main_load:addr - device.main_load + n]
+
+        # The title accessor keeps its live view in a2 and passes view +144's page to the getter.
+        manifest = json.loads((ROOT / 'mods/machines-dn2/mod.json').read_text())
+        ret = int(manifest['defsym']['SYN_TITLE_RETURN'], 0)
+        self.assertEqual(data(ret - 12, 12), bytes.fromhex('2f2a00902f004eb9400c2652'))
+        # 60 primary methods, then a secondary-base table. Method 4 paints, method 19 names it.
+        self.assertEqual(data(0x401d4db0 + 4 * 4, 4), bytes.fromhex('40018118'))
+        self.assertEqual(data(0x401d4db0 + 19 * 4, 4), bytes.fromhex('400177b2'))
+        self.assertEqual(data(0x401d4db0 + 60 * 4, 4), bytes.fromhex('fffffffc'))
+
     def test_bounds_and_references_match_the_appended_rows(self):
-        source = (ROOT / 'mods/machines-dn2/machines.c').read_text()
+        source = ((ROOT / 'mods/machines-dn2/dn2.h').read_text()
+                  + (ROOT / 'mods/machines-dn2/machines.c').read_text())
         define = {name: int(value, 0) for name, value in
-                  (line.split()[1:3] for line in source.splitlines() if line.startswith('#define '))}
+                  (line.split()[1:3] for line in source.splitlines()
+                   if line.startswith('#define ') and len(line.split()) > 2)}
         mod = json.loads((ROOT / 'mods/machines-dn2/mod.json').read_text())
         self.assertEqual(int(mod['defsym']['T1_ROWS']), define['ROWS'])
-        self.assertEqual(define['G_CODE'], define['ROWS'] + define['ADDED'])  # G's row ends the table
+        self.assertEqual(define['SDK_ROW'], define['ADDED'])  # SDK rows follow all five native pages
+        self.assertEqual(define['G_CODE'], define['ROWS'] + define['SDK_ROW'] + define['SDK_KNOBS'])
         bounds = [s for s in mod['sites'] if s['op'] == 'bytes' and len(s['stock']) == 12]
         self.assertEqual(len(bounds), 54)
         for site in bounds:
@@ -101,7 +124,7 @@ class VoicePagesTests(unittest.TestCase):
                       # A missing synth (9) keeps its type: MIDI's CC 70 (slot 33) is not its parameter.
                       (cc_code, [0, 4, 0, 70], 168), (cc_code, [0, 9, 0, 70], 0),
                       (value_class, [321], None), (value_class, [0xd5], None),
-                      (value_class, [362], None), (value_class, [0], None)]
+                      (value_class, [377], None), (value_class, [0], None)]
             request = stage / 'request.json'
             request.write_text(json.dumps({'calls': [{'pc': hex(pc), 'args': [str(a) for a in args]}
                                                      for pc, args, _ in checks]}))
@@ -179,8 +202,9 @@ class ParameterDispatchTests(unittest.TestCase):
                             # A custom machine keeps its ID for MIDI, whose lookups map it, and the
                             # stock reader sees a custom filter as LOWPASS 4, its host. A missing synth
                             # keeps its own type for MIDI (no stock synth map has it) but the stock
-                            # reader sees MIDI's; a missing filter falls back to MULTI-MODE.
-                            if mode == 'identity' or not first <= machine_id < 32:
+                            # reader sees MIDI's; a missing filter falls back to MULTI-MODE. Synth IDs
+                            # reach 127 (SDK machines), filter IDs 31.
+                            if mode == 'identity' or not first <= machine_id < (128 if kind == 'synth' else 32):
                                 expected.append(machine_id)
                             elif kind == 'synth':
                                 expected.append(machine_id if machine_id == 8 or mode == 'parameter' else 4)
@@ -271,18 +295,18 @@ class ParameterDispatchTests(unittest.TestCase):
             firmware.write_bytes(outputs['syx'])
             slot_code, row_slot, row_cc, value_class, cc_code, nrpn_code = (
                 0x400dc18e, 0x400dbe28, 0x400dc406, 0x400c257c, 0x400dc978, 0x400dca5a)
-            # The synth's 40 rows are 321..360 and G's is 361, after them. Slot 66 is G's only for
+            # The synth's 40 rows are 321..360 and G's is 376, after them. Slot 66 is G's only for
             # the custom filter: MULTI-MODE keeps TYPE (38), as a missing filter (6) does, and
             # LOWPASS 4 has none; CC 18 and NRPN 1:22 follow.
             checks = [(slot_code, [25, 8, 0], 321), (slot_code, [64, 8, 0], 360),
-                      (slot_code, [66, 8, 9], 361), (slot_code, [66, 0, 9], 361),
+                      (slot_code, [66, 8, 9], 376), (slot_code, [66, 0, 9], 376),
                       (slot_code, [66, 0, 0], 38), (slot_code, [66, 0, 1], 0), (slot_code, [66, 8, 6], 38),
                       (slot_code, [67, 0, 9], 39),
-                      (row_slot, [361], 66), (row_slot, [360], 64), (row_cc, [361], 18),
-                      (cc_code, [0, 8, 9, 18], 361), (nrpn_code, [0, 8, 9, 150], 361),
+                      (row_slot, [376], 66), (row_slot, [360], 64), (row_cc, [376], 18),
+                      (cc_code, [0, 8, 9, 18], 376), (nrpn_code, [0, 8, 9, 150], 376),
                       (cc_code, [0, 0, 1, 18], 0), (cc_code, [0, 0, 0, 18], 38), (cc_code, [0, 0, 9, 16], 39),
                       (cc_code, [0, 8, 9, 40], 321),
-                      (value_class, [361], None), (value_class, [38], None)]
+                      (value_class, [376], None), (value_class, [38], None)]
             request = work / 'request.json'
             request.write_text(json.dumps({'calls': [{'pc': hex(pc), 'args': [str(a) for a in args]}
                                                      for pc, args, _ in checks]}))

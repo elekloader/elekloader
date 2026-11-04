@@ -112,15 +112,14 @@ class Knobs:
         self.track.use(EIGHT)
         self.track.show()
         self.assertTrue(self.panel.wait_until(
-            lambda: any(self.panel.crop(25, 13, 16, 16))
-            and not any(self.panel.crop(18, 13, 6, 16))), 'the SDK knob grid did not appear')
-        first = self.panel.crop(25, 13, 16, 16)
+            lambda: any(self.panel.glyph_pixels())
+            and not any(self.panel.algorithm_pixels())), 'the SDK knob grid did not appear')
+        first = self.panel.glyph_pixels()
         self.assertTrue(any(first), 'encoder A has no knob graphic')
         for encoder in range(8):
             with self.subTest(encoder='ABCDEFGH'[encoder]):
-                self.assertEqual(self.panel.crop(25 + 26 * (encoder % 4),
-                                                 13 + 27 * (encoder // 4), 16, 16), first)
-        self.assertFalse(any(self.panel.crop(18, 13, 6, 16)), 'FM diagram remains beside the grid')
+                self.assertEqual(self.panel.glyph_pixels(encoder), first)
+        self.assertFalse(any(self.panel.algorithm_pixels()), 'FM diagram remains beside the grid')
 
     def test_each_encoder_edits_its_own_knob(self):
         knobs = self.track.use(EIGHT).all_knobs()

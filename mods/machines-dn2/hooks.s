@@ -47,7 +47,7 @@ dn2_list_end:
 dn2_group:
     cmpi.l #5,%d0
     bcs.s 1f
-    cmpi.l #32,%d0
+    cmpi.l #128,%d0                 | machines.c COUNT
     bcc.s 1f
     moveq #0,%d0
 1:  moveq #3,%d1
@@ -86,6 +86,11 @@ dn2_page_count:
     .globl dn2_page
 dn2_page:
     SAVE
+    move.l 20(%sp),%d0
+    cmpi.l #SYN_TITLE_RETURN,%d0
+    bne.s 3f
+    move.l %a2,dn2_syn_view         | the title accessor's live view, not a fixed heap address
+3:
     move.l 28(%sp),-(%sp)
     move.l 28(%sp),-(%sp)
     jsr dn2_voice_page
@@ -324,3 +329,27 @@ dn2_filter_curve:
     lea 20(%sp),%sp
     RESTORE
     jmp CURVE_SKIP
+
+| A loaded sound's synth type: stock keeps 0..31 (with the bound machines-dn2 0.1 set), and 0xff;
+| 0..127 here (machines.c COUNT): anything else becomes FM TONE, as stock does. The stock code's d1 is
+| dead after the type; d2 gets the filter's bound, 7, as it would.
+    .globl dn2_load_type
+dn2_load_type:
+    move.b 0xf4(%a3),%d0
+    moveq #0,%d1
+    move.b %d0,%d1
+    cmpi.l #128,%d1                 | machines.c COUNT
+    bcs.s 1f
+    cmpi.l #0xff,%d1
+    beq.s 1f
+    moveq #0,%d0
+1:  move.b #7,%d2
+    jmp LOAD_TYPE_CONTINUE
+
+| SDK machines (sdk_alpha.c): where OS 1.12 keeps the panel's track and page, the tracks' sounds and
+| SYN's page; the bitmap's fill. Found with digikit's emulator and checked on a unit (DigiHealth).
+    .globl dn2_active_track, dn2_shown_page, dn2_sounds, dn2_fillrect
+    .set dn2_active_track, ACTIVE_TRACK
+    .set dn2_shown_page, SHOWN_PAGE
+    .set dn2_sounds, SOUNDS
+    .set dn2_fillrect, FILLRECT

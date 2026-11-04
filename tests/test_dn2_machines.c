@@ -19,6 +19,22 @@ static const struct mk2_synth bad_id = {32, "BAD", "BAD"}, unlabelled = {6, "BAD
 static const struct mk2_synth duplicate = {5, "DUPLICATE", "DUP"};
 static const struct mk2_synth sine = {7, "SINE", "SINE"}, plain = {8, "PLAIN", "PLAIN"};
 static const struct mk2_synth roomy = {9, "ROOMY", "ROOMY"};
+/* sdk_alpha.c's side: one SDK machine, 100, which FM TONE plays (UI only). */
+static const struct mk2_synth sdk = {100, "SDK", "SDK"};
+const struct mk2_synth *dn2_sdk_synth(unsigned i)
+{
+#ifndef EMPTY
+    return i ? 0 : &sdk;
+#else
+    (void)i; (void)sdk;
+    return 0;
+#endif
+}
+void dn2_sdk_build(void) {}
+uint32_t dn2_sdk_page_count(uint32_t type) { return type == 100; }
+const struct descriptor *dn2_sdk_page(uint32_t type, uint32_t page) { (void)type; (void)page; return 0; }
+uint32_t dn2_sdk_code(uint32_t type, uint32_t slot) { return type == 100 && slot == SLOT ? 999 : 0; }
+
 const struct mk2_synth *const mk2_voice_synths[] = {
 #ifndef EMPTY
     &high, &bad_id, &unlabelled, &low, &sine, &plain, &roomy, &duplicate,
@@ -292,7 +308,12 @@ int main(void)
     (void)sine; (void)plain; (void)roomy;
     assert(!dn2_is_voice(5) && dn2_dsp_type(5) == 4);
 #else
-    assert(n == 10 && dn2_list[4] == 5 && dn2_list[5] == 7 && dn2_list[8] == 31);
+    assert(n == 11 && dn2_list[4] == 5 && dn2_list[5] == 7 && dn2_list[8] == 31 && dn2_list[9] == 100);
+    /* An SDK machine: FM TONE plays it, and its pages and knobs are sdk_alpha.c's. */
+    assert(dn2_is_voice(100) && dn2_dsp_type(100) == 0 && dn2_host_type(100) == 0);
+    assert(dn2_voice_page_count(100) == 1 && dn2_voice_page(100, 0) == dn2_descriptor(100));
+    assert(dn2_voice_code(100, SLOT) == 999 && dn2_voice_code(100, SLOT + 1) == 0);
+    assert(dn2_permit(100, 0) == dn2_permit(0, 0) && !strcmp((const char *)dn2_name(100), "SDK"));
     /* Every custom synth reads as FM TONE (0) and keeps its ID for the DSP. */
     assert(dn2_is_voice(7) && dn2_dsp_type(7) == 7 && dn2_host_type(7) == 0);
     assert(dn2_is_voice(5) && dn2_dsp_type(5) == 5 && dn2_host_type(31) == 0);
@@ -317,8 +338,8 @@ int main(void)
     assert(dn2_descriptor(6) == (uintptr_t)&dn2_stock_descriptors[4]);
     for (unsigned t = 0; t < 16; ++t)
         assert(dn2_permit(6, t) == dn2_permit(4, t));
-    assert(!dn2_permit(32, 0) && !dn2_permit(5, 16) && !dn2_permit(0xffffffff, 0));
-    assert(dn2_name(32) == (uintptr_t)dn2_unknown_name);
+    assert(!dn2_permit(128, 0) && !dn2_permit(5, 16) && !dn2_permit(0xffffffff, 0));
+    assert(dn2_name(128) == (uintptr_t)dn2_unknown_name);
     for (unsigned id = 0; id < 5; ++id) {
         assert(dn2_descriptor(id) == (uintptr_t)&dn2_stock_descriptors[id]);
         assert(dn2_name(id) == (uintptr_t)dn2_stock_names[id].name);

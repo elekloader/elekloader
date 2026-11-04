@@ -89,7 +89,7 @@ FIFTEEN = sdk_machine("Fifteen", """
 class LfoDestinations:
     def test_an_lfo_can_point_at_every_knob(self):
         used = self.track.use(LFO)
-        for number in (1, 2):
+        for number in range(1, self.device.lfo_count + 1):
             lfo = self.track.lfo(number)
             for knob in used.all_knobs():
                 with self.subTest(lfo=number, knob=knob.spec['label']):
@@ -98,7 +98,7 @@ class LfoDestinations:
 
     def test_the_list_names_every_knob_with_its_label(self):
         used = self.track.use(LFO)
-        for number in (1, 2):
+        for number in range(1, self.device.lfo_count + 1):
             lfo = self.track.lfo(number)
             for knob in used.all_knobs():
                 with self.subTest(lfo=number, knob=knob.spec['label']):
@@ -118,16 +118,16 @@ class LfoDestinations:
 
     def test_an_lfo_keeps_its_knob_when_the_knob_is_renamed_and_hidden(self):
         xyz, name = self.track.use(LFO).knobs("XYZ", "NAME")
-        for number in (1, 2):
+        for number in range(1, self.device.lfo_count + 1):
             self.track.lfo(number).choose(xyz)
             self.track.lfo(number).confirm()
         for value in (24, 127, 0):
             with self.subTest(name=value):
                 name.set(value)
-                for number in (1, 2):
+                for number in range(1, self.device.lfo_count + 1):
                     lfo = self.track.lfo(number)
+                    self.assertEqual(lfo.target.spec['id'], xyz.spec['id'])   # kept, before the list moves
                     lfo.choose(xyz)
-                    self.assertEqual(lfo.target.spec['id'], xyz.spec['id'])
                     self.assertEqual(lfo.label_of(xyz), "XYZ" if value == 0 else "QWE")
                     lfo.confirm()
         self.assertEqual(xyz.label, "XYZ")    # returning to the SDK page restores its page context

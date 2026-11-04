@@ -110,6 +110,21 @@ class Machines:
         self.assertEqual(self.tracks[0].machine_id, EMPTY.id)
         self.assertEqual(self.tracks[1].machine_id, CALLBACK.id)
 
+    def test_the_last_track_gets_its_own_callback_context(self):
+        self.tracks[-1].use(CALLBACK)
+        self.tracks[-1].show()
+        self.assertEqual(self.read('callback_track'), len(self.tracks) - 1)
+        self.assertEqual(self.tracks[0].machine_id, 0)
+
+    def test_a_callback_runs_again_after_returning_from_stock(self):
+        self.track.use(CALLBACK)
+        self.track.show()
+        calls = self.read('callback_calls')
+        self.track.use_stock()
+        self.track.use(CALLBACK)
+        self.track.show()
+        self.assertGreater(self.read('callback_calls'), calls)
+
     def test_the_hello_world_example_edits_pitch_on_both_its_pages(self):
         pitch, = self.track.use(HELLO).knobs("PITCH")
         pitch.turn(+16)

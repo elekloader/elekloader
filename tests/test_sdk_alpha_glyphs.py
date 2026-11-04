@@ -126,12 +126,22 @@ class Glyphs:
     def test_glyphs_follow_logical_ids_in_all_eight_positions(self):
         self.track.use(GRID)
         self.track.show()
-        self.assertTrue(self.panel.wait_until(lambda: tuple(self.panel.crop(25, 13, 16, 16)) == DIGITS[4]))
+        self.assertTrue(self.panel.wait_until(lambda: self.panel.glyph_pixels() == DIGITS[4]))
         for encoder in range(8):
             with self.subTest(encoder='ABCDEFGH'[encoder]):
-                self.assertEqual(tuple(self.panel.crop(25 + 26 * (encoder % 4),
-                                                       13 + 27 * (encoder // 4), 16, 16)),
+                self.assertEqual(self.panel.glyph_pixels(encoder),
                                  DIGITS[(7 - encoder) % 4 + 1])
+
+    def test_settings_cover_the_glyphs(self):
+        self.track.use(GRID)
+        self.track.show()
+        self.panel.open_settings()
+        sdk_menu = self.panel.settings_pixels()
+        self.panel.close_settings()
+        self.track.use_stock()
+        self.track.show()
+        self.panel.open_settings()
+        self.assertEqual(self.panel.settings_pixels(), sdk_menu)
 
     def test_an_older_knob_descriptor_keeps_the_stock_graphic(self):
         knob, = self.track.use(LEGACY).knobs("PLAIN")
