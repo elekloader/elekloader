@@ -179,15 +179,24 @@ CORE_42_EXPORTS = ['core_audio_caps', 'core_audio_gate', 'core_audio_live', 'cor
 # rest (ev_idle) take no handler there: digiemu's cold boot waits for the stock idle spin.
 CORE_50_SITES = ['core_card_ready', 'core_boot_ui', 'core_crash_install', 'core_project_saving',
     'core_project_saved', 'core_project_loaded', 'core_project_new', 'core_pattern_save', 'core_pattern_reload',
-    'core_sample_assign']
+    'core_sample_assign', 'core_play', 'core_stop', 'core_pause', 'core_sync_stop', 'core_seq_tick',
+    'core_pattern_request', 'core_pattern_switch', 'core_tempo', 'core_midi_in_a', 'core_midi_in_b', 'core_sysex',
+    'core_midi_cc', 'core_midi_pc', 'core_midi_out', 'core_midi_rt_out', 'core_note_on', 'core_note_off']
 CORE_50_TABLES = ['ev_card_ready', 'ev_boot_ui', 'ev_idle', 'ev_crash', 'ev_project_saving', 'ev_project_saved',
-    'ev_project_loaded', 'ev_project_new', 'ev_pattern_op', 'ev_sample_assign']
-CORE_50_EXPORTS = ['core_boot_ui', 'core_card_ready', 'core_crash', 'core_crash_install', 'core_pattern_reload',
-    'core_pattern_save', 'core_project_loaded', 'core_project_new', 'core_project_saved', 'core_project_saving',
-    'core_restart', 'core_restart_now', 'core_sample_assign']
+    'ev_project_loaded', 'ev_project_new', 'ev_pattern_op', 'ev_sample_assign', 'ev_transport', 'ev_seq_tick',
+    'ev_pattern_request', 'ev_pattern_switch', 'ev_tempo', 'ev_midi_in', 'ev_sysex', 'ev_midi_cc', 'ev_midi_pc',
+    'ev_midi_out', 'ev_live_note']
+CORE_50_EXPORTS = ['core_boot_ui', 'core_card_ready', 'core_crash', 'core_crash_install', 'core_midi_cc',
+    'core_midi_in_a', 'core_midi_in_b', 'core_midi_out', 'core_midi_pc', 'core_midi_rt_out', 'core_note_off',
+    'core_note_on', 'core_pattern_reload', 'core_pattern_request', 'core_pattern_save', 'core_pattern_switch',
+    'core_pause', 'core_play', 'core_project_loaded', 'core_project_new', 'core_project_saved',
+    'core_project_saving', 'core_restart', 'core_restart_now', 'core_sample_assign', 'core_seq_tick', 'core_stop',
+    'core_sync_stop', 'core_sysex', 'core_tempo', 'fw_sysex_send']
 CORE_50_BSS = 4
 CORE_50_EVENTS = ['ev_card_ready', 'ev_boot_ui', 'ev_crash', 'ev_project_saving', 'ev_project_saved',
-    'ev_project_loaded', 'ev_project_new', 'ev_pattern_op', 'ev_sample_assign']
+    'ev_project_loaded', 'ev_project_new', 'ev_pattern_op', 'ev_sample_assign', 'ev_transport', 'ev_seq_tick',
+    'ev_pattern_request', 'ev_pattern_switch', 'ev_tempo', 'ev_midi_in', 'ev_sysex', 'ev_midi_cc', 'ev_midi_pc',
+    'ev_midi_out', 'ev_live_note']
 # --- end core 5.0
 
 CORE_ADDS = [('4.1', CORE_41_SITES, CORE_41_TABLES, [], 8),

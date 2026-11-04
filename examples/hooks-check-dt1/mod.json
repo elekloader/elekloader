@@ -1,11 +1,19 @@
 {
- "id": "hcdt1", "version": "0.1",
+ "id": "hcdt1",
+ "version": "0.1",
  "license": "GPL-2.0-or-later",
- "title": "hooks check (Digitakt mk1)", "category": "Utility", "author": "irpina",
+ "title": "hooks check (Digitakt mk1)",
+ "category": "Utility",
+ "author": "irpina",
  "description": "A test mod for core 5.0: one handler on each event, which counts its calls and keeps its last arguments in hc_counts and hc_args, for the emulator probe to read. It takes nothing and changes nothing the unit does.",
- "device": "digitakt-mk1", "os": "1.53",
- "ports": {"1.54": {}},
- "sources": ["check.c"],
+ "device": "digitakt-mk1",
+ "os": "1.53",
+ "ports": {
+  "1.54": {}
+ },
+ "sources": [
+  "check.c"
+ ],
  "subscribe": [
   {"event": "ev_card_ready", "fn": "hc_card_ready", "order": 50},
   {"event": "ev_boot_ui", "fn": "hc_boot_ui", "order": 50},
@@ -15,8 +23,23 @@
   {"event": "ev_project_loaded", "fn": "hc_project_loaded", "order": 50},
   {"event": "ev_project_new", "fn": "hc_project_new", "order": 50},
   {"event": "ev_pattern_op", "fn": "hc_pattern_op", "order": 50},
-  {"event": "ev_sample_assign", "fn": "hc_sample_assign", "order": 50}
+  {"event": "ev_sample_assign", "fn": "hc_sample_assign", "order": 50},
+  {"event": "ev_transport", "fn": "hc_transport", "order": 50},
+  {"event": "ev_seq_tick", "fn": "hc_seq_tick", "order": 50},
+  {"event": "ev_pattern_request", "fn": "hc_pattern_request", "order": 50},
+  {"event": "ev_pattern_switch", "fn": "hc_pattern_switch", "order": 50},
+  {"event": "ev_tempo", "fn": "hc_tempo", "order": 50},
+  {"event": "ev_midi_in", "fn": "hc_midi_in", "order": 50},
+  {"event": "ev_sysex", "fn": "hc_sysex", "order": 50},
+  {"event": "ev_midi_cc", "fn": "hc_midi_cc", "order": 50},
+  {"event": "ev_midi_pc", "fn": "hc_midi_pc", "order": 50},
+  {"event": "ev_midi_out", "fn": "hc_midi_out", "order": 50},
+  {"event": "ev_live_note", "fn": "hc_live_note", "order": 50}
  ],
- "resources": {"core": "5.0"},
- "requires": ["core"]
+ "resources": {
+  "core": "5.0"
+ },
+ "requires": [
+  "core"
+ ]
 }

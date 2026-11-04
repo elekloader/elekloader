@@ -70,3 +70,7 @@
         FW      fw_tempo, FW_TEMPO
         FW      fw_timeline, FW_TIMELINE
         FW      fw_transport, FW_TRANSPORT
+
+| From 5.0:
+|   fw_sysex_send      0x400d6e1e  send(buf, len, volatile uint8_t *abort, port) -> nonzero: sent; in pieces of at most 144 bytes (1.54: 0x400d7046)
+        FW      fw_sysex_send, SYSEX_SEND

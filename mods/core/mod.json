@@ -77,7 +77,24 @@
   "NEW_PROJECT": "0x40084c00",
   "PATTERN_SAVE": "0x40016b16",
   "PATTERN_RELOAD": "0x40017c16",
-  "SAMPLE_ASSIGN": "0x4001da6a"
+  "SAMPLE_ASSIGN": "0x4001da6a",
+  "SEQ_PLAY": "0x4006edf4",
+  "SEQ_STOP": "0x40070218",
+  "SEQ_PAUSE": "0x4006fd86",
+  "SEQ_GATE": "0x40076f86",
+  "SYNC_STOP": "0x4006f29c",
+  "SYNC_STATE": "0x4199dc68",
+  "SEQ_TICK": "0x4007041c",
+  "PATTERN_REQ": "0x4006ffa2",
+  "PATTERN_SWITCH": "0x4006e6e0",
+  "SYSEX_IN": "0x400d52c4",
+  "CC_TRACK": "0x400d6a58",
+  "PC_IN": "0x400d4c0c",
+  "MIDI_SEND": "0x400d6bd0",
+  "RT_SEND": "0x400d6b8a",
+  "NOTE_ON": "0x400d53dc",
+  "NOTE_OFF": "0x400d575e",
+  "SYSEX_SEND": "0x400d6e1e"
  },
  "sites": [
   {"addr": "0x40000538", "stock": "4eb940001c94", "op": "jsr", "target": "boot"},
@@ -136,7 +153,24 @@
   {"addr": "0x40084c00", "stock": "4fefffec48d70c1c", "op": "jmp", "target": "core_project_new"},
   {"addr": "0x40016b16", "stock": "4fefffd448d71cfc", "op": "jmp", "target": "core_pattern_save"},
   {"addr": "0x40017c16", "stock": "4e56ffd448d71cfc", "op": "jmp", "target": "core_pattern_reload"},
-  {"addr": "0x4001da6a", "stock": "4e56ffe448d7041c", "op": "jmp", "target": "core_sample_assign"}
+  {"addr": "0x4001da6a", "stock": "4e56ffe448d7041c", "op": "jmp", "target": "core_sample_assign"},
+  {"addr": "0x4006edf4", "stock": "4fefffa848d77cfc", "op": "jmp", "target": "core_play"},
+  {"addr": "0x40070218", "stock": "4fefffe82f032f02", "op": "jmp", "target": "core_stop"},
+  {"addr": "0x4006fd86", "stock": "2f024eb940076f86", "op": "jmp", "target": "core_pause"},
+  {"addr": "0x4006f29c", "stock": "424042b94199dc68", "op": "jmp", "target": "core_sync_stop"},
+  {"addr": "0x4007041c", "stock": "4fefff8c48d77fff", "op": "jmp", "target": "core_seq_tick"},
+  {"addr": "0x4006ffa2", "stock": "4fefffec48d70c1c", "op": "jmp", "target": "core_pattern_request"},
+  {"addr": "0x4006e6e0", "stock": "4e56fffc2f0a2f02", "op": "jmp", "target": "core_pattern_switch"},
+  {"addr": "0x400ece46", "stock": "23c24020db60", "op": "jsr", "target": "core_tempo"},
+  {"addr": "0x400d472c", "stock": "20720c004e90", "op": "jsr", "target": "core_midi_in_a"},
+  {"addr": "0x400d4796", "stock": "20721c004e90", "op": "jsr", "target": "core_midi_in_b"},
+  {"addr": "0x400d52c4", "stock": "4feffff048d70c0c", "op": "jmp", "target": "core_sysex"},
+  {"addr": "0x400d6a58", "stock": "4aaf001456c0", "op": "jmp", "target": "core_midi_cc"},
+  {"addr": "0x400d4c0c", "stock": "4fefffd448d7001c", "op": "jmp", "target": "core_midi_pc"},
+  {"addr": "0x400d6bd0", "stock": "4feffff448d7001c", "op": "jmp", "target": "core_midi_out"},
+  {"addr": "0x400d6b8a", "stock": "71af00072f400004", "op": "jmp", "target": "core_midi_rt_out"},
+  {"addr": "0x400d53dc", "stock": "4e56ff98707f", "op": "jmp", "target": "core_note_on"},
+  {"addr": "0x400d575e", "stock": "4e56ff94707f", "op": "jmp", "target": "core_note_off"}
  ],
  "ports": {
   "1.54": {
@@ -212,7 +246,24 @@
     "NEW_PROJECT": "0x40084c00",
     "PATTERN_SAVE": "0x40016b16",
     "PATTERN_RELOAD": "0x40017c16",
-    "SAMPLE_ASSIGN": "0x4001da6a"
+    "SAMPLE_ASSIGN": "0x4001da6a",
+    "SEQ_PLAY": "0x4006edf4",
+    "SEQ_STOP": "0x40070218",
+    "SEQ_PAUSE": "0x4006fd86",
+    "SEQ_GATE": "0x40076f86",
+    "SYNC_STOP": "0x4006f29c",
+    "SYNC_STATE": "0x4199ec68",
+    "SEQ_TICK": "0x4007041c",
+    "PATTERN_REQ": "0x4006ffa2",
+    "PATTERN_SWITCH": "0x4006e6e0",
+    "SYSEX_IN": "0x400d54ec",
+    "CC_TRACK": "0x400d6c80",
+    "PC_IN": "0x400d4e34",
+    "MIDI_SEND": "0x400d6df8",
+    "RT_SEND": "0x400d6db2",
+    "NOTE_ON": "0x400d5604",
+    "NOTE_OFF": "0x400d5986",
+    "SYSEX_SEND": "0x400d7046"
    },
    "sites": [
     {"addr": "0x40000538", "stock": "4eb940001c94", "op": "jsr", "target": "boot"},
@@ -271,7 +322,24 @@
     {"addr": "0x40084c00", "stock": "4fefffec48d70c1c", "op": "jmp", "target": "core_project_new"},
     {"addr": "0x40016b16", "stock": "4fefffd448d71cfc", "op": "jmp", "target": "core_pattern_save"},
     {"addr": "0x40017c16", "stock": "4e56ffd448d71cfc", "op": "jmp", "target": "core_pattern_reload"},
-    {"addr": "0x4001da6a", "stock": "4e56ffe448d7041c", "op": "jmp", "target": "core_sample_assign"}
+    {"addr": "0x4001da6a", "stock": "4e56ffe448d7041c", "op": "jmp", "target": "core_sample_assign"},
+    {"addr": "0x4006edf4", "stock": "4fefffa848d77cfc", "op": "jmp", "target": "core_play"},
+    {"addr": "0x40070218", "stock": "4fefffe82f032f02", "op": "jmp", "target": "core_stop"},
+    {"addr": "0x4006fd86", "stock": "2f024eb940076f86", "op": "jmp", "target": "core_pause"},
+    {"addr": "0x4006f29c", "stock": "424042b94199ec68", "op": "jmp", "target": "core_sync_stop"},
+    {"addr": "0x4007041c", "stock": "4fefff8c48d77fff", "op": "jmp", "target": "core_seq_tick"},
+    {"addr": "0x4006ffa2", "stock": "4fefffec48d70c1c", "op": "jmp", "target": "core_pattern_request"},
+    {"addr": "0x4006e6e0", "stock": "4e56fffc2f0a2f02", "op": "jmp", "target": "core_pattern_switch"},
+    {"addr": "0x400ed06e", "stock": "23c24020df10", "op": "jsr", "target": "core_tempo"},
+    {"addr": "0x400d4954", "stock": "20720c004e90", "op": "jsr", "target": "core_midi_in_a"},
+    {"addr": "0x400d49be", "stock": "20721c004e90", "op": "jsr", "target": "core_midi_in_b"},
+    {"addr": "0x400d54ec", "stock": "4feffff048d70c0c", "op": "jmp", "target": "core_sysex"},
+    {"addr": "0x400d6c80", "stock": "4aaf001456c0", "op": "jmp", "target": "core_midi_cc"},
+    {"addr": "0x400d4e34", "stock": "4fefffd448d7001c", "op": "jmp", "target": "core_midi_pc"},
+    {"addr": "0x400d6df8", "stock": "4feffff448d7001c", "op": "jmp", "target": "core_midi_out"},
+    {"addr": "0x400d6db2", "stock": "71af00072f400004", "op": "jmp", "target": "core_midi_rt_out"},
+    {"addr": "0x400d5604", "stock": "4e56ff98707f", "op": "jmp", "target": "core_note_on"},
+    {"addr": "0x400d5986", "stock": "4e56ff94707f", "op": "jmp", "target": "core_note_off"}
    ]
   }
  },
@@ -288,7 +356,9 @@
   "ev_render_master": 4, "core_mpages": 4, "ev_fxmix": 4,
   "core_audio": 4, "core_menu": 4,
   "ev_card_ready": 4, "ev_boot_ui": 4, "ev_idle": 4, "ev_crash": 4,
-  "ev_project_saving": 4, "ev_project_saved": 4, "ev_project_loaded": 4, "ev_project_new": 4, "ev_pattern_op": 4, "ev_sample_assign": 4
+  "ev_project_saving": 4, "ev_project_saved": 4, "ev_project_loaded": 4, "ev_project_new": 4, "ev_pattern_op": 4, "ev_sample_assign": 4,
+  "ev_transport": 4, "ev_seq_tick": 4, "ev_pattern_request": 4, "ev_pattern_switch": 4, "ev_tempo": 4,
+  "ev_midi_in": 4, "ev_sysex": 4, "ev_midi_cc": 4, "ev_midi_pc": 4, "ev_midi_out": 4, "ev_live_note": 4
  },
  "resources": {"names": ["timer:DTIM0"]}
 }

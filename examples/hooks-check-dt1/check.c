@@ -23,3 +23,14 @@ static void note(int i, int32_t a, int32_t b, int32_t c, int32_t d)
 /*  6 */ void hc_project_new(int32_t a0) { note(6, a0, 0, 0, 0); }
 /*  7 */ void hc_pattern_op(int32_t a0, int32_t a1, int32_t a2, int32_t a3) { note(7, a0, a1, a2, a3); }
 /*  8 */ void hc_sample_assign(int32_t a0, int32_t a1, int32_t a2) { note(8, a0, a1, a2, 0); }
+/*  9 */ int32_t hc_transport(int32_t a0, int32_t a1) { note(9, a0, a1, 0, 0); return 0; }
+/* 10 */ void hc_seq_tick(void) { note(10, 0, 0, 0, 0); }
+/* 11 */ void hc_pattern_request(int32_t a0, int32_t a1) { note(11, a0, a1, 0, 0); }
+/* 12 */ void hc_pattern_switch(int32_t a0) { note(12, a0, 0, 0, 0); }
+/* 13 */ void hc_tempo(int32_t a0, int32_t a1) { note(13, a0, a1, 0, 0); }
+/* 14 */ int32_t hc_midi_in(int32_t a0, int32_t a1, int32_t a2) { note(14, a0, a1, a2, 0); return 0; }
+/* 15 */ int32_t hc_sysex(int32_t a0, int32_t a1, int32_t a2) { note(15, a0, a1, a2, 0); return 0; }
+/* 16 */ int32_t hc_midi_cc(int32_t a0, int32_t a1, int32_t a2, int32_t a3) { note(16, a0, a1, a2, a3); return 0; }
+/* 17 */ int32_t hc_midi_pc(int32_t a0, int32_t a1, int32_t a2) { note(17, a0, a1, a2, 0); return 0; }
+/* 18 */ int32_t hc_midi_out(int32_t a0, int32_t a1, int32_t a2) { note(18, a0, a1, a2, 0); return 0; }
+/* 19 */ int32_t hc_live_note(int32_t a0, int32_t a1, int32_t a2, int32_t a3) { note(19, a0, a1, a2, a3); return 0; }
