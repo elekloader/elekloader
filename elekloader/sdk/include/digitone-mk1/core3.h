@@ -416,7 +416,7 @@ typedef void (*ev_track_reload_fn)(int32_t track, int32_t pattern, void *params)
  * nonzero once confirmed). The selection points at a vector of the ticked sounds' indices. */
 #define CORE_SOUND_COPY_POOL    0
 #define CORE_SOUND_COPY_BANK    1       /* to the +Drive or one of its banks */
-#define CORE_SOUND_COPY_OTHER   2       /* the manager's third copy routine, not seen run */
+#define CORE_SOUND_COPY_OTHER   2       /* from the pool view (LEFT > VIEW POOL) to the +Drive or a bank */
 #define CORE_SOUND_DELETE       3
 #define CORE_SOUND_SEND_SYSEX   4
 #define CORE_SOUND_PROTECT      5       /* toggle write protection */

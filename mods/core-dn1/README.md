@@ -248,8 +248,8 @@ the Digitone needs it. On its own it changes nothing the unit does.
     +Drive or a bank (1, 0x400d3604), deletes them (3, 0x400d3a42), sends
     them as SysEx (4, 0x400d3854) or toggles their write protection (5,
     0x400d3d90), or the SOUND BROWSER pastes into a pool slot (6,
-    0x400d5a7a: how a copied track sound is saved); op 2 is the manager's
-    third copy routine (0x400d31ec); and
+    0x400d5a7a: how a copied track sound is saved); op 2 copies from the
+    manager's pool view (0x400d31ec); and
     `ev_sound_load(track, sound, kit)` before the kit puts a sound on a track
     (the SOUND BROWSER's FUNC+YES, 0x4001d710), and `ev_sound_clear(slot,
     name)` before CLEAR TRACK SOUND initialises one (0x400328f6);

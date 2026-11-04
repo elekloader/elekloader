@@ -711,7 +711,8 @@ core_track_reload:
 
 | ev_sound_op: f(int op, void *a, void *b), as the SOUND MANAGER (SETTINGS >
 | SOUNDS) runs an action on the ticked sounds (UI task): op 0 copy to the sound
-| pool, 1 copy to the +Drive or a bank, 2 the other copy (not seen run): a = the
+| pool, 1 copy to the +Drive or a bank, 2 copy from the pool view (LEFT > VIEW
+| POOL) to the +Drive or a bank: a = the
 | menu view, b = the selection; 3 delete (b = nonzero once confirmed), 4 send
 | SysEx, 5 toggle write protection, 6 paste into a pool slot (the SOUND
 | BROWSER's FUNC+STOP: how a copied track sound is saved): a = the selection
