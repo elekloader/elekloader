@@ -35,7 +35,10 @@
   {"event": "ev_arp_step", "fn": "hc_arp_step", "order": 50},
   {"event": "ev_voice_steal", "fn": "hc_voice_steal", "order": 50},
   {"event": "ev_keyboard_note", "fn": "hc_keyboard_note", "order": 50},
-  {"event": "ev_mute", "fn": "hc_mute", "order": 50}
+  {"event": "ev_mute", "fn": "hc_mute", "order": 50},
+  {"event": "ev_pattern_op", "fn": "hc_pattern_op", "order": 50},
+  {"event": "ev_view", "fn": "hc_view", "order": 50},
+  {"event": "ev_track_reload", "fn": "hc_track_reload", "order": 50}
  ],
  "resources": {"core": "5.0"},
  "requires": ["core"]

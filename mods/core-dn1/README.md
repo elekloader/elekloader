@@ -237,6 +237,14 @@ the Digitone needs it. On its own it changes nothing the unit does.
     take a press, at the note-on dispatcher (0x4003b198) and the note-off
     (0x4003b26e), and `ev_mute(state, track, muted, a4)` at the mute setter
     (0x4002f994);
+  - the pattern menu: `ev_pattern_op(op, index, what)` as FUNC+YES saves
+    (op 0, 0x40027a00) or FUNC+NO reloads (op 1, 0x40027e4a) the pattern,
+    its kit (what 1), its sequence (2) or both (3), before the stock checks,
+    and `ev_track_reload(track, pattern, params)` as a held track key + NO
+    reloads a track's sound (0x40029d16);
+  - the view stack: `ev_view(op, container, a, b)` before a view is pushed
+    (op 0, 0x400e60de), replaced by a page key (1, 0x400e6ad4) or popped
+    (2, 0x400e63c0), and `fw_view()`, the view on top (keys go to it);
   - sequencer edits: `ev_trig_set`, `ev_step_note`, `ev_plock_store`,
     `ev_plock_clear`, `ev_step_clear`, `ev_track_length` at the routines
     that write a step's flags, note slots, locks and a track's length;

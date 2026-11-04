@@ -396,4 +396,25 @@ typedef void (*ev_sound_live_fn)(int32_t value, int32_t track, int32_t slot);
 #define CORE_FX_DRIVE           3
 typedef int32_t (*ev_render_fx_fn)(int32_t stage, int16_t *out, int16_t *in, void *params);
 
+/* The pattern menu's two workers, at their entry (UI task), before their write-protect and project checks:
+ * FUNC+YES saves, FUNC+NO reloads; what is 1 the kit, 2 the sequence, 3 both. */
+#define CORE_PATTERN_SAVE       0
+#define CORE_PATTERN_RELOAD     1
+#define CORE_PATTERN_KIT        1
+#define CORE_PATTERN_SEQ        2
+typedef void (*ev_pattern_op_fn)(int32_t op, int32_t index, int32_t what);
+
+/* A held track key + NO reloads the track's sound from the saved pattern, once per track (UI task), before
+ * the project check. params is the parameter list (begin, end pointers): empty = the whole sound. */
+typedef void (*ev_track_reload_fn)(int32_t track, int32_t pattern, void *params);
+
+/* The view stack, before it changes (UI task). Push: a = &new view, b = nonzero to first close views of the
+ * same name; replace (the page keys): a = &old, b = &new; pop (NO, FUNC release): a = the matcher.
+ * container is MainScreen+0x40 for the main stack. fw_view() is the view on top (keys go to it), or 0. */
+#define CORE_VIEW_PUSH          0
+#define CORE_VIEW_REPLACE       1
+#define CORE_VIEW_POP           2
+typedef void (*ev_view_fn)(int32_t op, void *container, void *a, void *b);
+extern void *fw_view(void);
+
 #endif

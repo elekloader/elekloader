@@ -140,7 +140,14 @@
   "VOICE_SLOTS": "0x80005434",
   "KBD_ON": "0x4003b198",
   "KBD_OFF": "0x4003b26e",
-  "MUTE_SET": "0x4002f994"
+  "MUTE_SET": "0x4002f994",
+  "PTN_SAVE": "0x40027a00",
+  "PTN_RELOAD": "0x40027e4a",
+  "VIEW_PUSH": "0x400e60de",
+  "VIEW_REPLACE": "0x400e6ad4",
+  "VIEW_POP": "0x400e63c0",
+  "MAIN_SCREEN": "0x419efe50",
+  "TRACK_RELOAD": "0x40029d16"
  },
  "sites": [
   {"addr": "0x40000538", "stock": "4eb940001df4", "op": "jsr", "target": "core_dn_boot"},
@@ -272,7 +279,13 @@
   {"addr": "0x4009f700", "stock": "2801e98c1a2f003f", "op": "jsr", "target": "core_voice_steal"},
   {"addr": "0x4003b198", "stock": "4fefffe87007", "op": "jmp", "target": "core_kbd_on"},
   {"addr": "0x4003b26e", "stock": "598f2f037207", "op": "jmp", "target": "core_kbd_off"},
-  {"addr": "0x4002f994", "stock": "4e56ffd048d73c7c", "op": "jmp", "target": "core_mute"}
+  {"addr": "0x4002f994", "stock": "4e56ffd048d73c7c", "op": "jmp", "target": "core_mute"},
+  {"addr": "0x40027a00", "stock": "4fefffcc48d77cfc", "op": "jmp", "target": "core_pattern_save"},
+  {"addr": "0x40027e4a", "stock": "4fefffcc48d77cfc", "op": "jmp", "target": "core_pattern_reload"},
+  {"addr": "0x400e60de", "stock": "4fefffd848d77c1c", "op": "jmp", "target": "core_view_push"},
+  {"addr": "0x400e6ad4", "stock": "4e56ffd448d73c04", "op": "jmp", "target": "core_view_replace"},
+  {"addr": "0x400e63c0", "stock": "4fefffd048d77c7c", "op": "jmp", "target": "core_view_pop"},
+  {"addr": "0x40029d16", "stock": "4fefffcc48d77c3c", "op": "jmp", "target": "core_track_reload"}
  ],
  "ports": {
   "1.44": {
@@ -411,7 +424,14 @@
     "VOICE_SLOTS": "0x80005434",
     "KBD_ON": "0x4003b198",
     "KBD_OFF": "0x4003b26e",
-    "MUTE_SET": "0x4002f994"
+    "MUTE_SET": "0x4002f994",
+    "PTN_SAVE": "0x40027a00",
+    "PTN_RELOAD": "0x40027e4a",
+    "VIEW_PUSH": "0x400e6352",
+    "VIEW_REPLACE": "0x400e6d48",
+    "VIEW_POP": "0x400e6634",
+    "MAIN_SCREEN": "0x419f0e50",
+    "TRACK_RELOAD": "0x40029d16"
    },
    "sites": [
     {"addr": "0x40000538", "stock": "4eb940001df4", "op": "jsr", "target": "core_dn_boot"},
@@ -543,7 +563,13 @@
     {"addr": "0x4009f720", "stock": "2801e98c1a2f003f", "op": "jsr", "target": "core_voice_steal"},
     {"addr": "0x4003b198", "stock": "4fefffe87007", "op": "jmp", "target": "core_kbd_on"},
     {"addr": "0x4003b26e", "stock": "598f2f037207", "op": "jmp", "target": "core_kbd_off"},
-    {"addr": "0x4002f994", "stock": "4e56ffd048d73c7c", "op": "jmp", "target": "core_mute"}
+    {"addr": "0x4002f994", "stock": "4e56ffd048d73c7c", "op": "jmp", "target": "core_mute"},
+    {"addr": "0x40027a00", "stock": "4fefffcc48d77cfc", "op": "jmp", "target": "core_pattern_save"},
+    {"addr": "0x40027e4a", "stock": "4fefffcc48d77cfc", "op": "jmp", "target": "core_pattern_reload"},
+    {"addr": "0x400e6352", "stock": "4fefffd848d77c1c", "op": "jmp", "target": "core_view_push"},
+    {"addr": "0x400e6d48", "stock": "4e56ffd448d73c04", "op": "jmp", "target": "core_view_replace"},
+    {"addr": "0x400e6634", "stock": "4fefffd048d77c7c", "op": "jmp", "target": "core_view_pop"},
+    {"addr": "0x40029d16", "stock": "4fefffcc48d77c3c", "op": "jmp", "target": "core_track_reload"}
    ]
   }
  },
@@ -557,7 +583,10 @@
   "ev_boot_ui": 4, "ev_usb": 4, "ev_project_saving": 4, "ev_project_saved": 4, "ev_transport": 4, "ev_seq_tick": 4, "ev_pattern_request": 4, "ev_midi_in": 4, "ev_midi_out": 4, "ev_voice_free": 4, "ev_ui_msg": 4, "ev_trig_set": 4, "ev_step_note": 4, "ev_plock_store": 4, "ev_plock_clear": 4, "ev_step_clear": 4, "ev_track_length": 4, "ev_param_set": 4, "ev_sound_live": 4, "ev_render_fx": 4,
   "ev_tempo": 4, "ev_pattern_switch": 4,
   "ev_arp_step": 4, "ev_voice_steal": 4,
-  "ev_keyboard_note": 4, "ev_mute": 4
+  "ev_keyboard_note": 4, "ev_mute": 4,
+  "ev_pattern_op": 4,
+  "ev_view": 4,
+  "ev_track_reload": 4
  },
  "resources": {"names": ["timer:DTIM0"]}
 }

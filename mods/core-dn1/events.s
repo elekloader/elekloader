@@ -514,3 +514,127 @@ core_mute:
         link.w  %fp, #-48
         movem.l %d2-%d6/%a2-%a5, (%sp)
         jmp     MUTE_SET + 8
+
+| ev_pattern_op: f(int op, int index, int what). FUNC+YES saves (op 0,
+| 0x40027a00) and FUNC+NO reloads (op 1, 0x40027e4a) the pattern, kit or
+| sequence; what = 1 kit, 2 sequence, 3 both (the workers' last two flags).
+| Called at the worker's entry, before its write-protect and project checks.
+        .globl  core_pattern_save, core_pattern_reload
+core_pattern_save:
+        moveq   #0, %d0
+        bra.s   core_pattern_op
+core_pattern_reload:
+        moveq   #1, %d0
+core_pattern_op:
+        tst.l   ev_pattern_op
+        beq.s   9f
+        lea     -20(%sp), %sp
+        movem.l %d0-%d1/%a0-%a2, (%sp)
+        moveq   #0, %d1
+        tst.b   43(%sp)
+        beq.s   1f
+        moveq   #1, %d1
+1:      tst.b   39(%sp)
+        beq.s   2f
+        addq.l  #2, %d1
+2:      move.l  %d1, -(%sp)
+        move.l  36(%sp), -(%sp)
+        move.l  %d0, -(%sp)
+        lea     ev_pattern_op, %a2
+3:      move.l  (%a2)+, %d1
+        beq.s   4f
+        movea.l %d1, %a0
+        jsr     (%a0)
+        bra.s   3b
+4:      lea     12(%sp), %sp
+        movem.l (%sp), %d0-%d1/%a0-%a2
+        lea     20(%sp), %sp
+9:      lea     PTN_SAVE + 8, %a0
+        tst.l   %d0
+        beq.s   5f
+        lea     PTN_RELOAD + 8, %a0
+5:      lea     -52(%sp), %sp
+        movem.l %d2-%d7/%a2-%fp, (%sp)
+        jmp     (%a0)
+
+| ev_view: f(int op, void *container, void *a, void *b), before the view stack
+| changes (UI task). op 0 push: a = &new view, b = flag (nonzero: first close
+| views of the same name); op 1 replace (the page keys): a = &old, b = &new;
+| op 2 pop (NO, FUNC release): a = the matcher. container is MainScreen+0x40
+| for the main stack.
+        .globl  core_view_push, core_view_replace, core_view_pop, fw_view
+core_view_push:
+        moveq   #0, %d0
+        bsr.s   core_view
+        lea     -40(%sp), %sp
+        movem.l %d2-%d4/%a2-%fp, (%sp)
+        jmp     VIEW_PUSH + 8
+core_view_replace:
+        moveq   #1, %d0
+        bsr.s   core_view
+        link.w  %fp, #-44
+        movem.l %d2/%a2-%a5, (%sp)
+        jmp     VIEW_REPLACE + 8
+core_view_pop:
+        moveq   #2, %d0
+        bsr.s   core_view
+        lea     -48(%sp), %sp
+        movem.l %d2-%d6/%a2-%fp, (%sp)
+        jmp     VIEW_POP + 8
+
+core_view:
+        tst.l   ev_view
+        beq.s   9f
+        lea     -20(%sp), %sp
+        movem.l %d0-%d1/%a0-%a2, (%sp)
+        move.l  36(%sp), -(%sp)
+        move.l  36(%sp), -(%sp)
+        move.l  36(%sp), -(%sp)
+        move.l  %d0, -(%sp)
+        lea     ev_view, %a2
+1:      move.l  (%a2)+, %d1
+        beq.s   2f
+        movea.l %d1, %a0
+        jsr     (%a0)
+        bra.s   1b
+2:      lea     16(%sp), %sp
+        movem.l (%sp), %d0-%d1/%a0-%a2
+        lea     20(%sp), %sp
+9:      rts
+
+| fw_view(): the view on top of the main stack (the one keys go to), or 0.
+fw_view:
+        movea.l MAIN_SCREEN, %a0
+        lea     0x54(%a0), %a1
+        movea.l 0x58(%a0), %a0
+        moveq   #0, %d0
+        cmpa.l  %a0, %a1
+        beq.s   1f
+        move.l  8(%a0), %d0
+1:      rts
+
+| ev_track_reload: f(int track, int pattern, void *params), as a held track
+| key + NO reloads that track's sound from the saved pattern (0x40029d16), per
+| track, before the project check. params is the parameter list (begin, end):
+| empty reloads the whole sound, else just those parameters.
+        .globl  core_track_reload
+core_track_reload:
+        tst.l   ev_track_reload
+        beq.s   9f
+        lea     -20(%sp), %sp
+        movem.l %d0-%d1/%a0-%a2, (%sp)
+        move.l  36(%sp), -(%sp)
+        move.l  32(%sp), -(%sp)
+        move.l  40(%sp), -(%sp)
+        lea     ev_track_reload, %a2
+1:      move.l  (%a2)+, %d1
+        beq.s   2f
+        movea.l %d1, %a0
+        jsr     (%a0)
+        bra.s   1b
+2:      lea     12(%sp), %sp
+        movem.l (%sp), %d0-%d1/%a0-%a2
+        lea     20(%sp), %sp
+9:      lea     -52(%sp), %sp
+        movem.l %d2-%d5/%a2-%fp, (%sp)
+        jmp     TRACK_RELOAD + 8

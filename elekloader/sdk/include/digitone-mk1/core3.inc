@@ -69,3 +69,10 @@
         .equ    CORE_FX_DELAY, 1
         .equ    CORE_FX_REVERB, 2
         .equ    CORE_FX_DRIVE, 3
+        .equ    CORE_PATTERN_SAVE, 0
+        .equ    CORE_PATTERN_RELOAD, 1
+        .equ    CORE_PATTERN_KIT, 1
+        .equ    CORE_PATTERN_SEQ, 2
+        .equ    CORE_VIEW_PUSH, 0
+        .equ    CORE_VIEW_REPLACE, 1
+        .equ    CORE_VIEW_POP, 2
