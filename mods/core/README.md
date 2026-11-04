@@ -84,20 +84,54 @@ are 1.53's.
   With no owner on and the menu closed, the unit is stock.
   [docs/ADAPTING.md](../../docs/ADAPTING.md), "Exclusive audio and the Mod
   Menu (core 4.2, Digitakt mk1)"; `examples/dt-thru` is the smallest owner.
+- **5.0: core 4.2 and the firmware's moments as events** (Digitakt mk1, a
+  prototype; `system.s` and `events.s`, after `menu.s` in `sources`). Each
+  stock moment is hooked once and passed to every mod that subscribes; with
+  no subscriber the stock code runs as it was. 67 sites, each with its 1.54
+  port, and 43 events:
+  - the system: `ev_card_ready`, `ev_boot_ui`, `ev_idle`, `ev_usb`,
+    `ev_crash`; `core_restart` and `core_restart_now`;
+  - storage: `ev_project_saving`, `ev_project_saved`, `ev_project_loaded`,
+    `ev_project_new`, `ev_project_erase` (a slot cleared or deleted),
+    `ev_pattern_op` (kit, pattern and sequence save and reload),
+    `ev_sample_assign`, `ev_sound_read`/`ev_sound_write` and
+    `ev_kit_read`/`ev_kit_write` (beside the bytes dt-fm and machine-pages
+    patch in the same routines);
+  - the sequencer: `ev_transport` (may take), `ev_seq_tick`,
+    `ev_pattern_request`, `ev_pattern_switch`, `ev_tempo`, `ev_song_mode`,
+    `ev_beat`;
+  - MIDI: `ev_midi_in`, `ev_sysex`, `ev_midi_cc`, `ev_midi_pc`,
+    `ev_midi_out` (each may take); `fw_sysex_send`;
+  - notes and voices: `ev_live_note` (before the sites digislicer,
+    digipoly and ob1 patch), `ev_voice_on`, `ev_render_params`,
+    `ev_sound_live`;
+  - the UI: `ev_ui_msg`, `ev_view` and `fw_view()`, `ev_mute`,
+    `ev_key_leds` and `fw_led_set`;
+  - edits: `ev_trig_set`, `ev_plock_store`, `ev_track_length`,
+    `ev_param_set`, `ev_clip_op` (copy, paste, clear; a track's sound),
+    `ev_track_reload`;
+  - the sampler: `ev_sampler` and `fw_sampler_state`.
+
+  No site takes a byte a shop mod patches, and none sits in the block
+  digihealth's fast audio runs from SRAM. `core3.h` gives each event's
+  arguments, task and rate; the hook map behind it, with every place
+  looked at and why it is in or out, is in the research notes
+  (`notes/dt1-hooks/MAP.md`). [examples/hooks-check-dt1](../../examples/hooks-check-dt1)
+  counts each event's calls.
 
 Build it with the SDK (it needs m68k binutils):
 
 ```bash
-python -m elekloader.sdk.build mods/core --stock Digitakt_OS1.53.syx      # out/core-4.2.elemod
-python -m elekloader.sdk.build mods/core --stock Digitakt_OS1.54.syx      # out/core-4.2-os1.54.elemod
-python -m elekloader.lint mods/core/out/core-4.2-os1.54.elemod --stock Digitakt_OS1.54.syx
+python -m elekloader.sdk.build mods/core --stock Digitakt_OS1.53.syx      # out/core-5.0.elemod
+python -m elekloader.sdk.build mods/core --stock Digitakt_OS1.54.syx      # out/core-5.0-os1.54.elemod
+python -m elekloader.lint mods/core/out/core-5.0-os1.54.elemod --stock Digitakt_OS1.54.syx
 ```
 
 Core 3.0's files are on the
 [core-v3.0](https://github.com/irpina/elekloader/releases/tag/core-v3.0)
 pre-release and in the mod shop; 2.1's are in the latest release (v0.4.0);
 4.0's are on the [core-v4.0](https://github.com/irpina/elekloader/releases/tag/core-v4.0)
-pre-release; 4.1 and 4.2 are on main, not released yet.
+pre-release; 4.1, 4.2 and 5.0 are not released yet.
 
 The 1.54 port is the same core: the same code, sites and sections, built
 with 1.54's addresses. Of its 39 sites, 38 are where 1.53 has them, and
@@ -148,3 +182,18 @@ ms audio window); so do the two pedal builds; with fxkit and the pedals,
 each pedal from PEDALS gets the audio and the cleared line, plays the
 inputs and gives both back on NO, and the stock render (61% of a block)
 comes back after it (`mods/fxkit-dt1`, "Checked"). Not on a unit.
+
+5.0, on 1.53 and on 1.54: `tests/test_sdk.py` checks it against a 4.2
+built from the commit before it (`ELEKLOADER_CORE_42`): every 4.2 site with
+its bytes, table, contribution and symbol where it was, 4.2's `.run` at the
+start of 5.0's and its `.bss`, then 67 sites and 43 tables; and that
+examples/hooks-check-dt1 takes every event but `ev_idle` and links. The
+shop's Digitakt mods clash with 5.0 exactly as with 4.2 (Digi EQ and
+Tone+FX on 4.1's master site). In digikit's emulator, with hooks-check on
+both OS, each event fired with the arguments its comment gives, but these,
+checked against the firmware only: `ev_idle` (digiemu's cold boot waits for
+the stock idle spin, so hooks-check leaves it out), `ev_usb` (no USB host),
+`ev_crash`, `core_restart`, `ev_sample_assign` (no sample files on the
+emulator's +Drive), the external clock's stop, the USB MIDI input, the
+real-time MIDI bytes out, `fw_sysex_send`, the second trig routine, the
+song row's mutes, `fw_led_set` and the sampler's save (no recorded take).

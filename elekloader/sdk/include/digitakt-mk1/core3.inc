@@ -82,3 +82,31 @@
         .equ    CORE_LEND_LO,   0x47C00000
         .equ    CORE_LEND_HI,   0x48000000
         .equ    CORE_MENU_ICON, 0x49434F4E      | "ICON"
+
+| Core 5.0: the numbers some events pass (core3.h says what each means).
+        .equ    CORE_TRANSPORT_STOP,    0       | ev_transport's what
+        .equ    CORE_TRANSPORT_START,   1
+        .equ    CORE_TRANSPORT_PAUSE,   2
+        .equ    CORE_PATTERN_SAVE,      0       | ev_pattern_op's op
+        .equ    CORE_PATTERN_RELOAD,    1
+        .equ    CORE_VIEW_PUSH,         0       | ev_view's op
+        .equ    CORE_VIEW_REPLACE,      1
+        .equ    CORE_VIEW_POP,          2
+        .equ    CORE_MUTE_GLOBAL,       0       | ev_mute's where
+        .equ    CORE_MUTE_PATTERN,      1
+        .equ    CORE_MUTE_SONG_ROW,     2
+        .equ    CORE_CLIP_COPY,         0       | ev_clip_op's op
+        .equ    CORE_CLIP_PASTE,        1
+        .equ    CORE_CLIP_CLEAR,        2
+        .equ    CORE_CLIP_SOUND_COPY,   3
+        .equ    CORE_CLIP_SOUND_PASTE,  4
+        .equ    CORE_CLIP_SOUND_CLEAR,  5
+        .equ    CORE_SAMPLER_ARM,       0       | ev_sampler's op
+        .equ    CORE_SAMPLER_START,     1
+        .equ    CORE_SAMPLER_STOP,      2
+        .equ    CORE_SAMPLER_FINISH,    3
+        .equ    CORE_SAMPLER_ABORT,     4
+        .equ    CORE_SAMPLER_SAVE,      5
+        .equ    CORE_SAMPLER_WRITE,     6
+        .equ    CORE_ERASE_CLEAR,       0       | ev_project_erase's how
+        .equ    CORE_ERASE_DELETE,      1

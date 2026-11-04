@@ -230,4 +230,150 @@ extern void core_menu_show(int32_t track);
 extern void core_menu_open(const void *const *list, int32_t sel,
                            void (*pick)(void *brain, void *event, int32_t track, int32_t index));
 
+/* ---- core 5.0: the firmware's moments (say "resources": {"core": "5.0"}) --------------------------------- */
+/* Each event is a list of handlers the core calls at one stock moment (mods/core/events.s and system.s say
+ * where); with none, the stock runs as it was. A handler typed to return int32_t "may take": nonzero stops the
+ * stock (the routine does not run, or the call is skipped). The first argument of the edit events is the
+ * firmware's object for a pattern's track: its index is the long at +0x38. */
+
+/* The system. ev_card_ready: the init task has the +Drive up (status 0) or not, before the project loads and
+ * before the UI task exists. ev_boot_ui: the boot is done, the UI task is about to start. ev_idle: over and over
+ * in the init task once the UI task is up (the lowest priority; never at interrupt level; a handler must not
+ * wait for anything). ev_usb: a host configured the USB device (1), or its frames stopped (0); may be interrupt
+ * level. ev_crash: an exception nothing handles, interrupts masked; call core_restart_now to get the unit back,
+ * or return and the stock prints the crash and halts. */
+typedef void (*ev_card_ready_fn)(int32_t status);
+typedef void (*ev_boot_ui_fn)(void);
+typedef void (*ev_idle_fn)(void);
+typedef void (*ev_usb_fn)(int32_t configured);
+typedef void (*ev_crash_fn)(void *frame);
+/* Reboot from a task: the firmware's own restart (interrupts off, the panel link and the UART drained). */
+extern void core_restart(void);
+/* The same without the drain, for an exception handler or code with interrupts masked. Never returns. */
+extern void core_restart_now(void);
+
+/* Storage (the UI side). A project is about to be written to a slot (0-127; 128 the working copy: a SAVE writes
+ * slot N, then 128), then was (ok nonzero: written); a project load finished (err 0: LOAD OK); the working
+ * project was made a new one. A kit, pattern or sequence is about to be saved (op 0) or reloaded (1): temp 1
+ * the working copy; part 0 what 1 the kit, part 1 what 1 the pattern, part 1 what 0 the sequence. A sample was
+ * put in a slot of the project's list (slot below 0: the first free one). */
+typedef void (*ev_project_saving_fn)(void *self, int32_t slot, void *ctx);
+typedef void (*ev_project_saved_fn)(void *block, int32_t slot, int32_t ok);
+typedef void (*ev_project_loaded_fn)(void *job, int32_t err);
+typedef void (*ev_project_new_fn)(void *project);
+/* A project slot is about to be cleared (how 0: MANAGE PROJECTS > CLEAR, the slot made a new project) or deleted
+ * (1), once per ticked slot: a mod drops what it keeps for that slot. */
+#define CORE_ERASE_CLEAR        0
+#define CORE_ERASE_DELETE       1
+typedef void (*ev_project_erase_fn)(int32_t slot, int32_t how);
+#define CORE_PATTERN_SAVE       0
+#define CORE_PATTERN_RELOAD     1
+typedef void (*ev_pattern_op_fn)(int32_t op, int32_t temp, int32_t part, int32_t what);
+typedef void (*ev_sample_assign_fn)(const char *name, int32_t slot, int32_t ok);
+/* A sound or a kit about to be read from its record (a project load: 128 kits) or being written to it (a save,
+ * a paste). */
+typedef void (*ev_sound_read_fn)(void *sound, const void *buffer);
+typedef void (*ev_sound_write_fn)(void *dest, void *sound, void *ctx);
+typedef void (*ev_kit_read_fn)(void *kit, const void *buffer);
+typedef void (*ev_kit_write_fn)(void *dest, void *kit, void *ctx);
+
+/* The sequencer. ev_transport: about to start (what 1: PLAY, from stop or pause, MIDI Start and Continue; arg
+ * the routine's, 0 from the key), stop (0: STOP, MIDI, a project load; arg the routine's first) or pause (2:
+ * PLAY while playing); nonzero takes it: the sequencer does not. An external clock's stop: what 0, arg -1, not
+ * asked (interrupt level). ev_seq_tick: each sequencer tick, about 157 a second, playing or not: interrupt.
+ * ev_pattern_request: a pattern (or a chain of count) is asked for, before the stock queues it.
+ * ev_pattern_switch: the sequencer takes up another pattern (a queued one at the end of the current: interrupt
+ * level; or on STOP and while stopped). ev_tempo: the sequencer's tempo changed (BPM x 120, as fw_tempo). */
+#define CORE_TRANSPORT_STOP     0
+#define CORE_TRANSPORT_START    1
+#define CORE_TRANSPORT_PAUSE    2
+typedef int32_t (*ev_transport_fn)(int32_t what, int32_t arg);
+typedef void (*ev_seq_tick_fn)(void);
+typedef void (*ev_pattern_request_fn)(void *list, int32_t count);
+typedef void (*ev_pattern_switch_fn)(void *pattern);
+typedef void (*ev_tempo_fn)(int32_t tempo, int32_t old);
+
+/* MIDI (the MIDI task, or the sender's). ev_midi_in: every message the MIDI task dispatches (channel, real
+ * time, SysEx), before ev_midi_cc, ev_midi_pc and ev_sysex; source 2 or 4 USB, 8 DIN. ev_sysex: each whole
+ * SysEx, F0 7E included. ev_midi_cc: a control change on a track's channel (track 16: the auto channel).
+ * ev_midi_pc: a program change (flags 0). ev_midi_out: each message or SysEx piece sent (port 1 the default),
+ * and each real-time byte (len 1, port -1). Nonzero takes it: the stock does not see it (does not send it). */
+typedef int32_t (*ev_midi_in_fn)(const uint8_t *msg, int32_t len, int32_t source);
+typedef int32_t (*ev_sysex_fn)(const uint8_t *msg, int32_t len, int32_t source);
+typedef int32_t (*ev_midi_cc_fn)(int32_t track, int32_t cc, int32_t value, int32_t flags);
+typedef int32_t (*ev_midi_pc_fn)(int32_t channel, int32_t program, int32_t flags);
+typedef int32_t (*ev_midi_out_fn)(const uint8_t *buf, int32_t len, int32_t port);
+/* Send SysEx (or any bytes) from a task, 144 bytes at a time. abort: a byte the caller may set to stop between
+ * pieces (or 0). -> nonzero sent. */
+extern int32_t fw_sysex_send(const uint8_t *buf, int32_t len, volatile uint8_t *abort, int32_t port);
+
+/* Notes and voices. ev_live_note: a played note reaches a track before its voice (the trig keys, keyboard mode,
+ * the preview, a MIDI note on a track's channel): on 1, vel its velocity; on 0 its release (vel: the routine's
+ * third argument). Nonzero takes it: the track does not play (or release) it. The UI or the MIDI task; the
+ * sequencer's trigs do not pass here. ev_voice_on: a track's voice starts (voice = track: one a track; event
+ * the trig's record), in the render. ev_render_params: each render pass, the engine's parameter words once
+ * complete (track t's 53 at words + 0x35 t); a handler may change them for this pass. ev_sound_live: a
+ * parameter written into the engine's copy (value 8.8, track 0-7, 16 the master). Interrupt level but
+ * ev_live_note and ev_sound_live: keep the others short. */
+typedef int32_t (*ev_live_note_fn)(int32_t track, int32_t note, int32_t vel, int32_t on);
+typedef void (*ev_voice_on_fn)(int32_t voice, int32_t track, void *event);
+typedef void (*ev_render_params_fn)(int16_t *words);
+typedef void (*ev_sound_live_fn)(int32_t value, int32_t track, int32_t slot);
+
+/* The UI task. ev_ui_msg: each message it takes, before it switches on msg[0]; nonzero takes it (back to the
+ * mailbox). ev_view: the view stack about to change: push (a = &new view, b = nonzero to first close views of
+ * the same name), replace (the page keys: a = &old, b = &new), pop (NO, FUNC release); container is the main
+ * stack's. fw_view(): the view on top (keys go to it), or 0. ev_mute: a track's mute about to change (track
+ * 0-15, muted 1 or 0; row: the song row, else -1). ev_key_leds: each LED frame, before the views set theirs:
+ * the first setter of an LED wins; set them with fw_led_set(container - 0x40, led, state, colour). */
+typedef int32_t (*ev_ui_msg_fn)(uint8_t *msg);
+#define CORE_VIEW_PUSH          0
+#define CORE_VIEW_REPLACE       1
+#define CORE_VIEW_POP           2
+typedef void (*ev_view_fn)(int32_t op, void *container, void *a, void *b);
+extern void *fw_view(void);
+#define CORE_MUTE_GLOBAL        0       /* FUNC + a trig key */
+#define CORE_MUTE_PATTERN       1       /* "Pattern mutes" mode (FUNC + BANK twice) */
+#define CORE_MUTE_SONG_ROW      2       /* a song row's mutes; row says which */
+typedef void (*ev_mute_fn)(int32_t where, int32_t track, int32_t muted, int32_t row);
+typedef void (*ev_key_leds_fn)(void *container);
+extern void fw_led_set(void *brain, int32_t led, int32_t state, int32_t colour);
+
+/* Edits (the UI task). A step's trig placed (on 1) or removed (0); a parameter lock written (a held trig and a
+ * knob: the first turn makes it with the current value); a track's length set (2-64, in the low word; sixteen
+ * calls when set for all tracks); a sound page's knob applied (param the parameter's descriptor; ev_sound_live
+ * then sees its slots). The FUNC+RECORD / STOP / PLAY ops about to run, and a held track key + NO's reload. */
+typedef void (*ev_trig_set_fn)(void *track, int32_t step, int32_t on);
+typedef void (*ev_plock_store_fn)(void *track, int32_t step, int32_t slot, int32_t value);
+typedef void (*ev_track_length_fn)(void *track, int32_t length);
+typedef void (*ev_param_set_fn)(void **page, void *sound, void *param);
+#define CORE_CLIP_COPY          0       /* a = the pattern store, b = the index */
+#define CORE_CLIP_PASTE         1       /* a = the track object, b = the menu item (0: a plain paste) */
+#define CORE_CLIP_CLEAR         2
+#define CORE_CLIP_SOUND_COPY    3       /* TRK held + FUNC+RECORD on the SRC page: a the page; b below 8 the
+                                           track's sound, 8-15 a MIDI track's settings, 16 the FX */
+#define CORE_CLIP_SOUND_PASTE   4       /* the same, FUNC+STOP */
+#define CORE_CLIP_SOUND_CLEAR   5       /* the same, FUNC+PLAY */
+typedef void (*ev_clip_op_fn)(int32_t op, void *a, int32_t b);
+typedef void (*ev_track_reload_fn)(int32_t track);
+
+/* Song mode switched on (1) or off (0) (the UI task); it takes effect at the current row's end, where
+ * ev_pattern_switch gives the row's pattern. ev_beat: each metronome beat while playing, whether the click is on
+ * or not (the sequencer's tick: interrupt level); beat: the firmware's beat byte, as the click reads it. */
+typedef void (*ev_song_mode_fn)(int32_t on);
+typedef void (*ev_beat_fn)(int32_t beat);
+
+/* The sampler (the UI task): armed, recording, stopped, finished (fw_sampler_state 4: the take kept, 0:
+ * empty), aborted, a kept take to be saved (the save job picks its slot), the take being written. A threshold
+ * start while armed happens in the render: fw_sampler_state goes 1 to 2. */
+#define CORE_SAMPLER_ARM        0
+#define CORE_SAMPLER_START      1
+#define CORE_SAMPLER_STOP       2
+#define CORE_SAMPLER_FINISH     3
+#define CORE_SAMPLER_ABORT      4
+#define CORE_SAMPLER_SAVE       5
+#define CORE_SAMPLER_WRITE      6
+typedef void (*ev_sampler_fn)(int32_t op);
+extern volatile int32_t fw_sampler_state;   /* 0 idle, 1 armed, 2 recording, 3 stopped, 4 a take kept */
+
 #endif
