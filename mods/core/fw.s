@@ -78,3 +78,7 @@
 | From 5.0:
 |   fw_led_set         0x400083a0  set(brain, led, state, colour): an LED for this frame (in ev_key_leds; brain = its container - 0x40); the first setter wins (1.54: 0x400083a0)
         FW      fw_led_set, FW_LED_SET
+
+| From 5.0:
+|   fw_sampler_state   0x4199e114  the recorder's state, a long: 0 idle, 1 armed, 2 recording, 3 stopped, 4 a take kept (1.54: 0x4199f114)
+        FW      fw_sampler_state, SAMPLER_STATE

@@ -809,3 +809,261 @@ core_render_params:
         move.l  %d0, 8(%sp)             | and under it what `pea FW_VOICE_VEL` pushed
         move.l  (%sp)+, %d0
         rts
+
+| ---- edits ---------------------------------------------------------------------
+| The pattern's track objects these pass have their track's index in the
+| long at +0x38. All in the UI task, per key or knob detent.
+|
+| ev_trig_set: f(void *track, int step, int on). A step's trig is placed (on
+| 1) or removed (0), in GRID RECORDING and with the trig keys: TRIG_SET
+| (0x400261c2), a basic trig, and TRIG_SET_D (0x4002622a), a trig with the
+| default flags. Removing a trig is this with on 0 (there is no other step
+| clear).
+        .globl  core_trig_set, core_trig_set_d
+core_trig_set:
+        NOTIFY  ev_trig_set, 3
+        lea     -16(%sp), %sp
+        movem.l %d2-%d4/%a2, (%sp)
+        jmp     TRIG_SET + 8
+core_trig_set_d:
+        NOTIFY  ev_trig_set, 3
+        lea     -16(%sp), %sp
+        movem.l %d2-%d4/%a2, (%sp)
+        jmp     TRIG_SET_D + 8
+
+| ev_plock_store: f(void *track, int step, int slot, int value). A parameter
+| lock is written (PLOCK_STORE 0x40024768): a trig held and a knob turned
+| (the first turn makes the lock with the current value), and the paste.
+        .globl  core_plock_store
+core_plock_store:
+        NOTIFY  ev_plock_store, 4
+        move.l  %a2, -(%sp)             | PLOCK_STORE's first three instructions
+        move.l  %d2, -(%sp)
+        movea.l 12(%sp), %a2
+        jmp     PLOCK_STORE + 8
+
+| ev_track_length: f(void *track, int length). A track's length is set
+| (TRACK_LENGTH 0x40024f94, before its clamp to 2-64; length in the low
+| word): the TRK page's LENGTH, once a track, sixteen times when it is set
+| for all of them.
+        .globl  core_track_length
+core_track_length:
+        NOTIFY  ev_track_length, 2
+        lea     -20(%sp), %sp
+        movem.l %d2-%d3/%a2/%fp, (%sp)
+        jmp     TRACK_LENGTH + 8
+
+| ev_param_set: f(void **page, void *sound, void *param). A sound page's knob
+| has stored its value in the sound (its words at +0x14, 2 bytes a slot) and
+| the page applies it to the engine (PARAM_SET 0x40015e00): param is the
+| parameter's descriptor, whose slots ev_sound_live then sees one by one.
+| (*page)'s long at +4 is the track.
+        .globl  core_param_set
+core_param_set:
+        NOTIFY  ev_param_set, 3
+        lea     -24(%sp), %sp
+        movem.l %d2-%d3/%a2-%a5, (%sp)
+        jmp     PARAM_SET + 8
+
+| ---- kits and sounds, read and written ---------------------------------------------
+| Beside the entries dt-fm and machine-pages patch: each site is past those
+| bytes, where both mods come back to (machine-pages jumps to 0x4007a23e and
+| 0x4007a5a8 itself). The UI side; at a project load or save, per kit
+| (128) and per sound.
+|
+| ev_sound_load: f(void *sound, const void *buffer). A sound is about to be
+| read from its record (SOUND_LOAD 0x4007a23e, before its type check).
+| ev_sound_save: f(void *dest, void *sound, void *ctx). A sound is being
+| written to its record (0x4007a5a8).
+| ev_kit_save: f(void *dest, void *kit, void *ctx). A kit is being written
+| (0x4007a6ae).
+| ev_kit_load: f(void *kit, const void *buffer). A kit's record passed its
+| check and is about to be read (KIT_BODY 0x4007a386).
+        .globl  core_sound_load, core_sound_save, core_kit_save, core_kit_load
+core_sound_load:
+        tst.l   ev_sound_load
+        beq.s   7f
+        lea     -20(%sp), %sp
+        movem.l %d0-%d1/%a0-%a2, (%sp)
+        lea     ev_sound_load, %a2
+1:      move.l  (%a2)+, %d0
+        beq.s   2f
+        movea.l %d0, %a0
+        move.l  48(%sp), -(%sp)         | buffer (20 saved + return + 16 + sound)
+        move.l  48(%sp), -(%sp)         | sound
+        jsr     (%a0)
+        addq.l  #8, %sp
+        bra.s   1b
+2:      movem.l (%sp), %d0-%d1/%a0-%a2
+        lea     20(%sp), %sp
+7:      movea.l 24(%sp), %a2            | the two instructions this replaced
+        movea.l 28(%sp), %a3
+        rts
+
+core_sound_save:
+        tst.l   ev_sound_save
+        beq.s   7f
+        lea     -20(%sp), %sp
+        movem.l %d0-%d1/%a0-%a2, (%sp)
+        lea     ev_sound_save, %a2
+1:      move.l  (%a2)+, %d0
+        beq.s   2f
+        movea.l %d0, %a0
+        move.l  56(%sp), -(%sp)         | ctx (20 saved + return + 20 + dest, sound)
+        move.l  56(%sp), -(%sp)         | sound
+        move.l  56(%sp), -(%sp)         | dest
+        jsr     (%a0)
+        lea     12(%sp), %sp
+        bra.s   1b
+2:      movem.l (%sp), %d0-%d1/%a0-%a2
+        lea     20(%sp), %sp
+7:      movea.l 28(%sp), %a2
+        movea.l 32(%sp), %a3
+        rts
+
+core_kit_save:
+        tst.l   ev_kit_save
+        beq.s   7f
+        lea     -20(%sp), %sp
+        movem.l %d0-%d1/%a0-%a2, (%sp)
+        lea     ev_kit_save, %a2
+1:      move.l  (%a2)+, %d0
+        beq.s   2f
+        movea.l %d0, %a0
+        move.l  64(%sp), -(%sp)         | ctx (20 saved + return + 28 + dest, kit)
+        move.l  64(%sp), -(%sp)         | kit
+        move.l  64(%sp), -(%sp)         | dest
+        jsr     (%a0)
+        lea     12(%sp), %sp
+        bra.s   1b
+2:      movem.l (%sp), %d0-%d1/%a0-%a2
+        lea     20(%sp), %sp
+7:      movea.l 36(%sp), %a2
+        movea.l 40(%sp), %a3
+        rts
+
+core_kit_load:
+        NOTIFY  ev_kit_load, 2
+        lea     -28(%sp), %sp           | KIT_BODY's first two instructions
+        movem.l %d2-%d4/%a2-%a5, (%sp)
+        jmp     KIT_BODY + 8
+
+| ---- the sampler -------------------------------------------------------------------
+| ev_sampler: f(int op). The recorder (the SAMPLE key's page) changes state:
+| op 0 armed (SMP_ARM 0x400768a0, YES), 1 recording (SMP_START 0x400768ce,
+| FUNC+YES), 2 stopped (SMP_STOP 0x40076918, YES while recording), 3
+| finished (0x4000b172, after the take is trimmed: fw_sampler_state 4 kept, 0
+| empty), 4 aborted (SMP_ABORT 0x4007693c, FUNC+NO while armed). A threshold
+| start while armed happens in the render (fw_sampler_state 1 to 2): no
+| event. The UI task.
+        .globl  core_smp_arm, core_smp_start, core_smp_stop, core_smp_finish, core_smp_abort
+core_smp_arm:
+        CALLV   ev_sampler, #0
+        move.l  %d2, -(%sp)             | SMP_ARM's first three instructions
+        move.w  %sr, %d1
+        move.w  #0x2700, %sr
+        jmp     SMP_ARM + 8
+core_smp_start:
+        CALLV   ev_sampler, #1
+        move.l  %d3, -(%sp)
+        move.l  %d2, -(%sp)
+        move.w  %sr, %d3
+        jmp     SMP_START + 6
+core_smp_stop:
+        CALLV   ev_sampler, #2
+        move.l  %d2, -(%sp)
+        move.w  %sr, %d2
+        move.w  #0x2700, %sr
+        jmp     SMP_STOP + 8
+core_smp_finish:
+        jsr     SMP_FINISH
+        CALLV   ev_sampler, #3
+        rts
+core_smp_abort:
+        CALLV   ev_sampler, #4
+        lea     -12(%sp), %sp
+        movem.l %d2-%d4, (%sp)
+        jmp     SMP_ABORT + 8
+
+| ---- clipboard and reload --------------------------------------------------------
+| ev_clip_op: f(int op, void *a, int b). The FUNC+RECORD / STOP / PLAY ops
+| (on the pattern, or on the held trig's step), about to run: op 0 copy
+| (CLIP_COPY's call 0x4002c162: a the pattern store, b the index), 1 paste
+| (CLIP_PASTE 0x40015d0e: a the track object, b the menu item, 0 for a
+| plain paste; the boot runs it twice too), 2 clear (the call 0x40012c0c: a the object, b its
+| argument), 3 a track's sound copied (SOUND_COPY 0x4003bd82, TRK held and
+| FUNC+RECORD on the SRC page: a the page, b what, below 8 the track
+| sound). The UI task.
+        .globl  core_clip_copy, core_clip_paste, core_clip_clear, core_sound_copy
+core_clip_copy:
+        moveq   #0, %d0
+        movea.l 4(%sp), %a0
+        move.l  8(%sp), %d1
+        bsr.s   clip_op
+        jmp     CLIP_COPY               | the call this replaced, its return on top
+core_clip_clear:
+        moveq   #2, %d0
+        movea.l 4(%sp), %a0
+        move.l  8(%sp), %d1
+        bsr.s   clip_op
+        jmp     CLIP_CLEAR
+core_clip_paste:
+        moveq   #1, %d0
+        movea.l 8(%sp), %a0
+        move.l  12(%sp), %d1
+        bsr.s   clip_op
+        lea     -20(%sp), %sp           | CLIP_PASTE's first two instructions
+        movem.l %d2-%d3/%a2-%a4, (%sp)
+        jmp     CLIP_PASTE + 8
+core_sound_copy:
+        moveq   #3, %d0
+        movea.l 4(%sp), %a0
+        move.l  8(%sp), %d1
+        bsr.s   clip_op
+        link.w  %fp, #-32               | SOUND_COPY's first two instructions
+        moveq   #7, %d0
+        jmp     SOUND_COPY + 6
+| d0 = op, a0 = a, d1 = b (scratch at these sites: a call or a routine's entry)
+clip_op:
+        tst.l   ev_clip_op
+        beq.s   9f
+        lea     -20(%sp), %sp
+        movem.l %d0-%d1/%a0-%a2, (%sp)
+        lea     ev_clip_op, %a2
+1:      move.l  (%a2)+, %d1
+        beq.s   2f
+        movea.l %d1, %a0
+        move.l  4(%sp), -(%sp)          | b: the saved d1
+        move.l  12(%sp), -(%sp)         | a: the saved a0
+        move.l  8(%sp), -(%sp)          | op: the saved d0
+        jsr     (%a0)
+        lea     12(%sp), %sp
+        bra.s   1b
+2:      movem.l (%sp), %d0-%d1/%a0-%a2
+        lea     20(%sp), %sp
+9:      rts
+
+| ev_track_reload: f(int track). A held trig key and NO reload that track's
+| sound from the saved pattern (TRACK_RELOAD 0x40028df2), before the stock
+| releases the track's queued voices and reloads it. The UI task.
+        .globl  core_track_reload
+core_track_reload:
+        tst.l   ev_track_reload
+        beq.s   7f
+        lea     -20(%sp), %sp
+        movem.l %d0-%d1/%a0-%a2, (%sp)
+        lea     ev_track_reload, %a2
+1:      move.l  (%a2)+, %d0
+        beq.s   2f
+        movea.l %d0, %a0
+        movea.l 24(%sp), %a1            | its argument
+        movea.l (%a1), %a1              | the object it points to
+        move.l  8(%a1), -(%sp)          | the track
+        jsr     (%a0)
+        addq.l  #4, %sp
+        bra.s   1b
+2:      movem.l (%sp), %d0-%d1/%a0-%a2
+        lea     20(%sp), %sp
+7:      movea.l 4(%sp), %a0             | TRACK_RELOAD's first two instructions
+        movea.l (%a0), %a0
+        jmp     TRACK_RELOAD + 6

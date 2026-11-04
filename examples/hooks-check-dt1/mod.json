@@ -41,7 +41,19 @@
   {"event": "ev_view", "fn": "hc_view", "order": 50},
   {"event": "ev_voice_on", "fn": "hc_voice_on", "order": 50},
   {"event": "ev_sound_live", "fn": "hc_sound_live", "order": 50},
-  {"event": "ev_render_params", "fn": "hc_render_params", "order": 50}
+  {"event": "ev_render_params", "fn": "hc_render_params", "order": 50},
+  {"event": "ev_usb", "fn": "hc_usb", "order": 50},
+  {"event": "ev_trig_set", "fn": "hc_trig_set", "order": 50},
+  {"event": "ev_plock_store", "fn": "hc_plock_store", "order": 50},
+  {"event": "ev_track_length", "fn": "hc_track_length", "order": 50},
+  {"event": "ev_param_set", "fn": "hc_param_set", "order": 50},
+  {"event": "ev_sound_load", "fn": "hc_sound_load", "order": 50},
+  {"event": "ev_sound_save", "fn": "hc_sound_save", "order": 50},
+  {"event": "ev_kit_save", "fn": "hc_kit_save", "order": 50},
+  {"event": "ev_kit_load", "fn": "hc_kit_load", "order": 50},
+  {"event": "ev_sampler", "fn": "hc_sampler", "order": 50},
+  {"event": "ev_clip_op", "fn": "hc_clip_op", "order": 50},
+  {"event": "ev_track_reload", "fn": "hc_track_reload", "order": 50}
  ],
  "resources": {
   "core": "5.0"

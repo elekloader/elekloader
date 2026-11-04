@@ -6,6 +6,7 @@
 |   UI_SPAWN      creates and starts the UI task
 |   CRASH_SET     sets the default exception handler's RAM hook
 |   FW_RESTART    the stock restart: interrupts off, drain the links, restart
+|   USB_CONFIGURED  the USB stack's configured flag
 |
 | ---- ev_card_ready: the +Drive is up, nothing else is (5.0) ----------------
 | At 0x400691d2 the init task stores the card bring-up's status,
@@ -16,6 +17,25 @@
 | priority, before the project loads: a handler must not take the
 | firmware's heap (a block kept from boot can stall a first boot) and
 | should be quick. d0-d1/a0-a1 come back as they went.
+| CALLV list, value: an observer list called with one long; every register kept.
+        .macro  CALLV list, val
+        tst.l   \list
+        beq.s   9f
+        lea     -20(%sp), %sp
+        movem.l %d0-%d1/%a0-%a2, (%sp)
+        lea     \list, %a2
+1:      move.l  (%a2)+, %d0
+        beq.s   2f
+        movea.l %d0, %a0
+        move.l  \val, -(%sp)
+        jsr     (%a0)
+        addq.l  #4, %sp
+        bra.s   1b
+2:      movem.l (%sp), %d0-%d1/%a0-%a2
+        lea     20(%sp), %sp
+9:
+        .endm
+
         .section .run, "ax"
         .globl  core_card_ready
 core_card_ready:
@@ -65,6 +85,22 @@ core_boot_ui:
         jsr     (%a0)
         bra.s   8b
 9:      rts
+
+| ---- ev_usb: the USB device configured or dropped (5.0) -------------------
+| ev_usb: f(int configured). A host configured the USB device (1: the USB
+| stack's check 0x40004516 sees the configured bit and sets USB_CONFIGURED,
+| at 0x4000453c) or its frames stopped and the stack drops it (0, at
+| 0x40004592): the gate for USB MIDI out. The USB stack's event callback;
+| may be interrupt level: keep it short.
+        .globl  core_usb_on, core_usb_off
+core_usb_on:
+        CALLV   ev_usb, #1
+        move.l  %d0, USB_CONFIGURED     | the store this replaced (d0 = 1), last: its flags
+        rts
+core_usb_off:
+        CALLV   ev_usb, #0
+        clr.l   USB_CONFIGURED
+        rts
 
 | ---- ev_crash: an exception the firmware does not handle (5.0) -------------
 | Every vector starts at the default handler (0x40001536), which masks the
