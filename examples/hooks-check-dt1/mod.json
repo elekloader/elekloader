@@ -1,0 +1,22 @@
+{
+ "id": "hcdt1", "version": "0.1",
+ "license": "GPL-2.0-or-later",
+ "title": "hooks check (Digitakt mk1)", "category": "Utility", "author": "irpina",
+ "description": "A test mod for core 5.0: one handler on each event, which counts its calls and keeps its last arguments in hc_counts and hc_args, for the emulator probe to read. It takes nothing and changes nothing the unit does.",
+ "device": "digitakt-mk1", "os": "1.53",
+ "ports": {"1.54": {}},
+ "sources": ["check.c"],
+ "subscribe": [
+  {"event": "ev_card_ready", "fn": "hc_card_ready", "order": 50},
+  {"event": "ev_boot_ui", "fn": "hc_boot_ui", "order": 50},
+  {"event": "ev_crash", "fn": "hc_crash", "order": 50},
+  {"event": "ev_project_saving", "fn": "hc_project_saving", "order": 50},
+  {"event": "ev_project_saved", "fn": "hc_project_saved", "order": 50},
+  {"event": "ev_project_loaded", "fn": "hc_project_loaded", "order": 50},
+  {"event": "ev_project_new", "fn": "hc_project_new", "order": 50},
+  {"event": "ev_pattern_op", "fn": "hc_pattern_op", "order": 50},
+  {"event": "ev_sample_assign", "fn": "hc_sample_assign", "order": 50}
+ ],
+ "resources": {"core": "5.0"},
+ "requires": ["core"]
+}

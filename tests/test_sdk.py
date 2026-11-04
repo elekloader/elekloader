@@ -173,8 +173,26 @@ CORE_42_EXPORTS = ['core_audio_caps', 'core_audio_gate', 'core_audio_live', 'cor
 
 # Each core after 4.0, in its sources' order: its version, sites (by routine), tables, subscriptions ((event,
 # order), after the older ones) and words of .bss.
+# --- core 5.0 (Digitakt mk1): the firmware's moments as events (system.s, events.s), after everything 4.2 has.
+# Its sites by routine, its tables (one per event), its exports (the stubs, core_restart, core_restart_now and
+# the fw_* locations it adds) and its .bss, in bytes. CORE_50_EVENTS: what examples/hooks-check-dt1 takes; the
+# rest (ev_idle) take no handler there: digiemu's cold boot waits for the stock idle spin.
+CORE_50_SITES = ['core_card_ready', 'core_boot_ui', 'core_crash_install', 'core_project_saving',
+    'core_project_saved', 'core_project_loaded', 'core_project_new', 'core_pattern_save', 'core_pattern_reload',
+    'core_sample_assign']
+CORE_50_TABLES = ['ev_card_ready', 'ev_boot_ui', 'ev_idle', 'ev_crash', 'ev_project_saving', 'ev_project_saved',
+    'ev_project_loaded', 'ev_project_new', 'ev_pattern_op', 'ev_sample_assign']
+CORE_50_EXPORTS = ['core_boot_ui', 'core_card_ready', 'core_crash', 'core_crash_install', 'core_pattern_reload',
+    'core_pattern_save', 'core_project_loaded', 'core_project_new', 'core_project_saved', 'core_project_saving',
+    'core_restart', 'core_restart_now', 'core_sample_assign']
+CORE_50_BSS = 4
+CORE_50_EVENTS = ['ev_card_ready', 'ev_boot_ui', 'ev_crash', 'ev_project_saving', 'ev_project_saved',
+    'ev_project_loaded', 'ev_project_new', 'ev_pattern_op', 'ev_sample_assign']
+# --- end core 5.0
+
 CORE_ADDS = [('4.1', CORE_41_SITES, CORE_41_TABLES, [], 8),
-             ('4.2', CORE_42_SITES, CORE_42_TABLES, CORE_42_SUBSCRIBE, 0)]
+             ('4.2', CORE_42_SITES, CORE_42_TABLES, CORE_42_SUBSCRIBE, 0),
+             ('5.0', CORE_50_SITES, CORE_50_TABLES, [], CORE_50_BSS)]
 
 
 def core_adds(after):
@@ -206,6 +224,7 @@ def test_core_builds_and_lints():
     assert sorted(doc['collections']) == sorted(HOOK_BUS + ['core_machines'] + [x for a in adds for x in a[2]])
     assert set(FW + CORE_41_EXPORTS + ['core_machine', 'core_machine_ui']) <= set(doc['exports'])
     assert set(CORE_42_EXPORTS) <= set(doc['exports'])
+    assert set(CORE_50_EXPORTS) <= set(doc['exports'])
     assert all(doc['symbols'][x][0] == 'abs' for x in FW + ['fw_tempo', 'fw_timeline', 'fw_transport'])
     rc, r = lint_json(path, '--stock', stock())
     assert rc == 0 and r['link']['order'][0].startswith('core')
@@ -270,7 +289,8 @@ def check_newer(old, new, st, after):
     assert new['resources'] == old['resources']
     adds = core_adds(after)
     added = (CORE_41_EXPORTS + CORE_41_SITES if any(a[0] == '4.1' for a in adds) else []) + \
-        (CORE_42_EXPORTS if any(a[0] == '4.2' for a in adds) else [])
+        (CORE_42_EXPORTS if any(a[0] == '4.2' for a in adds) else []) + \
+        (CORE_50_EXPORTS if any(a[0] == '5.0' for a in adds) else [])
     assert sorted(set(new['exports']) - set(old['exports'])) == sorted(added)
     assert set(old['exports']) <= set(new['exports'])
     assert all(new['symbols'][k] == v for k, v in old['symbols'].items())
@@ -322,6 +342,51 @@ def test_digitakt_core_4_2_is_4_1_and_more():
             with open(path) as fh:
                 new = json.load(fh)
             check_newer(old, new, STOCK_154, '4.1')
+
+
+CORE_42 = os.environ.get('ELEKLOADER_CORE_42', '')
+
+
+def test_digitakt_core_5_0_is_4_2_and_more():
+    """core 5.0 is 4.2 and more: 4.2's sites with the same bytes, its tables, contributions, exports and
+    .bss, every 4.2 symbol where 4.2 has it, 4.2's .run at the start of 5.0's, then system.s and events.s:
+    the firmware's moments as events. 4.2 is not released: ELEKLOADER_CORE_42 is a core-4.2.elemod built
+    from the commit before 5.0, with core-4.2-os1.54.elemod beside it for 1.54."""
+    if not CORE_42 or not os.path.exists(CORE_42):
+        raise Skip('missing ELEKLOADER_CORE_42 (a core-4.2.elemod built before 5.0)')
+    with open(CORE_42) as fh:
+        old = json.load(fh)
+    with open(built_core()) as fh:
+        new = json.load(fh)
+    check_newer(old, new, stock(), '4.2')
+    other = CORE_42.replace('core-4.2.elemod', 'core-4.2-os1.54.elemod')
+    if STOCK_154 and os.path.exists(STOCK_154) and os.path.exists(other):
+        with tempfile.TemporaryDirectory() as tmp:
+            path, _m = build.build(os.path.join(ROOT, 'mods', 'core'), STOCK_154, tmp)
+            with open(other) as fh:
+                old = json.load(fh)
+            with open(path) as fh:
+                new = json.load(fh)
+            check_newer(old, new, STOCK_154, '4.2')
+
+
+def test_digitakt_core_5_events_take_a_handler_each():
+    """examples/hooks-check-dt1 subscribes one handler to each of core 5.0's
+    events but ev_idle: it builds for 1.53 and 1.54, names no firmware address
+    (its 1.54 port is empty) and links with the core."""
+    tc = devices.devices()[0].toolchain
+    if not shutil.which(os.environ.get('ELEKLOADER_CROSS', tc['prefix']) + 'gcc'):
+        raise Skip('no m68k cross compiler')
+    src = os.path.join(ROOT, 'examples', 'hooks-check-dt1')
+    with open(os.path.join(src, 'mod.json')) as fh:
+        subs = json.load(fh)['subscribe']
+    assert sorted(s['event'] for s in subs) == sorted(CORE_50_EVENTS)
+    assert set(CORE_50_EVENTS) < set(CORE_50_TABLES) and 'ev_idle' not in CORE_50_EVENTS
+    with tempfile.TemporaryDirectory() as tmp:
+        path, m = build.build(src, stock(), tmp)
+        assert not m.sites
+        rc, r = lint_json(path, '--stock', stock(), '--with', built_core())
+        assert rc == 0, r['problems']
 
 
 def test_core_3_is_core_2_1_and_more():

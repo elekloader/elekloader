@@ -1,10 +1,10 @@
 {
- "id": "core", "version": "4.2",
+ "id": "core", "version": "5.0",
  "license": "GPL-2.0-or-later",
  "title": "core", "category": "Framework", "author": "irpina",
  "description": "The boot copier, the hook bus, SRC machine slots, from 3.0 the firmware locations as named exports and machines that describe their own page, from 4.0 256 KB for the mods' code, tables and variables (from 0x47BC0000, in place of the 128 KB at 0x47BE0000), from 4.1 the master output: the master pair before it goes out (ev_render_master), pages of the mods' own among the master pages (core_mpages) and rows in SETTINGS > GLOBAL FX/MIX (ev_fxmix), and from 4.2 exclusive audio (core_audio: one mod at a time owns the audio, the engine stopped, and is lent the delay's 4 MB line meanwhile), the Mod Menu's grid (core_menu, shown by core_menu_show) and the tempo, the timeline and the transport as exports: every other mod needs it. On its own it changes nothing the unit does.",
  "device": "digitakt-mk1", "os": "1.53",
- "sources": ["core.s", "settings.s", "render.s", "machines.s", "fw.s", "master.s", "audio.s", "menu.s"],
+ "sources": ["core.s", "settings.s", "render.s", "machines.s", "fw.s", "master.s", "audio.s", "menu.s", "system.s", "events.s"],
  "defsym": {
   "DRAWALL": "0x400ca382",
   "KEYDISP": "0x400084fe",
@@ -66,7 +66,18 @@
   "FW_VOICES": "0x800014f0",
   "FW_TEMPO": "0x4020db60",
   "FW_TIMELINE": "0x80001f4c",
-  "FW_TRANSPORT": "0x4199dc2c"
+  "FW_TRANSPORT": "0x4199dc2c",
+  "CARD_STATUS": "0x41980918",
+  "UI_SPAWN": "0x4000ad1c",
+  "CRASH_SET": "0x40001c6a",
+  "FW_RESTART": "0x40005864",
+  "SLOT_WRITER": "0x4001692a",
+  "SLOT_CARD_WRITE": "0x400923b4",
+  "LOAD_DONE": "0x4004f054",
+  "NEW_PROJECT": "0x40084c00",
+  "PATTERN_SAVE": "0x40016b16",
+  "PATTERN_RELOAD": "0x40017c16",
+  "SAMPLE_ASSIGN": "0x4001da6a"
  },
  "sites": [
   {"addr": "0x40000538", "stock": "4eb940001c94", "op": "jsr", "target": "boot"},
@@ -115,7 +126,17 @@
   {"addr": "0x40184628", "stock": "40030930", "op": "ptr", "target": "core_mview_title"},
   {"addr": "0x401846bc", "stock": "400388ee", "op": "ptr", "target": "core_mview_enc"},
   {"addr": "0x40184698", "stock": "40039982", "op": "ptr", "target": "core_mview_clear"},
-  {"addr": "0x40077e94", "stock": "4879800014f0", "op": "jsr", "target": "core_audio_gate"}
+  {"addr": "0x40077e94", "stock": "4879800014f0", "op": "jsr", "target": "core_audio_gate"},
+  {"addr": "0x400691d2", "stock": "23c041980918", "op": "jsr", "target": "core_card_ready"},
+  {"addr": "0x4006933c", "stock": "4eb94000ad1c", "op": "jsr", "target": "core_boot_ui"},
+  {"addr": "0x400cbf0a", "stock": "4eb940001c6a", "op": "jsr", "target": "core_crash_install"},
+  {"addr": "0x4001692a", "stock": "4fefffcc48d77c1c", "op": "jmp", "target": "core_project_saving"},
+  {"addr": "0x40016a02", "stock": "4eb9400923b4", "op": "jsr", "target": "core_project_saved"},
+  {"addr": "0x4004f054", "stock": "4e56ffe0206e0008", "op": "jmp", "target": "core_project_loaded"},
+  {"addr": "0x40084c00", "stock": "4fefffec48d70c1c", "op": "jmp", "target": "core_project_new"},
+  {"addr": "0x40016b16", "stock": "4fefffd448d71cfc", "op": "jmp", "target": "core_pattern_save"},
+  {"addr": "0x40017c16", "stock": "4e56ffd448d71cfc", "op": "jmp", "target": "core_pattern_reload"},
+  {"addr": "0x4001da6a", "stock": "4e56ffe448d7041c", "op": "jmp", "target": "core_sample_assign"}
  ],
  "ports": {
   "1.54": {
@@ -180,7 +201,18 @@
     "FW_VOICES": "0x800014f0",
     "FW_TEMPO": "0x4020df10",
     "FW_TIMELINE": "0x80001f4c",
-    "FW_TRANSPORT": "0x4199ec2c"
+    "FW_TRANSPORT": "0x4199ec2c",
+    "CARD_STATUS": "0x41981918",
+    "UI_SPAWN": "0x4000ad1c",
+    "CRASH_SET": "0x40001c6a",
+    "FW_RESTART": "0x40005864",
+    "SLOT_WRITER": "0x4001692a",
+    "SLOT_CARD_WRITE": "0x400923f8",
+    "LOAD_DONE": "0x4004f054",
+    "NEW_PROJECT": "0x40084c00",
+    "PATTERN_SAVE": "0x40016b16",
+    "PATTERN_RELOAD": "0x40017c16",
+    "SAMPLE_ASSIGN": "0x4001da6a"
    },
    "sites": [
     {"addr": "0x40000538", "stock": "4eb940001c94", "op": "jsr", "target": "boot"},
@@ -229,7 +261,17 @@
     {"addr": "0x40184928", "stock": "40030930", "op": "ptr", "target": "core_mview_title"},
     {"addr": "0x401849bc", "stock": "400388ee", "op": "ptr", "target": "core_mview_enc"},
     {"addr": "0x40184998", "stock": "40039982", "op": "ptr", "target": "core_mview_clear"},
-    {"addr": "0x40077e94", "stock": "4879800014f0", "op": "jsr", "target": "core_audio_gate"}
+    {"addr": "0x40077e94", "stock": "4879800014f0", "op": "jsr", "target": "core_audio_gate"},
+    {"addr": "0x400691d2", "stock": "23c041981918", "op": "jsr", "target": "core_card_ready"},
+    {"addr": "0x4006933c", "stock": "4eb94000ad1c", "op": "jsr", "target": "core_boot_ui"},
+    {"addr": "0x400cc132", "stock": "4eb940001c6a", "op": "jsr", "target": "core_crash_install"},
+    {"addr": "0x4001692a", "stock": "4fefffcc48d77c1c", "op": "jmp", "target": "core_project_saving"},
+    {"addr": "0x40016a02", "stock": "4eb9400923f8", "op": "jsr", "target": "core_project_saved"},
+    {"addr": "0x4004f054", "stock": "4e56ffe0206e0008", "op": "jmp", "target": "core_project_loaded"},
+    {"addr": "0x40084c00", "stock": "4fefffec48d70c1c", "op": "jmp", "target": "core_project_new"},
+    {"addr": "0x40016b16", "stock": "4fefffd448d71cfc", "op": "jmp", "target": "core_pattern_save"},
+    {"addr": "0x40017c16", "stock": "4e56ffd448d71cfc", "op": "jmp", "target": "core_pattern_reload"},
+    {"addr": "0x4001da6a", "stock": "4e56ffe448d7041c", "op": "jmp", "target": "core_sample_assign"}
    ]
   }
  },
@@ -244,7 +286,9 @@
   "ev_tick": 4, "ev_draw": 4, "ev_key": 4, "ev_enc": 4, "ev_settings": 4,
   "ev_render_in": 4, "ev_render_out": 4, "core_machines": 4,
   "ev_render_master": 4, "core_mpages": 4, "ev_fxmix": 4,
-  "core_audio": 4, "core_menu": 4
+  "core_audio": 4, "core_menu": 4,
+  "ev_card_ready": 4, "ev_boot_ui": 4, "ev_idle": 4, "ev_crash": 4,
+  "ev_project_saving": 4, "ev_project_saved": 4, "ev_project_loaded": 4, "ev_project_new": 4, "ev_pattern_op": 4, "ev_sample_assign": 4
  },
  "resources": {"names": ["timer:DTIM0"]}
 }
