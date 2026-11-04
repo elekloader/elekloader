@@ -430,3 +430,58 @@ core_pattern_switch:
         CALLV   ev_pattern_switch, PATTERN_PENDING
 8:      move.l  PATTERN_PENDING, %d0    | the instruction this replaced, last: its flags
         jmp     PATTERN_SWITCH + 6
+
+| ---- the arpeggiator and the voice allocator (5.0, wave 2) -------------------
+| ev_arp_step: f(int track, void *event). An arpeggiator step is due on a track
+| (0x4009d6a0, the render's arp event branch, not a reset): the stock then
+| counts it and decides from the arp pattern. Interrupt, the render.
+        .globl  core_arp_step
+core_arp_step:
+        tst.l   ev_arp_step
+        beq.s   9f
+        lea     -20(%sp), %sp
+        movem.l %d0-%d1/%a0-%a2, (%sp)
+        lea     ev_arp_step, %a2
+1:      move.l  (%a2)+, %d0
+        beq.s   2f
+        movea.l %d0, %a0
+        move.l  %a3, -(%sp)             | the event
+        move.l  8(%a3), -(%sp)          | its track
+        jsr     (%a0)
+        addq.l  #8, %sp
+        bra.s   1b
+2:      movem.l (%sp), %d0-%d1/%a0-%a2
+        lea     20(%sp), %sp
+9:      move.l  #ARP_COUNTERS, %d1      | the instruction this replaced
+        rts
+
+| ev_voice_steal: f(int voice, int old_track). The allocator takes a busy voice
+| slot 0-7 for a new note (0x4009f700, its steal path: more notes than
+| voices); old_track is the track the voice still plays for (0xff if free).
+| Interrupt, the render or the note-on.
+        .globl  core_voice_steal
+core_voice_steal:
+        tst.l   ev_voice_steal
+        beq.s   9f
+        lea     -20(%sp), %sp
+        movem.l %d0-%d1/%a0-%a2, (%sp)
+        lea     ev_voice_steal, %a2
+1:      move.l  (%a2)+, %d0
+        beq.s   2f
+        movea.l %d0, %a0
+        move.l  4(%sp), %d0             | the slot (the saved d1)
+        mulu.w  #20, %d0
+        lea     VOICE_SLOTS, %a1
+        moveq   #0, %d1
+        move.b  2(%a1,%d0.l), %d1       | its track (0xff: free)
+        move.l  %d1, -(%sp)
+        move.l  8(%sp), -(%sp)          | the slot
+        jsr     (%a0)
+        addq.l  #8, %sp
+        bra.s   1b
+2:      movem.l (%sp), %d0-%d1/%a0-%a2
+        lea     20(%sp), %sp
+9:      move.l  %d1, %d4                | the three instructions this replaced
+        lsl.l   #4, %d4
+        move.b  67(%sp), %d5            | the allocator's 63(sp), past this return
+        rts

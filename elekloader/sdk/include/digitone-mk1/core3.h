@@ -358,6 +358,10 @@ extern int32_t fw_sysex_send(const uint8_t *buf, int32_t len, volatile uint8_t *
 /* Voices. A voice is released (its note or note-off ran out, it was retriggered, its track stopped).
  * Interrupt level, the render. */
 typedef void (*ev_voice_free_fn)(int32_t voice);
+/* An arpeggiator step is due on a track (the render, before the stock counts it); and a busy voice is taken
+ * for a new note, more notes than voices (old_track the track it played for). Interrupt level, the render. */
+typedef void (*ev_arp_step_fn)(int32_t track, void *event);
+typedef void (*ev_voice_steal_fn)(int32_t voice, int32_t old_track);
 
 /* The UI task's messages, each as it takes it, before it switches on msg[0] (a type past 34 is dropped). */
 typedef void (*ev_ui_msg_fn)(uint8_t *msg);

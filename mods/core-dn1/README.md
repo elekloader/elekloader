@@ -228,8 +228,10 @@ the Digitone needs it. On its own it changes nothing the unit does.
     `ev_sysex(msg, len, source)`, may take, at the SysEx router's entry
     (0x400ea854; digihealth's site further in still works);
     `ev_midi_out(buf, len, port)`, may take, at the port switch (0x400edf32);
-  - voices: `ev_voice_free(voice)` as a voice is released (0x4009f9bc,
-    interrupt);
+  - voices: `ev_voice_free(voice)` as a voice is released (0x4009f9bc),
+    `ev_voice_steal(voice, old_track)` as the allocator takes a busy voice
+    (0x4009f700) and `ev_arp_step(track, event)` as an arpeggiator step is due
+    (0x4009d6a0), all at interrupt level;
   - the UI task: `ev_ui_msg(msg)` for each message it takes (0x40019cda);
   - sequencer edits: `ev_trig_set`, `ev_step_note`, `ev_plock_store`,
     `ev_plock_clear`, `ev_step_clear`, `ev_track_length` at the routines

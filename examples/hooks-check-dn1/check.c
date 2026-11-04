@@ -38,3 +38,5 @@ static void note(int i, int32_t a, int32_t b, int32_t c, int32_t d)
 /* 22 */ int32_t hc_render_fx(int32_t a0, int32_t a1, int32_t a2, int32_t a3) { note(22, a0, a1, a2, a3); return 0; }
 /* 23 */ int32_t hc_tempo(int32_t a0) { note(23, a0, 0, 0, 0); return 0; }
 /* 24 */ void hc_pattern_switch(int32_t a0) { note(24, a0, 0, 0, 0); }
+/* 25 */ void hc_arp_step(int32_t a0, int32_t a1) { note(25, a0, a1, 0, 0); }
+/* 26 */ void hc_voice_steal(int32_t a0, int32_t a1) { note(26, a0, a1, 0, 0); }

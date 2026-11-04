@@ -506,7 +506,7 @@ CORE_DN1_50_EVENTS = [
     'ev_project_saved', 'ev_transport', 'ev_seq_tick', 'ev_pattern_request', 'ev_midi_in',
     'ev_midi_out', 'ev_voice_free', 'ev_ui_msg', 'ev_trig_set', 'ev_step_note', 'ev_plock_store',
     'ev_plock_clear', 'ev_step_clear', 'ev_track_length', 'ev_param_set', 'ev_sound_live',
-    'ev_render_fx', 'ev_tempo', 'ev_pattern_switch']
+    'ev_render_fx', 'ev_tempo', 'ev_pattern_switch', 'ev_arp_step', 'ev_voice_steal']
 
 
 def test_digitone_core_5_events_take_a_handler_each():
@@ -630,13 +630,13 @@ def test_digitone_core_builds_and_links():
         # filters, the master stage), the CC router's, the key-LED frame's, the
         # controller stage's, the program change handler's, the note queue's,
         # 4.2's knob turn, value getter, value routine, SYN envelope page and voice-ready,
-        # and 5.0's 32: the card's status, the SysEx router, the crash printer's install,
+        # and 5.0's 34: the card's status, the SysEx router, the crash printer's install,
         # the UI spawner, USB's two, the slot writer's two, the sequencer's start, stop,
         # pause and tick, the pattern request, the MIDI task's two dispatches, the port
         # switch, the voice release, the UI queue, six sequencer edits, the parameter
         # setter, the sound's way to the voices and four effect stages, the tempo setter
-        # and the pattern switch.
-        assert dn['target']['device'] == 'digitone-mk1' and len(dn['sites']) == 125
+        # and the pattern switch, the arpeggiator's step and the voice allocator's steal.
+        assert dn['target']['device'] == 'digitone-mk1' and len(dn['sites']) == 127
         assert sorted(dn['collections']) == sorted(
             HOOK_BUS + ['core_menu', 'core_pages', 'core_params', 'core_projdata',
                         'ev_hold', 'ev_voice_on', 'core_param_override', 'ev_render_voices',
@@ -1506,7 +1506,7 @@ def test_digitone_core_port_to_144_is_the_same_core():
 
         def what(d):                # each site's new bytes and targets, not where it is
             return [(s['len'], s['kind'], s['new'], s.get('relocs')) for s in d['sites']]
-        assert len(new['sites']) == 125 and what(new) == what(old)
+        assert len(new['sites']) == 127 and what(new) == what(old)
         rc, r = lint_json(path, '--stock', DN_STOCK_144)
         assert rc == 0, r['problems']
         rc, r = lint_json(old_path, '--stock', DN_STOCK_144)
