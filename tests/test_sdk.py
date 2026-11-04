@@ -32,6 +32,7 @@ import glob
 import io
 import json
 import os
+import re
 import shutil
 import sys
 import tempfile
@@ -632,20 +633,23 @@ def test_digitone_core_builds_and_links():
         # filters, the master stage), the CC router's, the key-LED frame's, the
         # controller stage's, the program change handler's, the note queue's,
         # 4.2's knob turn, value getter, value routine, SYN envelope page and voice-ready,
-        # and 5.0's 37: the card's status, the SysEx router, the crash printer's install,
+        # and 5.0's 54: the card's status, the SysEx router, the crash printer's install,
         # the UI spawner, USB's two, the slot writer's two, the sequencer's start, stop,
         # pause and tick, the pattern request, the MIDI task's two dispatches, the port
         # switch, the voice release, the UI queue, six sequencer edits, the parameter
         # setter, the sound's way to the voices and four effect stages, the tempo setter
         # and the pattern switch, the arpeggiator's step, the voice allocator's steal,
-        # KEYBOARD mode's note-on and note-off and the mute setter.
+        # KEYBOARD mode's note-on and note-off, the three mute writers, the view
+        # stack's push, replace and pop, the pattern menu's save and reload, the
+        # track reload, the sound manager's six actions and the browser's paste,
+        # the sound load and the track sound clear.
         assert dn['target']['device'] == 'digitone-mk1' and len(dn['sites']) == 147
         assert sorted(dn['collections']) == sorted(
             HOOK_BUS + ['core_menu', 'core_pages', 'core_params', 'core_projdata',
                         'ev_hold', 'ev_voice_on', 'core_param_override', 'ev_render_voices',
                         'core_audio', 'ev_midi_cc', 'ev_key_leds', 'ev_render_params', 'ev_midi_pc',
                         'ev_note_queue', 'ev_param_turn', 'ev_param_value', 'ev_voice_ready']
-            + CORE_DN1_50_EVENTS)
+            + CORE_DN1_50_EVENTS + ['ev_idle'])
         # The same core.s as core 2.1's, with the Digitone's addresses, and
         # each of its labels where core 2.1 has it.
         assert sorted(dn['build']['sources']) == ['audio.s', 'block.s', 'core.s', 'edit.s', 'events.s', 'fw.s',
@@ -653,9 +657,17 @@ def test_digitone_core_builds_and_links():
                                                   'projdata.s', 'queue.s', 'render.s', 'rows.s',
                                                   'settings.s', 'system.s', 'voice.s', 'voices.s']
         assert dn['build']['sources']['core.s'] == dt['build']['sources']['core.s']
+        # Only the labels of the sources both cores build (core.s, settings.s,
+        # render.s): a name each core defines in a file of its own, such as
+        # core_render_master (the Digitone's audio.s, the Digitakt's
+        # master.s), is two routines that need not sit in the same place.
+        common = set()
+        for f in ('core.s', 'settings.s', 'render.s'):
+            with open(os.path.join(ROOT, 'mods', 'core', f)) as fh:
+                common |= set(re.findall(r'^([A-Za-z_]\w*):', fh.read(), re.M))
         placed = {k: v for k, v in dn['symbols'].items() if v[0] != 'abs'}
-        shared = {k: v for k, v in placed.items() if k in dt['symbols']}
-        assert shared == {k: dt['symbols'][k] for k in shared}
+        shared = {k: v for k, v in placed.items() if k in dt['symbols'] and k in common}
+        assert shared and shared == {k: dt['symbols'][k] for k in shared}
         assert {'core_voice_on', 'core_dn_boot', 'core_param_ui', 'core_page_rec',
                 'core_view_init', 'core_page_open', 'core_page_shown', 'core_proj_save',
                 'core_proj_load', 'core_proj_import', 'core_proj_new',
