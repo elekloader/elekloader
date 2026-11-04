@@ -47,13 +47,14 @@
   {"event": "ev_plock_store", "fn": "hc_plock_store", "order": 50},
   {"event": "ev_track_length", "fn": "hc_track_length", "order": 50},
   {"event": "ev_param_set", "fn": "hc_param_set", "order": 50},
-  {"event": "ev_sound_load", "fn": "hc_sound_load", "order": 50},
-  {"event": "ev_sound_save", "fn": "hc_sound_save", "order": 50},
-  {"event": "ev_kit_save", "fn": "hc_kit_save", "order": 50},
-  {"event": "ev_kit_load", "fn": "hc_kit_load", "order": 50},
+  {"event": "ev_sound_read", "fn": "hc_sound_read", "order": 50},
+  {"event": "ev_sound_write", "fn": "hc_sound_write", "order": 50},
+  {"event": "ev_kit_write", "fn": "hc_kit_write", "order": 50},
+  {"event": "ev_kit_read", "fn": "hc_kit_read", "order": 50},
   {"event": "ev_sampler", "fn": "hc_sampler", "order": 50},
   {"event": "ev_clip_op", "fn": "hc_clip_op", "order": 50},
-  {"event": "ev_track_reload", "fn": "hc_track_reload", "order": 50}
+  {"event": "ev_track_reload", "fn": "hc_track_reload", "order": 50},
+  {"event": "ev_project_erase", "fn": "hc_project_erase", "order": 50}
  ],
  "resources": {
   "core": "5.0"

@@ -865,27 +865,27 @@ core_param_set:
         movem.l %d2-%d3/%a2-%a5, (%sp)
         jmp     PARAM_SET + 8
 
-| ---- kits and sounds, read and written ---------------------------------------------
+| ---- kits and sounds, read from and written to their records ---------------------------------------------
 | Beside the entries dt-fm and machine-pages patch: each site is past those
 | bytes, where both mods come back to (machine-pages jumps to 0x4007a23e and
 | 0x4007a5a8 itself). The UI side; at a project load or save, per kit
 | (128) and per sound.
 |
-| ev_sound_load: f(void *sound, const void *buffer). A sound is about to be
+| ev_sound_read: f(void *sound, const void *buffer). A sound is about to be
 | read from its record (SOUND_LOAD 0x4007a23e, before its type check).
-| ev_sound_save: f(void *dest, void *sound, void *ctx). A sound is being
+| ev_sound_write: f(void *dest, void *sound, void *ctx). A sound is being
 | written to its record (0x4007a5a8).
-| ev_kit_save: f(void *dest, void *kit, void *ctx). A kit is being written
+| ev_kit_write: f(void *dest, void *kit, void *ctx). A kit is being written
 | (0x4007a6ae).
-| ev_kit_load: f(void *kit, const void *buffer). A kit's record passed its
+| ev_kit_read: f(void *kit, const void *buffer). A kit's record passed its
 | check and is about to be read (KIT_BODY 0x4007a386).
-        .globl  core_sound_load, core_sound_save, core_kit_save, core_kit_load
-core_sound_load:
-        tst.l   ev_sound_load
+        .globl  core_sound_read, core_sound_write, core_kit_write, core_kit_read
+core_sound_read:
+        tst.l   ev_sound_read
         beq.s   7f
         lea     -20(%sp), %sp
         movem.l %d0-%d1/%a0-%a2, (%sp)
-        lea     ev_sound_load, %a2
+        lea     ev_sound_read, %a2
 1:      move.l  (%a2)+, %d0
         beq.s   2f
         movea.l %d0, %a0
@@ -900,12 +900,12 @@ core_sound_load:
         movea.l 28(%sp), %a3
         rts
 
-core_sound_save:
-        tst.l   ev_sound_save
+core_sound_write:
+        tst.l   ev_sound_write
         beq.s   7f
         lea     -20(%sp), %sp
         movem.l %d0-%d1/%a0-%a2, (%sp)
-        lea     ev_sound_save, %a2
+        lea     ev_sound_write, %a2
 1:      move.l  (%a2)+, %d0
         beq.s   2f
         movea.l %d0, %a0
@@ -921,12 +921,12 @@ core_sound_save:
         movea.l 32(%sp), %a3
         rts
 
-core_kit_save:
-        tst.l   ev_kit_save
+core_kit_write:
+        tst.l   ev_kit_write
         beq.s   7f
         lea     -20(%sp), %sp
         movem.l %d0-%d1/%a0-%a2, (%sp)
-        lea     ev_kit_save, %a2
+        lea     ev_kit_write, %a2
 1:      move.l  (%a2)+, %d0
         beq.s   2f
         movea.l %d0, %a0
@@ -942,8 +942,8 @@ core_kit_save:
         movea.l 40(%sp), %a3
         rts
 
-core_kit_load:
-        NOTIFY  ev_kit_load, 2
+core_kit_read:
+        NOTIFY  ev_kit_read, 2
         lea     -28(%sp), %sp           | KIT_BODY's first two instructions
         movem.l %d2-%d4/%a2-%a5, (%sp)
         jmp     KIT_BODY + 8
@@ -953,10 +953,14 @@ core_kit_load:
 | op 0 armed (SMP_ARM 0x400768a0, YES), 1 recording (SMP_START 0x400768ce,
 | FUNC+YES), 2 stopped (SMP_STOP 0x40076918, YES while recording), 3
 | finished (0x4000b172, after the take is trimmed: fw_sampler_state 4 kept, 0
-| empty), 4 aborted (SMP_ABORT 0x4007693c, FUNC+NO while armed). A threshold
+| empty), 4 aborted (SMP_ABORT 0x4007693c, FUNC+NO while armed), 5 a kept
+| take is to be saved (SMP_SAVE 0x400a8526, YES: the save job starts and
+| picks the slot), 6 the take is being written to the +Drive (SMP_WRITE
+| 0x400a8854). A threshold
 | start while armed happens in the render (fw_sampler_state 1 to 2): no
 | event. The UI task.
         .globl  core_smp_arm, core_smp_start, core_smp_stop, core_smp_finish, core_smp_abort
+        .globl  core_smp_save, core_smp_write
 core_smp_arm:
         CALLV   ev_sampler, #0
         move.l  %d2, -(%sp)             | SMP_ARM's first three instructions
@@ -984,6 +988,16 @@ core_smp_abort:
         lea     -12(%sp), %sp
         movem.l %d2-%d4, (%sp)
         jmp     SMP_ABORT + 8
+core_smp_save:
+        CALLV   ev_sampler, #5
+        link.w  %fp, #-104              | SMP_SAVE's first two instructions
+        movea.l 8(%fp), %a0
+        jmp     SMP_SAVE + 8
+core_smp_write:
+        CALLV   ev_sampler, #6
+        link.w  %fp, #-28               | SMP_WRITE's first two instructions
+        movea.l 8(%fp), %a0
+        jmp     SMP_WRITE + 8
 
 | ---- clipboard and reload --------------------------------------------------------
 | ev_clip_op: f(int op, void *a, int b). The FUNC+RECORD / STOP / PLAY ops
@@ -992,9 +1006,12 @@ core_smp_abort:
 | (CLIP_PASTE 0x40015d0e: a the track object, b the menu item, 0 for a
 | plain paste; the boot runs it twice too), 2 clear (the call 0x40012c0c: a the object, b its
 | argument), 3 a track's sound copied (SOUND_COPY 0x4003bd82, TRK held and
-| FUNC+RECORD on the SRC page: a the page, b what, below 8 the track
-| sound). The UI task.
+| FUNC+RECORD on the SRC page: a the page, b what: below 8 the track's
+| sound, 8-15 a MIDI track's settings, 16 the FX), 4 that paste (SOUND_PASTE
+| 0x4003c0d0, FUNC+STOP), 5 that clear (SOUND_CLEAR 0x4003bee8, FUNC+PLAY).
+| The UI task.
         .globl  core_clip_copy, core_clip_paste, core_clip_clear, core_sound_copy
+        .globl  core_sound_paste, core_sound_clear
 core_clip_copy:
         moveq   #0, %d0
         movea.l 4(%sp), %a0
@@ -1023,6 +1040,22 @@ core_sound_copy:
         link.w  %fp, #-32               | SOUND_COPY's first two instructions
         moveq   #7, %d0
         jmp     SOUND_COPY + 6
+core_sound_paste:
+        moveq   #4, %d0
+        movea.l 4(%sp), %a0
+        move.l  8(%sp), %d1
+        bsr.s   clip_op
+        link.w  %fp, #-36               | SOUND_PASTE's first two instructions
+        moveq   #7, %d0
+        jmp     SOUND_PASTE + 6
+core_sound_clear:
+        moveq   #5, %d0
+        movea.l 4(%sp), %a0
+        move.l  8(%sp), %d1
+        bsr.s   clip_op
+        link.w  %fp, #-36               | SOUND_CLEAR's first two instructions
+        moveq   #7, %d0
+        jmp     SOUND_CLEAR + 6
 | d0 = op, a0 = a, d1 = b (scratch at these sites: a call or a routine's entry)
 clip_op:
         tst.l   ev_clip_op
@@ -1067,3 +1100,42 @@ core_track_reload:
 7:      movea.l 4(%sp), %a0             | TRACK_RELOAD's first two instructions
         movea.l (%a0), %a0
         jmp     TRACK_RELOAD + 6
+
+| ev_project_erase: f(int slot, int how). A project slot is about to be
+| cleared (how 0: MANAGE PROJECTS > CLEAR, the slot made a new project, then
+| written; CLEAR_SLOT 0x4009213a, called from the clear job's loop through
+| a register, which the core points here) or deleted (how 1: DELETE,
+| SLOT_DELETE 0x40091fbc). Once per ticked slot, the UI side: a mod drops
+| the data it keeps for that slot.
+        .globl  core_project_clear, core_project_delete
+core_project_clear:
+        move.l  8(%sp), %d0             | the slot (scratch: a call's d0)
+        moveq   #0, %d1
+        bsr.s   project_erase
+        jmp     CLEAR_SLOT              | with the call's return on top
+core_project_delete:
+        move.l  8(%sp), %d0
+        moveq   #1, %d1
+        bsr.s   project_erase
+        move.l  %d2, -(%sp)             | SLOT_DELETE's first three instructions
+        moveq   #-1, %d0
+        move.l  12(%sp), %d2
+        jmp     SLOT_DELETE + 8
+| d0 = slot, d1 = how
+project_erase:
+        tst.l   ev_project_erase
+        beq.s   9f
+        lea     -20(%sp), %sp
+        movem.l %d0-%d1/%a0-%a2, (%sp)
+        lea     ev_project_erase, %a2
+1:      move.l  (%a2)+, %d0
+        beq.s   2f
+        movea.l %d0, %a0
+        move.l  4(%sp), -(%sp)          | how: the saved d1
+        move.l  4(%sp), -(%sp)          | slot: the saved d0
+        jsr     (%a0)
+        addq.l  #8, %sp
+        bra.s   1b
+2:      movem.l (%sp), %d0-%d1/%a0-%a2
+        lea     20(%sp), %sp
+9:      rts

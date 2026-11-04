@@ -48,10 +48,11 @@ void hc_view(int32_t a0, int32_t a1, int32_t a2, int32_t a3) { (void)a3; note(23
 /* 29 */ void hc_plock_store(int32_t a0, int32_t a1, int32_t a2, int32_t a3) { note(29, a0, a1, a2, a3); }
 /* 30 */ void hc_track_length(int32_t a0, int32_t a1) { note(30, a0, a1, 0, 0); }
 /* 31 */ void hc_param_set(int32_t a0, int32_t a1, int32_t a2) { note(31, a0, a1, a2, 0); }
-/* 32 */ void hc_sound_load(int32_t a0, int32_t a1) { note(32, a0, a1, 0, 0); }
-/* 33 */ void hc_sound_save(int32_t a0, int32_t a1, int32_t a2) { note(33, a0, a1, a2, 0); }
-/* 34 */ void hc_kit_save(int32_t a0, int32_t a1, int32_t a2) { note(34, a0, a1, a2, 0); }
-/* 35 */ void hc_kit_load(int32_t a0, int32_t a1) { note(35, a0, a1, 0, 0); }
+/* 32 */ void hc_sound_read(int32_t a0, int32_t a1) { note(32, a0, a1, 0, 0); }
+/* 33 */ void hc_sound_write(int32_t a0, int32_t a1, int32_t a2) { note(33, a0, a1, a2, 0); }
+/* 34 */ void hc_kit_write(int32_t a0, int32_t a1, int32_t a2) { note(34, a0, a1, a2, 0); }
+/* 35 */ void hc_kit_read(int32_t a0, int32_t a1) { note(35, a0, a1, 0, 0); }
 /* 36 */ void hc_sampler(int32_t a0) { note(36, a0, 0, 0, 0); }
 /* 37 */ void hc_clip_op(int32_t a0, int32_t a1, int32_t a2) { note(37, a0, a1, a2, 0); }
 /* 38 */ void hc_track_reload(int32_t a0) { note(38, a0, 0, 0, 0); }
+/* 39 */ void hc_project_erase(int32_t a0, int32_t a1) { note(39, a0, a1, 0, 0); }

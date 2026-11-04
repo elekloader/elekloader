@@ -185,25 +185,27 @@ CORE_50_SITES = ['core_card_ready', 'core_boot_ui', 'core_crash_install', 'core_
     'core_ui_msg', 'core_view_push', 'core_view_replace', 'core_view_pop', 'core_mute_global', 'core_mute_pattern',
     'core_mute_row', 'core_key_leds', 'core_voice_on', 'core_sound_live', 'core_render_params', 'core_usb_on',
     'core_usb_off', 'core_trig_set', 'core_trig_set_d', 'core_plock_store', 'core_track_length', 'core_param_set',
-    'core_sound_load', 'core_sound_save', 'core_kit_save', 'core_kit_load', 'core_smp_arm', 'core_smp_start',
+    'core_sound_read', 'core_sound_write', 'core_kit_write', 'core_kit_read', 'core_smp_arm', 'core_smp_start',
     'core_smp_stop', 'core_smp_finish', 'core_smp_abort', 'core_clip_copy', 'core_clip_clear', 'core_clip_paste',
-    'core_sound_copy', 'core_track_reload']
+    'core_sound_copy', 'core_track_reload', 'core_sound_paste', 'core_sound_clear', 'core_smp_save',
+    'core_smp_write', 'core_project_clear', 'core_project_delete']
 CORE_50_TABLES = ['ev_card_ready', 'ev_boot_ui', 'ev_idle', 'ev_crash', 'ev_project_saving', 'ev_project_saved',
     'ev_project_loaded', 'ev_project_new', 'ev_pattern_op', 'ev_sample_assign', 'ev_transport', 'ev_seq_tick',
     'ev_pattern_request', 'ev_pattern_switch', 'ev_tempo', 'ev_midi_in', 'ev_sysex', 'ev_midi_cc', 'ev_midi_pc',
     'ev_midi_out', 'ev_live_note', 'ev_ui_msg', 'ev_view', 'ev_mute', 'ev_key_leds', 'ev_voice_on',
     'ev_sound_live', 'ev_render_params', 'ev_usb', 'ev_trig_set', 'ev_plock_store', 'ev_track_length',
-    'ev_param_set', 'ev_sound_load', 'ev_sound_save', 'ev_kit_save', 'ev_kit_load', 'ev_sampler', 'ev_clip_op',
-    'ev_track_reload']
+    'ev_param_set', 'ev_sound_read', 'ev_sound_write', 'ev_kit_write', 'ev_kit_read', 'ev_sampler', 'ev_clip_op',
+    'ev_track_reload', 'ev_project_erase']
 CORE_50_EXPORTS = ['core_boot_ui', 'core_card_ready', 'core_clip_clear', 'core_clip_copy', 'core_clip_paste',
-    'core_crash', 'core_crash_install', 'core_key_leds', 'core_kit_load', 'core_kit_save', 'core_midi_cc',
+    'core_crash', 'core_crash_install', 'core_key_leds', 'core_kit_read', 'core_kit_write', 'core_midi_cc',
     'core_midi_in_a', 'core_midi_in_b', 'core_midi_out', 'core_midi_pc', 'core_midi_rt_out', 'core_mute_global',
     'core_mute_pattern', 'core_mute_row', 'core_note_off', 'core_note_on', 'core_param_set', 'core_pattern_reload',
     'core_pattern_request', 'core_pattern_save', 'core_pattern_switch', 'core_pause', 'core_play',
-    'core_plock_store', 'core_project_loaded', 'core_project_new', 'core_project_saved', 'core_project_saving',
-    'core_render_params', 'core_restart', 'core_restart_now', 'core_sample_assign', 'core_seq_tick',
-    'core_smp_abort', 'core_smp_arm', 'core_smp_finish', 'core_smp_start', 'core_smp_stop', 'core_sound_copy',
-    'core_sound_live', 'core_sound_load', 'core_sound_save', 'core_stop', 'core_sync_stop', 'core_sysex',
+    'core_plock_store', 'core_project_clear', 'core_project_delete', 'core_project_loaded', 'core_project_new',
+    'core_project_saved', 'core_project_saving', 'core_render_params', 'core_restart', 'core_restart_now',
+    'core_sample_assign', 'core_seq_tick', 'core_smp_abort', 'core_smp_arm', 'core_smp_finish', 'core_smp_save',
+    'core_smp_start', 'core_smp_stop', 'core_smp_write', 'core_sound_clear', 'core_sound_copy', 'core_sound_live',
+    'core_sound_paste', 'core_sound_read', 'core_sound_write', 'core_stop', 'core_sync_stop', 'core_sysex',
     'core_tempo', 'core_track_length', 'core_track_reload', 'core_trig_set', 'core_trig_set_d', 'core_ui_msg',
     'core_usb_off', 'core_usb_on', 'core_view_pop', 'core_view_push', 'core_view_replace', 'core_voice_on',
     'fw_led_set', 'fw_sampler_state', 'fw_sysex_send', 'fw_view']
@@ -213,8 +215,8 @@ CORE_50_EVENTS = ['ev_card_ready', 'ev_boot_ui', 'ev_crash', 'ev_project_saving'
     'ev_pattern_request', 'ev_pattern_switch', 'ev_tempo', 'ev_midi_in', 'ev_sysex', 'ev_midi_cc', 'ev_midi_pc',
     'ev_midi_out', 'ev_live_note', 'ev_ui_msg', 'ev_mute', 'ev_key_leds', 'ev_view', 'ev_voice_on',
     'ev_sound_live', 'ev_render_params', 'ev_usb', 'ev_trig_set', 'ev_plock_store', 'ev_track_length',
-    'ev_param_set', 'ev_sound_load', 'ev_sound_save', 'ev_kit_save', 'ev_kit_load', 'ev_sampler', 'ev_clip_op',
-    'ev_track_reload']
+    'ev_param_set', 'ev_sound_read', 'ev_sound_write', 'ev_kit_write', 'ev_kit_read', 'ev_sampler', 'ev_clip_op',
+    'ev_track_reload', 'ev_project_erase']
 # --- end core 5.0
 
 CORE_ADDS = [('4.1', CORE_41_SITES, CORE_41_TABLES, [], 8),
