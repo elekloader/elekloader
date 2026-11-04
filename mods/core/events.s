@@ -725,3 +725,87 @@ core_key_leds:
 core_view_ctr:
         .space  4
         .section .run, "ax"
+
+| ---- voices and the engine's parameters ------------------------------------------
+| ev_voice_on: f(int voice, int track, void *event). A track's voice starts
+| (0x40077a7a, in the render's event loop, as the start bit for the track is
+| set): voice and track are the same on the Digitakt (one voice a track);
+| event is the trig's record. Interrupt level (the render), once per start:
+| a handler must be short. Every register kept. The sites digihealth's fast
+| audio patches (the voice-start calls further on) are not touched.
+        .globl  core_voice_on
+core_voice_on:
+        or.l    %d0, %d3                | the start bit (this replaced it)
+        tst.l   ev_voice_on
+        beq.s   7f
+        lea     -20(%sp), %sp
+        movem.l %d0-%d1/%a0-%a2, (%sp)
+        lea     ev_voice_on, %a2
+1:      move.l  (%a2)+, %d1
+        beq.s   2f
+        movea.l %d1, %a0
+        move.l  16(%sp), -(%sp)         | event: the saved a2
+        move.l  %d2, -(%sp)             | track
+        move.l  %d2, -(%sp)             | voice
+        jsr     (%a0)
+        lea     12(%sp), %sp
+        bra.s   1b
+2:      movem.l (%sp), %d0-%d1/%a0-%a2
+        lea     20(%sp), %sp
+7:      move.l  0x800019ac, %d0         | the second instruction this replaced
+        rts
+
+| ev_sound_live: f(int value, int track, int slot). A sound parameter is
+| written into the engine's copy (fw_set_param, 0x400771f8, past its first
+| three instructions): value 8.8, track 0-7 (16: the master), slot the
+| parameter. The knobs, p-lock playback and the CC maps come this way. The UI
+| task or the sequencer. Every register kept.
+        .globl  core_sound_live
+core_sound_live:
+        tst.l   ev_sound_live
+        beq.s   7f
+        lea     -20(%sp), %sp
+        movem.l %d0-%d1/%a0-%a2, (%sp)
+        lea     ev_sound_live, %a2
+1:      move.l  (%a2)+, %d0
+        beq.s   2f
+        movea.l %d0, %a0
+        move.l  12(%sp), -(%sp)         | slot: the saved a1
+        move.l  4(%sp), -(%sp)          | track: the saved d0
+        move.l  12(%sp), -(%sp)         | value: the saved d1
+        jsr     (%a0)
+        lea     12(%sp), %sp
+        bra.s   1b
+2:      movem.l (%sp), %d0-%d1/%a0-%a2
+        lea     20(%sp), %sp
+7:      lea     0x800014f0, %a0         | the instruction this replaced
+        rts
+
+| ev_render_params: f(int16_t *words). Each render pass, once the engine's
+| parameter words are complete for it (0x40077f7c, before the voices start):
+| track t's 53 words at words + 0x35 t (fw_voice_params is word 17 of track
+| 0). A handler may change them for this pass. Interrupt level, ~1500 a
+| second: keep it short. Every register kept.
+        .globl  core_render_params
+core_render_params:
+        tst.l   ev_render_params
+        beq.s   7f
+        lea     -20(%sp), %sp
+        movem.l %d0-%d1/%a0-%a2, (%sp)
+        lea     ev_render_params, %a2
+1:      move.l  (%a2)+, %d1
+        beq.s   2f
+        movea.l %d1, %a0
+        movea.l 16(%sp), %a1            | the render's state: the saved a2
+        pea     18(%a1)                 | its tracks' words
+        jsr     (%a0)
+        addq.l  #4, %sp
+        bra.s   1b
+2:      movem.l (%sp), %d0-%d1/%a0-%a2
+        lea     20(%sp), %sp
+7:      move.l  (%sp), -(%sp)           | the return, one long down,
+        move.l  %d0, -(%sp)
+        move.l  #FW_VOICE_VEL, %d0
+        move.l  %d0, 8(%sp)             | and under it what `pea FW_VOICE_VEL` pushed
+        move.l  (%sp)+, %d0
+        rts

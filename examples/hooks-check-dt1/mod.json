@@ -38,7 +38,10 @@
   {"event": "ev_ui_msg", "fn": "hc_ui_msg", "order": 50},
   {"event": "ev_mute", "fn": "hc_mute", "order": 50},
   {"event": "ev_key_leds", "fn": "hc_key_leds", "order": 50},
-  {"event": "ev_view", "fn": "hc_view", "order": 50}
+  {"event": "ev_view", "fn": "hc_view", "order": 50},
+  {"event": "ev_voice_on", "fn": "hc_voice_on", "order": 50},
+  {"event": "ev_sound_live", "fn": "hc_sound_live", "order": 50},
+  {"event": "ev_render_params", "fn": "hc_render_params", "order": 50}
  ],
  "resources": {
   "core": "5.0"

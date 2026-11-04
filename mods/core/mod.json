@@ -187,7 +187,10 @@
   {"addr": "0x40020008", "stock": "4e56ffd048d73c7c", "op": "jmp", "target": "core_mute_global"},
   {"addr": "0x400130c4", "stock": "4e56ffcc48d73cfc", "op": "jmp", "target": "core_mute_pattern"},
   {"addr": "0x40020eae", "stock": "4feffff048d7041c", "op": "jmp", "target": "core_mute_row"},
-  {"addr": "0x400099b6", "stock": "4eb9400ca40a", "op": "jsr", "target": "core_key_leds"}
+  {"addr": "0x400099b6", "stock": "4eb9400ca40a", "op": "jsr", "target": "core_key_leds"},
+  {"addr": "0x40077a7a", "stock": "86802039800019ac", "op": "jsr", "target": "core_voice_on"},
+  {"addr": "0x400771f8", "stock": "41f9800014f0", "op": "jsr", "target": "core_sound_live"},
+  {"addr": "0x40077f7c", "stock": "487980001f18", "op": "jsr", "target": "core_render_params"}
  ],
  "ports": {
   "1.54": {
@@ -373,7 +376,10 @@
     {"addr": "0x40020008", "stock": "4e56ffd048d73c7c", "op": "jmp", "target": "core_mute_global"},
     {"addr": "0x400130c4", "stock": "4e56ffcc48d73cfc", "op": "jmp", "target": "core_mute_pattern"},
     {"addr": "0x40020eae", "stock": "4feffff048d7041c", "op": "jmp", "target": "core_mute_row"},
-    {"addr": "0x400099b6", "stock": "4eb9400ca632", "op": "jsr", "target": "core_key_leds"}
+    {"addr": "0x400099b6", "stock": "4eb9400ca632", "op": "jsr", "target": "core_key_leds"},
+    {"addr": "0x40077a7a", "stock": "86802039800019ac", "op": "jsr", "target": "core_voice_on"},
+    {"addr": "0x400771f8", "stock": "41f9800014f0", "op": "jsr", "target": "core_sound_live"},
+    {"addr": "0x40077f7c", "stock": "487980001f18", "op": "jsr", "target": "core_render_params"}
    ]
   }
  },
@@ -393,7 +399,8 @@
   "ev_project_saving": 4, "ev_project_saved": 4, "ev_project_loaded": 4, "ev_project_new": 4, "ev_pattern_op": 4, "ev_sample_assign": 4,
   "ev_transport": 4, "ev_seq_tick": 4, "ev_pattern_request": 4, "ev_pattern_switch": 4, "ev_tempo": 4,
   "ev_midi_in": 4, "ev_sysex": 4, "ev_midi_cc": 4, "ev_midi_pc": 4, "ev_midi_out": 4, "ev_live_note": 4,
-  "ev_ui_msg": 4, "ev_view": 4, "ev_mute": 4, "ev_key_leds": 4
+  "ev_ui_msg": 4, "ev_view": 4, "ev_mute": 4, "ev_key_leds": 4,
+  "ev_voice_on": 4, "ev_sound_live": 4, "ev_render_params": 4
  },
  "resources": {"names": ["timer:DTIM0"]}
 }

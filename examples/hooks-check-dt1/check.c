@@ -40,3 +40,6 @@ static void note(int i, int32_t a, int32_t b, int32_t c, int32_t d)
 /* 23: the last value is fw_view(), the top view before the change */
 extern void *fw_view(void);
 void hc_view(int32_t a0, int32_t a1, int32_t a2, int32_t a3) { (void)a3; note(23, a0, a1, a2, (int32_t)fw_view()); }
+/* 24 */ void hc_voice_on(int32_t a0, int32_t a1, int32_t a2) { note(24, a0, a1, a2, 0); }
+/* 25 */ void hc_sound_live(int32_t a0, int32_t a1, int32_t a2) { note(25, a0, a1, a2, 0); }
+/* 26 */ void hc_render_params(int32_t a0) { note(26, a0, 0, 0, 0); }

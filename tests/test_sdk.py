@@ -183,24 +183,26 @@ CORE_50_SITES = ['core_card_ready', 'core_boot_ui', 'core_crash_install', 'core_
     'core_pattern_request', 'core_pattern_switch', 'core_tempo', 'core_midi_in_a', 'core_midi_in_b', 'core_sysex',
     'core_midi_cc', 'core_midi_pc', 'core_midi_out', 'core_midi_rt_out', 'core_note_on', 'core_note_off',
     'core_ui_msg', 'core_view_push', 'core_view_replace', 'core_view_pop', 'core_mute_global', 'core_mute_pattern',
-    'core_mute_row', 'core_key_leds']
+    'core_mute_row', 'core_key_leds', 'core_voice_on', 'core_sound_live', 'core_render_params']
 CORE_50_TABLES = ['ev_card_ready', 'ev_boot_ui', 'ev_idle', 'ev_crash', 'ev_project_saving', 'ev_project_saved',
     'ev_project_loaded', 'ev_project_new', 'ev_pattern_op', 'ev_sample_assign', 'ev_transport', 'ev_seq_tick',
     'ev_pattern_request', 'ev_pattern_switch', 'ev_tempo', 'ev_midi_in', 'ev_sysex', 'ev_midi_cc', 'ev_midi_pc',
-    'ev_midi_out', 'ev_live_note', 'ev_ui_msg', 'ev_view', 'ev_mute', 'ev_key_leds']
+    'ev_midi_out', 'ev_live_note', 'ev_ui_msg', 'ev_view', 'ev_mute', 'ev_key_leds', 'ev_voice_on',
+    'ev_sound_live', 'ev_render_params']
 CORE_50_EXPORTS = ['core_boot_ui', 'core_card_ready', 'core_crash', 'core_crash_install', 'core_key_leds',
     'core_midi_cc', 'core_midi_in_a', 'core_midi_in_b', 'core_midi_out', 'core_midi_pc', 'core_midi_rt_out',
     'core_mute_global', 'core_mute_pattern', 'core_mute_row', 'core_note_off', 'core_note_on',
     'core_pattern_reload', 'core_pattern_request', 'core_pattern_save', 'core_pattern_switch', 'core_pause',
     'core_play', 'core_project_loaded', 'core_project_new', 'core_project_saved', 'core_project_saving',
-    'core_restart', 'core_restart_now', 'core_sample_assign', 'core_seq_tick', 'core_stop', 'core_sync_stop',
-    'core_sysex', 'core_tempo', 'core_ui_msg', 'core_view_pop', 'core_view_push', 'core_view_replace',
-    'fw_led_set', 'fw_sysex_send', 'fw_view']
+    'core_render_params', 'core_restart', 'core_restart_now', 'core_sample_assign', 'core_seq_tick',
+    'core_sound_live', 'core_stop', 'core_sync_stop', 'core_sysex', 'core_tempo', 'core_ui_msg', 'core_view_pop',
+    'core_view_push', 'core_view_replace', 'core_voice_on', 'fw_led_set', 'fw_sysex_send', 'fw_view']
 CORE_50_BSS = 8
 CORE_50_EVENTS = ['ev_card_ready', 'ev_boot_ui', 'ev_crash', 'ev_project_saving', 'ev_project_saved',
     'ev_project_loaded', 'ev_project_new', 'ev_pattern_op', 'ev_sample_assign', 'ev_transport', 'ev_seq_tick',
     'ev_pattern_request', 'ev_pattern_switch', 'ev_tempo', 'ev_midi_in', 'ev_sysex', 'ev_midi_cc', 'ev_midi_pc',
-    'ev_midi_out', 'ev_live_note', 'ev_ui_msg', 'ev_mute', 'ev_key_leds', 'ev_view']
+    'ev_midi_out', 'ev_live_note', 'ev_ui_msg', 'ev_mute', 'ev_key_leds', 'ev_view', 'ev_voice_on',
+    'ev_sound_live', 'ev_render_params']
 # --- end core 5.0
 
 CORE_ADDS = [('4.1', CORE_41_SITES, CORE_41_TABLES, [], 8),
