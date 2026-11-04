@@ -549,3 +549,179 @@ live_note:
         lea     20(%sp), %sp
 9:      cmp.l   %d0, %d0
         rts
+
+| ---- the UI ----------------------------------------------------------------------
+| ev_ui_msg: f(uint8_t *msg), may take. Every message the UI task takes from
+| its mailbox (0x4000b6f4), before the switch on its type (the byte at +0):
+| keys, knobs, the 30 Hz tick, the sequencer's and the MIDI task's posts. A
+| handler that takes it: the task goes back to its mailbox, as for the types
+| the stock ignores. The UI task.
+        .globl  core_ui_msg
+core_ui_msg:
+        tst.l   ev_ui_msg
+        beq.s   7f
+        lea     -20(%sp), %sp
+        movem.l %d0-%d1/%a0-%a2, (%sp)
+        lea     ev_ui_msg, %a2
+1:      move.l  (%a2)+, %d1
+        beq.s   2f
+        movea.l %d1, %a0
+        move.l  (%sp), -(%sp)           | msg: the saved d0
+        jsr     (%a0)
+        addq.l  #4, %sp
+        tst.l   %d0
+        beq.s   1b
+        movem.l (%sp), %d0-%d1/%a0-%a2
+        lea     24(%sp), %sp            | and the return into the switch
+        jmp     UI_LOOP
+2:      movem.l (%sp), %d0-%d1/%a0-%a2
+        lea     20(%sp), %sp
+7:      movea.l %d0, %a2                | the three instructions this replaced
+        mvz.b   (%a2), %d0
+        cmp.l   %d0, %d1                | its flags go to the switch's test
+        rts
+
+| ev_view: f(int op, void *container, void *a, void *b), before the view stack
+| changes (the UI task). op 0 push (VIEW_PUSH 0x400ca776): a = &new view, b =
+| flag (nonzero: first close views of the same name); op 1 replace
+| (VIEW_REPLACE 0x400cb16c, the page keys): a = &old, b = &new; op 2 pop
+| (VIEW_POP 0x400caa58, NO, FUNC release): a and b are not the routine's.
+| container is the Brain + 0x40 for the main stack.
+        .globl  core_view_push, core_view_replace, core_view_pop, fw_view
+core_view_push:
+        moveq   #0, %d0
+        bsr.s   core_view
+        lea     -40(%sp), %sp
+        movem.l %d2-%d4/%a2-%fp, (%sp)
+        jmp     VIEW_PUSH + 8
+core_view_replace:
+        moveq   #1, %d0
+        bsr.s   core_view
+        link.w  %fp, #-44
+        movem.l %d2/%a2-%a5, (%sp)
+        jmp     VIEW_REPLACE + 8
+core_view_pop:
+        moveq   #2, %d0
+        bsr.s   core_view
+        lea     -48(%sp), %sp
+        movem.l %d2-%d6/%a2-%fp, (%sp)
+        jmp     VIEW_POP + 8
+
+core_view:
+        tst.l   ev_view
+        beq.s   9f
+        lea     -20(%sp), %sp
+        movem.l %d0-%d1/%a0-%a2, (%sp)
+        move.l  36(%sp), -(%sp)
+        move.l  36(%sp), -(%sp)
+        move.l  36(%sp), -(%sp)
+        move.l  %d0, -(%sp)
+        lea     ev_view, %a2
+1:      move.l  (%a2)+, %d1
+        beq.s   2f
+        movea.l %d1, %a0
+        jsr     (%a0)
+        bra.s   1b
+2:      lea     16(%sp), %sp
+        movem.l (%sp), %d0-%d1/%a0-%a2
+        lea     20(%sp), %sp
+9:      rts
+
+| fw_view(): the view on top of the main stack (the one keys go to), or 0
+| (before the first LED frame, where core_key_leds keeps the main stack's
+| container); in d0 and a0 (the C compiler takes a pointer result from a0).
+fw_view:
+        move.l  core_view_ctr, %d0
+        beq.s   1f
+        movea.l %d0, %a0
+        lea     0x14(%a0), %a1          | the list's end
+        movea.l 0x18(%a0), %a0          | its last node: the top view's
+        moveq   #0, %d0
+        cmpa.l  %a0, %a1
+        beq.s   1f
+        move.l  8(%a0), %d0
+1:      movea.l %d0, %a0
+        rts
+
+| ev_mute: f(int where, int track, int muted, int row). A track's mute is
+| about to change (the UI task, FUNC + a trig key): where 0 the global mutes
+| (MUTE_GLOBAL 0x40020008), 1 the pattern's (MUTE_PATTERN 0x400130c4, the
+| "Pattern mutes" mode: FUNC + BANK twice), 2 a song row's (MUTE_ROW
+| 0x40020eae, song mode; row its row, else -1). track 0-15, muted 1 or 0.
+        .globl  core_mute_global, core_mute_pattern, core_mute_row
+core_mute_global:
+        moveq   #0, %d0
+        bsr.s   mute_where
+        link.w  %fp, #-48
+        movem.l %d2-%d6/%a2-%a5, (%sp)
+        jmp     MUTE_GLOBAL + 8
+core_mute_pattern:
+        moveq   #1, %d0
+        bsr.s   mute_where
+        link.w  %fp, #-52
+        movem.l %d2-%d7/%a2-%a5, (%sp)
+        jmp     MUTE_PATTERN + 8
+| d0 = where; 12(sp) track, 16(sp) muted (a byte in a long)
+mute_where:
+        tst.l   ev_mute
+        beq.s   9f
+        lea     -20(%sp), %sp
+        movem.l %d0-%d1/%a0-%a2, (%sp)
+        lea     ev_mute, %a2
+1:      move.l  (%a2)+, %d1
+        beq.s   2f
+        movea.l %d1, %a0
+        pea     -1.w                    | row
+        moveq   #0, %d1
+        move.b  43(%sp), %d1            | muted
+        move.l  %d1, -(%sp)
+        move.l  40(%sp), -(%sp)         | track
+        move.l  12(%sp), -(%sp)         | where: the saved d0
+        jsr     (%a0)
+        lea     16(%sp), %sp
+        bra.s   1b
+2:      movem.l (%sp), %d0-%d1/%a0-%a2
+        lea     20(%sp), %sp
+9:      rts
+| at the routine's entry: 4(sp) its object, 8 row, 12 track, 16 muted (a byte)
+core_mute_row:
+        tst.l   ev_mute
+        beq.s   7f
+        lea     -20(%sp), %sp
+        movem.l %d0-%d1/%a0-%a2, (%sp)
+        lea     ev_mute, %a2
+1:      move.l  (%a2)+, %d1
+        beq.s   2f
+        movea.l %d1, %a0
+        move.l  28(%sp), -(%sp)         | row
+        moveq   #0, %d1
+        move.b  43(%sp), %d1            | muted
+        move.l  %d1, -(%sp)
+        move.l  40(%sp), -(%sp)         | track
+        pea     2.w                     | where
+        jsr     (%a0)
+        lea     16(%sp), %sp
+        bra.s   1b
+2:      movem.l (%sp), %d0-%d1/%a0-%a2
+        lea     20(%sp), %sp
+7:      lea     -16(%sp), %sp           | MUTE_ROW's first two instructions
+        movem.l %d2-%d4/%a2, (%sp)
+        jmp     MUTE_ROW + 8
+
+| ev_key_leds: f(void *container). Each UI tick's LED frame (0x400099b6),
+| after the LEDs are cleared and before the views set theirs: the first
+| setter of an LED wins, so a handler's LEDs stay over the stock views'.
+| Set them with fw_led_set(brain, led, state, colour), brain = container -
+| 0x40. The UI task, 30 times a second.
+        .globl  core_key_leds
+core_key_leds:
+        movea.l 4(%sp), %a0             | the main stack's container, for fw_view
+        move.l  %a0, core_view_ctr      | (a0 is free: the call this replaced)
+        NOTIFY  ev_key_leds, 1
+        jmp     VIEW_LEDS
+
+        .section .bss
+        .align  4
+core_view_ctr:
+        .space  4
+        .section .run, "ax"

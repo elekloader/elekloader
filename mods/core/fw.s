@@ -74,3 +74,7 @@
 | From 5.0:
 |   fw_sysex_send      0x400d6e1e  send(buf, len, volatile uint8_t *abort, port) -> nonzero: sent; in pieces of at most 144 bytes (1.54: 0x400d7046)
         FW      fw_sysex_send, SYSEX_SEND
+
+| From 5.0:
+|   fw_led_set         0x400083a0  set(brain, led, state, colour): an LED for this frame (in ev_key_leds; brain = its container - 0x40); the first setter wins (1.54: 0x400083a0)
+        FW      fw_led_set, FW_LED_SET

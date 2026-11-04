@@ -34,7 +34,11 @@
   {"event": "ev_midi_cc", "fn": "hc_midi_cc", "order": 50},
   {"event": "ev_midi_pc", "fn": "hc_midi_pc", "order": 50},
   {"event": "ev_midi_out", "fn": "hc_midi_out", "order": 50},
-  {"event": "ev_live_note", "fn": "hc_live_note", "order": 50}
+  {"event": "ev_live_note", "fn": "hc_live_note", "order": 50},
+  {"event": "ev_ui_msg", "fn": "hc_ui_msg", "order": 50},
+  {"event": "ev_mute", "fn": "hc_mute", "order": 50},
+  {"event": "ev_key_leds", "fn": "hc_key_leds", "order": 50},
+  {"event": "ev_view", "fn": "hc_view", "order": 50}
  ],
  "resources": {
   "core": "5.0"

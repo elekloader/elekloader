@@ -34,3 +34,9 @@ static void note(int i, int32_t a, int32_t b, int32_t c, int32_t d)
 /* 17 */ int32_t hc_midi_pc(int32_t a0, int32_t a1, int32_t a2) { note(17, a0, a1, a2, 0); return 0; }
 /* 18 */ int32_t hc_midi_out(int32_t a0, int32_t a1, int32_t a2) { note(18, a0, a1, a2, 0); return 0; }
 /* 19 */ int32_t hc_live_note(int32_t a0, int32_t a1, int32_t a2, int32_t a3) { note(19, a0, a1, a2, a3); return 0; }
+/* 20 */ int32_t hc_ui_msg(int32_t a0) { note(20, a0, 0, 0, 0); return 0; }
+/* 21 */ void hc_mute(int32_t a0, int32_t a1, int32_t a2, int32_t a3) { note(21, a0, a1, a2, a3); }
+/* 22 */ void hc_key_leds(int32_t a0) { note(22, a0, 0, 0, 0); }
+/* 23: the last value is fw_view(), the top view before the change */
+extern void *fw_view(void);
+void hc_view(int32_t a0, int32_t a1, int32_t a2, int32_t a3) { (void)a3; note(23, a0, a1, a2, (int32_t)fw_view()); }

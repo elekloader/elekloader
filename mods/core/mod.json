@@ -94,7 +94,16 @@
   "RT_SEND": "0x400d6b8a",
   "NOTE_ON": "0x400d53dc",
   "NOTE_OFF": "0x400d575e",
-  "SYSEX_SEND": "0x400d6e1e"
+  "SYSEX_SEND": "0x400d6e1e",
+  "UI_LOOP": "0x4000b6e4",
+  "VIEW_PUSH": "0x400ca776",
+  "VIEW_REPLACE": "0x400cb16c",
+  "VIEW_POP": "0x400caa58",
+  "MUTE_GLOBAL": "0x40020008",
+  "MUTE_PATTERN": "0x400130c4",
+  "MUTE_ROW": "0x40020eae",
+  "VIEW_LEDS": "0x400ca40a",
+  "FW_LED_SET": "0x400083a0"
  },
  "sites": [
   {"addr": "0x40000538", "stock": "4eb940001c94", "op": "jsr", "target": "boot"},
@@ -170,7 +179,15 @@
   {"addr": "0x400d6bd0", "stock": "4feffff448d7001c", "op": "jmp", "target": "core_midi_out"},
   {"addr": "0x400d6b8a", "stock": "71af00072f400004", "op": "jmp", "target": "core_midi_rt_out"},
   {"addr": "0x400d53dc", "stock": "4e56ff98707f", "op": "jmp", "target": "core_note_on"},
-  {"addr": "0x400d575e", "stock": "4e56ff94707f", "op": "jmp", "target": "core_note_off"}
+  {"addr": "0x400d575e", "stock": "4e56ff94707f", "op": "jmp", "target": "core_note_off"},
+  {"addr": "0x4000b6f4", "stock": "24407192b280", "op": "jsr", "target": "core_ui_msg"},
+  {"addr": "0x400ca776", "stock": "4fefffd848d77c1c", "op": "jmp", "target": "core_view_push"},
+  {"addr": "0x400cb16c", "stock": "4e56ffd448d73c04", "op": "jmp", "target": "core_view_replace"},
+  {"addr": "0x400caa58", "stock": "4fefffd048d77c7c", "op": "jmp", "target": "core_view_pop"},
+  {"addr": "0x40020008", "stock": "4e56ffd048d73c7c", "op": "jmp", "target": "core_mute_global"},
+  {"addr": "0x400130c4", "stock": "4e56ffcc48d73cfc", "op": "jmp", "target": "core_mute_pattern"},
+  {"addr": "0x40020eae", "stock": "4feffff048d7041c", "op": "jmp", "target": "core_mute_row"},
+  {"addr": "0x400099b6", "stock": "4eb9400ca40a", "op": "jsr", "target": "core_key_leds"}
  ],
  "ports": {
   "1.54": {
@@ -263,7 +280,16 @@
     "RT_SEND": "0x400d6db2",
     "NOTE_ON": "0x400d5604",
     "NOTE_OFF": "0x400d5986",
-    "SYSEX_SEND": "0x400d7046"
+    "SYSEX_SEND": "0x400d7046",
+    "UI_LOOP": "0x4000b6e4",
+    "VIEW_PUSH": "0x400ca99e",
+    "VIEW_REPLACE": "0x400cb394",
+    "VIEW_POP": "0x400cac80",
+    "MUTE_GLOBAL": "0x40020008",
+    "MUTE_PATTERN": "0x400130c4",
+    "MUTE_ROW": "0x40020eae",
+    "VIEW_LEDS": "0x400ca632",
+    "FW_LED_SET": "0x400083a0"
    },
    "sites": [
     {"addr": "0x40000538", "stock": "4eb940001c94", "op": "jsr", "target": "boot"},
@@ -339,7 +365,15 @@
     {"addr": "0x400d6df8", "stock": "4feffff448d7001c", "op": "jmp", "target": "core_midi_out"},
     {"addr": "0x400d6db2", "stock": "71af00072f400004", "op": "jmp", "target": "core_midi_rt_out"},
     {"addr": "0x400d5604", "stock": "4e56ff98707f", "op": "jmp", "target": "core_note_on"},
-    {"addr": "0x400d5986", "stock": "4e56ff94707f", "op": "jmp", "target": "core_note_off"}
+    {"addr": "0x400d5986", "stock": "4e56ff94707f", "op": "jmp", "target": "core_note_off"},
+    {"addr": "0x4000b6f4", "stock": "24407192b280", "op": "jsr", "target": "core_ui_msg"},
+    {"addr": "0x400ca99e", "stock": "4fefffd848d77c1c", "op": "jmp", "target": "core_view_push"},
+    {"addr": "0x400cb394", "stock": "4e56ffd448d73c04", "op": "jmp", "target": "core_view_replace"},
+    {"addr": "0x400cac80", "stock": "4fefffd048d77c7c", "op": "jmp", "target": "core_view_pop"},
+    {"addr": "0x40020008", "stock": "4e56ffd048d73c7c", "op": "jmp", "target": "core_mute_global"},
+    {"addr": "0x400130c4", "stock": "4e56ffcc48d73cfc", "op": "jmp", "target": "core_mute_pattern"},
+    {"addr": "0x40020eae", "stock": "4feffff048d7041c", "op": "jmp", "target": "core_mute_row"},
+    {"addr": "0x400099b6", "stock": "4eb9400ca632", "op": "jsr", "target": "core_key_leds"}
    ]
   }
  },
@@ -358,7 +392,8 @@
   "ev_card_ready": 4, "ev_boot_ui": 4, "ev_idle": 4, "ev_crash": 4,
   "ev_project_saving": 4, "ev_project_saved": 4, "ev_project_loaded": 4, "ev_project_new": 4, "ev_pattern_op": 4, "ev_sample_assign": 4,
   "ev_transport": 4, "ev_seq_tick": 4, "ev_pattern_request": 4, "ev_pattern_switch": 4, "ev_tempo": 4,
-  "ev_midi_in": 4, "ev_sysex": 4, "ev_midi_cc": 4, "ev_midi_pc": 4, "ev_midi_out": 4, "ev_live_note": 4
+  "ev_midi_in": 4, "ev_sysex": 4, "ev_midi_cc": 4, "ev_midi_pc": 4, "ev_midi_out": 4, "ev_live_note": 4,
+  "ev_ui_msg": 4, "ev_view": 4, "ev_mute": 4, "ev_key_leds": 4
  },
  "resources": {"names": ["timer:DTIM0"]}
 }
