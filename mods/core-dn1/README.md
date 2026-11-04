@@ -233,6 +233,10 @@ the Digitone needs it. On its own it changes nothing the unit does.
     (0x4009f700) and `ev_arp_step(track, event)` as an arpeggiator step is due
     (0x4009d6a0), all at interrupt level;
   - the UI task: `ev_ui_msg(msg)` for each message it takes (0x40019cda);
+  - KEYBOARD mode and mutes: `ev_keyboard_note(state, on, track, note)`, may
+    take a press, at the note-on dispatcher (0x4003b198) and the note-off
+    (0x4003b26e), and `ev_mute(state, track, muted, a4)` at the mute setter
+    (0x4002f994);
   - sequencer edits: `ev_trig_set`, `ev_step_note`, `ev_plock_store`,
     `ev_plock_clear`, `ev_step_clear`, `ev_track_length` at the routines
     that write a step's flags, note slots, locks and a track's length;

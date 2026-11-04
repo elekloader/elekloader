@@ -137,7 +137,10 @@
   "PATTERN_SWITCH": "0x400fde0c",
   "PATTERN_PENDING": "0x419e9f60",
   "ARP_COUNTERS": "0x41391fac",
-  "VOICE_SLOTS": "0x80005434"
+  "VOICE_SLOTS": "0x80005434",
+  "KBD_ON": "0x4003b198",
+  "KBD_OFF": "0x4003b26e",
+  "MUTE_SET": "0x4002f994"
  },
  "sites": [
   {"addr": "0x40000538", "stock": "4eb940001df4", "op": "jsr", "target": "core_dn_boot"},
@@ -266,7 +269,10 @@
   {"addr": "0x4009c82c", "stock": "222f00040c8100000e10", "op": "jmp", "target": "core_tempo"},
   {"addr": "0x400fde0c", "stock": "2039419e9f60", "op": "jmp", "target": "core_pattern_switch"},
   {"addr": "0x4009d6a0", "stock": "223c41391fac", "op": "jsr", "target": "core_arp_step"},
-  {"addr": "0x4009f700", "stock": "2801e98c1a2f003f", "op": "jsr", "target": "core_voice_steal"}
+  {"addr": "0x4009f700", "stock": "2801e98c1a2f003f", "op": "jsr", "target": "core_voice_steal"},
+  {"addr": "0x4003b198", "stock": "4fefffe87007", "op": "jmp", "target": "core_kbd_on"},
+  {"addr": "0x4003b26e", "stock": "598f2f037207", "op": "jmp", "target": "core_kbd_off"},
+  {"addr": "0x4002f994", "stock": "4e56ffd048d73c7c", "op": "jmp", "target": "core_mute"}
  ],
  "ports": {
   "1.44": {
@@ -402,7 +408,10 @@
     "PATTERN_SWITCH": "0x400fe080",
     "PATTERN_PENDING": "0x419eaf60",
     "ARP_COUNTERS": "0x41392fac",
-    "VOICE_SLOTS": "0x80005434"
+    "VOICE_SLOTS": "0x80005434",
+    "KBD_ON": "0x4003b198",
+    "KBD_OFF": "0x4003b26e",
+    "MUTE_SET": "0x4002f994"
    },
    "sites": [
     {"addr": "0x40000538", "stock": "4eb940001df4", "op": "jsr", "target": "core_dn_boot"},
@@ -531,7 +540,10 @@
     {"addr": "0x4009c84c", "stock": "222f00040c8100000e10", "op": "jmp", "target": "core_tempo"},
     {"addr": "0x400fe080", "stock": "2039419eaf60", "op": "jmp", "target": "core_pattern_switch"},
     {"addr": "0x4009d6c0", "stock": "223c41392fac", "op": "jsr", "target": "core_arp_step"},
-    {"addr": "0x4009f720", "stock": "2801e98c1a2f003f", "op": "jsr", "target": "core_voice_steal"}
+    {"addr": "0x4009f720", "stock": "2801e98c1a2f003f", "op": "jsr", "target": "core_voice_steal"},
+    {"addr": "0x4003b198", "stock": "4fefffe87007", "op": "jmp", "target": "core_kbd_on"},
+    {"addr": "0x4003b26e", "stock": "598f2f037207", "op": "jmp", "target": "core_kbd_off"},
+    {"addr": "0x4002f994", "stock": "4e56ffd048d73c7c", "op": "jmp", "target": "core_mute"}
    ]
   }
  },
@@ -544,7 +556,8 @@
   "ev_card_ready": 4, "ev_sysex": 4, "ev_crash": 4,
   "ev_boot_ui": 4, "ev_usb": 4, "ev_project_saving": 4, "ev_project_saved": 4, "ev_transport": 4, "ev_seq_tick": 4, "ev_pattern_request": 4, "ev_midi_in": 4, "ev_midi_out": 4, "ev_voice_free": 4, "ev_ui_msg": 4, "ev_trig_set": 4, "ev_step_note": 4, "ev_plock_store": 4, "ev_plock_clear": 4, "ev_step_clear": 4, "ev_track_length": 4, "ev_param_set": 4, "ev_sound_live": 4, "ev_render_fx": 4,
   "ev_tempo": 4, "ev_pattern_switch": 4,
-  "ev_arp_step": 4, "ev_voice_steal": 4
+  "ev_arp_step": 4, "ev_voice_steal": 4,
+  "ev_keyboard_note": 4, "ev_mute": 4
  },
  "resources": {"names": ["timer:DTIM0"]}
 }

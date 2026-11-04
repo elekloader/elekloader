@@ -362,6 +362,12 @@ typedef void (*ev_voice_free_fn)(int32_t voice);
  * for a new note, more notes than voices (old_track the track it played for). Interrupt level, the render. */
 typedef void (*ev_arp_step_fn)(int32_t track, void *event);
 typedef void (*ev_voice_steal_fn)(int32_t voice, int32_t old_track);
+/* A trig key plays a note in KEYBOARD mode (these notes do not pass the note queue): pressed (on nonzero; a
+ * handler that returns nonzero takes it, and no note plays) or released (an observer). state: the
+ * firmware's. The UI task. */
+typedef int32_t (*ev_keyboard_note_fn)(void *state, int32_t on, int32_t track, int32_t note);
+/* A track's mute is about to be set (muted 1) or cleared (FUNC + a track key). The UI task. */
+typedef void (*ev_mute_fn)(void *state, int32_t track, int32_t muted, int32_t a4);
 
 /* The UI task's messages, each as it takes it, before it switches on msg[0] (a type past 34 is dropped). */
 typedef void (*ev_ui_msg_fn)(uint8_t *msg);

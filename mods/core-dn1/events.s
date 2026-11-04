@@ -485,3 +485,32 @@ core_voice_steal:
         lsl.l   #4, %d4
         move.b  67(%sp), %d5            | the allocator's 63(sp), past this return
         rts
+
+| ---- KEYBOARD mode and mutes (5.0, wave 3) ------------------------------------
+| ev_keyboard_note: f(void *state, int on, int track, int note), may take on a
+| press. A trig key plays a note in KEYBOARD mode: pressed (0x4003b198, the
+| note-on dispatcher; on nonzero) or released (0x4003b26e, the note-off; an
+| observer only). These notes do not pass the note queue (ev_note_queue). A
+| handler that takes a press: no note. The UI task.
+        .globl  core_kbd_on, core_kbd_off
+core_kbd_on:
+        NOTIFY  ev_keyboard_note, 4, 1
+        lea     -24(%sp), %sp           | the dispatcher's first two instructions
+        moveq   #7, %d0
+        jmp     KBD_ON + 6
+core_kbd_off:
+        NOTIFY  ev_keyboard_note, 4
+        subq.l  #4, %sp                 | the note-off's first three instructions
+        move.l  %d3, -(%sp)
+        moveq   #7, %d1
+        jmp     KBD_OFF + 6
+
+| ev_mute: f(void *state, int track, int muted, int a4). A track's mute is
+| about to be set or cleared (0x4002f994: the bit per track the quick mute
+| writes, FUNC + a track key). The UI task.
+        .globl  core_mute
+core_mute:
+        NOTIFY  ev_mute, 4
+        link.w  %fp, #-48
+        movem.l %d2-%d6/%a2-%a5, (%sp)
+        jmp     MUTE_SET + 8

@@ -40,3 +40,5 @@ static void note(int i, int32_t a, int32_t b, int32_t c, int32_t d)
 /* 24 */ void hc_pattern_switch(int32_t a0) { note(24, a0, 0, 0, 0); }
 /* 25 */ void hc_arp_step(int32_t a0, int32_t a1) { note(25, a0, a1, 0, 0); }
 /* 26 */ void hc_voice_steal(int32_t a0, int32_t a1) { note(26, a0, a1, 0, 0); }
+/* 27 */ int32_t hc_keyboard_note(int32_t a0, int32_t a1, int32_t a2, int32_t a3) { note(27, a0, a1, a2, a3); return 0; }
+/* 28 */ void hc_mute(int32_t a0, int32_t a1, int32_t a2, int32_t a3) { note(28, a0, a1, a2, a3); }
