@@ -484,7 +484,16 @@ export function check(mods: Mod2[], image: Uint8Array): string[] {
         + `${free.join(' or ') || `an area the ${dev.name} does not have`})`)
     }
   }
-  const regs: Span<AnyMod>[] = mods.flatMap(m => m.regions.map(g => [g.lo, g.hi, m, 'region ' + g.name] as Span<AnyMod>))
+  const regs: Span<AnyMod>[] = mods.flatMap(m => m.regions.filter(g => !(g.area in dev.lentAreas))
+    .map(g => [g.lo, g.hi, m, 'region ' + g.name] as Span<AnyMod>))
+  for (const m of mods) {                       // memory the core lends one owner at a time
+    for (const g of m.regions) {
+      const need = dev.lentAreas[g.area]
+      if (need && cores.length === 1 && cmpVersions(cores[0].version, need) < 0)
+        bad.push(`${m.label()} region ${g.name} is in the ${g.area} area, which core ${need} or newer lends; this build `
+          + `has core ${cores[0].version}`)
+    }
+  }
   if (dev.sramCode[1] > dev.sramCode[0]) regs.push([dev.sramCode[0], dev.sramCode[1], null, 'the .fast area'])
   for (const [a, b] of overlaps(regs)) {
     const la = a[2] ? a[2].label() : 'the linker', lb = b[2] ? b[2].label() : 'the linker'

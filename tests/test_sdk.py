@@ -10,6 +10,11 @@ missing is skipped, not passed:
   ELEKLOADER_CORE_21    optional: the released core-2.1.elemod (v0.4.0), with
                         core-2.1-os1.54.elemod beside it: core 3.0 must keep
                         all of it
+  ELEKLOADER_CORE_40    optional: the released core-4.0.elemod (core-v4.0),
+                        which 4.1 and 4.2 must keep
+  ELEKLOADER_CORE_41    optional: a core-4.1.elemod built from main before
+                        4.2 (4.1 is not released), with core-4.1-os1.54.elemod
+                        beside it: core 4.2 must keep all of it
   ELEKLOADER_DN_SYX, ELEKLOADER_DN_SYX_144  optional: the Digitone's 1.43
                         and 1.44 files, for mods/core-dn1 and its port
   ELEKLOADER_CORE_DN1_23  optional: the released core-dn1-2.3.elemod (the
@@ -156,6 +161,74 @@ CORE_41_SITES = ['core_render_master', 'core_fxmix', 'core_mview_key', 'core_mvi
 CORE_41_TABLES = ['ev_render_master', 'core_mpages', 'ev_fxmix']
 CORE_41_EXPORTS = ['core_mpage_shown', 'core_mview', 'core_mview_draws', 'fw_invalidate']
 
+# What core 4.2 adds, in audio.s and menu.s after everything 4.1 has: exclusive audio (a site at the engine's start,
+# the table core_audio), the Mod Menu (the table core_menu and its four handlers, core's own subscriptions) and the
+# sequencer's time as exports. Its state is in .run, so its .bss is 4.1's.
+CORE_42_SITES = ['core_audio_gate']
+CORE_42_TABLES = ['core_audio', 'core_menu']
+CORE_42_SUBSCRIBE = [('ev_key', 1), ('ev_enc', 1), ('ev_tick', 1), ('ev_draw', 99)]
+CORE_42_EXPORTS = ['core_audio_caps', 'core_audio_gate', 'core_audio_live', 'core_menu_draw', 'core_menu_enc',
+                   'core_menu_key', 'core_menu_open', 'core_menu_show', 'core_menu_tick', 'fw_tempo', 'fw_timeline',
+                   'fw_transport']
+
+# Each core after 4.0, in its sources' order: its version, sites (by routine), tables, subscriptions ((event,
+# order), after the older ones) and words of .bss.
+# --- core 5.0 (Digitakt mk1): the firmware's moments as events (system.s, events.s), after everything 4.2 has.
+# Its sites by routine, its tables (one per event), its exports (the stubs, core_restart, core_restart_now and
+# the fw_* locations it adds) and its .bss, in bytes. CORE_50_EVENTS: what examples/hooks-check-dt1 takes; the
+# rest (ev_idle) take no handler there: digiemu's cold boot waits for the stock idle spin.
+CORE_50_SITES = ['core_card_ready', 'core_boot_ui', 'core_crash_install', 'core_project_saving',
+    'core_project_saved', 'core_project_loaded', 'core_project_new', 'core_pattern_save', 'core_pattern_reload',
+    'core_sample_assign', 'core_play', 'core_stop', 'core_pause', 'core_sync_stop', 'core_seq_tick',
+    'core_pattern_request', 'core_pattern_switch', 'core_tempo', 'core_midi_in_a', 'core_midi_in_b', 'core_sysex',
+    'core_midi_cc', 'core_midi_pc', 'core_midi_out', 'core_midi_rt_out', 'core_note_on', 'core_note_off',
+    'core_ui_msg', 'core_view_push', 'core_view_replace', 'core_view_pop', 'core_mute_global', 'core_mute_pattern',
+    'core_mute_row', 'core_key_leds', 'core_voice_on', 'core_sound_live', 'core_render_params', 'core_usb_on',
+    'core_usb_off', 'core_trig_set', 'core_trig_set_d', 'core_plock_store', 'core_track_length', 'core_param_set',
+    'core_sound_read', 'core_sound_write', 'core_kit_write', 'core_kit_read', 'core_smp_arm', 'core_smp_start',
+    'core_smp_stop', 'core_smp_finish', 'core_smp_abort', 'core_clip_copy', 'core_clip_clear', 'core_clip_paste',
+    'core_sound_copy', 'core_track_reload', 'core_sound_paste', 'core_sound_clear', 'core_smp_save',
+    'core_smp_write', 'core_project_clear', 'core_project_delete', 'core_song_mode', 'core_beat']
+CORE_50_TABLES = ['ev_card_ready', 'ev_boot_ui', 'ev_idle', 'ev_crash', 'ev_project_saving', 'ev_project_saved',
+    'ev_project_loaded', 'ev_project_new', 'ev_pattern_op', 'ev_sample_assign', 'ev_transport', 'ev_seq_tick',
+    'ev_pattern_request', 'ev_pattern_switch', 'ev_tempo', 'ev_midi_in', 'ev_sysex', 'ev_midi_cc', 'ev_midi_pc',
+    'ev_midi_out', 'ev_live_note', 'ev_ui_msg', 'ev_view', 'ev_mute', 'ev_key_leds', 'ev_voice_on',
+    'ev_sound_live', 'ev_render_params', 'ev_usb', 'ev_trig_set', 'ev_plock_store', 'ev_track_length',
+    'ev_param_set', 'ev_sound_read', 'ev_sound_write', 'ev_kit_write', 'ev_kit_read', 'ev_sampler', 'ev_clip_op',
+    'ev_track_reload', 'ev_project_erase', 'ev_song_mode', 'ev_beat']
+CORE_50_EXPORTS = ['core_beat', 'core_boot_ui', 'core_card_ready', 'core_clip_clear', 'core_clip_copy',
+    'core_clip_paste', 'core_crash', 'core_crash_install', 'core_key_leds', 'core_kit_read', 'core_kit_write',
+    'core_midi_cc', 'core_midi_in_a', 'core_midi_in_b', 'core_midi_out', 'core_midi_pc', 'core_midi_rt_out',
+    'core_mute_global', 'core_mute_pattern', 'core_mute_row', 'core_note_off', 'core_note_on', 'core_param_set',
+    'core_pattern_reload', 'core_pattern_request', 'core_pattern_save', 'core_pattern_switch', 'core_pause',
+    'core_play', 'core_plock_store', 'core_project_clear', 'core_project_delete', 'core_project_loaded',
+    'core_project_new', 'core_project_saved', 'core_project_saving', 'core_render_params', 'core_restart',
+    'core_restart_now', 'core_sample_assign', 'core_seq_tick', 'core_smp_abort', 'core_smp_arm', 'core_smp_finish',
+    'core_smp_save', 'core_smp_start', 'core_smp_stop', 'core_smp_write', 'core_song_mode', 'core_sound_clear',
+    'core_sound_copy', 'core_sound_live', 'core_sound_paste', 'core_sound_read', 'core_sound_write', 'core_stop',
+    'core_sync_stop', 'core_sysex', 'core_tempo', 'core_track_length', 'core_track_reload', 'core_trig_set',
+    'core_trig_set_d', 'core_ui_msg', 'core_usb_off', 'core_usb_on', 'core_view_pop', 'core_view_push',
+    'core_view_replace', 'core_voice_on', 'fw_led_set', 'fw_sampler_state', 'fw_sysex_send', 'fw_view']
+CORE_50_BSS = 8
+CORE_50_EVENTS = ['ev_card_ready', 'ev_boot_ui', 'ev_crash', 'ev_project_saving', 'ev_project_saved',
+    'ev_project_loaded', 'ev_project_new', 'ev_pattern_op', 'ev_sample_assign', 'ev_transport', 'ev_seq_tick',
+    'ev_pattern_request', 'ev_pattern_switch', 'ev_tempo', 'ev_midi_in', 'ev_sysex', 'ev_midi_cc', 'ev_midi_pc',
+    'ev_midi_out', 'ev_live_note', 'ev_ui_msg', 'ev_mute', 'ev_key_leds', 'ev_view', 'ev_voice_on',
+    'ev_sound_live', 'ev_render_params', 'ev_usb', 'ev_trig_set', 'ev_plock_store', 'ev_track_length',
+    'ev_param_set', 'ev_sound_read', 'ev_sound_write', 'ev_kit_write', 'ev_kit_read', 'ev_sampler', 'ev_clip_op',
+    'ev_track_reload', 'ev_project_erase', 'ev_song_mode', 'ev_beat']
+# --- end core 5.0
+
+CORE_ADDS = [('4.1', CORE_41_SITES, CORE_41_TABLES, [], 8),
+             ('4.2', CORE_42_SITES, CORE_42_TABLES, CORE_42_SUBSCRIBE, 0),
+             ('5.0', CORE_50_SITES, CORE_50_TABLES, [], CORE_50_BSS)]
+
+
+def core_adds(after):
+    """-> CORE_ADDS of the cores after core `after`, up to the tree's."""
+    return [a for a in CORE_ADDS if elemod.version_key(after) < elemod.version_key(a[0])
+            <= elemod.version_key(DT_VERSION)]
+
 
 def site_targets(sites):
     """The routine each built site calls or points to (its relocation's symbol)."""
@@ -163,20 +236,25 @@ def site_targets(sites):
 
 
 def test_core_builds_and_lints():
-    """core (3.0 and 4.0, the same code, and 4.1): the hook bus (core.s, 8 sites), the SRC machine slots
+    """core (3.0 and 4.0, the same code, 4.1 and 4.2): the hook bus (core.s, 8 sites), the SRC machine slots
     (machines.s, Digitakt mk1 only: 31 sites and the table core_machines),
     the machine page reader (core_machine_ui), the firmware locations
-    (fw.s: absolute exports, no site) and from 4.1 the master output and pages (master.s: 7 sites
-    and three tables)."""
+    (fw.s: absolute exports, no site), from 4.1 the master output and pages (master.s: 7 sites
+    and three tables) and from 4.2 exclusive audio (audio.s: the engine's start, the table
+    core_audio) and the Mod Menu (menu.s: the table core_menu, no site)."""
     path = built_core()
     with open(path) as fh:
         doc = json.load(fh)
     assert doc['id'] == 'core' and doc['version'] == DT_VERSION
-    assert '.boot' in doc['sections'] and len(doc['sites']) == 39 + len(CORE_41_SITES)
-    assert site_targets(doc['sites'][39:]) == [[x] for x in CORE_41_SITES]
-    assert sorted(doc['collections']) == sorted(HOOK_BUS + ['core_machines'] + CORE_41_TABLES)
+    adds = core_adds('4.0')
+    sites = [x for a in adds for x in a[1]]
+    assert '.boot' in doc['sections'] and len(doc['sites']) == 39 + len(sites)
+    assert site_targets(doc['sites'][39:]) == [[x] for x in sites]
+    assert sorted(doc['collections']) == sorted(HOOK_BUS + ['core_machines'] + [x for a in adds for x in a[2]])
     assert set(FW + CORE_41_EXPORTS + ['core_machine', 'core_machine_ui']) <= set(doc['exports'])
-    assert all(doc['symbols'][x][0] == 'abs' for x in FW)
+    assert set(CORE_42_EXPORTS) <= set(doc['exports'])
+    assert set(CORE_50_EXPORTS) <= set(doc['exports'])
+    assert all(doc['symbols'][x][0] == 'abs' for x in FW + ['fw_tempo', 'fw_timeline', 'fw_transport'])
     rc, r = lint_json(path, '--stock', stock())
     assert rc == 0 and r['link']['order'][0].startswith('core')
 
@@ -193,15 +271,16 @@ CORE_21 = os.environ.get('ELEKLOADER_CORE_21', '')
 def check_superset(old_path, new_path, st):
     """Core 3.0 (and 4.0, the same code) is core 2.1 and more: the same sites
     with the same bytes, the same tables, every 2.1 symbol where 2.1 has it,
-    2.1's .run at the start of the new core's and the same .bss."""
+    2.1's .run at the start of the new core's and the same .bss; 4.1 and 4.2
+    add theirs after it (check_adds)."""
     with open(old_path) as fh:
         old = json.load(fh)
     with open(new_path) as fh:
         new = json.load(fh)
     assert old['version'] == '2.1' and new['version'] == DT_VERSION
     assert old['target'] == new['target']
-    check_41_adds(old, new)
-    assert new['contribute'] == old['contribute'] and new['resources'] == old['resources']
+    check_adds(old, new, '4.0')
+    assert new['resources'] == old['resources']
     assert set(old['exports']) <= set(new['exports'])
     assert all(new['symbols'][k] == v for k, v in old['symbols'].items())
     stock_, dev, _rel = formats.load(st)
@@ -213,39 +292,130 @@ def check_superset(old_path, new_path, st):
     assert [r for r in new['relocs'] if r[1] < len(run_old) or r[0] != '.run'] == old['relocs']
 
 
-def check_41_adds(old, new):
-    """What 4.1 adds to a core before it (2.1, 3.0, 4.0: the same sites and tables): its sites
-    after the old ones, its tables, and its words of .bss after the old .bss."""
+def check_adds(old, new, after):
+    """What the cores after `after` add to a core no newer (2.1, 3.0 and 4.0 have the same sites and
+    tables): their sites after the old ones, their tables, their subscriptions after the old
+    contributions, and their words of .bss after the old .bss."""
+    adds = core_adds(after)
     n = len(old['sites'])
     assert new['sites'][:n] == old['sites']
-    assert site_targets(new['sites'][n:]) == [[x] for x in CORE_41_SITES]
-    assert new['collections'] == dict(old['collections'], **{c: {'entry': 4} for c in CORE_41_TABLES})
+    assert site_targets(new['sites'][n:]) == [[x] for a in adds for x in a[1]]
+    assert new['collections'] == dict(old['collections'], **{c: {'entry': 4} for a in adds for c in a[2]})
+    k = len(old['contribute'])
+    assert new['contribute'][:k] == old['contribute']
+    assert [(c['to'], c['order']) for c in new['contribute'][k:]] == [x for a in adds for x in a[3]]
     ob, nb = old['sections']['.bss'], new['sections']['.bss']
-    assert ob['align'] == nb['align'] and nb['size'] == ob['size'] + 8, (ob, nb)
+    assert ob['align'] == nb['align'] and nb['size'] == ob['size'] + sum(a[4] for a in adds), (ob, nb)
 
 
-CORE_40 = os.environ.get('ELEKLOADER_CORE_40', '')
-
-
-def test_digitakt_core_4_1_is_4_0_and_more():
-    """core 4.1 is 4.0 and the master output and pages: 4.0's sites with the same bytes, its
-    tables and exports, every symbol where it was, 4.0's .run at the start of 4.1's."""
-    if not CORE_40 or not os.path.exists(CORE_40):
-        raise Skip('missing ELEKLOADER_CORE_40 (the released core-4.0.elemod)')
-    new_path = built_core()
-    with open(CORE_40) as fh:
-        old = json.load(fh)
-    with open(new_path) as fh:
-        new = json.load(fh)
-    assert old['version'] == '4.0' and new['version'] == DT_VERSION
-    check_41_adds(old, new)
-    assert sorted(set(new['exports']) - set(old['exports'])) == sorted(CORE_41_EXPORTS + CORE_41_SITES)
+def check_newer(old, new, st, after):
+    """The tree's core keeps all of core `after` (old, its .elemod's json): check_adds, its exports
+    and the new ones, every symbol where it was, its .run at the start of the new .run, its
+    relocations."""
+    assert old['version'] == after and new['version'] == DT_VERSION
+    assert old['target'] == new['target']
+    check_adds(old, new, after)
+    assert new['resources'] == old['resources']
+    adds = core_adds(after)
+    added = (CORE_41_EXPORTS + CORE_41_SITES if any(a[0] == '4.1' for a in adds) else []) + \
+        (CORE_42_EXPORTS if any(a[0] == '4.2' for a in adds) else []) + \
+        (CORE_50_EXPORTS if any(a[0] == '5.0' for a in adds) else [])
+    assert sorted(set(new['exports']) - set(old['exports'])) == sorted(added)
+    assert set(old['exports']) <= set(new['exports'])
     assert all(new['symbols'][k] == v for k, v in old['symbols'].items())
-    stock_, dev, _rel = formats.load(stock())
+    stock_, dev, _rel = formats.load(st)
     image = formats.main_image(stock_, dev)
     run_old = elemod.parts_bytes(link.Mod2(old, 'old').sections['.run']['parts'], image, dev)
     run_new = elemod.parts_bytes(link.Mod2(new, 'new').sections['.run']['parts'], image, dev)
     assert run_new[:len(run_old)] == run_old and len(run_new) > len(run_old)
+    assert [r for r in new['relocs'] if r[1] < len(run_old) or r[0] != '.run'] == old['relocs']
+
+
+CORE_40 = os.environ.get('ELEKLOADER_CORE_40', '')
+CORE_41 = os.environ.get('ELEKLOADER_CORE_41', '')
+
+
+def test_digitakt_core_4_1_is_4_0_and_more():
+    """core 4.1 is 4.0 and the master output and pages, and 4.2 is 4.1 and exclusive audio, the
+    Mod Menu and the sequencer's time: 4.0's sites with the same bytes, its tables and exports,
+    every symbol where it was, 4.0's .run at the start of the tree's."""
+    if not CORE_40 or not os.path.exists(CORE_40):
+        raise Skip('missing ELEKLOADER_CORE_40 (the released core-4.0.elemod)')
+    with open(CORE_40) as fh:
+        old = json.load(fh)
+    with open(built_core()) as fh:
+        new = json.load(fh)
+    check_newer(old, new, stock(), '4.0')
+
+
+def test_digitakt_core_4_2_is_4_1_and_more():
+    """core 4.2 is 4.1 and more: 4.1's 46 sites with the same bytes, its tables, contributions,
+    exports and .bss, every 4.1 symbol where 4.1 has it, 4.1's .run at the start of 4.2's, then
+    audio.s and menu.s: one site, two tables, the Mod Menu's four handlers. 4.1 is not released:
+    ELEKLOADER_CORE_41 is a core-4.1.elemod built from main before 4.2 (bd91e76 or later), with
+    core-4.1-os1.54.elemod beside it for 1.54."""
+    if not CORE_41 or not os.path.exists(CORE_41):
+        raise Skip('missing ELEKLOADER_CORE_41 (a core-4.1.elemod built from main before 4.2)')
+    with open(CORE_41) as fh:
+        old = json.load(fh)
+    with open(built_core()) as fh:
+        new = json.load(fh)
+    assert len(old['sites']) == 39 + len(CORE_41_SITES)
+    check_newer(old, new, stock(), '4.1')
+    other = CORE_41.replace('core-4.1.elemod', 'core-4.1-os1.54.elemod')
+    if STOCK_154 and os.path.exists(STOCK_154) and os.path.exists(other):
+        with tempfile.TemporaryDirectory() as tmp:
+            path, _m = build.build(os.path.join(ROOT, 'mods', 'core'), STOCK_154, tmp)
+            with open(other) as fh:
+                old = json.load(fh)
+            with open(path) as fh:
+                new = json.load(fh)
+            check_newer(old, new, STOCK_154, '4.1')
+
+
+CORE_42 = os.environ.get('ELEKLOADER_CORE_42', '')
+
+
+def test_digitakt_core_5_0_is_4_2_and_more():
+    """core 5.0 is 4.2 and more: 4.2's sites with the same bytes, its tables, contributions, exports and
+    .bss, every 4.2 symbol where 4.2 has it, 4.2's .run at the start of 5.0's, then system.s and events.s:
+    the firmware's moments as events. 4.2 is not released: ELEKLOADER_CORE_42 is a core-4.2.elemod built
+    from the commit before 5.0, with core-4.2-os1.54.elemod beside it for 1.54."""
+    if not CORE_42 or not os.path.exists(CORE_42):
+        raise Skip('missing ELEKLOADER_CORE_42 (a core-4.2.elemod built before 5.0)')
+    with open(CORE_42) as fh:
+        old = json.load(fh)
+    with open(built_core()) as fh:
+        new = json.load(fh)
+    check_newer(old, new, stock(), '4.2')
+    other = CORE_42.replace('core-4.2.elemod', 'core-4.2-os1.54.elemod')
+    if STOCK_154 and os.path.exists(STOCK_154) and os.path.exists(other):
+        with tempfile.TemporaryDirectory() as tmp:
+            path, _m = build.build(os.path.join(ROOT, 'mods', 'core'), STOCK_154, tmp)
+            with open(other) as fh:
+                old = json.load(fh)
+            with open(path) as fh:
+                new = json.load(fh)
+            check_newer(old, new, STOCK_154, '4.2')
+
+
+def test_digitakt_core_5_events_take_a_handler_each():
+    """examples/hooks-check-dt1 subscribes one handler to each of core 5.0's
+    events but ev_idle: it builds for 1.53 and 1.54, names no firmware address
+    (its 1.54 port is empty) and links with the core."""
+    tc = devices.devices()[0].toolchain
+    if not shutil.which(os.environ.get('ELEKLOADER_CROSS', tc['prefix']) + 'gcc'):
+        raise Skip('no m68k cross compiler')
+    src = os.path.join(ROOT, 'examples', 'hooks-check-dt1')
+    with open(os.path.join(src, 'mod.json')) as fh:
+        subs = json.load(fh)['subscribe']
+    assert sorted(s['event'] for s in subs) == sorted(CORE_50_EVENTS)
+    assert set(CORE_50_EVENTS) < set(CORE_50_TABLES) and 'ev_idle' not in CORE_50_EVENTS
+    with tempfile.TemporaryDirectory() as tmp:
+        path, m = build.build(src, stock(), tmp)
+        assert not m.sites
+        rc, r = lint_json(path, '--stock', stock(), '--with', built_core())
+        assert rc == 0, r['problems']
 
 
 def test_core_3_is_core_2_1_and_more():
@@ -270,7 +440,7 @@ def test_digitakt_core_4_gives_the_mods_256_kb():
         raise Skip('no m68k cross compiler')
     dev = [x for x in devices.devices() if x.key == 'digitakt-mk1'][0]
     assert dev.ddr_for('3.0') == dev.ddr_for('2.1') == (0x47BE0000, 0x47C00000) == dev.ddr
-    assert dev.ddr_for('4.0') == dev.ddr_for('4.1') == (0x47BC0000, 0x47C00000)
+    assert dev.ddr_for('4.0') == dev.ddr_for('4.1') == dev.ddr_for('4.2') == (0x47BC0000, 0x47C00000)
     st = stock()
     with tempfile.TemporaryDirectory() as tmp:
         d = os.path.join(tmp, 'big')
@@ -289,6 +459,54 @@ def test_digitakt_core_4_gives_the_mods_256_kb():
             rc, r = lint_json(bpath, '--stock', st, '--with', CORE_21)
             assert rc == 1 and any('core 4.0 or newer gives them 262144 bytes' in x for x in r['problems']), \
                 r['problems']
+
+
+C_LEND = r'''
+#include "digitakt-mk1/core3.h"
+static void two_render(int32_t *out, const int32_t *in)
+{
+    int i;
+    int16_t *line = (int16_t *)CORE_LEND_LO;
+    for (i = 0; i < 64; i++)
+        out[i] = in[i] + (core_audio_live ? line[i] : 0);
+}
+struct core_audio_owner two_owner = { 0, two_render, 0 };
+'''
+
+
+def test_digitakt_core_4_2_lends_the_delay_line():
+    """Core 4.2's exclusive audio (examples/dt-thru): THRU's echo is a region in
+    the profile's 'lend' area, the delay's line, which core lends the audio's
+    owner while it has the audio. Another owner's region there may overlap
+    THRU's; a region there with an older core (2.1, 4.1) is refused, the
+    message naming the core that lends it."""
+    tc = devices.devices()[0].toolchain
+    if not shutil.which(os.environ.get('ELEKLOADER_CROSS', tc['prefix']) + 'gcc'):
+        raise Skip('no m68k cross compiler')
+    dev = [x for x in devices.devices() if x.key == 'digitakt-mk1'][0]
+    assert dev.areas['lend'] == (0x47C00000, 0x48000000) and dev.lent_areas == {'lend': '4.2'}
+    st = stock()
+    with tempfile.TemporaryDirectory() as tmp:
+        thru, m = build.build(os.path.join(ROOT, 'examples', 'dt-thru'), st, tmp)
+        assert m.needs_core == '4.2' and [g['area'] for g in m.regions] == ['lend']
+        d = os.path.join(tmp, 'two')
+        os.makedirs(d)
+        with open(os.path.join(d, 'two.c'), 'w') as fh:
+            fh.write(C_LEND)
+        with open(os.path.join(d, 'mod.json'), 'w') as fh:
+            json.dump({'id': 'two', 'version': '0.1', 'license': 'GPL-2.0-or-later', 'device': 'digitakt-mk1',
+                       'os': '1.53', 'sources': ['two.c'], 'requires': ['core'],
+                       'contribute': [{'to': 'core_audio', 'order': 60, 'data': '00000000',
+                                       'relocs': [[0, 'abs32', 'sym:two_owner', 0]]}],
+                       'resources': {'regions': [{'name': 'two', 'lo': '0x47C00000', 'hi': '0x47D00000'}]}}, fh)
+        two, _m = build.build(d, st, tmp)
+        rc, r = lint_json(thru, '--stock', st, '--with', built_core(), '--with', two)
+        assert rc == 0, r['problems']
+        for older in (CORE_21, CORE_41):
+            if older and os.path.exists(older):
+                rc, r = lint_json(two, '--stock', st, '--with', older)
+                assert rc == 1 and any('region two is in the lend area, which core 4.2 or newer lends' in x
+                                       for x in r['problems']), r['problems']
 
 
 def test_core_too_old_is_said_plainly():
@@ -364,9 +582,11 @@ def test_a_machine_in_c_describes_its_page():
         assert rc == 1 and r['problems'] == ['pagetest 1.0 requires machine-pages'], r['problems']
         if CORE_21 and os.path.exists(CORE_21):
             rc, r = lint_json(path, '--stock', stock(), '--with', CORE_21, '--with', mp)
+            with open(os.path.join(ROOT, 'mods', 'machine-pages', 'mod.json')) as fh:
+                mp_version = json.load(fh)['version']
             assert rc == 1 and set(r['problems']) == {
                 'pagetest 1.0 needs core 3.0 or newer, and this build has core 2.1',
-                'machine-pages 1.1 needs core 3.0 or newer, and this build has core 2.1'}, r['problems']
+                'machine-pages %s needs core 3.0 or newer, and this build has core 2.1' % mp_version}, r['problems']
         if STOCK_154 and os.path.exists(STOCK_154):
             path4, m4 = build.build(d, STOCK_154, tmp)
             assert path4.endswith('pagetest-1.0-os1.54.elemod')
@@ -614,7 +834,11 @@ def test_digitone_core_builds_and_links():
                                                   'settings.s', 'voice.s', 'voices.s']
         assert dn['build']['sources']['core.s'] == dt['build']['sources']['core.s']
         placed = {k: v for k, v in dn['symbols'].items() if v[0] != 'abs'}
-        shared = {k: v for k, v in placed.items() if k in dt['symbols']}
+        # (the Digitakt's core ends with master.s from 4.1 and audio.s and menu.s from 4.2, its own, some under
+        # core-dn1's names, core_render_master the first: not shared)
+        cut = dt['symbols'].get('core_render_master', [None, None])[1]
+        dt_shared = {k: v for k, v in dt['symbols'].items() if cut is None or v[0] != '.run' or v[1] < cut}
+        shared = {k: v for k, v in placed.items() if k in dt_shared}
         assert shared == {k: dt['symbols'][k] for k in shared}
         assert {'core_voice_on', 'core_dn_boot', 'core_param_ui', 'core_page_rec',
                 'core_view_init', 'core_page_open', 'core_page_shown', 'core_proj_save',

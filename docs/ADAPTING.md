@@ -2769,6 +2769,78 @@ SETUP has the LOCK TRACK. The pedals share theirs through the pedal shell
 DigiPrism's modules and their order. DigiPrism's SOURCE DIGITONE stays an
 insert of its own (`fx_chain(e, 0)`), with fxkit's values all the same.
 
+### Exclusive audio and the Mod Menu (core 4.2, Digitakt mk1)
+
+A mod can take the whole audio on the Digitakt mk1 too: the audio inputs
+in, and what it makes out. The Digitakt has no second CPU: its render
+(vector 191) runs the whole engine on the ColdFire (the smoother, the LFOs,
+playback, the overdrive, the envelopes, the filters, and the mixer with the
+inputs, delay, reverb and compressor), about 100,000 of the 166,685 core
+cycles of a block in digikit's emulator and some 80% of a block on a unit.
+So an owner gets its time by stopping the engine: core 4.2 takes the
+instruction that starts it (0x40077e94, `core_audio_gate`, the same in 1.53
+and 1.54), and while there is an owner it skips everything up to the
+mixer's call and goes on just past it. The sequencer's events, its clock,
+USB and the sampler still run, so the MIDI tracks keep playing and PLAY and
+STOP work. The mixer's master stage is skipped with the rest, so
+`ev_render_master` (core 4.1, above) does not run while an owner has the
+audio: the owner's block is the output. In the emulator the render with an owner (THRU, below) takes
+about 4,500 cycles a block besides the owner's own: some 95% of a block is
+the owner's.
+
+A mod contributes to the table `core_audio` a pointer to a `struct
+core_audio_owner` (`digitakt-mk1/core3.h`), as on the Digitone: `on`, set
+and cleared from the UI task; `render(out, in)`, 32 frames L,R in Q1.31 each
+way, in the input's polarity; flags 0. Each block core takes the first
+record whose `on` is set. It hands the owner the block's input (Q1.31, the
+codec's 24 bits shifted as the mixer does, in place, so the sampler sees
+it so too), and writes what it returns to the codec (negated, as the
+mixer's output stage writes what it mixed, so the polarity is the stock's
+for the inputs), to the mixer's buffer (what the sampler records as the
+main mix) and to USB's main pair; USB's track channels are silent and its
+input pair the input. With no record on, every block is stock.
+
+**The lent line.** While an owner has the audio the engine's 4 MB delay
+line (0x47C00000-0x48000000, its DMA started by the render each block) has
+no user, and core lends it to the owner: its buffers are a region in the
+Digitakt profile's `lend` area. The regions of several such mods may
+overlap there, for only one has the line at a time, and the linker refuses
+one with a core older than 4.2. Core clears the line before it hands it
+over and again after the owner lets go (32 KB a block: about 85 ms each
+way, the output silent meanwhile), and pushes the data cache, so the
+delay's DMA never meets what an owner left. `core_audio_live` names the
+record that has the line, from the block its `render` first runs to the
+moment its `on` is cleared: a mod touches the line from the UI task only
+while it is its record. `core_audio_caps` is `CORE_AUDIO_LEND` (4): the
+Digitakt has no `CORE_AUDIO_INSERT`, as an insert would leave the engine and
+the owner one CPU to share.
+
+```json
+"contribute": [{"to": "core_audio", "order": 50, "data": "00000000",
+                "relocs": [[0, "abs32", "sym:thru_owner", 0]]}],
+"resources": {"core": "4.2",
+              "regions": [{"name": "THRU's echo", "lo": "0x47C00000", "hi": "0x47C0BB80"}]}
+```
+
+`examples/dt-thru` (THRU) is the smallest such mod: THRU in the Mod Menu
+takes the audio, the inputs go straight to the output at knob A's level
+with an echo at knob B's in the lent line, and NO gives the audio back.
+
+**The Mod Menu.** Core 4.2 has core-dn1's Mod Menu too, the grid of tiles
+mods add to with the table `core_menu` (the same descriptor, its icon and
+`core_menu_open` for a submenu: "The Mod Menu (core-dn1 2.2, Digitone
+mk1)"). The Digitakt has no track keys to hold, so nothing opens it but a
+call: `core_menu_show(track)`. machine-pages 1.7's command rows (below) are
+the way in: fxkit adds PEDALS to the machine menu, and its YES shows the
+grid. In the grid the arrows or a knob move, YES or trig N picks, NO
+closes, a page key closes it and goes to its page. Its handlers are core's
+own subscriptions: first on `ev_key` and `ev_enc` (order 1), last on
+`ev_draw` (99).
+
+Core 4.2 also exports the sequencer's time: `fw_tempo` (the tempo × 120, as
+the Digitone's), `fw_timeline` (5,400,000 units a 16th: the render moves it
+twice the tempo a block) and `fw_transport` (0 stopped, 1 playing).
+
 ### Step-fire events (seq-events, Digitone mk1, Digitakt mk1 and Octatrack)
 
 Mods that change what the sequencer plays (rhythm and melody generators,

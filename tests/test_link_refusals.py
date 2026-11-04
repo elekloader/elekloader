@@ -509,6 +509,15 @@ def _(B):
     return B.pair('m 1 region ra and n 1 region rb overlap', regions(lo + 0x80), regions(lo + 0x100))
 
 
+@row('check', '<> region <> is in the <> area, which core <> or newer lends; this build has core <>',
+     device='digitakt-mk1')
+def _(B):
+    lo = B.dev.areas['lend'][0]                 # the delay's line, which core 4.2 lends an audio owner
+    return B.pair('m 1 region r is in the lend area, which core 4.2 or newer lends; this build has core 1',
+                  edit_region('r', lo, lo + 0x100),
+                  lambda d: (edit_region('r', lo, lo + 0x100)(d), d[0].update(version='4.2')))
+
+
 @row('common_checks', 'mod <> is given <> times')
 def _(B):
     return B.pair('mod m is given 2 times', lambda d: d.append(copy.deepcopy(d[1])))
@@ -885,7 +894,7 @@ def test_octatrack_fixtures():
 
 
 def test_digitakt_fixtures():
-    assert run_rows('digitakt-mk1') == 2
+    assert run_rows('digitakt-mk1') == 3
 
 
 def test_analog_rytm_fixtures():

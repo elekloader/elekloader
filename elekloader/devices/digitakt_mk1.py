@@ -19,16 +19,22 @@ for both:
 - From core 4.0 the mods run from 0x47BC0000-0x47C00000 instead (256 KB,
   twice the 128 KB above; core_ddr): the whole gap between the sample pool's
   end (0x47BAF640 in 1.53, 0x47BBF640 in 1.54, which the OS compares
-  against) and the audio input ring at 0x47C00000. Nothing else is free in
+  against) and the delay's line at 0x47C00000. Nothing else is free in
   the DDR: the OS's variables and its uncached buffers run from the heap to
-  the pool's start (0x43BAF5F0 in 1.53), and the ring fills the last 4 MB
-  (the OS clears 0x400000 bytes there and masks its index with 0x7FFFF, 8
-  bytes a frame). No instruction operand points between the pool's end and
-  the ring, in 1.53 or 1.54, and in an emulator run (the pattern playing,
-  pages changing) nothing writes from 0x47B00000 to 0x48000000 but the
-  boot stack's top page. The core's boot copier puts the mods wherever the
-  linker laid them out, so only the area changes; an older core keeps
-  0x47BE0000.
+  the pool's start (0x43BAF5F0 in 1.53), and the delay effect's line fills
+  the last 4 MB (the OS clears 0x400000 bytes there and masks its index with
+  0x7FFFF, 8 bytes a frame; DMA channel 42 writes it and 30 reads it back,
+  each started by the render every block). No instruction operand points
+  between the pool's end and the line, in 1.53 or 1.54, and in an emulator
+  run (the pattern playing, pages changing) nothing writes from 0x47B00000
+  to 0x48000000 but the boot stack's top page. The core's boot copier puts
+  the mods wherever the linker laid them out, so only the area changes; an
+  older core keeps 0x47BE0000.
+- 'lend', the delay's line (0x47C00000-0x48000000, by its cached alias): core
+  4.2 lends it to the one exclusive-audio owner (core_audio) while that has
+  the audio, the engine stopped and its DMA with it, clearing it before and
+  after (lent_areas). Regions there may overlap, one mod's with another's:
+  only the owner of the moment uses them.
 """
 from . import Device, Release
 
@@ -56,10 +62,12 @@ DEVICE = Device(
     trailer=None,
     isa='coldfire',
     areas={
-        'ddr': (0x47BE0000, 0x47C00000),          # below the audio DMA ring
+        'ddr': (0x47BE0000, 0x47C00000),          # below the delay's line
         'sram-tail': (0x8000F700, 0x80010000),    # the SRAM's free tail
         'sram-block': (0x80003360, 0x80008000),   # free SRAM (FAST AUDIO's copy)
+        'lend': (0x47C00000, 0x48000000),         # the delay's line, lent by core 4.2 (above)
     },
+    lent_areas={'lend': '4.2'},
     ddr=(0x47BE0000, 0x47C00000),
     core_ddr=(('4.0', (0x47BC0000, 0x47C00000)),),   # core 4.0: 256 KB (above)
     sram_code=(0x8000F700, 0x80010000),

@@ -60,3 +60,25 @@
         FW      fw_blit, BLIT
         FW      fw_op_new, OP_NEW
         FW      fw_invalidate, FW_INVALIDATE
+
+| From 4.2: the sequencer's time.
+|   fw_tempo           0x4020db60  the tempo x 120 (87.0 BPM: 10440), as the
+|                                  sequencer runs it (1.54: 0x4020df10)
+|   fw_timeline        0x80001f4c  the timeline: 5,400,000 units a 16th; the render
+|                                  moves it twice the tempo every block
+|   fw_transport       0x4199dc2c  0 stopped, 1 playing (1.54: 0x4199ec2c)
+        FW      fw_tempo, FW_TEMPO
+        FW      fw_timeline, FW_TIMELINE
+        FW      fw_transport, FW_TRANSPORT
+
+| From 5.0:
+|   fw_sysex_send      0x400d6e1e  send(buf, len, volatile uint8_t *abort, port) -> nonzero: sent; in pieces of at most 144 bytes (1.54: 0x400d7046)
+        FW      fw_sysex_send, SYSEX_SEND
+
+| From 5.0:
+|   fw_led_set         0x400083a0  set(brain, led, state, colour): an LED for this frame (in ev_key_leds; brain = its container - 0x40); the first setter wins (1.54: 0x400083a0)
+        FW      fw_led_set, FW_LED_SET
+
+| From 5.0:
+|   fw_sampler_state   0x4199e114  the recorder's state, a long: 0 idle, 1 armed, 2 recording, 3 stopped, 4 a take kept (1.54: 0x4199f114)
+        FW      fw_sampler_state, SAMPLER_STATE

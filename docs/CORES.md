@@ -26,6 +26,8 @@ older ones people still have:
 |---|---|---|---|
 | Digitakt mk1 | 1.53, 1.54 | `core-4.0.elemod`, `core-4.0-os1.54.elemod` | the [core-v4.0](https://github.com/irpina/elekloader/releases/tag/core-v4.0) pre-release, and the web page |
 | Digitakt mk1 | 1.53, 1.54 | `core-4.1.elemod`, `core-4.1-os1.54.elemod` | on main, not released: build it ([below](#building-a-core)) |
+| Digitakt mk1 | 1.53, 1.54 | `core-4.2.elemod`, `core-4.2-os1.54.elemod` | on main, not released: build it ([below](#building-a-core)) |
+| Digitakt mk1 | 1.53, 1.54 | `core-5.0.elemod`, `core-5.0-os1.54.elemod` | on branch dt1-core-5.0, not released: build it ([below](#building-a-core)) |
 | Digitakt mk1 | 1.53, 1.54 | `core-2.1.elemod`, `core-2.1-os1.54.elemod` | the v0.4.0 release, built into its apps |
 | Digitone mk1, Digitone Keys | 1.43, 1.44 | `core-dn1-4.1.elemod`, `core-dn1-4.1-os1.44.elemod` | the [core-dn1-v4.1](https://github.com/irpina/elekloader/releases/tag/core-dn1-v4.1) pre-release, and the web page |
 | Digitone mk1, Digitone Keys | 1.43, 1.44 | `core-dn1-4.1.1.elemod`, `core-dn1-4.1.1-os1.44.elemod` | on main, not released: build it ([below](#building-a-core)) |
@@ -99,6 +101,20 @@ the one a mod that uses it names in `resources.core`.
   (core 3.0; ADAPTING.md, "Machine pages"). The master output, the mods'
   own master pages and rows in SETTINGS > GLOBAL FX/MIX, so master effects
   combine (core 4.1; ADAPTING.md, "The master output and the master pages").
+  Exclusive audio, one mod taking the whole audio with the Digitakt's
+  engine stopped and the delay's 4 MB line lent to it meanwhile, the
+  Digitone's Mod Menu, shown by a call (machine-pages 1.7 adds rows to the
+  machine menu that are not machines, and fxkit's PEDALS opens it), and the
+  tempo, the timeline and the transport as exports (core 4.2; ADAPTING.md,
+  "Exclusive audio and the Mod Menu (core 4.2, Digitakt mk1)"). With them,
+  [fxkit](../mods/fxkit-dt1) and the seven pedals (`mods/<pedal>-dt1`)
+  ("Effects on the Digitakt"). The firmware's moments as events, a
+  prototype: the +Drive ready, the boot, USB, crashes and a restart, project
+  saves, loads and slots, transport, the sequencer's tick, patterns and
+  tempo, song mode and the beat, every MIDI message in and out, notes and
+  voice starts, the UI
+  task's messages, views, mutes and LEDs, sequencer edits, parameter
+  commits, the clipboard and the sampler (core 5.0; the core's README).
 - **Digitone mk1** ([mods/core-dn1](../mods/core-dn1)): the Digitakt mk1's
   events, and:
   - the voices' note-on, parameter slots, mod pages and project data

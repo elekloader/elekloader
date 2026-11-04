@@ -478,7 +478,14 @@ def check(mods, image):
             bad.append('%s has DSP code for payload %s, which needs a mod that frees DSP memory '
                        'there (one that claims %s)' % (m.label(), tag, ' or '.join(free) or
                                                        'an area the %s does not have' % dev.name))
-    regs = [(g['lo'], g['hi'], m, 'region ' + g['name']) for m in mods for g in m.regions]
+    regs = [(g['lo'], g['hi'], m, 'region ' + g['name']) for m in mods for g in m.regions
+            if g['area'] not in dev.lent_areas]
+    for m in mods:                              # memory the core lends one owner at a time
+        for g in m.regions:
+            need = dev.lent_areas.get(g['area'])
+            if need and len(cores) == 1 and version_key(cores[0].version) < version_key(need):
+                bad.append('%s region %s is in the %s area, which core %s or newer lends; this build '
+                           'has core %s' % (m.label(), g['name'], g['area'], need, cores[0].version))
     if dev.sram_code[1] > dev.sram_code[0]:
         regs.append((dev.sram_code[0], dev.sram_code[1], None, 'the .fast area'))
     for a, b in overlaps(regs):

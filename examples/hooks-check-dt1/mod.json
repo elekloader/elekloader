@@ -1,0 +1,67 @@
+{
+ "id": "hcdt1",
+ "version": "0.1",
+ "license": "GPL-2.0-or-later",
+ "title": "hooks check (Digitakt mk1)",
+ "category": "Utility",
+ "author": "irpina",
+ "description": "A test mod for core 5.0: one handler on each event, which counts its calls and keeps its last arguments in hc_counts and hc_args, for the emulator probe to read. It takes nothing and changes nothing the unit does.",
+ "device": "digitakt-mk1",
+ "os": "1.53",
+ "ports": {
+  "1.54": {}
+ },
+ "sources": [
+  "check.c"
+ ],
+ "subscribe": [
+  {"event": "ev_card_ready", "fn": "hc_card_ready", "order": 50},
+  {"event": "ev_boot_ui", "fn": "hc_boot_ui", "order": 50},
+  {"event": "ev_crash", "fn": "hc_crash", "order": 50},
+  {"event": "ev_project_saving", "fn": "hc_project_saving", "order": 50},
+  {"event": "ev_project_saved", "fn": "hc_project_saved", "order": 50},
+  {"event": "ev_project_loaded", "fn": "hc_project_loaded", "order": 50},
+  {"event": "ev_project_new", "fn": "hc_project_new", "order": 50},
+  {"event": "ev_pattern_op", "fn": "hc_pattern_op", "order": 50},
+  {"event": "ev_sample_assign", "fn": "hc_sample_assign", "order": 50},
+  {"event": "ev_transport", "fn": "hc_transport", "order": 50},
+  {"event": "ev_seq_tick", "fn": "hc_seq_tick", "order": 50},
+  {"event": "ev_pattern_request", "fn": "hc_pattern_request", "order": 50},
+  {"event": "ev_pattern_switch", "fn": "hc_pattern_switch", "order": 50},
+  {"event": "ev_tempo", "fn": "hc_tempo", "order": 50},
+  {"event": "ev_midi_in", "fn": "hc_midi_in", "order": 50},
+  {"event": "ev_sysex", "fn": "hc_sysex", "order": 50},
+  {"event": "ev_midi_cc", "fn": "hc_midi_cc", "order": 50},
+  {"event": "ev_midi_pc", "fn": "hc_midi_pc", "order": 50},
+  {"event": "ev_midi_out", "fn": "hc_midi_out", "order": 50},
+  {"event": "ev_live_note", "fn": "hc_live_note", "order": 50},
+  {"event": "ev_ui_msg", "fn": "hc_ui_msg", "order": 50},
+  {"event": "ev_mute", "fn": "hc_mute", "order": 50},
+  {"event": "ev_key_leds", "fn": "hc_key_leds", "order": 50},
+  {"event": "ev_view", "fn": "hc_view", "order": 50},
+  {"event": "ev_voice_on", "fn": "hc_voice_on", "order": 50},
+  {"event": "ev_sound_live", "fn": "hc_sound_live", "order": 50},
+  {"event": "ev_render_params", "fn": "hc_render_params", "order": 50},
+  {"event": "ev_usb", "fn": "hc_usb", "order": 50},
+  {"event": "ev_trig_set", "fn": "hc_trig_set", "order": 50},
+  {"event": "ev_plock_store", "fn": "hc_plock_store", "order": 50},
+  {"event": "ev_track_length", "fn": "hc_track_length", "order": 50},
+  {"event": "ev_param_set", "fn": "hc_param_set", "order": 50},
+  {"event": "ev_sound_read", "fn": "hc_sound_read", "order": 50},
+  {"event": "ev_sound_write", "fn": "hc_sound_write", "order": 50},
+  {"event": "ev_kit_write", "fn": "hc_kit_write", "order": 50},
+  {"event": "ev_kit_read", "fn": "hc_kit_read", "order": 50},
+  {"event": "ev_sampler", "fn": "hc_sampler", "order": 50},
+  {"event": "ev_clip_op", "fn": "hc_clip_op", "order": 50},
+  {"event": "ev_track_reload", "fn": "hc_track_reload", "order": 50},
+  {"event": "ev_project_erase", "fn": "hc_project_erase", "order": 50},
+  {"event": "ev_song_mode", "fn": "hc_song_mode", "order": 50},
+  {"event": "ev_beat", "fn": "hc_beat", "order": 50}
+ ],
+ "resources": {
+  "core": "5.0"
+ },
+ "requires": [
+  "core"
+ ]
+}

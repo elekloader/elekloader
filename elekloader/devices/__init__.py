@@ -62,6 +62,10 @@ class Device:
                                  # every build leaves them stock (formats.verify)
     blob_max: int = None         # the most a whole build may append (None: the flash budget)
     areas: dict = field(default_factory=dict)   # name -> (lo, hi): free at run time
+    lent_areas: dict = field(default_factory=dict)   # area name -> the core version that lends it:
+                                 # memory the core lends one owner at a time (the Digitakt mk1's
+                                 # 'lend', while an exclusive-audio owner has the audio), so the
+                                 # mods' regions there may overlap, and need that core
     ddr: tuple = (0, 0)          # the linker's area for .run, tables and .bss
     core_ddr: tuple = ()         # ((core version, (lo, hi)), ...): from that core's version on,
                                  # the linker's area in place of ddr (the last that applies)

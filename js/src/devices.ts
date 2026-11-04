@@ -97,6 +97,8 @@ export type Device = {
   keep: [number, number, string][]             // main OS bytes that look free but the OS reads: no site may write them
   blobMax: number | null
   areas: Record<string, Range>                  // in the profile's order
+  lentAreas: Record<string, string>             // area -> the core version that lends it, one owner at a time: regions
+                                                // there may overlap, and need that core
   ddr: Range
   coreDdr: [string, Range][]                   // [core version, area]: from that core on, the linker's area in place of ddr
   slotClaims: [string, number, number, string][]   // [table, at, count, prefix]: a contribution to table points at a descriptor whose long at +at is a sound slot; the mod claims prefix:<slot>
@@ -115,6 +117,7 @@ const rel = (version: string, syxSha256: string, mainSha256: string, mainLen: nu
 const base = {
   mainSection: 3, mainLoad: 0x40000400, isa: 'coldfire' as const, hmacKeyFrom: null, container: 'ele3' as const,
   versionLen: 4, versionAt: 0x14, versionOptional: false, protected: [], relocatable: [], keep: [], blobMax: null, sramCode: [0, 0] as Range, coreDdr: [] as [string, Range][], slotClaims: [] as [string, number, number, string][], fastTable: '',
+  lentAreas: {} as Record<string, string>,
   imageFree: [], reserve: null, dspPayloads: {}, dspAreas: [], trailer: null, updateMax: null,
 }
 
@@ -128,7 +131,9 @@ export const DIGITAKT_MK1: Device = {
       '5c58bf9e3949ef09977c5fc007a61e8d026931f67f1621238379dfb8ee4d31a2', 2479680),
   ],
   stage: 0x40200000, flashAt: 0x80000, flashLimit: 0x380000,
-  areas: { ddr: [0x47be0000, 0x47c00000], 'sram-tail': [0x8000f700, 0x80010000], 'sram-block': [0x80003360, 0x80008000] },
+  areas: { ddr: [0x47be0000, 0x47c00000], 'sram-tail': [0x8000f700, 0x80010000], 'sram-block': [0x80003360, 0x80008000],
+    lend: [0x47c00000, 0x48000000] },
+  lentAreas: { lend: '4.2' },                     // the delay's line, lent by core 4.2 to its audio owner
   ddr: [0x47be0000, 0x47c00000], sramCode: [0x8000f700, 0x80010000], fastTable: 'fa_copies',
   coreDdr: [['4.0', [0x47bc0000, 0x47c00000]]],   // core 4.0: 256 KB
   recovery: 'hold FUNC while powering on for the startup menu, then send the stock .syx',
