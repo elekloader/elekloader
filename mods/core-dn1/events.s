@@ -716,10 +716,17 @@ core_track_reload:
 | menu view, b = the selection; 3 delete (b = nonzero once confirmed), 4 send
 | SysEx, 5 toggle write protection, 6 paste into a pool slot (the SOUND
 | BROWSER's FUNC+STOP: how a copied track sound is saved): a = the selection
-| (6: b = nonzero once confirmed). The selection points at a vector of the
-| ticked sounds' indices.
+| (6: b = nonzero once confirmed), 7 save the track's sound into the ticked
+| pool slot (the pool view's SAVE TO HERE, on its last YES). The selection
+| points at a vector of the ticked sounds' indices.
         .globl  core_snd_pool, core_snd_bank, core_snd_copy, core_snd_delete
-        .globl  core_snd_sysex, core_snd_protect, core_snd_paste
+        .globl  core_snd_sysex, core_snd_protect, core_snd_paste, core_snd_save
+core_snd_save:
+        moveq   #7, %d0
+        bsr.w   core_sound_op
+        link.w  %fp, #-56
+        movem.l %d2-%d3/%a2-%a3, (%sp)
+        jmp     SND_SAVE + 8
 core_snd_paste:
         moveq   #6, %d0
         bsr.w   core_sound_op

@@ -158,7 +158,8 @@
   "SOUND_CLEAR": "0x400328f6",
   "MUTE_PATTERN": "0x400238ee",
   "MUTE_SONG": "0x40033bee",
-  "SND_PASTE": "0x400d5a7a"
+  "SND_PASTE": "0x400d5a7a",
+  "SND_SAVE": "0x400d5236"
  },
  "sites": [
   {"addr": "0x40000538", "stock": "4eb940001df4", "op": "jsr", "target": "core_dn_boot"},
@@ -307,7 +308,8 @@
   {"addr": "0x400328f6", "stock": "4e56ffd448d73c0c", "op": "jmp", "target": "core_sound_clear"},
   {"addr": "0x400238ee", "stock": "4e56ffd048d71cfc", "op": "jmp", "target": "core_mute_pattern"},
   {"addr": "0x40033bee", "stock": "4feffff048d7041c", "op": "jmp", "target": "core_mute_song"},
-  {"addr": "0x400d5a7a", "stock": "4e56fff0206e0008", "op": "jmp", "target": "core_snd_paste"}
+  {"addr": "0x400d5a7a", "stock": "4e56fff0206e0008", "op": "jmp", "target": "core_snd_paste"},
+  {"addr": "0x400d5236", "stock": "4e56ffc848d70c0c", "op": "jmp", "target": "core_snd_save"}
  ],
  "ports": {
   "1.44": {
@@ -464,7 +466,8 @@
     "SOUND_CLEAR": "0x400328f6",
     "MUTE_PATTERN": "0x400238ee",
     "MUTE_SONG": "0x40033bee",
-    "SND_PASTE": "0x400d5cee"
+    "SND_PASTE": "0x400d5cee",
+    "SND_SAVE": "0x400d54aa"
    },
    "sites": [
     {"addr": "0x40000538", "stock": "4eb940001df4", "op": "jsr", "target": "core_dn_boot"},
@@ -613,7 +616,8 @@
     {"addr": "0x400328f6", "stock": "4e56ffd448d73c0c", "op": "jmp", "target": "core_sound_clear"},
     {"addr": "0x400238ee", "stock": "4e56ffd048d71cfc", "op": "jmp", "target": "core_mute_pattern"},
     {"addr": "0x40033bee", "stock": "4feffff048d7041c", "op": "jmp", "target": "core_mute_song"},
-    {"addr": "0x400d5cee", "stock": "4e56fff0206e0008", "op": "jmp", "target": "core_snd_paste"}
+    {"addr": "0x400d5cee", "stock": "4e56fff0206e0008", "op": "jmp", "target": "core_snd_paste"},
+    {"addr": "0x400d54aa", "stock": "4e56ffc848d70c0c", "op": "jmp", "target": "core_snd_save"}
    ]
   }
  },

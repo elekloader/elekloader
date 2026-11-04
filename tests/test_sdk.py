@@ -633,7 +633,7 @@ def test_digitone_core_builds_and_links():
         # filters, the master stage), the CC router's, the key-LED frame's, the
         # controller stage's, the program change handler's, the note queue's,
         # 4.2's knob turn, value getter, value routine, SYN envelope page and voice-ready,
-        # and 5.0's 54: the card's status, the SysEx router, the crash printer's install,
+        # and 5.0's 55: the card's status, the SysEx router, the crash printer's install,
         # the UI spawner, USB's two, the slot writer's two, the sequencer's start, stop,
         # pause and tick, the pattern request, the MIDI task's two dispatches, the port
         # switch, the voice release, the UI queue, six sequencer edits, the parameter
@@ -641,9 +641,9 @@ def test_digitone_core_builds_and_links():
         # and the pattern switch, the arpeggiator's step, the voice allocator's steal,
         # KEYBOARD mode's note-on and note-off, the three mute writers, the view
         # stack's push, replace and pop, the pattern menu's save and reload, the
-        # track reload, the sound manager's six actions and the browser's paste,
+        # track reload, the sound manager's seven actions and the browser's paste,
         # the sound load and the track sound clear.
-        assert dn['target']['device'] == 'digitone-mk1' and len(dn['sites']) == 147
+        assert dn['target']['device'] == 'digitone-mk1' and len(dn['sites']) == 148
         assert sorted(dn['collections']) == sorted(
             HOOK_BUS + ['core_menu', 'core_pages', 'core_params', 'core_projdata',
                         'ev_hold', 'ev_voice_on', 'core_param_override', 'ev_render_voices',
@@ -1521,7 +1521,7 @@ def test_digitone_core_port_to_144_is_the_same_core():
 
         def what(d):                # each site's new bytes and targets, not where it is
             return [(s['len'], s['kind'], s['new'], s.get('relocs')) for s in d['sites']]
-        assert len(new['sites']) == 147 and what(new) == what(old)
+        assert len(new['sites']) == 148 and what(new) == what(old)
         rc, r = lint_json(path, '--stock', DN_STOCK_144)
         assert rc == 0, r['problems']
         rc, r = lint_json(old_path, '--stock', DN_STOCK_144)

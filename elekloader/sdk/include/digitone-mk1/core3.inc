@@ -86,3 +86,4 @@
         .equ    CORE_SOUND_SEND_SYSEX, 4
         .equ    CORE_SOUND_PROTECT, 5
         .equ    CORE_SOUND_PASTE, 6
+        .equ    CORE_SOUND_SAVE, 7

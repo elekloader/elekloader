@@ -421,6 +421,7 @@ typedef void (*ev_track_reload_fn)(int32_t track, int32_t pattern, void *params)
 #define CORE_SOUND_SEND_SYSEX   4
 #define CORE_SOUND_PROTECT      5       /* toggle write protection */
 #define CORE_SOUND_PASTE        6       /* the SOUND BROWSER's FUNC+STOP into a pool slot (b: confirmed) */
+#define CORE_SOUND_SAVE         7       /* the pool view's SAVE TO HERE: the track's sound into the slot */
 typedef void (*ev_sound_op_fn)(int32_t op, void *a, void *b);
 
 /* Before the kit puts a sound on a track (UI task): the SOUND BROWSER's FUNC+YES load. sound is the
