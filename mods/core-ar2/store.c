@@ -891,6 +891,57 @@ int st_file_load(void *live, unsigned char *src, void *progress)
     return r;
 }
 
+/* ---- ev_project_save (0.10): a whole save of the live project to the +Drive ----
+ * Every front-panel save of the project (SAVE PROJECT, SAVE PROJECT AS, the
+ * project menu's saves, SAVE ... BEFORE LOADING) ends in one routine,
+ * 0x400b07a4(project model, slot, progress), which the "Project Save" job
+ * runs: it makes the slot the active one, serializes the live project into
+ * the slot's image (st_file_save), writes that to the +Drive, and clears the
+ * modified mark. LOAD of an empty slot runs it too, from the "Project Load"
+ * job, after CREATE NEW (ev_project 0), to write the new project there.
+ * Core calls the mods' ev_project_save handlers f(pre, how) around it: pre 1
+ * before anything is written, pre 0 after. how: the kind in bits 0..7 (1 a
+ * save to the active slot, 2 a save to another slot, 3 the new project of an
+ * empty slot's LOAD), the slot (0..127, 255 when stock has none) in bits
+ * 8..15, and in the call after, bit 16 when the save failed (the slot on the
+ * +Drive was not written, or only in part). A field a handler sets during
+ * pre 1 is in the saved copy: the serializer reads the live homes and the
+ * stored project's store. The active slot before the save is what tells a
+ * save from a save to another slot; a save with no active slot (a new
+ * project's first) is a save to another slot. */
+typedef void (*ev_project_save_t)(unsigned pre, unsigned how);
+extern const ev_project_save_t ev_project_save[];
+extern int st_proj_save_body(void *model, int slot, void *progress);
+
+#define ACTIVE_SLOT ((int (*)(void *))0x400aed54)
+#define SAVE_NEW_RET 0x400530e6         /* the empty slot's LOAD: the call's return */
+#define SAVE_SAME 1
+#define SAVE_OTHER 2
+#define SAVE_NEW 3
+#define SAVE_FAILED 0x10000
+
+static void save_event(unsigned pre, unsigned how)
+{
+    const ev_project_save_t *f;
+    for (f = ev_project_save; *f; f++)
+        (*f)(pre, how);
+}
+
+int st_proj_save(void *model, int slot, void *progress)
+{
+    int active = ACTIVE_SLOT(model), to = slot < 0 ? active : slot, r;
+    unsigned how;
+    if ((unsigned)__builtin_return_address(0) == SAVE_NEW_RET)
+        how = SAVE_NEW;
+    else
+        how = to >= 0 && to == active ? SAVE_SAME : SAVE_OTHER;
+    how |= ((unsigned)to < 128 ? (unsigned)to : 255) << 8;
+    save_event(1, how);
+    r = st_proj_save_body(model, slot, progress);
+    save_event(0, (r & 255) ? how : how | SAVE_FAILED);
+    return r;
+}
+
 /* ---- the SysEx project commands: whole stored songs ----
  * The SysEx handler copies, swaps and writes stored song records (0x518 B,
  * song slots 1..16 of a project image) with memcpy. Byte +2 of each of a

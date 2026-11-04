@@ -56,6 +56,28 @@
 #define CORE_PROJECT_LOADED 1
 #define STORE_DROPPED(scope) (1u << (scope))
 
+/* core-ar2 0.10: ev_project_save handlers: void f(unsigned pre, unsigned how),
+ * subscribed in mod.json ({"event": "ev_project_save", "fn": ...}), called
+ * around every whole save of the live project to a +Drive slot: pre 1 before
+ * anything is written, pre 0 after. CORE_SAVE_KIND(how) is CORE_SAVE_SAME (a
+ * save to the active slot: SAVE PROJECT), CORE_SAVE_OTHER (to another slot:
+ * SAVE PROJECT AS, or a new project's first save) or CORE_SAVE_NEW (LOAD of
+ * an empty slot, which writes the new project there after ev_project's
+ * CORE_PROJECT_NEW); CORE_SAVE_SLOT(how) is the slot, 0..127 (255: none);
+ * CORE_SAVE_FAILED is set in the call after when the slot was not written.
+ * A field set with core_store_set in the call before is in the saved copy.
+ * Both calls come from the job stock starts for the save ("Project Save", or
+ * "Project Load" for CORE_SAVE_NEW), not from a UI tick: keep
+ * them short, start no load or save, and leave slow work (MIDI, USB) to the
+ * next ev_tick. Don't call core_project_edited from them: the save clears
+ * the modified mark after the call before. */
+#define CORE_SAVE_SAME 1
+#define CORE_SAVE_OTHER 2
+#define CORE_SAVE_NEW 3
+#define CORE_SAVE_KIND(how) ((how) & 255)
+#define CORE_SAVE_SLOT(how) ((how) >> 8 & 255)
+#define CORE_SAVE_FAILED 0x10000u
+
 unsigned core_store_get(unsigned field, void *item, int index);
 void core_store_set(unsigned field, void *item, int index, unsigned value);
 

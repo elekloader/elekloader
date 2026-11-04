@@ -392,7 +392,9 @@ The Analog Rytm MKII's core (core-ar2) has `ev_tick`, `ev_draw`,
 0x40121656 in 1.73, and 0x400a2c5a, 0x400a2cc2, 0x400a4838, 0x400a4882,
 0x400db8ea, 0x4011fb6e and 0x401216c2 in 1.74 (`mods/core-ar2/mod.json`;
 from 0.3 the core is for 1.74 only, and 0.2 is the last with 1.73). It declares those seven events and, from 0.2, the event
-`ev_project` (after CREATE NEW and every project load, docs/ADAPTING.md)
+`ev_project` (after CREATE NEW and every project load, docs/ADAPTING.md),
+from 0.10 the event `ev_project_save` (before and after every project save
+to a +Drive slot, the routine at 0x400b07a4),
 and the table `core_store_ids` (entry 4, filled by the linker: below); no
 `.fast` copy table, so no `.fast` code.
 The Analog Four MKII's core (core-a4 0.1, OS 1.56) has core-ar2 0.3's

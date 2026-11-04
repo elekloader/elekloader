@@ -10,7 +10,7 @@ write-through storage (Write-through, below) and `finish.s` (The OS upgrade's re
 and from 0.8 with lockable parameters in `lock.c` and `lock.s` (Lockable parameters, below) and
 their p-locks in `rows.c` and `rows.s` (Mod p-locks, below), and from 0.9 the smoothed value,
 velocity and aftertouch destinations and the FX track's parameters (below), and from 0.10 field
-defaults (below). On its own it changes nothing
+defaults and the event `ev_project_save` around every project save (below). On its own it changes nothing
 the unit does, apart from that restart, which it makes safe.
 
 The Rytm runs on the Digitakt mk1's platform (a ColdFire MCF5441x), and its OS
@@ -234,6 +234,53 @@ What it does not do:
   slot's fields instead, so the pattern loads with its mods' defaults, as a
   pattern received as a SysEx dump does. A target project saved with another
   mod layout keeps its store as it is.
+
+## The project save (0.10)
+
+From 0.10 core calls the mods' `ev_project_save` handlers,
+`void f(unsigned pre, unsigned how)`, before (`pre` 1) and after (`pre` 0)
+every whole save of the live project to a +Drive slot. On 1.74 all of them
+end in one routine, 0x400b07a4 (project model, slot, progress), the one that
+holds the file save site above: it makes the slot the active one, serializes
+the live project into the slot's image, writes the image to the +Drive
+(0x40034e98) and clears the modified mark. Core takes its first
+instructions (`jmp`, `st_proj_save` in `store.c`, the displaced ones in
+`store.s`). Two jobs call it:
+
+- **Project Save** (0x40052f06, queued by 0x40052908, which shows SAVING
+  and sets the name): every save the front panel starts goes through
+  0x4005417e, which checks write protection and asks OVERWRITE first: SAVE
+  PROJECT, SAVE PROJECT AS, the project manager's saves and SAVE ... BEFORE
+  LOADING.
+- **Project Load** (0x40052fb0): LOAD of an empty slot, which runs CREATE
+  NEW (0x400b3bd6, so `ev_project` with `how` 0 first) and then writes the
+  new project into the slot.
+
+`how` holds the kind in bits 0..7: `CORE_SAVE_SAME` (1) when the slot is
+the active one, `CORE_SAVE_OTHER` (2) when it isn't (SAVE PROJECT AS to
+another slot, or a project that has no slot yet), `CORE_SAVE_NEW` (3) for
+the empty slot's LOAD (told by the call's return address, 0x400530e6). The
+slot is in bits 8..15 (255 when stock has none), and the call after has
+`CORE_SAVE_FAILED` (bit 16) set when the save failed. A field set with
+`core_store_set` in the call before is in the saved copy: the serializer
+reads the live homes, and a whole save copies the stored project's header
+and project data into the image (`st_pat_save`). So a SAVE PROJECT AS
+copy can be given its own project-scope value while the slot it came from
+keeps the old one on the +Drive.
+
+Both calls come from the save's job, not a UI tick, with the save screen
+up. A handler keeps them short, starts no load or save, and leaves MIDI or
+USB work to its next `ev_tick`. It doesn't call `core_project_edited`
+there: the save clears the modified mark after the call before.
+
+Not covered (no event): a project received over SysEx or a Transfer file
+load written into a slot, CLEAR and INIT NEW on the project manager (they
+change a slot without the live project), and the stored project's own
+writes outside a save (the "Write project MRAM" job, 0x400a1058, and the
+boot's and reset's copies at 0x400fb31a and 0x400fb36c, all from the live
+project into the stored one at 0x405c8f20). The "Project::updateMirror"
+job (0x400ae2da) serializes the live project into a mirror buffer and is
+no save either.
 
 ## Parameter pages (0.4, 0.6)
 
