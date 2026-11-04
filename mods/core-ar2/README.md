@@ -9,7 +9,8 @@ with `machines.c` (Machines, below), from 0.6 with page functions in `pages.s`, 
 write-through storage (Write-through, below) and `finish.s` (The OS upgrade's restart, below),
 and from 0.8 with lockable parameters in `lock.c` and `lock.s` (Lockable parameters, below) and
 their p-locks in `rows.c` and `rows.s` (Mod p-locks, below), and from 0.9 the smoothed value,
-velocity and aftertouch destinations and the FX track's parameters (below). On its own it changes nothing
+velocity and aftertouch destinations and the FX track's parameters (below), and from 0.10 field
+defaults (below). On its own it changes nothing
 the unit does, apart from that restart, which it makes safe.
 
 The Rytm runs on the Digitakt mk1's platform (a ColdFire MCF5441x), and its OS
@@ -741,6 +742,20 @@ back after a power-off and a cold boot, and stock 1.74 on the same card
 loads the FX LFO with DST None; SAVE KIT and RELOAD keep K's DST; a kit
 dump over USB carries it and restores it. Not on a unit or by ear.
 
+## Field defaults (0.10)
+
+A storage field declared with `"init": N` reads N where its bits are zero
+(docs/ADAPTING.md, "Mod storage (core-ar2 0.2, Analog Rytm MKII)"). The
+linker gives each such field a slot in the table `core_field_inits` (1..63)
+and puts the slot in the descriptor's bits 16..21; the offset keeps bits
+0..15, as no scope has 2^16 bits. `core_store_get` returns the bits XOR the
+slot's init and `core_store_set` stores the value XOR it, so a field
+without an init costs one test more and nothing else changes. Every read
+and write core makes of a field goes through those two (lock.c's RANDOMIZE
+and RELOAD PAGE, midi.c, rows.c, scenes.c, smooth.c, store.c's LFO
+destination fields), so all of them work on the value; the saves, loads,
+SysEx and Total Recall copy the bits. No new sites.
+
 ## Checked so far
 
 On a unit (OS 1.73). With test images built by rytm-mods-src (its `elemod`
@@ -1002,6 +1017,16 @@ stock bytes, and that each covers whole instructions.
   no turn, and the page follows a track switch. With rytm2_mods v1.3 (no
   `core_page_fns` entry) core 0.6 gives a 59-screen walk pixel-identical to
   core 0.4's. Not yet on a unit.
+
+- **Field defaults (0.10)**, in an emulator only (analog-emu, OS 1.74, 4
+  Nov 2026), with [lock-check 1.10](../../examples/lock-check-ar2)'s N
+  (`"init": 100`, 7 bits, slot 1) read from `lc_init`: on a new card's
+  first project N reads 100 and `core_param_value` 100 << 8 (25600) with no
+  lock or scene; knob C on the LOCK CHECK page turns it to 101; with a trig
+  held the first turn makes a lock at 100 and the second takes it to 101,
+  which plays (lock 101, value 101 << 8) while the sound keeps 100; N
+  turned to 0 survives a power-off and a cold boot as 0, not 100. RANDOMIZE
+  PAGE and an LFO on N were not tried. Not yet on a unit.
 
 ## Building
 

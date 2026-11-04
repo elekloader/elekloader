@@ -5,7 +5,9 @@
  * Mods declare fields in their mod.json ("storage"); elekloader places them
  * at build time from the build's lockfile (docs/ADAPTING.md, "Mod storage")
  * and gives each one an absolute symbol, its descriptor, which a mod passes to
- * core_store_get and core_store_set. Zero always means the mod's default.
+ * core_store_get and core_store_set. Bits at zero always mean the mod's
+ * default: from 0.10 a field declared with "init": N reads N there, as the
+ * field's bits keep value ^ N (field_init below).
  *
  * Each item keeps its fields in a live home inside stock's own objects, so
  * copy, paste, undo and pattern switch carry them with no hooks:
@@ -1075,9 +1077,25 @@ static void write_through(unsigned scope, unsigned char *item, int index)
     }
 }
 
+/* 0.10: a field's init. Its descriptor carries the field's slot in the table
+ * core_field_inits (1..63) in bits 16..21, 0 for a field without one; no
+ * scope keeps 2^16 bits, so the offset is bits 0..15. The field's bits keep
+ * value ^ init: cleared bits (a new project, a reset, another layout's data)
+ * read the init, and every value goes through unchanged. Every core read and
+ * write of a field comes here, so p-locks, scenes, MIDI, the smoothed value
+ * and RANDOMIZE and RELOAD PAGE all see the value; the saves, loads and
+ * SysEx copy the bits. */
+extern const unsigned core_field_inits[];
+
+static unsigned field_init(unsigned field)
+{
+    unsigned k = field >> 16 & 63;
+    return k ? core_field_inits[k - 1] : 0;
+}
+
 unsigned core_store_get(unsigned field, void *item, int index)
 {
-    unsigned scope = field >> 28, w = field >> 22 & 63, o = field & 0x3fffff, v = 0, i;
+    unsigned scope = field >> 28, w = field >> 22 & 63, o = field & 0xffff, v = 0, i;
     volatile unsigned char *base = field_base(scope, item, index);
     unsigned short sr;
     if (scope != SC_PROJECT && !base)
@@ -1086,16 +1104,17 @@ unsigned core_store_get(unsigned field, void *item, int index)
     for (i = 0; i < w; i++, o++)
         v = v << 1 | (B(field_byte(scope, base, o >> 3)) >> (7 - (o & 7)) & 1);
     irq_restore(sr);
-    return v;
+    return v ^ field_init(field);
 }
 
 void core_store_set(unsigned field, void *item, int index, unsigned value)
 {
-    unsigned scope = field >> 28, w = field >> 22 & 63, o = field & 0x3fffff, i;
+    unsigned scope = field >> 28, w = field >> 22 & 63, o = field & 0xffff, i;
     volatile unsigned char *base = field_base(scope, item, index), *p;
     unsigned short sr;
     if (scope != SC_PROJECT && !base)
         return;
+    value ^= field_init(field);
     sr = irq_mask();
     for (i = 0; i < w; i++, o++) {
         unsigned bit = 0x80 >> (o & 7);

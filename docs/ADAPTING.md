@@ -1424,8 +1424,23 @@ says `"core": "0.3"` in `resources`). Bits 0..23 are the same bytes with
 either core, so a 0.2 build's lockfile keeps its places with 0.3, and the
 sounds it saved load there with the new bits at 0.
 
-Zero is always the default: a field reads 0 in a new project, in a project
-saved by another layout, and after its scope was reset (below). Core exports
+A field's default is what it reads where its bits are zero: in a new
+project, in a project saved by another layout, and after its scope was reset
+(below). That is 0, or from core-ar2 0.10 the field's `init`:
+
+```json
+{"sym": "my_cutoff", "scope": "sound", "bits": 7, "lock": true, "init": 127}
+```
+
+`init` is 0 to 2^bits - 1. Core keeps the value XOR the init in the field's
+bits, so the cleared bits read 127 here, every value round-trips, and
+everything core does with a field (p-locks, scenes, performances, MIDI,
+`core_param_value`, the LFO and the routes, RANDOMIZE and RELOAD PAGE)
+works on the value. A lockable field's `min..max` should include its init.
+The init is part of the layout: a field whose `init` changes is a new field
+(new bits, a new code, its old data dropped), as one whose width changed.
+A build has at most 63 fields with an init, and a core without the table
+`core_field_inits` (core-ar2 before 0.10, core-a4) refuses them. Core exports
 no firmware locations, so a mod names the live objects it passes as `item`
 itself, for each OS. While an item is live its fields sit inside the stock
 object, so copy, paste, undo and pattern changes carry them with no extra

@@ -10,8 +10,11 @@
  *     unsigned v = core_store_get(STORE(my_accent), live_pattern, track);
  *     core_store_set(STORE(my_accent), live_pattern, track, v + 1);
  *
- * Zero is always the default: a field reads 0 in a new project, in one saved
- * by another layout, and after its scope was reset. Both calls mask
+ * A field reads its default where its bits are zero: in a new project, in one
+ * saved by another layout, and after its scope was reset. The default is 0,
+ * or from core-ar2 0.10 the field's "init" in mod.json ("init": 127): core
+ * keeps value ^ init, so the value read and written is the field's own. Both
+ * calls mask
  * interrupts while they read or write the field: use them from any context,
  * the audio interrupt too.
  *
@@ -33,7 +36,8 @@
 
 #define STORE_SCOPE(f) ((f) >> 28)            /* 1 sound .. 6 project */
 #define STORE_BITS(f) ((f) >> 22 & 63)        /* 1..32 */
-#define STORE_OFFSET(f) ((f) & 0x3fffff)      /* the first bit, most significant first */
+#define STORE_INIT_SLOT(f) ((f) >> 16 & 63)   /* core-ar2 0.10: its slot in core_field_inits, 0 for none */
+#define STORE_OFFSET(f) ((f) & 0xffff)        /* the first bit, most significant first */
 
 #define STORE_SOUND 1
 #define STORE_KIT 2

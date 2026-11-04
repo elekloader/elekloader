@@ -210,7 +210,7 @@ def test_a_mods_storage_declarations():
 
 def test_lockfiles_it_refuses():
     good, _ = store.allocate(None, [], DEV)
-    for k, v in (('elekloader_store', 2), ('device', 'digitakt'), ('id', '0x0'), ('fields', {})):
+    for k, v in (('elekloader_store', 3), ('device', 'digitakt'), ('id', '0x0'), ('fields', {})):
         bad = dict(good, **{k: v})
         refused(store.allocate, bad, [], DEV)
 
@@ -260,9 +260,25 @@ def test_a_lockfile_without_lockable_fields_keeps_its_id():
     assert l2 == l1 and 'codes' not in l2
 
 
-def test_only_sound_fields_can_be_lockable():
-    assert 'only sound fields' in refused(store.parse_decls,
-                                          {'storage': [{'sym': 'k', 'scope': 'kit', 'bits': 3, 'lock': True}]})
+def test_only_sound_and_kit_fields_can_be_lockable():
+    assert 'only sound and kit fields' in refused(store.parse_decls,
+                                                  {'storage': [{'sym': 'g', 'scope': 'global', 'bits': 3, 'lock': True}]})
+
+
+def test_a_field_with_an_init_is_kept_xored_and_its_init_is_part_of_the_layout():
+    """"init" (core-ar2 0.10): kept with the field in the lockfile (format 2), in the descriptor's
+    bits 16..21 as a slot of core_field_inits, and part of the layout ID."""
+    assert store.parse_inits({'storage': [{'sym': 'a', 'scope': 'kit', 'bits': 7, 'init': 100},
+                                          {'sym': 'b', 'scope': 'kit', 'bits': 7, 'init': 0}]}) == {'a': 100}
+    refused(store.parse_decls, {'storage': [{'sym': 'a', 'scope': 'kit', 'bits': 7, 'init': 128}]})
+    plain, _ = store.allocate(None, [('m', 'a', 'kit', 7)], DEV)
+    inited, _ = store.allocate(None, [('m', 'a', 'kit', 7)], DEV, inits={('m', 'a'): 100})
+    assert plain['elekloader_store'] == 1 and inited['elekloader_store'] == 2
+    assert inited['fields'][0]['init'] == 100 and inited['id'] != plain['id']
+    syms, _ = store.symbols(inited, DEV)
+    assert syms['a'] == 2 << 28 | 7 << 22 | 1 << 16 | 0
+    assert store.init_entries(inited) == [(100).to_bytes(4, 'big')]
+    assert store.symbols(plain, DEV)[0]['a'] == 2 << 28 | 7 << 22
     assert store.parse_locks({'storage': [{'sym': 's', 'scope': 'sound', 'bits': 3, 'lock': True},
                                           {'sym': 't', 'scope': 'sound', 'bits': 3}]}) == ['s']
 
