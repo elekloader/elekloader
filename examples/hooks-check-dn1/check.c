@@ -43,7 +43,9 @@ static void note(int i, int32_t a, int32_t b, int32_t c, int32_t d)
 /* 27 */ int32_t hc_keyboard_note(int32_t a0, int32_t a1, int32_t a2, int32_t a3) { note(27, a0, a1, a2, a3); return 0; }
 /* 28 */ void hc_mute(int32_t a0, int32_t a1, int32_t a2, int32_t a3) { note(28, a0, a1, a2, a3); }
 /* 29 */ void hc_pattern_op(int32_t a0, int32_t a1, int32_t a2) { note(29, a0, a1, a2, 0); }
-/* 30 */ void hc_view(int32_t a0, int32_t a1, int32_t a2, int32_t a3) { note(30, a0, a1, a2, a3); }
+/* 30: the last value is fw_view(), the top view before the change */
+extern void *fw_view(void);
+void hc_view(int32_t a0, int32_t a1, int32_t a2, int32_t a3) { (void)a3; note(30, a0, a1, a2, (int32_t)fw_view()); }
 /* 31 */ void hc_track_reload(int32_t a0, int32_t a1, int32_t a2) { note(31, a0, a1, a2, 0); }
 /* 32 */ void hc_sound_op(int32_t a0, int32_t a1, int32_t a2) { note(32, a0, a1, a2, 0); }
 /* 33 */ void hc_sound_load(int32_t a0, int32_t a1, int32_t a2) { note(33, a0, a1, a2, 0); }

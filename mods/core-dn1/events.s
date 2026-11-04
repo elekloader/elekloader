@@ -670,7 +670,8 @@ core_view:
         lea     20(%sp), %sp
 9:      rts
 
-| fw_view(): the view on top of the main stack (the one keys go to), or 0.
+| fw_view(): the view on top of the main stack (the one keys go to), or 0;
+| in d0 and a0 (the C compiler takes a pointer result from a0).
 fw_view:
         movea.l MAIN_SCREEN, %a0
         lea     0x54(%a0), %a1
@@ -679,7 +680,8 @@ fw_view:
         cmpa.l  %a0, %a1
         beq.s   1f
         move.l  8(%a0), %d0
-1:      rts
+1:      movea.l %d0, %a0
+        rts
 
 | ev_track_reload: f(int track, int pattern, void *params), as a held track
 | key + NO reloads that track's sound from the saved pattern (0x40029d16), per
