@@ -32,6 +32,7 @@ import glob
 import io
 import json
 import os
+import re
 import shutil
 import sys
 import tempfile
@@ -501,6 +502,35 @@ def test_a_graphic_that_reads_another_knob_needs_machine_pages_1_5():
             assert images[0] == images[1] and m.relocs == m4.relocs
 
 
+CORE_DN1_50_EVENTS = [
+    'ev_card_ready', 'ev_sysex', 'ev_crash', 'ev_boot_ui', 'ev_usb', 'ev_project_saving',
+    'ev_project_saved', 'ev_transport', 'ev_seq_tick', 'ev_pattern_request', 'ev_midi_in',
+    'ev_midi_out', 'ev_voice_free', 'ev_ui_msg', 'ev_trig_set', 'ev_step_note', 'ev_plock_store',
+    'ev_plock_clear', 'ev_step_clear', 'ev_track_length', 'ev_param_set', 'ev_sound_live',
+    'ev_render_fx', 'ev_tempo', 'ev_pattern_switch', 'ev_arp_step', 'ev_voice_steal',
+    'ev_keyboard_note', 'ev_mute', 'ev_pattern_op', 'ev_view', 'ev_track_reload', 'ev_sound_op', 'ev_sound_load', 'ev_sound_clear']
+# ev_idle is left out: a handler on it keeps digiemu's cold boot, which waits for the stock idle spin, from settling.
+
+
+def test_digitone_core_5_events_take_a_handler_each():
+    """examples/hooks-check-dn1 subscribes one handler to each of core-dn1
+    5.0's events: it builds, names no firmware address (its 1.44 port is
+    empty) and links with the core."""
+    tc = devices.devices()[0].toolchain
+    if not shutil.which(os.environ.get('ELEKLOADER_CROSS', tc['prefix']) + 'gcc'):
+        raise Skip('no m68k cross compiler')
+    src = os.path.join(ROOT, 'examples', 'hooks-check-dn1')
+    with tempfile.TemporaryDirectory() as tmp:
+        core = dn_core(tmp)
+        path, m = build.build(src, DN_STOCK, tmp)
+        assert not m.sites
+        with open(os.path.join(src, 'mod.json')) as fh:
+            subs = json.load(fh)['subscribe']
+        assert sorted(s['event'] for s in subs) == sorted(CORE_DN1_50_EVENTS)
+        rc, r = lint_json(path, '--stock', DN_STOCK, '--with', core)
+        assert rc == 0, r['problems']
+
+
 def test_the_sine_machine_example_builds_for_each_os_unchanged():
     """examples/sine-machine names no firmware address: its 1.54 port is
     empty, and both builds carry the same code."""
@@ -585,8 +615,10 @@ def test_digitone_core_builds_and_links():
     the text box and the pattern from 3.3) and voices.s
     (ev_render_voices, for machines, from 3.1), audio.s (exclusive audio,
     from 3.2, and insert audio, from 4.0), midi.s (ev_midi_cc, from 3.2, and ev_midi_pc,
-    4.0), leds.s (ev_key_leds, 3.3), block.s (ev_render_params, 3.3) and queue.s
-    (ev_note_queue, 4.1), the last twelve Digitone only."""
+    4.0), leds.s (ev_key_leds, 3.3), block.s (ev_render_params, 3.3), queue.s
+    (ev_note_queue, 4.1), rows.s (4.1.1) and edit.s (ev_param_turn,
+    ev_param_value, 4.2; ev_voice_ready is voice.s's), the last thirteen
+    Digitone only."""
     with tempfile.TemporaryDirectory() as tmp:
         path = dn_core(tmp)
         with open(path) as fh:
@@ -599,23 +631,43 @@ def test_digitone_core_builds_and_links():
         # builder), the project data's 5 (the serializer, two loads, two new
         # projects), the voices' block, exclusive audio's 2 (the voices'
         # filters, the master stage), the CC router's, the key-LED frame's, the
-        # controller stage's, the program change handler's and the note queue's.
-        assert dn['target']['device'] == 'digitone-mk1' and len(dn['sites']) == 88
+        # controller stage's, the program change handler's, the note queue's,
+        # 4.2's knob turn, value getter, value routine, SYN envelope page and voice-ready,
+        # and 5.0's 55: the card's status, the SysEx router, the crash printer's install,
+        # the UI spawner, USB's two, the slot writer's two, the sequencer's start, stop,
+        # pause and tick, the pattern request, the MIDI task's two dispatches, the port
+        # switch, the voice release, the UI queue, six sequencer edits, the parameter
+        # setter, the sound's way to the voices and four effect stages, the tempo setter
+        # and the pattern switch, the arpeggiator's step, the voice allocator's steal,
+        # KEYBOARD mode's note-on and note-off, the three mute writers, the view
+        # stack's push, replace and pop, the pattern menu's save and reload, the
+        # track reload, the sound manager's seven actions and the browser's paste,
+        # the sound load and the track sound clear.
+        assert dn['target']['device'] == 'digitone-mk1' and len(dn['sites']) == 148
         assert sorted(dn['collections']) == sorted(
             HOOK_BUS + ['core_menu', 'core_pages', 'core_params', 'core_projdata',
                         'ev_hold', 'ev_voice_on', 'core_param_override', 'ev_render_voices',
                         'core_audio', 'ev_midi_cc', 'ev_key_leds', 'ev_render_params', 'ev_midi_pc',
-                        'ev_note_queue'])
+                        'ev_note_queue', 'ev_param_turn', 'ev_param_value', 'ev_voice_ready']
+            + CORE_DN1_50_EVENTS + ['ev_idle'])
         # The same core.s as core 2.1's, with the Digitone's addresses, and
         # each of its labels where core 2.1 has it.
-        assert sorted(dn['build']['sources']) == ['audio.s', 'block.s', 'core.s', 'fw.s', 'leds.s',
-                                                  'menu.s', 'midi.s', 'pages.s', 'params.s',
+        assert sorted(dn['build']['sources']) == ['audio.s', 'block.s', 'core.s', 'edit.s', 'events.s', 'fw.s',
+                                                  'leds.s', 'menu.s', 'midi.s', 'pages.s', 'params.s',
                                                   'projdata.s', 'queue.s', 'render.s', 'rows.s',
-                                                  'settings.s', 'voice.s', 'voices.s']
+                                                  'settings.s', 'system.s', 'voice.s', 'voices.s']
         assert dn['build']['sources']['core.s'] == dt['build']['sources']['core.s']
+        # Only the labels of the sources both cores build (core.s, settings.s,
+        # render.s): a name each core defines in a file of its own, such as
+        # core_render_master (the Digitone's audio.s, the Digitakt's
+        # master.s), is two routines that need not sit in the same place.
+        common = set()
+        for f in ('core.s', 'settings.s', 'render.s'):
+            with open(os.path.join(ROOT, 'mods', 'core', f)) as fh:
+                common |= set(re.findall(r'^([A-Za-z_]\w*):', fh.read(), re.M))
         placed = {k: v for k, v in dn['symbols'].items() if v[0] != 'abs'}
-        shared = {k: v for k, v in placed.items() if k in dt['symbols']}
-        assert shared == {k: dt['symbols'][k] for k in shared}
+        shared = {k: v for k, v in placed.items() if k in dt['symbols'] and k in common}
+        assert shared and shared == {k: dt['symbols'][k] for k in shared}
         assert {'core_voice_on', 'core_dn_boot', 'core_param_ui', 'core_page_rec',
                 'core_view_init', 'core_page_open', 'core_page_shown', 'core_proj_save',
                 'core_proj_load', 'core_proj_import', 'core_proj_new',
@@ -623,7 +675,9 @@ def test_digitone_core_builds_and_links():
                 'core_dn_draw', 'core_menu_open', 'core_param_short', 'core_param_ui_make',
                 'core_sound_set', 'core_render_voices', 'core_voices_gate',
                 'core_render_master', 'core_midi_cc', 'core_key_leds',
-                'core_render_params', 'core_midi_pc', 'core_note_queue'} <= set(placed) - set(shared)
+                'core_render_params', 'core_midi_pc', 'core_note_queue', 'core_param_turn',
+                'core_param_value', 'core_param_value58', 'core_param_value_syn',
+                'core_voice_ready'} <= set(placed) - set(shared)
         # voice.s follows core.s's code in .run.
         last = max(off for sec, off in shared.values() if sec == '.run')
         assert placed['core_voice_on'][0] == '.run' and placed['core_voice_on'][1] > last
@@ -654,6 +708,10 @@ FW_DN = ['fw_active_track', 'fw_blit', 'fw_ev_alloc', 'fw_ev_free', 'fw_ev_queue
          '__ashldi3', '__lshrdi3', '__ashrdi3', 'fw_textbox', 'fw_transport', 'fw_pattern', 'fw_project']
 CORE_DN41 = ['core_note_queue']   # 4.1's
 CORE_DN411 = ['core_row_add', 'core_row_new']   # 4.1.1's: the SETTINGS rows' storage
+# 4.2's: the pages' knob turns and values, the voice once it has its locks (five sites, three tables)
+CORE_DN42 = ['core_param_turn', 'core_param_value', 'core_param_value58', 'core_param_value_syn', 'core_voice_ready',
+             'fw_voice_locks', 'fw_voice_locked', 'fw_param_uirec']
+COLL_DN42 = ['ev_param_turn', 'ev_param_value', 'ev_voice_ready']
 CORE_DN3 = ['core_note_queue', 'core_audio_caps', 'core_key_leds', 'core_menu_open', 'core_midi_cc', 'core_midi_pc', 'core_param_short',
             'core_param_ui_make', 'core_render_master', 'core_render_params', 'core_render_voices', 'core_sound_set',
             'core_voices_gate']
@@ -666,8 +724,9 @@ def check_dn_superset(old_path, new_path):
     exclusive audio and the MIDI CCs (3.2: three sites, two tables), the
     key LEDs and the block's parameters (3.3: two sites, two tables), their
     calls and 3.3's firmware exports, the program changes (4.0: a site,
-    a table), the note queue (4.1: a site, a table) and the rows' storage
-    (4.1.1: two routines)."""
+    a table), the note queue (4.1: a site, a table), the rows' storage
+    (4.1.1: two routines) and the pages' turns and values and the voice
+    with its locks (4.2: five sites, three tables, three firmware exports)."""
     with open(old_path) as fh:
         old = json.load(fh)
     with open(new_path) as fh:
@@ -676,12 +735,12 @@ def check_dn_superset(old_path, new_path):
     for k in ('target', 'contribute', 'resources'):
         assert new[k] == old[k], k
     assert all(s in new['sites'] for s in old['sites'])
-    assert len(new['sites']) == len(old['sites']) + 9
-    assert sorted(set(new['collections']) - set(old['collections'])) == [
+    assert len(new['sites']) == len(old['sites']) + 9 + 5
+    assert sorted(set(new['collections']) - set(old['collections'])) == sorted([
         'core_audio', 'core_param_override', 'ev_key_leds', 'ev_midi_cc', 'ev_midi_pc', 'ev_note_queue',
-        'ev_render_params', 'ev_render_voices']
+        'ev_render_params', 'ev_render_voices'] + COLL_DN42)
     assert all(new['collections'][k] == v for k, v in old['collections'].items())
-    assert sorted(set(new['exports']) - set(old['exports'])) == sorted(CORE_DN3 + FW_DN + CORE_DN411)
+    assert sorted(set(new['exports']) - set(old['exports'])) == sorted(CORE_DN3 + FW_DN + CORE_DN411 + CORE_DN42)
     assert all(new['symbols'][k][0] == v[0] for k, v in old['symbols'].items())
 
 
@@ -773,8 +832,8 @@ def check_dn_32(old_path, new_path):
     tables, their calls and the firmware exports), 4.0's insert
     audio (a flag and core_audio_caps, with no site) and program changes (a
     site and a table) (its bigger area is the profile's, not the core's),
-    4.1's note queue (a site and a table) and 4.1.1's rows' storage (two
-    routines)."""
+    4.1's note queue (a site and a table), 4.1.1's rows' storage (two
+    routines) and 4.2's turns, values and voice (five sites, three tables)."""
     with open(old_path) as fh:
         old = json.load(fh)
     with open(new_path) as fh:
@@ -782,16 +841,16 @@ def check_dn_32(old_path, new_path):
     assert old['version'] == '3.2' and new['version'] == DN_VERSION
     for k in ('target', 'contribute', 'resources'):
         assert new[k] == old[k], k
-    assert sorted(set(new['collections']) - set(old['collections'])) == ['ev_key_leds', 'ev_midi_pc',
-                                                                         'ev_note_queue', 'ev_render_params']
+    assert sorted(set(new['collections']) - set(old['collections'])) == sorted(
+        ['ev_key_leds', 'ev_midi_pc', 'ev_note_queue', 'ev_render_params'] + COLL_DN42)
     assert all(new['collections'][k] == v for k, v in old['collections'].items())
     assert sorted(set(new['exports']) - set(old['exports'])) == sorted(DN33_EXPORTS + ['core_audio_caps',
                                                                                      'core_midi_pc']
-                                                                       + CORE_DN41 + CORE_DN411)
+                                                                       + CORE_DN41 + CORE_DN411 + CORE_DN42)
 
     def what(d):
         return [(s['addr'], s['len'], s['kind'], s['new'], s.get('relocs')) for s in d['sites']]
-    assert all(x in what(new) for x in what(old)) and len(new['sites']) == len(old['sites']) + 4
+    assert all(x in what(new) for x in what(old)) and len(new['sites']) == len(old['sites']) + 4 + 5
     assert all(new['symbols'][k][0] == v[0] for k, v in old['symbols'].items())
 
 
@@ -812,8 +871,8 @@ CORE_DN40 = os.environ.get('ELEKLOADER_CORE_DN1_40', '')
 def check_dn_40(old_path, new_path):
     """core-dn1 4.1 keeps all of 4.0: its sites, tables, contributions, resources
     and exports, every symbol of 4.0's in the same section; it adds the note
-    queue (a site at the queue's entry, the table ev_note_queue), and 4.1.1
-    the rows' storage (two routines)."""
+    queue (a site at the queue's entry, the table ev_note_queue), 4.1.1
+    the rows' storage (two routines) and 4.2 the turns, values and voice."""
     with open(old_path) as fh:
         old = json.load(fh)
     with open(new_path) as fh:
@@ -821,13 +880,13 @@ def check_dn_40(old_path, new_path):
     assert old['version'] == '4.0' and new['version'] == DN_VERSION
     for k in ('target', 'contribute', 'resources'):
         assert new[k] == old[k], k
-    assert sorted(set(new['collections']) - set(old['collections'])) == ['ev_note_queue']
+    assert sorted(set(new['collections']) - set(old['collections'])) == sorted(['ev_note_queue'] + COLL_DN42)
     assert all(new['collections'][k] == v for k, v in old['collections'].items())
-    assert sorted(set(new['exports']) - set(old['exports'])) == sorted(CORE_DN41 + CORE_DN411)
+    assert sorted(set(new['exports']) - set(old['exports'])) == sorted(CORE_DN41 + CORE_DN411 + CORE_DN42)
 
     def what(d):
         return [(s['addr'], s['len'], s['kind'], s['new'], s.get('relocs')) for s in d['sites']]
-    assert all(x in what(new) for x in what(old)) and len(new['sites']) == len(old['sites']) + 1
+    assert all(x in what(new) for x in what(old)) and len(new['sites']) == len(old['sites']) + 1 + 5
     assert all(new['symbols'][k][0] == v[0] for k, v in old['symbols'].items())
 
 
@@ -847,17 +906,21 @@ CORE_DN41_REL = os.environ.get('ELEKLOADER_CORE_DN1_41', '')
 
 def check_dn_41(old_path, new_path):
     """core-dn1 4.1.1 is 4.1 with the SETTINGS rows kept off the heap: the same
-    sites, tables, contributions and resources, every symbol of 4.1's in the
-    same section, and core_additem where it was; it adds core_row_new and
-    core_row_add (rows.s) and their row pool in .bss."""
+    contributions and resources, every site and table of 4.1's, every symbol
+    of 4.1's in the same section, and core_additem where it was; it adds
+    core_row_new and core_row_add (rows.s) and their row pool in .bss, and
+    4.2 five sites and three tables (edit.s, voice.s) and three exports."""
     with open(old_path) as fh:
         old = json.load(fh)
     with open(new_path) as fh:
         new = json.load(fh)
     assert old['version'] == '4.1' and new['version'] == DN_VERSION
-    for k in ('target', 'contribute', 'resources', 'collections', 'sites'):
+    for k in ('target', 'contribute', 'resources'):
         assert new[k] == old[k], k
-    assert sorted(set(new['exports']) - set(old['exports'])) == sorted(CORE_DN411)
+    assert all(s in new['sites'] for s in old['sites']) and len(new['sites']) == len(old['sites']) + 5
+    assert sorted(set(new['collections']) - set(old['collections'])) == sorted(COLL_DN42)
+    assert all(new['collections'][k] == v for k, v in old['collections'].items())
+    assert sorted(set(new['exports']) - set(old['exports'])) == sorted(CORE_DN411 + CORE_DN42)
     assert all(new['symbols'][k] == v for k, v in old['symbols'].items()
                if k in ('core_settings', 'core_additem'))
     assert all(new['symbols'][k][0] == v[0] for k, v in old['symbols'].items())
@@ -1458,7 +1521,7 @@ def test_digitone_core_port_to_144_is_the_same_core():
 
         def what(d):                # each site's new bytes and targets, not where it is
             return [(s['len'], s['kind'], s['new'], s.get('relocs')) for s in d['sites']]
-        assert len(new['sites']) == 88 and what(new) == what(old)
+        assert len(new['sites']) == 148 and what(new) == what(old)
         rc, r = lint_json(path, '--stock', DN_STOCK_144)
         assert rc == 0, r['problems']
         rc, r = lint_json(old_path, '--stock', DN_STOCK_144)
