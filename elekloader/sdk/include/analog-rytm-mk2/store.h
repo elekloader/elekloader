@@ -63,7 +63,7 @@
  * save to the active slot: SAVE PROJECT), CORE_SAVE_OTHER (to another slot:
  * SAVE PROJECT AS, or a new project's first save) or CORE_SAVE_NEW (LOAD of
  * an empty slot, which writes the new project there after ev_project's
- * CORE_PROJECT_NEW); CORE_SAVE_SLOT(how) is the slot, 0..127 (255: none);
+ * CORE_PROJECT_NEW); CORE_SAVE_SLOT(how) is the slot, 0..127 (the screen's\n * number less one; 255: none);
  * CORE_SAVE_FAILED is set in the call after when the slot was not written.
  * A field set with core_store_set in the call before is in the saved copy.
  * Both calls come from the job stock starts for the save ("Project Save", or

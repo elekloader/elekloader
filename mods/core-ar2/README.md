@@ -260,7 +260,7 @@ instructions (`jmp`, `st_proj_save` in `store.c`, the displaced ones in
 the active one, `CORE_SAVE_OTHER` (2) when it isn't (SAVE PROJECT AS to
 another slot, or a project that has no slot yet), `CORE_SAVE_NEW` (3) for
 the empty slot's LOAD (told by the call's return address, 0x400530e6). The
-slot is in bits 8..15 (255 when stock has none), and the call after has
+slot is in bits 8..15, 0..127 (the number the screen shows, less one; 255 when stock has none), and the call after has
 `CORE_SAVE_FAILED` (bit 16) set when the save failed. A field set with
 `core_store_set` in the call before is in the saved copy: the serializer
 reads the live homes, and a whole save copies the stored project's header
@@ -1057,6 +1057,20 @@ stock bytes, and that each covers whole instructions.
   same slot loads with no question; after only a turn of A, CC 8 or NRPN
   4:0, LOAD FROM asks ANY CHANGES WILL BE LOST. PROCEED WITH LOADING?, as it
   does after a stock knob's turn.
+
+- **The project save (0.10)**, in an emulator only (analog-emu, OS 1.74,
+  4 Nov 2026), with [save-check 1.0](../../examples/save-check-ar2): INIT
+  NEW of slot 125 calls no handler. After LOAD FROM 125, SAVE PROJECT calls
+  both with `CORE_SAVE_SAME`, slot 124 (the screen's 125), and `sv_saves` 1.
+  SAVE PROJECT AS to 126 calls both with `CORE_SAVE_OTHER`, slot 125, and
+  `sv_saves` 2. LOAD FROM 125 then shows 1, and 126 shows 2: the field set
+  before the save is in the copy, and the slot it came from keeps its own.
+  After a knob's turn, SAVE ... BEFORE LOADING? YES calls both with
+  `CORE_SAVE_SAME` for 126, which then loads with 3. The project manager's
+  SAVE TO 127 calls both with `CORE_SAVE_OTHER`, slot 126, and makes 127
+  the active project. No call failed. Not checked: an empty slot's LOAD
+  (`CORE_SAVE_NEW`; the LOAD PROJECT list shows only used slots), a failed
+  save, and a unit.
 
 - **Page functions (0.6)**, in an emulator (OS 1.74, 23 Oct 2026): core 0.6
   with all eleven rytm2_mods (voice-dac 1.4) shows DAC FILTER without RES
