@@ -242,6 +242,14 @@ the Digitone needs it. On its own it changes nothing the unit does.
     its kit (what 1), its sequence (2) or both (3), before the stock checks,
     and `ev_track_reload(track, pattern, params)` as a held track key + NO
     reloads a track's sound (0x40029d16);
+  - the SOUND MANAGER (SETTINGS > SOUNDS): `ev_sound_op(op, a, b)`
+    before it copies the ticked sounds to the pool (op 0, 0x400d33ce), to the
+    +Drive or a bank (1, 0x400d3604), deletes them (3, 0x400d3a42), sends
+    them as SysEx (4, 0x400d3854) or toggles their write protection (5,
+    0x400d3d90); op 2 is its third copy routine (0x400d31ec); and
+    `ev_sound_load(track, sound, kit)` before the kit puts a sound on a track
+    (the SOUND BROWSER's FUNC+YES, 0x4001d710), and `ev_sound_clear(slot,
+    name)` before CLEAR TRACK SOUND initialises one (0x400328f6);
   - the view stack: `ev_view(op, container, a, b)` before a view is pushed
     (op 0, 0x400e60de), replaced by a page key (1, 0x400e6ad4) or popped
     (2, 0x400e63c0), and `fw_view()`, the view on top (keys go to it);

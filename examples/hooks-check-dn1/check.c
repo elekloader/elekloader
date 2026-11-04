@@ -45,3 +45,6 @@ static void note(int i, int32_t a, int32_t b, int32_t c, int32_t d)
 /* 29 */ void hc_pattern_op(int32_t a0, int32_t a1, int32_t a2) { note(29, a0, a1, a2, 0); }
 /* 30 */ void hc_view(int32_t a0, int32_t a1, int32_t a2, int32_t a3) { note(30, a0, a1, a2, a3); }
 /* 31 */ void hc_track_reload(int32_t a0, int32_t a1, int32_t a2) { note(31, a0, a1, a2, 0); }
+/* 32 */ void hc_sound_op(int32_t a0, int32_t a1, int32_t a2) { note(32, a0, a1, a2, 0); }
+/* 33 */ void hc_sound_load(int32_t a0, int32_t a1, int32_t a2) { note(33, a0, a1, a2, 0); }
+/* 34 */ void hc_sound_clear(int32_t a0, int32_t a1) { note(34, a0, a1, 0, 0); }

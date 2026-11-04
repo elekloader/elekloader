@@ -147,7 +147,15 @@
   "VIEW_REPLACE": "0x400e6ad4",
   "VIEW_POP": "0x400e63c0",
   "MAIN_SCREEN": "0x419efe50",
-  "TRACK_RELOAD": "0x40029d16"
+  "TRACK_RELOAD": "0x40029d16",
+  "SND_POOL": "0x400d33ce",
+  "SND_BANK": "0x400d3604",
+  "SND_COPY": "0x400d31ec",
+  "SND_DELETE": "0x400d3a42",
+  "SND_SYSEX": "0x400d3854",
+  "SND_PROTECT": "0x400d3d90",
+  "SOUND_LOAD": "0x4001d710",
+  "SOUND_CLEAR": "0x400328f6"
  },
  "sites": [
   {"addr": "0x40000538", "stock": "4eb940001df4", "op": "jsr", "target": "core_dn_boot"},
@@ -285,7 +293,15 @@
   {"addr": "0x400e60de", "stock": "4fefffd848d77c1c", "op": "jmp", "target": "core_view_push"},
   {"addr": "0x400e6ad4", "stock": "4e56ffd448d73c04", "op": "jmp", "target": "core_view_replace"},
   {"addr": "0x400e63c0", "stock": "4fefffd048d77c7c", "op": "jmp", "target": "core_view_pop"},
-  {"addr": "0x40029d16", "stock": "4fefffcc48d77c3c", "op": "jmp", "target": "core_track_reload"}
+  {"addr": "0x40029d16", "stock": "4fefffcc48d77c3c", "op": "jmp", "target": "core_track_reload"},
+  {"addr": "0x400d33ce", "stock": "4e56ff7448d73cfc", "op": "jmp", "target": "core_snd_pool"},
+  {"addr": "0x400d3604", "stock": "4e56ff7448d73cfc", "op": "jmp", "target": "core_snd_bank"},
+  {"addr": "0x400d31ec", "stock": "4e56ff7448d73cfc", "op": "jmp", "target": "core_snd_copy"},
+  {"addr": "0x400d3a42", "stock": "4e56ff44206e0008", "op": "jmp", "target": "core_snd_delete"},
+  {"addr": "0x400d3854", "stock": "4e56ff6c206e0008", "op": "jmp", "target": "core_snd_sysex"},
+  {"addr": "0x400d3d90", "stock": "4e56ff7c206e0008", "op": "jmp", "target": "core_snd_protect"},
+  {"addr": "0x4001d710", "stock": "4e56ffe848d70c0c", "op": "jmp", "target": "core_sound_load"},
+  {"addr": "0x400328f6", "stock": "4e56ffd448d73c0c", "op": "jmp", "target": "core_sound_clear"}
  ],
  "ports": {
   "1.44": {
@@ -431,7 +447,15 @@
     "VIEW_REPLACE": "0x400e6d48",
     "VIEW_POP": "0x400e6634",
     "MAIN_SCREEN": "0x419f0e50",
-    "TRACK_RELOAD": "0x40029d16"
+    "TRACK_RELOAD": "0x40029d16",
+    "SND_POOL": "0x400d3642",
+    "SND_BANK": "0x400d3878",
+    "SND_COPY": "0x400d3460",
+    "SND_DELETE": "0x400d3cb6",
+    "SND_SYSEX": "0x400d3ac8",
+    "SND_PROTECT": "0x400d4004",
+    "SOUND_LOAD": "0x4001d710",
+    "SOUND_CLEAR": "0x400328f6"
    },
    "sites": [
     {"addr": "0x40000538", "stock": "4eb940001df4", "op": "jsr", "target": "core_dn_boot"},
@@ -569,7 +593,15 @@
     {"addr": "0x400e6352", "stock": "4fefffd848d77c1c", "op": "jmp", "target": "core_view_push"},
     {"addr": "0x400e6d48", "stock": "4e56ffd448d73c04", "op": "jmp", "target": "core_view_replace"},
     {"addr": "0x400e6634", "stock": "4fefffd048d77c7c", "op": "jmp", "target": "core_view_pop"},
-    {"addr": "0x40029d16", "stock": "4fefffcc48d77c3c", "op": "jmp", "target": "core_track_reload"}
+    {"addr": "0x40029d16", "stock": "4fefffcc48d77c3c", "op": "jmp", "target": "core_track_reload"},
+    {"addr": "0x400d3642", "stock": "4e56ff7448d73cfc", "op": "jmp", "target": "core_snd_pool"},
+    {"addr": "0x400d3878", "stock": "4e56ff7448d73cfc", "op": "jmp", "target": "core_snd_bank"},
+    {"addr": "0x400d3460", "stock": "4e56ff7448d73cfc", "op": "jmp", "target": "core_snd_copy"},
+    {"addr": "0x400d3cb6", "stock": "4e56ff44206e0008", "op": "jmp", "target": "core_snd_delete"},
+    {"addr": "0x400d3ac8", "stock": "4e56ff6c206e0008", "op": "jmp", "target": "core_snd_sysex"},
+    {"addr": "0x400d4004", "stock": "4e56ff7c206e0008", "op": "jmp", "target": "core_snd_protect"},
+    {"addr": "0x4001d710", "stock": "4e56ffe848d70c0c", "op": "jmp", "target": "core_sound_load"},
+    {"addr": "0x400328f6", "stock": "4e56ffd448d73c0c", "op": "jmp", "target": "core_sound_clear"}
    ]
   }
  },
@@ -586,7 +618,10 @@
   "ev_keyboard_note": 4, "ev_mute": 4,
   "ev_pattern_op": 4,
   "ev_view": 4,
-  "ev_track_reload": 4
+  "ev_track_reload": 4,
+  "ev_sound_op": 4,
+  "ev_sound_load": 4,
+  "ev_sound_clear": 4
  },
  "resources": {"names": ["timer:DTIM0"]}
 }

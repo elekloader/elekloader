@@ -408,6 +408,25 @@ typedef void (*ev_pattern_op_fn)(int32_t op, int32_t index, int32_t what);
  * the project check. params is the parameter list (begin, end pointers): empty = the whole sound. */
 typedef void (*ev_track_reload_fn)(int32_t track, int32_t pattern, void *params);
 
+/* The SOUND MANAGER (SETTINGS > SOUNDS) running an action on the ticked sounds (UI task), before it runs.
+ * The copies: a = the menu view, b = the selection. Delete, send, protect: a = the selection (delete: b
+ * nonzero once confirmed). The selection points at a vector of the ticked sounds' indices. */
+#define CORE_SOUND_COPY_POOL    0
+#define CORE_SOUND_COPY_BANK    1       /* to the +Drive or one of its banks */
+#define CORE_SOUND_COPY_OTHER   2       /* the manager's third copy routine, not seen run */
+#define CORE_SOUND_DELETE       3
+#define CORE_SOUND_SEND_SYSEX   4
+#define CORE_SOUND_PROTECT      5       /* toggle write protection */
+typedef void (*ev_sound_op_fn)(int32_t op, void *a, void *b);
+
+/* Before the kit puts a sound on a track (UI task): the SOUND BROWSER's FUNC+YES load. sound is the
+ * incoming 0x146-byte sound; the track's slot is kit + 0x60 + track * 0x328. */
+typedef void (*ev_sound_load_fn)(int32_t track, void *sound, void *kit);
+
+/* Before a track's sound is initialised and named (UI task): SOUNDS > CLEAR TRACK SOUND. slot is the
+ * track's sound, kit + 0x60 + track * 0x328. */
+typedef void (*ev_sound_clear_fn)(void *slot, const char *name);
+
 /* The view stack, before it changes (UI task). Push: a = &new view, b = nonzero to first close views of the
  * same name; replace (the page keys): a = &old, b = &new; pop (NO, FUNC release): a = the matcher.
  * container is MainScreen+0x40 for the main stack. fw_view() is the view on top (keys go to it), or 0. */

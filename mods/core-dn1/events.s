@@ -638,3 +638,102 @@ core_track_reload:
 9:      lea     -52(%sp), %sp
         movem.l %d2-%d5/%a2-%fp, (%sp)
         jmp     TRACK_RELOAD + 8
+
+| ev_sound_op: f(int op, void *a, void *b), as the SOUND MANAGER (SETTINGS >
+| SOUNDS) runs an action on the ticked sounds (UI task): op 0 copy to the sound
+| pool, 1 copy to the +Drive or a bank, 2 the other copy (not seen run): a = the
+| menu view, b = the selection; 3 delete (b = nonzero once confirmed), 4 send
+| SysEx, 5 toggle write protection: a = the selection. The selection points at
+| a vector of the ticked sounds' indices.
+        .globl  core_snd_pool, core_snd_bank, core_snd_copy, core_snd_delete
+        .globl  core_snd_sysex, core_snd_protect
+core_snd_pool:
+        moveq   #0, %d0
+        bsr.w   core_sound_op
+        link.w  %fp, #-140
+        movem.l %d2-%d7/%a2-%a5, (%sp)
+        jmp     SND_POOL + 8
+core_snd_bank:
+        moveq   #1, %d0
+        bsr.w   core_sound_op
+        link.w  %fp, #-140
+        movem.l %d2-%d7/%a2-%a5, (%sp)
+        jmp     SND_BANK + 8
+core_snd_copy:
+        moveq   #2, %d0
+        bsr.w   core_sound_op
+        link.w  %fp, #-140
+        movem.l %d2-%d7/%a2-%a5, (%sp)
+        jmp     SND_COPY + 8
+core_snd_delete:
+        moveq   #3, %d0
+        bsr.w   core_sound_op
+        link.w  %fp, #-188
+        movea.l 8(%fp), %a0
+        jmp     SND_DELETE + 8
+core_snd_sysex:
+        moveq   #4, %d0
+        bsr.w   core_sound_op
+        link.w  %fp, #-148
+        movea.l 8(%fp), %a0
+        jmp     SND_SYSEX + 8
+core_snd_protect:
+        moveq   #5, %d0
+        bsr.w   core_sound_op
+        link.w  %fp, #-132
+        movea.l 8(%fp), %a0
+        jmp     SND_PROTECT + 8
+
+core_sound_op:
+        tst.l   ev_sound_op
+        beq.s   9f
+        lea     -20(%sp), %sp
+        movem.l %d0-%d1/%a0-%a2, (%sp)
+        move.l  32(%sp), -(%sp)
+        move.l  32(%sp), -(%sp)
+        move.l  %d0, -(%sp)
+        lea     ev_sound_op, %a2
+1:      move.l  (%a2)+, %d1
+        beq.s   2f
+        movea.l %d1, %a0
+        jsr     (%a0)
+        bra.s   1b
+2:      lea     12(%sp), %sp
+        movem.l (%sp), %d0-%d1/%a0-%a2
+        lea     20(%sp), %sp
+9:      rts
+
+| ev_sound_load: f(int track, void *sound, void *kit), before the kit puts a
+| sound on a track (0x4001d710, from a vtable): the SOUND BROWSER's FUNC+YES
+| load. sound is the incoming 0x146-byte sound; kit+0x60+track*0x328 the slot.
+        .globl  core_sound_load
+core_sound_load:
+        tst.l   ev_sound_load
+        beq.s   9f
+        lea     -20(%sp), %sp
+        movem.l %d0-%d1/%a0-%a2, (%sp)
+        move.l  24(%sp), -(%sp)
+        move.l  32(%sp), -(%sp)
+        move.l  40(%sp), -(%sp)
+        lea     ev_sound_load, %a2
+1:      move.l  (%a2)+, %d1
+        beq.s   2f
+        movea.l %d1, %a0
+        jsr     (%a0)
+        bra.s   1b
+2:      lea     12(%sp), %sp
+        movem.l (%sp), %d0-%d1/%a0-%a2
+        lea     20(%sp), %sp
+9:      link.w  %fp, #-24
+        movem.l %d2-%d3/%a2-%a3, (%sp)
+        jmp     SOUND_LOAD + 8
+
+| ev_sound_clear: f(void *slot, const char *name), before a track's sound is
+| initialised and named (0x400328f6): SOUNDS > CLEAR TRACK SOUND. slot is the
+| track's sound (kit+0x60+track*0x328).
+        .globl  core_sound_clear
+core_sound_clear:
+        NOTIFY  ev_sound_clear, 2
+        link.w  %fp, #-44
+        movem.l %d2-%d3/%a2-%a5, (%sp)
+        jmp     SOUND_CLEAR + 8
