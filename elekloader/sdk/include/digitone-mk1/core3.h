@@ -338,6 +338,11 @@ typedef void (*ev_project_saved_fn)(void *block, int32_t slot, int32_t ok);
 typedef int32_t (*ev_transport_fn)(int32_t what, int32_t arg);
 typedef void (*ev_seq_tick_fn)(void);
 typedef void (*ev_pattern_request_fn)(void *ui, void *request, int32_t arg3);
+/* ev_tempo: the tempo is about to be set, in hundredths of a BPM (the setter clamps it to 3600-36000).
+ * Nonzero takes it: the tempo stays. ev_pattern_switch: a pattern change asked for earlier is about to be
+ * applied (pending: the firmware's word for it). */
+typedef int32_t (*ev_tempo_fn)(int32_t bpm100);
+typedef void (*ev_pattern_switch_fn)(int32_t pending);
 
 /* MIDI. ev_midi_in: every message the MIDI task dispatches (channel messages, real time, SysEx), before
  * ev_midi_cc, ev_midi_pc and ev_sysex; source 2 or 4 USB, 8 or 0x10 DIN. ev_sysex: each SysEx but F0 7E.

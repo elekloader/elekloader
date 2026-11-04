@@ -36,3 +36,5 @@ static void note(int i, int32_t a, int32_t b, int32_t c, int32_t d)
 /* 20 */ void hc_param_set(int32_t a0, int32_t a1, int32_t a2, int32_t a3) { note(20, a0, a1, a2, a3); }
 /* 21 */ void hc_sound_live(int32_t a0, int32_t a1, int32_t a2) { note(21, a0, a1, a2, 0); }
 /* 22 */ int32_t hc_render_fx(int32_t a0, int32_t a1, int32_t a2, int32_t a3) { note(22, a0, a1, a2, a3); return 0; }
+/* 23 */ int32_t hc_tempo(int32_t a0) { note(23, a0, 0, 0, 0); return 0; }
+/* 24 */ void hc_pattern_switch(int32_t a0) { note(24, a0, 0, 0, 0); }

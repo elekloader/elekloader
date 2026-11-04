@@ -406,3 +406,27 @@ core_fx:
 2:      movem.l (%sp), %d2/%a1-%a2
         lea     12(%sp), %sp
 9:      jmp     (%a1)                   | the stock stage, with the site's arguments
+
+| ---- tempo and the pattern switch (5.0, wave 2) -------------------------------
+| ev_tempo: f(int bpm100), may take. The tempo is about to be set, in hundredths
+| of a BPM (the setter clamps it to 3600-36000), at the setter's entry
+| (0x4009c82c): the TEMPO menu, the knob. A handler that takes it leaves the
+| tempo as it was. The UI task.
+        .globl  core_tempo
+core_tempo:
+        NOTIFY  ev_tempo, 1, 1
+        move.l  4(%sp), %d1             | the setter's first two instructions
+        cmpi.l  #3600, %d1
+        jmp     TEMPO_SET + 10
+
+| ev_pattern_switch: f(int pending). A pattern change asked for earlier is
+| about to be applied (0x400fde0c, the routine that moves the pending
+| pattern to the current one and resets the steps); pending is its word.
+| Called only when one is pending. The sequencer's side.
+        .globl  core_pattern_switch
+core_pattern_switch:
+        tst.l   PATTERN_PENDING
+        beq.s   8f
+        CALLV   ev_pattern_switch, PATTERN_PENDING
+8:      move.l  PATTERN_PENDING, %d0    | the instruction this replaced, last: its flags
+        jmp     PATTERN_SWITCH + 6

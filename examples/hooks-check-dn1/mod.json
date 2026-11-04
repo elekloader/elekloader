@@ -29,7 +29,9 @@
   {"event": "ev_track_length", "fn": "hc_track_length", "order": 50},
   {"event": "ev_param_set", "fn": "hc_param_set", "order": 50},
   {"event": "ev_sound_live", "fn": "hc_sound_live", "order": 50},
-  {"event": "ev_render_fx", "fn": "hc_render_fx", "order": 50}
+  {"event": "ev_render_fx", "fn": "hc_render_fx", "order": 50},
+  {"event": "ev_tempo", "fn": "hc_tempo", "order": 50},
+  {"event": "ev_pattern_switch", "fn": "hc_pattern_switch", "order": 50}
  ],
  "resources": {"core": "5.0"},
  "requires": ["core"]

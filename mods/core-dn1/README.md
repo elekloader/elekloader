@@ -220,7 +220,9 @@ the Digitone needs it. On its own it changes nothing the unit does.
     (0x40093e1c), stop (0x400952f0) and pause (0x40094de0), which the PLAY and
     STOP keys and MIDI Start, Continue and Stop all reach; `ev_seq_tick()`
     each tick (0x40095518, interrupt); `ev_pattern_request(ui, request, a3)`
-    (0x40029424);
+    (0x40029424); `ev_tempo(bpm100)`, may take, at the tempo setter
+    (0x4009c82c); `ev_pattern_switch(pending)` as a requested pattern change
+    is applied (0x400fde0c);
   - MIDI: `ev_midi_in(msg, len, source)`, may take, every message the MIDI
     task dispatches, on both of its paths (0x400e99f4, 0x400e9a5e);
     `ev_sysex(msg, len, source)`, may take, at the SysEx router's entry
