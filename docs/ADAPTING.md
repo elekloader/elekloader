@@ -2686,7 +2686,12 @@ active one at a time; opening another's entry hands it the audio.
   byte at +0x2800 (0x400241f6), and a lock trig on a step with no trig. So
   the stock saves, loads, copies and pastes them with the pattern, and the
   sequencer fires them: `ev_note_queue` hands fxkit each trig of the lock
-  track with its time, and its locks hold until the track's next trig (the
+  track with its time, and its locks last that step, at the lock track's
+  SCALE: a track's own at `+0x3c7` of its 976 bytes in per-track mode (the
+  pattern's `+0x160f8 + 0x19` is 1), else the pattern's at `+0x160f8 + 0x1a`,
+  0-6 for 2x, 3/2x, 1x, 3/4x, 1/2x, 1/4x, 1/8x (measured on 1.43). fxkit 0.1
+  held them to the track's next trig, which on a lock track with trigs only
+  where there are locks kept a knob locked for the rest of the loop (the
   first step's, as PLAY starts, fxkit reads from the lock table). The lock
   track should play nothing of its own in a pattern where the effect has
   locks: its notes would take them too, and an arpeggiator on it turns its
@@ -2707,7 +2712,10 @@ active one at a time; opening another's entry hands it the audio.
   `fw_slot_ids`), WAVE and SPH as one picture of the wave from its start
   phase, DEST's box and its list (a turn opens it, YES picks with
   "Confirmed!" in the title, NO closes it), SPD and DEP in the stock's fine
-  steps, and the stock's defaults. On the MIXER and LFO pages a turned
+  steps, gathering speed with the knob as the stock's do (measured with the
+  panel's counts one a message: 0.11 a detent 150 ms apart, 0.25 at 75 ms,
+  0.46 at 30 ms, 0.68 at 15 ms), the lists (MULT, WAVE, MODE, DEST's) a step
+  every second detent, and the stock's defaults. On the MIXER and LFO pages a turned
   knob's value shows under it for a while, in the stock's text, as on the
   stock pages. While one of them is on screen an effect gives its keys to
   `fx_page_key` first (DEST's list takes YES, NO, UP and DOWN), adds
@@ -2719,8 +2727,12 @@ active one at a time; opening another's entry hands it the audio.
   saved with fewer loads with the rest zero, which `fx_unpack` reads as the
   format before); pack again when `fx_serial(e)` (a count of the changes to
   its values) moves, not every tick: the UI task's time is the firmware's
-  too. fxkit's own block (`FXKT`) holds the lock track. The locks are the
-  pattern's.
+  too. fxkit's own block (`FXKT`) holds the lock track and the inputs. The
+  locks are the pattern's.
+- **The inputs.** `fx_input_mono()` (fxkit 0.2) is one STEREO/MONO setting
+  for every effect: an effect's SETUP shows and sets it
+  (`fx_input_mono_set`) and its render applies it (input L on both sides).
+  fxkit saves it; a project without it keeps what is set.
 
 An effect mod contributes to the table `fx_effects` a pointer to a `struct
 fx_effect` (`digitone-mk1/fxkit.h`): its name, its knobs (each a slot, a

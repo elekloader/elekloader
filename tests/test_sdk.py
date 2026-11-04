@@ -1113,7 +1113,7 @@ def test_digitone_insert_audio_example():
 
 
 def test_digiswarm_builds_and_links():
-    """mods/digiswarm-dn1 (DigiSwarm) 0.2, an effect on fxkit: it patches no
+    """mods/digiswarm-dn1 (DigiSwarm) 0.3, an effect on fxkit: it patches no
     site, needs core-dn1 4.1 and fxkit, carries the same code for 1.43 and
     1.44 (an empty port), keeps its buffers in a region of the bulk area,
     links beside fxkit, THRU and the machines mod (two owners of the output
@@ -1129,7 +1129,7 @@ def test_digiswarm_builds_and_links():
         dpath, d = build.build(os.path.join(ROOT, 'mods', 'digiswarm-dn1'), DN_STOCK, tmp)
         tpath, _t = build.build(os.path.join(ROOT, 'examples', 'dn-thru'), DN_STOCK, tmp)
         mpath, _m = build.build(os.path.join(ROOT, 'mods', 'machines-dn1'), DN_STOCK, tmp)
-        assert os.path.basename(dpath) == 'digiswarm-0.2.elemod'
+        assert os.path.basename(dpath) == 'digiswarm-0.3.elemod'
         assert d.needs_core == '4.1' and not d.sites
         assert {'fx_activate', 'fx_deactivate', 'fx_set', 'fx_set_later', 'fx_lock_key', 'fx_turned',
                 'fx_pack', 'fx_unpack'} <= set(d.imports), d.imports
@@ -1137,15 +1137,15 @@ def test_digiswarm_builds_and_links():
         rc, r = lint_json(dpath, '--stock', DN_STOCK, '--with', core3, '--with', fxk, '--with', tpath,
                           '--with', mpath)
         assert rc == 0, r['problems']
-        assert r['link']['order'] == ['core ' + DN_VERSION, 'digiswarm 0.2', 'dnthru 1.0', 'fxkit 0.1',
+        assert r['link']['order'] == ['core ' + DN_VERSION, 'digiswarm 0.3', 'dnthru 1.0', 'fxkit 0.2',
                                        'machines ' + MACH_VERSION], r['link']['order']
         if CORE_DN40 and os.path.exists(CORE_DN40):
             rc, r = lint_json(dpath, '--stock', DN_STOCK, '--with', CORE_DN40, '--with', fxk)
-            assert rc == 1 and 'digiswarm 0.2 needs core 4.1 or newer, and this build has core 4.0' \
+            assert rc == 1 and 'digiswarm 0.3 needs core 4.1 or newer, and this build has core 4.0' \
                 in r['problems'], r['problems']
         if DN_STOCK_144 and os.path.exists(DN_STOCK_144):
             path4, d4 = build.build(os.path.join(ROOT, 'mods', 'digiswarm-dn1'), DN_STOCK_144, tmp)
-            assert path4.endswith('digiswarm-0.2-os1.44.elemod')
+            assert path4.endswith('digiswarm-0.3-os1.44.elemod')
             images = []
             for st, x in ((DN_STOCK, d), (DN_STOCK_144, d4)):
                 s, dv, _rel = formats.load(st)
@@ -1155,7 +1155,7 @@ def test_digiswarm_builds_and_links():
 
 
 def test_digiprism_builds_and_links():
-    """mods/digiprism-dn1 (DigiPrism) 0.2, an effect on fxkit with an
+    """mods/digiprism-dn1 (DigiPrism) 0.3, an effect on fxkit with an
     insert of its own (core_audio): it patches no site, needs core-dn1 4.1
     and fxkit, carries the same code for 1.43 and 1.44 (an empty port), keeps
     its buffers in a region of the bulk area beside DigiSwarm's, links beside
@@ -1173,7 +1173,7 @@ def test_digiprism_builds_and_links():
         dpath, _d = build.build(os.path.join(ROOT, 'mods', 'digiswarm-dn1'), DN_STOCK, tmp)
         tpath, _t = build.build(os.path.join(ROOT, 'examples', 'dn-thru'), DN_STOCK, tmp)
         mpath, _m = build.build(os.path.join(ROOT, 'mods', 'machines-dn1'), DN_STOCK, tmp)
-        assert os.path.basename(hpath) == 'digiprism-0.2.elemod'
+        assert os.path.basename(hpath) == 'digiprism-0.3.elemod'
         assert h.needs_core == '4.1' and not h.sites
         assert {'core_audio_caps', 'fx_activate', 'fx_chain', 'fx_deactivate', 'fx_set', 'fx_set_later',
                 'fx_lock_key', 'fx_pack'} <= set(h.imports), h.imports
@@ -1182,15 +1182,15 @@ def test_digiprism_builds_and_links():
         rc, r = lint_json(hpath, '--stock', DN_STOCK, '--with', core3, '--with', fxk, '--with', dpath,
                           '--with', tpath, '--with', mpath)
         assert rc == 0, r['problems']
-        assert r['link']['order'] == ['core ' + DN_VERSION, 'digiprism 0.2', 'digiswarm 0.2', 'dnthru 1.0',
-                                       'fxkit 0.1', 'machines ' + MACH_VERSION], r['link']['order']
+        assert r['link']['order'] == ['core ' + DN_VERSION, 'digiprism 0.3', 'digiswarm 0.3', 'dnthru 1.0',
+                                       'fxkit 0.2', 'machines ' + MACH_VERSION], r['link']['order']
         if CORE_DN40 and os.path.exists(CORE_DN40):
             rc, r = lint_json(hpath, '--stock', DN_STOCK, '--with', CORE_DN40, '--with', fxk)
-            assert rc == 1 and 'digiprism 0.2 needs core 4.1 or newer, and this build has core 4.0' \
+            assert rc == 1 and 'digiprism 0.3 needs core 4.1 or newer, and this build has core 4.0' \
                 in r['problems'], r['problems']
         if DN_STOCK_144 and os.path.exists(DN_STOCK_144):
             path4, h4 = build.build(os.path.join(ROOT, 'mods', 'digiprism-dn1'), DN_STOCK_144, tmp)
-            assert path4.endswith('digiprism-0.2-os1.44.elemod')
+            assert path4.endswith('digiprism-0.3-os1.44.elemod')
             images = []
             for st, x in ((DN_STOCK, h), (DN_STOCK_144, h4)):
                 s, dv, _rel = formats.load(st)
@@ -1290,7 +1290,7 @@ GAS_PEDALS = [('digitide', 0x47300000, 0x47700000), ('digitriad', 0x47B00000, 0x
 
 def test_gas_pedals_build_and_link():
     """The five effects pedals on the pedal shell (mods/digitide-dn1, digitriad-dn1, digireel-dn1,
-    digihoard-dn1, digihalo-dn1), 0.2, each a whole Digitone mod and an effect on fxkit: each patches no
+    digihoard-dn1, digihalo-dn1), 0.3, each a whole Digitone mod and an effect on fxkit: each patches no
     site, needs core-dn1 4.1 and fxkit, keeps its buffers in a region of its own in the bulk area and
     carries the same code for 1.43 and 1.44 (an empty port). All five, DigiSwarm, DigiPrism, fxkit and GAIN
     link together with the tree's core (over 128 KB together, they need its 1.25 MB), and beside the
@@ -1306,18 +1306,18 @@ def test_gas_pedals_build_and_link():
         paths = []
         for name, lo, hi in GAS_PEDALS:
             path, m = build.build(os.path.join(ROOT, 'mods', name + '-dn1'), DN_STOCK, tmp)
-            assert os.path.basename(path) == name + '-0.2.elemod'
+            assert os.path.basename(path) == name + '-0.3.elemod'
             assert m.needs_core == '4.1' and not m.sites, name
             assert [(g['area'], g['lo'], g['hi']) for g in m.regions] == [('bulk', lo, hi)], (name, m.regions)
             rc, r = lint_json(path, '--stock', DN_STOCK, '--with', core, '--with', fxk)
             assert rc == 0, (name, r['problems'])
             if CORE_DN40 and os.path.exists(CORE_DN40):
                 rc, r = lint_json(path, '--stock', DN_STOCK, '--with', CORE_DN40, '--with', fxk)
-                assert rc == 1 and '%s 0.2 needs core 4.1 or newer, and this build has core 4.0' % name \
+                assert rc == 1 and '%s 0.3 needs core 4.1 or newer, and this build has core 4.0' % name \
                     in r['problems'], r['problems']
             if DN_STOCK_144 and os.path.exists(DN_STOCK_144):
                 path4, m4 = build.build(os.path.join(ROOT, 'mods', name + '-dn1'), DN_STOCK_144, tmp)
-                assert path4.endswith(name + '-0.2-os1.44.elemod')
+                assert path4.endswith(name + '-0.3-os1.44.elemod')
                 images = []
                 for st, x in ((DN_STOCK, m), (DN_STOCK_144, m4)):
                     sd, dv, _rel = formats.load(st)
@@ -1349,7 +1349,7 @@ def test_fxkit_and_gain_build_and_link():
         core = dn_core(tmp)
         fpath, f = build.build(os.path.join(ROOT, 'mods', 'fxkit-dn1'), DN_STOCK, tmp)
         gpath, g = build.build(os.path.join(ROOT, 'examples', 'dn-fx-gain'), DN_STOCK, tmp)
-        assert os.path.basename(fpath) == 'fxkit-0.1.elemod' and os.path.basename(gpath) == 'dnfxgain-1.0.elemod'
+        assert os.path.basename(fpath) == 'fxkit-0.2.elemod' and os.path.basename(gpath) == 'dnfxgain-1.0.elemod'
         assert f.needs_core == '4.1' and not f.sites and g.needs_core == '4.1' and not g.sites
         assert {'fw_pattern', 'fw_timeline', 'fw_tempo', 'fw_transport', 'fx_effects'} <= set(f.imports), f.imports
         assert {'fx_activate', 'fx_deactivate', 'fx_lock_key', 'fx_page_draw', 'fx_pack', 'fx_unpack'} \
@@ -1357,10 +1357,10 @@ def test_fxkit_and_gain_build_and_link():
         assert {'fx_activate', 'fx_set', 'fx_turned', 'fx_lock_mask', 'fx_pack'} <= set(f.exports), f.exports
         rc, r = lint_json(gpath, '--stock', DN_STOCK, '--with', core, '--with', fpath)
         assert rc == 0, r['problems']
-        assert r['link']['order'] == ['core ' + DN_VERSION, 'dnfxgain 1.0', 'fxkit 0.1'], r['link']['order']
+        assert r['link']['order'] == ['core ' + DN_VERSION, 'dnfxgain 1.0', 'fxkit 0.2'], r['link']['order']
         if CORE_DN40 and os.path.exists(CORE_DN40):
             rc, r = lint_json(fpath, '--stock', DN_STOCK, '--with', CORE_DN40)
-            assert rc == 1 and 'fxkit 0.1 needs core 4.1 or newer, and this build has core 4.0' \
+            assert rc == 1 and 'fxkit 0.2 needs core 4.1 or newer, and this build has core 4.0' \
                 in r['problems'], r['problems']
         if DN_STOCK_144 and os.path.exists(DN_STOCK_144):
             for d, x in ((os.path.join(ROOT, 'mods', 'fxkit-dn1'), f), (os.path.join(ROOT, 'examples', 'dn-fx-gain'), g)):

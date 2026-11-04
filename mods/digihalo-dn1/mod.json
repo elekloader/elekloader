@@ -1,5 +1,5 @@
 {
- "id": "digihalo", "version": "0.2",
+ "id": "digihalo", "version": "0.3",
  "license": "GPL-2.0-or-later",
  "title": "DigiHalo", "category": "Effect", "author": "irpina",
  "description": "A reverb pedal for the Digitone mk1's audio inputs: twelve machines on trig 1-12 (ROOM, HALL, PLATE, SPRING, SWELL, SWIRL, NEBULA, VOWEL, SHIMMER, TAPE, NONLINEAR, REFLECTIONS) around one eight-line feedback delay network, each with its own diffusers, damping, modulation, size and its own PARAM 1 and PARAM 2 (shimmer intervals, dwell and springs, rise time, swirl length and feedback, vowels, tape heads, nonlinear shapes, room shape and position), DECAY, PRE-DELAY (or the tempo's divisions), MIX, TONE, MOD, LOW END, BOOST, HOLD as FREEZE or INFINITE on T1, PERSIST, SPILLOVER, a cab filter, and MIDI CCs. DIGIHALO in core-dn1's Mod Menu (hold a track key) makes it the active effect and opens its page; while it is active it owns the audio engine (the synths are muted) and processes the inputs, through fxkit's MIXER (AMP), with two LFOs aimed at its controls (LFO) and p-locks on the pattern's steps (RECORD: hold a trig, turn a control). MIDI leaves the page to edit the MIDI tracks while it plays; NO turns it off. Needs fxkit (core-dn1 4.1).",
