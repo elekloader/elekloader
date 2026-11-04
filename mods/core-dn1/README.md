@@ -197,19 +197,62 @@ the Digitone needs it. On its own it changes nothing the unit does.
     each voice's locked slots, and `fw_param_uirec` a parameter's UI record.
   - Project data blocks that save only what they hold: `CORE_PROJDATA_VARIABLE`
     in a descriptor's size (projdata.s).
+- **From 5.0, the firmware's moments** ([system.s](system.s), [events.s](events.s);
+  a prototype: the sites, their 1.44 ports and what the emulator showed are in
+  the hook map, research notes `dn1-hooks/`). Each is an observer list unless
+  it says "may take" (a handler's nonzero return stops the stock), and every
+  handler gets the routine's own arguments:
+  - the system: `ev_card_ready(status)` once the +Drive is up and before the
+    project loads (0x4008d27c, 1.44 0x4008d29c: the init task's store of the
+    card's status), `ev_boot_ui()` as the UI task is about to start
+    (0x4008d3d4), `ev_usb(configured)` (0x40004778, 0x400047ce),
+    `ev_crash(frame)` for an exception nothing handles (core installs its
+    handler in place of the stock crash printer at 0x400e7872, and calls the
+    printer after the handlers), and the exports `core_restart` (a reboot
+    that waits for the +Drive and lets the panel link drain with interrupts
+    on, which the stock's own restart does not) and `core_restart_now`;
+  - the +Drive and SysEx out as exports: `fw_card_read`, `fw_card_write`,
+    `fw_card_erase`, `fw_card_sectors`, `fw_sysex_send`;
+  - storage: `ev_project_saving(store, slot, a3)` and
+    `ev_project_saved(block, slot, ok)` around the slot writer (0x40027704,
+    0x400277dc; slot 128 is the working project);
+  - the sequencer: `ev_transport(what, arg)`, may take, at its start
+    (0x40093e1c), stop (0x400952f0) and pause (0x40094de0), which the PLAY and
+    STOP keys and MIDI Start, Continue and Stop all reach; `ev_seq_tick()`
+    each tick (0x40095518, interrupt); `ev_pattern_request(ui, request, a3)`
+    (0x40029424);
+  - MIDI: `ev_midi_in(msg, len, source)`, may take, every message the MIDI
+    task dispatches, on both of its paths (0x400e99f4, 0x400e9a5e);
+    `ev_sysex(msg, len, source)`, may take, at the SysEx router's entry
+    (0x400ea854; digihealth's site further in still works);
+    `ev_midi_out(buf, len, port)`, may take, at the port switch (0x400edf32);
+  - voices: `ev_voice_free(voice)` as a voice is released (0x4009f9bc,
+    interrupt);
+  - the UI task: `ev_ui_msg(msg)` for each message it takes (0x40019cda);
+  - sequencer edits: `ev_trig_set`, `ev_step_note`, `ev_plock_store`,
+    `ev_plock_clear`, `ev_step_clear`, `ev_track_length` at the routines
+    that write a step's flags, note slots, locks and a track's length;
+  - sound parameters: `ev_param_set` at the stock setter's commit
+    (0x40020fc0) and `ev_sound_live(value, track, slot)` as a value goes to
+    the voices (0x4009c972);
+  - the master's effect stages: `ev_render_fx(stage, out, in, params)`, may
+    take, at the calls of the three send effects and the master drive
+    (0x400971e6, 0x40097268, 0x40097318, 0x40097402; interrupt, each block).
+  The test mod [examples/hooks-check-dn1](../../examples/hooks-check-dn1)
+  subscribes to all of them.
 - **OS 1.44:** every site has its port (`ports` in mod.json): the same
   code, moved, and RAM 0x1000 further on.
 
 Build it with the SDK (it needs m68k binutils):
 
 ```bash
-python -m elekloader.sdk.build mods/core-dn1 --stock Digitone_and_Digitone_Keys_OS1.43.syx   # out/core-4.2.elemod
-python -m elekloader.sdk.build mods/core-dn1 --stock Digitone_and_Digitone_Keys_OS1.44.syx   # out/core-4.2-os1.44.elemod
-python -m elekloader.lint mods/core-dn1/out/core-4.2-os1.44.elemod --stock Digitone_and_Digitone_Keys_OS1.44.syx
+python -m elekloader.sdk.build mods/core-dn1 --stock Digitone_and_Digitone_Keys_OS1.43.syx   # out/core-5.0.elemod
+python -m elekloader.sdk.build mods/core-dn1 --stock Digitone_and_Digitone_Keys_OS1.44.syx   # out/core-5.0-os1.44.elemod
+python -m elekloader.lint mods/core-dn1/out/core-5.0-os1.44.elemod --stock Digitone_and_Digitone_Keys_OS1.44.syx
 ```
 
-A release names them `core-dn1-4.2.elemod` and `core-dn1-4.2-os1.44.elemod`.
-4.2 and 4.1.1 are not released yet; 4.1's are on the [core-dn1-v4.1](https://github.com/irpina/elekloader/releases/tag/core-dn1-v4.1) pre-release,
+A release names them `core-dn1-5.0.elemod` and `core-dn1-5.0-os1.44.elemod`.
+5.0, 4.2 and 4.1.1 are not released yet; 4.1's are on the [core-dn1-v4.1](https://github.com/irpina/elekloader/releases/tag/core-dn1-v4.1) pre-release,
 4.0's on the [core-dn1-v4.0](https://github.com/irpina/elekloader/releases/tag/core-dn1-v4.0) pre-release
 (3.3 was not released);
 3.2's are on the [core-dn1-v3.2](https://github.com/irpina/elekloader/releases/tag/core-dn1-v3.2) pre-release

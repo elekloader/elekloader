@@ -1,5 +1,5 @@
 | SPDX-License-Identifier: GPL-2.0-or-later
-| core-dn1 3.0 to 4.2 for the Digitone mk1, in assembly: the layouts that go
+| core-dn1 3.0 to 5.0 for the Digitone mk1, in assembly: the layouts that go
 | with the firmware locations core exports (core3.h has the same in C).
 | Assembly names the locations directly: fw_voice_pitch, fw_kit, fw_fillrect,
 | ... A mod that uses them needs core-dn1 3.0: "resources": {"core": "3.0"};
@@ -61,3 +61,11 @@
         .equ    FW_EVENT_KEYBOARD, 2
         .equ    CORE_PROJDATA_VARIABLE, 0x80000000  | in a core_projdata's size: saves what its first long says
         .equ    FW_VOICE_LOCKED_STRIDE, 12      | fw_voice_locked + 12 v: voice v's 3 longs of locked slots
+| 5.0: ev_transport's what, ev_render_fx's stages
+        .equ    CORE_TRANSPORT_STOP, 0
+        .equ    CORE_TRANSPORT_START, 1
+        .equ    CORE_TRANSPORT_PAUSE, 2
+        .equ    CORE_FX_CHORUS, 0
+        .equ    CORE_FX_DELAY, 1
+        .equ    CORE_FX_REVERB, 2
+        .equ    CORE_FX_DRIVE, 3

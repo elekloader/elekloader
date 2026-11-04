@@ -501,6 +501,33 @@ def test_a_graphic_that_reads_another_knob_needs_machine_pages_1_5():
             assert images[0] == images[1] and m.relocs == m4.relocs
 
 
+CORE_DN1_50_EVENTS = [
+    'ev_card_ready', 'ev_sysex', 'ev_crash', 'ev_boot_ui', 'ev_usb', 'ev_project_saving',
+    'ev_project_saved', 'ev_transport', 'ev_seq_tick', 'ev_pattern_request', 'ev_midi_in',
+    'ev_midi_out', 'ev_voice_free', 'ev_ui_msg', 'ev_trig_set', 'ev_step_note', 'ev_plock_store',
+    'ev_plock_clear', 'ev_step_clear', 'ev_track_length', 'ev_param_set', 'ev_sound_live',
+    'ev_render_fx']
+
+
+def test_digitone_core_5_events_take_a_handler_each():
+    """examples/hooks-check-dn1 subscribes one handler to each of core-dn1
+    5.0's events: it builds, names no firmware address (its 1.44 port is
+    empty) and links with the core."""
+    tc = devices.devices()[0].toolchain
+    if not shutil.which(os.environ.get('ELEKLOADER_CROSS', tc['prefix']) + 'gcc'):
+        raise Skip('no m68k cross compiler')
+    src = os.path.join(ROOT, 'examples', 'hooks-check-dn1')
+    with tempfile.TemporaryDirectory() as tmp:
+        core = dn_core(tmp)
+        path, m = build.build(src, DN_STOCK, tmp)
+        assert not m.sites
+        with open(os.path.join(src, 'mod.json')) as fh:
+            subs = json.load(fh)['subscribe']
+        assert sorted(s['event'] for s in subs) == sorted(CORE_DN1_50_EVENTS)
+        rc, r = lint_json(path, '--stock', DN_STOCK, '--with', core)
+        assert rc == 0, r['problems']
+
+
 def test_the_sine_machine_example_builds_for_each_os_unchanged():
     """examples/sine-machine names no firmware address: its 1.54 port is
     empty, and both builds carry the same code."""
@@ -602,19 +629,25 @@ def test_digitone_core_builds_and_links():
         # projects), the voices' block, exclusive audio's 2 (the voices'
         # filters, the master stage), the CC router's, the key-LED frame's, the
         # controller stage's, the program change handler's, the note queue's,
-        # and 4.2's knob turn, value getter, value routine, SYN envelope page and voice-ready.
-        assert dn['target']['device'] == 'digitone-mk1' and len(dn['sites']) == 93
+        # 4.2's knob turn, value getter, value routine, SYN envelope page and voice-ready,
+        # and 5.0's 30: the card's status, the SysEx router, the crash printer's install,
+        # the UI spawner, USB's two, the slot writer's two, the sequencer's start, stop,
+        # pause and tick, the pattern request, the MIDI task's two dispatches, the port
+        # switch, the voice release, the UI queue, six sequencer edits, the parameter
+        # setter, the sound's way to the voices and four effect stages.
+        assert dn['target']['device'] == 'digitone-mk1' and len(dn['sites']) == 123
         assert sorted(dn['collections']) == sorted(
             HOOK_BUS + ['core_menu', 'core_pages', 'core_params', 'core_projdata',
                         'ev_hold', 'ev_voice_on', 'core_param_override', 'ev_render_voices',
                         'core_audio', 'ev_midi_cc', 'ev_key_leds', 'ev_render_params', 'ev_midi_pc',
-                        'ev_note_queue', 'ev_param_turn', 'ev_param_value', 'ev_voice_ready'])
+                        'ev_note_queue', 'ev_param_turn', 'ev_param_value', 'ev_voice_ready']
+            + CORE_DN1_50_EVENTS)
         # The same core.s as core 2.1's, with the Digitone's addresses, and
         # each of its labels where core 2.1 has it.
-        assert sorted(dn['build']['sources']) == ['audio.s', 'block.s', 'core.s', 'edit.s', 'fw.s', 'leds.s',
-                                                  'menu.s', 'midi.s', 'pages.s', 'params.s',
+        assert sorted(dn['build']['sources']) == ['audio.s', 'block.s', 'core.s', 'edit.s', 'events.s', 'fw.s',
+                                                  'leds.s', 'menu.s', 'midi.s', 'pages.s', 'params.s',
                                                   'projdata.s', 'queue.s', 'render.s', 'rows.s',
-                                                  'settings.s', 'voice.s', 'voices.s']
+                                                  'settings.s', 'system.s', 'voice.s', 'voices.s']
         assert dn['build']['sources']['core.s'] == dt['build']['sources']['core.s']
         placed = {k: v for k, v in dn['symbols'].items() if v[0] != 'abs'}
         shared = {k: v for k, v in placed.items() if k in dt['symbols']}
@@ -1472,7 +1505,7 @@ def test_digitone_core_port_to_144_is_the_same_core():
 
         def what(d):                # each site's new bytes and targets, not where it is
             return [(s['len'], s['kind'], s['new'], s.get('relocs')) for s in d['sites']]
-        assert len(new['sites']) == 93 and what(new) == what(old)
+        assert len(new['sites']) == 123 and what(new) == what(old)
         rc, r = lint_json(path, '--stock', DN_STOCK_144)
         assert rc == 0, r['problems']
         rc, r = lint_json(old_path, '--stock', DN_STOCK_144)

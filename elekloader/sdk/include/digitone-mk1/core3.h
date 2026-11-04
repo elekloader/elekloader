@@ -302,4 +302,83 @@ typedef int32_t (*ev_param_value_fn)(void *view, int32_t id, int32_t *value, uin
 #define CORE_VIEW_SOUND_VALUE(view, id) \
     (((int32_t (*)(void *, int32_t, int32_t))(*(void *const *const *)(view))[0x58 / 4])((view), (id), -1))
 
+/* ---- 5.0: the firmware's moments --------------------------------------------------------------------- */
+/* The system. ev_card_ready: the init task has the +Drive up (status 0) or not (1, 6-9), before the project
+ * loads and before the UI and MIDI tasks exist; the card reads and writes here. ev_boot_ui: the boot is done,
+ * the UI task is about to start (the views are built in it next). ev_usb: the host configured the USB
+ * device (1) or the configuration was dropped (0); may be interrupt level. ev_crash: an exception nothing
+ * handles, interrupts masked, the frame (format/status word, PC, then the stack); call core_restart_now to
+ * get the unit back, or return and the stock prints the crash and halts. */
+typedef void (*ev_card_ready_fn)(int32_t status);
+typedef void (*ev_boot_ui_fn)(void);
+typedef void (*ev_usb_fn)(int32_t configured);
+typedef void (*ev_crash_fn)(void *frame);
+/* Reboot from a task: waits for the +Drive and the panel link, then resets (DDR word 0 cleared, RCM.RCR). */
+extern void core_restart(void);
+/* The same at once, for an interrupt or ev_crash. Never returns. */
+extern void core_restart_now(void);
+/* The +Drive, 512-byte sectors, from a task only (never an interrupt): 0, or < 0. */
+extern int32_t fw_card_read(uint32_t sector, uint32_t bytes, void *buf);
+extern int32_t fw_card_write(uint32_t sector, uint32_t bytes, const void *buf);
+extern int32_t fw_card_erase(uint32_t first, uint32_t count);
+extern int32_t fw_card_sectors(void);           /* -1 before the card is up */
+
+/* Storage. A project is about to be written to a slot (0-127, 128 the working project), then was (ok
+ * nonzero: written). The save task or the UI task. */
+typedef void (*ev_project_saving_fn)(void *store, int32_t slot, int32_t arg3);
+typedef void (*ev_project_saved_fn)(void *block, int32_t slot, int32_t ok);
+
+/* The sequencer. ev_transport: about to start (what 1; arg 0 PLAY or MIDI Start, 1 MIDI Continue), stop
+ * (0; the STOP key) or pause (2; PLAY while playing, MIDI Stop). Nonzero takes it: the sequencer does not.
+ * ev_seq_tick: each tick of the sequencer (about 140 a second), before it runs: interrupt.
+ * ev_pattern_request: a pattern change is asked for, before the stock queues it. The UI task. */
+#define CORE_TRANSPORT_STOP     0
+#define CORE_TRANSPORT_START    1
+#define CORE_TRANSPORT_PAUSE    2
+typedef int32_t (*ev_transport_fn)(int32_t what, int32_t arg);
+typedef void (*ev_seq_tick_fn)(void);
+typedef void (*ev_pattern_request_fn)(void *ui, void *request, int32_t arg3);
+
+/* MIDI. ev_midi_in: every message the MIDI task dispatches (channel messages, real time, SysEx), before
+ * ev_midi_cc, ev_midi_pc and ev_sysex; source 2 or 4 USB, 8 or 0x10 DIN. ev_sysex: each SysEx but F0 7E.
+ * ev_midi_out: each message or SysEx piece the port switch sends (port 1 the default, 2 USB, 3 DIN, 4 both).
+ * Nonzero takes it: the stock does not see it (does not send it). The MIDI task, or the sender's. */
+typedef int32_t (*ev_midi_in_fn)(const uint8_t *msg, int32_t len, int32_t source);
+typedef int32_t (*ev_sysex_fn)(const uint8_t *msg, int32_t len, int32_t source);
+typedef int32_t (*ev_midi_out_fn)(const uint8_t *buf, int32_t len, int32_t port);
+/* Send SysEx (or any bytes) from a task: 144 bytes at a time; it busy-waits while the USB ring is full, so
+ * keep replies small. abort: a byte the caller may set to stop between pieces (or 0). -> 1 sent. */
+extern int32_t fw_sysex_send(const uint8_t *buf, int32_t len, volatile uint8_t *abort, int32_t port);
+
+/* Voices. A voice is released (its note or note-off ran out, it was retriggered, its track stopped).
+ * Interrupt level, the render. */
+typedef void (*ev_voice_free_fn)(int32_t voice);
+
+/* The UI task's messages, each as it takes it, before it switches on msg[0] (a type past 34 is dropped). */
+typedef void (*ev_ui_msg_fn)(uint8_t *msg);
+
+/* Sequencer edits (the UI task): a step's flags (mask 1, 2: its trigs), a step's note slot (note -1 clears),
+ * a parameter lock set (live record or an edit), one lock removed, all of a step's locks removed, a track's
+ * length (2-64). The first argument is the firmware's track (or pattern) object. */
+typedef void (*ev_trig_set_fn)(void *track, int32_t step, int32_t mask, int32_t on);
+typedef void (*ev_step_note_fn)(void *track, int32_t step, int32_t note, int32_t slot);
+typedef void (*ev_plock_store_fn)(void *pattern, int32_t track, int32_t step, int32_t slot, int32_t value);
+typedef void (*ev_plock_clear_fn)(void *track, int32_t step, int32_t slot);
+typedef void (*ev_step_clear_fn)(void *track, int32_t step);
+typedef void (*ev_track_length_fn)(void *track, int32_t length);
+
+/* Sound parameters: the stock setter's commit (lock nonzero: into the held steps' locks), and a sound slot's
+ * value going to the voices playing the track (also core_sound_set's). The UI task. */
+typedef void (*ev_param_set_fn)(void *page, int32_t id, int32_t value, int32_t a4, int32_t a5, int32_t lock);
+typedef void (*ev_sound_live_fn)(int32_t value, int32_t track, int32_t slot);
+
+/* The master's effect stages, each block (interrupt): stage 0-2 the three send effects (chorus, delay,
+ * reverb, by their place on the bus), 3 the master drive. Nonzero takes it: the handler wrote out and the
+ * stock stage is skipped. */
+#define CORE_FX_CHORUS          0
+#define CORE_FX_DELAY           1
+#define CORE_FX_REVERB          2
+#define CORE_FX_DRIVE           3
+typedef int32_t (*ev_render_fx_fn)(int32_t stage, int16_t *out, int16_t *in, void *params);
+
 #endif

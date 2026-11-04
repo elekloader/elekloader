@@ -87,6 +87,11 @@
 |                                next note of the same sound loads them again
 |   fw_param_uirec   0x400899c4  uirec(id) -> d0, the parameter's UI record as the
 |                                pages use it (+0 bit 0: it takes no p-locks)
+|   fw_card_read     0x400f5860  read(sector, bytes, buf) -> 0 or < 0: the +Drive (512-byte sectors; a task, never an interrupt)
+|   fw_card_write    0x400f5a46  write(sector, bytes, buf) -> 0 or < 0
+|   fw_card_erase    0x400f5778  erase(first, count) -> 0 or < 0
+|   fw_card_sectors  0x400f5480  sectors() -> the card's size, -1 before it is up
+|   fw_sysex_send    0x400ee354  send(buf, len, abort *, port: 2 USB, 3 DIN, 4 both) -> 1 sent; 144 bytes at a time, busy-waits on a full USB ring
 
         .macro  FW name, value
         .globl  \name
@@ -143,3 +148,8 @@
         FW      fw_voice_locks, FW_VOICE_LOCKS
         FW      fw_voice_locked, FW_VOICE_LOCKED
         FW      fw_param_uirec, FW_PARAM_UIREC
+        FW      fw_card_read, FW_CARD_READ
+        FW      fw_card_write, FW_CARD_WRITE
+        FW      fw_card_erase, FW_CARD_ERASE
+        FW      fw_card_sectors, FW_CARD_SECTORS
+        FW      fw_sysex_send, FW_SYSEX_SEND
