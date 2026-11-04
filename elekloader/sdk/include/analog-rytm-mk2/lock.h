@@ -133,4 +133,11 @@ int core_param_value_ex(int track, unsigned field, unsigned flags);
  * it is) */
 int core_param_int(int track, unsigned field);
 
+/* core-ar2 0.10: a field's handle, looked up once (at boot, or on a mod's
+ * first read; 0 for a field with no lock code), and core_param_value_ex by
+ * the handle, which skips the field's lookup: for a mod that reads its
+ * parameters every audio block. The same values as by the field. */
+int core_param_handle(unsigned field);
+int core_param_value_h(int track, int handle, unsigned flags);
+
 #endif

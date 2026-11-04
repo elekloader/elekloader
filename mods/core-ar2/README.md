@@ -685,6 +685,28 @@ adds one before any mod's handler. The state is 13 tracks × 32 parameters
 without walking the kit's 48 entries while no performance's pressure is
 above 0.
 
+From 0.10 a read looks up only the field's code, through an open hash made
+once (lock.c), and keeps everything else it needs of the code in a table
+made on the first read: the range, the smoother's slot, the LFO and route
+flags, and where the field's bits are in a sound or kit (read without
+`core_store_get`'s interrupt mask: the audio interrupt isn't interrupted by
+a field's writer, which masks interrupts itself). The scene's list, the
+performances and the routes are asked by the code (`core_scene_value_in`,
+`core_perf_offset_in`, `core_mod_offset_code`), and the pads' pressures
+are read a word at a time. `core_param_handle(field)` gives the code as a
+handle, and `core_param_value_h(track, handle, flags)` reads by it.
+`core_store_get` reads a field a byte at a time (a bit at a time before).
+The values are 0.9's: lock-check 1.10's ring gives the same A, B, C, A's
+and C's sound values, p-lock, scene lock, LFO and performance offsets under
+both, after NRPNs set A, B and C and with the LFO's destination on A
+(emulator, 4 Nov 2026). The three reads a block cost 1,828 DMA timer ticks
+on average under 0.9's code and 636 under 0.10's (609 and 212 a read;
+2,952 and 2,984 at most, the most being the first read's table-making);
+a call that returns at once costs 39 a read. About half of what is left is
+the seven reads of the audio side's state at 0x8000xxxx (the kit index,
+the performance switch and the pressures), which the emulator charges
+heavily; not yet measured on a unit.
+
 ## Velocity and aftertouch destinations (0.9)
 
 `routes.c` and `routes.s`, three sites (docs/ADAPTING.md, "Lockable

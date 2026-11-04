@@ -161,22 +161,63 @@ int core_lock_on_track(const struct core_lock_param *p, int track)
     return p && (unsigned)track < 13 && (p->field >> 28 == SC_KIT) == (track == FX_TRACK);
 }
 
-int core_lock_code(unsigned field)
+/* (0.10) a field's code in one probe or a few: an open hash of the fields in
+ * core_lock_codes (at most 86), made once, on the first ask. core_param_value
+ * asks it every audio block for each parameter a mod reads, so a scan of the
+ * table there cost more than the rest of the read. It is made with
+ * interrupts masked, once, by whichever context asks first. */
+#define HASH 256
+static unsigned hash_field[HASH];
+static unsigned char hash_code[HASH];
+static volatile int hashed;
+
+static unsigned hash_of(unsigned field)
+{
+    return (field ^ field >> 8 ^ field >> 16 ^ field >> 24) & (HASH - 1);
+}
+
+static void make_hash(void)
 {
     const unsigned *c;
-    for (c = core_lock_codes; c[0]; c += 2)
-        if (c[0] == field)
-            return c[1] & 0xff;
+    unsigned h;
+    unsigned short sr;
+    __asm__ volatile("move.w %%sr,%0\n\tmove.w #0x2700,%%sr" : "=d"(sr) : : "memory");
+    if (!hashed) {
+        for (c = core_lock_codes; c[0]; c += 2) {
+            for (h = hash_of(c[0]); hash_field[h] && hash_field[h] != c[0]; h = (h + 1) & (HASH - 1))
+                ;
+            hash_code[h] = c[1] & 0xff;
+            hash_field[h] = c[0];
+        }
+        hashed = 1;
+    }
+    __asm__ volatile("move.w %0,%%sr" : : "d"(sr) : "memory");
+}
+
+int core_lock_code(unsigned field)
+{
+    unsigned h;
+    if (!hashed)
+        make_hash();
+    if (!field)
+        return 0;
+    for (h = hash_of(field); hash_field[h]; h = (h + 1) & (HASH - 1))
+        if (hash_field[h] == field)
+            return hash_code[h];
     return 0;
+}
+
+/* (0.10) by the code, for smooth.c */
+int core_lfo_offset_code(int track, unsigned code)
+{
+    if ((unsigned)track >= 13 || !code || core_lfo_code[track] != code || !core_lock_on_track(lfo_param(code), track))
+        return 0;
+    return core_lfo_value[track];
 }
 
 int core_lfo_offset(int track, unsigned field)
 {
-    unsigned code;
-    if ((unsigned)track >= 13 || !(code = core_lfo_code[track]) || code != (unsigned)core_lock_code(field) ||
-        !core_lock_on_track(lfo_param(code), track))
-        return 0;
-    return core_lfo_value[track];
+    return core_lfo_offset_code(track, core_lock_code(field));
 }
 
 /* a pseudo id's code, or 0 */

@@ -1924,7 +1924,11 @@ last call (`core_block`, `analog-rytm-mk2/load.h`), so a parameter no mod
 reads costs nothing, and a mod that reads its parameter every block sees
 stock's ramp block by block. Read it from the audio side only
 (`ev_render_in`, `ev_render_out`, a machine's render): each call steps the
-smoother. A read costs about 0.5% of a block. Core keeps a smoother for 32
+smoother. A read costs about 0.25% of a block in the emulator (core-ar2
+0.10; 0.9's cost about 0.7%). A mod that reads every block can look the
+field up once with `core_param_handle(field)` and read by the handle with
+`core_param_value_h(track, handle, flags)`, which gives the same values.
+Core keeps a smoother for 32
 lockable parameters a track; a build with more gives the rest their
 target unsmoothed.
 
