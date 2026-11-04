@@ -54,7 +54,9 @@
   {"event": "ev_sampler", "fn": "hc_sampler", "order": 50},
   {"event": "ev_clip_op", "fn": "hc_clip_op", "order": 50},
   {"event": "ev_track_reload", "fn": "hc_track_reload", "order": 50},
-  {"event": "ev_project_erase", "fn": "hc_project_erase", "order": 50}
+  {"event": "ev_project_erase", "fn": "hc_project_erase", "order": 50},
+  {"event": "ev_song_mode", "fn": "hc_song_mode", "order": 50},
+  {"event": "ev_beat", "fn": "hc_beat", "order": 50}
  ],
  "resources": {
   "core": "5.0"

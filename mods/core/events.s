@@ -1139,3 +1139,60 @@ project_erase:
 2:      movem.l (%sp), %d0-%d1/%a0-%a2
         lea     20(%sp), %sp
 9:      rts
+
+| ---- song mode and the beat --------------------------------------------------------
+| ev_song_mode: f(int on). Song mode is switched on (1: the sequencer is to
+| take its rows from the song) or off (0), at SONG_MODE 0x4007162c; it takes
+| effect at the current row's end (ev_pattern_switch then gives the row's
+| pattern). The UI task.
+        .globl  core_song_mode
+core_song_mode:
+        tst.l   ev_song_mode
+        beq.s   7f
+        lea     -20(%sp), %sp
+        movem.l %d0-%d1/%a0-%a2, (%sp)
+        lea     ev_song_mode, %a2
+1:      move.l  (%a2)+, %d0
+        beq.s   2f
+        movea.l %d0, %a0
+        move.l  24(%sp), %d1            | the routine's argument
+        moveq   #0, %d0
+        cmpi.l  #SONG_TABLE, %d1        | the song's table: on
+        bne.s   3f
+        moveq   #1, %d0
+3:      move.l  %d0, -(%sp)
+        jsr     (%a0)
+        addq.l  #4, %sp
+        bra.s   1b
+2:      movem.l (%sp), %d0-%d1/%a0-%a2
+        lea     20(%sp), %sp
+7:      lea     -24(%sp), %sp           | SONG_MODE's first three instructions
+        move.l  %a2, -(%sp)
+        move.l  %d2, -(%sp)
+        jmp     SONG_MODE + 8
+
+| ev_beat: f(int beat). Each metronome beat while playing (0x40071314, the
+| click's on/off test, whether the click is on or not): beat is the
+| firmware's beat byte (BEAT_POS; nonzero: the accented click). From the
+| sequencer's tick: interrupt level, keep it short. Every register and the
+| flags come back as they went.
+        .globl  core_beat
+core_beat:
+        tst.l   ev_beat
+        beq.s   7f
+        lea     -20(%sp), %sp
+        movem.l %d0-%d1/%a0-%a2, (%sp)
+        lea     ev_beat, %a2
+1:      move.l  (%a2)+, %d0
+        beq.s   2f
+        movea.l %d0, %a0
+        moveq   #0, %d0
+        move.b  BEAT_POS, %d0
+        move.l  %d0, -(%sp)
+        jsr     (%a0)
+        addq.l  #4, %sp
+        bra.s   1b
+2:      movem.l (%sp), %d0-%d1/%a0-%a2
+        lea     20(%sp), %sp
+7:      tst.l   METRO_ON                | the test this replaced, last: its flags
+        rts

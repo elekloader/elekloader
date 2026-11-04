@@ -127,7 +127,11 @@
   "SMP_SAVE": "0x400a8526",
   "SMP_WRITE": "0x400a8854",
   "CLEAR_SLOT": "0x4009213a",
-  "SLOT_DELETE": "0x40091fbc"
+  "SLOT_DELETE": "0x40091fbc",
+  "SONG_MODE": "0x4007162c",
+  "SONG_TABLE": "0x4020db38",
+  "METRO_ON": "0x4197b6e0",
+  "BEAT_POS": "0x4199dc30"
  },
  "sites": [
   {"addr": "0x40000538", "stock": "4eb940001c94", "op": "jsr", "target": "boot"},
@@ -241,7 +245,9 @@
   {"addr": "0x400a8526", "stock": "4e56ff98206e0008", "op": "jmp", "target": "core_smp_save"},
   {"addr": "0x400a8854", "stock": "4e56ffe4206e0008", "op": "jmp", "target": "core_smp_write"},
   {"addr": "0x4004cc9a", "stock": "49f94009213a", "op": "keep2", "target": "core_project_clear"},
-  {"addr": "0x40091fbc", "stock": "2f0270ff242f000c", "op": "jmp", "target": "core_project_delete"}
+  {"addr": "0x40091fbc", "stock": "2f0270ff242f000c", "op": "jmp", "target": "core_project_delete"},
+  {"addr": "0x4007162c", "stock": "4fefffe82f0a2f02", "op": "jmp", "target": "core_song_mode"},
+  {"addr": "0x40071314", "stock": "4ab94197b6e0", "op": "jsr", "target": "core_beat"}
  ],
  "ports": {
   "1.54": {
@@ -367,7 +373,11 @@
     "SMP_SAVE": "0x400a874e",
     "SMP_WRITE": "0x400a8a7c",
     "CLEAR_SLOT": "0x4009217e",
-    "SLOT_DELETE": "0x40092000"
+    "SLOT_DELETE": "0x40092000",
+    "SONG_MODE": "0x4007162c",
+    "SONG_TABLE": "0x4020dee8",
+    "METRO_ON": "0x4197c6e0",
+    "BEAT_POS": "0x4199ec30"
    },
    "sites": [
     {"addr": "0x40000538", "stock": "4eb940001c94", "op": "jsr", "target": "boot"},
@@ -481,7 +491,9 @@
     {"addr": "0x400a874e", "stock": "4e56ff98206e0008", "op": "jmp", "target": "core_smp_save"},
     {"addr": "0x400a8a7c", "stock": "4e56ffe4206e0008", "op": "jmp", "target": "core_smp_write"},
     {"addr": "0x4004cc9a", "stock": "49f94009217e", "op": "keep2", "target": "core_project_clear"},
-    {"addr": "0x40092000", "stock": "2f0270ff242f000c", "op": "jmp", "target": "core_project_delete"}
+    {"addr": "0x40092000", "stock": "2f0270ff242f000c", "op": "jmp", "target": "core_project_delete"},
+    {"addr": "0x4007162c", "stock": "4fefffe82f0a2f02", "op": "jmp", "target": "core_song_mode"},
+    {"addr": "0x40071314", "stock": "4ab94197c6e0", "op": "jsr", "target": "core_beat"}
    ]
   }
  },
@@ -506,7 +518,8 @@
   "ev_usb": 4,
   "ev_trig_set": 4, "ev_plock_store": 4, "ev_track_length": 4, "ev_param_set": 4,
   "ev_sound_read": 4, "ev_sound_write": 4, "ev_kit_write": 4, "ev_kit_read": 4, "ev_sampler": 4, "ev_clip_op": 4, "ev_track_reload": 4,
-  "ev_project_erase": 4
+  "ev_project_erase": 4,
+  "ev_song_mode": 4, "ev_beat": 4
  },
  "resources": {"names": ["timer:DTIM0"]}
 }

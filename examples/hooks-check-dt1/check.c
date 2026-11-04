@@ -56,3 +56,5 @@ void hc_view(int32_t a0, int32_t a1, int32_t a2, int32_t a3) { (void)a3; note(23
 /* 37 */ void hc_clip_op(int32_t a0, int32_t a1, int32_t a2) { note(37, a0, a1, a2, 0); }
 /* 38 */ void hc_track_reload(int32_t a0) { note(38, a0, 0, 0, 0); }
 /* 39 */ void hc_project_erase(int32_t a0, int32_t a1) { note(39, a0, a1, 0, 0); }
+/* 40 */ void hc_song_mode(int32_t a0) { note(40, a0, 0, 0, 0); }
+/* 41 */ void hc_beat(int32_t a0) { note(41, a0, 0, 0, 0); }
