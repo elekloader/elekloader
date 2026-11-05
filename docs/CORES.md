@@ -29,6 +29,7 @@ older ones people still have:
 | Digitone mk1, Digitone Keys | 1.43, 1.44 | `core-dn1-5.4.elemod`, `core-dn1-5.4-os1.44.elemod` | the [v0.11.0](https://github.com/elekloader/elekloader/releases/tag/v0.11.0) release, built into its apps, and the web page |
 | Digitone mk1, Digitone Keys | 1.43, 1.44 | `core-dn1-2.0a.elemod`, `core-dn1-2.0a-os1.44.elemod` | the v0.4.0 release, built into its apps |
 | Digitakt II | 1.17 | `core-dt2-1.0.elemod` | the [v0.11.0](https://github.com/elekloader/elekloader/releases/tag/v0.11.0) release, built into its apps, and the web page |
+| Digitakt II | 1.17 | `core-dt2-1.1.elemod` | on main, not released: build it ([below](#building-a-core)) |
 | Digitone II | 1.12 | `core-dn2-0.4.elemod` | the [v0.11.0](https://github.com/elekloader/elekloader/releases/tag/v0.11.0) release, built into its apps, and the web page (experimental) |
 | Analog Rytm MKII | 1.74 | `core-ar2-0.14.elemod` | build it ([below](#building-a-core)). Drive Loader 0.5 needs it: +Drive storage at boot (`ev_boot_drive`, `core_store_gens`) |
 | Analog Rytm MKII | 1.74 | `core-ar2-0.13.elemod` | the [v0.11.0](https://github.com/elekloader/elekloader/releases/tag/v0.11.0) release, built into its apps, and the web page. The Drive Loader needs 0.12 or newer: the +Drive mods' spare entries in its tables. Mods with pages built for 0.3 (rytm2_mods v1.2's lfo-rnd, voice-dac, euclid-accents, velocity-humanise, comp-preview) do not link with it: their sites overlap core's page sites |
@@ -195,7 +196,11 @@ the one a mod that uses it names in `resources.core`.
     the core's README).
 - **Digitakt II** ([mods/core-dt2](../mods/core-dt2)): SETTINGS and
   PERSONALIZE rows, and `.fast` code in SRAM. No render events: its audio
-  renders on the DSP.
+  renders on the DSP. Also:
+  - each frame's per-track parameter values (`ev_frame_params`) and key
+    LEDs over the stock views' (`ev_key_leds`);
+  - the mods' project and kit data, saved with the project and its kits
+    and copied with the kits, and value rows (ADAPTING.md, "Project data, kit data and value rows (core-dt2 1.1, Digitakt II)").
 - **Digitone II** ([mods/core-dn2](../mods/core-dn2), experimental): the
   Digitakt II's events and rows, without `.fast`; remote panel input and
   SysEx observers (ADAPTING.md, "Remote panel input and SysEx"); and SHARC

@@ -1,10 +1,10 @@
 {
- "id": "core", "version": "1.0",
+ "id": "core", "version": "1.1",
  "license": "GPL-2.0-or-later",
  "title": "core", "category": "Framework", "author": "irpina",
- "description": "The boot copier and the hook bus for the Digitakt II: every other mod needs it. On its own it changes nothing the unit does.",
+ "description": "The boot copier and the hook bus for the Digitakt II: every other mod needs it. From 1.1 also each frame's per-track parameter values before the stock modulators (ev_frame_params), the key-LED frame before the stock views (ev_key_leds), the mods' project data and kit data, saved and loaded with the project and its kits and copied with the kits (core_projdata, core_kitdata), and value rows for PERSONALIZE and SETTINGS (core_addvalue). On its own it changes nothing the unit does.",
  "device": "digitakt-mk2", "os": "1.17",
- "sources": ["../core/core.s", "../core/settings.s", "../core/fast.s", "personalize.s"],
+ "sources": ["../core/core.s", "../core/settings.s", "../core/fast.s", "personalize.s", "fw.s", "frame.s", "leds.s", "store.s", "store.c", "rows.s", "rows.c"],
  "defsym": {
   "DRAWALL": "0x4011bc96",
   "KEYDISP": "0x40030bd0",
@@ -15,7 +15,21 @@
   "FN_MGR": "0x4019d8a8",
   "SETTINGS_RET": "0x400a5eb2",
   "NO_DTIM0": "1",
-  "VBR_FN": "0x400019b0"
+  "VBR_FN": "0x400019b0",
+  "FW_TEXTBOX": "0x40113fd4",
+  "FW_FONT_MENU": "0x402a9be0",
+  "FW_INVALIDATE": "0x4011b126",
+  "FW_LED_SET": "0x400308e0",
+  "FW_STR_NEW": "0x401e7e7a",
+  "MEMCPY": "0x40136388",
+  "FW_KITS": "0x426532b8",
+  "KIT_SIZE": "0x5574",
+  "KIT_PAD": "0x573e",
+  "KIT_ROOM": "194",
+  "PATTERN_OBJ": "0x44f370a0",
+  "MODS_STOCK": "0x400d9508",
+  "LEDS_CLEAR": "0x4003098e",
+  "FRAME_STRIDE": "71"
  },
  "sites": [
   {"addr": "0x40000538", "stock": "4eb9400019b0", "op": "jsr", "target": "boot"},
@@ -24,8 +38,15 @@
   {"addr": "0x40033d94", "stock": "4eb940030bd0", "op": "jsr", "target": "core_key"},
   {"addr": "0x40033dde", "stock": "4eb940030b64", "op": "jsr", "target": "core_enc"},
   {"addr": "0x400a5eac", "stock": "205248780002", "op": "jmp", "target": "core_settings"},
-  {"addr": "0x4009e2a2", "stock": "4cef7c7c0018", "op": "jmp", "target": "core_personalize"}
+  {"addr": "0x4009e2a2", "stock": "4cef7c7c0018", "op": "jmp", "target": "core_personalize"},
+  {"addr": "0x4002e90c", "stock": "4eb9400d9508", "op": "jsr", "target": "core_frame"},
+  {"addr": "0x400311a2", "stock": "4ebaf7ea2f02", "op": "jsr", "target": "core_key_leds"},
+  {"addr": "0x400dbee4", "stock": "223cbacef00c", "op": "jsr", "target": "core_kit_save"},
+  {"addr": "0x400db8be", "stock": "223cbacef00c", "op": "jsr", "target": "core_kit_load"},
+  {"addr": "0x400df932", "stock": "26bcbeefbace", "op": "jsr", "target": "core_proj_save"},
+  {"addr": "0x400df99c", "stock": "203cbeefbace", "op": "jsr", "target": "core_proj_load"},
+  {"addr": "0x40136388", "stock": "226f0004206f0008202f000c", "op": "jmp", "target": "core_memcpy"}
  ],
  "subscribe": [{"event": "ev_tick", "fn": "core_fastcopy", "order": 0}],
- "collections": {"ev_tick": 4, "ev_draw": 4, "ev_key": 4, "ev_enc": 4, "ev_settings": 4, "ev_personalize": 4, "core_fast": 16}
+ "collections": {"ev_tick": 4, "ev_draw": 4, "ev_key": 4, "ev_enc": 4, "ev_settings": 4, "ev_personalize": 4, "core_fast": 16, "ev_frame_params": 4, "ev_key_leds": 4, "core_projdata": 4, "core_kitdata": 4}
 }
