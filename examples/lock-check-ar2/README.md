@@ -64,7 +64,9 @@ From 1.11 each audio block also reads A, B and C again in one
 writes to `lc_batch`, after the magic `BTCH`: that call's cost in DMA timer
 0's ticks, the most and the sum, the blocks, and the blocks where any of
 the three differed from its own `core_param_value` read in the same block
-(0 when the batch read gives the same values).
+(0 when the batch read gives the same values), then the sum of DMA timer
+0's ticks from one block's read to the next and their count: a block's
+length, to put the costs in proportion.
 
 The screen's y counts from the bottom row (y 0 is the bottom edge). 1.0
 drew its bars at y 57..63, which is the top edge, over the stock header's
