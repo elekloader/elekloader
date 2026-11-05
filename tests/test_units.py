@@ -1125,6 +1125,14 @@ def test_sdk_alpha_render_suite():
     assert result.wasSuccessful(), 'SDK render contract suite failed'
 
 
+def test_sdk_alpha_host_suite():
+    import unittest
+    suite = unittest.TestLoader().discover(HERE, pattern='test_sdk_alpha_host.py')
+    assert suite.countTestCases(), 'no SDK host run tests discovered'
+    result = unittest.TextTestRunner().run(suite)
+    assert result.wasSuccessful(), 'SDK host run suite failed'
+
+
 def test_sdk_alpha_suite():
     import unittest
     suite = unittest.TestLoader().discover(HERE, pattern='test_sdk_alpha.py')

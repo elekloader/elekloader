@@ -198,6 +198,31 @@ Working UI examples are [sdk-hello-world](../examples/sdk-hello-world)
 render: a sine at the note on both mk1s, tuned by FINE, whose glyph shows
 which way.
 
+### Run it on your computer
+
+Before building for a device, run the machine's `present` and `render`
+with your computer's C compiler (`cc`, or `$CC`):
+
+```bash
+python -m elekloader.sdk.sdk_alpha_host examples/sdk-sine
+```
+
+```
+SDK Sine (id 123), Q31 (ColdFire)
+  FINE  -50..50, default 0
+present, the other knobs at FINE=0:
+  FINE=-50   FINE "FINE" glyph
+  FINE=0     FINE "FINE" glyph
+  FINE=50    FINE "FINE" glyph
+render: note 60, 375 blocks: peak 0.500, about 261.6 Hz
+```
+
+Each knob goes to its min, default and max, and the line shows every
+knob's label as `present` left it. `--float` builds the SHARC's samples,
+`--note`, `--knob NAME=V` and `--blocks` set what renders, `--wav
+out.wav` writes it at 48 kHz, and `--glyphs` draws the glyphs. The mod
+must register exactly one machine.
+
 ## Audio contract
 
 Both mk1 devices call this callback on the main ColdFire. Digitone II's
@@ -388,6 +413,8 @@ stored UI values for effective voice controls.
   and the part every companion shares (`mods/sdk-alpha/machine.c`): value
   mapping across the bounds, defaults, label sanitising and when
   `.present` runs. `test_units.py` runs this suite.
+- [Host-run tests](../tests/test_sdk_alpha_host.py) run
+  `sdk_alpha_host` on the examples; `test_units.py` runs them too.
 - [Sound tests](../tests/test_sdk_alpha_sound.py) capture the emulator output;
   [defaults tests](../tests/test_sdk_alpha_defaults.py) exercise mapped defaults.
   Targets without the corresponding backend are explicitly skipped.

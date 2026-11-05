@@ -42,7 +42,7 @@ py.FS.writeFile('/work/tests/test_link_refusals.py', read(join(HERE, 'test_link_
 py.FS.writeFile('/work/tests/test_octatrack.py', read(join(HERE, 'test_octatrack.py')));
 // The SHARC suite also needs its author-owned fixtures and example checks, and
 // the DN2 machine registry suite machines-dn2's mod.json and machines.c. The DN2
-// DSP peek test is imported (it skips here: Pyodide has no C compiler), and the SDK
+// DSP peek test and the SDK host run are imported (they skip here: Pyodide has no C compiler), and the SDK
 // builder suite with its harness (its build checks skip: no stock files).
 for (const file of [
   ...readdirSync(HERE).filter(name => /^test_sharc.*\.py$/.test(name)).map(name => 'tests/' + name),
@@ -50,7 +50,7 @@ for (const file of [
   'mods/machines-dn2/dn2.h', 'mods/machine-pages/src.h',
   'tests/test_dn2_dsp_peek.py',
   'tests/test_sdk_alpha.py', 'tests/sdk_alpha_harness.py', 'tests/sdk_alpha_devices.py',
-  'tests/test_sdk_alpha_render.py',
+  'tests/test_sdk_alpha_render.py', 'tests/test_sdk_alpha_host.py',
   'tests/fixtures/sharc.json',
   'examples/sharc-sine/sine.sharc.json', 'examples/sharc-sine/build.py',
   'examples/sharc-sine-probe/execute.py', 'examples/sharc-sine-probe/h1_spills.py',
