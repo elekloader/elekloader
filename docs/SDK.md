@@ -199,9 +199,12 @@ required companions for the same stock file, then use the normal
 The builder refuses unsupported targets, invalid names, bounds, IDs and
 layouts, more machines in one mod than the device holds (the table above),
 duplicate declarations in JSON, and imports no companion exports (such as
-libgcc's floating point). SDK machines import `sdk_alpha_abi_v1`, which
-every companion exports; rebuild SDK mods and companions together when it
-changes. The limit is checked per mod: machines from several mods past it
+libgcc's floating point). Each refusal names where it is, as in the C:
+`sdk alpha: machine "Two Page" (id 40), knobs[0]: label "CUTOFF" has 6
+characters (at most 5)`, or `..., pages[0] "OSC", encoder B: does not
+point at one of the machine's knobs`. SDK machines import
+`sdk_alpha_abi_v1`, which every companion exports; rebuild SDK mods and
+companions together when it changes. The limit is checked per mod: machines from several mods past it
 are not refused, and the ones past it go unused.
 
 Working UI examples are [sdk-hello-world](../examples/sdk-hello-world)

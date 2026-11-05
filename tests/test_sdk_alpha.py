@@ -177,13 +177,30 @@ class SdkAlphaTests(unittest.TestCase):
         self.assertEqual(sdk_alpha_registrations(doc, {'.run': raw})[120]['at'], ('.run', M))
 
     def test_sdk_alpha_invalid_registrations(self):
-        for offset, value in ((M, 3), (M, 128), (M + B.MACHINE_KNOB_COUNT, 1), (page_at(0, 0), 1)):
+        empty = r'machine "Empty" \(id 120\)'
+        for offset, value, message in (
+                (M, 3, r'machine "Empty" \(id 3\): id 3 is outside 4\.\.127$'),
+                (M, 128, r'machine "Empty" \(id 128\): id 128 is outside 4\.\.127$'),
+                (M + B.MACHINE_KNOB_COUNT, 1, empty + r': knob_count is 1 but knobs is null \(give the knobs '
+                                                      r'with ELEK_KNOBS\)$'),
+                (page_at(0, 0), 1, empty + r', pages\[0\], encoder A: the knob is 0x00000001, not null or an '
+                                           r'address in this mod$')):
             with self.subTest(offset=offset, value=value):
                 doc, raw = sdk_alpha_test_document()
                 struct.pack_into('>I', raw, offset, value)
-                with self.assertRaises(build.BuildError):
+                with self.assertRaisesRegex(build.BuildError, message):
                     sdk_alpha_registrations(doc, {'.run': raw})
-        for kind in ('duplicate', 'missing', 'pointer', 'abi', 'name', 'truncated', 'pages'):
+        for kind, message in (
+                ('duplicate', empty + r': machine "Empty" has the same id: give each machine its own id$'),
+                ('missing', r'no machine registered: add ELEK_REGISTER_MACHINE\(machine\)$'),
+                ('pointer', r'ELEK_REGISTER_MACHINE\(empty\): registers no machine$'),
+                ('abi', r'the mod does not use sdk_alpha_abi_v1: rebuild it with this SDK\'s header$'),
+                ('name', r'machine id 120: name is empty \(give it 1\.\.16 printable ASCII characters\)$'),
+                ('long name', r'machine id 120: name "Seventeen chars!!" has 17 characters \(at most 16\)$'),
+                ('unprintable', r'machine "Empty" \(id 120\): short_name "E\\u0007PT" has 0x07, which is not '
+                                r'printable ASCII$'),
+                ('truncated', r'ELEK_REGISTER_MACHINE\(empty\): the machine runs past the end of its data'),
+                ('pages', empty + r': pages\[1\] "Empty" is set but pages\[0\] has no label$')):
             with self.subTest(kind=kind):
                 doc, raw = sdk_alpha_test_document()
                 if kind == 'duplicate':
@@ -197,11 +214,16 @@ class SdkAlphaTests(unittest.TestCase):
                     doc['imports'] = ['sdk_alpha_dt1_ui_v1']
                 elif kind == 'name':
                     raw[NAME] = 0
+                elif kind == 'long name':
+                    raw.extend(b'Seventeen chars!!\0')
+                    reloc(doc, M + B.MACHINE_NAME)[4] = len(raw) - 18
+                elif kind == 'unprintable':
+                    raw[SNAME + 1] = 7
                 elif kind == 'truncated':
                     raw = raw[:M + 10]
                 elif kind == 'pages':               # a second page without a first
                     doc['relocs'].append(['.run', page_at(1), 'abs32', 'sec:.run', NAME])
-                with self.assertRaises(build.BuildError):
+                with self.assertRaisesRegex(build.BuildError, '^sdk alpha: ' + message):
                     sdk_alpha_registrations(doc, {'.run': raw})
 
     def test_sdk_alpha_pages_hold_the_machines_own_knobs(self):
@@ -213,20 +235,35 @@ class SdkAlphaTests(unittest.TestCase):
         self.assertEqual(len(sdk_alpha_registrations(doc, {'.run': raw})), 1)
         without(doc, *[page_at(p, e) for p in range(2) for e in range(8)])   # label-only pages
         self.assertEqual(len(sdk_alpha_registrations(doc, {'.run': raw})), 1)
+        machine = r'^sdk alpha: machine "Empty" \(id 120\)'
+        not_a_knob = r'does not point at one of the machine\'s knobs \(use &knobs\[ID\], ID below 15\)$'
         for edit, message in (
-                (lambda doc, raw: struct.pack_into('>I', raw, M + B.MACHINE_KNOB_COUNT, 16), 'at most 15 knobs'),
-                (lambda doc, raw: reloc(doc, page_at(0, 0)).__setitem__(4, knob_at(2) + 4), r'&knobs\[ID\]'),
-                (lambda doc, raw: reloc(doc, page_at(0, 0)).__setitem__(4, knob_at(15)), r'&knobs\[ID\]'),
-                (lambda doc, raw: reloc(doc, page_at(1, 0)).__setitem__(4, NAME), r'page 2 encoder A'),
-                (lambda doc, raw: reloc(doc, page_at(0, 0)).__setitem__(3, 'sym:external_knob'), 'own mod'),
-                (lambda doc, raw: struct.pack_into('>ii', raw, knob_at(4, B.KNOB_MIN), 5, 5), 'max above min'),
-                (lambda doc, raw: struct.pack_into('>ii', raw, knob_at(4, B.KNOB_MIN), 0, 0), 'max above min'),
-                (lambda doc, raw: without(doc, page_at(1)), 'page 2 has knobs but no label'),
+                (lambda doc, raw: struct.pack_into('>I', raw, M + B.MACHINE_KNOB_COUNT, 16),
+                 machine + r': has 16 knobs \(at most 15\)$'),
+                (lambda doc, raw: reloc(doc, page_at(0, 0)).__setitem__(4, knob_at(2) + 4),
+                 machine + r', pages\[0\] "Empty", encoder A: ' + not_a_knob),
+                (lambda doc, raw: reloc(doc, page_at(0, 0)).__setitem__(4, knob_at(15)),
+                 machine + r', pages\[0\] "Empty", encoder A: ' + not_a_knob),
+                (lambda doc, raw: reloc(doc, page_at(1, 0)).__setitem__(4, NAME),
+                 machine + r', pages\[1\] "Empty", encoder A: ' + not_a_knob),
+                (lambda doc, raw: reloc(doc, page_at(0, 0)).__setitem__(3, 'sym:external_knob'),
+                 machine + r', pages\[0\] "Empty", encoder A: the knob points at external_knob, outside this mod'),
+                (lambda doc, raw: struct.pack_into('>ii', raw, knob_at(4, B.KNOB_MIN), 5, 5),
+                 machine + r', knobs\[4\] "Empty": max 5 is not above min 5$'),
+                (lambda doc, raw: struct.pack_into('>ii', raw, knob_at(4, B.KNOB_MIN), 0, -1),
+                 machine + r', knobs\[4\] "Empty": max -1 is not above min 0$'),
+                (lambda doc, raw: without(doc, page_at(1)),
+                 machine + r', pages\[1\]: has knobs but no label \(give the page a label\)$'),
                 (lambda doc, raw: without(doc, page_at(0), *[page_at(0, e) for e in range(8)]),
-                 'page 2 needs page 1'),
-                (lambda doc, raw: without(doc, knob_at(3)), 'missing registration pointer'),
-                (lambda doc, raw: without(doc, M + B.MACHINE_KNOBS), 'knob_count needs knobs'),
-                (lambda doc, raw: doc.__setitem__('imports', ['unknown_sdk_abi']), 'ABI')):
+                 machine + r': pages\[1\] "Empty" is set but pages\[0\] has no label$'),
+                (lambda doc, raw: without(doc, knob_at(3)),
+                 machine + r', knobs\[3\]: has no label \(give it 1\.\.5 printable ASCII characters\)$'),
+                (lambda doc, raw: without(doc, page_at(0)) or doc['relocs'].append(
+                    ['.run', page_at(0), 'abs32', 'sec:.run', len(raw)]) or raw.extend(b'SEVENTEEN-LETTERS\0'),
+                 machine + r', pages\[0\]: label "SEVENTEEN-LETTERS" has 17 characters \(at most 16\)$'),
+                (lambda doc, raw: without(doc, M + B.MACHINE_KNOBS),
+                 machine + r': knob_count is 15 but knobs is null \(give the knobs with ELEK_KNOBS\)$'),
+                (lambda doc, raw: doc.__setitem__('imports', ['unknown_sdk_abi']), 'sdk_alpha_abi_v1')):
             with self.subTest(message=message):
                 doc, raw = sdk_alpha_test_controls_document()
                 edit(doc, raw)
@@ -249,7 +286,13 @@ class SdkAlphaTests(unittest.TestCase):
             if supplied:
                 doc['relocs'].append(['.run', glyph, 'abs32', 'sec:.run', GLYPH])
             self.assertEqual(len(sdk_alpha_registrations(doc, {'.run': raw})), 1)
-        for kind in ('truncated', 'external', 'unrelocated', 'duplicate', 'unaligned'):
+        knob = r'^sdk alpha: machine "Empty" \(id 120\), knobs\[0\] "Empty": '
+        for kind, message in (
+                ('truncated', r'glyph runs past the end of its data \(point it at a struct elek_glyph\)$'),
+                ('external', r'glyph points at external_glyph, outside this mod: point it at data in the mod$'),
+                ('unrelocated', r'glyph is 0x000003e8, not null or an address in this mod$'),
+                ('duplicate', r'glyph is not a plain 32-bit address \(build with the SDK\'s flags\)$'),
+                ('unaligned', r'glyph is at an odd address \(point it at a struct elek_glyph\)$')):
             with self.subTest(kind=kind):
                 doc, raw = sdk_alpha_test_controls_document()
                 doc['relocs'].append(['.run', glyph, 'abs32', 'sec:.run', GLYPH])
@@ -264,7 +307,7 @@ class SdkAlphaTests(unittest.TestCase):
                     doc['relocs'].append(doc['relocs'][-1][:])
                 elif kind == 'unaligned':
                     doc['relocs'][-1][4] += 1
-                with self.assertRaises(build.BuildError):
+                with self.assertRaisesRegex(build.BuildError, knob + message):
                     sdk_alpha_registrations(doc, {'.run': raw})
 
     def test_sdk_alpha_defaults_are_clamped_into_the_range(self):
@@ -283,11 +326,12 @@ class SdkAlphaTests(unittest.TestCase):
         self.assertFalse(sdk_alpha_registrations(doc, {'.run': raw})[120]['render'])
         doc, raw = sdk_alpha_test_render_document(render=False)
         struct.pack_into('>I', raw, M + B.MACHINE_RENDER, 0x40001000)        # an address, not a function of the mod
-        with self.assertRaisesRegex(build.BuildError, 'function in the mod'):
+        with self.assertRaisesRegex(build.BuildError, r'^sdk alpha: machine "Empty" \(id 120\): render is '
+                                                      r'0x40001000, not null or an address in this mod$'):
             sdk_alpha_registrations(doc, {'.run': raw})
         doc, raw = sdk_alpha_test_render_document()
         doc['relocs'][-1][3] = 'sym:external_render'
-        with self.assertRaisesRegex(build.BuildError, 'own mod'):
+        with self.assertRaisesRegex(build.BuildError, 'render points at external_render, outside this mod'):
             sdk_alpha_registrations(doc, {'.run': raw})
 
     def test_a_voice_state_too_big_does_not_compile(self):
@@ -440,7 +484,8 @@ class SdkAlphaTests(unittest.TestCase):
                 sdk_alpha_build(sixteen, dn, tmp)
             self.assertEqual(len(sdk_alpha_build(sixteen, stocks['digitakt-mk1'], tmp)[2]), 16)   # it holds 32
             for stock in stocks.values():
-                with self.assertRaisesRegex(build.BuildError, '1..5 printable ASCII characters'):
+                with self.assertRaisesRegex(build.BuildError, r'^sdk alpha: machine "Long label" \(id \d+\), knobs\[0\]: '
+                                                              r'label "TOOLONG" has 7 characters \(at most 5\)$'):
                     sdk_alpha_build(LONG_LABEL.write(tmp + '/long'), stock, tmp)
                 shutil.rmtree(tmp + '/long')
 
@@ -481,13 +526,17 @@ class SdkAlphaTests(unittest.TestCase):
             duplicate['id'], duplicate['exports'] = 'sdk-alpha-conflict', []
             with self.assertRaisesRegex(elemod.ModError, 'mk2-synth:%d' % EMPTY.id):
                 link.link([core, machines, built['empty'][1], link.Mod2(duplicate, 'conflict')], image)
-            with self.assertRaisesRegex(build.BuildError, 'render is not supported on digitone-mk2'):
+            with self.assertRaisesRegex(build.BuildError, r'^sdk alpha: machine "Renders" \(id \d+\): render is not '
+                                                          r'supported on digitone-mk2 1\.12 yet$'):
                 sdk_alpha_build(RENDERS.write(tmp + '/renders'), stock, tmp)
-            with self.assertRaisesRegex(build.BuildError, 'defaults are not supported on digitone-mk2'):
+            with self.assertRaisesRegex(build.BuildError, r'^sdk alpha: machine "One page" \(id \d+\), knobs\[0\] '
+                                                          r'"KNOB": def 0 is not min -50; defaults are not supported '
+                                                          r'on digitone-mk2 1\.12 yet$'):
                 sdk_alpha_build(DEFAULTS.write(tmp + '/defaults'), stock, tmp)
             midi = SdkMachine("Midi slot", register=False, source=EMPTY.source)
             midi.id = 4                                 # 4..127 elsewhere; MIDI's type on the Digitone II
-            with self.assertRaisesRegex(build.BuildError, r'invalid machine slot 4 \(expected 5\.\.127\)'):
+            with self.assertRaisesRegex(build.BuildError, r'^sdk alpha: machine "Empty" \(id 4\): id 4 is outside '
+                                                          r'5\.\.127 on digitone-mk2 1\.12$'):
                 sdk_alpha_build(midi.write(tmp + '/midi'), stock, tmp)
 
 
