@@ -1357,7 +1357,12 @@ slot), CLEAR and a paste of itself (copy, paste, YES) give CLEARED,
 CLEARED, PASTED for slot 120; LOAD FROM loads it (`ev_kit`, no slot
 event); CLEAR of it while active gives CLEARED and leaves the live
 project; LOAD PROJECT's CREATE NEW gives no slot event. Finding 2 (the
-FX LFO's destination against stock) is not checked yet. Core's .run is
+FX LFO keeps its destination after a stopped kit change) is stock's, so
+core keeps it: on stock 1.74 alone, kit 2's FX LFO on a stock destination
+(SPD, set in the stored kit, then RELOAD KIT) puts 5 in the FX track's
+live slot (the byte the LFO block reads, 0x4009eabc); a stopped change
+from A02 to A01 (kit 1, None) leaves 5 there, still 5 ten seconds later;
+PLAY on A01 clears it, and so does the same change while playing. Core's .run is
 44,808 bytes, .bss 22,588; core + sidecar-check 0.3 take 81,244 of the
 128 KB area. Not yet on a unit.
 
