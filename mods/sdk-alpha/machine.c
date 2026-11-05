@@ -33,6 +33,10 @@ static int index_machine(struct sdk_alpha_entry *e, const struct elek_machine *m
             const struct elek_knob *knob = m->pages[page].encoder[encoder];
             e->encoder[page][encoder] = knob ? (int8_t)(knob - m->knobs) : -1;
         }
+    for (uint32_t page = 0; page < pages; ++page)
+        e->title[page] = m->pages[page].label;
+    if (!pages)
+        e->title[pages++] = m->name;
     e->count = count;
     e->pages = pages;
     e->machine = m;
@@ -131,8 +135,8 @@ int32_t sdk_alpha_present(const struct sdk_alpha_entry *e, uint32_t track, int32
     int32_t clamped[SDK_ALPHA_KNOBS], knob[SDK_ALPHA_KNOBS];
     struct elek_view view[SDK_ALPHA_KNOBS];
     int32_t changed = 0;
-    if (page < 0 || (uint32_t)page >= e->pages)
-        page = ELEK_UI_NO_PAGE;
+    if (page < 0 || (uint32_t)page >= e->pages || !m->pages[page].label)
+        page = ELEK_UI_NO_PAGE;     /* the blank page of a machine that declares none is no page of its own */
     for (k = 0; k < n; ++k)
         clamped[k] = raw[k] < 0 ? 0 : raw[k] > SDK_ALPHA_RAW_MAX ? SDK_ALPHA_RAW_MAX : raw[k];
     if (!force && e == sdk_alpha_seen && track == seen_track && page == sdk_alpha_seen_page) {

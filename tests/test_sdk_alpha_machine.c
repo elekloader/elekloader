@@ -135,7 +135,10 @@ int main(void)
     assert(sdk_alpha_count == 2 && e && e->count == 2 && e->pages == 2);
     assert(e->encoder[0][0] == 0 && e->encoder[0][1] == 1 && e->encoder[0][2] == -1);
     assert(e->encoder[1][7] == 0 && e->encoder[1][0] == -1);
-    assert(sdk_alpha_find(101) && sdk_alpha_find(101)->count == 0 && sdk_alpha_find(101)->pages == 0);
+    /* A machine that declares no page shows one blank page with its name. */
+    const struct sdk_alpha_entry *empty_entry = sdk_alpha_find(101);
+    assert(empty_entry && empty_entry->count == 0 && empty_entry->pages == 1);
+    assert(!strcmp(empty_entry->title[0], "Empty") && empty_entry->encoder[0][0] == -1);
     for (int32_t id = 102; id <= 106; ++id)
         assert(!sdk_alpha_find(id));
 

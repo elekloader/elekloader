@@ -228,7 +228,7 @@ uintptr_t dn2_voice_page(uint32_t type, uint32_t page)
         return 0;
     if (page >= dn2_voice_page_count(type))
         return (uintptr_t)&dn2_stock_descriptors[4];
-    if (ui_only[type] && dn2_sdk_page(type, page))
+    if (ui_only[type])
         return (uintptr_t)dn2_sdk_page(type, page);
     return (uintptr_t)(page_count[type] ? &pages[first_page[type] + page] : &descriptors[type]);
 }

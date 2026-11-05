@@ -55,7 +55,7 @@ void dn2_sdk_build(void)
             struct descriptor *d = &pages[i][page];
             const char tab[] = {'S', 'Y', 'N', '1' + page, 0};
             d->name = dn2_representation(&titles[i][page][0], tab, 4);
-            d->label = dn2_representation(&titles[i][page][1], e->pages[page].label, 16);
+            d->label = dn2_representation(&titles[i][page][1], sdk_alpha_entries[i].title[page], 16);
             for (int k = 0; k < 8; ++k) {
                 int32_t id = sdk_alpha_entries[i].encoder[page][k];
                 d->params[k] = id >= 0 ? ROWS + SDK_ROW + id : 0;
@@ -68,14 +68,14 @@ void dn2_sdk_build(void)
 uint32_t dn2_sdk_page_count(uint32_t type)
 {
     int32_t i = machine_of(type);
-    return i < 0 ? 0 : sdk_alpha_entries[i].pages ? sdk_alpha_entries[i].pages : 1;
+    return i < 0 ? 0 : sdk_alpha_entries[i].pages;
 }
 
-/* Page `page` of the machine; 0 for an empty machine, whose one page is its descriptor's. */
+/* Page `page` of the machine, or 0. */
 const struct descriptor *dn2_sdk_page(uint32_t type, uint32_t page)
 {
     int32_t i = machine_of(type);
-    return i < 0 || !sdk_alpha_entries[i].pages ? 0 : &pages[i][page];
+    return i < 0 ? 0 : &pages[i][page];
 }
 
 /* The parameter code of the machine's sound slot (25 + logical knob), 0 when it has no such knob. */
@@ -168,7 +168,7 @@ static int32_t raw_of(uint32_t t, uint32_t id)
     return (int16_t)(at[0] << 8 | at[1]);
 }
 
-/* The page SYN shows of machine i (0 when it has one page or none). */
+/* The page SYN shows of machine i (0 when it has one page). */
 static int32_t page_of(int32_t i)
 {
     int32_t page = dn2_syn_view ? *(const int32_t *)(dn2_syn_view + VIEW_CUR) : 0;
@@ -194,7 +194,7 @@ static void snapshot(int32_t i, uint32_t t, int32_t page)
 /* The id of the knob at encoder k (0-7) of the page SYN shows of machine i, or -1. */
 static int32_t shown_knob(int32_t i, int32_t k)
 {
-    return sdk_alpha_entries[i].pages ? sdk_alpha_entries[i].encoder[page_of(i)][k] : -1;
+    return sdk_alpha_entries[i].encoder[page_of(i)][k];
 }
 
 /* ev_tick, the UI task: each track keeps its page and .present sees the active track's values. */
@@ -220,7 +220,7 @@ void dn2_sdk_tick(uint8_t *ctrl)
             dn2_sdk_ids[k] = 0;
         return;
     }
-    if (sdk_alpha_entries[i].pages && dn2_syn_view) {
+    if (dn2_syn_view) {
         if ((int32_t)t != shown_track) {
             *(int32_t *)(dn2_syn_view + VIEW_CUR) = dn2_sdk_shown[t] < (int32_t)sdk_alpha_entries[i].pages ? dn2_sdk_shown[t] : 0;
             shown_track = t;
@@ -247,7 +247,7 @@ void dn2_sdk_tick(uint8_t *ctrl)
 static void sdk_draw(void *view, void *bmp)
 {
     int32_t i = track_machine(*dn2_active_track);
-    if (i < 0 || !sdk_alpha_entries[i].pages) {
+    if (i < 0) {
         draw_page(view, bmp);
         return;
     }
@@ -271,7 +271,7 @@ void dn2_sdk_draw(void *bmp, void *ctrl)
     (void)ctrl;
     int32_t i = track_machine(*dn2_active_track);
     /* BRAIN_SCREEN is 2 while the screen saver's view covers the frame; SYN stays the shown page. */
-    if (i < 0 || !sdk_alpha_entries[i].pages || !syn_shown() || *(const volatile int32_t *)(dn2_brain + BRAIN_SCREEN) == 2)
+    if (i < 0 || !syn_shown() || *(const volatile int32_t *)(dn2_brain + BRAIN_SCREEN) == 2)
         return;
     for (int k = 0; k < 8; ++k) {
         int32_t id = shown_knob(i, k);

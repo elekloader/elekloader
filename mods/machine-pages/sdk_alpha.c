@@ -4,9 +4,6 @@
 #include "dev.h"
 
 const char sdk_alpha_abi_v1[] = "sdk alpha 1";
-static const struct sdk_alpha_entry *sdk_alpha_current;
-static uint32_t sdk_alpha_empty_layout[11];
-extern uint32_t mp_stock_layout(int32_t machine);
 extern int32_t mp_shown_value(void *view, uint32_t id, uint8_t *locked);
 
 struct sdk_alpha_page {
@@ -18,7 +15,7 @@ static struct sdk_alpha_page sdk_alpha_pages[SDK_ALPHA_MACHINES];
 const struct cm_ui32 *sdk_alpha_ui(int32_t id)
 {
     const struct sdk_alpha_entry *e = sdk_alpha_find(id);
-    if (!e || !e->pages)
+    if (!e)
         return 0;
     const struct elek_machine *m = e->machine;
     struct sdk_alpha_page *p = &sdk_alpha_pages[e - sdk_alpha_entries];
@@ -40,7 +37,7 @@ const struct cm_ui32 *sdk_alpha_ui(int32_t id)
             n->flags |= CM_HIDDEN;
     }
     for (uint32_t page = 0; page < e->pages; ++page) {
-        p->pages[page].title = m->pages[page].label;
+        p->pages[page].title = e->title[page];
         for (int k = 0; k < 8; ++k)
             p->pages[page].parameter[k] = e->encoder[page][k] >= 0 ? e->encoder[page][k] : CM_SRC_BLANK;
     }
@@ -88,26 +85,6 @@ void sdk_alpha_render(int32_t *blocks)
         sdk_alpha_voice(e, track, &voice, raw, (fw_voice_start & (1u << track)) != 0,
                         blocks + ELEK_VOICE_FRAMES * track);
     }
-}
-
-uint32_t sdk_alpha_layout(int32_t machine, uint32_t track)
-{
-    const struct sdk_alpha_entry *e = sdk_alpha_find(machine);
-    sdk_alpha_current = 0;
-    if (!e || e->pages)
-        return 0;
-    sdk_alpha_current = e;
-    const uint32_t *stock = (const uint32_t *)mp_stock_layout(3);
-    for (int i = 0; i < 11; ++i)
-        sdk_alpha_empty_layout[i] = i >= 2 && i < 10 ? 0 : stock[i];
-    if (track < 8)
-        sdk_alpha_snapshot(e, ELEK_UI_NO_PAGE, 0);
-    return (uint32_t)sdk_alpha_empty_layout;
-}
-
-int32_t sdk_alpha_empty_selected(void)
-{
-    return sdk_alpha_current != 0;
 }
 
 /* A mapped integer's text fits the native value field; long values retain their popup text. */

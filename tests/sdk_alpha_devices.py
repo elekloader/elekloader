@@ -475,9 +475,13 @@ class Digitakt1(Device):
         return bytes(self.s.m.uc.mem_read(int(self.symbols['selected'], 16) + track, 1))[0]
 
     def empty_positions(self):
-        """Which of the eight positions of an empty machine's page hold a knob (none): machine-pages'
-        layout for it, not the screen."""
-        return tuple(bool(self.read('sdk_alpha_empty_layout', 4 * (2 + k))) for k in range(8))
+        """Which of the eight positions of the page shown hold a knob: machine-pages' layout of it
+        (pages.c's page_now, struct page: lay[2][11] at +20) for its selected page, not the screen."""
+        page = self.read('page_now')
+        if not page:
+            raise CannotYet('machine-pages shows no page of its own')
+        lay = page + 20 + 44 * self.shown_page(self.active_track())
+        return tuple(bool(self.peek32(lay + 4 * (2 + k))) for k in range(8))
 
     def switch_track(self, track):
         self.chord('TRK', str(track + 1))

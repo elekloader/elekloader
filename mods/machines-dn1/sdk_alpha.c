@@ -98,8 +98,7 @@ static void init(void)
             knobs[n][sdk_pos[i]].fmt = sdk_alpha_value_texts[i];
             defaults[n][sdk_pos[i]] = sdk_alpha_default(&e->machine->knobs[i]);
         }
-        if (e->pages)
-            machines[n].defaults = defaults[n];
+        machines[n].defaults = defaults[n];
     }
     __asm__ volatile ("" ::: "memory");
     count = sdk_alpha_count;
@@ -196,7 +195,7 @@ static int32_t dnm_sdk_hidden(const struct dnm_machine *m, int32_t k)
 static int32_t shown_knob(int32_t k)
 {
     const struct sdk_alpha_entry *e = listed ? entry_of(listed) : 0;
-    return e && e->pages ? e->encoder[shown_page()][k] : -1;
+    return e ? e->encoder[shown_page()][k] : -1;
 }
 
 int32_t dnm_sdk_enc(void *brain, const int32_t *event)
@@ -282,12 +281,12 @@ void dnm_sdk_tick(const struct dnm_machine *m, void *ctrl)
         int32_t pages = 0;
         if (want) {
             const struct sdk_alpha_entry *e = entry_of(want);
-            pages = e->pages ? e->pages : 1;
+            pages = e->pages;
             for (int p = 0; p < pages; ++p) {
                 dnm_sdk_pages[p].short_title = e->machine->short_name;
-                dnm_sdk_pages[p].title = e->pages ? e->machine->pages[p].label : e->machine->name;
+                dnm_sdk_pages[p].title = e->title[p];
                 for (int k = 0; k < 8; ++k) {
-                    int32_t id = e->pages ? e->encoder[p][k] : -1;
+                    int32_t id = e->encoder[p][k];
                     dnm_sdk_pages[p].ids[k] = id >= 0 ? dnm_sdk_param(sdk_pos[id]) : 0;
                 }
             }

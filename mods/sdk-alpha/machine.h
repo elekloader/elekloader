@@ -14,7 +14,8 @@
 struct sdk_alpha_entry {
     const struct elek_machine *machine;
     uint32_t count;                     /* knobs 0..count-1 */
-    uint32_t pages;                     /* pages 0..pages-1 */
+    uint32_t pages;                     /* pages 0..pages-1: one blank page when it declares none */
+    const char *title[ELEK_UI_PAGE_MAX]; /* each page's: its label, or the blank page's machine name */
     int8_t encoder[ELEK_UI_PAGE_MAX][8]; /* the knob's id, or -1 */
 };
 extern struct sdk_alpha_entry sdk_alpha_entries[];

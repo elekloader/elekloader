@@ -17,8 +17,6 @@ int mp_stock_sound_parameter(uint32_t id);
 const struct cm_ui32 *sdk_alpha_ui(int32_t id);
 int32_t sdk_alpha_snapshot(const struct sdk_alpha_entry *, int32_t page, void *view);
 int32_t sdk_alpha_value_text(int32_t machine, int32_t knob, int32_t raw, char *buf, int popup);
-uint32_t sdk_alpha_layout(int32_t machine, uint32_t track);
-int32_t sdk_alpha_empty_selected(void);
 void sdk_alpha_render(int32_t *blocks);
 /* pages.s */
 void sdk_alpha_redraw(void *view);

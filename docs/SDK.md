@@ -93,9 +93,10 @@ ELEK_REGISTER_MACHINE(machine);
 - `.pages` holds up to two pages, each with a 1..16-character label and
   eight encoders, `ELEK_A`..`ELEK_H`. An encoder holds `&knobs[ID]` or
   nothing. A page without a label is absent, so a machine with no pages
-  leaves `.pages` out; the second page needs the first. Place the same
-  knob on both pages to share it. The builder refuses a page pointing
-  anywhere but the machine's own `knobs`.
+  leaves `.pages` out: it shows one blank page titled with its name, and
+  `.present` gets `ELEK_UI_NO_PAGE`. The second page needs the first.
+  Place the same knob on both pages to share it. The builder refuses a
+  page pointing anywhere but the machine's own `knobs`.
 - `max` is required and must be above `min` (which defaults to 0). Values
   map the knob's native range onto `min..max`, rounding to the nearest
   integer, with exact halves toward max. The screen shows that mapped
