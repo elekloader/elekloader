@@ -222,30 +222,32 @@ python -m elekloader.sdk.sdk_alpha_host examples/sdk-sine
 ```
 SDK Sine (id 123), Q31 (ColdFire)
   FINE  -50..50, default 0
-present, the other knobs at FINE=0:
+present on page 0, track 0, the other knobs at FINE=0:
   FINE=-50   FINE "FINE" glyph
   FINE=0     FINE "FINE" glyph
   FINE=50    FINE "FINE" glyph
-render: note 60, 375 blocks: peak 0.500, about 261.6 Hz
+render: note 60, velocity 100, track 0, 375 blocks: peak 0.500, about 261.6 Hz
 ```
 
 Each knob goes to its min, default and max, with the others at their
-defaults, and each line shows every knob's label as `present` left it,
-plus `hidden` and `glyph` where set. The render line gives the peak (1.0 is
-full scale) and the pitch it found.
+`--knob` values (or defaults), and each line shows every knob's label as
+`present` left it, plus `hidden` and `glyph` where set. The render line
+gives the peak (1.0 is full scale) and the pitch it found.
 
 | option | what it does |
 |---|---|
-| `--note N` | the MIDI note to render (default 60) |
-| `--knob NAME=V` | a knob's value for the render, instead of its default; repeat it for more knobs |
+| `--note N` | the MIDI note to render, fractions allowed, such as 60.5 (default 60) |
+| `--knob NAME=V` | a knob's value for `present` and the render, instead of its default; repeat it for more knobs |
+| `--velocity V` | the note's velocity, 1..127 (default 100) |
+| `--track T` | the track, from 0, for `present` and the render (default 0) |
+| `--page P` | the page `present` is shown, from 0 (default 0); refused if the machine has no such page |
+| `--retrigger N` | start a new note (`start` set) every N blocks (default: one held note) |
 | `--blocks N` | how long to render, in blocks of 32 samples (default 375: 0.25 s) |
 | `--wav out.wav` | write the render as a 48 kHz mono WAV, to listen to |
 | `--float` | build with the SHARC's float samples instead of the ColdFire's Q31 |
 | `--glyphs` | draw each glyph `present` shows, as 16 rows of `#` and `.` |
 
-It holds the rest fixed: velocity 100, track 0, page 0, and one note held
-for the whole render (`start` on the first block only). The mod must
-register exactly one machine.
+The mod must register exactly one machine.
 
 ## Audio contract
 
