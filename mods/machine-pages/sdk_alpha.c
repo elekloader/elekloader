@@ -14,7 +14,6 @@ _Static_assert(sizeof(struct sdk_alpha_registration) == sizeof(struct cm_machine
 const char sdk_alpha_dt1_empty_ui[] = "sdk alpha dt1 empty";
 const char sdk_alpha_dt1_ui_v3[] = "sdk alpha dt1 pages 3";
 const char sdk_alpha_dt1_ui_v4[] = "sdk alpha dt1 glyphs 4";
-const char sdk_alpha_dt1_ui_v5[] = "sdk alpha dt1 render 5";
 static const struct elek_machine *sdk_alpha_current;
 static uint32_t sdk_alpha_empty_layout[11];
 extern uint32_t mp_stock_layout(int32_t machine);
@@ -32,24 +31,18 @@ static char sdk_alpha_labels[15][ELEK_UI_LABEL_MAX + 1];
 static uint8_t sdk_alpha_visibility[15];
 static const struct elek_ui_glyph *sdk_alpha_glyphs[15];
 
-/* Older compiled descriptors end before the glyph pointer (v3), or before .def and .render (v4). */
+/* Older compiled descriptors end before the glyph pointer. */
 static int sdk_alpha_has_glyphs(const struct elek_machine *m)
 {
     const struct sdk_alpha_machine_ui *u = (const void *)core_machine_ui(m->id);
-    return u && (u->abi == sdk_alpha_dt1_ui_v4 || u->abi == sdk_alpha_dt1_ui_v5);
-}
-
-static int sdk_alpha_v5(const struct elek_machine *m)
-{
-    const struct sdk_alpha_machine_ui *u = (const void *)core_machine_ui(m->id);
-    return u && u->abi == sdk_alpha_dt1_ui_v5;
+    return u && u->abi == sdk_alpha_dt1_ui_v4;
 }
 
 const struct elek_machine *sdk_alpha_machine(int32_t id)
 {
     const struct sdk_alpha_machine_ui *u = (const void *)core_machine_ui(id);
     if (!u || (u->abi != sdk_alpha_dt1_empty_ui && u->abi != sdk_alpha_dt1_ui_v3 &&
-               u->abi != sdk_alpha_dt1_ui_v4 && u->abi != sdk_alpha_dt1_ui_v5))
+               u->abi != sdk_alpha_dt1_ui_v4))
         return 0;
     const struct elek_machine *m = u->machine;
     if (!m || m->id != id || m->page_count > 2 || m->_reserved[0] || m->_reserved[1] ||
@@ -92,18 +85,6 @@ int32_t sdk_alpha_map(const struct elek_ui_knob *knob, int32_t raw)
     return (int32_t)((uint32_t)min + offset);
 }
 
-/* The smallest raw value that maps to value or above: sdk_alpha_map only rises. */
-static int32_t sdk_alpha_unmap(const struct elek_ui_knob *knob, int32_t value)
-{
-    int32_t lo = 0, hi = ELEK_UI_RAW_MAX;
-    while (lo < hi) {
-        int32_t mid = (lo + hi) / 2;
-        if (sdk_alpha_map(knob, mid) < value) lo = mid + 1;
-        else hi = mid;
-    }
-    return lo;
-}
-
 const struct cm_ui32 *sdk_alpha_ui(int32_t id)
 {
     const struct elek_machine *m = sdk_alpha_machine(id);
@@ -130,11 +111,9 @@ const struct cm_ui32 *sdk_alpha_ui(int32_t id)
         n->look = 134;              /* native unipolar encoder, 0..127 in 8.8 */
         n->flags = CM_RANGE | CM_DEFAULT | CM_NOT_SAMPLE;
         n->max = ELEK_UI_RAW_MAX;
-        if (k < (uint32_t)knob_count) {
+        if (k < (uint32_t)knob_count)
             n->name = n->lname = knobs[k]->label;
-            if (sdk_alpha_v5(m) && knobs[k]->def.supplied)
-                n->def = sdk_alpha_unmap(knobs[k], knobs[k]->def.value);
-        } else
+        else
             n->flags |= CM_HIDDEN;
     }
     for (uint32_t page = 0; page < m->page_count; ++page) {
@@ -289,53 +268,4 @@ int32_t sdk_alpha_value_text(int32_t machine, int32_t k, int32_t raw, char *buf,
     while (count) buf[pos++] = digits[--count];
     buf[pos] = 0;
     return 1;
-}
-
-/* sin, saw, anything: a phase step a sample at 48 kHz, as the Digitone's dnm_phase_inc. */
-uint32_t elek_phase_inc(int32_t pitch)
-{
-    int32_t octaves = 0;
-    if (pitch < 0) pitch = 0;
-    if (pitch > 128 << 16) pitch = 128 << 16;           /* the Digitone's range */
-    pitch += 3 << 16;                                   /* fw_pitch_tab is 1 at 63 << 16 / 384 */
-    while (pitch > 87 << 16) {                          /* past the table's end, an octave at a time */
-        pitch -= 12 << 16;
-        ++octaves;
-    }
-    return ((23410327u >> 13) * (fw_pitch_tab[pitch / 384] >> 16)) << octaves;  /* 261.63 Hz times it */
-}
-
-/* From mp_render_s, before ev_render_voices' handlers: each track playing an SDK machine with a render.
- * One voice a track, so the voice slot is the track. */
-void sdk_alpha_render(int32_t *blocks)
-{
-    for (uint32_t t = 0; t < 8; ++t) {
-        const struct elek_machine *m = sdk_alpha_machine(fw_render_machine[t]);
-        if (!m || !sdk_alpha_v5(m) || !m->render)
-            continue;
-        const struct elek_ui_knob *descriptors[15];
-        int32_t knob_count = sdk_alpha_knobs(m, descriptors);
-        if (knob_count < 0)
-            continue;
-        struct elek_ui_value values[15];
-        const struct elek_ui_value *knobs[15];
-        for (int32_t k = 0; k < knob_count; ++k) {
-            int32_t raw = cm_src_value(t, k);
-            if (raw < 0) raw = 0;
-            if (raw > ELEK_UI_RAW_MAX) raw = ELEK_UI_RAW_MAX;
-            values[k].raw_value = raw;
-            values[k].value = sdk_alpha_map(descriptors[k], raw);
-            knobs[k] = &values[k];
-        }
-        const struct elek_ui_context ctx = {
-            .page = ELEK_UI_NO_PAGE, .page_count = m->page_count, .knob_count = knob_count,
-            .knob = knob_count ? knobs : 0, .track = t,
-        };
-        const struct elek_voice voice = {
-            .voice = t, .pitch = fw_voice_note[t], .velocity = fw_voice_vel[t] >> 8,
-            .fresh = (fw_voice_start >> t) & 1,
-            .gate = fw_amp_env[3 * t] != 0,             /* phase 0: released (the render's note-off mask) */
-        };
-        m->render(&ctx, &voice, blocks + 32 * t);
-    }
 }

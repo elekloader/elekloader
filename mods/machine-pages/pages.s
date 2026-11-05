@@ -397,11 +397,6 @@ mp_rmach:
 mp_render_s:
         lea     -60(%sp), %sp
         movem.l %d0-%d7/%a0-%a6, (%sp)
-.ifdef SDK_ALPHA_DT1
-        pea     fw_track_blocks             | the SDK machines' sound first, as a handler making it would
-        jsr     sdk_alpha_render
-        addq.l  #4, %sp
-.endif
         lea     ev_render_voices, %a2
 1:      move.l  (%a2)+, %d0
         beq.s   2f

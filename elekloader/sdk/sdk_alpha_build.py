@@ -23,7 +23,7 @@ def sdk_alpha_registrations(doc, sections, layouts=None):
     """Discover compiler-emitted adapters; never repeat machine declarations in JSON.
 
     layouts, when given, is filled with each machine's declared layout, by machine id:
-    {'name', 'pages': [{'label', 'knobs': {encoder 0-7: {'id', 'label', 'min', 'max', 'def'}}}]}.
+    {'name', 'pages': [{'label', 'knobs': {encoder 0-7: {'id', 'label', 'min', 'max'}}}]}.
     The built mod does not change."""
     def sdk_alpha_bytes(where, size):
         sec, off = where
@@ -72,12 +72,10 @@ def sdk_alpha_registrations(doc, sections, layouts=None):
         if len(abi) != 1 or abi[0][2:] not in (
                 ['abs32', 'sym:sdk_alpha_dt1_empty_ui', 0],
                 ['abs32', 'sym:sdk_alpha_dt1_ui_v3', 0],
-                ['abs32', 'sym:sdk_alpha_dt1_ui_v4', 0],
-                ['abs32', 'sym:sdk_alpha_dt1_ui_v5', 0]):
+                ['abs32', 'sym:sdk_alpha_dt1_ui_v4', 0]):
             raise build.BuildError('sdk alpha: invalid machine UI ABI')
         machine = sdk_alpha_pointer(ui, 4)
-        v5 = abi[0][3] == 'sym:sdk_alpha_dt1_ui_v5'     # .def and .render
-        data = sdk_alpha_bytes(machine, 36 if v5 else 32)
+        data = sdk_alpha_bytes(machine, 32)
         if struct.unpack_from('>i', data)[0] != mid or struct.unpack_from('>iii', raw, 16) != (3, mid, 0x55493330):
             raise build.BuildError('sdk alpha: inconsistent machine adapter')
         page_layouts = []
@@ -93,9 +91,8 @@ def sdk_alpha_registrations(doc, sections, layouts=None):
                     r[0] == machine[0] and r[1] == machine[1] + 12 for r in doc['relocs']):
                 raise build.BuildError('sdk alpha: empty machines require zero pages')
         else:
-            glyphs = abi[0][3] in ('sym:sdk_alpha_dt1_ui_v4', 'sym:sdk_alpha_dt1_ui_v5')
-            if abi[0][3] not in ('sym:sdk_alpha_dt1_ui_v3', 'sym:sdk_alpha_dt1_ui_v4',
-                                 'sym:sdk_alpha_dt1_ui_v5'):
+            glyphs = abi[0][3] == 'sym:sdk_alpha_dt1_ui_v4'
+            if abi[0][3] not in ('sym:sdk_alpha_dt1_ui_v3', 'sym:sdk_alpha_dt1_ui_v4'):
                 raise build.BuildError('sdk alpha: pages require the pages ABI')
             pages = sdk_alpha_pointer(machine, 12)
             knobs = {}
@@ -111,7 +108,7 @@ def sdk_alpha_registrations(doc, sections, layouts=None):
                     if not relocated and not any(pd[offset:offset + 4]):
                         continue
                     ref = sdk_alpha_pointer(at_page, offset)
-                    kd = sdk_alpha_bytes(ref, 36 if v5 else 28 if glyphs else 24)
+                    kd = sdk_alpha_bytes(ref, 28 if glyphs else 24)
                     kid, = struct.unpack_from('>I', kd)
                     if kid >= 15:
                         raise build.BuildError('sdk alpha: knob IDs must be in 0..14 (at most 15 knobs)')
@@ -122,16 +119,11 @@ def sdk_alpha_registrations(doc, sections, layouts=None):
                     low, has_low, high, has_high = struct.unpack_from('>iIiI', kd, 8)
                     if has_low not in (0, 1) or has_high not in (0, 1):
                         raise build.BuildError('sdk alpha: bound supplied must be 0 or 1')
-                    low, high = low if has_low else 0, high if has_high else 127
-                    if low > high:
+                    if (low if has_low else 0) > (high if has_high else 127):
                         raise build.BuildError('sdk alpha: knob min exceeds max')
-                    default, has_default = struct.unpack_from('>iI', kd, 28) if v5 else (0, 0)
-                    if has_default not in (0, 1):
-                        raise build.BuildError('sdk alpha: bound supplied must be 0 or 1')
-                    if has_default and not low <= default <= high:
-                        raise build.BuildError('sdk alpha: knob def must be within min..max')
-                    page_layout['knobs'][encoder] = {'id': kid, 'label': label, 'min': low, 'max': high,
-                                                      'def': default if has_default else low}
+                    page_layout['knobs'][encoder] = {'id': kid, 'label': label,
+                                                      'min': low if has_low else 0,
+                                                      'max': high if has_high else 127}
                     if glyphs:
                         relocated = any(r[0] == ref[0] and r[1] == ref[1] + 24
                                         for r in doc['relocs'])

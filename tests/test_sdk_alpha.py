@@ -72,12 +72,11 @@ def sdk_alpha_test_document():
     return doc, raw
 
 
-def sdk_alpha_test_controls_document(glyphs=False, v5=False):
+def sdk_alpha_test_controls_document(glyphs=False):
     doc, raw = sdk_alpha_test_document()
     raw.extend(bytes(1200))
-    doc['relocs'][-1][3] = ('sym:sdk_alpha_dt1_ui_v5' if v5 else 'sym:sdk_alpha_dt1_ui_v4' if glyphs else
-                            'sym:sdk_alpha_dt1_ui_v3')
-    stride, pages = (36, 640) if v5 else (28, 600) if glyphs else (24, 512)
+    doc['relocs'][-1][3] = 'sym:sdk_alpha_dt1_ui_v4' if glyphs else 'sym:sdk_alpha_dt1_ui_v3'
+    stride, pages = (28, 600) if glyphs else (24, 512)
     struct.pack_into('>I', raw, 56, 2)
     doc['relocs'] += [['.run', 52, 'abs32', 'sec:.run', pages]]
     for i in range(15):
@@ -287,28 +286,6 @@ class SdkAlphaTests(unittest.TestCase):
                 with self.assertRaises(build.BuildError):
                     sdk_alpha_registrations(doc, {'.run': raw})
 
-    def test_a_knobs_default_is_within_its_bounds(self):
-        # Knob 0 runs -64..63 (min at +8, max at +16), its .def at +28 and whether it is supplied at +32.
-        def document(default=None, supplied=1):
-            doc, raw = sdk_alpha_test_controls_document(v5=True)
-            struct.pack_into('>iIiI', raw, 104, -64, 1, 63, 1)
-            if default is not None:
-                struct.pack_into('>iI', raw, 124, default, supplied)
-            return doc, raw
-
-        def knob0(doc, raw):
-            layouts = {}
-            sdk_alpha_registrations(doc, {'.run': raw}, layouts)
-            return next(k for k in layouts[120]['pages'][0]['knobs'].values() if k['id'] == 0)
-        self.assertEqual(knob0(*document())['def'], -64)        # omitted: its min, raw 0 as before
-        for value in (-64, 0, 63):
-            self.assertEqual(knob0(*document(value))['def'], value)
-        for value, supplied, message in ((64, 1, 'within'), (-65, 1, 'within'), (0, 2, 'supplied')):
-            with self.subTest(value=value, supplied=supplied):
-                doc, raw = document(value, supplied)
-                with self.assertRaisesRegex(build.BuildError, message):
-                    sdk_alpha_registrations(doc, {'.run': raw})
-
     def test_a_callbacks_input_is_read_only(self):
         cc = shutil.which('cc')
         if not cc:
@@ -320,48 +297,6 @@ class SdkAlphaTests(unittest.TestCase):
                                       'ctx->knob[0]->value = 1;}\n',
                                 capture_output=True, text=True)
         self.assertNotEqual(result.returncode, 0, 'a callback can write its input')
-
-    def test_sine_example_retriggers_without_a_waveform_jump(self):
-        cc = shutil.which('cc')
-        if not cc:
-            self.skipTest('no host C compiler')
-        source = textwrap.dedent('''
-            #include <assert.h>
-            #include "examples/sdk-sine/sine.c"
-            const char sdk_alpha_dt1_ui_v5[] = "test";
-            uint32_t elek_phase_inc(int32_t pitch) { return 23410327u; }
-            int main(void) {
-                const struct elek_ui_value value = { .value = 0 };
-                const struct elek_ui_value *knobs[] = { &value };
-                const struct elek_ui_context ctx = { .knob_count = 1, .knob = knobs };
-                struct elek_voice voice = { .pitch = 60 << 16, .gate = 1 };
-                int32_t out[ELEK_VOICE_FRAMES], last = 0;
-                for (int block = 0; block < 50; ++block) {
-                    voice.fresh = block % 7 == 0;
-                    render(&ctx, &voice, out);
-                    for (int i = 0; i < ELEK_VOICE_FRAMES; ++i) {
-                        int64_t step = (int64_t)out[i] - last;
-                        assert(step > -(1 << 26) && step < (1 << 26));
-                        last = out[i];
-                    }
-                }
-                voice.gate = 0;
-                voice.fresh = 0;
-                render(&ctx, &voice, out);
-                voice.gate = voice.fresh = 1;
-                render(&ctx, &voice, out);
-                assert(out[0] == 0); /* A note after release still starts at zero. */
-            }
-        ''')
-        with tempfile.TemporaryDirectory() as tmp:
-            binary = str(Path(tmp, 'sine-retrigger'))
-            result = subprocess.run([cc, '-std=c99', '-I', str(ROOT),
-                                     '-I', str(ROOT / 'elekloader/sdk/include'),
-                                     '-x', 'c', '-', '-o', binary],
-                                    input=source, capture_output=True, text=True)
-            self.assertEqual(result.returncode, 0, result.stderr)
-            result = subprocess.run([binary], capture_output=True, text=True)
-            self.assertEqual(result.returncode, 0, result.stderr)
 
     def stocks(self):
         stocks = {'digitakt-mk1': os.environ.get('ELEKLOADER_STOCK_154', ''),

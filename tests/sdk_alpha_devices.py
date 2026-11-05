@@ -62,11 +62,11 @@ class Digiemu:
             shutil.copyfile(self.pristine, self.card)
             self.card_stamp = os.stat(self.card).st_mtime_ns
 
-    def session(self, audio=False):
+    def session(self):
         """0.25 s from the saved state."""
         from emu.session import Session
         os.environ.update(self.paths.env())
-        return Session(self.paths.gui, self.paths.syx, audio=audio)
+        return Session(self.paths.gui, self.paths.syx, audio=False)
 
     @staticmethod
     def mem(session, addr, size):
@@ -81,7 +81,6 @@ class DigiKitSession:
     emulated milliseconds, the frames and a halt. Each detent is a short burst: the Digitone II's
     decoder accelerates by event spacing, and one slow event moves a value by a fraction of a step."""
 
-    record_audio = False        # Track.play needs a recording
     BURST = 4                   # events a detent, 2 ms apart: about one step of a plain knob
     KEYS = dict(SYN=2, FLTR=3, AMP=4, FX=5, MOD=6, PRESET=7, SETTINGS=8, TEMPO=9, YES=10, UP=11,
                 NO=12, LEFT=13, DOWN=14, RIGHT=15, TRK=16, FUNC=17, KEYBOARD=18, RECORD=19, PLAY=20,
@@ -179,8 +178,8 @@ class DigiKit:
     def restore_card(self):
         pass                    # the ready state has the card as booted: session() puts it back
 
-    def session(self, audio=False):
-        self._load()            # no audio: DigiKit records none (record_audio is False)
+    def session(self):
+        self._load()
         session = DigiKitSession(self.emu)
         session.run_ms(300)     # the first UI-loop passes
         return session
@@ -347,19 +346,6 @@ class Device:
         self.settle(quiet_ms=20000, limit_ms=300000)    # the progress bar stands still for a while
         self._leave_settings()
 
-    # The keyboard on the trig keys: the bottom row is C D E F G A B C, the top row has the black keys.
-    KEYS = {0: '9', 1: '2', 2: '10', 3: '3', 4: '11', 5: '12', 6: '5', 7: '13', 8: '6', 9: '14',
-            10: '7', 11: '15', 12: '16'}
-
-    def keyboard(self):
-        """Make the trig keys play the active track's notes."""
-
-    def press_key(self, key):
-        self.s.press(self.s.code(self.KEYS[key]))
-
-    def release_key(self, key):
-        self.s.release(self.s.code(self.KEYS[key]))
-
     def select(self, track, machine_id):
         """Pick machine_id (0: the stock machine) for track through the device's own menu; False if
         no entry gives it."""
@@ -377,7 +363,6 @@ class Digitakt1(Device):
     track_count = 8
 
     STOCK = (0, 1, 2, 3)            # the stock machines, first in the machine list
-    sound_without_render = False    # an SDK machine without .render plays an empty voice
     PAGE_LEDS = {'SRC': 19, 'LFO': 22}
 
     def page_visible(self, page):
@@ -407,11 +392,6 @@ class Digitakt1(Device):
 
     def switch_track(self, track):
         self.chord('TRK', str(track + 1))
-
-    def keyboard(self):
-        if not getattr(self, '_chromatic', False):
-            self.chord('FUNC', 'TRK')   # the chromatic keyboard, as on the hardware
-            self._chromatic = True
 
     def select(self, track, machine_id):
         # The list is the stock machines, then the build's by id; it opens at the track's own.
@@ -496,7 +476,6 @@ class Digitone1(Device):
     machine_claim = 'dnmachine'
     track_count = 4
 
-    sound_without_render = True     # FM plays
     SDK_PAGE, SYN2_FIRST = 30, 4    # machines-dn1's first page, and the first page of SYN2's stock list
     # machines-dn1's sdk_pos: the SYN parameter that holds each logical knob, whichever page shows it
     SDK_PARAMS = (119, 120, 121, 122, 123, 124, 125, 126, 112, 113, 114, 127, 130, 117, 118)
