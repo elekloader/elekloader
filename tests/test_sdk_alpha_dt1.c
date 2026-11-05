@@ -10,6 +10,7 @@
 static uintptr_t test_machine_ui(int32_t id);
 #define core_machine_ui test_machine_ui
 #include "../mods/machine-pages/sdk_alpha.c"
+#include "../mods/sdk-alpha/machine.c"
 
 const char cm_ui_v32[] = "native UI";
 volatile uint32_t fw_active_track, fw_voice_start;
@@ -49,6 +50,10 @@ static const struct elek_machine machine = {
 };
 static const struct sdk_alpha_machine_ui ui = { sdk_alpha_dt1_ui_v1, &machine };
 static uintptr_t test_machine_ui(int32_t id) { return id == 100 ? (uintptr_t)&ui : 0; }
+static const struct cm_machine native = { .id = 100 };
+const struct cm_machine *const core_machines[] = { &native, 0 };
+void fw_fillrect(void *bmp, int32_t x0, int32_t y0, int32_t x1, int32_t y1, int32_t colour)
+{ (void)bmp; (void)x0; (void)y0; (void)x1; (void)y1; (void)colour; }
 
 int main(void)
 {

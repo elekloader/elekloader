@@ -4,21 +4,14 @@
  * replace SYN2's pages while the track plays the machine (core_page_list): FM's envelope graphs belong to
  * page 4, not to its knobs. Each logical knob keeps its value in one SYN parameter, whichever page shows it.
  * SDK renderers replace FM through the companion's existing voice path. */
-#include "digitone-mk1/core3.h"
+#include "dev.h"
 #include "digitone-mk1/machines.h"
-#include "elekloader/sdk_alpha_machine.h"
 
-extern const struct sdk_alpha_registration *const sdk_alpha_machines[];   /* the table, ending in 0 */
-
-#define SDK_MACHINES 16
-#define SDK_KNOBS 15                /* logical knobs 0-14, as on the Digitakt */
+#define SDK_KNOBS SDK_ALPHA_KNOBS
 const char sdk_alpha_dt1_ui_v1[] = "sdk alpha 1";
-static struct dnm_machine machines[SDK_MACHINES];
-static const struct elek_machine *declared[SDK_MACHINES];
-static const struct elek_ui_knob *by_id[SDK_MACHINES][SDK_KNOBS];   /* each machine's knobs, by logical id */
-static uint8_t knob_count[SDK_MACHINES];
-static struct dnm_knob knobs[SDK_MACHINES][DNM_KNOBS_ALL];
-static int16_t defaults[SDK_MACHINES][DNM_KNOBS_ALL];
+static struct dnm_machine machines[SDK_ALPHA_MACHINES];   /* sdk_alpha_entries' machines, in their order */
+static struct dnm_knob knobs[SDK_ALPHA_MACHINES][DNM_KNOBS_ALL];
+static int16_t defaults[SDK_ALPHA_MACHINES][DNM_KNOBS_ALL];
 static int32_t count = -1;
 
 int32_t dnm_sdk_raw(int32_t track, int32_t encoder);  /* machines.c: the native sound value */
@@ -90,71 +83,40 @@ static void sdk_value(int32_t value, char *buf)
     buf[n] = 0;
 }
 
-/* Mapped controls use the same rounding and inverse defaults as the Digitakt adapter. */
-static int32_t map(const struct elek_ui_knob *knob, int32_t raw)
-{
-    int32_t min = knob->min.supplied ? knob->min.value : 0;
-    int32_t max = knob->max.supplied ? knob->max.value : 127;
-    uint32_t span = (uint32_t)max - (uint32_t)min;
-    uint32_t offset = (span / ELEK_UI_RAW_MAX) * (uint32_t)raw +
-        ((span % ELEK_UI_RAW_MAX) * (uint32_t)raw + ELEK_UI_RAW_MAX / 2) / ELEK_UI_RAW_MAX;
-    return (int32_t)((uint32_t)min + offset);
-}
-
-static int32_t default_raw(const struct elek_ui_knob *knob)
-{
-    if (!knob->def.supplied) return 0;
-    int32_t lo = 0, hi = ELEK_UI_RAW_MAX;
-    while (lo < hi) {
-        int32_t mid = (lo + hi) / 2;
-        if (map(knob, mid) < knob->def.value) lo = mid + 1;
-        else hi = mid;
-    }
-    return lo;
-}
-
-static int32_t state_machine[8];
-static uint8_t pending_start[8];
-static uint32_t voice_state[8][ELEK_VOICE_STATE_MAX / 4];
 static const int16_t *render_params;
 static void render(int32_t voice, int32_t *block, const struct dnm_voice *v);
 
 /* Reentrant initialization writes the same data; publish count only after every machine is ready. */
 static void init(void)
 {
-    const struct sdk_alpha_registration *const *p;
-    int32_t n = 0;
     if (count >= 0)
         return;
-    for (p = sdk_alpha_machines; *p && n < SDK_MACHINES; p++, n++) {
-        const struct elek_machine *e = (*p)->ui->machine;
-        machines[n].id = (*p)->id;
-        machines[n].name = (*p)->name;
+    sdk_alpha_init();
+    for (int32_t n = 0; n < sdk_alpha_count; ++n) {
+        const struct sdk_alpha_entry *e = &sdk_alpha_entries[n];
+        machines[n].id = e->machine->id;
+        machines[n].name = e->machine->name;
         machines[n].knobs = knobs[n];
         machines[n].flags = DNM_PAGES2;
-        machines[n].render = e->render ? render : 0;
-        declared[n] = e;
+        machines[n].render = e->machine->render ? render : 0;
         for (int k = 0; k < DNM_KNOBS_ALL; ++k)
             defaults[n][k] = -1;
-        for (uint32_t page = 0; page < e->page_count && page < 2; ++page)
-            for (int k = 0; k < 8; ++k) {
-                const struct elek_ui_knob *knob = e->pages[page].knob[k];
-                if (knob && knob->id < SDK_KNOBS)
-                    by_id[n][knob->id] = knob;
-            }
-        uint32_t nk = 0;
-        while (nk < SDK_KNOBS && by_id[n][nk]) ++nk;
-        knob_count[n] = nk;
-        for (int i = 0; i < knob_count[n]; ++i) {
-            knobs[n][sdk_pos[i]].name = by_id[n][i]->label;
+        for (uint32_t i = 0; i < e->count; ++i) {
+            knobs[n][sdk_pos[i]].name = e->knob[i]->label;
             knobs[n][sdk_pos[i]].fmt = sdk_value;
-            defaults[n][sdk_pos[i]] = default_raw(by_id[n][i]);
+            defaults[n][sdk_pos[i]] = sdk_alpha_default(e->knob[i]);
         }
-        if (e->page_count)
+        if (e->machine->page_count)
             machines[n].defaults = defaults[n];
     }
     __asm__ volatile ("" ::: "memory");
-    count = n;
+    count = sdk_alpha_count;
+}
+
+/* The SDK machine behind m, one of machines[], or 0. */
+static const struct sdk_alpha_entry *entry_of(const struct dnm_machine *m)
+{
+    return m >= machines && m < machines + count ? &sdk_alpha_entries[m - machines] : 0;
 }
 
 /* The page SYN2 shows of the listed machine's (0 when it shows none of theirs). */
@@ -162,7 +124,7 @@ static int32_t shown_page(void)
 {
     const uint8_t *view = dnm_sdk_pages[0].view;
     int32_t page = listed && view ? *(const int32_t *)(view + V_CUR) : 0;
-    return listed && page > 0 && (uint32_t)page < declared[listed - machines]->page_count ? page : 0;
+    return listed && page > 0 && (uint32_t)page < entry_of(listed)->machine->page_count ? page : 0;
 }
 
 /* SDK machine i, or 0 past the last. */
@@ -172,88 +134,20 @@ const struct dnm_machine *dnm_sdk_machine(int32_t i)
     return i >= 0 && i < count ? &machines[i] : 0;
 }
 
-/* The last snapshot .present saw: unchanged machine, track, page and values are skipped. */
-static const struct dnm_machine *seen;
-static int32_t seen_track = -1, seen_page = ELEK_UI_NO_PAGE, seen_raw[SDK_KNOBS];
-static char dnm_sdk_labels[SDK_KNOBS][ELEK_UI_LABEL_MAX + 1];
-static uint8_t dnm_sdk_visibility[SDK_KNOBS];
-static const struct elek_ui_glyph *dnm_sdk_glyphs[SDK_KNOBS];
 static int dirty;
 
+/* .present with the active track's values (sdk_alpha_present skips unchanged ones unless force). */
 static void snapshot(const struct dnm_machine *m, int32_t page, int force)
 {
     uint32_t track = fw_active_track;
-    const struct elek_machine *e;
-    struct elek_ui_context ctx = { ELEK_UI_NO_PAGE, 0, 0, 0, track };
-    struct elek_ui_presentation out = { 0 };
-    struct elek_ui_value values[SDK_KNOBS];
-    const struct elek_ui_value *input[SDK_KNOBS];        /* 0..n-1 filled: no memset in the build */
-    struct elek_ui_knob_presentation presentation[SDK_KNOBS];
-    struct elek_ui_knob_presentation *output[SDK_KNOBS];
-    int32_t i, n;
+    const struct sdk_alpha_entry *e;
+    int32_t raw[SDK_KNOBS];
     init();
-    if (m < machines || m >= machines + count || track >= 4)
+    if (!(e = entry_of(m)) || track >= 4 || (e->count && !fw_kit))
         return;
-    i = m - machines;
-    e = declared[i];
-    n = knob_count[i];
-    if (e->page_count) {
-        if (!fw_kit || ctx.track >= 4)
-            return;
-        for (uint32_t id = 0; id < (uint32_t)n; ++id) {
-            const struct elek_ui_knob *knob = by_id[i][id];
-            int32_t raw = dnm_sdk_raw(ctx.track, sdk_pos[id]);
-            if (raw < 0) raw = 0;
-            if (raw > ELEK_UI_RAW_MAX) raw = ELEK_UI_RAW_MAX;
-            values[id].raw_value = raw;
-            values[id].value = map(knob, raw);
-            input[id] = &values[id];
-            presentation[id].label = knob->label;
-            presentation[id].visible = 1;
-            presentation[id].glyph = knob->glyph;
-            output[id] = &presentation[id];
-            ++ctx.knob_count;
-        }
-        ctx.page = page;
-        if (!force && m == seen && ctx.track == (uint32_t)seen_track && ctx.page == seen_page) {
-            int k = 0;
-            while (k < n && input[k]->raw_value == seen_raw[k])
-                ++k;
-            if (k == n)
-                return;
-        }
-        for (int k = 0; k < n; ++k) seen_raw[k] = input[k]->raw_value;
-        ctx.page_count = e->page_count;
-        ctx.knob = ctx.knob_count ? input : 0;
-        out.knob_count = ctx.knob_count;
-        out.knob = ctx.knob_count ? output : 0;
-    } else if (!force && m == seen && ctx.track == (uint32_t)seen_track) {
-        return;                     /* an empty machine's context changes only with its track */
-    }
-    if (e->present)
-        e->present(&ctx, &out);
-    seen = m;
-    seen_track = ctx.track;
-    seen_page = ctx.page;
-    for (uint32_t id = 0; e->page_count && id < (uint32_t)n; ++id) {
-        const struct elek_ui_knob *knob = by_id[i][id];
-        const char *label = presentation[id].label;
-        if (!label) label = knob->label;
-        uint32_t n = 0;
-        for (; n < ELEK_UI_LABEL_MAX && label[n]; ++n) {
-            unsigned char c = label[n];
-            char next = c >= 32 && c <= 126 ? c : '?';
-            dirty |= dnm_sdk_labels[id][n] != next;
-            dnm_sdk_labels[id][n] = next;
-        }
-        dirty |= dnm_sdk_labels[id][n] != 0;
-        dnm_sdk_labels[id][n] = 0;
-        uint8_t visible = presentation[id].visible != 0;
-        dirty |= dnm_sdk_visibility[id] != visible;
-        dnm_sdk_visibility[id] = visible;
-        dirty |= dnm_sdk_glyphs[id] != presentation[id].glyph;
-        dnm_sdk_glyphs[id] = presentation[id].glyph;
-    }
+    for (uint32_t id = 0; id < e->count; ++id)
+        raw[id] = dnm_sdk_raw(track, sdk_pos[id]);
+    dirty |= sdk_alpha_present(e, track, page, raw, force);
 }
 
 /* The SYN controls are built (force) or redrawn with their page's presentation. */
@@ -265,11 +159,10 @@ void dnm_sdk_present(const struct dnm_machine *m, int force)
 /* The knob of machine m that SYN knob k (machines.c's 0-31) holds, or 0. */
 static const struct elek_ui_knob *sdk_knob(const struct dnm_machine *m, int32_t k)
 {
-    if (m < machines || m >= machines + count)
-        return 0;
-    for (int id = 0; id < knob_count[m - machines]; ++id)
+    const struct sdk_alpha_entry *e = entry_of(m);
+    for (uint32_t id = 0; e && id < e->count; ++id)
         if (sdk_pos[id] == k)
-            return by_id[m - machines][id];
+            return e->knob[id];
     return 0;
 }
 
@@ -279,7 +172,7 @@ const char *dnm_sdk_label(const struct dnm_machine *m, int32_t k)
     if (!knob)
         return 0;
     dnm_sdk_present(m, 0);
-    return dnm_sdk_visibility[knob->id] ? dnm_sdk_labels[knob->id] : "";
+    return sdk_alpha_visibility[knob->id] ? sdk_alpha_labels[knob->id] : "";
 }
 
 const char *dnm_sdk_lfo_name(const struct dnm_machine *m, int32_t k, int32_t field)
@@ -288,7 +181,7 @@ const char *dnm_sdk_lfo_name(const struct dnm_machine *m, int32_t k, int32_t fie
     if (!knob)
         return 0;
     snapshot(m, ELEK_UI_NO_PAGE, 0);
-    return field == 0x2c ? declared[m - machines]->short_name : dnm_sdk_labels[knob->id];
+    return field == 0x2c ? entry_of(m)->machine->short_name : sdk_alpha_labels[knob->id];
 }
 
 static int32_t dnm_sdk_hidden(const struct dnm_machine *m, int32_t k)
@@ -297,13 +190,13 @@ static int32_t dnm_sdk_hidden(const struct dnm_machine *m, int32_t k)
     if (!knob)
         return 0;
     dnm_sdk_present(m, 0);
-    return !dnm_sdk_visibility[knob->id];
+    return !sdk_alpha_visibility[knob->id];
 }
 
 /* The knob at encoder k of the page shown, or 0. */
 static const struct elek_ui_knob *shown_knob(int32_t k)
 {
-    const struct elek_machine *e = listed ? declared[listed - machines] : 0;
+    const struct elek_machine *e = listed ? entry_of(listed)->machine : 0;
     return e && e->page_count ? e->pages[shown_page()].knob[k] : 0;
 }
 
@@ -327,21 +220,15 @@ static void sdk_draw(void *view, void *bmp)
     for (int k = 0; k < 8; ++k) {
         const struct elek_ui_knob *knob = shown_knob(k);
         ids[k] = page->ids[k];
-        if (knob && !dnm_sdk_visibility[knob->id])
+        if (knob && !sdk_alpha_visibility[knob->id])
             page->ids[k] = 0;
     }
     draw_page(view, bmp);
     for (int k = 0; k < 8; ++k) {
         const struct elek_ui_knob *knob = shown_knob(k);
-        const struct elek_ui_glyph *glyph = knob ? dnm_sdk_glyphs[knob->id] : 0;
-        if (!page->ids[k] || !glyph)
-            continue;
-        int32_t x = 25 + 26 * (k % 4), y = 34 - 27 * (k / 4);
-        fw_fillrect(bmp, x, y, x + 16, y + 16, 0);
-        for (int row = 0; row < 16; ++row)
-            for (int col = 0; col < 16; ++col)
-                if (glyph->rows[row] & (0x8000u >> col))
-                    fw_fillrect(bmp, x + col, y + 16 - row, x + col, y + 16 - row, 1);
+        const struct elek_ui_glyph *glyph = knob ? sdk_alpha_glyphs[knob->id] : 0;
+        if (page->ids[k] && glyph)
+            sdk_alpha_blit(bmp, 25 + 26 * (k % 4), 34 - 27 * (k / 4), glyph);
     }
     for (int k = 0; k < 8; ++k)
         page->ids[k] = ids[k];
@@ -351,7 +238,7 @@ static void (*reset_parameter)(void *set, int32_t id);
 
 static int32_t sdk_default_of(const struct dnm_machine *m, int32_t id)
 {
-    for (int i = 0; m && i < knob_count[m - machines]; ++i)
+    for (uint32_t i = 0; m && i < entry_of(m)->count; ++i)
         if (dnm_sdk_param(sdk_pos[i]) == id)
             return defaults[m - machines][sdk_pos[i]];
     return -1;
@@ -396,7 +283,7 @@ void dnm_sdk_tick(const struct dnm_machine *m, void *ctrl)
     if (want != listed) {
         int32_t pages = 0;
         if (want) {
-            const struct elek_machine *e = declared[want - machines];
+            const struct elek_machine *e = entry_of(want)->machine;
             pages = e->page_count ? e->page_count : 1;
             for (int p = 0; p < pages; ++p) {
                 dnm_sdk_pages[p].short_title = e->short_name;
@@ -409,7 +296,7 @@ void dnm_sdk_tick(const struct dnm_machine *m, void *ctrl)
         }
         if (page_layout(want != 0) && core_page_list(SYN2_FIRST, want ? sdk_list : 0, pages)) {
             listed = want;
-            seen = 0;
+            sdk_alpha_seen = 0;
             shown_track = -1;
             ((uint8_t *)ctrl)[0x20] = 1;    /* redraw */
         }
@@ -417,7 +304,7 @@ void dnm_sdk_tick(const struct dnm_machine *m, void *ctrl)
     if (listed && dnm_sdk_pages[0].view) {  /* each track keeps its page, as on the Digitakt */
         int32_t t = fw_active_track, *cur = (int32_t *)((uint8_t *)dnm_sdk_pages[0].view + V_CUR);
         if (t >= 0 && t < 4 && t != shown_track) {
-            *cur = dnm_sdk_shown[t] < (int32_t)declared[listed - machines]->page_count ? dnm_sdk_shown[t] : 0;
+            *cur = dnm_sdk_shown[t] < (int32_t)entry_of(listed)->machine->page_count ? dnm_sdk_shown[t] : 0;
             shown_track = t;
             ((uint8_t *)ctrl)[0x20] = 1;
         } else if (t == shown_track) {
@@ -425,7 +312,7 @@ void dnm_sdk_tick(const struct dnm_machine *m, void *ctrl)
         }
     }
     if (m)
-        snapshot(m, seen_page, 0);
+        snapshot(m, sdk_alpha_seen_page, 0);
     if (dirty) {
         if (listed && dnm_sdk_pages[0].view) {
             uint8_t *view = dnm_sdk_pages[0].view;
@@ -438,50 +325,31 @@ void dnm_sdk_tick(const struct dnm_machine *m, void *ctrl)
     }
 }
 
-/* Track machine changes even while the native companion skips an inactive/non-SDK voice. */
-static void select_voice(int32_t voice, int32_t id)
-{
-    if (state_machine[voice] == id) return;
-    for (uint32_t k = 0; k < ELEK_VOICE_STATE_MAX / 4; ++k) voice_state[voice][k] = 0;
-    state_machine[voice] = id;
-    pending_start[voice] = 0;
-}
-
-/* The native controller/LFO stage edits these words after this event and before render(). */
+/* The native controller/LFO stage edits these words after this event and before render(); voices are
+ * followed even while the native companion skips an inactive or non-SDK one. */
 void dnm_sdk_params(int16_t *words)
 {
     render_params = words;
     for (int32_t v = 0; v < 8; ++v)
-        select_voice(v, FW_VOICE_PARAM(v, 0) >> 8);
+        sdk_alpha_select(v, FW_VOICE_PARAM(v, 0) >> 8);
 }
 
 static void render(int32_t voice, int32_t *block, const struct dnm_voice *v)
 {
-    int32_t id = FW_VOICE_PARAM(voice, 0) >> 8, i = 0;
-    while (i < count && machines[i].id != id) ++i;
+    int32_t id = FW_VOICE_PARAM(voice, 0) >> 8;
+    const struct sdk_alpha_entry *e = sdk_alpha_find(id);
     uint32_t track = fw_voice_track[voice];
-    if (i == count || track >= 4) return;
-    const struct elek_machine *e = declared[i];
-    select_voice(voice, id);
-    if (v->fresh) pending_start[voice] = 1;
-    int32_t input[SDK_KNOBS];
-    for (int k = 0; k < knob_count[i]; ++k) {
+    if (!e || track >= 4) return;
+    sdk_alpha_select(voice, id);
+    int32_t raw[SDK_KNOBS];
+    for (uint32_t k = 0; k < e->count; ++k) {
         int32_t slot = ((const int32_t *)fw_params)[15 * dnm_sdk_param(sdk_pos[k]) + 1];
-        int32_t raw = render_params ? render_params[79 * voice + slot] : dnm_knob(voice, sdk_pos[k]);
-        if (raw < 0) raw = 0;
-        if (raw > ELEK_UI_RAW_MAX) raw = ELEK_UI_RAW_MAX;
-        input[k] = map(by_id[i][k], raw);
+        raw[k] = render_params ? render_params[79 * voice + slot] : dnm_knob(voice, sdk_pos[k]);
     }
-    const struct elek_audio_context ctx = {
-        .knob_count = knob_count[i], .knob = knob_count[i] ? input : 0,
+    struct elek_voice sv = {
+        .slot = voice, .track = track, .pitch = v->pitch, .velocity = v->velocity, .gate = v->gate != 0,
     };
-    const struct elek_voice sv = {
-        .slot = voice, .track = track, .pitch = v->pitch, .velocity = v->velocity,
-        .flags = pending_start[voice] ? ELEK_VOICE_START : 0, .gate = v->gate != 0,
-        .state = e->voice_state ? voice_state[voice] : 0,
-    };
-    e->render(&ctx, &sv, block);
-    pending_start[voice] = 0;
+    sdk_alpha_voice(e, &sv, raw, v->fresh, block);
     for (int k = 0; k < ELEK_VOICE_FRAMES; ++k)
         block[k] >>= 4;              /* SDK Q31 full scale to DNM_PEAK, before native AMP/filter. */
 }

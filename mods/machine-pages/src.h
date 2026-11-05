@@ -12,12 +12,14 @@ void mp_src_init(void);
 int mp_stock_sound_parameter(uint32_t id);
 
 #ifdef SDK_ALPHA_DT1
-#include "elekloader/sdk_alpha_machine.h"
-const struct elek_machine *sdk_alpha_machine(int32_t id);
+#include "../sdk-alpha/machine.h"
+/* sdk_alpha.c */
 const struct cm_ui32 *sdk_alpha_ui(int32_t id);
-int32_t sdk_alpha_snapshot(const struct elek_machine *, int32_t page, void *view);
-int32_t sdk_alpha_visible(const struct elek_machine *, uint32_t knob);
-const char *sdk_alpha_label(const struct elek_machine *, uint32_t knob);
-const struct elek_ui_glyph *sdk_alpha_glyph(const struct elek_machine *, uint32_t knob);
+int32_t sdk_alpha_snapshot(const struct sdk_alpha_entry *, int32_t page, void *view);
 int32_t sdk_alpha_value_text(int32_t machine, int32_t knob, int32_t raw, char *buf, int popup);
+uint32_t sdk_alpha_layout(int32_t machine, uint32_t track);
+int32_t sdk_alpha_empty_selected(void);
+void sdk_alpha_render(int32_t *blocks);
+/* pages.s */
+void sdk_alpha_redraw(void *view);
 #endif

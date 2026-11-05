@@ -13,11 +13,6 @@
  * 0x6c + 8 page_from on, A-H), or else by its params machine (the ids MIDI, the LFOs and Randomize use). */
 #include "src.h"
 
-#ifdef SDK_ALPHA_DT1
-extern uint32_t sdk_alpha_layout(int32_t machine, uint32_t track);
-extern int32_t sdk_alpha_empty_selected(void);
-#endif
-
 #define KNOBS       8
 #define ID_BASE(p)  (0x6cu + 8u * (uint32_t)(p))
 #define PAGES       32                         /* added machines with a page; more get the stock page */
@@ -136,7 +131,7 @@ uint32_t mp_layout_track(int32_t m, uint32_t track)
     if (!p)
         return 0;
 #ifdef SDK_ALPHA_DT1
-    const struct elek_machine *alpha = sdk_alpha_machine(m);
+    const struct sdk_alpha_entry *alpha = sdk_alpha_find(m);
     if (alpha)
         p->ready = 0; /* Presentation may change without changing the machine descriptor. */
 #endif
@@ -172,12 +167,11 @@ uint32_t mp_layout_track(int32_t m, uint32_t track)
 }
 
 #ifdef SDK_ALPHA_DT1
-extern void sdk_alpha_redraw(void *view);
 uint32_t sdk_alpha_layout_view(int32_t machine, uint32_t track, void *view)
 {
-    const struct elek_machine *m = sdk_alpha_machine(machine);
-    if (m && m->page_count && track < 8 &&
-        sdk_alpha_snapshot(m, selected[track] < m->page_count ? selected[track] : 0, view))
+    const struct sdk_alpha_entry *m = sdk_alpha_find(machine);
+    if (m && m->machine->page_count && track < 8 &&
+        sdk_alpha_snapshot(m, selected[track] < m->machine->page_count ? selected[track] : 0, view))
         sdk_alpha_redraw(view);
     return mp_layout_track(machine, track);
 }
@@ -205,7 +199,7 @@ uint32_t mp_action_layout(uint32_t page, int32_t machine)
         return 0;
     uint32_t layout = mp_layout_track(machine, track);
 #ifdef SDK_ALPHA_DT1
-    if (sdk_alpha_machine(machine)) {
+    if (sdk_alpha_find(machine)) {
         static uint32_t actions[LAY_LONGS];
         const uint32_t *shown = (const uint32_t *)layout;
         for (int i = 0; i < LAY_LONGS; ++i)
@@ -254,7 +248,7 @@ uint32_t mp_src_title(void *view)
     if (track >= 8 || !page_now || !page_now->extended)
         return 0;
 #ifdef SDK_ALPHA_DT1
-    const struct elek_machine *alpha = sdk_alpha_machine(page_now->id);
+    const struct sdk_alpha_entry *alpha = sdk_alpha_find(page_now->id);
     if (alpha && sdk_alpha_snapshot(alpha, selected[track], view))
         sdk_alpha_redraw(view);
 #endif
@@ -267,7 +261,7 @@ uint32_t mp_label(uint32_t id, int32_t long_name)
     if (!k)
         return 0;
 #ifdef SDK_ALPHA_DT1
-    const struct elek_machine *alpha = sdk_alpha_machine(page_now->id);
+    const struct sdk_alpha_entry *alpha = sdk_alpha_find(page_now->id);
     if (alpha)
         return (uint32_t)sdk_alpha_label(alpha, knob_of(page_now, id));
 #endif
@@ -309,7 +303,7 @@ int32_t mp_knob(int32_t *a)
     if (!k)
         return 0;
 #ifdef SDK_ALPHA_DT1
-    const struct elek_machine *alpha = sdk_alpha_machine(page_now->id);
+    const struct sdk_alpha_entry *alpha = sdk_alpha_find(page_now->id);
     if (alpha && mp_shown_view) {
         uint32_t track = mp_view_track(mp_shown_view);
         if (track < 8 && sdk_alpha_snapshot(alpha, selected[track], mp_shown_view))
@@ -317,14 +311,7 @@ int32_t mp_knob(int32_t *a)
     }
     const struct elek_ui_glyph *glyph = alpha ? sdk_alpha_glyph(alpha, knob_of(page_now, a[0])) : 0;
     if (glyph) {
-        void *bmp = (void *)a[4];
-        int32_t x = a[5], y = a[6];
-        fw_fillrect(bmp, x + 1, y, x + 17, y + 16, 0);
-        for (int row = 0; row < 16; ++row)
-            for (int col = 0; col < 16; ++col)
-                if (glyph->rows[row] & (0x8000u >> col))
-                    fw_fillrect(bmp, x + 1 + col, y + 16 - row,
-                                x + 1 + col, y + 16 - row, 1);
+        sdk_alpha_blit((void *)a[4], a[5] + 1, a[6], glyph);
         return 1;
     }
 #endif
@@ -428,7 +415,7 @@ uint32_t mp_lfo(uint32_t id, int32_t what, uint32_t stock)
     if (what == 0)
         return p->ui->group ? (uint32_t)p->ui->group : stock;
 #ifdef SDK_ALPHA_DT1
-    const struct elek_machine *alpha = sdk_alpha_machine(p->id);
+    const struct sdk_alpha_entry *alpha = sdk_alpha_find(p->id);
     if (alpha) {
         sdk_alpha_snapshot(alpha, ELEK_UI_NO_PAGE, 0);
         const char *label = sdk_alpha_label(alpha, i);

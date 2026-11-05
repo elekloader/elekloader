@@ -10,7 +10,8 @@
   "machines.c",
   "hooks.s",
   "start.s",
-  "sdk_alpha.c"
+  "sdk_alpha.c",
+  "../sdk-alpha/machine.c"
  ],
  "defsym": {
   "STOCK_NAMES": "0x401f7c04",

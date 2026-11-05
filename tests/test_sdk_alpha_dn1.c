@@ -14,6 +14,7 @@ static int32_t params[15 * 160];
 #undef _Static_assert
 #define _Static_assert(condition, message)
 #include "../mods/machines-dn1/sdk_alpha.c"
+#include "../mods/sdk-alpha/machine.c"
 
 uint8_t *volatile fw_kit;
 volatile int32_t fw_active_track, fw_voice_track[8];
@@ -74,14 +75,14 @@ int main(void)
     for (int k = 0; k < DNM_KNOBS_ALL; ++k) params[15 * dnm_sdk_param(k) + 1] = 10 + k;
     const struct dnm_machine *m = dnm_sdk_machine(0);
     assert(m && m->render && !dnm_sdk_machine(1));
-    assert(knob_count[0] == 3);
-    assert(map(&controls[0], m->defaults[sdk_pos[0]]) == 0);
-    assert(map(&controls[1], m->defaults[sdk_pos[1]]) == 100);
+    assert(sdk_alpha_entries[0].count == 3);
+    assert(sdk_alpha_map(&controls[0], m->defaults[sdk_pos[0]]) == 0);
+    assert(sdk_alpha_map(&controls[1], m->defaults[sdk_pos[1]]) == 100);
     assert(m->defaults[sdk_pos[2]] == 0);
     listed = m; reset_parameter = stock_reset;
     sdk_reset(0, dnm_sdk_param(sdk_pos[1]));
     assert(set_track == 0 && set_slot == 10 + sdk_pos[1]);
-    assert(map(&controls[1], set_value) == 100);
+    assert(sdk_alpha_map(&controls[1], set_value) == 100);
     sdk_reset(0, 1); assert(fallback_reset == 1);
     listed = 0;
     FW_SOUND_SLOT(kit, 0, 0) = FW_SOUND_SLOT(kit, 1, 0) = 100 << 8;

@@ -30,16 +30,21 @@ class RenderContractTests(unittest.TestCase):
             cls.programs[target] = program
 
     def test_digitakt_adapter_keeps_state_and_maps_effective_values(self):
-        self.adapter('dt1')
+        self.adapter('dt1', 'machine-pages')
 
     def test_digitone_adapter_maps_voices_defaults_and_post_controller_values(self):
-        self.adapter('dn1')
+        self.adapter('dn1', 'machines-dn1')
 
-    def adapter(self, device):
+    def test_shared_part_maps_defaults_sanitises_and_skips_unchanged_inputs(self):
+        self.adapter('machine', 'machines-dn2')
+
+    def adapter(self, device, companion):
+        """tests/test_sdk_alpha_<device>.c, which includes ../mods/sdk-alpha/machine.c and so needs the
+        companion's dev.h on the include path."""
         program = Path(self.tmp.name) / (device + '-adapter')
         done = subprocess.run([CC, '-std=c99', '-O2', '-Wall', '-Wextra', '-Werror',
                                '-Wno-pointer-to-int-cast', '-Wno-int-to-pointer-cast',
-                               '-I', str(ROOT / 'elekloader/sdk/include'),
+                               '-I', str(ROOT / 'elekloader/sdk/include'), '-I', str(ROOT / 'mods' / companion),
                                str(ROOT / ('tests/test_sdk_alpha_' + device + '.c')), '-o', str(program)],
                               capture_output=True, text=True)
         self.assertEqual(done.returncode, 0, done.stderr)

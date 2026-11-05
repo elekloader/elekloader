@@ -140,7 +140,8 @@ struct elek_machine {
     const struct elek_ui_page *pages; /* at most two pages and fifteen logical knobs */
     uint32_t page_count;
     uint32_t _reserved[2];         /* zero */
-    /* ctx and its values are read-only snapshots, valid only during this call. */
+    /* Called when the machine, track, page or a value changed, and maybe again with the same inputs:
+     * keep it pure. ctx and its values are read-only snapshots, valid only during this call. */
     void (*present)(const struct elek_ui_context *, struct elek_ui_presentation *);
     /* Optional: the machine's sound, one voice at a time (without it the device's own plays).
      * It may read only its arguments, its state and constant data. */

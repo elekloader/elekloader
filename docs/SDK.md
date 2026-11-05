@@ -125,10 +125,10 @@ characters; nonprintable bytes become `?`. Their source must still be
 readable then: use literals or persistent buffers, not callback-local
 arrays. Glyph storage must remain readable while displayed.
 
-The Digitakt evaluates presentation when drawing and for LFO names. The
-Digitones also refresh it when the active machine, track, page or values
-change. Do not depend on an exact callback count or use `.present` as an
-audio clock. Native displays may uppercase labels.
+Every device calls `.present` when the machine, track, page or a knob's
+value has changed since its last call, and may call it again with the same
+inputs. Keep it pure: do not depend on an exact callback count or use it as
+an audio clock. Native displays may uppercase labels.
 
 ### Native storage and persistence
 
@@ -382,8 +382,10 @@ stored UI values for effective voice controls.
 - [Render-contract tests](../tests/test_sdk_alpha_render.py) compile one C
   machine twice with the host compiler, Q31 and float. They check sample
   helpers and compare the resulting sine. They also exercise the real
-  mk1 adapters' state isolation, effective-control mapping and defaults.
-  `test_units.py` runs this suite.
+  mk1 adapters' state isolation, effective-control mapping and defaults,
+  and the part every companion shares (`mods/sdk-alpha/machine.c`): value
+  mapping across the bounds, defaults, label sanitising and when
+  `.present` runs. `test_units.py` runs this suite.
 - [Sound tests](../tests/test_sdk_alpha_sound.py) capture the emulator output;
   [defaults tests](../tests/test_sdk_alpha_defaults.py) exercise mapped defaults.
   Targets without the corresponding backend are explicitly skipped.
