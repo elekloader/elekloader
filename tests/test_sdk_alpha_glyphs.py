@@ -4,11 +4,7 @@ pixels on the screen are the glyph's, a different glyph does not change the valu
 the stock graphic back, every track has its own, and the value shown while a knob turns is not cut
 short.
 
-Run with digiemu's Python:
-
-  ELEKLOADER_DIGIEMU=<digiemu> ELEKLOADER_STOCK_154=<Digitakt_OS1.54.syx> \
-  ELEKLOADER_STOCK_DN1_144=<Digitone_and_Digitone_Keys_OS1.44.syx> ELEKLOADER_CROSS=m68k-elf- \
-  uv run --project "$ELEKLOADER_DIGIEMU" python tests/test_sdk_alpha_glyphs.py
+Run as tests/sdk_alpha_harness.py says.
 """
 import unittest
 

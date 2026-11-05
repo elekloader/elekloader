@@ -4,11 +4,7 @@ values, what its callback shows and hides, and where its LFOs point.
 
 The tests save and load through the device's own menus, as a user does.
 
-Run with digiemu's Python:
-
-  ELEKLOADER_DIGIEMU=<digiemu> ELEKLOADER_STOCK_154=<Digitakt_OS1.54.syx> \
-  ELEKLOADER_STOCK_DN1_144=<Digitone_and_Digitone_Keys_OS1.44.syx> ELEKLOADER_CROSS=m68k-elf- \
-  uv run --project "$ELEKLOADER_DIGIEMU" python tests/test_sdk_alpha_saving.py
+Run as tests/sdk_alpha_harness.py says.
 """
 import unittest
 

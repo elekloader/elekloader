@@ -17,6 +17,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
+from elekloader import devices                                  # noqa: E402
 from elekloader.sdk.sdk_alpha_build import SDK_ALPHA_TARGETS    # noqa: E402
 
 
@@ -222,6 +223,18 @@ class Device:
             if doc.get('device') == cls.key and doc.get('id') in cls.target.companions:
                 found[doc['id']] = path.parent
         return [found[c] for c in cls.target.companions]
+
+    @classmethod
+    def stock(cls):
+        """The device's stock file, once it and the cross compiler are there; else a skip."""
+        stock = os.environ.get(cls.stock_env, '')
+        if not os.path.isfile(stock):
+            raise unittest.SkipTest('needs %s' % cls.stock_env)
+        profile, = [d for d in devices.devices() if d.key == cls.key]
+        gcc = os.environ.get('ELEKLOADER_CROSS', profile.toolchain['prefix']) + 'gcc'
+        if not shutil.which(gcc):
+            raise unittest.SkipTest('needs the cross compiler %s (ELEKLOADER_CROSS)' % gcc)
+        return stock
 
     @classmethod
     def machine_ids(cls, mod):

@@ -1,11 +1,7 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 """An SDK machine can be picked for a track, and its .present callback is called for its track only.
 
-Run with digiemu's Python:
-
-  ELEKLOADER_DIGIEMU=<digiemu> ELEKLOADER_STOCK_154=<Digitakt_OS1.54.syx> \
-  ELEKLOADER_STOCK_DN1_144=<Digitone_and_Digitone_Keys_OS1.44.syx> ELEKLOADER_CROSS=m68k-elf- \
-  uv run --project "$ELEKLOADER_DIGIEMU" python tests/test_sdk_alpha_machines.py
+Run as tests/sdk_alpha_harness.py says.
 """
 import unittest
 

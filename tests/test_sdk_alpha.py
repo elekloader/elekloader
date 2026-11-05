@@ -7,7 +7,6 @@ compiler (ELEKLOADER_CROSS); the Digitone II's need ELEKLOADER_DN2_SYX (OS 1.12)
 from contextlib import redirect_stdout
 import io
 import json
-import os
 from pathlib import Path
 import shutil
 import struct
@@ -23,7 +22,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from elekloader import elemod, formats, link        # noqa: E402
 from elekloader.sdk import build                    # noqa: E402
 from elekloader.sdk.sdk_alpha_build import sdk_alpha_build, sdk_alpha_main, sdk_alpha_registrations  # noqa: E402
-from sdk_alpha_devices import Device, Digitone1  # noqa: E402
+from sdk_alpha_devices import Device, Digitakt1, Digitone1, Digitone2  # noqa: E402
 from sdk_alpha_harness import SdkMachine  # noqa: E402
 
 # Machines the build tests use, as the C an author writes. Not registered for the emulator tests.
@@ -324,12 +323,7 @@ class SdkAlphaTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0, 'a callback can write its input')
 
     def stocks(self):
-        stocks = {'digitakt-mk1': os.environ.get('ELEKLOADER_STOCK_154', ''),
-                  'digitone-mk1': os.environ.get('ELEKLOADER_STOCK_DN1_144', '')}
-        cross = os.environ.get('ELEKLOADER_CROSS', 'm68k-linux-gnu-')
-        if not all(Path(s).is_file() for s in stocks.values()) or not shutil.which(cross + 'gcc'):
-            self.skipTest('needs ELEKLOADER_STOCK_154, ELEKLOADER_STOCK_DN1_144 and m68k cross compiler')
-        return stocks
+        return {device.key: device.stock() for device in (Digitakt1, Digitone1)}
 
     def test_sdk_alpha_builds_link_for_the_digitakt_and_keep_slot_conflicts(self):
         stock = self.stocks()['digitakt-mk1']
@@ -446,10 +440,7 @@ class SdkAlphaTests(unittest.TestCase):
                 sdk_alpha_build(both, dn, tmp)
 
     def test_sdk_alpha_builds_link_for_the_digitone_ii_and_keep_synth_conflicts(self):
-        stock = os.environ.get('ELEKLOADER_DN2_SYX', '')
-        cross = os.environ.get('ELEKLOADER_CROSS', 'm68k-linux-gnu-')
-        if not Path(stock).is_file() or not shutil.which(cross + 'gcc'):
-            self.skipTest('needs ELEKLOADER_DN2_SYX and m68k cross compiler')
+        stock = Digitone2.stock()
         with tempfile.TemporaryDirectory() as tmp:
             core = build.build(str(ROOT / 'mods/core-dn2'), stock, tmp)[1]
             machines = build.build(str(ROOT / 'mods/machines-dn2'), stock, tmp)[1]

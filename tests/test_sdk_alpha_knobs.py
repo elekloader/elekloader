@@ -2,11 +2,7 @@
 """A machine's knobs: each encoder edits its own knob, a knob maps its range onto its bounds, a knob
 can sit on two pages, and every track keeps its own values and page.
 
-Run with digiemu's Python:
-
-  ELEKLOADER_DIGIEMU=<digiemu> ELEKLOADER_STOCK_154=<Digitakt_OS1.54.syx> \
-  ELEKLOADER_STOCK_DN1_144=<Digitone_and_Digitone_Keys_OS1.44.syx> ELEKLOADER_CROSS=m68k-elf- \
-  uv run --project "$ELEKLOADER_DIGIEMU" python tests/test_sdk_alpha_knobs.py
+Run as tests/sdk_alpha_harness.py says.
 """
 import unittest
 

@@ -20,10 +20,18 @@ gets a fresh emulator from the saved state in a fraction of a second. A machine 
 build fails the tests that use it, with the builder's message; an observation the device's
 adapter does not have yet fails with "cannot do this yet".
 
-Run with digiemu's Python: ELEKLOADER_DIGIEMU, ELEKLOADER_STOCK_154, ELEKLOADER_STOCK_DN1_144 and
-ELEKLOADER_CROSS as in the feature files (tests/test_sdk_alpha_hiding.py shows the command). The
-Digitone II runs in DigiKit's ColdFire emulator instead: ELEKLOADER_DIGIKIT, ELEKLOADER_DIGI_EMUD and
-ELEKLOADER_DN2_SYX (sdk_alpha_devices.DigiKit).
+Run one feature file at a time; a device whose files are not given is skipped. The Digitakt and the
+Digitone mk1 run in digiemu, with its Python:
+
+  ELEKLOADER_DIGIEMU=<digiemu> ELEKLOADER_STOCK_154=<Digitakt_OS1.54.syx> \\
+  ELEKLOADER_STOCK_DN1_144=<Digitone_and_Digitone_Keys_OS1.44.syx> ELEKLOADER_CROSS=m68k-elf- \\
+  uv run --project "$ELEKLOADER_DIGIEMU" python tests/test_sdk_alpha_hiding.py
+
+The Digitone II runs in DigiKit's ColdFire emulator (sdk_alpha_devices.DigiKit):
+
+  ELEKLOADER_DIGIKIT=<digikit> ELEKLOADER_DIGI_EMUD=<digi-emud> \\
+  ELEKLOADER_DN2_SYX=<Digitone_II_OS1.12.syx> ELEKLOADER_CROSS=m68k-elf- \\
+  python tests/test_sdk_alpha_hiding.py
 """
 import atexit
 from contextlib import contextmanager
@@ -107,9 +115,7 @@ class Firmware:
     booted once and saved as a snapshot by the device's emulator (its backend)."""
 
     def __init__(self, device):
-        stock = os.environ.get(device.stock_env, '')
-        if not os.path.isfile(stock):
-            raise unittest.SkipTest('needs %s' % device.stock_env)
+        stock = device.stock()
         device.backend.check()
         self.device, self.work = device, tempfile.mkdtemp(prefix='sdk-harness-')
         atexit.register(shutil.rmtree, self.work, True)

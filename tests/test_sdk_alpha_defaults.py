@@ -2,7 +2,7 @@
 """Mapped defaults on selection/reset; edits survive page paste and project load.
 
 The scenarios use Device adapters. Targets without the defaults backend are explicitly skipped.
-Run with the environment used by test_sdk_alpha_hiding.py.
+Run as tests/sdk_alpha_harness.py says.
 """
 import unittest
 from sdk_alpha_harness import sdk_machine, sdk_tests
