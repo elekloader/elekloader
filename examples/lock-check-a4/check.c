@@ -24,6 +24,10 @@
  * last value seen. Two bars along the bottom of the screen
  * show track 1's lock of A (half a pixel a step) and of C (a pixel per 8),
  * none while its trig has none.
+ *
+ * From 1.2 A and V also declare "cc": true (C and K have none, so they are
+ * on MIDI by their NRPN only), and lk_midi keeps the four as stored each UI
+ * tick, for core-a4 0.5's MIDI checks.
  */
 #include "analog-four-mk2/store.h"
 #include "analog-four-mk2/lock.h"
@@ -285,6 +289,28 @@ static int lock_of(int s)
     return s % 4 == 3 ? -1 : 4 + s * 37 % 120;
 }
 
+/* 1.2: MIDI (core-a4 0.5, part 4). Each UI tick lk_midi keeps the four
+ * fields as stored: A and C in tracks 1..4's sounds of the current kit, K
+ * and V in the kit, so the emulator sees what an NRPN or a CC set. */
+struct midi {
+    char magic[4];
+    uint32_t ticks;
+    int16_t a[4], c[4], k, v;
+};
+volatile struct midi lk_midi = {{'L', 'K', 'M', 'I'}, 0, {0}, {0}, 0, 0};
+
+static void midi_note(unsigned char *k)
+{
+    int t;
+    for (t = 0; t < 4; t++) {
+        lk_midi.a[t] = core_store_get(STORE(lk_a), k + 0x1c + 0x152 * t, 0);
+        lk_midi.c[t] = core_store_get(STORE(lk_c), k + 0x1c + 0x152 * t, 0);
+    }
+    lk_midi.k = core_store_get(STORE(lk_k), k, 0);
+    lk_midi.v = core_store_get(STORE(lk_v), k, 0);
+    lk_midi.ticks++;
+}
+
 void lk_tick(void)
 {
     unsigned char *k = kit(), *snd;
@@ -293,6 +319,7 @@ void lk_tick(void)
     int st, v, vc;
     if (!k)
         return;
+    midi_note(k);
     vc = (unsigned)lk_cfg.voice < 4 ? lk_cfg.voice : 0;   /* a synth voice: its own track's sound */
     snd = k + 0x1c + 0x152 * vc;
     if (lk_cfg.push == 1 || lk_cfg.push == 2) {

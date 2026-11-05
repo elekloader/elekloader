@@ -6,12 +6,12 @@ V are `"mod": true`, so every modulation source of their track can target
 them). It declares one lockable field of each track kind and a fine one,
 and registers them in `core_lock_params`:
 
-| field | scope | kind | code (from a new lockfile) | range | page knob |
-|---|---|---|---|---|---|
-| `lk_a` | sound | synth | 0x70 | 0..127 | id 0x200, LOCK CHECK (AMP key, synth tracks), knob A |
-| `lk_c` | sound | synth | 0x71 | 0..1000 | id 0x201, LOCK CHECK, knob B |
-| `lk_k` | kit | FX | 0x70 | 0..127 | id 0x202, LOCK CHECK FX (LFO key, FX track), knob A |
-| `lk_v` | kit, `"track": "cv"` | CV | 0x70 | 0..127 | id 0x203, LOCK CHECK CV (LFO key, CV track), knob A |
+| field | scope | kind | code (from a new lockfile) | range | page knob | MIDI (1.2) |
+|---|---|---|---|---|---|---|
+| `lk_a` | sound | synth | 0x70 | 0..127 | id 0x200, LOCK CHECK (AMP key, synth tracks), knob A | NRPN 0:112, CC 12 |
+| `lk_c` | sound | synth | 0x71 | 0..1000 | id 0x201, LOCK CHECK, knob B | NRPN 0:113 (14 bits), no CC |
+| `lk_k` | kit | FX | 0x70 | 0..127 | id 0x202, LOCK CHECK FX (LFO key three times, FX track), knob A | NRPN 0:112, no CC |
+| `lk_v` | kit, `"track": "cv"` | CV | 0x70 | 0..127 | id 0x203, LOCK CHECK CV (LFO key three times, CV track), knob A | NRPN 0:112, CC 35 |
 
 The knobs show the current track's sound of the current kit (the FX and CV
 pages the kit's field). With a trig held a knob sets that trig's p-lock and
@@ -62,3 +62,8 @@ python -m elekloader.sdk.build examples/lock-check-a4 --stock Analog-Four_MKII_O
 python -m elekloader.lint examples/lock-check-a4/out/lock-check-1.1.elemod \
     --stock Analog-Four_MKII_OS1.56.syx --with mods/core-a4/out/core-0.5.elemod
 ```
+
+From 1.2 (core 0.5, part 4, MIDI) A and V declare `"cc": true`, and each UI
+tick `lk_midi` keeps the four fields as stored: after the magic `LKMI` and a
+count of ticks, A and C in tracks 1..4's sounds of the current kit (16 bits
+each), then K and V in the kit.

@@ -6,7 +6,8 @@ the A4's addresses, which `mod.json` gives (`defsym`, `sites`), as
 [core-ar2](../core-ar2) does for the Analog Rytm MKII, and its own `store.c`
 and `store.s` (Mod storage, below), and from 0.5 `lock.c`, `rows.c` and
 `rows.s` (Lockable parameters, Mod p-locks), `dests.c` and `dests.s`
-(Destinations) and `value.c` (The value read). On its own it changes nothing
+(Destinations), `value.c` (The value read) and `midi.c` and `midi.s` (Mod
+parameters on MIDI). On its own it changes nothing
 the unit does.
 
 The A4 MKII is the Rytm MKII's platform (a ColdFire MCF5441x): its OS entry,
@@ -427,6 +428,39 @@ Cost (dtboot, DMA timer 0 ticks, a block 88,284): a read of one parameter
 further parameter adds about 100 to 120. One read is 0.15% of a block, four
 0.5% (1.4% at the worst seen).
 
+## Mod parameters on MIDI (0.5)
+
+The lock service's fourth part (`midi.c`, `midi.s`): core-ar2 0.8's
+`midi.c` with the A4's numbering. An A4 NRPN is MSB x 128 + LSB, looked up
+in a 484-entry table of its set's kind, and the set is the channel's
+track's (dispatch 0x4006818e), never the MSB's; on a channel shared with
+PERF it is the active track's. Stock's synth, FX and CV tables use MSBs 1,
+2 and 3, and nothing at MSB 0, so (decided 2026-11-05):
+
+- **NRPN**: a mod parameter is MSB 0, LSB its lock code (0x70..0x7f, the
+  number its p-lock rows and destination bytes hold), on its track's
+  channel: the same number on every track kind. The value is the data
+  entry MSB for a parameter up to 127; one above 127 takes the whole
+  14-bit value, as stock's fine parameters, clamped to its range.
+- **CC**, opt-in per field (`"cc": true`), as on the Rytm: the lockfile
+  gives the field a CC no stock table maps on a track's channel (none of
+  the synth, FX, CV, MISC, TRACK and PERF kinds' nor bank select, read from
+  the records at 0x40186af4): 12..15, 28..31, 35..37, 39..47, 60..63, 96,
+  97, 100 and 101 for a synth field, of which a kit field (FX or CV) gets
+  only those the FX and CV tables leave free too (all but 12..15 and
+  28..31). A CC's step is the parameter's coarse step.
+
+| what | stock | core |
+|---|---|---|
+| NRPN in | the three sets' vtable +0x8c, 0x4009ff56 (set, nrpn, value, track, flag): the table 0x4133dd64, then +0x38 | a jmp over its first 8 bytes: MSB 0, LSB 0x70..0x7f on a synth, FX or CV set is core's; core sets the field in the track's sound of the current kit (the kit on FX and CV) with `core_store_set`, which ends its slide (part 1), and the read follows from the next block (part 3) |
+| CC in | +0x90, 0x400a0b62 (set, cc, value, track, flag): the table 0x4133ff6c | a jmp over its first 8 bytes: a CC in `core_lock_ccs` of the set's kind is core's |
+| live record | +0x38 with the record flag (the caller's, or MIDI CONFIG's 0x400acd80) locks the value on the playing step through 0x400a690c | the same flag: `core_lock_record` (part 1) |
+| out | +0x88, 0x4009fde4: when MIDI out applies (0x400ab768), PARAM OUTPUT (0x400ab6e4) NRPN 0x40068b22 or CC 0x400689ce on the channel of +0x94 (0x40068652) | `core_lock_turned` (a mod knob's turn, pages.s) sends the same way; a parameter with no CC sends nothing in CC mode |
+
+Stock's tables are left alone: an unknown number finds no id there, so a
+mod NRPN or CC never reaches stock's sets, hooked or not, and under stock
+firmware a mod NRPN does nothing.
+
 ## Checked so far
 
 On a unit (OS 1.56, 20 Oct 2026) [hw]: build HC56 (core-a4 with
@@ -570,6 +604,30 @@ images; 20 Oct 2026):
   Not checked yet: a poly track's two voices, a sound-locked trig's pool
   sound as the target, a `"smooth": false` field, a field wider than 7
   bits against a stock fine parameter, CONTROL IN.
+- **MIDI** [emu] (core 0.5 with lock-check-a4 1.2, whose A and V declare
+  `"cc": true`, dtboot, 5 Nov 2026), each field read back as stored
+  (`lk_midi`) after DIN messages (works, data read):
+  - NRPN 0:112 on channel 1 (A, 77), 0:113 on channel 2 with data MSB 3
+    and LSB 0x20 (C, 416), 0:112 on channel 5 (K, 99) and channel 6 (V,
+    55): each landed in its track's item, no other changed; core's read of
+    A on track 1 (`core_param_value_ex`) followed (77 << 8);
+  - CC 12 on channels 1 and 3 set A on tracks 1 and 3; CC 35 on channel 6
+    set V; CC 35 on channel 1 and CC 12 on channel 5 set nothing;
+  - a stock NRPN (1:80) and two stock CCs (16, 74) on channel 1: the same
+    kit bytes changed to the same values as on stock 1.56;
+  - live recording (RECORD + PLAY), NRPN 0:112 = 90 on channel 1: the lock
+    played on the next pass for one step's blocks (281), value 90; without
+    RECORD no lock;
+  - the PERF channel set to channel 1 with track 2 active: NRPN 0:112 on
+    channel 1 set track 2's A, as stock delivers its own there;
+  - knob turns with MIDI out on (poked) and PARAM OUTPUT NRPN: A sent 0:112
+    with the value in the data MSB, C 0:113 with 14 bits, K (FX) and V (CV)
+    0:112, on the channel stock's own knobs used; PARAM OUTPUT CC: A sent CC
+    12, V CC 35, C and K (no CC) nothing. Stock's AMP knob sent the same
+    NRPN and CC on both builds.
+  Not checked yet: an NRPN while a trig is held (stock's
+  +0x38 path with a held step), USB MIDI (the same dispatch), the MIDI
+  CONFIG screens' own settings (poked here).
 - Statically, against the stock image (python, no toolchain): every site's
   stock bytes, that each covers whole instructions, that each body in
   `store.s` jumps back to its site plus the 8 bytes it displaced, and that

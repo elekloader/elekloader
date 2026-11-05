@@ -82,18 +82,19 @@ test('codes per track kind (core-a4 0.5): the same lock codes, notes and table e
   const A4 = 'analog-four-mk2'
   for (const [name, run] of Object.entries<any>(V.kind_runs)) {
     let lock: Lock | null = null
-    run.steps.forEach(([decls, locks, cvs]: [Decl[], [string, string][], [string, string][]], i: number) => {
+    run.steps.forEach(([decls, locks, cvs, ccs = []]: [Decl[], [string, string][], [string, string][], [string, string][]?], i: number) => {
       const want = run.results[i]
       if (want.error) {
-        assert.throws(() => allocate(lock, decls, A4, null, locks, [], cvs), (e: Error) => e.message === want.error, `${name} step ${i}`)
+        assert.throws(() => allocate(lock, decls, A4, null, locks, ccs, cvs), (e: Error) => e.message === want.error, `${name} step ${i}`)
         return
       }
-      const [l, notes] = allocate(lock, decls, A4, null, locks, [], cvs)
+      const [l, notes] = allocate(lock, decls, A4, null, locks, ccs, cvs)
       lock = l
       assert.deepEqual(l, want.lock, `${name} step ${i}: lockfile`)
       assert.deepEqual(notes, want.notes, `${name} step ${i}: notes`)
       assert.deepEqual(codeEntries(l).map(hex), want.codes, `${name} step ${i}: codes`)
       assert.deepEqual(codeEntries(l, [], [], locks).map(hex), want.route_codes, `${name} step ${i}: codes with ROUTE_FLAG`)
+      assert.deepEqual(ccEntries(l).map(hex), want.ccs, `${name} step ${i}: CCs`)
       assert.equal(layoutId(l), want.layout_id, `${name} step ${i}: layout ID`)
       assert.equal(dumps(l), want.json, `${name} step ${i}: JSON`)
     })

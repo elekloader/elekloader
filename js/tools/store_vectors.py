@@ -121,6 +121,12 @@ KIND_RUNS = {
         ([F('m', 'f%02d' % i, 'kit', 1) for i in range(17)], [['m', 'f%02d' % i] for i in range(17)], []),
         ([F('m', 'f%02d' % i, 'kit', 1) for i in range(17)] + [F('m', 's', 'sound', 1)],
          [['m', 'f%02d' % i] for i in range(1, 17)] + [['m', 's']], [['m', 'f16']])],
+    # core-a4 0.5: a fourth list, the fields with a CC: the synth fields take the CCs the FX and CV tables map, a kit
+    # field (FX or CV) only those every kind leaves free
+    'kinds: CCs, synth first, kits past the FX and CV tables': [
+        (AK, AL, [['b', 'c1']], [['a', 's1'], ['a', 'k1'], ['b', 'c1']]),
+        (AK, AL, [['b', 'c1']], [['a', 's1'], ['a', 's2'], ['a', 'k1'], ['b', 'c1']]),
+        (AK[1:], AL[1:], [['b', 'c1']], [['a', 's2'], ['a', 'k1'], ['b', 'c1']])],
 }
 KL = dict(store.fresh(A4), fields=[{'mod': 'a', 'sym': 'x', 'scope': 'kit', 'offset': 0, 'bits': 4}],
           next=dict(store.fresh(A4)['next'], kit=4))
@@ -280,11 +286,14 @@ def main():
         out['cc_runs'][name] = {'steps': [list(st) for st in steps], 'results': res}
     for name, steps in KIND_RUNS.items():
         lock, res = None, []
-        for decls, locks, cvs in steps:
+        for st in steps:
+            decls, locks, cvs = st[:3]
+            ccs = st[3] if len(st) > 3 else []
             try:
-                lock, notes = store.allocate(lock, [tuple(d) for d in decls], A4, None, [tuple(k) for k in locks], (),
-                                             [tuple(k) for k in cvs])
+                lock, notes = store.allocate(lock, [tuple(d) for d in decls], A4, None, [tuple(k) for k in locks],
+                                             [tuple(k) for k in ccs], [tuple(k) for k in cvs])
                 res.append({'lock': lock, 'notes': notes, 'codes': [t.hex() for t in store.code_entries(lock)],
+                            'ccs': [t.hex() for t in store.cc_entries(lock)],
                             'route_codes': [t.hex() for t in store.code_entries(lock, (), (), [tuple(k) for k in locks])],
                             'json': store.dumps(lock), 'layout_id': store.layout_id(lock)})
             except ModError as e:

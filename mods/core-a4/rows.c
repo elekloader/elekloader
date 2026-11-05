@@ -901,18 +901,23 @@ int core_lock_knob(int id)
     return track >= 0 && core_lock_by_id_in(id, &code, core_lock_kind_of_track(track)) != 0;
 }
 
+void core_midi_turned(int track, const struct core_lock_param *p, unsigned code, int v);
+
 /* param_apply_delta, a mod's knob turn taken (pages.s): a mod parameter's
- * new value is recorded while live recording runs */
+ * new value is recorded while live recording runs, and (0.5, midi.c) sent
+ * as PARAM OUTPUT says */
 void core_lock_turned(int id)
 {
     const struct core_lock_param *p;
     unsigned code, w;
     unsigned char *s;
-    int track;
+    int track, v;
     if (id <= 0x126 || (track = current(&w)) < 0 ||
         !(p = core_lock_by_id_in(id, &code, core_lock_kind_of_track(track))) || !(s = edited_item(track)))
         return;
-    core_lock_record(track, code, core_store_get(core_lock_field(p), s, 0));
+    v = (int)core_store_get(core_lock_field(p), s, 0);
+    core_lock_record(track, code, v);
+    core_midi_turned(track, p, code, v);
 }
 
 /* ---- playing locks ---- */

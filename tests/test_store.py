@@ -292,13 +292,23 @@ def test_a4_codes_are_per_track_kind():
         refused(store.allocate, None, many, A4, None, [d[:2] for d in many])
 
 
+def test_a4_ccs():
+    """core-a4 0.5: a synth field's CC comes first from those the FX and CV tables map, a kit field's (FX or
+    CV) only from those every kind leaves free."""
+    decls = [('m', 's', 'sound', 7), ('m', 'k', 'kit', 7), ('m', 'c', 'kit', 7)]
+    locks = [('m', 's'), ('m', 'k'), ('m', 'c')]
+    l1, _ = store.allocate(None, decls, A4, None, locks, locks, [('m', 'c')])
+    assert [(c['sym'], c['cc']) for c in l1['ccs']] == [('s', 12), ('c', 35), ('k', 36)]
+    assert len(store.cc_entries(l1)) == 3
+
+
 def test_a4_flags():
     """On the A4 "lfo" is refused (every source is a destination of a "mod" field), "mod" is taken on
-    a kit field, and "cc" waits for the A4's CC pools; the Rytm has no CV track."""
+    a kit field, and "cc" is taken (core-a4 0.5's CC pool); the Rytm has no CV track."""
     scopes = {('m', 'a'): 'sound', ('m', 'k'): 'kit'}
     store.check_flags(A4, scopes, (), [('m', 'a'), ('m', 'k')], [('m', 'k')])
     assert '"lfo" is the Analog Rytm MKII' in refused(store.check_flags, A4, scopes, [('m', 'a')])
-    assert 'keeps no CCs' in refused(store.check_flags, A4, scopes, (), (), (), [('m', 'a')])
+    store.check_flags(A4, scopes, (), (), (), [('m', 'a'), ('m', 'k')])
     assert 'has no CV track' in refused(store.check_flags, 'analog-rytm-mk2', scopes, (), (), [('m', 'k')])
     assert 'the FX track has no routes' in refused(store.check_flags, 'analog-rytm-mk2', scopes, (), [('m', 'k')])
     assert store.parse_cvs({'storage': [{'sym': 'c', 'scope': 'kit', 'bits': 3, 'lock': True, 'track': 'cv'}]}) == ['c']

@@ -2052,8 +2052,8 @@ and on a unit (24 Oct 2026).
 
 core-a4 0.5 has the first part of the lock service, core-ar2's design
 ("Lockable parameters" and "Mod p-locks", above) with the A4's track
-kinds, from part 2 its destinations and from part 3 the value read. MIDI
-comes in a later part.
+kinds, from part 2 its destinations, from part 3 the value read and from
+part 4 MIDI.
 
 A storage field declared `"lock": true` gets a lock code from the lockfile,
 numbered within its kind, as stock keeps one parameter table per kind:
@@ -2066,7 +2066,8 @@ numbered within its kind, as stock keeps one parameter table per kind:
 
 Each kind has the codes 0x70..0x7f (stock's columns end at 0x6f), so a
 build has at most 16 lockable parameters of each. On the A4 `"mod"` covers
-the LFOs too, and `"lfo"` is refused; `"cc"` is refused for now. The mod
+the LFOs too, and `"lfo"` is refused; `"cc"` gives the parameter a CC
+(part 4, below). The mod
 registers each parameter in `core_lock_params` as on the Rytm
 (`analog-four-mk2/lock.h`): `id` is its page knob, an id stock does not
 have (above 0x126), unique within its kind.
@@ -2151,10 +2152,23 @@ it up at boot or on the first read, and never keep one in a project. In the
 emulator the values match stock's own parameter block for block (core-a4's
 README, "Checked so far").
 
+**MIDI (part 4).** Every lockable parameter is NRPN MSB 0, LSB its lock
+code (112..127), on its track's channel; stock's synth, FX and CV tables use
+MSBs 1 to 3 and nothing at MSB 0. A parameter up to 127 takes the data entry
+MSB; one above 127 takes the whole 14-bit value, as stock's fine
+parameters. A field declared `"cc": true` also gets a CC from the lockfile,
+one no stock table maps on a track's channel (a kit field's also free of the
+FX and CV tables), kept from build to build; the build's notes say which.
+Both set the field as its knob does, and lock it on the playing step while
+live recording runs; a mod knob's turn sends its NRPN, or its CC, as
+PARAM OUTPUT says, on the channel stock's own knobs use. On a channel shared
+with PERF, an NRPN reaches the active track, as stock's do.
+
 `examples/lock-check-a4` is the smallest mod on it: one lockable parameter
 of each kind and a fine one, on a LOCK CHECK page per kind, with what it
-reads each audio block in `lk_seen` for the emulator, and from 1.1 its
-value read beside a stock parameter's (`lk_ring`) and the read's cost.
+reads each audio block in `lk_seen` for the emulator, from 1.1 its value
+read beside a stock parameter's (`lk_ring`) and the read's cost, and from
+1.2 CCs on A and V and the stored values each tick (`lk_midi`).
 
 ### Machines (core-ar2 0.5, Analog Rytm MKII)
 

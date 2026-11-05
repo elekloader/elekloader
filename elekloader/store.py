@@ -128,7 +128,9 @@ A field whose kind changes is a new parameter: its old code is freed. The
 kind is part of the layout ID. On the A4 every modulation source can target
 a mod parameter, so `"mod": true` there covers the LFOs too (no "lfo"), and
 a kit field can have it. A CV field's code has CV_FLAG set in
-core_lock_codes. The device's CC pools come later (the A4 has none yet).
+core_lock_codes. A `"cc": true` field takes a CC from the A4's pool (core-a4
+0.5): the CCs no table of stock's maps on a track's channel; a kit field
+(FX or CV) only those the FX and CV tables leave free too.
 
 Nothing here is random: the same lockfile (or none) and mods always link to
 the same bytes.
@@ -187,6 +189,12 @@ DEVICES = {
         'codes': (0x70, 0x7f),
         'kinds': ('synth', 'fx', 'cv'),
         'no_lfo': True,
+        # core-a4 0.5: the CCs no table of stock's maps on a track's channel (the synth kind's and the controller
+        # kinds' MISC, TRACK and PERF, nor bank select 0 and 32, from the records at 0x40186af4), those the FX and CV
+        # kinds map first, so the synth tracks' fields take them before the CCs every kind leaves free
+        'ccs': (12, 13, 14, 15, 28, 29, 30, 31, 35, 36, 37) + tuple(range(39, 48)) + (60, 61, 62, 63, 96, 97, 100, 101),
+        # of the pool, the CCs the FX (12..14, 28..31) or CV (12..15) tables map: a kit field gets none of them
+        'fx_ccs_taken': (12, 13, 14, 15, 28, 29, 30, 31),
     },
 }
 

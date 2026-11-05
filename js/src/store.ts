@@ -85,6 +85,12 @@ const DEVICES: Record<string, Spec> = {
     codes: [0x70, 0x7f],
     kinds: ['synth', 'fx', 'cv'],
     noLfo: true,
+    // core-a4 0.5: the CCs no table of stock's maps on a track's channel (the synth kind's and the controller kinds'
+    // MISC, TRACK and PERF, nor bank select 0 and 32, from the records at 0x40186af4), those the FX and CV kinds map
+    // first, so the synth tracks' fields take them before the CCs every kind leaves free
+    ccs: [12, 13, 14, 15, 28, 29, 30, 31, 35, 36, 37, 39, 40, 41, 42, 43, 44, 45, 46, 47, 60, 61, 62, 63, 96, 97, 100, 101],
+    // of the pool, the CCs the FX (12..14, 28..31) or CV (12..15) tables map: a kit field gets none of them
+    fxCcsTaken: [12, 13, 14, 15, 28, 29, 30, 31],
   },
 }
 

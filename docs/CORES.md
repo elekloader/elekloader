@@ -166,8 +166,8 @@ the one a mod that uses it names in `resources.core`.
   (ADAPTING.md, "Mod storage (core-a4 0.1)"), and parameter pages, whose
   knobs can follow the selected sound (core-a4 0.2 and 0.3; ADAPTING.md,
   "Parameter pages (core-a4 0.2)"). Lockable parameters for each track
-  kind, their p-locks, their destinations and their value as stock would
-  play it (ADAPTING.md, "Lockable parameters (core-a4 0.5, Analog Four
+  kind, their p-locks, their destinations, their value as stock would
+  play it and their NRPNs and CCs (ADAPTING.md, "Lockable parameters (core-a4 0.5, Analog Four
   MKII)"). Its render events cover the effects, not the analog
   voices.
 - **Octatrack** ([mods/core-ot](../mods/core-ot)): a source of its own. It

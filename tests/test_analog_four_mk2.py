@@ -170,9 +170,18 @@ def test_core_a4_sites():
     # mod storage's sites (core-a4 0.1: 28 of the 36), and 0.2's 4 page
     # sites, 2 view sites and 5 range bytes, 0.4's OS upgrade restart, and
     # 0.5's 31 lock sites: 19 in code (rows.s) and 12 vtable entries; and 0.5's
-    # 21 destination sites (dests.s): 15 in code and 6 vtable entries
-    assert len(mod['sites']) == 100
-    locks = [x for x in mod['sites'] if x['addr'] not in {y['addr'] for y in j['sites'][:48]}]
+    # 21 destination sites (dests.s): 15 in code and 6 vtable entries; and
+    # 0.5's 2 MIDI sites (midi.s), the three sets' NRPN in and CC in, each a
+    # jmp resuming after the 8 bytes it displaced
+    assert len(mod['sites']) == 102
+    midi = [x for x in mod['sites'] if x.get('target') in ('core_nrpn_site', 'core_cc_site')]
+    assert [(x['addr'], x['op'], x['stock']) for x in midi] == \
+        [('0x4009ff56', 'jmp', '4fefffec48d7043c'), ('0x400a0b62', 'jmp', '4e56ffd848d71cfc')]
+    with open(os.path.join(ROOT, 'mods', 'core-a4', 'midi.s')) as fh:
+        src = fh.read()
+    assert 'jmp     0x4009ff5e' in src and 'jmp     0x400a0b6a' in src
+    assert mod['collections'].get('core_lock_ccs') == 8
+    locks = [x for x in mod['sites'] if x['addr'] not in {y['addr'] for y in j['sites'][:48]} and x not in midi]
     dests = [x for x in locks if x.get('target', '').startswith(('core_dst', 'core_id_index', 'core_index_id',
                                                                    'core_push_', 'core_set_'))]
     assert len(dests) == 21 and len([x for x in dests if x['op'] == 'ptr']) == 6

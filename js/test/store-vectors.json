@@ -13629,6 +13629,7 @@
       "2100000d00000071",
       "2180000700000870"
      ],
+     "ccs": [],
      "route_codes": [
       "11c0000000000470",
       "1200000700000471",
@@ -13750,6 +13751,7 @@
       "2100000d00000071",
       "2180000700000870"
      ],
+     "ccs": [],
      "route_codes": [
       "11c0000000000470",
       "1200000700000471",
@@ -13878,6 +13880,7 @@
       "21c0000000000070",
       "2180000700000870"
      ],
+     "ccs": [],
      "route_codes": [
       "11c0000000000470",
       "1200000700000471",
@@ -14004,6 +14007,7 @@
       "2100000d00000071",
       "2180000700000870"
      ],
+     "ccs": [],
      "route_codes": [
       "11c0000000000470",
       "1200000700000471",
@@ -14266,6 +14270,7 @@
       "2180000700000071",
       "2100000d00000072"
      ],
+     "ccs": [],
      "route_codes": [
       "11c0000000000470",
       "1200000700000471",
@@ -14395,6 +14400,7 @@
       "2180000700000870",
       "2100000d00000871"
      ],
+     "ccs": [],
      "route_codes": [
       "11c0000000000470",
       "1200000700000471",
@@ -15429,6 +15435,7 @@
       "2040000e0000007e",
       "2040000f0000007f"
      ],
+     "ccs": [],
      "route_codes": [
       "2040000000000470",
       "2040000100000471",
@@ -15728,6 +15735,7 @@
       "2040000e0000007e",
       "2040000f0000007f"
      ],
+     "ccs": [],
      "route_codes": [
       "2040001000000470",
       "2040000100000471",
@@ -16047,6 +16055,7 @@
       "2040000f0000007f",
       "2040001000000870"
      ],
+     "ccs": [],
      "route_codes": [
       "1040000000000470",
       "2040000100000471",
@@ -16068,6 +16077,702 @@
      ],
      "json": "{\n \"elekloader_store\": 1,\n \"device\": \"analog-four-mk2\",\n \"id\": \"0xaf9a6cdd\",\n \"ancestors\": [\n  \"0xcc5c9f4f\",\n  \"0x9239ddcc\"\n ],\n \"split\": {\n  \"track\": 2,\n  \"pattern\": 4\n },\n \"generation\": {\n  \"sound\": 1,\n  \"kit\": 1,\n  \"global\": 1,\n  \"track\": 1,\n  \"pattern\": 1,\n  \"project\": 1\n },\n \"next\": {\n  \"sound\": 1,\n  \"kit\": 17,\n  \"global\": 0,\n  \"track\": 0,\n  \"pattern\": 0,\n  \"project\": 0\n },\n \"fields\": [\n  {\n   \"mod\": \"m\",\n   \"sym\": \"s\",\n   \"scope\": \"sound\",\n   \"offset\": 0,\n   \"bits\": 1\n  },\n  {\n   \"mod\": \"m\",\n   \"sym\": \"f00\",\n   \"scope\": \"kit\",\n   \"offset\": 0,\n   \"bits\": 1\n  },\n  {\n   \"mod\": \"m\",\n   \"sym\": \"f01\",\n   \"scope\": \"kit\",\n   \"offset\": 1,\n   \"bits\": 1\n  },\n  {\n   \"mod\": \"m\",\n   \"sym\": \"f02\",\n   \"scope\": \"kit\",\n   \"offset\": 2,\n   \"bits\": 1\n  },\n  {\n   \"mod\": \"m\",\n   \"sym\": \"f03\",\n   \"scope\": \"kit\",\n   \"offset\": 3,\n   \"bits\": 1\n  },\n  {\n   \"mod\": \"m\",\n   \"sym\": \"f04\",\n   \"scope\": \"kit\",\n   \"offset\": 4,\n   \"bits\": 1\n  },\n  {\n   \"mod\": \"m\",\n   \"sym\": \"f05\",\n   \"scope\": \"kit\",\n   \"offset\": 5,\n   \"bits\": 1\n  },\n  {\n   \"mod\": \"m\",\n   \"sym\": \"f06\",\n   \"scope\": \"kit\",\n   \"offset\": 6,\n   \"bits\": 1\n  },\n  {\n   \"mod\": \"m\",\n   \"sym\": \"f07\",\n   \"scope\": \"kit\",\n   \"offset\": 7,\n   \"bits\": 1\n  },\n  {\n   \"mod\": \"m\",\n   \"sym\": \"f08\",\n   \"scope\": \"kit\",\n   \"offset\": 8,\n   \"bits\": 1\n  },\n  {\n   \"mod\": \"m\",\n   \"sym\": \"f09\",\n   \"scope\": \"kit\",\n   \"offset\": 9,\n   \"bits\": 1\n  },\n  {\n   \"mod\": \"m\",\n   \"sym\": \"f10\",\n   \"scope\": \"kit\",\n   \"offset\": 10,\n   \"bits\": 1\n  },\n  {\n   \"mod\": \"m\",\n   \"sym\": \"f11\",\n   \"scope\": \"kit\",\n   \"offset\": 11,\n   \"bits\": 1\n  },\n  {\n   \"mod\": \"m\",\n   \"sym\": \"f12\",\n   \"scope\": \"kit\",\n   \"offset\": 12,\n   \"bits\": 1\n  },\n  {\n   \"mod\": \"m\",\n   \"sym\": \"f13\",\n   \"scope\": \"kit\",\n   \"offset\": 13,\n   \"bits\": 1\n  },\n  {\n   \"mod\": \"m\",\n   \"sym\": \"f14\",\n   \"scope\": \"kit\",\n   \"offset\": 14,\n   \"bits\": 1\n  },\n  {\n   \"mod\": \"m\",\n   \"sym\": \"f15\",\n   \"scope\": \"kit\",\n   \"offset\": 15,\n   \"bits\": 1\n  },\n  {\n   \"mod\": \"m\",\n   \"sym\": \"f16\",\n   \"scope\": \"kit\",\n   \"offset\": 16,\n   \"bits\": 1\n  }\n ],\n \"freed\": [],\n \"codes\": [\n  {\n   \"mod\": \"m\",\n   \"sym\": \"s\",\n   \"code\": 112,\n   \"kind\": \"synth\"\n  },\n  {\n   \"mod\": \"m\",\n   \"sym\": \"f01\",\n   \"code\": 113,\n   \"kind\": \"fx\"\n  },\n  {\n   \"mod\": \"m\",\n   \"sym\": \"f02\",\n   \"code\": 114,\n   \"kind\": \"fx\"\n  },\n  {\n   \"mod\": \"m\",\n   \"sym\": \"f03\",\n   \"code\": 115,\n   \"kind\": \"fx\"\n  },\n  {\n   \"mod\": \"m\",\n   \"sym\": \"f04\",\n   \"code\": 116,\n   \"kind\": \"fx\"\n  },\n  {\n   \"mod\": \"m\",\n   \"sym\": \"f05\",\n   \"code\": 117,\n   \"kind\": \"fx\"\n  },\n  {\n   \"mod\": \"m\",\n   \"sym\": \"f06\",\n   \"code\": 118,\n   \"kind\": \"fx\"\n  },\n  {\n   \"mod\": \"m\",\n   \"sym\": \"f07\",\n   \"code\": 119,\n   \"kind\": \"fx\"\n  },\n  {\n   \"mod\": \"m\",\n   \"sym\": \"f08\",\n   \"code\": 120,\n   \"kind\": \"fx\"\n  },\n  {\n   \"mod\": \"m\",\n   \"sym\": \"f09\",\n   \"code\": 121,\n   \"kind\": \"fx\"\n  },\n  {\n   \"mod\": \"m\",\n   \"sym\": \"f10\",\n   \"code\": 122,\n   \"kind\": \"fx\"\n  },\n  {\n   \"mod\": \"m\",\n   \"sym\": \"f11\",\n   \"code\": 123,\n   \"kind\": \"fx\"\n  },\n  {\n   \"mod\": \"m\",\n   \"sym\": \"f12\",\n   \"code\": 124,\n   \"kind\": \"fx\"\n  },\n  {\n   \"mod\": \"m\",\n   \"sym\": \"f13\",\n   \"code\": 125,\n   \"kind\": \"fx\"\n  },\n  {\n   \"mod\": \"m\",\n   \"sym\": \"f14\",\n   \"code\": 126,\n   \"kind\": \"fx\"\n  },\n  {\n   \"mod\": \"m\",\n   \"sym\": \"f15\",\n   \"code\": 127,\n   \"kind\": \"fx\"\n  },\n  {\n   \"mod\": \"m\",\n   \"sym\": \"f16\",\n   \"code\": 112,\n   \"kind\": \"cv\"\n  }\n ],\n \"freed_codes\": [],\n \"next_code\": {\n  \"synth\": 113,\n  \"fx\": 128,\n  \"cv\": 113\n }\n}\n",
      "layout_id": 2946133213
+    }
+   ]
+  },
+  "kinds: CCs, synth first, kits past the FX and CV tables": {
+   "steps": [
+    [
+     [
+      [
+       "a",
+       "s1",
+       "sound",
+       7
+      ],
+      [
+       "a",
+       "s2",
+       "sound",
+       8
+      ],
+      [
+       "a",
+       "k1",
+       "kit",
+       7
+      ],
+      [
+       "b",
+       "k2",
+       "kit",
+       4
+      ],
+      [
+       "b",
+       "c1",
+       "kit",
+       6
+      ]
+     ],
+     [
+      [
+       "a",
+       "s1"
+      ],
+      [
+       "a",
+       "s2"
+      ],
+      [
+       "a",
+       "k1"
+      ],
+      [
+       "b",
+       "k2"
+      ],
+      [
+       "b",
+       "c1"
+      ]
+     ],
+     [
+      [
+       "b",
+       "c1"
+      ]
+     ],
+     [
+      [
+       "a",
+       "s1"
+      ],
+      [
+       "a",
+       "k1"
+      ],
+      [
+       "b",
+       "c1"
+      ]
+     ]
+    ],
+    [
+     [
+      [
+       "a",
+       "s1",
+       "sound",
+       7
+      ],
+      [
+       "a",
+       "s2",
+       "sound",
+       8
+      ],
+      [
+       "a",
+       "k1",
+       "kit",
+       7
+      ],
+      [
+       "b",
+       "k2",
+       "kit",
+       4
+      ],
+      [
+       "b",
+       "c1",
+       "kit",
+       6
+      ]
+     ],
+     [
+      [
+       "a",
+       "s1"
+      ],
+      [
+       "a",
+       "s2"
+      ],
+      [
+       "a",
+       "k1"
+      ],
+      [
+       "b",
+       "k2"
+      ],
+      [
+       "b",
+       "c1"
+      ]
+     ],
+     [
+      [
+       "b",
+       "c1"
+      ]
+     ],
+     [
+      [
+       "a",
+       "s1"
+      ],
+      [
+       "a",
+       "s2"
+      ],
+      [
+       "a",
+       "k1"
+      ],
+      [
+       "b",
+       "c1"
+      ]
+     ]
+    ],
+    [
+     [
+      [
+       "a",
+       "s2",
+       "sound",
+       8
+      ],
+      [
+       "a",
+       "k1",
+       "kit",
+       7
+      ],
+      [
+       "b",
+       "k2",
+       "kit",
+       4
+      ],
+      [
+       "b",
+       "c1",
+       "kit",
+       6
+      ]
+     ],
+     [
+      [
+       "a",
+       "s2"
+      ],
+      [
+       "a",
+       "k1"
+      ],
+      [
+       "b",
+       "k2"
+      ],
+      [
+       "b",
+       "c1"
+      ]
+     ],
+     [
+      [
+       "b",
+       "c1"
+      ]
+     ],
+     [
+      [
+       "a",
+       "s2"
+      ],
+      [
+       "a",
+       "k1"
+      ],
+      [
+       "b",
+       "c1"
+      ]
+     ]
+    ]
+   ],
+   "results": [
+    {
+     "lock": {
+      "elekloader_store": 1,
+      "device": "analog-four-mk2",
+      "id": "0x01172261",
+      "ancestors": [],
+      "split": {
+       "track": 2,
+       "pattern": 4
+      },
+      "generation": {
+       "sound": 1,
+       "kit": 1,
+       "global": 1,
+       "track": 1,
+       "pattern": 1,
+       "project": 1
+      },
+      "next": {
+       "sound": 15,
+       "kit": 17,
+       "global": 0,
+       "track": 0,
+       "pattern": 0,
+       "project": 0
+      },
+      "fields": [
+       {
+        "mod": "a",
+        "sym": "s1",
+        "scope": "sound",
+        "offset": 0,
+        "bits": 7
+       },
+       {
+        "mod": "a",
+        "sym": "s2",
+        "scope": "sound",
+        "offset": 7,
+        "bits": 8
+       },
+       {
+        "mod": "a",
+        "sym": "k1",
+        "scope": "kit",
+        "offset": 0,
+        "bits": 7
+       },
+       {
+        "mod": "b",
+        "sym": "c1",
+        "scope": "kit",
+        "offset": 7,
+        "bits": 6
+       },
+       {
+        "mod": "b",
+        "sym": "k2",
+        "scope": "kit",
+        "offset": 13,
+        "bits": 4
+       }
+      ],
+      "freed": [],
+      "codes": [
+       {
+        "mod": "a",
+        "sym": "s1",
+        "code": 112,
+        "kind": "synth"
+       },
+       {
+        "mod": "a",
+        "sym": "s2",
+        "code": 113,
+        "kind": "synth"
+       },
+       {
+        "mod": "a",
+        "sym": "k1",
+        "code": 112,
+        "kind": "fx"
+       },
+       {
+        "mod": "b",
+        "sym": "k2",
+        "code": 113,
+        "kind": "fx"
+       },
+       {
+        "mod": "b",
+        "sym": "c1",
+        "code": 112,
+        "kind": "cv"
+       }
+      ],
+      "freed_codes": [],
+      "next_code": {
+       "synth": 114,
+       "fx": 114,
+       "cv": 113
+      },
+      "ccs": [
+       {
+        "mod": "a",
+        "sym": "s1",
+        "cc": 12
+       },
+       {
+        "mod": "a",
+        "sym": "k1",
+        "cc": 35
+       },
+       {
+        "mod": "b",
+        "sym": "c1",
+        "cc": 36
+       }
+      ],
+      "freed_ccs": []
+     },
+     "notes": [
+      "a new lockfile, layout ID 0x01172261: projects and sounds saved by builds with other layouts load their mod data at defaults",
+      "a k1: 7 bits of kit storage at bit 0",
+      "a s1: 7 bits of sound storage at bit 0",
+      "a s2: 8 bits of sound storage at bit 7",
+      "b c1: 6 bits of kit storage at bit 7",
+      "b k2: 4 bits of kit storage at bit 13",
+      "a k1: lock code 112 (FX track)",
+      "a s1: lock code 112 (synth tracks)",
+      "a s2: lock code 113 (synth tracks)",
+      "b c1: lock code 112 (CV track)",
+      "b k2: lock code 113 (FX track)",
+      "a k1: CC 35",
+      "a s1: CC 12",
+      "b c1: CC 36"
+     ],
+     "codes": [
+      "11c0000000000070",
+      "1200000700000071",
+      "21c0000000000070",
+      "2100000d00000071",
+      "2180000700000870"
+     ],
+     "ccs": [
+      "11c000000000000c",
+      "21c0000000000023",
+      "2180000700000024"
+     ],
+     "route_codes": [
+      "11c0000000000470",
+      "1200000700000471",
+      "21c0000000000470",
+      "2100000d00000471",
+      "2180000700000c70"
+     ],
+     "json": "{\n \"elekloader_store\": 1,\n \"device\": \"analog-four-mk2\",\n \"id\": \"0x01172261\",\n \"ancestors\": [],\n \"split\": {\n  \"track\": 2,\n  \"pattern\": 4\n },\n \"generation\": {\n  \"sound\": 1,\n  \"kit\": 1,\n  \"global\": 1,\n  \"track\": 1,\n  \"pattern\": 1,\n  \"project\": 1\n },\n \"next\": {\n  \"sound\": 15,\n  \"kit\": 17,\n  \"global\": 0,\n  \"track\": 0,\n  \"pattern\": 0,\n  \"project\": 0\n },\n \"fields\": [\n  {\n   \"mod\": \"a\",\n   \"sym\": \"s1\",\n   \"scope\": \"sound\",\n   \"offset\": 0,\n   \"bits\": 7\n  },\n  {\n   \"mod\": \"a\",\n   \"sym\": \"s2\",\n   \"scope\": \"sound\",\n   \"offset\": 7,\n   \"bits\": 8\n  },\n  {\n   \"mod\": \"a\",\n   \"sym\": \"k1\",\n   \"scope\": \"kit\",\n   \"offset\": 0,\n   \"bits\": 7\n  },\n  {\n   \"mod\": \"b\",\n   \"sym\": \"c1\",\n   \"scope\": \"kit\",\n   \"offset\": 7,\n   \"bits\": 6\n  },\n  {\n   \"mod\": \"b\",\n   \"sym\": \"k2\",\n   \"scope\": \"kit\",\n   \"offset\": 13,\n   \"bits\": 4\n  }\n ],\n \"freed\": [],\n \"codes\": [\n  {\n   \"mod\": \"a\",\n   \"sym\": \"s1\",\n   \"code\": 112,\n   \"kind\": \"synth\"\n  },\n  {\n   \"mod\": \"a\",\n   \"sym\": \"s2\",\n   \"code\": 113,\n   \"kind\": \"synth\"\n  },\n  {\n   \"mod\": \"a\",\n   \"sym\": \"k1\",\n   \"code\": 112,\n   \"kind\": \"fx\"\n  },\n  {\n   \"mod\": \"b\",\n   \"sym\": \"k2\",\n   \"code\": 113,\n   \"kind\": \"fx\"\n  },\n  {\n   \"mod\": \"b\",\n   \"sym\": \"c1\",\n   \"code\": 112,\n   \"kind\": \"cv\"\n  }\n ],\n \"freed_codes\": [],\n \"next_code\": {\n  \"synth\": 114,\n  \"fx\": 114,\n  \"cv\": 113\n },\n \"ccs\": [\n  {\n   \"mod\": \"a\",\n   \"sym\": \"s1\",\n   \"cc\": 12\n  },\n  {\n   \"mod\": \"a\",\n   \"sym\": \"k1\",\n   \"cc\": 35\n  },\n  {\n   \"mod\": \"b\",\n   \"sym\": \"c1\",\n   \"cc\": 36\n  }\n ],\n \"freed_ccs\": []\n}\n",
+     "layout_id": 18293345
+    },
+    {
+     "lock": {
+      "elekloader_store": 1,
+      "device": "analog-four-mk2",
+      "id": "0x01172261",
+      "ancestors": [],
+      "split": {
+       "track": 2,
+       "pattern": 4
+      },
+      "generation": {
+       "sound": 1,
+       "kit": 1,
+       "global": 1,
+       "track": 1,
+       "pattern": 1,
+       "project": 1
+      },
+      "next": {
+       "sound": 15,
+       "kit": 17,
+       "global": 0,
+       "track": 0,
+       "pattern": 0,
+       "project": 0
+      },
+      "fields": [
+       {
+        "mod": "a",
+        "sym": "s1",
+        "scope": "sound",
+        "offset": 0,
+        "bits": 7
+       },
+       {
+        "mod": "a",
+        "sym": "s2",
+        "scope": "sound",
+        "offset": 7,
+        "bits": 8
+       },
+       {
+        "mod": "a",
+        "sym": "k1",
+        "scope": "kit",
+        "offset": 0,
+        "bits": 7
+       },
+       {
+        "mod": "b",
+        "sym": "c1",
+        "scope": "kit",
+        "offset": 7,
+        "bits": 6
+       },
+       {
+        "mod": "b",
+        "sym": "k2",
+        "scope": "kit",
+        "offset": 13,
+        "bits": 4
+       }
+      ],
+      "freed": [],
+      "codes": [
+       {
+        "mod": "a",
+        "sym": "s1",
+        "code": 112,
+        "kind": "synth"
+       },
+       {
+        "mod": "a",
+        "sym": "s2",
+        "code": 113,
+        "kind": "synth"
+       },
+       {
+        "mod": "a",
+        "sym": "k1",
+        "code": 112,
+        "kind": "fx"
+       },
+       {
+        "mod": "b",
+        "sym": "k2",
+        "code": 113,
+        "kind": "fx"
+       },
+       {
+        "mod": "b",
+        "sym": "c1",
+        "code": 112,
+        "kind": "cv"
+       }
+      ],
+      "freed_codes": [],
+      "next_code": {
+       "synth": 114,
+       "fx": 114,
+       "cv": 113
+      },
+      "ccs": [
+       {
+        "mod": "a",
+        "sym": "s1",
+        "cc": 12
+       },
+       {
+        "mod": "a",
+        "sym": "s2",
+        "cc": 13
+       },
+       {
+        "mod": "a",
+        "sym": "k1",
+        "cc": 35
+       },
+       {
+        "mod": "b",
+        "sym": "c1",
+        "cc": 36
+       }
+      ],
+      "freed_ccs": []
+     },
+     "notes": [
+      "a s2: CC 13"
+     ],
+     "codes": [
+      "11c0000000000070",
+      "1200000700000071",
+      "21c0000000000070",
+      "2100000d00000071",
+      "2180000700000870"
+     ],
+     "ccs": [
+      "11c000000000000c",
+      "120000070000000d",
+      "21c0000000000023",
+      "2180000700000024"
+     ],
+     "route_codes": [
+      "11c0000000000470",
+      "1200000700000471",
+      "21c0000000000470",
+      "2100000d00000471",
+      "2180000700000c70"
+     ],
+     "json": "{\n \"elekloader_store\": 1,\n \"device\": \"analog-four-mk2\",\n \"id\": \"0x01172261\",\n \"ancestors\": [],\n \"split\": {\n  \"track\": 2,\n  \"pattern\": 4\n },\n \"generation\": {\n  \"sound\": 1,\n  \"kit\": 1,\n  \"global\": 1,\n  \"track\": 1,\n  \"pattern\": 1,\n  \"project\": 1\n },\n \"next\": {\n  \"sound\": 15,\n  \"kit\": 17,\n  \"global\": 0,\n  \"track\": 0,\n  \"pattern\": 0,\n  \"project\": 0\n },\n \"fields\": [\n  {\n   \"mod\": \"a\",\n   \"sym\": \"s1\",\n   \"scope\": \"sound\",\n   \"offset\": 0,\n   \"bits\": 7\n  },\n  {\n   \"mod\": \"a\",\n   \"sym\": \"s2\",\n   \"scope\": \"sound\",\n   \"offset\": 7,\n   \"bits\": 8\n  },\n  {\n   \"mod\": \"a\",\n   \"sym\": \"k1\",\n   \"scope\": \"kit\",\n   \"offset\": 0,\n   \"bits\": 7\n  },\n  {\n   \"mod\": \"b\",\n   \"sym\": \"c1\",\n   \"scope\": \"kit\",\n   \"offset\": 7,\n   \"bits\": 6\n  },\n  {\n   \"mod\": \"b\",\n   \"sym\": \"k2\",\n   \"scope\": \"kit\",\n   \"offset\": 13,\n   \"bits\": 4\n  }\n ],\n \"freed\": [],\n \"codes\": [\n  {\n   \"mod\": \"a\",\n   \"sym\": \"s1\",\n   \"code\": 112,\n   \"kind\": \"synth\"\n  },\n  {\n   \"mod\": \"a\",\n   \"sym\": \"s2\",\n   \"code\": 113,\n   \"kind\": \"synth\"\n  },\n  {\n   \"mod\": \"a\",\n   \"sym\": \"k1\",\n   \"code\": 112,\n   \"kind\": \"fx\"\n  },\n  {\n   \"mod\": \"b\",\n   \"sym\": \"k2\",\n   \"code\": 113,\n   \"kind\": \"fx\"\n  },\n  {\n   \"mod\": \"b\",\n   \"sym\": \"c1\",\n   \"code\": 112,\n   \"kind\": \"cv\"\n  }\n ],\n \"freed_codes\": [],\n \"next_code\": {\n  \"synth\": 114,\n  \"fx\": 114,\n  \"cv\": 113\n },\n \"ccs\": [\n  {\n   \"mod\": \"a\",\n   \"sym\": \"s1\",\n   \"cc\": 12\n  },\n  {\n   \"mod\": \"a\",\n   \"sym\": \"s2\",\n   \"cc\": 13\n  },\n  {\n   \"mod\": \"a\",\n   \"sym\": \"k1\",\n   \"cc\": 35\n  },\n  {\n   \"mod\": \"b\",\n   \"sym\": \"c1\",\n   \"cc\": 36\n  }\n ],\n \"freed_ccs\": []\n}\n",
+     "layout_id": 18293345
+    },
+    {
+     "lock": {
+      "elekloader_store": 1,
+      "device": "analog-four-mk2",
+      "id": "0xdee3f8ca",
+      "ancestors": [
+       "0x01172261"
+      ],
+      "split": {
+       "track": 2,
+       "pattern": 4
+      },
+      "generation": {
+       "sound": 1,
+       "kit": 1,
+       "global": 1,
+       "track": 1,
+       "pattern": 1,
+       "project": 1
+      },
+      "next": {
+       "sound": 15,
+       "kit": 17,
+       "global": 0,
+       "track": 0,
+       "pattern": 0,
+       "project": 0
+      },
+      "fields": [
+       {
+        "mod": "a",
+        "sym": "s2",
+        "scope": "sound",
+        "offset": 7,
+        "bits": 8
+       },
+       {
+        "mod": "a",
+        "sym": "k1",
+        "scope": "kit",
+        "offset": 0,
+        "bits": 7
+       },
+       {
+        "mod": "b",
+        "sym": "c1",
+        "scope": "kit",
+        "offset": 7,
+        "bits": 6
+       },
+       {
+        "mod": "b",
+        "sym": "k2",
+        "scope": "kit",
+        "offset": 13,
+        "bits": 4
+       }
+      ],
+      "freed": [
+       {
+        "mod": "a",
+        "sym": "s1",
+        "scope": "sound",
+        "offset": 0,
+        "bits": 7
+       }
+      ],
+      "codes": [
+       {
+        "mod": "a",
+        "sym": "s2",
+        "code": 113,
+        "kind": "synth"
+       },
+       {
+        "mod": "a",
+        "sym": "k1",
+        "code": 112,
+        "kind": "fx"
+       },
+       {
+        "mod": "b",
+        "sym": "k2",
+        "code": 113,
+        "kind": "fx"
+       },
+       {
+        "mod": "b",
+        "sym": "c1",
+        "code": 112,
+        "kind": "cv"
+       }
+      ],
+      "freed_codes": [
+       {
+        "mod": "a",
+        "sym": "s1",
+        "code": 112,
+        "kind": "synth"
+       }
+      ],
+      "next_code": {
+       "synth": 114,
+       "fx": 114,
+       "cv": 113
+      },
+      "ccs": [
+       {
+        "mod": "a",
+        "sym": "s2",
+        "cc": 13
+       },
+       {
+        "mod": "a",
+        "sym": "k1",
+        "cc": 35
+       },
+       {
+        "mod": "b",
+        "sym": "c1",
+        "cc": 36
+       }
+      ],
+      "freed_ccs": [
+       {
+        "mod": "a",
+        "sym": "s1",
+        "cc": 12
+       }
+      ]
+     },
+     "notes": [
+      "a s1 (sound): no longer in the build; its bits are kept, so it gets its values back if it returns",
+      "a s1: lock code 112 (synth tracks) kept for it while it is out of the build",
+      "a s1: CC 12 freed, and kept for it until the unused CCs run out",
+      "layout ID 0xdee3f8ca (from 0x01172261, whose projects it still reads)"
+     ],
+     "codes": [
+      "1200000700000071",
+      "21c0000000000070",
+      "2100000d00000071",
+      "2180000700000870"
+     ],
+     "ccs": [
+      "120000070000000d",
+      "21c0000000000023",
+      "2180000700000024"
+     ],
+     "route_codes": [
+      "1200000700000471",
+      "21c0000000000470",
+      "2100000d00000471",
+      "2180000700000c70"
+     ],
+     "json": "{\n \"elekloader_store\": 1,\n \"device\": \"analog-four-mk2\",\n \"id\": \"0xdee3f8ca\",\n \"ancestors\": [\n  \"0x01172261\"\n ],\n \"split\": {\n  \"track\": 2,\n  \"pattern\": 4\n },\n \"generation\": {\n  \"sound\": 1,\n  \"kit\": 1,\n  \"global\": 1,\n  \"track\": 1,\n  \"pattern\": 1,\n  \"project\": 1\n },\n \"next\": {\n  \"sound\": 15,\n  \"kit\": 17,\n  \"global\": 0,\n  \"track\": 0,\n  \"pattern\": 0,\n  \"project\": 0\n },\n \"fields\": [\n  {\n   \"mod\": \"a\",\n   \"sym\": \"s2\",\n   \"scope\": \"sound\",\n   \"offset\": 7,\n   \"bits\": 8\n  },\n  {\n   \"mod\": \"a\",\n   \"sym\": \"k1\",\n   \"scope\": \"kit\",\n   \"offset\": 0,\n   \"bits\": 7\n  },\n  {\n   \"mod\": \"b\",\n   \"sym\": \"c1\",\n   \"scope\": \"kit\",\n   \"offset\": 7,\n   \"bits\": 6\n  },\n  {\n   \"mod\": \"b\",\n   \"sym\": \"k2\",\n   \"scope\": \"kit\",\n   \"offset\": 13,\n   \"bits\": 4\n  }\n ],\n \"freed\": [\n  {\n   \"mod\": \"a\",\n   \"sym\": \"s1\",\n   \"scope\": \"sound\",\n   \"offset\": 0,\n   \"bits\": 7\n  }\n ],\n \"codes\": [\n  {\n   \"mod\": \"a\",\n   \"sym\": \"s2\",\n   \"code\": 113,\n   \"kind\": \"synth\"\n  },\n  {\n   \"mod\": \"a\",\n   \"sym\": \"k1\",\n   \"code\": 112,\n   \"kind\": \"fx\"\n  },\n  {\n   \"mod\": \"b\",\n   \"sym\": \"k2\",\n   \"code\": 113,\n   \"kind\": \"fx\"\n  },\n  {\n   \"mod\": \"b\",\n   \"sym\": \"c1\",\n   \"code\": 112,\n   \"kind\": \"cv\"\n  }\n ],\n \"freed_codes\": [\n  {\n   \"mod\": \"a\",\n   \"sym\": \"s1\",\n   \"code\": 112,\n   \"kind\": \"synth\"\n  }\n ],\n \"next_code\": {\n  \"synth\": 114,\n  \"fx\": 114,\n  \"cv\": 113\n },\n \"ccs\": [\n  {\n   \"mod\": \"a\",\n   \"sym\": \"s2\",\n   \"cc\": 13\n  },\n  {\n   \"mod\": \"a\",\n   \"sym\": \"k1\",\n   \"cc\": 35\n  },\n  {\n   \"mod\": \"b\",\n   \"sym\": \"c1\",\n   \"cc\": 36\n  }\n ],\n \"freed_ccs\": [\n  {\n   \"mod\": \"a\",\n   \"sym\": \"s1\",\n   \"cc\": 12\n  }\n ]\n}\n",
+     "layout_id": 3739482314
     }
    ]
   }
@@ -17459,7 +18164,7 @@
      "a"
     ]
    ],
-   "error": "m: storage field 'a': the analog-four-mk2 keeps no CCs for mod parameters"
+   "error": null
   }
  },
  "decls": {
