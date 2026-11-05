@@ -413,6 +413,21 @@ class SdkAlphaTests(unittest.TestCase):
             mod = link.Mod2(json.loads(built[0].read_text()), 'hello')
             self.assertEqual((mod.names, mod.requires), (['machine:122'], ['core', 'machine-pages']))
 
+    def test_a_build_for_several_targets_names_each_output(self):
+        stocks = self.stocks()
+        with tempfile.TemporaryDirectory() as tmp:
+            for stock in stocks.values():
+                sdk_alpha_build(str(HELLO), stock, tmp)
+            self.assertEqual(sorted(p.name for p in Path(tmp).glob('*.elemod')),
+                             ['sdk-hello-world-0.1-digitakt-mk1-os1.54.elemod',
+                              'sdk-hello-world-0.1-digitone-mk1-os1.44.elemod'])
+            one = EMPTY.write(tmp)                  # a single target keeps the plain name
+            mod = json.loads(Path(one, 'mod.json').read_text())
+            mod['devices'] = {'digitakt-mk1': ['1.54']}
+            Path(one, 'mod.json').write_text(json.dumps(mod))
+            path, _ = sdk_alpha_build(one, stocks['digitakt-mk1'], tmp)
+            self.assertEqual(Path(path).name, 'sdk-test-empty-0.1.elemod')
+
     def test_sdk_alpha_refuses_imports_no_companion_exports(self):
         stock = self.stocks()['digitakt-mk1']
         with tempfile.TemporaryDirectory() as tmp:

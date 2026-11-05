@@ -225,7 +225,10 @@ def sdk_alpha_build(moddir, stock, out=None):
         mod.sdk_alpha_layouts = layouts     # for the test harness; not part of the built file
         out = out or os.path.join(moddir, 'out')
         os.makedirs(out, exist_ok=True)
-        dest = os.path.join(out, os.path.basename(path))
+        name = os.path.basename(path)
+        if listed is not None and sum(map(len, listed.values())) > 1:     # one file a target
+            name = '%s-%s-%s-os%s.elemod' % (doc['id'], doc['version'], device, release)
+        dest = os.path.join(out, name)
         with open(dest, 'w') as fh:
             json.dump(doc, fh, indent=1)
             fh.write('\n')

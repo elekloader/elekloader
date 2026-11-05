@@ -175,6 +175,9 @@ ELEKLOADER_CROSS=m68k-elf- \
 python -m elekloader.sdk.build <moddir> --stock <stock.syx>
 ```
 
+When `devices` lists more than one OS, each output's name carries its
+device and OS, such as `my-machine-0.1-digitone-mk1-os1.44.elemod`.
+
 The builder adds `machine:<id>` on Digitakt, `dnmachine:<id>` on Digitone
 mk1, or `mk2-synth:<id>` on Digitone II. SDK and native SHARC synths share
 the DN2 synth namespace. The linker refuses conflicting claims. Build the
