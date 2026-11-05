@@ -40,10 +40,8 @@ static void render(const struct elek_voice *v, elek_sample *out)
     uint32_t inc = elek_phase_inc(v->pitch + v->knob[FINE] * 65536 / 100);   /* cents: 1/100 semitone */
     uint32_t p = v->start ? 0 : s->phase;       /* each note starts its wave at zero */
     for (int i = 0; i < ELEK_VOICE_FRAMES; ++i) {
-        int32_t y = sine(p);
         /* half full scale: headroom for the filter's resonance */
-        elek_sample half = elek_mul(elek_level(y < 0 ? -y : y, 32767), ELEK_SAMPLE(0.5));
-        out[i] = y < 0 ? -half : half;
+        out[i] = elek_mul(elek_from_q15(sine(p)), ELEK_SAMPLE(0.5));
         p += inc;
     }
     s->phase = p;

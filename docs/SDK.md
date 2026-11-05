@@ -234,6 +234,7 @@ Use the helpers so the same C can operate on both representations:
 | `elek_add(a, b)` | Add samples; Q31 saturates, float retains headroom |
 | `elek_clip(a)` | Clip float to -1..1; Q31 already fits that range |
 | `elek_level(value, max)` | Convert an integer control to a level; `max` must be positive |
+| `elek_from_q15(v)` | A signed integer, -32768..32767, as a sample; -32768 is -1.0 |
 | `elek_phase_inc(pitch)` | Integer phase increment per sample; a full cycle is 2^32 |
 
 Use sample helpers for arithmetic and do not divide samples. Float and

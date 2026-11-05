@@ -37,6 +37,9 @@ static void check_q31(void)
     assert(elek_clip(INT32_MIN) == INT32_MIN);
     assert(elek_level(127, 127) >= INT32_MAX - 127 && elek_level(0, 127) == 0 && elek_level(-5, 127) == 0);
     assert(elek_level(200, 127) == elek_level(127, 127));
+    assert(elek_from_q15(-32768) == INT32_MIN && elek_from_q15(16384) == 0x40000000);
+    assert(elek_from_q15(32767) == 0x7fff0000 && elek_from_q15(-1) == -0x10000);
+    assert(elek_from_q15(40000) == elek_from_q15(32767) && elek_from_q15(-40000) == INT32_MIN);
 }
 #else
 static void check_float(void)
@@ -44,6 +47,7 @@ static void check_float(void)
     assert(elek_mul(0.5f, -0.5f) == -0.25f && elek_add(0.75f, 0.75f) == 1.5f && elek_clip(1.5f) == 1.0f);
     assert(elek_clip(-2.0f) == -1.0f && ELEK_SAMPLE(0.5) == 0.5f);
     assert(elek_level(127, 127) == 1.0f && elek_level(0, 127) == 0.0f && elek_level(200, 127) == 1.0f);
+    assert(elek_from_q15(-32768) == -1.0f && elek_from_q15(16384) == 0.5f && elek_from_q15(-40000) == -1.0f);
 }
 #endif
 

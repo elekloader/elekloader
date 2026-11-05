@@ -73,6 +73,10 @@ typedef float elek_sample;            /* -1.0..1.0 */
 static inline elek_sample elek_mul(elek_sample a, elek_sample b) { return a * b; }
 static inline elek_sample elek_add(elek_sample a, elek_sample b) { return a + b; }
 static inline elek_sample elek_clip(elek_sample a) { return a > 1.0f ? 1.0f : a < -1.0f ? -1.0f : a; }
+static inline elek_sample elek_from_q15(int32_t v)
+{
+    return (v < -32768 ? -32768 : v > 32767 ? 32767 : v) / 32768.0f;
+}
 #else
 typedef int32_t elek_sample;          /* Q31 */
 /* A constant only: a variable here would need floating point, which the ColdFire lacks. */
@@ -96,6 +100,11 @@ static inline elek_sample elek_add(elek_sample a, elek_sample b)
     return ((a ^ s) & (b ^ s)) < 0 ? (a < 0 ? INT32_MIN : INT32_MAX) : s;
 }
 static inline elek_sample elek_clip(elek_sample a) { return a; }   /* Q31 cannot exceed full scale */
+/* A signed Q15 integer, -32768..32767 (clamped), as a sample: -32768 is -1.0. */
+static inline elek_sample elek_from_q15(int32_t v)
+{
+    return (int32_t)((uint32_t)(v < -32768 ? -32768 : v > 32767 ? 32767 : v) << 16);
+}
 #endif
 /* value 0..max as a level, 0 to full scale (values outside are clamped); max > 0. */
 static inline elek_sample elek_level(int32_t value, int32_t max)
