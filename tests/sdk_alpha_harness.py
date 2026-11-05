@@ -51,7 +51,7 @@ from sdk_alpha_devices import CannotYet, Device                # noqa: E402
 RAW_MAX = 127 << 8              # a knob's native 8.8 range, whatever its bounds
 DEVICES_LISTED = {'digitakt-mk1': ['1.54'], 'digitone-mk1': ['1.44'], 'digitone-mk2': ['1.12']}
 
-_ids = iter(range(100, 120))    # the ids of the machines a test file writes inline
+_ids = iter(range(100, 128))    # the ids of the registered machines the test files write inline
 REGISTRY = []
 
 
@@ -61,7 +61,12 @@ class SdkMachine:
     def __init__(self, name, source=None, directory=None, substitutions=None, register=True):
         self.name, self.source, self.directory = name, source, directory
         self.substitutions = substitutions or {}
-        self.id = next(_ids) if source is not None else None    # a folder's own id, once built
+        if source is None:
+            self.id = None              # a folder's own id, once built
+        elif register:
+            self.id = next(_ids)
+        else:
+            self.id = 100               # built and linked alone, so it shares the id
         if register:
             REGISTRY.append(self)
 
