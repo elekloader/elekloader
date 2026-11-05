@@ -21,6 +21,7 @@ sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from elekloader import elemod, formats, link        # noqa: E402
 from elekloader.sdk import build                    # noqa: E402
+from elekloader.sdk import sdk_alpha_build as B     # noqa: E402
 from elekloader.sdk.sdk_alpha_build import sdk_alpha_build, sdk_alpha_main, sdk_alpha_registrations  # noqa: E402
 from sdk_alpha_devices import Device, Digitakt1, Digitone1, Digitone2  # noqa: E402
 from sdk_alpha_harness import SdkMachine  # noqa: E402
@@ -33,19 +34,19 @@ EMPTY = SdkMachine("Empty", register=False, source=textwrap.dedent("""
 """))
 ONE_PAGE = SdkMachine("One page", register=False, source=textwrap.dedent("""
     #include "elekloader/sdk_alpha_machine.h"
-    static const struct elek_ui_knob knob = { .id = 0, .label = "KNOB" };
-    static const struct elek_ui_page pages[] = { { .label = "ONE", .knob = { &knob } } };
+    static const struct elek_knob knobs[] = { { "KNOB", .max = 127 } };
     static const struct elek_machine one = {
-        .id = @ID@, .name = "One page", .short_name = "ONE", .pages = pages, .page_count = 1,
+        .id = @ID@, .name = "One page", .short_name = "ONE", ELEK_KNOBS(knobs),
+        .pages = { { "ONE", { &knobs[0] } } },
     };
     ELEK_REGISTER_MACHINE(one);
 """))
 LONG_LABEL = SdkMachine("Long label", register=False, source=textwrap.dedent("""
     #include "elekloader/sdk_alpha_machine.h"
-    static const struct elek_ui_knob knob = { .id = 0, .label = "TOOLONG" };
-    static const struct elek_ui_page pages[] = { { .label = "ONE", .knob = { &knob } } };
+    static const struct elek_knob knobs[] = { { "TOOLONG", .max = 127 } };
     static const struct elek_machine long_label = {
-        .id = @ID@, .name = "Long label", .short_name = "LONG", .pages = pages, .page_count = 1,
+        .id = @ID@, .name = "Long label", .short_name = "LONG", ELEK_KNOBS(knobs),
+        .pages = { { "ONE", { &knobs[0] } } },
     };
     ELEK_REGISTER_MACHINE(long_label);
 """))
@@ -63,10 +64,26 @@ RENDERS = SdkMachine("Renders", register=False, source=textwrap.dedent("""
     };
     ELEK_REGISTER_MACHINE(renders);
 """))
+# A knob that starts above its min, which the Digitone II cannot do yet.
 DEFAULTS = SdkMachine("Defaults", register=False, source=ONE_PAGE.source.replace(
-    '.label = "KNOB"', '.label = "KNOB", .def = ELEK_UI_BOUND(0)'))
+    '.max = 127', '.min = -50, .max = 50'))
 HELLO = ROOT / 'examples/sdk-hello-world'       # two pages
 GLYPHS = ROOT / 'examples/sdk-glyphs'
+
+
+M = 40                  # the machine, after the registration (32 bytes) and its adapter (8)
+RENDER, NAME, SNAME = M + B.MACHINE_SIZE, M + B.MACHINE_SIZE + 8, M + B.MACHINE_SIZE + 16
+KNOBS, GLYPH = 400, 1000
+
+
+def page_at(page, encoder=None):
+    """The offset of a page's label, or of one of its encoders."""
+    at = M + B.MACHINE_PAGES + B.PAGE_SIZE * page
+    return at if encoder is None else at + B.PAGE_ENCODER + 4 * encoder
+
+
+def knob_at(k, field=0):
+    return KNOBS + B.KNOB_SIZE * k + field
 
 
 def sdk_alpha_test_document():
@@ -74,43 +91,50 @@ def sdk_alpha_test_document():
 
 
 def sdk_alpha_test_render_document(render=True, voice_state=0):
-    """A registration: the machine at 40 is 40 bytes, its render (an rts) at 88."""
-    raw = bytearray(112)
+    """A registration of an empty machine at M; its render (an rts) at RENDER."""
+    raw = bytearray(SNAME + 8)
     struct.pack_into('>i', raw, 0, 120)
     struct.pack_into('>iii', raw, 16, 3, 120, 0x55493330)
-    struct.pack_into('>i', raw, 40, 120)
-    struct.pack_into('>I', raw, 76, voice_state)
-    raw[88:90] = b'\x4e\x75'
-    raw[96:102] = b'Empty\0'
-    raw[104:109] = b'EMPT\0'
+    struct.pack_into('>i', raw, M, 120)
+    struct.pack_into('>I', raw, M + B.MACHINE_VOICE_STATE, voice_state)
+    raw[RENDER:RENDER + 2] = b'\x4e\x75'
+    raw[NAME:NAME + 6] = b'Empty\0'
+    raw[SNAME:SNAME + 5] = b'EMPT\0'
     doc = {'exports': ['sdk_alpha_registration_empty'],
            'symbols': {'sdk_alpha_registration_empty': ['.run', 0]},
            'relocs': [['.run', o, 'abs32', 'sec:.run', a]
-                      for o, a in ((4, 96), (8, 104), (28, 32), (36, 40), (44, 96), (48, 104))] +
+                      for o, a in ((4, NAME), (8, SNAME), (28, 32), (36, M),
+                                   (M + B.MACHINE_NAME, NAME), (M + B.MACHINE_SHORT_NAME, SNAME))] +
                      [['.run', 32, 'abs32', 'sym:sdk_alpha_dt1_ui_v1', 0]]}
     if render:
-        doc['relocs'].append(['.run', 72, 'abs32', 'sec:.run', 88])
+        doc['relocs'].append(['.run', M + B.MACHINE_RENDER, 'abs32', 'sec:.run', RENDER])
     return doc, raw
 
 
 def sdk_alpha_test_controls_document():
+    """Fifteen knobs 0..127 labelled "Empty", on two pages."""
     doc, raw = sdk_alpha_test_document()
-    raw.extend(bytes(1200))
-    stride, pages = 36, 768
-    struct.pack_into('>I', raw, 56, 2)
-    doc['relocs'] += [['.run', 52, 'abs32', 'sec:.run', pages]]
-    for i in range(15):
-        struct.pack_into('>I', raw, 128 + stride * i, i)
-        doc['relocs'].append(['.run', 132 + stride * i, 'abs32', 'sec:.run', 96])
+    raw.extend(bytes(GLYPH + 64 - len(raw)))
+    struct.pack_into('>I', raw, M + B.MACHINE_KNOB_COUNT, 15)
+    doc['relocs'].append(['.run', M + B.MACHINE_KNOBS, 'abs32', 'sec:.run', KNOBS])
+    for k in range(15):
+        struct.pack_into('>ii', raw, knob_at(k, B.KNOB_MIN), 0, 127)
+        doc['relocs'].append(['.run', knob_at(k, B.KNOB_LABEL), 'abs32', 'sec:.run', NAME])
     for page in range(2):
-        doc['relocs'].append(['.run', pages + 36 * page, 'abs32', 'sec:.run', 96])
+        doc['relocs'].append(['.run', page_at(page), 'abs32', 'sec:.run', NAME])
         for encoder in range(8):
-            # Logical zero is D on page 0; page 1 shares it at H.
-            logical = ([2, 3, 4, 0, 5, 6, 7, 1] if page == 0 else
-                       [8, 9, 10, 11, 12, 13, 14, 0])[encoder]
-            doc['relocs'].append(['.run', pages + 4 + 36 * page + 4 * encoder,
-                                  'abs32', 'sec:.run', 128 + stride * logical])
+            # Knob zero is D on page 0; page 1 shares it at H.
+            k = ([2, 3, 4, 0, 5, 6, 7, 1] if page == 0 else [8, 9, 10, 11, 12, 13, 14, 0])[encoder]
+            doc['relocs'].append(['.run', page_at(page, encoder), 'abs32', 'sec:.run', knob_at(k)])
     return doc, raw
+
+
+def reloc(doc, offset):
+    return next(r for r in doc['relocs'] if r[1] == offset)
+
+
+def without(doc, *offsets):
+    doc['relocs'] = [r for r in doc['relocs'] if r[1] not in offsets]
 
 
 class SdkAlphaTests(unittest.TestCase):
@@ -151,7 +175,8 @@ class SdkAlphaTests(unittest.TestCase):
                          [('sdk_alpha_registration_empty', 120)])
 
     def test_sdk_alpha_invalid_registrations(self):
-        for offset, value in ((0, 3), (0, 128), (40, 121), (56, 1), (64, 1), (24, 0)):
+        for offset, value in ((0, 3), (0, 128), (M, 121), (M + B.MACHINE_KNOB_COUNT, 1),
+                              (page_at(0, 0), 1), (24, 0)):
             with self.subTest(offset=offset, value=value):
                 doc, raw = sdk_alpha_test_document()
                 struct.pack_into('>I', raw, offset, value)
@@ -170,82 +195,72 @@ class SdkAlphaTests(unittest.TestCase):
                 elif kind == 'abi':
                     doc['relocs'][-1][3] = 'sym:cm_ui_v3'
                 elif kind == 'name':
-                    raw[96] = 0
+                    raw[NAME] = 0
                 elif kind == 'truncated':
-                    raw = raw[:50]
-                elif kind == 'pages':
-                    doc['relocs'].append(['.run', 52, 'abs32', 'sec:.run', 96])
+                    raw = raw[:M + 10]
+                elif kind == 'pages':               # a second page without a first
+                    doc['relocs'].append(['.run', page_at(1), 'abs32', 'sec:.run', NAME])
                 with self.assertRaises(build.BuildError):
                     sdk_alpha_registrations(doc, {'.run': raw})
 
-    def test_sdk_alpha_pages_logical_identity_and_capacity(self):
+    def test_sdk_alpha_pages_hold_the_machines_own_knobs(self):
         doc, raw = sdk_alpha_test_controls_document()
-        self.assertEqual(sdk_alpha_registrations(doc, {'.run': raw}),
+        layouts = {}
+        self.assertEqual(sdk_alpha_registrations(doc, {'.run': raw}, layouts),
                          [('sdk_alpha_registration_empty', 120)])
-        # A blank position cannot alias logical zero. Zero can appear on both pages.
-        doc['relocs'] = [r for r in doc['relocs'] if r[1] != 836]
+        self.assertEqual([layouts[120]['pages'][p]['knobs'][e]['id'] for p, e in ((0, 3), (1, 7), (0, 0))],
+                         [0, 0, 2])
+        without(doc, page_at(0, 3))                 # a blank position
         self.assertEqual(len(sdk_alpha_registrations(doc, {'.run': raw})), 1)
-        for offset, value, message in ((56, 3, 'at most 2 pages'),
-                                       (128, 15, '15 knobs'),
-                                       (128, 0xffffffff, '15 knobs'),
-                                       (164, 0, 'cannot share'),
-                                       (140, 2, 'supplied'),
-                                       (136, 128, 'min exceeds max')):
-            with self.subTest(offset=offset):
+        without(doc, *[page_at(p, e) for p in range(2) for e in range(8)])   # label-only pages
+        self.assertEqual(len(sdk_alpha_registrations(doc, {'.run': raw})), 1)
+        for edit, message in (
+                (lambda doc, raw: struct.pack_into('>I', raw, M + B.MACHINE_KNOB_COUNT, 16), 'at most 15 knobs'),
+                (lambda doc, raw: reloc(doc, page_at(0, 0)).__setitem__(4, knob_at(2) + 4), r'&knobs\[ID\]'),
+                (lambda doc, raw: reloc(doc, page_at(0, 0)).__setitem__(4, knob_at(15)), r'&knobs\[ID\]'),
+                (lambda doc, raw: reloc(doc, page_at(1, 0)).__setitem__(4, NAME), r'page 2 encoder A'),
+                (lambda doc, raw: reloc(doc, page_at(0, 0)).__setitem__(3, 'sym:external_knob'), 'own mod'),
+                (lambda doc, raw: struct.pack_into('>ii', raw, knob_at(4, B.KNOB_MIN), 5, 5), 'max above min'),
+                (lambda doc, raw: struct.pack_into('>ii', raw, knob_at(4, B.KNOB_MIN), 0, 0), 'max above min'),
+                (lambda doc, raw: without(doc, page_at(1)), 'page 2 has knobs but no label'),
+                (lambda doc, raw: without(doc, page_at(0), *[page_at(0, e) for e in range(8)]),
+                 'page 2 needs page 1'),
+                (lambda doc, raw: without(doc, knob_at(3)), 'missing registration pointer'),
+                (lambda doc, raw: without(doc, M + B.MACHINE_KNOBS), 'knob_count needs knobs'),
+                (lambda doc, raw: reloc(doc, 32).__setitem__(3, 'sym:unknown_sdk_abi'), 'ABI')):
+            with self.subTest(message=message):
                 doc, raw = sdk_alpha_test_controls_document()
-                struct.pack_into('>I', raw, offset, value)
-                if offset == 136:
-                    struct.pack_into('>I', raw, 140, 1)
+                edit(doc, raw)
                 with self.assertRaisesRegex(build.BuildError, message):
                     sdk_alpha_registrations(doc, {'.run': raw})
-        # A unique descriptor may live outside any common array or section.
+        # Knobs may live in another section.
         doc, raw = sdk_alpha_test_controls_document()
-        descriptor = raw[128:164]
-        label = next(r for r in doc['relocs'] if r[1] == 132)
-        doc['relocs'].remove(label)
-        doc['relocs'].append(['.other', 4, 'abs32', 'sec:.run', 96])
+        other = raw[KNOBS:knob_at(15)]
         for r in doc['relocs']:
-            if r[4] == 128:
-                r[3:5] = ['sec:.other', 0]
-        self.assertEqual(len(sdk_alpha_registrations(doc, {'.run': raw, '.other': descriptor})), 1)
-        for target in (129, len(raw) - 20):
-            doc, raw = sdk_alpha_test_controls_document()
-            next(r for r in doc['relocs'] if r[1] == 772)[4] = target
-            with self.assertRaises(build.BuildError):
-                sdk_alpha_registrations(doc, {'.run': raw})
-        doc, raw = sdk_alpha_test_controls_document()
-        next(r for r in doc['relocs'] if r[1] == 772)[3] = 'sym:external_knob'
-        with self.assertRaisesRegex(build.BuildError, 'own mod'):
-            sdk_alpha_registrations(doc, {'.run': raw})
-        doc, raw = sdk_alpha_test_controls_document()
-        doc['relocs'] = [r for r in doc['relocs'] if r[1] != 772]
-        with self.assertRaisesRegex(build.BuildError, 'contiguous'):
-            sdk_alpha_registrations(doc, {'.run': raw})
-        # Label-only pages need no knob list; stale page records must be rebuilt.
-        doc, raw = sdk_alpha_test_controls_document()
-        doc['relocs'] = [r for r in doc['relocs'] if not 772 <= r[1] <= 836 or r[1] == 804]
-        self.assertEqual(len(sdk_alpha_registrations(doc, {'.run': raw})), 1)
-        next(r for r in doc['relocs'] if r[1] == 32)[3] = 'sym:unknown_sdk_abi'
-        with self.assertRaisesRegex(build.BuildError, 'ABI'):
-            sdk_alpha_registrations(doc, {'.run': raw})
+            if KNOBS <= r[4] < knob_at(15) and r[3] == 'sec:.run':
+                r[3:5] = ['sec:.other', r[4] - KNOBS]
+            if KNOBS <= r[1] < knob_at(15):
+                r[0:2] = ['.other', r[1] - KNOBS]
+        self.assertEqual(len(sdk_alpha_registrations(doc, {'.run': raw, '.other': other})), 1)
 
     def test_sdk_alpha_glyph_registration(self):
+        glyph = knob_at(0, B.KNOB_GLYPH)
         for supplied in (False, True):
             doc, raw = sdk_alpha_test_controls_document()
             if supplied:
-                doc['relocs'].append(['.run', 152, 'abs32', 'sec:.run', 1000])
+                doc['relocs'].append(['.run', glyph, 'abs32', 'sec:.run', GLYPH])
             self.assertEqual(len(sdk_alpha_registrations(doc, {'.run': raw})), 1)
         for kind in ('truncated', 'external', 'unrelocated', 'duplicate', 'unaligned'):
             with self.subTest(kind=kind):
                 doc, raw = sdk_alpha_test_controls_document()
-                doc['relocs'].append(['.run', 152, 'abs32', 'sec:.run', 1000])
+                doc['relocs'].append(['.run', glyph, 'abs32', 'sec:.run', GLYPH])
                 if kind == 'truncated':
-                    raw = raw[:1031]
+                    raw = raw[:GLYPH + 31]
                 elif kind == 'external':
                     doc['relocs'][-1][3] = 'sym:external_glyph'
                 elif kind == 'unrelocated':
                     doc['relocs'].pop()
-                    struct.pack_into('>I', raw, 152, 1000)
+                    struct.pack_into('>I', raw, glyph, GLYPH)
                 elif kind == 'duplicate':
                     doc['relocs'].append(doc['relocs'][-1][:])
                 elif kind == 'unaligned':
@@ -253,25 +268,15 @@ class SdkAlphaTests(unittest.TestCase):
                 with self.assertRaises(build.BuildError):
                     sdk_alpha_registrations(doc, {'.run': raw})
 
-    def test_sdk_alpha_defaults(self):
-        for low, high, default, supplied, expected in (
-                (-50, 50, 0, 1, 0), (0, 127, 100, 1, 100),
-                (-50, 50, 0, 0, -50), (0, 127, 0, 1, 0)):
-            with self.subTest(low=low, high=high, default=default, supplied=supplied):
+    def test_sdk_alpha_defaults_are_clamped_into_the_range(self):
+        for low, high, default, expected in ((-50, 50, 0, 0), (0, 127, 100, 100), (10, 20, 0, 10),
+                                             (-50, 50, -51, -50), (0, 127, 200, 127)):
+            with self.subTest(low=low, high=high, default=default):
                 doc, raw = sdk_alpha_test_controls_document()
-                struct.pack_into('>iIiI', raw, 136, low, 1, high, 1)
-                struct.pack_into('>iI', raw, 156, default, supplied)
+                struct.pack_into('>iii', raw, knob_at(0, B.KNOB_MIN), low, high, default)
                 layouts = {}
                 sdk_alpha_registrations(doc, {'.run': raw}, layouts)
-                knob = layouts[120]['pages'][0]['knobs'][3]
-                self.assertEqual((knob['def'], knob['has_default']), (expected, bool(supplied)))
-        for default, supplied, message in ((-51, 1, 'within min..max'),
-                                             (51, 1, 'within min..max'), (0, 2, 'supplied')):
-            doc, raw = sdk_alpha_test_controls_document()
-            struct.pack_into('>iIiI', raw, 136, -50, 1, 50, 1)
-            struct.pack_into('>iI', raw, 156, default, supplied)
-            with self.assertRaisesRegex(build.BuildError, message):
-                sdk_alpha_registrations(doc, {'.run': raw})
+                self.assertEqual(layouts[120]['pages'][0]['knobs'][3]['def'], expected)
 
     def test_sdk_alpha_render_registration(self):
         layouts = {}
@@ -289,7 +294,7 @@ class SdkAlphaTests(unittest.TestCase):
                 with self.assertRaisesRegex(build.BuildError, message):
                     sdk_alpha_registrations(doc, {'.run': raw})
         doc, raw = sdk_alpha_test_render_document(render=False)
-        struct.pack_into('>I', raw, 72, 0x40001000)        # an address, not a function of the mod
+        struct.pack_into('>I', raw, M + B.MACHINE_RENDER, 0x40001000)        # an address, not a function of the mod
         with self.assertRaisesRegex(build.BuildError, 'function in the mod'):
             sdk_alpha_registrations(doc, {'.run': raw})
         doc, raw = sdk_alpha_test_render_document()

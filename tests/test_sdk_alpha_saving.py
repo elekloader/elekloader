@@ -15,11 +15,7 @@ from sdk_alpha_harness import sdk_machine, sdk_tests
 SAVED = sdk_machine("Saved", """
     #include "elekloader/sdk_alpha_machine.h"
 
-    static const struct elek_ui_knob hide = { .id = 0, .label = "HIDE" };
-    static const struct elek_ui_knob trgt = { .id = 1, .label = "TRGT" };
-    static const struct elek_ui_page pages[] = {
-        { .label = "SAVED", .knob = { [ELEK_ENCODER_A] = &hide, [ELEK_ENCODER_B] = &trgt } },
-    };
+    static const struct elek_knob knobs[] = { { "HIDE", .max = 127 }, { "TRGT", .max = 127 } };
     static void present(const struct elek_ui_context *ctx, struct elek_ui_presentation *out)
     {
         if (ctx->knob && ctx->knob[0]->value) {
@@ -28,8 +24,8 @@ SAVED = sdk_machine("Saved", """
         }
     }
     static const struct elek_machine saved = {
-        .id = @ID@, .name = "Saved", .short_name = "SAVD",
-        .pages = pages, .page_count = 1, .present = present,
+        .id = @ID@, .name = "Saved", .short_name = "SAVD", ELEK_KNOBS(knobs),
+        .pages = { { "SAVED", { [ELEK_A] = &knobs[0], [ELEK_B] = &knobs[1] } } }, .present = present,
     };
     ELEK_REGISTER_MACHINE(saved);
 """)

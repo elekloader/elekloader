@@ -26,7 +26,7 @@ static struct sdk_alpha_page sdk_alpha_pages[SDK_ALPHA_MACHINES];
 const struct cm_ui32 *sdk_alpha_ui(int32_t id)
 {
     const struct sdk_alpha_entry *e = sdk_alpha_find(id);
-    if (!e || !e->machine->page_count)
+    if (!e || !e->pages)
         return 0;
     const struct elek_machine *m = e->machine;
     struct sdk_alpha_page *p = &sdk_alpha_pages[e - sdk_alpha_entries];
@@ -35,24 +35,22 @@ const struct cm_ui32 *sdk_alpha_ui(int32_t id)
     p->ui.base.abi = cm_ui_v32;
     p->ui.base.page_from = 3;
     p->ui.base.group = m->name;
-    p->ui.page_count = m->page_count;
+    p->ui.page_count = e->pages;
     for (uint32_t k = 0; k < 15; ++k) {
         struct cm_knob *n = k < 8 ? &p->ui.base.knob[k] : &p->ui.extra[k - 8];
         n->look = 134;              /* native unipolar encoder, 0..127 in 8.8 */
         n->flags = CM_RANGE | CM_DEFAULT | CM_NOT_SAMPLE;
         n->max = ELEK_UI_RAW_MAX;
         if (k < e->count) {
-            n->name = n->lname = e->knob[k]->label;
-            n->def = sdk_alpha_default(e->knob[k]);
+            n->name = n->lname = m->knobs[k].label;
+            n->def = sdk_alpha_default(&m->knobs[k]);
         } else
             n->flags |= CM_HIDDEN;
     }
-    for (uint32_t page = 0; page < m->page_count; ++page) {
+    for (uint32_t page = 0; page < e->pages; ++page) {
         p->pages[page].title = m->pages[page].label;
-        for (int k = 0; k < 8; ++k) {
-            const struct elek_ui_knob *knob = m->pages[page].knob[k];
-            p->pages[page].parameter[k] = knob ? knob->id : CM_SRC_BLANK;
-        }
+        for (int k = 0; k < 8; ++k)
+            p->pages[page].parameter[k] = e->encoder[page][k] >= 0 ? e->encoder[page][k] : CM_SRC_BLANK;
     }
     p->ui.pages = p->pages;
     return &p->ui;
@@ -105,7 +103,7 @@ uint32_t sdk_alpha_layout(int32_t machine, uint32_t track)
 {
     const struct sdk_alpha_entry *e = sdk_alpha_find(machine);
     sdk_alpha_current = 0;
-    if (!e || e->machine->page_count)
+    if (!e || e->pages)
         return 0;
     sdk_alpha_current = e;
     const uint32_t *stock = (const uint32_t *)mp_stock_layout(3);
@@ -127,7 +125,7 @@ int32_t sdk_alpha_value_text(int32_t machine, int32_t k, int32_t raw, char *buf,
     const struct sdk_alpha_entry *e = sdk_alpha_find(machine);
     if (!e || (uint32_t)k >= e->count)
         return 0;
-    int32_t value = sdk_alpha_map(e->knob[k], raw);
+    int32_t value = sdk_alpha_map(&e->machine->knobs[k], raw);
     char digits[10];
     uint32_t n = value < 0 ? 0u - (uint32_t)value : (uint32_t)value;
     int count = 0, pos = 0;

@@ -15,27 +15,24 @@ int32_t sdk_alpha_count = -1;
  * written only with its final values, which a reentrant run writes again. */
 static int index_machine(struct sdk_alpha_entry *e, const struct elek_machine *m)
 {
-    const struct elek_ui_knob *by_id[SDK_ALPHA_KNOBS];
-    uint32_t count = 0, k;
-    if (m->page_count > 2 || (m->page_count && !m->pages) || m->_reserved[0] || m->_reserved[1])
+    uint32_t count = m->knob_count, pages = 0;
+    if (count > SDK_ALPHA_KNOBS || (count && !m->knobs))
         return 0;
-    for (k = 0; k < SDK_ALPHA_KNOBS; ++k)
-        by_id[k] = 0;
-    for (uint32_t page = 0; page < m->page_count; ++page)
+    while (pages < 2 && m->pages[pages].label)
+        ++pages;
+    for (uint32_t page = 0; page < 2; ++page)
         for (uint32_t encoder = 0; encoder < 8; ++encoder) {
-            const struct elek_ui_knob *knob = m->pages[page].knob[encoder];
-            if (!knob) continue;
-            uint32_t id = knob->id;     /* explicit ids keep values independent of layout order */
-            if (id >= SDK_ALPHA_KNOBS || (by_id[id] && by_id[id] != knob))
+            const struct elek_knob *knob = m->pages[page].encoder[encoder];
+            if (knob && (page >= pages || knob < m->knobs || knob >= m->knobs + count))
                 return 0;
-            by_id[id] = knob;
-            if (count <= id) count = id + 1;
         }
-    for (k = 0; k < count; ++k)
-        if (!by_id[k]) return 0;
-    for (k = 0; k < count; ++k)
-        e->knob[k] = by_id[k];
+    for (uint32_t page = 0; page < 2; ++page)
+        for (uint32_t encoder = 0; encoder < 8; ++encoder) {
+            const struct elek_knob *knob = m->pages[page].encoder[encoder];
+            e->encoder[page][encoder] = knob ? (int8_t)(knob - m->knobs) : -1;
+        }
     e->count = count;
+    e->pages = pages;
     e->machine = m;
     return 1;
 }
@@ -64,25 +61,23 @@ const struct sdk_alpha_entry *sdk_alpha_find(int32_t id)
 }
 
 /* Split the product so the full signed-32-bit bound range needs no 64-bit runtime. */
-int32_t sdk_alpha_map(const struct elek_ui_knob *knob, int32_t raw)
+int32_t sdk_alpha_map(const struct elek_knob *knob, int32_t raw)
 {
-    int32_t min = knob->min.supplied ? knob->min.value : 0;
-    int32_t max = knob->max.supplied ? knob->max.value : 127;
-    uint32_t span = (uint32_t)max - (uint32_t)min;
+    uint32_t span = (uint32_t)knob->max - (uint32_t)knob->min;
     if (raw < 0) raw = 0;
     if (raw > ELEK_UI_RAW_MAX) raw = ELEK_UI_RAW_MAX;
     uint32_t offset = (span / ELEK_UI_RAW_MAX) * (uint32_t)raw +
         ((span % ELEK_UI_RAW_MAX) * (uint32_t)raw + ELEK_UI_RAW_MAX / 2) / ELEK_UI_RAW_MAX;
-    return (int32_t)((uint32_t)min + offset);
+    return (int32_t)((uint32_t)knob->min + offset);
 }
 
-int32_t sdk_alpha_default(const struct elek_ui_knob *knob)
+int32_t sdk_alpha_default(const struct elek_knob *knob)
 {
-    if (!knob->def.supplied) return 0;
+    int32_t def = knob->def < knob->min ? knob->min : knob->def > knob->max ? knob->max : knob->def;
     int32_t lo = 0, hi = ELEK_UI_RAW_MAX;
     while (lo < hi) {
         int32_t mid = (lo + hi) / 2;
-        if (sdk_alpha_map(knob, mid) < knob->def.value) lo = mid + 1;
+        if (sdk_alpha_map(knob, mid) < def) lo = mid + 1;
         else hi = mid;
     }
     return lo;
@@ -90,7 +85,7 @@ int32_t sdk_alpha_default(const struct elek_ui_knob *knob)
 
 char sdk_alpha_labels[SDK_ALPHA_KNOBS][ELEK_UI_LABEL_MAX + 1];
 uint8_t sdk_alpha_visibility[SDK_ALPHA_KNOBS];
-const struct elek_ui_glyph *sdk_alpha_glyphs[SDK_ALPHA_KNOBS];
+const struct elek_glyph *sdk_alpha_glyphs[SDK_ALPHA_KNOBS];
 const struct sdk_alpha_entry *sdk_alpha_seen;
 int32_t sdk_alpha_seen_page = ELEK_UI_NO_PAGE;
 static uint32_t seen_track;
@@ -106,16 +101,16 @@ int32_t sdk_alpha_present(const struct sdk_alpha_entry *e, uint32_t track, int32
     struct elek_ui_knob_presentation presentation[SDK_ALPHA_KNOBS];
     struct elek_ui_knob_presentation *output[SDK_ALPHA_KNOBS];
     int32_t changed = 0;
-    if (page < 0 || (uint32_t)page >= m->page_count)
+    if (page < 0 || (uint32_t)page >= e->pages)
         page = ELEK_UI_NO_PAGE;
     for (k = 0; k < n; ++k) {
         int32_t r = raw[k] < 0 ? 0 : raw[k] > ELEK_UI_RAW_MAX ? ELEK_UI_RAW_MAX : raw[k];
         values[k].raw_value = r;
-        values[k].value = sdk_alpha_map(e->knob[k], r);
+        values[k].value = sdk_alpha_map(&m->knobs[k], r);
         input[k] = &values[k];
-        presentation[k].label = e->knob[k]->label;
+        presentation[k].label = m->knobs[k].label;
         presentation[k].visible = 1;
-        presentation[k].glyph = e->knob[k]->glyph;
+        presentation[k].glyph = m->knobs[k].glyph;
         output[k] = &presentation[k];
     }
     if (!force && e == sdk_alpha_seen && track == seen_track && page == sdk_alpha_seen_page) {
@@ -130,14 +125,14 @@ int32_t sdk_alpha_present(const struct sdk_alpha_entry *e, uint32_t track, int32
     seen_track = track;
     sdk_alpha_seen_page = page;
     const struct elek_ui_context ctx = {
-        .page = page, .page_count = m->page_count, .knob_count = n,
+        .page = page, .page_count = e->pages, .knob_count = n,
         .knob = n ? input : 0, .track = track,
     };
     struct elek_ui_presentation out = { .knob_count = n, .knob = n ? output : 0 };
     if (m->present)
         m->present(&ctx, &out);
     for (k = 0; k < n; ++k) {
-        const char *label = presentation[k].label ? presentation[k].label : e->knob[k]->label;
+        const char *label = presentation[k].label ? presentation[k].label : m->knobs[k].label;
         uint32_t c = 0;
         for (; c < ELEK_UI_LABEL_MAX && label[c]; ++c) {
             unsigned char ch = label[c];
@@ -160,14 +155,14 @@ const char *sdk_alpha_label(const struct sdk_alpha_entry *e, uint32_t k)
 {
     if (k >= e->count)
         return 0;
-    return e == sdk_alpha_seen ? sdk_alpha_labels[k] : e->knob[k]->label;
+    return e == sdk_alpha_seen ? sdk_alpha_labels[k] : e->machine->knobs[k].label;
 }
 
-const struct elek_ui_glyph *sdk_alpha_glyph(const struct sdk_alpha_entry *e, uint32_t k)
+const struct elek_glyph *sdk_alpha_glyph(const struct sdk_alpha_entry *e, uint32_t k)
 {
     if (k >= e->count)
         return 0;
-    return e == sdk_alpha_seen ? sdk_alpha_glyphs[k] : e->knob[k]->glyph;
+    return e == sdk_alpha_seen ? sdk_alpha_glyphs[k] : e->machine->knobs[k].glyph;
 }
 
 int32_t sdk_alpha_visible(const struct sdk_alpha_entry *e, uint32_t k)
@@ -175,7 +170,7 @@ int32_t sdk_alpha_visible(const struct sdk_alpha_entry *e, uint32_t k)
     return k < e->count && (e != sdk_alpha_seen || sdk_alpha_visibility[k]);
 }
 
-void sdk_alpha_blit(void *bmp, int32_t x, int32_t y, const struct elek_ui_glyph *glyph)
+void sdk_alpha_blit(void *bmp, int32_t x, int32_t y, const struct elek_glyph *glyph)
 {
     dev_fillrect(bmp, x, y, x + 16, y + 16, 0);
     for (int row = 0; row < 16; ++row)
@@ -205,7 +200,7 @@ void sdk_alpha_voice(const struct sdk_alpha_entry *e, struct elek_voice *v, cons
     int32_t knob[SDK_ALPHA_KNOBS];
     if (start) voices[v->slot].start = 1;
     for (uint32_t k = 0; k < e->count; ++k)
-        knob[k] = sdk_alpha_map(e->knob[k], raw[k]);
+        knob[k] = sdk_alpha_map(&e->machine->knobs[k], raw[k]);
     const struct elek_audio_context ctx = { .knob_count = e->count, .knob = e->count ? knob : 0 };
     v->flags = voices[v->slot].start ? ELEK_VOICE_START : 0;
     v->state = e->machine->voice_state ? voices[v->slot].state : 0;

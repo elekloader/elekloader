@@ -52,18 +52,14 @@ static void sound(const struct elek_audio_context *ctx, const struct elek_voice 
     out[1] = 16 * ++*(uint32_t *)v->state;
     ++calls[v->slot];
 }
-static const struct elek_ui_knob controls[] = {
-    { .id = 0, .label = "FINE", .min = ELEK_UI_BOUND(-50), .max = ELEK_UI_BOUND(50),
-      .def = ELEK_UI_BOUND(0) },
-    { .id = 1, .label = "LEVEL", .def = ELEK_UI_BOUND(100) },
-    { .id = 2, .label = "OMIT", .min = ELEK_UI_BOUND(-20) },
-};
-static const struct elek_ui_page pages[] = {
-    { .label = "FIRST", .knob = { &controls[0], &controls[1], &controls[2] } },
-    { .label = "SHARED", .knob = { &controls[0] } },
+static const struct elek_knob controls[] = {
+    { "FINE", .min = -50, .max = 50 },
+    { "LEVEL", .max = 127, .def = 100 },
+    { "LOW", .min = 10, .max = 20 },
 };
 static const struct elek_machine test = {
-    .id = 100, .name = "Test", .short_name = "TEST", .pages = pages, .page_count = 2,
+    .id = 100, .name = "Test", .short_name = "TEST", ELEK_KNOBS(controls),
+    .pages = { { "FIRST", { &controls[0], &controls[1], &controls[2] } }, { "SHARED", { &controls[0] } } },
     .render = sound, .voice_state = 4,
 };
 ELEK_REGISTER_MACHINE(test);

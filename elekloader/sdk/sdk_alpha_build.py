@@ -27,15 +27,20 @@ SDK_ALPHA_TARGETS = {
                                      5, frozenset()),
 }
 SDK_ALPHA_ABI = 'sdk_alpha_dt1_ui_v1'    # the one symbol the companions export to SDK machines
-ELEK_VOICE_STATE_MAX = 256      # sdk_alpha_machine.h
+# sdk_alpha_machine.h's limits and the layout of its structs, as a 32-bit build lays them out
+ELEK_UI_LABEL_MAX, ELEK_UI_KNOB_MAX, ELEK_UI_PAGE_MAX, ELEK_VOICE_STATE_MAX = 5, 15, 2, 256
+MACHINE_NAME, MACHINE_SHORT_NAME, MACHINE_KNOBS, MACHINE_KNOB_COUNT, MACHINE_PAGES = 4, 8, 12, 16, 20
+MACHINE_RENDER, MACHINE_VOICE_STATE, MACHINE_SIZE = 96, 100, 104
+PAGE_LABEL, PAGE_ENCODER, PAGE_SIZE = 0, 4, 36
+KNOB_LABEL, KNOB_MIN, KNOB_GLYPH, KNOB_SIZE = 0, 4, 16, 20
 
 
 def sdk_alpha_registrations(doc, sections, layouts=None):
     """Discover compiler-emitted adapters; never repeat machine declarations in JSON.
 
     layouts, when given, is filled with each machine's declared layout, by machine id:
-    {'name', 'pages': [{'label', 'knobs': {encoder 0-7: {'id', 'label', 'min', 'max'}}}],
-     'render': bool, 'voice_state': bytes}. The built mod does not change."""
+    {'name', 'knobs': [{'id', 'label', 'min', 'max', 'def'}], 'pages': [{'label', 'knobs': {encoder 0-7:
+    knob}}], 'render': bool, 'voice_state': bytes}. The built mod does not change."""
     def sdk_alpha_bytes(where, size):
         sec, off = where
         raw = sections.get(sec, b'')
@@ -69,6 +74,17 @@ def sdk_alpha_registrations(doc, sections, layouts=None):
             text.append(b)
         raise build.BuildError('sdk alpha: names and labels need 1..%d printable ASCII characters' % limit)
 
+    def relocated(where, offset):
+        return any(r[0] == where[0] and r[1] == where[1] + offset for r in doc['relocs'])
+
+    def pointer_or_null(where, offset):
+        """The pointer at where + offset, or None when it is null."""
+        if relocated(where, offset):
+            return sdk_alpha_pointer(where, offset)
+        if any(sdk_alpha_bytes((where[0], where[1] + offset), 4)):
+            raise build.BuildError('sdk alpha: pointers must point into the mod')
+        return None
+
     registrations, ids = [], set()
     for name in sorted(doc['exports']):
         if not name.startswith('sdk_alpha_registration_'):
@@ -83,82 +99,63 @@ def sdk_alpha_registrations(doc, sections, layouts=None):
         if len(abi) != 1 or abi[0][2:] != ['abs32', 'sym:' + SDK_ALPHA_ABI, 0]:
             raise build.BuildError('sdk alpha: invalid machine UI ABI')
         machine = sdk_alpha_pointer(ui, 4)
-        data = sdk_alpha_bytes(machine, 40)
+        data = sdk_alpha_bytes(machine, MACHINE_SIZE)
         if struct.unpack_from('>i', data)[0] != mid or struct.unpack_from('>iii', raw, 16) != (3, mid, 0x55493330):
             raise build.BuildError('sdk alpha: inconsistent machine adapter')
+        knob_count, = struct.unpack_from('>I', data, MACHINE_KNOB_COUNT)
+        if knob_count > ELEK_UI_KNOB_MAX:
+            raise build.BuildError('sdk alpha: a machine has at most %d knobs' % ELEK_UI_KNOB_MAX)
+        knobs = pointer_or_null(machine, MACHINE_KNOBS)
+        if knob_count and not knobs:
+            raise build.BuildError('sdk alpha: knob_count needs knobs (use ELEK_KNOBS)')
+        knob_layouts = []
+        for k in range(knob_count):
+            ref = (knobs[0], knobs[1] + KNOB_SIZE * k)
+            kd = sdk_alpha_bytes(ref, KNOB_SIZE)
+            label = sdk_alpha_name(ref, KNOB_LABEL, ELEK_UI_LABEL_MAX)
+            low, high, default = struct.unpack_from('>iii', kd, KNOB_MIN)
+            if high <= low:
+                raise build.BuildError('sdk alpha: knob %s needs max above min (%d..%d)' % (label, low, high))
+            glyph = pointer_or_null(ref, KNOB_GLYPH)
+            if glyph:
+                if glyph[1] % 2:
+                    raise build.BuildError('sdk alpha: glyph must be word-aligned')
+                sdk_alpha_bytes(glyph, 32)
+            knob_layouts.append({'id': k, 'label': label, 'min': low, 'max': high,
+                                 'def': min(max(default, low), high)})
         page_layouts = []
-        page_count, = struct.unpack_from('>I', data, 16)
-        if page_count > 2:
-            raise build.BuildError('sdk alpha: a machine has at most 2 pages')
-        if any(data[20:28]) or any(
-                r[0] == machine[0] and machine[1] + 20 <= r[1] < machine[1] + 28
-                for r in doc['relocs']):
-            raise build.BuildError('sdk alpha: reserved machine fields must be zero')
-        if not page_count:
-            if any(data[12:16]) or any(
-                    r[0] == machine[0] and r[1] == machine[1] + 12 for r in doc['relocs']):
-                raise build.BuildError('sdk alpha: empty machines require zero pages')
-        else:
-            pages = sdk_alpha_pointer(machine, 12)
-            knobs = {}
-            for page in range(page_count):
-                at_page = (pages[0], pages[1] + 36 * page)
-                pd = sdk_alpha_bytes(at_page, 36)
-                page_layout = {'label': sdk_alpha_name(at_page, 0, 16), 'knobs': {}}
-                page_layouts.append(page_layout)
-                for encoder in range(8):
-                    offset = 4 + 4 * encoder
-                    relocated = any(r[0] == pages[0] and r[1] == at_page[1] + offset
-                                    for r in doc['relocs'])
-                    if not relocated and not any(pd[offset:offset + 4]):
-                        continue
-                    ref = sdk_alpha_pointer(at_page, offset)
-                    kd = sdk_alpha_bytes(ref, 36)
-                    kid, = struct.unpack_from('>I', kd)
-                    if kid >= 15:
-                        raise build.BuildError('sdk alpha: knob IDs must be in 0..14 (at most 15 knobs)')
-                    if kid in knobs and knobs[kid] != ref:
-                        raise build.BuildError('sdk alpha: different knobs cannot share a logical ID')
-                    knobs[kid] = ref
-                    label = sdk_alpha_name(ref, 4, 5)   # ELEK_UI_LABEL_MAX
-                    low, has_low, high, has_high = struct.unpack_from('>iIiI', kd, 8)
-                    if has_low not in (0, 1) or has_high not in (0, 1):
-                        raise build.BuildError('sdk alpha: bound supplied must be 0 or 1')
-                    if (low if has_low else 0) > (high if has_high else 127):
-                        raise build.BuildError('sdk alpha: knob min exceeds max')
-                    low, high = low if has_low else 0, high if has_high else 127
-                    default, has_default = struct.unpack_from('>iI', kd, 28)
-                    if has_default not in (0, 1):
-                        raise build.BuildError('sdk alpha: default supplied must be 0 or 1')
-                    if has_default and not low <= default <= high:
-                        raise build.BuildError('sdk alpha: knob def must be within min..max')
-                    page_layout['knobs'][encoder] = {'id': kid, 'label': label,
-                                                      'min': low, 'max': high,
-                                                      'def': default if has_default else low,
-                                                      'has_default': bool(has_default)}
-                    relocated = any(r[0] == ref[0] and r[1] == ref[1] + 24
-                                    for r in doc['relocs'])
-                    if relocated or any(kd[24:28]):
-                        glyph = sdk_alpha_pointer(ref, 24)
-                        if glyph[1] % 2:
-                            raise build.BuildError('sdk alpha: glyph must be word-aligned')
-                        sdk_alpha_bytes(glyph, 32)
-            if set(knobs) != set(range(len(knobs))):
-                raise build.BuildError('sdk alpha: knob IDs must be contiguous from zero')
-        render = any(r[0] == machine[0] and r[1] == machine[1] + 32 for r in doc['relocs'])
+        for page in range(ELEK_UI_PAGE_MAX):
+            at_page = (machine[0], machine[1] + MACHINE_PAGES + PAGE_SIZE * page)
+            title = pointer_or_null(at_page, PAGE_LABEL)
+            if title:
+                if len(page_layouts) != page:
+                    raise build.BuildError('sdk alpha: page %d needs page %d before it' % (page + 1, page))
+                page_layouts.append({'label': sdk_alpha_name(at_page, PAGE_LABEL, 16), 'knobs': {}})
+            for encoder in range(8):
+                ref = pointer_or_null(at_page, PAGE_ENCODER + 4 * encoder)
+                if not ref:
+                    continue
+                if not title:
+                    raise build.BuildError('sdk alpha: page %d has knobs but no label' % (page + 1))
+                k, off = divmod(ref[1] - knobs[1], KNOB_SIZE) if knobs and ref[0] == knobs[0] else (-1, 0)
+                if off or not 0 <= k < knob_count:
+                    raise build.BuildError('sdk alpha: page %d encoder %s: a page holds &knobs[ID] '
+                                           'of the machine\'s own knobs' % (page + 1, 'ABCDEFGH'[encoder]))
+                page_layouts[page]['knobs'][encoder] = knob_layouts[k]
+        render = relocated(machine, MACHINE_RENDER)
         if render:
-            sdk_alpha_pointer(machine, 32)          # a function in the mod itself
-        elif any(data[32:36]):
+            sdk_alpha_pointer(machine, MACHINE_RENDER)          # a function in the mod itself
+        elif any(data[MACHINE_RENDER:MACHINE_RENDER + 4]):
             raise build.BuildError('sdk alpha: render must be a function in the mod')
-        voice_state, = struct.unpack_from('>I', data, 36)
+        voice_state, = struct.unpack_from('>I', data, MACHINE_VOICE_STATE)
         if voice_state > ELEK_VOICE_STATE_MAX:
             raise build.BuildError('sdk alpha: voice_state is at most %d bytes' % ELEK_VOICE_STATE_MAX)
         if voice_state and not render:
             raise build.BuildError('sdk alpha: voice_state needs a render')
-        machine_name = sdk_alpha_name(machine, 4, 16)
-        sdk_alpha_name(machine, 8, 4)
+        machine_name = sdk_alpha_name(machine, MACHINE_NAME, 16)
+        sdk_alpha_name(machine, MACHINE_SHORT_NAME, 4)
         if layouts is not None:
-            layouts[mid] = {'name': machine_name, 'pages': page_layouts,
+            layouts[mid] = {'name': machine_name, 'pages': page_layouts, 'knobs': knob_layouts,
                             'render': render, 'voice_state': voice_state}
         ids.add(mid)
         registrations.append((name, mid))
@@ -206,8 +203,7 @@ def sdk_alpha_build(moddir, stock, out=None):
         for _, mid in registrations:
             if mid < low:
                 raise build.BuildError('sdk alpha: duplicate or invalid machine slot %d (expected %d..127)' % (mid, low))
-            if 'defaults' not in features and any(
-                    knob['has_default'] for page in layouts[mid]['pages'] for knob in page['knobs'].values()):
+            if 'defaults' not in features and any(knob['def'] != knob['min'] for knob in layouts[mid]['knobs']):
                 raise build.BuildError('sdk alpha: defaults are not supported on %s %s yet' % (device, release))
             if layouts[mid]['render'] and 'render' not in features:
                 raise build.BuildError('sdk alpha: render is not supported on %s %s yet' % (device, release))

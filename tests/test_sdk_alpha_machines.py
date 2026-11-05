@@ -45,9 +45,8 @@ HELLO = sdk_example("SDK Hello", "examples/sdk-hello-world")
 ONE_PAGE = sdk_machine("One page", """
     #include "elekloader/sdk_alpha_machine.h"
 
-    static const struct elek_ui_page page = { .label = "ONE" };
     static const struct elek_machine one_page = {
-        .id = @ID@, .name = "One page", .short_name = "ONE", .pages = &page, .page_count = 1,
+        .id = @ID@, .name = "One page", .short_name = "ONE", .pages = { { "ONE" } },
     };
     ELEK_REGISTER_MACHINE(one_page);
 """)

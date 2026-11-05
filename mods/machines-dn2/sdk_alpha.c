@@ -48,15 +48,15 @@ void dn2_sdk_build(void)
     for (int32_t i = 0; i < count; ++i) {
         const struct elek_machine *e = declared(i);
         for (uint32_t id = 0; id < sdk_alpha_entries[i].count; ++id)
-            dn2_add_row(ROWS + SDK_ROW + id, SLOT + id, sdk_alpha_entries[i].knob[id]->label, 0, e->short_name);
-        for (uint32_t page = 0; page < e->page_count && page < 2; ++page) {
+            dn2_add_row(ROWS + SDK_ROW + id, SLOT + id, e->knobs[id].label, 0, e->short_name);
+        for (uint32_t page = 0; page < sdk_alpha_entries[i].pages; ++page) {
             struct descriptor *d = &pages[i][page];
             const char tab[] = {'S', 'Y', 'N', '1' + page, 0};
             d->name = dn2_representation(&titles[i][page][0], tab, 4);
             d->label = dn2_representation(&titles[i][page][1], e->pages[page].label, 16);
             for (int k = 0; k < 8; ++k) {
-                const struct elek_ui_knob *knob = e->pages[page].knob[k];
-                d->params[k] = knob && knob->id < sdk_alpha_entries[i].count ? ROWS + SDK_ROW + knob->id : 0;
+                int32_t id = sdk_alpha_entries[i].encoder[page][k];
+                d->params[k] = id >= 0 ? ROWS + SDK_ROW + id : 0;
             }
             d->params[8] = PAGE_END;
         }
@@ -66,14 +66,14 @@ void dn2_sdk_build(void)
 uint32_t dn2_sdk_page_count(uint32_t type)
 {
     int32_t i = machine_of(type);
-    return i < 0 ? 0 : declared(i)->page_count ? declared(i)->page_count : 1;
+    return i < 0 ? 0 : sdk_alpha_entries[i].pages ? sdk_alpha_entries[i].pages : 1;
 }
 
 /* Page `page` of the machine; 0 for an empty machine, whose one page is its descriptor's. */
 const struct descriptor *dn2_sdk_page(uint32_t type, uint32_t page)
 {
     int32_t i = machine_of(type);
-    return i < 0 || !declared(i)->page_count ? 0 : &pages[i][page];
+    return i < 0 || !sdk_alpha_entries[i].pages ? 0 : &pages[i][page];
 }
 
 /* The parameter code of the machine's sound slot (25 + logical knob), 0 when it has no such knob. */
@@ -163,7 +163,7 @@ static int32_t raw_of(uint32_t t, uint32_t id)
 static int32_t page_of(int32_t i)
 {
     int32_t page = dn2_syn_view ? *(const int32_t *)(dn2_syn_view + VIEW_CUR) : 0;
-    return page > 0 && (uint32_t)page < declared(i)->page_count ? page : 0;
+    return page > 0 && (uint32_t)page < sdk_alpha_entries[i].pages ? page : 0;
 }
 
 /* .present with track t's values (sdk_alpha_present skips unchanged ones), and the rows' labels. */
@@ -182,11 +182,10 @@ static void snapshot(int32_t i, uint32_t t, int32_t page)
         dn2_row_label(ROWS + SDK_ROW + id, sdk_alpha_labels[id], e->machine->short_name);
 }
 
-/* The knob at encoder k (0-7) of the page SYN shows of machine i, or 0. */
-static const struct elek_ui_knob *shown_knob(int32_t i, int32_t k)
+/* The id of the knob at encoder k (0-7) of the page SYN shows of machine i, or -1. */
+static int32_t shown_knob(int32_t i, int32_t k)
 {
-    const struct elek_machine *e = declared(i);
-    return e->page_count ? e->pages[page_of(i)].knob[k] : 0;
+    return sdk_alpha_entries[i].pages ? sdk_alpha_entries[i].encoder[page_of(i)][k] : -1;
 }
 
 /* ev_tick, the UI task: each track keeps its page and .present sees the active track's values. */
@@ -212,9 +211,9 @@ void dn2_sdk_tick(uint8_t *ctrl)
             dn2_sdk_ids[k] = 0;
         return;
     }
-    if (declared(i)->page_count && dn2_syn_view) {
+    if (sdk_alpha_entries[i].pages && dn2_syn_view) {
         if ((int32_t)t != shown_track) {
-            *(int32_t *)(dn2_syn_view + VIEW_CUR) = dn2_sdk_shown[t] < (int32_t)declared(i)->page_count ? dn2_sdk_shown[t] : 0;
+            *(int32_t *)(dn2_syn_view + VIEW_CUR) = dn2_sdk_shown[t] < (int32_t)sdk_alpha_entries[i].pages ? dn2_sdk_shown[t] : 0;
             shown_track = t;
             ctrl[0x20] = 1;
         } else {
@@ -230,8 +229,8 @@ void dn2_sdk_tick(uint8_t *ctrl)
         dirty = 0;
     }
     for (int k = 0; k < 8; ++k) {
-        const struct elek_ui_knob *knob = shown_knob(i, k);
-        dn2_sdk_ids[k] = knob && sdk_alpha_visibility[knob->id] ? ROWS + SDK_ROW + knob->id : 0;
+        int32_t id = shown_knob(i, k);
+        dn2_sdk_ids[k] = id >= 0 && sdk_alpha_visibility[id] ? ROWS + SDK_ROW + id : 0;
     }
 }
 
@@ -239,7 +238,7 @@ void dn2_sdk_tick(uint8_t *ctrl)
 static void sdk_draw(void *view, void *bmp)
 {
     int32_t i = track_machine(*dn2_active_track);
-    if (i < 0 || !declared(i)->page_count) {
+    if (i < 0 || !sdk_alpha_entries[i].pages) {
         draw_page(view, bmp);
         return;
     }
@@ -247,9 +246,9 @@ static void sdk_draw(void *view, void *bmp)
     struct descriptor *d = &pages[i][page_of(i)];
     uint32_t ids[8];
     for (int k = 0; k < 8; ++k) {
-        const struct elek_ui_knob *knob = shown_knob(i, k);
+        int32_t id = shown_knob(i, k);
         ids[k] = d->params[k];
-        if (knob && !sdk_alpha_visibility[knob->id])
+        if (id >= 0 && !sdk_alpha_visibility[id])
             d->params[k] = 0;
     }
     draw_page(view, bmp);
@@ -263,12 +262,12 @@ void dn2_sdk_draw(void *bmp, void *ctrl)
     (void)ctrl;
     int32_t i = track_machine(*dn2_active_track);
     /* BRAIN_SCREEN is 2 while the screen saver's view covers the frame; SYN stays the shown page. */
-    if (i < 0 || !declared(i)->page_count || !syn_shown() || *(const volatile int32_t *)(dn2_brain + BRAIN_SCREEN) == 2)
+    if (i < 0 || !sdk_alpha_entries[i].pages || !syn_shown() || *(const volatile int32_t *)(dn2_brain + BRAIN_SCREEN) == 2)
         return;
     for (int k = 0; k < 8; ++k) {
-        const struct elek_ui_knob *knob = shown_knob(i, k);
-        const struct elek_ui_glyph *glyph = knob ? sdk_alpha_glyphs[knob->id] : 0;
-        if (glyph && sdk_alpha_visibility[knob->id])
+        int32_t id = shown_knob(i, k);
+        const struct elek_glyph *glyph = id >= 0 ? sdk_alpha_glyphs[id] : 0;
+        if (glyph && sdk_alpha_visibility[id])
             sdk_alpha_blit(bmp, 25 + 26 * (k % 4), 34 - 27 * (k / 4), glyph);
     }
 }
@@ -279,8 +278,8 @@ int dn2_sdk_enc(void *brain, const int32_t *event)
     (void)brain;
     int32_t encoder = event[3] - 1;
     int32_t i = track_machine(*dn2_active_track);
-    const struct elek_ui_knob *knob;
-    if (i < 0 || !syn_shown() || encoder < 0 || encoder >= 8 || !(knob = shown_knob(i, encoder)))
+    int32_t id;
+    if (i < 0 || !syn_shown() || encoder < 0 || encoder >= 8 || (id = shown_knob(i, encoder)) < 0)
         return 0;
-    return !sdk_alpha_visibility[knob->id];
+    return !sdk_alpha_visibility[id];
 }

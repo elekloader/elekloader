@@ -5,20 +5,15 @@
 
 enum { FINE };
 enum { FLAT, IN_TUNE, SHARP };
-static const struct elek_ui_glyph tuning[] = {
+static const struct elek_glyph tuning[] = {
     [FLAT] = { .rows = { [3] = 0x0180, 0x0180, 0x0180, 0x0180, 0x0180, 0x0180, 0x0ff0, 0x07e0, 0x03c0,
                          0x0180 } },
     [IN_TUNE] = { .rows = { [5] = 0x1800, 0x2400, 0x4200, 0x4201, 0x8102, 0x0084, 0x0048, 0x0030 } },
     [SHARP] = { .rows = { [3] = 0x0180, 0x03c0, 0x07e0, 0x0ff0, 0x0180, 0x0180, 0x0180, 0x0180, 0x0180,
                           0x0180 } },
 };
-static const struct elek_ui_knob fine = {
-    .id = FINE, .label = "FINE",
-    .min = ELEK_UI_BOUND(-50), .max = ELEK_UI_BOUND(50), .def = ELEK_UI_BOUND(0),
-    .glyph = &tuning[IN_TUNE],
-};
-static const struct elek_ui_page pages[] = {
-    { .label = "SINE", .knob = { [ELEK_ENCODER_A] = &fine } },
+static const struct elek_knob knobs[] = {
+    [FINE] = { "FINE", .min = -50, .max = 50, .glyph = &tuning[IN_TUNE] },     /* starts at 0 */
 };
 
 static void present(const struct elek_ui_context *ctx, struct elek_ui_presentation *out)
@@ -57,8 +52,9 @@ static void render(const struct elek_audio_context *ctx, const struct elek_voice
 }
 
 static const struct elek_machine machine = {
-    .id = 123, .name = "SDK Sine", .short_name = "SINE",
-    .pages = pages, .page_count = 1, .present = present, .render = render,
+    .id = 123, .name = "SDK Sine", .short_name = "SINE", ELEK_KNOBS(knobs),
+    .pages = { { "SINE", { [ELEK_A] = &knobs[FINE] } } },
+    .present = present, .render = render,
     .voice_state = sizeof(struct state),
 };
 ELEK_REGISTER_MACHINE(machine);

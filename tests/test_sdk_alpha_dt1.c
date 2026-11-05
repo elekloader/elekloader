@@ -39,14 +39,10 @@ static void render(const struct elek_audio_context *ctx, const struct elek_voice
     out[0] = ++*state;
     ++calls[v->track];
 }
-static const struct elek_ui_knob fine = {
-    .id = 0, .label = "FINE", .min = ELEK_UI_BOUND(-50), .max = ELEK_UI_BOUND(50),
-    .def = ELEK_UI_BOUND(0),
-};
-static const struct elek_ui_page pages[] = { { .label = "TEST", .knob = { &fine } } };
+static const struct elek_knob knobs[] = { { "FINE", .min = -50, .max = 50 } };
 static const struct elek_machine machine = {
-    .id = 100, .name = "Test", .short_name = "TEST", .pages = pages, .page_count = 1,
-    .render = render, .voice_state = sizeof(uint32_t),
+    .id = 100, .name = "Test", .short_name = "TEST", ELEK_KNOBS(knobs),
+    .pages = { { "TEST", { &knobs[0] } } }, .render = render, .voice_state = sizeof(uint32_t),
 };
 static const struct sdk_alpha_machine_ui ui = { sdk_alpha_dt1_ui_v1, &machine };
 static uintptr_t test_machine_ui(int32_t id) { return id == 100 ? (uintptr_t)&ui : 0; }
@@ -86,10 +82,10 @@ int main(void)
     fw_voice_start = 0; fw_amp_env[3] = 0;
     sdk_alpha_render(blocks);
     assert(!last[1].gate && !last[1].flags);
-    assert(sdk_alpha_map(&fine, sdk_alpha_default(&fine)) == 0);
-    struct elek_ui_knob omitted = fine; omitted.def.supplied = 0;
-    assert(sdk_alpha_default(&omitted) == 0 && sdk_alpha_map(&omitted, 0) == -50);
-    struct elek_ui_knob level = { .def = ELEK_UI_BOUND(100) };
+    assert(sdk_alpha_map(&knobs[0], sdk_alpha_default(&knobs[0])) == 0);   /* omitted: 0 */
+    struct elek_knob level = { "LEVEL", .max = 127, .def = 100 };
     assert(sdk_alpha_map(&level, sdk_alpha_default(&level)) == 100);
+    struct elek_knob above = { "ABOVE", .min = 10, .max = 20 };
+    assert(sdk_alpha_default(&above) == 0);                                /* 0, clamped to min */
     return 0;
 }

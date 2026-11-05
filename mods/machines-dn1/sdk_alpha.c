@@ -104,11 +104,11 @@ static void init(void)
         for (int k = 0; k < DNM_KNOBS_ALL; ++k)
             defaults[n][k] = -1;
         for (uint32_t i = 0; i < e->count; ++i) {
-            knobs[n][sdk_pos[i]].name = e->knob[i]->label;
+            knobs[n][sdk_pos[i]].name = e->machine->knobs[i].label;
             knobs[n][sdk_pos[i]].fmt = sdk_value;
-            defaults[n][sdk_pos[i]] = sdk_alpha_default(e->knob[i]);
+            defaults[n][sdk_pos[i]] = sdk_alpha_default(&e->machine->knobs[i]);
         }
-        if (e->machine->page_count)
+        if (e->pages)
             machines[n].defaults = defaults[n];
     }
     __asm__ volatile ("" ::: "memory");
@@ -126,7 +126,7 @@ static int32_t shown_page(void)
 {
     const uint8_t *view = dnm_sdk_pages[0].view;
     int32_t page = listed && view ? *(const int32_t *)(view + V_CUR) : 0;
-    return listed && page > 0 && (uint32_t)page < entry_of(listed)->machine->page_count ? page : 0;
+    return listed && page > 0 && (uint32_t)page < entry_of(listed)->pages ? page : 0;
 }
 
 /* SDK machine i, or 0 past the last. */
@@ -158,58 +158,57 @@ void dnm_sdk_present(const struct dnm_machine *m, int force)
     snapshot(m, shown_page(), force);
 }
 
-/* The knob of machine m that SYN knob k (machines.c's 0-31) holds, or 0. */
-static const struct elek_ui_knob *sdk_knob(const struct dnm_machine *m, int32_t k)
+/* The id of machine m's knob that SYN knob k (machines.c's 0-31) holds, or -1. */
+static int32_t sdk_knob(const struct dnm_machine *m, int32_t k)
 {
     const struct sdk_alpha_entry *e = entry_of(m);
     for (uint32_t id = 0; e && id < e->count; ++id)
         if (sdk_pos[id] == k)
-            return e->knob[id];
-    return 0;
+            return id;
+    return -1;
 }
 
 const char *dnm_sdk_label(const struct dnm_machine *m, int32_t k)
 {
-    const struct elek_ui_knob *knob = sdk_knob(m, k);
-    if (!knob)
+    int32_t id = sdk_knob(m, k);
+    if (id < 0)
         return 0;
     dnm_sdk_present(m, 0);
-    return sdk_alpha_visibility[knob->id] ? sdk_alpha_labels[knob->id] : "";
+    return sdk_alpha_visibility[id] ? sdk_alpha_labels[id] : "";
 }
 
 const char *dnm_sdk_lfo_name(const struct dnm_machine *m, int32_t k, int32_t field)
 {
-    const struct elek_ui_knob *knob = sdk_knob(m, k);
-    if (!knob)
+    int32_t id = sdk_knob(m, k);
+    if (id < 0)
         return 0;
     snapshot(m, ELEK_UI_NO_PAGE, 0);
-    return field == 0x2c ? entry_of(m)->machine->short_name : sdk_alpha_labels[knob->id];
+    return field == 0x2c ? entry_of(m)->machine->short_name : sdk_alpha_labels[id];
 }
 
 static int32_t dnm_sdk_hidden(const struct dnm_machine *m, int32_t k)
 {
-    const struct elek_ui_knob *knob = sdk_knob(m, k);
-    if (!knob)
+    int32_t id = sdk_knob(m, k);
+    if (id < 0)
         return 0;
     dnm_sdk_present(m, 0);
-    return !sdk_alpha_visibility[knob->id];
+    return !sdk_alpha_visibility[id];
 }
 
-/* The knob at encoder k of the page shown, or 0. */
-static const struct elek_ui_knob *shown_knob(int32_t k)
+/* The id of the knob at encoder k of the page shown, or -1. */
+static int32_t shown_knob(int32_t k)
 {
-    const struct elek_machine *e = listed ? entry_of(listed)->machine : 0;
-    return e && e->page_count ? e->pages[shown_page()].knob[k] : 0;
+    const struct sdk_alpha_entry *e = listed ? entry_of(listed) : 0;
+    return e && e->pages ? e->encoder[shown_page()][k] : -1;
 }
 
 int32_t dnm_sdk_enc(void *brain, const int32_t *event)
 {
-    int32_t encoder = event[3] - 1;
-    const struct elek_ui_knob *knob;
+    int32_t encoder = event[3] - 1, id;
     if (!listed || encoder < 0 || encoder >= 8 || !core_page_shown(brain, &dnm_sdk_pages[shown_page()]) ||
-        !(knob = shown_knob(encoder)))
+        (id = shown_knob(encoder)) < 0)
         return 0;
-    return dnm_sdk_hidden(listed, sdk_pos[knob->id]);
+    return dnm_sdk_hidden(listed, sdk_pos[id]);
 }
 
 /* Hide only while painting: the native clipboard still sees every declared parameter. */
@@ -220,15 +219,15 @@ static void sdk_draw(void *view, void *bmp)
     if (listed)
         dnm_sdk_present(listed, 0);
     for (int k = 0; k < 8; ++k) {
-        const struct elek_ui_knob *knob = shown_knob(k);
+        int32_t id = shown_knob(k);
         ids[k] = page->ids[k];
-        if (knob && !sdk_alpha_visibility[knob->id])
+        if (id >= 0 && !sdk_alpha_visibility[id])
             page->ids[k] = 0;
     }
     draw_page(view, bmp);
     for (int k = 0; k < 8; ++k) {
-        const struct elek_ui_knob *knob = shown_knob(k);
-        const struct elek_ui_glyph *glyph = knob ? sdk_alpha_glyphs[knob->id] : 0;
+        int32_t id = shown_knob(k);
+        const struct elek_glyph *glyph = id >= 0 ? sdk_alpha_glyphs[id] : 0;
         if (page->ids[k] && glyph)
             sdk_alpha_blit(bmp, 25 + 26 * (k % 4), 34 - 27 * (k / 4), glyph);
     }
@@ -285,14 +284,14 @@ void dnm_sdk_tick(const struct dnm_machine *m, void *ctrl)
     if (want != listed) {
         int32_t pages = 0;
         if (want) {
-            const struct elek_machine *e = entry_of(want)->machine;
-            pages = e->page_count ? e->page_count : 1;
+            const struct sdk_alpha_entry *e = entry_of(want);
+            pages = e->pages ? e->pages : 1;
             for (int p = 0; p < pages; ++p) {
-                dnm_sdk_pages[p].short_title = e->short_name;
-                dnm_sdk_pages[p].title = e->page_count ? e->pages[p].label : e->name;
+                dnm_sdk_pages[p].short_title = e->machine->short_name;
+                dnm_sdk_pages[p].title = e->pages ? e->machine->pages[p].label : e->machine->name;
                 for (int k = 0; k < 8; ++k) {
-                    const struct elek_ui_knob *knob = e->page_count ? e->pages[p].knob[k] : 0;
-                    dnm_sdk_pages[p].ids[k] = knob ? dnm_sdk_param(sdk_pos[knob->id]) : 0;
+                    int32_t id = e->pages ? e->encoder[p][k] : -1;
+                    dnm_sdk_pages[p].ids[k] = id >= 0 ? dnm_sdk_param(sdk_pos[id]) : 0;
                 }
             }
         }
@@ -306,7 +305,7 @@ void dnm_sdk_tick(const struct dnm_machine *m, void *ctrl)
     if (listed && dnm_sdk_pages[0].view) {  /* each track keeps its page, as on the Digitakt */
         int32_t t = fw_active_track, *cur = (int32_t *)((uint8_t *)dnm_sdk_pages[0].view + V_CUR);
         if (t >= 0 && t < 4 && t != shown_track) {
-            *cur = dnm_sdk_shown[t] < (int32_t)entry_of(listed)->machine->page_count ? dnm_sdk_shown[t] : 0;
+            *cur = dnm_sdk_shown[t] < (int32_t)entry_of(listed)->pages ? dnm_sdk_shown[t] : 0;
             shown_track = t;
             ((uint8_t *)ctrl)[0x20] = 1;
         } else if (t == shown_track) {

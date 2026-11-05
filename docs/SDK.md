@@ -8,7 +8,8 @@ rebuilt when it does.
 
 **Machine UIs work on all three releases below. Both mk1 devices run SDK
 renderers and apply mapped knob defaults.** Digitone II currently accepts
-UI-only machines; its builder refuses `.render` and explicit `.def`.
+UI-only machines; its builder refuses `.render` and a knob that starts
+above its `min`.
 
 The [header](../elekloader/sdk/include/elekloader/sdk_alpha_machine.h) is the
 reference for exact types, fields and helper behavior. This page explains
@@ -39,7 +40,7 @@ empty voice.
 
 ## How it fits together
 
-1. The mod defines an `elek_machine`, pages and logical knobs in C, then
+1. The mod defines an `elek_machine`, its knobs and pages in C, then
    declares it with `ELEK_REGISTER_MACHINE`.
 2. The SDK builder reads the compiled declaration. It validates the layout
    and adds the device's registration, machine-ID claim and required
@@ -50,9 +51,10 @@ empty voice.
 4. The companion calls `.present` with a snapshot of the editing track's
    values, then applies its labels, visibility and glyphs to the native UI.
 
-The logical knob ID is independent of its encoder or page. A knob placed
-on both pages has one stored value and one destination in each LFO. Hiding
-or renaming it changes its presentation without changing that identity.
+A knob's ID is its index in the machine's `knobs` array, independent of
+its encoder or page. A knob placed on both pages has one stored value and
+one destination in each LFO. Hiding or renaming it changes its
+presentation without changing that identity.
 
 ## Writing a UI machine
 
@@ -60,12 +62,9 @@ or renaming it changes its presentation without changing that identity.
 #include "elekloader/sdk_alpha_machine.h"
 
 enum { LEVEL, TONE };
-static const struct elek_ui_knob level = { .id = LEVEL, .label = "LEVEL" };
-static const struct elek_ui_knob tone = {
-    .id = TONE, .label = "TONE", .min = ELEK_UI_BOUND(-10), .max = ELEK_UI_BOUND(10),
-};
-static const struct elek_ui_page pages[] = {
-    { .label = "MAIN", .knob = { [ELEK_ENCODER_A] = &level, [ELEK_ENCODER_B] = &tone } },
+static const struct elek_knob knobs[] = {
+    [LEVEL] = { "LEVEL", .max = 127, .def = 100 },
+    [TONE] = { "TONE", .min = -10, .max = 10 },          /* starts at 0 */
 };
 static void present(const struct elek_ui_context *ctx, struct elek_ui_presentation *out)
 {
@@ -73,8 +72,9 @@ static void present(const struct elek_ui_context *ctx, struct elek_ui_presentati
         out->knob[TONE]->visible = 0;
 }
 static const struct elek_machine machine = {
-    .id = 23, .name = "My Machine", .short_name = "MINE",
-    .pages = pages, .page_count = 1, .present = present,
+    .id = 23, .name = "My Machine", .short_name = "MINE", ELEK_KNOBS(knobs),
+    .pages = { { "MAIN", { [ELEK_A] = &knobs[LEVEL], [ELEK_B] = &knobs[TONE] } } },
+    .present = present,
 };
 ELEK_REGISTER_MACHINE(machine);
 ```
@@ -82,24 +82,24 @@ ELEK_REGISTER_MACHINE(machine);
 - A machine ID is 4..127 on the mk1s, 5..127 on Digitone II. Give
   independently distributed machines different stable IDs. Its name has
   1..16 printable ASCII characters and its short name 1..4.
-- An empty machine can omit pages. Otherwise it has at most two pages,
-  each with a 1..16-character title and eight encoder positions, A..H.
-  An unspecified position is empty.
-- Logical knob IDs are contiguous from zero, with at most fifteen knobs
-  across all pages. Reuse the same knob descriptor for repeated placements.
-  Labels have 1..5 printable ASCII characters.
-- Bounds default to 0..127. `ELEK_UI_BOUND(0)` supplies a real zero bound;
-  it is different from omitting the bound. The callback receives a mapped
-  integer and the underlying raw value, 0..32512 in native 8.8 units.
-  Mapping rounds to the nearest integer, with exact halves toward max.
-- On the mk1 devices, `.def = ELEK_UI_BOUND(value)` sets a mapped default.
-  An explicit zero differs from omission: omission starts at the minimum.
-  The builder refuses defaults outside the effective bounds. Selection and
-  clear/reset use the default; paste and project load restore edited values.
-  Repeated page placements share one default and one value. Native storage
-  has 32,513 steps; a default between representable values uses the first
-  step mapping at or above it. Explicit defaults on Digitone II are
-  refused until its backend implements them.
+- `ELEK_KNOBS(knobs)` gives the machine its knobs: at most fifteen. A
+  knob's label has 1..5 printable ASCII characters.
+- `.pages` holds up to two pages, each with a 1..16-character label and
+  eight encoders, `ELEK_A`..`ELEK_H`. An encoder holds `&knobs[ID]` or
+  nothing. A page without a label is absent, so a machine with no pages
+  leaves `.pages` out; the second page needs the first. Place the same
+  knob on both pages to share it. The builder refuses a page pointing
+  anywhere but the machine's own `knobs`.
+- `max` is required and must be above `min` (which defaults to 0). Values
+  map the knob's native range onto `min..max`, rounding to the nearest
+  integer, with exact halves toward max.
+- `def` is the value a knob starts at, clamped into `min..max`; omitted, it
+  is 0, so a `-10..10` knob starts centred and a `10..20` one at 10. On the
+  mk1 devices, selection and clear/reset use the default; paste and
+  project load restore edited values. Native storage has 32,513 steps; a
+  default between representable values uses the first step mapping at or
+  above it. Digitone II refuses a knob that starts above its `min` until
+  its backend implements defaults.
 
 ### Presentation
 

@@ -280,8 +280,7 @@ class UsedMachine:
 
     def all_knobs(self):
         """Every knob the machine declares, by logical id."""
-        specs = {knob['id']: knob['label'] for page in self.layout['pages'] for knob in page['knobs'].values()}
-        return self.knobs(*[specs[i] for i in sorted(specs)])
+        return self.knobs(*[knob['label'] for knob in self.layout['knobs']])
 
 
 class Lfo:

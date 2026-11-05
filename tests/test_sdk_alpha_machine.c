@@ -22,8 +22,8 @@ void dn2_fillrect(void *bmp, int32_t x0, int32_t y0, int32_t x1, int32_t y1, int
 static const char *want_label;
 static uint32_t want_visible = 1, presents, seen_knob_count;
 static int32_t seen_page, seen_value;
-static const struct elek_ui_glyph glyph = { .rows = { 0x8000, [15] = 0x0001 } };
-static const struct elek_ui_glyph *want_glyph;
+static const struct elek_glyph glyph = { .rows = { 0x8000, [15] = 0x0001 } };
+static const struct elek_glyph *want_glyph;
 static void present(const struct elek_ui_context *ctx, struct elek_ui_presentation *out)
 {
     ++presents;
@@ -35,29 +35,35 @@ static void present(const struct elek_ui_context *ctx, struct elek_ui_presentati
     if (want_glyph) out->knob[0]->glyph = want_glyph;
 }
 
-static const struct elek_ui_knob a = { .id = 0, .label = "A", .min = ELEK_UI_BOUND(-50), .max = ELEK_UI_BOUND(50) };
-static const struct elek_ui_knob b = { .id = 1, .label = "B" };
-static const struct elek_ui_knob c = { .id = 2, .label = "C" };
-static const struct elek_ui_knob a_too = { .id = 0, .label = "A2" };
-static const struct elek_ui_page good_pages[] = { { .label = "P1", .knob = { &a, &b } }, { .label = "P2", .knob = { [7] = &a } } };
-static const struct elek_ui_page gap_page[] = { { .label = "GAP", .knob = { &a, &c } } };
-static const struct elek_ui_page twice_page[] = { { .label = "TWICE", .knob = { &a, &a_too } } };
-static const struct elek_machine good = { .id = 100, .name = "Good", .short_name = "GOOD", .pages = good_pages, .page_count = 2, .present = present };
+static const struct elek_knob knobs[] = { { "A", .min = -50, .max = 50 }, { "B", .max = 127 } };
+static const struct elek_knob other[] = { { "C", .max = 127 } };
+static const struct elek_knob many[16] = { { "M", .max = 127 } };
+static const struct elek_machine good = {
+    .id = 100, .name = "Good", .short_name = "GOOD", ELEK_KNOBS(knobs),
+    .pages = { { "P1", { &knobs[0], &knobs[1] } }, { "P2", { [7] = &knobs[0] } } }, .present = present,
+};
 static const struct elek_machine empty = { .id = 101, .name = "Empty", .short_name = "EMPT" };
-static const struct elek_machine gap = { .id = 102, .name = "Gap", .short_name = "GAP", .pages = gap_page, .page_count = 1 };
-static const struct elek_machine twice = { .id = 103, .name = "Twice", .short_name = "TWIC", .pages = twice_page, .page_count = 1 };
-static const struct elek_machine three = { .id = 104, .name = "Three", .short_name = "THRE", .pages = good_pages, .page_count = 3 };
-static const struct elek_machine reserved = { .id = 105, .name = "Res", .short_name = "RES", ._reserved = { 1 } };
+static const struct elek_machine foreign = {        /* a page holds another array's knob */
+    .id = 102, .name = "Foreign", .short_name = "FORN", ELEK_KNOBS(knobs), .pages = { { "F", { &other[0] } } },
+};
+static const struct elek_machine beyond = {         /* a knob past knob_count */
+    .id = 103, .name = "Beyond", .short_name = "BYND", .knobs = knobs, .knob_count = 1,
+    .pages = { { "B", { &knobs[1] } } },
+};
+static const struct elek_machine unlabelled = {     /* knobs on a page that is absent */
+    .id = 104, .name = "Unlabelled", .short_name = "UNLB", ELEK_KNOBS(knobs), .pages = { { 0, { &knobs[0] } } },
+};
+static const struct elek_machine too_many = { .id = 105, .name = "Many", .short_name = "MANY", ELEK_KNOBS(many) };
 ELEK_REGISTER_MACHINE(good);
 ELEK_REGISTER_MACHINE(empty);
-ELEK_REGISTER_MACHINE(gap);
-ELEK_REGISTER_MACHINE(twice);
-ELEK_REGISTER_MACHINE(three);
-ELEK_REGISTER_MACHINE(reserved);
+ELEK_REGISTER_MACHINE(foreign);
+ELEK_REGISTER_MACHINE(beyond);
+ELEK_REGISTER_MACHINE(unlabelled);
+ELEK_REGISTER_MACHINE(too_many);
 const char sdk_alpha_dt1_ui_v1[] = "sdk alpha 1";
 const struct sdk_alpha_registration *const sdk_alpha_machines[] = {
-    &sdk_alpha_registration_good, &sdk_alpha_registration_empty, &sdk_alpha_registration_gap,
-    &sdk_alpha_registration_twice, &sdk_alpha_registration_three, &sdk_alpha_registration_reserved, 0
+    &sdk_alpha_registration_good, &sdk_alpha_registration_empty, &sdk_alpha_registration_foreign,
+    &sdk_alpha_registration_beyond, &sdk_alpha_registration_unlabelled, &sdk_alpha_registration_too_many, 0
 };
 
 static int32_t present_label(const struct sdk_alpha_entry *e, const char *label, uint32_t visible)
@@ -71,17 +77,13 @@ static int32_t present_label(const struct sdk_alpha_entry *e, const char *label,
 int main(void)
 {
     /* Mapping: the split product equals 64-bit nearest rounding, halves toward max, raw clamped. */
-    static const struct { int32_t min, max; int supplied; } bounds[] = {
-        { 0, 127, 0 }, { -50, 50, 1 }, { 0, 1, 1 }, { 7, 7, 1 }, { -1000000, 1000000, 1 },
-        { INT32_MIN, INT32_MAX, 1 }, { INT32_MIN, INT32_MIN + 1, 1 }, { INT32_MAX - 1, INT32_MAX, 1 },
+    static const struct { int32_t min, max; } bounds[] = {
+        { 0, 127 }, { -50, 50 }, { 0, 1 }, { -1000000, 1000000 },
+        { INT32_MIN, INT32_MAX }, { INT32_MIN, INT32_MIN + 1 }, { INT32_MAX - 1, INT32_MAX },
     };
     static const int32_t raws[] = { INT32_MIN, -1, 0, 1, 127, 128, R / 2, R / 2 + 1, R - 1, R, R + 1, INT32_MAX };
     for (unsigned i = 0; i < sizeof bounds / sizeof *bounds; ++i) {
-        struct elek_ui_knob k = { .label = "K" };
-        if (bounds[i].supplied) {
-            k.min = (struct elek_ui_bound)ELEK_UI_BOUND(bounds[i].min);
-            k.max = (struct elek_ui_bound)ELEK_UI_BOUND(bounds[i].max);
-        }
+        struct elek_knob k = { .label = "K", .min = bounds[i].min, .max = bounds[i].max };
         int64_t span = (int64_t)bounds[i].max - bounds[i].min;
         int32_t last = INT32_MIN;
         for (unsigned j = 0; j < sizeof raws / sizeof *raws; ++j) {
@@ -93,22 +95,24 @@ int main(void)
         }
         assert(sdk_alpha_map(&k, 0) == bounds[i].min && sdk_alpha_map(&k, R) == bounds[i].max);
 
-        /* Defaults: the first native step that reaches the default; none is step 0. */
+        /* Defaults: the first native step that reaches the default, clamped into min..max (0 when
+         * omitted). */
         int32_t defs[] = { bounds[i].min, bounds[i].max, (int32_t)(bounds[i].min + span / 2),
-                           (int32_t)(bounds[i].min + span / 3) };
-        assert(sdk_alpha_default(&k) == 0);
+                           (int32_t)(bounds[i].min + span / 3), 0, INT32_MIN, INT32_MAX };
         for (unsigned j = 0; j < sizeof defs / sizeof *defs; ++j) {
-            k.def = (struct elek_ui_bound)ELEK_UI_BOUND(defs[j]);
-            int32_t d = sdk_alpha_default(&k);
-            assert(d >= 0 && d <= R && sdk_alpha_map(&k, d) >= defs[j]);
-            assert(d == 0 || sdk_alpha_map(&k, d - 1) < defs[j]);
+            k.def = defs[j];
+            int32_t d = sdk_alpha_default(&k), want = defs[j] < k.min ? k.min : defs[j] > k.max ? k.max : defs[j];
+            assert(d >= 0 && d <= R && sdk_alpha_map(&k, d) >= want);
+            assert(d == 0 || sdk_alpha_map(&k, d - 1) < want);
         }
     }
 
-    /* The index: refused machines are not SDK machines; knobs by id across pages. */
+    /* The index: refused machines are not SDK machines; each encoder's knob id, by page. */
     const struct sdk_alpha_entry *e = sdk_alpha_find(100);
-    assert(sdk_alpha_count == 2 && e && e->count == 2 && e->knob[0] == &a && e->knob[1] == &b);
-    assert(sdk_alpha_find(101) && sdk_alpha_find(101)->count == 0);
+    assert(sdk_alpha_count == 2 && e && e->count == 2 && e->pages == 2);
+    assert(e->encoder[0][0] == 0 && e->encoder[0][1] == 1 && e->encoder[0][2] == -1);
+    assert(e->encoder[1][7] == 0 && e->encoder[1][0] == -1);
+    assert(sdk_alpha_find(101) && sdk_alpha_find(101)->count == 0 && sdk_alpha_find(101)->pages == 0);
     for (int32_t id = 102; id <= 106; ++id)
         assert(!sdk_alpha_find(id));
 
@@ -148,7 +152,7 @@ int main(void)
     assert(presents == 4);
     sdk_alpha_present(sdk_alpha_find(101), 1, 0, raw, 0);   /* another machine, no knobs, no present */
     assert(sdk_alpha_seen == sdk_alpha_find(101) && sdk_alpha_seen_page == ELEK_UI_NO_PAGE);
-    assert(sdk_alpha_label(e, 0) == a.label);           /* not the last presented: as declared */
+    assert(sdk_alpha_label(e, 0) == knobs[0].label);           /* not the last presented: as declared */
     sdk_alpha_present(e, 1, ELEK_UI_NO_PAGE, raw, 0);
     assert(presents == 5);
 

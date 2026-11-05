@@ -9,26 +9,22 @@
 #define ELEK_UI_NO_PAGE (-1)
 #define ELEK_UI_LABEL_MAX 5   /* a knob label's characters: what fits under a knob on the Digitakt and Digitone */
 #define ELEK_UI_RAW_MAX (127 << 8) /* Native 8.8 units: 0..32512, independent of mapped bounds. */
-#define ELEK_UI_BOUND(v) { .value = (v), .supplied = 1 }
-enum { ELEK_ENCODER_A, ELEK_ENCODER_B, ELEK_ENCODER_C, ELEK_ENCODER_D,
-       ELEK_ENCODER_E, ELEK_ENCODER_F, ELEK_ENCODER_G, ELEK_ENCODER_H };
+enum { ELEK_A, ELEK_B, ELEK_C, ELEK_D, ELEK_E, ELEK_F, ELEK_G, ELEK_H };   /* the encoders */
 
-/* An omitted bound is distinct from ELEK_UI_BOUND(0). Defaults: min 0, max 127. */
-struct elek_ui_bound { int32_t value; uint32_t supplied; };
 /* 16 x 16 monochrome pixels: top row first, bit 15 leftmost; 1 lights a pixel.
  * Glyphs must remain readable while displayed (normally static const storage). */
-struct elek_ui_glyph { uint16_t rows[16]; };
-/* Every logical knob is an LFO target; presentation labels never change its ID. */
-struct elek_ui_knob {
-    uint32_t id;                   /* machine-wide logical ID, contiguous from zero */
-    const char *label;             /* 1..ELEK_UI_LABEL_MAX printable ASCII characters (sdk_alpha_build refuses more) */
-    struct elek_ui_bound min, max;
-    const struct elek_ui_glyph *glyph; /* null uses the stock encoder graphic */
-    struct elek_ui_bound def;      /* optional mapped default, min when omitted */
+struct elek_glyph { uint16_t rows[16]; };
+/* A knob: its index in the machine's .knobs is its id. Every knob is an LFO target; presentation
+ * labels never change its id. */
+struct elek_knob {
+    const char *label;             /* 1..ELEK_UI_LABEL_MAX printable ASCII characters */
+    int32_t min, max;              /* the mapped range; max is required and above min */
+    int32_t def;                   /* the value it starts at, clamped into min..max (omitted: 0) */
+    const struct elek_glyph *glyph; /* null uses the stock encoder graphic */
 };
-struct elek_ui_page {
-    const char *label;             /* 1..16 printable ASCII characters */
-    const struct elek_ui_knob *knob[8]; /* knob descriptors, which pages may share; null is empty */
+struct elek_page {
+    const char *label;             /* 1..16 printable ASCII characters; a page without one is absent */
+    const struct elek_knob *encoder[8]; /* &knobs[ID] or null for an empty position; pages may share */
 };
 struct elek_ui_value {
     int32_t value;                 /* signed integer, nearest; exact halves round toward max */
@@ -46,7 +42,7 @@ struct elek_ui_context {
 struct elek_ui_knob_presentation {
     const char *label;
     uint32_t visible;              /* defaults to 1; zero blanks every position, retaining its value */
-    const struct elek_ui_glyph *glyph; /* descriptor's default each call; null selects stock */
+    const struct elek_glyph *glyph; /* descriptor's default each call; null selects stock */
 };
 struct elek_ui_presentation {
     uint32_t knob_count;
@@ -137,10 +133,10 @@ struct elek_audio_context {
 struct elek_machine {
     int32_t id;                    /* native machine slot, 4..127 (Digitone II: 5..127); declared only here */
     const char *name, *short_name; /* 1..16 and 1..4 ASCII characters */
-    const struct elek_ui_page *pages; /* at most two pages and fifteen logical knobs */
-    uint32_t page_count;
-    uint32_t _reserved[2];         /* zero */
-    /* Called when the machine, track, page or a value changed, and maybe again with the same inputs:
+    const struct elek_knob *knobs; /* at most fifteen: give them with ELEK_KNOBS */
+    uint32_t knob_count;
+    struct elek_page pages[2];     /* a page without a label is absent: the first, if any, has one */
+/* Called when the machine, track, page or a value changed, and maybe again with the same inputs:
      * keep it pure. ctx and its values are read-only snapshots, valid only during this call. */
     void (*present)(const struct elek_ui_context *, struct elek_ui_presentation *);
     /* Optional: the machine's sound, one voice at a time (without it the device's own plays).
@@ -148,6 +144,8 @@ struct elek_machine {
     void (*render)(const struct elek_audio_context *, const struct elek_voice *, elek_sample *out);
     uint32_t voice_state;          /* 0..ELEK_VOICE_STATE_MAX bytes a voice keeps; needs render */
 };
+
+#define ELEK_KNOBS(k) .knobs = (k), .knob_count = sizeof(k) / sizeof((k)[0])
 
 /* Private adapter; the existing core descriptor and UI layouts stay intact. */
 struct sdk_alpha_machine_ui {

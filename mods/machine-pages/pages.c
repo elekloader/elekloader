@@ -170,8 +170,8 @@ uint32_t mp_layout_track(int32_t m, uint32_t track)
 uint32_t sdk_alpha_layout_view(int32_t machine, uint32_t track, void *view)
 {
     const struct sdk_alpha_entry *m = sdk_alpha_find(machine);
-    if (m && m->machine->page_count && track < 8 &&
-        sdk_alpha_snapshot(m, selected[track] < m->machine->page_count ? selected[track] : 0, view))
+    if (m && m->pages && track < 8 &&
+        sdk_alpha_snapshot(m, selected[track] < m->pages ? selected[track] : 0, view))
         sdk_alpha_redraw(view);
     return mp_layout_track(machine, track);
 }
@@ -309,7 +309,7 @@ int32_t mp_knob(int32_t *a)
         if (track < 8 && sdk_alpha_snapshot(alpha, selected[track], mp_shown_view))
             sdk_alpha_redraw(mp_shown_view);
     }
-    const struct elek_ui_glyph *glyph = alpha ? sdk_alpha_glyph(alpha, knob_of(page_now, a[0])) : 0;
+    const struct elek_glyph *glyph = alpha ? sdk_alpha_glyph(alpha, knob_of(page_now, a[0])) : 0;
     if (glyph) {
         sdk_alpha_blit((void *)a[4], a[5] + 1, a[6], glyph);
         return 1;

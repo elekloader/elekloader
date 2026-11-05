@@ -14,11 +14,7 @@ from sdk_alpha_harness import sdk_machine, sdk_tests
 LABELS = sdk_machine("Labels", """
     #include "elekloader/sdk_alpha_machine.h"
 
-    static const struct elek_ui_knob amnt = { .id = 0, .label = "AMNT" };
-    static const struct elek_ui_knob pitch = { .id = 1, .label = "PITCH" };
-    static const struct elek_ui_page pages[] = {
-        { .label = "LABELS", .knob = { [ELEK_ENCODER_A] = &amnt, [ELEK_ENCODER_H] = &pitch } },
-    };
+    static const struct elek_knob knobs[] = { { "AMNT", .max = 127 }, { "PITCH", .max = 127 } };
     static void present(const struct elek_ui_context *ctx, struct elek_ui_presentation *out)
     {
         static char text[] = "A 000";
@@ -34,8 +30,8 @@ LABELS = sdk_machine("Labels", """
         }
     }
     static const struct elek_machine labels = {
-        .id = @ID@, .name = "Labels", .short_name = "LABL",
-        .pages = pages, .page_count = 1, .present = present,
+        .id = @ID@, .name = "Labels", .short_name = "LABL", ELEK_KNOBS(knobs),
+        .pages = { { "LABELS", { [ELEK_A] = &knobs[0], [ELEK_H] = &knobs[1] } } }, .present = present,
     };
     ELEK_REGISTER_MACHINE(labels);
 """)
@@ -44,18 +40,15 @@ LABELS = sdk_machine("Labels", """
 LONG = sdk_machine("Long label", """
     #include "elekloader/sdk_alpha_machine.h"
 
-    static const struct elek_ui_knob knob = { .id = 0, .label = "SHORT" };
-    static const struct elek_ui_page pages[] = {
-        { .label = "LONG", .knob = { &knob } },
-    };
+    static const struct elek_knob knobs[] = { { "SHORT", .max = 127 } };
     static void present(const struct elek_ui_context *ctx, struct elek_ui_presentation *out)
     {
         if (ctx->knob)
             out->knob[0]->label = "ABCDEFGH";
     }
     static const struct elek_machine long_label = {
-        .id = @ID@, .name = "Long label", .short_name = "LONG",
-        .pages = pages, .page_count = 1, .present = present,
+        .id = @ID@, .name = "Long label", .short_name = "LONG", ELEK_KNOBS(knobs),
+        .pages = { { "LONG", { &knobs[0] } } }, .present = present,
     };
     ELEK_REGISTER_MACHINE(long_label);
 """)

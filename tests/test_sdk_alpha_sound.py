@@ -16,13 +16,7 @@ SINE = sdk_machine("Sine", """
     #include "elekloader/sdk_alpha_machine.h"
 
     enum { FINE };
-    static const struct elek_ui_knob fine = {
-        .id = FINE, .label = "FINE",
-        .min = ELEK_UI_BOUND(-100), .max = ELEK_UI_BOUND(100), .def = ELEK_UI_BOUND(0),
-    };
-    static const struct elek_ui_page pages[] = {
-        { .label = "SINE", .knob = { [ELEK_ENCODER_A] = &fine } },
-    };
+    static const struct elek_knob knobs[] = { [FINE] = { "FINE", .min = -100, .max = 100 } };
     struct state { uint32_t phase; };
     volatile int32_t sound_test_pitch;
     volatile int32_t sound_test_control;
@@ -66,8 +60,8 @@ SINE = sdk_machine("Sine", """
     }
 
     static const struct elek_machine sine_machine = {
-        .id = @ID@, .name = "Sine", .short_name = "SINE",
-        .pages = pages, .page_count = 1, .render = render,
+        .id = @ID@, .name = "Sine", .short_name = "SINE", ELEK_KNOBS(knobs),
+        .pages = { { "SINE", { [ELEK_A] = &knobs[FINE] } } }, .render = render,
         .voice_state = sizeof(struct state),
     };
     ELEK_REGISTER_MACHINE(sine_machine);
@@ -77,10 +71,10 @@ SINE = sdk_machine("Sine", """
 SILENT = sdk_machine("Silent", """
     #include "elekloader/sdk_alpha_machine.h"
 
-    static const struct elek_ui_knob fine = { .id = 0, .label = "FINE" };
-    static const struct elek_ui_page pages[] = { { .label = "SINE", .knob = { &fine } } };
+    static const struct elek_knob knobs[] = { { "FINE", .max = 127 } };
     static const struct elek_machine silent = {
-        .id = @ID@, .name = "Silent", .short_name = "SLNT", .pages = pages, .page_count = 1,
+        .id = @ID@, .name = "Silent", .short_name = "SLNT", ELEK_KNOBS(knobs),
+        .pages = { { "SINE", { &knobs[0] } } },
     };
     ELEK_REGISTER_MACHINE(silent);
 """)
