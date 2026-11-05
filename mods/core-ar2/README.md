@@ -714,7 +714,12 @@ each of their reads walked the track's 8 routes. On a unit (T126, 5 Nov
 2026, lock-check 1.11): the same values, the batch read never differed
 from the single reads, and a read cost 733 ticks one at a time and 324 in
 a call of three (the unit's timer counts differently from the emulator's,
-so compare only within one machine).
+so compare only within one machine). On the unit a block is 1/1,500 s
+(the block count against the dumps' times, T127) and DMA timer 0 counts
+about 88,000 ticks in one (above), so a read costs about 0.86% of a block
+one at a time and 0.37% in a call of three; a mod that reads 14 a block
+spends about 12% one at a time. Read several parameters of a track with
+`core_param_values`.
 ## Velocity and aftertouch destinations (0.9)
 
 `routes.c` and `routes.s`, three sites (docs/ADAPTING.md, "Lockable
@@ -1111,7 +1116,7 @@ stock bytes, and that each covers whole instructions.
   `core_page_fns` entry) core 0.6 gives a 59-screen walk pixel-identical to
   core 0.4's. Not yet on a unit.
 
-- **Field defaults (0.10)**, in an emulator only (analog-emu, OS 1.74, 4
+- **Field defaults (0.10)**, in an emulator (analog-emu, OS 1.74, 4
   Nov 2026), with [lock-check 1.10](../../examples/lock-check-ar2)'s N
   (`"init": 100`, 7 bits, slot 1) read from `lc_init`: on a new card's
   first project N reads 100 and `core_param_value` 100 << 8 (25600) with no
@@ -1119,7 +1124,10 @@ stock bytes, and that each covers whole instructions.
   held the first turn makes a lock at 100 and the second takes it to 101,
   which plays (lock 101, value 101 << 8) while the sound keeps 100; N
   turned to 0 survives a power-off and a cold boot as 0, not 100. RANDOMIZE
-  PAGE and an LFO on N were not tried. Not yet on a unit.
+  PAGE and an LFO on N were not tried. On a unit (T127, 5 Nov 2026,
+  lock-check 1.11): in a new project (CREATE NEW) N reads 100 in the sound
+  and 100 << 8 from `core_param_value`; NRPN 4:5 sets it to 101 and it
+  reads 101 (101 << 8).
 
 ## Building
 

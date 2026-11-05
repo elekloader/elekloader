@@ -239,23 +239,14 @@ struct {
 struct {
     char magic[4];
     unsigned cost_max, cost_sum, blocks, mismatches;
-    unsigned period_sum, periods;       /* DMA timer 0's ticks from one block's read to the next */
 } lc_batch = {{'B', 'T', 'C', 'H'}};
 
 static void lc_batch_check(const struct lc_rec *r, unsigned single)
 {
     static int h[3];
-    static unsigned prev, prev_block;
     int o[3];
     unsigned t0, t;
     (void)single;
-    t0 = DTCN0;
-    if (prev_block && core_block == prev_block + 1) {   /* a block's length, from consecutive blocks only */
-        lc_batch.period_sum += t0 - prev;
-        lc_batch.periods++;
-    }
-    prev = t0;
-    prev_block = core_block;
     if (!h[0]) {
         h[0] = core_param_handle(STORE(lc_a));
         h[1] = core_param_handle(STORE(lc_b));
