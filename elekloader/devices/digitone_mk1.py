@@ -88,6 +88,7 @@ DEVICE = Device(
     # the mod claims it, so two mods that store in one of a sound's 79 slots never link together
     slot_claims=(('core_params', 8, 79, 'soundslot'),
                  ('sdk_alpha_machines', 0, 128, 'dnmachine')),   # an SDK machine names its id at +0
+    table_limits={'sdk_alpha_machines': 15},   # MACHINES lists 15 machines
     recovery=('hold FUNC while powering on for the startup menu, press TRIG 4 (OS UPGRADE), '
               'then send the stock .syx'),
     toolchain={

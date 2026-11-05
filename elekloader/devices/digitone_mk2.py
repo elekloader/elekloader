@@ -146,6 +146,7 @@ DEVICE = Device(
                  ('sdk_alpha_machines', 0, 128, 'mk2-synth'),
                  ('mk2_voice_filters', 0, 32, 'mk2-filter'),
                  ('mk2_voice_pages', 0, 32, 'mk2-pages')),   # one pages entry per synth ID
+    table_limits={'sdk_alpha_machines': 16},   # machines-dn2's SDK machines
     recovery=('hold FUNC while powering on for the STARTUP menu, press TRIG 4 (OS UPGRADE), '
               'then send the stock .syx over MIDI (not USB)'),
     toolchain={

@@ -205,8 +205,10 @@ libgcc's floating point). Each refusal names where it is, as in the C:
 characters (at most 5)`, or `..., pages[0] "OSC", encoder B: does not
 point at one of the machine's knobs`. SDK machines import
 `sdk_alpha_abi_v1`, which every companion exports; rebuild SDK mods and
-companions together when it changes. The limit is checked per mod: machines from several mods past it
-are not refused, and the ones past it go unused.
+companions together when it changes. The linker refuses machines from
+several mods past the limit (the device profile's `table_limits`):
+`sdk_alpha_machines holds at most 15 entries on digitone-mk1 1.44; a 1
+and b 1 add 16`.
 
 Working UI examples are [sdk-hello-world](../examples/sdk-hello-world)
 (two pages and a shared knob) and [sdk-glyphs](../examples/sdk-glyphs)

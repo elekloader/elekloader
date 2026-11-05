@@ -100,6 +100,7 @@ export type Device = {
   ddr: Range
   coreDdr: [string, Range][]                   // [core version, area]: from that core on, the linker's area in place of ddr
   slotClaims: [string, number, number, string][]   // [table, at, count, prefix]: a contribution to table points at a descriptor whose long at +at is a sound slot; the mod claims prefix:<slot>
+  tableLimits: Record<string, number>           // table -> the most entries all mods together may add to it: the OS uses no more (link.check)
   sramCode: Range
   fastTable: string
   imageFree: Range[]
@@ -114,7 +115,7 @@ const rel = (version: string, syxSha256: string, mainSha256: string, mainLen: nu
 
 const base = {
   mainSection: 3, mainLoad: 0x40000400, isa: 'coldfire' as const, hmacKeyFrom: null, container: 'ele3' as const,
-  versionLen: 4, versionAt: 0x14, versionOptional: false, protected: [], relocatable: [], keep: [], blobMax: null, sramCode: [0, 0] as Range, coreDdr: [] as [string, Range][], slotClaims: [] as [string, number, number, string][], fastTable: '',
+  versionLen: 4, versionAt: 0x14, versionOptional: false, protected: [], relocatable: [], keep: [], blobMax: null, sramCode: [0, 0] as Range, coreDdr: [] as [string, Range][], slotClaims: [] as [string, number, number, string][], tableLimits: {}, fastTable: '',
   imageFree: [], reserve: null, dspPayloads: {}, dspAreas: [], trailer: null, updateMax: null,
 }
 
@@ -132,6 +133,7 @@ export const DIGITAKT_MK1: Device = {
   ddr: [0x47be0000, 0x47c00000], sramCode: [0x8000f700, 0x80010000], fastTable: 'fa_copies',
   coreDdr: [['4.0', [0x47bc0000, 0x47c00000]]],   // core 4.0: 256 KB
   slotClaims: [['core_machines', 0, 128, 'machine']],   // a machine's descriptor names its id at +0
+  tableLimits: { sdk_alpha_machines: 32 },   // machine-pages' SDK machines
   recovery: 'hold FUNC while powering on for the startup menu, then send the stock .syx',
 }
 
@@ -164,6 +166,7 @@ export const DIGITONE_MK1: Device = {
   coreDdr: [['4.0', [0x43ec0000, 0x44000000]]],   // core-dn1 4.0: 1.25 MB
   slotClaims: [['core_params', 8, 79, 'soundslot'],   // a parameter slot's descriptor names its sound slot at +8
     ['sdk_alpha_machines', 0, 128, 'dnmachine']],   // an SDK machine names its id at +0
+  tableLimits: { sdk_alpha_machines: 15 },   // MACHINES lists 15 machines
   recovery: 'hold FUNC while powering on for the startup menu, press TRIG 4 (OS UPGRADE), then send the stock .syx',
 }
 
@@ -304,6 +307,7 @@ export const DIGITONE_MK2: Device = {
   slotClaims: [['mk2_voice_synths', 0, 32, 'mk2-synth'], ['sdk_alpha_machines', 0, 128, 'mk2-synth'],
     ['mk2_voice_filters', 0, 32, 'mk2-filter'],
     ['mk2_voice_pages', 0, 32, 'mk2-pages']],   // one pages entry per synth ID
+  tableLimits: { sdk_alpha_machines: 16 },   // machines-dn2's SDK machines
   recovery: 'hold FUNC while powering on for the STARTUP menu, press TRIG 4 (OS UPGRADE), '
     + 'then send the stock .syx over MIDI (not USB)',
 }

@@ -114,6 +114,19 @@ test('DN2 machine bundles claim every pointer entry', () => {
   }
 })
 
+test('the mods together add no more to a table than the profile\'s tableLimits (tests/test_link_refusals.py)', () => {
+  const dn = DIGITONE_MK1, r = dn.releases.find(x => x.version === '1.44')!, image = new Uint8Array(r.mainLen)
+  const core = new Mod2({ elemod: 2, id: 'core', version: '1', target: targetOf(dn, r),
+    sections: { '.boot': { align: 4, parts: [['hex', '4e75']] } },
+    collections: { sdk_alpha_machines: { entry: 4 } } }, 'core')
+  const mod = (id: string, n: number) => new Mod2({ elemod: 2, id, version: '1', target: targetOf(dn, r), sections: {},
+    contribute: [{ to: 'sdk_alpha_machines', data: '00000000'.repeat(n), relocs: [] }] }, id)
+  const want = 'sdk_alpha_machines holds at most 15 entries on digitone-mk1 1.44; '
+  assert.deepEqual(check([core, mod('a', 5), mod('b', 5), mod('c', 6)], image), [want + 'a 1, b 1 and c 1 add 16'])
+  assert.deepEqual(check([core, mod('a', 16)], image), [want + 'a 1 adds 16'])
+  assert.deepEqual(check([core, mod('a', 5), mod('b', 5), mod('c', 5)], image), [])
+})
+
 test('a site in bytes the device keeps stock is refused, in both formats, with the range and its reason', () => {
   for (const d of devices()) {
     for (const [lo, hi, why] of d.keep) {
