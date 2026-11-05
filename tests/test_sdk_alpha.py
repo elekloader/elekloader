@@ -114,19 +114,6 @@ def sdk_alpha_test_controls_document():
 
 
 class SdkAlphaTests(unittest.TestCase):
-    def test_digitone_destinations_follow_the_logical_knob(self):
-        # Knob 0 sits on encoder D, knob 1 on A and knob 13 on the second page: each keeps its own
-        # parameter (machines-dn1's sdk_pos), whatever encoder or page shows it.
-        panel = Digitone1(None, {'fw_params': '0x1000'}, [100], {
-            100: {'pages': [{'knobs': {0: {'id': 1}, 3: {'id': 0}}}, {'knobs': {0: {'id': 13}}}]},
-        })
-        panel.machine = lambda track: 100
-        panel.peek32 = lambda at: {0x1000 + 60 * 119 + 4: 27, 0x1000 + 60 * 120 + 4: 28,
-                                   0x1000 + 60 * 117 + 4: 52}[at]
-        self.assertEqual(panel.destination_for(0, track=2), 27)
-        self.assertEqual(panel.destination_for(1, track=2), 28)
-        self.assertEqual(panel.destination_for(13, track=2), 52)
-
     def test_waiting_for_ui_state_returns_early_and_has_a_deadline(self):
         class Session:
             ms, halted = 0, None

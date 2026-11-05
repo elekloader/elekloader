@@ -145,21 +145,21 @@ class DigitonePages(SdkTestCase):
     def test_settings_cover_the_sdk_page_as_they_cover_fm(self):
         self.track.use(ONE_PAGE)
         self.track.show()
-        self.panel.tap('GLOBAL')
+        self.panel.open_settings()
         settings = self.panel.screen()
         self.panel.tap('NO')
         self.track.use_stock()
         self.track.show()
-        self.panel.tap('GLOBAL')
+        self.panel.open_settings()
         self.assertEqual(self.panel.screen(), settings)
 
     def test_syn2_gets_its_stock_pages_back(self):
         self.track.use_stock()
         self.panel.open_page()
-        self.assertTrue(self.panel.wait_until(lambda: any(self.panel.crop(18, 13, 6, 16))),
+        self.assertTrue(self.panel.wait_until(lambda: any(self.panel.algorithm_pixels())),
                         'FM\'s algorithm diagram did not appear')
         stock = self.panel.syn2_pages()
-        algorithm = self.panel.crop(18, 13, 6, 16)
+        algorithm = self.panel.algorithm_pixels()
         self.assertTrue(any(algorithm))
         self.assertIsNotNone(stock)
         self.assertGreater(len(stock), 1)
@@ -169,11 +169,11 @@ class DigitonePages(SdkTestCase):
         self.assertEqual(self.panel.syn2_pages(), [self.panel.SDK_PAGE])
         self.track.use_stock()
         self.track.show()
-        self.assertTrue(self.panel.wait_until(lambda: any(self.panel.crop(18, 13, 6, 16))),
+        self.assertTrue(self.panel.wait_until(lambda: any(self.panel.algorithm_pixels())),
                         'FM\'s algorithm diagram did not return')
         self.assertEqual(self.track.machine_id, 0)
         self.assertEqual(self.panel.syn2_pages(), stock)
-        self.assertEqual(self.panel.crop(18, 13, 6, 16), algorithm)
+        self.assertEqual(self.panel.algorithm_pixels(), algorithm)
 
 
 if __name__ == '__main__':

@@ -308,14 +308,6 @@ class Device:
             if not self.s.frames or self.s.ms - self.s.frames[-1][0] >= quiet_ms:
                 return
 
-    def turn_until(self, encoder, step, done, limit=160):
-        """Turn by step until done() holds; False if it never does."""
-        for _ in range(limit):
-            if done():
-                return True
-            self.turn(encoder, step)
-        return done()
-
     def active_track(self):
         return self.read('fw_active_track')
 
@@ -339,6 +331,10 @@ class Device:
 
     def glyph_pixels(self, encoder=0):
         return tuple(self.crop(25 + 26 * (encoder % 4), 13 + 27 * (encoder // 4), 16, 16))
+
+    def value_pixels(self, encoder=0):
+        x = 18 + 26 * (encoder % 4)
+        return self.crop(x, 30 + 27 * (encoder // 4), min(33, 128 - x), 9)
 
     def algorithm_pixels(self):
         return self.crop(18, 13, 6, 16)
@@ -488,10 +484,6 @@ class Digitakt1(Device):
         at = self.kit() + 0x20 + 0xa2 * track + 20 + 2 * slot
         return struct.unpack('>h', bytes(self.s.m.uc.mem_read(at, 2)))[0]
 
-    def value_pixels(self, encoder=0):
-        x = 18 + 26 * (encoder % 4)
-        return self.crop(x, 30 + 27 * (encoder // 4), min(33, 128 - x), 9)
-
     def destination_for(self, knob):
         return 17 + knob if knob < 8 else 46 + knob - 8
 
@@ -637,10 +629,6 @@ class Digitone1(Device):
 
     def parameter_for(self, knob, track=0):
         return self.SDK_PARAMS[knob]
-
-    def value_pixels(self, encoder=0):
-        x = 18 + 26 * (encoder % 4)
-        return self.crop(x, 30 + 27 * (encoder // 4), min(33, 128 - x), 9)
 
     def open_lfo(self, lfo):
         if not hasattr(self, '_lfo_labels'):
@@ -798,10 +786,6 @@ class Digitone2(Device):
     def empty_positions(self):
         """Which of the eight positions of the page SYN shows hold a parameter."""
         return tuple(bool(self.read('dn2_sdk_ids', 4 * k)) for k in range(8))
-
-    def value_pixels(self, encoder=0):
-        x = 18 + 26 * (encoder % 4)
-        return self.crop(x, 30 + 27 * (encoder // 4), min(33, 128 - x), 9)
 
     def label(self, knob):
         return self.mem(int(self.symbols['dn2_sdk_labels'], 16) + 6 * knob, 6).split(b'\0')[0].decode('ascii')
