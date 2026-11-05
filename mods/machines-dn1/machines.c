@@ -32,11 +32,19 @@
 #define PREC        60
 
 extern const struct dnm_machine *const dn_machines[];      /* this mod's table, ending in 0 */
+#ifdef SDK_ALPHA_DN1                                       /* the 1.44 port's (mod.json) */
 const struct dnm_machine *dnm_sdk_machine(int32_t i);      /* sdk_alpha.c: the SDK alpha's, after them */
 void dnm_sdk_present(const struct dnm_machine *m, int force);
 const char *dnm_sdk_lfo_name(const struct dnm_machine *m, int32_t k, int32_t field);
 void dnm_sdk_tick(const struct dnm_machine *m, void *ctrl);
 const char *dnm_sdk_label(const struct dnm_machine *m, int32_t k);
+#else                                                      /* no SDK machines on this OS */
+#define dnm_sdk_machine(i) ((const struct dnm_machine *)0)
+#define dnm_sdk_present(m, force) ((void)0)
+#define dnm_sdk_lfo_name(m, k, field) ((const char *)0)
+#define dnm_sdk_tick(m, ctrl) ((void)(ctrl))
+#define dnm_sdk_label(m, k) ((const char *)0)
+#endif
 
 /* The SYN knobs' parameter ids: A-H of SYN1's first page and of SYN2's, then (DNM_PAGES2) of SYN1's second page
  * and of SYN2's; 0 where a page has no parameter. */
