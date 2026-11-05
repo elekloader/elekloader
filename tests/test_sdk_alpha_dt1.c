@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
 /* Exercise the real adapter's render path. */
+#undef NDEBUG                   /* the checks below are asserts */
 #include <assert.h>
 #include <stdint.h>
 #include <string.h>

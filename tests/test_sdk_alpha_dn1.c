@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
 /* The real DN1 adapter with native metadata. */
+#undef NDEBUG                   /* the checks below are asserts */
 #include <assert.h>
 #include <stdint.h>
 #include "digitone-mk1/core3.h"
