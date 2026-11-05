@@ -3,6 +3,7 @@
 import argparse
 import json
 import os
+import re
 import struct
 import sys
 import tempfile
@@ -20,6 +21,7 @@ SDK_ALPHA_TARGETS = {
 # The releases whose companions implement each optional feature.
 SDK_ALPHA_RENDER = {('digitakt-mk1', '1.54'), ('digitone-mk1', '1.44')}
 SDK_ALPHA_DEFAULTS = {('digitakt-mk1', '1.54'), ('digitone-mk1', '1.44')}
+SDK_ALPHA_ABI = 'sdk_alpha_dt1_ui_v1'    # the one symbol the companions export to SDK machines
 ELEK_VOICE_STATE_MAX = 256      # sdk_alpha_machine.h
 ELEK_SHARED_MAX = 64
 
@@ -74,7 +76,7 @@ def sdk_alpha_registrations(doc, sections, layouts=None):
             raise build.BuildError('sdk alpha: duplicate or invalid machine slot %d (expected 4..127)' % mid)
         ui = sdk_alpha_pointer(at, 28)
         abi = [r for r in doc['relocs'] if r[:2] == [ui[0], ui[1]]]
-        if len(abi) != 1 or abi[0][2:] != ['abs32', 'sym:sdk_alpha_dt1_ui_v1', 0]:
+        if len(abi) != 1 or abi[0][2:] != ['abs32', 'sym:' + SDK_ALPHA_ABI, 0]:
             raise build.BuildError('sdk alpha: invalid machine UI ABI')
         machine = sdk_alpha_pointer(ui, 4)
         data = sdk_alpha_bytes(machine, 44)
@@ -188,6 +190,15 @@ def sdk_alpha_build(moddir, stock, out=None):
                     for s, d in mod.sections.items() if 'parts' in d}
         layouts = {}
         registrations = sdk_alpha_registrations(doc, sections, layouts)
+        unresolved = sorted(set(doc['imports']) - {SDK_ALPHA_ABI})
+        soft_float = [n for n in unresolved if re.fullmatch(r'__\w*?[sdtx]f\w*', n)]    # libgcc's
+        if soft_float:
+            raise build.BuildError('sdk alpha: the machine uses floating point (%s): the ColdFire has '
+                                   'none; ELEK_SAMPLE takes constants only, use elek_level'
+                                   % ', '.join(soft_float))
+        if unresolved:
+            raise build.BuildError('sdk alpha: the machine imports %s, which no companion exports'
+                                   % ', '.join(unresolved))
         low = 5 if device == 'digitone-mk2' else 4      # the Digitone II's synth type 4 is MIDI
         for _, mid in registrations:
             if mid < low:

@@ -182,7 +182,8 @@ required companions for the same stock file, then use the normal
 [lint and patch loop](ADAPTING.md).
 
 The builder refuses unsupported targets, invalid names, bounds, IDs and
-layouts, and duplicate declarations in JSON. All private SDK declarations
+layouts, duplicate declarations in JSON, and imports no companion exports
+(such as libgcc's floating point). All private SDK declarations
 and companions use `sdk_alpha_dt1_ui_v1`, with one descriptor layout.
 Rebuild SDK mods and companions together when that layout changes.
 

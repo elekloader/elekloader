@@ -413,6 +413,22 @@ class SdkAlphaTests(unittest.TestCase):
             mod = link.Mod2(json.loads(built[0].read_text()), 'hello')
             self.assertEqual((mod.names, mod.requires), (['machine:122'], ['core', 'machine-pages']))
 
+    def test_sdk_alpha_refuses_imports_no_companion_exports(self):
+        stock = self.stocks()['digitakt-mk1']
+        with tempfile.TemporaryDirectory() as tmp:
+            sdk_alpha_build(RENDERS.write(tmp), stock, tmp)          # imports only the ABI symbol
+            source = Path(tmp, 'renders', 'machine.c')
+            plain = source.read_text()
+            for sample, refusal in (
+                    ('ELEK_SAMPLE(ctx->knob[0] / 127.0)',
+                     r'uses floating point \(.*__divdf3.*\): the ColdFire has none; .* use elek_level'),
+                    ('helper()', 'imports helper, which no companion exports')):
+                with self.subTest(sample=sample):
+                    source.write_text(plain.replace('(void)ctx;', 'extern int helper(void);').replace(
+                        'ELEK_SAMPLE(0)', sample))
+                    with self.assertRaisesRegex(build.BuildError, refusal):
+                        sdk_alpha_build(str(source.parent), stock, tmp)
+
     def test_sdk_alpha_one_source_builds_for_both_devices(self):
         stocks = self.stocks()
         dn = stocks['digitone-mk1']
