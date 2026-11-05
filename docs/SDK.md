@@ -20,7 +20,7 @@ how they fit together. For other kinds of mod, start with
 | | Digitakt mk1 | Digitone mk1 / Keys | Digitone II |
 |---|---|---|---|
 | Stock OS | 1.54 | 1.44 | 1.12 |
-| Companions | core and `machine-pages` | core-dn1 4.2 and `machines` 0.3 | core-dn2 0.2 or later and `machines-dn2` 0.2 |
+| Companions | core and `machine-pages` | core-dn1 4.2 or later and `machines` 0.3 | core-dn2 0.2 or later and `machines-dn2` 0.2 |
 | Choose a machine | FUNC+SRC machine menu | Hold a track key, Mod Menu → MACHINES | FUNC+SYN → MACHINE SEL |
 | Show its pages | SRC | SYN2, replacing its pages on that track | SYN |
 | Pages / logical knobs | 2 / 15 | 2 / 15 | 2 / 15 |

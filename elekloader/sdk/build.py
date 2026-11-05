@@ -139,8 +139,9 @@ def run(cmd):
     try:
         r = subprocess.run(cmd, capture_output=True, text=True)
     except FileNotFoundError:
-        raise BuildError('%s is not installed (the device\'s cross toolchain; see '
-                         'docs/ADAPTING.md)' % cmd[0])
+        raise BuildError('%s is not installed (the device\'s cross toolchain; set ELEKLOADER_CROSS '
+                         'to another prefix, such as ELEKLOADER_CROSS=m68k-elf- for Homebrew\'s; '
+                         'see docs/ADAPTING.md)' % cmd[0])
     if r.returncode:
         raise BuildError('%s\n%s%s' % (' '.join(cmd), r.stdout, r.stderr))
     return r.stdout
