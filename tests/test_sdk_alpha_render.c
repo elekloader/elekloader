@@ -1,8 +1,8 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
 /* The SDK's sound contract on the host: built twice by test_sdk_alpha_render.py, as the ColdFire's Q31
  * (plain) and as the SHARC's float (-DELEK_TARGET_SHARC). It checks the helpers against 64-bit and double
- * references, then renders a sine through a machine's .render and prints the samples, -1.0..1.0, one a line,
- * for the Python side to compare the two builds. */
+ * references, then renders examples/sdk-sine through its .render (argv: FINE, then the note) and prints the
+ * samples, -1.0..1.0, one a line, for the Python side to compare the two builds. */
 #include <assert.h>
 #include <math.h>
 #include <stdio.h>
@@ -80,32 +80,10 @@ static void check_labels(void)
     assert(!strcmp(label, "TOOLO"));
 }
 
-/* An author's machine, as in the SDK's README: a sine kernel and a render that scales it. */
-enum { LEVEL, FINE };
-static elek_sample table[256];
-struct state { uint32_t phase; };
-
-static void sine_block(elek_sample *out, uint32_t *phase, uint32_t step)
-{
-    for (int i = 0; i < ELEK_VOICE_FRAMES; ++i) {
-        out[i] = table[*phase >> 24];
-        *phase += step;
-    }
-}
-
-static void sine_render(const struct elek_voice *v, elek_sample *out)
-{
-    struct state *s = ELEK_STATE(struct state, v);
-    if (v->start)
-        s->phase = 0;
-    sine_block(out, &s->phase, elek_phase_inc(v->pitch + v->knob[FINE] * 65536 / 100));
-    for (int i = 0; i < ELEK_VOICE_FRAMES; ++i)
-        out[i] = elek_clip(elek_mul(out[i], elek_level(v->knob[LEVEL], 127)));
-}
-
-static const struct elek_machine sine = {
-    .id = 23, .name = "Sine", .short_name = "SINE", .render = sine_render,
-};
+/* The example authors start from, examples/sdk-sine, as it is: the registration becomes a pointer here. */
+#undef ELEK_REGISTER_MACHINE
+#define ELEK_REGISTER_MACHINE(m) static const struct elek_machine *const example = &(m)
+#include "../examples/sdk-sine/sine.c"
 
 int main(int argc, char **argv)
 {
@@ -116,21 +94,13 @@ int main(int argc, char **argv)
 #endif
     check_phase();
     check_labels();
-    /* The table as each target holds it (a ColdFire build would write constants with ELEK_SAMPLE). */
-    for (int i = 0; i < 256; ++i) {
-        double x = sin(2.0 * 3.14159265358979323846 * i / 256.0);
-#ifdef ELEK_TARGET_SHARC
-        table[i] = (float)x;
-#else
-        table[i] = (int32_t)(x * 2147483647.0);
-#endif
-    }
-    int32_t knob[2] = {argc > 1 ? atoi(argv[1]) : 127, argc > 2 ? atoi(argv[2]) : 0};
-    struct state state = {12345};
-    struct elek_voice voice = {.knob = knob, .start = 1, .pitch = 69 << 16, .velocity = 100, .state = &state};
+    int32_t knob[1] = {argc > 1 ? atoi(argv[1]) : 0};
+    struct state state = {12345};               /* a previous note's phase: the start must reset it */
+    struct elek_voice voice = {.knob = knob, .start = 1, .pitch = (argc > 2 ? atoi(argv[2]) : 69) << 16,
+                               .velocity = 100, .state = &state};
     elek_sample block[ELEK_VOICE_FRAMES];
     for (int b = 0; b < 64; ++b) {
-        sine.render(&voice, block);
+        example->render(&voice, block);
         voice.start = 0;
         for (int i = 0; i < ELEK_VOICE_FRAMES; ++i)
 #ifdef ELEK_TARGET_SHARC

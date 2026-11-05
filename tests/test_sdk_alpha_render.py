@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 """The SDK's sound contract (sdk_alpha_machine.h), with no device: test_sdk_alpha_render.c built with the host
 compiler as the ColdFire's Q31 and as the SHARC's float. Each build checks the helpers itself; here the two
-render the same sine, which must be one waveform, continuous across blocks, at full level."""
+render examples/sdk-sine, which must be one waveform, at the note, starting at zero, at half level."""
 from pathlib import Path
 import json
 import shutil
@@ -56,9 +56,9 @@ class RenderContractTests(unittest.TestCase):
         done = subprocess.run([str(program)], capture_output=True, text=True)
         self.assertEqual(done.returncode, 0, done.stderr)
 
-    def render(self, target, level=127, fine=0):
+    def render(self, target, fine=0, note=69):
         """The samples (-1.0..1.0) and the phase after them; the program's own checks must pass first."""
-        done = subprocess.run([str(self.programs[target]), str(level), str(fine)], capture_output=True, text=True)
+        done = subprocess.run([str(self.programs[target]), str(fine), str(note)], capture_output=True, text=True)
         self.assertEqual(done.returncode, 0, '%s: a helper check failed\n%s' % (target, done.stderr))
         lines = done.stdout.split()
         return [float(x) for x in lines[:-2]], int(lines[-1])
@@ -70,25 +70,30 @@ class RenderContractTests(unittest.TestCase):
         self.assertEqual(q31_phase, flt_phase)                  # the same integer phase on both
         self.assertLess(max(abs(a - b) for a, b in zip(q31, flt)), 1e-6)
 
-    def test_the_sine_starts_at_zero_reaches_full_level_and_does_not_jump(self):
+    def test_the_sine_starts_at_zero_at_half_level_and_does_not_jump(self):
         for target in ('q31', 'float'):
             with self.subTest(target=target):
                 samples, _ = self.render(target)
                 self.assertEqual(samples[0], 0.0)               # the note's start reset the phase
-                self.assertGreater(max(samples), 0.99)
-                self.assertLess(min(samples), -0.99)
-                # 440 Hz moves at most 2 pi 440 / 48000 a sample, plus one 256-entry table step.
+                self.assertAlmostEqual(max(samples), 0.5, delta=0.001)
+                self.assertAlmostEqual(min(samples), -0.5, delta=0.001)
+                # 440 Hz at 0.5 moves at most pi 440 / 48000 a sample
                 step = max(abs(b - a) for a, b in zip(samples, samples[1:]))
-                self.assertLess(step, 0.0576 + 0.0246, 'a jump, at a block boundary or within one')
+                self.assertLess(step, 0.0289, 'a jump, at a block boundary or within one')
 
-    def test_level_and_fine_reach_the_render(self):
+    def test_pitch_follows_the_note_and_fine(self):
         for target in ('q31', 'float'):
             with self.subTest(target=target):
-                half, _ = self.render(target, level=64)
-                self.assertAlmostEqual(max(half), 64 / 127, delta=0.01)
-                _, base = self.render(target)
-                _, sharp = self.render(target, fine=50)
-                self.assertNotEqual(base, sharp)                # FINE moved the pitch
+                for note, fine, hz in ((69, 0, 440.0), (81, 0, 880.0), (69, 50, 440.0 * 2 ** (0.5 / 12)),
+                                       (69, -50, 440.0 * 2 ** (-0.5 / 12))):
+                    samples, _ = self.render(target, fine, note)
+                    self.assertAlmostEqual(frequency(samples), hz, delta=hz * 0.0005, msg=(note, fine))
+
+
+def frequency(samples, rate=48000):
+    """From the first to the last rising zero crossing, each placed between its two samples."""
+    rises = [i + a / (a - b) for i, (a, b) in enumerate(zip(samples, samples[1:])) if a <= 0 < b]
+    return rate * (len(rises) - 1) / (rises[-1] - rises[0])
 
 
 if __name__ == '__main__':

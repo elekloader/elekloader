@@ -380,9 +380,10 @@ stored UI values for effective voice controls.
 - [Builder tests](../tests/test_sdk_alpha.py) validate registration,
   layouts, ABI fields and refusals using each supplied stock file and a
   ColdFire compiler.
-- [Render-contract tests](../tests/test_sdk_alpha_render.py) compile one C
-  machine twice with the host compiler, Q31 and float. They check sample
-  helpers and compare the resulting sine. They also exercise the real
+- [Render-contract tests](../tests/test_sdk_alpha_render.py) compile
+  [sdk-sine](../examples/sdk-sine) twice with the host compiler, Q31 and
+  float. They check sample helpers, and the sine's pitch, start and level
+  on both. They also exercise the real
   mk1 adapters' state isolation, effective-control mapping and defaults,
   and the part every companion shares (`mods/sdk-alpha/machine.c`): value
   mapping across the bounds, defaults, label sanitising and when
