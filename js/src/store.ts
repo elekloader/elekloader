@@ -20,6 +20,9 @@
 // lockfile keeps the init with the field ("init", only when not 0; format 2) and it is part of the layout ID, so a
 // field whose init changes is a new field. Its descriptor carries its slot in core_field_inits (1..63) in bits
 // 16..21, which no offset needs (no scope keeps 2^16 bits).
+// A field declared with "handle": true (core-ar2 0.11) holds a mod's handle on something kept elsewhere, 0 for none:
+// placed, kept and read like any field, not in the lockfile and not part of the layout ID. The linker gives the core
+// the table core_handles, each handle field's descriptor in the lockfile's order. A handle has no "lock" and no init.
 // Nothing here is random.
 import { sha } from './bytes.ts'
 import { ModError, cmpVersions, int } from './elemod.ts'
@@ -42,6 +45,7 @@ export const SMOOTH_OFF = 0x200                // in core_lock_codes: the field'
 export const ROUTE_FLAG = 0x400                // in core_lock_codes: a velocity/aftertouch destination (core-ar2 0.9)
 const FIRST_CODE = 42, LAST_CODE = 127
 export const INITS_TABLE = 'core_field_inits'  // core-ar2 0.10: the fields' inits, by slot
+export const HANDLES_TABLE = 'core_handles'    // core-ar2 0.11: the handle fields' descriptors
 const MAX_INITS = 63                           // slots 1..63, in the descriptor's bits 16..21
 const LOCK_SCOPES = ['sound', 'kit']
 
@@ -173,6 +177,12 @@ export function parseInits(m: Record<string, any>): Map<string, number> {
   return new Map(st.filter((f: unknown) => isDict(f) && f.init).map((f: Record<string, any>) => [f.sym, f.init]))
 }
 
+/** A mod document's "storage" -> the syms of its fields declared "handle": true, in order. store.parse_handles. */
+export function parseHandles(m: Record<string, any>): string[] {
+  const st = Object.hasOwn(m, 'storage') && Array.isArray(m.storage) ? m.storage : []
+  return st.filter((f: unknown) => isDict(f) && f.handle === true).map((f: Record<string, any>) => f.sym)
+}
+
 /** A mod document's "storage" -> [sym, scope, bits][]. */
 export function parseDecls(m: Record<string, any>): [string, string, number][] {
   const out: [string, string, number][] = []
@@ -180,9 +190,9 @@ export function parseDecls(m: Record<string, any>): [string, string, number][] {
   const st = Object.hasOwn(m, 'storage') ? m.storage : []
   if (!Array.isArray(st)) throw new ModError('"storage" is a list of fields')
   for (const f of st) {
-    if (!isDict(f) || Object.keys(f).some(k => !['sym', 'scope', 'bits', 'lock', 'cc', 'lfo', 'smooth', 'mod', 'init'].includes(k)))
+    if (!isDict(f) || Object.keys(f).some(k => !['sym', 'scope', 'bits', 'lock', 'cc', 'lfo', 'smooth', 'mod', 'init', 'handle'].includes(k)))
       throw new ModError('a storage field is {"sym", "scope", "bits"}, and "lock" for a lockable one')
-    for (const k of ['lock', 'cc', 'lfo', 'smooth', 'mod'])
+    for (const k of ['lock', 'cc', 'lfo', 'smooth', 'mod', 'handle'])
       if (Object.hasOwn(f, k) && typeof f[k] !== 'boolean')
         throw new ModError(`storage field ${repr(Object.hasOwn(f, 'sym') ? f.sym : null)}: "${k}" is true or false`)
     if (f.cc && !f.lock)
@@ -193,6 +203,10 @@ export function parseDecls(m: Record<string, any>): [string, string, number][] {
       throw new ModError(`storage field ${repr(Object.hasOwn(f, 'sym') ? f.sym : null)}: only a lockable field ("lock": true) can be a velocity or aftertouch destination`)
     if (Object.hasOwn(f, 'smooth') && !f.lock)
       throw new ModError(`storage field ${repr(Object.hasOwn(f, 'sym') ? f.sym : null)}: only a lockable field ("lock": true) is smoothed`)
+    if (f.handle && f.lock)
+      throw new ModError(`storage field ${repr(Object.hasOwn(f, 'sym') ? f.sym : null)}: a handle ("handle": true) is not a parameter: it cannot be lockable`)
+    if (f.handle && f.init)
+      throw new ModError(`storage field ${repr(Object.hasOwn(f, 'sym') ? f.sym : null)}: a handle ("handle": true) has no init: 0 is none`)
     if (f.lock && !LOCK_SCOPES.includes(f.scope))
       throw new ModError(`storage field ${repr(Object.hasOwn(f, 'sym') ? f.sym : null)}: only ${LOCK_SCOPES.join(' and ')} fields can be lockable`)
     if (f.mod && f.scope === 'kit')
@@ -592,6 +606,14 @@ export function descriptors(lock: Lock): Map<string, number> {
 /** -> the table core_field_inits' entries: each init, 4 bytes, by slot. store.init_entries. */
 export function initEntries(lock: Lock): Uint8Array[] {
   return inited(lock).map(f => { const out = new Uint8Array(4); new DataView(out.buffer).setUint32(0, f.init!); return out })
+}
+
+/** -> the table core_handles' entries: the descriptor of each placed field in handles ([mod, sym]), 4 bytes each, in the
+ * lockfile's order. store.handle_entries. */
+export function handleEntries(lock: Lock, handles: [string, string][] = []): Uint8Array[] {
+  const desc = descriptors(lock), want = new Set(handles.map(([m, sy]) => m + '\0' + sy))
+  return lock.fields.filter(f => want.has(f.mod + '\0' + f.sym))
+    .map(f => { const out = new Uint8Array(4); new DataView(out.buffer).setUint32(0, desc.get(f.mod + '\0' + f.sym)!); return out })
 }
 
 /** -> [{name: value}, the IDs' table entries] for the linker. store.symbols. */

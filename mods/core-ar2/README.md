@@ -915,6 +915,66 @@ value):
 Nothing runs in an interrupt: the trig's locks site (`core_rows_trig`, the
 audio interrupt) skips the tag codes.
 
+## Moments (0.11)
+
+`moments.c` and `moments.s`, and `core_handle_fields` in `store.c`: stock
+moments and words the Sidecar companion read or claimed itself, so every
+stock address stays in core (docs/ADAPTING.md, "Moments (core-ar2 0.11,
+Analog Rytm MKII)"; `elekloader/sdk/include/analog-rytm-mk2/moments.h`).
+
+| what | where (OS 1.74) | context |
+|---|---|---|
+| `ev_sysex_in(data, len, iface)`, nonzero takes the message | the SysEx router 0x40083dd8 (`jmp`, after it 0x40083de0), before the universal check | MIDI task |
+| `core_midi_try_send(len, msg)` | stock's USB sender 0x400029e0 under its mutex 0x42f67a28 (try-lock 0x4000119c, give 0x400011ee) | any task; an interrupt queues |
+| `core_current_kit`, `_track`, `_pattern` and their items | the model's +0x1a4 (the working kits' +0x44), 0x400b693e, `core_step_pattern_now` | UI task |
+| `core_project_name()` | the live project's +8, 0x407c89d3 | any |
+| `ev_kit(kit, how)`: SELECTED | the kit select 0x400a65f6 (after it 0x400a65fe) | UI task, sent at `ev_tick` |
+| `ev_kit(kit, how)`: PUSHED | the whole-kit push 0x4011f90a (after it 0x4011f912) | UI, MIDI or job task, sent at `ev_tick` |
+| `ev_project_slot(slot, how)`: CLEARED, INIT | the slot clear 0x40034bd2 (after it 0x40034bd8; slot -1 is CREATE NEW on the live project) | job or MIDI task, sent at `ev_tick` |
+| `ev_project_slot(slot, how)`: PASTED | the slot paste 0x400351d2 (after it 0x400351da) | job task, sent at `ev_tick` |
+| `core_handle_fields(fn)` | the table `core_handles` | UI task |
+
+- **The router** runs for every message from F0 that is not F0 7E, before
+  the Elektron header check; analoghealth's tap (0x40083e04) is after
+  core's site and sees only what no mod took. Core's own pattern dump in
+  (0x4000d79c) is behind the router too.
+- **The sender** busy-waits while its 4 KB buffer (0x4b80c000, next byte
+  0x413db25c) holds more than 0xffb bytes not yet sent (0x413db258, which
+  the USB controller's completion 0x40002454 brings down), and for a
+  message over 0x2f bytes near the buffer's end. `core_midi_try_send` asks
+  first, with the try-lock taken: it sends only when 4 bytes a message
+  byte fit, no stock SysEx is open (0x413db244 = 0xF0), the port is
+  configured (0x413db254 = 1) and USB is on (0xfc0b01c4); otherwise it
+  answers 0. The try-lock and the give are a task's (the owner is the
+  current task, the give can switch tasks), so from an interrupt (the
+  status register's level not 0) the message goes into core's ring (512
+  bytes, at most 64 a message), which the next `ev_tick` sends first, in
+  order. Only whole messages: a status byte first, and a SysEx closed in
+  the same call.
+- **A kit select** doesn't push the kit to the engine (each track takes it
+  at its next trig with the new kit), so the two events are apart. A
+  change of kit while stopped (0x405c8c90 not 1) clears the tracks'
+  playing-trig mod locks (`core_rows_now_reset`), the 0.9 follow-up's
+  finding 1; while playing each track's next trig writes its own, so locks
+  a new pattern's first trigs set before the UI's select stay. Pushes are
+  kept as one bit per kit and selects as the last one, so several in one
+  tick are one event each.
+- **The slot paths** outside `ev_project_save`: the project manager's
+  CLEAR (job "Projects Clear", 0x40051a8a, then the name 0x40034e98) and
+  Transfer's clear (the RPC handler 0x4008680c) both call 0x40034bd2, and
+  with slot -1 it runs CREATE NEW on the live project (0x400b3bd6), which
+  is INIT [G; that INIT NEW in the manager takes this path is to be seen
+  in the emulator]. Paste is the job "Project Paste" (0x4005180e). There is
+  no SysEx project dump; Transfer's other slot commands read a project or
+  write items into one (kits, patterns, sounds: item 11's copy events), not
+  a whole slot.
+- **Handles** walk the live project: the 128 kits as edited and as last
+  saved (each with its 12 sounds), the 128 pool sounds, the 4 global
+  slots, the 128 patterns and their 13 tracks, and the project; the
+  working pattern (a copy) is left out. A handle field is any field marked
+  `"handle": true` (no lock, no init; 0 is none); the mark is not in the
+  lockfile.
+
 ## Checked so far
 
 On a unit (OS 1.73). With test images built by rytm-mods-src (its `elemod`

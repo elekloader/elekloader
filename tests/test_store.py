@@ -2,6 +2,7 @@
 """Mod storage's lockfile and allocator, elekloader/store.py (pytest, or run
 with python). Needs no stock file: js/test/store.test.ts checks the
 TypeScript port against the same module's results."""
+import json
 import os
 import sys
 
@@ -281,6 +282,27 @@ def test_a_field_with_an_init_is_kept_xored_and_its_init_is_part_of_the_layout()
     assert store.symbols(plain, DEV)[0]['a'] == 2 << 28 | 7 << 22
     assert store.parse_locks({'storage': [{'sym': 's', 'scope': 'sound', 'bits': 3, 'lock': True},
                                           {'sym': 't', 'scope': 'sound', 'bits': 3}]}) == ['s']
+
+
+
+def test_a_handle_field_is_placed_like_any_and_listed_in_core_handles():
+    """"handle": true (core-ar2 0.11): not in the lockfile, not part of the layout; core_handles lists
+    the handle fields' descriptors in the lockfile's order. A handle has no lock and no init."""
+    doc = {'storage': [{'sym': 'h', 'scope': 'project', 'bits': 16, 'handle': True},
+                       {'sym': 'k', 'scope': 'kit', 'bits': 4, 'handle': False}]}
+    assert store.parse_handles(doc) == ['h'] and store.parse_decls(doc) == [('h', 'project', 16), ('k', 'kit', 4)]
+    d = [('m', 'k', 'kit', 4), ('m', 'h', 'project', 16)]
+    lock, _ = store.allocate(None, d, DEV)
+    assert 'handle' not in json.dumps(lock)
+    syms, _ = store.symbols(lock, DEV)
+    assert store.handle_entries(lock, [('m', 'h')]) == [syms['h'].to_bytes(4, 'big')]
+    assert store.handle_entries(lock) == []
+    assert 'cannot be lockable' in refused(store.parse_decls, {'storage': [
+        {'sym': 'h', 'scope': 'sound', 'bits': 8, 'lock': True, 'handle': True}]})
+    assert 'has no init' in refused(store.parse_decls, {'storage': [
+        {'sym': 'h', 'scope': 'kit', 'bits': 8, 'init': 1, 'handle': True}]})
+    assert 'true or false' in refused(store.parse_decls, {'storage': [
+        {'sym': 'h', 'scope': 'kit', 'bits': 8, 'handle': 1}]})
 
 
 if __name__ == '__main__':

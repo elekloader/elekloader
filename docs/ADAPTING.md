@@ -1963,6 +1963,44 @@ reuse. Each owner costs 214,656 bytes of RAM outside core's area; a
 pattern switch with every step of both patterns tagged costs about 0.4 ms
 of the UI task, and nothing runs in the audio interrupt.
 
+### Moments (core-ar2 0.11, Analog Rytm MKII)
+
+Events and calls for stock moments a mod would otherwise find with its own
+sites, with `analog-rytm-mk2/moments.h`:
+
+```json
+{"event": "ev_sysex_in", "fn": "my_sysex", "order": 50},
+{"event": "ev_kit", "fn": "my_kit", "order": 50},
+{"event": "ev_project_slot", "fn": "my_slot", "order": 50}
+```
+
+- `int32_t my_sysex(data, len, iface)`: every SysEx message in (not the
+  universal F0 7E ones), in the MIDI task, before stock. Return nonzero to
+  take it; nothing after you sees it.
+- `core_midi_try_send(len, msg)`: one whole MIDI message out of USB, 1 sent
+  or 0 not now; it never waits. From the sequencer's or the audio
+  interrupt it is queued (512 bytes) and sent at the next `ev_tick`.
+- `core_current_kit()`, `core_current_track()`, `core_current_pattern()`
+  (-1 for none) and `core_current_kit_item()`, `core_current_sound_item()`,
+  `core_current_pattern_item()` for `core_store_get` and `core_store_set`;
+  `core_project_name()`, 16 bytes (at `ev_project_save`'s pre 1 of a SAVE
+  AS, already the new name).
+- `my_kit(kit, how)` at `ev_tick`: `CORE_KIT_SELECTED` when the UI's
+  current kit changes or is chosen again, `CORE_KIT_PUSHED` when a kit's
+  whole data went to the engine (RELOAD KIT, a project load, CREATE NEW, a
+  SysEx kit). A select doesn't reach the engine at once: each track takes
+  the new kit at its next trig.
+- `my_slot(slot, how)` at `ev_tick`, for a +Drive slot written outside a
+  save: `CORE_SLOT_CLEARED`, `CORE_SLOT_INIT` (the live project initialized
+  in place; `ev_project` 0 came first) and `CORE_SLOT_PASTED`, with
+  `CORE_SLOT_FAILED`.
+- A storage field declared `"handle": true` holds a handle on something the
+  mod keeps elsewhere, 0 for none (no `"lock"`, no `"init"`).
+  `core_handle_fields(fn)` calls `fn(field, item, index, value)` for every
+  item of the live project whose handle is not 0, so the mod can list every
+  handle a project uses. A core without the table `core_handles` refuses
+  the mark at link time.
+
 ### Mod scene and performance locks (core-ar2 0.8, Analog Rytm MKII)
 
 A lockable parameter is locked to a scene, or given a performance depth,

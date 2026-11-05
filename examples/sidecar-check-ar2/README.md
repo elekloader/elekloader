@@ -49,6 +49,31 @@ goes back to 0 (`done` keeps it):
 | 4 | clear every tag of the 128 patterns |
 | 5 | walk the tags (`core_step_tags`): those in patterns, those in copies, the handles' sum |
 
+## Part 3: moments (core 0.11)
+
+The record after the magic `SCK3` (`sc3`, moments.c):
+
+- `ev_sysex_in` takes every message that starts F0 7D (`sx_taken`) and lets
+  the rest through (`sx_passed`, `sx_passed_elektron` for F0 00 20 3C);
+  `sx_len`, `sx_iface` and `sx_head` keep the last one seen.
+- each `ev_tick` it notes `core_current_kit`, `_track`, `_pattern`, their
+  items and `core_project_name` (`name`); `ev_project_save` copies the name
+  at pre 1 (`name_pre1`) and pre 0 (`name_pre0`).
+- every `ev_kit` (kind 1) and `ev_project_slot` (kind 2) goes into a ring
+  of 32 (`e`, at `n % 32`).
+- two storage fields marked `"handle": true`: `sc_h_project` (project, 16
+  bits) and `sc_h_pattern` (pattern, 12 bits).
+
+A command word `cmd` (and `arg`) acts on the next `ev_tick`:
+
+| `cmd` | what |
+|---|---|
+| 1 | `arg` note-ons through `core_midi_try_send` from the UI task (`sent`, `refused`) |
+| 2 | `arg` note-ons from the audio interrupt (`ev_render_in`), into core's ring (`irq_sent`, `irq_refused`) |
+| 3 | the project's handle = `arg`, the current pattern's = `arg` + 1 |
+| 4 | walk the handles (`core_handle_fields`): `walk_n`, `walk_sum`, `walk_fields` (bit 0 the project's, bit 1 the pattern's) |
+| 5 | one SysEx F0 7D .. F7 of `arg` bytes (4..64) through `core_midi_try_send` |
+
 ## Building
 
 ```bash

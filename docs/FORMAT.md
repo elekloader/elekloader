@@ -272,7 +272,11 @@ can be lockable too (core-ar2 0.9): it is the FX track's parameter, with
 imports `core_fx_lfo_dst`. Any field can take `"init": N` (core-ar2 0.10),
 0 to 2^bits - 1, the value it reads where its bits are zero (0, the same as
 no `init`, otherwise); it is refused with a core that has no table
-`core_field_inits`, and past 63 fields with an init. Only a core
+`core_field_inits`, and past 63 fields with an init. Any field but a
+lockable one or one with an `init` can take `"handle": true` (core-ar2
+0.11): it holds a mod's handle on something kept elsewhere, 0 for none;
+the mark is not in the lockfile or the layout ID, and it is refused with
+a core that has no table `core_handles`. Only a core
 that imports `__store_gen` takes them (core-ar2 from 0.2, core-a4); with another
 core a mod that declares storage is refused. A scope's room can depend on
 the core's version (a sound's: 24 bits with core-ar2 0.2, 56 from 0.3,
@@ -299,7 +303,8 @@ linker:
   is refused; a kit field never gets a CC stock uses on the FX channel, the
   device's `fx_ccs_taken`, and a lockfile that gives it one is refused);
   and to `core_field_inits`, each field's `init` (4 bytes), by slot: the
-  fields with one, in the order of `fields`;
+  fields with one, in the order of `fields`; and to `core_handles`, each
+  `"handle"` field's descriptor (4 bytes), in the order of `fields`;
 - appends the lockfile to the image, after the mods' image: `ELKSTORE`,
   its length (4 bytes, big-endian), then its text. Nothing reads it on the
   unit; `elekloader.patch --lockfile-from` takes it back out of a build;

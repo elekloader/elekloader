@@ -15431,6 +15431,144 @@
    ]
   }
  },
+ "handle_runs": {
+  "handles": {
+   "decls": [
+    [
+     "a",
+     "a_k",
+     "kit",
+     16
+    ],
+    [
+     "a",
+     "a_p",
+     "project",
+     32
+    ],
+    [
+     "b",
+     "b_t",
+     "track",
+     12
+    ]
+   ],
+   "handles": [
+    [
+     "a",
+     "a_p"
+    ],
+    [
+     "b",
+     "b_t"
+    ]
+   ],
+   "lock": {
+    "elekloader_store": 1,
+    "device": "analog-rytm-mk2",
+    "id": "0xfdefb80d",
+    "ancestors": [],
+    "split": {
+     "track": 2,
+     "pattern": 4
+    },
+    "generation": {
+     "sound": 1,
+     "kit": 1,
+     "global": 1,
+     "track": 1,
+     "pattern": 1,
+     "project": 1
+    },
+    "next": {
+     "sound": 0,
+     "kit": 16,
+     "global": 0,
+     "track": 12,
+     "pattern": 0,
+     "project": 32
+    },
+    "fields": [
+     {
+      "mod": "a",
+      "sym": "a_k",
+      "scope": "kit",
+      "offset": 0,
+      "bits": 16
+     },
+     {
+      "mod": "b",
+      "sym": "b_t",
+      "scope": "track",
+      "offset": 0,
+      "bits": 12
+     },
+     {
+      "mod": "a",
+      "sym": "a_p",
+      "scope": "project",
+      "offset": 0,
+      "bits": 32
+     }
+    ],
+    "freed": []
+   },
+   "handles_table": [
+    "43000000",
+    "68000000"
+   ],
+   "layout_id": 4260345869
+  },
+  "none": {
+   "decls": [
+    [
+     "a",
+     "a_k",
+     "kit",
+     16
+    ]
+   ],
+   "handles": [],
+   "lock": {
+    "elekloader_store": 1,
+    "device": "analog-rytm-mk2",
+    "id": "0xd8cbaefb",
+    "ancestors": [],
+    "split": {
+     "track": 2,
+     "pattern": 4
+    },
+    "generation": {
+     "sound": 1,
+     "kit": 1,
+     "global": 1,
+     "track": 1,
+     "pattern": 1,
+     "project": 1
+    },
+    "next": {
+     "sound": 0,
+     "kit": 16,
+     "global": 0,
+     "track": 0,
+     "pattern": 0,
+     "project": 0
+    },
+    "fields": [
+     {
+      "mod": "a",
+      "sym": "a_k",
+      "scope": "kit",
+      "offset": 0,
+      "bits": 16
+     }
+    ],
+    "freed": []
+   },
+   "handles_table": [],
+   "layout_id": 3637227259
+  }
+ },
  "locks": {
   "not a dict": {
    "lock": [
@@ -16396,7 +16534,8 @@
    "lfos": [],
    "rough": [],
    "routes": [],
-   "inits": {}
+   "inits": {},
+   "handles": []
   },
   "not a list": {
    "doc": {
@@ -16510,7 +16649,8 @@
    "lfos": [],
    "rough": [],
    "routes": [],
-   "inits": {}
+   "inits": {},
+   "handles": []
   },
   "lock kit": {
    "doc": {
@@ -16543,7 +16683,8 @@
    ],
    "rough": [],
    "routes": [],
-   "inits": {}
+   "inits": {},
+   "handles": []
   },
   "lock global": {
    "doc": {
@@ -16626,7 +16767,8 @@
    "lfos": [],
    "rough": [],
    "routes": [],
-   "inits": {}
+   "inits": {},
+   "handles": []
   },
   "cc without lock": {
    "doc": {
@@ -16696,7 +16838,8 @@
    ],
    "rough": [],
    "routes": [],
-   "inits": {}
+   "inits": {},
+   "handles": []
   },
   "lfo without lock": {
    "doc": {
@@ -16778,7 +16921,8 @@
     "a"
    ],
    "routes": [],
-   "inits": {}
+   "inits": {},
+   "handles": []
   },
   "mod": {
    "doc": {
@@ -16838,7 +16982,8 @@
     "a",
     "c"
    ],
-   "inits": {}
+   "inits": {},
+   "handles": []
   },
   "mod without lock": {
    "doc": {
@@ -16943,7 +17088,8 @@
    "routes": [],
    "inits": {
     "a": 127
-   }
+   },
+   "handles": []
   },
   "init past its bits": {
    "doc": {
@@ -17013,6 +17159,99 @@
     ]
    },
    "error": "storage field a is declared twice"
+  },
+  "handle": {
+   "doc": {
+    "storage": [
+     {
+      "sym": "a",
+      "scope": "kit",
+      "bits": 16,
+      "handle": true
+     },
+     {
+      "sym": "b",
+      "scope": "project",
+      "bits": 32,
+      "handle": false
+     },
+     {
+      "sym": "c",
+      "scope": "track",
+      "bits": 12,
+      "handle": true,
+      "init": 0
+     }
+    ]
+   },
+   "ok": [
+    [
+     "a",
+     "kit",
+     16
+    ],
+    [
+     "b",
+     "project",
+     32
+    ],
+    [
+     "c",
+     "track",
+     12
+    ]
+   ],
+   "locks": [],
+   "ccs": [],
+   "lfos": [],
+   "rough": [],
+   "routes": [],
+   "inits": {},
+   "handles": [
+    "a",
+    "c"
+   ]
+  },
+  "handle type": {
+   "doc": {
+    "storage": [
+     {
+      "sym": "a",
+      "scope": "kit",
+      "bits": 16,
+      "handle": 1
+     }
+    ]
+   },
+   "error": "storage field 'a': \"handle\" is true or false"
+  },
+  "handle lock": {
+   "doc": {
+    "storage": [
+     {
+      "sym": "a",
+      "scope": "sound",
+      "bits": 16,
+      "lock": true,
+      "handle": true
+     }
+    ]
+   },
+   "error": "storage field 'a': a handle (\"handle\": true) is not a parameter: it cannot be lockable"
+  },
+  "handle init": {
+   "doc": {
+    "storage": [
+     {
+      "sym": "a",
+      "scope": "kit",
+      "bits": 16,
+      "handle": true,
+      "init": 3
+     }
+    ]
+   },
+   "error": "storage field 'a': a handle (\"handle\": true) has no init: 0 is none"
   }
  }
 }

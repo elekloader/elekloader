@@ -4,7 +4,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { allocate, ccEntries, codeEntries, dumps, fromImage, initEntries, layoutId, parseCcs, parseDecls, parseInits, parseLfos, parseLocks, parseRough, parseRoutes, symbols, trailer, type Decl, type Lock } from '../src/store.ts'
+import { allocate, ccEntries, codeEntries, dumps, fromImage, handleEntries, initEntries, layoutId, parseCcs, parseDecls, parseHandles, parseInits, parseLfos, parseLocks, parseRough, parseRoutes, symbols, trailer, type Decl, type Lock } from '../src/store.ts'
 
 const V = JSON.parse(readFileSync(new URL('./store-vectors.json', import.meta.url), 'utf8'))
 const DEV = 'analog-rytm-mk2'
@@ -101,6 +101,15 @@ test('inits: the same lockfiles, descriptors, table entries and notes', () => {
   }
 })
 
+test('handles (core-ar2 0.11): core_handles as store.py lists it, with the lockfile and layout of the same fields', () => {
+  for (const [name, c] of Object.entries<any>(V.handle_runs)) {
+    const [l] = allocate(null, c.decls, DEV)
+    assert.deepEqual(l, c.lock, `${name}: lockfile`)
+    assert.deepEqual(handleEntries(l, c.handles).map(hex), c.handles_table, `${name}: core_handles`)
+    assert.equal(layoutId(l), c.layout_id, `${name}: layout ID`)
+  }
+})
+
 test('the lockfiles it refuses, with the same messages, and the ones it keeps as they are', () => {
   for (const [name, c] of Object.entries<any>(V.locks)) {
     if (c.error === null) assert.deepEqual(allocate(c.lock, [], DEV)[0], c.result, name)
@@ -119,6 +128,7 @@ test('a mod\'s "storage": what it reads, and what it refuses', () => {
       assert.deepEqual(parseRough(c.doc), c.rough, name)
       assert.deepEqual(parseRoutes(c.doc), c.routes, name)
       assert.deepEqual(Object.fromEntries(parseInits(c.doc)), c.inits, name)
+      assert.deepEqual(parseHandles(c.doc), c.handles, name)
     }
   }
 })

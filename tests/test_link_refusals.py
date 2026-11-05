@@ -763,6 +763,15 @@ def _(B):
              [keeper(B), inited])], [inits, inited]
 
 
+@row('link', '<> mark<> storage fields as handles, which <> does not keep (no table <>)', device='analog-rytm-mk2')
+def _(B):
+    handled = B.other('m', storage=[{'sym': 'st_h', 'scope': 'project', 'bits': 16, 'handle': True}])
+    handles = keeper(B)
+    handles['collections']['core_handles'] = {'entry': 4}
+    return [('m marks storage fields as handles, which core 1 does not keep (no table core_handles)',
+             [keeper(B), handled])], [handles, handled]
+
+
 @row('link', '<> imports <> but declares no table <>', device='analog-rytm-mk2')
 def _(B):
     # check() refuses a core that imports the generation symbols without the table, unless a mod
@@ -944,7 +953,7 @@ def test_digitakt_fixtures():
 
 
 def test_analog_rytm_fixtures():
-    assert run_rows('analog-rytm-mk2') == 12
+    assert run_rows('analog-rytm-mk2') == 13
 
 
 def test_the_lfo_destination_field_is_placed_only_with_an_lfo_field():
