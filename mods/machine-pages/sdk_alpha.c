@@ -3,15 +3,7 @@
  * device shares is ../sdk-alpha/machine.c. */
 #include "dev.h"
 
-/* ELEK_REGISTER_MACHINE emits struct sdk_alpha_registration; core reads it as a struct cm_machine. */
-_Static_assert(sizeof(struct sdk_alpha_registration) == sizeof(struct cm_machine) &&
-               __builtin_offsetof(struct sdk_alpha_registration, render) ==
-               __builtin_offsetof(struct cm_machine, render) &&
-               __builtin_offsetof(struct sdk_alpha_registration, ui) ==
-               __builtin_offsetof(struct cm_machine, ui) &&
-               SDK_ALPHA_UI_TAG == CM_UI_TAG, "registration layout");
-
-const char sdk_alpha_dt1_ui_v1[] = "sdk alpha 1";
+const char sdk_alpha_abi_v1[] = "sdk alpha 1";
 static const struct sdk_alpha_entry *sdk_alpha_current;
 static uint32_t sdk_alpha_empty_layout[11];
 extern uint32_t mp_stock_layout(int32_t machine);

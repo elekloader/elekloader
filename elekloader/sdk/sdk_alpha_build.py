@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
-"""Private machine UI experiment; emits ordinary format-2 mods."""
+"""Builds an SDK machine (elekloader/sdk_alpha_machine.h) into an ordinary format-2 mod."""
 import argparse
 import collections
 import json
@@ -13,29 +13,30 @@ from elekloader import devices, elemod, formats, link
 from elekloader.sdk import build
 
 
-# The SDK's support matrix, the one place it lives: each supported release, the table a
-# registration goes to (its claims come from the profile's slot_claims), the companions it
-# requires, its first machine id and the optional features its companions implement. The
-# refusals and the tests derive from it.
-Target = collections.namedtuple('Target', 'table companions first_id features')
+# The SDK's support matrix, the one place it lives: each supported release, the companions it
+# requires, its first machine id, the optional features its companions implement, and the core table that also needs a native descriptor (the Digitakt's
+# core_machines: a struct cm_machine the builder writes). Every machine goes to the companion's table
+# SDK_ALPHA_TABLE; claims come from the profile's slot_claims. The refusals and the tests derive from it.
+Target = collections.namedtuple('Target', 'companions first_id features native')
 SDK_ALPHA_TARGETS = {
-    ('digitakt-mk1', '1.54'): Target('core_machines', ('core', 'machine-pages'),
-                                     4, frozenset(('render', 'defaults'))),
-    ('digitone-mk1', '1.44'): Target('sdk_alpha_machines', ('core', 'machines'),
-                                     4, frozenset(('render', 'defaults'))),
+    ('digitakt-mk1', '1.54'): Target(('core', 'machine-pages'), 4,
+                                     frozenset(('render', 'defaults')), 'core_machines'),
+    ('digitone-mk1', '1.44'): Target(('core', 'machines'), 4,
+                                     frozenset(('render', 'defaults')), None),
     # the Digitone II's synth type 4 is MIDI
-    ('digitone-mk2', '1.12'): Target('sdk_alpha_machines', ('core', 'machines-dn2'),
-                                     5, frozenset()),
+    ('digitone-mk2', '1.12'): Target(('core', 'machines-dn2'), 5, frozenset(), None),
 }
-SDK_ALPHA_ABI = 'sdk_alpha_dt1_ui_v1'    # the one symbol the companions export to SDK machines
+SDK_ALPHA_TABLE = 'sdk_alpha_machines'   # pointers to struct elek_machine, read by each companion
+SDK_ALPHA_ABI = 'sdk_alpha_abi_v1'       # the one symbol the companions export to SDK machines
+# core's struct cm_machine (digitakt-mk1/core3.h): id, name, short name, icon, params (3: SLICE's
+# parameters), render (its own id: an empty voice for SDK render), and no page tail: machine-pages
+# finds the SDK machine in SDK_ALPHA_TABLE.
+CM_MACHINE = struct.Struct('>iIIIiiII')
 # sdk_alpha_machine.h's limits (#define ELEK_UI_*) and the layout of its structs in a ColdFire build
 # (its ELEK_OFFSET and ELEK_SIZE asserts); tests/test_sdk_alpha.py checks they agree.
 LIMITS = {'ELEK_UI_LABEL_MAX': 5, 'ELEK_UI_KNOB_MAX': 15, 'ELEK_UI_PAGE_MAX': 2, 'ELEK_UI_PAGE_LABEL_MAX': 16,
           'ELEK_UI_NAME_MAX': 16, 'ELEK_UI_SHORT_NAME_MAX': 4}
 LAYOUT = {
-    ('sdk_alpha_registration', 'id'): 0, ('sdk_alpha_registration', 'params'): 16,
-    ('sdk_alpha_registration', 'ui'): 28, ('sdk_alpha_registration', None): 32,
-    ('sdk_alpha_machine_ui', 'machine'): 4,
     ('elek_machine', 'id'): 0, ('elek_machine', 'name'): 4, ('elek_machine', 'short_name'): 8,
     ('elek_machine', 'knobs'): 12, ('elek_machine', 'knob_count'): 16, ('elek_machine', 'pages'): 20,
     ('elek_machine', 'render'): 96, ('elek_machine', None): 100,
@@ -52,12 +53,10 @@ KNOB_LABEL, KNOB_MIN, KNOB_GLYPH, KNOB_SIZE = (LAYOUT['elek_knob', f] for f in (
 GLYPH_SIZE = LAYOUT['elek_glyph', None]
 
 
-def sdk_alpha_registrations(doc, sections, layouts=None):
-    """Discover compiler-emitted adapters; never repeat machine declarations in JSON.
-
-    layouts, when given, is filled with each machine's declared layout, by machine id:
-    {'name', 'knobs': [{'id', 'label', 'min', 'max', 'def'}], 'pages': [{'label', 'knobs': {encoder 0-7:
-    knob}}], 'render': bool}. The built mod does not change."""
+def sdk_alpha_registrations(doc, sections):
+    """The machines ELEK_REGISTER_MACHINE declared, checked: their layouts by machine id,
+    {'at': (section, offset) of the struct elek_machine, 'name', 'knobs': [{'id', 'label', 'min', 'max',
+    'def'}], 'pages': [{'label', 'knobs': {encoder 0-7: knob}}], 'render': bool}."""
     def sdk_alpha_bytes(where, size):
         sec, off = where
         raw = sections.get(sec, b'')
@@ -102,24 +101,15 @@ def sdk_alpha_registrations(doc, sections, layouts=None):
             raise build.BuildError('sdk alpha: pointers must point into the mod')
         return None
 
-    registrations, ids = [], set()
+    layouts = {}
     for name in sorted(doc['exports']):
         if not name.startswith('sdk_alpha_registration_'):
             continue
-        at = doc['symbols'][name]
-        raw = sdk_alpha_bytes(at, LAYOUT['sdk_alpha_registration', None])
-        mid, = struct.unpack_from('>i', raw)
-        if not 4 <= mid <= 127 or mid in ids:
-            raise build.BuildError('sdk alpha: duplicate or invalid machine slot %d (expected 4..127)' % mid)
-        ui = sdk_alpha_pointer(at, LAYOUT['sdk_alpha_registration', 'ui'])
-        abi = [r for r in doc['relocs'] if r[:2] == [ui[0], ui[1]]]
-        if len(abi) != 1 or abi[0][2:] != ['abs32', 'sym:' + SDK_ALPHA_ABI, 0]:
-            raise build.BuildError('sdk alpha: invalid machine UI ABI')
-        machine = sdk_alpha_pointer(ui, LAYOUT['sdk_alpha_machine_ui', 'machine'])
+        machine = sdk_alpha_pointer(doc['symbols'][name], 0)
         data = sdk_alpha_bytes(machine, MACHINE_SIZE)
-        if struct.unpack_from('>i', data)[0] != mid or struct.unpack_from(
-                '>iii', raw, LAYOUT['sdk_alpha_registration', 'params']) != (3, mid, 0x55493330):
-            raise build.BuildError('sdk alpha: inconsistent machine adapter')
+        mid, = struct.unpack_from('>i', data)
+        if not 4 <= mid <= 127 or mid in layouts:
+            raise build.BuildError('sdk alpha: duplicate or invalid machine slot %d (expected 4..127)' % mid)
         knob_count, = struct.unpack_from('>I', data, MACHINE_KNOB_COUNT)
         if knob_count > ELEK_UI_KNOB_MAX:
             raise build.BuildError('sdk alpha: a machine has at most %d knobs' % ELEK_UI_KNOB_MAX)
@@ -168,14 +158,13 @@ def sdk_alpha_registrations(doc, sections, layouts=None):
             raise build.BuildError('sdk alpha: render must be a function in the mod')
         machine_name = sdk_alpha_name(machine, MACHINE_NAME, LIMITS['ELEK_UI_NAME_MAX'])
         sdk_alpha_name(machine, MACHINE_SHORT_NAME, LIMITS['ELEK_UI_SHORT_NAME_MAX'])
-        if layouts is not None:
-            layouts[mid] = {'name': machine_name, 'pages': page_layouts, 'knobs': knob_layouts,
-                            'render': render}
-        ids.add(mid)
-        registrations.append((name, mid))
-    if not registrations:
+        layouts[mid] = {'at': machine, 'name': machine_name, 'pages': page_layouts, 'knobs': knob_layouts,
+                        'render': render}
+    if not layouts:
         raise build.BuildError('sdk alpha: no ELEK_REGISTER_MACHINE declaration found')
-    return registrations
+    if SDK_ALPHA_ABI not in doc['imports']:
+        raise build.BuildError('sdk alpha: invalid machine ABI (rebuild with this SDK\'s header)')
+    return layouts
 
 
 def sdk_alpha_build(moddir, stock, out=None):
@@ -198,13 +187,13 @@ def sdk_alpha_build(moddir, stock, out=None):
             names = {d.key: d.name for d in devices.devices()}
             supported = ['%s OS %s' % (names[d], v) for d, v in SDK_ALPHA_TARGETS]
             raise build.BuildError('sdk alpha: only %s and %s are supported' % (', '.join(supported[:-1]), supported[-1]))
-        table, companions, low, features = SDK_ALPHA_TARGETS[device, release]
+        companions, low, features, native = SDK_ALPHA_TARGETS[device, release]
+        tables = (SDK_ALPHA_TABLE,) + ((native,) if native else ())
         firmware, dev, _ = formats.load(stock)
         image = formats.main_image(firmware, dev)
         sections = {s: elemod.parts_bytes(d['parts'], image, dev)
                     for s, d in mod.sections.items() if 'parts' in d}
-        layouts = {}
-        registrations = sdk_alpha_registrations(doc, sections, layouts)
+        layouts = sdk_alpha_registrations(doc, sections)
         unresolved = sorted(set(doc['imports']) - {SDK_ALPHA_ABI})
         soft_float = [n for n in unresolved if re.fullmatch(r'__\w*?[sdtx]f\w*', n)]    # libgcc's
         if soft_float:
@@ -214,26 +203,37 @@ def sdk_alpha_build(moddir, stock, out=None):
         if unresolved:
             raise build.BuildError('sdk alpha: the machine imports %s, which no companion exports'
                                    % ', '.join(unresolved))
-        for _, mid in registrations:
+        for mid in layouts:
             if mid < low:
                 raise build.BuildError('sdk alpha: duplicate or invalid machine slot %d (expected %d..127)' % (mid, low))
             if 'defaults' not in features and any(knob['def'] != knob['min'] for knob in layouts[mid]['knobs']):
                 raise build.BuildError('sdk alpha: defaults are not supported on %s %s yet' % (device, release))
             if layouts[mid]['render'] and 'render' not in features:
                 raise build.BuildError('sdk alpha: render is not supported on %s %s yet' % (device, release))
-        if any(c['to'] == table for c in doc['contribute']):
+        if any(c['to'] in tables for c in doc['contribute']):
             raise build.BuildError('sdk alpha: declare machines only in C')
         taken = set(doc['resources'].get('names', [])) | set(mod.implied_names(image))
-        for symbol, mid in registrations:
-            doc['contribute'].append({'to': table, 'order': 50, 'data': '00000000',
-                                      'relocs': [[0, 'abs32', 'sym:' + symbol, 0]], 'claims': []})
+        run = doc['sections']['.run']
+        for mid, layout in sorted(layouts.items()):
+            sec, off = layout['at']
+            doc['contribute'].append({'to': SDK_ALPHA_TABLE, 'order': 50, 'data': '00000000',
+                                      'relocs': [[0, 'abs32', 'sec:' + sec, off]], 'claims': []})
+            if not native:
+                continue
+            at = -(-run['len'] // 4) * 4
+            run['parts'].append(['hex', (bytes(at - run['len']) + CM_MACHINE.pack(mid, 0, 0, 0, 3, mid, 0, 0)).hex()])
+            run['len'] = at + CM_MACHINE.size
+            for field, to in ((MACHINE_NAME, 4), (MACHINE_SHORT_NAME, 8)):     # cm_machine's name, short
+                r, = [r for r in doc['relocs'] if r[:2] == [sec, off + field]]
+                doc['relocs'].append(['.run', at + to, 'abs32', r[3], r[4]])
+            doc['contribute'].append({'to': native, 'order': 50, 'data': '00000000',
+                                      'relocs': [[0, 'abs32', 'sec:.run', at]], 'claims': []})
         for required in companions:
             if required not in doc['requires']:
                 doc['requires'].append(required)
         mod = link.Mod2(doc, doc['id'])
-        if taken & set(mod.implied_names(image, table)):    # the profile's slot_claims name the claims
+        if taken & {n for t in tables for n in mod.implied_names(image, t)}:   # the profile's slot_claims
             raise build.BuildError('sdk alpha: declare machines only in C')
-        mod.sdk_alpha_layouts = layouts     # for the test harness; not part of the built file
         out = out or os.path.join(moddir, 'out')
         os.makedirs(out, exist_ok=True)
         name = os.path.basename(path)
@@ -243,7 +243,7 @@ def sdk_alpha_build(moddir, stock, out=None):
         with open(dest, 'w') as fh:
             json.dump(doc, fh, indent=1)
             fh.write('\n')
-        return dest, mod
+        return dest, mod, layouts
 
 
 def sdk_alpha_main(argv=None):
@@ -253,7 +253,7 @@ def sdk_alpha_main(argv=None):
     ap.add_argument('--out')
     args = ap.parse_args(argv)
     try:
-        path, _ = sdk_alpha_build(args.moddir, args.stock, args.out)
+        path, _, _ = sdk_alpha_build(args.moddir, args.stock, args.out)
     except (build.BuildError, OSError, KeyError, ValueError) as e:
         print('BUILD FAILED: %s' % e)
         return 1

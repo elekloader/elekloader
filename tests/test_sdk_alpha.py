@@ -73,7 +73,7 @@ HELLO = ROOT / 'examples/sdk-hello-world'       # two pages
 GLYPHS = ROOT / 'examples/sdk-glyphs'
 
 
-M = 40                  # the machine, after the registration (32 bytes) and its adapter (8)
+M = 8                   # the machine, after the registration's pointer to it and its ABI reference
 RENDER, NAME, SNAME = M + B.MACHINE_SIZE, M + B.MACHINE_SIZE + 8, M + B.MACHINE_SIZE + 16
 KNOBS, GLYPH = 400, 1000
 
@@ -95,18 +95,15 @@ def sdk_alpha_test_document():
 def sdk_alpha_test_render_document(render=True):
     """A registration of an empty machine at M; its render (an rts) at RENDER."""
     raw = bytearray(SNAME + 8)
-    struct.pack_into('>i', raw, 0, 120)
-    struct.pack_into('>iii', raw, 16, 3, 120, 0x55493330)
     struct.pack_into('>i', raw, M, 120)
     raw[RENDER:RENDER + 2] = b'\x4e\x75'
     raw[NAME:NAME + 6] = b'Empty\0'
     raw[SNAME:SNAME + 5] = b'EMPT\0'
-    doc = {'exports': ['sdk_alpha_registration_empty'],
+    doc = {'exports': ['sdk_alpha_registration_empty'], 'imports': [B.SDK_ALPHA_ABI],
            'symbols': {'sdk_alpha_registration_empty': ['.run', 0]},
            'relocs': [['.run', o, 'abs32', 'sec:.run', a]
-                      for o, a in ((4, NAME), (8, SNAME), (28, 32), (36, M),
-                                   (M + B.MACHINE_NAME, NAME), (M + B.MACHINE_SHORT_NAME, SNAME))] +
-                     [['.run', 32, 'abs32', 'sym:sdk_alpha_dt1_ui_v1', 0]]}
+                      for o, a in ((0, M), (M + B.MACHINE_NAME, NAME), (M + B.MACHINE_SHORT_NAME, SNAME))] +
+                     [['.run', 4, 'abs32', 'sym:' + B.SDK_ALPHA_ABI, 0]]}
     if render:
         doc['relocs'].append(['.run', M + B.MACHINE_RENDER, 'abs32', 'sec:.run', RENDER])
     return doc, raw
@@ -172,12 +169,11 @@ class SdkAlphaTests(unittest.TestCase):
 
     def test_sdk_alpha_discovery_and_empty_descriptor(self):
         doc, raw = sdk_alpha_test_document()
-        self.assertEqual(sdk_alpha_registrations(doc, {'.run': raw}),
-                         [('sdk_alpha_registration_empty', 120)])
+        self.assertEqual(list(sdk_alpha_registrations(doc, {'.run': raw})), [120])
+        self.assertEqual(sdk_alpha_registrations(doc, {'.run': raw})[120]['at'], ('.run', M))
 
     def test_sdk_alpha_invalid_registrations(self):
-        for offset, value in ((0, 3), (0, 128), (M, 121), (M + B.MACHINE_KNOB_COUNT, 1),
-                              (page_at(0, 0), 1), (24, 0)):
+        for offset, value in ((M, 3), (M, 128), (M + B.MACHINE_KNOB_COUNT, 1), (page_at(0, 0), 1)):
             with self.subTest(offset=offset, value=value):
                 doc, raw = sdk_alpha_test_document()
                 struct.pack_into('>I', raw, offset, value)
@@ -194,7 +190,7 @@ class SdkAlphaTests(unittest.TestCase):
                 elif kind == 'pointer':
                     doc['relocs'] = []
                 elif kind == 'abi':
-                    doc['relocs'][-1][3] = 'sym:cm_ui_v3'
+                    doc['imports'] = ['sdk_alpha_dt1_ui_v1']
                 elif kind == 'name':
                     raw[NAME] = 0
                 elif kind == 'truncated':
@@ -206,9 +202,7 @@ class SdkAlphaTests(unittest.TestCase):
 
     def test_sdk_alpha_pages_hold_the_machines_own_knobs(self):
         doc, raw = sdk_alpha_test_controls_document()
-        layouts = {}
-        self.assertEqual(sdk_alpha_registrations(doc, {'.run': raw}, layouts),
-                         [('sdk_alpha_registration_empty', 120)])
+        layouts = sdk_alpha_registrations(doc, {'.run': raw})
         self.assertEqual([layouts[120]['pages'][p]['knobs'][e]['id'] for p, e in ((0, 3), (1, 7), (0, 0))],
                          [0, 0, 2])
         without(doc, page_at(0, 3))                 # a blank position
@@ -228,7 +222,7 @@ class SdkAlphaTests(unittest.TestCase):
                  'page 2 needs page 1'),
                 (lambda doc, raw: without(doc, knob_at(3)), 'missing registration pointer'),
                 (lambda doc, raw: without(doc, M + B.MACHINE_KNOBS), 'knob_count needs knobs'),
-                (lambda doc, raw: reloc(doc, 32).__setitem__(3, 'sym:unknown_sdk_abi'), 'ABI')):
+                (lambda doc, raw: doc.__setitem__('imports', ['unknown_sdk_abi']), 'ABI')):
             with self.subTest(message=message):
                 doc, raw = sdk_alpha_test_controls_document()
                 edit(doc, raw)
@@ -275,19 +269,14 @@ class SdkAlphaTests(unittest.TestCase):
             with self.subTest(low=low, high=high, default=default):
                 doc, raw = sdk_alpha_test_controls_document()
                 struct.pack_into('>iii', raw, knob_at(0, B.KNOB_MIN), low, high, default)
-                layouts = {}
-                sdk_alpha_registrations(doc, {'.run': raw}, layouts)
+                layouts = sdk_alpha_registrations(doc, {'.run': raw})
                 self.assertEqual(layouts[120]['pages'][0]['knobs'][3]['def'], expected)
 
     def test_sdk_alpha_render_registration(self):
-        layouts = {}
         doc, raw = sdk_alpha_test_render_document()
-        self.assertEqual(sdk_alpha_registrations(doc, {'.run': raw}, layouts),
-                         [('sdk_alpha_registration_empty', 120)])
-        self.assertTrue(layouts[120]['render'])
+        self.assertTrue(sdk_alpha_registrations(doc, {'.run': raw})[120]['render'])
         doc, raw = sdk_alpha_test_render_document(render=False)
-        sdk_alpha_registrations(doc, {'.run': raw}, layouts)
-        self.assertFalse(layouts[120]['render'])
+        self.assertFalse(sdk_alpha_registrations(doc, {'.run': raw})[120]['render'])
         doc, raw = sdk_alpha_test_render_document(render=False)
         struct.pack_into('>I', raw, M + B.MACHINE_RENDER, 0x40001000)        # an address, not a function of the mod
         with self.assertRaisesRegex(build.BuildError, 'function in the mod'):
@@ -345,7 +334,7 @@ class SdkAlphaTests(unittest.TestCase):
             for name, folder in (('empty', EMPTY.write(tmp)), ('one page', ONE_PAGE.write(tmp)),
                                  ('hello', str(HELLO)), ('glyphs', str(GLYPHS)),
                                  ('renders', RENDERS.write(tmp))):
-                path, mod = sdk_alpha_build(folder, stock, tmp)
+                path, mod, _ = sdk_alpha_build(folder, stock, tmp)
                 built[name] = path, mod
                 result = subprocess.run([sys.executable, '-m', 'elekloader.lint', path, '--stock', stock,
                                          '--with', core_path, '--with', pages_path, '--json'],
@@ -355,6 +344,14 @@ class SdkAlphaTests(unittest.TestCase):
                 self.assertEqual(mod.requires, ['core', 'machine-pages'])
             self.assertEqual(built['empty'][1].implied_names(image), ['machine:%d' % EMPTY.id])
             self.assertEqual(built['hello'][1].implied_names(image), ['machine:122'])
+            with open(built['hello'][0]) as fh:
+                doc = json.load(fh)
+            self.assertEqual([c['to'] for c in doc['contribute']], ['sdk_alpha_machines', 'core_machines'])
+            self.assertEqual(doc['contribute'][1]['relocs'][0][2], 'sec:.run')
+            at = doc['contribute'][1]['relocs'][0][3]                   # the descriptor the builder wrote
+            run = elemod.parts_bytes(built['hello'][1].sections['.run']['parts'], image, dev)
+            self.assertEqual(struct.unpack_from('>iiiiiiII', run, at)[::3], (122, 0, 0))   # id, icon, tag
+            self.assertEqual(struct.unpack_from('>ii', run, at + 16), (3, 122))         # params, render
             with open(built['empty'][0]) as fh:
                 duplicate = json.load(fh)
             duplicate['id'], duplicate['exports'] = 'sdk-alpha-conflict', []   # keep the refusal to the slot
@@ -385,7 +382,7 @@ class SdkAlphaTests(unittest.TestCase):
             mod = json.loads(Path(one, 'mod.json').read_text())
             mod['devices'] = {'digitakt-mk1': ['1.54']}
             Path(one, 'mod.json').write_text(json.dumps(mod))
-            path, _ = sdk_alpha_build(one, stocks['digitakt-mk1'], tmp)
+            path, _, _ = sdk_alpha_build(one, stocks['digitakt-mk1'], tmp)
             self.assertEqual(Path(path).name, 'sdk-test-empty-0.1.elemod')
 
     def test_sdk_alpha_refuses_imports_no_companion_exports(self):
@@ -408,11 +405,11 @@ class SdkAlphaTests(unittest.TestCase):
         stocks = self.stocks()
         dn = stocks['digitone-mk1']
         with tempfile.TemporaryDirectory() as tmp:
-            _, dt_mod = sdk_alpha_build(EMPTY.write(tmp + '/dt'), stocks['digitakt-mk1'], tmp + '/dt-out')
+            _, dt_mod, _ = sdk_alpha_build(EMPTY.write(tmp + '/dt'), stocks['digitakt-mk1'], tmp + '/dt-out')
             firmware, dev, _ = formats.load(stocks['digitakt-mk1'])
             self.assertEqual((dt_mod.implied_names(formats.main_image(firmware, dev)), dt_mod.requires),
                              (['machine:%d' % EMPTY.id], ['core', 'machine-pages']))
-            path, dn_mod = sdk_alpha_build(EMPTY.write(tmp + '/dn'), dn, tmp + '/dn-out')
+            path, dn_mod, _ = sdk_alpha_build(EMPTY.write(tmp + '/dn'), dn, tmp + '/dn-out')
             firmware, dev, _ = formats.load(dn)
             image = formats.main_image(firmware, dev)
             self.assertEqual((dn_mod.implied_names(image), dn_mod.requires),
@@ -463,7 +460,7 @@ class SdkAlphaTests(unittest.TestCase):
             built = {}
             for name, folder in (('empty', EMPTY.write(tmp)), ('one page', ONE_PAGE.write(tmp)),
                                  ('hello', str(HELLO)), ('glyphs', str(GLYPHS))):
-                path, mod = sdk_alpha_build(folder, stock, tmp)
+                path, mod, _ = sdk_alpha_build(folder, stock, tmp)
                 built[name] = path, mod
                 self.assertEqual(mod.requires, ['core', 'machines-dn2'])
                 link.link([core, machines, mod], image)

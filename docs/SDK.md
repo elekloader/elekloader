@@ -184,9 +184,12 @@ python -m elekloader.sdk.build <moddir> --stock <stock.syx>
 When `devices` lists more than one OS, each output's name carries its
 device and OS, such as `my-machine-0.1-digitone-mk1-os1.44.elemod`.
 
+`ELEK_REGISTER_MACHINE` emits a pointer to the machine. The builder adds
+each one to the companion's table `sdk_alpha_machines`; on the Digitakt it
+also writes the machine's `struct cm_machine` into `core_machines`.
 A machine claims `machine:<id>` on Digitakt, `dnmachine:<id>` on Digitone
-mk1, or `mk2-synth:<id>` on Digitone II: the linker reads the id from its
-registration (the device profile's `slot_claims`), so the built mod lists
+mk1, or `mk2-synth:<id>` on Digitone II: the linker reads the id from
+those records (the device profile's `slot_claims`), so the built mod lists
 no claim. SDK and native SHARC synths share the DN2 synth namespace. The
 linker refuses conflicting claims. Build the
 required companions for the same stock file, then use the normal
@@ -194,9 +197,9 @@ required companions for the same stock file, then use the normal
 
 The builder refuses unsupported targets, invalid names, bounds, IDs and
 layouts, duplicate declarations in JSON, and imports no companion exports
-(such as libgcc's floating point). All private SDK declarations
-and companions use `sdk_alpha_dt1_ui_v1`, with one descriptor layout.
-Rebuild SDK mods and companions together when that layout changes.
+(such as libgcc's floating point). SDK machines import `sdk_alpha_abi_v1`,
+which every companion exports; rebuild SDK mods and companions together
+when it changes.
 
 Working UI examples are [sdk-hello-world](../examples/sdk-hello-world)
 (two pages and a shared knob) and [sdk-glyphs](../examples/sdk-glyphs)

@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
-/* Private experiment: Digitakt mk1 OS 1.54 and Digitone mk1 OS 1.44 (UI and audio); Digitone II
+/* The SDK's machine interface: Digitakt mk1 OS 1.54 and Digitone mk1 OS 1.44 (UI and audio), Digitone II
  * OS 1.12 (UI only). The builder refuses audio on targets without a render backend. */
 #ifndef ELEKLOADER_SDK_ALPHA_MACHINE_H
 #define ELEKLOADER_SDK_ALPHA_MACHINE_H
@@ -171,45 +171,20 @@ struct elek_machine {
 
 #define ELEK_KNOBS(k) .knobs = (k), .knob_count = sizeof(k) / sizeof((k)[0])
 
-/* Private adapter; the existing core descriptor and UI layouts stay intact. */
-struct sdk_alpha_machine_ui {
-    const void *abi;
-    const struct elek_machine *machine;
-};
-/* The registration the builder finds: the Digitakt's struct cm_machine layout, which machine-pages
- * reads as is; another device's backend reads id, name and ui. No device header, so one source builds
- * for every device. */
-#define SDK_ALPHA_UI_TAG 0x55493330u   /* CM_UI_TAG */
-struct sdk_alpha_registration {
-    int32_t id;
-    const char *name, *sname;
-    const void *icon;
-    int32_t params, render;
-    uint32_t tag;
-    const struct sdk_alpha_machine_ui *ui;
-};
-extern const char sdk_alpha_dt1_ui_v1[];
-
+/* Registers a machine, at file scope: the builder adds it to the device's companion. */
 #define ELEK_REGISTER_MACHINE(machine) \
-    static const struct sdk_alpha_machine_ui sdk_alpha_ui_##machine = { \
-        sdk_alpha_dt1_ui_v1, &(machine) \
-    }; \
-    const struct sdk_alpha_registration sdk_alpha_registration_##machine = { \
-        .id = (machine).id, .name = (machine).name, .sname = (machine).short_name, \
-        .params = 3, .render = (machine).id, .tag = SDK_ALPHA_UI_TAG, \
-        .ui = &sdk_alpha_ui_##machine \
-    }
+    static const char *const sdk_alpha_abi_##machine __attribute__((used)) = sdk_alpha_abi_v1; \
+    const struct elek_machine *const sdk_alpha_registration_##machine = &(machine)
+
+/* Private: what ELEK_REGISTER_MACHINE needs. Every companion exports the ABI symbol, so a machine built
+ * for another ABI fails to link. */
+extern const char sdk_alpha_abi_v1[];
 
 /* The layout sdk_alpha_build reads from a ColdFire build (tests/test_sdk_alpha.py keeps its copy in step).
  * A host build, with 8-byte pointers, lays them out differently. */
 #if __SIZEOF_POINTER__ == 4
 #define ELEK_OFFSET(type, field, n) _Static_assert(__builtin_offsetof(struct type, field) == (n), #type "." #field)
 #define ELEK_SIZE(type, n) _Static_assert(sizeof(struct type) == (n), "sizeof " #type)
-ELEK_OFFSET(sdk_alpha_registration, id, 0);
-ELEK_OFFSET(sdk_alpha_registration, params, 16);
-ELEK_OFFSET(sdk_alpha_registration, ui, 28);
-ELEK_SIZE(sdk_alpha_registration, 32);
-ELEK_OFFSET(sdk_alpha_machine_ui, machine, 4);
 ELEK_OFFSET(elek_machine, id, 0);
 ELEK_OFFSET(elek_machine, name, 4);
 ELEK_OFFSET(elek_machine, short_name, 8);

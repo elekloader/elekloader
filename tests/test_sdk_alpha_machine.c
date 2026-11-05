@@ -72,11 +72,8 @@ ELEK_REGISTER_MACHINE(foreign);
 ELEK_REGISTER_MACHINE(beyond);
 ELEK_REGISTER_MACHINE(unlabelled);
 ELEK_REGISTER_MACHINE(too_many);
-const char sdk_alpha_dt1_ui_v1[] = "sdk alpha 1";
-const struct sdk_alpha_registration *const sdk_alpha_machines[] = {
-    &sdk_alpha_registration_good, &sdk_alpha_registration_empty, &sdk_alpha_registration_foreign,
-    &sdk_alpha_registration_beyond, &sdk_alpha_registration_unlabelled, &sdk_alpha_registration_too_many, 0
-};
+const char sdk_alpha_abi_v1[] = "sdk alpha 1";
+const struct elek_machine *const sdk_alpha_machines[] = { &good, &empty, &foreign, &beyond, &unlabelled, &too_many, 0 };
 
 static int32_t present_label(const struct sdk_alpha_entry *e, const char *label, uint32_t visible)
 {

@@ -65,7 +65,7 @@ static const struct elek_machine test = {
     .render = sound,
 };
 ELEK_REGISTER_MACHINE(test);
-const struct sdk_alpha_registration *const sdk_alpha_machines[] = { &sdk_alpha_registration_test, 0 };
+const struct elek_machine *const sdk_alpha_machines[] = { &test, 0 };
 
 int main(void)
 {

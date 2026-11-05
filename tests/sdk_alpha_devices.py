@@ -254,10 +254,6 @@ class Device:
             raise unittest.SkipTest('needs the cross compiler %s (ELEKLOADER_CROSS)' % gcc)
         return stock
 
-    @classmethod
-    def machine_ids(cls, mod):
-        return list(mod.sdk_alpha_layouts)     # by machine id
-
     def __init__(self, session, symbols, machines, layouts=None):
         self.s, self.symbols = session, symbols
         self.machines = sorted(machines)    # the SDK machine ids in this build

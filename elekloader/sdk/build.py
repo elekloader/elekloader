@@ -592,7 +592,7 @@ def main(argv=None):
         if any(x.startswith('sdk_alpha_registration_') for x in m.exports):
             from elekloader.sdk.sdk_alpha_build import sdk_alpha_build   # it imports this module
             os.remove(path)                 # without the SDK step the machine does nothing
-            path, m = sdk_alpha_build(a.moddir, a.stock, a.out)
+            path, m, _ = sdk_alpha_build(a.moddir, a.stock, a.out)
     except (BuildError, OSError, KeyError, ValueError) as e:
         print('BUILD FAILED: %s' % e)
         return 1

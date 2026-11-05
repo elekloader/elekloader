@@ -21,7 +21,7 @@ the mod shop: tick it there and the page takes the newest core for it.
 | sites | 109, listed in `mod.json`. 1.1's 20: 7 on the SRC page, 4 range lookups, 5 on the LFO page, 2 SAMP compares, the machine menu's icon row and the render point 0x40077fba. 1.2's extra values add 77: 50 one-byte bounds (the parameter-id compares, 164 to 171), and 27 hooks: the SRC page's page flip, title and copy/clear/paste, the id-slot maps, the descriptor table and its 7 readers, defaults, Randomize, locks and the sound file's save/load/upgrade and LFO destinations. 1.2.1 adds 2: the stores of the firmware's in-place parameter sync. 1.3 adds 2: MIDI's range lookups, the CC's (0x40010d50) and the NRPN's (0x40010154). 1.4 adds 1: the CC lookup's table for an audio track (0x400791fe). 1.5 adds none: it reads the view at the knob-graphic site it already has. 1.6 adds 7, for the machine menu's filter tab |
 | exports | `cm_ui_v3`, from 1.1 `cm_ui_v31`, from 1.2 `cm_ui_v32`, from 1.4 `cm_ui_v33`: the markers a machine's page names; from 1.2 `cm_src_value`; from 1.5 `cm_src_shown` |
 | claims | from 1.2, `soundslot:46` to `soundslot:52`, the extra values' slots |
-| declares | `ev_render_voices`, the render event |
+| declares | `ev_render_voices`, the render event; on OS 1.54 `sdk_alpha_machines`, the shared SDK's machines (docs/SDK.md) |
 | RAM | 9.3 KB code, 4.5 KB for up to 32 machines' pages (1.1: 2.4 KB and 2 KB) |
 
 ## What a machine describes

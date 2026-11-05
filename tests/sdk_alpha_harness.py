@@ -123,15 +123,15 @@ class Firmware:
         self.refused, self.layouts, ids = {}, {}, []
         for machine in REGISTRY:
             try:
-                path, mod = sdk_alpha_build(machine.write(self.work), stock, self.work)
+                path, mod, layouts = sdk_alpha_build(machine.write(self.work), stock, self.work)
             except build.BuildError as error:
                 self.refused[machine] = str(error).strip().splitlines()[0]
                 continue
             mods.append(path)
-            found = device.machine_ids(mod)
+            found = list(layouts)
             machine.id = found[0]
             ids += found
-            self.layouts.update(mod.sdk_alpha_layouts)
+            self.layouts.update(layouts)
         self.machine_ids = ids
         syx = os.path.join(self.work, 'firmware.syx')
         done = subprocess.run([sys.executable, '-m', 'elekloader.patch', '--stock', stock,

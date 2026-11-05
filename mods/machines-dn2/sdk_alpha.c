@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
 /* machines-dn2 0.2: the SDK alpha's machines (elekloader/sdk_alpha_machine.h) on the Digitone II. A mod
- * built by sdk_alpha_build contributes its registration to the table sdk_alpha_machines. Each machine is
+ * built by sdk_alpha_build contributes each machine to the table sdk_alpha_machines. Each machine is
  * a synth in MACHINE SEL that FM TONE plays (no DSP code), with its pages (two at most) as SYN's pages.
  * Logical knob i keeps its value in sound slot 25 + i, whichever page shows it; every SDK machine
  * shares the parameter rows ROWS + SDK_ROW + i, labelled for the active track's machine. */
@@ -8,7 +8,7 @@
 #include "dev.h"
 #include "dn2.h"
 
-const char sdk_alpha_dt1_ui_v1[] = "sdk alpha 1";
+const char sdk_alpha_abi_v1[] = "sdk alpha 1";
 static struct mk2_synth synths[SDK_ALPHA_MACHINES];  /* sdk_alpha_entries' machines, in their order */
 static struct descriptor pages[SDK_ALPHA_MACHINES][2];
 static struct string_rep titles[SDK_ALPHA_MACHINES][2][2];

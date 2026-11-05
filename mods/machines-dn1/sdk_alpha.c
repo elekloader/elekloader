@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
 /* machines 0.3: the SDK alpha's machines (elekloader/sdk_alpha_machine.h) on the Digitone. A mod built by
- * sdk_alpha_build contributes its registration to the table sdk_alpha_machines. Its pages (two at most)
+ * sdk_alpha_build contributes each machine to the table sdk_alpha_machines. Its pages (two at most)
  * replace SYN2's pages while the track plays the machine (core_page_list): FM's envelope graphs belong to
  * page 4, not to its knobs. Each logical knob keeps its value in one SYN parameter, whichever page shows it.
  * SDK renderers replace FM through the companion's existing voice path. */
@@ -8,7 +8,7 @@
 #include "digitone-mk1/machines.h"
 
 #define SDK_KNOBS SDK_ALPHA_KNOBS
-const char sdk_alpha_dt1_ui_v1[] = "sdk alpha 1";
+const char sdk_alpha_abi_v1[] = "sdk alpha 1";
 static struct dnm_machine machines[SDK_ALPHA_MACHINES];   /* sdk_alpha_entries' machines, in their order */
 static struct dnm_knob knobs[SDK_ALPHA_MACHINES][DNM_KNOBS_ALL];
 static int16_t defaults[SDK_ALPHA_MACHINES][DNM_KNOBS_ALL];

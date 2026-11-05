@@ -92,19 +92,20 @@ void mp_src_init(void)
     int count = 0;
     for (int i = 0; core_machines[i]; ++i) {
         const struct cm_machine *m = core_machines[i];
-        if (m->tag != CM_UI_TAG || !m->ui)
-            continue;
-        if (m->id > 3 && m->ui->page_from <= 3 &&
-            (m->ui->abi == cm_ui_v3 || m->ui->abi == cm_ui_v31)) {
-            ++count;
-            continue;
-        }
-        const struct cm_ui32 *u = (const struct cm_ui32 *)m->ui;
+        const struct cm_ui32 *u = 0;
 #ifdef SDK_ALPHA_DT1
-        const struct cm_ui32 *alpha = sdk_alpha_ui(m->id);
-        if (alpha)
-            u = alpha;
+        u = sdk_alpha_ui(m->id);        /* an SDK machine's descriptor names no page */
 #endif
+        if (!u) {
+            if (m->tag != CM_UI_TAG || !m->ui)
+                continue;
+            if (m->id > 3 && m->ui->page_from <= 3 &&
+                (m->ui->abi == cm_ui_v3 || m->ui->abi == cm_ui_v31)) {
+                ++count;
+                continue;
+            }
+            u = (const struct cm_ui32 *)m->ui;
+        }
         if ((u->base.abi == cm_ui_v32 || u->base.abi == cm_ui_v33) && count < 32 && valid(m, u)) {
             extended[m->id] = u;
             ++count;
