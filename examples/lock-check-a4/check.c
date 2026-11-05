@@ -132,6 +132,11 @@ struct seen {
     int16_t track_a, track_c, track_k, track_v;
     int32_t hits[4];                    /* A, C, K, V: blocks with a lock */
     int16_t last[4];                    /* their last lock seen, -1 none */
+    int8_t routes[6], dests[6];         /* core_dst_voice's counts, voices 0..5 */
+    struct core_dst first[6];           /* each voice's first modulation */
+    int16_t macros;                     /* core_dst_macros' count */
+    struct core_dst macro0;             /* and its first */
+    uint16_t target[8];                 /* voice 0's Dest selectors' engine target slots */
 };
 
 volatile struct seen lk_seen = {{'L', 'K', 'C', 'K'}, .last = {-1, -1, -1, -1}};
@@ -160,6 +165,26 @@ void lk_render_out(void)
     note(1, lk_seen.track_c);
     note(2, lk_seen.track_k);
     note(3, lk_seen.track_v);
+    for (v = 0; v < 6; v++) {
+        int r, d;
+        const struct core_dst *e = core_dst_voice(v, &r, &d);
+        lk_seen.routes[v] = r;
+        lk_seen.dests[v] = d;
+        if (r + d)
+            lk_seen.first[v] = e[0];
+    }
+    {
+        int n;
+        const struct core_dst *e = core_dst_macros(&n);
+        lk_seen.macros = n;
+        if (n)
+            lk_seen.macro0 = e[0];
+    }
+    for (v = 0; v < 8; v++) {           /* stock's engine: the Dest list, the map, the base words */
+        int32_t sel = ((const volatile int32_t *)0x4045c7a8)[v];
+        lk_seen.target[v] = sel < 0 ? 0xffff
+            : ((const volatile uint16_t *)0x80003e38)[((const volatile int16_t *)0x42878da0)[sel]];
+    }
     lk_seen.blocks++;
 }
 

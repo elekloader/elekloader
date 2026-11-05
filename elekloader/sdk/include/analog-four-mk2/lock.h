@@ -70,4 +70,32 @@ int core_lock_value_voice(int voice, int code);
  * comes with core_param_value (core-a4's part 3). */
 int core_slide_delta_voice(int voice, int code);
 
+/* Destinations (core-a4 0.5, part 2). A lockable field also declared
+ * "mod": true is a destination of every modulation source of its track: the
+ * five routes, the four Dest knobs, the performance macros and CONTROL IN.
+ * Its lists end with the field (its short_name, name and category show
+ * there), and the route, Dest or macro keeps the field's lock code. Core
+ * notes them when stock pushes a sound, for the value read (part 3). */
+struct core_dst {
+    uint8_t src;                /* 0..4 a route (velocity, bend, wheel, breath, aftertouch);
+                                   5..12 a Dest, 5 + its place in the voice's Dest list (synth:
+                                   EnvF A, B, Env2 A, B, LFO1 A, B, LFO2 A, B; FX: LFO1 A, B,
+                                   LFO2 A, B; CV: ENV1 A, B, ENV2 A, B, LFO1 A, B, LFO2 A, B);
+                                   a macro: 0..9, then 10, 11 CONTROL IN 1, 2 */
+    uint8_t n;                  /* a route's place (0..4); a Dest's selector (its sound word,
+                                   e.g. 0x44 EnvF Dest A); a macro target's track */
+    uint8_t code;               /* the field's lock code */
+    uint8_t pad;
+    int16_t depth;              /* a route's or macro target's depth (signed, 0x4000 = +0.5) */
+};
+
+/* the voice's (0..5) modulations: *routes routes, then *dests Dests */
+const struct core_dst *core_dst_voice(int voice, int *routes, int *dests);
+
+/* every macro's targets on mod parameters */
+const struct core_dst *core_dst_macros(int *n);
+
+/* 1 when anything modulates one of the voice's mod parameters */
+int core_dst_any(int voice);
+
 #endif

@@ -5,7 +5,8 @@ The boot copier, the hook bus and mod storage for the Analog Four MKII, OS
 the A4's addresses, which `mod.json` gives (`defsym`, `sites`), as
 [core-ar2](../core-ar2) does for the Analog Rytm MKII, and its own `store.c`
 and `store.s` (Mod storage, below), and from 0.5 `lock.c`, `rows.c` and
-`rows.s` (Lockable parameters, Mod p-locks). On its own it changes nothing
+`rows.s` (Lockable parameters, Mod p-locks) and `dests.c` and `dests.s`
+(Destinations). On its own it changes nothing
 the unit does.
 
 The A4 MKII is the Rytm MKII's platform (a ColdFire MCF5441x): its OS entry,
@@ -331,6 +332,54 @@ before it. A project load whose layout ID the build doesn't read
 load and CREATE NEW clear the playing ones; a set of a field
 (`core_store_set`) ends its slide on every voice playing that item.
 
+## Destinations (0.5)
+
+The lock service's second part. A lockable field declared `"mod": true`
+(ROUTE in `core_lock_codes`) is a destination of every modulation source of
+its track kind: the five routes (velocity, pitch bend, mod wheel, breath,
+aftertouch, 5 each), the four Dest knobs (EnvF, Env2, LFO1, LFO2; A and B;
+the FX and CV tracks' own), the ten performance macros and CONTROL IN 1
+and 2 (5 targets each). The code goes raw in the bytes stock already has:
+a route's and a macro target's index byte (signed, -1 none), a Dest word's
+high byte. Stock's apply needs no change: an index of 0x70 or more
+resolves to its sink slot (0x24b).
+
+| site | 1.56 | what |
+|---|---|---|
+| list builder's end | 0x400a11a4 (`jmp`) | 0x400a1108(set, mask) builds every destination list (route screens, Dest popups, macro and CONTROL IN setup); core appends the pseudo id of each "mod" field of the set's kind (set +4: 1 synth, 7 FX, 8 CV), whatever the mask |
+| id to index | 0x40007632 (`jmp`) | a "mod" pseudo id's engine index is its code |
+| index to id | 0x400077d2 (`jmp`) | stock answers 0 (None) for an index above 0x6f; a "mod" code gives its pseudo id |
+| Dest value check | 0x4009f6ca (`jmp`), in 0x4009f650 (vtable +0x28) | stock refuses any id above 0x126 (checked: without this site a Dest knob's step stops at the last stock entry); a "mod" pseudo id of the set's kind passes |
+| short and long names | +0x68, +0x6c of the synth, FX and CV parameter sets (0x401a16b4.., 0x401a1754.., 0x401a17f4.., `ptr`) | a pseudo id's and a mod parameter's page knob's names: the knob's label and, with a trig held, the screen's title (stock: ERR, INVALID PARAMETER) |
+| Dest value text | 0x400f3630, 0x400f368e, 0x400f36ec (`jmp`) | a Dest knob on a "mod" code shows its short name (synth, FX, CV) |
+| list item | 0x40035a84 (`jmp`) | `CATEGORY:Name` (MOD when it has no category), stock's format |
+| setup target | 0x40036a0a (`jmp`) | a route's, macro's or CONTROL IN's target on its setup screen: the short name and category |
+| synth, FX, CV sound push | 0x40100b0e, 0x40100eb4, 0x401010dc (`jmp`, the returns of 0x40100a04, 0x40100d84, 0x40100fb8) | each Dest selector's code, per voice, and the item the voice was pushed with |
+| route push | 0x40100cf4 (`jmp`, the return of 0x40100baa(sound, voice)) | each route to a code: {source, place, code, depth} |
+| performance push | 0x401012e2 (`jmp`, the return of 0x401011e0(entry, n)) | each macro target on a code: {macro, track, code, depth} |
+| knob push | 0x40100678 (`jmp`, the return of 0x401005b8) | a Dest knob's turn (or NRPN) on each voice of its track |
+
+`core_dst_voice(voice, &routes, &dests)` and `core_dst_macros(&n)`
+(`analog-four-mk2/lock.h`) hand part 3 what the pushes noted; every write
+is made with interrupts masked, as the pushes run from the UI and from the
+audio interrupt. A voice is 0..5 (the four synth voices, the FX track, the
+CV track), the map rows 0x42878da0 + 0x200 x voice.
+
+A Dest stored outside its list. The lists offer a Dest only the depths of
+stages the audio interrupt applies after it (LFO2, Env2, LFO1, EnvF), but
+an NRPN, a kit or SysEx can store any index, and stock then adds the term
+to a depth its stage has already read: nothing hears it (trace item 8). At
+each push core sends such a Dest to the sink, as stock sends an unknown
+index, so a depth read at the end of the block (part 3) never carries a
+term stock never used. The rule is stock's own list rule, applied to
+depths only: a Dest whose target is a depth (a selector's word + 4) that the
+selector's mask would not list.
+
+Loads. A sound's and a kit's load (`st_sound_load`, `st_kit_load`) turn a
+code this build has no "mod" parameter for into None (a route's or macro
+target's -1, a Dest word 0), and every code when the item's layout ID is
+not this build's.
+
 ## Checked so far
 
 On a unit (OS 1.56, 20 Oct 2026) [hw]: build HC56 (core-a4 with
@@ -415,6 +464,37 @@ images; 20 Oct 2026):
     accept's refill (above).
   Not checked yet: track clear, the SysEx dump out and in, the kit change's
   and CREATE NEW's clear, the FX and CV kinds' knobs, a fine parameter.
+- **Destinations** [emu] (core 0.5 with lock-check-a4, its A, K and V
+  `"mod": true`, dtboot, 5 Nov 2026):
+  - with a trig held in grid recording, LOCK CHECK's knobs read LKA and LKC
+    and a turn of A titles the screen LOCK CHECK A (core 0.5 part 1: ERR,
+    ERR and INVALID PARAMET) (works, screen);
+  - track 1's LFO1 Dest A list ends with MOD:Lock Check A after ENVF:Depth
+    B, the FX track's with MOD:Lock Check K, the CV track's with MOD:Lock
+    Check V, none with another kind's (works, screen);
+  - choosing it and YES stored 0x7000 in the sound's Dest word, the knob
+    showed LKA, and voice 0's notes held {Dest place 4, 0x58, 0x70}
+    (set-and-kept, data read);
+  - without the Dest value check's site, the same steps stop at ENVF:Depth
+    B (0x49): stock's check refuses a pseudo id on the knob's step, so the
+    site is needed (works, data read);
+  - a wheel route {0x4000, 0, 0x70} (poked) and a note: voice 0's notes held
+    {wheel, 0, 0x70, 0x4000}; a route to 0x71 (C, no "mod") was left out
+    (works, data read);
+  - macro targets {0x7f00, T1, 0x70}, {0x7f00, FX, 0x70}, {0x7f00, T1,
+    0x71} (poked) and a PERF turn: the notes held the first two; the setup
+    screen (FUNC+PERF, PERF CONFIGURE, HPF) showed T1 MOD LKA, FX MOD LKK,
+    T1 ERR (works, screen and data read);
+  - item 8: EnvF Dest A at 0x5c (LFO1 depth A) or 0x48 (its own depth),
+    set by poke and a note or by NRPN 1:66: voice 0's selector slot held
+    the sink 0x24b; at 0x12 (in its list) and 0x44 (not a depth) stock's
+    slots (0x3c, 0x1f9) (works, data read);
+  - SAVE KIT, the Dest word, route and macro target poked back to stock's,
+    LOAD KIT: all three came back with their codes (set-and-kept).
+  Not checked yet: RANDOMIZE landing on a mod parameter, the five route
+  screens' lists (the macro setup shares their view), a kit of another
+  layout loading as None, stock 1.56 with such a kit (ERR and the sink, as
+  found 2026-11-04 with pokes).
 - Statically, against the stock image (python, no toolchain): every site's
   stock bytes, that each covers whole instructions, that each body in
   `store.s` jumps back to its site plus the 8 bytes it displaced, and that

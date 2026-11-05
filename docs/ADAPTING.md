@@ -2052,7 +2052,8 @@ and on a unit (24 Oct 2026).
 
 core-a4 0.5 has the first part of the lock service, core-ar2's design
 ("Lockable parameters" and "Mod p-locks", above) with the A4's track
-kinds. Destinations, the smoothed value and MIDI come in later parts.
+kinds, and from part 2 its destinations. The smoothed value and MIDI come
+in later parts.
 
 A storage field declared `"lock": true` gets a lock code from the lockfile,
 numbered within its kind, as stock keeps one parameter table per kind:
@@ -2102,8 +2103,28 @@ What differs from the Rytm:
   with the smoothed value.
 - A project load, a kit change and CREATE NEW clear every voice's locks.
 
-Limits: a mod knob's label shows ERR, and the screen's title INVALID
-PARAMETER while a trig is held, until the knob label sites come.
+A mod knob shows its parameter's `short_name` as its label and its `name`
+as the screen's title while a trig is held (from part 2).
+
+**Destinations (part 2).** A lockable field also declared `"mod": true` is
+a destination of every modulation source on its track: the five routes
+(velocity, pitch bend, mod wheel, breath, aftertouch), the four Dest knobs
+(EnvF, Env2, LFO1, LFO2, A and B), the ten performance macros and CONTROL
+IN 1 and 2. Every one of their lists ends with it, as `CATEGORY:Name`
+(`MOD` when it has no category), only on tracks of its kind; a Dest knob
+shows its `short_name`. The route, Dest or macro keeps the field's lock
+code in its own byte, so kit saves, loads and copies carry it. Core notes,
+per voice, which sources point at which codes when stock pushes a sound,
+for the value read (part 3):
+
+```c
+int r, d, n;
+const struct core_dst *e = core_dst_voice(voice, &r, &d);  /* r routes, then d Dests */
+const struct core_dst *m = core_dst_macros(&n);           /* every macro's targets */
+```
+
+A kit or sound of another layout loads with its codes as None. Stock 1.56
+shows such a destination as ERR and sends it nowhere.
 
 `examples/lock-check-a4` is the smallest mod on it: one lockable parameter
 of each kind and a fine one, on a LOCK CHECK page per kind, with what it

@@ -11,10 +11,10 @@
  "sources": ["check.c"],
  "cflags": ["-DFILLRECT_AT=0x40059f1a"],
  "storage": [
-  {"sym": "lk_a", "scope": "sound", "bits": 7, "lock": true},
+  {"sym": "lk_a", "scope": "sound", "bits": 7, "lock": true, "mod": true},
   {"sym": "lk_c", "scope": "sound", "bits": 10, "lock": true},
-  {"sym": "lk_k", "scope": "kit", "bits": 7, "lock": true},
-  {"sym": "lk_v", "scope": "kit", "bits": 7, "lock": true, "track": "cv"}
+  {"sym": "lk_k", "scope": "kit", "bits": 7, "lock": true, "mod": true},
+  {"sym": "lk_v", "scope": "kit", "bits": 7, "lock": true, "track": "cv", "mod": true}
  ],
  "subscribe": [
   {"event": "ev_draw", "fn": "lk_draw", "order": 60},

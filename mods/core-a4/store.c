@@ -480,6 +480,9 @@ int st_sound_save(unsigned char *dst, unsigned char *live)
     return r;
 }
 
+void core_dst_clean_sound(unsigned char *sound, int foreign);
+void core_dst_clean_kit(unsigned char *kit, int foreign);
+
 int st_sound_load(unsigned char *live, unsigned char *src)
 {
     int r = st_sound_load_body(live, src), j;
@@ -492,6 +495,7 @@ int st_sound_load(unsigned char *live, unsigned char *src)
         for (j = 0; j < SOUND_BYTES; j++)
             live[sound_at(j)] = ok ? src[sound_at(j) + SOUND_STORED] : 0;
         live[0xe2] = live[0xe3] = 0;    /* where the save's raw copy goes under the ID */
+        core_dst_clean_sound(live, !ok); /* 0.5: a code of another layout, or with no "mod" parameter here, is None */
     }
     return r;
 }
@@ -510,6 +514,7 @@ int st_kit_save(unsigned char *dst, unsigned char *live)
 
 void core_rows_now_reset(void);
 void core_rows_forget(void);
+
 void core_lock_cancel(unsigned field, void *item);
 
 /* a kit load is a kit change: no trig of the new kit has played yet, so no
@@ -523,6 +528,7 @@ int st_kit_load(unsigned char *live, unsigned char *src)
                  src[KIT_SPARE + KIT_BYTES + 4] == gen(SC_KIT);
         for (j = 0; j < KIT_BYTES; j++)
             live[KIT_HOME + j] = ok ? src[KIT_SPARE + j] : 0;
+        core_dst_clean_kit(live, !ok);  /* 0.5: macro targets and FX and CV Dests, as the sounds' */
     }
     return r;
 }
