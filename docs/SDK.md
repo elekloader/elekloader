@@ -29,6 +29,7 @@ how they fit together. For other kinds of mod, start with
 | Mapped defaults / SDK audio callback | Implemented | Implemented | Not implemented |
 
 Other OS releases and devices, including Digitakt II, are not SDK targets.
+The builder's `SDK_ALPHA_TARGETS` (elekloader/sdk/sdk_alpha_build.py) is the matrix it enforces.
 Support in elekloader's firmware loader does not imply support in this SDK.
 
 A UI-only machine supplies no sound generator. The Digitones continue to

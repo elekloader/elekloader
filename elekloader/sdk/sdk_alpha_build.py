@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 """Private machine UI experiment; emits ordinary format-2 mods."""
 import argparse
+import collections
 import json
 import os
 import re
@@ -8,19 +9,23 @@ import struct
 import sys
 import tempfile
 
-from elekloader import elemod, formats, link
+from elekloader import devices, elemod, formats, link
 from elekloader.sdk import build
 
 
-# Each supported release: the table a registration goes to, its claim, the companions it requires.
+# The SDK's support matrix, the one place it lives: each supported release, the table a
+# registration goes to, its claim, the companions it requires, its first machine id and the
+# optional features its companions implement. The refusals and the tests derive from it.
+Target = collections.namedtuple('Target', 'table claim companions first_id features')
 SDK_ALPHA_TARGETS = {
-    ('digitakt-mk1', '1.54'): ('core_machines', 'machine:%d', ('core', 'machine-pages')),
-    ('digitone-mk1', '1.44'): ('sdk_alpha_machines', 'dnmachine:%d', ('core', 'machines')),
-    ('digitone-mk2', '1.12'): ('sdk_alpha_machines', 'mk2-synth:%d', ('core', 'machines-dn2')),
+    ('digitakt-mk1', '1.54'): Target('core_machines', 'machine:%d', ('core', 'machine-pages'),
+                                     4, frozenset(('render', 'defaults'))),
+    ('digitone-mk1', '1.44'): Target('sdk_alpha_machines', 'dnmachine:%d', ('core', 'machines'),
+                                     4, frozenset(('render', 'defaults'))),
+    # the Digitone II's synth type 4 is MIDI
+    ('digitone-mk2', '1.12'): Target('sdk_alpha_machines', 'mk2-synth:%d', ('core', 'machines-dn2'),
+                                     5, frozenset()),
 }
-# The releases whose companions implement each optional feature.
-SDK_ALPHA_RENDER = {('digitakt-mk1', '1.54'), ('digitone-mk1', '1.44')}
-SDK_ALPHA_DEFAULTS = {('digitakt-mk1', '1.54'), ('digitone-mk1', '1.44')}
 SDK_ALPHA_ABI = 'sdk_alpha_dt1_ui_v1'    # the one symbol the companions export to SDK machines
 ELEK_VOICE_STATE_MAX = 256      # sdk_alpha_machine.h
 
@@ -179,8 +184,10 @@ def sdk_alpha_build(moddir, stock, out=None):
             raise build.BuildError('mod.json is for %s; the stock file is %s %s' % (
                 ', '.join('%s %s' % (d, ' '.join(v)) for d, v in sorted(listed.items())), device, release))
         if (device, release) not in SDK_ALPHA_TARGETS:
-            raise build.BuildError('sdk alpha: only Digitakt mk1 OS 1.54, Digitone mk1 OS 1.44 and Digitone II OS 1.12 are supported')
-        table, claim_of, companions = SDK_ALPHA_TARGETS[device, release]
+            names = {d.key: d.name for d in devices.devices()}
+            supported = ['%s OS %s' % (names[d], v) for d, v in SDK_ALPHA_TARGETS]
+            raise build.BuildError('sdk alpha: only %s and %s are supported' % (', '.join(supported[:-1]), supported[-1]))
+        table, claim_of, companions, low, features = SDK_ALPHA_TARGETS[device, release]
         firmware, dev, _ = formats.load(stock)
         image = formats.main_image(firmware, dev)
         sections = {s: elemod.parts_bytes(d['parts'], image, dev)
@@ -196,14 +203,13 @@ def sdk_alpha_build(moddir, stock, out=None):
         if unresolved:
             raise build.BuildError('sdk alpha: the machine imports %s, which no companion exports'
                                    % ', '.join(unresolved))
-        low = 5 if device == 'digitone-mk2' else 4      # the Digitone II's synth type 4 is MIDI
         for _, mid in registrations:
             if mid < low:
                 raise build.BuildError('sdk alpha: duplicate or invalid machine slot %d (expected %d..127)' % (mid, low))
-            if (device, release) not in SDK_ALPHA_DEFAULTS and any(
+            if 'defaults' not in features and any(
                     knob['has_default'] for page in layouts[mid]['pages'] for knob in page['knobs'].values()):
                 raise build.BuildError('sdk alpha: defaults are not supported on %s %s yet' % (device, release))
-            if layouts[mid]['render'] and (device, release) not in SDK_ALPHA_RENDER:
+            if layouts[mid]['render'] and 'render' not in features:
                 raise build.BuildError('sdk alpha: render is not supported on %s %s yet' % (device, release))
         if any(c['to'] == table for c in doc['contribute']):
             raise build.BuildError('sdk alpha: declare machines only in C')

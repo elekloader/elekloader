@@ -44,12 +44,14 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from elekloader.sdk import build                              # noqa: E402
-from elekloader.sdk.sdk_alpha_build import sdk_alpha_build    # noqa: E402
+from elekloader.sdk.sdk_alpha_build import SDK_ALPHA_TARGETS, sdk_alpha_build    # noqa: E402
 import sdk_alpha_devices                                      # noqa: E402
 from sdk_alpha_devices import CannotYet, Device                # noqa: E402
 
 RAW_MAX = 127 << 8              # a knob's native 8.8 range, whatever its bounds
-DEVICES_LISTED = {'digitakt-mk1': ['1.54'], 'digitone-mk1': ['1.44'], 'digitone-mk2': ['1.12']}
+DEVICES_LISTED = {}
+for _device, _os in SDK_ALPHA_TARGETS:
+    DEVICES_LISTED.setdefault(_device, []).append(_os)
 
 _ids = iter(range(100, 128))    # the ids of the registered machines the test files write inline
 REGISTRY = []
@@ -113,7 +115,7 @@ class Firmware:
         device.backend.check()
         self.device, self.work = device, tempfile.mkdtemp(prefix='sdk-harness-')
         atexit.register(shutil.rmtree, self.work, True)
-        mods = [build.build(str(ROOT / path), stock, self.work)[0] for path in device.bases]
+        mods = [build.build(str(path), stock, self.work)[0] for path in device.bases()]
         self.refused, self.layouts, ids = {}, {}, []
         for machine in REGISTRY:
             try:

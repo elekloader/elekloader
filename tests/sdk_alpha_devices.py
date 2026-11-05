@@ -14,6 +14,11 @@ import struct
 import subprocess
 import sys
 import unittest
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+from elekloader.sdk.sdk_alpha_build import SDK_ALPHA_TARGETS    # noqa: E402
 
 
 class CannotYet(AssertionError):
@@ -194,14 +199,30 @@ class DigiKit:
 
 
 class Device:
-    """What every device's adapter offers the tests."""
+    """What every device's adapter offers the tests. Its target, claim and the builder's features
+    come from SDK_ALPHA_TARGETS; features adds the ones only the adapter has."""
     key = stock_env = None
     backend = Digiemu
-    bases = ()
     machine_claim = None
     lfo_count = 2
     settings_key = 'GLOBAL'
     features = frozenset()
+
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)
+        cls.target, = [t for (key, _), t in SDK_ALPHA_TARGETS.items() if key == cls.key]
+        cls.features = cls.target.features | cls.features
+        cls.machine_claim = cls.target.claim.split(':')[0]
+
+    @classmethod
+    def bases(cls):
+        """The mods/ folders of the target's companions, found by their mod.json's id and device."""
+        found = {}
+        for path in (ROOT / 'mods').glob('*/mod.json'):
+            doc = json.loads(path.read_text())
+            if doc.get('device') == cls.key and doc.get('id') in cls.target.companions:
+                found[doc['id']] = path.parent
+        return [found[c] for c in cls.target.companions]
 
     @classmethod
     def machine_ids(cls, mod):
@@ -384,11 +405,8 @@ class Device:
 
 class Digitakt1(Device):
     key, stock_env = 'digitakt-mk1', 'ELEKLOADER_STOCK_154'
-    bases = ('mods/core', 'mods/machine-pages')
-    machine_claim = 'machine'
     track_count = 8
 
-    features = frozenset(('defaults', 'render'))
     sound_without_render = False
     KEYS = {0: '9', 1: '2', 2: '10', 3: '3', 4: '11', 5: '12', 6: '5', 7: '13',
             8: '6', 9: '14', 10: '7', 11: '15', 12: '16'}
@@ -514,10 +532,8 @@ class Digitakt1(Device):
 
 class Digitone1(Device):
     key, stock_env = 'digitone-mk1', 'ELEKLOADER_STOCK_DN1_144'
-    bases = ('mods/core-dn1', 'mods/machines-dn1')
-    machine_claim = 'dnmachine'
     track_count = 4
-    features = frozenset(('defaults', 'render', 'polyphony', 'audio_modulation'))
+    features = frozenset(('polyphony', 'audio_modulation'))
     sound_without_render = True
     KEYS = Digitakt1.KEYS
 
@@ -707,8 +723,6 @@ class Digitone2(Device):
     sdk_alpha.c) whose pages are SYN's; logical knob i is sound slot 25 + i."""
     key, stock_env = 'digitone-mk2', 'ELEKLOADER_DN2_SYX'
     backend = DigiKit
-    bases = ('mods/core-dn2', 'mods/machines-dn2')
-    machine_claim = 'mk2-synth'
     track_count = 16
     lfo_count = 3
     settings_key = 'SETTINGS'
