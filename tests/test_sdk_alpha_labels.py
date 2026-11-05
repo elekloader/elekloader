@@ -3,6 +3,8 @@
 when the callback stops changing it, belongs to its track, is cut at five characters, and the
 value shown while a knob turns is not cut short by the change.
 
+Most tests read `Knob.label`, the adapter's copy of the label; one compares the screen's pixels.
+
 Run as tests/sdk_alpha_harness.py says.
 """
 import unittest
@@ -25,6 +27,18 @@ LABELS = sdk_machine("Labels", """
         .pages = { { "LABELS", { [ELEK_A] = &knobs[0], [ELEK_H] = &knobs[1] } } }, .present = present,
     };
     ELEK_REGISTER_MACHINE(labels);
+""")
+
+# LABELS's layout with PITCH declared "A 37": how the screen draws that label at H.
+REFERENCE = sdk_machine("Label reference", """
+    #include "elekloader/sdk_alpha_machine.h"
+
+    static const struct elek_knob knobs[] = { { "AMNT", .max = 127 }, { "A 37", .max = 127 } };
+    static const struct elek_machine reference = {
+        .id = @ID@, .name = "Label reference", .short_name = "LABL", ELEK_KNOBS(knobs),
+        .pages = { { "LABELS", { [ELEK_A] = &knobs[0], [ELEK_H] = &knobs[1] } } },
+    };
+    ELEK_REGISTER_MACHINE(reference);
 """)
 
 # One knob, which the callback labels with eight characters: the SDK keeps five.
@@ -62,13 +76,17 @@ class Labels:
         self.assertEqual(pitch.label, "PITCH")
 
     def test_a_changed_label_is_drawn_and_restored(self):
+        """On the screen, not the adapter's copy: H shows what a declared "A 37" shows, then PITCH."""
+        _, a37 = self.tracks[1].use(REFERENCE).knobs("AMNT", "A 37")
+        self.assertTrue(self.panel.wait_until(lambda: any(a37.label_pixels)))
+        drawn = a37.label_pixels
         amnt, pitch = self.track.use(LABELS).knobs("AMNT", "PITCH")
         self.assertTrue(self.panel.wait_until(lambda: any(pitch.label_pixels)))
         declared = pitch.label_pixels
+        self.assertNotEqual(declared, drawn)
         amnt.set(37)
-        self.assertTrue(self.panel.wait_until(lambda: pitch.label_pixels != declared),
+        self.assertTrue(self.panel.wait_until(lambda: pitch.label_pixels == drawn),
                         'the changed label was not drawn')
-        self.assertTrue(any(pitch.label_pixels))
         amnt.set(0)
         self.assertTrue(self.panel.wait_until(lambda: pitch.label_pixels == declared),
                         'the declared label was not drawn again')

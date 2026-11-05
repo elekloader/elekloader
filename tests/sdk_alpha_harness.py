@@ -196,14 +196,16 @@ class Knob:
 
     @property
     def label(self):
-        """The label on the screen (a .present callback may have changed it)."""
+        """The label .present left, as the adapter's copy holds it (the device's sdk_alpha_labels),
+        not the screen's pixels: test_sdk_alpha_labels compares those."""
         self.track.case.say('what is %s labelled?' % self.spec['label'])
         self._settled()
         return self.track.case.panel.label(self.spec['id'])
 
     @property
     def visible(self):
-        """Whether the screen shows the knob (a .present callback may hide it)."""
+        """Whether .present left the knob shown, as the adapter's copy holds it (the device's
+        sdk_alpha_visibility), not the screen's pixels: `pixels` is those."""
         self.track.case.say('is %s shown?' % self.spec['label'])
         self._settled()
         return self.track.case.panel.visible(self.spec['id'])
@@ -370,7 +372,7 @@ class Track:
         return self.case.panel.shown_page(self.index)
 
     def empty_positions(self):
-        """Which of the page's eight positions hold a knob."""
+        """Which of the page's eight positions hold a knob, as the adapter's page table holds it."""
         self.show(0)
         return self.case.panel.empty_positions()
 

@@ -475,7 +475,8 @@ class Digitakt1(Device):
         return bytes(self.s.m.uc.mem_read(int(self.symbols['selected'], 16) + track, 1))[0]
 
     def empty_positions(self):
-        """Which of the eight positions of an empty machine's page hold a knob (none)."""
+        """Which of the eight positions of an empty machine's page hold a knob (none): machine-pages'
+        layout for it, not the screen."""
         return tuple(bool(self.read('sdk_alpha_empty_layout', 4 * (2 + k))) for k in range(8))
 
     def switch_track(self, track):
@@ -539,7 +540,7 @@ class Digitakt1(Device):
         self.tap('YES')
 
     def label(self, knob):
-        """The label shown for a logical knob: machine-pages' copy of what .present gave."""
+        """A logical knob's label: the adapter's copy of what .present gave, not the screen."""
         at = int(self.symbols['sdk_alpha_labels'], 16) + 6 * knob   # [15][ELEK_UI_LABEL_MAX + 1]
         return bytes(self.s.m.uc.mem_read(at, 6)).split(b'\0')[0].decode('ascii')
 
@@ -593,6 +594,7 @@ class Digitone1(Device):
         return self.read('dnm_sdk_shown', 4 * track)
 
     def empty_positions(self):
+        """machines-dn1's page table (dnm_sdk_pages), not the screen."""
         return tuple(bool(self.read('dnm_sdk_pages', 16 + 4 * k)) for k in range(8))
 
     def switch_track(self, track):
@@ -727,6 +729,7 @@ class Digitone1(Device):
         return self._lfo_labels[param].split(':', 1)[-1]
 
     def label(self, knob):
+        """The adapter's copy (sdk_alpha_labels, which dev.h renames for this read), not the screen."""
         at = int(self.symbols['dnm_sdk_labels'], 16) + 6 * knob
         return bytes(self.s.m.uc.mem_read(at, 6)).split(b'\0')[0].decode('ascii')
 
@@ -806,10 +809,12 @@ class Digitone2(Device):
         return self.read('dn2_sdk_shown', 4 * track)
 
     def empty_positions(self):
-        """Which of the eight positions of the page SYN shows hold a parameter."""
+        """Which of the eight positions of the page SYN shows hold a parameter: machines-dn2's
+        dn2_sdk_ids, not the screen."""
         return tuple(bool(self.read('dn2_sdk_ids', 4 * k)) for k in range(8))
 
     def label(self, knob):
+        """The adapter's copy (sdk_alpha_labels, which dev.h renames for this read), not the screen."""
         return self.mem(int(self.symbols['dn2_sdk_labels'], 16) + 6 * knob, 6).split(b'\0')[0].decode('ascii')
 
     def visible(self, knob):
