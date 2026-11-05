@@ -105,6 +105,54 @@ CC_RUNS = {
                                              (MANY[1:35], [[f[0], f[1]] for f in MANY[1:35]],
                                               [[f[0], f[1]] for f in MANY[1:35]])],
 }
+# runs with codes per track kind (core-a4 0.5, the Analog Four MKII): each step is (decls, lockable, CV fields)
+A4 = 'analog-four-mk2'
+AK = [F('a', 's1', 'sound', 7), F('a', 's2', 'sound', 8), F('a', 'k1', 'kit', 7), F('b', 'k2', 'kit', 4),
+      F('b', 'c1', 'kit', 6)]
+AL = [['a', 's1'], ['a', 's2'], ['a', 'k1'], ['b', 'k2'], ['b', 'c1']]
+KIND_RUNS = {
+    'kinds: each from 0x70, keep, free, back': [(AK, AL, [['b', 'c1']]), (AK, AL, [['b', 'c1']]),
+                                                (AK[:3] + AK[4:], AL[:3] + AL[4:], [['b', 'c1']]),
+                                                (AK, AL, [['b', 'c1']])],
+    'kinds: FX to CV is a new code': [(AK, AL, []), (AK, AL, [['b', 'k2'], ['b', 'c1']])],
+    'kinds: 16 a kind, then a freed one, then refused': [
+        ([F('m', 'f%02d' % i, 'kit', 1) for i in range(17)], [['m', 'f%02d' % i] for i in range(16)], []),
+        ([F('m', 'f%02d' % i, 'kit', 1) for i in range(17)], [['m', 'f%02d' % i] for i in range(1, 17)], []),
+        ([F('m', 'f%02d' % i, 'kit', 1) for i in range(17)], [['m', 'f%02d' % i] for i in range(17)], []),
+        ([F('m', 'f%02d' % i, 'kit', 1) for i in range(17)] + [F('m', 's', 'sound', 1)],
+         [['m', 'f%02d' % i] for i in range(1, 17)] + [['m', 's']], [['m', 'f16']])],
+}
+KL = dict(store.fresh(A4), fields=[{'mod': 'a', 'sym': 'x', 'scope': 'kit', 'offset': 0, 'bits': 4}],
+          next=dict(store.fresh(A4)['next'], kit=4))
+KIND_LOCKS = {
+    'a4 next_code a number': dict(KL, codes=[], freed_codes=[], next_code=112),
+    'a4 next_code a kind short': dict(KL, codes=[], freed_codes=[], next_code={'synth': 112, 'fx': 112}),
+    'a4 next_code below': dict(KL, codes=[], freed_codes=[], next_code={'synth': 111, 'fx': 112, 'cv': 112}),
+    'a4 code without kind': dict(KL, codes=[{'mod': 'a', 'sym': 'x', 'code': 112}], freed_codes=[],
+                                 next_code={'synth': 112, 'fx': 113, 'cv': 112}),
+    'a4 code past its kind': dict(KL, codes=[{'mod': 'a', 'sym': 'x', 'code': 112, 'kind': 'cv'}], freed_codes=[],
+                                  next_code={'synth': 112, 'fx': 113, 'cv': 112}),
+    'a4 kit field synth': dict(KL, codes=[{'mod': 'a', 'sym': 'x', 'code': 112, 'kind': 'synth'}], freed_codes=[],
+                               next_code={'synth': 113, 'fx': 112, 'cv': 112}),
+    'a4 same code two kinds': dict(KL, codes=[{'mod': 'a', 'sym': 'x', 'code': 112, 'kind': 'fx'}],
+                                   freed_codes=[{'mod': 'a', 'sym': 'y', 'code': 112, 'kind': 'cv'}],
+                                   next_code={'synth': 112, 'fx': 113, 'cv': 113}),
+    'a4 same code one kind': dict(KL, codes=[{'mod': 'a', 'sym': 'x', 'code': 112, 'kind': 'fx'}],
+                                  freed_codes=[{'mod': 'a', 'sym': 'y', 'code': 112, 'kind': 'fx'}],
+                                  next_code={'synth': 112, 'fx': 113, 'cv': 112}),
+    'a4 rytm code': dict(KL, codes=[{'mod': 'a', 'sym': 'x', 'code': 42, 'kind': 'fx'}], freed_codes=[],
+                         next_code={'synth': 112, 'fx': 113, 'cv': 112}),
+}
+# the device checks of a build's lockable fields' flags: (device, {mod\0sym: scope}, lfos, routes, cvs, ccs)
+FLAGS = {
+    'rytm: ok': ('analog-rytm-mk2', {'m\0a': 'sound', 'm\0k': 'kit'}, [['m', 'a'], ['m', 'k']], [['m', 'a']], [],
+                 [['m', 'a']]),
+    'rytm: mod on a kit field': ('analog-rytm-mk2', {'m\0k': 'kit'}, [], [['m', 'k']], [], []),
+    'rytm: a CV field': ('analog-rytm-mk2', {'m\0k': 'kit'}, [], [], [['m', 'k']], []),
+    'a4: ok': (A4, {'m\0a': 'sound', 'm\0k': 'kit'}, [], [['m', 'a'], ['m', 'k']], [['m', 'k']], []),
+    'a4: lfo': (A4, {'m\0a': 'sound'}, [['m', 'a']], [], [], []),
+    'a4: cc': (A4, {'m\0a': 'sound'}, [], [], [], [['m', 'a']]),
+}
 LOCKS = {
     'not a dict': [1], 'not ours': {'x': 1}, 'newer': {'elekloader_store': 2},
     'device': dict(store.fresh(DEV), device='digitakt-mk1'),
@@ -147,6 +195,11 @@ DECLS = {
     'lock kit': {'storage': [{'sym': 'a', 'scope': 'kit', 'bits': 3, 'lock': True, 'cc': True, 'lfo': True}]},
     'lock global': {'storage': [{'sym': 'a', 'scope': 'global', 'bits': 3, 'lock': True}]},
     'mod kit': {'storage': [{'sym': 'a', 'scope': 'kit', 'bits': 3, 'lock': True, 'mod': True}]},
+    'track cv': {'storage': [{'sym': 'a', 'scope': 'kit', 'bits': 3, 'lock': True, 'mod': True, 'track': 'cv'},
+                             {'sym': 'b', 'scope': 'kit', 'bits': 3, 'lock': True}]},
+    'track fx': {'storage': [{'sym': 'a', 'scope': 'kit', 'bits': 3, 'lock': True, 'track': 'fx'}]},
+    'track sound': {'storage': [{'sym': 'a', 'scope': 'sound', 'bits': 3, 'lock': True, 'track': 'cv'}]},
+    'track unlocked': {'storage': [{'sym': 'a', 'scope': 'kit', 'bits': 3, 'track': 'cv'}]},
     'lock type': {'storage': [{'sym': 'a', 'scope': 'sound', 'bits': 3, 'lock': 1}]},
     'cc': {'storage': [{'sym': 'a', 'scope': 'sound', 'bits': 3, 'lock': True, 'cc': True},
                        {'sym': 'b', 'scope': 'sound', 'bits': 3, 'lock': True, 'cc': False}]},
@@ -171,7 +224,8 @@ DECLS = {
 
 
 def main():
-    out = {'runs': {}, 'lock_runs': {}, 'cc_runs': {}, 'locks': {}, 'decls': {}}
+    out = {'runs': {}, 'lock_runs': {}, 'cc_runs': {}, 'kind_runs': {}, 'locks': {}, 'kind_locks': {}, 'flags': {},
+           'decls': {}}
     def run(lock, steps, core, dev=DEV):
         res = []
         for decls in steps:
@@ -224,6 +278,33 @@ def main():
             except ModError as e:
                 res.append({'error': str(e)})
         out['cc_runs'][name] = {'steps': [list(st) for st in steps], 'results': res}
+    for name, steps in KIND_RUNS.items():
+        lock, res = None, []
+        for decls, locks, cvs in steps:
+            try:
+                lock, notes = store.allocate(lock, [tuple(d) for d in decls], A4, None, [tuple(k) for k in locks], (),
+                                             [tuple(k) for k in cvs])
+                res.append({'lock': lock, 'notes': notes, 'codes': [t.hex() for t in store.code_entries(lock)],
+                            'route_codes': [t.hex() for t in store.code_entries(lock, (), (), [tuple(k) for k in locks])],
+                            'json': store.dumps(lock), 'layout_id': store.layout_id(lock)})
+            except ModError as e:
+                res.append({'error': str(e)})
+        out['kind_runs'][name] = {'steps': [list(st) for st in steps], 'results': res}
+    for name, lock in KIND_LOCKS.items():
+        try:
+            same, _ = store.allocate(lock, [], A4)
+            out['kind_locks'][name] = {'lock': lock, 'error': None, 'result': same}
+        except ModError as e:
+            out['kind_locks'][name] = {'lock': lock, 'error': str(e)}
+    for name, (dev, scopes, lfos, routes, cvs, ccs) in FLAGS.items():
+        try:
+            store.check_flags(dev, {tuple(k.split('\0')): v for k, v in scopes.items()}, [tuple(k) for k in lfos],
+                              [tuple(k) for k in routes], [tuple(k) for k in cvs], [tuple(k) for k in ccs])
+            err = None
+        except ModError as e:
+            err = str(e)
+        out['flags'][name] = {'device': dev, 'scopes': scopes, 'lfos': lfos, 'routes': routes, 'cvs': cvs,
+                              'ccs': ccs, 'error': err}
     for name, lock in LOCKS.items():
         try:
             same, _ = store.allocate(lock, [], DEV)
@@ -234,7 +315,8 @@ def main():
         try:
             out['decls'][name] = {'doc': doc, 'ok': store.parse_decls(doc), 'locks': store.parse_locks(doc),
                                   'ccs': store.parse_ccs(doc), 'lfos': store.parse_lfos(doc),
-                                  'rough': store.parse_rough(doc), 'routes': store.parse_routes(doc)}
+                                  'rough': store.parse_rough(doc), 'routes': store.parse_routes(doc),
+                                  'cvs': store.parse_cvs(doc)}
         except ModError as e:
             out['decls'][name] = {'doc': doc, 'error': str(e)}
     path = os.path.join(ROOT, 'js', 'test', 'store-vectors.json')

@@ -93,6 +93,7 @@ export class Mod2 implements AnyMod {
   lfos: string[]
   rough: string[]
   routes: string[]
+  cvs: string[]
   regions: Region[]
   names: string[]
   needsCore: string | null
@@ -198,6 +199,7 @@ export class Mod2 implements AnyMod {
       this.lfos = store.parseLfos(doc)
       this.rough = store.parseRough(doc)
       this.routes = store.parseRoutes(doc)
+      this.cvs = store.parseCvs(doc)
     } catch (e) {
       if (e instanceof ModError) throw new ModError(`${name}: ${e.message}`)
       throw e
@@ -710,8 +712,10 @@ export function link(mods: Mod2[], image: Uint8Array, lock: store.Lock | null = 
     const rough = order.flatMap(m => m.rough.map(sym => [m.id, sym] as [string, string]))
     const routes = order.flatMap(m => m.routes.map(sym => [m.id, sym] as [string, string]))
     const scopeOf = new Map(decls.map(d => [d[0] + '\0' + d[1], d[2]]))
+    const cvs = order.flatMap(m => m.cvs.map(sym => [m.id, sym] as [string, string]))
+    store.checkFlags(dev.key, scopeOf, lfos, routes, cvs, order.flatMap(m => m.ccs.map(sym => [m.id, sym] as [string, string])))
     const fx = [...new Set(locks.filter(k => scopeOf.get(k[0] + '\0' + k[1]) === 'kit').map(k => k[0]))].sort(cmp)
-    if (fx.length && !core.imports.includes(store.FX_LOCK_DST))
+    if (fx.length && !store.kinds(dev.key).length && !core.imports.includes(store.FX_LOCK_DST))
       throw new ModError(`${fx.join(', ')} declare${fx.length === 1 ? 's' : ''} lockable kit fields (the FX track's), which ${core.label()} does not keep`)
     for (const [dst, scope, bits] of [[store.LOCK_DST, 'sound', store.lockDstBits(dev.key)], [store.FX_LOCK_DST, 'kit', store.fxLockDstBits(dev.key)]] as const)
       if (lfos.some(k => scopeOf.get(k[0] + '\0' + k[1]) === scope) && core.imports.includes(dst) && bits)
@@ -722,7 +726,7 @@ export function link(mods: Mod2[], image: Uint8Array, lock: store.Lock | null = 
       const users = [...new Set(ccs.map(k => k[0]))].sort(cmp)
       throw new ModError(`${users.join(', ')} give${users.length === 1 ? 's' : ''} lockable parameters CCs, which ${core.label()} does not keep (no table ${store.CCS_TABLE})`)
     }
-    ;[newLock, storeNotes] = store.allocate(lock, decls, dev.key, core.version, locks, ccs)
+    ;[newLock, storeNotes] = store.allocate(lock, decls, dev.key, core.version, locks, ccs, cvs)
     let ids: Uint8Array[]
     ;[storeSyms, ids] = store.symbols(newLock)
     if (!storeSyms.has(store.LOCK_DST)) storeSyms.set(store.LOCK_DST, 0)    // not placed: no LFO field

@@ -4,7 +4,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { allocate, ccEntries, codeEntries, dumps, fromImage, layoutId, parseCcs, parseDecls, parseLfos, parseLocks, parseRough, parseRoutes, symbols, trailer, type Decl, type Lock } from '../src/store.ts'
+import { allocate, ccEntries, checkFlags, codeEntries, dumps, fromImage, layoutId, parseCcs, parseCvs, parseDecls, parseLfos, parseLocks, parseRough, parseRoutes, symbols, trailer, type Decl, type Lock } from '../src/store.ts'
 
 const V = JSON.parse(readFileSync(new URL('./store-vectors.json', import.meta.url), 'utf8'))
 const DEV = 'analog-rytm-mk2'
@@ -78,6 +78,40 @@ test('CCs: the same CCs, notes and table entries', () => {
   }
 })
 
+test('codes per track kind (core-a4 0.5): the same lock codes, notes and table entries', () => {
+  const A4 = 'analog-four-mk2'
+  for (const [name, run] of Object.entries<any>(V.kind_runs)) {
+    let lock: Lock | null = null
+    run.steps.forEach(([decls, locks, cvs]: [Decl[], [string, string][], [string, string][]], i: number) => {
+      const want = run.results[i]
+      if (want.error) {
+        assert.throws(() => allocate(lock, decls, A4, null, locks, [], cvs), (e: Error) => e.message === want.error, `${name} step ${i}`)
+        return
+      }
+      const [l, notes] = allocate(lock, decls, A4, null, locks, [], cvs)
+      lock = l
+      assert.deepEqual(l, want.lock, `${name} step ${i}: lockfile`)
+      assert.deepEqual(notes, want.notes, `${name} step ${i}: notes`)
+      assert.deepEqual(codeEntries(l).map(hex), want.codes, `${name} step ${i}: codes`)
+      assert.deepEqual(codeEntries(l, [], [], locks).map(hex), want.route_codes, `${name} step ${i}: codes with ROUTE_FLAG`)
+      assert.equal(layoutId(l), want.layout_id, `${name} step ${i}: layout ID`)
+      assert.equal(dumps(l), want.json, `${name} step ${i}: JSON`)
+    })
+  }
+  for (const [name, c] of Object.entries<any>(V.kind_locks)) {
+    if (c.error === null) assert.deepEqual(allocate(c.lock, [], A4)[0], c.result, name)
+    else assert.throws(() => allocate(c.lock, [], A4), (e: Error) => e.message === c.error, `${name}: ${c.error}`)
+  }
+})
+
+test("the device checks of the lockable fields' flags, with the same messages", () => {
+  for (const [name, c] of Object.entries<any>(V.flags)) {
+    const run = () => checkFlags(c.device, new Map(Object.entries(c.scopes)), c.lfos, c.routes, c.cvs, c.ccs)
+    if (c.error === null) run()
+    else assert.throws(run, (e: Error) => e.message === c.error, `${name}: ${c.error}`)
+  }
+})
+
 test('the lockfiles it refuses, with the same messages, and the ones it keeps as they are', () => {
   for (const [name, c] of Object.entries<any>(V.locks)) {
     if (c.error === null) assert.deepEqual(allocate(c.lock, [], DEV)[0], c.result, name)
@@ -95,6 +129,7 @@ test('a mod\'s "storage": what it reads, and what it refuses', () => {
       assert.deepEqual(parseLfos(c.doc), c.lfos, name)
       assert.deepEqual(parseRough(c.doc), c.rough, name)
       assert.deepEqual(parseRoutes(c.doc), c.routes, name)
+      assert.deepEqual(parseCvs(c.doc), c.cvs, name)
     }
   }
 })
