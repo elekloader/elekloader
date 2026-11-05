@@ -76,6 +76,22 @@
 |   fw_transport     0x4138e208  the transport, a long: 0 stopped, 1 playing, 2 paused
 |   fw_pattern       0x4138e214  -> the active pattern's data: track t at +976 t
 |   fw_project       0x419efde0  -> the project
+| From 4.2, a starting voice's locks (ev_voice_ready) and the parameter pages:
+|   fw_voice_locks   0x4009bec8  locks(voice, list, fw_voice_params): a p-lock list
+|                                (+8 the count, from +0x14 {u16 slot, s16 value}
+|                                8 bytes apart) into a voice, as its note starts:
+|                                each slot's target, the smoother's value and its
+|                                bit in fw_voice_locked. Interrupt level, the render.
+|   fw_voice_locked  0x431f16b4  each voice's slots set by locks as it started,
+|                                3 longs a voice (bit k & 31 of long k >> 5): its
+|                                next note of the same sound loads them again
+|   fw_param_uirec   0x400899c4  uirec(id) -> d0, the parameter's UI record as the
+|                                pages use it (+0 bit 0: it takes no p-locks)
+|   fw_card_read     0x400f5860  read(sector, bytes, buf) -> 0 or < 0: the +Drive (512-byte sectors; a task, never an interrupt)
+|   fw_card_write    0x400f5a46  write(sector, bytes, buf) -> 0 or < 0
+|   fw_card_erase    0x400f5778  erase(first, count) -> 0 or < 0
+|   fw_card_sectors  0x400f5480  sectors() -> the card's size, -1 before it is up
+|   fw_sysex_send    0x400ee354  send(buf, len, abort *, port: 2 USB, 3 DIN, 4 both) -> 1 sent; 144 bytes at a time, busy-waits on a full USB ring
 
         .macro  FW name, value
         .globl  \name
@@ -129,3 +145,11 @@
         FW      fw_transport, FW_TRANSPORT
         FW      fw_pattern, FW_PATTERN
         FW      fw_project, FW_PROJECT
+        FW      fw_voice_locks, FW_VOICE_LOCKS
+        FW      fw_voice_locked, FW_VOICE_LOCKED
+        FW      fw_param_uirec, FW_PARAM_UIREC
+        FW      fw_card_read, FW_CARD_READ
+        FW      fw_card_write, FW_CARD_WRITE
+        FW      fw_card_erase, FW_CARD_ERASE
+        FW      fw_card_sectors, FW_CARD_SECTORS
+        FW      fw_sysex_send, FW_SYSEX_SEND

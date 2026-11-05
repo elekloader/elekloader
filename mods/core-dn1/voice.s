@@ -41,3 +41,40 @@ core_voice_on:
         lea     20(%sp), %sp
         addq.l  #4, (%sp)               | return past the store at 0x4009e92e
         rts
+
+| ---- ev_voice_ready: a starting voice, with its sound and its locks (4.2) -
+| At 0x4009eadc (1.44 0x4009eafc), the note-on loop's last instruction for a
+| voice (was: clr.l READY_FLAG), in the same pass as ev_voice_on. By now the
+| voice holds its sound in fw_voice_params (loaded whole for another sound,
+| or for the same one only the slots in fw_voice_locked again) and the
+| event's p-locks over it, each set by the firmware's fw_voice_locks: the
+| target, the smoother's value (so it starts there) and the slot's bit in
+| fw_voice_locked, which makes the voice's next note load that slot from its
+| sound again. core makes the clear itself and runs the handlers. A handler
+| that puts values into the voice with fw_voice_locks starts the note with
+| them as with p-locks; what the voice has at this point is what plays.
+|
+| Handlers: f(int voice, int track, void *event), as ev_voice_on's.
+| Interrupt level, inside the render: keep them short. Here -128(a6) = the
+| voice, d2 = the track and a3 = the event; every register is as the render
+| left it when this returns.
+        .globl  core_voice_ready
+core_voice_ready:
+        clr.l   READY_FLAG              | the instruction this replaced
+        tst.l   ev_voice_ready
+        beq.s   9f
+        lea     -20(%sp), %sp
+        movem.l %d0-%d1/%a0-%a2, (%sp)
+        lea     ev_voice_ready, %a2
+1:      move.l  (%a2)+, %d0
+        beq.s   2f
+        move.l  %a3, -(%sp)             | the note event
+        move.l  %d2, -(%sp)             | the track
+        move.l  -128(%a6), -(%sp)       | the voice
+        movea.l %d0, %a0
+        jsr     (%a0)
+        lea     12(%sp), %sp
+        bra.s   1b
+2:      movem.l (%sp), %d0-%d1/%a0-%a2
+        lea     20(%sp), %sp
+9:      rts

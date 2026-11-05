@@ -174,19 +174,116 @@ the Digitone needs it. On its own it changes nothing the unit does.
   starved. In digikit's emulator, two rows on 1.43 or 1.44 never got past
   that screen. The calls in `core_additem` changed (`ROW_POOL`), not its
   place or its arguments: mods need no change.
+- **From 4.2, the parameter pages and the starting voice** ([edit.s](edit.s),
+  [voice.s](voice.s); docs/ADAPTING.md, "Parameter pages and the starting
+  voice"), for a mod that keeps values of its own for stock parameters:
+  - `ev_param_turn(view, id, delta, knob)`: a knob turn on a parameter page
+    that the stock would put into the sound (no trig held), at the knob
+    handler's held-steps question (0x400455ba, the same in 1.44); a handler
+    that returns nonzero takes it, and the stock neither edits the sound nor
+    shows its pop-up. GRID REC's held trigs keep their turns.
+  - `ev_param_value(view, id, &value, &locked)`: the value a page shows on a
+    knob, at the pages' value getter (0x40043dd0, the same in 1.44); a
+    handler may answer, inverted as a p-lock when `locked` is 1. Core asks
+    the same handlers at the views' value routine (0x400432dc), which the
+    SYN pages draw their envelopes and algorithm from, and at SYN2's
+    envelope page's own call of it (0x4004b462, 1.44 0x4004b482), which
+    draws that page's knobs.
+  - `ev_voice_ready(voice, track, event)`: each voice starting a note, once
+    it holds its sound and the event's p-locks, at the note-on loop's last
+    instruction for it (0x4009eadc, 1.44 0x4009eafc), after `ev_voice_on`.
+    With `fw_voice_locks` (the render's own routine) a handler puts more
+    locks into the voice as the render puts a step's; `fw_voice_locked` is
+    each voice's locked slots, and `fw_param_uirec` a parameter's UI record.
+  - Project data blocks that save only what they hold: `CORE_PROJDATA_VARIABLE`
+    in a descriptor's size (projdata.s).
+- **From 5.0, the firmware's moments** ([system.s](system.s), [events.s](events.s);
+  a prototype: the sites, their 1.44 ports and what the emulator showed are in
+  the hook map, research notes `dn1-hooks/`). Each is an observer list unless
+  it says "may take" (a handler's nonzero return stops the stock), and every
+  handler gets the routine's own arguments:
+  - the system: `ev_card_ready(status)` once the +Drive is up and before the
+    project loads (0x4008d27c, 1.44 0x4008d29c: the init task's store of the
+    card's status), `ev_boot_ui()` as the UI task is about to start
+    (0x4008d3d4), `ev_usb(configured)` (0x40004778, 0x400047ce),
+    `ev_crash(frame)` for an exception nothing handles (core installs its
+    handler in place of the stock crash printer at 0x400e7872, and calls the
+    printer after the handlers), and the exports `core_restart` (a reboot
+    that waits for the +Drive and lets the panel link drain with interrupts
+    on, which the stock's own restart does not) and `core_restart_now`;
+  - the +Drive and SysEx out as exports: `fw_card_read`, `fw_card_write`,
+    `fw_card_erase`, `fw_card_sectors`, `fw_sysex_send`;
+  - storage: `ev_project_saving(store, slot, a3)` and
+    `ev_project_saved(block, slot, ok)` around the slot writer (0x40027704,
+    0x400277dc; slot 128 is the working project);
+  - the sequencer: `ev_transport(what, arg)`, may take, at its start
+    (0x40093e1c), stop (0x400952f0) and pause (0x40094de0), which the PLAY and
+    STOP keys and MIDI Start, Continue and Stop all reach; `ev_seq_tick()`
+    each tick (0x40095518, interrupt); `ev_pattern_request(ui, request, a3)`
+    (0x40029424); `ev_tempo(bpm100)`, may take, at the tempo setter
+    (0x4009c82c); `ev_pattern_switch(pending)` as a requested pattern change
+    is applied (0x400fde0c);
+  - MIDI: `ev_midi_in(msg, len, source)`, may take, every message the MIDI
+    task dispatches, on both of its paths (0x400e99f4, 0x400e9a5e);
+    `ev_sysex(msg, len, source)`, may take, at the SysEx router's entry
+    (0x400ea854; digihealth's site further in still works);
+    `ev_midi_out(buf, len, port)`, may take, at the port switch (0x400edf32);
+  - voices: `ev_voice_free(voice)` as a voice is released (0x4009f9bc),
+    `ev_voice_steal(voice, old_track)` as the allocator takes a busy voice
+    (0x4009f700) and `ev_arp_step(track, event)` as an arpeggiator step is due
+    (0x4009d6a0), all at interrupt level;
+  - the UI task: `ev_ui_msg(msg)` for each message it takes (0x40019cda);
+  - KEYBOARD mode and mutes: `ev_keyboard_note(state, on, track, note)`, may
+    take a press, at the note-on dispatcher (0x4003b198) and the note-off
+    (0x4003b26e), and `ev_mute(where, track, muted, row)` before a track's
+    mute is set: the global mute (FUNC + a track key, 0x4002f994), the
+    pattern's mutes (0x400238ee) or a song row's (0x40033bee);
+  - the pattern menu: `ev_pattern_op(op, index, what)` as FUNC+YES saves
+    (op 0, 0x40027a00) or FUNC+NO reloads (op 1, 0x40027e4a) the pattern,
+    its kit (what 1), its sequence (2) or both (3), before the stock checks,
+    and `ev_track_reload(track, pattern, params)` as a held track key + NO
+    reloads a track's sound (0x40029d16);
+  - the SOUND MANAGER (SETTINGS > SOUNDS): `ev_sound_op(op, a, b)`
+    before it copies the ticked sounds to the pool (op 0, 0x400d33ce), to the
+    +Drive or a bank (1, 0x400d3604), deletes them (3, 0x400d3a42), sends
+    them as SysEx (4, 0x400d3854) or toggles their write protection (5,
+    0x400d3d90), or the SOUND BROWSER pastes into a pool slot (6,
+    0x400d5a7a: how a copied track sound is saved) or the pool view saves
+    the track's sound into a slot (7, SAVE TO HERE, 0x400d5236); op 2 copies from the
+    manager's pool view (0x400d31ec); and
+    `ev_sound_load(track, sound, kit)` before the kit puts a sound on a track
+    (the SOUND BROWSER's FUNC+YES, 0x4001d710), and `ev_sound_clear(slot,
+    name)` before CLEAR TRACK SOUND initialises one (0x400328f6);
+  - `ev_idle()`, over and over in the init task (the lowest priority task
+    that runs) once the UI task is up, from the ev_boot_ui stub: with no
+    handler the stock idle spin runs;
+  - the view stack: `ev_view(op, container, a, b)` before a view is pushed
+    (op 0, 0x400e60de), replaced by a page key (1, 0x400e6ad4) or popped
+    (2, 0x400e63c0), and `fw_view()`, the view on top (keys go to it);
+  - sequencer edits: `ev_trig_set`, `ev_step_note`, `ev_plock_store`,
+    `ev_plock_clear`, `ev_step_clear`, `ev_track_length` at the routines
+    that write a step's flags, note slots, locks and a track's length;
+  - sound parameters: `ev_param_set` at the stock setter's commit
+    (0x40020fc0) and `ev_sound_live(value, track, slot)` as a value goes to
+    the voices (0x4009c972);
+  - the master's effect stages: `ev_render_fx(stage, out, in, params)`, may
+    take, at the calls of the three send effects and the master drive
+    (0x400971e6, 0x40097268, 0x40097318, 0x40097402; interrupt, each block).
+  The test mod [examples/hooks-check-dn1](../../examples/hooks-check-dn1)
+  subscribes to all of them.
 - **OS 1.44:** every site has its port (`ports` in mod.json): the same
   code, moved, and RAM 0x1000 further on.
 
 Build it with the SDK (it needs m68k binutils):
 
 ```bash
-python -m elekloader.sdk.build mods/core-dn1 --stock Digitone_and_Digitone_Keys_OS1.43.syx   # out/core-4.1.1.elemod
-python -m elekloader.sdk.build mods/core-dn1 --stock Digitone_and_Digitone_Keys_OS1.44.syx   # out/core-4.1.1-os1.44.elemod
-python -m elekloader.lint mods/core-dn1/out/core-4.1.1-os1.44.elemod --stock Digitone_and_Digitone_Keys_OS1.44.syx
+python -m elekloader.sdk.build mods/core-dn1 --stock Digitone_and_Digitone_Keys_OS1.43.syx   # out/core-5.0.elemod
+python -m elekloader.sdk.build mods/core-dn1 --stock Digitone_and_Digitone_Keys_OS1.44.syx   # out/core-5.0-os1.44.elemod
+python -m elekloader.lint mods/core-dn1/out/core-5.0-os1.44.elemod --stock Digitone_and_Digitone_Keys_OS1.44.syx
 ```
 
-A release names them `core-dn1-4.1.1.elemod` and `core-dn1-4.1.1-os1.44.elemod`.
-4.1.1 is not released yet; 4.1's are on the [core-dn1-v4.1](https://github.com/irpina/elekloader/releases/tag/core-dn1-v4.1) pre-release,
+A release names them `core-dn1-5.0.elemod` and `core-dn1-5.0-os1.44.elemod`.
+5.0, 4.2 and 4.1.1 are not released yet; 4.1's are on the [core-dn1-v4.1](https://github.com/irpina/elekloader/releases/tag/core-dn1-v4.1) pre-release,
 4.0's on the [core-dn1-v4.0](https://github.com/irpina/elekloader/releases/tag/core-dn1-v4.0) pre-release
 (3.3 was not released);
 3.2's are on the [core-dn1-v3.2](https://github.com/irpina/elekloader/releases/tag/core-dn1-v3.2) pre-release
