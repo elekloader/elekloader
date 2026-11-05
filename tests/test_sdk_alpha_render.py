@@ -30,11 +30,17 @@ class RenderContractTests(unittest.TestCase):
             cls.programs[target] = program
 
     def test_digitakt_adapter_keeps_state_and_publishes_complete_shared_blocks(self):
-        program = Path(self.tmp.name) / 'dt1-adapter'
+        self.adapter('dt1')
+
+    def test_digitone_adapter_maps_voices_defaults_and_post_controller_values(self):
+        self.adapter('dn1')
+
+    def adapter(self, device):
+        program = Path(self.tmp.name) / (device + '-adapter')
         done = subprocess.run([CC, '-std=c99', '-O2', '-Wall', '-Wextra', '-Werror',
                                '-Wno-pointer-to-int-cast', '-Wno-int-to-pointer-cast',
                                '-I', str(ROOT / 'elekloader/sdk/include'),
-                               str(ROOT / 'tests/test_sdk_alpha_dt1.c'), '-o', str(program)],
+                               str(ROOT / ('tests/test_sdk_alpha_' + device + '.c')), '-o', str(program)],
                               capture_output=True, text=True)
         self.assertEqual(done.returncode, 0, done.stderr)
         done = subprocess.run([str(program)], capture_output=True, text=True)

@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
-/* Private experiment: Digitakt mk1 OS 1.54 (UI and audio), Digitone mk1 OS 1.44 and Digitone II
+/* Private experiment: Digitakt mk1 OS 1.54 and Digitone mk1 OS 1.44 (UI and audio); Digitone II
  * OS 1.12 (UI only). The builder refuses audio on targets without a render backend. */
 #ifndef ELEKLOADER_SDK_ALPHA_MACHINE_H
 #define ELEKLOADER_SDK_ALPHA_MACHINE_H

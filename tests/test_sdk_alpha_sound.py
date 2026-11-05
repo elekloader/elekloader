@@ -29,13 +29,17 @@ SINE = sdk_machine("Sine", """
     };
     struct state { uint32_t phase; };
     volatile int32_t sound_test_pitch;
-    volatile int32_t sound_test_shared[2];
+    volatile int32_t sound_test_shared[2], sound_test_prepared[2];
+    volatile int32_t sound_test_control;
+    volatile uint32_t sound_test_start_count, sound_test_overlap;
+    volatile uint32_t sound_test_starts[2][4];
     struct shared { int32_t fine, inverse; };
     static void present(const struct elek_ui_context *ctx, struct elek_ui_presentation *out)
     {
         struct shared *shared = out->shared;
         shared->fine = ctx->knob[FINE]->value;
         shared->inverse = -shared->fine;
+        if (ctx->track < 2) sound_test_prepared[ctx->track] = shared->fine;
     }
 
     /* sin(2 pi ph / 2^32), Q15: a parabola, then its square nudged in. */
@@ -53,6 +57,19 @@ SINE = sdk_machine("Sine", """
         struct state *state = v->state;
         uint32_t inc = elek_phase_inc(v->pitch + ctx->knob[FINE] * 65536 / 100);
         sound_test_pitch = v->pitch;
+        sound_test_control = ctx->knob[FINE];
+        if (v->flags & ELEK_VOICE_START) {
+            uint32_t n = sound_test_start_count;
+            if (n < 2) {
+                sound_test_starts[n][0] = v->slot;
+                sound_test_starts[n][1] = v->track;
+                sound_test_starts[n][2] = (uint32_t)(uintptr_t)v->state;
+                sound_test_starts[n][3] = v->pitch;
+            }
+            sound_test_start_count = n + 1;
+        }
+        if (sound_test_start_count >= 2 && v->slot == sound_test_starts[0][0])
+            ++sound_test_overlap;
         const struct shared *shared = ctx->shared;
         if (v->track < 2)
             sound_test_shared[v->track] = shared->fine == -shared->inverse ? shared->fine : 999;
@@ -139,13 +156,65 @@ class Sound:
         self.assertNotEqual([k.value & 0xffffffff for k in (first, second)], saved)
         self.load_project()
         self.wait(100)
-        self.assertEqual([self.read('sound_test_shared', i) for i in range(2)],
-                         saved)
+        self.assertEqual([self.read('sound_test_prepared', i) for i in range(2)], saved)
+        for track in self.tracks[:2]:
+            track.play(0)
+        self.assertEqual([self.read('sound_test_shared', i) for i in range(2)], saved)
 
     def test_a_machine_without_render_plays_what_it_did(self):
         self.track.use(SILENT)
         played = self.track.play(0).peak > 1000
         self.assertEqual(played, self.panel.sound_without_render)
+
+
+@sdk_tests
+class Polyphony:
+    audio = True
+    requires = ('render', 'polyphony')
+
+    def test_overlapping_notes_have_separate_voice_slots_and_state(self):
+        self.track.use(SINE)
+        self.panel.keyboard()
+        self.panel.press_key(0)
+        self.wait(100)
+        self.panel.press_key(7)
+        self.wait(100)
+        self.panel.release_key(7)
+        self.panel.release_key(0)
+        self.wait(100)
+        self.assertGreaterEqual(self.read('sound_test_start_count'), 2)
+        first = [self.read('sound_test_starts', i) for i in range(4)]
+        second = [self.read('sound_test_starts', 4 + i) for i in range(4)]
+        self.assertNotEqual(first[0], second[0], 'both notes used one slot')
+        self.assertEqual((first[1], second[1]), (self.track.index, self.track.index))
+        self.assertNotEqual(first[2], second[2], 'both notes shared voice state')
+        self.assertEqual(second[3] - first[3], 7 << 16)
+        self.assertGreater(self.read('sound_test_overlap'), 0, 'the first voice stopped at the second note')
+
+
+@sdk_tests
+class Modulation:
+    audio = True
+    requires = ('render', 'audio_modulation')
+
+    def test_lfo_changes_the_voices_controls_without_editing_the_knob(self):
+        fine = self.track.use(SINE).knob('FINE')
+        original = fine.raw
+        lfo = self.track.lfo(1)
+        lfo.choose(fine)
+        lfo.confirm()
+        self.panel.set_lfo_depth()
+        self.panel.keyboard()
+        self.panel.press_key(0)
+        self.wait(100)
+        values = []
+        for _ in range(12):
+            values.append(self.read('sound_test_control'))
+            self.wait(50)
+        self.panel.release_key(0)
+        self.wait(100)
+        self.assertGreater(len(set(values)), 1, 'the render received an unmodulated control')
+        self.assertEqual(fine.raw, original)
 
 
 if __name__ == '__main__':

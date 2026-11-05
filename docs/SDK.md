@@ -6,10 +6,9 @@ connects those declarations to its native machine selector, parameters and
 screen. This is a private experiment: the API may change, and mods must be
 rebuilt when it does.
 
-**Machine UIs work on all three releases below. Digitakt mk1 also runs SDK
-renderers and applies mapped knob defaults.** Digitone mk1 and Digitone II
-currently accept UI-only machines; the builder refuses `.render` and
-explicit `.def` on those targets.
+**Machine UIs work on all three releases below. Both mk1 devices run SDK
+renderers and apply mapped knob defaults.** Digitone II currently accepts
+UI-only machines; its builder refuses `.render` and explicit `.def`.
 
 The [header](../elekloader/sdk/include/elekloader/sdk_alpha_machine.h) is the
 reference for exact types, fields and helper behavior. This page explains
@@ -27,7 +26,7 @@ how they fit together. For other kinds of mod, start with
 | Pages / logical knobs | 2 / 15 | 2 / 15 | 2 / 15 |
 | LFO destination lists | 2 | 2 | 3 |
 | Labels, hiding, 16×16 glyphs | Yes | Yes | Yes |
-| Mapped defaults / SDK audio callback | Implemented | Not implemented | Not implemented |
+| Mapped defaults / SDK audio callback | Implemented | Implemented | Not implemented |
 
 Other OS releases and devices, including Digitakt II, are not SDK targets.
 Support in elekloader's firmware loader does not imply support in this SDK.
@@ -92,14 +91,14 @@ ELEK_REGISTER_MACHINE(machine);
   it is different from omitting the bound. The callback receives a mapped
   integer and the underlying raw value, 0..32512 in native 8.8 units.
   Mapping rounds to the nearest integer, with exact halves toward max.
-- On Digitakt, `.def = ELEK_UI_BOUND(value)` sets a default in mapped units.
+- On the mk1 devices, `.def = ELEK_UI_BOUND(value)` sets a mapped default.
   An explicit zero differs from omission: omission starts at the minimum.
   The builder refuses defaults outside the effective bounds. Selection and
   clear/reset use the default; paste and project load restore edited values.
   Repeated page placements share one default and one value. Native storage
   has 32,513 steps; a default between representable values uses the first
-  step mapping at or above it. Explicit defaults on the Digitones are
-  refused until their backends implement them.
+  step mapping at or above it. Explicit defaults on Digitone II are
+  refused until its backend implements them.
 
 ### Presentation
 
@@ -189,8 +188,8 @@ Working UI examples are [sdk-hello-world](../examples/sdk-hello-world)
 
 ## Audio contract
 
-Digitakt mk1 calls this callback on its main ColdFire. The other two
-backends are pending; their device-specific audio interfaces remain
+Both mk1 devices call this callback on the main ColdFire. Digitone II's
+shared SDK backend is pending; its native audio interface remains
 available separately.
 
 The callback is:
@@ -271,7 +270,7 @@ that is not a native knob value. Most instruments can work from
 follow per-voice locks or LFOs; compute those dependencies from the voice's
 controls in the audio path.
 
-Digitakt publishes shared data through two buffers per track: `.present`
+Both mk1 adapters publish shared data through two buffers per track: `.present`
 updates the inactive buffer, then publishes its index after the complete
 write. The audio interrupt reads one published buffer for the whole call.
 The UI tick refreshes every SDK audio track, including inactive tracks
@@ -280,7 +279,7 @@ snapshot is ready its renderer produces silence. UI-only machines and
 machines without `.shared` receive a null shared pointer.
 
 DN2 requires a copy to the SHARC's separate memory; that transport is
-pending. Digitone UI-only calls also have `out->shared == NULL`.
+pending. Its UI-only calls have `out->shared == NULL`.
 
 Shared data must not contain pointers into UI memory. The DN2 backend also
 needs a defined byte order and layout; copying an arbitrary C structure
@@ -303,7 +302,7 @@ The backends reuse each device's native voice path:
 | Target | Native path available to an adapter | Work still required for the shared SDK |
 |---|---|---|
 | Digitakt mk1 | ColdFire track blocks, 32 Q31 samples; one rendering slot per track | Implemented; hardware and worst-case load qualification remain |
-| Digitone mk1 | Main ColdFire replaces an allocated FM voice with 32 Q31 samples through the machines companion | Dispatch the shared callback, map per-voice controls/state and owning track, and qualify locks, LFOs, gain and envelope behavior |
+| Digitone mk1 | Main ColdFire replaces an allocated FM voice with 32 Q31 samples through the machines companion | Implemented; hardware, lock/modulation timing and worst-case load qualification remain |
 | Digitone II | SHARC voice callback, 32 floats before the native envelope, filter and mixer | Build/package the audio artifact, bind it to SDK registration, transport shared data, and supply missing voice metadata |
 
 Digitakt replaces the track block before the existing native overdrive,
@@ -315,10 +314,26 @@ The start flag, pitch and velocity come from the native render exports.
 Currently `gate` reflects a nonzero native AMP envelope phase; it is an
 envelope-active indication, not a separately observed key-held flag.
 
-Digitone mk1's second ColdFire still generates stock FM voices. The
-existing replacement hook runs on the main CPU after those voices arrive;
-selecting a backend requires knowing the execution target, not just its
-instruction set.
+Digitone mk1's second ColdFire still generates FM. The shared renderer
+replaces each allocated voice on the main CPU through `machines-dn1`.
+There are eight independent state blocks; `slot` is the allocated voice,
+and `track` comes from the native voice-owner map. Pitch, velocity, start
+and held-note gate come from the companion's native voice record. State
+survives notes and retriggers, and is cleared when the slot changes machine.
+If shared data is not ready, the wrapper writes silence and retains the
+note-start notification until its first call to the renderer.
+The wrapper scales SDK full scale to `DNM_PEAK` (1/16); the companion's AMP
+envelope and velocity, then the native multimode filter, mixer and effects,
+follow the renderer.
+
+DN1 audio uses the same SYN parameter mapping as its UI, including DTUN,
+delays and ratio offsets; it does not use DN2's `25 + i` slots. The adapter
+retains the native block-parameter buffer from `ev_render_params` and reads
+it after controllers and LFOs have run. That supplies per-voice sound/lock
+values and native modulation instead of the editing kit. The host adapter
+test checks distinct voice values and post-event edits; the emulator checks
+LFO values reaching render. Exact sound-lock and modulation timing relative
+to the stock DSP/filter pipeline still needs device qualification.
 
 For a mk1 build, UI and audio can be compiled into the same ColdFire mod.
 The intended DN2 build compiles the source for both processors: pages and
@@ -361,10 +376,11 @@ Digitakt II are outside this shared render contract.
 - UI tests cover native destination selection/naming and project
   restoration. They do not qualify audible LFO modulation, held-step or
   sound-lock presentation, or pattern-lock save/load.
-- Digitakt emulator sound tests check pitch, octave intervals, FINE and
+- The mk1 emulator sound tests check pitch, octave intervals, FINE and
   UI-only fallback through the native output. Defaults tests cover selection,
   clear, repeated placements, paste and project restoration. Shared-state
-  tests check inactive tracks after load. These do not
+  tests check inactive tracks after load. DN1 also exercises overlapping
+  voice/state identity and LFO controls reaching render. These do not
   establish physical-device timing or worst-case render load.
 - Host audio tests check C sample helpers, pitch, level and waveform
   continuity. A host float build is not execution on the SHARC, and does
@@ -385,8 +401,8 @@ stored UI values for effective voice controls.
 - [Render-contract tests](../tests/test_sdk_alpha_render.py) compile one C
   machine twice with the host compiler, Q31 and float. They check sample
   helpers and compare the resulting sine. They also exercise the real
-  Digitakt adapter's state isolation, effective-control mapping and atomic
-  shared publication. `test_units.py` runs this suite.
+  mk1 adapters' state isolation, effective-control mapping, defaults and
+  atomic shared publication. `test_units.py` runs this suite.
 - [Sound tests](../tests/test_sdk_alpha_sound.py) capture the emulator output;
   [defaults tests](../tests/test_sdk_alpha_defaults.py) exercise mapped defaults.
   Targets without the corresponding backend are explicitly skipped.
@@ -402,7 +418,7 @@ python tests/test_sdk_alpha_render.py -v
 ```
 
 The mk1 suites use digiemu's Python (use `test_sdk_alpha_sound.py` or
-`test_sdk_alpha_defaults.py` for Digitakt audio/defaults):
+`test_sdk_alpha_defaults.py` for mk1 audio/defaults):
 
 ```bash
 ELEKLOADER_DIGIEMU=<digiemu> ELEKLOADER_STOCK_154=<Digitakt_OS1.54.syx> \

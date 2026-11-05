@@ -36,11 +36,13 @@ DEFAULTS = sdk_machine('Defaults', """
 EXTRA = sdk_machine('Extra default', """
     #include "elekloader/sdk_alpha_machine.h"
     #define K(i) { .id = i, .label = "V" #i, .def = ELEK_UI_BOUND(100) }
-    static const struct elek_ui_knob knobs[] = { K(0), K(1), K(2), K(3), K(4), K(5), K(6), K(7), K(8) };
+    static const struct elek_ui_knob knobs[] = { K(0), K(1), K(2), K(3), K(4), K(5), K(6), K(7), K(8),
+        K(9), K(10), K(11), K(12), K(13), K(14) };
     static const struct elek_ui_page pages[] = {
         { .label = "FIRST", .knob = { &knobs[0], &knobs[1], &knobs[2], &knobs[3],
                                      &knobs[4], &knobs[5], &knobs[6], &knobs[7] } },
-        { .label = "EXTRA", .knob = { &knobs[8] } },
+        { .label = "EXTRA", .knob = { &knobs[8], &knobs[9], &knobs[10], &knobs[11],
+                                     &knobs[12], &knobs[13], &knobs[14] } },
     };
     static const struct elek_machine extra_machine = {
         .id = @ID@, .name = "Extra default", .short_name = "EXTR", .pages = pages, .page_count = 2,
@@ -57,9 +59,12 @@ class Defaults:
         used = self.track.use(EXTRA)
         extra = used.all_knobs()[-1]
         self.assertEqual(extra.value, 100)
+        before = extra.raw
         extra.turn(10)
+        self.assertGreater(extra.raw, before)
         self.track.page_action('clear')
         self.assertEqual(extra.value, 100)
+        self.assertEqual(extra.raw, before)
 
     def test_selection_uses_mapped_defaults(self):
         knobs = self.track.use(DEFAULTS).all_knobs()

@@ -212,6 +212,9 @@ class Device:
         self.machines = sorted(machines)    # the SDK machine ids in this build
         self.layouts = layouts
 
+    def set_lfo_depth(self):
+        raise CannotYet('LFO depth')
+
     def keyboard(self):
         raise CannotYet('the keyboard')
 
@@ -514,6 +517,21 @@ class Digitone1(Device):
     bases = ('mods/core-dn1', 'mods/machines-dn1')
     machine_claim = 'dnmachine'
     track_count = 4
+    features = frozenset(('defaults', 'render', 'polyphony', 'audio_modulation'))
+    sound_without_render = True
+    KEYS = Digitakt1.KEYS
+
+    def set_lfo_depth(self):
+        self.turn('H', 64)
+
+    def keyboard(self):
+        pass                        # DN1's trig keys already play its chromatic keyboard.
+
+    def press_key(self, key):
+        self.s.press(self.s.code(self.KEYS[key]))
+
+    def release_key(self, key):
+        self.s.release(self.s.code(self.KEYS[key]))
 
     SDK_PAGE, SYN2_FIRST = 30, 4    # machines-dn1's first page, and the first page of SYN2's stock list
     # machines-dn1's sdk_pos: the SYN parameter that holds each logical knob, whichever page shows it

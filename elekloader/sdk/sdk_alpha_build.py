@@ -18,8 +18,8 @@ SDK_ALPHA_TARGETS = {
     ('digitone-mk2', '1.12'): ('sdk_alpha_machines', 'mk2-synth:%d', ('core', 'machines-dn2')),
 }
 # The releases whose companions implement each optional feature.
-SDK_ALPHA_RENDER = {('digitakt-mk1', '1.54')}
-SDK_ALPHA_DEFAULTS = {('digitakt-mk1', '1.54')}
+SDK_ALPHA_RENDER = {('digitakt-mk1', '1.54'), ('digitone-mk1', '1.44')}
+SDK_ALPHA_DEFAULTS = {('digitakt-mk1', '1.54'), ('digitone-mk1', '1.44')}
 ELEK_VOICE_STATE_MAX = 256      # sdk_alpha_machine.h
 ELEK_SHARED_MAX = 64
 

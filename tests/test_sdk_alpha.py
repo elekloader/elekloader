@@ -426,10 +426,9 @@ class SdkAlphaTests(unittest.TestCase):
             link.link([core, machines, sdk_alpha_build(str(HELLO), dn, tmp)[1]], image)   # two pages
             sdk_alpha_build(RENDERS.write(tmp + '/renders-dt'), stocks['digitakt-mk1'], tmp)
             sdk_alpha_build(DEFAULTS.write(tmp + '/defaults-dt'), stocks['digitakt-mk1'], tmp)
-            with self.assertRaisesRegex(build.BuildError, 'defaults are not supported on digitone-mk1'):
-                sdk_alpha_build(DEFAULTS.write(tmp + '/defaults-dn'), dn, tmp)
-            with self.assertRaisesRegex(build.BuildError, 'render is not supported on digitone-mk1'):
-                sdk_alpha_build(RENDERS.write(tmp + '/renders-dn'), dn, tmp)
+            for machine in (DEFAULTS, RENDERS):
+                mod = sdk_alpha_build(machine.write(tmp + '/dn-' + machine.name), dn, tmp)[1]
+                link.link([core, machines, mod], image)
             for stock in stocks.values():
                 with self.assertRaisesRegex(build.BuildError, '1..5 printable ASCII characters'):
                     sdk_alpha_build(LONG_LABEL.write(tmp + '/long'), stock, tmp)
