@@ -14,6 +14,8 @@
 #define SDK_ALPHA_MACHINES 16
 #define SDK_ALPHA_VOICES 8
 #define dev_fillrect fw_fillrect
+#define dev_active dnm_sdk_active
+const struct sdk_alpha_entry *dnm_sdk_active(void);   /* sdk_alpha.c */
 
 extern const struct sdk_alpha_registration *const sdk_alpha_machines[];   /* the table, ending in 0 */
 

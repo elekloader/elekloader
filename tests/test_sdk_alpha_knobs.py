@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
-"""A machine's knobs: each encoder edits its own knob, a knob maps its range onto its bounds, a knob
-can sit on two pages, and every track keeps its own values and page.
+"""A machine's knobs: each encoder edits its own knob, a knob maps its range onto its bounds and shows
+the mapped value, a knob can sit on two pages, and every track keeps its own values and page.
 
 Run as tests/sdk_alpha_harness.py says.
 """
@@ -85,6 +85,11 @@ class Knobs:
         word = self.read(name, knob.spec['id'])
         return word - (1 << 32) if word >= 1 << 31 else word
 
+    def shown(self, knob, value):
+        """The value text under the knob at `value`, read before it gives way to the label."""
+        knob.set(value)
+        return [row >> 7 for row in knob.label_pixels]     # its column: the crop's last 7 reach the next
+
     def test_every_knob_starts_at_zero(self):
         knobs = self.track.use(EIGHT).all_knobs()
         self.assertEqual([knob.raw for knob in knobs], [0] * 8)
@@ -148,6 +153,14 @@ class Knobs:
         self.assertEqual(self.seen('bounds_value', sign), 10)
         sign.set(-10)
         self.assertEqual(self.seen('bounds_value', sign), -10)
+
+    def test_a_knob_shows_its_mapped_value(self):
+        wide, sign = self.track.use(BOUNDS).knobs("WIDE", "SIGN")
+        ten = self.shown(wide, 10)
+        self.assertTrue(any(ten), 'no value under WIDE')
+        self.assertEqual(self.shown(sign, 10), ten)
+        self.assertEqual(self.shown(sign, 0), self.shown(wide, 0))
+        self.assertNotEqual(self.shown(sign, -10), ten)
 
     def test_a_knob_can_span_the_whole_32_bit_range(self):
         full, = self.track.use(BOUNDS).knobs("FULL")

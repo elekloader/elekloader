@@ -125,6 +125,12 @@ void dn2_row_label(uint32_t code, const char *label, const char *owner_name)
     dn2_t1[code].owner_name = owner_name;
 }
 
+/* An added row's value text: format(value 8.8, buf), which the stock rows' formatter field holds. */
+void dn2_row_format(uint32_t code, void (*format)(int32_t value, char *buf))
+{
+    dn2_t1[code].format = (uint32_t)(uintptr_t)format;
+}
+
 /* Each declared knob gets a parameter row after the stock ones, copied from TEMPLATE. */
 static void build_pages(void)
 {

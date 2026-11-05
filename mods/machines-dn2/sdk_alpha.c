@@ -47,8 +47,10 @@ void dn2_sdk_build(void)
     init();
     for (int32_t i = 0; i < count; ++i) {
         const struct elek_machine *e = declared(i);
-        for (uint32_t id = 0; id < sdk_alpha_entries[i].count; ++id)
+        for (uint32_t id = 0; id < sdk_alpha_entries[i].count; ++id) {
             dn2_add_row(ROWS + SDK_ROW + id, SLOT + id, e->knobs[id].label, 0, e->short_name);
+            dn2_row_format(ROWS + SDK_ROW + id, sdk_alpha_value_texts[id]);
+        }
         for (uint32_t page = 0; page < sdk_alpha_entries[i].pages; ++page) {
             struct descriptor *d = &pages[i][page];
             const char tab[] = {'S', 'Y', 'N', '1' + page, 0};
@@ -150,6 +152,13 @@ static int page_layout(int sdk)
 static int32_t track_machine(uint32_t t)
 {
     return t < 16 ? machine_of(dn2_sounds[SOUND_SIZE * t + SOUND_TYPE]) : -1;
+}
+
+/* The active track's SDK machine, or 0: the one whose knobs' value texts the shared rows show. */
+const struct sdk_alpha_entry *dn2_sdk_active(void)
+{
+    int32_t i = track_machine(*dn2_active_track);
+    return i < 0 ? 0 : &sdk_alpha_entries[i];
 }
 
 /* Knob `id`'s stored value on track t: slot 25 + id, a big-endian word (the sounds are packed). */

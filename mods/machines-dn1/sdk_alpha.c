@@ -75,16 +75,6 @@ static int page_layout(int sdk)
     return 1;
 }
 
-/* A knob's value text: the number, 0-127, whichever parameter holds it. */
-static void sdk_value(int32_t value, char *buf)
-{
-    int32_t v = value >> 8, n = 0;
-    if (v >= 100) buf[n++] = '0' + v / 100;
-    if (v >= 10) buf[n++] = '0' + v / 10 % 10;
-    buf[n++] = '0' + v % 10;
-    buf[n] = 0;
-}
-
 static const int16_t *render_params;
 static void render(int32_t voice, int32_t *block, const struct dnm_voice *v);
 
@@ -105,7 +95,7 @@ static void init(void)
             defaults[n][k] = -1;
         for (uint32_t i = 0; i < e->count; ++i) {
             knobs[n][sdk_pos[i]].name = e->machine->knobs[i].label;
-            knobs[n][sdk_pos[i]].fmt = sdk_value;
+            knobs[n][sdk_pos[i]].fmt = sdk_alpha_value_texts[i];
             defaults[n][sdk_pos[i]] = sdk_alpha_default(&e->machine->knobs[i]);
         }
         if (e->pages)
@@ -127,6 +117,13 @@ static int32_t shown_page(void)
     const uint8_t *view = dnm_sdk_pages[0].view;
     int32_t page = listed && view ? *(const int32_t *)(view + V_CUR) : 0;
     return listed && page > 0 && (uint32_t)page < entry_of(listed)->pages ? page : 0;
+}
+
+/* The active track's SDK machine, or 0: the one whose knobs' value texts the UI records show. */
+const struct sdk_alpha_entry *dnm_sdk_active(void)
+{
+    uint32_t t = fw_active_track;
+    return t < 4 && fw_kit ? sdk_alpha_find(FW_SOUND_SLOT(fw_kit, t, 0) >> 8) : 0;   /* slot 0: the machine */
 }
 
 /* SDK machine i, or 0 past the last. */

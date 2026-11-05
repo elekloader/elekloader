@@ -12,6 +12,8 @@
 
 #define SDK_ALPHA_MACHINES 16
 #define dev_fillrect dn2_fillrect
+#define dev_active dn2_sdk_active
+const struct sdk_alpha_entry *dn2_sdk_active(void);   /* sdk_alpha.c */
 
 extern void dn2_fillrect(void *bmp, int32_t x0, int32_t y0, int32_t x1, int32_t y1, int32_t on);
 extern const struct sdk_alpha_registration *const sdk_alpha_machines[];   /* the table, ending in 0 */

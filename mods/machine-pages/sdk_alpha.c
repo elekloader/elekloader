@@ -124,14 +124,6 @@ int32_t sdk_alpha_value_text(int32_t machine, int32_t k, int32_t raw, char *buf,
     const struct sdk_alpha_entry *e = sdk_alpha_find(machine);
     if (!e || (uint32_t)k >= e->count)
         return 0;
-    int32_t value = sdk_alpha_map(&e->machine->knobs[k], raw);
-    char digits[10];
-    uint32_t n = value < 0 ? 0u - (uint32_t)value : (uint32_t)value;
-    int count = 0, pos = 0;
-    do { digits[count++] = '0' + n % 10; n /= 10; } while (n);
-    if (!popup && count + (value < 0) > 5) { buf[0] = '#'; buf[1] = 0; return 1; }
-    if (value < 0) buf[pos++] = '-';
-    while (count) buf[pos++] = digits[--count];
-    buf[pos] = 0;
+    sdk_alpha_number(sdk_alpha_map(&e->machine->knobs[k], raw), buf, popup);
     return 1;
 }

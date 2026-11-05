@@ -18,6 +18,7 @@ struct string_rep { uint32_t length, capacity; int32_t references; char text[32]
 const char *dn2_representation(struct string_rep *r, const char *s, unsigned max);
 void dn2_add_row(uint32_t code, int32_t slot, const char *label, uint32_t def, const char *owner_name);
 void dn2_row_label(uint32_t code, const char *label, const char *owner_name);
+void dn2_row_format(uint32_t code, void (*format)(int32_t value, char *buf));
 void dn2_ensure(void);
 
 /* sdk_alpha.c */

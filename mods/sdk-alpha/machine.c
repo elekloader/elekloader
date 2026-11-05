@@ -5,6 +5,8 @@
  *   dev_candidate(i, &m) its i-th registered machine in m (0 for one that is not an SDK machine);
  *                        0 past the last;
  *   dev_fillrect         the firmware's fillrect(bmp, x0, y0, x1, y1, on);
+ *   dev_active           the active track's machine, or 0, on a device whose value formatter is given
+ *                        no knob;
  *   SDK_ALPHA_VOICES     the voices it renders, when it renders. */
 #include "dev.h"
 
@@ -82,6 +84,36 @@ int32_t sdk_alpha_default(const struct elek_knob *knob)
     }
     return lo;
 }
+
+void sdk_alpha_number(int32_t value, char *buf, int wide)
+{
+    char digits[10];
+    uint32_t n = value < 0 ? 0u - (uint32_t)value : (uint32_t)value;
+    int count = 0, pos = 0;
+    do { digits[count++] = '0' + n % 10; n /= 10; } while (n);
+    if (!wide && count + (value < 0) > SDK_ALPHA_VALUE_MAX) { buf[0] = '#'; buf[1] = 0; return; }
+    if (value < 0) buf[pos++] = '-';
+    while (count) buf[pos++] = digits[--count];
+    buf[pos] = 0;
+}
+
+#ifdef dev_active
+static void value_text(uint32_t k, int32_t raw, char *buf)
+{
+    const struct sdk_alpha_entry *e = dev_active();
+    sdk_alpha_number(e && k < e->count ? sdk_alpha_map(&e->machine->knobs[k], raw) : raw >> 8, buf, 0);
+}
+#define VALUE_TEXT(k) static void value_text##k(int32_t raw, char *buf) { value_text(k, raw, buf); }
+VALUE_TEXT(0) VALUE_TEXT(1) VALUE_TEXT(2) VALUE_TEXT(3) VALUE_TEXT(4) VALUE_TEXT(5) VALUE_TEXT(6)
+VALUE_TEXT(7) VALUE_TEXT(8) VALUE_TEXT(9) VALUE_TEXT(10) VALUE_TEXT(11) VALUE_TEXT(12) VALUE_TEXT(13)
+VALUE_TEXT(14)
+_Static_assert(SDK_ALPHA_KNOBS == 15, "one value_text per knob");
+void (*const sdk_alpha_value_texts[SDK_ALPHA_KNOBS])(int32_t raw, char *buf) = {
+    value_text0, value_text1, value_text2, value_text3, value_text4, value_text5, value_text6,
+    value_text7, value_text8, value_text9, value_text10, value_text11, value_text12, value_text13,
+    value_text14,
+};
+#endif
 
 char sdk_alpha_labels[SDK_ALPHA_KNOBS][ELEK_UI_LABEL_MAX + 1];
 uint8_t sdk_alpha_visibility[SDK_ALPHA_KNOBS];

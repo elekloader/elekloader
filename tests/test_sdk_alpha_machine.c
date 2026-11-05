@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
 /* The shared part (mods/sdk-alpha/machine.c) as the Digitone II builds it, table by table: the value
- * mapping over the whole signed range, the defaults' inverse, the index's checks, label sanitising, the
- * skip of unchanged inputs and the glyph blit. */
+ * mapping over the whole signed range, the defaults' inverse, the value text, the index's checks, label
+ * sanitising, the skip of unchanged inputs and the glyph blit. */
 #include <assert.h>
 #include <stdint.h>
 #include <string.h>
@@ -16,6 +16,13 @@ void dn2_fillrect(void *bmp, int32_t x0, int32_t y0, int32_t x1, int32_t y1, int
     for (int32_t y = y0; y <= y1; ++y)
         for (int32_t x = x0; x <= x1; ++x)
             lit[y][x] = (uint8_t)on;
+}
+
+/* The active track's machine, for the value texts. */
+static const struct sdk_alpha_entry *active;
+const struct sdk_alpha_entry *dn2_sdk_active(void)
+{
+    return active;
 }
 
 /* The present callback: one label (0 keeps the declared one), visibility and glyph per call, from these. */
@@ -112,6 +119,20 @@ int main(void)
         }
     }
 
+    /* The value text: the number, "#" past five characters unless wide. */
+    static const struct { int32_t value; const char *text, *wide; } numbers[] = {
+        { 0, "0", "0" }, { 7, "7", "7" }, { -50, "-50", "-50" }, { 99999, "99999", "99999" },
+        { -9999, "-9999", "-9999" }, { 100000, "#", "100000" }, { -10000, "#", "-10000" },
+        { INT32_MAX, "#", "2147483647" }, { INT32_MIN, "#", "-2147483648" },
+    };
+    for (unsigned i = 0; i < sizeof numbers / sizeof *numbers; ++i) {
+        char buf[12];
+        sdk_alpha_number(numbers[i].value, buf, 0);
+        assert(!strcmp(buf, numbers[i].text));
+        sdk_alpha_number(numbers[i].value, buf, 1);
+        assert(!strcmp(buf, numbers[i].wide));
+    }
+
     /* The index: refused machines are not SDK machines; each encoder's knob id, by page. */
     const struct sdk_alpha_entry *e = sdk_alpha_find(100);
     assert(sdk_alpha_count == 2 && e && e->count == 2 && e->pages == 2);
@@ -120,6 +141,23 @@ int main(void)
     assert(sdk_alpha_find(101) && sdk_alpha_find(101)->count == 0 && sdk_alpha_find(101)->pages == 0);
     for (int32_t id = 102; id <= 106; ++id)
         assert(!sdk_alpha_find(id));
+
+    /* A knob's formatter shows the active machine's mapped value; the native number for another. */
+    char text[12];
+    active = e;
+    sdk_alpha_value_texts[0](0, text);
+    assert(!strcmp(text, "-50"));
+    sdk_alpha_value_texts[0](R / 2, text);
+    assert(!strcmp(text, "0"));
+    sdk_alpha_value_texts[0](R, text);
+    assert(!strcmp(text, "50"));
+    sdk_alpha_value_texts[1](64 << 8, text);
+    assert(!strcmp(text, "64"));
+    sdk_alpha_value_texts[2](0, text);                  /* past the machine's knobs */
+    assert(!strcmp(text, "0"));
+    active = 0;
+    sdk_alpha_value_texts[0](0, text);
+    assert(!strcmp(text, "0"));
 
     /* Labels: at most ELEK_UI_LABEL_MAX characters, nonprintable bytes become ?; untouched, the declared. */
     static const struct { const char *label, *shown; } labels[] = {

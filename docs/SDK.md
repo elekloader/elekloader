@@ -97,7 +97,8 @@ ELEK_REGISTER_MACHINE(machine);
   anywhere but the machine's own `knobs`.
 - `max` is required and must be above `min` (which defaults to 0). Values
   map the knob's native range onto `min..max`, rounding to the nearest
-  integer, with exact halves toward max.
+  integer, with exact halves toward max. The screen shows that mapped
+  value under the knob, or `#` when it needs more than five characters.
 - `def` is the value a knob starts at, clamped into `min..max`; omitted, it
   is 0, so a `-10..10` knob starts centred and a `10..20` one at 10. On the
   mk1 devices, selection and clear/reset use the default; paste and
@@ -428,7 +429,7 @@ stored UI values for effective voice controls.
   on both. They also exercise the real
   mk1 adapters' state isolation, effective-control mapping and defaults,
   and the part every companion shares (`mods/sdk-alpha/machine.c`): value
-  mapping across the bounds, defaults, label sanitising and when
+  mapping across the bounds, defaults, value text, label sanitising and when
   `.present` runs. `test_units.py` runs this suite.
 - [Host-run tests](../tests/test_sdk_alpha_host.py) run
   `sdk_alpha_host` on the examples; `test_units.py` runs them too.

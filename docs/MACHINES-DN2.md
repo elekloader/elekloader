@@ -59,7 +59,7 @@ parameter rows after the stock table's 321: at boot, before the OS's
 initializers, the companion copies the table (`0x401f83a4`) to its RAM,
 points the table's 56 references at the copy and raises its 54 row bounds
 by 56, for 40 SHARC synth knobs, fifteen shared SDK knobs and a filter's G; the value-class accessor (`0x400c257c`) gives an added row its
-template's object, and the bounds that end loops keep the stock count. The CC
+template's object (the SDK knobs' rows keep their own formatter, `+0x34`, which `0x400c25a0` calls with the value and a buffer), and the bounds that end loops keep the stock count. The CC
 and NRPN lookups (`0x400dc978`, `0x400dca5a`) ask FM TONE's map for a paged
 synth, and an FM TONE row found there becomes the synth's row for its slot. The sound-load bound
 accepts IDs through 127. SHARC synth registrations remain limited to 5..31.

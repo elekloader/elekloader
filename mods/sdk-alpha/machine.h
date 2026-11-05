@@ -29,6 +29,13 @@ const struct sdk_alpha_entry *sdk_alpha_find(int32_t id);
 int32_t sdk_alpha_map(const struct elek_knob *knob, int32_t raw);
 /* The first native step whose mapped value reaches the knob's default. */
 int32_t sdk_alpha_default(const struct elek_knob *knob);
+/* A knob's value text: the decimal number (12 bytes at most); unless wide, "#" when it needs more than
+ * SDK_ALPHA_VALUE_MAX characters, which is what fits under a knob. */
+#define SDK_ALPHA_VALUE_MAX 5
+void sdk_alpha_number(int32_t value, char *buf, int wide);
+/* On a device whose value formatter f(raw, buf) is given no knob (dev.h defines dev_active): knob k's,
+ * for the active track's machine; the native number for another machine. */
+extern void (*const sdk_alpha_value_texts[SDK_ALPHA_KNOBS])(int32_t raw, char *buf);
 
 /* What .present last left, and for which machine, track and page. */
 extern char sdk_alpha_labels[SDK_ALPHA_KNOBS][ELEK_UI_LABEL_MAX + 1];
