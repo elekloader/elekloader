@@ -849,14 +849,22 @@ static void write_through(unsigned scope, unsigned char *item)
 
 unsigned core_store_get(unsigned field, void *item, int index)
 {
-    unsigned scope = field >> 28, w = field >> 22 & 63, o = field & 0x3fffff, v = 0, i;
+    unsigned scope = field >> 28, w = field >> 22 & 63, o = field & 0x3fffff, v = 0, i, k, n;
     volatile unsigned char *base = field_base(scope, item, index);
     unsigned short sr;
     if (scope != SC_PROJECT && !base)
         return 0;
+    n = ((o & 7) + w + 7) >> 3;               /* the bytes it spans */
     sr = irq_mask();
-    for (i = 0; i < w; i++, o++)
-        v = v << 1 | (B(field_byte(scope, base, o >> 3)) >> (7 - (o & 7)) & 1);
+    if (n <= 4) {                             /* (0.5) a byte at a time: every field but a 26..32-bit one off its byte */
+        for (k = o >> 3, i = 0; i < n; i++, k++)
+            v = v << 8 | B(field_byte(scope, base, k));
+        v >>= 8 * n - (o & 7) - w;
+        if (w < 32)
+            v &= (1u << w) - 1;
+    } else
+        for (i = 0; i < w; i++, o++)
+            v = v << 1 | (B(field_byte(scope, base, o >> 3)) >> (7 - (o & 7)) & 1);
     irq_restore(sr);
     return v;
 }

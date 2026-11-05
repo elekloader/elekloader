@@ -5,8 +5,8 @@ The boot copier, the hook bus and mod storage for the Analog Four MKII, OS
 the A4's addresses, which `mod.json` gives (`defsym`, `sites`), as
 [core-ar2](../core-ar2) does for the Analog Rytm MKII, and its own `store.c`
 and `store.s` (Mod storage, below), and from 0.5 `lock.c`, `rows.c` and
-`rows.s` (Lockable parameters, Mod p-locks) and `dests.c` and `dests.s`
-(Destinations). On its own it changes nothing
+`rows.s` (Lockable parameters, Mod p-locks), `dests.c` and `dests.s`
+(Destinations) and `value.c` (The value read). On its own it changes nothing
 the unit does.
 
 The A4 MKII is the Rytm MKII's platform (a ColdFire MCF5441x): its OS entry,
@@ -380,6 +380,53 @@ code this build has no "mod" parameter for into None (a route's or macro
 target's -1, a Dest word 0), and every code when the item's layout ID is
 not this build's.
 
+## The value read (0.5)
+
+The lock service's third part (`value.c`): core-ar2 0.10's `smooth.c` with
+the A4's stages. `core_param_values(track, handles, n, flags, out)` gives
+each lockable parameter the value stock would play for a coarse parameter
+of the same range, in 8.8 steps of the field (`CORE_PARAM_ENGINE`: the
+engine's 0..0x7fff, the field's min..max as 0..0x7f00), computed in the
+order of stock's audio interrupt (0x401013be), with a clamp to 0..0x7fff
+after each term, as stock clamps:
+
+| stage | stock | core |
+|---|---|---|
+| target | the pushed sound's word (kit block on FX, CV), the trig's lock in its place | the field in `core_voice_item[voice]` (part 2), the voice's `core_lock_now` (part 1) in its place; byte reads from offsets made once |
+| smoother | 0x40102f0c: s = 0.97 s + 0.03 target a block, slots below 0x128; the state set to the target at a locked trig and at the next unlocked one (trace item 7) | smooth.c's lazy step and 0.97^k table per voice and code; a new accept on the voice whose trig is locked, or follows a locked one, jumps. `"smooth": false` skips it |
+| Param Slide | 0x4010306a: phase and limit per voice (0x80002d54, 0x80002d3c), factor (phase / 2) x scale (0x80002d24) x 0x74822, copy - factor x delta (0x401030c6) | the same arithmetic, with part 1's delta in the engine's scale and the phase stock used in the block (it adds to it after use, and a slide trig resets it first) |
+| routes | 0x400fff7a: source x depth / 32768, sources velocity 0x4287c4e8 (bipolar 0x800042dc), bend 0x80006a68 (x 2 - 0x8000), wheel 0x80006a5a, breath 0x80006a4c, aftertouch 0x80006a76, the track from 0x80006008 | the voice's noted routes (part 2) |
+| macros, CONTROL IN | 0x40103314: copy[n] (bipolar from +0x498, CONTROL IN 0 while 0x80004804 is set) x depth / 32768 on the voices of the target's track (0x80005ff0) | every noted target on the voice's track |
+| LFO2, Env2, LFO1, EnvF | 0x4007cbf2(1), 0x400ff230(1), 0x4007cbf2(0), 0x400ff230(0): ((depth - 0x4000) x out) >> 30 (LFO, out 0x80006b74 + 0x60 n + 0x30 p, depth slot 0xca + 0x10 n + 2 p + k) or >> 28 (envelope, out 0x80003b24 + 0x54 n + 0x1c e, depth slot 0xd0 + 0x10 n + 2 e + k) | each noted Dest by its place's stage, A then B |
+
+The inputs of the last four stages are audio-side state stock holds for a
+block. Core copies them once a block at `ev_render_out` (order 1, before
+any mod's handler: `core_value_snapshot`), with per voice whether anything
+modulates one of its mod parameters, so a read on a voice with nothing
+pointing at its mod parameters skips the last three stages. A read in
+`ev_render_out` sees the block's values, one in the next `ev_render_in` the
+same, one block (0.67 ms) late, as on the Rytm. Part 2's push rule keeps a
+Dest stored outside its list at the sink (trace item 8), so no depth in the
+snapshot carries a term stock never used.
+
+Voices (decided 2026-11-05): a track's read uses the voice its last trig
+went to (part 1's record of the accepts; on a poly track the last-played
+voice; before any trig, a voice stock gives the track), and
+`core_param_values_voice(voice, ...)` reads one voice (0..3 synth, 4 FX, 5
+CV). A handle is `code | kind << 8` (`core_param_handle(field)`): a build's
+own numbering, never kept in a project. `core_param_value`,
+`core_param_value_ex`, `core_param_int` and `core_param_value_h` are the
+single reads, with core-ar2's names.
+
+`core_store_get` reads a field a byte at a time (core-ar2 0.10's), and the
+read does not call it: it reads the field's bytes from offsets made once.
+
+Cost (dtboot, DMA timer 0 ticks, a block 88,284): a read of one parameter
+129 on average with nothing modulating it, 179 with every source on it
+(at most 531); four in one batch 426 and 528 (at most 1,238), so each
+further parameter adds about 100 to 120. One read is 0.15% of a block, four
+0.5% (1.4% at the worst seen).
+
 ## Checked so far
 
 On a unit (OS 1.56, 20 Oct 2026) [hw]: build HC56 (core-a4 with
@@ -495,6 +542,34 @@ images; 20 Oct 2026):
   screens' lists (the macro setup shares their view), a kit of another
   layout loading as None, stock 1.56 with such a kit (ERR and the sink, as
   found 2026-11-04 with pokes).
+- **The value read** [emu] (core 0.5 with lock-check-a4 1.1, dtboot, 5 Nov
+  2026): each block, core's read of A on a voice in the engine's scale
+  beside stock's engine copy (0x80005af0) of a stock coarse parameter on
+  the same voice with the same value and the same modulation (track 1's
+  0x24, the FX track's 0x1b, the CV track's 0x00), set by poked sound and
+  kit words and a push from the UI, compared over the last 1,500 to 2,000
+  blocks of each run (works, data read):
+  - a knob step (A set, the stock parameter through the knob push
+    0x401005b8 in the same tick): the same glide, within 1 (42 of 700
+    blocks off by 1, the lazy step's rounding);
+  - p-locks on 48 of 64 steps, PLAY: the same jump into each lock and back
+    to the sound's value at each unlocked trig, exactly;
+  - every step a slide trig, the same locks: the same ramps, exactly;
+  - each route source (velocity by notes, bend, wheel, breath, aftertouch
+    by MIDI) at depth +0x5000 and -0x4000: exactly, clamps at 0 and
+    0x7fff included;
+  - a macro target, unipolar and bipolar with a negative depth: exactly;
+  - LFO1 and LFO2 on Dest A (A) and B (the stock parameter), EnvF and Env2
+    by notes, positive and negative depths: exactly;
+  - all at once (LFO1, LFO2, EnvF, Env2, a wheel and a velocity route, a
+    macro, locks and slides, playing): exactly, 660 blocks at the clamp;
+  - the FX track (K, LFO1 and LFO2), the CV track (V, LFO1 and ENV1) and a
+    second synth voice (track 2 on voice 1): exactly;
+  - the batch of four against single reads: no mismatch; the track call
+    followed the voices' tracks (0, 1, 2, 3, 4, 5).
+  Not checked yet: a poly track's two voices, a sound-locked trig's pool
+  sound as the target, a `"smooth": false` field, a field wider than 7
+  bits against a stock fine parameter, CONTROL IN.
 - Statically, against the stock image (python, no toolchain): every site's
   stock bytes, that each covers whole instructions, that each body in
   `store.s` jumps back to its site plus the 8 bytes it displaced, and that

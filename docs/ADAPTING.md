@@ -2052,8 +2052,8 @@ and on a unit (24 Oct 2026).
 
 core-a4 0.5 has the first part of the lock service, core-ar2's design
 ("Lockable parameters" and "Mod p-locks", above) with the A4's track
-kinds, and from part 2 its destinations. The smoothed value and MIDI come
-in later parts.
+kinds, from part 2 its destinations and from part 3 the value read. MIDI
+comes in a later part.
 
 A storage field declared `"lock": true` gets a lock code from the lockfile,
 numbered within its kind, as stock keeps one parameter table per kind:
@@ -2099,8 +2099,8 @@ What differs from the Rytm:
   trig went to (on a poly track, the last-played voice).
 - `core_slide_delta_voice(voice, code)` is Param Slide's change from the
   trig to the next trig or lock trig, in the field's steps, by stock's
-  rules; a set of the field (its knob, MIDI) ends it. The ramp itself comes
-  with the smoothed value.
+  rules; a set of the field (its knob, MIDI) ends it. The ramp itself is in
+  the value read (part 3).
 - A project load, a kit change and CREATE NEW clear every voice's locks.
 
 A mod knob shows its parameter's `short_name` as its label and its `name`
@@ -2126,9 +2126,35 @@ const struct core_dst *m = core_dst_macros(&n);           /* every macro's targe
 A kit or sound of another layout loads with its codes as None. Stock 1.56
 shows such a destination as ERR and sends it nowhere.
 
+**The value read (part 3).** The value stock would play for the parameter
+now, as it computes a stock coarse parameter of the same range: the sound's
+(the kit's) value, the playing lock in its place, smoothed, Param Slide's
+ramp, then for a `"mod"` field the routes, the macros and CONTROL IN, and
+LFO2, Env2, LFO1 and EnvF, clamped after each as stock clamps. Read it in
+the audio interrupt (`ev_render_in`, `ev_render_out`), every block:
+
+```c
+static int h[2];
+int v[2];
+if (!h[0]) {
+    h[0] = core_param_handle(STORE(my_depth));
+    h[1] = core_param_handle(STORE(my_rate));
+}
+core_param_values(track, h, 2, 0, v);           /* 8.8 steps of each field */
+core_param_values_voice(voice, h, 2, 0, v);     /* one voice of a poly track */
+int one = core_param_value(track, STORE(my_depth));
+```
+
+A track's read is the voice its last trig went to. `CORE_PARAM_ENGINE`
+gives the engine's 0..0x7fff instead. A handle is a build's own number: look
+it up at boot or on the first read, and never keep one in a project. In the
+emulator the values match stock's own parameter block for block (core-a4's
+README, "Checked so far").
+
 `examples/lock-check-a4` is the smallest mod on it: one lockable parameter
 of each kind and a fine one, on a LOCK CHECK page per kind, with what it
-reads each audio block in `lk_seen` for the emulator.
+reads each audio block in `lk_seen` for the emulator, and from 1.1 its
+value read beside a stock parameter's (`lk_ring`) and the read's cost.
 
 ### Machines (core-ar2 0.5, Analog Rytm MKII)
 

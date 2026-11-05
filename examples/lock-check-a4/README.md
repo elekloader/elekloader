@@ -35,9 +35,30 @@ Every audio block (`ev_render_out`) it writes `lk_seen`, for the emulator:
 Two bars along the bottom of the screen show track 1's lock of A (half a
 pixel a step) and of C (a pixel per 8), none while its trig has none.
 
+From 1.1 it checks core-a4's value read (part 3). Each block, after core's
+snapshot, `lk_ring` (2,048 entries of two 16-bit words, `lk_ring_n` the
+count) keeps core's read of A (K on voice 4, V on voice 5) in the engine's
+scale (`CORE_PARAM_ENGINE`) beside stock's engine copy (0x80005af0) of the
+stock parameter `lk_cfg.index` on the same voice, at its slot by stock's
+map. `lk_cfg` (magic LKCF) is poked to set a run up from the UI tick:
+
+| offset | what |
+|---|---|
+| 4 | the stock parameter's index (16 bits) |
+| 6 | 1: push the voice's sound (or the FX, CV block) as a trig does; 2: set A and the stock parameter by the knob push, as a knob turn |
+| 8, 10 | at the push, A's value and the stock parameter's word (-1: none) |
+| 12 | 1: lock A and the stock parameter with the same values on 48 of track 1's 64 steps |
+| 13 | n + 1: push macro n |
+| 14 | the voice compared (0..5) |
+
+`lk_cost` (magic LKCT) has the read's cost in DMA timer ticks (one
+parameter, four in a batch: min, max, sum, count), the block's length, the
+batch's values against the single read, the voice each track reads
+(`core_param_voice`) and track 1's read of A.
+
 ```bash
 python -m elekloader.sdk.build mods/core-a4 --stock Analog-Four_MKII_OS1.56.syx
 python -m elekloader.sdk.build examples/lock-check-a4 --stock Analog-Four_MKII_OS1.56.syx
-python -m elekloader.lint examples/lock-check-a4/out/lock-check-1.0.elemod \
+python -m elekloader.lint examples/lock-check-a4/out/lock-check-1.1.elemod \
     --stock Analog-Four_MKII_OS1.56.syx --with mods/core-a4/out/core-0.5.elemod
 ```

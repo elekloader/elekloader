@@ -67,7 +67,7 @@ int core_lock_value_voice(int voice, int code);
  * by stock's four rules (to and from the sound's value; none across a lock
  * trig); 0 when it does not slide. A set of the field (its knob, MIDI) ends
  * it, as a stock knob's turn ends a stock parameter's slide. The ramp itself
- * comes with core_param_value (core-a4's part 3). */
+ * is in core_param_value (below). */
 int core_slide_delta_voice(int voice, int code);
 
 /* Destinations (core-a4 0.5, part 2). A lockable field also declared
@@ -97,5 +97,54 @@ const struct core_dst *core_dst_macros(int *n);
 
 /* 1 when anything modulates one of the voice's mod parameters */
 int core_dst_any(int voice);
+
+/* The value read (core-a4 0.5, part 3): the value stock would play for a
+ * lockable parameter now, in 8.8 steps of the field (one step is 256),
+ * clamped to min..max, computed in stock's own stages and order (the audio
+ * interrupt's), with a clamp after each, as stock computes a coarse
+ * parameter of the same range: the field's value in the sound the voice
+ * plays (on FX and CV the kit), the playing trig's p-lock in its place;
+ * smoothed with stock's one-pole (90% of a step in 50 ms), jumping into a
+ * p-lock at its trig and back out at the next unlocked trig, as stock's
+ * parameters do; Param Slide's ramp; then, for a "mod" field, the routes
+ * (velocity, bend, wheel, breath, aftertouch), the performance macros and
+ * CONTROL IN, and LFO2, Env2, LFO1 and EnvF on their Dest A and B. A field
+ * declared "smooth": false jumps to its target. The modulations' inputs are
+ * the audio side's of the block, taken by core at ev_render_out before any
+ * mod's handler: a read in ev_render_out sees this block's, one in
+ * ev_render_in the last block's. Audio side only (ev_render_in,
+ * ev_render_out, a mod's engine hook): a read steps the smoother, lazily,
+ * to the current block.
+ *
+ * A track (0..3 synth, 4 FX, 5 CV) reads the voice its last trig went to;
+ * on a poly track the last-played voice. core_param_values_voice reads one
+ * voice (0..3 the synth voices, 4 the FX track's, 5 the CV track's). A field
+ * of another kind than the track's, or with no lock code, gives
+ * CORE_PARAM_NONE. */
+#define CORE_PARAM_NONE ((int)0x80000000)
+int core_param_value(int track, unsigned field);
+
+/* with flags: CORE_PARAM_ENGINE gives the engine's value, 0..0x7fff (the
+ * field's min..max as 0..0x7f00), the scale stock's own parameters move in */
+#define CORE_PARAM_ENGINE 4
+int core_param_value_ex(int track, unsigned field, unsigned flags);
+
+/* core_param_value rounded to whole steps (CORE_PARAM_NONE as it is) */
+int core_param_int(int track, unsigned field);
+
+/* a field's handle, looked up once (0 for a field with no lock code): its
+ * code and kind. A build's own numbering: look it up at boot or on the
+ * first read, and never keep one in a project. */
+int core_param_handle(unsigned field);
+int core_param_value_h(int track, int handle, unsigned flags);
+
+/* n parameters of one track or voice by their handles, into out[0..n-1]: the
+ * same values as n single reads, with the voice, its sound and the block's
+ * inputs found once. For a mod that reads several parameters every block. */
+void core_param_values(int track, const int *handles, int n, unsigned flags, int *out);
+void core_param_values_voice(int voice, const int *handles, int n, unsigned flags, int *out);
+
+/* the voice a track's read uses (0..5), or -1 for no such track */
+int core_param_voice(int track);
 
 #endif

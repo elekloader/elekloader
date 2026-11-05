@@ -124,6 +124,8 @@ const struct core_view_page lk_view = {CORE_TRACK_SYNTH, CORE_KEY_AMP, 49, 0};
 const struct core_view_page lk_fx_view = {CORE_TRACK_FX, CORE_KEY_LFO, 50, 0};
 const struct core_view_page lk_cv_view = {CORE_TRACK_CV, CORE_KEY_LFO, 51, 0};
 
+static void probe(void);
+
 /* the record the emulator reads */
 struct seen {
     char magic[4];
@@ -186,6 +188,147 @@ void lk_render_out(void)
             : ((const volatile uint16_t *)0x80003e38)[((const volatile int16_t *)0x42878da0)[sel]];
     }
     lk_seen.blocks++;
+    probe();
+}
+
+/* 1.1: the value read (core-a4 0.5, part 3). Each block, after core's
+ * snapshot, lk_ring keeps core's read of A on voice 0 in the engine's scale
+ * beside stock's engine copy of the stock parameter lk_cfg.index on voice 0
+ * (its slot by stock's map), for a block-by-block compare in the emulator;
+ * lk_cost the read's cost in DMA timer ticks, one parameter and four at once.
+ * lk_cfg.push, poked to 1, pushes track 1's sound to voice 0 from the UI, as
+ * a trig does, so poked sound words reach the engine (with lk_cfg.voice 1..3 track
+ * 2..4's sound to that voice, with 4
+ * or 5, the kit's FX or CV block, and the compare is of K or V there). */
+#define DTCN0 (*(const volatile uint32_t *)0xfc07000c)
+#define RING 2048
+#define SOUND_PUSH ((void (*)(void *, int, int))0x40100a04)   /* (sound, voice, track) */
+#define ROUTE_PUSH ((void (*)(void *, int))0x40100baa)        /* (sound, voice) */
+
+struct cfg {
+    char magic[4];
+    int16_t index;                      /* the stock parameter beside A */
+    int8_t push, pushed;                /* 1: push track 1's sound to voice 0, 2: the stock parameter as a knob turn (then 0) */
+    int16_t a_value, stock_value;       /* at the push, A's value and the stock parameter's word (-1: none) */
+    int8_t locks, macro;                /* 1: lock both on track 1's steps; n + 1: push macro n */
+    int8_t voice, pad;                  /* the voice compared: 0..3 with A, 4 (FX) with K, 5 (CV) with V */
+};
+struct cost {
+    char magic[4];
+    uint32_t one_min, one_max, one_sum, four_min, four_max, four_sum, n, period;
+    int32_t values[4];                  /* the batch's last values */
+    int32_t mismatches;                 /* the batch against the single reads */
+    int8_t track_voice[6];              /* core_param_voice of tracks 1..6 */
+    int16_t track_a;                    /* core_param_value_ex(track 1, A), the engine's scale */
+};
+volatile struct cfg lk_cfg = {{'L', 'K', 'C', 'F'}, 0x24, 0, 0, -1, -1, 0, 0, 0, 0};
+volatile struct cost lk_cost = {{'L', 'K', 'C', 'T'}, 0xffffffffu, 0, 0, 0xffffffffu, 0, 0, 0, 0, {0}, 0, {0}, 0};
+volatile uint32_t lk_ring_n;
+volatile int16_t lk_ring[RING][2];
+static int handles[4];
+
+static void probe(void)
+{
+    static uint32_t last;
+    uint32_t t0, t1, t2;
+    int one, four[4], i, slot, v = lk_cfg.voice;
+    int h = core_param_handle(v == 4 ? STORE(lk_k) : v == 5 ? STORE(lk_v) : STORE(lk_a));
+    if (!handles[0]) {
+        handles[0] = core_param_handle(STORE(lk_a));
+        handles[1] = core_param_handle(STORE(lk_c));
+        handles[2] = core_param_handle(STORE(lk_a));
+        handles[3] = core_param_handle(STORE(lk_c));
+    }
+    if ((unsigned)v > 5)
+        v = 0;
+    t0 = DTCN0;
+    core_param_values_voice(v, &h, 1, CORE_PARAM_ENGINE, &one);
+    t1 = DTCN0;
+    core_param_values_voice(0, handles, 4, CORE_PARAM_ENGINE, four);
+    t2 = DTCN0;
+    if (last)
+        lk_cost.period = t0 - last;
+    last = t0;
+    for (i = 0; i < 4; i++)
+        lk_cost.values[i] = four[i];
+    if (v == 0 && (four[0] != one || four[2] != one))
+        lk_cost.mismatches++;
+    t2 -= t1;
+    t1 -= t0;
+    if (t1 < lk_cost.one_min) lk_cost.one_min = t1;
+    if (t1 > lk_cost.one_max) lk_cost.one_max = t1;
+    if (t2 < lk_cost.four_min) lk_cost.four_min = t2;
+    if (t2 > lk_cost.four_max) lk_cost.four_max = t2;
+    lk_cost.one_sum += t1;
+    lk_cost.four_sum += t2;
+    lk_cost.n++;
+    for (i = 0; i < 6; i++)
+        lk_cost.track_voice[i] = core_param_voice(i);
+    lk_cost.track_a = core_param_value_ex(0, STORE(lk_a), CORE_PARAM_ENGINE);
+    slot = ((const volatile int16_t *)0x42878da0)[0x100 * v + (lk_cfg.index & 0xff)];
+    lk_ring[lk_ring_n % RING][0] = one;
+    lk_ring[lk_ring_n % RING][1] = (unsigned)slot < 0x24c ? ((const volatile uint16_t *)0x80005af0)[slot] : -1;
+    lk_ring_n++;
+}
+
+#define LOCK_PASTE ((int (*)(unsigned, int, int, int, int))0x400b51f6)   /* (wrapper, step, column, 8.8, fine) */
+#define TRACK_WRAPPER ((unsigned (*)(unsigned, int))0x400a1f3c)
+#define APP_PATTERN ((unsigned (*)(unsigned))0x400a5f4a)
+#define KNOB_PUSH ((void (*)(int, int, int, int))0x401005b8)              /* (value, track, index, Dest) */
+#define FX_PUSH ((void (*)(void *))0x40100d84)
+#define CV_PUSH ((void (*)(void *))0x40100fb8)
+#define PERF_PUSH ((void (*)(void *, int))0x401011e0)                     /* (entry, n) */
+
+/* a lock on step s of track 1 for the compare, or -1 for none */
+static int lock_of(int s)
+{
+    return s % 4 == 3 ? -1 : 4 + s * 37 % 120;
+}
+
+void lk_tick(void)
+{
+    unsigned char *k = kit(), *snd;
+    unsigned short sr;
+    unsigned w;
+    int st, v, vc;
+    if (!k)
+        return;
+    vc = (unsigned)lk_cfg.voice < 4 ? lk_cfg.voice : 0;   /* a synth voice: its own track's sound */
+    snd = k + 0x1c + 0x152 * vc;
+    if (lk_cfg.push == 1 || lk_cfg.push == 2) {
+        __asm__ volatile("move.w %%sr,%0\n\tmove.w #0x2700,%%sr" : "=d"(sr) : : "memory");
+        if (lk_cfg.a_value >= 0)
+            core_store_set(STORE(lk_a), snd, 0, lk_cfg.a_value);
+        if (lk_cfg.stock_value >= 0)
+            *(volatile uint16_t *)(snd + 0x14 + 2 * (lk_cfg.index & 0xff)) = lk_cfg.stock_value;
+        if (lk_cfg.voice == 4)
+            FX_PUSH(k + 0x564);
+        else if (lk_cfg.voice == 5)
+            CV_PUSH(k + 0x668);
+        else if (lk_cfg.push == 2 && lk_cfg.stock_value >= 0)
+            KNOB_PUSH(lk_cfg.stock_value, vc, lk_cfg.index & 0xff, 0);   /* as a knob turn */
+        else {
+            SOUND_PUSH(snd, vc, vc);
+            ROUTE_PUSH(snd, vc);
+        }
+        __asm__ volatile("move.w %0,%%sr" : : "d"(sr) : "memory");
+        lk_cfg.push = 0;
+        lk_cfg.pushed++;
+    }
+    if (lk_cfg.locks == 1 && (w = TRACK_WRAPPER(APP_PATTERN(APP()), 0)) != 0) {
+        for (st = 0; st < 64; st++)
+            if ((v = lock_of(st)) >= 0) {
+                LOCK_PASTE(w, st, lk_cfg.index & 0xff, v << 8, 0);
+                LOCK_PASTE(w, st, core_lock_code(STORE(lk_a)), v << 8, 0);
+            }
+        lk_cfg.locks = 2;
+    }
+    if (lk_cfg.macro > 0 && lk_cfg.macro <= 12) {
+        __asm__ volatile("move.w %%sr,%0\n\tmove.w #0x2700,%%sr" : "=d"(sr) : : "memory");
+        PERF_PUSH(k + 0x764 + 0x26 * (lk_cfg.macro - 1), lk_cfg.macro - 1);
+        __asm__ volatile("move.w %0,%%sr" : : "d"(sr) : "memory");
+        lk_cfg.macro = 0;
+    }
 }
 
 void lk_draw(void *bmp, void *ctrl)
