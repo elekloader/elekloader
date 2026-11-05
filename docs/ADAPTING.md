@@ -1890,10 +1890,11 @@ track and the step:
   lock, with the knob's value without one; also a paste's lock. 1 when kept.
 - `turn(id, track, step, delta)`: each turn after it; the new lock, or -1.
   A lock it answers marks the project modified.
-- `clear(id, track, step)`: the trig's lock cleared (the knob pushed).
+- `clear(id, track, step)`: the trig's lock cleared (FUNC held and the knob
+  pushed; a push alone sets a lock that isn't there).
 - `label(id)`, `name(id)`: the knob's label (4 characters) and the header's
-  name (up to 32), on any page that shows the id; 0 for stock's, which
-  shows ERR / ERROR above 468.
+  name (up to 32; the header shows the first 13), on any page that shows
+  the id; 0 for stock's, which shows ERR / ERROR above 468.
 
 Live recording calls `turn` with `CORE_LOCK_RECORDING` (0x100) in the step
 argument, after a `core_params` entry took the turn of the knob with no

@@ -25,6 +25,8 @@ struct {
     struct sc_call last_text;               /* the last text: step and track from core_held_step */
     int32_t base[IDS];                      /* the knobs' values without a trig, 8.8 */
     int16_t lock[IDS][TRACKS][STEPS];       /* 8.8 + 1, 0 none */
+    uint32_t ticks;                         /* ev_tick calls */
+    uint16_t trigs, lock_trigs;             /* track 1's steps 1..16 in the current pattern */
 } sc = {{'S', 'C', 'K', '1'}};
 
 static int ix(int32_t id) { return (unsigned)(id - FIRST) < IDS ? id - FIRST : -1; }
@@ -90,8 +92,7 @@ static int l_clear(int32_t id, int32_t t, int32_t s)
 }
 
 static const char *const labels[IDS] = {"SCA", "SCB", "SCC", "SCD"};
-static const char *const names[IDS] = {"SIDECAR CHECK A", "SIDECAR CHECK B", "SIDECAR CHECK C",
-                                       "SIDECAR CHECK D"};
+static const char *const names[IDS] = {"SC KNOB A", "SC KNOB B", "SC KNOB C", "SC KNOB D"};
 
 static const char *l_label(int32_t id) { return ix(id) >= 0 ? labels[ix(id)] : 0; }
 static const char *l_name(int32_t id) { return ix(id) >= 0 ? names[ix(id)] : 0; }
@@ -151,3 +152,28 @@ const struct core_page sc_page = {20, "SIDECAR CHECK", {560, 561, 562, 563, 0, 0
 const struct core_view_page sc_view_page = {CORE_VIEW_LFO, 20, 0};
 const struct core_page sc_fx_page = {21, "SIDECAR CHECK FX", {560, 561, 562, 563, 0, 0, 0, 0}};
 const struct core_view_page sc_fx_view_page = {CORE_VIEW_FX_LFO, 21, 0};
+
+/* ev_tick: track 1's trigs and lock trigs on steps 1..16 (bit 0 = step 1),
+ * so a check can tell whether a held step kept a trig */
+#define APP ((unsigned (*)(void))0x4017fa0a)
+#define CURRENT_PATTERN ((unsigned (*)(unsigned))0x400af0ac)
+#define TRACK_REC ((unsigned (*)(unsigned, int))0x400ab29e)
+#define HAS_TRIG ((unsigned char (*)(unsigned, int))0x400bff7e)
+#define HAS_LOCK_TRIG ((unsigned char (*)(unsigned, int))0x400c000e)
+
+void sc_tick(void *ctrl)
+{
+    unsigned rec = TRACK_REC(CURRENT_PATTERN(APP()), 0);
+    unsigned t = 0, l = 0;
+    int i;
+    (void)ctrl;
+    for (i = 0; i < 16; i++) {
+        if (HAS_TRIG(rec, i))
+            t |= 1u << i;
+        if (HAS_LOCK_TRIG(rec, i))
+            l |= 1u << i;
+    }
+    sc.trigs = t;
+    sc.lock_trigs = l;
+    sc.ticks++;
+}

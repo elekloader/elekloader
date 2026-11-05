@@ -18,13 +18,16 @@ per id, track (0..12) and step (`sc.lock`):
 | `set` | the lock set to the value |
 | `turn` | the lock moved by the delta, from the value without one; with `CORE_LOCK_RECORDING` (live recording) the lock is the knob's value |
 | `clear` | the lock gone |
-| `label`, `name` | SCA..SCD, SIDECAR CHECK A..D |
+| `label`, `name` | SCA..SCD, SC KNOB A..D |
 | text (`core_params`) | the value, and with a trig held `L` and the held step (1..64) from `core_held_step`: `L5 64` |
 
 Every call but `get` and text goes into a ring of 64 (`sc.e`, at
 `sc.n % 64`), with its kind (0 get, 1 turn, 2 set, 3 clear, 4 text, 5 the
 knob's turn without a trig), id, track, step (with bit 8 for live
-recording), argument and answer; `sc.count` counts each kind.
+recording), argument and answer; `sc.count` counts each kind. On each
+`ev_tick` it notes track 1's trigs and lock trigs on steps 1..16 in the
+current pattern (`sc.trigs`, `sc.lock_trigs`, bit 0 for step 1), so a check
+can tell what a held step left behind.
 
 ## Building
 

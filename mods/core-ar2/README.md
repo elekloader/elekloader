@@ -1149,6 +1149,25 @@ stock bytes, and that each covers whole instructions.
   and 100 << 8 from `core_param_value`; NRPN 4:5 sets it to 101 and it
   reads 101 (101 << 8).
 
+Checked in the emulator (dtboot, OS 1.74, core 0.11 with
+`examples/sidecar-check-ar2` 0.1, build SC11, 5 Nov 2026), mod-kept locks
+(0.11): the SIDECAR CHECK page's knobs show SCA..SCD and, as a knob turns
+with a trig held, the header shows its name (SC KNOB C), not ERR / ERROR.
+In grid record, T1 held and knob C turned: set (track 0, step 0, the
+unlocked value) then turn, and the knob shows the lock with the held step
+in its text (`L1 6`, from `core_held_step`); after the release the text has
+no step. T1 and T9 held and knob A turned: one call each, steps 0 and 8.
+T1 held and knob B pushed: set (no lock yet); T1 held, FUNC and knob C
+pushed: clear. On the FX track (FX, its LFO view's added page) T3 held and
+knob C turned: set then turn with track 12, step 2. Live recording (RECORD
+held + PLAY) with knob B turned: turn with the playing step and
+`CORE_LOCK_RECORDING` (0x104, 0x10a: steps 5 and 11), and a lock trig added
+on step 11, which had no trig. An empty step held in grid record keeps a
+trig after release whether a mod's knob or a stock one (AMP) is turned, or
+none: that is stock's press, and no lock trig is added. Part 1 adds no
+work in an interrupt. Core's .run grows 1,092 bytes over 0.10 (33,356),
+.bss 8; core + sidecar-check take 60,712 of the 128 KB area.
+
 ## Building
 
 Core 0.8 builds with `Analog-Rytm_MKII_OS1.74.syx` only: the SDK writes

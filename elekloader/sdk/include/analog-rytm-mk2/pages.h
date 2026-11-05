@@ -134,8 +134,8 @@ struct core_param_lock {
     /* step's lock of id cleared: 1 */
     int (*clear)(int32_t id, int32_t track, int32_t step);
     /* the knob's label (up to 4 characters) and the header's name (up to
-     * 32), for any page that shows the id, locks or not; 0 for stock's
-     * (which reads ERR / ERROR for an id above 468) */
+     * 32; the header shows the first 13), for any page that shows the id,
+     * locks or not; 0 for stock's (which reads ERR / ERROR above 468) */
     const char *(*label)(int32_t id);
     const char *(*name)(int32_t id);
 };
