@@ -52,6 +52,13 @@ class ParameterTableSitesTests(unittest.TestCase):
         # The Brain's pointer, which the SDK reads for the page stack: stock tests it there.
         self.assertEqual(int(manifest['defsym']['BRAIN'], 0), 0x44648900)
         self.assertEqual(data(0x4003b7c6, 6), bytes.fromhex('4ab944648900'))
+        # The UI loop sets Brain +0xe8 to 2 when it adds the screen saver's view (the SDK hides glyphs).
+        self.assertEqual(data(0x4002e3aa, 6), bytes.fromhex('7002254000e8'))
+        # A key zeroes the idle count (+0xe4); the same routine then clears +0xe8 before its tick and
+        # draw sites, so the first frame after waking draws the glyphs again.
+        self.assertEqual(data(0x4002c54e, 4), bytes.fromhex('42a800e4'))
+        self.assertEqual(data(0x4002e334, 10), bytes.fromhex('4aaa00e4663e42aa00e8'))
+        self.assertEqual(data(0x4002e464, 6), bytes.fromhex('4eb94011d5d4'))
 
     def test_bounds_and_references_match_the_appended_rows(self):
         source = ((ROOT / 'mods/machines-dn2/dn2.h').read_text()

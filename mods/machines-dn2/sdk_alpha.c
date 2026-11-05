@@ -345,7 +345,8 @@ void dn2_sdk_draw(void *bmp, void *ctrl)
 {
     (void)ctrl;
     int32_t i = track_machine(*dn2_active_track);
-    if (i < 0 || !declared[i]->page_count || !syn_shown())
+    /* Brain +0xe8 is 2 while the screen saver's view covers the frame; SYN stays the shown page. */
+    if (i < 0 || !declared[i]->page_count || !syn_shown() || *(const volatile int32_t *)(dn2_brain + 0xe8) == 2)
         return;
     for (int k = 0; k < 8; ++k) {
         const struct elek_ui_knob *knob = shown_knob(i, k);
