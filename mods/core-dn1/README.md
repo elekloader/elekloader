@@ -296,9 +296,11 @@ the Digitone needs it. On its own it changes nothing the unit does.
     0x41367d30, 1.44 0x41368d30).
 
   5.0.1 keeps all of 5.0 (`tests/test_sdk.py`, with a 5.0 build) and adds
-  two sites and one table. The mods it was made for are
-  [arpmenu-dn1](../arpmenu-dn1), [solo-dn1](../solo-dn1),
-  [loopback-dn1](../loopback-dn1) and [pcsound-dn1](../pcsound-dn1).
+  two sites and one table. The mods it was made for, each in its own
+  repository: [digiarpmenu](https://github.com/irpina/digiarpmenu),
+  [digisolo](https://github.com/irpina/digisolo),
+  [digiloop](https://github.com/irpina/digiloop) and
+  [digipcsound](https://github.com/irpina/digipcsound).
 - **OS 1.44:** every site has its port (`ports` in mod.json): the same
   code, moved, and RAM 0x1000 further on.
 
