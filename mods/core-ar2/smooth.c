@@ -31,7 +31,8 @@
  * Audio side only: the audio interrupt runs these, and nothing else may
  * step the state.
  *
- * 0.10: a read costs about a quarter of 0.9's (README, "The smoothed value").
+ * 0.10: a read costs about a quarter of 0.9's (README, "The smoothed value"),
+ * reading the audio side's state once a block, as stock does (snapshot()).
  * The field's code is a hash probe (lock.c), and everything else a read needs
  * of the code is made once (info, below): the range, the smoother's slot, the
  * LFO and route flags, and where the field's bits are in a sound or kit, which
@@ -190,6 +191,48 @@ extern volatile int16_t core_lfo_value[TRACKS];
 #define PERF_OFF (*(const volatile unsigned *)0x8000ed74)    /* scenes.c: stock skips the performances */
 #define PRESSURE32 ((const volatile uint32_t *)0x8000f774)   /* the 12 performances' pressures, 2 a word */
 
+/* the audio side's state a read needs, taken once a block on the block's
+ * first read, as stock reads it once a block for its own parameters: the
+ * kit the audio side plays, and whether the performances count (not
+ * switched off, and a pad's pressure above 0) */
+static uint32_t snap_block;
+static const unsigned char *snap_kit;
+static unsigned char snap_perf;
+
+/* and per track, on its first read in a block, whether any of its 8
+ * velocity and aftertouch routes points at a mod parameter (routes.c's
+ * core_routes, which the engine push writes once a block) */
+#define ROUTES 8
+extern volatile uint32_t core_routes[];
+static uint32_t route_block[TRACKS];
+static unsigned char route_any[TRACKS];
+
+static int any_route(int track)
+{
+    uint32_t now = core_block, any = 0;
+    const volatile uint32_t *e = core_routes + ROUTES * track;
+    int i;
+    if (route_block[track] == now && now)
+        return route_any[track];
+    for (i = 0; i < ROUTES; i++)
+        any |= e[i] & 0xffff;
+    route_any[track] = any != 0;
+    route_block[track] = now;
+    return any != 0;
+}
+
+static void snapshot(void)
+{
+    uint32_t now = core_block, k;
+    if (snap_block == now && now)
+        return;
+    k = AUDIO_KIT;
+    snap_kit = k < 128 ? (const unsigned char *)LIVE_KITS + LIVE_KIT_SIZE * k : 0;
+    snap_perf = !PERF_OFF && (PRESSURE32[0] | PRESSURE32[1] | PRESSURE32[2] | PRESSURE32[3] | PRESSURE32[4] |
+                              PRESSURE32[5]);
+    snap_block = now;
+}
+
 /* d x f / 0x8000 for |d| < 2^31 and f <= 0x8000, in 32-bit multiplies */
 static int32_t scale(int32_t d, unsigned f)
 {
@@ -227,10 +270,9 @@ static __attribute__((noinline)) int modulations(const unsigned char *kit, int t
                                                   const struct info *in, unsigned flags)
 {
     int v = 0, mod, lfo;
-    if (!PERF_OFF && (PRESSURE32[0] | PRESSURE32[1] | PRESSURE32[2] | PRESSURE32[3] | PRESSURE32[4] |
-                      PRESSURE32[5]))         /* a pad pressed: core_perf_offset's own gates, a word at a time */
+    if (snap_perf)                            /* a pad pressed: core_perf_offset's own gates, this block */
         v += core_perf_offset_in(kit, track, code, in->p);
-    if (in->flags & I_ROUTE && (mod = core_mod_offset_code(track, code)) != 0)
+    if (in->flags & I_ROUTE && any_route(track) && (mod = core_mod_offset_code(track, code)) != 0)
         v += flags & MOD_RAW ? mod : mod * (in->max - in->min) / 127;
     if (in->flags & I_LFO && core_lfo_code[track] == code && (lfo = core_lfo_value[track]) != 0)
         v += flags & LFO_RAW ? lfo : lfo * (in->max - in->min) / 127;
@@ -264,9 +306,9 @@ static int value(int track, int code, unsigned flags)
     /* a kit parameter on the FX track, a sound's on a drum track (core_lock_on_track) */
     if (!in->p || (unsigned)track >= 13 || !(in->flags & I_KIT) != (track != 12))
         return NONE;
-    if ((b = AUDIO_KIT) >= 128)               /* the sound, or on the FX track the kit (core_audio_sound) */
+    snapshot();
+    if (!(kit = snap_kit))                    /* the sound, or on the FX track the kit (core_audio_sound) */
         return NONE;
-    kit = (const unsigned char *)LIVE_KITS + LIVE_KIT_SIZE * b;
     s = track < 12 ? kit + 42 + 152 * track : kit;
     /* the target, in whole steps: the field's bytes, as core_store_get reads them */
     switch (in->n) {

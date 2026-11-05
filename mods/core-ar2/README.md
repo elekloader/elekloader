@@ -690,23 +690,25 @@ once (lock.c), and keeps everything else it needs of the code in a table
 made on the first read: the range, the smoother's slot, the LFO and route
 flags, and where the field's bits are in a sound or kit (read without
 `core_store_get`'s interrupt mask: the audio interrupt isn't interrupted by
-a field's writer, which masks interrupts itself). The scene's list, the
-performances and the routes are asked by the code (`core_scene_value_in`,
-`core_perf_offset_in`, `core_mod_offset_code`), and the pads' pressures
-are read a word at a time. `core_param_handle(field)` gives the code as a
-handle, and `core_param_value_h(track, handle, flags)` reads by it.
-`core_store_get` reads a field a byte at a time (a bit at a time before).
-The values are 0.9's: lock-check 1.10's ring gives the same A, B, C, A's
-and C's sound values, p-lock, scene lock, LFO and performance offsets under
-both, after NRPNs set A, B and C and with the LFO's destination on A
-(emulator, 4 Nov 2026). The three reads a block cost 1,828 DMA timer ticks
-on average under 0.9's code and 636 under 0.10's (609 and 212 a read;
-2,952 and 2,984 at most, the most being the first read's table-making);
-a call that returns at once costs 39 a read. About half of what is left is
-the seven reads of the audio side's state at 0x8000xxxx (the kit index,
-the performance switch and the pressures), which the emulator charges
-heavily; not yet measured on a unit.
-
+a field's writer, which masks interrupts itself). Like stock, which works
+its parameters out once a block, it reads the audio side's state once a
+block, on the block's first read: the kit the audio side plays, whether a
+performance's pad is pressed (the pressures a word at a time), and per
+track whether any of its 8 routes points at a mod parameter. The scene's
+list, the performances and the routes are then asked by the code
+(`core_scene_value_in`, `core_perf_offset_in`, `core_mod_offset_code`)
+only when they can add something. `core_param_handle(field)` gives the
+code as a handle, and `core_param_value_h(track, handle, flags)` reads by
+it. `core_store_get` reads a field a byte at a time (a bit at a time
+before). The values are 0.9's: lock-check 1.10's ring gives the same A, B,
+C, A's and C's sound values, p-lock, scene lock, LFO and performance
+offsets under both, after NRPNs set A, B and C and with the LFO's
+destination on A (emulator, 5 Nov 2026). The three reads a block cost
+1,828 DMA timer ticks on average under 0.9's code and 468 under 0.10's
+(609 and 156 a read; a call that returns at once costs 39). Most of what
+was saved is the routes' walk: lock-check's A and C are `"mod": true`, and
+each of their reads walked the track's 8 routes. Not yet measured on a
+unit.
 ## Velocity and aftertouch destinations (0.9)
 
 `routes.c` and `routes.s`, three sites (docs/ADAPTING.md, "Lockable
@@ -1090,9 +1092,11 @@ stock bytes, and that each covers whole instructions.
   After a knob's turn, SAVE ... BEFORE LOADING? YES calls both with
   `CORE_SAVE_SAME` for 126, which then loads with 3. The project manager's
   SAVE TO 127 calls both with `CORE_SAVE_OTHER`, slot 126, and makes 127
-  the active project. No call failed. Not checked: an empty slot's LOAD
-  (`CORE_SAVE_NEW`; the LOAD PROJECT list shows only used slots), a failed
-  save, and a unit.
+  the active project. No call failed. On a unit (T122, 5 Nov 2026, the
+  Rytm reached through the Sidecar mirror): SAVE PROJECT to 121, SAVE PROJECT
+  AS 122 and the two loads gave the emulator's kinds, slots and values. Not
+  checked: an empty slot's LOAD (`CORE_SAVE_NEW`; the LOAD PROJECT list shows
+  only used slots) and a failed save.
 
 - **Page functions (0.6)**, in an emulator (OS 1.74, 23 Oct 2026): core 0.6
   with all eleven rytm2_mods (voice-dac 1.4) shows DAC FILTER without RES
