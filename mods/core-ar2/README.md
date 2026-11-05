@@ -858,6 +858,63 @@ the label, name, text and turn routines core already owns:
 ms of DMA timer 0 (a page draws each knob's lock with get just before its
 text). The profile's `param_ids` gives the linker the ranges it checks.
 
+## Step tags (0.11)
+
+`steps.c` and `steps.s`: a mod's 16-bit handle on each step of each
+pattern, which follows the step wherever stock moves it (docs/ADAPTING.md,
+"Step tags (core-ar2 0.11, Analog Rytm MKII)";
+`elekloader/sdk/include/analog-rytm-mk2/steps.h`). A mod asks for tags
+with a record in `core_step_owners` (at most 8); its owner number is the
+record's place there. Tags are RAM only, so they need no lockfile entry.
+
+- **The live patterns' tags** are dense: for each owner, 2 bytes for each
+  step of the 129 live pattern objects (13 x 64 a pattern, 1,664 bytes),
+  the handle + 1, 214,656 bytes an owner, from 0x47938000 (below core's
+  area, which RAM canaries found untouched), zeroed at the first `ev_tick`. A tag is
+  found from the step record's address. Not on stock's heap: OS 1.74's
+  buddy heap (state 0x40285b90) comes up in the emulator with a bad entry
+  at the head of its 512 KB free list (index 1: a stock decompression at
+  0x40099374 writes into a free block's header during boot), so a 256 KB
+  block taken there leaves stock's next large request (a pattern copy or
+  clear) to split that entry over live data, and the UI hangs on a broken
+  mutex. Whether a unit's heap has it too is not known.
+- **Tags outside the live patterns** (the clipboards, the undo buffers, a
+  trig shift's temporaries) are entries in the lock ledger with the code
+  128 + owner, which rebuild never writes as rows. The ledger now keeps one
+  array for each live pattern object and one for everything else, so a
+  look at one pattern's steps reads only its own.
+- **The moves** are the lock ledger's (Mod p-locks): memcpy, memset,
+  operator new, the track and step clears and row load (which clears its
+  pattern's tags: RELOAD) carry or clear the tags of the step records they
+  copy or clear, and trig copy and paste carry them through the lock list.
+  A copy between live objects moves slices of the tables, skipping objects
+  with no tags at either end.
+- **Live object 0** is stock's copy of the pattern that plays (a pattern
+  switch copies the pattern there; RELOAD PATTERN copies it back): its tags
+  follow, but no event names it, and `core_step_tags` reports them as
+  copies (pattern -1). Object k + 1 is pattern k.
+- **`ev_steps`** goes out at `ev_tick` from a queue of 64: MOVED and
+  DROPPED with a run of steps (a change that adjoins or overlaps a queued
+  one of its kind and owner joins it, unless an event queued after that one
+  touches the same steps), RELOAD, LENGTH, and RESYNC when the queue
+  overflowed.
+
+Six sites (`jmp`, the setter first, then `core_steps_length` with the
+setter's object, which finds the pattern from the object's data, and the
+value):
+
+| setter | address | LENGTH's `n` |
+|---|---|---|
+| a track's length | 0x400c0ba2 | 0 (track: the object's +64) |
+| a track's speed | 0x400c0c8c | 1 |
+| the pattern's (master) length | 0x400ab8d0 | 2 |
+| the pattern's speed | 0x400aba02 | 3 |
+| the scale mode | 0x400aba7e | 4 |
+| the change length | 0x400ab096 | 5 |
+
+Nothing runs in an interrupt: the trig's locks site (`core_rows_trig`, the
+audio interrupt) skips the tag codes.
+
 ## Checked so far
 
 On a unit (OS 1.73). With test images built by rytm-mods-src (its `elemod`
@@ -1167,6 +1224,38 @@ trig after release whether a mod's knob or a stock one (AMP) is turned, or
 none: that is stock's press, and no lock trig is added. Part 1 adds no
 work in an interrupt. Core's .run grows 1,092 bytes over 0.10 (33,356),
 .bss 8; core + sidecar-check take 60,712 of the 128 KB area.
+
+Checked in the emulator (dtboot, OS 1.74, core 0.11 with
+`examples/sidecar-check-ar2` 0.2, build ST11, 5 Nov 2026), step tags
+(0.11), with the bad free-list entry above poked out of stock's heap
+(`0x42ac137c` = -1) after boot, as stock 1.74 alone hangs on a pattern
+clear there without it. Steps 1 and 6 of track 1 in A01 tagged 0x101 and
+0x106 (after their trigs: placing a trig clears the step): a trig copy of
+step 1 onto step 9 gives step 9 0x101 (MOVED step 8), and the trig's lock
+clear (FUNC + PLAY with it held) drops it (DROPPED); track clear drops
+both (DROPPED 0 n 6; a walk finds the two in the undo buffer) and its undo
+brings them back (MOVED 0 and 5); a track copy pasted onto SD tags its
+steps 1 and 6 (MOVED track 1); trig shift right twice moves them to steps
+3 and 8 and left once to 2 and 7, four or five events a shift; a pattern
+copy pasted into A03 gives A03 both (MOVED pattern 2), its clear drops them
+and the undo brings them back; with A01 cleared, RELOAD PATTERN brings
+them back from live object 0 (MOVED pattern 0); a track's length (16 to
+13 and back) and the master length (INF to 1024) give LENGTH (track 0 with
+`n` 0; track -1 with `n` 2); a pattern dump of A01 (request 0x64) sent
+back into A03 gives RELOAD pattern 2; switching A01 to A03 and back while
+playing keeps A01's tags, with no event. With
+[lock-check 1.11](../../examples/lock-check-ar2)'s A locked on the same
+steps, the locks take every one of those moves with the tags (the ledger
+read by region), and after the trig shift the trigs play their lock. In
+a build timing core's memcpy part with interrupts masked (not committed),
+with every step of A01..A20 tagged: a pattern switch while playing costs
+47,000 to 49,000 DMA timer 0 ticks (0.36 ms) of the UI task, against 292
+with no tags; one memcpy of an edit at most 10,458 (a track clear's undo,
+65 copies, 128,000 in all); the trig's locks site at most 24 ticks of the
+88,010 between audio blocks. Core's .run grows 8,584 bytes over thread
+1's 33,356 (41,940), .bss 21,944; core + sidecar-check 0.2 take 76,016 of
+the 128 KB area, and with lock-check 1.11 too, 102,840. Not yet on a
+unit.
 
 ## Building
 

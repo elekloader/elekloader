@@ -196,8 +196,11 @@ def test_core_ar2_sites():
     # and the NRPN and CC in sites (0.8), and the engine push's velocity and
     # aftertouch index sites and the routes' knob label (0.9), the FX set's five vtable entries,
     # the FX words' save and the FX and sound edits' write into the stored kit (0.9),
-    # and the project save to a +Drive slot (0.10, ev_project_save)
-    assert len(mod['sites']) == 109
+    # the project save to a +Drive slot (0.10, ev_project_save), and the six
+    # length and scale setters (0.11, ev_steps' LENGTH)
+    assert len(mod['sites']) == 115
+    for addr in ('0x400c0ba2', '0x400c0c8c', '0x400ab8d0', '0x400aba02', '0x400aba7e', '0x400ab096'):
+        assert [x for x in mod['sites'] if x['addr'] == addr and x['op'] == 'jmp'], addr
     x = [x for x in mod['sites'] if x.get('target') == 'st_proj_save'][0]
     assert (x['addr'], x['op'], x['stock']) == ('0x400b07a4', 'jmp', '4fefffd048d77c1c'), x
     assert img[0x400b07a4 - DEV.main_load:0x400b07ac - DEV.main_load].hex() == x['stock'], x

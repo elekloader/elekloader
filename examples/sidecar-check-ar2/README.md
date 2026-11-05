@@ -2,7 +2,8 @@
 
 A test for the [core-ar2](../../mods/core-ar2) 0.11 calls the Sidecar mods
 use, checked in RAM: each part of 0.11 adds what it needs here, and the
-emulator and a unit's readback read the record after the magic `SCK1`.
+emulator and a unit's readback read the records after the magics `SCK1`
+and `SCK2`.
 
 ## Part 1: locks the mod keeps itself (core 0.11)
 
@@ -28,6 +29,25 @@ recording), argument and answer; `sc.count` counts each kind. On each
 `ev_tick` it notes track 1's trigs and lock trigs on steps 1..16 in the
 current pattern (`sc.trigs`, `sc.lock_trigs`, bit 0 for step 1), so a check
 can tell what a held step left behind.
+
+## Part 2: step tags (core 0.11)
+
+The record after the magic `SCK2` (`sc2`, tags.c) owns tags through
+`core_step_owners` (`sc_owner`). On each `ev_tick` it shows its owner
+number, `core_step_tables`, the pattern edited (`core_step_pattern_now`)
+and the tags of track 1's steps 1..16 there (`now`) and in the pattern
+`watch` names (`seen`; -1 for none), and it logs every `ev_steps` in a
+ring of 64 (`e`, at `n % 64`; `kinds` counts each kind). A command word
+`cmd` (and `arg`), written from outside, acts on the next `ev_tick`, then
+goes back to 0 (`done` keeps it):
+
+| `cmd` | what |
+|---|---|
+| 1 | tag steps 1 and 6 of track 1 in the pattern edited: 0x101, 0x106 |
+| 2 | measure stock's heap: the largest block operator new gives, and the total in up to 64 blocks, all given back |
+| 3 | tag every step of patterns 0..`arg` - 1: `(pattern << 10 \| track << 6 \| step) & 0xffff` |
+| 4 | clear every tag of the 128 patterns |
+| 5 | walk the tags (`core_step_tags`): those in patterns, those in copies, the handles' sum |
 
 ## Building
 

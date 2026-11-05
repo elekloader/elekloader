@@ -1,15 +1,16 @@
 {
  "id": "sidecar-check",
- "version": "0.1",
+ "version": "0.2",
  "title": "Sidecar check",
  "category": "Examples",
  "license": "GPL-2.0-or-later",
  "author": "Iced-Cream",
- "description": "A test for the core-ar2 0.11 calls the Sidecar mods use, checked in RAM. Part 1 (core 0.11): a SIDECAR CHECK page behind the LFO key and one behind the FX LFO key, with knob ids 560..563 whose p-locks the mod keeps itself (core_param_locks): per id, track and step, in RAM, with every call logged after the magic SCK1. The knobs show their labels (SCA..SCD) and names (SC KNOB A..D), with a trig held the value text shows the held step (core_held_step), and on each tick it notes track 1's trigs and lock trigs on steps 1..16.",
+ "description": "A test for the core-ar2 0.11 calls the Sidecar mods use, checked in RAM. Part 1 (core 0.11): a SIDECAR CHECK page behind the LFO key and one behind the FX LFO key, with knob ids 560..563 whose p-locks the mod keeps itself (core_param_locks): per id, track and step, in RAM, with every call logged after the magic SCK1. The knobs show their labels (SCA..SCD) and names (SC KNOB A..D), with a trig held the value text shows the held step (core_held_step), and on each tick it notes track 1's trigs and lock trigs on steps 1..16. Part 2 (core 0.11): a step tag owner (core_step_owners) whose tags it sets, reads and walks on commands written into its record after the magic SCK2, logging every ev_steps event; and a measure of the heap's free space.",
  "device": "analog-rytm-mk2",
  "os": "1.74",
  "sources": [
-  "check.c"
+  "check.c",
+  "tags.c"
  ],
  "contribute": [
   {
@@ -89,6 +90,19 @@
      0
     ]
    ]
+  },
+  {
+   "to": "core_step_owners",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:sc_owner",
+     0
+    ]
+   ]
   }
  ],
  "resources": {
@@ -102,6 +116,16 @@
    "event": "ev_tick",
    "fn": "sc_tick",
    "order": 60
+  },
+  {
+   "event": "ev_tick",
+   "fn": "sc_tags_tick",
+   "order": 61
+  },
+  {
+   "event": "ev_steps",
+   "fn": "sc_steps",
+   "order": 50
   }
  ]
 }

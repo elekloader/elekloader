@@ -113,9 +113,9 @@
 
 struct ent {
     unsigned addr;              /* the step record */
-    unsigned char code;         /* 42..127, DEAD once gone */
+    unsigned char code;         /* 42..127 a mod lock, 128.. a step tag (0.11), DEAD once gone */
     unsigned char pad;
-    unsigned short value;       /* 0..16383 */
+    unsigned short value;       /* 0..16383; a tag's handle */
 };
 
 struct ledger {
@@ -135,8 +135,28 @@ int core_lock_shift(const struct core_lock_param *p);
 unsigned core_store_get(unsigned field, void *item, int index);
 extern const unsigned core_store_ids[];         /* this build's layout ID first */
 
-static struct ledger *volatile led;
-static volatile unsigned gen;   /* every change, to the array or in place */
+/* steps.c (0.11): the live patterns' dense tag tables */
+#define TAG_CODE 128                            /* a step tag's code: TAG_CODE + its owner */
+int core_steps_any(unsigned a, unsigned b);
+void core_steps_copy(unsigned dst, unsigned src, unsigned n);
+int core_steps_src(unsigned dst, unsigned src, unsigned n, struct ent *out);
+void core_steps_clear(unsigned a, unsigned b, int quiet);
+void core_steps_reload(unsigned store);
+int core_steps_list(unsigned addr, int (*push)(void *, int, int), void *list);
+int core_steps_paste(unsigned addr, int owner, int handle);
+int core_steps_live(unsigned addr);
+
+/* (0.11) the ledger, split per region: one array for each of the 129 live
+ * pattern objects' lock stores and one for everything else (the heap: the
+ * clipboards, the undo buffers, a trig shift's temporaries), each sorted by
+ * address. A change rebuilds only its region's array, so its cost follows
+ * that region's entries, not the whole ledger's (0.8 had one array). */
+#define REGIONS 130
+#define HEAP_REGION 129
+
+static struct ledger *volatile led[REGIONS];
+static volatile unsigned gen[REGIONS];          /* every change, to the array or in place */
+static volatile unsigned short dead[REGIONS];   /* entries marked DEAD since the last rebuild */
 
 /* the playing trig's mod locks, per track, each value + 1 (0: none, so a
  * track no trig has played yet has none); now_set: the codes the track's
@@ -165,103 +185,6 @@ static void copy_bytes(void *d, const void *s, unsigned n)
         *a++ = *b++;
 }
 
-/* the first entry at or above addr */
-static int lower(const struct ledger *l, unsigned addr)
-{
-    int lo = 0, hi = l->n, m;
-    while (lo < hi) {
-        m = (lo + hi) / 2;
-        if (l->e[m].addr < addr)
-            lo = m + 1;
-        else
-            hi = m;
-    }
-    return lo;
-}
-
-static int any_in(const struct ledger *l, unsigned a, unsigned b)
-{
-    int i;
-    for (i = lower(l, a); i < l->n && l->e[i].addr < b; i++)
-        if (l->e[i].code != DEAD)
-            return 1;
-    return 0;
-}
-
-/* the locks in [a, b) go, in place (no memory taken: also from operator new
- * and from interrupts) */
-static void drop(unsigned a, unsigned b)
-{
-    struct ledger *l = led;
-    int i;
-    if (!l)
-        return;
-    for (i = lower(l, a); i < l->n && l->e[i].addr < b; i++)
-        if (l->e[i].code != DEAD) {
-            l->e[i].code = DEAD;
-            gen++;
-        }
-}
-
-/* the ledger with [a, b) holding only add[0..k) (sorted, each in [a, b));
- * 0 when it could not be made */
-static int replace(unsigned a, unsigned b, const struct ent *add, int k)
-{
-    struct ledger *l, *n;
-    unsigned g;
-    unsigned short sr;
-    int i, j, live;
-    for (;;) {
-        l = led;
-        g = gen;
-        live = k;
-        for (i = 0; l && i < l->n; i++)
-            if (l->e[i].code != DEAD && (l->e[i].addr < a || l->e[i].addr >= b))
-                live++;
-        if (live > MOST)
-            return 0;
-        n = live ? (struct ledger *)NEW(4 + sizeof(struct ent) * live) : 0;
-        if (live && !n)
-            return 0;
-        j = 0;
-        for (i = 0; l && i < l->n && l->e[i].addr < a; i++)
-            if (l->e[i].code != DEAD)
-                n->e[j++] = l->e[i];
-        copy_bytes(&n->e[j], add, sizeof(struct ent) * k);
-        j += k;
-        for (; l && i < l->n; i++)
-            if (l->e[i].code != DEAD && l->e[i].addr >= b)
-                n->e[j++] = l->e[i];
-        if (n)
-            n->n = j;
-        sr = irq_mask();
-        if (led == l && gen == g) {
-            led = n;
-            gen++;
-            irq_restore(sr);
-            if (l)
-                DELETE(l);
-            return 1;
-        }
-        irq_restore(sr);
-        if (n)
-            DELETE(n);
-    }
-}
-
-/* a step record's mod locks, into out[] by code; their count */
-static int step_locks(unsigned addr, struct ent *out)
-{
-    struct ledger *l = led;
-    int i, k = 0;
-    for (i = l ? lower(l, addr) : 0; l && i < l->n && l->e[i].addr == addr && k < CODES; i++)
-        if (l->e[i].code != DEAD)
-            out[k++] = l->e[i];
-    return k;
-}
-
-/* ---- live patterns and their stored rows ---- */
-
 /* the live pattern whose lock store holds addr, or -1 */
 static int live_of(unsigned addr)
 {
@@ -276,6 +199,218 @@ static unsigned store_of(int k)
 {
     return LIVE_PATTERNS + PATTERN_SIZE * k + LIVE_LOCKS;
 }
+
+static int region_of(unsigned addr)
+{
+    int k = live_of(addr);
+    return k < 0 ? HEAP_REGION : k;
+}
+
+/* the live regions [*lo, *hi] whose lock stores [a, b) overlaps; 0 for none */
+static int live_span(unsigned a, unsigned b, int *lo, int *hi)
+{
+    unsigned base = LIVE_PATTERNS + LIVE_LOCKS;
+    if (b <= base || a >= store_of(128) + STORE_LOCKS || b <= a)
+        return 0;
+    *lo = a <= base ? 0 : (a - base) / PATTERN_SIZE;
+    if (store_of(*lo) + STORE_LOCKS <= a)
+        ++*lo;
+    *hi = (b - 1 - base) / PATTERN_SIZE;
+    if (*hi > 128)
+        *hi = 128;
+    return *lo <= *hi;
+}
+
+/* the first entry at or above addr */
+static int lower(const struct ledger *l, unsigned addr)
+{
+    int lo = 0, hi = l->n, m;
+    while (lo < hi) {
+        m = (lo + hi) / 2;
+        if (l->e[m].addr < addr)
+            lo = m + 1;
+        else
+            hi = m;
+    }
+    return lo;
+}
+
+static int any_in_r(const struct ledger *l, unsigned a, unsigned b)
+{
+    int i;
+    for (i = l ? lower(l, a) : 0; l && i < l->n && l->e[i].addr < b; i++)
+        if (l->e[i].code != DEAD)
+            return 1;
+    return 0;
+}
+
+static int any_in(unsigned a, unsigned b)
+{
+    int k, lo, hi;
+    if (any_in_r(led[HEAP_REGION], a, b))
+        return 1;
+    if (live_span(a, b, &lo, &hi))
+        for (k = lo; k <= hi; k++)
+            if (any_in_r(led[k], a, b))
+                return 1;
+    return 0;
+}
+
+/* the locks in [a, b) go, in place (no memory taken: also from operator new
+ * and from interrupts) */
+static void drop_r(int r, unsigned a, unsigned b)
+{
+    struct ledger *l = led[r];
+    int i;
+    for (i = l ? lower(l, a) : 0; l && i < l->n && l->e[i].addr < b; i++)
+        if (l->e[i].code != DEAD) {
+            l->e[i].code = DEAD;
+            dead[r]++;
+            gen[r]++;
+        }
+}
+
+static void drop(unsigned a, unsigned b)
+{
+    int k, lo, hi;
+    drop_r(HEAP_REGION, a, b);
+    if (live_span(a, b, &lo, &hi))
+        for (k = lo; k <= hi; k++)
+            drop_r(k, a, b);
+}
+
+/* the ledger's live entries, all regions (the cap, MOST) */
+static int live_total(void)
+{
+    int r, t = 0;
+    for (r = 0; r < REGIONS; r++)
+        if (led[r])
+            t += led[r]->n - dead[r];
+    return t;
+}
+
+/* region r's array with [a, b) holding only those of add[0..k) in region r
+ * (add sorted by address, each in [a, b)); 0 when it could not be made */
+static int replace_r(int r, unsigned a, unsigned b, const struct ent *add, int k)
+{
+    struct ledger *l, *n;
+    unsigned g;
+    unsigned short sr;
+    int i, j, live, mine, others;
+    for (mine = i = 0; i < k; i++)
+        mine += region_of(add[i].addr) == r;
+    for (;;) {
+        l = led[r];
+        g = gen[r];
+        live = mine;
+        for (i = 0; l && i < l->n; i++)
+            if (l->e[i].code != DEAD && (l->e[i].addr < a || l->e[i].addr >= b))
+                live++;
+        others = live_total() - (l ? l->n - dead[r] : 0);
+        if (live + others > MOST)
+            return 0;
+        if (!live && !l)
+            return 1;
+        n = live ? (struct ledger *)NEW(4 + sizeof(struct ent) * live) : 0;
+        if (live && !n)
+            return 0;
+        j = 0;
+        for (i = 0; l && i < l->n && l->e[i].addr < a; i++)
+            if (l->e[i].code != DEAD)
+                n->e[j++] = l->e[i];
+        for (live = 0; live < k; live++)
+            if (region_of(add[live].addr) == r)
+                n->e[j++] = add[live];
+        for (; l && i < l->n; i++)
+            if (l->e[i].code != DEAD && l->e[i].addr >= b)
+                n->e[j++] = l->e[i];
+        if (n)
+            n->n = j;
+        sr = irq_mask();
+        if (led[r] == l && gen[r] == g) {
+            led[r] = n;
+            dead[r] = 0;
+            gen[r]++;
+            irq_restore(sr);
+            if (l)
+                DELETE(l);
+            return 1;
+        }
+        irq_restore(sr);
+        if (n)
+            DELETE(n);
+    }
+}
+
+/* the ledger with [a, b) holding only add[0..k) (sorted, each in [a, b)),
+ * region by region; 0 when a region's could not be made */
+static int replace(unsigned a, unsigned b, const struct ent *add, int k)
+{
+    int r, lo, hi, ok = 1;
+    if (live_span(a, b, &lo, &hi))
+        for (r = lo; r <= hi; r++)
+            ok &= replace_r(r, a, b, add, k);
+    return replace_r(HEAP_REGION, a, b, add, k) & ok;
+}
+
+/* a step record's entries, into out[] by code (max of them): its mod locks,
+ * and with tags its step tags too; their count */
+static int step_ents(unsigned addr, struct ent *out, int max, int tags)
+{
+    struct ledger *l = led[region_of(addr)];
+    int i, k = 0;
+    for (i = l ? lower(l, addr) : 0; l && i < l->n && l->e[i].addr == addr && k < max; i++)
+        if (l->e[i].code != DEAD && (tags || l->e[i].code <= LAST_CODE))
+            out[k++] = l->e[i];
+    return k;
+}
+
+static int step_locks(unsigned addr, struct ent *out)
+{
+    return step_ents(addr, out, CODES, 0);
+}
+
+/* (0.11) steps.c: a step record's sparse tag of owner (outside the live
+ * patterns), or -1 */
+int core_rows_tag_at(unsigned addr, int owner)
+{
+    struct ledger *l = led[region_of(addr)];
+    int i;
+    for (i = l ? lower(l, addr) : 0; l && i < l->n && l->e[i].addr == addr; i++)
+        if (l->e[i].code == TAG_CODE + owner)
+            return l->e[i].value;
+    return -1;
+}
+
+/* (0.11) steps.c: every sparse tag of owner, fn(handle) */
+void core_rows_tags_walk(int owner, void (*fn)(int, int, int, int))
+{
+    struct ledger *l;
+    int r, i;
+    for (r = 0; r < REGIONS; r++)
+        for (l = led[r], i = 0; l && i < l->n; i++)
+            if (l->e[i].code == TAG_CODE + owner)
+                fn(-1, -1, -1, l->e[i].value);
+}
+
+/* sort by address (a merge sort; tmp holds n) */
+static void sort_ents(struct ent *e, struct ent *tmp, int n)
+{
+    int w, i, a, b, ea, eb, j;
+    for (w = 1; w < n; w *= 2) {
+        for (i = 0; i < n; i += 2 * w) {
+            a = i;
+            ea = i + w < n ? i + w : n;
+            b = ea;
+            eb = i + 2 * w < n ? i + 2 * w : n;
+            for (j = i; a < ea || b < eb; j++)
+                tmp[j] = b >= eb || (a < ea && e[a].addr <= e[b].addr) ? e[a++] : e[b++];
+        }
+        copy_bytes(e, tmp, sizeof(struct ent) * n);
+    }
+}
+
+/* ---- live patterns and their stored rows ---- */
 
 static unsigned char *stored_rows(int k)
 {
@@ -319,7 +454,7 @@ static int used(const unsigned char *rows)
  * or neither) */
 static void append(unsigned char *rows, unsigned store)
 {
-    struct ledger *l = led;
+    struct ledger *l = led[region_of(store)];
     unsigned char at[CODES][13], lo[CODES][13], *r;
     unsigned o;
     int u, code, t, s, i, n, w, k = 0, first, last;
@@ -331,7 +466,7 @@ static void append(unsigned char *rows, unsigned store)
         for (t = 0; t < 13; t++)
             at[code][t] = lo[code][t] = 0xff;
     for (i = first; i < last; i++)
-        if (l->e[i].code != DEAD && (o = l->e[i].addr - store) % TRACK_LOCKS < STEPS_LOCKS)
+        if (l->e[i].code <= LAST_CODE && (o = l->e[i].addr - store) % TRACK_LOCKS < STEPS_LOCKS)
             at[l->e[i].code - FIRST_CODE][o / TRACK_LOCKS] = 0xfe;
     u = used(rows);
     for (code = 0; code < CODES; code++) {
@@ -362,7 +497,7 @@ static void append(unsigned char *rows, unsigned store)
     }
 fill:
     for (i = first; i < last; i++)
-        if (l->e[i].code != DEAD && (o = l->e[i].addr - store) % TRACK_LOCKS < STEPS_LOCKS) {
+        if (l->e[i].code <= LAST_CODE && (o = l->e[i].addr - store) % TRACK_LOCKS < STEPS_LOCKS) {
             code = l->e[i].code - FIRST_CODE;
             t = o / TRACK_LOCKS;
             s = o % TRACK_LOCKS / STEP_LOCKS;
@@ -407,27 +542,65 @@ static void changed(unsigned a, unsigned b)
 
 /* ---- the sites ---- */
 
+/* the entries of [src, src + n) whose step record was copied whole, moved
+ * to dst, into out (sorted by address) when out is given; their count. From
+ * 0.11 a step tag that lands in a live pattern's step goes into its dense
+ * table instead (core_steps_copy), and a dense tag copied out of one comes
+ * in as a sparse entry (core_steps_src). */
+static int moved(unsigned dst, unsigned src, unsigned n, struct ent *out)
+{
+    struct ledger *l;
+    int r, lo, hi, i, k = 0, runs = 0, any;
+    unsigned to;
+    for (r = live_span(src, src + n, &lo, &hi) ? lo : HEAP_REGION; r <= HEAP_REGION;
+         r = r == hi ? HEAP_REGION : r + 1) {
+        l = led[r];
+        any = 0;
+        for (i = l ? lower(l, src) : 0; l && i < l->n && l->e[i].addr < src + n; i++)
+            if (l->e[i].code != DEAD && l->e[i].addr + STEP_LOCKS <= src + n) {
+                to = l->e[i].addr + (dst - src);
+                if (l->e[i].code >= TAG_CODE && core_steps_live(to) >= 0)
+                    continue;
+                if (out) {
+                    out[k] = l->e[i];
+                    out[k].addr = to;
+                }
+                k++;
+                any = 1;
+            }
+        runs += any;
+        if (r == HEAP_REGION)
+            break;
+    }
+    return k | (runs > 1 ? 0x40000000 : 0);
+}
+
 /* memcpy (dst, src, n), after the copy (rows.s): n >= 88 */
 void core_rows_memcpy(unsigned dst, unsigned src, unsigned n)
 {
-    struct ledger *l = led;
     struct ent *add;
-    int i, k, first;
-    if (!l || !l->n || dst == src || (!any_in(l, dst, dst + n) && !any_in(l, src, src + n)))
+    int k, d, runs;
+    int dense = core_steps_any(dst, dst + n) || core_steps_any(src, src + n);
+    int from = any_in(src, src + n), to = any_in(dst, dst + n);
+    if (dst == src || (!dense && !from && !to))
         return;
-    first = lower(l, src);
-    for (k = 0, i = first; i < l->n && l->e[i].addr < src + n; i++)
-        if (l->e[i].code != DEAD && l->e[i].addr + STEP_LOCKS <= src + n)
-            k++;
-    if (!k) {
+    if (dense || from)                  /* (0.11) a sparse tag may land in a live step */
+        core_steps_copy(dst, src, n);
+    d = dense ? core_steps_src(dst, src, n, 0) : 0;
+    if (!from && !to && !d)
+        return;                         /* (0.11) only dense tags, moved: the ledger keeps */
+    k = moved(dst, src, n, 0);
+    runs = k >> 30;
+    k &= 0x3fffffff;
+    if (!k && !d) {
         drop(dst, dst + n);
-    } else if ((add = (struct ent *)NEW(sizeof(struct ent) * k)) != 0) {
-        for (k = 0, i = first; i < l->n && l->e[i].addr < src + n; i++)
-            if (l->e[i].code != DEAD && l->e[i].addr + STEP_LOCKS <= src + n) {
-                add[k] = l->e[i];
-                add[k++].addr += dst - src;
-            }
-        if (!replace(dst, dst + n, add, k))
+    } else if ((add = (struct ent *)NEW(sizeof(struct ent) * (k + d) * 2)) != 0) {
+        moved(dst, src, n, add);
+        if (d)
+            core_steps_src(dst, src, n, add + k);
+        if (runs || (d && k))
+            sort_ents(add, add + k + d, k + d);
+        if (!replace(dst, dst + n, add, k + d))
             drop(dst, dst + n);
         DELETE(add);
     } else {
@@ -437,12 +610,14 @@ void core_rows_memcpy(unsigned dst, unsigned src, unsigned n)
 }
 
 /* memset (dst, c, n) and operator new's block (rows.s), track clear
- * (data, locks: rows.s): the locks there go */
+ * (data, locks: rows.s): the locks there go; (0.11) and the step tags */
 void core_rows_drop(unsigned a, unsigned n)
 {
-    struct ledger *l = led;
-    if (!l || !l->n || !any_in(l, a, a + n))
+    int dense = core_steps_any(a, a + n);
+    if (!dense && !any_in(a, a + n))
         return;
+    if (dense)
+        core_steps_clear(a, a + n, 0);
     drop(a, a + n);
     changed(a, a + n);
 }
@@ -473,6 +648,7 @@ void core_rows_load(unsigned store, const unsigned char *rows)
     int i, j, k, t, s, x;
     if (!store || !rows)
         return;
+    core_steps_reload(store);           /* (0.11) its step tags go: RELOAD */
     for (i = k = 0; i < ROWS; i++)
         if (mod_code(rows[ROW * i]) && rows[ROW * i + 1] < 13)
             ord[k++] = i;
@@ -590,6 +766,7 @@ void core_rows_forget(void)
     for (k = 0; k < 129; k++) {
         unappend(stored_rows(k));
         drop(store_of(k), store_of(k) + STORE_LOCKS);
+        core_steps_clear(store_of(k), store_of(k) + STORE_LOCKS, 1);
     }
 }
 
@@ -611,18 +788,34 @@ static unsigned step_addr(unsigned rec, int step)
     return locks ? locks + TRACK_LOCKS * track + STEP_LOCKS * step : 0;
 }
 
+static void *tag_list;
+
+/* core_steps_list's push: e is the caller's entry, the list the one set below */
+static int list_tag(void *entry, int code, int handle)
+{
+    struct listed *e = entry;
+    e->value = handle << 8;
+    e->code = code;
+    e->fine = 0;
+    LIST_PUSH(tag_list, e);
+    return 0;
+}
+
 /* 0x400c4d62, 0x400c3eb0 (rows.s): the step's mod locks join its list */
 void core_rows_list(unsigned rec, int step, void *list, struct listed *e)
 {
     struct ent at[CODES];
     unsigned a = step_addr(rec, step);
     int i, k = a ? step_locks(a, at) : 0;
+    tag_list = list;
     for (i = 0; i < k; i++) {
         e->value = at[i].value << 8;
         e->code = at[i].code;
         e->fine = 0;
         LIST_PUSH(list, e);
     }
+    if (a)                              /* (0.11) and its step tags, code TAG_CODE + owner */
+        core_steps_list(a, list_tag, e);
 }
 
 static int put(unsigned addr, int code, int v);
@@ -635,9 +828,11 @@ int core_rows_paste(unsigned rec, int step, int code, int value)
 {
     const struct core_lock_param *p;
     unsigned a;
-    if (code < FIRST_CODE || code > LAST_CODE || TRACK_LENGTH(rec) < step || !(a = step_addr(rec, step)))
+    if (code < FIRST_CODE || code >= DEAD || TRACK_LENGTH(rec) < step || !(a = step_addr(rec, step)))
         return 0;
     value >>= 8;
+    if (code >= TAG_CODE)               /* (0.11) a listed step tag */
+        return core_steps_paste(a, code - TAG_CODE, value);
     p = core_lock_by_code(code);
     return put(a, code, p ? clamp(p, value) : value < 0 ? 0 : value > 127 ? 127 : value);
 }
@@ -679,7 +874,7 @@ void core_lock_record(int track, int code, int value)
  * locks, ...) ---- */
 void core_rows_trig(int track, unsigned step)
 {
-    struct ledger *l = led;
+    struct ledger *l = led[region_of(step)];
     int i, c, n;
     if ((unsigned)track >= 13)
         return;
@@ -687,7 +882,7 @@ void core_rows_trig(int track, unsigned step)
         core_lock_now[track][now_set[track][i]] = 0;
     n = 0;
     for (i = l ? lower(l, step) : 0; l && i < l->n && l->e[i].addr == step; i++)
-        if (l->e[i].code != DEAD && n < CODES) {
+        if (l->e[i].code <= LAST_CODE && n < CODES) {
             c = l->e[i].code - FIRST_CODE;
             core_lock_now[track][c] = l->e[i].value + 1;
             now_set[track][n++] = c;
@@ -751,10 +946,10 @@ static int get(unsigned addr, int code)
 /* does the lock store hold a lock of code on addr's track? */
 static int has_row(unsigned addr, int code)
 {
-    struct ledger *l = led;
+    struct ledger *l;
     unsigned track;
     int k = live_of(addr), i;
-    if (!l || k < 0)
+    if (k < 0 || !(l = led[k]))
         return 0;
     track = addr - (addr - store_of(k)) % TRACK_LOCKS;
     for (i = lower(l, track); i < l->n && l->e[i].addr < track + STEPS_LOCKS; i++)
@@ -766,9 +961,9 @@ static int has_row(unsigned addr, int code)
 /* v: 0..16383, or -1 to clear; 0 when there was no room */
 static int put(unsigned addr, int code, int v)
 {
-    struct ent at[CODES + 1];
-    int k = step_locks(addr, at), i, j, live = live_of(addr);
-    for (i = j = 0; i < k; i++)
+    struct ent at[CODES + 1 + 8];
+    int k = step_ents(addr, at, CODES + 8, 1), i, j, live = live_of(addr);
+    for (i = j = 0; i < k; i++)         /* (0.11) a sparse tag there stays */
         if (at[i].code != code)
             at[j++] = at[i];
     if (v >= 0) {
@@ -1004,4 +1199,12 @@ int core_lock_turn_vt(void *set, int id, int delta, int step)
     v = clamp(p, v + (delta > 0 ? (delta + 255) >> 8 : delta < 0 ? -((255 - delta) >> 8) : 0));
     put(a, code, v);
     return v << 8;
+}
+
+/* (0.11) steps.c: the live pattern object the UI edits (its track 1's step
+ * 1 found as a lock call finds it), or -1 */
+int core_rows_current(void)
+{
+    unsigned rec = TRACK_REC(CURRENT_PATTERN(APP()), 0), a = rec ? step_addr(rec, 0) : 0;
+    return a ? live_of(a) : -1;
 }

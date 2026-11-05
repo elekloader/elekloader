@@ -1909,6 +1909,60 @@ The linker refuses a `core_params` or `core_param_locks` entry whose ids
 take 469..554, a `core_param_locks` entry below 555, and entries of two
 mods that share an id from 555.
 
+### Step tags (core-ar2 0.11, Analog Rytm MKII)
+
+A mod that keeps a record of its own for some steps (for the Sidecar mods,
+on the computer they talk to) gives each such step a tag: a 16-bit handle
+(0..65534) to its record. Core moves the tag wherever stock moves the step
+(trig copy and paste, a page, track or pattern copy, paste, clear and undo,
+a trig shift, a pattern switch, RELOAD PATTERN) and drops it where stock
+clears the step. With `analog-rytm-mk2/steps.h`:
+
+```json
+{"to": "core_step_owners", "order": 50, "data": "00000000",
+ "relocs": [[0, "abs32", "sym:my_owner", 0]]},
+{"event": "ev_steps", "fn": "my_steps", "order": 50}
+```
+
+```c
+#include "analog-rytm-mk2/steps.h"
+const struct core_step_owner my_owner = {"MINE"};
+
+int me = core_step_owner(&my_owner);              /* 0..7 */
+core_step_tag_set(pattern, track, step, me, 17);  /* -1 clears */
+int h = core_step_tag(pattern, track, step, me);  /* 17, or -1 */
+```
+
+Patterns are 0..127 (A01..H16), tracks 0..12 (12 the FX track), steps
+0..63; the calls run in the UI task, and the tables exist from the first
+`ev_tick` (`core_step_tables`). `core_step_pattern_now` is the pattern the
+UI edits.
+
+Tags are RAM only: never in a saved project, the pattern's rows or a SysEx
+dump. The mod keeps its own copy of each pattern's tags and puts them back
+with `core_step_tag_set` at `ev_project` and on RELOAD. To keep its copy
+current it follows `ev_steps(kind, pattern, track, step, n, owner)`, which
+core sends at `ev_tick`, after stock's change:
+
+- `CORE_STEPS_MOVED`: tags came into a run of `n` steps from (track, step),
+  counted across tracks (track * 64 + step). Read them with
+  `core_step_tag`. A handle may now be on two steps (a paste), so copy the
+  record before writing either.
+- `CORE_STEPS_DROPPED`: tags left those steps.
+- `CORE_STEPS_RELOAD`: patterns `pattern` .. `pattern + n - 1` were loaded
+  from storage (project load, a SysEx pattern) and have no tags.
+- `CORE_STEPS_LENGTH`: a length or scale setting changed (`n` says which,
+  `step` is the value, `track` -1 for the pattern's own).
+- `CORE_STEPS_RESYNC`: more changes than the queue holds; read the
+  pattern's tags again.
+
+`core_step_tags(owner, fn)` calls `fn` for every tag the owner has: in the
+patterns, then in the copies outside them (the clipboards, the undo
+buffers) with pattern -1. A handle the walk finds nowhere is free to
+reuse. Each owner costs 214,656 bytes of RAM outside core's area; a
+pattern switch with every step of both patterns tagged costs about 0.4 ms
+of the UI task, and nothing runs in the audio interrupt.
+
 ### Mod scene and performance locks (core-ar2 0.8, Analog Rytm MKII)
 
 A lockable parameter is locked to a scene, or given a performance depth,
