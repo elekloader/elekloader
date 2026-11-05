@@ -92,10 +92,7 @@ void mp_src_init(void)
     int count = 0;
     for (int i = 0; core_machines[i]; ++i) {
         const struct cm_machine *m = core_machines[i];
-        const struct cm_ui32 *u = 0;
-#ifdef SDK_ALPHA_DT1
-        u = sdk_alpha_ui(m->id);        /* an SDK machine's descriptor names no page */
-#endif
+        const struct cm_ui32 *u = sdk_alpha_ui(m->id);  /* an SDK machine's descriptor names no page */
         if (!u) {
             if (m->tag != CM_UI_TAG || !m->ui)
                 continue;

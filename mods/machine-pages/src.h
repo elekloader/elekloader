@@ -11,13 +11,16 @@ uint32_t mp_ui32(int32_t machine);
 void mp_src_init(void);
 int mp_stock_sound_parameter(uint32_t id);
 
-#ifdef SDK_ALPHA_DT1
+/* The SDK alpha's machines (sdk_alpha.c, OS 1.54 only). Without it no machine is an SDK machine:
+ * sdk_alpha_find and the lookups below are 0, and the compiler drops every SDK branch. */
 #include "../sdk-alpha/machine.h"
-/* sdk_alpha.c */
 const struct cm_ui32 *sdk_alpha_ui(int32_t id);
 int32_t sdk_alpha_snapshot(const struct sdk_alpha_entry *, int32_t page, void *view);
 int32_t sdk_alpha_value_text(int32_t machine, int32_t knob, int32_t raw, char *buf, int popup);
 void sdk_alpha_render(int32_t *blocks);
-/* pages.s */
-void sdk_alpha_redraw(void *view);
+void sdk_alpha_redraw(void *view);     /* sdk_alpha.s */
+#ifndef SDK_ALPHA_DT1
+#define sdk_alpha_find(id) ((const struct sdk_alpha_entry *)0)
+#define sdk_alpha_ui(id) ((const struct cm_ui32 *)0)
+#define sdk_alpha_value_text(machine, knob, raw, buf, popup) 0
 #endif

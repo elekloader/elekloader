@@ -176,7 +176,7 @@
  ],
  "ports": {
   "1.54": {
-   "sources": ["pages.s", "pages.c", "src.s", "src.c", "params.s", "params.c", "menu.s", "menu.c", "sdk_alpha.c", "../sdk-alpha/machine.c"],
+   "sources": ["pages.s", "pages.c", "src.s", "src.c", "params.s", "params.c", "menu.s", "menu.c", "sdk_alpha.c", "sdk_alpha.s", "../sdk-alpha/machine.c"],
    "cflags": ["-DSDK_ALPHA_DT1"],
    "collections": {"ev_render_voices": 4, "sdk_alpha_machines": 4},
    "defsym": {
