@@ -15,7 +15,7 @@ from sdk_alpha_harness import sdk_machine, sdk_tests
 
 # SINE plays a sine at the note, FINE cents (-100..100, from 0) away. sound_test_pitch is the last
 # pitch it was given, so a test can say which note the key played. Writable globals here
-# are observation probes for the emulator, not an instrument state/sharing pattern.
+# are observation probes for the emulator, not an instrument state pattern.
 SINE = sdk_machine("Sine", """
     #include "elekloader/sdk_alpha_machine.h"
 
@@ -29,18 +29,9 @@ SINE = sdk_machine("Sine", """
     };
     struct state { uint32_t phase; };
     volatile int32_t sound_test_pitch;
-    volatile int32_t sound_test_shared[2], sound_test_prepared[2];
     volatile int32_t sound_test_control;
     volatile uint32_t sound_test_start_count, sound_test_overlap;
     volatile uint32_t sound_test_starts[2][4];
-    struct shared { int32_t fine, inverse; };
-    static void present(const struct elek_ui_context *ctx, struct elek_ui_presentation *out)
-    {
-        struct shared *shared = out->shared;
-        shared->fine = ctx->knob[FINE]->value;
-        shared->inverse = -shared->fine;
-        if (ctx->track < 2) sound_test_prepared[ctx->track] = shared->fine;
-    }
 
     /* sin(2 pi ph / 2^32), Q15: a parabola, then its square nudged in. */
     static int32_t sine(uint32_t ph)
@@ -70,9 +61,6 @@ SINE = sdk_machine("Sine", """
         }
         if (sound_test_start_count >= 2 && v->slot == sound_test_starts[0][0])
             ++sound_test_overlap;
-        const struct shared *shared = ctx->shared;
-        if (v->track < 2)
-            sound_test_shared[v->track] = shared->fine == -shared->inverse ? shared->fine : 999;
         for (int i = 0; i < ELEK_VOICE_FRAMES; ++i) {
             int32_t y = sine(state->phase);
             elek_sample sample = elek_level(y < 0 ? -y : y, 32767);
@@ -83,8 +71,8 @@ SINE = sdk_machine("Sine", """
 
     static const struct elek_machine sine_machine = {
         .id = @ID@, .name = "Sine", .short_name = "SINE",
-        .pages = pages, .page_count = 1, .present = present, .render = render,
-        .voice_state = sizeof(struct state), .shared = sizeof(struct shared),
+        .pages = pages, .page_count = 1, .render = render,
+        .voice_state = sizeof(struct state),
     };
     ELEK_REGISTER_MACHINE(sine_machine);
 """)
@@ -142,24 +130,6 @@ class Sound:
         self.assertClose(self.track.play(0).frequency, centre * 2 ** (1 / 12), 0.005, 'FINE 100')
         fine.set(-100)
         self.assertClose(self.track.play(0).frequency, centre / 2 ** (1 / 12), 0.005, 'FINE -100')
-
-    def test_shared_data_is_restored_for_inactive_tracks(self):
-        first = self.tracks[0].use(SINE).knob('FINE')
-        second = self.tracks[1].use(SINE).knob('FINE')
-        first.turn(10)
-        second.turn(-10)
-        saved = [k.value & 0xffffffff for k in (first, second)]
-        self.assertNotEqual(*saved)
-        self.save_project()
-        first.turn(-5)
-        second.turn(5)
-        self.assertNotEqual([k.value & 0xffffffff for k in (first, second)], saved)
-        self.load_project()
-        self.wait(100)
-        self.assertEqual([self.read('sound_test_prepared', i) for i in range(2)], saved)
-        for track in self.tracks[:2]:
-            track.play(0)
-        self.assertEqual([self.read('sound_test_shared', i) for i in range(2)], saved)
 
     def test_a_machine_without_render_plays_what_it_did(self):
         self.track.use(SILENT)

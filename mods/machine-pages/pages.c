@@ -460,9 +460,6 @@ void mp_tick(void *ctrl)
     (void)ctrl;
     if (!kit)
         return;
-#ifdef SDK_ALPHA_DT1
-    sdk_alpha_tick();
-#endif
     if (kit != seen_kit) {                     /* another kit: taken as it is */
         for (t = 0; t < 8; t++)
             seen[t] = FW_SOUND(kit, t)[FW_SOUND_MACHINE];

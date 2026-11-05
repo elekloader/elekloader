@@ -126,10 +126,8 @@ arrays. Glyph storage must remain readable while displayed.
 
 The Digitakt evaluates presentation when drawing and for LFO names. The
 Digitones also refresh it when the active machine, track, page or values
-change. On the mk1s, a machine with `.render` and `.shared` is also
-presented on every UI tick for each track playing it, active or not
-(`ctx->track` says which). Do not depend on an exact callback count or
-use `.present` as an audio clock. Native displays may uppercase labels.
+change. Do not depend on an exact callback count or use `.present` as an
+audio clock. Native displays may uppercase labels.
 
 ### Native storage and persistence
 
@@ -265,46 +263,23 @@ match that processor's sample representation and calling convention;
 ColdFire instructions cannot execute on SHARC. Automatic selection and
 packaging of those kernels are not implemented by the SDK builder yet.
 
-### Voice state and shared UI data
+### Voice state
 
-The contract separates two kinds of memory:
+`.voice_state` declares one block per voice slot, at most 256 bytes,
+zeroed at boot and retained between calls and notes; render reaches it
+through `voice->state`. Render computes everything else from `ctx->knob`,
+which already carries the voice's locks and LFOs, and caches derived
+values in voice state.
 
-| Declaration | Owner and use | Limit |
-|---|---|---|
-| `.voice_state` | One block per voice slot, zeroed at boot and retained between calls and notes; `voice->state` | 256 bytes per slot |
-| `.shared` | One block per track, written by `.present` through `out->shared` and read by audio through `ctx->shared` | 64 bytes per track |
+Audio code may read its arguments, its voice state and constant data. A
+writable global is not a portable UI-to-audio channel: on DN2 it would be
+two independent copies. A build-time check for such access is not
+implemented. Avoid allocation, blocking, file/USB access and UI/firmware
+calls from render code.
 
-`.shared` is for extra UI-computed data, such as a mode table or a seed,
-that is not a native knob value. Most instruments can work from
-`ctx->knob` and voice state alone. A UI-derived value does not automatically
-follow per-voice locks or LFOs; compute those dependencies from the voice's
-controls in the audio path.
-
-Both mk1 adapters publish shared data through two buffers per track: `.present`
-updates the inactive buffer, then publishes its index after the complete
-write. The audio interrupt reads one published buffer for the whole call.
-The UI tick refreshes every SDK audio track, including inactive tracks
-after a project load, with `ELEK_UI_NO_PAGE`. Until a track's first
-snapshot is ready its renderer produces silence; a note that starts then
-still reaches the renderer with `ELEK_VOICE_START`. UI-only machines and
-machines without `.shared` receive a null shared pointer.
-
-DN2 requires a copy to the SHARC's separate memory; that transport is
-pending. Its UI-only calls have `out->shared == NULL`.
-
-Shared data must not contain pointers into UI memory. The DN2 backend also
-needs a defined byte order and layout; copying an arbitrary C structure
-between processors is not by itself a portable transport.
-
-Audio code may read its arguments, its voice state, the shared snapshot
-and constant data. A writable global is not a portable UI-to-audio channel:
-on DN2 it would be two independent copies. A build-time check for such
-access is not implemented. Avoid allocation, blocking, file/USB access and
-UI/firmware calls from render code.
-
-The builder validates these sizes and rejects either state declaration
-without `.render`. Passing the checks defines a valid record, not an
-available audio backend.
+The builder validates the size and rejects `.voice_state` without
+`.render`. Passing the checks defines a valid record, not an available
+audio backend.
 
 ## Audio across mk1 and mk2
 
@@ -314,7 +289,7 @@ The backends reuse each device's native voice path:
 |---|---|---|
 | Digitakt mk1 | ColdFire track blocks, 32 Q31 samples; one rendering slot per track | Implemented; hardware and worst-case load qualification remain |
 | Digitone mk1 | Main ColdFire replaces an allocated FM voice with 32 Q31 samples through the machines companion | Implemented; hardware, lock/modulation timing and worst-case load qualification remain |
-| Digitone II | SHARC voice callback, 32 floats before the native envelope, filter and mixer | Build/package the audio artifact, bind it to SDK registration, transport shared data, and supply missing voice metadata |
+| Digitone II | SHARC voice callback, 32 floats before the native envelope, filter and mixer | Build/package the audio artifact, bind it to SDK registration, and supply missing voice metadata |
 
 Digitakt replaces the track block before the existing native overdrive,
 filter and AMP stages. The voice's `slot` and `track` are the track index.
@@ -355,14 +330,11 @@ DN2's existing [native voice input](../elekloader/sdk/include/digitone-mk2/voice
 already exposes 40 per-voice parameter values from the stock engine, with
 locks and modulation. The SDK mapping puts its fifteen knobs in the first
 fifteen of those slots. Connecting that path to SDK audio still needs
-validation. Pages, labels and glyphs stay on ColdFire; knob values do not
-need to be resent as `.shared` data.
+validation. Pages, labels and glyphs stay on ColdFire.
 
 The native DN2 input has pitch, start, slot, controls and state, but lacks
 the owning track, velocity and gate required by `elek_voice`. Core/bridge
-work must provide those values. The shared-data channel must coexist with
-DSP peek, publish complete updates and establish when they become visible.
-Neither is supplied by the current DN2 SDK adapter.
+work must provide those values; the current DN2 SDK adapter does not.
 
 The existing DN2 native audio limits are one SHARC synth per build, synth
 IDs 5..31, a 2,048-byte callback stack, and bounded code/data regions. A
@@ -387,8 +359,7 @@ Digitakt II are outside this shared render contract.
   sound-lock presentation, or pattern-lock save/load.
 - The mk1 emulator sound tests check pitch, octave intervals, FINE and
   UI-only fallback through the native output. Defaults tests cover selection,
-  clear, repeated placements, paste and project restoration. Shared-state
-  tests check inactive tracks after load. DN1 also exercises overlapping
+  clear, repeated placements, paste and project restoration. DN1 also exercises overlapping
   voice/state identity and LFO controls reaching render. These do not
   establish physical-device timing or worst-case render load.
 - Host audio tests check C sample helpers, pitch, level and waveform
@@ -410,8 +381,8 @@ stored UI values for effective voice controls.
 - [Render-contract tests](../tests/test_sdk_alpha_render.py) compile one C
   machine twice with the host compiler, Q31 and float. They check sample
   helpers and compare the resulting sine. They also exercise the real
-  mk1 adapters' state isolation, effective-control mapping, defaults and
-  atomic shared publication. `test_units.py` runs this suite.
+  mk1 adapters' state isolation, effective-control mapping and defaults.
+  `test_units.py` runs this suite.
 - [Sound tests](../tests/test_sdk_alpha_sound.py) capture the emulator output;
   [defaults tests](../tests/test_sdk_alpha_defaults.py) exercise mapped defaults.
   Targets without the corresponding backend are explicitly skipped.

@@ -28,7 +28,7 @@ struct elek_ui_knob {
 };
 struct elek_ui_page {
     const char *label;             /* 1..16 printable ASCII characters */
-    const struct elek_ui_knob *knob[8]; /* shared knob descriptors; null is empty */
+    const struct elek_ui_knob *knob[8]; /* knob descriptors, which pages may share; null is empty */
 };
 struct elek_ui_value {
     int32_t value;                 /* signed integer, nearest; exact halves round toward max */
@@ -51,7 +51,6 @@ struct elek_ui_knob_presentation {
 struct elek_ui_presentation {
     uint32_t knob_count;
     struct elek_ui_knob_presentation *const *knob; /* logical IDs; defaults reset each call */
-    void *shared;                  /* this track's writable shared snapshot; null without .shared */
 };
 
 /* Sound. render fills one voice's block. The same C builds for every device: samples are the
@@ -61,7 +60,6 @@ struct elek_ui_presentation {
 #define ELEK_VOICE_FRAMES 32          /* samples a render call */
 #define ELEK_VOICE_START 1u           /* elek_voice.flags: the note's first block */
 #define ELEK_VOICE_STATE_MAX 256      /* .voice_state's limit: bytes a voice keeps between calls */
-#define ELEK_SHARED_MAX 64            /* .shared's limit: bytes a track's block holds */
 #ifdef ELEK_TARGET_SHARC
 typedef float elek_sample;            /* -1.0..1.0 */
 #define ELEK_SAMPLE(x) ((float)(x))
@@ -134,7 +132,6 @@ struct elek_voice {
 struct elek_audio_context {
     uint32_t knob_count;
     const int32_t *knob;           /* by logical ID: this voice's values, mapped to the knob's bounds */
-    const void *shared;            /* the voice's track's .shared block (written by .present), or null */
 };
 
 struct elek_machine {
@@ -146,10 +143,9 @@ struct elek_machine {
     /* ctx and its values are read-only snapshots, valid only during this call. */
     void (*present)(const struct elek_ui_context *, struct elek_ui_presentation *);
     /* Optional: the machine's sound, one voice at a time (without it the device's own plays).
-     * It may read only its arguments, its state, .shared and constant data. */
+     * It may read only its arguments, its state and constant data. */
     void (*render)(const struct elek_audio_context *, const struct elek_voice *, elek_sample *out);
     uint32_t voice_state;          /* 0..ELEK_VOICE_STATE_MAX bytes a voice keeps; needs render */
-    uint32_t shared;               /* 0..ELEK_SHARED_MAX bytes a track shares with render; needs render */
 };
 
 /* Private adapter; the existing core descriptor and UI layouts stay intact. */

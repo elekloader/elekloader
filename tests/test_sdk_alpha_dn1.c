@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
-/* The real DN1 adapter with native metadata and an audio interrupt inside .present. */
+/* The real DN1 adapter with native metadata. */
 #include <assert.h>
 #include <stdint.h>
 #include "digitone-mk1/core3.h"
@@ -22,9 +22,9 @@ static uint8_t kit[0x2c + 326 * 4];
 static int16_t words[79 * 8];
 static int32_t blocks[8][ELEK_VOICE_FRAMES];
 static struct dnm_voice native[8];
-static uint32_t calls[8], generation, interrupt_present, fallback_reset;
+static uint32_t calls[8], fallback_reset;
 static struct elek_voice last[8];
-static int32_t input[8][3], pairs[8];
+static int32_t input[8][3];
 static int32_t set_track, set_slot, set_value;
 
 int32_t dnm_sdk_param(int32_t k) { return 100 + k; }
@@ -43,27 +43,12 @@ static void stock_reset(void *set, int32_t id) { (void)set; (void)id; ++fallback
 
 static void sound(const struct elek_audio_context *ctx, const struct elek_voice *v, elek_sample *out)
 {
-    assert(v->state && ctx->shared && ctx->knob_count == 3);
-    const int32_t *pair = ctx->shared;
-    assert(pair[0] == -pair[1]);
-    pairs[v->slot] = pair[0];
+    assert(v->state && ctx->knob_count == 3);
     last[v->slot] = *v;
     for (int k = 0; k < 3; ++k) input[v->slot][k] = ctx->knob[k];
     out[0] = ELEK_SAMPLE(1.0);
     out[1] = 16 * ++*(uint32_t *)v->state;
     ++calls[v->slot];
-}
-static void present(const struct elek_ui_context *ctx, struct elek_ui_presentation *out)
-{
-    assert(ctx->page == ELEK_UI_NO_PAGE);
-    int32_t *pair = out->shared;
-    pair[0] = generation + ctx->track;
-    if (interrupt_present) {
-        interrupt_present = 0;
-        render(5, blocks[5], &native[5]);
-        render(7, blocks[7], &native[7]);
-    }
-    pair[1] = -pair[0];
 }
 static const struct elek_ui_knob controls[] = {
     { .id = 0, .label = "FINE", .min = ELEK_UI_BOUND(-50), .max = ELEK_UI_BOUND(50),
@@ -77,7 +62,7 @@ static const struct elek_ui_page pages[] = {
 };
 static const struct elek_machine test = {
     .id = 100, .name = "Test", .short_name = "TEST", .pages = pages, .page_count = 2,
-    .render = sound, .present = present, .voice_state = 4, .shared = 8,
+    .render = sound, .voice_state = 4,
 };
 ELEK_REGISTER_MACHINE(test);
 const struct sdk_alpha_registration *const sdk_alpha_machines[] = { &sdk_alpha_registration_test, 0 };
@@ -109,11 +94,6 @@ int main(void)
     /* The controller stage changes the retained buffer after the params event. */
     words[79 * 5 + 10 + sdk_pos[0]] = ELEK_UI_RAW_MAX;
     words[79 * 7 + 10 + sdk_pos[0]] = 0;
-    render(5, blocks[5], &native[5]); assert(!calls[5]);
-    native[5].fresh = 0;                   /* the native companion consumes its first-block flag */
-    generation = 10;
-    uint8_t ctrl[64] = {0};
-    dnm_sdk_tick(0, ctrl);                  /* initialize both tracks with neither page open */
     render(5, blocks[5], &native[5]); render(7, blocks[7], &native[7]);
     assert(calls[5] == 1 && calls[7] == 1);
     assert(last[5].slot == 5 && last[5].track == 0 && last[5].pitch == 65 << 16);
@@ -122,13 +102,11 @@ int main(void)
     assert(last[5].state != last[7].state);
     assert(input[5][0] == 50 && input[7][0] == -50);
     assert(blocks[5][0] == 0x07ffffff && blocks[5][1] == 1);
-    assert(pairs[5] == 10 && pairs[7] == 11);
-    generation = 20; interrupt_present = 1;
-    dnm_sdk_tick(0, ctrl);
-    assert(pairs[5] == 10 && pairs[7] == 11); /* no half-published pair */
+    native[5].fresh = 0;                   /* the native companion consumes its first-block flag */
+    render(5, blocks[5], &native[5]); render(7, blocks[7], &native[7]);
+    assert(!last[5].flags);
     render(5, blocks[5], &native[5]); render(7, blocks[7], &native[7]);
     assert(blocks[5][1] == 3 && blocks[7][1] == 3);
-    assert(pairs[5] == 20 && pairs[7] == 21);
     FW_VOICE_PARAM(5, 0) = 0; dnm_sdk_params(words);
     FW_VOICE_PARAM(5, 0) = 100 << 8; dnm_sdk_params(words);
     render(5, blocks[5], &native[5]); render(7, blocks[7], &native[7]);

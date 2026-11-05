@@ -29,7 +29,7 @@ class RenderContractTests(unittest.TestCase):
                 raise AssertionError('%s build failed:\n%s' % (target, done.stderr))
             cls.programs[target] = program
 
-    def test_digitakt_adapter_keeps_state_and_publishes_complete_shared_blocks(self):
+    def test_digitakt_adapter_keeps_state_and_maps_effective_values(self):
         self.adapter('dt1')
 
     def test_digitone_adapter_maps_voices_defaults_and_post_controller_values(self):

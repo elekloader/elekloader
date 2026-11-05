@@ -113,12 +113,6 @@ static int32_t default_raw(const struct elek_ui_knob *knob)
     return lo;
 }
 
-struct sdk_shared {
-    const struct elek_machine *machine;
-    uint32_t data[ELEK_SHARED_MAX / 4];
-};
-static struct sdk_shared shared[4][2];
-static volatile uint32_t published[4];
 static int32_t state_machine[8];
 static uint8_t pending_start[8];
 static uint32_t voice_state[8][ELEK_VOICE_STATE_MAX / 4];
@@ -186,9 +180,9 @@ static uint8_t dnm_sdk_visibility[SDK_KNOBS];
 static const struct elek_ui_glyph *dnm_sdk_glyphs[SDK_KNOBS];
 static int dirty;
 
-static void snapshot_track(const struct dnm_machine *m, int32_t page, int force,
-                           uint32_t track, int update_ui)
+static void snapshot(const struct dnm_machine *m, int32_t page, int force)
 {
+    uint32_t track = fw_active_track;
     const struct elek_machine *e;
     struct elek_ui_context ctx = { ELEK_UI_NO_PAGE, 0, 0, 0, track };
     struct elek_ui_presentation out = { 0 };
@@ -221,37 +215,23 @@ static void snapshot_track(const struct dnm_machine *m, int32_t page, int force,
             ++ctx.knob_count;
         }
         ctx.page = page;
-        if (update_ui && !force && m == seen && ctx.track == (uint32_t)seen_track && ctx.page == seen_page) {
+        if (!force && m == seen && ctx.track == (uint32_t)seen_track && ctx.page == seen_page) {
             int k = 0;
             while (k < n && input[k]->raw_value == seen_raw[k])
                 ++k;
             if (k == n)
                 return;
         }
-        if (update_ui)
-            for (int k = 0; k < n; ++k) seen_raw[k] = input[k]->raw_value;
+        for (int k = 0; k < n; ++k) seen_raw[k] = input[k]->raw_value;
         ctx.page_count = e->page_count;
         ctx.knob = ctx.knob_count ? input : 0;
         out.knob_count = ctx.knob_count;
         out.knob = ctx.knob_count ? output : 0;
-    } else if (update_ui && !force && m == seen && ctx.track == (uint32_t)seen_track) {
+    } else if (!force && m == seen && ctx.track == (uint32_t)seen_track) {
         return;                     /* an empty machine's context changes only with its track */
-    }
-    uint32_t bank = published[track], next = bank ^ 1;
-    struct sdk_shared *next_shared = &shared[track][next];
-    if (e->shared) {
-        for (uint32_t k = 0; k < ELEK_SHARED_MAX / 4; ++k)
-            next_shared->data[k] = shared[track][bank].machine == e ? shared[track][bank].data[k] : 0;
-        out.shared = next_shared->data;
     }
     if (e->present)
         e->present(&ctx, &out);
-    if (e->shared) {
-        next_shared->machine = e;
-        __asm__ volatile ("" ::: "memory");
-        published[track] = next;
-    }
-    if (!update_ui) return;
     seen = m;
     seen_track = ctx.track;
     seen_page = ctx.page;
@@ -274,11 +254,6 @@ static void snapshot_track(const struct dnm_machine *m, int32_t page, int force,
         dirty |= dnm_sdk_glyphs[id] != presentation[id].glyph;
         dnm_sdk_glyphs[id] = presentation[id].glyph;
     }
-}
-
-static void snapshot(const struct dnm_machine *m, int32_t page, int force)
-{
-    snapshot_track(m, page, force, fw_active_track, 1);
 }
 
 /* The SYN controls are built (force) or redrawn with their page's presentation. */
@@ -449,12 +424,6 @@ void dnm_sdk_tick(const struct dnm_machine *m, void *ctrl)
             dnm_sdk_shown[t] = *cur;
         }
     }
-    if (fw_kit)
-        for (uint32_t t = 0; t < 4; ++t)
-            for (int32_t i = 0; i < count; ++i)
-                if (machines[i].render && declared[i]->shared &&
-                    machines[i].id == (FW_SOUND_SLOT(fw_kit, t, 0) >> 8))
-                    snapshot_track(&machines[i], ELEK_UI_NO_PAGE, 1, t, 0);
     if (m)
         snapshot(m, seen_page, 0);
     if (dirty) {
@@ -495,12 +464,6 @@ static void render(int32_t voice, int32_t *block, const struct dnm_voice *v)
     const struct elek_machine *e = declared[i];
     select_voice(voice, id);
     if (v->fresh) pending_start[voice] = 1;
-    const struct sdk_shared *current = &shared[track][published[track]];
-    __asm__ volatile ("" ::: "memory");
-    if (e->shared && current->machine != e) {
-        for (int k = 0; k < ELEK_VOICE_FRAMES; ++k) block[k] = 0;
-        return;
-    }
     int32_t input[SDK_KNOBS];
     for (int k = 0; k < knob_count[i]; ++k) {
         int32_t slot = ((const int32_t *)fw_params)[15 * dnm_sdk_param(sdk_pos[k]) + 1];
@@ -511,7 +474,6 @@ static void render(int32_t voice, int32_t *block, const struct dnm_voice *v)
     }
     const struct elek_audio_context ctx = {
         .knob_count = knob_count[i], .knob = knob_count[i] ? input : 0,
-        .shared = e->shared ? current->data : 0,
     };
     const struct elek_voice sv = {
         .slot = voice, .track = track, .pitch = v->pitch, .velocity = v->velocity,

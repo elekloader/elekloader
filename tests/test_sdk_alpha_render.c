@@ -102,7 +102,7 @@ int main(int argc, char **argv)
 #endif
     }
     int32_t knob[2] = {argc > 1 ? atoi(argv[1]) : 127, argc > 2 ? atoi(argv[2]) : 0};
-    struct elek_audio_context ctx = {2, knob, 0};
+    struct elek_audio_context ctx = {2, knob};
     struct state state = {12345};
     struct elek_voice voice = {0, 0, 69 << 16, 100, 1, ELEK_VOICE_START, &state};
     elek_sample block[ELEK_VOICE_FRAMES];

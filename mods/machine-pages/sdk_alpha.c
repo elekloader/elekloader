@@ -87,13 +87,6 @@ static int32_t sdk_alpha_default(const struct elek_ui_knob *knob)
     return lo;
 }
 
-/* The audio interrupt reads the published bank while the UI writes the other one. */
-struct sdk_alpha_shared {
-    const struct elek_machine *machine;
-    uint32_t data[ELEK_SHARED_MAX / 4];
-};
-static struct sdk_alpha_shared sdk_alpha_shared[8][2];
-static volatile uint32_t sdk_alpha_published[8];
 static const struct elek_machine *sdk_alpha_voice_machine[8];
 static uint32_t sdk_alpha_voice_state[8][ELEK_VOICE_STATE_MAX / 4];
 static uint8_t sdk_alpha_start[8];      /* fw_voice_start lasts one block; kept until render runs */
@@ -140,9 +133,9 @@ const struct cm_ui32 *sdk_alpha_ui(int32_t id)
     return &p->ui;
 }
 
-static int32_t sdk_alpha_snapshot_track(const struct elek_machine *m, int32_t page,
-                                       void *view, uint32_t track, int update_ui)
+int32_t sdk_alpha_snapshot(const struct elek_machine *m, int32_t page, void *view)
 {
+    uint32_t track = fw_active_track;
     const struct elek_ui_knob *descriptors[15];
     int32_t knob_count = sdk_alpha_knobs(m, descriptors);
     if (knob_count < 0)
@@ -179,25 +172,11 @@ static int32_t sdk_alpha_snapshot_track(const struct elek_machine *m, int32_t pa
         .page = page, .page_count = m->page_count, .knob_count = knob_count,
         .knob = knob_count ? knobs : 0, .track = track,
     };
-    uint32_t bank = sdk_alpha_published[track], next = bank ^ 1;
-    struct sdk_alpha_shared *shared = &sdk_alpha_shared[track][next];
-    if (m->shared) {
-        for (uint32_t i = 0; i < ELEK_SHARED_MAX / 4; ++i)
-            shared->data[i] = sdk_alpha_shared[track][bank].machine == m ?
-                sdk_alpha_shared[track][bank].data[i] : 0;
-    }
     struct elek_ui_presentation out = {
         .knob_count = knob_count, .knob = knob_count ? output : 0,
-        .shared = m->shared ? shared->data : 0,
     };
     if (m->present)
         m->present(&ctx, &out);
-    if (m->shared) {
-        shared->machine = m;
-        __asm__ volatile ("" ::: "memory");
-        sdk_alpha_published[track] = next;
-    }
-    if (!update_ui) return 0;
     int32_t changed = sdk_alpha_presented != m;
     for (uint32_t k = 0; k < (uint32_t)knob_count; ++k) {
         const char *label = presentation[k].label;
@@ -221,22 +200,6 @@ static int32_t sdk_alpha_snapshot_track(const struct elek_machine *m, int32_t pa
     return changed;
 }
 
-int32_t sdk_alpha_snapshot(const struct elek_machine *m, int32_t page, void *view)
-{
-    return sdk_alpha_snapshot_track(m, page, view, fw_active_track, 1);
-}
-
-/* Refresh every track, including ones whose UI has not been opened after a load. */
-void sdk_alpha_tick(void)
-{
-    if (!fw_kit) return;
-    for (uint32_t track = 0; track < 8; ++track) {
-        const struct elek_machine *m = sdk_alpha_machine(FW_SOUND(fw_kit, track)[FW_SOUND_MACHINE]);
-        if (m && m->render && m->shared)
-            sdk_alpha_snapshot_track(m, ELEK_UI_NO_PAGE, 0, track, 0);
-    }
-}
-
 void sdk_alpha_render(int32_t *blocks)
 {
     for (uint32_t track = 0; track < 8; ++track) {
@@ -249,13 +212,6 @@ void sdk_alpha_render(int32_t *blocks)
         }
         if (!m || !m->render) continue;
         if (fw_voice_start & (1u << track)) sdk_alpha_start[track] = 1;
-        const struct sdk_alpha_shared *shared = &sdk_alpha_shared[track][sdk_alpha_published[track]];
-        __asm__ volatile ("" ::: "memory");
-        if (m->shared && shared->machine != m) {
-            for (uint32_t i = 0; i < ELEK_VOICE_FRAMES; ++i)
-                blocks[ELEK_VOICE_FRAMES * track + i] = 0;
-            continue;
-        }
         const struct elek_ui_knob *descriptors[15];
         int32_t count = sdk_alpha_knobs(m, descriptors);
         if (count < 0) continue;
@@ -268,7 +224,6 @@ void sdk_alpha_render(int32_t *blocks)
         }
         const struct elek_audio_context ctx = {
             .knob_count = count, .knob = count ? knobs : 0,
-            .shared = m->shared ? shared->data : 0,
         };
         const struct elek_voice voice = {
             .slot = track, .track = track, .pitch = fw_voice_note[track],

@@ -77,13 +77,13 @@ def sdk_alpha_test_document():
     return sdk_alpha_test_render_document(render=False)
 
 
-def sdk_alpha_test_render_document(render=True, voice_state=0, shared=0):
-    """A registration: the machine at 40 is 44 bytes, its render (an rts) at 88."""
+def sdk_alpha_test_render_document(render=True, voice_state=0):
+    """A registration: the machine at 40 is 40 bytes, its render (an rts) at 88."""
     raw = bytearray(112)
     struct.pack_into('>i', raw, 0, 120)
     struct.pack_into('>iii', raw, 16, 3, 120, 0x55493330)
     struct.pack_into('>i', raw, 40, 120)
-    struct.pack_into('>II', raw, 76, voice_state, shared)
+    struct.pack_into('>I', raw, 76, voice_state)
     raw[88:90] = b'\x4e\x75'
     raw[96:102] = b'Empty\0'
     raw[104:109] = b'EMPT\0'
@@ -332,17 +332,15 @@ class SdkAlphaTests(unittest.TestCase):
 
     def test_sdk_alpha_render_registration(self):
         layouts = {}
-        doc, raw = sdk_alpha_test_render_document(voice_state=16, shared=8)
+        doc, raw = sdk_alpha_test_render_document(voice_state=16)
         self.assertEqual(sdk_alpha_registrations(doc, {'.run': raw}, layouts),
                          [('sdk_alpha_registration_empty', 120)])
-        self.assertEqual([layouts[120][k] for k in ('render', 'voice_state', 'shared')], [True, 16, 8])
+        self.assertEqual([layouts[120][k] for k in ('render', 'voice_state')], [True, 16])
         doc, raw = sdk_alpha_test_render_document(render=False)
         sdk_alpha_registrations(doc, {'.run': raw}, layouts)
-        self.assertEqual([layouts[120][k] for k in ('render', 'voice_state', 'shared')], [False, 0, 0])
+        self.assertEqual([layouts[120][k] for k in ('render', 'voice_state')], [False, 0])
         for kwargs, message in (({'voice_state': 257}, 'voice_state is at most 256'),
-                                ({'shared': 65}, 'shared is at most 64'),
-                                ({'render': False, 'voice_state': 4}, 'need a render'),
-                                ({'render': False, 'shared': 4}, 'need a render')):
+                                ({'render': False, 'voice_state': 4}, 'needs a render')):
             with self.subTest(**kwargs):
                 doc, raw = sdk_alpha_test_render_document(**kwargs)
                 with self.assertRaisesRegex(build.BuildError, message):

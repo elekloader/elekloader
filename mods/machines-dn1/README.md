@@ -22,8 +22,8 @@ the mod shop, beside the cores: a machine mod that requires it (`"requires": ["c
 | claims | `soundslot:0`, `page:30` and `page:29` (0.3: the SDK pages) |
 | RAM | OS 1.44: 10.8 KiB code and initialized data, 16.0 KiB zero-initialized data |
 
-The [shared SDK](../../docs/SDK.md) also supports audio callbacks, mapped
-defaults and per-track shared snapshots on OS 1.44. It uses the same voice
+The [shared SDK](../../docs/SDK.md) also supports audio callbacks and
+mapped defaults on OS 1.44. It uses the same voice
 path as native machines; SDK-only details and qualification limits live
 in that guide.
 

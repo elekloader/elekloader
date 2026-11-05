@@ -23,7 +23,6 @@ SDK_ALPHA_RENDER = {('digitakt-mk1', '1.54'), ('digitone-mk1', '1.44')}
 SDK_ALPHA_DEFAULTS = {('digitakt-mk1', '1.54'), ('digitone-mk1', '1.44')}
 SDK_ALPHA_ABI = 'sdk_alpha_dt1_ui_v1'    # the one symbol the companions export to SDK machines
 ELEK_VOICE_STATE_MAX = 256      # sdk_alpha_machine.h
-ELEK_SHARED_MAX = 64
 
 
 def sdk_alpha_registrations(doc, sections, layouts=None):
@@ -31,7 +30,7 @@ def sdk_alpha_registrations(doc, sections, layouts=None):
 
     layouts, when given, is filled with each machine's declared layout, by machine id:
     {'name', 'pages': [{'label', 'knobs': {encoder 0-7: {'id', 'label', 'min', 'max'}}}],
-     'render': bool, 'voice_state': bytes, 'shared': bytes}. The built mod does not change."""
+     'render': bool, 'voice_state': bytes}. The built mod does not change."""
     def sdk_alpha_bytes(where, size):
         sec, off = where
         raw = sections.get(sec, b'')
@@ -79,7 +78,7 @@ def sdk_alpha_registrations(doc, sections, layouts=None):
         if len(abi) != 1 or abi[0][2:] != ['abs32', 'sym:' + SDK_ALPHA_ABI, 0]:
             raise build.BuildError('sdk alpha: invalid machine UI ABI')
         machine = sdk_alpha_pointer(ui, 4)
-        data = sdk_alpha_bytes(machine, 44)
+        data = sdk_alpha_bytes(machine, 40)
         if struct.unpack_from('>i', data)[0] != mid or struct.unpack_from('>iii', raw, 16) != (3, mid, 0x55493330):
             raise build.BuildError('sdk alpha: inconsistent machine adapter')
         page_layouts = []
@@ -146,18 +145,16 @@ def sdk_alpha_registrations(doc, sections, layouts=None):
             sdk_alpha_pointer(machine, 32)          # a function in the mod itself
         elif any(data[32:36]):
             raise build.BuildError('sdk alpha: render must be a function in the mod')
-        voice_state, shared = struct.unpack_from('>II', data, 36)
+        voice_state, = struct.unpack_from('>I', data, 36)
         if voice_state > ELEK_VOICE_STATE_MAX:
             raise build.BuildError('sdk alpha: voice_state is at most %d bytes' % ELEK_VOICE_STATE_MAX)
-        if shared > ELEK_SHARED_MAX:
-            raise build.BuildError('sdk alpha: shared is at most %d bytes' % ELEK_SHARED_MAX)
-        if (voice_state or shared) and not render:
-            raise build.BuildError('sdk alpha: voice_state and shared need a render')
+        if voice_state and not render:
+            raise build.BuildError('sdk alpha: voice_state needs a render')
         machine_name = sdk_alpha_name(machine, 4, 16)
         sdk_alpha_name(machine, 8, 4)
         if layouts is not None:
             layouts[mid] = {'name': machine_name, 'pages': page_layouts,
-                            'render': render, 'voice_state': voice_state, 'shared': shared}
+                            'render': render, 'voice_state': voice_state}
         ids.add(mid)
         registrations.append((name, mid))
     if not registrations:
