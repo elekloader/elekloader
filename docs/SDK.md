@@ -126,8 +126,10 @@ arrays. Glyph storage must remain readable while displayed.
 
 The Digitakt evaluates presentation when drawing and for LFO names. The
 Digitones also refresh it when the active machine, track, page or values
-change. Do not depend on an exact callback count or use `.present` as an
-audio clock. Native displays may uppercase labels.
+change. On the mk1s, a machine with `.render` and `.shared` is also
+presented on every UI tick for each track playing it, active or not
+(`ctx->track` says which). Do not depend on an exact callback count or
+use `.present` as an audio clock. Native displays may uppercase labels.
 
 ### Native storage and persistence
 
@@ -275,7 +277,8 @@ updates the inactive buffer, then publishes its index after the complete
 write. The audio interrupt reads one published buffer for the whole call.
 The UI tick refreshes every SDK audio track, including inactive tracks
 after a project load, with `ELEK_UI_NO_PAGE`. Until a track's first
-snapshot is ready its renderer produces silence. UI-only machines and
+snapshot is ready its renderer produces silence; a note that starts then
+still reaches the renderer with `ELEK_VOICE_START`. UI-only machines and
 machines without `.shared` receive a null shared pointer.
 
 DN2 requires a copy to the SHARC's separate memory; that transport is
@@ -320,8 +323,6 @@ There are eight independent state blocks; `slot` is the allocated voice,
 and `track` comes from the native voice-owner map. Pitch, velocity, start
 and held-note gate come from the companion's native voice record. State
 survives notes and retriggers, and is cleared when the slot changes machine.
-If shared data is not ready, the wrapper writes silence and retains the
-note-start notification until its first call to the renderer.
 The wrapper scales SDK full scale to `DNM_PEAK` (1/16); the companion's AMP
 envelope and velocity, then the native multimode filter, mixer and effects,
 follow the renderer.

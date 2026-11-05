@@ -38,7 +38,7 @@ struct elek_ui_context {
     int32_t page;                  /* displayed machine page, or ELEK_UI_NO_PAGE (e.g. LFO labels) */
     uint32_t page_count, knob_count;
     const struct elek_ui_value *const *knob; /* indexed by machine-wide logical ID, all pages */
-    uint32_t track;                /* the track this call is for (the active track), from zero */
+    uint32_t track;                /* the track this call is for, from zero: not always the active one */
 };
 /* Labels may use literals or caller-owned storage readable after callback return.
  * The SDK copies labels immediately: at most ELEK_UI_LABEL_MAX characters, nonprintable bytes become ?.

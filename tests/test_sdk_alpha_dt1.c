@@ -74,6 +74,7 @@ int main(void)
         fw_amp_env[3*t] = 1;
         effective[t][0] = t ? ELEK_UI_RAW_MAX : 0;
     }
+    fw_voice_start = 1;                         /* track 0 starts before its shared block is ready */
     sdk_alpha_render(blocks);
     assert(!calls[0] && !calls[1]);             /* no uninitialized shared block */
     generation = 10;
@@ -84,7 +85,7 @@ int main(void)
     assert(value[0] == -50 && value[1] == 50);   /* effective audio values, not UI kit zeros */
     assert(pair[0][0] == 10 && pair[1][0] == 11);
     assert(last[1].pitch == 61 << 16 && last[1].velocity == 100 && last[1].gate == 1);
-    assert(!last[0].flags && last[1].flags == ELEK_VOICE_START);
+    assert(last[0].flags == ELEK_VOICE_START && last[1].flags == ELEK_VOICE_START);
     assert(last[0].state != last[1].state && blocks[0] == 1 && blocks[32] == 1);
     generation = 20;
     interrupt_present = 1;
@@ -92,6 +93,7 @@ int main(void)
     assert(pair[0][0] == 10 && pair[1][0] == 11);
     sdk_alpha_render(blocks);
     assert(pair[0][0] == 20 && pair[1][0] == 21);
+    assert(!last[0].flags);                     /* the kept start went to one call */
     assert(blocks[0] == 3 && blocks[32] == 3);  /* retriggers preserve the voice's state */
     fw_render_machine[0] = 0;
     sdk_alpha_render(blocks);

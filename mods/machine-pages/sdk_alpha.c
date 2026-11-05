@@ -96,6 +96,7 @@ static struct sdk_alpha_shared sdk_alpha_shared[8][2];
 static volatile uint32_t sdk_alpha_published[8];
 static const struct elek_machine *sdk_alpha_voice_machine[8];
 static uint32_t sdk_alpha_voice_state[8][ELEK_VOICE_STATE_MAX / 4];
+static uint8_t sdk_alpha_start[8];      /* fw_voice_start lasts one block; kept until render runs */
 
 const struct cm_ui32 *sdk_alpha_ui(int32_t id)
 {
@@ -244,8 +245,10 @@ void sdk_alpha_render(int32_t *blocks)
             for (uint32_t i = 0; i < ELEK_VOICE_STATE_MAX / 4; ++i)
                 sdk_alpha_voice_state[track][i] = 0;
             sdk_alpha_voice_machine[track] = m;
+            sdk_alpha_start[track] = 0;
         }
         if (!m || !m->render) continue;
+        if (fw_voice_start & (1u << track)) sdk_alpha_start[track] = 1;
         const struct sdk_alpha_shared *shared = &sdk_alpha_shared[track][sdk_alpha_published[track]];
         __asm__ volatile ("" ::: "memory");
         if (m->shared && shared->machine != m) {
@@ -270,10 +273,11 @@ void sdk_alpha_render(int32_t *blocks)
         const struct elek_voice voice = {
             .slot = track, .track = track, .pitch = fw_voice_note[track],
             .velocity = fw_voice_vel[track] >> 8, .gate = fw_amp_env[3 * track] != 0,
-            .flags = (fw_voice_start & (1u << track)) ? ELEK_VOICE_START : 0,
+            .flags = sdk_alpha_start[track] ? ELEK_VOICE_START : 0,
             .state = m->voice_state ? sdk_alpha_voice_state[track] : 0,
         };
         m->render(&ctx, &voice, blocks + ELEK_VOICE_FRAMES * track);
+        sdk_alpha_start[track] = 0;
     }
 }
 
