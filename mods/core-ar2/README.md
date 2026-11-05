@@ -710,8 +710,11 @@ destination on A (emulator, 5 Nov 2026). The three reads a block cost
 0.10's (609 and about 160 a read; a call that returns at once costs 39),
 and 366 as one `core_param_values` call (122 a read). Most of what
 was saved is the routes' walk: lock-check's A and C are `"mod": true`, and
-each of their reads walked the track's 8 routes. Not yet measured on a
-unit.
+each of their reads walked the track's 8 routes. On a unit (T126, 5 Nov
+2026, lock-check 1.11): the same values, the batch read never differed
+from the single reads, and a read cost 733 ticks one at a time and 324 in
+a call of three (the unit's timer counts differently from the emulator's,
+so compare only within one machine).
 ## Velocity and aftertouch destinations (0.9)
 
 `routes.c` and `routes.s`, three sites (docs/ADAPTING.md, "Lockable
