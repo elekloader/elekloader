@@ -128,7 +128,8 @@ event (lower first; the shipped mods use 10-90).
 | `ev_voice_on` | Digitone mk1 only (core-dn1 2.1): a voice starts a note, in the render | `void f(int voice, int track, void *event)` | interrupt level. The voice's pitch word (`0x41391f80` + 4 x voice, the note << 16) is already written and may be changed: the render reads it every block. The voice's sound and the step's locks load after this, so read the voice's parameters from `ev_render_out` |
 | `ev_midi_cc` | Digitakt mk1 (core 4.3), Digitone mk1 (core-dn1 3.2) and Digitone II (core-dn2 0.4): each MIDI CC the unit receives on a track's channel or the auto channel, before the stock applies it; the MIDI task | `int f(int track, int cc, int value, int flags)` | `track` by MIDI CONFIG's channels: on the Digitakt 0-7 the audio tracks, 8-15 the MIDI tracks, 16 FX; on the Digitone 0-8 (channels 1-9 by default); on the Digitone II 0-15, 16 FX. A CC on the auto channel comes as the active track, with `flags` bit 0 (`CORE_MIDI_CC_AUTO`) set. Return nonzero to take it: the stock does not apply it. Only what MIDI CONFIG lets in arrives (PORT CONFIG > INPUT FROM). The router keeps a few CCs for itself (NRPN and data entry among them), which never arrive. On the Digitone, a mod that patches the CC router's entry, 0x400ed94e (Tone+FX), sees a CC before core |
 | `ev_midi_pc` | Digitone mk1 only (core-dn1 4.0): each program change the unit receives, on any channel, before the stock applies it; the MIDI task | `int f(int channel, int program, int flags)` | `channel` 0-15, `program` 0-127; `flags` bit 0 (`CORE_MIDI_CC_AUTO`): it came on the auto channel; bit 1 (`CORE_MIDI_PC_STOCK`): the stock would apply it (MIDI CONFIG receives program changes, and it came on PROG CH IN's channel). Return nonzero to take it: the stock does not change the pattern. Only what MIDI CONFIG lets in arrives (PORT CONFIG > INPUT FROM) |
-| `ev_key_leds` | Digitone mk1 only (core-dn1 3.3): the key-LED frame, every UI frame, after the frame clears the LEDs and before the stock views set theirs; UI task | `void f(void *mgr)` | `mgr` the LedManager. The first setter of an LED wins, so what a handler sets stays over the stock view's: a mod shows its state on the keys while the stock page keeps the rest |
+| `ev_key_leds` | Digitone mk1 (core-dn1 3.3) and Digitakt II (core-dt2 1.1): the key-LED frame, every UI frame, after the frame clears the LEDs and before the stock views set theirs; UI task | `void f(void *mgr)` | `mgr` the LedManager. The first setter of an LED wins, so what a handler sets stays over the stock view's: a mod shows its state on the keys while the stock page keeps the rest |
+| `ev_frame_params` | Digitakt II only (core-dt2 1.1): each frame's per-track parameter values, before the stock modulators and LFOs add theirs; the frame interrupt | `void f(int16_t *values, int stride)` | interrupt level, once a frame. Track t's value j (the Sound array's index, the modulation destinations') at `values[stride * t + j]`, stride 71; add to them, held in each parameter's range. The kit and the pages are untouched, so what a handler adds is never saved |
 | `ev_render_params` | Digitone mk1 only (core-dn1 3.3): each block's sound parameter words, before the controller stage and the LFOs, in the render | `void f(int16_t *words)` | interrupt level, ~1500 times a second. Voice v's slot k at `words[79 * v + k]` (8.8, `CORE_PARAMS_VOICE`), the global FX at record 8; the smoother writes them again every block, so a change lasts one block and the kit is untouched. The words of a block are rendered in the next two; `fw_voice_track[v]` is voice v's track ("Each block's sound parameters" below) |
 | `ev_voice_ready` | Digitone mk1 only (core-dn1 4.2): a voice starting a note, once it holds its sound and the event's p-locks, in the render | `void f(int voice, int track, void *event)` | interrupt level, after `ev_voice_on` in the same pass. What the voice has here is what plays; `fw_voice_locks` puts more locks into it as the render puts a step's ("Parameter pages and the starting voice" below) |
 | `ev_param_turn` | Digitone mk1 only (core-dn1 4.2): a knob turn on a parameter page that the stock would put into the track's sound (no trig held); UI task | `int f(void *view, int id, int delta, int knob)` | return nonzero to take it: the stock neither edits the sound nor shows its pop-up. `delta` is the stock's step (8.8). GRID REC's held trigs keep their turns and are never asked |
@@ -136,10 +137,11 @@ event (lower first; the shipped mods use 10-90).
 | `ev_live_note` | Digitakt mk1 (core 4.2) and Digitone mk1 (core-dn1 5.3): a note played live on a track (the trig keys, keyboard mode, the preview, a MIDI note on its channel), before its voice; the UI or the MIDI task. The sequencer's trigs do not pass here | `int f(int track, int note, int vel, int on, int source)` | return nonzero to take it: the stock neither counts the key nor plays (or releases) it. On a release `vel` is the source; `source` 0x40 the panel, 2 MIDI on the Digitakt; 0x40 or 0x80 KEYBOARD mode, the port (8 or 0x10 DIN, 2 or 4 USB) for MIDI on the Digitone. `fw_note_on` and `fw_note_off` (core3.h) play a note past the event; each counts the key, so pair them |
 
 The events, their prototypes and their conventions are the same on every
-device; only the sites differ, and `ev_voice_on`, `ev_key_leds`,
+device; only the sites differ, and `ev_voice_on`,
 `ev_render_params`, `ev_midi_pc`, `ev_voice_ready`, `ev_param_turn` and
-`ev_param_value` exist on the Digitone only, and `ev_live_note` on the two mk1s only. The Digitakt II's core (mods/core-dt2 1.0) has `ev_tick`, `ev_draw`,
-`ev_key`, `ev_enc`, `ev_settings` and its own `ev_personalize`, and no
+`ev_param_value` exist on the Digitone only, `ev_key_leds` on it and the Digitakt II, `ev_frame_params` on the Digitakt II only, and `ev_live_note` on the two mk1s only. The Digitakt II's core (mods/core-dt2) has `ev_tick`, `ev_draw`,
+`ev_key`, `ev_enc`, `ev_settings`, its own `ev_personalize`,
+`ev_frame_params` and `ev_key_leds` ("Project data, kit data and value rows (core-dt2 1.1, Digitakt II)" below), and no
 render events: its audio
 renders on the DSP. It copies `.fast` code into SRAM itself, on the first
 `ev_tick` (`core_fast`): subscribe only `.run` code to `ev_key` and
@@ -250,7 +252,8 @@ The sites core owns (do not patch them):
   0x4009e09e, 0x4009e166, 0x400edbe2, 0x40018332, 0x4009dba0 and
   0x400ea41c;
 - Digitakt II 1.17: 0x40000538, 0x40032ad4, 0x40032b3a, 0x40033d94,
-  0x40033dde, 0x400a5eac, 0x4009e2a2;
+  0x40033dde, 0x400a5eac, 0x4009e2a2, 0x4002e90c, 0x400311a2,
+  0x400dbee4, 0x400db8be, 0x400df932, 0x400df99c and 0x40136388;
 - Digitone II 1.12: 0x40000538, 0x4002e464, 0x4002e4ca, 0x4002f20c,
   0x4002f256, 0x4009ff88, 0x400987a2, 0x4011fc8c, 0x4011f8c4,
   0x4012197a;
@@ -1436,6 +1439,63 @@ jmp: every save, to a slot, to the temp area or the working copy);
 the load of a block already in RAM (at boot, and from SysEx), both by jsr;
 0x4001570e, the new project's builder (CREATE NEW, by jmp), and 0x400acbf4,
 the template copy of slot -1's load (by jsr).
+
+### Project data, kit data and value rows (core-dt2 1.1, Digitakt II)
+
+Core-dt2 1.1 keeps mods' data in the saved project, in bytes the stock OS
+writes as zeros and never reads, and adds value rows to the menus. The C
+names are in `elekloader/sdk/include/digitakt-mk2/core.h`; the smallest mod
+that uses them is [examples/kit-memo-dt2](../examples/kit-memo-dt2).
+
+**Project data.** As on the Digitone mk1 ("Project data (core-dn1 2.1,
+Digitone mk1)" above): a mod contributes a `core_projdata_t` to
+`core_projdata` and claims `projdata:<tag>`. A Digitakt II project file's
+header (0xBEEFBACE, version 5) leaves +0x1c to +0x200 unused; core puts
+`ELKP` and the blocks there on each save and takes them out on each load,
+then calls `loaded(found)`.
+
+**Kit data.** Kit n is pattern n's, and each kit record leaves 194 bytes
+after its end mark (+0x573e) unused. A mod contributes a `core_kitdata_t` to
+`core_kitdata` and claims `kitdata:<tag>`:
+
+| offset | field | |
+|---|---|---|
+| +0 | tag | four characters |
+| +4 | size | bytes per kit |
+| +8 | data | `CORE_KITS` (128) blocks, kit n's at data + n * size |
+| +12 | changed | `void changed(int kit, int found)`, or 0: kit's block was loaded or copied; `found` is 0 when the kit had none for this set of kit-data mods, and the block then holds zeros |
+
+The area holds `K`, a 16-bit layout id (a CRC of every block's tag and
+size, in the table's order) and the blocks, so 191 bytes for all of them
+(`core_kitdata_room()`); a block that does not fit is left out. Core fills
+it when the firmware writes a kit record (a project save, SAVE KIT), reads
+it when one is loaded, and follows the firmware's copies of a kit in RAM
+(`memcpy` calls of a kit's size): pattern copy and paste, PASTE KIT and
+undo. A kit copied into a buffer outside the project's kits (the clipboard,
+the undo copy) keeps its blocks in one of eight shadows until it is copied
+back. `core_kit_on()` gives the kit on (the pattern on's).
+
+Both areas stay readable by the stock OS, which keeps them when it saves a
+project it loaded. Core writes only where an area holds zeros or its own
+data, and leaves anything else (another tool's, a later OS's) as it was,
+counting it in `core_store_conflicts`.
+
+**Value rows.** From `ev_personalize` (or `ev_settings`),
+`core_addvalue(menu, &row)` adds a row that shows `label` and, on the right
+as LED INTENSITY does, `values[get()]`; LEFT and RIGHT step it, and each
+change calls `set(new)` and redraws. Claim the row (`personalize:<label>`).
+
+**Key LEDs.** An `ev_key_leds` handler sets an LED with
+`fw_led_set(mgr, logical, 2, value)` (value's high nibble a colour; layer 1
+turns it off). Logical ids: the trig keys are key code + 1, the page keys
+TRIG to MOD key code + 19. A handler that changes its LEDs asks for a frame
+by setting the view controller's byte +0x21 (Brain + 0x40).
+
+The sites, each a whole instruction the core runs too (jsr, except
+`memcpy`'s first 12 bytes, by jmp): `ev_frame_params` 0x4002e90c,
+`ev_key_leds` 0x400311a2, kit save 0x400dbee4, kit load 0x400db8be,
+project save 0x400df932, project load 0x400df99c, `memcpy` 0x40136388.
+mods/core-dt2/README.md has what each was.
 
 ### Mod storage (core-ar2 0.2, Analog Rytm MKII)
 
