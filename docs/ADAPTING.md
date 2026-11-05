@@ -2270,8 +2270,8 @@ over ALGO jumps two algorithms a detent. Core consults the table in the UI
 record lookups (0x400899c8 and 0x400899e6) and replaces the routine that
 makes a knob's label (0x400207b8, by jmp; the same address in 1.44). The
 LFO destination list and DEST box also consult the table: 0x28 names the
-destination, 0x2c its group. An over-wide list row falls back to 0x30; the
-box keeps its stock short name when no 0x28 override answers. Native sound
+destination, 0x2c its group. The box and an over-wide list row keep their
+stock short name when no 0x28 override answers. Native sound
 slots, destination order and modulation stay unchanged. The value pop-up's
 long name and a page's group headings keep their stock names, and a page
 view's own drawing stays (SYN1's algorithm diagram, SYN2's envelope graphs).

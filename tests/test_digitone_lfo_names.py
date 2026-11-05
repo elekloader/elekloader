@@ -115,7 +115,8 @@ class DigitoneLfoNames(unittest.TestCase):
                     actual = [get(stack - 4 * nargs + 4 * i) for i in range(nargs)]
                     long, group, short = ((0x10a100, 0x10a200, 0x10a300) if override else
                                           (0x10a028, 0x10a02c, 0x10a030))
-                    expected = {'list': [group, long], 'compact': [group, short],
+                    # The compact row names a destination (0x28): a label-only override keeps its stock text.
+                    expected = {'list': [group, long], 'compact': [group, long if override else short],
                                 'group': [0x10a400, group], 'name': [long if override else short]}[fn]
                     self.assertEqual(actual, expected, (fn, override))
                     self.assertEqual(get(symbols['failed']), 0, 'a later override ran after the first answer')

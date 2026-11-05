@@ -44,7 +44,7 @@
 | the stock id's (its turn), another id's graphic and the mod's formatter.
 | The short name is read by one routine (0x400207b8), which core
 | replaces: the label on the page. names.s also asks this table for the
-| LFO list and DEST box (0x28 destination, 0x2c group; 0x30 compact row).
+| LFO list and DEST box (0x28 destination, also for the compact row; 0x2c group).
 | The value pop-up still reads the stock long name.
 |
 | From 3.1 too: a mod that changes a sound slot calls core_sound_set,
