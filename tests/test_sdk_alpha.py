@@ -53,6 +53,20 @@ LONG_LABEL = SdkMachine("Long label", register=False, source=textwrap.dedent("""
     };
     ELEK_REGISTER_MACHINE(long_label);
 """))
+# A machine with a sound: no device renders yet, so every build refuses it.
+RENDERS = SdkMachine("Renders", register=False, source=textwrap.dedent("""
+    #include "elekloader/sdk_alpha_machine.h"
+    static void render(const struct elek_audio_context *ctx, const struct elek_voice *v, elek_sample *out)
+    {
+        (void)ctx; (void)v;
+        for (int i = 0; i < ELEK_VOICE_FRAMES; ++i)
+            out[i] = ELEK_SAMPLE(0);
+    }
+    static const struct elek_machine renders = {
+        .id = @ID@, .name = "Renders", .short_name = "REND", .render = render, .voice_state = 4,
+    };
+    ELEK_REGISTER_MACHINE(renders);
+"""))
 HELLO = ROOT / 'examples/sdk-hello-world'       # two pages
 GLYPHS = ROOT / 'examples/sdk-glyphs'
 
@@ -69,6 +83,26 @@ def sdk_alpha_test_document():
            'relocs': [['.run', o, 'abs32', 'sec:.run', a]
                       for o, a in ((4, 72), (8, 80), (28, 32), (36, 40), (44, 72), (48, 80))] +
                      [['.run', 32, 'abs32', 'sym:sdk_alpha_dt1_empty_ui', 0]]}
+    return doc, raw
+
+
+def sdk_alpha_test_render_document(render=True, voice_state=0, shared=0):
+    """A v5 registration: the machine at 40 is 44 bytes, its render (an rts) at 88."""
+    raw = bytearray(112)
+    struct.pack_into('>i', raw, 0, 120)
+    struct.pack_into('>iii', raw, 16, 3, 120, 0x55493330)
+    struct.pack_into('>i', raw, 40, 120)
+    struct.pack_into('>II', raw, 76, voice_state, shared)
+    raw[88:90] = b'\x4e\x75'
+    raw[96:102] = b'Empty\0'
+    raw[104:109] = b'EMPT\0'
+    doc = {'exports': ['sdk_alpha_registration_empty'],
+           'symbols': {'sdk_alpha_registration_empty': ['.run', 0]},
+           'relocs': [['.run', o, 'abs32', 'sec:.run', a]
+                      for o, a in ((4, 96), (8, 104), (28, 32), (36, 40), (44, 96), (48, 104))] +
+                     [['.run', 32, 'abs32', 'sym:sdk_alpha_dt1_ui_v5', 0]]}
+    if render:
+        doc['relocs'].append(['.run', 72, 'abs32', 'sec:.run', 88])
     return doc, raw
 
 
@@ -286,6 +320,32 @@ class SdkAlphaTests(unittest.TestCase):
                 with self.assertRaises(build.BuildError):
                     sdk_alpha_registrations(doc, {'.run': raw})
 
+    def test_sdk_alpha_render_registration(self):
+        layouts = {}
+        doc, raw = sdk_alpha_test_render_document(voice_state=16, shared=8)
+        self.assertEqual(sdk_alpha_registrations(doc, {'.run': raw}, layouts),
+                         [('sdk_alpha_registration_empty', 120)])
+        self.assertEqual([layouts[120][k] for k in ('render', 'voice_state', 'shared')], [True, 16, 8])
+        doc, raw = sdk_alpha_test_render_document(render=False)
+        sdk_alpha_registrations(doc, {'.run': raw}, layouts)
+        self.assertEqual([layouts[120][k] for k in ('render', 'voice_state', 'shared')], [False, 0, 0])
+        for kwargs, message in (({'voice_state': 257}, 'voice_state is at most 256'),
+                                ({'shared': 65}, 'shared is at most 64'),
+                                ({'render': False, 'voice_state': 4}, 'need a render'),
+                                ({'render': False, 'shared': 4}, 'need a render')):
+            with self.subTest(**kwargs):
+                doc, raw = sdk_alpha_test_render_document(**kwargs)
+                with self.assertRaisesRegex(build.BuildError, message):
+                    sdk_alpha_registrations(doc, {'.run': raw})
+        doc, raw = sdk_alpha_test_render_document(render=False)
+        struct.pack_into('>I', raw, 72, 0x40001000)        # an address, not a function of the mod
+        with self.assertRaisesRegex(build.BuildError, 'function in the mod'):
+            sdk_alpha_registrations(doc, {'.run': raw})
+        doc, raw = sdk_alpha_test_render_document()
+        doc['relocs'][-1][3] = 'sym:external_render'
+        with self.assertRaisesRegex(build.BuildError, 'own mod'):
+            sdk_alpha_registrations(doc, {'.run': raw})
+
     def test_a_callbacks_input_is_read_only(self):
         cc = shutil.which('cc')
         if not cc:
@@ -333,8 +393,8 @@ class SdkAlphaTests(unittest.TestCase):
                 link.link([core, pages, built['empty'][1], link.Mod2(duplicate, 'conflict')], image)
             with open(pages_path) as fh:
                 older_pages = json.load(fh)
-            older_pages['exports'].remove('sdk_alpha_dt1_ui_v4')
-            with self.assertRaisesRegex(elemod.ModError, 'sdk_alpha_dt1_ui_v4'):
+            older_pages['exports'].remove('sdk_alpha_dt1_ui_v5')   # a companion from before render
+            with self.assertRaisesRegex(elemod.ModError, 'sdk_alpha_dt1_ui_v5'):
                 link.link([core, link.Mod2(older_pages, 'older-pages'), built['empty'][1]], image)
 
     def test_sdk_alpha_one_source_builds_for_both_devices(self):
@@ -358,6 +418,9 @@ class SdkAlphaTests(unittest.TestCase):
                 link.link([core, machines, dn_mod, link.Mod2(doc, 'conflict')], image)
             link.link([core, machines, sdk_alpha_build(ONE_PAGE.write(tmp + '/one'), dn, tmp)[1]], image)
             link.link([core, machines, sdk_alpha_build(str(HELLO), dn, tmp)[1]], image)   # two pages
+            for device, stock in stocks.items():
+                with self.assertRaisesRegex(build.BuildError, 'render is not supported on %s' % device):
+                    sdk_alpha_build(RENDERS.write(tmp + '/renders-' + device), stock, tmp)
             for stock in stocks.values():
                 with self.assertRaisesRegex(build.BuildError, '1..5 printable ASCII characters'):
                     sdk_alpha_build(LONG_LABEL.write(tmp + '/long'), stock, tmp)
@@ -404,6 +467,8 @@ class SdkAlphaTests(unittest.TestCase):
             duplicate['resources']['names'] = []  # descriptor inference also protects hand-written mods
             with self.assertRaisesRegex(elemod.ModError, 'mk2-synth:%d' % EMPTY.id):
                 link.link([core, machines, built['empty'][1], link.Mod2(duplicate, 'conflict')], image)
+            with self.assertRaisesRegex(build.BuildError, 'render is not supported on digitone-mk2'):
+                sdk_alpha_build(RENDERS.write(tmp + '/renders'), stock, tmp)
             midi = SdkMachine("Midi slot", register=False, source=EMPTY.source)
             midi.id = 4                                 # 4..127 elsewhere; MIDI's type on the Digitone II
             with self.assertRaisesRegex(build.BuildError, r'invalid machine slot 4 \(expected 5\.\.127\)'):

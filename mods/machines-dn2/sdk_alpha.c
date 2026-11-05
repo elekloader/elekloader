@@ -12,6 +12,7 @@
 const char sdk_alpha_dt1_empty_ui[] = "sdk alpha dn2 empty";
 const char sdk_alpha_dt1_ui_v3[] = "sdk alpha dn2 pages 3";
 const char sdk_alpha_dt1_ui_v4[] = "sdk alpha dn2 glyphs 4";
+const char sdk_alpha_dt1_ui_v5[] = "sdk alpha dn2 render 5";    /* v4 and the render fields */
 
 extern const struct sdk_alpha_registration *const sdk_alpha_machines[];   /* the table, ending in 0 */
 
@@ -36,7 +37,7 @@ static void init(void)
         synths[n].name = (*p)->name;
         synths[n].label = (*p)->sname;
         declared[n] = e;
-        has_glyphs[n] = (*p)->ui->abi == sdk_alpha_dt1_ui_v4;
+        has_glyphs[n] = (*p)->ui->abi == sdk_alpha_dt1_ui_v4 || (*p)->ui->abi == sdk_alpha_dt1_ui_v5;
         for (uint32_t page = 0; page < e->page_count && page < 2; ++page)
             for (int k = 0; k < 8; ++k) {
                 const struct elek_ui_knob *knob = e->pages[page].knob[k];

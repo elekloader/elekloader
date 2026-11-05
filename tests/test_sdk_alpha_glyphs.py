@@ -99,6 +99,7 @@ GRID = sdk_machine("Glyph grid", """
 # A v3 knob ends before the glyph pointer. The next word is deliberately not a valid glyph.
 LEGACY = sdk_machine("Legacy glyph", """
     #define sdk_alpha_dt1_ui_v4 sdk_alpha_dt1_ui_v3
+    #define sdk_alpha_dt1_ui_v5 sdk_alpha_dt1_ui_v3
     #include "elekloader/sdk_alpha_machine.h"
 
     struct legacy_knob {

@@ -14,6 +14,7 @@ _Static_assert(sizeof(struct sdk_alpha_registration) == sizeof(struct cm_machine
 const char sdk_alpha_dt1_empty_ui[] = "sdk alpha dt1 empty";
 const char sdk_alpha_dt1_ui_v3[] = "sdk alpha dt1 pages 3";
 const char sdk_alpha_dt1_ui_v4[] = "sdk alpha dt1 glyphs 4";
+const char sdk_alpha_dt1_ui_v5[] = "sdk alpha dt1 render 5";    /* v4 and the render fields */
 static const struct elek_machine *sdk_alpha_current;
 static uint32_t sdk_alpha_empty_layout[11];
 extern uint32_t mp_stock_layout(int32_t machine);
@@ -35,14 +36,14 @@ static const struct elek_ui_glyph *sdk_alpha_glyphs[15];
 static int sdk_alpha_has_glyphs(const struct elek_machine *m)
 {
     const struct sdk_alpha_machine_ui *u = (const void *)core_machine_ui(m->id);
-    return u && u->abi == sdk_alpha_dt1_ui_v4;
+    return u && (u->abi == sdk_alpha_dt1_ui_v4 || u->abi == sdk_alpha_dt1_ui_v5);
 }
 
 const struct elek_machine *sdk_alpha_machine(int32_t id)
 {
     const struct sdk_alpha_machine_ui *u = (const void *)core_machine_ui(id);
     if (!u || (u->abi != sdk_alpha_dt1_empty_ui && u->abi != sdk_alpha_dt1_ui_v3 &&
-               u->abi != sdk_alpha_dt1_ui_v4))
+               u->abi != sdk_alpha_dt1_ui_v4 && u->abi != sdk_alpha_dt1_ui_v5))
         return 0;
     const struct elek_machine *m = u->machine;
     if (!m || m->id != id || m->page_count > 2 || m->_reserved[0] || m->_reserved[1] ||

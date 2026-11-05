@@ -23,6 +23,8 @@ docs match its code.
 - **[Adapting your mod](ADAPTING.md)**: the path to take, the rules, every
   command with the output it should print, every refusal with its fix, and a
   definition of done. Coding agents: start with [AGENTS.md](../AGENTS.md).
+- **[Shared machine SDK](SDK.md)** (alpha): portable machine UIs, supported
+  devices and limits, and the audio contract with its pending device backends.
 - **[Your mod in the shop](SHOP.md)**: publish it, submit it with one form,
   and let later releases update it by themselves; take it out the same way.
 - **[Digitone II machines](MACHINES-DN2.md)**: register

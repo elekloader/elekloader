@@ -17,14 +17,18 @@ SDK_ALPHA_TARGETS = {
     ('digitone-mk1', '1.44'): ('sdk_alpha_machines', 'dnmachine:%d', ('core', 'machines')),
     ('digitone-mk2', '1.12'): ('sdk_alpha_machines', 'mk2-synth:%d', ('core', 'machines-dn2')),
 }
+# The releases whose companion plays an SDK machine's .render. None yet: the contract comes first.
+SDK_ALPHA_RENDER = set()
+ELEK_VOICE_STATE_MAX = 256      # sdk_alpha_machine.h
+ELEK_SHARED_MAX = 64
 
 
 def sdk_alpha_registrations(doc, sections, layouts=None):
     """Discover compiler-emitted adapters; never repeat machine declarations in JSON.
 
     layouts, when given, is filled with each machine's declared layout, by machine id:
-    {'name', 'pages': [{'label', 'knobs': {encoder 0-7: {'id', 'label', 'min', 'max'}}}]}.
-    The built mod does not change."""
+    {'name', 'pages': [{'label', 'knobs': {encoder 0-7: {'id', 'label', 'min', 'max'}}}],
+     'render': bool, 'voice_state': bytes, 'shared': bytes}. The built mod does not change."""
     def sdk_alpha_bytes(where, size):
         sec, off = where
         raw = sections.get(sec, b'')
@@ -72,10 +76,12 @@ def sdk_alpha_registrations(doc, sections, layouts=None):
         if len(abi) != 1 or abi[0][2:] not in (
                 ['abs32', 'sym:sdk_alpha_dt1_empty_ui', 0],
                 ['abs32', 'sym:sdk_alpha_dt1_ui_v3', 0],
-                ['abs32', 'sym:sdk_alpha_dt1_ui_v4', 0]):
+                ['abs32', 'sym:sdk_alpha_dt1_ui_v4', 0],
+                ['abs32', 'sym:sdk_alpha_dt1_ui_v5', 0]):
             raise build.BuildError('sdk alpha: invalid machine UI ABI')
+        v5 = abi[0][3] == 'sym:sdk_alpha_dt1_ui_v5'
         machine = sdk_alpha_pointer(ui, 4)
-        data = sdk_alpha_bytes(machine, 32)
+        data = sdk_alpha_bytes(machine, 44 if v5 else 32)
         if struct.unpack_from('>i', data)[0] != mid or struct.unpack_from('>iii', raw, 16) != (3, mid, 0x55493330):
             raise build.BuildError('sdk alpha: inconsistent machine adapter')
         page_layouts = []
@@ -91,8 +97,9 @@ def sdk_alpha_registrations(doc, sections, layouts=None):
                     r[0] == machine[0] and r[1] == machine[1] + 12 for r in doc['relocs']):
                 raise build.BuildError('sdk alpha: empty machines require zero pages')
         else:
-            glyphs = abi[0][3] == 'sym:sdk_alpha_dt1_ui_v4'
-            if abi[0][3] not in ('sym:sdk_alpha_dt1_ui_v3', 'sym:sdk_alpha_dt1_ui_v4'):
+            glyphs = abi[0][3] in ('sym:sdk_alpha_dt1_ui_v4', 'sym:sdk_alpha_dt1_ui_v5')
+            if abi[0][3] not in ('sym:sdk_alpha_dt1_ui_v3', 'sym:sdk_alpha_dt1_ui_v4',
+                                 'sym:sdk_alpha_dt1_ui_v5'):
                 raise build.BuildError('sdk alpha: pages require the pages ABI')
             pages = sdk_alpha_pointer(machine, 12)
             knobs = {}
@@ -134,10 +141,25 @@ def sdk_alpha_registrations(doc, sections, layouts=None):
                             sdk_alpha_bytes(glyph, 32)
             if set(knobs) != set(range(len(knobs))):
                 raise build.BuildError('sdk alpha: knob IDs must be contiguous from zero')
+        render, voice_state, shared = False, 0, 0
+        if v5:
+            render = any(r[0] == machine[0] and r[1] == machine[1] + 32 for r in doc['relocs'])
+            if render:
+                sdk_alpha_pointer(machine, 32)          # a function in the mod itself
+            elif any(data[32:36]):
+                raise build.BuildError('sdk alpha: render must be a function in the mod')
+            voice_state, shared = struct.unpack_from('>II', data, 36)
+            if voice_state > ELEK_VOICE_STATE_MAX:
+                raise build.BuildError('sdk alpha: voice_state is at most %d bytes' % ELEK_VOICE_STATE_MAX)
+            if shared > ELEK_SHARED_MAX:
+                raise build.BuildError('sdk alpha: shared is at most %d bytes' % ELEK_SHARED_MAX)
+            if (voice_state or shared) and not render:
+                raise build.BuildError('sdk alpha: voice_state and shared need a render')
         machine_name = sdk_alpha_name(machine, 4, 16)
         sdk_alpha_name(machine, 8, 4)
         if layouts is not None:
-            layouts[mid] = {'name': machine_name, 'pages': page_layouts}
+            layouts[mid] = {'name': machine_name, 'pages': page_layouts,
+                            'render': render, 'voice_state': voice_state, 'shared': shared}
         ids.add(mid)
         registrations.append((name, mid))
     if not registrations:
@@ -174,6 +196,8 @@ def sdk_alpha_build(moddir, stock, out=None):
         for _, mid in registrations:
             if mid < low:
                 raise build.BuildError('sdk alpha: duplicate or invalid machine slot %d (expected %d..127)' % (mid, low))
+            if layouts[mid]['render'] and (device, release) not in SDK_ALPHA_RENDER:
+                raise build.BuildError('sdk alpha: render is not supported on %s %s yet' % (device, release))
         if any(c['to'] == table for c in doc['contribute']):
             raise build.BuildError('sdk alpha: declare machines only in C')
         for symbol, mid in registrations:
