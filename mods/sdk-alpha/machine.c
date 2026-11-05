@@ -194,17 +194,17 @@ void sdk_alpha_select(uint32_t slot, int32_t id)
     voices[slot].start = 0;
 }
 
-void sdk_alpha_voice(const struct sdk_alpha_entry *e, struct elek_voice *v, const int32_t *raw,
-                     int start, elek_sample *out)
+void sdk_alpha_voice(const struct sdk_alpha_entry *e, uint32_t slot, struct elek_voice *v,
+                     const int32_t *raw, int start, elek_sample *out)
 {
     int32_t knob[SDK_ALPHA_KNOBS];
-    if (start) voices[v->slot].start = 1;
+    if (start) voices[slot].start = 1;
     for (uint32_t k = 0; k < e->count; ++k)
         knob[k] = sdk_alpha_map(&e->machine->knobs[k], raw[k]);
-    const struct elek_audio_context ctx = { .knob_count = e->count, .knob = e->count ? knob : 0 };
-    v->flags = voices[v->slot].start ? ELEK_VOICE_START : 0;
-    v->state = e->machine->voice_state ? voices[v->slot].state : 0;
-    e->machine->render(&ctx, v, out);
-    voices[v->slot].start = 0;
+    v->knob = knob;
+    v->start = voices[slot].start;
+    v->state = voices[slot].state;
+    e->machine->render(v, out);
+    voices[slot].start = 0;
 }
 #endif

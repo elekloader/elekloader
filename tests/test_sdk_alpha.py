@@ -53,20 +53,21 @@ LONG_LABEL = SdkMachine("Long label", register=False, source=textwrap.dedent("""
 # A machine with a sound: Digitakt renders it; the other targets refuse it.
 RENDERS = SdkMachine("Renders", register=False, source=textwrap.dedent("""
     #include "elekloader/sdk_alpha_machine.h"
-    static void render(const struct elek_audio_context *ctx, const struct elek_voice *v, elek_sample *out)
+    static void render(const struct elek_voice *v, elek_sample *out)
     {
-        (void)ctx; (void)v;
+        (void)v;
         for (int i = 0; i < ELEK_VOICE_FRAMES; ++i)
             out[i] = ELEK_SAMPLE(0);
     }
     static const struct elek_machine renders = {
-        .id = @ID@, .name = "Renders", .short_name = "REND", .render = render, .voice_state = 4,
+        .id = @ID@, .name = "Renders", .short_name = "REND", .render = render,
     };
     ELEK_REGISTER_MACHINE(renders);
 """))
 # A knob that starts above its min, which the Digitone II cannot do yet.
 DEFAULTS = SdkMachine("Defaults", register=False, source=ONE_PAGE.source.replace(
     '.max = 127', '.min = -50, .max = 50'))
+ELEK_STATE_BYTES = 256                          # ELEK_VOICE_STATE_MAX
 HELLO = ROOT / 'examples/sdk-hello-world'       # two pages
 GLYPHS = ROOT / 'examples/sdk-glyphs'
 
@@ -90,13 +91,12 @@ def sdk_alpha_test_document():
     return sdk_alpha_test_render_document(render=False)
 
 
-def sdk_alpha_test_render_document(render=True, voice_state=0):
+def sdk_alpha_test_render_document(render=True):
     """A registration of an empty machine at M; its render (an rts) at RENDER."""
     raw = bytearray(SNAME + 8)
     struct.pack_into('>i', raw, 0, 120)
     struct.pack_into('>iii', raw, 16, 3, 120, 0x55493330)
     struct.pack_into('>i', raw, M, 120)
-    struct.pack_into('>I', raw, M + B.MACHINE_VOICE_STATE, voice_state)
     raw[RENDER:RENDER + 2] = b'\x4e\x75'
     raw[NAME:NAME + 6] = b'Empty\0'
     raw[SNAME:SNAME + 5] = b'EMPT\0'
@@ -280,19 +280,13 @@ class SdkAlphaTests(unittest.TestCase):
 
     def test_sdk_alpha_render_registration(self):
         layouts = {}
-        doc, raw = sdk_alpha_test_render_document(voice_state=16)
+        doc, raw = sdk_alpha_test_render_document()
         self.assertEqual(sdk_alpha_registrations(doc, {'.run': raw}, layouts),
                          [('sdk_alpha_registration_empty', 120)])
-        self.assertEqual([layouts[120][k] for k in ('render', 'voice_state')], [True, 16])
+        self.assertTrue(layouts[120]['render'])
         doc, raw = sdk_alpha_test_render_document(render=False)
         sdk_alpha_registrations(doc, {'.run': raw}, layouts)
-        self.assertEqual([layouts[120][k] for k in ('render', 'voice_state')], [False, 0])
-        for kwargs, message in (({'voice_state': 257}, 'voice_state is at most 256'),
-                                ({'render': False, 'voice_state': 4}, 'needs a render')):
-            with self.subTest(**kwargs):
-                doc, raw = sdk_alpha_test_render_document(**kwargs)
-                with self.assertRaisesRegex(build.BuildError, message):
-                    sdk_alpha_registrations(doc, {'.run': raw})
+        self.assertFalse(layouts[120]['render'])
         doc, raw = sdk_alpha_test_render_document(render=False)
         struct.pack_into('>I', raw, M + B.MACHINE_RENDER, 0x40001000)        # an address, not a function of the mod
         with self.assertRaisesRegex(build.BuildError, 'function in the mod'):
@@ -301,6 +295,20 @@ class SdkAlphaTests(unittest.TestCase):
         doc['relocs'][-1][3] = 'sym:external_render'
         with self.assertRaisesRegex(build.BuildError, 'own mod'):
             sdk_alpha_registrations(doc, {'.run': raw})
+
+    def test_a_voice_state_too_big_does_not_compile(self):
+        cc = shutil.which('cc')
+        if not cc:
+            self.skipTest('no host C compiler')
+        for size, fits in ((ELEK_STATE_BYTES, True), (ELEK_STATE_BYTES + 1, False)):
+            with self.subTest(size=size):
+                result = subprocess.run(
+                    [cc, '-std=c99', '-fsyntax-only', '-x', 'c', '-I', str(ROOT / 'elekloader/sdk/include'), '-'],
+                    input='#include "elekloader/sdk_alpha_machine.h"\n'
+                          'struct state { char bytes[%d]; };\n'
+                          'void *f(const struct elek_voice *v) { return ELEK_STATE(struct state, v); }\n' % size,
+                    capture_output=True, text=True)
+                self.assertEqual(result.returncode == 0, fits, result.stderr)
 
     def test_a_callbacks_input_is_read_only(self):
         cc = shutil.which('cc')
@@ -376,11 +384,11 @@ class SdkAlphaTests(unittest.TestCase):
             source = Path(tmp, 'renders', 'machine.c')
             plain = source.read_text()
             for sample, refusal in (
-                    ('ELEK_SAMPLE(ctx->knob[0] / 127.0)',
+                    ('ELEK_SAMPLE(v->knob[0] / 127.0)',
                      r'uses floating point \(.*__divdf3.*\): the ColdFire has none; .* use elek_level'),
                     ('helper()', 'imports helper, which no companion exports')):
                 with self.subTest(sample=sample):
-                    source.write_text(plain.replace('(void)ctx;', 'extern int helper(void);').replace(
+                    source.write_text(plain.replace('(void)v;', 'extern int helper(void);').replace(
                         'ELEK_SAMPLE(0)', sample))
                     with self.assertRaisesRegex(build.BuildError, refusal):
                         sdk_alpha_build(str(source.parent), stock, tmp)

@@ -347,10 +347,8 @@ static void render(int32_t voice, int32_t *block, const struct dnm_voice *v)
         int32_t slot = ((const int32_t *)fw_params)[15 * dnm_sdk_param(sdk_pos[k]) + 1];
         raw[k] = render_params ? render_params[79 * voice + slot] : dnm_knob(voice, sdk_pos[k]);
     }
-    struct elek_voice sv = {
-        .slot = voice, .track = track, .pitch = v->pitch, .velocity = v->velocity, .gate = v->gate != 0,
-    };
-    sdk_alpha_voice(e, &sv, raw, v->fresh, block);
+    struct elek_voice sv = { .track = track, .pitch = v->pitch, .velocity = v->velocity };
+    sdk_alpha_voice(e, voice, &sv, raw, v->fresh, block);
     for (int k = 0; k < ELEK_VOICE_FRAMES; ++k)
         block[k] >>= 4;              /* SDK Q31 full scale to DNM_PEAK, before native AMP/filter. */
 }

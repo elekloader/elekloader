@@ -74,7 +74,7 @@ class RenderContractTests(unittest.TestCase):
         for target in ('q31', 'float'):
             with self.subTest(target=target):
                 samples, _ = self.render(target)
-                self.assertEqual(samples[0], 0.0)               # ELEK_VOICE_START reset the phase
+                self.assertEqual(samples[0], 0.0)               # the note's start reset the phase
                 self.assertGreater(max(samples), 0.99)
                 self.assertLess(min(samples), -0.99)
                 # 440 Hz moves at most 2 pi 440 / 48000 a sample, plus one 256-entry table step.

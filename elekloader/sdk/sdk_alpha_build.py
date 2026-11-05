@@ -28,9 +28,9 @@ SDK_ALPHA_TARGETS = {
 }
 SDK_ALPHA_ABI = 'sdk_alpha_dt1_ui_v1'    # the one symbol the companions export to SDK machines
 # sdk_alpha_machine.h's limits and the layout of its structs, as a 32-bit build lays them out
-ELEK_UI_LABEL_MAX, ELEK_UI_KNOB_MAX, ELEK_UI_PAGE_MAX, ELEK_VOICE_STATE_MAX = 5, 15, 2, 256
+ELEK_UI_LABEL_MAX, ELEK_UI_KNOB_MAX, ELEK_UI_PAGE_MAX = 5, 15, 2
 MACHINE_NAME, MACHINE_SHORT_NAME, MACHINE_KNOBS, MACHINE_KNOB_COUNT, MACHINE_PAGES = 4, 8, 12, 16, 20
-MACHINE_RENDER, MACHINE_VOICE_STATE, MACHINE_SIZE = 96, 100, 104
+MACHINE_RENDER, MACHINE_SIZE = 96, 100
 PAGE_LABEL, PAGE_ENCODER, PAGE_SIZE = 0, 4, 36
 KNOB_LABEL, KNOB_MIN, KNOB_GLYPH, KNOB_SIZE = 0, 4, 16, 20
 
@@ -40,7 +40,7 @@ def sdk_alpha_registrations(doc, sections, layouts=None):
 
     layouts, when given, is filled with each machine's declared layout, by machine id:
     {'name', 'knobs': [{'id', 'label', 'min', 'max', 'def'}], 'pages': [{'label', 'knobs': {encoder 0-7:
-    knob}}], 'render': bool, 'voice_state': bytes}. The built mod does not change."""
+    knob}}], 'render': bool}. The built mod does not change."""
     def sdk_alpha_bytes(where, size):
         sec, off = where
         raw = sections.get(sec, b'')
@@ -147,16 +147,11 @@ def sdk_alpha_registrations(doc, sections, layouts=None):
             sdk_alpha_pointer(machine, MACHINE_RENDER)          # a function in the mod itself
         elif any(data[MACHINE_RENDER:MACHINE_RENDER + 4]):
             raise build.BuildError('sdk alpha: render must be a function in the mod')
-        voice_state, = struct.unpack_from('>I', data, MACHINE_VOICE_STATE)
-        if voice_state > ELEK_VOICE_STATE_MAX:
-            raise build.BuildError('sdk alpha: voice_state is at most %d bytes' % ELEK_VOICE_STATE_MAX)
-        if voice_state and not render:
-            raise build.BuildError('sdk alpha: voice_state needs a render')
         machine_name = sdk_alpha_name(machine, MACHINE_NAME, 16)
         sdk_alpha_name(machine, MACHINE_SHORT_NAME, 4)
         if layouts is not None:
             layouts[mid] = {'name': machine_name, 'pages': page_layouts, 'knobs': knob_layouts,
-                            'render': render, 'voice_state': voice_state}
+                            'render': render}
         ids.add(mid)
         registrations.append((name, mid))
     if not registrations:

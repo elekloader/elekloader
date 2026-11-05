@@ -204,20 +204,21 @@ available separately.
 The callback is:
 
 ```c
-void render(const struct elek_audio_context *ctx,
-            const struct elek_voice *voice, elek_sample *out);
+void render(const struct elek_voice *v, elek_sample *out);
 ```
 
 It fills all `ELEK_VOICE_FRAMES` (32) mono samples at
-`ELEK_SAMPLE_RATE` (48 kHz). `ctx->knob[i]` is the mapped value of logical
-knob `i` for this voice, with locks and modulation applied where the
-backend supplies them. It is separate from `.present`'s editing snapshot.
+`ELEK_SAMPLE_RATE` (48 kHz). `v->knob[i]` is the mapped value of knob `i`
+for this voice, with locks and modulation applied where the backend
+supplies them. It is separate from `.present`'s editing snapshot.
 
-`elek_voice` describes the allocated voice `slot`, owning `track`, pitch
-in 16.16 MIDI semitones, velocity 1..127, gate, note-start flags and a
-state pointer. A voice slot is not a track number on a polyphonic device.
-`ELEK_VOICE_START` notifies the renderer of a note start; the mod decides
-what to reset. Resetting phase on a retrigger can cause a waveform jump.
+`elek_voice` also gives the owning `track`, the pitch in 16.16 MIDI
+semitones, the velocity 1..127, `start` and the voice's state. `start` is
+nonzero in a note's first block; the mod decides what to reset. On the
+Digitone mk1 the AMP applies the velocity after render, so scaling by it
+applies it twice: use it for timbre. On the Digitakt mk1, render runs
+before the native AMP; whether that applies velocity has not been
+checked.
 
 ### Samples and an external kernel
 
@@ -240,25 +241,23 @@ for that. The pitch helper clamps to MIDI notes 0..127 and does not
 generate a waveform or provide antialiasing.
 
 This render fragment calls an external kernel with the target's sample
-type. `LEVEL` is a logical control ID defined by the machine:
+type. `LEVEL` is a knob ID defined by the machine:
 
 ```c
 struct voice_state { uint32_t phase; };
 void sine_block(elek_sample *out, uint32_t *phase, uint32_t step);
 
-static void render(const struct elek_audio_context *ctx,
-                   const struct elek_voice *v, elek_sample *out)
+static void render(const struct elek_voice *v, elek_sample *out)
 {
-    struct voice_state *s = v->state;
-    elek_sample gain = elek_level(ctx->knob[LEVEL], 127);
+    struct voice_state *s = ELEK_STATE(struct voice_state, v);
+    elek_sample gain = elek_level(v->knob[LEVEL], 127);
     sine_block(out, &s->phase, elek_phase_inc(v->pitch));
     for (int i = 0; i < ELEK_VOICE_FRAMES; ++i)
         out[i] = elek_clip(elek_mul(out[i], gain));
 }
 ```
 
-The machine declares `.render = render` and
-`.voice_state = sizeof(struct voice_state)`. The kernel can be portable C
+The machine declares `.render = render`. The kernel can be portable C
 or a separate assembly implementation for each processor. Assembly must
 match that processor's sample representation and calling convention;
 ColdFire instructions cannot execute on SHARC. Automatic selection and
@@ -266,11 +265,12 @@ packaging of those kernels are not implemented by the SDK builder yet.
 
 ### Voice state
 
-`.voice_state` declares one block per voice slot, at most 256 bytes,
-zeroed at boot and retained between calls and notes; render reaches it
-through `voice->state`. Render computes everything else from `ctx->knob`,
-which already carries the voice's locks and LFOs, and caches derived
-values in voice state.
+Each voice has `ELEK_VOICE_STATE_MAX` (256) bytes of state, zeroed at boot
+and when the voice changes machine, and kept between calls and notes.
+`ELEK_STATE(struct my_state, v)` returns it as a `struct my_state *`, and
+refuses to compile when the struct does not fit. Render computes
+everything else from `v->knob`, which already carries the voice's locks
+and LFOs, and caches derived values in voice state.
 
 Audio code may read its arguments, its voice state and constant data. A
 writable global is not a portable UI-to-audio channel: on DN2 it would be
@@ -278,8 +278,7 @@ two independent copies. A build-time check for such access is not
 implemented. Avoid allocation, blocking, file/USB access and UI/firmware
 calls from render code.
 
-The builder validates the size and rejects `.voice_state` without
-`.render`. Passing the checks defines a valid record, not an available
+Passing the builder's checks defines a valid record, not an available
 audio backend.
 
 ## Audio across mk1 and mk2
@@ -293,20 +292,18 @@ The backends reuse each device's native voice path:
 | Digitone II | SHARC voice callback, 32 floats before the native envelope, filter and mixer | Build/package the audio artifact, bind it to SDK registration, and supply missing voice metadata |
 
 Digitakt replaces the track block before the existing native overdrive,
-filter and AMP stages. The voice's `slot` and `track` are the track index.
-Controls come from `cm_src_value`, the render parameter buffer, rather
-than the editing kit. Each track has its own voice state, retained across
-notes and retriggers and cleared when its rendered machine changes.
-The start flag, pitch and velocity come from the native render exports.
-Currently `gate` reflects a nonzero native AMP envelope phase; it is an
-envelope-active indication, not a separately observed key-held flag.
+filter and AMP stages; each track is one voice. Controls come from
+`cm_src_value`, the render parameter buffer, rather than the editing kit.
+Each track has its own voice state, retained across notes and retriggers
+and cleared when its rendered machine changes. The start flag, pitch and
+velocity come from the native render exports.
 
 Digitone mk1's second ColdFire still generates FM. The shared renderer
 replaces each allocated voice on the main CPU through `machines-dn1`.
-There are eight independent state blocks; `slot` is the allocated voice,
-and `track` comes from the native voice-owner map. Pitch, velocity, start
-and held-note gate come from the companion's native voice record. State
-survives notes and retriggers, and is cleared when the slot changes machine.
+There are eight independent state blocks, one for each allocated voice,
+and `track` comes from the native voice-owner map. Pitch, velocity and
+start come from the companion's native voice record. State survives notes
+and retriggers, and is cleared when the voice changes machine.
 The wrapper scales SDK full scale to `DNM_PEAK` (1/16); the companion's AMP
 envelope and velocity, then the native multimode filter, mixer and effects,
 follow the renderer.
@@ -334,7 +331,7 @@ fifteen of those slots. Connecting that path to SDK audio still needs
 validation. Pages, labels and glyphs stay on ColdFire.
 
 The native DN2 input has pitch, start, slot, controls and state, but lacks
-the owning track, velocity and gate required by `elek_voice`. Core/bridge
+the owning track and velocity required by `elek_voice`. Core/bridge
 work must provide those values; the current DN2 SDK adapter does not.
 
 The existing DN2 native audio limits are one SHARC synth per build, synth

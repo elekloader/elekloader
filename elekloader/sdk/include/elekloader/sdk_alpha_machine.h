@@ -54,8 +54,7 @@ struct elek_ui_presentation {
  * ELEK_SAMPLE, and do not divide them. ELEK_TARGET_SHARC is set when the SDK builds for the SHARC. */
 #define ELEK_SAMPLE_RATE 48000
 #define ELEK_VOICE_FRAMES 32          /* samples a render call */
-#define ELEK_VOICE_START 1u           /* elek_voice.flags: the note's first block */
-#define ELEK_VOICE_STATE_MAX 256      /* .voice_state's limit: bytes a voice keeps between calls */
+#define ELEK_VOICE_STATE_MAX 256      /* the bytes of a voice's state */
 #ifdef ELEK_TARGET_SHARC
 typedef float elek_sample;            /* -1.0..1.0 */
 #define ELEK_SAMPLE(x) ((float)(x))
@@ -117,18 +116,17 @@ static inline uint32_t elek_phase_inc(int32_t pitch)
     return (step[k] + (((step[k + 1] - step[k]) * f) >> 14)) << (q / 48);
 }
 struct elek_voice {
-    uint32_t slot;                 /* the voice, 0-based: not the track */
+    const int32_t *knob;           /* by id: this voice's values, mapped, with its locks and LFOs */
     uint32_t track;                /* the track that played it, from zero */
+    uint32_t start;                /* nonzero in a note's first block */
     int32_t pitch;                 /* semitones, 16.16, MIDI numbering */
-    int32_t velocity;              /* 1..127 */
-    uint32_t gate;                 /* held note; DT1 currently reports AMP active (docs/SDK.md) */
-    uint32_t flags;                /* ELEK_VOICE_START */
-    void *state;                   /* zeroed at boot/machine change; kept between calls and notes */
+    int32_t velocity;              /* 1..127; the Digitone's AMP already applies it: use it for timbre */
+    void *state;                   /* ELEK_VOICE_STATE_MAX bytes, zeroed at boot and when the voice changes
+                                    * machine, kept between calls and notes: read it with ELEK_STATE */
 };
-struct elek_audio_context {
-    uint32_t knob_count;
-    const int32_t *knob;           /* by logical ID: this voice's values, mapped to the knob's bounds */
-};
+/* The voice's state as a type*, which must fit in ELEK_VOICE_STATE_MAX bytes (a compile error if not). */
+#define ELEK_STATE(type, v) \
+    ((void)sizeof(char[sizeof(type) <= ELEK_VOICE_STATE_MAX ? 1 : -1]), (type *)(v)->state)
 
 struct elek_machine {
     int32_t id;                    /* native machine slot, 4..127 (Digitone II: 5..127); declared only here */
@@ -141,8 +139,7 @@ struct elek_machine {
     void (*present)(const struct elek_ui_context *, struct elek_ui_presentation *);
     /* Optional: the machine's sound, one voice at a time (without it the device's own plays).
      * It may read only its arguments, its state and constant data. */
-    void (*render)(const struct elek_audio_context *, const struct elek_voice *, elek_sample *out);
-    uint32_t voice_state;          /* 0..ELEK_VOICE_STATE_MAX bytes a voice keeps; needs render */
+    void (*render)(const struct elek_voice *, elek_sample *out);
 };
 
 #define ELEK_KNOBS(k) .knobs = (k), .knob_count = sizeof(k) / sizeof((k)[0])

@@ -91,10 +91,9 @@ void sdk_alpha_render(int32_t *blocks)
         for (uint32_t k = 0; k < e->count; ++k)
             raw[k] = cm_src_value(track, k);
         struct elek_voice voice = {
-            .slot = track, .track = track, .pitch = fw_voice_note[track],
-            .velocity = fw_voice_vel[track] >> 8, .gate = fw_amp_env[3 * track] != 0,
+            .track = track, .pitch = fw_voice_note[track], .velocity = fw_voice_vel[track] >> 8,
         };
-        sdk_alpha_voice(e, &voice, raw, (fw_voice_start & (1u << track)) != 0,
+        sdk_alpha_voice(e, track, &voice, raw, (fw_voice_start & (1u << track)) != 0,
                         blocks + ELEK_VOICE_FRAMES * track);
     }
 }

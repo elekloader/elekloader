@@ -53,8 +53,8 @@ void sdk_alpha_blit(void *bmp, int32_t x, int32_t y, const struct elek_glyph *gl
 /* The voices, on a device that renders (dev.h's SDK_ALPHA_VOICES). */
 /* The machine id voice `slot` plays: another id zeroes its state and drops a pending start. */
 void sdk_alpha_select(uint32_t slot, int32_t id);
-/* One block of v->slot: start latches ELEK_VOICE_START until a block is rendered; fills v's flags and
- * state and maps raw[0..count-1] as sdk_alpha_present does. */
-void sdk_alpha_voice(const struct sdk_alpha_entry *e, struct elek_voice *v, const int32_t *raw,
-                     int start, elek_sample *out);
+/* One block of voice `slot`: start latches v->start until a block is rendered; fills v's knob, start
+ * and state, mapping raw[0..count-1] as sdk_alpha_present does. */
+void sdk_alpha_voice(const struct sdk_alpha_entry *e, uint32_t slot, struct elek_voice *v,
+                     const int32_t *raw, int start, elek_sample *out);
 #endif

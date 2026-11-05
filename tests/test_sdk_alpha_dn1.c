@@ -43,15 +43,17 @@ void fw_fillrect(void *bmp, int32_t x0, int32_t y0, int32_t x1, int32_t y1, int3
 { (void)bmp; (void)x0; (void)y0; (void)x1; (void)y1; (void)colour; }
 static void stock_reset(void *set, int32_t id) { (void)set; (void)id; ++fallback_reset; }
 
-static void sound(const struct elek_audio_context *ctx, const struct elek_voice *v, elek_sample *out)
+static int32_t rendering;                   /* the voice render() is rendering */
+static void sound(const struct elek_voice *v, elek_sample *out)
 {
-    assert(v->state && ctx->knob_count == 3);
-    last[v->slot] = *v;
-    for (int k = 0; k < 3; ++k) input[v->slot][k] = ctx->knob[k];
+    assert(v->state && v->knob);
+    last[rendering] = *v;
+    for (int k = 0; k < 3; ++k) input[rendering][k] = v->knob[k];
     out[0] = ELEK_SAMPLE(1.0);
-    out[1] = 16 * ++*(uint32_t *)v->state;
-    ++calls[v->slot];
+    out[1] = 16 * ++*ELEK_STATE(uint32_t, v);
+    ++calls[rendering];
 }
+#define render(voice, block, v) (rendering = (voice), render(voice, block, v))
 static const struct elek_knob controls[] = {
     { "FINE", .min = -50, .max = 50 },
     { "LEVEL", .max = 127, .def = 100 },
@@ -60,7 +62,7 @@ static const struct elek_knob controls[] = {
 static const struct elek_machine test = {
     .id = 100, .name = "Test", .short_name = "TEST", ELEK_KNOBS(controls),
     .pages = { { "FIRST", { &controls[0], &controls[1], &controls[2] } }, { "SHARED", { &controls[0] } } },
-    .render = sound, .voice_state = 4,
+    .render = sound,
 };
 ELEK_REGISTER_MACHINE(test);
 const struct sdk_alpha_registration *const sdk_alpha_machines[] = { &sdk_alpha_registration_test, 0 };
@@ -86,7 +88,7 @@ int main(void)
         FW_VOICE_PARAM(v, 0) = 100 << 8;
         fw_voice_track[v] = v == 5 ? 0 : 1;
         native[v] = (struct dnm_voice){ .pitch = (60 + v) << 16, .velocity = 90,
-                                      .fresh = 1, .track = fw_voice_track[v], .gate = 1 };
+                                      .fresh = 1, .track = fw_voice_track[v] };
     }
     dnm_sdk_params(words);
     /* The controller stage changes the retained buffer after the params event. */
@@ -94,23 +96,23 @@ int main(void)
     words[79 * 7 + 10 + sdk_pos[0]] = 0;
     render(5, blocks[5], &native[5]); render(7, blocks[7], &native[7]);
     assert(calls[5] == 1 && calls[7] == 1);
-    assert(last[5].slot == 5 && last[5].track == 0 && last[5].pitch == 65 << 16);
-    assert(last[7].slot == 7 && last[7].track == 1 && last[7].velocity == 90);
-    assert(last[5].gate && last[5].flags == ELEK_VOICE_START);
+    assert(last[5].track == 0 && last[5].pitch == 65 << 16);
+    assert(last[7].track == 1 && last[7].velocity == 90);
+    assert(last[5].start);
     assert(last[5].state != last[7].state);
     assert(input[5][0] == 50 && input[7][0] == -50);
     assert(blocks[5][0] == 0x07ffffff && blocks[5][1] == 1);
     native[5].fresh = 0;                   /* the native companion consumes its first-block flag */
     render(5, blocks[5], &native[5]); render(7, blocks[7], &native[7]);
-    assert(!last[5].flags);
+    assert(!last[5].start);
     render(5, blocks[5], &native[5]); render(7, blocks[7], &native[7]);
     assert(blocks[5][1] == 3 && blocks[7][1] == 3);
     FW_VOICE_PARAM(5, 0) = 0; dnm_sdk_params(words);
     FW_VOICE_PARAM(5, 0) = 100 << 8; dnm_sdk_params(words);
     render(5, blocks[5], &native[5]); render(7, blocks[7], &native[7]);
     assert(blocks[5][1] == 1 && blocks[7][1] == 4);
-    native[7].fresh = native[7].gate = 0;
+    native[7].fresh = 0;
     render(7, blocks[7], &native[7]);
-    assert(!last[7].flags && !last[7].gate);
+    assert(!last[7].start);
     return 0;
 }

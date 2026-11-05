@@ -70,18 +70,18 @@ static void sine_block(elek_sample *out, uint32_t *phase, uint32_t step)
     }
 }
 
-static void sine_render(const struct elek_audio_context *ctx, const struct elek_voice *v, elek_sample *out)
+static void sine_render(const struct elek_voice *v, elek_sample *out)
 {
-    struct state *s = v->state;
-    if (v->flags & ELEK_VOICE_START)
+    struct state *s = ELEK_STATE(struct state, v);
+    if (v->start)
         s->phase = 0;
-    sine_block(out, &s->phase, elek_phase_inc(v->pitch + ctx->knob[FINE] * 65536 / 100));
+    sine_block(out, &s->phase, elek_phase_inc(v->pitch + v->knob[FINE] * 65536 / 100));
     for (int i = 0; i < ELEK_VOICE_FRAMES; ++i)
-        out[i] = elek_clip(elek_mul(out[i], elek_level(ctx->knob[LEVEL], 127)));
+        out[i] = elek_clip(elek_mul(out[i], elek_level(v->knob[LEVEL], 127)));
 }
 
 static const struct elek_machine sine = {
-    .id = 23, .name = "Sine", .short_name = "SINE", .render = sine_render, .voice_state = sizeof(struct state),
+    .id = 23, .name = "Sine", .short_name = "SINE", .render = sine_render,
 };
 
 int main(int argc, char **argv)
@@ -102,13 +102,12 @@ int main(int argc, char **argv)
 #endif
     }
     int32_t knob[2] = {argc > 1 ? atoi(argv[1]) : 127, argc > 2 ? atoi(argv[2]) : 0};
-    struct elek_audio_context ctx = {2, knob};
     struct state state = {12345};
-    struct elek_voice voice = {0, 0, 69 << 16, 100, 1, ELEK_VOICE_START, &state};
+    struct elek_voice voice = {.knob = knob, .start = 1, .pitch = 69 << 16, .velocity = 100, .state = &state};
     elek_sample block[ELEK_VOICE_FRAMES];
     for (int b = 0; b < 64; ++b) {
-        sine.render(&ctx, &voice, block);
-        voice.flags = 0;
+        sine.render(&voice, block);
+        voice.start = 0;
         for (int i = 0; i < ELEK_VOICE_FRAMES; ++i)
 #ifdef ELEK_TARGET_SHARC
             printf("%.9f\n", block[i]);
