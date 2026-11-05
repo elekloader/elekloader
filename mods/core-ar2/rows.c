@@ -872,12 +872,15 @@ void core_lock_record(int track, int code, int value)
 
 /* ---- playback: the trig's locks (0x4009a954: track, out, the step's
  * locks, ...) ---- */
+void core_seq_edge(void);
+
 void core_rows_trig(int track, unsigned step)
 {
     struct ledger *l = led[region_of(step)];
     int i, c, n;
     if ((unsigned)track >= 13)
         return;
+    core_seq_edge();                    /* (0.11) the first step after PLAY first (seq.c) */
     for (i = 0; i < now_n[track]; i++)
         core_lock_now[track][now_set[track][i]] = 0;
     n = 0;

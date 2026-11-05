@@ -985,6 +985,51 @@ Analog Rytm MKII)"; `elekloader/sdk/include/analog-rytm-mk2/moments.h`).
   `"handle": true` (no lock, no init; 0 is none); the mark is not in the
   lockfile.
 
+## The sequencer (0.11)
+
+`seq.c` and `seq.s`: the sequencer clock's steps, ticks and play state as
+events, and its words as getters (docs/ADAPTING.md, "The sequencer
+(core-ar2 0.11, Analog Rytm MKII)";
+`elekloader/sdk/include/analog-rytm-mk2/seq.h`).
+
+| what | where (OS 1.74) | context |
+|---|---|---|
+| a track's next step made, and whether it trigs | in the clock's loop over the 13 tracks, after trig_fire (0x4009aa28) filled the trig record (0x42ac1704) and it was copied to the trig queue: 0x4009b68a, `tst.l 0x42ac1704` (`jsr`; core sets the same flags for the `beq` after it); the track is in `%d2` | the clock's interrupt |
+| `ev_transport(state)`, `ev_seq_step(steps, trigs)`, `ev_seq_tick()` | the clock's exit 0x4009c00a, after it restored its SR, `movem.l (%sp),%d0-%d7/%a0-%a6; lea 76(%sp),%sp` (`jmp`; core's part ends with the same and the `rte`) | the clock's interrupt |
+| the first step after PLAY | the trig queue's slots in use (0x800067a4 + track), the playing pattern's lock store (0x407dd8e3 + 0x14f00 · pattern, + 0x2e91) | the clock's interrupt (or the trig-locks site, first) |
+| `core_transport()` | 0x405c8c90 (1 playing, 0 stopped) | any |
+| `core_pattern_now()`, `core_pattern_next()` | 0x405c8d04 (byte); the pattern queue's next entry 0x412f5a03 (-1 none) into the entries at 0x412f3e91, 20 bytes each, the pattern a word at +0 | any |
+| `core_tempo()` | 0x40287ffc, BPM x 120 | any |
+| `core_track_speed(t)`, `core_track_step(t)` | 0x405c8d25 + t, 0x405c8cea + t (bytes) | any |
+
+- **The clock** (0x4009b0b4) is an exception handler, one call a tick: 96
+  a quarter note, also while stopped. When a track reaches a step
+  boundary (each at its own speed) the loop calls trig_fire for its next
+  step, one step ahead of the sound; trig_fire clears the record's first
+  word for a trigless step, a failed condition (FILL, PRE, ratios) or a
+  failed probability. Microtiming moves only the queued trig's due time
+  and retrigs ride in the record, so neither adds a call. trig_fire's own
+  entry isn't hooked: the UI task calls it too (0x4009c02a and its
+  callers), and those calls aren't sequencer steps.
+- **The masks** gather at the fired site during the tick and go out once
+  at the exit, after `ev_transport`, in one `ev_seq_step` call; tracks
+  not at a boundary that tick are 0 in both.
+- **The first step after PLAY** isn't made by the clock (stock made its
+  trig before PLAY), so core's trig-locks site didn't see it on the first
+  loop. On the PLAY tick core seeds it: every track whose trig queue holds
+  a trig (stock's, its condition evaluated) takes step 1's mod locks, and
+  `ev_seq_step(0x1fff | CORE_SEQ_FIRST, trigs)` goes out before that
+  tick's ordinary call. The PLAY tick's batch also makes step 2, and the
+  trig-locks site sets step 2's locks at once, so the seed runs at the
+  first of that site (`core_rows_trig`), the fired site and the exit on
+  that tick: while the queue holds only step 1's trigs, and before step
+  2's locks.
+- **The pattern queue**: a pattern selected while playing, or a chain's
+  next, is an entry the clock switches to at the pattern's end; with none
+  queued `core_pattern_next` answers the pattern playing.
+- **Blocks**: `core_block` (load.h, 0.9) is the audio block count; there
+  is no call by that name, since the variable has it.
+
 ## Checked so far
 
 On a unit (OS 1.73). With test images built by rytm-mods-src (its `elemod`
@@ -1365,6 +1410,35 @@ from A02 to A01 (kit 1, None) leaves 5 there, still 5 ten seconds later;
 PLAY on A01 clears it, and so does the same change while playing. Core's .run is
 44,808 bytes, .bss 22,588; core + sidecar-check 0.3 take 81,244 of the
 128 KB area. Not yet on a unit.
+
+Part 4, the sequencer (core 0.11 + sidecar-check 0.4 + lock-check 1.11,
+build SC22), in analog-emu (dtboot, OS 1.74), with the same poke after
+boot. A01 cleared, track 1 trigs on steps 1, 5, 9 and 13, 127 BPM: every
+16th (24 ticks) one `ev_seq_step` with all 13 tracks, track 1's trig bit
+set on the calls made while steps 4, 8, 12 and 16 start (one step ahead),
+4 trigs a loop; `core_tempo` 15,240. PLAY: `ev_transport(1)`, then on the
+same tick the seed (steps 0x1fff | `CORE_SEQ_FIRST`, trigs 0x1) and step
+2's call; with lock-check's LCA p-locked to 4 on step 1 and 0 on step 5,
+`core_lock_now` holds step 1's lock (5) at step 2 and step 5's (1) at
+step 7, where 0.10 left step 1 without its
+lock on the first loop. Step 9 on the FILL condition: 3 trigs a loop, 4
+while FILL is held. Step 5 at +2/384 microtiming: the same calls at the
+same ticks. Track 1 to 1/2x mid-pattern (SCALE menu, per-track mode):
+`core_track_speed(0)` 2 then 4, track 1 alone every 48 ticks from its next
+step, the others every 24, each its own call. A02 selected while A01 plays:
+`core_pattern_next` 1 while `core_pattern_now` stays 0 until the switch,
+then both 1. STOP: `ev_transport(0)`, no more step calls; BD and SD pads
+while stopped make none; PLAY again seeds again (A02, trigs 0x117).
+Retrigs weren't set in the emulator (the RTRG popup's switch didn't change
+with knob A, its push or YES); the trace's count shows they add no
+trig_fire call. Cost, DMA timer 0 ticks in a measuring build
+(`-DCORE_SEQ_MEASURE`, core's parts and the subscribers, of the 88,010 a
+1/1500 s block): a tick with a step, one subscriber 289 to 292 (0.33%),
+three 555 to 558 (0.63%); the PLAY tick (seed, two calls, `ev_transport`)
+516 and 1,047 (1.19%, once a PLAY, with the two extra subscribers'
+work); a tick without a step 23 playing, 28 stopped. Core's .run is 45,788
+bytes (+980), .bss 22,608; core + sidecar-check 0.4 take 84,044 of the
+128 KB area. Tempo on a unit is left for the run. Not yet on a unit.
 
 ## Building
 

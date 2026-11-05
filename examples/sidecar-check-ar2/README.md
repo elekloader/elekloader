@@ -3,7 +3,7 @@
 A test for the [core-ar2](../../mods/core-ar2) 0.11 calls the Sidecar mods
 use, checked in RAM: each part of 0.11 adds what it needs here, and the
 emulator and a unit's readback read the records after the magics `SCK1`
-and `SCK2`.
+to `SCK4`.
 
 ## Part 1: locks the mod keeps itself (core 0.11)
 
@@ -73,6 +73,30 @@ A command word `cmd` (and `arg`) acts on the next `ev_tick` (with `arg`'s high h
 | 3 | the project's handle = `arg`, the current pattern's = `arg` + 1 |
 | 4 | walk the handles (`core_handle_fields`): `walk_n`, `walk_sum`, `walk_fields` (bit 0 the project's, bit 1 the pattern's) |
 | 5 | one SysEx F0 7D .. F7 of `arg` bytes (4..64) through `core_midi_try_send` |
+
+## Part 4: the sequencer (core 0.11)
+
+The record after the magic `SCK4` (`sc4`, seq.c):
+
+- every `ev_seq_step` goes into a ring of 64 (`e`, at `n % 64`) with the
+  tick, both masks (`CORE_SEQ_FIRST` shown as bit 15), `core_track_step`
+  of tracks 1 and 9, `core_transport` and `core_pattern_now`; the PLAY
+  seed counts in `seeds` (its trigs in `seed_trigs`), every other call in
+  `step_events` and the per-track `steps_n` and `trigs_n`.
+- `ev_seq_tick` counts `ticks` and keeps the getters' last values:
+  `state`, `now`, `next`, `tempo`, `speed[13]`, `step[13]`.
+- every `ev_transport` goes into a ring of 8 (`tr`, at `tr_n % 8`) with
+  the tick.
+- two more `ev_seq_step` subscribers do a little work only when `subs`
+  asks for them (`work` counts it), for the cost with 1 and 3.
+
+A command word `cmd` (and `arg`) acts on the next `ev_tick`:
+
+| `cmd` | what |
+|---|---|
+| 1 | `subs` = `arg`: how many `ev_seq_step` subscribers work (1..3) |
+| 2 | the counters and rings back to 0 |
+| 3 | `quiet` = `arg`: 1 makes `ev_seq_tick` only count (no getters), for the cost |
 
 ## Building
 

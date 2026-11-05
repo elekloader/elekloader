@@ -2003,6 +2003,37 @@ sites, with `analog-rytm-mk2/moments.h`:
   handle a project uses. A core without the table `core_handles` refuses
   the mark at link time.
 
+### The sequencer (core-ar2 0.11, Analog Rytm MKII)
+
+The sequencer clock's steps and ticks as events, with
+`analog-rytm-mk2/seq.h`:
+
+```json
+{"event": "ev_seq_step", "fn": "my_step", "order": 50},
+{"event": "ev_seq_tick", "fn": "my_tick", "order": 50},
+{"event": "ev_transport", "fn": "my_transport", "order": 50}
+```
+
+All three run in the clock's interrupt, at the end of a tick (96 a quarter
+note): keep them short, never wait, and send MIDI only with
+`core_midi_try_send` (queued from there).
+
+- `my_step(steps, trigs)`: on a tick where tracks reached a step boundary,
+  bit t of `steps` for each such track (0..12, 12 the FX track), and of
+  `trigs` when its next step plays a trig: one step ahead of the sound.
+  A trigless step, a failed condition or probability is no trig;
+  microtiming and retrigs add no calls. Each track keeps its own speed.
+  The first step after PLAY comes first on the PLAY tick, with
+  `CORE_SEQ_FIRST` in `steps`; its mod locks are set then
+  (`core_lock_value`).
+- `my_tick()` each tick, playing or stopped; `my_transport(state)` when the
+  play state changes.
+- `core_transport()` (1 playing, 0 stopped), `core_pattern_now()`,
+  `core_pattern_next()` (the pattern playing when none is queued),
+  `core_tempo()` (BPM x 120), `core_track_speed(t)` (0..6, 2 is 1x) and
+  `core_track_step(t)` (the step starting now); the audio block count is
+  `core_block` (`analog-rytm-mk2/load.h`).
+
 ### Mod scene and performance locks (core-ar2 0.8, Analog Rytm MKII)
 
 A lockable parameter is locked to a scene, or given a performance depth,
