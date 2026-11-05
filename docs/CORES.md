@@ -161,7 +161,9 @@ the one a mod that uses it names in `resources.core`.
   Analog Rytm MKII)"), and as a destination of each sound's velocity and
   aftertouch routes (0.9; ADAPTING.md, "Lockable parameters"). Lockable
   parameters of the FX track, in kit fields (0.9; ADAPTING.md, "The FX
-  track's parameters (core-ar2 0.9, Analog Rytm MKII)").
+  track's parameters (core-ar2 0.9, Analog Rytm MKII)"). A field's default
+  other than 0, its `init` (0.10; ADAPTING.md, "Mod storage (core-ar2 0.2,
+  Analog Rytm MKII)").
 - **Analog Four MKII** ([mods/core-a4](../mods/core-a4), a proof of
   concept): core-ar2's events and mod storage at the A4's addresses
   (ADAPTING.md, "Mod storage (core-a4 0.1)"), and parameter pages, whose

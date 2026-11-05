@@ -105,8 +105,35 @@ CC_RUNS = {
                                              (MANY[1:35], [[f[0], f[1]] for f in MANY[1:35]],
                                               [[f[0], f[1]] for f in MANY[1:35]])],
 }
+# runs with inits (core-ar2 0.10): each step is (decls, lockable, [[mod, sym, init], ...])
+SI = [F('a', 'frq', 'sound', 7), F('a', 'dep', 'sound', 7), F('a', 'p', 'sound', 3), F('b', 'k', 'kit', 7)]
+FD = [['a', 'frq'], ['a', 'dep']]
+INIT_RUNS = {
+    'inits: give, keep, change, drop, back': [
+        (SI, FD, [['a', 'frq', 127], ['a', 'dep', 127], ['b', 'k', 100]]),
+        (SI, FD, [['a', 'frq', 127], ['a', 'dep', 127], ['b', 'k', 100]]),
+        (SI, FD, [['a', 'frq', 127], ['a', 'dep', 64], ['b', 'k', 100]]),
+        (SI, FD, [['a', 'frq', 127], ['a', 'dep', 64]]),
+        (SI, FD, [['a', 'frq', 127], ['a', 'dep', 64], ['b', 'k', 100]]),
+        (SI[:2], FD, [['a', 'frq', 127], ['a', 'dep', 64]]),
+        (SI, FD, [['a', 'frq', 127], ['a', 'dep', 0], ['b', 'k', 100]])],
+    'inits: none keeps format 1': [(SI, FD, []), (SI, FD, [['a', 'p', 0]])],
+    'inits: too many': [([F('m', 'g%02d' % i, 'project', 1) for i in range(64)], [],
+                         [['m', 'g%02d' % i, 1] for i in range(64)])],
+}
 LOCKS = {
-    'not a dict': [1], 'not ours': {'x': 1}, 'newer': {'elekloader_store': 2},
+    'not a dict': [1], 'not ours': {'x': 1}, 'newer': {'elekloader_store': 3},
+    'init in format 1': dict(store.fresh(DEV), fields=[{'mod': 'a', 'sym': 'x', 'scope': 'kit', 'offset': 0,
+                                                        'bits': 4, 'init': 3}], next=dict(store.fresh(DEV)['next'], kit=4)),
+    'init past its bits': dict(store.fresh(DEV), elekloader_store=2,
+                               fields=[{'mod': 'a', 'sym': 'x', 'scope': 'kit', 'offset': 0, 'bits': 4, 'init': 16}],
+                               next=dict(store.fresh(DEV)['next'], kit=4)),
+    'init 0 written': dict(store.fresh(DEV), elekloader_store=2,
+                           fields=[{'mod': 'a', 'sym': 'x', 'scope': 'kit', 'offset': 0, 'bits': 4, 'init': 0}],
+                           next=dict(store.fresh(DEV)['next'], kit=4)),
+    'format 2 with an init': dict(store.fresh(DEV), elekloader_store=2,
+                                  fields=[{'mod': 'a', 'sym': 'x', 'scope': 'kit', 'offset': 0, 'bits': 4, 'init': 15}],
+                                  next=dict(store.fresh(DEV)['next'], kit=4)),
     'device': dict(store.fresh(DEV), device='digitakt-mk1'),
     'id 0': dict(store.fresh(DEV), id='0x0'), 'id text': dict(store.fresh(DEV), id='abc'),
     'split': dict(store.fresh(DEV), split={'track': 2}),
@@ -166,12 +193,18 @@ DECLS = {
     'mod type': {'storage': [{'sym': 'a', 'scope': 'sound', 'bits': 3, 'lock': True, 'mod': 1}]},
     'smooth without lock': {'storage': [{'sym': 'a', 'scope': 'sound', 'bits': 3, 'smooth': False}]},
     'smooth type': {'storage': [{'sym': 'a', 'scope': 'sound', 'bits': 3, 'lock': True, 'smooth': 0}]},
+    'init': {'storage': [{'sym': 'a', 'scope': 'sound', 'bits': 7, 'lock': True, 'init': 127},
+                         {'sym': 'b', 'scope': 'kit', 'bits': 3, 'init': 0}, {'sym': 'c', 'scope': 'kit', 'bits': 3}]},
+    'init past its bits': {'storage': [{'sym': 'a', 'scope': 'kit', 'bits': 3, 'init': 8}]},
+    'init negative': {'storage': [{'sym': 'a', 'scope': 'kit', 'bits': 3, 'init': -1}]},
+    'init type': {'storage': [{'sym': 'a', 'scope': 'kit', 'bits': 3, 'init': True}]},
+    'init text': {'storage': [{'sym': 'a', 'scope': 'kit', 'bits': 3, 'init': '1'}]},
     'twice': {'storage': [{'sym': 'a', 'scope': 'kit', 'bits': 1}, {'sym': 'a', 'scope': 'kit', 'bits': 2}]},
 }
 
 
 def main():
-    out = {'runs': {}, 'lock_runs': {}, 'cc_runs': {}, 'locks': {}, 'decls': {}}
+    out = {'runs': {}, 'lock_runs': {}, 'cc_runs': {}, 'init_runs': {}, 'locks': {}, 'decls': {}}
     def run(lock, steps, core, dev=DEV):
         res = []
         for decls in steps:
@@ -224,6 +257,19 @@ def main():
             except ModError as e:
                 res.append({'error': str(e)})
         out['cc_runs'][name] = {'steps': [list(st) for st in steps], 'results': res}
+    for name, steps in INIT_RUNS.items():
+        lock, res = None, []
+        for decls, locks, inits in steps:
+            try:
+                lock, notes = store.allocate(lock, [tuple(d) for d in decls], DEV, None, [tuple(k) for k in locks], (),
+                                             {(m, s): v for m, s, v in inits})
+                syms, tab = store.symbols(lock, DEV)
+                res.append({'lock': lock, 'notes': notes, 'symbols': syms, 'codes': [t.hex() for t in store.code_entries(lock)],
+                            'inits': [t.hex() for t in store.init_entries(lock)],
+                            'json': store.dumps(lock), 'layout_id': store.layout_id(lock)})
+            except ModError as e:
+                res.append({'error': str(e)})
+        out['init_runs'][name] = {'steps': [list(st) for st in steps], 'results': res}
     for name, lock in LOCKS.items():
         try:
             same, _ = store.allocate(lock, [], DEV)
@@ -234,7 +280,8 @@ def main():
         try:
             out['decls'][name] = {'doc': doc, 'ok': store.parse_decls(doc), 'locks': store.parse_locks(doc),
                                   'ccs': store.parse_ccs(doc), 'lfos': store.parse_lfos(doc),
-                                  'rough': store.parse_rough(doc), 'routes': store.parse_routes(doc)}
+                                  'rough': store.parse_rough(doc), 'routes': store.parse_routes(doc),
+                                  'inits': store.parse_inits(doc)}
         except ModError as e:
             out['decls'][name] = {'doc': doc, 'error': str(e)}
     path = os.path.join(ROOT, 'js', 'test', 'store-vectors.json')

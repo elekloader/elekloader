@@ -1,0 +1,24 @@
+{
+ "id": "save-check",
+ "version": "1.0",
+ "title": "Save check",
+ "category": "Examples",
+ "license": "GPL-2.0-or-later",
+ "author": "Iced-Cream",
+ "description": "A probe for core-ar2 0.10's ev_project_save: it counts the calls before and after each project save and adds 1 to a project field before each one, so a saved copy carries the count of saves made before it. Bars at the bottom of the screen show the counts, the field and the last save's kind and slot.",
+ "device": "analog-rytm-mk2",
+ "os": "1.74",
+ "sources": ["check.c"],
+ "cflags": ["-DFILLRECT_AT=0x40070726"],
+ "storage": [
+  {"sym": "sv_saves", "scope": "project", "bits": 16}
+ ],
+ "subscribe": [
+  {"event": "ev_tick", "fn": "sv_tick", "order": 60},
+  {"event": "ev_draw", "fn": "sv_draw", "order": 60},
+  {"event": "ev_project", "fn": "sv_project", "order": 60},
+  {"event": "ev_project_save", "fn": "sv_save", "order": 60}
+ ],
+ "resources": {"core": "0.10"},
+ "requires": ["core"]
+}
