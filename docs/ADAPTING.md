@@ -2048,6 +2048,67 @@ its knob B, AMP PAN again, is shown while the count of PAN's turn updates
 (the bar) is odd and empty while it is even. Checked in rytm-emu's A4 build
 and on a unit (24 Oct 2026).
 
+### Lockable parameters (core-a4 0.5, Analog Four MKII)
+
+core-a4 0.5 has the first part of the lock service, core-ar2's design
+("Lockable parameters" and "Mod p-locks", above) with the A4's track
+kinds. Destinations, the smoothed value and MIDI come in later parts.
+
+A storage field declared `"lock": true` gets a lock code from the lockfile,
+numbered within its kind, as stock keeps one parameter table per kind:
+
+| field | kind | tracks |
+|---|---|---|
+| sound | synth | 1..4 |
+| kit | FX | 5 |
+| kit, with `"track": "cv"` | CV | 6 |
+
+Each kind has the codes 0x70..0x7f (stock's columns end at 0x6f), so a
+build has at most 16 lockable parameters of each. On the A4 `"mod"` covers
+the LFOs too, and `"lfo"` is refused; `"cc"` is refused for now. The mod
+registers each parameter in `core_lock_params` as on the Rytm
+(`analog-four-mk2/lock.h`): `id` is its page knob, an id stock does not
+have (above 0x126), unique within its kind.
+
+A parameter is p-locked like a stock one: hold a trig and turn its page
+knob, or turn the knob while live recording runs. The lock is a row in the
+pattern's 128 rows with the field's code, so it is saved, loaded, copied,
+pasted and cleared with the pattern and its trigs, and stock's locks always
+fit first (127 rows at most). A parameter above 127 takes two rows per
+track and keeps its whole value. A pattern's SysEx dump and a received
+pattern carry the mod rows with a marker, as on the Rytm.
+
+The mod reads the lock while the trig plays:
+
+```c
+#include "analog-four-mk2/lock.h"
+
+int v = core_lock_value(track, STORE(my_depth));      /* min..max, or -1: none */
+int w = core_lock_value_voice(voice, core_lock_code(STORE(my_depth)));
+int d = core_slide_delta_voice(voice, core_lock_code(STORE(my_depth)));
+```
+
+What differs from the Rytm:
+- A lock lasts while its trig plays: the next trig on the voice without one
+  gives -1 (the parameter jumps back to the sound's value), as stock's
+  locks on the A4 do.
+- The locks are per voice (0..3 the synth voices, 4 the FX track's, 5 the
+  CV track's), set at the trig's event accept in the audio interrupt, before
+  it sounds. `core_lock_value(track, field)` is the voice the track's last
+  trig went to (on a poly track, the last-played voice).
+- `core_slide_delta_voice(voice, code)` is Param Slide's change from the
+  trig to the next trig or lock trig, in the field's steps, by stock's
+  rules; a set of the field (its knob, MIDI) ends it. The ramp itself comes
+  with the smoothed value.
+- A project load, a kit change and CREATE NEW clear every voice's locks.
+
+Limits: a mod knob's label shows ERR, and the screen's title INVALID
+PARAMETER while a trig is held, until the knob label sites come.
+
+`examples/lock-check-a4` is the smallest mod on it: one lockable parameter
+of each kind and a fine one, on a LOCK CHECK page per kind, with what it
+reads each audio block in `lk_seen` for the emulator.
+
 ### Machines (core-ar2 0.5, Analog Rytm MKII)
 
 The Rytm has 53 machine slots. 34..52 hold hidden factory machines: stock

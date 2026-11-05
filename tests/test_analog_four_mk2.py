@@ -113,6 +113,15 @@ def test_core_a4_sites():
     for s in mod['sites']:
         a, want = int(s['addr'], 16), bytes.fromhex(s['stock'])
         assert img[a - DEV.main_load:a - DEV.main_load + len(want)] == want, s
+        if s['op'] == 'ptr':            # data (0.5): the lock get, set, clear and turn
+            # (+0x48..+0x54) of the synth, FX and CV parameter sets' vtables; the turn is shared
+            ptrs = {}
+            for vt, (g, st, c) in ((0x401a164c, (0x400a0190, 0x400a0218, 0x400a02a4)),
+                                   (0x401a16ec, (0x400a044a, 0x400a04d2, 0x400a055e)),
+                                   (0x401a178c, (0x400a0704, 0x400a078c, 0x400a0818))):
+                ptrs.update({vt + 0x48: g, vt + 0x4c: st, vt + 0x50: c, vt + 0x54: 0x4009e74c})
+            assert a in ptrs and want == ptrs[a].to_bytes(4, 'big'), s
+            continue
         ok, note = elemod.insn_check(img, a, len(want), DEV)
         assert ok, (s, note)
     d = mod['defsym']
@@ -157,8 +166,15 @@ def test_core_a4_sites():
         assert x['stock'][2:] == '1c' and x['new'] == x['stock'][:2] + '2c', x
         assert x['stock'][0] == '7' and int(x['stock'][1], 16) % 2 == 0, x     # moveq #28,Dn
     # mod storage's sites (core-a4 0.1: 28 of the 36), and 0.2's 4 page
-    # sites, 2 view sites and 5 range bytes, and 0.4's OS upgrade restart
-    assert len(mod['sites']) == 48
+    # sites, 2 view sites and 5 range bytes, 0.4's OS upgrade restart, and
+    # 0.5's 31 lock sites: 19 in code (rows.s) and 12 vtable entries
+    assert len(mod['sites']) == 79
+    locks = [x for x in mod['sites'] if x['addr'] not in {y['addr'] for y in j['sites'][:48]}]
+    assert len(locks) == 31 and len([x for x in locks if x['op'] == 'ptr']) == 12
+    # the event accept is a jsr over stock's `lea 0x80006178,a0`, which core's
+    # stub does before it returns (rows.s)
+    x = [x for x in locks if x.get('target') == 'core_accept'][0]
+    assert x['op'] == 'jsr' and x['stock'] == '41f980006178', x
     x = [x for x in mod['sites'] if x.get('target') == 'core_finish_drain'][0]
     assert x['op'] == 'jsr' and x['stock'] == '46fc27004eb9' + d['FINISH_DRAIN'][2:], x
     assert len([x for x in mod['sites'] if x.get('target', '').startswith('st_')]) == 28

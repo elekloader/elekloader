@@ -253,15 +253,19 @@ static int known_id(unsigned id)
     return 0;
 }
 
+/* the image's store's layout ID */
+static unsigned store_id(unsigned char *img)
+{
+    return (unsigned)B(store_byte(img, 0)) << 24 | (unsigned)B(store_byte(img, 1)) << 16 |
+           (unsigned)B(store_byte(img, 2)) << 8 | B(store_byte(img, 3));
+}
+
 /* does the image's store hold this scope's data in this layout? */
 static int store_ok(unsigned char *img, int scope)
 {
-    unsigned id;
     if (!img)
         return 0;
-    id = (unsigned)B(store_byte(img, 0)) << 24 | (unsigned)B(store_byte(img, 1)) << 16 |
-         (unsigned)B(store_byte(img, 2)) << 8 | B(store_byte(img, 3));
-    return known_id(id) && B(store_byte(img, 3 + scope)) == gen(scope);
+    return known_id(store_id(img)) && B(store_byte(img, 3 + scope)) == gen(scope);
 }
 
 static void store_header(unsigned char *img)
@@ -504,9 +508,16 @@ int st_kit_save(unsigned char *dst, unsigned char *live)
     return r;
 }
 
+void core_rows_now_reset(void);
+void core_rows_forget(void);
+void core_lock_cancel(unsigned field, void *item);
+
+/* a kit load is a kit change: no trig of the new kit has played yet, so no
+ * voice keeps a mod p-lock (rows.c, 0.5) */
 int st_kit_load(unsigned char *live, unsigned char *src)
 {
     int r = st_kit_load_body(live, src), j;
+    core_rows_now_reset();
     if (live && src) {
         int ok = st_image && known_id(rd32(src + KIT_SPARE + KIT_BYTES)) &&
                  src[KIT_SPARE + KIT_BYTES + 4] == gen(SC_KIT);
@@ -582,6 +593,7 @@ int st_kit_init(unsigned char *kit)
 int st_proj_init(void *project)
 {
     int r = st_proj_init_body(project), g, j;
+    core_rows_now_reset();                     /* no playing mod p-locks (rows.c, 0.5) */
     store_clear(S, 0, STORE_BYTES);
     store_header(S);
     for (g = 0; g < 4; g++)
@@ -601,6 +613,11 @@ int st_proj_load(void *live, unsigned char *src, void *progress)
     int r = st_proj_load_body(live, src, progress), s;
     unsigned char *from = is_image(src) ? src : st_image;
     unsigned dropped = 0;
+    /* its mod p-locks' codes are its layout's (rows.c, 0.5); no trig of it
+     * has played yet */
+    if (!from || !known_id(store_id(from)))
+        core_rows_forget();
+    core_rows_now_reset();
     if (!from || !st_image || !global_ok(from + GLOBALS_AT))
         dropped |= 1 << SC_GLOBAL;
     for (s = SC_TRACK; s <= SC_PROJECT; s++)
@@ -857,4 +874,6 @@ void core_store_set(unsigned field, void *item, int index, unsigned value)
     if (scope == SC_SOUND || scope == SC_KIT)
         write_through(scope, item);
     irq_restore(sr);
+    if (scope == SC_SOUND || scope == SC_KIT)
+        core_lock_cancel(field, item);         /* no slide of it now (rows.c, 0.5) */
 }

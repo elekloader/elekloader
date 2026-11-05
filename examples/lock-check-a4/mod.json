@@ -1,0 +1,38 @@
+{
+ "id": "lock-check",
+ "version": "1.0",
+ "title": "Lock check",
+ "category": "Examples",
+ "license": "GPL-2.0-or-later",
+ "author": "Iced-Cream",
+ "description": "The smallest user of core-a4 0.5's lockable parameters on the Analog Four MKII: four lockable fields, one per kind and one above 127 (A and C, the synth tracks'; K, the FX track's; V, the CV track's), on LOCK CHECK pages behind the AMP key (synth) and the LFO key (FX, CV), so a trig held and a knob turned sets a mod p-lock. Every audio block it records the playing locks per voice and C's slide delta after the magic LKCK, and two bars show track 1's locks of A and C.",
+ "device": "analog-four-mk2",
+ "os": "1.56",
+ "sources": ["check.c"],
+ "cflags": ["-DFILLRECT_AT=0x40059f1a"],
+ "storage": [
+  {"sym": "lk_a", "scope": "sound", "bits": 7, "lock": true},
+  {"sym": "lk_c", "scope": "sound", "bits": 10, "lock": true},
+  {"sym": "lk_k", "scope": "kit", "bits": 7, "lock": true},
+  {"sym": "lk_v", "scope": "kit", "bits": 7, "lock": true, "track": "cv"}
+ ],
+ "subscribe": [
+  {"event": "ev_draw", "fn": "lk_draw", "order": 60},
+  {"event": "ev_render_out", "fn": "lk_render_out", "order": 60}
+ ],
+ "contribute": [
+  {"to": "core_lock_params", "order": 50, "data": "00000000", "relocs": [[0, "abs32", "sym:lk_param_a", 0]]},
+  {"to": "core_lock_params", "order": 50, "data": "00000000", "relocs": [[0, "abs32", "sym:lk_param_c", 0]]},
+  {"to": "core_lock_params", "order": 50, "data": "00000000", "relocs": [[0, "abs32", "sym:lk_param_k", 0]]},
+  {"to": "core_lock_params", "order": 50, "data": "00000000", "relocs": [[0, "abs32", "sym:lk_param_v", 0]]},
+  {"to": "core_params", "order": 50, "data": "00000000", "relocs": [[0, "abs32", "sym:lk_params", 0]]},
+  {"to": "core_pages", "order": 50, "data": "00000000", "relocs": [[0, "abs32", "sym:lk_page", 0]]},
+  {"to": "core_pages", "order": 50, "data": "00000000", "relocs": [[0, "abs32", "sym:lk_fx_page", 0]]},
+  {"to": "core_pages", "order": 50, "data": "00000000", "relocs": [[0, "abs32", "sym:lk_cv_page", 0]]},
+  {"to": "core_view_pages", "order": 30, "data": "00000000", "relocs": [[0, "abs32", "sym:lk_view", 0]]},
+  {"to": "core_view_pages", "order": 30, "data": "00000000", "relocs": [[0, "abs32", "sym:lk_fx_view", 0]]},
+  {"to": "core_view_pages", "order": 30, "data": "00000000", "relocs": [[0, "abs32", "sym:lk_cv_view", 0]]}
+ ],
+ "resources": {"core": "0.5"},
+ "requires": ["core"]
+}

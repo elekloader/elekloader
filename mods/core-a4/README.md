@@ -4,8 +4,9 @@ The boot copier, the hook bus and mod storage for the Analog Four MKII, OS
 1.56. It builds the Digitakt mk1's `core.s`, `settings.s` and `render.s` with
 the A4's addresses, which `mod.json` gives (`defsym`, `sites`), as
 [core-ar2](../core-ar2) does for the Analog Rytm MKII, and its own `store.c`
-and `store.s` (Mod storage, below). On its own it changes nothing the unit
-does.
+and `store.s` (Mod storage, below), and from 0.5 `lock.c`, `rows.c` and
+`rows.s` (Lockable parameters, Mod p-locks). On its own it changes nothing
+the unit does.
 
 The A4 MKII is the Rytm MKII's platform (a ColdFire MCF5441x): its OS entry,
 bootstrap loader and UI loop are the Rytm's, instruction for instruction
@@ -279,6 +280,57 @@ nothing is pending (core-ar2's README, "The OS upgrade's restart"). The A4's
 routine is the Rytm's instruction for instruction; the hang itself was seen
 in analog-emu on the Rytm only, and this site is not yet checked on the A4.
 
+## Lockable parameters (0.5)
+
+The lock service's first part (docs/ADAPTING.md, "Lockable parameters
+(core-a4 0.5, Analog Four MKII)"), core-ar2 0.8..0.10's `lock.c`, `rows.c`
+and `rows.s` with the A4's pattern and track kinds. The linker writes
+`{field, code}` for each lockable field into `core_lock_codes` (CV_FLAG,
+0x800, in the code of a CV track's kit field), and mods add their entries to
+`core_lock_params`. Codes are 0x70..0x7f per kind: synth (sound fields),
+FX and CV (kit fields). A parameter's page knob is an id stock does not have
+(above 0x126; stock's records end there and read record 0 for a higher id);
+its pseudo id in stock's lists, from part 2, is 0x127 + 16 x kind + code -
+0x70.
+
+| site | 1.56 | what |
+|---|---|---|
+| lockable check | 0x4002327c (`jmp`) | a page view's "can this knob be locked?" reads the id's record's flag; a mod parameter's knob of the current track's kind can be |
+| lock get, set, clear, turn | +0x48..+0x54 of the synth, FX and CV parameter sets (0x401a1694.., 0x401a1734.., 0x401a17d4.., `ptr`) | a mod parameter's knob with a trig held: the lock goes into the ledger (below); any other id goes to stock's routine. The three sets share stock's turn, 0x4009e74c |
+| page value | page_get_value, 0x40023d54 (pages.s) | with a step, a mod parameter's knob shows the step's lock |
+| live record | param_apply_delta, 0x400232e2 (pages.s) | a mod parameter's turn taken while live recording runs locks the value on the step the track plays, as stock's live record (0x400a690c) |
+
+## Mod p-locks (0.5)
+
+A pattern keeps its p-locks in 128 rows of 66 bytes, `[column][track][64
+step bytes]`; stock's columns are 0..0x6f, a mod parameter's row carries
+its code. Stock edits and plays an unpacked lock store, a 0xe4-byte step
+record per step in each of the 129 unpacked patterns, and packs the rows
+from it, dropping columns it doesn't know. So core keeps the mod locks in a
+ledger, `{step record, code, value}`, that follows stock's moves of step
+records by address, as core-ar2's does.
+
+| site | 1.56 | what |
+|---|---|---|
+| memcpy | 0x40077fa0 (`jmp`) | a copy of 0xe4 bytes or more: the copied records' locks go with them, and the overwritten ones' go |
+| memset, bzero, operator new | 0x40077fe8, 0x400778e0, 0x400653b8, 0x400653be (`jmp`) | the locks in the block go |
+| store, track and step clear | 0x40015d10, 0x40015c2e, 0x400a35ac (`jmp`) | the locks there go |
+| row unpack | 0x40009dbc (`jmp`) | the rows with codes 0x70..0x7f become the store's mod locks |
+| row pack, row update | 0x4000a02c, 0x4000a1e6 (`jmp`) | after stock's rows, the mod locks as rows, in code then track order, while one fits under 127 rows; the per-column update runs with the mod rows taken out |
+| trig copy | 0x400b905a (`jmp`) | after stock lists a held step's columns for a paste, core lists its mod locks |
+| paste's lock set | 0x400b51f6 (`jmp`) | a listed column of 0x70 or more is a mod lock |
+| trig fire | 0x40079fbe (`jmp`) | after stock builds a trig's lock list (the immediate list, three scheduled, the note path's), core fills its own slot for that list with the step's mod locks and Param Slide's deltas |
+| event accept | 0x40101d58 (`jsr`), 0x40101fb2 (`jmp`) | when the audio interrupt copies an event's list to a voice, core copies its slot into `core_lock_now` and `core_slide_delta` for that voice; a slot filled before the ledger last changed is filled again first, as stock fills a stopped sequencer's first step at STOP and again on its own lock edits only |
+| dump out | 0x4006b492 (`jmp`) | a pattern's SysEx dump: a marker row (`{0x7f, 0xfe}`, then the layout ID) for its mod rows, or, with no free row, no mod rows |
+| dump in | 0x40011d44 (`jmp`) | a received pattern's unpack: its mod rows stay only with a marker holding this build's layout ID; the marker goes |
+
+A fine parameter's second row has the header `{0x80, 0x81}`, never stock's
+`{0x80, 0x80}`, which stock's unpack ORs into the last stock fine column
+before it. A project load whose layout ID the build doesn't read
+(`st_proj_load`) drops every pattern's mod locks; a project load, a kit
+load and CREATE NEW clear the playing ones; a set of a field
+(`core_store_set`) ends its slide on every voice playing that item.
+
 ## Checked so far
 
 On a unit (OS 1.56, 20 Oct 2026) [hw]: build HC56 (core-a4 with
@@ -345,6 +397,24 @@ images; 20 Oct 2026):
   stock on every screen of Check 4's stock steps; with pages-check-a4 0.2
   (PF56) CHECK's knob B followed `core_page_fns` at each redraw, and an
   empty B took no turn ("Parameter pages (0.2, 0.3)" above).
+- **Mod p-locks** [emu] (core 0.5 with
+  [lock-check-a4](../../examples/lock-check-a4), dtboot, 5 Nov 2026), on
+  track 1 of the first pattern, stopped, in grid recording:
+  - T1 held and LOCK CHECK's knob A turned: the lock went into the ledger
+    (set-and-kept), and the trig played it on that voice, read back as A's
+    lock in `lk_seen` (works);
+  - trig copy of step 1 and paste onto step 3 carried the lock; the trig's
+    clear on step 1 dropped it there and left step 3's (set-and-kept);
+  - SAVE PROJECT AS, the lock cleared, the project loaded back: the lock
+    came back (set-and-kept);
+  - stock 1.56, booted on that card, loaded the project and played it with
+    no fault, with step 1's record and flags as core's (works);
+  - locks of 4 and 9 on steps 1 and 2, step 1 a slide trig: step 1 played
+    4 with a slide delta of +5, step 2 played 9 (works);
+  - locks set while stopped play on PLAY's first step (works), through the
+    accept's refill (above).
+  Not checked yet: track clear, the SysEx dump out and in, the kit change's
+  and CREATE NEW's clear, the FX and CV kinds' knobs, a fine parameter.
 - Statically, against the stock image (python, no toolchain): every site's
   stock bytes, that each covers whole instructions, that each body in
   `store.s` jumps back to its site plus the 8 bytes it displaced, and that
@@ -358,8 +428,8 @@ images; 20 Oct 2026):
 python -m elekloader.sdk.build mods/core-a4 --stock Analog-Four_MKII_OS1.56.syx
 python -m elekloader.sdk.build examples/store-check-a4 --stock Analog-Four_MKII_OS1.56.syx
 python -m elekloader.lint examples/store-check-a4/out/store-check-1.0.elemod \
-    --stock Analog-Four_MKII_OS1.56.syx --with mods/core-a4/out/core-0.4.elemod
+    --stock Analog-Four_MKII_OS1.56.syx --with mods/core-a4/out/core-0.5.elemod
 python -m elekloader.patch --stock Analog-Four_MKII_OS1.56.syx \
-    --mod mods/core-a4/out/core-0.4.elemod --mod examples/store-check-a4/out/store-check-1.0.elemod \
+    --mod mods/core-a4/out/core-0.5.elemod --mod examples/store-check-a4/out/store-check-1.0.elemod \
     --out a4-store.syx --version SC56 --lockfile a4-store.lock.json
 ```
