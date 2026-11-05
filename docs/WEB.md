@@ -156,7 +156,9 @@ stock file.
   (core-dn1 4.0's 1.25 MB on the Digitone, core 4.0's 256 KB on the
   Digitakt mk1, in place of 128 KB).
 
-To add a mod to the shop, publish its `.elemod` in a GitHub release, add an
+To add a mod to the shop, publish its `.elemod` in a GitHub release and
+submit it with the **Submit a mod** form ([Submitting a mod](#submitting-a-mod)):
+a check opens the pull request for you. By hand, add an
 item to `web/catalog.json` with the asset's sha256 (the release page shows
 it, or `gh release view --json assets`), and merge: the next deploy takes
 it. A mod whose author keeps its `.elemod` files in their repository
@@ -165,6 +167,118 @@ the file's path, and its sha256. A shop mod that requires another shop mod
 (Digi Mono needs digichain) brings it when it is added. A mod you added yourself that needs a shop mod (a Digitone
 machine needs machines) shows "Needs machines" with a + beside it, which adds the shop's for your OS and ticks it. A mod with a file for each OS version gets an item per file; the page
 shows them as one card (the same repository, mod, version and device).
+
+### Submitting a mod
+
+Authors don't need to edit the list themselves; [SHOP.md](SHOP.md) is their page. The shop's
+**Submit a mod** button opens the [issue form](../.github/ISSUE_TEMPLATE/submit-mod.yml): the
+repository, the release tag or a commit, a one-sentence summary, what has been tested on a unit, the
+licence if the files name none, and optionally which of the files to submit. A release or a
+pre-release; a draft is refused until it is published. With a commit (its whole id), the files are
+the `.elemod` files in the commit's tree, and the entries pin the commit and each file's path.
+`python -m elekloader.sdk.publish` (in the package) builds a mod for each stock file, makes the
+release with `gh`, and opens this form filled in from its address.
+
+When the issue is opened (or edited), `.github/workflows/mod-submission.yml` runs
+`packaging/submit_mod.py` on it:
+- **The check.** It downloads the release's (or the commit's) `.elemod` files and checks each
+  against the sha256 GitHub lists. It reads each with elekloader (id, version, device, OS, licence,
+  requirements) and refuses a licence that doesn't allow the site to pass the file on
+  (`SHOP_LICENCES`). A file the shop lists already, byte for byte, is just that.
+- **The comparison.** It compares the files with the shop's, downloaded as the pages workflow does:
+  - **an update:** the same mod, device and OS from the same repository replaces the old entry, in
+    its place (a repository that moved counts as the same; the entry takes its new name);
+  - **a clash:** another repository's file for a mod the shop lists for that device, for any OS
+    (the mod is that repository's on the device), is flagged and left out. A release sometimes
+    bundles someone else's mod; the submitter can name the file in "Only these files" to add it
+    anyway, and the review decides.
+- **What each mod needs.** A mod goes in only if the site can build it:
+  - **its core:** the site has a core for its device and OS (the latest release's, or the shop's)
+    at least as new as the one the file names (`resources.core`), or as the core its release
+    carries. That version becomes the entry's `needs_core`. Cores come from elekloader's own
+    releases only: the page builds with the newest core for a device and OS, so a core from a
+    mod's release would become every build's. A mod's release that carries one is fine; the core
+    stays out;
+  - **the mods it requires** (machine-pages, fxkit, machines, ...): the shop's for its device and
+    OS, or else the release's own, which comes along even when "Only these files" leaves it out
+    (with the summary its file gives). A mod whose requirement is in neither is refused.
+- **The answer.** It comments on the issue with a table of what it found, and labels the issue
+  `needs-changes` if nothing could be added. Editing the issue runs the check again. Under "Good to
+  know" it says, for each file that goes in, the core it builds with, its RAM, and the shop's mods
+  for its device and OS it can't share a build with (`build_web.clash`, the page's rules); that is
+  never a refusal. A note says when the issue isn't from the repository's owner.
+- **The pull request.** When files pass, it writes them into `web/catalog.json` (in the list's own
+  layout, which `tests/test_units.py` keeps exact) and opens a pull request from branch
+  `mod-submission/<issue>`. The pull request closes the issue when it merges, and the next deploy
+  puts the mods on the site. The workflow starts the tests workflow on it (its own token's pushes
+  start none).
+- **An author's own update merges itself.** When the repository's owner opened the issue and every
+  change is a newer file of a mod that repository already has in the shop (no new mod, no clash,
+  no core, no held entry), the unit tests run and the pull request merges, and pages redeploys.
+  Everything else waits for a maintainer.
+
+The **Remove a mod** form ([remove-mod.yml](../.github/ISSUE_TEMPLATE/remove-mod.yml)) goes through
+the same workflow (`submit_mod.py --remove`): the repository's entries, all or the files it names,
+leave the list (cores stay: a maintainer removes those), and the report names every other shop mod
+for the same device and OS that requires a mod that goes. It merges by itself when the repository's
+owner opened it, nothing else needs what goes, and no entry was held.
+
+An update keeps the card's text: the summary, and the hardware note, marked "As of <the old
+version>" so it doesn't claim a run of the new file. New text comes from the form, or from lines in
+the release's notes:
+
+```
+Shop summary: One sentence the card shows.
+Tested on a unit: What ran on hardware, and what not yet.
+```
+
+A file older than the one the shop lists is left out.
+
+Nothing in a submitted file runs. The issue's text reaches the script as a file, never the shell.
+The repository needs **Settings > Actions > General > Allow GitHub Actions to create and approve
+pull requests** (in an organisation, allowed in the organisation's settings first).
+
+The same check runs locally, on a copy of the list, with the shop's files and the latest release's
+cores downloaded as pages.yml does:
+
+```bash
+python packaging/submit_mod.py --repo owner/name --tag v1.0 --summary "One sentence." \
+    --catalog /tmp/catalog.json --files-dir build/shop --cores-dir build/core
+```
+
+### Updates, by themselves
+
+Once a mod is in the shop, its author only publishes releases. Every day
+`.github/workflows/shop-updates.yml` runs `packaging/shop_updates.py`:
+
+- **It finds the newer releases.** For each repository the shop takes mods from by a release tag,
+  the releases GitHub published after the earliest one the shop takes (no drafts, and none whose
+  `.elemod` files are all cores).
+- **It checks them, oldest first,** with the submission's check in its update mode: only newer
+  files of mods the repository already has in the shop go in, for any OS of the same mod (a new OS
+  version's file joins its card). It leaves out new mods (they come through the form), clashes,
+  cores, older files, held entries, and a pre-release over a file that came from a release.
+- **It opens a pull request** from branch `shop-update/<owner>-<name>`, or refreshes the one open,
+  and closes one that main has caught up with. When every change is such an update, the unit tests
+  run and it merges, and pages redeploys; otherwise it waits for a maintainer, with the tests
+  workflow started on it.
+
+Two switches, for maintainers:
+
+- **`"hold"`** on an entry in `web/catalog.json` (true, or a reason) keeps that mod's file where it
+  is: the daily check leaves it, and an update through the form waits for a review (and stays
+  held). For a mod others build on, such as machine-pages, when a new version needs a look first.
+- **The repository variable `SHOP_AUTO_MERGE`** set to `false` (Settings > Secrets and variables >
+  Actions > Variables) stops both workflows merging; their pull requests still open.
+
+Run it by hand from Actions > Shop updates > Run workflow (one repository, if you name it), or
+locally on a copy of the list:
+
+```bash
+python packaging/shop_updates.py --list --catalog /tmp/catalog.json
+python packaging/shop_updates.py --apply owner/name --catalog /tmp/catalog.json \
+    --files-dir build/shop --cores-dir build/core
+```
 
 ## What stays private, and how
 
@@ -209,7 +323,7 @@ shows them as one card (the same repository, mod, version and device).
 | `shop/claims.json` | the leaderboard: the to-do list's entries claimed by the repository's merged pull requests (`Claims:` lines; [CONTRIBUTE.md](CONTRIBUTE.md#claiming-an-entry)), from `gh pr list --state merged` |
 | `shop/bounties.json` | the community's to-do list for the core, from the shop's files and the cores (`elekloader.sdk.bounties`, grouped by distance: the site has no stock file), and from the upstream lists in `web/upstream/` (`--upstream`: the stock code octabam's newer modules hook), shown in the page's Contribute view ([CONTRIBUTE.md](CONTRIBUTE.md)) |
 | `pyodide/` | five files from Pyodide's core tarball (`pyodide.mjs`, `pyodide.asm.mjs`, `pyodide.asm.wasm`, `python_stdlib.zip`, `pyodide-lock.json`), and `NOTICE.txt` with their licences |
-| `build.json` | the commit, the site's version, the package's sha256 and git tree, the release the cores come from and whether the package is that release's, Pyodide's version, every file's sha256 |
+| `build.json` | the repository it was built from (its "Submit a mod" form and commit links), the commit, the site's version, the package's sha256 and git tree, the release the cores come from and whether the package is that release's, Pyodide's version, every file's sha256 |
 | `LICENSE.txt`, `NOTICE.txt` | elekloader's |
 
 The Pyodide release is pinned by version and sha256 in `build_web.py`

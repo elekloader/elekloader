@@ -193,6 +193,7 @@ h1 { margin: 0 0 6px; font-size: 32px; line-height: 1.1; font-weight: 800; lette
 .drop.mini .drop-ico { flex: none; width: 26px; height: 26px; }
 .drop.mini.waiting { cursor: progress; opacity: 0.65; }
 .list-h { margin: 30px 0 12px; font-size: 22px; font-weight: 800; letter-spacing: -0.02em; }
+.submit-mod { white-space: nowrap; text-decoration: none; }
 /* with a stock file in: done, now, then */
 .next { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 12px; }
 .next-step { display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; border-radius: 999px; border: 1px solid var(--line-2);

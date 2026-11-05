@@ -1314,6 +1314,8 @@ async function boot() {
     const r = await engine.call('init');
     st.info = r.info;
     st.build = r.build;
+    // the repository the site was built from: its "Submit a mod" form
+    for (const a of document.querySelectorAll('a.submit-mod')) a.href = `https://github.com/${repository()}/issues/new?template=submit-mod.yml`;
     const got = r.fetched.filter(f => /\/(pyodide\/|elekloader\.zip|bridge\.py|core\/|build\.json)/.test(f.url));
     const over = got.reduce((a, f) => a + f.transferred, 0);
     $('engine').textContent = `Engine ready: elekloader ${st.info.version}, Python ${r.python}, `
@@ -1599,6 +1601,9 @@ function note(text) {
   alert(text);
 }
 
+// the repository the site was built from (build.json), or elekloader's
+const repository = () => (/^[\w.-]+\/[\w.-]+$/.test(st.build?.repository || '') ? st.build.repository : 'elekloader/elekloader');
+
 function renderAbout(r) {
   const b = r.build || {};
   const commit = b.commit ? b.commit.slice(0, 7) : '';
@@ -1607,7 +1612,7 @@ function renderAbout(r) {
     b.release ? (b.same_as_release ? ` (the package of release ${b.release})`
       : ` (newer than release ${b.release}: the package as of`) : '',
     commit ? [b.release && !b.same_as_release ? ' ' : ' · commit ',
-      el('a', { href: `https://github.com/irpina/elekloader/commit/${b.commit}`, rel: 'noreferrer' }, commit),
+      el('a', { href: `https://github.com/${repository()}/commit/${b.commit}`, rel: 'noreferrer' }, commit),
       b.release && !b.same_as_release ? ')' : ''] : '',
     ` · Python ${r.python} in Pyodide ${r.pyodide}`,
     b.zip_sha256 ? ` · elekloader.zip sha256 ${b.zip_sha256.slice(0, 16)}…` : '',

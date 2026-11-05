@@ -1,0 +1,27 @@
+name: Remove a mod
+description: Take your mod's files out of elekloader's shop. A check lists what goes and opens a pull request.
+title: "Remove a mod: "
+labels: [mod-removal]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        The shop stops listing the files; your releases and your repository stay as they are. A check lists what goes, and says whether another shop mod needs any of it, then opens a pull request. When the repository's owner opens this, and nothing else in the shop needs the files, it merges by itself. Otherwise a maintainer looks first. More in [docs/SHOP.md](https://github.com/elekloader/elekloader/blob/main/docs/SHOP.md).
+  - type: input
+    id: repo
+    attributes:
+      label: Repository
+      description: owner/name, as the shop lists it (for example irpina/digislicer).
+      placeholder: owner/name
+    validations:
+      required: true
+  - type: textarea
+    id: files
+    attributes:
+      label: Only these files
+      description: The .elemod files to take out, one per line. Leave it empty to take out every file the shop lists from the repository.
+  - type: textarea
+    id: why
+    attributes:
+      label: Why
+      description: Optional. It goes in the pull request.

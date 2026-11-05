@@ -1,5 +1,5 @@
 | SPDX-License-Identifier: GPL-2.0-or-later
-| core-dn1 3.0 to 4.1 for the Digitone mk1, in assembly: the layouts that go
+| core-dn1 3.0 to 5.0 for the Digitone mk1, in assembly: the layouts that go
 | with the firmware locations core exports (core3.h has the same in C).
 | Assembly names the locations directly: fw_voice_pitch, fw_kit, fw_fillrect,
 | ... A mod that uses them needs core-dn1 3.0: "resources": {"core": "3.0"};
@@ -7,7 +7,9 @@
 | 3.2 one (fw_tempo, core_audio, ev_midi_cc) 3.2, and a 3.3 one
 | (ev_key_leds, ev_render_params, fw_memcpy, fw_textbox, fw_pattern,
 | __ashldi3, ...) 3.3, CORE_AUDIO_INSERT and ev_midi_pc's CORE_MIDI_PC_STOCK 4.0,
-| and ev_note_queue's event (FW_EVENT_*) 4.1.
+| ev_note_queue's event (FW_EVENT_*) 4.1, and ev_voice_ready, ev_param_turn,
+| ev_param_value, fw_voice_locks, fw_voice_locked, fw_param_uirec and
+| CORE_PROJDATA_VARIABLE 4.2.
 | The SDK puts this folder on the include path:
 |
 |       .include "digitone-mk1/core3.inc"
@@ -54,3 +56,34 @@
         .equ    FW_LOCKS_COUNT,   8             | the list's entries, a long
         .equ    FW_LOCKS_PAIRS,   0x14          | from here {u16 slot, s16 value}, FW_LOCKS_STRIDE apart
         .equ    FW_LOCKS_STRIDE,  8
+| 4.2: where an event came from (ev_voice_ready's), a variable project data block
+        .equ    FW_EVENT_MODE,    0xc           | a long: 2 the trig keys in KEYBOARD mode
+        .equ    FW_EVENT_KEYBOARD, 2
+        .equ    CORE_PROJDATA_VARIABLE, 0x80000000  | in a core_projdata's size: saves what its first long says
+        .equ    FW_VOICE_LOCKED_STRIDE, 12      | fw_voice_locked + 12 v: voice v's 3 longs of locked slots
+| 5.0: ev_transport's what, ev_render_fx's stages
+        .equ    CORE_TRANSPORT_STOP, 0
+        .equ    CORE_TRANSPORT_START, 1
+        .equ    CORE_TRANSPORT_PAUSE, 2
+        .equ    CORE_FX_CHORUS, 0
+        .equ    CORE_FX_DELAY, 1
+        .equ    CORE_FX_REVERB, 2
+        .equ    CORE_FX_DRIVE, 3
+        .equ    CORE_PATTERN_SAVE, 0
+        .equ    CORE_PATTERN_RELOAD, 1
+        .equ    CORE_PATTERN_KIT, 1
+        .equ    CORE_PATTERN_SEQ, 2
+        .equ    CORE_VIEW_PUSH, 0
+        .equ    CORE_VIEW_REPLACE, 1
+        .equ    CORE_VIEW_POP, 2
+        .equ    CORE_MUTE_GLOBAL, 0
+        .equ    CORE_MUTE_PATTERN, 1
+        .equ    CORE_MUTE_SONG_ROW, 2
+        .equ    CORE_SOUND_COPY_POOL, 0
+        .equ    CORE_SOUND_COPY_BANK, 1
+        .equ    CORE_SOUND_COPY_OTHER, 2
+        .equ    CORE_SOUND_DELETE, 3
+        .equ    CORE_SOUND_SEND_SYSEX, 4
+        .equ    CORE_SOUND_PROTECT, 5
+        .equ    CORE_SOUND_PASTE, 6
+        .equ    CORE_SOUND_SAVE, 7

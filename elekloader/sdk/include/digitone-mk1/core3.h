@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
-/* core-dn1 3.0 to 4.1 for the Digitone mk1, in C: the firmware locations core exports, and core-dn1's
+/* core-dn1 3.0 to 4.2 for the Digitone mk1, in C: the firmware locations core exports, and core-dn1's
  * own tables and calls (docs/ADAPTING.md, "Firmware locations", "Parameter slots", "Mod pages", "Project
  * data", "The Mod Menu" and "Machines and stock parameters"). The SDK puts this folder on the include
  * path:
@@ -8,8 +8,8 @@
  *
  * Every fw_ name here is resolved by the linker against the core in the build, so a mod that uses only
  * these rebuilds for another OS version without a change (its port in mod.json is empty). Declaring one
- * makes the mod need core-dn1 3.0, or 3.1, 3.2, 3.3, 4.0 or 4.1 for the names marked so: say so with
- * "resources": {"core": "3.0"} (or "3.1", "3.2", "3.3", "4.0", "4.1"). From 4.0 the mods' code, tables and variables
+ * makes the mod need core-dn1 3.0, or 3.1, 3.2, 3.3, 4.0, 4.1 or 4.2 for the names marked so: say so with
+ * "resources": {"core": "3.0"} (or "3.1", "3.2", "3.3", "4.0", "4.1", "4.2"). From 4.0 the mods' code, tables and variables
  * have 1.25 MB (from 0x43EC0000) in place of 128 KB: a build that needs more than 128 KB needs core 4.0. digitone-mk1/core3.inc has the same for assembly. Functions that return a pointer
  * are declared to return uint32_t: the firmware returns it in d0, where gcc for m68k looks in a0. */
 #ifndef ELEKLOADER_DIGITONE_MK1_CORE3_H
@@ -159,9 +159,13 @@ struct core_page {                  /* core_pages: pages 27-30 */
     int32_t pos;                    /* +56 core writes it */
 } __attribute__((aligned(4)));
 
+/* 4.2: in a core_projdata's size, a block that saves only what it holds (the rest of size is the most it may
+ * hold): the first long of its data is the bytes it holds now, that long included (rounded up to 4; 0, or
+ * more than the most, saves all of it). A load copies what was saved and zeroes the rest, as for any block. */
+#define CORE_PROJDATA_VARIABLE  0x80000000u
 struct core_projdata {              /* core_projdata: saved and loaded with the project */
     uint32_t tag;                   /* +0  four characters, claimed as projdata:<tag> */
-    uint32_t size;                  /* +4  bytes, a multiple of 4 */
+    uint32_t size;                  /* +4  bytes, a multiple of 4 (| CORE_PROJDATA_VARIABLE, 4.2) */
     void *data;                     /* +8  the mod's copy */
     void (*loaded)(int32_t found);  /* +12 after a load; found 0: none, data holds zeros */
 } __attribute__((aligned(4)));
@@ -264,5 +268,191 @@ typedef void (*ev_note_queue_fn)(void *event, uint32_t time);
 #define FW_LOCKS_COUNT(l)       (*(volatile uint32_t *)((l) + 8))
 #define FW_LOCK_SLOT(l, i)      (*(volatile uint16_t *)((l) + 0x14 + 8 * (i)))      /* a sound slot, 0-78 */
 #define FW_LOCK_VALUE(l, i)     (*(volatile int16_t *)((l) + 0x16 + 8 * (i)))       /* its value, 8.8 */
+#define FW_EVENT_MODE(ev)       (((volatile int32_t *)(ev))[3])     /* +0xc: where it came from: */
+#define FW_EVENT_KEYBOARD       2                                   /*   the trig keys in KEYBOARD mode */
+
+/* ---- 4.2: a starting voice's locks, and the parameter pages ------------------------------------ */
+/* Each voice as it starts a note, once it holds its sound and the event's p-locks (after ev_voice_on, in the
+ * same pass of the render): what the voice has here is what plays. voice 0-7, track, the note event (its
+ * p-locks at FW_EVENT_LOCKS, FW_EVENT_MODE where it came from); the note is fw_voice_pitch[voice] >> 16.
+ * Interrupt level, inside the render: keep it short. */
+typedef void (*ev_voice_ready_fn)(int32_t voice, int32_t track, void *event);
+/* The firmware's own: a p-lock list (the layout of FW_EVENT_LOCKS's: +8 the count, from +0x14 {slot, value}
+ * 8 bytes apart) into a starting voice, as the render puts a step's locks there: each slot's target in
+ * fw_voice_params, the smoother's value (so the note starts at it) and the slot's bit in fw_voice_locked.
+ * params: fw_voice_params. From ev_voice_ready. */
+extern void fw_voice_locks(int32_t voice, const void *list, volatile int16_t *params);
+/* Each voice's slots that locks set as it started: 3 longs a voice, slot k at bit k & 31 of long k >> 5. A
+ * voice's next note of the same sound loads these slots from the sound again (a new sound loads them all),
+ * so a mod that writes a voice's parameters outside its start sets the slot's bit for it to come back. */
+extern volatile uint32_t fw_voice_locked[];
+#define FW_VOICE_LOCKED(v, k)   (fw_voice_locked[3 * (v) + ((k) >> 5)])
+/* The UI record the pages use for parameter id (fw_uirecs', or a parameter slot's, 182-184): bit 0 of its
+ * first long set when the parameter takes no p-locks. The UI task. */
+extern uint32_t fw_param_uirec(int32_t id);
+#define CORE_PARAM_LOCKABLE(id) ((*(volatile uint32_t *)fw_param_uirec(id) & 1) == 0)
+
+/* A knob turn on a parameter page (a stock page or a mod's) that the stock would put into the track's sound:
+ * no trig is held (GRID REC's held steps take their turns into their p-locks, as stock, and are never asked).
+ * view: the page; id: the parameter; delta: the step the stock would add (8.8, a coarse parameter's whole
+ * step 256, acceleration in); knob 0-7 for A-H. Nonzero takes it: the stock neither edits the sound nor
+ * shows its pop-up. The UI task. */
+typedef int32_t (*ev_param_turn_fn)(void *view, int32_t id, int32_t delta, int32_t knob);
+/* The value a page shows on a knob for parameter id, asked every frame it draws its knobs. Nonzero answers:
+ * *value (8.8) is shown, drawn inverted as a held step's p-lock when *locked is 1 (core clears it before
+ * asking). Otherwise the stock answers: the held steps' lock, or the sound's value. Core also asks where the
+ * pages read the track's sound for what they draw themselves (SYN2's envelopes, SYN1's algorithm, the knob
+ * handlers' redraws: the views' value routine) and *locked is not used there; and on SYN2's envelope page,
+ * which draws its knobs itself, *locked inverts the knob as on the other pages. The UI task. */
+typedef int32_t (*ev_param_value_fn)(void *view, int32_t id, int32_t *value, uint8_t *locked);
+/* A page's own answers, for these handlers (its C++ methods; the same in 1.43 and 1.44): the parameter on
+ * knob 0-7, and the value the stock would show with no trig held (the track's sound). The UI task. */
+#define CORE_VIEW_KNOB_ID(view, knob) \
+    (((int32_t (*)(void *, int32_t))(*(void *const *const *)(view))[0xa0 / 4])((view), (knob)))
+#define CORE_VIEW_SOUND_VALUE(view, id) \
+    (((int32_t (*)(void *, int32_t, int32_t))(*(void *const *const *)(view))[0x58 / 4])((view), (id), -1))
+
+/* ---- 5.0: the firmware's moments --------------------------------------------------------------------- */
+/* The system. ev_card_ready: the init task has the +Drive up (status 0) or not (1, 6-9), before the project
+ * loads and before the UI and MIDI tasks exist; the card reads and writes here. ev_boot_ui: the boot is done,
+ * the UI task is about to start (the views are built in it next). ev_usb: the host configured the USB
+ * device (1) or the configuration was dropped (0); may be interrupt level. ev_crash: an exception nothing
+ * handles, interrupts masked, the frame (format/status word, PC, then the stack); call core_restart_now to
+ * get the unit back, or return and the stock prints the crash and halts. */
+typedef void (*ev_card_ready_fn)(int32_t status);
+typedef void (*ev_boot_ui_fn)(void);
+typedef void (*ev_usb_fn)(int32_t configured);
+typedef void (*ev_crash_fn)(void *frame);
+/* Reboot from a task: waits for the +Drive and the panel link, then resets (DDR word 0 cleared, RCM.RCR). */
+extern void core_restart(void);
+/* The same at once, for an interrupt or ev_crash. Never returns. */
+extern void core_restart_now(void);
+/* The +Drive, 512-byte sectors, from a task only (never an interrupt): 0, or < 0. */
+extern int32_t fw_card_read(uint32_t sector, uint32_t bytes, void *buf);
+extern int32_t fw_card_write(uint32_t sector, uint32_t bytes, const void *buf);
+extern int32_t fw_card_erase(uint32_t first, uint32_t count);
+extern int32_t fw_card_sectors(void);           /* -1 before the card is up */
+
+/* Storage. A project is about to be written to a slot (0-127, 128 the working project), then was (ok
+ * nonzero: written). The save task or the UI task. */
+typedef void (*ev_project_saving_fn)(void *store, int32_t slot, int32_t arg3);
+typedef void (*ev_project_saved_fn)(void *block, int32_t slot, int32_t ok);
+
+/* The sequencer. ev_transport: about to start (what 1; arg 0 PLAY or MIDI Start, 1 MIDI Continue), stop
+ * (0; the STOP key) or pause (2; PLAY while playing, MIDI Stop). Nonzero takes it: the sequencer does not.
+ * ev_seq_tick: each tick of the sequencer (about 140 a second), before it runs: interrupt.
+ * ev_pattern_request: a pattern change is asked for, before the stock queues it. The UI task. */
+#define CORE_TRANSPORT_STOP     0
+#define CORE_TRANSPORT_START    1
+#define CORE_TRANSPORT_PAUSE    2
+typedef int32_t (*ev_transport_fn)(int32_t what, int32_t arg);
+typedef void (*ev_seq_tick_fn)(void);
+typedef void (*ev_pattern_request_fn)(void *ui, void *request, int32_t arg3);
+/* ev_tempo: the tempo is about to be set, in hundredths of a BPM (the setter clamps it to 3600-36000).
+ * Nonzero takes it: the tempo stays. ev_pattern_switch: a pattern change asked for earlier is about to be
+ * applied (pending: the firmware's word for it). */
+typedef int32_t (*ev_tempo_fn)(int32_t bpm100);
+typedef void (*ev_pattern_switch_fn)(int32_t pending);
+
+/* MIDI. ev_midi_in: every message the MIDI task dispatches (channel messages, real time, SysEx), before
+ * ev_midi_cc, ev_midi_pc and ev_sysex; source 2 or 4 USB, 8 or 0x10 DIN. ev_sysex: each SysEx but F0 7E.
+ * ev_midi_out: each message or SysEx piece the port switch sends (port 1 the default, 2 USB, 3 DIN, 4 both).
+ * Nonzero takes it: the stock does not see it (does not send it). The MIDI task, or the sender's. */
+typedef int32_t (*ev_midi_in_fn)(const uint8_t *msg, int32_t len, int32_t source);
+typedef int32_t (*ev_sysex_fn)(const uint8_t *msg, int32_t len, int32_t source);
+typedef int32_t (*ev_midi_out_fn)(const uint8_t *buf, int32_t len, int32_t port);
+/* Send SysEx (or any bytes) from a task: 144 bytes at a time; it busy-waits while the USB ring is full, so
+ * keep replies small. abort: a byte the caller may set to stop between pieces (or 0). -> 1 sent. */
+extern int32_t fw_sysex_send(const uint8_t *buf, int32_t len, volatile uint8_t *abort, int32_t port);
+
+/* Voices. A voice is released (its note or note-off ran out, it was retriggered, its track stopped).
+ * Interrupt level, the render. */
+typedef void (*ev_voice_free_fn)(int32_t voice);
+/* An arpeggiator step is due on a track (the render, before the stock counts it); and a busy voice is taken
+ * for a new note, more notes than voices (old_track the track it played for). Interrupt level, the render. */
+typedef void (*ev_arp_step_fn)(int32_t track, void *event);
+typedef void (*ev_voice_steal_fn)(int32_t voice, int32_t old_track);
+/* A trig key plays a note in KEYBOARD mode (these notes do not pass the note queue): pressed (on nonzero; a
+ * handler that returns nonzero takes it, and no note plays) or released (an observer). state: the
+ * firmware's. The UI task. */
+typedef int32_t (*ev_keyboard_note_fn)(void *state, int32_t on, int32_t track, int32_t note);
+/* A track's mute is about to be set (muted 1) or cleared (FUNC + a track key). The UI task. */
+#define CORE_MUTE_GLOBAL        0       /* FUNC + a track key */
+#define CORE_MUTE_PATTERN       1       /* quick mute in "Pattern mutes" mode */
+#define CORE_MUTE_SONG_ROW      2       /* a song row's mutes; row says which */
+typedef void (*ev_mute_fn)(int32_t where, int32_t track, int32_t muted, int32_t row);
+
+/* The UI task's messages, each as it takes it, before it switches on msg[0] (a type past 34 is dropped). */
+typedef void (*ev_ui_msg_fn)(uint8_t *msg);
+
+/* Sequencer edits (the UI task): a step's flags (mask 1, 2: its trigs), a step's note slot (note -1 clears),
+ * a parameter lock set (live record or an edit), one lock removed, all of a step's locks removed, a track's
+ * length (2-64). The first argument is the firmware's track (or pattern) object. */
+typedef void (*ev_trig_set_fn)(void *track, int32_t step, int32_t mask, int32_t on);
+typedef void (*ev_step_note_fn)(void *track, int32_t step, int32_t note, int32_t slot);
+typedef void (*ev_plock_store_fn)(void *pattern, int32_t track, int32_t step, int32_t slot, int32_t value);
+typedef void (*ev_plock_clear_fn)(void *track, int32_t step, int32_t slot);
+typedef void (*ev_step_clear_fn)(void *track, int32_t step);
+typedef void (*ev_track_length_fn)(void *track, int32_t length);
+
+/* Sound parameters: the stock setter's commit (lock nonzero: into the held steps' locks), and a sound slot's
+ * value going to the voices playing the track (also core_sound_set's). The UI task. */
+typedef void (*ev_param_set_fn)(void *page, int32_t id, int32_t value, int32_t a4, int32_t a5, int32_t lock);
+typedef void (*ev_sound_live_fn)(int32_t value, int32_t track, int32_t slot);
+
+/* The master's effect stages, each block (interrupt): stage 0-2 the three send effects (chorus, delay,
+ * reverb, by their place on the bus), 3 the master drive. Nonzero takes it: the handler wrote out and the
+ * stock stage is skipped. */
+#define CORE_FX_CHORUS          0
+#define CORE_FX_DELAY           1
+#define CORE_FX_REVERB          2
+#define CORE_FX_DRIVE           3
+typedef int32_t (*ev_render_fx_fn)(int32_t stage, int16_t *out, int16_t *in, void *params);
+
+/* The pattern menu's two workers, at their entry (UI task), before their write-protect and project checks:
+ * FUNC+YES saves, FUNC+NO reloads; what is 1 the kit, 2 the sequence, 3 both. */
+#define CORE_PATTERN_SAVE       0
+#define CORE_PATTERN_RELOAD     1
+#define CORE_PATTERN_KIT        1
+#define CORE_PATTERN_SEQ        2
+typedef void (*ev_pattern_op_fn)(int32_t op, int32_t index, int32_t what);
+
+/* A held track key + NO reloads the track's sound from the saved pattern, once per track (UI task), before
+ * the project check. params is the parameter list (begin, end pointers): empty = the whole sound. */
+typedef void (*ev_track_reload_fn)(int32_t track, int32_t pattern, void *params);
+
+/* The SOUND MANAGER (SETTINGS > SOUNDS) running an action on the ticked sounds (UI task), before it runs.
+ * The copies: a = the menu view, b = the selection. Delete, send, protect: a = the selection (delete: b
+ * nonzero once confirmed). The selection points at a vector of the ticked sounds' indices. */
+#define CORE_SOUND_COPY_POOL    0
+#define CORE_SOUND_COPY_BANK    1       /* to the +Drive or one of its banks */
+#define CORE_SOUND_COPY_OTHER   2       /* from the pool view (LEFT > VIEW POOL) to the +Drive or a bank */
+#define CORE_SOUND_DELETE       3
+#define CORE_SOUND_SEND_SYSEX   4
+#define CORE_SOUND_PROTECT      5       /* toggle write protection */
+#define CORE_SOUND_PASTE        6       /* the SOUND BROWSER's FUNC+STOP into a pool slot (b: confirmed) */
+#define CORE_SOUND_SAVE         7       /* the pool view's SAVE TO HERE: the track's sound into the slot */
+typedef void (*ev_sound_op_fn)(int32_t op, void *a, void *b);
+
+/* Before the kit puts a sound on a track (UI task): the SOUND BROWSER's FUNC+YES load. sound is the
+ * incoming 0x146-byte sound; the track's slot is kit + 0x60 + track * 0x328. */
+typedef void (*ev_sound_load_fn)(int32_t track, void *sound, void *kit);
+
+/* Before a track's sound is initialised and named (UI task): SOUNDS > CLEAR TRACK SOUND. slot is the
+ * track's sound, kit + 0x60 + track * 0x328. */
+typedef void (*ev_sound_clear_fn)(void *slot, const char *name);
+
+/* Over and over in the init task once the UI task is up: the lowest priority task that runs (RTOS priority 1),
+ * so only while no other task is ready. Never at interrupt level; a handler must not wait for anything. */
+typedef void (*ev_idle_fn)(void);
+
+/* The view stack, before it changes (UI task). Push: a = &new view, b = nonzero to first close views of the
+ * same name; replace (the page keys): a = &old, b = &new; pop (NO, FUNC release): a = the matcher.
+ * container is MainScreen+0x40 for the main stack. fw_view() is the view on top (keys go to it), or 0. */
+#define CORE_VIEW_PUSH          0
+#define CORE_VIEW_REPLACE       1
+#define CORE_VIEW_POP           2
+typedef void (*ev_view_fn)(int32_t op, void *container, void *a, void *b);
+extern void *fw_view(void);
 
 #endif

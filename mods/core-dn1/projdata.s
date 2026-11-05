@@ -13,7 +13,11 @@
 | From 2.1 mods keep data there, saved and loaded with the project. A mod
 | contributes to the table core_projdata a pointer to a descriptor:
 |   +0  tag      four characters, claimed as the resource projdata:<tag>
-|   +4  size     bytes, a multiple of 4
+|   +4  size     bytes, a multiple of 4; from 4.2, with bit 31 set
+|               (CORE_PROJDATA_VARIABLE) a block that saves only what it
+|               holds: the rest is the most it may hold, and its data's
+|               first long the bytes it holds now (that long included,
+|               rounded up to 4; 0 or more than the most: all of it)
 |   +8  data     the mod's copy in RAM, which it reads and writes
 |   +12 loaded   void loaded(int found), or 0: after a project's data is
 |               loaded into RAM; found 0 when the project has none for this
@@ -23,6 +27,10 @@
 | (core_proj_save), and takes them out after a project is deserialized
 | (core_proj_load) or a new one is made (core_proj_new). The gap holds
 | 'ELKP', then per block its tag, its size and its bytes, then a zero tag.
+| Blocks go in the table's order; one that does not fit in what is left is
+| left out of that save. A variable block takes only the room it uses, so
+| the blocks after it keep theirs; a load copies what was saved and zeroes
+| the rest of the mod's copy, as for any block.
         .equ    GAP,      0x20          | the gap in the storage block
         .equ    GAP_END,  0x200
         .equ    MAGIC,    0x454c4b50    | 'ELKP'
@@ -139,7 +147,19 @@ stamp:
         beq.s   4f
         movea.l %d0, %a0
         move.l  4(%a0), %d1             | its size
-        move.l  %a3, %d2                | room: tag, size, data, a zero tag
+        bclr    #31, %d1                | 4.2: variable, the size the most
+        beq.s   11f
+        movea.l 8(%a0), %a0
+        move.l  (%a0), %d0              | the bytes its data holds now
+        movea.l -4(%a2), %a0            | the descriptor again
+        addq.l  #3, %d0
+        moveq   #-4, %d2
+        and.l   %d2, %d0
+        beq.s   11f                     | 0: all of it
+        cmp.l   %d1, %d0
+        bhi.s   11f                     | more than the most: all of it
+        move.l  %d0, %d1
+11:     move.l  %a3, %d2                | room: tag, size, data, a zero tag
         sub.l   %a1, %d2
         subi.l  #12, %d2
         cmp.l   %d1, %d2
@@ -188,6 +208,7 @@ extract:
         adda.l  %d1, %a0
         bra.s   2b
 3:      move.l  4(%a3), %d2             | ours: copy what both sizes hold
+        bclr    #31, %d2                | a variable block's most
         cmp.l   %d1, %d2
         bls.s   4f
         move.l  %d1, %d2
@@ -218,6 +239,7 @@ extract:
 zero:
         movea.l 8(%a3), %a1
         move.l  4(%a3), %d3
+        bclr    #31, %d3
         lsr.l   #2, %d3
         beq.s   2f
 1:      clr.l   (%a1)+
