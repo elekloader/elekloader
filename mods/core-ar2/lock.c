@@ -506,14 +506,20 @@ int core_reload(void *view, int track, int **ids, int d)
  * takes the id for the set's sound, the knob is stock's and so is its label.
  * The callers read the string from %d0, so it is typed as a number. */
 #define KNOB_LABEL ((unsigned (*)(void *, int))0x400a9000)
+unsigned core_param_lock_label(int id);         /* rows.c (0.11) */
+unsigned core_param_lock_name(int id);
 
+/* (0.11) a mod's own id (core_param_locks, from 555) shows the label and
+ * name its entry gives, for any set: stock would read record 0 (ERR) */
 unsigned core_knob_label(void *set, int id)
 {
-    unsigned code;
+    unsigned code, l;
     unsigned char *s;
     const struct core_lock_param *p = core_lock_knob_param(set, id, &code, &s);
     if (p && p->short_name)
         return (unsigned)shorts[code - FIRST_CODE];
+    if ((l = core_param_lock_label(id)) != 0)
+        return l;
     return KNOB_LABEL(set, id);
 }
 
@@ -522,6 +528,8 @@ unsigned core_knob_label(void *set, int id)
  * number. Stock would check the id against the set (vtable +36) and, for the
  * id a mod page borrows (an Error record, another machine's parameter),
  * write ERR. Where stock takes the id for the set's sound, it is stock's. */
+int core_param_lock_owns(int id);              /* rows.c (0.11) */
+
 int core_lock_text(void *set, int id, int value, char *buf)
 {
     unsigned code;
@@ -529,7 +537,7 @@ int core_lock_text(void *set, int id, int value, char *buf)
     const struct core_lock_param *p = core_lock_knob_param(set, id, &code, &s);
     unsigned v, d;
     int n = 0, digits = 0;
-    if (!p)
+    if (!p && !core_param_lock_owns(id))      /* (0.11) a mod-kept lock's id: its number too */
         return 0;
     if (value < 0) {
         buf[n++] = '-';
@@ -554,10 +562,12 @@ int core_lock_text(void *set, int id, int value, char *buf)
 
 unsigned core_knob_name(void *set, int id)
 {
-    unsigned code;
+    unsigned code, l;
     unsigned char *s;
     const struct core_lock_param *p = core_lock_knob_param(set, id, &code, &s);
     if (p && p->name)
         return (unsigned)names[code - FIRST_CODE];
+    if ((l = core_param_lock_name(id)) != 0)
+        return l;
     return KNOB_NAME(set, id);
 }

@@ -100,6 +100,7 @@ export type Device = {
   ddr: Range
   coreDdr: [string, Range][]                   // [core version, area]: from that core on, the linker's area in place of ddr
   slotClaims: [string, number, number, string][]   // [table, at, count, prefix]: a contribution to table points at a descriptor whose long at +at is a sound slot; the mod claims prefix:<slot>
+  paramIds: [number, [number, number, string], [string, boolean][]] | null   // [own, [lo, hi, what], [[table, ownOnly]]]: knob id ranges (link.Mod2.idRanges)
   sramCode: Range
   fastTable: string
   imageFree: Range[]
@@ -114,7 +115,7 @@ const rel = (version: string, syxSha256: string, mainSha256: string, mainLen: nu
 
 const base = {
   mainSection: 3, mainLoad: 0x40000400, isa: 'coldfire' as const, hmacKeyFrom: null, container: 'ele3' as const,
-  versionLen: 4, versionAt: 0x14, versionOptional: false, protected: [], relocatable: [], keep: [], blobMax: null, sramCode: [0, 0] as Range, coreDdr: [] as [string, Range][], slotClaims: [] as [string, number, number, string][], fastTable: '',
+  versionLen: 4, versionAt: 0x14, versionOptional: false, protected: [], relocatable: [], keep: [], blobMax: null, sramCode: [0, 0] as Range, coreDdr: [] as [string, Range][], slotClaims: [] as [string, number, number, string][], paramIds: null, fastTable: '',
   imageFree: [], reserve: null, dspPayloads: {}, dspAreas: [], trailer: null, updateMax: null,
 }
 
@@ -232,6 +233,9 @@ export const ANALOG_RYTM_MK2: Device = {
   recovery: 'hold FUNC while powering on for the STARTUP menu, press TRIG 4 (OS UPGRADE), '
     + 'then send the stock .syx over MIDI DIN (not USB)',
   slotClaims: [['core_machines', 0, 53, 'machine']],   // a machine's descriptor names its slot at +0
+  // core-ar2's knob ids: stock's records are 0..468, core's lockable parameters take 469..554
+  // (469 + code - 42, lock.c) and a mod's own ids start at 555 (pages.h CORE_PARAM_LOCK_FIRST)
+  paramIds: [555, [469, 554, "core's lockable parameters' ids"], [['core_params', false], ['core_param_locks', true]]],
 }
 
 export const ANALOG_FOUR_MK2: Device = {

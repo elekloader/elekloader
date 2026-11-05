@@ -212,6 +212,27 @@ class Mod2:
                         out.append('%s:%d' % (prefix, v))
         return out
 
+    def id_ranges(self, image):
+        """The knob ids this mod's entries answer for, by the profile's param_ids: a
+        contribution to such a table holds four-byte pointers to entries whose first two longs are
+        a range of ids (core-ar2's core_params, core_param_locks). -> [(table, first, last)]. An
+        entry this cannot read (outside the mod's own bytes, or relocated there) answers for none."""
+        out = []
+        for table, _own_only in (self.dev.param_ids[2] if self.dev.param_ids else ()):
+            for c in self.contribute:
+                if c['to'] != table:
+                    continue
+                for off, typ, tgt, add in c['relocs']:
+                    at = None if off % 4 else self._target(typ, tgt, add)
+                    if at is None:
+                        continue
+                    first, last = self._long(at[0], at[1], image), self._long(at[0], at[1] + 4, image)
+                    if first is not None and last is not None:
+                        first, last = [v - (1 << 32) if v >> 31 else v for v in (first, last)]
+                        if first <= last:
+                            out.append((table, first, last))
+        return out
+
     def _long(self, sec, off, image):
         """The big-endian long at `sec`+`off` of this mod's bytes, or None: in a section
         without bytes or under a relocation."""
@@ -438,6 +459,25 @@ def check(mods, image):
             if c in owner:
                 bad.append('table %s has the name of a symbol %s exports' % (c, owner[c].label()))
             tables[c] = (m, e)
+    if dev.param_ids and len({(m.dev.key, m.rel.version) for m in mods}) == 1:
+        own, (lo, hi, what), kinds = dev.param_ids
+        own_only = {t for t, o in kinds if o}
+        taken = []
+        for m in mods:
+            for table, a, b in m.id_ranges(image):
+                if a <= hi and lo <= b:
+                    bad.append('%s: its %s entry takes ids %d..%d, and %d..%d are %s; a mod\'s own '
+                               'ids start at %d' % (m.label(), table, a, b, lo, hi, what, own))
+                elif table in own_only and a < own:
+                    bad.append('%s: its %s entry takes ids %d..%d; that table\'s ids start at %d'
+                               % (m.label(), table, a, b, own))
+                elif b >= own:
+                    a = max(a, own)
+                    for n, t, x, y in taken:
+                        if n is not m and x <= b and a <= y:
+                            bad.append('%s and %s both take ids %d..%d (%s, %s)'
+                                       % (n.label(), m.label(), max(a, x), min(b, y), t, table))
+                    taken.append((m, table, a, b))
     sized = reserve_names(dev, owner)
     fields = {}                                 # mod storage: the linker defines these
     for m in mods:

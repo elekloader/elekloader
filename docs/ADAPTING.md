@@ -1861,6 +1861,53 @@ Live recording records a mod parameter as it records a stock one: its
 knob turned, or its NRPN or CC received, locks the value on the step the
 track plays (a lock trig where the step has no trig).
 
+### Locks a mod keeps itself (core-ar2 0.11, Analog Rytm MKII)
+
+A mod that keeps its locks somewhere of its own (in RAM, or on a computer
+it talks to) takes stock's lock calls for its knobs instead of core's
+ledger. Its knob ids start at 555 (`CORE_PARAM_LOCK_FIRST`): stock's
+records are 0..468 and core's lockable parameters take 469..554. With
+`analog-rytm-mk2/pages.h`:
+
+```json
+{"to": "core_param_locks", "order": 50, "data": "00000000",
+ "relocs": [[0, "abs32", "sym:my_locks", 0]]}
+```
+
+```c
+#include "analog-rytm-mk2/pages.h"
+const struct core_param_lock my_locks = {560, 563, my_get, my_turn, my_set, my_clear,
+                                         my_label, my_name};
+```
+
+With a trig held, a turn of one of these knobs on the current track (0..11,
+12 on the FX track) calls the entry once for each held trig, with the
+track and the step:
+
+- `get(id, track, step)`: the step's lock (8.8), or -1. It runs for every
+  knob each time the page draws with a trig held, so it answers from RAM.
+- `set(id, track, step, value)`: a turn's first call on a step without a
+  lock, with the knob's value without one; also a paste's lock. 1 when kept.
+- `turn(id, track, step, delta)`: each turn after it; the new lock, or -1.
+  A lock it answers marks the project modified.
+- `clear(id, track, step)`: the trig's lock cleared (the knob pushed).
+- `label(id)`, `name(id)`: the knob's label (4 characters) and the header's
+  name (up to 32), on any page that shows the id; 0 for stock's, which
+  shows ERR / ERROR above 468.
+
+Live recording calls `turn` with `CORE_LOCK_RECORDING` (0x100) in the step
+argument, after a `core_params` entry took the turn of the knob with no
+trig held: the step is the one the track plays (`step & 0xff`), and core
+has put a lock trig there when it had none, as it does for its own locks.
+
+A `core_params` text entry for the id gets the lock's value with a trig
+held; `core_held_step(&track)` gives that trig's step and track (-1: none).
+Without a text entry, the knob's value shows as a number.
+
+The linker refuses a `core_params` or `core_param_locks` entry whose ids
+take 469..554, a `core_param_locks` entry below 555, and entries of two
+mods that share an id from 555.
+
 ### Mod scene and performance locks (core-ar2 0.8, Analog Rytm MKII)
 
 A lockable parameter is locked to a scene, or given a performance depth,

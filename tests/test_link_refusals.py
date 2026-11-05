@@ -795,6 +795,52 @@ def _(B):
              [keeper(B), storing(B), thief])], [keeper(B), storing(B)]
 
 
+# ---- knob ids (the Analog Rytm MKII's core_params and core_param_locks, the profile's param_ids) ----------
+
+def knobs(B):
+    c = B.core()
+    c['collections'].update({'core_params': {'entry': 4}, 'core_param_locks': {'entry': 4}})
+    return c
+
+
+def answering(B, first, last, table='core_params', ident='m'):
+    """A mod whose one entry in `table` answers for ids first..last."""
+    d = B.other(ident)
+    d['sections']['.run'] = {'align': 4, 'len': 8, 'parts': [['hex', '%08x%08x' % (first, last)]]}
+    d['symbols'] = {'e_' + ident: ['.run', 0]}
+    d['contribute'] = [{'to': table, 'data': '00000000', 'relocs': [[0, 'abs32', 'sym:e_' + ident, 0]]}]
+    return d
+
+
+@row('check', "<>: its <> entry takes ids <>..<>, and <>..<> are <>; a mod's own ids start at <>",
+     device='analog-rytm-mk2')
+def _(B):
+    return [("m 1: its core_params entry takes ids 470..483, and 469..554 are core's lockable "
+             "parameters' ids; a mod's own ids start at 555", [knobs(B), answering(B, 470, 483)])], \
+        [knobs(B), answering(B, 560, 573)]
+
+
+@row('check', "<>: its <> entry takes ids <>..<>; that table's ids start at <>", device='analog-rytm-mk2')
+def _(B):
+    return [("m 1: its core_param_locks entry takes ids 1..4; that table's ids start at 555",
+             [knobs(B), answering(B, 1, 4, 'core_param_locks')])], \
+        [knobs(B), answering(B, 1, 4)]
+
+
+@row('check', '<> and <> both take ids <>..<> (<>, <>)', device='analog-rytm-mk2')
+def _(B):
+    return [('m 1 and n 1 both take ids 570..573 (core_params, core_param_locks)',
+             [knobs(B), answering(B, 560, 573), answering(B, 570, 580, 'core_param_locks', 'n')])], \
+        [knobs(B), both(B, 560, 573), answering(B, 574, 580, 'core_param_locks', 'n')]
+
+
+def both(B, first, last):
+    """One mod's core_params and core_param_locks entries for the same ids: allowed."""
+    d = answering(B, first, last)
+    d['contribute'].append(dict(d['contribute'][0], to='core_param_locks'))
+    return d
+
+
 # ---- the finished image against the stock one (link.image_problems) -------------------------------------------
 
 def stray(B, at, n=1, spacing=1):
@@ -898,7 +944,7 @@ def test_digitakt_fixtures():
 
 
 def test_analog_rytm_fixtures():
-    assert run_rows('analog-rytm-mk2') == 9
+    assert run_rows('analog-rytm-mk2') == 12
 
 
 def test_the_lfo_destination_field_is_placed_only_with_an_lfo_field():

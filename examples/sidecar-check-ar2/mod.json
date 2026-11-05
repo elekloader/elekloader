@@ -1,0 +1,100 @@
+{
+ "id": "sidecar-check",
+ "version": "0.1",
+ "title": "Sidecar check",
+ "category": "Examples",
+ "license": "GPL-2.0-or-later",
+ "author": "Iced-Cream",
+ "description": "A test for the core-ar2 0.11 calls the Sidecar mods use, checked in RAM. Part 1 (core 0.11): a SIDECAR CHECK page behind the LFO key and one behind the FX LFO key, with knob ids 560..563 whose p-locks the mod keeps itself (core_param_locks): per id, track and step, in RAM, with every call logged after the magic SCK1. The knobs show their labels (SCA..SCD) and names, and with a trig held the value text shows the held step (core_held_step).",
+ "device": "analog-rytm-mk2",
+ "os": "1.74",
+ "sources": [
+  "check.c"
+ ],
+ "contribute": [
+  {
+   "to": "core_param_locks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:sc_locks",
+     0
+    ]
+   ]
+  },
+  {
+   "to": "core_params",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:sc_params",
+     0
+    ]
+   ]
+  },
+  {
+   "to": "core_pages",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:sc_page",
+     0
+    ]
+   ]
+  },
+  {
+   "to": "core_view_pages",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:sc_view_page",
+     0
+    ]
+   ]
+  },
+  {
+   "to": "core_pages",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:sc_fx_page",
+     0
+    ]
+   ]
+  },
+  {
+   "to": "core_view_pages",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:sc_fx_view_page",
+     0
+    ]
+   ]
+  }
+ ],
+ "resources": {
+  "core": "0.11"
+ },
+ "requires": [
+  "core"
+ ]
+}

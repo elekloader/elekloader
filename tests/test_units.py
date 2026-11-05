@@ -555,6 +555,42 @@ def test_a_machine_claims_its_slot():
     assert not [p for p in link.check([mod('c', 36), mod('d', 37)], image) if 'claim' in p]
     assert mod('e', 53).implied_names(image) == []
 
+def test_knob_id_ranges_on_the_rytm():
+    """On the Analog Rytm MKII (core-ar2 0.11) the ids a core_params or core_param_locks entry
+    answers for (its first two longs) may not take 469..554, core's lockable parameters' ids;
+    a core_param_locks entry takes only ids from 555, and two mods may not share one of those.
+    One mod's own entries may, and two mods' entries for stock ids (below 469) may."""
+    ar = [d for d in devices.devices() if d.key == 'analog-rytm-mk2'][0]
+    r = ar.releases['1.74']
+    image = bytes(r.main_len)
+
+    def mod(i, *entries):
+        parts = ''.join('%08x%08x' % (a, b) for _t, a, b in entries)
+        return link.Mod2({'elemod': 2, 'id': i, 'version': '1', 'target': devices.target_of(ar, r),
+                          'sections': {'.run': {'align': 4, 'parts': [['hex', parts]]}},
+                          'symbols': {'e%d' % n: ['.run', 8 * n] for n in range(len(entries))},
+                          'contribute': [{'to': t, 'data': '00000000',
+                                          'relocs': [[0, 'abs32', 'sym:e%d' % n, 0]]}
+                                         for n, (t, _a, _b) in enumerate(entries)]}, i)
+
+    def ids(problems):
+        return [p for p in problems if 'ids' in p]
+    a = mod('a', ('core_params', 560, 573), ('core_param_locks', 560, 573))
+    assert a.id_ranges(image) == [('core_params', 560, 573), ('core_param_locks', 560, 573)]
+    assert ids(link.check([a, mod('b', ('core_params', 1, 4)), mod('c', ('core_params', 1, 4))], image)) == []
+    assert ids(link.check([mod('s', ('core_params', 470, 483))], image)) == [
+        "s 1: its core_params entry takes ids 470..483, and 469..554 are core's lockable parameters' "
+        "ids; a mod's own ids start at 555"]
+    assert ids(link.check([mod('l', ('core_param_locks', 400, 460))], image)) == [
+        "l 1: its core_param_locks entry takes ids 400..460; that table's ids start at 555"]
+    assert ids(link.check([a, mod('d', ('core_param_locks', 500, 561))], image))[0].startswith(
+        'd 1: its core_param_locks entry takes ids 500..561, and 469..554')
+    assert ids(link.check([a, mod('e', ('core_param_locks', 570, 600))], image)) == [
+        'a 1 and e 1 both take ids 570..573 (core_params, core_param_locks)',
+        'a 1 and e 1 both take ids 570..573 (core_param_locks, core_param_locks)']
+    assert mod('f', ('core_params', 9, 3)).id_ranges(image) == []
+
+
 def test_dn2_synth_claims_its_stable_type():
     dn = next(d for d in devices.devices() if d.key == 'digitone-mk2')
     r = dn.releases['1.12']

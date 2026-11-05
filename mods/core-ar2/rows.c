@@ -644,27 +644,35 @@ int core_rows_paste(unsigned rec, int step, int code, int value)
 
 /* ---- live recording ---- */
 
-/* the value (0..16383) a mod parameter's knob or MIDI gave the track's
- * sound: while live recording runs, it is locked on the step the track
- * plays, found as stock's live record finds it (0x400af762), which adds a
- * lock trig to a step without a trig */
-void core_lock_record(int track, int code, int value)
+/* the step live recording locks on the track (its record in *rec), found
+ * as stock's live record finds it (0x400af762), which adds a lock trig to a
+ * step without a trig; -1 for none (not recording, or a quantized step
+ * that is none) */
+static int record_step(int track, unsigned *rec)
 {
-    unsigned app, rec;
     int step;
     if ((unsigned)track >= 13 || !LIVE_RECORDING(REC_STATE()))
-        return;
+        return -1;
     step = PLAY_STEP(SEQUENCER(), track);
-    app = APP();
-    rec = TRACK_REC(CURRENT_PATTERN(app), track);
-    if (SCALED(rec))
-        step = SCALED_STEP(rec, step);
-    if (QUANTIZED(rec) == 1) {
-        if ((step = QUANTIZED_STEP(rec, step)) < 0)
-            return;
-    } else if (!HAS_TRIG(rec, step) && !HAS_LOCK_TRIG(rec, step))
-        ADD_LOCK_TRIG(rec, step, 1);
-    core_rows_paste(rec, step, code, value << 8);
+    *rec = TRACK_REC(CURRENT_PATTERN(APP()), track);
+    if (SCALED(*rec))
+        step = SCALED_STEP(*rec, step);
+    if (QUANTIZED(*rec) == 1)
+        return QUANTIZED_STEP(*rec, step);
+    if (!HAS_TRIG(*rec, step) && !HAS_LOCK_TRIG(*rec, step))
+        ADD_LOCK_TRIG(*rec, step, 1);
+    return step;
+}
+
+/* the value (0..16383) a mod parameter's knob or MIDI gave the track's
+ * sound: while live recording runs, it is locked on the step the track
+ * plays */
+void core_lock_record(int track, int code, int value)
+{
+    unsigned rec;
+    int step = record_step(track, &rec);
+    if (step >= 0)
+        core_rows_paste(rec, step, code, value << 8);
 }
 
 /* ---- playback: the trig's locks (0x4009a954: track, out, the step's
@@ -809,30 +817,102 @@ struct core_param_lock {                /* pages.h */
     int (*turn)(int32_t id, int32_t track, int32_t step, int32_t delta);
     int (*set)(int32_t id, int32_t track, int32_t step, int32_t value);
     int (*clear)(int32_t id, int32_t track, int32_t step);
+    const char *(*label)(int32_t id);
+    const char *(*name)(int32_t id);
 };
 extern unsigned char *core_lock_item(void *set, int *fx);
 extern void core_project_edited(void);
 extern const struct core_param_lock *const core_param_locks[];   /* zero-terminated */
 #define OWN_FIRST 555                   /* pages.h CORE_PARAM_LOCK_FIRST */
+#define RECORDING 0x100                 /* pages.h CORE_LOCK_RECORDING */
+#define DTCN0 (*(volatile unsigned *)0xfc07000c)
+#define HELD_TICKS 528000               /* 4 ms of DMA timer 0 (88,010 a 1/1500 s block) */
 
-static const struct core_param_lock *theirs(void *set, int id, int step, int *track)
+/* the entry that answers for id, or 0 */
+static const struct core_param_lock *entry_of(int id)
 {
     const struct core_param_lock *const *e;
-    unsigned app, rec;
-    int fx;
     if (id < OWN_FIRST)
         return 0;
     for (e = core_param_locks; *e; e++)
         if (id >= (*e)->first && id <= (*e)->last)
-            break;
-    if (!*e || !core_lock_item(set, &fx))
+            return *e;
+    return 0;
+}
+
+/* the held trig's step and track, from the last lock call: stock calls get
+ * for each knob as it draws it with a trig held, so a value text drawn
+ * just after it (pages.h core_held_step) finds the step there */
+static int held_step = -1, held_track;
+static unsigned held_at;
+
+static void held(int track, int step)
+{
+    held_track = track;
+    held_step = step;
+    held_at = DTCN0;
+}
+
+int core_held_step(int32_t *track)
+{
+    if (held_step < 0 || DTCN0 - held_at > HELD_TICKS)
+        return -1;
+    if (track)
+        *track = held_track;
+    return held_step;
+}
+
+/* lock.c: whether an entry answers for id; a knob's label and name from
+ * it, 0 for stock's */
+int core_param_lock_owns(int id)
+{
+    return entry_of(id) != 0;
+}
+
+unsigned core_param_lock_label(int id)
+{
+    const struct core_param_lock *m = entry_of(id);
+    return m && m->label ? (unsigned)m->label(id) : 0;
+}
+
+unsigned core_param_lock_name(int id)
+{
+    const struct core_param_lock *m = entry_of(id);
+    return m && m->name ? (unsigned)m->name(id) : 0;
+}
+
+/* pages.s, after a core_params entry took a turn (id, delta 8.8) with no
+ * trig held: while live recording runs, the entry's turn gets the step the
+ * current track plays, with RECORDING set in the step argument, as core's
+ * own locks are recorded (core_lock_record) */
+void core_lock_record_own(int id, int delta)
+{
+    const struct core_param_lock *m = entry_of(id);
+    unsigned rec;
+    int track, step;
+    if (!m || !m->turn)
+        return;
+    track = CURRENT_TRACK(APP_TRACKS(APP()));
+    if ((step = record_step(track, &rec)) < 0 || step >= 64 || TRACK_LENGTH(rec) < step)
+        return;
+    m->turn(id, track, step | RECORDING, delta);
+}
+
+static const struct core_param_lock *theirs(void *set, int id, int step, int *track)
+{
+    const struct core_param_lock *m = entry_of(id);
+    unsigned app, rec;
+    int fx;
+    if (!m || !core_lock_item(set, &fx))
         return 0;
     app = APP();
     *track = CURRENT_TRACK(APP_TRACKS(app));
     rec = TRACK_REC(CURRENT_PATTERN(app), *track);
     if ((unsigned)step >= 64 || TRACK_LENGTH(rec) < step)
         *track = -1;
-    return *e;
+    else
+        held(*track, step);
+    return m;
 }
 
 /* sound set vtable +60: (set, id, step) -> the lock (8.8) or -1; the FX

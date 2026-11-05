@@ -241,6 +241,26 @@ export class Mod2 implements AnyMod {
     return out
   }
 
+  /** The knob ids this mod's entries answer for, by the profile's paramIds: a contribution to such a table holds
+   * four-byte pointers to entries whose first two longs are a range of ids (core-ar2's core_params,
+   * core_param_locks). -> [[table, first, last]]. An entry this cannot read (outside the mod's own bytes, or
+   * relocated there) answers for none. link.Mod2.id_ranges. */
+  idRanges(image: Uint8Array): [string, number, number][] {
+    const out: [string, number, number][] = []
+    for (const [table] of this.dev.paramIds ? this.dev.paramIds[2] : []) {
+      for (const c of this.contribute) {
+        if (c.to !== table) continue
+        for (const [off, typ, tgt, add] of c.relocs) {
+          const at = off % 4 ? null : this.target(typ, tgt, add)
+          if (at === null) continue
+          const first = this.long(at[0], at[1], image), last = this.long(at[0], at[1] + 4, image)
+          if (first !== null && last !== null && (first | 0) <= (last | 0)) out.push([table, first | 0, last | 0])
+        }
+      }
+    }
+    return out
+  }
+
   /** The big-endian long at sec+off of this mod's bytes, or null: in a section without bytes
    * or under a relocation. */
   private long(sec: string, off: number, image: Uint8Array): number | null {
@@ -447,6 +467,27 @@ export function check(mods: Mod2[], image: Uint8Array): string[] {
       if (tables.has(c)) bad.push(`${tables.get(c)![0].label()} and ${m.label()} both declare the table ${c}`)
       if (owner.has(c)) bad.push(`table ${c} has the name of a symbol ${owner.get(c)!.label()} exports`)
       tables.set(c, [m, e])
+    }
+  }
+  if (dev.paramIds && new Set(mods.map(m => m.dev.key + '\0' + m.rel.version)).size === 1) {
+    const [own, [lo, hi, what], kinds] = dev.paramIds
+    const ownOnly = new Set(kinds.filter(([, o]) => o).map(([t]) => t))
+    const taken: [Mod2, string, number, number][] = []
+    for (const m of mods) {
+      for (const [table, a0, b] of m.idRanges(image)) {
+        let a = a0
+        if (a <= hi && lo <= b) {
+          bad.push(`${m.label()}: its ${table} entry takes ids ${a}..${b}, and ${lo}..${hi} are ${what}; a mod's own ids start at ${own}`)
+        } else if (ownOnly.has(table) && a < own) {
+          bad.push(`${m.label()}: its ${table} entry takes ids ${a}..${b}; that table's ids start at ${own}`)
+        } else if (b >= own) {
+          a = Math.max(a, own)
+          for (const [n, t, x, y] of taken) {
+            if (n !== m && x <= b && a <= y) bad.push(`${n.label()} and ${m.label()} both take ids ${Math.max(a, x)}..${Math.min(b, y)} (${t}, ${table})`)
+          }
+          taken.push([m, table, a, b])
+        }
+      }
     }
   }
   const sized = reserveNames(dev, owner)

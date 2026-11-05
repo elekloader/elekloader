@@ -10,7 +10,8 @@ write-through storage (Write-through, below) and `finish.s` (The OS upgrade's re
 and from 0.8 with lockable parameters in `lock.c` and `lock.s` (Lockable parameters, below) and
 their p-locks in `rows.c` and `rows.s` (Mod p-locks, below), and from 0.9 the smoothed value,
 velocity and aftertouch destinations and the FX track's parameters (below), and from 0.10 field
-defaults and the event `ev_project_save` around every project save (below). On its own it changes nothing
+defaults and the event `ev_project_save` around every project save (below), and from 0.11 locks a mod keeps
+itself (below). On its own it changes nothing
 the unit does, apart from that restart, which it makes safe.
 
 The Rytm runs on the Digitakt mk1's platform (a ColdFire MCF5441x), and its OS
@@ -837,6 +838,25 @@ and write core makes of a field goes through those two (lock.c's RANDOMIZE
 and RELOAD PAGE, midi.c, rows.c, scenes.c, smooth.c, store.c's LFO
 destination fields), so all of them work on the value; the saves, loads,
 SysEx and Total Recall copy the bits. No new sites.
+
+## Mod-kept locks (0.11)
+
+A knob whose id is in a `core_param_locks` entry (docs/ADAPTING.md, "Locks
+a mod keeps itself (core-ar2 0.11, Analog Rytm MKII)") from 555 up is the
+mod's: core keeps none of its locks. No new sites; `rows.c` routes these
+ids in the four lock calls it already owns, and `lock.c` and `pages.s` in
+the label, name, text and turn routines core already owns:
+
+| where | what |
+|---|---|
+| lock get, set, clear, turn (rows.c, sound and FX set vtable +60..+72) | an id core's own parameters don't take, in an entry's range: the entry's function, with the current track (12 on the FX track) and the step; a step past the track's length is none (-1, 0); a turn that answers marks the project modified |
+| knob label and name (lock.c, 0x400a9000 and 0x400a9022's callers) | the entry's `label(id)` and `name(id)`, for any set, before stock's |
+| value text (pages.s, after the `core_params` text entries) | the value as a number, as for core's own parameters |
+| turn (pages.s, after a `core_params` entry took it) | with live recording on, the entry's turn with the playing step and `CORE_LOCK_RECORDING` (0x100), found as for core's own locks (`record_step`, a lock trig added to a step without one) |
+
+`core_held_step(&track)` is the step and track of the last lock call, for 4
+ms of DMA timer 0 (a page draws each knob's lock with get just before its
+text). The profile's `param_ids` gives the linker the ranges it checks.
 
 ## Checked so far
 

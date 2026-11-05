@@ -52,6 +52,32 @@ test('a machine claims its slot (machine:<n>) on the Analog Rytm MKII', () => {
   assert.deepEqual(mod('e', 53).impliedNames(image), [])
 })
 
+test('knob id ranges on the Analog Rytm MKII (core_params, core_param_locks)', () => {
+  const ar = ANALOG_RYTM_MK2, r = ar.releases.find(x => x.version === '1.74')!
+  const image = new Uint8Array(r.mainLen)
+  const hex8 = (n: number) => n.toString(16).padStart(8, '0')
+  const mod = (id: string, ...entries: [string, number, number][]) => new Mod2({
+    elemod: 2, id, version: '1', target: targetOf(ar, r),
+    sections: { '.run': { align: 4, parts: [['hex', entries.map(([, a, b]) => hex8(a) + hex8(b)).join('')]] } },
+    symbols: Object.fromEntries(entries.map((_e, n) => [`e${n}`, ['.run', 8 * n]])),
+    contribute: entries.map(([t], n) => ({ to: t, data: '00000000', relocs: [[0, 'abs32', `sym:e${n}`, 0]] })),
+  }, id)
+  const ids = (problems: string[]) => problems.filter(p => p.includes('ids'))
+  const a = mod('a', ['core_params', 560, 573], ['core_param_locks', 560, 573])
+  assert.deepEqual(a.idRanges(image), [['core_params', 560, 573], ['core_param_locks', 560, 573]])
+  assert.deepEqual(ids(check([a, mod('b', ['core_params', 1, 4]), mod('c', ['core_params', 1, 4])], image)), [])
+  assert.deepEqual(ids(check([mod('s', ['core_params', 470, 483])], image)), [
+    "s 1: its core_params entry takes ids 470..483, and 469..554 are core's lockable parameters' ids; a mod's own ids start at 555"])
+  assert.deepEqual(ids(check([mod('l', ['core_param_locks', 400, 460])], image)), [
+    "l 1: its core_param_locks entry takes ids 400..460; that table's ids start at 555"])
+  assert.ok(ids(check([a, mod('d', ['core_param_locks', 500, 561])], image))[0]
+    .startsWith('d 1: its core_param_locks entry takes ids 500..561, and 469..554'))
+  assert.deepEqual(ids(check([a, mod('e', ['core_param_locks', 570, 600])], image)), [
+    'a 1 and e 1 both take ids 570..573 (core_params, core_param_locks)',
+    'a 1 and e 1 both take ids 570..573 (core_param_locks, core_param_locks)'])
+  assert.deepEqual(mod('f', ['core_params', 9, 3]).idRanges(image), [])
+})
+
 test('DN2 synth and filter claims use separate stable ID namespaces', () => {
   const dn = DIGITONE_MK2, r = dn.releases[0], image = new Uint8Array(r.mainLen)
   const mod = (id: string, type: number, table = 'mk2_voice_synths') => new Mod2({

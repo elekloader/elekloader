@@ -119,16 +119,21 @@ static int cc_of(unsigned field)
     return -1;
 }
 
-/* pages.s: a mod's knob took a turn (view, id): live recording locks the
- * value (rows.c), and PARAM OUTPUT sends it */
-void core_midi_knob(void *view, int id)
+void core_lock_record_own(int id, int delta);
+
+/* pages.s: a mod's knob took a turn (view, id, delta 8.8): live recording
+ * locks the value (rows.c), or (0.11) a mod-kept lock's entry records it,
+ * and PARAM OUTPUT sends it */
+void core_midi_knob(void *view, int id, int delta)
 {
     unsigned code, cfg;
     unsigned char *s;
     int track, v, sh, cc;
     const struct core_lock_param *p = core_lock_knob(view, id, &track, &code, &s);
-    if (!p)
+    if (!p) {
+        core_lock_record_own(id, delta);
         return;
+    }
     v = (int)core_store_get(core_lock_field(p), s, 0);
     v = v < 0 ? 0 : v > core_lock_max(p) ? core_lock_max(p) : v;
     core_lock_record(track, code, v);

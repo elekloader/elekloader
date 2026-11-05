@@ -96,27 +96,57 @@ struct core_param {
  *     {"to": "core_param_locks", "order": 50, "data": "00000000",
  *      "relocs": [[0, "abs32", "sym:my_locks", 0]]}
  *
- *     const struct core_param_lock my_locks = {560, 573, my_get, my_turn, 0, my_clear};
+ *     const struct core_param_lock my_locks = {560, 573, my_get, my_turn, my_set, my_clear,
+ *                                              my_label, my_name};
  *
- * A function left 0 answers "none" (get, turn: -1; set, clear: 0). Called in
- * the UI task. A turn that answers a lock marks the project modified. */
+ * A function left 0 answers "none" (get, turn: -1; set, clear: 0; label,
+ * name: stock's). Called in the UI task. A turn that answers a lock marks the
+ * project modified. What stock does, seen in the emulator:
+ *   - a turn's first call for a step without a lock is set, with the value
+ *     the knob has without one; the turns after it are turn. So a mod that
+ *     keeps locks needs set.
+ *   - get runs for every knob of the page each time it is drawn with a trig
+ *     held (50 to 170 calls a hold): answer from RAM.
+ *   - live recording (a knob turned with no trig held while it records,
+ *     after a core_params entry took the turn): turn gets the step the
+ *     track plays with CORE_LOCK_RECORDING set in step, once for each turn;
+ *     core has added a lock trig there as it does for its own locks.
+ * The linker refuses an entry here or in core_params whose ids take
+ * 469..554, one here below 555, and two mods' entries sharing an id from 555
+ * up (the profile's param_ids). */
 /* the first id a core_param_locks entry may use: stock's records end at
  * 468 and core's lockable parameters take pseudo ids 469..554 (469 + code
- * - 42, codes 42..127, lock.c); core ignores ids below this */
+ * - 42, codes 42..127, lock.c) */
 #define CORE_PARAM_LOCK_FIRST 555
+#define CORE_LOCK_RECORDING 0x100   /* in step: live recording; the step is step & 0xff */
 
 struct core_param_lock {
     int32_t first, last;    /* the ids this entry answers for */
     /* step's lock of id on track, 8.8, or -1 for none (what the knob shows) */
     int (*get)(int32_t id, int32_t track, int32_t step);
     /* the knob turned by delta (8.8) with step's trig held: the new lock
-     * (8.8), the first turn starting from the value without one; -1 none */
+     * (8.8), the first turn starting from the value without one; -1 none.
+     * With CORE_LOCK_RECORDING in step, live recording (above) */
     int (*turn)(int32_t id, int32_t track, int32_t step, int32_t delta);
-    /* step's lock set to value (8.8), as stock's paste and value entry do: 1 */
+    /* step's lock set to value (8.8), as stock's paste and value entry do,
+     * and a turn's first step: 1 */
     int (*set)(int32_t id, int32_t track, int32_t step, int32_t value);
     /* step's lock of id cleared: 1 */
     int (*clear)(int32_t id, int32_t track, int32_t step);
+    /* the knob's label (up to 4 characters) and the header's name (up to
+     * 32), for any page that shows the id, locks or not; 0 for stock's
+     * (which reads ERR / ERROR for an id above 468) */
+    const char *(*label)(int32_t id);
+    const char *(*name)(int32_t id);
 };
+
+/* the trig held while a knob of an id in core_param_locks is drawn: its
+ * step, and its track in *track (may be 0); -1 when none. For a core_params
+ * text entry, which gets the lock's value but not the step: it is the step
+ * of the last lock call (a page draws a knob's lock with get just before its
+ * text) and lasts 4 ms. With no core_params text entry, an id here shows its
+ * value as a number. */
+int core_held_step(int32_t *track);
 
 /* the page keys' views (a voice track's five, then the FX track's) */
 #define CORE_VIEW_SRC 0         /* page 0, the machine's */
