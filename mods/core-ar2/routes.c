@@ -62,12 +62,19 @@ static int vel_g(int t)
     return (int16_t)(s >> 16);
 }
 
+int core_mod_offset_code(int track, unsigned code);
+
 int core_mod_offset(int track, unsigned field)
 {
-    unsigned code;
+    return core_mod_offset_code(track, core_lock_code(field));
+}
+
+/* (0.10) by the code, for smooth.c */
+int core_mod_offset_code(int track, unsigned code)
+{
     int i, sum = 0;
     const volatile uint32_t *e;
-    if ((unsigned)track >= TRACKS || !(code = core_lock_code(field)) || !core_lock_route(code))
+    if ((unsigned)track >= TRACKS || !code || !core_lock_route(code))
         return 0;
     e = core_routes + ROUTES * track;
     for (i = 0; i < ROUTES; i++) {

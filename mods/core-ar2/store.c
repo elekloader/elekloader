@@ -5,7 +5,9 @@
  * Mods declare fields in their mod.json ("storage"); elekloader places them
  * at build time from the build's lockfile (docs/ADAPTING.md, "Mod storage")
  * and gives each one an absolute symbol, its descriptor, which a mod passes to
- * core_store_get and core_store_set. Zero always means the mod's default.
+ * core_store_get and core_store_set. Bits at zero always mean the mod's
+ * default: from 0.10 a field declared with "init": N reads N there, as the
+ * field's bits keep value ^ N (field_init below).
  *
  * Each item keeps its fields in a live home inside stock's own objects, so
  * copy, paste, undo and pattern switch carry them with no hooks:
@@ -889,6 +891,57 @@ int st_file_load(void *live, unsigned char *src, void *progress)
     return r;
 }
 
+/* ---- ev_project_save (0.10): a whole save of the live project to the +Drive ----
+ * Every front-panel save of the project (SAVE PROJECT, SAVE PROJECT AS, the
+ * project menu's saves, SAVE ... BEFORE LOADING) ends in one routine,
+ * 0x400b07a4(project model, slot, progress), which the "Project Save" job
+ * runs: it makes the slot the active one, serializes the live project into
+ * the slot's image (st_file_save), writes that to the +Drive, and clears the
+ * modified mark. LOAD of an empty slot runs it too, from the "Project Load"
+ * job, after CREATE NEW (ev_project 0), to write the new project there.
+ * Core calls the mods' ev_project_save handlers f(pre, how) around it: pre 1
+ * before anything is written, pre 0 after. how: the kind in bits 0..7 (1 a
+ * save to the active slot, 2 a save to another slot, 3 the new project of an
+ * empty slot's LOAD), the slot (0..127, 255 when stock has none) in bits
+ * 8..15, and in the call after, bit 16 when the save failed (the slot on the
+ * +Drive was not written, or only in part). A field a handler sets during
+ * pre 1 is in the saved copy: the serializer reads the live homes and the
+ * stored project's store. The active slot before the save is what tells a
+ * save from a save to another slot; a save with no active slot (a new
+ * project's first) is a save to another slot. */
+typedef void (*ev_project_save_t)(unsigned pre, unsigned how);
+extern const ev_project_save_t ev_project_save[];
+extern int st_proj_save_body(void *model, int slot, void *progress);
+
+#define ACTIVE_SLOT ((int (*)(void *))0x400aed54)
+#define SAVE_NEW_RET 0x400530e6         /* the empty slot's LOAD: the call's return */
+#define SAVE_SAME 1
+#define SAVE_OTHER 2
+#define SAVE_NEW 3
+#define SAVE_FAILED 0x10000
+
+static void save_event(unsigned pre, unsigned how)
+{
+    const ev_project_save_t *f;
+    for (f = ev_project_save; *f; f++)
+        (*f)(pre, how);
+}
+
+int st_proj_save(void *model, int slot, void *progress)
+{
+    int active = ACTIVE_SLOT(model), to = slot < 0 ? active : slot, r;
+    unsigned how;
+    if ((unsigned)__builtin_return_address(0) == SAVE_NEW_RET)
+        how = SAVE_NEW;
+    else
+        how = to >= 0 && to == active ? SAVE_SAME : SAVE_OTHER;
+    how |= ((unsigned)to < 128 ? (unsigned)to : 255) << 8;
+    save_event(1, how);
+    r = st_proj_save_body(model, slot, progress);
+    save_event(0, (r & 255) ? how : how | SAVE_FAILED);
+    return r;
+}
+
 /* ---- the SysEx project commands: whole stored songs ----
  * The SysEx handler copies, swaps and writes stored song records (0x518 B,
  * song slots 1..16 of a project image) with memcpy. Byte +2 of each of a
@@ -1075,27 +1128,52 @@ static void write_through(unsigned scope, unsigned char *item, int index)
     }
 }
 
+/* 0.10: a field's init. Its descriptor carries the field's slot in the table
+ * core_field_inits (1..63) in bits 16..21, 0 for a field without one; no
+ * scope keeps 2^16 bits, so the offset is bits 0..15. The field's bits keep
+ * value ^ init: cleared bits (a new project, a reset, another layout's data)
+ * read the init, and every value goes through unchanged. Every core read and
+ * write of a field comes here, so p-locks, scenes, MIDI, the smoothed value
+ * and RANDOMIZE and RELOAD PAGE all see the value; the saves, loads and
+ * SysEx copy the bits. */
+extern const unsigned core_field_inits[];
+
+static unsigned field_init(unsigned field)
+{
+    unsigned k = field >> 16 & 63;
+    return k ? core_field_inits[k - 1] : 0;
+}
+
 unsigned core_store_get(unsigned field, void *item, int index)
 {
-    unsigned scope = field >> 28, w = field >> 22 & 63, o = field & 0x3fffff, v = 0, i;
+    unsigned scope = field >> 28, w = field >> 22 & 63, o = field & 0xffff, v = 0, i, k, n;
     volatile unsigned char *base = field_base(scope, item, index);
     unsigned short sr;
     if (scope != SC_PROJECT && !base)
         return 0;
+    n = ((o & 7) + w + 7) >> 3;               /* the bytes it spans */
     sr = irq_mask();
-    for (i = 0; i < w; i++, o++)
-        v = v << 1 | (B(field_byte(scope, base, o >> 3)) >> (7 - (o & 7)) & 1);
+    if (n <= 4) {                             /* (0.10) a byte at a time: every field but a 26..32-bit one off its byte */
+        for (k = o >> 3, i = 0; i < n; i++, k++)
+            v = v << 8 | B(field_byte(scope, base, k));
+        v >>= 8 * n - (o & 7) - w;
+        if (w < 32)
+            v &= (1u << w) - 1;
+    } else
+        for (i = 0; i < w; i++, o++)
+            v = v << 1 | (B(field_byte(scope, base, o >> 3)) >> (7 - (o & 7)) & 1);
     irq_restore(sr);
-    return v;
+    return v ^ field_init(field);
 }
 
 void core_store_set(unsigned field, void *item, int index, unsigned value)
 {
-    unsigned scope = field >> 28, w = field >> 22 & 63, o = field & 0x3fffff, i;
+    unsigned scope = field >> 28, w = field >> 22 & 63, o = field & 0xffff, i;
     volatile unsigned char *base = field_base(scope, item, index), *p;
     unsigned short sr;
     if (scope != SC_PROJECT && !base)
         return;
+    value ^= field_init(field);
     sr = irq_mask();
     for (i = 0; i < w; i++, o++) {
         unsigned bit = 0x80 >> (o & 7);

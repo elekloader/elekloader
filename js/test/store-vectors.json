@@ -13263,6 +13263,2174 @@
    ]
   }
  },
+ "init_runs": {
+  "inits: give, keep, change, drop, back": {
+   "steps": [
+    [
+     [
+      [
+       "a",
+       "frq",
+       "sound",
+       7
+      ],
+      [
+       "a",
+       "dep",
+       "sound",
+       7
+      ],
+      [
+       "a",
+       "p",
+       "sound",
+       3
+      ],
+      [
+       "b",
+       "k",
+       "kit",
+       7
+      ]
+     ],
+     [
+      [
+       "a",
+       "frq"
+      ],
+      [
+       "a",
+       "dep"
+      ]
+     ],
+     [
+      [
+       "a",
+       "frq",
+       127
+      ],
+      [
+       "a",
+       "dep",
+       127
+      ],
+      [
+       "b",
+       "k",
+       100
+      ]
+     ]
+    ],
+    [
+     [
+      [
+       "a",
+       "frq",
+       "sound",
+       7
+      ],
+      [
+       "a",
+       "dep",
+       "sound",
+       7
+      ],
+      [
+       "a",
+       "p",
+       "sound",
+       3
+      ],
+      [
+       "b",
+       "k",
+       "kit",
+       7
+      ]
+     ],
+     [
+      [
+       "a",
+       "frq"
+      ],
+      [
+       "a",
+       "dep"
+      ]
+     ],
+     [
+      [
+       "a",
+       "frq",
+       127
+      ],
+      [
+       "a",
+       "dep",
+       127
+      ],
+      [
+       "b",
+       "k",
+       100
+      ]
+     ]
+    ],
+    [
+     [
+      [
+       "a",
+       "frq",
+       "sound",
+       7
+      ],
+      [
+       "a",
+       "dep",
+       "sound",
+       7
+      ],
+      [
+       "a",
+       "p",
+       "sound",
+       3
+      ],
+      [
+       "b",
+       "k",
+       "kit",
+       7
+      ]
+     ],
+     [
+      [
+       "a",
+       "frq"
+      ],
+      [
+       "a",
+       "dep"
+      ]
+     ],
+     [
+      [
+       "a",
+       "frq",
+       127
+      ],
+      [
+       "a",
+       "dep",
+       64
+      ],
+      [
+       "b",
+       "k",
+       100
+      ]
+     ]
+    ],
+    [
+     [
+      [
+       "a",
+       "frq",
+       "sound",
+       7
+      ],
+      [
+       "a",
+       "dep",
+       "sound",
+       7
+      ],
+      [
+       "a",
+       "p",
+       "sound",
+       3
+      ],
+      [
+       "b",
+       "k",
+       "kit",
+       7
+      ]
+     ],
+     [
+      [
+       "a",
+       "frq"
+      ],
+      [
+       "a",
+       "dep"
+      ]
+     ],
+     [
+      [
+       "a",
+       "frq",
+       127
+      ],
+      [
+       "a",
+       "dep",
+       64
+      ]
+     ]
+    ],
+    [
+     [
+      [
+       "a",
+       "frq",
+       "sound",
+       7
+      ],
+      [
+       "a",
+       "dep",
+       "sound",
+       7
+      ],
+      [
+       "a",
+       "p",
+       "sound",
+       3
+      ],
+      [
+       "b",
+       "k",
+       "kit",
+       7
+      ]
+     ],
+     [
+      [
+       "a",
+       "frq"
+      ],
+      [
+       "a",
+       "dep"
+      ]
+     ],
+     [
+      [
+       "a",
+       "frq",
+       127
+      ],
+      [
+       "a",
+       "dep",
+       64
+      ],
+      [
+       "b",
+       "k",
+       100
+      ]
+     ]
+    ],
+    [
+     [
+      [
+       "a",
+       "frq",
+       "sound",
+       7
+      ],
+      [
+       "a",
+       "dep",
+       "sound",
+       7
+      ]
+     ],
+     [
+      [
+       "a",
+       "frq"
+      ],
+      [
+       "a",
+       "dep"
+      ]
+     ],
+     [
+      [
+       "a",
+       "frq",
+       127
+      ],
+      [
+       "a",
+       "dep",
+       64
+      ]
+     ]
+    ],
+    [
+     [
+      [
+       "a",
+       "frq",
+       "sound",
+       7
+      ],
+      [
+       "a",
+       "dep",
+       "sound",
+       7
+      ],
+      [
+       "a",
+       "p",
+       "sound",
+       3
+      ],
+      [
+       "b",
+       "k",
+       "kit",
+       7
+      ]
+     ],
+     [
+      [
+       "a",
+       "frq"
+      ],
+      [
+       "a",
+       "dep"
+      ]
+     ],
+     [
+      [
+       "a",
+       "frq",
+       127
+      ],
+      [
+       "a",
+       "dep",
+       0
+      ],
+      [
+       "b",
+       "k",
+       100
+      ]
+     ]
+    ]
+   ],
+   "results": [
+    {
+     "lock": {
+      "elekloader_store": 2,
+      "device": "analog-rytm-mk2",
+      "id": "0x7b76122f",
+      "ancestors": [],
+      "split": {
+       "track": 2,
+       "pattern": 4
+      },
+      "generation": {
+       "sound": 1,
+       "kit": 1,
+       "global": 1,
+       "track": 1,
+       "pattern": 1,
+       "project": 1
+      },
+      "next": {
+       "sound": 17,
+       "kit": 7,
+       "global": 0,
+       "track": 0,
+       "pattern": 0,
+       "project": 0
+      },
+      "fields": [
+       {
+        "mod": "a",
+        "sym": "dep",
+        "scope": "sound",
+        "offset": 0,
+        "bits": 7,
+        "init": 127
+       },
+       {
+        "mod": "a",
+        "sym": "frq",
+        "scope": "sound",
+        "offset": 7,
+        "bits": 7,
+        "init": 127
+       },
+       {
+        "mod": "a",
+        "sym": "p",
+        "scope": "sound",
+        "offset": 14,
+        "bits": 3
+       },
+       {
+        "mod": "b",
+        "sym": "k",
+        "scope": "kit",
+        "offset": 0,
+        "bits": 7,
+        "init": 100
+       }
+      ],
+      "freed": [],
+      "codes": [
+       {
+        "mod": "a",
+        "sym": "dep",
+        "code": 42
+       },
+       {
+        "mod": "a",
+        "sym": "frq",
+        "code": 43
+       }
+      ],
+      "freed_codes": [],
+      "next_code": 44
+     },
+     "notes": [
+      "a new lockfile, layout ID 0x7b76122f: projects and sounds saved by builds with other layouts load their mod data at defaults",
+      "a dep: 7 bits of sound storage at bit 0",
+      "a frq: 7 bits of sound storage at bit 7",
+      "a p: 3 bits of sound storage at bit 14",
+      "b k: 7 bits of kit storage at bit 0",
+      "a dep: lock code 42",
+      "a frq: lock code 43"
+     ],
+     "symbols": {
+      "__store_gen": 16843009,
+      "__store_gen2": 16843268,
+      "dep": 297861120,
+      "frq": 297926663,
+      "p": 281018382,
+      "k": 566427648
+     },
+     "codes": [
+      "11c100000000002a",
+      "11c200070000002b"
+     ],
+     "inits": [
+      "0000007f",
+      "0000007f",
+      "00000064"
+     ],
+     "json": "{\n \"elekloader_store\": 2,\n \"device\": \"analog-rytm-mk2\",\n \"id\": \"0x7b76122f\",\n \"ancestors\": [],\n \"split\": {\n  \"track\": 2,\n  \"pattern\": 4\n },\n \"generation\": {\n  \"sound\": 1,\n  \"kit\": 1,\n  \"global\": 1,\n  \"track\": 1,\n  \"pattern\": 1,\n  \"project\": 1\n },\n \"next\": {\n  \"sound\": 17,\n  \"kit\": 7,\n  \"global\": 0,\n  \"track\": 0,\n  \"pattern\": 0,\n  \"project\": 0\n },\n \"fields\": [\n  {\n   \"mod\": \"a\",\n   \"sym\": \"dep\",\n   \"scope\": \"sound\",\n   \"offset\": 0,\n   \"bits\": 7,\n   \"init\": 127\n  },\n  {\n   \"mod\": \"a\",\n   \"sym\": \"frq\",\n   \"scope\": \"sound\",\n   \"offset\": 7,\n   \"bits\": 7,\n   \"init\": 127\n  },\n  {\n   \"mod\": \"a\",\n   \"sym\": \"p\",\n   \"scope\": \"sound\",\n   \"offset\": 14,\n   \"bits\": 3\n  },\n  {\n   \"mod\": \"b\",\n   \"sym\": \"k\",\n   \"scope\": \"kit\",\n   \"offset\": 0,\n   \"bits\": 7,\n   \"init\": 100\n  }\n ],\n \"freed\": [],\n \"codes\": [\n  {\n   \"mod\": \"a\",\n   \"sym\": \"dep\",\n   \"code\": 42\n  },\n  {\n   \"mod\": \"a\",\n   \"sym\": \"frq\",\n   \"code\": 43\n  }\n ],\n \"freed_codes\": [],\n \"next_code\": 44\n}\n",
+     "layout_id": 2071335471
+    },
+    {
+     "lock": {
+      "elekloader_store": 2,
+      "device": "analog-rytm-mk2",
+      "id": "0x7b76122f",
+      "ancestors": [],
+      "split": {
+       "track": 2,
+       "pattern": 4
+      },
+      "generation": {
+       "sound": 1,
+       "kit": 1,
+       "global": 1,
+       "track": 1,
+       "pattern": 1,
+       "project": 1
+      },
+      "next": {
+       "sound": 17,
+       "kit": 7,
+       "global": 0,
+       "track": 0,
+       "pattern": 0,
+       "project": 0
+      },
+      "fields": [
+       {
+        "mod": "a",
+        "sym": "dep",
+        "scope": "sound",
+        "offset": 0,
+        "bits": 7,
+        "init": 127
+       },
+       {
+        "mod": "a",
+        "sym": "frq",
+        "scope": "sound",
+        "offset": 7,
+        "bits": 7,
+        "init": 127
+       },
+       {
+        "mod": "a",
+        "sym": "p",
+        "scope": "sound",
+        "offset": 14,
+        "bits": 3
+       },
+       {
+        "mod": "b",
+        "sym": "k",
+        "scope": "kit",
+        "offset": 0,
+        "bits": 7,
+        "init": 100
+       }
+      ],
+      "freed": [],
+      "codes": [
+       {
+        "mod": "a",
+        "sym": "dep",
+        "code": 42
+       },
+       {
+        "mod": "a",
+        "sym": "frq",
+        "code": 43
+       }
+      ],
+      "freed_codes": [],
+      "next_code": 44
+     },
+     "notes": [],
+     "symbols": {
+      "__store_gen": 16843009,
+      "__store_gen2": 16843268,
+      "dep": 297861120,
+      "frq": 297926663,
+      "p": 281018382,
+      "k": 566427648
+     },
+     "codes": [
+      "11c100000000002a",
+      "11c200070000002b"
+     ],
+     "inits": [
+      "0000007f",
+      "0000007f",
+      "00000064"
+     ],
+     "json": "{\n \"elekloader_store\": 2,\n \"device\": \"analog-rytm-mk2\",\n \"id\": \"0x7b76122f\",\n \"ancestors\": [],\n \"split\": {\n  \"track\": 2,\n  \"pattern\": 4\n },\n \"generation\": {\n  \"sound\": 1,\n  \"kit\": 1,\n  \"global\": 1,\n  \"track\": 1,\n  \"pattern\": 1,\n  \"project\": 1\n },\n \"next\": {\n  \"sound\": 17,\n  \"kit\": 7,\n  \"global\": 0,\n  \"track\": 0,\n  \"pattern\": 0,\n  \"project\": 0\n },\n \"fields\": [\n  {\n   \"mod\": \"a\",\n   \"sym\": \"dep\",\n   \"scope\": \"sound\",\n   \"offset\": 0,\n   \"bits\": 7,\n   \"init\": 127\n  },\n  {\n   \"mod\": \"a\",\n   \"sym\": \"frq\",\n   \"scope\": \"sound\",\n   \"offset\": 7,\n   \"bits\": 7,\n   \"init\": 127\n  },\n  {\n   \"mod\": \"a\",\n   \"sym\": \"p\",\n   \"scope\": \"sound\",\n   \"offset\": 14,\n   \"bits\": 3\n  },\n  {\n   \"mod\": \"b\",\n   \"sym\": \"k\",\n   \"scope\": \"kit\",\n   \"offset\": 0,\n   \"bits\": 7,\n   \"init\": 100\n  }\n ],\n \"freed\": [],\n \"codes\": [\n  {\n   \"mod\": \"a\",\n   \"sym\": \"dep\",\n   \"code\": 42\n  },\n  {\n   \"mod\": \"a\",\n   \"sym\": \"frq\",\n   \"code\": 43\n  }\n ],\n \"freed_codes\": [],\n \"next_code\": 44\n}\n",
+     "layout_id": 2071335471
+    },
+    {
+     "lock": {
+      "elekloader_store": 2,
+      "device": "analog-rytm-mk2",
+      "id": "0xd47a9685",
+      "ancestors": [
+       "0x7b76122f"
+      ],
+      "split": {
+       "track": 2,
+       "pattern": 4
+      },
+      "generation": {
+       "sound": 1,
+       "kit": 1,
+       "global": 1,
+       "track": 1,
+       "pattern": 1,
+       "project": 1
+      },
+      "next": {
+       "sound": 24,
+       "kit": 7,
+       "global": 0,
+       "track": 0,
+       "pattern": 0,
+       "project": 0
+      },
+      "fields": [
+       {
+        "mod": "a",
+        "sym": "frq",
+        "scope": "sound",
+        "offset": 7,
+        "bits": 7,
+        "init": 127
+       },
+       {
+        "mod": "a",
+        "sym": "p",
+        "scope": "sound",
+        "offset": 14,
+        "bits": 3
+       },
+       {
+        "mod": "a",
+        "sym": "dep",
+        "scope": "sound",
+        "offset": 17,
+        "bits": 7,
+        "init": 64
+       },
+       {
+        "mod": "b",
+        "sym": "k",
+        "scope": "kit",
+        "offset": 0,
+        "bits": 7,
+        "init": 100
+       }
+      ],
+      "freed": [
+       {
+        "mod": "a",
+        "sym": "dep",
+        "scope": "sound",
+        "offset": 0,
+        "bits": 7,
+        "init": 127
+       }
+      ],
+      "codes": [
+       {
+        "mod": "a",
+        "sym": "frq",
+        "code": 43
+       },
+       {
+        "mod": "a",
+        "sym": "dep",
+        "code": 44
+       }
+      ],
+      "freed_codes": [],
+      "next_code": 45
+     },
+     "notes": [
+      "a dep (sound): changed its init, its data is dropped",
+      "a dep: 7 bits of sound storage at bit 17",
+      "a dep: lock code 42 kept for it while it is out of the build",
+      "a dep: lock code 44",
+      "layout ID 0xd47a9685 (from 0x7b76122f, whose projects it still reads)"
+     ],
+     "symbols": {
+      "__store_gen": 16843009,
+      "__store_gen2": 16843268,
+      "frq": 297861127,
+      "p": 281018382,
+      "dep": 297926673,
+      "k": 566427648
+     },
+     "codes": [
+      "11c100070000002b",
+      "11c200110000002c"
+     ],
+     "inits": [
+      "0000007f",
+      "00000040",
+      "00000064"
+     ],
+     "json": "{\n \"elekloader_store\": 2,\n \"device\": \"analog-rytm-mk2\",\n \"id\": \"0xd47a9685\",\n \"ancestors\": [\n  \"0x7b76122f\"\n ],\n \"split\": {\n  \"track\": 2,\n  \"pattern\": 4\n },\n \"generation\": {\n  \"sound\": 1,\n  \"kit\": 1,\n  \"global\": 1,\n  \"track\": 1,\n  \"pattern\": 1,\n  \"project\": 1\n },\n \"next\": {\n  \"sound\": 24,\n  \"kit\": 7,\n  \"global\": 0,\n  \"track\": 0,\n  \"pattern\": 0,\n  \"project\": 0\n },\n \"fields\": [\n  {\n   \"mod\": \"a\",\n   \"sym\": \"frq\",\n   \"scope\": \"sound\",\n   \"offset\": 7,\n   \"bits\": 7,\n   \"init\": 127\n  },\n  {\n   \"mod\": \"a\",\n   \"sym\": \"p\",\n   \"scope\": \"sound\",\n   \"offset\": 14,\n   \"bits\": 3\n  },\n  {\n   \"mod\": \"a\",\n   \"sym\": \"dep\",\n   \"scope\": \"sound\",\n   \"offset\": 17,\n   \"bits\": 7,\n   \"init\": 64\n  },\n  {\n   \"mod\": \"b\",\n   \"sym\": \"k\",\n   \"scope\": \"kit\",\n   \"offset\": 0,\n   \"bits\": 7,\n   \"init\": 100\n  }\n ],\n \"freed\": [\n  {\n   \"mod\": \"a\",\n   \"sym\": \"dep\",\n   \"scope\": \"sound\",\n   \"offset\": 0,\n   \"bits\": 7,\n   \"init\": 127\n  }\n ],\n \"codes\": [\n  {\n   \"mod\": \"a\",\n   \"sym\": \"frq\",\n   \"code\": 43\n  },\n  {\n   \"mod\": \"a\",\n   \"sym\": \"dep\",\n   \"code\": 44\n  }\n ],\n \"freed_codes\": [],\n \"next_code\": 45\n}\n",
+     "layout_id": 3564803717
+    },
+    {
+     "lock": {
+      "elekloader_store": 2,
+      "device": "analog-rytm-mk2",
+      "id": "0x3e1c27ec",
+      "ancestors": [
+       "0xd47a9685",
+       "0x7b76122f"
+      ],
+      "split": {
+       "track": 2,
+       "pattern": 4
+      },
+      "generation": {
+       "sound": 1,
+       "kit": 1,
+       "global": 1,
+       "track": 1,
+       "pattern": 1,
+       "project": 1
+      },
+      "next": {
+       "sound": 24,
+       "kit": 14,
+       "global": 0,
+       "track": 0,
+       "pattern": 0,
+       "project": 0
+      },
+      "fields": [
+       {
+        "mod": "a",
+        "sym": "frq",
+        "scope": "sound",
+        "offset": 7,
+        "bits": 7,
+        "init": 127
+       },
+       {
+        "mod": "a",
+        "sym": "p",
+        "scope": "sound",
+        "offset": 14,
+        "bits": 3
+       },
+       {
+        "mod": "a",
+        "sym": "dep",
+        "scope": "sound",
+        "offset": 17,
+        "bits": 7,
+        "init": 64
+       },
+       {
+        "mod": "b",
+        "sym": "k",
+        "scope": "kit",
+        "offset": 7,
+        "bits": 7
+       }
+      ],
+      "freed": [
+       {
+        "mod": "a",
+        "sym": "dep",
+        "scope": "sound",
+        "offset": 0,
+        "bits": 7,
+        "init": 127
+       },
+       {
+        "mod": "b",
+        "sym": "k",
+        "scope": "kit",
+        "offset": 0,
+        "bits": 7,
+        "init": 100
+       }
+      ],
+      "codes": [
+       {
+        "mod": "a",
+        "sym": "frq",
+        "code": 43
+       },
+       {
+        "mod": "a",
+        "sym": "dep",
+        "code": 44
+       }
+      ],
+      "freed_codes": [],
+      "next_code": 45
+     },
+     "notes": [
+      "b k (kit): changed its init, its data is dropped",
+      "b k: 7 bits of kit storage at bit 7",
+      "layout ID 0x3e1c27ec (from 0xd47a9685, whose projects it still reads)"
+     ],
+     "symbols": {
+      "__store_gen": 16843009,
+      "__store_gen2": 16843268,
+      "frq": 297861127,
+      "p": 281018382,
+      "dep": 297926673,
+      "k": 566231047
+     },
+     "codes": [
+      "11c100070000002b",
+      "11c200110000002c"
+     ],
+     "inits": [
+      "0000007f",
+      "00000040"
+     ],
+     "json": "{\n \"elekloader_store\": 2,\n \"device\": \"analog-rytm-mk2\",\n \"id\": \"0x3e1c27ec\",\n \"ancestors\": [\n  \"0xd47a9685\",\n  \"0x7b76122f\"\n ],\n \"split\": {\n  \"track\": 2,\n  \"pattern\": 4\n },\n \"generation\": {\n  \"sound\": 1,\n  \"kit\": 1,\n  \"global\": 1,\n  \"track\": 1,\n  \"pattern\": 1,\n  \"project\": 1\n },\n \"next\": {\n  \"sound\": 24,\n  \"kit\": 14,\n  \"global\": 0,\n  \"track\": 0,\n  \"pattern\": 0,\n  \"project\": 0\n },\n \"fields\": [\n  {\n   \"mod\": \"a\",\n   \"sym\": \"frq\",\n   \"scope\": \"sound\",\n   \"offset\": 7,\n   \"bits\": 7,\n   \"init\": 127\n  },\n  {\n   \"mod\": \"a\",\n   \"sym\": \"p\",\n   \"scope\": \"sound\",\n   \"offset\": 14,\n   \"bits\": 3\n  },\n  {\n   \"mod\": \"a\",\n   \"sym\": \"dep\",\n   \"scope\": \"sound\",\n   \"offset\": 17,\n   \"bits\": 7,\n   \"init\": 64\n  },\n  {\n   \"mod\": \"b\",\n   \"sym\": \"k\",\n   \"scope\": \"kit\",\n   \"offset\": 7,\n   \"bits\": 7\n  }\n ],\n \"freed\": [\n  {\n   \"mod\": \"a\",\n   \"sym\": \"dep\",\n   \"scope\": \"sound\",\n   \"offset\": 0,\n   \"bits\": 7,\n   \"init\": 127\n  },\n  {\n   \"mod\": \"b\",\n   \"sym\": \"k\",\n   \"scope\": \"kit\",\n   \"offset\": 0,\n   \"bits\": 7,\n   \"init\": 100\n  }\n ],\n \"codes\": [\n  {\n   \"mod\": \"a\",\n   \"sym\": \"frq\",\n   \"code\": 43\n  },\n  {\n   \"mod\": \"a\",\n   \"sym\": \"dep\",\n   \"code\": 44\n  }\n ],\n \"freed_codes\": [],\n \"next_code\": 45\n}\n",
+     "layout_id": 1042032620
+    },
+    {
+     "lock": {
+      "elekloader_store": 2,
+      "device": "analog-rytm-mk2",
+      "id": "0xc357f3b5",
+      "ancestors": [
+       "0x3e1c27ec",
+       "0xd47a9685",
+       "0x7b76122f"
+      ],
+      "split": {
+       "track": 2,
+       "pattern": 4
+      },
+      "generation": {
+       "sound": 1,
+       "kit": 1,
+       "global": 1,
+       "track": 1,
+       "pattern": 1,
+       "project": 1
+      },
+      "next": {
+       "sound": 24,
+       "kit": 14,
+       "global": 0,
+       "track": 0,
+       "pattern": 0,
+       "project": 0
+      },
+      "fields": [
+       {
+        "mod": "a",
+        "sym": "frq",
+        "scope": "sound",
+        "offset": 7,
+        "bits": 7,
+        "init": 127
+       },
+       {
+        "mod": "a",
+        "sym": "p",
+        "scope": "sound",
+        "offset": 14,
+        "bits": 3
+       },
+       {
+        "mod": "a",
+        "sym": "dep",
+        "scope": "sound",
+        "offset": 17,
+        "bits": 7,
+        "init": 64
+       },
+       {
+        "mod": "b",
+        "sym": "k",
+        "scope": "kit",
+        "offset": 0,
+        "bits": 7,
+        "init": 100
+       }
+      ],
+      "freed": [
+       {
+        "mod": "a",
+        "sym": "dep",
+        "scope": "sound",
+        "offset": 0,
+        "bits": 7,
+        "init": 127
+       },
+       {
+        "mod": "b",
+        "sym": "k",
+        "scope": "kit",
+        "offset": 7,
+        "bits": 7
+       }
+      ],
+      "codes": [
+       {
+        "mod": "a",
+        "sym": "frq",
+        "code": 43
+       },
+       {
+        "mod": "a",
+        "sym": "dep",
+        "code": 44
+       }
+      ],
+      "freed_codes": [],
+      "next_code": 45
+     },
+     "notes": [
+      "b k (kit): changed its init, its data is dropped",
+      "b k: back at bit 0 of kit storage, with the values it had",
+      "layout ID 0xc357f3b5 (from 0x3e1c27ec, whose projects it still reads)"
+     ],
+     "symbols": {
+      "__store_gen": 16843009,
+      "__store_gen2": 16843268,
+      "frq": 297861127,
+      "p": 281018382,
+      "dep": 297926673,
+      "k": 566427648
+     },
+     "codes": [
+      "11c100070000002b",
+      "11c200110000002c"
+     ],
+     "inits": [
+      "0000007f",
+      "00000040",
+      "00000064"
+     ],
+     "json": "{\n \"elekloader_store\": 2,\n \"device\": \"analog-rytm-mk2\",\n \"id\": \"0xc357f3b5\",\n \"ancestors\": [\n  \"0x3e1c27ec\",\n  \"0xd47a9685\",\n  \"0x7b76122f\"\n ],\n \"split\": {\n  \"track\": 2,\n  \"pattern\": 4\n },\n \"generation\": {\n  \"sound\": 1,\n  \"kit\": 1,\n  \"global\": 1,\n  \"track\": 1,\n  \"pattern\": 1,\n  \"project\": 1\n },\n \"next\": {\n  \"sound\": 24,\n  \"kit\": 14,\n  \"global\": 0,\n  \"track\": 0,\n  \"pattern\": 0,\n  \"project\": 0\n },\n \"fields\": [\n  {\n   \"mod\": \"a\",\n   \"sym\": \"frq\",\n   \"scope\": \"sound\",\n   \"offset\": 7,\n   \"bits\": 7,\n   \"init\": 127\n  },\n  {\n   \"mod\": \"a\",\n   \"sym\": \"p\",\n   \"scope\": \"sound\",\n   \"offset\": 14,\n   \"bits\": 3\n  },\n  {\n   \"mod\": \"a\",\n   \"sym\": \"dep\",\n   \"scope\": \"sound\",\n   \"offset\": 17,\n   \"bits\": 7,\n   \"init\": 64\n  },\n  {\n   \"mod\": \"b\",\n   \"sym\": \"k\",\n   \"scope\": \"kit\",\n   \"offset\": 0,\n   \"bits\": 7,\n   \"init\": 100\n  }\n ],\n \"freed\": [\n  {\n   \"mod\": \"a\",\n   \"sym\": \"dep\",\n   \"scope\": \"sound\",\n   \"offset\": 0,\n   \"bits\": 7,\n   \"init\": 127\n  },\n  {\n   \"mod\": \"b\",\n   \"sym\": \"k\",\n   \"scope\": \"kit\",\n   \"offset\": 7,\n   \"bits\": 7\n  }\n ],\n \"codes\": [\n  {\n   \"mod\": \"a\",\n   \"sym\": \"frq\",\n   \"code\": 43\n  },\n  {\n   \"mod\": \"a\",\n   \"sym\": \"dep\",\n   \"code\": 44\n  }\n ],\n \"freed_codes\": [],\n \"next_code\": 45\n}\n",
+     "layout_id": 3277321141
+    },
+    {
+     "lock": {
+      "elekloader_store": 2,
+      "device": "analog-rytm-mk2",
+      "id": "0xf9c4dc2b",
+      "ancestors": [
+       "0xc357f3b5",
+       "0x3e1c27ec",
+       "0xd47a9685",
+       "0x7b76122f"
+      ],
+      "split": {
+       "track": 2,
+       "pattern": 4
+      },
+      "generation": {
+       "sound": 1,
+       "kit": 1,
+       "global": 1,
+       "track": 1,
+       "pattern": 1,
+       "project": 1
+      },
+      "next": {
+       "sound": 24,
+       "kit": 14,
+       "global": 0,
+       "track": 0,
+       "pattern": 0,
+       "project": 0
+      },
+      "fields": [
+       {
+        "mod": "a",
+        "sym": "frq",
+        "scope": "sound",
+        "offset": 7,
+        "bits": 7,
+        "init": 127
+       },
+       {
+        "mod": "a",
+        "sym": "dep",
+        "scope": "sound",
+        "offset": 17,
+        "bits": 7,
+        "init": 64
+       }
+      ],
+      "freed": [
+       {
+        "mod": "a",
+        "sym": "dep",
+        "scope": "sound",
+        "offset": 0,
+        "bits": 7,
+        "init": 127
+       },
+       {
+        "mod": "b",
+        "sym": "k",
+        "scope": "kit",
+        "offset": 7,
+        "bits": 7
+       },
+       {
+        "mod": "a",
+        "sym": "p",
+        "scope": "sound",
+        "offset": 14,
+        "bits": 3
+       },
+       {
+        "mod": "b",
+        "sym": "k",
+        "scope": "kit",
+        "offset": 0,
+        "bits": 7,
+        "init": 100
+       }
+      ],
+      "codes": [
+       {
+        "mod": "a",
+        "sym": "frq",
+        "code": 43
+       },
+       {
+        "mod": "a",
+        "sym": "dep",
+        "code": 44
+       }
+      ],
+      "freed_codes": [],
+      "next_code": 45
+     },
+     "notes": [
+      "a p (sound): no longer in the build; its bits are kept, so it gets its values back if it returns",
+      "b k (kit): no longer in the build; its bits are kept, so it gets its values back if it returns",
+      "layout ID 0xf9c4dc2b (from 0xc357f3b5, whose projects it still reads)"
+     ],
+     "symbols": {
+      "__store_gen": 16843009,
+      "__store_gen2": 16843268,
+      "frq": 297861127,
+      "dep": 297926673
+     },
+     "codes": [
+      "11c100070000002b",
+      "11c200110000002c"
+     ],
+     "inits": [
+      "0000007f",
+      "00000040"
+     ],
+     "json": "{\n \"elekloader_store\": 2,\n \"device\": \"analog-rytm-mk2\",\n \"id\": \"0xf9c4dc2b\",\n \"ancestors\": [\n  \"0xc357f3b5\",\n  \"0x3e1c27ec\",\n  \"0xd47a9685\",\n  \"0x7b76122f\"\n ],\n \"split\": {\n  \"track\": 2,\n  \"pattern\": 4\n },\n \"generation\": {\n  \"sound\": 1,\n  \"kit\": 1,\n  \"global\": 1,\n  \"track\": 1,\n  \"pattern\": 1,\n  \"project\": 1\n },\n \"next\": {\n  \"sound\": 24,\n  \"kit\": 14,\n  \"global\": 0,\n  \"track\": 0,\n  \"pattern\": 0,\n  \"project\": 0\n },\n \"fields\": [\n  {\n   \"mod\": \"a\",\n   \"sym\": \"frq\",\n   \"scope\": \"sound\",\n   \"offset\": 7,\n   \"bits\": 7,\n   \"init\": 127\n  },\n  {\n   \"mod\": \"a\",\n   \"sym\": \"dep\",\n   \"scope\": \"sound\",\n   \"offset\": 17,\n   \"bits\": 7,\n   \"init\": 64\n  }\n ],\n \"freed\": [\n  {\n   \"mod\": \"a\",\n   \"sym\": \"dep\",\n   \"scope\": \"sound\",\n   \"offset\": 0,\n   \"bits\": 7,\n   \"init\": 127\n  },\n  {\n   \"mod\": \"b\",\n   \"sym\": \"k\",\n   \"scope\": \"kit\",\n   \"offset\": 7,\n   \"bits\": 7\n  },\n  {\n   \"mod\": \"a\",\n   \"sym\": \"p\",\n   \"scope\": \"sound\",\n   \"offset\": 14,\n   \"bits\": 3\n  },\n  {\n   \"mod\": \"b\",\n   \"sym\": \"k\",\n   \"scope\": \"kit\",\n   \"offset\": 0,\n   \"bits\": 7,\n   \"init\": 100\n  }\n ],\n \"codes\": [\n  {\n   \"mod\": \"a\",\n   \"sym\": \"frq\",\n   \"code\": 43\n  },\n  {\n   \"mod\": \"a\",\n   \"sym\": \"dep\",\n   \"code\": 44\n  }\n ],\n \"freed_codes\": [],\n \"next_code\": 45\n}\n",
+     "layout_id": 4190428203
+    },
+    {
+     "lock": {
+      "elekloader_store": 2,
+      "device": "analog-rytm-mk2",
+      "id": "0xe2ce104c",
+      "ancestors": [
+       "0xf9c4dc2b",
+       "0xc357f3b5",
+       "0x3e1c27ec",
+       "0xd47a9685",
+       "0x7b76122f"
+      ],
+      "split": {
+       "track": 2,
+       "pattern": 4
+      },
+      "generation": {
+       "sound": 1,
+       "kit": 1,
+       "global": 1,
+       "track": 1,
+       "pattern": 1,
+       "project": 1
+      },
+      "next": {
+       "sound": 31,
+       "kit": 14,
+       "global": 0,
+       "track": 0,
+       "pattern": 0,
+       "project": 0
+      },
+      "fields": [
+       {
+        "mod": "a",
+        "sym": "frq",
+        "scope": "sound",
+        "offset": 7,
+        "bits": 7,
+        "init": 127
+       },
+       {
+        "mod": "a",
+        "sym": "p",
+        "scope": "sound",
+        "offset": 14,
+        "bits": 3
+       },
+       {
+        "mod": "a",
+        "sym": "dep",
+        "scope": "sound",
+        "offset": 24,
+        "bits": 7
+       },
+       {
+        "mod": "b",
+        "sym": "k",
+        "scope": "kit",
+        "offset": 0,
+        "bits": 7,
+        "init": 100
+       }
+      ],
+      "freed": [
+       {
+        "mod": "a",
+        "sym": "dep",
+        "scope": "sound",
+        "offset": 0,
+        "bits": 7,
+        "init": 127
+       },
+       {
+        "mod": "b",
+        "sym": "k",
+        "scope": "kit",
+        "offset": 7,
+        "bits": 7
+       },
+       {
+        "mod": "a",
+        "sym": "dep",
+        "scope": "sound",
+        "offset": 17,
+        "bits": 7,
+        "init": 64
+       }
+      ],
+      "codes": [
+       {
+        "mod": "a",
+        "sym": "frq",
+        "code": 43
+       },
+       {
+        "mod": "a",
+        "sym": "dep",
+        "code": 45
+       }
+      ],
+      "freed_codes": [],
+      "next_code": 46
+     },
+     "notes": [
+      "a dep (sound): changed its init, its data is dropped",
+      "a dep: 7 bits of sound storage at bit 24",
+      "a p: back at bit 14 of sound storage, with the values it had",
+      "b k: back at bit 0 of kit storage, with the values it had",
+      "a dep: lock code 44 kept for it while it is out of the build",
+      "a dep: lock code 45",
+      "layout ID 0xe2ce104c (from 0xf9c4dc2b, whose projects it still reads)"
+     ],
+     "symbols": {
+      "__store_gen": 16843009,
+      "__store_gen2": 16843268,
+      "frq": 297861127,
+      "p": 281018382,
+      "dep": 297795608,
+      "k": 566362112
+     },
+     "codes": [
+      "11c100070000002b",
+      "11c000180000002d"
+     ],
+     "inits": [
+      "0000007f",
+      "00000064"
+     ],
+     "json": "{\n \"elekloader_store\": 2,\n \"device\": \"analog-rytm-mk2\",\n \"id\": \"0xe2ce104c\",\n \"ancestors\": [\n  \"0xf9c4dc2b\",\n  \"0xc357f3b5\",\n  \"0x3e1c27ec\",\n  \"0xd47a9685\",\n  \"0x7b76122f\"\n ],\n \"split\": {\n  \"track\": 2,\n  \"pattern\": 4\n },\n \"generation\": {\n  \"sound\": 1,\n  \"kit\": 1,\n  \"global\": 1,\n  \"track\": 1,\n  \"pattern\": 1,\n  \"project\": 1\n },\n \"next\": {\n  \"sound\": 31,\n  \"kit\": 14,\n  \"global\": 0,\n  \"track\": 0,\n  \"pattern\": 0,\n  \"project\": 0\n },\n \"fields\": [\n  {\n   \"mod\": \"a\",\n   \"sym\": \"frq\",\n   \"scope\": \"sound\",\n   \"offset\": 7,\n   \"bits\": 7,\n   \"init\": 127\n  },\n  {\n   \"mod\": \"a\",\n   \"sym\": \"p\",\n   \"scope\": \"sound\",\n   \"offset\": 14,\n   \"bits\": 3\n  },\n  {\n   \"mod\": \"a\",\n   \"sym\": \"dep\",\n   \"scope\": \"sound\",\n   \"offset\": 24,\n   \"bits\": 7\n  },\n  {\n   \"mod\": \"b\",\n   \"sym\": \"k\",\n   \"scope\": \"kit\",\n   \"offset\": 0,\n   \"bits\": 7,\n   \"init\": 100\n  }\n ],\n \"freed\": [\n  {\n   \"mod\": \"a\",\n   \"sym\": \"dep\",\n   \"scope\": \"sound\",\n   \"offset\": 0,\n   \"bits\": 7,\n   \"init\": 127\n  },\n  {\n   \"mod\": \"b\",\n   \"sym\": \"k\",\n   \"scope\": \"kit\",\n   \"offset\": 7,\n   \"bits\": 7\n  },\n  {\n   \"mod\": \"a\",\n   \"sym\": \"dep\",\n   \"scope\": \"sound\",\n   \"offset\": 17,\n   \"bits\": 7,\n   \"init\": 64\n  }\n ],\n \"codes\": [\n  {\n   \"mod\": \"a\",\n   \"sym\": \"frq\",\n   \"code\": 43\n  },\n  {\n   \"mod\": \"a\",\n   \"sym\": \"dep\",\n   \"code\": 45\n  }\n ],\n \"freed_codes\": [],\n \"next_code\": 46\n}\n",
+     "layout_id": 3805155404
+    }
+   ]
+  },
+  "inits: none keeps format 1": {
+   "steps": [
+    [
+     [
+      [
+       "a",
+       "frq",
+       "sound",
+       7
+      ],
+      [
+       "a",
+       "dep",
+       "sound",
+       7
+      ],
+      [
+       "a",
+       "p",
+       "sound",
+       3
+      ],
+      [
+       "b",
+       "k",
+       "kit",
+       7
+      ]
+     ],
+     [
+      [
+       "a",
+       "frq"
+      ],
+      [
+       "a",
+       "dep"
+      ]
+     ],
+     []
+    ],
+    [
+     [
+      [
+       "a",
+       "frq",
+       "sound",
+       7
+      ],
+      [
+       "a",
+       "dep",
+       "sound",
+       7
+      ],
+      [
+       "a",
+       "p",
+       "sound",
+       3
+      ],
+      [
+       "b",
+       "k",
+       "kit",
+       7
+      ]
+     ],
+     [
+      [
+       "a",
+       "frq"
+      ],
+      [
+       "a",
+       "dep"
+      ]
+     ],
+     [
+      [
+       "a",
+       "p",
+       0
+      ]
+     ]
+    ]
+   ],
+   "results": [
+    {
+     "lock": {
+      "elekloader_store": 1,
+      "device": "analog-rytm-mk2",
+      "id": "0x9307554b",
+      "ancestors": [],
+      "split": {
+       "track": 2,
+       "pattern": 4
+      },
+      "generation": {
+       "sound": 1,
+       "kit": 1,
+       "global": 1,
+       "track": 1,
+       "pattern": 1,
+       "project": 1
+      },
+      "next": {
+       "sound": 17,
+       "kit": 7,
+       "global": 0,
+       "track": 0,
+       "pattern": 0,
+       "project": 0
+      },
+      "fields": [
+       {
+        "mod": "a",
+        "sym": "dep",
+        "scope": "sound",
+        "offset": 0,
+        "bits": 7
+       },
+       {
+        "mod": "a",
+        "sym": "frq",
+        "scope": "sound",
+        "offset": 7,
+        "bits": 7
+       },
+       {
+        "mod": "a",
+        "sym": "p",
+        "scope": "sound",
+        "offset": 14,
+        "bits": 3
+       },
+       {
+        "mod": "b",
+        "sym": "k",
+        "scope": "kit",
+        "offset": 0,
+        "bits": 7
+       }
+      ],
+      "freed": [],
+      "codes": [
+       {
+        "mod": "a",
+        "sym": "dep",
+        "code": 42
+       },
+       {
+        "mod": "a",
+        "sym": "frq",
+        "code": 43
+       }
+      ],
+      "freed_codes": [],
+      "next_code": 44
+     },
+     "notes": [
+      "a new lockfile, layout ID 0x9307554b: projects and sounds saved by builds with other layouts load their mod data at defaults",
+      "a dep: 7 bits of sound storage at bit 0",
+      "a frq: 7 bits of sound storage at bit 7",
+      "a p: 3 bits of sound storage at bit 14",
+      "b k: 7 bits of kit storage at bit 0",
+      "a dep: lock code 42",
+      "a frq: lock code 43"
+     ],
+     "symbols": {
+      "__store_gen": 16843009,
+      "__store_gen2": 16843268,
+      "dep": 297795584,
+      "frq": 297795591,
+      "p": 281018382,
+      "k": 566231040
+     },
+     "codes": [
+      "11c000000000002a",
+      "11c000070000002b"
+     ],
+     "inits": [],
+     "json": "{\n \"elekloader_store\": 1,\n \"device\": \"analog-rytm-mk2\",\n \"id\": \"0x9307554b\",\n \"ancestors\": [],\n \"split\": {\n  \"track\": 2,\n  \"pattern\": 4\n },\n \"generation\": {\n  \"sound\": 1,\n  \"kit\": 1,\n  \"global\": 1,\n  \"track\": 1,\n  \"pattern\": 1,\n  \"project\": 1\n },\n \"next\": {\n  \"sound\": 17,\n  \"kit\": 7,\n  \"global\": 0,\n  \"track\": 0,\n  \"pattern\": 0,\n  \"project\": 0\n },\n \"fields\": [\n  {\n   \"mod\": \"a\",\n   \"sym\": \"dep\",\n   \"scope\": \"sound\",\n   \"offset\": 0,\n   \"bits\": 7\n  },\n  {\n   \"mod\": \"a\",\n   \"sym\": \"frq\",\n   \"scope\": \"sound\",\n   \"offset\": 7,\n   \"bits\": 7\n  },\n  {\n   \"mod\": \"a\",\n   \"sym\": \"p\",\n   \"scope\": \"sound\",\n   \"offset\": 14,\n   \"bits\": 3\n  },\n  {\n   \"mod\": \"b\",\n   \"sym\": \"k\",\n   \"scope\": \"kit\",\n   \"offset\": 0,\n   \"bits\": 7\n  }\n ],\n \"freed\": [],\n \"codes\": [\n  {\n   \"mod\": \"a\",\n   \"sym\": \"dep\",\n   \"code\": 42\n  },\n  {\n   \"mod\": \"a\",\n   \"sym\": \"frq\",\n   \"code\": 43\n  }\n ],\n \"freed_codes\": [],\n \"next_code\": 44\n}\n",
+     "layout_id": 2466731339
+    },
+    {
+     "lock": {
+      "elekloader_store": 1,
+      "device": "analog-rytm-mk2",
+      "id": "0x9307554b",
+      "ancestors": [],
+      "split": {
+       "track": 2,
+       "pattern": 4
+      },
+      "generation": {
+       "sound": 1,
+       "kit": 1,
+       "global": 1,
+       "track": 1,
+       "pattern": 1,
+       "project": 1
+      },
+      "next": {
+       "sound": 17,
+       "kit": 7,
+       "global": 0,
+       "track": 0,
+       "pattern": 0,
+       "project": 0
+      },
+      "fields": [
+       {
+        "mod": "a",
+        "sym": "dep",
+        "scope": "sound",
+        "offset": 0,
+        "bits": 7
+       },
+       {
+        "mod": "a",
+        "sym": "frq",
+        "scope": "sound",
+        "offset": 7,
+        "bits": 7
+       },
+       {
+        "mod": "a",
+        "sym": "p",
+        "scope": "sound",
+        "offset": 14,
+        "bits": 3
+       },
+       {
+        "mod": "b",
+        "sym": "k",
+        "scope": "kit",
+        "offset": 0,
+        "bits": 7
+       }
+      ],
+      "freed": [],
+      "codes": [
+       {
+        "mod": "a",
+        "sym": "dep",
+        "code": 42
+       },
+       {
+        "mod": "a",
+        "sym": "frq",
+        "code": 43
+       }
+      ],
+      "freed_codes": [],
+      "next_code": 44
+     },
+     "notes": [],
+     "symbols": {
+      "__store_gen": 16843009,
+      "__store_gen2": 16843268,
+      "dep": 297795584,
+      "frq": 297795591,
+      "p": 281018382,
+      "k": 566231040
+     },
+     "codes": [
+      "11c000000000002a",
+      "11c000070000002b"
+     ],
+     "inits": [],
+     "json": "{\n \"elekloader_store\": 1,\n \"device\": \"analog-rytm-mk2\",\n \"id\": \"0x9307554b\",\n \"ancestors\": [],\n \"split\": {\n  \"track\": 2,\n  \"pattern\": 4\n },\n \"generation\": {\n  \"sound\": 1,\n  \"kit\": 1,\n  \"global\": 1,\n  \"track\": 1,\n  \"pattern\": 1,\n  \"project\": 1\n },\n \"next\": {\n  \"sound\": 17,\n  \"kit\": 7,\n  \"global\": 0,\n  \"track\": 0,\n  \"pattern\": 0,\n  \"project\": 0\n },\n \"fields\": [\n  {\n   \"mod\": \"a\",\n   \"sym\": \"dep\",\n   \"scope\": \"sound\",\n   \"offset\": 0,\n   \"bits\": 7\n  },\n  {\n   \"mod\": \"a\",\n   \"sym\": \"frq\",\n   \"scope\": \"sound\",\n   \"offset\": 7,\n   \"bits\": 7\n  },\n  {\n   \"mod\": \"a\",\n   \"sym\": \"p\",\n   \"scope\": \"sound\",\n   \"offset\": 14,\n   \"bits\": 3\n  },\n  {\n   \"mod\": \"b\",\n   \"sym\": \"k\",\n   \"scope\": \"kit\",\n   \"offset\": 0,\n   \"bits\": 7\n  }\n ],\n \"freed\": [],\n \"codes\": [\n  {\n   \"mod\": \"a\",\n   \"sym\": \"dep\",\n   \"code\": 42\n  },\n  {\n   \"mod\": \"a\",\n   \"sym\": \"frq\",\n   \"code\": 43\n  }\n ],\n \"freed_codes\": [],\n \"next_code\": 44\n}\n",
+     "layout_id": 2466731339
+    }
+   ]
+  },
+  "inits: too many": {
+   "steps": [
+    [
+     [
+      [
+       "m",
+       "g00",
+       "project",
+       1
+      ],
+      [
+       "m",
+       "g01",
+       "project",
+       1
+      ],
+      [
+       "m",
+       "g02",
+       "project",
+       1
+      ],
+      [
+       "m",
+       "g03",
+       "project",
+       1
+      ],
+      [
+       "m",
+       "g04",
+       "project",
+       1
+      ],
+      [
+       "m",
+       "g05",
+       "project",
+       1
+      ],
+      [
+       "m",
+       "g06",
+       "project",
+       1
+      ],
+      [
+       "m",
+       "g07",
+       "project",
+       1
+      ],
+      [
+       "m",
+       "g08",
+       "project",
+       1
+      ],
+      [
+       "m",
+       "g09",
+       "project",
+       1
+      ],
+      [
+       "m",
+       "g10",
+       "project",
+       1
+      ],
+      [
+       "m",
+       "g11",
+       "project",
+       1
+      ],
+      [
+       "m",
+       "g12",
+       "project",
+       1
+      ],
+      [
+       "m",
+       "g13",
+       "project",
+       1
+      ],
+      [
+       "m",
+       "g14",
+       "project",
+       1
+      ],
+      [
+       "m",
+       "g15",
+       "project",
+       1
+      ],
+      [
+       "m",
+       "g16",
+       "project",
+       1
+      ],
+      [
+       "m",
+       "g17",
+       "project",
+       1
+      ],
+      [
+       "m",
+       "g18",
+       "project",
+       1
+      ],
+      [
+       "m",
+       "g19",
+       "project",
+       1
+      ],
+      [
+       "m",
+       "g20",
+       "project",
+       1
+      ],
+      [
+       "m",
+       "g21",
+       "project",
+       1
+      ],
+      [
+       "m",
+       "g22",
+       "project",
+       1
+      ],
+      [
+       "m",
+       "g23",
+       "project",
+       1
+      ],
+      [
+       "m",
+       "g24",
+       "project",
+       1
+      ],
+      [
+       "m",
+       "g25",
+       "project",
+       1
+      ],
+      [
+       "m",
+       "g26",
+       "project",
+       1
+      ],
+      [
+       "m",
+       "g27",
+       "project",
+       1
+      ],
+      [
+       "m",
+       "g28",
+       "project",
+       1
+      ],
+      [
+       "m",
+       "g29",
+       "project",
+       1
+      ],
+      [
+       "m",
+       "g30",
+       "project",
+       1
+      ],
+      [
+       "m",
+       "g31",
+       "project",
+       1
+      ],
+      [
+       "m",
+       "g32",
+       "project",
+       1
+      ],
+      [
+       "m",
+       "g33",
+       "project",
+       1
+      ],
+      [
+       "m",
+       "g34",
+       "project",
+       1
+      ],
+      [
+       "m",
+       "g35",
+       "project",
+       1
+      ],
+      [
+       "m",
+       "g36",
+       "project",
+       1
+      ],
+      [
+       "m",
+       "g37",
+       "project",
+       1
+      ],
+      [
+       "m",
+       "g38",
+       "project",
+       1
+      ],
+      [
+       "m",
+       "g39",
+       "project",
+       1
+      ],
+      [
+       "m",
+       "g40",
+       "project",
+       1
+      ],
+      [
+       "m",
+       "g41",
+       "project",
+       1
+      ],
+      [
+       "m",
+       "g42",
+       "project",
+       1
+      ],
+      [
+       "m",
+       "g43",
+       "project",
+       1
+      ],
+      [
+       "m",
+       "g44",
+       "project",
+       1
+      ],
+      [
+       "m",
+       "g45",
+       "project",
+       1
+      ],
+      [
+       "m",
+       "g46",
+       "project",
+       1
+      ],
+      [
+       "m",
+       "g47",
+       "project",
+       1
+      ],
+      [
+       "m",
+       "g48",
+       "project",
+       1
+      ],
+      [
+       "m",
+       "g49",
+       "project",
+       1
+      ],
+      [
+       "m",
+       "g50",
+       "project",
+       1
+      ],
+      [
+       "m",
+       "g51",
+       "project",
+       1
+      ],
+      [
+       "m",
+       "g52",
+       "project",
+       1
+      ],
+      [
+       "m",
+       "g53",
+       "project",
+       1
+      ],
+      [
+       "m",
+       "g54",
+       "project",
+       1
+      ],
+      [
+       "m",
+       "g55",
+       "project",
+       1
+      ],
+      [
+       "m",
+       "g56",
+       "project",
+       1
+      ],
+      [
+       "m",
+       "g57",
+       "project",
+       1
+      ],
+      [
+       "m",
+       "g58",
+       "project",
+       1
+      ],
+      [
+       "m",
+       "g59",
+       "project",
+       1
+      ],
+      [
+       "m",
+       "g60",
+       "project",
+       1
+      ],
+      [
+       "m",
+       "g61",
+       "project",
+       1
+      ],
+      [
+       "m",
+       "g62",
+       "project",
+       1
+      ],
+      [
+       "m",
+       "g63",
+       "project",
+       1
+      ]
+     ],
+     [],
+     [
+      [
+       "m",
+       "g00",
+       1
+      ],
+      [
+       "m",
+       "g01",
+       1
+      ],
+      [
+       "m",
+       "g02",
+       1
+      ],
+      [
+       "m",
+       "g03",
+       1
+      ],
+      [
+       "m",
+       "g04",
+       1
+      ],
+      [
+       "m",
+       "g05",
+       1
+      ],
+      [
+       "m",
+       "g06",
+       1
+      ],
+      [
+       "m",
+       "g07",
+       1
+      ],
+      [
+       "m",
+       "g08",
+       1
+      ],
+      [
+       "m",
+       "g09",
+       1
+      ],
+      [
+       "m",
+       "g10",
+       1
+      ],
+      [
+       "m",
+       "g11",
+       1
+      ],
+      [
+       "m",
+       "g12",
+       1
+      ],
+      [
+       "m",
+       "g13",
+       1
+      ],
+      [
+       "m",
+       "g14",
+       1
+      ],
+      [
+       "m",
+       "g15",
+       1
+      ],
+      [
+       "m",
+       "g16",
+       1
+      ],
+      [
+       "m",
+       "g17",
+       1
+      ],
+      [
+       "m",
+       "g18",
+       1
+      ],
+      [
+       "m",
+       "g19",
+       1
+      ],
+      [
+       "m",
+       "g20",
+       1
+      ],
+      [
+       "m",
+       "g21",
+       1
+      ],
+      [
+       "m",
+       "g22",
+       1
+      ],
+      [
+       "m",
+       "g23",
+       1
+      ],
+      [
+       "m",
+       "g24",
+       1
+      ],
+      [
+       "m",
+       "g25",
+       1
+      ],
+      [
+       "m",
+       "g26",
+       1
+      ],
+      [
+       "m",
+       "g27",
+       1
+      ],
+      [
+       "m",
+       "g28",
+       1
+      ],
+      [
+       "m",
+       "g29",
+       1
+      ],
+      [
+       "m",
+       "g30",
+       1
+      ],
+      [
+       "m",
+       "g31",
+       1
+      ],
+      [
+       "m",
+       "g32",
+       1
+      ],
+      [
+       "m",
+       "g33",
+       1
+      ],
+      [
+       "m",
+       "g34",
+       1
+      ],
+      [
+       "m",
+       "g35",
+       1
+      ],
+      [
+       "m",
+       "g36",
+       1
+      ],
+      [
+       "m",
+       "g37",
+       1
+      ],
+      [
+       "m",
+       "g38",
+       1
+      ],
+      [
+       "m",
+       "g39",
+       1
+      ],
+      [
+       "m",
+       "g40",
+       1
+      ],
+      [
+       "m",
+       "g41",
+       1
+      ],
+      [
+       "m",
+       "g42",
+       1
+      ],
+      [
+       "m",
+       "g43",
+       1
+      ],
+      [
+       "m",
+       "g44",
+       1
+      ],
+      [
+       "m",
+       "g45",
+       1
+      ],
+      [
+       "m",
+       "g46",
+       1
+      ],
+      [
+       "m",
+       "g47",
+       1
+      ],
+      [
+       "m",
+       "g48",
+       1
+      ],
+      [
+       "m",
+       "g49",
+       1
+      ],
+      [
+       "m",
+       "g50",
+       1
+      ],
+      [
+       "m",
+       "g51",
+       1
+      ],
+      [
+       "m",
+       "g52",
+       1
+      ],
+      [
+       "m",
+       "g53",
+       1
+      ],
+      [
+       "m",
+       "g54",
+       1
+      ],
+      [
+       "m",
+       "g55",
+       1
+      ],
+      [
+       "m",
+       "g56",
+       1
+      ],
+      [
+       "m",
+       "g57",
+       1
+      ],
+      [
+       "m",
+       "g58",
+       1
+      ],
+      [
+       "m",
+       "g59",
+       1
+      ],
+      [
+       "m",
+       "g60",
+       1
+      ],
+      [
+       "m",
+       "g61",
+       1
+      ],
+      [
+       "m",
+       "g62",
+       1
+      ],
+      [
+       "m",
+       "g63",
+       1
+      ]
+     ]
+    ]
+   ],
+   "results": [
+    {
+     "error": "the mods give 64 storage fields an init; the core keeps at most 63"
+    }
+   ]
+  }
+ },
  "locks": {
   "not a dict": {
    "lock": [
@@ -13278,9 +15446,208 @@
   },
   "newer": {
    "lock": {
-    "elekloader_store": 2
+    "elekloader_store": 3
    },
-   "error": "lockfile: format 2 is newer than this elekloader (1): update elekloader"
+   "error": "lockfile: format 3 is newer than this elekloader (2): update elekloader"
+  },
+  "init in format 1": {
+   "lock": {
+    "elekloader_store": 1,
+    "device": "analog-rytm-mk2",
+    "id": "0x828a73b9",
+    "ancestors": [],
+    "split": {
+     "track": 2,
+     "pattern": 4
+    },
+    "generation": {
+     "sound": 1,
+     "kit": 1,
+     "global": 1,
+     "track": 1,
+     "pattern": 1,
+     "project": 1
+    },
+    "next": {
+     "sound": 0,
+     "kit": 4,
+     "global": 0,
+     "track": 0,
+     "pattern": 0,
+     "project": 0
+    },
+    "fields": [
+     {
+      "mod": "a",
+      "sym": "x",
+      "scope": "kit",
+      "offset": 0,
+      "bits": 4,
+      "init": 3
+     }
+    ],
+    "freed": []
+   },
+   "error": "lockfile: a bad entry in \"fields\""
+  },
+  "init past its bits": {
+   "lock": {
+    "elekloader_store": 2,
+    "device": "analog-rytm-mk2",
+    "id": "0x828a73b9",
+    "ancestors": [],
+    "split": {
+     "track": 2,
+     "pattern": 4
+    },
+    "generation": {
+     "sound": 1,
+     "kit": 1,
+     "global": 1,
+     "track": 1,
+     "pattern": 1,
+     "project": 1
+    },
+    "next": {
+     "sound": 0,
+     "kit": 4,
+     "global": 0,
+     "track": 0,
+     "pattern": 0,
+     "project": 0
+    },
+    "fields": [
+     {
+      "mod": "a",
+      "sym": "x",
+      "scope": "kit",
+      "offset": 0,
+      "bits": 4,
+      "init": 16
+     }
+    ],
+    "freed": []
+   },
+   "error": "lockfile: a bad entry in \"fields\""
+  },
+  "init 0 written": {
+   "lock": {
+    "elekloader_store": 2,
+    "device": "analog-rytm-mk2",
+    "id": "0x828a73b9",
+    "ancestors": [],
+    "split": {
+     "track": 2,
+     "pattern": 4
+    },
+    "generation": {
+     "sound": 1,
+     "kit": 1,
+     "global": 1,
+     "track": 1,
+     "pattern": 1,
+     "project": 1
+    },
+    "next": {
+     "sound": 0,
+     "kit": 4,
+     "global": 0,
+     "track": 0,
+     "pattern": 0,
+     "project": 0
+    },
+    "fields": [
+     {
+      "mod": "a",
+      "sym": "x",
+      "scope": "kit",
+      "offset": 0,
+      "bits": 4,
+      "init": 0
+     }
+    ],
+    "freed": []
+   },
+   "error": "lockfile: a bad entry in \"fields\""
+  },
+  "format 2 with an init": {
+   "lock": {
+    "elekloader_store": 2,
+    "device": "analog-rytm-mk2",
+    "id": "0x828a73b9",
+    "ancestors": [],
+    "split": {
+     "track": 2,
+     "pattern": 4
+    },
+    "generation": {
+     "sound": 1,
+     "kit": 1,
+     "global": 1,
+     "track": 1,
+     "pattern": 1,
+     "project": 1
+    },
+    "next": {
+     "sound": 0,
+     "kit": 4,
+     "global": 0,
+     "track": 0,
+     "pattern": 0,
+     "project": 0
+    },
+    "fields": [
+     {
+      "mod": "a",
+      "sym": "x",
+      "scope": "kit",
+      "offset": 0,
+      "bits": 4,
+      "init": 15
+     }
+    ],
+    "freed": []
+   },
+   "error": null,
+   "result": {
+    "elekloader_store": 2,
+    "device": "analog-rytm-mk2",
+    "id": "0x1f6528b4",
+    "ancestors": [
+     "0x828a73b9"
+    ],
+    "split": {
+     "track": 2,
+     "pattern": 4
+    },
+    "generation": {
+     "sound": 1,
+     "kit": 1,
+     "global": 1,
+     "track": 1,
+     "pattern": 1,
+     "project": 1
+    },
+    "next": {
+     "sound": 0,
+     "kit": 4,
+     "global": 0,
+     "track": 0,
+     "pattern": 0,
+     "project": 0
+    },
+    "fields": [],
+    "freed": [
+     {
+      "mod": "a",
+      "sym": "x",
+      "scope": "kit",
+      "offset": 0,
+      "bits": 4,
+      "init": 15
+     }
+    ]
+   }
   },
   "device": {
    "lock": {
@@ -14028,7 +16395,8 @@
    "ccs": [],
    "lfos": [],
    "rough": [],
-   "routes": []
+   "routes": [],
+   "inits": {}
   },
   "not a list": {
    "doc": {
@@ -14141,7 +16509,8 @@
    "ccs": [],
    "lfos": [],
    "rough": [],
-   "routes": []
+   "routes": [],
+   "inits": {}
   },
   "lock kit": {
    "doc": {
@@ -14173,7 +16542,8 @@
     "a"
    ],
    "rough": [],
-   "routes": []
+   "routes": [],
+   "inits": {}
   },
   "lock global": {
    "doc": {
@@ -14255,7 +16625,8 @@
    ],
    "lfos": [],
    "rough": [],
-   "routes": []
+   "routes": [],
+   "inits": {}
   },
   "cc without lock": {
    "doc": {
@@ -14324,7 +16695,8 @@
     "a"
    ],
    "rough": [],
-   "routes": []
+   "routes": [],
+   "inits": {}
   },
   "lfo without lock": {
    "doc": {
@@ -14405,7 +16777,8 @@
    "rough": [
     "a"
    ],
-   "routes": []
+   "routes": [],
+   "inits": {}
   },
   "mod": {
    "doc": {
@@ -14464,7 +16837,8 @@
    "routes": [
     "a",
     "c"
-   ]
+   ],
+   "inits": {}
   },
   "mod without lock": {
    "doc": {
@@ -14519,6 +16893,109 @@
     ]
    },
    "error": "storage field 'a': \"smooth\" is true or false"
+  },
+  "init": {
+   "doc": {
+    "storage": [
+     {
+      "sym": "a",
+      "scope": "sound",
+      "bits": 7,
+      "lock": true,
+      "init": 127
+     },
+     {
+      "sym": "b",
+      "scope": "kit",
+      "bits": 3,
+      "init": 0
+     },
+     {
+      "sym": "c",
+      "scope": "kit",
+      "bits": 3
+     }
+    ]
+   },
+   "ok": [
+    [
+     "a",
+     "sound",
+     7
+    ],
+    [
+     "b",
+     "kit",
+     3
+    ],
+    [
+     "c",
+     "kit",
+     3
+    ]
+   ],
+   "locks": [
+    "a"
+   ],
+   "ccs": [],
+   "lfos": [],
+   "rough": [],
+   "routes": [],
+   "inits": {
+    "a": 127
+   }
+  },
+  "init past its bits": {
+   "doc": {
+    "storage": [
+     {
+      "sym": "a",
+      "scope": "kit",
+      "bits": 3,
+      "init": 8
+     }
+    ]
+   },
+   "error": "storage field a: init 8 (0 to 7, what its 3 bits hold)"
+  },
+  "init negative": {
+   "doc": {
+    "storage": [
+     {
+      "sym": "a",
+      "scope": "kit",
+      "bits": 3,
+      "init": -1
+     }
+    ]
+   },
+   "error": "storage field a: init -1 (0 to 7, what its 3 bits hold)"
+  },
+  "init type": {
+   "doc": {
+    "storage": [
+     {
+      "sym": "a",
+      "scope": "kit",
+      "bits": 3,
+      "init": true
+     }
+    ]
+   },
+   "error": "storage field a: init True (0 to 7, what its 3 bits hold)"
+  },
+  "init text": {
+   "doc": {
+    "storage": [
+     {
+      "sym": "a",
+      "scope": "kit",
+      "bits": 3,
+      "init": "1"
+     }
+    ]
+   },
+   "error": "storage field a: init '1' (0 to 7, what its 3 bits hold)"
   },
   "twice": {
    "doc": {

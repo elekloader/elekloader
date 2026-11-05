@@ -9,7 +9,8 @@ with `machines.c` (Machines, below), from 0.6 with page functions in `pages.s`, 
 write-through storage (Write-through, below) and `finish.s` (The OS upgrade's restart, below),
 and from 0.8 with lockable parameters in `lock.c` and `lock.s` (Lockable parameters, below) and
 their p-locks in `rows.c` and `rows.s` (Mod p-locks, below), and from 0.9 the smoothed value,
-velocity and aftertouch destinations and the FX track's parameters (below). On its own it changes nothing
+velocity and aftertouch destinations and the FX track's parameters (below), and from 0.10 field
+defaults and the event `ev_project_save` around every project save (below). On its own it changes nothing
 the unit does, apart from that restart, which it makes safe.
 
 The Rytm runs on the Digitakt mk1's platform (a ColdFire MCF5441x), and its OS
@@ -233,6 +234,53 @@ What it does not do:
   slot's fields instead, so the pattern loads with its mods' defaults, as a
   pattern received as a SysEx dump does. A target project saved with another
   mod layout keeps its store as it is.
+
+## The project save (0.10)
+
+From 0.10 core calls the mods' `ev_project_save` handlers,
+`void f(unsigned pre, unsigned how)`, before (`pre` 1) and after (`pre` 0)
+every whole save of the live project to a +Drive slot. On 1.74 all of them
+end in one routine, 0x400b07a4 (project model, slot, progress), the one that
+holds the file save site above: it makes the slot the active one, serializes
+the live project into the slot's image, writes the image to the +Drive
+(0x40034e98) and clears the modified mark. Core takes its first
+instructions (`jmp`, `st_proj_save` in `store.c`, the displaced ones in
+`store.s`). Two jobs call it:
+
+- **Project Save** (0x40052f06, queued by 0x40052908, which shows SAVING
+  and sets the name): every save the front panel starts goes through
+  0x4005417e, which checks write protection and asks OVERWRITE first: SAVE
+  PROJECT, SAVE PROJECT AS, the project manager's saves and SAVE ... BEFORE
+  LOADING.
+- **Project Load** (0x40052fb0): LOAD of an empty slot, which runs CREATE
+  NEW (0x400b3bd6, so `ev_project` with `how` 0 first) and then writes the
+  new project into the slot.
+
+`how` holds the kind in bits 0..7: `CORE_SAVE_SAME` (1) when the slot is
+the active one, `CORE_SAVE_OTHER` (2) when it isn't (SAVE PROJECT AS to
+another slot, or a project that has no slot yet), `CORE_SAVE_NEW` (3) for
+the empty slot's LOAD (told by the call's return address, 0x400530e6). The
+slot is in bits 8..15, 0..127 (the number the screen shows, less one; 255 when stock has none), and the call after has
+`CORE_SAVE_FAILED` (bit 16) set when the save failed. A field set with
+`core_store_set` in the call before is in the saved copy: the serializer
+reads the live homes, and a whole save copies the stored project's header
+and project data into the image (`st_pat_save`). So a SAVE PROJECT AS
+copy can be given its own project-scope value while the slot it came from
+keeps the old one on the +Drive.
+
+Both calls come from the save's job, not a UI tick, with the save screen
+up. A handler keeps them short, starts no load or save, and leaves MIDI or
+USB work to its next `ev_tick`. It doesn't call `core_project_edited`
+there: the save clears the modified mark after the call before.
+
+Not covered (no event): a project received over SysEx or a Transfer file
+load written into a slot, CLEAR and INIT NEW on the project manager (they
+change a slot without the live project), and the stored project's own
+writes outside a save (the "Write project MRAM" job, 0x400a1058, and the
+boot's and reset's copies at 0x400fb31a and 0x400fb36c, all from the live
+project into the stored one at 0x405c8f20). The "Project::updateMirror"
+job (0x400ae2da) serializes the live project into a mirror buffer and is
+no save either.
 
 ## Parameter pages (0.4, 0.6)
 
@@ -637,6 +685,41 @@ adds one before any mod's handler. The state is 13 tracks × 32 parameters
 without walking the kit's 48 entries while no performance's pressure is
 above 0.
 
+From 0.10 a read looks up only the field's code, through an open hash made
+once (lock.c), and keeps everything else it needs of the code in a table
+made on the first read: the range, the smoother's slot, the LFO and route
+flags, and where the field's bits are in a sound or kit (read without
+`core_store_get`'s interrupt mask: the audio interrupt isn't interrupted by
+a field's writer, which masks interrupts itself). Like stock, which works
+its parameters out once a block, it reads the audio side's state once a
+block, on the block's first read: the kit the audio side plays, whether a
+performance's pad is pressed (the pressures a word at a time), and per
+track whether any of its 8 routes points at a mod parameter. The scene's
+list, the performances and the routes are then asked by the code
+(`core_scene_value_in`, `core_perf_offset_in`, `core_mod_offset_code`)
+only when they can add something. `core_param_handle(field)` gives the
+code as a handle, `core_param_value_h(track, handle, flags)` reads by
+it, and `core_param_values(track, handles, n, flags, out)` reads several
+parameters of one track with the track's checks, the block's state and
+the sound found once. `core_store_get` reads a field a byte at a time (a bit at a time
+before). The values are 0.9's: lock-check 1.10's ring gives the same A, B,
+C, A's and C's sound values, p-lock, scene lock, LFO and performance
+offsets under both, after NRPNs set A, B and C and with the LFO's
+destination on A (emulator, 5 Nov 2026). The three reads a block cost
+1,828 DMA timer ticks on average under 0.9's code and about 480 under
+0.10's (609 and about 160 a read; a call that returns at once costs 39),
+and 366 as one `core_param_values` call (122 a read). Most of what
+was saved is the routes' walk: lock-check's A and C are `"mod": true`, and
+each of their reads walked the track's 8 routes. On a unit (T126, 5 Nov
+2026, lock-check 1.11): the same values, the batch read never differed
+from the single reads, and a read cost 733 ticks one at a time and 324 in
+a call of three (the unit's timer counts differently from the emulator's,
+so compare only within one machine). On the unit a block is 1/1,500 s
+(the block count against the dumps' times, T127) and DMA timer 0 counts
+about 88,000 ticks in one (above), so a read costs about 0.86% of a block
+one at a time and 0.37% in a call of three; a mod that reads 14 a block
+spends about 12% one at a time. Read several parameters of a track with
+`core_param_values`.
 ## Velocity and aftertouch destinations (0.9)
 
 `routes.c` and `routes.s`, three sites (docs/ADAPTING.md, "Lockable
@@ -740,6 +823,20 @@ predicted; stock's FX words are unchanged. K, its p-lock and the DST come
 back after a power-off and a cold boot, and stock 1.74 on the same card
 loads the FX LFO with DST None; SAVE KIT and RELOAD keep K's DST; a kit
 dump over USB carries it and restores it. Not on a unit or by ear.
+
+## Field defaults (0.10)
+
+A storage field declared with `"init": N` reads N where its bits are zero
+(docs/ADAPTING.md, "Mod storage (core-ar2 0.2, Analog Rytm MKII)"). The
+linker gives each such field a slot in the table `core_field_inits` (1..63)
+and puts the slot in the descriptor's bits 16..21; the offset keeps bits
+0..15, as no scope has 2^16 bits. `core_store_get` returns the bits XOR the
+slot's init and `core_store_set` stores the value XOR it, so a field
+without an init costs one test more and nothing else changes. Every read
+and write core makes of a field goes through those two (lock.c's RANDOMIZE
+and RELOAD PAGE, midi.c, rows.c, scenes.c, smooth.c, store.c's LFO
+destination fields), so all of them work on the value; the saves, loads,
+SysEx and Total Recall copy the bits. No new sites.
 
 ## Checked so far
 
@@ -996,12 +1093,41 @@ stock bytes, and that each covers whole instructions.
   4:0, LOAD FROM asks ANY CHANGES WILL BE LOST. PROCEED WITH LOADING?, as it
   does after a stock knob's turn.
 
+- **The project save (0.10)**, in an emulator only (analog-emu, OS 1.74,
+  4 Nov 2026), with [save-check 1.0](../../examples/save-check-ar2): INIT
+  NEW of slot 125 calls no handler. After LOAD FROM 125, SAVE PROJECT calls
+  both with `CORE_SAVE_SAME`, slot 124 (the screen's 125), and `sv_saves` 1.
+  SAVE PROJECT AS to 126 calls both with `CORE_SAVE_OTHER`, slot 125, and
+  `sv_saves` 2. LOAD FROM 125 then shows 1, and 126 shows 2: the field set
+  before the save is in the copy, and the slot it came from keeps its own.
+  After a knob's turn, SAVE ... BEFORE LOADING? YES calls both with
+  `CORE_SAVE_SAME` for 126, which then loads with 3. The project manager's
+  SAVE TO 127 calls both with `CORE_SAVE_OTHER`, slot 126, and makes 127
+  the active project. No call failed. On a unit (T122, 5 Nov 2026, the
+  Rytm reached through the Sidecar mirror): SAVE PROJECT to 121, SAVE PROJECT
+  AS 122 and the two loads gave the emulator's kinds, slots and values. Not
+  checked: an empty slot's LOAD (`CORE_SAVE_NEW`; the LOAD PROJECT list shows
+  only used slots) and a failed save.
+
 - **Page functions (0.6)**, in an emulator (OS 1.74, 23 Oct 2026): core 0.6
   with all eleven rytm2_mods (voice-dac 1.4) shows DAC FILTER without RES
   for LP1 and HP1 and without FRQ and RES for TYP OFF, the empty knobs take
   no turn, and the page follows a track switch. With rytm2_mods v1.3 (no
   `core_page_fns` entry) core 0.6 gives a 59-screen walk pixel-identical to
   core 0.4's. Not yet on a unit.
+
+- **Field defaults (0.10)**, in an emulator (analog-emu, OS 1.74, 4
+  Nov 2026), with [lock-check 1.10](../../examples/lock-check-ar2)'s N
+  (`"init": 100`, 7 bits, slot 1) read from `lc_init`: on a new card's
+  first project N reads 100 and `core_param_value` 100 << 8 (25600) with no
+  lock or scene; knob C on the LOCK CHECK page turns it to 101; with a trig
+  held the first turn makes a lock at 100 and the second takes it to 101,
+  which plays (lock 101, value 101 << 8) while the sound keeps 100; N
+  turned to 0 survives a power-off and a cold boot as 0, not 100. RANDOMIZE
+  PAGE and an LFO on N were not tried. On a unit (T127, 5 Nov 2026,
+  lock-check 1.11): in a new project (CREATE NEW) N reads 100 in the sound
+  and 100 << 8 from `core_param_value`; NRPN 4:5 sets it to 101 and it
+  reads 101 (101 << 8).
 
 ## Building
 

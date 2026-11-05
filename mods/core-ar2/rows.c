@@ -703,13 +703,17 @@ void core_rows_now_reset(void)
     irq_restore(sr);
 }
 
+/* (0.10) by the code, for smooth.c */
+int core_lock_value_code(int track, int code)
+{
+    if ((unsigned)track >= 13 || code < FIRST_CODE || code > LAST_CODE)
+        return -1;
+    return core_lock_now[track][code - FIRST_CODE] - 1;
+}
+
 int core_lock_value(int track, unsigned field)
 {
-    int code = core_lock_code(field), v;
-    if ((unsigned)track >= 13 || code < FIRST_CODE)
-        return -1;
-    v = core_lock_now[track][code - FIRST_CODE];
-    return v - 1;
+    return core_lock_value_code(track, core_lock_code(field));
 }
 
 /* ---- editing: a mod parameter's knob with a trig held ---- */

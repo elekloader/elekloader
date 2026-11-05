@@ -4,7 +4,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { allocate, ccEntries, codeEntries, dumps, fromImage, layoutId, parseCcs, parseDecls, parseLfos, parseLocks, parseRough, parseRoutes, symbols, trailer, type Decl, type Lock } from '../src/store.ts'
+import { allocate, ccEntries, codeEntries, dumps, fromImage, initEntries, layoutId, parseCcs, parseDecls, parseInits, parseLfos, parseLocks, parseRough, parseRoutes, symbols, trailer, type Decl, type Lock } from '../src/store.ts'
 
 const V = JSON.parse(readFileSync(new URL('./store-vectors.json', import.meta.url), 'utf8'))
 const DEV = 'analog-rytm-mk2'
@@ -78,6 +78,29 @@ test('CCs: the same CCs, notes and table entries', () => {
   }
 })
 
+test('inits: the same lockfiles, descriptors, table entries and notes', () => {
+  for (const [name, run] of Object.entries<any>(V.init_runs)) {
+    let lock: Lock | null = null
+    run.steps.forEach(([decls, locks, inits]: [Decl[], [string, string][], [string, string, number][]], i: number) => {
+      const want = run.results[i]
+      if (want.error) {
+        assert.throws(() => { const [l] = allocate(lock, decls, DEV, null, locks, [], inits); symbols(l) },
+          (e: Error) => e.message === want.error, `${name} step ${i}`)
+        return
+      }
+      const [l, notes] = allocate(lock, decls, DEV, null, locks, [], inits)
+      lock = l
+      assert.deepEqual(l, want.lock, `${name} step ${i}: lockfile`)
+      assert.deepEqual(notes, want.notes, `${name} step ${i}: notes`)
+      assert.deepEqual(Object.fromEntries(symbols(l)[0]), want.symbols, `${name} step ${i}: symbols`)
+      assert.deepEqual(codeEntries(l).map(hex), want.codes, `${name} step ${i}: codes`)
+      assert.deepEqual(initEntries(l).map(hex), want.inits, `${name} step ${i}: inits`)
+      assert.equal(layoutId(l), want.layout_id, `${name} step ${i}: layout ID`)
+      assert.equal(dumps(l), want.json, `${name} step ${i}: JSON`)
+    })
+  }
+})
+
 test('the lockfiles it refuses, with the same messages, and the ones it keeps as they are', () => {
   for (const [name, c] of Object.entries<any>(V.locks)) {
     if (c.error === null) assert.deepEqual(allocate(c.lock, [], DEV)[0], c.result, name)
@@ -95,6 +118,7 @@ test('a mod\'s "storage": what it reads, and what it refuses', () => {
       assert.deepEqual(parseLfos(c.doc), c.lfos, name)
       assert.deepEqual(parseRough(c.doc), c.rough, name)
       assert.deepEqual(parseRoutes(c.doc), c.routes, name)
+      assert.deepEqual(Object.fromEntries(parseInits(c.doc)), c.inits, name)
     }
   }
 })

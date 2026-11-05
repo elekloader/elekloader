@@ -37,6 +37,7 @@ STORE_FIELD(lc_b);
 STORE_FIELD(lc_c);
 STORE_FIELD(lc_d);
 STORE_FIELD(lc_k);
+STORE_FIELD(lc_n);
 
 /* 1.5: A takes core's category (MOD), C its own (LCHK) */
 const struct core_lock_param lc_param_a = {STORE(lc_a), 1, 0, 127, "LCA", "Lock Check A", 0};
@@ -54,6 +55,12 @@ const struct core_lock_param lc_param_d = {
  * a CC, 0..127 on knob A of a LOCK CHECK FX page behind the FX LFO key (id 3,
  * an Error record as ids 1 and 2) */
 const struct core_lock_param lc_param_k = {STORE(lc_k), 3, 0, 127, "LCK", "Lock Check K",
+                                           CORE_LOCK_CATEGORY("LCHK")};
+
+/* 1.10 (core 0.10): N, a sound field with "init": 100, so it reads 100 in a
+ * new project and in a sound from another layout; an LFO destination with a
+ * CC, on knob C of the LOCK CHECK page (id 4, an Error record as ids 1..3) */
+const struct core_lock_param lc_param_n = {STORE(lc_n), 4, 0, 127, "LCN", "Lock Check N",
                                            CORE_LOCK_CATEGORY("LCHK")};
 
 /* track 1's sound of the current kit: the live kits as edited, the stored
@@ -131,16 +138,16 @@ void lc_draw(void *bmp, void *ctrl)
     }
 }
 
-const struct core_page lc_page = {14, "LOCK CHECK", {1, 2, 0, 0, 0, 0, 0, 0}};
+const struct core_page lc_page = {14, "LOCK CHECK", {1, 2, 4, 0, 0, 0, 0, 0}};
 const struct core_view_page lc_view_page = {CORE_VIEW_LFO, 14, 0};
 const struct core_page lc_fx_page = {15, "LOCK CHECK FX", {3, 0, 0, 0, 0, 0, 0, 0}};
 const struct core_view_page lc_fx_view_page = {CORE_VIEW_FX_LFO, 15, 0};
 
-/* knob A is A (id 1, 0..127), knob B is C (id 2, 0..1000); on the FX page
- * knob A is K (id 3, 0..127), in the kit */
+/* knob A is A (id 1, 0..127), knob B is C (id 2, 0..1000), knob C is N (id
+ * 4, 0..127); on the FX page knob A is K (id 3, 0..127), in the kit */
 static unsigned lc_field(int32_t id)
 {
-    return id == 1 ? STORE(lc_a) : id == 3 ? STORE(lc_k) : STORE(lc_c);
+    return id == 1 ? STORE(lc_a) : id == 3 ? STORE(lc_k) : id == 4 ? STORE(lc_n) : STORE(lc_c);
 }
 
 static void *lc_item(int32_t id)
@@ -151,7 +158,7 @@ static void *lc_item(int32_t id)
 static int lc_get(int32_t id, int32_t *value)
 {
     void *s = lc_item(id);
-    if ((id != 1 && id != 2 && id != 3) || !s)
+    if (id < 1 || id > 4 || !s)
         return 0;
     *value = core_store_get(lc_field(id), s, 0) << 8;
     return 1;
@@ -163,7 +170,7 @@ static int lc_delta(void *view, int32_t id, int32_t delta, int32_t func)
     int v, top = id == 2 ? 1000 : 127;
     (void)view;
     (void)func;
-    if ((id != 1 && id != 2 && id != 3) || !s)
+    if (id < 1 || id > 4 || !s)
         return 0;
     v = (int)core_store_get(lc_field(id), s, 0) + (delta > 0 ? (delta + 255) / 256 : -((255 - delta) / 256));
     core_store_set(lc_field(id), s, 0, v < 0 ? 0 : v > top ? top : v);
@@ -185,7 +192,7 @@ static int lc_text(struct core_text *t)
     return CORE_TEXT_DONE;
 }
 
-const struct core_param lc_params = {1, 3, lc_get, lc_delta, lc_text};
+const struct core_param lc_params = {1, 4, lc_get, lc_delta, lc_text};
 
 /* 1.7 (core 0.9): every audio block, core_param_value of A, B ("smooth":
  * false) and C on track 1, with A's and C's values in the sound, the
@@ -215,6 +222,47 @@ struct {
     struct lc_rec rec[RING];
 } lc_ring = {{'S', 'M', 'C', 'K'}};
 
+/* 1.10 (core 0.10): N on track 1 at the last block, after the magic INIT:
+ * the block, core_param_value (8.8), N in the sound, the LFO's offset to N
+ * and N's p-lock and scene lock */
+struct {
+    char magic[4];
+    unsigned block;
+    int value;
+    short sound, lfo, lock, scene;
+} lc_init = {{'I', 'N', 'I', 'T'}};
+
+/* 1.11 (core 0.10): A, B and C read again in one core_param_values call by
+ * their handles, after the magic BTCH: that call's cost in DMA timer 0's
+ * ticks, the most and the sum, the blocks, and the blocks where any of the
+ * three differed from its own core_param_value read in the same block */
+struct {
+    char magic[4];
+    unsigned cost_max, cost_sum, blocks, mismatches;
+} lc_batch = {{'B', 'T', 'C', 'H'}};
+
+static void lc_batch_check(const struct lc_rec *r, unsigned single)
+{
+    static int h[3];
+    int o[3];
+    unsigned t0, t;
+    (void)single;
+    if (!h[0]) {
+        h[0] = core_param_handle(STORE(lc_a));
+        h[1] = core_param_handle(STORE(lc_b));
+        h[2] = core_param_handle(STORE(lc_c));
+    }
+    t0 = DTCN0;
+    core_param_values(0, h, 3, 0, o);
+    t = DTCN0 - t0;
+    if (o[0] != r->a || o[1] != r->b || o[2] != r->c)
+        lc_batch.mismatches++;
+    if (t > lc_batch.cost_max)
+        lc_batch.cost_max = t;
+    lc_batch.cost_sum += t;
+    lc_batch.blocks++;
+}
+
 void lc_render(void)
 {
     struct lc_rec *r = &lc_ring.rec[lc_ring.next % RING];
@@ -237,6 +285,13 @@ void lc_render(void)
     r->lock_k = core_lock_value(12, STORE(lc_k));
     r->scene_k = core_scene_value(12, STORE(lc_k));
     r->perf_k = core_perf_offset(12, STORE(lc_k));
+    lc_init.value = core_param_value(0, STORE(lc_n));
+    lc_init.sound = s ? (short)core_store_get(STORE(lc_n), s, 0) : -1;
+    lc_init.lfo = core_lfo_offset(0, STORE(lc_n));
+    lc_init.lock = core_lock_value(0, STORE(lc_n));
+    lc_init.scene = core_scene_value(0, STORE(lc_n));
+    lc_init.block = core_block;
+    lc_batch_check(r, t);
     if (t > lc_ring.cost_max)
         lc_ring.cost_max = t;
     lc_ring.cost_sum += t;
