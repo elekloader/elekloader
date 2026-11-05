@@ -16,6 +16,11 @@ reference for exact types, fields and helper behavior. This page explains
 how they fit together. For other kinds of mod, start with
 [Adapting your mod](ADAPTING.md).
 
+Try a machine on your computer before building it for a device:
+`python -m elekloader.sdk.sdk_alpha_host <moddir>` runs its `present` and
+`render` with your C compiler, with no device or emulator
+([Run it on your computer](#run-it-on-your-computer)).
+
 ## Supported devices
 
 | | Digitakt mk1 | Digitone mk1 / Keys | Digitone II |
@@ -217,11 +222,23 @@ present, the other knobs at FINE=0:
 render: note 60, 375 blocks: peak 0.500, about 261.6 Hz
 ```
 
-Each knob goes to its min, default and max, and the line shows every
-knob's label as `present` left it. `--float` builds the SHARC's samples,
-`--note`, `--knob NAME=V` and `--blocks` set what renders, `--wav
-out.wav` writes it at 48 kHz, and `--glyphs` draws the glyphs. The mod
-must register exactly one machine.
+Each knob goes to its min, default and max, with the others at their
+defaults, and each line shows every knob's label as `present` left it,
+plus `hidden` and `glyph` where set. The render line gives the peak (1.0 is
+full scale) and the pitch it found.
+
+| option | what it does |
+|---|---|
+| `--note N` | the MIDI note to render (default 60) |
+| `--knob NAME=V` | a knob's value for the render, instead of its default; repeat it for more knobs |
+| `--blocks N` | how long to render, in blocks of 32 samples (default 375: 0.25 s) |
+| `--wav out.wav` | write the render as a 48 kHz mono WAV, to listen to |
+| `--float` | build with the SHARC's float samples instead of the ColdFire's Q31 |
+| `--glyphs` | draw each glyph `present` shows, as 16 rows of `#` and `.` |
+
+It holds the rest fixed: velocity 100, track 0, page 0, and one note held
+for the whole render (`start` on the first block only). The mod must
+register exactly one machine.
 
 ## Audio contract
 

@@ -28,7 +28,9 @@ Follow [docs/ADAPTING.md](docs/ADAPTING.md). It has:
 - a definition of done.
 
 A machine for several devices from one C source uses the shared SDK:
-start from [docs/SDK.md](docs/SDK.md) and `examples/sdk-hello-world/`.
+start from [docs/SDK.md](docs/SDK.md) and `examples/sdk-hello-world/`,
+and run it on your computer first with
+`python -m elekloader.sdk.sdk_alpha_host <moddir>`.
 
 Start from `examples/hello-marker/`. Your loop is:
 
