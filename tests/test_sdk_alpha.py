@@ -15,9 +15,7 @@ import subprocess
 import sys
 import tempfile
 import textwrap
-from types import ModuleType
 import unittest
-from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
@@ -25,9 +23,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from elekloader import elemod, formats, link        # noqa: E402
 from elekloader.sdk import build                    # noqa: E402
 from elekloader.sdk.sdk_alpha_build import sdk_alpha_build, sdk_alpha_main, sdk_alpha_registrations  # noqa: E402
-import sdk_alpha_harness                          # noqa: E402
-from sdk_alpha_devices import CannotYet, Device, Digitakt1, Digitone1  # noqa: E402
-from sdk_alpha_harness import SdkMachine, sdk_expected_failure, sdk_tests  # noqa: E402
+from sdk_alpha_devices import Device, Digitone1  # noqa: E402
+from sdk_alpha_harness import SdkMachine  # noqa: E402
 
 # Machines the build tests use, as the C an author writes. Not registered for the emulator tests.
 EMPTY = SdkMachine("Empty", register=False, source=textwrap.dedent("""
@@ -149,46 +146,6 @@ class SdkAlphaTests(unittest.TestCase):
         session.halted = 'stopped'
         self.assertFalse(panel.wait_until(lambda: False))
         self.assertEqual(session.ms, 175)
-
-    def test_known_gaps_are_expected_only_on_the_named_device(self):
-        class Probe:
-            def setUp(self):
-                self.failure = None
-
-            def tearDown(self):
-                pass
-
-            @sdk_expected_failure('digitone-mk1')
-            def test_observation_gap(self):
-                with self.subTest(observation='label'):
-                    raise CannotYet('labels')
-
-            @sdk_expected_failure('digitone-mk1')
-            def test_builder_refusal(self):
-                self.fail('the builder refused the machine')
-
-            @sdk_expected_failure('digitone-mk1')
-            def test_fixed_gap(self):
-                pass
-
-            def test_new_regression(self):
-                raise CannotYet('a new gap must still fail')
-
-        module = ModuleType('sdk_harness_probe')
-        Probe.__module__ = module.__name__
-        with patch.dict(sys.modules, {module.__name__: module}), \
-                patch.object(sdk_alpha_harness, '_devices', return_value=(Digitakt1, Digitone1)):
-            sdk_tests(Probe)
-        for device, counts in ((Digitakt1, (0, 0, 3)), (Digitone1, (2, 1, 1))):
-            with self.subTest(device=device.key):
-                cls = getattr(module, 'Probe_' + device.key.replace('-', '_'))
-                result = unittest.TestResult()
-                unittest.defaultTestLoader.loadTestsFromTestCase(cls).run(result)
-                self.assertEqual(result.testsRun, 4)
-                self.assertEqual(result.errors, [])
-                self.assertEqual((len(result.expectedFailures), len(result.unexpectedSuccesses),
-                                  len(result.failures)), counts)
-                self.assertFalse(result.wasSuccessful())
 
     def test_malformed_devices_gets_a_build_message_without_a_traceback(self):
         with tempfile.TemporaryDirectory() as tmp:

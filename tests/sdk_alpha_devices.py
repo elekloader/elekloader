@@ -4,8 +4,7 @@ what the firmware stored and what the screen shows. Add a Device subclass here a
 test_sdk_alpha_*.py runs on it.
 
 Operations drive the panel or read the firmware's memory; an observation the adapter does not have
-yet raises CannotYet; known gaps are marked as expected failures in the tests. Firmware addresses, screen
-geometry and the keys stay in this module.
+yet raises CannotYet. Firmware addresses, screen geometry and the keys stay in this module.
 """
 import json
 import os

@@ -417,7 +417,6 @@ python tests/test_sdk_alpha_hiding.py
 ```
 
 `SDK_WATCH=1` displays the test's screen, actions and result in a window;
-`0.25` runs slower and `4` faster. Known device gaps use
-`@sdk_expected_failure(device)` and become unexpected successes when fixed.
+`0.25` runs slower and `4` faster.
 Missing input files or emulator dependencies cause skips, not passes.
 These UI runs do not execute an SDK renderer on the DSP.

@@ -18,8 +18,7 @@ A test file defines the SDK machines it needs as C, next to its tests:
 file defines is built for the device and linked into one firmware, booted once; each test then
 gets a fresh emulator from the saved state in a fraction of a second. A machine a device cannot
 build fails the tests that use it, with the builder's message; an observation the device's
-adapter does not have yet fails with "cannot do this yet". Known gaps are marked with
-`@sdk_expected_failure(device)`: they count separately, and a fixed gap is an unexpected success.
+adapter does not have yet fails with "cannot do this yet".
 
 Run with digiemu's Python: ELEKLOADER_DIGIEMU, ELEKLOADER_STOCK_154, ELEKLOADER_STOCK_DN1_144 and
 ELEKLOADER_CROSS as in the feature files (tests/test_sdk_alpha_hiding.py shows the command). The
@@ -28,7 +27,6 @@ ELEKLOADER_DN2_SYX (sdk_alpha_devices.DigiKit).
 """
 import atexit
 from contextlib import contextmanager
-from functools import wraps
 import gc
 import json
 import os
@@ -524,26 +522,11 @@ def _devices(base=Device):
         yield from _devices(device)
 
 
-def sdk_expected_failure(*devices):
-    """A known gap on these devices only; other devices still have to pass the test."""
-    def decorate(method):
-        method.sdk_expected_failures = devices
-        return method
-    return decorate
-
-
 def sdk_tests(cls):
     """Run the plain class `cls` once for every device, as test classes of this module."""
     module = sys.modules[cls.__module__]
     for device in _devices():
         name = '%s_%s' % (cls.__name__, device.key.replace('-', '_'))
         attrs = {'device': device, '__module__': cls.__module__}
-        for method_name, method in vars(cls).items():
-            if device.key in getattr(method, 'sdk_expected_failures', ()):
-                @unittest.expectedFailure
-                @wraps(method)
-                def expected(self, method=method):
-                    return method(self)
-                attrs[method_name] = expected
         setattr(module, name, type(name, (cls, SdkTestCase), attrs))
     return cls
