@@ -604,4 +604,6 @@ def main(argv=None):
 
 
 if __name__ == '__main__':
-    sys.exit(main())
+    # Under -m this file is __main__; run the package's copy so sdk_alpha_build's BuildError is caught.
+    from elekloader.sdk import build
+    sys.exit(build.main())
