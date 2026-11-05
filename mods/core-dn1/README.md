@@ -271,19 +271,47 @@ the Digitone needs it. On its own it changes nothing the unit does.
     (0x400971e6, 0x40097268, 0x40097318, 0x40097402; interrupt, each block).
   The test mod [examples/hooks-check-dn1](../../examples/hooks-check-dn1)
   subscribes to all of them.
+- **5.0.1, what the first 5.0 mods needed** ([seqmidi.s](seqmidi.s),
+  [track.s](track.s); in core3.h's 5.0.1 section):
+  - `ev_seq_midi(msg, len, buffer)`, may take: each message the sequencer's
+    MIDI engine queues for its output, whole, at its two append routines
+    (0x400f3bfc buffer 0, 0x400f39a6 buffer 1; 1.44 0x400f3e70, 0x400f3c1a):
+    the MIDI tracks' notes, CCs and the rest. The engine writes its buffers
+    straight to DIN and USB (0x400f355a), so these never pass the port
+    switch `ev_midi_out` sees: they are the hook map's "direct sends" a MIDI
+    track makes. Interrupt level.
+  - `core_midi_receive(msg, len)`: a message played into the unit as if it
+    came in on DIN: `ev_midi_in`'s handlers, then the MIDI task's handler for
+    its status (the dispatch table 0x401cdec4, 1.44 0x401ce294), so
+    `ev_midi_cc` and `ev_midi_pc` see it. A task, not an interrupt.
+  - `core_pool_load(track, index)`: a pool sound put on a track as the SOUND
+    BROWSER's FUNC+YES does (the pool's getter 0x40033540, then the kit's load
+    0x4001d710, which `ev_sound_load` sees).
+  - `core_mutes()` and `core_mute_set(track, muted)`: the global mutes, as
+    FUNC + a track key sets them (0x4002f994 with the project's track state,
+    project + 0x30; `ev_mute` sees them).
+  - Exports: `fw_brain_key` (Brain::key, 0x40016fc0: a handler of `ev_key`
+    may hand the stock an event of its own, to replay a key or a combo),
+    `fw_sound_load` and `fw_midi_chan` (MIDI CONFIG's track channels,
+    0x41367d30, 1.44 0x41368d30).
+
+  5.0.1 keeps all of 5.0 (`tests/test_sdk.py`, with a 5.0 build) and adds
+  two sites and one table. The mods it was made for are
+  [arpmenu-dn1](../arpmenu-dn1), [solo-dn1](../solo-dn1),
+  [loopback-dn1](../loopback-dn1) and [pcsound-dn1](../pcsound-dn1).
 - **OS 1.44:** every site has its port (`ports` in mod.json): the same
   code, moved, and RAM 0x1000 further on.
 
 Build it with the SDK (it needs m68k binutils):
 
 ```bash
-python -m elekloader.sdk.build mods/core-dn1 --stock Digitone_and_Digitone_Keys_OS1.43.syx   # out/core-5.0.elemod
-python -m elekloader.sdk.build mods/core-dn1 --stock Digitone_and_Digitone_Keys_OS1.44.syx   # out/core-5.0-os1.44.elemod
-python -m elekloader.lint mods/core-dn1/out/core-5.0-os1.44.elemod --stock Digitone_and_Digitone_Keys_OS1.44.syx
+python -m elekloader.sdk.build mods/core-dn1 --stock Digitone_and_Digitone_Keys_OS1.43.syx   # out/core-5.0.1.elemod
+python -m elekloader.sdk.build mods/core-dn1 --stock Digitone_and_Digitone_Keys_OS1.44.syx   # out/core-5.0.1-os1.44.elemod
+python -m elekloader.lint mods/core-dn1/out/core-5.0.1-os1.44.elemod --stock Digitone_and_Digitone_Keys_OS1.44.syx
 ```
 
-A release names them `core-dn1-5.0.elemod` and `core-dn1-5.0-os1.44.elemod`.
-5.0, 4.2 and 4.1.1 are not released yet; 4.1's are on the [core-dn1-v4.1](https://github.com/irpina/elekloader/releases/tag/core-dn1-v4.1) pre-release,
+A release names them `core-dn1-5.0.1.elemod` and `core-dn1-5.0.1-os1.44.elemod`.
+5.0.1, 5.0, 4.2 and 4.1.1 are not released yet; 4.1's are on the [core-dn1-v4.1](https://github.com/irpina/elekloader/releases/tag/core-dn1-v4.1) pre-release,
 4.0's on the [core-dn1-v4.0](https://github.com/irpina/elekloader/releases/tag/core-dn1-v4.0) pre-release
 (3.3 was not released);
 3.2's are on the [core-dn1-v3.2](https://github.com/irpina/elekloader/releases/tag/core-dn1-v3.2) pre-release
