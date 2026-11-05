@@ -219,11 +219,10 @@ class DigiKit:
 
 
 class Device:
-    """What every device's adapter offers the tests. Its target, claim and the builder's features
+    """What every device's adapter offers the tests. Its target and the builder's features
     come from SDK_ALPHA_TARGETS; features adds the ones only the adapter has."""
     key = stock_env = None
     backend = Digiemu
-    machine_claim = None
     lfo_count = 2
     settings_key = 'GLOBAL'
     features = frozenset()
@@ -232,7 +231,6 @@ class Device:
         super().__init_subclass__(**kwargs)
         cls.target, = [t for (key, _), t in SDK_ALPHA_TARGETS.items() if key == cls.key]
         cls.features = cls.target.features | cls.features
-        cls.machine_claim = cls.target.claim.split(':')[0]
 
     @classmethod
     def bases(cls):
@@ -258,7 +256,7 @@ class Device:
 
     @classmethod
     def machine_ids(cls, mod):
-        return [int(n.split(':')[1]) for n in mod.names if n.split(':')[0] == cls.machine_claim]
+        return list(mod.sdk_alpha_layouts)     # by machine id
 
     def __init__(self, session, symbols, machines, layouts=None):
         self.s, self.symbols = session, symbols

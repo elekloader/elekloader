@@ -178,9 +178,11 @@ python -m elekloader.sdk.build <moddir> --stock <stock.syx>
 When `devices` lists more than one OS, each output's name carries its
 device and OS, such as `my-machine-0.1-digitone-mk1-os1.44.elemod`.
 
-The builder adds `machine:<id>` on Digitakt, `dnmachine:<id>` on Digitone
-mk1, or `mk2-synth:<id>` on Digitone II. SDK and native SHARC synths share
-the DN2 synth namespace. The linker refuses conflicting claims. Build the
+A machine claims `machine:<id>` on Digitakt, `dnmachine:<id>` on Digitone
+mk1, or `mk2-synth:<id>` on Digitone II: the linker reads the id from its
+registration (the device profile's `slot_claims`), so the built mod lists
+no claim. SDK and native SHARC synths share the DN2 synth namespace. The
+linker refuses conflicting claims. Build the
 required companions for the same stock file, then use the normal
 [lint and patch loop](ADAPTING.md).
 

@@ -353,8 +353,8 @@ class SdkAlphaTests(unittest.TestCase):
                 self.assertEqual(result.returncode, 0, name + '\n' + result.stdout + result.stderr)
                 link.link([core, pages, mod], image)
                 self.assertEqual(mod.requires, ['core', 'machine-pages'])
-            self.assertEqual(built['empty'][1].names, ['machine:%d' % EMPTY.id])
-            self.assertEqual(built['hello'][1].names, ['machine:122'])
+            self.assertEqual(built['empty'][1].implied_names(image), ['machine:%d' % EMPTY.id])
+            self.assertEqual(built['hello'][1].implied_names(image), ['machine:122'])
             with open(built['empty'][0]) as fh:
                 duplicate = json.load(fh)
             duplicate['id'], duplicate['exports'] = 'sdk-alpha-conflict', []   # keep the refusal to the slot
@@ -369,7 +369,9 @@ class SdkAlphaTests(unittest.TestCase):
             built = sorted(Path(tmp).glob('*.elemod'))
             self.assertEqual(len(built), 1)
             mod = link.Mod2(json.loads(built[0].read_text()), 'hello')
-            self.assertEqual((mod.names, mod.requires), (['machine:122'], ['core', 'machine-pages']))
+            firmware, dev, _ = formats.load(stock)
+            self.assertEqual((mod.implied_names(formats.main_image(firmware, dev)), mod.requires),
+                             (['machine:122'], ['core', 'machine-pages']))
 
     def test_a_build_for_several_targets_names_each_output(self):
         stocks = self.stocks()
@@ -407,16 +409,19 @@ class SdkAlphaTests(unittest.TestCase):
         dn = stocks['digitone-mk1']
         with tempfile.TemporaryDirectory() as tmp:
             _, dt_mod = sdk_alpha_build(EMPTY.write(tmp + '/dt'), stocks['digitakt-mk1'], tmp + '/dt-out')
-            self.assertEqual((dt_mod.names, dt_mod.requires), (['machine:%d' % EMPTY.id], ['core', 'machine-pages']))
+            firmware, dev, _ = formats.load(stocks['digitakt-mk1'])
+            self.assertEqual((dt_mod.implied_names(formats.main_image(firmware, dev)), dt_mod.requires),
+                             (['machine:%d' % EMPTY.id], ['core', 'machine-pages']))
             path, dn_mod = sdk_alpha_build(EMPTY.write(tmp + '/dn'), dn, tmp + '/dn-out')
-            self.assertEqual((dn_mod.names, dn_mod.requires), (['dnmachine:%d' % EMPTY.id], ['core', 'machines']))
+            firmware, dev, _ = formats.load(dn)
+            image = formats.main_image(firmware, dev)
+            self.assertEqual((dn_mod.implied_names(image), dn_mod.requires),
+                             (['dnmachine:%d' % EMPTY.id], ['core', 'machines']))
             with open(path) as fh:
                 doc = json.load(fh)
             self.assertEqual([c['to'] for c in doc['contribute']], ['sdk_alpha_machines'])
             core = build.build(str(ROOT / 'mods/core-dn1'), dn, tmp)[1]
             machines = build.build(str(ROOT / 'mods/machines-dn1'), dn, tmp)[1]
-            firmware, dev, _ = formats.load(dn)
-            image = formats.main_image(firmware, dev)
             link.link([core, machines, dn_mod], image)
             doc['id'], doc['exports'] = 'sdk-alpha-conflict', []
             with self.assertRaisesRegex(elemod.ModError, 'dnmachine:%d' % EMPTY.id):
@@ -463,12 +468,11 @@ class SdkAlphaTests(unittest.TestCase):
                 self.assertEqual(mod.requires, ['core', 'machines-dn2'])
                 link.link([core, machines, mod], image)
             # The SDK's IDs reach 127: the synths' claims, which native SHARC voices share.
-            self.assertEqual(built['empty'][1].names, ['mk2-synth:%d' % EMPTY.id])
-            self.assertEqual(built['glyphs'][1].names, ['mk2-synth:127'])
+            self.assertEqual(built['empty'][1].implied_names(image), ['mk2-synth:%d' % EMPTY.id])
+            self.assertEqual(built['glyphs'][1].implied_names(image), ['mk2-synth:127'])
             with open(built['empty'][0]) as fh:
                 duplicate = json.load(fh)
             duplicate['id'], duplicate['exports'] = 'sdk-alpha-conflict', []
-            duplicate['resources']['names'] = []  # descriptor inference also protects hand-written mods
             with self.assertRaisesRegex(elemod.ModError, 'mk2-synth:%d' % EMPTY.id):
                 link.link([core, machines, built['empty'][1], link.Mod2(duplicate, 'conflict')], image)
             with self.assertRaisesRegex(build.BuildError, 'render is not supported on digitone-mk2'):

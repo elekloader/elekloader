@@ -14,16 +14,17 @@ from elekloader.sdk import build
 
 
 # The SDK's support matrix, the one place it lives: each supported release, the table a
-# registration goes to, its claim, the companions it requires, its first machine id and the
-# optional features its companions implement. The refusals and the tests derive from it.
-Target = collections.namedtuple('Target', 'table claim companions first_id features')
+# registration goes to (its claims come from the profile's slot_claims), the companions it
+# requires, its first machine id and the optional features its companions implement. The
+# refusals and the tests derive from it.
+Target = collections.namedtuple('Target', 'table companions first_id features')
 SDK_ALPHA_TARGETS = {
-    ('digitakt-mk1', '1.54'): Target('core_machines', 'machine:%d', ('core', 'machine-pages'),
+    ('digitakt-mk1', '1.54'): Target('core_machines', ('core', 'machine-pages'),
                                      4, frozenset(('render', 'defaults'))),
-    ('digitone-mk1', '1.44'): Target('sdk_alpha_machines', 'dnmachine:%d', ('core', 'machines'),
+    ('digitone-mk1', '1.44'): Target('sdk_alpha_machines', ('core', 'machines'),
                                      4, frozenset(('render', 'defaults'))),
     # the Digitone II's synth type 4 is MIDI
-    ('digitone-mk2', '1.12'): Target('sdk_alpha_machines', 'mk2-synth:%d', ('core', 'machines-dn2'),
+    ('digitone-mk2', '1.12'): Target('sdk_alpha_machines', ('core', 'machines-dn2'),
                                      5, frozenset()),
 }
 SDK_ALPHA_ABI = 'sdk_alpha_dt1_ui_v1'    # the one symbol the companions export to SDK machines
@@ -197,7 +198,7 @@ def sdk_alpha_build(moddir, stock, out=None):
             names = {d.key: d.name for d in devices.devices()}
             supported = ['%s OS %s' % (names[d], v) for d, v in SDK_ALPHA_TARGETS]
             raise build.BuildError('sdk alpha: only %s and %s are supported' % (', '.join(supported[:-1]), supported[-1]))
-        table, claim_of, companions, low, features = SDK_ALPHA_TARGETS[device, release]
+        table, companions, low, features = SDK_ALPHA_TARGETS[device, release]
         firmware, dev, _ = formats.load(stock)
         image = formats.main_image(firmware, dev)
         sections = {s: elemod.parts_bytes(d['parts'], image, dev)
@@ -222,18 +223,16 @@ def sdk_alpha_build(moddir, stock, out=None):
                 raise build.BuildError('sdk alpha: render is not supported on %s %s yet' % (device, release))
         if any(c['to'] == table for c in doc['contribute']):
             raise build.BuildError('sdk alpha: declare machines only in C')
+        taken = set(doc['resources'].get('names', [])) | set(mod.implied_names(image))
         for symbol, mid in registrations:
-            claim = claim_of % mid
-            names = doc['resources'].setdefault('names', [])
-            if claim in names or claim in mod.implied_names(image):
-                raise build.BuildError('sdk alpha: declare machines only in C')
-            names.append(claim)
             doc['contribute'].append({'to': table, 'order': 50, 'data': '00000000',
                                       'relocs': [[0, 'abs32', 'sym:' + symbol, 0]], 'claims': []})
         for required in companions:
             if required not in doc['requires']:
                 doc['requires'].append(required)
         mod = link.Mod2(doc, doc['id'])
+        if taken & set(mod.implied_names(image, table)):    # the profile's slot_claims name the claims
+            raise build.BuildError('sdk alpha: declare machines only in C')
         mod.sdk_alpha_layouts = layouts     # for the test harness; not part of the built file
         out = out or os.path.join(moddir, 'out')
         os.makedirs(out, exist_ok=True)

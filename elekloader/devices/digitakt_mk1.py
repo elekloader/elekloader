@@ -64,6 +64,7 @@ DEVICE = Device(
     core_ddr=(('4.0', (0x47BC0000, 0x47C00000)),),   # core 4.0: 256 KB (above)
     sram_code=(0x8000F700, 0x80010000),
     fast_table='fa_copies',
+    slot_claims=(('core_machines', 0, 128, 'machine'),),   # a machine's descriptor names its id at +0
     recovery='hold FUNC while powering on for the startup menu, then send the stock .syx',
     toolchain={
         'prefix': 'm68k-linux-gnu-',                # binutils + gcc for m68k/ColdFire

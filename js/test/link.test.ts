@@ -52,6 +52,23 @@ test('a machine claims its slot (machine:<n>) on the Analog Rytm MKII', () => {
   assert.deepEqual(mod('e', 53).impliedNames(image), [])
 })
 
+test('mk1 machines claim their ids (machine:<id>, dnmachine:<id>)', () => {
+  for (const [dev, table, prefix] of [[DIGITAKT_MK1, 'core_machines', 'machine'],
+    [DIGITONE_MK1, 'sdk_alpha_machines', 'dnmachine']] as const) {
+    const r = dev.releases[dev.releases.length - 1], image = new Uint8Array(r.mainLen)
+    const mod = (id: string, slot: number) => new Mod2({
+      elemod: 2, id, version: '1', target: targetOf(dev, r),
+      sections: { '.run': { align: 4, parts: [['hex', slot.toString(16).padStart(8, '0') + '00'.repeat(28)]] } },
+      symbols: { m: ['.run', 0] },
+      contribute: [{ to: table, data: '00000000', relocs: [[0, 'abs32', 'sym:m', 0]] }],
+    }, id)
+    assert.deepEqual(mod('a', 30).impliedNames(image), [`${prefix}:30`])
+    assert.ok(check([mod('a', 30), mod('b', 30)], image).includes(`a 1 and b 1 both claim ${prefix}:30`))
+    assert.ok(!check([mod('a', 30), mod('b', 127)], image).some(p => p.includes('claim')))
+    assert.deepEqual(mod('outside', 128).impliedNames(image), [])
+  }
+})
+
 test('DN2 synth and filter claims use separate stable ID namespaces', () => {
   const dn = DIGITONE_MK2, r = dn.releases[0], image = new Uint8Array(r.mainLen)
   const mod = (id: string, type: number, table = 'mk2_voice_synths') => new Mod2({
