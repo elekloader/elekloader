@@ -807,7 +807,7 @@ class Digitone2(Device):
 
     MOD_PAGE = 0x447c0890           # the LFO MOD shows (0-2): the MOD view's page
     ROW, ROW_NAME = 60, 40          # machines-dn2's parameter rows (dn2_t1): a row's size, its name
-    ROWS, SDK_ROW = 321, 40         # machines-dn2's dn2.h: knob i's row is ROWS + SDK_ROW + i
+    ROWS, SDK_ROW = 321, 41         # machines-dn2's dn2.h: knob i's row is ROWS + SDK_ROW + i
 
     def open_lfo(self, lfo):
         """MOD at the LFO's page, its DEST list open (PUSH D)."""

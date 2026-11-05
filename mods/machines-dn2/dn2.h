@@ -11,7 +11,7 @@ struct string_rep { uint32_t length, capacity; int32_t references; char text[32]
 #define ROWS 321
 #define SLOT 25
 #define PAGE_END 10                 /* Track Level ends a stock page */
-#define SDK_ROW 40                  /* the added rows SDK machines share, after the five native pages */
+#define SDK_ROW 41                  /* the added rows SDK machines share, after the five native pages and G */
 #define SDK_KNOBS 15
 
 /* machines.c */

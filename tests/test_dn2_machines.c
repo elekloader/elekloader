@@ -161,7 +161,7 @@ static void check_pages(void)
 {
     assert(dn2_value_code(TEMPLATE) == TEMPLATE && dn2_value_code(ROWS - 1) == ROWS - 1);
     assert(dn2_value_code(ROWS) == TEMPLATE && dn2_value_code(ROWS + ADDED - 1) == TEMPLATE);
-    assert(dn2_value_code(G_CODE + 1) == G_CODE + 1);
+    assert(dn2_value_code(G_CODE + 1) == TEMPLATE && dn2_value_code(T1_END) == T1_END);
     assert(dn2_voice_page_count(0) == 0 && dn2_voice_page_count(6) == 0);
 #ifdef EMPTY
     assert(dn2_voice_page_count(7) == 0 && dn2_voice_code(7, SLOT) == 0);
