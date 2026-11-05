@@ -132,6 +132,20 @@ core_lock_codes. A `"cc": true` field takes a CC from the A4's pool (core-a4
 0.5): the CCs no table of stock's maps on a track's channel; a kit field
 (FX or CV) only those the FX and CV tables leave free too.
 
+Field defaults (core-ar2 0.10). A field declared with `"init": N` (0 < N <
+2**bits) reads N where its bits are zero: in a new project, after its scope
+was reset, and in data saved by another layout. The core keeps a field's
+value XOR its init (store bits = value ^ init), so every value round-trips
+and everything that goes through core_store_get and core_store_set (p-locks,
+scenes, MIDI, the smoothed value, RANDOMIZE and RELOAD PAGE) works on the
+value. A field's init is part of where its data means what it says, so it is
+kept with the field in the lockfile ("init", written only when not 0) and is
+part of the layout ID: a field whose init changes is a new field, like one
+whose width changed. The descriptor of a field with an init carries its slot
+in core_field_inits (1..63, bits 16..21; 0 for none): no scope keeps more
+than 2**16 bits, so the offset never needs those bits. A lockfile with an
+init is format 2, which an older elekloader refuses instead of misreading.
+
 Nothing here is random: the same lockfile (or none) and mods always link to
 the same bytes.
 """
@@ -142,7 +156,7 @@ import re
 
 from .elemod import ModError, _int, version_key
 
-FORMAT = 1
+FORMAT = 2                                      # 2 only for a lockfile with a field's init (core-ar2 0.10)
 SCOPES = ('sound', 'kit', 'global', 'track', 'pattern', 'project')
 SCOPE_NUM = {s: i + 1 for i, s in enumerate(SCOPES)}
 MAX_ANCESTORS = 15
@@ -158,6 +172,8 @@ SMOOTH_OFF = 0x200                              # in core_lock_codes: the field'
 ROUTE_FLAG = 0x400                              # in core_lock_codes: a velocity/aftertouch destination (core-ar2 0.9)
 CV_FLAG = 0x800                                 # in core_lock_codes: a kit field of the CV track (core-a4 0.5)
 FIRST_CODE, LAST_CODE = 42, 127                 # a device's codes unless its spec says others
+INITS_TABLE = 'core_field_inits'                # core-ar2 0.10: the fields' inits, by slot
+MAX_INITS = 63                                  # slots 1..63, in the descriptor's bits 16..21
 LOCK_SCOPES = ('sound', 'kit')
 KIND_NAMES = {'synth': 'the synth tracks', 'fx': 'the FX track', 'cv': 'the CV track'}
 
@@ -330,6 +346,12 @@ def parse_ccs(m):
     return [f['sym'] for f in m.get('storage', []) if isinstance(f, dict) and f.get('cc') is True]
 
 
+def parse_inits(m):
+    """A mod document's "storage" -> {sym: init} of its fields with an init other than 0.
+    parse_decls checks the rest."""
+    return {f['sym']: f['init'] for f in m.get('storage', []) if isinstance(f, dict) and f.get('init')}
+
+
 def parse_decls(m):
     """A mod document's "storage" -> [(sym, scope, bits)]. Raises ModError."""
     out, seen = [], set()
@@ -337,7 +359,7 @@ def parse_decls(m):
     if not isinstance(st, list):
         raise ModError('"storage" is a list of fields')
     for f in st:
-        if not isinstance(f, dict) or set(f) - {'sym', 'scope', 'bits', 'lock', 'cc', 'lfo', 'smooth', 'mod', 'track'}:
+        if not isinstance(f, dict) or set(f) - {'sym', 'scope', 'bits', 'lock', 'cc', 'lfo', 'smooth', 'mod', 'track', 'init'}:
             raise ModError('a storage field is {"sym", "scope", "bits"}, and "lock" for a lockable one')
         for k in ('lock', 'cc', 'lfo', 'smooth', 'mod'):
             if k in f and not isinstance(f[k], bool):
@@ -367,6 +389,9 @@ def parse_decls(m):
             raise ModError('storage field %s: scope %r (%s)' % (sym, scope, ', '.join(SCOPES)))
         if not _whole(bits) or not 1 <= bits <= MAX_BITS:
             raise ModError('storage field %s: bits %r (1 to %d)' % (sym, bits, MAX_BITS))
+        if 'init' in f and (not _whole(f['init']) or not 0 <= f['init'] < 1 << bits):
+            raise ModError('storage field %s: init %r (0 to %d, what its %d bits hold)'
+                           % (sym, f['init'], (1 << bits) - 1, bits))
         if sym in seen:
             raise ModError('storage field %s is declared twice' % sym)
         seen.add(sym)
@@ -385,8 +410,8 @@ def layout_id(lock):
     reads."""
     what = [lock['elekloader_store'], lock['device'], [lock['split']['track'], lock['split']['pattern']],
             [lock['generation'][s] for s in SCOPES], [lock['next'][s] for s in SCOPES]]
-    for k in ('fields', 'freed'):
-        what.append([[f['scope'], f['offset'], f['bits'], f['mod'], f['sym']]
+    for k in ('fields', 'freed'):       # a field's init counts only where there is one: older IDs stay
+        what.append([[f['scope'], f['offset'], f['bits'], f['mod'], f['sym']] + ([f['init']] if f.get('init') else [])
                      for f in sorted(lock[k], key=_field_key)])
     if lock.get('codes') or lock.get('freed_codes'):   # a lockfile with no codes keeps its ID
         if isinstance(lock['next_code'], dict):         # codes per track kind (core-a4 0.5): the kind counts
@@ -402,7 +427,7 @@ def layout_id(lock):
 
 def fresh(dev_key):
     sp = _spec(dev_key)
-    lock = {'elekloader_store': FORMAT, 'device': dev_key, 'id': None,
+    lock = {'elekloader_store': 1, 'device': dev_key, 'id': None,
             'ancestors': [], 'split': dict(sp['split']),
             'generation': {s: 1 for s in SCOPES}, 'next': {s: 0 for s in SCOPES},
             'fields': [], 'freed': []}
@@ -453,10 +478,11 @@ def check_lock(lock, dev_key):
         if not isinstance(fs, list):
             raise ModError('lockfile: "%s" is a list' % k)
         for f in fs:
-            if not isinstance(f, dict) or set(f) != {'mod', 'sym', 'scope', 'offset', 'bits'} \
+            if not isinstance(f, dict) or set(f) - {'init'} != {'mod', 'sym', 'scope', 'offset', 'bits'} \
                     or not isinstance(f['mod'], str) or not isinstance(f['sym'], str) \
                     or f['scope'] not in SCOPES or not _whole(f['offset']) or f['offset'] < 0 \
-                    or not _whole(f['bits']) or not 1 <= f['bits'] <= MAX_BITS:
+                    or not _whole(f['bits']) or not 1 <= f['bits'] <= MAX_BITS \
+                    or 'init' in f and (v < 2 or not _whole(f['init']) or not 0 < f['init'] < 1 << f['bits']):
                 raise ModError('lockfile: a bad entry in "%s"' % k)
             if k == 'fields' and not 0 <= f['offset'] <= lock['next'][f['scope']] - f['bits']:
                 raise ModError('lockfile: field %s of %s lies past its scope\'s used bits'
@@ -518,12 +544,14 @@ def _bump(g):
     return 1 if g >= 255 else g + 1
 
 
-def allocate(lock, decls, dev_key, core=None, locks=(), ccs=(), cvs=()):
+def allocate(lock, decls, dev_key, core=None, locks=(), ccs=(), inits=None, cvs=()):
     """lock: a lockfile (dict) or None for a new one; decls: [(mod id, sym,
     scope, bits)]; core: the build's core's version (None: the newest core's
     room); locks: [(mod id, sym)] of the lockable fields; ccs: those of them
-    with a CC; cvs: those declared "track": "cv" (core-a4 0.5). -> (the new
-    lockfile, [notes]). The lockfile given is not changed."""
+    with a CC; inits: {(mod id, sym): init} of the fields with an init other
+    than 0 (core-ar2 0.10); cvs: those declared "track": "cv" (core-a4 0.5).
+    -> (the new lockfile, [notes]). The lockfile given is not changed."""
+    inits = {k: v for k, v in (inits or {}).items() if v}
     notes = []
     if lock is None:
         lock = fresh(dev_key)
@@ -536,22 +564,23 @@ def allocate(lock, decls, dev_key, core=None, locks=(), ccs=(), cvs=()):
     for mid, sym, scope, bits in decls:
         if any(k[1] == sym for k in want):
             raise ModError('the storage field %s is declared by two mods' % sym)
-        want[(mid, sym)] = (scope, bits)
+        want[(mid, sym)] = (scope, bits, inits.get((mid, sym), 0))
     kept, gone = [], []
     for f in lock['fields']:
-        if want.get((f['mod'], f['sym'])) == (f['scope'], f['bits']):
+        if want.get((f['mod'], f['sym'])) == (f['scope'], f['bits'], f.get('init', 0)):
             kept.append(f)
         else:
             gone.append(f)
     have = {(f['mod'], f['sym']) for f in kept}
-    added = [{'mod': mid, 'sym': sym, 'scope': want[(mid, sym)][0], 'offset': None,
-              'bits': want[(mid, sym)][1]} for mid, sym in sorted(want) if (mid, sym) not in have]
+    added = [dict({'mod': mid, 'sym': sym, 'scope': want[(mid, sym)][0], 'offset': None,
+                   'bits': want[(mid, sym)][1]}, **({'init': want[(mid, sym)][2]} if want[(mid, sym)][2] else {}))
+             for mid, sym in sorted(want) if (mid, sym) not in have]
     # a freed field back with the same scope and width takes its old place: no
     # field was given those bits since, so its values are still there
     back = set()
     for f in added:
-        same = [g for g in lock['freed'] if (g['mod'], g['sym'], g['scope'], g['bits'])
-                == (f['mod'], f['sym'], f['scope'], f['bits'])]
+        same = [g for g in lock['freed'] if (g['mod'], g['sym'], g['scope'], g['bits'], g.get('init', 0))
+                == (f['mod'], f['sym'], f['scope'], f['bits'], f.get('init', 0))]
         if same:
             f['offset'] = same[-1]['offset']
             lock['freed'].remove(same[-1])
@@ -630,9 +659,11 @@ def allocate(lock, decls, dev_key, core=None, locks=(), ccs=(), cvs=()):
             repack(s)
     for f in gone:
         if (f['mod'], f['sym']) in want or f['scope'] in repacked:
+            w = want.get((f['mod'], f['sym']))
             notes.append('%s %s (%s): %s, its data is dropped'
                          % (f['mod'], f['sym'], f['scope'],
-                            'changed size' if (f['mod'], f['sym']) in want else 'no longer in the build'))
+                            'no longer in the build' if w is None
+                            else 'changed its init' if w[:2] == (f['scope'], f['bits']) else 'changed size'))
         else:
             notes.append('%s %s (%s): no longer in the build; its bits are kept, so it gets its '
                          'values back if it returns' % (f['mod'], f['sym'], f['scope']))
@@ -644,6 +675,9 @@ def allocate(lock, decls, dev_key, core=None, locks=(), ccs=(), cvs=()):
             notes.append('%s %s: %d bits of %s storage at bit %d'
                          % (f['mod'], f['sym'], f['bits'], f['scope'], f['offset']))
     lock['fields'] = sorted(fields, key=lambda f: (SCOPE_NUM[f['scope']], f['offset']))
+    # format 2 from the first init: an older elekloader refuses it rather than reading the inits' fields as 0
+    if any(f.get('init') for k in ('fields', 'freed') for f in lock[k]):
+        lock['elekloader_store'] = 2
     scope_of = {(f['mod'], f['sym']): f['scope'] for f in fields}
     cvs = set(cvs)
     recoded = _codes(lock, {k: kind_of(dev_key, scope_of.get(k), k in cvs) for k in locks},
@@ -779,6 +813,29 @@ def _ccs(lock, want, pool, notes, kits=(), fx_taken=()):
     lock['freed_ccs'] = freed
 
 
+def _inited(lock):
+    """-> the placed fields with an init, in their slots' order (slot 1 first). Raises ModError."""
+    out = [f for f in lock['fields'] if f.get('init')]
+    if len(out) > MAX_INITS:
+        raise ModError('the mods give %d storage fields an init; the core keeps at most %d'
+                       % (len(out), MAX_INITS))
+    return out
+
+
+def descriptors(lock):
+    """-> {(mod, sym): descriptor} of the placed fields: scope in bits 28..31,
+    width in 22..27, the init's slot in 16..21 (0: none), the offset in
+    0..15."""
+    slot = {(f['mod'], f['sym']): i + 1 for i, f in enumerate(_inited(lock))}
+    return {(f['mod'], f['sym']): SCOPE_NUM[f['scope']] << 28 | f['bits'] << 22
+            | slot.get((f['mod'], f['sym']), 0) << 16 | f['offset'] for f in lock['fields']}
+
+
+def init_entries(lock):
+    """-> the table core_field_inits' entries: each init, 4 bytes, by slot."""
+    return [f['init'].to_bytes(4, 'big') for f in _inited(lock)]
+
+
 def symbols(lock, dev_key):
     """-> ({name: value}, [table entries as bytes]) for the linker."""
     g, sp = lock['generation'], lock['split']
@@ -786,8 +843,8 @@ def symbols(lock, dev_key):
         '__store_gen': g['sound'] << 24 | g['kit'] << 16 | g['global'] << 8 | g['track'],
         '__store_gen2': g['pattern'] << 24 | g['project'] << 16 | sp['track'] << 8 | sp['pattern'],
     }
-    for f in lock['fields']:
-        out[f['sym']] = SCOPE_NUM[f['scope']] << 28 | f['bits'] << 22 | f['offset']
+    for (mod, sym), d in descriptors(lock).items():
+        out[sym] = d
     ids = [_idval(lock['id'], 'id')] + [_idval(a, 'ancestor') for a in lock['ancestors']]
     return out, [i.to_bytes(4, 'big') for i in ids]
 
@@ -797,8 +854,7 @@ def code_entries(lock, lfos=(), rough=(), routes=()):
     each, by code (by kind, then code, where codes have kinds); the code of
     a field in lfos ((mod, sym)) has LFO_FLAG set, of one in rough
     SMOOTH_OFF, of one in routes ROUTE_FLAG, of a CV field CV_FLAG."""
-    desc = {(f['mod'], f['sym']): SCOPE_NUM[f['scope']] << 28 | f['bits'] << 22 | f['offset']
-            for f in lock['fields']}
+    desc = descriptors(lock)
     lfos, rough, routes = set(lfos), set(rough), set(routes)
     return [desc[(c['mod'], c['sym'])].to_bytes(4, 'big')
             + (c['code'] | (LFO_FLAG if (c['mod'], c['sym']) in lfos else 0)
@@ -811,8 +867,7 @@ def code_entries(lock, lfos=(), rough=(), routes=()):
 def cc_entries(lock):
     """-> the table core_lock_ccs' entries: {field descriptor, CC}, 8 bytes
     each, by CC."""
-    desc = {(f['mod'], f['sym']): SCOPE_NUM[f['scope']] << 28 | f['bits'] << 22 | f['offset']
-            for f in lock['fields']}
+    desc = descriptors(lock)
     return [desc[(c['mod'], c['sym'])].to_bytes(4, 'big') + c['cc'].to_bytes(4, 'big')
             for c in lock.get('ccs', [])]
 

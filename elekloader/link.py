@@ -173,6 +173,7 @@ class Mod2:
             self.rough = store.parse_rough(doc)
             self.routes = store.parse_routes(doc)
             self.cvs = store.parse_cvs(doc)
+            self.inits = store.parse_inits(doc)
         except ModError as e:
             raise ModError('%s: %s' % (name, e))
         self.copied = [(_int(c['lo'], name), _int(c['hi'], name), _int(c['to'], name))
@@ -707,12 +708,17 @@ def link(mods, image, lock=None, *, sharc_stream=None):
             raise ModError('%s give%s lockable parameters CCs, which %s does not keep (no table %s)'
                            % (', '.join(sorted({k[0] for k in ccs})), 's' if len({k[0] for k in ccs}) == 1
                               else '', core.label(), store.CCS_TABLE))
-        new_lock, store_notes = store.allocate(lock, decls, dev.key, core.version, locks, ccs, cvs)
+        inits = {(m.id, sym): v for m in order for sym, v in m.inits.items()}
+        if inits and store.INITS_TABLE not in tables:
+            users = sorted({k[0] for k in inits})
+            raise ModError('%s give%s storage fields an init, which %s does not keep (no table %s)'
+                           % (', '.join(users), 's' if len(users) == 1 else '', core.label(), store.INITS_TABLE))
+        new_lock, store_notes = store.allocate(lock, decls, dev.key, core.version, locks, ccs, inits, cvs)
         store_syms, ids = store.symbols(new_lock, dev.key)
         store_syms.setdefault(store.LOCK_DST, 0)    # not placed: no LFO field
         store_syms.setdefault(store.FX_LOCK_DST, 0)
         for table, made in ((store.CODES_TABLE, lambda l: store.code_entries(l, lfos, rough, routes)),
-                            (store.CCS_TABLE, store.cc_entries)):
+                            (store.CCS_TABLE, store.cc_entries), (store.INITS_TABLE, store.init_entries)):
             if table in tables:
                 for i, data in enumerate(made(new_lock)):
                     entries[table].append((-1, '', i, core, {'data': data, 'relocs': []}))

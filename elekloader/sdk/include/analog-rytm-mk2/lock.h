@@ -133,4 +133,19 @@ int core_param_value_ex(int track, unsigned field, unsigned flags);
  * it is) */
 int core_param_int(int track, unsigned field);
 
+/* core-ar2 0.10: a field's handle, looked up once (at boot, or on a mod's
+ * first read; 0 for a field with no lock code), and core_param_value_ex by
+ * the handle, which skips the field's lookup: for a mod that reads its
+ * parameters every audio block. The same values as by the field. */
+int core_param_handle(unsigned field);
+int core_param_value_h(int track, int handle, unsigned flags);
+
+/* core-ar2 0.10: n parameters of one track by their handles, into out[0..n-1]
+ * (CORE_PARAM_NONE for one not on the track): the same values as n calls of
+ * core_param_value_h, with the track's checks, the block's state and the
+ * sound or kit found once. For a mod that reads several parameters of a
+ * track every block. A handle is a lock code of this build's layout: look it
+ * up at boot or on the first read, and never keep one in a project. */
+void core_param_values(int track, const int *handles, int n, unsigned flags, int *out);
+
 #endif

@@ -210,7 +210,7 @@ def test_a_mods_storage_declarations():
 
 def test_lockfiles_it_refuses():
     good, _ = store.allocate(None, [], DEV)
-    for k, v in (('elekloader_store', 2), ('device', 'digitakt'), ('id', '0x0'), ('fields', {})):
+    for k, v in (('elekloader_store', 3), ('device', 'digitakt'), ('id', '0x0'), ('fields', {})):
         bad = dict(good, **{k: v})
         refused(store.allocate, bad, [], DEV)
 
@@ -263,6 +263,22 @@ def test_a_lockfile_without_lockable_fields_keeps_its_id():
 def test_only_sound_and_kit_fields_can_be_lockable():
     assert 'only sound and kit fields' in refused(store.parse_decls,
                                                   {'storage': [{'sym': 'g', 'scope': 'global', 'bits': 3, 'lock': True}]})
+
+
+def test_a_field_with_an_init_is_kept_xored_and_its_init_is_part_of_the_layout():
+    """"init" (core-ar2 0.10): kept with the field in the lockfile (format 2), in the descriptor's
+    bits 16..21 as a slot of core_field_inits, and part of the layout ID."""
+    assert store.parse_inits({'storage': [{'sym': 'a', 'scope': 'kit', 'bits': 7, 'init': 100},
+                                          {'sym': 'b', 'scope': 'kit', 'bits': 7, 'init': 0}]}) == {'a': 100}
+    refused(store.parse_decls, {'storage': [{'sym': 'a', 'scope': 'kit', 'bits': 7, 'init': 128}]})
+    plain, _ = store.allocate(None, [('m', 'a', 'kit', 7)], DEV)
+    inited, _ = store.allocate(None, [('m', 'a', 'kit', 7)], DEV, inits={('m', 'a'): 100})
+    assert plain['elekloader_store'] == 1 and inited['elekloader_store'] == 2
+    assert inited['fields'][0]['init'] == 100 and inited['id'] != plain['id']
+    syms, _ = store.symbols(inited, DEV)
+    assert syms['a'] == 2 << 28 | 7 << 22 | 1 << 16 | 0
+    assert store.init_entries(inited) == [(100).to_bytes(4, 'big')]
+    assert store.symbols(plain, DEV)[0]['a'] == 2 << 28 | 7 << 22
     assert store.parse_locks({'storage': [{'sym': 's', 'scope': 'sound', 'bits': 3, 'lock': True},
                                           {'sym': 't', 'scope': 'sound', 'bits': 3}]}) == ['s']
 
@@ -276,14 +292,14 @@ def test_a4_codes_are_per_track_kind():
     17th field of a kind is refused."""
     decls = [('a', 's', 'sound', 7), ('a', 'k', 'kit', 7), ('a', 'c', 'kit', 7)]
     locks = [('a', 's'), ('a', 'k'), ('a', 'c')]
-    l1, _ = store.allocate(None, decls, A4, None, locks, (), [('a', 'c')])
+    l1, _ = store.allocate(None, decls, A4, None, locks, (), cvs=[('a', 'c')])
     assert [(c['sym'], c['code'], c['kind']) for c in l1['codes']] == \
         [('s', 0x70, 'synth'), ('k', 0x70, 'fx'), ('c', 0x70, 'cv')]
     assert l1['next_code'] == {'synth': 0x71, 'fx': 0x71, 'cv': 0x71}
     assert [int.from_bytes(e[4:], 'big') for e in store.code_entries(l1)] == [0x70, 0x70, 0x70 | store.CV_FLAG]
-    l2, _ = store.allocate(l1, decls, A4, None, locks, (), [('a', 'c')])
+    l2, _ = store.allocate(l1, decls, A4, None, locks, (), cvs=[('a', 'c')])
     assert l2 == l1
-    l3, _ = store.allocate(l1, decls, A4, None, locks, (), [])
+    l3, _ = store.allocate(l1, decls, A4, None, locks, (), cvs=[])
     assert [(c['sym'], c['code'], c['kind']) for c in l3['codes']] == \
         [('s', 0x70, 'synth'), ('k', 0x70, 'fx'), ('c', 0x71, 'fx')] and l3['id'] != l1['id']
     many = [('m', 'f%d' % i, 'kit', 1) for i in range(17)]
@@ -297,7 +313,7 @@ def test_a4_ccs():
     CV) only from those every kind leaves free."""
     decls = [('m', 's', 'sound', 7), ('m', 'k', 'kit', 7), ('m', 'c', 'kit', 7)]
     locks = [('m', 's'), ('m', 'k'), ('m', 'c')]
-    l1, _ = store.allocate(None, decls, A4, None, locks, locks, [('m', 'c')])
+    l1, _ = store.allocate(None, decls, A4, None, locks, locks, cvs=[('m', 'c')])
     assert [(c['sym'], c['cc']) for c in l1['ccs']] == [('s', 12), ('c', 35), ('k', 36)]
     assert len(store.cc_entries(l1)) == 3
 

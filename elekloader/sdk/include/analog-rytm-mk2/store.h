@@ -10,8 +10,11 @@
  *     unsigned v = core_store_get(STORE(my_accent), live_pattern, track);
  *     core_store_set(STORE(my_accent), live_pattern, track, v + 1);
  *
- * Zero is always the default: a field reads 0 in a new project, in one saved
- * by another layout, and after its scope was reset. Both calls mask
+ * A field reads its default where its bits are zero: in a new project, in one
+ * saved by another layout, and after its scope was reset. The default is 0,
+ * or from core-ar2 0.10 the field's "init" in mod.json ("init": 127): core
+ * keeps value ^ init, so the value read and written is the field's own. Both
+ * calls mask
  * interrupts while they read or write the field: use them from any context,
  * the audio interrupt too.
  *
@@ -33,7 +36,8 @@
 
 #define STORE_SCOPE(f) ((f) >> 28)            /* 1 sound .. 6 project */
 #define STORE_BITS(f) ((f) >> 22 & 63)        /* 1..32 */
-#define STORE_OFFSET(f) ((f) & 0x3fffff)      /* the first bit, most significant first */
+#define STORE_INIT_SLOT(f) ((f) >> 16 & 63)   /* core-ar2 0.10: its slot in core_field_inits, 0 for none */
+#define STORE_OFFSET(f) ((f) & 0xffff)        /* the first bit, most significant first */
 
 #define STORE_SOUND 1
 #define STORE_KIT 2
@@ -51,6 +55,28 @@
 #define CORE_PROJECT_NEW 0
 #define CORE_PROJECT_LOADED 1
 #define STORE_DROPPED(scope) (1u << (scope))
+
+/* core-ar2 0.10: ev_project_save handlers: void f(unsigned pre, unsigned how),
+ * subscribed in mod.json ({"event": "ev_project_save", "fn": ...}), called
+ * around every whole save of the live project to a +Drive slot: pre 1 before
+ * anything is written, pre 0 after. CORE_SAVE_KIND(how) is CORE_SAVE_SAME (a
+ * save to the active slot: SAVE PROJECT), CORE_SAVE_OTHER (to another slot:
+ * SAVE PROJECT AS, or a new project's first save) or CORE_SAVE_NEW (LOAD of
+ * an empty slot, which writes the new project there after ev_project's
+ * CORE_PROJECT_NEW); CORE_SAVE_SLOT(how) is the slot, 0..127 (the screen's\n * number less one; 255: none);
+ * CORE_SAVE_FAILED is set in the call after when the slot was not written.
+ * A field set with core_store_set in the call before is in the saved copy.
+ * Both calls come from the job stock starts for the save ("Project Save", or
+ * "Project Load" for CORE_SAVE_NEW), not from a UI tick: keep
+ * them short, start no load or save, and leave slow work (MIDI, USB) to the
+ * next ev_tick. Don't call core_project_edited from them: the save clears
+ * the modified mark after the call before. */
+#define CORE_SAVE_SAME 1
+#define CORE_SAVE_OTHER 2
+#define CORE_SAVE_NEW 3
+#define CORE_SAVE_KIND(how) ((how) & 255)
+#define CORE_SAVE_SLOT(how) ((how) >> 8 & 255)
+#define CORE_SAVE_FAILED 0x10000u
 
 unsigned core_store_get(unsigned field, void *item, int index);
 void core_store_set(unsigned field, void *item, int index, unsigned value);

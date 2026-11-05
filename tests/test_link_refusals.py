@@ -754,6 +754,15 @@ def _(B):
              [codes, cc])], [both, cc]
 
 
+@row('link', '<> give<> storage fields an init, which <> does not keep (no table <>)', device='analog-rytm-mk2')
+def _(B):
+    inited = B.other('m', storage=[{'sym': 'st_a', 'scope': 'kit', 'bits': 7, 'init': 100}])
+    inits = keeper(B)
+    inits['collections']['core_field_inits'] = {'entry': 4}
+    return [('m gives storage fields an init, which core 1 does not keep (no table core_field_inits)',
+             [keeper(B), inited])], [inits, inited]
+
+
 @row('link', '<> imports <> but declares no table <>', device='analog-rytm-mk2')
 def _(B):
     # check() refuses a core that imports the generation symbols without the table, unless a mod
@@ -889,7 +898,7 @@ def test_digitakt_fixtures():
 
 
 def test_analog_rytm_fixtures():
-    assert run_rows('analog-rytm-mk2') == 8
+    assert run_rows('analog-rytm-mk2') == 9
 
 
 def test_the_lfo_destination_field_is_placed_only_with_an_lfo_field():
@@ -1022,6 +1031,59 @@ def test_a_lockable_kit_field_is_the_fx_tracks():
             assert 'cannot be a velocity or aftertouch destination: the FX track has no routes' in str(e), e
         else:
             raise AssertionError('"mod" on a kit field was accepted')
+
+
+def test_a_field_with_an_init_gets_its_slot_and_a_new_place_when_the_init_changes():
+    """"init" (core-ar2 0.10): a field with an init has its slot in core_field_inits in its
+    descriptor's bits 16..21 and its init in the table, by slot; fields without one keep the
+    descriptor they had. The lockfile keeps the init ("init", format 2), and a field whose init
+    changes is a new field: new bits, a new layout ID, and a note that its data is dropped. An init
+    the field's bits cannot hold, or more than 63 of them, is refused."""
+    with Bench('analog-rytm-mk2') as B:
+        core = keeper(B)
+        core['collections'].update({'core_lock_codes': {'entry': 8}, 'core_field_inits': {'entry': 4}})
+
+        def build(storage, lock=None):
+            mod = B.other('m', storage=storage)
+            return link.link([link.Mod2(d, d['id']) for d in (copy.deepcopy(core), mod)], B.img, lock=lock)
+        plain = [{'sym': 'st_p', 'scope': 'sound', 'bits': 3}]
+        a = {'sym': 'st_a', 'scope': 'sound', 'bits': 7, 'lock': True, 'init': 100}
+        k = {'sym': 'st_k', 'scope': 'kit', 'bits': 7, 'init': 127}
+        before = build(plain).store
+        out = build(plain + [a, k], lock=before)
+        assert (out.store['elekloader_store'], before['elekloader_store']) == (2, 1), (out.store, before)
+        fields = {f['sym']: f for f in out.store['fields']}
+        assert fields['st_a']['init'] == 100 and fields['st_k']['init'] == 127 and 'init' not in fields['st_p']
+        desc = store.descriptors(out.store)
+        assert desc[('m', 'st_a')] >> 16 & 63 == 1 and desc[('m', 'st_k')] >> 16 & 63 == 2, desc
+        assert desc[('m', 'st_p')] == store.descriptors(before)[('m', 'st_p')]
+        assert store.init_entries(out.store) == [(100).to_bytes(4, 'big'), (127).to_bytes(4, 'big')]
+        assert any(int.from_bytes(e[:4], 'big') == desc[('m', 'st_a')] for e in store.code_entries(out.store))
+        again, notes = store.allocate(out.store, [('m', 'st_p', 'sound', 3), ('m', 'st_a', 'sound', 7),
+                                                  ('m', 'st_k', 'kit', 7)], 'analog-rytm-mk2', None,
+                                      [('m', 'st_a')], (), {('m', 'st_a'): 100, ('m', 'st_k'): 127})
+        assert again['id'] == out.store['id'], notes
+        moved = build(plain + [dict(a, init=64), k], lock=out.store).store
+        f = {g['sym']: g for g in moved['fields']}['st_a']
+        assert f['init'] == 64 and f['offset'] != fields['st_a']['offset'], f
+        assert moved['id'] != out.store['id'] and out.store['id'] in moved['ancestors']
+        assert any(g['sym'] == 'st_a' and g['init'] == 100 for g in moved['freed']), moved['freed']
+        _l, notes = store.allocate(out.store, [('m', 'st_p', 'sound', 3), ('m', 'st_a', 'sound', 7),
+                                               ('m', 'st_k', 'kit', 7)], 'analog-rytm-mk2', None,
+                                   [('m', 'st_a')], (), {('m', 'st_a'): 64, ('m', 'st_k'): 127})
+        assert any('st_a (sound): changed its init' in n for n in notes), notes
+        for bad, said in (([dict(k, init=128)], 'storage field st_k: init 128 (0 to 127'),
+                          ([dict(k, init=-1)], 'storage field st_k: init -1'),
+                          ([{'sym': 'g%d' % i, 'scope': 'project', 'bits': 1, 'init': 1} for i in range(64)],
+                           'the mods give 64 storage fields an init; the core keeps at most 63')):
+            try:
+                build(bad)
+            except ModError as e:
+                assert said in str(e), e
+            else:
+                raise AssertionError('accepted: %s' % said)
+        assert build([{'sym': 'g%d' % i, 'scope': 'project', 'bits': 1, 'init': 1} for i in range(63)])
+        assert build([dict(k, init=0)]).store['elekloader_store'] == 1   # init 0 is no init
 
 
 def test_the_image_check_refuses_a_protected_or_kept_byte_the_other_checks_let_through():

@@ -94,6 +94,7 @@ export class Mod2 implements AnyMod {
   rough: string[]
   routes: string[]
   cvs: string[]
+  inits: Map<string, number>
   regions: Region[]
   names: string[]
   needsCore: string | null
@@ -200,6 +201,7 @@ export class Mod2 implements AnyMod {
       this.rough = store.parseRough(doc)
       this.routes = store.parseRoutes(doc)
       this.cvs = store.parseCvs(doc)
+      this.inits = store.parseInits(doc)
     } catch (e) {
       if (e instanceof ModError) throw new ModError(`${name}: ${e.message}`)
       throw e
@@ -726,12 +728,17 @@ export function link(mods: Mod2[], image: Uint8Array, lock: store.Lock | null = 
       const users = [...new Set(ccs.map(k => k[0]))].sort(cmp)
       throw new ModError(`${users.join(', ')} give${users.length === 1 ? 's' : ''} lockable parameters CCs, which ${core.label()} does not keep (no table ${store.CCS_TABLE})`)
     }
-    ;[newLock, storeNotes] = store.allocate(lock, decls, dev.key, core.version, locks, ccs, cvs)
+    const inits = order.flatMap(m => [...m.inits].map(([sym, v]) => [m.id, sym, v] as [string, string, number]))
+    if (inits.length && !tables.has(store.INITS_TABLE)) {
+      const users = [...new Set(inits.map(k => k[0]))].sort(cmp)
+      throw new ModError(`${users.join(', ')} give${users.length === 1 ? 's' : ''} storage fields an init, which ${core.label()} does not keep (no table ${store.INITS_TABLE})`)
+    }
+    ;[newLock, storeNotes] = store.allocate(lock, decls, dev.key, core.version, locks, ccs, inits, cvs)
     let ids: Uint8Array[]
     ;[storeSyms, ids] = store.symbols(newLock)
     if (!storeSyms.has(store.LOCK_DST)) storeSyms.set(store.LOCK_DST, 0)    // not placed: no LFO field
     if (!storeSyms.has(store.FX_LOCK_DST)) storeSyms.set(store.FX_LOCK_DST, 0)
-    for (const [table, made] of [[store.CODES_TABLE, (l: store.Lock) => store.codeEntries(l, lfos, rough, routes)], [store.CCS_TABLE, store.ccEntries]] as const)
+    for (const [table, made] of [[store.CODES_TABLE, (l: store.Lock) => store.codeEntries(l, lfos, rough, routes)], [store.CCS_TABLE, store.ccEntries], [store.INITS_TABLE, store.initEntries]] as const)
       if (tables.has(table))
         made(newLock).forEach((data, i) => entries.get(table)!.push([-1, '', i, core, { to: table, order: -1, data, relocs: [], claims: [], i }]))
     const taken = new Set(order.flatMap(m => m.exports))

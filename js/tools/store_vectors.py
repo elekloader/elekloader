@@ -105,6 +105,102 @@ CC_RUNS = {
                                              (MANY[1:35], [[f[0], f[1]] for f in MANY[1:35]],
                                               [[f[0], f[1]] for f in MANY[1:35]])],
 }
+# runs with inits (core-ar2 0.10): each step is (decls, lockable, [[mod, sym, init], ...])
+SI = [F('a', 'frq', 'sound', 7), F('a', 'dep', 'sound', 7), F('a', 'p', 'sound', 3), F('b', 'k', 'kit', 7)]
+FD = [['a', 'frq'], ['a', 'dep']]
+INIT_RUNS = {
+    'inits: give, keep, change, drop, back': [
+        (SI, FD, [['a', 'frq', 127], ['a', 'dep', 127], ['b', 'k', 100]]),
+        (SI, FD, [['a', 'frq', 127], ['a', 'dep', 127], ['b', 'k', 100]]),
+        (SI, FD, [['a', 'frq', 127], ['a', 'dep', 64], ['b', 'k', 100]]),
+        (SI, FD, [['a', 'frq', 127], ['a', 'dep', 64]]),
+        (SI, FD, [['a', 'frq', 127], ['a', 'dep', 64], ['b', 'k', 100]]),
+        (SI[:2], FD, [['a', 'frq', 127], ['a', 'dep', 64]]),
+        (SI, FD, [['a', 'frq', 127], ['a', 'dep', 0], ['b', 'k', 100]])],
+    'inits: none keeps format 1': [(SI, FD, []), (SI, FD, [['a', 'p', 0]])],
+    'inits: too many': [([F('m', 'g%02d' % i, 'project', 1) for i in range(64)], [],
+                         [['m', 'g%02d' % i, 1] for i in range(64)])],
+}
+LOCKS = {
+    'not a dict': [1], 'not ours': {'x': 1}, 'newer': {'elekloader_store': 3},
+    'init in format 1': dict(store.fresh(DEV), fields=[{'mod': 'a', 'sym': 'x', 'scope': 'kit', 'offset': 0,
+                                                        'bits': 4, 'init': 3}], next=dict(store.fresh(DEV)['next'], kit=4)),
+    'init past its bits': dict(store.fresh(DEV), elekloader_store=2,
+                               fields=[{'mod': 'a', 'sym': 'x', 'scope': 'kit', 'offset': 0, 'bits': 4, 'init': 16}],
+                               next=dict(store.fresh(DEV)['next'], kit=4)),
+    'init 0 written': dict(store.fresh(DEV), elekloader_store=2,
+                           fields=[{'mod': 'a', 'sym': 'x', 'scope': 'kit', 'offset': 0, 'bits': 4, 'init': 0}],
+                           next=dict(store.fresh(DEV)['next'], kit=4)),
+    'format 2 with an init': dict(store.fresh(DEV), elekloader_store=2,
+                                  fields=[{'mod': 'a', 'sym': 'x', 'scope': 'kit', 'offset': 0, 'bits': 4, 'init': 15}],
+                                  next=dict(store.fresh(DEV)['next'], kit=4)),
+    'device': dict(store.fresh(DEV), device='digitakt-mk1'),
+    'id 0': dict(store.fresh(DEV), id='0x0'), 'id text': dict(store.fresh(DEV), id='abc'),
+    'split': dict(store.fresh(DEV), split={'track': 2}),
+    'split too big': dict(store.fresh(DEV), split={'track': 3, 'pattern': 4}),
+    'generation 0': dict(store.fresh(DEV), generation=dict(store.fresh(DEV)['generation'], kit=0)),
+    'next past': dict(store.fresh(DEV), next=dict(store.fresh(DEV)['next'], sound=57)),
+    'bad field': dict(store.fresh(DEV), fields=[{'mod': 'a', 'sym': 'x', 'scope': 'kit', 'offset': 0}]),
+    'field past': dict(store.fresh(DEV), fields=[{'mod': 'a', 'sym': 'x', 'scope': 'kit', 'offset': 0,
+                                                  'bits': 4}]),
+    'next_code': dict(store.fresh(DEV), codes=[], freed_codes=[], next_code=41),
+    'code past next': dict(store.fresh(DEV), codes=[], freed_codes=[{'mod': 'a', 'sym': 'x', 'code': 50}],
+                           next_code=43),
+    'code for no field': dict(store.fresh(DEV), codes=[{'mod': 'a', 'sym': 'x', 'code': 42}], freed_codes=[],
+                              next_code=43),
+    'cc not in the pool': dict(store.fresh(DEV), ccs=[], freed_ccs=[{'mod': 'a', 'sym': 'x', 'cc': 64}]),
+    'cc twice': dict(store.fresh(DEV), ccs=[], freed_ccs=[{'mod': 'a', 'sym': 'x', 'cc': 8},
+                                                           {'mod': 'a', 'sym': 'y', 'cc': 8}]),
+    'cc for no code': dict(store.fresh(DEV), ccs=[{'mod': 'a', 'sym': 'x', 'cc': 8}], freed_ccs=[]),
+    'freed cc kept': dict(store.fresh(DEV), ccs=[], freed_ccs=[{'mod': 'a', 'sym': 'x', 'cc': 9}]),
+    # a kit field (the FX track's) with a CC stock uses on the FX channel
+    'kit cc taken': dict(store.fresh(DEV), fields=[{'mod': 'a', 'sym': 'x', 'scope': 'kit', 'offset': 0, 'bits': 4}],
+                         codes=[{'mod': 'a', 'sym': 'x', 'code': 42}], freed_codes=[], next_code=43,
+                         ccs=[{'mod': 'a', 'sym': 'x', 'cc': 84}], freed_ccs=[],
+                         next=dict(store.fresh(DEV)['next'], kit=4)),
+    # an older lockfile, with an ID not from a hash: kept while nothing changes
+    'random id': dict(store.fresh(DEV), id='0x5a17c0de', ancestors=['0x00000007']),
+}
+DECLS = {
+    'ok': {'storage': [{'sym': 'a_b1', 'scope': 'kit', 'bits': 3}]},
+    'not a list': {'storage': {}}, 'not a field': {'storage': [1]},
+    'extra key': {'storage': [{'sym': 'a', 'scope': 'kit', 'bits': 1, 'x': 2}]},
+    'sym': {'storage': [{'sym': '1a', 'scope': 'kit', 'bits': 1}]},
+    'sym type': {'storage': [{'sym': 5, 'scope': 'kit', 'bits': 1}]},
+    'scope': {'storage': [{'sym': 'a', 'scope': 'song', 'bits': 1}]},
+    'bits': {'storage': [{'sym': 'a', 'scope': 'kit', 'bits': 33}]},
+    'bits bool': {'storage': [{'sym': 'a', 'scope': 'kit', 'bits': True}]},
+    'lock': {'storage': [{'sym': 'a', 'scope': 'sound', 'bits': 3, 'lock': True}]},
+    'lock kit': {'storage': [{'sym': 'a', 'scope': 'kit', 'bits': 3, 'lock': True, 'cc': True, 'lfo': True}]},
+    'lock global': {'storage': [{'sym': 'a', 'scope': 'global', 'bits': 3, 'lock': True}]},
+    'mod kit': {'storage': [{'sym': 'a', 'scope': 'kit', 'bits': 3, 'lock': True, 'mod': True}]},
+    'lock type': {'storage': [{'sym': 'a', 'scope': 'sound', 'bits': 3, 'lock': 1}]},
+    'cc': {'storage': [{'sym': 'a', 'scope': 'sound', 'bits': 3, 'lock': True, 'cc': True},
+                       {'sym': 'b', 'scope': 'sound', 'bits': 3, 'lock': True, 'cc': False}]},
+    'cc without lock': {'storage': [{'sym': 'a', 'scope': 'sound', 'bits': 3, 'cc': True}]},
+    'cc type': {'storage': [{'sym': 'a', 'scope': 'sound', 'bits': 3, 'lock': True, 'cc': 'yes'}]},
+    'lfo': {'storage': [{'sym': 'a', 'scope': 'sound', 'bits': 3, 'lock': True, 'lfo': True},
+                        {'sym': 'b', 'scope': 'sound', 'bits': 3, 'lock': True, 'lfo': False}]},
+    'lfo without lock': {'storage': [{'sym': 'a', 'scope': 'sound', 'bits': 3, 'lfo': True}]},
+    'lfo type': {'storage': [{'sym': 'a', 'scope': 'sound', 'bits': 3, 'lock': True, 'lfo': 1}]},
+    'smooth': {'storage': [{'sym': 'a', 'scope': 'sound', 'bits': 3, 'lock': True, 'smooth': False},
+                           {'sym': 'b', 'scope': 'sound', 'bits': 3, 'lock': True, 'smooth': True},
+                           {'sym': 'c', 'scope': 'sound', 'bits': 3, 'lock': True}]},
+    'mod': {'storage': [{'sym': 'a', 'scope': 'sound', 'bits': 3, 'lock': True, 'mod': True},
+                        {'sym': 'b', 'scope': 'sound', 'bits': 3, 'lock': True, 'mod': False},
+                        {'sym': 'c', 'scope': 'sound', 'bits': 3, 'lock': True, 'lfo': True, 'mod': True}]},
+    'mod without lock': {'storage': [{'sym': 'a', 'scope': 'sound', 'bits': 3, 'mod': True}]},
+    'mod type': {'storage': [{'sym': 'a', 'scope': 'sound', 'bits': 3, 'lock': True, 'mod': 1}]},
+    'smooth without lock': {'storage': [{'sym': 'a', 'scope': 'sound', 'bits': 3, 'smooth': False}]},
+    'smooth type': {'storage': [{'sym': 'a', 'scope': 'sound', 'bits': 3, 'lock': True, 'smooth': 0}]},
+    'init': {'storage': [{'sym': 'a', 'scope': 'sound', 'bits': 7, 'lock': True, 'init': 127},
+                         {'sym': 'b', 'scope': 'kit', 'bits': 3, 'init': 0}, {'sym': 'c', 'scope': 'kit', 'bits': 3}]},
+    'init past its bits': {'storage': [{'sym': 'a', 'scope': 'kit', 'bits': 3, 'init': 8}]},
+    'init negative': {'storage': [{'sym': 'a', 'scope': 'kit', 'bits': 3, 'init': -1}]},
+    'init type': {'storage': [{'sym': 'a', 'scope': 'kit', 'bits': 3, 'init': True}]},
+    'init text': {'storage': [{'sym': 'a', 'scope': 'kit', 'bits': 3, 'init': '1'}]},
+    'twice': {'storage': [{'sym': 'a', 'scope': 'kit', 'bits': 1}, {'sym': 'a', 'scope': 'kit', 'bits': 2}]},
+}
 # runs with codes per track kind (core-a4 0.5, the Analog Four MKII): each step is (decls, lockable, CV fields)
 A4 = 'analog-four-mk2'
 AK = [F('a', 's1', 'sound', 7), F('a', 's2', 'sound', 8), F('a', 'k1', 'kit', 7), F('b', 'k2', 'kit', 4),
@@ -230,8 +326,8 @@ DECLS = {
 
 
 def main():
-    out = {'runs': {}, 'lock_runs': {}, 'cc_runs': {}, 'kind_runs': {}, 'locks': {}, 'kind_locks': {}, 'flags': {},
-           'decls': {}}
+    out = {'runs': {}, 'lock_runs': {}, 'cc_runs': {}, 'init_runs': {}, 'kind_runs': {}, 'locks': {}, 'kind_locks': {},
+           'flags': {}, 'decls': {}}
     def run(lock, steps, core, dev=DEV):
         res = []
         for decls in steps:
@@ -284,6 +380,19 @@ def main():
             except ModError as e:
                 res.append({'error': str(e)})
         out['cc_runs'][name] = {'steps': [list(st) for st in steps], 'results': res}
+    for name, steps in INIT_RUNS.items():
+        lock, res = None, []
+        for decls, locks, inits in steps:
+            try:
+                lock, notes = store.allocate(lock, [tuple(d) for d in decls], DEV, None, [tuple(k) for k in locks], (),
+                                             inits={(m, s): v for m, s, v in inits})
+                syms, tab = store.symbols(lock, DEV)
+                res.append({'lock': lock, 'notes': notes, 'symbols': syms, 'codes': [t.hex() for t in store.code_entries(lock)],
+                            'inits': [t.hex() for t in store.init_entries(lock)],
+                            'json': store.dumps(lock), 'layout_id': store.layout_id(lock)})
+            except ModError as e:
+                res.append({'error': str(e)})
+        out['init_runs'][name] = {'steps': [list(st) for st in steps], 'results': res}
     for name, steps in KIND_RUNS.items():
         lock, res = None, []
         for st in steps:
@@ -291,7 +400,7 @@ def main():
             ccs = st[3] if len(st) > 3 else []
             try:
                 lock, notes = store.allocate(lock, [tuple(d) for d in decls], A4, None, [tuple(k) for k in locks],
-                                             [tuple(k) for k in ccs], [tuple(k) for k in cvs])
+                                             [tuple(k) for k in ccs], cvs=[tuple(k) for k in cvs])
                 res.append({'lock': lock, 'notes': notes, 'codes': [t.hex() for t in store.code_entries(lock)],
                             'ccs': [t.hex() for t in store.cc_entries(lock)],
                             'route_codes': [t.hex() for t in store.code_entries(lock, (), (), [tuple(k) for k in locks])],
@@ -325,7 +434,7 @@ def main():
             out['decls'][name] = {'doc': doc, 'ok': store.parse_decls(doc), 'locks': store.parse_locks(doc),
                                   'ccs': store.parse_ccs(doc), 'lfos': store.parse_lfos(doc),
                                   'rough': store.parse_rough(doc), 'routes': store.parse_routes(doc),
-                                  'cvs': store.parse_cvs(doc)}
+                                  'cvs': store.parse_cvs(doc), 'inits': store.parse_inits(doc)}
         except ModError as e:
             out['decls'][name] = {'doc': doc, 'error': str(e)}
     path = os.path.join(ROOT, 'js', 'test', 'store-vectors.json')

@@ -195,8 +195,14 @@ def test_core_ar2_sites():
     # sites (0.8), the 18 lock row sites (0.8), the 7 scene and performance sites (0.8)
     # and the NRPN and CC in sites (0.8), and the engine push's velocity and
     # aftertouch index sites and the routes' knob label (0.9), the FX set's five vtable entries,
-    # the FX words' save and the FX and sound edits' write into the stored kit (0.9)
-    assert len(mod['sites']) == 108
+    # the FX words' save and the FX and sound edits' write into the stored kit (0.9),
+    # and the project save to a +Drive slot (0.10, ev_project_save)
+    assert len(mod['sites']) == 109
+    x = [x for x in mod['sites'] if x.get('target') == 'st_proj_save'][0]
+    assert (x['addr'], x['op'], x['stock']) == ('0x400b07a4', 'jmp', '4fefffd048d77c1c'), x
+    assert img[0x400b07a4 - DEV.main_load:0x400b07ac - DEV.main_load].hex() == x['stock'], x
+    # the file save site (0.2) is inside it: the serializer's call into the slot's image
+    assert img[0x400b0870 - DEV.main_load:0x400b0876 - DEV.main_load].hex() == '4eb94000d10e'
     for t, addr, was in (('st_fx_through', 0x400a5692, '4fefffc448d73c1c'),
                          ('st_sound_through', 0x400bd412, '4fefffbc48d77c3c')):
         x = [x for x in mod['sites'] if x.get('target') == t][0]
@@ -290,7 +296,8 @@ def test_core_ar2_sites():
     assert sub['ev_render_in']['fn'] == 'core_load_in' and sub['ev_render_in']['order'] == 0
     assert sub['ev_render_out']['fn'] == 'core_load_out' and sub['ev_render_out']['order'] == 100
     # mod storage's own sites, with the FX and sound edits' writes into the stored kit (0.9)
-    assert len([x for x in mod['sites'] if x.get('target', '').startswith('st_')]) == 34
+    # and the project save (0.10)
+    assert len([x for x in mod['sites'] if x.get('target', '').startswith('st_')]) == 35
 
 
 
