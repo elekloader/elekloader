@@ -186,7 +186,9 @@ Rebuild SDK mods and companions together when that layout changes.
 
 Working UI examples are [sdk-hello-world](../examples/sdk-hello-world)
 (two pages and a shared knob) and [sdk-glyphs](../examples/sdk-glyphs)
-(a callback selecting glyphs).
+(a callback selecting glyphs). [sdk-sine](../examples/sdk-sine) adds a
+render: a sine at the note on both mk1s, tuned by FINE, whose glyph shows
+which way.
 
 ## Audio contract
 
