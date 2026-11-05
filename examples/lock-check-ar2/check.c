@@ -232,6 +232,37 @@ struct {
     short sound, lfo, lock, scene;
 } lc_init = {{'I', 'N', 'I', 'T'}};
 
+/* 1.11 (core 0.10): A, B and C read again in one core_param_values call by
+ * their handles, after the magic BTCH: that call's cost in DMA timer 0's
+ * ticks, the most and the sum, the blocks, and the blocks where any of the
+ * three differed from its own core_param_value read in the same block */
+struct {
+    char magic[4];
+    unsigned cost_max, cost_sum, blocks, mismatches;
+} lc_batch = {{'B', 'T', 'C', 'H'}};
+
+static void lc_batch_check(const struct lc_rec *r, unsigned single)
+{
+    static int h[3];
+    int o[3];
+    unsigned t0, t;
+    (void)single;
+    if (!h[0]) {
+        h[0] = core_param_handle(STORE(lc_a));
+        h[1] = core_param_handle(STORE(lc_b));
+        h[2] = core_param_handle(STORE(lc_c));
+    }
+    t0 = DTCN0;
+    core_param_values(0, h, 3, 0, o);
+    t = DTCN0 - t0;
+    if (o[0] != r->a || o[1] != r->b || o[2] != r->c)
+        lc_batch.mismatches++;
+    if (t > lc_batch.cost_max)
+        lc_batch.cost_max = t;
+    lc_batch.cost_sum += t;
+    lc_batch.blocks++;
+}
+
 void lc_render(void)
 {
     struct lc_rec *r = &lc_ring.rec[lc_ring.next % RING];
@@ -260,6 +291,7 @@ void lc_render(void)
     lc_init.lock = core_lock_value(0, STORE(lc_n));
     lc_init.scene = core_scene_value(0, STORE(lc_n));
     lc_init.block = core_block;
+    lc_batch_check(r, t);
     if (t > lc_ring.cost_max)
         lc_ring.cost_max = t;
     lc_ring.cost_sum += t;

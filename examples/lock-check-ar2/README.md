@@ -1,6 +1,6 @@
 # lock-check (Analog Rytm MKII)
 
-A test for [core-ar2](../../mods/core-ar2)'s lockable parameters (core 0.8), from 1.1 their p-locks, from 1.2 their scene and performance locks, from 1.3 a value above 127, from 1.4 a lockable parameter that is not an LFO destination, from 1.5 a category of its own, from 1.6 core's cut of strings longer than it shows (core 0.8), from 1.7 the smoothed value (core 0.9), and from 1.10 a field's init (core 0.10).
+A test for [core-ar2](../../mods/core-ar2)'s lockable parameters (core 0.8), from 1.1 their p-locks, from 1.2 their scene and performance locks, from 1.3 a value above 127, from 1.4 a lockable parameter that is not an LFO destination, from 1.5 a category of its own, from 1.6 core's cut of strings longer than it shows (core 0.8), from 1.7 the smoothed value (core 0.9), from 1.10 a field's init (core 0.10), and from 1.11 the batch read (core 0.10).
 It declares three sound fields with `"lock": true` and registers them in
 `core_lock_params` (1.6: four); `lc_a`, `lc_c` and `lc_d` are also `"lfo": true`:
 
@@ -58,6 +58,13 @@ the LOCK CHECK page shows it (id 4). Each audio block also writes N's
 state on track 1 to `lc_init`, after the magic `INIT`: the block, then
 `core_param_value(0, N)`, N in the sound, the LFO's offset to N, and N's
 p-lock and scene lock (16-bit, -1 for none).
+
+From 1.11 each audio block also reads A, B and C again in one
+`core_param_values` call by their handles (`core_param_handle`) and
+writes to `lc_batch`, after the magic `BTCH`: that call's cost in DMA timer
+0's ticks, the most and the sum, the blocks, and the blocks where any of
+the three differed from its own `core_param_value` read in the same block
+(0 when the batch read gives the same values).
 
 The screen's y counts from the bottom row (y 0 is the bottom edge). 1.0
 drew its bars at y 57..63, which is the top edge, over the stock header's
