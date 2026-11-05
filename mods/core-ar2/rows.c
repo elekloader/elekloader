@@ -794,14 +794,60 @@ static int clamp(const struct core_lock_param *p, int v)
     return v < lo ? lo : v > hi ? hi : v;
 }
 
+/* 0.11: a mod's own locks (core_param_locks, pages.h). A knob whose id is
+ * in an entry's range, from OWN_FIRST up (above the pseudo ids, lock.c): with a trig held, the
+ * set's four lock calls below go to the entry's functions, with the track
+ * (the current one, 12 on the FX track, where() finds the step there too)
+ * and the step, and the mod keeps the lock where it likes (the Sidecar
+ * mods: on the Pi). Only for an edited kit's set, as core's own locks; a
+ * step past the track's length is no step (-1, 0). Stock holds the trig
+ * and marks the hold used before it calls them, so the trig stays when it
+ * is let go, as with a stock lock. */
+struct core_param_lock {                /* pages.h */
+    int32_t first, last;
+    int (*get)(int32_t id, int32_t track, int32_t step);
+    int (*turn)(int32_t id, int32_t track, int32_t step, int32_t delta);
+    int (*set)(int32_t id, int32_t track, int32_t step, int32_t value);
+    int (*clear)(int32_t id, int32_t track, int32_t step);
+};
+extern unsigned char *core_lock_item(void *set, int *fx);
+extern void core_project_edited(void);
+extern const struct core_param_lock *const core_param_locks[];   /* zero-terminated */
+#define OWN_FIRST 555                   /* pages.h CORE_PARAM_LOCK_FIRST */
+
+static const struct core_param_lock *theirs(void *set, int id, int step, int *track)
+{
+    const struct core_param_lock *const *e;
+    unsigned app, rec;
+    int fx;
+    if (id < OWN_FIRST)
+        return 0;
+    for (e = core_param_locks; *e; e++)
+        if (id >= (*e)->first && id <= (*e)->last)
+            break;
+    if (!*e || !core_lock_item(set, &fx))
+        return 0;
+    app = APP();
+    *track = CURRENT_TRACK(APP_TRACKS(app));
+    rec = TRACK_REC(CURRENT_PATTERN(app), *track);
+    if ((unsigned)step >= 64 || TRACK_LENGTH(rec) < step)
+        *track = -1;
+    return *e;
+}
+
 /* sound set vtable +60: (set, id, step) -> the lock (8.8) or -1; the FX
  * set's the same (0.9), with stock's FX call for a knob not core's */
 static int lock_get(void *set, int id, int step, int (*stock)(void *, int, int))
 {
     unsigned code, a;
     unsigned char *s;
-    if (!ours(set, id, &code, &s))
-        return stock(set, id, step);
+    const struct core_param_lock *m;
+    int t;
+    if (!ours(set, id, &code, &s)) {
+        if (!(m = theirs(set, id, step, &t)))
+            return stock(set, id, step);
+        return t < 0 || !m->get ? -1 : m->get(id, t, step);
+    }
     if (!(a = where(step)))
         return -1;
     step = get(a, code);
@@ -815,10 +861,15 @@ int core_fx_lock_get_vt(void *set, int id, int step) { return lock_get(set, id, 
 static int lock_set(void *set, int id, int value, int step, int (*stock)(void *, int, int, int))
 {
     const struct core_lock_param *p;
+    const struct core_param_lock *m;
     unsigned code, a;
     unsigned char *s;
-    if (!(p = ours(set, id, &code, &s)))
-        return stock(set, id, value, step);
+    int t;
+    if (!(p = ours(set, id, &code, &s))) {
+        if (!(m = theirs(set, id, step, &t)))
+            return stock(set, id, value, step);
+        return t < 0 || !m->set ? 0 : m->set(id, t, step, value);
+    }
     if (!(a = where(step)))
         return 0;
     return put(a, code, clamp(p, value >> 8));
@@ -832,8 +883,13 @@ static int lock_clear(void *set, int id, int step, int (*stock)(void *, int, int
 {
     unsigned code, a;
     unsigned char *s;
-    if (!ours(set, id, &code, &s))
-        return stock(set, id, step);
+    const struct core_param_lock *m;
+    int t;
+    if (!ours(set, id, &code, &s)) {
+        if (!(m = theirs(set, id, step, &t)))
+            return stock(set, id, step);
+        return t < 0 || !m->clear ? 0 : m->clear(id, t, step);
+    }
     if (!(a = where(step)))
         return 0;
     return put(a, code, -1);
@@ -848,11 +904,19 @@ int core_fx_lock_clear_vt(void *set, int id, int step) { return lock_clear(set, 
 int core_lock_turn_vt(void *set, int id, int delta, int step)
 {
     const struct core_lock_param *p;
+    const struct core_param_lock *m;
     unsigned code, a;
     unsigned char *s;
-    int v;
-    if (!(p = ours(set, id, &code, &s)))
-        return STOCK_LOCK_TURN(set, id, delta, step);
+    int v, t;
+    if (!(p = ours(set, id, &code, &s))) {
+        if (!(m = theirs(set, id, step, &t)))
+            return STOCK_LOCK_TURN(set, id, delta, step);
+        if (t < 0 || !m->turn)
+            return -1;
+        if ((v = m->turn(id, t, step, delta)) >= 0)
+            core_project_edited();
+        return v;
+    }
     if (!(a = where(step)))
         return -1;
     if ((v = get(a, code)) < 0)

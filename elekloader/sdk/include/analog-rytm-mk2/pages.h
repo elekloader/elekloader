@@ -87,6 +87,37 @@ struct core_param {
     int (*text)(struct core_text *t);
 };
 
+/* core-ar2 0.11: locks a mod keeps itself. A knob whose id is in an entry's
+ * range, from CORE_PARAM_LOCK_FIRST up: with a trig held, stock's
+ * lock calls for it come here, on the current track (0..11, 12 on the FX
+ * track) and the held step, once for each held trig; core keeps nothing.
+ * Contributed to core_param_locks:
+ *
+ *     {"to": "core_param_locks", "order": 50, "data": "00000000",
+ *      "relocs": [[0, "abs32", "sym:my_locks", 0]]}
+ *
+ *     const struct core_param_lock my_locks = {560, 573, my_get, my_turn, 0, my_clear};
+ *
+ * A function left 0 answers "none" (get, turn: -1; set, clear: 0). Called in
+ * the UI task. A turn that answers a lock marks the project modified. */
+/* the first id a core_param_locks entry may use: stock's records end at
+ * 468 and core's lockable parameters take pseudo ids 469..554 (469 + code
+ * - 42, codes 42..127, lock.c); core ignores ids below this */
+#define CORE_PARAM_LOCK_FIRST 555
+
+struct core_param_lock {
+    int32_t first, last;    /* the ids this entry answers for */
+    /* step's lock of id on track, 8.8, or -1 for none (what the knob shows) */
+    int (*get)(int32_t id, int32_t track, int32_t step);
+    /* the knob turned by delta (8.8) with step's trig held: the new lock
+     * (8.8), the first turn starting from the value without one; -1 none */
+    int (*turn)(int32_t id, int32_t track, int32_t step, int32_t delta);
+    /* step's lock set to value (8.8), as stock's paste and value entry do: 1 */
+    int (*set)(int32_t id, int32_t track, int32_t step, int32_t value);
+    /* step's lock of id cleared: 1 */
+    int (*clear)(int32_t id, int32_t track, int32_t step);
+};
+
 /* the page keys' views (a voice track's five, then the FX track's) */
 #define CORE_VIEW_SRC 0         /* page 0, the machine's */
 #define CORE_VIEW_SAMPLE 1      /* pages 4 and 5 */
