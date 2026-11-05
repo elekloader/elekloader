@@ -53,10 +53,13 @@ const char *core_project_name(void);
 
 /* ev_project_slot: void f(int32_t slot, uint32_t how), at the next ev_tick,
  * for a +Drive slot written outside a project save (ev_project_save):
- *   CORE_SLOT_CLEARED  the project manager's (or Transfer's) CLEAR of slot
- *   CORE_SLOT_INIT     the live project initialized in place (CLEAR of the
- *                      active project, INIT NEW): ev_project 0 came first;
- *                      slot is the slot that was active, 255 for none
+ *   CORE_SLOT_CLEARED  slot now holds a new, empty project: the project
+ *                      manager's CLEAR or INIT NEW (or Transfer's clear);
+ *                      CLEAR of the active slot leaves the live project
+ *   CORE_SLOT_INIT     the live project initialized in place through the
+ *                      slot clear (Transfer's, slot -1): ev_project 0 came
+ *                      first; slot is the slot that was active, 255 for
+ *                      none. LOAD PROJECT's CREATE NEW gives no slot event
  *   CORE_SLOT_PASTED   a copied project pasted into slot
  * with CORE_SLOT_FAILED set when stock reported a failure. */
 #define CORE_SLOT_CLEARED 1

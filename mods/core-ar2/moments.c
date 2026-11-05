@@ -20,7 +20,10 @@
 
 #include <stdint.h>
 
-#define APP ((unsigned (*)(void))0x4017fa0a)
+/* the project model, 0 until 0x4017fa0a first makes it; never call that
+ * from here: the kit select site runs during boot, before it exists, and
+ * the call would make it there (0x3d7ac bytes, too early) */
+#define APP() (*(volatile unsigned *)0x419f28a8)
 #define APP_TRACKS ((unsigned (*)(unsigned))0x400ae492)
 #define CURRENT_TRACK ((int (*)(unsigned))0x400b693e)
 #define ACTIVE_SLOT ((int (*)(void *))0x400aed54)
@@ -46,6 +49,11 @@
 #define TX_LEVEL (*(volatile int *)0x413db258)   /* bytes submitted, not yet done */
 #define TX_AT (*(volatile int *)0x413db25c)      /* the next byte of the 4 KB buffer */
 #define TX_ROOM 0xffb                            /* the sender waits above this */
+/* the sender's transfer requests (0x40003a64): a free list whose head is
+ * here, linked at +0x34; with none free, or the head still busy (+4's top
+ * bit), the sender waits for one to complete */
+#define REQ_FREE (*(unsigned char *volatile *)0x413db390)
+#define REQ_NEXT 0x34
 
 void core_rows_now_reset(void);
 int core_step_pattern_now(void);
@@ -158,6 +166,17 @@ static int whole(int len, const unsigned char *msg)
 
 /* from a task: send now if nothing would make the sender wait; the sender
  * puts one 4-byte event in the buffer for each 1 to 3 bytes */
+static int requests_free(int need)
+{
+    unsigned char *r = REQ_FREE;
+    if (!r || (signed char)r[4] < 0)
+        return 0;
+    for (; r; r = *(unsigned char **)(r + REQ_NEXT))
+        if (--need == 0)
+            return 1;
+    return 0;
+}
+
 static int send_now(int len, const unsigned char *msg)
 {
     int at;
@@ -167,7 +186,8 @@ static int send_now(int len, const unsigned char *msg)
         return 0;
     at = TX_AT;
     if (TX_SYSEX == 0xf0 || TX_LEVEL + 4 * len > TX_ROOM ||
-        (len > 0x2f && at > 0xfbf && at - 0x3f <= TX_LEVEL)) {
+        (len > 0x2f && at > 0xfbf && at - 0x3f <= TX_LEVEL) ||
+        !requests_free(at + 4 * len > 0xfff ? 2 : 1)) {
         GIVE(TX_MUTEX);
         return 0;
     }
@@ -299,9 +319,10 @@ void core_kit_push(const unsigned char *kit)
     irq_restore(sr);
 }
 
-/* 0x40034bd2(store, slot): the project manager's CLEAR (and Transfer's), a
- * slot cleared; slot -1 initializes the live project (CREATE NEW on it,
- * after which no slot is active). Job or MIDI task. */
+/* 0x40034bd2(store, slot): the project manager's CLEAR and INIT NEW (and
+ * Transfer's clear), a new project written to the slot; slot -1 (Transfer)
+ * initializes the live project (CREATE NEW on it, after which no slot is
+ * active). Job or MIDI task. */
 unsigned core_slot_clear_body(void *store, int slot);
 
 unsigned core_slot_clear(void *store, int slot)

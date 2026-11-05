@@ -930,7 +930,7 @@ Analog Rytm MKII)"; `elekloader/sdk/include/analog-rytm-mk2/moments.h`).
 | `core_project_name()` | the live project's +8, 0x407c89d3 | any |
 | `ev_kit(kit, how)`: SELECTED | the kit select 0x400a65f6 (after it 0x400a65fe) | UI task, sent at `ev_tick` |
 | `ev_kit(kit, how)`: PUSHED | the whole-kit push 0x4011f90a (after it 0x4011f912) | UI, MIDI or job task, sent at `ev_tick` |
-| `ev_project_slot(slot, how)`: CLEARED, INIT | the slot clear 0x40034bd2 (after it 0x40034bd8; slot -1 is CREATE NEW on the live project) | job or MIDI task, sent at `ev_tick` |
+| `ev_project_slot(slot, how)`: CLEARED, INIT | the slot clear 0x40034bd2 (after it 0x40034bd8; the manager's CLEAR and INIT NEW; slot -1, from Transfer, is CREATE NEW on the live project) | job or MIDI task, sent at `ev_tick` |
 | `ev_project_slot(slot, how)`: PASTED | the slot paste 0x400351d2 (after it 0x400351da) | job task, sent at `ev_tick` |
 | `core_handle_fields(fn)` | the table `core_handles` | UI task |
 
@@ -941,16 +941,23 @@ Analog Rytm MKII)"; `elekloader/sdk/include/analog-rytm-mk2/moments.h`).
 - **The sender** busy-waits while its 4 KB buffer (0x4b80c000, next byte
   0x413db25c) holds more than 0xffb bytes not yet sent (0x413db258, which
   the USB controller's completion 0x40002454 brings down), and for a
-  message over 0x2f bytes near the buffer's end. `core_midi_try_send` asks
-  first, with the try-lock taken: it sends only when 4 bytes a message
-  byte fit, no stock SysEx is open (0x413db244 = 0xF0), the port is
-  configured (0x413db254 = 1) and USB is on (0xfc0b01c4); otherwise it
-  answers 0. The try-lock and the give are a task's (the owner is the
+  message over 0x2f bytes near the buffer's end; and each transfer takes a
+  request from a free list (head 0x413db390, linked at +0x34), waiting for
+  one to complete when none is free (0x40003a64). `core_midi_try_send`
+  asks first, with the try-lock taken: it sends only when 4 bytes a
+  message byte fit, no stock SysEx is open (0x413db244 = 0xF0), the port
+  is configured (0x413db254 = 1), USB is on (0xfc0b01c4) and the requests
+  it needs (two when the message wraps the buffer) are free and the first
+  is not busy; otherwise it answers 0. The try-lock and the give are a task's (the owner is the
   current task, the give can switch tasks), so from an interrupt (the
   status register's level not 0) the message goes into core's ring (512
   bytes, at most 64 a message), which the next `ev_tick` sends first, in
   order. Only whole messages: a status byte first, and a SysEx closed in
   the same call.
+- **The project model** (0x419f28a8) is read, never made: 0x4017fa0a
+  makes it when it is 0, and the kit select site runs during boot, before
+  stock makes it; a call there makes it too early and the boot hangs
+  (seen in the emulator).
 - **A kit select** doesn't push the kit to the engine (each track takes it
   at its next trig with the new kit), so the two events are apart. A
   change of kit while stopped (0x405c8c90 not 1) clears the tracks'
@@ -961,13 +968,16 @@ Analog Rytm MKII)"; `elekloader/sdk/include/analog-rytm-mk2/moments.h`).
   tick are one event each.
 - **The slot paths** outside `ev_project_save`: the project manager's
   CLEAR (job "Projects Clear", 0x40051a8a, then the name 0x40034e98) and
-  Transfer's clear (the RPC handler 0x4008680c) both call 0x40034bd2, and
-  with slot -1 it runs CREATE NEW on the live project (0x400b3bd6), which
-  is INIT [G; that INIT NEW in the manager takes this path is to be seen
-  in the emulator]. Paste is the job "Project Paste" (0x4005180e). There is
-  no SysEx project dump; Transfer's other slot commands read a project or
-  write items into one (kits, patterns, sounds: item 11's copy events), not
-  a whole slot.
+  its INIT NEW of an empty slot both call 0x40034bd2 with the slot, which
+  writes a new project there: CLEARED either way. CLEAR of the active slot
+  clears its card copy only; the live project goes on. Transfer's clear
+  (the RPC handler 0x4008680c) calls it too; with slot -1 it runs CREATE
+  NEW on the live project (0x400b3bd6), INIT, which the manager never
+  passes (LOAD PROJECT's CREATE NEW reaches 0x400b3bd6 another way, with
+  no slot event: `ev_project` and `ev_kit` tell it). Paste is the job
+  "Project Paste" (0x4005180e). There is no SysEx project dump;
+  Transfer's other slot commands read a project or write items into one
+  (kits, patterns, sounds: item 11's copy events), not a whole slot.
 - **Handles** walk the live project: the 128 kits as edited and as last
   saved (each with its 12 sounds), the 128 pool sounds, the 4 global
   slots, the 128 patterns and their 13 tracks, and the project; the
@@ -1316,6 +1326,40 @@ with no tags; one memcpy of an edit at most 10,458 (a track clear's undo,
 1's 33,356 (41,940), .bss 21,944; core + sidecar-check 0.2 take 76,016 of
 the 128 KB area, and with lock-check 1.11 too, 102,840. Not yet on a
 unit.
+
+Part 3, the moments (core 0.11 + sidecar-check 0.3, build SC17), in
+analog-emu (dtboot, OS 1.74), with the same poke after boot; the USB
+checks with its USB host and stock's own sender and request pool
+(`--usb-host --usb-midi-real`). The first build hung at boot (the kit
+select site called 0x4017fa0a; see "The project model" above). An F0 7D
+message is taken (stock never sees it) and a pattern dump request (0x64)
+passes and comes back whole (14,988 bytes). Bursts of 40 note-ons from
+the UI task, timed from before to after a pattern dump: each arrives
+whole and in order, before or after the dump or split around it (38,
+then the dump, then 2), never inside it. The first try lost notes while
+the dump held every transfer request (the sender waited inside a
+"send now"); the request check above fixed it. One timing (the burst on
+the tick the dump starts) still loses the burst, and stock's own sender
+(0x400857ca, used the same way in a test build) loses it at the same
+tick: stock's, or the emulator's. From the audio interrupt 200 note-ons go
+through core's ring in order (225 refusals while the ring was full, each
+tried again); a send there takes at most 80 DMA timer 0 ticks of the
+88,010 between audio blocks. `ev_kit`: a pattern change to another kit
+and KIT menu LOAD KIT give SELECTED; RELOAD KIT, a SysEx kit dump in
+(request 0x62, sent back) and project load and CREATE NEW (SELECTED,
+then PUSHED) give PUSHED. A stale playing-trig lock poked into
+`core_lock_now` stays with nothing done and is cleared by a stopped LOAD
+KIT of kit 2 (finding 1). SAVE PROJECT AS from PRESETS to slot 004 as
+QRESETS: `core_project_name` gives QRESETS at pre 1 and pre 0 (how
+0x302). Handles: the project's set to 5 and pattern A01's to 6, the walk
+finds two values, sum 11, one of each field. Slot 121: INIT NEW (empty
+slot), CLEAR and a paste of itself (copy, paste, YES) give CLEARED,
+CLEARED, PASTED for slot 120; LOAD FROM loads it (`ev_kit`, no slot
+event); CLEAR of it while active gives CLEARED and leaves the live
+project; LOAD PROJECT's CREATE NEW gives no slot event. Finding 2 (the
+FX LFO's destination against stock) is not checked yet. Core's .run is
+44,808 bytes, .bss 22,588; core + sidecar-check 0.3 take 81,244 of the
+128 KB area. Not yet on a unit.
 
 ## Building
 

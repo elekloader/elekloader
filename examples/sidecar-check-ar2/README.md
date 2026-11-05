@@ -64,12 +64,12 @@ The record after the magic `SCK3` (`sc3`, moments.c):
 - two storage fields marked `"handle": true`: `sc_h_project` (project, 16
   bits) and `sc_h_pattern` (pattern, 12 bits).
 
-A command word `cmd` (and `arg`) acts on the next `ev_tick`:
+A command word `cmd` (and `arg`) acts on the next `ev_tick` (with `arg`'s high half, that many ticks later):
 
 | `cmd` | what |
 |---|---|
-| 1 | `arg` note-ons through `core_midi_try_send` from the UI task (`sent`, `refused`) |
-| 2 | `arg` note-ons from the audio interrupt (`ev_render_in`), into core's ring (`irq_sent`, `irq_refused`) |
+| 1 | `arg` note-ons through `core_midi_try_send` from the UI task (`sent`, `refused`); a refused one is tried again on the next tick |
+| 2 | `arg` note-ons from the audio interrupt (`ev_render_in`), into core's ring (`irq_sent`, `irq_refused`); a refused one is tried again on the next interrupt |
 | 3 | the project's handle = `arg`, the current pattern's = `arg` + 1 |
 | 4 | walk the handles (`core_handle_fields`): `walk_n`, `walk_sum`, `walk_fields` (bit 0 the project's, bit 1 the pattern's) |
 | 5 | one SysEx F0 7D .. F7 of `arg` bytes (4..64) through `core_midi_try_send` |

@@ -1991,8 +1991,10 @@ sites, with `analog-rytm-mk2/moments.h`:
   SysEx kit). A select doesn't reach the engine at once: each track takes
   the new kit at its next trig.
 - `my_slot(slot, how)` at `ev_tick`, for a +Drive slot written outside a
-  save: `CORE_SLOT_CLEARED`, `CORE_SLOT_INIT` (the live project initialized
-  in place; `ev_project` 0 came first) and `CORE_SLOT_PASTED`, with
+  save: `CORE_SLOT_CLEARED` (the manager's CLEAR or INIT NEW: a new, empty
+  project in the slot), `CORE_SLOT_INIT` (the live project initialized in
+  place through Transfer's clear; `ev_project` 0 came first; LOAD
+  PROJECT's CREATE NEW has no slot event) and `CORE_SLOT_PASTED`, with
   `CORE_SLOT_FAILED`.
 - A storage field declared `"handle": true` holds a handle on something the
   mod keeps elsewhere, 0 for none (no `"lock"`, no `"init"`).

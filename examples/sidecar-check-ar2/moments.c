@@ -13,8 +13,8 @@ STORE_FIELD(sc_h_pattern);
 
 enum {
     CMD3_NONE,
-    CMD3_BURST,         /* arg note-ons (ch 1, note 60 + i % 12) from the UI task */
-    CMD3_IRQ_BURST,     /* arg note-ons from the audio interrupt (ev_render_in), into core's ring */
+    CMD3_BURST,         /* arg note-ons (ch 1, note 60 + i % 12) from the UI task; a refused one is tried again next tick */
+    CMD3_IRQ_BURST,     /* arg note-ons from the audio interrupt (ev_render_in), into core's ring; the same */
     CMD3_HSET,          /* the project's handle = arg, the current pattern's = arg + 1 */
     CMD3_HWALK,         /* walk the handles (core_handle_fields) */
     CMD3_SYSEX,         /* one whole SysEx (F0 7D 01 .. F7, arg bytes in all) from the UI task */
@@ -24,7 +24,8 @@ struct sc3_ev { int16_t kind, a; uint32_t b; };    /* kind 1 ev_kit, 2 ev_projec
 
 struct {
     char magic[4];                              /* SCK3 */
-    volatile int32_t cmd, arg;                  /* written from outside; cmd back to 0 when done */
+    volatile int32_t cmd, arg;                  /* written from outside; cmd back to 0 when done;
+                                                   arg's high half delays it by that many ticks */
     int32_t done;
     /* ev_sysex_in: messages taken (F0 7D ...) and passed on */
     uint32_t sx_taken, sx_passed, sx_passed_elektron;
@@ -47,6 +48,7 @@ struct {
     uint32_t n;
     struct sc3_ev e[RING];
     uint32_t ticks;
+    int32_t burst_at;                           /* CMD3_BURST: the next note to send */
 } sc3 = {{'S', 'C', 'K', '3'}};
 
 int32_t sc_sysex_in(const unsigned char *data, int32_t len, int32_t iface)
@@ -114,10 +116,11 @@ void sc_render_in(void)
 {
 
     while (sc3.irq_left > 0) {
-        if (note(sc3.irq_left))
-            sc3.irq_sent++;
-        else
+        if (!note(sc3.irq_left)) {
             sc3.irq_refused++;
+            return;
+        }
+        sc3.irq_sent++;
         sc3.irq_left--;
     }
 }
@@ -136,13 +139,20 @@ void sc_moments_tick(void *ctrl)
     sc3.sound_item = (uint32_t)core_current_sound_item();
     sc3.pattern_item = (uint32_t)core_current_pattern_item();
     copy16(sc3.name, core_project_name());
+    if (sc3.cmd && sc3.arg >= 0x10000) {        /* arg's high half: ticks to wait first */
+        sc3.arg -= 0x10000;
+        return;
+    }
     switch (sc3.cmd) {
     case CMD3_BURST:
-        for (i = 0; i < sc3.arg; i++)
-            if (note(i))
+        for (; sc3.burst_at < sc3.arg; sc3.burst_at++)
+            if (note(sc3.burst_at))
                 sc3.sent++;
-            else
+            else {
                 sc3.refused++;
+                return;
+            }
+        sc3.burst_at = 0;
         break;
     case CMD3_IRQ_BURST:
         sc3.irq_left = sc3.arg;
