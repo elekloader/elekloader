@@ -11,7 +11,11 @@ sites of its own; those pages show how.
 through `sdk_alpha_machines`: synth IDs 5..127 in the same selector, with
 two SYN pages and fifteen logical knobs. Their values use sound slots
 25..39, shared placements use one value, and the DSP receives FM TONE's
-type. These machines carry no SHARC payload. SDK and SHARC synths share
+type. These machines carry no SHARC payload: the builder refuses an SDK
+machine's `render`, and a knob whose `def` is not its `min`. The
+[native voice input](../elekloader/sdk/include/digitone-mk2/voice.h) has
+pitch, start, slot, controls and state, but not the track and velocity
+`elek_voice` gives. SDK and SHARC synths share
 the `mk2-synth` ID namespace; filters have their own namespace.
 
 Each descriptor starts with a permanent ID: 5..31 for synths, 6..31 for

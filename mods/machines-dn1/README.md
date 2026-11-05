@@ -22,10 +22,29 @@ the mod shop, beside the cores: a machine mod that requires it (`"requires": ["c
 | claims | `soundslot:0`, `page:30` and `page:29` (0.3, OS 1.44: the SDK pages) |
 | RAM | OS 1.44: 10.8 KiB code and initialized data, 16.0 KiB zero-initialized data |
 
-The [shared SDK](../../docs/SDK.md) also supports audio callbacks and
-mapped defaults on OS 1.44. It uses the same voice
-path as native machines; SDK-only details and qualification limits live
-in that guide.
+## SDK machines (OS 1.44)
+
+The [shared SDK's](../../docs/SDK.md) machines are on OS 1.44 only: its
+port adds `sdk_alpha.c` and the shared `../sdk-alpha/machine.c`, with
+`SDK_ALPHA_DN1`. OS 1.43 has no SDK machines.
+
+- **The knobs.** Logical knob `i` keeps its value in one SYN parameter,
+  whichever page shows it: knobs 0-7 in SYN2's first page's eight, 8-14
+  in DTUN, FDBK, MIX, ADEL, BDEL and two ratio offsets. Knobs 8, 13 and
+  14 turn in finer steps. The ratio offsets reach 127.99; the SDK clamps
+  their raw value to 127.0 before mapping it. These are not the Digitone
+  II's `25 + i` slots.
+- **The sound.** An SDK machine's render replaces an allocated FM voice
+  on the main CPU, through the same voice path as native machines: eight
+  voices, each with its own state, kept across notes and retriggers and
+  cleared when the voice changes machine. `track` comes from the
+  firmware's voice-owner map; pitch, velocity and start from the
+  companion's voice record. Knob values come from the native
+  block-parameter buffer that `ev_render_params` gives, read after the
+  controllers and LFOs have run, so each voice gets its own locks and
+  modulation. The wrapper scales SDK full scale to `DNM_PEAK` (1/16);
+  the companion's AMP envelope and velocity, then the multimode filter,
+  mixer and effects follow.
 
 ## How it works
 

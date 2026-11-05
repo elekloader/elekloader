@@ -173,6 +173,31 @@ the overdrive. A machine that makes its own sound subscribes with order
 at 20 and NEIGHBOR copies at 60, so a NEIGHBOR track can take a SOPHIE
 track's sound, as digichain arranged it.
 
+## SDK machines (OS 1.54)
+
+The [shared SDK's](../../docs/SDK.md) machines on the Digitakt. Only the
+1.54 port builds them: it adds `sdk_alpha.c`, `sdk_alpha.s` and the shared
+`../sdk-alpha/machine.c`, and sets `SDK_ALPHA_DT1` (a cflag and a defsym)
+for the few places in `pages.c` and `pages.s` that call them. OS 1.53 has
+no SDK machines.
+
+- **The machine.** `sdk_alpha_build` adds each machine to
+  `sdk_alpha_machines`, and writes a `struct cm_machine` for it into
+  core's `core_machines`: params machine 3 (SLICE's), its own id as the
+  render id (an empty voice), and no page tail.
+- **The page.** `sdk_alpha.c` builds a `cm_ui32` page from the
+  declaration, once a machine: SLICE's page, every knob a plain 0-127
+  encoder with its default, knobs 0-7 on A-H's parameters and 8-14 on the
+  extra values (slots 46-52), so they save, lock and take LFOs as any
+  `cm_ui32` page's do.
+- **The sound.** `sdk_alpha_render` runs in the render point (above),
+  after playback and before the overdrive, filter and AMP: one voice a
+  track, its block replaced. Its knob values are `cm_src_value`'s, after
+  locks and LFOs; its start, note and velocity are the firmware's
+  (`fw_voice_start`, `fw_voice_note`, `fw_voice_vel`). A track's voice
+  state is kept across notes, and cleared when the track's rendered
+  machine changes.
+
 ## Beside the shop's mods
 
 It links beside every Digitakt mod of the shop that adds no machine (Digi
