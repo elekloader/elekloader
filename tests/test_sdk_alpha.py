@@ -68,6 +68,10 @@ RENDERS = SdkMachine("Renders", register=False, source=textwrap.dedent("""
 # A knob that starts above its min, which the Digitone II cannot do yet.
 DEFAULTS = SdkMachine("Defaults", register=False, source=ONE_PAGE.source.replace(
     '.max = 127', '.min = -50, .max = 50'))
+# Sixteen machines in one mod: more than the Digitone mk1's MACHINES menu lists.
+SIXTEEN = SdkMachine("Sixteen", register=False, source='#include "elekloader/sdk_alpha_machine.h"\n' + ''.join(
+    'static const struct elek_machine m%d = { .id = %d, .name = "M", .short_name = "M" };\n'
+    'ELEK_REGISTER_MACHINE(m%d);\n' % (i, 100 + i, i) for i in range(16)))
 ELEK_STATE_BYTES = 256                          # ELEK_VOICE_STATE_MAX
 HELLO = ROOT / 'examples/sdk-hello-world'       # two pages
 GLYPHS = ROOT / 'examples/sdk-glyphs'
@@ -430,6 +434,11 @@ class SdkAlphaTests(unittest.TestCase):
             for machine in (DEFAULTS, RENDERS):
                 mod = sdk_alpha_build(machine.write(tmp + '/dn-' + machine.name), dn, tmp)[1]
                 link.link([core, machines, mod], image)
+            with self.assertRaisesRegex(build.BuildError, 'digitone-mk1 1.44 holds at most 15 SDK machines; '
+                                                          'this mod registers 16'):
+                sixteen = SIXTEEN.write(tmp + '/sixteen')
+                sdk_alpha_build(sixteen, dn, tmp)
+            self.assertEqual(len(sdk_alpha_build(sixteen, stocks['digitakt-mk1'], tmp)[2]), 16)   # it holds 32
             for stock in stocks.values():
                 with self.assertRaisesRegex(build.BuildError, '1..5 printable ASCII characters'):
                     sdk_alpha_build(LONG_LABEL.write(tmp + '/long'), stock, tmp)

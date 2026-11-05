@@ -14,17 +14,19 @@ from elekloader.sdk import build
 
 
 # The SDK's support matrix, the one place it lives: each supported release, the companions it
-# requires, its first machine id, the optional features its companions implement, and the core table that also needs a native descriptor (the Digitakt's
+# requires, its first machine id, how many SDK machines its companion holds, the optional features
+# its companions implement, and the core table that also needs a native descriptor (the Digitakt's
 # core_machines: a struct cm_machine the builder writes). Every machine goes to the companion's table
 # SDK_ALPHA_TABLE; claims come from the profile's slot_claims. The refusals and the tests derive from it.
-Target = collections.namedtuple('Target', 'companions first_id features native')
+Target = collections.namedtuple('Target', 'companions first_id limit features native')
 SDK_ALPHA_TARGETS = {
-    ('digitakt-mk1', '1.54'): Target(('core', 'machine-pages'), 4,
+    ('digitakt-mk1', '1.54'): Target(('core', 'machine-pages'), 4, 32,
                                      frozenset(('render', 'defaults')), 'core_machines'),
-    ('digitone-mk1', '1.44'): Target(('core', 'machines'), 4,
+    # MACHINES lists 15 machines
+    ('digitone-mk1', '1.44'): Target(('core', 'machines'), 4, 15,
                                      frozenset(('render', 'defaults')), None),
     # the Digitone II's synth type 4 is MIDI
-    ('digitone-mk2', '1.12'): Target(('core', 'machines-dn2'), 5, frozenset(), None),
+    ('digitone-mk2', '1.12'): Target(('core', 'machines-dn2'), 5, 16, frozenset(), None),
 }
 SDK_ALPHA_TABLE = 'sdk_alpha_machines'   # pointers to struct elek_machine, read by each companion
 SDK_ALPHA_ABI = 'sdk_alpha_abi_v1'       # the one symbol the companions export to SDK machines
@@ -187,13 +189,16 @@ def sdk_alpha_build(moddir, stock, out=None):
             names = {d.key: d.name for d in devices.devices()}
             supported = ['%s OS %s' % (names[d], v) for d, v in SDK_ALPHA_TARGETS]
             raise build.BuildError('sdk alpha: only %s and %s are supported' % (', '.join(supported[:-1]), supported[-1]))
-        companions, low, features, native = SDK_ALPHA_TARGETS[device, release]
+        companions, low, limit, features, native = SDK_ALPHA_TARGETS[device, release]
         tables = (SDK_ALPHA_TABLE,) + ((native,) if native else ())
         firmware, dev, _ = formats.load(stock)
         image = formats.main_image(firmware, dev)
         sections = {s: elemod.parts_bytes(d['parts'], image, dev)
                     for s, d in mod.sections.items() if 'parts' in d}
         layouts = sdk_alpha_registrations(doc, sections)
+        if len(layouts) > limit:
+            raise build.BuildError('sdk alpha: %s %s holds at most %d SDK machines; this mod registers %d'
+                                   % (device, release, limit, len(layouts)))
         unresolved = sorted(set(doc['imports']) - {SDK_ALPHA_ABI})
         soft_float = [n for n in unresolved if re.fullmatch(r'__\w*?[sdtx]f\w*', n)]    # libgcc's
         if soft_float:

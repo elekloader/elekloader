@@ -30,6 +30,7 @@ Try a machine on your computer before building it for a device:
 | Choose a machine | FUNC+SRC machine menu | Hold a track key, Mod Menu → MACHINES | FUNC+SYN → MACHINE SEL |
 | Show its pages | SRC | SYN2, replacing its pages on that track | SYN |
 | Pages / logical knobs | 2 / 15 | 2 / 15 | 2 / 15 |
+| SDK machines | 32 | 15 | 16 |
 | LFO destination lists | 2 | 2 | 3 |
 | Labels, hiding, 16×16 glyphs | Yes | Yes | Yes |
 | Mapped defaults / SDK audio callback | Implemented | Implemented | Not implemented |
@@ -196,10 +197,12 @@ required companions for the same stock file, then use the normal
 [lint and patch loop](ADAPTING.md).
 
 The builder refuses unsupported targets, invalid names, bounds, IDs and
-layouts, duplicate declarations in JSON, and imports no companion exports
-(such as libgcc's floating point). SDK machines import `sdk_alpha_abi_v1`,
-which every companion exports; rebuild SDK mods and companions together
-when it changes.
+layouts, more machines in one mod than the device holds (the table above),
+duplicate declarations in JSON, and imports no companion exports (such as
+libgcc's floating point). SDK machines import `sdk_alpha_abi_v1`, which
+every companion exports; rebuild SDK mods and companions together when it
+changes. The limit is checked per mod: machines from several mods past it
+are not refused, and the ones past it go unused.
 
 Working UI examples are [sdk-hello-world](../examples/sdk-hello-world)
 (two pages and a shared knob) and [sdk-glyphs](../examples/sdk-glyphs)
