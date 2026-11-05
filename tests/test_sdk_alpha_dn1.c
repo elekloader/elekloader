@@ -8,10 +8,11 @@
 
 static int32_t params[15 * 160];
 #define fw_params ((const uint8_t *)params)
-/* The production assertion describes the 32-bit firmware ABI, checked by the cross build. */
+/* The production assertion describes the 32-bit firmware ABI, checked by the cross build. glibc's
+ * C99 headers define _Static_assert as a macro already; nothing below the adapter uses it. */
+#undef _Static_assert
 #define _Static_assert(condition, message)
 #include "../mods/machines-dn1/sdk_alpha.c"
-#undef _Static_assert
 
 uint8_t *volatile fw_kit;
 volatile int32_t fw_active_track, fw_voice_track[8];
