@@ -25,7 +25,10 @@ static const uint8_t sdk_pos[SDK_KNOBS] = { 8, 9, 10, 11, 12, 13, 14, 15, 5, 6, 
 /* The SDK pages: mod pages no stock list holds (after -1), shown by SYN2 in place of its own pages while
  * an SDK machine is the active track's. */
 #define SYN2_FIRST 4                /* SYN2's stock list starts with page 4 */
-#define V_CUR 144                   /* a view's place in its list (core-dn1's pages.s) */
+#define V_CUR 144                   /* a view's place in its list (core-dn1's pages.s, every OS) */
+/* The OS release's View and parameter-set layouts come from mod.json's port cflags: VIEW_METHODS,
+ * VIEW_DRAW, VIEW_DRAW_PARAMETER, VIEW_CLEAR, VIEW_PARAM_SET (and its argument VIEW_PARAM_SET_ARG),
+ * VIEW_DIRTY, VIEW_PARENT, SET_METHODS and SET_RESET. */
 struct core_page dnm_sdk_pages[2] = {   /* claimed as page:30 and page:29 */
     { 30, -1, "SDK", "SDK", { 0 }, 9, 0, 0 },
     { 29, -1, "SDK", "SDK", { 0 }, 9, 0, 1 },
@@ -45,10 +48,9 @@ static uint8_t sdk_clear(void *view);
 /* Adapt SYN2's view for the plain grid and SDK defaults; FM gets its own method table back. */
 static int page_layout(int sdk)
 {
-    enum { METHODS = 53, DRAW = 4, DRAW_PARAMETER = 38, CLEAR = 48 }; /* OS 1.44 */
     static uint32_t *view;
     static const uint32_t *stock;
-    static uint32_t methods[2 + METHODS];
+    static uint32_t methods[2 + VIEW_METHODS];
     if (!view) {
         uint32_t *syn2 = 0, *plain = 0;
         for (int i = 0; i < 16 && core_views[i].view; ++i) {
@@ -60,13 +62,13 @@ static int page_layout(int sdk)
         view = syn2;
         stock = (const uint32_t *)view[0];
         const uint32_t *base = (const uint32_t *)plain[0];
-        for (int i = -2; i < METHODS; ++i)
+        for (int i = -2; i < VIEW_METHODS; ++i)
             methods[i + 2] = stock[i];    /* include the offset-to-top and type information */
-        draw_page = (void (*)(void *, void *))base[DRAW];
-        methods[2 + DRAW] = (uint32_t)sdk_draw;
-        methods[2 + DRAW_PARAMETER] = base[DRAW_PARAMETER];
-        clear_page = (uint8_t (*)(void *))stock[CLEAR];
-        methods[2 + CLEAR] = (uint32_t)sdk_clear;
+        draw_page = (void (*)(void *, void *))base[VIEW_DRAW];
+        methods[2 + VIEW_DRAW] = (uint32_t)sdk_draw;
+        methods[2 + VIEW_DRAW_PARAMETER] = base[VIEW_DRAW_PARAMETER];
+        clear_page = (uint8_t (*)(void *))stock[VIEW_CLEAR];
+        methods[2 + VIEW_CLEAR] = (uint32_t)sdk_clear;
         dnm_sdk_pages[0].view = dnm_sdk_pages[1].view = syn2;
     }
     view[0] = (uint32_t)(sdk ? methods + 2 : stock);
@@ -259,13 +261,13 @@ static void sdk_reset(void *set, int32_t id)
 static uint8_t sdk_clear(void *view)
 {
     const uint32_t *methods = *(const uint32_t **)view;
-    uint32_t *set = (uint32_t *)((uint32_t (*)(void *, int32_t, int32_t))methods[42])(view, 119, -1);
+    uint32_t *set = (uint32_t *)((uint32_t (*)(void *, int32_t, int32_t))methods[VIEW_PARAM_SET])(view, VIEW_PARAM_SET_ARG, -1);
     const uint32_t *stock = (const uint32_t *)set[0];
-    uint32_t reset[2 + 30];          /* OS 1.44's sound parameter-set table, including RTTI */
-    for (int i = -2; i < 30; ++i)
+    uint32_t reset[2 + SET_METHODS]; /* the sound parameter-set's method table, including RTTI */
+    for (int i = -2; i < SET_METHODS; ++i)
         reset[i + 2] = stock[i];
-    reset_parameter = (void (*)(void *, int32_t))stock[4];
-    reset[2 + 4] = (uint32_t)sdk_reset;
+    reset_parameter = (void (*)(void *, int32_t))stock[SET_RESET];
+    reset[2 + SET_RESET] = (uint32_t)sdk_reset;
     set[0] = (uint32_t)(reset + 2);
     uint8_t result = clear_page(view);
     set[0] = (uint32_t)stock;
@@ -316,8 +318,8 @@ void dnm_sdk_tick(const struct dnm_machine *m, void *ctrl)
     if (dirty) {
         if (listed && dnm_sdk_pages[0].view) {
             uint8_t *view = dnm_sdk_pages[0].view;
-            view[0x14] = 1;                  /* native View::dirty, without resetting value timers */
-            uint8_t *parent = *(uint8_t **)(view + 0x2c);
+            view[VIEW_DIRTY] = 1;            /* native View::dirty, without resetting value timers */
+            uint8_t *parent = *(uint8_t **)(view + VIEW_PARENT);
             if (parent) parent[0x20] = 1;
         }
         ((uint8_t *)ctrl)[0x20] = 1;    /* redraw without resetting the temporary value display */

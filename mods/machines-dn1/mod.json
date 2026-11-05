@@ -7,7 +7,9 @@
  "ports": {
   "1.44": {
    "sources": ["machines.c", "sdk_alpha.c", "../sdk-alpha/machine.c"],
-   "cflags": ["-DSDK_ALPHA_DN1"],
+   "cflags": ["-DSDK_ALPHA_DN1", "-DVIEW_METHODS=53", "-DVIEW_DRAW=4", "-DVIEW_DRAW_PARAMETER=38",
+              "-DVIEW_CLEAR=48", "-DVIEW_PARAM_SET=42", "-DVIEW_PARAM_SET_ARG=119", "-DVIEW_DIRTY=0x14",
+              "-DVIEW_PARENT=0x2c", "-DSET_METHODS=30", "-DSET_RESET=4"],
    "subscribe": [
     {"event": "ev_render_params", "fn": "dnm_sdk_params", "order": 50},
     {"event": "ev_voice_on", "fn": "dnm_voice_on", "order": 20},

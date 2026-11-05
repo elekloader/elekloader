@@ -3,6 +3,7 @@
 compiler as the ColdFire's Q31 and as the SHARC's float. Each build checks the helpers itself; here the two
 render the same sine, which must be one waveform, continuous across blocks, at full level."""
 from pathlib import Path
+import json
 import shutil
 import subprocess
 import tempfile
@@ -40,12 +41,16 @@ class RenderContractTests(unittest.TestCase):
 
     def adapter(self, device, companion):
         """tests/test_sdk_alpha_<device>.c, which includes ../mods/sdk-alpha/machine.c and so needs the
-        companion's dev.h on the include path."""
+        companion's dev.h on the include path, and the -D flags of the build that compiles its sdk_alpha.c
+        (mod.json: the OS release's layouts)."""
         program = Path(self.tmp.name) / (device + '-adapter')
+        mod = json.loads((ROOT / 'mods' / companion / 'mod.json').read_text())
+        sdk = next((p for p in mod.get('ports', {}).values() if 'sdk_alpha.c' in p.get('sources', ())), mod)
+        defines = [f for f in sdk.get('cflags', mod.get('cflags', [])) if f.startswith('-D')]
         done = subprocess.run([CC, '-std=c99', '-O2', '-Wall', '-Wextra', '-Werror',
                                '-Wno-pointer-to-int-cast', '-Wno-int-to-pointer-cast',
                                '-I', str(ROOT / 'elekloader/sdk/include'), '-I', str(ROOT / 'mods' / companion),
-                               str(ROOT / ('tests/test_sdk_alpha_' + device + '.c')), '-o', str(program)],
+                               *defines, str(ROOT / ('tests/test_sdk_alpha_' + device + '.c')), '-o', str(program)],
                               capture_output=True, text=True)
         self.assertEqual(done.returncode, 0, done.stderr)
         done = subprocess.run([str(program)], capture_output=True, text=True)

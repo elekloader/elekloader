@@ -83,12 +83,13 @@ uint32_t dn2_sdk_code(uint32_t type, uint32_t slot)
     return i >= 0 && slot >= SLOT && slot < SLOT + sdk_alpha_entries[i].count ? ROWS + SDK_ROW + slot - SLOT : 0;
 }
 
-/* The panel: OS 1.12's addresses (hooks.s). */
+/* The panel: the OS release's addresses (hooks.s, from mod.json's defsym) and layouts (mod.json's cflags:
+ * a sound's SOUND_SIZE bytes, its machine at SOUND_TYPE and slot s's word at SOUND_SLOTS + 2s; a View's
+ * VIEW_METHODS methods, its page at VIEW_CUR and View::dirty at VIEW_DIRTY; Brain's page stack from
+ * BRAIN_STACK_FIRST to BRAIN_STACK_LAST, an entry's manager at STACK_MANAGER and the manager's view at
+ * MANAGER_VIEW; Brain's screen state at BRAIN_SCREEN). */
 extern volatile uint8_t dn2_active_track[], dn2_shown_page[], dn2_sounds[];
 uint8_t *dn2_syn_view;             /* hooks.s records the view passed to the native SYN title accessor */
-#define SOUND_SIZE 0x48b
-#define SOUND_TYPE 0xde
-#define SOUND_SLOTS 20              /* sound slot s is the word at +20 + 2s */
 #define SHOWN_SYN 1                 /* dn2_shown_page while SYN is on the screen */
 
 /* What the tests and the drawing read: the active track's machine, as .present left it. */
@@ -109,12 +110,12 @@ static uint8_t *shown_view(void)
     const uint8_t *brain = dn2_brain;
     if (!brain)
         return 0;
-    const uint8_t *bottom = *(const uint8_t *const *)(brain + 0x54);
-    if (!bottom || bottom != *(const uint8_t *const *)(brain + 0x5c))
+    const uint8_t *bottom = *(const uint8_t *const *)(brain + BRAIN_STACK_FIRST);
+    if (!bottom || bottom != *(const uint8_t *const *)(brain + BRAIN_STACK_LAST))
         return 0;
-    const uint8_t *manager = *(const uint8_t *const *)(bottom + 8);
+    const uint8_t *manager = *(const uint8_t *const *)(bottom + STACK_MANAGER);
     /* The manager keeps the owning View handle; its object starts after the 16-byte header. */
-    uint8_t *shown = manager ? *(uint8_t *const *)(manager + 0xc0) : 0;
+    uint8_t *shown = manager ? *(uint8_t *const *)(manager + MANAGER_VIEW) : 0;
     return shown ? shown + 16 : 0;
 }
 
@@ -123,18 +124,18 @@ static int syn_shown(void)
     return dn2_syn_view && shown_view() == dn2_syn_view;
 }
 
-/* SYN's native method table, including RTTI and its 60 primary methods (OS 1.12). */
+/* SYN's native method table, including RTTI and its VIEW_METHODS primary methods. */
 static int page_layout(int sdk)
 {
     static uint32_t *view;
     static const uint32_t *stock;
-    static uint32_t methods[62];
+    static uint32_t methods[2 + VIEW_METHODS];
     if (!dn2_syn_view)
         return 0;
     if (view != (uint32_t *)dn2_syn_view) {
         view = (uint32_t *)dn2_syn_view;
         stock = (const uint32_t *)view[0];
-        for (int i = -2; i < 60; ++i)
+        for (int i = -2; i < VIEW_METHODS; ++i)
             methods[i + 2] = stock[i];
         draw_page = (void (*)(void *, void *))stock[4];
         methods[6] = (uint32_t)sdk_draw;
@@ -161,7 +162,7 @@ static int32_t raw_of(uint32_t t, uint32_t id)
 /* The page SYN shows of machine i (0 when it has one page or none). */
 static int32_t page_of(int32_t i)
 {
-    int32_t page = dn2_syn_view ? *(const int32_t *)(dn2_syn_view + 144) : 0;
+    int32_t page = dn2_syn_view ? *(const int32_t *)(dn2_syn_view + VIEW_CUR) : 0;
     return page > 0 && (uint32_t)page < declared(i)->page_count ? page : 0;
 }
 
@@ -213,7 +214,7 @@ void dn2_sdk_tick(uint8_t *ctrl)
     }
     if (declared(i)->page_count && dn2_syn_view) {
         if ((int32_t)t != shown_track) {
-            *(int32_t *)(dn2_syn_view + 144) = dn2_sdk_shown[t] < (int32_t)declared(i)->page_count ? dn2_sdk_shown[t] : 0;
+            *(int32_t *)(dn2_syn_view + VIEW_CUR) = dn2_sdk_shown[t] < (int32_t)declared(i)->page_count ? dn2_sdk_shown[t] : 0;
             shown_track = t;
             ctrl[0x20] = 1;
         } else {
@@ -224,7 +225,7 @@ void dn2_sdk_tick(uint8_t *ctrl)
     snapshot(i, t, *dn2_shown_page == SHOWN_SYN ? page_of(i) : ELEK_UI_NO_PAGE);
     if (dirty) {
         if (dn2_syn_view)
-            dn2_syn_view[0x14] = 1;
+            dn2_syn_view[VIEW_DIRTY] = 1;
         ctrl[0x20] = 1;
         dirty = 0;
     }
@@ -261,8 +262,8 @@ void dn2_sdk_draw(void *bmp, void *ctrl)
 {
     (void)ctrl;
     int32_t i = track_machine(*dn2_active_track);
-    /* Brain +0xe8 is 2 while the screen saver's view covers the frame; SYN stays the shown page. */
-    if (i < 0 || !declared(i)->page_count || !syn_shown() || *(const volatile int32_t *)(dn2_brain + 0xe8) == 2)
+    /* BRAIN_SCREEN is 2 while the screen saver's view covers the frame; SYN stays the shown page. */
+    if (i < 0 || !declared(i)->page_count || !syn_shown() || *(const volatile int32_t *)(dn2_brain + BRAIN_SCREEN) == 2)
         return;
     for (int k = 0; k < 8; ++k) {
         const struct elek_ui_knob *knob = shown_knob(i, k);
