@@ -15,7 +15,7 @@ struct sdk_alpha_entry {
     const struct elek_machine *machine;
     uint32_t count;                     /* knobs 0..count-1 */
     uint32_t pages;                     /* pages 0..pages-1 */
-    int8_t encoder[2][8];               /* the knob's id, or -1 */
+    int8_t encoder[ELEK_UI_PAGE_MAX][8]; /* the knob's id, or -1 */
 };
 extern struct sdk_alpha_entry sdk_alpha_entries[];
 extern int32_t sdk_alpha_count;         /* -1 until sdk_alpha_init has run */

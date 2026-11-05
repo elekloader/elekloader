@@ -6,9 +6,14 @@
 
 #include <stdint.h>
 
+/* The limits, which the builder checks (tests/test_sdk_alpha.py keeps its copy in step). */
+#define ELEK_UI_LABEL_MAX 5        /* a knob label's characters: what fits under a knob */
+#define ELEK_UI_KNOB_MAX 15        /* a machine's knobs */
+#define ELEK_UI_PAGE_MAX 2         /* a machine's pages */
+#define ELEK_UI_PAGE_LABEL_MAX 16  /* a page label's characters */
+#define ELEK_UI_NAME_MAX 16        /* a machine name's characters */
+#define ELEK_UI_SHORT_NAME_MAX 4   /* a machine short name's characters */
 #define ELEK_UI_NO_PAGE (-1)
-#define ELEK_UI_LABEL_MAX 5   /* a knob label's characters: what fits under a knob on the Digitakt and Digitone */
-#define ELEK_UI_KNOB_MAX 15   /* a machine's knobs */
 enum { ELEK_A, ELEK_B, ELEK_C, ELEK_D, ELEK_E, ELEK_F, ELEK_G, ELEK_H };   /* the encoders */
 
 /* 16 x 16 monochrome pixels: top row first, bit 15 leftmost; 1 lights a pixel.
@@ -23,7 +28,8 @@ struct elek_knob {
     const struct elek_glyph *glyph; /* null uses the stock encoder graphic */
 };
 struct elek_page {
-    const char *label;             /* 1..16 printable ASCII characters; a page without one is absent */
+    const char *label;             /* 1..ELEK_UI_PAGE_LABEL_MAX printable ASCII characters; a page without
+                                    * one is absent */
     const struct elek_knob *encoder[8]; /* &knobs[ID] or null for an empty position; pages may share */
 };
 /* What .present shows for one knob. Each call starts from the knob's declaration: its label, shown,
@@ -151,10 +157,10 @@ struct elek_voice {
 
 struct elek_machine {
     int32_t id;                    /* native machine slot, 4..127 (Digitone II: 5..127); declared only here */
-    const char *name, *short_name; /* 1..16 and 1..4 ASCII characters */
-    const struct elek_knob *knobs; /* at most fifteen: give them with ELEK_KNOBS */
+    const char *name, *short_name; /* 1..ELEK_UI_NAME_MAX and 1..ELEK_UI_SHORT_NAME_MAX ASCII characters */
+    const struct elek_knob *knobs; /* at most ELEK_UI_KNOB_MAX: give them with ELEK_KNOBS */
     uint32_t knob_count;
-    struct elek_page pages[2];     /* a page without a label is absent: the first, if any, has one */
+    struct elek_page pages[ELEK_UI_PAGE_MAX]; /* a page without a label is absent: the first, if any, has one */
     /* Optional: called when the machine, track, page or a value changed, and maybe again with the same
      * inputs: keep it pure. ui and its arrays are valid only during the call. */
     void (*present)(const struct elek_ui *ui);
@@ -193,5 +199,37 @@ extern const char sdk_alpha_dt1_ui_v1[];
         .params = 3, .render = (machine).id, .tag = SDK_ALPHA_UI_TAG, \
         .ui = &sdk_alpha_ui_##machine \
     }
+
+/* The layout sdk_alpha_build reads from a ColdFire build (tests/test_sdk_alpha.py keeps its copy in step).
+ * A host build, with 8-byte pointers, lays them out differently. */
+#if __SIZEOF_POINTER__ == 4
+#define ELEK_OFFSET(type, field, n) _Static_assert(__builtin_offsetof(struct type, field) == (n), #type "." #field)
+#define ELEK_SIZE(type, n) _Static_assert(sizeof(struct type) == (n), "sizeof " #type)
+ELEK_OFFSET(sdk_alpha_registration, id, 0);
+ELEK_OFFSET(sdk_alpha_registration, params, 16);
+ELEK_OFFSET(sdk_alpha_registration, ui, 28);
+ELEK_SIZE(sdk_alpha_registration, 32);
+ELEK_OFFSET(sdk_alpha_machine_ui, machine, 4);
+ELEK_OFFSET(elek_machine, id, 0);
+ELEK_OFFSET(elek_machine, name, 4);
+ELEK_OFFSET(elek_machine, short_name, 8);
+ELEK_OFFSET(elek_machine, knobs, 12);
+ELEK_OFFSET(elek_machine, knob_count, 16);
+ELEK_OFFSET(elek_machine, pages, 20);
+ELEK_OFFSET(elek_machine, render, 96);
+ELEK_SIZE(elek_machine, 100);
+ELEK_OFFSET(elek_page, label, 0);
+ELEK_OFFSET(elek_page, encoder, 4);
+ELEK_SIZE(elek_page, 36);
+ELEK_OFFSET(elek_knob, label, 0);
+ELEK_OFFSET(elek_knob, min, 4);
+ELEK_OFFSET(elek_knob, max, 8);
+ELEK_OFFSET(elek_knob, def, 12);
+ELEK_OFFSET(elek_knob, glyph, 16);
+ELEK_SIZE(elek_knob, 20);
+ELEK_SIZE(elek_glyph, 32);
+#undef ELEK_OFFSET
+#undef ELEK_SIZE
+#endif
 
 #endif

@@ -7,6 +7,7 @@ compiler (ELEKLOADER_CROSS); the Digitone II's need ELEKLOADER_DN2_SYX (OS 1.12)
 from contextlib import redirect_stdout
 import io
 import json
+import re
 from pathlib import Path
 import shutil
 import struct
@@ -309,6 +310,15 @@ class SdkAlphaTests(unittest.TestCase):
                           'void *f(const struct elek_voice *v) { return ELEK_STATE(struct state, v); }\n' % size,
                     capture_output=True, text=True)
                 self.assertEqual(result.returncode == 0, fits, result.stderr)
+
+    def test_the_builder_reads_the_headers_limits_and_layout(self):
+        header = (ROOT / 'elekloader/sdk/include/elekloader/sdk_alpha_machine.h').read_text()
+        limits = {name: int(n) for name, n in re.findall(r'^#define (ELEK_UI_\w+_MAX) (\d+)', header, re.M)}
+        self.assertEqual(limits, B.LIMITS)
+        layout = {(t, f): int(n) for t, f, n in re.findall(r'^ELEK_OFFSET\((\w+), (\w+), (\d+)\);', header, re.M)}
+        layout.update({(t, None): int(n) for t, n in re.findall(r'^ELEK_SIZE\((\w+), (\d+)\);', header, re.M)})
+        self.assertEqual(layout, B.LAYOUT)
+        self.assertEqual(ELEK_STATE_BYTES, int(re.search(r'#define ELEK_VOICE_STATE_MAX (\d+)', header)[1]))
 
     def test_a_callbacks_input_is_read_only(self):
         cc = shutil.which('cc')

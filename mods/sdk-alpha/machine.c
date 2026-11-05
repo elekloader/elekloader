@@ -18,15 +18,15 @@ static int index_machine(struct sdk_alpha_entry *e, const struct elek_machine *m
     uint32_t count = m->knob_count, pages = 0;
     if (count > SDK_ALPHA_KNOBS || (count && !m->knobs))
         return 0;
-    while (pages < 2 && m->pages[pages].label)
+    while (pages < ELEK_UI_PAGE_MAX && m->pages[pages].label)
         ++pages;
-    for (uint32_t page = 0; page < 2; ++page)
+    for (uint32_t page = 0; page < ELEK_UI_PAGE_MAX; ++page)
         for (uint32_t encoder = 0; encoder < 8; ++encoder) {
             const struct elek_knob *knob = m->pages[page].encoder[encoder];
             if (knob && (page >= pages || knob < m->knobs || knob >= m->knobs + count))
                 return 0;
         }
-    for (uint32_t page = 0; page < 2; ++page)
+    for (uint32_t page = 0; page < ELEK_UI_PAGE_MAX; ++page)
         for (uint32_t encoder = 0; encoder < 8; ++encoder) {
             const struct elek_knob *knob = m->pages[page].encoder[encoder];
             e->encoder[page][encoder] = knob ? (int8_t)(knob - m->knobs) : -1;
