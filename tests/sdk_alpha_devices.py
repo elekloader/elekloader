@@ -8,6 +8,7 @@ yet raises CannotYet. Firmware addresses, screen geometry and the keys stay in t
 """
 import json
 import os
+import re
 import shutil
 import struct
 import subprocess
@@ -26,6 +27,25 @@ class CannotYet(AssertionError):
 
     def __init__(self, what):
         super().__init__('cannot do this yet: %s' % what)
+
+
+def c_defines(path):
+    """name -> value of a C header's #defines that read as Python: numbers, and macros as functions."""
+    found = {}
+    for name, args, body in re.findall(r'^#define[ \t]+(\w+)(\([^)]*\))?[ \t]+(.*?)\s*(?:/\*.*)?$',
+                                       path.read_text(), re.M):
+        try:
+            found[name] = eval(('lambda %s: ' % args[1:-1] if args else '') + body, dict(found))
+        except Exception:
+            pass                    # not a Python expression (a type, a suffixed literal): not needed here
+    return found
+
+
+def mod_defines(mod):
+    """name -> number of a mod's `defsym` and `cflags` -D entries (mods/<mod>/mod.json)."""
+    doc = json.loads((ROOT / 'mods' / mod / 'mod.json').read_text())
+    flags = (f[2:].split('=', 1) for f in doc.get('cflags', ()) if f.startswith('-D') and '=' in f)
+    return {**{k: int(v, 0) for k, v in doc.get('defsym', {}).items()}, **{k: int(v, 0) for k, v in flags}}
 
 
 DIGIEMU = os.environ.get('ELEKLOADER_DIGIEMU', '')
@@ -411,6 +431,12 @@ class Device:
         return False
 
 
+DT1 = c_defines(ROOT / 'elekloader/sdk/include/digitakt-mk1/core3.h')   # FW_SOUND, FW_SOUND_MACHINE, ...
+DT1_SLOT_A = 17                     # FW_SOUND_PARAM(k) is slot 17 + k: core3.h says so only in a comment
+DT1_SLOTS = DT1['FW_SOUND_PARAM'](-DT1_SLOT_A)                          # a sound's slot s at + DT1_SLOTS + 2s
+DT1_EXTRA_SLOT = c_defines(ROOT / 'mods/machine-pages/src.h')['MP_EXTRA_SLOT']
+
+
 class Digitakt1(Device):
     key, stock_env = 'digitakt-mk1', 'ELEKLOADER_STOCK_154'
     track_count = 8
@@ -477,18 +503,18 @@ class Digitakt1(Device):
         return self.machine(track) == machine_id
 
     def machine(self, track):
-        return (self.peek32(self.kit() + 0x20 + 0xa2 * track + 0x7c) >> 8) & 255
+        return bytes(self.s.m.uc.mem_read(DT1['FW_SOUND'](self.kit(), track) + DT1['FW_SOUND_MACHINE'], 1))[0]
 
     def raw_value(self, knob, track=0):
         slot = self.destination_for(knob)
-        at = self.kit() + 0x20 + 0xa2 * track + 20 + 2 * slot
+        at = DT1['FW_SOUND'](self.kit(), track) + DT1_SLOTS + 2 * slot
         return struct.unpack('>h', bytes(self.s.m.uc.mem_read(at, 2)))[0]
 
     def destination_for(self, knob):
-        return 17 + knob if knob < 8 else 46 + knob - 8
+        return DT1_SLOT_A + knob if knob < 8 else DT1_EXTRA_SLOT(knob - 8)
 
     def destination(self, lfo, track=0):
-        at = self.kit() + 0x20 + 0xa2 * track + 20 + 2 * (4 + 8 * lfo)
+        at = DT1['FW_SOUND'](self.kit(), track) + DT1_SLOTS + 2 * (4 + 8 * lfo)
         return struct.unpack('>H', bytes(self.s.m.uc.mem_read(at, 2)))[0] >> 8
 
     def open_lfo(self, lfo):
@@ -646,6 +672,7 @@ class Digitone1(Device):
                     self._lfo_box[address] = bytes(uc.mem_read(string, 64)).split(b'\0')[0].decode('ascii')
 
             self._lfo_box = {}
+            # OS 1.44's list formatter and DEST box renderer: only this probe hooks them, so no profile has them
             for address in (0x400c6a3c, 0x40089bb0, 0x40089bf0):
                 self.s.m.uc.hook_add(UC_HOOK_CODE, named, begin=address, end=address)
             self.s.m.uc.ctl_remove_cache(0x400c6918, 0x400c6a48)
@@ -727,9 +754,10 @@ class Digitone2(Device):
     lfo_count = 3
     settings_key = 'SETTINGS'
 
-    ACTIVE_TRACK = 0x42432a6c       # a byte: the track the panel edits (checked on a unit with DigiHealth)
-    SOUNDS, SOUND_SIZE = 0x4210d0c0, 0x48b  # the tracks' sounds: the machine at +0xde, slot s at +20 + 2s
-    SLOT = 25
+    MOD, H = mod_defines('machines-dn2'), c_defines(ROOT / 'mods/machines-dn2/dn2.h')
+    ACTIVE_TRACK = MOD['ACTIVE_TRACK']  # a byte: the track the panel edits (checked on a unit with DigiHealth)
+    SOUNDS, SOUND_SIZE = MOD['SOUNDS'], MOD['SOUND_SIZE']  # the machine at +0xde, slot s at +20 + 2s
+    SLOT = H['SLOT']
 
     def active_track(self):
         return self.mem(self.ACTIVE_TRACK, 1)[0]
@@ -815,9 +843,9 @@ class Digitone2(Device):
         self.settle(quiet_ms=20000, limit_ms=300000)
         self._leave_settings()
 
-    MOD_PAGE = 0x447c0890           # the LFO MOD shows (0-2): the MOD view's page
-    ROW, ROW_NAME = 60, 40          # machines-dn2's parameter rows (dn2_t1): a row's size, its name
-    ROWS, SDK_ROW = 321, 41         # machines-dn2's dn2.h: knob i's row is ROWS + SDK_ROW + i
+    MOD_PAGE = 0x447c0890           # the LFO MOD shows (0-2): the MOD view's page; only this test reads it
+    ROW, ROW_NAME = 60, 40          # machines.c's struct row (dn2_t1): its size, its name; a layout, no #define
+    ROWS, SDK_ROW = H['ROWS'], H['SDK_ROW']     # knob i's row is ROWS + SDK_ROW + i
 
     def open_lfo(self, lfo):
         """MOD at the LFO's page, its DEST list open (PUSH D)."""
