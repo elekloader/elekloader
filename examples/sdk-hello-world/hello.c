@@ -6,18 +6,13 @@ static const struct elek_knob knobs[] = {
     [PITCH] = { "PITCH", .min = 10, .max = 20 },
     [AMOUNT] = { "AMNT", .max = 127 },
 };
-static void hello_present(const struct elek_ui_context *ctx, struct elek_ui_presentation *out)
+/* AMOUNT renames PITCH, "A 37" say, and at 127 hides it. */
+static void hello_present(const struct elek_ui *ui)
 {
-    static char text[] = "A 000";
-    unsigned amount = ctx->knob[AMOUNT]->value;
-    if (amount) {
-        text[2] = '0' + amount / 100;
-        text[3] = '0' + amount / 10 % 10;
-        text[4] = '0' + amount % 10;
-        out->knob[PITCH]->label = text;
-        if (amount == 127)
-            out->knob[PITCH]->visible = 0;
-    }
+    int32_t amount = ui->knob[AMOUNT];
+    if (amount)
+        elek_label_num(ui->view[PITCH].label, "A ", amount);
+    ui->view[PITCH].hidden = amount == 127;
 }
 static const struct elek_machine sdk_hello_world = {
     .id = 122, .name = "SDK Hello", .short_name = "HELO", ELEK_KNOBS(knobs),

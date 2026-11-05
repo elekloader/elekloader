@@ -50,12 +50,10 @@ STATES = sdk_machine("States", """
     static const struct elek_knob knobs[] = {
         { "STATE", .min = 1, .max = 4, .glyph = &digits[0] }, { "STOCK", .max = 1 }, { "HIDE", .max = 1 },
     };
-    static void present(const struct elek_ui_context *ctx, struct elek_ui_presentation *out)
+    static void present(const struct elek_ui *ui)
     {
-        if (ctx->knob)
-            out->knob[0]->glyph = ctx->knob[1]->value ? 0 : &digits[ctx->knob[0]->value - 1];
-        if (ctx->knob && ctx->knob[2]->value)
-            out->knob[0]->visible = 0;
+        ui->view[0].glyph = ui->knob[1] ? 0 : &digits[ui->knob[0] - 1];
+        ui->view[0].hidden = ui->knob[2];
     }
     static const struct elek_machine states = {
         .id = @ID@, .name = "States", .short_name = "STAT", ELEK_KNOBS(knobs),

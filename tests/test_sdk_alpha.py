@@ -317,8 +317,7 @@ class SdkAlphaTests(unittest.TestCase):
         result = subprocess.run([cc, '-std=c99', '-fsyntax-only', '-x', 'c',
                                  '-I', str(ROOT / 'elekloader/sdk/include'), '-'],
                                 input='#include "elekloader/sdk_alpha_machine.h"\n'
-                                      'void bad(const struct elek_ui_context *ctx) {'
-                                      'ctx->knob[0]->value = 1;}\n',
+                                      'void bad(const struct elek_ui *ui) { ui->knob[0] = 1; }\n',
                                 capture_output=True, text=True)
         self.assertNotEqual(result.returncode, 0, 'a callback can write its input')
 

@@ -13,10 +13,9 @@ static const struct elek_knob knobs[] = {
     [STATE] = { "STATE", .min = 1, .max = 4, .glyph = &state_glyphs[0] },
     [STOCK] = { "STOCK", .max = 1 },
 };
-static void present(const struct elek_ui_context *ctx, struct elek_ui_presentation *out)
+static void present(const struct elek_ui *ui)
 {
-    out->knob[STATE]->glyph = ctx->knob[STOCK]->value ? 0 :
-        &state_glyphs[ctx->knob[STATE]->value - 1];
+    ui->view[STATE].glyph = ui->knob[STOCK] ? 0 : &state_glyphs[ui->knob[STATE] - 1];
 }
 static const struct elek_machine glyph_machine = {
     .id = 127, .name = "SDK Glyphs", .short_name = "GLYP", ELEK_KNOBS(knobs),

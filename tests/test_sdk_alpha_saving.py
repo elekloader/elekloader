@@ -16,11 +16,11 @@ SAVED = sdk_machine("Saved", """
     #include "elekloader/sdk_alpha_machine.h"
 
     static const struct elek_knob knobs[] = { { "HIDE", .max = 127 }, { "TRGT", .max = 127 } };
-    static void present(const struct elek_ui_context *ctx, struct elek_ui_presentation *out)
+    static void present(const struct elek_ui *ui)
     {
-        if (ctx->knob && ctx->knob[0]->value) {
-            out->knob[1]->label = "QWE";
-            out->knob[1]->visible = ctx->knob[0]->value != 127;
+        if (ui->knob[0]) {
+            elek_label_set(ui->view[1].label, "QWE");
+            ui->view[1].hidden = ui->knob[0] == 127;
         }
     }
     static const struct elek_machine saved = {

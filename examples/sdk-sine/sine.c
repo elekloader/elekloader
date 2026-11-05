@@ -16,10 +16,10 @@ static const struct elek_knob knobs[] = {
     [FINE] = { "FINE", .min = -50, .max = 50, .glyph = &tuning[IN_TUNE] },     /* starts at 0 */
 };
 
-static void present(const struct elek_ui_context *ctx, struct elek_ui_presentation *out)
+static void present(const struct elek_ui *ui)
 {
-    int32_t cents = ctx->knob[FINE]->value;
-    out->knob[FINE]->glyph = &tuning[cents < 0 ? FLAT : cents > 0 ? SHARP : IN_TUNE];
+    int32_t cents = ui->knob[FINE];
+    ui->view[FINE].glyph = &tuning[cents < 0 ? FLAT : cents > 0 ? SHARP : IN_TUNE];
 }
 
 /* sin(2 pi ph / 2^32), Q15: a parabola, then its square nudged in (within 0.1 %). */

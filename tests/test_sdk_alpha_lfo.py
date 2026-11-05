@@ -22,12 +22,12 @@ LFO = sdk_machine("Lfo", """
         { "XYZ", .max = 127 }, { "NAME", .max = 127 }, { "P03", .max = 127 }, { "P04", .max = 127 },
         { "P05", .max = 127 }, { "P06", .max = 127 }, { "P07", .max = 127 }, { "P08", .max = 127 },
     };
-    static void present(const struct elek_ui_context *ctx, struct elek_ui_presentation *out)
+    static void present(const struct elek_ui *ui)
     {
-        lfo_page = ctx->page;
-        if (ctx->knob && ctx->knob[1]->value) {
-            out->knob[0]->label = "QWE";
-            out->knob[0]->visible = ctx->knob[1]->value != 127;
+        lfo_page = ui->page;
+        if (ui->knob[1]) {
+            elek_label_set(ui->view[0].label, "QWE");
+            ui->view[0].hidden = ui->knob[1] == 127;
         }
     }
     static const struct elek_machine lfo = {
@@ -51,12 +51,12 @@ FIFTEEN = sdk_machine("Fifteen", """
         { "P09", .max = 127 }, { "P10", .max = 127 }, { "P11", .max = 127 }, { "P12", .max = 127 },
         { "P13", .max = 127 }, { "P14", .max = 127 }, { "P15", .max = 127 },
     };
-    static void present(const struct elek_ui_context *ctx, struct elek_ui_presentation *out)
+    static void present(const struct elek_ui *ui)
     {
-        fifteen_page = ctx->page;
-        if (ctx->knob && ctx->knob[1]->value) {
-            out->knob[0]->label = "QWE";
-            out->knob[0]->visible = ctx->knob[1]->value != 127;
+        fifteen_page = ui->page;
+        if (ui->knob[1]) {
+            elek_label_set(ui->view[0].label, "QWE");
+            ui->view[0].hidden = ui->knob[1] == 127;
         }
     }
     static const struct elek_machine fifteen = {

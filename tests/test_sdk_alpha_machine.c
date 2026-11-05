@@ -7,7 +7,7 @@
 #include <string.h>
 #include "../mods/sdk-alpha/machine.c"
 
-#define R ELEK_UI_RAW_MAX
+#define R SDK_ALPHA_RAW_MAX
 
 static uint8_t lit[64][64];
 void dn2_fillrect(void *bmp, int32_t x0, int32_t y0, int32_t x1, int32_t y1, int32_t on)
@@ -18,21 +18,26 @@ void dn2_fillrect(void *bmp, int32_t x0, int32_t y0, int32_t x1, int32_t y1, int
             lit[y][x] = (uint8_t)on;
 }
 
-/* The present callback: one label, visibility and glyph per call, from these. */
+/* The present callback: one label (0 keeps the declared one), visibility and glyph per call, from these. */
 static const char *want_label;
-static uint32_t want_visible = 1, presents, seen_knob_count;
+static uint32_t want_visible = 1, presents;
 static int32_t seen_page, seen_value;
+static char seen_label[ELEK_UI_LABEL_MAX + 1];
 static const struct elek_glyph glyph = { .rows = { 0x8000, [15] = 0x0001 } };
 static const struct elek_glyph *want_glyph;
-static void present(const struct elek_ui_context *ctx, struct elek_ui_presentation *out)
+static void present(const struct elek_ui *ui)
 {
     ++presents;
-    seen_page = ctx->page;
-    seen_knob_count = ctx->knob_count;
-    seen_value = ctx->knob[0]->value;
-    out->knob[0]->label = want_label;
-    out->knob[0]->visible = want_visible;
-    if (want_glyph) out->knob[0]->glyph = want_glyph;
+    seen_page = ui->page;
+    seen_value = ui->knob[0];
+    memcpy(seen_label, ui->view[0].label, sizeof seen_label);
+    assert(!ui->view[0].hidden && ui->view[0].glyph == 0);  /* each call starts from the declaration */
+    if (want_label) {
+        size_t n = strlen(want_label);
+        memcpy(ui->view[0].label, want_label, n < ELEK_UI_LABEL_MAX ? n + 1 : ELEK_UI_LABEL_MAX);
+    }
+    ui->view[0].hidden = !want_visible;
+    if (want_glyph) ui->view[0].glyph = want_glyph;
 }
 
 static const struct elek_knob knobs[] = { { "A", .min = -50, .max = 50 }, { "B", .max = 127 } };
@@ -116,12 +121,13 @@ int main(void)
     for (int32_t id = 102; id <= 106; ++id)
         assert(!sdk_alpha_find(id));
 
-    /* Labels: at most ELEK_UI_LABEL_MAX characters, nonprintable bytes become ?, null is the declared. */
+    /* Labels: at most ELEK_UI_LABEL_MAX characters, nonprintable bytes become ?; untouched, the declared. */
     static const struct { const char *label, *shown; } labels[] = {
         { "ABCDEFGH", "ABCDE" }, { "a\tb\x7f\x80", "a?b??" }, { " ~", " ~" }, { 0, "A" }, { "", "" },
     };
     for (unsigned i = 0; i < sizeof labels / sizeof *labels; ++i) {
         present_label(e, labels[i].label, 1);
+        assert(!strcmp(seen_label, "A"));
         assert(!strcmp(sdk_alpha_label(e, 0), labels[i].shown) && !strcmp(sdk_alpha_label(e, 1), "B"));
     }
     assert(!present_label(e, "", 1));                   /* the same presentation is no change */
@@ -135,7 +141,7 @@ int main(void)
     int32_t raw[2] = { R, 0 };
     presents = 0;
     sdk_alpha_present(e, 0, 1, raw, 0);
-    assert(presents == 1 && seen_page == 1 && seen_value == 50 && seen_knob_count == 2);
+    assert(presents == 1 && seen_page == 1 && seen_value == 50);
     sdk_alpha_present(e, 0, 1, raw, 0);
     assert(presents == 1);
     raw[1] = -7;                                        /* clamps to 0: the same input */

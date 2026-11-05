@@ -92,7 +92,7 @@ int main(void)
     }
     dnm_sdk_params(words);
     /* The controller stage changes the retained buffer after the params event. */
-    words[79 * 5 + 10 + sdk_pos[0]] = ELEK_UI_RAW_MAX;
+    words[79 * 5 + 10 + sdk_pos[0]] = SDK_ALPHA_RAW_MAX;
     words[79 * 7 + 10 + sdk_pos[0]] = 0;
     render(5, blocks[5], &native[5]); render(7, blocks[7], &native[7]);
     assert(calls[5] == 1 && calls[7] == 1);

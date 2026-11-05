@@ -9,25 +9,16 @@ import unittest
 
 from sdk_alpha_harness import sdk_machine, sdk_tests
 
-# AMNT on encoder A, PITCH on H, far from it. While AMNT is not 0 the machine labels PITCH "A 037", from AMNT's
+# AMNT on encoder A, PITCH on H, far from it. While AMNT is not 0 the machine labels PITCH "A 37", from AMNT's
 # value; at 0 PITCH has its own label.
 LABELS = sdk_machine("Labels", """
     #include "elekloader/sdk_alpha_machine.h"
 
     static const struct elek_knob knobs[] = { { "AMNT", .max = 127 }, { "PITCH", .max = 127 } };
-    static void present(const struct elek_ui_context *ctx, struct elek_ui_presentation *out)
+    static void present(const struct elek_ui *ui)
     {
-        static char text[] = "A 000";
-        unsigned amount;
-        if (!ctx->knob)
-            return;
-        amount = ctx->knob[0]->value;
-        if (amount) {
-            text[2] = '0' + amount / 100;
-            text[3] = '0' + amount / 10 % 10;
-            text[4] = '0' + amount % 10;
-            out->knob[1]->label = text;
-        }
+        if (ui->knob[0])
+            elek_label_num(ui->view[1].label, "A ", ui->knob[0]);
     }
     static const struct elek_machine labels = {
         .id = @ID@, .name = "Labels", .short_name = "LABL", ELEK_KNOBS(knobs),
@@ -41,10 +32,9 @@ LONG = sdk_machine("Long label", """
     #include "elekloader/sdk_alpha_machine.h"
 
     static const struct elek_knob knobs[] = { { "SHORT", .max = 127 } };
-    static void present(const struct elek_ui_context *ctx, struct elek_ui_presentation *out)
+    static void present(const struct elek_ui *ui)
     {
-        if (ctx->knob)
-            out->knob[0]->label = "ABCDEFGH";
+        elek_label_set(ui->view[0].label, "ABCDEFGH");
     }
     static const struct elek_machine long_label = {
         .id = @ID@, .name = "Long label", .short_name = "LONG", ELEK_KNOBS(knobs),
@@ -63,7 +53,7 @@ class Labels:
     def test_a_callback_can_relabel_a_knob(self):
         amnt, pitch = self.track.use(LABELS).knobs("AMNT", "PITCH")
         amnt.set(37)
-        self.assertEqual(pitch.label, "A 037")
+        self.assertEqual(pitch.label, "A 37")
 
     def test_the_declared_label_comes_back_when_the_callback_stops(self):
         amnt, pitch = self.track.use(LABELS).knobs("AMNT", "PITCH")
@@ -87,7 +77,7 @@ class Labels:
         amnt, pitch = self.tracks[0].use(LABELS).knobs("AMNT", "PITCH")
         other_amnt, other_pitch = self.tracks[1].use(LABELS).knobs("AMNT", "PITCH")
         amnt.set(37)
-        self.assertEqual(pitch.label, "A 037")
+        self.assertEqual(pitch.label, "A 37")
         self.assertEqual(other_pitch.label, "PITCH")
 
     def test_a_label_is_cut_at_five_characters(self):

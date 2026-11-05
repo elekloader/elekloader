@@ -40,7 +40,7 @@ const struct cm_ui32 *sdk_alpha_ui(int32_t id)
         struct cm_knob *n = k < 8 ? &p->ui.base.knob[k] : &p->ui.extra[k - 8];
         n->look = 134;              /* native unipolar encoder, 0..127 in 8.8 */
         n->flags = CM_RANGE | CM_DEFAULT | CM_NOT_SAMPLE;
-        n->max = ELEK_UI_RAW_MAX;
+        n->max = SDK_ALPHA_RAW_MAX;
         if (k < e->count) {
             n->name = n->lname = m->knobs[k].label;
             n->def = sdk_alpha_default(&m->knobs[k]);

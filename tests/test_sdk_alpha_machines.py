@@ -25,12 +25,11 @@ CALLBACK = sdk_machine("Callback", """
 
     volatile uint32_t callback_calls, callback_bad_context, callback_track;
 
-    static void present(const struct elek_ui_context *ctx, struct elek_ui_presentation *out)
+    static void present(const struct elek_ui *ui)
     {
         ++callback_calls;
-        callback_track = ctx->track;
-        if (ctx->page != ELEK_UI_NO_PAGE || ctx->page_count || ctx->knob_count || ctx->knob ||
-            out->knob_count || out->knob)
+        callback_track = ui->track;
+        if (ui->page != ELEK_UI_NO_PAGE)
             ++callback_bad_context;
     }
     static const struct elek_machine callback = {

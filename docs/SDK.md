@@ -66,10 +66,10 @@ static const struct elek_knob knobs[] = {
     [LEVEL] = { "LEVEL", .max = 127, .def = 100 },
     [TONE] = { "TONE", .min = -10, .max = 10 },          /* starts at 0 */
 };
-static void present(const struct elek_ui_context *ctx, struct elek_ui_presentation *out)
+static void present(const struct elek_ui *ui)
 {
-    if (ctx->knob[LEVEL]->value == 127)
-        out->knob[TONE]->visible = 0;
+    elek_label_num(ui->view[TONE].label, "T", ui->knob[TONE]);    /* "T-10".."T10" */
+    ui->view[TONE].hidden = ui->knob[LEVEL] == 0;
 }
 static const struct elek_machine machine = {
     .id = 23, .name = "My Machine", .short_name = "MINE", ELEK_KNOBS(knobs),
@@ -103,27 +103,28 @@ ELEK_REGISTER_MACHINE(machine);
 
 ### Presentation
 
-`.present` is optional. Its context includes the track, the displayed
-machine-page index, and values for every logical knob, including those on
-other pages. `ELEK_UI_NO_PAGE` means the call is not for a displayed machine
-page, for example when naming LFO destinations. An empty machine has no
-knob array.
+`.present` is optional. It gets one `const struct elek_ui *ui`: the
+`track`, the `page` shown, and `ui->knob[ID]`, every knob's value mapped
+to its `min..max`, including those on other pages. `ELEK_UI_NO_PAGE`
+means the call is not for a page shown, for example when naming LFO
+destinations.
 
-Every call starts from the declared labels and glyphs, with all populated
-controls visible. The callback can replace a label, set `visible` to zero,
-or supply a glyph. A hidden knob keeps its value and LFO identity, and its
-encoder does not edit it while that page is shown. Page copy, clear/undo
-and paste include hidden controls.
+It writes `ui->view[ID]`, which every call starts from the declaration:
+the knob's `label`, `hidden` 0 and its `glyph`. Write a label with
+`elek_label_set(label, "SAW")` or `elek_label_num(label, "F", value)`
+(there is no libc), set `hidden`, or pick a glyph. A hidden knob keeps
+its value and LFO identity, and its encoder does not edit it while that
+page is shown. Page copy, clear/undo and paste include hidden controls.
 
 A glyph is sixteen rows of sixteen bits, top row first and bit 15 leftmost.
 A set bit lights a pixel; a null glyph selects the stock control graphic.
 It replaces the control graphic while retaining the label and binding.
 Menus and the screensaver cover SDK glyphs as they cover native controls.
 
-Labels are copied immediately after `.present` returns, truncated to five
-characters; nonprintable bytes become `?`. Their source must still be
-readable then: use literals or persistent buffers, not callback-local
-arrays. Glyph storage must remain readable while displayed.
+A label shows at most five characters; nonprintable bytes become `?`.
+`elek_label_num` cuts its prefix to fit the number, and writes `#` when
+the number alone needs more. Glyph storage must remain readable while
+displayed.
 
 Every device calls `.present` when the machine, track, page or a knob's
 value has changed since its last call, and may call it again with the same

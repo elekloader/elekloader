@@ -65,16 +65,16 @@ int32_t sdk_alpha_map(const struct elek_knob *knob, int32_t raw)
 {
     uint32_t span = (uint32_t)knob->max - (uint32_t)knob->min;
     if (raw < 0) raw = 0;
-    if (raw > ELEK_UI_RAW_MAX) raw = ELEK_UI_RAW_MAX;
-    uint32_t offset = (span / ELEK_UI_RAW_MAX) * (uint32_t)raw +
-        ((span % ELEK_UI_RAW_MAX) * (uint32_t)raw + ELEK_UI_RAW_MAX / 2) / ELEK_UI_RAW_MAX;
+    if (raw > SDK_ALPHA_RAW_MAX) raw = SDK_ALPHA_RAW_MAX;
+    uint32_t offset = (span / SDK_ALPHA_RAW_MAX) * (uint32_t)raw +
+        ((span % SDK_ALPHA_RAW_MAX) * (uint32_t)raw + SDK_ALPHA_RAW_MAX / 2) / SDK_ALPHA_RAW_MAX;
     return (int32_t)((uint32_t)knob->min + offset);
 }
 
 int32_t sdk_alpha_default(const struct elek_knob *knob)
 {
     int32_t def = knob->def < knob->min ? knob->min : knob->def > knob->max ? knob->max : knob->def;
-    int32_t lo = 0, hi = ELEK_UI_RAW_MAX;
+    int32_t lo = 0, hi = SDK_ALPHA_RAW_MAX;
     while (lo < hi) {
         int32_t mid = (lo + hi) / 2;
         if (sdk_alpha_map(knob, mid) < def) lo = mid + 1;
@@ -96,43 +96,34 @@ int32_t sdk_alpha_present(const struct sdk_alpha_entry *e, uint32_t track, int32
 {
     const struct elek_machine *m = e->machine;
     uint32_t n = e->count, k;
-    struct elek_ui_value values[SDK_ALPHA_KNOBS];
-    const struct elek_ui_value *input[SDK_ALPHA_KNOBS];  /* 0..n-1 filled: no memset in the build */
-    struct elek_ui_knob_presentation presentation[SDK_ALPHA_KNOBS];
-    struct elek_ui_knob_presentation *output[SDK_ALPHA_KNOBS];
+    int32_t clamped[SDK_ALPHA_KNOBS], knob[SDK_ALPHA_KNOBS];
+    struct elek_view view[SDK_ALPHA_KNOBS];
     int32_t changed = 0;
     if (page < 0 || (uint32_t)page >= e->pages)
         page = ELEK_UI_NO_PAGE;
-    for (k = 0; k < n; ++k) {
-        int32_t r = raw[k] < 0 ? 0 : raw[k] > ELEK_UI_RAW_MAX ? ELEK_UI_RAW_MAX : raw[k];
-        values[k].raw_value = r;
-        values[k].value = sdk_alpha_map(&m->knobs[k], r);
-        input[k] = &values[k];
-        presentation[k].label = m->knobs[k].label;
-        presentation[k].visible = 1;
-        presentation[k].glyph = m->knobs[k].glyph;
-        output[k] = &presentation[k];
-    }
+    for (k = 0; k < n; ++k)
+        clamped[k] = raw[k] < 0 ? 0 : raw[k] > SDK_ALPHA_RAW_MAX ? SDK_ALPHA_RAW_MAX : raw[k];
     if (!force && e == sdk_alpha_seen && track == seen_track && page == sdk_alpha_seen_page) {
-        for (k = 0; k < n && values[k].raw_value == seen_raw[k]; ++k)
+        for (k = 0; k < n && clamped[k] == seen_raw[k]; ++k)
             ;
         if (k == n)
             return 0;
     }
-    for (k = 0; k < n; ++k)
-        seen_raw[k] = values[k].raw_value;
+    for (k = 0; k < n; ++k) {
+        seen_raw[k] = clamped[k];
+        knob[k] = sdk_alpha_map(&m->knobs[k], clamped[k]);
+        elek_label_set(view[k].label, m->knobs[k].label);
+        view[k].hidden = 0;
+        view[k].glyph = m->knobs[k].glyph;
+    }
     sdk_alpha_seen = e;
     seen_track = track;
     sdk_alpha_seen_page = page;
-    const struct elek_ui_context ctx = {
-        .page = page, .page_count = e->pages, .knob_count = n,
-        .knob = n ? input : 0, .track = track,
-    };
-    struct elek_ui_presentation out = { .knob_count = n, .knob = n ? output : 0 };
+    const struct elek_ui ui = { .knob = knob, .view = view, .page = page, .track = track };
     if (m->present)
-        m->present(&ctx, &out);
+        m->present(&ui);
     for (k = 0; k < n; ++k) {
-        const char *label = presentation[k].label ? presentation[k].label : m->knobs[k].label;
+        const char *label = view[k].label;
         uint32_t c = 0;
         for (; c < ELEK_UI_LABEL_MAX && label[c]; ++c) {
             unsigned char ch = label[c];
@@ -142,11 +133,11 @@ int32_t sdk_alpha_present(const struct sdk_alpha_entry *e, uint32_t track, int32
         }
         changed |= sdk_alpha_labels[k][c] != 0;
         sdk_alpha_labels[k][c] = 0;
-        uint8_t visible = presentation[k].visible != 0;
+        uint8_t visible = view[k].hidden == 0;
         changed |= sdk_alpha_visibility[k] != visible;
         sdk_alpha_visibility[k] = visible;
-        changed |= sdk_alpha_glyphs[k] != presentation[k].glyph;
-        sdk_alpha_glyphs[k] = presentation[k].glyph;
+        changed |= sdk_alpha_glyphs[k] != view[k].glyph;
+        sdk_alpha_glyphs[k] = view[k].glyph;
     }
     return changed;
 }

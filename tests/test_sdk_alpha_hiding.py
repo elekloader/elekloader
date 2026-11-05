@@ -14,10 +14,9 @@ HIDING = sdk_machine("Hiding", """
 
     enum { HIDE, TRGT };
     static const struct elek_knob knobs[] = { [HIDE] = { "HIDE", .max = 127 }, [TRGT] = { "TRGT", .max = 127 } };
-    static void present(const struct elek_ui_context *ctx, struct elek_ui_presentation *out)
+    static void present(const struct elek_ui *ui)
     {
-        if (ctx->knob[HIDE]->value == 127)
-            out->knob[TRGT]->visible = 0;
+        ui->view[TRGT].hidden = ui->knob[HIDE] == 127;
     }
     static const struct elek_machine hiding = {
         .id = @ID@, .name = "Hiding", .short_name = "HIDE", ELEK_KNOBS(knobs),

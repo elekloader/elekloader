@@ -58,7 +58,7 @@ int main(void)
         fw_render_machine[t] = 100;
         fw_voice_note[t] = (60 + t) << 16;
         fw_voice_vel[t] = 100 << 8;
-        effective[t][0] = t ? ELEK_UI_RAW_MAX : 0;
+        effective[t][0] = t ? SDK_ALPHA_RAW_MAX : 0;
     }
     fw_voice_start = 3;
     sdk_alpha_render(blocks);

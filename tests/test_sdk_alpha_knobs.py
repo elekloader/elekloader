@@ -24,12 +24,12 @@ EIGHT = sdk_machine("Eight", """
     ELEK_REGISTER_MACHINE(eight);
 """)
 
-# Knobs with different bounds, on encoders A to D; E to H hold none. The callback keeps the raw
-# value (native, 0..32512) and the mapped value it was given for each knob.
+# Knobs with different bounds, on encoders A to D; E to H hold none. The callback keeps the mapped
+# value it was given for each knob.
 BOUNDS = sdk_machine("Bounds", """
     #include "elekloader/sdk_alpha_machine.h"
 
-    volatile int32_t bounds_raw[4], bounds_value[4];
+    volatile int32_t bounds_value[4];
 
     static const struct elek_knob knobs[] = {
         { "WIDE", .max = 127 },
@@ -37,14 +37,10 @@ BOUNDS = sdk_machine("Bounds", """
         { "SIGN", .min = -10, .max = 10, .def = -10 },     /* from min: the Digitone II has no defaults */
         { "FULL", .min = -2147483647 - 1, .max = 2147483647, .def = -2147483647 - 1 },
     };
-    static void present(const struct elek_ui_context *ctx, struct elek_ui_presentation *out)
+    static void present(const struct elek_ui *ui)
     {
-        if (!ctx->knob)
-            return;
-        for (int k = 0; k < 4; ++k) {
-            bounds_raw[k] = ctx->knob[k]->raw_value;
-            bounds_value[k] = ctx->knob[k]->value;
-        }
+        for (int k = 0; k < 4; ++k)
+            bounds_value[k] = ui->knob[k];
     }
     static const struct elek_machine bounds = {
         .id = @ID@, .name = "Bounds", .short_name = "BNDS", ELEK_KNOBS(knobs),
@@ -54,23 +50,21 @@ BOUNDS = sdk_machine("Bounds", """
 """)
 
 # Two pages. PITCH sits on both: encoder D of the first, B of the second. The callback keeps the page
-# it was called for and every knob's raw value, whichever page the knob is on.
+# it was called for and every knob's value, whichever page the knob is on.
 PAGES = sdk_machine("Pages", """
     #include "elekloader/sdk_alpha_machine.h"
 
-    volatile int32_t pages_page, pages_raw[3];
+    volatile int32_t pages_page, pages_value[3];
 
     static const struct elek_knob knobs[] = {
         { "AMNT", .max = 127 }, { "PITCH", .max = 127 }, { "OTHER", .max = 127 },
     };
-    static void present(const struct elek_ui_context *ctx, struct elek_ui_presentation *out)
+    static void present(const struct elek_ui *ui)
     {
-        if (!ctx->knob)
-            return;
-        if (ctx->page >= 0)
-            pages_page = ctx->page;
+        if (ui->page >= 0)
+            pages_page = ui->page;
         for (int k = 0; k < 3; ++k)
-            pages_raw[k] = ctx->knob[k]->raw_value;
+            pages_value[k] = ui->knob[k];
     }
     static const struct elek_machine pages_machine = {
         .id = @ID@, .name = "Pages", .short_name = "PAGE", ELEK_KNOBS(knobs),
@@ -146,7 +140,6 @@ class Knobs:
         pitch, sign = self.track.use(BOUNDS).knobs("PITCH", "SIGN")
         for knob in (pitch, sign):
             knob.turn(+37)
-            self.assertEqual(self.seen('bounds_raw', knob), knob.raw)
             self.assertEqual(self.seen('bounds_value', knob), knob.value)
 
     def test_a_signed_range_reaches_both_ends(self):
@@ -187,7 +180,7 @@ class Knobs:
         amnt, = self.track.use(PAGES).knobs("AMNT")
         amnt.turn(+20)
         self.track.show(1)
-        self.assertEqual(self.read('pages_raw', amnt.spec['id']), amnt.raw)
+        self.assertEqual(self.read('pages_value', amnt.spec['id']), amnt.value)
 
     def test_each_track_has_its_own_values(self):
         first, = self.tracks[0].use(EIGHT).knobs("KNB A")

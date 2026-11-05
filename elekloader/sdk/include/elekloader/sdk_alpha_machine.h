@@ -8,7 +8,7 @@
 
 #define ELEK_UI_NO_PAGE (-1)
 #define ELEK_UI_LABEL_MAX 5   /* a knob label's characters: what fits under a knob on the Digitakt and Digitone */
-#define ELEK_UI_RAW_MAX (127 << 8) /* Native 8.8 units: 0..32512, independent of mapped bounds. */
+#define ELEK_UI_KNOB_MAX 15   /* a machine's knobs */
 enum { ELEK_A, ELEK_B, ELEK_C, ELEK_D, ELEK_E, ELEK_F, ELEK_G, ELEK_H };   /* the encoders */
 
 /* 16 x 16 monochrome pixels: top row first, bit 15 leftmost; 1 lights a pixel.
@@ -26,28 +26,40 @@ struct elek_page {
     const char *label;             /* 1..16 printable ASCII characters; a page without one is absent */
     const struct elek_knob *encoder[8]; /* &knobs[ID] or null for an empty position; pages may share */
 };
-struct elek_ui_value {
-    int32_t value;                 /* signed integer, nearest; exact halves round toward max */
-    int32_t raw_value;             /* native 8.8, 0..ELEK_UI_RAW_MAX */
+/* What .present shows for one knob. Each call starts from the knob's declaration: its label, shown,
+ * its glyph. */
+struct elek_view {
+    char label[ELEK_UI_LABEL_MAX + 1]; /* write it with elek_label_set or elek_label_num; nonprintable
+                                        * characters show as ? */
+    uint32_t hidden;               /* nonzero blanks the knob on every page; it keeps its value */
+    const struct elek_glyph *glyph; /* null selects the stock graphic; must stay readable */
 };
-struct elek_ui_context {
-    int32_t page;                  /* displayed machine page, or ELEK_UI_NO_PAGE (e.g. LFO labels) */
-    uint32_t page_count, knob_count;
-    const struct elek_ui_value *const *knob; /* indexed by machine-wide logical ID, all pages */
+struct elek_ui {
+    const int32_t *knob;           /* by id, mapped to min..max: every knob, on every page */
+    struct elek_view *view;        /* by id */
+    int32_t page;                  /* the page shown, or ELEK_UI_NO_PAGE (e.g. naming LFO destinations) */
     uint32_t track;                /* the track this call is for, from zero: not always the active one */
 };
-/* Labels may use literals or caller-owned storage readable after callback return.
- * The SDK copies labels immediately: at most ELEK_UI_LABEL_MAX characters, nonprintable bytes become ?.
- * Automatic callback-local arrays have expired by then; use static/caller-owned buffers. */
-struct elek_ui_knob_presentation {
-    const char *label;
-    uint32_t visible;              /* defaults to 1; zero blanks every position, retaining its value */
-    const struct elek_glyph *glyph; /* descriptor's default each call; null selects stock */
-};
-struct elek_ui_presentation {
-    uint32_t knob_count;
-    struct elek_ui_knob_presentation *const *knob; /* logical IDs; defaults reset each call */
-};
+/* Labels, as there is no libc: text, cut at ELEK_UI_LABEL_MAX characters. */
+static inline void elek_label_set(char *label, const char *text)
+{
+    int n = 0;
+    while (n < ELEK_UI_LABEL_MAX && text[n]) { label[n] = text[n]; ++n; }
+    label[n] = 0;
+}
+/* prefix then v in decimal, the prefix cut to fit the number; "#" when the number alone does not fit. */
+static inline void elek_label_num(char *label, const char *prefix, int32_t v)
+{
+    char digits[11];
+    uint32_t n = v < 0 ? 0u - (uint32_t)v : (uint32_t)v;
+    int count = 0, pos = 0;
+    do digits[count++] = (char)('0' + n % 10); while (n /= 10);
+    if (v < 0) digits[count++] = '-';
+    if (count > ELEK_UI_LABEL_MAX) { label[0] = '#'; label[1] = 0; return; }
+    while (pos < ELEK_UI_LABEL_MAX - count && prefix[pos]) { label[pos] = prefix[pos]; ++pos; }
+    while (count) label[pos++] = digits[--count];
+    label[pos] = 0;
+}
 
 /* Sound. render fills one voice's block. The same C builds for every device: samples are the
  * device's own format, so touch them only through the helpers below, write constants with
@@ -134,9 +146,9 @@ struct elek_machine {
     const struct elek_knob *knobs; /* at most fifteen: give them with ELEK_KNOBS */
     uint32_t knob_count;
     struct elek_page pages[2];     /* a page without a label is absent: the first, if any, has one */
-/* Called when the machine, track, page or a value changed, and maybe again with the same inputs:
-     * keep it pure. ctx and its values are read-only snapshots, valid only during this call. */
-    void (*present)(const struct elek_ui_context *, struct elek_ui_presentation *);
+    /* Optional: called when the machine, track, page or a value changed, and maybe again with the same
+     * inputs: keep it pure. ui and its arrays are valid only during the call. */
+    void (*present)(const struct elek_ui *ui);
     /* Optional: the machine's sound, one voice at a time (without it the device's own plays).
      * It may read only its arguments, its state and constant data. */
     void (*render)(const struct elek_voice *, elek_sample *out);

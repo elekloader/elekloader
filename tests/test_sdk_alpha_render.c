@@ -7,6 +7,7 @@
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include "elekloader/sdk_alpha_machine.h"
 
 #ifndef ELEK_TARGET_SHARC
@@ -57,6 +58,24 @@ static void check_phase(void)
     assert(elek_phase_inc(-1) == elek_phase_inc(0) && elek_phase_inc(200 << 16) == elek_phase_inc(127 << 16));
 }
 
+/* The label helpers: no libc on the device. */
+static void check_labels(void)
+{
+    static const struct { const char *prefix; int32_t v; const char *want; } nums[] = {
+        {"F", 7, "F7"}, {"A ", 37, "A 37"}, {"F", -50, "F-50"}, {"LONG", 127, "LO127"}, {"", 0, "0"},
+        {"X", 99999, "99999"}, {"X", -9999, "-9999"}, {"X", 100000, "#"}, {"X", INT32_MIN, "#"},
+    };
+    char label[ELEK_UI_LABEL_MAX + 1];
+    for (unsigned i = 0; i < sizeof nums / sizeof *nums; ++i) {
+        elek_label_num(label, nums[i].prefix, nums[i].v);
+        assert(!strcmp(label, nums[i].want));
+    }
+    elek_label_set(label, "SAW");
+    assert(!strcmp(label, "SAW"));
+    elek_label_set(label, "TOOLONG");
+    assert(!strcmp(label, "TOOLO"));
+}
+
 /* An author's machine, as in the SDK's README: a sine kernel and a render that scales it. */
 enum { LEVEL, FINE };
 static elek_sample table[256];
@@ -92,6 +111,7 @@ int main(int argc, char **argv)
     check_float();
 #endif
     check_phase();
+    check_labels();
     /* The table as each target holds it (a ColdFire build would write constants with ELEK_SAMPLE). */
     for (int i = 0; i < 256; ++i) {
         double x = sin(2.0 * 3.14159265358979323846 * i / 256.0);

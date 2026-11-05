@@ -7,7 +7,8 @@
 
 #include "elekloader/sdk_alpha_machine.h"
 
-#define SDK_ALPHA_KNOBS 15              /* logical knobs 0-14 */
+#define SDK_ALPHA_KNOBS ELEK_UI_KNOB_MAX
+#define SDK_ALPHA_RAW_MAX (127 << 8)    /* a knob's native 8.8 range, 0..32512, whatever its bounds */
 
 /* A machine, indexed once: its knobs' ids by page and encoder. */
 struct sdk_alpha_entry {
@@ -24,7 +25,7 @@ void sdk_alpha_init(void);
 /* The machine with native id `id`, or 0. */
 const struct sdk_alpha_entry *sdk_alpha_find(int32_t id);
 
-/* A native 8.8 value (clamped to 0..ELEK_UI_RAW_MAX) as the knob's mapped value. */
+/* A native 8.8 value (clamped to 0..SDK_ALPHA_RAW_MAX) as the knob's mapped value. */
 int32_t sdk_alpha_map(const struct elek_knob *knob, int32_t raw);
 /* The first native step whose mapped value reaches the knob's default. */
 int32_t sdk_alpha_default(const struct elek_knob *knob);
