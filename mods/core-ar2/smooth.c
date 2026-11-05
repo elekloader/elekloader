@@ -291,25 +291,14 @@ static __attribute__((noinline)) unsigned slow_get(const struct info *in, const 
     return core_store_get(in->field, (void *)s, 0);
 }
 
-/* the read, by the code */
-static int value(int track, int code, unsigned flags)
+/* the read of one parameter on a track, its code and the track checked, with
+ * the block's kit and the track's sound or kit */
+static inline __attribute__((always_inline)) int one(const struct info *in, int track, int code,
+                                                     const unsigned char *kit, const unsigned char *s,
+                                                     unsigned flags)
 {
-    const struct info *in;
-    const unsigned char *kit, *s;
     uint32_t b;
     int v, off, min, max;
-    if (code < FIRST_CODE || code > LAST_CODE)
-        return NONE;
-    if (!flags_made)
-        make();
-    in = &info[code - FIRST_CODE];
-    /* a kit parameter on the FX track, a sound's on a drum track (core_lock_on_track) */
-    if (!in->p || (unsigned)track >= 13 || !(in->flags & I_KIT) != (track != 12))
-        return NONE;
-    snapshot();
-    if (!(kit = snap_kit))                    /* the sound, or on the FX track the kit (core_audio_sound) */
-        return NONE;
-    s = track < 12 ? kit + 42 + 152 * track : kit;
     /* the target, in whole steps: the field's bytes, as core_store_get reads them */
     switch (in->n) {
     case 1: b = s[in->off[0]]; break;
@@ -338,6 +327,49 @@ static int value(int track, int code, unsigned flags)
     return v < min ? min : v > max ? max : v;
 }
 
+/* is the code a parameter on the track: a kit parameter on the FX track, a
+ * sound's on a drum track (core_lock_on_track)? */
+static inline __attribute__((always_inline)) const struct info *on(int track, int code)
+{
+    const struct info *in;
+    if (code < FIRST_CODE || code > LAST_CODE)
+        return 0;
+    in = &info[code - FIRST_CODE];
+    return in->p && !(in->flags & I_KIT) == (track != 12) ? in : 0;
+}
+
+/* the read, by the code */
+static int value(int track, int code, unsigned flags)
+{
+    const struct info *in;
+    const unsigned char *kit;
+    if (!flags_made)
+        make();
+    if ((unsigned)track >= 13 || !(in = on(track, code)))
+        return NONE;
+    snapshot();
+    if (!(kit = snap_kit))                    /* the sound, or on the FX track the kit (core_audio_sound) */
+        return NONE;
+    return one(in, track, code, kit, track < 12 ? kit + 42 + 152 * track : kit, flags);
+}
+
+/* (0.10) several parameters of one track by their handles: the track's
+ * checks, the block's state and the sound are found once for all of them */
+void core_param_values(int track, const int *handles, int n, unsigned flags, int *out)
+{
+    const struct info *in;
+    const unsigned char *kit = 0, *s = 0;
+    int i;
+    if (!flags_made)
+        make();
+    if ((unsigned)track < 13) {
+        snapshot();
+        if ((kit = snap_kit) != 0)
+            s = track < 12 ? kit + 42 + 152 * track : kit;
+    }
+    for (i = 0; i < n; i++)
+        out[i] = s && (in = on(track, handles[i])) ? one(in, track, handles[i], kit, s, flags) : NONE;
+}
 int core_param_value_ex(int track, unsigned field, unsigned flags)
 {
     return value(track, core_lock_code(field), flags);

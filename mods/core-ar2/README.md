@@ -698,14 +698,17 @@ track whether any of its 8 routes points at a mod parameter. The scene's
 list, the performances and the routes are then asked by the code
 (`core_scene_value_in`, `core_perf_offset_in`, `core_mod_offset_code`)
 only when they can add something. `core_param_handle(field)` gives the
-code as a handle, and `core_param_value_h(track, handle, flags)` reads by
-it. `core_store_get` reads a field a byte at a time (a bit at a time
+code as a handle, `core_param_value_h(track, handle, flags)` reads by
+it, and `core_param_values(track, handles, n, flags, out)` reads several
+parameters of one track with the track's checks, the block's state and
+the sound found once. `core_store_get` reads a field a byte at a time (a bit at a time
 before). The values are 0.9's: lock-check 1.10's ring gives the same A, B,
 C, A's and C's sound values, p-lock, scene lock, LFO and performance
 offsets under both, after NRPNs set A, B and C and with the LFO's
 destination on A (emulator, 5 Nov 2026). The three reads a block cost
-1,828 DMA timer ticks on average under 0.9's code and 468 under 0.10's
-(609 and 156 a read; a call that returns at once costs 39). Most of what
+1,828 DMA timer ticks on average under 0.9's code and about 480 under
+0.10's (609 and about 160 a read; a call that returns at once costs 39),
+and 366 as one `core_param_values` call (122 a read). Most of what
 was saved is the routes' walk: lock-check's A and C are `"mod": true`, and
 each of their reads walked the track's 8 routes. Not yet measured on a
 unit.

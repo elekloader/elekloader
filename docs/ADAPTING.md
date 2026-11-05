@@ -1927,7 +1927,9 @@ stock's ramp block by block. Read it from the audio side only
 smoother. A read costs about 0.2% of a block in the emulator (core-ar2
 0.10; 0.9's cost about 0.7%). A mod that reads every block can look the
 field up once with `core_param_handle(field)` and read by the handle with
-`core_param_value_h(track, handle, flags)`, which gives the same values.
+`core_param_value_h(track, handle, flags)`, which gives the same values;
+`core_param_values(track, handles, n, flags, out)` reads several of one
+track's parameters in one call, at about three quarters of the cost a read.
 Core keeps a smoother for 32
 lockable parameters a track; a build with more gives the rest their
 target unsmoothed.
