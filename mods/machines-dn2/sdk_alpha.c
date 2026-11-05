@@ -273,6 +273,9 @@ static const struct elek_ui_knob *shown_knob(int32_t i, int32_t k)
 /* ev_tick, the UI task: each track keeps its page and .present sees the active track's values. */
 void dn2_sdk_tick(uint8_t *ctrl)
 {
+    init();
+    if (!count)
+        return;                     /* no SDK machine: leave Brain and SYN's methods alone */
     uint32_t t = *dn2_active_track;
     /* At power-on SYN shows under the project's name: its title accessor (hooks.s) has not run yet. */
     if (!dn2_syn_view) {
