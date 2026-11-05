@@ -1,6 +1,6 @@
 # lock-check (Analog Rytm MKII)
 
-A test for [core-ar2](../../mods/core-ar2)'s lockable parameters (core 0.8), from 1.1 their p-locks, from 1.2 their scene and performance locks, from 1.3 a value above 127, from 1.4 a lockable parameter that is not an LFO destination, from 1.5 a category of its own, from 1.6 core's cut of strings longer than it shows (core 0.8), and from 1.7 the smoothed value (core 0.9).
+A test for [core-ar2](../../mods/core-ar2)'s lockable parameters (core 0.8), from 1.1 their p-locks, from 1.2 their scene and performance locks, from 1.3 a value above 127, from 1.4 a lockable parameter that is not an LFO destination, from 1.5 a category of its own, from 1.6 core's cut of strings longer than it shows (core 0.8), from 1.7 the smoothed value (core 0.9), from 1.10 a field's init (core 0.10), and from 1.11 the batch read (core 0.10).
 It declares three sound fields with `"lock": true` and registers them in
 `core_lock_params` (1.6: four); `lc_a`, `lc_c` and `lc_d` are also `"lfo": true`:
 
@@ -11,6 +11,7 @@ It declares three sound fields with `"lock": true` and registers them in
 | `lc_c` | 10 | 44 | 9 | LCHK:Lock Check C (its own) | LCC | 0..1000, page knob id 2 |
 | `lc_d` (1.6) | 1 | 45 | none | LCHK:Lock Check D, a name longer… (cut to 4, 32 and 4 characters) | LCDX (a 200-character short name, cut) | 0..1 |
 | `lc_k` (1.9, kit) | 7 | 46 | 48 | the FX LFO's: LCHK:Lock Check K | LCK | 0..127, FX page knob id 3 |
+| `lc_n` (1.10) | 7 | 47 | 49 | LCHK:Lock Check N | LCN | 0..127, `"init": 100`, page knob C, id 4 |
 
 A bar along the bottom edge shows the offset track 1's LFO gives A or C
 (`core_lfo_offset`), from the middle, a pixel per stock knob step; a small
@@ -51,6 +52,20 @@ CC 48 on the FX track's channel sets it. Each ring record then also holds
 `core_param_value(12, K)`, K in the kit, the FX LFO's offset to K and its
 p-lock, scene lock and performance offset (44-byte records).
 
+From 1.10 (core 0.10) a sound field, `lc_n`, is declared `"init": 100`, so
+it reads 100 in a new project and in a sound saved without it: knob C of
+the LOCK CHECK page shows it (id 4). Each audio block also writes N's
+state on track 1 to `lc_init`, after the magic `INIT`: the block, then
+`core_param_value(0, N)`, N in the sound, the LFO's offset to N, and N's
+p-lock and scene lock (16-bit, -1 for none).
+
+From 1.11 each audio block also reads A, B and C again in one
+`core_param_values` call by their handles (`core_param_handle`) and
+writes to `lc_batch`, after the magic `BTCH`: that call's cost in DMA timer
+0's ticks, the most and the sum, the blocks, and the blocks where any of
+the three differed from its own `core_param_value` read in the same block
+(0 when the batch read gives the same values).
+
 The screen's y counts from the bottom row (y 0 is the bottom edge). 1.0
 drew its bars at y 57..63, which is the top edge, over the stock header's
 top rows; 1.0.1 and later draw them from y 0 (1.2's third bar at y 8..9).
@@ -59,7 +74,7 @@ top rows; 1.0.1 and later draw them from y 0 (1.2's third bar at y 8..9).
 python -m elekloader.sdk.build mods/core-ar2 --stock Analog-Rytm_MKII_OS1.74.syx
 python -m elekloader.sdk.build examples/lock-check-ar2 --stock Analog-Rytm_MKII_OS1.74.syx
 python -m elekloader.patch --stock Analog-Rytm_MKII_OS1.74.syx \
-    --mod mods/core-ar2/out/core-0.9.elemod --mod examples/lock-check-ar2/out/lock-check-1.9.elemod \
+    --mod mods/core-ar2/out/core-0.10.elemod --mod examples/lock-check-ar2/out/lock-check-1.10.elemod \
     --out rytm-lock.syx --version LK10
 ```
 

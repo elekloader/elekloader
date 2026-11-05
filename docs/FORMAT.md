@@ -269,7 +269,10 @@ also a velocity and aftertouch destination (core-ar2 0.9). A kit field
 can be lockable too (core-ar2 0.9): it is the FX track's parameter, with
 `"cc"`, `"lfo"` (the FX LFO's destination) and `"smooth"` but not `"mod"`
 (the FX track has no routes, so it is refused), and only with a core that
-imports `core_fx_lfo_dst`. Only a core
+imports `core_fx_lfo_dst`. Any field can take `"init": N` (core-ar2 0.10),
+0 to 2^bits - 1, the value it reads where its bits are zero (0, the same as
+no `init`, otherwise); it is refused with a core that has no table
+`core_field_inits`, and past 63 fields with an init. Only a core
 that imports `__store_gen` takes them (core-ar2 from 0.2, core-a4); with another
 core a mod that declares storage is refused. A scope's room can depend on
 the core's version (a sound's: 24 bits with core-ar2 0.2, 56 from 0.3,
@@ -280,8 +283,10 @@ linker:
   (`elekloader/store.py`, `js/src/store.ts`: the same bytes from both)
   within what the build's core keeps; a field an earlier build placed past
   that (with a newer core) repacks its scope;
-- defines each `sym` as `scope << 28 | bits << 22 | offset`, the offset
-  in bits from the start of the scope's bytes, most significant bit first;
+- defines each `sym` as `scope << 28 | bits << 22 | slot << 16 | offset`,
+  the offset in bits from the start of the scope's bytes, most significant
+  bit first (no scope keeps 2^16 bits), and `slot` the field's place in
+  `core_field_inits` counted from 1, or 0 for a field without an `init`;
 - defines `__store_gen` (the sound, kit, global and track generations,
   one byte each, high to low) and `__store_gen2` (the pattern and project
   generations, then T and P);
@@ -293,21 +298,27 @@ linker:
   that has a CC (a lockable field or a CC with a core that has no such table
   is refused; a kit field never gets a CC stock uses on the FX channel, the
   device's `fx_ccs_taken`, and a lockfile that gives it one is refused);
+  and to `core_field_inits`, each field's `init` (4 bytes), by slot: the
+  fields with one, in the order of `fields`;
 - appends the lockfile to the image, after the mods' image: `ELKSTORE`,
   its length (4 bytes, big-endian), then its text. Nothing reads it on the
   unit; `elekloader.patch --lockfile-from` takes it back out of a build;
 - returns the new lockfile, which the build's manifest carries as `store`.
 
-The lockfile is JSON: `elekloader_store` (1), `device`, `id`, `ancestors`,
+The lockfile is JSON: `elekloader_store` (1, or 2 once a field has an
+`init`, which an older elekloader refuses), `device`, `id`, `ancestors`,
 `split` (`track`, `pattern`: bytes per item in the tagged store),
 `generation` and `next` (per scope: its generation and its first bit no
-field ever used), `fields` (`mod`, `sym`, `scope`, `offset`, `bits`) and
+field ever used), `fields` (`mod`, `sym`, `scope`, `offset`, `bits`, and
+`init` when it is not 0) and
 `freed` (fields a build dropped: no other field is given their bits until
 the scope's generation is bumped, and a field back with the same `mod`,
-`sym`, `scope` and `bits` takes its old place again). A field keeps its
-place while its mod, `sym`, `scope` and `bits` stay the same. `id` is the
+`sym`, `scope`, `bits` and `init` takes its old place again). A field keeps its
+place while its mod, `sym`, `scope`, `bits` and `init` stay the same: a
+field whose `init` changes is a new field, as its old bits mean other values. `id` is the
 first 4 bytes of a SHA-256 of the layout (`store.layout_id`: the format, the
-device, `split`, `generation`, `next`, `fields` and `freed`, not the ID or
+device, `split`, `generation`, `next`, `fields` and `freed`, each field's
+`init` only where it has one, so older IDs stay; not the ID or
 the ancestors), taken whenever the layout changes; a lockfile whose ID came
 from somewhere else keeps it until then. Lockable fields add `codes`,
 `freed_codes` and `next_code` (part of the layout ID), and fields with a CC
@@ -381,7 +392,9 @@ The Analog Rytm MKII's core (core-ar2) has `ev_tick`, `ev_draw`,
 0x40121656 in 1.73, and 0x400a2c5a, 0x400a2cc2, 0x400a4838, 0x400a4882,
 0x400db8ea, 0x4011fb6e and 0x401216c2 in 1.74 (`mods/core-ar2/mod.json`;
 from 0.3 the core is for 1.74 only, and 0.2 is the last with 1.73). It declares those seven events and, from 0.2, the event
-`ev_project` (after CREATE NEW and every project load, docs/ADAPTING.md)
+`ev_project` (after CREATE NEW and every project load, docs/ADAPTING.md),
+from 0.10 the event `ev_project_save` (before and after every project save
+to a +Drive slot, the routine at 0x400b07a4),
 and the table `core_store_ids` (entry 4, filled by the linker: below); no
 `.fast` copy table, so no `.fast` code.
 The Analog Four MKII's core (core-a4 0.1, OS 1.56) has core-ar2 0.3's

@@ -85,13 +85,6 @@ static int mod_entry(const unsigned char *e)
 
 /* ---- for mods ---- */
 
-/* a code's coarse shift (0 for a parameter up to 127) */
-static int shift(int code)
-{
-    const struct core_lock_param *p = core_lock_by_code(code);
-    return p ? core_lock_shift(p) : 0;
-}
-
 static const unsigned char *audio_kit(void)
 {
     unsigned k = AUDIO_KIT;
@@ -112,26 +105,35 @@ static int on_track(int code, int track)
     return core_lock_on_track(core_lock_by_code(code), track);
 }
 
-int core_scene_value(int track, unsigned field)
+/* (0.10) for smooth.c: the kit the audio side plays, or 0 */
+const unsigned char *core_audio_kit(void)
 {
-    const unsigned char *kit = audio_kit(), *e;
-    int code = core_lock_code(field), i;
+    return audio_kit();
+}
+
+/* (0.10) the two lists by the code, for a parameter p already known to be on
+ * the track, in the kit the audio side plays: core_param_value looks the code
+ * and its parameter up once and asks these */
+int core_scene_value_in(const unsigned char *kit, int track, int code, const struct core_lock_param *p)
+{
+    const unsigned char *e;
+    int i;
     signed char scene;
-    if (!kit || !code || !on_track(code, track) || (scene = kit[ACTIVE_SCENE]) < 0)
+    if (!kit || (scene = kit[ACTIVE_SCENE]) < 0)
         return -1;
     for (i = 0, e = kit + SCENE_LIST; i < ENTRIES; i++, e += ENTRY)
         if ((signed char)e[4] == scene && e[2] == track && e[3] == code)
-            return e[0] << shift(code);
+            return e[0] << core_lock_shift(p);
     return -1;
 }
 
 /* as stock adds a performance's lock (0x40120fde): depth times the pad's
  * pressure, a fraction of 0x8000 */
-int core_perf_offset(int track, unsigned field)
+int core_perf_offset_in(const unsigned char *kit, int track, int code, const struct core_lock_param *p)
 {
-    const unsigned char *kit = audio_kit(), *e;
-    int code = core_lock_code(field), i, sum = 0;
-    if (!kit || !code || !on_track(code, track) || PERF_OFF)
+    const unsigned char *e;
+    int i, sum = 0;
+    if (!kit || PERF_OFF)
         return 0;
     for (i = 0; i < 12 && !PRESSURE[i]; i++)
         ;
@@ -140,7 +142,23 @@ int core_perf_offset(int track, unsigned field)
     for (i = 0, e = kit + PERF_LIST; i < ENTRIES; i++, e += ENTRY)
         if (e[2] == track && e[3] == code && e[4] < 12)
             sum += (int16_t)(e[0] << 8 | e[1]) * PRESSURE[e[4]] >> 15;
-    return sum << shift(code);
+    return sum << core_lock_shift(p);
+}
+
+int core_scene_value(int track, unsigned field)
+{
+    int code = core_lock_code(field);
+    if (!code || !on_track(code, track))
+        return -1;
+    return core_scene_value_in(audio_kit(), track, code, core_lock_by_code(code));
+}
+
+int core_perf_offset(int track, unsigned field)
+{
+    int code = core_lock_code(field);
+    if (!code || !on_track(code, track))
+        return 0;
+    return core_perf_offset_in(audio_kit(), track, code, core_lock_by_code(code));
 }
 
 /* ---- editing, with a scene's or a performance's pad held ---- */

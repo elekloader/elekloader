@@ -46,11 +46,21 @@ ELEK_REGISTER_MACHINE(machine);
   numbers the knobs from 0 with no gaps, whatever their position. One knob
   may appear on both pages and keeps one value.
   - A label is 1..5 characters (`ELEK_UI_LABEL_MAX`).
-  - A knob runs 0..127 unless `ELEK_UI_BOUND` gives its bounds.
+  - A knob runs 0..127 unless `ELEK_UI_BOUND` gives its bounds. `.def`
+    (also `ELEK_UI_BOUND`) is the value a track starts with when it switches
+    to the machine; without it, the knob's min.
 - **`.present`** is optional. It reads every knob's value, mapped and raw
   (0..32512), and the track it is called for. It may change a knob's label,
   hide it, or give it a 16×16 glyph. Each call starts from the declared
   labels, all visible.
+- **`.render`** is optional: the machine's sound, called each block for each
+  voice playing it, at interrupt level. It gets the voice's knob values (the
+  same context as `.present`, with `ELEK_UI_NO_PAGE`) and a `struct
+  elek_voice`: a voice slot (0..7) for its state, the pitch (semitones in
+  16.16, 60 is middle C), the velocity, `fresh` on a note's first block and
+  `gate` until its release. It writes 32 samples, Q31. `elek_phase_inc(pitch)`
+  gives the phase step a sample at 48 kHz. Each device converts these, so the
+  same code plays on both; the track's filter and amp envelope follow.
 - **`devices`** lists the releases the mod builds for. It replaces
   `device` and `os`.
 
@@ -67,7 +77,7 @@ Digitakt, `dnmachine:<id>` on the Digitone mk1, `mk2-synth:<id>` on Digitone II)
 - a stock file that `devices` doesn't list;
 - more than 2 pages or 15 knobs;
 - a label over 5 characters;
-- bad bounds, ids or names.
+- bad bounds or defaults (`.def` outside min..max), ids or names.
 
 Examples: [examples/sdk-hello-world](../../../../examples/sdk-hello-world)
 and [examples/sdk-glyphs](../../../../examples/sdk-glyphs), with two
@@ -86,7 +96,7 @@ pages and glyphs respectively; they build for all three devices.
 | glyphs | yes | yes |
 | LFO destinations | every knob, with its SDK label | every knob, with its SDK label |
 | saving a project | brings back the machine, the values, what `.present` shows and hides, and the LFO destinations (tested through the menus); p-locks are not tested | the same, through the same menus: the machine and the values are the sound's own slots |
-| sound | none of its own (the SDK has no audio callback); what the track plays is not checked | none of its own: the track plays FM |
+| sound | `.render`, one voice a track (the slot is the track), full scale as a full-scale sample; none without it | `.render` in place of FM, a voice each note, full scale as FM at its defaults (`DNM_PEAK`); FM without it |
 
 On **Digitone II OS 1.12**, `machines-dn2` 0.2 with core-dn2 0.2 or newer
 puts SDK machines in **FUNC+SYN → MACHINE SEL**. SYN cycles through their
@@ -99,8 +109,8 @@ three LFOs. Native page copy, clear/undo, paste and project save/load keep
 the values. SDK machines share fifteen parameter rows, independently of
 the five-page SHARC pool. Their stable IDs share SHARC synths' namespace;
 a saved ID whose mod is absent remains MISSING. The DSP receives stock
-FM TONE's type: knobs edit FM parameters, and the SDK supplies no audio
-callback. The [DN2 companion](../../../../docs/MACHINES-DN2.md) describes
+FM TONE's type: knobs edit FM parameters, and `.render` is not
+called. The [DN2 companion](../../../../docs/MACHINES-DN2.md) describes
 the native registration and missing-mod behavior.
 
 ## Tests
@@ -109,7 +119,7 @@ the native registration and missing-mod behavior.
   a registration may declare, what is refused, what the build adds for each
   device (`ELEKLOADER_STOCK_154`, `ELEKLOADER_STOCK_DN1_144`,
   `ELEKLOADER_DN2_SYX`, `ELEKLOADER_CROSS`).
-- `tests/test_sdk_alpha_{machines,knobs,labels,hiding,glyphs,lfo,saving}.py`:
+- `tests/test_sdk_alpha_{machines,knobs,labels,hiding,glyphs,lfo,saving,sound}.py`:
   what the SDK promises, on every device, in digiemu (mk1) or DigiKit
   (Digitone II, ColdFire only). A test file defines the
   machines it needs as SDK C, next to its tests, and says what a user would
@@ -132,6 +142,9 @@ the native registration and missing-mod behavior.
   - `tests/sdk_alpha_devices.py` has one adapter per device: its keys, its
     menus, where it keeps a track's machine and values, where its screen
     shows a knob. Add a `Device` subclass and every test runs on it.
+  - `audio = True` on a test class records what the device plays;
+    `self.track.play(key)` holds a key of its keyboard (0 its C, 12 the C
+    above) and gives the sound, with its `.frequency` and `.peak`.
   - Known device gaps use `@sdk_expected_failure(device)`: they count as
     expected failures, and fixing one reports an unexpected success until
     its marker is removed. An unmarked failure breaks the suite.
@@ -182,10 +195,10 @@ the native registration and missing-mod behavior.
 - **Tests not written yet:** LFO modulation of a knob's value while a note
   plays, and p-locks (applied, saved and loaded). Both need the live
   parameter values read from the emulator.
-- **Sound on the Digitone.** A UI-only machine plays FM, and its knobs are
-  FM's parameters (the operator envelopes, detune, feedback, mix, delays and
-  ratio offsets), so turning one changes FM's sound. What
-  a machine with no sound of its own should play is not decided.
+- **Sound on the Digitone.** A machine without `.render` plays FM, and its
+  knobs are FM's parameters (the operator envelopes, detune, feedback, mix,
+  delays and ratio offsets), so turning one changes FM's sound. What a
+  machine with no sound of its own should play is not decided.
 - **Releases.** Only Digitakt 1.54, Digitone mk1 1.44 and Digitone II 1.12
   are supported, not Digitakt 1.53 or Digitone 1.43.
 - **The ABI marker symbols** keep the Digitakt's names (`sdk_alpha_dt1_*`)

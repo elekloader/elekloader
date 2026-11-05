@@ -1452,8 +1452,23 @@ says `"core": "0.3"` in `resources`). Bits 0..23 are the same bytes with
 either core, so a 0.2 build's lockfile keeps its places with 0.3, and the
 sounds it saved load there with the new bits at 0.
 
-Zero is always the default: a field reads 0 in a new project, in a project
-saved by another layout, and after its scope was reset (below). Core exports
+A field's default is what it reads where its bits are zero: in a new
+project, in a project saved by another layout, and after its scope was reset
+(below). That is 0, or from core-ar2 0.10 the field's `init`:
+
+```json
+{"sym": "my_cutoff", "scope": "sound", "bits": 7, "lock": true, "init": 127}
+```
+
+`init` is 0 to 2^bits - 1. Core keeps the value XOR the init in the field's
+bits, so the cleared bits read 127 here, every value round-trips, and
+everything core does with a field (p-locks, scenes, performances, MIDI,
+`core_param_value`, the LFO and the routes, RANDOMIZE and RELOAD PAGE)
+works on the value. A lockable field's `min..max` should include its init.
+The init is part of the layout: a field whose `init` changes is a new field
+(new bits, a new code, its old data dropped), as one whose width changed.
+A build has at most 63 fields with an init, and a core without the table
+`core_field_inits` (core-ar2 before 0.10, core-a4) refuses them. Core exports
 no firmware locations, so a mod names the live objects it passes as `item`
 itself, for each OS. While an item is live its fields sit inside the stock
 object, so copy, paste, undo and pattern changes carry them with no extra
@@ -1539,6 +1554,7 @@ sets things up per project, subscribes to `ev_project`:
 | event | when | C prototype | notes |
 |---|---|---|---|
 | `ev_project` | Analog Rytm MKII (core-ar2 from 0.2) and Analog Four MKII (core-a4 0.1): after CREATE NEW or the project reset (`how` 0, `CORE_PROJECT_NEW`), and after every project load (`how` 1, `CORE_PROJECT_LOADED`: at boot too); the stored project and its mod data are in place | `void f(int how, unsigned dropped)` | `dropped` has `STORE_DROPPED(scope)` set for each of `STORE_GLOBAL`, `STORE_TRACK`, `STORE_PATTERN` and `STORE_PROJECT` that loaded as zeros: saved by another layout, or with no mods. Sounds and kits are checked one by one as they load, so they are not in it. It comes from inside the load: keep it short, and don't start another load or save from it |
+| `ev_project_save` | Analog Rytm MKII (core-ar2 0.10): before (`pre` 1) and after (`pre` 0) every whole save of the live project to a +Drive slot: SAVE PROJECT, SAVE PROJECT AS, the project manager's saves, SAVE ... BEFORE LOADING, and LOAD of an empty slot, which writes a new project there | `void f(unsigned pre, unsigned how)` | `CORE_SAVE_KIND(how)`: `CORE_SAVE_SAME` (the active slot), `CORE_SAVE_OTHER` (another slot, or a project with none yet), `CORE_SAVE_NEW` (the empty slot's LOAD, after `ev_project`'s `CORE_PROJECT_NEW`); `CORE_SAVE_SLOT(how)` 0..127, the screen's number less one (255: none); `CORE_SAVE_FAILED` in the call after when the slot was not written. A field set in the call before is in the saved copy. From the save's job, not a UI tick: keep it short, start no load or save, leave MIDI and USB to `ev_tick`, and don't call `core_project_edited` (mods/core-ar2/README.md, "The project save") |
 
 Core-ar2 0.2 owns 22 more sites, the same on 1.73 and 1.74 except the file
 save (0x400b0804 on 1.73, 0x400b0870 on 1.74) and the SysEx copies: 0x4000937c and 0x40009146
@@ -1936,7 +1952,14 @@ last call (`core_block`, `analog-rytm-mk2/load.h`), so a parameter no mod
 reads costs nothing, and a mod that reads its parameter every block sees
 stock's ramp block by block. Read it from the audio side only
 (`ev_render_in`, `ev_render_out`, a machine's render): each call steps the
-smoother. A read costs about 0.5% of a block. Core keeps a smoother for 32
+smoother. A read costs about 0.9% of a block on a unit (core-ar2 0.10,
+OS 1.74; about 0.2% in the emulator, whose timer counts differently). A mod that reads every block can look the
+field up once with `core_param_handle(field)` and read by the handle with
+`core_param_value_h(track, handle, flags)`, which gives the same values;
+`core_param_values(track, handles, n, flags, out)` reads several of one
+track's parameters in one call, at well under half the cost a read on a
+unit (0.37% of a block each for three).
+Core keeps a smoother for 32
 lockable parameters a track; a build with more gives the rest their
 target unsmoothed.
 
