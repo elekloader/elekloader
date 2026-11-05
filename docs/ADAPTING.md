@@ -2192,6 +2192,10 @@ of each kind and a fine one, on a LOCK CHECK page per kind, with what it
 reads each audio block in `lk_seen` for the emulator, from 1.1 its value
 read beside a stock parameter's (`lk_ring`) and the read's cost, and from
 1.2 CCs on A and V and the stored values each tick (`lk_midi`).
+`examples/sound-check-a4` makes one heard: a test tone whose level (LVL)
+and pitch (PIT) are lockable mod parameters, read on each synth voice every
+block with `core_param_values_voice` and added to the effects' return (the
+DAC words 4 and 5 of the TX block at `ev_render_out`).
 
 ### Machines (core-ar2 0.5, Analog Rytm MKII)
 

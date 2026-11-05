@@ -628,6 +628,13 @@ images; 20 Oct 2026):
   Not checked yet: an NRPN while a trig is held (stock's
   +0x38 path with a held step), USB MIDI (the same dispatch), the MIDI
   CONFIG screens' own settings (poked here).
+- **Sound** [emu] (core 0.5 with lock-check-a4 1.2 and
+  [sound-check-a4](../../examples/sound-check-a4) 1.0, dtboot
+  `--analog-wav`, 5 Nov 2026): a mod parameter read every block drives a
+  tone in the outputs (works, WAV): LVL 100 gave a clean 110 Hz sine, PIT
+  12 220 Hz; LFO1 on PIT and LFO2 on LVL moved the tone's pitch and level
+  with stock's parameter 0x24 under the same LFO's Dest B (correlation
+  0.98 and 0.97 over 2,048 blocks).
 - Statically, against the stock image (python, no toolchain): every site's
   stock bytes, that each covers whole instructions, that each body in
   `store.s` jumps back to its site plus the 8 bytes it displaced, and that
