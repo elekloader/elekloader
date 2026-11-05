@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
-/* Private experiment: Digitakt mk1 OS 1.54, Digitone mk1 OS 1.44 and Digitone II OS 1.12. No device
- * renders sound yet: sdk_alpha_build refuses a machine with .render until its device's backend lands. */
+/* Private experiment: Digitakt mk1 OS 1.54 (UI and audio), Digitone mk1 OS 1.44 and Digitone II
+ * OS 1.12 (UI only). The builder refuses audio on targets without a render backend. */
 #ifndef ELEKLOADER_SDK_ALPHA_MACHINE_H
 #define ELEKLOADER_SDK_ALPHA_MACHINE_H
 
@@ -24,6 +24,7 @@ struct elek_ui_knob {
     const char *label;             /* 1..ELEK_UI_LABEL_MAX printable ASCII characters (sdk_alpha_build refuses more) */
     struct elek_ui_bound min, max;
     const struct elek_ui_glyph *glyph; /* null uses the stock encoder graphic */
+    struct elek_ui_bound def;      /* optional mapped default, min when omitted */
 };
 struct elek_ui_page {
     const char *label;             /* 1..16 printable ASCII characters */
@@ -50,10 +51,10 @@ struct elek_ui_knob_presentation {
 struct elek_ui_presentation {
     uint32_t knob_count;
     struct elek_ui_knob_presentation *const *knob; /* logical IDs; defaults reset each call */
-    void *shared;                  /* this track's .shared bytes for render; null where no device renders yet */
+    void *shared;                  /* this track's writable shared snapshot; null without .shared */
 };
 
-/* Sound (v5). render fills one voice's block. The same C builds for every device: samples are the
+/* Sound. render fills one voice's block. The same C builds for every device: samples are the
  * device's own format, so touch them only through the helpers below, write constants with
  * ELEK_SAMPLE, and do not divide them. ELEK_TARGET_SHARC is set when the SDK builds for the SHARC. */
 #define ELEK_SAMPLE_RATE 48000
@@ -126,9 +127,9 @@ struct elek_voice {
     uint32_t track;                /* the track that played it, from zero */
     int32_t pitch;                 /* semitones, 16.16, MIDI numbering */
     int32_t velocity;              /* 1..127 */
-    uint32_t gate;                 /* 1 while the note is held */
+    uint32_t gate;                 /* held note; DT1 currently reports AMP active (docs/SDK.md) */
     uint32_t flags;                /* ELEK_VOICE_START */
-    void *state;                   /* .voice_state bytes for this slot: zeroed at boot, kept between calls */
+    void *state;                   /* zeroed at boot/machine change; kept between calls and notes */
 };
 struct elek_audio_context {
     uint32_t knob_count;
@@ -141,10 +142,10 @@ struct elek_machine {
     const char *name, *short_name; /* 1..16 and 1..4 ASCII characters */
     const struct elek_ui_page *pages; /* at most two pages and fifteen logical knobs */
     uint32_t page_count;
-    uint32_t _reserved[2];         /* zero; preserves the original empty-machine ABI */
+    uint32_t _reserved[2];         /* zero */
     /* ctx and its values are read-only snapshots, valid only during this call. */
     void (*present)(const struct elek_ui_context *, struct elek_ui_presentation *);
-    /* v5, optional: the machine's sound, one voice at a time (without it the device's own plays).
+    /* Optional: the machine's sound, one voice at a time (without it the device's own plays).
      * It may read only its arguments, its state, .shared and constant data. */
     void (*render)(const struct elek_audio_context *, const struct elek_voice *, elek_sample *out);
     uint32_t voice_state;          /* 0..ELEK_VOICE_STATE_MAX bytes a voice keeps; needs render */
@@ -168,11 +169,11 @@ struct sdk_alpha_registration {
     uint32_t tag;
     const struct sdk_alpha_machine_ui *ui;
 };
-extern const char sdk_alpha_dt1_empty_ui[], sdk_alpha_dt1_ui_v3[], sdk_alpha_dt1_ui_v4[], sdk_alpha_dt1_ui_v5[];
+extern const char sdk_alpha_dt1_ui_v1[];
 
 #define ELEK_REGISTER_MACHINE(machine) \
     static const struct sdk_alpha_machine_ui sdk_alpha_ui_##machine = { \
-        sdk_alpha_dt1_ui_v5, &(machine) \
+        sdk_alpha_dt1_ui_v1, &(machine) \
     }; \
     const struct sdk_alpha_registration sdk_alpha_registration_##machine = { \
         .id = (machine).id, .name = (machine).name, .sname = (machine).short_name, \

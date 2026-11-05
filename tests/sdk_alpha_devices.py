@@ -62,11 +62,11 @@ class Digiemu:
             shutil.copyfile(self.pristine, self.card)
             self.card_stamp = os.stat(self.card).st_mtime_ns
 
-    def session(self):
+    def session(self, audio=False):
         """0.25 s from the saved state."""
         from emu.session import Session
         os.environ.update(self.paths.env())
-        return Session(self.paths.gui, self.paths.syx, audio=False)
+        return Session(self.paths.gui, self.paths.syx, audio=audio)
 
     @staticmethod
     def mem(session, addr, size):
@@ -178,7 +178,9 @@ class DigiKit:
     def restore_card(self):
         pass                    # the ready state has the card as booted: session() puts it back
 
-    def session(self):
+    def session(self, audio=False):
+        if audio:
+            raise CannotYet('audio capture in the DigiKit UI backend')
         self._load()
         session = DigiKitSession(self.emu)
         session.run_ms(300)     # the first UI-loop passes
@@ -199,6 +201,7 @@ class Device:
     machine_claim = None
     lfo_count = 2
     settings_key = 'GLOBAL'
+    features = frozenset()
 
     @classmethod
     def machine_ids(cls, mod):
@@ -208,6 +211,26 @@ class Device:
         self.s, self.symbols = session, symbols
         self.machines = sorted(machines)    # the SDK machine ids in this build
         self.layouts = layouts
+
+    def keyboard(self):
+        raise CannotYet('the keyboard')
+
+    def press_key(self, key):
+        raise CannotYet('a note key')
+
+    def release_key(self, key):
+        raise CannotYet('a note key')
+
+    def audio_position(self):
+        if not getattr(self.s, 'record_audio', False):
+            raise CannotYet('audio capture (set audio = True on the test class)')
+        return len(self.s.pcm)
+
+    def audio_since(self, start, skip_ms=0):
+        # digiemu's 48 kHz stereo signed-16 PCM, left channel.
+        pcm = bytes(self.s.pcm[start + 4 * 48 * skip_ms:])
+        return [int.from_bytes(pcm[i:i + 2], 'little', signed=True)
+                for i in range(0, len(pcm) - 3, 4)]
 
     def tap(self, name, after_ms=300):
         self.s.tap(self.s.code(name), after_ms=after_ms)
@@ -361,6 +384,22 @@ class Digitakt1(Device):
     bases = ('mods/core', 'mods/machine-pages')
     machine_claim = 'machine'
     track_count = 8
+
+    features = frozenset(('defaults', 'render'))
+    sound_without_render = False
+    KEYS = {0: '9', 1: '2', 2: '10', 3: '3', 4: '11', 5: '12', 6: '5', 7: '13',
+            8: '6', 9: '14', 10: '7', 11: '15', 12: '16'}
+
+    def keyboard(self):
+        if not getattr(self, '_chromatic', False):
+            self.chord('FUNC', 'TRK')
+            self._chromatic = True
+
+    def press_key(self, key):
+        self.s.press(self.s.code(self.KEYS[key]))
+
+    def release_key(self, key):
+        self.s.release(self.s.code(self.KEYS[key]))
 
     STOCK = (0, 1, 2, 3)            # the stock machines, first in the machine list
     PAGE_LEDS = {'SRC': 19, 'LFO': 22}

@@ -29,6 +29,17 @@ class RenderContractTests(unittest.TestCase):
                 raise AssertionError('%s build failed:\n%s' % (target, done.stderr))
             cls.programs[target] = program
 
+    def test_digitakt_adapter_keeps_state_and_publishes_complete_shared_blocks(self):
+        program = Path(self.tmp.name) / 'dt1-adapter'
+        done = subprocess.run([CC, '-std=c99', '-O2', '-Wall', '-Wextra', '-Werror',
+                               '-Wno-pointer-to-int-cast', '-Wno-int-to-pointer-cast',
+                               '-I', str(ROOT / 'elekloader/sdk/include'),
+                               str(ROOT / 'tests/test_sdk_alpha_dt1.c'), '-o', str(program)],
+                              capture_output=True, text=True)
+        self.assertEqual(done.returncode, 0, done.stderr)
+        done = subprocess.run([str(program)], capture_output=True, text=True)
+        self.assertEqual(done.returncode, 0, done.stderr)
+
     def render(self, target, level=127, fine=0):
         """The samples (-1.0..1.0) and the phase after them; the program's own checks must pass first."""
         done = subprocess.run([str(self.programs[target]), str(level), str(fine)], capture_output=True, text=True)

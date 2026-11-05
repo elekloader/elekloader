@@ -6,11 +6,10 @@ connects those declarations to its native machine selector, parameters and
 screen. This is a private experiment: the API may change, and mods must be
 rebuilt when it does.
 
-**Machine UIs work on the three releases below. The audio contract is defined
-and tested on the host, but no device backend calls an SDK `.render` yet.**
-The builder refuses a machine with `.render` on every device. The render
-sections below describe that contract and the integration still required;
-they are not instructions for a working device instrument.
+**Machine UIs work on all three releases below. Digitakt mk1 also runs SDK
+renderers and applies mapped knob defaults.** Digitone mk1 and Digitone II
+currently accept UI-only machines; the builder refuses `.render` and
+explicit `.def` on those targets.
 
 The [header](../elekloader/sdk/include/elekloader/sdk_alpha_machine.h) is the
 reference for exact types, fields and helper behavior. This page explains
@@ -28,15 +27,15 @@ how they fit together. For other kinds of mod, start with
 | Pages / logical knobs | 2 / 15 | 2 / 15 | 2 / 15 |
 | LFO destination lists | 2 | 2 | 3 |
 | Labels, hiding, 16×16 glyphs | Yes | Yes | Yes |
-| SDK audio callback on device | Not implemented | Not implemented | Not implemented |
+| Mapped defaults / SDK audio callback | Implemented | Not implemented | Not implemented |
 
 Other OS releases and devices, including Digitakt II, are not SDK targets.
 Support in elekloader's firmware loader does not imply support in this SDK.
 
 A UI-only machine supplies no sound generator. The Digitones continue to
 play stock FM; their SDK controls use FM sound parameters, so turning a
-control can change that sound. What a UI-only Digitakt machine plays is not
-qualified by the UI tests.
+control can change that sound. A UI-only Digitakt machine produces an
+empty voice.
 
 ## How it fits together
 
@@ -93,7 +92,14 @@ ELEK_REGISTER_MACHINE(machine);
   it is different from omitting the bound. The callback receives a mapped
   integer and the underlying raw value, 0..32512 in native 8.8 units.
   Mapping rounds to the nearest integer, with exact halves toward max.
-  There is no knob-default field yet.
+- On Digitakt, `.def = ELEK_UI_BOUND(value)` sets a default in mapped units.
+  An explicit zero differs from omission: omission starts at the minimum.
+  The builder refuses defaults outside the effective bounds. Selection and
+  clear/reset use the default; paste and project load restore edited values.
+  Repeated page placements share one default and one value. Native storage
+  has 32,513 steps; a default between representable values uses the first
+  step mapping at or above it. Explicit defaults on the Digitones are
+  refused until their backends implement them.
 
 ### Presentation
 
@@ -173,9 +179,9 @@ required companions for the same stock file, then use the normal
 [lint and patch loop](ADAPTING.md).
 
 The builder refuses unsupported targets, invalid names, bounds, IDs and
-layouts, and duplicate declarations in JSON. New declarations use the v5
-ABI marker; the companions also accept older v3/v4 UI declarations.
-An older companion lacking v5 refuses to link a v5 machine.
+layouts, and duplicate declarations in JSON. All private SDK declarations
+and companions use `sdk_alpha_dt1_ui_v1`, with one descriptor layout.
+Rebuild SDK mods and companions together when that layout changes.
 
 Working UI examples are [sdk-hello-world](../examples/sdk-hello-world)
 (two pages and a shared knob) and [sdk-glyphs](../examples/sdk-glyphs)
@@ -183,10 +189,9 @@ Working UI examples are [sdk-hello-world](../examples/sdk-hello-world)
 
 ## Audio contract
 
-**This section is a contract for backend implementation and host testing.
-The SDK builder currently refuses every non-null `.render`.** Existing
-device-specific machine/audio interfaces remain available separately;
-their existence does not make the shared callback runnable.
+Digitakt mk1 calls this callback on its main ColdFire. The other two
+backends are pending; their device-specific audio interfaces remain
+available separately.
 
 The callback is:
 
@@ -266,11 +271,16 @@ that is not a native knob value. Most instruments can work from
 follow per-voice locks or LFOs; compute those dependencies from the voice's
 controls in the audio path.
 
-The mk1 UI and renderer can access the same memory, but an audio interrupt
-can interrupt a UI update. The backend must publish a complete shared
-snapshot. DN2 requires an actual copy to the SHARC's separate memory.
-That synchronization and transport are not implemented yet; current
-UI-only calls have `out->shared == NULL`.
+Digitakt publishes shared data through two buffers per track: `.present`
+updates the inactive buffer, then publishes its index after the complete
+write. The audio interrupt reads one published buffer for the whole call.
+The UI tick refreshes every SDK audio track, including inactive tracks
+after a project load, with `ELEK_UI_NO_PAGE`. Until a track's first
+snapshot is ready its renderer produces silence. UI-only machines and
+machines without `.shared` receive a null shared pointer.
+
+DN2 requires a copy to the SHARC's separate memory; that transport is
+pending. Digitone UI-only calls also have `out->shared == NULL`.
 
 Shared data must not contain pointers into UI memory. The DN2 backend also
 needs a defined byte order and layout; copying an arbitrary C structure
@@ -288,13 +298,22 @@ available audio backend.
 
 ## Audio across mk1 and mk2
 
-The intended backends reuse each device's native voice path:
+The backends reuse each device's native voice path:
 
 | Target | Native path available to an adapter | Work still required for the shared SDK |
 |---|---|---|
-| Digitakt mk1 | ColdFire track blocks, 32 Q31 samples; one rendering slot per track | Dispatch `.render`, allocate state, publish shared data, and verify effective controls and native amp/filter integration |
+| Digitakt mk1 | ColdFire track blocks, 32 Q31 samples; one rendering slot per track | Implemented; hardware and worst-case load qualification remain |
 | Digitone mk1 | Main ColdFire replaces an allocated FM voice with 32 Q31 samples through the machines companion | Dispatch the shared callback, map per-voice controls/state and owning track, and qualify locks, LFOs, gain and envelope behavior |
 | Digitone II | SHARC voice callback, 32 floats before the native envelope, filter and mixer | Build/package the audio artifact, bind it to SDK registration, transport shared data, and supply missing voice metadata |
+
+Digitakt replaces the track block before the existing native overdrive,
+filter and AMP stages. The voice's `slot` and `track` are the track index.
+Controls come from `cm_src_value`, the render parameter buffer, rather
+than the editing kit. Each track has its own voice state, retained across
+notes and retriggers and cleared when its rendered machine changes.
+The start flag, pitch and velocity come from the native render exports.
+Currently `gate` reflects a nonzero native AMP envelope phase; it is an
+envelope-active indication, not a separately observed key-held flag.
 
 Digitone mk1's second ColdFire still generates stock FM voices. The
 existing replacement hook runs on the main CPU after those voices arrive;
@@ -319,7 +338,7 @@ The native DN2 input has pitch, start, slot, controls and state, but lacks
 the owning track, velocity and gate required by `elek_voice`. Core/bridge
 work must provide those values. The shared-data channel must coexist with
 DSP peek, publish complete updates and establish when they become visible.
-Neither is supplied by this contract-only implementation.
+Neither is supplied by the current DN2 SDK adapter.
 
 The existing DN2 native audio limits are one SHARC synth per build, synth
 IDs 5..31, a 2,048-byte callback stack, and bounded code/data regions. A
@@ -338,10 +357,15 @@ Digitakt II are outside this shared render contract.
   either conflicts. `machines-dn1` must also be the only mod replacing
   SYN2's page list: the last `core_page_list` call wins.
 - The shared API has no arbitrary full-screen drawing, custom widget/input
-  lifecycle, knob defaults or user-supplied value formatter.
+  lifecycle or user-supplied value formatter.
 - UI tests cover native destination selection/naming and project
   restoration. They do not qualify audible LFO modulation, held-step or
   sound-lock presentation, or pattern-lock save/load.
+- Digitakt emulator sound tests check pitch, octave intervals, FINE and
+  UI-only fallback through the native output. Defaults tests cover selection,
+  clear, repeated placements, paste and project restoration. Shared-state
+  tests check inactive tracks after load. These do not
+  establish physical-device timing or worst-case render load.
 - Host audio tests check C sample helpers, pitch, level and waveform
   continuity. A host float build is not execution on the SHARC, and does
   not establish device sound, timing, polyphony or compiler compatibility.
@@ -360,7 +384,12 @@ stored UI values for effective voice controls.
   ColdFire compiler.
 - [Render-contract tests](../tests/test_sdk_alpha_render.py) compile one C
   machine twice with the host compiler, Q31 and float. They check sample
-  helpers and compare the resulting sine. `test_units.py` runs this suite.
+  helpers and compare the resulting sine. They also exercise the real
+  Digitakt adapter's state isolation, effective-control mapping and atomic
+  shared publication. `test_units.py` runs this suite.
+- [Sound tests](../tests/test_sdk_alpha_sound.py) capture the emulator output;
+  [defaults tests](../tests/test_sdk_alpha_defaults.py) exercise mapped defaults.
+  Targets without the corresponding backend are explicitly skipped.
 - `tests/test_sdk_alpha_{machines,knobs,labels,hiding,glyphs,lfo,saving}.py`
   exercise shared behavior through device adapters. Each test starts from
   a restored emulator state. Firmware addresses, navigation, storage and
@@ -372,7 +401,8 @@ Run the host audio contract without firmware:
 python tests/test_sdk_alpha_render.py -v
 ```
 
-The mk1 UI suites use digiemu's Python:
+The mk1 suites use digiemu's Python (use `test_sdk_alpha_sound.py` or
+`test_sdk_alpha_defaults.py` for Digitakt audio/defaults):
 
 ```bash
 ELEKLOADER_DIGIEMU=<digiemu> ELEKLOADER_STOCK_154=<Digitakt_OS1.54.syx> \

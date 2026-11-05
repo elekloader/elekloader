@@ -96,32 +96,6 @@ GRID = sdk_machine("Glyph grid", """
     ELEK_REGISTER_MACHINE(grid);
 """, one=rows(DIGITS[1]), two=rows(DIGITS[2]), three=rows(DIGITS[3]), four=rows(DIGITS[4]))
 
-# A v3 knob ends before the glyph pointer. The next word is deliberately not a valid glyph.
-LEGACY = sdk_machine("Legacy glyph", """
-    #define sdk_alpha_dt1_ui_v4 sdk_alpha_dt1_ui_v3
-    #define sdk_alpha_dt1_ui_v5 sdk_alpha_dt1_ui_v3
-    #include "elekloader/sdk_alpha_machine.h"
-
-    struct legacy_knob {
-        uint32_t id;
-        const char *label;
-        struct elek_ui_bound min, max;
-    };
-    _Static_assert(sizeof(struct legacy_knob) == 24, "v3 knob layout");
-    static const struct {
-        struct legacy_knob knob;
-        const void *next_word;
-    } legacy = { .knob = { .id = 0, .label = "PLAIN" }, .next_word = (void *)1 };
-    static const struct elek_ui_page pages[] = {
-        { .label = "LEGACY", .knob = { (const struct elek_ui_knob *)&legacy.knob } },
-    };
-    static const struct elek_machine machine = {
-        .id = @ID@, .name = "Legacy glyph", .short_name = "OLD", .pages = pages, .page_count = 1,
-    };
-    ELEK_REGISTER_MACHINE(machine);
-""")
-
-
 @sdk_tests
 class Glyphs:
     def test_glyphs_follow_logical_ids_in_all_eight_positions(self):
@@ -143,14 +117,6 @@ class Glyphs:
         self.track.show()
         self.panel.open_settings()
         self.assertEqual(self.panel.settings_pixels(), sdk_menu)
-
-    def test_an_older_knob_descriptor_keeps_the_stock_graphic(self):
-        knob, = self.track.use(LEGACY).knobs("PLAIN")
-        before = knob.glyph_on_screen
-        self.assertTrue(any(before))
-        knob.turn(+32)
-        self.assertGreater(knob.raw, 0)
-        self.assertNotEqual(knob.glyph_on_screen, before)
 
     def test_a_hidden_knob_does_not_draw_its_glyph(self):
         state, hide = self.track.use(STATES).knobs("STATE", "HIDE")

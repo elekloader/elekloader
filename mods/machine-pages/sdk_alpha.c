@@ -11,10 +11,7 @@ _Static_assert(sizeof(struct sdk_alpha_registration) == sizeof(struct cm_machine
                __builtin_offsetof(struct cm_machine, ui) &&
                SDK_ALPHA_UI_TAG == CM_UI_TAG, "registration layout");
 
-const char sdk_alpha_dt1_empty_ui[] = "sdk alpha dt1 empty";
-const char sdk_alpha_dt1_ui_v3[] = "sdk alpha dt1 pages 3";
-const char sdk_alpha_dt1_ui_v4[] = "sdk alpha dt1 glyphs 4";
-const char sdk_alpha_dt1_ui_v5[] = "sdk alpha dt1 render 5";    /* v4 and the render fields */
+const char sdk_alpha_dt1_ui_v1[] = "sdk alpha 1";
 static const struct elek_machine *sdk_alpha_current;
 static uint32_t sdk_alpha_empty_layout[11];
 extern uint32_t mp_stock_layout(int32_t machine);
@@ -32,23 +29,14 @@ static char sdk_alpha_labels[15][ELEK_UI_LABEL_MAX + 1];
 static uint8_t sdk_alpha_visibility[15];
 static const struct elek_ui_glyph *sdk_alpha_glyphs[15];
 
-/* Older compiled descriptors end before the glyph pointer. */
-static int sdk_alpha_has_glyphs(const struct elek_machine *m)
-{
-    const struct sdk_alpha_machine_ui *u = (const void *)core_machine_ui(m->id);
-    return u && (u->abi == sdk_alpha_dt1_ui_v4 || u->abi == sdk_alpha_dt1_ui_v5);
-}
-
 const struct elek_machine *sdk_alpha_machine(int32_t id)
 {
     const struct sdk_alpha_machine_ui *u = (const void *)core_machine_ui(id);
-    if (!u || (u->abi != sdk_alpha_dt1_empty_ui && u->abi != sdk_alpha_dt1_ui_v3 &&
-               u->abi != sdk_alpha_dt1_ui_v4 && u->abi != sdk_alpha_dt1_ui_v5))
+    if (!u || u->abi != sdk_alpha_dt1_ui_v1)
         return 0;
     const struct elek_machine *m = u->machine;
     if (!m || m->id != id || m->page_count > 2 || m->_reserved[0] || m->_reserved[1] ||
-        (m->page_count && !m->pages) ||
-        (u->abi == sdk_alpha_dt1_empty_ui && m->page_count))
+        (m->page_count && !m->pages))
         return 0;
     return m;
 }
@@ -86,6 +74,29 @@ int32_t sdk_alpha_map(const struct elek_ui_knob *knob, int32_t raw)
     return (int32_t)((uint32_t)min + offset);
 }
 
+/* Choose the first native step that reaches the mapped default. */
+static int32_t sdk_alpha_default(const struct elek_ui_knob *knob)
+{
+    if (!knob->def.supplied) return 0;
+    int32_t lo = 0, hi = ELEK_UI_RAW_MAX;
+    while (lo < hi) {
+        int32_t mid = (lo + hi) / 2;
+        if (sdk_alpha_map(knob, mid) < knob->def.value) lo = mid + 1;
+        else hi = mid;
+    }
+    return lo;
+}
+
+/* The audio interrupt reads the published bank while the UI writes the other one. */
+struct sdk_alpha_shared {
+    const struct elek_machine *machine;
+    uint32_t data[ELEK_SHARED_MAX / 4];
+};
+static struct sdk_alpha_shared sdk_alpha_shared[8][2];
+static volatile uint32_t sdk_alpha_published[8];
+static const struct elek_machine *sdk_alpha_voice_machine[8];
+static uint32_t sdk_alpha_voice_state[8][ELEK_VOICE_STATE_MAX / 4];
+
 const struct cm_ui32 *sdk_alpha_ui(int32_t id)
 {
     const struct elek_machine *m = sdk_alpha_machine(id);
@@ -112,9 +123,10 @@ const struct cm_ui32 *sdk_alpha_ui(int32_t id)
         n->look = 134;              /* native unipolar encoder, 0..127 in 8.8 */
         n->flags = CM_RANGE | CM_DEFAULT | CM_NOT_SAMPLE;
         n->max = ELEK_UI_RAW_MAX;
-        if (k < (uint32_t)knob_count)
+        if (k < (uint32_t)knob_count) {
             n->name = n->lname = knobs[k]->label;
-        else
+            n->def = sdk_alpha_default(knobs[k]);
+        } else
             n->flags |= CM_HIDDEN;
     }
     for (uint32_t page = 0; page < m->page_count; ++page) {
@@ -127,17 +139,18 @@ const struct cm_ui32 *sdk_alpha_ui(int32_t id)
     return &p->ui;
 }
 
-int32_t sdk_alpha_snapshot(const struct elek_machine *m, int32_t page, void *view)
+static int32_t sdk_alpha_snapshot_track(const struct elek_machine *m, int32_t page,
+                                       void *view, uint32_t track, int update_ui)
 {
     const struct elek_ui_knob *descriptors[15];
     int32_t knob_count = sdk_alpha_knobs(m, descriptors);
     if (knob_count < 0)
         return 0;
     const uint8_t *sound = 0;
+    if (track >= 8) return 0;
     if (!view && knob_count) {
-        uint32_t track = fw_active_track;
         const uint8_t *kit = fw_kit;
-        if (track >= 8 || !kit)
+        if (!kit)
             return 0;
         sound = FW_SOUND(kit, track);
     }
@@ -145,7 +158,6 @@ int32_t sdk_alpha_snapshot(const struct elek_machine *m, int32_t page, void *vie
     struct elek_ui_knob_presentation *output[15];
     struct elek_ui_value values[15];
     const struct elek_ui_value *knobs[15];
-    int has_glyphs = sdk_alpha_has_glyphs(m);
     for (uint32_t k = 0; k < (uint32_t)knob_count; ++k) {
         uint8_t locked;
         uint32_t id = k < 8 ? 0x84 + k : MP_EXTRA_ID + k - 8;
@@ -159,18 +171,32 @@ int32_t sdk_alpha_snapshot(const struct elek_machine *m, int32_t page, void *vie
         knobs[k] = &values[k];
         presentation[k].label = descriptors[k]->label;
         presentation[k].visible = 1;
-        presentation[k].glyph = has_glyphs ? descriptors[k]->glyph : 0;
+        presentation[k].glyph = descriptors[k]->glyph;
         output[k] = &presentation[k];
     }
     const struct elek_ui_context ctx = {
         .page = page, .page_count = m->page_count, .knob_count = knob_count,
-        .knob = knob_count ? knobs : 0, .track = fw_active_track,
+        .knob = knob_count ? knobs : 0, .track = track,
     };
+    uint32_t bank = sdk_alpha_published[track], next = bank ^ 1;
+    struct sdk_alpha_shared *shared = &sdk_alpha_shared[track][next];
+    if (m->shared) {
+        for (uint32_t i = 0; i < ELEK_SHARED_MAX / 4; ++i)
+            shared->data[i] = sdk_alpha_shared[track][bank].machine == m ?
+                sdk_alpha_shared[track][bank].data[i] : 0;
+    }
     struct elek_ui_presentation out = {
         .knob_count = knob_count, .knob = knob_count ? output : 0,
+        .shared = m->shared ? shared->data : 0,
     };
     if (m->present)
         m->present(&ctx, &out);
+    if (m->shared) {
+        shared->machine = m;
+        __asm__ volatile ("" ::: "memory");
+        sdk_alpha_published[track] = next;
+    }
+    if (!update_ui) return 0;
     int32_t changed = sdk_alpha_presented != m;
     for (uint32_t k = 0; k < (uint32_t)knob_count; ++k) {
         const char *label = presentation[k].label;
@@ -194,6 +220,63 @@ int32_t sdk_alpha_snapshot(const struct elek_machine *m, int32_t page, void *vie
     return changed;
 }
 
+int32_t sdk_alpha_snapshot(const struct elek_machine *m, int32_t page, void *view)
+{
+    return sdk_alpha_snapshot_track(m, page, view, fw_active_track, 1);
+}
+
+/* Refresh every track, including ones whose UI has not been opened after a load. */
+void sdk_alpha_tick(void)
+{
+    if (!fw_kit) return;
+    for (uint32_t track = 0; track < 8; ++track) {
+        const struct elek_machine *m = sdk_alpha_machine(FW_SOUND(fw_kit, track)[FW_SOUND_MACHINE]);
+        if (m && m->render && m->shared)
+            sdk_alpha_snapshot_track(m, ELEK_UI_NO_PAGE, 0, track, 0);
+    }
+}
+
+void sdk_alpha_render(int32_t *blocks)
+{
+    for (uint32_t track = 0; track < 8; ++track) {
+        const struct elek_machine *m = sdk_alpha_machine(fw_render_machine[track]);
+        if (m != sdk_alpha_voice_machine[track]) {
+            for (uint32_t i = 0; i < ELEK_VOICE_STATE_MAX / 4; ++i)
+                sdk_alpha_voice_state[track][i] = 0;
+            sdk_alpha_voice_machine[track] = m;
+        }
+        if (!m || !m->render) continue;
+        const struct sdk_alpha_shared *shared = &sdk_alpha_shared[track][sdk_alpha_published[track]];
+        __asm__ volatile ("" ::: "memory");
+        if (m->shared && shared->machine != m) {
+            for (uint32_t i = 0; i < ELEK_VOICE_FRAMES; ++i)
+                blocks[ELEK_VOICE_FRAMES * track + i] = 0;
+            continue;
+        }
+        const struct elek_ui_knob *descriptors[15];
+        int32_t count = sdk_alpha_knobs(m, descriptors);
+        if (count < 0) continue;
+        int32_t knobs[15];
+        for (int32_t k = 0; k < count; ++k) {
+            int32_t raw = cm_src_value(track, k);
+            if (raw < 0) raw = 0;
+            if (raw > ELEK_UI_RAW_MAX) raw = ELEK_UI_RAW_MAX;
+            knobs[k] = sdk_alpha_map(descriptors[k], raw);
+        }
+        const struct elek_audio_context ctx = {
+            .knob_count = count, .knob = count ? knobs : 0,
+            .shared = m->shared ? shared->data : 0,
+        };
+        const struct elek_voice voice = {
+            .slot = track, .track = track, .pitch = fw_voice_note[track],
+            .velocity = fw_voice_vel[track] >> 8, .gate = fw_amp_env[3 * track] != 0,
+            .flags = (fw_voice_start & (1u << track)) ? ELEK_VOICE_START : 0,
+            .state = m->voice_state ? sdk_alpha_voice_state[track] : 0,
+        };
+        m->render(&ctx, &voice, blocks + ELEK_VOICE_FRAMES * track);
+    }
+}
+
 const char *sdk_alpha_label(const struct elek_machine *m, uint32_t k)
 {
     if (!m)
@@ -213,7 +296,7 @@ const struct elek_ui_glyph *sdk_alpha_glyph(const struct elek_machine *m, uint32
         return 0;
     if (m == sdk_alpha_presented)
         return sdk_alpha_glyphs[k];
-    return sdk_alpha_has_glyphs(m) ? knobs[k]->glyph : 0;
+    return knobs[k]->glyph;
 }
 
 int32_t sdk_alpha_visible(const struct elek_machine *m, uint32_t k)

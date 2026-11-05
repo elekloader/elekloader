@@ -24,7 +24,7 @@ docs match its code.
   command with the output it should print, every refusal with its fix, and a
   definition of done. Coding agents: start with [AGENTS.md](../AGENTS.md).
 - **[Shared machine SDK](SDK.md)** (alpha): portable machine UIs, supported
-  devices and limits, and the audio contract with its pending device backends.
+  devices and limits, Digitakt audio and the pending Digitone audio backends.
 - **[Your mod in the shop](SHOP.md)**: publish it, submit it with one form,
   and let later releases update it by themselves; take it out the same way.
 - **[Digitone II machines](MACHINES-DN2.md)**: register

@@ -137,9 +137,9 @@ class Firmware:
         """Put the card back as booted, if a test saved to it."""
         self.booted.restore_card()
 
-    def session(self):
+    def session(self, audio=False):
         """A new emulator at the settled user interface, whatever happened to the last."""
-        return self.booted.session()
+        return self.booted.session(audio=audio)
 
 
 _firmware = {}
@@ -307,6 +307,29 @@ class Lfo:
         self.track.open_list = None
 
 
+class Sound:
+    """What the device played while a key was held: its left output, 48 kHz."""
+    RATE = 48000
+
+    def __init__(self, samples):
+        self.samples = samples
+
+    @property
+    def peak(self):
+        return max((abs(x) for x in self.samples), default=0)
+
+    @property
+    def frequency(self):
+        """The tone's pitch in Hz, from its rising zero crossings (interpolated) where it is loud;
+        None with fewer than three."""
+        loud = [i for i, x in enumerate(self.samples) if abs(x) > self.peak // 8]
+        if not loud:
+            return None
+        part = self.samples[loud[0]:loud[-1] + 1]
+        ups = [i + a / (a - b) for i, (a, b) in enumerate(zip(part, part[1:])) if a < 0 <= b]
+        return (len(ups) - 1) * self.RATE / (ups[-1] - ups[0]) if len(ups) >= 3 else None
+
+
 class Track:
     def __init__(self, case, index):
         self.case, self.index, self.shown, self.open_list = case, index, None, None
@@ -373,6 +396,22 @@ class Track:
                 panel.next_page()
             self.shown = page
 
+    def play(self, key, hold_ms=300):
+        """Hold a keyboard key and measure its sound after the first 20 ms of attack."""
+        panel = self.case.panel
+        if panel.active_track() != self.index:
+            panel.switch_track(self.index)
+            self.shown = None
+        panel.keyboard()
+        panel.wait(20)
+        start = panel.audio_position()
+        panel.press_key(key)
+        panel.wait(hold_ms)
+        sound = Sound(panel.audio_since(start, skip_ms=20))
+        panel.release_key(key)
+        panel.wait(200)
+        return sound
+
     def page_action(self, action):
         """Copy, clear or paste the page on the screen."""
         self.case.say('%s the page' % action)
@@ -384,14 +423,19 @@ class Track:
 class SdkTestCase(unittest.TestCase):
     """The base of every generated test class: a fresh emulator on the device's firmware."""
     device = None
+    audio = False
+    requires = ()
 
     def setUp(self):
+        missing = set(self.requires) - self.device.features
+        if missing:
+            self.skipTest('%s: backend does not implement %s yet' % (self.device.key, ', '.join(sorted(missing))))
         self.fw = firmware(self.device)
         if self.fw.cwd:
             cwd = os.getcwd()
             os.chdir(self.fw.cwd)
             self.addCleanup(os.chdir, cwd)
-        self.session = self.fw.session()
+        self.session = self.fw.session(audio=self.audio)
         self.addCleanup(self._close)
         self.panel = self.device(self.session, self.fw.symbols, self.fw.machine_ids, self.fw.layouts)
         self.tracks = [Track(self, i) for i in range(self.device.track_count)]

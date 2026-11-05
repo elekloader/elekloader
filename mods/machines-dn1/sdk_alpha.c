@@ -8,21 +8,15 @@
 #include "digitone-mk1/machines.h"
 #include "elekloader/sdk_alpha_machine.h"
 
-/* The ABI markers ELEK_REGISTER_MACHINE points at. Private; they keep the Digitakt's names for now. */
-const char sdk_alpha_dt1_empty_ui[] = "sdk alpha dn1 empty";
-const char sdk_alpha_dt1_ui_v3[] = "sdk alpha dn1 pages 3";
-const char sdk_alpha_dt1_ui_v4[] = "sdk alpha dn1 glyphs 4";
-const char sdk_alpha_dt1_ui_v5[] = "sdk alpha dn1 render 5";    /* v4 and the render fields */
-
 extern const struct sdk_alpha_registration *const sdk_alpha_machines[];   /* the table, ending in 0 */
 
 #define SDK_MACHINES 16
 #define SDK_KNOBS 15                /* logical knobs 0-14, as on the Digitakt */
+const char sdk_alpha_dt1_ui_v1[] = "sdk alpha 1";
 static struct dnm_machine machines[SDK_MACHINES];
 static const struct elek_machine *declared[SDK_MACHINES];
 static const struct elek_ui_knob *by_id[SDK_MACHINES][SDK_KNOBS];   /* each machine's knobs, by logical id */
 static uint8_t knob_count[SDK_MACHINES];
-static uint8_t has_glyphs[SDK_MACHINES];
 static struct dnm_knob knobs[SDK_MACHINES][DNM_KNOBS_ALL];
 static int16_t defaults[SDK_MACHINES][DNM_KNOBS_ALL];
 static int32_t count = -1;
@@ -111,7 +105,6 @@ static void init(void)
         machines[n].knobs = knobs[n];
         machines[n].flags = DNM_PAGES2;
         declared[n] = e;
-        has_glyphs[n] = (*p)->ui->abi == sdk_alpha_dt1_ui_v4 || (*p)->ui->abi == sdk_alpha_dt1_ui_v5;
         for (int k = 0; k < DNM_KNOBS_ALL; ++k)
             defaults[n][k] = -1;
         for (uint32_t page = 0; page < e->page_count && page < 2; ++page)
@@ -191,7 +184,7 @@ static void snapshot(const struct dnm_machine *m, int32_t page, int force)
             input[id] = &values[id];
             presentation[id].label = knob->label;
             presentation[id].visible = 1;
-            presentation[id].glyph = has_glyphs[i] ? knob->glyph : 0;
+            presentation[id].glyph = knob->glyph;
             output[id] = &presentation[id];
             ++ctx.knob_count;
         }
