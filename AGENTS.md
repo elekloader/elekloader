@@ -27,6 +27,9 @@ Follow [docs/ADAPTING.md](docs/ADAPTING.md). It has:
 - a table from each refusal message to its fix;
 - a definition of done.
 
+A machine for several devices from one C source uses the shared SDK:
+start from [docs/SDK.md](docs/SDK.md) and `examples/sdk-hello-world/`.
+
 Start from `examples/hello-marker/`. Your loop is:
 
 ```bash

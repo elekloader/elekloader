@@ -166,11 +166,13 @@ The example above can use this `mod.json`:
 ```
 
 `devices` replaces `device` and `os`; do not supply both forms. Build for
-one stock OS file at a time with a ColdFire cross compiler:
+one stock OS file at a time with a ColdFire cross compiler, using the
+ordinary build command; it runs the SDK step when the source registers a
+machine:
 
 ```bash
 ELEKLOADER_CROSS=m68k-elf- \
-python -m elekloader.sdk.sdk_alpha_build <moddir> --stock <stock.syx>
+python -m elekloader.sdk.build <moddir> --stock <stock.syx>
 ```
 
 The builder adds `machine:<id>` on Digitakt, `dnmachine:<id>` on Digitone

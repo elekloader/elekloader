@@ -403,6 +403,16 @@ class SdkAlphaTests(unittest.TestCase):
             with self.assertRaisesRegex(elemod.ModError, 'machine:%d' % EMPTY.id):
                 link.link([core, pages, built['empty'][1], link.Mod2(duplicate, 'conflict')], image)
 
+    def test_the_ordinary_build_command_runs_the_sdk_step(self):
+        stock = self.stocks()['digitakt-mk1']
+        with tempfile.TemporaryDirectory() as tmp:
+            with redirect_stdout(io.StringIO()):
+                self.assertEqual(build.main([str(HELLO), '--stock', stock, '--out', tmp]), 0)
+            built = sorted(Path(tmp).glob('*.elemod'))
+            self.assertEqual(len(built), 1)
+            mod = link.Mod2(json.loads(built[0].read_text()), 'hello')
+            self.assertEqual((mod.names, mod.requires), (['machine:122'], ['core', 'machine-pages']))
+
     def test_sdk_alpha_one_source_builds_for_both_devices(self):
         stocks = self.stocks()
         dn = stocks['digitone-mk1']
