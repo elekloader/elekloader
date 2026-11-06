@@ -136,6 +136,22 @@ ELEKLOADER_DN2_SYX=<Digitone_II_OS1.12.syx> ELEKLOADER_CROSS=m68k-elf- \
 python tests/test_sdk_alpha_sound.py
 ```
 
+DigiKit builds these inputs in its checkout. The ready inputs need the text of
+ADI's ADSP-2156x Hardware Reference in `out/refs/adsp-2156x-hwr/` (DigiKit's
+docs/sharc/SOURCES.md; `tools/devtools/refstext.py` extracts it, with
+`pdftotext`):
+
+```bash
+cd <digikit>
+mise run gen:core                                   # the shared core, out/native/shared-core/gen
+export SHARC_GEN_DIR=$PWD/out/native/shared-core/gen
+mise run emu:serve -- --build-only                  # ELEKLOADER_DIGI_EMUD: out/native/target/nogen/release/digi-emud
+uv run python -m tools.emulator.native_emu --daemon --coupled --build-only
+                                                    # ELEKLOADER_DIGI_EMUD_COUPLED: out/native/target/generic/release/digi-emud
+uv run python -m tools.emulator.ready dn2 --syx <Digitone_II_OS1.12.syx> --force
+                                                    # ELEKLOADER_DN2_EMU_READY: out/snapshots/dn2-audio-ready-cold-2026-10-20
+```
+
 `SDK_WATCH=1` shows the emulated screen, the actions and the result in a
 window (`0.25` runs slower, `4` faster). A device whose files are not
 given is skipped. The emulator runs check the UI, defaults and sound
