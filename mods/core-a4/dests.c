@@ -76,8 +76,12 @@
 #define VOICE_TRACK ((const volatile int32_t *)0x80005ff0)     /* a synth voice's track */
 #define DEST_LIST(r) ((const volatile int32_t *)(0x4045c7a8 + 0x20 * (r)))  /* r 0..3; FX 4, CV 5 */
 #define LIST_APPEND ((void (*)(void *, int *))0x40168822)      /* (vector, &id) */
-#define STOCK_SHORT ((const char *(*)(void *, int))0x4009e79e)
-#define STOCK_LONG ((const char *(*)(void *, int))0x4009e7c2)
+/* stock returns the name in d0 only; a C call typed as returning a pointer
+ * reads a0 (the m68k ABI), which holds the parameter table's base there, so
+ * every stock knob label came out empty (found 2026-11-06, OSC and NOISE
+ * pages): typed as returning an integer, the result is read from d0 */
+#define STOCK_SHORT(s, i) ((const char *)((unsigned long (*)(void *, int))0x4009e79e)(s, i))
+#define STOCK_LONG(s, i) ((const char *)((unsigned long (*)(void *, int))0x4009e7c2)(s, i))
 
 #define SRC_VEL 0                             /* routes: velocity, bend, wheel, breath, aftertouch */
 #define SRC_DEST 5                            /* + the selector's place in the Dest list (0..7) */
