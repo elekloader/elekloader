@@ -320,6 +320,7 @@ class SdkAlphaTests(unittest.TestCase):
                                       'ctx->knob[0]->value = 1;}\n',
                                 capture_output=True, text=True)
         self.assertNotEqual(result.returncode, 0, 'a callback can write its input')
+        self.assertRegex(result.stderr, 'read-only|const', 'failed for another reason')
 
     def test_sine_example_retriggers_without_a_waveform_jump(self):
         cc = shutil.which('cc')
