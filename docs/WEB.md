@@ -80,7 +80,8 @@ the worker returns (`blob:` URLs).
 
 The page shows the device's recovery text before it lets you download.
 Flash the file yourself, as with any OS update ([BUILDING.md](BUILDING.md#flash-it)).
-The page never talks to a device: it has no Web MIDI and no USB access.
+The build never talks to a device. Only [the +Drive mods view](#the-drive-mods-view)
+does, over Web MIDI, and it never flashes firmware.
 
 ## The mod shop: the library's cards
 
@@ -280,12 +281,46 @@ python packaging/shop_updates.py --apply owner/name --catalog /tmp/catalog.json 
     --files-dir build/shop --cores-dir build/core
 ```
 
+## The +Drive mods view
+
+The page's +Drive mods view (`#drive`, `drive.js`) manages the `/mods`
+folder of a unit running a build with the Drive Loader (FORMAT.md, "+Drive
+mods"), over Web MIDI with SysEx. The browser asks for MIDI the first time
+the view opens, not before. The view writes nothing but files in `/mods`:
+every request goes through `datarpc.Mods`, whose paths are inside that
+folder. It runs `js/`'s engine as the site serves it (`engine/`), not
+Pyodide, and `app.js` loads it only when the view first opens:
+- **Connect** picks a MIDI port (one named like "Rytm" first) and reads
+  `/mods/.build`, the build descriptor. The view shows the build (its
+  modules, the +Drive area and what the ticked set uses of it, the largest
+  file the loader takes) and each table's spare entries.
+- **`/mods`** lists the folder's `.elemod` files, each downloaded and checked
+  alone against the build (`drive.check`), with Download and Delete (a second
+  press deletes).
+- **Uploads**, dropped or chosen, are checked first, together with the files
+  in `/mods` they require. If one would not load, nothing is sent.
+- **The set** for the next boot is the ticked files. The view checks it as you
+  tick, and Save writes `/mods/active` only when every one loads, as
+  `elekloader mods active` does. A line of `/mods/active` whose file is
+  missing or changed is named: the unit drops it.
+- **The last boot** shows `/mods/.status`.
+- **The shop's mods** for the build's device and OS are each marked
+  **+Drive** or **flash** (`drive.flashOnly`: sites, storage and the other
+  things only a flashed build carries), and a +Drive one can be uploaded from
+  there.
+
+`tests/test_drive_view.mjs` runs the view in Chromium (Playwright) against a
+mocked MIDI port: a fake unit with the made-up build of
+`js/test/drive-vectors.json`, whose uploads must be the requests
+`elekloader mods` sent, byte for byte.
+
 ## What stays private, and how
 
 - **Nothing is sent anywhere.** No request ever carries your files. The
   page fetches only its own files (the page, the worker, Pyodide, the
-  elekloader package, the cores, the shop's list and its mods), all from
-  this site. There are no
+  elekloader package, the engine, the cores, the shop's list and its mods),
+  all from this site. The +Drive mods view sends the files you choose to
+  the unit you connect over USB MIDI, and nowhere else. There are no
   analytics, no fonts or scripts from elsewhere, and no server side.
 - **The page** carries a Content Security Policy in a `<meta>` tag:
   `default-src 'self'`, scripts from this site only, plus
@@ -315,7 +350,8 @@ python packaging/shop_updates.py --apply owner/name --catalog /tmp/catalog.json 
 
 | path | what |
 |---|---|
-| `index.html`, `style.css`, `app.js`, `worker.js`, `bridge.py` | `web/`, as committed, but for one change: index.html names `app.js?v=` and `style.css?v=` with the site's version (a hash of every other file), and the page and its worker pass that `?v=` on to every file they load, so a browser's cache never mixes two deploys |
+| `index.html`, `style.css`, `app.js`, `worker.js`, `bridge.py`, `drive.js` | `web/`, as committed, but for one change: index.html names `app.js?v=` and `style.css?v=` with the site's version (a hash of every other file), and the page and its worker pass that `?v=` on to every file they load, so a browser's cache never mixes two deploys |
+| `engine/<hash>/` | the TypeScript engine the [+Drive mods view](#the-drive-mods-view) loads (`js/tools/build.ts`'s output, in a folder named by its files' hash, which index.html names: a deploy never mixes two engines) |
 | `devices.json` | the devices the engine knows (key, name, OS versions), so the page lists them all before the engine has loaded |
 | `elekloader.zip` | the elekloader package, exactly as the commit has it (`git archive HEAD elekloader`), stored, sorted, fixed dates: its sha256 follows from the commit |
 | `core/*.elemod`, `core/index.json` | the cores of the latest release, and the cores the catalog lists, with their sha256; the worker loads the newest of each device and OS and checks it |

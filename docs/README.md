@@ -92,6 +92,10 @@ docs match its code.
     routines; `hooks-check-dn2` for core-dn2 on the Digitone II, with rows in
     SETTINGS and PERSONALIZE, two key handlers in order and a key it takes
     once armed);
+  - `drive-hello-ar2` and `drive-hello-user-ar2`, two +Drive mods for the
+    Analog Rytm MKII's Drive Loader: one export and a tick entry, and a mod
+    that imports it, requires it and draws ahead of a flashed entry
+    ([FORMAT.md](FORMAT.md), "+Drive mods");
   - `perform-direct`, a real Digitakt II mod: [PRESET] toggles PERFORM
     without [FUNC];
   - `sine-machine`, an SRC machine for core 3.0 that names no firmware

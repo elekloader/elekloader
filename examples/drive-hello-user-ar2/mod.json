@@ -1,0 +1,16 @@
+{
+ "id": "drive-hello-user",
+ "version": "0.1",
+ "title": "+Drive hello user",
+ "category": "Examples",
+ "license": "GPL-2.0-or-later",
+ "description": "A test for the Drive Loader on the Analog Rytm MKII: imports drive-hello's tick count and draws it as a bar along the bottom of the screen. Its ev_draw entry has order 5, below core-ar2's and analoghealth's, so the merge puts it first.",
+ "device": "analog-rytm-mk2",
+ "os": "1.74",
+ "sources": ["user.c"],
+ "cflags": ["-DFILLRECT_AT=0x40070726"],
+ "subscribe": [
+  {"event": "ev_draw", "fn": "drive_hello_draw", "order": 5}
+ ],
+ "requires": ["core", "drive-loader", "drive-hello"]
+}

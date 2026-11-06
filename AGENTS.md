@@ -46,6 +46,7 @@ python -m elekloader.patch --stock <stock.syx> --mod <core.elemod> --mod <mod.el
 | `elekloader/elemod.py` | the mod format: shared validation, format 1, the instruction check, `summarize` |
 | `elekloader/link.py` | format 2: the linker and its checks |
 | `elekloader/desc.py` | the build descriptor (`core_desc`) the linker writes for a mod that imports it, and its reader (`python -m elekloader.desc dump`) |
+| `elekloader/drive.py`, `elekloader/container.py`, `elekloader/datarpc.py` | +Drive mods on the host (docs/FORMAT.md, "+Drive mods"): the build-checker (`elekloader check`) and the Drive Loader's boot linker's twin (`elekloader link --device-layout`), rule for rule with `mods/drive-loader-ar2/dlink.c`; the Data router's file container; `elekloader mods` over USB MIDI. `js/src/drive.ts`, `container.ts` and `datarpc.ts` are their TypeScript ports (the checker, not the twin), kept equal by `js/tools/drive_vectors.py` |
 | `elekloader/dsp.py` | the DSP code inside a main OS (the Octatrack's payloads): the linker places mods' DSP code in it |
 | `elekloader/sharc.py` | the Digitone II's DSP section (section 7, ADI boot records): reads it, and adds a SHARC mod's records and core's bridge (docs/SHARC-BOOT.md, docs/SHARC-DN2.md) |
 | `elekloader/patch.py` | the command line; `build()` is what the window calls too |
@@ -72,7 +73,7 @@ python -m elekloader.patch --stock <stock.syx> --mod <core.elemod> --mod <mod.el
 | `packaging/`, `.github/workflows/windows-build.yml`, `macos-build.yml` | the apps: `elekloader-<version>-windows.exe`, and `elekloader-<version>-macos.dmg` (signed and notarized), with core built in (`elekloader/bundled`, never committed) |
 | `js/` | the engine in TypeScript (GPL-3.0-or-later; js/README.md): the formats, the checks, the linker, the build and the web bridge, ported from the Python and matching it byte for byte, messages included (`js/tools/parity.ts` checks with your stock files) |
 | `js/src/kit/`, `js/tools/kit.ts`, `js/examples/minimal/`, `packaging/build_kit.py`, `.github/workflows/kit-build.yml` | the kit for websites (docs/INTEGRATING.md): the builder worker, the page's client, the catalog format and elekloader's curated catalog, the lock and its checks. It names no website |
-| `web/`, `packaging/build_web.py`, `.github/workflows/pages.yml` | the web page (GitHub Pages): elekloader in Pyodide, in a worker; `bridge.py` is its only Python, a thin layer over `gui.LoaderModel` and `patch`; `catalog.json` is its mod shop's curated list (docs/WEB.md); `upstream/` holds the upstream lists for the to-do list (`sdk.octabam --sites`: the stock code octabam's newer modules hook). Everything it loads comes from the site itself |
+| `web/`, `packaging/build_web.py`, `.github/workflows/pages.yml` | the web page (GitHub Pages): elekloader in Pyodide, in a worker; `drive.js`, its +Drive mods view (Web MIDI), on js/'s engine; `bridge.py` is its only Python, a thin layer over `gui.LoaderModel` and `patch`; `catalog.json` is its mod shop's curated list (docs/WEB.md); `upstream/` holds the upstream lists for the to-do list (`sdk.octabam --sites`: the stock code octabam's newer modules hook). Everything it loads comes from the site itself |
 | `packaging/submit_mod.py`, `packaging/shop_updates.py`, `elekloader/sdk/publish.py`, `.github/workflows/mod-submission.yml`, `.github/workflows/shop-updates.yml`, `.github/ISSUE_TEMPLATE/submit-mod.yml`, `remove-mod.yml` | the shop's Submit a mod and Remove a mod forms, its daily updates, and the authors' publish command (docs/SHOP.md): the check reads a release's files, refuses a mod whose core or required mods the site can't supply (cores only from elekloader's releases), and opens the pull request that writes `web/catalog.json` in its own layout; an author's newer files of mods already in the shop merge by themselves, unless an entry is `hold` or `SHOP_AUTO_MERGE` is false (docs/WEB.md, "Submitting a mod") |
 
 Tests:
@@ -97,6 +98,7 @@ ELEKLOADER_RELEASES=<folder of stock files> python tests/test_releases.py   # ev
 ELEKLOADER_STOCK=... ELEKLOADER_OT_SYX=... ELEKLOADER_MODS=... python tests/test_gui.py   # the window, hidden (Tk)
 python packaging/build_web.py --pyodide pyodide-core-<v>.tar.bz2 --core core-*.elemod --out build/site
 node tests/test_web.mjs build/site                           # the web page's engine, in Pyodide
+node tests/test_drive_view.mjs                               # the +Drive mods view in Chromium, a mocked MIDI port (Playwright)
 ```
 
 A test whose files are not given is skipped, not passed. Say which ran.
@@ -131,7 +133,10 @@ Rules:
   pass.
 - **The web page stays on its own site.** It loads nothing from anywhere
   else (no CDN, fonts, analytics or package downloads), sends the user's
-  files nowhere, and only offers downloads: no Web MIDI or USB. Its Python
+  files nowhere but to the unit they connect, and builds only downloads: it
+  never flashes. Its one device link is the +Drive mods view, over Web MIDI,
+  which writes only files in the unit's `/mods` folder (docs/WEB.md, "The
+  +Drive mods view"). Its Python
   goes through `elekloader` unchanged. The site never holds firmware or a
   build; the only mods on it are the cores and the shop's
   (`web/catalog.json`), each from its author's release, pinned by sha256,

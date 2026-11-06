@@ -27,6 +27,8 @@ The site holds:
     grouped by distance: the site has no stock file), and from the upstream
     lists (--upstream, by default web/upstream/*.json: the stock code
     octabam's newer modules hook, which the shop's files do not);
+  - engine/<hash>/: the TypeScript engine the page's +Drive mods view (drive.js)
+    loads (js/tools/build.ts's output; it needs Node);
   - devices.json: the devices the engine knows, for the page before it loads;
   - shop/claims.json: the leaderboard, the to-do list's entries claimed by
     merged pull requests (--prs: gh pr list --state merged --json ...);
@@ -69,7 +71,7 @@ PYODIDE_URL = ('https://github.com/pyodide/pyodide/releases/download/%s/pyodide-
 # what the page needs: the loader, the runtime, the standard library, the lock file
 PYODIDE_FILES = ('pyodide.mjs', 'pyodide.asm.mjs', 'pyodide.asm.wasm', 'python_stdlib.zip',
                  'pyodide-lock.json')
-WEB_FILES = ('index.html', 'style.css', 'app.js', 'worker.js', 'bridge.py')
+WEB_FILES = ('index.html', 'style.css', 'app.js', 'worker.js', 'bridge.py', 'drive.js')
 # licences under which the site may pass a mod on (SPDX identifiers)
 SHOP_LICENCES = {'GPL-2.0', 'GPL-2.0-only', 'GPL-2.0-or-later', 'GPL-3.0', 'GPL-3.0-only',
                  'GPL-3.0-or-later', 'LGPL-2.1-or-later', 'LGPL-3.0-or-later', 'MIT',
@@ -280,16 +282,35 @@ def device_list():
     return [{'key': d.key, 'name': d.name, 'releases': sorted(d.releases)} for d in devices.devices()]
 
 
-def stamp(html, token):
+def stamp(html, token, engine='engine'):
     """index.html with its script and stylesheet named as app.js?v=TOKEN and style.css?v=TOKEN: a deploy
     changes the names, so a browser never runs one deploy's page with another's files from its cache (app.js
-    and worker.js pass the same ?v= on to every file they load)."""
+    and worker.js pass the same ?v= on to every file they load). It also names the engine's folder
+    (engine/<sha256 of its files>/), for the +Drive mods view (drive.js), so its files never mix either."""
     out = html
-    for a in ('src="app.js"', 'href="style.css"'):
+    for a in ('src="app.js"', 'href="style.css"', '<meta name="engine" content="engine">'):
         if out.count(a) != 1:
             sys.exit('web/index.html: expected one %s' % a)
+    for a in ('src="app.js"', 'href="style.css"'):
         out = out.replace(a, a[:-1] + '?v=%s"' % token)
-    return out
+    return out.replace('<meta name="engine" content="engine">', '<meta name="engine" content="%s">' % engine)
+
+
+def engine_files():
+    """The TypeScript engine as the +Drive mods page loads it: js/tools/build.ts's output (Node's own type
+    stripping). -> (its folder's name, {path in it: bytes})."""
+    import tempfile
+    with tempfile.TemporaryDirectory() as tmp:
+        subprocess.run(['node', os.path.join(ROOT, 'js', 'tools', 'build.ts'), tmp], check=True,
+                       stdout=subprocess.DEVNULL)
+        files = {}
+        for d, _dirs, names in os.walk(tmp):
+            for n in names:
+                p = os.path.join(d, n)
+                with open(p, 'rb') as fh:
+                    files[os.path.relpath(p, tmp).replace(os.sep, '/')] = fh.read()
+    h = sha(''.join('%s %s\n' % (n, sha(b)) for n, b in sorted(files.items())).encode())[:12]
+    return 'engine/' + h, files
 
 
 def to_do(core_paths, folder, items, cs, upstream=()):
@@ -391,6 +412,9 @@ def main(argv=None):
     for n in ('LICENSE', 'NOTICE'):
         with open(os.path.join(ROOT, n), 'rb') as fh:
             site[n + '.txt'] = fh.read()
+    engine, efiles = engine_files()
+    for n, b in efiles.items():
+        site['%s/%s' % (engine, n)] = b
     site['elekloader.zip'] = zipped
     for n, b in py.items():
         site['pyodide/' + n] = b
@@ -418,7 +442,7 @@ def main(argv=None):
     # the site's version: its files but the page, which names it
     token = sha(''.join('%s %s\n' % (n, sha(b)) for n, b in sorted(site.items()) if n != 'index.html')
                 .encode())[:12]
-    site['index.html'] = stamp(site['index.html'].decode('utf-8'), token).encode('utf-8')
+    site['index.html'] = stamp(site['index.html'].decode('utf-8'), token, engine).encode('utf-8')
     commit = git('rev-parse', 'HEAD').decode().strip()
     dirty = bool(git('status', '--porcelain', '--', 'elekloader').strip())
     tree = git('rev-parse', 'HEAD:elekloader').decode().strip()

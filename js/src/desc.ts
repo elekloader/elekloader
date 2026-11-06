@@ -4,6 +4,7 @@
 // tables: the modules, their exports, every table with its room for more entries and each entry's sort key, the names
 // the modules claim, the RAM line and the mod storage's room. desc.py's docstring gives the layout.
 import { crc32 } from './zip.ts'
+import { ModError } from './elemod.ts'
 
 export const SYM = 'core_desc'
 export const ABI: [number, number] = [1, 0]
@@ -85,4 +86,58 @@ export function encode(d: DescFields): Uint8Array {
   b.set(pool, oPool)
   u32(0x0c, crc32(b))
   return b
+}
+
+export type Decoded = Omit<DescFields, 'modules'> & {
+  abi: [number, number]; size: number; crc: number
+  modules: (DescModule & { index: number })[]
+}
+
+/** The block at `at` of `blk` -> its fields. ModError on a bad block (or a RangeError on a block cut inside a
+ * record, as desc.py's struct.error). desc.decode. */
+export function decode(blk: Uint8Array, at = 0): Decoded {
+  if (blk.length < at + 4 || blk[at] !== 0x45 || blk[at + 1] !== 0x4c || blk[at + 2] !== 0x4b || blk[at + 3] !== 0x44)
+    throw new ModError(`no build descriptor at +0x${at.toString(16)}`)
+  if (blk.length < at + 16) throw new RangeError('unpack_from requires a buffer of at least 16 bytes')
+  const v0 = new DataView(blk.buffer, blk.byteOffset + at)
+  const major = v0.getUint16(4), minor = v0.getUint16(6), size = v0.getUint32(8), crc = v0.getUint32(12)
+  if (major !== ABI[0]) throw new ModError(`build descriptor ABI ${major}, this reader reads ${ABI[0]}`)
+  const b = blk.slice(at, at + size)
+  if (b.length !== size || size < HEADER) throw new ModError('the build descriptor is cut short')
+  const z = b.slice()
+  z.fill(0, 0x0c, 0x10)
+  if (crc32(z) !== crc) throw new ModError('the build descriptor\'s CRC does not match')
+  const v = new DataView(b.buffer)
+  const u16 = (o: number) => v.getUint16(o), u32 = (o: number) => v.getUint32(o)
+  const pAt = u32(0x18)
+  const dec = new TextDecoder('utf-8', { fatal: true })
+  const name = (off: number) => {
+    const o = pAt + off, end = b.indexOf(0, o)
+    if (end < 0) throw new RangeError('substring not found')
+    return dec.decode(b.subarray(o, end))
+  }
+  const [nmod, nexp, ntab, nclm] = [u16(0x20), u16(0x22), u16(0x24), u16(0x26)]
+  const [oMod, oExp, oTab, oClm, , oArea, oSto] = Array.from({ length: 7 }, (_, i) => u32(0x28 + 4 * i))
+  const exports: [string, number][] = Array.from({ length: nexp }, (_, i) => [name(u32(oExp + EXPORT * i)), u32(oExp + EXPORT * i + 4)])
+  const modules = Array.from({ length: nmod }, (_, i) => {
+    const o = oMod + MODULE * i, first = u16(o + 12), cnt = u16(o + 14)
+    return { name: name(u32(o)), version: name(u32(o + 4)), kind: b[o + 8], flags: b[o + 9], index: u16(o + 10),
+      exports: exports.slice(first, first + cnt) }
+  })
+  const tables = Array.from({ length: ntab }, (_, i) => {
+    const o = oTab + TABLE * i, cnt = u16(o + 10), ko = u32(o + 16)
+    return { name: name(u32(o)), address: u32(o + 4), entry: u16(o + 8), count: cnt, capacity: u16(o + 12), flags: u16(o + 14),
+      keys: Array.from({ length: cnt }, (_, k) => u32(ko + 4 * k)) }
+  })
+  const claims = Array.from({ length: nclm }, (_, i): [number, number, string] =>
+    [u16(oClm + CLAIM * i), u16(oClm + CLAIM * i + 2), name(u32(oClm + CLAIM * i + 4))])
+  const nsc = u16(oSto + 8)
+  const scopes = Array.from({ length: nsc }, (_, i): [string, number, number, number] => {
+    const o = oSto + 12 + SCOPE * i
+    return [name(u32(o)), u32(o + 4), u32(o + 8), u32(o + 12)]
+  })
+  return { abi: [major, minor], size, crc, family: u16(0x10), device: u16(0x12), release: u32(0x14),
+    deviceKey: name(u32(0x44)), os: name(u32(0x48)), modules, tables, claims,
+    area: Array.from({ length: 5 }, (_, i) => u32(oArea + 4 * i)) as [number, number, number, number, number],
+    storage: { trailer: [u32(oSto), u32(oSto + 4)], scopes } }
 }

@@ -70,6 +70,7 @@ export type Release = {
   mainLen: number        // ... and that section's length
   binSha256: string      // the stock card file (.bin), where the device has one
   sharc?: SharcProfile   // absent unless this release has measured section-7 facts
+  dataRelease?: number   // the OS release word of the data container's header (absent: not known)
 }
 
 export type Range = [number, number]
@@ -103,6 +104,7 @@ export type Device = {
   paramIds: [number, [number, number, string], [string, boolean][]] | null   // [own, [lo, hi, what], [[table, ownOnly]]]: knob id ranges (link.Mod2.idRanges)
   driveArea: Range                              // the +Drive mods' area a build descriptor names; a build with one keeps its own RAM below it
   dataFamily: number                            // the family id of the data container's header (0: not known)
+  dataDevice: number                            // ... and its device id (0: not known)
   sramCode: Range
   fastTable: string
   imageFree: Range[]
@@ -117,7 +119,7 @@ const rel = (version: string, syxSha256: string, mainSha256: string, mainLen: nu
 
 const base = {
   mainSection: 3, mainLoad: 0x40000400, isa: 'coldfire' as const, hmacKeyFrom: null, container: 'ele3' as const,
-  versionLen: 4, versionAt: 0x14, versionOptional: false, protected: [], relocatable: [], keep: [], blobMax: null, driveArea: [0, 0] as Range, dataFamily: 0, sramCode: [0, 0] as Range, coreDdr: [] as [string, Range][], slotClaims: [] as [string, number, number, string][], paramIds: null, fastTable: '',
+  versionLen: 4, versionAt: 0x14, versionOptional: false, protected: [], relocatable: [], keep: [], blobMax: null, driveArea: [0, 0] as Range, dataFamily: 0, dataDevice: 0, sramCode: [0, 0] as Range, coreDdr: [] as [string, Range][], slotClaims: [] as [string, number, number, string][], paramIds: null, fastTable: '',
   imageFree: [], reserve: null, dspPayloads: {}, dspAreas: [], trailer: null, updateMax: null,
 }
 
@@ -226,8 +228,9 @@ export const ANALOG_RYTM_MK2: Device = {
   releases: [
     rel('1.73', '8ad671087ec30433d5407c7380d2396e0915ab931c5d3dd18a78bf284d3d1e52',
       '28d9ef40c895e03f17dfce096543109adaf708947392db72818fc2a412d685d6', 3005432),
-    rel('1.74', 'cb0f99d620edde994fb860c0e79cc2464e427d06882828cfdfb00fc53700e123',
+    { ...rel('1.74', 'cb0f99d620edde994fb860c0e79cc2464e427d06882828cfdfb00fc53700e123',
       '34cd0c4da8e4b810d1b25284475a99ea53821e2ab7d30a978bf15dc578251f3b', 3005432),
+      dataRelease: 0x30313736 },                   // a stock 1.74 project download's header
   ],
   stage: 0x40200000, flashAt: 0x80000, flashLimit: 0x300000,
   areas: { ddr: [0x47be0000, 0x47c00000], big: [0x47938000, 0x47fff000] },
@@ -235,6 +238,7 @@ export const ANALOG_RYTM_MK2: Device = {
   coreDdr: [['0.11', [0x47b10000, 0x47fff000]]],   // core-ar2 0.11: 5 MB, above its tags and mirrors
   driveArea: [0x47d00000, 0x47fff000],             // the +Drive mods' area: the top 3 MB of coreDdr's
   dataFamily: 2,                                   // the data container's family id (stock checks it)
+  dataDevice: 5,                                   // ... and its device id (a stock project download's)
   recovery: 'hold FUNC while powering on for the STARTUP menu, press TRIG 4 (OS UPGRADE), '
     + 'then send the stock .syx over MIDI DIN (not USB)',
   slotClaims: [['core_machines', 0, 53, 'machine']],   // a machine's descriptor names its slot at +0

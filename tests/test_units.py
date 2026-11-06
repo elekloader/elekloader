@@ -1023,6 +1023,7 @@ def test_the_site_names_its_files_with_its_version_and_lists_the_devices():
     out = build_web.stamp(html, 'abc123')
     assert 'src="app.js?v=abc123"' in out and 'href="style.css?v=abc123"' in out
     assert out.replace('?v=abc123', '') == html
+    assert '<meta name="engine" content="engine/0123abcd">' in build_web.stamp(html, 'abc123', 'engine/0123abcd')
     try:
         build_web.stamp(html.replace('src="app.js"', 'src="main.js"'), 'x')
     except SystemExit:

@@ -909,7 +909,7 @@ export function link(mods: Mod2[], image: Uint8Array, lock: store.Lock | null = 
       const room = store.capacity(dev.key, newLock.split, core.version)
       scopes = store.SCOPES.map(s => [s, room[s], newLock!.next[s], newLock!.generation[s]])
     }
-    return { family: dev.dataFamily, device: 0, release: 0, deviceKey: dev.key, os: rel.version, modules, tables: tabs,
+    return { family: dev.dataFamily, device: dev.dataDevice, release: rel.dataRelease ?? 0, deviceKey: dev.key, os: rel.version, modules, tables: tabs,
       claims: order.flatMap(m => m.names.map(nm => [desc.CLAIM_NAME, index.get(m.id)!, nm] as [number, number, string])),
       area: [w('bss_end'), dev.driveArea[0], dev.driveArea[1], w('glob', desc.STAGING[0]), w('glob', desc.STAGING[1])],
       storage: { trailer: [w('trailer'), trailerLen], scopes } }
