@@ -24,13 +24,20 @@
 | PAGE_REC then returns the record for idx, VIEW_INIT puts idx after the
 | page it follows, and the stock UI shows the page and turns its knobs like
 | its own. core_page_open opens it from a key handler.
+|
+| From 5.1 core has a page of its own, 30, TRIG's second (core_trig2,
+| lanes.c), shown once a mod puts a knob on it through core_knobs; and
+| core_knobs puts mods' knobs on the stock pages' empty boxes too
+| (core_knobs_apply, at the first view's build).
         .equ    PAGE0,    27            | the first index for mods
         .equ    PAGES,    4
+        .equ    PAGE_TRIG2, 30          | 5.1: core's own, after TRIG's page 1
+        .equ    PAGE_TRIG, 1
         .equ    LISTMAX,  32            | the longest list core rebuilds
         .equ    EVLEN,    32            | a key event, with room to spare
         .equ    VIEW_CUR, 144           | a view's page: its place in its list
         .equ    PRESSES,  8             | the most core_page_open sends
-        .equ    VIEWS,    16            | the views core_views notes (4.2)
+        .equ    VIEWS,    16            | the views core_views notes (5.2)
 
         .section .run, "ax"
 
@@ -44,14 +51,29 @@ core_page_rec:
         bcs.s   3f
         lea     core_pages, %a0
 1:      move.l  (%a0)+, %d1             | a descriptor, or 0: the table's end
-        beq.s   3f
+        beq.s   5f
         movea.l %d1, %a1
         cmp.l   (%a1), %d0
         bne.s   1b
         lea     8(%a1), %a1
         move.l  %a1, %d0
         rts
-3:      move.l  %d3, -(%sp)
+5:      cmpi.l  #PAGE_TRIG2, %d0        | 5.1: TRIG's second page
+        bne.s   3f
+        tst.l   core_trig2_on
+        beq.s   3f
+        move.l  #core_trig2 + 8, %d0
+        rts
+3:      move.l  4(%sp), -(%sp)          | a stock page: the stock record, with
+        bsr.s   4f                      | 5.1's mod knobs in its empty boxes
+        addq.l  #4, %sp
+        move.l  %d0, -(%sp)
+        move.l  8(%sp), -(%sp)
+        jsr     core_knobs_fix          | (idx, record) -> the record
+        addq.l  #8, %sp
+        movea.l %d0, %a0
+        rts
+4:      move.l  %d3, -(%sp)
         moveq   #26, %d0
         move.l  %d2, -(%sp)
         jmp     PAGE_REC + 6
@@ -63,13 +85,14 @@ core_page_rec:
 | for the buffer goes through unchanged.
         .globl  core_view_init
 core_view_init:
+        jsr     core_knobs_apply        | 5.1: mods' knobs onto their pages, once
         lea     -24(%sp), %sp           | 0: the copy's std::vector, 12: saves
         movem.l %d2/%a2-%a3, 12(%sp)
         movea.l 32(%sp), %a0            | the list (args from 28: view, list)
         movea.l (%a0), %a1              | its first index
         move.l  4(%a0), %d2             | its end
         sub.l   %a1, %d2
-        cmpi.l  #4 * (LISTMAX - PAGES), %d2
+        cmpi.l  #4 * (LISTMAX - PAGES - 1), %d2
         bhi.w   5f
         add.l   %a1, %d2
         lea     core_view_buf, %a2
@@ -79,7 +102,7 @@ core_view_init:
         move.l  %d0, (%a2)+
         lea     core_pages, %a3
 2:      move.l  (%a3)+, %d1             | ... and each mod page after it
-        beq.s   1b
+        beq.s   7f
         movea.l %d1, %a0
         cmp.l   4(%a0), %d0
         bne.s   2b
@@ -90,17 +113,29 @@ core_view_init:
         asr.l   #2, %d1
         move.l  %d1, 56(%a0)            | the place in its list
         bra.s   2b
-4:      move.l  28(%sp), %d0            | 4.2: note the view and its first page
+7:      tst.l   core_trig2_on           | 5.1: then core's TRIG 2 after TRIG
+        beq.s   1b
+        cmpi.l  #PAGE_TRIG, %d0
+        bne.s   1b
+        lea     core_trig2, %a0
+        move.l  (%a0), (%a2)+
+        move.l  28(%sp), 52(%a0)
+        move.l  %a2, %d1
+        subi.l  #core_view_buf + 4, %d1
+        asr.l   #2, %d1
+        move.l  %d1, 56(%a0)
+        bra.s   1b
+4:      move.l  28(%sp), %d0            | 5.2: note the view and its first page
         move.l  core_view_buf, %d1      | (stock's first: mod pages follow theirs)
         lea     core_views, %a0
         moveq   #VIEWS, %d2
-7:      tst.l   (%a0)                   | a free entry, or this view's again
+9:      tst.l   (%a0)                   | a free entry, or this view's again
         beq.s   8f
         cmp.l   (%a0), %d0
         beq.s   8f
         addq.l  #8, %a0
         subq.l  #1, %d2
-        bne.s   7b
+        bne.s   9b
         bra.s   3f                      | full: not noted
 8:      move.l  %d0, (%a0)+
         move.l  %d1, (%a0)
@@ -205,7 +240,7 @@ core_view_buf:
         .skip   4 * LISTMAX
 core_page_ev:
         .skip   EVLEN
-| 4.2: each view VIEW_INIT built, and the first page of its stock list
+| 5.2: each view VIEW_INIT built, and the first page of its stock list
 | (lists.c's core_page_list finds a page key's view by it).
         .globl  core_views
 core_views:

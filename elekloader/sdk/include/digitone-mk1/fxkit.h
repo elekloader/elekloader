@@ -20,7 +20,8 @@
  * otherwise): a step with an effect's locks is a lock trig of that track with those slots locked. So the stock
  * saves, loads, copies and pastes them with the pattern, and the sequencer fires them: core-dn1 4.1's
  * ev_note_queue gives fxkit each, with the time it plays (the first step's, as PLAY starts, fxkit reads from the
- * lock table). The lock track should play nothing of its own in a pattern where an effect has locks: its notes
+ * lock table). A step's locks last that step, at the lock track's SCALE (fxkit 0.2; 0.1's held to the track's
+ * next trig). The lock track should play nothing of its own in a pattern where an effect has locks: its notes
  * would take them too, and an arpeggiator on it turns its trigs into the arpeggiator's events. */
 #ifndef ELEKLOADER_DIGITONE_MK1_FXKIT_H
 #define ELEKLOADER_DIGITONE_MK1_FXKIT_H
@@ -158,5 +159,10 @@ extern uint32_t fx_serial(const struct fx_effect *e);
  * has bypassed the active effect (cleared by fx_activate, or by BYP) */
 extern volatile uint32_t fx_load;
 extern int32_t fx_overload(void);
+
+/* The inputs (fxkit 0.2): 1 MONO, input L on both sides; 0 STEREO. One setting for every effect, saved with the
+ * project (fxkit's own data); a project without it keeps what is set. The effect applies it to its input. */
+extern int32_t fx_input_mono(void);
+extern void fx_input_mono_set(int32_t on);
 
 #endif

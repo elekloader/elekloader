@@ -19,6 +19,18 @@ it off and gives the audio and the screen back. The sequencer keeps running, so 
 and TEMPO still work and SIZE can follow the Digitone's tempo. Opening the
 page steps the pedal on.
 
+## 0.3
+
+From the first reports from a unit: a p-lock lasts its own step (fxkit 0.2; it
+used to hold until the lock track's next trig, and with trigs only where there
+are locks one lock kept its knob for the rest of the loop); SETUP's INPUT is
+one setting for every pedal, and a new project keeps it; the LFO pages turn as
+the stock's do (SPD and DEP gather speed with the knob, MULT, WAVE, MODE and
+DEST's list step every second detent); a knob let go no longer steps once
+more; and the next key pressed without FUNC clears FUNC, so it cannot stay on
+(a FUNC left on shows page 2 for pages 1-3, as reported after a SETUP change).
+Needs fxkit 0.2.
+
 ## 0.2: on fxkit
 
 From 0.2 DigiHoard is an effect on fxkit ([../fxkit-dn1](../fxkit-dn1)), as every
@@ -207,8 +219,8 @@ task, on the pedal shell the GAS pedals share.
 With the SDK and a stock OS file:
 
 ```bash
-python -m elekloader.sdk.build mods/digihoard-dn1 --stock Digitone_and_Digitone_Keys_OS1.43.syx   # out/digihoard-0.2.elemod
-python -m elekloader.sdk.build mods/digihoard-dn1 --stock Digitone_and_Digitone_Keys_OS1.44.syx   # out/digihoard-0.2-os1.44.elemod
+python -m elekloader.sdk.build mods/digihoard-dn1 --stock Digitone_and_Digitone_Keys_OS1.43.syx   # out/digihoard-0.3.elemod
+python -m elekloader.sdk.build mods/digihoard-dn1 --stock Digitone_and_Digitone_Keys_OS1.44.syx   # out/digihoard-0.3-os1.44.elemod
 ```
 
 It names no firmware address, so its 1.44 port is empty. It needs fxkit and core-dn1

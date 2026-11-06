@@ -29,12 +29,12 @@ static const uint8_t sdk_pos[SDK_KNOBS] = { 8, 9, 10, 11, 12, 13, 14, 15, 5, 6, 
 /* The OS release's View and parameter-set layouts come from mod.json's port cflags: VIEW_METHODS,
  * VIEW_DRAW, VIEW_DRAW_PARAMETER, VIEW_CLEAR, VIEW_PARAM_SET (and its argument VIEW_PARAM_SET_ARG),
  * VIEW_DIRTY, VIEW_PARENT, SET_METHODS and SET_RESET. */
-struct core_page dnm_sdk_pages[2] = {   /* claimed as page:30 and page:29 */
-    { 30, -1, "SDK", "SDK", { 0 }, 9, 0, 0 },
-    { 29, -1, "SDK", "SDK", { 0 }, 9, 0, 1 },
+struct core_page dnm_sdk_pages[2] = {   /* claimed as page:29 and page:28 (core-dn1 5.1 has 30) */
+    { 29, -1, "SDK", "SDK", { 0 }, 9, 0, 0 },
+    { 28, -1, "SDK", "SDK", { 0 }, 9, 0, 1 },
 };
 _Static_assert(sizeof(struct core_page) == 60, "mod.json contributes dnm_sdk_pages + 60");
-static const int32_t sdk_list[2] = { 30, 29 };
+static const int32_t sdk_list[2] = { 29, 28 };
 static const struct dnm_machine *listed;    /* the machine SYN2 shows the SDK pages for; 0: stock */
 int32_t dnm_sdk_shown[4];                   /* each track's SDK page, kept across track switches */
 static int32_t shown_track = -1;            /* the track dnm_sdk_shown follows now */

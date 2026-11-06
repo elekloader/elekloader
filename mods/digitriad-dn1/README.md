@@ -21,6 +21,18 @@ it off and gives the audio and the screen back. The sequencer keeps running, so 
 TEMPO still work and the delay can follow the Digitone's tempo. BYPASS
 (trig 16) passes the inputs through dry, with the delay's tails.
 
+## 0.3
+
+From the first reports from a unit: a p-lock lasts its own step (fxkit 0.2; it
+used to hold until the lock track's next trig, and with trigs only where there
+are locks one lock kept its knob for the rest of the loop); SETUP's INPUT is
+one setting for every pedal, and a new project keeps it; the LFO pages turn as
+the stock's do (SPD and DEP gather speed with the knob, MULT, WAVE, MODE and
+DEST's list step every second detent); a knob let go no longer steps once
+more; and the next key pressed without FUNC clears FUNC, so it cannot stay on
+(a FUNC left on shows page 2 for pages 1-3, as reported after a SETUP change).
+Needs fxkit 0.2.
+
 ## 0.2: on fxkit
 
 From 0.2 DigiTriad is an effect on fxkit ([../fxkit-dn1](../fxkit-dn1)), as every
@@ -210,8 +222,8 @@ Digitone's UI task.
 With the SDK and a stock OS file:
 
 ```bash
-python -m elekloader.sdk.build mods/digitriad-dn1 --stock Digitone_and_Digitone_Keys_OS1.43.syx   # out/digitriad-0.2.elemod
-python -m elekloader.sdk.build mods/digitriad-dn1 --stock Digitone_and_Digitone_Keys_OS1.44.syx   # out/digitriad-0.2-os1.44.elemod
+python -m elekloader.sdk.build mods/digitriad-dn1 --stock Digitone_and_Digitone_Keys_OS1.43.syx   # out/digitriad-0.3.elemod
+python -m elekloader.sdk.build mods/digitriad-dn1 --stock Digitone_and_Digitone_Keys_OS1.44.syx   # out/digitriad-0.3-os1.44.elemod
 ```
 
 It names no firmware address, so its 1.44 port is empty. It needs fxkit and core-dn1

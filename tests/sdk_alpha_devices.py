@@ -578,7 +578,7 @@ class Digitone1(Device):
     def release_key(self, key):
         self.s.release(self.s.code(self.KEYS[key]))
 
-    SDK_PAGE, SYN2_FIRST = 30, 4    # machines-dn1's first page, and the first page of SYN2's stock list
+    SDK_PAGE, SYN2_FIRST = 29, 4    # machines-dn1's first page, and the first page of SYN2's stock list
     # machines-dn1's sdk_pos: the SYN parameter that holds each logical knob, whichever page shows it
     SDK_PARAMS = (119, 120, 121, 122, 123, 124, 125, 126, 112, 113, 114, 127, 130, 117, 118)
 

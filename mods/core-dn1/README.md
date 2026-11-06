@@ -83,7 +83,7 @@ the Digitone needs it. On its own it changes nothing the unit does.
   - `core_param_override` ([params.s](params.s)): a mod answers for a stock
     parameter while it wants to: its UI record (value text, knob graphic,
     how a turn moves it), its label and the LFO destination names and groups
-    ([names.s](names.s), 4.2). Core consults the table in its UI
+    ([names.s](names.s), 5.2). Core consults the table in its UI
     record lookups, and replaces the routine that makes a knob's label
     (0x400207b8, the same in 1.44). `core_param_ui_make` builds a UI
     record from a stock parameter's turn and another one's graphic.
@@ -198,12 +198,6 @@ the Digitone needs it. On its own it changes nothing the unit does.
     each voice's locked slots, and `fw_param_uirec` a parameter's UI record.
   - Project data blocks that save only what they hold: `CORE_PROJDATA_VARIABLE`
     in a descriptor's size (projdata.s).
-- **From 4.2, page lists** ([lists.c](lists.c), [pages.s](pages.s);
-  docs/ADAPTING.md, "Mod pages"): `core_page_list(first, list, n)` gives a
-  page key another list of pages for a while (SYN2 = page 4: its stock
-  list starts there), or its stock list back with `n` 0. machines-dn1 shows
-  an SDK alpha machine's pages behind SYN2 with it, in place of FM's
-  envelope pages. No new site: `core_view_init` notes each view it builds.
 - **From 5.0, the firmware's moments** ([system.s](system.s), [events.s](events.s);
   a prototype: the sites, their 1.44 ports and what the emulator showed are in
   the hook map, research notes `dn1-hooks/`). Each is an observer list unless
@@ -278,15 +272,83 @@ the Digitone needs it. On its own it changes nothing the unit does.
     (0x400971e6, 0x40097268, 0x40097318, 0x40097402; interrupt, each block).
   The test mod [examples/hooks-check-dn1](../../examples/hooks-check-dn1)
   subscribes to all of them.
+- **5.0.1, what the first 5.0 mods needed** ([seqmidi.s](seqmidi.s),
+  [track.s](track.s); in core3.h's 5.0.1 section):
+  - `ev_seq_midi(msg, len, buffer)`, may take: each message the sequencer's
+    MIDI engine queues for its output, whole, at its two append routines
+    (0x400f3bfc buffer 0, 0x400f39a6 buffer 1; 1.44 0x400f3e70, 0x400f3c1a):
+    the MIDI tracks' notes, CCs and the rest. The engine writes its buffers
+    straight to DIN and USB (0x400f355a), so these never pass the port
+    switch `ev_midi_out` sees: they are the hook map's "direct sends" a MIDI
+    track makes. Interrupt level.
+  - `core_midi_receive(msg, len)`: a message played into the unit as if it
+    came in on DIN: `ev_midi_in`'s handlers, then the MIDI task's handler for
+    its status (the dispatch table 0x401cdec4, 1.44 0x401ce294), so
+    `ev_midi_cc` and `ev_midi_pc` see it. A task, not an interrupt.
+  - `core_pool_load(track, index)`: a pool sound put on a track as the SOUND
+    BROWSER's FUNC+YES does (the pool's getter 0x40033540, then the kit's load
+    0x4001d710, which `ev_sound_load` sees).
+  - `core_mutes()` and `core_mute_set(track, muted)`: the global mutes, as
+    FUNC + a track key sets them (0x4002f994 with the project's track state,
+    project + 0x30; `ev_mute` sees them).
+  - Exports: `fw_brain_key` (Brain::key, 0x40016fc0: a handler of `ev_key`
+    may hand the stock an event of its own, to replay a key or a combo),
+    `fw_sound_load` and `fw_midi_chan` (MIDI CONFIG's track channels,
+    0x41367d30, 1.44 0x41368d30).
+
+  5.0.1 keeps all of 5.0 (`tests/test_sdk.py`, with a 5.0 build) and adds
+  two sites and one table. The mods it was made for, each in its own
+  repository: [digiarpmenu](https://github.com/irpina/digiarpmenu),
+  [digisolo](https://github.com/irpina/digisolo),
+  [digiloop](https://github.com/irpina/digiloop) and
+  [digipcsound](https://github.com/irpina/digipcsound).
+- **5.1, mod parameters with p-locks and their knobs** ([lanes.c](lanes.c),
+  [lanes.s](lanes.s); in core3.h's 5.1 section; ADAPTING.md, "Lane
+  parameters, knobs on pages and TRIG's second page"):
+  - ten mod parameter ids, 182-191: two more of the firmware's small tables
+    after the parameter records move into core (0x4018fc90 and 0x4018fd34,
+    read at 0x400081a6, 0x40007d46 and 0x40008152, ended at 0x40008160), and
+    the 58 id bounds are raised to 192;
+  - lane parameters (`CORE_SLOT_LANE`): values per track and per step in
+    core's RAM, for all 128 live patterns (`fw_patterns`, 0x1611d bytes
+    apart), saved as lock rows 0x80+ and 0xC0+ after stock's, at the rows'
+    save (0x400090f2) and load (0x40008ee6), both by jmp at their entries;
+    the knob's turn and value through 4.2's sites; a trig's removal clears
+    them (`ev_step_clear`'s site); CREATE NEW clears them all;
+  - knobs on the stock pages' empty boxes (`core_knobs`, at each page
+    record lookup) and core's own page 30, TRIG's second (`core_trig2`);
+  - `ev_note_built(track, step, event)`, at the note builders' four calls
+    (0x40094d4e and 0x40094d7e, the first step PLAY plays, and 0x40095b28
+    and 0x40095b3a, the sequencer's tick; 1.44 0x20 further on), and
+    `core_note_step(event)`; a lane changed while stopped has the sequencer
+    build its first step again (0x40094bc2, 1.44 0x40094be2);
+  - `core_pool_count()` and `fw_pool_sounds`, for a note that plays a pool
+    sound as a sound lock does.
+
+  5.1 keeps all of 5.0 and 5.0.1 but for the id bounds it raises again
+  (`tests/test_sdk.py`, with a 5.0 build). The mods it was made for are
+  [digichoke](https://github.com/irpina/digichoke),
+  [digipcsound](https://github.com/irpina/digipcsound) and
+  [digiloop](https://github.com/irpina/digiloop).
+- **5.2, page lists and LFO names** ([lists.c](lists.c), [pages.s](pages.s);
+  docs/ADAPTING.md, "Mod pages"): `core_page_list(first, list, n)` gives a
+  page key another list of pages for a while (SYN2 = page 4: its stock
+  list starts there), or its stock list back with `n` 0. machines-dn1 shows
+  an SDK alpha machine's pages behind SYN2 with it, in place of FM's
+  envelope pages. No new site: `core_view_init` notes each view it builds.
+  The LFO destination list asks `core_param_override`'s name for a
+  destination's name and group (four sites, [names.s](names.s)).
+
+  5.2 keeps all of 5.1.
 - **OS 1.44:** every site has its port (`ports` in mod.json): the same
   code, moved, and RAM 0x1000 further on.
 
 Build it with the SDK (it needs m68k binutils):
 
 ```bash
-python -m elekloader.sdk.build mods/core-dn1 --stock Digitone_and_Digitone_Keys_OS1.43.syx   # out/core-5.0.elemod
-python -m elekloader.sdk.build mods/core-dn1 --stock Digitone_and_Digitone_Keys_OS1.44.syx   # out/core-5.0-os1.44.elemod
-python -m elekloader.lint mods/core-dn1/out/core-5.0-os1.44.elemod --stock Digitone_and_Digitone_Keys_OS1.44.syx
+python -m elekloader.sdk.build mods/core-dn1 --stock Digitone_and_Digitone_Keys_OS1.43.syx   # out/core-5.2.elemod
+python -m elekloader.sdk.build mods/core-dn1 --stock Digitone_and_Digitone_Keys_OS1.44.syx   # out/core-5.2-os1.44.elemod
+python -m elekloader.lint mods/core-dn1/out/core-5.2-os1.44.elemod --stock Digitone_and_Digitone_Keys_OS1.44.syx
 ```
 
 The LFO name hooks have ColdFire ABI probes (stock fallback, first answer,
@@ -297,8 +359,8 @@ file is needed:
 ELEKLOADER_CROSS=m68k-elf- python tests/test_digitone_lfo_names.py
 ```
 
-A release names them `core-dn1-5.0.elemod` and `core-dn1-5.0-os1.44.elemod`.
-5.0, 4.2 and 4.1.1 are not released yet; 4.1's are on the [core-dn1-v4.1](https://github.com/irpina/elekloader/releases/tag/core-dn1-v4.1) pre-release,
+A release names them `core-dn1-5.2.elemod` and `core-dn1-5.2-os1.44.elemod`.
+5.2, 5.1, 5.0.1, 5.0, 4.2 and 4.1.1 are not released yet; 4.1's are on the [core-dn1-v4.1](https://github.com/irpina/elekloader/releases/tag/core-dn1-v4.1) pre-release,
 4.0's on the [core-dn1-v4.0](https://github.com/irpina/elekloader/releases/tag/core-dn1-v4.0) pre-release
 (3.3 was not released);
 3.2's are on the [core-dn1-v3.2](https://github.com/irpina/elekloader/releases/tag/core-dn1-v3.2) pre-release

@@ -10,7 +10,7 @@ change, and mods must be rebuilt when it does.
 | | Digitakt mk1 | Digitone mk1 / Keys | Digitone II |
 |---|---|---|---|
 | Stock OS | 1.54 | 1.44 | 1.12 |
-| Core and companion | `mods/core`, `mods/machine-pages` | `mods/core-dn1` (4.2 or later), `mods/machines-dn1` | `mods/core-dn2` (0.2 or later), `mods/machines-dn2` |
+| Core and companion | `mods/core`, `mods/machine-pages` | `mods/core-dn1` (5.2 or later), `mods/machines-dn1` | `mods/core-dn2` (0.2 or later), `mods/machines-dn2` |
 | Choose a machine | FUNC+SRC machine menu | hold a track key, Mod Menu → MACHINES | FUNC+SYN → MACHINE SEL |
 | Its pages show on | SRC | SYN2, in place of its pages on that track | SYN |
 | Pages, labels, hiding, glyphs | yes | yes | yes |

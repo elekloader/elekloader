@@ -340,6 +340,10 @@ core_plock_clear:
 | (0x40035708).
         .globl  core_step_clear
 core_step_clear:
+        move.l  8(%sp), -(%sp)          | 5.1: the step's lane locks too (lanes.c)
+        move.l  8(%sp), -(%sp)
+        jsr     core_lanes_step_clear
+        addq.l  #8, %sp
         NOTIFY  ev_step_clear, 2
         move.l  %a2, -(%sp)
         move.l  %d2, -(%sp)
