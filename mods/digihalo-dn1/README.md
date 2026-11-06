@@ -18,6 +18,18 @@ and TEMPO still work and PRE-DELAY can follow the Digitone's tempo. BYPASS
 (trig 16) passes the inputs through dry; with PERSIST on, the reverb's tail
 rings out.
 
+## 0.3
+
+From the first reports from a unit: a p-lock lasts its own step (fxkit 0.2; it
+used to hold until the lock track's next trig, and with trigs only where there
+are locks one lock kept its knob for the rest of the loop); SETUP's INPUT is
+one setting for every pedal, and a new project keeps it; the LFO pages turn as
+the stock's do (SPD and DEP gather speed with the knob, MULT, WAVE, MODE and
+DEST's list step every second detent); a knob let go no longer steps once
+more; and the next key pressed without FUNC clears FUNC, so it cannot stay on
+(a FUNC left on shows page 2 for pages 1-3, as reported after a SETUP change).
+Needs fxkit 0.2.
+
 ## 0.2: on fxkit
 
 From 0.2 DigiHalo is an effect on fxkit ([../fxkit-dn1](../fxkit-dn1)), as every

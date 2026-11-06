@@ -97,6 +97,7 @@ static u8 ui_flash_ticks, ui_flash_pg, ui_flash_i;   /* a control's value in the
 static u8 cfg_midi_any, cfg_closed, in_cc;
 static u32 clear_at;                        /* the next address to clear, 0 when nothing is */
 static s32 enc_acc[8];
+static u32 ui_now, enc_at[8];               /* UI ticks (60 a second), and each knob's last turn */
 static u8 t_down[4], t_held[4];             /* the track keys: pressed, and held (ev_hold took them) */
 static u32 t_at[4];                         /* when each went down, in blocks */
 static u32 tap_last, tap_iv[3], tap_n;
@@ -229,7 +230,8 @@ static void turn_ctl(int pg, int i, s32 v)  /* a control turned or pushed: in LO
  * are the pattern's. */
 #define SAVE_VER (PD_SAVE_VER | 0x40)       /* 0.2's: packed, the mixer and the LFOs, no presets */
 struct pd_save {
-    u8 ver, cfgb, clock, sw;                /* cfgb: MIDI CC ANY, CC CLOSED, MONO, TRAILS; sw: the latches */
+    u8 ver, cfgb, clock, sw;                /* cfgb: MIDI CC ANY, CC CLOSED, MONO (written, not read: INPUT is
+                                               fxkit's since 0.3), TRAILS; sw: the latches */
     u16 tap;
     u8 cfg[2];                              /* the pedal's SETUP rows, 4 bits each */
     u8 knob[8], sec[8];
@@ -254,7 +256,6 @@ static void defaults(void)
     ST.trails = 1;
     ST.clock = CL_TEMPO;
     ST.tap = 14400;
-    ST.mono = 0;
     cfg_midi_any = cfg_closed = 0;
     fx_defaults();
 }
@@ -280,7 +281,6 @@ static void loaded(int found)
         }
         cfg_midi_any = save.cfgb & 1;
         cfg_closed = (save.cfgb >> 1) & 1;
-        ST.mono = (save.cfgb >> 2) & 1;
         ST.trails = (save.cfgb >> 3) & 1;
         ST.clock = save.clock < 3 ? save.clock : CL_TEMPO;
         ST.tap = save.tap >= 2400 && save.tap <= 48000 ? save.tap : 14400;
@@ -439,6 +439,9 @@ int PD(key)(void *brain, void *ev)
     }
     if (fl & 2)                             /* another key's event: FUNC is held */
         ui_func = 1;
+    else if (fl & 1)                        /* another key down without it: FUNC is up, whether its release came
+                                               or not (FUNC left on showed page 2 for pages 1-3) */
+        ui_func = 0;
     if (key == KEY_PLAY || key == KEY_STOP || key == KEY_TEMPO)
         return 0;                           /* the sequencer and its tempo stay the Digitone's */
     if (!ui_setup && page_now() >= 3 && fx_page_key(EFF, page_now() - 3, key, fl))
@@ -498,7 +501,7 @@ int PD(key)(void *brain, void *ev)
     } else if (ui_setup && (key == KEY_LEFT || key == KEY_RIGHT)) {
         int d = key == KEY_RIGHT ? 1 : -1;
         if (ui_row == G_INPUT)
-            ST.mono = !ST.mono;
+            fx_input_mono_set(!fx_input_mono());    /* fxkit's: every pedal's, and a new project keeps it */
         else if (ui_row == G_CLOCK)
             ST.clock = (u8)((ST.clock + 3 + d) % 3);
         else if (ui_row == G_BYPASS)
@@ -551,6 +554,9 @@ int PD(enc)(void *brain, void *ev)
     if (ui_setup)
         return 1;
     i = (int)e - 1;
+    if (ui_now - enc_at[i] > 18)
+        enc_acc[i] = 0;                     /* a pause: part of a detent from before it goes (a knob let go) */
+    enc_at[i] = ui_now;
     enc_acc[i] += EV_DELTA(ev);
     d = enc_acc[i] / COUNTS;
     enc_acc[i] -= d * COUNTS;
@@ -616,6 +622,7 @@ static u32 signature(void)                  /* what the page shows, but the mete
 
 void PD(tick)(void *ctrl)
 {
+    ui_now++;
     if (!ui_inited) {                       /* no project load reached us */
         defaults();
         ui_inited = 1;
@@ -640,6 +647,7 @@ void PD(tick)(void *ctrl)
     if (ui_pending && ui_ready)
         activate();
     PD(on) = (u8)(fx_active() == EFF);
+    ST.mono = (u8)fx_input_mono();
     if (ui_open && !PD(on) && !ui_pending)
         pd_hide();                          /* another effect took the audio */
     if (labels_moved())                     /* the pedal renamed a control: fxkit's DEST names too */
@@ -891,7 +899,7 @@ static void draw_setup(void *bmp)
         int y = 47 - 7 * (i - first);
         const char *v;
         if (i == G_INPUT)
-            v = ST.mono ? "MONO (L)" : "STEREO";
+            v = fx_input_mono() ? "MONO (L)" : "STEREO";
         else if (i == G_CLOCK)
             v = clocks[ST.clock % 3];
         else if (i == G_BYPASS)
