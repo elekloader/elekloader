@@ -5,10 +5,10 @@
 |   PARAMS      the stock parameter records, 60 bytes each, ids 0-181: page
 |               group, sound slot, min, max, default (8.8), flags, MIDI CC,
 |               two words, a word, name, group name, short name, formatter
-|   PARAM_FREE  right after them, where ids 182-184 go: two small tables live
-|               there in the stock image, and boot moves them to
-|               core_ptab_save (three instructions read them, and core
-|               points them there)
+|   PARAM_FREE  right after them, where ids 182-191 go: four small tables
+|               live there in the stock image (two from 5.1), and boot moves
+|               them to core_ptab_save (seven instructions read them, and
+|               core points them there)
 |   UIRECS      the UI records, 84 bytes each, built by the OS's static
 |               constructors for ids 0-181; core builds its slots' own
 |   STR_CTOR    std::string(dest, const char *, alloc) (from 3.1)
@@ -17,11 +17,12 @@
 |               playing the track, the stock setter's last step (from 3.1)
 |
 | The firmware clamps every parameter id it is given to 0-181 (44 places:
-| cmpi.l #182). From 2.1 core raises each clamp to 185, so ids 182-184 reach
-| PARAM_FREE through the stock code: the knob, its pop-up, its value and its
+| cmpi.l #182). From 2.1 core raises each clamp, to 185 and from 5.1 to 192,
+| so ids 182-191 reach PARAM_FREE through the stock code: the knob, its pop-up, its value and its
 | p-locks work as for any parameter. A mod adds one by contributing to the
 | table core_params a pointer to its descriptor:
-|   +0  id      182, 183 or 184, claimed as the resource param:<id>
+|   +0  id      182-191 (182-184 before 5.1), claimed as the resource
+|               param:<id>
 |   +4  the 60-byte record, in the stock layout (docs/ADAPTING.md)
 |   +64 look    the stock parameter whose knob it borrows: its UI record
 |               (graphic, how a turn moves the value, the knob's scale), with
@@ -49,10 +50,10 @@
 | From 3.1 too: a mod that changes a sound slot calls core_sound_set,
 | which does what a stock edit does: the kit, then the track's voices.
         .equ    SLOT0,    182
-        .equ    SLOTS,    3
+        .equ    SLOTS,    10            | 3 before 5.1
         .equ    PREC,     60            | a parameter record
         .equ    UREC,     84            | a UI record
-        .equ    PTAB_LEN, 228           | the two tables at PARAM_FREE
+        .equ    PTAB_LEN, 600           | the four tables at PARAM_FREE (228 before 5.1)
         .equ    LOOK_DEF, 24            | PTIM: a plain knob, whole steps
 
 | ============================ .boot =======================================
@@ -63,11 +64,11 @@
         .globl  core_dn_boot
 core_dn_boot:
         move.l  %a2, -(%sp)
-        | 1. The two tables at PARAM_FREE move to core_ptab_save.
+        | 1. The tables at PARAM_FREE move to core_ptab_save.
         lea     core_ptab_save, %a1
         bsr.w   run2load
         lea     PARAM_FREE, %a0
-        moveq   #PTAB_LEN / 4, %d0
+        move.l  #PTAB_LEN / 4, %d0
 1:      move.l  (%a0)+, (%a1)+
         subq.l  #1, %d0
         bne.s   1b
@@ -204,7 +205,7 @@ core_param_ui:
 | core_param_short: the routine at 0x400207b8, std::string short_name(set,
 | int id), by jmp at its entry. a0 = the string to make (the caller's), 8(sp)
 | the id once the frame is up. As the stock one, with core_param_override
-| asked first: the id clamped to the slots (185, as core's raised clamps),
+| asked first: the id clamped to the slots (192, as core's raised clamps),
 | its record's +0x30, and std::string(dest, name, alloc). Returns dest in d0.
         .globl  core_param_short
 core_param_short:

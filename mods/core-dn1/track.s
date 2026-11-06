@@ -55,6 +55,20 @@ core_pool_load:
         lea     24(%sp), %sp
         rts
 
+| int core_pool_count(void) (5.1): the sounds in the project's pool, 0-128:
+| pool sounds 0 to the count less one exist (the getter's own test, the
+| pool list's +0xc method). Any task; a call into the list's object.
+        .globl  core_pool_count
+core_pool_count:
+        movea.l FW_PROJECT, %a0
+        adda.l  #POOL_OFF + 0x2c, %a0
+        movea.l (%a0), %a1
+        move.l  %a0, -(%sp)
+        movea.l 12(%a1), %a1
+        jsr     (%a1)
+        addq.l  #4, %sp
+        rts
+
 | ---- core_mutes, core_mute_set ----------------------------------------------------
 | uint32_t core_mutes(void): the global mutes (FUNC + a track key), bit t for
 | track t (0-3 the synth tracks, 4-7 the MIDI tracks); 0 with no pattern.

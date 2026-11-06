@@ -301,19 +301,47 @@ the Digitone needs it. On its own it changes nothing the unit does.
   [digisolo](https://github.com/irpina/digisolo),
   [digiloop](https://github.com/irpina/digiloop) and
   [digipcsound](https://github.com/irpina/digipcsound).
+- **5.1, mod parameters with p-locks and their knobs** ([lanes.c](lanes.c),
+  [lanes.s](lanes.s); in core3.h's 5.1 section; ADAPTING.md, "Lane
+  parameters, knobs on pages and TRIG's second page"):
+  - ten mod parameter ids, 182-191: two more of the firmware's small tables
+    after the parameter records move into core (0x4018fc90 and 0x4018fd34,
+    read at 0x400081a6, 0x40007d46 and 0x40008152, ended at 0x40008160), and
+    the 58 id bounds are raised to 192;
+  - lane parameters (`CORE_SLOT_LANE`): values per track and per step in
+    core's RAM, for all 128 live patterns (`fw_patterns`, 0x1611d bytes
+    apart), saved as lock rows 0x80+ and 0xC0+ after stock's, at the rows'
+    save (0x400090f2) and load (0x40008ee6), both by jmp at their entries;
+    the knob's turn and value through 4.2's sites; a trig's removal clears
+    them (`ev_step_clear`'s site); CREATE NEW clears them all;
+  - knobs on the stock pages' empty boxes (`core_knobs`, at each page
+    record lookup) and core's own page 30, TRIG's second (`core_trig2`);
+  - `ev_note_built(track, step, event)`, at the note builders' four calls
+    (0x40094d4e and 0x40094d7e, the first step PLAY plays, and 0x40095b28
+    and 0x40095b3a, the sequencer's tick; 1.44 0x20 further on), and
+    `core_note_step(event)`; a lane changed while stopped has the sequencer
+    build its first step again (0x40094bc2, 1.44 0x40094be2);
+  - `core_pool_count()` and `fw_pool_sounds`, for a note that plays a pool
+    sound as a sound lock does.
+
+  5.1 keeps all of 5.0 and 5.0.1 but for the id bounds it raises again
+  (`tests/test_sdk.py`, with a 5.0 build). The mods it was made for are
+  [digichoke](https://github.com/irpina/digichoke),
+  [digipcsound](https://github.com/irpina/digipcsound) and
+  [digiloop](https://github.com/irpina/digiloop).
 - **OS 1.44:** every site has its port (`ports` in mod.json): the same
   code, moved, and RAM 0x1000 further on.
 
 Build it with the SDK (it needs m68k binutils):
 
 ```bash
-python -m elekloader.sdk.build mods/core-dn1 --stock Digitone_and_Digitone_Keys_OS1.43.syx   # out/core-5.0.1.elemod
-python -m elekloader.sdk.build mods/core-dn1 --stock Digitone_and_Digitone_Keys_OS1.44.syx   # out/core-5.0.1-os1.44.elemod
-python -m elekloader.lint mods/core-dn1/out/core-5.0.1-os1.44.elemod --stock Digitone_and_Digitone_Keys_OS1.44.syx
+python -m elekloader.sdk.build mods/core-dn1 --stock Digitone_and_Digitone_Keys_OS1.43.syx   # out/core-5.1.elemod
+python -m elekloader.sdk.build mods/core-dn1 --stock Digitone_and_Digitone_Keys_OS1.44.syx   # out/core-5.1-os1.44.elemod
+python -m elekloader.lint mods/core-dn1/out/core-5.1-os1.44.elemod --stock Digitone_and_Digitone_Keys_OS1.44.syx
 ```
 
-A release names them `core-dn1-5.0.1.elemod` and `core-dn1-5.0.1-os1.44.elemod`.
-5.0.1, 5.0, 4.2 and 4.1.1 are not released yet; 4.1's are on the [core-dn1-v4.1](https://github.com/irpina/elekloader/releases/tag/core-dn1-v4.1) pre-release,
+A release names them `core-dn1-5.1.elemod` and `core-dn1-5.1-os1.44.elemod`.
+5.1, 5.0.1, 5.0, 4.2 and 4.1.1 are not released yet; 4.1's are on the [core-dn1-v4.1](https://github.com/irpina/elekloader/releases/tag/core-dn1-v4.1) pre-release,
 4.0's on the [core-dn1-v4.0](https://github.com/irpina/elekloader/releases/tag/core-dn1-v4.0) pre-release
 (3.3 was not released);
 3.2's are on the [core-dn1-v3.2](https://github.com/irpina/elekloader/releases/tag/core-dn1-v3.2) pre-release

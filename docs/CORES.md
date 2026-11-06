@@ -28,7 +28,7 @@ older ones people still have:
 | Digitakt mk1 | 1.53, 1.54 | `core-4.1.elemod`, `core-4.1-os1.54.elemod` | on main, not released: build it ([below](#building-a-core)) |
 | Digitakt mk1 | 1.53, 1.54 | `core-2.1.elemod`, `core-2.1-os1.54.elemod` | the v0.4.0 release, built into its apps |
 | Digitone mk1, Digitone Keys | 1.43, 1.44 | `core-dn1-4.1.elemod`, `core-dn1-4.1-os1.44.elemod` | the [core-dn1-v4.1](https://github.com/irpina/elekloader/releases/tag/core-dn1-v4.1) pre-release, and the web page |
-| Digitone mk1, Digitone Keys | 1.43, 1.44 | `core-dn1-5.0.1.elemod`, `core-dn1-5.0.1-os1.44.elemod` | on main, not released: build it ([below](#building-a-core)) |
+| Digitone mk1, Digitone Keys | 1.43, 1.44 | `core-dn1-5.1.elemod`, `core-dn1-5.1-os1.44.elemod` | on main, not released: build it ([below](#building-a-core)) |
 | Digitone mk1, Digitone Keys | 1.43, 1.44 | `core-dn1-2.0a.elemod`, `core-dn1-2.0a-os1.44.elemod` | the v0.4.0 release, built into its apps |
 | Digitakt II | 1.17 | `core-dt2-1.0.elemod` | not released: build it ([below](#building-a-core)) |
 | Digitone II | 1.12 | `core-dn2-0.3.elemod` | experimental, not released: build it ([below](#building-a-core)) |
@@ -131,7 +131,10 @@ the one a mod that uses it names in `resources.core`.
     README);
   - the sequencer's MIDI out (the MIDI tracks' messages, which `ev_midi_out` never sees), a message
     played in as if from DIN, a pool sound put on a track, the global mutes, and the key dispatch (5.0.1;
-    the core's README).
+    the core's README);
+  - lane parameters, a mod's values per track and per step with p-locks saved in the pattern, ten mod
+    parameter ids, knobs on the stock pages' empty boxes and a second TRIG page, and each note the
+    sequencer builds (5.1; ADAPTING.md, "Lane parameters, knobs on pages and TRIG's second page").
 - **Digitakt II** ([mods/core-dt2](../mods/core-dt2)): SETTINGS and
   PERSONALIZE rows, and `.fast` code in SRAM. No render events: its audio
   renders on the DSP.
