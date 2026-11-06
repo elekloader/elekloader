@@ -108,8 +108,9 @@ the one a mod that uses it names in `resources.core`.
     1.44 (3.0, and 3.3 for the C library, the transport, the pattern and
     the project; ADAPTING.md, "Firmware locations (core-dn1 3.0)");
   - what machines need: the voices' sound before the filter, stock
-    parameters a mod relabels, sound edits the voices hear and submenus in
-    the Mod Menu (3.1; ADAPTING.md, "Machines and stock parameters"). With
+    parameters a mod relabels (including LFO destinations in 5.2), sound
+    edits the voices hear and submenus in the Mod Menu (3.1;
+    ADAPTING.md, "Machines and stock parameters"). With
     them, the companion [machines](../mods/machines-dn1) plays a machine
     mod's voice in place of FM (ADAPTING.md, "Machines on the Digitone");
   - exclusive audio, one mod taking the whole output (3.2;

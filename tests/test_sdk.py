@@ -715,6 +715,8 @@ CORE_DN411 = ['core_row_add', 'core_row_new']   # 4.1.1's: the SETTINGS rows' st
 # 4.2's: the pages' knob turns and values, the voice once it has its locks (five sites, three tables)
 CORE_DN42 = ['core_param_turn', 'core_param_value', 'core_param_value58', 'core_param_value_syn', 'core_voice_ready',
              'fw_voice_locks', 'fw_voice_locked', 'fw_param_uirec']
+# 5.2's: page lists and LFO destination names (four sites)
+CORE_DN52 = ['core_page_list', 'core_views', 'core_lfo_list', 'core_lfo_compact', 'core_lfo_group', 'core_lfo_name']
 COLL_DN42 = ['ev_param_turn', 'ev_param_value', 'ev_voice_ready']
 CORE_DN3 = ['core_note_queue', 'core_audio_caps', 'core_key_leds', 'core_menu_open', 'core_midi_cc', 'core_midi_pc', 'core_param_short',
             'core_param_ui_make', 'core_render_master', 'core_render_params', 'core_render_voices', 'core_sound_set',
@@ -729,8 +731,9 @@ def check_dn_superset(old_path, new_path):
     key LEDs and the block's parameters (3.3: two sites, two tables), their
     calls and 3.3's firmware exports, the program changes (4.0: a site,
     a table), the note queue (4.1: a site, a table), the rows' storage
-    (4.1.1: two routines) and the pages' turns and values and the voice
-    with its locks (4.2: five sites, three tables, three firmware exports)."""
+    (4.1.1: two routines), the pages' turns and values and the voice
+    with its locks (4.2: five sites, three tables, three firmware exports)
+    and page lists and LFO names (5.2: four sites)."""
     with open(old_path) as fh:
         old = json.load(fh)
     with open(new_path) as fh:
@@ -739,12 +742,12 @@ def check_dn_superset(old_path, new_path):
     for k in ('target', 'contribute', 'resources'):
         assert new[k] == old[k], k
     assert all(s in new['sites'] for s in old['sites'])
-    assert len(new['sites']) == len(old['sites']) + 9 + 5
+    assert len(new['sites']) == len(old['sites']) + 9 + 5 + 4
     assert sorted(set(new['collections']) - set(old['collections'])) == sorted([
         'core_audio', 'core_param_override', 'ev_key_leds', 'ev_midi_cc', 'ev_midi_pc', 'ev_note_queue',
         'ev_render_params', 'ev_render_voices'] + COLL_DN42)
     assert all(new['collections'][k] == v for k, v in old['collections'].items())
-    assert sorted(set(new['exports']) - set(old['exports'])) == sorted(CORE_DN3 + FW_DN + CORE_DN411 + CORE_DN42)
+    assert sorted(set(new['exports']) - set(old['exports'])) == sorted(CORE_DN3 + FW_DN + CORE_DN411 + CORE_DN42 + CORE_DN52)
     assert all(new['symbols'][k][0] == v[0] for k, v in old['symbols'].items())
 
 
@@ -837,7 +840,8 @@ def check_dn_32(old_path, new_path):
     audio (a flag and core_audio_caps, with no site) and program changes (a
     site and a table) (its bigger area is the profile's, not the core's),
     4.1's note queue (a site and a table), 4.1.1's rows' storage (two
-    routines) and 4.2's turns, values and voice (five sites, three tables)."""
+    routines), 4.2's turns, values and voice (five sites, three tables)
+    and 5.2's LFO names (four sites)."""
     with open(old_path) as fh:
         old = json.load(fh)
     with open(new_path) as fh:
@@ -850,11 +854,11 @@ def check_dn_32(old_path, new_path):
     assert all(new['collections'][k] == v for k, v in old['collections'].items())
     assert sorted(set(new['exports']) - set(old['exports'])) == sorted(DN33_EXPORTS + ['core_audio_caps',
                                                                                      'core_midi_pc']
-                                                                       + CORE_DN41 + CORE_DN411 + CORE_DN42)
+                                                                       + CORE_DN41 + CORE_DN411 + CORE_DN42 + CORE_DN52)
 
     def what(d):
         return [(s['addr'], s['len'], s['kind'], s['new'], s.get('relocs')) for s in d['sites']]
-    assert all(x in what(new) for x in what(old)) and len(new['sites']) == len(old['sites']) + 4 + 5
+    assert all(x in what(new) for x in what(old)) and len(new['sites']) == len(old['sites']) + 4 + 5 + 4
     assert all(new['symbols'][k][0] == v[0] for k, v in old['symbols'].items())
 
 
@@ -876,7 +880,8 @@ def check_dn_40(old_path, new_path):
     """core-dn1 4.1 keeps all of 4.0: its sites, tables, contributions, resources
     and exports, every symbol of 4.0's in the same section; it adds the note
     queue (a site at the queue's entry, the table ev_note_queue), 4.1.1
-    the rows' storage (two routines) and 4.2 the turns, values and voice."""
+    the rows' storage (two routines), 4.2 the turns, values and voice
+    and 5.2 the LFO names."""
     with open(old_path) as fh:
         old = json.load(fh)
     with open(new_path) as fh:
@@ -886,11 +891,11 @@ def check_dn_40(old_path, new_path):
         assert new[k] == old[k], k
     assert sorted(set(new['collections']) - set(old['collections'])) == sorted(['ev_note_queue'] + COLL_DN42)
     assert all(new['collections'][k] == v for k, v in old['collections'].items())
-    assert sorted(set(new['exports']) - set(old['exports'])) == sorted(CORE_DN41 + CORE_DN411 + CORE_DN42)
+    assert sorted(set(new['exports']) - set(old['exports'])) == sorted(CORE_DN41 + CORE_DN411 + CORE_DN42 + CORE_DN52)
 
     def what(d):
         return [(s['addr'], s['len'], s['kind'], s['new'], s.get('relocs')) for s in d['sites']]
-    assert all(x in what(new) for x in what(old)) and len(new['sites']) == len(old['sites']) + 1 + 5
+    assert all(x in what(new) for x in what(old)) and len(new['sites']) == len(old['sites']) + 1 + 5 + 4
     assert all(new['symbols'][k][0] == v[0] for k, v in old['symbols'].items())
 
 
@@ -913,7 +918,8 @@ def check_dn_41(old_path, new_path):
     contributions and resources, every site and table of 4.1's, every symbol
     of 4.1's in the same section, and core_additem where it was; it adds
     core_row_new and core_row_add (rows.s) and their row pool in .bss, and
-    4.2 five sites and three tables (edit.s, voice.s) and three exports."""
+    4.2 five sites and three tables (edit.s, voice.s) and its exports, and
+    5.2 four sites (names.s), core_page_list (lists.c) and the views it finds (core_views)."""
     with open(old_path) as fh:
         old = json.load(fh)
     with open(new_path) as fh:
@@ -921,10 +927,10 @@ def check_dn_41(old_path, new_path):
     assert old['version'] == '4.1' and new['version'] == DN_VERSION
     for k in ('target', 'contribute', 'resources'):
         assert new[k] == old[k], k
-    assert all(s in new['sites'] for s in old['sites']) and len(new['sites']) == len(old['sites']) + 5
+    assert all(s in new['sites'] for s in old['sites']) and len(new['sites']) == len(old['sites']) + 5 + 4
     assert sorted(set(new['collections']) - set(old['collections'])) == sorted(COLL_DN42)
     assert all(new['collections'][k] == v for k, v in old['collections'].items())
-    assert sorted(set(new['exports']) - set(old['exports'])) == sorted(CORE_DN411 + CORE_DN42)
+    assert sorted(set(new['exports']) - set(old['exports'])) == sorted(CORE_DN411 + CORE_DN42 + CORE_DN52)
     assert all(new['symbols'][k] == v for k, v in old['symbols'].items()
                if k in ('core_settings', 'core_additem'))
     assert all(new['symbols'][k][0] == v[0] for k, v in old['symbols'].items())
@@ -1522,7 +1528,7 @@ CORE_DN51_INNER = ['core_build_midi_a', 'core_build_midi_b', 'core_build_syn_a',
 
 
 def check_dn_51(old_path, new_path):
-    """core-dn1 5.1 is 5.0 and more (5.0.1's and 5.1's): the same target, every site of 5.0's at the same address
+    """core-dn1 5.1 and 5.2 are 5.0 and more (5.0.1's, 5.1's and 5.2's four LFO name sites): the same target, every site of 5.0's at the same address
     with the same stock bytes, the same code but for the 58 id bounds it raises again (182-191: 192 where 5.0 has
     185, 191 for 184), 5.0's tables and exports with 5.0.1's and 5.1's added, its contributions with core's own
     ev_tick subscription (lanes.c's redraw and re-arm), and page 30 (TRIG's second page) claimed."""
@@ -1539,7 +1545,7 @@ def check_dn_51(old_path, new_path):
     olds = {s['addr']: s for s in old['sites']}
     news = {s['addr']: s for s in new['sites']}
     assert all(a in news and news[a]['stock_sha256'] == s['stock_sha256'] for a, s in olds.items())
-    assert len(news) == len(olds) + 2 + 10
+    assert len(news) == len(olds) + 2 + 10 + 4
     raised = [a for a, s in olds.items() if news[a] != s]
     assert len(raised) == 58
     for a in raised:
@@ -1547,7 +1553,7 @@ def check_dn_51(old_path, new_path):
         assert o[:-1] == n[:-1] and (o[-1], n[-1]) in ((185, 192), (184, 191)), a
     assert sorted(set(new['collections']) - set(old['collections'])) == ['core_knobs', 'ev_note_built', 'ev_seq_midi']
     assert all(new['collections'][k] == v for k, v in old['collections'].items())
-    assert sorted(set(new['exports']) - set(old['exports'])) == sorted(CORE_DN501 + CORE_DN51 + CORE_DN51_INNER)
+    assert sorted(set(new['exports']) - set(old['exports'])) == sorted(CORE_DN501 + CORE_DN51 + CORE_DN51_INNER + CORE_DN52)
     assert all(new['symbols'][k][0] == v[0] for k, v in old['symbols'].items())
 
 
