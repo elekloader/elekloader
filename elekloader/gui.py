@@ -1158,6 +1158,10 @@ class LoaderWindow:
 
 
 def main(argv=None):
+    argv = sys.argv[1:] if argv is None else list(argv)
+    if argv and argv[0] in ('check', 'link', 'mods'):   # the +Drive tools (drive.py)
+        from . import drive
+        return drive.main(argv)
     ap = argparse.ArgumentParser(prog='elekloader', description=__doc__.split('\n')[0])
     ap.add_argument('--stock', help='your stock OS .syx (default: the one chosen last time)')
     ap.add_argument('--mods', action='append', default=[],

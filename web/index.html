@@ -12,6 +12,7 @@
 <meta name="description" content="Custom firmware for Elektron devices, built in your browser from your own stock OS file and the mods you choose. Nothing is uploaded.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='6' fill='%23f5cf45'/%3E%3Cpath d='M13.5 3.5 6.5 13h5l-1 7.5 7-9.5h-5z' fill='%23161616'/%3E%3C/svg%3E">
 <meta name="theme-color" content="#131316">
+<meta name="engine" content="engine">
 <link rel="stylesheet" href="style.css">
 <script type="module" src="app.js"></script>
 </head>
@@ -29,6 +30,8 @@
       <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M13.5 3.5 6.5 13h5l-1 7.5 7-9.5h-5z"/></svg>Build<span class="badge" id="nav-count">0</span></a>
     <a class="nav-link" id="nav-contribute" href="#contribute">
       <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/></svg>Contribute</a>
+    <a class="nav-link" id="nav-drive" href="#drive" title="The +Drive mods on a unit running a build with the Drive Loader, over USB MIDI">
+      <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="4" width="14" height="16" rx="2"/><path d="M9 9h6M9 13h6M9 17h3"/></svg>+Drive mods</a>
     <!-- Contribute's pages, under it while it is open (the page's own row of links does the same on a phone) -->
     <div class="side-sub" id="nav-csub" hidden>
       <a class="sub-link" href="#contribute" data-cpage="overview">Overview</a>
@@ -327,6 +330,61 @@ python -m elekloader.patch --stock Digitakt_OS1.53.syx --mod mods/core/out/core-
       <p class="next">Back to the <a href="#contribute">to-do list and the leaderboard</a></p>
     </article>
   </section>
+  <section class="view" id="view-drive" aria-labelledby="drive-title" hidden>
+    <header class="page-head">
+      <p class="eyebrow">+Drive mods</p>
+      <h1 id="drive-title">The mods on your unit</h1>
+      <p class="sub">For a unit running a build with the Drive Loader. This view reads the unit's build, lists its
+        <code>/mods</code> folder over USB MIDI, uploads <code>.elemod</code> files after checking them against that
+        build, and chooses the set the unit loads at its next boot. It writes nothing outside <code>/mods</code>,
+        and never flashes firmware.</p>
+    </header>
+    <div class="dm">
+      <section class="dm-card">
+        <div class="dm-row">
+          <label>Port <select id="dm-port" aria-label="MIDI port"></select></label>
+          <button type="button" class="btn primary" id="dm-connect-btn">Connect</button>
+          <span id="dm-conn" class="muted small" role="status"></span>
+        </div>
+      </section>
+
+      <section class="dm-card" id="dm-build" hidden>
+        <h2>The flashed build</h2>
+        <p id="dm-build-label" class="mono"></p>
+        <div class="dm-grid2">
+          <div><h3>Modules</h3><table class="dm-t" id="dm-modules"></table></div>
+          <div><h3>Room</h3><dl class="dm-kv" id="dm-room"></dl>
+            <h3>Spare entries per event</h3><table class="dm-t" id="dm-tables"></table></div>
+        </div>
+      </section>
+
+      <section class="dm-card" id="dm-files" hidden>
+        <h2><code>/mods</code></h2>
+        <div class="dm-drop" id="dm-drop" tabindex="0">Drop <code>.elemod</code> files here, or
+          <label class="linkish">choose them<input type="file" id="dm-pick" accept=".elemod" multiple hidden></label>.
+          Each is checked against the build before it is sent.</div>
+        <p id="dm-upload-msg" class="small" role="status"></p>
+        <table class="dm-t" id="dm-file-list"></table>
+        <h3>The set for the next boot</h3>
+        <p class="muted small">Tick the mods to load. The unit links them at boot in id order, after the flashed build.</p>
+        <pre class="mono dm-out" id="dm-set-check"></pre>
+        <div class="dm-row"><button type="button" class="btn primary" id="dm-save-set">Save the set</button>
+          <span id="dm-set-msg" class="small" role="status"></span></div>
+      </section>
+
+      <section class="dm-card" id="dm-status" hidden>
+        <h2>The last boot</h2>
+        <pre class="mono dm-out" id="dm-status-text"></pre>
+      </section>
+
+      <section class="dm-card" id="dm-catalog" hidden>
+        <h2>The shop's mods for this build</h2>
+        <p class="muted small">A mod marked <b>flash</b> uses something only a flashed build can carry: build it into
+          firmware in <a href="#build">Build</a>. One marked <b>+Drive</b> can load from <code>/mods</code>.</p>
+        <table class="dm-t" id="dm-catalog-list"></table>
+      </section>
+    </div>
+  </section>
   <section class="view" id="view-build" aria-labelledby="build-title" hidden>
     <header class="page-head head-build">
       <div class="tile" id="build-cover"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13.5 3.5 6.5 13h5l-1 7.5 7-9.5h-5z"/></svg></div>
@@ -427,6 +485,8 @@ python -m elekloader.patch --stock Digitakt_OS1.53.syx --mod mods/core/out/core-
     <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M13.5 3.5 6.5 13h5l-1 7.5 7-9.5h-5z"/></svg>Build<span class="badge" id="tab-count">0</span></a>
   <a class="tab" id="tab-contribute" href="#contribute">
     <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/></svg>Contribute</a>
+  <a class="tab" id="tab-drive" href="#drive">
+    <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="4" width="14" height="16" rx="2"/><path d="M9 9h6M9 13h6M9 17h3"/></svg>+Drive</a>
   <button type="button" class="tab" id="tab-about">
     <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 11v5M12 8v.01"/></svg>About</button>
 </nav>

@@ -64,6 +64,46 @@ def _align(v, a):
     return (v + a - 1) // a * a
 
 
+# ---- the order, layout and relocation every link uses (this linker's, and the +Drive twin's) --
+
+def by_id(mods):
+    """Mods in link order after the core: by id."""
+    return sorted(mods, key=lambda m: m.id)
+
+
+def entry_key(order, mod_id, index):
+    """A table entry's place: by order, then the mod's id, then its index in that mod."""
+    return (order, mod_id, index)
+
+
+def lay_out(mods, sec, at, base):
+    """Place each mod's `sec`, in the given order, from `at`, each at its alignment (at least 4):
+    base[(mod id, sec)] = its address. -> the address after the last."""
+    for m in mods:
+        if m.size(sec):
+            at = _align(at, max(4, m.sections[sec]['align']))
+            base[(m.id, sec)] = at
+            at += m.size(sec)
+    return at
+
+
+def put_reloc(buf, off, typ, value, p, where):
+    """Write a relocation's value into `buf` at `off`: `p` is the address of that byte."""
+    if typ == 'dsp24':                     # a DSP word, little-endian, as the payloads hold it
+        if not 0 <= value <= 0xFFFFFF:
+            raise ModError('%s: a DSP address out of range (0x%x)' % (where, value))
+        buf[off:off + 3] = bytes((value & 0xFF, (value >> 8) & 0xFF, value >> 16))
+    elif typ == 'abs32':
+        struct.pack_into('>I', buf, off, value & 0xFFFFFFFF)
+    elif typ == 'pc32':
+        struct.pack_into('>i', buf, off, value - p)
+    else:
+        d = value - p
+        if not -0x8000 <= d < 0x8000:
+            raise ModError('%s: a 16-bit PC-relative reference spans %d bytes' % (where, d))
+        struct.pack_into('>h', buf, off, d)
+
+
 def payload_id(mod_id):
     """A mod's payload id in core_payloads: the FNV-1a hash (32 bits) of its id's UTF-8 bytes."""
     h = 0x811C9DC5
@@ -673,7 +713,7 @@ def link(mods, image, lock=None, *, sharc_stream=None):
     core = [m for m in mods if '.boot' in m.sections][0]
     ddr_base, ddr_end = dev.ddr_for(core.version)
     fast_base, fast_end = dev.sram_code
-    order = [core] + sorted((m for m in mods if m is not core), key=lambda m: m.id)
+    order = [core] + by_id(m for m in mods if m is not core)
     sharc_mods = [m for m in order if m.sharc and m is not core]
     dsp_stream = dsp_stored = None
     if sharc_mods:
@@ -827,7 +867,7 @@ def link(mods, image, lock=None, *, sharc_stream=None):
                 'data': struct.pack('>III', i, 0, m.size('.payload')),
                 'relocs': [(4, 'abs32', 'sec:.payload', 0)]}))
     for c in entries:
-        entries[c].sort(key=lambda e: e[:3])
+        entries[c].sort(key=lambda e: entry_key(*e[:3]))
     dsp_tables = {c: t for m in order for c, t in m.dsp_tables.items()}
 
     # a build descriptor, for a mod that imports it: spare entries in the tables more mods may join
@@ -857,12 +897,7 @@ def link(mods, image, lock=None, *, sharc_stream=None):
     base = {}                                  # (mod id, section) -> address
     boot_len = core.size('.boot')
     base[(core.id, '.boot')] = image_end
-    at = ddr_base
-    for m in order:
-        if m.size('.run'):
-            at = _align(at, max(4, m.sections['.run']['align']))
-            base[(m.id, '.run')] = at
-            at += m.size('.run')
+    at = lay_out(order, '.run', ddr_base, base)
     tab_at = {}
     for c in sorted(tables):
         if c in dsp_tables:
@@ -899,7 +934,8 @@ def link(mods, image, lock=None, *, sharc_stream=None):
         if new_lock is not None:
             room = store.capacity(dev.key, new_lock['split'], core.version)
             scopes = [(s, room[s], new_lock['next'][s], new_lock['generation'][s]) for s in store.SCOPES]
-        return {'family': dev.data_family, 'device': 0, 'release': 0, 'device_key': dev.key,
+        return {'family': dev.data_family, 'device': dev.data_device, 'release': rel.data_release,
+                'device_key': dev.key,
                 'os': rel.version, 'modules': mods, 'tables': tabs,
                 'claims': [(desc.CLAIM_NAME, index[m.id], nm) for m in order for nm in m.names],
                 'area': (w('bss_end'), dev.drive_area[0], dev.drive_area[1],
@@ -926,13 +962,7 @@ def link(mods, image, lock=None, *, sharc_stream=None):
         at += m.size('.payload')
     pay_end = at
     run_end = _align(at, 4)
-    at = run_end
-    for m in order:
-        if m.size('.bss'):
-            at = _align(at, max(4, m.sections['.bss']['align']))
-            base[(m.id, '.bss')] = at
-            at += m.size('.bss')
-    bss_end = _align(at, 4)
+    bss_end = _align(lay_out(order, '.bss', run_end, base), 4)
     if pay_mods and bss_end > ddr_end:
         raise ModError('the payloads (%d bytes) and the mods need RAM to 0x%08x, past 0x%08x (%d bytes over): '
                        'the area has room for %d bytes of payload'
@@ -1039,22 +1069,7 @@ def link(mods, image, lock=None, *, sharc_stream=None):
             raise ModError('%s: %s is a %s reference to a %s address' % (
                 m.label(), where, 'DSP' if typ == 'dsp24' else 'ColdFire',
                 'DSP' if d else 'ColdFire'))
-        put(buf, off, typ, resolve(m, tgt, where) + add, p, where)
-
-    def put(buf, off, typ, value, p, where):
-        if typ == 'dsp24':                     # a DSP word, little-endian, as the payloads hold it
-            if not 0 <= value <= 0xFFFFFF:
-                raise ModError('%s: a DSP address out of range (0x%x)' % (where, value))
-            buf[off:off + 3] = bytes((value & 0xFF, (value >> 8) & 0xFF, value >> 16))
-        elif typ == 'abs32':
-            struct.pack_into('>I', buf, off, value & 0xFFFFFFFF)
-        elif typ == 'pc32':
-            struct.pack_into('>i', buf, off, value - p)
-        else:
-            d = value - p
-            if not -0x8000 <= d < 0x8000:
-                raise ModError('%s: a 16-bit PC-relative reference spans %d bytes' % (where, d))
-            struct.pack_into('>h', buf, off, d)
+        put_reloc(buf, off, typ, resolve(m, tgt, where) + add, p, where)
 
     content, boot_relocs = {}, []
     for m in order:

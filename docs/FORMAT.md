@@ -320,6 +320,147 @@ names offsets into its string pool (UTF-8, NUL-terminated):
 A loader accepts any minor of its major; a minor adds fields in reserved
 space or records at the end, a major changes a record.
 
+### +Drive mods
+
+A build with the Drive Loader (`mods/drive-loader-ar2/`, which imports
+`core_desc`) links more mods at boot from `/mods` on the unit's +Drive
+into the +Drive area. `elekloader/drive.py` does the same on the computer:
+`elekloader check BUILD MODS...` (the build-checker) and `elekloader link
+--device-layout BUILD MODS... --out DIR` (the boot linker's twin). BUILD
+is a built `.syx` or main OS image, or the descriptor alone (`/mods/.build`,
+as `elekloader mods get .build` saves it), which is enough to check but not
+for the tables' flashed bytes. The twin writes `area.bin` (the area from its
+start to the layout's end), `tables/NAME.bin` for each table it rewrites
+(its capacity + 1 entries, the address in `summary.json`), `status.bin` and
+`detail.bin` (the records below), `status.txt` and `summary.json`. The same
+inputs give the same bytes.
+
+**What a +Drive mod is.** A format-2 mod with only `.run` and `.bss`,
+relocations only in `.run` (`abs32`, `pc32`, `pc16`), and none of `sites`,
+`collections`, `copied`, `storage`, `sharc`, `resources.regions` or a
+contribution's `claims`. It adds entries only to tables whose descriptor
+flags say more may be added (not a DSP table), in whole entries, at an
+order of 0 to 65,534. Its imports are the build's exports, the tables'
+names and `NAME_n` (the count after the merge), `core_desc`, and the other
++Drive mods' exports. Its own symbol `drive_init` (in `.run` or `.bss`), if
+it has one, is called after the link as `void drive_init(void)`, in id
+order; it is never a global name. Its id is under 28 bytes.
+
+**`/mods/active`** lists the chosen files, one line each: the file name, a
+space, its CRC-32 (zlib's, as 8 hex digits; `0x` is optional). Blank lines,
+`#` lines and lines without a CRC are skipped; the name is everything
+before the last run of spaces, under 64 bytes. More than 32 lines and
+nothing loads.
+
+**The link**, in this order:
+1. *Pass 1*, each line in order: a missing file or a different CRC is
+   dropped; a file larger than the staging buffer is refused; then the
+   file's own rules, first failure wins: JSON, format (`elemod` 2, the id,
+   the version), target (`target.device` and `target.os` against the
+   descriptor's), the fields above, sections, regions, relocations,
+   contributions, exports.
+2. *Check rounds* over the living mods in id order (UTF-8 bytes; of two
+   files with one id the earlier line counts first), again until a round
+   refuses nothing; a mod refused earlier in a round no longer counts.
+   First failure wins: its id is a flashed module's or an earlier living
+   mod's; `resources.core` is newer than module 0's version; a `requires`
+   is neither flashed nor a living mod; a `conflicts` is flashed, or an
+   earlier living mod names it or is named by it (of a pair, the later one
+   goes); an export is a flashed name or an earlier living mod's; a
+   resource name is claimed by the build or an earlier living mod; an
+   import is none of the names above and not weak. Then each table in
+   descriptor order: while its count plus the living mods' entries pass its
+   capacity, the last living mod in id order with an entry there is
+   refused.
+3. *Layout* from the area's start: every `.run` in id order at its
+   alignment (at least 4), then every `.bss` likewise, each block ending
+   4-aligned. Past the area's end, the last living mod is refused and the
+   check runs again.
+4. *Pass 2*, in id order: `.run` decoded into place (a `stock` part is
+   copied from the running OS), `.bss` zeroed, relocations applied (a
+   symbol is the mod's own first, then a global name, then `core_zero` for
+   a weak import). A `pc16` out of range refuses the mod and the check
+   runs again.
+5. *Merge*: each table that gets an entry is rewritten with the flashed
+   entries and the new ones sorted by (order, id, then the flashed position
+   or the contribution's index and entry), the entries' relocations applied
+   at their final address, then zero entries to capacity + 1. Other tables
+   are not touched.
+
+**Status records**: 32 of 32 bytes, one a line of `/mods/active`: u8
+state, u8 code, u16 argument, then the id (the file name until pass 1
+reads the mod's id), NUL-padded to 28 bytes; and beside them 32 detail
+strings of 32 bytes (a name the refusal is about, NUL-terminated).
+
+#### +Drive refusal codes
+
+| state | name |
+|---|---|
+| 0 | `none` |
+| 1 | `loaded` |
+| 2 | `refused` |
+| 3 | `dropped` (missing or changed) |
+
+| code | name | the argument and detail |
+|---|---|---|
+| 0 | `ok` | |
+| 1 | `missing` | the file is not in `/mods` |
+| 2 | `changed` | its CRC-32 is not the one `/mods/active` has |
+| 3 | `too-big` | larger than the staging buffer |
+| 4 | `json` | not a JSON object |
+| 5 | `format` | not a format-2 mod the loader reads (the id, version, a relocation, an order, an export) |
+| 6 | `target` | made for another device or OS |
+| 7 | `feature` | a field or section +Drive mods cannot use (detail: its name) |
+| 8 | `duplicate` | the id of a flashed module or of an earlier mod (detail: the id) |
+| 9 | `core` | needs a newer core (detail: the version) |
+| 10 | `requires` | detail: the first missing id |
+| 11 | `conflicts` | detail: the other id |
+| 12 | `export` | detail: the name |
+| 13 | `claim` | detail: the name |
+| 14 | `import` | detail: the name |
+| 15 | `table` | a table +Drive mods cannot add to, or not whole entries (detail: the table) |
+| 16 | `full` | argument: the table's spare entries; detail: the table |
+| 17 | `room` | argument: KB over the area, rounded up |
+| 18 | `range` | a `pc16` out of range |
+| 19 | `limit` | past the loader's own room: 1536 global names, 384 entries and 4096 bytes of them with 384 relocations, 12 KB of names and 1536 list items over all files (a refused file keeps its share of these two), 1024 symbols in one file, or a merge past 256 entries or 4096 bytes |
+| 20 | `count` | more than 32 lines in `/mods/active` |
+
+When nothing is linked, the loader keeps why:
+
+| skip | name |
+|---|---|
+| 0 | `none` |
+| 1 | `key` ([NO] held at power-on) |
+| 2 | `armed` (the last start failed: `/mods/.armed`) |
+| 3 | `drive` (no eMMC or no ekFS) |
+| 4 | `abi` (another descriptor ABI major) |
+| 5 | `unstable` (the check never settled, or a merge passed the loader's room) |
+| 6 | `count` |
+
+#### The data container
+
+The Data router sends and takes every file in Elektron's data container
+(`elekloader/container.py`): a 31-byte header (u32 `0xac11d303`, u8 header
+version 2, u16 family, u16 device id, u32 OS release, u32 file type, i32
+file version, i32 file index, u32 payload size uncompressed, u8 compressed,
+u8 footer size 12), the body, and a 12-byte footer (u32 the body's CRC-32,
+zlib's from `0xffffffff`; u32 the body's size as sent; u32 `0xaaa1daaa`). A
+stock Analog Rytm MKII 1.74 project reads family 2, device 5, OS release
+`0x30313736`; the build descriptor carries them (the profile's
+`data_family`, `data_device` and each release's `data_release`). Uploads to
+`/mods` are file type `0x454d4f44` ('EMOD'), version 2, index 0, not
+compressed.
+
+`elekloader mods` moves files over USB MIDI (`elekloader/datarpc.py`, with
+`mido` and `python-rtmidi`): `ls`, `get NAME` (also `.build` and
+`.status`), `put FILES...` (checked against the unit's `.build` first;
+nothing is uploaded if one is refused), `rm NAME` and `active NAMES...`
+(writes `/mods/active` when the set loads). `--folder` names the route's
+folder (`/mods`). The TypeScript engine has `check` (`js/src/drive.ts`),
+the container and the same requests (`container.ts`, `datarpc.ts`, over any
+port: Web MIDI on a page), with the same results and bytes
+(`js/test/drive.test.ts`).
+
 ### Mod storage
 
 A mod's `storage` lists fields: `sym` (a C name), `scope` (`sound`, `kit`,
