@@ -202,7 +202,7 @@ static int lc_text(struct core_text *t)
 
 const struct core_param lc_params = {1, 5, lc_get, lc_delta, lc_text};
 
-/* 1.7 (core 0.9): every audio block, core_param_value of A, B ("smooth":
+/* 1.7 (core 0.9): every audio block (1.13: every 8th), core_param_value of A, B ("smooth":
  * false) and C on track 1, with A's and C's values in the sound, the
  * offsets the LFO and the performances give A and A's p-lock and scene lock,
  * in a ring the emulator's
@@ -271,11 +271,22 @@ static void lc_batch_check(const struct lc_rec *r, unsigned single)
     lc_batch.blocks++;
 }
 
+/* 1.13 (core 0.11): every LC_STRIDE-th audio block only. Every block cost
+ * 59 us of the Rytm's 667 us block (8.8 % of the CPU on the unit), enough with core
+ * 0.11 to starve the UI task; each record keeps its block number, so the
+ * checks read the ring as before, with gaps */
+#define LC_STRIDE 8
+
 void lc_render(void)
 {
-    struct lc_rec *r = &lc_ring.rec[lc_ring.next % RING];
-    void *s = sound1();
-    unsigned t0 = DTCN0, t;
+    struct lc_rec *r;
+    void *s;
+    unsigned t0, t;
+    if (core_block % LC_STRIDE)
+        return;
+    r = &lc_ring.rec[lc_ring.next % RING];
+    s = sound1();
+    t0 = DTCN0;
     r->a = core_param_value(0, STORE(lc_a));
     r->b = core_param_value(0, STORE(lc_b));
     r->c = core_param_value(0, STORE(lc_c));

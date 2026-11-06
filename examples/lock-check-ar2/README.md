@@ -86,3 +86,10 @@ shown on the dial's 0..127: its get answers round(v * 127 / 15) and its
 `core_param_scales` entry asks for core's linear map, so with a trig or a
 scene's pad held, on NRPN 4/1 and in its text, B agrees with the knob
 (mods/core-ar2/README.md, "Dial scale (0.11)").
+
+From 1.13 `lc_render` runs every 8th audio block (`LC_STRIDE`), not every
+block: `lc_ring`, `lc_init` and `lc_batch` get a record every 8th block,
+each with its block number, so the ring holds 512 records over 4096 blocks.
+On the unit the per-block reads took 59 us of the 667 us block, 8.8 % of
+the CPU, which with core 0.11 left the UI task no time (remote keys
+expired, CPU 100 %).
