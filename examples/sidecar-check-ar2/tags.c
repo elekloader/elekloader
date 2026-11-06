@@ -37,6 +37,7 @@ struct {
     uint32_t heap_largest, heap_total, heap_blocks;   /* CMD_HEAP, bytes */
     uint32_t ticks;
 } sc2 = {{'S', 'C', 'K', '2'}, -1, 0, 0, 0, 0, -1, -1};
+const unsigned sc2_size = sizeof sc2;          /* remote.c */
 
 const struct core_step_owner sc_owner = {"SIDECAR CHECK"};
 

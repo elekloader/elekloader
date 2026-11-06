@@ -47,6 +47,7 @@ struct {
     uint32_t n, resyncs;
     struct sc5_ev e[RING];
 } sc5 = {{'S', 'C', 'K', '5'}};
+const unsigned sc5_size = sizeof sc5;          /* remote.c */
 
 static uint32_t next_value;
 

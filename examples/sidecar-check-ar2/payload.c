@@ -42,6 +42,7 @@ struct {
     uint32_t total_bad;                         /* over every verify */
     uint32_t missing;                           /* 1: core_payload found nothing */
 } sc6 = {{'S', 'C', 'K', '6'}};
+const unsigned sc6_size = sizeof sc6;          /* remote.c */
 
 static void verify(void)
 {

@@ -28,6 +28,7 @@ struct {
     uint32_t ticks;                         /* ev_tick calls */
     uint16_t trigs, lock_trigs;             /* track 1's steps 1..16 in the current pattern */
 } sc = {{'S', 'C', 'K', '1'}};
+const unsigned sc1_size = sizeof sc;          /* remote.c */
 
 static int ix(int32_t id) { return (unsigned)(id - FIRST) < IDS ? id - FIRST : -1; }
 static int ok(int32_t t, int32_t s) { return (unsigned)t < TRACKS && (unsigned)(s & 0xff) < STEPS; }

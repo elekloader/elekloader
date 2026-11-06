@@ -31,6 +31,7 @@ struct {
     int32_t trig_pattern;                       /* CMD7_TRIGS: the pattern read */
     uint32_t note[13][2], lock[13][2];          /* steps 0..31, 32..63 */
 } sc7 = {{'S', 'C', 'K', '7'}};
+const unsigned sc7_size = sizeof sc7;          /* remote.c */
 
 /* F0 7D 37 <seq, 4 x 7 bits> <len - 8 bytes of (seq + i) & 0x7f> F7 */
 static void send_one(int len)

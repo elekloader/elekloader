@@ -50,6 +50,10 @@ struct {
     uint32_t ticks;
     int32_t burst_at;                           /* CMD3_BURST: the next note to send */
 } sc3 = {{'S', 'C', 'K', '3'}};
+const unsigned sc3_size = sizeof sc3;          /* remote.c */
+
+int sc_remote_in(const unsigned char *data, int len);   /* remote.c */
+void sc_remote_tick(void);
 
 int32_t sc_sysex_in(const unsigned char *data, int32_t len, int32_t iface)
 {
@@ -58,6 +62,8 @@ int32_t sc_sysex_in(const unsigned char *data, int32_t len, int32_t iface)
     sc3.sx_iface = iface;
     for (i = 0; i < 8 && i < len; i++)
         sc3.sx_head[i] = data[i];
+    if (sc_remote_in(data, len))                /* 0.8: F0 7D 53 43, the readback's commands */
+        return 1;
     if (len >= 2 && data[0] == 0xf0 && data[1] == 0x7d) {
         sc3.sx_taken++;
         return 1;
@@ -132,6 +138,7 @@ void sc_moments_tick(void *ctrl)
     int i;
     (void)ctrl;
     sc3.ticks++;
+    sc_remote_tick();
     sc3.kit = core_current_kit();
     sc3.track = core_current_track();
     sc3.pattern = core_current_pattern();

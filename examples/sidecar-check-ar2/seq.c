@@ -43,6 +43,7 @@ struct {
     uint32_t work;                              /* the extra subscribers' calls */
     int32_t quiet;
 } sc4 = {{'S', 'C', 'K', '4'}, 0, 0, 0, 1};
+const unsigned sc4_size = sizeof sc4;          /* remote.c */
 
 void sc_seq_step(uint32_t steps, uint32_t trigs)
 {

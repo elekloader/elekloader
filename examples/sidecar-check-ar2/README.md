@@ -169,6 +169,25 @@ A command word `cmd` (and `arg`) acts on the next `ev_tick`:
 | 3 | `core_step_trig` of every step of the pattern playing: bit s of `note[t]` and `lock[t]` (two words, steps 0..31 and 32..63); out-of-range calls must answer -1 (`bad` otherwise) |
 | 4 | one message of `arg` bytes at each of the next 96 `ev_seq_tick`s, playing or stopped |
 
+## Over MIDI (0.8)
+
+For a unit run, which can't peek or poke RAM, remote.c takes SysEx
+commands over USB and sends the records back (all start F0 7D 53 43):
+
+| message | what |
+|---|---|
+| in `01 <part> <cmd> <a0..a4> F7` | part 2..7's `arg` = a0 << 28 \| a1 << 21 \| a2 << 14 \| a3 << 7 \| a4, then its `cmd` |
+| in `02 <part> F7` | send part 1..7's record back |
+| out `03 <part> <off, 3 x 7 bits> <n> <2n nibbles> F7` | n bytes (at most 48) of the record from off, each byte as two nibbles, high first |
+| out `04 <part> <size, 3 x 7 bits> F7` | the record's end |
+
+One record goes out at a time, up to 8 messages an `ev_tick`; a request
+while one is going out is dropped. The record `SCRM` counts the commands,
+dumps, messages sent and refused. These messages are taken before part 3's
+F0 7D count. In the emulator a command set part 7's ticks sends and the
+records of parts 1, 4, 6 and 7 (7,768, 1,032, 68 and 280 bytes) came back
+whole.
+
 ## Building
 
 ```bash
