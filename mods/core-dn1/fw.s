@@ -101,6 +101,12 @@
 |                                the project + 0x250 (core_pool_load does it all)
 |   fw_midi_chan     0x41367d30  MIDI CONFIG's channels: track t's (0-15, a long) at
 |                                [t], t 0-3 the synth tracks
+| From 5.1:
+|   fw_pool_sounds   0x4135d74a  the project's pool sounds, 0x146 bytes each: sound n at
+|                                + 0x146 n (what a step's sound lock plays: a note
+|                                event's +0x2c, CORE_EVENT_SOUND); n below core_pool_count()
+|   fw_patterns      0x407fc414  the 128 patterns, live: pattern k (A01 is 0) at
+|                                + 0x1611d k; fw_pattern points at one of them
 
         .macro  FW name, value
         .globl  \name
@@ -165,3 +171,5 @@
         FW      fw_brain_key, KEYDISP
         FW      fw_sound_load, SOUND_LOAD
         FW      fw_midi_chan, FW_MIDI_CHAN
+        FW      fw_pool_sounds, POOL_SOUNDS
+        FW      fw_patterns, PATTERNS

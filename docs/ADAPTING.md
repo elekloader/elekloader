@@ -1054,9 +1054,11 @@ for 2.x builds with it too.
 | `fw_brain_key` (5.0.1) | 0x40016fc0 | 0x40016fc0 | `key(brain, event)`: the stock key dispatch, where `ev_key` hands a key on; a handler may pass it an event of its own (a copy of its own, +12 the key and +16 the flags changed) to replay a key or a combo |
 | `fw_sound_load` (5.0.1) | 0x4001d710 | 0x4001d710 | `load(kit, sound, track)`: the kit (the project + 0x250) puts a 0x146-byte sound on a track; `ev_sound_load` sees it |
 | `fw_midi_chan` (5.0.1) | 0x41367d30 | 0x41368d30 | MIDI CONFIG > CHANNELS: track t's channel (0-15), a long, t 0-3 the synth tracks |
+| `fw_pool_sounds` (5.1) | 0x4135d74a | 0x4135e74a | the project's pool sounds, 0x146 bytes each: what a step's sound lock plays (a note event's +0x2c) |
+| `fw_patterns` (5.1) | 0x407fc414 | 0x407fd414 | the 128 patterns, live, 0x1611d bytes apart: `fw_pattern` points at one |
 
-A name marked 3.1, 3.2, 3.3, 4.0, 4.1, 4.2 or 5.0.1 needs that core-dn1 (`"resources": {"core": "3.1"}`,
-`"3.2"`, `"3.3"`, `"4.0"`, `"4.1"`, `"4.2"` or `"5.0.1"`). Core-dn1 5.0.1's calls (`core_midi_receive`,
+A name marked 3.1, 3.2, 3.3, 4.0, 4.1, 4.2, 5.0.1 or 5.1 needs that core-dn1 (`"resources": {"core": "3.1"}`,
+`"3.2"`, `"3.3"`, `"4.0"`, `"4.1"`, `"4.2"`, `"5.0.1"` or `"5.1"`). Core-dn1 5.0.1's calls (`core_midi_receive`,
 `core_pool_load`, `core_mutes`, `core_mute_set`) and its event `ev_seq_midi` are in core3.h's 5.0.1 section and
 mods/core-dn1/README.md.
 
@@ -1279,16 +1281,16 @@ machine-pages, whose sites it overlaps.
 
 A Digitone mk1 parameter is an id (0-181) with a 60-byte record; the knob
 code, its pop-up, its value text, its p-locks, copy and paste all go through
-the id. From core-dn1 2.1 a mod can add ids 182, 183 and 184: core raises the
-firmware's id bounds (58 of them) and puts the records right after the stock
-ones, so the stock UI handles them as its own. The mod contributes to the
+the id. A mod can add ids 182-191 (core-dn1 5.1; 182-184 from 2.1): core
+raises the firmware's id bounds (58 of them) and puts the records right after
+the stock ones, so the stock UI handles them as its own. The mod contributes to the
 table `core_params` a pointer to a descriptor:
 
 | offset | field | |
 |---|---|---|
-| +0 | id | 182, 183 or 184: claim it as the resource `param:<id>` |
+| +0 | id | 182-191 (182-184 before 5.1): claim it as the resource `param:<id>` |
 | +4 | group | the page group: 1 Amp, 2 Filter, ... (a sound page's, for a sound parameter) |
-| +8 | slot | the sound parameter it edits (0-78): a slot no stock parameter of that kind uses, e.g. 26 on a synth track. The linker claims it for the mod as `soundslot:<slot>` (below) |
+| +8 | slot | the sound parameter it edits (0-78): a slot no stock parameter of that kind uses, e.g. 26 on a synth track. The linker claims it for the mod as `soundslot:<slot>` (below). `CORE_SLOT_LANE` (-1, core-dn1 5.1) keeps the values in core instead ("Lane parameters", below) |
 | +12, +16, +20 | min, max, default | 8.8 fixed point, as the slot holds them |
 | +24 | flags | 0 |
 | +28 | cc | MIDI CC (MSB << 16 \| LSB), or -1 for none |
@@ -1297,13 +1299,11 @@ table `core_params` a pointer to a descriptor:
 | +56 | format | `void f(int value, char *buf)`: the value's text |
 | +60 | | the firmware's empty string: `fw_str_empty` (core-dn1 3.0), `0x401ddbcd` in 1.43 |
 | +64 | look | the stock parameter whose knob it borrows (graphic, how a turn moves the value, scale), or 0 for PTIM's (24): a plain knob in whole steps |
+| +68 | lane flags | a lane's (5.1): `CORE_LANE_NOLOCK` for a value per track that takes no p-locks |
 
-To put it on a stock page, replace the instruction of the page's static
-constructor that writes that knob's id (or give it a page of its own: "Mod
-pages", below): a page's eight ids are written with
-immediates, not read from a table: AMP page 1's knob F, empty, is cleared
-by `clrl 0x4136b6d4` at `0x4016affe`, so a `jsr` there to a routine that
-writes 182 puts id 182 on it.
+To put it on a stock page's empty box, contribute a `core_knob` (core-dn1
+5.1; "Lane parameters, knobs on pages and TRIG's second page" in
+ADAPTING.md), or give it a page of its own ("Mod pages", below).
 
 **Sound slots are scarce.** A Digitone sound is 79 slots, and only three hold
 no stock parameter: 0, 26 and 65 (no knob, 0 in every factory sound, no effect
@@ -2620,6 +2620,65 @@ Core-dn1 4.2 owns five more sites, 0x400455ba (`core_param_turn`),
 0x4004b462 (`core_param_value_syn`) and 0x4009eadc (`core_voice_ready`), and adds
 variable project data blocks (above). `tests/test_sdk.py` checks it keeps
 all of the released 4.1, 4.0, 3.2 and 2.3.
+
+### Lane parameters, knobs on pages and TRIG's second page (core-dn1 5.1, Digitone mk1)
+
+A Digitone sound has three spare slots ("Parameter slots", above), so a mod
+parameter that keeps its values in a sound and takes p-locks there is
+scarce. A **lane parameter** keeps them in core instead: a `core_params`
+descriptor whose slot (+8) is `CORE_SLOT_LANE` (-1). It has a value per
+track in each pattern, as a trig parameter (NOTE, VELOCITY) has, and a
+p-lock on any step: with trig keys held in GRID REC its knob edits the held
+steps' locks, drawn inverted, and otherwise the track's value.
+`CORE_LANE_NOLOCK` in the lane flags (+68) makes it a track value only.
+Values are whole numbers: the record's min, max and default >> 8, min 0 or
+more. A trig removed takes its lane locks with it.
+
+```c
+int32_t core_lane_value(int32_t id, int32_t track, int32_t step);  /* the lock, else the track's */
+int32_t core_lane_lock(int32_t id, int32_t track, int32_t step);   /* the step's lock, or -1 */
+int32_t core_lane_track(int32_t id, int32_t track);                /* the track's value */
+int32_t core_lane_set(int32_t id, int32_t track, int32_t step, int32_t value);  /* UI task; step -1: the track's */
+```
+
+They read the pattern the sequencer plays (in `ev_note_built`, the one the
+note came from). Core keeps every pattern's lanes in its RAM, by pattern
+number, and stores them with the pattern as lock rows: after stock's rows, a
+row `0x80 + lane` for each track with locks, and a row `0xC0 + lane` for the
+tracks' values (lane = id - 182). The stock OS skips rows whose id is 79 or
+more, so a project saved with lanes loads on it, without them. A pattern has
+80 rows: stock's go first, and a lane row that no longer fits is left out of
+that save. Lane rows count toward stock's limit of 79 too: in a pattern
+nearly full of locks, a new stock lock can show "Lock mem full" sooner,
+although a save still writes stock's rows first. A pattern, track or page copied and pasted carries no lanes, and
+a pattern cleared keeps them.
+
+**Knobs.** A `core_knobs` entry, `struct core_knob {page, knob, id}`, puts a
+parameter on a page's empty box (knob 0-7, A-H; claim `knob:<page>:<knob>`).
+Page 1-26 is a stock page: 19, the MIDI tracks' TRIG page, has E, G and H
+empty. `CORE_PAGE_TRIG2` (30) is core's second TRIG page for the synth
+tracks, "Trig Parameters (2/2)", shown once a mod puts a knob on it: TRIG
+pressed again steps to it (`core_trig2` is its descriptor, for
+`core_page_open`).
+
+**The notes the sequencer builds.** `ev_note_built(track, step, event)` runs
+as the sequencer builds a step's note (tracks 0-3 a synth track's, 4-7 a
+MIDI track's), before it is queued, and a handler may change the note:
+`CORE_EVENT_SOUND(event)` is the sound a synth note plays, the track's or a
+pool sound for a sound lock (`fw_pool_sounds` + 0x146 n, n below
+`core_pool_count()`). Interrupt level. `core_note_step(event)`, from
+`ev_voice_on` or `ev_voice_ready`, gives the step a note came from, or -1
+for the keys, MIDI and the arpeggiator. PLAY plays a first step the
+sequencer built ahead while stopped: core builds it again when a lane
+changes while stopped, and `core_note_step` knows the copy PLAY makes of it.
+
+Core-dn1 5.1 owns ten more sites: four more table moves for the ids, the
+lock rows' save (0x400090f2) and load (0x40008ee6), by jmp at their entries,
+and the note builders' four calls (0x40094d4e, 0x40094d7e, 0x40095b28,
+0x40095b3a; in 1.44 0x20 further on). Mods on it:
+[digichoke](https://github.com/irpina/digichoke) (CHK),
+[digipcsound](https://github.com/irpina/digipcsound) (PRG) and
+[digiloop](https://github.com/irpina/digiloop) (LOOP).
 
 ### The mods' RAM (core-dn1 4.0, Digitone mk1; core 4.0, Digitakt mk1)
 
