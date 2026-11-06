@@ -2,7 +2,8 @@
 // The DN2's observed boot-record subset. Paired with elekloader/sharc.py; no external parser code.
 import { equal, fromHex, sha } from './bytes.ts'
 import type { SharcProfile } from './devices.ts'
-import { ModError } from './elemod.ts'
+import { ModError, isDict, pyEq } from './elemod.ts'
+import { PyFloat, TypeError_, pyType, repr, str } from './py.ts'
 
 export const LOAD = 0x0001, FILL = 0x0101, FIRST = 0x5001, INIT = 0x0801, FINAL = 0x8001
 const KINDS = [LOAD, FILL, FIRST, INIT, FINAL]
@@ -172,9 +173,6 @@ export function insert(stream: Uint8Array, profile: SharcProfile,
 }
 
 export type SharcPayload = {
-  machineId?: number
-  machineKind?: 'voice' | 'filter'
-  voiceState?: [number, number] | null    // per-voice state: offset in the owner, one voice's bytes
   segments: [number, 'code' | 'data', Uint8Array][]
   zero: [number, number][]
   entries: { [name: string]: number } | null
@@ -185,16 +183,12 @@ export type SharcPayload = {
 /** Validate the narrow prelinked format-2 payload; offsets are owner bytes. */
 export function modulePayload(doc: any, profile: SharcProfile | undefined, core = false): SharcPayload {
   if (!profile?.abi) throw new ModError('SHARC payload has no supported device ABI')
-  const kind = !core ? (['voice', 'filter'] as const).find(k =>
-    profile[`${k}Abi`] !== undefined && doc?.abi === profile[`${k}Abi`]) : undefined
-  const keys = ['abi', 'entries', ...(kind ? ['machine_id'] : []), 'segments', 'stack_bytes', 'zero']
   if (!doc || typeof doc !== 'object' || Array.isArray(doc) ||
-    Object.keys(doc).filter(k => !(kind && k === 'voice_state')).sort().join(',') !== keys.join(','))
-    throw new ModError(kind ? `SHARC ${kind} payload needs exactly abi, segments, zero, entries, stack_bytes, machine_id`
-      : 'SHARC payload needs exactly abi, segments, zero, entries, stack_bytes')
-  const abi = core ? profile.abi : kind ? profile[`${kind}Abi`] : profile.l2Abi
+    Object.keys(doc).sort().join(',') !== 'abi,entries,segments,stack_bytes,zero')
+    throw new ModError('SHARC payload needs exactly abi, segments, zero, entries, stack_bytes')
+  const abi = core ? profile.abi : profile.l2Abi
   if (!abi || doc.abi !== abi) throw new ModError('SHARC ABI does not match the device profile')
-  const owner = core ? profile.coreRange! : kind ? profile[`${kind}Range`]! : profile.l2AppRange!
+  const owner = core ? profile.coreRange! : profile.l2AppRange!
   const size = owner[1] - owner[0]
   const spans: [number, number][] = [], segments: SharcPayload['segments'] = [], zero: [number, number][] = []
   if (!Array.isArray(doc.segments) || !doc.segments.length) throw new ModError('SHARC payload needs code segments')
@@ -227,7 +221,7 @@ export function modulePayload(doc: any, profile: SharcProfile | undefined, core 
   if (at !== size) throw new ModError('SHARC payload has a gap or overlap in its owner')
   const entries = doc.entries
   if (entries !== null) {
-    const entryKeys = core ? 'hook_offset_bytes' : kind ? 'render_offset_bytes' : 'init_offset_bytes,render_offset_bytes'
+    const entryKeys = core ? 'hook_offset_bytes' : 'init_offset_bytes,render_offset_bytes'
     if (!entries || typeof entries !== 'object' || Array.isArray(entries) || Object.keys(entries).sort().join(',') !== entryKeys)
       throw new ModError('SHARC entries do not match core/mod role')
     for (const off of Object.values(entries))
@@ -245,37 +239,220 @@ export function modulePayload(doc: any, profile: SharcProfile | undefined, core 
         throw new ModError('SHARC entry is in the instruction read-ahead guard')
     }
   }
-  if (kind) {
-    const prefix = profile[`${kind}AdapterBytes`]!, state = size - profile[`${kind}StateBytes`]!
-    const first = kind === 'voice' ? 5 : 6
-    if (!uint32(doc.machine_id) || doc.machine_id < first || doc.machine_id >= 32)
-      throw new ModError(`SHARC ${kind} machine_id must be ${first}..31`)
-    if (entries === null) throw new ModError(`SHARC ${kind} payload needs a render entry`)
-    if (segments[0][0] !== 0 || segments[0][1] !== 'code' || segments[0][2].length !== prefix ||
-      sha(segments[0][2]) !== profile[`${kind}AdapterSha256`])
-      throw new ModError(`SHARC ${kind} adapter does not match the qualified prefix`)
-    if (!zero.some(([off, count]) => off === state && count === profile[`${kind}StateBytes`]) ||
-      segments.slice(1).some(([off, , data]) => off < prefix || off + data.length > state) ||
-      zero.some(([off, count]) => off !== state && (off < prefix || off + count > state)) ||
-      entries.render_offset_bytes < prefix)
-      throw new ModError(`SHARC ${kind} mod overlaps the adapter reservation`)
-    const voice = doc.voice_state
-    if ('voice_state' in doc) {
-      if (!voice || typeof voice !== 'object' || Array.isArray(voice) || Object.keys(voice).sort().join(',') !== 'offset_bytes,voice_bytes')
-        throw new ModError(`SHARC ${kind} voice_state needs exactly offset_bytes, voice_bytes`)
-      const off = voice.offset_bytes, each = voice.voice_bytes
-      if (!uint32(off) || !uint32(each) || !each || off % 8 || each % 4 ||
-        !zero.some(([z, n]) => z !== state && z <= off && off + 16 * each <= z + n))
-        throw new ModError(`SHARC ${kind} voice_state must be 16 zeroed voices inside the mod`)
-    }
-  }
   const stack = doc.stack_bytes
-  if (kind && (!uint32(stack) || stack > profile[`${kind}StackMax`]!))
-    throw new ModError(`SHARC ${kind} stack exceeds the profile limit`)
-  if (!kind && (!uint32(stack) || stack > profile.stackMax!))   // machines run on their own stack
+  if (!uint32(stack) || stack > profile.stackMax!)
     throw new ModError('SHARC stack contribution exceeds the profile limit')
   if (entries === null && stack) throw new ModError('inert SHARC payload must declare zero stack')
-  return { segments, zero, entries, stackBytes: stack, owner,
-    ...(kind ? { machineId: doc.machine_id, machineKind: kind,
-      voiceState: doc.voice_state ? [doc.voice_state.offset_bytes, doc.voice_state.voice_bytes] as [number, number] : null } : {}) }
+  return { segments, zero, entries, stackBytes: stack, owner }
+}
+
+// DN2 machine kernels (dn2-kernel-v1): machines-dn2's dispatcher and every mod's kernels, relocatable,
+// placed anywhere in the profile's pool by placeKernels. sharc.py's kernel part.
+export const KERNEL_ABI = 'dn2-kernel-v1'
+export const DISPATCH = ['dn2_voice_hook.', 'dn2_filter_hook.', 'dn2_filter_capture.', 'dn2_voice_table.', 'dn2_filter_table.']
+// Each kind's ids, as machines-dn2 stores them, and its table: SDK and mk2 synths share the voice table.
+export const KERNEL_IDS: { [kind: string]: [number, number] } = { sdk: [5, 127], 'mk2-voice': [5, 31], 'mk2-filter': [6, 31] }
+export const KERNEL_TABLE: { [kind: string]: 'voice' | 'filter' } = { sdk: 'voice', 'mk2-voice': 'voice', 'mk2-filter': 'filter' }
+export const TABLE_IDS = 128
+export const KNOBS_MAX = 15                  // ELEK_UI_KNOB_MAX
+export const RAW_MAX = 32512                 // a knob's raw value, 0..127.0 in 8.8
+
+export type KernelKind = 'sdk' | 'mk2-voice' | 'mk2-filter'
+export type Kernel = { kind: KernelKind; id: number; entry: number; knobs?: [number, number][]; state_bytes?: number }
+export type KernelPayload = {
+  abi: string; code: Uint8Array; data: Uint8Array; codePc16: number; dataAddress: number; dataAlign: number
+  relocs: ['code' | 'data', number, number, 'code' | 'data'][]; kernels: Kernel[]; exports: { [name: string]: ['code' | 'data', number] }
+}
+
+const int = (v: unknown): v is number => typeof v === 'number' && Number.isInteger(v)
+const uint = (v: unknown): v is number => int(v) && uint32(v)
+const int32 = (v: unknown): v is number => int(v) && v >= -0x80000000 && v <= 0x7fffffff
+/** `v in d` for a dict d with string keys: Python refuses an unhashable v. */
+function inKeys(v: unknown, keys: object): boolean {
+  if (Array.isArray(v) || isDict(v)) throw new TypeError_(`unhashable type: '${pyType(v)}'`)
+  return typeof v === 'string' && Object.hasOwn(keys, v)
+}
+
+function kernelHex(value: unknown, what: string): Uint8Array {
+  if (typeof value !== 'string' || !/^(?:[0-9a-fA-F]{2})*$/.test(value)) throw new ModError(`${what} must be hex bytes`)
+  return fromHex(value)!
+}
+
+/** Validate a relocatable kernel artifact (sdk.sharc.kernel_artifact or machine_artifact). sharc.kernel_payload. */
+export function kernelPayload(doc: any, profile: SharcProfile | undefined): KernelPayload {
+  if (!isDict(doc) || !profile || doc.abi !== profile.kernelAbi)
+    throw new ModError(`SHARC kernel: abi must be ${KERNEL_ABI} on this device`)
+  const keys = ['abi', 'code', 'code_pc16', 'data', 'data_address', 'data_align', 'exports', 'kernels', 'relocs']
+  if (Object.keys(doc).sort().join(',') !== keys.join(','))
+    throw new ModError('SHARC kernel needs exactly ' + keys.join(', '))
+  const [code, data] = (['code', 'data'] as const).map(k => kernelHex(doc[k], 'SHARC kernel ' + k))
+  if (!code.length || code.length % 2) throw new ModError('SHARC kernel: code must be whole 16-bit parcels')
+  const align = doc.data_align
+  if (!int(align) || ![4, 8, 16, 32, 64, 128].includes(align) || !uint(doc.code_pc16) || !uint(doc.data_address) ||
+    doc.data_address % align) throw new ModError('SHARC kernel: invalid base or data alignment')
+  const sizes = { code: code.length, data: data.length }, relocs: KernelPayload['relocs'] = [], taken = new Set<string>()
+  for (const r of Array.isArray(doc.relocs) ? doc.relocs : [null]) {
+    const ok = Array.isArray(r) && r.length === 4 && inKeys(r[0], sizes) && uint(r[1]) &&
+      (r[0] === 'code' ? pyEq(r[2], 3) || pyEq(r[2], 4) : pyEq(r[2], 4)) && (r[3] === 'code' || r[3] === 'data') &&
+      r[1] + Number(r[2] instanceof PyFloat ? r[2].value : r[2]) <= sizes[r[0] as 'code' | 'data']
+    if (ok && !int(r[2])) throw new TypeError_(`'${pyType(r[2])}' object cannot be interpreted as an integer`)   // range(r[2])
+    if (!ok || Array.from({ length: r[2] }, (_, i) => `${r[0]}:${r[1] + i}`).some(k => taken.has(k)))
+      throw new ModError(`SHARC kernel: invalid relocation ${repr(r)}`)
+    for (let i = 0; i < r[2]; i++) taken.add(`${r[0]}:${r[1] + i}`)
+    relocs.push([r[0], r[1], r[2], r[3]])
+  }
+  const exports = doc.exports
+  if (!isDict(exports) || Object.entries(exports).some(([n, v]) => !DISPATCH.includes(n) || !Array.isArray(v) ||
+    v.length !== 2 || !inKeys(v[0], sizes) || !uint(v[1]) || v[1] >= sizes[v[0] as 'code' | 'data']))
+    throw new ModError(`SHARC kernel: exports are the dispatcher's labels, ${DISPATCH.join(', ')}`)
+  const names = Object.keys(exports)
+  if (names.length && (names.length !== DISPATCH.length || !DISPATCH.every(n => names.includes(n))))
+    throw new ModError('SHARC kernel: a dispatcher defines all of ' + DISPATCH.join(', '))
+  const kernels: Kernel[] = [], seen = new Set<string>()
+  for (const k of Array.isArray(doc.kernels) ? doc.kernels : [null]) {
+    const given = isDict(k) ? Object.keys(k) : []
+    if (!isDict(k) || !['kind', 'id', 'entry'].every(n => given.includes(n)) ||
+      given.some(n => !['kind', 'id', 'entry', 'state_bytes', 'knobs'].includes(n)) || !inKeys(k.kind, KERNEL_IDS) ||
+      ('knobs' in k && k.kind !== 'sdk') || ('state_bytes' in k && k.kind === 'sdk'))
+      throw new ModError('SHARC kernel: a kernel is {kind: sdk, id, entry, knobs} or ' +
+        '{kind: mk2-voice|mk2-filter, id, entry[, state_bytes]}')
+    const kind = k.kind as KernelKind, mid = k.id, entry = k.entry
+    const [first, last] = KERNEL_IDS[kind]
+    if (!int(mid) || !(first <= mid && mid <= last))
+      throw new ModError(`SHARC kernel: ${kind} id ${str(mid)} is outside ${first}..${last}`)
+    const space = `${KERNEL_TABLE[kind]}:${mid}`
+    if (seen.has(space)) throw new ModError(`SHARC kernel: two ${KERNEL_TABLE[kind]} kernels with id ${mid}`)
+    seen.add(space)
+    if (!uint(entry) || 2 * entry >= code.length) throw new ModError(`SHARC kernel: ${kind} ${mid} entry is outside its code`)
+    const out: Kernel = { kind, id: mid, entry }
+    if (kind === 'sdk') {
+      const knobs = k.knobs
+      if (!Array.isArray(knobs) || knobs.length > KNOBS_MAX || knobs.some(r =>
+        !Array.isArray(r) || r.length !== 2 || !r.every(int32) || r[0] >= r[1]))
+        throw new ModError(`SHARC kernel: sdk ${mid} knobs are up to ${KNOBS_MAX} [min, max] pairs of int32, min below max`)
+      out.knobs = knobs.map(([a, b]) => [a, b])
+    } else {
+      const state = 'state_bytes' in k ? k.state_bytes : 0
+      if (!uint(state) || state % 4) throw new ModError(`SHARC kernel: ${kind} ${mid} state_bytes must be whole 32-bit words`)
+      out.state_bytes = state
+    }
+    kernels.push(out)
+  }
+  if (!kernels.length && !names.length) throw new ModError('SHARC kernel: no kernel and no dispatcher')
+  return { abi: KERNEL_ABI, code, data, codePc16: doc.code_pc16, dataAddress: doc.data_address, dataAlign: align, relocs,
+    kernels, exports: Object.fromEntries(Object.entries(exports).map(([n, v]) => [n, [(v as any)[0], (v as any)[1]]])) }
+}
+
+/** The kernel's [code, data] moved to PC16 codePc16 and byte dataAddress: each relocation is a code or data
+ * address field (big-endian in code, as the executable stores it; little-endian in data) that moves with its kind. */
+export function rebase(artifact: KernelPayload, codePc16: number, dataAddress: number): [Uint8Array, Uint8Array] {
+  if (dataAddress % artifact.dataAlign)
+    throw new ModError(`SHARC kernel: data base 0x${dataAddress.toString(16)} is not ${artifact.dataAlign}-byte aligned`)
+  const out = { code: artifact.code.slice(), data: artifact.data.slice() }
+  const delta = { code: codePc16 - artifact.codePc16, data: dataAddress - artifact.dataAddress }
+  for (const [section, at, width, kind] of artifact.relocs) {
+    const field = out[section].subarray(at, at + width), order = section === 'code' ? [...field.keys()] : [...field.keys()].reverse()
+    const modulus = 2 ** (8 * width)
+    let value = order.reduce((n, i) => n * 256 + field[i], 0)
+    value = ((value + delta[kind]) % modulus + modulus) % modulus
+    for (const i of [...order].reverse()) { field[i] = value % 256; value = Math.floor(value / 256) }
+  }
+  return [out.code, out.data]
+}
+
+/** The NOPs after a code block: the read-ahead guard, plus one parcel when the code ends mid-word. */
+function guard(code: Uint8Array): Uint8Array {
+  return Uint8Array.from({ length: 64 + 2 * ((code.length >> 1) % 2) }, (_, i) => (i % 2 ? 0 : 1))
+}
+
+/** The executable's byte order and the loader's differ by each 16-bit parcel's two bytes. */
+export function parcels(code: Uint8Array): Uint8Array {
+  const out = code.slice()
+  for (let i = 0; i + 1 < out.length; i += 2) [out[i], out[i + 1]] = [code[i + 1], code[i]]
+  return out
+}
+
+/** A 48-bit absolute JUMP to PC16 pc, in loader order. */
+export const jump = (pc: number): Uint8Array => parcels(Uint8Array.of(0x06, 0x3e, 0x00, pc >>> 16 & 0xff, pc >>> 8 & 0xff, pc & 0xff))
+
+const u32 = (...words: number[]): Uint8Array => {
+  const out = new Uint8Array(4 * words.length), view = new DataView(out.buffer)
+  words.forEach((w, i) => view.setUint32(4 * i, w, true))
+  return out
+}
+
+/** An SDK machine's knob map for the dispatcher: the count, then per knob min, span / RAW_MAX and span % RAW_MAX. */
+export function knobMap(knobs: [number, number][]): Uint8Array {
+  const words = [knobs.length]
+  for (const [lo, hi] of knobs) {
+    const span = ((hi - lo) % 2 ** 32 + 2 ** 32) % 2 ** 32
+    words.push((lo % 2 ** 32 + 2 ** 32) % 2 ** 32, Math.floor(span / RAW_MAX), span % RAW_MAX)
+  }
+  return u32(...words)
+}
+
+export type KernelLayout = { pool: [number, number]; used: number; mods: { id: string; code: [number, number]; data: [number, number] }[] }
+
+/** Lay the dispatcher (the payload with exports) and every kernel out in the profile's pool: each block of code
+ * takes its guard; data keeps its alignment; each kernel gets 16 slots of state, an SDK machine its knob map.
+ * The dispatcher's tables name each kernel by id. Throws ModError when the pool is too small. sharc.place_kernels. */
+export function placeKernels(payloads: [string, KernelPayload][], profile: SharcProfile):
+  [[number, Uint8Array][], [number, number, number][], [number, Uint8Array, Uint8Array][], KernelLayout] {
+  const [lo, hi] = profile.pool!
+  const dispatcher = payloads.find(([, p]) => Object.keys(p.exports).length)![1]
+  const order = [...payloads.filter(([, p]) => p === dispatcher), ...payloads.filter(([, p]) => p !== dispatcher)]
+  let at = lo
+  const placed = new Map<string, [number, number]>(), loads: [number, Uint8Array][] = [], fills: [number, number, number][] = []
+  const layout: KernelLayout['mods'] = []
+  const take = (size: number, align = 4): number => { const start = Math.ceil(at / align) * align; at = start + size; return start }
+  for (const [mid, p] of order) {
+    const codeAt = take(p.code.length + guard(p.code).length), dataAt = take(p.data.length, p.dataAlign)
+    placed.set(mid, [pc16(profile, codeAt), dataAt])
+    layout.push({ id: mid, code: [codeAt, p.code.length + guard(p.code).length], data: [dataAt, p.data.length] })
+  }
+  const tables = { voice: new Uint8Array(TABLE_IDS * 16), filter: new Uint8Array(TABLE_IDS * 16) }
+  for (const [mid, p] of order) for (const k of p.kernels) {
+    const knobs = k.kind === 'sdk' ? knobMap(k.knobs!) : new Uint8Array(0)
+    const knobAt = knobs.length ? take(knobs.length) : 0
+    if (knobs.length) loads.push([knobAt, knobs])
+    const each = k.kind === 'sdk' ? profile.kernelStateBytes! : k.state_bytes!
+    const state = each ? take(16 * each, 8) : 0
+    if (each) fills.push([state, 16 * each, 0])
+    tables[KERNEL_TABLE[k.kind]].set(u32(placed.get(mid)![0] + k.entry, state, each, knobAt), 16 * k.id)
+  }
+  if (at > hi) throw new ModError(`DN2 kernels need ${at - lo} bytes; the machine pool has ${hi - lo}`)
+  for (const [mid, p] of order) {
+    const [code, data] = rebase(p, ...placed.get(mid)!)
+    if (p === dispatcher) {
+      for (const kind of ['voice', 'filter'] as const) {
+        const [section, off] = p.exports[`dn2_${kind}_table.`]
+        if (section !== 'data' || off + tables[kind].length > data.length)
+          throw new ModError(`SHARC dispatcher: dn2_${kind}_table. is not ${tables[kind].length} bytes of data`)
+        data.set(tables[kind], off)
+      }
+    }
+    const codeAt = layout.find(e => e.id === mid)!.code[0]
+    const tail = guard(code), block = new Uint8Array(code.length + tail.length)
+    block.set(parcels(code)); block.set(tail, code.length)
+    loads.push([codeAt, block])
+    if (data.length) {
+      const padded = new Uint8Array(data.length + (-data.length & 3))
+      padded.set(data)
+      loads.push([placed.get(mid)![1], padded])
+    }
+  }
+  const hook = (label: string) => placed.get(order[0][0])![0] + dispatcher.exports[label][1]
+  const patches: [number, Uint8Array, Uint8Array][] = []
+  for (const [key, label] of [['voiceHook', 'dn2_voice_hook.'], ['filterHook', 'dn2_filter_hook.']] as const) {
+    const [site, old] = profile[key]!
+    patches.push([site, fromHex(old)!, jump(hook(label))])
+  }
+  const [site, old] = profile.filterCapture!
+  patches.push([site, fromHex(old)!, u32(hook('dn2_filter_capture.'))])
+  for (const key of ['voiceStack', 'filterStack'] as const) {   // each kind's L1 stack: the guard word, then zeros
+    const [sLo, sHi] = profile[key]!
+    loads.push([sLo, u32(profile.stackGuard!)])
+    fills.push([sLo + 4, sHi - sLo - 4, 0])
+  }
+  return [loads, fills, patches, { pool: [lo, hi], used: at - lo, mods: layout }]
 }

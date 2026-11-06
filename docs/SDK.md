@@ -14,7 +14,7 @@ change, and mods must be rebuilt when it does.
 | Choose a machine | FUNC+SRC machine menu | hold a track key, Mod Menu → MACHINES | FUNC+SYN → MACHINE SEL |
 | Its pages show on | SRC | SYN2, in place of its pages on that track | SYN |
 | Pages, labels, hiding, glyphs | yes | yes | yes |
-| `render` and knob defaults | yes | yes | not supported yet: the builder refuses them |
+| `render` and knob defaults | yes | yes | yes, `render` in SHARC assembly ([`render` on the Digitone II](#render-on-the-digitone-ii)) |
 
 Other devices and OS releases, the Digitakt II among them, are not SDK
 targets. The builder's `SDK_ALPHA_TARGETS`
@@ -83,9 +83,10 @@ and `my-saw/mod.json`:
 ```
 
 `devices` replaces `device` and `os`. The Digitone II is left out because
-it refuses `render` and `def`; [sdk-hello-world](../examples/sdk-hello-world)
-builds for all three. The other examples are
-[sdk-glyphs](../examples/sdk-glyphs) and [sdk-sine](../examples/sdk-sine).
+its `render` is SHARC assembly ([`render` on the Digitone II](#render-on-the-digitone-ii));
+[sdk-hello-world](../examples/sdk-hello-world),
+[sdk-glyphs](../examples/sdk-glyphs) and [sdk-sine](../examples/sdk-sine)
+build for all three.
 
 From the elekloader checkout, run it on your computer first, with no
 device or emulator ([Run it on your computer](#run-it-on-your-computer)):
@@ -225,6 +226,64 @@ helpers:
 
 Do not divide samples. Float and Q31 do not clip or round alike.
 
+### `render` on the Digitone II
+
+On the Digitone II the sound runs on the DSP, a SHARC, so `render` is SHARC
+assembly. The builder compiles a Digitone II build's C with
+`ELEK_TARGET_SHARC`, and `.render` names the routine, declared under that
+macro with `render`'s signature
+([sdk-sine](../examples/sdk-sine/sine.c)):
+
+```c
+#ifdef ELEK_TARGET_SHARC
+void sine_render(const struct elek_voice *v, elek_sample *out);     /* sine-dn2.s */
+#define RENDER sine_render
+#else
+static void render(const struct elek_voice *v, elek_sample *out) { ... }
+#define RENDER render
+#endif
+```
+
+mod.json lists the assembly as `"sharc": {"sources": ["sine-dn2.s"]}`:
+relative `.s` files in the mod's folder, which the other devices ignore.
+The builder assembles them with the pinned Selache (`SELACHE`, a clean
+checkout at `2b26d3b`, built with `cargo build --release`) and pairs each
+`.render` with the global label of its C name and a dot (`sine_render.`).
+It refuses a C render (`render is C, which digitone-mk2 1.12 cannot play`)
+and a missing label (`render is sine_render, but no file in mod.json's
+"sharc": {"sources": [...]} has the global label sine_render.`).
+
+machines-dn2's dispatcher calls the routine for each voice slot that plays
+the machine, with R4 = `v` and R8 = `out`, 32 floats. `v` is
+`struct elek_voice` as the header lays it out: `knob` at +0, `track` +4,
+`start` +8, `pitch` +12, `velocity` +16, `state` +20.
+
+- `knob[ID]` is `sdk_alpha_map`'s value for this voice's raw value, as on
+  the other devices;
+- `track` comes from the DSP's map of voice slots to tracks;
+- `pitch` is 16.16 and `velocity` 1..127;
+- `start` is set in the block after the note's trigger, whose own block
+  is silent;
+- `state` is the slot's 256 bytes, zeroed when the slot's machine changes.
+
+The routine may change what the dispatcher saves and restores around the
+call: R0–R15, I0–I5, I12, I13, M0–M4, L0–L5, LCNTR and the ASTAT and
+STKY flags. It keeps everything else as it found it, the C constants
+M5 = 0, M6 = 1, M7 = -1, M13 = 0, M14 = 1 and M15 = -1, MODE1 and the
+hardware stacks' depth among them, and returns as C does, which restores
+I6 and I7:
+
+```
+I12=DM(M7,I6);
+JUMP(M14,I12)(DB);
+RFRAME;
+NOP;
+```
+
+It runs on the synths' 4 KiB stack in L1, which interrupts share; a call
+that overruns it mutes that machine
+([MACHINES-DN2-VOICE.md](MACHINES-DN2-VOICE.md#context-and-memory)).
+
 ### Limits and refusals
 
 The header's `ELEK_UI_*` names the limits above. A mod may register
@@ -247,8 +306,8 @@ changes.
 | SDK machines in a build | 32 | 15 | 16 |
 | LFO destination lists | 2 | 2 | 3 |
 | Value text | `#` past five characters under the knob; the pop-up shows the whole number | `#` past five characters | `#` past five characters |
-| Voices | one a track | eight, on four tracks | no render |
-| After `render` | the native overdrive, filter and AMP; whether the AMP applies velocity is not checked | the companion's AMP envelope, which applies velocity (use it for timbre, not level), then the filter | no render |
+| Voices | one a track | eight, on four tracks | sixteen voice slots, which the OS allocates to tracks |
+| After `render` | the native overdrive, filter and AMP; whether the AMP applies velocity is not checked | the companion's AMP envelope, which applies velocity (use it for timbre, not level), then the filter | the voice envelope, the selected stock or custom filter, pan, sends and mixer, as an mk2 synth's |
 
 No device tells `render` when a key is released: the AMP envelope ends the
 note. How each companion stores knobs and renders voices is in its own

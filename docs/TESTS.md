@@ -9,8 +9,11 @@ files never go in this repository.
 
 `test_units.py` also runs the `test_sharc*.py` files. With
 `ELEKLOADER_DN2_SYX` they check the real stock file too, and with
-`ELEKLOADER_CROSS` they build core with its bridge. The toolchain test needs
-Git, and skips without it.
+`ELEKLOADER_CROSS` they build core with its bridge. With `SELACHE`, a clean
+checkout of the pinned Selache built with `cargo build --release`,
+`test_sharc_kernels.py` packages kernels from C and assembly and checks
+that machines-dn2's `dispatch.sharc.json` matches `dispatch.s`. The
+toolchain test needs Git, and skips without it.
 The same command checks the DN2 machine registry. The
 [external C example](https://github.com/simonjohansson/digitone-2-mod-hack)
 checks its producer and kernels with `mise run test`.
@@ -21,19 +24,30 @@ LOWPASS 4, identity reads keep saved IDs, and registers and the
 stack are preserved. It also boots a build with a paged SHARC synth and
 reads its pages and rows through the stock accessors, and one with a full
 40-knob synth and a filter with G, whose row must follow the synth's and
-leave the stock filters' slot 66 alone. With DigiKit
+leave the stock filters' slot 66 alone; one with two synths and two
+filters with G from two mods, whose shared rows take the active track's
+machine's labels and defaults; and one with an SDK machine with a render,
+whose own type reaches the DSP. With DigiKit
 (`ELEKLOADER_DIGIKIT`, its `ELEKLOADER_DIGI_EMUD` and the ready inputs in
 `ELEKLOADER_DN2_EMU_READY`), `test_dn2_filter_capture.py` plays stock
 LOWPASS 4 and a custom filter side by side in the coupled emulator, with the
 filter envelope and an LFO moving the cutoff: the custom voice's captured
 cutoff and resonance must equal the stock voice's in every block, and its
 input must carry the G that CC 18 set. `test_dn2_machine_memory.py` fills
-both 64 KiB machine areas and both L1 stacks with a pattern, plays every track with sweeps,
+the 128 KiB machine pool and both L1 stacks with a pattern, plays every track with sweeps,
 and checks that stock wrote none of it. `test_dn2_machine_stack.py` runs a
 filter that uses 1 KB of stack, and one that overruns its 4 KiB stack and
 must be muted while the emulator keeps running. `test_dn2_dsp_peek.py`
 reads a stack guard and a known data pattern back through core-dn2's DSP
-peek and checks that a peripheral address is refused.
+peek and checks that a peripheral address is refused. The capture, stack
+and peek tests build their kernels with Selache, so they need `SELACHE`
+too. `test_dn2_dispatch.py` runs machines-dn2's dispatcher, placed as the
+linker places it, in DigiKit's SHARC runner with `ELEKLOADER_DIGIKIT` and
+`SELACHE`: each kernel's input (an mk2 synth's, an mk2 filter's and an SDK
+machine's `struct elek_voice`, its knobs equal to `sdk_alpha_map`'s), the
+state zeroed on a machine change, examples/sdk-sine, several synths and
+filters side by side, and an overrun that mutes only its machine. Its
+knob arithmetic check needs nothing.
 
 The **tests** workflow runs `test_units.py`, `test_link_refusals.py` and the
 TypeScript engine's tests (`node --test "js/test/*.test.ts"`) on every pull
@@ -56,10 +70,11 @@ ELEKLOADER_AR2_SYX=Analog-Rytm_MKII_OS1.74.syx python tests/test_rytm_mk2.py   #
 ELEKLOADER_A4_SYX=Analog-Four_MKII_OS1.56.syx python tests/test_analog_four_mk2.py
 ELEKLOADER_DN2_SYX=Digitone_II_OS1.12.syx ELEKLOADER_DN2_ZIP=Digitone_II_OS1.12_dist.zip python tests/test_digitone2.py
 ELEKLOADER_MC_SYX=Model_Cycles_OS1.13.syx python tests/test_model_cycles.py   # core-mc 0.3 against 0.2 and 0.1, its exports and ev_boot
-ELEKLOADER_DN2_SYX=... ELEKLOADER_CROSS=... ELEKLOADER_DIGIKIT=... ELEKLOADER_DIGI_EMUD=... ELEKLOADER_DN2_EMU_READY=... python tests/test_dn2_filter_capture.py
+ELEKLOADER_DN2_SYX=... ELEKLOADER_CROSS=... ELEKLOADER_DIGIKIT=... ELEKLOADER_DIGI_EMUD=... ELEKLOADER_DN2_EMU_READY=... SELACHE=... python tests/test_dn2_filter_capture.py
 ELEKLOADER_DN2_SYX=... ELEKLOADER_CROSS=... ELEKLOADER_DIGIKIT=... ELEKLOADER_DIGI_EMUD=... ELEKLOADER_DN2_EMU_READY=... python tests/test_dn2_machine_memory.py
-ELEKLOADER_DN2_SYX=... ELEKLOADER_CROSS=... ELEKLOADER_DIGIKIT=... ELEKLOADER_DIGI_EMUD=... ELEKLOADER_DN2_EMU_READY=... python tests/test_dn2_machine_stack.py
-ELEKLOADER_DN2_SYX=... ELEKLOADER_CROSS=... ELEKLOADER_DIGIKIT=... ELEKLOADER_DIGI_EMUD=... ELEKLOADER_DN2_EMU_READY=... python tests/test_dn2_dsp_peek.py
+ELEKLOADER_DN2_SYX=... ELEKLOADER_CROSS=... ELEKLOADER_DIGIKIT=... ELEKLOADER_DIGI_EMUD=... ELEKLOADER_DN2_EMU_READY=... SELACHE=... python tests/test_dn2_machine_stack.py
+ELEKLOADER_DN2_SYX=... ELEKLOADER_CROSS=... ELEKLOADER_DIGIKIT=... ELEKLOADER_DIGI_EMUD=... ELEKLOADER_DN2_EMU_READY=... SELACHE=... python tests/test_dn2_dsp_peek.py
+ELEKLOADER_DIGIKIT=... SELACHE=... python tests/test_dn2_dispatch.py   # the dispatcher, in DigiKit's SHARC runner
 ELEKLOADER_CATALOG_DIR=folder/of/catalog/files ELEKLOADER_STOCK=... python tests/test_catalog_link.py   # the catalog against core 3.0
 ELEKLOADER_STOCK=... ELEKLOADER_STOCK_154=... ELEKLOADER_OT_SYX=... ELEKLOADER_MODS=... python tests/test_gui.py   # the window, hidden (Tk)
 node tests/test_web.mjs build/site   # the web page's engine, in Pyodide (packaging/build_web.py first)
@@ -89,7 +104,7 @@ with the ColdFire tools. Keep the `.elemod` files out of the repository.
 `test_units.py` runs the SDK's firmware-free suites: `test_sdk_alpha.py`
 (the builder: registrations, layouts, refusals; its build checks need
 `ELEKLOADER_STOCK_154`, `ELEKLOADER_STOCK_DN1_144`, `ELEKLOADER_DN2_SYX`
-and `ELEKLOADER_CROSS`), `test_sdk_alpha_render.py` (the sample helpers
+and `ELEKLOADER_CROSS`, and the Digitone II's render `SELACHE`), `test_sdk_alpha_render.py` (the sample helpers
 and examples/sdk-sine, compiled with the host compiler as Q31 and as float,
 and the shared `mods/sdk-alpha/machine.c` with each mk1 adapter) and
 `test_sdk_alpha_host.py` (`sdk_alpha_host` on the examples).

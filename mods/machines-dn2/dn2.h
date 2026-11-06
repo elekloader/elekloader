@@ -20,6 +20,7 @@ void dn2_add_row(uint32_t code, int32_t slot, const char *label, uint32_t def, c
 void dn2_row_label(uint32_t code, const char *label, const char *owner_name);
 void dn2_row_format(uint32_t code, void (*format)(int32_t value, char *buf));
 void dn2_ensure(void);
+void dn2_rows_follow(void);
 
 /* sdk_alpha.c */
 struct mk2_synth;
@@ -28,4 +29,7 @@ void dn2_sdk_build(void);
 uint32_t dn2_sdk_page_count(uint32_t type);
 const struct descriptor *dn2_sdk_page(uint32_t type, uint32_t page);
 uint32_t dn2_sdk_code(uint32_t type, uint32_t slot);
+uint32_t dn2_sdk_renders(uint32_t type);
+int32_t dn2_sdk_default(uint32_t knob);
+uint32_t dn2_active_type(uint32_t filter);
 #endif

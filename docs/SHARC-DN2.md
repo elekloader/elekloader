@@ -7,9 +7,10 @@ maintainers. Mod authors start with the
 [sine example](../examples/sharc-sine/README.md); the
 [callback contract](SHARC-DN2-ABI.md) says what a mod's code must do, and
 [FORMAT](FORMAT.md#digitone-ii-sharc-mod) what the file holds.
-Selectable synths and filters (machines-dn2) own 64 KiB each from the same
-start, with the [voice](MACHINES-DN2-VOICE.md) and [filter](MACHINES-DN2-FILTER.md)
-contracts; a build has either those or one master-output mod.
+Selectable synths, filters and SDK machines (machines-dn2) share a 128 KiB
+machine pool from the same start, with the [voice](MACHINES-DN2-VOICE.md) and
+[filter](MACHINES-DN2-FILTER.md) contracts; a build has either those or one
+master-output mod.
 
 ## The stock file and the writer
 
@@ -41,10 +42,9 @@ Every range is half-open, in loader bytes:
 | core's bridge and its state | `[0x282dd600,0x282dda00)` |
 | the bridge's pitch table and padding | `[0x282dda00,0x282dde00)` |
 | the mod | `[0x20090000,0x20098000)` (L2) |
-| a selectable synth | `[0x20090000,0x200a0000)` (L2) |
-| a selectable filter | `[0x200a0000,0x200b0000)` (L2) |
-| a synth's stack | `[0x282de000,0x282df000)` (L1) |
-| a filter's stack | `[0x282df000,0x282e0000)` (L1) |
+| the machine pool: machines-dn2's dispatcher and every kernel | `[0x20090000,0x200b0000)` (L2) |
+| the synths' stack | `[0x282de000,0x282df000)` (L1) |
+| the filters' stack | `[0x282df000,0x282e0000)` (L1) |
 | core-dn2's DSP peek, with any SHARC mod | `[0x282e0000,0x282e0800)` (L1) |
 | the stock instruction the bridge replaces | `[0x2838489a,0x283848a0)` |
 

@@ -24,7 +24,7 @@ DIGIKIT = os.environ.get('ELEKLOADER_DIGIKIT')
 EMUD = os.environ.get('ELEKLOADER_DIGI_EMUD')
 READY = os.environ.get('ELEKLOADER_DN2_EMU_READY')
 MS = 132000  # emulated instructions per millisecond
-RETURN = 'fe4d3f0e3f083f3401190100'  # I12=DM(M7,I6); JUMP(M14,I12)(DB); RFRAME; NOP;
+RETURN = 'I12=DM(M7,I6);\nJUMP(M14,I12)(DB);\nRFRAME;\nNOP;\n'
 NAMES = ('request', 'words', 'got', 'received', 'total', 'refused', 'seq')
 
 
@@ -39,8 +39,23 @@ class ColdFirePeekTests(unittest.TestCase):
             subprocess.run([executable], check=True)
 
 
-@unittest.skipUnless(STOCK and DIGIKIT and EMUD and READY and os.environ.get('ELEKLOADER_CROSS'),
-                     'needs DN2 stock, the cross compiler, DigiKit, its digi-emud and ready inputs')
+def filter_kernel(work, source, machine_id=8):
+    """An mk2 filter's kernel artifact from SHARC assembly, with the pinned Selache."""
+    from elekloader.sdk.sharc import machine_artifact, selache_tools
+    (work / 'kernel.s').write_text(source)
+    subprocess.run([str(selache_tools() / 'selas'), '-proc', 'ADSP-21569', '-o', str(work / 'kernel.doj'),
+                    str(work / 'kernel.s')], check=True)
+    return machine_artifact('filter', [work / 'kernel.doj'], machine_id)
+
+
+def kernel_data(manifest, mod):
+    """Where the linker put `mod`'s kernel data."""
+    return next(m['data'][0] for m in manifest['link']['layout']['sharc']['kernels']['mods'] if m['id'] == mod)
+
+
+@unittest.skipUnless(STOCK and DIGIKIT and EMUD and READY and os.environ.get('ELEKLOADER_CROSS')
+                     and os.environ.get('SELACHE'),
+                     'needs DN2 stock, the cross compiler, Selache, DigiKit, its digi-emud and ready inputs')
 class DspPeekTests(unittest.TestCase):
     def test_reads_dsp_memory_and_refuses_peripherals(self):
         self.check_build(False)
@@ -52,7 +67,6 @@ class DspPeekTests(unittest.TestCase):
         from elekloader import patch
         from elekloader.devices.digitone_mk2 import DEVICE
         from elekloader.sdk import build as sdk
-        from elekloader.sdk.sharc import filter_artifact, machine_layout
         profile = DEVICE.releases['1.12'].sharc
         pattern = bytes(range(256)) * 4
         with tempfile.TemporaryDirectory() as tmp:
@@ -64,7 +78,11 @@ class DspPeekTests(unittest.TestCase):
             stage.mkdir()
             (stage / 'machine.c').write_text('#include "mk2/machines.h"\n'
                                              'const struct mk2_filter custom = {8,"PEEK","PEEK",0,0};\n')
-            (stage / 'kernel.json').write_text(json.dumps(filter_artifact(bytes.fromhex(RETURN), pattern, 0, 8, 0)))
+            words = ''.join('.VAR = 0x%08x;\n' % int.from_bytes(pattern[i:i + 4], 'little') for i in range(4, len(pattern), 4))
+            (stage / 'kernel.json').write_text(json.dumps(filter_kernel(stage, (
+                '.SECTION/DM seg_dmda;\n.GLOBAL pattern.;\n.VAR pattern. = 0x%08x;\n%s'
+                '.SECTION/SW seg_swco;\n.GLOBAL sharc_filter_render.;\nsharc_filter_render.:\n%s'
+                % (int.from_bytes(pattern[:4], 'little'), words, RETURN)))))
             (stage / 'mod.json').write_text(json.dumps({
                 'id': 'peek-test', 'version': '0.1', 'device': 'digitone-mk2', 'os': '1.12',
                 'sources': ['machine.c'], 'sharc': {'artifact': 'kernel.json'}, 'resources': {'core': '0.1'},
@@ -109,7 +127,7 @@ class DspPeekTests(unittest.TestCase):
                 wait(300)
                 guard = profile['filter_stack'][0] - 0x28000000          # the core's view of L1
                 self.assertEqual(peek(guard, 1), (0, [profile['stack_guard']]))
-                data = machine_layout('filter')['data_address']
+                data = kernel_data(manifest, 'peek-test')
                 self.assertEqual(peek(data, 8), (0, [int.from_bytes(pattern[4 * i:4 * i + 4], 'little') for i in range(8)]))
                 self.assertEqual(peek(0x31000000, 1)[0], 1)              # peripherals are refused
                 self.assertEqual(peek(0x200f9ffc, 1)[0], 0)             # the last readable L2 word
