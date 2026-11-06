@@ -45,6 +45,25 @@ in it: the Digitakt II renders its audio on the DSP.
   tail (0x8000F100-0x80010000) on the first tick, once: the OS zeroes SRAM
   after the boot copier runs.
 
+From 1.1 it also builds `fw.s`, `frame.s`, `leds.s`, `store.s`,
+`store.c`, `rows.s` and `rows.c`: the events `ev_frame_params` and
+`ev_key_leds`, the mods' project and kit data (`core_projdata`,
+`core_kitdata`) and value rows (`core_addvalue`). What mods use is in
+[docs/ADAPTING.md](../../docs/ADAPTING.md), "Project data, kit data and
+value rows (core-dt2 1.1, Digitakt II)", and
+[digitakt-mk2/core.h](../../elekloader/sdk/include/digitakt-mk2/core.h).
+Its sites, each a whole instruction the shim runs too:
+
+| site | was | for |
+|---|---|---|
+| 0x4002e90c | `jsr 0x400d9508`: the frame interrupt's per-track modulators, after it rebuilt the values from the smoother (block 0x80005b50, 71 values a track from +0x22) | `ev_frame_params` |
+| 0x400311a2 | `jsr (pc) 0x4003098e; move.l d2,-(sp)`: the LED frame (0x4003117c) clears every LED, then pushes the views' argument | `ev_key_leds` |
+| 0x400dbee4 | `move.l #0xbacef00c,d1` in the kit serializer (0x400dbdca), before it writes the record's end mark: a2 the record, a3 the kit | kit save |
+| 0x400db8be | the same instruction in the kit loader (0x400db898), after its version check: a2 the kit, a3 the record | kit load |
+| 0x400df932 | `move.l #0xbeefbace,(a3)`, the file's mark, in the project save (0x400df66c) | project save |
+| 0x400df99c | `move.l #0xbeefbace,d0`, the load's (0x400df95a) check of that mark | project load |
+| 0x40136388 | `memcpy`'s first 12 bytes, the loads of its three arguments, by jmp: a copy of a kit's size (0x5574) also calls `core_kit_copied` | kit copies |
+
 Each site and routine was found by the mk1's code, with the addresses
 masked: the UI loop's dirty check and frame composition, the key and
 encoder events built from the UI queue's message, and the SETTINGS
@@ -57,8 +76,8 @@ Build it with the SDK (it needs m68k binutils; with Homebrew's
 `m68k-elf-binutils`, set `ELEKLOADER_CROSS=m68k-elf-`):
 
 ```bash
-python -m elekloader.sdk.build mods/core-dt2 --stock Digitakt_II_OS1.17.syx      # out/core-1.0.elemod
-python -m elekloader.lint mods/core-dt2/out/core-1.0.elemod --stock Digitakt_II_OS1.17.syx
+python -m elekloader.sdk.build mods/core-dt2 --stock Digitakt_II_OS1.17.syx      # out/core-1.1.elemod
+python -m elekloader.lint mods/core-dt2/out/core-1.1.elemod --stock Digitakt_II_OS1.17.syx
 ```
 
 Checked by cold-booting it in digikit's emulator (`emu.checkpoint`, then

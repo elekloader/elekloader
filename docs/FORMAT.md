@@ -380,7 +380,9 @@ and `core_projdata` (project data); 2.2 the event `ev_hold` and the table
 0x40032b3a, 0x40033d94, 0x40033dde and 0x400a5eac, a Digitakt II-only
 `ev_personalize` (0x4009e2a2, the PERSONALIZE menu, `void f(menu)`), and no
 render events (its audio renders on the DSP). It declares the `.fast` copy table itself,
-`core_fast`, and copies it on the first `ev_tick` (`mods/core/fast.s`). The Digitone
+`core_fast`, and copies it on the first `ev_tick` (`mods/core/fast.s`). Core-dt2 1.1 adds
+`ev_frame_params` (0x4002e90c), `ev_key_leds` (0x400311a2) and the tables `core_projdata`
+and `core_kitdata` (docs/ADAPTING.md has each). The Digitone
 II 1.12's core (core-dn2 0.1, experimental) has the same six UI events at
 0x4002e464, 0x4002e4ca, 0x4002f20c, 0x4002f256, 0x4009ff88 and 0x400987a2,
 no render events and no `.fast` table (SRAM is not qualified there).
