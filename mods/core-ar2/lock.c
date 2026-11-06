@@ -409,12 +409,14 @@ unsigned char *core_lock_sound(void *set)
 
 /* would the sound setter (0x400a9dea) take this id for this sound? Its
  * slot is a stock one (0x40006ea8, which core answers for pseudo ids), and
- * the parameter is common to all machines (0x40006f18) or the sound's
- * machine's (0x4000714a against the sound's +104). A mod page's knob borrows
- * an id stock rejects here (an Error record, another machine's parameter);
- * where the id is the sound's own stock parameter, the knob is stock's. */
+ * the parameter is common to all machines or the sound's machine's: the
+ * setter asks 0x40006f18, which is 1 for a machine's parameter (its
+ * record's machine 0..52), and then wants 0x4000714a to match the sound's
+ * +104. A mod page's knob borrows an id stock rejects here (an Error
+ * record, another machine's parameter); where the id is the sound's own
+ * stock parameter, the knob is stock's. */
 #define ID_SLOT ((int (*)(int))0x40006ea8)
-#define ID_COMMON ((int (*)(int))0x40006f18)
+#define ID_OF_MACHINE ((int (*)(int))0x40006f18)
 #define ID_MACHINE ((int (*)(int))0x4000714a)
 
 int core_lock_stock_takes(int id, const unsigned char *s)
@@ -422,14 +424,16 @@ int core_lock_stock_takes(int id, const unsigned char *s)
     int slot = ID_SLOT(id);
     if (slot < 0 || slot > 41)
         return 0;
-    return ID_COMMON(id) || ID_MACHINE(id) == (signed char)s[104];
+    return !ID_OF_MACHINE(id) || ID_MACHINE(id) == (signed char)s[104];
 }
 
-/* (0.9) the FX setter (0x400a9f28) takes any id with a slot of 0..41 */
+/* (0.9) the FX setter (0x400a9f28) takes any id with a slot of 0..41, but
+ * the FX track's own parameters are none machine's: a machine's parameter
+ * (a TEST machine's record, as mods borrow) is a mod's knob there */
 int core_lock_fx_takes(int id)
 {
     int slot = ID_SLOT(id);
-    return slot >= 0 && slot <= 41;
+    return slot >= 0 && slot <= 41 && !ID_OF_MACHINE(id);
 }
 
 /* the knob's mod parameter in the set's item: a parameter of the item's
