@@ -188,9 +188,15 @@ static int sidecar(int kind)
     return kind == K_SOUND ? b >> 16 & 255 : kind == K_KIT ? b >> 8 & 255 : b & 255;
 }
 
+/* __sidecar_bytes is a value in a symbol's address. The compiler takes an
+ * array's address as never null and folds a plain `!= 0` to true, which
+ * left every remote-field hook live on builds without sidecar fields; the
+ * empty asm hides the value from it. */
 static int any_sidecar(void)
 {
-    return (unsigned)__sidecar_bytes != 0;
+    unsigned b = (unsigned)__sidecar_bytes;
+    __asm__("" : "+d"(b));
+    return b != 0;
 }
 
 /* ---- the event queue ---- */
