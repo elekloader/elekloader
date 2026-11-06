@@ -13,6 +13,19 @@ the synths are silent, the Digitone's own effects are off, and everything
 you hear is the inputs through DigiSwarm. NO turns it off and gives the audio and the screen back. The sequencer keeps running, so DigiSwarm follows its tempo and PLAY,
 STOP and TEMPO still work.
 
+## 0.3
+
+From the first reports from a unit: a p-lock lasts its own step (fxkit 0.2; it
+used to hold until the lock track's next trig, and with trigs only where there
+are locks one lock kept its knob for the rest of the loop); SETUP's INPUT is
+one setting for every pedal, and a new project keeps it; the LFO pages turn as
+the stock's do (SPD and DEP gather speed with the knob, MULT, WAVE, MODE and
+DEST's list step every second detent); a knob let go no longer steps once
+more; and the next key pressed without FUNC clears FUNC, so it cannot stay on
+(a FUNC left on shows page 2 for pages 1-3, as reported after a SETUP change).
+Needs fxkit 0.2. The looper counts its seconds from 1 while it records, and
+shows a loop's length rounded.
+
 ## 0.2: on fxkit
 
 From 0.2 DigiSwarm is an effect on fxkit ([../fxkit-dn1](../fxkit-dn1)), as every
@@ -62,7 +75,7 @@ sequencer plays the engines' grid is its timeline.
 | Looper: record / play / overdub, hold for undo; stop, hold to erase | page 3, or T1 and T2 as two footswitches (hold T1 to undo, T2 to erase) |
 | Reverse, Bypass (with trails) | REV and BYP on page 3 |
 | Presets | none from 0.2: the project keeps the controls, and p-locks (RECORD) follow the pattern |
-| Settings | YES opens SETUP (input mono/stereo, loop route, looper only, quantize, burst, hold mode, loop order, MIDI channel); UP and DOWN pick a row, LEFT or RIGHT changes it |
+| Settings | YES opens SETUP (input mono/stereo: fxkit's, one setting for every pedal; loop route, looper only, quantize, burst, hold mode, loop order, MIDI channel); UP and DOWN pick a row, LEFT or RIGHT changes it |
 | MIDI CCs | on the Digitone's auto channel (see MIDI below) |
 | Tempo | the Digitone's own tempo (TEMPO) |
 
@@ -150,8 +163,8 @@ core-dn1's render; the UI (`ui.c`) runs in the Digitone's UI task.
 With the SDK and a stock OS file:
 
 ```bash
-python -m elekloader.sdk.build mods/digiswarm-dn1 --stock Digitone_and_Digitone_Keys_OS1.43.syx   # out/digiswarm-0.2.elemod
-python -m elekloader.sdk.build mods/digiswarm-dn1 --stock Digitone_and_Digitone_Keys_OS1.44.syx   # out/digiswarm-0.2-os1.44.elemod
+python -m elekloader.sdk.build mods/digiswarm-dn1 --stock Digitone_and_Digitone_Keys_OS1.43.syx   # out/digiswarm-0.3.elemod
+python -m elekloader.sdk.build mods/digiswarm-dn1 --stock Digitone_and_Digitone_Keys_OS1.44.syx   # out/digiswarm-0.3-os1.44.elemod
 ```
 
 It names no firmware address, so its 1.44 port is empty. It needs fxkit and core-dn1

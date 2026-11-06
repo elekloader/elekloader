@@ -20,7 +20,7 @@ how they fit together. For other kinds of mod, start with
 | | Digitakt mk1 | Digitone mk1 / Keys | Digitone II |
 |---|---|---|---|
 | Stock OS | 1.54 | 1.44 | 1.12 |
-| Companions | core and `machine-pages` | core-dn1 4.2 and `machines` 0.3 | core-dn2 0.2 or later and `machines-dn2` 0.2 |
+| Companions | core and `machine-pages` | core-dn1 5.2 and `machines` 0.3 | core-dn2 0.2 or later and `machines-dn2` 0.2 |
 | Choose a machine | FUNC+SRC machine menu | Hold a track key, Mod Menu → MACHINES | FUNC+SYN → MACHINE SEL |
 | Show its pages | SRC | SYN2, replacing its pages on that track | SYN |
 | Pages / logical knobs | 2 / 15 | 2 / 15 | 2 / 15 |
@@ -371,7 +371,7 @@ Digitakt II are outside this shared render contract.
   fields do not imply that a device implements them.
 - DN2 registers at most sixteen SDK machines per build. This is a core
   capacity limit, separate from the two-page/fifteen-knob layout limit.
-- Digitone mk1 SDK pages occupy `page:30` and `page:29`. Another mod using
+- Digitone mk1 SDK pages occupy `page:29` and `page:28` (core-dn1 5.1 has `page:30`). Another mod using
   either conflicts. `machines-dn1` must also be the only mod replacing
   SYN2's page list: the last `core_page_list` call wins.
 - The shared API has no arbitrary full-screen drawing, custom widget/input

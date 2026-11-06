@@ -25,6 +25,18 @@ DigiReel is one of the pedals on the pedal shell (`pedal.h`,
 gives them the same page, keys, SETUP, TAP, BYPASS, CPU guard and project
 data, on fxkit.
 
+## 0.3
+
+From the first reports from a unit: a p-lock lasts its own step (fxkit 0.2; it
+used to hold until the lock track's next trig, and with trigs only where there
+are locks one lock kept its knob for the rest of the loop); SETUP's INPUT is
+one setting for every pedal, and a new project keeps it; the LFO pages turn as
+the stock's do (SPD and DEP gather speed with the knob, MULT, WAVE, MODE and
+DEST's list step every second detent); a knob let go no longer steps once
+more; and the next key pressed without FUNC clears FUNC, so it cannot stay on
+(a FUNC left on shows page 2 for pages 1-3, as reported after a SETUP change).
+Needs fxkit 0.2.
+
 ## 0.2: on fxkit
 
 From 0.2 DigiReel is an effect on fxkit ([../fxkit-dn1](../fxkit-dn1)), as every
@@ -75,7 +87,7 @@ default (a setting: its next value).
 | Bypass | trig 16 (with the tail; SETUP's BYPASS: TRAILS or CUT) |
 | Presets | none from 0.2: the project keeps the pedal, and p-locks (RECORD) follow the pattern |
 | TIME and SPEED | trig 1-10: TIME's divisions, 1/32 to 2 bars; trig 11-14: SPEED -1x, 0.5x, 1x, 2x |
-| SETUP | YES opens SETUP: INPUT (STEREO, or MONO from input L), CLOCK (FREE, DIGITONE, TAP), BYPASS (TRAILS, CUT), MIDI CC (auto channel or any), CC CLOSED |
+| SETUP | YES opens SETUP: INPUT (STEREO, or MONO from input L: fxkit's, one setting for every pedal), CLOCK (FREE, DIGITONE, TAP), BYPASS (TRAILS, CUT), MIDI CC (auto channel or any), CC CLOSED |
 
 ## How it plays
 
@@ -126,8 +138,8 @@ closed, in SETUP):
 ## Build
 
 ```bash
-python -m elekloader.sdk.build mods/digireel-dn1 --stock Digitone_and_Digitone_Keys_OS1.43.syx   # out/digireel-0.2.elemod
-python -m elekloader.sdk.build mods/digireel-dn1 --stock Digitone_and_Digitone_Keys_OS1.44.syx   # out/digireel-0.2-os1.44.elemod
+python -m elekloader.sdk.build mods/digireel-dn1 --stock Digitone_and_Digitone_Keys_OS1.43.syx   # out/digireel-0.3.elemod
+python -m elekloader.sdk.build mods/digireel-dn1 --stock Digitone_and_Digitone_Keys_OS1.44.syx   # out/digireel-0.3-os1.44.elemod
 ```
 
 It names no firmware address, so its 1.44 port is empty. It needs fxkit and core-dn1

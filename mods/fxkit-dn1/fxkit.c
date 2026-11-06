@@ -139,11 +139,13 @@ static volatile u32 r_overload;         /* the CPU guard bypassed the active eff
 static volatile u32 r_blocks;           /* the render's blocks, 1500 a second: the pages' timers */
 
 #define QLEN 8
-struct lockev { u32 time; s16 n; u8 slot[SLOTS]; s16 val[SLOTS]; };
+struct lockev { u32 time, len; s16 n; u8 slot[SLOTS]; s16 val[SLOTS]; };
 struct lfo { u32 ph, last_ph; s32 out, rnd, fade; u8 stopped, reset; };
 static struct lockev q[QLEN];           /* the lock track's trigs queued, oldest first */
 static volatile u8 qw, qr;
-static s16 lock[SLOTS];                 /* the playing trig's locks, -1 none */
+static s16 lock[SLOTS];                 /* the playing step's locks, -1 none */
+static u32 lock_end;                    /* when they end: the step's end on the timeline */
+static u8 locked;                       /* lock[] holds some */
 static volatile s16 val[SLOTS];         /* this block's values */
 static struct lfo lfo[2];
 static u8 trig, byp_now;
@@ -155,6 +157,24 @@ const volatile int32_t *const fxt_act = &r_act;
 
 static uint8_t *lock_row(s32 step);
 static volatile u16 *step_word(s32 step);
+
+#define PAT_SETTINGS 0x160f8            /* the pattern's settings: +0x14 its length (u16), +0x19 1 per track, +0x1a its
+                                           SCALE */
+#define TRACK_SCALE  0x3c7              /* a track's SCALE, per track */
+
+/* A step of the lock track on the timeline (5,400,000 units a 16th at 1x): its SCALE, the track's per track, else
+ * the pattern's: 2x 3/2x 1x 3/4x 1/2x 1/4x 1/8x (measured on 1.43: per-track mode's flag, the two SCALEs) */
+static u32 step_len(void)
+{
+    static const u32 len[7] = { 2700000, 3600000, 5400000, 7200000, 10800000, 21600000, 43200000 };
+    uint8_t *pat = fw_pattern, *ps;
+    u32 s;
+    if (!pat)
+        return 5400000;
+    ps = pat + PAT_SETTINGS;
+    s = ps[0x19] == 1 ? FW_TRACK(pat, lock_track)[TRACK_SCALE] : ps[0x1a];
+    return len[s < 7 ? s : 2];
+}
 
 /* ev_note_queue: a trig of the lock track, at the time it plays (interrupts masked). The first step's, as PLAY
  * starts, is not this way: the event made for it then carries no locks, and a lock trig there makes none, so
@@ -171,6 +191,7 @@ void fxt_queue(void *ev, uint32_t time)
         qr++;                           /* full (stopped, say): the oldest goes; the render is masked out */
     e = &q[qw % QLEN];
     e->time = time;
+    e->len = step_len();
     if ((l = FW_EVENT_LOCKS(ev))) {
         c = FW_LOCKS_COUNT(l);
         for (i = 0; i < c && i < SLOTS; i++) {
@@ -198,6 +219,7 @@ static void first_step(u32 now)
         qr++;
     e = &q[qw % QLEN];
     e->time = now;
+    e->len = step_len();
     for (i = 1; i < SLOTS; i++) {
         s16 v = *(volatile s16 *)(row + 2 * i);
         if (v >= 0) {
@@ -339,7 +361,17 @@ static void lfo_block(struct lfo *l, const volatile s16 *v, s32 *mod, s32 *dest,
     *mod = fmul((v[7] - 0x4000) * 2, l->out);
 }
 
-/* This block's values of effect a: its own, the playing trig's locks, the LFOs on them */
+static void unlock(void)
+{
+    s32 k;
+    for (k = 0; k < SLOTS; k++)
+        lock[k] = -1;
+    locked = 0;
+}
+
+/* This block's values of effect a: its own, the playing step's locks, the LFOs on them. A step's locks last that
+ * step (its length at its SCALE), not until the lock track's next trig: the lock track has trigs only where there
+ * are locks, so a lock held to the next one would keep its knob for the rest of the loop. */
 static void values_block(s32 a, s32 now, int playing, s32 tempo)
 {
     const s16 *base = fx[a].base;
@@ -347,21 +379,23 @@ static void values_block(s32 a, s32 now, int playing, s32 tempo)
     trig = 0;
     if (!playing) {                     /* stopped: the effect's own values; what was queued before the stop goes,
                                          * the first step's (PLAY queues it as it starts) stays */
-        for (k = 0; k < SLOTS; k++)
-            lock[k] = -1;
+        if (locked)
+            unlock();
         while (qr != qw && (s32)(now - (s32)q[qr % QLEN].time) >= 0)
             qr++;
     }
     while (playing && qr != qw && (s32)(now - (s32)q[qr % QLEN].time) >= 0) {
         const struct lockev *e = &q[qr % QLEN];
-        for (k = 0; k < SLOTS; k++)
-            lock[k] = -1;
+        unlock();
         for (i = 0; i < e->n; i++)
             if (base[e->slot[i]] != -1)     /* the effect's slots only */
-                lock[e->slot[i]] = e->val[i];
+                lock[e->slot[i]] = e->val[i], locked = 1;
+        lock_end = e->time + e->len;
         trig = 1;
         qr++;
     }
+    if (locked && (s32)(now - (s32)lock_end) >= 0)
+        unlock();
     for (k = 0; k < SLOTS; k++)
         val[k] = lock[k] != -1 ? lock[k] : base[k];
     for (i = 0; i < 2; i++) {
@@ -517,6 +551,7 @@ void fx_activate(const struct fx_effect *e)
     r_act = -1;                         /* the render leaves it be meanwhile */
     for (k = 0; k < SLOTS; k++)
         lock[k] = -1;
+    locked = 0;
     qr = qw;
     lfo[0].ph = lfo[1].ph = 0;
     lfo[0].fade = lfo[1].fade = 0x3fffffff;
@@ -591,7 +626,6 @@ int32_t fx_overload(void)
 #define STEP_LOCKS   160
 #define LOCK_COUNT   0x9e               /* a row's count of locks, a u16 */
 #define LOCK_USED    0x2800             /* a byte a slot: the track has locks of it */
-#define PAT_SETTINGS 0x160f8            /* the pattern's settings: +0x14 its length (u16), +0x19 1 per track */
 #define KEY_YES      13
 #define KEY_NO       14
 #define KEY_UP       15
@@ -921,11 +955,31 @@ static s32 dest_step(s32 a, s32 cur, s32 d)
     return l[i < 0 ? 0 : i >= n ? n - 1 : i];
 }
 
-static s32 fine_step(s32 d)             /* SPD's and DEP's turn of d detents, as the stock's (measured): 6/256 a
-                                         * detent turned slowly, 3 d^2 / 256 when fast */
+/* The LFO pages' turns, as the stock LFO page's feel (measured on 1.43 with the panel's counts one a message, four
+ * a detent): SPD and DEP gather speed with the knob, 0.11 a detent 150 ms apart, 0.25 at 75 ms, 0.46 at 30 ms,
+ * 0.68 at 15 ms; a list (MULT, WAVE, MODE, DEST's) steps every second detent, its half step dropped after a pause
+ * (a knob let go must not step it). Timed in the render's blocks, 1500 a second. */
+static u32 turned_at[SLOTS];
+static int8_t list_acc[SLOTS];
+
+static s32 fine_step(s32 k, s32 d)      /* SPD's and DEP's turn of d detents: about 4400/ms 256ths a detent */
 {
-    s32 a = d < 0 ? -d : d;
-    return 3 * d * (a < 2 ? 2 : a);
+    s32 a = d < 0 ? -d : d, dt = (s32)(r_blocks - turned_at[k]), s;
+    turned_at[k] = r_blocks;
+    s = dt <= 0 ? 180 : 6600 * a / dt;
+    s = s < 6 ? 6 : s > 180 ? 180 : s;
+    return d * s;
+}
+
+static s32 list_steps(s32 k, s32 d)     /* a list's turn of d detents -> its steps */
+{
+    s32 s;
+    if ((s32)(r_blocks - turned_at[k]) > 450)
+        list_acc[k] = 0;
+    turned_at[k] = r_blocks;
+    s = list_acc[k] + d;
+    list_acc[k] = (int8_t)(s % 2);
+    return s / 2;
 }
 
 void fx_knob_turn(const struct fx_effect *e, int32_t k, int32_t detents)
@@ -937,7 +991,7 @@ void fx_knob_turn(const struct fx_effect *e, int32_t k, int32_t detents)
         return;
     v = fx_view(k, fx_get(e, k));
     if (p->kind == FX_FINE) {
-        fx_turned(e, k, v + fine_step(detents));
+        fx_turned(e, k, v + fine_step(k, detents));
         return;
     }
     v >>= 8;
@@ -976,6 +1030,8 @@ static void list_move(s32 d)
 
 void fx_page_turn(const struct fx_effect *e, int32_t page, int32_t knob, int32_t detents)
 {
+    struct fx_param t;
+    const struct fx_param *p;
     s32 k = fx_page_slot(page, knob);
     if (page && knob == 3 && !(lock_on && held >= 0)) {     /* DEST: its list, as the stock's (a held step's
                                                                lock steps it at once) */
@@ -986,13 +1042,18 @@ void fx_page_turn(const struct fx_effect *e, int32_t page, int32_t knob, int32_t
             if (list_top + 7 > list_n)
                 list_top = list_n > 7 ? (u8)(list_n - 7) : 0;
             list_pg = (u8)page;
+            list_acc[k] = 0;
+            turned_at[k] = r_blocks;
         } else {
-            list_move(detents);
+            list_move(list_steps(k, detents));
         }
         shown_end = r_blocks;
         return;
     }
     list_pg = 0;
+    p = page ? param_of(e, k, &t) : 0;
+    if (p && (p->kind == FX_OPT || p->kind == FX_DEST) && !(detents = list_steps(k, detents)))
+        return;
     fx_knob_turn(e, k, detents);
     shown_k = (u8)k;
     shown_end = r_blocks + SHOW_BLOCKS;
@@ -1407,12 +1468,28 @@ uint32_t fx_serial(const struct fx_effect *e)
     return a < 0 ? 0 : fx[a].serial;
 }
 
-/* fxkit's own: the lock track */
-static struct { u8 ver, track, pad[2]; } save;
+/* The inputs, STEREO or MONO (input L on both sides): one setting for every effect, the project's. A project
+ * without it (new, or saved before it) keeps what is set, so MONO is set once. */
+static volatile u8 in_mono;
+
+int32_t fx_input_mono(void)
+{
+    return in_mono;
+}
+
+void fx_input_mono_set(int32_t on)
+{
+    in_mono = (u8)(on != 0);
+}
+
+/* fxkit's own: the lock track, the inputs (version 2) */
+static struct { u8 ver, track, mono, pad; } save;
 
 static void fxt_loaded(int32_t found)
 {
-    fx_lock_track_set(found && save.ver == 1 && save.track < 4 ? save.track : 3);
+    fx_lock_track_set(found && (save.ver == 1 || save.ver == 2) && save.track < 4 ? save.track : 3);
+    if (found && save.ver == 2)
+        in_mono = save.mono & 1;
     lock_pg = 0;
 }
 
@@ -1435,8 +1512,9 @@ void fxt_tick(void *ctrl)
             fx_set(fx[setq[r % SETQ].fx].e, setq[r % SETQ].slot, setq[r % SETQ].val);
         sq_r = (u8)(r + 1);
     }
-    save.ver = 1;
+    save.ver = 2;
     save.track = lock_track;
+    save.mono = in_mono;
     if (lock_pg >= fx_lock_pages())
         lock_pg = 0;
 }

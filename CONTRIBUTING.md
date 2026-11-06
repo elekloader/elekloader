@@ -23,6 +23,11 @@ Good things to send:
 - **Fixes and docs**: a refusal message that misled you, a step that did
   not work, a page that was unclear.
 
+Modwerk's own bases for the Octatrack, the Analog Rytm MKII and the
+Digitakt II are separate from elekloader's cores: a change to one of them
+goes to [Modwerk](https://github.com/repeat98/modwerk), and a change to a
+core here comes here ([docs/CORE-CONTRIBUTING.md](docs/CORE-CONTRIBUTING.md)).
+
 Using a coding agent? Point it at [AGENTS.md](AGENTS.md). It has the
 rules, the commands and what "done" means, and it tells the agent that a
 pull request here is welcome.

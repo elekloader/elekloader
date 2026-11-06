@@ -3,6 +3,7 @@
  * own item, so the list draws, moves and frees it; the stock view knows nothing of the tab. The view's
  * addresses are the same on OS 1.53 and 1.54; what it calls is in mod.json's defsym. */
 #include <stdint.h>
+#include "digitakt-mk1/core3.h"
 
 #define KEY_YES   12
 #define KEY_NO    13
@@ -26,7 +27,10 @@
 struct fn { void *data, *pad, *manager, *invoker; };     /* the firmware's std::function */
 struct vec { int32_t *begin, *end, *cap; };
 
-extern void *MENU_NEW(uint32_t);
+/* The firmware returns in d0, pointers too: declared as pointers, the Linux toolchain (m68k-linux-gnu-gcc) would
+ * read them from a0, as its ABI returns them (where operator new leaves the heap's own address), so the routines
+ * that return a pointer are declared as returning uint32_t. */
+extern uint32_t MENU_NEW(uint32_t);
 extern void MENU_ITEM(void *, struct fn *, struct fn *, struct fn *, struct fn *, int32_t, int32_t);
 extern void MENU_FN_FREE(struct fn *);
 extern void MENU_ADD(void *, void *);
@@ -38,14 +42,13 @@ extern void MENU_CLOSE(void *, int32_t);
 extern void MENU_PAGE_STEP(void *, int32_t, int32_t);
 extern void MENU_SHOW(void *);
 extern int32_t MENU_PAGE_FN(void *, int32_t);
-extern const char *MENU_NAME_FN(int32_t);
+extern uint32_t MENU_NAME_FN(int32_t);
 extern void MENU_HLINE(void *, int32_t, int32_t, int32_t, int32_t);
-extern void MENU_BLIT(void *, void *, int32_t, int32_t, int32_t);
 extern void MENU_TEXT(void *, void *, int32_t, int32_t, int32_t, const char *);
 extern char MENU_WAVE[], MENU_FONT[];
 extern char MENU_NAME_MGR[], MENU_NAME_CALL[], MENU_ICON_MGR[], MENU_ICON_CALL[];
-extern void *APP_FN(void);
-extern void *APP_TRACKS(void *);
+extern uint32_t APP_FN(void);
+extern uint32_t APP_TRACKS(void *);
 extern int32_t SRC_TRACK_FN(void *);
 extern void SRC_DIRTY_FN(void *);
 extern void mp_menu_list(struct vec *, int32_t);         /* menu.s: the machines a track offers */
@@ -59,7 +62,7 @@ void *mp_menu_back;                                      /* the page views' owne
 
 static struct fn view_fn(void *view, char *manager, char *invoker)
 {
-    void **closure = MENU_NEW(4);
+    void **closure = (void **)MENU_NEW(4);
     *closure = view;
     return (struct fn){closure, 0, manager, invoker};
 }
@@ -69,7 +72,7 @@ static void add_row(void *view, int32_t id)
     struct fn name = view_fn(view, MENU_NAME_MGR, MENU_NAME_CALL);
     struct fn icon = view_fn(view, MENU_ICON_MGR, MENU_ICON_CALL);
     struct fn none1 = {0, 0, 0, 0}, none2 = {0, 0, 0, 0};
-    void *item = MENU_NEW(0x54);
+    void *item = (void *)MENU_NEW(0x54);
     MENU_ITEM(item, &name, &none1, &icon, &none2, id, 8);
     MENU_ADD((char *)view + V_LIST, item);
     MENU_FN_FREE(&none2);
@@ -95,7 +98,7 @@ static void show_machines(void *view)
     void *list = (char *)view + V_LIST;
     struct vec machines;
     MENU_CLEAR(list);
-    mp_menu_list(&machines, SRC_TRACK_FN(APP_TRACKS(APP_FN())));
+    mp_menu_list(&machines, SRC_TRACK_FN((void *)APP_TRACKS((void *)APP_FN())));
     for (int32_t *m = machines.begin; m != machines.end; ++m) {
         if (*m == -1)                                    /* as the view's constructor does */
             continue;
@@ -180,7 +183,7 @@ void mp_menu_panel(void *screen)
             rect(screen, 24 + c, 31 + (next < curve[c] ? next : curve[c]), 1, gap + 3);
         }
     } else {
-        MENU_BLIT(screen, MENU_WAVE, 24, 29, 0);
+        fw_blit(screen, MENU_WAVE, 24, 29, 0);
     }
     MENU_TEXT(screen, MENU_FONT, 37, 11, 2, mp_menu_filter ? "< FLTR >" : "< SRC >");
     /* The page dots: the one shown is the larger. */
@@ -191,5 +194,5 @@ void mp_menu_panel(void *screen)
 /* A row's name: the item's callback asks for the machine's. */
 const char *mp_menu_name(int32_t id)
 {
-    return id == FILTER_STOCK ? "MULTI-MODE" : MENU_NAME_FN(id);
+    return id == FILTER_STOCK ? "MULTI-MODE" : (const char *)MENU_NAME_FN(id);
 }

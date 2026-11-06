@@ -1,5 +1,5 @@
 {
- "id": "digiprism", "version": "0.2",
+ "id": "digiprism", "version": "0.3",
  "license": "GPL-2.0-or-later",
  "title": "DigiPrism", "category": "Effect", "author": "irpina",
  "description": "An effects pedal for the Digitone mk1's audio inputs: four modules, Color (DRIVE, WARMTH, FUZZ, WAIL, SWELL), Motion (DOUBLER, VIBRATO, PHASER, TREMOLO, PITCH), Ambience (ECHOES, TAPE, SPACE, SCATTER, REVERSE) and Grit (FILTER, COMP, LO-FI, GLITCH, STATIC), in any order, with TILT, RATE, TIME, MIX and four AMOUNTs on the encoders, their secondary controls, GESTURE (knob recordings), CAPTURE (a 30-second looper and sustainer) and MIDI CCs. DIGIPRISM in core-dn1's Mod Menu (hold a track key) makes it the active effect and opens its page; while it is active it owns the audio engine (the synths are muted) and processes the inputs, through fxkit's MIXER (AMP), with two LFOs aimed at its controls (LFO) and p-locks on the pattern's steps (RECORD: hold a trig, turn a control; the modules' effects and order lock too). With SETUP's SOURCE on DIGITONE it processes everything the Digitone plays instead, with the same LFOs and p-locks. MIDI leaves the page to edit the MIDI tracks while it plays; NO turns it off. Needs fxkit (core-dn1 4.1).",

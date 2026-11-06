@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
-/* core-dn1 4.2: a page key's list of pages, replaced for a while (docs/ADAPTING.md, "Mod pages").
+/* core-dn1 5.2: a page key's list of pages, replaced for a while (docs/ADAPTING.md, "Mod pages").
  *
  * VIEW_INIT copies each page key's list into its view's own std::vector (+124 its first index, +128 its
  * end, +132 its capacity); the view shows the entry at +144, steps through the list when its key is pressed

@@ -1,5 +1,5 @@
 {
- "id": "digihoard", "version": "0.2",
+ "id": "digihoard", "version": "0.3",
  "license": "GPL-2.0-or-later",
  "title": "DigiHoard", "category": "Effect", "author": "irpina",
  "description": "An echo collector for the Digitone mk1's audio inputs: a 3-minute memory that always records what you play (COLLECT overdubs it, ALWAYS keeps it recording while bypassed), an echo with REPEATS and SIZE (in time with the Digitone's tempo), SCAN (auto: it wanders off into the past and plays old fragments into the echoes; manual: you pick the moment), SPREAD (a second echo further back, placed apart in stereo), six modifiers (stepped and smooth speed, stability, trimmer, filter, dropper) after the echo, in its feedback or round the memory (IN, OUT, FEED), LOOP, CLEAR, RAMP and bounce, and MIDI CCs. DIGIHOARD in core-dn1's Mod Menu (hold a track key) makes it the active effect and opens its page; while it is active it owns the audio engine (the synths are muted) and processes the inputs, through fxkit's MIXER (AMP), with two LFOs aimed at its controls (LFO) and p-locks on the pattern's steps (RECORD: hold a trig, turn a control). MIDI leaves the page to edit the MIDI tracks while it plays; NO turns it off. Needs fxkit (core-dn1 4.1).",
