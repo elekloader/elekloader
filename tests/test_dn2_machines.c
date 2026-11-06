@@ -19,17 +19,22 @@ static const struct mk2_synth bad_id = {32, "BAD", "BAD"}, unlabelled = {6, "BAD
 static const struct mk2_synth duplicate = {5, "DUPLICATE", "DUP"};
 static const struct mk2_synth sine = {7, "SINE", "SINE"}, plain = {8, "PLAIN", "PLAIN"};
 static const struct mk2_synth roomy = {9, "ROOMY", "ROOMY"};
-/* sdk_alpha.c's side: one SDK machine, 100, which FM TONE plays (UI only). */
-static const struct mk2_synth sdk = {100, "SDK", "SDK"};
+/* sdk_alpha.c's side: two SDK machines, 100, which FM TONE plays (UI only), and 101, with a render. */
+static const struct mk2_synth sdk = {100, "SDK", "SDK"}, sounding = {101, "SOUND", "SND"};
 const struct mk2_synth *dn2_sdk_synth(unsigned i)
 {
 #ifndef EMPTY
-    return i ? 0 : &sdk;
+    return i == 0 ? &sdk : i == 1 ? &sounding : 0;
 #else
-    (void)i; (void)sdk;
+    (void)i; (void)sdk; (void)sounding;
     return 0;
 #endif
 }
+static uint32_t active[2];          /* the active track's synth and filter types */
+uint32_t dn2_active_type(uint32_t filter) { return active[filter]; }
+uint32_t dn2_sdk_renders(uint32_t type) { return type == 101; }
+/* The SDK machine 100's knob 1 starts at raw 0x1234. */
+int32_t dn2_sdk_default(uint32_t knob) { return active[0] == 100 && knob == 1 ? 0x1234 : -1; }
 void dn2_sdk_build(void) {}
 uint32_t dn2_sdk_page_count(uint32_t type) { return type == 100; }
 static const struct descriptor sdk_page;
@@ -45,9 +50,13 @@ const struct mk2_synth *const mk2_voice_synths[] = {
 
 static const struct mk2_param level = {"lev", 100}, detune = {"DET", 64}, last = {"X", 0};
 static const struct mk2_param loud = {"LOUD", 128}, wide = {"TOOWIDE", 1}, blank = {"", 1};
+static const struct mk2_param other = {"OTHER", 7}, far = {"FAR", 9};
 static const struct mk2_page sine_pages[2] = {{{&level, 0, &detune}}, {{0, 0, 0, 0, 0, 0, 0, &last}}};
 static const struct mk2_page bad_default[1] = {{{&loud}}}, bad_label[1] = {{{&wide}}};
-static const struct mk2_page empty_label[1] = {{{&blank}}}, roomy_pages[6] = {{{0}}};
+/* A second voice with pages: slot 25 too (SINE's LEV), and slot 64, past five of SINE's pages. */
+static const struct mk2_page empty_label[1] = {{{&blank}}},
+    roomy_pages[6] = {{{&other}}, {{0}}, {{0}}, {{0}}, {{0}}, {{0}}};
+static const struct mk2_page roomy_five[5] = {{{&other}}, {{0}}, {{0}}, {{0}}, {{[7] = &far}}};
 static const struct mk2_voice_pages pages_sine = {7, 2, sine_pages};
 static const struct mk2_voice_pages pages_again = {7, 1, sine_pages};
 static const struct mk2_voice_pages pages_missing = {10, 1, sine_pages};
@@ -56,7 +65,7 @@ static const struct mk2_voice_pages pages_default = {8, 1, bad_default};
 static const struct mk2_voice_pages pages_label = {8, 1, bad_label};
 static const struct mk2_voice_pages pages_blank = {8, 1, empty_label};
 static const struct mk2_voice_pages pages_six = {9, 6, roomy_pages};      /* over the ceiling */
-static const struct mk2_voice_pages pages_full = {9, 4, roomy_pages};     /* 2 + 4 > 5 pages */
+static const struct mk2_voice_pages pages_full = {9, 5, roomy_five};      /* 2 + 5 pages: shared rows */
 const struct mk2_voice_pages *const mk2_voice_pages[] = {
 #ifndef EMPTY
     &pages_missing, &pages_none, &pages_default, &pages_label, &pages_blank,
@@ -95,7 +104,8 @@ void dn2_pixel(void *canvas, int32_t x, int32_t y, int32_t on)
 }
 static const struct mk2_param mode = {"mode", 5}, loud_g = {"LOUD", 128}, wide_g = {"TOOWIDE", 1};
 static const struct mk2_filter filter_low = {6, "LOW FILTER", "LOWF", 0, &loud_g};
-static const struct mk2_filter filter_high = {31, "comb high", "comb", test_curve, &mode};   /* a second G */
+static const struct mk2_param space = {"space", 9};
+static const struct mk2_filter filter_high = {31, "comb high", "comb", test_curve, &space};  /* a second G */
 static const struct mk2_filter filter_unity = {7, "UNITY", "UNITY", test_curve, &mode};
 static const struct mk2_filter filter_wide = {9, "WIDE", "WIDE", 0, &wide_g};
 static const struct mk2_filter filter_duplicate = {6, "DUPLICATE", "DUP", test_curve};
@@ -150,6 +160,7 @@ static void check_midi(void)
     assert(dn2_cc_code(0, 0, 8, 18) == 0 && dn2_cc_code(0, 0, 0xffffffff, 18) == 0);
 #ifndef EMPTY
     assert(dn2_cc_code(0, 0, 7, 18) == G_CODE && dn2_nrpn_code(0, 0, 7, 178) == G_CODE);
+    assert(dn2_cc_code(0, 0, 31, 18) == G_CODE);
     assert(dn2_cc_code(0, 0, 6, 18) == 0 && dn2_cc_code(0, 0, 7, 23) == 0);   /* no G; host's map */
     assert(dn2_cc_code(0, 7, 7, 40) == ROWS && dn2_cc_code(0, 7, 7, 18) == G_CODE);
 #else
@@ -174,13 +185,15 @@ static void check_pages(void)
     const struct descriptor *two = (const struct descriptor *)dn2_voice_page(7, 1);
     assert(!strcmp(one->name, "SYN1") && !strcmp(two->name, "SYN2") && tabs[0].references == -1);
     assert(!strcmp(one->label, "SINE") && !strcmp(two->label, "SINE"));
+    active[0] = 7;                                          /* the rows follow the active track's voice */
+    dn2_rows_follow();
     const uint32_t first[9] = {ROWS, 0, ROWS + 2, 0, 0, 0, 0, 0, PAGE_END};
     const uint32_t second[9] = {0, 0, 0, 0, 0, 0, 0, ROWS + 15, PAGE_END};
     assert(!memcmp(one->params, first, sizeof(first)) && !memcmp(two->params, second, sizeof(second)));
     assert(dn2_voice_page(7, 2) == (uintptr_t)&dn2_stock_descriptors[4]);
     const struct row *r = &dn2_t1[ROWS], *t = &dn2_t1[TEMPLATE];
     assert(r->owner == 0 && r->slot == SLOT && r->min == 0 && r->max == 127 << 8);
-    assert(r->def == 100 << 8 && r->cc == 40 && !strcmp(r->label, "LEV") && r->name == r->label);
+    assert(r->cc == 40 && !strcmp(r->label, "LEV") && r->name == r->label);
     assert(!strcmp(r->owner_name, "SINE"));
     assert(r->flag == t->flag && r->cc_low == t->cc_low && r->kind == t->kind && r->mask == t->mask
            && r->format == t->format && r->end == t->end && r->unknown == t->unknown);
@@ -193,7 +206,38 @@ static void check_pages(void)
     /* Invalid entries leave their synth with one empty page. */
     assert(dn2_voice_page_count(8) == 1 && dn2_voice_code(8, SLOT) == 0);
     assert(dn2_voice_page(8, 0) == dn2_descriptor(8));
-    assert(dn2_voice_page_count(9) == 1 && used_pages == 2);
+    /* ROOMY (9) has five pages besides SINE's two: a slot is one row for every voice, labelled for the
+     * active track's and taking its default. Six pages are refused. */
+    assert(dn2_voice_page_count(9) == 5 && dn2_voice_code(9, SLOT) == ROWS);
+    assert(dn2_voice_code(9, SLOT + 39) == ROWS + 39 && dn2_voice_code(7, SLOT + 39) == 0);
+    const struct descriptor *five = (const struct descriptor *)dn2_voice_page(9, 4);
+    assert(!strcmp(five->name, "SYN5") && !strcmp(five->label, "ROOMY") && five->params[7] == ROWS + 39);
+    assert(dn2_t1[ROWS + 39].slot == SLOT + 39);
+    int32_t range[3];
+    dn2_range(range, ROWS);
+    assert(range[0] == 0 && range[1] == 127 << 8 && range[2] == 100 << 8);
+    active[0] = 9;
+    dn2_rows_follow();
+    assert(!strcmp(r->label, "OTHER") && !strcmp(r->owner_name, "ROOMY") && r->name == r->label);
+    dn2_range(range, ROWS);
+    assert(range[2] == 7 << 8);
+    dn2_range(range, ROWS + 39);
+    assert(range[2] == 9 << 8);
+    active[0] = 7;
+    dn2_rows_follow();
+    assert(!strcmp(r->label, "LEV") && !strcmp(r->owner_name, "SINE"));
+    dn2_range(range, ROWS + 39);                            /* SINE has no knob there: the row's */
+    assert(range[2] == dn2_t1[ROWS + 39].def);
+    active[0] = 100;                                        /* an SDK machine's rows: sdk_alpha.c's default */
+    dn2_range(range, ROWS + SDK_ROW + 1);
+    assert(range[2] == 0x1234);
+    dn2_range(range, ROWS + SDK_ROW + 2);
+    assert(range[2] == dn2_t1[ROWS + SDK_ROW + 2].def);
+    dn2_range(range, TEMPLATE);
+    assert(range[0] == 0 && range[1] == 32512 && range[2] == 8192);
+    dn2_range(range, T1_END);                               /* the stock clamp to row 0 */
+    assert(range[2] == dn2_t1[0].def);
+    active[0] = 0;
 #endif
 }
 
@@ -223,21 +267,36 @@ static void check_filters(void)
     assert(dn2_filter_list_bytes == 40);
     assert(dn2_filter_list[6] == 6 && dn2_filter_list[7] == 7 && dn2_filter_list[8] == 9
            && dn2_filter_list[9] == 31);
-    /* G: UNITY (7) has the row, a copy of MULTI-MODE's slot-66 row owned by LOWPASS 4 (6), in
-     * its page's G cell. LOW's default and WIDE's label are invalid; COMB's is a second G. */
+    /* G: UNITY (7) and COMB (31) share the row, a copy of MULTI-MODE's slot-66 row owned by LOWPASS 4
+     * (6), in their pages' G cell, labelled for the active track's filter and taking its default.
+     * LOW's default and WIDE's label are invalid. */
     const struct row *g = &dn2_t1[G_CODE], *gt = &dn2_t1[G_TEMPLATE];
-    assert(g->owner == 6 && g->slot == G_SLOT && g->def == 5 << 8 && g->min == 0 && g->max == 127 << 8);
+    int32_t range[3];
+    active[1] = 7;
+    dn2_rows_follow();
+    dn2_range(range, G_CODE);
+    assert(g->owner == 6 && g->slot == G_SLOT && range[2] == 5 << 8 && g->min == 0 && g->max == 127 << 8);
     assert(!strcmp(g->label, "MODE") && g->name == g->label && g->owner_name == gt->owner_name);
+    active[1] = 31;
+    dn2_rows_follow();
+    dn2_range(range, G_CODE);
+    assert(!strcmp(g->label, "SPACE") && range[2] == 9 << 8);
+    active[1] = 6;                                          /* LOW's G is invalid: the last one's stays */
+    dn2_rows_follow();
+    assert(!strcmp(g->label, "SPACE"));
+    active[1] = 0;
     assert(g->cc == 18 && g->kind == gt->kind && g->mask == gt->mask && g->format == gt->format);
     assert(dn2_value_code(G_CODE) == G_TEMPLATE && dn2_value_code(G_CODE - 1) == TEMPLATE);
     assert(((const struct descriptor *)dn2_filter_descriptor(7))->params[G_CELL] == G_CODE);
     for (uint32_t id = 6; id < 32; ++id)
-        if (id != 7) {
+        if (id != 7 && id != 31) {
             assert(!dn2_filter_code(G_SLOT, id));
             if (filters[id])
                 assert(((const struct descriptor *)dn2_filter_descriptor(id))->params[G_CELL] == 0);
         }
     assert(dn2_filter_code(G_SLOT, 7) == G_CODE && !dn2_filter_code(67, 7) && !dn2_filter_code(G_SLOT, 1));
+    assert(dn2_filter_code(G_SLOT, 31) == G_CODE
+           && ((const struct descriptor *)dn2_filter_descriptor(31))->params[G_CELL] == G_CODE);
     /* Every custom filter reads as LOWPASS 4 (1) and keeps its ID for the DSP. */
     assert(dn2_filter_host_type(6) == 1 && dn2_filter_host_type(7) == 1 && dn2_filter_host_type(31) == 1);
     assert(dn2_filter_dsp_type(6) == 6 && dn2_filter_dsp_type(7) == 7
@@ -270,7 +329,7 @@ static void check_filters(void)
     assert(dot_count == 0);
 #ifndef EMPTY
     dn2_filter_draw_curve(31, (void *)0x1234, 0x4000, 0x2180, (void *)0x5678);
-    assert(curve_args[0] == 0x4000 && curve_args[1] == 0x2180 && curve_args[2] == 0);  /* no G: 0 */
+    assert(curve_args[0] == 0x4000 && curve_args[1] == 0x2180 && curve_args[2] == 0x7f00);  /* its G */
     dot_count = 0;
     dn2_filter_draw_curve(7, (void *)0x1234, 0x4000, 0x2180, (void *)0x5678);
     assert(curve_args[0] == 0x4000 && curve_args[1] == 0x2180 && curve_args[2] == 0x7f00);  /* G's shown word */
@@ -309,9 +368,11 @@ int main(void)
     (void)sine; (void)plain; (void)roomy;
     assert(!dn2_is_voice(5) && dn2_dsp_type(5) == 4);
 #else
-    assert(n == 11 && dn2_list[4] == 5 && dn2_list[5] == 7 && dn2_list[8] == 31 && dn2_list[9] == 100);
-    /* An SDK machine: FM TONE plays it, and its pages and knobs are sdk_alpha.c's. */
+    assert(n == 12 && dn2_list[4] == 5 && dn2_list[5] == 7 && dn2_list[8] == 31 && dn2_list[9] == 100);
+    /* An SDK machine: FM TONE plays it, and its pages and knobs are sdk_alpha.c's. With a render, its
+     * kernel does: the DSP gets its own type. */
     assert(dn2_is_voice(100) && dn2_dsp_type(100) == 0 && dn2_host_type(100) == 0);
+    assert(dn2_list[10] == 101 && dn2_dsp_type(101) == 101 && dn2_host_type(101) == 0);
     assert(dn2_voice_page_count(100) == 1 && dn2_voice_page(100, 0) == (uintptr_t)&sdk_page);
     assert(dn2_voice_code(100, SLOT) == 999 && dn2_voice_code(100, SLOT + 1) == 0);
     assert(dn2_permit(100, 0) == dn2_permit(0, 0) && !strcmp((const char *)dn2_name(100), "SDK"));

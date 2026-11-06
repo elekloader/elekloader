@@ -50,10 +50,10 @@ cell unless the descriptor's optional `g` declares it (below). The
 response graph stays empty unless the descriptor's optional `curve` draws
 it. The kernel receives the resulting cutoff and resonance, and G; it
 does not implement pre-delay, the envelope or ENV itself. The same mod
-must carry a
-`dn2-filter-mono32-l2-v1` artifact with the matching `machine_id` and
-`entries: {"render_offset_bytes": ...}`. The linker refuses a missing or
-mismatched payload and conflicting filter IDs.
+must carry a `dn2-kernel-v1` artifact whose kernel has the filter's ID
+(below). The linker refuses a registration without its kernel, a kernel
+without a registration with its ID in the same mod, and conflicting filter
+IDs.
 
 ```c
 #include "digitone-mk2/filter.h"
@@ -87,9 +87,10 @@ const struct mk2_filter my_filter = {8, "LOWPASS", "LOWPASS", curve, &mode};
 
 The linker refuses an invalid G. The companion adds one parameter row for
 it, after the synths' 40: a copy of MULTI-MODE's slot-66 row owned by
-LOWPASS 4, which the stock filters never show. A build has one custom
-filter, so one row serves it. The cell shows its label and value; the
-picture above it stays empty.
+LOWPASS 4, which the stock filters never show. Every filter with a G shares
+that row, labelled for the active track's filter and starting at its
+default. The cell shows its label and value; the picture above it stays
+empty.
 
 The 28-byte input contains `float *samples`, `uint32_t slot`,
 `uint32_t flags`, `float cutoff`, `float resonance`, `float g` and
@@ -101,8 +102,8 @@ and on a new trigger edge. Clear that slot's history before processing
 the block when this flag is set. Keep history between ordinary callbacks.
 `DN2_FILTER_STATE(type)` gives each slot its own zeroed `type` at
 `in->state`, as `DN2_VOICE_STATE` does for a
-[synth](MACHINES-DN2-VOICE.md); the adapter never clears it, so clear it
-on RESET.
+[synth](MACHINES-DN2-VOICE.md), zeroed when the slot's machine changes;
+clear it on RESET.
 
 `cutoff` and `resonance` are the stock values for this slot in this
 block, once per 32 samples and not smoothed; smoothing belongs to the
@@ -111,61 +112,46 @@ kernel. `cutoff` is normalized: FREQ/128, plus the stock filter envelope
 tracking, clamped to 0..1.
 `resonance` is RESO/128 (0..0.992). `g` is G/127 (0..1) when the filter
 declares G; otherwise ignore it. The callback receives no pitch.
-One custom synth and one custom filter can coexist; a master-output mod
-cannot be combined with either.
+Any number of custom synths and filters can coexist; a master-output mod
+cannot be combined with them.
 
-The adapter uses the register preservation and C context described for
-the [synth adapter](MACHINES-DN2-VOICE.md#context-and-memory), and also
-preserves LCNTR around the callback. The filter callback has its own 4 KiB
-stack in L1, `0x2df000..0x2e0000` (loader `0x282df000`), set up and guarded
-as the synth's, and may declare at most **2,048 stack bytes**, plus its
-adapter's eight-byte call frame; interrupts use the rest. An overrun mutes
-the filter: its slots get silence. Preserve the other registers and hardware stacks; return I6/I7
-unchanged. These limits do not measure actual stack use or prove an audio
+The dispatcher calls a filter with the register preservation and C context
+described for [synths](MACHINES-DN2-VOICE.md#context-and-memory). Every
+filter's kernel runs on the filters' 4 KiB stack in L1, `0x2df000..0x2e0000`
+(loader `0x282df000`), set up and guarded as the synths', which it shares
+with the dispatcher's eight-byte call frame and with interrupts. An overrun
+mutes only that filter: its slots get silence. Preserve the other registers
+and hardware stacks; return I6/I7 unchanged. These limits do not measure actual stack use or prove an audio
 deadline.
 
 ## Memory and dispatch
 
-The filter owns the 64 KiB of L2 after the synth's:
-
-| Part | Loader byte range | Size |
-|---|---|---|
-| Pinned adapter, including guard | `0x200a0000..0x200a0800` | 2 KiB |
-| Author code, including 64-byte guard | `0x200a0800..0x200a8000` | 30 KiB |
-| Author data | `0x200a8000..0x200afc00` | 31 KiB |
-| Zeroed adapter state | `0x200afc00..0x200b0000` | 1 KiB |
-
-Ranges exclude their end. A mod builds a filter as it builds a
-[synth](MACHINES-DN2-VOICE.md#context-and-memory): link with
-`machine_linker_script('filter')` (entry `sharc_filter_render`) and pass the
-executable to `machine_from_executable('filter', executable, machine_id)`, or call
-`filter_artifact` with `machine_layout('filter')`'s bounds. Compilation belongs
-to the mod. Keep writes in the author
-data area and supplied sample buffer.
+Filters share the machine pool with the synths. A mod builds a filter as
+it builds a [synth](MACHINES-DN2-VOICE.md#context-and-memory): entry
+`sharc_filter_render`, packaged by `machine_artifact('filter', objects,
+machine_id)`. Compilation belongs to the mod. Keep writes in the kernel's
+own data and state and the supplied sample buffer.
 
 The controls come from the stock filter preparation, which runs for every
 voice before the render loop and leaves the final cutoff in F8. The
 linker points entry 0 of its setup table (`0x8052dba4`, internal type 0,
-which only custom filters use) at the adapter's capture entry instead of
+which only custom filters use) at the dispatcher's capture entry instead of
 PC16 `0x1c927e`. That entry keeps F8, the resonance word and slot 66's
 word, two words below it, for the voice (R3, the same slot the render hook
-sees) in three 16-entry arrays at `0x200afd40`, `0x200afd80` and
-`0x200afdc0`, preserves ASTATX, and continues at
+sees) in three 16-entry arrays in the dispatcher's data, preserves ASTATX,
+and continues at
 `0x1c927e`. It makes no identity check; the render gate below is the only
 one.
 
-The linker binds the render PC and ID at `0x200afe00`. Its hook replaces
-the six-byte table-pointer load at `0x28392b0e` and continues at PC16
-`0x1c958a` after restoring that load. A matching raw filter ID dispatches
-the callback when the stock internal filter type has settled to zero.
+The dispatcher's filter hook replaces the six-byte table-pointer load at
+`0x28392b0e` and continues at PC16 `0x1c958a` after restoring that load. A
+raw filter ID with a kernel in the dispatcher's table calls that kernel
+when the stock internal filter type has settled to zero.
 The first block after selection may still use the previous stock filter.
 Other IDs follow the stock path.
 
-`mods/machines-dn2/filter-bridge.s` produces 1,884 code bytes, padded to
-2 KiB, SHA-256
-`10576ba32964c88b620a72c73cd46aadb8bb66095eef98cfce29280f648b42c4`.
-The [adapter rebuild instructions](MACHINES-DN2-VOICE.md#context-and-memory)
-cover both machine adapters. Native sites are declared in
+The [dispatcher's rebuild instructions](MACHINES-DN2-VOICE.md#context-and-memory)
+cover filters too. Native sites are declared in
 `mods/machines-dn2/mod.json`; the DSP hook and limits live in the device
 profile.
 

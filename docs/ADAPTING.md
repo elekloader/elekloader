@@ -2347,9 +2347,11 @@ firmware hooks live in the companion, which shows the stock OS each custom
 machine as a fixed stock host type. See
 [Digitone II machines](MACHINES-DN2.md) for IDs, host types and missing
 mods, and the [track-synth contract](MACHINES-DN2-VOICE.md) or
-[filter contract](MACHINES-DN2-FILTER.md) for registration and custom DSP. One custom synth and one custom filter can share a
-build; their SDK helpers package the compiled code in separate regions.
-The producer's build handles compilation and placement. The external
+[filter contract](MACHINES-DN2-FILTER.md) for registration and custom DSP. Any number of
+custom synths and filters, from any number of mods, can share a build:
+`elekloader.sdk.sharc.machine_artifact` packages each one's compiled code
+as a relocatable kernel, and the linker places them all.
+The producer's build handles compilation. The external
 `digitone-2-mod-hack` example's `mise run build-c` builds SINE, LOWPASS and
 DigiHealth together. This interface is implemented only for Digitone II.
 
@@ -3900,20 +3902,20 @@ Some differences from an octabam build, by design:
 | `the label N is part of a longer word here` (SDK) | dsp_asm would put N's address inside that word | rename the label |
 | `unqualified SHARC data site` | a companion's data site differs from the profile's exact stock hash, length or replacement, uses code or has relocations | rebuild the unmodified [dspbusy-dn2 companion](../mods/dspbusy-dn2/README.md) with a matching loader |
 | `SHARC data site requires a SHARC mod` | the idle hook would jump into absent DSP code | add a SHARC mod or omit dspbusy-dn2 |
-| `SHARC ABI does not match the device profile` | the artifact does not name a supported master-output, track-synth or track-filter contract | build for the matching [SHARC contract](FORMAT.md#digitone-ii-sharc-mod); changing only the ABI string does not relocate code |
-| `SHARC voice machine_id must match its single native voice registration` / `DN2 voice registration requires a matching SHARC voice payload` | a voice descriptor and DSP artifact disagree, or the artifact is absent | package one matching descriptor and payload as the [track-synth contract](MACHINES-DN2-VOICE.md) describes |
-| `SHARC filter machine_id must match its single native filter registration` / `DN2 filter registration requires a matching SHARC filter payload` | a filter descriptor and DSP artifact disagree, or the artifact is absent | package one matching descriptor and payload as the [filter contract](MACHINES-DN2-FILTER.md) describes |
-| `SHARC voice voice_state needs exactly offset_bytes, voice_bytes` / `SHARC filter voice_state needs exactly offset_bytes, voice_bytes` | the artifact's `voice_state` is not an object of those two fields | make the artifact with the SDK, or write the object [FORMAT.md](FORMAT.md) describes |
-| `SHARC voice voice_state must be 16 zeroed voices inside the mod` / `SHARC filter voice_state must be 16 zeroed voices inside the mod` | the state is unaligned, empty, not whole words, or not inside one of the mod's zero ranges | make the artifact with the SDK, which places it after the data |
-| `SHARC voice stack exceeds the profile limit` | the callback declares more than 2,048 stack bytes (it has a 4 KiB stack of its own and shares the rest with interrupts) | reduce its stack use and declaration, then qualify the real workload |
-| `SHARC filter stack exceeds the profile limit` | the callback declares more than 2,048 stack bytes (as a synth's) | reduce its stack use and declaration, then qualify the real workload |
+| `SHARC ABI does not match the device profile` | the artifact names neither the master-output contract nor `dn2-kernel-v1` | build for the matching [SHARC contract](FORMAT.md#digitone-ii-sharc-mod); changing only the ABI string does not relocate code |
+| `its T entry N needs a SHARC K kernel with that id` | a synth or filter registration whose mod carries no kernel with its ID | package the kernel with `machine_artifact` and the same ID, as the [track-synth](MACHINES-DN2-VOICE.md) or [filter](MACHINES-DN2-FILTER.md) contract describes |
+| `its SHARC K kernel N has no registration with that id in its mod` | a kernel whose mod registers no machine with its ID | register the machine in the mod that carries its kernel, with the same ID |
+| `A and B both have a DN2 T kernel with id N` | two kernels of one kind's table share an ID (synths and SDK machines share one) | give each machine its own ID |
+| `DN2 machine kernels need one dispatcher (machines-dn2); this build has ...` | the build has a kernel and no machines-dn2, or two dispatchers | build with one machines-dn2 |
+| `DN2 machine kernels do not combine with M` | the build has a kernel and a master-output SHARC mod | use machines or one master-output mod |
+| `DN2 kernels need N bytes; the machine pool has M` | the kernels, their data and state do not fit the 128 KiB pool | build with fewer machines, or smaller code, data or state |
 | `DN2 filter G needs a label of 1..5 printable ASCII characters and a default of 0..127` | a filter descriptor's `g` has an empty, too long or non-printable label, or a default above 127 | give G a label of one to five printable ASCII characters and a default of 0..127, or leave `g` out ([filter contract](MACHINES-DN2-FILTER.md)) |
 | `SHARC payload has a gap or overlap in its owner` | the segments and zero ranges do not cover the mod's owner exactly once | add a `zero` range for the bytes you do not use; fix overlapping offsets |
 | `SHARC mod code needs its profiled NOP read-ahead guard` | a code segment does not end in 64 bytes of NOPs (`0100` repeated) | pad the end of each code segment |
 | `SHARC entry is in the instruction read-ahead guard` / `SHARC entry is not in owned code` | a callback offset is in the guard, outside the code, or odd | link the callbacks inside a code segment, before its guard |
 | `active SHARC mod requires a qualified matching core bridge` / `has unqualified active SHARC core bytes or entry` | the core is older than core-dn2 0.2, or its bridge is not the one the profile pins | build with core-dn2 0.2 or newer, its bridge unchanged; set `"resources": {"core": "0.2"}` |
 | `active SHARC stack exceeds the profile limit` | the mod declares more than 428 bytes of stack (the bridge's 116 and yours may not pass 544) | use less stack, and declare what you use |
-| `SHARC mods may combine only one DN2 voice and one DN2 filter` | the build has two mods of one kind, or mixes a master-output mod with a machine | use at most one synth and one filter, or one master-output mod |
+| `a build takes one SHARC mod; this one has ...` | the build has two master-output SHARC mods | use one |
 
 ## 6. Definition of done
 

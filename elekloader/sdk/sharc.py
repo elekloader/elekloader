@@ -1,160 +1,181 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
-"""Package DN2 machine kernels; compilation belongs to the mod.
+"""Package DN2 machine kernels: link a mod's SHARC objects with the pinned Selache into a relocatable
+kernel artifact (dn2-kernel-v1) that the linker places anywhere in the machine pool; the build never
+names an address.
 
-A mod's build compiles its kernel, links it with `machine_linker_script(kind)` and hands the
-linked executable to `machine_from_executable`: the build never names an address."""
-import json
+`kernel_artifact` assembles sources and names each kernel's entry label (SDK machines, machines-dn2's
+dispatcher); `machine_artifact` links an mk2 synth's or filter's objects, whose entry is
+sharc_voice_render / sharc_filter_render (digitone-mk2/voice.h, filter.h)."""
+import os
 from pathlib import Path
+import re
 import struct
+import subprocess
+import tempfile
 
+from .. import sharc as linker
 from ..devices.digitone_mk2 import DEVICE
-from ..sharc import module_payload, pc16
+from ..elemod import ModError
+from . import sharc_reloc
+
+PROFILE = DEVICE.releases['1.12'].sharc
+CODE_SECTION, DATA_SECTION = 'machine_code', 'machine_data'   # the sections KERNEL_LDF places
+SELACHE_PIN = '2b26d3b75c53063575bc5c820fa0d38879335187'
+KERNEL_CODE, KERNEL_DATA = 0xbc8400, 0x20098000      # where the probes link; the linker rebases
+KERNEL_WINDOW = 0x40000                                # bytes either section may take in a probe link
+KERNEL_LDF = """ARCHITECTURE(ADSP-21569)
+$OBJECTS = $COMMAND_LINE_OBJECTS;
+MEMORY {
+ code { TYPE(BW RAM) START(0x%x) END(0x%x) WIDTH(8) }
+ data { TYPE(BW RAM) START(0x%x) END(0x%x) WIDTH(8) }
+}
+PROCESSOR p0 { OUTPUT($COMMAND_LINE_OUTPUT_FILE) SECTIONS {
+ %s SW { INPUT_SECTION_ALIGN(2) INPUT_SECTIONS($OBJECTS(seg_swco)) } > code
+ %s BW { INPUT_SECTION_ALIGN(4) INPUT_SECTIONS($OBJECTS(seg_dmda)) } > data
+} }
+"""
 
 
-def machine_layout(kind):
-    """Linker bounds for a voice or filter; no compiler-specific linker syntax."""
-    if kind not in ('voice', 'filter'):
-        raise ValueError('DN2 machine kind must be voice or filter')
-    profile = DEVICE.releases['1.12'].sharc
-    lo, hi = profile[kind + '_range']
-    middle = (hi - lo) // 2
-    return {'code_pc16': pc16(profile, lo + profile[kind + '_adapter_bytes']),
-            'code_bytes': middle - profile[kind + '_adapter_bytes'],
-            'data_address': lo + middle,
-            'data_bytes': middle - profile[kind + '_state_bytes']}
+def selache_tools():
+    """The pinned Selache's target/release, from $SELACHE (a clean checkout). Raises ValueError."""
+    root = os.environ.get('SELACHE')
+    if not root:
+        raise ValueError('SHARC sources need Selache: set SELACHE to a checkout at %s, built with '
+                         'cargo build --release' % SELACHE_PIN[:7])
+    try:
+        head = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=root, text=True).strip()
+        dirty = subprocess.check_output(['git', 'status', '--porcelain'], cwd=root, text=True).strip()
+    except (OSError, subprocess.CalledProcessError) as e:
+        raise ValueError('SELACHE=%s is not a git checkout: %s' % (root, e)) from e
+    if head != SELACHE_PIN or dirty:
+        raise ValueError('SELACHE must be a clean checkout at %s (it is at %s%s)'
+                         % (SELACHE_PIN[:7], head[:7], ', modified' if dirty else ''))
+    tools = Path(root) / 'target' / 'release'
+    if not all((tools / t).is_file() for t in ('selas', 'seld')):
+        raise ValueError('SELACHE has no target/release/selas and seld: run cargo build --release')
+    return tools
 
 
-def voice_artifact(code, data, render_offset_bytes, machine_id, stack_bytes, voice_bytes=0):
-    """Kernel PC16 0xbc8400, data 0x20098000; entry offset excludes the adapter. voice_bytes:
-    one voice's state; the artifact reserves 16, zeroed, after the data."""
-    return _machine_artifact('voice', code, data, render_offset_bytes, machine_id, stack_bytes, voice_bytes)
-
-
-def filter_artifact(code, data, render_offset_bytes, machine_id, stack_bytes, voice_bytes=0):
-    """Kernel PC16 0xbd0400, data 0x200a8000; entry offset excludes the adapter. voice_bytes:
-    as voice_artifact's."""
-    return _machine_artifact('filter', code, data, render_offset_bytes, machine_id, stack_bytes, voice_bytes)
-
-
-def _machine_artifact(kind, code, data, render_offset_bytes, machine_id, stack_bytes, voice_bytes=0):
-    profile = DEVICE.releases['1.12'].sharc
-    layout = machine_layout(kind)
-    prefix = profile[kind + '_adapter_bytes']
-    data_offset = prefix + layout['code_bytes']
-    state = data_offset + layout['data_bytes']
-    if not isinstance(code, bytes) or not code or len(code) % 2 or len(code) > layout['code_bytes'] - 64:
-        raise ValueError('DN2 %s code must fit %d KiB with its 64-byte guard' % (kind, layout['code_bytes'] // 1024))
-    if type(render_offset_bytes) is not int or render_offset_bytes % 2 or not 0 <= render_offset_bytes < len(code):
-        raise ValueError('DN2 %s entry must be even and inside the supplied code' % kind)
-    if not isinstance(data, bytes) or len(data) % 4 or len(data) > layout['data_bytes']:
-        raise ValueError('DN2 %s data must fit %d KiB and be four-byte aligned' % (kind, layout['data_bytes'] // 1024))
-    voice_at = data_offset + -(-len(data) // 8) * 8          # 16 voices' state, after the data
-    if type(voice_bytes) is not int or voice_bytes < 0 or voice_bytes % 4:
-        raise ValueError('DN2 %s voice state must be a whole number of 32-bit words' % kind)
-    if voice_bytes and voice_at + 16 * voice_bytes > state:
-        raise ValueError('DN2 %s data (%d bytes) and 16 voices of %d bytes need %d bytes; the area has %d'
-                         % (kind, len(data), voice_bytes, voice_at - data_offset + 16 * voice_bytes, layout['data_bytes']))
-    adapter = json.loads((Path(__file__).parent / ('include/digitone-mk2/' + kind + '-bridge.json')).read_text())
-    code += b'\x01\x00' * (32 + len(code) // 2 % 2)        # the read-ahead guard, to whole words
-    gap, end = prefix + len(code), data_offset + len(data)   # zeroed words decode as NOP
-    doc = {'abi': profile[kind + '_abi'], 'machine_id': machine_id,
-           'segments': [adapter, {'offset_bytes': prefix, 'kind': 'code', 'hex': code.hex()},
-                        *([{'offset_bytes': data_offset, 'kind': 'data', 'hex': data.hex()}] if data else [])],
-           'zero': ([{'offset_bytes': gap, 'size_bytes': data_offset - gap}] if gap < data_offset else [])
-                   + ([{'offset_bytes': end, 'size_bytes': state - end}] if end < state else [])
-                   + [{'offset_bytes': state, 'size_bytes': profile[kind + '_state_bytes']}],
-           'entries': {'render_offset_bytes': prefix + render_offset_bytes},
-           'stack_bytes': stack_bytes}
-    if voice_bytes:
-        doc['voice_state'] = {'offset_bytes': voice_at, 'voice_bytes': voice_bytes}
-    module_payload(doc, profile)
-    return doc
-
-
-# The executable's two loadable sections; the linker script names them.
-CODE_SECTION, DATA_SECTION = 'machine_code', 'machine_data'
-
-
-def machine_linker_script(kind):
-    """The linker script (the ADI LDF form Selache's seld reads) that places a machine's code
-    and data where its kind's area puts them. Code comes from seg_swco, data from seg_dmda;
-    the entry is `sharc_<kind>_render.` (the C function `sharc_<kind>_render`)."""
-    layout = machine_layout(kind)
-    code, data = layout['code_pc16'] * 2, layout['data_address']
-    return ("ARCHITECTURE(ADSP-21569)\n"
-            "$OBJECTS = $COMMAND_LINE_OBJECTS;\n"
-            "MEMORY {\n"
-            " code { TYPE(BW RAM) START(0x%x) END(0x%x) WIDTH(8) }\n"
-            " data { TYPE(BW RAM) START(0x%x) END(0x%x) WIDTH(8) }\n"
-            "}\n"
-            "PROCESSOR p0 { OUTPUT($COMMAND_LINE_OUTPUT_FILE) SECTIONS {\n"
-            " %s SW { INPUT_SECTION_ALIGN(2) INPUT_SECTIONS($OBJECTS(seg_swco)) } > code\n"
-            " %s BW { INPUT_SECTION_ALIGN(4) INPUT_SECTIONS($OBJECTS(seg_dmda)) } > data\n"
-            "} }\n" % (code, code + layout['code_bytes'] - 1, data, data + layout['data_bytes'] - 1,
-                        CODE_SECTION, DATA_SECTION))
-
-
-def machine_from_executable(kind, executable, machine_id, stack_bytes=None):
-    """The machine artifact for a linked SHARC executable (little-endian ELF32) built with
-    machine_linker_script(kind): its code, data and render entry, checked against the area.
-    stack_bytes defaults to the most the kind's callback may declare. Raises ValueError."""
-    def need(ok, message):
-        if not ok:
-            raise ValueError('DN2 %s executable: %s' % (kind, message))
-    layout = machine_layout(kind)
-    raw = bytes(executable)
-    need(len(raw) >= 52 and raw[:7] == b'\x7fELF\x01\x01\x01'
-         and struct.unpack_from('<HH', raw, 16) == (2, 0x85), 'expected a linked little-endian SHARC ELF32 executable')
-    entry, shoff = struct.unpack_from('<II', raw, 24)[0], struct.unpack_from('<I', raw, 32)[0]
-    shentsize, shnum, shstrndx = struct.unpack_from('<HHH', raw, 46)
-    need(shentsize == 40 and shoff + 40 * shnum <= len(raw) and shstrndx < shnum, 'malformed section table')
+def _executable(raw):
+    """(code PC16, code, data address, data, {symbol: address}) of a linked SHARC ELF32."""
+    if len(raw) < 52 or raw[:7] != b'\x7fELF\x01\x01\x01' or struct.unpack_from('<HH', raw, 16) != (2, 0x85):
+        raise ValueError('SHARC kernel: expected a linked little-endian SHARC ELF32 executable')
+    shoff, = struct.unpack_from('<I', raw, 32)
+    _size, shnum, shstrndx = struct.unpack_from('<HHH', raw, 46)
     headers = [struct.unpack_from('<10I', raw, shoff + 40 * i) for i in range(shnum)]
 
     def text(table, at):
         start = headers[table][4] + at
-        end = raw.index(b'\0', start)
-        return raw[start:end].decode('latin-1')
+        return raw[start:raw.index(b'\0', start)].decode('latin-1')
     sections = {}
-    for name, kind_, flags, address, offset, size, *_ in headers:
+    for name, kind, flags, address, offset, size, *_ in headers:
         label = text(shstrndx, name)
-        need(kind_ not in (4, 9), 'unresolved relocations in %s' % label)          # SHT_RELA, SHT_REL
-        if flags & 2:                                                               # SHF_ALLOC
-            need(kind_ == 1 and label in (CODE_SECTION, DATA_SECTION),
-                 'only %s and %s may be loaded, not %s' % (CODE_SECTION, DATA_SECTION, label))
-            need(label not in sections and offset + size <= len(raw), 'duplicate or truncated %s' % label)
-            sections[label] = (flags, address, raw[offset:offset + size])
-    need(CODE_SECTION in sections, 'no %s section' % CODE_SECTION)
-    code_flags, code_pc, code = sections[CODE_SECTION]
-    data_flags, data_address, data = sections.get(DATA_SECTION, (3, layout['data_address'], b''))
-    need(code_flags & 4 and not data_flags & 4, 'code and data sections swapped')
-    need(code_pc == layout['code_pc16'], 'code linked at PC16 0x%x, not 0x%x' % (code_pc, layout['code_pc16']))
-    need(data_address == layout['data_address'], 'data linked at 0x%x, not 0x%x' % (data_address, layout['data_address']))
-    symbols = [h for h in headers if h[1] == 2]                                     # SHT_SYMTAB
-    need(len(symbols) == 1, 'no symbol table')
-    _n, _t, _f, _a, offset, size, strings, *_ = symbols[0]
-    render, undefined, state = [], [], []
-    for at in range(offset + 16, offset + size, 16):
-        name, value, _size, _info, _other, index = struct.unpack_from('<IIIBBH', raw, at)
-        label = text(strings, name)
-        if label and index == 0:
-            undefined.append(label)
-        if label == 'sharc_%s_render.' % kind:
-            render.append(value)
-        if label == 'sharc_%s_state_bytes.' % kind:                # DN2_VOICE_STATE / DN2_FILTER_STATE
-            state.append(value)
-    need(not undefined, 'unresolved symbols: ' + ', '.join(undefined))
-    need(len(render) == 1, 'needs exactly one sharc_%s_render' % kind)
-    need(entry == render[0], 'its entry is not sharc_%s_render' % kind)
-    need(len(code) % 2 == 0, 'code is not whole 16-bit parcels')
-    need(len(state) <= 1, 'more than one sharc_%s_state_bytes' % kind)
-    voice_bytes = 0
+        if kind in (4, 9):                                     # SHT_RELA, SHT_REL
+            raise ValueError('SHARC kernel: unresolved relocations in %s' % label)
+        if flags & 2:                                          # SHF_ALLOC
+            if kind != 1 or label not in (CODE_SECTION, DATA_SECTION):
+                raise ValueError('SHARC kernel: only seg_swco code and seg_dmda data may be loaded, not %s' % label)
+            sections[label] = (address, raw[offset:offset + size])
+    symbols, undefined = {}, []
+    for _n, kind, _f, _a, offset, size, strings, *_ in headers:
+        if kind != 2:                                          # SHT_SYMTAB
+            continue
+        for at in range(offset + 16, offset + size, 16):
+            name, value, _s, _i, _o, index = struct.unpack_from('<IIIBBH', raw, at)
+            label = text(strings, name)
+            if label and index == 0:
+                undefined.append(label)
+            elif label:
+                symbols[label] = value
+    if undefined:
+        raise ValueError('SHARC kernel: unresolved symbols: ' + ', '.join(sorted(undefined)))
+    if CODE_SECTION not in sections:
+        raise ValueError('SHARC kernel: no code in seg_swco')
+    code_pc, code = sections[CODE_SECTION]
+    data_address, data = sections.get(DATA_SECTION, (None, b''))
+    return code_pc, code, data_address, data, symbols
+
+
+def _relocatable(tools, objects, work):
+    """sharc_reloc.relocatable over seld links of `objects`."""
+    work = Path(work)
+
+    def link(objects, code_pc16, data_address):
+        ldf, exe = work / 'kernel.ldf', work / 'kernel.dxe'
+        ldf.write_text(KERNEL_LDF % (code_pc16 * 2, code_pc16 * 2 + KERNEL_WINDOW - 1,
+                                     data_address, data_address + KERNEL_WINDOW - 1, CODE_SECTION, DATA_SECTION))
+        _run([tools / 'seld', '-proc', 'ADSP-21569', '-T', ldf, '-o', exe, *objects])
+        code_pc, code, at, data, symbols = _executable(exe.read_bytes())
+        if code_pc != code_pc16 or (data and at != data_address):
+            raise ValueError('SHARC kernel: sections moved from their base')
+        return code, data, symbols
+    return sharc_reloc.relocatable(link, list(objects), KERNEL_CODE, KERNEL_DATA)
+
+
+def kernel_artifact(sources, work, kernels=()):
+    """Assemble `sources` (.s files) with the pinned Selache: the dn2-kernel-v1 artifact, with one kernel
+    per (kind, id, entry label, knobs) of `kernels` (an SDK machine's knobs are its (min, max) pairs) and
+    the dispatcher's labels as exports when the sources define them. Raises ValueError."""
+    tools = selache_tools()
+    objects = []
+    for i, src in enumerate(sources):
+        obj = Path(work) / ('k%d.doj' % i)
+        _run([tools / 'selas', '-proc', 'ADSP-21569', '-o', obj, src])
+        objects.append(obj)
+    art = _relocatable(tools, objects, work)
+    entries = []
+    for kind, mid, label, knobs in kernels:
+        entries.append({'kind': kind, 'id': mid, 'entry': _code_symbol(art, label),
+                        **({'knobs': [list(r) for r in knobs]} if kind == 'sdk' else {})})
+    return kernel_doc(art, entries)
+
+
+def machine_artifact(kind, objects, machine_id):
+    """Link an mk2 synth's (kind 'voice') or filter's ('filter') Selache objects (.doj, from C or
+    assembly): the dn2-kernel-v1 artifact of one kernel whose entry is sharc_<kind>_render and whose
+    state, 16 slots, is sharc_<kind>_state_bytes's value (DN2_VOICE_STATE / DN2_FILTER_STATE), if
+    defined, in whole words. Raises ValueError."""
+    if kind not in ('voice', 'filter'):
+        raise ValueError('DN2 machine kind must be voice or filter')
+    tools = selache_tools()
+    with tempfile.TemporaryDirectory() as work:
+        art = _relocatable(tools, [Path(o) for o in objects], work)
+    k = {'kind': 'mk2-' + kind, 'id': machine_id, 'entry': _code_symbol(art, 'sharc_%s_render.' % kind)}
+    state = art['symbols'].get('sharc_%s_state_bytes.' % kind)
     if state:
-        at = state[0] - data_address
-        need(0 <= at and at + 4 <= len(data), 'sharc_%s_state_bytes is not in %s' % (kind, DATA_SECTION))
-        voice_bytes = struct.unpack_from('<I', data, at)[0]
-        voice_bytes += -voice_bytes % 4                                         # whole words
-    # The executable stores each 16-bit parcel little-endian; the loader takes them the other way.
-    code = b''.join(code[i:i + 2][::-1] for i in range(0, len(code), 2))
-    profile = DEVICE.releases['1.12'].sharc
-    return _machine_artifact(kind, code, data, (render[0] - code_pc) * 2, machine_id,
-                             profile[kind + '_stack_max'] if stack_bytes is None else stack_bytes, voice_bytes)
+        if state[0] != 'data' or state[1] + 4 > len(art['data']):
+            raise ValueError('SHARC kernel: sharc_%s_state_bytes is not a word of data' % kind)
+        size, = struct.unpack_from('<I', art['data'], state[1])
+        k['state_bytes'] = size + -size % 4
+    return kernel_doc(art, [k])
+
+
+def _code_symbol(art, label):
+    where = art['symbols'].get(label)
+    if where is None:
+        raise ValueError('SHARC kernel: the sources define no global label %s' % label)
+    if where[0] != 'code':
+        raise ValueError('SHARC kernel: %s is not a code label' % label)
+    return where[1]
+
+
+def kernel_doc(artifact, kernels):
+    """The mod file's "sharc" for a relocatable kernel (sharc_reloc.relocatable's result), checked as
+    the linker checks it. Raises ValueError."""
+    doc = {'abi': linker.KERNEL_ABI, 'code': artifact['code'].hex(), 'data': artifact['data'].hex(),
+           'code_pc16': artifact['code_pc16'], 'data_address': artifact['data_address'],
+           'data_align': artifact['data_align'], 'relocs': [list(r) for r in artifact['relocs']],
+           'kernels': kernels,
+           'exports': {n: list(artifact['symbols'][n]) for n in linker.DISPATCH if n in artifact['symbols']}}
+    try:
+        linker.kernel_payload(doc, PROFILE)
+    except ModError as e:
+        raise ValueError(str(e)) from e
+    return doc
+
+
+def _run(cmd):
+    p = subprocess.run([str(c) for c in cmd], capture_output=True, text=True)
+    # Selache may print an error and still exit 0 (the assembler, like its C compiler).
+    if p.returncode or re.search(r'(?i)\berror\b', p.stdout + p.stderr):
+        raise ValueError('SHARC kernel: %s failed:\n%s' % (Path(str(cmd[0])).name, (p.stdout + p.stderr).strip()))

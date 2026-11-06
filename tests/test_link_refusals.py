@@ -148,23 +148,26 @@ def external(fn, template, path, text):
     EXTERNAL[(fn, template)] = (path, text)
 
 
-external('check', 'SHARC mods may combine only one DN2 voice and one DN2 filter',
-         'tests/test_sharc_filter.py', ['SHARC mods may combine only one DN2 voice and one DN2 filter',
-                                      'test_pair_binds_both_hooks_and_is_order_independent'])
 external('check', 'active SHARC mod requires a qualified matching core bridge', 'tests/test_sharc_active.py',
          'active SHARC mod requires a qualified matching core bridge')
 external('check', '<> has unqualified active SHARC core bytes or entry', 'tests/test_sharc_active.py',
          'unqualified active SHARC core bytes or entry')
 external('check', 'active SHARC stack exceeds the profile limit', 'tests/test_sharc_active.py',
          'active SHARC stack exceeds the profile limit')
-external('check', '<>: DN2 <> registration requires a matching SHARC <> payload',
-         'tests/test_sharc_filter.py', ['DN2 %s registration requires a matching SHARC %s payload',
-                                      'test_pair_binds_both_hooks_and_is_order_independent'])
-external('check', '<>: SHARC <> machine_id must match its single native <> registration',
-         'tests/test_sharc_filter.py', ['SHARC %s machine_id must match its single native %s registration',
-                                      'test_pair_binds_both_hooks_and_is_order_independent'])
+external('check', 'DN2 machine kernels need one dispatcher (machines-dn2); this build has <>',
+         'tests/test_sharc_kernels.py', ['need one dispatcher', 'test_kernels_need_one_dispatcher'])
+external('check', 'DN2 machine kernels do not combine with <>', 'tests/test_sharc_kernels.py',
+         ['DN2 machine kernels do not combine with master 0.1', 'test_kernels_do_not_combine_with_another_sharc_mod'])
+external('check', 'a build takes one SHARC mod; this one has <>', 'tests/test_sharc_kernels.py',
+         ['a build takes one SHARC mod', 'test_a_build_takes_one_sharc_mod'])
+external('check', '<> and <> both have a DN2 <> kernel with id <>', 'tests/test_sharc_kernels.py',
+         ['both have a DN2 voice kernel with id 9', 'test_an_id_has_one_kernel'])
+external('check', '<>: its <> entry <> needs a SHARC <> kernel with that id', 'tests/test_sharc_kernels.py',
+         ['needs a SHARC %s kernel with that id', 'test_an_mk2_registration_needs_its_kernel'])
+external('check', '<>: its SHARC <> kernel <> has no registration with that id in its mod', 'tests/test_sharc_kernels.py',
+         ['has no registration with that id in its mod', 'test_a_kernel_needs_its_registration_in_its_mod'])
 external('check', '<>: DN2 filter G needs a label of 1..5 printable ASCII characters and a default of 0..127',
-         'tests/test_sharc_filter.py', ['DN2 filter G needs a label', 'test_refuses_an_invalid_g_and_links_a_valid_one'])
+         'tests/test_sharc_kernels.py', ['DN2 filter G needs a label', 'test_refuses_an_invalid_g_and_links_a_valid_one'])
 external('parse_sites', '<>: unqualified SHARC data site', 'tests/test_sharc_filter.py',
          ['unqualified SHARC data site', 'test_only_the_exact_profiled_sharc_data_site_is_accepted'])
 external('check', '<>: SHARC data site requires a SHARC mod', 'tests/test_sharc_filter.py',

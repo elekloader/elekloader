@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
 /* Private SDK example: a sine at the note played, FINE cents (-50..50) away. FINE's glyph shows which way
- * it is tuned: an arrow down when flat, a sine when in tune, an arrow up when sharp. */
+ * it is tuned: an arrow down when flat, a sine when in tune, an arrow up when sharp. On the Digitone II
+ * the sound is sine-dn2.s, the same sine on the SHARC. */
 #include "elekloader/sdk_alpha_machine.h"
 
 enum { FINE };
@@ -22,6 +23,10 @@ static void present(const struct elek_ui *ui)
     ui->view[FINE].glyph = &tuning[cents < 0 ? FLAT : cents > 0 ? SHARP : IN_TUNE];
 }
 
+#ifdef ELEK_TARGET_SHARC
+void sine_render(const struct elek_voice *v, elek_sample *out);     /* sine-dn2.s */
+#define RENDER sine_render
+#else
 /* sin(2 pi ph / 2^32), Q15: a parabola, then its square nudged in (within 0.1 %). */
 static int32_t sine(uint32_t ph)
 {
@@ -46,10 +51,12 @@ static void render(const struct elek_voice *v, elek_sample *out)
     }
     s->phase = p;
 }
+#define RENDER render
+#endif
 
 static const struct elek_machine machine = {
     .id = 123, .name = "SDK Sine", .short_name = "SINE", ELEK_KNOBS(knobs),
     .pages = { { "SINE", { [ELEK_A] = &knobs[FINE] } } },
-    .present = present, .render = render,
+    .present = present, .render = RENDER,
 };
 ELEK_REGISTER_MACHINE(machine);

@@ -235,7 +235,7 @@ def for_release(mod, dev, rel):
 
 def build(mdir, stock_path, out_dir=None, extra=None):
     """-> (the path of the .elemod written, its Mod2). `extra` ({'sites', 'contribute',
-    'sources'}) lets a generator add parts it computed."""
+    'sources', 'cflags'}) lets a generator add parts it computed."""
     with open(os.path.join(mdir, 'mod.json')) as fh:
         mod = json.load(fh)
     extra = extra or {}
@@ -244,9 +244,19 @@ def build(mdir, stock_path, out_dir=None, extra=None):
     except (devices.UnknownFirmware, formats.FormatError) as e:
         raise BuildError(str(e))
     mod, ported = for_release(mod, dev, rel)
-    sharc_doc = None
-    if 'sharc' in mod:
-        spec = mod['sharc']
+    sharc_doc, sharc_sources = None, []
+    spec = mod.get('sharc')
+    if isinstance(spec, dict) and set(spec) == {'sources'}:
+        # SDK machines' SHARC render, which sdk_alpha_build assembles; targets without kernels skip it
+        root = os.path.realpath(mdir)
+        names = spec['sources'] if isinstance(spec['sources'], list) else []
+        paths = [os.path.realpath(os.path.join(root, n)) for n in names
+                 if isinstance(n, str) and n.endswith('.s') and not os.path.isabs(n)]
+        if not names or len(paths) < len(names) or any(not p.startswith(root + os.sep) for p in paths):
+            raise BuildError('mod.json: sharc sources are relative .s files in the mod folder')
+        if (rel.sharc or {}).get('kernel_abi'):
+            sharc_sources = paths
+    elif 'sharc' in mod:
         if not isinstance(spec, dict) or set(spec) != {'artifact'} or not isinstance(spec['artifact'], str) \
                 or not spec['artifact'] or os.path.isabs(spec['artifact']):
             raise BuildError('mod.json: sharc is {"artifact": "relative-file.sharc.json"}')
@@ -293,8 +303,8 @@ def build(mdir, stock_path, out_dir=None, extra=None):
     for s in srcs:
         o = os.path.join(work, os.path.basename(s) + '.o')
         if s.endswith('.c'):
-            run([prefix + 'gcc'] + tc['cflags'] + mod.get('cflags', []) + ['-I', mdir, '-I', INCLUDE,
-                                                                            '-c', s, '-o', o])
+            run([prefix + 'gcc'] + tc['cflags'] + mod.get('cflags', []) + extra.get('cflags', [])
+                + ['-I', mdir, '-I', INCLUDE, '-c', s, '-o', o])
         else:
             run([prefix + 'as'] + tc['asflags'] + ['-I', mdir, '-I', INCLUDE] + defs + ['-o', o, s])
         objs.append(o)
@@ -540,7 +550,7 @@ def build(mdir, stock_path, out_dir=None, extra=None):
     imports |= set(weak)
 
     source_hashes = {}
-    for s in srcs + dsrcs:
+    for s in srcs + dsrcs + sharc_sources:
         with open(s, 'rb') as fh:
             source_hashes[os.path.basename(s)] = sha(fh.read())
 

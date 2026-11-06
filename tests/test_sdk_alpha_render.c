@@ -83,7 +83,13 @@ static void check_labels(void)
 /* The example authors start from, examples/sdk-sine, as it is: the registration becomes a pointer here. */
 #undef ELEK_REGISTER_MACHINE
 #define ELEK_REGISTER_MACHINE(m) static const struct elek_machine *const example = &(m)
+#ifdef ELEK_TARGET_SHARC                    /* its C render with float samples, not its sine-dn2.s */
+#undef ELEK_TARGET_SHARC
 #include "../examples/sdk-sine/sine.c"
+#define ELEK_TARGET_SHARC
+#else
+#include "../examples/sdk-sine/sine.c"
+#endif
 
 int main(int argc, char **argv)
 {
