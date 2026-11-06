@@ -1515,10 +1515,9 @@ sits at 0x47B28FE8. At the first ev_tick `core_payload` with its id
 (0x3a4826f9) returned that address and 1,048,576 bytes, the same as the
 mod's own symbol, one entry in `core_payloads`, and the readback of all
 262,144 words found 0 wrong. After the three samples were loaded into the
-project (GLOBAL > SAMPLES > LOAD TO PROJ, the first at 0x43937290) and the
-pattern played, a second readback found 0 wrong. Not checked yet: a track
-playing one of those samples (the sample list's selection didn't move in
-the emulator). Core's .run is 56,116 bytes; the build's RAM ends at
+project (GLOBAL > SAMPLES > LOAD TO PROJ, the first at 0x43937290), the
+current track set to play the first (SMP 1) and the pattern played, a
+second readback found 0 wrong. Core's .run is 56,116 bytes; the build's RAM ends at
 0x47C2EC78 with 3,998,600 bytes of the area spare; the main OS packs to
 2.29 MB, unpacks in place with 223,737 bytes of gap, and the flash has
 161,888 bytes spare. Not yet on a unit.
