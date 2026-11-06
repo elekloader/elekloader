@@ -7,7 +7,7 @@
         .globl  core_store_init, core_track_clear, core_step_clear
         .globl  core_row_unpack, core_row_pack, core_row_update
         .globl  core_trig_list, core_lock_paste, core_fire_list
-        .globl  core_accept, core_accept_note, core_dump_mark, core_dump_check
+        .globl  core_accept, core_accept_note, core_voice_apply, core_dump_mark, core_dump_check
         .align  2
 
         .equ    STEP, 0xe4                      | a step record
@@ -293,6 +293,19 @@ core_accept_note:
         addq.l  #4,%sp
         move.l  #0x390,%d0
         jmp     0x40101fb8
+
+| 0x401025ac in the audio interrupt's apply, where channel %a5's list goes
+| to voice %d2 (one of the voices the allocator gave its note): `movea.l
+| -0x84(%a6),%a0; moveq #2,%d5`. d0, d1, a0 and a1 are set again before
+| stock reads them.
+core_voice_apply:
+        move.l  %a5,-(%sp)
+        move.l  %d2,-(%sp)
+        jsr     core_rows_voice
+        addq.l  #8,%sp
+        movea.l -0x84(%a6),%a0
+        moveq   #2,%d5
+        rts
 
 | 0x4006b492 in the SysEx handler, where a pattern dump's buffer (%d4) has
 | the working pattern packed or a slot copied: `move.l %d7,-(%sp); move.l

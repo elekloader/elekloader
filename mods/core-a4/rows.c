@@ -62,9 +62,13 @@
  *
  * Playing locks. Stock's trig fire (0x4007a1d2) builds a lock list per track
  * and event (the immediate one, three scheduled; 0x40079fbe), and the audio
- * interrupt copies an event's list to the voice it gives the trig (event
- * accept, 0x40101d22). Core lists the step's mod locks at the same call, in
- * core's own event slots, and copies them at the same accept, into
+ * interrupt copies an event's list to the list of the event's channel, one
+ * per track (event accept, 0x40101d22; 0x8000e670 + channel x 0x390), then
+ * applies a channel's list to each voice the allocator gives its note
+ * (0x401025ac: the channel %a5, the voice %d2; on a poly track the voice it
+ * picks, in UNISON every poly voice). Core lists the step's mod locks at the
+ * same call, in core's own event slots, keeps them per channel at the same
+ * accept, and copies them to each voice at the same apply, into
  * core_lock_now[voice][code] and core_slide_delta[voice][code]. A voice is
  * 0..5: the four synth voices, the FX track's, the CV track's. The note
  * path's list (0x40066f2a, accepted at 0x40101fb2) is a fifth slot. Stopped,
@@ -928,7 +932,7 @@ void core_lock_turned(int id)
 #define LIST_LATER 0x428740c0u                  /* + track x 0xab0 + slot x 0x390 */
 #define LIST_NOTE 0x4287a820u                   /* + track x 0x390 */
 #define LIST_SIZE 0x390
-#define VOICE_LISTS 0x8000e670u                 /* + voice x 0x390 */
+#define VOICE_LISTS 0x8000e670u                 /* + channel x 0x390 (a channel per track) */
 
 struct slot {
     unsigned short value[CODES];                /* the lock + 1, or 0 */
@@ -947,6 +951,16 @@ volatile short core_slide_delta[VOICES][CODES];
 volatile signed char core_lock_voice_track[VOICES] = {-1, -1, -1, -1, -1, -1};
 volatile unsigned core_lock_accepts[VOICES];     /* the accept's number, of all voices' */
 static unsigned accepts;
+
+/* per channel (0..5, a channel per track): the accepted trig's locks until
+ * the apply gives them to its voices (0.5 gap 7: a poly note's voice is the
+ * allocator's, and UNISON gives one note to every poly voice) */
+static struct {
+    unsigned short value[CODES];
+    short delta[CODES];
+    signed char track;                          /* -1: nothing accepted */
+} chan[VOICES] = {{{0}, {0}, -1}, {{0}, {0}, -1}, {{0}, {0}, -1},
+                  {{0}, {0}, -1}, {{0}, {0}, -1}, {{0}, {0}, -1}};
 
 /* a lock list's track and slot, or -1 */
 static int list_slot(unsigned list, int *track)
@@ -1079,13 +1093,14 @@ void core_rows_fire(int track, unsigned list, unsigned rec, unsigned deltas)
     fill(&slots[track][slot], track, kind, rec, deltas);
 }
 
-/* the event accept in the audio interrupt (rows.s): the voice's list (dst)
- * from the event's list; the slot's locks become the voice's */
-static void accept(int voice, int track, int slot)
+/* the event accept in the audio interrupt (rows.s): the channel's list (dst)
+ * from the event's list; the slot's locks become the channel's, and a voice's
+ * at the apply (core_rows_voice) */
+static void accept(int ch, int track, int slot)
 {
     int i, kind;
     struct slot *sl;
-    if ((unsigned)voice >= VOICES || (unsigned)track >= TRACKS || (unsigned)slot >= SLOTS)
+    if ((unsigned)ch >= VOICES || (unsigned)track >= TRACKS || (unsigned)slot >= SLOTS)
         return;
     sl = &slots[track][slot];
     if (sl->rec && sl->gen != gen && (kind = core_lock_kind_of_track(track)) >= 0)
@@ -1094,11 +1109,25 @@ static void accept(int voice, int track, int slot)
          * lock's edit does not do, so the step's locks are read again here */
         fill(sl, track, kind, sl->rec, sl->deltas);
     for (i = 0; i < CODES; i++) {
-        core_lock_now[voice][i] = sl->value[i];
-        core_slide_delta[voice][i] = sl->delta[i];
+        chan[ch].value[i] = sl->value[i];
+        chan[ch].delta[i] = sl->delta[i];
     }
-    core_lock_voice_track[voice] = track;
-    core_lock_accepts[voice] = ++accepts;
+    chan[ch].track = track;
+}
+
+/* 0x401025ac in the audio interrupt's apply (rows.s): channel ch's list goes
+ * to voice v, as stock applies it; once for each voice the note gets */
+void core_rows_voice(int v, int ch)
+{
+    int i;
+    if ((unsigned)v >= VOICES || (unsigned)ch >= VOICES || chan[ch].track < 0)
+        return;
+    for (i = 0; i < CODES; i++) {
+        core_lock_now[v][i] = chan[ch].value[i];
+        core_slide_delta[v][i] = chan[ch].delta[i];
+    }
+    core_lock_voice_track[v] = chan[ch].track;
+    core_lock_accepts[v] = ++accepts;
 }
 
 void core_rows_accept(unsigned dst, unsigned list)
@@ -1110,7 +1139,7 @@ void core_rows_accept(unsigned dst, unsigned list)
 }
 
 /* the note path's accept (0x40101fb2): index n's list (0x4287a820 + n x
- * 0x390, which the note path fills for track n) to voice n */
+ * 0x390, which the note path fills for track n) to channel n */
 void core_rows_accept_note(int n)
 {
     accept(n, n, 4);
@@ -1152,6 +1181,11 @@ void core_rows_now_reset(void)
             core_slide_delta[t][i] = 0;
         }
         core_lock_voice_track[t] = -1;
+        for (i = 0; i < CODES; i++) {
+            chan[t].value[i] = 0;
+            chan[t].delta[i] = 0;
+        }
+        chan[t].track = -1;
     }
     for (t = 0; t < TRACKS; t++)
         for (s = 0; s < SLOTS; s++)

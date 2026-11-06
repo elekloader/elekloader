@@ -106,6 +106,7 @@
   {"addr": "0x40079fbe", "stock": "4fefffc048d77cfc", "op": "jmp", "target": "core_fire_list"},
   {"addr": "0x40101d58", "stock": "41f980006178", "op": "jsr", "target": "core_accept"},
   {"addr": "0x40101fb2", "stock": "203c00000390", "op": "jmp", "target": "core_accept_note"},
+  {"addr": "0x401025ac", "stock": "206eff7c7a02", "op": "jsr", "target": "core_voice_apply"},
   {"addr": "0x4006b492", "stock": "2f072a3c000032ae", "op": "jmp", "target": "core_dump_mark"},
   {"addr": "0x40011d44", "stock": "2f032f02262f000c", "op": "jmp", "target": "core_dump_check"},
   {"addr": "0x4002327c", "stock": "2f2f00084eb9400f6232", "op": "jmp", "target": "core_view_lockable"},

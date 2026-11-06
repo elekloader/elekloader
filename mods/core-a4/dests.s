@@ -211,3 +211,4 @@ core_dst_setup_label:
 2:      moveq   #0,%d6
 1:      cmp.l   #0x126,%d6
         jmp     0x40036a10
+

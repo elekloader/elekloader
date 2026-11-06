@@ -493,12 +493,22 @@ static int clean(int kind, int c, int foreign)
     return c >= FIRST_CODE && (foreign || kind < 0 || !mod_code(kind, c));
 }
 
+/* stock's own None of a kind (the META:None entry each list opens with):
+ * synth 96, FX 73, CV 68 (0.5 gap 7: index 0 is OSC1 TUNE on a synth, which
+ * a Dest page shows as TUN) */
+static unsigned char none_of(int kind)
+{
+    return kind == 1 ? 73 : kind == 2 ? 68 : 96;
+}
+
 static void clean_dests(unsigned char *item, int words, const volatile int32_t *list, int kind, int foreign)
 {
     int i, s;
     for (i = 0; i < DESTS && (s = list[i]) != -1; i++)
-        if (clean(kind, (signed char)item[words + 2 * s], foreign))
-            item[words + 2 * s] = item[words + 2 * s + 1] = 0;
+        if (clean(kind, (signed char)item[words + 2 * s], foreign)) {
+            item[words + 2 * s] = none_of(kind);
+            item[words + 2 * s + 1] = 0;
+        }
 }
 
 /* a live sound after its load (store.c): its routes and Dest words; foreign:
@@ -509,7 +519,7 @@ void core_dst_clean_sound(unsigned char *sound, int foreign)
     for (i = 0; i < ROUTES; i++) {
         at = ROUTE_AT + (i < 5 ? 0 : 0x16 + (i / 5 - 1) * 0x14) + 4 * (i % 5);
         if (clean(0, (signed char)sound[at + 3], foreign))
-            sound[at + 3] = 0xff;
+            sound[at + 3] = none_of(0);
     }
     clean_dests(sound, 0x14, DEST_LIST(0), 0, foreign);
 }
@@ -526,6 +536,47 @@ void core_dst_clean_kit(unsigned char *kit, int foreign)
             unsigned char *t = kit + 0x764 + 0x26 * i + 0x10 + 4 * j;
             track = (signed char)t[2];
             if (clean((unsigned)track < 4 ? 0 : track == 4 ? 1 : track == 5 ? 2 : -1, (signed char)t[3], foreign))
-                t[3] = 0xff;
+                t[3] = none_of(track == 4 ? 1 : track == 5 ? 2 : 0);
+        }
+}
+
+
+/* ---- loads keep a mod target (0.5 gap 7) ----
+ *
+ * Stock's sound and kit loads from storage (0x40008808, 0x40008f2a: a project
+ * or kit load, a received kit or sound dump) write 0 (OSC1 TUNE, at the
+ * route's depth) over a route or macro target index they do not know. Core
+ * puts a mod code back from the storage before its own load rule runs, which
+ * then makes a code of another layout, or one with no "mod" parameter here,
+ * None. Storage keeps a sound's routes 8 bytes further on than the live
+ * sound (+0xf4), and a kit's 12 macros (the ten performance macros, CONTROL
+ * IN 1 and 2) 0x34 further on (+0x798). */
+
+#define STORED_ROUTES (ROUTE_AT + 8)
+#define LIVE_MACROS 0x764
+#define STORED_MACROS (LIVE_MACROS + 0x34)
+
+static int route_at(int i)
+{
+    int src = i / 5;
+    return (src == 0 ? 0 : 0x16 + (src - 1) * 0x14) + 4 * (i % 5) + 3;
+}
+
+void core_dst_keep_sound(unsigned char *live, const unsigned char *src)
+{
+    int i, c;
+    for (i = 0; i < ROUTES; i++)
+        if ((c = src[STORED_ROUTES + route_at(i)]) >= FIRST_CODE)
+            live[ROUTE_AT + route_at(i)] = c;
+}
+
+void core_dst_keep_kit(unsigned char *live, const unsigned char *src)
+{
+    int i, j, c, o;
+    for (i = 0; i < MACROS; i++)
+        for (j = 0; j < TARGETS; j++) {
+            o = 0x26 * i + 0x10 + 4 * j + 3;
+            if ((c = src[STORED_MACROS + o]) >= FIRST_CODE)
+                live[LIVE_MACROS + o] = c;
         }
 }

@@ -322,7 +322,8 @@ records by address, as core-ar2's does.
 | trig copy | 0x400b905a (`jmp`) | after stock lists a held step's columns for a paste, core lists its mod locks |
 | paste's lock set | 0x400b51f6 (`jmp`) | a listed column of 0x70 or more is a mod lock |
 | trig fire | 0x40079fbe (`jmp`) | after stock builds a trig's lock list (the immediate list, three scheduled, the note path's), core fills its own slot for that list with the step's mod locks and Param Slide's deltas |
-| event accept | 0x40101d58 (`jsr`), 0x40101fb2 (`jmp`) | when the audio interrupt copies an event's list to a voice, core copies its slot into `core_lock_now` and `core_slide_delta` for that voice; a slot filled before the ledger last changed is filled again first, as stock fills a stopped sequencer's first step at STOP and again on its own lock edits only |
+| event accept | 0x40101d58 (`jsr`), 0x40101fb2 (`jmp`) | when the audio interrupt copies an event's list to its channel's list (0x8000e670 + channel x 0x390, a channel per track), core keeps its slot for that channel; a slot filled before the ledger last changed is filled again first, as stock fills a stopped sequencer's first step at STOP and again on its own lock edits only |
+| voice apply | 0x401025ac (`jsr`) | when the interrupt applies a channel's list (%a5) to a voice the allocator gave its note (%d2; on a poly track the voice it picks, in UNISON each poly voice in turn), core copies the channel's locks into `core_lock_now` and `core_slide_delta` for that voice (gap 7, 6 Nov 2026: until then core took the channel for the voice, so a poly or UNISON voice other than the track's own never had the locks) |
 | dump out | 0x4006b492 (`jmp`) | a pattern's SysEx dump: a marker row (`{0x7f, 0xfe}`, then the layout ID) for its mod rows, or, with no free row, no mod rows |
 | dump in | 0x40011d44 (`jmp`) | a received pattern's unpack: its mod rows stay only with a marker holding this build's layout ID; the marker goes |
 
@@ -376,10 +377,18 @@ term stock never used. The rule is stock's own list rule, applied to
 depths only: a Dest whose target is a depth (a selector's word + 4) that the
 selector's mask would not list.
 
-Loads. A sound's and a kit's load (`st_sound_load`, `st_kit_load`) turn a
-code this build has no "mod" parameter for into None (a route's or macro
-target's -1, a Dest word 0), and every code when the item's layout ID is
-not this build's.
+Loads. Stock's sound and kit loads from storage (0x40008808, 0x40008f2a:
+a project or kit load, a received kit or sound dump) write 0, OSC1 TUNE at
+the route's depth, over a route or macro target index they do not know.
+A sound's and a kit's load (`st_sound_load`, `st_kit_load`) first put a mod
+code back from the storage (a sound's routes at storage +0xf4, the live
+sound's +0xec; a kit's macros, CONTROL IN 1 and 2 at +0x798, live +0x764),
+then turn a code this build has no "mod" parameter for into None, and every
+code when the item's layout ID is not this build's. None is stock's own
+entry of the kind (synth 96, FX 73, CV 68), as each list opens with it
+(gap 7, 6 Nov 2026: it was a target's -1 and a Dest word 0, which a Dest
+page showed as TUN, and a received kit's mod route targets came back as
+OSC1 TUNE).
 
 ## The value read (0.5)
 
@@ -411,8 +420,9 @@ Dest stored outside its list at the sink (trace item 8), so no depth in the
 snapshot carries a term stock never used.
 
 Voices (decided 2026-11-05): a track's read uses the voice its last trig
-went to (part 1's record of the accepts; on a poly track the last-played
-voice; before any trig, a voice stock gives the track), and
+went to (part 1's record of the voice applies; on a poly track the
+last-played voice, in UNISON the last of its voices, which all play the
+same locks; before any trig, a voice stock gives the track), and
 `core_param_values_voice(voice, ...)` reads one voice (0..3 synth, 4 FX, 5
 CV). A handle is `code | kind << 8` (`core_param_handle(field)`): a build's
 own numbering, never kept in a project. `core_param_value`,

@@ -482,6 +482,8 @@ int st_sound_save(unsigned char *dst, unsigned char *live)
 
 void core_dst_clean_sound(unsigned char *sound, int foreign);
 void core_dst_clean_kit(unsigned char *kit, int foreign);
+void core_dst_keep_sound(unsigned char *live, const unsigned char *src);
+void core_dst_keep_kit(unsigned char *live, const unsigned char *src);
 
 int st_sound_load(unsigned char *live, unsigned char *src)
 {
@@ -495,6 +497,7 @@ int st_sound_load(unsigned char *live, unsigned char *src)
         for (j = 0; j < SOUND_BYTES; j++)
             live[sound_at(j)] = ok ? src[sound_at(j) + SOUND_STORED] : 0;
         live[0xe2] = live[0xe3] = 0;    /* where the save's raw copy goes under the ID */
+        core_dst_keep_sound(live, src);  /* gap 7: stock's load wrote 0 over a mod target */
         core_dst_clean_sound(live, !ok); /* 0.5: a code of another layout, or with no "mod" parameter here, is None */
     }
     return r;
@@ -528,6 +531,7 @@ int st_kit_load(unsigned char *live, unsigned char *src)
                  src[KIT_SPARE + KIT_BYTES + 4] == gen(SC_KIT);
         for (j = 0; j < KIT_BYTES; j++)
             live[KIT_HOME + j] = ok ? src[KIT_SPARE + j] : 0;
+        core_dst_keep_kit(live, src);    /* gap 7: stock's load wrote 0 over a mod target */
         core_dst_clean_kit(live, !ok);  /* 0.5: macro targets and FX and CV Dests, as the sounds' */
     }
     return r;
