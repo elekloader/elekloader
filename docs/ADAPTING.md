@@ -2073,6 +2073,35 @@ out, project load and save) and tells the mod, with
 - `core_item_addr(kind, ref)` gives the record a ref names (to read or set
   its mirror), `core_item_ref(kind, addr)` the ref of a record.
 
+### Payloads (core-ar2 0.11, Analog Rytm MKII)
+
+A mod can ship data with its code, such as code another processor loads,
+in a `.payload` section (`analog-rytm-mk2/payload.h`):
+
+```
+        .section .payload, "a"
+        .globl  my_blob
+my_blob:
+        .incbin "blob.bin"
+```
+
+- The linker places it in the mods' area after every mod's code and tables,
+  and the boot copier copies it there with them, before the OS starts. The
+  mod's own symbols (`my_blob`) reach it like any other.
+- `core_payload(id, &len)` finds a mod's payload by its id,
+  `core_payload_id("my-mod")` (the FNV-1a hash of the mod's id), so another
+  mod can find it; `core_payloads` lists them all, `{id, addr, len}`, ending
+  with a zero entry. One payload a mod.
+- Room: with core-ar2 0.11 the mods' area is 0x47B10000-0x47FFF000, 5 MB
+  for code, tables, payloads and `.bss`; a build past it is refused, with the
+  room left for payloads. The tighter limits are the OS file's: the payload
+  is part of the main OS the bootloader unpacks in place, so its packed
+  size comes out of the flash budget (about 1 MB with core alone), and a
+  payload that packs much smaller than it is (long runs, repeated blocks)
+  overtakes its own input. The patcher refuses either and says by how much.
+  A 1 MB payload that packs to about 80 % fits beside core and a check mod
+  (sidecar-check-ar2 part 6).
+
 ### Mod scene and performance locks (core-ar2 0.8, Analog Rytm MKII)
 
 A lockable parameter is locked to a scene, or given a performance depth,

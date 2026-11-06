@@ -5,7 +5,7 @@ import assert from 'node:assert/strict'
 import { ANALOG_RYTM_MK2, DIGITONE_MK2, DIGITAKT_MK1, DIGITONE_MK1, OCTATRACK, devices, targetOf } from '../src/devices.ts'
 import { sha } from '../src/bytes.ts'
 import { Mod, check as check1 } from '../src/elemod.ts'
-import { Mod2, check, imageProblems } from '../src/link.ts'
+import { Mod2, check, ddrFor, imageProblems, payloadId } from '../src/link.ts'
 
 test('a parameter slot claims its sound slot (soundslot:<n>), from its own bytes or the stock image', () => {
   const dn = DIGITONE_MK1, r = dn.releases.find(x => x.version === '1.43')!
@@ -186,4 +186,12 @@ test('the finished image against the stock one: link.py\'s image_problems, line 
   assert.deepEqual(problems(stray(plo + 8, 2), [[plo + 8, plo + 10, 'a site']]), [`${hx(plo)}-${hx(phi)} (${pwhy}) is not stock in the linked image`])
   assert.deepEqual(problems(stray(klo + 4, 2), [[klo + 4, klo + 6, 'a site']]), [`${hx(klo)}-${hx(khi)} (${kwhy}) is not stock in the linked image`])
   assert.deepEqual(problems(stray(plo - 16, 2), [[plo - 16, plo - 14, 'a site']]), [])
+})
+
+test('a payload id is link.py payload_id, and core-ar2 0.11 moves the Rytm\'s mods\' area', () => {
+  assert.equal(payloadId('sidecar-check'), 0x3a4826f9)          // link.payload_id('sidecar-check')
+  assert.equal(payloadId('porbxw'), payloadId('puscra'))         // the collision tests/test_link_refusals.py uses
+  assert.notEqual(payloadId('porbxw'), payloadId('puscrb'))
+  assert.deepEqual(ddrFor(ANALOG_RYTM_MK2, '0.10'), [0x47be0000, 0x47c00000])
+  assert.deepEqual(ddrFor(ANALOG_RYTM_MK2, '0.11'), [0x47b10000, 0x47fff000])
 })

@@ -228,8 +228,9 @@ export const ANALOG_RYTM_MK2: Device = {
       '34cd0c4da8e4b810d1b25284475a99ea53821e2ab7d30a978bf15dc578251f3b', 3005432),
   ],
   stage: 0x40200000, flashAt: 0x80000, flashLimit: 0x300000,
-  areas: { ddr: [0x47be0000, 0x47c00000] },
+  areas: { ddr: [0x47be0000, 0x47c00000], big: [0x47938000, 0x47fff000] },
   ddr: [0x47be0000, 0x47c00000],
+  coreDdr: [['0.11', [0x47b10000, 0x47fff000]]],   // core-ar2 0.11: 5 MB, above its tags and mirrors
   recovery: 'hold FUNC while powering on for the STARTUP menu, press TRIG 4 (OS UPGRADE), '
     + 'then send the stock .syx over MIDI DIN (not USB)',
   slotClaims: [['core_machines', 0, 53, 'machine']],   // a machine's descriptor names its slot at +0

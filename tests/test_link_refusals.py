@@ -638,6 +638,54 @@ def _(B):
                   lambda d: d[1]['sections']['.bss'].update(size=room - 4096))
 
 
+def payload(n, fill='a5'):
+    return {'.payload': {'align': 4, 'len': n, 'parts': [['hex', fill * n]]}}
+
+
+def keeps_payloads(d):
+    d[0]['collections']['core_payloads'] = {'entry': 12}
+
+
+@row('link', '<> carr<> a payload, which <> does not keep (no table <> of <>-byte entries)')
+def _(B):
+    def bad(d):
+        d[1]['sections'].update(payload(64))
+
+    def good(d):
+        bad(d)
+        keeps_payloads(d)
+    return B.pair('m carries a payload, which core 1 does not keep (no table core_payloads of 12-byte entries)',
+                  bad, good)
+
+
+@row('link', 'the payloads (<> bytes) and the mods need RAM to 0x<>, past 0x<> (<> bytes over): the area has '
+             'room for <> bytes of payload')
+def _(B):
+    room = B.dev.ddr[1] - B.dev.ddr[0]
+
+    def size(n):
+        def f(d):
+            keeps_payloads(d)
+            d[1]['sections'].update(payload(n, '00'))
+        return f
+    return B.pair('the payloads (%d bytes) and the mods need RAM to ' % (room + 16), size(room + 16), size(room - 4096))
+
+
+@row('link', 'the payloads of <> and <> have the same id (0x<>)')
+def _(B):
+    def two(second):            # "porbxw" and "puscra": the same FNV-1a hash
+        def f(d):
+            keeps_payloads(d)
+            d[1]['sections'].update(payload(64))
+            d.append(B.other(second, sections=dict(B.other(second)['sections'], **payload(32))))
+            d[1]['id'] = 'porbxw'
+            d[1]['symbols'] = {'fn_porbxw': ['.run', 0]}
+            d[1]['contribute'][0]['relocs'][0][2] = 'sym:fn_porbxw'
+            d[1]['sites'][0]['relocs'][0][2] = 'sym:fn_porbxw'
+        return f
+    return B.pair('the payloads of porbxw and puscra have the same id (0x', two('puscra'), two('puscrb'))
+
+
 @row('link', '.fast code needs SRAM to 0x<>, past 0x<>', device='digitakt-mk1')
 def _(B):
     room = B.dev.sram_code[1] - B.dev.sram_code[0]

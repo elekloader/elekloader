@@ -98,6 +98,7 @@ export async function build(stock: File, modFiles: File[], version: string | nul
     const L = linked.layout
     log(`linked ${linked.order.join(', ')}: RAM ${hex8(L.ddr[0])}-${hex8(L.bss[1])} (${L.ddr_spare} bytes spare), .fast to `
       + `${hex8(L.fast[1])} (${L.fast_spare} spare), blob ${L.blob_len} bytes`)
+    if (L.payload) log(`payloads: ${hex8(L.payload[0])}-${hex8(L.payload[1])} (${L.payload[1] - L.payload[0]} bytes); room for ${L.ddr_spare} more`)
   }
   const man: Record<string, any> = {
     patcher: 'elekloader', device: dev.key,

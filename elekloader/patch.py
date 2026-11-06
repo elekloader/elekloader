@@ -99,6 +99,9 @@ def build(stock_path, mod_paths, version=None, check_only=False, log=print, lock
         log('linked %s: RAM 0x%08x-0x%08x (%d bytes spare), .fast to 0x%08x (%d spare), '
             'blob %d bytes' % (', '.join(linked.order), L['ddr'][0], L['bss'][1],
                                L['ddr_spare'], L['fast'][1], L['fast_spare'], L['blob_len']))
+        if L.get('payload'):
+            log('payloads: 0x%08x-0x%08x (%d bytes); room for %d more'
+                % (L['payload'][0], L['payload'][1], L['payload'][1] - L['payload'][0], L['ddr_spare']))
     man = {
         'patcher': 'elekloader', 'device': dev.key,
         'stock': {'path': os.path.abspath(stock_path), 'sha256': stock.sha256,
