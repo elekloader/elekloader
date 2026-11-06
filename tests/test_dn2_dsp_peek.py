@@ -7,6 +7,12 @@ arriving through reply word 2 are the DSP's memory: the filter stack's guard wor
 filter's data, and a refusal for a peripheral address. It also checks that the record of how
 busy the DSP is (CORE_DSP_BUSY_RECORD) stays zero without dspbusy-dn2 and publishes
 whole windows with it.
+
+dspbusy-dn2 is code-free: its one site sends the DSP's idle loop through core's busy measure.
+DigiKit counts the DSP's start-up as done when the program counter rests in the stock idle
+loop, so with the site in the image it never does. The test boots the image without the
+companion and writes the site's bytes once the DSP is idle; that the build writes exactly
+these bytes is test_sharc_filter's.
 """
 import json
 import os
@@ -19,9 +25,10 @@ import tempfile
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
 STOCK = os.environ.get('ELEKLOADER_DN2_SYX')
 DIGIKIT = os.environ.get('ELEKLOADER_DIGIKIT')
-EMUD = os.environ.get('ELEKLOADER_DIGI_EMUD')
+EMUD = os.environ.get('ELEKLOADER_DIGI_EMUD_COUPLED')   # a digi-emud built with coupled-audio
 READY = os.environ.get('ELEKLOADER_DN2_EMU_READY')
 MS = 132000  # emulated instructions per millisecond
 RETURN = 'I12=DM(M7,I6);\nJUMP(M14,I12)(DB);\nRFRAME;\nNOP;\n'
@@ -72,8 +79,6 @@ class DspPeekTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             work = Path(tmp)
             mods = [sdk.build(str(ROOT / 'mods' / src), STOCK, str(work / src))[0] for src in ('core-dn2', 'machines-dn2')]
-            if busy:
-                mods.append(sdk.build(str(ROOT / 'mods/dspbusy-dn2'), STOCK, str(work / 'busy'))[0])
             stage = work / 'custom'
             stage.mkdir()
             (stage / 'machine.c').write_text('#include "mk2/machines.h"\n'
@@ -124,6 +129,10 @@ class DspPeekTests(unittest.TestCase):
                     return emu.peek32(at['refused']), [(w & 0xffff) << 16 | w >> 16 for w in pairs]
 
                 emu.call('firmware.load', syx=str(firmware), start='cold', force=True, auto_no=True)
+                if busy:                                                 # dspbusy-dn2's site, once idle
+                    (site, (old, new)), = profile['data_sites'].items()
+                    self.assertEqual(emu.call('dsp.peek', addr=site, len=len(old) // 2)['hex'], old)
+                    emu.call('dsp.patch', text='BYTES 0x%x %s' % (site, new))
                 wait(300)
                 guard = profile['filter_stack'][0] - 0x28000000          # the core's view of L1
                 self.assertEqual(peek(guard, 1), (0, [profile['stack_guard']]))

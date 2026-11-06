@@ -28,7 +28,7 @@ leave the stock filters' slot 66 alone; one with two synths and two
 filters with G from two mods, whose shared rows take the active track's
 machine's labels and defaults; and one with an SDK machine with a render,
 whose own type reaches the DSP. With DigiKit
-(`ELEKLOADER_DIGIKIT`, its `ELEKLOADER_DIGI_EMUD` and the ready inputs in
+(`ELEKLOADER_DIGIKIT`, a coupled `ELEKLOADER_DIGI_EMUD_COUPLED` and the ready inputs in
 `ELEKLOADER_DN2_EMU_READY`), `test_dn2_filter_capture.py` plays stock
 LOWPASS 4 and a custom filter side by side in the coupled emulator, with the
 filter envelope and an LFO moving the cutoff: the custom voice's captured
@@ -70,10 +70,10 @@ ELEKLOADER_AR2_SYX=Analog-Rytm_MKII_OS1.74.syx python tests/test_rytm_mk2.py   #
 ELEKLOADER_A4_SYX=Analog-Four_MKII_OS1.56.syx python tests/test_analog_four_mk2.py
 ELEKLOADER_DN2_SYX=Digitone_II_OS1.12.syx ELEKLOADER_DN2_ZIP=Digitone_II_OS1.12_dist.zip python tests/test_digitone2.py
 ELEKLOADER_MC_SYX=Model_Cycles_OS1.13.syx python tests/test_model_cycles.py   # core-mc 0.3 against 0.2 and 0.1, its exports and ev_boot
-ELEKLOADER_DN2_SYX=... ELEKLOADER_CROSS=... ELEKLOADER_DIGIKIT=... ELEKLOADER_DIGI_EMUD=... ELEKLOADER_DN2_EMU_READY=... SELACHE=... python tests/test_dn2_filter_capture.py
-ELEKLOADER_DN2_SYX=... ELEKLOADER_CROSS=... ELEKLOADER_DIGIKIT=... ELEKLOADER_DIGI_EMUD=... ELEKLOADER_DN2_EMU_READY=... python tests/test_dn2_machine_memory.py
-ELEKLOADER_DN2_SYX=... ELEKLOADER_CROSS=... ELEKLOADER_DIGIKIT=... ELEKLOADER_DIGI_EMUD=... ELEKLOADER_DN2_EMU_READY=... SELACHE=... python tests/test_dn2_machine_stack.py
-ELEKLOADER_DN2_SYX=... ELEKLOADER_CROSS=... ELEKLOADER_DIGIKIT=... ELEKLOADER_DIGI_EMUD=... ELEKLOADER_DN2_EMU_READY=... SELACHE=... python tests/test_dn2_dsp_peek.py
+ELEKLOADER_DN2_SYX=... ELEKLOADER_CROSS=... ELEKLOADER_DIGIKIT=... ELEKLOADER_DIGI_EMUD_COUPLED=... ELEKLOADER_DN2_EMU_READY=... SELACHE=... python tests/test_dn2_filter_capture.py
+ELEKLOADER_DN2_SYX=... ELEKLOADER_CROSS=... ELEKLOADER_DIGIKIT=... ELEKLOADER_DIGI_EMUD_COUPLED=... ELEKLOADER_DN2_EMU_READY=... python tests/test_dn2_machine_memory.py
+ELEKLOADER_DN2_SYX=... ELEKLOADER_CROSS=... ELEKLOADER_DIGIKIT=... ELEKLOADER_DIGI_EMUD_COUPLED=... ELEKLOADER_DN2_EMU_READY=... SELACHE=... python tests/test_dn2_machine_stack.py
+ELEKLOADER_DN2_SYX=... ELEKLOADER_CROSS=... ELEKLOADER_DIGIKIT=... ELEKLOADER_DIGI_EMUD_COUPLED=... ELEKLOADER_DN2_EMU_READY=... SELACHE=... python tests/test_dn2_dsp_peek.py
 ELEKLOADER_DIGIKIT=... SELACHE=... python tests/test_dn2_dispatch.py   # the dispatcher, in DigiKit's SHARC runner
 ELEKLOADER_CATALOG_DIR=folder/of/catalog/files ELEKLOADER_STOCK=... python tests/test_catalog_link.py   # the catalog against core 3.0
 ELEKLOADER_STOCK=... ELEKLOADER_STOCK_154=... ELEKLOADER_OT_SYX=... ELEKLOADER_MODS=... python tests/test_gui.py   # the window, hidden (Tk)
@@ -122,12 +122,18 @@ ELEKLOADER_STOCK_DN1_144=<Digitone_and_Digitone_Keys_OS1.44.syx> ELEKLOADER_CROS
 uv run --project "$ELEKLOADER_DIGIEMU" python tests/test_sdk_alpha_hiding.py
 ```
 
-The Digitone II runs in DigiKit's ColdFire emulator:
+The Digitone II runs in DigiKit's ColdFire emulator, and its sound
+(`test_sdk_alpha_sound.py`) in DigiKit's coupled emulator, which runs the
+DSP too: `ELEKLOADER_DIGI_EMUD_COUPLED` is a digi-emud built with coupled
+audio, `ELEKLOADER_DN2_EMU_READY` its ready inputs, and `SELACHE` assembles
+the test machines' SHARC renders. The probes such a render keeps are read
+from the DSP's memory.
 
 ```bash
 ELEKLOADER_DIGIKIT=<digikit> ELEKLOADER_DIGI_EMUD=<digi-emud> \
+ELEKLOADER_DIGI_EMUD_COUPLED=<coupled digi-emud> ELEKLOADER_DN2_EMU_READY=<ready inputs> SELACHE=<selache> \
 ELEKLOADER_DN2_SYX=<Digitone_II_OS1.12.syx> ELEKLOADER_CROSS=m68k-elf- \
-python tests/test_sdk_alpha_hiding.py
+python tests/test_sdk_alpha_sound.py
 ```
 
 `SDK_WATCH=1` shows the emulated screen, the actions and the result in a

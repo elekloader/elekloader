@@ -14,9 +14,10 @@ import tempfile
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
 STOCK = os.environ.get('ELEKLOADER_DN2_SYX')
 DIGIKIT = os.environ.get('ELEKLOADER_DIGIKIT')
-EMUD = os.environ.get('ELEKLOADER_DIGI_EMUD')
+EMUD = os.environ.get('ELEKLOADER_DIGI_EMUD_COUPLED')   # a digi-emud built with coupled-audio
 READY = os.environ.get('ELEKLOADER_DN2_EMU_READY')
 MS = 132000  # emulated instructions per millisecond
 
