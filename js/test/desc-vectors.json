@@ -1,0 +1,1878 @@
+{
+ "release": {
+  "version": "SYN",
+  "syxSha256": "f68bd6cf1e705b900ce813b74b87389447fff0a41dd3a3e03e6262a6c2ed65e3",
+  "mainSha256": "f99c600b0f873b28bb752700dfcd34cdd7df8987c285b5726b912b1b86e2819d",
+  "mainLen": 3005432
+ },
+ "cases": [
+  {
+   "name": "with the descriptor",
+   "docs": [
+    {
+     "elemod": 2,
+     "id": "core",
+     "version": "1",
+     "target": {
+      "device": "analog-rytm-mk2",
+      "product": "Analog Rytm MKII",
+      "os": "SYN",
+      "syx_sha256": "f68bd6cf1e705b900ce813b74b87389447fff0a41dd3a3e03e6262a6c2ed65e3",
+      "section3_sha256": "f99c600b0f873b28bb752700dfcd34cdd7df8987c285b5726b912b1b86e2819d",
+      "section3_len": 3005432
+     },
+     "sections": {
+      ".boot": {
+       "align": 4,
+       "len": 2,
+       "parts": [
+        [
+         "hex",
+         "4e75"
+        ]
+       ]
+      }
+     },
+     "symbols": {
+      "core_fn": [
+       ".boot",
+       0
+      ],
+      "core_zero": [
+       ".boot",
+       0
+      ]
+     },
+     "exports": [
+      "core_zero",
+      "core_fn"
+     ],
+     "collections": {
+      "ev_x": {
+       "entry": 4
+      },
+      "core_store_ids": {
+       "entry": 4
+      },
+      "ev_render_x": {
+       "entry": 4,
+       "render": true,
+       "spare": 2
+      },
+      "core_handles": {
+       "entry": 4
+      }
+     },
+     "imports": [
+      "__store_gen",
+      "__store_gen2"
+     ]
+    },
+    {
+     "elemod": 2,
+     "id": "m",
+     "version": "1",
+     "target": {
+      "device": "analog-rytm-mk2",
+      "product": "Analog Rytm MKII",
+      "os": "SYN",
+      "syx_sha256": "f68bd6cf1e705b900ce813b74b87389447fff0a41dd3a3e03e6262a6c2ed65e3",
+      "section3_sha256": "f99c600b0f873b28bb752700dfcd34cdd7df8987c285b5726b912b1b86e2819d",
+      "section3_len": 3005432
+     },
+     "requires": [
+      "core"
+     ],
+     "sections": {
+      ".run": {
+       "align": 4,
+       "len": 8,
+       "parts": [
+        [
+         "hex",
+         "4e714e714e714e75"
+        ]
+       ]
+      },
+      ".bss": {
+       "size": 16
+      }
+     },
+     "symbols": {
+      "fn_m": [
+       ".run",
+       0
+      ],
+      "drive_staging_size": [
+       "abs",
+       524288
+      ]
+     },
+     "imports": [
+      "core_fn",
+      "core_desc"
+     ],
+     "contribute": [
+      {
+       "to": "ev_x",
+       "data": "00000000",
+       "relocs": [
+        [
+         0,
+         "abs32",
+         "sym:fn_m",
+         0
+        ]
+       ]
+      }
+     ],
+     "storage": [
+      {
+       "sym": "st_a",
+       "scope": "kit",
+       "bits": 5
+      }
+     ],
+     "resources": {
+      "names": [
+       "sysex:7d"
+      ]
+     },
+     "relocs": [
+      [
+       ".run",
+       4,
+       "abs32",
+       "sym:core_desc",
+       0
+      ]
+     ],
+     "exports": [
+      "drive_staging_size"
+     ]
+    },
+    {
+     "elemod": 2,
+     "id": "n",
+     "version": "1",
+     "target": {
+      "device": "analog-rytm-mk2",
+      "product": "Analog Rytm MKII",
+      "os": "SYN",
+      "syx_sha256": "f68bd6cf1e705b900ce813b74b87389447fff0a41dd3a3e03e6262a6c2ed65e3",
+      "section3_sha256": "f99c600b0f873b28bb752700dfcd34cdd7df8987c285b5726b912b1b86e2819d",
+      "section3_len": 3005432
+     },
+     "requires": [
+      "core"
+     ],
+     "sections": {
+      ".run": {
+       "align": 4,
+       "len": 8,
+       "parts": [
+        [
+         "hex",
+         "4e714e714e714e75"
+        ]
+       ]
+      },
+      ".bss": {
+       "size": 16
+      }
+     },
+     "symbols": {
+      "fn_n": [
+       ".run",
+       0
+      ]
+     },
+     "imports": [
+      "core_fn"
+     ],
+     "contribute": [
+      {
+       "to": "ev_x",
+       "order": 10,
+       "data": "0000000000000000",
+       "relocs": [
+        [
+         0,
+         "abs32",
+         "sym:fn_n",
+         0
+        ],
+        [
+         4,
+         "abs32",
+         "sym:fn_n",
+         2
+        ]
+       ]
+      },
+      {
+       "to": "ev_render_x",
+       "order": 60,
+       "data": "00000000",
+       "relocs": [
+        [
+         0,
+         "abs32",
+         "sym:fn_n",
+         0
+        ]
+       ]
+      }
+     ],
+     "sites": [
+      {
+       "addr": "0x40001400",
+       "len": 6,
+       "kind": "code",
+       "new": "4ef900000000",
+       "stock_sha256": "12132dc79760ae8e1efc3726056d71c57651f9cc9289d461637863fce79237f0",
+       "relocs": [
+        [
+         2,
+         "abs32",
+         "sym:fn_n",
+         0
+        ]
+       ]
+      }
+     ]
+    }
+   ],
+   "image_sha256": "d985772e6c960605408229839ebdbd6463f69e413c8c674e95ce0d2a9b3fc30b",
+   "layout": {
+    "boot": [
+     1076748280,
+     1076748282
+    ],
+    "run_load": 1076748288,
+    "ddr": [
+     1202782208,
+     1202782916
+    ],
+    "bss": [
+     1202782916,
+     1202782948
+    ],
+    "fast": [
+     0,
+     0
+    ],
+    "blob_len": 716,
+    "payload": null,
+    "sections": {
+     "core .boot": 1076748280,
+     "m .run": 1202782208,
+     "n .run": 1202782216,
+     "m .bss": 1202782916,
+     "n .bss": 1202782932
+    },
+    "ddr_spare": 5172508,
+    "fast_spare": 0,
+    "ddr_size": 5173248,
+    "fast_size": 0,
+    "desc": [
+     1202782332,
+     1202782916
+    ]
+   },
+   "map": {
+    "core:core_fn": 1076748280,
+    "core:core_zero": 1076748280,
+    "m:fn_m": 1202782208,
+    "m:drive_staging_size": 524288,
+    "n:fn_n": 1202782216,
+    "core_fn": 1076748280,
+    "core_zero": 1076748280,
+    "drive_staging_size": 524288,
+    "ev_x": 1202782252,
+    "ev_x_n": 3,
+    "core_store_ids": 1202782228,
+    "core_store_ids_n": 1,
+    "ev_render_x": 1202782236,
+    "ev_render_x_n": 1,
+    "core_handles": 1202782224,
+    "core_handles_n": 0,
+    "__store_gen": 16843009,
+    "__store_gen2": 16843268,
+    "st_a": 557842432,
+    "core_lfo_dst": 0,
+    "core_fx_lfo_dst": 0,
+    "core_desc": 1202782332,
+    "__run_load": 1076748288,
+    "__run_start": 1202782208,
+    "__run_words": 177,
+    "__bss_start": 1202782916,
+    "__bss_end": 1202782948,
+    "__bss_words": 8,
+    "__run_hash": 1635912,
+    "fn_m": 1202782208,
+    "fn_n": 1202782216
+   },
+   "desc": "454c4b440001000000000248e78928d60002000000000000000001a4000000a100030003000400010000006000000090000000a80000010800000110000001240000013800000000000000100000000000000000000000000000000000000000000000140000001900000000000000020000001b0000001902000001000200010000001d0000001901010002000300000000001f402ddff800000027402ddff800000031000800000000004447b10010000400000000000000000110000000000000005147b10014000400010001000000000110000000000000006047b1001c000400010003000300000114000000000000006c47b1002c000400030013000100000118000000000001000100000071ffff0000003c0002000a0002000a00020032000147b102e447d0000047fff0000000000000080000402de2c4000001e1000600000000007a00000038000000000000000100000080000000400000000500000001000000840000002800000000000000010000008b000000100000000000000001000000910000002000000000000000010000009900000ec00000000000000001616e616c6f672d7279746d2d6d6b320053594e00636f72650031006d006e00636f72655f666e00636f72655f7a65726f0064726976655f73746167696e675f73697a6500636f72655f68616e646c657300636f72655f73746f72655f6964730065765f72656e6465725f780065765f780073797365783a376400736f756e64006b697400676c6f62616c00747261636b007061747465726e0070726f6a65637400000000"
+  },
+  {
+   "name": "without it",
+   "docs": [
+    {
+     "elemod": 2,
+     "id": "core",
+     "version": "1",
+     "target": {
+      "device": "analog-rytm-mk2",
+      "product": "Analog Rytm MKII",
+      "os": "SYN",
+      "syx_sha256": "f68bd6cf1e705b900ce813b74b87389447fff0a41dd3a3e03e6262a6c2ed65e3",
+      "section3_sha256": "f99c600b0f873b28bb752700dfcd34cdd7df8987c285b5726b912b1b86e2819d",
+      "section3_len": 3005432
+     },
+     "sections": {
+      ".boot": {
+       "align": 4,
+       "len": 2,
+       "parts": [
+        [
+         "hex",
+         "4e75"
+        ]
+       ]
+      }
+     },
+     "symbols": {
+      "core_fn": [
+       ".boot",
+       0
+      ],
+      "core_zero": [
+       ".boot",
+       0
+      ]
+     },
+     "exports": [
+      "core_zero",
+      "core_fn"
+     ],
+     "collections": {
+      "ev_x": {
+       "entry": 4
+      },
+      "core_store_ids": {
+       "entry": 4
+      },
+      "ev_render_x": {
+       "entry": 4,
+       "render": true,
+       "spare": 2
+      },
+      "core_handles": {
+       "entry": 4
+      }
+     },
+     "imports": [
+      "__store_gen",
+      "__store_gen2"
+     ]
+    },
+    {
+     "elemod": 2,
+     "id": "m",
+     "version": "1",
+     "target": {
+      "device": "analog-rytm-mk2",
+      "product": "Analog Rytm MKII",
+      "os": "SYN",
+      "syx_sha256": "f68bd6cf1e705b900ce813b74b87389447fff0a41dd3a3e03e6262a6c2ed65e3",
+      "section3_sha256": "f99c600b0f873b28bb752700dfcd34cdd7df8987c285b5726b912b1b86e2819d",
+      "section3_len": 3005432
+     },
+     "requires": [
+      "core"
+     ],
+     "sections": {
+      ".run": {
+       "align": 4,
+       "len": 8,
+       "parts": [
+        [
+         "hex",
+         "4e714e714e714e75"
+        ]
+       ]
+      },
+      ".bss": {
+       "size": 16
+      }
+     },
+     "symbols": {
+      "fn_m": [
+       ".run",
+       0
+      ]
+     },
+     "imports": [
+      "core_fn"
+     ],
+     "contribute": [
+      {
+       "to": "ev_x",
+       "data": "00000000",
+       "relocs": [
+        [
+         0,
+         "abs32",
+         "sym:fn_m",
+         0
+        ]
+       ]
+      }
+     ],
+     "storage": [
+      {
+       "sym": "st_a",
+       "scope": "kit",
+       "bits": 5
+      }
+     ],
+     "resources": {
+      "names": [
+       "sysex:7d"
+      ]
+     }
+    },
+    {
+     "elemod": 2,
+     "id": "n",
+     "version": "1",
+     "target": {
+      "device": "analog-rytm-mk2",
+      "product": "Analog Rytm MKII",
+      "os": "SYN",
+      "syx_sha256": "f68bd6cf1e705b900ce813b74b87389447fff0a41dd3a3e03e6262a6c2ed65e3",
+      "section3_sha256": "f99c600b0f873b28bb752700dfcd34cdd7df8987c285b5726b912b1b86e2819d",
+      "section3_len": 3005432
+     },
+     "requires": [
+      "core"
+     ],
+     "sections": {
+      ".run": {
+       "align": 4,
+       "len": 8,
+       "parts": [
+        [
+         "hex",
+         "4e714e714e714e75"
+        ]
+       ]
+      },
+      ".bss": {
+       "size": 16
+      }
+     },
+     "symbols": {
+      "fn_n": [
+       ".run",
+       0
+      ]
+     },
+     "imports": [
+      "core_fn"
+     ],
+     "contribute": [
+      {
+       "to": "ev_x",
+       "order": 10,
+       "data": "0000000000000000",
+       "relocs": [
+        [
+         0,
+         "abs32",
+         "sym:fn_n",
+         0
+        ],
+        [
+         4,
+         "abs32",
+         "sym:fn_n",
+         2
+        ]
+       ]
+      },
+      {
+       "to": "ev_render_x",
+       "order": 60,
+       "data": "00000000",
+       "relocs": [
+        [
+         0,
+         "abs32",
+         "sym:fn_n",
+         0
+        ]
+       ]
+      }
+     ],
+     "sites": [
+      {
+       "addr": "0x40001400",
+       "len": 6,
+       "kind": "code",
+       "new": "4ef900000000",
+       "stock_sha256": "12132dc79760ae8e1efc3726056d71c57651f9cc9289d461637863fce79237f0",
+       "relocs": [
+        [
+         2,
+         "abs32",
+         "sym:fn_n",
+         0
+        ]
+       ]
+      }
+     ]
+    }
+   ],
+   "image_sha256": "d04390cabb89d461f1871c8d70b6d01648c25a8838c7ad768cd4834111c3782d",
+   "layout": {
+    "boot": [
+     1076748280,
+     1076748282
+    ],
+    "run_load": 1076748288,
+    "ddr": [
+     1202782208,
+     1202782260
+    ],
+    "bss": [
+     1202782260,
+     1202782292
+    ],
+    "fast": [
+     0,
+     0
+    ],
+    "blob_len": 60,
+    "payload": null,
+    "sections": {
+     "core .boot": 1076748280,
+     "m .run": 1202782208,
+     "n .run": 1202782216,
+     "m .bss": 1202782260,
+     "n .bss": 1202782276
+    },
+    "ddr_spare": 5173164,
+    "fast_spare": 0,
+    "ddr_size": 5173248,
+    "fast_size": 0
+   },
+   "map": {
+    "core:core_fn": 1076748280,
+    "core:core_zero": 1076748280,
+    "m:fn_m": 1202782208,
+    "n:fn_n": 1202782216,
+    "core_fn": 1076748280,
+    "core_zero": 1076748280,
+    "ev_x": 1202782244,
+    "ev_x_n": 3,
+    "core_store_ids": 1202782228,
+    "core_store_ids_n": 1,
+    "ev_render_x": 1202782236,
+    "ev_render_x_n": 1,
+    "core_handles": 1202782224,
+    "core_handles_n": 0,
+    "__store_gen": 16843009,
+    "__store_gen2": 16843268,
+    "st_a": 557842432,
+    "core_lfo_dst": 0,
+    "core_fx_lfo_dst": 0,
+    "__run_load": 1076748288,
+    "__run_start": 1202782208,
+    "__run_words": 13,
+    "__bss_start": 1202782260,
+    "__bss_end": 1202782292,
+    "__bss_words": 8,
+    "__run_hash": 2330139171,
+    "fn_m": 1202782208,
+    "fn_n": 1202782216
+   },
+   "desc": null
+  },
+  {
+   "name": "no spare in ev_x, an order of 0",
+   "docs": [
+    {
+     "elemod": 2,
+     "id": "core",
+     "version": "1",
+     "target": {
+      "device": "analog-rytm-mk2",
+      "product": "Analog Rytm MKII",
+      "os": "SYN",
+      "syx_sha256": "f68bd6cf1e705b900ce813b74b87389447fff0a41dd3a3e03e6262a6c2ed65e3",
+      "section3_sha256": "f99c600b0f873b28bb752700dfcd34cdd7df8987c285b5726b912b1b86e2819d",
+      "section3_len": 3005432
+     },
+     "sections": {
+      ".boot": {
+       "align": 4,
+       "len": 2,
+       "parts": [
+        [
+         "hex",
+         "4e75"
+        ]
+       ]
+      }
+     },
+     "symbols": {
+      "core_fn": [
+       ".boot",
+       0
+      ],
+      "core_zero": [
+       ".boot",
+       0
+      ]
+     },
+     "exports": [
+      "core_zero",
+      "core_fn"
+     ],
+     "collections": {
+      "ev_x": {
+       "entry": 4,
+       "spare": 0
+      },
+      "core_store_ids": {
+       "entry": 4
+      },
+      "ev_render_x": {
+       "entry": 4,
+       "render": true,
+       "spare": 2
+      },
+      "core_handles": {
+       "entry": 4
+      }
+     },
+     "imports": [
+      "__store_gen",
+      "__store_gen2"
+     ]
+    },
+    {
+     "elemod": 2,
+     "id": "m",
+     "version": "1",
+     "target": {
+      "device": "analog-rytm-mk2",
+      "product": "Analog Rytm MKII",
+      "os": "SYN",
+      "syx_sha256": "f68bd6cf1e705b900ce813b74b87389447fff0a41dd3a3e03e6262a6c2ed65e3",
+      "section3_sha256": "f99c600b0f873b28bb752700dfcd34cdd7df8987c285b5726b912b1b86e2819d",
+      "section3_len": 3005432
+     },
+     "requires": [
+      "core"
+     ],
+     "sections": {
+      ".run": {
+       "align": 4,
+       "len": 8,
+       "parts": [
+        [
+         "hex",
+         "4e714e714e714e75"
+        ]
+       ]
+      },
+      ".bss": {
+       "size": 16
+      }
+     },
+     "symbols": {
+      "fn_m": [
+       ".run",
+       0
+      ],
+      "drive_staging_size": [
+       "abs",
+       524288
+      ]
+     },
+     "imports": [
+      "core_fn",
+      "core_desc"
+     ],
+     "contribute": [
+      {
+       "to": "ev_x",
+       "data": "00000000",
+       "relocs": [
+        [
+         0,
+         "abs32",
+         "sym:fn_m",
+         0
+        ]
+       ]
+      }
+     ],
+     "storage": [
+      {
+       "sym": "st_a",
+       "scope": "kit",
+       "bits": 5
+      }
+     ],
+     "resources": {
+      "names": [
+       "sysex:7d"
+      ]
+     },
+     "relocs": [
+      [
+       ".run",
+       4,
+       "abs32",
+       "sym:core_desc",
+       0
+      ]
+     ],
+     "exports": [
+      "drive_staging_size"
+     ]
+    },
+    {
+     "elemod": 2,
+     "id": "n",
+     "version": "1",
+     "target": {
+      "device": "analog-rytm-mk2",
+      "product": "Analog Rytm MKII",
+      "os": "SYN",
+      "syx_sha256": "f68bd6cf1e705b900ce813b74b87389447fff0a41dd3a3e03e6262a6c2ed65e3",
+      "section3_sha256": "f99c600b0f873b28bb752700dfcd34cdd7df8987c285b5726b912b1b86e2819d",
+      "section3_len": 3005432
+     },
+     "requires": [
+      "core"
+     ],
+     "sections": {
+      ".run": {
+       "align": 4,
+       "len": 8,
+       "parts": [
+        [
+         "hex",
+         "4e714e714e714e75"
+        ]
+       ]
+      },
+      ".bss": {
+       "size": 16
+      }
+     },
+     "symbols": {
+      "fn_n": [
+       ".run",
+       0
+      ]
+     },
+     "imports": [
+      "core_fn"
+     ],
+     "contribute": [
+      {
+       "to": "ev_x",
+       "order": 10,
+       "data": "0000000000000000",
+       "relocs": [
+        [
+         0,
+         "abs32",
+         "sym:fn_n",
+         0
+        ],
+        [
+         4,
+         "abs32",
+         "sym:fn_n",
+         2
+        ]
+       ]
+      },
+      {
+       "to": "ev_render_x",
+       "order": 0,
+       "data": "00000000",
+       "relocs": [
+        [
+         0,
+         "abs32",
+         "sym:fn_n",
+         0
+        ]
+       ]
+      }
+     ],
+     "sites": [
+      {
+       "addr": "0x40001400",
+       "len": 6,
+       "kind": "code",
+       "new": "4ef900000000",
+       "stock_sha256": "12132dc79760ae8e1efc3726056d71c57651f9cc9289d461637863fce79237f0",
+       "relocs": [
+        [
+         2,
+         "abs32",
+         "sym:fn_n",
+         0
+        ]
+       ]
+      }
+     ]
+    }
+   ],
+   "image_sha256": "2f1cf49596824b8486f553f9956442a5abd20834525fb411bed7008ca0b517da",
+   "layout": {
+    "boot": [
+     1076748280,
+     1076748282
+    ],
+    "run_load": 1076748288,
+    "ddr": [
+     1202782208,
+     1202782852
+    ],
+    "bss": [
+     1202782852,
+     1202782884
+    ],
+    "fast": [
+     0,
+     0
+    ],
+    "blob_len": 652,
+    "payload": null,
+    "sections": {
+     "core .boot": 1076748280,
+     "m .run": 1202782208,
+     "n .run": 1202782216,
+     "m .bss": 1202782852,
+     "n .bss": 1202782868
+    },
+    "ddr_spare": 5172572,
+    "fast_spare": 0,
+    "ddr_size": 5173248,
+    "fast_size": 0,
+    "desc": [
+     1202782268,
+     1202782852
+    ]
+   },
+   "map": {
+    "core:core_fn": 1076748280,
+    "core:core_zero": 1076748280,
+    "m:fn_m": 1202782208,
+    "m:drive_staging_size": 524288,
+    "n:fn_n": 1202782216,
+    "core_fn": 1076748280,
+    "core_zero": 1076748280,
+    "drive_staging_size": 524288,
+    "ev_x": 1202782252,
+    "ev_x_n": 3,
+    "core_store_ids": 1202782228,
+    "core_store_ids_n": 1,
+    "ev_render_x": 1202782236,
+    "ev_render_x_n": 1,
+    "core_handles": 1202782224,
+    "core_handles_n": 0,
+    "__store_gen": 16843009,
+    "__store_gen2": 16843268,
+    "st_a": 557842432,
+    "core_lfo_dst": 0,
+    "core_fx_lfo_dst": 0,
+    "core_desc": 1202782268,
+    "__run_load": 1076748288,
+    "__run_start": 1202782208,
+    "__run_words": 161,
+    "__bss_start": 1202782852,
+    "__bss_end": 1202782884,
+    "__bss_words": 8,
+    "__run_hash": 3223558328,
+    "fn_m": 1202782208,
+    "fn_n": 1202782216
+   },
+   "desc": "454c4b440001000000000248128b9c060002000000000000000001a4000000a100030003000400010000006000000090000000a80000010800000110000001240000013800000000000000100000000000000000000000000000000000000000000000140000001900000000000000020000001b0000001902000001000200010000001d0000001901010002000300000000001f402ddff800000027402ddff800000031000800000000004447b10010000400000000000000000110000000000000005147b10014000400010001000000000110000000000000006047b1001c000400010003000300000114000000000000006c47b1002c000400030003000100000118000000000001000100000071ffff000000000002000a0002000a00020032000147b102a447d0000047fff0000000000000080000402de284000001e1000600000000007a00000038000000000000000100000080000000400000000500000001000000840000002800000000000000010000008b000000100000000000000001000000910000002000000000000000010000009900000ec00000000000000001616e616c6f672d7279746d2d6d6b320053594e00636f72650031006d006e00636f72655f666e00636f72655f7a65726f0064726976655f73746167696e675f73697a6500636f72655f68616e646c657300636f72655f73746f72655f6964730065765f72656e6465725f780065765f780073797365783a376400736f756e64006b697400676c6f62616c00747261636b007061747465726e0070726f6a65637400000000"
+  },
+  {
+   "name": "an order past the keys'",
+   "docs": [
+    {
+     "elemod": 2,
+     "id": "core",
+     "version": "1",
+     "target": {
+      "device": "analog-rytm-mk2",
+      "product": "Analog Rytm MKII",
+      "os": "SYN",
+      "syx_sha256": "f68bd6cf1e705b900ce813b74b87389447fff0a41dd3a3e03e6262a6c2ed65e3",
+      "section3_sha256": "f99c600b0f873b28bb752700dfcd34cdd7df8987c285b5726b912b1b86e2819d",
+      "section3_len": 3005432
+     },
+     "sections": {
+      ".boot": {
+       "align": 4,
+       "len": 2,
+       "parts": [
+        [
+         "hex",
+         "4e75"
+        ]
+       ]
+      }
+     },
+     "symbols": {
+      "core_fn": [
+       ".boot",
+       0
+      ],
+      "core_zero": [
+       ".boot",
+       0
+      ]
+     },
+     "exports": [
+      "core_zero",
+      "core_fn"
+     ],
+     "collections": {
+      "ev_x": {
+       "entry": 4
+      },
+      "core_store_ids": {
+       "entry": 4
+      },
+      "ev_render_x": {
+       "entry": 4,
+       "render": true,
+       "spare": 2
+      },
+      "core_handles": {
+       "entry": 4
+      }
+     },
+     "imports": [
+      "__store_gen",
+      "__store_gen2"
+     ]
+    },
+    {
+     "elemod": 2,
+     "id": "m",
+     "version": "1",
+     "target": {
+      "device": "analog-rytm-mk2",
+      "product": "Analog Rytm MKII",
+      "os": "SYN",
+      "syx_sha256": "f68bd6cf1e705b900ce813b74b87389447fff0a41dd3a3e03e6262a6c2ed65e3",
+      "section3_sha256": "f99c600b0f873b28bb752700dfcd34cdd7df8987c285b5726b912b1b86e2819d",
+      "section3_len": 3005432
+     },
+     "requires": [
+      "core"
+     ],
+     "sections": {
+      ".run": {
+       "align": 4,
+       "len": 8,
+       "parts": [
+        [
+         "hex",
+         "4e714e714e714e75"
+        ]
+       ]
+      },
+      ".bss": {
+       "size": 16
+      }
+     },
+     "symbols": {
+      "fn_m": [
+       ".run",
+       0
+      ],
+      "drive_staging_size": [
+       "abs",
+       524288
+      ]
+     },
+     "imports": [
+      "core_fn",
+      "core_desc"
+     ],
+     "contribute": [
+      {
+       "to": "ev_x",
+       "data": "00000000",
+       "relocs": [
+        [
+         0,
+         "abs32",
+         "sym:fn_m",
+         0
+        ]
+       ]
+      }
+     ],
+     "storage": [
+      {
+       "sym": "st_a",
+       "scope": "kit",
+       "bits": 5
+      }
+     ],
+     "resources": {
+      "names": [
+       "sysex:7d"
+      ]
+     },
+     "relocs": [
+      [
+       ".run",
+       4,
+       "abs32",
+       "sym:core_desc",
+       0
+      ]
+     ],
+     "exports": [
+      "drive_staging_size"
+     ]
+    },
+    {
+     "elemod": 2,
+     "id": "n",
+     "version": "1",
+     "target": {
+      "device": "analog-rytm-mk2",
+      "product": "Analog Rytm MKII",
+      "os": "SYN",
+      "syx_sha256": "f68bd6cf1e705b900ce813b74b87389447fff0a41dd3a3e03e6262a6c2ed65e3",
+      "section3_sha256": "f99c600b0f873b28bb752700dfcd34cdd7df8987c285b5726b912b1b86e2819d",
+      "section3_len": 3005432
+     },
+     "requires": [
+      "core"
+     ],
+     "sections": {
+      ".run": {
+       "align": 4,
+       "len": 8,
+       "parts": [
+        [
+         "hex",
+         "4e714e714e714e75"
+        ]
+       ]
+      },
+      ".bss": {
+       "size": 16
+      }
+     },
+     "symbols": {
+      "fn_n": [
+       ".run",
+       0
+      ]
+     },
+     "imports": [
+      "core_fn"
+     ],
+     "contribute": [
+      {
+       "to": "ev_x",
+       "order": 65535,
+       "data": "0000000000000000",
+       "relocs": [
+        [
+         0,
+         "abs32",
+         "sym:fn_n",
+         0
+        ],
+        [
+         4,
+         "abs32",
+         "sym:fn_n",
+         2
+        ]
+       ]
+      },
+      {
+       "to": "ev_render_x",
+       "order": 60,
+       "data": "00000000",
+       "relocs": [
+        [
+         0,
+         "abs32",
+         "sym:fn_n",
+         0
+        ]
+       ]
+      }
+     ],
+     "sites": [
+      {
+       "addr": "0x40001400",
+       "len": 6,
+       "kind": "code",
+       "new": "4ef900000000",
+       "stock_sha256": "12132dc79760ae8e1efc3726056d71c57651f9cc9289d461637863fce79237f0",
+       "relocs": [
+        [
+         2,
+         "abs32",
+         "sym:fn_n",
+         0
+        ]
+       ]
+      }
+     ]
+    }
+   ],
+   "error": "n 1: its entry for ev_x has the order 65535; with a build descriptor an order is 0 to 65534"
+  },
+  {
+   "name": "past the +Drive area",
+   "docs": [
+    {
+     "elemod": 2,
+     "id": "core",
+     "version": "0.11",
+     "target": {
+      "device": "analog-rytm-mk2",
+      "product": "Analog Rytm MKII",
+      "os": "SYN",
+      "syx_sha256": "f68bd6cf1e705b900ce813b74b87389447fff0a41dd3a3e03e6262a6c2ed65e3",
+      "section3_sha256": "f99c600b0f873b28bb752700dfcd34cdd7df8987c285b5726b912b1b86e2819d",
+      "section3_len": 3005432
+     },
+     "sections": {
+      ".boot": {
+       "align": 4,
+       "len": 2,
+       "parts": [
+        [
+         "hex",
+         "4e75"
+        ]
+       ]
+      }
+     },
+     "symbols": {
+      "core_fn": [
+       ".boot",
+       0
+      ],
+      "core_zero": [
+       ".boot",
+       0
+      ]
+     },
+     "exports": [
+      "core_zero",
+      "core_fn"
+     ],
+     "collections": {
+      "ev_x": {
+       "entry": 4
+      },
+      "core_store_ids": {
+       "entry": 4
+      },
+      "ev_render_x": {
+       "entry": 4,
+       "render": true,
+       "spare": 2
+      },
+      "core_handles": {
+       "entry": 4
+      }
+     },
+     "imports": [
+      "__store_gen",
+      "__store_gen2"
+     ]
+    },
+    {
+     "elemod": 2,
+     "id": "m",
+     "version": "1",
+     "target": {
+      "device": "analog-rytm-mk2",
+      "product": "Analog Rytm MKII",
+      "os": "SYN",
+      "syx_sha256": "f68bd6cf1e705b900ce813b74b87389447fff0a41dd3a3e03e6262a6c2ed65e3",
+      "section3_sha256": "f99c600b0f873b28bb752700dfcd34cdd7df8987c285b5726b912b1b86e2819d",
+      "section3_len": 3005432
+     },
+     "requires": [
+      "core"
+     ],
+     "sections": {
+      ".run": {
+       "align": 4,
+       "len": 8,
+       "parts": [
+        [
+         "hex",
+         "4e714e714e714e75"
+        ]
+       ]
+      },
+      ".bss": {
+       "size": 2097152
+      }
+     },
+     "symbols": {
+      "fn_m": [
+       ".run",
+       0
+      ],
+      "drive_staging_size": [
+       "abs",
+       524288
+      ]
+     },
+     "imports": [
+      "core_fn",
+      "core_desc"
+     ],
+     "contribute": [
+      {
+       "to": "ev_x",
+       "data": "00000000",
+       "relocs": [
+        [
+         0,
+         "abs32",
+         "sym:fn_m",
+         0
+        ]
+       ]
+      }
+     ],
+     "storage": [
+      {
+       "sym": "st_a",
+       "scope": "kit",
+       "bits": 5
+      }
+     ],
+     "resources": {
+      "names": [
+       "sysex:7d"
+      ]
+     },
+     "relocs": [
+      [
+       ".run",
+       4,
+       "abs32",
+       "sym:core_desc",
+       0
+      ]
+     ],
+     "exports": [
+      "drive_staging_size"
+     ]
+    },
+    {
+     "elemod": 2,
+     "id": "n",
+     "version": "1",
+     "target": {
+      "device": "analog-rytm-mk2",
+      "product": "Analog Rytm MKII",
+      "os": "SYN",
+      "syx_sha256": "f68bd6cf1e705b900ce813b74b87389447fff0a41dd3a3e03e6262a6c2ed65e3",
+      "section3_sha256": "f99c600b0f873b28bb752700dfcd34cdd7df8987c285b5726b912b1b86e2819d",
+      "section3_len": 3005432
+     },
+     "requires": [
+      "core"
+     ],
+     "sections": {
+      ".run": {
+       "align": 4,
+       "len": 8,
+       "parts": [
+        [
+         "hex",
+         "4e714e714e714e75"
+        ]
+       ]
+      },
+      ".bss": {
+       "size": 16
+      }
+     },
+     "symbols": {
+      "fn_n": [
+       ".run",
+       0
+      ]
+     },
+     "imports": [
+      "core_fn"
+     ],
+     "contribute": [
+      {
+       "to": "ev_x",
+       "order": 10,
+       "data": "0000000000000000",
+       "relocs": [
+        [
+         0,
+         "abs32",
+         "sym:fn_n",
+         0
+        ],
+        [
+         4,
+         "abs32",
+         "sym:fn_n",
+         2
+        ]
+       ]
+      },
+      {
+       "to": "ev_render_x",
+       "order": 60,
+       "data": "00000000",
+       "relocs": [
+        [
+         0,
+         "abs32",
+         "sym:fn_n",
+         0
+        ]
+       ]
+      }
+     ],
+     "sites": [
+      {
+       "addr": "0x40001400",
+       "len": 6,
+       "kind": "code",
+       "new": "4ef900000000",
+       "stock_sha256": "12132dc79760ae8e1efc3726056d71c57651f9cc9289d461637863fce79237f0",
+       "relocs": [
+        [
+         2,
+         "abs32",
+         "sym:fn_n",
+         0
+        ]
+       ]
+      }
+     ]
+    }
+   ],
+   "error": "the flashed mods need RAM to 0x47d102d8, past the start of the +Drive mods' area, 0x47d00000 (66264 bytes over)"
+  },
+  {
+   "name": "a negative spare",
+   "docs": [
+    {
+     "elemod": 2,
+     "id": "core",
+     "version": "1",
+     "target": {
+      "device": "analog-rytm-mk2",
+      "product": "Analog Rytm MKII",
+      "os": "SYN",
+      "syx_sha256": "f68bd6cf1e705b900ce813b74b87389447fff0a41dd3a3e03e6262a6c2ed65e3",
+      "section3_sha256": "f99c600b0f873b28bb752700dfcd34cdd7df8987c285b5726b912b1b86e2819d",
+      "section3_len": 3005432
+     },
+     "sections": {
+      ".boot": {
+       "align": 4,
+       "len": 2,
+       "parts": [
+        [
+         "hex",
+         "4e75"
+        ]
+       ]
+      }
+     },
+     "symbols": {
+      "core_fn": [
+       ".boot",
+       0
+      ],
+      "core_zero": [
+       ".boot",
+       0
+      ]
+     },
+     "exports": [
+      "core_zero",
+      "core_fn"
+     ],
+     "collections": {
+      "ev_x": {
+       "entry": 4,
+       "spare": -1
+      },
+      "core_store_ids": {
+       "entry": 4
+      },
+      "ev_render_x": {
+       "entry": 4,
+       "render": true,
+       "spare": 2
+      },
+      "core_handles": {
+       "entry": 4
+      }
+     },
+     "imports": [
+      "__store_gen",
+      "__store_gen2"
+     ]
+    },
+    {
+     "elemod": 2,
+     "id": "m",
+     "version": "1",
+     "target": {
+      "device": "analog-rytm-mk2",
+      "product": "Analog Rytm MKII",
+      "os": "SYN",
+      "syx_sha256": "f68bd6cf1e705b900ce813b74b87389447fff0a41dd3a3e03e6262a6c2ed65e3",
+      "section3_sha256": "f99c600b0f873b28bb752700dfcd34cdd7df8987c285b5726b912b1b86e2819d",
+      "section3_len": 3005432
+     },
+     "requires": [
+      "core"
+     ],
+     "sections": {
+      ".run": {
+       "align": 4,
+       "len": 8,
+       "parts": [
+        [
+         "hex",
+         "4e714e714e714e75"
+        ]
+       ]
+      },
+      ".bss": {
+       "size": 16
+      }
+     },
+     "symbols": {
+      "fn_m": [
+       ".run",
+       0
+      ],
+      "drive_staging_size": [
+       "abs",
+       524288
+      ]
+     },
+     "imports": [
+      "core_fn",
+      "core_desc"
+     ],
+     "contribute": [
+      {
+       "to": "ev_x",
+       "data": "00000000",
+       "relocs": [
+        [
+         0,
+         "abs32",
+         "sym:fn_m",
+         0
+        ]
+       ]
+      }
+     ],
+     "storage": [
+      {
+       "sym": "st_a",
+       "scope": "kit",
+       "bits": 5
+      }
+     ],
+     "resources": {
+      "names": [
+       "sysex:7d"
+      ]
+     },
+     "relocs": [
+      [
+       ".run",
+       4,
+       "abs32",
+       "sym:core_desc",
+       0
+      ]
+     ],
+     "exports": [
+      "drive_staging_size"
+     ]
+    },
+    {
+     "elemod": 2,
+     "id": "n",
+     "version": "1",
+     "target": {
+      "device": "analog-rytm-mk2",
+      "product": "Analog Rytm MKII",
+      "os": "SYN",
+      "syx_sha256": "f68bd6cf1e705b900ce813b74b87389447fff0a41dd3a3e03e6262a6c2ed65e3",
+      "section3_sha256": "f99c600b0f873b28bb752700dfcd34cdd7df8987c285b5726b912b1b86e2819d",
+      "section3_len": 3005432
+     },
+     "requires": [
+      "core"
+     ],
+     "sections": {
+      ".run": {
+       "align": 4,
+       "len": 8,
+       "parts": [
+        [
+         "hex",
+         "4e714e714e714e75"
+        ]
+       ]
+      },
+      ".bss": {
+       "size": 16
+      }
+     },
+     "symbols": {
+      "fn_n": [
+       ".run",
+       0
+      ]
+     },
+     "imports": [
+      "core_fn"
+     ],
+     "contribute": [
+      {
+       "to": "ev_x",
+       "order": 10,
+       "data": "0000000000000000",
+       "relocs": [
+        [
+         0,
+         "abs32",
+         "sym:fn_n",
+         0
+        ],
+        [
+         4,
+         "abs32",
+         "sym:fn_n",
+         2
+        ]
+       ]
+      },
+      {
+       "to": "ev_render_x",
+       "order": 60,
+       "data": "00000000",
+       "relocs": [
+        [
+         0,
+         "abs32",
+         "sym:fn_n",
+         0
+        ]
+       ]
+      }
+     ],
+     "sites": [
+      {
+       "addr": "0x40001400",
+       "len": 6,
+       "kind": "code",
+       "new": "4ef900000000",
+       "stock_sha256": "12132dc79760ae8e1efc3726056d71c57651f9cc9289d461637863fce79237f0",
+       "relocs": [
+        [
+         2,
+         "abs32",
+         "sym:fn_n",
+         0
+        ]
+       ]
+      }
+     ]
+    }
+   ],
+   "error": "core: table ev_x spare -1 (0 to 4096)"
+  },
+  {
+   "name": "a mod exports core_desc",
+   "docs": [
+    {
+     "elemod": 2,
+     "id": "core",
+     "version": "1",
+     "target": {
+      "device": "analog-rytm-mk2",
+      "product": "Analog Rytm MKII",
+      "os": "SYN",
+      "syx_sha256": "f68bd6cf1e705b900ce813b74b87389447fff0a41dd3a3e03e6262a6c2ed65e3",
+      "section3_sha256": "f99c600b0f873b28bb752700dfcd34cdd7df8987c285b5726b912b1b86e2819d",
+      "section3_len": 3005432
+     },
+     "sections": {
+      ".boot": {
+       "align": 4,
+       "len": 2,
+       "parts": [
+        [
+         "hex",
+         "4e75"
+        ]
+       ]
+      }
+     },
+     "symbols": {
+      "core_fn": [
+       ".boot",
+       0
+      ],
+      "core_zero": [
+       ".boot",
+       0
+      ]
+     },
+     "exports": [
+      "core_zero",
+      "core_fn"
+     ],
+     "collections": {
+      "ev_x": {
+       "entry": 4
+      },
+      "core_store_ids": {
+       "entry": 4
+      },
+      "ev_render_x": {
+       "entry": 4,
+       "render": true,
+       "spare": 2
+      },
+      "core_handles": {
+       "entry": 4
+      }
+     },
+     "imports": [
+      "__store_gen",
+      "__store_gen2"
+     ]
+    },
+    {
+     "elemod": 2,
+     "id": "m",
+     "version": "1",
+     "target": {
+      "device": "analog-rytm-mk2",
+      "product": "Analog Rytm MKII",
+      "os": "SYN",
+      "syx_sha256": "f68bd6cf1e705b900ce813b74b87389447fff0a41dd3a3e03e6262a6c2ed65e3",
+      "section3_sha256": "f99c600b0f873b28bb752700dfcd34cdd7df8987c285b5726b912b1b86e2819d",
+      "section3_len": 3005432
+     },
+     "requires": [
+      "core"
+     ],
+     "sections": {
+      ".run": {
+       "align": 4,
+       "len": 8,
+       "parts": [
+        [
+         "hex",
+         "4e714e714e714e75"
+        ]
+       ]
+      },
+      ".bss": {
+       "size": 16
+      }
+     },
+     "symbols": {
+      "fn_m": [
+       ".run",
+       0
+      ],
+      "drive_staging_size": [
+       "abs",
+       524288
+      ]
+     },
+     "imports": [
+      "core_fn",
+      "core_desc"
+     ],
+     "contribute": [
+      {
+       "to": "ev_x",
+       "data": "00000000",
+       "relocs": [
+        [
+         0,
+         "abs32",
+         "sym:fn_m",
+         0
+        ]
+       ]
+      }
+     ],
+     "storage": [
+      {
+       "sym": "st_a",
+       "scope": "kit",
+       "bits": 5
+      }
+     ],
+     "resources": {
+      "names": [
+       "sysex:7d"
+      ]
+     },
+     "relocs": [
+      [
+       ".run",
+       4,
+       "abs32",
+       "sym:core_desc",
+       0
+      ]
+     ],
+     "exports": [
+      "drive_staging_size"
+     ]
+    },
+    {
+     "elemod": 2,
+     "id": "n",
+     "version": "1",
+     "target": {
+      "device": "analog-rytm-mk2",
+      "product": "Analog Rytm MKII",
+      "os": "SYN",
+      "syx_sha256": "f68bd6cf1e705b900ce813b74b87389447fff0a41dd3a3e03e6262a6c2ed65e3",
+      "section3_sha256": "f99c600b0f873b28bb752700dfcd34cdd7df8987c285b5726b912b1b86e2819d",
+      "section3_len": 3005432
+     },
+     "requires": [
+      "core"
+     ],
+     "sections": {
+      ".run": {
+       "align": 4,
+       "len": 8,
+       "parts": [
+        [
+         "hex",
+         "4e714e714e714e75"
+        ]
+       ]
+      },
+      ".bss": {
+       "size": 16
+      }
+     },
+     "symbols": {
+      "fn_n": [
+       ".run",
+       0
+      ],
+      "core_desc": [
+       ".run",
+       0
+      ]
+     },
+     "imports": [
+      "core_fn"
+     ],
+     "contribute": [
+      {
+       "to": "ev_x",
+       "order": 10,
+       "data": "0000000000000000",
+       "relocs": [
+        [
+         0,
+         "abs32",
+         "sym:fn_n",
+         0
+        ],
+        [
+         4,
+         "abs32",
+         "sym:fn_n",
+         2
+        ]
+       ]
+      },
+      {
+       "to": "ev_render_x",
+       "order": 60,
+       "data": "00000000",
+       "relocs": [
+        [
+         0,
+         "abs32",
+         "sym:fn_n",
+         0
+        ]
+       ]
+      }
+     ],
+     "sites": [
+      {
+       "addr": "0x40001400",
+       "len": 6,
+       "kind": "code",
+       "new": "4ef900000000",
+       "stock_sha256": "12132dc79760ae8e1efc3726056d71c57651f9cc9289d461637863fce79237f0",
+       "relocs": [
+        [
+         2,
+         "abs32",
+         "sym:fn_n",
+         0
+        ]
+       ]
+      }
+     ],
+     "exports": [
+      "core_desc"
+     ]
+    }
+   ],
+   "error": "the mods do not combine:\n  n 1 exports core_desc, the name of the build descriptor the linker writes"
+  }
+ ]
+}

@@ -70,7 +70,7 @@ A format-2 mod is a relocatable object:
 | `exports` | the symbols other mods may use |
 | `imports`, `weak` | the names it uses from others; a weak one resolves to `core_zero` (zeros) if no mod provides it |
 | `relocs` | `[section, offset, "abs32"/"pc32"/"pc16"/"dsp24", target, addend]`; target `"sym:NAME"`, `"sec:NAME"` or `"abs"` |
-| `collections` | tables this mod declares: `{"ev_tick": {"entry": 4}}`, or a DSP table (below) |
+| `collections` | tables this mod declares: `{"ev_tick": {"entry": 4}}`, or a DSP table (below); a core's may add `"spare"` (0 to 4,096) and `"render": true` for the build descriptor ("The build descriptor" below) |
 | `contribute` | entries for tables: `{"to", "order", "data", "relocs", "claims"}` |
 | `copied` | `[{"lo", "hi", "to"}]`: a block of the image this mod copies elsewhere at run time |
 | `storage` | fields this mod keeps with the project: `[{"sym", "scope", "bits"}]` (the Analog Rytm MKII from core-ar2 0.2, the Analog Four MKII from core-a4 0.1; "Mod storage" below) |
@@ -221,6 +221,8 @@ each program on its own.
    When a mod declares `storage`, the linker places the fields from the
    build's lockfile ("Mod storage" below) and defines each field's `sym`
    as an absolute symbol, its descriptor.
+   When a mod imports `core_desc`, the linker also writes the build
+   descriptor and gives tables spare entries ("The build descriptor" below).
 4. **Relocates** the sections, the table entries and the sites.
 5. **Checks again** on the result: code sites are still whole
    instructions, the copied-block rules hold, and the image is what the
@@ -267,6 +269,56 @@ Nothing is built unless all of these pass:
   sections and DSP table entries, at whole words, and only `dsp24` there;
   and a DSP address and a ColdFire address are never written in place of
   each other.
+
+### The build descriptor
+
+A build that will link more mods on the unit (the +Drive mods loader)
+needs to know what was flashed. When a mod imports `core_desc`, the
+linker writes one block, the build descriptor, into the RAM image after
+the tables, and defines `core_desc` as its address. A build without such
+a mod is the same as before, byte for byte. `elekloader/desc.py` writes
+and reads it; `python -m elekloader.desc dump <built .syx or main OS
+image>` prints it.
+
+- **Spare entries.** Each table gets spare zero entries after its zero
+  entry, so a loader can merge more entries in at boot: 16, or the
+  table's `"spare"` in the declaring mod's `collections`. Tables the
+  linker fills itself get none: `core_store_ids`, `core_lock_codes`,
+  `core_lock_ccs`, `core_field_inits`, `core_handles`, `core_payloads`,
+  the `.fast` copy table and DSP tables. `NAME_n` stays the count of
+  entries the build has. The spare entries and the block count toward
+  the RAM budget.
+- **The RAM line.** On a device whose profile names a +Drive mods' area
+  (`drive_area`: the Analog Rytm MKII's is 0x47D00000 to 0x47FFF000), the
+  flashed build's RAM must end below its start.
+- **Orders.** Each entry's sort key is kept as `order << 16 | module`, so
+  an order must be 0 to 65,534. The linker's own entries (storage,
+  payloads, `.fast` copies) have order 65,535.
+
+The block (ABI 1.0) is big-endian, its records 4-byte aligned, and its
+names offsets into its string pool (UTF-8, NUL-terminated):
+
+| offset | field |
+|---|---|
+| +0x00 | `'ELKD'`, u16 ABI major, u16 minor, u32 size, u32 CRC-32 of the block with this word zeroed |
+| +0x10 | u16 data family, u16 data device id, u32 OS release: the data container's (0 where the profile does not know them) |
+| +0x18 | u32 string pool offset, u32 its size |
+| +0x20 | u16 counts: modules, exports, tables, claims |
+| +0x28 | u32 offsets: modules, exports, tables, claims, key arrays, area record, storage record |
+| +0x44 | u32 the device key, u32 the OS version (names); zero to +0x60 |
+
+| record | bytes | fields |
+|---|---|---|
+| module | 16 | name, version, u8 kind (0 core, 1 flashed mod, 2 a mod that imports `core_desc`), u8 flags (bit 0: has sites), u16 index, u16 first export, u16 export count. Index 0 is the core, then the mods by id |
+| export | 8 | name, u32 address. Grouped by module in module order, by name within a module |
+| table | 24 | name, u32 address, u16 entry size, u16 count, u16 capacity (count + spare), u16 flags (bit 0: more entries may be added; bit 1: a render table, the collection's `"render": true`; bit 2: a DSP table), u32 offset of its keys, u32 0 |
+| keys | 4 an entry | `order << 16 \| module index`, in table order |
+| claim | 8 | u16 kind (1: a resource name), u16 module index, u32 the name |
+| area | 20 | the flashed build's RAM end, the +Drive area's start and end, the staging buffer's address and size (the exports `drive_staging` and `drive_staging_size`, else 0) |
+| storage | 12 + 16 a scope | u32 address and u32 length of the lockfile's trailer in the main OS image (for the host: nothing on the unit reads it), u16 scope count, u16 0; per scope: name, u32 room in bits, u32 bits used, u32 generation |
+
+A loader accepts any minor of its major; a minor adds fields in reserved
+space or records at the end, a major changes a record.
 
 ### Mod storage
 
