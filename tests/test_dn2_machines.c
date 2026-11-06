@@ -32,7 +32,8 @@ const struct mk2_synth *dn2_sdk_synth(unsigned i)
 }
 void dn2_sdk_build(void) {}
 uint32_t dn2_sdk_page_count(uint32_t type) { return type == 100; }
-const struct descriptor *dn2_sdk_page(uint32_t type, uint32_t page) { (void)type; (void)page; return 0; }
+static const struct descriptor sdk_page;
+const struct descriptor *dn2_sdk_page(uint32_t type, uint32_t page) { return type == 100 && !page ? &sdk_page : 0; }
 uint32_t dn2_sdk_code(uint32_t type, uint32_t slot) { return type == 100 && slot == SLOT ? 999 : 0; }
 
 const struct mk2_synth *const mk2_voice_synths[] = {
@@ -161,7 +162,7 @@ static void check_pages(void)
 {
     assert(dn2_value_code(TEMPLATE) == TEMPLATE && dn2_value_code(ROWS - 1) == ROWS - 1);
     assert(dn2_value_code(ROWS) == TEMPLATE && dn2_value_code(ROWS + ADDED - 1) == TEMPLATE);
-    assert(dn2_value_code(G_CODE + 1) == G_CODE + 1);
+    assert(dn2_value_code(G_CODE + 1) == TEMPLATE && dn2_value_code(T1_END) == T1_END);
     assert(dn2_voice_page_count(0) == 0 && dn2_voice_page_count(6) == 0);
 #ifdef EMPTY
     assert(dn2_voice_page_count(7) == 0 && dn2_voice_code(7, SLOT) == 0);
@@ -311,7 +312,7 @@ int main(void)
     assert(n == 11 && dn2_list[4] == 5 && dn2_list[5] == 7 && dn2_list[8] == 31 && dn2_list[9] == 100);
     /* An SDK machine: FM TONE plays it, and its pages and knobs are sdk_alpha.c's. */
     assert(dn2_is_voice(100) && dn2_dsp_type(100) == 0 && dn2_host_type(100) == 0);
-    assert(dn2_voice_page_count(100) == 1 && dn2_voice_page(100, 0) == dn2_descriptor(100));
+    assert(dn2_voice_page_count(100) == 1 && dn2_voice_page(100, 0) == (uintptr_t)&sdk_page);
     assert(dn2_voice_code(100, SLOT) == 999 && dn2_voice_code(100, SLOT + 1) == 0);
     assert(dn2_permit(100, 0) == dn2_permit(0, 0) && !strcmp((const char *)dn2_name(100), "SDK"));
     /* Every custom synth reads as FM TONE (0) and keeps its ID for the DSP. */

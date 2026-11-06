@@ -3,11 +3,7 @@
 what the device outputs. Without .render a machine plays what it did before (nothing on the
 Digitakt, FM on the Digitone).
 
-Run with digiemu's Python:
-
-  ELEKLOADER_DIGIEMU=<digiemu> ELEKLOADER_STOCK_154=<Digitakt_OS1.54.syx> \\
-  ELEKLOADER_STOCK_DN1_144=<Digitone_and_Digitone_Keys_OS1.44.syx> ELEKLOADER_CROSS=m68k-elf- \\
-  uv run --project "$ELEKLOADER_DIGIEMU" python tests/test_sdk_alpha_sound.py
+Run as tests/sdk_alpha_harness.py says.
 """
 import unittest
 
@@ -15,32 +11,17 @@ from sdk_alpha_harness import sdk_machine, sdk_tests
 
 # SINE plays a sine at the note, FINE cents (-100..100, from 0) away. sound_test_pitch is the last
 # pitch it was given, so a test can say which note the key played. Writable globals here
-# are observation probes for the emulator, not an instrument state/sharing pattern.
+# are observation probes for the emulator, not an instrument state pattern.
 SINE = sdk_machine("Sine", """
     #include "elekloader/sdk_alpha_machine.h"
 
     enum { FINE };
-    static const struct elek_ui_knob fine = {
-        .id = FINE, .label = "FINE",
-        .min = ELEK_UI_BOUND(-100), .max = ELEK_UI_BOUND(100), .def = ELEK_UI_BOUND(0),
-    };
-    static const struct elek_ui_page pages[] = {
-        { .label = "SINE", .knob = { [ELEK_ENCODER_A] = &fine } },
-    };
+    static const struct elek_knob knobs[] = { [FINE] = { "FINE", .min = -100, .max = 100 } };
     struct state { uint32_t phase; };
     volatile int32_t sound_test_pitch;
-    volatile int32_t sound_test_shared[2], sound_test_prepared[2];
     volatile int32_t sound_test_control;
     volatile uint32_t sound_test_start_count, sound_test_overlap;
-    volatile uint32_t sound_test_starts[2][4];
-    struct shared { int32_t fine, inverse; };
-    static void present(const struct elek_ui_context *ctx, struct elek_ui_presentation *out)
-    {
-        struct shared *shared = out->shared;
-        shared->fine = ctx->knob[FINE]->value;
-        shared->inverse = -shared->fine;
-        if (ctx->track < 2) sound_test_prepared[ctx->track] = shared->fine;
-    }
+    volatile uint32_t sound_test_starts[2][3];
 
     /* sin(2 pi ph / 2^32), Q15: a parabola, then its square nudged in. */
     static int32_t sine(uint32_t ph)
@@ -52,27 +33,24 @@ SINE = sdk_machine("Sine", """
         return y > 32767 ? 32767 : y < -32767 ? -32767 : y;
     }
 
-    static void render(const struct elek_audio_context *ctx, const struct elek_voice *v, elek_sample *out)
+    static void render(const struct elek_voice *v, elek_sample *out)
     {
-        struct state *state = v->state;
-        uint32_t inc = elek_phase_inc(v->pitch + ctx->knob[FINE] * 65536 / 100);
+        struct state *state = ELEK_STATE(struct state, v);
+        uint32_t inc = elek_phase_inc(v->pitch + v->knob[FINE] * 65536 / 100);
         sound_test_pitch = v->pitch;
-        sound_test_control = ctx->knob[FINE];
-        if (v->flags & ELEK_VOICE_START) {
+        sound_test_control = v->knob[FINE];
+        if (v->start) {
             uint32_t n = sound_test_start_count;
             if (n < 2) {
-                sound_test_starts[n][0] = v->slot;
-                sound_test_starts[n][1] = v->track;
-                sound_test_starts[n][2] = (uint32_t)(uintptr_t)v->state;
-                sound_test_starts[n][3] = v->pitch;
+                sound_test_starts[n][0] = v->track;
+                sound_test_starts[n][1] = (uint32_t)(uintptr_t)v->state;
+                sound_test_starts[n][2] = v->pitch;
             }
             sound_test_start_count = n + 1;
         }
-        if (sound_test_start_count >= 2 && v->slot == sound_test_starts[0][0])
+        /* each voice has its own state: the first note's still sounds */
+        if (sound_test_start_count >= 2 && (uint32_t)(uintptr_t)v->state == sound_test_starts[0][1])
             ++sound_test_overlap;
-        const struct shared *shared = ctx->shared;
-        if (v->track < 2)
-            sound_test_shared[v->track] = shared->fine == -shared->inverse ? shared->fine : 999;
         for (int i = 0; i < ELEK_VOICE_FRAMES; ++i) {
             int32_t y = sine(state->phase);
             elek_sample sample = elek_level(y < 0 ? -y : y, 32767);
@@ -82,9 +60,8 @@ SINE = sdk_machine("Sine", """
     }
 
     static const struct elek_machine sine_machine = {
-        .id = @ID@, .name = "Sine", .short_name = "SINE",
-        .pages = pages, .page_count = 1, .present = present, .render = render,
-        .voice_state = sizeof(struct state), .shared = sizeof(struct shared),
+        .id = @ID@, .name = "Sine", .short_name = "SINE", ELEK_KNOBS(knobs),
+        .pages = { { "SINE", { [ELEK_A] = &knobs[FINE] } } }, .render = render,
     };
     ELEK_REGISTER_MACHINE(sine_machine);
 """)
@@ -93,10 +70,10 @@ SINE = sdk_machine("Sine", """
 SILENT = sdk_machine("Silent", """
     #include "elekloader/sdk_alpha_machine.h"
 
-    static const struct elek_ui_knob fine = { .id = 0, .label = "FINE" };
-    static const struct elek_ui_page pages[] = { { .label = "SINE", .knob = { &fine } } };
+    static const struct elek_knob knobs[] = { { "FINE", .max = 127 } };
     static const struct elek_machine silent = {
-        .id = @ID@, .name = "Silent", .short_name = "SLNT", .pages = pages, .page_count = 1,
+        .id = @ID@, .name = "Silent", .short_name = "SLNT", ELEK_KNOBS(knobs),
+        .pages = { { "SINE", { &knobs[0] } } },
     };
     ELEK_REGISTER_MACHINE(silent);
 """)
@@ -143,24 +120,6 @@ class Sound:
         fine.set(-100)
         self.assertClose(self.track.play(0).frequency, centre / 2 ** (1 / 12), 0.005, 'FINE -100')
 
-    def test_shared_data_is_restored_for_inactive_tracks(self):
-        first = self.tracks[0].use(SINE).knob('FINE')
-        second = self.tracks[1].use(SINE).knob('FINE')
-        first.turn(10)
-        second.turn(-10)
-        saved = [k.value & 0xffffffff for k in (first, second)]
-        self.assertNotEqual(*saved)
-        self.save_project()
-        first.turn(-5)
-        second.turn(5)
-        self.assertNotEqual([k.value & 0xffffffff for k in (first, second)], saved)
-        self.load_project()
-        self.wait(100)
-        self.assertEqual([self.read('sound_test_prepared', i) for i in range(2)], saved)
-        for track in self.tracks[:2]:
-            track.play(0)
-        self.assertEqual([self.read('sound_test_shared', i) for i in range(2)], saved)
-
     def test_a_machine_without_render_plays_what_it_did(self):
         self.track.use(SILENT)
         played = self.track.play(0).peak > 1000
@@ -172,7 +131,7 @@ class Polyphony:
     audio = True
     requires = ('render', 'polyphony')
 
-    def test_overlapping_notes_have_separate_voice_slots_and_state(self):
+    def test_overlapping_notes_have_separate_voice_state(self):
         self.track.use(SINE)
         self.panel.keyboard()
         self.panel.press_key(0)
@@ -183,12 +142,11 @@ class Polyphony:
         self.panel.release_key(0)
         self.wait(100)
         self.assertGreaterEqual(self.read('sound_test_start_count'), 2)
-        first = [self.read('sound_test_starts', i) for i in range(4)]
-        second = [self.read('sound_test_starts', 4 + i) for i in range(4)]
-        self.assertNotEqual(first[0], second[0], 'both notes used one slot')
-        self.assertEqual((first[1], second[1]), (self.track.index, self.track.index))
-        self.assertNotEqual(first[2], second[2], 'both notes shared voice state')
-        self.assertEqual(second[3] - first[3], 7 << 16)
+        first = [self.read('sound_test_starts', i) for i in range(3)]
+        second = [self.read('sound_test_starts', 3 + i) for i in range(3)]
+        self.assertEqual((first[0], second[0]), (self.track.index, self.track.index))
+        self.assertNotEqual(first[1], second[1], 'both notes shared voice state')
+        self.assertEqual(second[2] - first[2], 7 << 16)
         self.assertGreater(self.read('sound_test_overlap'), 0, 'the first voice stopped at the second note')
 
 

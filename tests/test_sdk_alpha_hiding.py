@@ -2,11 +2,7 @@
 """A .present callback may hide a knob. A hidden knob keeps its value and its encoder does nothing,
 and copying, clearing and pasting the page take the hidden knob along.
 
-Run with digiemu's Python:
-
-  ELEKLOADER_DIGIEMU=<digiemu> ELEKLOADER_STOCK_154=<Digitakt_OS1.54.syx> \
-  ELEKLOADER_STOCK_DN1_144=<Digitone_and_Digitone_Keys_OS1.44.syx> ELEKLOADER_CROSS=m68k-elf- \
-  uv run --project "$ELEKLOADER_DIGIEMU" python tests/test_sdk_alpha_hiding.py
+Run as tests/sdk_alpha_harness.py says.
 """
 import unittest
 
@@ -17,19 +13,14 @@ HIDING = sdk_machine("Hiding", """
     #include "elekloader/sdk_alpha_machine.h"
 
     enum { HIDE, TRGT };
-    static const struct elek_ui_knob hide = { .id = HIDE, .label = "HIDE" };
-    static const struct elek_ui_knob trgt = { .id = TRGT, .label = "TRGT" };
-    static const struct elek_ui_page pages[] = {
-        { .label = "MAIN", .knob = { [ELEK_ENCODER_A] = &hide, [ELEK_ENCODER_B] = &trgt } },
-    };
-    static void present(const struct elek_ui_context *ctx, struct elek_ui_presentation *out)
+    static const struct elek_knob knobs[] = { [HIDE] = { "HIDE", .max = 127 }, [TRGT] = { "TRGT", .max = 127 } };
+    static void present(const struct elek_ui *ui)
     {
-        if (ctx->knob[HIDE]->value == 127)
-            out->knob[TRGT]->visible = 0;
+        ui->view[TRGT].hidden = ui->knob[HIDE] == 127;
     }
     static const struct elek_machine hiding = {
-        .id = @ID@, .name = "Hiding", .short_name = "HIDE",
-        .pages = pages, .page_count = 1, .present = present,
+        .id = @ID@, .name = "Hiding", .short_name = "HIDE", ELEK_KNOBS(knobs),
+        .pages = { { "MAIN", { [ELEK_A] = &knobs[HIDE], [ELEK_B] = &knobs[TRGT] } } }, .present = present,
     };
     ELEK_REGISTER_MACHINE(hiding);
 """)

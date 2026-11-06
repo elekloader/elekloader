@@ -555,6 +555,28 @@ def test_a_machine_claims_its_slot():
     assert not [p for p in link.check([mod('c', 36), mod('d', 37)], image) if 'claim' in p]
     assert mod('e', 53).implied_names(image) == []
 
+def test_mk1_machines_claim_their_ids():
+    """On the Digitakt mk1 a machine (core_machines) claims machine:<id>, and on the Digitone mk1
+    an SDK machine (sdk_alpha_machines) claims dnmachine:<id>, from the descriptor's id at +0, so
+    two mods that register one id never link together, SDK or not. Ids are 0..127."""
+    for key, table, prefix in (('digitakt-mk1', 'core_machines', 'machine'),
+                               ('digitone-mk1', 'sdk_alpha_machines', 'dnmachine')):
+        dev = next(d for d in devices.devices() if d.key == key)
+        r = dev.releases[max(dev.releases)]
+        image = bytes(r.main_len)
+
+        def mod(i, slot):
+            return link.Mod2({'elemod': 2, 'id': i, 'version': '1', 'target': devices.target_of(dev, r),
+                              'sections': {'.run': {'align': 4, 'parts': [['hex', '%08x' % slot + '00' * 28]]}},
+                              'symbols': {'m': ['.run', 0]},
+                              'contribute': [{'to': table, 'data': '00000000',
+                                              'relocs': [[0, 'abs32', 'sym:m', 0]]}]}, i)
+        assert mod('a', 30).implied_names(image) == ['%s:30' % prefix]
+        assert 'a 1 and b 1 both claim %s:30' % prefix in link.check([mod('a', 30), mod('b', 30)], image)
+        assert not [p for p in link.check([mod('a', 30), mod('b', 127)], image) if 'claim' in p]
+        assert mod('outside', 128).implied_names(image) == []
+
+
 def test_dn2_synth_claims_its_stable_type():
     dn = next(d for d in devices.devices() if d.key == 'digitone-mk2')
     r = dn.releases['1.12']
@@ -1101,6 +1123,22 @@ def test_sdk_alpha_render_suite():
     assert suite.countTestCases(), 'no SDK render contract tests discovered'
     result = unittest.TextTestRunner().run(suite)
     assert result.wasSuccessful(), 'SDK render contract suite failed'
+
+
+def test_sdk_alpha_host_suite():
+    import unittest
+    suite = unittest.TestLoader().discover(HERE, pattern='test_sdk_alpha_host.py')
+    assert suite.countTestCases(), 'no SDK host run tests discovered'
+    result = unittest.TextTestRunner().run(suite)
+    assert result.wasSuccessful(), 'SDK host run suite failed'
+
+
+def test_sdk_alpha_suite():
+    import unittest
+    suite = unittest.TestLoader().discover(HERE, pattern='test_sdk_alpha.py')
+    assert suite.countTestCases(), 'no SDK builder tests discovered'
+    result = unittest.TextTestRunner().run(suite)
+    assert result.wasSuccessful(), 'SDK builder suite failed'
 
 
 def test_sharc_suite():

@@ -1,75 +1,89 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
-/* Private experiment: Digitakt mk1 OS 1.54 and Digitone mk1 OS 1.44 (UI and audio); Digitone II
+/* The SDK's machine interface: Digitakt mk1 OS 1.54 and Digitone mk1 OS 1.44 (UI and audio), Digitone II
  * OS 1.12 (UI only). The builder refuses audio on targets without a render backend. */
 #ifndef ELEKLOADER_SDK_ALPHA_MACHINE_H
 #define ELEKLOADER_SDK_ALPHA_MACHINE_H
 
 #include <stdint.h>
 
+/* The limits, which the builder checks (tests/test_sdk_alpha.py keeps its copy in step). */
+#define ELEK_UI_LABEL_MAX 5        /* a knob label's characters: what fits under a knob */
+#define ELEK_UI_KNOB_MAX 15        /* a machine's knobs */
+#define ELEK_UI_PAGE_MAX 2         /* a machine's pages */
+#define ELEK_UI_PAGE_LABEL_MAX 16  /* a page label's characters */
+#define ELEK_UI_NAME_MAX 16        /* a machine name's characters */
+#define ELEK_UI_SHORT_NAME_MAX 4   /* a machine short name's characters */
 #define ELEK_UI_NO_PAGE (-1)
-#define ELEK_UI_LABEL_MAX 5   /* a knob label's characters: what fits under a knob on the Digitakt and Digitone */
-#define ELEK_UI_RAW_MAX (127 << 8) /* Native 8.8 units: 0..32512, independent of mapped bounds. */
-#define ELEK_UI_BOUND(v) { .value = (v), .supplied = 1 }
-enum { ELEK_ENCODER_A, ELEK_ENCODER_B, ELEK_ENCODER_C, ELEK_ENCODER_D,
-       ELEK_ENCODER_E, ELEK_ENCODER_F, ELEK_ENCODER_G, ELEK_ENCODER_H };
+enum { ELEK_A, ELEK_B, ELEK_C, ELEK_D, ELEK_E, ELEK_F, ELEK_G, ELEK_H };   /* the encoders */
 
-/* An omitted bound is distinct from ELEK_UI_BOUND(0). Defaults: min 0, max 127. */
-struct elek_ui_bound { int32_t value; uint32_t supplied; };
 /* 16 x 16 monochrome pixels: top row first, bit 15 leftmost; 1 lights a pixel.
  * Glyphs must remain readable while displayed (normally static const storage). */
-struct elek_ui_glyph { uint16_t rows[16]; };
-/* Every logical knob is an LFO target; presentation labels never change its ID. */
-struct elek_ui_knob {
-    uint32_t id;                   /* machine-wide logical ID, contiguous from zero */
-    const char *label;             /* 1..ELEK_UI_LABEL_MAX printable ASCII characters (sdk_alpha_build refuses more) */
-    struct elek_ui_bound min, max;
-    const struct elek_ui_glyph *glyph; /* null uses the stock encoder graphic */
-    struct elek_ui_bound def;      /* optional mapped default, min when omitted */
+struct elek_glyph { uint16_t rows[16]; };
+/* A knob: its index in the machine's .knobs is its id. Every knob is an LFO target; presentation
+ * labels never change its id. */
+struct elek_knob {
+    const char *label;             /* 1..ELEK_UI_LABEL_MAX printable ASCII characters */
+    int32_t min, max;              /* the mapped range; max is required and above min */
+    int32_t def;                   /* the value it starts at, clamped into min..max (omitted: 0) */
+    const struct elek_glyph *glyph; /* null uses the stock encoder graphic */
 };
-struct elek_ui_page {
-    const char *label;             /* 1..16 printable ASCII characters */
-    const struct elek_ui_knob *knob[8]; /* shared knob descriptors; null is empty */
+struct elek_page {
+    const char *label;             /* 1..ELEK_UI_PAGE_LABEL_MAX printable ASCII characters; a page without
+                                    * one is absent */
+    const struct elek_knob *encoder[8]; /* &knobs[ID] or null for an empty position; pages may share */
 };
-struct elek_ui_value {
-    int32_t value;                 /* signed integer, nearest; exact halves round toward max */
-    int32_t raw_value;             /* native 8.8, 0..ELEK_UI_RAW_MAX */
+/* What .present shows for one knob. Each call starts from the knob's declaration: its label, shown,
+ * its glyph. */
+struct elek_view {
+    char label[ELEK_UI_LABEL_MAX + 1]; /* write it with elek_label_set or elek_label_num; nonprintable
+                                        * characters show as ? */
+    uint32_t hidden;               /* nonzero blanks the knob on every page; it keeps its value */
+    const struct elek_glyph *glyph; /* null selects the stock graphic; must stay readable */
 };
-struct elek_ui_context {
-    int32_t page;                  /* displayed machine page, or ELEK_UI_NO_PAGE (e.g. LFO labels),
+struct elek_ui {
+    const int32_t *knob;           /* by id, mapped to min..max: every knob, on every page */
+    struct elek_view *view;        /* by id */
+    int32_t page;                  /* the page shown, or ELEK_UI_NO_PAGE (e.g. naming LFO destinations),
                                     * also for machines with pages: check before indexing */
-    uint32_t page_count, knob_count;
-    const struct elek_ui_value *const *knob; /* indexed by machine-wide logical ID, all pages */
     uint32_t track;                /* the track this call is for, from zero: not always the active one */
 };
-/* Labels may use literals or caller-owned storage readable after callback return.
- * The SDK copies labels immediately: at most ELEK_UI_LABEL_MAX characters, nonprintable bytes become ?.
- * Automatic callback-local arrays have expired by then; use static/caller-owned buffers. */
-struct elek_ui_knob_presentation {
-    const char *label;
-    uint32_t visible;              /* defaults to 1; zero blanks every position, retaining its value */
-    const struct elek_ui_glyph *glyph; /* descriptor's default each call; null selects stock.
-                                        * Drawn after return: never automatic storage */
-};
-struct elek_ui_presentation {
-    uint32_t knob_count;
-    struct elek_ui_knob_presentation *const *knob; /* logical IDs; defaults reset each call */
-    void *shared;                  /* this track's writable shared snapshot; null without .shared */
-};
+/* Labels, as there is no libc: text, cut at ELEK_UI_LABEL_MAX characters. */
+static inline void elek_label_set(char *label, const char *text)
+{
+    int n = 0;
+    while (n < ELEK_UI_LABEL_MAX && text[n]) { label[n] = text[n]; ++n; }
+    label[n] = 0;
+}
+/* prefix then v in decimal, the prefix cut to fit the number; "#" when the number alone does not fit. */
+static inline void elek_label_num(char *label, const char *prefix, int32_t v)
+{
+    char digits[11];
+    uint32_t n = v < 0 ? 0u - (uint32_t)v : (uint32_t)v;
+    int count = 0, pos = 0;
+    do digits[count++] = (char)('0' + n % 10); while (n /= 10);
+    if (v < 0) digits[count++] = '-';
+    if (count > ELEK_UI_LABEL_MAX) { label[0] = '#'; label[1] = 0; return; }
+    while (pos < ELEK_UI_LABEL_MAX - count && prefix[pos]) { label[pos] = prefix[pos]; ++pos; }
+    while (count) label[pos++] = digits[--count];
+    label[pos] = 0;
+}
 
 /* Sound. render fills one voice's block. The same C builds for every device: samples are the
  * device's own format, so touch them only through the helpers below, write constants with
  * ELEK_SAMPLE, and do not divide them. ELEK_TARGET_SHARC is set when the SDK builds for the SHARC. */
 #define ELEK_SAMPLE_RATE 48000
 #define ELEK_VOICE_FRAMES 32          /* samples a render call */
-#define ELEK_VOICE_START 1u           /* elek_voice.flags: the note's first block */
-#define ELEK_VOICE_STATE_MAX 256      /* .voice_state's limit: bytes a voice keeps between calls */
-#define ELEK_SHARED_MAX 64            /* .shared's limit: bytes a track's block holds */
+#define ELEK_VOICE_STATE_MAX 256      /* the bytes of a voice's state */
 #ifdef ELEK_TARGET_SHARC
 typedef float elek_sample;            /* -1.0..1.0 */
 #define ELEK_SAMPLE(x) ((float)(x))
 static inline elek_sample elek_mul(elek_sample a, elek_sample b) { return a * b; }
 static inline elek_sample elek_add(elek_sample a, elek_sample b) { return a + b; }
 static inline elek_sample elek_clip(elek_sample a) { return a > 1.0f ? 1.0f : a < -1.0f ? -1.0f : a; }
+static inline elek_sample elek_from_q15(int32_t v)
+{
+    return (v < -32768 ? -32768 : v > 32767 ? 32767 : v) / 32768.0f;
+}
 #else
 typedef int32_t elek_sample;          /* Q31 */
 /* A constant only: a variable here would need floating point, which the ColdFire lacks. */
@@ -93,6 +107,11 @@ static inline elek_sample elek_add(elek_sample a, elek_sample b)
     return ((a ^ s) & (b ^ s)) < 0 ? (a < 0 ? INT32_MIN : INT32_MAX) : s;
 }
 static inline elek_sample elek_clip(elek_sample a) { return a; }   /* Q31 cannot exceed full scale */
+/* A signed Q15 integer, -32768..32767 (clamped), as a sample: -32768 is -1.0. */
+static inline elek_sample elek_from_q15(int32_t v)
+{
+    return (int32_t)((uint32_t)(v < -32768 ? -32768 : v > 32767 ? 32767 : v) << 16);
+}
 #endif
 /* value 0..max as a level, 0 to full scale (values outside are clamped); max > 0. */
 static inline elek_sample elek_level(int32_t value, int32_t max)
@@ -125,62 +144,68 @@ static inline uint32_t elek_phase_inc(int32_t pitch)
     return (step[k] + (((step[k + 1] - step[k]) * f) >> 14)) << (q / 48);
 }
 struct elek_voice {
-    uint32_t slot;                 /* the voice, 0-based: not the track */
+    const int32_t *knob;           /* by id: this voice's values, mapped, with its locks and LFOs */
     uint32_t track;                /* the track that played it, from zero */
+    uint32_t start;                /* nonzero in a note's first block */
     int32_t pitch;                 /* semitones, 16.16, MIDI numbering */
-    int32_t velocity;              /* 1..127 */
-    uint32_t gate;                 /* held note; DT1 currently reports AMP active (docs/SDK.md) */
-    uint32_t flags;                /* ELEK_VOICE_START */
-    void *state;                   /* zeroed at boot/machine change; kept between calls and notes */
+    int32_t velocity;              /* 1..127; the Digitone's AMP already applies it: use it for timbre */
+    void *state;                   /* ELEK_VOICE_STATE_MAX bytes, zeroed at boot and when the voice changes
+                                    * machine, kept between calls and notes: read it with ELEK_STATE */
 };
-struct elek_audio_context {
-    uint32_t knob_count;
-    const int32_t *knob;           /* by logical ID: this voice's values, mapped to the knob's bounds */
-    const void *shared;            /* the voice's track's .shared block (written by .present), or null */
-};
+/* The voice's state as a type*, which must fit in ELEK_VOICE_STATE_MAX bytes (a compile error if not). */
+#define ELEK_STATE(type, v) \
+    ((void)sizeof(char[sizeof(type) <= ELEK_VOICE_STATE_MAX ? 1 : -1]), (type *)(v)->state)
 
 struct elek_machine {
     int32_t id;                    /* native machine slot, 4..127 (Digitone II: 5..127); declared only here */
-    const char *name, *short_name; /* 1..16 and 1..4 ASCII characters */
-    const struct elek_ui_page *pages; /* at most two pages and fifteen logical knobs */
-    uint32_t page_count;
-    uint32_t _reserved[2];         /* zero */
-    /* ctx and its values are read-only snapshots, valid only during this call. */
-    void (*present)(const struct elek_ui_context *, struct elek_ui_presentation *);
+    const char *name, *short_name; /* 1..ELEK_UI_NAME_MAX and 1..ELEK_UI_SHORT_NAME_MAX ASCII characters */
+    const struct elek_knob *knobs; /* at most ELEK_UI_KNOB_MAX: give them with ELEK_KNOBS */
+    uint32_t knob_count;
+    struct elek_page pages[ELEK_UI_PAGE_MAX]; /* a page without a label is absent: the first, if any, has one */
+    /* Optional: called when the machine, track, page or a value changed, and maybe again with the same
+     * inputs: keep it pure. ui and its arrays are valid only during the call. */
+    void (*present)(const struct elek_ui *ui);
     /* Optional: the machine's sound, one voice at a time (without it the device's own plays).
-     * It may read only its arguments, its state, .shared and constant data. */
-    void (*render)(const struct elek_audio_context *, const struct elek_voice *, elek_sample *out);
-    uint32_t voice_state;          /* 0..ELEK_VOICE_STATE_MAX bytes a voice keeps; needs render */
-    uint32_t shared;               /* 0..ELEK_SHARED_MAX bytes a track shares with render; needs render */
+     * It may read only its arguments, its state and constant data. */
+    void (*render)(const struct elek_voice *, elek_sample *out);
 };
 
-/* Private adapter; the existing core descriptor and UI layouts stay intact. */
-struct sdk_alpha_machine_ui {
-    const void *abi;
-    const struct elek_machine *machine;
-};
-/* The registration the builder finds: the Digitakt's struct cm_machine layout, which machine-pages
- * reads as is; another device's backend reads id, name and ui. No device header, so one source builds
- * for every device. */
-#define SDK_ALPHA_UI_TAG 0x55493330u   /* CM_UI_TAG */
-struct sdk_alpha_registration {
-    int32_t id;
-    const char *name, *sname;
-    const void *icon;
-    int32_t params, render;
-    uint32_t tag;
-    const struct sdk_alpha_machine_ui *ui;
-};
-extern const char sdk_alpha_dt1_ui_v1[];
+#define ELEK_KNOBS(k) .knobs = (k), .knob_count = sizeof(k) / sizeof((k)[0])
 
+/* Registers a machine, at file scope: the builder adds it to the device's companion. */
 #define ELEK_REGISTER_MACHINE(machine) \
-    static const struct sdk_alpha_machine_ui sdk_alpha_ui_##machine = { \
-        sdk_alpha_dt1_ui_v1, &(machine) \
-    }; \
-    const struct sdk_alpha_registration sdk_alpha_registration_##machine = { \
-        .id = (machine).id, .name = (machine).name, .sname = (machine).short_name, \
-        .params = 3, .render = (machine).id, .tag = SDK_ALPHA_UI_TAG, \
-        .ui = &sdk_alpha_ui_##machine \
-    }
+    static const char *const sdk_alpha_abi_##machine __attribute__((used)) = sdk_alpha_abi_v1; \
+    const struct elek_machine *const sdk_alpha_registration_##machine = &(machine)
+
+/* Private: what ELEK_REGISTER_MACHINE needs. Every companion exports the ABI symbol, so a machine built
+ * for another ABI fails to link. */
+extern const char sdk_alpha_abi_v1[];
+
+/* The layout sdk_alpha_build reads from a ColdFire build (tests/test_sdk_alpha.py keeps its copy in step).
+ * A host build, with 8-byte pointers, lays them out differently. */
+#if __SIZEOF_POINTER__ == 4
+#define ELEK_OFFSET(type, field, n) _Static_assert(__builtin_offsetof(struct type, field) == (n), #type "." #field)
+#define ELEK_SIZE(type, n) _Static_assert(sizeof(struct type) == (n), "sizeof " #type)
+ELEK_OFFSET(elek_machine, id, 0);
+ELEK_OFFSET(elek_machine, name, 4);
+ELEK_OFFSET(elek_machine, short_name, 8);
+ELEK_OFFSET(elek_machine, knobs, 12);
+ELEK_OFFSET(elek_machine, knob_count, 16);
+ELEK_OFFSET(elek_machine, pages, 20);
+ELEK_OFFSET(elek_machine, render, 96);
+ELEK_SIZE(elek_machine, 100);
+ELEK_OFFSET(elek_page, label, 0);
+ELEK_OFFSET(elek_page, encoder, 4);
+ELEK_SIZE(elek_page, 36);
+ELEK_OFFSET(elek_knob, label, 0);
+ELEK_OFFSET(elek_knob, min, 4);
+ELEK_OFFSET(elek_knob, max, 8);
+ELEK_OFFSET(elek_knob, def, 12);
+ELEK_OFFSET(elek_knob, glyph, 16);
+ELEK_SIZE(elek_knob, 20);
+ELEK_SIZE(elek_glyph, 32);
+#undef ELEK_OFFSET
+#undef ELEK_SIZE
+#endif
 
 #endif

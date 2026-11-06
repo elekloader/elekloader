@@ -6,7 +6,7 @@
 #define FILTER_COUNT 32
 #define VOICE_COUNT 32              /* SHARC voices: the DSP bridge's table has 32 types */
 struct names { const char *name, *label, *hint; };
-/* The stock parameter table's 60-byte row; the bound sites in mod.json allow G_CODE + 1. */
+/* The stock parameter table's 60-byte row; the bound sites in mod.json allow T1_END. */
 struct row {
     int32_t owner, slot, min, max, def, flag;
     int16_t cc, cc_low;
@@ -16,7 +16,8 @@ struct row {
 };
 #define ADDED 40                    /* five pages of eight knobs */
 #define TEMPLATE 0xd5               /* A Env Decay: a plain 0..127 knob */
-#define G_CODE 376                  /* ROWS + SDK_ROW + SDK_KNOBS: the table's last row, filter G */
+#define G_CODE 361                  /* ROWS + ADDED: filter G, where machines-dn2 0.1 put it */
+#define T1_END 377                  /* ROWS + SDK_ROW + SDK_KNOBS: the table's rows */
 #define G_TEMPLATE 0x26             /* MULTI-MODE's TYPE: the stock rows for slot 66 */
 #define G_SLOT 66
 #define G_CELL 6                    /* G's place in the FLTR page's descriptor */
@@ -36,11 +37,11 @@ static struct descriptor descriptors[COUNT];
 static struct string_rep strings[COUNT][2];
 static uint8_t ui_only[COUNT];      /* an SDK machine (sdk_alpha.c): FM TONE plays it */
 static uint32_t ready;
-struct row dn2_t1[G_CODE + 1];     /* the stock rows are copied in at boot (start.s) */
+struct row dn2_t1[T1_END];     /* the stock rows are copied in at boot (start.s) */
 static struct descriptor pages[ADDED / 8];
 static uint8_t first_page[COUNT], page_count[COUNT];
 static struct string_rep tabs[ADDED / 8];
-static struct string_rep labels[G_CODE - ROWS];
+static struct string_rep labels[T1_END - ROWS];
 static unsigned used_pages;
 
 const char *dn2_representation(struct string_rep *r, const char *s, unsigned max)
@@ -122,6 +123,12 @@ void dn2_row_label(uint32_t code, const char *label, const char *owner_name)
 {
     dn2_representation(&labels[code - ROWS], label, 5);
     dn2_t1[code].owner_name = owner_name;
+}
+
+/* An added row's value text: format(value 8.8, buf), which the stock rows' formatter field holds. */
+void dn2_row_format(uint32_t code, void (*format)(int32_t value, char *buf))
+{
+    dn2_t1[code].format = (uint32_t)(uintptr_t)format;
 }
 
 /* Each declared knob gets a parameter row after the stock ones, copied from TEMPLATE. */
@@ -221,7 +228,7 @@ uintptr_t dn2_voice_page(uint32_t type, uint32_t page)
         return 0;
     if (page >= dn2_voice_page_count(type))
         return (uintptr_t)&dn2_stock_descriptors[4];
-    if (ui_only[type] && dn2_sdk_page(type, page))
+    if (ui_only[type])
         return (uintptr_t)dn2_sdk_page(type, page);
     return (uintptr_t)(page_count[type] ? &pages[first_page[type] + page] : &descriptors[type]);
 }
@@ -275,7 +282,7 @@ uint32_t dn2_nrpn_code(uint32_t track, uint32_t synth, uint32_t filter, uint32_t
 /* An added row's value-class object is its template's. */
 uint32_t dn2_value_code(uint32_t code)
 {
-    return code == G_CODE ? G_TEMPLATE : code >= ROWS && code < G_CODE ? TEMPLATE : code;
+    return code == G_CODE ? G_TEMPLATE : code >= ROWS && code < T1_END ? TEMPLATE : code;
 }
 
 uintptr_t dn2_descriptor(uint32_t type)

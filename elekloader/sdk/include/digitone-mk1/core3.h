@@ -189,8 +189,8 @@ extern void core_menu_open(const void *const *list, int32_t sel,
 /* core_param_override: a mod answering for a stock parameter, while it wants to (from 3.1). ui returns a UI
  * record (84 bytes, the stock layout: the value text's formatter at +0x14, the knob graphic) or 0 for
  * the stock one. name returns the short label for field 0x30, or 0 for stock. In 5.2 the LFO list and
- * DEST box also ask for 0x28 (destination name) and 0x2c (group); an over-wide list row falls back to
- * 0x30. With no destination-name override the box keeps its stock short name. Either callback may be
+ * DEST box also ask for 0x28 (destination name) and 0x2c (group). With no destination-name override the
+ * box and an over-wide list row keep their stock short name. Either callback may be
  * 0; the first answer wins. These change text only: native slots and destination order stay intact. */
 struct core_param_override {
     void *(*ui)(int32_t id);

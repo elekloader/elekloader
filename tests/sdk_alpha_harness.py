@@ -18,17 +18,23 @@ A test file defines the SDK machines it needs as C, next to its tests:
 file defines is built for the device and linked into one firmware, booted once; each test then
 gets a fresh emulator from the saved state in a fraction of a second. A machine a device cannot
 build fails the tests that use it, with the builder's message; an observation the device's
-adapter does not have yet fails with "cannot do this yet". Known gaps are marked with
-`@sdk_expected_failure(device)`: they count separately, and a fixed gap is an unexpected success.
+adapter does not have yet fails with "cannot do this yet".
 
-Run with digiemu's Python: ELEKLOADER_DIGIEMU, ELEKLOADER_STOCK_154, ELEKLOADER_STOCK_DN1_144 and
-ELEKLOADER_CROSS as in the feature files (tests/test_sdk_alpha_hiding.py shows the command). The
-Digitone II runs in DigiKit's ColdFire emulator instead: ELEKLOADER_DIGIKIT, ELEKLOADER_DIGI_EMUD and
-ELEKLOADER_DN2_SYX (sdk_alpha_devices.DigiKit).
+Run one feature file at a time; a device whose files are not given is skipped. The Digitakt and the
+Digitone mk1 run in digiemu, with its Python:
+
+  ELEKLOADER_DIGIEMU=<digiemu> ELEKLOADER_STOCK_154=<Digitakt_OS1.54.syx> \\
+  ELEKLOADER_STOCK_DN1_144=<Digitone_and_Digitone_Keys_OS1.44.syx> ELEKLOADER_CROSS=m68k-elf- \\
+  uv run --project "$ELEKLOADER_DIGIEMU" python tests/test_sdk_alpha_hiding.py
+
+The Digitone II runs in DigiKit's ColdFire emulator (sdk_alpha_devices.DigiKit):
+
+  ELEKLOADER_DIGIKIT=<digikit> ELEKLOADER_DIGI_EMUD=<digi-emud> \\
+  ELEKLOADER_DN2_SYX=<Digitone_II_OS1.12.syx> ELEKLOADER_CROSS=m68k-elf- \\
+  python tests/test_sdk_alpha_hiding.py
 """
 import atexit
 from contextlib import contextmanager
-from functools import wraps
 import gc
 import json
 import os
@@ -44,14 +50,16 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from elekloader.sdk import build                              # noqa: E402
-from elekloader.sdk.sdk_alpha_build import sdk_alpha_build    # noqa: E402
+from elekloader.sdk.sdk_alpha_build import SDK_ALPHA_TARGETS, sdk_alpha_build    # noqa: E402
 import sdk_alpha_devices                                      # noqa: E402
 from sdk_alpha_devices import CannotYet, Device                # noqa: E402
 
 RAW_MAX = 127 << 8              # a knob's native 8.8 range, whatever its bounds
-DEVICES_LISTED = {'digitakt-mk1': ['1.54'], 'digitone-mk1': ['1.44'], 'digitone-mk2': ['1.12']}
+DEVICES_LISTED = {}
+for _device, _os in SDK_ALPHA_TARGETS:
+    DEVICES_LISTED.setdefault(_device, []).append(_os)
 
-_ids = iter(range(100, 120))    # the ids of the machines a test file writes inline
+_ids = iter(range(100, 128))    # the ids of the registered machines the test files write inline
 REGISTRY = []
 
 
@@ -61,7 +69,12 @@ class SdkMachine:
     def __init__(self, name, source=None, directory=None, substitutions=None, register=True):
         self.name, self.source, self.directory = name, source, directory
         self.substitutions = substitutions or {}
-        self.id = next(_ids) if source is not None else None    # a folder's own id, once built
+        if source is None:
+            self.id = None              # a folder's own id, once built
+        elif register:
+            self.id = next(_ids)
+        else:
+            self.id = 100               # built and linked alone, so it shares the id
         if register:
             REGISTRY.append(self)
 
@@ -102,25 +115,23 @@ class Firmware:
     booted once and saved as a snapshot by the device's emulator (its backend)."""
 
     def __init__(self, device):
-        stock = os.environ.get(device.stock_env, '')
-        if not os.path.isfile(stock):
-            raise unittest.SkipTest('needs %s' % device.stock_env)
+        stock = device.stock()
         device.backend.check()
         self.device, self.work = device, tempfile.mkdtemp(prefix='sdk-harness-')
         atexit.register(shutil.rmtree, self.work, True)
-        mods = [build.build(str(ROOT / path), stock, self.work)[0] for path in device.bases]
+        mods = [build.build(str(path), stock, self.work)[0] for path in device.bases()]
         self.refused, self.layouts, ids = {}, {}, []
         for machine in REGISTRY:
             try:
-                path, mod = sdk_alpha_build(machine.write(self.work), stock, self.work)
+                path, mod, layouts = sdk_alpha_build(machine.write(self.work), stock, self.work)
             except build.BuildError as error:
                 self.refused[machine] = str(error).strip().splitlines()[0]
                 continue
             mods.append(path)
-            found = device.machine_ids(mod)
+            found = list(layouts)
             machine.id = found[0]
             ids += found
-            self.layouts.update(mod.sdk_alpha_layouts)
+            self.layouts.update(layouts)
         self.machine_ids = ids
         syx = os.path.join(self.work, 'firmware.syx')
         done = subprocess.run([sys.executable, '-m', 'elekloader.patch', '--stock', stock,
@@ -185,14 +196,16 @@ class Knob:
 
     @property
     def label(self):
-        """The label on the screen (a .present callback may have changed it)."""
+        """The label .present left, as the adapter's copy holds it (the device's sdk_alpha_labels),
+        not the screen's pixels: test_sdk_alpha_labels compares those."""
         self.track.case.say('what is %s labelled?' % self.spec['label'])
         self._settled()
         return self.track.case.panel.label(self.spec['id'])
 
     @property
     def visible(self):
-        """Whether the screen shows the knob (a .present callback may hide it)."""
+        """Whether .present left the knob shown, as the adapter's copy holds it (the device's
+        sdk_alpha_visibility), not the screen's pixels: `pixels` is those."""
         self.track.case.say('is %s shown?' % self.spec['label'])
         self._settled()
         return self.track.case.panel.visible(self.spec['id'])
@@ -269,8 +282,7 @@ class UsedMachine:
 
     def all_knobs(self):
         """Every knob the machine declares, by logical id."""
-        specs = {knob['id']: knob['label'] for page in self.layout['pages'] for knob in page['knobs'].values()}
-        return self.knobs(*[specs[i] for i in sorted(specs)])
+        return self.knobs(*[knob['label'] for knob in self.layout['knobs']])
 
 
 class Lfo:
@@ -360,7 +372,7 @@ class Track:
         return self.case.panel.shown_page(self.index)
 
     def empty_positions(self):
-        """Which of the page's eight positions hold a knob."""
+        """Which of the page's eight positions hold a knob, as the adapter's page table holds it."""
         self.show(0)
         return self.case.panel.empty_positions()
 
@@ -517,26 +529,11 @@ def _devices(base=Device):
         yield from _devices(device)
 
 
-def sdk_expected_failure(*devices):
-    """A known gap on these devices only; other devices still have to pass the test."""
-    def decorate(method):
-        method.sdk_expected_failures = devices
-        return method
-    return decorate
-
-
 def sdk_tests(cls):
     """Run the plain class `cls` once for every device, as test classes of this module."""
     module = sys.modules[cls.__module__]
     for device in _devices():
         name = '%s_%s' % (cls.__name__, device.key.replace('-', '_'))
         attrs = {'device': device, '__module__': cls.__module__}
-        for method_name, method in vars(cls).items():
-            if device.key in getattr(method, 'sdk_expected_failures', ()):
-                @unittest.expectedFailure
-                @wraps(method)
-                def expected(self, method=method):
-                    return method(self)
-                attrs[method_name] = expected
         setattr(module, name, type(name, (cls, SdkTestCase), attrs))
     return cls

@@ -139,8 +139,9 @@ def run(cmd):
     try:
         r = subprocess.run(cmd, capture_output=True, text=True)
     except FileNotFoundError:
-        raise BuildError('%s is not installed (the device\'s cross toolchain; see '
-                         'docs/ADAPTING.md)' % cmd[0])
+        raise BuildError('%s is not installed (the device\'s cross toolchain; set ELEKLOADER_CROSS '
+                         'to another prefix, such as ELEKLOADER_CROSS=m68k-elf- for Homebrew\'s; '
+                         'see docs/ADAPTING.md)' % cmd[0])
     if r.returncode:
         raise BuildError('%s\n%s%s' % (' '.join(cmd), r.stdout, r.stderr))
     return r.stdout
@@ -588,6 +589,10 @@ def main(argv=None):
         ap.error('--stock is required (or set ELEKLOADER_STOCK)')
     try:
         path, m = build(a.moddir, a.stock, a.out)
+        if any(x.startswith('sdk_alpha_registration_') for x in m.exports):
+            from elekloader.sdk.sdk_alpha_build import sdk_alpha_build   # it imports this module
+            os.remove(path)                 # without the SDK step the machine does nothing
+            path, m, _ = sdk_alpha_build(a.moddir, a.stock, a.out)
     except (BuildError, OSError, KeyError, ValueError) as e:
         print('BUILD FAILED: %s' % e)
         return 1
@@ -599,4 +604,6 @@ def main(argv=None):
 
 
 if __name__ == '__main__':
-    sys.exit(main())
+    # Under -m this file is __main__; run the package's copy so sdk_alpha_build's BuildError is caught.
+    from elekloader.sdk import build
+    sys.exit(build.main())

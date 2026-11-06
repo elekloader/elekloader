@@ -68,8 +68,9 @@ class ParameterTableSitesTests(unittest.TestCase):
                    if line.startswith('#define ') and len(line.split()) > 2)}
         mod = json.loads((ROOT / 'mods/machines-dn2/mod.json').read_text())
         self.assertEqual(int(mod['defsym']['T1_ROWS']), define['ROWS'])
-        self.assertEqual(define['SDK_ROW'], define['ADDED'])  # SDK rows follow all five native pages
-        self.assertEqual(define['G_CODE'], define['ROWS'] + define['SDK_ROW'] + define['SDK_KNOBS'])
+        self.assertEqual(define['G_CODE'], define['ROWS'] + define['ADDED'])  # 0.1's G row: projects keep it
+        self.assertEqual(define['SDK_ROW'], define['ADDED'] + 1)  # SDK rows follow the five native pages and G
+        self.assertEqual(define['T1_END'], define['ROWS'] + define['SDK_ROW'] + define['SDK_KNOBS'])
         bounds = [s for s in mod['sites'] if s['op'] == 'bytes' and len(s['stock']) == 12]
         self.assertEqual(len(bounds), 54)
         for site in bounds:
@@ -77,7 +78,7 @@ class ParameterTableSitesTests(unittest.TestCase):
             self.assertEqual(stock[:2], new[:2], site['addr'])
             self.assertIn(int.from_bytes(stock[2:], 'big'), (define['ROWS'], define['ROWS'] - 1))
             self.assertEqual(int.from_bytes(new[2:], 'big') - int.from_bytes(stock[2:], 'big'),
-                             define['G_CODE'] + 1 - define['ROWS'], site['addr'])
+                             define['T1_END'] - define['ROWS'], site['addr'])
         self.assertEqual(sum(s.get('target') == 'dn2_t1' for s in mod['sites']), 56)
 
 
@@ -306,18 +307,18 @@ class ParameterDispatchTests(unittest.TestCase):
             firmware.write_bytes(outputs['syx'])
             slot_code, row_slot, row_cc, value_class, cc_code, nrpn_code = (
                 0x400dc18e, 0x400dbe28, 0x400dc406, 0x400c257c, 0x400dc978, 0x400dca5a)
-            # The synth's 40 rows are 321..360 and G's is 376, after them. Slot 66 is G's only for
+            # The synth's 40 rows are 321..360 and G's is 361, after them. Slot 66 is G's only for
             # the custom filter: MULTI-MODE keeps TYPE (38), as a missing filter (6) does, and
             # LOWPASS 4 has none; CC 18 and NRPN 1:22 follow.
             checks = [(slot_code, [25, 8, 0], 321), (slot_code, [64, 8, 0], 360),
-                      (slot_code, [66, 8, 9], 376), (slot_code, [66, 0, 9], 376),
+                      (slot_code, [66, 8, 9], 361), (slot_code, [66, 0, 9], 361),
                       (slot_code, [66, 0, 0], 38), (slot_code, [66, 0, 1], 0), (slot_code, [66, 8, 6], 38),
                       (slot_code, [67, 0, 9], 39),
-                      (row_slot, [376], 66), (row_slot, [360], 64), (row_cc, [376], 18),
-                      (cc_code, [0, 8, 9, 18], 376), (nrpn_code, [0, 8, 9, 150], 376),
+                      (row_slot, [361], 66), (row_slot, [360], 64), (row_cc, [361], 18),
+                      (cc_code, [0, 8, 9, 18], 361), (nrpn_code, [0, 8, 9, 150], 361),
                       (cc_code, [0, 0, 1, 18], 0), (cc_code, [0, 0, 0, 18], 38), (cc_code, [0, 0, 9, 16], 39),
                       (cc_code, [0, 8, 9, 40], 321),
-                      (value_class, [376], None), (value_class, [38], None)]
+                      (value_class, [361], None), (value_class, [38], None)]
             request = work / 'request.json'
             request.write_text(json.dumps({'calls': [{'pc': hex(pc), 'args': [str(a) for a in args]}
                                                      for pc, args, _ in checks]}))

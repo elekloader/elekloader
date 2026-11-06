@@ -1,12 +1,8 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
-"""A machine's knobs: each encoder edits its own knob, a knob maps its range onto its bounds, a knob
-can sit on two pages, and every track keeps its own values and page.
+"""A machine's knobs: each encoder edits its own knob, a knob maps its range onto its bounds and shows
+the mapped value, a knob can sit on two pages, and every track keeps its own values and page.
 
-Run with digiemu's Python:
-
-  ELEKLOADER_DIGIEMU=<digiemu> ELEKLOADER_STOCK_154=<Digitakt_OS1.54.syx> \
-  ELEKLOADER_STOCK_DN1_144=<Digitone_and_Digitone_Keys_OS1.44.syx> ELEKLOADER_CROSS=m68k-elf- \
-  uv run --project "$ELEKLOADER_DIGIEMU" python tests/test_sdk_alpha_knobs.py
+Run as tests/sdk_alpha_harness.py says.
 """
 import unittest
 
@@ -16,82 +12,67 @@ from sdk_alpha_harness import sdk_machine, sdk_tests
 EIGHT = sdk_machine("Eight", """
     #include "elekloader/sdk_alpha_machine.h"
 
-    static const struct elek_ui_knob knobs[] = {
-        { .id = 0, .label = "KNB A" }, { .id = 1, .label = "KNB B" },
-        { .id = 2, .label = "KNB C" }, { .id = 3, .label = "KNB D" },
-        { .id = 4, .label = "KNB E" }, { .id = 5, .label = "KNB F" },
-        { .id = 6, .label = "KNB G" }, { .id = 7, .label = "KNB H" },
-    };
-    static const struct elek_ui_page pages[] = {
-        { .label = "EIGHT", .knob = { &knobs[0], &knobs[1], &knobs[2], &knobs[3],
-                                      &knobs[4], &knobs[5], &knobs[6], &knobs[7] } },
+    static const struct elek_knob knobs[] = {
+        { "KNB A", .max = 127 }, { "KNB B", .max = 127 }, { "KNB C", .max = 127 }, { "KNB D", .max = 127 },
+        { "KNB E", .max = 127 }, { "KNB F", .max = 127 }, { "KNB G", .max = 127 }, { "KNB H", .max = 127 },
     };
     static const struct elek_machine eight = {
-        .id = @ID@, .name = "Eight", .short_name = "EGHT", .pages = pages, .page_count = 1,
+        .id = @ID@, .name = "Eight", .short_name = "EGHT", ELEK_KNOBS(knobs),
+        .pages = { { "EIGHT", { &knobs[0], &knobs[1], &knobs[2], &knobs[3],
+                                &knobs[4], &knobs[5], &knobs[6], &knobs[7] } } },
     };
     ELEK_REGISTER_MACHINE(eight);
 """)
 
-# Knobs with different bounds, on encoders A to F; G and H hold none. The callback keeps the raw
-# value (native, 0..32512) and the mapped value it was given for each knob.
+# Knobs with different bounds, on encoders A to D; E to H hold none. The callback keeps the mapped
+# value it was given for each knob.
 BOUNDS = sdk_machine("Bounds", """
     #include "elekloader/sdk_alpha_machine.h"
 
-    volatile int32_t bounds_raw[6], bounds_value[6];
+    volatile int32_t bounds_value[4];
 
-    static const struct elek_ui_knob knobs[] = {
-        { .id = 0, .label = "DFLT" },                                   /* 0..127 */
-        { .id = 1, .label = "PITCH", .min = ELEK_UI_BOUND(10), .max = ELEK_UI_BOUND(20) },
-        { .id = 2, .label = "ZERO", .max = ELEK_UI_BOUND(0) },          /* 0..0 */
-        { .id = 3, .label = "FIXED", .min = ELEK_UI_BOUND(7), .max = ELEK_UI_BOUND(7) },
-        { .id = 4, .label = "SIGN", .min = ELEK_UI_BOUND(-10), .max = ELEK_UI_BOUND(10) },
-        { .id = 5, .label = "FULL", .min = ELEK_UI_BOUND(-2147483647 - 1), .max = ELEK_UI_BOUND(2147483647) },
+    static const struct elek_knob knobs[] = {
+        { "WIDE", .max = 127 },
+        { "PITCH", .min = 10, .max = 20 },
+        { "SIGN", .min = -10, .max = 10, .def = -10 },     /* from min: the Digitone II has no defaults */
+        { "FULL", .min = -2147483647 - 1, .max = 2147483647, .def = -2147483647 - 1 },
     };
-    static const struct elek_ui_page pages[] = {
-        { .label = "BOUNDS", .knob = { &knobs[0], &knobs[1], &knobs[2], &knobs[3], &knobs[4], &knobs[5] } },
-    };
-    static void present(const struct elek_ui_context *ctx, struct elek_ui_presentation *out)
+    static void present(const struct elek_ui *ui)
     {
-        if (!ctx->knob)
-            return;
-        for (int k = 0; k < 6; ++k) {
-            bounds_raw[k] = ctx->knob[k]->raw_value;
-            bounds_value[k] = ctx->knob[k]->value;
-        }
+        for (int k = 0; k < 4; ++k)
+            bounds_value[k] = ui->knob[k];
     }
     static const struct elek_machine bounds = {
-        .id = @ID@, .name = "Bounds", .short_name = "BNDS",
-        .pages = pages, .page_count = 1, .present = present,
+        .id = @ID@, .name = "Bounds", .short_name = "BNDS", ELEK_KNOBS(knobs),
+        .pages = { { "BOUNDS", { &knobs[0], &knobs[1], &knobs[2], &knobs[3] } } }, .present = present,
     };
     ELEK_REGISTER_MACHINE(bounds);
 """)
 
 # Two pages. PITCH sits on both: encoder D of the first, B of the second. The callback keeps the page
-# it was called for and every knob's raw value, whichever page the knob is on.
+# it was called for and every knob's value, whichever page the knob is on.
 PAGES = sdk_machine("Pages", """
     #include "elekloader/sdk_alpha_machine.h"
 
-    volatile int32_t pages_page, pages_raw[3];
+    volatile int32_t pages_page, pages_value[3];
 
-    static const struct elek_ui_knob knobs[] = {
-        { .id = 0, .label = "AMNT" }, { .id = 1, .label = "PITCH" }, { .id = 2, .label = "OTHER" },
+    static const struct elek_knob knobs[] = {
+        { "AMNT", .max = 127 }, { "PITCH", .max = 127 }, { "OTHER", .max = 127 },
     };
-    static const struct elek_ui_page pages[] = {
-        { .label = "FIRST", .knob = { [ELEK_ENCODER_A] = &knobs[0], [ELEK_ENCODER_D] = &knobs[1] } },
-        { .label = "SECOND", .knob = { [ELEK_ENCODER_A] = &knobs[2], [ELEK_ENCODER_B] = &knobs[1] } },
-    };
-    static void present(const struct elek_ui_context *ctx, struct elek_ui_presentation *out)
+    static void present(const struct elek_ui *ui)
     {
-        if (!ctx->knob)
-            return;
-        if (ctx->page >= 0)
-            pages_page = ctx->page;
+        if (ui->page >= 0)
+            pages_page = ui->page;
         for (int k = 0; k < 3; ++k)
-            pages_raw[k] = ctx->knob[k]->raw_value;
+            pages_value[k] = ui->knob[k];
     }
     static const struct elek_machine pages_machine = {
-        .id = @ID@, .name = "Pages", .short_name = "PAGE",
-        .pages = pages, .page_count = 2, .present = present,
+        .id = @ID@, .name = "Pages", .short_name = "PAGE", ELEK_KNOBS(knobs),
+        .pages = {
+            { "FIRST", { [ELEK_A] = &knobs[0], [ELEK_D] = &knobs[1] } },
+            { "SECOND", { [ELEK_A] = &knobs[2], [ELEK_B] = &knobs[1] } },
+        },
+        .present = present,
     };
     ELEK_REGISTER_MACHINE(pages_machine);
 """)
@@ -103,6 +84,11 @@ class Knobs:
         """What the callback was given for the knob (a signed word)."""
         word = self.read(name, knob.spec['id'])
         return word - (1 << 32) if word >= 1 << 31 else word
+
+    def shown(self, knob, value):
+        """The value text under the knob at `value`, read before it gives way to the label."""
+        knob.set(value)
+        return [row >> 7 for row in knob.label_pixels]     # its column: the crop's last 7 reach the next
 
     def test_every_knob_starts_at_zero(self):
         knobs = self.track.use(EIGHT).all_knobs()
@@ -141,11 +127,11 @@ class Knobs:
         self.track.turn_encoder('G', +10)
         self.assertEqual([knob.raw for knob in knobs], before)
 
-    def test_a_knob_with_no_bounds_runs_from_0_to_127(self):
-        dflt, = self.track.use(BOUNDS).knobs("DFLT")
-        self.assertEqual(dflt.value, 0)
-        dflt.set(127)
-        self.assertEqual(self.seen('bounds_value', dflt), 127)
+    def test_a_knob_runs_from_min_to_max(self):
+        wide, = self.track.use(BOUNDS).knobs("WIDE")
+        self.assertEqual(wide.value, 0)
+        wide.set(127)
+        self.assertEqual(self.seen('bounds_value', wide), 127)
 
     def test_a_knob_maps_its_range_onto_its_bounds(self):
         pitch, = self.track.use(BOUNDS).knobs("PITCH")
@@ -159,7 +145,6 @@ class Knobs:
         pitch, sign = self.track.use(BOUNDS).knobs("PITCH", "SIGN")
         for knob in (pitch, sign):
             knob.turn(+37)
-            self.assertEqual(self.seen('bounds_raw', knob), knob.raw)
             self.assertEqual(self.seen('bounds_value', knob), knob.value)
 
     def test_a_signed_range_reaches_both_ends(self):
@@ -169,23 +154,19 @@ class Knobs:
         sign.set(-10)
         self.assertEqual(self.seen('bounds_value', sign), -10)
 
+    def test_a_knob_shows_its_mapped_value(self):
+        wide, sign = self.track.use(BOUNDS).knobs("WIDE", "SIGN")
+        ten = self.shown(wide, 10)
+        self.assertTrue(any(ten), 'no value under WIDE')
+        self.assertEqual(self.shown(sign, 10), ten)
+        self.assertEqual(self.shown(sign, 0), self.shown(wide, 0))
+        self.assertNotEqual(self.shown(sign, -10), ten)
+
     def test_a_knob_can_span_the_whole_32_bit_range(self):
         full, = self.track.use(BOUNDS).knobs("FULL")
         self.assertEqual(self.seen('bounds_value', full), -2**31)
         full.set(2**31 - 1)
         self.assertEqual(self.seen('bounds_value', full), 2**31 - 1)
-
-    def test_a_knob_whose_max_is_zero_reads_zero_but_keeps_its_raw_value(self):
-        zero, = self.track.use(BOUNDS).knobs("ZERO")
-        zero.turn(+10)
-        self.assertGreater(zero.raw, 0)
-        self.assertEqual(self.seen('bounds_value', zero), 0)
-
-    def test_a_knob_with_equal_bounds_reads_that_value_but_keeps_its_raw_value(self):
-        fixed, = self.track.use(BOUNDS).knobs("FIXED")
-        fixed.turn(+10)
-        self.assertGreater(fixed.raw, 0)
-        self.assertEqual(self.seen('bounds_value', fixed), 7)
 
     def test_a_knob_on_two_pages_is_one_knob(self):
         pitch, = self.track.use(PAGES).knobs("PITCH")
@@ -212,7 +193,7 @@ class Knobs:
         amnt, = self.track.use(PAGES).knobs("AMNT")
         amnt.turn(+20)
         self.track.show(1)
-        self.assertEqual(self.read('pages_raw', amnt.spec['id']), amnt.raw)
+        self.assertEqual(self.read('pages_value', amnt.spec['id']), amnt.value)
 
     def test_each_track_has_its_own_values(self):
         first, = self.tracks[0].use(EIGHT).knobs("KNB A")

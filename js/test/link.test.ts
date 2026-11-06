@@ -52,6 +52,23 @@ test('a machine claims its slot (machine:<n>) on the Analog Rytm MKII', () => {
   assert.deepEqual(mod('e', 53).impliedNames(image), [])
 })
 
+test('mk1 machines claim their ids (machine:<id>, dnmachine:<id>)', () => {
+  for (const [dev, table, prefix] of [[DIGITAKT_MK1, 'core_machines', 'machine'],
+    [DIGITONE_MK1, 'sdk_alpha_machines', 'dnmachine']] as const) {
+    const r = dev.releases[dev.releases.length - 1], image = new Uint8Array(r.mainLen)
+    const mod = (id: string, slot: number) => new Mod2({
+      elemod: 2, id, version: '1', target: targetOf(dev, r),
+      sections: { '.run': { align: 4, parts: [['hex', slot.toString(16).padStart(8, '0') + '00'.repeat(28)]] } },
+      symbols: { m: ['.run', 0] },
+      contribute: [{ to: table, data: '00000000', relocs: [[0, 'abs32', 'sym:m', 0]] }],
+    }, id)
+    assert.deepEqual(mod('a', 30).impliedNames(image), [`${prefix}:30`])
+    assert.ok(check([mod('a', 30), mod('b', 30)], image).includes(`a 1 and b 1 both claim ${prefix}:30`))
+    assert.ok(!check([mod('a', 30), mod('b', 127)], image).some(p => p.includes('claim')))
+    assert.deepEqual(mod('outside', 128).impliedNames(image), [])
+  }
+})
+
 test('DN2 synth and filter claims use separate stable ID namespaces', () => {
   const dn = DIGITONE_MK2, r = dn.releases[0], image = new Uint8Array(r.mainLen)
   const mod = (id: string, type: number, table = 'mk2_voice_synths') => new Mod2({
@@ -95,6 +112,19 @@ test('DN2 machine bundles claim every pointer entry', () => {
     assert(check([bundle, mod('custom', [7], table)], image).includes(`bundle 1 and custom 1 both claim ${prefix}:7`))
     assert(!check([mod('bundle', [6, 7], table), mod('custom', [8], table)], image).some(p => p.includes('claim')))
   }
+})
+
+test('the mods together add no more to a table than the profile\'s tableLimits (tests/test_link_refusals.py)', () => {
+  const dn = DIGITONE_MK1, r = dn.releases.find(x => x.version === '1.44')!, image = new Uint8Array(r.mainLen)
+  const core = new Mod2({ elemod: 2, id: 'core', version: '1', target: targetOf(dn, r),
+    sections: { '.boot': { align: 4, parts: [['hex', '4e75']] } },
+    collections: { sdk_alpha_machines: { entry: 4 } } }, 'core')
+  const mod = (id: string, n: number) => new Mod2({ elemod: 2, id, version: '1', target: targetOf(dn, r), sections: {},
+    contribute: [{ to: 'sdk_alpha_machines', data: '00000000'.repeat(n), relocs: [] }] }, id)
+  const want = 'sdk_alpha_machines holds at most 15 entries on digitone-mk1 1.44; '
+  assert.deepEqual(check([core, mod('a', 5), mod('b', 5), mod('c', 6)], image), [want + 'a 1, b 1 and c 1 add 16'])
+  assert.deepEqual(check([core, mod('a', 16)], image), [want + 'a 1 adds 16'])
+  assert.deepEqual(check([core, mod('a', 5), mod('b', 5), mod('c', 5)], image), [])
 })
 
 test('a site in bytes the device keeps stock is refused, in both formats, with the range and its reason', () => {

@@ -1,12 +1,13 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
 /* The SDK's sound contract on the host: built twice by test_sdk_alpha_render.py, as the ColdFire's Q31
  * (plain) and as the SHARC's float (-DELEK_TARGET_SHARC). It checks the helpers against 64-bit and double
- * references, then renders a sine through a machine's .render and prints the samples, -1.0..1.0, one a line,
- * for the Python side to compare the two builds. */
+ * references, then renders examples/sdk-sine through its .render (argv: FINE, then the note) and prints the
+ * samples, -1.0..1.0, one a line, for the Python side to compare the two builds. */
 #include <assert.h>
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include "elekloader/sdk_alpha_machine.h"
 
 #ifndef ELEK_TARGET_SHARC
@@ -36,6 +37,9 @@ static void check_q31(void)
     assert(elek_clip(INT32_MIN) == INT32_MIN);
     assert(elek_level(127, 127) >= INT32_MAX - 127 && elek_level(0, 127) == 0 && elek_level(-5, 127) == 0);
     assert(elek_level(200, 127) == elek_level(127, 127));
+    assert(elek_from_q15(-32768) == INT32_MIN && elek_from_q15(16384) == 0x40000000);
+    assert(elek_from_q15(32767) == 0x7fff0000 && elek_from_q15(-1) == -0x10000);
+    assert(elek_from_q15(40000) == elek_from_q15(32767) && elek_from_q15(-40000) == INT32_MIN);
 }
 #else
 static void check_float(void)
@@ -43,6 +47,7 @@ static void check_float(void)
     assert(elek_mul(0.5f, -0.5f) == -0.25f && elek_add(0.75f, 0.75f) == 1.5f && elek_clip(1.5f) == 1.0f);
     assert(elek_clip(-2.0f) == -1.0f && ELEK_SAMPLE(0.5) == 0.5f);
     assert(elek_level(127, 127) == 1.0f && elek_level(0, 127) == 0.0f && elek_level(200, 127) == 1.0f);
+    assert(elek_from_q15(-32768) == -1.0f && elek_from_q15(16384) == 0.5f && elek_from_q15(-40000) == -1.0f);
 }
 #endif
 
@@ -57,32 +62,28 @@ static void check_phase(void)
     assert(elek_phase_inc(-1) == elek_phase_inc(0) && elek_phase_inc(200 << 16) == elek_phase_inc(127 << 16));
 }
 
-/* An author's machine, as in the SDK's README: a sine kernel and a render that scales it. */
-enum { LEVEL, FINE };
-static elek_sample table[256];
-struct state { uint32_t phase; };
-
-static void sine_block(elek_sample *out, uint32_t *phase, uint32_t step)
+/* The label helpers: no libc on the device. */
+static void check_labels(void)
 {
-    for (int i = 0; i < ELEK_VOICE_FRAMES; ++i) {
-        out[i] = table[*phase >> 24];
-        *phase += step;
+    static const struct { const char *prefix; int32_t v; const char *want; } nums[] = {
+        {"F", 7, "F7"}, {"A ", 37, "A 37"}, {"F", -50, "F-50"}, {"LONG", 127, "LO127"}, {"", 0, "0"},
+        {"X", 99999, "99999"}, {"X", -9999, "-9999"}, {"X", 100000, "#"}, {"X", INT32_MIN, "#"},
+    };
+    char label[ELEK_UI_LABEL_MAX + 1];
+    for (unsigned i = 0; i < sizeof nums / sizeof *nums; ++i) {
+        elek_label_num(label, nums[i].prefix, nums[i].v);
+        assert(!strcmp(label, nums[i].want));
     }
+    elek_label_set(label, "SAW");
+    assert(!strcmp(label, "SAW"));
+    elek_label_set(label, "TOOLONG");
+    assert(!strcmp(label, "TOOLO"));
 }
 
-static void sine_render(const struct elek_audio_context *ctx, const struct elek_voice *v, elek_sample *out)
-{
-    struct state *s = v->state;
-    if (v->flags & ELEK_VOICE_START)
-        s->phase = 0;
-    sine_block(out, &s->phase, elek_phase_inc(v->pitch + ctx->knob[FINE] * 65536 / 100));
-    for (int i = 0; i < ELEK_VOICE_FRAMES; ++i)
-        out[i] = elek_clip(elek_mul(out[i], elek_level(ctx->knob[LEVEL], 127)));
-}
-
-static const struct elek_machine sine = {
-    .id = 23, .name = "Sine", .short_name = "SINE", .render = sine_render, .voice_state = sizeof(struct state),
-};
+/* The example authors start from, examples/sdk-sine, as it is: the registration becomes a pointer here. */
+#undef ELEK_REGISTER_MACHINE
+#define ELEK_REGISTER_MACHINE(m) static const struct elek_machine *const example = &(m)
+#include "../examples/sdk-sine/sine.c"
 
 int main(int argc, char **argv)
 {
@@ -92,23 +93,15 @@ int main(int argc, char **argv)
     check_float();
 #endif
     check_phase();
-    /* The table as each target holds it (a ColdFire build would write constants with ELEK_SAMPLE). */
-    for (int i = 0; i < 256; ++i) {
-        double x = sin(2.0 * 3.14159265358979323846 * i / 256.0);
-#ifdef ELEK_TARGET_SHARC
-        table[i] = (float)x;
-#else
-        table[i] = (int32_t)(x * 2147483647.0);
-#endif
-    }
-    int32_t knob[2] = {argc > 1 ? atoi(argv[1]) : 127, argc > 2 ? atoi(argv[2]) : 0};
-    struct elek_audio_context ctx = {2, knob, 0};
-    struct state state = {12345};
-    struct elek_voice voice = {0, 0, 69 << 16, 100, 1, ELEK_VOICE_START, &state};
+    check_labels();
+    int32_t knob[1] = {argc > 1 ? atoi(argv[1]) : 0};
+    struct state state = {12345};               /* a previous note's phase: the start must reset it */
+    struct elek_voice voice = {.knob = knob, .start = 1, .pitch = (argc > 2 ? atoi(argv[2]) : 69) << 16,
+                               .velocity = 100, .state = &state};
     elek_sample block[ELEK_VOICE_FRAMES];
     for (int b = 0; b < 64; ++b) {
-        sine.render(&ctx, &voice, block);
-        voice.flags = 0;
+        example->render(&voice, block);
+        voice.start = 0;
         for (int i = 0; i < ELEK_VOICE_FRAMES; ++i)
 #ifdef ELEK_TARGET_SHARC
             printf("%.9f\n", block[i]);

@@ -15,17 +15,36 @@ the mod shop, beside the cores: a machine mod that requires it (`"requires": ["c
 | | |
 |---|---|
 | needs | core-dn1 5.2 (`resources.core`; 0.2: 3.1) |
-| sites | none: it uses core's `ev_voice_on`, `ev_render_params`, `ev_render_voices`, `ev_tick` and `ev_enc` (0.3, an SDK machine's presentation), `core_param_override`, `core_sound_set` and `core_menu_open` |
-| table | `dn_machines`: a machine mod contributes a pointer to its `struct dnm_machine`; `sdk_alpha_machines` (0.3): the SDK alpha builder contributes each registration (`elekloader/sdk_alpha_machine.h`) |
+| sites | none: it uses core's `ev_voice_on`, `ev_render_voices`, `ev_tick`, `ev_render_params` and `ev_enc` (0.3, OS 1.44: an SDK machine's render and presentation), `core_param_override`, `core_sound_set` and `core_menu_open` |
+| table | `dn_machines`: a machine mod contributes a pointer to its `struct dnm_machine`; `sdk_alpha_machines` (0.3, OS 1.44): the SDK alpha builder contributes a pointer to each SDK machine's `struct elek_machine` (`elekloader/sdk_alpha_machine.h`) |
 | exports | `dnm_knob`, `dnm_knob_range`, `dnm_phase_inc`, `dnm_sin` (`digitone-mk1/machines.h`) |
 | version | 0.3: SDK alpha machines, empty or with up to two pages and fifteen knobs, each knob kept in one SYN parameter (SYN2's first page's eight, then DTUN, FDBK, MIX, ADEL, BDEL and two ratio offsets) whichever page shows it, on pages of their own which SYN2 shows in place of its pages on the machine's track (`core_page_list`), each track keeping its page, with the SDK labels, a four-column grid without FM's algorithm diagram, and blank positions for undeclared knobs; `.present` runs again when a value changes, applies five-character labels, visibility and optional 16×16 glyphs, and blocks hidden encoders while retaining their values in native page copy, clear/undo and paste. Both native LFOs target its logical knobs with current labels, even while hidden; destination naming calls `.present` with `ELEK_UI_NO_PAGE`. A machine with no render plays FM. 0.2: a machine may take the SYN pages' second pages (`DNM_PAGES2`) |
-| claims | `soundslot:0`, `page:29` and `page:28` (0.3: the SDK pages) |
+| claims | `soundslot:0`, `page:29` and `page:28` (0.3, OS 1.44: the SDK pages) |
 | RAM | OS 1.44: 10.8 KiB code and initialized data, 16.0 KiB zero-initialized data |
 
-The [shared SDK](../../docs/SDK.md) also supports audio callbacks, mapped
-defaults and per-track shared snapshots on OS 1.44. It uses the same voice
-path as native machines; SDK-only details and qualification limits live
-in that guide.
+## SDK machines (OS 1.44)
+
+The [shared SDK's](../../docs/SDK.md) machines are on OS 1.44 only: its
+port adds `sdk_alpha.c` and the shared `../sdk-alpha/machine.c`, with
+`SDK_ALPHA_DN1`. OS 1.43 has no SDK machines.
+
+- **The knobs.** Logical knob `i` keeps its value in one SYN parameter,
+  whichever page shows it: knobs 0-7 in SYN2's first page's eight, 8-14
+  in DTUN, FDBK, MIX, ADEL, BDEL and two ratio offsets. Knobs 8, 13 and
+  14 turn in finer steps. The ratio offsets reach 127.99; the SDK clamps
+  their raw value to 127.0 before mapping it. These are not the Digitone
+  II's `25 + i` slots.
+- **The sound.** An SDK machine's render replaces an allocated FM voice
+  on the main CPU, through the same voice path as native machines: eight
+  voices, each with its own state, kept across notes and retriggers and
+  cleared when the voice changes machine. `track` comes from the
+  firmware's voice-owner map; pitch, velocity and start from the
+  companion's voice record. Knob values come from the native
+  block-parameter buffer that `ev_render_params` gives, read after the
+  controllers and LFOs have run, so each voice gets its own locks and
+  modulation. The wrapper scales SDK full scale to `DNM_PEAK` (1/16);
+  the companion's AMP envelope and velocity, then the multimode filter,
+  mixer and effects follow.
 
 ## How it works
 

@@ -1,11 +1,7 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 """An SDK machine can be picked for a track, and its .present callback is called for its track only.
 
-Run with digiemu's Python:
-
-  ELEKLOADER_DIGIEMU=<digiemu> ELEKLOADER_STOCK_154=<Digitakt_OS1.54.syx> \
-  ELEKLOADER_STOCK_DN1_144=<Digitone_and_Digitone_Keys_OS1.44.syx> ELEKLOADER_CROSS=m68k-elf- \
-  uv run --project "$ELEKLOADER_DIGIEMU" python tests/test_sdk_alpha_machines.py
+Run as tests/sdk_alpha_harness.py says.
 """
 import unittest
 
@@ -29,12 +25,11 @@ CALLBACK = sdk_machine("Callback", """
 
     volatile uint32_t callback_calls, callback_bad_context, callback_track;
 
-    static void present(const struct elek_ui_context *ctx, struct elek_ui_presentation *out)
+    static void present(const struct elek_ui *ui)
     {
         ++callback_calls;
-        callback_track = ctx->track;
-        if (ctx->page != ELEK_UI_NO_PAGE || ctx->page_count || ctx->knob_count || ctx->knob ||
-            out->knob_count || out->knob)
+        callback_track = ui->track;
+        if (ui->page != ELEK_UI_NO_PAGE)
             ++callback_bad_context;
     }
     static const struct elek_machine callback = {
@@ -49,9 +44,8 @@ HELLO = sdk_example("SDK Hello", "examples/sdk-hello-world")
 ONE_PAGE = sdk_machine("One page", """
     #include "elekloader/sdk_alpha_machine.h"
 
-    static const struct elek_ui_page page = { .label = "ONE" };
     static const struct elek_machine one_page = {
-        .id = @ID@, .name = "One page", .short_name = "ONE", .pages = &page, .page_count = 1,
+        .id = @ID@, .name = "One page", .short_name = "ONE", .pages = { { "ONE" } },
     };
     ELEK_REGISTER_MACHINE(one_page);
 """)
@@ -149,21 +143,21 @@ class DigitonePages(SdkTestCase):
     def test_settings_cover_the_sdk_page_as_they_cover_fm(self):
         self.track.use(ONE_PAGE)
         self.track.show()
-        self.panel.tap('GLOBAL')
+        self.panel.open_settings()
         settings = self.panel.screen()
         self.panel.tap('NO')
         self.track.use_stock()
         self.track.show()
-        self.panel.tap('GLOBAL')
+        self.panel.open_settings()
         self.assertEqual(self.panel.screen(), settings)
 
     def test_syn2_gets_its_stock_pages_back(self):
         self.track.use_stock()
         self.panel.open_page()
-        self.assertTrue(self.panel.wait_until(lambda: any(self.panel.crop(18, 13, 6, 16))),
+        self.assertTrue(self.panel.wait_until(lambda: any(self.panel.algorithm_pixels())),
                         'FM\'s algorithm diagram did not appear')
         stock = self.panel.syn2_pages()
-        algorithm = self.panel.crop(18, 13, 6, 16)
+        algorithm = self.panel.algorithm_pixels()
         self.assertTrue(any(algorithm))
         self.assertIsNotNone(stock)
         self.assertGreater(len(stock), 1)
@@ -173,11 +167,11 @@ class DigitonePages(SdkTestCase):
         self.assertEqual(self.panel.syn2_pages(), [self.panel.SDK_PAGE])
         self.track.use_stock()
         self.track.show()
-        self.assertTrue(self.panel.wait_until(lambda: any(self.panel.crop(18, 13, 6, 16))),
+        self.assertTrue(self.panel.wait_until(lambda: any(self.panel.algorithm_pixels())),
                         'FM\'s algorithm diagram did not return')
         self.assertEqual(self.track.machine_id, 0)
         self.assertEqual(self.panel.syn2_pages(), stock)
-        self.assertEqual(self.panel.crop(18, 13, 6, 16), algorithm)
+        self.assertEqual(self.panel.algorithm_pixels(), algorithm)
 
 
 if __name__ == '__main__':

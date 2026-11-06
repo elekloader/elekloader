@@ -4,16 +4,22 @@ what the firmware stored and what the screen shows. Add a Device subclass here a
 test_sdk_alpha_*.py runs on it.
 
 Operations drive the panel or read the firmware's memory; an observation the adapter does not have
-yet raises CannotYet; known gaps are marked as expected failures in the tests. Firmware addresses, screen
-geometry and the keys stay in this module.
+yet raises CannotYet. Firmware addresses, screen geometry and the keys stay in this module.
 """
 import json
 import os
+import re
 import shutil
 import struct
 import subprocess
 import sys
 import unittest
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+from elekloader import devices                                  # noqa: E402
+from elekloader.sdk.sdk_alpha_build import SDK_ALPHA_TARGETS    # noqa: E402
 
 
 class CannotYet(AssertionError):
@@ -21,6 +27,25 @@ class CannotYet(AssertionError):
 
     def __init__(self, what):
         super().__init__('cannot do this yet: %s' % what)
+
+
+def c_defines(path):
+    """name -> value of a C header's #defines that read as Python: numbers, and macros as functions."""
+    found = {}
+    for name, args, body in re.findall(r'^#define[ \t]+(\w+)(\([^)]*\))?[ \t]+(.*?)\s*(?:/\*.*)?$',
+                                       path.read_text(), re.M):
+        try:
+            found[name] = eval(('lambda %s: ' % args[1:-1] if args else '') + body, dict(found))
+        except Exception:
+            pass                    # not a Python expression (a type, a suffixed literal): not needed here
+    return found
+
+
+def mod_defines(mod):
+    """name -> number of a mod's `defsym` and `cflags` -D entries (mods/<mod>/mod.json)."""
+    doc = json.loads((ROOT / 'mods' / mod / 'mod.json').read_text())
+    flags = (f[2:].split('=', 1) for f in doc.get('cflags', ()) if f.startswith('-D') and '=' in f)
+    return {**{k: int(v, 0) for k, v in doc.get('defsym', {}).items()}, **{k: int(v, 0) for k, v in flags}}
 
 
 DIGIEMU = os.environ.get('ELEKLOADER_DIGIEMU', '')
@@ -194,18 +219,40 @@ class DigiKit:
 
 
 class Device:
-    """What every device's adapter offers the tests."""
+    """What every device's adapter offers the tests. Its target and the builder's features
+    come from SDK_ALPHA_TARGETS; features adds the ones only the adapter has."""
     key = stock_env = None
     backend = Digiemu
-    bases = ()
-    machine_claim = None
     lfo_count = 2
     settings_key = 'GLOBAL'
     features = frozenset()
 
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)
+        cls.target, = [t for (key, _), t in SDK_ALPHA_TARGETS.items() if key == cls.key]
+        cls.features = cls.target.features | cls.features
+
     @classmethod
-    def machine_ids(cls, mod):
-        return [int(n.split(':')[1]) for n in mod.names if n.split(':')[0] == cls.machine_claim]
+    def bases(cls):
+        """The mods/ folders of the target's companions, found by their mod.json's id and device."""
+        found = {}
+        for path in (ROOT / 'mods').glob('*/mod.json'):
+            doc = json.loads(path.read_text())
+            if doc.get('device') == cls.key and doc.get('id') in cls.target.companions:
+                found[doc['id']] = path.parent
+        return [found[c] for c in cls.target.companions]
+
+    @classmethod
+    def stock(cls):
+        """The device's stock file, once it and the cross compiler are there; else a skip."""
+        stock = os.environ.get(cls.stock_env, '')
+        if not os.path.isfile(stock):
+            raise unittest.SkipTest('needs %s' % cls.stock_env)
+        profile, = [d for d in devices.devices() if d.key == cls.key]
+        gcc = os.environ.get('ELEKLOADER_CROSS', profile.toolchain['prefix']) + 'gcc'
+        if not shutil.which(gcc):
+            raise unittest.SkipTest('needs the cross compiler %s (ELEKLOADER_CROSS)' % gcc)
+        return stock
 
     def __init__(self, session, symbols, machines, layouts=None):
         self.s, self.symbols = session, symbols
@@ -275,14 +322,6 @@ class Device:
             if not self.s.frames or self.s.ms - self.s.frames[-1][0] >= quiet_ms:
                 return
 
-    def turn_until(self, encoder, step, done, limit=160):
-        """Turn by step until done() holds; False if it never does."""
-        for _ in range(limit):
-            if done():
-                return True
-            self.turn(encoder, step)
-        return done()
-
     def active_track(self):
         return self.read('fw_active_track')
 
@@ -306,6 +345,10 @@ class Device:
 
     def glyph_pixels(self, encoder=0):
         return tuple(self.crop(25 + 26 * (encoder % 4), 13 + 27 * (encoder // 4), 16, 16))
+
+    def value_pixels(self, encoder=0):
+        x = 18 + 26 * (encoder % 4)
+        return self.crop(x, 30 + 27 * (encoder // 4), min(33, 128 - x), 9)
 
     def algorithm_pixels(self):
         return self.crop(18, 13, 6, 16)
@@ -382,13 +425,16 @@ class Device:
         return False
 
 
+DT1 = c_defines(ROOT / 'elekloader/sdk/include/digitakt-mk1/core3.h')   # FW_SOUND, FW_SOUND_MACHINE, ...
+DT1_SLOT_A = 17                     # FW_SOUND_PARAM(k) is slot 17 + k: core3.h says so only in a comment
+DT1_SLOTS = DT1['FW_SOUND_PARAM'](-DT1_SLOT_A)                          # a sound's slot s at + DT1_SLOTS + 2s
+DT1_EXTRA_SLOT = c_defines(ROOT / 'mods/machine-pages/src.h')['MP_EXTRA_SLOT']
+
+
 class Digitakt1(Device):
     key, stock_env = 'digitakt-mk1', 'ELEKLOADER_STOCK_154'
-    bases = ('mods/core', 'mods/machine-pages')
-    machine_claim = 'machine'
     track_count = 8
 
-    features = frozenset(('defaults', 'render'))
     sound_without_render = False
     KEYS = {0: '9', 1: '2', 2: '10', 3: '3', 4: '11', 5: '12', 6: '5', 7: '13',
             8: '6', 9: '14', 10: '7', 11: '15', 12: '16'}
@@ -429,8 +475,13 @@ class Digitakt1(Device):
         return bytes(self.s.m.uc.mem_read(int(self.symbols['selected'], 16) + track, 1))[0]
 
     def empty_positions(self):
-        """Which of the eight positions of an empty machine's page hold a knob (none)."""
-        return tuple(bool(self.read('sdk_alpha_empty_layout', 4 * (2 + k))) for k in range(8))
+        """Which of the eight positions of the page shown hold a knob: machine-pages' layout of it
+        (pages.c's page_now, struct page: lay[2][11] at +20) for its selected page, not the screen."""
+        page = self.read('page_now')
+        if not page:
+            raise CannotYet('machine-pages shows no page of its own')
+        lay = page + 20 + 44 * self.shown_page(self.active_track())
+        return tuple(bool(self.peek32(lay + 4 * (2 + k))) for k in range(8))
 
     def switch_track(self, track):
         self.chord('TRK', str(track + 1))
@@ -451,22 +502,18 @@ class Digitakt1(Device):
         return self.machine(track) == machine_id
 
     def machine(self, track):
-        return (self.peek32(self.kit() + 0x20 + 0xa2 * track + 0x7c) >> 8) & 255
+        return bytes(self.s.m.uc.mem_read(DT1['FW_SOUND'](self.kit(), track) + DT1['FW_SOUND_MACHINE'], 1))[0]
 
     def raw_value(self, knob, track=0):
         slot = self.destination_for(knob)
-        at = self.kit() + 0x20 + 0xa2 * track + 20 + 2 * slot
+        at = DT1['FW_SOUND'](self.kit(), track) + DT1_SLOTS + 2 * slot
         return struct.unpack('>h', bytes(self.s.m.uc.mem_read(at, 2)))[0]
 
-    def value_pixels(self, encoder=0):
-        x = 18 + 26 * (encoder % 4)
-        return self.crop(x, 30 + 27 * (encoder // 4), min(33, 128 - x), 9)
-
     def destination_for(self, knob):
-        return 17 + knob if knob < 8 else 46 + knob - 8
+        return DT1_SLOT_A + knob if knob < 8 else DT1_EXTRA_SLOT(knob - 8)
 
     def destination(self, lfo, track=0):
-        at = self.kit() + 0x20 + 0xa2 * track + 20 + 2 * (4 + 8 * lfo)
+        at = DT1['FW_SOUND'](self.kit(), track) + DT1_SLOTS + 2 * (4 + 8 * lfo)
         return struct.unpack('>H', bytes(self.s.m.uc.mem_read(at, 2)))[0] >> 8
 
     def open_lfo(self, lfo):
@@ -497,7 +544,7 @@ class Digitakt1(Device):
         self.tap('YES')
 
     def label(self, knob):
-        """The label shown for a logical knob: machine-pages' copy of what .present gave."""
+        """A logical knob's label: the adapter's copy of what .present gave, not the screen."""
         at = int(self.symbols['sdk_alpha_labels'], 16) + 6 * knob   # [15][ELEK_UI_LABEL_MAX + 1]
         return bytes(self.s.m.uc.mem_read(at, 6)).split(b'\0')[0].decode('ascii')
 
@@ -514,10 +561,8 @@ class Digitakt1(Device):
 
 class Digitone1(Device):
     key, stock_env = 'digitone-mk1', 'ELEKLOADER_STOCK_DN1_144'
-    bases = ('mods/core-dn1', 'mods/machines-dn1')
-    machine_claim = 'dnmachine'
     track_count = 4
-    features = frozenset(('defaults', 'render', 'polyphony', 'audio_modulation'))
+    features = frozenset(('polyphony', 'audio_modulation'))
     sound_without_render = True
     KEYS = Digitakt1.KEYS
 
@@ -553,6 +598,7 @@ class Digitone1(Device):
         return self.read('dnm_sdk_shown', 4 * track)
 
     def empty_positions(self):
+        """machines-dn1's page table (dnm_sdk_pages), not the screen."""
         return tuple(bool(self.read('dnm_sdk_pages', 16 + 4 * k)) for k in range(8))
 
     def switch_track(self, track):
@@ -610,10 +656,6 @@ class Digitone1(Device):
     def parameter_for(self, knob, track=0):
         return self.SDK_PARAMS[knob]
 
-    def value_pixels(self, encoder=0):
-        x = 18 + 26 * (encoder % 4)
-        return self.crop(x, 30 + 27 * (encoder // 4), min(33, 128 - x), 9)
-
     def open_lfo(self, lfo):
         if not hasattr(self, '_lfo_labels'):
             # OS 1.44's native list formatter returns the text its row renderer draws.
@@ -630,6 +672,7 @@ class Digitone1(Device):
                     self._lfo_box[address] = bytes(uc.mem_read(string, 64)).split(b'\0')[0].decode('ascii')
 
             self._lfo_box = {}
+            # OS 1.44's list formatter and DEST box renderer: only this probe hooks them, so no profile has them
             for address in (0x400c6a3c, 0x40089bb0, 0x40089bf0):
                 self.s.m.uc.hook_add(UC_HOOK_CODE, named, begin=address, end=address)
             self.s.m.uc.ctl_remove_cache(0x400c6918, 0x400c6a48)
@@ -690,6 +733,7 @@ class Digitone1(Device):
         return self._lfo_labels[param].split(':', 1)[-1]
 
     def label(self, knob):
+        """The adapter's copy (sdk_alpha_labels, which dev.h renames for this read), not the screen."""
         at = int(self.symbols['dnm_sdk_labels'], 16) + 6 * knob
         return bytes(self.s.m.uc.mem_read(at, 6)).split(b'\0')[0].decode('ascii')
 
@@ -707,15 +751,14 @@ class Digitone2(Device):
     sdk_alpha.c) whose pages are SYN's; logical knob i is sound slot 25 + i."""
     key, stock_env = 'digitone-mk2', 'ELEKLOADER_DN2_SYX'
     backend = DigiKit
-    bases = ('mods/core-dn2', 'mods/machines-dn2')
-    machine_claim = 'mk2-synth'
     track_count = 16
     lfo_count = 3
     settings_key = 'SETTINGS'
 
-    ACTIVE_TRACK = 0x42432a6c       # a byte: the track the panel edits (checked on a unit with DigiHealth)
-    SOUNDS, SOUND_SIZE = 0x4210d0c0, 0x48b  # the tracks' sounds: the machine at +0xde, slot s at +20 + 2s
-    SLOT = 25
+    MOD, H = mod_defines('machines-dn2'), c_defines(ROOT / 'mods/machines-dn2/dn2.h')
+    ACTIVE_TRACK = MOD['ACTIVE_TRACK']  # a byte: the track the panel edits (checked on a unit with DigiHealth)
+    SOUNDS, SOUND_SIZE = MOD['SOUNDS'], MOD['SOUND_SIZE']  # the machine at +0xde, slot s at +20 + 2s
+    SLOT = H['SLOT']
 
     def active_track(self):
         return self.mem(self.ACTIVE_TRACK, 1)[0]
@@ -770,14 +813,12 @@ class Digitone2(Device):
         return self.read('dn2_sdk_shown', 4 * track)
 
     def empty_positions(self):
-        """Which of the eight positions of the page SYN shows hold a parameter."""
+        """Which of the eight positions of the page SYN shows hold a parameter: machines-dn2's
+        dn2_sdk_ids, not the screen."""
         return tuple(bool(self.read('dn2_sdk_ids', 4 * k)) for k in range(8))
 
-    def value_pixels(self, encoder=0):
-        x = 18 + 26 * (encoder % 4)
-        return self.crop(x, 30 + 27 * (encoder // 4), min(33, 128 - x), 9)
-
     def label(self, knob):
+        """The adapter's copy (sdk_alpha_labels, which dev.h renames for this read), not the screen."""
         return self.mem(int(self.symbols['dn2_sdk_labels'], 16) + 6 * knob, 6).split(b'\0')[0].decode('ascii')
 
     def visible(self, knob):
@@ -805,9 +846,9 @@ class Digitone2(Device):
         self.settle(quiet_ms=20000, limit_ms=300000)
         self._leave_settings()
 
-    MOD_PAGE = 0x447c0890           # the LFO MOD shows (0-2): the MOD view's page
-    ROW, ROW_NAME = 60, 40          # machines-dn2's parameter rows (dn2_t1): a row's size, its name
-    ROWS, SDK_ROW = 321, 40         # machines-dn2's dn2.h: knob i's row is ROWS + SDK_ROW + i
+    MOD_PAGE = 0x447c0890           # the LFO MOD shows (0-2): the MOD view's page; only this test reads it
+    ROW, ROW_NAME = 60, 40          # machines.c's struct row (dn2_t1): its size, its name; a layout, no #define
+    ROWS, SDK_ROW = H['ROWS'], H['SDK_ROW']     # knob i's row is ROWS + SDK_ROW + i
 
     def open_lfo(self, lfo):
         """MOD at the LFO's page, its DEST list open (PUSH D)."""

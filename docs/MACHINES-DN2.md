@@ -11,7 +11,11 @@ sites of its own; those pages show how.
 through `sdk_alpha_machines`: synth IDs 5..127 in the same selector, with
 two SYN pages and fifteen logical knobs. Their values use sound slots
 25..39, shared placements use one value, and the DSP receives FM TONE's
-type. These machines carry no SHARC payload. SDK and SHARC synths share
+type. These machines carry no SHARC payload: the builder refuses an SDK
+machine's `render`, and a knob whose `def` is not its `min`. The
+[native voice input](../elekloader/sdk/include/digitone-mk2/voice.h) has
+pitch, start, slot, controls and state, but not the track and velocity
+`elek_voice` gives. SDK and SHARC synths share
 the `mk2-synth` ID namespace; filters have their own namespace.
 
 Each descriptor starts with a permanent ID: 5..31 for synths, 6..31 for
@@ -59,7 +63,7 @@ parameter rows after the stock table's 321: at boot, before the OS's
 initializers, the companion copies the table (`0x401f83a4`) to its RAM,
 points the table's 56 references at the copy and raises its 54 row bounds
 by 56, for 40 SHARC synth knobs, fifteen shared SDK knobs and a filter's G; the value-class accessor (`0x400c257c`) gives an added row its
-template's object, and the bounds that end loops keep the stock count. The CC
+template's object (the SDK knobs' rows keep their own formatter, `+0x34`, which `0x400c25a0` calls with the value and a buffer), and the bounds that end loops keep the stock count. The CC
 and NRPN lookups (`0x400dc978`, `0x400dca5a`) ask FM TONE's map for a paged
 synth, and an FM TONE row found there becomes the synth's row for its slot. The sound-load bound
 accepts IDs through 127. SHARC synth registrations remain limited to 5..31.

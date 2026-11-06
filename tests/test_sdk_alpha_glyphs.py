@@ -4,11 +4,7 @@ pixels on the screen are the glyph's, a different glyph does not change the valu
 the stock graphic back, every track has its own, and the value shown while a knob turns is not cut
 short.
 
-Run with digiemu's Python:
-
-  ELEKLOADER_DIGIEMU=<digiemu> ELEKLOADER_STOCK_154=<Digitakt_OS1.54.syx> \
-  ELEKLOADER_STOCK_DN1_144=<Digitone_and_Digitone_Keys_OS1.44.syx> ELEKLOADER_CROSS=m68k-elf- \
-  uv run --project "$ELEKLOADER_DIGIEMU" python tests/test_sdk_alpha_glyphs.py
+Run as tests/sdk_alpha_harness.py says.
 """
 import unittest
 
@@ -34,13 +30,11 @@ def rows(glyph):
 SHAPE = sdk_machine("Shape", """
     #include "elekloader/sdk_alpha_machine.h"
 
-    static const struct elek_ui_glyph diamond = { .rows = { @DIAMOND@ } };
-    static const struct elek_ui_knob shape = { .id = 0, .label = "SHAPE", .glyph = &diamond };
-    static const struct elek_ui_page pages[] = {
-        { .label = "SHAPE", .knob = { &shape } },
-    };
+    static const struct elek_glyph diamond = { .rows = { @DIAMOND@ } };
+    static const struct elek_knob knobs[] = { { "SHAPE", .max = 127, .glyph = &diamond } };
     static const struct elek_machine shape_machine = {
-        .id = @ID@, .name = "Shape", .short_name = "SHAP", .pages = pages, .page_count = 1,
+        .id = @ID@, .name = "Shape", .short_name = "SHAP", ELEK_KNOBS(knobs),
+        .pages = { { "SHAPE", { &knobs[0] } } },
     };
     ELEK_REGISTER_MACHINE(shape_machine);
 """, diamond=rows(DIAMOND))
@@ -50,27 +44,20 @@ SHAPE = sdk_machine("Shape", """
 STATES = sdk_machine("States", """
     #include "elekloader/sdk_alpha_machine.h"
 
-    static const struct elek_ui_glyph digits[] = {
+    static const struct elek_glyph digits[] = {
         { .rows = { @ONE@ } }, { .rows = { @TWO@ } }, { .rows = { @THREE@ } }, { .rows = { @FOUR@ } },
     };
-    static const struct elek_ui_knob state = {
-        .id = 0, .label = "STATE", .min = ELEK_UI_BOUND(1), .max = ELEK_UI_BOUND(4), .glyph = &digits[0],
+    static const struct elek_knob knobs[] = {
+        { "STATE", .min = 1, .max = 4, .glyph = &digits[0] }, { "STOCK", .max = 1 }, { "HIDE", .max = 1 },
     };
-    static const struct elek_ui_knob stock = { .id = 1, .label = "STOCK", .max = ELEK_UI_BOUND(1) };
-    static const struct elek_ui_knob hide = { .id = 2, .label = "HIDE", .max = ELEK_UI_BOUND(1) };
-    static const struct elek_ui_page pages[] = {
-        { .label = "STATES", .knob = { &state, &stock, &hide } },
-    };
-    static void present(const struct elek_ui_context *ctx, struct elek_ui_presentation *out)
+    static void present(const struct elek_ui *ui)
     {
-        if (ctx->knob)
-            out->knob[0]->glyph = ctx->knob[1]->value ? 0 : &digits[ctx->knob[0]->value - 1];
-        if (ctx->knob && ctx->knob[2]->value)
-            out->knob[0]->visible = 0;
+        ui->view[0].glyph = ui->knob[1] ? 0 : &digits[ui->knob[0] - 1];
+        ui->view[0].hidden = ui->knob[2];
     }
     static const struct elek_machine states = {
-        .id = @ID@, .name = "States", .short_name = "STAT",
-        .pages = pages, .page_count = 1, .present = present,
+        .id = @ID@, .name = "States", .short_name = "STAT", ELEK_KNOBS(knobs),
+        .pages = { { "STATES", { &knobs[0], &knobs[1], &knobs[2] } } }, .present = present,
     };
     ELEK_REGISTER_MACHINE(states);
 """, one=rows(DIGITS[1]), two=rows(DIGITS[2]), three=rows(DIGITS[3]), four=rows(DIGITS[4]))
@@ -78,20 +65,18 @@ STATES = sdk_machine("States", """
 GRID = sdk_machine("Glyph grid", """
     #include "elekloader/sdk_alpha_machine.h"
 
-    static const struct elek_ui_glyph digits[] = {
+    static const struct elek_glyph digits[] = {
         { .rows = { @ONE@ } }, { .rows = { @TWO@ } }, { .rows = { @THREE@ } }, { .rows = { @FOUR@ } },
     };
-    #define KNOB(n) { .id = n, .label = "GLYPH", .glyph = &digits[(n) % 4] }
-    static const struct elek_ui_knob knobs[] = {
+    #define KNOB(n) { "GLYPH", .max = 127, .glyph = &digits[(n) % 4] }
+    static const struct elek_knob knobs[] = {
         KNOB(0), KNOB(1), KNOB(2), KNOB(3), KNOB(4), KNOB(5), KNOB(6), KNOB(7),
     };
-    static const struct elek_ui_page pages[] = {
-        { .label = "GRID", .knob = {
-            &knobs[7], &knobs[6], &knobs[5], &knobs[4], &knobs[3], &knobs[2], &knobs[1], &knobs[0],
-        } },
-    };
     static const struct elek_machine grid = {
-        .id = @ID@, .name = "Glyph grid", .short_name = "GRID", .pages = pages, .page_count = 1,
+        .id = @ID@, .name = "Glyph grid", .short_name = "GRID", ELEK_KNOBS(knobs),
+        .pages = { { "GRID", {
+            &knobs[7], &knobs[6], &knobs[5], &knobs[4], &knobs[3], &knobs[2], &knobs[1], &knobs[0],
+        } } },
     };
     ELEK_REGISTER_MACHINE(grid);
 """, one=rows(DIGITS[1]), two=rows(DIGITS[2]), three=rows(DIGITS[3]), four=rows(DIGITS[4]))

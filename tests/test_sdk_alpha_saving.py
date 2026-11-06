@@ -4,11 +4,7 @@ values, what its callback shows and hides, and where its LFOs point.
 
 The tests save and load through the device's own menus, as a user does.
 
-Run with digiemu's Python:
-
-  ELEKLOADER_DIGIEMU=<digiemu> ELEKLOADER_STOCK_154=<Digitakt_OS1.54.syx> \
-  ELEKLOADER_STOCK_DN1_144=<Digitone_and_Digitone_Keys_OS1.44.syx> ELEKLOADER_CROSS=m68k-elf- \
-  uv run --project "$ELEKLOADER_DIGIEMU" python tests/test_sdk_alpha_saving.py
+Run as tests/sdk_alpha_harness.py says.
 """
 import unittest
 
@@ -19,21 +15,17 @@ from sdk_alpha_harness import sdk_machine, sdk_tests
 SAVED = sdk_machine("Saved", """
     #include "elekloader/sdk_alpha_machine.h"
 
-    static const struct elek_ui_knob hide = { .id = 0, .label = "HIDE" };
-    static const struct elek_ui_knob trgt = { .id = 1, .label = "TRGT" };
-    static const struct elek_ui_page pages[] = {
-        { .label = "SAVED", .knob = { [ELEK_ENCODER_A] = &hide, [ELEK_ENCODER_B] = &trgt } },
-    };
-    static void present(const struct elek_ui_context *ctx, struct elek_ui_presentation *out)
+    static const struct elek_knob knobs[] = { { "HIDE", .max = 127 }, { "TRGT", .max = 127 } };
+    static void present(const struct elek_ui *ui)
     {
-        if (ctx->knob && ctx->knob[0]->value) {
-            out->knob[1]->label = "QWE";
-            out->knob[1]->visible = ctx->knob[0]->value != 127;
+        if (ui->knob[0]) {
+            elek_label_set(ui->view[1].label, "QWE");
+            ui->view[1].hidden = ui->knob[0] == 127;
         }
     }
     static const struct elek_machine saved = {
-        .id = @ID@, .name = "Saved", .short_name = "SAVD",
-        .pages = pages, .page_count = 1, .present = present,
+        .id = @ID@, .name = "Saved", .short_name = "SAVD", ELEK_KNOBS(knobs),
+        .pages = { { "SAVED", { [ELEK_A] = &knobs[0], [ELEK_B] = &knobs[1] } } }, .present = present,
     };
     ELEK_REGISTER_MACHINE(saved);
 """)

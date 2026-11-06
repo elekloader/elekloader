@@ -84,6 +84,43 @@ All four need the 0.1 core, and the DigiHealth one needs that mod too; a
 missing file skips them. The suite builds the current core and examples
 with the ColdFire tools. Keep the `.elemod` files out of the repository.
 
+## The shared machine SDK
+
+`test_units.py` runs the SDK's firmware-free suites: `test_sdk_alpha.py`
+(the builder: registrations, layouts, refusals; its build checks need
+`ELEKLOADER_STOCK_154`, `ELEKLOADER_STOCK_DN1_144`, `ELEKLOADER_DN2_SYX`
+and `ELEKLOADER_CROSS`), `test_sdk_alpha_render.py` (the sample helpers
+and examples/sdk-sine, compiled with the host compiler as Q31 and as float,
+and the shared `mods/sdk-alpha/machine.c` with each mk1 adapter) and
+`test_sdk_alpha_host.py` (`sdk_alpha_host` on the examples).
+
+The other `test_sdk_alpha_*.py` files boot the machines they define on
+each device's emulator: machines, knobs, labels, hiding, glyphs, LFO
+destinations, saving, defaults and sound. Device facts (addresses,
+navigation, screen geometry) live in `tests/sdk_alpha_devices.py`. Run one
+file at a time, as `tests/sdk_alpha_harness.py` says. The Digitakt and
+the Digitone mk1 run in digiemu, with its Python:
+
+```bash
+ELEKLOADER_DIGIEMU=<digiemu> ELEKLOADER_STOCK_154=<Digitakt_OS1.54.syx> \
+ELEKLOADER_STOCK_DN1_144=<Digitone_and_Digitone_Keys_OS1.44.syx> ELEKLOADER_CROSS=m68k-elf- \
+uv run --project "$ELEKLOADER_DIGIEMU" python tests/test_sdk_alpha_hiding.py
+```
+
+The Digitone II runs in DigiKit's ColdFire emulator:
+
+```bash
+ELEKLOADER_DIGIKIT=<digikit> ELEKLOADER_DIGI_EMUD=<digi-emud> \
+ELEKLOADER_DN2_SYX=<Digitone_II_OS1.12.syx> ELEKLOADER_CROSS=m68k-elf- \
+python tests/test_sdk_alpha_hiding.py
+```
+
+`SDK_WATCH=1` shows the emulated screen, the actions and the result in a
+window (`0.25` runs slower, `4` faster). A device whose files are not
+given is skipped. The emulator runs check the UI, defaults and sound
+through the native output; they do not measure timing or render load on a
+unit.
+
 ## The refusal fixtures
 
 `tests/test_link_refusals.py` needs no firmware. For every message the linker

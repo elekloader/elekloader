@@ -55,6 +55,8 @@ core_lfo_list:
         rts
 
 | OS 1.44 0x400c6a20: a row too wide for the list, [group][short name].
+| Like the DEST box it asks for the destination name (0x28), not the
+| knob's label (0x30), so a label override alone keeps the stock text.
         .globl  core_lfo_compact
 core_lfo_compact:
         move.l  (%sp), -(%sp)
@@ -62,7 +64,7 @@ core_lfo_compact:
         lea     -60(%sp), %sp
         movem.l %d0-%d7/%a0-%a6, (%sp)
         move.l  0x30(%a3,%d2.l), -(%sp)
-        pea     0x30.w
+        pea     0x28.w
         move.l  %d2, -(%sp)
         bsr.w   name_at
         lea     12(%sp), %sp

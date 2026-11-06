@@ -3,11 +3,7 @@
 with the machine's labels as they stand, and an LFO keeps pointing at its knob when the knob is
 renamed or hidden.
 
-Run with digiemu's Python:
-
-  ELEKLOADER_DIGIEMU=<digiemu> ELEKLOADER_STOCK_154=<Digitakt_OS1.54.syx> \
-  ELEKLOADER_STOCK_DN1_144=<Digitone_and_Digitone_Keys_OS1.44.syx> ELEKLOADER_CROSS=m68k-elf- \
-  uv run --project "$ELEKLOADER_DIGIEMU" python tests/test_sdk_alpha_lfo.py
+Run as tests/sdk_alpha_harness.py says.
 """
 import unittest
 
@@ -22,27 +18,23 @@ LFO = sdk_machine("Lfo", """
 
     volatile int32_t lfo_page;
 
-    static const struct elek_ui_knob knobs[] = {
-        { .id = 0, .label = "XYZ" }, { .id = 1, .label = "NAME" },
-        { .id = 2, .label = "P03" }, { .id = 3, .label = "P04" },
-        { .id = 4, .label = "P05" }, { .id = 5, .label = "P06" },
-        { .id = 6, .label = "P07" }, { .id = 7, .label = "P08" },
+    static const struct elek_knob knobs[] = {
+        { "XYZ", .max = 127 }, { "NAME", .max = 127 }, { "P03", .max = 127 }, { "P04", .max = 127 },
+        { "P05", .max = 127 }, { "P06", .max = 127 }, { "P07", .max = 127 }, { "P08", .max = 127 },
     };
-    static const struct elek_ui_page pages[] = {
-        { .label = "LFO", .knob = { &knobs[1], &knobs[2], &knobs[3], &knobs[0],
-                                    &knobs[4], &knobs[5], &knobs[6], &knobs[7] } },
-    };
-    static void present(const struct elek_ui_context *ctx, struct elek_ui_presentation *out)
+    static void present(const struct elek_ui *ui)
     {
-        lfo_page = ctx->page;
-        if (ctx->knob && ctx->knob[1]->value) {
-            out->knob[0]->label = "QWE";
-            out->knob[0]->visible = ctx->knob[1]->value != 127;
+        lfo_page = ui->page;
+        if (ui->knob[1]) {
+            elek_label_set(ui->view[0].label, "QWE");
+            ui->view[0].hidden = ui->knob[1] == 127;
         }
     }
     static const struct elek_machine lfo = {
-        .id = @ID@, .name = "Lfo", .short_name = "LFO",
-        .pages = pages, .page_count = 1, .present = present,
+        .id = @ID@, .name = "Lfo", .short_name = "LFO", ELEK_KNOBS(knobs),
+        .pages = { { "LFO", { &knobs[1], &knobs[2], &knobs[3], &knobs[0],
+                              &knobs[4], &knobs[5], &knobs[6], &knobs[7] } } },
+        .present = present,
     };
     ELEK_REGISTER_MACHINE(lfo);
 """)
@@ -53,33 +45,27 @@ FIFTEEN = sdk_machine("Fifteen", """
 
     volatile int32_t fifteen_page;
 
-    static const struct elek_ui_knob knobs[] = {
-        { .id = 0, .label = "XYZ" }, { .id = 1, .label = "NAME" },
-        { .id = 2, .label = "P03" }, { .id = 3, .label = "P04" },
-        { .id = 4, .label = "P05" }, { .id = 5, .label = "P06" },
-        { .id = 6, .label = "P07" }, { .id = 7, .label = "P08" },
-        { .id = 8, .label = "P09" }, { .id = 9, .label = "P10" },
-        { .id = 10, .label = "P11" }, { .id = 11, .label = "P12" },
-        { .id = 12, .label = "P13" }, { .id = 13, .label = "P14" },
-        { .id = 14, .label = "P15" },
+    static const struct elek_knob knobs[] = {
+        { "XYZ", .max = 127 }, { "NAME", .max = 127 }, { "P03", .max = 127 }, { "P04", .max = 127 },
+        { "P05", .max = 127 }, { "P06", .max = 127 }, { "P07", .max = 127 }, { "P08", .max = 127 },
+        { "P09", .max = 127 }, { "P10", .max = 127 }, { "P11", .max = 127 }, { "P12", .max = 127 },
+        { "P13", .max = 127 }, { "P14", .max = 127 }, { "P15", .max = 127 },
     };
-    static const struct elek_ui_page pages[] = {
-        { .label = "FIRST", .knob = { &knobs[1], &knobs[2], &knobs[3], &knobs[0],
-                                      &knobs[4], &knobs[5], &knobs[6], &knobs[7] } },
-        { .label = "SECOND", .knob = { &knobs[8], &knobs[9], &knobs[10], &knobs[11],
-                                       &knobs[12], &knobs[13], &knobs[14], &knobs[0] } },
-    };
-    static void present(const struct elek_ui_context *ctx, struct elek_ui_presentation *out)
+    static void present(const struct elek_ui *ui)
     {
-        fifteen_page = ctx->page;
-        if (ctx->knob && ctx->knob[1]->value) {
-            out->knob[0]->label = "QWE";
-            out->knob[0]->visible = ctx->knob[1]->value != 127;
+        fifteen_page = ui->page;
+        if (ui->knob[1]) {
+            elek_label_set(ui->view[0].label, "QWE");
+            ui->view[0].hidden = ui->knob[1] == 127;
         }
     }
     static const struct elek_machine fifteen = {
-        .id = @ID@, .name = "Fifteen", .short_name = "FIFT",
-        .pages = pages, .page_count = 2, .present = present,
+        .id = @ID@, .name = "Fifteen", .short_name = "FIFT", ELEK_KNOBS(knobs),
+        .pages = {
+            { "FIRST", { &knobs[1], &knobs[2], &knobs[3], &knobs[0], &knobs[4], &knobs[5], &knobs[6], &knobs[7] } },
+            { "SECOND", { &knobs[8], &knobs[9], &knobs[10], &knobs[11], &knobs[12], &knobs[13], &knobs[14], &knobs[0] } },
+        },
+        .present = present,
     };
     ELEK_REGISTER_MACHINE(fifteen);
 """)

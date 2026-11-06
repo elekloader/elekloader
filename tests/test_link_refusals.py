@@ -493,6 +493,19 @@ def _(B):
     return B.pair('m 1 has .fast code, which needs the mod that declares fa_copies', fast, declared)
 
 
+@row('check', '<> holds at most <> entries on <> <>; <> add<> <>', device='digitakt-mk1')
+def _(B):
+    def machines(n_m, n_n):
+        def f(d):
+            d[0]['collections']['sdk_alpha_machines'] = {'entry': 4}
+            d[1]['contribute'].append({'to': 'sdk_alpha_machines', 'data': '00000000' * n_m, 'relocs': []})
+            d.append(B.other('n'))
+            d[2]['contribute'] = [{'to': 'sdk_alpha_machines', 'data': '00000000' * n_n, 'relocs': []}]
+        return f
+    return B.pair('sdk_alpha_machines holds at most 32 entries on digitakt-mk1 SYN; m 1 and n 1 add 33',
+                  machines(16, 17), machines(16, 16))
+
+
 external('check', '<> has DSP code for payload <>, which needs a mod that frees DSP memory there '
          '(one that claims <>)', 'tests/test_octatrack.py', 'which needs a mod that frees DSP memory')
 
@@ -894,7 +907,7 @@ def test_octatrack_fixtures():
 
 
 def test_digitakt_fixtures():
-    assert run_rows('digitakt-mk1') == 2
+    assert run_rows('digitakt-mk1') == 3
 
 
 def test_analog_rytm_fixtures():
