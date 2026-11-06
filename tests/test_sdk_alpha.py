@@ -367,6 +367,7 @@ class SdkAlphaTests(unittest.TestCase):
                                       'void bad(const struct elek_ui *ui) { ui->knob[0] = 1; }\n',
                                 capture_output=True, text=True)
         self.assertNotEqual(result.returncode, 0, 'a callback can write its input')
+        self.assertRegex(result.stderr, 'read-only|const', 'failed for another reason')
 
     def stocks(self):
         return {device.key: device.stock() for device in (Digitakt1, Digitone1)}

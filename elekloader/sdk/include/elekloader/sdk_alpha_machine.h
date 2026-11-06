@@ -43,7 +43,8 @@ struct elek_view {
 struct elek_ui {
     const int32_t *knob;           /* by id, mapped to min..max: every knob, on every page */
     struct elek_view *view;        /* by id */
-    int32_t page;                  /* the page shown, or ELEK_UI_NO_PAGE (e.g. naming LFO destinations) */
+    int32_t page;                  /* the page shown, or ELEK_UI_NO_PAGE (e.g. naming LFO destinations),
+                                    * also for machines with pages: check before indexing */
     uint32_t track;                /* the track this call is for, from zero: not always the active one */
 };
 /* Labels, as there is no libc: text, cut at ELEK_UI_LABEL_MAX characters. */
