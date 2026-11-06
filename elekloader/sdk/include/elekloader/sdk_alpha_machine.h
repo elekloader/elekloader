@@ -37,7 +37,8 @@ struct elek_ui_value {
     int32_t raw_value;             /* native 8.8, 0..ELEK_UI_RAW_MAX */
 };
 struct elek_ui_context {
-    int32_t page;                  /* displayed machine page, or ELEK_UI_NO_PAGE (e.g. LFO labels) */
+    int32_t page;                  /* displayed machine page, or ELEK_UI_NO_PAGE (e.g. LFO labels),
+                                    * also for machines with pages: check before indexing */
     uint32_t page_count, knob_count;
     const struct elek_ui_value *const *knob; /* indexed by machine-wide logical ID, all pages */
     uint32_t track;                /* the track this call is for (the active track), from zero */
@@ -48,7 +49,8 @@ struct elek_ui_context {
 struct elek_ui_knob_presentation {
     const char *label;
     uint32_t visible;              /* defaults to 1; zero blanks every position, retaining its value */
-    const struct elek_ui_glyph *glyph; /* descriptor's default each call; null selects stock */
+    const struct elek_ui_glyph *glyph; /* descriptor's default each call; null selects stock.
+                                        * Drawn after return: never automatic storage */
 };
 struct elek_ui_presentation {
     uint32_t knob_count;
