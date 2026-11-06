@@ -21,6 +21,14 @@ them (rule 5 in [ADAPTING.md](ADAPTING.md#2-the-rules)). The same site as a
 core event serves every mod, and the mod's next OS port is the core's work
 rather than its own.
 
+The cores on this page are elekloader's, in `mods/`. Modwerk
+([repeat98/modwerk](https://github.com/repeat98/modwerk)) builds its own
+bases for the Octatrack, the Analog Rytm MKII and the Digitakt II. They
+started from these cores but are separate from them: a site, an event or a
+fix for one of those bases goes to Modwerk, and one for a core here comes
+here. A mod built for one of those bases may not build with elekloader's
+core for the same device, nor the other way round.
+
 ## 1. Look first
 
 Before you hook a stock site, look for what the core already has for
