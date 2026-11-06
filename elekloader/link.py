@@ -174,6 +174,7 @@ class Mod2:
             self.routes = store.parse_routes(doc)
             self.inits = store.parse_inits(doc)
             self.handles = store.parse_handles(doc)
+            self.sidecar = set(store.parse_sidecar(doc))
         except ModError as e:
             raise ModError('%s: %s' % (name, e))
         self.copied = [(_int(c['lo'], name), _int(c['hi'], name), _int(c['to'], name))
@@ -491,7 +492,7 @@ def check(mods, image):
                            % (m.label(), sym))
             fields[sym] = m
     if store.IDS_TABLE in tables:
-        fields.update({x: None for x in store.GEN_SYMS + (store.LOCK_DST, store.FX_LOCK_DST)})
+        fields.update({x: None for x in store.GEN_SYMS + (store.LOCK_DST, store.FX_LOCK_DST, store.SIDECAR_SYM)})
     for m in mods:
         for x in m.imports:
             if x in owner or x in tables or x in LINKER_SYMS or x in sized or x in m.weak \
@@ -713,8 +714,13 @@ def link(mods, image, lock=None, *, sharc_stream=None):
 
     # mod storage: the fields' places from the lockfile, as symbols and the IDs' table
     keeps = store.GEN_SYMS[0] in core.imports
-    decls = [(m.id, sym, scope, bits) for m in order for sym, scope, bits in m.storage]
+    decls = [(m.id, sym, scope, bits) for m in order for sym, scope, bits in m.storage if sym not in m.sidecar]
+    sidecar = [(m.id, sym, scope, bits) for m in order for sym, scope, bits in m.storage if sym in m.sidecar]
     new_lock, store_notes, store_syms = None, [], {}
+    if sidecar and store.SIDECAR_SYM not in core.imports:
+        users = sorted({d[0] for d in sidecar})
+        raise ModError('%s declare%s sidecar fields ("where": "sidecar"), which %s does not keep'
+                       % (', '.join(users), 's' if len(users) == 1 else '', core.label()))
     if decls and not keeps:
         users = sorted({d[0] for d in decls})
         raise ModError('%s declare%s mod storage, which %s does not keep'
@@ -772,6 +778,8 @@ def link(mods, image, lock=None, *, sharc_stream=None):
                 raise ModError('the storage field %s has the name of a symbol a mod exports' % nm)
         for i, data in enumerate(ids):
             entries[store.IDS_TABLE].append((-1, '', i, core, {'data': data, 'relocs': []}))
+    if store.SIDECAR_SYM in core.imports:
+        store_syms.update(store.sidecar_symbols(sidecar))
     fast_mods = [m for m in order if m.size('.fast')]
     for c in entries:
         entries[c].sort(key=lambda e: e[:3])
