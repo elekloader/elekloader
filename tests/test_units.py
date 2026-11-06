@@ -1095,6 +1095,14 @@ def test_dn2_machines_suite():
     assert result.wasSuccessful(), 'DN2 machine registry suite failed'
 
 
+def test_sdk_alpha_render_suite():
+    import unittest
+    suite = unittest.TestLoader().discover(HERE, pattern='test_sdk_alpha_render.py')
+    assert suite.countTestCases(), 'no SDK render contract tests discovered'
+    result = unittest.TextTestRunner().run(suite)
+    assert result.wasSuccessful(), 'SDK render contract suite failed'
+
+
 def test_sharc_suite():
     import unittest
     suite = unittest.TestLoader().discover(HERE, pattern='test_sharc*.py')

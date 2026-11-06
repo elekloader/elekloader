@@ -15,12 +15,17 @@ the mod shop, beside the cores: a machine mod that requires it (`"requires": ["c
 | | |
 |---|---|
 | needs | core-dn1 5.2 (`resources.core`; 0.2: 3.1) |
-| sites | none: it uses core's `ev_voice_on`, `ev_render_voices`, `ev_tick` and `ev_enc` (0.3, an SDK machine's presentation), `core_param_override`, `core_sound_set` and `core_menu_open` |
+| sites | none: it uses core's `ev_voice_on`, `ev_render_params`, `ev_render_voices`, `ev_tick` and `ev_enc` (0.3, an SDK machine's presentation), `core_param_override`, `core_sound_set` and `core_menu_open` |
 | table | `dn_machines`: a machine mod contributes a pointer to its `struct dnm_machine`; `sdk_alpha_machines` (0.3): the SDK alpha builder contributes each registration (`elekloader/sdk_alpha_machine.h`) |
 | exports | `dnm_knob`, `dnm_knob_range`, `dnm_phase_inc`, `dnm_sin` (`digitone-mk1/machines.h`) |
-| version | 0.3: SDK alpha machines, empty or with up to two pages and fifteen knobs, each knob kept in one SYN parameter (SYN2's first page's eight, then DTUN, FDBK, MIX, ADEL, BDEL and two ratio offsets) whichever page shows it, on pages of their own which SYN2 shows in place of its pages on the machine's track (`core_page_list`), each track keeping its page, with the SDK labels, a four-column grid without FM's algorithm diagram, and blank positions for undeclared knobs; `.present` runs again when a value changes, applies five-character labels, visibility and optional 16×16 glyphs, and blocks hidden encoders while retaining their values in native page copy, clear/undo and paste. Both native LFOs target its logical knobs with current labels, even while hidden; destination naming calls `.present` with `ELEK_UI_NO_PAGE`. A machine with `.render` plays it in place of FM, with the voice's own knob values, scaled to `DNM_PEAK`, and its knobs start at their `.def`; one with no render plays FM. 0.2: a machine may take the SYN pages' second pages (`DNM_PAGES2`) |
+| version | 0.3: SDK alpha machines, empty or with up to two pages and fifteen knobs, each knob kept in one SYN parameter (SYN2's first page's eight, then DTUN, FDBK, MIX, ADEL, BDEL and two ratio offsets) whichever page shows it, on pages of their own which SYN2 shows in place of its pages on the machine's track (`core_page_list`), each track keeping its page, with the SDK labels, a four-column grid without FM's algorithm diagram, and blank positions for undeclared knobs; `.present` runs again when a value changes, applies five-character labels, visibility and optional 16×16 glyphs, and blocks hidden encoders while retaining their values in native page copy, clear/undo and paste. Both native LFOs target its logical knobs with current labels, even while hidden; destination naming calls `.present` with `ELEK_UI_NO_PAGE`. A machine with no render plays FM. 0.2: a machine may take the SYN pages' second pages (`DNM_PAGES2`) |
 | claims | `soundslot:0`, `page:29` and `page:28` (0.3: the SDK pages) |
-| RAM | OS 1.44: 9.3 KB code and initialized data, 13.4 KB zero-initialized data |
+| RAM | OS 1.44: 10.8 KiB code and initialized data, 16.0 KiB zero-initialized data |
+
+The [shared SDK](../../docs/SDK.md) also supports audio callbacks, mapped
+defaults and per-track shared snapshots on OS 1.44. It uses the same voice
+path as native machines; SDK-only details and qualification limits live
+in that guide.
 
 ## How it works
 

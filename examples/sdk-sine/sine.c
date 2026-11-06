@@ -37,24 +37,28 @@ static int32_t sine(uint32_t ph)
     return y > 32767 ? 32767 : y < -32767 ? -32767 : y;
 }
 
-static uint32_t phase[ELEK_VOICES_MAX];
-static uint32_t gated[ELEK_VOICES_MAX];
+struct state { uint32_t phase, gated; };
 
-static void render(const struct elek_ui_context *ctx, const struct elek_voice *v, int32_t *out)
+static void render(const struct elek_audio_context *ctx, const struct elek_voice *v, elek_sample *out)
 {
-    uint32_t inc = elek_phase_inc(v->pitch + ctx->knob[FINE]->value * 65536 / 100);   /* cents: 1/100 semitone */
+    struct state *s = v->state;
+    uint32_t inc = elek_phase_inc(v->pitch + ctx->knob[FINE] * 65536 / 100);   /* cents: 1/100 semitone */
     /* Retrigger a held voice without cutting its waveform; start released voices at zero. */
-    uint32_t p = v->fresh && !gated[v->voice] ? 0 : phase[v->voice];
-    gated[v->voice] = v->gate;
+    uint32_t p = (v->flags & ELEK_VOICE_START) && !s->gated ? 0 : s->phase;
+    s->gated = v->gate;
     for (int i = 0; i < ELEK_VOICE_FRAMES; ++i) {
-        out[i] = sine(p) << 15;         /* half full scale: headroom for the filter's resonance */
+        int32_t y = sine(p);
+        /* half full scale: headroom for the filter's resonance */
+        elek_sample half = elek_mul(elek_level(y < 0 ? -y : y, 32767), ELEK_SAMPLE(0.5));
+        out[i] = y < 0 ? -half : half;
         p += inc;
     }
-    phase[v->voice] = p;
+    s->phase = p;
 }
 
 static const struct elek_machine machine = {
     .id = 123, .name = "SDK Sine", .short_name = "SINE",
     .pages = pages, .page_count = 1, .present = present, .render = render,
+    .voice_state = sizeof(struct state),
 };
 ELEK_REGISTER_MACHINE(machine);

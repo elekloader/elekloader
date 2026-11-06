@@ -8,18 +8,14 @@
 #include "elekloader/sdk_alpha_machine.h"
 #include "dn2.h"
 
-/* The ABI markers ELEK_REGISTER_MACHINE points at. Private; they keep the Digitakt's names for now. */
-const char sdk_alpha_dt1_empty_ui[] = "sdk alpha dn2 empty";
-const char sdk_alpha_dt1_ui_v3[] = "sdk alpha dn2 pages 3";
-const char sdk_alpha_dt1_ui_v4[] = "sdk alpha dn2 glyphs 4";
-
 extern const struct sdk_alpha_registration *const sdk_alpha_machines[];   /* the table, ending in 0 */
 
 #define SDK_MACHINES 16
+const char sdk_alpha_dt1_ui_v1[] = "sdk alpha 1";
 static struct mk2_synth synths[SDK_MACHINES];
 static const struct elek_machine *declared[SDK_MACHINES];
 static const struct elek_ui_knob *by_id[SDK_MACHINES][SDK_KNOBS];
-static uint8_t knob_count[SDK_MACHINES], has_glyphs[SDK_MACHINES];
+static uint8_t knob_count[SDK_MACHINES];
 static struct descriptor pages[SDK_MACHINES][2];
 static struct string_rep titles[SDK_MACHINES][2][2];
 static int32_t count = -1;
@@ -36,7 +32,6 @@ static void init(void)
         synths[n].name = (*p)->name;
         synths[n].label = (*p)->sname;
         declared[n] = e;
-        has_glyphs[n] = (*p)->ui->abi == sdk_alpha_dt1_ui_v4;
         for (uint32_t page = 0; page < e->page_count && page < 2; ++page)
             for (int k = 0; k < 8; ++k) {
                 const struct elek_ui_knob *knob = e->pages[page].knob[k];
@@ -222,7 +217,7 @@ static void snapshot(int32_t i, uint32_t t, int32_t page, int force)
             input[id] = &values[id];
             presentation[id].label = knob->label;
             presentation[id].visible = 1;
-            presentation[id].glyph = has_glyphs[i] ? knob->glyph : 0;
+            presentation[id].glyph = knob->glyph;
             output[id] = &presentation[id];
         }
         ctx.page = page;

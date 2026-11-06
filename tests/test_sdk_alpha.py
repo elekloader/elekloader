@@ -53,44 +53,67 @@ LONG_LABEL = SdkMachine("Long label", register=False, source=textwrap.dedent("""
     };
     ELEK_REGISTER_MACHINE(long_label);
 """))
+# A machine with a sound: Digitakt renders it; the other targets refuse it.
+RENDERS = SdkMachine("Renders", register=False, source=textwrap.dedent("""
+    #include "elekloader/sdk_alpha_machine.h"
+    static void render(const struct elek_audio_context *ctx, const struct elek_voice *v, elek_sample *out)
+    {
+        (void)ctx; (void)v;
+        for (int i = 0; i < ELEK_VOICE_FRAMES; ++i)
+            out[i] = ELEK_SAMPLE(0);
+    }
+    static const struct elek_machine renders = {
+        .id = @ID@, .name = "Renders", .short_name = "REND", .render = render, .voice_state = 4,
+    };
+    ELEK_REGISTER_MACHINE(renders);
+"""))
+DEFAULTS = SdkMachine("Defaults", register=False, source=ONE_PAGE.source.replace(
+    '.label = "KNOB"', '.label = "KNOB", .def = ELEK_UI_BOUND(0)'))
 HELLO = ROOT / 'examples/sdk-hello-world'       # two pages
 GLYPHS = ROOT / 'examples/sdk-glyphs'
 
 
 def sdk_alpha_test_document():
-    raw = bytearray(96)
+    return sdk_alpha_test_render_document(render=False)
+
+
+def sdk_alpha_test_render_document(render=True, voice_state=0, shared=0):
+    """A registration: the machine at 40 is 44 bytes, its render (an rts) at 88."""
+    raw = bytearray(112)
     struct.pack_into('>i', raw, 0, 120)
     struct.pack_into('>iii', raw, 16, 3, 120, 0x55493330)
     struct.pack_into('>i', raw, 40, 120)
-    raw[72:78] = b'Empty\0'
-    raw[80:85] = b'EMPT\0'
+    struct.pack_into('>II', raw, 76, voice_state, shared)
+    raw[88:90] = b'\x4e\x75'
+    raw[96:102] = b'Empty\0'
+    raw[104:109] = b'EMPT\0'
     doc = {'exports': ['sdk_alpha_registration_empty'],
            'symbols': {'sdk_alpha_registration_empty': ['.run', 0]},
            'relocs': [['.run', o, 'abs32', 'sec:.run', a]
-                      for o, a in ((4, 72), (8, 80), (28, 32), (36, 40), (44, 72), (48, 80))] +
-                     [['.run', 32, 'abs32', 'sym:sdk_alpha_dt1_empty_ui', 0]]}
+                      for o, a in ((4, 96), (8, 104), (28, 32), (36, 40), (44, 96), (48, 104))] +
+                     [['.run', 32, 'abs32', 'sym:sdk_alpha_dt1_ui_v1', 0]]}
+    if render:
+        doc['relocs'].append(['.run', 72, 'abs32', 'sec:.run', 88])
     return doc, raw
 
 
-def sdk_alpha_test_controls_document(glyphs=False, v5=False):
+def sdk_alpha_test_controls_document():
     doc, raw = sdk_alpha_test_document()
     raw.extend(bytes(1200))
-    doc['relocs'][-1][3] = ('sym:sdk_alpha_dt1_ui_v5' if v5 else 'sym:sdk_alpha_dt1_ui_v4' if glyphs else
-                            'sym:sdk_alpha_dt1_ui_v3')
-    stride, pages = (36, 640) if v5 else (28, 600) if glyphs else (24, 512)
+    stride, pages = 36, 768
     struct.pack_into('>I', raw, 56, 2)
     doc['relocs'] += [['.run', 52, 'abs32', 'sec:.run', pages]]
     for i in range(15):
-        struct.pack_into('>I', raw, 96 + stride * i, i)
-        doc['relocs'].append(['.run', 100 + stride * i, 'abs32', 'sec:.run', 72])
+        struct.pack_into('>I', raw, 128 + stride * i, i)
+        doc['relocs'].append(['.run', 132 + stride * i, 'abs32', 'sec:.run', 96])
     for page in range(2):
-        doc['relocs'].append(['.run', pages + 36 * page, 'abs32', 'sec:.run', 72])
+        doc['relocs'].append(['.run', pages + 36 * page, 'abs32', 'sec:.run', 96])
         for encoder in range(8):
             # Logical zero is D on page 0; page 1 shares it at H.
             logical = ([2, 3, 4, 0, 5, 6, 7, 1] if page == 0 else
                        [8, 9, 10, 11, 12, 13, 14, 0])[encoder]
             doc['relocs'].append(['.run', pages + 4 + 36 * page + 4 * encoder,
-                                  'abs32', 'sec:.run', 96 + stride * logical])
+                                  'abs32', 'sec:.run', 128 + stride * logical])
     return doc, raw
 
 
@@ -204,11 +227,11 @@ class SdkAlphaTests(unittest.TestCase):
                 elif kind == 'abi':
                     doc['relocs'][-1][3] = 'sym:cm_ui_v3'
                 elif kind == 'name':
-                    raw[72] = 0
+                    raw[96] = 0
                 elif kind == 'truncated':
                     raw = raw[:50]
                 elif kind == 'pages':
-                    doc['relocs'].append(['.run', 52, 'abs32', 'sec:.run', 72])
+                    doc['relocs'].append(['.run', 52, 'abs32', 'sec:.run', 96])
                 with self.assertRaises(build.BuildError):
                     sdk_alpha_registrations(doc, {'.run': raw})
 
@@ -217,69 +240,69 @@ class SdkAlphaTests(unittest.TestCase):
         self.assertEqual(sdk_alpha_registrations(doc, {'.run': raw}),
                          [('sdk_alpha_registration_empty', 120)])
         # A blank position cannot alias logical zero. Zero can appear on both pages.
-        doc['relocs'] = [r for r in doc['relocs'] if r[1] != 580]
+        doc['relocs'] = [r for r in doc['relocs'] if r[1] != 836]
         self.assertEqual(len(sdk_alpha_registrations(doc, {'.run': raw})), 1)
         for offset, value, message in ((56, 3, 'at most 2 pages'),
-                                       (96, 15, '15 knobs'),
-                                       (96, 0xffffffff, '15 knobs'),
-                                       (120, 0, 'cannot share'),
-                                       (108, 2, 'supplied'),
-                                       (104, 128, 'min exceeds max')):
+                                       (128, 15, '15 knobs'),
+                                       (128, 0xffffffff, '15 knobs'),
+                                       (164, 0, 'cannot share'),
+                                       (140, 2, 'supplied'),
+                                       (136, 128, 'min exceeds max')):
             with self.subTest(offset=offset):
                 doc, raw = sdk_alpha_test_controls_document()
                 struct.pack_into('>I', raw, offset, value)
-                if offset == 104:
-                    struct.pack_into('>I', raw, 108, 1)
+                if offset == 136:
+                    struct.pack_into('>I', raw, 140, 1)
                 with self.assertRaisesRegex(build.BuildError, message):
                     sdk_alpha_registrations(doc, {'.run': raw})
         # A unique descriptor may live outside any common array or section.
         doc, raw = sdk_alpha_test_controls_document()
-        descriptor = raw[96:120]
-        label = next(r for r in doc['relocs'] if r[1] == 100)
+        descriptor = raw[128:164]
+        label = next(r for r in doc['relocs'] if r[1] == 132)
         doc['relocs'].remove(label)
-        doc['relocs'].append(['.other', 4, 'abs32', 'sec:.run', 72])
+        doc['relocs'].append(['.other', 4, 'abs32', 'sec:.run', 96])
         for r in doc['relocs']:
-            if r[4] == 96:
+            if r[4] == 128:
                 r[3:5] = ['sec:.other', 0]
         self.assertEqual(len(sdk_alpha_registrations(doc, {'.run': raw, '.other': descriptor})), 1)
-        for target in (97, len(raw) - 20):
+        for target in (129, len(raw) - 20):
             doc, raw = sdk_alpha_test_controls_document()
-            next(r for r in doc['relocs'] if r[1] == 516)[4] = target
+            next(r for r in doc['relocs'] if r[1] == 772)[4] = target
             with self.assertRaises(build.BuildError):
                 sdk_alpha_registrations(doc, {'.run': raw})
         doc, raw = sdk_alpha_test_controls_document()
-        next(r for r in doc['relocs'] if r[1] == 516)[3] = 'sym:external_knob'
+        next(r for r in doc['relocs'] if r[1] == 772)[3] = 'sym:external_knob'
         with self.assertRaisesRegex(build.BuildError, 'own mod'):
             sdk_alpha_registrations(doc, {'.run': raw})
         doc, raw = sdk_alpha_test_controls_document()
-        doc['relocs'] = [r for r in doc['relocs'] if r[1] != 516]
+        doc['relocs'] = [r for r in doc['relocs'] if r[1] != 772]
         with self.assertRaisesRegex(build.BuildError, 'contiguous'):
             sdk_alpha_registrations(doc, {'.run': raw})
         # Label-only pages need no knob list; stale page records must be rebuilt.
         doc, raw = sdk_alpha_test_controls_document()
-        doc['relocs'] = [r for r in doc['relocs'] if not 516 <= r[1] <= 580 or r[1] == 548]
+        doc['relocs'] = [r for r in doc['relocs'] if not 772 <= r[1] <= 836 or r[1] == 804]
         self.assertEqual(len(sdk_alpha_registrations(doc, {'.run': raw})), 1)
-        next(r for r in doc['relocs'] if r[1] == 32)[3] = 'sym:sdk_alpha_dt1_ui_v2'
+        next(r for r in doc['relocs'] if r[1] == 32)[3] = 'sym:unknown_sdk_abi'
         with self.assertRaisesRegex(build.BuildError, 'ABI'):
             sdk_alpha_registrations(doc, {'.run': raw})
 
     def test_sdk_alpha_glyph_registration(self):
         for supplied in (False, True):
-            doc, raw = sdk_alpha_test_controls_document(glyphs=True)
+            doc, raw = sdk_alpha_test_controls_document()
             if supplied:
-                doc['relocs'].append(['.run', 120, 'abs32', 'sec:.run', 1000])
+                doc['relocs'].append(['.run', 152, 'abs32', 'sec:.run', 1000])
             self.assertEqual(len(sdk_alpha_registrations(doc, {'.run': raw})), 1)
         for kind in ('truncated', 'external', 'unrelocated', 'duplicate', 'unaligned'):
             with self.subTest(kind=kind):
-                doc, raw = sdk_alpha_test_controls_document(glyphs=True)
-                doc['relocs'].append(['.run', 120, 'abs32', 'sec:.run', 1000])
+                doc, raw = sdk_alpha_test_controls_document()
+                doc['relocs'].append(['.run', 152, 'abs32', 'sec:.run', 1000])
                 if kind == 'truncated':
                     raw = raw[:1031]
                 elif kind == 'external':
                     doc['relocs'][-1][3] = 'sym:external_glyph'
                 elif kind == 'unrelocated':
                     doc['relocs'].pop()
-                    struct.pack_into('>I', raw, 120, 1000)
+                    struct.pack_into('>I', raw, 152, 1000)
                 elif kind == 'duplicate':
                     doc['relocs'].append(doc['relocs'][-1][:])
                 elif kind == 'unaligned':
@@ -287,27 +310,51 @@ class SdkAlphaTests(unittest.TestCase):
                 with self.assertRaises(build.BuildError):
                     sdk_alpha_registrations(doc, {'.run': raw})
 
-    def test_a_knobs_default_is_within_its_bounds(self):
-        # Knob 0 runs -64..63 (min at +8, max at +16), its .def at +28 and whether it is supplied at +32.
-        def document(default=None, supplied=1):
-            doc, raw = sdk_alpha_test_controls_document(v5=True)
-            struct.pack_into('>iIiI', raw, 104, -64, 1, 63, 1)
-            if default is not None:
-                struct.pack_into('>iI', raw, 124, default, supplied)
-            return doc, raw
+    def test_sdk_alpha_defaults(self):
+        for low, high, default, supplied, expected in (
+                (-50, 50, 0, 1, 0), (0, 127, 100, 1, 100),
+                (-50, 50, 0, 0, -50), (0, 127, 0, 1, 0)):
+            with self.subTest(low=low, high=high, default=default, supplied=supplied):
+                doc, raw = sdk_alpha_test_controls_document()
+                struct.pack_into('>iIiI', raw, 136, low, 1, high, 1)
+                struct.pack_into('>iI', raw, 156, default, supplied)
+                layouts = {}
+                sdk_alpha_registrations(doc, {'.run': raw}, layouts)
+                knob = layouts[120]['pages'][0]['knobs'][3]
+                self.assertEqual((knob['def'], knob['has_default']), (expected, bool(supplied)))
+        for default, supplied, message in ((-51, 1, 'within min..max'),
+                                             (51, 1, 'within min..max'), (0, 2, 'supplied')):
+            doc, raw = sdk_alpha_test_controls_document()
+            struct.pack_into('>iIiI', raw, 136, -50, 1, 50, 1)
+            struct.pack_into('>iI', raw, 156, default, supplied)
+            with self.assertRaisesRegex(build.BuildError, message):
+                sdk_alpha_registrations(doc, {'.run': raw})
 
-        def knob0(doc, raw):
-            layouts = {}
-            sdk_alpha_registrations(doc, {'.run': raw}, layouts)
-            return next(k for k in layouts[120]['pages'][0]['knobs'].values() if k['id'] == 0)
-        self.assertEqual(knob0(*document())['def'], -64)        # omitted: its min, raw 0 as before
-        for value in (-64, 0, 63):
-            self.assertEqual(knob0(*document(value))['def'], value)
-        for value, supplied, message in ((64, 1, 'within'), (-65, 1, 'within'), (0, 2, 'supplied')):
-            with self.subTest(value=value, supplied=supplied):
-                doc, raw = document(value, supplied)
+    def test_sdk_alpha_render_registration(self):
+        layouts = {}
+        doc, raw = sdk_alpha_test_render_document(voice_state=16, shared=8)
+        self.assertEqual(sdk_alpha_registrations(doc, {'.run': raw}, layouts),
+                         [('sdk_alpha_registration_empty', 120)])
+        self.assertEqual([layouts[120][k] for k in ('render', 'voice_state', 'shared')], [True, 16, 8])
+        doc, raw = sdk_alpha_test_render_document(render=False)
+        sdk_alpha_registrations(doc, {'.run': raw}, layouts)
+        self.assertEqual([layouts[120][k] for k in ('render', 'voice_state', 'shared')], [False, 0, 0])
+        for kwargs, message in (({'voice_state': 257}, 'voice_state is at most 256'),
+                                ({'shared': 65}, 'shared is at most 64'),
+                                ({'render': False, 'voice_state': 4}, 'need a render'),
+                                ({'render': False, 'shared': 4}, 'need a render')):
+            with self.subTest(**kwargs):
+                doc, raw = sdk_alpha_test_render_document(**kwargs)
                 with self.assertRaisesRegex(build.BuildError, message):
                     sdk_alpha_registrations(doc, {'.run': raw})
+        doc, raw = sdk_alpha_test_render_document(render=False)
+        struct.pack_into('>I', raw, 72, 0x40001000)        # an address, not a function of the mod
+        with self.assertRaisesRegex(build.BuildError, 'function in the mod'):
+            sdk_alpha_registrations(doc, {'.run': raw})
+        doc, raw = sdk_alpha_test_render_document()
+        doc['relocs'][-1][3] = 'sym:external_render'
+        with self.assertRaisesRegex(build.BuildError, 'own mod'):
+            sdk_alpha_registrations(doc, {'.run': raw})
 
     def test_a_callbacks_input_is_read_only(self):
         cc = shutil.which('cc')
@@ -321,48 +368,6 @@ class SdkAlphaTests(unittest.TestCase):
                                 capture_output=True, text=True)
         self.assertNotEqual(result.returncode, 0, 'a callback can write its input')
         self.assertRegex(result.stderr, 'read-only|const', 'failed for another reason')
-
-    def test_sine_example_retriggers_without_a_waveform_jump(self):
-        cc = shutil.which('cc')
-        if not cc:
-            self.skipTest('no host C compiler')
-        source = textwrap.dedent('''
-            #include <assert.h>
-            #include "examples/sdk-sine/sine.c"
-            const char sdk_alpha_dt1_ui_v5[] = "test";
-            uint32_t elek_phase_inc(int32_t pitch) { return 23410327u; }
-            int main(void) {
-                const struct elek_ui_value value = { .value = 0 };
-                const struct elek_ui_value *knobs[] = { &value };
-                const struct elek_ui_context ctx = { .knob_count = 1, .knob = knobs };
-                struct elek_voice voice = { .pitch = 60 << 16, .gate = 1 };
-                int32_t out[ELEK_VOICE_FRAMES], last = 0;
-                for (int block = 0; block < 50; ++block) {
-                    voice.fresh = block % 7 == 0;
-                    render(&ctx, &voice, out);
-                    for (int i = 0; i < ELEK_VOICE_FRAMES; ++i) {
-                        int64_t step = (int64_t)out[i] - last;
-                        assert(step > -(1 << 26) && step < (1 << 26));
-                        last = out[i];
-                    }
-                }
-                voice.gate = 0;
-                voice.fresh = 0;
-                render(&ctx, &voice, out);
-                voice.gate = voice.fresh = 1;
-                render(&ctx, &voice, out);
-                assert(out[0] == 0); /* A note after release still starts at zero. */
-            }
-        ''')
-        with tempfile.TemporaryDirectory() as tmp:
-            binary = str(Path(tmp, 'sine-retrigger'))
-            result = subprocess.run([cc, '-std=c99', '-I', str(ROOT),
-                                     '-I', str(ROOT / 'elekloader/sdk/include'),
-                                     '-x', 'c', '-', '-o', binary],
-                                    input=source, capture_output=True, text=True)
-            self.assertEqual(result.returncode, 0, result.stderr)
-            result = subprocess.run([binary], capture_output=True, text=True)
-            self.assertEqual(result.returncode, 0, result.stderr)
 
     def stocks(self):
         stocks = {'digitakt-mk1': os.environ.get('ELEKLOADER_STOCK_154', ''),
@@ -381,7 +386,8 @@ class SdkAlphaTests(unittest.TestCase):
             image = formats.main_image(firmware, dev)
             built = {}
             for name, folder in (('empty', EMPTY.write(tmp)), ('one page', ONE_PAGE.write(tmp)),
-                                 ('hello', str(HELLO)), ('glyphs', str(GLYPHS))):
+                                 ('hello', str(HELLO)), ('glyphs', str(GLYPHS)),
+                                 ('renders', RENDERS.write(tmp))):
                 path, mod = sdk_alpha_build(folder, stock, tmp)
                 built[name] = path, mod
                 result = subprocess.run([sys.executable, '-m', 'elekloader.lint', path, '--stock', stock,
@@ -397,11 +403,6 @@ class SdkAlphaTests(unittest.TestCase):
             duplicate['id'], duplicate['exports'] = 'sdk-alpha-conflict', []   # keep the refusal to the slot
             with self.assertRaisesRegex(elemod.ModError, 'machine:%d' % EMPTY.id):
                 link.link([core, pages, built['empty'][1], link.Mod2(duplicate, 'conflict')], image)
-            with open(pages_path) as fh:
-                older_pages = json.load(fh)
-            older_pages['exports'].remove('sdk_alpha_dt1_ui_v4')
-            with self.assertRaisesRegex(elemod.ModError, 'sdk_alpha_dt1_ui_v4'):
-                link.link([core, link.Mod2(older_pages, 'older-pages'), built['empty'][1]], image)
 
     def test_sdk_alpha_one_source_builds_for_both_devices(self):
         stocks = self.stocks()
@@ -424,6 +425,11 @@ class SdkAlphaTests(unittest.TestCase):
                 link.link([core, machines, dn_mod, link.Mod2(doc, 'conflict')], image)
             link.link([core, machines, sdk_alpha_build(ONE_PAGE.write(tmp + '/one'), dn, tmp)[1]], image)
             link.link([core, machines, sdk_alpha_build(str(HELLO), dn, tmp)[1]], image)   # two pages
+            sdk_alpha_build(RENDERS.write(tmp + '/renders-dt'), stocks['digitakt-mk1'], tmp)
+            sdk_alpha_build(DEFAULTS.write(tmp + '/defaults-dt'), stocks['digitakt-mk1'], tmp)
+            for machine in (DEFAULTS, RENDERS):
+                mod = sdk_alpha_build(machine.write(tmp + '/dn-' + machine.name), dn, tmp)[1]
+                link.link([core, machines, mod], image)
             for stock in stocks.values():
                 with self.assertRaisesRegex(build.BuildError, '1..5 printable ASCII characters'):
                     sdk_alpha_build(LONG_LABEL.write(tmp + '/long'), stock, tmp)
@@ -470,6 +476,10 @@ class SdkAlphaTests(unittest.TestCase):
             duplicate['resources']['names'] = []  # descriptor inference also protects hand-written mods
             with self.assertRaisesRegex(elemod.ModError, 'mk2-synth:%d' % EMPTY.id):
                 link.link([core, machines, built['empty'][1], link.Mod2(duplicate, 'conflict')], image)
+            with self.assertRaisesRegex(build.BuildError, 'render is not supported on digitone-mk2'):
+                sdk_alpha_build(RENDERS.write(tmp + '/renders'), stock, tmp)
+            with self.assertRaisesRegex(build.BuildError, 'defaults are not supported on digitone-mk2'):
+                sdk_alpha_build(DEFAULTS.write(tmp + '/defaults'), stock, tmp)
             midi = SdkMachine("Midi slot", register=False, source=EMPTY.source)
             midi.id = 4                                 # 4..127 elsewhere; MIDI's type on the Digitone II
             with self.assertRaisesRegex(build.BuildError, r'invalid machine slot 4 \(expected 5\.\.127\)'):

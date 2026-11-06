@@ -7,7 +7,7 @@ category, using the `mk2_*` interface in `mk2/machines.h`. A mod registers
 a descriptor and carries its DSP code, without firmware addresses or hook
 sites of its own; those pages show how.
 
-`machines-dn2` 0.2 also adapts the private [SDK alpha's machine UIs](../elekloader/sdk/include/elekloader/README.md)
+`machines-dn2` 0.2 also adapts the private [SDK alpha's machine UIs](SDK.md)
 through `sdk_alpha_machines`: synth IDs 5..127 in the same selector, with
 two SYN pages and fifteen logical knobs. Their values use sound slots
 25..39, shared placements use one value, and the DSP receives FM TONE's

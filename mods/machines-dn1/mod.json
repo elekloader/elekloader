@@ -7,6 +7,7 @@
  "ports": {"1.44": {}},
  "sources": ["machines.c", "sdk_alpha.c"],
  "subscribe": [
+  {"event": "ev_render_params", "fn": "dnm_sdk_params", "order": 50},
   {"event": "ev_voice_on", "fn": "dnm_voice_on", "order": 20},
   {"event": "ev_render_voices", "fn": "dnm_render", "order": 50},
   {"event": "ev_tick", "fn": "dnm_tick", "order": 50},
