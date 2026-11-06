@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
-/* core-dn1 3.0 to 4.2 for the Digitone mk1, in C: the firmware locations core exports, and core-dn1's
+/* core-dn1 3.0 to 5.0.1 for the Digitone mk1, in C: the firmware locations core exports, and core-dn1's
  * own tables and calls (docs/ADAPTING.md, "Firmware locations", "Parameter slots", "Mod pages", "Project
  * data", "The Mod Menu" and "Machines and stock parameters"). The SDK puts this folder on the include
  * path:
@@ -444,5 +444,40 @@ typedef void (*ev_idle_fn)(void);
 #define CORE_VIEW_POP           2
 typedef void (*ev_view_fn)(int32_t op, void *container, void *a, void *b);
 extern void *fw_view(void);
+
+/* ---- 5.0.1 ---------------------------------------------------------------------------------------- */
+/* The sequencer's MIDI out: each message its MIDI engine queues for DIN and USB (the MIDI tracks' notes,
+ * CCs, program changes, pitch bend, aftertouch; All Sound Off at STOP), whole, before it goes into one of
+ * the engine's two buffers (buffer 0 or 1). These do not pass the port switch, so ev_midi_out does not see
+ * them. Nonzero takes the message: it is not sent. Interrupt level (the engine's tick): keep it short. */
+typedef int32_t (*ev_seq_midi_fn)(const uint8_t *msg, int32_t len, int32_t buffer);
+/* A whole MIDI message played into the unit as if it came in on DIN: ev_midi_in's handlers (a nonzero
+ * return takes it: -> 1), then the MIDI task's handler for its status, so ev_midi_cc and ev_midi_pc see it
+ * and the stock applies it by MIDI CONFIG's channels (INPUT FROM is not asked). From a task, never at
+ * interrupt level. -> 0. */
+extern int32_t core_midi_receive(const uint8_t *msg, int32_t len);
+/* The project's pool sound index (0-127) put on track (0-3) as the SOUND BROWSER's FUNC+YES does (the
+ * handlers of ev_sound_load see it). The UI task. -> 0 loaded, 1 the slot took nothing, 2 no such track,
+ * -1 no such pool sound. */
+extern int32_t core_pool_load(int32_t track, int32_t index);
+/* The global mutes (FUNC + a track key): bit t for track t, 0-3 the synth tracks, 4-7 the MIDI tracks
+ * (0 with no pattern); and one track's mute set (muted 1) or cleared as FUNC + its key does, which
+ * ev_mute's handlers see (where 0). The UI task. */
+extern uint32_t core_mutes(void);
+extern void core_mute_set(int32_t track, int32_t muted);
+/* The stock key dispatch, Brain::key, where ev_key hands a key on: a handler may pass an event of its own
+ * (a copy of the one it got, with +12 the key and +16 its flags changed) to replay a stock key or combo.
+ * The UI task. */
+extern int32_t fw_brain_key(void *brain, void *event);
+#define CORE_KEY_ID(ev)     (*(volatile int32_t *)((uint8_t *)(ev) + 12))
+#define CORE_KEY_FLAGS(ev)  (*(volatile uint32_t *)((uint8_t *)(ev) + 16))
+#define CORE_KEY_DOWN       1u      /* pressed */
+#define CORE_KEY_FUNC       2u      /* with FUNC held */
+#define CORE_KEY_REPEAT     8u      /* held: about 0.4 s in, then repeating */
+#define CORE_KEY_UP         0x10u   /* released */
+/* The kit's sound load: kit = fw_project + 0x250, sound 0x146 bytes, track 0-3. -> as core_pool_load's. */
+extern int32_t fw_sound_load(void *kit, const void *sound, int32_t track);
+/* MIDI CONFIG > CHANNELS: track t's channel (0-15), a long, t 0-3 the synth tracks. */
+extern volatile int32_t fw_midi_chan[];
 
 #endif

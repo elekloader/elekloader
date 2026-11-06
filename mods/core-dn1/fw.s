@@ -92,6 +92,15 @@
 |   fw_card_erase    0x400f5778  erase(first, count) -> 0 or < 0
 |   fw_card_sectors  0x400f5480  sectors() -> the card's size, -1 before it is up
 |   fw_sysex_send    0x400ee354  send(buf, len, abort *, port: 2 USB, 3 DIN, 4 both) -> 1 sent; 144 bytes at a time, busy-waits on a full USB ring
+| From 5.0.1:
+|   fw_brain_key     0x40016fc0  Brain::key(brain, event): the stock key dispatch, where
+|                                ev_key's handlers hand a key on (an event of their own:
+|                                +12 the key, +16 its flags), the UI task
+|   fw_sound_load    0x4001d710  load(kit, sound, track) -> 0: the kit puts a 0x146-byte
+|                                sound on a track (ev_sound_load sees it); the kit is
+|                                the project + 0x250 (core_pool_load does it all)
+|   fw_midi_chan     0x41367d30  MIDI CONFIG's channels: track t's (0-15, a long) at
+|                                [t], t 0-3 the synth tracks
 
         .macro  FW name, value
         .globl  \name
@@ -153,3 +162,6 @@
         FW      fw_card_erase, FW_CARD_ERASE
         FW      fw_card_sectors, FW_CARD_SECTORS
         FW      fw_sysex_send, FW_SYSEX_SEND
+        FW      fw_brain_key, KEYDISP
+        FW      fw_sound_load, SOUND_LOAD
+        FW      fw_midi_chan, FW_MIDI_CHAN

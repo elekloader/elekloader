@@ -1051,9 +1051,14 @@ for 2.x builds with it too.
 | `fw_voice_locks` (4.2) | 0x4009bec8 | 0x4009bee8 | `locks(voice, list, fw_voice_params)`: a p-lock list into a starting voice, as the render puts a step's (`ev_voice_ready`) |
 | `fw_voice_locked` (4.2) | 0x431f16b4 | 0x431f26b4 | each voice's slots that locks set as it started, 3 longs a voice: its next note of the same sound loads them from the sound again |
 | `fw_param_uirec` (4.2) | 0x400899c4 | 0x400899e4 | `uirec(id)`: a parameter's UI record as the pages use it; bit 0 of its first long: it takes no p-locks |
+| `fw_brain_key` (5.0.1) | 0x40016fc0 | 0x40016fc0 | `key(brain, event)`: the stock key dispatch, where `ev_key` hands a key on; a handler may pass it an event of its own (a copy of its own, +12 the key and +16 the flags changed) to replay a key or a combo |
+| `fw_sound_load` (5.0.1) | 0x4001d710 | 0x4001d710 | `load(kit, sound, track)`: the kit (the project + 0x250) puts a 0x146-byte sound on a track; `ev_sound_load` sees it |
+| `fw_midi_chan` (5.0.1) | 0x41367d30 | 0x41368d30 | MIDI CONFIG > CHANNELS: track t's channel (0-15), a long, t 0-3 the synth tracks |
 
-A name marked 3.1, 3.2, 3.3, 4.0, 4.1 or 4.2 needs that core-dn1 (`"resources": {"core": "3.1"}`,
-`"3.2"`, `"3.3"`, `"4.0"`, `"4.1"` or `"4.2"`).
+A name marked 3.1, 3.2, 3.3, 4.0, 4.1, 4.2 or 5.0.1 needs that core-dn1 (`"resources": {"core": "3.1"}`,
+`"3.2"`, `"3.3"`, `"4.0"`, `"4.1"`, `"4.2"` or `"5.0.1"`). Core-dn1 5.0.1's calls (`core_midi_receive`,
+`core_pool_load`, `core_mutes`, `core_mute_set`) and its event `ev_seq_midi` are in core3.h's 5.0.1 section and
+mods/core-dn1/README.md.
 
 gcc calls libgcc's `__ashldi3`, `__lshrdi3` and `__ashrdi3` for a 64-bit value shifted by a
 variable count, and a mod links no libgcc. From core-dn1 3.3, core exports the firmware's

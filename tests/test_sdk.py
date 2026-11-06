@@ -642,20 +642,22 @@ def test_digitone_core_builds_and_links():
         # KEYBOARD mode's note-on and note-off, the three mute writers, the view
         # stack's push, replace and pop, the pattern menu's save and reload, the
         # track reload, the sound manager's seven actions and the browser's paste,
-        # the sound load and the track sound clear.
-        assert dn['target']['device'] == 'digitone-mk1' and len(dn['sites']) == 148
+        # the sound load and the track sound clear; and 5.0.1's 2: the sequencer's MIDI
+        # engine's two appends (ev_seq_midi).
+        assert dn['target']['device'] == 'digitone-mk1' and len(dn['sites']) == 150
         assert sorted(dn['collections']) == sorted(
             HOOK_BUS + ['core_menu', 'core_pages', 'core_params', 'core_projdata',
                         'ev_hold', 'ev_voice_on', 'core_param_override', 'ev_render_voices',
                         'core_audio', 'ev_midi_cc', 'ev_key_leds', 'ev_render_params', 'ev_midi_pc',
                         'ev_note_queue', 'ev_param_turn', 'ev_param_value', 'ev_voice_ready']
-            + CORE_DN1_50_EVENTS + ['ev_idle'])
+            + CORE_DN1_50_EVENTS + ['ev_idle', 'ev_seq_midi'])
         # The same core.s as core 2.1's, with the Digitone's addresses, and
         # each of its labels where core 2.1 has it.
         assert sorted(dn['build']['sources']) == ['audio.s', 'block.s', 'core.s', 'edit.s', 'events.s', 'fw.s',
                                                   'leds.s', 'menu.s', 'midi.s', 'pages.s', 'params.s',
                                                   'projdata.s', 'queue.s', 'render.s', 'rows.s',
-                                                  'settings.s', 'system.s', 'voice.s', 'voices.s']
+                                                  'seqmidi.s', 'settings.s', 'system.s', 'track.s',
+                                                  'voice.s', 'voices.s']
         assert dn['build']['sources']['core.s'] == dt['build']['sources']['core.s']
         # Only the labels of the sources both cores build (core.s, settings.s,
         # render.s): a name each core defines in a file of its own, such as
@@ -1499,6 +1501,42 @@ def test_example_port_to_154_builds_and_links():
 DN_STOCK_144 = os.environ.get('ELEKLOADER_DN_SYX_144', '')
 
 
+CORE_DN50_BUILT = os.environ.get('ELEKLOADER_CORE_DN1_50', '')
+# 5.0.1's: the sequencer's MIDI out (two sites, one table), a message played in, a pool sound on a track, the
+# global mutes, and the key dispatch, the sound load and the track channels as exports
+CORE_DN501 = ['core_seq_midi_a', 'core_seq_midi_b', 'core_midi_receive', 'core_pool_load', 'core_mutes',
+              'core_mute_set', 'fw_brain_key', 'fw_sound_load', 'fw_midi_chan']
+
+
+def check_dn_50(old_path, new_path):
+    """core-dn1 5.0.1 is 5.0 and more: the same contributions and resources, every site and table of 5.0's,
+    every symbol of 5.0's in the same section; it adds the two appends of the sequencer's MIDI engine, the
+    table ev_seq_midi and the nine exports of CORE_DN501."""
+    with open(old_path) as fh:
+        old = json.load(fh)
+    with open(new_path) as fh:
+        new = json.load(fh)
+    assert old['version'] == '5.0' and new['version'] == DN_VERSION
+    for k in ('target', 'contribute', 'resources'):
+        assert new[k] == old[k], k
+    assert all(s in new['sites'] for s in old['sites']) and len(new['sites']) == len(old['sites']) + 2
+    assert sorted(set(new['collections']) - set(old['collections'])) == ['ev_seq_midi']
+    assert all(new['collections'][k] == v for k, v in old['collections'].items())
+    assert sorted(set(new['exports']) - set(old['exports'])) == sorted(CORE_DN501)
+    assert all(new['symbols'][k][0] == v[0] for k, v in old['symbols'].items())
+
+
+def test_digitone_core_5_0_1_is_5_0_and_more():
+    if not CORE_DN50_BUILT or not os.path.exists(CORE_DN50_BUILT):
+        raise Skip('missing ELEKLOADER_CORE_DN1_50 (core-dn1 5.0 built, core-5.0.elemod)')
+    with tempfile.TemporaryDirectory() as tmp:
+        check_dn_50(CORE_DN50_BUILT, dn_core(tmp))
+        other = CORE_DN50_BUILT.replace('core-5.0.elemod', 'core-5.0-os1.44.elemod')
+        if DN_STOCK_144 and os.path.exists(DN_STOCK_144) and os.path.exists(other):
+            path4, _m = build.build(os.path.join(ROOT, 'mods', 'core-dn1'), DN_STOCK_144, tmp)
+            check_dn_50(other, path4)
+
+
 def test_digitone_core_port_to_144_is_the_same_core():
     """mods/core-dn1's 1.44 port: the same code and the same sites, at 1.44's
     addresses; a 1.43 core-dn1 is refused on 1.44."""
@@ -1521,7 +1559,7 @@ def test_digitone_core_port_to_144_is_the_same_core():
 
         def what(d):                # each site's new bytes and targets, not where it is
             return [(s['len'], s['kind'], s['new'], s.get('relocs')) for s in d['sites']]
-        assert len(new['sites']) == 148 and what(new) == what(old)
+        assert len(new['sites']) == 150 and what(new) == what(old)
         rc, r = lint_json(path, '--stock', DN_STOCK_144)
         assert rc == 0, r['problems']
         rc, r = lint_json(old_path, '--stock', DN_STOCK_144)
