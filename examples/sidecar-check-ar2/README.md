@@ -137,6 +137,38 @@ stock field reads 0 while the mirror comes back; and a project loaded from
 the +Drive comes in as `EXT`, so its mirrors read 0 until the mod puts its
 data back.
 
+## Part 6: payloads (core 0.11)
+
+payload.s is a 1 MB `.payload` of 4,096 blocks of 64 words: the block's
+number (xor 0x5041594c), 48 xorshift32 words and a 15-word table, so the
+OS file still packs. The record after the magic `SCK6` (`sc6`, payload.c)
+holds what `core_payload` answered for the mod's id (`id`, `addr`, `len`),
+the mod's own symbol beside it (`own`, `own_len`), the entries in
+`core_payloads`, and each readback's count and wrong words (`verifies`,
+`words`, `bad`, `first_bad`, `total_bad`). It reads the payload back at
+the first `ev_tick` and on `cmd` 1.
+
+## Part 7: the interrupt send and the step getters (core 0.11)
+
+The record after the magic `SCK7` (`sc7`, send.c):
+
+- each message is a SysEx F0 7D 37, the message's number in four 7-bit
+  bytes, then `(number + i) & 0x7f` for each byte i up to F7, so a USB
+  capture shows order, loss and damage. `sent` and `refused` count
+  `core_midi_try_send`'s answers; core's own record `MIRQ` counts the
+  interrupt path (at once, queued, drained, refused) and its longest time
+  at level 5.
+- `ev_seq_tick` keeps `core_track_length` of the 13 tracks (`length`).
+
+A command word `cmd` (and `arg`) acts on the next `ev_tick`:
+
+| `cmd` | what |
+|---|---|
+| 1 | one message of `arg` bytes (8..128) at each `ev_seq_step`, from the clock's interrupt; 0 stops |
+| 2 | the counters back to 0 |
+| 3 | `core_step_trig` of every step of the pattern playing: bit s of `note[t]` and `lock[t]` (two words, steps 0..31 and 32..63); out-of-range calls must answer -1 (`bad` otherwise) |
+| 4 | one message of `arg` bytes at each of the next 96 `ev_seq_tick`s, playing or stopped |
+
 ## Building
 
 ```bash

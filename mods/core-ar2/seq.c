@@ -47,11 +47,22 @@
 #define TRACK_LOCKS 5674u
 #define STEP_LOCKS 88u
 #define QUEUED ((volatile unsigned char *)0x800067a4) /* + track: the trig queue's slots in use */
+#define TRACK_REC 0x395u                        /* a track's record in the pattern object */
+#define TR_LENGTH 0x2c5u                        /* the track's length (per-track scale mode) */
+#define TR_EUCLID 0x2cau                        /* 1: euclidean mode */
+#define TR_EUCLID_MAP 0x2d1u                    /* + step: the euclidean map, -1 no trig */
+#define PAT_LENGTH 0x14eb3u                     /* the pattern's length, a word */
+#define PAT_SCALE 0x14eb9u                      /* scale mode: 1 per track */
+#define TRIG_ON 0x0001u                         /* the step's trig word: a trig (note or lock) */
+#define TRIG_SOUND 0x0380u                      /* its synth, sample and envelope triggers: a
+                                                   trigless trig has none (0x3841 against a
+                                                   note trig's 0x0381, seen in the emulator) */
 #define TRACKS 13
 #define ALL ((1u << TRACKS) - 1)
 #define SEQ_FIRST 0x80000000u                  /* in steps: the first step after PLAY */
 
 void core_rows_trig(int track, unsigned step);
+void core_midi_irq_drain(void);
 
 typedef void (*ev_seq_step_t)(uint32_t steps, uint32_t trigs);
 typedef void (*ev_seq_tick_t)(void);
@@ -143,6 +154,7 @@ void core_seq_exit(void)
     if (st)
         for (s = ev_seq_step; *s; s++)
             (*s)(st, tr);
+    core_midi_irq_drain();                     /* what waited in core's MIDI ring */
     for (k = ev_seq_tick; *k; k++)
         (*k)();
 #ifdef CORE_SEQ_MEASURE
@@ -200,4 +212,43 @@ int core_track_speed(int track)
 int core_track_step(int track)
 {
     return (unsigned)track < TRACKS ? TRACK_STEP[track] : -1;
+}
+
+/* the length track's step wraps at in pattern p's live object, as
+ * trig_fire reads it: the track's in per-track scale mode, else the
+ * pattern's. The objects sit at odd addresses: bytes only. */
+static int length_in(unsigned obj, int track)
+{
+    volatile unsigned char *o = (volatile unsigned char *)obj;
+    if (o[PAT_SCALE] == 1)
+        return o[TRACK_REC * (unsigned)track + TR_LENGTH];
+    return o[PAT_LENGTH] << 8 | o[PAT_LENGTH + 1];
+}
+
+int core_track_length(int track)
+{
+    int p = PATTERN_NOW;
+    if ((unsigned)track >= TRACKS || (unsigned)p >= 128)
+        return -1;
+    return length_in(PATTERNS + PATTERN_SIZE * (unsigned)p, track);
+}
+
+/* step's trig in live pattern p: CORE_STEP_NOTE for a trig that triggers
+ * the sound (synth, sample or envelope), CORE_STEP_LOCK for a trigless
+ * lock trig (a trig with none of them), 0 none; in euclidean mode a note
+ * trig where the map holds one (the map has no lock trigs) */
+int core_step_trig(int pattern, int track, int step)
+{
+    volatile unsigned char *r;
+    unsigned w;
+    if ((unsigned)pattern >= 128 || (unsigned)track >= TRACKS || (unsigned)step >= 64)
+        return -1;
+    r = (volatile unsigned char *)(PATTERNS + PATTERN_SIZE * (unsigned)pattern +
+                                   TRACK_REC * (unsigned)track);
+    if (r[TR_EUCLID] == 1)
+        return (signed char)r[TR_EUCLID_MAP + (unsigned)step] >= 0 ? 1 : 0;
+    w = (unsigned)r[2 * step] << 8 | r[2 * step + 1];
+    if (!(w & TRIG_ON))
+        return 0;
+    return w & TRIG_SOUND ? 1 : 2;
 }

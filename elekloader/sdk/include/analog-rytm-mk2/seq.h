@@ -3,7 +3,8 @@
  * sequencer (core-ar2 0.11, Analog Rytm MKII)"). Events are subscribed in
  * mod.json, {"event": "ev_seq_step", "fn": "my_step"}; calls are core's
  * exports. The events run in the sequencer clock's interrupt: keep them
- * short, never wait, and send MIDI only with core_midi_try_send.
+ * short, never wait, and send MIDI only with core_midi_try_send (sent at
+ * once when the sender has room, else queued).
  */
 #ifndef ELEKLOADER_AR2_SEQ_H
 #define ELEKLOADER_AR2_SEQ_H
@@ -14,7 +15,8 @@
  * tick where any track reached a step boundary. Bit t of steps: track t
  * (0..12, 12 the FX track) made its next step's trig, one step ahead of the
  * sound (the step after core_track_step(t)); bit t of trigs: that step
- * plays a trig. A trigless step, a failed condition (FILL, PRE, a ratio)
+ * plays a trig, a trigless lock trig too (core_step_trig tells them
+ * apart). A step without a trig, a failed condition (FILL, PRE, a ratio)
  * and a failed probability are no trig. Microtiming and retrigs don't add
  * calls: they ride in the trig. Each track keeps its own speed, so the
  * masks hold only the tracks at a boundary this tick.
@@ -46,6 +48,22 @@ unsigned core_tempo(void);
  * -1 for a track out of range */
 int core_track_speed(int track);
 int core_track_step(int track);
+/* the length track t's steps wrap at as the clock plays the pattern now
+ * playing: the track's own in per-track scale mode, else the pattern's.
+ * -1 for a track out of range or no pattern playing */
+int core_track_length(int track);
+/* step (0..63) of track t in live pattern p (0..127), as stored:
+ * CORE_STEP_NOTE a trig that triggers the sound, CORE_STEP_LOCK a trigless
+ * lock trig, 0 none, -1 out of range. A track in euclidean mode answers
+ * from its map (note trigs only). Before conditions and probability, unlike
+ * ev_seq_step's trigs. ev_seq_step's steps are one ahead of the sound, so
+ * at a pattern change a step it reports may be in core_pattern_next(), not
+ * core_pattern_now(): pass the one the step belongs to. While the change
+ * copies the new pattern in, a read may see either pattern's step. Any
+ * context. */
+#define CORE_STEP_NOTE 1
+#define CORE_STEP_LOCK 2
+int core_step_trig(int pattern, int track, int step);
 
 /* audio blocks: core_block in analog-rytm-mk2/load.h */
 

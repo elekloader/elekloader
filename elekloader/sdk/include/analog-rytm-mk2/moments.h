@@ -17,9 +17,11 @@
 /* a whole MIDI message (a status byte first; a SysEx F0 .. F7 in one call)
  * out of USB, or nothing: 1 sent (or queued, from an interrupt), 0 not now
  * (USB not configured, a stock SysEx under way, stock's sender busy or its
- * buffer too full). It never waits. From a task it goes through stock's
- * sender; from an interrupt (the sequencer's) into core's ring of 512 bytes,
- * at most 64 a message, which the next ev_tick sends in order. */
+ * buffer too full). It never waits, and messages leave in the order sent.
+ * From a task it goes through stock's sender under its mutex. From an
+ * interrupt it goes out at once (at level 5) when no task is in the sender
+ * and nothing waits before it; otherwise into core's ring of 1024 bytes, at
+ * most 128 a message, which the next sequencer tick or ev_tick sends. */
 int core_midi_try_send(int len, const unsigned char *msg);
 
 /* the UI's current kit (0..127), track (0..12, 12 the FX track) and pattern

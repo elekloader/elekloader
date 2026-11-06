@@ -925,7 +925,7 @@ Analog Rytm MKII)"; `elekloader/sdk/include/analog-rytm-mk2/moments.h`).
 | what | where (OS 1.74) | context |
 |---|---|---|
 | `ev_sysex_in(data, len, iface)`, nonzero takes the message | the SysEx router 0x40083dd8 (`jmp`, after it 0x40083de0), before the universal check | MIDI task |
-| `core_midi_try_send(len, msg)` | stock's USB sender 0x400029e0 under its mutex 0x42f67a28 (try-lock 0x4000119c, give 0x400011ee) | any task; an interrupt queues |
+| `core_midi_try_send(len, msg)` | stock's USB sender 0x400029e0 under its mutex 0x42f67a28 (try-lock 0x4000119c, give 0x400011ee); from an interrupt the sender at level 5 while the mutex's owner word (0x42f67a28) is 0 | any task or interrupt |
 | `core_current_kit`, `_track`, `_pattern` and their items | the model's +0x1a4 (the working kits' +0x44), 0x400b693e, `core_step_pattern_now` | UI task |
 | `core_project_name()` | the live project's +8, 0x407c89d3 | any |
 | `ev_kit(kit, how)`: SELECTED | the kit select 0x400a65f6 (after it 0x400a65fe) | UI task, sent at `ev_tick` |
@@ -948,12 +948,21 @@ Analog Rytm MKII)"; `elekloader/sdk/include/analog-rytm-mk2/moments.h`).
   message byte fit, no stock SysEx is open (0x413db244 = 0xF0), the port
   is configured (0x413db254 = 1), USB is on (0xfc0b01c4) and the requests
   it needs (two when the message wraps the buffer) are free and the first
-  is not busy; otherwise it answers 0. The try-lock and the give are a task's (the owner is the
-  current task, the give can switch tasks), so from an interrupt (the
-  status register's level not 0) the message goes into core's ring (512
-  bytes, at most 64 a message), which the next `ev_tick` sends first, in
-  order. Only whole messages: a status byte first, and a SysEx closed in
-  the same call.
+  is not busy; otherwise it answers 0. The try-lock and the give are a
+  task's (the owner is the current task, the give can switch tasks), so
+  from an interrupt (the status register's level not 0) core uses neither:
+  it sends at once, at level 5 for the sender's call (as the Sidecar
+  companion's step clock did, so the audio interrupt can't cut in), when
+  no task holds the mutex (its owner word 0), no other interrupt is
+  sending and the same checks pass. Otherwise the message goes into core's
+  ring (1,024 bytes, at most 128 a message), which the next sequencer tick
+  (before `ev_seq_tick`) or `ev_tick` sends first; a call from a task
+  while the ring holds messages queues behind them. Messages leave in the
+  order of the calls, except that one from an interrupt cutting into
+  another interrupt's send may go first. `core_midi_irq` (magic `MIRQ`)
+  counts the interrupt path's sends at once, queued, drained and refused,
+  and its longest time at level 5 in DMA timer 0 ticks. Only whole
+  messages: a status byte first, and a SysEx closed in the same call.
 - **The project model** (0x419f28a8) is read, never made: 0x4017fa0a
   makes it when it is 0, and the kit select site runs during boot, before
   stock makes it; a call there makes it too early and the boot hangs
@@ -1001,6 +1010,8 @@ events, and its words as getters (docs/ADAPTING.md, "The sequencer
 | `core_pattern_now()`, `core_pattern_next()` | 0x405c8d04 (byte); the pattern queue's next entry 0x412f5a03 (-1 none) into the entries at 0x412f3e91, 20 bytes each, the pattern a word at +0 | any |
 | `core_tempo()` | 0x40287ffc, BPM x 120 | any |
 | `core_track_speed(t)`, `core_track_step(t)` | 0x405c8d25 + t, 0x405c8cea + t (bytes) | any |
+| `core_track_length(t)` | the playing pattern's object (0x407dd8e3 + 0x14f00 · pattern): its scale mode byte +0x14eb9 (1 per track) chooses the track record's (+0x395 · t) length byte +0x2c5, else the pattern's word +0x14eb3, as trig_fire reads them | any |
+| `core_step_trig(p, t, step)` | pattern p's object, the track record's trig word at +2 · step: 0x0001 a trig, 0x0380 its synth, sample and envelope triggers (none: a trigless lock trig); in euclidean mode (+0x2ca = 1) the map at +0x2d1 + step (-1 none) | any |
 
 - **The clock** (0x4009b0b4) is an exception handler, one call a tick: 96
   a quarter note, also while stopped. When a track reaches a step
@@ -1027,6 +1038,10 @@ events, and its words as getters (docs/ADAPTING.md, "The sequencer
 - **The pattern queue**: a pattern selected while playing, or a chain's
   next, is an entry the clock switches to at the pattern's end; with none
   queued `core_pattern_next` answers the pattern playing.
+- **Trig words**: a note trig is 0x0381 and a trigless lock trig 0x3841
+  (seen in the emulator), so 0x0004 is not the trigless mark; trig_fire
+  makes no trig for a word with 0x0004 set or 0x0001 clear. A trigless
+  lock trig makes a trig record, so `ev_seq_step`'s trigs include it.
 - **Blocks**: `core_block` (load.h, 0.9) is the audio block count; there
   is no call by that name, since the variable has it.
 
@@ -1521,6 +1536,28 @@ second readback found 0 wrong. Core's .run is 56,116 bytes; the build's RAM ends
 0x47C2EC78 with 3,998,600 bytes of the area spare; the main OS packs to
 2.29 MB, unpacks in place with 223,737 bytes of gap, and the flash has
 161,888 bytes spare. Not yet on a unit.
+
+Part 7, the interrupt send and the step getters (core 0.11 + sidecar-check
+0.7 + lock-check 1.11, build SC73), in analog-emu with its USB host and
+stock's own sender (`--usb-host --usb-midi-real`): a 77-byte SysEx (a
+whole 13-track 2C) from every `ev_seq_step` while playing went out at once,
+80 of 80 in order in the host's capture, and 96 from `ev_seq_tick` while
+stopped the same. With a slow host (one read each 400 microframes) and 400
+note-ons from the UI task at the same time, 10 waited in the ring and
+went out at later ticks, 67 were refused (the ring full) and the capture
+held every sent SysEx in order between the notes, none broken. The
+emulator saw no wait from interrupt level (stock's sem_pend), and the
+longest time at level 5 was 1,189 DMA timer 0 ticks for one message, of
+the 88,010 between audio blocks (1.4%). A trig on steps 1, 5, 9 and 13 of
+track 1 and a trigless trig (FUNC + trig in grid record) on step 3:
+`core_step_trig` gave note trigs at 1, 5, 9, 13 and a lock trig at 3;
+`core_track_length` gave each track's length in per-track scale mode,
+track 10's 18 matching where its step wraps. The first two sends after a
+snapshot load are lost while the emulator's host enumerates again, as
+stock's own are. Not checked: a track in euclidean mode, the pattern
+scale mode's length, a task inside the sender at the moment of an
+interrupt send (the counts show none queued for that). Core's .run is
+56,928 bytes. Not yet on a unit.
 
 ## Building
 

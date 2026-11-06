@@ -8,8 +8,10 @@
  *     pattern dump in, stock) sees it.
  *   - core_midi_try_send: a whole MIDI message out of USB, now or never: 1
  *     sent, 0 not now. From a task it goes through stock's sender
- *     (0x400029e0) under its mutex's try-lock; from an interrupt (the
- *     sequencer's) it goes into core's ring, which the next ev_tick sends.
+ *     (0x400029e0) under its mutex's try-lock; from an interrupt it calls
+ *     the sender at once at level 5 when no task holds the mutex and the
+ *     same checks pass, else it goes into core's ring, which the next
+ *     sequencer tick or ev_tick sends.
  *   - the UI's current kit, track and pattern, with their items for
  *     core_store_get and core_store_set, and the live project's name;
  *   - ev_kit: a kit select (0x400a65f6) and a whole kit pushed to the
@@ -40,6 +42,7 @@
 
 /* stock's USB MIDI out (0x400857ca's USB half) */
 #define TX_MUTEX ((void *)0x42f67a28)
+#define TX_OWNER (*(volatile unsigned *)0x42f67a28) /* the mutex's owner, 0: free */
 #define TRY_LOCK ((int (*)(void *))0x4000119c)  /* 1 taken; the owner is the current task */
 #define GIVE ((void (*)(void *))0x400011ee)
 #define SEND ((void (*)(int, const unsigned char *))0x400029e0)
@@ -177,31 +180,39 @@ static int requests_free(int need)
     return 0;
 }
 
-static int send_now(int len, const unsigned char *msg)
+/* whether the sender takes len bytes now without waiting: the port up, no
+ * stock SysEx open, 4 bytes a message byte below its level's ceiling, not
+ * a long message near the buffer's end, and the requests it needs free.
+ * With the mutex held (a task) or no task holding it (an interrupt). */
+static int room(int len)
 {
     int at;
     if (PORT_STATE != 1 || !USB_ON || TX_SYSEX == 0xf0)
         return 0;
-    if (!TRY_LOCK(TX_MUTEX))
-        return 0;
     at = TX_AT;
-    if (TX_SYSEX == 0xf0 || TX_LEVEL + 4 * len > TX_ROOM ||
-        (len > 0x2f && at > 0xfbf && at - 0x3f <= TX_LEVEL) ||
-        !requests_free(at + 4 * len > 0xfff ? 2 : 1)) {
-        GIVE(TX_MUTEX);
+    if (TX_LEVEL + 4 * len > TX_ROOM ||
+        (len > 0x2f && at > 0xfbf && at - 0x3f <= TX_LEVEL))
         return 0;
-    }
-    SEND(len, msg);
-    GIVE(TX_MUTEX);
-    return 1;
+    return requests_free(at + 4 * len > 0xfff ? 2 : 1);
 }
 
-/* from an interrupt: core's ring, sent at the next ev_tick in order; each
- * message is its length byte then its bytes */
-#define RING 512
-#define RING_MSG 64
+/* core's ring: messages that waited, sent in order; each is its length
+ * byte then its bytes. ring_in moves with interrupts masked; ring_out only
+ * where the sender is core's: a task holding the mutex, or an interrupt
+ * while no task holds it and no other interrupt is sending (irq_busy). */
+#define RING 1024
+#define RING_MSG 128
 static unsigned char ring[RING];
 static volatile unsigned ring_in, ring_out;     /* free-running */
+static volatile int irq_busy;
+
+/* the interrupt path's counts and its longest time at level 5, in DMA
+ * timer 0 ticks (README, "Checked so far") */
+#define DTCN0 (*(volatile unsigned *)0xfc07000c)
+struct {
+    char magic[4];
+    uint32_t now, queued, drained, refused, max_ticks;
+} core_midi_irq = {{'M', 'I', 'R', 'Q'}};
 
 static int queue(int len, const unsigned char *msg)
 {
@@ -222,17 +233,129 @@ static int queue(int len, const unsigned char *msg)
     return 1;
 }
 
-static void drain(void)
+/* from a task holding the mutex: the ring's messages while the sender has
+ * room; 1 when it is empty */
+static int drain_ring(void)
 {
     unsigned char m[RING_MSG];
     int len, i;
     while (ring_out != ring_in) {
         len = ring[ring_out % RING];
+        if (!room(len))
+            return 0;
         for (i = 0; i < len; i++)
             m[i] = ring[(ring_out + 1 + i) % RING];
-        if (!send_now(len, m))
-            return;                             /* the next tick tries again */
+        SEND(len, m);
         ring_out += len + 1;
+    }
+    return 1;
+}
+
+/* level 5 at least, as the companion's step clock sent (the audio
+ * interrupt below it can't cut into the sender) */
+static unsigned short irq_raise5(void)
+{
+    unsigned short sr, raised;
+    __asm__ volatile("move.w %%sr,%0" : "=d"(sr));
+    if ((sr & 0x0700) >= 0x0500)
+        return sr;
+    raised = (unsigned short)((sr & 0xf8ff) | 0x0500);
+    __asm__ volatile("move.w %0,%%sr" : : "d"(raised) : "memory");
+    return sr;
+}
+
+/* one message to the sender from an interrupt, at level 5 for the call
+ * only; 0 when it has no room */
+static int irq_one(int len, const unsigned char *msg)
+{
+    unsigned short sr = irq_raise5();
+    unsigned t0 = DTCN0;
+    int ok = room(len);
+    if (ok)
+        SEND(len, msg);
+    t0 = DTCN0 - t0;
+    if (t0 > core_midi_irq.max_ticks)
+        core_midi_irq.max_ticks = t0;
+    irq_restore(sr);
+    return ok;
+}
+
+/* from an interrupt: the ring's messages queued before this call, then
+ * msg, while no task holds the mutex (a task inside the sender) and no
+ * other interrupt is sending (irq_busy); never the try-lock or the give,
+ * which are a task's. A message queued by an interrupt that cuts in stays
+ * behind msg. msg 0: the ring only */
+static int irq_send(int len, const unsigned char *msg)
+{
+    unsigned char m[RING_MSG];
+    unsigned short sr;
+    unsigned end;
+    int sent = 0, n, i;
+    sr = irq_mask();
+    if (irq_busy || TX_OWNER != 0) {
+        irq_restore(sr);
+        goto later;
+    }
+    irq_busy = 1;
+    end = ring_in;
+    irq_restore(sr);
+    while (ring_out != end) {
+        n = ring[ring_out % RING];
+        for (i = 0; i < n; i++)
+            m[i] = ring[(ring_out + 1 + i) % RING];
+        if (!irq_one(n, m))
+            break;
+        ring_out += n + 1;
+        core_midi_irq.drained++;
+    }
+    if (msg && ring_out == end)
+        sent = irq_one(len, msg);
+    irq_busy = 0;
+later:
+    if (!msg)
+        return 0;
+    if (sent) {
+        core_midi_irq.now++;
+        return 1;
+    }
+    if (queue(len, msg)) {
+        core_midi_irq.queued++;
+        return 1;
+    }
+    core_midi_irq.refused++;
+    return 0;
+}
+
+/* the sequencer clock's exit, before ev_seq_tick (seq.c): what waited */
+void core_midi_irq_drain(void)
+{
+    if (ring_out != ring_in)
+        irq_send(0, 0);
+}
+
+/* from a task: under the try-lock, the ring first, then msg if the ring
+ * emptied and there is room; a message that would overtake a queued one
+ * is queued instead */
+static int task_send(int len, const unsigned char *msg)
+{
+    int r = 0;
+    if (!TRY_LOCK(TX_MUTEX))
+        return ring_out != ring_in ? queue(len, msg) : 0;
+    if (!drain_ring())
+        r = queue(len, msg);
+    else if (room(len)) {
+        SEND(len, msg);
+        r = 1;
+    }
+    GIVE(TX_MUTEX);
+    return r;
+}
+
+static void drain(void)
+{
+    if (TRY_LOCK(TX_MUTEX)) {
+        drain_ring();
+        GIVE(TX_MUTEX);
     }
 }
 
@@ -241,12 +364,8 @@ int core_midi_try_send(int len, const unsigned char *msg)
     if (!msg || !whole(len, msg))
         return 0;
     if (in_interrupt())
-        return queue(len, msg);
-    if (ring_out != ring_in)                    /* keep the order: queued ones first */
-        drain();
-    if (ring_out != ring_in)
-        return queue(len, msg);
-    return send_now(len, msg);
+        return irq_send(len, msg);
+    return task_send(len, msg);
 }
 
 /* ---- ev_kit and ev_project_slot, delivered at ev_tick (UI task) ---- */

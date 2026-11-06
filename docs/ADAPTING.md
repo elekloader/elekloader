@@ -1979,7 +1979,9 @@ sites, with `analog-rytm-mk2/moments.h`:
   take it; nothing after you sees it.
 - `core_midi_try_send(len, msg)`: one whole MIDI message out of USB, 1 sent
   or 0 not now; it never waits. From the sequencer's or the audio
-  interrupt it is queued (512 bytes) and sent at the next `ev_tick`.
+  interrupt it goes out at once when the sender has room and no task is in
+  it, else it is queued (1,024 bytes, at most 128 a message) and sent at
+  the next sequencer tick or `ev_tick`, in order.
 - `core_current_kit()`, `core_current_track()`, `core_current_pattern()`
   (-1 for none) and `core_current_kit_item()`, `core_current_sound_item()`,
   `core_current_pattern_item()` for `core_store_get` and `core_store_set`;
@@ -2016,12 +2018,13 @@ The sequencer clock's steps and ticks as events, with
 
 All three run in the clock's interrupt, at the end of a tick (96 a quarter
 note): keep them short, never wait, and send MIDI only with
-`core_midi_try_send` (queued from there).
+`core_midi_try_send` (sent at once from there when it can, else queued).
 
 - `my_step(steps, trigs)`: on a tick where tracks reached a step boundary,
   bit t of `steps` for each such track (0..12, 12 the FX track), and of
   `trigs` when its next step plays a trig: one step ahead of the sound.
-  A trigless step, a failed condition or probability is no trig;
+  A trigless lock trig counts as a trig; a step without one, a failed
+  condition or probability is no trig;
   microtiming and retrigs add no calls. Each track keeps its own speed.
   The first step after PLAY comes first on the PLAY tick, with
   `CORE_SEQ_FIRST` in `steps`; its mod locks are set then
@@ -2031,7 +2034,11 @@ note): keep them short, never wait, and send MIDI only with
 - `core_transport()` (1 playing, 0 stopped), `core_pattern_now()`,
   `core_pattern_next()` (the pattern playing when none is queued),
   `core_tempo()` (BPM x 120), `core_track_speed(t)` (0..6, 2 is 1x) and
-  `core_track_step(t)` (the step starting now); the audio block count is
+  `core_track_step(t)` (the step starting now), `core_track_length(t)`
+  (where the track's steps wrap as the clock plays them) and
+  `core_step_trig(p, t, step)` (`CORE_STEP_NOTE` a trig that triggers the
+  sound, `CORE_STEP_LOCK` a trigless lock trig, 0 none; euclid-aware; pass
+  `core_pattern_next()` for a step past a pattern change); the audio block count is
   `core_block` (`analog-rytm-mk2/load.h`).
 
 ### Remote fields (core-ar2 0.11, Analog Rytm MKII)
