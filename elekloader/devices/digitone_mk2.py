@@ -143,6 +143,7 @@ DEVICE = Device(
     },
     ddr=(0x47F00000, 0x47F40000),
     slot_claims=(('mk2_voice_synths', 0, 32, 'mk2-synth'),  # stable synth IDs
+                 ('sdk_alpha_machines', 0, 128, 'mk2-synth'),
                  ('mk2_voice_filters', 0, 32, 'mk2-filter'),
                  ('mk2_voice_pages', 0, 32, 'mk2-pages')),   # one pages entry per synth ID
     recovery=('hold FUNC while powering on for the STARTUP menu, press TRIG 4 (OS UPGRADE), '

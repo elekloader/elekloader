@@ -7,6 +7,13 @@ category, using the `mk2_*` interface in `mk2/machines.h`. A mod registers
 a descriptor and carries its DSP code, without firmware addresses or hook
 sites of its own; those pages show how.
 
+`machines-dn2` 0.2 also adapts the private [SDK alpha's machine UIs](../elekloader/sdk/include/elekloader/README.md)
+through `sdk_alpha_machines`: synth IDs 5..127 in the same selector, with
+two SYN pages and fifteen logical knobs. Their values use sound slots
+25..39, shared placements use one value, and the DSP receives FM TONE's
+type. These machines carry no SHARC payload. SDK and SHARC synths share
+the `mk2-synth` ID namespace; filters have their own namespace.
+
 Each descriptor starts with a permanent ID: 5..31 for synths, 6..31 for
 filters, two separate namespaces. Give each independently distributed mod a
 different ID. The linker reads the descriptor's ID and refuses conflicts,
@@ -25,7 +32,7 @@ companion, not chosen by a mod.
 The menu lists stock synths first, added synths by stable ID, then MIDI.
 The FLTR category lists the stock filters, then added filters by ID.
 
-With the companion present, a saved synth ID 5..31 whose mod is absent is kept,
+With the companion present, a saved synth ID 5..127 whose mod is absent is kept,
 named MISSING by the name accessors and omitted from the selector. Its DSP
 type maps to MIDI (silence), rather than another mod's synth. Its synth
 MIDI CCs and NRPNs do nothing, so they cannot overwrite the saved values
@@ -51,11 +58,12 @@ A small wrapper gives the native track-type accessor the real reader without emb
 parameter rows after the stock table's 321: at boot, before the OS's
 initializers, the companion copies the table (`0x401f83a4`) to its RAM,
 points the table's 56 references at the copy and raises its 54 row bounds
-by 41, for 40 synth knobs and a filter's G; the value-class accessor (`0x400c257c`) gives an added row its
+by 56, for 40 SHARC synth knobs, fifteen shared SDK knobs and a filter's G; the value-class accessor (`0x400c257c`) gives an added row its
 template's object, and the bounds that end loops keep the stock count. The CC
 and NRPN lookups (`0x400dc978`, `0x400dca5a`) ask FM TONE's map for a paged
 synth, and an FM TONE row found there becomes the synth's row for its slot. The sound-load bound
-accepts IDs through 31. Unused IDs never enter the cached list.
+accepts IDs through 127. SHARC synth registrations remain limited to 5..31.
+Unused IDs never enter the cached list.
 
 Firmware-free C checks exercise registration order, gaps, missing mods,
 invalid descriptors and stock behavior:

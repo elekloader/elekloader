@@ -15,6 +15,7 @@ from elekloader.sdk import build
 SDK_ALPHA_TARGETS = {
     ('digitakt-mk1', '1.54'): ('core_machines', 'machine:%d', ('core', 'machine-pages')),
     ('digitone-mk1', '1.44'): ('sdk_alpha_machines', 'dnmachine:%d', ('core', 'machines')),
+    ('digitone-mk2', '1.12'): ('sdk_alpha_machines', 'mk2-synth:%d', ('core', 'machines-dn2')),
 }
 
 
@@ -169,7 +170,7 @@ def sdk_alpha_build(moddir, stock, out=None):
             raise build.BuildError('mod.json is for %s; the stock file is %s %s' % (
                 ', '.join('%s %s' % (d, ' '.join(v)) for d, v in sorted(listed.items())), device, release))
         if (device, release) not in SDK_ALPHA_TARGETS:
-            raise build.BuildError('sdk alpha: only Digitakt mk1 OS 1.54 and Digitone mk1 OS 1.44 are supported')
+            raise build.BuildError('sdk alpha: only Digitakt mk1 OS 1.54, Digitone mk1 OS 1.44 and Digitone II OS 1.12 are supported')
         table, claim_of, companions = SDK_ALPHA_TARGETS[device, release]
         firmware, dev, _ = formats.load(stock)
         image = formats.main_image(firmware, dev)
@@ -177,12 +178,16 @@ def sdk_alpha_build(moddir, stock, out=None):
                     for s, d in mod.sections.items() if 'parts' in d}
         layouts = {}
         registrations = sdk_alpha_registrations(doc, sections, layouts)
+        low = 5 if device == 'digitone-mk2' else 4      # the Digitone II's synth type 4 is MIDI
+        for _, mid in registrations:
+            if mid < low:
+                raise build.BuildError('sdk alpha: duplicate or invalid machine slot %d (expected %d..127)' % (mid, low))
         if any(c['to'] == table for c in doc['contribute']):
             raise build.BuildError('sdk alpha: declare machines only in C')
         for symbol, mid in registrations:
             claim = claim_of % mid
             names = doc['resources'].setdefault('names', [])
-            if claim in names:
+            if claim in names or claim in mod.implied_names(image):
                 raise build.BuildError('sdk alpha: declare machines only in C')
             names.append(claim)
             doc['contribute'].append({'to': table, 'order': 50, 'data': '00000000',

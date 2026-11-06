@@ -11,7 +11,7 @@ Run with digiemu's Python:
 """
 import unittest
 
-from sdk_alpha_harness import sdk_machine, sdk_tests
+from sdk_alpha_harness import sdk_expected_failure, sdk_machine, sdk_tests
 
 # SINE plays a sine at the note, FINE cents (-100..100, from 0) away. sound_test_pitch is the last
 # pitch it was given, so a test can say which note the key played.
@@ -76,6 +76,9 @@ def hz(pitch):
     return 261.6256 * 2 ** ((pitch / 65536 - 60) / 12)
 
 
+NO_AUDIO = sdk_expected_failure('digitone-mk2')    # DigiKit records no audio, and .render is not called
+
+
 @sdk_tests
 class Sound:
     audio = True
@@ -85,12 +88,14 @@ class Sound:
         self.assertLess(abs(value / expected - 1), tolerance,
                         '%s: %.2f Hz, expected %.2f Hz' % (what, value, expected))
 
+    @NO_AUDIO
     def test_the_machine_plays_a_sine_at_the_note(self):
         self.track.use(SINE)
         sound = self.track.play(0)
         self.assertGreater(sound.peak, 1000, 'the key played nothing')
         self.assertClose(sound.frequency, hz(self.read('sound_test_pitch')), 0.01, 'key 0')
 
+    @NO_AUDIO
     def test_the_pitch_follows_the_key(self):
         self.track.use(SINE)
         low = self.track.play(0)
@@ -103,6 +108,7 @@ class Sound:
         fine, = self.track.use(SINE).knobs("FINE")
         self.assertEqual(fine.value, 0)
 
+    @NO_AUDIO
     def test_fine_tunes_up_to_a_semitone_either_way(self):
         fine, = self.track.use(SINE).knobs("FINE")
         centre = self.track.play(0).frequency
@@ -111,6 +117,7 @@ class Sound:
         fine.set(-100)
         self.assertClose(self.track.play(0).frequency, centre / 2 ** (1 / 12), 0.005, 'FINE -100')
 
+    @NO_AUDIO
     def test_a_machine_without_render_plays_what_it_did(self):
         self.track.use(SILENT)
         played = self.track.play(0).peak > 1000

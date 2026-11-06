@@ -22,7 +22,9 @@ adapter does not have yet fails with "cannot do this yet". Known gaps are marked
 `@sdk_expected_failure(device)`: they count separately, and a fixed gap is an unexpected success.
 
 Run with digiemu's Python: ELEKLOADER_DIGIEMU, ELEKLOADER_STOCK_154, ELEKLOADER_STOCK_DN1_144 and
-ELEKLOADER_CROSS as in the feature files (tests/test_sdk_alpha_hiding.py shows the command).
+ELEKLOADER_CROSS as in the feature files (tests/test_sdk_alpha_hiding.py shows the command). The
+Digitone II runs in DigiKit's ColdFire emulator instead: ELEKLOADER_DIGIKIT, ELEKLOADER_DIGI_EMUD and
+ELEKLOADER_DN2_SYX (sdk_alpha_devices.DigiKit).
 """
 import atexit
 from contextlib import contextmanager
@@ -44,10 +46,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from elekloader.sdk import build                              # noqa: E402
 from elekloader.sdk.sdk_alpha_build import sdk_alpha_build    # noqa: E402
 import sdk_alpha_devices                                      # noqa: E402
-from sdk_alpha_devices import CannotYet, Device, DIGIEMU       # noqa: E402
+from sdk_alpha_devices import CannotYet, Device                # noqa: E402
 
 RAW_MAX = 127 << 8              # a knob's native 8.8 range, whatever its bounds
-DEVICES_LISTED = {'digitakt-mk1': ['1.54'], 'digitone-mk1': ['1.44']}
+DEVICES_LISTED = {'digitakt-mk1': ['1.54'], 'digitone-mk1': ['1.44'], 'digitone-mk2': ['1.12']}
 
 _ids = iter(range(100, 120))    # the ids of the machines a test file writes inline
 REGISTRY = []
@@ -97,17 +99,13 @@ def sdk_example(name, directory):
 
 class Firmware:
     """One device's firmware: the device's core, its companion and every registered machine,
-    booted once and saved as a snapshot."""
+    booted once and saved as a snapshot by the device's emulator (its backend)."""
 
     def __init__(self, device):
         stock = os.environ.get(device.stock_env, '')
-        if not (DIGIEMU and os.path.isdir(DIGIEMU) and os.path.isfile(stock)):
-            raise unittest.SkipTest('needs ELEKLOADER_DIGIEMU and %s' % device.stock_env)
-        try:
-            import unicorn  # noqa: F401
-        except ImportError:
-            raise unittest.SkipTest("needs digiemu's Python (uv run --project $ELEKLOADER_DIGIEMU)")
-        sys.path.insert(0, DIGIEMU)
+        if not os.path.isfile(stock):
+            raise unittest.SkipTest('needs %s' % device.stock_env)
+        device.backend.check()
         self.device, self.work = device, tempfile.mkdtemp(prefix='sdk-harness-')
         atexit.register(shutil.rmtree, self.work, True)
         mods = [build.build(str(ROOT / path), stock, self.work)[0] for path in device.bases]
@@ -132,32 +130,17 @@ class Firmware:
             raise RuntimeError('%s: patch failed\n%s' % (device.key, done.stdout[-2000:]))
         with open(syx + '.map.json') as fh:
             self.symbols = json.load(fh)
-        home = os.path.join(self.work, 'home')
-        subprocess.run([sys.executable, '-m', 'emu.portable', '--home', home, '--add', syx, '--yes'],
-                       cwd=DIGIEMU, check=True, stdout=subprocess.DEVNULL)
-        from emu.bootstrap import FirmwarePaths
-        root = os.path.join(home, 'firmware')
-        (slug,) = os.listdir(root)
-        with open(os.path.join(root, slug, 'firmware.json')) as fh:
-            name = json.load(fh)['release']['syx_name']
-        self.paths = FirmwarePaths(os.path.join(root, slug), name, os.path.join(DIGIEMU, 'devices'))
-        self.card = self.paths.card                 # a test that saves a project writes to it
-        self.pristine = self.card + '.pristine'
-        shutil.copyfile(self.card, self.pristine)
-        self.card_stamp = os.stat(self.card).st_mtime_ns
+        self.booted = device.backend(syx, stock, self.work)
+        self.cwd = self.booted.cwd
 
     def restore_card(self):
-        """Put the +Drive image back as booted, if a test saved to it."""
-        if os.stat(self.card).st_mtime_ns != self.card_stamp:
-            shutil.copyfile(self.pristine, self.card)
-            self.card_stamp = os.stat(self.card).st_mtime_ns
+        """Put the card back as booted, if a test saved to it."""
+        self.booted.restore_card()
 
     def session(self, audio=False):
-        """A new emulator at the settled user interface: 0.25 s, whatever happened to the last.
+        """A new emulator at the settled user interface, whatever happened to the last.
         With audio, it records what the device plays (session.pcm)."""
-        from emu.session import Session
-        os.environ.update(self.paths.env())
-        return Session(self.paths.gui, self.paths.syx, audio=audio)
+        return self.booted.session(audio)
 
 
 _firmware = {}
@@ -369,7 +352,7 @@ class Track:
         return self.used
 
     def lfo(self, number):
-        """One of the track's LFOs (1 or 2), to point at a knob."""
+        """One of the track's LFOs, numbered from 1, to point at a knob."""
         return Lfo(self, number - 1)
 
     @property
@@ -450,9 +433,10 @@ class SdkTestCase(unittest.TestCase):
 
     def setUp(self):
         self.fw = firmware(self.device)
-        cwd = os.getcwd()
-        os.chdir(DIGIEMU)
-        self.addCleanup(os.chdir, cwd)
+        if self.fw.cwd:
+            cwd = os.getcwd()
+            os.chdir(self.fw.cwd)
+            self.addCleanup(os.chdir, cwd)
         self.session = self.fw.session(self.audio)
         self.addCleanup(self._close)
         self.panel = self.device(self.session, self.fw.symbols, self.fw.machine_ids, self.fw.layouts)

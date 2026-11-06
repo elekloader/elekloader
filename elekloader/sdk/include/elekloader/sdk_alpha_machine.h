@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
-/* Private experiment: Digitakt mk1 OS 1.54 and Digitone mk1 OS 1.44 (behind SYN2 on the Digitone). */
+/* Private experiment: Digitakt mk1 OS 1.54, Digitone mk1 OS 1.44 and Digitone II OS 1.12. */
 #ifndef ELEKLOADER_SDK_ALPHA_MACHINE_H
 #define ELEKLOADER_SDK_ALPHA_MACHINE_H
 
@@ -37,7 +37,7 @@ struct elek_ui_value {
     int32_t raw_value;             /* native 8.8, 0..ELEK_UI_RAW_MAX */
 };
 struct elek_ui_context {
-    int32_t page;                  /* displayed SRC page, or ELEK_UI_NO_PAGE (e.g. LFO labels),
+    int32_t page;                  /* displayed machine page, or ELEK_UI_NO_PAGE (e.g. LFO labels),
                                     * also for machines with pages: check before indexing */
     uint32_t page_count, knob_count;
     const struct elek_ui_value *const *knob; /* indexed by machine-wide logical ID, all pages */
@@ -64,7 +64,7 @@ struct elek_voice {
     uint32_t gate;                 /* 1 until the note is released */
 };
 struct elek_machine {
-    int32_t id;                    /* native machine slot, 4..127; declared only here */
+    int32_t id;                    /* native machine slot, 4..127 (Digitone II: 5..127); declared only here */
     const char *name, *short_name; /* 1..16 and 1..4 ASCII characters */
     const struct elek_ui_page *pages; /* at most two pages and fifteen logical knobs */
     uint32_t page_count;

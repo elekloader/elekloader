@@ -3,7 +3,7 @@
 build adds for each device. No emulator; the behaviour on the device is in test_sdk_alpha_*.py.
 
 Build checks need ELEKLOADER_STOCK_154, ELEKLOADER_STOCK_DN1_144 (Digitone mk1 OS 1.44) and a cross
-compiler (ELEKLOADER_CROSS)."""
+compiler (ELEKLOADER_CROSS); the Digitone II's need ELEKLOADER_DN2_SYX (OS 1.12) and the cross compiler."""
 from contextlib import redirect_stdout
 import io
 import json
@@ -443,6 +443,37 @@ class SdkAlphaTests(unittest.TestCase):
             both = edited(EMPTY, 'both', lambda m: m.update(device='digitone-mk1'))
             with self.assertRaisesRegex(build.BuildError, '"devices" replaces "device" and "os"'):
                 sdk_alpha_build(both, dn, tmp)
+
+    def test_sdk_alpha_builds_link_for_the_digitone_ii_and_keep_synth_conflicts(self):
+        stock = os.environ.get('ELEKLOADER_DN2_SYX', '')
+        cross = os.environ.get('ELEKLOADER_CROSS', 'm68k-linux-gnu-')
+        if not Path(stock).is_file() or not shutil.which(cross + 'gcc'):
+            self.skipTest('needs ELEKLOADER_DN2_SYX and m68k cross compiler')
+        with tempfile.TemporaryDirectory() as tmp:
+            core = build.build(str(ROOT / 'mods/core-dn2'), stock, tmp)[1]
+            machines = build.build(str(ROOT / 'mods/machines-dn2'), stock, tmp)[1]
+            firmware, dev, _ = formats.load(stock)
+            image = formats.main_image(firmware, dev)
+            built = {}
+            for name, folder in (('empty', EMPTY.write(tmp)), ('one page', ONE_PAGE.write(tmp)),
+                                 ('hello', str(HELLO)), ('glyphs', str(GLYPHS))):
+                path, mod = sdk_alpha_build(folder, stock, tmp)
+                built[name] = path, mod
+                self.assertEqual(mod.requires, ['core', 'machines-dn2'])
+                link.link([core, machines, mod], image)
+            # The SDK's IDs reach 127: the synths' claims, which native SHARC voices share.
+            self.assertEqual(built['empty'][1].names, ['mk2-synth:%d' % EMPTY.id])
+            self.assertEqual(built['glyphs'][1].names, ['mk2-synth:127'])
+            with open(built['empty'][0]) as fh:
+                duplicate = json.load(fh)
+            duplicate['id'], duplicate['exports'] = 'sdk-alpha-conflict', []
+            duplicate['resources']['names'] = []  # descriptor inference also protects hand-written mods
+            with self.assertRaisesRegex(elemod.ModError, 'mk2-synth:%d' % EMPTY.id):
+                link.link([core, machines, built['empty'][1], link.Mod2(duplicate, 'conflict')], image)
+            midi = SdkMachine("Midi slot", register=False, source=EMPTY.source)
+            midi.id = 4                                 # 4..127 elsewhere; MIDI's type on the Digitone II
+            with self.assertRaisesRegex(build.BuildError, r'invalid machine slot 4 \(expected 5\.\.127\)'):
+                sdk_alpha_build(midi.write(tmp + '/midi'), stock, tmp)
 
 
 if __name__ == '__main__':

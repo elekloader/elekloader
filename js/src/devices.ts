@@ -299,7 +299,8 @@ export const DIGITONE_MK2: Device = {
   stage: 0x40400000, flashAt: 0x80000, flashLimit: 0x380000, trailer: 'hmac', hmacKeyFrom: [2, 'Multiplier'],
   areas: { ddr: [0x47f00000, 0x47f40000] },
   ddr: [0x47f00000, 0x47f40000],
-  slotClaims: [['mk2_voice_synths', 0, 32, 'mk2-synth'], ['mk2_voice_filters', 0, 32, 'mk2-filter'],
+  slotClaims: [['mk2_voice_synths', 0, 32, 'mk2-synth'], ['sdk_alpha_machines', 0, 128, 'mk2-synth'],
+    ['mk2_voice_filters', 0, 32, 'mk2-filter'],
     ['mk2_voice_pages', 0, 32, 'mk2-pages']],   // one pages entry per synth ID
   recovery: 'hold FUNC while powering on for the STARTUP menu, press TRIG 4 (OS UPGRADE), '
     + 'then send the stock .syx over MIDI (not USB)',

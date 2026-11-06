@@ -570,6 +570,11 @@ def test_dn2_synth_claims_its_stable_type():
     assert 'a 1 and b 1 both claim mk2-synth:5' in link.check([mod('a', 5), mod('b', 5)], image)
     assert not [p for p in link.check([mod('a', 5), mod('b', 31)], image) if 'claim' in p]
     assert mod('outside', 32).implied_names(image) == []
+    assert mod('sdk', 127, 'sdk_alpha_machines').implied_names(image) == ['mk2-synth:127']
+    assert 'native 1 and sdk 1 both claim mk2-synth:7' in link.check(
+        [mod('native', 7), mod('sdk', 7, 'sdk_alpha_machines')], image)
+    assert not [p for p in link.check(
+        [mod('a', 100, 'sdk_alpha_machines'), mod('b', 127, 'sdk_alpha_machines')], image) if 'claim' in p]
     assert mod('filter', 6, 'mk2_voice_filters').implied_names(image) == ['mk2-filter:6']
     assert 'a 1 and b 1 both claim mk2-filter:6' in link.check(
         [mod('a', 6, 'mk2_voice_filters'), mod('b', 6, 'mk2_voice_filters')], image)
