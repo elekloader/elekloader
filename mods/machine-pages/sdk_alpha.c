@@ -336,6 +336,8 @@ int32_t sdk_alpha_empty_selected(void)
     return sdk_alpha_current != 0;
 }
 
+void sdk_alpha_format(int32_t value, char *buf, int popup);
+
 /* A mapped integer's text fits the native value field; long values retain their popup text. */
 int32_t sdk_alpha_value_text(int32_t machine, int32_t k, int32_t raw, char *buf, int popup)
 {
@@ -346,14 +348,19 @@ int32_t sdk_alpha_value_text(int32_t machine, int32_t k, int32_t raw, char *buf,
     int32_t knob_count = sdk_alpha_knobs(m, knobs);
     if (knob_count < 0 || (uint32_t)k >= (uint32_t)knob_count)
         return 0;
-    int32_t value = sdk_alpha_map(knobs[k], raw < 0 ? 0 : raw > ELEK_UI_RAW_MAX ? ELEK_UI_RAW_MAX : raw);
+    sdk_alpha_format(sdk_alpha_map(knobs[k], raw < 0 ? 0 : raw > ELEK_UI_RAW_MAX ? ELEK_UI_RAW_MAX : raw),
+                     buf, popup);
+    return 1;
+}
+
+void sdk_alpha_format(int32_t value, char *buf, int popup)
+{
     char digits[10];
     uint32_t n = value < 0 ? 0u - (uint32_t)value : (uint32_t)value;
     int count = 0, pos = 0;
     do { digits[count++] = '0' + n % 10; n /= 10; } while (n);
-    if (!popup && count + (value < 0) > 5) { buf[0] = '#'; buf[1] = 0; return 1; }
+    if (!popup && count + (value < 0) > 5) { buf[0] = '#'; buf[1] = 0; return; }
     if (value < 0) buf[pos++] = '-';
     while (count) buf[pos++] = digits[--count];
     buf[pos] = 0;
-    return 1;
 }
