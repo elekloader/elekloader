@@ -34,12 +34,18 @@ is the effect to start from (docs/ADAPTING.md, "Effects").
   lock setter keeps them: the value, the step's count, the slot's used
   byte, and a lock trig on a step with no trig. The stock saves, copies
   and plays them with the pattern; `ev_note_queue` gives fxkit each trig of
-  the lock track with its time, and its locks hold until the next.
+  the lock track with its time, and its locks last that step, at the lock
+  track's SCALE (from 0.2; 0.1 held them to the track's next trig, and the
+  lock track has trigs only where there are locks, so one lock kept its knob
+  for the rest of the loop).
 - **The MIXER and LFO pages** (`fx_page_*`): the LFO pages are the stock
   LFO page, its own knob graphics (the stock's drawers, from the UI records
   core exports), WAVE and SPH as one wave, DEST's box and list (YES picks,
-  NO closes), SPD and DEP in fine steps; a turned knob's value shows under
-  it a while, in the stock's text. An effect gives them its keys first
+  NO closes), SPD and DEP in fine steps that gather speed with the knob as
+  the stock's do, and the lists (MULT, WAVE, MODE, DEST's) a step every
+  second detent, as slow as the stock's; a half step left when the knob
+  stops is dropped, so letting go does not move it. A turned knob's value
+  shows under it a while, in the stock's text. An effect gives them its keys first
   (`fx_page_key`) and redraws when `fx_page_state` moves.
 - **LOCK mode** (`fx_lock_key`, from an effect's key handler): the trig
   keys are the steps of a 16-step page, PAGE the next; hold a trig and turn
@@ -47,7 +53,11 @@ is the effect to start from (docs/ADAPTING.md, "Effects").
 - **Saving**: an effect packs its mixer and LFOs into its own project data
   (`fx_pack`, 23 bytes) when `fx_serial` says its values moved (packing
   every UI tick, seven effects slowed the UI task enough to stretch the
-  first boot's +Drive work); fxkit saves the lock track.
+  first boot's +Drive work); fxkit saves the lock track and the inputs.
+- **The inputs** (`fx_input_mono`, from 0.2): STEREO, or MONO (input L on
+  both sides), one setting for every effect (each effect's SETUP shows it),
+  saved with the project; a project without it (a new one, or one saved
+  before 0.2) keeps what is set, so MONO is set once.
 
 ## Not yet
 

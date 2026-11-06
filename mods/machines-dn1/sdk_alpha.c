@@ -39,12 +39,12 @@ static const uint8_t sdk_pos[SDK_KNOBS] = { 8, 9, 10, 11, 12, 13, 14, 15, 5, 6, 
  * an SDK machine is the active track's. */
 #define SYN2_FIRST 4                /* SYN2's stock list starts with page 4 */
 #define V_CUR 144                   /* a view's place in its list (core-dn1's pages.s) */
-struct core_page dnm_sdk_pages[2] = {   /* claimed as page:30 and page:29 */
-    { 30, -1, "SDK", "SDK", { 0 }, 9, 0, 0 },
-    { 29, -1, "SDK", "SDK", { 0 }, 9, 0, 1 },
+struct core_page dnm_sdk_pages[2] = {   /* claimed as page:29 and page:28 (core-dn1 5.1 has 30) */
+    { 29, -1, "SDK", "SDK", { 0 }, 9, 0, 0 },
+    { 28, -1, "SDK", "SDK", { 0 }, 9, 0, 1 },
 };
 _Static_assert(sizeof(struct core_page) == 60, "mod.json contributes dnm_sdk_pages + 60");
-static const int32_t sdk_list[2] = { 30, 29 };
+static const int32_t sdk_list[2] = { 29, 28 };
 static const struct dnm_machine *listed;    /* the machine SYN2 shows the SDK pages for; 0: stock */
 int32_t dnm_sdk_shown[4];                   /* each track's SDK page, kept across track switches */
 static int32_t shown_track = -1;            /* the track dnm_sdk_shown follows now */

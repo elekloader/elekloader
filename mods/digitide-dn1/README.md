@@ -20,6 +20,18 @@ STOP and TEMPO still work and the clock can follow the Digitone's tempo.
 Opening the page steps the pedal on; BYPASS (trig 16) passes the inputs
 through dry, with the wet channel's tail.
 
+## 0.3
+
+From the first reports from a unit: a p-lock lasts its own step (fxkit 0.2; it
+used to hold until the lock track's next trig, and with trigs only where there
+are locks one lock kept its knob for the rest of the loop); SETUP's INPUT is
+one setting for every pedal, and a new project keeps it; the LFO pages turn as
+the stock's do (SPD and DEP gather speed with the knob, MULT, WAVE, MODE and
+DEST's list step every second detent); a knob let go no longer steps once
+more; and the next key pressed without FUNC clears FUNC, so it cannot stay on
+(a FUNC left on shows page 2 for pages 1-3, as reported after a SETUP change).
+Needs fxkit 0.2.
+
 ## 0.2: on fxkit
 
 From 0.2 DigiTide is an effect on fxkit ([../fxkit-dn1](../fxkit-dn1)), as every
@@ -131,7 +143,7 @@ hi-cut on the wet channel from open (127) down to 600 Hz.
 | page 3's SPRD | SPREAD on both channels, the wet only or the looper only |
 | SETUP's LOOP BUFFER | half or full: HALF halves LENGTH |
 | page 3 | LATCH, DRY KILL, NO DUB |
-| SETUP | SMOOTH CLK, INPUT (MONO: input L to both sides), BYPASS (TRAILS or CUT) |
+| SETUP | SMOOTH CLK, INPUT (MONO: input L to both sides; fxkit's, one setting for every pedal), BYPASS (TRAILS or CUT) |
 | trig 15 | tap tempo |
 | presets | none from 0.2: the project keeps the pedal, and p-locks (RECORD) follow the pattern |
 | trig 1-6, 7-12, 13 and 14 | TIME's six divisions; LENGTH's six; CLOCK a step down, up |
@@ -212,8 +224,8 @@ feedback matrix) with its allpasses' coefficient on MODIFY. The UI
 With the SDK and a stock OS file:
 
 ```bash
-python -m elekloader.sdk.build mods/digitide-dn1 --stock Digitone_and_Digitone_Keys_OS1.43.syx   # out/digitide-0.2.elemod
-python -m elekloader.sdk.build mods/digitide-dn1 --stock Digitone_and_Digitone_Keys_OS1.44.syx   # out/digitide-0.2-os1.44.elemod
+python -m elekloader.sdk.build mods/digitide-dn1 --stock Digitone_and_Digitone_Keys_OS1.43.syx   # out/digitide-0.3.elemod
+python -m elekloader.sdk.build mods/digitide-dn1 --stock Digitone_and_Digitone_Keys_OS1.44.syx   # out/digitide-0.3-os1.44.elemod
 ```
 
 It names no firmware address, so its 1.44 port is empty. It needs fxkit and core-dn1

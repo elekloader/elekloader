@@ -180,7 +180,7 @@ static int fx_cc(int cc, int v)
     } else if (cc == 33) {
         ST.cfg[C_HALF] = (u8)(v < 2);
     } else if (cc == 72) {
-        ST.mono = (u8)on;
+        fx_input_mono_set(on);
     } else if (cc == 73) {
         set_ctl(2, O_SPRD, on ? (OPT(O_SPRD) ? OPT(O_SPRD) : SP_BOTH) : SP_OFF);
     } else if (cc == 74) {
