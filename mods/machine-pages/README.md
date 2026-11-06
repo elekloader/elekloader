@@ -22,7 +22,7 @@ the mod shop: tick it there and the page takes the newest core for it.
 | exports | `cm_ui_v3`, from 1.1 `cm_ui_v31`, from 1.2 `cm_ui_v32`, from 1.4 `cm_ui_v33`: the markers a machine's page names; from 1.2 `cm_src_value`; from 1.5 `cm_src_shown` |
 | claims | from 1.2, `soundslot:46` to `soundslot:52`, the extra values' slots |
 | declares | `ev_render_voices`, the render event |
-| RAM | 9.3 KB code, 4.5 KB for up to 32 machines' pages (1.1: 2.4 KB and 2 KB) |
+| RAM | 10.9 KB code, 4.5 KB for up to 32 machines' pages (1.1: 2.4 KB and 2 KB) |
 
 ## What a machine describes
 
@@ -199,10 +199,17 @@ with each shop mod that does, on OS 1.53 and 1.54.
 ## Checked
 
 1.6 (the filter tab), on OS 1.53 and 1.54: `tests/probe_digitakt_filter_menu.py`
-boots core 4.1 and 1.6 in digiemu and drives the panel. RIGHT and LEFT swap
-the lists and back, UP and DOWN leave the filter list as it is, FUNC+SRC from
-FLTR gives the same screen as RIGHT, YES and NO go back to the FLTR page, a page key goes to its own page, and from AMP or SRC the machine list, and
-the screens are the same on both releases.
+boots core 4.1 and 1.6 in digiemu, drives the panel and reads the track's
+sound from RAM:
+- RIGHT and LEFT swap the lists and back, and UP and DOWN leave the filter
+  list as it is.
+- FUNC+SRC from FLTR gives the same screen as RIGHT; from AMP or SRC, the
+  machine list.
+- YES and NO go back to the FLTR page, and a page key goes to its own page.
+- YES on the filter list leaves the sound's bytes as they were; after a
+  machine stepped to on the machine list, it commits that machine.
+- The screens are the same on both releases.
+
 On a unit: the owner's Digitakt ran it on OS 1.54, a build of core 4.1 and 1.6, and it worked.
 
 1.5 (`cm_src_shown`), on OS 1.53 and 1.54. `tests/probe_digitakt_shown.py`

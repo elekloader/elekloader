@@ -3,6 +3,7 @@
  * own item, so the list draws, moves and frees it; the stock view knows nothing of the tab. The view's
  * addresses are the same on OS 1.53 and 1.54; what it calls is in mod.json's defsym. */
 #include <stdint.h>
+#include "digitakt-mk1/core3.h"
 
 #define KEY_YES   12
 #define KEY_NO    13
@@ -43,7 +44,6 @@ extern void MENU_SHOW(void *);
 extern int32_t MENU_PAGE_FN(void *, int32_t);
 extern uint32_t MENU_NAME_FN(int32_t);
 extern void MENU_HLINE(void *, int32_t, int32_t, int32_t, int32_t);
-extern void MENU_BLIT(void *, void *, int32_t, int32_t, int32_t);
 extern void MENU_TEXT(void *, void *, int32_t, int32_t, int32_t, const char *);
 extern char MENU_WAVE[], MENU_FONT[];
 extern char MENU_NAME_MGR[], MENU_NAME_CALL[], MENU_ICON_MGR[], MENU_ICON_CALL[];
@@ -183,7 +183,7 @@ void mp_menu_panel(void *screen)
             rect(screen, 24 + c, 31 + (next < curve[c] ? next : curve[c]), 1, gap + 3);
         }
     } else {
-        MENU_BLIT(screen, MENU_WAVE, 24, 29, 0);
+        fw_blit(screen, MENU_WAVE, 24, 29, 0);
     }
     MENU_TEXT(screen, MENU_FONT, 37, 11, 2, mp_menu_filter ? "< FLTR >" : "< SRC >");
     /* The page dots: the one shown is the larger. */
