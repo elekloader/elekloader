@@ -37,7 +37,7 @@
 
 #include <stdint.h>
 
-#define TAG_AREA 0x47938000u                    /* to core's area at 0x47be0000, free (README) */
+#define TAG_AREA 0x47938000u                    /* the start of the bigger area, below the mirrors (README) */
 
 #define LIVE_PATTERNS 0x407c89e3u
 #define PATTERN_SIZE 85760u
@@ -77,6 +77,8 @@ int core_rows_current(void);
 /* each owner's table: the handle + 1 at (object * 13 + track) * 64 + step,
  * 0 for none; and its tags in each object, so a copy that carries none
  * costs one look */
+/* the tables end below the sidecar fields' mirrors (items.c MIRROR_AREA) */
+typedef char tables_fit[TAG_AREA + OWNERS * TABLE * 2 <= 0x47b00000u ? 1 : -1];
 static unsigned short *table[OWNERS];
 static unsigned short tagged[OWNERS][OBJECTS];
 static int owners = -1;

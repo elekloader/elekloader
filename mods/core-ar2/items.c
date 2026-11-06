@@ -52,7 +52,7 @@
 
 #include <stdint.h>
 
-#define MIRROR_AREA 0x47b00000u                 /* after 8 owners' tag tables (steps.c), before core's area */
+#define MIRROR_AREA 0x47b00000u                 /* after 8 owners' tag tables (steps.c), below the mods' area */
 
 #define LIVE_PROJECT 0x407c89cbu
 #define LIVE_PATTERNS (LIVE_PROJECT + 24)       /* object 0, then the 128 */
@@ -133,6 +133,9 @@ struct out {
 #define others ((struct other *)(M_SOUND + SOUND_PLACES * MS))
 #define outs ((struct out *)(others + OTHERS))
 #define M_END ((unsigned char *)(outs + OUTS))
+/* the mirrors end below the mods' area of 0.11 (0x47b10000, the profile's core_ddr) */
+typedef char mirrors_fit[MIRROR_AREA + PAT_PLACES * MP + KIT_PLACES * MK + SOUND_PLACES * MS
+                         + OTHERS * sizeof(struct other) + OUTS * sizeof(struct out) <= 0x47b10000u ? 1 : -1];
 static unsigned short serials, out_serials;
 static unsigned others_at, outs_at;
 static volatile int ready;                      /* the area zeroed (the first ev_tick) */
