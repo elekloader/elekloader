@@ -48,6 +48,35 @@ struct core_lock_param {
                                  * case as stock's (SAMP, FILT, AMP), or 0 for MOD */
 };
 
+/* core-ar2 0.11: a lockable parameter narrower than the dial, shown on its
+ * scale. A mod whose core_params get answers a knob on the dial's 0..127
+ * (lfo-rnd's 4-bit fields, say) contributes an entry for the knob's id to
+ * core_param_scales:
+ *
+ *     {"to": "core_param_scales", "order": 50, "data": "00000000",
+ *      "relocs": [[0, "abs32", "sym:my_scale", 0]]}
+ *
+ *     const struct core_param_scale my_scale = {449, 450, my_show, my_unshow, 0};
+ *
+ * show(id, field value) answers the dial's 8.8 value, unshow(id, dial 8.8)
+ * the field's value; with both 0 core uses its linear map,
+ * round((v - min) * 127 / (max - min)) and back to the nearest field value
+ * (none for a field 127 wide or wider). Core then converts where a value
+ * meets the page: a held trig's lock (get, set and turn, a turn still a
+ * whole field step at least), a held scene's lock, the NRPN or CC in and
+ * PARAM OUTPUT, and core's number text (the field's value); a performance's
+ * depth reaches the page in dial steps (show(min + d) - show(min)), and core
+ * writes its text as a signed number unless flags has CORE_SCALE_DEPTHS.
+ * Stock's copy and paste of locks keep field values and need nothing. A
+ * parameter without an entry is unchanged. */
+struct core_param_scale {
+    int32_t first, last;                /* the knob ids it answers for */
+    int32_t (*show)(int32_t id, int32_t value);
+    int32_t (*unshow)(int32_t id, int32_t dial);
+    uint32_t flags;
+};
+#define CORE_SCALE_DEPTHS 1             /* the mod writes a performance depth's text */
+
 /* Core hands stock at most 4 characters of a short name or a category and
  * 32 of a name, so no length a mod gives can overrun stock's buffers. A
  * category written with this is refused by the compiler when it is longer

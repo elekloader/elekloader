@@ -1082,6 +1082,34 @@ sound, kit or pattern record (docs/ADAPTING.md, "Remote fields (core-ar2
   swap) go through memcpy, kit_load and kit_save, the paths above; the
   emulator can't drive Transfer, so they are a gap for the unit run.
 
+## Dial scale (0.11)
+
+`scale.c`, with `core_held_get` and `core_held_text` in `scenes.c`: a
+lockable parameter narrower than the dial, whose knob the mod's
+`core_params` get answers on 0..127, shown on that scale everywhere else
+too (docs/ADAPTING.md, "Dial scale and held pads (core-ar2 0.11, Analog
+Rytm MKII)"; `core_param_scales` in `elekloader/sdk/include/analog-rytm-mk2/lock.h`).
+Opt-in, by the knob's id; a parameter without an entry is as in 0.10.
+
+| where a value meets the page | what core does with an entry |
+|---|---|
+| a held trig's lock: get (vtable +60), set (+64), turn (+72) | get and turn answer `show(lock)`; set stores `unshow(value)`; a turn still moves a whole field step |
+| a held scene's lock (`core_held_get`) | `show(lock)` |
+| a held performance's depth (`core_held_get`) | the depth in dial steps, `show(min + d) - show(min)`; and core writes the text as the signed depth first (`core_held_text`, param_value_text's first word) unless the entry has `CORE_SCALE_DEPTHS` |
+| the NRPN and CC in (midi.c `set`) | `unshow(value)`: 127 is the top of the dial |
+| PARAM OUTPUT (midi.c `core_midi_knob`) | sends `show(value)`, so the value comes back the same |
+| core's number text (`core_lock_text`) | prints `unshow(value)`, the field's value, except a depth |
+
+- **Field values stay field values** wherever no page reads them: the
+  ledger, stock's copy and paste of locks (the copy list), the scene turn
+  and push (they step and seed in field units), RANDOMIZE and RELOAD PAGE,
+  live recording, `core_lock_value`, `core_scene_value`,
+  `core_perf_offset` and `core_param_value`.
+- **`core_held_kind(view)`**: 0, `CORE_HELD_SCENE` or `CORE_HELD_PERF`,
+  for a mod that draws its knob. The text is drawn just after the value,
+  so a depth's get notes its id and DMA timer 0's count, and the text
+  within 4 ms takes it, as `core_held_step` does.
+
 ## Checked so far
 
 On a unit (OS 1.73). With test images built by rytm-mods-src (its `elemod`
@@ -1558,6 +1586,20 @@ stock's own are. Not checked: a track in euclidean mode, the pattern
 scale mode's length, a task inside the sender at the moment of an
 interrupt send (the counts show none queued for that). Core's .run is
 56,928 bytes. Not yet on a unit.
+
+Part 8, the dial scale and the lock takes (core 0.11 + sidecar-check 0.7 +
+lock-check 1.12, build SC81), in analog-emu: lock-check's B, a 4-bit field
+on knob D of LOCK CHECK whose get answers round(v * 127 / 15), with a
+`core_param_scales` entry for core's linear map. Turned with no pad held
+to 7, the needle sat mid-dial and the text read 7. In grid record, T1 held
+and the knob turned: the ledger held 9 (code 43, step 1) and the knob
+showed 9 with its needle where the dial puts 76. A scene's pad held in
+SCENE mode: the lock stepped from 7 to 11 and showed 11 at 93. NRPN MSB 4,
+LSB 1 with 127 set B to 15 (needle full, text 15), and 64 set it to 8.
+Not seen in the emulator: a performance's depth (holding a pad in PERF
+mode turned neither a mod knob's nor stock's ATK into a depth there),
+PARAM OUTPUT and a custom show/unshow; they are for the unit run. Core's
+.run is 58,468 bytes. Not yet on a unit.
 
 ## Building
 

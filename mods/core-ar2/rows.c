@@ -994,6 +994,9 @@ static const struct core_lock_param *ours(void *set, int id, unsigned *code, uns
     return core_lock_set_param(set, id, code, s);
 }
 
+int core_scale_show(const struct core_lock_param *p, int v);       /* scale.c (0.11) */
+int core_scale_unshow(const struct core_lock_param *p, int dial);
+
 static int clamp(const struct core_lock_param *p, int v)
 {
     int lo = core_lock_min(p), hi = core_lock_max(p);
@@ -1120,8 +1123,9 @@ static int lock_get(void *set, int id, int step, int (*stock)(void *, int, int))
     unsigned code, a;
     unsigned char *s;
     const struct core_param_lock *m;
+    const struct core_lock_param *p;
     int t;
-    if (!ours(set, id, &code, &s)) {
+    if (!(p = ours(set, id, &code, &s))) {
         if (!(m = theirs(set, id, step, &t)))
             return stock(set, id, step);
         return t < 0 || !m->get ? -1 : m->get(id, t, step);
@@ -1129,7 +1133,7 @@ static int lock_get(void *set, int id, int step, int (*stock)(void *, int, int))
     if (!(a = where(step)))
         return -1;
     step = get(a, code);
-    return step < 0 ? -1 : step << 8;
+    return step < 0 ? -1 : core_scale_show(p, step);   /* (0.11) on the dial's scale */
 }
 
 int core_lock_get_vt(void *set, int id, int step) { return lock_get(set, id, step, STOCK_LOCK_GET); }
@@ -1150,7 +1154,7 @@ static int lock_set(void *set, int id, int value, int step, int (*stock)(void *,
     }
     if (!(a = where(step)))
         return 0;
-    return put(a, code, clamp(p, value >> 8));
+    return put(a, code, clamp(p, core_scale_unshow(p, value)));   /* (0.11) from the dial's scale */
 }
 
 int core_lock_set_vt(void *set, int id, int value, int step) { return lock_set(set, id, value, step, STOCK_LOCK_SET); }
@@ -1201,7 +1205,7 @@ int core_lock_turn_vt(void *set, int id, int delta, int step)
         v = core_store_get(core_lock_field(p), s, 0);
     v = clamp(p, v + (delta > 0 ? (delta + 255) >> 8 : delta < 0 ? -((255 - delta) >> 8) : 0));
     put(a, code, v);
-    return v << 8;
+    return core_scale_show(p, v);
 }
 
 /* (0.11) steps.c: the live pattern object the UI edits (its track 1's step

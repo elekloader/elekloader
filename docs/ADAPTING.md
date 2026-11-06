@@ -2080,6 +2080,37 @@ out, project load and save) and tells the mod, with
 - `core_item_addr(kind, ref)` gives the record a ref names (to read or set
   its mirror), `core_item_ref(kind, addr)` the ref of a record.
 
+### Dial scale and held pads (core-ar2 0.11, Analog Rytm MKII)
+
+A lockable parameter narrower than the dial (a 4-bit field, say) whose
+knob your `core_params` get shows on 0..127 gets a `core_param_scales`
+entry for the knob's id (`analog-rytm-mk2/lock.h`), so a held trig's or
+scene's lock, its NRPN or CC and core's text agree with the knob:
+
+```json
+{"to": "core_param_scales", "order": 50, "data": "00000000",
+ "relocs": [[0, "abs32", "sym:my_scale", 0]]}
+```
+
+```c
+const struct core_param_scale my_scale = {449, 450, 0, 0, 0}; /* core's linear map */
+```
+
+- `show(id, field value)` answers the dial's 8.8 and `unshow(id, dial)`
+  the field's value; with both 0 core maps round((v - min) * 127 / (max -
+  min)) and back. A turn with a trig held still moves a whole field step.
+- With a performance's pad held the page gets the depth in dial steps, and
+  core writes its text as a signed number unless `flags` has
+  `CORE_SCALE_DEPTHS`. `core_held_kind(view)` (`pages.h`) tells a knob you
+  draw yourself whether the value is a scene's lock (`CORE_HELD_SCENE`) or
+  a depth (`CORE_HELD_PERF`).
+- Values a page doesn't read stay the field's: `core_lock_value`,
+  `core_scene_value`, `core_perf_offset`, `core_param_value`, stock's copy
+  and paste.
+- A trig-held lock on a knob that borrows another machine's record goes to
+  core (0.11): stock takes a common parameter, or one of the sound's own
+  machine, and on the FX track no machine's.
+
 ### Payloads (core-ar2 0.11, Analog Rytm MKII)
 
 A mod can ship data with its code, such as code another processor loads,

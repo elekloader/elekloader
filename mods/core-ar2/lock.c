@@ -339,6 +339,7 @@ const struct core_lock_param *core_lock_fx_lfo(unsigned code)
 
 unsigned core_lock_field(const struct core_lock_param *p) { return p->field; }
 int core_lock_min(const struct core_lock_param *p) { return p->min; }
+int core_lock_id(const struct core_lock_param *p) { return p->id; }
 
 /* the most a lock holds: max, at most 16383 (14 bits, an NRPN's value) */
 #define TOP 16383
@@ -533,6 +534,9 @@ unsigned core_knob_label(void *set, int id)
  * id a mod page borrows (an Error record, another machine's parameter),
  * write ERR. Where stock takes the id for the set's sound, it is stock's. */
 int core_param_lock_owns(int id);              /* rows.c (0.11) */
+int core_scale_has(const struct core_lock_param *p);           /* scale.c (0.11) */
+int core_scale_unshow(const struct core_lock_param *p, int dial);
+int core_held_depth_now(int id);                               /* scenes.c (0.11) */
 
 int core_lock_text(void *set, int id, int value, char *buf)
 {
@@ -543,6 +547,8 @@ int core_lock_text(void *set, int id, int value, char *buf)
     int n = 0, digits = 0;
     if (!p && !core_param_lock_owns(id))      /* (0.11) a mod-kept lock's id: its number too */
         return 0;
+    if (p && core_scale_has(p) && !core_held_depth_now(id))  /* (0.11) the field's value */
+        value = core_scale_unshow(p, value) << 8;
     if (value < 0) {
         buf[n++] = '-';
         value = -value;

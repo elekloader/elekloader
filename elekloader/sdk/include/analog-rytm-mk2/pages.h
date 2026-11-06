@@ -148,6 +148,14 @@ struct core_param_lock {
  * value as a number. */
 int core_held_step(int32_t *track);
 
+/* core-ar2 0.11: what the view's held pad is, for a mod drawing its own
+ * knob: 0 none (or a trig: core_held_step), CORE_HELD_SCENE or
+ * CORE_HELD_PERF, when the value the page passes is a performance's depth
+ * (in dial steps for a parameter in core_param_scales, lock.h). UI task. */
+#define CORE_HELD_SCENE 1
+#define CORE_HELD_PERF 2
+int core_held_kind(void *view);
+
 /* the page keys' views (a voice track's five, then the FX track's) */
 #define CORE_VIEW_SRC 0         /* page 0, the machine's */
 #define CORE_VIEW_SAMPLE 1      /* pages 4 and 5 */

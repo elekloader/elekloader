@@ -170,7 +170,16 @@ core_param_delta:
 | %d2-%d4/%a2-%a3,%sp@`. Frame: 0 the cursor, 8 obj, 12 id, 16 value, 20 buf;
 | the handler gets the address of obj, the four as a struct core_text.
 core_param_text:
-        lea     core_params,%a1
+        move.l  16(%sp),-(%sp)            | 0.11: a performance's depth on a mod
+        move.l  16(%sp),-(%sp)            | parameter's knob, core's text
+        move.l  16(%sp),-(%sp)
+        move.l  16(%sp),-(%sp)
+        jsr     core_held_text
+        lea     16(%sp),%sp
+        tst.l   %d0
+        beq.s   0f
+        rts
+0:      lea     core_params,%a1
         subq.l  #4,%sp
 1:      move.l  12(%sp),%d0
         bsr.w   param_next
