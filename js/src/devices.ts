@@ -101,6 +101,8 @@ export type Device = {
   coreDdr: [string, Range][]                   // [core version, area]: from that core on, the linker's area in place of ddr
   slotClaims: [string, number, number, string][]   // [table, at, count, prefix]: a contribution to table points at a descriptor whose long at +at is a sound slot; the mod claims prefix:<slot>
   paramIds: [number, [number, number, string], [string, boolean][]] | null   // [own, [lo, hi, what], [[table, ownOnly]]]: knob id ranges (link.Mod2.idRanges)
+  driveArea: Range                              // the +Drive mods' area a build descriptor names; a build with one keeps its own RAM below it
+  dataFamily: number                            // the family id of the data container's header (0: not known)
   sramCode: Range
   fastTable: string
   imageFree: Range[]
@@ -115,7 +117,7 @@ const rel = (version: string, syxSha256: string, mainSha256: string, mainLen: nu
 
 const base = {
   mainSection: 3, mainLoad: 0x40000400, isa: 'coldfire' as const, hmacKeyFrom: null, container: 'ele3' as const,
-  versionLen: 4, versionAt: 0x14, versionOptional: false, protected: [], relocatable: [], keep: [], blobMax: null, sramCode: [0, 0] as Range, coreDdr: [] as [string, Range][], slotClaims: [] as [string, number, number, string][], paramIds: null, fastTable: '',
+  versionLen: 4, versionAt: 0x14, versionOptional: false, protected: [], relocatable: [], keep: [], blobMax: null, driveArea: [0, 0] as Range, dataFamily: 0, sramCode: [0, 0] as Range, coreDdr: [] as [string, Range][], slotClaims: [] as [string, number, number, string][], paramIds: null, fastTable: '',
   imageFree: [], reserve: null, dspPayloads: {}, dspAreas: [], trailer: null, updateMax: null,
 }
 
@@ -231,6 +233,8 @@ export const ANALOG_RYTM_MK2: Device = {
   areas: { ddr: [0x47be0000, 0x47c00000], big: [0x47938000, 0x47fff000] },
   ddr: [0x47be0000, 0x47c00000],
   coreDdr: [['0.11', [0x47b10000, 0x47fff000]]],   // core-ar2 0.11: 5 MB, above its tags and mirrors
+  driveArea: [0x47d00000, 0x47fff000],             // the +Drive mods' area: the top 3 MB of coreDdr's
+  dataFamily: 2,                                   // the data container's family id (stock checks it)
   recovery: 'hold FUNC while powering on for the STARTUP menu, press TRIG 4 (OS UPGRADE), '
     + 'then send the stock .syx over MIDI DIN (not USB)',
   slotClaims: [['core_machines', 0, 53, 'machine']],   // a machine's descriptor names its slot at +0

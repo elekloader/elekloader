@@ -20,7 +20,8 @@ import {
   pyEq, resolveTarget, sharcSite, summarize, unpack,
 } from './elemod.ts'
 import { PCREL, decodeColdFire, readerAt } from './isa/coldfire.ts'
-import { AttributeError, KeyError, PyException, ValueError, hex8, pyType, repr, str } from './py.ts'
+import { AttributeError, KeyError, PyException, ValueError, hex8, pyType, repr, str, truthy } from './py.ts'
+import * as desc from './desc.ts'
 import * as store from './store.ts'
 import { modulePayload, type SharcPayload } from './sharc.ts'
 import * as sharcRecords from './sharc.ts'
@@ -44,7 +45,10 @@ export function payloadId(modId: string): number {
   return h >>> 0
 }
 const MAX_ALIGN = 4096                      // a section's alignment: a power of two up to this
-const LINKER_SYMS = new Set(['__run_load', '__run_start', '__run_words', '__bss_start', '__bss_end', '__bss_words', '__run_hash'])
+const LINKER_SYMS = new Set(['__run_load', '__run_start', '__run_words', '__bss_start', '__bss_end', '__bss_words', '__run_hash', desc.SYM])
+const MAX_SPARE = 4096                      // a table's spare entries (a collection's "spare")
+// the tables a build descriptor gives no spare entries: the linker fills them, from storage and payloads
+const NO_SPARE = [store.IDS_TABLE, store.CODES_TABLE, store.CCS_TABLE, store.INITS_TABLE, store.HANDLES_TABLE, PAYLOADS]
 export const HASH_SEED = 5381, HASH_MUL = 33       // __run_hash: h = seed; h = h * 33 + word (mod 2^32), per word
 
 const align = (v: number, a: number) => Math.ceil(v / a) * a
@@ -93,6 +97,8 @@ export class Mod2 implements AnyMod {
   relocs: [string, number, string, string, number][]
   sites: Site[]
   collections: Map<string, number>
+  spare: Map<string, number>                 // a table's spare entries, for a build descriptor
+  render: Set<string>                        // the render tables it declares
   dspTables: Map<string, [string, Uint8Array, Uint8Array]>   // name -> [payload tag, head, end]
   contribute: Contribution[]
   copied: [number, number, number][]
@@ -169,8 +175,16 @@ export class Mod2 implements AnyMod {
     this.sites = parseSites(doc, name, this.dev, this.rel, true)
     this.collections = new Map()
     this.dspTables = new Map()
+    this.spare = new Map()
+    this.render = new Set()
     for (const [c, d] of items(get(doc, 'collections', {}))) {
       const e = int(get(d, 'entry'), name)
+      if (isDict(d) && 'spare' in d) {         // for a build descriptor: room for more entries
+        const n = int(d.spare, name)
+        this.spare.set(c, n)
+        if (!(n >= 0 && n <= MAX_SPARE)) throw new ModError(`${name}: table ${c} spare ${n} (0 to ${MAX_SPARE})`)
+      }
+      if (truthy(get(d, 'render'))) this.render.add(c)
       const space = get(d, 'space')
       if (space === null) {
         if (e <= 0 || e % 4) throw new ModError(`${name}: table ${c} entry size ${e}`)
@@ -473,6 +487,7 @@ export function check(mods: Mod2[], image: Uint8Array): string[] {
       owner.set(x, m)
     }
   }
+  if (owner.has(desc.SYM)) bad.push(`${owner.get(desc.SYM)!.label()} exports ${desc.SYM}, the name of the build descriptor the linker writes`)
   const tables = new Map<string, [Mod2, number]>()
   for (const m of mods) {
     for (const [c, e] of m.collections) {
@@ -629,6 +644,7 @@ export type DspLayout = {
 export type Layout = {
   boot: [number, number]; run_load: number; ddr: [number, number]; bss: [number, number]; fast: [number, number]
   blob_len: number; payload: Range | null; sections: Record<string, number>; ddr_spare: number; fast_spare: number; ddr_size: number; fast_size: number
+  desc?: [number, number]                      // a build with the build descriptor: where it is
   reserve?: { units: number; end: number }   // a core sized to the mods: the pages it takes, and where they end
   dsp?: Record<string, DspLayout>              // words: P addresses of each payload's area
   sharc?: { decoded: number; decoded_sha256: string; stored: number; stored_sha256: string;
@@ -823,16 +839,27 @@ export function link(mods: Mod2[], image: Uint8Array, lock: store.Lock | null = 
   }
   const dspTables = new Map<string, [string, Uint8Array, Uint8Array]>()
   for (const m of order) for (const [c, t] of m.dspTables) dspTables.set(c, t)
+
+  // a build descriptor, for a mod that imports it: spare entries in the tables more mods may join
+  const withDesc = order.some(m => m.imports.includes(desc.SYM))
+  const spare = new Map<string, number>()
+  const fixed = new Set([...NO_SPARE, dev.fastTable, ...dspTables.keys()])
+  if (withDesc) {
+    for (const m of order) for (const c of m.contribute)
+      if (!(c.order >= 0 && c.order < desc.LINKER_ORDER))
+        throw new ModError(`${m.label()}: its entry for ${c.to} has the order ${c.order}; with a build descriptor an order is 0 to ${desc.LINKER_ORDER - 1}`)
+    for (const [c, [owner]] of tables) spare.set(c, fixed.has(c) ? 0 : owner.spare.get(c) ?? desc.SPARE)
+  }
   const tableLen = (c: string) => {
     let n = entries.get(c)!.reduce((k, e) => k + e[4].data.length, 0)
     const dt = dspTables.get(c)
     if (dt) return dt[1].length + n + dt[2].length   // a DSP table: its head, its entries, its end
     if (c === dev.fastTable) n += FAST_ENTRY * fastMods.length
-    return n + tables.get(c)![1]               // the zero entry
+    return n + tables.get(c)![1] * (1 + (spare.get(c) ?? 0))   // the zero entry, and any spare ones
   }
   const tableCount = (c: string) => {
     const n = entries.get(c)!.reduce((k, e) => k + e[4].data.length, 0)
-    return dspTables.has(c) ? Math.floor(n / tables.get(c)![1]) : Math.floor(tableLen(c) / tables.get(c)![1]) - 1
+    return dspTables.has(c) ? Math.floor(n / tables.get(c)![1]) : Math.floor(tableLen(c) / tables.get(c)![1]) - 1 - (spare.get(c) ?? 0)
   }
 
   // layout
@@ -854,6 +881,44 @@ export function link(mods: Mod2[], image: Uint8Array, lock: store.Lock | null = 
     at = align(at, 4)
     tabAt.set(c, at)
     at += tableLen(c)
+  }
+  const index = new Map(order.map((m, i) => [m.id, i]))
+  const trailerLen = newLock ? store.trailer(newLock).length : 0
+  type Where = (kind: string, ...a: any[]) => number
+  /** The descriptor's fields; `where` (a function of the layout) gives the addresses, or null: all 0, to size it. */
+  const descFields = (where: Where | null): desc.DescFields => {
+    const w: Where = where ?? (() => 0)
+    const modules = order.map(m => ({
+      name: m.id, version: m.version, flags: m.sites.length ? 1 : 0,
+      kind: m === core ? desc.KIND_CORE : m.imports.includes(desc.SYM) ? desc.KIND_LOADER : desc.KIND_FLASHED,
+      exports: [...m.exports].sort(cmp).map(nm => [nm, w('sym', m, nm)] as [string, number]),
+    }))
+    const tabs = [...tables.keys()].sort(cmp).map(c => {
+      const e = tables.get(c)![1], keys: number[] = []
+      for (const [o, , , m, x] of entries.get(c)!) {
+        const k = ((o < 0 ? desc.LINKER_ORDER : o) * 0x10000 + index.get(m.id)!)
+        for (let i = 0; i < Math.floor(x.data.length / e); i++) keys.push(k)
+      }
+      if (c === dev.fastTable) for (const m of fastMods) keys.push(desc.LINKER_ORDER * 0x10000 + index.get(m.id)!)
+      const n = tableCount(c)
+      return { name: c, address: w('table', c), entry: e, count: n, capacity: n + spare.get(c)!, keys,
+        flags: (fixed.has(c) ? 0 : desc.F_MORE) | (tables.get(c)![0].render.has(c) ? desc.F_RENDER : 0) | (dspTables.has(c) ? desc.F_DSP : 0) }
+    })
+    let scopes: [string, number, number, number][] = []
+    if (newLock) {
+      const room = store.capacity(dev.key, newLock.split, core.version)
+      scopes = store.SCOPES.map(s => [s, room[s], newLock!.next[s], newLock!.generation[s]])
+    }
+    return { family: dev.dataFamily, device: 0, release: 0, deviceKey: dev.key, os: rel.version, modules, tables: tabs,
+      claims: order.flatMap(m => m.names.map(nm => [desc.CLAIM_NAME, index.get(m.id)!, nm] as [number, number, string])),
+      area: [w('bss_end'), dev.driveArea[0], dev.driveArea[1], w('glob', desc.STAGING[0]), w('glob', desc.STAGING[1])],
+      storage: { trailer: [w('trailer'), trailerLen], scopes } }
+  }
+  let descAt = 0, descLen = 0
+  if (withDesc) {
+    descLen = desc.encode(descFields(null)).length
+    descAt = at = align(at, 4)
+    at += descLen
   }
   let fastAt = fastBase
   const fload = new Map<string, number>()
@@ -891,6 +956,9 @@ export function link(mods: Mod2[], image: Uint8Array, lock: store.Lock | null = 
     throw new ModError(`the mods need RAM to ${hex8(bssEnd)}, past ${hex8(ddrEnd)} (${bssEnd - ddrEnd} bytes over)`
       + (more.length ? `; core ${more[0][0]} or newer gives them ${more[0][1][1] - more[0][1][0]} bytes` : ''))
   }
+  if (withDesc && dev.driveArea[1] > dev.driveArea[0] && bssEnd > dev.driveArea[0])
+    throw new ModError(`the flashed mods need RAM to ${hex8(bssEnd)}, past the start of the +Drive mods' area, `
+      + `${hex8(dev.driveArea[0])} (${bssEnd - dev.driveArea[0]} bytes over)`)
   if (fastAt > fastEnd) throw new ModError(`.fast code needs SRAM to ${hex8(fastAt)}, past ${hex8(fastEnd)}`)
   const runLoad = align(end + bootLen, 16)
 
@@ -950,6 +1018,7 @@ export function link(mods: Mod2[], image: Uint8Array, lock: store.Lock | null = 
     if (dspTables.has(c)) dspSym.add('\0' + c)
   }
   for (const [k, v] of storeSyms) glob.set(k, v)
+  if (withDesc) glob.set(desc.SYM, descAt)
   for (const [k, v] of [['__run_load', runLoad], ['__run_start', ddrBase], ['__run_words', Math.floor((runEnd - ddrBase) / 4)],
     ['__bss_start', runEnd], ['__bss_end', bssEnd], ['__bss_words', Math.floor((bssEnd - runEnd) / 4)]] as [string, number][]) glob.set(k, v)
   // a reserve sized to the mods, for a core that imports its symbols
@@ -1069,6 +1138,17 @@ export function link(mods: Mod2[], image: Uint8Array, lock: store.Lock | null = 
     if (m.size('.payload')) ddr.set(content.get(key(m.id, '.payload'))!, base.get(key(m.id, '.payload'))! - ddrBase)
   }
   for (const c of tables.keys()) if (!dspTables.has(c)) ddr.set(tab.get(c)!, tabAt.get(c)! - ddrBase)
+  if (withDesc) {
+    const block = desc.encode(descFields((kind, ...a) => {
+      if (kind === 'sym') return addr.get(key(a[0].id, a[1]))!
+      if (kind === 'table') return tabAt.get(a[0])!
+      if (kind === 'glob') return glob.get(a[0]) ?? 0
+      if (kind === 'bss_end') return bssEnd
+      return dev.mainLoad + image.length + runLoad - end + ddr.length   // the trailer
+    }))
+    if (block.length !== descLen) throw new Error('the build descriptor changed size')
+    ddr.set(block, descAt - ddrBase)
+  }
   glob.set('__run_hash', runHash(ddr))
   for (const [m, off, typ, tgt, add] of bootRelocs)
     place(m, content.get(key(m.id, '.boot'))!, off, typ, tgt, add, base.get(key(m.id, '.boot'))! + off, `.boot+0x${off.toString(16)}`)
@@ -1155,6 +1235,7 @@ export function link(mods: Mod2[], image: Uint8Array, lock: store.Lock | null = 
       }
     }
   }
+  if (withDesc) layout.desc = [descAt, descAt + descLen]
   if (units !== null) layout.reserve = { units, end: ddrBase + units * dev.reserve![0] }   // the reserve the core takes
   if (areas.size) {
     const dspOut: Record<string, DspLayout> = {}

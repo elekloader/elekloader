@@ -74,6 +74,9 @@ class Device:
                                  # uses itself; ids from `own` up are a mod's own, so two mods' entries
                                  # may not share one; an own_only table's entries take only those
                                  # (link.Mod2.id_ranges, link.check)
+    drive_area: tuple = (0, 0)   # (lo, hi): the +Drive mods' area a build descriptor names; a
+                                 # build with one (desc.py) keeps its own RAM below lo
+    data_family: int = 0         # the family id of the data container's header (0: not known)
     sram_code: tuple = (0, 0)    # the linker's area for .fast code
     fast_table: str = ''         # the table .fast sections are copied through
     image_free: tuple = ()       # ((lo, hi), ...): zero runs inside the main OS that
