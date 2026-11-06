@@ -4,8 +4,11 @@ The boot copier, the hook bus and mod storage for the Analog Four MKII, OS
 1.56. It builds the Digitakt mk1's `core.s`, `settings.s` and `render.s` with
 the A4's addresses, which `mod.json` gives (`defsym`, `sites`), as
 [core-ar2](../core-ar2) does for the Analog Rytm MKII, and its own `store.c`
-and `store.s` (Mod storage, below). On its own it changes nothing the unit
-does.
+and `store.s` (Mod storage, below), and from 0.5 `lock.c`, `rows.c` and
+`rows.s` (Lockable parameters, Mod p-locks), `dests.c` and `dests.s`
+(Destinations), `value.c` (The value read) and `midi.c` and `midi.s` (Mod
+parameters on MIDI). On its own it changes nothing
+the unit does.
 
 The A4 MKII is the Rytm MKII's platform (a ColdFire MCF5441x): its OS entry,
 bootstrap loader and UI loop are the Rytm's, instruction for instruction
@@ -279,6 +282,195 @@ nothing is pending (core-ar2's README, "The OS upgrade's restart"). The A4's
 routine is the Rytm's instruction for instruction; the hang itself was seen
 in analog-emu on the Rytm only, and this site is not yet checked on the A4.
 
+## Lockable parameters (0.5)
+
+The lock service's first part (docs/ADAPTING.md, "Lockable parameters
+(core-a4 0.5, Analog Four MKII)"), core-ar2 0.8..0.10's `lock.c`, `rows.c`
+and `rows.s` with the A4's pattern and track kinds. The linker writes
+`{field, code}` for each lockable field into `core_lock_codes` (CV_FLAG,
+0x800, in the code of a CV track's kit field), and mods add their entries to
+`core_lock_params`. Codes are 0x70..0x7f per kind: synth (sound fields),
+FX and CV (kit fields). A parameter's page knob is an id stock does not have
+(above 0x126; stock's records end there and read record 0 for a higher id);
+its pseudo id in stock's lists, from part 2, is 0x127 + 16 x kind + code -
+0x70.
+
+| site | 1.56 | what |
+|---|---|---|
+| lockable check | 0x4002327c (`jmp`) | a page view's "can this knob be locked?" reads the id's record's flag; a mod parameter's knob of the current track's kind can be |
+| lock get, set, clear, turn | +0x48..+0x54 of the synth, FX and CV parameter sets (0x401a1694.., 0x401a1734.., 0x401a17d4.., `ptr`) | a mod parameter's knob with a trig held: the lock goes into the ledger (below); any other id goes to stock's routine. The three sets share stock's turn, 0x4009e74c |
+| page value | page_get_value, 0x40023d54 (pages.s) | with a step, a mod parameter's knob shows the step's lock |
+| live record | param_apply_delta, 0x400232e2 (pages.s) | a mod parameter's turn taken while live recording runs locks the value on the step the track plays, as stock's live record (0x400a690c) |
+
+## Mod p-locks (0.5)
+
+A pattern keeps its p-locks in 128 rows of 66 bytes, `[column][track][64
+step bytes]`; stock's columns are 0..0x6f, a mod parameter's row carries
+its code. Stock edits and plays an unpacked lock store, a 0xe4-byte step
+record per step in each of the 129 unpacked patterns, and packs the rows
+from it, dropping columns it doesn't know. So core keeps the mod locks in a
+ledger, `{step record, code, value}`, that follows stock's moves of step
+records by address, as core-ar2's does.
+
+| site | 1.56 | what |
+|---|---|---|
+| memcpy | 0x40077fa0 (`jmp`) | a copy of 0xe4 bytes or more: the copied records' locks go with them, and the overwritten ones' go |
+| memset, bzero, operator new | 0x40077fe8, 0x400778e0, 0x400653b8, 0x400653be (`jmp`) | the locks in the block go |
+| store, track and step clear | 0x40015d10, 0x40015c2e, 0x400a35ac (`jmp`) | the locks there go |
+| row unpack | 0x40009dbc (`jmp`) | the rows with codes 0x70..0x7f become the store's mod locks |
+| row pack, row update | 0x4000a02c, 0x4000a1e6 (`jmp`) | after stock's rows, the mod locks as rows, in code then track order, while one fits under 127 rows; the per-column update runs with the mod rows taken out |
+| trig copy | 0x400b905a (`jmp`) | after stock lists a held step's columns for a paste, core lists its mod locks |
+| paste's lock set | 0x400b51f6 (`jmp`) | a listed column of 0x70 or more is a mod lock |
+| trig fire | 0x40079fbe (`jmp`) | after stock builds a trig's lock list (the immediate list, three scheduled, the note path's), core fills its own slot for that list with the step's mod locks and Param Slide's deltas |
+| event accept | 0x40101d58 (`jsr`), 0x40101fb2 (`jmp`) | when the audio interrupt copies an event's list to its channel's list (0x8000e670 + channel x 0x390, a channel per track), core keeps its slot for that channel; a slot filled before the ledger last changed is filled again first, as stock fills a stopped sequencer's first step at STOP and again on its own lock edits only |
+| voice apply | 0x401025ac (`jsr`) | when the interrupt applies a channel's list (%a5) to a voice the allocator gave its note (%d2; on a poly track the voice it picks, in UNISON each poly voice in turn), core copies the channel's locks into `core_lock_now` and `core_slide_delta` for that voice (gap 7, 6 Nov 2026: until then core took the channel for the voice, so a poly or UNISON voice other than the track's own never had the locks) |
+| dump out | 0x4006b492 (`jmp`) | a pattern's SysEx dump: a marker row (`{0x7f, 0xfe}`, then the layout ID) for its mod rows, or, with no free row, no mod rows |
+| dump in | 0x40011d44 (`jmp`) | a received pattern's unpack: its mod rows stay only with a marker holding this build's layout ID; the marker goes |
+
+A fine parameter's second row has the header `{0x80, 0x81}`, never stock's
+`{0x80, 0x80}`, which stock's unpack ORs into the last stock fine column
+before it. A project load whose layout ID the build doesn't read
+(`st_proj_load`) drops every pattern's mod locks; a project load, a kit
+load and CREATE NEW clear the playing ones; a set of a field
+(`core_store_set`) ends its slide on every voice playing that item.
+
+## Destinations (0.5)
+
+The lock service's second part. A lockable field declared `"mod": true`
+(ROUTE in `core_lock_codes`) is a destination of every modulation source of
+its track kind: the five routes (velocity, pitch bend, mod wheel, breath,
+aftertouch, 5 each), the four Dest knobs (EnvF, Env2, LFO1, LFO2; A and B;
+the FX and CV tracks' own), the ten performance macros and CONTROL IN 1
+and 2 (5 targets each). The code goes raw in the bytes stock already has:
+a route's and a macro target's index byte (signed, -1 none), a Dest word's
+high byte. Stock's apply needs no change: an index of 0x70 or more
+resolves to its sink slot (0x24b).
+
+| site | 1.56 | what |
+|---|---|---|
+| list builder's end | 0x400a11a4 (`jmp`) | 0x400a1108(set, mask) builds every destination list (route screens, Dest popups, macro and CONTROL IN setup); core appends the pseudo id of each "mod" field of the set's kind (set +4: 1 synth, 7 FX, 8 CV), whatever the mask |
+| id to index | 0x40007632 (`jmp`) | a "mod" pseudo id's engine index is its code |
+| index to id | 0x400077d2 (`jmp`) | stock answers 0 (None) for an index above 0x6f; a "mod" code gives its pseudo id |
+| Dest value check | 0x4009f6ca (`jmp`), in 0x4009f650 (vtable +0x28) | stock refuses any id above 0x126 (checked: without this site a Dest knob's step stops at the last stock entry); a "mod" pseudo id of the set's kind passes |
+| short and long names | +0x68, +0x6c of the synth, FX and CV parameter sets (0x401a16b4.., 0x401a1754.., 0x401a17f4.., `ptr`) | a pseudo id's and a mod parameter's page knob's names: the knob's label and, with a trig held, the screen's title (stock: ERR, INVALID PARAMETER) |
+| Dest value text | 0x400f3630, 0x400f368e, 0x400f36ec (`jmp`) | a Dest knob on a "mod" code shows its short name (synth, FX, CV) |
+| list item | 0x40035a84 (`jmp`) | `CATEGORY:Name` (MOD when it has no category), stock's format |
+| setup target | 0x40036a0a (`jmp`) | a route's, macro's or CONTROL IN's target on its setup screen: the short name and category |
+| synth, FX, CV sound push | 0x40100b0e, 0x40100eb4, 0x401010dc (`jmp`, the returns of 0x40100a04, 0x40100d84, 0x40100fb8) | each Dest selector's code, per voice, and the item the voice was pushed with |
+| route push | 0x40100cf4 (`jmp`, the return of 0x40100baa(sound, voice)) | each route to a code: {source, place, code, depth} |
+| performance push | 0x401012e2 (`jmp`, the return of 0x401011e0(entry, n)) | each macro target on a code: {macro, track, code, depth} |
+| knob push | 0x40100678 (`jmp`, the return of 0x401005b8) | a Dest knob's turn (or NRPN) on each voice of its track |
+
+`core_dst_voice(voice, &routes, &dests)` and `core_dst_macros(&n)`
+(`analog-four-mk2/lock.h`) hand part 3 what the pushes noted; every write
+is made with interrupts masked, as the pushes run from the UI and from the
+audio interrupt. A voice is 0..5 (the four synth voices, the FX track, the
+CV track), the map rows 0x42878da0 + 0x200 x voice.
+
+A Dest stored outside its list. The lists offer a Dest only the depths of
+stages the audio interrupt applies after it (LFO2, Env2, LFO1, EnvF), but
+an NRPN, a kit or SysEx can store any index, and stock then adds the term
+to a depth its stage has already read: nothing hears it (trace item 8). At
+each push core sends such a Dest to the sink, as stock sends an unknown
+index, so a depth read at the end of the block (part 3) never carries a
+term stock never used. The rule is stock's own list rule, applied to
+depths only: a Dest whose target is a depth (a selector's word + 4) that the
+selector's mask would not list.
+
+Loads. Stock's sound and kit loads from storage (0x40008808, 0x40008f2a:
+a project or kit load, a received kit or sound dump) write 0, OSC1 TUNE at
+the route's depth, over a route or macro target index they do not know.
+A sound's and a kit's load (`st_sound_load`, `st_kit_load`) first put a mod
+code back from the storage (a sound's routes at storage +0xf4, the live
+sound's +0xec; a kit's macros, CONTROL IN 1 and 2 at +0x798, live +0x764),
+then turn a code this build has no "mod" parameter for into None, and every
+code when the item's layout ID is not this build's. None is stock's own
+entry of the kind (synth 96, FX 73, CV 68), as each list opens with it
+(gap 7, 6 Nov 2026: it was a target's -1 and a Dest word 0, which a Dest
+page showed as TUN, and a received kit's mod route targets came back as
+OSC1 TUNE).
+
+## The value read (0.5)
+
+The lock service's third part (`value.c`): core-ar2 0.10's `smooth.c` with
+the A4's stages. `core_param_values(track, handles, n, flags, out)` gives
+each lockable parameter the value stock would play for a coarse parameter
+of the same range, in 8.8 steps of the field (`CORE_PARAM_ENGINE`: the
+engine's 0..0x7fff, the field's min..max as 0..0x7f00), computed in the
+order of stock's audio interrupt (0x401013be), with a clamp to 0..0x7fff
+after each term, as stock clamps:
+
+| stage | stock | core |
+|---|---|---|
+| target | the pushed sound's word (kit block on FX, CV), the trig's lock in its place | the field in `core_voice_item[voice]` (part 2), the voice's `core_lock_now` (part 1) in its place; byte reads from offsets made once |
+| smoother | 0x40102f0c: s = 0.97 s + 0.03 target a block, slots below 0x128; the state set to the target at a locked trig and at the next unlocked one (trace item 7) | smooth.c's lazy step and 0.97^k table per voice and code; a new accept on the voice whose trig is locked, or follows a locked one, jumps. `"smooth": false` skips it |
+| Param Slide | 0x4010306a: phase and limit per voice (0x80002d54, 0x80002d3c), factor (phase / 2) x scale (0x80002d24) x 0x74822, copy - factor x delta (0x401030c6) | the same arithmetic, with part 1's delta in the engine's scale and the phase stock used in the block (it adds to it after use, and a slide trig resets it first) |
+| routes | 0x400fff7a: source x depth / 32768, sources velocity 0x4287c4e8 (bipolar 0x800042dc), bend 0x80006a68 (x 2 - 0x8000), wheel 0x80006a5a, breath 0x80006a4c, aftertouch 0x80006a76, the track from 0x80006008 | the voice's noted routes (part 2) |
+| macros, CONTROL IN | 0x40103314: copy[n] (bipolar from +0x498, CONTROL IN 0 while 0x80004804 is set) x depth / 32768 on the voices of the target's track (0x80005ff0) | every noted target on the voice's track |
+| LFO2, Env2, LFO1, EnvF | 0x4007cbf2(1), 0x400ff230(1), 0x4007cbf2(0), 0x400ff230(0): ((depth - 0x4000) x out) >> 30 (LFO, out 0x80006b74 + 0x60 n + 0x30 p, depth slot 0xca + 0x10 n + 2 p + k) or >> 28 (envelope, out 0x80003b24 + 0x54 n + 0x1c e, depth slot 0xd0 + 0x10 n + 2 e + k) | each noted Dest by its place's stage, A then B |
+
+The inputs of the last four stages are audio-side state stock holds for a
+block. Core copies them once a block at `ev_render_out` (order 1, before
+any mod's handler: `core_value_snapshot`), with per voice whether anything
+modulates one of its mod parameters, so a read on a voice with nothing
+pointing at its mod parameters skips the last three stages. A read in
+`ev_render_out` sees the block's values, one in the next `ev_render_in` the
+same, one block (0.67 ms) late, as on the Rytm. Part 2's push rule keeps a
+Dest stored outside its list at the sink (trace item 8), so no depth in the
+snapshot carries a term stock never used.
+
+Voices (decided 2026-11-05): a track's read uses the voice its last trig
+went to (part 1's record of the voice applies; on a poly track the
+last-played voice, in UNISON the last of its voices, which all play the
+same locks; before any trig, a voice stock gives the track), and
+`core_param_values_voice(voice, ...)` reads one voice (0..3 synth, 4 FX, 5
+CV). A handle is `code | kind << 8` (`core_param_handle(field)`): a build's
+own numbering, never kept in a project. `core_param_value`,
+`core_param_value_ex`, `core_param_int` and `core_param_value_h` are the
+single reads, with core-ar2's names.
+
+`core_store_get` reads a field a byte at a time (core-ar2 0.10's), and the
+read does not call it: it reads the field's bytes from offsets made once.
+
+Cost (dtboot, DMA timer 0 ticks, a block 88,284): a read of one parameter
+129 on average with nothing modulating it, 179 with every source on it
+(at most 531); four in one batch 426 and 528 (at most 1,238), so each
+further parameter adds about 100 to 120. One read is 0.15% of a block, four
+0.5% (1.4% at the worst seen).
+
+## Mod parameters on MIDI (0.5)
+
+The lock service's fourth part (`midi.c`, `midi.s`): core-ar2 0.8's
+`midi.c` with the A4's numbering. An A4 NRPN is MSB x 128 + LSB, looked up
+in a 484-entry table of its set's kind, and the set is the channel's
+track's (dispatch 0x4006818e), never the MSB's; on a channel shared with
+PERF it is the active track's. Stock's synth, FX and CV tables use MSBs 1,
+2 and 3, and nothing at MSB 0, so (decided 2026-11-05):
+
+- **NRPN**: a mod parameter is MSB 0, LSB its lock code (0x70..0x7f, the
+  number its p-lock rows and destination bytes hold), on its track's
+  channel: the same number on every track kind. The value is the data
+  entry MSB for a parameter up to 127; one above 127 takes the whole
+  14-bit value, as stock's fine parameters, clamped to its range.
+- **CC**, opt-in per field (`"cc": true`), as on the Rytm: the lockfile
+  gives the field a CC no stock table maps on a track's channel (none of
+  the synth, FX, CV, MISC, TRACK and PERF kinds' nor bank select, read from
+  the records at 0x40186af4): 12..15, 28..31, 35..37, 39..47, 60..63, 96,
+  97, 100 and 101 for a synth field, of which a kit field (FX or CV) gets
+  only those the FX and CV tables leave free too (all but 12..15 and
+  28..31). A CC's step is the parameter's coarse step.
+
+| what | stock | core |
+|---|---|---|
+| NRPN in | the three sets' vtable +0x8c, 0x4009ff56 (set, nrpn, value, track, flag): the table 0x4133dd64, then +0x38 | a jmp over its first 8 bytes: MSB 0, LSB 0x70..0x7f on a synth, FX or CV set is core's; core sets the field in the track's sound of the current kit (the kit on FX and CV) with `core_store_set`, which ends its slide (part 1), and the read follows from the next block (part 3) |
+| CC in | +0x90, 0x400a0b62 (set, cc, value, track, flag): the table 0x4133ff6c | a jmp over its first 8 bytes: a CC in `core_lock_ccs` of the set's kind is core's |
+| live record | +0x38 with the record flag (the caller's, or MIDI CONFIG's 0x400acd80) locks the value on the playing step through 0x400a690c | the same flag: `core_lock_record` (part 1) |
+| out | +0x88, 0x4009fde4: when MIDI out applies (0x400ab768), PARAM OUTPUT (0x400ab6e4) NRPN 0x40068b22 or CC 0x400689ce on the channel of +0x94 (0x40068652) | `core_lock_turned` (a mod knob's turn, pages.s) sends the same way; a parameter with no CC sends nothing in CC mode |
+
+Stock's tables are left alone: an unknown number finds no id there, so a
+mod NRPN or CC never reaches stock's sets, hooked or not, and under stock
+firmware a mod NRPN does nothing.
+
 ## Checked so far
 
 On a unit (OS 1.56, 20 Oct 2026) [hw]: build HC56 (core-a4 with
@@ -345,6 +537,114 @@ images; 20 Oct 2026):
   stock on every screen of Check 4's stock steps; with pages-check-a4 0.2
   (PF56) CHECK's knob B followed `core_page_fns` at each redraw, and an
   empty B took no turn ("Parameter pages (0.2, 0.3)" above).
+- **Mod p-locks** [emu] (core 0.5 with
+  [lock-check-a4](../../examples/lock-check-a4), dtboot, 5 Nov 2026), on
+  track 1 of the first pattern, stopped, in grid recording:
+  - T1 held and LOCK CHECK's knob A turned: the lock went into the ledger
+    (set-and-kept), and the trig played it on that voice, read back as A's
+    lock in `lk_seen` (works);
+  - trig copy of step 1 and paste onto step 3 carried the lock; the trig's
+    clear on step 1 dropped it there and left step 3's (set-and-kept);
+  - SAVE PROJECT AS, the lock cleared, the project loaded back: the lock
+    came back (set-and-kept);
+  - stock 1.56, booted on that card, loaded the project and played it with
+    no fault, with step 1's record and flags as core's (works);
+  - locks of 4 and 9 on steps 1 and 2, step 1 a slide trig: step 1 played
+    4 with a slide delta of +5, step 2 played 9 (works);
+  - locks set while stopped play on PLAY's first step (works), through the
+    accept's refill (above).
+  Not checked yet: track clear, the SysEx dump out and in, the kit change's
+  and CREATE NEW's clear, the FX and CV kinds' knobs, a fine parameter.
+- **Destinations** [emu] (core 0.5 with lock-check-a4, its A, K and V
+  `"mod": true`, dtboot, 5 Nov 2026):
+  - with a trig held in grid recording, LOCK CHECK's knobs read LKA and LKC
+    and a turn of A titles the screen LOCK CHECK A (core 0.5 part 1: ERR,
+    ERR and INVALID PARAMET) (works, screen);
+  - track 1's LFO1 Dest A list ends with MOD:Lock Check A after ENVF:Depth
+    B, the FX track's with MOD:Lock Check K, the CV track's with MOD:Lock
+    Check V, none with another kind's (works, screen);
+  - choosing it and YES stored 0x7000 in the sound's Dest word, the knob
+    showed LKA, and voice 0's notes held {Dest place 4, 0x58, 0x70}
+    (set-and-kept, data read);
+  - without the Dest value check's site, the same steps stop at ENVF:Depth
+    B (0x49): stock's check refuses a pseudo id on the knob's step, so the
+    site is needed (works, data read);
+  - a wheel route {0x4000, 0, 0x70} (poked) and a note: voice 0's notes held
+    {wheel, 0, 0x70, 0x4000}; a route to 0x71 (C, no "mod") was left out
+    (works, data read);
+  - macro targets {0x7f00, T1, 0x70}, {0x7f00, FX, 0x70}, {0x7f00, T1,
+    0x71} (poked) and a PERF turn: the notes held the first two; the setup
+    screen (FUNC+PERF, PERF CONFIGURE, HPF) showed T1 MOD LKA, FX MOD LKK,
+    T1 ERR (works, screen and data read);
+  - item 8: EnvF Dest A at 0x5c (LFO1 depth A) or 0x48 (its own depth),
+    set by poke and a note or by NRPN 1:66: voice 0's selector slot held
+    the sink 0x24b; at 0x12 (in its list) and 0x44 (not a depth) stock's
+    slots (0x3c, 0x1f9) (works, data read);
+  - SAVE KIT, the Dest word, route and macro target poked back to stock's,
+    LOAD KIT: all three came back with their codes (set-and-kept).
+  Not checked yet: RANDOMIZE landing on a mod parameter, the five route
+  screens' lists (the macro setup shares their view), a kit of another
+  layout loading as None, stock 1.56 with such a kit (ERR and the sink, as
+  found 2026-11-04 with pokes).
+- **The value read** [emu] (core 0.5 with lock-check-a4 1.1, dtboot, 5 Nov
+  2026): each block, core's read of A on a voice in the engine's scale
+  beside stock's engine copy (0x80005af0) of a stock coarse parameter on
+  the same voice with the same value and the same modulation (track 1's
+  0x24, the FX track's 0x1b, the CV track's 0x00), set by poked sound and
+  kit words and a push from the UI, compared over the last 1,500 to 2,000
+  blocks of each run (works, data read):
+  - a knob step (A set, the stock parameter through the knob push
+    0x401005b8 in the same tick): the same glide, within 1 (42 of 700
+    blocks off by 1, the lazy step's rounding);
+  - p-locks on 48 of 64 steps, PLAY: the same jump into each lock and back
+    to the sound's value at each unlocked trig, exactly;
+  - every step a slide trig, the same locks: the same ramps, exactly;
+  - each route source (velocity by notes, bend, wheel, breath, aftertouch
+    by MIDI) at depth +0x5000 and -0x4000: exactly, clamps at 0 and
+    0x7fff included;
+  - a macro target, unipolar and bipolar with a negative depth: exactly;
+  - LFO1 and LFO2 on Dest A (A) and B (the stock parameter), EnvF and Env2
+    by notes, positive and negative depths: exactly;
+  - all at once (LFO1, LFO2, EnvF, Env2, a wheel and a velocity route, a
+    macro, locks and slides, playing): exactly, 660 blocks at the clamp;
+  - the FX track (K, LFO1 and LFO2), the CV track (V, LFO1 and ENV1) and a
+    second synth voice (track 2 on voice 1): exactly;
+  - the batch of four against single reads: no mismatch; the track call
+    followed the voices' tracks (0, 1, 2, 3, 4, 5).
+  Not checked yet: a poly track's two voices, a sound-locked trig's pool
+  sound as the target, a `"smooth": false` field, a field wider than 7
+  bits against a stock fine parameter, CONTROL IN.
+- **MIDI** [emu] (core 0.5 with lock-check-a4 1.2, whose A and V declare
+  `"cc": true`, dtboot, 5 Nov 2026), each field read back as stored
+  (`lk_midi`) after DIN messages (works, data read):
+  - NRPN 0:112 on channel 1 (A, 77), 0:113 on channel 2 with data MSB 3
+    and LSB 0x20 (C, 416), 0:112 on channel 5 (K, 99) and channel 6 (V,
+    55): each landed in its track's item, no other changed; core's read of
+    A on track 1 (`core_param_value_ex`) followed (77 << 8);
+  - CC 12 on channels 1 and 3 set A on tracks 1 and 3; CC 35 on channel 6
+    set V; CC 35 on channel 1 and CC 12 on channel 5 set nothing;
+  - a stock NRPN (1:80) and two stock CCs (16, 74) on channel 1: the same
+    kit bytes changed to the same values as on stock 1.56;
+  - live recording (RECORD + PLAY), NRPN 0:112 = 90 on channel 1: the lock
+    played on the next pass for one step's blocks (281), value 90; without
+    RECORD no lock;
+  - the PERF channel set to channel 1 with track 2 active: NRPN 0:112 on
+    channel 1 set track 2's A, as stock delivers its own there;
+  - knob turns with MIDI out on (poked) and PARAM OUTPUT NRPN: A sent 0:112
+    with the value in the data MSB, C 0:113 with 14 bits, K (FX) and V (CV)
+    0:112, on the channel stock's own knobs used; PARAM OUTPUT CC: A sent CC
+    12, V CC 35, C and K (no CC) nothing. Stock's AMP knob sent the same
+    NRPN and CC on both builds.
+  Not checked yet: an NRPN while a trig is held (stock's
+  +0x38 path with a held step), USB MIDI (the same dispatch), the MIDI
+  CONFIG screens' own settings (poked here).
+- **Sound** [emu] (core 0.5 with lock-check-a4 1.2 and
+  [sound-check-a4](../../examples/sound-check-a4) 1.0, dtboot
+  `--analog-wav`, 5 Nov 2026): a mod parameter read every block drives a
+  tone in the outputs (works, WAV): LVL 100 gave a clean 110 Hz sine, PIT
+  12 220 Hz; LFO1 on PIT and LFO2 on LVL moved the tone's pitch and level
+  with stock's parameter 0x24 under the same LFO's Dest B (correlation
+  0.98 and 0.97 over 2,048 blocks).
 - Statically, against the stock image (python, no toolchain): every site's
   stock bytes, that each covers whole instructions, that each body in
   `store.s` jumps back to its site plus the 8 bytes it displaced, and that
@@ -358,8 +658,8 @@ images; 20 Oct 2026):
 python -m elekloader.sdk.build mods/core-a4 --stock Analog-Four_MKII_OS1.56.syx
 python -m elekloader.sdk.build examples/store-check-a4 --stock Analog-Four_MKII_OS1.56.syx
 python -m elekloader.lint examples/store-check-a4/out/store-check-1.0.elemod \
-    --stock Analog-Four_MKII_OS1.56.syx --with mods/core-a4/out/core-0.4.elemod
+    --stock Analog-Four_MKII_OS1.56.syx --with mods/core-a4/out/core-0.5.elemod
 python -m elekloader.patch --stock Analog-Four_MKII_OS1.56.syx \
-    --mod mods/core-a4/out/core-0.4.elemod --mod examples/store-check-a4/out/store-check-1.0.elemod \
+    --mod mods/core-a4/out/core-0.5.elemod --mod examples/store-check-a4/out/store-check-1.0.elemod \
     --out a4-store.syx --version SC56 --lockfile a4-store.lock.json
 ```

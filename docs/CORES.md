@@ -36,7 +36,7 @@ older ones people still have:
 | Analog Rytm MKII | 1.74 | `core-ar2-0.7.elemod` | the [core-ar2-v0.7](https://github.com/irpina/elekloader/releases/tag/core-ar2-v0.7) pre-release, and the shop. Mods with pages built for 0.3 (rytm2_mods v1.2's lfo-rnd, voice-dac, euclid-accents, velocity-humanise, comp-preview) do not link with it: their sites overlap core's page sites |
 | Analog Rytm MKII | 1.74 | `core-ar2-0.8.elemod` | on main, not released: build it ([below](#building-a-core)). Mods with pages built for 0.3 (rytm2_mods v1.2's lfo-rnd, voice-dac, euclid-accents, velocity-humanise, comp-preview) do not link with it: their sites overlap core's page sites |
 | Analog Rytm MKII | 1.73 | `core-ar2-0.2.elemod` | not released: the last core with 1.73; build it from commit 92a99c9 ([below](#building-a-core)) |
-| Analog Four MKII | 1.56 | `core-a4-0.4.elemod` | a proof of concept, not released: build it ([below](#building-a-core)) |
+| Analog Four MKII | 1.56 | `core-a4-0.5.elemod` | a proof of concept, not released: build it ([below](#building-a-core)) |
 | Octatrack MKI, MKII | 1.40C | `core-ot-0.3.1.elemod` | the [core-ot-v0.3.1](https://github.com/irpina/elekloader/releases/tag/core-ot-v0.3.1) pre-release, and the shop |
 | Octatrack MKI, MKII | 1.40C | `core-ot-0.8.elemod` | on main, not released: build it ([below](#building-a-core)) |
 | Octatrack MKI, MKII | 1.40C | `core-ot-0.1.elemod` | the v0.4.0 release: PURGE SAMPLES freezes the unit with it, so use 0.3.1 or newer |
@@ -174,8 +174,11 @@ the one a mod that uses it names in `resources.core`.
   concept): core-ar2's events and mod storage at the A4's addresses
   (ADAPTING.md, "Mod storage (core-a4 0.1)"), and parameter pages, whose
   knobs can follow the selected sound (core-a4 0.2 and 0.3; ADAPTING.md,
-  "Parameter pages (core-a4 0.2)"). Its render events cover the effects,
-  not the analog voices.
+  "Parameter pages (core-a4 0.2)"). Lockable parameters for each track
+  kind, their p-locks, their destinations, their value as stock would
+  play it and their NRPNs and CCs (ADAPTING.md, "Lockable parameters (core-a4 0.5, Analog Four
+  MKII)"). Its render events cover the effects, not the analog
+  voices.
 - **Octatrack** ([mods/core-ot](../mods/core-ot)): a source of its own. It
   takes the mods' RAM from the sample and recorder memory, only what they
   use and at most 10 MB, and has a hook bus of the Octatrack's own: the UI,

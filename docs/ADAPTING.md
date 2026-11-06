@@ -2091,6 +2091,132 @@ its knob B, AMP PAN again, is shown while the count of PAN's turn updates
 (the bar) is odd and empty while it is even. Checked in rytm-emu's A4 build
 and on a unit (24 Oct 2026).
 
+### Lockable parameters (core-a4 0.5, Analog Four MKII)
+
+core-a4 0.5 has the first part of the lock service, core-ar2's design
+("Lockable parameters" and "Mod p-locks", above) with the A4's track
+kinds, from part 2 its destinations, from part 3 the value read and from
+part 4 MIDI.
+
+A storage field declared `"lock": true` gets a lock code from the lockfile,
+numbered within its kind, as stock keeps one parameter table per kind:
+
+| field | kind | tracks |
+|---|---|---|
+| sound | synth | 1..4 |
+| kit | FX | 5 |
+| kit, with `"track": "cv"` | CV | 6 |
+
+Each kind has the codes 0x70..0x7f (stock's columns end at 0x6f), so a
+build has at most 16 lockable parameters of each. On the A4 `"mod"` covers
+the LFOs too, and `"lfo"` is refused; `"cc"` gives the parameter a CC
+(part 4, below). The mod
+registers each parameter in `core_lock_params` as on the Rytm
+(`analog-four-mk2/lock.h`): `id` is its page knob, an id stock does not
+have (above 0x126), unique within its kind.
+
+A parameter is p-locked like a stock one: hold a trig and turn its page
+knob, or turn the knob while live recording runs. The lock is a row in the
+pattern's 128 rows with the field's code, so it is saved, loaded, copied,
+pasted and cleared with the pattern and its trigs, and stock's locks always
+fit first (127 rows at most). A parameter above 127 takes two rows per
+track and keeps its whole value. A pattern's SysEx dump and a received
+pattern carry the mod rows with a marker, as on the Rytm.
+
+The mod reads the lock while the trig plays:
+
+```c
+#include "analog-four-mk2/lock.h"
+
+int v = core_lock_value(track, STORE(my_depth));      /* min..max, or -1: none */
+int w = core_lock_value_voice(voice, core_lock_code(STORE(my_depth)));
+int d = core_slide_delta_voice(voice, core_lock_code(STORE(my_depth)));
+```
+
+What differs from the Rytm:
+- A lock lasts while its trig plays: the next trig on the voice without one
+  gives -1 (the parameter jumps back to the sound's value), as stock's
+  locks on the A4 do.
+- The locks are per voice (0..3 the synth voices, 4 the FX track's, 5 the
+  CV track's), set at the trig's event accept in the audio interrupt, before
+  it sounds. `core_lock_value(track, field)` is the voice the track's last
+  trig went to (on a poly track, the last-played voice).
+- `core_slide_delta_voice(voice, code)` is Param Slide's change from the
+  trig to the next trig or lock trig, in the field's steps, by stock's
+  rules; a set of the field (its knob, MIDI) ends it. The ramp itself is in
+  the value read (part 3).
+- A project load, a kit change and CREATE NEW clear every voice's locks.
+
+A mod knob shows its parameter's `short_name` as its label and its `name`
+as the screen's title while a trig is held (from part 2).
+
+**Destinations (part 2).** A lockable field also declared `"mod": true` is
+a destination of every modulation source on its track: the five routes
+(velocity, pitch bend, mod wheel, breath, aftertouch), the four Dest knobs
+(EnvF, Env2, LFO1, LFO2, A and B), the ten performance macros and CONTROL
+IN 1 and 2. Every one of their lists ends with it, as `CATEGORY:Name`
+(`MOD` when it has no category), only on tracks of its kind; a Dest knob
+shows its `short_name`. The route, Dest or macro keeps the field's lock
+code in its own byte, so kit saves, loads and copies carry it. Core notes,
+per voice, which sources point at which codes when stock pushes a sound,
+for the value read (part 3):
+
+```c
+int r, d, n;
+const struct core_dst *e = core_dst_voice(voice, &r, &d);  /* r routes, then d Dests */
+const struct core_dst *m = core_dst_macros(&n);           /* every macro's targets */
+```
+
+A kit or sound of another layout loads with its codes as None. Stock 1.56
+shows such a destination as ERR and sends it nowhere.
+
+**The value read (part 3).** The value stock would play for the parameter
+now, as it computes a stock coarse parameter of the same range: the sound's
+(the kit's) value, the playing lock in its place, smoothed, Param Slide's
+ramp, then for a `"mod"` field the routes, the macros and CONTROL IN, and
+LFO2, Env2, LFO1 and EnvF, clamped after each as stock clamps. Read it in
+the audio interrupt (`ev_render_in`, `ev_render_out`), every block:
+
+```c
+static int h[2];
+int v[2];
+if (!h[0]) {
+    h[0] = core_param_handle(STORE(my_depth));
+    h[1] = core_param_handle(STORE(my_rate));
+}
+core_param_values(track, h, 2, 0, v);           /* 8.8 steps of each field */
+core_param_values_voice(voice, h, 2, 0, v);     /* one voice of a poly track */
+int one = core_param_value(track, STORE(my_depth));
+```
+
+A track's read is the voice its last trig went to. `CORE_PARAM_ENGINE`
+gives the engine's 0..0x7fff instead. A handle is a build's own number: look
+it up at boot or on the first read, and never keep one in a project. In the
+emulator the values match stock's own parameter block for block (core-a4's
+README, "Checked so far").
+
+**MIDI (part 4).** Every lockable parameter is NRPN MSB 0, LSB its lock
+code (112..127), on its track's channel; stock's synth, FX and CV tables use
+MSBs 1 to 3 and nothing at MSB 0. A parameter up to 127 takes the data entry
+MSB; one above 127 takes the whole 14-bit value, as stock's fine
+parameters. A field declared `"cc": true` also gets a CC from the lockfile,
+one no stock table maps on a track's channel (a kit field's also free of the
+FX and CV tables), kept from build to build; the build's notes say which.
+Both set the field as its knob does, and lock it on the playing step while
+live recording runs; a mod knob's turn sends its NRPN, or its CC, as
+PARAM OUTPUT says, on the channel stock's own knobs use. On a channel shared
+with PERF, an NRPN reaches the active track, as stock's do.
+
+`examples/lock-check-a4` is the smallest mod on it: one lockable parameter
+of each kind and a fine one, on a LOCK CHECK page per kind, with what it
+reads each audio block in `lk_seen` for the emulator, from 1.1 its value
+read beside a stock parameter's (`lk_ring`) and the read's cost, and from
+1.2 CCs on A and V and the stored values each tick (`lk_midi`).
+`examples/sound-check-a4` makes one heard: a test tone whose level (LVL)
+and pitch (PIT) are lockable mod parameters, read on each synth voice every
+block with `core_param_values_voice` and added to the effects' return (the
+DAC words 4 and 5 of the TX block at `ev_render_out`).
+
 ### Machines (core-ar2 0.5, Analog Rytm MKII)
 
 The Rytm has 53 machine slots. 34..52 hold hidden factory machines: stock

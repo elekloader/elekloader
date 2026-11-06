@@ -172,6 +172,7 @@ class Mod2:
             self.lfos = store.parse_lfos(doc)
             self.rough = store.parse_rough(doc)
             self.routes = store.parse_routes(doc)
+            self.cvs = store.parse_cvs(doc)
             self.inits = store.parse_inits(doc)
         except ModError as e:
             raise ModError('%s: %s' % (name, e))
@@ -699,8 +700,10 @@ def link(mods, image, lock=None, *, sharc_stream=None):
         rough = [(m.id, sym) for m in order for sym in m.rough]
         routes = [(m.id, sym) for m in order for sym in m.routes]
         scope_of = {(d[0], d[1]): d[2] for d in decls}
+        cvs = [(m.id, sym) for m in order for sym in m.cvs]
+        store.check_flags(dev.key, scope_of, lfos, routes, cvs, [(m.id, sym) for m in order for sym in m.ccs])
         fx = sorted({k[0] for k in locks if scope_of.get(k) == 'kit'})
-        if fx and store.FX_LOCK_DST not in core.imports:
+        if fx and not store.kinds(dev.key) and store.FX_LOCK_DST not in core.imports:
             raise ModError('%s declare%s lockable kit fields (the FX track\'s), which %s does not keep'
                            % (', '.join(fx), 's' if len(fx) == 1 else '', core.label()))
         for dst, scope, bits in ((store.LOCK_DST, 'sound', store.lock_dst_bits(dev.key)),
@@ -718,7 +721,7 @@ def link(mods, image, lock=None, *, sharc_stream=None):
             users = sorted({k[0] for k in inits})
             raise ModError('%s give%s storage fields an init, which %s does not keep (no table %s)'
                            % (', '.join(users), 's' if len(users) == 1 else '', core.label(), store.INITS_TABLE))
-        new_lock, store_notes = store.allocate(lock, decls, dev.key, core.version, locks, ccs, inits)
+        new_lock, store_notes = store.allocate(lock, decls, dev.key, core.version, locks, ccs, inits, cvs)
         store_syms, ids = store.symbols(new_lock, dev.key)
         store_syms.setdefault(store.LOCK_DST, 0)    # not placed: no LFO field
         store_syms.setdefault(store.FX_LOCK_DST, 0)
