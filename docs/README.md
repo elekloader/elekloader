@@ -23,6 +23,8 @@ docs match its code.
 - **[Adapting your mod](ADAPTING.md)**: the path to take, the rules, every
   command with the output it should print, every refusal with its fix, and a
   definition of done. Coding agents: start with [AGENTS.md](../AGENTS.md).
+- **[Shared machine SDK](SDK.md)** (alpha): one C machine for the Digitakt mk1,
+  the Digitone mk1 and the Digitone II, from a quickstart to the reference.
 - **[Your mod in the shop](SHOP.md)**: publish it, submit it with one form,
   and let later releases update it by themselves; take it out the same way.
 - **[Digitone II machines](MACHINES-DN2.md)**: register

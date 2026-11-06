@@ -488,6 +488,16 @@ export function check(mods: Mod2[], image: Uint8Array): string[] {
         + `${free.join(' or ') || `an area the ${dev.name} does not have`})`)
     }
   }
+  for (const [t, most] of Object.entries(dev.tableLimits).sort(([a], [b]) => cmp(a, b))) {   // the OS uses no more (the profile's tableLimits)
+    const adds = mods.filter(m => m.contribute.some(c => c.to === t)).map(m => m.label())
+    const n = tables.has(t)
+      ? Math.floor(mods.flatMap(m => m.contribute).filter(c => c.to === t).reduce((s, c) => s + c.data.length, 0) / tables.get(t)![1])
+      : 0
+    if (n > most) {
+      const who = adds.length > 1 ? adds.slice(0, -1).join(', ') + ' and ' + adds[adds.length - 1] : adds[0]
+      bad.push(`${t} holds at most ${most} entries on ${dev.key} ${mods[0].rel.version}; ${who} add${adds.length > 1 ? '' : 's'} ${n}`)
+    }
+  }
   const regs: Span<AnyMod>[] = mods.flatMap(m => m.regions.map(g => [g.lo, g.hi, m, 'region ' + g.name] as Span<AnyMod>))
   if (dev.sramCode[1] > dev.sramCode[0]) regs.push([dev.sramCode[0], dev.sramCode[1], null, 'the .fast area'])
   for (const [a, b] of overlaps(regs)) {

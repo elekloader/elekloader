@@ -951,7 +951,9 @@ static s32 t_rs, t_rt, t_g = 32767, t_gt = 32767, t_d = 300 << 12, t_am = 32767;
 static u32 br_t, br_len, br_next = 48000;
 static s32 br_extra, br_xf;
 static u32 if_burst, if_gap = 48000, if_st, if_slen, if_sstart, if_crush, if_hold;
-static s32 if_hv0, if_hv1, if_env;
+static s32 if_hv0, if_hv1, if_env, if_gate;
+static s32 lf_h0, lf_h1;                        /* LO-FI: the held sample */
+static u32 lf_n;                                /* frames it has held */
 
 static void filt(s32 *w, s32 idx, int hp)       /* two one-poles: 12 dB an octave; idx in ch_op, 8.8 */
 {
@@ -1021,11 +1023,15 @@ static void m_tex(s32 *w)
         sq_env = env;
         break;
     }
-    case FX_LOFI: {                         /* saturation, a narrowing band, wow, flutter, hiss, dropouts */
+    case FX_LOFI: {                         /* saturation, fewer bits and a lower rate (from 20%), a narrowing
+                                               band (5.8 kHz at the middle, 2 kHz at the top, 30 .. 300 Hz below),
+                                               wow, flutter, hiss, dropouts */
         s32 u = amt, u2 = (u >> 7) * (u >> 7) >> 1, drive = 256 + ((u * 640) >> 15);
-        s32 la = ch_op[247 - ((u * 46) >> 15)], ha = ch_op[15 + ((u * 59) >> 15)];
-        s32 wow = (4 << 12) + u2 * 8, flut = 1600 + (u2 >> 2), warble = u > 19660 ? (u - 19660) * 4 : 0;
-        s32 hiss = (u * 50) >> 15, mk = 4096 * 256 / drive, d, ds, g, gs;
+        s32 la = ch_op[247 - ((u * 77) >> 15)], ha = ch_op[15 + ((u * 85) >> 15)];
+        s32 wow = (4 << 12) + u2 * 12, flut = 1600 + (u2 >> 1), warble = u > 16384 ? (u - 16384) * 4 : 0;
+        s32 hiss = (u * 160) >> 15, mk = 4096 * 256 / drive, d, ds, g, gs;
+        s32 crush = (u * 9) >> 15, cm = ~((1 << crush) - 1);            /* 0 .. 8 bits off */
+        u32 hold = 1 + (u > 6554 ? (u32)((u - 6554) * 9) / 26214u : 0); /* 48 kHz .. 4.8 kHz */
         s32 a0 = t_a0, a1 = t_a1, b0 = t_b0, b1 = t_b1;
         if (u > 22937 && t_gt >= 32767 && t_g >= 32767 && rnd_n(65535) < (u32)((u - 22937) >> 9))
             t_gt = 3000 + (s32)rnd_n(14000);    /* a dropout */
@@ -1051,8 +1057,13 @@ static void m_tex(s32 *w)
         for (i = 0; i < N; i++) {
             s32 x0 = (shape(sh_tape, (w[2 * i] * drive) >> 8) * mk) >> 12;
             s32 x1 = (shape(sh_tape, (w[2 * i + 1] * drive) >> 8) * mk) >> 12, v0, v1;
-            x0 = LP(a0, x0, la);
-            x1 = LP(a1, x1, la);
+            if (++lf_n >= hold) {               /* a new sample, its low bits gone; else the last one again */
+                lf_n = 0;
+                lf_h0 = x0 & cm;
+                lf_h1 = x1 & cm;
+            }
+            x0 = LP(a0, lf_h0, la);
+            x1 = LP(a1, lf_h1, la);
             x0 -= LP(b0, x0, ha);
             x1 -= LP(b1, x1, ha);
             T[2 * tw] = (s16)sat16(x0 >> 1);
@@ -1134,8 +1145,9 @@ static void m_tex(s32 *w)
             br_extra = 0, t_d = (s32)(64 << 12);
         break;
     }
-    default: {                                  /* STATIC: static, fading, buzz, then glitches */
-        s32 u = amt, noise = (u * 300) >> 15, c0 = t_c0;
+    default: {                                  /* STATIC: static, fading, buzz, then glitches; the noises it adds
+                                                   follow the music (a gate on its level), so silence stays silent */
+        s32 u = amt, noise = (u * 700) >> 15, c0 = t_c0;
         s32 fade = u > 8192 ? ((u - 8192) * 30) >> 5 : 0, buzz = u > 14745 ? (u - 14745) >> 2 : 0;
         int glitch = u > 19660, crack = -1;
         s32 pk = 0, g;
@@ -1143,6 +1155,10 @@ static void m_tex(s32 *w)
             if (absv(w[i]) > pk)
                 pk = absv(w[i]);
         if_env += (pk - if_env) >> 3;
+        {                                       /* the gate, Q15: open from -24 dBFS, closing in ~0.1 s */
+            s32 gt = if_env >= 2048 ? 32767 : if_env * 16;
+            if_gate += gt > if_gate ? (gt - if_gate) >> 2 : (gt - if_gate) >> 7;
+        }
         if (rnd_n(65535) < (u32)((3 + ((u * 80) >> 15)) * 44))     /* 3-83 crackles a second: one this block? */
             crack = (int)rnd_n(N);
         if (fade) {                             /* radio fading: a slow random wave on the level */
@@ -1213,8 +1229,9 @@ static void m_tex(s32 *w)
                 if (++t_ev >= if_hold)
                     t_ev = 0;
             }
-            w[2 * i] = lim(x0 + n + b, TOP);
-            w[2 * i + 1] = lim(x1 + n + b, TOP);
+            n = ((n + b) * if_gate) >> 15;
+            w[2 * i] = lim(x0 + n, TOP);
+            w[2 * i + 1] = lim(x1 + n, TOP);
             tw = (tw + 1) & msk;
         }
         t_c0 = c0;
@@ -1256,6 +1273,7 @@ static void capture_play(void)
 {
     const s16 *A = DH_CAP;
     u32 L = dprism.clen, p = cpos;
+    s32 v = dprism.clvl, g = v * v * 4096 / 10000;     /* its level: (v / 100)^2, Q12 */
     int i;
     if (dprism.cstate != C_PLAY || !L) {
         if (!cap_zero)
@@ -1289,6 +1307,9 @@ static void capture_play(void)
         }
     }
     cpos = p;
+    if (g < 4092 || g > 4100)
+        for (i = 0; i < 2 * N; i++)
+            cap[i] = (cap[i] * g) >> 12;
 }
 
 static void capture_write(const s32 *src)
@@ -1341,6 +1362,12 @@ void dprism_rout(void)
 
 /* ---- the block ------------------------------------------------------------------------------------ */
 static u32 t_prev, quiet;
+
+/* A module's AMOUNT at 0 leaves it out (dry, and its time saved); over its first 8 steps it fades in, so each effect
+ * starts from the dry sound rather than from its own colour */
+#define DRY_RAMP (8 << 8)
+static const u8 amt_knob[4] = { K_CAMT, K_MAMT, K_AAMT, K_GAMT };
+static s32 pre_w[2 * N];
 
 void dprism_dsp_reset(void)
 {
@@ -1412,13 +1439,22 @@ void dprism_render(int32_t *out, const int32_t *in)
             capture_write(x);
         for (k = 0; k < 4; k++) {
             int m = ch_order[dprism.order % 24][k];
-            if (!dprism.on[m])
+            s32 a = sk[amt_knob[m]];
+            if (!dprism.on[m] || a <= 0)
                 continue;
+            if (a < DRY_RAMP)
+                for (i = 0; i < 2 * N; i++)
+                    pre_w[i] = w[i];
             switch (m) {
             case M_CHAR: m_char(w); break;
             case M_MOVE: m_move(w); break;
             case M_DIFF: m_diff(w); break;
             default: m_tex(w); break;
+            }
+            if (a < DRY_RAMP) {
+                s32 p = (a << 12) / DRY_RAMP;
+                for (i = 0; i < 2 * N; i++)
+                    w[i] = pre_w[i] + (((w[i] - pre_w[i]) * p) >> 12);
             }
         }
     } else if (dprism.on[M_DIFF] && dprism.trails && !dprism.overload) {

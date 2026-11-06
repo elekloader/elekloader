@@ -480,6 +480,14 @@ def check(mods, image):
             bad.append('%s has DSP code for payload %s, which needs a mod that frees DSP memory '
                        'there (one that claims %s)' % (m.label(), tag, ' or '.join(free) or
                                                        'an area the %s does not have' % dev.name))
+    for t, most in sorted(dev.table_limits.items()):     # the OS uses no more (the profile's table_limits)
+        adds = [m.label() for m in mods if any(c['to'] == t for c in m.contribute)]
+        n = sum(len(c['data']) for m in mods for c in m.contribute if c['to'] == t) // tables[t][1] \
+            if t in tables else 0
+        if n > most:
+            who = ', '.join(adds[:-1]) + ' and ' + adds[-1] if len(adds) > 1 else adds[0]
+            bad.append('%s holds at most %d entries on %s %s; %s add%s %d'
+                       % (t, most, dev.key, mods[0].rel.version, who, '' if len(adds) > 1 else 's', n))
     regs = [(g['lo'], g['hi'], m, 'region ' + g['name']) for m in mods for g in m.regions]
     if dev.sram_code[1] > dev.sram_code[0]:
         regs.append((dev.sram_code[0], dev.sram_code[1], None, 'the .fast area'))

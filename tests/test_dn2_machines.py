@@ -5,10 +5,12 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 import tempfile
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
 CC = shutil.which('cc')
 CF_CALL = os.environ.get('ELEKLOADER_CF_CALL')
 STOCK = os.environ.get('ELEKLOADER_DN2_SYX')
@@ -29,13 +31,46 @@ class RegistryTests(unittest.TestCase):
 
 
 class ParameterTableSitesTests(unittest.TestCase):
+    @unittest.skipUnless(STOCK, 'needs DN2 stock')
+    def test_syn_view_contract_matches_stock(self):
+        from elekloader import formats
+        firmware, device, _ = formats.load(STOCK)
+        image = formats.main_image(firmware, device)
+
+        def data(addr, n):
+            return image[addr - device.main_load:addr - device.main_load + n]
+
+        # The title accessor keeps its live view in a2 and passes view +144's page to the getter.
+        manifest = json.loads((ROOT / 'mods/machines-dn2/mod.json').read_text())
+        ret = int(manifest['defsym']['SYN_TITLE_RETURN'], 0)
+        self.assertEqual(data(ret - 12, 12), bytes.fromhex('2f2a00902f004eb9400c2652'))
+        # 60 primary methods, then a secondary-base table. Method 4 paints, method 19 names it.
+        self.assertEqual(int(manifest['defsym']['SYN_METHODS'], 0), 0x401d4db0)   # SYN's view at power-on
+        self.assertEqual(data(0x401d4db0 + 4 * 4, 4), bytes.fromhex('40018118'))
+        self.assertEqual(data(0x401d4db0 + 19 * 4, 4), bytes.fromhex('400177b2'))
+        self.assertEqual(data(0x401d4db0 + 60 * 4, 4), bytes.fromhex('fffffffc'))
+        # The Brain's pointer, which the SDK reads for the page stack: stock tests it there.
+        self.assertEqual(int(manifest['defsym']['BRAIN'], 0), 0x44648900)
+        self.assertEqual(data(0x4003b7c6, 6), bytes.fromhex('4ab944648900'))
+        # The UI loop sets Brain +0xe8 to 2 when it adds the screen saver's view (the SDK hides glyphs).
+        self.assertEqual(data(0x4002e3aa, 6), bytes.fromhex('7002254000e8'))
+        # A key zeroes the idle count (+0xe4); the same routine then clears +0xe8 before its tick and
+        # draw sites, so the first frame after waking draws the glyphs again.
+        self.assertEqual(data(0x4002c54e, 4), bytes.fromhex('42a800e4'))
+        self.assertEqual(data(0x4002e334, 10), bytes.fromhex('4aaa00e4663e42aa00e8'))
+        self.assertEqual(data(0x4002e464, 6), bytes.fromhex('4eb94011d5d4'))
+
     def test_bounds_and_references_match_the_appended_rows(self):
-        source = (ROOT / 'mods/machines-dn2/machines.c').read_text()
+        source = ((ROOT / 'mods/machines-dn2/dn2.h').read_text()
+                  + (ROOT / 'mods/machines-dn2/machines.c').read_text())
         define = {name: int(value, 0) for name, value in
-                  (line.split()[1:3] for line in source.splitlines() if line.startswith('#define '))}
+                  (line.split()[1:3] for line in source.splitlines()
+                   if line.startswith('#define ') and len(line.split()) > 2)}
         mod = json.loads((ROOT / 'mods/machines-dn2/mod.json').read_text())
         self.assertEqual(int(mod['defsym']['T1_ROWS']), define['ROWS'])
-        self.assertEqual(define['G_CODE'], define['ROWS'] + define['ADDED'])  # G's row ends the table
+        self.assertEqual(define['G_CODE'], define['ROWS'] + define['ADDED'])  # 0.1's G row: projects keep it
+        self.assertEqual(define['SDK_ROW'], define['ADDED'] + 1)  # SDK rows follow the five native pages and G
+        self.assertEqual(define['T1_END'], define['ROWS'] + define['SDK_ROW'] + define['SDK_KNOBS'])
         bounds = [s for s in mod['sites'] if s['op'] == 'bytes' and len(s['stock']) == 12]
         self.assertEqual(len(bounds), 54)
         for site in bounds:
@@ -43,7 +78,7 @@ class ParameterTableSitesTests(unittest.TestCase):
             self.assertEqual(stock[:2], new[:2], site['addr'])
             self.assertIn(int.from_bytes(stock[2:], 'big'), (define['ROWS'], define['ROWS'] - 1))
             self.assertEqual(int.from_bytes(new[2:], 'big') - int.from_bytes(stock[2:], 'big'),
-                             define['G_CODE'] + 1 - define['ROWS'], site['addr'])
+                             define['T1_END'] - define['ROWS'], site['addr'])
         self.assertEqual(sum(s.get('target') == 'dn2_t1' for s in mod['sites']), 56)
 
 
@@ -101,7 +136,7 @@ class VoicePagesTests(unittest.TestCase):
                       # A missing synth (9) keeps its type: MIDI's CC 70 (slot 33) is not its parameter.
                       (cc_code, [0, 4, 0, 70], 168), (cc_code, [0, 9, 0, 70], 0),
                       (value_class, [321], None), (value_class, [0xd5], None),
-                      (value_class, [362], None), (value_class, [0], None)]
+                      (value_class, [377], None), (value_class, [0], None)]
             request = stage / 'request.json'
             request.write_text(json.dumps({'calls': [{'pc': hex(pc), 'args': [str(a) for a in args]}
                                                      for pc, args, _ in checks]}))
@@ -179,8 +214,9 @@ class ParameterDispatchTests(unittest.TestCase):
                             # A custom machine keeps its ID for MIDI, whose lookups map it, and the
                             # stock reader sees a custom filter as LOWPASS 4, its host. A missing synth
                             # keeps its own type for MIDI (no stock synth map has it) but the stock
-                            # reader sees MIDI's; a missing filter falls back to MULTI-MODE.
-                            if mode == 'identity' or not first <= machine_id < 32:
+                            # reader sees MIDI's; a missing filter falls back to MULTI-MODE. Synth IDs
+                            # reach 127 (SDK machines), filter IDs 31.
+                            if mode == 'identity' or not first <= machine_id < (128 if kind == 'synth' else 32):
                                 expected.append(machine_id)
                             elif kind == 'synth':
                                 expected.append(machine_id if machine_id == 8 or mode == 'parameter' else 4)

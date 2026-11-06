@@ -1,0 +1,7 @@
+{
+ "id": "sdk-sine",
+ "version": "0.1",
+ "license": "GPL-2.0-or-later",
+ "devices": {"digitakt-mk1": ["1.54"], "digitone-mk1": ["1.44"]},
+ "sources": ["sine.c"]
+}

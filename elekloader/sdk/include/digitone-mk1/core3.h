@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
-/* core-dn1 3.0 to 4.2 for the Digitone mk1, in C: the firmware locations core exports, and core-dn1's
+/* core-dn1 3.0 to 5.1 for the Digitone mk1, in C: the firmware locations core exports, and core-dn1's
  * own tables and calls (docs/ADAPTING.md, "Firmware locations", "Parameter slots", "Mod pages", "Project
  * data", "The Mod Menu" and "Machines and stock parameters"). The SDK puts this folder on the include
  * path:
@@ -135,10 +135,10 @@ struct core_audio_owner {
 } __attribute__((aligned(4)));
 
 /* ---- core-dn1's tables (core 2.1-2.3): what a mod contributes points to one of these ------------ */
-struct core_param {                 /* core_params: parameter slots 182-184 */
-    int32_t id;                     /* +0  182-184, claimed as param:<id> */
-    int32_t group;                  /* +4  the page group: 1 Amp, 2 Filter, ... */
-    int32_t slot;                   /* +8  the sound parameter it edits, 0-78 */
+struct core_param {                 /* core_params: parameter slots 182-191 (182-184 before 5.1) */
+    int32_t id;                     /* +0  182-191, claimed as param:<id> */
+    int32_t group;                  /* +4  the page group: 1 Amp, 2 Filter, ..., 16 Trig */
+    int32_t slot;                   /* +8  the sound parameter it edits, 0-78; 5.1: CORE_SLOT_LANE */
     int32_t min, max, def;          /* +12 8.8 */
     int32_t flags;                  /* +24 0 */
     int32_t cc;                     /* +28 MIDI CC (MSB << 16 | LSB), or -1 */
@@ -147,6 +147,7 @@ struct core_param {                 /* core_params: parameter slots 182-184 */
     void (*format)(int32_t value, char *buf);       /* +56 the value's text */
     const char *empty;              /* +60 fw_str_empty */
     int32_t look;                   /* +64 the stock parameter whose knob it borrows, 0 for a plain one */
+    int32_t lane_flags;             /* +68 5.1: a lane's CORE_LANE_ flags (read only for a lane) */
 } __attribute__((aligned(4)));
 
 struct core_page {                  /* core_pages: pages 27-30 */
@@ -187,7 +188,10 @@ extern void core_menu_open(const void *const *list, int32_t sel,
 
 /* core_param_override: a mod answering for a stock parameter, while it wants to (from 3.1). ui returns a UI
  * record (84 bytes, the stock layout: the value text's formatter at +0x14, the knob graphic) or 0 for
- * the stock one; name returns the label for field 0x30 or 0. Either may be 0; the first answer wins. */
+ * the stock one. name returns the short label for field 0x30, or 0 for stock. In 5.2 the LFO list and
+ * DEST box also ask for 0x28 (destination name) and 0x2c (group). With no destination-name override the
+ * box and an over-wide list row keep their stock short name. Either callback may be
+ * 0; the first answer wins. These change text only: native slots and destination order stay intact. */
 struct core_param_override {
     void *(*ui)(int32_t id);
     const char *(*name)(int32_t id, int32_t field);
@@ -199,6 +203,13 @@ struct core_param_override {
  * bytes, 4-aligned, the mod's; build it once, outside the render. */
 #define CORE_LOOK_NONE  (-1)
 extern void core_param_ui_make(void *ui, int32_t id, int32_t look, void (*fmt)(int32_t value, char *buf));
+
+/* 5.2: the page list of the page key whose stock list starts with page first (SYN1 2, SYN2 4, FLTR 6, AMP 8,
+ * LFO 10), replaced by list[0..n-1] (page indices: stock's 1-26, or a mod page's), or put back with n 0.
+ * Never longer than the stock list. The page shown goes back to the first when it is past the new end; the
+ * caller redraws (ev_tick's ctrl). 1, or 0 when that view is not built yet or the list is too long. From the
+ * UI task (ev_tick, ev_key); the last call wins, so one mod answers for a key. */
+extern int32_t core_page_list(int32_t first, const int32_t *list, int32_t n);
 
 /* Open a mod page from a key handler (its key's code: AMP 24, say); 0 when the view was never built. */
 extern int32_t core_page_open(void *brain, void *event, int32_t key, void *page);
@@ -444,5 +455,88 @@ typedef void (*ev_idle_fn)(void);
 #define CORE_VIEW_POP           2
 typedef void (*ev_view_fn)(int32_t op, void *container, void *a, void *b);
 extern void *fw_view(void);
+
+/* ---- 5.0.1 ---------------------------------------------------------------------------------------- */
+/* The sequencer's MIDI out: each message its MIDI engine queues for DIN and USB (the MIDI tracks' notes,
+ * CCs, program changes, pitch bend, aftertouch; All Sound Off at STOP), whole, before it goes into one of
+ * the engine's two buffers (buffer 0 or 1). These do not pass the port switch, so ev_midi_out does not see
+ * them. Nonzero takes the message: it is not sent. Interrupt level (the engine's tick): keep it short. */
+typedef int32_t (*ev_seq_midi_fn)(const uint8_t *msg, int32_t len, int32_t buffer);
+/* A whole MIDI message played into the unit as if it came in on DIN: ev_midi_in's handlers (a nonzero
+ * return takes it: -> 1), then the MIDI task's handler for its status, so ev_midi_cc and ev_midi_pc see it
+ * and the stock applies it by MIDI CONFIG's channels (INPUT FROM is not asked). From a task, never at
+ * interrupt level. -> 0. */
+extern int32_t core_midi_receive(const uint8_t *msg, int32_t len);
+/* The project's pool sound index (0-127) put on track (0-3) as the SOUND BROWSER's FUNC+YES does (the
+ * handlers of ev_sound_load see it). The UI task. -> 0 loaded, 1 the slot took nothing, 2 no such track,
+ * -1 no such pool sound. */
+extern int32_t core_pool_load(int32_t track, int32_t index);
+/* The global mutes (FUNC + a track key): bit t for track t, 0-3 the synth tracks, 4-7 the MIDI tracks
+ * (0 with no pattern); and one track's mute set (muted 1) or cleared as FUNC + its key does, which
+ * ev_mute's handlers see (where 0). The UI task. */
+extern uint32_t core_mutes(void);
+extern void core_mute_set(int32_t track, int32_t muted);
+/* The stock key dispatch, Brain::key, where ev_key hands a key on: a handler may pass an event of its own
+ * (a copy of the one it got, with +12 the key and +16 its flags changed) to replay a stock key or combo.
+ * The UI task. */
+extern int32_t fw_brain_key(void *brain, void *event);
+#define CORE_KEY_ID(ev)     (*(volatile int32_t *)((uint8_t *)(ev) + 12))
+#define CORE_KEY_FLAGS(ev)  (*(volatile uint32_t *)((uint8_t *)(ev) + 16))
+#define CORE_KEY_DOWN       1u      /* pressed */
+#define CORE_KEY_FUNC       2u      /* with FUNC held */
+#define CORE_KEY_REPEAT     8u      /* held: about 0.4 s in, then repeating */
+#define CORE_KEY_UP         0x10u   /* released */
+/* The kit's sound load: kit = fw_project + 0x250, sound 0x146 bytes, track 0-3. -> as core_pool_load's. */
+extern int32_t fw_sound_load(void *kit, const void *sound, int32_t track);
+/* MIDI CONFIG > CHANNELS: track t's channel (0-15), a long, t 0-3 the synth tracks. */
+extern volatile int32_t fw_midi_chan[];
+
+/* ---- 5.1 ---------------------------------------------------------------------------------------------- */
+/* Lane parameters (docs/ADAPTING.md, "Lane parameters"): a core_params entry whose slot is CORE_SLOT_LANE
+ * keeps its values in core, not in a sound: per pattern a value for each track (as NOTE or VELOCITY) and a
+ * p-lock on any step, saved with the pattern as lock rows the stock OS skips. Whole numbers: the record's
+ * min, max and default >> 8 (min 0 or more); its knob turns and shows them as any parameter's, with trig
+ * keys held in GRID REC the held steps' locks. CORE_LANE_NOLOCK: a track value only. The value a getter
+ * gives is a whole number, -1 for none; the pattern is the one the sequencer plays (in ev_note_built, the
+ * one that note came from). */
+#define CORE_SLOT_LANE          (-1)
+#define CORE_LANE_NOLOCK        1
+#define CORE_PARAM_FIRST        182     /* the mod parameter ids, 182-191 */
+#define CORE_PARAM_LAST         191
+extern int32_t core_lane_lock(int32_t id, int32_t track, int32_t step);    /* the step's p-lock, or -1 */
+extern int32_t core_lane_track(int32_t id, int32_t track);                 /* the track's value */
+extern int32_t core_lane_value(int32_t id, int32_t track, int32_t step);   /* the lock, else the track's */
+/* The UI task: step -1 sets the track's value (value -1: the default again), a step its lock (value -1 clears
+ * it). -> 0 when it could not be kept: no such lane, no pattern, or no room (core keeps 384 locked
+ * track-lanes for the project). */
+extern int32_t core_lane_set(int32_t id, int32_t track, int32_t step, int32_t value);
+
+/* Knobs on pages: a core_knobs entry points to one of these, and core puts id on that page's knob when its
+ * box is empty (claim it as the resource knob:<page>:<knob>). page 1-26 the stock pages (19 the MIDI tracks'
+ * TRIG page, whose E, G and H are empty), or CORE_PAGE_TRIG2: core's second TRIG page (30) for the synth
+ * tracks, after TRIG's first ("Trig Parameters (2/2)"), shown once a mod puts a knob on it. knob 0-7, A-H. */
+struct core_knob {
+    int32_t page, knob, id;
+} __attribute__((aligned(4)));
+#define CORE_PAGE_TRIG          1
+#define CORE_PAGE_MIDI_TRIG     19
+#define CORE_PAGE_TRIG2         30
+extern struct core_page core_trig2;     /* its descriptor, for core_page_open (TRIG's key is 20) */
+
+/* Each note the sequencer builds, as it builds it, before it is queued: track 0-3 a synth track's step, 4-7
+ * a MIDI track's; event the firmware's note event. A handler may change it: CORE_EVENT_SOUND is the sound a
+ * synth track's note plays (the track's, or a pool sound for a step's sound lock: fw_pool_sounds + 0x146 n).
+ * Interrupt level (the sequencer's tick, or PLAY's first step): keep it short. */
+typedef void (*ev_note_built_fn)(int32_t track, int32_t step, void *event);
+/* The step a note event came from, for ev_voice_on and ev_voice_ready: -1 for a note the sequencer did not
+ * build (the keys, MIDI, the arpeggiator). Core remembers the last 16 notes built, and knows a copy of one
+ * (PLAY's first step is built ahead while stopped and copied as the sequencer starts) by its track, notes,
+ * flags and sound. Any level. */
+extern int32_t core_note_step(void *event);
+#define CORE_EVENT_SOUND(ev)    (*(const uint8_t **)((uint8_t *)(ev) + 0x2c))
+#define FW_POOL_SOUND_SIZE      0x146
+extern uint8_t fw_pool_sounds[];        /* the pool's sounds, sound n at + 0x146 n */
+extern int32_t core_pool_count(void);   /* pool sounds 0 to this less one exist */
+extern uint8_t fw_patterns[];           /* the 128 live patterns, k at + 0x1611d k (fw_pattern is one) */
 
 #endif

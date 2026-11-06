@@ -2,7 +2,7 @@
  "id": "machine-pages", "version": "1.6",
  "license": "GPL-2.0-or-later",
  "title": "machine pages", "category": "Framework", "author": "irpina",
- "description": "Draws the SRC and LFO pages of the SRC machines that describe their own (core 3.0), and gives the render an event for machines that make or take a track's sound, so several machine mods combine. On its own, and for machines that do not describe a page, it changes nothing the unit does.",
+ "description": "Draws the SRC and LFO pages of the SRC machines that describe their own (core 3.0), and gives the render an event for machines that make or take a track's sound, so several machine mods combine. On its own, and for machines that do not describe a page, it changes nothing the unit does but the machine menu, which gains a filter tab.",
  "device": "digitakt-mk1", "os": "1.53",
  "sources": ["pages.s", "pages.c", "src.s", "src.c", "params.s", "params.c", "menu.s", "menu.c"],
  "defsym": {
@@ -59,7 +59,7 @@
   "MENU_NAME_CALL": "0x4002a0f2", "MENU_ICON_MGR": "0x40029fc6", "MENU_ICON_CALL": "0x40029e9c",
   "APP_TRACKS": "0x40014d86", "MENU_NEW": "0x400d4180", "MENU_ITEM": "0x400c423c",
   "MENU_FN_FREE": "0x40137576", "MENU_ADD": "0x400c3a72", "MENU_CLEAR": "0x400c3b94",
-  "MENU_CURSOR": "0x400c3858", "MENU_VEC_FREE": "0x400d418c", "MENU_TEXT": "0x400c25c0", "MENU_BLIT": "0x400c2960", "MENU_HLINE": "0x400c0e58",
+  "MENU_CURSOR": "0x400c3858", "MENU_VEC_FREE": "0x400d418c", "MENU_TEXT": "0x400c25c0", "MENU_HLINE": "0x400c0e58",
   "MENU_WAVE": "0x421f9670", "MENU_FONT": "0x4208cc58", "MENU_PANEL_DONE": "0x4002b528", "MENU_ROW_ID": "0x400c3fb8",
   "APP_FN": "0x4013865a"
  },
@@ -176,8 +176,9 @@
  ],
  "ports": {
   "1.54": {
-   "sources": ["pages.s", "pages.c", "src.s", "src.c", "params.s", "params.c", "sdk_alpha.c"],
+   "sources": ["pages.s", "pages.c", "src.s", "src.c", "params.s", "params.c", "menu.s", "menu.c", "sdk_alpha.c", "sdk_alpha.s", "../sdk-alpha/machine.c"],
    "cflags": ["-DSDK_ALPHA_DT1"],
+   "collections": {"ev_render_voices": 4, "sdk_alpha_machines": 4},
    "defsym": {
     "SDK_ALPHA_DT1": 1,
     "SRC_TRACK_FN": "0x4001d24e",
@@ -233,7 +234,7 @@
     "MENU_NAME_CALL": "0x4002a0f2", "MENU_ICON_MGR": "0x40029fc6", "MENU_ICON_CALL": "0x40029e9c",
     "APP_TRACKS": "0x40014d86", "MENU_NEW": "0x400d43a8", "MENU_ITEM": "0x400c4464",
     "MENU_FN_FREE": "0x4013779e", "MENU_ADD": "0x400c3c9a", "MENU_CLEAR": "0x400c3dbc",
-    "MENU_CURSOR": "0x400c3a80", "MENU_VEC_FREE": "0x400d43b4", "MENU_TEXT": "0x400c27e8", "MENU_BLIT": "0x400c2b88", "MENU_HLINE": "0x400c1080",
+    "MENU_CURSOR": "0x400c3a80", "MENU_VEC_FREE": "0x400d43b4", "MENU_TEXT": "0x400c27e8", "MENU_HLINE": "0x400c1080",
     "MENU_WAVE": "0x421fa670", "MENU_FONT": "0x4208dc58", "MENU_PANEL_DONE": "0x4002b528", "MENU_ROW_ID": "0x400c41e0",
     "APP_FN": "0x40138882"
    },

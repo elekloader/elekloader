@@ -1,13 +1,12 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
 #include <stdint.h>
 #include "mk2/machines.h"
+#include "dn2.h"
 
-#define FIRST 5
-#define COUNT 32
+#define FILTER_COUNT 32
+#define VOICE_COUNT 32              /* SHARC voices: the DSP bridge's table has 32 types */
 struct names { const char *name, *label, *hint; };
-struct descriptor { const char *name, *label; uint32_t params[9]; };
-struct string_rep { uint32_t length, capacity; int32_t references; char text[32]; };
-/* The stock parameter table's 60-byte row; the bound sites in mod.json allow G_CODE + 1. */
+/* The stock parameter table's 60-byte row; the bound sites in mod.json allow T1_END. */
 struct row {
     int32_t owner, slot, min, max, def, flag;
     int16_t cc, cc_low;
@@ -15,15 +14,13 @@ struct row {
     const char *name, *owner_name, *label;
     uint32_t format, end;
 };
-#define ROWS 321
 #define ADDED 40                    /* five pages of eight knobs */
 #define TEMPLATE 0xd5               /* A Env Decay: a plain 0..127 knob */
-#define SLOT 25
-#define G_CODE 361                  /* ROWS + ADDED: a custom filter's G, the table's last row */
+#define G_CODE 361                  /* ROWS + ADDED: filter G, where machines-dn2 0.1 put it */
+#define T1_END 377                  /* ROWS + SDK_ROW + SDK_KNOBS: the table's rows */
 #define G_TEMPLATE 0x26             /* MULTI-MODE's TYPE: the stock rows for slot 66 */
 #define G_SLOT 66
 #define G_CELL 6                    /* G's place in the FLTR page's descriptor */
-#define PAGE_END 10                 /* Track Level ends a stock page */
 #define SYNTH_HOST 0                /* FM TONE: the stock type the OS sees for a custom synth */
 #define FILTER_HOST 1               /* LOWPASS 4: the same for a custom filter */
 
@@ -38,15 +35,16 @@ uint32_t dn2_list[COUNT], dn2_list_bytes;
 static const struct mk2_synth *registered[COUNT];
 static struct descriptor descriptors[COUNT];
 static struct string_rep strings[COUNT][2];
+static uint8_t ui_only[COUNT];      /* an SDK machine (sdk_alpha.c): FM TONE plays it */
 static uint32_t ready;
-struct row dn2_t1[G_CODE + 1];     /* the stock rows are copied in at boot (start.s) */
+struct row dn2_t1[T1_END];     /* the stock rows are copied in at boot (start.s) */
 static struct descriptor pages[ADDED / 8];
 static uint8_t first_page[COUNT], page_count[COUNT];
 static struct string_rep tabs[ADDED / 8];
-static struct string_rep labels[ADDED];
+static struct string_rep labels[T1_END - ROWS];
 static unsigned used_pages;
 
-static const char *representation(struct string_rep *r, const char *s, unsigned max)
+const char *dn2_representation(struct string_rep *r, const char *s, unsigned max)
 {
     unsigned n = 0;
     while (n < max && s[n]) {
@@ -107,6 +105,32 @@ static void copy_row(struct row *r, const struct row *t)
     r->max = 127 << 8;
 }
 
+/* An added row: TEMPLATE's, owned by the host, for one sound slot. */
+void dn2_add_row(uint32_t code, int32_t slot, const char *label, uint32_t def, const char *owner_name)
+{
+    struct row *r = &dn2_t1[code];
+    copy_row(r, &dn2_t1[TEMPLATE]);
+    r->owner = SYNTH_HOST;
+    r->slot = slot;
+    r->def = def << 8;
+    r->cc = host_cc(slot);
+    r->name = r->label = dn2_representation(&labels[code - ROWS], label, 5);
+    r->owner_name = owner_name;
+}
+
+/* An added row's label and owner, in place: stock code may hold the pointers. */
+void dn2_row_label(uint32_t code, const char *label, const char *owner_name)
+{
+    dn2_representation(&labels[code - ROWS], label, 5);
+    dn2_t1[code].owner_name = owner_name;
+}
+
+/* An added row's value text: format(value 8.8, buf), which the stock rows' formatter field holds. */
+void dn2_row_format(uint32_t code, void (*format)(int32_t value, char *buf))
+{
+    dn2_t1[code].format = (uint32_t)(uintptr_t)format;
+}
+
 /* Each declared knob gets a parameter row after the stock ones, copied from TEMPLATE. */
 static void build_pages(void)
 {
@@ -120,22 +144,14 @@ static void build_pages(void)
         for (unsigned i = 0; i < p->count; ++i, ++used_pages) {
             const char tab[] = {'S', 'Y', 'N', '1' + i, 0};
             struct descriptor *d = &pages[used_pages];
-            d->name = representation(&tabs[used_pages], tab, 4);
+            d->name = dn2_representation(&tabs[used_pages], tab, 4);
             d->label = strings[p->id][0].text;
             for (unsigned k = 0; k < 8; ++k) {
                 const struct mk2_param *m = p->page[i].knob[k];
                 unsigned code = ROWS + 8 * used_pages + k;
                 d->params[k] = m ? code : 0;
-                if (!m)
-                    continue;
-                struct row *r = &dn2_t1[code];
-                copy_row(r, &dn2_t1[TEMPLATE]);
-                r->owner = SYNTH_HOST;
-                r->slot = SLOT + 8 * i + k;
-                r->def = m->def << 8;
-                r->cc = host_cc(r->slot);
-                r->name = r->label = representation(&labels[code - ROWS], m->label, 5);
-                r->owner_name = strings[p->id][0].text;
+                if (m)
+                    dn2_add_row(code, SLOT + 8 * i + k, m->label, m->def, strings[p->id][0].text);
             }
             d->params[8] = PAGE_END;
         }
@@ -146,16 +162,26 @@ void dn2_ensure(void)
 {
     if (ready)
         return;
-    const struct mk2_synth *const *e;
+    const struct mk2_synth *const *e, *s;
     for (e = mk2_voice_synths; *e; ++e) {
-        const struct mk2_synth *s = *e;
-        if (s->id < FIRST || s->id >= COUNT || !s->name || !s->label || registered[s->id])
+        s = *e;
+        if (s->id < FIRST || s->id >= VOICE_COUNT || !s->name || !s->label || registered[s->id])
             continue;
         registered[s->id] = s;
-        descriptors[s->id].name = representation(&strings[s->id][0], s->name, 31);
-        descriptors[s->id].label = representation(&strings[s->id][1], s->label, 7);
+        descriptors[s->id].name = dn2_representation(&strings[s->id][0], s->name, 31);
+        descriptors[s->id].label = dn2_representation(&strings[s->id][1], s->label, 7);
+    }
+    /* SDK machines after the SHARC voices: a voice keeps its ID. */
+    for (unsigned i = 0; (s = dn2_sdk_synth(i)); ++i) {
+        if (s->id < FIRST || s->id >= COUNT || registered[s->id])
+            continue;
+        registered[s->id] = s;
+        ui_only[s->id] = 1;
+        descriptors[s->id].name = dn2_representation(&strings[s->id][0], s->name, 31);
+        descriptors[s->id].label = dn2_representation(&strings[s->id][1], s->label, 7);
     }
     build_pages();
+    dn2_sdk_build();
     /* Stock ordering puts FM DRUM before WAVETONE and MIDI last. */
     dn2_list[0] = 0; dn2_list[1] = 2; dn2_list[2] = 1; dn2_list[3] = 3;
     unsigned n = 4;
@@ -184,13 +210,15 @@ uint32_t dn2_is_voice(uint32_t type)
 
 uint32_t dn2_dsp_type(uint32_t type)
 {
-    return dn2_is_voice(type) ? type : dn2_host_type(type);
+    return dn2_is_voice(type) && !ui_only[type] ? type : dn2_host_type(type);
 }
 
 uint32_t dn2_voice_page_count(uint32_t type)
 {
     if (!dn2_is_voice(type))
         return 0;
+    if (ui_only[type])
+        return dn2_sdk_page_count(type);
     return page_count[type] ? page_count[type] : 1;
 }
 
@@ -200,6 +228,8 @@ uintptr_t dn2_voice_page(uint32_t type, uint32_t page)
         return 0;
     if (page >= dn2_voice_page_count(type))
         return (uintptr_t)&dn2_stock_descriptors[4];
+    if (ui_only[type])
+        return (uintptr_t)dn2_sdk_page(type, page);
     return (uintptr_t)(page_count[type] ? &pages[first_page[type] + page] : &descriptors[type]);
 }
 
@@ -207,6 +237,8 @@ uintptr_t dn2_voice_page(uint32_t type, uint32_t page)
 uint32_t dn2_voice_code(uint32_t type, uint32_t slot)
 {
     uint32_t page = (slot - SLOT) / 8;
+    if (dn2_is_voice(type) && ui_only[type])
+        return dn2_sdk_code(type, slot);
     if (!dn2_is_voice(type) || slot < SLOT || page >= page_count[type])
         return 0;
     return pages[first_page[type] + page].params[(slot - SLOT) % 8];
@@ -228,7 +260,7 @@ static uint32_t voice_lookup(lookup *stock, uint32_t track, uint32_t synth, uint
     uint32_t g = filter_lookup(stock, track, synth, &filter, key);
     if (g)
         return g;
-    if (dn2_is_voice(synth) && page_count[synth]) {
+    if (dn2_is_voice(synth) && (page_count[synth] || ui_only[synth])) {
         uint32_t code = stock(track, SYNTH_HOST, filter, key);
         if (code < ROWS && dn2_t1[code].owner == SYNTH_HOST && dn2_t1[code].slot >= SLOT
                 && dn2_t1[code].slot < SLOT + ADDED)
@@ -250,7 +282,7 @@ uint32_t dn2_nrpn_code(uint32_t track, uint32_t synth, uint32_t filter, uint32_t
 /* An added row's value-class object is its template's. */
 uint32_t dn2_value_code(uint32_t code)
 {
-    return code == G_CODE ? G_TEMPLATE : code >= ROWS && code < G_CODE ? TEMPLATE : code;
+    return code == G_CODE ? G_TEMPLATE : code >= ROWS && code < T1_END ? TEMPLATE : code;
 }
 
 uintptr_t dn2_descriptor(uint32_t type)
@@ -300,10 +332,10 @@ uint32_t dn2_permit(uint32_t type, uint32_t track)
 extern const struct mk2_filter *const mk2_voice_filters[];
 extern const struct names dn2_stock_filter_names[6];
 extern const struct descriptor dn2_stock_filter_descriptors[6];
-uint32_t dn2_filter_list[COUNT], dn2_filter_list_bytes;
-static const struct mk2_filter *filters[COUNT];
-static struct descriptor filter_descriptors[COUNT];
-static struct string_rep filter_strings[COUNT][2];
+uint32_t dn2_filter_list[FILTER_COUNT], dn2_filter_list_bytes;
+static const struct mk2_filter *filters[FILTER_COUNT];
+static struct descriptor filter_descriptors[FILTER_COUNT];
+static struct string_rep filter_strings[FILTER_COUNT][2];
 static uint32_t filters_ready;
 static uint32_t g_filter;           /* the custom filter G's row belongs to, or 0 */
 static struct string_rep g_label;
@@ -321,7 +353,7 @@ static void add_g(const struct mk2_filter *f)
     r->owner = dn2_t1[G_TEMPLATE].owner + FILTER_HOST;   /* filter rows: 5 + the filter type */
     r->slot = G_SLOT;
     r->def = m->def << 8;
-    r->name = r->label = representation(&g_label, m->label, 5);
+    r->name = r->label = dn2_representation(&g_label, m->label, 5);
     r->owner_name = dn2_t1[G_TEMPLATE].owner_name;
     filter_descriptors[f->id].params[G_CELL] = G_CODE;
     g_filter = f->id;
@@ -334,19 +366,19 @@ void dn2_filters_ensure(void)
     const struct mk2_filter *const *e;
     for (e = mk2_voice_filters; *e; ++e) {
         const struct mk2_filter *f = *e;
-        if (f->id < 6 || f->id >= COUNT || !f->name || !f->label || filters[f->id])
+        if (f->id < 6 || f->id >= FILTER_COUNT || !f->name || !f->label || filters[f->id])
             continue;
         filters[f->id] = f;
         filter_descriptors[f->id] = dn2_stock_filter_descriptors[FILTER_HOST];
-        filter_descriptors[f->id].name = representation(&filter_strings[f->id][0], f->name, 31);
-        filter_descriptors[f->id].label = representation(&filter_strings[f->id][1], f->label, 7);
+        filter_descriptors[f->id].name = dn2_representation(&filter_strings[f->id][0], f->name, 31);
+        filter_descriptors[f->id].label = dn2_representation(&filter_strings[f->id][1], f->label, 7);
         add_g(f);
     }
     const uint32_t stock[] = {0, 1, 4, 3, 5, 2};
     unsigned n = 0;
     for (; n < 6; ++n)
         dn2_filter_list[n] = stock[n];
-    for (unsigned id = 6; id < COUNT; ++id)
+    for (unsigned id = 6; id < FILTER_COUNT; ++id)
         if (filters[id])
             dn2_filter_list[n++] = id;
     dn2_filter_list_bytes = n * 4;
@@ -355,7 +387,7 @@ void dn2_filters_ensure(void)
 
 uint32_t dn2_filter_host_type(uint32_t type)
 {
-    if (type < 6 || type >= COUNT)
+    if (type < 6 || type >= FILTER_COUNT)
         return type;
     dn2_filters_ensure();
     return filters[type] ? FILTER_HOST : 0;
@@ -364,7 +396,7 @@ uint32_t dn2_filter_host_type(uint32_t type)
 uint32_t dn2_filter_dsp_type(uint32_t type)
 {
     dn2_filters_ensure();
-    return type < COUNT && filters[type] ? type : dn2_filter_host_type(type);
+    return type < FILTER_COUNT && filters[type] ? type : dn2_filter_host_type(type);
 }
 
 /* The parameter code of a filter's sound slot that its host has no row for: G's, or 0. */
@@ -379,7 +411,7 @@ uint32_t dn2_filter_code(uint32_t slot, uint32_t type)
 static uint32_t filter_lookup(lookup *stock, uint32_t track, uint32_t synth, uint32_t *filter,
                               uint32_t key)
 {
-    if (*filter < 6 || *filter >= COUNT)
+    if (*filter < 6 || *filter >= FILTER_COUNT)
         return 0;
     dn2_filters_ensure();
     if (!filters[*filter])
@@ -399,7 +431,7 @@ uintptr_t dn2_filter_descriptor(uint32_t type)
     if (type < 6)
         return (uintptr_t)&dn2_stock_filter_descriptors[type];
     dn2_filters_ensure();
-    return (uintptr_t)(type < COUNT && filters[type] ? &filter_descriptors[type]
+    return (uintptr_t)(type < FILTER_COUNT && filters[type] ? &filter_descriptors[type]
                                                    : &dn2_stock_filter_descriptors[0]);
 }
 
@@ -408,7 +440,7 @@ uintptr_t dn2_filter_name(uint32_t type)
     if (type < 6)
         return (uintptr_t)dn2_stock_filter_names[type].name;
     dn2_filters_ensure();
-    return (uintptr_t)(type < COUNT ? filters[type] ? filters[type]->name : "MISSING"
+    return (uintptr_t)(type < FILTER_COUNT ? filters[type] ? filters[type]->name : "MISSING"
                                    : dn2_unknown_name);
 }
 
@@ -417,7 +449,7 @@ uintptr_t dn2_filter_label(uint32_t type)
     if (type < 6)
         return (uintptr_t)dn2_stock_filter_names[type].label;
     dn2_filters_ensure();
-    return (uintptr_t)(type < COUNT ? filters[type] ? filters[type]->label : "MISS"
+    return (uintptr_t)(type < FILTER_COUNT ? filters[type] ? filters[type]->label : "MISS"
                                    : dn2_unknown_label);
 }
 
@@ -429,7 +461,7 @@ extern uint32_t dn2_shown(void *page, uint32_t code, uint8_t *flag);
 /* A custom filter's response graph: canvas x 21..71, y 7..23 from the bottom (screen y 56..40). */
 void dn2_filter_draw_curve(uint32_t type, void *canvas, uint32_t freq, uint32_t reso, void *page)
 {
-    if (type >= COUNT)
+    if (type >= FILTER_COUNT)
         return;
     dn2_filters_ensure();
     const struct mk2_filter *f = filters[type];

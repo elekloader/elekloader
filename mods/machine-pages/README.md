@@ -21,8 +21,8 @@ the mod shop: tick it there and the page takes the newest core for it.
 | sites | 109, listed in `mod.json`. 1.1's 20: 7 on the SRC page, 4 range lookups, 5 on the LFO page, 2 SAMP compares, the machine menu's icon row and the render point 0x40077fba. 1.2's extra values add 77: 50 one-byte bounds (the parameter-id compares, 164 to 171), and 27 hooks: the SRC page's page flip, title and copy/clear/paste, the id-slot maps, the descriptor table and its 7 readers, defaults, Randomize, locks and the sound file's save/load/upgrade and LFO destinations. 1.2.1 adds 2: the stores of the firmware's in-place parameter sync. 1.3 adds 2: MIDI's range lookups, the CC's (0x40010d50) and the NRPN's (0x40010154). 1.4 adds 1: the CC lookup's table for an audio track (0x400791fe). 1.5 adds none: it reads the view at the knob-graphic site it already has. 1.6 adds 7, for the machine menu's filter tab |
 | exports | `cm_ui_v3`, from 1.1 `cm_ui_v31`, from 1.2 `cm_ui_v32`, from 1.4 `cm_ui_v33`: the markers a machine's page names; from 1.2 `cm_src_value`; from 1.5 `cm_src_shown` |
 | claims | from 1.2, `soundslot:46` to `soundslot:52`, the extra values' slots |
-| declares | `ev_render_voices`, the render event |
-| RAM | 9.3 KB code, 4.5 KB for up to 32 machines' pages (1.1: 2.4 KB and 2 KB) |
+| declares | `ev_render_voices`, the render event; on OS 1.54 `sdk_alpha_machines`, the shared SDK's machines (docs/SDK.md) |
+| RAM | 10.9 KB code, 4.5 KB for up to 32 machines' pages (1.1: 2.4 KB and 2 KB) |
 
 ## What a machine describes
 
@@ -173,6 +173,31 @@ the overdrive. A machine that makes its own sound subscribes with order
 at 20 and NEIGHBOR copies at 60, so a NEIGHBOR track can take a SOPHIE
 track's sound, as digichain arranged it.
 
+## SDK machines (OS 1.54)
+
+The [shared SDK's](../../docs/SDK.md) machines on the Digitakt. Only the
+1.54 port builds them: it adds `sdk_alpha.c`, `sdk_alpha.s` and the shared
+`../sdk-alpha/machine.c`, and sets `SDK_ALPHA_DT1` (a cflag and a defsym)
+for the few places in `pages.c` and `pages.s` that call them. OS 1.53 has
+no SDK machines.
+
+- **The machine.** `sdk_alpha_build` adds each machine to
+  `sdk_alpha_machines`, and writes a `struct cm_machine` for it into
+  core's `core_machines`: params machine 3 (SLICE's), its own id as the
+  render id (an empty voice), and no page tail.
+- **The page.** `sdk_alpha.c` builds a `cm_ui32` page from the
+  declaration, once a machine: SLICE's page, every knob a plain 0-127
+  encoder with its default, knobs 0-7 on A-H's parameters and 8-14 on the
+  extra values (slots 46-52), so they save, lock and take LFOs as any
+  `cm_ui32` page's do.
+- **The sound.** `sdk_alpha_render` runs in the render point (above),
+  after playback and before the overdrive, filter and AMP: one voice a
+  track, its block replaced. Its knob values are `cm_src_value`'s, after
+  locks and LFOs; its start, note and velocity are the firmware's
+  (`fw_voice_start`, `fw_voice_note`, `fw_voice_vel`). A track's voice
+  state is kept across notes, and cleared when the track's rendered
+  machine changes.
+
 ## Beside the shop's mods
 
 It links beside every Digitakt mod of the shop that adds no machine (Digi
@@ -199,10 +224,17 @@ with each shop mod that does, on OS 1.53 and 1.54.
 ## Checked
 
 1.6 (the filter tab), on OS 1.53 and 1.54: `tests/probe_digitakt_filter_menu.py`
-boots core 4.1 and 1.6 in digiemu and drives the panel. RIGHT and LEFT swap
-the lists and back, UP and DOWN leave the filter list as it is, FUNC+SRC from
-FLTR gives the same screen as RIGHT, YES and NO go back to the FLTR page, a page key goes to its own page, and from AMP or SRC the machine list, and
-the screens are the same on both releases.
+boots core 4.1 and 1.6 in digiemu, drives the panel and reads the track's
+sound from RAM:
+- RIGHT and LEFT swap the lists and back, and UP and DOWN leave the filter
+  list as it is.
+- FUNC+SRC from FLTR gives the same screen as RIGHT; from AMP or SRC, the
+  machine list.
+- YES and NO go back to the FLTR page, and a page key goes to its own page.
+- YES on the filter list leaves the sound's bytes as they were; after a
+  machine stepped to on the machine list, it commits that machine.
+- The screens are the same on both releases.
+
 On a unit: the owner's Digitakt ran it on OS 1.54, a build of core 4.1 and 1.6, and it worked.
 
 1.5 (`cm_src_shown`), on OS 1.53 and 1.54. `tests/probe_digitakt_shown.py`

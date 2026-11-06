@@ -1,5 +1,5 @@
 {
- "id": "digitide", "version": "0.2",
+ "id": "digitide", "version": "0.3",
  "license": "GPL-2.0-or-later",
  "title": "DigiTide", "category": "Effect", "author": "irpina",
  "description": "A two-channel pedal for the Digitone mk1's audio inputs: a wet channel (REVERB, DELAY, GRAB, with FREEZE) and an always-listening looper that keeps the last 15 seconds and loops the last LENGTH of it when you turn it on (ENV, TAPE, STRETCH, with OVERDUB), routed into each other as ROUTING says, a CLOCK that lowers the sample rate of both from 48K to 2K, extra options, and MIDI CCs. DIGITIDE in core-dn1's Mod Menu (hold a track key) makes it the active effect and opens its page; while it is active it owns the audio engine (the synths are muted) and processes the inputs, through fxkit's MIXER (AMP), with two LFOs aimed at its controls (LFO) and p-locks on the pattern's steps (RECORD: hold a trig, turn a control). MIDI leaves the page to edit the MIDI tracks while it plays; NO turns it off. Needs fxkit (core-dn1 4.1).",

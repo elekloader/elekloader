@@ -26,6 +26,24 @@ it **stays on** after NO, while you play the Digitone as usual, until
 BYPASS. A project saved without DigiPrism starts with it off. With an older
 core SOURCE reads INPUTS ONLY.
 
+## 0.3
+
+From the first reports from a unit: a p-lock lasts its own step (fxkit 0.2; it
+used to hold until the lock track's next trig, and with trigs only where there
+are locks one lock kept its knob for the rest of the loop); SETUP's INPUT is
+one setting for every pedal, and a new project keeps it; the LFO pages turn as
+the stock's do (SPD and DEP gather speed with the knob, MULT, WAVE, MODE and
+DEST's list step every second detent); a knob let go no longer steps once
+more; and the next key pressed without FUNC clears FUNC, so it cannot stay on
+(a FUNC left on shows page 2 for pages 1-3, as reported after a SETUP change).
+Needs fxkit 0.2. Its own: a module's AMOUNT at 0 leaves the module out (dry),
+fading in over the first eight steps; LO-FI is plainly lo-fi from the middle
+(fewer bits, a lower rate, a narrower band, more hiss); STATIC's noises follow
+the music, so silence stays silent; CAPTURE counts its seconds from 1 and has
+a level (CLVL, page 3 H, CC 85), with the input level moved to SETUP (INPUT
+LEVEL); CLOCK starts on DIGITONE, and TIME and RATE name the division they
+snap to.
+
 ## 0.2: on fxkit
 
 From 0.2 DigiPrism is an effect on fxkit ([../fxkit-dn1](../fxkit-dn1)), as every
@@ -64,10 +82,15 @@ FUNC shows page 2.
 |---|---|---|
 | 1 Prism (the primary controls) | TILT (Color's tone), RATE (Motion), TIME (Ambience), MIX | AMOUNT of Color, Motion, Ambience, Grit |
 | 2 Secondary (the gray labels) | SENS (Color's sensitivity), DRFT (Motion's DRIFT), DRFT (Ambience's), OUT (output level) | VOL: each module's EFFECT VOL (Ambience's: its wet only) |
-| 3 Modules | the four modules' effects: turn to pick, push for on/off | ORDR (the order, as letters: CMAG), FLTR (FILTER's style: TILT, LPF, HPF), CAPT (CAPTURE: POST or PRE the effects), LEVL (the input level: LOW, MED, HIGH, VHI) |
+| 3 Modules | the four modules' effects: turn to pick, push for on/off | ORDR (the order, as letters: CMAG), FLTR (FILTER's style: TILT, LPF, HPF), CAPT (CAPTURE: POST or PRE the effects: PRE plays the loop into the chain), CLVL (CAPTURE's level, 100 as recorded) |
 
 Pushing a knob on pages 1 and 2 sets it back to its default; on page 2 the
-knobs whose middle is neutral (SENS, OUT, the VOLs) show - and +. The `C` at
+knobs whose middle is neutral (SENS, OUT, the VOLs) show - and +. A module's
+AMOUNT at 0 leaves the module out (dry), and over its first eight steps it
+fades in from the dry sound, so every effect starts dry. With CLOCK on
+DIGITONE (the default from 0.3) or TAP, TIME (ECHOES, TAPE, SCATTER) and
+RATE (VIBRATO, PHASER, TREMOLO) step through the tempo's divisions and show
+them by name. The `C` at
 the top right is how much of each audio block the whole render takes, the
 Digitone's and DigiPrism's (see CPU below).
 
@@ -79,9 +102,9 @@ Digitone's and DigiPrism's (see CPU below).
 | GESTURE | trig 13: record knob movements; again to play them. FUNC + trig 13 erases every gesture |
 | Secondary controls | page 2, or FUNC held |
 | Routing, filter style, capture routing | page 3 (DUAL BYPASS in SETUP) |
-| Calibration | LEVL on page 3, and SENS on page 2 |
+| Calibration | INPUT LEVEL in SETUP, and SENS on page 2 |
 | Presets | none from 0.2: the project keeps the pedal, and p-locks (RECORD) follow the pattern |
-| Global settings | YES opens SETUP: SOURCE (INPUTS, or DIGITONE with core-dn1 3.4), INPUT (STEREO, or MONO from input L), CLOCK, BYPASS (trails or cut), DUAL BYPASS, MIDI CC (auto channel or any), CC CLOSED |
+| Global settings | YES opens SETUP: SOURCE (INPUTS, or DIGITONE with core-dn1 3.4), INPUT (STEREO, or MONO from input L: fxkit's, one setting for every pedal), INPUT LEVEL (LOW, MED, HIGH, VHI), CLOCK, BYPASS (trails or cut), DUAL BYPASS, MIDI CC (auto channel or any), CC CLOSED |
 | Expression pedal | not yet |
 
 ## Modules and effects
@@ -110,9 +133,9 @@ with a soft clip before the output.
 | | REVERSE | backwards windows of what just played. TIME: half speed (left) to double (right); AMOUNT: its mix; DRIFT: pitch modulation |
 | Grit: AMOUNT | FILTER | the cutoff: TILT style cuts highs left of the middle and lows right of it; LPF and HPF styles are open at one end |
 | | COMP | a heavy compressor that overdrives near the top |
-| | LO-FI | tape: saturation, a narrowing band, wow, flutter, hiss and dropouts, in turn as AMOUNT grows |
+| | LO-FI | tape and sampler: saturation, fewer bits and a lower rate (from 20%), a narrowing band (to 2 kHz), wow, flutter, hiss and dropouts, in turn as AMOUNT grows |
 | | GLITCH | a motor in need of service: pitch drops, wobbling level and speed |
-| | STATIC | static and crackle that follow the music, radio fading, bursts of a phone's buzz, then stutters, crushed bits and dropouts |
+| | STATIC | static and crackle that follow the music (silence stays silent), radio fading, bursts of a phone's buzz, then stutters, crushed bits and dropouts |
 
 With CLOCK on DIGITONE (or TAP, after you tap trig 15) the delays' TIME
 picks subdivisions of the tempo (1/32 to 1/4; SCATTER 1/16 to two bars),
@@ -168,6 +191,7 @@ the Digitone. MIDI CONFIG > PORT CONFIG > INPUT FROM has to let them in.
 | 82 | CAPTURE: stop (0-43), play (44-87), record (88-127) | 83 | CAPTURE: post below 64, pre from 64 |
 | 84 | FILTER: LPF (0-43), TILT (44-87), HPF (88-127) | 93 | TAP |
 | 94 | the input level: LOW, MED, HIGH, VERY HIGH by quarters | 95 | taken, does nothing |
+| 85 | CAPTURE's level | | |
 
 Program changes (for presets) are not mapped: core-dn1
 passes mods the CCs only.
@@ -202,9 +226,11 @@ Digitone's UI task.
   so a unit runs slower: a guard times the whole render on DMA timer 0
   every block, and if the unit stays over 93% for 0.2 s it bypasses the
   pedal at once (no trails) and says so in the title ("CPU full:
-  bypassed"); BYPASS turns it back on.
+  bypassed"); BYPASS turns it back on. With SOURCE DIGITONE a busy pattern
+  can get there (the stock render alone peaks near 84% on a unit): fewer
+  modules, or a module's AMOUNT at 0 (which leaves it out), make room.
 - **Project data:** DigiPrism's controls, its latches and SETUP, with fxkit's mixer and LFOs
-  (`fx_pack`), are saved with the project (tag `DCHR`, 56 bytes; mods share 480 there,
+  (`fx_pack`), are saved with the project (tag `DCHR`, 56 bytes, version 3 with CAPTURE's level; mods share 480 there,
   and the seven effects, GAIN and fxkit take about 470). The p-locks are the
   pattern's.
 
@@ -213,8 +239,8 @@ Digitone's UI task.
 With the SDK and a stock OS file:
 
 ```bash
-python -m elekloader.sdk.build mods/digiprism-dn1 --stock Digitone_and_Digitone_Keys_OS1.43.syx   # out/digiprism-0.2.elemod
-python -m elekloader.sdk.build mods/digiprism-dn1 --stock Digitone_and_Digitone_Keys_OS1.44.syx   # out/digiprism-0.2-os1.44.elemod
+python -m elekloader.sdk.build mods/digiprism-dn1 --stock Digitone_and_Digitone_Keys_OS1.43.syx   # out/digiprism-0.3.elemod
+python -m elekloader.sdk.build mods/digiprism-dn1 --stock Digitone_and_Digitone_Keys_OS1.44.syx   # out/digiprism-0.3-os1.44.elemod
 ```
 
 It names no firmware address, so its 1.44 port is empty. It needs fxkit and core-dn1

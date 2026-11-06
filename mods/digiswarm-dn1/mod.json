@@ -1,5 +1,5 @@
 {
- "id": "digiswarm", "version": "0.2",
+ "id": "digiswarm", "version": "0.3",
  "license": "GPL-2.0-or-later",
  "title": "DigiSwarm", "category": "Effect", "author": "irpina",
  "description": "An effects engine for the Digitone mk1's audio inputs: eleven engines (SHARDS, SEQ, GLIDE, MIST, DRONE, RAKE, CHOPS, STUTTER, ARP, PATTERN, WARP) with four variations each, a 60-second looper with overdub and undo, Hold, Reverse, a resonant filter, pitch modulation and a reverb with four rooms, in time with the Digitone's tempo, and MIDI CCs for its controls and looper. DIGISWARM in core-dn1's Mod Menu (hold a track key) makes it the active effect and opens its page; while it is active it owns the audio engine (the synths are muted), through fxkit's MIXER (AMP), with two LFOs aimed at its controls (LFO) and p-locks on the pattern's steps (RECORD: hold a trig, turn a control; Hold, Reverse and the engine lock too). MIDI leaves the page to edit the MIDI tracks while it plays; NO turns it off. Needs fxkit (core-dn1 4.1).",

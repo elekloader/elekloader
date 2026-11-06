@@ -1,5 +1,5 @@
 {
- "id": "digitriad", "version": "0.2",
+ "id": "digitriad", "version": "0.3",
  "license": "GPL-2.0-or-later",
  "title": "DigiTriad", "category": "Effect", "author": "irpina",
  "description": "A three-voice rhythmic pitch shifter for the Digitone mk1's audio inputs: three voices from -2 to +2 octaves, chromatic or in a key and scale (Major, Minor, Melodic Minor, Harmonic Minor, Double Harmonic, Lydian and Minor Pentatonic) from the note a pitch detector hears, with microtune, glide and pitch correction, each behind its own time division of a delay in time with the Digitone's tempo, in four delay modes (pitch feedback, series, dual with cross feedback, dual), rhythm patterns, half speed, swell, freeze, and MIDI CCs. DIGITRIAD in core-dn1's Mod Menu (hold a track key) makes it the active effect and opens its page; while it is active it owns the audio engine (the synths are muted) and processes the inputs, through fxkit's MIXER (AMP), with two LFOs aimed at its controls (LFO) and p-locks on the pattern's steps (RECORD: hold a trig, turn a control). MIDI leaves the page to edit the MIDI tracks while it plays; NO turns it off. Needs fxkit (core-dn1 4.1).",
