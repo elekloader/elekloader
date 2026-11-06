@@ -77,6 +77,7 @@ static volatile u8 dc_on;                   /* DigiSwarm is the active effect */
 static u32 clear_at;                        /* the next address to clear, 0 when nothing is */
 static u32 bclear_at;                       /* the overdub layer's clearing, in frames */
 static s32 enc_acc[8];
+static u32 ui_now, enc_at[8];               /* UI ticks (60 a second), and each knob's last turn */
 
 /* ---- the effect: DigiSwarm's controls as fxkit's slots ------------------------------------------------- */
 static const char *const eng_short[E_COUNT] = { "SHRD", "SEQ", "GLID", "MIST", "DRON", "RAKE", "CHOP", "STUT",
@@ -380,6 +381,9 @@ int dswarm_key(void *brain, void *ev)
     }
     if (fl & 2)                             /* another key's event: FUNC is held */
         ui_func = 1;
+    else if (fl & 1)                        /* another key down without it: FUNC is up, whether its release came
+                                               or not (FUNC left on showed page 2 for pages 1-3) */
+        ui_func = 0;
     if (key == KEY_PLAY || key == KEY_STOP || key == KEY_TEMPO)
         return 0;                           /* the sequencer and its tempo stay the Digitone's */
     if (!ui_setup && page_now() >= 3 && fx_page_key(EFF, page_now() - 3, key, fl))
@@ -427,6 +431,9 @@ int dswarm_key(void *brain, void *ev)
     } else if (ui_setup && (key == KEY_LEFT || key == KEY_RIGHT)) {
         if (ui_row == G_COUNT) {
             fx_lock_track_set((fx_lock_track() + (key == KEY_RIGHT ? 1 : 3)) % 4);
+        } else if (ui_row == G_MONO) {      /* fxkit's INPUT: every pedal's, and a new project keeps it */
+            fx_input_mono_set(!fx_input_mono());
+            dswarm.cfg[G_MONO] = (u8)fx_input_mono();
         } else {
             dswarm.cfg[ui_row] = !dswarm.cfg[ui_row];
             if (ui_row == G_HOLDMOM)
@@ -470,6 +477,9 @@ int dswarm_enc(void *brain, void *ev)
     if (ui_setup)
         return 1;
     i = (int)e - 1;
+    if (ui_now - enc_at[i] > 18)
+        enc_acc[i] = 0;                     /* a pause: part of a detent from before it goes (a knob let go) */
+    enc_at[i] = ui_now;
     enc_acc[i] += EV_DELTA(ev);
     d = enc_acc[i] / COUNTS;
     enc_acc[i] -= d * COUNTS;
@@ -570,10 +580,12 @@ static int cc_take(int cc, int value)
 /* ---- the UI task: clearing, the effect, redraws ---------------------------------------------------------- */
 void dswarm_tick(void *ctrl)
 {
+    ui_now++;
     if (!ui_inited) {                       /* no project load reached us */
         defaults();
         ui_inited = 1;
     }
+    dswarm.cfg[G_MONO] = (u8)fx_input_mono();   /* INPUT is fxkit's (its bit in the save: written, not read) */
     if (clear_at) {                         /* 256 KB a tick */
         u32 *p = (u32 *)clear_at, *end = p + 65536;
         if ((u32)end > DC_CLEAR_END)
@@ -838,8 +850,11 @@ static void left_column(void *bmp)
     int s = dswarm.lstate, k, l, r, secs;
     rframe(bmp, 0, 27, 14, 50);             /* the looper, as the stock's SYN box */
     loop_icon(bmp, 7, 44, s);
-    if (s != L_EMPTY) {
-        secs = (int)((s == L_REC ? dswarm.lrec : dswarm.llen) / 48000);
+    if (s != L_EMPTY) {                     /* seconds: the one recording now (1 from the start), or the loop's,
+                                               rounded */
+        secs = (int)(s == L_REC ? dswarm.lrec / 48000 + 1 : (dswarm.llen + 24000) / 48000);
+        if (secs < 1)
+            secs = 1;
         TEXTF(bmp, FONT5, secs >= 10 ? 3 : 5, 35, -1, "%d", secs);
     }
     if (dswarm.hold)

@@ -87,7 +87,7 @@ pages and glyphs respectively; they build for all three devices.
 
 | | Digitakt mk1 OS 1.54 | Digitone mk1 OS 1.44 |
 |---|---|---|
-| companion | `machine-pages` (`mods/machine-pages/sdk_alpha.c`) | `machines` 0.3, with core-dn1 4.2 (`mods/machines-dn1/sdk_alpha.c`) |
+| companion | `machine-pages` (`mods/machine-pages/sdk_alpha.c`) | `machines` 0.3, with core-dn1 5.2 (`mods/machines-dn1/sdk_alpha.c`) |
 | choosing the machine | the machine menu (FUNC + SRC) | Mod Menu → MACHINES (hold a track key) |
 | pages, knobs | 2 pages, 15 knobs, on SRC | 2 pages, 15 knobs: SYN2 shows the machine's pages in place of its own on its tracks; each track keeps the page it showed |
 | values | 0..127, raw 0..32512 | the same, each knob in one SYN parameter whatever page shows it: 0-7 SYN2's first page's A-H, 8-14 DTUN, FDBK, MIX, ADEL, BDEL and two ratio offsets. Knobs 8, 13 and 14 turn in finer steps, as those parameters do, and 13 and 14 reach 127.99, which `.present` reads as 127 |
@@ -184,8 +184,8 @@ the native registration and missing-mod behavior.
 
 ## Open issues
 
-- **The SDK pages' numbers on the Digitone.** They claim `page:30` and
-  `page:29`, two of core-dn1's four mod page numbers (27..30), so a build
+- **The SDK pages' numbers on the Digitone.** They claim `page:29` and
+  `page:28`, two of core-dn1's four mod page numbers (27..30; 5.1 takes 30), so a build
   with another mod on either refuses to link. Core could number mod pages
   itself instead.
 - **Who sets SYN2's list.** With `core_page_list` the last call wins, so

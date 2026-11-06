@@ -1,5 +1,5 @@
 {
- "id": "digireel", "version": "0.2",
+ "id": "digireel", "version": "0.3",
  "license": "GPL-2.0-or-later",
  "title": "DigiReel", "category": "Effect", "author": "irpina",
  "description": "A time-warp pedal for the Digitone mk1's audio inputs: a 10-second tape that always listens, played back at -2x to +2x (reverse included) in windows in time with the Digitone's tempo, pitch apart from speed (STRETCH) or with it (TAPE), HOLD (loop the last or the next window, forwards, backwards or back and forth), TAPE STOP, random speed, pitch, reverse and stutter events, a step slicer, and MIDI CCs. DIGIREEL in core-dn1's Mod Menu (hold a track key) makes it the active effect and opens its page; while it is active it owns the audio engine (the synths are muted) and processes the inputs, through fxkit's MIXER (AMP), with two LFOs aimed at its controls (LFO) and p-locks on the pattern's steps (RECORD: hold a trig, turn a control). MIDI leaves the page to edit the MIDI tracks while it plays; NO turns it off. Needs fxkit (core-dn1 4.1).",

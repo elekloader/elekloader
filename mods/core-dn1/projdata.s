@@ -128,6 +128,7 @@ core_proj_init:
         clr.l   -(%sp)                  | no data: defaults
         bsr.w   extract
         addq.l  #4, %sp
+        jsr     core_lanes_new          | 5.1: no lanes in it (lanes.c)
         move.l  (%sp)+, %d0
         rts
 1:      lea     -20(%sp), %sp

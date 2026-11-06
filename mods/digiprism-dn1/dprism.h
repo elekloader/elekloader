@@ -86,7 +86,8 @@ struct dh_state {
     volatile u16 load;                  /* the whole render's (the Digitone's and DigiPrism's), per mille */
     volatile u8 overload;               /* 1: the guard bypassed the pedal (the UI clears it) */
     volatile u8 source;                 /* SRC_*: the inputs (exclusive) or the Digitone (insert) */
-    volatile u8 mono;                   /* 1: input L to both sides (a mono source on one jack) */
+    volatile u8 mono;                   /* 1: input L to both sides (a mono source on one jack; fxkit's INPUT) */
+    volatile u8 clvl;                   /* CAPTURE's level, 0-127 (100: as recorded) */
 };
 extern struct dh_state dprism;
 extern struct core_audio_owner dprism_owner;   /* SOURCE DIGITONE's insert; the inputs go through fxkit's audio */
@@ -94,7 +95,8 @@ extern volatile u8 dprism_on;          /* DigiPrism is fxkit's active effect (th
 extern const struct fx_effect dprism_effect;
 
 /* The controls' slots (fxkit's): the primary knobs on page 1, the secondaries on page 2, then the modules'
- * effects and their on/off, the order, FILTER's style, CAPTURE's route and the input level as settings */
+ * effects and their on/off, the order, FILTER's style, CAPTURE's route and the input level as settings, and
+ * CAPTURE's level */
 #define DH_S_KNOB(i)    (FX_S_P1 + (i))
 #define DH_S_SEC(i)     (FX_S_P2 + (i))
 #define DH_S_FX(m)      FX_S_SET(m)
@@ -103,6 +105,7 @@ extern const struct fx_effect dprism_effect;
 #define DH_S_STYLE      FX_S_SET(9)
 #define DH_S_CROUTE     FX_S_SET(10)
 #define DH_S_LEVEL      54
+#define DH_S_CLVL       55
 extern const u8 ch_order[24][4];
 
 void dprism_render(int32_t *out, const int32_t *in);
