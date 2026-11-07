@@ -257,6 +257,20 @@
       "on_unit": "0.2 tested on a Digitone mk1 by its author (Oct 2026), built before the effects' rename, which changed only names; still a beta. Also checked in digikit's emulator on OS 1.43 and 1.44. Not yet run on a Digitone Keys."
     },
     {
+      "repo": "mbaumannn/mutiny", "tag": "v0.2.0", "file": "mutiny-0.2.elemod",
+      "device": "digitone-mk1", "needs_core": "4.1",
+      "sha256": "7477705619b515decc7ae8fa4eebe4fcbd4c87cace9dc387f00830c2938f60da",
+      "summary": "Euclidean, Turing Machine and TB-3PO acid sequencers on each synth track, played from the encoders; YES writes a page into ordinary trigs.",
+      "on_unit": "One Digitone mk1 on OS 1.44, about an hour through every feature (three models, page commits and undo, project save and reload, pattern switches, four tracks generating). No bugs found. Not tested with other mods on hardware."
+    },
+    {
+      "repo": "mbaumannn/mutiny", "tag": "v0.2.0", "file": "seq-events-0.1-os1.44.elemod",
+      "device": "digitone-mk1",
+      "sha256": "0727ece76a560c30ee27e4d19d18536e81340f60d7deaf294fc213d05124cd21",
+      "summary": "Euclidean, Turing Machine and TB-3PO acid sequencers on each synth track, played from the encoders; YES writes a page into ordinary trigs.",
+      "on_unit": "One Digitone mk1 on OS 1.44, about an hour through every feature (three models, page commits and undo, project save and reload, pattern switches, four tracks generating). No bugs found. Not tested with other mods on hardware."
+    },
+    {
       "repo": "irpina/digineighbor", "tag": "v0.6", "file": "digineighbor-0.6.elemod",
       "device": "digitakt-mk1", "needs_core": "2.1", "title": "digineighbor", "version": "0.6",
       "sha256": "380837f86c05cf6d0aba2dfc930a4309cc6b2e99b2e8c6a450f0abe6e844dccd",
