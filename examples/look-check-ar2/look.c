@@ -149,7 +149,7 @@ void lk_tick(void *ctrl)
 const struct core_param lk_params_own = {CORE_KNOB(0), CORE_KNOB(NOWN - 1), p_get, p_delta, p_text};
 const struct core_param_lock lk_locks = {CORE_KNOB(0), CORE_KNOB(NOWN - 1), 0, 0, 0, 0, l_label, l_name};
 const struct core_knob_look lk_looks_each[NLOOK] = {LOOK_ENTRIES};
-const struct core_knob_look lk_look_ui = {CORE_KNOB(UI_PAIR), CORE_KNOB(UI_PAIR), 0, l_ui, 0, 0};
+const struct core_knob_look lk_look_ui = {CORE_KNOB(UI_PAIR), CORE_KNOB(UI_PAIR), UI_LOOK, l_ui, 0, 0};
 const struct core_knob_look lk_look_range = {CORE_KNOB(RANGE_PAIR), CORE_KNOB(RANGE_PAIR), RANGE_LOOK, 0,
                                              RANGE_MIN, RANGE_MAX};
 const struct core_param lk_params_stock = {1, 468, p_get, p_delta, p_text};
