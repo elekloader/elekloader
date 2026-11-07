@@ -24,9 +24,9 @@
     <span class="brand-text"><strong>elekloader</strong><small>Elektron firmware mods</small></span></a>
   <nav class="side-nav">
     <a class="nav-link" id="nav-library" href="#library">
-      <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></svg>Mods</a>
+      <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></svg>Mod Shop</a>
     <a class="nav-link" id="nav-build" href="#build">
-      <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M13.5 3.5 6.5 13h5l-1 7.5 7-9.5h-5z"/></svg>Build<span class="badge" id="nav-count">0</span></a>
+      <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M13.5 3.5 6.5 13h5l-1 7.5 7-9.5h-5z"/></svg>Build Firmware<span class="badge" id="nav-count">0</span></a>
     <a class="nav-link" id="nav-make" href="#make">
       <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8zM18.5 15.5l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7z"/></svg>Make your own mod!</a>
     <a class="nav-link" id="nav-submit" href="#submit">
@@ -101,7 +101,7 @@
     <!-- with a stock file in: where you are, and what's next -->
     <header class="page-head" id="lib-head" hidden>
       <p class="eyebrow" id="lib-eyebrow">Library</p>
-      <h1 id="lib-title">Mods</h1>
+      <h1 id="lib-title">Mod Shop</h1>
       <div class="next" id="next"></div>
     </header>
     <h2 class="list-h" id="list-title">Browse the mods</h2>
@@ -344,8 +344,8 @@ python -m elekloader.patch --stock Digitakt_OS1.53.syx --mod mods/core/out/core-
 
       <h2>What is a mod?</h2>
       <p>A mod is a small file (<code>.elemod</code>) that adds something to your Elektron's operating system: a new
-        sound machine, an effect, a change to a screen. You pick mods on the <a href="#library">Mods</a> page, and
-        the <a href="#build">Build</a> page combines them with Elektron's own OS file into a normal update (a
+        sound machine, an effect, a change to a screen. You pick mods in the <a href="#library">Mod Shop</a>, and
+        <a href="#build">Build Firmware</a> combines them with Elektron's own OS file into a normal update (a
         <code>.syx</code>) that you send to your unit like any other. Making a mod means making one of those small
         files.</p>
 
@@ -461,7 +461,7 @@ python -m elekloader.patch --stock Digitakt_OS1.53.syx --mod mods/core/out/core-
         <li><strong>Read the bot's comment.</strong> It checks each file's checksum, licence, OS, and that the shop has
           what the mod needs. If it refuses something it says why; fix it and edit the issue, and it checks again.</li>
         <li><strong>A maintainer merges</strong> the pull request the bot opened, and the next deploy puts your mod on
-          the Mods page.</li>
+          the Mod Shop.</li>
       </ol>
       <p><a class="btn primary" href="https://github.com/elekloader/elekloader/issues/new?template=submit-mod.yml" target="_blank" rel="noopener">Open the Submit a mod form</a></p>
 
@@ -585,9 +585,9 @@ python -m elekloader.patch --stock Digitakt_OS1.53.syx --mod mods/core/out/core-
 
 <nav class="tabbar" aria-label="Views">
   <a class="tab" id="tab-library" href="#library">
-    <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></svg>Mods</a>
+    <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></svg>Mod Shop</a>
   <a class="tab" id="tab-build" href="#build">
-    <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M13.5 3.5 6.5 13h5l-1 7.5 7-9.5h-5z"/></svg>Build<span class="badge" id="tab-count">0</span></a>
+    <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M13.5 3.5 6.5 13h5l-1 7.5 7-9.5h-5z"/></svg>Build Firmware<span class="badge" id="tab-count">0</span></a>
   <a class="tab" id="tab-make" href="#make">
     <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8zM18.5 15.5l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7z"/></svg>Make</a>
   <a class="tab" id="tab-submit" href="#submit">

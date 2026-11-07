@@ -498,7 +498,8 @@ details summary:hover { color: var(--text); }
   .tabbar { display: flex; position: fixed; z-index: 10; left: 0; right: 0; bottom: 0; height: 62px;
     background: var(--side); border-top: 1px solid var(--line); }
   .tab { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
-    position: relative; border: 0; background: none; color: var(--muted); font-size: 11.5px; font-weight: 600; cursor: pointer; }
+    position: relative; border: 0; background: none; color: var(--muted); font-size: 11.5px; font-weight: 600; cursor: pointer;
+    padding: 0 2px; text-align: center; line-height: 1.1; }
   .tab .ico { width: 21px; height: 21px; }
   .tab:hover { text-decoration: none; color: var(--text); }
   .tab.on { color: var(--accent); }
