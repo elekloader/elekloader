@@ -2124,6 +2124,43 @@ my_blob:
   A 1 MB payload that packs to about 80 % fits beside core and a check mod
   (sidecar-check-ar2 part 6).
 
+### Screen calls (core-ar2 0.12, Analog Rytm MKII)
+
+Text in stock's own fonts, a key handed back to stock, whether a stock
+overlay is up, the TRK LEVEL readout and stock's progress box
+(`analog-rytm-mk2/screen.h`; ask for `"core": "0.12"` in `resources`).
+All are for the UI task: `ev_tick`, `ev_draw`, `ev_key`, `ev_enc` and what
+they call. `examples/screen-check-ar2` uses each of them.
+
+- **Text.** `core_text_draw(bmp, font, x, y, align, str)` draws `str` in
+  one of stock's 17 fonts (16 is the main screen's) with stock's own
+  routine, into `ev_draw`'s frame or a bitmap you make over your own
+  buffers with `core_bitmap_init` (`CORE_BITMAP_SIZE` bytes; 1 KB of bits
+  for 128 x 64). `y` counts from the bottom: for a glass top row `t`, pass
+  `64 - core_font_height(font) - t`. `align` is `CORE_ALIGN_LEFT`,
+  `_CENTRE` or `_RIGHT`, with `CORE_TEXT_INVERT` for light text on a set
+  bar. A `%` in `str` is drawn as a `%`. `core_text_width` measures.
+- **Keys back to stock.** `core_stock_key(ev)` hands a key event to stock
+  alone, skipping the other mods' handlers. To act on a key and let stock
+  have it later, return 1 from `ev_key`, keep a copy of the event
+  (`CORE_KEY_EVENT_SIZE` bytes) and hand the copy over from `ev_tick`.
+- **Overlays.** `core_stock_overlay()` answers `CORE_OVERLAY_VIEW` while a
+  stock menu or overlay view is stacked over the main screen (TEMPO, SCALE,
+  the FUNC + key menus, a browser, TRK held), `CORE_OVERLAY_WINDOW` while
+  a stock window is up (a popup, a confirm box, a progress box) and
+  `CORE_OVERLAY_SCREEN` while the main screen isn't up at all (GLOBAL).
+  The pad modes' views don't count. A mod that draws over the screen steps
+  aside while it is not 0.
+- **The TRK LEVEL readout.** After a LEVEL turn that reached stock,
+  `core_level_readout()` counts down 47 ticks (2.35 s, inside stock's own
+  readout). Save the header's field with `core_level_field_save` before you
+  draw over it and put it back with `core_level_field_put`, and stock's
+  `TRK LEVEL <v>` shows through your page.
+- **The progress box.** `h = core_progress_open("TITLE")` shows stock's
+  progress box (up to four at once), `core_progress_set(h, done, total)`
+  fills its bar and `core_progress_close(h)` takes it away. The box takes
+  no keys: catch NO in your `ev_key` and close it.
+
 ### Mod scene and performance locks (core-ar2 0.8, Analog Rytm MKII)
 
 A lockable parameter is locked to a scene, or given a performance depth,

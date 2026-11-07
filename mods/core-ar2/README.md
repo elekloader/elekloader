@@ -1075,6 +1075,27 @@ Opt-in, by the knob's id; a parameter without an entry is as in 0.10.
   so a depth's get notes its id and DMA timer 0's count, and the text
   within 4 ms takes it, as `core_held_step` does.
 
+## Screen calls (0.12)
+
+`screen.c`, declared in `elekloader/sdk/include/analog-rytm-mk2/screen.h`
+(docs/ADAPTING.md, "Screen calls (core-ar2 0.12, Analog Rytm MKII)"). Core
+calls stock's own routines; nothing of their code or glyphs is copied.
+
+| call | stock's |
+|---|---|
+| `core_bitmap_init` | the 28-byte bitmap over a caller's buffers (0x4006fa2e, owned 0) |
+| `core_text_draw`, `core_text_width`, `core_font_height`, `core_font_descent` | the 17 font objects at 0x417e381c + 8 i, their data (0x40071be8), the text routine 0x4007154c with a fixed `"%s"`, the width 0x40071bf2 over a `std::string` |
+| `core_stock_key` | Brain::key 0x400a0336, with the brain `core_screen_key` keeps from `ev_key` (order -1000000, before every mod) |
+| `core_stock_overlay` | the view controller ev_tick passes: its list (+28 the first node, +20 the end, a node's +8 its view); classes by their RTTI names, SamplerLedView 0x4023502c the main screen's last view |
+| `core_level_readout`, `core_level_field_save`, `core_level_field_put` | `core_screen_enc` (`ev_enc`, order 1000000, so only a turn no mod took) starts 47 ticks on encoder 8; the field is rows 0..8, columns 0..69 of the frame |
+| `core_progress_open`, `_set`, `_close` | COPYING SOUNDS' (0x400634cc): a ProgressWindow of 0x88 bytes (ctor 0x40076c4a), its shared_ptr's count (0x40185926), pushed onto the controller (0x40079462, the controller COPYING SOUNDS reaches as `*(host + 100)`); filled by 0x40076bb0, closed by its vtable +0x2c, and freed when core's count and the controller's are released |
+
+- Stock returns pointers in `%d0`, so screen.c declares those routines as
+  returning `uintptr_t`.
+- Stock's popups, confirm boxes and progress boxes are views on the same
+  list as the screen's, pushed after them: a window is a view whose class
+  name ends in Window.
+
 ## Checked so far
 
 On a unit (OS 1.73). With test images built by rytm-mods-src (its `elemod`
