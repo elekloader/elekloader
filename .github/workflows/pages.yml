@@ -9,7 +9,8 @@
 #
 # It also puts the mod shop on the site: each mod web/catalog.json lists,
 # from its author's GitHub release, checked against the sha256 the catalog
-# pins.
+# pins, and each card's thumbnail the same way (packaging/thumbs.py checks
+# it again; the repository variable SHOP_THUMBS=false leaves them all out).
 #
 # No firmware reaches this workflow, and the site holds none: the page reads
 # the user's stock OS file only in their browser, and builds there.
@@ -65,8 +66,17 @@ jobs:
           # web/catalog.json pins each file's sha256 (build_web.py checks them); one that
           # cannot be fetched (a draft release) is listed in the shop as not available
           mkdir -p build/shop
-          python packaging/build_web.py --catalog-list web/catalog.json | while read -r how repo ref path; do
-            if [ "$how" = commit ]; then
+          # and each card's thumbnail ("thumb"), to thumbs/<sha256>.png; one that can't be fetched leaves its card's
+          # drawn cover (build_web.py checks each again)
+          mkdir -p build/shop/thumbs
+          python packaging/build_web.py --catalog-list web/catalog.json --thumbs | while read -r how repo ref path sum; do
+            if [ "$how" = thumb-commit ]; then
+              gh api "repos/$repo/contents/$path?ref=$ref" -H "Accept: application/vnd.github.raw" > "build/shop/thumbs/$sum.png" \
+                || { rm -f "build/shop/thumbs/$sum.png"; echo "::warning::$repo $ref $path: thumbnail not downloadable"; }
+            elif [ "$how" = thumb-release ]; then
+              gh release download "$ref" --repo "$repo" --pattern "$path" --output "build/shop/thumbs/$sum.png" --clobber \
+                || echo "::warning::$repo $ref $path: thumbnail not downloadable"
+            elif [ "$how" = commit ]; then
               out="build/shop/${path##*/}"
               gh api "repos/$repo/contents/$path?ref=$ref" -H "Accept: application/vnd.github.raw" > "$out.part" \
                 && mv "$out.part" "$out" \
@@ -86,7 +96,10 @@ jobs:
       - name: Pyodide, the pinned release
         run: curl -fsSL --retry 3 --create-dirs -o build/pyodide-core.tar.bz2 "$(python packaging/build_web.py --pyodide-url)"
       - name: Assemble the site
-        run: python packaging/build_web.py --pyodide build/pyodide-core.tar.bz2 --core build/core/core-*.elemod --release "$TAG" --catalog web/catalog.json --catalog-dir build/shop --prs build/prs.json --out build/site
+        env:
+          # the maintainers' switch: the repository variable SHOP_THUMBS set to false leaves every thumbnail out
+          SHOP_THUMBS: ${{ vars.SHOP_THUMBS }}
+        run: python packaging/build_web.py --pyodide build/pyodide-core.tar.bz2 --core build/core/core-*.elemod --release "$TAG" --catalog web/catalog.json --catalog-dir build/shop --prs build/prs.json --out build/site $([ "$SHOP_THUMBS" = false ] && echo --no-thumbs)
       - name: The engine under Pyodide, from the assembled site
         run: node tests/test_web.mjs build/site
       - uses: actions/upload-pages-artifact@v5
