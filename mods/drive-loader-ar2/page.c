@@ -403,7 +403,9 @@ static int inspect_kept(const u8 *keep)
 #define LIST_CLEAR ((void (*)(void *))0x40072914)
 #define VIEW_DIRTY ((void (*)(void *))0x40078580)       /* (view + 0x38) */
 #define FOCUS ((void (*)(void *, void *))0x400734a8)    /* (view, panel); (view, view) closes the panels */
-/* the list view's calls (vtable offsets): +0x18 cursor to (row, 0) (0x400724bc), +0x24 the
+/* the list view's calls (vtable offsets; the two-pane view's table 0x401d6974): +0x18 move the cursor
+ * by n rows (0x40072024: relative, clamped to the list; found 2026-11-07, the CB11 runs: with the
+ * cursor_to of an absolute row, a YES on row r jumped the cursor r + 1 rows), +0x24 the
  * cursor row, +0x54 tick a row (0x40072a98), +0x58 untick it (0x40072944); the ticks are a
  * vector of rows at +0x28/+0x2c */
 #define VCALL(off) ((*(unsigned **)view)[(off) / 4])
@@ -593,9 +595,12 @@ static void cursor_to(int row)
     /* never on a row the list does not have: stock's view hangs the UI on a cursor in an empty
      * list (no files on the +Drive; found 2026-11-07 on DLP7). Stock's own lists are never empty
      * (a folder always has "..", VIEW RAM always its 128 slots), so the MODS page alone needs this. */
+    int now;
     if (row < 0 || row >= list_n())
         return;
-    ((void (*)(void *, int, int))VCALL(0x18))(view, row, 0);
+    now = ((int (*)(void *))VCALL(0x24))(view);
+    if (row != now)
+        ((void (*)(void *, int))VCALL(0x18))(view, row - now);
 }
 
 /* "n MODS <what>" into msg */
