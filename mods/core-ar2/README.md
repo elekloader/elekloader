@@ -1075,6 +1075,44 @@ Opt-in, by the knob's id; a parameter without an entry is as in 0.10.
   so a depth's get notes its id and DMA timer 0's count, and the text
   within 4 ms takes it, as `core_held_step` does.
 
+## Knob looks (0.12)
+
+`looks.c`, `looks.s`: a mod's own knob id (555 up, `core_params` and
+`core_param_locks`) has no stock records, so stock drew every such knob as
+record 0's dial on record 0's range (0..0), whatever it showed: a switch
+like voice-dac's POL became a dial whose pointer never moves. An entry in
+`core_knob_looks` (`elekloader/sdk/include/analog-rytm-mk2/pages.h`,
+docs/ADAPTING.md "Knob looks (core-ar2 0.12, Analog Rytm MKII)") gives its
+ids the look of any stock knob, a range of their own, or a UI record of the
+mod's own. An id without an entry is as in 0.11.
+
+Stock finds a knob's look in two places, both one routine, and core answers
+both from their first instruction:
+
+| lookup | what it answers | core, for an entry's id |
+|---|---|---|
+| 0x400ff5c2, `uirec(id)` (12 callers) | the UI record, 84 bytes an id in RAM from 0x419a4888, built at boot: flags at +0 (the parts the knob draws), the turn's steps at +4..+0x10, and four delegates of 16 bytes from +0x14 (the value text, the graphic at +0x24, one at +0x34, the value pop-up at +0x44) | the entry's `ui(id)` when it answers, else look's stock record |
+| 0x40006ff0, `range(id)` (32 callers: the pop-ups, the header) | 12 bytes from the parameter record's +8 (52 bytes an id from 0x401bfbc8): min, max and the record's default, 8.8 | look's, with the entry's min and max when min < max |
+
+Both are behind a `cmpi.l #469` bound in stock (record 0 above it). Nothing
+else is taken from look: the label and the name stay `core_param_locks'`,
+the value and its text `core_params'`, and the parameter record's other
+fields (its sound slot, the +0x24 flags that put it in the LFO and
+modulation lists and open a list on a turn, MIDI) are read for the knob's
+own id as before, so a knob that looks like a stock one does nothing that
+stock one does. Stock's graphics draw the knob's value on their own fixed
+scale (the dial's 0..127, which several graphics map their value to and
+clamp, 0x400ff86c..0x400ffa14), not on the range.
+
+A stock 1.74 boot builds 87 different UI records (by their flags, steps and
+delegates) over 469 ids, with 46 different graphics;
+`examples/look-check-ar2` draws one stock id of each beside a mod knob that
+takes its look. Before 0.12, mods that borrowed hidden machines' records
+had a stock record's look: duck and fx-sends 1.0 copied COMP MIX's (94) steps
+and dial into HH TEST's and CY TEST's records, which gives exactly the UI
+record of 191 (and 82 other ids); voice-dac 1.5's POL was CB TEST's 457, a
+switch. With `look` set to those, their knobs draw as they did.
+
 ## Checked so far
 
 On a unit (OS 1.73). With test images built by rytm-mods-src (its `elemod`

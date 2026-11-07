@@ -1950,6 +1950,45 @@ the mod's `"knobs"`.
 Keep your values by `id - CORE_KNOB(0)`, never by the id itself: a build
 with other mods may give the mod other ids.
 
+### Knob looks (core-ar2 0.12, Analog Rytm MKII)
+
+A knob id of the mod's own (555 up) has no stock records: without more,
+stock draws it as record 0's dial with a range of 0..0, so its pointer
+never moves, whatever the value. To draw it as any stock knob draws (a
+switch, a select box, a bipolar dial, a dial with its own steps), give the
+ids a look in `core_knob_looks`, with `analog-rytm-mk2/pages.h`:
+
+```json
+{"to": "core_knob_looks", "order": 50, "data": "00000000",
+ "relocs": [[0, "abs32", "sym:my_looks", 0]]}
+```
+
+```c
+CORE_KNOBS;
+/* {first, last, look, ui, min, max} */
+const struct core_knob_look my_looks = {CORE_KNOB(0), CORE_KNOB(0), 457, 0, 0, 0};  /* CB TEST's switch */
+```
+
+- `look`: a stock id (1..468). The knob takes its UI record (the graphic,
+  the parts its flags draw, the turn's steps, its pop-ups) and its range.
+  Pick an id whose knob looks as yours should; any id with the same record
+  looks the same (`examples/look-check-ar2/looks.h` lists one of each of
+  1.74's 87).
+- `min`, `max`: when min < max, the range (8.8) in place of look's, for the
+  pop-ups and the header. The graphic itself draws the value on its own
+  scale (a dial 0..127), so a value outside it is clamped there.
+- `ui(id)`: when not 0, an 84-byte UI record of your own for the id, or 0
+  for look's. Build it once from a stock one,
+  `memcpy(mine, core_knob_stock_ui(94), 84)`, and change fields (flags +0,
+  steps +4..+0x10, delegates +0x14, +0x24 the graphic, +0x34, +0x44): stock
+  builds its records at boot, so copy at the first call, not in `ev_boot`.
+  Its pointer is read from %a0 (in assembly, return it in %a0 and %d0).
+
+The label and name stay your `core_param_locks` entry's, the value and its
+text your `core_params` entry's; nothing else of the stock parameter (its
+sound slot, its lists, MIDI) comes with its look. The linker refuses an
+entry below 555 and two mods' entries that share an id.
+
 ### Step tags (core-ar2 0.11, Analog Rytm MKII)
 
 A mod that keeps a record of its own for some steps (for the Sidecar mods,
