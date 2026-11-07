@@ -304,7 +304,7 @@ struct fn {                              /* std::function: functor[2], manager, 
 };
 
 enum { M_DRIVE, M_BUILD };
-enum { P_NONE, P_LOAD, P_UNLOAD, P_DELETE };
+enum { P_NONE, P_LOAD, P_UNLOAD, P_DELETE, P_CLEAR };
 static u8 mode;                          /* the list: the files, or the build */
 static u8 pending;                       /* what the open confirm window does */
 static void *view;                       /* the page's view while it shows (UI task only) */
@@ -338,9 +338,9 @@ static void build_list(void)
             build_rows[nbuild++] = i;
 }
 
-static const char *const acts_drive[] = {"SELECT ALL", "DESELECT ALL", "LOAD TO BUILD", "DELETE"};
+static const char *const acts_drive[] = {"SELECT ALL", "DESELECT ALL", "LOAD TO BUILD", "CLEAR BUILD", "DELETE"};
 static const char *const acts_build[] = {"SELECT ALL", "DESELECT ALL", "UNLOAD"};
-#define NACT_DRIVE 4
+#define NACT_DRIVE 5
 #define NACT_BUILD 3
 #define I_ACT 100                        /* functor index of the action panel's rows */
 #define I_LEFT 300                       /* and of the left panel's row */
@@ -523,7 +523,19 @@ static void do_load(void)
     build_list();
     page_rows();
     cursor_to(0);                        /* as stock after LOAD TO PROJ */
-    show_box(n ? count_msg(n, "LOADED") : "BUILD EMPTIED");
+    show_box(n ? count_msg(n, "LOADED") : "BUILD CLEARED");
+}
+
+/* CLEAR BUILD: an empty build (LOAD TO BUILD with nothing ticked does nothing; decided 2026-11-07) */
+static void do_clear(void)
+{
+    u8 keep[ROWS];
+    dl_memset(keep, 0, sizeof keep);
+    if (save_set(keep))
+        return;
+    build_list();
+    page_rows();
+    show_box("BUILD CLEARED");
 }
 
 /* UNLOAD in the build list: the build without the ticked mods */
@@ -590,6 +602,8 @@ void dl_page_yes(void **f, int yes)
             do_unload();
         else if (pending == P_DELETE)
             do_delete();
+        else if (pending == P_CLEAR)
+            do_clear();
     }
     pending = P_NONE;
 }
@@ -598,11 +612,6 @@ static void ask(const char *verb, int what)
 {
     char *end = msg + sizeof msg, *at;
     int n = ticked(sel);
-    if (!n && what == P_LOAD) {
-        pending = P_LOAD;
-        confirm("EMPTY THE BUILD?");
-        return;
-    }
     if (!n) {
         show_box("NO MODS SELECTED");
         return;
@@ -648,7 +657,10 @@ void dl_page_select(void **f)
         VIEW_DIRTY((char *)view + 0x38);
     } else if (i == 2)
         ask(mode == M_DRIVE ? "LOAD" : "UNLOAD", mode == M_DRIVE ? P_LOAD : P_UNLOAD);
-    else if (i == 3 && mode == M_DRIVE)
+    else if (i == 3 && mode == M_DRIVE) {
+        pending = P_CLEAR;
+        confirm("CLEAR THE BUILD?");
+    } else if (i == 4 && mode == M_DRIVE)
         ask("DELETE", P_DELETE);
 }
 

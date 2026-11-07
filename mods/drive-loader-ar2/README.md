@@ -134,9 +134,9 @@ The page is stock's two-pane file view, the one SAMPLES and PROJECTS are built o
   right where SAMPLES puts sizes, its size in whole KB, or `!` for a file pass 1 refuses (a bad
   file, another device, a newer core, over 512 KB). The ticks start as the saved build.
 - **Ticks are the build.** [YES] ticks or unticks a row and steps down, as in SAMPLES. RIGHT
-  opens the action panel: SELECT ALL, DESELECT ALL, LOAD TO BUILD, DELETE. LOAD TO BUILD asks
-  `LOAD n MODS? CONFIRM Y/N` (`EMPTY THE BUILD?` with nothing ticked) in stock's confirm
-  window, then runs the boot's own pass 1, checks and layout (`dl_check`, `dlink.c`) on exactly
+  opens the action panel: SELECT ALL, DESELECT ALL, LOAD TO BUILD, CLEAR BUILD, DELETE. LOAD TO
+  BUILD asks `LOAD n MODS? CONFIRM Y/N` in stock's confirm window (with nothing ticked it says
+  `NO MODS SELECTED` and changes nothing; CLEAR BUILD empties the build after its own confirm), then runs the boot's own pass 1, checks and layout (`dl_check`, `dlink.c`) on exactly
   the ticked files against `core_desc`, without writing RAM. A set where every mod would load
   replaces `active` (`active.tmp`, then the old file deleted and the tmp renamed), one line per
   file, its name and CRC-32, and a box says `n MODS LOADED`. A set that wouldn't isn't saved,
