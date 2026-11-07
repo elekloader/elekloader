@@ -415,6 +415,27 @@ function channelsOf(id) {
 }
 
 // a cover's line: drawn from the mod's motif or kind, varied by its name
+// A shop card's thumbnail, when its author gave one (web/catalog.json's "thumb", docs/SHOP.md): the site's copy,
+// a 128x64 1-bit PNG (packaging/thumbs.py), drawn pixel for pixel with its lit pixels in the card's colour.
+const cardPicture = en => (en.shop ? (shopPick(en.shop) || {}).thumb || (en.shop.find(x => x.thumb) || {}).thumb : null);
+function screen(path) {
+  const c = el('canvas', { width: 128, height: 64, 'aria-hidden': 'true' });
+  const img = new Image();
+  img.onload = () => {
+    const x = c.getContext('2d');
+    x.drawImage(img, 0, 0);
+    x.globalCompositeOperation = 'multiply';         // white (lit) takes the colour, black stays black
+    x.fillStyle = `hsl(${c.parentNode ? c.parentNode.style.getPropertyValue('--h') || 200 : 200} 80% 74%)`;
+    x.fillRect(0, 0, 128, 64);
+  };
+  img.src = site('shop/' + path);
+  return c;
+}
+// the "Report a picture" form, about this card
+const reportPicture = (en, path) => `https://github.com/${repository()}/issues/new?template=report-picture.yml`
+  + `&title=${encodeURIComponent('Picture: ' + en.title)}`
+  + `&mod=${encodeURIComponent(`${en.title} (${(en.shop[0] || {}).repo || ''}, ${path})`)}`;
+
 function trace(en) {
   const svg = document.createElementNS(SVG, 'svg');
   svg.setAttribute('viewBox', '0 0 200 100');
@@ -866,8 +887,9 @@ function card(en) {
   const act = action(en, s);
   const pick = s.pick || {};
   const open = () => openSheet(en);
-  const cover = el('button', { type: 'button', class: 'cover', onclick: open, 'aria-label': `About ${en.title}` },
-    trace(en), el('span', { class: 'name' }, en.title));
+  const pic = cardPicture(en);
+  const cover = el('button', { type: 'button', class: 'cover' + (pic ? ' screen' : ''), onclick: open,
+    'aria-label': `About ${en.title}` }, ...(pic ? [screen(pic)] : [trace(en), el('span', { class: 'name' }, en.title)]));
   const m = motifOf(en);
   cover.style.setProperty('--h', String(Math.round((KIND_HUE[en.category] ?? 330) + (m ? m.hue : 0)
     + (m ? 16 : 36) * seeded(en.id)() - (m ? 8 : 18))));
@@ -932,6 +954,12 @@ function openSheet(en) {
     parts.splice(i < 0 ? parts.length : i + 1, 0, el('h4', {}, 'On a unit'), el('p', { class: 'muted' }, en.onUnit));
   }
   if (s.clashing.length) parts.unshift(el('p', { class: 'note' }, clashNote(s.clashing)));
+  const pic = cardPicture(en);
+  if (pic) {
+    parts.push(el('p', { class: 'muted small' }, 'The picture on this card is its author\'s. ',
+      el('a', { href: reportPicture(en, pic), rel: 'noreferrer', target: '_blank' }, 'Report it'),
+      ' if it shouldn\'t be here.'));
+  }
   // what you can do with it: the card's action, Remove, its source
   const act = action(en, s);
   const close = () => $('mod-sheet').close();

@@ -1401,6 +1401,191 @@ def test_shop_updates_take_only_newer_files_of_the_repositorys_own_mods():
     assert submit_mod.release_text('') == {}
 
 
+def thumbs_module():
+    """packaging/thumbs.py, or None where the repository isn't (under Pyodide)."""
+    folder = os.path.join(os.path.dirname(HERE), 'packaging')
+    if not os.path.exists(os.path.join(folder, 'thumbs.py')):
+        return None
+    sys.path.insert(0, folder)
+    import thumbs
+    return thumbs
+
+
+def png_rgba(rows):
+    """An 8-bit RGBA PNG of rows of (r, g, b, a), as an image editor saves one."""
+    import zlib
+    w, h = len(rows[0]), len(rows)
+    raw = b''.join(b'\x00' + bytes(v for p in row for v in p) for row in rows)
+    def chunk(k, d):
+        return struct.pack('>I', len(d)) + k + d + struct.pack('>I', zlib.crc32(k + d))
+    return (b'\x89PNG\r\n\x1a\n' + chunk(b'IHDR', struct.pack('>IIBBBBB', w, h, 8, 6, 0, 0, 0))
+            + chunk(b'IDAT', zlib.compress(raw)) + chunk(b'IEND', b''))
+
+
+def screen_bits(kind='drawing'):
+    """A 128x64 picture: a frame, a sine and bars (a drawing), a checkerboard of shading (dithered)."""
+    import math
+    bits = [[0] * 128 for _ in range(64)]
+    for y in range(64):
+        for x in range(128):
+            if kind == 'dithered':
+                bits[y][x] = (x + y) % 2 if 20 < x < 110 else (x * 7 + y * 3) % 5 == 0
+            elif y in (0, 63) or x in (0, 127) or y == int(32 + 20 * math.sin(x / 8)) or (x % 32 == 4 and y > 40):
+                bits[y][x] = 1
+    return bits
+
+
+def test_shop_thumbnails_are_screen_pictures():
+    """packaging/thumbs.py: exactly 128x64 in two solid colours, drawn, not dithered; nothing is converted."""
+    thumbs = thumbs_module()
+    if thumbs is None:
+        return
+    bits = screen_bits()
+    canon = thumbs.canonical_png(bits)
+    r = thumbs.check(canon)
+    assert r['ok'] and r['bits'] == bits and len(canon) < 1024, r.get('reason')
+    assert thumbs.canonical_png(thumbs.check(canon)['bits']) == canon       # the site's file is stable
+    # an editor's RGBA save of two colours (amber on navy) is the same picture; the lighter colour is lit
+    two = png_rgba([[(250, 190, 60, 255) if v else (20, 24, 60, 255) for v in row] for row in bits])
+    assert thumbs.check(two)['bits'] == bits
+    text = thumbs.braille(bits).split('\n')
+    assert len(text) == 16 and all(len(t) == 64 for t in text) and text[0][0] == chr(0x2800 + 0x4f)
+    refused = {
+        'not a PNG': (b'GIF89a' + bytes(100), 'not a PNG'),
+        'too big': (png_rgba([[(0, 0, 0, 255)] * 256 for _ in range(128)]), 'is 256x128'),
+        'greys': (png_rgba([[(v * 2, v * 2, v * 2, 255) for v in range(128)] for _ in range(64)]), 'has 128 colours'),
+        'transparent': (png_rgba([[(255, 255, 255, 255 if v else 0) for v in row] for row in bits]), 'transparent'),
+        'flat': (thumbs.canonical_png([[0] * 128 for _ in range(64)]), 'one flat colour'),
+        'dithered': (thumbs.canonical_png(screen_bits('dithered')), 'looks dithered'),
+        'large': (canon + b'\0' * thumbs.MAX_BYTES, 'at most'),
+    }
+    for name, (data, said) in refused.items():
+        r = thumbs.check(data)
+        assert not r['ok'] and said in r['reason'], (name, r.get('reason'))
+    assert 'not taken: it looks dithered' in thumbs.preview_md(thumbs.check(refused['dithered'][0]))
+    assert '```text\n' + thumbs.braille(bits) in thumbs.preview_md(thumbs.check(canon))
+
+
+def test_the_site_takes_a_thumbnail_only_as_pinned_and_checked():
+    """build_web.py: a "thumb" is pinned like a file, listed once for download, checked again, and served as the
+    canonical PNG; one missing, changed or failing leaves the card's drawn cover."""
+    thumbs = thumbs_module()
+    if thumbs is None:
+        return
+    import contextlib
+    import hashlib
+    import io
+    import build_web
+    good = thumbs.canonical_png(screen_bits())
+    bad = thumbs.canonical_png(screen_bits('dithered'))
+    sums = {n: hashlib.sha256(b).hexdigest() for n, b in (('good', good), ('bad', bad))}
+    with tempfile.TemporaryDirectory() as tmp:
+        cat = os.path.join(tmp, 'catalog.json')
+        def items(*thumbs_):
+            return [{'repo': 'o/r', 'tag': 'v1', 'file': 'm%d.elemod' % i, 'device': 'digitakt-mk1', 'sha256': '0' * 64,
+                     'thumb': t} for i, t in enumerate(thumbs_)]
+        def read(*thumbs_):
+            with open(cat, 'w') as fh:
+                json.dump({'about': '', 'items': items(*thumbs_)}, fh)
+            return build_web.read_catalog(cat)
+        pin = {'tag': 'v1', 'file': 'thumb.png', 'sha256': sums['good']}
+        got = read(pin, dict(pin), {'commit': 'a' * 40, 'path': 'art/thumb.png', 'sha256': sums['bad']})
+        assert build_web.thumb_list(got) == sorted([('thumb-release', 'o/r', 'v1', 'thumb.png', sums['good']),
+                                                    ('thumb-commit', 'o/r', 'a' * 40, 'art/thumb.png', sums['bad'])],
+                                                   key=lambda t: t[-1])
+        for wrong in ({'tag': 'v1', 'file': 'thumb.gif', 'sha256': sums['good']}, {'tag': 'v1', 'sha256': sums['good']},
+                      {'commit': 'a' * 40, 'path': '../thumb.png', 'sha256': sums['good']}, dict(pin, sha256='x')):
+            try:
+                read(wrong)
+            except SystemExit as e:
+                assert '"thumb" is' in str(e)
+            else:
+                raise AssertionError(wrong)
+        os.mkdir(os.path.join(tmp, 'thumbs'))
+        for n, b in (('good', good), ('bad', bad)):
+            with open(os.path.join(tmp, 'thumbs', sums[n] + '.png'), 'wb') as fh:
+                fh.write(b)
+        with contextlib.redirect_stdout(io.StringIO()) as said:
+            assert build_web.thumb({'file': 'a', 'repo': 'o/r', 'tag': 'v1', 'thumb': pin}, tmp) == good
+            assert build_web.thumb({'file': 'b', 'repo': 'o/r', 'tag': 'v1',
+                                    'thumb': dict(pin, sha256=sums['bad'])}, tmp) is None
+            assert build_web.thumb({'file': 'c', 'repo': 'o/r', 'tag': 'v1', 'thumb': dict(pin, sha256='1' * 64)}, tmp) is None
+            assert build_web.thumb({'file': 'd', 'repo': 'o/r', 'tag': 'v1'}, tmp) is None
+        said = said.getvalue()
+        assert 'thumbnail of b is left out: it looks dithered' in said and 'thumbnail of c (o/r v1) is not there' in said
+
+
+def test_a_new_thumbnail_waits_for_a_maintainer():
+    """submit_mod.py: a release's thumb.png goes on the entries a form submission adds or changes, and on files the
+    shop has already, and never merges by itself; a daily update moves the pin only to the same picture."""
+    submit_mod = submit_mod_module()
+    if submit_mod is None:
+        return
+    import hashlib
+    thumbs = thumbs_module()
+    one, two = thumbs.canonical_png(screen_bits()), thumbs.canonical_png([r[::-1] for r in screen_bits()])
+    dots = thumbs.canonical_png(screen_bits('dithered'))
+    h = lambda b: hashlib.sha256(b).hexdigest()
+    def mod(version):
+        return {'id': 'x', 'version': version, 'device': 'digitakt-mk1', 'os': '1.53', 'license': 'MIT',
+                'named_license': True, 'title': 'X', 'core': False, 'requires': [], 'needs_core': None, 'description': ''}
+    FACTS = {'x-1.0.elemod': mod('1.0'), 'x-1.1.elemod': mod('1.1'), 'x-1.2.elemod': mod('1.2'), 'x-1.3.elemod': mod('1.3')}
+    RELEASES = {'v1.0': (['x-1.0.elemod'], one), 'v1.1': (['x-1.1.elemod'], one), 'v1.2': (['x-1.2.elemod'], two),
+                'v1.3': (['x-1.3.elemod'], dots)}
+    def get(url, accept='', limit=0):
+        if '/releases/tags/' in url:
+            tag = url.rsplit('/', 1)[1]
+            return json.dumps({'html_url': 'https://github.com/o/x/releases/tag/' + tag, 'prerelease': False,
+                               'assets': [{'name': n} for n in RELEASES[tag][0] + ['thumb.png']]}).encode()
+        if url.endswith('/thumb.png'):
+            return RELEASES[url.split('/download/')[1].split('/')[0]][1]
+        return ('file ' + url.rsplit('/', 1)[1]).encode()
+    real = submit_mod.get, submit_mod.facts
+    submit_mod.get, submit_mod.facts = get, lambda path, license='': dict(FACTS[os.path.basename(path)])
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            shop = os.path.join(tmp, 'shop')
+            os.mkdir(shop)
+            catalog = os.path.join(tmp, 'catalog.json')
+            def start(items):
+                for it in items:
+                    open(os.path.join(shop, it['file']), 'wb').close()
+                with open(catalog, 'w', encoding='utf-8') as fh:
+                    fh.write(submit_mod.render({'about': '', 'items': items}))
+            def run(tag, update=False):
+                status, r = submit_mod.submit({'repo': 'o/x', 'tag': tag, 'summary': '' if update else 'X.'}, catalog,
+                                              shop, None, update=update)
+                with open(catalog, encoding='utf-8') as fh:
+                    return status, r, json.load(fh)['items']
+            entry = {'repo': 'o/x', 'tag': 'v1.0', 'file': 'x-1.0.elemod', 'device': 'digitakt-mk1', 'sha256': h(b'file x-1.0.elemod'),
+                     'summary': 'X.'}
+            # the form, for a file the shop has already: the picture goes on, and waits for a review
+            start([dict(entry)])
+            status, r, items = run('v1.0')
+            assert status == 0 and items[0]['thumb'] == {'tag': 'v1.0', 'file': 'thumb.png', 'sha256': h(one)}, items
+            assert not r['same_repo_update'] and r['rows'][0]['result'] == 'thumbnail changed (already in the shop)'
+            md = submit_mod.report_md(status, r)
+            assert '```text\n' + thumbs.braille(thumbs.check(one)['bits']) in md and 'A maintainer looks at' in md
+            # a daily update with the same picture: the pin moves to the newer release, and it merges by itself
+            status, r, items = run('v1.1', update=True)
+            assert status == 0 and r['same_repo_update'] and items[0]['file'] == 'x-1.1.elemod', r
+            assert items[0]['thumb'] == {'tag': 'v1.1', 'file': 'thumb.png', 'sha256': h(one)}
+            # a daily update with a new picture: the file goes in, the card keeps its picture, the report says so
+            status, r, items = run('v1.2', update=True)
+            assert status == 0 and r['same_repo_update'] and items[0]['file'] == 'x-1.2.elemod'
+            assert items[0]['thumb']['tag'] == 'v1.1' and 'keeps the shop\'s thumbnail for X' in submit_mod.report_md(status, r)
+            # the same release through the form: now it changes, with a review
+            status, r, items = run('v1.2')
+            assert status == 0 and not r['same_repo_update'] and items[0]['thumb']['sha256'] == h(two)
+            # a picture that fails never stops the mod: it goes in with the picture it had
+            status, r, items = run('v1.3')
+            assert status == 0 and items[0]['file'] == 'x-1.3.elemod' and items[0]['thumb']['sha256'] == h(two)
+            assert '`thumb.png` was not taken: it looks dithered' in submit_mod.report_md(status, r)
+            assert r['same_repo_update']
+    finally:
+        submit_mod.get, submit_mod.facts = real
+
+
 def test_publish_fills_in_the_form_and_writes_notes_the_shop_reads():
     """elekloader.sdk.publish: the repository from a git remote, the release's notes (which the shop's check reads
     back), the filled-in Submit a mod form, and whether the shop lists a mod already."""

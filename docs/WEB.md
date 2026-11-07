@@ -140,6 +140,11 @@ stock file.
     it under "On a unit"; the card does not.
   - a `license`, when the file names none. `"kind": "core"` marks a core the listed mods need: it joins the
   site's cores.
+  - `thumb`: the card's picture ([SHOP.md](SHOP.md#a-thumbnail)), pinned on its own:
+    `{"tag", "file", "sha256"}` from a release or `{"commit", "path", "sha256"}`, from the item's `repo`.
+    The workflow downloads it, `build_web.py` checks it again (`packaging/thumbs.py`) and serves the
+    canonical 1-bit PNG; one missing or failing is left out with a warning, and the card keeps its drawn
+    cover. Deleting `thumb` takes a picture off the site.
 - **The files** are not committed. The pages workflow downloads each from
   its author's release or commit, and `build_web.py` puts it on the site only if it
   is the file the catalog pins (by sha256), made for the device the catalog
@@ -270,11 +275,14 @@ release the shop already has changes only the setting. A newer release whose not
 not taken: it opts the repository out, and the daily check stops following it. An opted-out
 entry is left alone by the daily check, and its releases come in through the form.
 
-Two switches, for maintainers:
+Three switches, for maintainers:
 
 - **`"hold"`** on an entry in `web/catalog.json` (true, or a reason) keeps that mod's file where it
   is: the daily check leaves it, and an update through the form waits for a review (and stays
   held). For a mod others build on, such as machine-pages, when a new version needs a look first.
+- **The repository variable `SHOP_THUMBS`** set to `false` leaves every thumbnail off the site at
+  the next deploy (the pages workflow passes `--no-thumbs`); the catalog keeps them. "Report a
+  picture" issues (`.github/ISSUE_TEMPLATE/report-picture.yml`) come from a card's details.
 - **The repository variable `SHOP_AUTO_MERGE`** set to `false` (Settings > Secrets and variables >
   Actions > Variables) stops both workflows merging; their pull requests still open.
 
@@ -327,6 +335,7 @@ python packaging/shop_updates.py --apply owner/name --catalog /tmp/catalog.json 
 | `elekloader.zip` | the elekloader package, exactly as the commit has it (`git archive HEAD elekloader`), stored, sorted, fixed dates: its sha256 follows from the commit |
 | `core/*.elemod`, `core/index.json` | the cores of the latest release, and the cores the catalog lists, with their sha256; the worker loads the newest of each device and OS and checks it |
 | `shop/*.elemod`, `shop/index.json` | the shop: the catalog's mods, from their authors' releases, with what each file says about itself |
+| `shop/thumbs/<sha256>.png` | the cards' thumbnails: each the canonical 1-bit PNG of the picture the catalog pins (`packaging/thumbs.py`), named by the sha256 of the author's file |
 | `shop/claims.json` | the leaderboard: the to-do list's entries claimed by the repository's merged pull requests (`Claims:` lines; [CONTRIBUTE.md](CONTRIBUTE.md#claiming-an-entry)), from `gh pr list --state merged` |
 | `shop/bounties.json` | the community's to-do list for the core, from the shop's files and the cores (`elekloader.sdk.bounties`, grouped by distance: the site has no stock file), and from the upstream lists in `web/upstream/` (`--upstream`: the stock code octabam's newer modules hook), shown in the page's Contribute view ([CONTRIBUTE.md](CONTRIBUTE.md)) |
 | `pyodide/` | five files from Pyodide's core tarball (`pyodide.mjs`, `pyodide.asm.mjs`, `pyodide.asm.wasm`, `python_stdlib.zip`, `pyodide-lock.json`), and `NOTICE.txt` with their licences |

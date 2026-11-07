@@ -1,0 +1,32 @@
+name: Report a picture
+description: A shop card's picture (its thumbnail) shouldn't be there. A maintainer takes it off.
+title: "Picture: "
+labels: [shop-picture]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Every picture in the shop is its author's, and a maintainer looked at it before it went in. If one is offensive, misleading or isn't the author's to use, say which, and a maintainer takes it off the site (its card goes back to the drawn cover). You don't need to describe or attach the picture. More in [docs/SHOP.md](https://github.com/elekloader/elekloader/blob/main/docs/SHOP.md#a-thumbnail).
+  - type: input
+    id: mod
+    attributes:
+      label: Card
+      description: The mod's name as the shop shows it. The shop's "Report it" link fills this in.
+    validations:
+      required: true
+  - type: dropdown
+    id: why
+    attributes:
+      label: What's wrong with it
+      options:
+        - Offensive
+        - Misleading (it doesn't show this mod)
+        - Not the author's to use
+        - Something else
+    validations:
+      required: true
+  - type: textarea
+    id: more
+    attributes:
+      label: Anything else
+      description: Optional.

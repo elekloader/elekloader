@@ -6,7 +6,7 @@
     python packaging/build_web.py --pyodide pyodide-core-314.0.7.tar.bz2 \\
         --core core-2.1.elemod [core-dn1-2.0a.elemod ...] \\
         [--catalog web/catalog.json --catalog-dir build/shop] --out build/site
-    python packaging/build_web.py --catalog-list web/catalog.json   # what to download
+    python packaging/build_web.py --catalog-list web/catalog.json [--thumbs]   # what to download
 
 The site holds:
   - web/'s files (the page, its worker and the Python bridge);
@@ -22,7 +22,11 @@ The site holds:
     catalog pins, and listed in shop/index.json with what its file says
     about it. A mod goes in only under a licence that allows passing it on
     (SHOP_LICENCES); one whose file is not there (a draft release) is listed
-    as not available. shop/bounties.json is the community's to-do list for
+    as not available. An item's thumbnail ("thumb", pinned on its own and
+    downloaded to --catalog-dir's thumbs/<sha256>.png) is checked again
+    (packaging/thumbs.py) and goes in as shop/thumbs/<sha256>.png, the
+    canonical 1-bit PNG; one that is not there or fails is left out, and
+    --no-thumbs leaves them all out (the maintainers' switch); shop/bounties.json is the community's to-do list for
     the core, made from those files and the cores (elekloader.sdk.bounties,
     grouped by distance: the site has no stock file), and from the upstream
     lists (--upstream, by default web/upstream/*.json: the stock code
@@ -55,6 +59,9 @@ import subprocess
 import sys
 import tarfile
 import zipfile
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import thumbs  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
@@ -176,7 +183,47 @@ def read_catalog(path):
         if it['file'] in names:              # they are all downloaded into one folder
             sys.exit('%s: two items named %s' % (path, it['file']))
         names.add(it['file'])
+        th = it.get('thumb')
+        if th is not None:                   # a thumbnail: pinned like a file, on its own
+            pin = ('commit', 'path') if 'commit' in th else ('tag', 'file')
+            if (not isinstance(th, dict) or set(th) != set(pin) | {'sha256'} or not re.fullmatch('[0-9a-f]{64}', th['sha256'])
+                    or ('commit' in th and (not re.fullmatch('[0-9a-f]{40}', th['commit'])
+                                            or not re.fullmatch(r'[\w.-]+(/[\w.-]+)*\.png', th['path'])
+                                            or '..' in th['path'].split('/')))
+                    or ('tag' in th and not re.fullmatch(r'[\w.-]+\.png', th['file']))):
+                sys.exit('%s: %s: "thumb" is {"tag", "file"} or {"commit", "path"}, and "sha256": a .png'
+                         % (path, it['file']))
     return doc['items']
+
+
+def thumb_list(items):
+    """The thumbnails to download, once each: (how, repo, ref, path, sha256)."""
+    out = {}
+    for it in items:
+        th = it.get('thumb')
+        if th:
+            out[th['sha256']] = (('thumb-commit', it['repo'], th['commit'], th['path']) if 'commit' in th
+                                 else ('thumb-release', it['repo'], th['tag'], th['file'])) + (th['sha256'],)
+    return sorted(out.values(), key=lambda t: t[-1])
+
+
+def thumb(it, folder):
+    """An item's thumbnail from `folder`/thumbs, checked. -> the canonical PNG, or None (with a warning)."""
+    th = it.get('thumb')
+    if not th:
+        return None
+    p = os.path.join(folder or '', 'thumbs', th['sha256'] + '.png')
+    if not folder or not os.path.exists(p):
+        print('WARNING: the thumbnail of %s (%s) is not there: its card keeps its drawn cover' % (it['file'], source(it)))
+        return None
+    with open(p, 'rb') as fh:
+        raw = fh.read()
+    r = thumbs.check(raw)
+    if r['sha256'] != th['sha256'] or not r['ok']:
+        print('WARNING: the thumbnail of %s is left out: %s' % (it['file'], r.get('reason') or
+                                                                'sha256 %s, not the one the catalog names' % r['sha256']))
+        return None
+    return thumbs.canonical_png(r['bits'])
 
 
 def source(it):
@@ -184,10 +231,10 @@ def source(it):
     return it['repo'] + ' ' + (it['commit'][:7] if it.get('commit') else it['tag'])
 
 
-def shop(path, folder):
+def shop(path, folder, with_thumbs=True):
     """The catalog's items, from `folder`. -> (cores [(entry, bytes)],
-    shop [(entry, bytes or None)])."""
-    cs, out = [], []
+    shop [(entry, bytes or None)], thumbnails {site name: canonical PNG})."""
+    cs, out, pictures = [], [], {}
     for it in read_catalog(path):
         f = it['file']
         base = {'file': f, 'sha256': it['sha256'], 'device': it['device'], 'repo': it['repo'],
@@ -198,6 +245,10 @@ def shop(path, folder):
                                 'https://github.com/%s/releases/tag/%s' % (it['repo'], it['tag'])),
                 'summary': it.get('summary', ''), 'needs_core': it.get('needs_core'),
                 'on_unit': it.get('on_unit', '')}
+        png = thumb(it, folder) if with_thumbs else None
+        if png:
+            base['thumb'] = 'thumbs/%s.png' % it['thumb']['sha256']
+            pictures[base['thumb']] = png
         p = os.path.join(folder, f) if folder else ''
         if not p or not os.path.exists(p):
             print('WARNING: %s (%s) is not there: the shop lists it as not available'
@@ -234,7 +285,7 @@ def shop(path, folder):
                          ram=(m.size('.run') + m.size('.bss')) if v2 else 0,
                          fast=m.size('.fast') if v2 else 0, sites=len(m.sites),
                          footprint=footprint(m)), raw))
-    return cs, out
+    return cs, out, pictures
 
 
 def footprint(m):
@@ -359,22 +410,28 @@ def main(argv=None):
                                   "number,title,body,author,mergedAt,url), for the leaderboard")
     ap.add_argument('--upstream', nargs='*', default=None, metavar='LIST.json',
                     help='upstream lists for the to-do list (default: web/upstream/*.json)')
+    ap.add_argument('--thumbs', action='store_true', help='with --catalog-list: the thumbnails too, as '
+                                                         '"thumb-release repo tag file sha256" or "thumb-commit repo commit path sha256"')
+    ap.add_argument('--no-thumbs', action='store_true', help="leave the shop's thumbnails out (SHOP_THUMBS=false)")
     ap.add_argument('--out', help='the site folder to write (emptied first)')
     a = ap.parse_args(argv)
     if a.pyodide_url:
         print(PYODIDE_URL)
         return 0
     if a.catalog_list:
-        for it in read_catalog(a.catalog_list):
+        items = read_catalog(a.catalog_list)
+        for it in items:
             print(*(('commit', it['repo'], it['commit'], it['path']) if 'commit' in it
                     else ('release', it['repo'], it['tag'], it['file'])))
+        for t in thumb_list(items) if a.thumbs else []:
+            print(*t)
         return 0
     if not a.pyodide or not a.out:
         ap.error('--pyodide and --out are required')
     py = pyodide_files(a.pyodide)
     zipped, names = package_zip()
     cs = cores(a.core)
-    shop_cores, items = shop(a.catalog, a.catalog_dir) if a.catalog else ([], [])
+    shop_cores, items, pictures = shop(a.catalog, a.catalog_dir, not a.no_thumbs) if a.catalog else ([], [], {})
     for c, raw in shop_cores:                # the catalog's cores join the release's
         same_name = [x for x, _ in cs if x['file'] == c['file']]
         if same_name and same_name[0]['sha256'] != c['sha256']:
@@ -402,6 +459,8 @@ def main(argv=None):
     for e, raw in items:
         if raw is not None:
             site['shop/' + e['file']] = raw
+    for n, png in pictures.items():
+        site['shop/' + n] = png
     site['shop/index.json'] = json.dumps([e for e, _ in items], indent=1).encode()
     if a.upstream is None:                  # the upstream lists the repository has
         up = os.path.join(ROOT, 'web', 'upstream')

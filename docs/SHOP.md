@@ -8,7 +8,7 @@ it up to date, and take it down.
 **The short version:** put your `.elemod` files in a release on your own
 GitHub repository, fill in one form, and a bot checks your files and does the
 rest. There is nothing to add to elekloader's repository, no evidence files,
-no screenshots, and no account but GitHub's.
+and no account but GitHub's. A picture for your card is optional.
 
 The shop lists *your files*. Your code, your releases and your repository stay
 yours, and so do questions and bug reports about your mod.
@@ -19,6 +19,7 @@ yours, and so do questions and bug reports about your mod.
 - [What the check tells you](#what-the-check-tells-you)
 - [If it says no](#if-it-says-no)
 - [Updates: publish a release, that's all](#updates-publish-a-release-thats-all)
+- [A thumbnail](#a-thumbnail)
 - [Take a mod out](#take-a-mod-out)
 - [Questions](#questions)
 
@@ -272,6 +273,39 @@ of these:
 Opted out, you send each new release through the form, as the first time. To
 opt back in, submit the form again with **Updates** unticked, or put
 `Shop auto-update: on` in the release's notes.
+
+## A thumbnail
+
+Your card can show a picture of the device's screen instead of its drawn
+cover. Add a file named **`thumb.png`** to the release, beside your `.elemod`
+files (for a commit, one `thumb.png` anywhere in its tree). It has to be:
+
+- **exactly 128×64 pixels**, the size of the screen;
+- **exactly two solid colours**: no greys, no smoothing, no transparency.
+  Switch anti-aliasing off when you draw it;
+- **drawn, not dithered**: lines, shapes and pixel text. A photo or shading
+  turned into dots is refused.
+
+A screenshot of your mod's screen is ideal: the emulator's, or a capture
+from the device, scaled back to 1× with no smoothing. The shop shows it in the
+card's colour on black, whatever your two colours were (the lighter one is
+lit).
+
+```bash
+python packaging/thumbs.py thumb.png         # "taken", or why not
+python packaging/thumbs.py thumb.png --md    # what a maintainer sees: its pixels as text
+```
+
+**A maintainer looks at every new picture**, so a submission or update that
+brings one doesn't merge by itself. In the pull request the bot shows the
+picture as text, pixel for pixel, never as an image. Updates still work as
+above: when your newer release has the same `thumb.png`, the card keeps it;
+when it has a new one, the daily update keeps the old picture and says so,
+and you send that release through the form to change it.
+
+A picture that fails the check never stops your mod: the card keeps the
+picture it had, or its drawn cover. Anyone can report a picture from the
+card's details ("Report it"), and a maintainer can take it off.
 
 ## Take a mod out
 
