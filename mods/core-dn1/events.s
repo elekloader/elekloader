@@ -509,18 +509,25 @@ core_voice_steal:
 | note-on dispatcher; on nonzero) or released (0x4003b26e, the note-off; an
 | observer only). These notes do not pass the note queue (ev_note_queue). A
 | handler that takes a press: no note. The UI task.
+| From 5.2.1 the sites are each routine's instructions after its first 6
+| bytes (KBD_ON + 6, KBD_OFF + 6), not its entry: a mod that hooks the entry
+| itself and goes on at + 6 (DigiArp MIDI does) runs first, then this.
         .globl  core_kbd_on, core_kbd_off
-core_kbd_on:
+core_kbd_on:                            | the dispatcher's lea -24(sp) and moveq #7 ran
+        lea     24(%sp), %sp            | the entry's stack: the arguments at 4(sp)
         NOTIFY  ev_keyboard_note, 4, 1
-        lea     -24(%sp), %sp           | the dispatcher's first two instructions
-        moveq   #7, %d0
-        jmp     KBD_ON + 6
-core_kbd_off:
+        lea     -24(%sp), %sp
+        movem.l %d2-%d6/%a2, (%sp)      | the two instructions the site replaced
+        movea.l 28(%sp), %a2
+        jmp     KBD_ON + 14
+core_kbd_off:                           | the note-off's subq, move.l d3 and moveq #7 ran
+        addq.l  #8, %sp                 | the entry's stack (d3 is still in d3)
         NOTIFY  ev_keyboard_note, 4
-        subq.l  #4, %sp                 | the note-off's first three instructions
+        subq.l  #4, %sp
         move.l  %d3, -(%sp)
-        moveq   #7, %d1
-        jmp     KBD_OFF + 6
+        move.l  %d2, -(%sp)             | the two instructions the site replaced
+        movea.l 16(%sp), %a0
+        jmp     KBD_OFF + 12
 
 | ev_mute: f(int where, int track, int muted, int row). A track's mute is
 | about to be set or cleared, in the UI task: where 0 the global mute (FUNC +

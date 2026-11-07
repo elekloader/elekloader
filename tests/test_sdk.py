@@ -644,8 +644,9 @@ def test_digitone_core_builds_and_links():
         # track reload, the sound manager's seven actions and the browser's paste,
         # the sound load and the track sound clear; 5.0.1's 2: the sequencer's MIDI
         # engine's two appends (ev_seq_midi); and 5.1's 6 besides its 4 table moves: the
-        # pattern's lock rows saved and loaded, and the note builders' four calls.
-        assert dn['target']['device'] == 'digitone-mk1' and len(dn['sites']) == 160
+        # pattern's lock rows saved and loaded, and the note builders' four calls; and
+        # 5.2's 4: the LFO destination list's name, compact name, group and DEST box.
+        assert dn['target']['device'] == 'digitone-mk1' and len(dn['sites']) == 164
         assert sorted(dn['collections']) == sorted(
             HOOK_BUS + ['core_menu', 'core_pages', 'core_params', 'core_projdata',
                         'ev_hold', 'ev_voice_on', 'core_param_override', 'ev_render_voices',
@@ -656,7 +657,7 @@ def test_digitone_core_builds_and_links():
         # each of its labels where core 2.1 has it.
         assert sorted(dn['build']['sources']) == ['audio.s', 'block.s', 'core.s', 'edit.s', 'events.s', 'fw.s',
                                                   'lanes.c', 'lanes.s',
-                                                  'leds.s', 'menu.s', 'midi.s', 'pages.s', 'params.s',
+                                                  'leds.s', 'lists.c', 'menu.s', 'midi.s', 'names.s', 'pages.s', 'params.s',
                                                   'projdata.s', 'queue.s', 'render.s', 'rows.s',
                                                   'seqmidi.s', 'settings.s', 'system.s', 'track.s',
                                                   'voice.s', 'voices.s']
@@ -1083,7 +1084,7 @@ def test_digitone_machines_build_and_link():
         mpath, m = build.build(os.path.join(ROOT, 'mods', 'machines-dn1'), DN_STOCK, tmp)
         spath, sm = build.build(os.path.join(ROOT, 'examples', 'dn-sine-machine'), DN_STOCK, tmp)
         assert os.path.basename(mpath) == 'machines-%s.elemod' % MACH_VERSION
-        assert m.needs_core == '3.1' and sm.needs_core == '3.1' and not m.sites and not sm.sites
+        assert m.needs_core == '5.2' and sm.needs_core == '3.1' and not m.sites and not sm.sites   # machines 0.3: SDK pages (5.2)
         assert {'core_sound_set', 'core_param_ui_make', 'core_menu_open', 'fw_params',
                 'fw_active_track'} <= set(m.imports)
         assert {'dnm_knob', 'dnm_phase_inc', 'dnm_sin'} <= set(m.exports)
@@ -1095,7 +1096,8 @@ def test_digitone_machines_build_and_link():
             assert rc == 1 and 'machines %s needs core 3.1 or newer, and this build has core 2.3' % MACH_VERSION \
                 in r['problems'], r['problems']
         if DN_STOCK_144 and os.path.exists(DN_STOCK_144):
-            for src, mod in (('mods/machines-dn1', m), ('examples/dn-sine-machine', sm)):
+            # the same code on 1.44 (machines 0.3 is not: its 1.44 port adds the SDK machines, sdk_alpha.c)
+            for src, mod in (('examples/dn-sine-machine', sm),):
                 path4, mod4 = build.build(os.path.join(ROOT, src), DN_STOCK_144, tmp)
                 images = []
                 for st, x in ((DN_STOCK, mod), (DN_STOCK_144, mod4)):
@@ -1529,7 +1531,8 @@ CORE_DN51_INNER = ['core_build_midi_a', 'core_build_midi_b', 'core_build_syn_a',
 
 def check_dn_51(old_path, new_path):
     """core-dn1 5.1 and 5.2 are 5.0 and more (5.0.1's, 5.1's and 5.2's four LFO name sites): the same target, every site of 5.0's at the same address
-    with the same stock bytes, the same code but for the 58 id bounds it raises again (182-191: 192 where 5.0 has
+    with the same stock bytes (but 5.2.1's two KEYBOARD note sites, 6 bytes further into their routines, so a mod
+    that hooks the routines' entries combines), the same code but for the 58 id bounds it raises again (182-191: 192 where 5.0 has
     185, 191 for 184), 5.0's tables and exports with 5.0.1's and 5.1's added, its contributions with core's own
     ev_tick subscription (lanes.c's redraw and re-arm), and page 30 (TRIG's second page) claimed."""
     with open(old_path) as fh:
@@ -1544,6 +1547,11 @@ def check_dn_51(old_path, new_path):
     assert [(c['to'], c['relocs'][0][2]) for c in added] == [('ev_tick', 'sym:core_lanes_tick')]
     olds = {s['addr']: s for s in old['sites']}
     news = {s['addr']: s for s in new['sites']}
+    moved = {'0x4003b198': '0x4003b19e', '0x4003b26e': '0x4003b274'}   # 5.2.1: KBD_ON + 6, KBD_OFF + 6
+    for a, b in moved.items():
+        assert a in olds and a not in news and b in news and b not in olds, (a, b)
+        assert news[b]['relocs'] == olds[a]['relocs']                 # the same handler, core_kbd_on / _off
+        olds.pop(a), news.pop(b)
     assert all(a in news and news[a]['stock_sha256'] == s['stock_sha256'] for a, s in olds.items())
     assert len(news) == len(olds) + 2 + 10 + 4
     raised = [a for a, s in olds.items() if news[a] != s]
@@ -1590,7 +1598,7 @@ def test_digitone_core_port_to_144_is_the_same_core():
 
         def what(d):                # each site's new bytes and targets, not where it is
             return [(s['len'], s['kind'], s['new'], s.get('relocs')) for s in d['sites']]
-        assert len(new['sites']) == 160 and what(new) == what(old)
+        assert len(new['sites']) == 164 and what(new) == what(old)
         rc, r = lint_json(path, '--stock', DN_STOCK_144)
         assert rc == 0, r['problems']
         rc, r = lint_json(old_path, '--stock', DN_STOCK_144)
