@@ -1981,10 +1981,13 @@ sites, with `analog-rytm-mk2/moments.h`:
   or 0 not now; it never waits. From the sequencer's or the audio
   interrupt it goes out at once when the sender has room and no task is in
   it, else it is queued (1,024 bytes, at most 128 a message) and sent at
-  the next sequencer tick or `ev_tick`, in order.
+  the next sequencer tick or `ev_tick`, in order. `core_usb_midi_up()`
+  says whether USB is on and the host has configured the MIDI port.
 - `core_current_kit()`, `core_current_track()`, `core_current_pattern()`
   (-1 for none) and `core_current_kit_item()`, `core_current_sound_item()`,
-  `core_current_pattern_item()` for `core_store_get` and `core_store_set`;
+  `core_current_pattern_item()` for `core_store_get` and `core_store_set`,
+  and `core_kit_item(k)`, `core_pattern_item(p)` for any kit or pattern
+  (the items `core_handle_fields` passes);
   `core_project_name()`, 16 bytes (at `ev_project_save`'s pre 1 of a SAVE
   AS, already the new name).
 - `my_kit(kit, how)` at `ev_tick`: `CORE_KIT_SELECTED` when the UI's

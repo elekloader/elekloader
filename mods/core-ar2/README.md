@@ -927,6 +927,8 @@ Analog Rytm MKII)"; `elekloader/sdk/include/analog-rytm-mk2/moments.h`).
 | `ev_sysex_in(data, len, iface)`, nonzero takes the message | the SysEx router 0x40083dd8 (`jmp`, after it 0x40083de0), before the universal check | MIDI task |
 | `core_midi_try_send(len, msg)` | stock's USB sender 0x400029e0 under its mutex 0x42f67a28 (try-lock 0x4000119c, give 0x400011ee); from an interrupt the sender at level 5 while the mutex's owner word (0x42f67a28) is 0 | any task or interrupt |
 | `core_current_kit`, `_track`, `_pattern` and their items | the model's +0x1a4 (the working kits' +0x44), 0x400b693e, `core_step_pattern_now` | UI task |
+| `core_usb_midi_up()` | the USB MIDI port state 0x413db254 (1 configured) and USB on 0xfc0b01c4 | any task or interrupt |
+| `core_kit_item(k)`, `core_pattern_item(p)` | live kit 0x412558e3 + 2,531 k, live pattern 0x407dd8e3 + 85,760 p (0..127) | any |
 | `core_project_name()` | the live project's +8, 0x407c89d3 | any |
 | `ev_kit(kit, how)`: SELECTED | the kit select 0x400a65f6 (after it 0x400a65fe) | UI task, sent at `ev_tick` |
 | `ev_kit(kit, how)`: PUSHED | the whole-kit push 0x4011f90a (after it 0x4011f912) | UI, MIDI or job task, sent at `ev_tick` |

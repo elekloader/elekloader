@@ -23,6 +23,9 @@
  * and nothing waits before it; otherwise into core's ring of 1024 bytes, at
  * most 128 a message, which the next sequencer tick or ev_tick sends. */
 int core_midi_try_send(int len, const unsigned char *msg);
+/* 1 while USB is on and the host has configured the MIDI port, else 0 (the
+ * first thing core_midi_try_send checks). Any task or interrupt. */
+int core_usb_midi_up(void);
 
 /* the UI's current kit (0..127), track (0..12, 12 the FX track) and pattern
  * (0..127), -1 for none; and their items for core_store_get/set: the live
@@ -34,6 +37,11 @@ int core_current_track(void);
 void *core_current_sound_item(void);
 int core_current_pattern(void);
 void *core_current_pattern_item(void);
+/* live kit k (as edited) and live pattern p, 0..127 (0 out of range): the
+ * items core_handle_fields passes for them, so a handle can be matched to a
+ * kit or pattern by number. Any task. */
+void *core_kit_item(int k);
+void *core_pattern_item(int p);
 
 /* the live project's name: 16 bytes, not always zero-terminated. At
  * ev_project_save's pre 1 of a SAVE AS it is already the new name. */

@@ -92,10 +92,16 @@ int core_current_kit(void)
     return (unsigned)k < 128 ? k : -1;
 }
 
+/* live kit k (0..127) as edited, the item core_handle_fields passes first
+ * for it; 0 out of range */
+void *core_kit_item(int k)
+{
+    return (unsigned)k < 128 ? LIVE_KITS + LIVE_KIT_SIZE * k : 0;
+}
+
 void *core_current_kit_item(void)
 {
-    int k = core_current_kit();
-    return k < 0 ? 0 : LIVE_KITS + LIVE_KIT_SIZE * k;
+    return core_kit_item(core_current_kit());
 }
 
 int core_current_track(void)
@@ -122,10 +128,16 @@ int core_current_pattern(void)
     return core_step_pattern_now();
 }
 
+/* live pattern p (0..127), the item core_handle_fields passes for it; 0 out
+ * of range */
+void *core_pattern_item(int p)
+{
+    return (unsigned)p < 128 ? LIVE_PATTERNS + LIVE_PATTERN_SIZE * p : 0;
+}
+
 void *core_current_pattern_item(void)
 {
-    int p = core_current_pattern();
-    return p < 0 ? 0 : LIVE_PATTERNS + LIVE_PATTERN_SIZE * p;
+    return core_pattern_item(core_current_pattern());
 }
 
 /* the live project's name: 16 bytes, not always zero-terminated. SAVE AS
@@ -149,7 +161,14 @@ int core_sysex_in(const unsigned char *data, int len, int iface)
     return 0;
 }
 
-/* ---- core_midi_try_send ---- */
+/* ---- core_usb_midi_up, core_midi_try_send ---- */
+
+/* 1 while USB is on and the host has configured the MIDI port, else 0: the
+ * port state core_midi_try_send checks first. Any task or interrupt. */
+int core_usb_midi_up(void)
+{
+    return PORT_STATE == 1 && USB_ON ? 1 : 0;
+}
 
 /* whether msg is one whole message the sender takes as it is: a status byte
  * first, and a SysEx (or one inside) ended in the same call, so stock's
