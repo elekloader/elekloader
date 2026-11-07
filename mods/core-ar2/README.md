@@ -420,7 +420,7 @@ so the latch holds this block's trig. `core_voice_trigged(v)` and
 `core_voice_velocity(v)` read the latch: plain reads, for the engine's own
 voice.
 
-Checked in the emulator only (analog-emu, OS 1.74, 7 Nov 2026), with a
+Checked in the emulator only (analog-emu run headless on the PC, OS 1.74, 7 Nov 2026), with a
 check mod holding BD SLOT44 (slot 44 on the BD voice, BD CLASSIC's
 engine) and CB SLOT52 (slot 52 on the CY/CB voice) whose engines count
 `core_voice_trigged` and keep `core_voice_velocity`:
