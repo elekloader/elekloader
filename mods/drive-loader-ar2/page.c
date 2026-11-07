@@ -163,8 +163,14 @@ static int ends_elemod(const char *s)
     return n > 7 && !dl_strcmp(s + n - 7, ".elemod");
 }
 
-/* a refusal, as short as the row's width allows (the codes: dl.h) */
-static void reason(char *at, char *end, int code, u32 arg, const char *d)
+/* a refusal (the codes: dl.h). Stock's message box splits its text at newlines (0x400764cc)
+ * and is as wide as its widest line;
+ * about 32 characters fit the screen (DL6B, r-47b821), so a longer reason puts its detail on
+ * a line of its own (decided 2026-11-07: multiple lines are fine) */
+#define BOX_LINE 30
+
+/* a refusal into [at, end); `line` is where its line starts in the same buffer */
+static void reason_line(const char *line, char *at, char *end, int code, u32 arg, const char *d)
 {
     static const char *const what[] = {
         "", "FILE MISSING", "FILE CHANGED", "TOO BIG", "BAD FILE", "NOT FORMAT 2",
@@ -178,12 +184,20 @@ static void reason(char *at, char *end, int code, u32 arg, const char *d)
         cat(at, end, "K");
         return;
     }
-    if (d && d[0])
-        at = cat(cat(at, end, " "), end, d);
+    if (d && d[0]) {
+        u32 tail = dl_strlen(d) + (code == DL_R_FULL ? 12 : 0);
+        at = cat(at, end, (u32)(at - line) + 1 + tail > BOX_LINE ? "\n" : " ");
+        at = cat(at, end, d);
+    }
     if (code == DL_R_FULL) {             /* "FULL ev_x (0 SPARE)" */
         at = num(cat(at, end, " ("), end, arg);
         cat(at, end, " SPARE)");
     }
+}
+
+static void reason(char *at, char *end, int code, u32 arg, const char *d)
+{
+    reason_line(at, at, end, code, arg, d);
 }
 
 /* ---- files ---- */
@@ -740,7 +754,8 @@ static int row_reason(const struct row *r, char *out, char *end)
     }
     if (r->boot != DL_ST_REFUSED && r->boot != DL_ST_DROPPED)
         return 0;
-    reason(cat(out, end, "BOOT: "), end, r->boot_code ? r->boot_code : DL_R_LIMIT, r->boot_arg, r->boot_detail);
+    reason_line(out, cat(out, end, "BOOT: "), end, r->boot_code ? r->boot_code : DL_R_LIMIT, r->boot_arg,
+                r->boot_detail);
     return 1;
 }
 

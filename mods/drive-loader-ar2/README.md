@@ -154,7 +154,9 @@ The page is stock's two-pane file view, the one SAMPLES and PROJECTS are built o
   (decided 2026-11-07): in the file list the file's own (`OTHER DEVICE/OS`, `NEEDS CORE 0.12`,
   `NOT FORMAT 2`...), in the build list the last boot's after `BOOT: ` (`BOOT: NOT FOUND
   core_fn`, `BOOT: NO ROOM +12K`, `BOOT: FULL ev_x (0 SPARE)`), with the detail name the
-  linker kept. Unticking shows nothing; tick it again to see it again.
+  linker kept. A reason longer than 30 characters puts its detail on a second line: stock's
+  box splits at newlines (`0x400764cc`) and about 32 characters fit the screen. The box closes
+  by itself after a few seconds. Unticking shows nothing; tick it again to see it again.
 - **Ticks are the build.** [YES] ticks or unticks a row and steps down, as in SAMPLES. RIGHT
   opens the action panel: SELECT ALL, DESELECT ALL, LOAD TO BUILD (UPDATE BUILD once the build
   holds mods), CLEAR BUILD, DELETE. It asks `LOAD n MODS?` (`UPDATE BUILD? (n MODS)`) over
