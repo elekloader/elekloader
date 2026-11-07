@@ -140,7 +140,7 @@ stock file.
     it under "On a unit"; the card does not.
   - a `license`, when the file names none. `"kind": "core"` marks a core the listed mods need: it joins the
   site's cores.
-  - `thumb`: the card's picture ([SHOP.md](SHOP.md#a-thumbnail)), pinned on its own:
+  - `thumb`: the card's picture ([THUMBNAILS.md](THUMBNAILS.md)), pinned on its own:
     `{"tag", "file", "sha256"}` from a release or `{"commit", "path", "sha256"}`, from the item's `repo`.
     The workflow downloads it, `build_web.py` checks it again (`packaging/thumbs.py`) and serves the
     canonical 1-bit PNG; one missing or failing is left out with a warning, and the card keeps its drawn

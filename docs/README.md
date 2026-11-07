@@ -27,6 +27,7 @@ docs match its code.
   the Digitone mk1 and the Digitone II, from a quickstart to the reference.
 - **[Your mod in the shop](SHOP.md)**: publish it, submit it with one form,
   and let later releases update it by themselves; take it out the same way.
+  [A thumbnail for its card](THUMBNAILS.md): a picture of the screen.
 - **[Digitone II machines](MACHINES-DN2.md)**: register
   [SHARC voices](MACHINES-DN2-VOICE.md) and [filters](MACHINES-DN2-FILTER.md),
   with a [paired C example](https://github.com/simonjohansson/digitone-2-mod-hack).

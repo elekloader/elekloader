@@ -6,7 +6,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Every picture in the shop is its author's, and a maintainer looked at it before it went in. If one is offensive, misleading or isn't the author's to use, say which, and a maintainer takes it off the site (its card goes back to the drawn cover). You don't need to describe or attach the picture. More in [docs/SHOP.md](https://github.com/elekloader/elekloader/blob/main/docs/SHOP.md#a-thumbnail).
+        Every picture in the shop is its author's, and a maintainer looked at it before it went in. If one is offensive, misleading or isn't the author's to use, say which, and a maintainer takes it off the site (its card goes back to the drawn cover). You don't need to describe or attach the picture. More in [docs/THUMBNAILS.md](https://github.com/elekloader/elekloader/blob/main/docs/THUMBNAILS.md).
   - type: input
     id: mod
     attributes:
