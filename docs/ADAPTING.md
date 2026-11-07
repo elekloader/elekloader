@@ -2472,8 +2472,9 @@ defaults. An older machines mod (0.1) reads 16 knobs only.
 phase step a sample at 48 kHz and a sine. A voice that peaks at `DNM_PEAK`
 (0x08000000) is about as loud as an FM voice at the stock defaults. The
 render runs at interrupt level for every voice playing the machine, every
-block (667 us): in digikit's emulator SINE takes about 3,000 instructions a
-voice a block.
+block (667 us), until its envelope ends; `struct dnm_voice`'s `idle` then
+counts the frames it was not rendered (machines 0.4). In digikit's emulator
+SINE takes about 3,000 instructions a voice a block.
 
 `examples/dn-sine-machine` is a whole machine in C to start from: a sine at
 the note that OCT shifts by octaves, FOLD folds, SUB doubles an octave down
