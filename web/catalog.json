@@ -503,6 +503,13 @@
       "sha256": "f1e9cb2c39eb52af15e7cf8ad25596e46f550e4f748bc9dd60d63a44da2dd9c1"
     },
     {
+      "repo": "Iced-Cream/analoghealth", "tag": "v1.3", "file": "analoghealth-1.3.elemod",
+      "device": "analog-rytm-mk2",
+      "sha256": "c32aa50cd6fdbbd75484792abe3d2663fb3511dd33ae2c1cf5dc548b62a22088",
+      "summary": "Diagnostics for the Analog Rytm MKII: CPU, DSP, RAM and free sample memory in the top bar (SYSTEM INFO), and a USB channel that reads them and presses the panel's keys, encoders and pads from a computer (REMOTE KEYS). After irpina's digihealth.",
+      "on_unit": "Yes, on an Analog Rytm MKII, OS 1.74. This exact file (1.3) has run in the unit test builds since 26 Oct 2026, with core-ar2 0.8 to 0.11: the readout and the USB stats answered, and its remote keys drove the tests. Version 1.2 also ran with the released core-ar2 0.3."
+    },
+    {
       "repo": "irpina/octabam2elemod", "tag": "v1.0", "file": "octabam-tuner-363861e.elemod",
       "device": "octatrack", "needs_core": "0.1",
       "sha256": "1e2447d88c953b09584bcd0b84a9b7733bb87264b6542169d0f2686f9762dff6",
