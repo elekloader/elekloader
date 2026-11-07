@@ -10,7 +10,8 @@ write-through storage (Write-through, below) and `finish.s` (The OS upgrade's re
 and from 0.8 with lockable parameters in `lock.c` and `lock.s` (Lockable parameters, below) and
 their p-locks in `rows.c` and `rows.s` (Mod p-locks, below), and from 0.9 the smoothed value,
 velocity and aftertouch destinations and the FX track's parameters (below), and from 0.10 field
-defaults and the event `ev_project_save` around every project save (below). On its own it changes nothing
+defaults and the event `ev_project_save` around every project save (below), and from 0.11 locks a mod keeps
+itself (below). On its own it changes nothing
 the unit does, apart from that restart, which it makes safe.
 
 The Rytm runs on the Digitakt mk1's platform (a ColdFire MCF5441x), and its OS
@@ -838,6 +839,242 @@ and RELOAD PAGE, midi.c, rows.c, scenes.c, smooth.c, store.c's LFO
 destination fields), so all of them work on the value; the saves, loads,
 SysEx and Total Recall copy the bits. No new sites.
 
+## Mod-kept locks (0.11)
+
+A knob whose id is in a `core_param_locks` entry (docs/ADAPTING.md, "Locks
+a mod keeps itself (core-ar2 0.11, Analog Rytm MKII)") from 555 up is the
+mod's: core keeps none of its locks. No new sites; `rows.c` routes these
+ids in the four lock calls it already owns, and `lock.c` and `pages.s` in
+the label, name, text and turn routines core already owns:
+
+| where | what |
+|---|---|
+| lock get, set, clear, turn (rows.c, sound and FX set vtable +60..+72) | an id core's own parameters don't take, in an entry's range: the entry's function, with the current track (12 on the FX track) and the step; a step past the track's length is none (-1, 0); a turn that answers marks the project modified |
+| knob label and name (lock.c, 0x400a9000 and 0x400a9022's callers) | the entry's `label(id)` and `name(id)`, for any set, before stock's |
+| value text (pages.s, after the `core_params` text entries) | the value as a number, as for core's own parameters |
+| turn (pages.s, after a `core_params` entry took it) | with live recording on, the entry's turn with the playing step and `CORE_LOCK_RECORDING` (0x100), found as for core's own locks (`record_step`, a lock trig added to a step without one) |
+
+`core_held_step(&track)` is the step and track of the last lock call, for 4
+ms of DMA timer 0 (a page draws each knob's lock with get just before its
+text). The profile's `param_ids` gives the linker the ranges it checks.
+
+## Step tags (0.11)
+
+`steps.c` and `steps.s`: a mod's 16-bit handle on each step of each
+pattern, which follows the step wherever stock moves it (docs/ADAPTING.md,
+"Step tags (core-ar2 0.11, Analog Rytm MKII)";
+`elekloader/sdk/include/analog-rytm-mk2/steps.h`). A mod asks for tags
+with a record in `core_step_owners` (at most 8); its owner number is the
+record's place there. Tags are RAM only, so they need no lockfile entry.
+
+- **The live patterns' tags** are dense: for each owner, 2 bytes for each
+  step of the 129 live pattern objects (13 x 64 a pattern, 1,664 bytes),
+  the handle + 1, 214,656 bytes an owner, from 0x47938000 (below core's
+  area, which RAM canaries found untouched), zeroed at the first `ev_tick`. A tag is
+  found from the step record's address. Not on stock's heap: OS 1.74's
+  buddy heap (state 0x40285b90) comes up in the emulator with a bad entry
+  at the head of its 512 KB free list (index 1: a stock decompression at
+  0x40099374 writes into a free block's header during boot), so a 256 KB
+  block taken there leaves stock's next large request (a pattern copy or
+  clear) to split that entry over live data, and the UI hangs on a broken
+  mutex. Whether a unit's heap has it too is not known.
+- **Tags outside the live patterns** (the clipboards, the undo buffers, a
+  trig shift's temporaries) are entries in the lock ledger with the code
+  128 + owner, which rebuild never writes as rows. The ledger now keeps one
+  array for each live pattern object and one for everything else, so a
+  look at one pattern's steps reads only its own.
+- **The moves** are the lock ledger's (Mod p-locks): memcpy, memset,
+  operator new, the track and step clears and row load (which clears its
+  pattern's tags: RELOAD) carry or clear the tags of the step records they
+  copy or clear, and trig copy and paste carry them through the lock list.
+  A copy between live objects moves slices of the tables, skipping objects
+  with no tags at either end.
+- **Live object 0** is stock's copy of the pattern that plays (a pattern
+  switch copies the pattern there; RELOAD PATTERN copies it back): its tags
+  follow, but no event names it, and `core_step_tags` reports them as
+  copies (pattern -1). Object k + 1 is pattern k.
+- **`ev_steps`** goes out at `ev_tick` from a queue of 64: MOVED and
+  DROPPED with a run of steps (a change that adjoins or overlaps a queued
+  one of its kind and owner joins it, unless an event queued after that one
+  touches the same steps), RELOAD, LENGTH, and RESYNC when the queue
+  overflowed.
+
+Six sites (`jmp`, the setter first, then `core_steps_length` with the
+setter's object, which finds the pattern from the object's data, and the
+value):
+
+| setter | address | LENGTH's `n` |
+|---|---|---|
+| a track's length | 0x400c0ba2 | 0 (track: the object's +64) |
+| a track's speed | 0x400c0c8c | 1 |
+| the pattern's (master) length | 0x400ab8d0 | 2 |
+| the pattern's speed | 0x400aba02 | 3 |
+| the scale mode | 0x400aba7e | 4 |
+| the change length | 0x400ab096 | 5 |
+
+Nothing runs in an interrupt: the trig's locks site (`core_rows_trig`, the
+audio interrupt) skips the tag codes.
+
+## Moments (0.11)
+
+`moments.c` and `moments.s`, and `core_handle_fields` in `store.c`: stock
+moments and words the Sidecar companion read or claimed itself, so every
+stock address stays in core (docs/ADAPTING.md, "Moments (core-ar2 0.11,
+Analog Rytm MKII)"; `elekloader/sdk/include/analog-rytm-mk2/moments.h`).
+
+| what | where (OS 1.74) | context |
+|---|---|---|
+| `ev_sysex_in(data, len, iface)`, nonzero takes the message | the SysEx router 0x40083dd8 (`jmp`, after it 0x40083de0), before the universal check | MIDI task |
+| `core_midi_try_send(len, msg)` | stock's USB sender 0x400029e0 under its mutex 0x42f67a28 (try-lock 0x4000119c, give 0x400011ee); from an interrupt the sender at level 5 while the mutex's owner word (0x42f67a28) is 0 | any task or interrupt |
+| `core_current_kit`, `_track`, `_pattern` and their items | the model's +0x1a4 (the working kits' +0x44), 0x400b693e, `core_step_pattern_now` | UI task |
+| `core_usb_midi_up()` | the USB MIDI port state 0x413db254 (1 configured) and USB on 0xfc0b01c4 | any task or interrupt |
+| `core_kit_item(k)`, `core_pattern_item(p)` | live kit 0x412558e3 + 2,531 k, live pattern 0x407dd8e3 + 85,760 p (0..127) | any |
+| `core_project_name()` | the live project's +8, 0x407c89d3 | any |
+| `ev_kit(kit, how)`: SELECTED | the kit select 0x400a65f6 (after it 0x400a65fe) | UI task, sent at `ev_tick` |
+| `ev_kit(kit, how)`: PUSHED | the whole-kit push 0x4011f90a (after it 0x4011f912) | UI, MIDI or job task, sent at `ev_tick` |
+| `ev_project_slot(slot, how)`: CLEARED, INIT | the slot clear 0x40034bd2 (after it 0x40034bd8; the manager's CLEAR and INIT NEW; slot -1, from Transfer, is CREATE NEW on the live project) | job or MIDI task, sent at `ev_tick` |
+| `ev_project_slot(slot, how)`: PASTED | the slot paste 0x400351d2 (after it 0x400351da) | job task, sent at `ev_tick` |
+| `core_handle_fields(fn)` | the table `core_handles` | UI task |
+
+- **The router** runs for every message from F0 that is not F0 7E, before
+  the Elektron header check; analoghealth's tap (0x40083e04) is after
+  core's site and sees only what no mod took. Core's own pattern dump in
+  (0x4000d79c) is behind the router too.
+- **The sender** busy-waits while its 4 KB buffer (0x4b80c000, next byte
+  0x413db25c) holds more than 0xffb bytes not yet sent (0x413db258, which
+  the USB controller's completion 0x40002454 brings down), and for a
+  message over 0x2f bytes near the buffer's end; and each transfer takes a
+  request from a free list (head 0x413db390, linked at +0x34), waiting for
+  one to complete when none is free (0x40003a64). `core_midi_try_send`
+  asks first, with the try-lock taken: it sends only when 4 bytes a
+  message byte fit, no stock SysEx is open (0x413db244 = 0xF0), the port
+  is configured (0x413db254 = 1), USB is on (0xfc0b01c4) and the requests
+  it needs (two when the message wraps the buffer) are free and the first
+  is not busy; otherwise it answers 0. The try-lock and the give are a
+  task's (the owner is the current task, the give can switch tasks), so
+  from an interrupt (the status register's level not 0) core uses neither:
+  it sends at once, at level 5 for the sender's call (as the Sidecar
+  companion's step clock did, so the audio interrupt can't cut in), when
+  no task holds the mutex (its owner word 0), no other interrupt is
+  sending and the same checks pass. Otherwise the message goes into core's
+  ring (1,024 bytes, at most 128 a message), which the next sequencer tick
+  (before `ev_seq_tick`) or `ev_tick` sends first; a call from a task
+  while the ring holds messages queues behind them. Messages leave in the
+  order of the calls, except that one from an interrupt cutting into
+  another interrupt's send may go first. `core_midi_irq` (magic `MIRQ`)
+  counts the interrupt path's sends at once, queued, drained and refused,
+  and its longest time at level 5 in DMA timer 0 ticks. Only whole
+  messages: a status byte first, and a SysEx closed in the same call.
+- **The project model** (0x419f28a8) is read, never made: 0x4017fa0a
+  makes it when it is 0, and the kit select site runs during boot, before
+  stock makes it; a call there makes it too early and the boot hangs
+  (seen in the emulator).
+- **A kit select** doesn't push the kit to the engine (each track takes it
+  at its next trig with the new kit), so the two events are apart. A
+  change of kit while stopped (0x405c8c90 not 1) clears the tracks'
+  playing-trig mod locks (`core_rows_now_reset`), the 0.9 follow-up's
+  finding 1; while playing each track's next trig writes its own, so locks
+  a new pattern's first trigs set before the UI's select stay. Pushes are
+  kept as one bit per kit and selects as the last one, so several in one
+  tick are one event each.
+- **The slot paths** outside `ev_project_save`: the project manager's
+  CLEAR (job "Projects Clear", 0x40051a8a, then the name 0x40034e98) and
+  its INIT NEW of an empty slot both call 0x40034bd2 with the slot, which
+  writes a new project there: CLEARED either way. CLEAR of the active slot
+  clears its card copy only; the live project goes on. Transfer's clear
+  (the RPC handler 0x4008680c) calls it too; with slot -1 it runs CREATE
+  NEW on the live project (0x400b3bd6), INIT, which the manager never
+  passes (LOAD PROJECT's CREATE NEW reaches 0x400b3bd6 another way, with
+  no slot event: `ev_project` and `ev_kit` tell it). Paste is the job
+  "Project Paste" (0x4005180e). There is no SysEx project dump;
+  Transfer's other slot commands read a project or write items into one
+  (kits, patterns, sounds: item 11's copy events), not a whole slot.
+- **Handles** walk the live project: the 128 kits as edited and as last
+  saved (each with its 12 sounds), the 128 pool sounds, the 4 global
+  slots, the 128 patterns and their 13 tracks, and the project; the
+  working pattern (a copy) is left out. A handle field is any field marked
+  `"handle": true` (no lock, no init; 0 is none); the mark is not in the
+  lockfile.
+
+## The sequencer (0.11)
+
+`seq.c` and `seq.s`: the sequencer clock's steps, ticks and play state as
+events, and its words as getters (docs/ADAPTING.md, "The sequencer
+(core-ar2 0.11, Analog Rytm MKII)";
+`elekloader/sdk/include/analog-rytm-mk2/seq.h`).
+
+| what | where (OS 1.74) | context |
+|---|---|---|
+| a track's next step made, and whether it trigs | in the clock's loop over the 13 tracks, after trig_fire (0x4009aa28) filled the trig record (0x42ac1704) and it was copied to the trig queue: 0x4009b68a, `tst.l 0x42ac1704` (`jsr`; core sets the same flags for the `beq` after it); the track is in `%d2` | the clock's interrupt |
+| `ev_transport(state)`, `ev_seq_step(steps, trigs)`, `ev_seq_tick()` | the clock's exit 0x4009c00a, after it restored its SR, `movem.l (%sp),%d0-%d7/%a0-%a6; lea 76(%sp),%sp` (`jmp`; core's part ends with the same and the `rte`) | the clock's interrupt |
+| the first step after PLAY | the trig queue's slots in use (0x800067a4 + track), the playing pattern's lock store (0x407dd8e3 + 0x14f00 · pattern, + 0x2e91) | the clock's interrupt (or the trig-locks site, first) |
+| `core_transport()` | 0x405c8c90 (1 playing, 0 stopped) | any |
+| `core_pattern_now()`, `core_pattern_next()` | 0x405c8d04 (byte); the pattern queue's next entry 0x412f5a03 (-1 none) into the entries at 0x412f3e91, 20 bytes each, the pattern a word at +0 | any |
+| `core_tempo()` | 0x40287ffc, BPM x 120 | any |
+| `core_track_speed(t)`, `core_track_step(t)` | 0x405c8d25 + t, 0x405c8cea + t (bytes) | any |
+| `core_track_length(t)` | the playing pattern's object (0x407dd8e3 + 0x14f00 · pattern): its scale mode byte +0x14eb9 (1 per track) chooses the track record's (+0x395 · t) length byte +0x2c5, else the pattern's word +0x14eb3, as trig_fire reads them | any |
+| `core_step_trig(p, t, step)` | pattern p's object, the track record's trig word at +2 · step: 0x0001 a trig, 0x0380 its synth, sample and envelope triggers (none: a trigless lock trig); in euclidean mode (+0x2ca = 1) the map at +0x2d1 + step (-1 none) | any |
+
+- **The clock** (0x4009b0b4) is an exception handler, one call a tick: 96
+  a quarter note, also while stopped. When a track reaches a step
+  boundary (each at its own speed) the loop calls trig_fire for its next
+  step, one step ahead of the sound; trig_fire clears the record's first
+  word for a trigless step, a failed condition (FILL, PRE, ratios) or a
+  failed probability. Microtiming moves only the queued trig's due time
+  and retrigs ride in the record, so neither adds a call. trig_fire's own
+  entry isn't hooked: the UI task calls it too (0x4009c02a and its
+  callers), and those calls aren't sequencer steps.
+- **The masks** gather at the fired site during the tick and go out once
+  at the exit, after `ev_transport`, in one `ev_seq_step` call; tracks
+  not at a boundary that tick are 0 in both.
+- **The first step after PLAY** isn't made by the clock (stock made its
+  trig before PLAY), so core's trig-locks site didn't see it on the first
+  loop. On the PLAY tick core seeds it: every track whose trig queue holds
+  a trig (stock's, its condition evaluated) takes step 1's mod locks, and
+  `ev_seq_step(0x1fff | CORE_SEQ_FIRST, trigs)` goes out before that
+  tick's ordinary call. The PLAY tick's batch also makes step 2, and the
+  trig-locks site sets step 2's locks at once, so the seed runs at the
+  first of that site (`core_rows_trig`), the fired site and the exit on
+  that tick: while the queue holds only step 1's trigs, and before step
+  2's locks.
+- **The pattern queue**: a pattern selected while playing, or a chain's
+  next, is an entry the clock switches to at the pattern's end; with none
+  queued `core_pattern_next` answers the pattern playing.
+- **Trig words**: a note trig is 0x0381 and a trigless lock trig 0x3841
+  (seen in the emulator), so 0x0004 is not the trigless mark; trig_fire
+  makes no trig for a word with 0x0004 set or 0x0001 clear. A trigless
+  lock trig makes a trig record, so `ev_seq_step`'s trigs include it.
+- **Blocks**: `core_block` (load.h, 0.9) is the audio block count; there
+  is no call by that name, since the variable has it.
+
+## Dial scale (0.11)
+
+`scale.c`, with `core_held_get` and `core_held_text` in `scenes.c`: a
+lockable parameter narrower than the dial, whose knob the mod's
+`core_params` get answers on 0..127, shown on that scale everywhere else
+too (docs/ADAPTING.md, "Dial scale and held pads (core-ar2 0.11, Analog
+Rytm MKII)"; `core_param_scales` in `elekloader/sdk/include/analog-rytm-mk2/lock.h`).
+Opt-in, by the knob's id; a parameter without an entry is as in 0.10.
+
+| where a value meets the page | what core does with an entry |
+|---|---|
+| a held trig's lock: get (vtable +60), set (+64), turn (+72) | get and turn answer `show(lock)`; set stores `unshow(value)`; a turn still moves a whole field step |
+| a held scene's lock (`core_held_get`) | `show(lock)` |
+| a held performance's depth (`core_held_get`) | the depth in dial steps, `show(min + d) - show(min)`; and core writes the text as the signed depth first (`core_held_text`, param_value_text's first word) unless the entry has `CORE_SCALE_DEPTHS` |
+| the NRPN and CC in (midi.c `set`) | `unshow(value)`: 127 is the top of the dial |
+| PARAM OUTPUT (midi.c `core_midi_knob`) | sends `show(value)`, so the value comes back the same |
+| core's number text (`core_lock_text`) | prints `unshow(value)`, the field's value, except a depth |
+
+- **Field values stay field values** wherever no page reads them: the
+  ledger, stock's copy and paste of locks (the copy list), the scene turn
+  and push (they step and seed in field units), RANDOMIZE and RELOAD PAGE,
+  live recording, `core_lock_value`, `core_scene_value`,
+  `core_perf_offset` and `core_param_value`.
+- **`core_held_kind(view)`**: 0, `CORE_HELD_SCENE` or `CORE_HELD_PERF`,
+  for a mod that draws its knob. The text is drawn just after the value,
+  so a depth's get notes its id and DMA timer 0's count, and the text
+  within 4 ms takes it, as `core_held_step` does.
+
 ## Checked so far
 
 On a unit (OS 1.73). With test images built by rytm-mods-src (its `elemod`
@@ -1128,6 +1365,176 @@ stock bytes, and that each covers whole instructions.
   lock-check 1.11): in a new project (CREATE NEW) N reads 100 in the sound
   and 100 << 8 from `core_param_value`; NRPN 4:5 sets it to 101 and it
   reads 101 (101 << 8).
+
+Checked in the emulator (dtboot, OS 1.74, core 0.11 with
+`examples/sidecar-check-ar2` 0.1, build SC11, 5 Nov 2026), mod-kept locks
+(0.11): the SIDECAR CHECK page's knobs show SCA..SCD and, as a knob turns
+with a trig held, the header shows its name (SC KNOB C), not ERR / ERROR.
+In grid record, T1 held and knob C turned: set (track 0, step 0, the
+unlocked value) then turn, and the knob shows the lock with the held step
+in its text (`L1 6`, from `core_held_step`); after the release the text has
+no step. T1 and T9 held and knob A turned: one call each, steps 0 and 8.
+T1 held and knob B pushed: set (no lock yet); T1 held, FUNC and knob C
+pushed: clear. On the FX track (FX, its LFO view's added page) T3 held and
+knob C turned: set then turn with track 12, step 2. Live recording (RECORD
+held + PLAY) with knob B turned: turn with the playing step and
+`CORE_LOCK_RECORDING` (0x104, 0x10a: steps 5 and 11), and a lock trig added
+on step 11, which had no trig. An empty step held in grid record keeps a
+trig after release whether a mod's knob or a stock one (AMP) is turned, or
+none: that is stock's press, and no lock trig is added. Part 1 adds no
+work in an interrupt. Core's .run grows 1,092 bytes over 0.10 (33,356),
+.bss 8; core + sidecar-check take 60,712 of the 128 KB area.
+
+Checked in the emulator (dtboot, OS 1.74, core 0.11 with
+`examples/sidecar-check-ar2` 0.2, build ST11, 5 Nov 2026), step tags
+(0.11), with the bad free-list entry above poked out of stock's heap
+(`0x42ac137c` = -1) after boot, as stock 1.74 alone hangs on a pattern
+clear there without it. Steps 1 and 6 of track 1 in A01 tagged 0x101 and
+0x106 (after their trigs: placing a trig clears the step): a trig copy of
+step 1 onto step 9 gives step 9 0x101 (MOVED step 8), and the trig's lock
+clear (FUNC + PLAY with it held) drops it (DROPPED); track clear drops
+both (DROPPED 0 n 6; a walk finds the two in the undo buffer) and its undo
+brings them back (MOVED 0 and 5); a track copy pasted onto SD tags its
+steps 1 and 6 (MOVED track 1); trig shift right twice moves them to steps
+3 and 8 and left once to 2 and 7, four or five events a shift; a pattern
+copy pasted into A03 gives A03 both (MOVED pattern 2), its clear drops them
+and the undo brings them back; with A01 cleared, RELOAD PATTERN brings
+them back from live object 0 (MOVED pattern 0); a track's length (16 to
+13 and back) and the master length (INF to 1024) give LENGTH (track 0 with
+`n` 0; track -1 with `n` 2); a pattern dump of A01 (request 0x64) sent
+back into A03 gives RELOAD pattern 2; switching A01 to A03 and back while
+playing keeps A01's tags, with no event. With
+[lock-check 1.11](../../examples/lock-check-ar2)'s A locked on the same
+steps, the locks take every one of those moves with the tags (the ledger
+read by region), and after the trig shift the trigs play their lock. In
+a build timing core's memcpy part with interrupts masked (not committed),
+with every step of A01..A20 tagged: a pattern switch while playing costs
+47,000 to 49,000 DMA timer 0 ticks (0.36 ms) of the UI task, against 292
+with no tags; one memcpy of an edit at most 10,458 (a track clear's undo,
+65 copies, 128,000 in all); the trig's locks site at most 24 ticks of the
+88,010 between audio blocks. Core's .run grows 8,584 bytes over thread
+1's 33,356 (41,940), .bss 21,944; core + sidecar-check 0.2 take 76,016 of
+the 128 KB area, and with lock-check 1.11 too, 102,840. Not yet on a
+unit.
+
+Part 3, the moments (core 0.11 + sidecar-check 0.3, build SC17), in
+analog-emu (dtboot, OS 1.74), with the same poke after boot; the USB
+checks with its USB host and stock's own sender and request pool
+(`--usb-host --usb-midi-real`). The first build hung at boot (the kit
+select site called 0x4017fa0a; see "The project model" above). An F0 7D
+message is taken (stock never sees it) and a pattern dump request (0x64)
+passes and comes back whole (14,988 bytes). Bursts of 40 note-ons from
+the UI task, timed from before to after a pattern dump: each arrives
+whole and in order, before or after the dump or split around it (38,
+then the dump, then 2), never inside it. The first try lost notes while
+the dump held every transfer request (the sender waited inside a
+"send now"); the request check above fixed it. One timing (the burst on
+the tick the dump starts) still loses the burst, and stock's own sender
+(0x400857ca, used the same way in a test build) loses it at the same
+tick: stock's, or the emulator's. From the audio interrupt 200 note-ons go
+through core's ring in order (225 refusals while the ring was full, each
+tried again); a send there takes at most 80 DMA timer 0 ticks of the
+88,010 between audio blocks. `ev_kit`: a pattern change to another kit
+and KIT menu LOAD KIT give SELECTED; RELOAD KIT, a SysEx kit dump in
+(request 0x62, sent back) and project load and CREATE NEW (SELECTED,
+then PUSHED) give PUSHED. A stale playing-trig lock poked into
+`core_lock_now` stays with nothing done and is cleared by a stopped LOAD
+KIT of kit 2 (finding 1). SAVE PROJECT AS from PRESETS to slot 004 as
+QRESETS: `core_project_name` gives QRESETS at pre 1 and pre 0 (how
+0x302). Handles: the project's set to 5 and pattern A01's to 6, the walk
+finds two values, sum 11, one of each field. Slot 121: INIT NEW (empty
+slot), CLEAR and a paste of itself (copy, paste, YES) give CLEARED,
+CLEARED, PASTED for slot 120; LOAD FROM loads it (`ev_kit`, no slot
+event); CLEAR of it while active gives CLEARED and leaves the live
+project; LOAD PROJECT's CREATE NEW gives no slot event. Finding 2 (the
+FX LFO keeps its destination after a stopped kit change) is stock's, so
+core keeps it: on stock 1.74 alone, kit 2's FX LFO on a stock destination
+(SPD, set in the stored kit, then RELOAD KIT) puts 5 in the FX track's
+live slot (the byte the LFO block reads, 0x4009eabc); a stopped change
+from A02 to A01 (kit 1, None) leaves 5 there, still 5 ten seconds later;
+PLAY on A01 clears it, and so does the same change while playing. Core's .run is
+44,808 bytes, .bss 22,588; core + sidecar-check 0.3 take 81,244 of the
+128 KB area. Not yet on a unit.
+
+Part 4, the sequencer (core 0.11 + sidecar-check 0.4 + lock-check 1.11,
+build SC22), in analog-emu (dtboot, OS 1.74), with the same poke after
+boot. A01 cleared, track 1 trigs on steps 1, 5, 9 and 13, 127 BPM: every
+16th (24 ticks) one `ev_seq_step` with all 13 tracks, track 1's trig bit
+set on the calls made while steps 4, 8, 12 and 16 start (one step ahead),
+4 trigs a loop; `core_tempo` 15,240. PLAY: `ev_transport(1)`, then on the
+same tick the seed (steps 0x1fff | `CORE_SEQ_FIRST`, trigs 0x1) and step
+2's call; with lock-check's LCA p-locked to 4 on step 1 and 0 on step 5,
+`core_lock_now` holds step 1's lock (5) at step 2 and step 5's (1) at
+step 7, where 0.10 left step 1 without its
+lock on the first loop. Step 9 on the FILL condition: 3 trigs a loop, 4
+while FILL is held. Step 5 at +2/384 microtiming: the same calls at the
+same ticks. Track 1 to 1/2x mid-pattern (SCALE menu, per-track mode):
+`core_track_speed(0)` 2 then 4, track 1 alone every 48 ticks from its next
+step, the others every 24, each its own call. A02 selected while A01 plays:
+`core_pattern_next` 1 while `core_pattern_now` stays 0 until the switch,
+then both 1. STOP: `ev_transport(0)`, no more step calls; BD and SD pads
+while stopped make none; PLAY again seeds again (A02, trigs 0x117).
+Retrigs weren't set in the emulator (the RTRG popup's switch didn't change
+with knob A, its push or YES); the trace's count shows they add no
+trig_fire call. Cost, DMA timer 0 ticks in a measuring build
+(`-DCORE_SEQ_MEASURE`, core's parts and the subscribers, of the 88,010 a
+1/1500 s block): a tick with a step, one subscriber 289 to 292 (0.33%),
+three 555 to 558 (0.63%); the PLAY tick (seed, two calls, `ev_transport`)
+516 and 1,047 (1.19%, once a PLAY, with the two extra subscribers'
+work); a tick without a step 23 playing, 28 stopped. Core's .run is 45,788
+bytes (+980), .bss 22,608; core + sidecar-check 0.4 take 84,044 of the
+128 KB area. Tempo on a unit is left for the run. Not yet on a unit.
+
+Part 6, payloads and the bigger area (core 0.11 + sidecar-check 0.6 +
+lock-check 1.11, build SC61), in analog-emu (dtboot, OS 1.74, upstream
+2ac0f1f), on a card with three noise samples: the mods run from 0x47B10000
+(the 0.11 area, 0x47B10000-0x47FFF000) and sidecar-check's 1 MB payload
+sits at 0x47B28FE8. At the first ev_tick `core_payload` with its id
+(0x3a4826f9) returned that address and 1,048,576 bytes, the same as the
+mod's own symbol, one entry in `core_payloads`, and the readback of all
+262,144 words found 0 wrong. After the three samples were loaded into the
+project (GLOBAL > SAMPLES > LOAD TO PROJ, the first at 0x43937290), the
+current track set to play the first (SMP 1) and the pattern played, a
+second readback found 0 wrong. Core's .run is 56,116 bytes; the build's RAM ends at
+0x47C2EC78 with 3,998,600 bytes of the area spare; the main OS packs to
+2.29 MB, unpacks in place with 223,737 bytes of gap, and the flash has
+161,888 bytes spare. Not yet on a unit.
+
+Part 7, the interrupt send and the step getters (core 0.11 + sidecar-check
+0.7 + lock-check 1.11, build SC73), in analog-emu with its USB host and
+stock's own sender (`--usb-host --usb-midi-real`): a 77-byte SysEx (a
+whole 13-track 2C) from every `ev_seq_step` while playing went out at once,
+80 of 80 in order in the host's capture, and 96 from `ev_seq_tick` while
+stopped the same. With a slow host (one read each 400 microframes) and 400
+note-ons from the UI task at the same time, 10 waited in the ring and
+went out at later ticks, 67 were refused (the ring full) and the capture
+held every sent SysEx in order between the notes, none broken. The
+emulator saw no wait from interrupt level (stock's sem_pend), and the
+longest time at level 5 was 1,189 DMA timer 0 ticks for one message, of
+the 88,010 between audio blocks (1.4%). A trig on steps 1, 5, 9 and 13 of
+track 1 and a trigless trig (FUNC + trig in grid record) on step 3:
+`core_step_trig` gave note trigs at 1, 5, 9, 13 and a lock trig at 3;
+`core_track_length` gave each track's length in per-track scale mode,
+track 10's 18 matching where its step wraps. The first two sends after a
+snapshot load are lost while the emulator's host enumerates again, as
+stock's own are. Not checked: a track in euclidean mode, the pattern
+scale mode's length, a task inside the sender at the moment of an
+interrupt send (the counts show none queued for that). Core's .run is
+56,928 bytes. Not yet on a unit.
+
+Part 8, the dial scale and the lock takes (core 0.11 + sidecar-check 0.7 +
+lock-check 1.12, build SC81), in analog-emu: lock-check's B, a 4-bit field
+on knob D of LOCK CHECK whose get answers round(v * 127 / 15), with a
+`core_param_scales` entry for core's linear map. Turned with no pad held
+to 7, the needle sat mid-dial and the text read 7. In grid record, T1 held
+and the knob turned: the ledger held 9 (code 43, step 1) and the knob
+showed 9 with its needle where the dial puts 76. A scene's pad held in
+SCENE mode: the lock stepped from 7 to 11 and showed 11 at 93. NRPN MSB 4,
+LSB 1 with 127 set B to 15 (needle full, text 15), and 64 set it to 8.
+Not seen in the emulator: a performance's depth (holding a pad in PERF
+mode turned neither a mod knob's nor stock's ATK into a depth there),
+PARAM OUTPUT and a custom show/unshow; they are for the unit run. Core's
+.run is 58,468 bytes. Not yet on a unit.
 
 ## Building
 

@@ -5,7 +5,7 @@ import assert from 'node:assert/strict'
 import { ANALOG_RYTM_MK2, DIGITONE_MK2, DIGITAKT_MK1, DIGITONE_MK1, OCTATRACK, devices, targetOf } from '../src/devices.ts'
 import { sha } from '../src/bytes.ts'
 import { Mod, check as check1 } from '../src/elemod.ts'
-import { Mod2, check, imageProblems } from '../src/link.ts'
+import { Mod2, check, ddrFor, imageProblems, payloadId } from '../src/link.ts'
 
 test('a parameter slot claims its sound slot (soundslot:<n>), from its own bytes or the stock image', () => {
   const dn = DIGITONE_MK1, r = dn.releases.find(x => x.version === '1.43')!
@@ -50,6 +50,32 @@ test('a machine claims its slot (machine:<n>) on the Analog Rytm MKII', () => {
   assert.ok(check([mod('a', 36), mod('b', 36)], image).includes('a 1 and b 1 both claim machine:36'))
   assert.ok(!check([mod('c', 36), mod('d', 37)], image).some(p => p.includes('claim')))
   assert.deepEqual(mod('e', 53).impliedNames(image), [])
+})
+
+test('knob id ranges on the Analog Rytm MKII (core_params, core_param_locks)', () => {
+  const ar = ANALOG_RYTM_MK2, r = ar.releases.find(x => x.version === '1.74')!
+  const image = new Uint8Array(r.mainLen)
+  const hex8 = (n: number) => n.toString(16).padStart(8, '0')
+  const mod = (id: string, ...entries: [string, number, number][]) => new Mod2({
+    elemod: 2, id, version: '1', target: targetOf(ar, r),
+    sections: { '.run': { align: 4, parts: [['hex', entries.map(([, a, b]) => hex8(a) + hex8(b)).join('')]] } },
+    symbols: Object.fromEntries(entries.map((_e, n) => [`e${n}`, ['.run', 8 * n]])),
+    contribute: entries.map(([t], n) => ({ to: t, data: '00000000', relocs: [[0, 'abs32', `sym:e${n}`, 0]] })),
+  }, id)
+  const ids = (problems: string[]) => problems.filter(p => p.includes('ids'))
+  const a = mod('a', ['core_params', 560, 573], ['core_param_locks', 560, 573])
+  assert.deepEqual(a.idRanges(image), [['core_params', 560, 573], ['core_param_locks', 560, 573]])
+  assert.deepEqual(ids(check([a, mod('b', ['core_params', 1, 4]), mod('c', ['core_params', 1, 4])], image)), [])
+  assert.deepEqual(ids(check([mod('s', ['core_params', 470, 483])], image)), [
+    "s 1: its core_params entry takes ids 470..483, and 469..554 are core's lockable parameters' ids; a mod's own ids start at 555"])
+  assert.deepEqual(ids(check([mod('l', ['core_param_locks', 400, 460])], image)), [
+    "l 1: its core_param_locks entry takes ids 400..460; that table's ids start at 555"])
+  assert.ok(ids(check([a, mod('d', ['core_param_locks', 500, 561])], image))[0]
+    .startsWith('d 1: its core_param_locks entry takes ids 500..561, and 469..554'))
+  assert.deepEqual(ids(check([a, mod('e', ['core_param_locks', 570, 600])], image)), [
+    'a 1 and e 1 both take ids 570..573 (core_params, core_param_locks)',
+    'a 1 and e 1 both take ids 570..573 (core_param_locks, core_param_locks)'])
+  assert.deepEqual(mod('f', ['core_params', 9, 3]).idRanges(image), [])
 })
 
 test('mk1 machines claim their ids (machine:<id>, dnmachine:<id>)', () => {
@@ -195,4 +221,12 @@ test('the finished image against the stock one: link.py\'s image_problems, line 
   assert.deepEqual(problems(stray(plo + 8, 2), [[plo + 8, plo + 10, 'a site']]), [`${hx(plo)}-${hx(phi)} (${pwhy}) is not stock in the linked image`])
   assert.deepEqual(problems(stray(klo + 4, 2), [[klo + 4, klo + 6, 'a site']]), [`${hx(klo)}-${hx(khi)} (${kwhy}) is not stock in the linked image`])
   assert.deepEqual(problems(stray(plo - 16, 2), [[plo - 16, plo - 14, 'a site']]), [])
+})
+
+test('a payload id is link.py payload_id, and core-ar2 0.11 moves the Rytm\'s mods\' area', () => {
+  assert.equal(payloadId('sidecar-check'), 0x3a4826f9)          // link.payload_id('sidecar-check')
+  assert.equal(payloadId('porbxw'), payloadId('puscra'))         // the collision tests/test_link_refusals.py uses
+  assert.notEqual(payloadId('porbxw'), payloadId('puscrb'))
+  assert.deepEqual(ddrFor(ANALOG_RYTM_MK2, '0.10'), [0x47be0000, 0x47c00000])
+  assert.deepEqual(ddrFor(ANALOG_RYTM_MK2, '0.11'), [0x47b10000, 0x47fff000])
 })

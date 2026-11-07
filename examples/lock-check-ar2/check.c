@@ -41,7 +41,13 @@ STORE_FIELD(lc_n);
 
 /* 1.5: A takes core's category (MOD), C its own (LCHK) */
 const struct core_lock_param lc_param_a = {STORE(lc_a), 1, 0, 127, "LCA", "Lock Check A", 0};
-const struct core_lock_param lc_param_b = {STORE(lc_b), 0, 0, 15, "LCB", "Lock Check B", 0};
+/* 1.12 (core 0.11): B, 0..15, on knob D of the LOCK CHECK page (id 5, an
+ * Error record), shown on the dial's scale: its get answers round(v * 127 /
+ * 15) and its core_param_scales entry asks core's linear map, so a held
+ * trig's or scene's lock, a performance's depth, its NRPN and its text
+ * agree with the knob as it shows without a pad held */
+const struct core_lock_param lc_param_b = {STORE(lc_b), 5, 0, 15, "LCB", "Lock Check B", 0};
+const struct core_param_scale lc_scale_b = {5, 5, 0, 0, 0};
 const struct core_lock_param lc_param_c = {STORE(lc_c), 2, 0, 1000, "LCC", "Lock Check C",
                                            CORE_LOCK_CATEGORY("LCHK")};
 /* 1.6: D's strings are longer than core shows (4, 32 and 4 characters), so
@@ -138,16 +144,17 @@ void lc_draw(void *bmp, void *ctrl)
     }
 }
 
-const struct core_page lc_page = {14, "LOCK CHECK", {1, 2, 4, 0, 0, 0, 0, 0}};
+const struct core_page lc_page = {14, "LOCK CHECK", {1, 2, 4, 5, 0, 0, 0, 0}};
 const struct core_view_page lc_view_page = {CORE_VIEW_LFO, 14, 0};
 const struct core_page lc_fx_page = {15, "LOCK CHECK FX", {3, 0, 0, 0, 0, 0, 0, 0}};
 const struct core_view_page lc_fx_view_page = {CORE_VIEW_FX_LFO, 15, 0};
 
 /* knob A is A (id 1, 0..127), knob B is C (id 2, 0..1000), knob C is N (id
- * 4, 0..127); on the FX page knob A is K (id 3, 0..127), in the kit */
+ * 4, 0..127), knob D is B (id 5, 0..15 on the dial's 0..127); on the FX
+ * page knob A is K (id 3, 0..127), in the kit */
 static unsigned lc_field(int32_t id)
 {
-    return id == 1 ? STORE(lc_a) : id == 3 ? STORE(lc_k) : id == 4 ? STORE(lc_n) : STORE(lc_c);
+    return id == 1 ? STORE(lc_a) : id == 3 ? STORE(lc_k) : id == 4 ? STORE(lc_n) : id == 5 ? STORE(lc_b) : STORE(lc_c);
 }
 
 static void *lc_item(int32_t id)
@@ -158,19 +165,20 @@ static void *lc_item(int32_t id)
 static int lc_get(int32_t id, int32_t *value)
 {
     void *s = lc_item(id);
-    if (id < 1 || id > 4 || !s)
+    if (id < 1 || id > 5 || !s)
         return 0;
-    *value = core_store_get(lc_field(id), s, 0) << 8;
+    *value = core_store_get(lc_field(id), s, 0);
+    *value = id == 5 ? (*value * 127 + 7) / 15 << 8 : *value << 8;
     return 1;
 }
 
 static int lc_delta(void *view, int32_t id, int32_t delta, int32_t func)
 {
     void *s = lc_item(id);
-    int v, top = id == 2 ? 1000 : 127;
+    int v, top = id == 2 ? 1000 : id == 5 ? 15 : 127;
     (void)view;
     (void)func;
-    if (id < 1 || id > 4 || !s)
+    if (id < 1 || id > 5 || !s)
         return 0;
     v = (int)core_store_get(lc_field(id), s, 0) + (delta > 0 ? (delta + 255) / 256 : -((255 - delta) / 256));
     core_store_set(lc_field(id), s, 0, v < 0 ? 0 : v > top ? top : v);
@@ -192,9 +200,9 @@ static int lc_text(struct core_text *t)
     return CORE_TEXT_DONE;
 }
 
-const struct core_param lc_params = {1, 4, lc_get, lc_delta, lc_text};
+const struct core_param lc_params = {1, 5, lc_get, lc_delta, lc_text};
 
-/* 1.7 (core 0.9): every audio block, core_param_value of A, B ("smooth":
+/* 1.7 (core 0.9): every audio block (1.13: every 8th), core_param_value of A, B ("smooth":
  * false) and C on track 1, with A's and C's values in the sound, the
  * offsets the LFO and the performances give A and A's p-lock and scene lock,
  * in a ring the emulator's
@@ -263,11 +271,22 @@ static void lc_batch_check(const struct lc_rec *r, unsigned single)
     lc_batch.blocks++;
 }
 
+/* 1.13 (core 0.11): every LC_STRIDE-th audio block only. Every block cost
+ * 59 us of the Rytm's 667 us block (8.8 % of the CPU on the unit), enough with core
+ * 0.11 to starve the UI task; each record keeps its block number, so the
+ * checks read the ring as before, with gaps */
+#define LC_STRIDE 8
+
 void lc_render(void)
 {
-    struct lc_rec *r = &lc_ring.rec[lc_ring.next % RING];
-    void *s = sound1();
-    unsigned t0 = DTCN0, t;
+    struct lc_rec *r;
+    void *s;
+    unsigned t0, t;
+    if (core_block % LC_STRIDE)
+        return;
+    r = &lc_ring.rec[lc_ring.next % RING];
+    s = sound1();
+    t0 = DTCN0;
     r->a = core_param_value(0, STORE(lc_a));
     r->b = core_param_value(0, STORE(lc_b));
     r->c = core_param_value(0, STORE(lc_c));

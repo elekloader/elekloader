@@ -651,6 +651,54 @@ def _(B):
                   lambda d: d[1]['sections']['.bss'].update(size=room - 4096))
 
 
+def payload(n, fill='a5'):
+    return {'.payload': {'align': 4, 'len': n, 'parts': [['hex', fill * n]]}}
+
+
+def keeps_payloads(d):
+    d[0]['collections']['core_payloads'] = {'entry': 12}
+
+
+@row('link', '<> carr<> a payload, which <> does not keep (no table <> of <>-byte entries)')
+def _(B):
+    def bad(d):
+        d[1]['sections'].update(payload(64))
+
+    def good(d):
+        bad(d)
+        keeps_payloads(d)
+    return B.pair('m carries a payload, which core 1 does not keep (no table core_payloads of 12-byte entries)',
+                  bad, good)
+
+
+@row('link', 'the payloads (<> bytes) and the mods need RAM to 0x<>, past 0x<> (<> bytes over): the area has '
+             'room for <> bytes of payload')
+def _(B):
+    room = B.dev.ddr[1] - B.dev.ddr[0]
+
+    def size(n):
+        def f(d):
+            keeps_payloads(d)
+            d[1]['sections'].update(payload(n, '00'))
+        return f
+    return B.pair('the payloads (%d bytes) and the mods need RAM to ' % (room + 16), size(room + 16), size(room - 4096))
+
+
+@row('link', 'the payloads of <> and <> have the same id (0x<>)')
+def _(B):
+    def two(second):            # "porbxw" and "puscra": the same FNV-1a hash
+        def f(d):
+            keeps_payloads(d)
+            d[1]['sections'].update(payload(64))
+            d.append(B.other(second, sections=dict(B.other(second)['sections'], **payload(32))))
+            d[1]['id'] = 'porbxw'
+            d[1]['symbols'] = {'fn_porbxw': ['.run', 0]}
+            d[1]['contribute'][0]['relocs'][0][2] = 'sym:fn_porbxw'
+            d[1]['sites'][0]['relocs'][0][2] = 'sym:fn_porbxw'
+        return f
+    return B.pair('the payloads of porbxw and puscra have the same id (0x', two('puscra'), two('puscrb'))
+
+
 @row('link', '.fast code needs SRAM to 0x<>, past 0x<>', device='digitakt-mk1')
 def _(B):
     room = B.dev.sram_code[1] - B.dev.sram_code[0]
@@ -776,6 +824,15 @@ def _(B):
              [keeper(B), inited])], [inits, inited]
 
 
+@row('link', '<> mark<> storage fields as handles, which <> does not keep (no table <>)', device='analog-rytm-mk2')
+def _(B):
+    handled = B.other('m', storage=[{'sym': 'st_h', 'scope': 'project', 'bits': 16, 'handle': True}])
+    handles = keeper(B)
+    handles['collections']['core_handles'] = {'entry': 4}
+    return [('m marks storage fields as handles, which core 1 does not keep (no table core_handles)',
+             [keeper(B), handled])], [handles, handled]
+
+
 @row('link', '<> imports <> but declares no table <>', device='analog-rytm-mk2')
 def _(B):
     # check() refuses a core that imports the generation symbols without the table, unless a mod
@@ -806,6 +863,52 @@ def _(B):
     thief = B.other('n', symbols={'__store_gen2': ['.run', 0]}, exports=['__store_gen2'])
     return [('the storage field __store_gen2 has the name of a symbol a mod exports',
              [keeper(B), storing(B), thief])], [keeper(B), storing(B)]
+
+
+# ---- knob ids (the Analog Rytm MKII's core_params and core_param_locks, the profile's param_ids) ----------
+
+def knobs(B):
+    c = B.core()
+    c['collections'].update({'core_params': {'entry': 4}, 'core_param_locks': {'entry': 4}})
+    return c
+
+
+def answering(B, first, last, table='core_params', ident='m'):
+    """A mod whose one entry in `table` answers for ids first..last."""
+    d = B.other(ident)
+    d['sections']['.run'] = {'align': 4, 'len': 8, 'parts': [['hex', '%08x%08x' % (first, last)]]}
+    d['symbols'] = {'e_' + ident: ['.run', 0]}
+    d['contribute'] = [{'to': table, 'data': '00000000', 'relocs': [[0, 'abs32', 'sym:e_' + ident, 0]]}]
+    return d
+
+
+@row('check', "<>: its <> entry takes ids <>..<>, and <>..<> are <>; a mod's own ids start at <>",
+     device='analog-rytm-mk2')
+def _(B):
+    return [("m 1: its core_params entry takes ids 470..483, and 469..554 are core's lockable "
+             "parameters' ids; a mod's own ids start at 555", [knobs(B), answering(B, 470, 483)])], \
+        [knobs(B), answering(B, 560, 573)]
+
+
+@row('check', "<>: its <> entry takes ids <>..<>; that table's ids start at <>", device='analog-rytm-mk2')
+def _(B):
+    return [("m 1: its core_param_locks entry takes ids 1..4; that table's ids start at 555",
+             [knobs(B), answering(B, 1, 4, 'core_param_locks')])], \
+        [knobs(B), answering(B, 1, 4)]
+
+
+@row('check', '<> and <> both take ids <>..<> (<>, <>)', device='analog-rytm-mk2')
+def _(B):
+    return [('m 1 and n 1 both take ids 570..573 (core_params, core_param_locks)',
+             [knobs(B), answering(B, 560, 573), answering(B, 570, 580, 'core_param_locks', 'n')])], \
+        [knobs(B), both(B, 560, 573), answering(B, 574, 580, 'core_param_locks', 'n')]
+
+
+def both(B, first, last):
+    """One mod's core_params and core_param_locks entries for the same ids: allowed."""
+    d = answering(B, first, last)
+    d['contribute'].append(dict(d['contribute'][0], to='core_param_locks'))
+    return d
 
 
 # ---- the finished image against the stock one (link.image_problems) -------------------------------------------
@@ -911,7 +1014,7 @@ def test_digitakt_fixtures():
 
 
 def test_analog_rytm_fixtures():
-    assert run_rows('analog-rytm-mk2') == 9
+    assert run_rows('analog-rytm-mk2') == 13
 
 
 def test_the_lfo_destination_field_is_placed_only_with_an_lfo_field():

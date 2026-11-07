@@ -30,10 +30,19 @@ import * as syx from './syx.ts'
 export class StructError extends PyException {}
 
 export const FORMAT2 = 2
-const SECTIONS = ['.boot', '.run', '.fast', '.bss']
+const SECTIONS = ['.boot', '.run', '.fast', '.bss', '.payload']
 const RTYPES = ['abs32', 'pc32', 'pc16', 'dsp24']
 const DSP = '.dsp.'                         // a DSP section: '.dsp.' + its payload's tag
 const FAST_ENTRY = 16                       // a .fast copy entry: src, dst, len, 0
+export const PAYLOADS = 'core_payloads'     // the core's table of the mods' payloads: id, address, length
+const PAYLOAD_ENTRY = 12
+
+/** A mod's payload id in core_payloads: the FNV-1a hash (32 bits) of its id's UTF-8 bytes (link.py payload_id). */
+export function payloadId(modId: string): number {
+  let h = 0x811c9dc5
+  for (const b of new TextEncoder().encode(modId)) h = Math.imul(h ^ b, 0x01000193) >>> 0
+  return h >>> 0
+}
 const MAX_ALIGN = 4096                      // a section's alignment: a power of two up to this
 const LINKER_SYMS = new Set(['__run_load', '__run_start', '__run_words', '__bss_start', '__bss_end', '__bss_words', '__run_hash'])
 export const HASH_SEED = 5381, HASH_MUL = 33       // __run_hash: h = seed; h = h * 33 + word (mod 2^32), per word
@@ -95,6 +104,7 @@ export class Mod2 implements AnyMod {
   routes: string[]
   cvs: string[]
   inits: Map<string, number>
+  handles: string[]
   regions: Region[]
   names: string[]
   needsCore: string | null
@@ -202,6 +212,7 @@ export class Mod2 implements AnyMod {
       this.routes = store.parseRoutes(doc)
       this.cvs = store.parseCvs(doc)
       this.inits = store.parseInits(doc)
+      this.handles = store.parseHandles(doc)
     } catch (e) {
       if (e instanceof ModError) throw new ModError(`${name}: ${e.message}`)
       throw e
@@ -237,6 +248,26 @@ export class Mod2 implements AnyMod {
           const v = this.long(sec, base + add + at, image)
           const nm = `${prefix}:${v}`
           if (v !== null && v >= 0 && v < count && !out.includes(nm)) out.push(nm)
+        }
+      }
+    }
+    return out
+  }
+
+  /** The knob ids this mod's entries answer for, by the profile's paramIds: a contribution to such a table holds
+   * four-byte pointers to entries whose first two longs are a range of ids (core-ar2's core_params,
+   * core_param_locks). -> [[table, first, last]]. An entry this cannot read (outside the mod's own bytes, or
+   * relocated there) answers for none. link.Mod2.id_ranges. */
+  idRanges(image: Uint8Array): [string, number, number][] {
+    const out: [string, number, number][] = []
+    for (const [table] of this.dev.paramIds ? this.dev.paramIds[2] : []) {
+      for (const c of this.contribute) {
+        if (c.to !== table) continue
+        for (const [off, typ, tgt, add] of c.relocs) {
+          const at = off % 4 ? null : this.target(typ, tgt, add)
+          if (at === null) continue
+          const first = this.long(at[0], at[1], image), last = this.long(at[0], at[1] + 4, image)
+          if (first !== null && last !== null && (first | 0) <= (last | 0)) out.push([table, first | 0, last | 0])
         }
       }
     }
@@ -329,9 +360,10 @@ export class Mod2 implements AnyMod {
    * holds them (model.ts withCore). */
   ramBound(): number {
     let n = 0
-    for (const sec of ['.run', '.bss']) {
+    for (const sec of ['.run', '.bss', '.payload']) {
       if (this.size(sec)) n += align(this.size(sec), 4) + Math.max(4, this.sections.get(sec)!.align) - 4
     }
+    if (this.size('.payload')) n += PAYLOAD_ENTRY
     for (const c of this.contribute) n += align(c.data.length, 4)
     for (const e of this.collections.values()) n += align(e, 4)
     if (this.size('.fast')) n += align(this.size('.fast'), 4) + FAST_ENTRY
@@ -449,6 +481,27 @@ export function check(mods: Mod2[], image: Uint8Array): string[] {
       if (tables.has(c)) bad.push(`${tables.get(c)![0].label()} and ${m.label()} both declare the table ${c}`)
       if (owner.has(c)) bad.push(`table ${c} has the name of a symbol ${owner.get(c)!.label()} exports`)
       tables.set(c, [m, e])
+    }
+  }
+  if (dev.paramIds && new Set(mods.map(m => m.dev.key + '\0' + m.rel.version)).size === 1) {
+    const [own, [lo, hi, what], kinds] = dev.paramIds
+    const ownOnly = new Set(kinds.filter(([, o]) => o).map(([t]) => t))
+    const taken: [Mod2, string, number, number][] = []
+    for (const m of mods) {
+      for (const [table, a0, b] of m.idRanges(image)) {
+        let a = a0
+        if (a <= hi && lo <= b) {
+          bad.push(`${m.label()}: its ${table} entry takes ids ${a}..${b}, and ${lo}..${hi} are ${what}; a mod's own ids start at ${own}`)
+        } else if (ownOnly.has(table) && a < own) {
+          bad.push(`${m.label()}: its ${table} entry takes ids ${a}..${b}; that table's ids start at ${own}`)
+        } else if (b >= own) {
+          a = Math.max(a, own)
+          for (const [n, t, x, y] of taken) {
+            if (n !== m && x <= b && a <= y) bad.push(`${n.label()} and ${m.label()} both take ids ${Math.max(a, x)}..${Math.min(b, y)} (${t}, ${table})`)
+          }
+          taken.push([m, table, a, b])
+        }
+      }
     }
   }
   const sized = reserveNames(dev, owner)
@@ -587,7 +640,7 @@ export type DspLayout = {
 
 export type Layout = {
   boot: [number, number]; run_load: number; ddr: [number, number]; bss: [number, number]; fast: [number, number]
-  blob_len: number; sections: Record<string, number>; ddr_spare: number; fast_spare: number; ddr_size: number; fast_size: number
+  blob_len: number; payload: Range | null; sections: Record<string, number>; ddr_spare: number; fast_spare: number; ddr_size: number; fast_size: number
   reserve?: { units: number; end: number }   // a core sized to the mods: the pages it takes, and where they end
   dsp?: Record<string, DspLayout>              // words: P addresses of each payload's area
   sharc?: { decoded: number; decoded_sha256: string; stored: number; stored_sha256: string;
@@ -743,12 +796,17 @@ export function link(mods: Mod2[], image: Uint8Array, lock: store.Lock | null = 
       const users = [...new Set(inits.map(k => k[0]))].sort(cmp)
       throw new ModError(`${users.join(', ')} give${users.length === 1 ? 's' : ''} storage fields an init, which ${core.label()} does not keep (no table ${store.INITS_TABLE})`)
     }
+    const handles = order.flatMap(m => m.handles.map(sym => [m.id, sym] as [string, string]))
+    if (handles.length && !tables.has(store.HANDLES_TABLE)) {
+      const users = [...new Set(handles.map(k => k[0]))].sort(cmp)
+      throw new ModError(`${users.join(', ')} mark${users.length === 1 ? 's' : ''} storage fields as handles, which ${core.label()} does not keep (no table ${store.HANDLES_TABLE})`)
+    }
     ;[newLock, storeNotes] = store.allocate(lock, decls, dev.key, core.version, locks, ccs, inits, cvs)
     let ids: Uint8Array[]
     ;[storeSyms, ids] = store.symbols(newLock)
     if (!storeSyms.has(store.LOCK_DST)) storeSyms.set(store.LOCK_DST, 0)    // not placed: no LFO field
     if (!storeSyms.has(store.FX_LOCK_DST)) storeSyms.set(store.FX_LOCK_DST, 0)
-    for (const [table, made] of [[store.CODES_TABLE, (l: store.Lock) => store.codeEntries(l, lfos, rough, routes)], [store.CCS_TABLE, store.ccEntries], [store.INITS_TABLE, store.initEntries]] as const)
+    for (const [table, made] of [[store.CODES_TABLE, (l: store.Lock) => store.codeEntries(l, lfos, rough, routes)], [store.CCS_TABLE, store.ccEntries], [store.INITS_TABLE, store.initEntries], [store.HANDLES_TABLE, (l: store.Lock) => store.handleEntries(l, handles)]] as const)
       if (tables.has(table))
         made(newLock).forEach((data, i) => entries.get(table)!.push([-1, '', i, core, { to: table, order: -1, data, relocs: [], claims: [], i }]))
     const taken = new Set(order.flatMap(m => m.exports))
@@ -757,6 +815,23 @@ export function link(mods: Mod2[], image: Uint8Array, lock: store.Lock | null = 
     ids.forEach((data, i) => entries.get(store.IDS_TABLE)!.push([-1, '', i, core, { to: store.IDS_TABLE, order: -1, data, relocs: [], claims: [], i }]))
   }
   const fastMods = order.filter(m => m.size('.fast'))
+  const payMods = order.filter(m => m.size('.payload'))
+  if (payMods.length) {
+    if (!tables.has(PAYLOADS) || tables.get(PAYLOADS)![1] !== PAYLOAD_ENTRY)
+      throw new ModError(`${payMods.map(m => m.id).join(', ')} carr${payMods.length === 1 ? 'ies' : 'y'} a payload, which `
+        + `${core.label()} does not keep (no table ${PAYLOADS} of ${PAYLOAD_ENTRY}-byte entries)`)
+    const ids = new Map<number, string>()
+    for (const m of payMods) {
+      const i = payloadId(m.id)
+      if (ids.has(i)) throw new ModError(`the payloads of ${ids.get(i)} and ${m.id} have the same id (${hex8(i)})`)
+      ids.set(i, m.id)
+      const data = new Uint8Array(PAYLOAD_ENTRY)
+      const v = new DataView(data.buffer)
+      v.setUint32(0, i)
+      v.setUint32(8, m.size('.payload'))
+      entries.get(PAYLOADS)!.push([-1, m.id, 0, m, { to: PAYLOADS, order: -1, data, relocs: [[4, 'abs32', 'sec:.payload', 0]], claims: [], i: 0 }])
+    }
+  }
   for (const list of entries.values()) {
     list.sort((a, b) => a[0] - b[0] || (a[1] < b[1] ? -1 : a[1] > b[1] ? 1 : 0) || a[2] - b[2])
   }
@@ -805,6 +880,13 @@ export function link(mods: Mod2[], image: Uint8Array, lock: store.Lock | null = 
     fastAt += n
     at += n
   }
+  const payAt = at = align(at, 4)
+  for (const m of payMods) {                   // after the code: copied with it, then the .bss
+    at = align(at, Math.max(4, m.sections.get('.payload')!.align))
+    base.set(key(m.id, '.payload'), at)
+    at += m.size('.payload')
+  }
+  const payEnd = at
   const runEnd = align(at, 4)
   at = runEnd
   for (const m of order) {
@@ -815,6 +897,9 @@ export function link(mods: Mod2[], image: Uint8Array, lock: store.Lock | null = 
     }
   }
   const bssEnd = align(at, 4)
+  if (payMods.length && bssEnd > ddrEnd)
+    throw new ModError(`the payloads (${payEnd - payAt} bytes) and the mods need RAM to ${hex8(bssEnd)}, past ${hex8(ddrEnd)} `
+      + `(${bssEnd - ddrEnd} bytes over): the area has room for ${Math.max(0, payEnd - payAt - (bssEnd - ddrEnd))} bytes of payload`)
   if (bssEnd > ddrEnd) {
     const more = dev.coreDdr.filter(([, a]) => a[1] - a[0] >= bssEnd - ddrBase)
     throw new ModError(`the mods need RAM to ${hex8(bssEnd)}, past ${hex8(ddrEnd)} (${bssEnd - ddrEnd} bytes over)`
@@ -995,6 +1080,7 @@ export function link(mods: Mod2[], image: Uint8Array, lock: store.Lock | null = 
   for (const m of order) {
     if (m.size('.run')) ddr.set(content.get(key(m.id, '.run'))!, base.get(key(m.id, '.run'))! - ddrBase)
     if (fload.has(m.id)) ddr.set(content.get(key(m.id, '.fast'))!, fload.get(m.id)! - ddrBase)
+    if (m.size('.payload')) ddr.set(content.get(key(m.id, '.payload'))!, base.get(key(m.id, '.payload'))! - ddrBase)
   }
   for (const c of tables.keys()) if (!dspTables.has(c)) ddr.set(tab.get(c)!, tabAt.get(c)! - ddrBase)
   glob.set('__run_hash', runHash(ddr))
@@ -1065,7 +1151,7 @@ export function link(mods: Mod2[], image: Uint8Array, lock: store.Lock | null = 
     if (!dspSecs.has(k)) sections[k.replace('\0', ' ')] = v
   const layout: Layout = {
     boot: [end, end + bootLen], run_load: runLoad, ddr: [ddrBase, runEnd], bss: [runEnd, bssEnd], fast: [fastBase, fastAt],
-    blob_len: blob.length, sections, ddr_spare: ddrEnd - bssEnd, fast_spare: fastEnd - fastAt, ddr_size: ddrEnd - ddrBase,
+    blob_len: blob.length, payload: payMods.length ? [payAt, payEnd] : null, sections, ddr_spare: ddrEnd - bssEnd, fast_spare: fastEnd - fastAt, ddr_size: ddrEnd - ddrBase,
     fast_size: fastEnd - fastBase,
   }
   if (sharcMods.length) {

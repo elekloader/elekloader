@@ -146,6 +146,16 @@ in core_field_inits (1..63, bits 16..21; 0 for none): no scope keeps more
 than 2**16 bits, so the offset never needs those bits. A lockfile with an
 init is format 2, which an older elekloader refuses instead of misreading.
 
+Handles (core-ar2 0.11). A field declared `"handle": true` holds a mod's
+handle on something kept elsewhere (for the Sidecar mods, a record on the
+Pi), 0 for none. Nothing about its bits changes: it is placed, kept and read
+like any field, it is not in the lockfile and not part of the layout ID, and
+the same field with or without the mark links to the same bytes. The linker
+gives the core the table core_handles, each handle field's descriptor in the
+lockfile's order, which core_handle_fields walks over every item of the
+project, so a mod can list every handle a project uses. A handle is not a
+parameter (no "lock") and has no init (0 is none).
+
 Nothing here is random: the same lockfile (or none) and mods always link to
 the same bytes.
 """
@@ -173,6 +183,7 @@ ROUTE_FLAG = 0x400                              # in core_lock_codes: a velocity
 CV_FLAG = 0x800                                 # in core_lock_codes: a kit field of the CV track (core-a4 0.5)
 FIRST_CODE, LAST_CODE = 42, 127                 # a device's codes unless its spec says others
 INITS_TABLE = 'core_field_inits'                # core-ar2 0.10: the fields' inits, by slot
+HANDLES_TABLE = 'core_handles'                  # core-ar2 0.11: the handle fields' descriptors
 MAX_INITS = 63                                  # slots 1..63, in the descriptor's bits 16..21
 LOCK_SCOPES = ('sound', 'kit')
 KIND_NAMES = {'synth': 'the synth tracks', 'fx': 'the FX track', 'cv': 'the CV track'}
@@ -352,6 +363,11 @@ def parse_inits(m):
     return {f['sym']: f['init'] for f in m.get('storage', []) if isinstance(f, dict) and f.get('init')}
 
 
+def parse_handles(m):
+    """A mod document's "storage" -> the syms of its fields declared "handle": true, in order."""
+    return [f['sym'] for f in m.get('storage', []) if isinstance(f, dict) and f.get('handle') is True]
+
+
 def parse_decls(m):
     """A mod document's "storage" -> [(sym, scope, bits)]. Raises ModError."""
     out, seen = [], set()
@@ -359,9 +375,10 @@ def parse_decls(m):
     if not isinstance(st, list):
         raise ModError('"storage" is a list of fields')
     for f in st:
-        if not isinstance(f, dict) or set(f) - {'sym', 'scope', 'bits', 'lock', 'cc', 'lfo', 'smooth', 'mod', 'track', 'init'}:
+        if not isinstance(f, dict) or set(f) - {'sym', 'scope', 'bits', 'lock', 'cc', 'lfo', 'smooth', 'mod', 'track', 'init',
+                                                'handle'}:
             raise ModError('a storage field is {"sym", "scope", "bits"}, and "lock" for a lockable one')
-        for k in ('lock', 'cc', 'lfo', 'smooth', 'mod'):
+        for k in ('lock', 'cc', 'lfo', 'smooth', 'mod', 'handle'):
             if k in f and not isinstance(f[k], bool):
                 raise ModError('storage field %r: "%s" is true or false' % (f.get('sym'), k))
         if f.get('cc') and not f.get('lock'):
@@ -375,6 +392,12 @@ def parse_decls(m):
                            'destination' % (f.get('sym'),))
         if 'smooth' in f and not f.get('lock'):
             raise ModError('storage field %r: only a lockable field ("lock": true) is smoothed'
+                           % (f.get('sym'),))
+        if f.get('handle') and f.get('lock'):
+            raise ModError('storage field %r: a handle ("handle": true) is not a parameter: it cannot be lockable'
+                           % (f.get('sym'),))
+        if f.get('handle') and f.get('init'):
+            raise ModError('storage field %r: a handle ("handle": true) has no init: 0 is none'
                            % (f.get('sym'),))
         if f.get('lock') and f.get('scope') not in LOCK_SCOPES:
             raise ModError('storage field %r: only %s fields can be lockable'
@@ -834,6 +857,14 @@ def descriptors(lock):
 def init_entries(lock):
     """-> the table core_field_inits' entries: each init, 4 bytes, by slot."""
     return [f['init'].to_bytes(4, 'big') for f in _inited(lock)]
+
+
+def handle_entries(lock, handles=()):
+    """-> the table core_handles' entries: the descriptor of each placed field in handles
+    ((mod, sym)), 4 bytes each, in the lockfile's order."""
+    desc, handles = descriptors(lock), set(handles)
+    return [desc[(f['mod'], f['sym'])].to_bytes(4, 'big') for f in lock['fields']
+            if (f['mod'], f['sym']) in handles]
 
 
 def symbols(lock, dev_key):

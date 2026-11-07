@@ -2,7 +2,9 @@
 """The linker: format-2 mods -> one patched main OS (docs/FORMAT.md).
 
 A format-2 mod is a relocatable object in JSON:
-- its sections: .boot (the core mod only), .run, .fast and .bss;
+- its sections: .boot (the core mod only), .run, .fast, .bss and .payload (data the
+  boot copier places with .run, after the mods' code; the core's table core_payloads
+  lists each mod's: its id, address and length);
 - the symbols it defines and exports, and what it imports (some weakly);
 - its relocations;
 - sites in the image, with relocations of their own;
@@ -34,7 +36,7 @@ from .elemod import (ModError, sha, _int, _hex, common_checks, insn_check, overl
                     COMMON, sharc_site)
 
 FORMAT2 = 2
-SECTIONS = ('.boot', '.run', '.fast', '.bss')
+SECTIONS = ('.boot', '.run', '.fast', '.bss', '.payload')
 RTYPES = ('abs32', 'pc32', 'pc16', 'dsp24')
 RSIZE = {'abs32': 4, 'pc32': 4, 'pc16': 2, 'dsp24': 3}
 DSP = '.dsp.'                     # a DSP section: '.dsp.' + its payload's tag
@@ -46,6 +48,8 @@ def _dsp_tag(dev, sec):
         return sec[len(DSP):]
     return None
 FAST_ENTRY = 16                   # a .fast copy entry: src, dst, len, 0
+PAYLOADS = 'core_payloads'        # the core's table of the mods' payloads: id, address, length
+PAYLOAD_ENTRY = 12
 MAX_ALIGN = 4096                  # a section's alignment: a power of two up to this
 LINKER_SYMS = {'__run_load', '__run_start', '__run_words', '__bss_start', '__bss_end',
                '__bss_words', '__run_hash'}
@@ -54,6 +58,14 @@ HASH_SEED, HASH_MUL = 5381, 33    # __run_hash: h = seed; h = h * 33 + word (mod
 
 def _align(v, a):
     return (v + a - 1) // a * a
+
+
+def payload_id(mod_id):
+    """A mod's payload id in core_payloads: the FNV-1a hash (32 bits) of its id's UTF-8 bytes."""
+    h = 0x811C9DC5
+    for b in str(mod_id).encode('utf-8'):
+        h = ((h ^ b) * 0x01000193) & 0xFFFFFFFF
+    return h
 
 
 def run_hash(ddr):
@@ -174,6 +186,7 @@ class Mod2:
             self.routes = store.parse_routes(doc)
             self.cvs = store.parse_cvs(doc)
             self.inits = store.parse_inits(doc)
+            self.handles = store.parse_handles(doc)
         except ModError as e:
             raise ModError('%s: %s' % (name, e))
         self.copied = [(_int(c['lo'], name), _int(c['hi'], name), _int(c['to'], name))
@@ -211,6 +224,27 @@ class Mod2:
                     v = self._long(sec, base + add + at, image)
                     if v is not None and 0 <= v < count and '%s:%d' % (prefix, v) not in out:
                         out.append('%s:%d' % (prefix, v))
+        return out
+
+    def id_ranges(self, image):
+        """The knob ids this mod's entries answer for, by the profile's param_ids: a
+        contribution to such a table holds four-byte pointers to entries whose first two longs are
+        a range of ids (core-ar2's core_params, core_param_locks). -> [(table, first, last)]. An
+        entry this cannot read (outside the mod's own bytes, or relocated there) answers for none."""
+        out = []
+        for table, _own_only in (self.dev.param_ids[2] if self.dev.param_ids else ()):
+            for c in self.contribute:
+                if c['to'] != table:
+                    continue
+                for off, typ, tgt, add in c['relocs']:
+                    at = None if off % 4 else self._target(typ, tgt, add)
+                    if at is None:
+                        continue
+                    first, last = self._long(at[0], at[1], image), self._long(at[0], at[1] + 4, image)
+                    if first is not None and last is not None:
+                        first, last = [v - (1 << 32) if v >> 31 else v for v in (first, last)]
+                        if first <= last:
+                            out.append((table, first, last))
         return out
 
     def _long(self, sec, off, image):
@@ -304,9 +338,11 @@ class Mod2:
         mods' bounds, so a builder can tell which core's area holds them
         (gui.with_core)."""
         n = 0
-        for sec in ('.run', '.bss'):
+        for sec in ('.run', '.bss', '.payload'):
             if self.size(sec):
                 n += _align(self.size(sec), 4) + max(4, self.sections[sec]['align']) - 4
+        if self.size('.payload'):
+            n += PAYLOAD_ENTRY
         n += sum(_align(len(c['data']), 4) for c in self.contribute)
         n += sum(_align(e, 4) for e in self.collections.values())
         if self.size('.fast'):
@@ -439,6 +475,25 @@ def check(mods, image):
             if c in owner:
                 bad.append('table %s has the name of a symbol %s exports' % (c, owner[c].label()))
             tables[c] = (m, e)
+    if dev.param_ids and len({(m.dev.key, m.rel.version) for m in mods}) == 1:
+        own, (lo, hi, what), kinds = dev.param_ids
+        own_only = {t for t, o in kinds if o}
+        taken = []
+        for m in mods:
+            for table, a, b in m.id_ranges(image):
+                if a <= hi and lo <= b:
+                    bad.append('%s: its %s entry takes ids %d..%d, and %d..%d are %s; a mod\'s own '
+                               'ids start at %d' % (m.label(), table, a, b, lo, hi, what, own))
+                elif table in own_only and a < own:
+                    bad.append('%s: its %s entry takes ids %d..%d; that table\'s ids start at %d'
+                               % (m.label(), table, a, b, own))
+                elif b >= own:
+                    a = max(a, own)
+                    for n, t, x, y in taken:
+                        if n is not m and x <= b and a <= y:
+                            bad.append('%s and %s both take ids %d..%d (%s, %s)'
+                                       % (n.label(), m.label(), max(a, x), min(b, y), t, table))
+                    taken.append((m, table, a, b))
     sized = reserve_names(dev, owner)
     fields = {}                                 # mod storage: the linker defines these
     for m in mods:
@@ -721,12 +776,18 @@ def link(mods, image, lock=None, *, sharc_stream=None):
             users = sorted({k[0] for k in inits})
             raise ModError('%s give%s storage fields an init, which %s does not keep (no table %s)'
                            % (', '.join(users), 's' if len(users) == 1 else '', core.label(), store.INITS_TABLE))
+        handles = [(m.id, sym) for m in order for sym in m.handles]
+        if handles and store.HANDLES_TABLE not in tables:
+            users = sorted({k[0] for k in handles})
+            raise ModError('%s mark%s storage fields as handles, which %s does not keep (no table %s)'
+                           % (', '.join(users), 's' if len(users) == 1 else '', core.label(), store.HANDLES_TABLE))
         new_lock, store_notes = store.allocate(lock, decls, dev.key, core.version, locks, ccs, inits, cvs)
         store_syms, ids = store.symbols(new_lock, dev.key)
         store_syms.setdefault(store.LOCK_DST, 0)    # not placed: no LFO field
         store_syms.setdefault(store.FX_LOCK_DST, 0)
         for table, made in ((store.CODES_TABLE, lambda l: store.code_entries(l, lfos, rough, routes)),
-                            (store.CCS_TABLE, store.cc_entries), (store.INITS_TABLE, store.init_entries)):
+                            (store.CCS_TABLE, store.cc_entries), (store.INITS_TABLE, store.init_entries),
+                            (store.HANDLES_TABLE, lambda l: store.handle_entries(l, handles))):
             if table in tables:
                 for i, data in enumerate(made(new_lock)):
                     entries[table].append((-1, '', i, core, {'data': data, 'relocs': []}))
@@ -737,6 +798,21 @@ def link(mods, image, lock=None, *, sharc_stream=None):
         for i, data in enumerate(ids):
             entries[store.IDS_TABLE].append((-1, '', i, core, {'data': data, 'relocs': []}))
     fast_mods = [m for m in order if m.size('.fast')]
+    pay_mods = [m for m in order if m.size('.payload')]
+    if pay_mods:
+        if PAYLOADS not in tables or tables[PAYLOADS][1] != PAYLOAD_ENTRY:
+            raise ModError('%s carr%s a payload, which %s does not keep (no table %s of %d-byte entries)'
+                           % (', '.join(m.id for m in pay_mods), 'ies' if len(pay_mods) == 1 else 'y',
+                              core.label(), PAYLOADS, PAYLOAD_ENTRY))
+        ids = {}
+        for m in pay_mods:
+            i = payload_id(m.id)
+            if i in ids:
+                raise ModError('the payloads of %s and %s have the same id (0x%08x)' % (ids[i], m.id, i))
+            ids[i] = m.id
+            entries[PAYLOADS].append((-1, m.id, 0, m, {
+                'data': struct.pack('>III', i, 0, m.size('.payload')),
+                'relocs': [(4, 'abs32', 'sec:.payload', 0)]}))
     for c in entries:
         entries[c].sort(key=lambda e: e[:3])
 
@@ -780,6 +856,12 @@ def link(mods, image, lock=None, *, sharc_stream=None):
         n = _align(m.size('.fast'), 4)
         fast_at += n
         at += n
+    pay_at = at = _align(at, 4)
+    for m in pay_mods:                         # after the code: copied with it, then the .bss
+        at = _align(at, max(4, m.sections['.payload']['align']))
+        base[(m.id, '.payload')] = at
+        at += m.size('.payload')
+    pay_end = at
     run_end = _align(at, 4)
     at = run_end
     for m in order:
@@ -788,6 +870,11 @@ def link(mods, image, lock=None, *, sharc_stream=None):
             base[(m.id, '.bss')] = at
             at += m.size('.bss')
     bss_end = _align(at, 4)
+    if pay_mods and bss_end > ddr_end:
+        raise ModError('the payloads (%d bytes) and the mods need RAM to 0x%08x, past 0x%08x (%d bytes over): '
+                       'the area has room for %d bytes of payload'
+                       % (pay_end - pay_at, bss_end, ddr_end, bss_end - ddr_end,
+                          max(0, pay_end - pay_at - (bss_end - ddr_end))))
     if bss_end > ddr_end:
         more = [(v, a) for v, a in dev.core_ddr if a[1] - a[0] >= bss_end - ddr_base]
         raise ModError('the mods need RAM to 0x%08x, past 0x%08x (%d bytes over)%s'
@@ -937,6 +1024,9 @@ def link(mods, image, lock=None, *, sharc_stream=None):
         if m.id in fload:
             o = fload[m.id] - ddr_base
             ddr[o:o + m.size('.fast')] = content[(m.id, '.fast')]
+        if m.size('.payload'):
+            o = base[(m.id, '.payload')] - ddr_base
+            ddr[o:o + m.size('.payload')] = content[(m.id, '.payload')]
     for c in tables:
         if c in dsp_tables:
             continue
@@ -1012,6 +1102,7 @@ def link(mods, image, lock=None, *, sharc_stream=None):
         'boot': [image_end, image_end + boot_len], 'run_load': run_load,
         'ddr': [ddr_base, run_end], 'bss': [run_end, bss_end],
         'fast': [fast_base, fast_at], 'blob_len': len(blob),
+        'payload': [pay_at, pay_end] if pay_mods else None,
         'sections': {'%s %s' % k: v for k, v in sorted(base.items(), key=lambda kv: kv[1])
                      if k not in dsp_secs},
         'ddr_spare': ddr_end - bss_end, 'fast_spare': fast_end - fast_at,

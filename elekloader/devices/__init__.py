@@ -68,6 +68,12 @@ class Device:
     slot_claims: tuple = ()      # ((table, at, count, prefix), ...): a contribution to `table` points
                                  # at a descriptor whose long at +`at` is a sound slot (0 to count - 1);
                                  # the mod claims `prefix:<slot>` for it (link.Mod2.implied_names)
+    param_ids: tuple = ()        # (own, (lo, hi, what), ((table, own_only), ...)): a contribution
+                                 # to `table` points at an entry whose first two longs are the ids it
+                                 # answers for (first, last); none may take lo..hi, which the core
+                                 # uses itself; ids from `own` up are a mod's own, so two mods' entries
+                                 # may not share one; an own_only table's entries take only those
+                                 # (link.Mod2.id_ranges, link.check)
     table_limits: dict = field(default_factory=dict)   # table -> the most entries all mods together
                                  # may add to it: the OS uses no more (link.check)
     sram_code: tuple = (0, 0)    # the linker's area for .fast code

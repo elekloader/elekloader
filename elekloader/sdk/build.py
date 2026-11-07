@@ -90,16 +90,17 @@ from . import elf
 
 OPS = {'jsr': b'\x4e\xb9', 'jmp': b'\x4e\xf9'}
 INCLUDE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'include')
-KEEP = ('.boot', '.run', '.fast', '.bss')
+KEEP = ('.boot', '.run', '.fast', '.bss', '.payload')
 STOCK_MIN = 8
 LD_SCRIPT = """/* One mod's objects -> one relocatable object (ld -r), in the four sections
-   elekloader places: .boot (the core mod only), .run, .fast, .bss. */
+   elekloader places: .boot (the core mod only), .run, .fast, .bss, .payload. */
 SECTIONS
 {
     .boot 0 : { *(.boot) }
     .run  0 : { *(.run) *(.text) *(.text.*) *(.data) *(.data.*) *(.rodata) *(.rodata.*) *(.sdata) *(.sdata.*) }
     .fast 0 : { *(.fast) }
     .bss  0 : { *(.bss) *(.bss.*) *(.sbss) *(.sbss.*) *(COMMON) }
+    .payload 0 : { *(.payload) *(.payload.*) }
     /DISCARD/ : { *(.comment) *(.note*) *(.gnu.attributes) }
 }
 """
@@ -334,6 +335,8 @@ def build(mdir, stock_path, out_dir=None, extra=None):
             sec_of[s.idx] = s.name
             if s.name == '.bss':
                 secs['.bss'] = {'align': max(4, s.align), 'size': s.size}
+            elif s.name == '.payload':          # data the mod ships: kept whole, never stock runs
+                secs[s.name] = {'align': max(4, s.align), 'len': s.size, 'parts': [['hex', s.data.hex()]]}
             else:
                 parts = stock_parts(s.data, image, STOCK_MIN, dev.main_load)
                 secs[s.name] = {'align': max(4, s.align), 'len': s.size,
@@ -341,7 +344,7 @@ def build(mdir, stock_path, out_dir=None, extra=None):
                                           else ['stock', '0x%08x' % p[1], p[2]] for p in parts]}
         elif s.size and s.flags & 2 and s.name not in KEEP:          # SHF_ALLOC
             raise BuildError('section %s is not one elekloader places (.run, .fast, .bss, '
-                             '.boot)' % s.name)
+                             '.payload, .boot)' % s.name)
     if '.boot' in secs and mid != 'core':
         raise BuildError('only the core mod may have a .boot section')
     symbols, exports, imports = {}, [], set()
@@ -597,8 +600,9 @@ def main(argv=None):
         print('BUILD FAILED: %s' % e)
         return 1
     print('BUILT %s' % path)
-    print('  %s: .run %d, .fast %d, .bss %d bytes; %d sites, %d relocations; imports %s'
-          % (m.label(), m.size('.run'), m.size('.fast'), m.size('.bss'), len(m.sites),
+    print('  %s: .run %d, .fast %d, .bss %d%s bytes; %d sites, %d relocations; imports %s'
+          % (m.label(), m.size('.run'), m.size('.fast'), m.size('.bss'),
+             ', .payload %d' % m.size('.payload') if m.size('.payload') else '', len(m.sites),
              len(m.relocs), ', '.join(m.imports) or 'nothing'))
     return 0
 

@@ -15431,6 +15431,144 @@
    ]
   }
  },
+ "handle_runs": {
+  "handles": {
+   "decls": [
+    [
+     "a",
+     "a_k",
+     "kit",
+     16
+    ],
+    [
+     "a",
+     "a_p",
+     "project",
+     32
+    ],
+    [
+     "b",
+     "b_t",
+     "track",
+     12
+    ]
+   ],
+   "handles": [
+    [
+     "a",
+     "a_p"
+    ],
+    [
+     "b",
+     "b_t"
+    ]
+   ],
+   "lock": {
+    "elekloader_store": 1,
+    "device": "analog-rytm-mk2",
+    "id": "0xfdefb80d",
+    "ancestors": [],
+    "split": {
+     "track": 2,
+     "pattern": 4
+    },
+    "generation": {
+     "sound": 1,
+     "kit": 1,
+     "global": 1,
+     "track": 1,
+     "pattern": 1,
+     "project": 1
+    },
+    "next": {
+     "sound": 0,
+     "kit": 16,
+     "global": 0,
+     "track": 12,
+     "pattern": 0,
+     "project": 32
+    },
+    "fields": [
+     {
+      "mod": "a",
+      "sym": "a_k",
+      "scope": "kit",
+      "offset": 0,
+      "bits": 16
+     },
+     {
+      "mod": "b",
+      "sym": "b_t",
+      "scope": "track",
+      "offset": 0,
+      "bits": 12
+     },
+     {
+      "mod": "a",
+      "sym": "a_p",
+      "scope": "project",
+      "offset": 0,
+      "bits": 32
+     }
+    ],
+    "freed": []
+   },
+   "handles_table": [
+    "43000000",
+    "68000000"
+   ],
+   "layout_id": 4260345869
+  },
+  "none": {
+   "decls": [
+    [
+     "a",
+     "a_k",
+     "kit",
+     16
+    ]
+   ],
+   "handles": [],
+   "lock": {
+    "elekloader_store": 1,
+    "device": "analog-rytm-mk2",
+    "id": "0xd8cbaefb",
+    "ancestors": [],
+    "split": {
+     "track": 2,
+     "pattern": 4
+    },
+    "generation": {
+     "sound": 1,
+     "kit": 1,
+     "global": 1,
+     "track": 1,
+     "pattern": 1,
+     "project": 1
+    },
+    "next": {
+     "sound": 0,
+     "kit": 16,
+     "global": 0,
+     "track": 0,
+     "pattern": 0,
+     "project": 0
+    },
+    "fields": [
+     {
+      "mod": "a",
+      "sym": "a_k",
+      "scope": "kit",
+      "offset": 0,
+      "bits": 16
+     }
+    ],
+    "freed": []
+   },
+   "handles_table": [],
+   "layout_id": 3637227259
+  }
+ },
  "kind_runs": {
   "kinds: each from 0x70, keep, free, back": {
    "steps": [
@@ -20359,7 +20497,8 @@
    "rough": [],
    "routes": [],
    "cvs": [],
-   "inits": {}
+   "inits": {},
+   "handles": []
   },
   "not a list": {
    "doc": {
@@ -20474,7 +20613,8 @@
    "rough": [],
    "routes": [],
    "cvs": [],
-   "inits": {}
+   "inits": {},
+   "handles": []
   },
   "lock kit": {
    "doc": {
@@ -20508,7 +20648,8 @@
    "rough": [],
    "routes": [],
    "cvs": [],
-   "inits": {}
+   "inits": {},
+   "handles": []
   },
   "lock global": {
    "doc": {
@@ -20552,7 +20693,8 @@
     "a"
    ],
    "cvs": [],
-   "inits": {}
+   "inits": {},
+   "handles": []
   },
   "track cv": {
    "doc": {
@@ -20598,7 +20740,8 @@
    "cvs": [
     "a"
    ],
-   "inits": {}
+   "inits": {},
+   "handles": []
   },
   "track fx": {
    "doc": {
@@ -20696,7 +20839,8 @@
    "rough": [],
    "routes": [],
    "cvs": [],
-   "inits": {}
+   "inits": {},
+   "handles": []
   },
   "cc without lock": {
    "doc": {
@@ -20767,7 +20911,8 @@
    "rough": [],
    "routes": [],
    "cvs": [],
-   "inits": {}
+   "inits": {},
+   "handles": []
   },
   "lfo without lock": {
    "doc": {
@@ -20850,7 +20995,8 @@
    ],
    "routes": [],
    "cvs": [],
-   "inits": {}
+   "inits": {},
+   "handles": []
   },
   "mod": {
    "doc": {
@@ -20911,7 +21057,8 @@
     "c"
    ],
    "cvs": [],
-   "inits": {}
+   "inits": {},
+   "handles": []
   },
   "mod without lock": {
    "doc": {

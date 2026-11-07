@@ -196,8 +196,23 @@ def test_core_ar2_sites():
     # and the NRPN and CC in sites (0.8), and the engine push's velocity and
     # aftertouch index sites and the routes' knob label (0.9), the FX set's five vtable entries,
     # the FX words' save and the FX and sound edits' write into the stored kit (0.9),
-    # and the project save to a +Drive slot (0.10, ev_project_save)
-    assert len(mod['sites']) == 109
+    # the project save to a +Drive slot (0.10, ev_project_save), and the six
+    # length and scale setters (0.11, ev_steps' LENGTH), and the five moments (0.11: the SysEx
+    # router, the kit select and push, the slot clear and paste), and the sequencer clock's two
+    # (0.11, ev_seq_step)
+    assert len(mod['sites']) == 122
+    for addr in ('0x400c0ba2', '0x400c0c8c', '0x400ab8d0', '0x400aba02', '0x400aba7e', '0x400ab096'):
+        assert [x for x in mod['sites'] if x['addr'] == addr and x['op'] == 'jmp'], addr
+    # each moment's site is its routine's first whole instructions, and the body in moments.s
+    # rejoins right after them
+    body = open(os.path.join(ROOT, 'mods', 'core-ar2', 'moments.s')).read()
+    for target, addr, n in (('core_sysex_site', 0x40083dd8, 8), ('core_kit_select', 0x400a65f6, 8),
+                            ('core_kit_push', 0x4011f90a, 8), ('core_slot_clear', 0x40034bd2, 6),
+                            ('core_slot_paste', 0x400351d2, 8)):
+        x = [x for x in mod['sites'] if x.get('target') == target][0]
+        assert x['op'] == 'jmp' and int(x['addr'], 16) == addr and len(x['stock']) == 2 * n, x
+        assert img[addr - DEV.main_load:addr + n - DEV.main_load].hex() == x['stock'], x
+        assert 'jmp     0x%08x' % (addr + n) in body, target
     x = [x for x in mod['sites'] if x.get('target') == 'st_proj_save'][0]
     assert (x['addr'], x['op'], x['stock']) == ('0x400b07a4', 'jmp', '4fefffd048d77c1c'), x
     assert img[0x400b07a4 - DEV.main_load:0x400b07ac - DEV.main_load].hex() == x['stock'], x

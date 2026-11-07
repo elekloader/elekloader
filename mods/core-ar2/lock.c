@@ -339,6 +339,7 @@ const struct core_lock_param *core_lock_fx_lfo(unsigned code)
 
 unsigned core_lock_field(const struct core_lock_param *p) { return p->field; }
 int core_lock_min(const struct core_lock_param *p) { return p->min; }
+int core_lock_id(const struct core_lock_param *p) { return p->id; }
 
 /* the most a lock holds: max, at most 16383 (14 bits, an NRPN's value) */
 #define TOP 16383
@@ -409,12 +410,14 @@ unsigned char *core_lock_sound(void *set)
 
 /* would the sound setter (0x400a9dea) take this id for this sound? Its
  * slot is a stock one (0x40006ea8, which core answers for pseudo ids), and
- * the parameter is common to all machines (0x40006f18) or the sound's
- * machine's (0x4000714a against the sound's +104). A mod page's knob borrows
- * an id stock rejects here (an Error record, another machine's parameter);
- * where the id is the sound's own stock parameter, the knob is stock's. */
+ * the parameter is common to all machines or the sound's machine's: the
+ * setter asks 0x40006f18, which is 1 for a machine's parameter (its
+ * record's machine 0..52), and then wants 0x4000714a to match the sound's
+ * +104. A mod page's knob borrows an id stock rejects here (an Error
+ * record, another machine's parameter); where the id is the sound's own
+ * stock parameter, the knob is stock's. */
 #define ID_SLOT ((int (*)(int))0x40006ea8)
-#define ID_COMMON ((int (*)(int))0x40006f18)
+#define ID_OF_MACHINE ((int (*)(int))0x40006f18)
 #define ID_MACHINE ((int (*)(int))0x4000714a)
 
 int core_lock_stock_takes(int id, const unsigned char *s)
@@ -422,14 +425,16 @@ int core_lock_stock_takes(int id, const unsigned char *s)
     int slot = ID_SLOT(id);
     if (slot < 0 || slot > 41)
         return 0;
-    return ID_COMMON(id) || ID_MACHINE(id) == (signed char)s[104];
+    return !ID_OF_MACHINE(id) || ID_MACHINE(id) == (signed char)s[104];
 }
 
-/* (0.9) the FX setter (0x400a9f28) takes any id with a slot of 0..41 */
+/* (0.9) the FX setter (0x400a9f28) takes any id with a slot of 0..41, but
+ * the FX track's own parameters are none machine's: a machine's parameter
+ * (a TEST machine's record, as mods borrow) is a mod's knob there */
 int core_lock_fx_takes(int id)
 {
     int slot = ID_SLOT(id);
-    return slot >= 0 && slot <= 41;
+    return slot >= 0 && slot <= 41 && !ID_OF_MACHINE(id);
 }
 
 /* the knob's mod parameter in the set's item: a parameter of the item's
@@ -506,14 +511,20 @@ int core_reload(void *view, int track, int **ids, int d)
  * takes the id for the set's sound, the knob is stock's and so is its label.
  * The callers read the string from %d0, so it is typed as a number. */
 #define KNOB_LABEL ((unsigned (*)(void *, int))0x400a9000)
+unsigned core_param_lock_label(int id);         /* rows.c (0.11) */
+unsigned core_param_lock_name(int id);
 
+/* (0.11) a mod's own id (core_param_locks, from 555) shows the label and
+ * name its entry gives, for any set: stock would read record 0 (ERR) */
 unsigned core_knob_label(void *set, int id)
 {
-    unsigned code;
+    unsigned code, l;
     unsigned char *s;
     const struct core_lock_param *p = core_lock_knob_param(set, id, &code, &s);
     if (p && p->short_name)
         return (unsigned)shorts[code - FIRST_CODE];
+    if ((l = core_param_lock_label(id)) != 0)
+        return l;
     return KNOB_LABEL(set, id);
 }
 
@@ -522,6 +533,11 @@ unsigned core_knob_label(void *set, int id)
  * number. Stock would check the id against the set (vtable +36) and, for the
  * id a mod page borrows (an Error record, another machine's parameter),
  * write ERR. Where stock takes the id for the set's sound, it is stock's. */
+int core_param_lock_owns(int id);              /* rows.c (0.11) */
+int core_scale_has(const struct core_lock_param *p);           /* scale.c (0.11) */
+int core_scale_unshow(const struct core_lock_param *p, int dial);
+int core_held_depth_now(int id);                               /* scenes.c (0.11) */
+
 int core_lock_text(void *set, int id, int value, char *buf)
 {
     unsigned code;
@@ -529,8 +545,10 @@ int core_lock_text(void *set, int id, int value, char *buf)
     const struct core_lock_param *p = core_lock_knob_param(set, id, &code, &s);
     unsigned v, d;
     int n = 0, digits = 0;
-    if (!p)
+    if (!p && !core_param_lock_owns(id))      /* (0.11) a mod-kept lock's id: its number too */
         return 0;
+    if (p && core_scale_has(p) && !core_held_depth_now(id))  /* (0.11) the field's value */
+        value = core_scale_unshow(p, value) << 8;
     if (value < 0) {
         buf[n++] = '-';
         value = -value;
@@ -554,10 +572,12 @@ int core_lock_text(void *set, int id, int value, char *buf)
 
 unsigned core_knob_name(void *set, int id)
 {
-    unsigned code;
+    unsigned code, l;
     unsigned char *s;
     const struct core_lock_param *p = core_lock_knob_param(set, id, &code, &s);
     if (p && p->name)
         return (unsigned)names[code - FIRST_CODE];
+    if ((l = core_param_lock_name(id)) != 0)
+        return l;
     return KNOB_NAME(set, id);
 }

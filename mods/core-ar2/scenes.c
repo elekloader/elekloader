@@ -248,25 +248,87 @@ int core_scene_push(void *view, int id)
     return 1;
 }
 
+int core_scale_show(const struct core_lock_param *p, int v);       /* scale.c (0.11) */
+int core_scale_depth(const struct core_lock_param *p, int d);
+int core_scale_depths_own(const struct core_lock_param *p);
+
+#define DTCN0 (*(volatile unsigned *)0xfc07000c)
+#define DEPTH_TICKS 528000              /* 4 ms of DMA timer 0, as core_held_step's */
+
+/* (0.11) the last get that answered a performance's depth: its id and
+ * time, for the text drawn just after it (stock draws a knob's value, then
+ * its text) */
+static int depth_id = -1;
+static unsigned depth_at;
+
 /* page_get_value (pages.s, before the mods' get): with a scene's or a
  * performance's pad held, a mod knob shows its lock there, as stock's knobs
  * do: a scene's lock, else (0) the sound's value; a performance's depth,
- * else 0. 1 and *value (8.8) when it answers. */
+ * else 0. 1 and *value (8.8) when it answers. (0.11) A scene's lock on the
+ * dial's scale (core_param_scales), a depth in dial steps. */
 int core_held_get(void *view, int id, int *value)
 {
     void *o = held(view);
     const struct core_lock_param *p;
     unsigned code;
     unsigned char *s;
-    int track;
+    int track, rel, v;
     if (!o || !(p = core_lock_knob(view, id, &track, &code, &s)))
         return 0;
-    if ((unsigned char)METHOD(o, 28)(o, track, code))
-        *value = ((int16_t)METHOD(o, 24)(o, track, code) >> 8 << core_lock_shift(p)) * 256;
-    else if ((unsigned char)METHOD(o, 32)(o))
+    rel = (unsigned char)METHOD(o, 32)(o);
+    if ((unsigned char)METHOD(o, 28)(o, track, code)) {
+        v = (int16_t)METHOD(o, 24)(o, track, code) >> 8 << core_lock_shift(p);
+        *value = rel ? core_scale_depth(p, v) << 8 : core_scale_show(p, v);
+    } else if (rel)
         *value = 0;
     else
         return 0;
+    if (rel) {
+        depth_id = core_scale_depths_own(p) ? -1 : id;
+        depth_at = DTCN0;
+    }
+    return 1;
+}
+
+/* (0.11) what the view's held pad is: 0 none (or a trig), CORE_HELD_SCENE,
+ * CORE_HELD_PERF */
+int core_held_kind(void *view)
+{
+    void *o = view ? held(view) : 0;
+    if (!o)
+        return 0;
+    return (unsigned char)METHOD(o, 32)(o) ? 2 : 1;  /* CORE_HELD_PERF, _SCENE */
+}
+
+/* (0.11) whether the text being drawn for id is a performance's depth that
+ * core writes (lock.c, and core_held_text) */
+int core_held_depth_now(int id)
+{
+    return id == depth_id && DTCN0 - depth_at <= DEPTH_TICKS;
+}
+
+/* (0.11) param_value_text's first word (pages.s, before the mods' text): a
+ * performance's depth on a mod parameter's knob, as a signed number, as
+ * stock writes its own knobs' depths; 1 when it wrote buf */
+int core_held_text(void *obj, int id, int value, char *buf)
+{
+    unsigned v, d;
+    int n = 0, digits = 0;
+    (void)obj;
+    if (!core_held_depth_now(id))
+        return 0;
+    if (value < 0) {
+        buf[n++] = '-';
+        value = -value;
+    }
+    v = (unsigned)value >> 8;
+    for (d = 100; d > 1; d /= 10)
+        if (v >= d || digits) {
+            buf[n++] = '0' + v / d % 10;
+            digits = 1;
+        }
+    buf[n++] = '0' + v % 10;
+    buf[n] = 0;
     return 1;
 }
 

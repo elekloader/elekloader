@@ -200,6 +200,18 @@ DECLS = {
     'init type': {'storage': [{'sym': 'a', 'scope': 'kit', 'bits': 3, 'init': True}]},
     'init text': {'storage': [{'sym': 'a', 'scope': 'kit', 'bits': 3, 'init': '1'}]},
     'twice': {'storage': [{'sym': 'a', 'scope': 'kit', 'bits': 1}, {'sym': 'a', 'scope': 'kit', 'bits': 2}]},
+    'handle': {'storage': [{'sym': 'a', 'scope': 'kit', 'bits': 16, 'handle': True},
+                           {'sym': 'b', 'scope': 'project', 'bits': 32, 'handle': False},
+                           {'sym': 'c', 'scope': 'track', 'bits': 12, 'handle': True, 'init': 0}]},
+    'handle type': {'storage': [{'sym': 'a', 'scope': 'kit', 'bits': 16, 'handle': 1}]},
+    'handle lock': {'storage': [{'sym': 'a', 'scope': 'sound', 'bits': 16, 'lock': True, 'handle': True}]},
+    'handle init': {'storage': [{'sym': 'a', 'scope': 'kit', 'bits': 16, 'handle': True, 'init': 3}]},
+}
+# core-ar2 0.11: the same declarations with and without handles, and which fields core_handles lists
+HANDLE_RUNS = {
+    'handles': [[['a', 'a_k', 'kit', 16], ['a', 'a_p', 'project', 32], ['b', 'b_t', 'track', 12]],
+                [['a', 'a_p'], ['b', 'b_t']]],
+    'none': [[['a', 'a_k', 'kit', 16]], []],
 }
 # runs with codes per track kind (core-a4 0.5, the Analog Four MKII): each step is (decls, lockable, CV fields)
 A4 = 'analog-four-mk2'
@@ -326,8 +338,8 @@ DECLS = {
 
 
 def main():
-    out = {'runs': {}, 'lock_runs': {}, 'cc_runs': {}, 'init_runs': {}, 'kind_runs': {}, 'locks': {}, 'kind_locks': {},
-           'flags': {}, 'decls': {}}
+    out = {'runs': {}, 'lock_runs': {}, 'cc_runs': {}, 'init_runs': {}, 'handle_runs': {}, 'kind_runs': {},
+           'locks': {}, 'kind_locks': {}, 'flags': {}, 'decls': {}}
     def run(lock, steps, core, dev=DEV):
         res = []
         for decls in steps:
@@ -393,6 +405,11 @@ def main():
             except ModError as e:
                 res.append({'error': str(e)})
         out['init_runs'][name] = {'steps': [list(st) for st in steps], 'results': res}
+    for name, (decls, handles) in HANDLE_RUNS.items():
+        lock, notes = store.allocate(None, [tuple(d) for d in decls], DEV)
+        out['handle_runs'][name] = {'decls': decls, 'handles': handles, 'lock': lock,
+                                    'handles_table': [t.hex() for t in store.handle_entries(lock, [tuple(h) for h in handles])],
+                                    'layout_id': store.layout_id(lock)}
     for name, steps in KIND_RUNS.items():
         lock, res = None, []
         for st in steps:
@@ -434,7 +451,7 @@ def main():
             out['decls'][name] = {'doc': doc, 'ok': store.parse_decls(doc), 'locks': store.parse_locks(doc),
                                   'ccs': store.parse_ccs(doc), 'lfos': store.parse_lfos(doc),
                                   'rough': store.parse_rough(doc), 'routes': store.parse_routes(doc),
-                                  'cvs': store.parse_cvs(doc), 'inits': store.parse_inits(doc)}
+                                  'cvs': store.parse_cvs(doc), 'inits': store.parse_inits(doc), 'handles': store.parse_handles(doc)}
         except ModError as e:
             out['decls'][name] = {'doc': doc, 'error': str(e)}
     path = os.path.join(ROOT, 'js', 'test', 'store-vectors.json')

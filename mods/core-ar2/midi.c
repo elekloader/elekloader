@@ -57,6 +57,9 @@ unsigned core_store_get(unsigned field, void *item, int index);
 void core_store_set(unsigned field, void *item, int index, unsigned value);
 void core_lock_record(int track, int code, int value);
 void core_project_edited(void);
+int core_scale_has(const struct core_lock_param *p);           /* scale.c (0.11) */
+int core_scale_show(const struct core_lock_param *p, int v);
+int core_scale_unshow(const struct core_lock_param *p, int dial);
 
 /* the parameter of a code in the track's sound of the current kit (the kit
  * itself on the FX track), from an NRPN's 14-bit value or a CC's 7, clamped
@@ -72,6 +75,8 @@ static void set(unsigned code, int value, int cc, int track)
         return;
     sh = core_lock_shift(p);
     value = cc ? value << sh : sh ? value : value >> 7;
+    if (core_scale_has(p))                     /* (0.11) 0..127 is the dial's */
+        value = core_scale_unshow(p, value << 8);
     value = value < core_lock_min(p) ? core_lock_min(p) : value > core_lock_max(p) ? core_lock_max(p) : value;
     core_store_set(core_lock_field(p),
                    (unsigned char *)LIVE_KITS + LIVE_KIT_SIZE * k + (track == FX_TRACK ? 0 : 42 + 152 * track), 0,
@@ -119,16 +124,21 @@ static int cc_of(unsigned field)
     return -1;
 }
 
-/* pages.s: a mod's knob took a turn (view, id): live recording locks the
- * value (rows.c), and PARAM OUTPUT sends it */
-void core_midi_knob(void *view, int id)
+void core_lock_record_own(int id, int delta);
+
+/* pages.s: a mod's knob took a turn (view, id, delta 8.8): live recording
+ * locks the value (rows.c), or (0.11) a mod-kept lock's entry records it,
+ * and PARAM OUTPUT sends it */
+void core_midi_knob(void *view, int id, int delta)
 {
     unsigned code, cfg;
     unsigned char *s;
     int track, v, sh, cc;
     const struct core_lock_param *p = core_lock_knob(view, id, &track, &code, &s);
-    if (!p)
+    if (!p) {
+        core_lock_record_own(id, delta);
         return;
+    }
     v = (int)core_store_get(core_lock_field(p), s, 0);
     v = v < 0 ? 0 : v > core_lock_max(p) ? core_lock_max(p) : v;
     core_lock_record(track, code, v);
@@ -136,6 +146,8 @@ void core_midi_knob(void *view, int id)
     if (!PARAM_OUT(cfg))
         return;
     sh = core_lock_shift(p);
+    if (core_scale_has(p))                     /* (0.11) out on the dial's scale too */
+        v = core_scale_show(p, v) >> 8;
     switch (PARAM_OUT_KIND(cfg)) {
     case 0:
         SEND_NRPN(OUT_CHANNEL(0), MSB << 7 | (code - FIRST_CODE), sh ? v : v << 7, 1);

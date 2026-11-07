@@ -152,10 +152,11 @@ core_param_delta:
         tst.l   %d0
         beq.s   1b
         jsr     core_project_edited       | taken: the project is modified (0.8)
-        move.l  12(%sp),-(%sp)            | and a mod parameter's MIDI out (0.8)
-        move.l  12(%sp),-(%sp)
+        move.l  16(%sp),-(%sp)            | and a mod parameter's MIDI out (0.8) and
+        move.l  16(%sp),-(%sp)            | live record (0.11: delta, id, view)
+        move.l  16(%sp),-(%sp)
         jsr     core_midi_knob
-        addq.l  #8,%sp
+        lea     12(%sp),%sp
         move.l  8(%sp),-(%sp)             | and redraw the view now
         jsr     VIEW_INVALIDATE
         addq.l  #8,%sp
@@ -169,7 +170,16 @@ core_param_delta:
 | %d2-%d4/%a2-%a3,%sp@`. Frame: 0 the cursor, 8 obj, 12 id, 16 value, 20 buf;
 | the handler gets the address of obj, the four as a struct core_text.
 core_param_text:
-        lea     core_params,%a1
+        move.l  16(%sp),-(%sp)            | 0.11: a performance's depth on a mod
+        move.l  16(%sp),-(%sp)            | parameter's knob, core's text
+        move.l  16(%sp),-(%sp)
+        move.l  16(%sp),-(%sp)
+        jsr     core_held_text
+        lea     16(%sp),%sp
+        tst.l   %d0
+        beq.s   0f
+        rts
+0:      lea     core_params,%a1
         subq.l  #4,%sp
 1:      move.l  12(%sp),%d0
         bsr.w   param_next

@@ -1881,6 +1881,249 @@ Live recording records a mod parameter as it records a stock one: its
 knob turned, or its NRPN or CC received, locks the value on the step the
 track plays (a lock trig where the step has no trig).
 
+### Locks a mod keeps itself (core-ar2 0.11, Analog Rytm MKII)
+
+A mod that keeps its locks somewhere of its own (in RAM, or on a computer
+it talks to) takes stock's lock calls for its knobs instead of core's
+ledger. Its knob ids start at 555 (`CORE_PARAM_LOCK_FIRST`): stock's
+records are 0..468 and core's lockable parameters take 469..554. With
+`analog-rytm-mk2/pages.h`:
+
+```json
+{"to": "core_param_locks", "order": 50, "data": "00000000",
+ "relocs": [[0, "abs32", "sym:my_locks", 0]]}
+```
+
+```c
+#include "analog-rytm-mk2/pages.h"
+const struct core_param_lock my_locks = {560, 563, my_get, my_turn, my_set, my_clear,
+                                         my_label, my_name};
+```
+
+With a trig held, a turn of one of these knobs on the current track (0..11,
+12 on the FX track) calls the entry once for each held trig, with the
+track and the step:
+
+- `get(id, track, step)`: the step's lock (8.8), or -1. It runs for every
+  knob each time the page draws with a trig held, so it answers from RAM.
+- `set(id, track, step, value)`: a turn's first call on a step without a
+  lock, with the knob's value without one; also a paste's lock. 1 when kept.
+- `turn(id, track, step, delta)`: each turn after it; the new lock, or -1.
+  A lock it answers marks the project modified.
+- `clear(id, track, step)`: the trig's lock cleared (FUNC held and the knob
+  pushed; a push alone sets a lock that isn't there).
+- `label(id)`, `name(id)`: the knob's label (4 characters) and the header's
+  name (up to 32; the header shows the first 13), on any page that shows
+  the id; 0 for stock's, which shows ERR / ERROR above 468.
+
+Live recording calls `turn` with `CORE_LOCK_RECORDING` (0x100) in the step
+argument, after a `core_params` entry took the turn of the knob with no
+trig held: the step is the one the track plays (`step & 0xff`), and core
+has put a lock trig there when it had none, as it does for its own locks.
+
+A `core_params` text entry for the id gets the lock's value with a trig
+held; `core_held_step(&track)` gives that trig's step and track (-1: none).
+Without a text entry, the knob's value shows as a number.
+
+The linker refuses a `core_params` or `core_param_locks` entry whose ids
+take 469..554, a `core_param_locks` entry below 555, and entries of two
+mods that share an id from 555.
+
+### Step tags (core-ar2 0.11, Analog Rytm MKII)
+
+A mod that keeps a record of its own for some steps (for the Sidecar mods,
+on the computer they talk to) gives each such step a tag: a 16-bit handle
+(0..65534) to its record. Core moves the tag wherever stock moves the step
+(trig copy and paste, a page, track or pattern copy, paste, clear and undo,
+a trig shift, a pattern switch, RELOAD PATTERN) and drops it where stock
+clears the step. With `analog-rytm-mk2/steps.h`:
+
+```json
+{"to": "core_step_owners", "order": 50, "data": "00000000",
+ "relocs": [[0, "abs32", "sym:my_owner", 0]]},
+{"event": "ev_steps", "fn": "my_steps", "order": 50}
+```
+
+```c
+#include "analog-rytm-mk2/steps.h"
+const struct core_step_owner my_owner = {"MINE"};
+
+int me = core_step_owner(&my_owner);              /* 0..7 */
+core_step_tag_set(pattern, track, step, me, 17);  /* -1 clears */
+int h = core_step_tag(pattern, track, step, me);  /* 17, or -1 */
+```
+
+Patterns are 0..127 (A01..H16), tracks 0..12 (12 the FX track), steps
+0..63; the calls run in the UI task, and the tables exist from the first
+`ev_tick` (`core_step_tables`). `core_step_pattern_now` is the pattern the
+UI edits.
+
+Tags are RAM only: never in a saved project, the pattern's rows or a SysEx
+dump. The mod keeps its own copy of each pattern's tags and puts them back
+with `core_step_tag_set` at `ev_project` and on RELOAD. To keep its copy
+current it follows `ev_steps(kind, pattern, track, step, n, owner)`, which
+core sends at `ev_tick`, after stock's change:
+
+- `CORE_STEPS_MOVED`: tags came into a run of `n` steps from (track, step),
+  counted across tracks (track * 64 + step). Read them with
+  `core_step_tag`. A handle may now be on two steps (a paste), so copy the
+  record before writing either.
+- `CORE_STEPS_DROPPED`: tags left those steps.
+- `CORE_STEPS_RELOAD`: patterns `pattern` .. `pattern + n - 1` were loaded
+  from storage (project load, a SysEx pattern) and have no tags.
+- `CORE_STEPS_LENGTH`: a length or scale setting changed (`n` says which,
+  `step` is the value, `track` -1 for the pattern's own).
+- `CORE_STEPS_RESYNC`: more changes than the queue holds; read the
+  pattern's tags again.
+
+`core_step_tags(owner, fn)` calls `fn` for every tag the owner has: in the
+patterns, then in the copies outside them (the clipboards, the undo
+buffers) with pattern -1. A handle the walk finds nowhere is free to
+reuse. Each owner costs 214,656 bytes of RAM outside core's area; a
+pattern switch with every step of both patterns tagged costs about 0.4 ms
+of the UI task, and nothing runs in the audio interrupt.
+
+### Moments (core-ar2 0.11, Analog Rytm MKII)
+
+Events and calls for stock moments a mod would otherwise find with its own
+sites, with `analog-rytm-mk2/moments.h`:
+
+```json
+{"event": "ev_sysex_in", "fn": "my_sysex", "order": 50},
+{"event": "ev_kit", "fn": "my_kit", "order": 50},
+{"event": "ev_project_slot", "fn": "my_slot", "order": 50}
+```
+
+- `int32_t my_sysex(data, len, iface)`: every SysEx message in (not the
+  universal F0 7E ones), in the MIDI task, before stock. Return nonzero to
+  take it; nothing after you sees it.
+- `core_midi_try_send(len, msg)`: one whole MIDI message out of USB, 1 sent
+  or 0 not now; it never waits. From the sequencer's or the audio
+  interrupt it goes out at once when the sender has room and no task is in
+  it, else it is queued (1,024 bytes, at most 128 a message) and sent at
+  the next sequencer tick or `ev_tick`, in order. `core_usb_midi_up()`
+  says whether USB is on and the host has configured the MIDI port.
+- `core_current_kit()`, `core_current_track()`, `core_current_pattern()`
+  (-1 for none) and `core_current_kit_item()`, `core_current_sound_item()`,
+  `core_current_pattern_item()` for `core_store_get` and `core_store_set`,
+  and `core_kit_item(k)`, `core_pattern_item(p)` for any kit or pattern
+  (the items `core_handle_fields` passes);
+  `core_project_name()`, 16 bytes (at `ev_project_save`'s pre 1 of a SAVE
+  AS, already the new name).
+- `my_kit(kit, how)` at `ev_tick`: `CORE_KIT_SELECTED` when the UI's
+  current kit changes or is chosen again, `CORE_KIT_PUSHED` when a kit's
+  whole data went to the engine (RELOAD KIT, a project load, CREATE NEW, a
+  SysEx kit). A select doesn't reach the engine at once: each track takes
+  the new kit at its next trig.
+- `my_slot(slot, how)` at `ev_tick`, for a +Drive slot written outside a
+  save: `CORE_SLOT_CLEARED` (the manager's CLEAR or INIT NEW: a new, empty
+  project in the slot), `CORE_SLOT_INIT` (the live project initialized in
+  place through Transfer's clear; `ev_project` 0 came first; LOAD
+  PROJECT's CREATE NEW has no slot event) and `CORE_SLOT_PASTED`, with
+  `CORE_SLOT_FAILED`.
+- A storage field declared `"handle": true` holds a handle on something the
+  mod keeps elsewhere, 0 for none (no `"lock"`, no `"init"`).
+  `core_handle_fields(fn)` calls `fn(field, item, index, value)` for every
+  item of the live project whose handle is not 0, so the mod can list every
+  handle a project uses. A core without the table `core_handles` refuses
+  the mark at link time.
+
+### The sequencer (core-ar2 0.11, Analog Rytm MKII)
+
+The sequencer clock's steps and ticks as events, with
+`analog-rytm-mk2/seq.h`:
+
+```json
+{"event": "ev_seq_step", "fn": "my_step", "order": 50},
+{"event": "ev_seq_tick", "fn": "my_tick", "order": 50},
+{"event": "ev_transport", "fn": "my_transport", "order": 50}
+```
+
+All three run in the clock's interrupt, at the end of a tick (96 a quarter
+note): keep them short, never wait, and send MIDI only with
+`core_midi_try_send` (sent at once from there when it can, else queued).
+
+- `my_step(steps, trigs)`: on a tick where tracks reached a step boundary,
+  bit t of `steps` for each such track (0..12, 12 the FX track), and of
+  `trigs` when its next step plays a trig: one step ahead of the sound.
+  A trigless lock trig counts as a trig; a step without one, a failed
+  condition or probability is no trig;
+  microtiming and retrigs add no calls. Each track keeps its own speed.
+  The first step after PLAY comes first on the PLAY tick, with
+  `CORE_SEQ_FIRST` in `steps`; its mod locks are set then
+  (`core_lock_value`).
+- `my_tick()` each tick, playing or stopped; `my_transport(state)` when the
+  play state changes.
+- `core_transport()` (1 playing, 0 stopped), `core_pattern_now()`,
+  `core_pattern_next()` (the pattern playing when none is queued),
+  `core_tempo()` (BPM x 120), `core_track_speed(t)` (0..6, 2 is 1x) and
+  `core_track_step(t)` (the step starting now), `core_track_length(t)`
+  (where the track's steps wrap as the clock plays them) and
+  `core_step_trig(p, t, step)` (`CORE_STEP_NOTE` a trig that triggers the
+  sound, `CORE_STEP_LOCK` a trigless lock trig, 0 none; euclid-aware; pass
+  `core_pattern_next()` for a step past a pattern change); the audio block count is
+  `core_block` (`analog-rytm-mk2/load.h`).
+
+### Dial scale and held pads (core-ar2 0.11, Analog Rytm MKII)
+
+A lockable parameter narrower than the dial (a 4-bit field, say) whose
+knob your `core_params` get shows on 0..127 gets a `core_param_scales`
+entry for the knob's id (`analog-rytm-mk2/lock.h`), so a held trig's or
+scene's lock, its NRPN or CC and core's text agree with the knob:
+
+```json
+{"to": "core_param_scales", "order": 50, "data": "00000000",
+ "relocs": [[0, "abs32", "sym:my_scale", 0]]}
+```
+
+```c
+const struct core_param_scale my_scale = {449, 450, 0, 0, 0}; /* core's linear map */
+```
+
+- `show(id, field value)` answers the dial's 8.8 and `unshow(id, dial)`
+  the field's value; with both 0 core maps round((v - min) * 127 / (max -
+  min)) and back. A turn with a trig held still moves a whole field step.
+- With a performance's pad held the page gets the depth in dial steps, and
+  core writes its text as a signed number unless `flags` has
+  `CORE_SCALE_DEPTHS`. `core_held_kind(view)` (`pages.h`) tells a knob you
+  draw yourself whether the value is a scene's lock (`CORE_HELD_SCENE`) or
+  a depth (`CORE_HELD_PERF`).
+- Values a page doesn't read stay the field's: `core_lock_value`,
+  `core_scene_value`, `core_perf_offset`, `core_param_value`, stock's copy
+  and paste.
+- A trig-held lock on a knob that borrows another machine's record goes to
+  core (0.11): stock takes a common parameter, or one of the sound's own
+  machine, and on the FX track no machine's.
+
+### Payloads (core-ar2 0.11, Analog Rytm MKII)
+
+A mod can ship data with its code, such as code another processor loads,
+in a `.payload` section (`analog-rytm-mk2/payload.h`):
+
+```
+        .section .payload, "a"
+        .globl  my_blob
+my_blob:
+        .incbin "blob.bin"
+```
+
+- The linker places it in the mods' area after every mod's code and tables,
+  and the boot copier copies it there with them, before the OS starts. The
+  mod's own symbols (`my_blob`) reach it like any other.
+- `core_payload(id, &len)` finds a mod's payload by its id,
+  `core_payload_id("my-mod")` (the FNV-1a hash of the mod's id), so another
+  mod can find it; `core_payloads` lists them all, `{id, addr, len}`, ending
+  with a zero entry. One payload a mod.
+- Room: with core-ar2 0.11 the mods' area is 0x47B10000-0x47FFF000, 5 MB
+  for code, tables, payloads and `.bss`; a build past it is refused, with the
+  room left for payloads. The tighter limits are the OS file's: the payload
+  is part of the main OS the bootloader unpacks in place, so its packed
+  size comes out of the flash budget (about 1 MB with core alone), and a
+  payload that packs much smaller than it is (long runs, repeated blocks)
+  overtakes its own input. The patcher refuses either and says by how much.
+  A 1 MB payload that packs to about 80 % fits beside core and a check mod
+  (sidecar-check-ar2 part 6).
+
 ### Mod scene and performance locks (core-ar2 0.8, Analog Rytm MKII)
 
 A lockable parameter is locked to a scene, or given a performance depth,

@@ -65,7 +65,7 @@ A format-2 mod is a relocatable object:
 
 | field | |
 |---|---|
-| `sections` | `.run` (RAM), `.fast` (fast SRAM, copied in at run time), `.bss` (`{"size"}`), and `.boot` (the core mod only: it runs where the bootloader unpacks it); each with an `align`, a power of two up to 4,096 (default 4). On a device whose OS carries DSP code, also `.dsp.<payload>` (below) |
+| `sections` | `.run` (RAM), `.fast` (fast SRAM, copied in at run time), `.bss` (`{"size"}`), `.payload` (data the mod ships, copied into RAM with `.run`; "The linker" below), and `.boot` (the core mod only: it runs where the bootloader unpacks it); each with an `align`, a power of two up to 4,096 (default 4). On a device whose OS carries DSP code, also `.dsp.<payload>` (below) |
 | `symbols` | `{"name": [".run", offset]}` or `["abs", value]` |
 | `exports` | the symbols other mods may use |
 | `imports`, `weak` | the names it uses from others; a weak one resolves to `core_zero` (zeros) if no mod provides it |
@@ -175,9 +175,19 @@ each program on its own.
 2. **Lays out.** The core mod comes first, then the others by id, so the
    result is the same whatever order the mods were given in.
    - The core's `.boot` goes at the image end.
-   - Then the RAM image: every `.run`, the tables, and the load images of
-     every `.fast`.
+   - Then the RAM image: every `.run`, the tables, the load images of
+     every `.fast`, and every `.payload`.
    - Then every `.bss`.
+   - A `.payload` needs a core that declares the table `core_payloads`
+     (12-byte entries): the linker adds one entry a mod with a payload,
+     {id, address, length}, the id being the FNV-1a hash (32 bits) of the
+     mod's id (`link.payload_id`); two mods whose ids hash alike are
+     refused. A build whose payloads don't fit the area is refused with the
+     room the area has for them, and `patch` prints where they went and the
+     room left. The payload is also part of the main OS the bootloader
+     unpacks in place, so the verifier's two limits apply to it as to code:
+     the flash budget (its packed size) and the in-place gap (a payload that
+     packs very small overtakes its own input).
    - The `.fast` sections go in the device's fast-SRAM area.
    - The core's `boot` copies the RAM image and zeroes `.bss`, using the
      symbols the linker defines: `__run_load`, `__run_start`,
@@ -201,7 +211,8 @@ each program on its own.
      from the build's core's version on: the Digitone mk1's mods run from
      0x43EC0000 (1.25 MB) with core-dn1 4.0, the Digitakt mk1's from
      0x47BC0000 (256 KB) with core 4.0, and both from 0x47BE0000 (128 KB)
-     with an older core.
+     with an older core; the Analog Rytm MKII's from 0x47B10000 to
+     0x47FFF000 (5 MB) with core-ar2 0.11, from 0x47BE0000 (128 KB) before.
 3. **Builds the tables.** Each table's entries are sorted by (`order`, mod
    id), followed by one zero entry. A table defines two symbols: `NAME` (its
    address) and `NAME_n` (its count). Each `.fast` section is added to the
@@ -272,7 +283,11 @@ can be lockable too (core-ar2 0.9): it is the FX track's parameter, with
 imports `core_fx_lfo_dst`. Any field can take `"init": N` (core-ar2 0.10),
 0 to 2^bits - 1, the value it reads where its bits are zero (0, the same as
 no `init`, otherwise); it is refused with a core that has no table
-`core_field_inits`, and past 63 fields with an init. Only a core
+`core_field_inits`, and past 63 fields with an init. Any field but a
+lockable one or one with an `init` can take `"handle": true` (core-ar2
+0.11): it holds a mod's handle on something kept elsewhere, 0 for none;
+the mark is not in the lockfile or the layout ID, and it is refused with
+a core that has no table `core_handles`. Only a core
 that imports `__store_gen` takes them (core-ar2 from 0.2, core-a4); with another
 core a mod that declares storage is refused. A scope's room can depend on
 the core's version (a sound's: 24 bits with core-ar2 0.2, 56 from 0.3,
@@ -299,7 +314,8 @@ linker:
   is refused; a kit field never gets a CC stock uses on the FX channel, the
   device's `fx_ccs_taken`, and a lockfile that gives it one is refused);
   and to `core_field_inits`, each field's `init` (4 bytes), by slot: the
-  fields with one, in the order of `fields`;
+  fields with one, in the order of `fields`; and to `core_handles`, each
+  `"handle"` field's descriptor (4 bytes), in the order of `fields`;
 - appends the lockfile to the image, after the mods' image: `ELKSTORE`,
   its length (4 bytes, big-endian), then its text. Nothing reads it on the
   unit; `elekloader.patch --lockfile-from` takes it back out of a build;

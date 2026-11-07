@@ -1216,3 +1216,67 @@ void core_edit_tick(void *ctrl)
     edited = 0;
     SET_MODIFIED(model, 1);
 }
+
+/* ---- handles (0.11): every handle field's value in the live project ----
+ * The linker gives core_handles, the descriptor of each field a mod declared
+ * "handle": true (zero-terminated). core_handle_fields calls fn(field, item,
+ * index, value) for each item of the live project whose handle is not 0,
+ * with the item and index core_store_get takes: the 128 kits as edited, then
+ * as last saved, each followed by its 12 sounds; the 128 pool sounds; the 4
+ * global slots; the 128 patterns and their 13 tracks; the project. The
+ * working pattern (a copy of one of the 128) is left out. UI task. */
+extern const unsigned core_handles[];
+
+typedef void (*core_handle_fn)(unsigned field, void *item, int index, unsigned value);
+
+static void handle_at(core_handle_fn fn, unsigned field, void *item, int index)
+{
+    unsigned v = core_store_get(field, item, index);
+    if (v)
+        fn(field, item, index, v);
+}
+
+void core_handle_fields(core_handle_fn fn)
+{
+    const unsigned *h;
+    unsigned char *kit, *p;
+    int k, t, s;
+    if (!fn)
+        return;
+    for (h = core_handles; *h; h++)
+        switch (*h >> 28) {
+        case SC_SOUND:
+        case SC_KIT:
+            for (s = 0; s < 2; s++)
+                for (k = 0; k < 128; k++) {
+                    kit = LIVE_KITS + (s ? LIVE_KITS_SAVED : 0) + LIVE_KIT_SIZE * k;
+                    if (*h >> 28 == SC_KIT)
+                        handle_at(fn, *h, kit, 0);
+                    else
+                        for (t = 0; t < 12; t++)
+                            handle_at(fn, *h, kit + LIVE_KIT_SOUNDS + LIVE_SOUND_SIZE * t, 0);
+                }
+            if (*h >> 28 == SC_SOUND)
+                for (k = 0; k < 128; k++)
+                    handle_at(fn, *h, LIVE_POOL + LIVE_SOUND_SIZE * k, 0);
+            break;
+        case SC_GLOBAL:
+            for (k = 0; k < 4; k++)
+                handle_at(fn, *h, 0, k);
+            break;
+        case SC_TRACK:
+        case SC_PATTERN:
+            for (k = 0; k < 128; k++) {
+                p = LIVE_PATTERNS + LIVE_PATTERN_SIZE * k;
+                if (*h >> 28 == SC_PATTERN)
+                    handle_at(fn, *h, p, 0);
+                else
+                    for (t = 0; t < 13; t++)
+                        handle_at(fn, *h, p, t);
+            }
+            break;
+        case SC_PROJECT:
+            handle_at(fn, *h, 0, 0);
+            break;
+        }
+}

@@ -1,0 +1,231 @@
+{
+ "id": "sidecar-check",
+ "version": "0.10",
+ "title": "Sidecar check",
+ "category": "Examples",
+ "license": "GPL-2.0-or-later",
+ "author": "Iced-Cream",
+ "description": "A test for the core-ar2 0.11 calls the Sidecar mods use, checked in RAM. Part 1 (core 0.11): a SIDECAR CHECK page behind the LFO key and one behind the FX LFO key, with knob ids 560..563 whose p-locks the mod keeps itself (core_param_locks): per id, track and step, in RAM, with every call logged after the magic SCK1. The knobs show their labels (SCA..SCD) and names (SC KNOB A..D), with a trig held the value text shows the held step (core_held_step), and on each tick it notes track 1's trigs and lock trigs on steps 1..16. Part 2 (core 0.11): a step tag owner (core_step_owners) whose tags it sets, reads and walks on commands written into its record after the magic SCK2, logging every ev_steps event; and a measure of the heap's free space. Part 3 (core 0.11): the moments, after the magic SCK3: a SysEx handler that takes F0 7D messages and lets the rest through, USB MIDI bursts through core_midi_try_send from the UI task and from the audio interrupt, the current kit, track, pattern and project name each tick, the name at ev_project_save, two handle fields walked by core_handle_fields, and every ev_kit and ev_project_slot logged. Part 4 (core 0.11): the sequencer, after the magic SCK4: every ev_seq_step and ev_transport logged with the getters at that moment (the PLAY seed apart), per-track step and trig counts, ev_seq_tick's count and the getters' last values, and two more ev_seq_step subscribers that work only when a command asks, for the cost with 1 and 3. Part 6 (core 0.11): payloads, after the magic SCK6: a 1 MB payload of a known pattern, found through core_payload and read back whole at the first tick and on command. Part 7 (core 0.11): the interrupt send and the step getters, after the magic SCK7: on command a numbered SysEx of a set length from each ev_seq_step (or each of 96 ev_seq_ticks) through core_midi_try_send, core_track_length of every track each tick, and core_step_trig of the pattern playing. From 0.8, over USB MIDI for a unit run: F0 7D 53 43 SysEx commands that set any part's command word and send any part's record back. From 0.9 there is no part 5: remote fields left core 0.11.",
+ "device": "analog-rytm-mk2",
+ "os": "1.74",
+ "sources": [
+  "check.c",
+  "tags.c",
+  "moments.c",
+  "seq.c",
+  "send.c",
+  "remote.c",
+  "payload.c",
+  "payload.s"
+ ],
+ "contribute": [
+  {
+   "to": "core_param_locks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:sc_locks",
+     0
+    ]
+   ]
+  },
+  {
+   "to": "core_params",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:sc_params",
+     0
+    ]
+   ]
+  },
+  {
+   "to": "core_pages",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:sc_page",
+     0
+    ]
+   ]
+  },
+  {
+   "to": "core_view_pages",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:sc_view_page",
+     0
+    ]
+   ]
+  },
+  {
+   "to": "core_pages",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:sc_fx_page",
+     0
+    ]
+   ]
+  },
+  {
+   "to": "core_view_pages",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:sc_fx_view_page",
+     0
+    ]
+   ]
+  },
+  {
+   "to": "core_step_owners",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:sc_owner",
+     0
+    ]
+   ]
+  }
+ ],
+ "resources": {
+  "core": "0.11"
+ },
+ "requires": [
+  "core"
+ ],
+ "subscribe": [
+  {
+   "event": "ev_tick",
+   "fn": "sc_tick",
+   "order": 60
+  },
+  {
+   "event": "ev_tick",
+   "fn": "sc_tags_tick",
+   "order": 61
+  },
+  {
+   "event": "ev_steps",
+   "fn": "sc_steps",
+   "order": 50
+  },
+  {
+   "event": "ev_tick",
+   "fn": "sc_moments_tick",
+   "order": 62
+  },
+  {
+   "event": "ev_sysex_in",
+   "fn": "sc_sysex_in",
+   "order": 50
+  },
+  {
+   "event": "ev_kit",
+   "fn": "sc_kit",
+   "order": 50
+  },
+  {
+   "event": "ev_project_slot",
+   "fn": "sc_slot",
+   "order": 50
+  },
+  {
+   "event": "ev_project_save",
+   "fn": "sc_save",
+   "order": 50
+  },
+  {
+   "event": "ev_seq_step",
+   "fn": "sc_seq_step",
+   "order": 50
+  },
+  {
+   "event": "ev_seq_step",
+   "fn": "sc_seq_step2",
+   "order": 51
+  },
+  {
+   "event": "ev_seq_step",
+   "fn": "sc_seq_step3",
+   "order": 52
+  },
+  {
+   "event": "ev_seq_tick",
+   "fn": "sc_seq_tick",
+   "order": 50
+  },
+  {
+   "event": "ev_transport",
+   "fn": "sc_transport",
+   "order": 50
+  },
+  {
+   "event": "ev_tick",
+   "fn": "sc_seq_cmd",
+   "order": 63
+  },
+  {
+   "event": "ev_render_in",
+   "fn": "sc_render_in",
+   "order": 50
+  },
+  {
+   "event": "ev_tick",
+   "fn": "sc_payload_tick",
+   "order": 65
+  },
+  {
+   "event": "ev_seq_step",
+   "fn": "sc7_seq_step",
+   "order": 60
+  },
+  {
+   "event": "ev_seq_tick",
+   "fn": "sc7_seq_tick",
+   "order": 60
+  },
+  {
+   "event": "ev_tick",
+   "fn": "sc7_tick",
+   "order": 66
+  }
+ ],
+ "storage": [
+  {
+   "sym": "sc_h_project",
+   "scope": "project",
+   "bits": 16,
+   "handle": true
+  },
+  {
+   "sym": "sc_h_pattern",
+   "scope": "pattern",
+   "bits": 12,
+   "handle": true
+  }
+ ]
+}

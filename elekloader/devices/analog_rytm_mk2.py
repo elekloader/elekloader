@@ -58,6 +58,18 @@ addresses (docs/DEVICES.md says how far each moved).
   changed words after boot, through kit/sample loading, busy playback,
   FX/drive, MIDI, Overbridge, project save/reload, a long run, and again
   after a power cycle. That run also exercised the boot hook (0x400008C0).
+- The bigger area, 'big': 0x47938000-0x47FFF000 (6.8 MB), with the mods'
+  area inside it. Checked on hardware 2026-11-05 with the DDR canary over
+  the rest (stock 1.74): through boot, a project's setup, playback, sample
+  memory filled to its limit, heavy MIDI, kit dumps, Overbridge streaming
+  and a power cycle, stock never wrote 0x47938000-0x47BE0000 or
+  0x47C00000-0x47FFF000. Sample memory ends at about 0x47937290. Below it, the OS clears a block at 0x479372E0
+  (its 0x4F9372E0, which the 128 MB DDR aliases there); above it, the last
+  4 KB under 0x48000000 is the stack's. core-ar2 0.11 keeps its step tag
+  tables at 0x47938000..0x47B00000, fixed,
+  so from 0.11 the linker lays the mods out from 0x47B10000 to 0x47FFF000
+  (core_ddr), payloads included. The flash budget (the container below
+  0x300000) is the tighter limit for a payload: about 1 MB.
 - UI: the periodic UI routine (0x400A2AAA) advances its counter 20 per
   second (the Digitakt's at 30, 0x4000A75C), so ev_tick runs at about
   20 Hz. The tick target is the Digitakt's byte for byte (it returns the
@@ -96,11 +108,17 @@ DEVICE = Device(
     isa='coldfire',
     areas={
         'ddr': (0x47BE0000, 0x47C00000),          # verified 2026-10-11, see above
+        'big': (0x47938000, 0x47FFF000),          # verified 2026-11-05, see above
     },
     ddr=(0x47BE0000, 0x47C00000),
+    core_ddr=(('0.11', (0x47B10000, 0x47FFF000)),),   # core-ar2 0.11: 5 MB, above its step tags
     recovery=('hold FUNC while powering on for the STARTUP menu, press TRIG 4 (OS UPGRADE), '
               'then send the stock .syx over MIDI DIN (not USB)'),
     slot_claims=(('core_machines', 0, 53, 'machine'),),   # a machine's descriptor names its slot at +0
+    # core-ar2's knob ids: stock's records are 0..468, core's lockable parameters take 469..554
+    # (469 + code - 42, lock.c) and a mod's own ids start at 555 (pages.h CORE_PARAM_LOCK_FIRST)
+    param_ids=(555, (469, 554, "core's lockable parameters' ids"),
+               (('core_params', False), ('core_param_locks', True))),
     toolchain={
         'prefix': 'm68k-linux-gnu-',              # or ELEKLOADER_CROSS=m68k-elf-
         'asflags': ['-mcpu=54455'],                 # ColdFire V4 (the MCF5441x's ISA), as the Digitakt mk1
