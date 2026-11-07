@@ -369,6 +369,13 @@
       "on_unit": "Tested on hardware; fully functional and stable."
     },
     {
+      "repo": "DigiAlchemydsp/DigiAlchemy-GamePack-1", "tag": "v0.21", "file": "digidoom-0.21.elemod",
+      "device": "digitone-mk1",
+      "sha256": "3b37cf1ce083ff34d099975a6a6bfef9cfc770aa7b31fa944ba05973d6a42423",
+      "summary": "A pocket arcade for the Digitone mk1: a DOOM-style raycaster, Space Invaders and Snake on the 128x64 screen.",
+      "on_unit": "Tested on hardware; fully functional and stable."
+    },
+    {
       "repo": "irpina/digineighbor", "tag": "v0.6", "file": "digineighbor-0.6.elemod",
       "device": "digitakt-mk1", "needs_core": "2.1", "title": "digineighbor", "version": "0.6",
       "sha256": "380837f86c05cf6d0aba2dfc930a4309cc6b2e99b2e8c6a450f0abe6e844dccd",
