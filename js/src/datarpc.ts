@@ -124,16 +124,21 @@ export class Client {
   async get(path: string): Promise<Uint8Array> {
     let msg = await this.call(ROPEN, cat(path0(path), be([CHUNK, 4], [0, 1])))
     const job = rd32(msg, 6), parts: Uint8Array[] = []
+    let seq = 0
     try {
-      for (let seq = 0; ; seq++) {
+      for (; ; seq++) {
         msg = await this.call(READ, be([job, 4], [seq, 4]))
         const n = rd32(msg, 23)
         parts.push(msg.slice(27, 27 + n))
         if (msg[18]) break
       }
-    } finally {
-      await this.call(RCLOSE, be([job, 4]))
+    } catch (e) {
+      if (!(e instanceof RpcError)) throw e
+      // close it, but say why the read stopped: the unit refuses to close an unfinished read
+      try { await this.call(RCLOSE, be([job, 4])) } catch (e2) { if (!(e2 instanceof RpcError)) throw e2 }
+      throw new RpcError(`reading ${path}, chunk ${seq}: ${e.message}`)
     }
+    await this.call(RCLOSE, be([job, 4]))
     return cat(...parts)
   }
 

@@ -451,8 +451,9 @@ stock Analog Rytm MKII 1.74 project reads family 2, device 5, OS release
 `/mods` are file type `0x454d4f44` ('EMOD'), version 2, index 0, not
 compressed.
 
-`elekloader mods` moves files over USB MIDI (`elekloader/datarpc.py`, with
-`mido` and `python-rtmidi`): `ls`, `get NAME` (also `.build` and
+`elekloader mods` moves files over USB MIDI (`elekloader/datarpc.py`; on
+Windows through winmm, `elekloader/winmm.py`, as python-rtmidi drops SysEx
+over 1 KB there; elsewhere with `mido` and `python-rtmidi`): `ls`, `get NAME` (also `.build` and
 `.status`), `put FILES...` (checked against the unit's `.build` first;
 nothing is uploaded if one is refused), `rm NAME` and `active NAMES...`
 (writes `/mods/active` when the set loads). `--folder` names the route's

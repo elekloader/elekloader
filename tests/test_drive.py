@@ -530,6 +530,43 @@ class FakeUnit:
         return self.out.pop(0) if self.out else None
 
 
+class LossyUnit(FakeUnit):
+    """A FakeUnit whose port loses the reply to the first read of a chunk (as python-rtmidi on
+    Windows loses any SysEx over 1 KB) and that, as stock, refuses to close an unfinished read."""
+
+    def __init__(self, build_blk):
+        super().__init__(build_blk)
+        self.lost, self.done = False, set()
+
+    def send(self, raw):
+        msg = datarpc.unframe(raw)
+        seq, cmd, a = struct.unpack_from('>H', msg)[0], msg[4], msg[5:]
+        if cmd == datarpc.READ and not self.lost:
+            self.lost = True
+            return
+        if cmd == datarpc.RCLOSE and struct.unpack_from('>I', a)[0] not in self.done:
+            self.out.append(datarpc.frame(struct.pack('>HH', 0, seq) + bytes((cmd | 0x80, 0))
+                                          + b'Reader did not complete\0'))
+            return
+        super().send(raw)
+        if cmd == datarpc.READ and datarpc.unframe(self.out[-1])[18]:
+            self.done.add(struct.unpack_from('>I', a)[0])
+
+
+def test_a_lost_read_reply_is_the_error_not_the_refused_close():
+    with Bench('analog-rytm-mk2') as B:
+        out, _b = built(B)
+        blk = out.image[desc.find(out.image)[0]:]
+        mods = datarpc.Mods(datarpc.Client(LossyUnit(blk[:struct.unpack_from('>I', blk, 8)[0]]), timeout=0.2))
+        try:
+            mods.build()
+        except datarpc.RpcError as e:
+            assert str(e) == 'reading /mods/.build, chunk 0: no reply from the unit to command 0x55', e
+        else:
+            raise AssertionError('the lost reply was not an error')
+        assert mods.build()[0].crc                     # the next read is whole
+
+
 def test_mods_put_ls_get_active_and_rm_over_the_data_router():
     import argparse
     with Bench('analog-rytm-mk2') as B:
