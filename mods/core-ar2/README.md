@@ -383,13 +383,65 @@ machine as it does its own. elekloader names an entry's slot as the resource
 `machine:<n>` (the profile's `slot_claims`), so two mods that take one slot
 are refused at link.
 
-Slots 44..52 (the TEST machines) are not offered: mods use their records as
-spare parameters (fx-sends, voice-dac). A kit saved with an added machine
+Until 0.12, slots 44..52 (the TEST machines) were not offered, since mods
+used their records as spare parameters; see "Machine slots 44..52 and the
+trig getters (0.12)" below. A kit saved with an added machine
 loads on a build without the mod with that track's machine set to DISABLE,
 as stock does for a machine its voice may not run (checked on a unit, below).
 
 `examples/machine-ar2` is the smallest machine: BD COPY in slot 36, which
 runs BD CLASSIC with BD CLASSIC's knobs.
+
+## Machine slots 44..52 and the trig getters (0.12)
+
+**The slots.** `SLOT_LAST` is 52, so a mod may take any of 34..52; the
+profile's `slot_claims` already covered 0..53. The TEST machines' records
+(408..460) have no MIDI: +0x18 and +0x1c are -1. For each record a mod
+knob uses in 44..52, `core_boot_init` copies +0x18 (CC 16 + k in the high
+half, LSB 0xffff) and +0x1c (NRPN 1:k, `1 << 7 | k`) from slot 35's record
+at the same sound index, which carries what 34..42 carry. Stock builds its
+CC map (`0x413dd3b4 + 32 m`, one record id per CC 16..23) from the records
+after core's writes. +0x20 is 0 on every hidden record, 34..43 included,
+so it is not written. Fewer records: SD TEST 9..12, 15, 16; BT TEST
+9..13; LT and MT TEST 9..12; HH TEST 9..13, 16; CB TEST 10..12, 16 (no
+LEV); BD, RS and CY TEST all eight (machines.h). The TEST records also
+have +0x24 = 0, where 34..42 and every public machine record have 0x600,
+the list kinds that make a record an LFO, velocity and aftertouch
+destination; 0.12 leaves it as it is, so a knob in 44..52 is not offered
+as one of those destinations.
+
+**The trig getters.** `ENGINES[s]` is core's trampoline for slot s (one
+per slot, 19), which latches, for the voice v it is called with, the
+owner track t = `0x40291138[v]` (bytes), whether the trig state
+`0x8000e508 + 4t` is 1 (trig; 2 is release), and the velocity word
+`0x800067c4 + 2t`, then calls the mod's engine. The audio interrupt's trig
+intake runs before the per-voice engine calls (firmware reference 6.1),
+so the latch holds this block's trig. `core_voice_trigged(v)` and
+`core_voice_velocity(v)` read the latch: plain reads, for the engine's own
+voice.
+
+Checked in the emulator only (analog-emu, OS 1.74, 7 Nov 2026), with a
+check mod holding BD SLOT44 (slot 44 on the BD voice, BD CLASSIC's
+engine) and CB SLOT52 (slot 52 on the CY/CB voice) whose engines count
+`core_voice_trigged` and keep `core_voice_velocity`:
+- after boot the engine table holds the trampolines at 44 and 52, the
+  records carry CC 16..23 / NRPN 1:0..7 at their indices, and the CC map
+  for 44 lists records 408..415 and for 52 457, 458, 459 at CC 17..19 and
+  460 at CC 23;
+- CC 15 = 44 on channel 1 sets the BD track's machine to 44 (`0x8000ea00`)
+  and the SRC page shows the mod's knob labels; CC 16, CC 18, CC 23 and
+  NRPN 1:0, 1:1 move engine words 0, 2, 7, 0, 1; on the CB track with
+  machine 52, CC 17, CC 23 and NRPN 1:2 move words 1, 7, 2, and CC 16 (no
+  record) changes nothing;
+- trigs: 4 sequencer trigs a bar played 4 bars gave 16; a pad, 3 chromatic
+  pads, notes on the auto channel (velocity 0x40, 0x50, 0x60 gave
+  `0x4000`, `0x5000`, `0x6000`) and a retrig 0.2 s into a sounding note
+  each counted once; the CB pad and a CB note counted on voice 6 only;
+- a knob on a record that was 14-bit (BD TEST's TUNE2, rewritten to
+  0..127 centred) shows whole values (+4 after a turn) but its engine word
+  keeps a fraction (`0x442c`), like stock BD CLASSIC's TUN word
+  (`0x3880`); a 7-bit record's (DEC) moves in whole steps. Read the high
+  byte for the display value.
 
 ## The OS upgrade's restart (0.7)
 

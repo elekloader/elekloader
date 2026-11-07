@@ -341,6 +341,41 @@ def test_core_ar2_machines():
     assert 'machines.c' in j['sources']
     assert ('core_machines', 0, 53, 'machine') in DEV.slot_claims
 
+
+def test_core_ar2_machine_slots_44_52():
+    """core-ar2 0.12 (machines.c): slots 44..52 are offered. Their TEST records have no MIDI
+    (+0x18 and +0x1c -1) and the indices machines.h lists; slot 35's record at index 9 + k
+    carries CC 16 + k (no LSB) and NRPN 1:k, which core copies; +0x20 is 0 on every hidden
+    record. The trig getters' sources: the owner bytes (8 voices, tracks 0..11) and the engine
+    table's 53 entries are data in the image."""
+    _r, _s, img = stock()
+    if REL.version != '1.74':
+        raise Skip('core-ar2 0.12 is for 1.74')
+
+    def l(a):
+        return struct.unpack('>I', img[a - DEV.main_load:a - DEV.main_load + 4])[0]
+    recs = {}
+    for i in range(469):
+        r = 0x401bfbc8 + 0x34 * i
+        recs.setdefault(l(r), {})[l(r + 4)] = r
+    for k in range(8):
+        r = recs[35][9 + k]
+        assert l(r + 0x18) == (16 + k) << 16 | 0xffff and l(r + 0x1c) == 1 << 7 | k, k
+    want = {44: range(9, 17), 45: [9, 10, 11, 12, 15, 16], 46: range(9, 17), 47: range(9, 14),
+            48: range(9, 13), 49: range(9, 13), 50: [9, 10, 11, 12, 13, 16], 51: range(9, 17),
+            52: [10, 11, 12, 16]}
+    for m, idx in want.items():
+        assert sorted(recs[m]) == list(idx), (m, sorted(recs[m]))
+        for r in recs[m].values():
+            assert l(r + 0x18) == 0xffffffff and l(r + 0x1c) == 0xffffffff, (m, hex(r))
+    for m in range(34, 53):
+        assert all(l(r + 0x20) == 0 for r in recs[m].values()), m
+    owner = img[0x40291138 - DEV.main_load:0x40291138 - DEV.main_load + 8]
+    assert all(t < 12 for t in owner), owner.hex()
+    with open(os.path.join(ROOT, 'mods', 'core-ar2', 'machines.c')) as fh:
+        src = fh.read()
+    assert '#define SLOT_LAST 52' in src and '0x40291138' in src and '0x8000e508' in src
+
 def test_no_copy_of_the_bootstrap_in_the_main_os():
     """The main OS holds no copy of the bootstrap (section 2). No 512 bytes of
     its first 0x7d94 (zero-padded tables and data follow them) are in

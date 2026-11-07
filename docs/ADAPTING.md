@@ -2496,9 +2496,18 @@ sounds store the knobs and MIDI reaches them as any machine's. A knob
 whose name is 0 keeps its record as stock has it. Slots 35..42 have all
 eight records; 34 and 43 have five, and a knob with no record is ignored.
 Each entry's slot is the resource `machine:<n>`, which elekloader names
-for it, so a second mod with the same slot is refused at link. Slots
-44..52 (the TEST machines) are not offered, since mods already use their
-records as spare parameters.
+for it, so a second mod with the same slot is refused at link.
+
+From core-ar2 0.12 the TEST machines' slots 44..52 are offered too (ask
+for `"core": "0.12"`). Their records have no MIDI of their own, so at
+boot core gives each record a knob uses the hidden machines' CC 16 + k
+and NRPN 1:k (k = the sound index less 9). They have fewer records: BD,
+RS and CY TEST (44, 46, 51) all eight; SD TEST (45) 9..12, 15 and 16;
+BT TEST (47) 9..13; LT and MT TEST (48, 49) 9..12; HH TEST (50) 9..13 and
+16; CB TEST (52) 10..12 and 16, with no LEV. Mods that kept spare
+parameters in those records (fx-sends, duck, voice-dac) move off them for
+0.12; one that still uses a slot's records declares `"machine:<n>"` in
+its resources, and the linker refuses it next to a machine in that slot.
 
 The engine is called once per 32-frame block for each voice running the
 machine, from the audio interrupt, as stock's are: `frame` is the analog
@@ -2507,6 +2516,14 @@ sound's index 9 + k). It may call a stock engine (`CORE_ENGINE_*`) with a
 block it fills itself, which is how the AE TX machines are built. A value's
 text, or how a knob turns, can be changed through `core_params` (Parameter
 pages, above).
+
+From core-ar2 0.12 the engine table holds core's trampoline for the slot,
+which latches the voice's trig and velocity and then calls the engine.
+In the engine, `core_voice_trigged(voice)` is 1 when the voice's track
+trigged this block (sequencer, pad, chromatic, MIDI in, a retrig of a
+sounding voice alike) and `core_voice_velocity(voice)` is the track's
+velocity, `velocity << 8` (a MIDI note at 64 gives `0x4000`), before
+accent.
 
 A kit or sound that uses the machine, loaded on a build without the mod,
 gets DISABLE on that track, as stock does for any machine its voice may
