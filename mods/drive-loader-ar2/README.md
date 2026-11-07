@@ -186,13 +186,18 @@ The page is stock's two-pane file view, the one SAMPLES and PROJECTS are built o
   links); `NO MEMORY` when the heap has no room for the list.
 - **No file limit.** The list grows like SAMPLES' (decided 2026-11-07): the page takes its
   per-file arrays from the heap when it reads the folder, sized to the folder's count, and gives
-  them back at the next read. Each file is checked alone for its own verdict (id, version, a
-  refusal of the file itself), so no number of files reaches a set's limits; opening reads each
-  file twice (its CRC, then the check).
+  them back at the next read. Opening reads only the folder's listing and each file's size
+  (decided 2026-11-07, after T178: opening with 13 files of 484 KB held the key path and USB
+  for over 5 s). The files are then read and checked one at a time in the background, one
+  every 2 ticks (about 10 a second for small files) while the page's rows are drawn: a row
+  shows its file name and size until then, and its id and `!` after. Each file is checked
+  alone for its own verdict (id, version, a refusal of the file itself), so no number of files
+  reaches a set's limits. Ticking a row checks it at once if the background hasn't, and a
+  change checks every file of the new set first.
 - **The boot's verdicts** come from the boot's own records, matched by file name
   (`dl_boot_choice`), so a second file with a loaded mod's id isn't shown as loaded.
 - **Reading files.** The page reads each file into the staging buffer, which it takes only
-  while it reads: at its opening and at each change. The route answers `busy` then, and only
+  while it reads that one file. The route answers `busy` then, and only
   then. A separate buffer for the UI task would cost another 512 KB, or limit what the page
   can check. Every ekFS call is made under `dl_lock`.
 - **Keeping off reads.** Stock streams a read out of the buffer after the route fills it, so

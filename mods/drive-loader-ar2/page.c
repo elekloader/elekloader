@@ -11,8 +11,8 @@
  * and a box says why. The page never loads or unloads code.
  *
  * Everything here runs in the UI task. The route runs in the SysEx tasks: the page takes
- * the staging buffer only while it reads files, at the page's opening and at each change,
- * and not while a read of a file is open (dl_staging_take_idle), since stock streams a read
+ * the staging buffer only while it reads one file (the background check of the listed files,
+ * one at a time while the page shows, and the files of a change), and not while a read of a file is open (dl_staging_take_idle), since stock streams a read
  * out of the buffer after the fill; a read that hasn't moved for READ_STALL ticks was left
  * by its client and doesn't count. The route answers "busy" while the page holds it, and
  * every ekFS call is made under dl_lock. All addresses are OS 1.74's (README, "Firmware
@@ -57,6 +57,7 @@ struct row {
     char ver[DL_VER_MAX];
     char detail[32];                     /* the file's refusal's name argument */
     char boot_detail[32];                /* the boot record's */
+    u8 checked;                          /* read and checked (crc, id, ver, file_code known) */
 };
 
 /* The list grows like SAMPLES' (decided 2026-11-07): every array the page keeps per file
@@ -116,6 +117,7 @@ static int page_alloc(int n)
 
 static u8 redraw;                        /* ask the next ev_tick for a frame */
 static volatile u32 ticks, drawn_at;     /* the page's rows were drawn at this tick */
+static int next_check;                   /* the next row the background checks (check_next) */
 
 /* ---- text ---- */
 
@@ -277,23 +279,21 @@ static void boot_record(struct row *r)
         }
 }
 
-/* Read DL_DIR: each .elemod's size, CRC-32, id and version and what pass 1 says of it,
- * and the ticks from DL_DIR/active. Holds the staging buffer. The page's arrays are taken
- * anew for the folder's count. -> 0, -1 busy, -2 no memory. */
+/* Read DL_DIR's listing: each .elemod's name and size, and the ticks from DL_DIR/active, without
+ * reading any mod (decided 2026-11-07: opening the page with many large files held the key
+ * path and USB for seconds, T178). Each file is read later, one at a time (inspect). The
+ * page's arrays are taken anew for the folder's count. -> 0, -2 no memory. */
 static int scan(void)
 {
     int i, k, n, m;
     s32 len, size;
     char (*names)[DL_NAME_MAX + 1], *text = 0, path[DL_PATH_MAX];
     struct dl_choice *ticks_set = 0;
-    if (!dl_staging_take_idle(ticks, READ_STALL))
-        return -1;
     dl_lock();
     n = dl_list_files(0, 0);
     names = page_alloc(n) ? dl_alloc((u32)(n > 0 ? n : 1) * sizeof *names) : 0;
     if (!names) {
         dl_unlock();
-        dl_staging_give();
         page_free();
         return -2;
     }
@@ -303,14 +303,17 @@ static int scan(void)
         if (!ends_elemod(names[i]))
             continue;
         copy_str(r->name, names[i], sizeof r->name);
-        len = dl_read_file(r->name, drive_staging, DL_STAGING_SIZE);
-        if (len == -2)
-            r->file_code = DL_R_TOO_BIG;
-        else if (len < 0)
+        path_of(path, r->name);
+        size = dl_fs_file_size(path);
+        if (size < 0) {
             r->file_code = DL_R_MISSING;
-        else {
-            r->size = (u32)len;
-            r->crc = dl_crc32(drive_staging, (u32)len);
+            r->checked = 1;
+        } else {
+            r->size = (u32)size;
+            if (r->size > DL_STAGING_SIZE) {   /* as the boot: a file past the staging buffer */
+                r->file_code = DL_R_TOO_BIG;
+                r->checked = 1;
+            }
         }
         nrows++;
     }
@@ -333,30 +336,58 @@ static int scan(void)
     }
     dl_free(ticks_set);
     dl_free(text);
+    for (i = 0; i < nrows; i++)
+        boot_record(&rows[i]);
+    next_check = 0;
+    return 0;
+}
 
-    /* every file's id, version and pass-1 verdict: a check of each file alone, whose set
-     * refusals mean nothing here (only codes about the file itself are kept), so no number
-     * of files reaches the set's limits */
-    for (i = 0; i < nrows; i++) {
-        struct row *r = &rows[i];
-        int c;
-        if (r->file_code)
-            continue;
+/* One file read: its CRC-32 and size, then a check of it alone for its id, version and
+ * pass-1 verdict (a check's set refusals mean nothing here: only codes about the file itself
+ * are kept), so no number of files reaches a set's limits. Holds the staging buffer and the
+ * loader's mutex for this one file only. -> 0 (the row is checked), -1 busy. */
+static int inspect(struct row *r)
+{
+    s32 len;
+    int c;
+    if (r->checked)
+        return 0;
+    if (!dl_staging_take_idle(ticks, READ_STALL))
+        return -1;
+    dl_lock();
+    len = dl_read_file(r->name, drive_staging, DL_STAGING_SIZE);
+    dl_unlock();
+    r->checked = 1;
+    if (len == -2)
+        r->file_code = DL_R_TOO_BIG;
+    else if (len < 0)
+        r->file_code = DL_R_MISSING;
+    else {
+        r->size = (u32)len;
+        r->crc = dl_crc32(drive_staging, (u32)len);
         copy_str(choice[0].name, r->name, DL_LINE_NAME_MAX);
         choice[0].crc = r->crc;
-        if (check(1) < 0)
-            continue;
-        c = cst[0].code;
-        copy_str(r->id, cst[0].id, sizeof r->id);
-        copy_str(r->ver, cver[0], sizeof r->ver);
-        if (cst[0].state != DL_ST_LOADED && c && (c <= DL_R_FEATURE || c == DL_R_CORE)) {
-            r->file_code = (u8)c;
-            copy_str(r->detail, cdet[0], sizeof r->detail);
+        if (check(1) >= 0) {
+            c = cst[0].code;
+            copy_str(r->id, cst[0].id, sizeof r->id);
+            copy_str(r->ver, cver[0], sizeof r->ver);
+            if (cst[0].state != DL_ST_LOADED && c && (c <= DL_R_FEATURE || c == DL_R_CORE)) {
+                r->file_code = (u8)c;
+                copy_str(r->detail, cdet[0], sizeof r->detail);
+            }
         }
     }
     dl_staging_give();
+    return 0;
+}
+
+/* Every row with keep[i] checked now (a save needs their CRCs). -> 0, -1 busy. */
+static int inspect_kept(const u8 *keep)
+{
+    int i;
     for (i = 0; i < nrows; i++)
-        boot_record(&rows[i]);
+        if (keep[i] && inspect(&rows[i]))
+            return -1;
     return 0;
 }
 
@@ -586,6 +617,10 @@ static int save_set(const u8 *keep)
         show_box("OVER 256 MODS");
         return -1;
     }
+    if (inspect_kept(keep)) {            /* their CRCs, before the set is named */
+        show_box("BUSY: TRY AGAIN");
+        return -1;
+    }
     for (i = 0, m = 0; i < nrows; i++)
         if (keep[i]) {
             copy_str(choice[m].name, rows[i].name, DL_LINE_NAME_MAX);
@@ -768,6 +803,8 @@ static void toggle_advance(void)
     if (row < 0 || row >= list_n())
         return;
     on = !is_ticked(row);
+    if (on)                              /* its verdict now, if the background hasn't got there */
+        inspect(&rows[file_k(row)]);
     tick(row, on);
     if (row + 1 < list_n())
         cursor_to(row + 1);
@@ -905,10 +942,29 @@ unsigned dl_page_now(void)
     return ticks;
 }
 
+/* The files the page lists are read and checked one at a time in the background (inspect),
+ * one every CHECK_EVERY ticks, only while the page's rows are being drawn (within SHOWN ticks
+ * of a draw: the page shows); each check asks for a frame, so the next one follows it. */
+#define CHECK_EVERY 2
+#define SHOWN 10
+
+static void check_next(void)
+{
+    if (!view || !rows || ticks - drawn_at > SHOWN || ticks % CHECK_EVERY)
+        return;
+    while (next_check < nrows && rows[next_check].checked)
+        next_check++;
+    if (next_check >= nrows)
+        return;
+    if (!inspect(&rows[next_check]))
+        redraw = 1;
+}
+
 void dl_page_tick(void *ctrl)
 {
     ticks++;
     dl_readers_poll(ticks);
+    check_next();
     if (redraw) {
         redraw = 0;
         *((volatile u8 *)ctrl + 0x20) = 1;
