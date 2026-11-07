@@ -1,11 +1,11 @@
 {
  "id": "drive-loader",
- "version": "0.2",
+ "version": "0.3",
  "title": "Drive Loader",
  "category": "Framework",
  "license": "GPL-2.0-or-later",
  "author": "Iced-Cream",
- "description": "The +Drive mods loader's flashed part (core-ar2 0.11 and newer, OS 1.74). From 0.1 the boot linker, which links the mods chosen in /mods/active into the +Drive mods' area at boot (skip with [NO] held; a crash guard skips once after a start that didn't get 10 s in), and the /mods route: a top-level /mods in the unit's Data root listing, holding the .elemod files in the +Drive's /mods folder, which a client such as elekloader lists, reads, uploads and deletes over USB; /mods/.build is the build descriptor (core_desc), /mods/.status the loader's status in plain text; and the MODS page at the bottom of SETTINGS > GLOBAL, which lists the files with a tick each and saves a set to /mods/active only when the boot linker's checks pass it.",
+ "description": "The +Drive mods loader's flashed part (core-ar2 0.11 and newer, OS 1.74). From 0.1 the boot linker, which links the mods chosen in /mods/active into the +Drive mods' area at boot (skip with [NO] held; a crash guard skips once after a start that didn't get 10 s in), and the /mods route: a top-level /mods in the unit's Data root listing, holding the .elemod files in the +Drive's /mods folder, which a client such as elekloader lists, reads, uploads and deletes over USB; /mods/.build is the build descriptor (core_desc), /mods/.status the loader's status in plain text; and the MODS page at the bottom of SETTINGS > GLOBAL, from 0.3 stock's SAMPLES-style file browser: the ticked files are the build, and LOAD TO BUILD saves them to /mods/active only when the boot linker's checks pass them.",
  "device": "analog-rytm-mk2",
  "os": "1.74",
  "sources": [

@@ -8,7 +8,7 @@
 
         .text
         .align  2
-        .globl  dl_mods_label, dl_row_label
+        .globl  dl_mods_label, dl_page_label
 
 | SETTINGS > GLOBAL's MODS row
 dl_mods_label:
@@ -26,14 +26,14 @@ dl_mods_label:
         unlk    %a6
         rts
 
-| a MODS page row: the functor's first word is the row's index
-dl_row_label:
+| a MODS page row: the functor's first word is the row's index (page.c, dl_page_text)
+dl_page_label:
         link    %a6, #-4
         move.l  %d2, -(%sp)
         move.l  %a0, %d2
         movea.l 8(%a6), %a1             | the functor
         move.l  (%a1), -(%sp)
-        jsr     dl_row_text             | -> the text, in %d0
+        jsr     dl_page_text             | -> the text, in %d0
         addq.l  #4, %sp
         pea     -1(%a6)
         move.l  %d0, -(%sp)

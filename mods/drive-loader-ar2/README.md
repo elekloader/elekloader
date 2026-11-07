@@ -9,7 +9,8 @@ From 0.1 it holds the `/mods` route, links the mods `/mods/active` names into th
 mods' area at boot, and adds the MODS page in SETTINGS > GLOBAL, which writes `/mods/active`.
 The rules (what a +Drive mod may hold, the checks, the order, the refusal
 codes and skip reasons) are docs/FORMAT.md's, "+Drive mods".
-From 0.2 the files in `/mods` carry a 16-byte header (below, "Files on the +Drive").
+From 0.2 the files in `/mods` carry a 16-byte header (below, "Files on the +Drive"). From 0.3
+the MODS page works like stock's SAMPLES browser (below, "The MODS page").
 
 ## The /mods route
 
@@ -121,23 +122,38 @@ start and the UI task haven't run, so nothing reads the tables the link rewrites
 ## The MODS page
 
 A MODS row at the bottom of SETTINGS > GLOBAL (`ev_settings`, `core_additem`) opens a page
-(`page.c`, `page.s`) listing the `.elemod` files in the folder, one row each, with a tick. The MODS row has a 9 x 9
+(`page.c`, `page.s`) on the `.elemod` files in the folder. The MODS row has a 9 x 9
 lightning-bolt icon like the other submenu rows: its draw callback (`dl_mods_icon`, `page.s`) is
 stock's icon thunk, tail-calling the bitmap blit `0x400716e0` with a Bitmap of stock's layout
 (one long a column, top row the lowest bit, a full mask).
 
-- **The rows.** The first row is the state: how many mods the boot loaded, or why it skipped;
-  after a change, `SAVED: REBOOT`, `NOT SAVED`, `SAVE FAILED` or `BUSY: TRY AGAIN`; with no
-  files, `NO MODS ON +DRIVE`. Each file's row shows its id, alternating every half second with
-  what applies first: why the set on the page is refused for it, why the file itself is (a bad
-  file, another device, a newer core), `LOADED`, `BOOT:` and why the boot refused it,
-  `ON NEXT BOOT`, `OFF NEXT BOOT`, or its version and size.
-- **A change.** [YES] on a row toggles it, and the page runs the boot's own pass 1, checks and
-  layout (`dl_check`, `dlink.c`) on the new set against `core_desc`, without writing RAM. A
-  set where every ticked mod would load is written to `active` (`active.tmp`, then the old
-  file deleted and the tmp renamed), one line per file, its name and CRC-32. A set that
-  wouldn't is not saved, and the refused row says why. The page never loads or unloads code:
-  the next boot links the saved set.
+The page is stock's two-pane file view, the one SAMPLES and PROJECTS are built on
+(`0x400734f2`), and works like SAMPLES:
+
+- **The file list.** One row a file: its id (its file name until one is known) and, on the
+  right where SAMPLES puts sizes, its size in whole KB, or `!` for a file pass 1 refuses (a bad
+  file, another device, a newer core, over 512 KB). The ticks start as the saved build.
+- **Ticks are the build.** [YES] ticks or unticks a row and steps down, as in SAMPLES. RIGHT
+  opens the action panel: SELECT ALL, DESELECT ALL, LOAD TO BUILD, DELETE. LOAD TO BUILD asks
+  `LOAD n MODS? CONFIRM Y/N` (`EMPTY THE BUILD?` with nothing ticked) in stock's confirm
+  window, then runs the boot's own pass 1, checks and layout (`dl_check`, `dlink.c`) on exactly
+  the ticked files against `core_desc`, without writing RAM. A set where every mod would load
+  replaces `active` (`active.tmp`, then the old file deleted and the tmp renamed), one line per
+  file, its name and CRC-32, and a box says `n MODS LOADED`. A set that wouldn't isn't saved,
+  and the box gives the first refusal (`NEEDS drive-hello`). Unlike SAMPLES the ticks stay after
+  a load: they are the build. The page never loads or unloads code: the next boot links the
+  saved set.
+- **DELETE** deletes the ticked files after its confirm, refusing a file that is in the saved
+  build (`IN THE BUILD: UNLOAD IT FIRST`).
+- **The build list.** LEFT opens a one-row left panel, VIEW BUILD (VIEW +DRIVE in the build
+  list), like SAMPLES' VIEW RAM, which switches the list and closes the panel (`0x400734a8`).
+  The build list shows the saved set, each mod with what the next boot does: `KEEP` (loaded
+  now, stays), `ADD` (loads at the next boot), `DROP` (loaded now, gone after the next boot;
+  these rows stay until the reboot) or `!` (the last boot refused it). Its action panel has
+  UNLOAD, which saves the build without the ticked mods through the same checks.
+- **Messages** are stock's message box: on opening, why the boot skipped the mods
+  (`SKIPPED: [NO] HELD`, `SKIPPED: CRASH`, `NO +DRIVE`, ...) or `NO MODS ON +DRIVE`; after a
+  change, `SAVE FAILED` or `BUSY: TRY AGAIN`.
 - **The boot's verdicts** come from the boot's own records, matched by file name
   (`dl_boot_choice`), so a second file with a loaded mod's id isn't shown as loaded.
 - **Reading files.** The page reads each file into the staging buffer, which it takes only
@@ -167,7 +183,7 @@ stock's icon thunk, tail-calling the bitmap blit `0x400716e0` with a Bitmap of s
 What the page doesn't see:
 
 - Pass 2's refusals (a `pc16` out of range) are only found by the boot's link: the page saves
-  such a set, and the row shows `BOOT:` and the reason after the restart.
+  such a set, and the build list shows `!` after the restart.
 - A read the client leaves open keeps the page `BUSY` for 30 s. If that client takes the read
   up again after a page check, it can get the page's bytes.
 
@@ -188,5 +204,5 @@ emulator through its `--usb-midi-tcp` port.
 ```bash
 python -m elekloader.sdk.build mods/core-ar2 --stock Analog-Rytm_MKII_OS1.74.syx
 python -m elekloader.sdk.build mods/drive-loader-ar2 --stock Analog-Rytm_MKII_OS1.74.syx
-python -m elekloader.patch --stock Analog-Rytm_MKII_OS1.74.syx --mod core-0.11.elemod --mod drive-loader-0.2.elemod --out drive-loader.syx --version 1.74
+python -m elekloader.patch --stock Analog-Rytm_MKII_OS1.74.syx --mod core-0.11.elemod --mod drive-loader-0.3.elemod --out drive-loader.syx --version 1.74
 ```
