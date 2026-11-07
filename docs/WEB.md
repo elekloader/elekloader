@@ -263,6 +263,13 @@ Once a mod is in the shop, its author only publishes releases. Every day
   run and it merges, and pages redeploys; otherwise it waits for a maintainer, with the tests
   workflow started on it.
 
+**Authors can opt out.** Updates are on for every entry unless it says `"auto_update": false`.
+The form's **Updates** box (ticked = opt out) or a `Shop auto-update: off` line in a release's
+notes sets it; the box unticked or `Shop auto-update: on` clears it. Submitting the form for a
+release the shop already has changes only the setting. A newer release whose notes say `off` is
+not taken: it opts the repository out, and the daily check stops following it. An opted-out
+entry is left alone by the daily check, and its releases come in through the form.
+
 Two switches, for maintainers:
 
 - **`"hold"`** on an entry in `web/catalog.json` (true, or a reason) keeps that mod's file where it

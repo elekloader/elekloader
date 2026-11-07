@@ -11,8 +11,9 @@
    --tag says otherwise, in the repository --repo names or MODDIR's git remote "origin" points at. --summary and
    --tested go in the release's notes as "Shop summary:" and "Tested on a unit:" lines, which the shop takes for
    the mod's card (docs/SHOP.md).
-3. If the shop lists the mod already, the shop's daily check takes the release by itself. If not, it opens the
-   Submit a mod form in your browser, filled in with the repository, the tag and the summary.
+3. If the shop lists the mod already, the shop's daily check takes the release by itself (unless you opted out:
+   --no-auto-update writes "Shop auto-update: off" in the notes, and the form is how a release gets in then). If
+   not, it opens the Submit a mod form in your browser, filled in with the repository, the tag and the summary.
 
 --dry-run builds, then prints the gh command and the form's address, and publishes nothing.
 """
@@ -39,10 +40,12 @@ def repo_from_remote(url):
     return m.group(1) if m else None
 
 
-def release_notes(summary='', tested=''):
-    """The release's notes: the lines the shop reads for the card (packaging/submit_mod.py, release_text)."""
+def release_notes(summary='', tested='', auto_update=True):
+    """The release's notes: the lines the shop reads for the card, and whether to follow the repository's newer
+    releases (packaging/submit_mod.py, release_text)."""
     lines = ['Shop summary: ' + ' '.join(summary.split())] if summary.strip() else []
     lines += ['Tested on a unit: ' + ' '.join(tested.split())] if tested.strip() else []
+    lines += [] if auto_update else ['Shop auto-update: off']
     return '\n'.join(lines) + '\n' if lines else 'Built with elekloader.\n'
 
 
@@ -81,6 +84,8 @@ def main(argv=None):
     ap.add_argument('--prerelease', action='store_true', help='publish it as a pre-release (a beta)')
     ap.add_argument('--summary', default='', help='one sentence for the shop\'s card')
     ap.add_argument('--tested', default='', help='what ran on hardware, and what not yet')
+    ap.add_argument('--no-auto-update', action='store_true', help='tell the shop not to take your later releases by '
+                                                                   'itself ("Shop auto-update: off" in the notes)')
     ap.add_argument('--dry-run', action='store_true', help='build, then print what would happen; publish nothing')
     ap.add_argument('--no-browser', action='store_true', help='print the form\'s address instead of opening it')
     a = ap.parse_args(argv)
@@ -114,7 +119,7 @@ def main(argv=None):
         files.append(path)
 
     notes = tempfile.NamedTemporaryFile('w', suffix='.md', delete=False, encoding='utf-8')
-    notes.write(release_notes(a.summary, a.tested))
+    notes.write(release_notes(a.summary, a.tested, not a.no_auto_update))
     notes.close()
     cmd = (['gh', 'release', 'create', tag] + files + ['--repo', repo, '--title', '%s %s' % (title, version),
                                                        '--notes-file', notes.name]
@@ -135,8 +140,11 @@ def main(argv=None):
 
     items = shop_items()
     if items is not None and in_shop(items, repo, mod_id):
-        print('The shop lists %s from %s: its daily check takes this release by itself (docs/SHOP.md).' % (title, repo))
-        return 0
+        print('The shop lists %s from %s: %s' % (title, repo, (
+            'you opted out, so send this release through the Submit a mod form (docs/SHOP.md).' if a.no_auto_update else
+            'its daily check takes this release by itself, unless you opted out earlier (docs/SHOP.md).')))
+        if not a.no_auto_update:
+            return 0
     url = form_url(repo, tag, title, summary)
     print('To put it in the shop, send the Submit a mod form:\n  ' + url)
     if not (a.dry_run or a.no_browser):
