@@ -113,7 +113,8 @@ DEVICE = Device(
     },
     ddr=(0x47BE0000, 0x47C00000),
     core_ddr=(('0.11', (0x47B10000, 0x47FFF000)),),   # core-ar2 0.11: 5 MB, above its step tags
-    drive_area=(0x47D00000, 0x47FFF000),          # the +Drive mods' area: the top 3 MB of core_ddr's
+    drive_align=0x1000,                           # the +Drive mods' area: what the flashed build
+                                                  # leaves of core_ddr's, from a 4 KB boundary
     data_family=2,                                # the data container's family id (stock checks it)
     data_device=5,                                # ... and its device id (a stock project download's)
     recovery=('hold FUNC while powering on for the STARTUP menu, press TRIG 4 (OS UPGRADE), '

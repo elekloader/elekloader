@@ -900,6 +900,12 @@ export function link(mods: Mod2[], image: Uint8Array, lock: store.Lock | null = 
   const trailerLen = newLock ? store.trailer(newLock).length : 0
   type Where = (kind: string, ...a: any[]) => number
   /** The descriptor's fields; `where` (a function of the layout) gives the addresses, or null: all 0, to size it. */
+  // the +Drive mods' area a descriptor names: what the flashed build leaves of the core's linker
+  // area, from its RAM end rounded up to the device's driveAlign; [0, 0] on a device without one
+  const driveArea = (ramEnd: number): [number, number] => {
+    if (!dev.driveAlign) return [0, 0]
+    return [Math.min(align(ramEnd, dev.driveAlign), ddrEnd), ddrEnd]
+  }
   const descFields = (where: Where | null): desc.DescFields => {
     const w: Where = where ?? (() => 0)
     const modules = order.map(m => ({
@@ -925,7 +931,7 @@ export function link(mods: Mod2[], image: Uint8Array, lock: store.Lock | null = 
     }
     return { family: dev.dataFamily, device: dev.dataDevice, release: rel.dataRelease ?? 0, deviceKey: dev.key, os: rel.version, modules, tables: tabs,
       claims: order.flatMap(m => m.names.map(nm => [desc.CLAIM_NAME, index.get(m.id)!, nm] as [number, number, string])),
-      area: [w('bss_end'), dev.driveArea[0], dev.driveArea[1], w('glob', desc.STAGING[0]), w('glob', desc.STAGING[1])],
+      area: [w('bss_end'), ...driveArea(w('bss_end')), w('glob', desc.STAGING[0]), w('glob', desc.STAGING[1])],
       storage: { trailer: [w('trailer'), trailerLen], scopes } }
   }
   let descAt = 0, descLen = 0
@@ -970,9 +976,6 @@ export function link(mods: Mod2[], image: Uint8Array, lock: store.Lock | null = 
     throw new ModError(`the mods need RAM to ${hex8(bssEnd)}, past ${hex8(ddrEnd)} (${bssEnd - ddrEnd} bytes over)`
       + (more.length ? `; core ${more[0][0]} or newer gives them ${more[0][1][1] - more[0][1][0]} bytes` : ''))
   }
-  if (withDesc && dev.driveArea[1] > dev.driveArea[0] && bssEnd > dev.driveArea[0])
-    throw new ModError(`the flashed mods need RAM to ${hex8(bssEnd)}, past the start of the +Drive mods' area, `
-      + `${hex8(dev.driveArea[0])} (${bssEnd - dev.driveArea[0]} bytes over)`)
   if (fastAt > fastEnd) throw new ModError(`.fast code needs SRAM to ${hex8(fastAt)}, past ${hex8(fastEnd)}`)
   const runLoad = align(end + bootLen, 16)
 

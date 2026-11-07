@@ -103,7 +103,7 @@ export type Device = {
   slotClaims: [string, number, number, string][]   // [table, at, count, prefix]: a contribution to table points at a descriptor whose long at +at is a sound slot; the mod claims prefix:<slot>
   paramIds: [number, [number, number, string], [string, boolean][]] | null   // [own, [lo, hi, what], [[table, ownOnly]]]: knob id ranges (link.Mod2.idRanges)
   tableLimits: Record<string, number>           // table -> the most entries all mods together may add to it: the OS uses no more (link.check)
-  driveArea: Range                              // the +Drive mods' area a build descriptor names; a build with one keeps its own RAM below it
+  driveAlign: number                            // a build descriptor's +Drive mods' area: from the flashed build's RAM end rounded up to this, to the top of the core's linker area (ddrFor); 0: none
   dataFamily: number                            // the family id of the data container's header (0: not known)
   dataDevice: number                            // ... and its device id (0: not known)
   sramCode: Range
@@ -120,7 +120,7 @@ const rel = (version: string, syxSha256: string, mainSha256: string, mainLen: nu
 
 const base = {
   mainSection: 3, mainLoad: 0x40000400, isa: 'coldfire' as const, hmacKeyFrom: null, container: 'ele3' as const,
-  versionLen: 4, versionAt: 0x14, versionOptional: false, protected: [], relocatable: [], keep: [], blobMax: null, driveArea: [0, 0] as Range, dataFamily: 0, dataDevice: 0, sramCode: [0, 0] as Range, coreDdr: [] as [string, Range][], slotClaims: [] as [string, number, number, string][], paramIds: null, tableLimits: {}, fastTable: '',
+  versionLen: 4, versionAt: 0x14, versionOptional: false, protected: [], relocatable: [], keep: [], blobMax: null, driveAlign: 0, dataFamily: 0, dataDevice: 0, sramCode: [0, 0] as Range, coreDdr: [] as [string, Range][], slotClaims: [] as [string, number, number, string][], paramIds: null, tableLimits: {}, fastTable: '',
   imageFree: [], reserve: null, dspPayloads: {}, dspAreas: [], trailer: null, updateMax: null,
 }
 
@@ -241,7 +241,7 @@ export const ANALOG_RYTM_MK2: Device = {
   areas: { ddr: [0x47be0000, 0x47c00000], big: [0x47938000, 0x47fff000] },
   ddr: [0x47be0000, 0x47c00000],
   coreDdr: [['0.11', [0x47b10000, 0x47fff000]]],   // core-ar2 0.11: 5 MB, above its tags and mirrors
-  driveArea: [0x47d00000, 0x47fff000],             // the +Drive mods' area: the top 3 MB of coreDdr's
+  driveAlign: 0x1000,                              // the +Drive mods' area: what the flashed build leaves of coreDdr's, from a 4 KB boundary
   dataFamily: 2,                                   // the data container's family id (stock checks it)
   dataDevice: 5,                                   // ... and its device id (a stock project download's)
   recovery: 'hold FUNC while powering on for the STARTUP menu, press TRIG 4 (OS UPGRADE), '

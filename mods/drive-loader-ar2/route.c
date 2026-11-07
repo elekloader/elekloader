@@ -66,22 +66,26 @@ extern unsigned char drive_staging[];
 extern volatile int dl_staging_owner;
 extern int dl_list_inv(), dl_entry_inv(), dl_pre_inv(), dl_hdr_inv();
 
-/* the boot linker's status records (its own .bss); absent until it links */
+/* the boot linker's status records: pointers to dl_status_n of them on the heap (0 until
+ * it links) */
 struct dl_status_rec {
     unsigned char state, code;
     unsigned short arg;
     char id[28];
 };
-extern struct dl_status_rec dl_status[] __attribute__((weak));
+extern struct dl_status_rec *dl_status __attribute__((weak));
 extern int dl_status_n __attribute__((weak));
 extern unsigned char dl_skip_reason __attribute__((weak));
-extern char dl_detail[][32] __attribute__((weak));      /* a refusal's name argument */
+extern char (*dl_detail)[32] __attribute__((weak));     /* a refusal's name argument */
 extern unsigned dl_boot_us[] __attribute__((weak));     /* the boot's time: whole, checks, link, inits */
 
 static char dl_note[64];
 static unsigned dl_upload_epoch;               /* dl_staging_epoch when the upload's header came */
 int dl_last_io[4];                             /* the last commit's raw results, for .status */                       /* the route's last commit or delete */
-static char dl_status_text[2048];
+static char *dl_status_text;                  /* from the heap, sized to the boot's records */
+static unsigned dl_status_cap;
+#define STATUS_HEAD 512                        /* the lines before the records */
+#define STATUS_LINE 84                         /* id 28, state, code, arg, detail 32, at most */
 static unsigned dl_dir_obj[0x130 / 4];         /* under dl_lock */
 
 /* ---- small helpers (no libc) ---- */
@@ -390,12 +394,28 @@ void dl_change(void **f, const unsigned char *h)
 static const char *const dl_state_names[] = {"-", "loaded", "refused", "dropped"};
 static const char *const dl_skip_names[] = {
     "-", "key held", "after a failed start", "drive not ready", "descriptor ABI",
-    "unstable", "more than 32 lines"};
+    "unstable", "more than 256 lines", "no memory"};
 
-static void status_text(void)
+/* -> 0 when the heap has no room for the text */
+static int status_text(void)
 {
-    char *end = dl_status_text + sizeof dl_status_text, *at = dl_status_text;
-    int i, n;
+    char *end, *at;
+    int i, n = &dl_status_n ? dl_status_n : 0;
+    unsigned want;
+    if (!&dl_status || !dl_status)
+        n = 0;
+    want = STATUS_HEAD + STATUS_LINE * (unsigned)n;
+    if (want > dl_status_cap) {              /* the records are the boot's: this happens once */
+        char *t = NEW(want);
+        if (!t)
+            return 0;
+        if (dl_status_text)
+            DELETE(dl_status_text);
+        dl_status_text = t;
+        dl_status_cap = want;
+    }
+    end = dl_status_text + dl_status_cap;
+    at = dl_status_text;
     at = cat(at, end, "drive-loader route\nfolder " DL_DIR "\nlast: ");
     at = cat(at, end, dl_note[0] ? dl_note : "-");
     at = cat(at, end, "\nio:");
@@ -414,16 +434,13 @@ static void status_text(void)
     }
     if (&dl_skip_reason && dl_skip_reason) {
         at = cat(at, end, "skipped: ");
-        if (dl_skip_reason < 7)
+        if (dl_skip_reason < sizeof dl_skip_names / sizeof dl_skip_names[0])
             at = cat(at, end, dl_skip_names[dl_skip_reason]);
         else
             at = num(at, end, dl_skip_reason);
         at = cat(at, end, "\n");
     }
-    n = &dl_status_n ? dl_status_n : 0;
-    if (!&dl_status)
-        n = 0;
-    for (i = 0; i < n && i < 32; i++) {
+    for (i = 0; i < n; i++) {
         const struct dl_status_rec *s = &dl_status[i];
         char id[29];
         copy(id, s->id, 28);
@@ -435,7 +452,7 @@ static void status_text(void)
         at = num(at, end, s->code);
         at = cat(at, end, " ");
         at = num(at, end, s->arg);
-        if (&dl_detail && dl_detail[i][0]) {
+        if (&dl_detail && dl_detail && dl_detail[i][0]) {
             char d[33];
             copy(d, dl_detail[i], 32);
             d[32] = 0;
@@ -443,6 +460,7 @@ static void status_text(void)
         }
         at = cat(at, end, "\n");
     }
+    return 1;
 }
 
 /* ---- the routes ---- */
@@ -492,12 +510,14 @@ unsigned dl_entry(unsigned char *res, void **f, void **caps)
         perm = P_READ;
         c.what = C_BUILD;
     } else if (same(name, ".status")) {
+        static char no_room[] = "drive-loader route\nno memory for the status\n";
+        const char *text;
         dl_lock();
-        status_text();
+        text = status_text() ? dl_status_text : no_room;
         dl_unlock();
         put32(e + E_TYPE, TYPE_TEXT);
-        put32(e + E_ADDR, (unsigned)dl_status_text);
-        size = len(dl_status_text);
+        put32(e + E_ADDR, (unsigned)text);
+        size = len(text);
         perm = P_READ;
         c.what = C_STATUS;
     } else if (!name_ok(name)) {
@@ -588,11 +608,16 @@ static int walk(unsigned char *at, int max)
 
 /* the names of DL_DIR's files (not its folders), up to `max`, for the MODS page;
  * the caller holds dl_lock. -> how many */
+/* The files in DL_DIR (names == 0: the folder's entry count, an upper bound on them). */
 int dl_list_files(char (*names)[DL_NAME_MAX + 1], int max)
 {
     int i, n, k = 0;
     DIR_NEW(dl_dir_obj, DL_DIR, 0);
     n = DIR_COUNT(dl_dir_obj);
+    if (!names) {
+        DIR_DEL(dl_dir_obj);
+        return n;
+    }
     for (i = 0; i < n && k < max; i++) {
         unsigned sp[2] = {0, 0};
         const unsigned char *node;

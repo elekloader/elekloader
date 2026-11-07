@@ -77,8 +77,9 @@ class Device:
                                  # (link.Mod2.id_ranges, link.check)
     table_limits: dict = field(default_factory=dict)   # table -> the most entries all mods together
                                  # may add to it: the OS uses no more (link.check)
-    drive_area: tuple = (0, 0)   # (lo, hi): the +Drive mods' area a build descriptor names; a
-                                 # build with one (desc.py) keeps its own RAM below lo
+    drive_align: int = 0         # a build descriptor's +Drive mods' area (desc.py): from the
+                                 # flashed build's RAM end rounded up to this, to the top of
+                                 # the core's linker area (ddr_for); 0: the device has none
     data_family: int = 0         # the family id of the data container's header (0: not known)
     data_device: int = 0         # ... and its device id (0: not known)
     sram_code: tuple = (0, 0)    # the linker's area for .fast code

@@ -22,7 +22,8 @@ test('the build-checker: drive.py\'s results, set for set', () => {
     const build = drive.loadBuild(fromHex(V.build)!)
     assert.equal(build.label(), V.label)
     for (const c of V.cases) {
-      const r = drive.check(build, c.files.map(([n, f]: [string, any]) => [n, file(f)]))
+      const b = c.build ? drive.loadBuild(fromHex(c.build)!) : build   // a row's own build: a smaller area
+      const r = drive.check(b, c.files.map(([n, f]: [string, any]) => [n, file(f)]))
       assert.deepEqual(drive.summary(r), c.summary, c.name)
       assert.equal(drive.statusText(r), c.status, c.name)
       assert.deepEqual(drive.resultLines(r), c.lines, c.name)

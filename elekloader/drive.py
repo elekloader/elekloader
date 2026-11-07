@@ -26,14 +26,17 @@ from . import container, desc, devices, link as linker
 from .elemod import ModError, format_of, version_key
 from .link import _align, by_id, entry_key, lay_out, put_reloc
 
-MAX_MODS = 32                  # lines of /mods/active, and status records
+MAX_MODS = 256                 # lines of /mods/active, and status records
 ID_MAX = 28                    # a status record's id field (27 bytes and a NUL)
 DETAIL = 32                    # a detail string (31 bytes and a NUL)
 NAME_MAX = 64                  # a file name in /mods/active (63 bytes)
 RECORD = 32                    # a status record's bytes
-# the boot linker's own room (dlink.c): past it a mod, or the whole set, is refused with LIMIT
-SYMS, CONTRIBS, EDATA, MERGE, MDATA = 1536, 384, 4096, 256, 4096
-ARENA, LISTS, LOCALS, ERELOCS = 12288, 1536, 1024, 384
+# the boot linker's own room (dl.h DL_POOL_*, dlink.c pools()): each pool per started MB of the
+# +Drive area (at least 1), the symbols past the flashed build's own names, each capped at
+# POOL_CAP; past one a mod, or the whole set, is refused with LIMIT
+POOL_PER_MB = {'arena': 12288, 'lists': 1024, 'syms': 1024, 'locals': 1024, 'contribs': 256,
+               'edata': 2048, 'erelocs': 256}
+POOL_CAP = 0xFFF0
 INIT = 'drive_init'            # each mod's own init: void drive_init(void); never a global name
 
 # states and refusal codes (docs/FORMAT.md, "+Drive refusal codes"): the boot linker's numbers
@@ -60,11 +63,11 @@ CODES = {
     17: ('room', 'the +Drive area is {arg} KB short'),
     18: ('range', 'a 16-bit PC-relative reference is out of range'),
     19: ('limit', 'past the loader\'s own limits'),
-    20: ('count', 'more than 32 mods are chosen'),
+    20: ('count', 'more than 256 mods are chosen'),
 }
 CODE = {name: c for c, (name, _m) in CODES.items()}
 BOOT_ONLY = ('missing', 'changed')     # the host has the files it is given
-SKIPS = {0: 'none', 1: 'key', 2: 'armed', 3: 'drive', 4: 'abi', 5: 'unstable', 6: 'count'}
+SKIPS = {0: 'none', 1: 'key', 2: 'armed', 3: 'drive', 4: 'abi', 5: 'unstable', 6: 'count', 7: 'memory'}
 SKIP = {v: k for k, v in SKIPS.items()}
 NO_FIELDS = ('sites', 'collections', 'copied', 'storage', 'sharc')   # pass 1 refuses them, in order
 
@@ -113,6 +116,7 @@ class Build:
         self.globals.setdefault(desc.SYM, ('desc', 0))
         self.nsyms = sum(len(m['exports']) for m in self.modules) + sum(
             2 if len(t['name']) < 60 else 1 for t in self.tables) + 1
+        self.pools = pools(self)
         dev = next((x for x in devices.devices() if x.key == self.device_key), None)
         self.main_load = dev.main_load if dev else None
         self.image, self._ram, self.desc_at = image, None, None
@@ -152,6 +156,17 @@ class Build:
         core = self.modules[0]
         return '%s %s, %s %s, build 0x%08x' % (self.device_key, self.os, core['name'], core['version'],
                                                 self.crc)
+
+
+def pools(build):
+    """The boot linker's pools for this build, as dlink.c sizes them: {name: size}, and 'merge'
+    and 'mdata', the biggest table +Drive entries can go to (its entries and bytes)."""
+    mb = max(1, (build.hi - build.lo + 0xFFFFF) >> 20) if build.hi > build.lo else 1
+    out = {k: min(POOL_CAP, v * mb + (build.nsyms if k == 'syms' else 0)) for k, v in POOL_PER_MB.items()}
+    more = [t for t in build.tables if t['flags'] & desc.F_MORE and not t['flags'] & desc.F_DSP]
+    out['merge'] = max([t['capacity'] + 1 for t in more] or [0])
+    out['mdata'] = max([(t['capacity'] + 1) * t['entry'] for t in more] or [0])
+    return out
 
 
 def load_build(path_or_bytes, device=None):
@@ -243,7 +258,8 @@ def pass1(build, c, state):
     refused file gives back, and the names' arena and lists, which it does not. -> c.alive."""
     def keep(text):                             # a name into the arena: its bytes and a NUL
         n = len(text.encode('utf-8')) + 1
-        if state['arena'] >= ARENA or state['arena'] + n > ARENA:
+        arena = build.pools['arena']
+        if state['arena'] >= arena or state['arena'] + n > arena:
             return False
         state['arena'] += n
         return True
@@ -254,7 +270,7 @@ def pass1(build, c, state):
         if not isinstance(v, list):
             return False
         for x in v:
-            if not isinstance(x, str) or not keep(x) or state['lists'] >= LISTS:
+            if not isinstance(x, str) or not keep(x) or state['lists'] >= build.pools['lists']:
                 return False
             state['lists'] += 1
         return True
@@ -334,7 +350,7 @@ def pass1(build, c, state):
             return c.refuse('format', note='an order of %r' % (order,))
         if not n or n % build.tables[build.table[to]]['entry']:
             return c.refuse('table', to)
-        if state['contribs'] + contribs >= CONTRIBS:
+        if state['contribs'] + contribs >= build.pools['contribs']:
             return c.refuse('limit', note='contributions')
         contribs += 1
     syms = doc.get('symbols') or {}
@@ -344,7 +360,7 @@ def pass1(build, c, state):
             return c.refuse('format', note='exports %s' % x)
         if x == INIT:
             continue
-        if state['syms'] + len(exports) >= SYMS or not keep(x):
+        if state['syms'] + len(exports) >= build.pools['syms'] or not keep(x):
             return c.refuse('limit', note='symbols')
         exports.append(x)
     try:                                        # the host's own reading of the file, a last check
@@ -468,7 +484,7 @@ def _pass2(build, c, base, glob, edata):
     [(contribution, bytes, [(off, type, S + A)])]), None), or (None, (code, detail))."""
     m = c.mod
     own = {}
-    if sum(1 for sec, _off in m.symbols.values() if sec in ('abs', '.run', '.bss')) > LOCALS:
+    if sum(1 for sec, _off in m.symbols.values() if sec in ('abs', '.run', '.bss')) > build.pools['locals']:
         return None, ('limit', '')
     for nm, (sec, off) in m.symbols.items():
         if sec == 'abs':
@@ -510,12 +526,12 @@ def _pass2(build, c, base, glob, edata):
                 return None, ('range', '')
     ents = []
     for x in m.contribute:
-        if edata[0] + len(x['data']) > EDATA:
+        if edata[0] + len(x['data']) > build.pools['edata']:
             return None, ('limit', '')
         edata[0] += len(x['data'])
         rel = []
         for off, typ, tgt, add in x['relocs']:
-            if edata[1] >= ERELOCS:
+            if edata[1] >= build.pools['erelocs']:
                 return None, ('limit', '')
             v = value(tgt)
             if v is None:
@@ -537,7 +553,7 @@ def _bind(build, live, placed):
         new = [(c, x, data, rel) for c in live for x, data, rel in placed[c.id][1] if x['to'] == t['name']]
         if not new:
             continue
-        if (cnt + 1) * e > MDATA:
+        if (cnt + 1) * e > build.pools['mdata']:
             return None
         flashed = build.ram(t['address'], cnt * e)
         rows = []
@@ -550,7 +566,7 @@ def _bind(build, live, placed):
                 rows.append((entry_key(x['order'], c.id.encode('utf-8'), x['i'] << 8 | k), c.id, x['order'],
                              data[k * e:(k + 1) * e],
                              [(o - k * e, typ, v) for o, typ, v in rel if k * e <= o < (k + 1) * e]))
-        if len(rows) > MERGE:
+        if len(rows) > build.pools['merge']:
             return None
         rows.sort(key=lambda row: row[0])
         raw = bytearray()
@@ -654,9 +670,11 @@ def link(build, files):
 
 
 def records(r):
-    """The 32 status records and the 32 detail strings, as the boot linker keeps them."""
-    st, dt = bytearray(MAX_MODS * RECORD), bytearray(MAX_MODS * DETAIL)
-    for c in r.choices[:MAX_MODS]:
+    """The status records and detail strings, one each per line of the set (at most MAX_MODS), as
+    the boot linker keeps them."""
+    n = 0 if r.skip == 'count' else min(len(r.choices), MAX_MODS)   # past the limit: none
+    st, dt = bytearray(n * RECORD), bytearray(n * DETAIL)
+    for c in r.choices[:n]:
         st[c.line * RECORD:(c.line + 1) * RECORD] = c.record()
         dt[c.line * DETAIL:(c.line + 1) * DETAIL] = c.detail_bytes()
     return bytes(st), bytes(dt)
@@ -746,7 +764,7 @@ def active_text(entries):
 
 def parse_active(text):
     """`/mods/active` -> [(name, crc)], as the boot linker reads it (blank and # lines skipped, a
-    line without a CRC skipped, the name before the last run of spaces). None past 32 lines."""
+    line without a CRC skipped, the name before the last run of spaces). None past MAX_MODS lines."""
     out = []
     for ln in text.split('\n'):
         ln = ln[:-1] if ln.endswith('\r') else ln

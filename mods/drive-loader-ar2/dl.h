@@ -13,12 +13,12 @@ typedef unsigned short u16;
 typedef unsigned int u32;
 typedef int s32;
 
-#define DL_MAX_MODS 32
+#define DL_MAX_MODS 256                      /* lines of /mods/active a boot links */
 #define DL_ID_MAX 28                     /* a mod id, NUL included, as the status keeps it */
 #define DL_LINE_NAME_MAX 64                   /* a file name in /mods/active, NUL included */
 #define DL_VER_MAX 12                        /* a version as dl_check reports it, NUL included */
 
-/* ---- status records: /mods/.status and the MODS page (32 x 32 bytes) ---------------- */
+/* ---- status records: /mods/.status and the MODS page (32 bytes per /mods/active line) -- */
 struct dl_status {
     u8 state;                            /* DL_ST_* */
     u8 code;                             /* DL_R_* when refused */
@@ -50,14 +50,17 @@ enum {
     DL_R_ROOM = 17,                      /* the area is full (arg: KB over) */
     DL_R_RANGE = 18,                     /* a pc16 reference out of range */
     DL_R_LIMIT = 19,                     /* past the loader's own limits (symbols, entries) */
-    DL_R_COUNT = 20,                     /* more than 32 lines in /mods/active */
+    DL_R_COUNT = 20,                     /* more than DL_MAX_MODS lines in /mods/active */
 };
 
 /* Why nothing was linked (dl_skip_reason). */
-enum { DL_SKIP_NONE, DL_SKIP_KEY, DL_SKIP_ARMED, DL_SKIP_DRIVE, DL_SKIP_ABI, DL_SKIP_UNSTABLE, DL_SKIP_COUNT };
+enum { DL_SKIP_NONE, DL_SKIP_KEY, DL_SKIP_ARMED, DL_SKIP_DRIVE, DL_SKIP_ABI, DL_SKIP_UNSTABLE, DL_SKIP_COUNT,
+       DL_SKIP_MEMORY };
 
-extern struct dl_status dl_status[DL_MAX_MODS];
-extern char dl_detail[DL_MAX_MODS][32];  /* the refusal's name argument, NUL-terminated */
+/* dl_link's records, one per line of the set it was given (dl_status_n), taken from the heap
+ * by dl_link and kept until the next dl_link (0 before the first). */
+extern struct dl_status *dl_status;
+extern char (*dl_detail)[32];            /* the refusal's name argument, NUL-terminated */
 extern u32 dl_status_n;
 extern u8 dl_skip_reason;
 
@@ -83,6 +86,11 @@ static inline u16 dl_rd16(const u8 *p) { return (u16)(p[0] << 8 | p[1]); }
 static inline void dl_wr32(u8 *p, u32 v) { p[0] = v >> 24; p[1] = v >> 16; p[2] = v >> 8; p[3] = v; }
 static inline void dl_wr16(u8 *p, u32 v) { p[0] = v >> 8; p[1] = v; }
 
+/* Heap memory (the unit: stock's operator new and delete; the host: calloc and free).
+ * dl_alloc zeroes what it gives, and gives 0 when there is none; dl_free(0) does nothing. */
+void *dl_alloc(u32 n);
+void dl_free(void *p);
+
 void dl_memcpy(void *d, const void *s, u32 n);
 void dl_memset(void *d, int c, u32 n);
 int dl_strcmp(const char *a, const char *b);
@@ -100,29 +108,45 @@ struct dl_choice {
     char name[DL_LINE_NAME_MAX];
     u32 crc;
 };
-/* Link the chosen files (in /mods/active order) against the build descriptor at `desc`,
- * using `buf` (max bytes) to hold one file at a time. Fills the status records. Writes the
- * area and the tables. -> the number of mods loaded. */
+/* Link the chosen files (in /mods/active order, n <= DL_MAX_MODS) against the build
+ * descriptor at `desc`, using `buf` (max bytes) to hold one file at a time. Fills the status
+ * records (n of them, from the heap). Writes the area and the tables. -> the number of mods
+ * loaded. Its working memory (the mods, the pools, the symbol buckets) comes from the heap
+ * for the call and goes back after it: DL_SKIP_MEMORY when there is none. */
 int dl_link(u32 desc, const struct dl_choice *choice, int n, u8 *buf, u32 max);
 
 /* After dl_link: each loaded mod's drive_init (0 if it has none), in id order, and the
  * range the linker wrote, for the cache flush. */
-extern u32 dl_inits[DL_MAX_MODS];
+extern u32 *dl_inits;                    /* dl_status_n of them, from the heap */
 extern u32 dl_inits_n;
 extern u32 dl_used_lo, dl_used_hi;
 
 /* The MODS page's check of a set (design steps 4 to 6: pass 1, the checks, the layout),
- * which writes nothing but its own records: st and det (DL_MAX_MODS each) as dl_status
- * and dl_detail, with DL_ST_LOADED for a mod that would load, and each file's version
- * (ver may be 0). Pass 2's own refusals aren't seen. -> how many would load, -1 when the
- * descriptor isn't one the loader reads. */
+ * which writes nothing but its own records: st and det (n each, n <= DL_MAX_MODS) as
+ * dl_status and dl_detail, with DL_ST_LOADED for a mod that would load, and each file's
+ * version (ver may be 0). Pass 2's own refusals aren't seen. -> how many would load, -1 when
+ * the descriptor isn't one the loader reads or the heap has no room for the check. */
 int dl_check(u32 desc, const struct dl_choice *choice, int n, u8 *buf, u32 max,
              struct dl_status *st, char (*det)[32], char (*ver)[DL_VER_MAX]);
 
-/* The set the boot linked, in /mods/active order: dl_status[i] is dl_boot_choice[i]'s. */
-extern struct dl_choice dl_boot_choice[DL_MAX_MODS];
+/* The set the boot linked, in /mods/active order: dl_status[i] is dl_boot_choice[i]'s
+ * (dl_status_n of them, from the heap; 0 when the boot linked nothing). */
+extern struct dl_choice *dl_boot_choice;
 
-/* /mods/active -> choices. -> the count, or -1 past 32 lines. */
+/* /mods/active -> choices (out == 0: only count them). -> the count, or -1 past DL_MAX_MODS
+ * lines. */
 int dl_parse_active(const char *text, u32 len, struct dl_choice *out);
+
+/* The linker's pools, sized to the +Drive area (docs/FORMAT.md, "+Drive mods"): per started
+ * MB of the area (at least 1), each capped where its 16-bit index ends. The host twin
+ * (elekloader/drive.py, pools()) has the same table. */
+#define DL_POOL_ARENA 12288                  /* name bytes: ids, requires, imports... */
+#define DL_POOL_LISTS 1024                   /* names in lists */
+#define DL_POOL_SYMS 1024                    /* +Drive exports (past the flashed build's names) */
+#define DL_POOL_LOCALS 1024                  /* one file's own symbols, in pass 2 */
+#define DL_POOL_CONTRIBS 256                 /* +Drive table contributions */
+#define DL_POOL_EDATA 2048                   /* their bytes */
+#define DL_POOL_ERELOCS 256                  /* their relocations */
+#define DL_POOL_CAP 0xFFF0                   /* every pool's most */
 
 #endif

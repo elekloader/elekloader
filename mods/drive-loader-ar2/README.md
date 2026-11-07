@@ -102,6 +102,22 @@ start and the UI task haven't run, so nothing reads the tables the link rewrites
   staging buffer and works from `core_desc` only: pass 1, the checks in id order, the layout,
   pass 2 and the tables' merge. A pass-2 refusal starts the checks again without that mod. It
   writes the status records `/mods/.status` shows.
+- **Limits and memory.** Up to 256 lines of `/mods/active` (`DL_MAX_MODS`); past that nothing
+  loads (`count`). Nothing the boot keeps per line is in `.bss`: it reads `/mods/active` whole
+  into the heap (stock's operator new, `0x40082a40`, set up and in use by `main()`'s static
+  constructors before the site), counts its lines, and takes the set, the status records, the
+  detail strings and the init list from the heap for that many. The link's working memory (the
+  mods, the names, the symbols and their hash buckets, the entries) is also taken from the
+  heap, sized to the +Drive area (docs/FORMAT.md, "+Drive mods": about 270 KB for the Rytm's
+  4.3 MB area) and given back when the link returns; the MODS page's checks do the same. When
+  the heap has no room the boot skips (`memory`, `NO MEMORY`).
+- **The area** is what the flashed build leaves of core 0.11's: from the build's RAM end (this
+  loader's own `.bss`, the 512 KB staging buffer, included) rounded up to 4 KB, to 0x47FFF000.
+  The descriptor's area record names it; the loader reads it from there.
+- **Lookups.** Global names (the build's exports, the tables, `NAME_n` and the mods' exports)
+  are found through hash buckets built after pass 1, each chain in the order the names were
+  added, so a lookup finds what a scan in order would and the boot stays near linear in the
+  number of mods.
 - **The cache.** `dl_flush` pushes every data-cache line by set and way (the V4's CPUSHL takes
   an index, not an address), then sets CACR to `0xA40CE100`: stock's value without DCINVA.
 - **The crash guard.** With a mod loaded, it writes `/mods/.armed`, calls each `drive_init` in
@@ -159,7 +175,13 @@ The page is stock's two-pane file view, the one SAMPLES and PROJECTS are built o
   `..`, VIEW RAM its 128 slots).
 - **Messages** are stock's message box: on opening, why the boot skipped the mods
   (`SKIPPED: [NO] HELD`, `SKIPPED: CRASH`, `NO +DRIVE`, ...); after a
-  change, `SAVE FAILED` or `BUSY: TRY AGAIN`.
+  change, `SAVE FAILED`, `BUSY: TRY AGAIN` or `OVER 256 MODS` (a build of more than the boot
+  links); `NO MEMORY` when the heap has no room for the list.
+- **No file limit.** The list grows like SAMPLES' (decided 2026-11-07): the page takes its
+  per-file arrays from the heap when it reads the folder, sized to the folder's count, and gives
+  them back at the next read. Each file is checked alone for its own verdict (id, version, a
+  refusal of the file itself), so no number of files reaches a set's limits; opening reads each
+  file twice (its CRC, then the check).
 - **The boot's verdicts** come from the boot's own records, matched by file name
   (`dl_boot_choice`), so a second file with a loaded mod's id isn't shown as loaded.
 - **Reading files.** The page reads each file into the staging buffer, which it takes only

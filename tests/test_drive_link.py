@@ -19,11 +19,11 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(HERE))
 sys.path.insert(0, HERE)
 
-from elekloader import desc, link                                # noqa: E402
+from elekloader import desc, drive, link                         # noqa: E402
 from test_link_refusals import Bench                             # noqa: E402
 
 SRC = os.path.join(os.path.dirname(HERE), 'mods', 'drive-loader-ar2')
-AREA = 0x47D00000
+AREA = None                              # the build's +Drive area start, from its descriptor
 
 
 def build_host(work):
@@ -140,6 +140,10 @@ def main():
 
     with Bench('analog-rytm-mk2') as B:
         F = Flashed(B)
+        global AREA
+        AREA = F.d['area'][1]
+        check("the area: the build's RAM end, from 4 KB, to core 0.11's top",
+              F.d['area'][1:3] == (link._align(F.d['area'][0], 0x1000), 0x47FFF000), F.d['area'])
         flm_fn = F.out.map['flm:fn_flm']
         x0 = F.table_words(F.ram, 'ev_x')
         check('descriptor: ev_x has 1 entry and 16 spare', F.tables['ev_x']['count'] == 1
@@ -245,7 +249,7 @@ def main():
         refused('a full table (the later)', drive_mod(B, 'zfull', contribute=[
             {'to': 'ev_y', 'order': 1, 'data': '00000000'}]), 16, detail='ev_y',
             extra=[drive_mod(B, 'afull', contribute=[{'to': 'ev_y', 'order': 1, 'data': '00000000'}])])
-        refused('no room', drive_mod(B, 'zroom', sections={'.bss': {'size': 3 * 1024 * 1024}}), 17)
+        refused('no room', drive_mod(B, 'zroom', sections={'.bss': {'size': F.d['area'][2] - AREA + 1}}), 17)
         refused('a pc16 out of range', drive_mod(B, 'pc', imports=['core_fn'],
                                                  relocs=[['.run', 0, 'pc16', 'sym:core_fn', 0]]), 18)
         refused('a changed file', drive_mod(B, 'chg'), 2,
@@ -262,8 +266,12 @@ def main():
                    % (gcrc, zlib.crc32(tdata)), extra_files={'good2.elemod': tdata})
         check('refuses a second file with the same id', [(x['state'], x['code']) for x in s['status']]
               == [(1, 0), (2, 8)], s)
-        s, _ = run(exe, F, [good], work, active=''.join('m%d.elemod 0\n' % i for i in range(33)))
-        check('more than 32 lines: nothing', s.get('skip') == 'count', s)
+        s, _ = run(exe, F, [good], work, active=''.join('m%d.elemod 0\n' % i for i in range(257)))
+        check('more than 256 lines: nothing', s.get('skip') == 'count', s)
+        s, _ = run(exe, F, [good], work, active=''.join('m%d.elemod 0\n' % i for i in range(256)))
+        check('256 lines: a record each', s.get('skip') == 0 and len(s['status']) == 256
+              and all((x['state'], x['code']) == (3, 1) for x in s['status'])
+              and s['status'][255]['id'] == 'm255.elemod', s.get('skip'))
         big = drive_mod(B, 'big')
         refused('a file over 512 KB', big, 3, raw={'big': (json.dumps(big) + ' ' * (512 * 1024)).encode()})
         refused('broken JSON', drive_mod(B, 'bj'), 4, raw={'bj': b'{"elemod": 2, "id": "bj",'})
@@ -287,6 +295,27 @@ def main():
         s, ram = run(exe, F, [base], work)
         check('a pass-2 refusal with nothing loaded leaves the area zero',
               s['loaded'] == 0 and not any(area(F, ram, 4096)), s)
+
+        # 256 mods, each importing the one before it (found through the symbols' buckets),
+        # in reverse /mods/active order: all load, linked as the host twin links them
+        chain = []
+        for i in range(256):
+            m = drive_mod(B, 'p%03d' % i, contribute=[],
+                          sections={'.run': {'align': 4, 'len': 8, 'parts': [['hex', '4e714e7100000000']]},
+                                    '.bss': {'size': 16}})
+            if i:
+                m['imports'] = ['fn_p%03d' % (i - 1)]
+                m['relocs'] = [['.run', 4, 'abs32', 'sym:fn_p%03d' % (i - 1), 0]]
+            chain.append(m)
+        s, ram = run(exe, F, chain[::-1], work)
+        runs = area(F, ram, 8 * 256)
+        words = [struct.unpack('>I', runs[8 * i + 4:8 * i + 8])[0] for i in range(256)]
+        check('256 mods load', s['loaded'] == 256 and all(x['state'] == 1 for x in s['status']), s.get('skip'))
+        check('256 mods: each word is the one before it', list(words[1:]) == [AREA + 8 * i for i in range(255)])
+        files = [(m['id'] + '.elemod', (json.dumps(m, indent=1) + '\n').encode()) for m in chain[::-1]]
+        twin = drive.link(drive.load_build(F.out.image), files)
+        check('256 mods: the twin writes the same area',
+              twin.area == bytes(area(F, ram, len(twin.area))) and len(twin.live) == 256)
 
         # the boot's time (dl.h, dl_bus_us): bus ticks at 132 MHz to ﾂｵs, across DTIM0's wrap
         src = os.path.join(work, 'bus_us.c')

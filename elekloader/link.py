@@ -908,6 +908,15 @@ def link(mods, image, lock=None, *, sharc_stream=None):
     index = {m.id: i for i, m in enumerate(order)}
     trailer_len = len(store.trailer(new_lock)) if new_lock is not None else 0
 
+    def drive_area(ram_end):
+        """The +Drive mods' area a descriptor names: what the flashed build leaves of the core's
+        linker area, from its RAM end rounded up to the device's drive_align (docs/FORMAT.md,
+        "+Drive mods"); (0, 0) on a device without one."""
+        if not dev.drive_align:
+            return (0, 0)
+        lo = _align(ram_end, dev.drive_align)
+        return (min(lo, ddr_end), ddr_end)
+
     def desc_fields(where):
         """The descriptor's fields; `where` (a function of the layout) gives the addresses, or None:
         all 0, to size the block."""
@@ -938,8 +947,8 @@ def link(mods, image, lock=None, *, sharc_stream=None):
                 'device_key': dev.key,
                 'os': rel.version, 'modules': mods, 'tables': tabs,
                 'claims': [(desc.CLAIM_NAME, index[m.id], nm) for m in order for nm in m.names],
-                'area': (w('bss_end'), dev.drive_area[0], dev.drive_area[1],
-                         w('glob', desc.STAGING[0]), w('glob', desc.STAGING[1])),
+                'area': (w('bss_end'),) + drive_area(w('bss_end'))
+                         + (w('glob', desc.STAGING[0]), w('glob', desc.STAGING[1])),
                 'storage': {'trailer': (w('trailer'), trailer_len), 'scopes': scopes}}
     desc_at = desc_len = None
     if with_desc:
@@ -974,9 +983,6 @@ def link(mods, image, lock=None, *, sharc_stream=None):
                        % (bss_end, ddr_end, bss_end - ddr_end,
                           '; core %s or newer gives them %d bytes' % (more[0][0], more[0][1][1] - more[0][1][0])
                           if more else ''))
-    if with_desc and dev.drive_area[1] > dev.drive_area[0] and bss_end > dev.drive_area[0]:
-        raise ModError('the flashed mods need RAM to 0x%08x, past the start of the +Drive mods\' area, '
-                       '0x%08x (%d bytes over)' % (bss_end, dev.drive_area[0], bss_end - dev.drive_area[0]))
     if fast_at > fast_end:
         raise ModError('.fast code needs SRAM to 0x%08x, past 0x%08x' % (fast_at, fast_end))
     run_load = _align(image_end + boot_len, 16)

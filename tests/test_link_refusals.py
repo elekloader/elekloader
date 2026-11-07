@@ -935,20 +935,6 @@ def _(B):
                   lambda d: (late(d), loader(d)), late)
 
 
-@row('link', "the flashed mods need RAM to 0x<>, past the start of the +Drive mods' area, 0x<> (<> bytes over)",
-     device='analog-rytm-mk2')
-def _(B):
-    def big(n):
-        def edit(d):
-            d[0]['version'] = '0.11'            # core_ddr: 0x47B10000..0x47FFF000; 0x144 bytes of
-            #                                     code, tables (16 spare entries) and descriptor first
-            d[1]['sections']['.bss']['size'] = n
-            loader(d)
-        return edit
-    return B.pair("the flashed mods need RAM to 0x47d00010, past the start of the +Drive mods' area, "
-                  "0x47d00000 (16 bytes over)", big(0x1F0000 - 0x134), big(0x1F0000 - 0x144))
-
-
 def both(B, first, last):
     """One mod's core_params and core_param_locks entries for the same ids: allowed."""
     d = answering(B, first, last)
@@ -1059,7 +1045,7 @@ def test_digitakt_fixtures():
 
 
 def test_analog_rytm_fixtures():
-    assert run_rows('analog-rytm-mk2') == 17
+    assert run_rows('analog-rytm-mk2') == 16
 
 
 def test_the_lfo_destination_field_is_placed_only_with_an_lfo_field():
@@ -1394,7 +1380,8 @@ def test_the_build_descriptor():
         assert ids['flags'] == 0 and ids['capacity'] == ids['count'] == 1
         assert ids['keys'] == [desc.LINKER_ORDER << 16 | 0]
         assert d['claims'] == [(desc.CLAIM_NAME, 1, 'sysex:7d')]
-        assert d['area'] == (out.layout['bss'][1], 0x47D00000, 0x47FFF000, 0, 0x80000)
+        end = out.layout['bss'][1]           # the +Drive area: the rest of core 0.11's, from 4 KB
+        assert d['area'] == (end, link._align(end, 0x1000), 0x47FFF000, 0, 0x80000)
         kit = [s for s in d['storage']['scopes'] if s[0] == 'kit'][0]
         assert kit[2] == 5 and kit[3] == 1
         tr = d['storage']['trailer']

@@ -30,6 +30,16 @@ u8 *dl_host_mem(u32 a)
     exit(3);
 }
 
+void *dl_alloc(u32 n)
+{
+    return calloc(n ? n : 1, 1);
+}
+
+void dl_free(void *p)
+{
+    free(p);
+}
+
 static u8 *slurp(const char *path, u32 *n)
 {
     FILE *f = fopen(path, "rb");

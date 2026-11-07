@@ -288,9 +288,12 @@ image>` prints it.
   the `.fast` copy table and DSP tables. `NAME_n` stays the count of
   entries the build has. The spare entries and the block count toward
   the RAM budget.
-- **The RAM line.** On a device whose profile names a +Drive mods' area
-  (`drive_area`: the Analog Rytm MKII's is 0x47D00000 to 0x47FFF000), the
-  flashed build's RAM must end below its start.
+- **The +Drive area.** On a device whose profile has `drive_align` (the
+  Analog Rytm MKII's is 4 KB), the +Drive mods' area is what the flashed
+  build leaves of the core's linker area: from the build's RAM end (its
+  last `.bss`, the Drive Loader's own included) rounded up to `drive_align`,
+  to the top of that area (0x47FFF000 with core-ar2 0.11). A bigger flashed
+  build leaves a smaller area; the linker's own RAM limit is the only cap.
 - **Orders.** Each entry's sort key is kept as `order << 16 | module`, so
   an order must be 0 to 65,534. The linker's own entries (storage,
   payloads, `.fast` copies) have order 65,535.
@@ -349,7 +352,7 @@ order; it is never a global name. Its id is under 28 bytes.
 **`/mods/active`** lists the chosen files, one line each: the file name, a
 space, its CRC-32 (zlib's, as 8 hex digits; `0x` is optional). Blank lines,
 `#` lines and lines without a CRC are skipped; the name is everything
-before the last run of spaces, under 64 bytes. More than 32 lines and
+before the last run of spaces, under 64 bytes. More than 256 lines and
 nothing loads.
 
 **The link**, in this order:
@@ -387,10 +390,21 @@ nothing loads.
    at their final address, then zero entries to capacity + 1. Other tables
    are not touched.
 
-**Status records**: 32 of 32 bytes, one a line of `/mods/active`: u8
-state, u8 code, u16 argument, then the id (the file name until pass 1
-reads the mod's id), NUL-padded to 28 bytes; and beside them 32 detail
-strings of 32 bytes (a name the refusal is about, NUL-terminated).
+**Status records**: one of 32 bytes for each line of `/mods/active` (none
+past 256 lines): u8 state, u8 code, u16 argument, then the id (the file
+name until pass 1 reads the mod's id), NUL-padded to 28 bytes; and beside
+them a detail string of 32 bytes each (a name the refusal is about,
+NUL-terminated). The loader takes them from the heap at boot, sized to the
+lines.
+
+**The loader's room**: the link's working memory comes from the heap for
+the link and goes back after it. Its pools are sized to the area, per
+started MB of it (at least 1), each at most 65,520: 12,288 bytes of names
+and 1,024 list items over all files (a refused file keeps its share of
+these two), 1,024 global names past the flashed build's own, 1,024 symbols
+in one file, 256 entries and 2,048 bytes of them with 256 relocations. A
+merge has room for the biggest table +Drive entries can go to. Global names
+are found through hash buckets, in the order a scan would find them.
 
 #### +Drive refusal codes
 
@@ -422,8 +436,8 @@ strings of 32 bytes (a name the refusal is about, NUL-terminated).
 | 16 | `full` | argument: the table's spare entries; detail: the table |
 | 17 | `room` | argument: KB over the area, rounded up |
 | 18 | `range` | a `pc16` out of range |
-| 19 | `limit` | past the loader's own room: 1536 global names, 384 entries and 4096 bytes of them with 384 relocations, 12 KB of names and 1536 list items over all files (a refused file keeps its share of these two), 1024 symbols in one file, or a merge past 256 entries or 4096 bytes |
-| 20 | `count` | more than 32 lines in `/mods/active` |
+| 19 | `limit` | past the loader's own room (above) |
+| 20 | `count` | more than 256 lines in `/mods/active` |
 
 When nothing is linked, the loader keeps why:
 
@@ -436,6 +450,7 @@ When nothing is linked, the loader keeps why:
 | 4 | `abi` (another descriptor ABI major) |
 | 5 | `unstable` (the check never settled, or a merge passed the loader's room) |
 | 6 | `count` |
+| 7 | `memory` (the heap had no room for the records or the link) |
 
 #### The data container
 

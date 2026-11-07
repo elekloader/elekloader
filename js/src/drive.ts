@@ -14,13 +14,15 @@ import { JSONDecodeError, UnicodeDecodeError, decodeUtf8, loads } from './pyjson
 import { repr, str, truthy } from './py.ts'
 import { crc32 } from './zip.ts'
 
-export const MAX_MODS = 32                 // lines of /mods/active, and status records
+export const MAX_MODS = 256                // lines of /mods/active, and status records
 export const ID_MAX = 28                   // a status record's id field (27 bytes and a NUL)
 export const DETAIL = 32                   // a detail string (31 bytes and a NUL)
 export const NAME_MAX = 64                 // a file name in /mods/active (63 bytes)
 export const RECORD = 32
-// the boot linker's own room (dlink.c): past it a mod, or the whole set, is refused with LIMIT
-export const SYMS = 1536, CONTRIBS = 384, ARENA = 12288, LISTS = 1536
+// the boot linker's own room (dl.h DL_POOL_*, dlink.c pools()): each pool per started MB of the +Drive area (at least
+// 1), the symbols past the flashed build's own names, each capped at POOL_CAP; past one a mod is refused with LIMIT
+export const POOL_PER_MB = { arena: 12288, lists: 1024, syms: 1024, contribs: 256 }
+export const POOL_CAP = 0xfff0
 export const INIT = 'drive_init'
 
 export const NONE = 0, LOADED = 1, REFUSED = 2, DROPPED = 3
@@ -46,10 +48,10 @@ export const CODES: [string, string][] = [
   ['room', 'the +Drive area is {arg} KB short'],
   ['range', 'a 16-bit PC-relative reference is out of range'],
   ['limit', 'past the loader\'s own limits'],
-  ['count', 'more than 32 mods are chosen'],
+  ['count', 'more than 256 mods are chosen'],
 ]
 export const CODE: Record<string, number> = Object.fromEntries(CODES.map(([n], i) => [n, i]))
-export const SKIPS = ['none', 'key', 'armed', 'drive', 'abi', 'unstable', 'count']
+export const SKIPS = ['none', 'key', 'armed', 'drive', 'abi', 'unstable', 'count', 'memory']
 export const NO_FIELDS = ['sites', 'collections', 'copied', 'storage', 'sharc']
 const RSIZE: Record<string, number> = { abs32: 4, pc32: 4, pc16: 2 }
 
@@ -91,6 +93,7 @@ export class Build {
   ramEnd: number; lo: number; hi: number; staging: number; stagingSize: number
   globals: Map<string, Global>
   nsyms: number
+  pools: Record<keyof typeof POOL_PER_MB, number>
 
   constructor(d: desc.Decoded) {
     this.d = d
@@ -111,6 +114,9 @@ export class Build {
     put(desc.SYM, ['desc', 0])
     this.nsyms = d.modules.reduce((n, m) => n + m.exports.length, 0)
       + d.tables.reduce((n, t) => n + ([...t.name].length < 60 ? 2 : 1), 0) + 1
+    const mb = this.hi > this.lo ? Math.max(1, Math.floor((this.hi - this.lo + 0xfffff) / 0x100000)) : 1
+    const pool = (k: keyof typeof POOL_PER_MB) => Math.min(POOL_CAP, POOL_PER_MB[k] * mb + (k === 'syms' ? this.nsyms : 0))
+    this.pools = { arena: pool('arena'), lists: pool('lists'), syms: pool('syms'), contribs: pool('contribs') }
   }
 
   label(): string {
@@ -204,7 +210,8 @@ type State = { syms: number; contribs: number; arena: number; lists: number }
 export function pass1(build: Build, c: Choice, state: State): boolean {
   const keep = (text: string) => {
     const n = ulen(text) + 1
-    if (state.arena >= ARENA || state.arena + n > ARENA) return false
+    const arena = build.pools.arena
+    if (state.arena >= arena || state.arena + n > arena) return false
     state.arena += n
     return true
   }
@@ -212,7 +219,7 @@ export function pass1(build: Build, c: Choice, state: State): boolean {
     if (v === null || v === undefined) return true
     if (!Array.isArray(v)) return false
     for (const x of v) {
-      if (typeof x !== 'string' || !keep(x) || state.lists >= LISTS) return false
+      if (typeof x !== 'string' || !keep(x) || state.lists >= build.pools.lists) return false
       state.lists++
     }
     return true
@@ -274,7 +281,7 @@ export function pass1(build: Build, c: Choice, state: State): boolean {
     const o = order as number
     if (!(o >= 0 && o < desc.LINKER_ORDER)) return c.refuse('format', '', 0, `an order of ${repr(order)}`)
     if (!n || n % build.tables[build.table.get(to)!].entry) return c.refuse('table', to)
-    if (state.contribs + contribs >= CONTRIBS) return c.refuse('limit', '', 0, 'contributions')
+    if (state.contribs + contribs >= build.pools.contribs) return c.refuse('limit', '', 0, 'contributions')
     contribs++
   }
   const syms = truthy(g(doc, 'symbols')) ? doc.symbols : {}
@@ -282,7 +289,7 @@ export function pass1(build: Build, c: Choice, state: State): boolean {
   for (const x of each(truthy(g(doc, 'exports')) ? doc.exports : [])) {
     if (typeof x !== 'string' || !isDict(syms) || !(x in syms) || !symbol(syms[x])) return c.refuse('format', '', 0, `exports ${str(x)}`)
     if (x === INIT) continue
-    if (state.syms + exports.length >= SYMS || !keep(x)) return c.refuse('limit', '', 0, 'symbols')
+    if (state.syms + exports.length >= build.pools.syms || !keep(x)) return c.refuse('limit', '', 0, 'symbols')
     exports.push(x)
   }
   let m: Mod2
@@ -461,7 +468,7 @@ export function activeText(entries: [string, Uint8Array][]): string {
   return entries.map(([n, raw]) => `${n} ${fileCrc(raw).toString(16).padStart(8, '0')}\n`).join('')
 }
 
-/** `/mods/active` -> [[name, crc]], as the boot linker reads it; null past 32 lines. drive.parse_active. */
+/** `/mods/active` -> [[name, crc]], as the boot linker reads it; null past MAX_MODS lines. drive.parse_active. */
 export function parseActive(text: string): [string, number][] | null {
   const out: [string, number][] = []
   for (let ln of text.split('\n')) {

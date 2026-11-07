@@ -16,16 +16,10 @@
  * computer in tests. */
 #include "json.h"
 
-/* ---- the link state: one block in .bss (64 KB) ------------------------------------------ */
-#define ARENA 12288                      /* names: ids, requires, imports... */
-#define LISTS 1536                       /* arena offsets of the names in lists */
-#define SYMS 1536                        /* flashed and +Drive exports, table names */
-#define LOCALS 1024                      /* one file's own symbols, in pass 2 */
-#define CONTRIBS 384                     /* +Drive table contributions */
-#define EDATA 4096                       /* their bytes */
-#define ERELOCS 384                      /* their relocations */
-#define MERGE 256                        /* one table's entries while it is merged */
-#define MDATA 4096                       /* and their bytes */
+/* ---- the link state ------------------------------------------------------------------------
+ * The header lives in .bss; the mods and the pools come from the heap for each dl_link and
+ * dl_check, sized to the set (the mods) and to the +Drive area (the pools, dl.h DL_POOL_*),
+ * and go back when it returns. The merge's room is the descriptor's biggest table. */
 
 enum { SEC_ABS, SEC_RUN, SEC_BSS, SEC_TABLE, SEC_COUNT };
 enum { R_ABS32, R_PC32, R_PC16 };
@@ -99,30 +93,35 @@ static struct {
     u32 pool;                            /* its string pool's offset */
     u32 area_lo, area_hi;
     int nmods;
-    struct dmod mods[DL_MAX_MODS];
-    u8 order[DL_MAX_MODS];               /* mods by id */
+    struct dmod *mods;                   /* n of them */
+    u16 *order;                          /* mods by id */
     u32 arena_n, lists_n, nsyms, nlocals, nctr, nent, edata_n, nerel;
     u32 flashed_syms;
-    char arena[ARENA];
-    u16 lists[LISTS];
-    struct sym syms[SYMS];
-    struct local locals[LOCALS];
-    struct contrib ctr[CONTRIBS];
-    struct entry ent[CONTRIBS];
-    u8 edata[EDATA];
-    struct erel erel[ERELOCS];
-    struct item items[MERGE];
-    u8 mdata[MDATA];
+    /* the pools' sizes (dl.h, DL_POOL_*; the merge's from the descriptor) */
+    u32 ARENA, LISTS, SYMS, LOCALS, CONTRIBS, EDATA, ERELOCS, MERGE, MDATA;
+    char *arena;
+    u16 *lists;
+    struct sym *syms;
+    u16 *sym_next;                       /* the symbols' buckets: chains in insertion order */
+    u16 *sym_head;
+    u32 sym_mask;
+    struct local *locals;
+    struct contrib *ctr;
+    struct entry *ent;
+    u8 *edata;
+    struct erel *erel;
+    struct item *items;
+    u8 *mdata;
     struct dl_status *st;                /* where the records go: dl_status, or a check's */
     char (*det)[32];
     u32 crc_table[256];
 } L;
 
-struct dl_status dl_status[DL_MAX_MODS];
-char dl_detail[DL_MAX_MODS][32];
+struct dl_status *dl_status;
+char (*dl_detail)[32];
 u32 dl_status_n;
 u8 dl_skip_reason;
-u32 dl_inits[DL_MAX_MODS];
+u32 *dl_inits;
 u32 dl_inits_n;
 u32 dl_used_lo, dl_used_hi;
 
@@ -188,9 +187,9 @@ static const char *astr(u16 off) { return off == NONE ? "" : L.arena + off; }
 static u16 keep(const char *s, u32 n)
 {
     s32 k;
-    if (L.arena_n >= ARENA)
+    if (L.arena_n >= L.ARENA)
         return NONE;
-    k = js_unescape(s, n, L.arena + L.arena_n, ARENA - L.arena_n);
+    k = js_unescape(s, n, L.arena + L.arena_n, L.ARENA - L.arena_n);
     if (k < 0)
         return NONE;
     L.arena_n += k + 1;
@@ -260,7 +259,7 @@ static int flashed_module(const char *name)
 /* ---- symbols ---------------------------------------------------------------------------- */
 static int add_sym(u32 hash, u16 owner, u8 sec, u32 val)
 {
-    if (L.nsyms >= SYMS)
+    if (L.nsyms >= L.SYMS)
         return 0;
     L.syms[L.nsyms].name = NONE;
     L.syms[L.nsyms].hash = hash;
@@ -294,11 +293,28 @@ static u32 sym_value(const struct sym *s)
     return (s->sec == SEC_RUN ? m->run_base : m->bss_base) + s->val;
 }
 
+/* The first symbol in a hash's bucket (NONE: none); each chain is in insertion order. */
+static u32 sym_first(u32 hash) { return L.sym_head[hash & L.sym_mask]; }
+
+/* After pass 1, the only time symbols are added or given back: each symbol into its
+ * bucket, insertion order kept in each chain, so a lookup sees what a scan in order would. */
+static void hash_syms(void)
+{
+    u32 i;
+    for (i = 0; i <= L.sym_mask; i++)
+        L.sym_head[i] = NONE;
+    for (i = L.nsyms; i-- > 0;) {
+        u32 b = L.syms[i].hash & L.sym_mask;
+        L.sym_next[i] = L.sym_head[b];
+        L.sym_head[b] = (u16)i;
+    }
+}
+
 /* A global name, among the flashed build's and the living +Drive mods' (flashed first). */
 static const struct sym *global(u32 hash)
 {
     u32 i;
-    for (i = 0; i < L.nsyms; i++)
+    for (i = sym_first(hash); i != NONE; i = L.sym_next[i])
         if (L.syms[i].hash == hash && (L.syms[i].owner == FLASHED || L.mods[L.syms[i].owner].alive))
             return &L.syms[i];
     return 0;
@@ -451,7 +467,7 @@ static int read_list(const char *p, const u8 *buf, u32 len, struct list *l)
     if (!js_open(&j, '['))
         return 0;
     while (js_next(&j, ']', &first)) {
-        if (!js_str(&j, &s, &n) || (o = keep(s, n)) == NONE || L.lists_n >= LISTS)
+        if (!js_str(&j, &s, &n) || (o = keep(s, n)) == NONE || L.lists_n >= L.LISTS)
             return 0;
         L.lists[L.lists_n++] = o;
         l->n++;
@@ -787,7 +803,7 @@ static int scan(struct dmod *m, const u8 *buf, u32 len, const char **what)
                 *what = table_name(t);
                 return DL_R_TABLE;
             }
-            if (L.nctr >= CONTRIBS)
+            if (L.nctr >= L.CONTRIBS)
                 return DL_R_LIMIT;
             c = &L.ctr[L.nctr++];
             c->table = (u16)t;
@@ -932,7 +948,7 @@ static int check_round(void)
             u32 e, x;
             for (e = 0; e < m->exp_n; e++) {
                 const struct sym *s = &L.syms[m->exp_first + e];
-                for (x = 0; x < L.nsyms; x++) {
+                for (x = sym_first(s->hash); x != NONE; x = L.sym_next[x]) {
                     const struct sym *g = &L.syms[x];
                     if (g->hash != s->hash || g == s)
                         continue;
@@ -945,7 +961,7 @@ static int check_round(void)
                     if (k < i)
                         break;
                 }
-                if (x < L.nsyms)
+                if (x != NONE)
                     break;
             }
             if (e < m->exp_n) {
@@ -1141,7 +1157,7 @@ static int place(struct dmod *m, const u8 *buf, u32 len, const char **what)
             js_next(&j, ']', &f2);
             if (sec == 0xF)              /* a section it may not have: no reference can use it */
                 continue;
-            if (L.nlocals >= LOCALS)
+            if (L.nlocals >= L.LOCALS)
                 return DL_R_LIMIT;
             L.locals[L.nlocals].hash = h;
             L.locals[L.nlocals].val = (u32)v;
@@ -1223,7 +1239,7 @@ static int place(struct dmod *m, const u8 *buf, u32 len, const char **what)
             int f2 = 1;
             struct entry *e;
             const struct contrib *c = &L.ctr[m->ctr_first + ci];
-            if (L.nent >= CONTRIBS)
+            if (L.nent >= L.CONTRIBS)
                 return DL_R_LIMIT;
             e = &L.ent[L.nent];
             e->mod = (u16)(m - L.mods);
@@ -1236,9 +1252,9 @@ static int place(struct dmod *m, const u8 *buf, u32 len, const char **what)
                 js_key(&j, &s, &n);
                 if (js_eq(s, n, "data")) {
                     u32 dn;
-                    if (L.edata_n + (u32)c->nent * table_entry(c->table) > EDATA)
+                    if (L.edata_n + (u32)c->nent * table_entry(c->table) > L.EDATA)
                         return DL_R_LIMIT;
-                    if (!js_hex(&j, L.edata + L.edata_n, EDATA - L.edata_n, &dn))
+                    if (!js_hex(&j, L.edata + L.edata_n, L.EDATA - L.edata_n, &dn))
                         return DL_R_JSON;
                     L.edata_n += dn;
                 } else if (js_eq(s, n, "relocs")) {
@@ -1254,7 +1270,7 @@ static int place(struct dmod *m, const u8 *buf, u32 len, const char **what)
                         js_int(&j, &off);
                         js_next(&j, ']', &f4);
                         js_str(&j, &s, &n);
-                        if (L.nerel >= ERELOCS)
+                        if (L.nerel >= L.ERELOCS)
                             return DL_R_LIMIT;
                         r = &L.erel[L.nerel];
                         r->type = (u8)rtype(s, n);
@@ -1318,7 +1334,7 @@ static int bind(int write)
                 any = 1;
         if (!any)
             continue;
-        if ((cnt + 1) * esz > MDATA)
+        if ((cnt + 1) * esz > L.MDATA)
             return 0;
         dl_memcpy(L.mdata, tab, cnt * esz);
         for (i = 0; i < cnt; i++) {
@@ -1338,7 +1354,7 @@ static int bind(int write)
                 continue;
             for (k = 0; k < c->nent; k++) {
                 struct item *it;
-                if (n >= MERGE)
+                if (n >= L.MERGE)
                     return 0;
                 it = &L.items[n++];
                 it->order = c->order;
@@ -1432,12 +1448,79 @@ int dl_parse_active(const char *text, u32 len, struct dl_choice *out)
         }
         if (n >= DL_MAX_MODS)
             return -1;
-        dl_memcpy(out[n].name, text + a, k - a);
-        out[n].name[k - a] = 0;
-        out[n].crc = (u32)crc;
+        if (out) {
+            dl_memcpy(out[n].name, text + a, k - a);
+            out[n].name[k - a] = 0;
+            out[n].crc = (u32)crc;
+        }
         n++;
     }
     return (int)n;
+}
+
+/* ---- the link state's memory ------------------------------------------------------------- */
+static void *take(u32 n) { return dl_alloc(n ? n : 4); }
+
+/* Every block begin() took goes back. */
+static void finish(void)
+{
+    void **p[] = {(void **)&L.mods, (void **)&L.order, (void **)&L.arena, (void **)&L.lists,
+                  (void **)&L.syms, (void **)&L.sym_next, (void **)&L.sym_head, (void **)&L.locals,
+                  (void **)&L.ctr, (void **)&L.ent, (void **)&L.edata, (void **)&L.erel,
+                  (void **)&L.items, (void **)&L.mdata};
+    u32 i;
+    for (i = 0; i < sizeof p / sizeof p[0]; i++) {
+        dl_free(*p[i]);
+        *p[i] = 0;
+    }
+}
+
+static u32 pool_n(u32 per, u32 mb, u32 base)
+{
+    u32 v = base + per * mb;
+    return v > DL_POOL_CAP ? DL_POOL_CAP : v;
+}
+
+/* The pools' sizes (dl.h, DL_POOL_*): per started MB of the area, the symbols past the
+ * flashed build's own names; the merge's room is the biggest table +Drive entries can go
+ * to. -> 1 when every block was taken, else 0 (finish() gives back what was). */
+static int pools(int n)
+{
+    u32 mb = L.area_hi > L.area_lo ? (L.area_hi - L.area_lo + 0xFFFFF) >> 20 : 0, t;
+    u32 flashed = n_exports() + 1;
+    if (!mb)
+        mb = 1;
+    for (t = 0; t < n_tables(); t++) {
+        flashed += dl_strlen(table_name(t)) < 60 ? 2 : 1;
+        if ((table_flags(t) & F_MORE) && !(table_flags(t) & F_DSP)) {
+            if (table_cap(t) + 1 > L.MERGE)
+                L.MERGE = table_cap(t) + 1;
+            if ((table_cap(t) + 1) * table_entry(t) > L.MDATA)
+                L.MDATA = (table_cap(t) + 1) * table_entry(t);
+        }
+    }
+    L.ARENA = pool_n(DL_POOL_ARENA, mb, 0);
+    L.LISTS = pool_n(DL_POOL_LISTS, mb, 0);
+    L.SYMS = pool_n(DL_POOL_SYMS, mb, flashed);
+    L.LOCALS = pool_n(DL_POOL_LOCALS, mb, 0);
+    L.CONTRIBS = pool_n(DL_POOL_CONTRIBS, mb, 0);
+    L.EDATA = pool_n(DL_POOL_EDATA, mb, 0);
+    L.ERELOCS = pool_n(DL_POOL_ERELOCS, mb, 0);
+    L.mods = take((u32)n * sizeof *L.mods);
+    L.order = take((u32)n * sizeof *L.order);
+    L.arena = take(L.ARENA);
+    L.lists = take(L.LISTS * sizeof *L.lists);
+    L.syms = take(L.SYMS * sizeof *L.syms);
+    L.sym_next = take(L.SYMS * sizeof *L.sym_next);
+    L.locals = take(L.LOCALS * sizeof *L.locals);
+    L.ctr = take(L.CONTRIBS * sizeof *L.ctr);
+    L.ent = take(L.CONTRIBS * sizeof *L.ent);
+    L.edata = take(L.EDATA);
+    L.erel = take(L.ERELOCS * sizeof *L.erel);
+    L.items = take(L.MERGE * sizeof *L.items);
+    L.mdata = take(L.MDATA);
+    return L.mods && L.order && L.arena && L.lists && L.syms && L.sym_next && L.locals && L.ctr
+           && L.ent && L.edata && L.erel && L.items && L.mdata;
 }
 
 /* ---- the whole link ------------------------------------------------------------------------ */
@@ -1456,21 +1539,23 @@ static s32 load(struct dmod *m, const struct dl_choice *ch)
     return len;
 }
 
-/* The flashed build's names, then pass 1 over every chosen file and the id order: what a
- * link and a check share. The records go to st/det (n of them, zeroed here). -> 0 when the
- * descriptor isn't one the loader reads, else 1. */
+/* The flashed build's names, then pass 1 over every chosen file, the symbols' buckets and the
+ * id order: what a link and a check share. The records go to st/det (n of them, zeroed
+ * here). -> 1, 0 when the descriptor isn't one the loader reads, -1 when the heap has no room
+ * for the link state. Every return is followed by finish(). */
 static int begin(u32 desc, const struct dl_choice *choice, int n, u8 *buf, u32 max,
                  struct dl_status *st_out, char (*det)[32])
 {
     int i, k;
     const char *what;
-    u32 e;
+    u32 e, nb;
 
+    finish();
     dl_memset(&L, 0, (u32)((u8 *)&L.crc_table - (u8 *)&L));   /* the crc table stays */
     L.st = st_out;
     L.det = det;
-    dl_memset(st_out, 0, DL_MAX_MODS * sizeof *st_out);
-    dl_memset(det, 0, DL_MAX_MODS * sizeof *det);
+    dl_memset(st_out, 0, (u32)n * sizeof *st_out);
+    dl_memset(det, 0, (u32)n * sizeof *det);
     L.buf = buf;
     L.max = max;
     L.d_addr = desc;
@@ -1480,6 +1565,8 @@ static int begin(u32 desc, const struct dl_choice *choice, int n, u8 *buf, u32 m
     L.pool = D32(0x18);
     L.area_lo = D32(D32(0x3c) + 4);
     L.area_hi = D32(D32(0x3c) + 8);
+    if (!pools(n))
+        return -1;
     L.arena_n = 1;                       /* offset 0 holds "" */
 
     /* the flashed build's names: exports, tables and their counts, core_desc */
@@ -1533,11 +1620,21 @@ static int begin(u32 desc, const struct dl_choice *choice, int n, u8 *buf, u32 m
         m->alive = 1;
         L.nmods++;
     }
+
+    /* the symbols' buckets: a power of two, at least as many as the symbols */
+    for (nb = 16; nb < L.nsyms; nb <<= 1)
+        ;
+    L.sym_head = take(nb * sizeof *L.sym_head);
+    if (!L.sym_head)
+        return -1;
+    L.sym_mask = nb - 1;
+    hash_syms();
+
     /* id order: an insertion sort, stable, so of two files with one id the first line wins */
     for (i = 0; i < L.nmods; i++)
-        L.order[i] = (u8)i;
+        L.order[i] = (u16)i;
     for (i = 1; i < L.nmods; i++) {
-        u8 x = L.order[i];
+        u16 x = L.order[i];
         k = i;
         while (k > 0 && dl_strcmp(astr(L.mods[x].id), astr(L.mods[L.order[k - 1]].id)) < 0) {
             L.order[k] = L.order[k - 1];
@@ -1553,16 +1650,20 @@ static int begin(u32 desc, const struct dl_choice *choice, int n, u8 *buf, u32 m
  * dl_status stay as the boot left them). A mod that would load gets DL_ST_LOADED. The
  * refusals only pass 2 finds (a pc16 out of range, a relocation to a name nothing
  * defines) are not seen. -> how many would load, or -1 when the descriptor isn't one the
- * loader reads. */
+ * loader reads, the set is over DL_MAX_MODS or the heap has no room for the check. */
 int dl_check(u32 desc, const struct dl_choice *choice, int n, u8 *buf, u32 max,
              struct dl_status *st, char (*det)[32], char (*ver)[DL_VER_MAX])
 {
     u32 lo = dl_used_lo, hi = dl_used_hi;
     int i, rounds, ok = 0;
-    if (!begin(desc, choice, n, buf, max, st, det))
+    if (n < 0 || n > DL_MAX_MODS)
         return -1;
+    if (begin(desc, choice, n, buf, max, st, det) <= 0) {
+        finish();
+        return -1;
+    }
     if (ver) {
-        dl_memset(ver, 0, DL_MAX_MODS * sizeof *ver);
+        dl_memset(ver, 0, (u32)n * sizeof *ver);
         for (i = 0; i < L.nmods; i++) {
             const char *v = astr(L.mods[i].version);
             u32 q;
@@ -1583,20 +1684,42 @@ int dl_check(u32 desc, const struct dl_choice *choice, int n, u8 *buf, u32 max,
         }
     dl_used_lo = lo;
     dl_used_hi = hi;
+    finish();
     return ok;
 }
 
-int dl_link(u32 desc, const struct dl_choice *choice, int n, u8 *buf, u32 max)
+/* The boot's records, for n lines, in place of the last link's. -> 0 when the heap has none. */
+static int records(int n)
 {
-    int i, rounds, loaded = 0;
+    dl_free(dl_status);
+    dl_free(dl_detail);
+    dl_free(dl_inits);
+    dl_status_n = 0;
+    dl_status = take((u32)n * sizeof *dl_status);
+    dl_detail = take((u32)n * sizeof *dl_detail);
+    dl_inits = take((u32)n * sizeof *dl_inits);
+    if (dl_status && dl_detail && dl_inits) {
+        dl_status_n = (u32)n;
+        return 1;
+    }
+    dl_free(dl_status);
+    dl_free(dl_detail);
+    dl_free(dl_inits);
+    dl_status = 0;
+    dl_detail = 0;
+    dl_inits = 0;
+    return 0;
+}
+
+static int link_set(u32 desc, const struct dl_choice *choice, int n, u8 *buf, u32 max)
+{
+    int i, rounds, loaded = 0, b;
     u32 dirty_hi = 0;                    /* the highest end any pass 2 wrote to */
     const char *what;
 
-    dl_inits_n = 0;
-    dl_used_lo = dl_used_hi = 0;
-    dl_status_n = (u32)n;
-    if (!begin(desc, choice, n, buf, max, dl_status, dl_detail)) {
-        dl_skip_reason = DL_SKIP_ABI;
+    b = begin(desc, choice, n, buf, max, dl_status, dl_detail);
+    if (b <= 0) {
+        dl_skip_reason = b < 0 ? DL_SKIP_MEMORY : DL_SKIP_ABI;
         return 0;
     }
 
@@ -1658,5 +1781,24 @@ int dl_link(u32 desc, const struct dl_choice *choice, int n, u8 *buf, u32 max)
             dl_memset(DL_MEM(dl_used_lo), 0, dirty_hi - dl_used_lo);
         dl_used_hi = dl_used_lo;
     }
+    return loaded;
+}
+
+int dl_link(u32 desc, const struct dl_choice *choice, int n, u8 *buf, u32 max)
+{
+    int loaded;
+    dl_inits_n = 0;
+    dl_used_lo = dl_used_hi = 0;
+    if (n < 0 || n > DL_MAX_MODS) {
+        records(0);
+        dl_skip_reason = DL_SKIP_COUNT;
+        return 0;
+    }
+    if (!records(n)) {
+        dl_skip_reason = DL_SKIP_MEMORY;
+        return 0;
+    }
+    loaded = link_set(desc, choice, n, buf, max);
+    finish();
     return loaded;
 }

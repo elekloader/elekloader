@@ -33,14 +33,14 @@ from test_link_refusals import Bench                                      # noqa
 STAGING = 0x10000
 
 
-def flashed(B):
+def flashed(B, pad=0):
     core = B.core(collections={'ev_tick': {'entry': 4}, 'ev_draw': {'entry': 4},
                                'ev_x': {'entry': 4, 'spare': 1}, 'core_handles': {'entry': 4}})
     core['symbols']['core_zero'] = ['.boot', 0]
     core['exports'] = ['core_fn', 'core_zero']
     loader = B.other('drive-loader', imports=['core_desc'],
                      relocs=[['.run', 4, 'abs32', 'sym:core_desc', 0]])
-    loader['sections']['.bss'] = {'size': STAGING}
+    loader['sections']['.bss'] = {'size': STAGING + pad}   # pad: a bigger build, a smaller area
     loader['symbols'].update({'drive_staging': ['.bss', 0], 'drive_staging_size': ['abs', STAGING]})
     loader['exports'] = ['drive_staging', 'drive_staging_size']
     fa = B.mod('flash-a', resources={'names': ['settings:A']})
@@ -51,9 +51,15 @@ def flashed(B):
     return [core, loader, fa]
 
 
-def built(B):
+def built(B, area=None):
+    """The flashed build, and the Build the boot linker sees; with `area`, its loader's .bss grown
+    until the +Drive area is about that many bytes (its pools are sized to the area)."""
     out = link.link([link.Mod2(d, d['id']) for d in flashed(B)], B.img)
-    return out, drive.load_build(out.image)
+    b = drive.load_build(out.image)
+    if area is not None:
+        out = link.link([link.Mod2(d, d['id']) for d in flashed(B, b.hi - b.lo - area)], B.img)
+        b = drive.load_build(out.image)
+    return out, b
 
 
 def dmod(B, ident, **extra):
@@ -98,18 +104,20 @@ def files(*docs):
 def test_the_two_example_mods_link_as_the_unit_links_them():
     with Bench('analog-rytm-mk2') as B:
         out, b = built(B)
-        assert (b.lo, b.hi, b.staging_size) == (0x47D00000, 0x47FFF000, STAGING)
+        # the area: what the flashed build leaves of core 0.11's, from a 4 KB boundary
+        lo = link._align(out.layout['bss'][1], 0x1000)
+        assert (b.ram_end, b.lo, b.hi, b.staging_size) == (out.layout['bss'][1], lo, 0x47FFF000, STAGING)
         r = drive.link(b, files(user(B), hello(B)))
         assert [c.state for c in r.choices] == [drive.LOADED] * 2, [c.why() for c in r.choices]
         assert [c.id for c in r.live] == ['drive-hello', 'drive-hello-user']
         # .run of each in id order from the area's start, then each .bss
-        h, u = 0x47D00000, 0x47D0000C
+        h, u = lo, lo + 0xC
         assert r.base[('drive-hello', '.run')] == h and r.base[('drive-hello-user', '.run')] == u
-        assert r.base[('drive-hello', '.bss')] == 0x47D00018
-        assert r.base[('drive-hello-user', '.bss')] == 0x47D00020 and r.end == 0x47D00028
+        assert r.base[('drive-hello', '.bss')] == lo + 0x18
+        assert r.base[('drive-hello-user', '.bss')] == lo + 0x20 and r.end == lo + 0x28
         core_fn = out.map['core_fn']
         assert r.area[:12] == bytes.fromhex('4e714e714e75fffa') + struct.pack('>I', core_fn)
-        assert r.area[12:24] == bytes.fromhex('4e714e714e750000') + struct.pack('>I', 0x47D00018)
+        assert r.area[12:24] == bytes.fromhex('4e714e714e750000') + struct.pack('>I', lo + 0x18)
         assert len(r.area) == r.end - b.lo and r.area[24:] == bytes(16)
         # ev_draw: the +Drive entry at order 10 before the flashed one at 60, then zeros
         t = r.tables['ev_draw']
@@ -122,7 +130,7 @@ def test_the_two_example_mods_link_as_the_unit_links_them():
         assert sorted(r.tables) == ['ev_draw', 'ev_tick']          # untouched tables aren't listed
         st, dt = drive.records(r)
         assert st[:4] == bytes((1, 0, 0, 0)) and st[4:4 + 17] == b'drive-hello-user\0'
-        assert st[32:36] == bytes((1, 0, 0, 0)) and len(st) == len(dt) == 32 * 32
+        assert st[32:36] == bytes((1, 0, 0, 0)) and len(st) == len(dt) == 2 * 32   # one per line
 
 
 def test_the_same_inputs_give_the_same_bytes():
@@ -176,7 +184,7 @@ def test_drive_init_is_each_mods_own_and_never_an_export():
             d['exports'] = d['exports'] + ['drive_init']
         r = drive.link(b, files(h, u))
         assert all(c.state == drive.LOADED for c in r.choices), [c.why() for c in r.choices]
-        assert r.inits == [('drive-hello', 0x47D00000), ('drive-hello-user', 0x47D0000E)]
+        assert r.inits == [('drive-hello', b.lo), ('drive-hello-user', b.lo + 0xE)]
         assert 'drive_init' not in r.glob
 
 
@@ -185,7 +193,8 @@ def test_active_reads_as_the_boot_linker_reads_it():
     assert text == 'a.elemod 8cdc1683\nb c.elemod 00000000\n'
     assert drive.parse_active(text) == [('a.elemod', 0x8cdc1683), ('b c.elemod', 0)]
     assert drive.parse_active('# x\n\n  a.elemod   0x1F \r\nnocrc\nb.elemod zz\n') == [('a.elemod', 0x1f)]
-    assert drive.parse_active(''.join('m%d.elemod 1\n' % i for i in range(33))) is None
+    assert drive.parse_active(''.join('m%d.elemod 1\n' % i for i in range(257))) is None
+    assert len(drive.parse_active(''.join('m%d.elemod 1\n' % i for i in range(256)))) == 256
     for bad in ('#x', ' a', 'a\nb', ''):
         try:
             drive.active_text([(bad, b'')])
@@ -199,10 +208,11 @@ def test_active_reads_as_the_boot_linker_reads_it():
 ROWS = {}
 
 
-def row(code, line=0, detail=None, arg=None, deep=False):
-    """A fixture: f(B) -> (bad files, good files); line `line` of the bad set gets `code`."""
+def row(code, line=0, detail=None, arg=None, deep=False, area=None):
+    """A fixture: f(B) -> (bad files, good files); line `line` of the bad set gets `code`, on
+    built(B, area)."""
     def deco(f):
-        ROWS[code] = (f, line, detail, arg, deep)
+        ROWS[code] = (f, line, detail, arg, deep, area)
         return f
     return deco
 
@@ -290,7 +300,8 @@ def _(B):
 
 @row('room', arg=1)
 def _(B):
-    room = 0x47FFF000 - 0x47D00000 - 12
+    _out, b = built(B)
+    room = b.hi - b.lo - 12
     return files(hello(B, sections={'.run': dmod(B, 'x')['sections']['.run'], '.bss': {'size': room + 1}})), \
         files(hello(B, sections={'.run': dmod(B, 'x')['sections']['.run'], '.bss': {'size': room}}))
 
@@ -301,10 +312,11 @@ def _(B):
     return files(hello(B, relocs=far)), files(hello(B, relocs=[['.run', 6, 'pc32', 'sym:core_fn', 0]][:0]))
 
 
-@row('limit')
+@row('limit', area=0xC0000)
 def _(B):
+    _out, b = built(B, area=0xC0000)           # 1 MB of pools: one file can pass them
     many, some = hello(B), hello(B)
-    for i in range(drive.SYMS):
+    for i in range(b.pools['syms']):
         many['symbols']['s%d' % i] = ['abs', i]
     for i in range(1000):
         some['symbols']['s%d' % i] = ['abs', i]
@@ -315,16 +327,19 @@ def test_the_boot_linkers_other_rooms_refuse_as_limit():
     """The names' arena and lists, shared by every file and not given back by a refused one, and
     one file's own symbols in pass 2."""
     with Bench('analog-rytm-mk2') as B:
-        _out, b = built(B)
-        big = ['n%05d' % i for i in range(drive.ARENA // 7)]          # 7 bytes each: past the arena
-        first = hello(B, resources={'names': big[:1000]}, exports=['not_a_symbol'])
-        r = drive.check(b, files(first, hello(B, resources={'names': big[1000:]})))
+        _out, b = built(B, area=0xC0000)       # 1 MB of pools: one file can pass them
+        assert b.pools['locals'] == drive.POOL_PER_MB['locals']
+        big = ['n%014d' % i for i in range(b.pools['arena'] // 16)]   # 16 bytes each: past the arena
+        assert len(big) < b.pools['lists']                            # ... before the lists
+        half = len(big) // 2
+        first = hello(B, resources={'names': big[:half]}, exports=['not_a_symbol'])
+        r = drive.check(b, files(first, hello(B, resources={'names': big[half:]})))
         assert [(c.code, c.note) for c in r.choices] == [
             (drive.CODE['format'], 'exports not_a_symbol'), (drive.CODE['limit'], 'resources.names')], \
             [c.why() for c in r.choices]
-        assert drive.check(b, files(hello(B, resources={'names': big[1000:]}))).choices[0].state == drive.LOADED
+        assert drive.check(b, files(hello(B, resources={'names': big[half:]}))).choices[0].state == drive.LOADED
         locs = hello(B)
-        for i in range(drive.LOCALS):
+        for i in range(b.pools['locals']):
             locs['symbols']['s%d' % i] = ['abs', i]
         assert drive.check(b, files(locs)).choices[0].state == drive.LOADED     # pass 1 cannot tell
         r = drive.link(b, files(locs))
@@ -333,14 +348,17 @@ def test_the_boot_linkers_other_rooms_refuse_as_limit():
 
 @row('count')
 def _(B):
-    good = [dmod(B, 'm%02d' % i) for i in range(32)]
-    return files(*(good + [dmod(B, 'm32')])), files(*good)
+    good = [dmod(B, 'm%03d' % i) for i in range(256)]
+    return files(*(good + [dmod(B, 'm256')])), files(*good)
 
 
 def test_every_refusal_has_a_fixture_that_is_refused_and_one_that_loads():
     with Bench('analog-rytm-mk2') as B:
-        _out, b = built(B)
-        for code, (f, line, detail, arg, deep) in sorted(ROWS.items()):
+        builds = {}
+        for code, (f, line, detail, arg, deep, area) in sorted(ROWS.items()):
+            if area not in builds:
+                builds[area] = built(B, area)[1]
+            b = builds[area]
             bad, good = f(B)
             run = drive.link if deep else drive.check
             rb, rg = run(b, bad), run(b, good)
@@ -408,7 +426,7 @@ def test_a_refusal_in_pass_2_starts_the_check_again():
         st = [(c.id, c.code) for c in r.choices]
         assert st == [('a-far', drive.CODE['range']), ('drive-hello', drive.CODE['requires'])]
         r = drive.link(b, files(a, hello(B)))
-        assert r.base[('drive-hello', '.run')] == 0x47D00000
+        assert r.base[('drive-hello', '.run')] == b.lo
 
 
 def test_a_missing_file_is_dropped():
@@ -663,7 +681,7 @@ def test_a_real_core_ar2_build_with_a_loader_stub_and_the_example_mods():
         cdoc = json.load(fh)
     out = link.link([link.Mod2(cdoc, 'core'), link.Mod2(stub, 'stub')], image)
     b = drive.load_build(out.image)
-    assert (b.lo, b.hi, b.staging_size) == (0x47D00000, 0x47FFF000, 0x80000)
+    assert (b.lo, b.hi, b.staging_size) == (link._align(out.layout['bss'][1], 0x1000), 0x47FFF000, 0x80000)
     assert (b.d['family'], b.d['device'], b.d['release']) == (2, 5, 0x30313736)
     assert b.desc_at == out.map['core_desc']
     folder = os.environ.get('ELEKLOADER_DRIVE_MODS')

@@ -21,14 +21,21 @@ from test_link_refusals import Bench                       # noqa: E402
 
 
 def sets(B):
-    """(name, files) for every row's refused and loading set, and the tests' other sets."""
+    """(name, files, area) for every row's refused and loading set, and the tests' other sets; area:
+    the +Drive area the row's build has (T.built), None for the usual one."""
     out = []
-    for code, (f, _line, _detail, _arg, deep) in sorted(T.ROWS.items()):
+    for code, (f, _line, _detail, _arg, deep, area) in sorted(T.ROWS.items()):
         if deep:                            # pass 2: the host twin's, not the checker's
             continue
         bad, good = f(B)
-        out += [(code + ': refused', bad), (code + ': loads', good)]
+        out += [(code + ': refused', bad, area), (code + ': loads', good, area)]
     h, u = T.hello(B), T.user(B)
+    out = out + [(n, f, None) for n, f in _more(B, h, u)]
+    return out
+
+
+def _more(B, h, u):
+    out = []
     out.append(('the two examples', T.files(u, h)))
     out.append(('a missing file', [('gone.elemod', None)] + T.files(h)))
     out.append(('bad UTF-8', [('bad.elemod', b'{"id": "\xff"}')] + T.files(h)))
@@ -55,7 +62,7 @@ def sets(B):
                                                                   'relocs': [], 'claims': [[1, 2]]}]))))
     a, z = T.hello(B, id='a-mod', conflicts=['b-mod']), T.hello(B, id='b-mod')
     out += [('a conflicting pair', T.files(a, z)), ('a conflicting pair, the other way', T.files(z, a))]
-    big = ['n%05d' % i for i in range(drive.ARENA // 7)]
+    big = ['n%05d' % i for i in range(T.built(B)[1].pools['arena'] // 7)]
     out.append(('the arena', T.files(T.hello(B, resources={'names': big[:1000]}, exports=['not_a_symbol']),
                                      T.hello(B, resources={'names': big[1000:]}))))
     d = T.hello(B)
@@ -68,20 +75,28 @@ def sets(B):
 def main():
     rows = []
     with Bench('analog-rytm-mk2') as B:
-        out, b = T.built(B)
-        at = desc.find(out.image)[0]
-        blk = out.image[at:at + desc.decode(out.image, at)['size']]
-        for name, files in sets(B):
-            r = drive.check(drive.load_build(blk), files)
-            rows.append({'name': name, 'files': [[n, _enc(raw)] for n, raw in files],
-                         'summary': drive.summary(r), 'status': drive.status_text(r),
-                         'lines': _lines(r)})
+        blocks = {}
+
+        def block(area):
+            if area not in blocks:
+                out = T.built(B, area)[0]
+                at = desc.find(out.image)[0]
+                blocks[area] = out.image[at:at + desc.decode(out.image, at)['size']]
+            return blocks[area]
+        blk = block(None)
+        for name, files, area in sets(B):
+            r = drive.check(drive.load_build(block(area)), files)
+            row = {'name': name, 'files': [[n, _enc(raw)] for n, raw in files],
+                   'summary': drive.summary(r), 'status': drive.status_text(r), 'lines': _lines(r)}
+            if area is not None:            # its own build: a smaller area, smaller pools
+                row['build'] = block(area).hex()
+            rows.append(row)
         release = {'version': B.rel.version, 'syxSha256': B.rel.syx_sha256, 'mainSha256': B.rel.main_sha256,
                    'mainLen': B.rel.main_len}
         body = b'{"elemod": 2}'
         wrapped = container.wrap(body, 2, 5, 0x30313736)
         texts = ['# x\n\n  a.elemod   0x1F \r\nnocrc\nb.elemod zz\n', 'a.elemod -1\nb.elemod 1_f\nc.elemod 0x0x2\n',
-                 ''.join('m%d.elemod 1\n' % i for i in range(33)), 'x 123456789ab\ny 0xffffffff\n']
+                 ''.join('m%d.elemod 1\n' % i for i in range(257)), 'x 123456789ab\ny 0xffffffff\n']
         extra = {
             'build': blk.hex(), 'label': drive.load_build(blk).label(),
             'container': {'body': body.hex(), 'wrapped': wrapped.hex(),

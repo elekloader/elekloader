@@ -30,8 +30,26 @@ typedef u32 (*held_fn)(u32 code);
 extern char core_desc[];
 void dl_flush(void);
 
-struct dl_choice dl_boot_choice[DL_MAX_MODS];     /* the boot's set: dl_status[i] is line i's */
-static char active[DL_MAX_MODS * (DL_LINE_NAME_MAX + 12) + 64];
+/* stock's heap (core-ar2 rows.c): main() has set it up and run the static constructors,
+ * which use it, before the site (0x40100718 onwards). */
+#define OP_NEW ((void *(*)(u32))0x40082a40)
+#define OP_DELETE ((void (*)(void *))0x40082a4c)
+
+void *dl_alloc(u32 n)
+{
+    void *p = OP_NEW(n);
+    if (p)
+        dl_memset(p, 0, n);
+    return p;
+}
+
+void dl_free(void *p)
+{
+    if (p)
+        OP_DELETE(p);
+}
+
+struct dl_choice *dl_boot_choice;        /* the boot's set: dl_status[i] is line i's */
 static u32 armed_ticks;
 static u8 armed;
 
@@ -154,11 +172,29 @@ void dl_boot(void)
     dl_boot_us[DL_T_INIT] = dl_bus_us(t_link, t1);
 }
 
+/* /mods/active, read whole into the heap (the caller frees it). -> its length, <= 0 none. */
+static s32 read_active(char **text)
+{
+    char path[128];
+    s32 size, len;
+    *text = 0;
+    path_of(path, "active");
+    size = dl_fs_file_size(path);
+    if (size <= 0)
+        return 0;
+    *text = dl_alloc((u32)size + 1);
+    if (!*text)
+        return 0;
+    len = dl_read_file("active", (u8 *)*text, (u32)size);
+    return len;
+}
+
 static void boot(void)
 {
     s32 len;
     int n, loaded;
     u32 i;
+    char *active;
 
     dl_status_n = 0;
     dl_skip_reason = DL_SKIP_NONE;
@@ -176,16 +212,24 @@ static void boot(void)
         return;
     }
     t_checks = DTCN0;
-    len = dl_read_file("active", (u8 *)active, sizeof active - 1);
-    if (len <= 0)
-        return;                          /* no set chosen */
-    n = dl_parse_active(active, (u32)len, dl_boot_choice);
+    len = read_active(&active);
+    n = len > 0 ? dl_parse_active(active, (u32)len, 0) : 0;   /* how many lines, first */
+    if (n > 0) {
+        dl_boot_choice = dl_alloc((u32)n * sizeof *dl_boot_choice);
+        if (dl_boot_choice)
+            dl_parse_active(active, (u32)len, dl_boot_choice);
+    }
+    dl_free(active);
     if (n < 0) {
         dl_skip_reason = DL_SKIP_COUNT;
         return;
     }
     if (!n)
+        return;                          /* no set chosen */
+    if (!dl_boot_choice) {
+        dl_skip_reason = DL_SKIP_MEMORY;
         return;
+    }
     loaded = dl_link((u32)core_desc, dl_boot_choice, n, (u8 *)drive_staging, DL_STAGING_SIZE);
     dl_flush();
     t_link = DTCN0;

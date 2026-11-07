@@ -40,9 +40,8 @@ extern void dl_mods_label(void), dl_page_label(void), dl_mods_icon(void);   /* p
 extern void dl_call_a0(unsigned fn, void *res, void *a, unsigned b);   /* route.s */
 int dl_list_files(char (*names)[DL_NAME_MAX + 1], int max);           /* route.c */
 
-#define ROWS DL_MAX_MODS
 #define READ_STALL 600                   /* ev_ticks (30 s) a read may stand still and count */
-#define ACTIVE_MAX (DL_MAX_MODS * (DL_LINE_NAME_MAX + 12) + 64)
+#define LINE_MAX (DL_NAME_MAX + 10)      /* an /mods/active line: name, space, 8 digits, \n */
 
 struct row {
     char name[DL_NAME_MAX + 1];          /* the file in DL_DIR */
@@ -58,16 +57,60 @@ struct row {
     char detail[32];                     /* the refusal's name argument */
 };
 
-static struct row rows[ROWS];
-static int nrows;
-static char names[ROWS][DL_NAME_MAX + 1];
-static struct dl_choice choice[DL_MAX_MODS];
-static int choice_row[DL_MAX_MODS];
-static struct dl_status cst[DL_MAX_MODS];
-static char cdet[DL_MAX_MODS][32];
-static char cver[DL_MAX_MODS][DL_VER_MAX];
-static char text[ACTIVE_MAX];
+/* The list grows like SAMPLES' (decided 2026-11-07): every array the page keeps per file
+ * comes from the heap when the page reads DL_DIR, sized to the folder (cap), and goes back
+ * at the next read. A set (choice .. cver) is a subset of the files, and at most
+ * DL_MAX_MODS. */
+static struct row *rows;
+static int nrows, cap;
+static struct dl_choice *choice;
+static int *choice_row;
+static struct dl_status *cst;
+static char (*cdet)[32];
+static char (*cver)[DL_VER_MAX];
+static u8 *drive_ticks;                  /* the file list's ticks while the build list shows */
+static int *build_rows, nbuild;
+static int *sel;
+static u8 *keep_now, *was;               /* a new set's files, and the old one's */
 static char label[48];
+
+static void page_free(void)
+{
+    void **p[] = {(void **)&rows, (void **)&choice, (void **)&choice_row, (void **)&cst,
+                  (void **)&cdet, (void **)&cver, (void **)&drive_ticks, (void **)&build_rows,
+                  (void **)&sel, (void **)&keep_now, (void **)&was};
+    u32 i;
+    for (i = 0; i < sizeof p / sizeof p[0]; i++) {
+        dl_free(*p[i]);
+        *p[i] = 0;
+    }
+    nrows = nbuild = cap = 0;
+}
+
+/* The page's arrays for n files. -> 0 when the heap has no room (nothing kept). */
+static int page_alloc(int n)
+{
+    u32 k = (u32)(n > 0 ? n : 1), s = k < DL_MAX_MODS ? k : DL_MAX_MODS;
+    page_free();
+    rows = dl_alloc(k * sizeof *rows);
+    choice = dl_alloc(s * sizeof *choice);
+    choice_row = dl_alloc(s * sizeof *choice_row);
+    cst = dl_alloc(s * sizeof *cst);
+    cdet = dl_alloc(s * sizeof *cdet);
+    cver = dl_alloc(s * sizeof *cver);
+    drive_ticks = dl_alloc(k);
+    build_rows = dl_alloc(k * sizeof *build_rows);
+    sel = dl_alloc(k * sizeof *sel);
+    keep_now = dl_alloc(k);
+    was = dl_alloc(k);
+    if (!rows || !choice || !choice_row || !cst || !cdet || !cver || !drive_ticks || !build_rows
+        || !sel || !keep_now || !was) {
+        page_free();
+        return 0;
+    }
+    cap = (int)k;
+    return 1;
+}
 
 static u8 redraw;                        /* ask the next ev_tick for a frame */
 static volatile u32 ticks, drawn_at;     /* the page's rows were drawn at this tick */
@@ -125,7 +168,7 @@ static void reason(char *at, char *end, int code, u32 arg, const char *d)
         "", "FILE MISSING", "FILE CHANGED", "TOO BIG", "BAD FILE", "NOT FORMAT 2",
         "OTHER DEVICE/OS", "CAN'T USE", "SAME ID AS", "NEEDS CORE", "NEEDS", "CONFLICTS",
         "EXPORT TAKEN", "CLAIMED", "NOT FOUND", "TABLE", "FULL", "NO ROOM", "OUT OF RANGE",
-        "TOO MANY NAMES", "OVER 32 MODS"};
+        "TOO MANY NAMES", "OVER 256 MODS"};
     at = cat(at, end, code < (int)(sizeof what / sizeof what[0]) ? what[code] : "REFUSED");
     if (code == DL_R_ROOM) {
         at = cat(at, end, " +");
@@ -147,10 +190,18 @@ static void path_of(char *out, const char *name)
 /* DL_DIR/active, from rows[].on. -> 0, or < 0 when it wasn't written. */
 static int save_active(void)
 {
-    char *end = text + sizeof text, *at = text, tmp[DL_PATH_MAX], path[DL_PATH_MAX];
+    char *text, *end, *at, tmp[DL_PATH_MAX], path[DL_PATH_MAX];
     dl_file f;
-    int i, r;
+    int i, r, on = 0;
     u32 n;
+    for (i = 0; i < nrows; i++)
+        on += rows[i].on;
+    n = 64 + (u32)on * LINE_MAX;
+    text = dl_alloc(n);
+    if (!text)
+        return -1;
+    end = text + n;
+    at = text;
     at = cat(at, end, "# chosen on the unit's MODS page\n");
     for (i = 0; i < nrows; i++)
         if (rows[i].on) {
@@ -177,6 +228,7 @@ static int save_active(void)
         dl_fs_delete(tmp);
     }
     dl_unlock();
+    dl_free(text);
     return r;
 }
 
@@ -205,18 +257,27 @@ static void boot_record(struct row *r)
 }
 
 /* Read DL_DIR: each .elemod's size, CRC-32, id and version and what pass 1 says of it,
- * and the ticks from DL_DIR/active. Holds the staging buffer. -> 0, or -1 busy. */
+ * and the ticks from DL_DIR/active. Holds the staging buffer. The page's arrays are taken
+ * anew for the folder's count. -> 0, -1 busy, -2 no memory. */
 static int scan(void)
 {
     int i, k, n, m;
-    s32 len;
+    s32 len, size;
+    char (*names)[DL_NAME_MAX + 1], *text = 0, path[DL_PATH_MAX];
+    struct dl_choice *ticks_set = 0;
     if (!dl_staging_take_idle(ticks, READ_STALL))
         return -1;
-    dl_memset(rows, 0, sizeof rows);
-    nrows = 0;
     dl_lock();
-    n = dl_list_files(names, ROWS);
-    for (i = 0; i < n && nrows < ROWS; i++) {
+    n = dl_list_files(0, 0);
+    names = page_alloc(n) ? dl_alloc((u32)(n > 0 ? n : 1) * sizeof *names) : 0;
+    if (!names) {
+        dl_unlock();
+        dl_staging_give();
+        page_free();
+        return -2;
+    }
+    n = dl_list_files(names, n);
+    for (i = 0; i < n && nrows < cap; i++) {
         struct row *r = &rows[nrows];
         if (!ends_elemod(names[i]))
             continue;
@@ -232,38 +293,46 @@ static int scan(void)
         }
         nrows++;
     }
-    len = dl_read_file("active", (u8 *)text, sizeof text - 1);
+    dl_free(names);
+    path_of(path, "active");
+    size = dl_fs_file_size(path);
+    len = size > 0 && (text = dl_alloc((u32)size + 1)) != 0
+          ? dl_read_file("active", (u8 *)text, (u32)size) : 0;
     dl_unlock();
 
     /* the ticks: a line whose file is here; a changed file stays ticked (its new CRC goes
      * into the next save), and the boot record says what the boot made of it */
-    if (len > 0) {
-        m = dl_parse_active(text, (u32)len, choice);
+    m = len > 0 ? dl_parse_active(text, (u32)len, 0) : 0;
+    if (m > 0 && (ticks_set = dl_alloc((u32)m * sizeof *ticks_set)) != 0) {
+        dl_parse_active(text, (u32)len, ticks_set);
         for (k = 0; k < m; k++)
             for (i = 0; i < nrows; i++)
-                if (!dl_strcmp(choice[k].name, rows[i].name))
+                if (!dl_strcmp(ticks_set[k].name, rows[i].name))
                     rows[i].on = 1;
     }
+    dl_free(ticks_set);
+    dl_free(text);
 
-    /* every file's id, version and pass-1 verdict: one check of them all, whose set
-     * refusals mean nothing here (only codes about the file itself are kept) */
-    for (i = 0, m = 0; i < nrows; i++)
-        if (!rows[i].file_code) {
-            copy_str(choice[m].name, rows[i].name, DL_LINE_NAME_MAX);
-            choice[m].crc = rows[i].crc;
-            choice_row[m++] = i;
+    /* every file's id, version and pass-1 verdict: a check of each file alone, whose set
+     * refusals mean nothing here (only codes about the file itself are kept), so no number
+     * of files reaches the set's limits */
+    for (i = 0; i < nrows; i++) {
+        struct row *r = &rows[i];
+        int c;
+        if (r->file_code)
+            continue;
+        copy_str(choice[0].name, r->name, DL_LINE_NAME_MAX);
+        choice[0].crc = r->crc;
+        if (check(1) < 0)
+            continue;
+        c = cst[0].code;
+        copy_str(r->id, cst[0].id, sizeof r->id);
+        copy_str(r->ver, cver[0], sizeof r->ver);
+        if (cst[0].state != DL_ST_LOADED && c && (c <= DL_R_FEATURE || c == DL_R_CORE)) {
+            r->file_code = (u8)c;
+            copy_str(r->detail, cdet[0], sizeof r->detail);
         }
-    if (m && check(m) >= 0)              /* no files: nothing to check (found 2026-11-07) */
-        for (k = 0; k < m; k++) {
-            struct row *r = &rows[choice_row[k]];
-            int c = cst[k].code;
-            copy_str(r->id, cst[k].id, sizeof r->id);
-            copy_str(r->ver, cver[k], sizeof r->ver);
-            if (cst[k].state != DL_ST_LOADED && c && (c <= DL_R_FEATURE || c == DL_R_CORE)) {
-                r->file_code = (u8)c;
-                copy_str(r->detail, cdet[k], sizeof r->detail);
-            }
-        }
+    }
     dl_staging_give();
     for (i = 0; i < nrows; i++)
         boot_record(&rows[i]);
@@ -306,11 +375,8 @@ struct fn {                              /* std::function: functor[2], manager, 
 enum { M_DRIVE, M_BUILD };
 enum { P_NONE, P_LOAD, P_UNLOAD, P_DELETE, P_CLEAR };
 static u8 mode;                          /* the list: the files, or the build */
-static u8 drive_ticks[ROWS];             /* the file list's ticks while the build list shows */
 static u8 pending;                       /* what the open confirm window does */
 static void *view;                       /* the page's view while it shows (UI task only) */
-static int build_rows[ROWS], nbuild;
-static int sel[ROWS];
 static char msg[40];
 
 static void page_rows(void);
@@ -341,10 +407,10 @@ static void build_list(void)
 {
     int i;
     nbuild = 0;
-    for (i = 0; i < nrows && nbuild < ROWS; i++)
+    for (i = 0; i < nrows && nbuild < cap; i++)
         if (rows[i].on)
             build_rows[nbuild++] = i;
-    for (i = 0; i < nrows && nbuild < ROWS; i++)
+    for (i = 0; i < nrows && nbuild < cap; i++)
         if (!rows[i].on && rows[i].boot == DL_ST_LOADED)
             build_rows[nbuild++] = i;
 }
@@ -446,7 +512,7 @@ static void confirm(const char *line1)
 static int ticked(int *out)
 {
     int *v = ((int **)view)[10], *e = ((int **)view)[11], n = 0;
-    for (; v && v < e && n < ROWS; v++)
+    for (; v && v < e && n < cap; v++)
         if (*v >= 0 && *v < list_n())
             out[n++] = file_k(*v);
     return n;
@@ -493,8 +559,13 @@ static const char *count_msg(int n, const char *what)
 static int save_set(const u8 *keep)
 {
     int i, m = 0, ok, k;
-    u8 was[ROWS];
-    for (i = 0; i < nrows && m < DL_MAX_MODS; i++)
+    for (i = 0; i < nrows; i++)
+        m += keep[i] != 0;
+    if (m > DL_MAX_MODS) {               /* the boot links at most DL_MAX_MODS lines */
+        show_box("OVER 256 MODS");
+        return -1;
+    }
+    for (i = 0, m = 0; i < nrows; i++)
         if (keep[i]) {
             copy_str(choice[m].name, rows[i].name, DL_LINE_NAME_MAX);
             choice[m].crc = rows[i].crc;
@@ -532,9 +603,9 @@ static int save_set(const u8 *keep)
 /* LOAD TO BUILD / UPDATE BUILD: the ticked files are the whole build (decided 2026-11-07) */
 static void do_load(void)
 {
-    u8 keep[ROWS];
+    u8 *keep = keep_now;
     int n = ticked(sel), i, first = build_empty();
-    dl_memset(keep, 0, sizeof keep);
+    dl_memset(keep, 0, (u32)cap);
     for (i = 0; i < n; i++)
         keep[sel[i]] = 1;
     if (save_set(keep))
@@ -548,8 +619,8 @@ static void do_load(void)
 /* CLEAR BUILD: an empty build (LOAD TO BUILD with nothing ticked does nothing; decided 2026-11-07) */
 static void do_clear(void)
 {
-    u8 keep[ROWS];
-    dl_memset(keep, 0, sizeof keep);
+    u8 *keep = keep_now;
+    dl_memset(keep, 0, (u32)cap);
     if (save_set(keep))
         return;
     build_list();
@@ -560,7 +631,7 @@ static void do_clear(void)
 /* UNLOAD in the build list: the build without the ticked mods */
 static void do_unload(void)
 {
-    u8 keep[ROWS];
+    u8 *keep = keep_now;
     int n = ticked(sel), i, k = 0;
     for (i = 0; i < nrows; i++)
         keep[i] = rows[i].on;
@@ -584,7 +655,7 @@ static void do_unload(void)
 static void do_delete(void)
 {
     char path[DL_PATH_MAX];
-    int n = ticked(sel), i, done = 0;
+    int n = ticked(sel), i, k, done = 0;
     for (i = 0; i < n; i++)
         if (rows[sel[i]].on) {
             show_box("MOD IN USE");          /* unload it first */
@@ -601,8 +672,9 @@ static void do_delete(void)
     }
     dl_unlock();
     dl_staging_give();
-    if (scan()) {
-        show_box("BUSY: TRY AGAIN");
+    k = scan();
+    if (k) {
+        show_box(k == -2 ? "NO MEMORY" : "BUSY: TRY AGAIN");
         return;
     }
     build_list();
@@ -746,10 +818,10 @@ void dl_mods_open(void **f)
 {
     static const char *const skip[] = {
         "", "SKIPPED: [NO] HELD", "SKIPPED: CRASH", "NO +DRIVE", "OLD DESCRIPTOR",
-        "SET UNSTABLE", "OVER 32 LINES"};
+        "SET UNSTABLE", "OVER 256 LINES", "NO MEMORY"};
     void *menu = *f, *p;
     unsigned sp[2] = {0, 0};
-    int busy = scan() != 0;
+    int busy = scan();
     if (busy)
         nrows = 0;
     build_list();
@@ -766,7 +838,7 @@ void dl_mods_open(void **f)
     if (sp[1])
         SP_RELEASE(&sp[1]);
     if (busy)
-        show_box("BUSY: TRY AGAIN");
+        show_box(busy == -2 ? "NO MEMORY" : "BUSY: TRY AGAIN");
     else if (dl_skip_reason && dl_skip_reason < sizeof skip / sizeof skip[0])
         show_box(skip[dl_skip_reason]);
 }
