@@ -135,12 +135,13 @@ The page is stock's two-pane file view, the one SAMPLES and PROJECTS are built o
   file, another device, a newer core, over 512 KB). The ticks start as the saved build on entering MODS
   and after each change; coming back from the build list keeps the ticks as they were.
 - **Ticks are the build.** [YES] ticks or unticks a row and steps down, as in SAMPLES. RIGHT
-  opens the action panel: SELECT ALL, DESELECT ALL, LOAD TO BUILD, CLEAR BUILD, DELETE. LOAD TO
-  BUILD asks `LOAD n MODS? CONFIRM Y/N` in stock's confirm window (with nothing ticked it says
+  opens the action panel: SELECT ALL, DESELECT ALL, LOAD TO BUILD (UPDATE BUILD once the build
+  holds mods), CLEAR BUILD, DELETE. It asks `LOAD n MODS?` (`UPDATE BUILD? (n MODS)`) over
+  `CONFIRM Y/N` in stock's confirm window (with nothing ticked it says
   `NO MODS SELECTED` and changes nothing; CLEAR BUILD empties the build after its own confirm), then runs the boot's own pass 1, checks and layout (`dl_check`, `dlink.c`) on exactly
   the ticked files against `core_desc`, without writing RAM. A set where every mod would load
   replaces `active` (`active.tmp`, then the old file deleted and the tmp renamed), one line per
-  file, its name and CRC-32, and a box says `n MODS LOADED`. A set that wouldn't isn't saved,
+  file, its name and CRC-32, and a box says `n MODS LOADED` (`BUILD UPDATED`). A set that wouldn't isn't saved,
   and the box gives the first refusal (`NEEDS drive-hello`). Unlike SAMPLES the ticks stay after
   a load: they are the build. The page never loads or unloads code: the next boot links the
   saved set.

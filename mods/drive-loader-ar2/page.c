@@ -315,6 +315,16 @@ static char msg[40];
 
 static void page_rows(void);
 
+/* the saved build is empty: the action reads LOAD TO BUILD, else UPDATE BUILD (decided 2026-11-07) */
+static int build_empty(void)
+{
+    int i;
+    for (i = 0; i < nrows; i++)
+        if (rows[i].on)
+            return 0;
+    return 1;
+}
+
 static int list_n(void)
 {
     return mode == M_BUILD ? nbuild : nrows;
@@ -356,7 +366,7 @@ unsigned dl_page_text(int i)
     else if (i >= I_ACT) {
         i -= I_ACT;
         if (mode == M_DRIVE && i < NACT_DRIVE)
-            cat(label, end, acts_drive[i]);
+            cat(label, end, i == 2 && !build_empty() ? "UPDATE BUILD" : acts_drive[i]);
         else if (mode == M_BUILD && i < NACT_BUILD)
             cat(label, end, acts_build[i]);
     } else if (--i >= 0 && i < list_n()) {
@@ -511,11 +521,11 @@ static int save_set(const u8 *keep)
     return 0;
 }
 
-/* LOAD TO BUILD: the ticked files are the whole build (decided 2026-11-07) */
+/* LOAD TO BUILD / UPDATE BUILD: the ticked files are the whole build (decided 2026-11-07) */
 static void do_load(void)
 {
     u8 keep[ROWS];
-    int n = ticked(sel), i;
+    int n = ticked(sel), i, first = build_empty();
     dl_memset(keep, 0, sizeof keep);
     for (i = 0; i < n; i++)
         keep[sel[i]] = 1;
@@ -524,7 +534,7 @@ static void do_load(void)
     build_list();
     page_rows();
     cursor_to(0);                        /* as stock after LOAD TO PROJ */
-    show_box(n ? count_msg(n, "LOADED") : "BUILD CLEARED");
+    show_box(first ? count_msg(n, "LOADED") : "BUILD UPDATED");
 }
 
 /* CLEAR BUILD: an empty build (LOAD TO BUILD with nothing ticked does nothing; decided 2026-11-07) */
@@ -617,9 +627,14 @@ static void ask(const char *verb, int what)
         show_box("NO MODS SELECTED");
         return;
     }
-    at = cat(cat(msg, end, verb), end, " ");
-    at = num(at, end, (u32)n);
-    cat(at, end, n == 1 ? " MOD?" : " MODS?");
+    if (what == P_LOAD && !build_empty()) {   /* "UPDATE BUILD? (2 MODS)" */
+        at = num(cat(msg, end, "UPDATE BUILD? ("), end, (u32)n);
+        cat(at, end, n == 1 ? " MOD)" : " MODS)");
+    } else {                             /* "LOAD 2 MODS?", as stock's "LOAD 2 SAMPLES?" */
+        at = cat(cat(msg, end, verb), end, " ");
+        at = num(at, end, (u32)n);
+        cat(at, end, n == 1 ? " MOD?" : " MODS?");
+    }
     pending = (u8)what;
     confirm(msg);
 }
