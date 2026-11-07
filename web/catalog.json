@@ -257,6 +257,13 @@
       "on_unit": "0.2 tested on a Digitone mk1 by its author (Oct 2026), built before the effects' rename, which changed only names; still a beta. Also checked in digikit's emulator on OS 1.43 and 1.44. Not yet run on a Digitone Keys."
     },
     {
+      "repo": "aleks-karachevtsev/Digitone-MIDI-Arpeggiator", "tag": "v0.9.0-beta", "file": "DigiArp-MIDI-DA27-0.9-dev11.elemod",
+      "device": "digitone-mk1", "needs_core": "4.1",
+      "sha256": "b82506a6adb3c39545eb6daa731e5e28d09e6c61a07dcedb312a65066b84ff58",
+      "summary": "Native-style MIDI arpeggiator for Digitone MK1 MIDI tracks A–D with ARP page and graphical step editor.",
+      "on_unit": "DA27 was installed and tested on a physical Digitone MK1 by its owner. MIDI arpeggiation, native panel controls, graphical step editor, track settings and additional modes are largely functional. One held key with transport stopped can intermittently produce unintended extra pitches; see the release known limitations. Emulator and SDK checks are recorded in TEST_RESULTS.md. Further hardware validation is welcome."
+    },
+    {
       "repo": "irpina/digineighbor", "tag": "v0.6", "file": "digineighbor-0.6.elemod",
       "device": "digitakt-mk1", "needs_core": "2.1", "title": "digineighbor", "version": "0.6",
       "sha256": "380837f86c05cf6d0aba2dfc930a4309cc6b2e99b2e8c6a450f0abe6e844dccd",
