@@ -21131,5 +21131,1397 @@
    },
    "error": "storage field a is declared twice"
   }
+ },
+ "knob_runs": {
+  "from 555 past fixed ids, kept, freed and back (none)": {
+   "start": "none",
+   "steps": [
+    [
+     {
+      "b": 4,
+      "a": 2
+     },
+     555,
+     [
+      [
+       560,
+       573
+      ]
+     ],
+     65535
+    ],
+    [
+     {
+      "b": 4,
+      "a": 2
+     },
+     555,
+     [
+      [
+       560,
+       573
+      ]
+     ],
+     65535
+    ],
+    [
+     {
+      "b": 4
+     },
+     555,
+     [
+      [
+       560,
+       573
+      ]
+     ],
+     65535
+    ],
+    [
+     {
+      "b": 4,
+      "c": 1
+     },
+     555,
+     [
+      [
+       560,
+       573
+      ]
+     ],
+     65535
+    ],
+    [
+     {
+      "a": 2,
+      "b": 6,
+      "c": 1
+     },
+     555,
+     [
+      [
+       560,
+       573
+      ]
+     ],
+     65535
+    ],
+    [
+     {
+      "a": 2,
+      "b": 5,
+      "c": 1
+     },
+     555,
+     [
+      [
+       560,
+       573
+      ]
+     ],
+     65535
+    ],
+    [
+     {
+      "a": 2,
+      "b": 5,
+      "c": 1
+     },
+     555,
+     [
+      [
+       540,
+       556
+      ]
+     ],
+     65535
+    ]
+   ],
+   "results": [
+    {
+     "lock": {
+      "knobs": [
+       {
+        "mod": "a",
+        "first": 555,
+        "count": 2
+       },
+       {
+        "mod": "b",
+        "first": 574,
+        "count": 4
+       }
+      ],
+      "freed_knobs": [],
+      "next_knob": 578
+     },
+     "base": {
+      "a": 555,
+      "b": 574
+     },
+     "notes": [
+      "a: knob ids 555..556",
+      "b: knob ids 574..577"
+     ],
+     "layout_id": null
+    },
+    {
+     "lock": {
+      "knobs": [
+       {
+        "mod": "a",
+        "first": 555,
+        "count": 2
+       },
+       {
+        "mod": "b",
+        "first": 574,
+        "count": 4
+       }
+      ],
+      "freed_knobs": [],
+      "next_knob": 578
+     },
+     "base": {
+      "a": 555,
+      "b": 574
+     },
+     "notes": [],
+     "layout_id": null
+    },
+    {
+     "lock": {
+      "knobs": [
+       {
+        "mod": "b",
+        "first": 574,
+        "count": 4
+       }
+      ],
+      "freed_knobs": [
+       {
+        "mod": "a",
+        "first": 555,
+        "count": 2
+       }
+      ],
+      "next_knob": 578
+     },
+     "base": {
+      "b": 574
+     },
+     "notes": [
+      "a: knob ids 555..556 freed, and kept for it until the unused ids run out"
+     ],
+     "layout_id": null
+    },
+    {
+     "lock": {
+      "knobs": [
+       {
+        "mod": "b",
+        "first": 574,
+        "count": 4
+       },
+       {
+        "mod": "c",
+        "first": 578,
+        "count": 1
+       }
+      ],
+      "freed_knobs": [
+       {
+        "mod": "a",
+        "first": 555,
+        "count": 2
+       }
+      ],
+      "next_knob": 579
+     },
+     "base": {
+      "b": 574,
+      "c": 578
+     },
+     "notes": [
+      "c: knob ids 578..578"
+     ],
+     "layout_id": null
+    },
+    {
+     "lock": {
+      "knobs": [
+       {
+        "mod": "a",
+        "first": 555,
+        "count": 2
+       },
+       {
+        "mod": "c",
+        "first": 578,
+        "count": 1
+       },
+       {
+        "mod": "b",
+        "first": 579,
+        "count": 6
+       }
+      ],
+      "freed_knobs": [],
+      "next_knob": 585
+     },
+     "base": {
+      "c": 578,
+      "a": 555,
+      "b": 579
+     },
+     "notes": [
+      "a: back with knob ids 555..556",
+      "b: knob ids 579..584"
+     ],
+     "layout_id": null
+    },
+    {
+     "lock": {
+      "knobs": [
+       {
+        "mod": "a",
+        "first": 555,
+        "count": 2
+       },
+       {
+        "mod": "c",
+        "first": 578,
+        "count": 1
+       },
+       {
+        "mod": "b",
+        "first": 579,
+        "count": 5
+       }
+      ],
+      "freed_knobs": [],
+      "next_knob": 585
+     },
+     "base": {
+      "a": 555,
+      "c": 578,
+      "b": 579
+     },
+     "notes": [
+      "b: back with knob ids 579..583"
+     ],
+     "layout_id": null
+    },
+    {
+     "lock": {
+      "knobs": [
+       {
+        "mod": "c",
+        "first": 578,
+        "count": 1
+       },
+       {
+        "mod": "b",
+        "first": 579,
+        "count": 5
+       },
+       {
+        "mod": "a",
+        "first": 585,
+        "count": 2
+       }
+      ],
+      "freed_knobs": [],
+      "next_knob": 587
+     },
+     "base": {
+      "c": 578,
+      "b": 579,
+      "a": 585
+     },
+     "notes": [
+      "a: knob ids 585..586"
+     ],
+     "layout_id": null
+    }
+   ]
+  },
+  "from 555 past fixed ids, kept, freed and back (fresh)": {
+   "start": "fresh",
+   "steps": [
+    [
+     {
+      "b": 4,
+      "a": 2
+     },
+     555,
+     [
+      [
+       560,
+       573
+      ]
+     ],
+     65535
+    ],
+    [
+     {
+      "b": 4,
+      "a": 2
+     },
+     555,
+     [
+      [
+       560,
+       573
+      ]
+     ],
+     65535
+    ],
+    [
+     {
+      "b": 4
+     },
+     555,
+     [
+      [
+       560,
+       573
+      ]
+     ],
+     65535
+    ],
+    [
+     {
+      "b": 4,
+      "c": 1
+     },
+     555,
+     [
+      [
+       560,
+       573
+      ]
+     ],
+     65535
+    ],
+    [
+     {
+      "a": 2,
+      "b": 6,
+      "c": 1
+     },
+     555,
+     [
+      [
+       560,
+       573
+      ]
+     ],
+     65535
+    ],
+    [
+     {
+      "a": 2,
+      "b": 5,
+      "c": 1
+     },
+     555,
+     [
+      [
+       560,
+       573
+      ]
+     ],
+     65535
+    ],
+    [
+     {
+      "a": 2,
+      "b": 5,
+      "c": 1
+     },
+     555,
+     [
+      [
+       540,
+       556
+      ]
+     ],
+     65535
+    ]
+   ],
+   "results": [
+    {
+     "lock": {
+      "elekloader_store": 1,
+      "device": "analog-rytm-mk2",
+      "id": "0x828a73b9",
+      "ancestors": [],
+      "split": {
+       "track": 2,
+       "pattern": 4
+      },
+      "generation": {
+       "sound": 1,
+       "kit": 1,
+       "global": 1,
+       "track": 1,
+       "pattern": 1,
+       "project": 1
+      },
+      "next": {
+       "sound": 0,
+       "kit": 0,
+       "global": 0,
+       "track": 0,
+       "pattern": 0,
+       "project": 0
+      },
+      "fields": [],
+      "freed": [],
+      "knobs": [
+       {
+        "mod": "a",
+        "first": 555,
+        "count": 2
+       },
+       {
+        "mod": "b",
+        "first": 574,
+        "count": 4
+       }
+      ],
+      "freed_knobs": [],
+      "next_knob": 578
+     },
+     "base": {
+      "a": 555,
+      "b": 574
+     },
+     "notes": [
+      "a: knob ids 555..556",
+      "b: knob ids 574..577"
+     ],
+     "layout_id": 2190111673
+    },
+    {
+     "lock": {
+      "elekloader_store": 1,
+      "device": "analog-rytm-mk2",
+      "id": "0x828a73b9",
+      "ancestors": [],
+      "split": {
+       "track": 2,
+       "pattern": 4
+      },
+      "generation": {
+       "sound": 1,
+       "kit": 1,
+       "global": 1,
+       "track": 1,
+       "pattern": 1,
+       "project": 1
+      },
+      "next": {
+       "sound": 0,
+       "kit": 0,
+       "global": 0,
+       "track": 0,
+       "pattern": 0,
+       "project": 0
+      },
+      "fields": [],
+      "freed": [],
+      "knobs": [
+       {
+        "mod": "a",
+        "first": 555,
+        "count": 2
+       },
+       {
+        "mod": "b",
+        "first": 574,
+        "count": 4
+       }
+      ],
+      "freed_knobs": [],
+      "next_knob": 578
+     },
+     "base": {
+      "a": 555,
+      "b": 574
+     },
+     "notes": [],
+     "layout_id": 2190111673
+    },
+    {
+     "lock": {
+      "elekloader_store": 1,
+      "device": "analog-rytm-mk2",
+      "id": "0x828a73b9",
+      "ancestors": [],
+      "split": {
+       "track": 2,
+       "pattern": 4
+      },
+      "generation": {
+       "sound": 1,
+       "kit": 1,
+       "global": 1,
+       "track": 1,
+       "pattern": 1,
+       "project": 1
+      },
+      "next": {
+       "sound": 0,
+       "kit": 0,
+       "global": 0,
+       "track": 0,
+       "pattern": 0,
+       "project": 0
+      },
+      "fields": [],
+      "freed": [],
+      "knobs": [
+       {
+        "mod": "b",
+        "first": 574,
+        "count": 4
+       }
+      ],
+      "freed_knobs": [
+       {
+        "mod": "a",
+        "first": 555,
+        "count": 2
+       }
+      ],
+      "next_knob": 578
+     },
+     "base": {
+      "b": 574
+     },
+     "notes": [
+      "a: knob ids 555..556 freed, and kept for it until the unused ids run out"
+     ],
+     "layout_id": 2190111673
+    },
+    {
+     "lock": {
+      "elekloader_store": 1,
+      "device": "analog-rytm-mk2",
+      "id": "0x828a73b9",
+      "ancestors": [],
+      "split": {
+       "track": 2,
+       "pattern": 4
+      },
+      "generation": {
+       "sound": 1,
+       "kit": 1,
+       "global": 1,
+       "track": 1,
+       "pattern": 1,
+       "project": 1
+      },
+      "next": {
+       "sound": 0,
+       "kit": 0,
+       "global": 0,
+       "track": 0,
+       "pattern": 0,
+       "project": 0
+      },
+      "fields": [],
+      "freed": [],
+      "knobs": [
+       {
+        "mod": "b",
+        "first": 574,
+        "count": 4
+       },
+       {
+        "mod": "c",
+        "first": 578,
+        "count": 1
+       }
+      ],
+      "freed_knobs": [
+       {
+        "mod": "a",
+        "first": 555,
+        "count": 2
+       }
+      ],
+      "next_knob": 579
+     },
+     "base": {
+      "b": 574,
+      "c": 578
+     },
+     "notes": [
+      "c: knob ids 578..578"
+     ],
+     "layout_id": 2190111673
+    },
+    {
+     "lock": {
+      "elekloader_store": 1,
+      "device": "analog-rytm-mk2",
+      "id": "0x828a73b9",
+      "ancestors": [],
+      "split": {
+       "track": 2,
+       "pattern": 4
+      },
+      "generation": {
+       "sound": 1,
+       "kit": 1,
+       "global": 1,
+       "track": 1,
+       "pattern": 1,
+       "project": 1
+      },
+      "next": {
+       "sound": 0,
+       "kit": 0,
+       "global": 0,
+       "track": 0,
+       "pattern": 0,
+       "project": 0
+      },
+      "fields": [],
+      "freed": [],
+      "knobs": [
+       {
+        "mod": "a",
+        "first": 555,
+        "count": 2
+       },
+       {
+        "mod": "c",
+        "first": 578,
+        "count": 1
+       },
+       {
+        "mod": "b",
+        "first": 579,
+        "count": 6
+       }
+      ],
+      "freed_knobs": [],
+      "next_knob": 585
+     },
+     "base": {
+      "c": 578,
+      "a": 555,
+      "b": 579
+     },
+     "notes": [
+      "a: back with knob ids 555..556",
+      "b: knob ids 579..584"
+     ],
+     "layout_id": 2190111673
+    },
+    {
+     "lock": {
+      "elekloader_store": 1,
+      "device": "analog-rytm-mk2",
+      "id": "0x828a73b9",
+      "ancestors": [],
+      "split": {
+       "track": 2,
+       "pattern": 4
+      },
+      "generation": {
+       "sound": 1,
+       "kit": 1,
+       "global": 1,
+       "track": 1,
+       "pattern": 1,
+       "project": 1
+      },
+      "next": {
+       "sound": 0,
+       "kit": 0,
+       "global": 0,
+       "track": 0,
+       "pattern": 0,
+       "project": 0
+      },
+      "fields": [],
+      "freed": [],
+      "knobs": [
+       {
+        "mod": "a",
+        "first": 555,
+        "count": 2
+       },
+       {
+        "mod": "c",
+        "first": 578,
+        "count": 1
+       },
+       {
+        "mod": "b",
+        "first": 579,
+        "count": 5
+       }
+      ],
+      "freed_knobs": [],
+      "next_knob": 585
+     },
+     "base": {
+      "a": 555,
+      "c": 578,
+      "b": 579
+     },
+     "notes": [
+      "b: back with knob ids 579..583"
+     ],
+     "layout_id": 2190111673
+    },
+    {
+     "lock": {
+      "elekloader_store": 1,
+      "device": "analog-rytm-mk2",
+      "id": "0x828a73b9",
+      "ancestors": [],
+      "split": {
+       "track": 2,
+       "pattern": 4
+      },
+      "generation": {
+       "sound": 1,
+       "kit": 1,
+       "global": 1,
+       "track": 1,
+       "pattern": 1,
+       "project": 1
+      },
+      "next": {
+       "sound": 0,
+       "kit": 0,
+       "global": 0,
+       "track": 0,
+       "pattern": 0,
+       "project": 0
+      },
+      "fields": [],
+      "freed": [],
+      "knobs": [
+       {
+        "mod": "c",
+        "first": 578,
+        "count": 1
+       },
+       {
+        "mod": "b",
+        "first": 579,
+        "count": 5
+       },
+       {
+        "mod": "a",
+        "first": 585,
+        "count": 2
+       }
+      ],
+      "freed_knobs": [],
+      "next_knob": 587
+     },
+     "base": {
+      "c": 578,
+      "b": 579,
+      "a": 585
+     },
+     "notes": [
+      "a: knob ids 585..586"
+     ],
+     "layout_id": 2190111673
+    }
+   ]
+  },
+  "run out, then the freed runs again (none)": {
+   "start": "none",
+   "steps": [
+    [
+     {
+      "a": 4,
+      "b": 4
+     },
+     10,
+     [],
+     20
+    ],
+    [
+     {
+      "b": 4
+     },
+     10,
+     [],
+     20
+    ],
+    [
+     {
+      "b": 4,
+      "c": 4
+     },
+     10,
+     [],
+     20
+    ],
+    [
+     {
+      "b": 4,
+      "c": 4,
+      "d": 30
+     },
+     10,
+     [],
+     20
+    ]
+   ],
+   "results": [
+    {
+     "lock": {
+      "knobs": [
+       {
+        "mod": "a",
+        "first": 10,
+        "count": 4
+       },
+       {
+        "mod": "b",
+        "first": 14,
+        "count": 4
+       }
+      ],
+      "freed_knobs": [],
+      "next_knob": 18
+     },
+     "base": {
+      "a": 10,
+      "b": 14
+     },
+     "notes": [
+      "a: knob ids 10..13",
+      "b: knob ids 14..17"
+     ],
+     "layout_id": null
+    },
+    {
+     "lock": {
+      "knobs": [
+       {
+        "mod": "b",
+        "first": 14,
+        "count": 4
+       }
+      ],
+      "freed_knobs": [
+       {
+        "mod": "a",
+        "first": 10,
+        "count": 4
+       }
+      ],
+      "next_knob": 18
+     },
+     "base": {
+      "b": 14
+     },
+     "notes": [
+      "a: knob ids 10..13 freed, and kept for it until the unused ids run out"
+     ],
+     "layout_id": null
+    },
+    {
+     "lock": {
+      "knobs": [
+       {
+        "mod": "c",
+        "first": 10,
+        "count": 4
+       },
+       {
+        "mod": "b",
+        "first": 14,
+        "count": 4
+       }
+      ],
+      "freed_knobs": [],
+      "next_knob": 18
+     },
+     "base": {
+      "b": 14,
+      "c": 10
+     },
+     "notes": [
+      "knob ids freed by a given out again",
+      "c: knob ids 10..13"
+     ],
+     "layout_id": null
+    },
+    {
+     "error": "d asks for 30 knob ids, and ids 10..20 have no run that long free"
+    }
+   ]
+  },
+  "run out, then the freed runs again (fresh)": {
+   "start": "fresh",
+   "steps": [
+    [
+     {
+      "a": 4,
+      "b": 4
+     },
+     10,
+     [],
+     20
+    ],
+    [
+     {
+      "b": 4
+     },
+     10,
+     [],
+     20
+    ],
+    [
+     {
+      "b": 4,
+      "c": 4
+     },
+     10,
+     [],
+     20
+    ],
+    [
+     {
+      "b": 4,
+      "c": 4,
+      "d": 30
+     },
+     10,
+     [],
+     20
+    ]
+   ],
+   "results": [
+    {
+     "lock": {
+      "elekloader_store": 1,
+      "device": "analog-rytm-mk2",
+      "id": "0x828a73b9",
+      "ancestors": [],
+      "split": {
+       "track": 2,
+       "pattern": 4
+      },
+      "generation": {
+       "sound": 1,
+       "kit": 1,
+       "global": 1,
+       "track": 1,
+       "pattern": 1,
+       "project": 1
+      },
+      "next": {
+       "sound": 0,
+       "kit": 0,
+       "global": 0,
+       "track": 0,
+       "pattern": 0,
+       "project": 0
+      },
+      "fields": [],
+      "freed": [],
+      "knobs": [
+       {
+        "mod": "a",
+        "first": 10,
+        "count": 4
+       },
+       {
+        "mod": "b",
+        "first": 14,
+        "count": 4
+       }
+      ],
+      "freed_knobs": [],
+      "next_knob": 18
+     },
+     "base": {
+      "a": 10,
+      "b": 14
+     },
+     "notes": [
+      "a: knob ids 10..13",
+      "b: knob ids 14..17"
+     ],
+     "layout_id": 2190111673
+    },
+    {
+     "lock": {
+      "elekloader_store": 1,
+      "device": "analog-rytm-mk2",
+      "id": "0x828a73b9",
+      "ancestors": [],
+      "split": {
+       "track": 2,
+       "pattern": 4
+      },
+      "generation": {
+       "sound": 1,
+       "kit": 1,
+       "global": 1,
+       "track": 1,
+       "pattern": 1,
+       "project": 1
+      },
+      "next": {
+       "sound": 0,
+       "kit": 0,
+       "global": 0,
+       "track": 0,
+       "pattern": 0,
+       "project": 0
+      },
+      "fields": [],
+      "freed": [],
+      "knobs": [
+       {
+        "mod": "b",
+        "first": 14,
+        "count": 4
+       }
+      ],
+      "freed_knobs": [
+       {
+        "mod": "a",
+        "first": 10,
+        "count": 4
+       }
+      ],
+      "next_knob": 18
+     },
+     "base": {
+      "b": 14
+     },
+     "notes": [
+      "a: knob ids 10..13 freed, and kept for it until the unused ids run out"
+     ],
+     "layout_id": 2190111673
+    },
+    {
+     "lock": {
+      "elekloader_store": 1,
+      "device": "analog-rytm-mk2",
+      "id": "0x828a73b9",
+      "ancestors": [],
+      "split": {
+       "track": 2,
+       "pattern": 4
+      },
+      "generation": {
+       "sound": 1,
+       "kit": 1,
+       "global": 1,
+       "track": 1,
+       "pattern": 1,
+       "project": 1
+      },
+      "next": {
+       "sound": 0,
+       "kit": 0,
+       "global": 0,
+       "track": 0,
+       "pattern": 0,
+       "project": 0
+      },
+      "fields": [],
+      "freed": [],
+      "knobs": [
+       {
+        "mod": "c",
+        "first": 10,
+        "count": 4
+       },
+       {
+        "mod": "b",
+        "first": 14,
+        "count": 4
+       }
+      ],
+      "freed_knobs": [],
+      "next_knob": 18
+     },
+     "base": {
+      "b": 14,
+      "c": 10
+     },
+     "notes": [
+      "knob ids freed by a given out again",
+      "c: knob ids 10..13"
+     ],
+     "layout_id": 2190111673
+    },
+    {
+     "error": "d asks for 30 knob ids, and ids 10..20 have no run that long free"
+    }
+   ]
+  }
+ },
+ "knob_locks": {
+  "next_knob below a run": {
+   "lock": {
+    "elekloader_store": 1,
+    "device": "analog-rytm-mk2",
+    "id": "0x828a73b9",
+    "ancestors": [],
+    "split": {
+     "track": 2,
+     "pattern": 4
+    },
+    "generation": {
+     "sound": 1,
+     "kit": 1,
+     "global": 1,
+     "track": 1,
+     "pattern": 1,
+     "project": 1
+    },
+    "next": {
+     "sound": 0,
+     "kit": 0,
+     "global": 0,
+     "track": 0,
+     "pattern": 0,
+     "project": 0
+    },
+    "fields": [],
+    "freed": [],
+    "next_knob": 556,
+    "knobs": [
+     {
+      "mod": "a",
+      "first": 555,
+      "count": 2
+     }
+    ],
+    "freed_knobs": []
+   },
+   "error": "lockfile: a bad entry in \"knobs\""
+  },
+  "overlapping runs": {
+   "lock": {
+    "elekloader_store": 1,
+    "device": "analog-rytm-mk2",
+    "id": "0x828a73b9",
+    "ancestors": [],
+    "split": {
+     "track": 2,
+     "pattern": 4
+    },
+    "generation": {
+     "sound": 1,
+     "kit": 1,
+     "global": 1,
+     "track": 1,
+     "pattern": 1,
+     "project": 1
+    },
+    "next": {
+     "sound": 0,
+     "kit": 0,
+     "global": 0,
+     "track": 0,
+     "pattern": 0,
+     "project": 0
+    },
+    "fields": [],
+    "freed": [],
+    "next_knob": 560,
+    "knobs": [
+     {
+      "mod": "a",
+      "first": 555,
+      "count": 2
+     },
+     {
+      "mod": "b",
+      "first": 556,
+      "count": 2
+     }
+    ],
+    "freed_knobs": []
+   },
+   "error": "lockfile: two mods' knob ids overlap"
+  },
+  "one mod twice": {
+   "lock": {
+    "elekloader_store": 1,
+    "device": "analog-rytm-mk2",
+    "id": "0x828a73b9",
+    "ancestors": [],
+    "split": {
+     "track": 2,
+     "pattern": 4
+    },
+    "generation": {
+     "sound": 1,
+     "kit": 1,
+     "global": 1,
+     "track": 1,
+     "pattern": 1,
+     "project": 1
+    },
+    "next": {
+     "sound": 0,
+     "kit": 0,
+     "global": 0,
+     "track": 0,
+     "pattern": 0,
+     "project": 0
+    },
+    "fields": [],
+    "freed": [],
+    "next_knob": 560,
+    "knobs": [
+     {
+      "mod": "a",
+      "first": 555,
+      "count": 1
+     },
+     {
+      "mod": "a",
+      "first": 557,
+      "count": 1
+     }
+    ],
+    "freed_knobs": []
+   },
+   "error": "lockfile: a bad entry in \"knobs\""
+  },
+  "freed not a list": {
+   "lock": {
+    "elekloader_store": 1,
+    "device": "analog-rytm-mk2",
+    "id": "0x828a73b9",
+    "ancestors": [],
+    "split": {
+     "track": 2,
+     "pattern": 4
+    },
+    "generation": {
+     "sound": 1,
+     "kit": 1,
+     "global": 1,
+     "track": 1,
+     "pattern": 1,
+     "project": 1
+    },
+    "next": {
+     "sound": 0,
+     "kit": 0,
+     "global": 0,
+     "track": 0,
+     "pattern": 0,
+     "project": 0
+    },
+    "fields": [],
+    "freed": [],
+    "next_knob": 560,
+    "knobs": [],
+    "freed_knobs": {}
+   },
+   "error": "lockfile: \"freed_knobs\" is a list"
+  },
+  "a count of 0": {
+   "lock": {
+    "elekloader_store": 1,
+    "device": "analog-rytm-mk2",
+    "id": "0x828a73b9",
+    "ancestors": [],
+    "split": {
+     "track": 2,
+     "pattern": 4
+    },
+    "generation": {
+     "sound": 1,
+     "kit": 1,
+     "global": 1,
+     "track": 1,
+     "pattern": 1,
+     "project": 1
+    },
+    "next": {
+     "sound": 0,
+     "kit": 0,
+     "global": 0,
+     "track": 0,
+     "pattern": 0,
+     "project": 0
+    },
+    "fields": [],
+    "freed": [],
+    "next_knob": 560,
+    "knobs": [
+     {
+      "mod": "a",
+      "first": 555,
+      "count": 0
+     }
+    ],
+    "freed_knobs": []
+   },
+   "error": "lockfile: a bad entry in \"knobs\""
+  },
+  "good": {
+   "lock": {
+    "elekloader_store": 1,
+    "device": "analog-rytm-mk2",
+    "id": "0x828a73b9",
+    "ancestors": [],
+    "split": {
+     "track": 2,
+     "pattern": 4
+    },
+    "generation": {
+     "sound": 1,
+     "kit": 1,
+     "global": 1,
+     "track": 1,
+     "pattern": 1,
+     "project": 1
+    },
+    "next": {
+     "sound": 0,
+     "kit": 0,
+     "global": 0,
+     "track": 0,
+     "pattern": 0,
+     "project": 0
+    },
+    "fields": [],
+    "freed": [],
+    "next_knob": 560,
+    "knobs": [
+     {
+      "mod": "a",
+      "first": 555,
+      "count": 2
+     }
+    ],
+    "freed_knobs": [
+     {
+      "mod": "b",
+      "first": 557,
+      "count": 3
+     }
+    ]
+   },
+   "error": null
+  }
  }
 }

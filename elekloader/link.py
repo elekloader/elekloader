@@ -26,6 +26,12 @@ carry DSP56300 code, `.dsp.<payload>` sections of 24-bit little-endian words, an
 DSP tables (a collection with "space": "dsp.<payload>"). They are placed in the P words of
 that payload a mod frees by claiming the area's name (the profile's `dsp_areas`); a symbol
 there is a DSP word address, and a `dsp24` relocation writes one as three little-endian bytes.
+
+On a device with knob ids for mods (the profile's `param_ids`), a mod may declare `"knobs": n`:
+the linker gives it a run of n ids from the profile's first mod id up (store.knobs, kept in the
+lockfile), and its own symbol `__knobs` is the run's first id. A relocation to `__knobs` is an
+abs32 or an `abs16` (two big-endian bytes, for the 16-bit knob lists of const tables) with an
+addend of 0..n-1.
 """
 import struct
 
@@ -37,8 +43,9 @@ from .elemod import (ModError, sha, _int, _hex, common_checks, insn_check, overl
 
 FORMAT2 = 2
 SECTIONS = ('.boot', '.run', '.fast', '.bss', '.payload')
-RTYPES = ('abs32', 'pc32', 'pc16', 'dsp24')
-RSIZE = {'abs32': 4, 'pc32': 4, 'pc16': 2, 'dsp24': 3}
+RTYPES = ('abs32', 'abs16', 'pc32', 'pc16', 'dsp24')
+RSIZE = {'abs32': 4, 'abs16': 2, 'pc32': 4, 'pc16': 2, 'dsp24': 3}
+KNOBS = '__knobs'                 # a mod's first knob id (its "knobs")
 DSP = '.dsp.'                     # a DSP section: '.dsp.' + its payload's tag
 
 
@@ -50,6 +57,7 @@ def _dsp_tag(dev, sec):
 FAST_ENTRY = 16                   # a .fast copy entry: src, dst, len, 0
 PAYLOADS = 'core_payloads'        # the core's table of the mods' payloads: id, address, length
 PAYLOAD_ENTRY = 12
+MAX_KNOBS = 1024                  # a mod's "knobs": at most this many ids
 MAX_ALIGN = 4096                  # a section's alignment: a power of two up to this
 LINKER_SYMS = {'__run_load', '__run_start', '__run_words', '__bss_start', '__bss_end',
                '__bss_words', '__run_hash'}
@@ -88,7 +96,8 @@ class Mod2:
         if format_of(doc) != FORMAT2:
             raise ModError('%s: not a format-2 .elemod file' % name)
         extra = set(doc) - COMMON - {'sections', 'symbols', 'exports', 'imports', 'weak',
-                                     'relocs', 'collections', 'contribute', 'copied', 'storage', 'sharc'}
+                                     'relocs', 'collections', 'contribute', 'copied', 'storage', 'sharc',
+                                     'knobs'}
         if extra:
             raise ModError('%s: unknown fields %s' % (name, sorted(extra)))
         for k in ('id', 'version', 'target', 'sections'):
@@ -131,6 +140,11 @@ class Mod2:
             self.symbols[nm] = (v[0], _int(v[1], name))
             if _dsp_tag(self.dev, v[0]) and self.symbols[nm][1] % 3:
                 raise ModError('%s: DSP symbol %s is not at a whole word' % (name, nm))
+        if KNOBS in self.symbols:
+            raise ModError('%s: %s is the linker\'s (its first knob id), not a symbol of a mod' % (name, KNOBS))
+        self.knobs = doc.get('knobs', 0)
+        if type(self.knobs) is not int or not 0 <= self.knobs <= MAX_KNOBS:
+            raise ModError('%s: "knobs" is a count of knob ids, 0..%d' % (name, MAX_KNOBS))
         self.exports = [str(x) for x in doc.get('exports', [])]
         for x in self.exports:
             if x not in self.symbols:
@@ -171,7 +185,7 @@ class Mod2:
             for r in c.get('relocs', []):
                 off, typ, tgt, add = r
                 off = _int(off, what)
-                if typ not in RTYPES or off < 0 or off + (3 if typ == 'dsp24' else 4) > len(data):
+                if typ not in RTYPES or off < 0 or off + RSIZE[typ] > len(data):
                     raise ModError('%s: bad relocation %r' % (what, r))
                 rel.append((off, typ, tgt, _int(add, what)))
             claims = [(_int(a, what), _int(b, what)) for a, b in c.get('claims', [])]
@@ -226,11 +240,12 @@ class Mod2:
                         out.append('%s:%d' % (prefix, v))
         return out
 
-    def id_ranges(self, image):
+    def id_ranges(self, image, knobs=None):
         """The knob ids this mod's entries answer for, by the profile's param_ids: a
         contribution to such a table holds four-byte pointers to entries whose first two longs are
         a range of ids (core-ar2's core_params, core_param_locks). -> [(table, first, last)]. An
-        entry this cannot read (outside the mod's own bytes, or relocated there) answers for none."""
+        entry this cannot read (outside the mod's own bytes, or relocated there) answers for none;
+        one relocated to __knobs answers for its ids when knobs (the mod's first id) is given."""
         out = []
         for table, _own_only in (self.dev.param_ids[2] if self.dev.param_ids else ()):
             for c in self.contribute:
@@ -240,11 +255,30 @@ class Mod2:
                     at = None if off % 4 else self._target(typ, tgt, add)
                     if at is None:
                         continue
-                    first, last = self._long(at[0], at[1], image), self._long(at[0], at[1] + 4, image)
+                    first, last = self._id(at[0], at[1], image, knobs), self._id(at[0], at[1] + 4, image, knobs)
                     if first is not None and last is not None:
                         first, last = [v - (1 << 32) if v >> 31 else v for v in (first, last)]
                         if first <= last:
                             out.append((table, first, last))
+        return out
+
+    def _id(self, sec, off, image, knobs):
+        """An id long at `sec`+`off`: its bytes, or __knobs + the addend where an abs32
+        relocates it to __knobs and knobs is given; else None."""
+        r = next(((t, g, a) for s, o, t, g, a in self.relocs if s == sec and o == off), None)
+        if r is None:
+            return self._long(sec, off, image)
+        if knobs is not None and r[:2] == ('abs32', 'sym:' + KNOBS):
+            return (knobs + r[2]) & 0xFFFFFFFF
+        return None
+
+    def knob_refs(self):
+        """-> [(where, type, addend)] of every relocation to __knobs: sections, sites, entries."""
+        out = [('%s+0x%x' % (sec, off), t, a) for sec, off, t, g, a in self.relocs if g == 'sym:' + KNOBS]
+        out += [('site 0x%08x' % s['addr'], t, a) for s in self.sites for _o, t, g, a in s['relocs']
+                if g == 'sym:' + KNOBS]
+        out += [('an entry of %s' % c['to'], t, a) for c in self.contribute for _o, t, g, a in c['relocs']
+                if g == 'sym:' + KNOBS]
         return out
 
     def _long(self, sec, off, image):
@@ -476,24 +510,15 @@ def check(mods, image):
                 bad.append('table %s has the name of a symbol %s exports' % (c, owner[c].label()))
             tables[c] = (m, e)
     if dev.param_ids and len({(m.dev.key, m.rel.version) for m in mods}) == 1:
-        own, (lo, hi, what), kinds = dev.param_ids
-        own_only = {t for t, o in kinds if o}
-        taken = []
-        for m in mods:
-            for table, a, b in m.id_ranges(image):
-                if a <= hi and lo <= b:
-                    bad.append('%s: its %s entry takes ids %d..%d, and %d..%d are %s; a mod\'s own '
-                               'ids start at %d' % (m.label(), table, a, b, lo, hi, what, own))
-                elif table in own_only and a < own:
-                    bad.append('%s: its %s entry takes ids %d..%d; that table\'s ids start at %d'
-                               % (m.label(), table, a, b, own))
-                elif b >= own:
-                    a = max(a, own)
-                    for n, t, x, y in taken:
-                        if n is not m and x <= b and a <= y:
-                            bad.append('%s and %s both take ids %d..%d (%s, %s)'
-                                       % (n.label(), m.label(), max(a, x), min(b, y), t, table))
-                    taken.append((m, table, a, b))
+        bad += id_problems(mods, image)
+    for m in mods:
+        if m.knobs and not dev.param_ids:
+            bad.append('%s asks for knob ids ("knobs"), which the %s does not give mods'
+                       % (m.label(), dev.name))
+        for where, t, a in m.knob_refs():
+            if t not in ('abs32', 'abs16') or not 0 <= a < m.knobs:
+                bad.append('%s: %s is a %s reference to %s+%d; one takes abs32 or abs16 with an addend '
+                           'below its "knobs" (%d)' % (m.label(), where, t, KNOBS, a, m.knobs))
     sized = reserve_names(dev, owner)
     fields = {}                                 # mod storage: the linker defines these
     for m in mods:
@@ -510,7 +535,7 @@ def check(mods, image):
     for m in mods:
         for x in m.imports:
             if x in owner or x in tables or x in LINKER_SYMS or x in sized or x in m.weak \
-                    or (x.endswith('_n') and x[:-2] in tables) or x in fields:
+                    or (x.endswith('_n') and x[:-2] in tables) or x in fields or (x == KNOBS and m.knobs):
                 continue
             bad.append('%s imports %s, which no given mod exports' % (m.label(), x))
         for c in m.contribute:
@@ -550,6 +575,31 @@ def check(mods, image):
         la = a[2].label() if a[2] else 'the linker'
         lb = b[2].label() if b[2] else 'the linker'
         bad.append('%s %s and %s %s overlap' % (la, a[3], lb, b[3]))
+    return bad
+
+
+def id_problems(mods, image, knobs=None):
+    """The profile's param_ids against the mods' entries: none in the core's ids, none in a table
+    whose ids are mods' own below them, and no id from there up taken twice. knobs: {mod id: its
+    first knob id} (link), to count the entries relocated to __knobs too. -> [problems]."""
+    own, (lo, hi, what), kinds = mods[0].dev.param_ids
+    own_only = {t for t, o in kinds if o}
+    taken, bad = [], []
+    for m in mods:
+        for table, a, b in m.id_ranges(image, (knobs or {}).get(m.id)):
+            if a <= hi and lo <= b:
+                bad.append('%s: its %s entry takes ids %d..%d, and %d..%d are %s; a mod\'s own '
+                           'ids start at %d' % (m.label(), table, a, b, lo, hi, what, own))
+            elif table in own_only and a < own:
+                bad.append('%s: its %s entry takes ids %d..%d; that table\'s ids start at %d'
+                           % (m.label(), table, a, b, own))
+            elif b >= own:
+                a = max(a, own)
+                for n, t, x, y in taken:
+                    if n is not m and x <= b and a <= y:
+                        bad.append('%s and %s both take ids %d..%d (%s, %s)'
+                                   % (n.label(), m.label(), max(a, x), min(b, y), t, table))
+                taken.append((m, table, a, b))
     return bad
 
 
@@ -645,7 +695,8 @@ class Linked:
 def link(mods, image, lock=None, *, sharc_stream=None):
     """-> Linked: .image (the patched main OS), .map ({name: address}),
     .layout, .tables ({name: (address, count, entry)}), .order, and for a core
-    with mod storage .store (the new lockfile) and .store_notes. lock: the
+    with mod storage .store (the new lockfile) and .store_notes; .knobs ({mod id:
+    [first id, count]}) and .knob_notes for the mods' "knobs". lock: the
     build's lockfile, or None for a new one (elekloader/store.py). Raises
     ModError."""
     if not mods:
@@ -797,6 +848,17 @@ def link(mods, image, lock=None, *, sharc_stream=None):
                 raise ModError('the storage field %s has the name of a symbol a mod exports' % nm)
         for i, data in enumerate(ids):
             entries[store.IDS_TABLE].append((-1, '', i, core, {'data': data, 'relocs': []}))
+    # knob ids: each "knobs" mod's run, past the ids mods' entries name themselves
+    knob_base, knob_notes = {}, []
+    if dev.param_ids and (any(m.knobs for m in order) or (new_lock or {}).get('knobs')
+                          or (new_lock or {}).get('freed_knobs')):
+        fixed = [(a, b) for m in order for _t, a, b in m.id_ranges(image)]
+        held = new_lock if new_lock is not None else {}
+        knob_base, knob_notes = store.knobs(held, {m.id: m.knobs for m in order if m.knobs},
+                                            dev.param_ids[0], fixed)
+        bad = id_problems(order, image, knob_base)
+        if bad:                                # store.knobs keeps clear of them: a self-check
+            raise ModError('the linked mods break a rule:\n  ' + '\n  '.join(bad))
     fast_mods = [m for m in order if m.size('.fast')]
     pay_mods = [m for m in order if m.size('.payload')]
     if pay_mods:
@@ -948,6 +1010,8 @@ def link(mods, image, lock=None, *, sharc_stream=None):
             return base[(m.id, nm)]
         if (m.id, nm) in addr and nm in m.symbols:
             return addr[(m.id, nm)]
+        if nm == KNOBS and m.id in knob_base:
+            return knob_base[m.id]
         if nm in glob:
             return glob[nm]
         if nm in m.weak and zero is not None:
@@ -980,6 +1044,10 @@ def link(mods, image, lock=None, *, sharc_stream=None):
             buf[off:off + 3] = bytes((value & 0xFF, (value >> 8) & 0xFF, value >> 16))
         elif typ == 'abs32':
             struct.pack_into('>I', buf, off, value & 0xFFFFFFFF)
+        elif typ == 'abs16':
+            if not -0x8000 <= value <= 0xFFFF:
+                raise ModError('%s: a 16-bit value out of range (%d)' % (where, value))
+            struct.pack_into('>H', buf, off, value & 0xFFFF)
         elif typ == 'pc32':
             struct.pack_into('>i', buf, off, value - p)
         else:
@@ -1120,6 +1188,10 @@ def link(mods, image, lock=None, *, sharc_stream=None):
             if payload['entries'] is not None:
                 info.update(core=list(core.sharc['owner']), hook=rel.sharc['hook'][0])
     out.store, out.store_notes = new_lock, store_notes
+    out.knobs = {mid: [b, next(m.knobs for m in order if m.id == mid)] for mid, b in sorted(knob_base.items())}
+    out.knob_notes = knob_notes
+    for mid, b in knob_base.items():
+        out.map['%s:%s' % (mid, KNOBS)] = b
     if units is not None:                      # the reserve the core takes: units of dev.reserve
         out.layout['reserve'] = {'units': units, 'end': ddr_base + units * dev.reserve[0]}
     if areas:                                  # words: P addresses of each payload's area

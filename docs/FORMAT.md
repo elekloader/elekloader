@@ -69,10 +69,11 @@ A format-2 mod is a relocatable object:
 | `symbols` | `{"name": [".run", offset]}` or `["abs", value]` |
 | `exports` | the symbols other mods may use |
 | `imports`, `weak` | the names it uses from others; a weak one resolves to `core_zero` (zeros) if no mod provides it |
-| `relocs` | `[section, offset, "abs32"/"pc32"/"pc16"/"dsp24", target, addend]`; target `"sym:NAME"`, `"sec:NAME"` or `"abs"` |
+| `relocs` | `[section, offset, "abs32"/"abs16"/"pc32"/"pc16"/"dsp24", target, addend]`; target `"sym:NAME"`, `"sec:NAME"` or `"abs"`; `abs16` writes two big-endian bytes, -32768..65535 |
 | `collections` | tables this mod declares: `{"ev_tick": {"entry": 4}}`, or a DSP table (below) |
 | `contribute` | entries for tables: `{"to", "order", "data", "relocs", "claims"}` |
 | `copied` | `[{"lo", "hi", "to"}]`: a block of the image this mod copies elsewhere at run time |
+| `knobs` | a count of knob ids, 0..1024, the linker gives this mod (the Analog Rytm MKII from core-ar2 0.12; "Knob ids" below) |
 | `storage` | fields this mod keeps with the project: `[{"sym", "scope", "bits"}]` (the Analog Rytm MKII from core-ar2 0.2, the Analog Four MKII from core-a4 0.1; "Mod storage" below) |
 | `sharc` | Digitone II 1.12 only: compiled code for the DSP ("Digitone II SHARC mod" below) |
 
@@ -220,7 +221,8 @@ each program on its own.
    Digitakt II) automatically.
    When a mod declares `storage`, the linker places the fields from the
    build's lockfile ("Mod storage" below) and defines each field's `sym`
-   as an absolute symbol, its descriptor.
+   as an absolute symbol, its descriptor. When a mod declares `knobs`, the
+   linker gives it its run of ids ("Knob ids" below).
 4. **Relocates** the sections, the table entries and the sites.
 5. **Checks again** on the result: code sites are still whole
    instructions, the copied-block rules hold, and the image is what the
@@ -346,6 +348,29 @@ imports `core_fx_lfo_dst` gets that as a kit field (7 bits); in a build
 without one the symbol is 0 and the field is not placed. docs/ADAPTING.md ("Mod storage
 (core-ar2 0.2, Analog Rytm MKII)" and "Mod storage (core-a4 0.1, Analog
 Four MKII)") has the rest.
+
+### Knob ids
+
+On a device whose profile gives mods knob ids (`param_ids`: the Analog Rytm
+MKII's start at 555), a mod declares `"knobs": n` and the linker gives it n
+ids in a row. Its symbol `__knobs` is the first; it is the mod's own, so two
+mods' `__knobs` differ. A relocation to `__knobs` is an `abs32` or an `abs16`
+with an addend of 0..n-1, anything else is refused, as is `"knobs"` on a
+device without `param_ids` or a mod that defines `__knobs` itself.
+
+The linker (`store.knobs`, the same in `js/src/store.ts`) gives the runs from
+the first id up, by mod id, past every id a mod's `core_params` or
+`core_param_locks` entry names in its own bytes, and checks the linked
+entries again with their runs. The lockfile keeps them in `knobs` and
+`freed_knobs` (`mod`, `first`, `count`) and `next_knob`, none of them part
+of the layout ID: the ids are not stored data. A mod keeps its run while its
+count stays; one that leaves keeps it in `freed_knobs` and gets it back when
+it returns; one whose count changes keeps its first id when the new run has
+room there; any other takes never-used ids from `next_knob` up. Only when
+those run out (past 65535, which an `abs16` holds) are freed runs given out
+again. A build whose core keeps no lockfile gets the same ids for the same
+mods. The build's manifest carries the runs as `knobs` (`{mod: [first,
+count]}`).
 
 ### DSP code
 

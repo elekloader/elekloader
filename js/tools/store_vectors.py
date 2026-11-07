@@ -337,9 +337,33 @@ DECLS = {
 }
 
 
+# knob ids (store.knobs): each run is steps of [want ({mod: count}), first, fixed, top], from {} or a fresh lockfile
+KNOB_RUNS = {
+    'from 555 past fixed ids, kept, freed and back': [
+        [{'b': 4, 'a': 2}, 555, [[560, 573]], 0xFFFF], [{'b': 4, 'a': 2}, 555, [[560, 573]], 0xFFFF],
+        [{'b': 4}, 555, [[560, 573]], 0xFFFF], [{'b': 4, 'c': 1}, 555, [[560, 573]], 0xFFFF],
+        [{'a': 2, 'b': 6, 'c': 1}, 555, [[560, 573]], 0xFFFF], [{'a': 2, 'b': 5, 'c': 1}, 555, [[560, 573]], 0xFFFF],
+        [{'a': 2, 'b': 5, 'c': 1}, 555, [[540, 556]], 0xFFFF]],
+    'run out, then the freed runs again': [
+        [{'a': 4, 'b': 4}, 10, [], 20], [{'b': 4}, 10, [], 20], [{'b': 4, 'c': 4}, 10, [], 20],
+        [{'b': 4, 'c': 4, 'd': 30}, 10, [], 20]],
+}
+KNOB_LOCKS = {
+    'next_knob below a run': {'next_knob': 556, 'knobs': [{'mod': 'a', 'first': 555, 'count': 2}], 'freed_knobs': []},
+    'overlapping runs': {'next_knob': 560, 'knobs': [{'mod': 'a', 'first': 555, 'count': 2},
+                                                    {'mod': 'b', 'first': 556, 'count': 2}], 'freed_knobs': []},
+    'one mod twice': {'next_knob': 560, 'knobs': [{'mod': 'a', 'first': 555, 'count': 1},
+                                                 {'mod': 'a', 'first': 557, 'count': 1}], 'freed_knobs': []},
+    'freed not a list': {'next_knob': 560, 'knobs': [], 'freed_knobs': {}},
+    'a count of 0': {'next_knob': 560, 'knobs': [{'mod': 'a', 'first': 555, 'count': 0}], 'freed_knobs': []},
+    'good': {'next_knob': 560, 'knobs': [{'mod': 'a', 'first': 555, 'count': 2}],
+             'freed_knobs': [{'mod': 'b', 'first': 557, 'count': 3}]},
+}
+
+
 def main():
     out = {'runs': {}, 'lock_runs': {}, 'cc_runs': {}, 'init_runs': {}, 'handle_runs': {}, 'kind_runs': {},
-           'locks': {}, 'kind_locks': {}, 'flags': {}, 'decls': {}}
+           'locks': {}, 'kind_locks': {}, 'flags': {}, 'decls': {}, 'knob_runs': {}, 'knob_locks': {}}
     def run(lock, steps, core, dev=DEV):
         res = []
         for decls in steps:
@@ -454,6 +478,24 @@ def main():
                                   'cvs': store.parse_cvs(doc), 'inits': store.parse_inits(doc), 'handles': store.parse_handles(doc)}
         except ModError as e:
             out['decls'][name] = {'doc': doc, 'error': str(e)}
+    for name, steps in KNOB_RUNS.items():
+        for start in ('none', 'fresh'):
+            lock, res = ({} if start == 'none' else store.fresh(DEV)), []
+            for want, first, fixed, top in steps:
+                try:
+                    base, notes = store.knobs(lock, want, first, [tuple(f) for f in fixed], top)
+                    res.append({'lock': json.loads(json.dumps(lock)), 'base': base, 'notes': notes,
+                                'layout_id': store.layout_id(lock) if start == 'fresh' else None})
+                except ModError as e:
+                    res.append({'error': str(e)})
+            out['knob_runs']['%s (%s)' % (name, start)] = {'start': start, 'steps': steps, 'results': res}
+    for name, extra in KNOB_LOCKS.items():
+        lock = dict(store.fresh(DEV), **extra)
+        try:
+            store.check_lock(lock, DEV)
+            out['knob_locks'][name] = {'lock': lock, 'error': None}
+        except ModError as e:
+            out['knob_locks'][name] = {'lock': lock, 'error': str(e)}
     path = os.path.join(ROOT, 'js', 'test', 'store-vectors.json')
     with open(path, 'w') as fh:
         json.dump(out, fh, indent=1)

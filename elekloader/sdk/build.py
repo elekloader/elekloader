@@ -33,6 +33,10 @@ mod.json:
                                                      linker places from the lockfile; "lock":
                                                      true on a sound field gives it a lock
                                                      code (core-ar2 0.8)
+     "knobs": 4,                                      knob ids (core-ar2 0.12): the linker gives
+                                                     the mod 4 ids from 555 up; __knobs is the
+                                                     first (`.short __knobs + 2` in a const
+                                                     table is an abs16)
      "ports": {"1.54": {"defsym": {...}, "sites": [...]}}}   optional: other OS versions
 
 A port builds the same mod for another release of the device: for that OS,
@@ -389,8 +393,8 @@ def build(mdir, stock_path, out_dir=None, extra=None):
         for off, typ, y, add in rl:
             if typ == elf.R_68K_NONE:
                 continue
-            if typ not in (elf.R_68K_32, elf.R_68K_PC32, elf.R_68K_PC16):
-                raise BuildError('relocation type %d at %s+0x%x (%s): only 32-bit absolute and '
+            if typ not in (elf.R_68K_32, elf.R_68K_16, elf.R_68K_PC32, elf.R_68K_PC16):
+                raise BuildError('relocation type %d at %s+0x%x (%s): only 32/16-bit absolute and '
                                  '32/16-bit PC-relative references can be relocated'
                                  % (typ, sec, off, y.name))
             tgt, a = target(y, add)
@@ -569,6 +573,8 @@ def build(mdir, stock_path, out_dir=None, extra=None):
         doc['build']['sharc_artifact_sha256'] = sha(artifact_raw)
     if mod.get('storage'):                  # mod storage: fields elekloader places (store.py)
         doc['storage'] = mod['storage']
+    if mod.get('knobs'):                    # knob ids the linker gives out (link.py, store.knobs)
+        doc['knobs'] = mod['knobs']
     raw = (json.dumps(doc, indent=1) + '\n').encode()
     try:
         m = link.Mod2(json.loads(raw), mid)                # the loader's own validation

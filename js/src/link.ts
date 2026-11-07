@@ -31,7 +31,9 @@ export class StructError extends PyException {}
 
 export const FORMAT2 = 2
 const SECTIONS = ['.boot', '.run', '.fast', '.bss', '.payload']
-const RTYPES = ['abs32', 'pc32', 'pc16', 'dsp24']
+const RTYPES = ['abs32', 'abs16', 'pc32', 'pc16', 'dsp24']
+export const KNOBS = '__knobs'                // a mod's first knob id (its "knobs")
+const MAX_KNOBS = 1024                      // a mod's "knobs": at most this many ids
 const DSP = '.dsp.'                         // a DSP section: '.dsp.' + its payload's tag
 const FAST_ENTRY = 16                       // a .fast copy entry: src, dst, len, 0
 export const PAYLOADS = 'core_payloads'     // the core's table of the mods' payloads: id, address, length
@@ -97,6 +99,7 @@ export class Mod2 implements AnyMod {
   contribute: Contribution[]
   copied: [number, number, number][]
   storage: [string, string, number][]
+  knobs: number
   locks: string[]
   ccs: string[]
   lfos: string[]
@@ -117,7 +120,7 @@ export class Mod2 implements AnyMod {
     this.name = name
     this.sha256 = raw ? sha(raw) : null
     if (!pyEq(formatOf(doc), FORMAT2)) throw new ModError(`${name}: not a format-2 .elemod file`)
-    const more = new Set(['sections', 'symbols', 'exports', 'imports', 'weak', 'relocs', 'collections', 'contribute', 'copied', 'storage', 'sharc'])
+    const more = new Set(['sections', 'symbols', 'exports', 'imports', 'weak', 'relocs', 'collections', 'contribute', 'copied', 'storage', 'sharc', 'knobs'])
     const extra = Object.keys(doc).filter(k => !COMMON.has(k) && !more.has(k)).sort()
     if (extra.length) throw new ModError(`${name}: unknown fields ${repr(extra)}`)
     for (const k of ['id', 'version', 'target', 'sections']) if (!(k in doc)) throw new ModError(`${name}: no "${k}"`)
@@ -155,6 +158,11 @@ export class Mod2 implements AnyMod {
       this.symbols.set(nm, [v[0], int(v[1], name)])
       if (dspTag(this.dev, v[0]) && this.symbols.get(nm)![1] % 3) throw new ModError(`${name}: DSP symbol ${nm} is not at a whole word`)
     }
+    if (this.symbols.has(KNOBS)) throw new ModError(`${name}: ${KNOBS} is the linker's (its first knob id), not a symbol of a mod`)
+    const k = get(doc, 'knobs', 0)
+    if (typeof k !== 'number' || !Number.isInteger(k) || !(k >= 0 && k <= MAX_KNOBS))
+      throw new ModError(`${name}: "knobs" is a count of knob ids, 0..${MAX_KNOBS}`)
+    this.knobs = k
     this.exports = iter(get(doc, 'exports', [])).map(x => str(x))
     for (const x of this.exports) if (!this.symbols.has(x)) throw new ModError(`${name}: exports ${x}, which it does not define`)
     this.imports = iter(get(doc, 'imports', [])).map(x => str(x))
@@ -192,7 +200,7 @@ export class Mod2 implements AnyMod {
       for (const r of iter(get(c, 'relocs', []))) {
         const [off0, typ, tgt, add] = unpack(r, 4)
         const off = int(off0, what)
-        if (!RTYPES.includes(typ as string) || off < 0 || off + (typ === 'dsp24' ? 3 : 4) > data.length)
+        if (!RTYPES.includes(typ as string) || off < 0 || off + RSIZE.get(typ as string)! > data.length)
           throw new ModError(`${what}: bad relocation ${repr(r)}`)
         rel.push([off, typ as string, tgt as string, int(add, what)])
       }
@@ -257,8 +265,9 @@ export class Mod2 implements AnyMod {
   /** The knob ids this mod's entries answer for, by the profile's paramIds: a contribution to such a table holds
    * four-byte pointers to entries whose first two longs are a range of ids (core-ar2's core_params,
    * core_param_locks). -> [[table, first, last]]. An entry this cannot read (outside the mod's own bytes, or
-   * relocated there) answers for none. link.Mod2.id_ranges. */
-  idRanges(image: Uint8Array): [string, number, number][] {
+   * relocated there) answers for none; one relocated to __knobs answers for its ids when knobs (the mod's first id)
+   * is given. link.Mod2.id_ranges. */
+  idRanges(image: Uint8Array, knobs: number | null = null): [string, number, number][] {
     const out: [string, number, number][] = []
     for (const [table] of this.dev.paramIds ? this.dev.paramIds[2] : []) {
       for (const c of this.contribute) {
@@ -266,12 +275,31 @@ export class Mod2 implements AnyMod {
         for (const [off, typ, tgt, add] of c.relocs) {
           const at = off % 4 ? null : this.target(typ, tgt, add)
           if (at === null) continue
-          const first = this.long(at[0], at[1], image), last = this.long(at[0], at[1] + 4, image)
+          const first = this.idLong(at[0], at[1], image, knobs), last = this.idLong(at[0], at[1] + 4, image, knobs)
           if (first !== null && last !== null && (first | 0) <= (last | 0)) out.push([table, first | 0, last | 0])
         }
       }
     }
     return out
+  }
+
+  /** An id long at sec+off: its bytes, or __knobs + the addend where an abs32 relocates it to __knobs and knobs is
+   * given; else null. link.Mod2._id. */
+  private idLong(sec: string, off: number, image: Uint8Array, knobs: number | null): number | null {
+    const r = this.relocs.find(([s, o]) => s === sec && o === off)
+    if (!r) return this.long(sec, off, image)
+    if (knobs !== null && r[2] === 'abs32' && r[3] === 'sym:' + KNOBS) return (knobs + r[4]) >>> 0
+    return null
+  }
+
+  /** -> [[where, type, addend]] of every relocation to __knobs: sections, sites, entries. link.Mod2.knob_refs. */
+  knobRefs(): [string, string, number][] {
+    const t = 'sym:' + KNOBS
+    return [
+      ...this.relocs.filter(r => r[3] === t).map(([sec, off, ty, , a]) => [`${sec}+0x${off.toString(16)}`, ty, a] as [string, string, number]),
+      ...this.sites.flatMap(s => s.relocs.filter(r => r[2] === t).map(([, ty, , a]) => [`site 0x${s.addr.toString(16).padStart(8, '0')}`, ty, a] as [string, string, number])),
+      ...this.contribute.flatMap(c => c.relocs.filter(r => r[2] === t).map(([, ty, , a]) => [`an entry of ${c.to}`, ty, a] as [string, string, number])),
+    ]
   }
 
   /** The big-endian long at sec+off of this mod's bytes, or null: in a section without bytes
@@ -483,26 +511,12 @@ export function check(mods: Mod2[], image: Uint8Array): string[] {
       tables.set(c, [m, e])
     }
   }
-  if (dev.paramIds && new Set(mods.map(m => m.dev.key + '\0' + m.rel.version)).size === 1) {
-    const [own, [lo, hi, what], kinds] = dev.paramIds
-    const ownOnly = new Set(kinds.filter(([, o]) => o).map(([t]) => t))
-    const taken: [Mod2, string, number, number][] = []
-    for (const m of mods) {
-      for (const [table, a0, b] of m.idRanges(image)) {
-        let a = a0
-        if (a <= hi && lo <= b) {
-          bad.push(`${m.label()}: its ${table} entry takes ids ${a}..${b}, and ${lo}..${hi} are ${what}; a mod's own ids start at ${own}`)
-        } else if (ownOnly.has(table) && a < own) {
-          bad.push(`${m.label()}: its ${table} entry takes ids ${a}..${b}; that table's ids start at ${own}`)
-        } else if (b >= own) {
-          a = Math.max(a, own)
-          for (const [n, t, x, y] of taken) {
-            if (n !== m && x <= b && a <= y) bad.push(`${n.label()} and ${m.label()} both take ids ${Math.max(a, x)}..${Math.min(b, y)} (${t}, ${table})`)
-          }
-          taken.push([m, table, a, b])
-        }
-      }
-    }
+  if (dev.paramIds && new Set(mods.map(m => m.dev.key + '\0' + m.rel.version)).size === 1) bad.push(...idProblems(mods, image))
+  for (const m of mods) {
+    if (m.knobs && !dev.paramIds) bad.push(`${m.label()} asks for knob ids ("knobs"), which the ${dev.name} does not give mods`)
+    for (const [where, t, a] of m.knobRefs())
+      if (!['abs32', 'abs16'].includes(t) || !(a >= 0 && a < m.knobs))
+        bad.push(`${m.label()}: ${where} is a ${t} reference to ${KNOBS}+${a}; one takes abs32 or abs16 with an addend below its "knobs" (${m.knobs})`)
   }
   const sized = reserveNames(dev, owner)
   const fields = new Map<string, Mod2 | null>()   // mod storage: the linker defines these
@@ -518,7 +532,7 @@ export function check(mods: Mod2[], image: Uint8Array): string[] {
   for (const m of mods) {
     for (const x of m.imports) {
       if (owner.has(x) || tables.has(x) || LINKER_SYMS.has(x) || sized.has(x) || m.weak.has(x)
-        || (x.endsWith('_n') && tables.has(x.slice(0, -2))) || fields.has(x)) continue
+        || (x.endsWith('_n') && tables.has(x.slice(0, -2))) || fields.has(x) || (x === KNOBS && m.knobs)) continue
       bad.push(`${m.label()} imports ${x}, which no given mod exports`)
     }
     for (const c of m.contribute) {
@@ -564,6 +578,32 @@ export function check(mods: Mod2[], image: Uint8Array): string[] {
  * patched image. */
 /** The linker's last check, on the image it built, against the stock one. It trusts none of the layout that
  *  built the image; it only compares (link.py's image_problems, the same lines). */
+/** The profile's paramIds against the mods' entries: none in the core's ids, none in a table whose ids are mods' own
+ * below them, and no id from there up taken twice. knobs: mod id -> its first knob id (link), to count the entries
+ * relocated to __knobs too. -> [problems]. link.id_problems. */
+export function idProblems(mods: Mod2[], image: Uint8Array, knobs: Map<string, number> | null = null): string[] {
+  const [own, [lo, hi, what], kinds] = mods[0].dev.paramIds!
+  const ownOnly = new Set(kinds.filter(([, o]) => o).map(([t]) => t))
+  const taken: [Mod2, string, number, number][] = [], bad: string[] = []
+  for (const m of mods) {
+    for (const [table, a0, b] of m.idRanges(image, knobs?.get(m.id) ?? null)) {
+      let a = a0
+      if (a <= hi && lo <= b) {
+        bad.push(`${m.label()}: its ${table} entry takes ids ${a}..${b}, and ${lo}..${hi} are ${what}; a mod's own ids start at ${own}`)
+      } else if (ownOnly.has(table) && a < own) {
+        bad.push(`${m.label()}: its ${table} entry takes ids ${a}..${b}; that table's ids start at ${own}`)
+      } else if (b >= own) {
+        a = Math.max(a, own)
+        for (const [n, t, x, y] of taken) {
+          if (n !== m && x <= b && a <= y) bad.push(`${n.label()} and ${m.label()} both take ids ${Math.max(a, x)}..${Math.min(b, y)} (${t}, ${table})`)
+        }
+        taken.push([m, table, a, b])
+      }
+    }
+  }
+  return bad
+}
+
 export function imageProblems(dev: Device, stock: Uint8Array, img: Uint8Array, declared: [number, number, string][], tailAt: number): string[] {
   const ml = dev.mainLoad, n = stock.length
   const bad: string[] = []
@@ -656,6 +696,8 @@ export type Linked = {
   layout: Layout
   store: store.Lock | null                      // a core with mod storage: the new lockfile
   storeNotes: string[]
+  knobs: Map<string, [number, number]>          // mod id -> [first knob id, count], by mod id
+  knobNotes: string[]
   sharcStream: Uint8Array | null
   sharcStored: Uint8Array | null
 }
@@ -813,6 +855,15 @@ export function link(mods: Mod2[], image: Uint8Array, lock: store.Lock | null = 
     for (const nm of storeSyms.keys())
       if (taken.has(nm) || LINKER_SYMS.has(nm)) throw new ModError(`the storage field ${nm} has the name of a symbol a mod exports`)
     ids.forEach((data, i) => entries.get(store.IDS_TABLE)!.push([-1, '', i, core, { to: store.IDS_TABLE, order: -1, data, relocs: [], claims: [], i }]))
+  }
+  // knob ids: each "knobs" mod's run, past the ids mods' entries name themselves
+  let knobBase = new Map<string, number>(), knobNotes: string[] = []
+  if (dev.paramIds && (order.some(m => m.knobs) || newLock?.knobs?.length || newLock?.freed_knobs?.length)) {
+    const fixed = order.flatMap(m => m.idRanges(image).map(([, a, b]) => [a, b] as [number, number]))
+    const held: Partial<store.Lock> = newLock ?? {}
+    ;[knobBase, knobNotes] = store.knobs(held, new Map(order.filter(m => m.knobs).map(m => [m.id, m.knobs])), dev.paramIds[0], fixed)
+    const bad = idProblems(order, image, knobBase)
+    if (bad.length) throw new ModError('the linked mods break a rule:\n  ' + bad.join('\n  '))   // store.knobs keeps clear of them
   }
   const fastMods = order.filter(m => m.size('.fast'))
   const payMods = order.filter(m => m.size('.payload'))
@@ -990,6 +1041,7 @@ export function link(mods: Mod2[], image: Uint8Array, lock: store.Lock | null = 
       return b
     }
     if (addr.has(key(m.id, nm)) && m.symbols.has(nm)) return addr.get(key(m.id, nm))!
+    if (nm === KNOBS && knobBase.has(m.id)) return knobBase.get(m.id)!
     if (glob.has(nm)) return glob.get(nm)!
     if (m.weak.has(nm) && zero !== undefined) return zero
     throw new ModError(`${m.label()}: ${where} refers to ${nm}, which nothing defines`)
@@ -1022,6 +1074,9 @@ export function link(mods: Mod2[], image: Uint8Array, lock: store.Lock | null = 
       buf[off + 2] = value >> 16
     } else if (typ === 'abs32') {
       v.setUint32(off, ((value % 2 ** 32) + 2 ** 32) % 2 ** 32)
+    } else if (typ === 'abs16') {
+      if (!(value >= -0x8000 && value <= 0xffff)) throw new ModError(`${where}: a 16-bit value out of range (${value})`)
+      v.setUint16(off, value & 0xffff)
     } else if (typ === 'pc32') {
       const d = value - p
       if (d < -(2 ** 31) || d >= 2 ** 31) throw new StructError("'i' format requires -2147483648 <= number <= 2147483647")
@@ -1183,7 +1238,9 @@ export function link(mods: Mod2[], image: Uint8Array, lock: store.Lock | null = 
     }
     layout.dsp = dspOut
   }
-  return { image: img, order: order.map(m => m.label()), map, tables: outTables, layout, store: newLock, storeNotes,
+  const knobsOut = new Map([...knobBase].sort((a, b) => cmp(a[0], b[0])).map(([id, b]) => [id, [b, order.find(m => m.id === id)!.knobs] as [number, number]]))
+  for (const [id, b] of knobBase) map.set(`${id}:${KNOBS}`, b)
+  return { image: img, order: order.map(m => m.label()), map, tables: outTables, layout, store: newLock, storeNotes, knobs: knobsOut, knobNotes,
     sharcStream: dspStream, sharcStored: dspStored }
 }
 

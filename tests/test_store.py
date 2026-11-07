@@ -353,6 +353,50 @@ def test_a4_flags():
     refused(store.parse_decls, {'storage': [{'sym': 'c', 'scope': 'sound', 'bits': 3, 'lock': True, 'track': 'cv'}]})
 
 
+def test_knob_ids_follow_their_mods_and_not_the_layout():
+    lock = store.fresh(DEV)
+    lid = lock['id']
+    base, notes = store.knobs(lock, {'b': 4, 'a': 2}, 555, [(560, 573)])
+    assert base == {'a': 555, 'b': 574} and lock['next_knob'] == 578       # a fits under 560, b past 573
+    assert notes == ['a: knob ids 555..556', 'b: knob ids 574..577']
+    assert store.layout_id(lock) == store.layout_id(store.fresh(DEV)) and lock['id'] == lid
+    store.check_lock(lock, DEV)
+    base, notes = store.knobs(lock, {'b': 4, 'a': 2}, 555, [(560, 573)])
+    assert base == {'a': 555, 'b': 574} and notes == []                     # the same build: the same ids
+    base, notes = store.knobs(lock, {'b': 4}, 555, [(560, 573)])           # a leaves: its ids are kept
+    assert base == {'b': 574} and lock['freed_knobs'] == [{'mod': 'a', 'first': 555, 'count': 2}]
+    assert notes == ['a: knob ids 555..556 freed, and kept for it until the unused ids run out']
+    base, notes = store.knobs(lock, {'b': 4, 'c': 1}, 555, [(560, 573)])   # c takes never-used ids
+    assert base == {'b': 574, 'c': 578}
+    base, notes = store.knobs(lock, {'a': 2, 'b': 6, 'c': 1}, 555, [(560, 573)])
+    assert base == {'a': 555, 'b': 579, 'c': 578}                          # a back; b grew past c
+    assert notes == ['a: back with knob ids 555..556', 'b: knob ids 579..584']
+    base, _ = store.knobs(lock, {'a': 2, 'b': 5, 'c': 1}, 555, [(560, 573)])
+    assert base['b'] == 579                                                 # b shrank: same first id
+    store.check_lock(lock, DEV)
+
+
+def test_knob_ids_run_out_then_freed_runs_are_given_again():
+    lock = {}
+    store.knobs(lock, {'a': 4, 'b': 4}, 10, (), top=20)
+    store.knobs(lock, {'b': 4}, 10, (), top=20)
+    base, notes = store.knobs(lock, {'b': 4, 'c': 4}, 10, (), top=20)    # 18..21 is past 20
+    assert base == {'b': 14, 'c': 10} and lock['freed_knobs'] == []
+    assert notes == ['knob ids freed by a given out again', 'c: knob ids 10..13']
+    assert refused(store.knobs, {}, {'d': 30}, 10, (), 20) == \
+        'd asks for 30 knob ids, and ids 10..20 have no run that long free'
+
+
+def test_knob_lockfiles_it_refuses():
+    lock = store.fresh(DEV)
+    store.knobs(lock, {'a': 2, 'b': 2}, 555)
+    for edit in (lambda l: l.update(next_knob=556), lambda l: l['knobs'][1].update(first=556),
+                 lambda l: l['knobs'].append(dict(l['knobs'][0])), lambda l: l.update(freed_knobs={})):
+        bad = json.loads(json.dumps(lock))
+        edit(bad)
+        assert refused(store.check_lock, bad, DEV).startswith('lockfile: ')
+
+
 if __name__ == '__main__':
     for name, fn in sorted(globals().items()):
         if name.startswith('test_'):

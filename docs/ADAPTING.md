@@ -1929,6 +1929,27 @@ The linker refuses a `core_params` or `core_param_locks` entry whose ids
 take 469..554, a `core_param_locks` entry below 555, and entries of two
 mods that share an id from 555.
 
+**Knob ids by count (core-ar2 0.12).** Rather than pick ids from 555 up,
+declare how many the mod needs in mod.json, `"knobs": 4`, and use
+`__knobs + k` for knob k. The linker gives each mod its own run past every
+other mod's ids and keeps it from build to build in the lockfile
+(docs/FORMAT.md, "Knob ids"):
+
+```c
+#include "analog-rytm-mk2/pages.h"
+CORE_KNOBS;                         /* extern char __knobs[] */
+const struct core_page my_page = {14, "MY PAGE", {CORE_KNOB(0), CORE_KNOB(1), CORE_KNOB(2), CORE_KNOB(3)}};
+const struct core_param_lock my_locks = {CORE_KNOB(0), CORE_KNOB(3), my_get, my_turn,
+                                         my_set, my_clear, my_label, my_name};
+```
+
+`CORE_KNOB(k)` is a constant in a const table (an `abs32`); a 16-bit field
+in assembly, `.short __knobs + 2`, is an `abs16`. The addend must be below
+the mod's `"knobs"`.
+
+Keep your values by `id - CORE_KNOB(0)`, never by the id itself: a build
+with other mods may give the mod other ids.
+
 ### Step tags (core-ar2 0.11, Analog Rytm MKII)
 
 A mod that keeps a record of its own for some steps (for the Sidecar mods,
@@ -4128,7 +4149,10 @@ Some differences from an octabam build, by design:
 | `adds to table T, which no given mod declares` | the table's owner is missing, or the event name is wrong | add core (or the owner); check the event name |
 | `T holds at most N entries on <device> <OS>; A and B add M` | the mods together add more to T than the OS uses (the device profile's `table_limits`; for `sdk_alpha_machines`, the SDK machines it lists) | build with fewer of those mods, or fewer machines in them |
 | `both export S` | two mods define the same global | prefix your globals with your mod id; make internals `static` |
-| `relocation type N` | a reference the linker cannot relocate (e.g. 16-bit absolute) | use 32-bit addressing for your own symbols; build with the SDK's flags |
+| `relocation type N` | a reference the linker cannot relocate (e.g. 8-bit) | use 32-bit addressing for your own symbols; build with the SDK's flags |
+| `a 16-bit value out of range` | an `abs16` names an address or a number past 65535 | use 32 bits; `abs16` is for ids such as `__knobs + k` |
+| `is a ... reference to __knobs+N; one takes abs32 or abs16 with an addend below its "knobs"` | the mod uses a knob past the count it declares, or a PC-relative reference to it | raise `"knobs"` in mod.json, or fix the index |
+| `asks for knob ids ("knobs"), which the <device> does not give mods` | only a device with mod knob ids (the Analog Rytm MKII) has them | drop `"knobs"` |
 | `section X is not one elekloader places` | code or data in a section the linker does not know | C: default sections; asm: `.section .run, "ax"`, `.fast` or `.bss` |
 | `the mods need RAM to ...` / `.fast code needs SRAM to ...` | over budget | shrink tables and buffers; keep `.fast` for the hottest code only |
 | `has .fast code, which needs ...` | `.fast` is copied in by FAST AUDIO | require `fast-audio`, or use `.run` |
