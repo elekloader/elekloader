@@ -151,6 +151,8 @@ struct elek_voice {
     int32_t velocity;              /* 1..127; the Digitone's AMP already applies it: use it for timbre */
     void *state;                   /* ELEK_VOICE_STATE_MAX bytes, zeroed at boot and when the voice changes
                                     * machine, kept between calls and notes: read it with ELEK_STATE */
+    uint32_t idle;                 /* frames the voice was not rendered (silent) since its last render, up to
+                                    * UINT32_MAX; 0 in the first render after its state is zeroed */
 };
 /* The voice's state as a type*, which must fit in ELEK_VOICE_STATE_MAX bytes (a compile error if not). */
 #define ELEK_STATE(type, v) \

@@ -114,5 +114,12 @@ int main(void)
     native[7].fresh = 0;
     render(7, blocks[7], &native[7]);
     assert(!last[7].start);
+    native[7].idle = 2 * ELEK_VOICE_FRAMES;    /* the native companion's count of skipped frames */
+    render(7, blocks[7], &native[7]);
+    assert(last[7].idle == 2 * ELEK_VOICE_FRAMES);
+    FW_VOICE_PARAM(7, 0) = 0; dnm_sdk_params(words);
+    FW_VOICE_PARAM(7, 0) = 100 << 8; dnm_sdk_params(words);
+    render(7, blocks[7], &native[7]);
+    assert(last[7].idle == 0 && blocks[7][1] == 1);   /* a cleared state's first render gets 0 */
     return 0;
 }

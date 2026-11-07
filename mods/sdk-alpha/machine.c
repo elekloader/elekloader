@@ -210,6 +210,7 @@ void sdk_alpha_blit(void *bmp, int32_t x, int32_t y, const struct elek_glyph *gl
 static struct {
     int32_t id;
     uint8_t start;                      /* the device's start flag lasts one block; kept until render */
+    uint8_t rendered;                   /* rendered since its state was cleared: idle means something */
     uint32_t state[ELEK_VOICE_STATE_MAX / 4];
 } voices[SDK_ALPHA_VOICES];
 
@@ -219,10 +220,11 @@ void sdk_alpha_select(uint32_t slot, int32_t id)
     for (uint32_t i = 0; i < ELEK_VOICE_STATE_MAX / 4; ++i) voices[slot].state[i] = 0;
     voices[slot].id = id;
     voices[slot].start = 0;
+    voices[slot].rendered = 0;
 }
 
 void sdk_alpha_voice(const struct sdk_alpha_entry *e, uint32_t slot, struct elek_voice *v,
-                     const int32_t *raw, int start, elek_sample *out)
+                     const int32_t *raw, int start, uint32_t idle, elek_sample *out)
 {
     int32_t knob[SDK_ALPHA_KNOBS];
     if (start) voices[slot].start = 1;
@@ -231,7 +233,9 @@ void sdk_alpha_voice(const struct sdk_alpha_entry *e, uint32_t slot, struct elek
     v->knob = knob;
     v->start = voices[slot].start;
     v->state = voices[slot].state;
+    v->idle = voices[slot].rendered ? idle : 0;
     e->machine->render(v, out);
     voices[slot].start = 0;
+    voices[slot].rendered = 1;
 }
 #endif
