@@ -153,8 +153,12 @@ The page is stock's two-pane file view, the one SAMPLES and PROJECTS are built o
   now, stays), `ADD` (loads at the next boot), `DROP` (loaded now, gone after the next boot;
   these rows stay until the reboot) or `!` (the last boot refused it). Its action panel has
   UNLOAD, which saves the build without the ticked mods through the same checks.
+- **No files.** With no `.elemod` in `/mods` the list has one row, `NO MODS ON +DRIVE`, which
+  YES does nothing to, and neither panel opens (decided 2026-11-07). Stock's file view hangs
+  the UI when it is first shown with no row at all; its own lists never are (a folder has
+  `..`, VIEW RAM its 128 slots).
 - **Messages** are stock's message box: on opening, why the boot skipped the mods
-  (`SKIPPED: [NO] HELD`, `SKIPPED: CRASH`, `NO +DRIVE`, ...) or `NO MODS ON +DRIVE`; after a
+  (`SKIPPED: [NO] HELD`, `SKIPPED: CRASH`, `NO +DRIVE`, ...); after a
   change, `SAVE FAILED` or `BUSY: TRY AGAIN`.
 - **The boot's verdicts** come from the boot's own records, matched by file name
   (`dl_boot_choice`), so a second file with a loaded mod's id isn't shown as loaded.

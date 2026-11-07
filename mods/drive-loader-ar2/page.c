@@ -253,7 +253,7 @@ static int scan(void)
             choice[m].crc = rows[i].crc;
             choice_row[m++] = i;
         }
-    if (check(m) >= 0)
+    if (m && check(m) >= 0)              /* no files: nothing to check (found 2026-11-07) */
         for (k = 0; k < m; k++) {
             struct row *r = &rows[choice_row[k]];
             int c = cst[k].code;
@@ -355,13 +355,16 @@ static const char *const acts_build[] = {"SELECT ALL", "DESELECT ALL", "UNLOAD"}
 #define NACT_BUILD 3
 #define I_ACT 100                        /* functor index of the action panel's rows */
 #define I_LEFT 300                       /* and of the left panel's row */
+#define I_EMPTY 200                      /* the file list's one row when /mods holds no file */
 
 /* a row's label: list rows 1.., the action panel I_ACT.., the left panel I_LEFT */
 unsigned dl_page_text(int i)
 {
     char *end = label + sizeof label;
     label[0] = 0;
-    if (i >= I_LEFT)
+    if (i == I_EMPTY)
+        cat(label, end, "NO MODS ON +DRIVE");
+    else if (i >= I_LEFT)
         cat(label, end, mode == M_DRIVE ? "VIEW BUILD" : "VIEW +DRIVE");
     else if (i >= I_ACT) {
         i -= I_ACT;
@@ -468,6 +471,11 @@ static void tick(int row, int on)
 
 static void cursor_to(int row)
 {
+    /* never on a row the list does not have: stock's view hangs the UI on a cursor in an empty
+     * list (no files on the +Drive; found 2026-11-07 on DLP7). Stock's own lists are never empty
+     * (a folder always has "..", VIEW RAM always its 128 slots), so the MODS page alone needs this. */
+    if (row < 0 || row >= list_n())
+        return;
     ((void (*)(void *, int, int))VCALL(0x18))(view, row, 0);
 }
 
@@ -712,6 +720,11 @@ static void page_rows(void)
     ((int *)view)[11] = ((int *)view)[10];   /* no ticks carried across lists */
     for (i = 0; i < list_n(); i++)
         add_item(view, i + 1, i);
+    /* stock's file view hangs the UI when it is first shown with no row (DLP7, 2026-11-07); its
+     * own lists never are (a folder has "..", VIEW RAM its slots). So a file list with no file
+     * gets one row that says so and does nothing (YES on it changes nothing: it is no file). */
+    if (mode == M_DRIVE && !nrows)
+        add_item(view, I_EMPTY, 0);
     LIST_CLEAR(right);
     for (i = 0; i < (mode == M_BUILD ? NACT_BUILD : NACT_DRIVE); i++)
         add_item(right, I_ACT + i, -1);
@@ -743,7 +756,9 @@ void dl_mods_open(void **f)
     mode = M_DRIVE;
     pending = P_NONE;
     p = NEW(PANE_SIZE);
-    PANE_CTOR(p, "ModsManager", 0x80, 1, 1, 0);   /* left panel on (+0x508), action panel on (+0x509) */
+    /* left panel on (+0x508), action panel on (+0x509); with no file both stay shut, as there
+     * is nothing to act on or view (decided 2026-11-07) */
+    PANE_CTOR(p, "ModsManager", 0x80, nrows != 0, nrows != 0, 0);
     view = p;
     page_rows();
     dl_call_a0(VIEW_SP, sp, menu, (unsigned)((char *)p + 0x38));
@@ -754,8 +769,6 @@ void dl_mods_open(void **f)
         show_box("BUSY: TRY AGAIN");
     else if (dl_skip_reason && dl_skip_reason < sizeof skip / sizeof skip[0])
         show_box(skip[dl_skip_reason]);
-    else if (!nrows)
-        show_box("NO MODS ON +DRIVE");
 }
 
 static const void *const mods_row[4] = {
