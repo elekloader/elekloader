@@ -327,6 +327,13 @@
       "on_unit": "Tested on hardware; fully functional and stable."
     },
     {
+      "repo": "DigiAlchemydsp/FILTER-PLUS", "tag": "v1.0", "file": "filterplus-dn-1.0.elemod",
+      "device": "digitone-mk1", "needs_core": "4.0",
+      "sha256": "82daf461ea712751bb85f7404b43292620c610df77d701531cf840ce2f9d6101",
+      "summary": "13 extra filter types for the Digitakt mk1 and Digitone mk1/Keys, all cheaper than the stock Elektron filter types.",
+      "on_unit": "Tested on hardware; fully functional and stable."
+    },
+    {
       "repo": "irpina/digineighbor", "tag": "v0.6", "file": "digineighbor-0.6.elemod",
       "device": "digitakt-mk1", "needs_core": "2.1", "title": "digineighbor", "version": "0.6",
       "sha256": "380837f86c05cf6d0aba2dfc930a4309cc6b2e99b2e8c6a450f0abe6e844dccd",
@@ -541,6 +548,13 @@
       "device": "digitakt-mk1", "needs_core": "4.0",
       "sha256": "9e9fa4c5c3be54dec5d915e0a7ac19dbf704f2c24ca2743992836137fc442ff6",
       "summary": "Routes the Digitone or Digitakt inputs or internal tracks into a track with a low-CPU pitch shifter and an on-page oscilloscope.",
+      "on_unit": "Tested on hardware; fully functional and stable."
+    },
+    {
+      "repo": "DigiAlchemydsp/FILTER-PLUS", "tag": "v1.0", "file": "filterplus-1.0.elemod",
+      "device": "digitakt-mk1", "needs_core": "4.0",
+      "sha256": "1a311d337c243a0d4a204172d61671c7aeacdc1fa535f0138def6f074f333656",
+      "summary": "13 extra filter types for the Digitakt mk1 and Digitone mk1/Keys, all cheaper than the stock Elektron filter types.",
       "on_unit": "Tested on hardware; fully functional and stable."
     },
     {
