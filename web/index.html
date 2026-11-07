@@ -27,6 +27,8 @@
       <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></svg>Mods</a>
     <a class="nav-link" id="nav-build" href="#build">
       <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M13.5 3.5 6.5 13h5l-1 7.5 7-9.5h-5z"/></svg>Build<span class="badge" id="nav-count">0</span></a>
+    <a class="nav-link" id="nav-make" href="#make">
+      <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8zM18.5 15.5l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7z"/></svg>Make your own mod!</a>
     <a class="nav-link" id="nav-submit" href="#submit">
       <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5M5 15v3.5A1.5 1.5 0 0 0 6.5 20h11a1.5 1.5 0 0 0 1.5-1.5V15"/></svg>Submit your mod</a>
     <a class="nav-link" id="nav-contribute" href="#contribute">
@@ -330,6 +332,93 @@ python -m elekloader.patch --stock Digitakt_OS1.53.syx --mod mods/core/out/core-
     </article>
   </section>
 
+  <section class="view" id="view-make" aria-labelledby="make-title" hidden>
+    <article class="guide-page">
+      <header class="page-head">
+        <p class="eyebrow">Never made one before?</p>
+        <h1 id="make-title">Make your own mod!</h1>
+        <p class="sub">You don't have to be a programmer. Tell an AI coding agent what kind of sound you want: it
+          writes the code, checks it on your computer, and builds a firmware file you can try on your unit. This page
+          is what a mod is, what you need, what to ask, and what to expect.</p>
+      </header>
+
+      <h2>What is a mod?</h2>
+      <p>A mod is a small file (<code>.elemod</code>) that adds something to your Elektron's operating system: a new
+        sound machine, an effect, a change to a screen. You pick mods on the <a href="#library">Mods</a> page, and
+        the <a href="#build">Build</a> page combines them with Elektron's own OS file into a normal update (a
+        <code>.syx</code>) that you send to your unit like any other. Making a mod means making one of those small
+        files.</p>
+
+      <h2>The easiest first mod: a sound machine</h2>
+      <p>A <strong>machine</strong> is a new sound source: its name, its knobs, the pages they sit on, and the code that
+        makes the sound. You write it once, in a few dozen lines of C, and the same file builds for the
+        <strong>Digitakt</strong> (OS 1.54), the <strong>Digitone</strong> and Digitone Keys (OS 1.44) and, without
+        sound code for now, the <strong>Digitone II</strong> (OS 1.12). Your agent writes those lines; you decide what
+        it should sound like. This part of elekloader (the SDK) is an alpha: it can change, and a mod may need
+        rebuilding when it does.</p>
+      <p>Wanting something else, such as an effect, a new screen or a change for another device? Tell the agent
+        that, and it will start from the right template. The <a href="#contribute/start">developer's guide</a> is the
+        longer route.</p>
+
+      <h2>What you need</h2>
+      <ul>
+        <li><strong>A coding agent</strong> that can run commands on your computer (Claude Code, Codex and others).
+          It does the installing and the typing; you stay in charge.</li>
+        <li><strong>Python 3.9 or newer and git.</strong> The agent can install them and the rest; setup is the part
+          that takes longest.</li>
+        <li><strong>Your device's stock OS file,</strong> the one you download from Elektron.
+          <a href="https://github.com/elekloader/elekloader/blob/main/docs/INSTALL.md#the-stock-os-file" rel="noreferrer" target="_blank">Where to get it</a>.
+          It stays on your computer: never put it in a repository.</li>
+        <li><strong>A cross compiler,</strong> to turn the C into code your unit runs. The agent installs it (on
+          Windows it works inside WSL).</li>
+        <li><strong>A backup plan:</strong> the stock OS file also puts your unit back as it was.
+          <a href="https://github.com/elekloader/elekloader#flash-it" rel="noreferrer" target="_blank">How to flash, and how to go back</a></li>
+      </ul>
+
+      <h2>Start here: paste this to your agent</h2>
+      <pre class="prompt"><code id="make-prompt">I'm new to this and want to make my first elekloader mod: a new sound machine for my Elektron. I'm not a programmer, so explain things plainly and do the setup for me. Start by asking me which device and OS version I have and what kind of sound I want. Then clone https://github.com/elekloader/elekloader, read AGENTS.md and docs/SDK.md, and install whatever is missing (Python 3.9 or newer, git, the ColdFire cross compiler; on Windows use WSL). Copy examples/sdk-hello-world as the starting point, write my machine in C, and run it on my computer with python -m elekloader.sdk.sdk_alpha_host before you build anything. Ask me where my stock OS file is (the .syx I downloaded from Elektron); never copy it into the repository or commit it. Build, lint and patch as docs/SDK.md says, then give me the .syx and plain instructions for trying it, including how to get back to stock. Never flash my device yourself. When I'm happy with it, help me put the mod in its own GitHub repository and send me to the Submit your mod tab.</code></pre>
+      <p><button type="button" class="btn primary small" id="copy-make">Copy the prompt</button>
+        <span class="muted small" id="make-note" role="status"></span></p>
+
+      <h2>What happens next</h2>
+      <ol class="steps">
+        <li><strong>The agent asks you</strong> which device and OS you have, and what you'd like to hear: "a fat saw
+          with a tune knob", "a noisy hi-hat", "something that sounds broken".</li>
+        <li><strong>It writes your machine</strong> and runs it on your computer. That check prints each knob's label
+          and the sound's level and pitch (no audio yet), so mistakes show up before anything is built.</li>
+        <li><strong>It builds a firmware file</strong> from your stock OS file, your mod and the pieces it needs, and
+          checks that they fit together. You get a <code>.syx</code>.</li>
+        <li><strong>You try it.</strong> First in the emulator if you like
+          (<a href="#contribute/test">Test before you flash</a>), then on your unit. The sound is the part only you
+          can judge, so tell the agent what to change and it will rebuild.</li>
+        <li><strong>You share it,</strong> when it's good: <a href="#submit">Submit your mod</a>.</li>
+      </ol>
+
+      <h2>Good to know</h2>
+      <ul>
+        <li><strong>Only the main OS changes.</strong> The bootloader stays stock, so the stock OS file always gets a
+          unit back. Flashing custom firmware is still at your own risk, and elekloader isn't affiliated with Elektron.</li>
+        <li><strong>Ask the agent to explain.</strong> "What does this line do?" and "what could go wrong on the
+          unit?" are good questions at any step.</li>
+        <li><strong>Say what you haven't tested.</strong> If it only ran in the emulator, say so when you share it:
+          "not yet on a unit" is a fine answer.</li>
+      </ul>
+
+      <h2>Links</h2>
+      <ul class="ways">
+        <li><strong>The SDK guide</strong>: a complete machine, every field, the commands.
+          <a href="https://github.com/elekloader/elekloader/blob/main/docs/SDK.md" rel="noreferrer" target="_blank">Shared machine SDK</a></li>
+        <li><strong>The rules for coding agents</strong>, which your agent reads.
+          <a href="https://github.com/elekloader/elekloader/blob/main/AGENTS.md" rel="noreferrer" target="_blank">AGENTS.md</a></li>
+        <li><strong>Other kinds of mod</strong>: effects, screens, a change of a byte or two.
+          <a href="https://github.com/elekloader/elekloader/blob/main/docs/ADAPTING.md" rel="noreferrer" target="_blank">Adapting your mod</a></li>
+        <li><strong>Stuck?</strong> Ask on the issues; say what you tried and what it printed.
+          <a href="https://github.com/elekloader/elekloader/issues" rel="noreferrer" target="_blank">The issues</a></li>
+      </ul>
+      <p class="next">Next: <a href="#submit">Submit your mod</a></p>
+    </article>
+  </section>
+
   <section class="view" id="view-submit" aria-labelledby="submit-title" hidden>
     <article class="guide-page">
       <header class="page-head">
@@ -499,6 +588,8 @@ python -m elekloader.patch --stock Digitakt_OS1.53.syx --mod mods/core/out/core-
     <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></svg>Mods</a>
   <a class="tab" id="tab-build" href="#build">
     <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M13.5 3.5 6.5 13h5l-1 7.5 7-9.5h-5z"/></svg>Build<span class="badge" id="tab-count">0</span></a>
+  <a class="tab" id="tab-make" href="#make">
+    <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8zM18.5 15.5l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7z"/></svg>Make</a>
   <a class="tab" id="tab-submit" href="#submit">
     <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5M5 15v3.5A1.5 1.5 0 0 0 6.5 20h11a1.5 1.5 0 0 0 1.5-1.5V15"/></svg>Submit</a>
   <a class="tab" id="tab-contribute" href="#contribute">
