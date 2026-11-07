@@ -1107,7 +1107,8 @@ clamp, 0x400ff86c..0x400ffa14), not on the range.
 A stock 1.74 boot builds 87 different UI records (by their flags, steps and
 delegates) over 469 ids, with 46 different graphics;
 `examples/look-check-ar2` draws one stock id of each beside a mod knob that
-takes its look. Before 0.12, mods that borrowed hidden machines' records
+takes its look, and [knob-looks-1.74.md](knob-looks-1.74.md) lists them all: a sample
+id of each, its stock name, and every id that looks the same. Before 0.12, mods that borrowed hidden machines' records
 had a stock record's look: duck and fx-sends 1.0 copied COMP MIX's (94) steps
 and dial into HH TEST's and CY TEST's records, which gives exactly the UI
 record of 191 (and 82 other ids); voice-dac 1.5's POL was CB TEST's 457, a
