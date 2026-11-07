@@ -137,8 +137,13 @@ class Client:
                 seq += 1
                 if last:
                     break
-        finally:
-            self.call(RCLOSE, struct.pack('>I', job))
+        except RpcError as e:
+            try:                                # close it, but say why the read stopped:
+                self.call(RCLOSE, struct.pack('>I', job))   # the unit refuses to close an unfinished read
+            except RpcError:
+                pass
+            raise RpcError('reading %s, chunk %d: %s' % (path, seq, e))
+        self.call(RCLOSE, struct.pack('>I', job))
         return bytes(data)
 
     def put(self, path, data):
@@ -193,8 +198,18 @@ class Mods:
 
 # ---- ports ---------------------------------------------------------------------------------------
 
+def open_port(name=None):
+    """A unit's USB MIDI ports: winmm's own on Windows (winmm.py: python-rtmidi drops SysEx over
+    1 KB there, and every read reply is longer), mido elsewhere."""
+    if sys.platform == 'win32':
+        from .winmm import WinmmPort
+        return WinmmPort(name)
+    return MidoPort(name)
+
+
 class MidoPort:
-    """A unit's USB MIDI ports through mido (pip install mido python-rtmidi)."""
+    """A unit's USB MIDI ports through mido (pip install mido python-rtmidi). Not on Windows:
+    open_port."""
 
     def __init__(self, name=None):
         try:
@@ -292,7 +307,7 @@ def run(a, mods, log=print):
 
 def main(a):
     try:
-        return run(a, Mods(Client(MidoPort(a.port)), a.folder))
+        return run(a, Mods(Client(open_port(a.port)), a.folder))
     except (OSError, ModError) as e:
         print('REFUSED: %s' % e)
         return 2
