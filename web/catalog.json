@@ -274,8 +274,8 @@
       "repo": "mbaumannn/mutiny", "tag": "v0.2.0", "file": "seq-events-0.1-os1.44.elemod",
       "device": "digitone-mk1",
       "sha256": "0727ece76a560c30ee27e4d19d18536e81340f60d7deaf294fc213d05124cd21",
-      "summary": "Euclidean, Turing Machine and TB-3PO acid sequencers on each synth track, played from the encoders; YES writes a page into ordinary trigs.",
-      "on_unit": "One Digitone mk1 on OS 1.44, about an hour through every feature (three models, page commits and undo, project save and reload, pattern switches, four tracks generating). No bugs found. Not tested with other mods on hardware."
+      "summary": "Step-fire events for the Digitone mk1, so several mods that change what the sequencer plays can combine. On its own it changes nothing the unit does.",
+      "on_unit": "Ran under MUTINY on one Digitone mk1, OS 1.44, for about an hour. Not tested on its own or with other mods on hardware."
     },
     {
       "repo": "DigiAlchemydsp/Flex-Plus", "tag": "v1.0", "file": "flexbus-1.0-digitone-flexbus.elemod",
