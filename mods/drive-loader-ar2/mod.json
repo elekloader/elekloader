@@ -1,0 +1,57 @@
+{
+ "id": "drive-loader",
+ "version": "0.1",
+ "title": "Drive Loader",
+ "category": "Framework",
+ "license": "GPL-2.0-or-later",
+ "author": "Iced-Cream",
+ "description": "The +Drive mods loader's flashed part (core-ar2 0.11 and newer, OS 1.74). From 0.1 the boot linker, which links the mods chosen in /mods/active into the +Drive mods' area at boot (skip with [NO] held; a crash guard skips once after a start that didn't get 10 s in), and the /mods route: a top-level /mods in the unit's Data root listing, holding the .elemod files in the +Drive's /mods folder, which a client such as elekloader lists, reads, uploads and deletes over USB; /mods/.build is the build descriptor (core_desc), /mods/.status the loader's status in plain text; and the MODS page at the bottom of SETTINGS > GLOBAL, which lists the files with a tick each and saves a set to /mods/active only when the boot linker's checks pass it.",
+ "device": "analog-rytm-mk2",
+ "os": "1.74",
+ "sources": [
+  "fs.c",
+  "route.c",
+  "route.s",
+  "flush.s",
+  "boot.c",
+  "dlink.c",
+  "json.c",
+  "page.c",
+  "page.s"
+ ],
+ "sites": [
+  {
+   "addr": "0x400a005e",
+   "stock": "700113c0419438c8",
+   "op": "jsr",
+   "target": "dl_route_site"
+  },
+  {
+   "addr": "0x401009e0",
+   "stock": "4eb94009da0e",
+   "op": "jsr",
+   "target": "drive_boot"
+  }
+ ],
+ "subscribe": [
+  {
+   "event": "ev_tick",
+   "fn": "dl_tick",
+   "order": 99
+  },
+  {
+   "event": "ev_settings",
+   "fn": "dl_settings",
+   "order": 90
+  }
+ ],
+ "resources": {
+  "core": "0.11",
+  "names": [
+   "data-route:mods"
+  ]
+ },
+ "requires": [
+  "core"
+ ]
+}
