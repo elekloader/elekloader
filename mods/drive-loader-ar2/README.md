@@ -144,7 +144,7 @@ The page is stock's two-pane file view, the one SAMPLES and PROJECTS are built o
   a load: they are the build. The page never loads or unloads code: the next boot links the
   saved set.
 - **DELETE** deletes the ticked files after its confirm, refusing a file that is in the saved
-  build (`IN THE BUILD: UNLOAD IT FIRST`).
+  build (`IN THE BUILD`: unload it first).
 - **The build list.** LEFT opens a one-row left panel, VIEW BUILD (VIEW +DRIVE in the build
   list), like SAMPLES' VIEW RAM, which switches the list and closes the panel (`0x400734a8`).
   The build list shows the saved set, each mod with what the next boot does: `KEEP` (loaded
