@@ -348,6 +348,13 @@
       "on_unit": "Tested on hardware; fully functional and stable."
     },
     {
+      "repo": "DigiAlchemydsp/Filter-FX", "tag": "v1.2", "file": "filter-fx-dn-1.2.elemod",
+      "device": "digitone-mk1", "needs_core": "4.0",
+      "sha256": "19324605026c1f727c1f651cf213e57fbf1443cd201388b431b83ee084efd883",
+      "summary": "Seven filter-based FX modes for the Digitakt mk1 and Digitone mk1/Keys: VOWEL, BANK, FOLD, CRUSH, RING, PHASER and FLANGER.",
+      "on_unit": "Tested on hardware; fully functional and stable."
+    },
+    {
       "repo": "irpina/digineighbor", "tag": "v0.6", "file": "digineighbor-0.6.elemod",
       "device": "digitakt-mk1", "needs_core": "2.1", "title": "digineighbor", "version": "0.6",
       "sha256": "380837f86c05cf6d0aba2dfc930a4309cc6b2e99b2e8c6a450f0abe6e844dccd",
@@ -576,6 +583,13 @@
       "device": "digitakt-mk1", "needs_core": "4.0",
       "sha256": "05169b93bde4dfd698f2844b664f3530270941c1a256fac2b79b1899901a3c23",
       "summary": "Six extra per-track filter modes for the Digitakt mk1 and Digitone mk1/Keys: BP, BP2, COMB, TRASH, OB4 and OB2.",
+      "on_unit": "Tested on hardware; fully functional and stable."
+    },
+    {
+      "repo": "DigiAlchemydsp/Filter-FX", "tag": "v1.2", "file": "filter-fx-1.2-dt.elemod",
+      "device": "digitakt-mk1",
+      "sha256": "ce501eec504a9aae5687f4b3e7b3f8b180e66430073f715e5c990e152047075a",
+      "summary": "Seven filter-based FX modes for the Digitakt mk1 and Digitone mk1/Keys: VOWEL, BANK, FOLD, CRUSH, RING, PHASER and FLANGER.",
       "on_unit": "Tested on hardware; fully functional and stable."
     },
     {
