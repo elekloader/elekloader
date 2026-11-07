@@ -118,6 +118,7 @@ static int page_alloc(int n)
 static u8 redraw;                        /* ask the next ev_tick for a frame */
 static volatile u32 ticks, drawn_at;     /* the page's rows were drawn at this tick */
 static int next_check;                   /* the next row the background checks (check_next) */
+static unsigned held[2];                 /* our shared_ptr to the page's view: it outlives a close */
 
 /* ---- text ---- */
 
@@ -903,7 +904,12 @@ void dl_mods_open(void **f)
         "SET UNSTABLE", "OVER 256 LINES", "NO MEMORY"};
     void *menu = *f, *p;
     unsigned sp[2] = {0, 0};
-    int busy = scan();
+    int busy;
+    view = 0;                            /* the last page (not showing: GLOBAL is) goes */
+    if (held[1])
+        SP_RELEASE(&held[1]);
+    held[0] = held[1] = 0;
+    busy = scan();
     if (busy)
         nrows = 0;
     build_list();
@@ -917,8 +923,8 @@ void dl_mods_open(void **f)
     page_rows();
     dl_call_a0(VIEW_SP, sp, menu, (unsigned)((char *)p + 0x38));
     PUSH(menu, sp);
-    if (sp[1])
-        SP_RELEASE(&sp[1]);
+    held[0] = sp[0];                     /* kept, not released: the background may mark the view */
+    held[1] = sp[1];                     /* dirty after the page closes; it goes at the next opening */
     if (busy)
         show_box(busy == -2 ? "NO MEMORY" : "BUSY: TRY AGAIN");
     else if (dl_skip_reason && dl_skip_reason < sizeof skip / sizeof skip[0])
@@ -944,7 +950,10 @@ unsigned dl_page_now(void)
 
 /* The files the page lists are read and checked one at a time in the background (inspect),
  * one every CHECK_EVERY ticks, only while the page's rows are being drawn (within SHOWN ticks
- * of a draw: the page shows); each check asks for a frame, so the next one follows it. */
+ * of a draw: the page shows); each check marks the view dirty, so its rows are drawn again and
+ * the next check follows. (A frame request through ctrl + 0x20 alone doesn't draw the rows:
+ * CB11 record run 2026-11-07 22:21, the background stopped after one file.) The view is ours to
+ * mark: the page holds its own reference to it (held) until the next MODS opening. */
 #define CHECK_EVERY 2
 #define SHOWN 10
 
@@ -956,8 +965,8 @@ static void check_next(void)
         next_check++;
     if (next_check >= nrows)
         return;
-    if (!inspect(&rows[next_check]))
-        redraw = 1;
+    if (!inspect(&rows[next_check]))     /* its row now shows its id or "!"; the frame that draws */
+        VIEW_DIRTY((char *)view + 0x38);  /* it keeps drawn_at fresh, so the next check follows */
 }
 
 void dl_page_tick(void *ctrl)
