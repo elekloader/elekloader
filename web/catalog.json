@@ -278,6 +278,13 @@
       "on_unit": "One Digitone mk1 on OS 1.44, about an hour through every feature (three models, page commits and undo, project save and reload, pattern switches, four tracks generating). No bugs found. Not tested with other mods on hardware."
     },
     {
+      "repo": "DigiAlchemydsp/Flex-Plus", "tag": "v1.0", "file": "flexbus-1.0-digitone-flexbus.elemod",
+      "device": "digitone-mk1", "needs_core": "4.0",
+      "sha256": "59b4655fdd53750fee338c579a8391ca0ceb10827a16572cad976150b918bbd2",
+      "summary": "Routes the Digitone or Digitakt inputs or internal tracks into a track with a low-CPU pitch shifter and an on-page oscilloscope.",
+      "on_unit": "Tested on hardware; fully functional and stable."
+    },
+    {
       "repo": "irpina/digineighbor", "tag": "v0.6", "file": "digineighbor-0.6.elemod",
       "device": "digitakt-mk1", "needs_core": "2.1", "title": "digineighbor", "version": "0.6",
       "sha256": "380837f86c05cf6d0aba2dfc930a4309cc6b2e99b2e8c6a450f0abe6e844dccd",
@@ -486,6 +493,13 @@
       "sha256": "743439412b1039cba809f5cd401671490628759c6536d519ade7e69c2c1fa072",
       "summary": "A metallic percussion machine with four models: FUSE, BOOM, PIPE and SHARD.",
       "on_unit": "As of 1.1.13: Tested on a Digitakt mk1 by its author (release v1.1.13): one Sophie track runs without FAST AUDIO, two ran with it on; eight tracks are not claimed."
+    },
+    {
+      "repo": "DigiAlchemydsp/Flex-Plus", "tag": "v1.0", "file": "flexbus-dt-1.0-digitakt-flexbus.elemod",
+      "device": "digitakt-mk1", "needs_core": "4.0",
+      "sha256": "9e9fa4c5c3be54dec5d915e0a7ac19dbf704f2c24ca2743992836137fc442ff6",
+      "summary": "Routes the Digitone or Digitakt inputs or internal tracks into a track with a low-CPU pitch shifter and an on-page oscilloscope.",
+      "on_unit": "Tested on hardware; fully functional and stable."
     },
     {
       "repo": "irpina/elekloader", "tag": "core-ot-v0.3.1", "file": "core-ot-0.3.1.elemod", "kind": "core",
