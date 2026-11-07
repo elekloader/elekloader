@@ -63,6 +63,11 @@ The record after the magic `SCK3` (`sc3`, moments.c):
   of 32 (`e`, at `n % 32`).
 - two storage fields marked `"handle": true`: `sc_h_project` (project, 16
   bits) and `sc_h_pattern` (pattern, 12 bits).
+- from 0.10, each `ev_tick`: `core_usb_midi_up` (`usb_up`) and `items_ok`:
+  bit 0 `core_kit_item` of the current kit is `core_current_kit_item`, bit 1
+  the same for the pattern, bits 2 and 3 `core_kit_item` / `core_pattern_item`
+  of 128 and -1 answer 0; a handle walk (cmd 4) names the pattern of the
+  pattern handle's item by `core_pattern_item` (`walk_pat`, `walk_pat_n`).
 
 A command word `cmd` (and `arg`) acts on the next `ev_tick` (with `arg`'s high half, that many ticks later):
 

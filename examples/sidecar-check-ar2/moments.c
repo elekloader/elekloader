@@ -49,6 +49,13 @@ struct {
     struct sc3_ev e[RING];
     uint32_t ticks;
     int32_t burst_at;                           /* CMD3_BURST: the next note to send */
+    /* 0.10: core_usb_midi_up, core_kit_item, core_pattern_item, each tick */
+    int32_t usb_up;
+    uint32_t items_ok;                          /* bit 0 kit item = current kit item, bit 1 the
+                                                   pattern's, bit 2 kit items 128 and -1 are 0,
+                                                   bit 3 pattern items 128 and -1 are 0 */
+    /* CMD3_HWALK: the pattern a pattern handle's item is, by core_pattern_item (-1 none) */
+    int32_t walk_pat, walk_pat_n;
 } sc3 = {{'S', 'C', 'K', '3'}};
 const unsigned sc3_size = sizeof sc3;          /* remote.c */
 
@@ -105,7 +112,15 @@ void sc_save(unsigned pre, unsigned how)
 
 static void walk_fn(unsigned field, void *item, int index, unsigned value)
 {
-    (void)item; (void)index;
+    int p;
+    (void)index;
+    if (field == STORE(sc_h_pattern))
+        for (p = 0; p < 128; p++)
+            if (core_pattern_item(p) == item) {
+                sc3.walk_pat = p;
+                sc3.walk_pat_n++;
+                break;
+            }
     sc3.walk_n++;
     sc3.walk_sum += value;
     sc3.walk_fields |= field == STORE(sc_h_project) ? 1 : field == STORE(sc_h_pattern) ? 2 : 4;
@@ -146,6 +161,11 @@ void sc_moments_tick(void *ctrl)
     sc3.sound_item = (uint32_t)core_current_sound_item();
     sc3.pattern_item = (uint32_t)core_current_pattern_item();
     copy16(sc3.name, core_project_name());
+    sc3.usb_up = core_usb_midi_up();
+    sc3.items_ok = (core_kit_item(sc3.kit) == core_current_kit_item() ? 1u : 0) |
+                   (core_pattern_item(sc3.pattern) == core_current_pattern_item() ? 2u : 0) |
+                   (!core_kit_item(128) && !core_kit_item(-1) ? 4u : 0) |
+                   (!core_pattern_item(128) && !core_pattern_item(-1) ? 8u : 0);
     if (sc3.cmd && sc3.arg >= 0x10000) {        /* arg's high half: ticks to wait first */
         sc3.arg -= 0x10000;
         return;
@@ -172,6 +192,8 @@ void sc_moments_tick(void *ctrl)
     case CMD3_HWALK:
         sc3.walk_n = 0;
         sc3.walk_sum = sc3.walk_fields = 0;
+        sc3.walk_pat = -1;
+        sc3.walk_pat_n = 0;
         core_handle_fields(walk_fn);
         break;
     case CMD3_SYSEX:
