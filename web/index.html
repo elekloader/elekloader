@@ -27,6 +27,8 @@
       <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></svg>Mods</a>
     <a class="nav-link" id="nav-build" href="#build">
       <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M13.5 3.5 6.5 13h5l-1 7.5 7-9.5h-5z"/></svg>Build<span class="badge" id="nav-count">0</span></a>
+    <a class="nav-link" id="nav-submit" href="#submit">
+      <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5M5 15v3.5A1.5 1.5 0 0 0 6.5 20h11a1.5 1.5 0 0 0 1.5-1.5V15"/></svg>Submit your mod</a>
     <a class="nav-link" id="nav-contribute" href="#contribute">
       <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/></svg>Contribute</a>
     <!-- Contribute's pages, under it while it is open (the page's own row of links does the same on a phone) -->
@@ -327,6 +329,78 @@ python -m elekloader.patch --stock Digitakt_OS1.53.syx --mod mods/core/out/core-
       <p class="next">Back to the <a href="#contribute">to-do list and the leaderboard</a></p>
     </article>
   </section>
+
+  <section class="view" id="view-submit" aria-labelledby="submit-title" hidden>
+    <article class="guide-page">
+      <header class="page-head">
+        <p class="eyebrow">Share your mod</p>
+        <h1 id="submit-title">Submit your mod</h1>
+        <p class="sub">Put your <code>.elemod</code> files in a release on your own GitHub repository, send one form,
+          and a bot checks them and opens the pull request for you. No files go into elekloader's repository, and
+          there are no evidence files or screenshots to make.</p>
+      </header>
+
+      <h2>Using an AI agent?</h2>
+      <p>Most people do. Paste this to your agent. It can do the whole thing from the command line: build, release,
+        submit, and read the bot's answer.</p>
+      <pre class="prompt"><code id="agent-prompt">Submit my elekloader mod to the Elekloader Shop. First read the section "Using an AI agent" of https://github.com/elekloader/elekloader/blob/main/docs/SHOP.md and follow it. In short: build the .elemod files for each OS version I support, publish them in a GitHub release on my repository, then open a "Submit a mod" issue on elekloader/elekloader with gh issue create. A bot checks the issue and opens the pull request, so don't open one yourself. Before you publish or submit anything, show me the release notes, the summary and the "Tested on a unit" text, and wait for my OK: I am the one declaring that I wrote the mod (or its licence lets it be passed on) and that the files hold no Elektron firmware. Then read the bot's comment on the issue and fix whatever it refuses.</code></pre>
+      <p><button type="button" class="btn primary small" id="copy-prompt">Copy the prompt</button>
+        <span class="muted small" id="copy-note" role="status"></span></p>
+      <p>The agent needs GitHub's command line tool (<code>gh</code>), signed in as you. You stay in charge of two
+        things it will ask you: what ran on a real unit, and that the mod is yours to share.</p>
+
+      <h2>What you need</h2>
+      <ul>
+        <li><strong>Your <code>.elemod</code> files,</strong> one for each OS version the mod supports.
+          <a href="https://github.com/elekloader/elekloader/blob/main/docs/ADAPTING.md" rel="noreferrer" target="_blank">Adapting your mod</a>
+          builds them.</li>
+        <li><strong>A GitHub repository</strong> to hold them in a release (a pre-release is fine for a beta).</li>
+        <li><strong>A licence the shop can pass on:</strong> MIT, GPL, LGPL, BSD, Apache-2.0, MPL-2.0, ISC, 0BSD, CC0 or
+          the Unlicense, named in your <code>mod.json</code> or on the form.</li>
+        <li><strong>No Elektron firmware</strong> in the files: your mod's own code only.</li>
+      </ul>
+
+      <h2>The steps</h2>
+      <ol class="steps">
+        <li><strong>Release.</strong> Publish a GitHub release on your repository with the <code>.elemod</code> files
+          attached. One command builds, releases and prints the form's address:
+          <pre><code>python -m elekloader.sdk.publish my-mod --stock Digitakt_OS1.53.syx --no-browser \
+    --summary "One sentence." --tested "What ran on a unit, and what not yet."</code></pre></li>
+        <li><strong>Submit.</strong> Open the form (or have your agent run <code>gh issue create</code>): your
+          repository, the release tag, a one-sentence summary, and what you've tested on a unit. "Not yet" is a fine
+          answer.</li>
+        <li><strong>Read the bot's comment.</strong> It checks each file's checksum, licence, OS, and that the shop has
+          what the mod needs. If it refuses something it says why; fix it and edit the issue, and it checks again.</li>
+        <li><strong>A maintainer merges</strong> the pull request the bot opened, and the next deploy puts your mod on
+          the Mods page.</li>
+      </ol>
+      <p><a class="btn primary" href="https://github.com/elekloader/elekloader/issues/new?template=submit-mod.yml" target="_blank" rel="noopener">Open the Submit a mod form</a></p>
+
+      <h2>After it's in</h2>
+      <p><strong>Publish a release, and the shop takes it.</strong> Every day the shop looks for newer releases of the
+        mods it lists and takes the newer files, with the same checks. Updates are on by default. To decide yourself
+        which releases go in, tick the form's <strong>Updates</strong> box, or put
+        <code>Shop auto-update: off</code> in a release's notes. Lines <code>Shop summary: …</code> and
+        <code>Tested on a unit: …</code> in the notes change your card's text.</p>
+
+      <h2>Links</h2>
+      <ul class="ways">
+        <li><strong>The full guide</strong>, with every refusal and its fix, and the steps for agents.
+          <a href="https://github.com/elekloader/elekloader/blob/main/docs/SHOP.md" rel="noreferrer" target="_blank">Your mod in the shop</a></li>
+        <li><strong>The rules for coding agents</strong>: the commands, and what "done" means.
+          <a href="https://github.com/elekloader/elekloader/blob/main/AGENTS.md" rel="noreferrer" target="_blank">AGENTS.md</a></li>
+        <li><strong>Build your <code>.elemod</code></strong> for each OS version.
+          <a href="https://github.com/elekloader/elekloader/blob/main/docs/ADAPTING.md" rel="noreferrer" target="_blank">Adapting your mod</a></li>
+        <li><strong>Take a mod out</strong> of the shop.
+          <a href="https://github.com/elekloader/elekloader/issues/new?template=remove-mod.yml" rel="noreferrer" target="_blank">Remove a mod form</a></li>
+        <li><strong>Stuck?</strong> Leave a comment on your issue and a maintainer will look.
+          <a href="https://github.com/elekloader/elekloader/issues" rel="noreferrer" target="_blank">The issues</a></li>
+      </ul>
+      <p class="muted small">The shop lists your files. Your code, your releases and your repository stay yours, and bug
+        reports for your mod go to your repository.</p>
+    </article>
+  </section>
+
   <section class="view" id="view-build" aria-labelledby="build-title" hidden>
     <header class="page-head head-build">
       <div class="tile" id="build-cover"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13.5 3.5 6.5 13h5l-1 7.5 7-9.5h-5z"/></svg></div>
@@ -425,6 +499,8 @@ python -m elekloader.patch --stock Digitakt_OS1.53.syx --mod mods/core/out/core-
     <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></svg>Mods</a>
   <a class="tab" id="tab-build" href="#build">
     <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M13.5 3.5 6.5 13h5l-1 7.5 7-9.5h-5z"/></svg>Build<span class="badge" id="tab-count">0</span></a>
+  <a class="tab" id="tab-submit" href="#submit">
+    <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5M5 15v3.5A1.5 1.5 0 0 0 6.5 20h11a1.5 1.5 0 0 0 1.5-1.5V15"/></svg>Submit</a>
   <a class="tab" id="tab-contribute" href="#contribute">
     <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/></svg>Contribute</a>
   <button type="button" class="tab" id="tab-about">

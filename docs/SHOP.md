@@ -15,6 +15,7 @@ yours, and so do questions and bug reports about your mod.
 
 - [What you need](#what-you-need)
 - [Upload, step by step](#upload-step-by-step)
+- [Using an AI agent](#using-an-ai-agent)
 - [What the check tells you](#what-the-check-tells-you)
 - [If it says no](#if-it-says-no)
 - [Updates: publish a release, that's all](#updates-publish-a-release-thats-all)
@@ -95,6 +96,105 @@ your mod on the page. The pull request closes your issue by itself.
 
 If the bot says no, you haven't lost anything: see the next two sections,
 fix it, and the check runs again.
+
+## Using an AI agent
+
+Most uploads are done with an agent's help, and the whole path works without a
+browser. The **Submit your mod** tab on the shop page has this prompt with a
+Copy button:
+
+```text
+Submit my elekloader mod to the Elekloader Shop. First read the section "Using an AI agent" of
+https://github.com/elekloader/elekloader/blob/main/docs/SHOP.md and follow it. In short: build the
+.elemod files for each OS version I support, publish them in a GitHub release on my repository, then
+open a "Submit a mod" issue on elekloader/elekloader with gh issue create. A bot checks the issue and
+opens the pull request, so don't open one yourself. Before you publish or submit anything, show me the
+release notes, the summary and the "Tested on a unit" text, and wait for my OK: I am the one declaring
+that I wrote the mod (or its licence lets it be passed on) and that the files hold no Elektron
+firmware. Then read the bot's comment on the issue and fix whatever it refuses.
+```
+
+**For the agent.** You don't open a pull request to submit a mod. You publish a
+release on the author's repository and open an issue; a bot checks it and opens
+the pull request itself.
+
+1. **Build and release.** Build one `.elemod` per OS version the mod supports
+   ([ADAPTING.md](ADAPTING.md); the repository's [AGENTS.md](../AGENTS.md) has
+   the commands). The stock OS files are the author's and stay on their machine:
+   publish only the built `.elemod` files. One command does both, and prints the
+   issue form's address instead of opening it with `--no-browser`:
+
+   ```bash
+   python -m elekloader.sdk.publish MODDIR --stock Digitakt_OS1.53.syx --stock Digitakt_OS1.54.syx \
+       --summary "One sentence." --tested "What ran on a unit, and what not yet." --no-browser
+   ```
+
+   Or `gh release create v1.0 *.elemod --repo owner/name` (a published release or
+   pre-release; a draft is refused). A mod needs its licence in `mod.json`
+   (`"license"`): MIT, GPL, LGPL, BSD, Apache-2.0, MPL-2.0, ISC, 0BSD, CC0 or
+   the Unlicense.
+2. **Ask the author before you publish or submit.** Show them the summary
+   (one sentence, up to 300 characters), the "Tested on a unit" text (what ran
+   on hardware, and what didn't yet: never claim a test that wasn't made) and the
+   release notes. The two "Checks" below are the author's own declarations; don't
+   tick them for them without their yes.
+3. **Open the issue** with a body in the form's own layout (save it as
+   `body.md`). The title must start with `Submit a mod`; an empty answer is
+   `_No response_`:
+
+   ```markdown
+   ### Repository
+
+   owner/name
+
+   ### Release tag
+
+   v1.0
+
+   ### Or a commit
+
+   _No response_
+
+   ### Summary
+
+   One sentence the shop shows on the card.
+
+   ### Tested on a unit
+
+   What ran on hardware, and what not yet.
+
+   ### Licence, for files that name none
+
+   _No response_
+
+   ### Only these files
+
+   _No response_
+
+   ### Updates
+
+   - [ ] Don't update these mods automatically; I'll send each new release through this form.
+
+   ### Checks
+
+   - [x] I wrote these mods, or their licence allows them to be passed on.
+   - [x] The files carry no Elektron firmware, only the mod's own code (and the short stock fragments elekloader allows).
+   ```
+
+   ```bash
+   gh issue create --repo elekloader/elekloader --title "Submit a mod: My Mod" --body-file body.md
+   ```
+
+   Leave "Updates" unticked unless the author wants to opt out of automatic
+   updates (see [Opting out](#opting-out)). For files kept in the repository
+   instead of a release, leave the tag empty and give the whole 40-character
+   commit id under "Or a commit".
+4. **Read the answer.** Within a minute or two the bot comments on the issue:
+   `gh issue view NUMBER --repo elekloader/elekloader --comments`. If it
+   refused something, [If it says no](#if-it-says-no) says what to change; fix
+   the release (or the issue's text with `gh issue edit NUMBER --body-file
+   body.md`) and the check runs again. If it passed, it has opened the pull
+   request, and a maintainer merges it. Report the issue's address to the author.
 
 ## What the check tells you
 

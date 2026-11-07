@@ -1011,7 +1011,7 @@ function toast(text) {
 
 // ---- the frame: the three views, your setup, the counts ----
 
-const view = () => location.hash === '#build' ? 'build'
+const view = () => location.hash === '#build' ? 'build' : location.hash === '#submit' ? 'submit'
   : /^#contribute(\/|$)/.test(location.hash) ? 'contribute' : 'library';
 // Contribute's pages: #contribute is the overview, #contribute/<page> the others (index.html, cp-<page>)
 const CPAGES = ['overview', 'start', 'core', 'pr', 'test'];
@@ -1022,7 +1022,7 @@ const cpage = () => {
 
 function route() {
   const v = view(), cp = cpage();
-  for (const n of ['library', 'build', 'contribute']) $('view-' + n).hidden = v !== n;
+  for (const n of ['library', 'build', 'submit', 'contribute']) $('view-' + n).hidden = v !== n;
   for (const p of CPAGES) $('cp-' + p).hidden = p !== cp;
   for (const a of document.querySelectorAll('[data-cpage]')) {
     a.classList.toggle('on', v === 'contribute' && a.dataset.cpage === cp);
@@ -1031,7 +1031,7 @@ function route() {
   }
   $('nav-csub').hidden = v !== 'contribute';
   const page = v === 'contribute' && cp !== 'overview' ? $('cp-' + cp).querySelector('h1').textContent : null;
-  document.title = (page || { build: 'Build', contribute: 'Contribute', library: 'Mods' }[v]) + ' · elekloader';
+  document.title = (page || { build: 'Build', submit: 'Submit your mod', contribute: 'Contribute', library: 'Mods' }[v]) + ' · elekloader';
   $('content').scrollTop = 0;
   $('topbar').classList.remove('solid');
   window.scrollTo(0, 0);
@@ -1183,8 +1183,9 @@ function renderChrome() {
     $(id).textContent = String(n);
     $(id).classList.toggle('on', n > 0);
   }
-  for (const [id, on] of [['nav-library', v === 'library'], ['nav-build', build], ['nav-contribute', v === 'contribute'],
-    ['tab-library', v === 'library'], ['tab-build', build], ['tab-contribute', v === 'contribute']]) {
+  for (const [id, on] of [['nav-library', v === 'library'], ['nav-build', build], ['nav-submit', v === 'submit'],
+    ['nav-contribute', v === 'contribute'], ['tab-library', v === 'library'], ['tab-build', build],
+    ['tab-submit', v === 'submit'], ['tab-contribute', v === 'contribute']]) {
     $(id).classList.toggle('on', on);
     if (on) $(id).setAttribute('aria-current', 'page'); else $(id).removeAttribute('aria-current');
   }
@@ -2055,6 +2056,19 @@ function wire() {
     renderLibrary();
   });
   $('f-sort').addEventListener('change', e => setFilter('sort', e.target.value || 'collection'));
+  // Submit your mod: the agent prompt, copied (the text is selectable if the clipboard is blocked)
+  $('copy-prompt').addEventListener('click', async () => {
+    let ok = false;
+    try { await navigator.clipboard.writeText($('agent-prompt').textContent); ok = true; } catch { /* selected below */ }
+    if (!ok) {
+      const r = document.createRange();
+      r.selectNodeContents($('agent-prompt'));
+      const s = getSelection();
+      s.removeAllRanges();
+      s.addRange(r);
+    }
+    $('copy-note').textContent = ok ? 'Copied.' : 'Selected: press Ctrl+C (Cmd+C on a Mac).';
+  });
   // the sheets: their close buttons, and a click on the backdrop
   for (const [sheet, close] of [['mod-sheet', 'sheet-close'], ['about-sheet', 'about-close'], ['profile-sheet', 'ps-close']]) {
     $(close).addEventListener('click', () => $(sheet).close());
