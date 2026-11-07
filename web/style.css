@@ -417,6 +417,7 @@ details summary:hover { color: var(--text); }
 .guide-page pre { margin: 8px 0; padding: 10px 14px; background: var(--well); border: 1px solid var(--line); border-radius: 8px;
   overflow-x: auto; white-space: pre; }
 .guide-page pre code { color: var(--text); font-size: 12.5px; }
+.guide-page pre.prompt { white-space: pre-wrap; overflow-wrap: anywhere; user-select: all; }
 .guide-page :not(pre) > code { color: var(--accent); }
 .guide-page .steps > li { margin: 12px 0; }
 .guide-page .next { margin-top: 28px; padding-top: 14px; border-top: 1px solid var(--line); }

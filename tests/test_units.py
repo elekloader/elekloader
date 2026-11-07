@@ -1501,6 +1501,101 @@ def test_a_commit_pin_and_a_removal_through_the_forms():
     assert submit_mod.as_of('As of 0.9: Ran.', '1.0') == 'As of 0.9: Ran.'
     assert submit_mod.release_text('Shop summary: One line.\n* Tested on a unit: yes') == {'summary': 'One line.', 'on_unit': 'yes'}
 
+def test_authors_can_opt_out_of_automatic_updates():
+    """Updates are on for every shop mod unless its entry says "auto_update": false: set by the form's Updates box or
+    a 'Shop auto-update: off' line in the release's notes, cleared by the box unticked or an 'on' line. A newer release
+    that says off isn't taken: it opts the repository out. GitHub and the files are faked."""
+    submit_mod = submit_mod_module()
+    if submit_mod is None:
+        return
+    import shop_updates
+    def mod(id_, version):
+        return {'id': id_, 'version': version, 'device': 'digitakt-mk1', 'os': '1.53', 'license': 'MIT', 'named_license': True,
+                'title': id_.upper(), 'core': id_ == 'core', 'requires': [] if id_ == 'core' else ['core'],
+                'needs_core': None, 'description': ''}
+    FACTS = {n + '.elemod': mod(*n.split('-')) for n in ('core-4.1', 'x-1.0', 'x-1.1', 'y-1.0', 'y-1.1', 'y-1.2', 'z-1')}
+    notes = {'v1.1': '', 'v1.2': 'Shop auto-update: off\n', 'v1.0': '', 'z1': '', 'z1-off': '- **Shop auto-update:** off', 'z1-on': 'Shop auto-update: on'}
+    RELEASES = [('v1.0', '2026-10-02', ['x-1.0.elemod', 'y-1.0.elemod']), ('v1.1', '2026-10-03', ['x-1.1.elemod', 'y-1.1.elemod']),
+                ('v1.2', '2026-10-04', ['y-1.2.elemod'])]
+    def release(t):
+        tag, when, files = next(x for x in RELEASES if x[0] == t)
+        return {'tag_name': tag, 'published_at': when + 'T00:00:00Z', 'prerelease': False, 'draft': False, 'body': notes[tag],
+                'html_url': 'https://github.com/owner/x/releases/tag/' + tag, 'assets': [{'name': n} for n in files]}
+    def get(url, accept='', limit=0):
+        if url.endswith('/releases?per_page=100'):
+            return json.dumps([release(t[0]) for t in reversed(RELEASES)]).encode()
+        if '/releases/tags/' in url:
+            tag = url.rsplit('/', 1)[1]
+            if tag.startswith('z'):
+                return json.dumps({'html_url': 'https://github.com/owner/z/releases/tag/' + tag, 'prerelease': False,
+                                   'body': notes[tag], 'assets': [{'name': 'z-1.elemod'}]}).encode()
+            return json.dumps(release(tag)).encode()
+        return ('file ' + url.rsplit('/', 1)[1]).encode()
+    real = submit_mod.get, submit_mod.facts
+    submit_mod.get, submit_mod.facts = get, lambda path, license='': dict(FACTS[os.path.basename(path)])
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            shop, cores = os.path.join(tmp, 'shop'), os.path.join(tmp, 'core')
+            for d, names in ((shop, ['x-1.0.elemod', 'y-1.0.elemod']), (cores, ['core-4.1.elemod'])):
+                os.mkdir(d)
+                for n in names:
+                    open(os.path.join(d, n), 'wb').close()
+            catalog = os.path.join(tmp, 'catalog.json')
+            def entry(file, **more):
+                return dict({'repo': 'owner/x', 'tag': 'v1.0', 'file': file, 'device': 'digitakt-mk1', 'sha256': '0' * 64,
+                             'summary': file[0].upper() + '.'}, **more)
+            def write(items):
+                with open(catalog, 'w', encoding='utf-8') as fh:
+                    fh.write(submit_mod.render({'about': '', 'items': items}))
+            def read():
+                with open(catalog, encoding='utf-8') as fh:
+                    return {i['file']: i for i in json.load(fh)['items']}
+            def apply():
+                import contextlib
+                import io
+                with contextlib.redirect_stdout(io.StringIO()):
+                    code = shop_updates.main(['--apply', 'owner/x', '--catalog', catalog, '--files-dir', shop,
+                                              '--cores-dir', cores, '--report', os.path.join(tmp, 'report.md'),
+                                              '--result', os.path.join(tmp, 'result.json')])
+                with open(os.path.join(tmp, 'result.json')) as fh:
+                    return code, json.load(fh)
+            # x opted out, y not: the repository is followed, but only y moves (v1.2 says off, so y stops at 1.1)
+            write([entry('x-1.0.elemod', auto_update=False), entry('y-1.0.elemod')])
+            assert list(shop_updates.shop_repos(shop_updates.read_items(catalog))) == ['owner/x']
+            code, result = apply()
+            got = read()
+            assert code == 0 and result['tags'] == ['v1.1', 'v1.2'], result
+            assert sorted(got) == ['x-1.0.elemod', 'y-1.1.elemod'] and got['x-1.0.elemod']['auto_update'] is False, sorted(got)
+            assert got['y-1.1.elemod']['auto_update'] is False                 # the 'off' release set it, took no file
+            assert shop_updates.shop_repos(shop_updates.read_items(catalog)) == {}  # now nothing to follow
+            with open(os.path.join(tmp, 'report.md'), encoding='utf-8') as fh:
+                report = fh.read()
+            assert 'its author turned automatic updates off' in report and 'Shop auto-update: off' in report, report
+            # the form: ticked box opts a new mod out; the same release again with it unticked opts back in
+            write([entry('x-1.0.elemod')])
+            box = '- [x] Don\'t update these mods automatically.'
+            assert submit_mod.parse_issue('### Updates\n\n' + box + '\n') == {'updates': box}
+            status, r = submit_mod.submit({'repo': 'owner/z', 'tag': 'z1', 'summary': 'Z.', 'updates': box}, catalog, shop, cores)
+            assert status == 0 and read()['z-1.elemod']['auto_update'] is False and 'Automatic updates are off' in submit_mod.report_md(status, r)
+            status, r = submit_mod.submit({'repo': 'owner/z', 'tag': 'z1', 'summary': 'Z.', 'updates': '- [ ] Don\'t'}, catalog, shop, cores)
+            assert status == 0 and r['same_repo_update'] and r['rows'][0]['result'] == 'auto-update turned on (already in the shop)', r['rows']
+            assert 'auto_update' not in read()['z-1.elemod'] and 'Automatic updates are on' in submit_mod.report_md(status, r)
+            assert submit_mod.submit({'repo': 'owner/z', 'tag': 'z1', 'summary': 'Z.'}, catalog, shop, cores)[0] == 2   # nothing changes
+            # the release's own line opts out, and 'on' wins over the box
+            status, r = submit_mod.submit({'repo': 'owner/z', 'tag': 'z1-off', 'summary': 'Z.'}, catalog, shop, cores)
+            assert status == 0 and read()['z-1.elemod']['auto_update'] is False
+            status, r = submit_mod.submit({'repo': 'owner/z', 'tag': 'z1-on', 'summary': 'Z.', 'updates': box}, catalog, shop, cores)
+            assert status == 0 and 'auto_update' not in read()['z-1.elemod']
+    finally:
+        submit_mod.get, submit_mod.facts = real
+    assert submit_mod.release_text('Shop auto-update: Off\n* Shop auto-update: yes') == {'auto_update': True}
+    assert submit_mod.release_text('Shop auto-update: off') == {'auto_update': False}
+    assert submit_mod.release_text('Shop auto-update: later') == {}
+    from elekloader.sdk import publish
+    assert publish.release_notes('A.', '', auto_update=False) == 'Shop summary: A.\nShop auto-update: off\n'
+    assert submit_mod.release_text(publish.release_notes('A.', '', False)) == {'summary': 'A.', 'auto_update': False}
+
+
 if __name__ == '__main__':
     import traceback
     ok = failed = 0

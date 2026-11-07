@@ -6,7 +6,10 @@
     python packaging/shop_updates.py --apply owner/name --files-dir build/shop --cores-dir build/core
                                      [--catalog web/catalog.json] [--report report.md] [--result result.json]
 
---list prints each repository the shop takes mods from by a release tag that has newer releases with .elemod files,
+Every mod is followed unless its author opted out (an entry with "auto_update": false: the Submit a mod form's
+"Updates" box, or "Shop auto-update: off" in the release's notes).
+
+--list prints each repository with such mods, taken by a release tag, that has newer releases with .elemod files,
 one per line. A release is newer when GitHub published it after the earliest release the shop takes from that
 repository; a draft is never one, nor a release whose .elemod files are all cores (core-*.elemod).
 
@@ -29,10 +32,11 @@ import submit_mod  # noqa: E402
 
 
 def shop_repos(items):
-    """-> {repository (as compared): (a name to ask GitHub with, {tags})} for the shop's mods pinned to a release."""
+    """-> {repository (as compared): (a name to ask GitHub with, {tags})} for the shop's mods pinned to a release whose
+    author hasn't opted out of automatic updates ("auto_update": false in the entry)."""
     out = {}
     for it in items:
-        if it.get('kind') == 'core' or 'tag' not in it:
+        if it.get('kind') == 'core' or 'tag' not in it or it.get('auto_update') is False:
             continue
         name, tags = out.setdefault(submit_mod.same_repo(it['repo']), (it['repo'], set()))
         tags.add(it['tag'])
@@ -95,6 +99,8 @@ def main(argv=None):
             changed, same = True, same and r['same_repo_update']
             done.append(tag)
             titles += [t for t in r.get('titles', []) if t not in titles]
+        if r.get('stopped'):                       # "Shop auto-update: off": the releases after it aren't followed
+            break
     text = '\n'.join(reports) or 'No newer releases.\n'
     if a.report:
         with open(a.report, 'w', encoding='utf-8') as fh:
