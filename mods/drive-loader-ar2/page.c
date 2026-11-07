@@ -570,7 +570,7 @@ static void do_unload(void)
             k++;
         }
     if (!k) {
-        show_box("NOT IN THE BUILD");
+        show_box("MOD NOT LOADED");
         return;
     }
     if (save_set(keep))
@@ -587,7 +587,7 @@ static void do_delete(void)
     int n = ticked(sel), i, done = 0;
     for (i = 0; i < n; i++)
         if (rows[sel[i]].on) {
-            show_box("IN THE BUILD");          /* unload it first */
+            show_box("MOD IN USE");          /* unload it first */
             return;
         }
     if (!dl_staging_take_idle(ticks, READ_STALL)) {   /* no read of a file open */

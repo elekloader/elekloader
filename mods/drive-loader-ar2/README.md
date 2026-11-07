@@ -146,13 +146,13 @@ The page is stock's two-pane file view, the one SAMPLES and PROJECTS are built o
   a load: they are the build. The page never loads or unloads code: the next boot links the
   saved set.
 - **DELETE** deletes the ticked files after its confirm, refusing a file that is in the saved
-  build (`IN THE BUILD`: unload it first).
+  build (`MOD IN USE`: unload it first).
 - **The build list.** LEFT opens a one-row left panel, VIEW BUILD (VIEW +DRIVE in the build
   list), like SAMPLES' VIEW RAM, which switches the list and closes the panel (`0x400734a8`).
   The build list shows the saved set, each mod with what the next boot does: `KEEP` (loaded
   now, stays), `ADD` (loads at the next boot), `DROP` (loaded now, gone after the next boot;
   these rows stay until the reboot) or `!` (the last boot refused it). Its action panel has
-  UNLOAD, which saves the build without the ticked mods through the same checks.
+  UNLOAD, which saves the build without the ticked mods through the same checks (`MOD NOT LOADED` for a ticked mod the build does not hold).
 - **No files.** With no `.elemod` in `/mods` the list has one row, `NO MODS ON +DRIVE`, which
   YES does nothing to, and neither panel opens (decided 2026-11-07). Stock's file view hangs
   the UI when it is first shown with no row at all; its own lists never are (a folder has
