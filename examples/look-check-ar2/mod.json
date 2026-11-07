@@ -1,0 +1,1825 @@
+{
+ "id": "look-check",
+ "version": "0.1",
+ "title": "Look check",
+ "category": "Examples",
+ "license": "GPL-2.0-or-later",
+ "author": "Iced-Cream",
+ "description": "A test for core-ar2 0.12's knob looks (core_knob_looks). LOOK CHECK pages, 23 of them (the first 12 behind the LFO key, the rest behind AMP), four pairs of knobs a page: a stock id on A, C, E and G and on B, D, F and H a knob id of the mod's own that takes that id's look, for one stock id of each of the 87 different UI records of 1.74; both knobs of a pair show the same value, text, label and name, so the two cells of a pair are the same pixel for pixel when core gives the look. The last page's own knobs take a UI record from a ui callback (a copy of CB TEST's) and COMP MIX's look with a range of 0..12. After the magic LKC1, what core's UI record and range lookups answer for every own knob.",
+ "device": "analog-rytm-mk2",
+ "os": "1.74",
+ "knobs": 89,
+ "resources": {
+  "core": "0.12"
+ },
+ "requires": [
+  "core"
+ ],
+ "sources": [
+  "look.c",
+  "pages.c"
+ ],
+ "subscribe": [
+  {
+   "event": "ev_tick",
+   "fn": "lk_tick",
+   "order": 60
+  }
+ ],
+ "contribute": [
+  {
+   "to": "core_params",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_params_own",
+     0
+    ]
+   ]
+  },
+  {
+   "to": "core_params",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_params_stock",
+     0
+    ]
+   ]
+  },
+  {
+   "to": "core_param_locks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_locks",
+     0
+    ]
+   ]
+  },
+  {
+   "to": "core_pages",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_page_0",
+     0
+    ]
+   ]
+  },
+  {
+   "to": "core_view_pages",
+   "order": 30,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_view_0",
+     0
+    ]
+   ]
+  },
+  {
+   "to": "core_pages",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_page_1",
+     0
+    ]
+   ]
+  },
+  {
+   "to": "core_view_pages",
+   "order": 31,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_view_1",
+     0
+    ]
+   ]
+  },
+  {
+   "to": "core_pages",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_page_2",
+     0
+    ]
+   ]
+  },
+  {
+   "to": "core_view_pages",
+   "order": 32,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_view_2",
+     0
+    ]
+   ]
+  },
+  {
+   "to": "core_pages",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_page_3",
+     0
+    ]
+   ]
+  },
+  {
+   "to": "core_view_pages",
+   "order": 33,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_view_3",
+     0
+    ]
+   ]
+  },
+  {
+   "to": "core_pages",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_page_4",
+     0
+    ]
+   ]
+  },
+  {
+   "to": "core_view_pages",
+   "order": 34,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_view_4",
+     0
+    ]
+   ]
+  },
+  {
+   "to": "core_pages",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_page_5",
+     0
+    ]
+   ]
+  },
+  {
+   "to": "core_view_pages",
+   "order": 35,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_view_5",
+     0
+    ]
+   ]
+  },
+  {
+   "to": "core_pages",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_page_6",
+     0
+    ]
+   ]
+  },
+  {
+   "to": "core_view_pages",
+   "order": 36,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_view_6",
+     0
+    ]
+   ]
+  },
+  {
+   "to": "core_pages",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_page_7",
+     0
+    ]
+   ]
+  },
+  {
+   "to": "core_view_pages",
+   "order": 37,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_view_7",
+     0
+    ]
+   ]
+  },
+  {
+   "to": "core_pages",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_page_8",
+     0
+    ]
+   ]
+  },
+  {
+   "to": "core_view_pages",
+   "order": 38,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_view_8",
+     0
+    ]
+   ]
+  },
+  {
+   "to": "core_pages",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_page_9",
+     0
+    ]
+   ]
+  },
+  {
+   "to": "core_view_pages",
+   "order": 39,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_view_9",
+     0
+    ]
+   ]
+  },
+  {
+   "to": "core_pages",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_page_10",
+     0
+    ]
+   ]
+  },
+  {
+   "to": "core_view_pages",
+   "order": 40,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_view_10",
+     0
+    ]
+   ]
+  },
+  {
+   "to": "core_pages",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_page_11",
+     0
+    ]
+   ]
+  },
+  {
+   "to": "core_view_pages",
+   "order": 41,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_view_11",
+     0
+    ]
+   ]
+  },
+  {
+   "to": "core_pages",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_page_12",
+     0
+    ]
+   ]
+  },
+  {
+   "to": "core_view_pages",
+   "order": 42,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_view_12",
+     0
+    ]
+   ]
+  },
+  {
+   "to": "core_pages",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_page_13",
+     0
+    ]
+   ]
+  },
+  {
+   "to": "core_view_pages",
+   "order": 43,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_view_13",
+     0
+    ]
+   ]
+  },
+  {
+   "to": "core_pages",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_page_14",
+     0
+    ]
+   ]
+  },
+  {
+   "to": "core_view_pages",
+   "order": 44,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_view_14",
+     0
+    ]
+   ]
+  },
+  {
+   "to": "core_pages",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_page_15",
+     0
+    ]
+   ]
+  },
+  {
+   "to": "core_view_pages",
+   "order": 45,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_view_15",
+     0
+    ]
+   ]
+  },
+  {
+   "to": "core_pages",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_page_16",
+     0
+    ]
+   ]
+  },
+  {
+   "to": "core_view_pages",
+   "order": 46,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_view_16",
+     0
+    ]
+   ]
+  },
+  {
+   "to": "core_pages",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_page_17",
+     0
+    ]
+   ]
+  },
+  {
+   "to": "core_view_pages",
+   "order": 47,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_view_17",
+     0
+    ]
+   ]
+  },
+  {
+   "to": "core_pages",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_page_18",
+     0
+    ]
+   ]
+  },
+  {
+   "to": "core_view_pages",
+   "order": 48,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_view_18",
+     0
+    ]
+   ]
+  },
+  {
+   "to": "core_pages",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_page_19",
+     0
+    ]
+   ]
+  },
+  {
+   "to": "core_view_pages",
+   "order": 49,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_view_19",
+     0
+    ]
+   ]
+  },
+  {
+   "to": "core_pages",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_page_20",
+     0
+    ]
+   ]
+  },
+  {
+   "to": "core_view_pages",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_view_20",
+     0
+    ]
+   ]
+  },
+  {
+   "to": "core_pages",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_page_21",
+     0
+    ]
+   ]
+  },
+  {
+   "to": "core_view_pages",
+   "order": 51,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_view_21",
+     0
+    ]
+   ]
+  },
+  {
+   "to": "core_pages",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_page_22",
+     0
+    ]
+   ]
+  },
+  {
+   "to": "core_view_pages",
+   "order": 52,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_view_22",
+     0
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks_each",
+     0
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks_each",
+     24
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks_each",
+     48
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks_each",
+     72
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks_each",
+     96
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks_each",
+     120
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks_each",
+     144
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks_each",
+     168
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks_each",
+     192
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks_each",
+     216
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks_each",
+     240
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks_each",
+     264
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks_each",
+     288
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks_each",
+     312
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks_each",
+     336
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks_each",
+     360
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks_each",
+     384
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks_each",
+     408
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks_each",
+     432
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks_each",
+     456
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks_each",
+     480
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks_each",
+     504
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks_each",
+     528
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks_each",
+     552
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks_each",
+     576
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks_each",
+     600
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks_each",
+     624
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks_each",
+     648
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks_each",
+     672
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks_each",
+     696
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks_each",
+     720
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks_each",
+     744
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks_each",
+     768
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks_each",
+     792
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks_each",
+     816
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks_each",
+     840
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks_each",
+     864
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks_each",
+     888
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks_each",
+     912
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks_each",
+     936
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks_each",
+     960
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks_each",
+     984
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks_each",
+     1008
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks_each",
+     1032
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks_each",
+     1056
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks_each",
+     1080
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks_each",
+     1104
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks_each",
+     1128
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks_each",
+     1152
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks_each",
+     1176
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks_each",
+     1200
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks_each",
+     1224
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks_each",
+     1248
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks_each",
+     1272
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks_each",
+     1296
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks_each",
+     1320
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks_each",
+     1344
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks_each",
+     1368
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks_each",
+     1392
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks_each",
+     1416
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks_each",
+     1440
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks_each",
+     1464
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks_each",
+     1488
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks_each",
+     1512
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks_each",
+     1536
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks_each",
+     1560
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks_each",
+     1584
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks_each",
+     1608
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks_each",
+     1632
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks_each",
+     1656
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks_each",
+     1680
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks_each",
+     1704
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks_each",
+     1728
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks_each",
+     1752
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks_each",
+     1776
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks_each",
+     1800
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks_each",
+     1824
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks_each",
+     1848
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks_each",
+     1872
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks_each",
+     1896
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks_each",
+     1920
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks_each",
+     1944
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks_each",
+     1968
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks_each",
+     1992
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks_each",
+     2016
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks_each",
+     2040
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_looks_each",
+     2064
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_look_ui",
+     0
+    ]
+   ]
+  },
+  {
+   "to": "core_knob_looks",
+   "order": 50,
+   "data": "00000000",
+   "relocs": [
+    [
+     0,
+     "abs32",
+     "sym:lk_look_range",
+     0
+    ]
+   ]
+  }
+ ]
+}
