@@ -471,7 +471,7 @@ class FakeUnit:
 
     def __init__(self, build_blk):
         self.files = {'.build': build_blk, '.status': b''}
-        self.jobs, self.out, self.nj = {}, [], 1
+        self.jobs, self.out, self.nj, self.chunks = {}, [], 1, {}
 
     def send(self, raw):
         msg = datarpc.unframe(raw)
@@ -489,11 +489,13 @@ class FakeUnit:
                 j = self.nj = self.nj + 1
                 body = self.files[name]
                 self.jobs[j] = container.wrap(body, 2, 5, 0x30313736)
-                extra = struct.pack('>IIB', j, datarpc.CHUNK, 0)
+                self.chunks[j] = struct.unpack_from('>I', a, a.index(b'\0') + 1)[0]   # the size asked for
+                extra = struct.pack('>IIB', j, self.chunks[j], 0)
         elif cmd == datarpc.READ:
             j, s = struct.unpack_from('>II', a)
-            d = self.jobs[j][s * datarpc.CHUNK:(s + 1) * datarpc.CHUNK]
-            last = (s + 1) * datarpc.CHUNK >= len(self.jobs[j])
+            c = self.chunks[j]
+            d = self.jobs[j][s * c:(s + 1) * c]
+            last = (s + 1) * c >= len(self.jobs[j])
             extra = struct.pack('>IIIBII', j, s, 0, last, 0, len(d)) + d
         elif cmd in (datarpc.RCLOSE,):
             extra = a[:4] + bytes(4)
@@ -536,13 +538,13 @@ class LossyUnit(FakeUnit):
 
     def __init__(self, build_blk):
         super().__init__(build_blk)
-        self.lost, self.done = False, set()
+        self.lose, self.done = 1, set()             # how many read replies to lose
 
     def send(self, raw):
         msg = datarpc.unframe(raw)
         seq, cmd, a = struct.unpack_from('>H', msg)[0], msg[4], msg[5:]
-        if cmd == datarpc.READ and not self.lost:
-            self.lost = True
+        if cmd == datarpc.READ and self.lose:
+            self.lose -= 1
             return
         if cmd == datarpc.RCLOSE and struct.unpack_from('>I', a)[0] not in self.done:
             self.out.append(datarpc.frame(struct.pack('>HH', 0, seq) + bytes((cmd | 0x80, 0))
@@ -554,10 +556,13 @@ class LossyUnit(FakeUnit):
 
 
 def test_a_lost_read_reply_is_the_error_not_the_refused_close():
+    """Every read reply lost: after the smaller chunk fails too, the error is the lost reply."""
     with Bench('analog-rytm-mk2') as B:
         out, _b = built(B)
         blk = out.image[desc.find(out.image)[0]:]
-        mods = datarpc.Mods(datarpc.Client(LossyUnit(blk[:struct.unpack_from('>I', blk, 8)[0]]), timeout=0.2))
+        unit = LossyUnit(blk[:struct.unpack_from('>I', blk, 8)[0]])
+        mods = datarpc.Mods(datarpc.Client(unit, timeout=0.2))
+        unit.lose = 2                                  # both sizes' first replies
         try:
             mods.build()
         except datarpc.RpcError as e:
@@ -565,6 +570,36 @@ def test_a_lost_read_reply_is_the_error_not_the_refused_close():
         else:
             raise AssertionError('the lost reply was not an error')
         assert mods.build()[0].crc                     # the next read is whole
+
+
+class SmallBufferUnit(LossyUnit):
+    """A FakeUnit behind a host MIDI input that drops every SysEx message over 1 KB (Firefox's Web
+    MIDI, python-rtmidi on Windows): every reply longer than that is lost."""
+
+    def __init__(self, build_blk):
+        super().__init__(build_blk)
+        self.lose = 0                       # no one-off loss: only the long replies
+
+    def send(self, raw):
+        n = len(self.out)
+        super().send(raw)
+        if len(self.out) > n and len(self.out[-1]) > 1024:
+            self.out.pop()
+
+
+def test_a_read_whose_replies_are_lost_starts_again_with_small_chunks():
+    """An 11 KB file (as the unit's .build) through a host that loses SysEx over 1 KB: the 8 KB
+    chunk's reply never arrives, so the read starts again with 0x300-byte chunks, and the client
+    keeps that size."""
+    body = bytes(range(256)) * 44
+    unit = SmallBufferUnit(b'')
+    unit.files['big.elemod'] = body
+    client = datarpc.Client(unit, timeout=0.2)
+    mods = datarpc.Mods(client)
+    assert mods.get('big.elemod')[1] == body
+    assert client.read_chunk == 0x300
+    assert mods.get('big.elemod')[1] == body          # whole, and at once this time
+    assert client.read_chunk == 0x300
 
 
 def test_mods_put_ls_get_active_and_rm_over_the_data_router():
