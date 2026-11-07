@@ -33,15 +33,15 @@ extern int dl_last_io[4];
  * LOAD TO PROJECT reads a file's first 16 bytes as FsSample's own header. A raw .elemod
  * there hangs stock (and a project that holds it stalls the next OS upgrade in PREPARING),
  * so every file the loader writes starts with 16 zero bytes, which stock loads as an empty
- * sample (README, "Files on the +Drive"). Reads skip the header; a file without one
- * (loader 0.1) reads whole, its first bytes kept from the check. */
+ * sample (README, "Files on the +Drive"). Reads skip the header; a file without it was not
+ * written by the loader and doesn't open. */
 static const unsigned char zero_header[DL_HEADER];
 
 int dl_fs_open(dl_file *f, const char *path, int write)
 {
     void *s;
+    unsigned char h[DL_HEADER];
     int i, k;
-    f->hdr = f->pb_n = f->pb_at = 0;
     STR_NEW(&s, path, 0);
     FILE_NEW(f, &s, write ? 1 : 0);
     STR_DEL(&s);
@@ -50,31 +50,15 @@ int dl_fs_open(dl_file *f, const char *path, int write)
         return -1;
     if (write)
         return FILE_WRITE(f, zero_header, DL_HEADER) == DL_HEADER ? 0 : -1;
-    k = FILE_READ(f, f->pb, DL_HEADER);
-    if (k < 0)
-        return -1;
-    for (i = 0; i < k && !f->pb[i]; i++)
+    k = FILE_READ(f, h, DL_HEADER);
+    for (i = 0; i < k && !h[i]; i++)
         ;
-    if (k == DL_HEADER && i == DL_HEADER)
-        f->hdr = 1;                      /* the header: the data follows */
-    else
-        f->pb_n = (unsigned char)k;      /* no header: these are the file's first bytes */
-    return 0;
+    return k == DL_HEADER && i == DL_HEADER ? 0 : -1;   /* no header: not the loader's file (the caller closes it) */
 }
 
 int dl_fs_read(dl_file *f, void *buf, unsigned n)
 {
-    unsigned char *p = buf;
-    int got = 0, r;
-    while (n && f->pb_at < f->pb_n) {
-        *p++ = f->pb[f->pb_at++];
-        n--;
-        got++;
-    }
-    if (!n)
-        return got;
-    r = FILE_READ(f, p, n);
-    return r < 0 ? (got ? got : r) : got + r;
+    return FILE_READ(f, buf, n);
 }
 
 int dl_fs_write(dl_file *f, const void *buf, unsigned n)
@@ -94,9 +78,7 @@ int dl_fs_write(dl_file *f, const void *buf, unsigned n)
 
 /* stock's node size (0x4007d9ec) is the node's length less 16, never below
  * 0: FsSample's files start with a 16-byte header of their own, as the loader's
- * do now, so for a file with the header it is the data's size. A file without
- * one (loader 0.1) is that plus 16, and one of 16 bytes or less is what the open
- * read. Read mode only, before any read. */
+ * do, so it is the data's size. Read mode only. */
 int dl_fs_size(dl_file *f)
 {
     void *node;
@@ -109,9 +91,7 @@ int dl_fs_size(dl_file *f)
         return -1;
     n = NODE_SIZE(node);
     dl_last_io[3] = n;
-    if (f->hdr)
-        return n;
-    return n > 0 ? n + DL_HEADER : f->pb_n;
+    return n;
 }
 
 void dl_fs_close(dl_file *f)

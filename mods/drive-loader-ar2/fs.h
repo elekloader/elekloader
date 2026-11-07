@@ -22,15 +22,11 @@
 #define DL_HEADER 16
 typedef struct dl_file {
     unsigned char raw[DL_FILE_BYTES];
-    unsigned char hdr;                   /* read mode: 1 the file has the header */
-    unsigned char pb_n, pb_at;           /* bytes of a headerless file read at open */
-    unsigned char pad;
-    unsigned char pb[DL_HEADER];
 } __attribute__((aligned(4))) dl_file;
 
 /* 0 or a negative error. write truncates (stock deletes the old file), makes
  * the parent folders and writes the header first; read skips the header (a
- * file without one, as loader 0.1 wrote them, reads whole). Every opened file
+ * file without one doesn't open). Every opened file
  * is closed with dl_fs_close, also after a failed open. */
 int dl_fs_open(dl_file *f, const char *path, int write);
 int dl_fs_read(dl_file *f, void *buf, unsigned n);        /* bytes read, or < 0 */
