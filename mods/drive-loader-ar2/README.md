@@ -192,7 +192,7 @@ The page is stock's two-pane file view, the one SAMPLES and PROJECTS are built o
   every 2 ticks (about 10 a second for small files) while the page's rows are drawn: a row
   shows its file name and size until then, and its id and `!` after. Each file is checked
   alone for its own verdict (id, version, a refusal of the file itself), so no number of files
-  reaches a set's limits. Ticking a row checks it at once if the background hasn't, and a
+  reaches a set's limits. Ticking never reads a file (a row not yet checked shows no `!` and no reason box), and a
   change checks every file of the new set first.
 - **The boot's verdicts** come from the boot's own records, matched by file name
   (`dl_boot_choice`), so a second file with a loaded mod's id isn't shown as loaded.

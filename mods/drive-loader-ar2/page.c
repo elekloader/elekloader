@@ -803,9 +803,8 @@ static void toggle_advance(void)
     int row = ((int (*)(void *))VCALL(0x24))(view), on;
     if (row < 0 || row >= list_n())
         return;
-    on = !is_ticked(row);
-    if (on)                              /* its verdict now, if the background hasn't got there */
-        inspect(&rows[file_k(row)]);
+    on = !is_ticked(row);                /* no read here: a tick is never held up by a check (CB11
+                                          * record runs: YES presses during a check were lost) */
     tick(row, on);
     if (row + 1 < list_n())
         cursor_to(row + 1);
