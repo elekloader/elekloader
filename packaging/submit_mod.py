@@ -29,6 +29,12 @@ form or the release's notes give new ones ("Shop summary: ..." and "Tested on a 
 the one the shop lists is left out. With --update (packaging/shop_updates.py) only newer files of mods this
 repository already has go in, and a pre-release replaces only what came from a pre-release.
 
+Automatic updates are on for every entry unless its author opts out ("auto_update": false in web/catalog.json): the
+form's "Updates" box ticked, or a "Shop auto-update: off" line in the release's notes, sets it on the files that go in
+(and on this repository's files the form lists already, when only the setting changes); the box unticked, or "Shop
+auto-update: on" in the notes, clears it. With --update an opted-out entry is left alone, and a newer release whose
+notes say "off" is not taken: it opts the repository out instead.
+
 web/catalog.json keeps its own layout (render() reproduces it byte for byte). Nothing in the release is run.
 
 Exit 0: entries added or changed (the report says what); 1: nothing added, refused (the report says why);
@@ -68,7 +74,7 @@ MOVED = {'irpina/elekloader': 'elekloader/elekloader'}
 # the issue form's fields (.github/ISSUE_TEMPLATE/submit-mod.yml), by their labels
 FIELDS = {'Repository': 'repo', 'Release tag': 'tag', 'Or a commit': 'commit', 'Summary': 'summary',
           'Tested on a unit': 'on_unit', 'Licence, for files that name none': 'license', 'Only these files': 'files',
-          'Why': 'why'}
+          'Why': 'why', 'Updates': 'updates'}
 # web/catalog.json's layout: these keys share a line, in this order; any other key gets a line of its own
 LINES = (('repo', 'tag', 'file', 'kind', 'commit'), ('path',), ('device', 'needs_core', 'title', 'version', 'license'),
          ('sha256',), ('summary',), ('on_unit',))
@@ -160,12 +166,22 @@ def newest(versions):
 
 
 def release_text(body):
-    """The shop's text a release's notes may give: 'Shop summary: ...' and 'Tested on a unit: ...' lines."""
+    """What a release's notes may tell the shop: 'Shop summary: ...' and 'Tested on a unit: ...' lines (the card's
+    text), and 'Shop auto-update: on' or 'off' (whether the shop takes this author's newer releases by itself)."""
     out = {}
     for line in (body or '').replace('\r\n', '\n').split('\n'):
-        m = re.match(r'^[\s>*_-]*(shop summary|tested on a unit)[*_]*\s*:[*_]*\s*(.+)$', line, re.I)
-        if m:
-            out['summary' if m.group(1).lower() == 'shop summary' else 'on_unit'] = ' '.join(m.group(2).split())
+        m = re.match(r'^[\s>*_-]*(shop summary|tested on a unit|shop auto-?updates?)[*_]*\s*:[*_]*\s*(.+)$', line, re.I)
+        if not m:
+            continue
+        what, value = m.group(1).lower(), ' '.join(m.group(2).split())
+        if what.startswith('shop auto'):
+            word = value.strip('*_. ').lower()
+            if word in ('on', 'yes', 'true'):
+                out['auto_update'] = True
+            elif word in ('off', 'no', 'false'):
+                out['auto_update'] = False
+        else:
+            out['summary' if what == 'shop summary' else 'on_unit'] = value
     return out
 
 
@@ -189,7 +205,9 @@ def submit(fields, catalog=CATALOG, files_dir=None, cores_dir=None, update=False
     on_unit = ' '.join(fields.get('on_unit', '').split())
     license = fields.get('license', '').strip()
     only = [f.strip() for f in re.split(r'[\s,]+', fields.get('files', '')) if f.strip()]
+    form_off = fields.get('auto_update') is False or bool(re.search(r'\[x\]', fields.get('updates', ''), re.I))
     r['repo'], r['tag'] = repo, tag or commit[:7]
+    r['auto_off'] = None
     if not REPO.fullmatch(repo):
         r['errors'].append('The repository is owner/name, as on GitHub (for example irpina/digislicer).')
     if commit and tag:
@@ -247,6 +265,9 @@ def submit(fields, catalog=CATALOG, files_dir=None, cores_dir=None, update=False
     notes = release_text(release.get('body'))      # the form's text first, then the release's notes
     summary = summary or notes.get('summary', '')[:300]
     on_unit = on_unit or notes.get('on_unit', '')[:600]
+    # automatic updates are on unless the author opts out: the form's "Updates" box ticked, or "Shop auto-update: off"
+    # in the release's notes; "Shop auto-update: on" in the notes turns them back on
+    off = notes.get('auto_update') is False or (form_off and notes.get('auto_update') is not True)
     if not assets:
         r['errors'].append('%s %s has no .elemod files %s.' % (repo, r['tag'], 'in it' if commit else 'attached'))
         return 1, r
@@ -269,6 +290,21 @@ def submit(fields, catalog=CATALOG, files_dir=None, cores_dir=None, update=False
                 pass
     name = lambda it: it['file'] if 'file' in it else it['path'].rsplit('/', 1)[-1]
     by_name = {name(it): it for it in items}
+    if update and notes.get('auto_update') is False:
+        # the author's release says to stop: its files stay out, and the shop stops following the repository
+        stopping = [it for it in items if same_repo(it['repo']) == same_repo(repo) and it.get('auto_update') is not False
+                    and it.get('kind') != 'core']
+        if not stopping:
+            return 2, r
+        for it in stopping:
+            it['auto_update'] = False
+            r['rows'].append({'file': name(it), 'result': 'auto-update turned off by the release\'s notes',
+                              'title': (known.get(name(it)) or {}).get('title', name(it))})
+        with open(catalog, 'w', encoding='utf-8', newline='\n') as fh:
+            fh.write(render(doc))
+        r.update(changed=True, same_repo_update=True, stopped=True, auto_off=True,
+                 titles=sorted({row['title'] for row in r['rows']}))
+        return 0, r
     key = lambda f: (f['id'], f['device'], f['os'])
     shop_mods = {key(k) for k in known.values()}
     site_cores = {}                               # (device, os) -> the core versions the site has
@@ -378,6 +414,9 @@ def submit(fields, catalog=CATALOG, files_dir=None, cores_dir=None, update=False
             if update and f['update_of'] is None:
                 f['result'] = 'left out: not in the shop yet; submit it with the Submit a mod form'
                 continue
+            if update and f['update_of'].get('auto_update') is False:
+                f['result'] = 'left out: its author turned automatic updates off; send it through the Submit a mod form'
+                continue
             f['held'] = next((it['hold'] for it in f['older'] or mine if it.get('hold')), None)
             if update and f['held']:
                 f['result'] = 'left out: the shop holds %s; a maintainer updates it' % f['id']
@@ -439,6 +478,8 @@ def submit(fields, catalog=CATALOG, files_dir=None, cores_dir=None, update=False
             entry['device'] = f['device']
             if f['held']:                              # a held entry's update (through the form) stays held
                 entry['hold'] = f['held']
+            if off and not update and not commit:      # opted out (an automatic update never is: it would be left out)
+                entry['auto_update'] = False
             if f['need']:
                 entry['needs_core'] = f['need']
             if 'core' in f['requires']:
@@ -475,7 +516,18 @@ def submit(fields, catalog=CATALOG, files_dir=None, cores_dir=None, update=False
                 pin = dict(repo=repo, commit=commit, path=c['path']) if commit else dict(repo=repo, tag=tag, file=c['file'])
                 new.append((dict(pin, kind='core', device=device, sha256=c['sha256']), None))
                 c['result'] = 'added: the core this release\'s mods need'
-        if new:
+        flips = []                                 # this repository's files the form lists already: the setting alone changes
+        for row in r['rows'] if not update else []:
+            it = by_name.get(row['file'])
+            if (row['result'] == 'already in the shop' and not row.get('core') and it
+                    and same_repo(it['repo']) == same_repo(repo) and (it.get('auto_update') is False) != off):
+                if off:
+                    it['auto_update'] = False
+                else:
+                    del it['auto_update']
+                flips.append(it)
+                row['result'] = 'auto-update turned %s (already in the shop)' % ('off' if off else 'on')
+        if new or flips:
             for e, at in new:                      # in the old entry's place, or after the shop's last item for its device
                 if at is None:
                     at = max((i for i, it in enumerate(items) if it['device'] == e['device']), default=len(items) - 1) + 1
@@ -486,7 +538,9 @@ def submit(fields, catalog=CATALOG, files_dir=None, cores_dir=None, update=False
             with open(catalog, 'w', encoding='utf-8', newline='\n') as fh:
                 fh.write(out)
             r['changed'] = True
-            r['titles'] = sorted({f.get('title', f['file']) for f in r['rows'] if f['result'].startswith(('added', 'replaces'))})
+            r['auto_off'] = None if update else off
+            r['titles'] = sorted({f.get('title', f['file']) for f in r['rows']
+                                  if f['result'].startswith(('added', 'replaces', 'auto-update'))})
             # every change a newer file of a mod this repository already has: no new mod, no clash, no core, none held
             r['same_repo_update'] = (all(f['update_of'] is not None and not f['clash'] and not f['held'] for f in taken)
                                      and len(new) == len(taken))
@@ -600,6 +654,16 @@ def report_md(status, r):
                       1: 'Nothing was removed. Edit the issue to fix it, and the check runs again.',
                       2: 'Nothing to remove.'}[status])
         return '\n'.join(lines) + '\n'
+    if r.get('stopped'):
+        lines += ['This release says `Shop auto-update: off`: its files were not taken, and the shop stops following %s. '
+                  'To turn it back on, submit the form again with the "Updates" box unticked.' % r['repo'], '']
+    elif status == 0 and r.get('auto_off') is False:
+        lines += ['Automatic updates are on: when you publish a newer release, the shop takes its files within a day '
+                  '(docs/SHOP.md). To stop, put `Shop auto-update: off` in a release\'s notes, or submit the form again '
+                  'with "Updates" ticked.', '']
+    elif status == 0 and r.get('auto_off') is True:
+        lines += ['Automatic updates are off for these: send each newer release through this form. Submit it again '
+                  'with "Updates" unticked to turn them on.', '']
     lines.append({0: 'These go to the shop in a pull request.' + (' Each is a newer file of a mod this repository already '
                                                                   'has in the shop.' if r.get('same_repo_update') else ''),
                   1: 'Nothing was added. Edit the issue to fix it, and the check runs again.',
@@ -624,6 +688,8 @@ def main(argv=None):
                                         'core the site doesn\'t have is refused')
     ap.add_argument('--update', action='store_true', help='only newer files of mods this repository already has in '
                                                            'the shop (packaging/shop_updates.py); the text may be empty')
+    ap.add_argument('--no-auto-update', action='store_true', help='opt these mods out of automatic updates (the '
+                                                                   'form\'s "Updates" box)')
     ap.add_argument('--remove', action='store_true', help='the "Remove a mod" form: take the repository\'s files out')
     ap.add_argument('--commit', default='', help='instead of --tag: the commit whose .elemod files to take')
     ap.add_argument('--report', help='write the report (Markdown) here')
@@ -635,7 +701,7 @@ def main(argv=None):
             fields = parse_issue(fh.read())
     else:
         fields = {'repo': a.repo or '', 'tag': a.tag or '', 'commit': a.commit, 'summary': a.summary,
-                  'on_unit': a.on_unit, 'license': a.license, 'files': a.files}
+                  'on_unit': a.on_unit, 'license': a.license, 'files': a.files, 'auto_update': False if a.no_auto_update else None}
     if a.remove:
         status, r = remove(fields, a.catalog, a.files_dir)
     else:

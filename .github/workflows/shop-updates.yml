@@ -1,5 +1,6 @@
 # The shop's mods, kept up to date from their authors' releases (packaging/shop_updates.py):
-# 1. Once a day, it lists the repositories the shop takes mods from that have published newer releases.
+# 1. Once a day, it lists the repositories the shop takes mods from that have published newer releases (not those
+#    whose authors opted out: "auto_update": false in the entry).
 # 2. For each, it updates web/catalog.json from those releases on a branch of its own (shop-update/<owner>-<name>),
 #    with the same checks as a submission, and opens a pull request (or refreshes the one already open).
 # 3. When every change is a newer file of a mod that repository already has in the shop (no new mod, no clash, no

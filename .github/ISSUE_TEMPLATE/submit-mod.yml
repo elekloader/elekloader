@@ -14,7 +14,7 @@ body:
 
         If files pass, it opens a pull request that adds them to the shop, and a maintainer reviews and merges it. Edit this issue to fix anything, and the check runs again.
 
-        After that you only publish releases: a daily check finds your newer releases and updates your mods in the shop by itself. Lines `Shop summary: ...` and `Tested on a unit: ...` in a release's notes change your card's text.
+        After that you only publish releases: a daily check finds your newer releases and updates your mods in the shop by itself (you can opt out below). Lines `Shop summary: ...` and `Tested on a unit: ...` in a release's notes change your card's text.
   - type: input
     id: repo
     attributes:
@@ -56,6 +56,13 @@ body:
     attributes:
       label: Only these files
       description: The .elemod files to submit, one per line, if not all of the release's. Mods they require from the release come with them.
+  - type: checkboxes
+    id: updates
+    attributes:
+      label: Updates
+      description: By default the shop takes your newer releases of these mods by itself, once a day, with the same checks. You can also put `Shop auto-update: off` in a release's notes.
+      options:
+        - label: Don't update these mods automatically; I'll send each new release through this form.
   - type: checkboxes
     id: checks
     attributes:
