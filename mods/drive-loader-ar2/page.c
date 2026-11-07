@@ -52,9 +52,11 @@ struct row {
     u8 boot;                             /* its boot record: DL_ST_*, or DL_ST_NONE */
     u8 boot_code;
     u16 set_arg;
+    u16 boot_arg;                        /* the boot record's number (NO ROOM's KB, FULL's spare) */
     char id[DL_ID_MAX];
     char ver[DL_VER_MAX];
-    char detail[32];                     /* the refusal's name argument */
+    char detail[32];                     /* the file's refusal's name argument */
+    char boot_detail[32];                /* the boot record's */
 };
 
 /* The list grows like SAMPLES' (decided 2026-11-07): every array the page keeps per file
@@ -174,8 +176,13 @@ static void reason(char *at, char *end, int code, u32 arg, const char *d)
         at = cat(at, end, " +");
         at = num(at, end, arg);
         cat(at, end, "K");
-    } else if (d && d[0]) {
-        cat(cat(at, end, " "), end, d);
+        return;
+    }
+    if (d && d[0])
+        at = cat(cat(at, end, " "), end, d);
+    if (code == DL_R_FULL) {             /* "FULL ev_x (0 SPARE)" */
+        at = num(cat(at, end, " ("), end, arg);
+        cat(at, end, " SPARE)");
     }
 }
 
@@ -250,8 +257,8 @@ static void boot_record(struct row *r)
         if (!dl_strcmp(dl_boot_choice[i].name, r->name)) {
             r->boot = dl_status[i].state;
             r->boot_code = dl_status[i].code;
-            if (dl_status[i].state != DL_ST_LOADED && !r->detail[0])
-                copy_str(r->detail, dl_detail[i], sizeof r->detail);
+            r->boot_arg = dl_status[i].arg;
+            copy_str(r->boot_detail, dl_detail[i], sizeof r->boot_detail);
             return;
         }
 }
@@ -377,7 +384,7 @@ enum { P_NONE, P_LOAD, P_UNLOAD, P_DELETE, P_CLEAR };
 static u8 mode;                          /* the list: the files, or the build */
 static u8 pending;                       /* what the open confirm window does */
 static void *view;                       /* the page's view while it shows (UI task only) */
-static char msg[40];
+static char msg[80];
 
 static void page_rows(void);
 
@@ -720,15 +727,38 @@ static void ask(const char *verb, int what)
 }
 
 /* YES on a list row, as in SAMPLES: tick or untick it, and step down */
+/* A "!" row's whole refusal into out (as dl_page_draw marks it): in the file list the file's
+ * own (pass 1), in the build list the last boot's, after "BOOT: ". -> 0 for a row without one. */
+static int row_reason(const struct row *r, char *out, char *end)
+{
+    out[0] = 0;
+    if (mode == M_DRIVE) {
+        if (!r->file_code)
+            return 0;
+        reason(out, end, r->file_code, 0, r->detail);
+        return 1;
+    }
+    if (r->boot != DL_ST_REFUSED && r->boot != DL_ST_DROPPED)
+        return 0;
+    reason(cat(out, end, "BOOT: "), end, r->boot_code ? r->boot_code : DL_R_LIMIT, r->boot_arg, r->boot_detail);
+    return 1;
+}
+
+/* YES on a list row, as in SAMPLES: tick or untick it, and step down. Ticking a "!" row also
+ * shows why it has one (decided 2026-11-07: the whole reason, reachable from the page). */
 static void toggle_advance(void)
 {
-    int row = ((int (*)(void *))VCALL(0x24))(view);
+    static char why[80];
+    int row = ((int (*)(void *))VCALL(0x24))(view), on;
     if (row < 0 || row >= list_n())
         return;
-    tick(row, !is_ticked(row));
+    on = !is_ticked(row);
+    tick(row, on);
     if (row + 1 < list_n())
         cursor_to(row + 1);
     VIEW_DIRTY((char *)view + 0x38);
+    if (on && row_reason(&rows[file_k(row)], why, why + sizeof why))
+        show_box(why);
 }
 
 void dl_page_select(void **f)

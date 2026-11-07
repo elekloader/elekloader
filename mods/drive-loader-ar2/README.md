@@ -150,6 +150,11 @@ The page is stock's two-pane file view, the one SAMPLES and PROJECTS are built o
   right where SAMPLES puts sizes, its size in whole KB, or `!` for a file pass 1 refuses (a bad
   file, another device, a newer core, over 512 KB). The ticks start as the saved build on entering MODS
   and after each change; coming back from the build list keeps the ticks as they were.
+- **Why a `!`.** Ticking a `!` row also shows its whole refusal in stock's message box
+  (decided 2026-11-07): in the file list the file's own (`OTHER DEVICE/OS`, `NEEDS CORE 0.12`,
+  `NOT FORMAT 2`...), in the build list the last boot's after `BOOT: ` (`BOOT: NOT FOUND
+  core_fn`, `BOOT: NO ROOM +12K`, `BOOT: FULL ev_x (0 SPARE)`), with the detail name the
+  linker kept. Unticking shows nothing; tick it again to see it again.
 - **Ticks are the build.** [YES] ticks or unticks a row and steps down, as in SAMPLES. RIGHT
   opens the action panel: SELECT ALL, DESELECT ALL, LOAD TO BUILD (UPDATE BUILD once the build
   holds mods), CLEAR BUILD, DELETE. It asks `LOAD n MODS?` (`UPDATE BUILD? (n MODS)`) over
