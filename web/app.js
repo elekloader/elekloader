@@ -1032,7 +1032,7 @@ function route() {
   }
   $('nav-csub').hidden = v !== 'contribute';
   const page = v === 'contribute' && cp !== 'overview' ? $('cp-' + cp).querySelector('h1').textContent : null;
-  document.title = (page || { build: 'Build', make: 'Make your own mod!', submit: 'Submit your mod', contribute: 'Contribute', library: 'Mods' }[v]) + ' · elekloader';
+  document.title = (page || { build: 'Build Firmware', make: 'Make your own mod!', submit: 'Submit your mod', contribute: 'Contribute', library: 'Mod Shop' }[v]) + ' · elekloader';
   $('content').scrollTop = 0;
   $('topbar').classList.remove('solid');
   window.scrollTo(0, 0);
