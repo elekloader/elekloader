@@ -388,6 +388,111 @@ def test_every_flash_write_and_erase_in_the_os_is_known():
     assert at(img, 0x4013bea0, 6) == bytes.fromhex('2f3c00040000')        # the bootstrap at 0x40000
 
 
+def here(img, addr, n):
+    """n bytes at addr in the stock file's own release (no moved())."""
+    return img[addr - DEV.main_load:addr - DEV.main_load + n]
+
+
+def _class(img, vt):
+    """A vtable's class name, from the RTTI before it (vtable - 4 -> typeinfo, +4 -> name)."""
+    def l(a):
+        return struct.unpack('>I', here(img, a, 4))[0]
+    nm = l(l(vt - 4) + 4) - DEV.main_load
+    return img[nm:img.index(b'\0', nm)].decode().lstrip('0123456789')
+
+
+def test_core_ar2_screen():
+    """core-ar2 0.12's screen calls (screen.c): what they assume of 1.74."""
+    _r, _s, img = stock()
+    if REL.version != '1.74':
+        raise Skip('core-ar2 0.12 is for 1.74')
+
+    def l(a):
+        return struct.unpack('>I', here(img, a, 4))[0]
+    # the 17 fonts: {vtable, data} at 0x417e381c + 8 i, each set up by one static initialiser
+    # (its stores at 0x4018964c..0x40189846); the next object is set up elsewhere (0x4018a29c)
+    init = img[0x40189640 - DEV.main_load:0x40189850 - DEV.main_load]
+    for i in range(17):
+        assert (0x417e381c + 8 * i).to_bytes(4, 'big') in init, i
+    assert (0x417e381c + 8 * 17).to_bytes(4, 'big') not in init
+    # the font's data: movea.l 4(sp),a0; move.l 4(a0),d0; rts
+    assert here(img, 0x40071be8, 10) == bytes.fromhex('206f000420280004' '4e75')
+    # the bitmap over a caller's buffers: vtable, +4 w, +8 h, +16 bits, +20 mask, +24 owned = 0
+    assert here(img, 0x4006fa2e, 10) == bytes.fromhex('206f0004202f000c' '20bc')
+    assert here(img, 0x4006fa54, 12) == bytes.fromhex('216f00100010' '216f00140014')
+    # the frame: a 128 x 64 bitmap over the frame buffer, drawn by drawAll(ctrl, bmp) with
+    # ctrl = the UI object's +32
+    assert here(img, 0x400a2ca8, 18) == bytes.fromhex('48780040' '48780080' '47eeffe4' '2f0b'
+                                                    '4eb94006')
+    # Brain::key(brain, ev): the UI object; its controller at +32
+    assert here(img, 0x400a0336, 24) == bytes.fromhex('4feffff048d70c0c266f0014242f001842ab07484aab0020')
+    # KeyEvent: 24 bytes, its ctor storing up to +20
+    assert _class(img, 0x401d67c8) == 'KeyEvent'
+    assert here(img, 0x40071e94, 18) == bytes.fromhex('256f0014000c' '256f00180010' '256f00200014')
+    # the views core_stock_overlay knows by address
+    assert _class(img, 0x4023502c) == 'SamplerLedView'
+    assert _class(img, 0x401d2124) == 'ScaleMenuView'
+    # the progress box: COPYING SOUNDS (0x400634cc) makes a ProgressWindow of 0x88 bytes,
+    # its shared_ptr's count, and shows it on the controller *(host + 100)
+    assert here(img, 0x4006350e, 4) == bytes.fromhex('48780088')
+    assert here(img, 0x40063520, 6) == bytes.fromhex('4eb940076c4a')
+    assert here(img, 0x4006352e, 6) == bytes.fromhex('4eb940185926')
+    assert _class(img, l(0x40076c6a + 2)) == 'ProgressWindow'
+    assert 'ProgressWindow' in _class(img, l(0x4018594a + 2))
+    assert here(img, 0x40078698, 4) == bytes.fromhex('4aa9002c')      # 0x40078684: host + 0x38 + 44
+    assert here(img, 0x400e97fe, 12) == bytes.fromhex('20542f2800644eb940079462')
+    # the push takes the controller's mutex at +4 and walks its list at +20, as drawAll does
+    assert here(img, 0x40079476, 4) == bytes.fromhex('486a0004')
+    assert here(img, 0x40079116, 4) == bytes.fromhex('486a0004')
+    assert here(img, 0x40079132, 4) == bytes.fromhex('266a001c')        # drawAll: the first node, +28
+    # the window's close, vtable +0x2c (the push closes another of the same class with it)
+    assert here(img, 0x40079504, 4) == bytes.fromhex('2069002c')
+    # core's own handlers: the key's first, the encoder's last, so the LEVEL window counts
+    # only turns that reach stock
+    with open(os.path.join(ROOT, 'mods', 'core-ar2', 'mod.json')) as fh:
+        j = json.load(fh)
+    sub = [(x['event'], x['fn'], x['order']) for x in j['subscribe']]
+    assert ('ev_key', 'core_screen_key', -1000000) in sub
+    assert ('ev_enc', 'core_screen_enc', 1000000) in sub
+    assert ('ev_tick', 'core_screen_tick', 3) in sub
+    assert 'screen.c' in j['sources'] and j['version'] == '0.12'
+
+
+def test_core_ar2_screen_check_needs_0_12():
+    """The screen check asks for core 0.12: refused with a core that says 0.11, built with
+    0.12 (needs the cross toolchain)."""
+    import shutil
+    import tempfile
+    from elekloader import patch
+    from elekloader.sdk import build as sdkbuild
+    stock()
+    if REL.version != '1.74':
+        raise Skip('core-ar2 0.12 is for 1.74')
+    if not shutil.which(os.environ.get('ELEKLOADER_CROSS', DEV.toolchain['prefix']) + 'as'):
+        raise Skip('no cross assembler (ELEKLOADER_CROSS)')
+    with tempfile.TemporaryDirectory() as tmp:
+        for d in ('core', 'core-ar2'):
+            shutil.copytree(os.path.join(ROOT, 'mods', d), os.path.join(tmp, 'mods', d))
+        cj = os.path.join(tmp, 'mods', 'core-ar2', 'mod.json')
+        with open(cj) as fh:
+            j = json.load(fh)
+        j['version'] = '0.11'
+        with open(cj, 'w') as fh:
+            json.dump(j, fh)
+        out = os.path.join(tmp, 'out')
+        old = sdkbuild.build(os.path.join(tmp, 'mods', 'core-ar2'), SYX, out)[0]
+        new = sdkbuild.build(os.path.join(ROOT, 'mods', 'core-ar2'), SYX, os.path.join(out, 'new'))[0]
+        app = sdkbuild.build(os.path.join(ROOT, 'examples', 'screen-check-ar2'), SYX, out)[0]
+        assert elemod.load_any(app).needs_core == '0.12'
+        try:
+            patch.build(SYX, [old, app], log=lambda *a: None)
+        except patch.PatchError as e:
+            assert 'needs core 0.12 or newer, and this build has core 0.11' in str(e), e
+        else:
+            raise AssertionError('the screen check linked with core 0.11')
+        patch.build(SYX, [new, app], version='1.74', log=lambda *a: None)
+
+
 if __name__ == '__main__':
     import traceback
     ok = skipped = failed = 0
