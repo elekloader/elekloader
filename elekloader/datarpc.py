@@ -33,6 +33,11 @@ from .elemod import ModError
 HEAD = bytes((0xF0, 0x00, 0x20, 0x3C, 0x10, 0x00))
 LIST, ROPEN, READ, RCLOSE, WOPEN, WRITE, WCLOSE, CLEAR = 0x53, 0x54, 0x55, 0x56, 0x57, 0x58, 0x59, 0x5C
 CHUNK = 0x2000
+# a read's chunk sizes, largest first: when a reply never arrives (a host whose MIDI input drops SysEx
+# over about 1 KB, as Firefox's Web MIDI and python-rtmidi on Windows), the read starts again with the
+# next; 0x300 bytes travel as a SysEx message of about 920 bytes
+READ_CHUNKS = (CHUNK, 0x300)
+NO_REPLY = 'no reply from the unit to command 0x%02x'
 FOLDER = '/mods'
 
 
@@ -81,6 +86,7 @@ class Client:
 
     def __init__(self, port, timeout=5.0):
         self.port, self.timeout, self.seq = port, timeout, 0
+        self.read_chunk = CHUNK                 # the largest read chunk that has come through
 
     def call(self, cmd, args=b''):
         seq = self.seq
@@ -90,7 +96,7 @@ class Client:
         while True:
             left = end - time.monotonic()
             if left <= 0:
-                raise RpcError('no reply from the unit to command 0x%02x' % cmd)
+                raise RpcError(NO_REPLY % cmd)
             raw = self.port.receive(left)
             if raw is None:
                 continue
@@ -124,8 +130,21 @@ class Client:
         return out
 
     def get(self, path):
-        """-> the bytes the unit serves (a data container)."""
-        msg = self.call(ROPEN, path.encode('latin-1') + b'\0' + struct.pack('>IB', CHUNK, 0))
+        """-> the bytes the unit serves (a data container). A read whose reply never arrives starts
+        again with a smaller chunk (READ_CHUNKS); the client keeps the size that worked."""
+        sizes = [c for c in READ_CHUNKS if c <= self.read_chunk]
+        for i, chunk in enumerate(sizes):
+            try:
+                data = self._get(path, chunk)
+            except RpcError as e:
+                if i + 1 == len(sizes) or not str(e).endswith(NO_REPLY % READ):
+                    raise
+                continue
+            self.read_chunk = chunk
+            return data
+
+    def _get(self, path, chunk):
+        msg = self.call(ROPEN, path.encode('latin-1') + b'\0' + struct.pack('>IB', chunk, 0))
         job = struct.unpack_from('>I', msg, 6)[0]
         data, seq = bytearray(), 0
         try:

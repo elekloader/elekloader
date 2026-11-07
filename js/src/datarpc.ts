@@ -13,6 +13,11 @@ import { repr } from './py.ts'
 export const HEAD = Uint8Array.of(0xf0, 0x00, 0x20, 0x3c, 0x10, 0x00)
 export const LIST = 0x53, ROPEN = 0x54, READ = 0x55, RCLOSE = 0x56, WOPEN = 0x57, WRITE = 0x58, WCLOSE = 0x59, CLEAR = 0x5c
 export const CHUNK = 0x2000
+// a read's chunk sizes, largest first: when a reply never arrives (a host whose MIDI input drops SysEx
+// over about 1 KB, as Firefox's Web MIDI and python-rtmidi on Windows), the read starts again with the
+// next; 0x300 bytes travel as a SysEx message of about 920 bytes
+export const READ_CHUNKS = [CHUNK, 0x300]
+const noReply = (cmd: number) => `no reply from the unit to command 0x${hex2(cmd)}`
 export const FOLDER = '/mods'
 
 export class RpcError extends ModError {}
@@ -80,6 +85,7 @@ export class Client {
   seq = 0
   port: Port
   timeoutMs: number
+  readChunk = CHUNK                       // the largest read chunk that has come through
   constructor(port: Port, timeoutMs = 5000) { this.port = port; this.timeoutMs = timeoutMs }
 
   async call(cmd: number, args: Uint8Array = new Uint8Array(0)): Promise<Uint8Array> {
@@ -89,7 +95,7 @@ export class Client {
     const end = Date.now() + this.timeoutMs
     for (;;) {
       const left = end - Date.now()
-      if (left <= 0) throw new RpcError(`no reply from the unit to command 0x${hex2(cmd)}`)
+      if (left <= 0) throw new RpcError(noReply(cmd))
       const raw = await this.port.receive(left)
       if (raw === null) continue
       const msg = unframe(raw)
@@ -120,9 +126,23 @@ export class Client {
     return out
   }
 
-  /** -> the bytes the unit serves (a data container). */
+  /** -> the bytes the unit serves (a data container). A read whose reply never arrives starts again
+   *  with a smaller chunk (READ_CHUNKS); the client keeps the size that worked. */
   async get(path: string): Promise<Uint8Array> {
-    let msg = await this.call(ROPEN, cat(path0(path), be([CHUNK, 4], [0, 1])))
+    const sizes = READ_CHUNKS.filter(c => c <= this.readChunk)
+    for (let i = 0; ; i++) {
+      try {
+        const data = await this.getChunked(path, sizes[i])
+        this.readChunk = sizes[i]
+        return data
+      } catch (e) {
+        if (!(e instanceof RpcError) || i + 1 === sizes.length || !e.message.endsWith(noReply(READ))) throw e
+      }
+    }
+  }
+
+  private async getChunked(path: string, chunk: number): Promise<Uint8Array> {
+    let msg = await this.call(ROPEN, cat(path0(path), be([chunk, 4], [0, 1])))
     const job = rd32(msg, 6), parts: Uint8Array[] = []
     let seq = 0
     try {

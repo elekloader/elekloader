@@ -121,3 +121,45 @@ test('the Data router client: the CLI\'s requests, byte for byte, over its recor
     ANALOG_RYTM_MK2.releases.pop()
   }
 })
+
+/** A unit serving one file through a host whose MIDI input drops SysEx over 1 KB (Firefox's Web MIDI on Windows):
+ * every reply longer than that is lost, and, as stock, an unfinished read can't be closed. */
+class SmallBufferUnit implements datarpc.Port {
+  queue: Uint8Array[] = []
+  jobs = new Map<number, [Uint8Array, number]>()
+  done = new Set<number>()
+  nj = 1
+  body: Uint8Array
+  constructor(body: Uint8Array) { this.body = body }
+  send(raw: Uint8Array) {
+    const msg = datarpc.unframe(raw)!, seq = (msg[0] << 8) | msg[1], cmd = msg[4], a = msg.subarray(5)
+    const u32 = (b: Uint8Array, at: number) => ((b[at] << 24) | (b[at + 1] << 16) | (b[at + 2] << 8) | b[at + 3]) >>> 0
+    const be = (...v: number[]) => Uint8Array.from(v.flatMap(x => [x >>> 24, (x >>> 16) & 255, (x >>> 8) & 255, x & 255]))
+    let ok = 1, extra = new Uint8Array(0)
+    if (cmd === datarpc.ROPEN) {
+      const j = ++this.nj, chunk = u32(a, a.indexOf(0) + 1)
+      this.jobs.set(j, [container.wrap(this.body, 2, 5, 0x30313736), chunk])
+      extra = Uint8Array.of(...be(j, chunk), 0)
+    } else if (cmd === datarpc.READ) {
+      const j = u32(a, 0), s = u32(a, 4), [data, c] = this.jobs.get(j)!
+      const d = data.subarray(s * c, (s + 1) * c), last = (s + 1) * c >= data.length ? 1 : 0
+      if (last) this.done.add(j)
+      extra = Uint8Array.of(...be(j, s, 0), last, ...be(0, d.length), ...d)
+    } else if (cmd === datarpc.RCLOSE) {
+      ok = this.done.has(u32(a, 0)) ? 1 : 0
+      extra = Uint8Array.of(...a.subarray(0, 4), 0, 0, 0, 0)
+    }
+    const reply = datarpc.frame(Uint8Array.of(0, 0, seq >> 8, seq & 255, cmd | 0x80, ok, ...extra))
+    if (reply.length <= 1024) this.queue.push(reply)
+  }
+  async receive() { return this.queue.shift() ?? null }
+}
+
+test('a read whose replies are lost starts again with small chunks, and the client keeps that size', async () => {
+  const body = new Uint8Array(256 * 44).map((_, i) => i & 255)
+  const client = new datarpc.Client(new SmallBufferUnit(body), 100)
+  assert.deepEqual(container.parse(await client.get('/mods/big.elemod'))[1], body)
+  assert.equal(client.readChunk, 0x300)
+  assert.deepEqual(container.parse(await client.get('/mods/big.elemod'))[1], body)
+  assert.equal(client.readChunk, 0x300)
+})
