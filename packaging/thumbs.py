@@ -5,7 +5,7 @@
     python packaging/thumbs.py thumb.png [--md] [--png out.png]
 
 A thumbnail is exactly 128x64 pixels in exactly two solid colours: the size and
-colours of the Elektron screens (docs/SHOP.md, "A thumbnail"). Nothing else is
+colours of the Elektron screens (docs/THUMBNAILS.md). Nothing else is
 taken, and nothing is converted: a photo scaled down and dithered to two colours
 stays recognisable, so the check refuses dithering too. What passes becomes
 
