@@ -334,6 +334,13 @@
       "on_unit": "Tested on hardware; fully functional and stable."
     },
     {
+      "repo": "DigiAlchemydsp/DRUM-PLUS", "tag": "v1.0.1", "file": "drumplus-1.0.elemod",
+      "device": "digitone-mk1", "needs_core": "4.0",
+      "sha256": "59b8dcc775b6dd0d7ebf17bf3205f40cc8f410c688d5b1f4c3d2ed2ba39ea487",
+      "summary": "A one-shot FM percussion machine for the Digitone mk1/Keys built around the stock FM voice.",
+      "on_unit": "Tested on hardware; fully functional and stable."
+    },
+    {
       "repo": "irpina/digineighbor", "tag": "v0.6", "file": "digineighbor-0.6.elemod",
       "device": "digitakt-mk1", "needs_core": "2.1", "title": "digineighbor", "version": "0.6",
       "sha256": "380837f86c05cf6d0aba2dfc930a4309cc6b2e99b2e8c6a450f0abe6e844dccd",
