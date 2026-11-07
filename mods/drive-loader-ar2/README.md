@@ -9,6 +9,7 @@ From 0.1 it holds the `/mods` route, links the mods `/mods/active` names into th
 mods' area at boot, and adds the MODS page in SETTINGS > GLOBAL, which writes `/mods/active`.
 The rules (what a +Drive mod may hold, the checks, the order, the refusal
 codes and skip reasons) are docs/FORMAT.md's, "+Drive mods".
+From 0.2 the files in `/mods` carry a 16-byte header (below, "Files on the +Drive").
 
 ## The /mods route
 
@@ -28,6 +29,21 @@ compressed, and a payload of at most 512 KB. Anything else is refused at the hea
 nothing is written. The router checks the CRC at the footer, and only a transfer that passes
 every check reaches the commit: the body goes to `<name>.tmp`, the old file is deleted, and the
 tmp file is renamed over it.
+
+### Files on the +Drive
+
+The files live on the +Drive's sample file system (ekFS), and stock's SAMPLES browser lists
+every folder there, `/mods` too: its root is ekFS's `/`, and its directory scan
+(`Directory`, vtable `0x401d7cbc`, filled by `0x4007e950` through readdir `0x4007c0b4`) keeps
+every entry, so no name or node flag hides a folder (a `/.mods` shows like any other). LOAD TO
+PROJECT reads a file's first 16 bytes as FsSample's own header. A raw `.elemod` there hangs
+stock, and a project that holds one stalls the next OS upgrade in PREPARING until a CREATE NEW.
+So from 0.2 every file the loader writes starts with 16 zero bytes, which stock loads as an
+empty sample (checked in the emulator on stock 1.74 with remote keys). `fs.c` writes the
+header at each open for writing and skips it at each open for reading; stock's node size
+(`0x4007d9ec`, the length less 16) is then the data's size. A file without the header, as 0.1
+wrote them, still reads whole. The header is the loader's storage only: the route, the
+`.elemod` files on the computer and `/mods/active`'s CRCs are of the data after it.
 
 A build for a unit test run sets `-DDL_TEST_DIR` (mod.json `cflags`), which makes the folder
 `/~T MODS`. The test rules allow only `~T` items.
@@ -172,5 +188,5 @@ emulator through its `--usb-midi-tcp` port.
 ```bash
 python -m elekloader.sdk.build mods/core-ar2 --stock Analog-Rytm_MKII_OS1.74.syx
 python -m elekloader.sdk.build mods/drive-loader-ar2 --stock Analog-Rytm_MKII_OS1.74.syx
-python -m elekloader.patch --stock Analog-Rytm_MKII_OS1.74.syx --mod core-0.11.elemod --mod drive-loader-0.1.elemod --out drive-loader.syx --version 1.74
+python -m elekloader.patch --stock Analog-Rytm_MKII_OS1.74.syx --mod core-0.11.elemod --mod drive-loader-0.2.elemod --out drive-loader.syx --version 1.74
 ```
