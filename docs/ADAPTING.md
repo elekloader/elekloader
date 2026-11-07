@@ -2041,45 +2041,6 @@ note): keep them short, never wait, and send MIDI only with
   `core_pattern_next()` for a step past a pattern change); the audio block count is
   `core_block` (`analog-rytm-mk2/load.h`).
 
-### Remote fields (core-ar2 0.11, Analog Rytm MKII)
-
-A storage field declared `"where": "sidecar"` (sound, kit or pattern scope)
-has no bits in stock's objects. Core keeps a RAM mirror of it for every
-place that holds such a record, and the mod keeps the data itself (for the
-Sidecar mods, on the Pi):
-
-```json
-"storage": [{"sym": "my_rec", "scope": "kit", "bits": 16, "where": "sidecar"}],
-"subscribe": [{"event": "ev_items", "fn": "my_items", "order": 50}]
-```
-
-Read and write it with `core_store_get` / `core_store_set` like any field,
-with the record as the item. Room: sound 64 bits, kit 64, pattern 256,
-shared by the build's mods, packed in link order every build (the mirror
-is RAM only, so sidecar fields are not in the lockfile or the layout ID).
-A sidecar field isn't lockable, has no init and isn't a handle. A mirror
-reads 0 until set and after a power-off or a project load from the +Drive:
-the mod puts its values back.
-
-Core moves the mirrors wherever stock moves the records (copy, paste,
-undo, clear, pattern switch, RELOAD, SAVE KIT and LOAD KIT, SysEx in and
-out, project load and save) and tells the mod, with
-`analog-rytm-mk2/items.h`:
-
-- `my_items(kind, from, to, n)`: `kind` `CORE_ITEM_SOUND`, `_KIT` or
-  `_PATTERN`; `n` records moved, the next `n` of `from` to the next `n` of
-  `to` (0: every record of the kind, a whole project's load, save or
-  CREATE NEW); `from` and `to` are refs, `CORE_ITEM_WHERE(ref)` (`LIVE`,
-  `SAVED`, `POOL`, `IMAGE`, `IMAGE_POOL`, `OTHER` for a clipboard or an
-  undo buffer, `OUT` for a record sent off, `EXT` for one from outside,
-  `NONE` for a fresh one) and `CORE_ITEM_INDEX(ref)`. A kit's move carries
-  its 12 sounds. A record sent out and coming back unchanged (a SysEx dump
-  sent back) is `from` the same `OUT` ref, with its mirror. Called in the
-  UI task at `ev_tick`, after the moves; kind 0 means the queue overflowed:
-  read the mirrors again.
-- `core_item_addr(kind, ref)` gives the record a ref names (to read or set
-  its mirror), `core_item_ref(kind, addr)` the ref of a record.
-
 ### Dial scale and held pads (core-ar2 0.11, Analog Rytm MKII)
 
 A lockable parameter narrower than the dial (a 4-bit field, say) whose

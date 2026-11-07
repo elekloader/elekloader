@@ -404,8 +404,8 @@ Digitakt's in the places elekloader depends on.
   memory filled to its limit, heavy MIDI, kit dumps, Overbridge streaming and
   a power cycle. Sample memory ends just below it (about `0x47937290`), the
   OS clears a block at `0x479372E0` at every boot, and the last 4 KB under
-  `0x48000000` are the stack's. core-ar2 0.11 keeps its step tag tables and
-  mirrors at fixed addresses in the area's first 1.8 MB (it claims that
+  `0x48000000` are the stack's. core-ar2 0.11 keeps its step tag tables
+  at fixed addresses in the area's first 1.8 MB (it claims that
   region). For a payload, the flash budget is the tighter limit.
 - **Recovery.** The STARTUP menu (FUNC at power-on), TRIG 4 for OS UPGRADE, the
   stock file over MIDI DIN. Checked on a unit with stock 1.73.

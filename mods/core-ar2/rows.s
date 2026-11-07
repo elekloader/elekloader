@@ -28,11 +28,6 @@ core_memcpy:
         move.l  16(%sp),-(%sp)            | dst
         jsr     core_rows_memcpy
         lea     12(%sp),%sp
-        move.l  16(%sp),-(%sp)            | (0.11) sound, kit and pattern records
-        move.l  16(%sp),-(%sp)
-        move.l  16(%sp),-(%sp)
-        jsr     core_items_memcpy
-        lea     12(%sp),%sp
         move.l  (%sp)+,%d0
         rts
 memcpy_body:
@@ -49,10 +44,6 @@ core_memset:
         move.l  12(%sp),-(%sp)
         move.l  8(%sp),-(%sp)
         jsr     core_rows_drop
-        addq.l  #8,%sp
-        move.l  12(%sp),-(%sp)            | (0.11)
-        move.l  8(%sp),-(%sp)
-        jsr     core_items_drop
         addq.l  #8,%sp
 1:      movea.l 8(%sp),%a0
         mvz.b   11(%sp),%d0
@@ -72,12 +63,6 @@ core_new_array:
         move.l  %d0,-(%sp)
         jsr     core_rows_drop
         addq.l  #8,%sp
-        move.l  (%sp),%d0                 | (0.11)
-        move.l  %d0,-(%sp)
-        move.l  12(%sp),-(%sp)
-        move.l  %d0,-(%sp)
-        jsr     core_items_drop
-        lea     12(%sp),%sp
         move.l  (%sp)+,%d0
 1:      move.l  %d0,%a0
         rts

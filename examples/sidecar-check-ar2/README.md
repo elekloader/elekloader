@@ -3,7 +3,7 @@
 A test for the [core-ar2](../../mods/core-ar2) 0.11 calls the Sidecar mods
 use, checked in RAM: each part of 0.11 adds what it needs here, and the
 emulator and a unit's readback read the records after the magics `SCK1`
-to `SCK5`.
+to `SCK4`.
 
 ## Part 1: locks the mod keeps itself (core 0.11)
 
@@ -98,45 +98,6 @@ A command word `cmd` (and `arg`) acts on the next `ev_tick`:
 | 2 | the counters and rings back to 0 |
 | 3 | `quiet` = `arg`: 1 makes `ev_seq_tick` only count (no getters), for the cost |
 
-## Part 5: remote fields (core 0.11)
-
-items.c declares three stock fields (`sc5_ts` sound 12 bits, `sc5_tk` kit
-16, `sc5_tp` pattern 16) and three `"where": "sidecar"` fields of the same
-widths (`sc5_ss`, `sc5_sk`, `sc5_sp`). The stock field travels inside the
-record wherever stock copies it; the sidecar field is core's mirror. Seeding
-both with the same value at every place and reading both after a stock
-action shows any move core missed: the two differ there.
-
-The places read are the 129 live patterns (the playing copy first), the 128
-edited and 128 saved kits, their 12 sounds each, and the 128 pool sounds
-(3,585 in all).
-
-The record after the magic `SCK5` (`sc5`, items.c):
-
-- `checked`, `bad`, `zero`, `nonzero`: the last verify's places read,
-  places whose two values differ, both 0, both set; the first 16 bad
-  places in `first` (kind, ref, stock value, sidecar value).
-- `read_*`: the last read's kind, ref (given back by `core_item_ref`),
-  address and two values.
-- every `ev_items` goes into a ring of 64 (`e`, at `n % 64`) with the tick;
-  `CORE_ITEM_RESYNC` also counts in `resyncs`.
-
-A command word `cmd` (and `arg`) acts on the next `ev_tick`:
-
-| `cmd` | what |
-|---|---|
-| 1 | seed: every place gets a fresh nonzero value in both fields, counting up from `arg` |
-| 2 | verify |
-| 3 | the `ev_items` ring back to 0 |
-| 4 | read the place `arg` = kind << 28 \| ref |
-| 5 | write `arg` into both fields of the last read's place |
-
-Two cases differ by design: a pattern sent out as SysEx and back carries
-no stock mod field (mod storage of patterns is not in the dump), so its
-stock field reads 0 while the mirror comes back; and a project loaded from
-the +Drive comes in as `EXT`, so its mirrors read 0 until the mod puts its
-data back.
-
 ## Part 6: payloads (core 0.11)
 
 payload.s is a 1 MB `.payload` of 4,096 blocks of 64 words: the block's
@@ -176,8 +137,8 @@ commands over USB and sends the records back (all start F0 7D 53 43):
 
 | message | what |
 |---|---|
-| in `01 <part> <cmd> <a0..a4> F7` | part 2..7's `arg` = a0 << 28 \| a1 << 21 \| a2 << 14 \| a3 << 7 \| a4, then its `cmd` |
-| in `02 <part> F7` | send part 1..7's record back |
+| in `01 <part> <cmd> <a0..a4> F7` | part 2..4, 6 or 7's `arg` = a0 << 28 \| a1 << 21 \| a2 << 14 \| a3 << 7 \| a4, then its `cmd` |
+| in `02 <part> F7` | send part 1..4, 6 or 7's record back (from 0.9 there is no part 5) |
 | out `03 <part> <off, 3 x 7 bits> <n> <2n nibbles> F7` | n bytes (at most 48) of the record from off, each byte as two nibbles, high first |
 | out `04 <part> <size, 3 x 7 bits> F7` | the record's end |
 

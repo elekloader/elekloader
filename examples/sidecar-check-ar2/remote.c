@@ -1,10 +1,10 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
-/* sidecar-check (Analog Rytm MKII), 0.8: the records' readback and the
+/* sidecar-check (Analog Rytm MKII), 0.8 (0.9: no part 5): the records' readback and the
  * commands over USB MIDI, for a unit run that can't peek or poke RAM
  * (README, "Over MIDI"). Every message starts F0 7D 53 43 ("SC"):
  *
  *   in   01 <part> <cmd> <a0> <a1> <a2> <a3> <a4> F7
- *        part 1..7's command word: arg = a0 << 28 | a1 << 21 | a2 << 14 |
+ *        part 1..4, 6, 7's command word: arg = a0 << 28 | a1 << 21 | a2 << 14 |
  *        a3 << 7 | a4 is written, then cmd (part 1 has none)
  *   in   02 <part> F7
  *        send part's record back: the whole record, from its magic
@@ -19,8 +19,8 @@
 #include <stdint.h>
 #include "analog-rytm-mk2/moments.h"
 
-extern char sc[], sc2[], sc3[], sc4[], sc5[], sc6[], sc7[];
-extern const unsigned sc1_size, sc2_size, sc3_size, sc4_size, sc5_size, sc6_size, sc7_size;
+extern char sc[], sc2[], sc3[], sc4[], sc6[], sc7[];
+extern const unsigned sc1_size, sc2_size, sc3_size, sc4_size, sc6_size, sc7_size;
 
 #define PARTS 7
 #define CHUNK 48
@@ -32,7 +32,7 @@ static char *rec(int part, unsigned *size, int *cmd)
     case 2: *size = sc2_size; *cmd = 12; return sc2;
     case 3: *size = sc3_size; *cmd = 4; return sc3;
     case 4: *size = sc4_size; *cmd = 4; return sc4;
-    case 5: *size = sc5_size; *cmd = 4; return sc5;
+    /* part 5 (remote fields) left core 0.11 (sidecar-check 0.9): no record */
     case 6: *size = sc6_size; *cmd = 4; return sc6;
     case 7: *size = sc7_size; *cmd = 4; return sc7;
     }

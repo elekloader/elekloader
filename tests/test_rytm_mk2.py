@@ -198,9 +198,9 @@ def test_core_ar2_sites():
     # the FX words' save and the FX and sound edits' write into the stored kit (0.9),
     # the project save to a +Drive slot (0.10, ev_project_save), and the six
     # length and scale setters (0.11, ev_steps' LENGTH), and the five moments (0.11: the SysEx
-    # router, the kit select and push, the slot clear and paste), the sequencer clock's two
-    # (0.11, ev_seq_step) and the kit init (0.11, remote fields)
-    assert len(mod['sites']) == 123
+    # router, the kit select and push, the slot clear and paste), and the sequencer clock's two
+    # (0.11, ev_seq_step)
+    assert len(mod['sites']) == 122
     for addr in ('0x400c0ba2', '0x400c0c8c', '0x400ab8d0', '0x400aba02', '0x400aba7e', '0x400ab096'):
         assert [x for x in mod['sites'] if x['addr'] == addr and x['op'] == 'jmp'], addr
     # each moment's site is its routine's first whole instructions, and the body in moments.s

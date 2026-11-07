@@ -45,7 +45,6 @@
 #define STORE_TRACK 4
 #define STORE_PATTERN 5
 #define STORE_PROJECT 6
-#define STORE_SIDECAR 8                       /* core-ar2 0.11: + the scope, a "where": "sidecar" field (items.h) */
 
 /* ev_project handlers: void f(int how, unsigned dropped), subscribed in
  * mod.json ({"event": "ev_project", "fn": ...}). how is CORE_PROJECT_NEW after

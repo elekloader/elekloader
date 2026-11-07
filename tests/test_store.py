@@ -305,30 +305,6 @@ def test_a_handle_field_is_placed_like_any_and_listed_in_core_handles():
         {'sym': 'h', 'scope': 'kit', 'bits': 8, 'handle': 1}]})
 
 
-def test_a_sidecar_field_is_packed_apart_from_the_lockfile():
-    """"where": "sidecar" (core-ar2 0.11): sound, kit and pattern only; packed per scope in link order
-    into its mirror (scope + 8 in the descriptor), not in the lockfile; __sidecar_bytes gives each
-    mirror's bytes; the room is SIDECAR_ROOM."""
-    doc = {'storage': [{'sym': 'a', 'scope': 'kit', 'bits': 12, 'where': 'sidecar'},
-                       {'sym': 'b', 'scope': 'kit', 'bits': 5, 'where': 'sidecar'},
-                       {'sym': 'c', 'scope': 'pattern', 'bits': 16, 'where': 'sidecar'},
-                       {'sym': 'd', 'scope': 'sound', 'bits': 3}]}
-    assert store.parse_sidecar(doc) == ['a', 'b', 'c']
-    syms = store.sidecar_symbols([('m', 'a', 'kit', 12), ('m', 'b', 'kit', 5), ('m', 'c', 'pattern', 16)])
-    assert syms['a'] == (2 + 8) << 28 | 12 << 22 | 0 and syms['b'] == (2 + 8) << 28 | 5 << 22 | 12
-    assert syms['c'] == (5 + 8) << 28 | 16 << 22 | 0
-    assert syms['__sidecar_bytes'] == 0 << 16 | 3 << 8 | 2
-    assert store.sidecar_symbols([]) == {'__sidecar_bytes': 0}
-    assert 'mirror' in refused(store.sidecar_symbols, [('m', 'a', 'sound', 32), ('n', 'b', 'sound', 33)])
-    assert 'sound, kit and pattern' in refused(store.parse_decls, {'storage': [
-        {'sym': 'g', 'scope': 'global', 'bits': 8, 'where': 'sidecar'}]})
-    assert '"sidecar"' in refused(store.parse_decls, {'storage': [
-        {'sym': 'g', 'scope': 'kit', 'bits': 8, 'where': 'pi'}]})
-    for k, v in (('lock', True), ('init', 1), ('handle', True)):
-        assert 'not lockable' in refused(store.parse_decls, {'storage': [
-            {'sym': 'g', 'scope': 'kit', 'bits': 8, 'where': 'sidecar', k: v}]})
-
-
 if __name__ == '__main__':
     for name, fn in sorted(globals().items()):
         if name.startswith('test_'):

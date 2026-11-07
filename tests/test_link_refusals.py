@@ -820,15 +820,6 @@ def _(B):
              [keeper(B), handled])], [handles, handled]
 
 
-@row('link', '<> declare<> sidecar fields ("where": "sidecar"), which <> does not keep', device='analog-rytm-mk2')
-def _(B):
-    side = B.other('m', storage=[{'sym': 'st_s', 'scope': 'kit', 'bits': 16, 'where': 'sidecar'}])
-    sides = keeper(B)
-    sides['imports'] = sides['imports'] + ['__sidecar_bytes']
-    return [('m declares sidecar fields ("where": "sidecar"), which core 1 does not keep',
-             [keeper(B), side])], [sides, side]
-
-
 @row('link', '<> imports <> but declares no table <>', device='analog-rytm-mk2')
 def _(B):
     # check() refuses a core that imports the generation symbols without the table, unless a mod
@@ -1010,7 +1001,7 @@ def test_digitakt_fixtures():
 
 
 def test_analog_rytm_fixtures():
-    assert run_rows('analog-rytm-mk2') == 14
+    assert run_rows('analog-rytm-mk2') == 13
 
 
 def test_the_lfo_destination_field_is_placed_only_with_an_lfo_field():

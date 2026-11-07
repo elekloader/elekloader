@@ -6,8 +6,8 @@
  * code, and the table core_payloads lists each mod's, {id, address, length}.
  * The id is the FNV-1a hash (32 bits) of the mod's id (link.py payload_id).
  * From 0.11 the mods' area is 0x47b10000..0x47fff000 (the profile's
- * core_ddr), above the step tag tables and the mirrors core keeps at fixed
- * addresses (steps.c, items.c).
+ * core_ddr), above the step tag tables core keeps at fixed
+ * addresses (steps.c).
  */
 
 #include <stdint.h>

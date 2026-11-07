@@ -66,7 +66,7 @@ addresses (docs/DEVICES.md says how far each moved).
   0x47C00000-0x47FFF000. Sample memory ends at about 0x47937290. Below it, the OS clears a block at 0x479372E0
   (its 0x4F9372E0, which the 128 MB DDR aliases there); above it, the last
   4 KB under 0x48000000 is the stack's. core-ar2 0.11 keeps its step tag
-  tables at 0x47938000 and its sidecar fields' mirrors at 0x47B00000, fixed,
+  tables at 0x47938000..0x47B00000, fixed,
   so from 0.11 the linker lays the mods out from 0x47B10000 to 0x47FFF000
   (core_ddr), payloads included. The flash budget (the container below
   0x300000) is the tighter limit for a payload: about 1 MB.
@@ -111,7 +111,7 @@ DEVICE = Device(
         'big': (0x47938000, 0x47FFF000),          # verified 2026-11-05, see above
     },
     ddr=(0x47BE0000, 0x47C00000),
-    core_ddr=(('0.11', (0x47B10000, 0x47FFF000)),),   # core-ar2 0.11: 5 MB, above its tags and mirrors
+    core_ddr=(('0.11', (0x47B10000, 0x47FFF000)),),   # core-ar2 0.11: 5 MB, above its step tags
     recovery=('hold FUNC while powering on for the STARTUP menu, press TRIG 4 (OS UPGRADE), '
               'then send the stock .syx over MIDI DIN (not USB)'),
     slot_claims=(('core_machines', 0, 53, 'machine'),),   # a machine's descriptor names its slot at +0

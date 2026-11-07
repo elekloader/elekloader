@@ -137,19 +137,6 @@ lockfile's order, which core_handle_fields walks over every item of the
 project, so a mod can list every handle a project uses. A handle is not a
 parameter (no "lock") and has no init (0 is none).
 
-Sidecar fields (core-ar2 0.11). A field declared `"where": "sidecar"` (sound,
-kit or pattern scope) has no bits in stock's objects: core keeps a RAM mirror
-of it for every place that holds such an item and moves the mirror wherever
-stock moves the item, telling the mods each move (ev_items), and the mod
-keeps the data elsewhere (for the Sidecar mods, on the Pi). Its descriptor is
-the scope + 8 in bits 28..31 (STORE_SIDECAR), its width and its bit offset in
-the mirror. Sidecar fields are packed in link order, every build afresh: the
-mirror is RAM only, so they are not in the lockfile and not part of the
-layout ID. Each scope's mirror has its room (SIDECAR_ROOM); the linker gives
-the core the bytes each one uses in `__sidecar_bytes` (sound << 16 | kit << 8
-| pattern), 0 in a build without one. A sidecar field is not lockable, has no
-init and is not a handle.
-
 Nothing here is random: the same lockfile (or none) and mods always link to
 the same bytes.
 """
@@ -179,9 +166,6 @@ INITS_TABLE = 'core_field_inits'                # core-ar2 0.10: the fields' ini
 HANDLES_TABLE = 'core_handles'                  # core-ar2 0.11: the handle fields' descriptors
 MAX_INITS = 63                                  # slots 1..63, in the descriptor's bits 16..21
 LOCK_SCOPES = ('sound', 'kit')
-SIDECAR_SYM = '__sidecar_bytes'                 # core-ar2 0.11: the sidecar mirrors' bytes
-SIDECAR_ROOM = {'sound': 64, 'kit': 64, 'pattern': 256}   # bits a mirror holds (items.c MS, MK, MP)
-SIDECAR_FLAG = 8                                # added to a sidecar field's scope in its descriptor
 
 # Per device: each scope's bits in its live home, and the tagged store.
 DEVICES = {
@@ -310,27 +294,6 @@ def parse_handles(m):
     return [f['sym'] for f in m.get('storage', []) if isinstance(f, dict) and f.get('handle') is True]
 
 
-def parse_sidecar(m):
-    """A mod document's "storage" -> the syms of its fields declared "where": "sidecar", in order."""
-    return [f['sym'] for f in m.get('storage', []) if isinstance(f, dict) and f.get('where') == 'sidecar']
-
-
-def sidecar_symbols(decls):
-    """decls: [(mod id, sym, scope, bits)] of the sidecar fields, in link order -> {sym: descriptor}, with
-    SIDECAR_SYM. Raises ModError when a scope's fields pass its mirror's room."""
-    at = {s: 0 for s in SIDECAR_ROOM}
-    out = {}
-    for mid, sym, scope, bits in decls:
-        if at[scope] + bits > SIDECAR_ROOM[scope]:
-            raise ModError('the sidecar fields of scope %s take more than its mirror\'s %d bits (%s of %s)'
-                           % (scope, SIDECAR_ROOM[scope], sym, mid))
-        out[sym] = (SCOPE_NUM[scope] + SIDECAR_FLAG) << 28 | bits << 22 | at[scope]
-        at[scope] += bits
-    nb = {s: (at[s] + 7) // 8 for s in at}
-    out[SIDECAR_SYM] = nb['sound'] << 16 | nb['kit'] << 8 | nb['pattern']
-    return out
-
-
 def parse_decls(m):
     """A mod document's "storage" -> [(sym, scope, bits)]. Raises ModError."""
     out, seen = [], set()
@@ -339,7 +302,7 @@ def parse_decls(m):
         raise ModError('"storage" is a list of fields')
     for f in st:
         if not isinstance(f, dict) or set(f) - {'sym', 'scope', 'bits', 'lock', 'cc', 'lfo', 'smooth', 'mod', 'init',
-                                                'handle', 'where'}:
+                                                'handle'}:
             raise ModError('a storage field is {"sym", "scope", "bits"}, and "lock" for a lockable one')
         for k in ('lock', 'cc', 'lfo', 'smooth', 'mod', 'handle'):
             if k in f and not isinstance(f[k], bool):
@@ -362,16 +325,6 @@ def parse_decls(m):
         if f.get('handle') and f.get('init'):
             raise ModError('storage field %r: a handle ("handle": true) has no init: 0 is none'
                            % (f.get('sym'),))
-        if 'where' in f:
-            if f['where'] != 'sidecar':
-                raise ModError('storage field %r: "where" is "sidecar" (or left out: in stock\'s objects)'
-                               % (f.get('sym'),))
-            if f.get('scope') not in SIDECAR_ROOM:
-                raise ModError('storage field %r: only sound, kit and pattern fields can be "where": "sidecar"'
-                               % (f.get('sym'),))
-            if f.get('lock') or f.get('init') or f.get('handle'):
-                raise ModError('storage field %r: a sidecar field ("where": "sidecar") is not lockable, has no '
-                               'init and is not a handle' % (f.get('sym'),))
         if f.get('lock') and f.get('scope') not in LOCK_SCOPES:
             raise ModError('storage field %r: only %s fields can be lockable'
                            % (f.get('sym'), ' and '.join(LOCK_SCOPES)))

@@ -149,19 +149,6 @@ extern int st_sound_init_body(void *sound, int a, int b, int c);
 extern int st_proj_init_body(void *project, int a, int b, int c);
 extern int st_proj_load_body(void *live, void *src, void *progress);
 
-/* items.c (0.11): the remote fields' mirrors follow the serializers */
-#define K_SOUND 1
-#define K_KIT 2
-#define K_PATTERN 5
-#define ITEM_ALL(w) ((unsigned)(w) << 24 | 0xffffff)
-void core_items_save(int kind, unsigned stored, unsigned live);
-void core_items_load(int kind, unsigned live, unsigned stored);
-void core_items_init(int kind, unsigned live);
-void core_items_nest(int d);
-void core_items_bulk(int on, unsigned from, unsigned to);
-unsigned core_items_get(unsigned field, void *item);
-void core_items_set(unsigned field, void *item, unsigned value);
-
 /* ev_project: f(how, dropped) after CREATE NEW (how 0) and after every project
  * load (how 1), with the stored project in place; dropped has bit 1 << scope
  * set for each of global, track, pattern and project whose data the project
@@ -347,7 +334,6 @@ int st_pat_save(unsigned char *dst, unsigned char *live, int a)
 {
     unsigned char *img = pattern_image(dst);
     int r = st_pat_save_body(dst, live, a), n = pattern_index(img, dst);
-    core_items_save(K_PATTERN, (unsigned)dst, (unsigned)live);
     if (n < 0 || !live)
         return r;
     pattern_out(img, n, live, 1, 1);
@@ -364,7 +350,6 @@ int st_pat_load(unsigned char *live, unsigned char *src)
     int r = st_pat_load_body(live, src), n = pattern_index(img, src);
     int tok = n >= 0 && store_ok(img, SC_TRACK), pok = n >= 0 && store_ok(img, SC_PATTERN);
     unsigned t, j, T = SPLIT_T, P = SPLIT_P;
-    core_items_load(K_PATTERN, (unsigned)live, (unsigned)src);
     if (!live)
         return r;
     for (t = 0; t < 13; t++)
@@ -489,14 +474,12 @@ int st_sound_save(unsigned char *dst, unsigned char *live, int a)
         wr32(dst + SOUND_SPARE + 3, core_store_ids[0]);
         dst[SOUND_SPARE + 7] = gen(SC_SOUND);
     }
-    core_items_save(K_SOUND, (unsigned)dst, (unsigned)live);   /* after core's bytes: the hash sees them */
     return r;
 }
 
 int st_sound_load(unsigned char *live, unsigned char *src)
 {
     int r = st_sound_load_body(live, src), j;
-    core_items_load(K_SOUND, (unsigned)live, (unsigned)src);
     if (live && src) {
         int ok = st_image && known_id(rd32(src + SOUND_SPARE + 3)) &&
                  src[SOUND_SPARE + 7] == gen(SC_SOUND);
@@ -668,10 +651,7 @@ int st_fx_through(void *obj, unsigned char *dst, void *edit)
 int st_kit_save(unsigned char *dst, unsigned char *live, int a)
 {
     unsigned c = fx_dst_out(live);
-    int r, j;
-    core_items_nest(1);
-    r = st_kit_save_body(dst, live, a);
-    core_items_nest(-1);
+    int r = st_kit_save_body(dst, live, a), j;
     fx_dst_back(live, c);
     if (dst && live) {
         for (j = 0; j < 8; j++)
@@ -679,7 +659,6 @@ int st_kit_save(unsigned char *dst, unsigned char *live, int a)
         wr32(dst + KIT_SPARE + 8, core_store_ids[0]);
         dst[KIT_SPARE + 12] = gen(SC_KIT);
     }
-    core_items_save(K_KIT, (unsigned)dst, (unsigned)live);   /* after core's bytes: the hash sees them */
     return r;
 }
 
@@ -687,11 +666,7 @@ void core_kit_forget(unsigned char *kit);
 
 int st_kit_load(unsigned char *live, unsigned char *src)
 {
-    int r, j;
-    core_items_nest(1);
-    r = st_kit_load_body(live, src);
-    core_items_nest(-1);
-    core_items_load(K_KIT, (unsigned)live, (unsigned)src);
+    int r = st_kit_load_body(live, src), j;
     if (live && src) {
         int ok = st_image && known_id(rd32(src + KIT_SPARE + 8)) &&
                  src[KIT_SPARE + 12] == gen(SC_KIT);
@@ -742,7 +717,6 @@ void core_rows_clear(unsigned obj);
 int st_pat_init(unsigned char *pattern, int a)
 {
     int r = st_pat_init_body(pattern, a), j;   /* its track inits go through st_track_init */
-    core_items_init(K_PATTERN, (unsigned)pattern);
     if (pattern) {
         for (j = 0; j < HOME_BYTES; j++)
             pattern[PATTERN_HOME + j] = 0;
@@ -763,7 +737,6 @@ int st_track_init(unsigned char *track, int a)
 int st_sound_init(unsigned char *sound, int a, int b, int c)
 {
     int r = st_sound_init_body(sound, a, b, c), j;
-    core_items_init(K_SOUND, (unsigned)sound);
     if (sound)
         for (j = 0; j < SOUND_BYTES; j++)
             sound[SOUND_HOME + sound_at(j)] = 0;
@@ -803,10 +776,7 @@ void core_rows_now_reset(void);
  * playing trig's mod locks (rows.c) */
 int st_proj_init(void *project, int a, int b, int c)
 {
-    int r, g, j;
-    core_items_bulk(1, 0, ITEM_ALL(1));
-    r = st_proj_init_body(project, a, b, c);
-    core_items_bulk(0, 0, 0);
+    int r = st_proj_init_body(project, a, b, c), g, j;
     core_rows_now_reset();
     store_clear(S, 0, STORE_BYTES);
     store_header(S);
@@ -826,10 +796,7 @@ void core_rows_forget(void);
 
 int st_proj_load(void *live, unsigned char *src, void *progress)
 {
-    int r, g, j, s;
-    core_items_bulk(1, ITEM_ALL(src == S ? 4 : 8), ITEM_ALL(1));
-    r = st_proj_load_body(live, src, progress);
-    core_items_bulk(0, 0, 0);
+    int r = st_proj_load_body(live, src, progress), g, j, s;
     unsigned char *from = is_image(src) ? src : st_image;
     unsigned dropped = 0;
     /* its mod p-locks' codes are its layout's (rows.c, 0.8); no trig of it
@@ -908,9 +875,7 @@ int st_file_save(unsigned char *dst, void *live, int a, int flags, void *progres
 {
     int r;
     st_image = dst;
-    core_items_bulk(1, ITEM_ALL(1), ITEM_ALL(dst == S ? 4 : 7));
     r = PROJECT_SAVE(dst, live, a, flags, progress);
-    core_items_bulk(0, 0, 0);
     st_image = S;
     if (r && dst != S && live == LIVE_PROJECT && is_image(dst))
         to_stored(dst, flags);
@@ -921,9 +886,7 @@ int st_file_load(void *live, unsigned char *src, void *progress)
 {
     int r;
     st_image = src && rd32(src + 4) == 9 ? src : 0;
-    core_items_bulk(1, ITEM_ALL(src == S ? 4 : 8), ITEM_ALL(1));
     r = PROJECT_LOAD(live, src, progress);   /* through st_proj_load */
-    core_items_bulk(0, 0, 0);
     st_image = S;
     return r;
 }
@@ -1184,11 +1147,8 @@ static unsigned field_init(unsigned field)
 unsigned core_store_get(unsigned field, void *item, int index)
 {
     unsigned scope = field >> 28, w = field >> 22 & 63, o = field & 0xffff, v = 0, i, k, n;
-    volatile unsigned char *base;
+    volatile unsigned char *base = field_base(scope, item, index);
     unsigned short sr;
-    if (scope & 8)                            /* (0.11) "where": "sidecar": its mirror (items.c) */
-        return core_items_get(field, item);
-    base = field_base(scope, item, index);
     if (scope != SC_PROJECT && !base)
         return 0;
     n = ((o & 7) + w + 7) >> 3;               /* the bytes it spans */
@@ -1209,13 +1169,8 @@ unsigned core_store_get(unsigned field, void *item, int index)
 void core_store_set(unsigned field, void *item, int index, unsigned value)
 {
     unsigned scope = field >> 28, w = field >> 22 & 63, o = field & 0xffff, i;
-    volatile unsigned char *base, *p;
+    volatile unsigned char *base = field_base(scope, item, index), *p;
     unsigned short sr;
-    if (scope & 8) {                          /* (0.11) a sidecar field */
-        core_items_set(field, item, value);
-        return;
-    }
-    base = field_base(scope, item, index);
     if (scope != SC_PROJECT && !base)
         return;
     value ^= field_init(field);

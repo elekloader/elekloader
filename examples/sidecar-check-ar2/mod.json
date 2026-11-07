@@ -1,11 +1,11 @@
 {
  "id": "sidecar-check",
- "version": "0.8",
+ "version": "0.9",
  "title": "Sidecar check",
  "category": "Examples",
  "license": "GPL-2.0-or-later",
  "author": "Iced-Cream",
- "description": "A test for the core-ar2 0.11 calls the Sidecar mods use, checked in RAM. Part 1 (core 0.11): a SIDECAR CHECK page behind the LFO key and one behind the FX LFO key, with knob ids 560..563 whose p-locks the mod keeps itself (core_param_locks): per id, track and step, in RAM, with every call logged after the magic SCK1. The knobs show their labels (SCA..SCD) and names (SC KNOB A..D), with a trig held the value text shows the held step (core_held_step), and on each tick it notes track 1's trigs and lock trigs on steps 1..16. Part 2 (core 0.11): a step tag owner (core_step_owners) whose tags it sets, reads and walks on commands written into its record after the magic SCK2, logging every ev_steps event; and a measure of the heap's free space. Part 3 (core 0.11): the moments, after the magic SCK3: a SysEx handler that takes F0 7D messages and lets the rest through, USB MIDI bursts through core_midi_try_send from the UI task and from the audio interrupt, the current kit, track, pattern and project name each tick, the name at ev_project_save, two handle fields walked by core_handle_fields, and every ev_kit and ev_project_slot logged. Part 4 (core 0.11): the sequencer, after the magic SCK4: every ev_seq_step and ev_transport logged with the getters at that moment (the PLAY seed apart), per-track step and trig counts, ev_seq_tick's count and the getters' last values, and two more ev_seq_step subscribers that work only when a command asks, for the cost with 1 and 3. Part 5 (core 0.11): remote fields, after the magic SCK5: a sidecar field per kind (sound, kit, pattern) and a stock field beside each; on command it seeds both with the same fresh value in every live and saved kit, their sounds, the pool and the live patterns, and verifies that both still agree there after any stock action, logging every ev_items event. Part 6 (core 0.11): payloads, after the magic SCK6: a 1 MB payload of a known pattern, found through core_payload and read back whole at the first tick and on command. Part 7 (core 0.11): the interrupt send and the step getters, after the magic SCK7: on command a numbered SysEx of a set length from each ev_seq_step (or each of 96 ev_seq_ticks) through core_midi_try_send, core_track_length of every track each tick, and core_step_trig of the pattern playing. From 0.8, over USB MIDI for a unit run: F0 7D 53 43 SysEx commands that set any part's command word and send any part's record back.",
+ "description": "A test for the core-ar2 0.11 calls the Sidecar mods use, checked in RAM. Part 1 (core 0.11): a SIDECAR CHECK page behind the LFO key and one behind the FX LFO key, with knob ids 560..563 whose p-locks the mod keeps itself (core_param_locks): per id, track and step, in RAM, with every call logged after the magic SCK1. The knobs show their labels (SCA..SCD) and names (SC KNOB A..D), with a trig held the value text shows the held step (core_held_step), and on each tick it notes track 1's trigs and lock trigs on steps 1..16. Part 2 (core 0.11): a step tag owner (core_step_owners) whose tags it sets, reads and walks on commands written into its record after the magic SCK2, logging every ev_steps event; and a measure of the heap's free space. Part 3 (core 0.11): the moments, after the magic SCK3: a SysEx handler that takes F0 7D messages and lets the rest through, USB MIDI bursts through core_midi_try_send from the UI task and from the audio interrupt, the current kit, track, pattern and project name each tick, the name at ev_project_save, two handle fields walked by core_handle_fields, and every ev_kit and ev_project_slot logged. Part 4 (core 0.11): the sequencer, after the magic SCK4: every ev_seq_step and ev_transport logged with the getters at that moment (the PLAY seed apart), per-track step and trig counts, ev_seq_tick's count and the getters' last values, and two more ev_seq_step subscribers that work only when a command asks, for the cost with 1 and 3. Part 6 (core 0.11): payloads, after the magic SCK6: a 1 MB payload of a known pattern, found through core_payload and read back whole at the first tick and on command. Part 7 (core 0.11): the interrupt send and the step getters, after the magic SCK7: on command a numbered SysEx of a set length from each ev_seq_step (or each of 96 ev_seq_ticks) through core_midi_try_send, core_track_length of every track each tick, and core_step_trig of the pattern playing. From 0.8, over USB MIDI for a unit run: F0 7D 53 43 SysEx commands that set any part's command word and send any part's record back. From 0.9 there is no part 5: remote fields left core 0.11.",
  "device": "analog-rytm-mk2",
  "os": "1.74",
  "sources": [
@@ -13,7 +13,6 @@
   "tags.c",
   "moments.c",
   "seq.c",
-  "items.c",
   "send.c",
   "remote.c",
   "payload.c",
@@ -196,16 +195,6 @@
   },
   {
    "event": "ev_tick",
-   "fn": "sc_items_tick",
-   "order": 64
-  },
-  {
-   "event": "ev_items",
-   "fn": "sc_items",
-   "order": 50
-  },
-  {
-   "event": "ev_tick",
    "fn": "sc_payload_tick",
    "order": 65
   },
@@ -237,39 +226,6 @@
    "scope": "pattern",
    "bits": 12,
    "handle": true
-  },
-  {
-   "sym": "sc5_ts",
-   "scope": "sound",
-   "bits": 12
-  },
-  {
-   "sym": "sc5_tk",
-   "scope": "kit",
-   "bits": 16
-  },
-  {
-   "sym": "sc5_tp",
-   "scope": "pattern",
-   "bits": 16
-  },
-  {
-   "sym": "sc5_ss",
-   "scope": "sound",
-   "bits": 12,
-   "where": "sidecar"
-  },
-  {
-   "sym": "sc5_sk",
-   "scope": "kit",
-   "bits": 16,
-   "where": "sidecar"
-  },
-  {
-   "sym": "sc5_sp",
-   "scope": "pattern",
-   "bits": 16,
-   "where": "sidecar"
   }
  ]
 }

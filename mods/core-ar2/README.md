@@ -1045,43 +1045,6 @@ events, and its words as getters (docs/ADAPTING.md, "The sequencer
 - **Blocks**: `core_block` (load.h, 0.9) is the audio block count; there
   is no call by that name, since the variable has it.
 
-## Remote fields (0.11)
-
-`items.c` and `items.s`: storage fields declared `"where": "sidecar"`, kept
-in RAM mirrors instead of stock's objects, and `ev_items`, every move of a
-sound, kit or pattern record (docs/ADAPTING.md, "Remote fields (core-ar2
-0.11, Analog Rytm MKII)"; `elekloader/sdk/include/analog-rytm-mk2/items.h`).
-
-| what | where (OS 1.74) | context |
-|---|---|---|
-| the mirrors | 0x47b00000.., about 57 KB (after 8 owners' tag tables, before core's area), zeroed at the first `ev_tick` | RAM only |
-| pattern places | the 129 live objects 0x407c89e3 + 0x14f00 · o (object 0 the playing copy); the stored project's 129 records 0x405c8f38 + 13,101 · n | |
-| kit places | the live kits 0x412558e3 + 0x9e3 · k (128 as edited, then 128 as saved); the stored project's 0x405c8f20 + 0x19d3fb + 2,610 · k and its working kit + 0x19c9c5 | |
-| sound places | each kit place's 12 (+42 + 152 · t live, +46 + 162 · t stored); the pool 0x41313c47 + 152 · i and the stored pool + 0x1f4397 + 162 · i | |
-| moves by copy | memcpy 0x40098bc0 (rows.s, 88 bytes or more): every whole place in the destination takes the mirror at the same offset in the source; a whole record from a place to other memory is followed there (32 entries) | the caller's task |
-| clears | memset 0x40098c08 and operator new 0x40082a40 / 0x40082a46 (rows.s); the pattern and sound inits (st_pat_init, st_sound_init); the kit init 0x400117cc (`jmp`, new here: CLEAR KIT, the kit browser's clear 0x400a6cdc) | the caller's task |
-| serializers | st_sound_save / load, st_kit_save / load, st_pat_save / load (store.c): the stored project's place, or else a cache of 32 records out keyed by an FNV-1a hash of the stored record (SysEx out and in, Transfer, the sound library) | the caller's task (the SysEx dump's handler too) |
-| whole projects | st_proj_load, st_proj_init, st_file_save, st_file_load: one `ev_items` per kind, from `..ALL` to `..ALL` | the "Project Load" / "Project Save" jobs |
-| `ev_items` | queued (64, a run of moves in one event, a repeat dropped), delivered at `ev_tick` order 3 | the UI task |
-
-- **A kit's sounds** are inside it (+42 + 152 · t): a kit's move moves
-  its 12 sounds' mirrors under one KIT event; a sound's own move (CLEAR
-  TRACK SOUND, the sound browser, a pool sound's SysEx) is a SOUND event.
-- **Nothing runs in an interrupt** that 0.10 didn't run there: the memcpy
-  test is a few compares unless an end is near the live project, the
-  stored project or followed memory. Each record's move masks interrupts
-  for its own mirror copy only; a hash runs unmasked.
-- **Not carried by stock's dump**: a pattern's stock-scope fields live in
-  the project's tagged store, not in the pattern record, so a pattern's
-  SysEx dump brings them back as zeros; a sidecar field's mirror comes back
-  when the same record returns (the cache).
-- **A project load from the +Drive** gives every mirror zeros (`EXT` to
-  `LIVE`, `..ALL`): the mod restores them from its own store, as after a
-  power-off.
-- **Transfer's kit ops** (0x4018b94c copy, 0x4018c4dc receive, 0x4018c5c8
-  swap) go through memcpy, kit_load and kit_save, the paths above; the
-  emulator can't drive Transfer, so they are a gap for the unit run.
-
 ## Dial scale (0.11)
 
 `scale.c`, with `core_held_get` and `core_held_text` in `scenes.c`: a
@@ -1519,36 +1482,6 @@ three 555 to 558 (0.63%); the PLAY tick (seed, two calls, `ev_transport`)
 work); a tick without a step 23 playing, 28 stopped. Core's .run is 45,788
 bytes (+980), .bss 22,608; core + sidecar-check 0.4 take 84,044 of the
 128 KB area. Tempo on a unit is left for the run. Not yet on a unit.
-
-Part 5, remote fields (core 0.11 + sidecar-check 0.5 + lock-check 1.11,
-build SC24), in analog-emu (dtboot, OS 1.74), with the same poke after
-boot, by `suite5.py`: sidecar-check gives every live and saved kit, their
-sounds, the pool and the 129 live pattern objects (3,585 places) one fresh
-value in a sidecar field and in a stock field beside it, which stock
-carries in the record's own bytes; after each action it reads both
-everywhere, and a place where they differ is a move core missed. 0
-differing after: a pattern switch, stopped and while playing; pattern copy
-and paste, the paste's undo, CLEAR PATTERN and its undo, RELOAD PATTERN;
-kit RELOAD, SAVE KIT to another slot, LOAD KIT, CLEAR KIT, the kit
-browser's copy, paste and clear; CLEAR TRACK SOUND; a +Drive sound loaded
-to a track (`EXT`, both 0); a kit's, a pattern's and a pool sound's SysEx
-dump out, the place changed, and the dump sent back in (each mirror back
-through the cache: `OUT:n` to the place; the pattern's stock field comes
-back 0, as it isn't in the dump); SAVE PROJECT (`LIVE:ALL` to `OUT:ALL`).
-A project load from the +Drive gives the mirrors zeros by design (stock's
-fields come back from the file, so every place differs until the mod
-restores its own). The events name each move as expected (the clipboard
-and undo copies as `OTHER:n`, the stored project's working kit as
-`IMAGE:W`). In a measuring build (`-DCORE_ITEMS_MEASURE`) the longest
-stretch with interrupts masked was 943 DMA timer 0 ticks (1.1% of a
-1/1500 s block, once, a kit's SysEx in), most 178 to 182; the longest
-memcpy hook call 46,193 ticks, unmasked, in a task (a whole project's
-copy). An earlier build kept a 104-byte buffer per move on the stack and
-once left the PROJECT menu deaf to keys after a project load in a long
-session; the buffers went, and the same sequence on this build and on the
-part-4 build is clean. Core's .run is 56,000 bytes (+10,212), .bss 23,676;
-core + sidecar-check 0.5 take 98,492 of the 128 KB area, the mirrors
-about 57 KB outside it. Not yet on a unit.
 
 Part 6, payloads and the bigger area (core 0.11 + sidecar-check 0.6 +
 lock-check 1.11, build SC61), in analog-emu (dtboot, OS 1.74, upstream
