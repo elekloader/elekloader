@@ -306,6 +306,7 @@ struct fn {                              /* std::function: functor[2], manager, 
 enum { M_DRIVE, M_BUILD };
 enum { P_NONE, P_LOAD, P_UNLOAD, P_DELETE, P_CLEAR };
 static u8 mode;                          /* the list: the files, or the build */
+static u8 drive_ticks[ROWS];             /* the file list's ticks while the build list shows */
 static u8 pending;                       /* what the open confirm window does */
 static void *view;                       /* the page's view while it shows (UI task only) */
 static int build_rows[ROWS], nbuild;
@@ -645,8 +646,14 @@ void dl_page_select(void **f)
         return;
     }
     if (i >= I_LEFT) {                   /* as SAMPLES' VIEW RAM (0x400e9062): switch, rebuild, back to the list */
+        if (mode == M_DRIVE)             /* the file list's ticks wait for the way back */
+            for (r = 0; r < nrows; r++)
+                drive_ticks[r] = (u8)is_ticked(r);
         mode = mode == M_DRIVE ? M_BUILD : M_DRIVE;
         page_rows();
+        if (mode == M_DRIVE)             /* back from BUILD: the ticks as they were, not the build */
+            for (r = 0; r < nrows; r++)
+                tick(r, drive_ticks[r]);
         FOCUS(view, view);
         return;
     }
@@ -680,7 +687,8 @@ static void add_item(void *list, int i, int index)
     MENU_ADD(list, it);
 }
 
-/* (Re)build the list and both panels. In the file list the ticks start as the saved build. */
+/* (Re)build the list and both panels. In the file list the ticks start as the saved build
+ * (on entering MODS and after a change; decided 2026-11-07). */
 static void page_rows(void)
 {
     int i;

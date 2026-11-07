@@ -132,7 +132,8 @@ The page is stock's two-pane file view, the one SAMPLES and PROJECTS are built o
 
 - **The file list.** One row a file: its id (its file name until one is known) and, on the
   right where SAMPLES puts sizes, its size in whole KB, or `!` for a file pass 1 refuses (a bad
-  file, another device, a newer core, over 512 KB). The ticks start as the saved build.
+  file, another device, a newer core, over 512 KB). The ticks start as the saved build on entering MODS
+  and after each change; coming back from the build list keeps the ticks as they were.
 - **Ticks are the build.** [YES] ticks or unticks a row and steps down, as in SAMPLES. RIGHT
   opens the action panel: SELECT ALL, DESELECT ALL, LOAD TO BUILD, CLEAR BUILD, DELETE. LOAD TO
   BUILD asks `LOAD n MODS? CONFIRM Y/N` in stock's confirm window (with nothing ticked it says
