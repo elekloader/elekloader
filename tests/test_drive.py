@@ -437,6 +437,31 @@ def test_a_missing_file_is_dropped():
         assert r.choices[1].state == drive.LOADED
 
 
+def test_core_ar2_events_take_256_drive_mods():
+    """core-ar2's events have room for as many +Drive handlers as the loader links (DL_MAX_MODS), not the
+    default 16 spare entries (found 2026-11-07: a 17th ev_tick handler was refused `full`); the
+    machines table only for its 10 hidden slots."""
+    with open(os.path.join(ROOT, 'mods', 'core-ar2', 'mod.json'), encoding='utf-8') as fh:
+        cols = json.load(fh)['collections']
+    for name, v in cols.items():
+        if name.startswith('ev_'):
+            assert isinstance(v, dict) and v.get('spare') == drive.MAX_MODS, (name, v)
+    assert cols['core_machines'] == {'entry': 4, 'spare': 10}
+    # the linker gives a table what its collection declares
+    with Bench('analog-rytm-mk2') as B:
+        docs = flashed(B)
+        docs[0]['collections']['ev_tick'] = {'entry': 4, 'spare': 40}
+        out = link.link([link.Mod2(d, d['id']) for d in docs], B.img)
+        b = drive.load_build(out.image)
+        t = b.tables[b.table['ev_tick']]
+        assert t['capacity'] == t['count'] + 40, t
+        many = [dmod(B, 'm%02d' % i, contribute=[{'to': 'ev_tick', 'order': 50, 'data': '00000000', 'relocs': []}])
+                for i in range(41)]
+        r = drive.check(b, files(*many))
+        assert [c.state for c in r.choices[:40]] == [drive.LOADED] * 40
+        assert r.choices[40].code == drive.CODE['full'], r.choices[40].why()
+
+
 def test_format_md_lists_every_code_and_state():
     with open(os.path.join(ROOT, 'docs', 'FORMAT.md'), encoding='utf-8') as fh:
         doc = fh.read()
