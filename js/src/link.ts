@@ -102,6 +102,7 @@ export class Mod2 implements AnyMod {
   lfos: string[]
   rough: string[]
   routes: string[]
+  cvs: string[]
   inits: Map<string, number>
   handles: string[]
   regions: Region[]
@@ -209,6 +210,7 @@ export class Mod2 implements AnyMod {
       this.lfos = store.parseLfos(doc)
       this.rough = store.parseRough(doc)
       this.routes = store.parseRoutes(doc)
+      this.cvs = store.parseCvs(doc)
       this.inits = store.parseInits(doc)
       this.handles = store.parseHandles(doc)
     } catch (e) {
@@ -539,6 +541,16 @@ export function check(mods: Mod2[], image: Uint8Array): string[] {
         + `${free.join(' or ') || `an area the ${dev.name} does not have`})`)
     }
   }
+  for (const [t, most] of Object.entries(dev.tableLimits).sort(([a], [b]) => cmp(a, b))) {   // the OS uses no more (the profile's tableLimits)
+    const adds = mods.filter(m => m.contribute.some(c => c.to === t)).map(m => m.label())
+    const n = tables.has(t)
+      ? Math.floor(mods.flatMap(m => m.contribute).filter(c => c.to === t).reduce((s, c) => s + c.data.length, 0) / tables.get(t)![1])
+      : 0
+    if (n > most) {
+      const who = adds.length > 1 ? adds.slice(0, -1).join(', ') + ' and ' + adds[adds.length - 1] : adds[0]
+      bad.push(`${t} holds at most ${most} entries on ${dev.key} ${mods[0].rel.version}; ${who} add${adds.length > 1 ? '' : 's'} ${n}`)
+    }
+  }
   const regs: Span<AnyMod>[] = mods.flatMap(m => m.regions.map(g => [g.lo, g.hi, m, 'region ' + g.name] as Span<AnyMod>))
   if (dev.sramCode[1] > dev.sramCode[0]) regs.push([dev.sramCode[0], dev.sramCode[1], null, 'the .fast area'])
   for (const [a, b] of overlaps(regs)) {
@@ -765,8 +777,10 @@ export function link(mods: Mod2[], image: Uint8Array, lock: store.Lock | null = 
     const rough = order.flatMap(m => m.rough.map(sym => [m.id, sym] as [string, string]))
     const routes = order.flatMap(m => m.routes.map(sym => [m.id, sym] as [string, string]))
     const scopeOf = new Map(decls.map(d => [d[0] + '\0' + d[1], d[2]]))
+    const cvs = order.flatMap(m => m.cvs.map(sym => [m.id, sym] as [string, string]))
+    store.checkFlags(dev.key, scopeOf, lfos, routes, cvs, order.flatMap(m => m.ccs.map(sym => [m.id, sym] as [string, string])))
     const fx = [...new Set(locks.filter(k => scopeOf.get(k[0] + '\0' + k[1]) === 'kit').map(k => k[0]))].sort(cmp)
-    if (fx.length && !core.imports.includes(store.FX_LOCK_DST))
+    if (fx.length && !store.kinds(dev.key).length && !core.imports.includes(store.FX_LOCK_DST))
       throw new ModError(`${fx.join(', ')} declare${fx.length === 1 ? 's' : ''} lockable kit fields (the FX track's), which ${core.label()} does not keep`)
     for (const [dst, scope, bits] of [[store.LOCK_DST, 'sound', store.lockDstBits(dev.key)], [store.FX_LOCK_DST, 'kit', store.fxLockDstBits(dev.key)]] as const)
       if (lfos.some(k => scopeOf.get(k[0] + '\0' + k[1]) === scope) && core.imports.includes(dst) && bits)
@@ -787,7 +801,7 @@ export function link(mods: Mod2[], image: Uint8Array, lock: store.Lock | null = 
       const users = [...new Set(handles.map(k => k[0]))].sort(cmp)
       throw new ModError(`${users.join(', ')} mark${users.length === 1 ? 's' : ''} storage fields as handles, which ${core.label()} does not keep (no table ${store.HANDLES_TABLE})`)
     }
-    ;[newLock, storeNotes] = store.allocate(lock, decls, dev.key, core.version, locks, ccs, inits)
+    ;[newLock, storeNotes] = store.allocate(lock, decls, dev.key, core.version, locks, ccs, inits, cvs)
     let ids: Uint8Array[]
     ;[storeSyms, ids] = store.symbols(newLock)
     if (!storeSyms.has(store.LOCK_DST)) storeSyms.set(store.LOCK_DST, 0)    // not placed: no LFO field

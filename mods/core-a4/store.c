@@ -253,15 +253,19 @@ static int known_id(unsigned id)
     return 0;
 }
 
+/* the image's store's layout ID */
+static unsigned store_id(unsigned char *img)
+{
+    return (unsigned)B(store_byte(img, 0)) << 24 | (unsigned)B(store_byte(img, 1)) << 16 |
+           (unsigned)B(store_byte(img, 2)) << 8 | B(store_byte(img, 3));
+}
+
 /* does the image's store hold this scope's data in this layout? */
 static int store_ok(unsigned char *img, int scope)
 {
-    unsigned id;
     if (!img)
         return 0;
-    id = (unsigned)B(store_byte(img, 0)) << 24 | (unsigned)B(store_byte(img, 1)) << 16 |
-         (unsigned)B(store_byte(img, 2)) << 8 | B(store_byte(img, 3));
-    return known_id(id) && B(store_byte(img, 3 + scope)) == gen(scope);
+    return known_id(store_id(img)) && B(store_byte(img, 3 + scope)) == gen(scope);
 }
 
 static void store_header(unsigned char *img)
@@ -476,6 +480,11 @@ int st_sound_save(unsigned char *dst, unsigned char *live)
     return r;
 }
 
+void core_dst_clean_sound(unsigned char *sound, int foreign);
+void core_dst_clean_kit(unsigned char *kit, int foreign);
+void core_dst_keep_sound(unsigned char *live, const unsigned char *src);
+void core_dst_keep_kit(unsigned char *live, const unsigned char *src);
+
 int st_sound_load(unsigned char *live, unsigned char *src)
 {
     int r = st_sound_load_body(live, src), j;
@@ -488,6 +497,8 @@ int st_sound_load(unsigned char *live, unsigned char *src)
         for (j = 0; j < SOUND_BYTES; j++)
             live[sound_at(j)] = ok ? src[sound_at(j) + SOUND_STORED] : 0;
         live[0xe2] = live[0xe3] = 0;    /* where the save's raw copy goes under the ID */
+        core_dst_keep_sound(live, src);  /* gap 7: stock's load wrote 0 over a mod target */
+        core_dst_clean_sound(live, !ok); /* 0.5: a code of another layout, or with no "mod" parameter here, is None */
     }
     return r;
 }
@@ -504,14 +515,24 @@ int st_kit_save(unsigned char *dst, unsigned char *live)
     return r;
 }
 
+void core_rows_now_reset(void);
+void core_rows_forget(void);
+
+void core_lock_cancel(unsigned field, void *item);
+
+/* a kit load is a kit change: no trig of the new kit has played yet, so no
+ * voice keeps a mod p-lock (rows.c, 0.5) */
 int st_kit_load(unsigned char *live, unsigned char *src)
 {
     int r = st_kit_load_body(live, src), j;
+    core_rows_now_reset();
     if (live && src) {
         int ok = st_image && known_id(rd32(src + KIT_SPARE + KIT_BYTES)) &&
                  src[KIT_SPARE + KIT_BYTES + 4] == gen(SC_KIT);
         for (j = 0; j < KIT_BYTES; j++)
             live[KIT_HOME + j] = ok ? src[KIT_SPARE + j] : 0;
+        core_dst_keep_kit(live, src);    /* gap 7: stock's load wrote 0 over a mod target */
+        core_dst_clean_kit(live, !ok);  /* 0.5: macro targets and FX and CV Dests, as the sounds' */
     }
     return r;
 }
@@ -582,6 +603,7 @@ int st_kit_init(unsigned char *kit)
 int st_proj_init(void *project)
 {
     int r = st_proj_init_body(project), g, j;
+    core_rows_now_reset();                     /* no playing mod p-locks (rows.c, 0.5) */
     store_clear(S, 0, STORE_BYTES);
     store_header(S);
     for (g = 0; g < 4; g++)
@@ -601,6 +623,11 @@ int st_proj_load(void *live, unsigned char *src, void *progress)
     int r = st_proj_load_body(live, src, progress), s;
     unsigned char *from = is_image(src) ? src : st_image;
     unsigned dropped = 0;
+    /* its mod p-locks' codes are its layout's (rows.c, 0.5); no trig of it
+     * has played yet */
+    if (!from || !known_id(store_id(from)))
+        core_rows_forget();
+    core_rows_now_reset();
     if (!from || !st_image || !global_ok(from + GLOBALS_AT))
         dropped |= 1 << SC_GLOBAL;
     for (s = SC_TRACK; s <= SC_PROJECT; s++)
@@ -826,14 +853,22 @@ static void write_through(unsigned scope, unsigned char *item)
 
 unsigned core_store_get(unsigned field, void *item, int index)
 {
-    unsigned scope = field >> 28, w = field >> 22 & 63, o = field & 0x3fffff, v = 0, i;
+    unsigned scope = field >> 28, w = field >> 22 & 63, o = field & 0x3fffff, v = 0, i, k, n;
     volatile unsigned char *base = field_base(scope, item, index);
     unsigned short sr;
     if (scope != SC_PROJECT && !base)
         return 0;
+    n = ((o & 7) + w + 7) >> 3;               /* the bytes it spans */
     sr = irq_mask();
-    for (i = 0; i < w; i++, o++)
-        v = v << 1 | (B(field_byte(scope, base, o >> 3)) >> (7 - (o & 7)) & 1);
+    if (n <= 4) {                             /* (0.5) a byte at a time: every field but a 26..32-bit one off its byte */
+        for (k = o >> 3, i = 0; i < n; i++, k++)
+            v = v << 8 | B(field_byte(scope, base, k));
+        v >>= 8 * n - (o & 7) - w;
+        if (w < 32)
+            v &= (1u << w) - 1;
+    } else
+        for (i = 0; i < w; i++, o++)
+            v = v << 1 | (B(field_byte(scope, base, o >> 3)) >> (7 - (o & 7)) & 1);
     irq_restore(sr);
     return v;
 }
@@ -857,4 +892,6 @@ void core_store_set(unsigned field, void *item, int index, unsigned value)
     if (scope == SC_SOUND || scope == SC_KIT)
         write_through(scope, item);
     irq_restore(sr);
+    if (scope == SC_SOUND || scope == SC_KIT)
+        core_lock_cancel(field, item);         /* no slide of it now (rows.c, 0.5) */
 }

@@ -28,7 +28,7 @@ older ones people still have:
 | Digitakt mk1 | 1.53, 1.54 | `core-4.1.elemod`, `core-4.1-os1.54.elemod` | on main, not released: build it ([below](#building-a-core)) |
 | Digitakt mk1 | 1.53, 1.54 | `core-2.1.elemod`, `core-2.1-os1.54.elemod` | the v0.4.0 release, built into its apps |
 | Digitone mk1, Digitone Keys | 1.43, 1.44 | `core-dn1-4.1.elemod`, `core-dn1-4.1-os1.44.elemod` | the [core-dn1-v4.1](https://github.com/irpina/elekloader/releases/tag/core-dn1-v4.1) pre-release, and the web page |
-| Digitone mk1, Digitone Keys | 1.43, 1.44 | `core-dn1-5.0.elemod`, `core-dn1-5.0-os1.44.elemod` | on branch core-dn1-5.0, not released: build it ([below](#building-a-core)) |
+| Digitone mk1, Digitone Keys | 1.43, 1.44 | `core-dn1-5.1.elemod`, `core-dn1-5.1-os1.44.elemod` | on main, not released: build it ([below](#building-a-core)) |
 | Digitone mk1, Digitone Keys | 1.43, 1.44 | `core-dn1-2.0a.elemod`, `core-dn1-2.0a-os1.44.elemod` | the v0.4.0 release, built into its apps |
 | Digitakt II | 1.17 | `core-dt2-1.0.elemod` | not released: build it ([below](#building-a-core)) |
 | Digitone II | 1.12 | `core-dn2-0.3.elemod` | experimental, not released: build it ([below](#building-a-core)) |
@@ -36,7 +36,7 @@ older ones people still have:
 | Analog Rytm MKII | 1.74 | `core-ar2-0.7.elemod` | the [core-ar2-v0.7](https://github.com/irpina/elekloader/releases/tag/core-ar2-v0.7) pre-release, and the shop. Mods with pages built for 0.3 (rytm2_mods v1.2's lfo-rnd, voice-dac, euclid-accents, velocity-humanise, comp-preview) do not link with it: their sites overlap core's page sites |
 | Analog Rytm MKII | 1.74 | `core-ar2-0.8.elemod` | on main, not released: build it ([below](#building-a-core)). Mods with pages built for 0.3 (rytm2_mods v1.2's lfo-rnd, voice-dac, euclid-accents, velocity-humanise, comp-preview) do not link with it: their sites overlap core's page sites |
 | Analog Rytm MKII | 1.73 | `core-ar2-0.2.elemod` | not released: the last core with 1.73; build it from commit 92a99c9 ([below](#building-a-core)) |
-| Analog Four MKII | 1.56 | `core-a4-0.4.elemod` | a proof of concept, not released: build it ([below](#building-a-core)) |
+| Analog Four MKII | 1.56 | `core-a4-0.5.elemod` | a proof of concept, not released: build it ([below](#building-a-core)) |
 | Octatrack MKI, MKII | 1.40C | `core-ot-0.3.1.elemod` | the [core-ot-v0.3.1](https://github.com/irpina/elekloader/releases/tag/core-ot-v0.3.1) pre-release, and the shop |
 | Octatrack MKI, MKII | 1.40C | `core-ot-0.8.elemod` | on main, not released: build it ([below](#building-a-core)) |
 | Octatrack MKI, MKII | 1.40C | `core-ot-0.1.elemod` | the v0.4.0 release: PURGE SAMPLES freezes the unit with it, so use 0.3.1 or newer |
@@ -108,8 +108,9 @@ the one a mod that uses it names in `resources.core`.
     1.44 (3.0, and 3.3 for the C library, the transport, the pattern and
     the project; ADAPTING.md, "Firmware locations (core-dn1 3.0)");
   - what machines need: the voices' sound before the filter, stock
-    parameters a mod relabels, sound edits the voices hear and submenus in
-    the Mod Menu (3.1; ADAPTING.md, "Machines and stock parameters"). With
+    parameters a mod relabels (including LFO destinations in 5.2), sound
+    edits the voices hear and submenus in the Mod Menu (3.1;
+    ADAPTING.md, "Machines and stock parameters"). With
     them, the companion [machines](../mods/machines-dn1) plays a machine
     mod's voice in place of FM (ADAPTING.md, "Machines on the Digitone");
   - exclusive audio, one mod taking the whole output (3.2;
@@ -128,7 +129,13 @@ the one a mod that uses it names in `resources.core`.
   - the firmware's moments, a prototype: the +Drive ready, the boot, USB, crashes and a safe restart, project
     saves, transport, the sequencer's tick, every MIDI message in and out, SysEx, voices released, the UI
     task's messages, sequencer edits, parameter commits and the master's effect stages (5.0; the core's
-    README).
+    README);
+  - the sequencer's MIDI out (the MIDI tracks' messages, which `ev_midi_out` never sees), a message
+    played in as if from DIN, a pool sound put on a track, the global mutes, and the key dispatch (5.0.1;
+    the core's README);
+  - lane parameters, a mod's values per track and per step with p-locks saved in the pattern, ten mod
+    parameter ids, knobs on the stock pages' empty boxes and a second TRIG page, and each note the
+    sequencer builds (5.1; ADAPTING.md, "Lane parameters, knobs on pages and TRIG's second page").
 - **Digitakt II** ([mods/core-dt2](../mods/core-dt2)): SETTINGS and
   PERSONALIZE rows, and `.fast` code in SRAM. No render events: its audio
   renders on the DSP.
@@ -169,8 +176,11 @@ the one a mod that uses it names in `resources.core`.
   concept): core-ar2's events and mod storage at the A4's addresses
   (ADAPTING.md, "Mod storage (core-a4 0.1)"), and parameter pages, whose
   knobs can follow the selected sound (core-a4 0.2 and 0.3; ADAPTING.md,
-  "Parameter pages (core-a4 0.2)"). Its render events cover the effects,
-  not the analog voices.
+  "Parameter pages (core-a4 0.2)"). Lockable parameters for each track
+  kind, their p-locks, their destinations, their value as stock would
+  play it and their NRPNs and CCs (ADAPTING.md, "Lockable parameters (core-a4 0.5, Analog Four
+  MKII)"). Its render events cover the effects, not the analog
+  voices.
 - **Octatrack** ([mods/core-ot](../mods/core-ot)): a source of its own. It
   takes the mods' RAM from the sample and recorder memory, only what they
   use and at most 10 MB, and has a hook bus of the Octatrack's own: the UI,

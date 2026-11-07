@@ -305,6 +305,54 @@ def test_a_handle_field_is_placed_like_any_and_listed_in_core_handles():
         {'sym': 'h', 'scope': 'kit', 'bits': 8, 'handle': 1}]})
 
 
+A4 = 'analog-four-mk2'
+
+
+def test_a4_codes_are_per_track_kind():
+    """core-a4 0.5: a sound field's code is the synth tracks', a kit field's the FX track's, or the CV
+    track's with "track": "cv", each kind from 0x70; a field that changes kind gets a new code, and a
+    17th field of a kind is refused."""
+    decls = [('a', 's', 'sound', 7), ('a', 'k', 'kit', 7), ('a', 'c', 'kit', 7)]
+    locks = [('a', 's'), ('a', 'k'), ('a', 'c')]
+    l1, _ = store.allocate(None, decls, A4, None, locks, (), cvs=[('a', 'c')])
+    assert [(c['sym'], c['code'], c['kind']) for c in l1['codes']] == \
+        [('s', 0x70, 'synth'), ('k', 0x70, 'fx'), ('c', 0x70, 'cv')]
+    assert l1['next_code'] == {'synth': 0x71, 'fx': 0x71, 'cv': 0x71}
+    assert [int.from_bytes(e[4:], 'big') for e in store.code_entries(l1)] == [0x70, 0x70, 0x70 | store.CV_FLAG]
+    l2, _ = store.allocate(l1, decls, A4, None, locks, (), cvs=[('a', 'c')])
+    assert l2 == l1
+    l3, _ = store.allocate(l1, decls, A4, None, locks, (), cvs=[])
+    assert [(c['sym'], c['code'], c['kind']) for c in l3['codes']] == \
+        [('s', 0x70, 'synth'), ('k', 0x70, 'fx'), ('c', 0x71, 'fx')] and l3['id'] != l1['id']
+    many = [('m', 'f%d' % i, 'kit', 1) for i in range(17)]
+    store.allocate(None, many[:16], A4, None, [d[:2] for d in many[:16]])
+    assert 'more than 16 lockable parameters on the FX track' in \
+        refused(store.allocate, None, many, A4, None, [d[:2] for d in many])
+
+
+def test_a4_ccs():
+    """core-a4 0.5: a synth field's CC comes first from those the FX and CV tables map, a kit field's (FX or
+    CV) only from those every kind leaves free."""
+    decls = [('m', 's', 'sound', 7), ('m', 'k', 'kit', 7), ('m', 'c', 'kit', 7)]
+    locks = [('m', 's'), ('m', 'k'), ('m', 'c')]
+    l1, _ = store.allocate(None, decls, A4, None, locks, locks, cvs=[('m', 'c')])
+    assert [(c['sym'], c['cc']) for c in l1['ccs']] == [('s', 12), ('c', 35), ('k', 36)]
+    assert len(store.cc_entries(l1)) == 3
+
+
+def test_a4_flags():
+    """On the A4 "lfo" is refused (every source is a destination of a "mod" field), "mod" is taken on
+    a kit field, and "cc" is taken (core-a4 0.5's CC pool); the Rytm has no CV track."""
+    scopes = {('m', 'a'): 'sound', ('m', 'k'): 'kit'}
+    store.check_flags(A4, scopes, (), [('m', 'a'), ('m', 'k')], [('m', 'k')])
+    assert '"lfo" is the Analog Rytm MKII' in refused(store.check_flags, A4, scopes, [('m', 'a')])
+    store.check_flags(A4, scopes, (), (), (), [('m', 'a'), ('m', 'k')])
+    assert 'has no CV track' in refused(store.check_flags, 'analog-rytm-mk2', scopes, (), (), [('m', 'k')])
+    assert 'the FX track has no routes' in refused(store.check_flags, 'analog-rytm-mk2', scopes, (), [('m', 'k')])
+    assert store.parse_cvs({'storage': [{'sym': 'c', 'scope': 'kit', 'bits': 3, 'lock': True, 'track': 'cv'}]}) == ['c']
+    refused(store.parse_decls, {'storage': [{'sym': 'c', 'scope': 'sound', 'bits': 3, 'lock': True, 'track': 'cv'}]})
+
+
 if __name__ == '__main__':
     for name, fn in sorted(globals().items()):
         if name.startswith('test_'):

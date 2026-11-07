@@ -28,13 +28,23 @@
 |
 | Handlers: f(void *view, int id, int delta, int knob) -> nonzero: taken.
 | view is the page (a C++ object, +0 its vtable), id the parameter (the
-| firmware's, 0-184), delta the step the stock would add (8.8: a whole step
+| firmware's, 0-191), delta the step the stock would add (8.8: a whole step
 | of a coarse parameter is 256, acceleration in), knob 0-7 for A-H. The UI
 | task. Here a2 = the view, d2 = the id, d3 = the step and d4 = the knob.
         .section .run, "ax"
         .globl  core_param_turn
 core_param_turn:
-        move.l  4(%sp), -(%sp)          | the manager
+        move.l  4(%sp), -(%sp)          | 5.1: a lane parameter's is core's (lanes.c)
+        move.l  %d3, -(%sp)
+        move.l  %d2, -(%sp)
+        move.l  %a2, -(%sp)
+        jsr     core_lanes_turn
+        lea     16(%sp), %sp
+        tst.l   %d0
+        beq.s   0f
+        addq.l  #8, %sp                 | our return and the manager
+        jmp     TURN_DONE
+0:      move.l  4(%sp), -(%sp)          | the manager
         jsr     HELD_STEPS
         addq.l  #4, %sp
         tst.b   %d0
@@ -86,6 +96,18 @@ core_param_turn:
 | sets that flag from their answer.
         .globl  core_param_value
 core_param_value:
+        subq.l  #4, %sp                 | 5.1: a lane parameter's is core's (lanes.c)
+        move.l  16(%sp), -(%sp)         | locked
+        pea     4(%sp)                  | &value
+        move.l  20(%sp), -(%sp)         | id
+        move.l  20(%sp), -(%sp)         | view
+        jsr     core_lanes_value
+        lea     16(%sp), %sp
+        tst.l   %d0
+        beq.s   0f
+        move.l  (%sp)+, %d0
+        rts
+0:      addq.l  #4, %sp
         tst.l   ev_param_value
         beq.s   9f
         move.l  8(%sp), -(%sp)          | the id
@@ -105,6 +127,18 @@ core_param_value:
 
         .globl  core_param_value58
 core_param_value58:
+        subq.l  #4, %sp                 | 5.1: a lane parameter's (lanes.c)
+        clr.l   -(%sp)                  | no locked flag
+        pea     4(%sp)                  | &value
+        move.l  20(%sp), -(%sp)         | id
+        move.l  20(%sp), -(%sp)         | view
+        jsr     core_lanes_value
+        lea     16(%sp), %sp
+        tst.l   %d0
+        beq.s   0f
+        move.l  (%sp)+, %d0
+        rts
+0:      addq.l  #4, %sp
         tst.l   ev_param_value
         beq.s   9f
         moveq   #-1, %d0

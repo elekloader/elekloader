@@ -92,10 +92,19 @@ param_next:
 9:      rts
 
 | page_get_value (0x40023d54): `lea %sp@(-12),%sp; moveml %d2-%d3/%a2,%sp@`.
-| Frame: 0 the cursor, 4 the answer, 12 view, 16 id, 20 lock.
+| Frame: 0 the cursor, 4 the answer, 12 view, 16 id, 20 lock (a step, or
+| -1). From core-a4 0.5, with a step, a mod parameter's knob (lock.c) shows
+| the step's mod lock (rows.c) before the mods are asked.
 core_param_get:
-        lea     core_params,%a1
         subq.l  #8,%sp
+        pea     4(%sp)                    | (0.5) with a step, a mod knob's lock
+        move.l  24(%sp),-(%sp)            | the step
+        move.l  24(%sp),-(%sp)            | id
+        jsr     core_lock_page_get
+        lea     12(%sp),%sp
+        tst.l   %d0
+        bne.s   8f
+        lea     core_params,%a1
 1:      move.l  16(%sp),%d0
         bsr.w   param_next
         beq.s   9f
@@ -110,7 +119,7 @@ core_param_get:
         move.l  (%sp),%a1
         tst.l   %d0
         beq.s   1b
-        move.l  4(%sp),%d0
+8:      move.l  4(%sp),%d0
         addq.l  #8,%sp
         rts
 9:      addq.l  #8,%sp
@@ -140,7 +149,10 @@ core_param_delta:
         move.l  (%sp),%a1
         tst.l   %d0
         beq.s   1b
-        move.l  8(%sp),-(%sp)             | taken: redraw the view now
+        move.l  12(%sp),-(%sp)            | taken: (0.5) a mod parameter's live record
+        jsr     core_lock_turned
+        addq.l  #4,%sp
+        move.l  8(%sp),-(%sp)             | and redraw the view now
         jsr     VIEW_INVALIDATE
         addq.l  #8,%sp
         rts

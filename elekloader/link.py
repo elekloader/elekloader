@@ -184,6 +184,7 @@ class Mod2:
             self.lfos = store.parse_lfos(doc)
             self.rough = store.parse_rough(doc)
             self.routes = store.parse_routes(doc)
+            self.cvs = store.parse_cvs(doc)
             self.inits = store.parse_inits(doc)
             self.handles = store.parse_handles(doc)
         except ModError as e:
@@ -534,6 +535,14 @@ def check(mods, image):
             bad.append('%s has DSP code for payload %s, which needs a mod that frees DSP memory '
                        'there (one that claims %s)' % (m.label(), tag, ' or '.join(free) or
                                                        'an area the %s does not have' % dev.name))
+    for t, most in sorted(dev.table_limits.items()):     # the OS uses no more (the profile's table_limits)
+        adds = [m.label() for m in mods if any(c['to'] == t for c in m.contribute)]
+        n = sum(len(c['data']) for m in mods for c in m.contribute if c['to'] == t) // tables[t][1] \
+            if t in tables else 0
+        if n > most:
+            who = ', '.join(adds[:-1]) + ' and ' + adds[-1] if len(adds) > 1 else adds[0]
+            bad.append('%s holds at most %d entries on %s %s; %s add%s %d'
+                       % (t, most, dev.key, mods[0].rel.version, who, '' if len(adds) > 1 else 's', n))
     regs = [(g['lo'], g['hi'], m, 'region ' + g['name']) for m in mods for g in m.regions]
     if dev.sram_code[1] > dev.sram_code[0]:
         regs.append((dev.sram_code[0], dev.sram_code[1], None, 'the .fast area'))
@@ -746,8 +755,10 @@ def link(mods, image, lock=None, *, sharc_stream=None):
         rough = [(m.id, sym) for m in order for sym in m.rough]
         routes = [(m.id, sym) for m in order for sym in m.routes]
         scope_of = {(d[0], d[1]): d[2] for d in decls}
+        cvs = [(m.id, sym) for m in order for sym in m.cvs]
+        store.check_flags(dev.key, scope_of, lfos, routes, cvs, [(m.id, sym) for m in order for sym in m.ccs])
         fx = sorted({k[0] for k in locks if scope_of.get(k) == 'kit'})
-        if fx and store.FX_LOCK_DST not in core.imports:
+        if fx and not store.kinds(dev.key) and store.FX_LOCK_DST not in core.imports:
             raise ModError('%s declare%s lockable kit fields (the FX track\'s), which %s does not keep'
                            % (', '.join(fx), 's' if len(fx) == 1 else '', core.label()))
         for dst, scope, bits in ((store.LOCK_DST, 'sound', store.lock_dst_bits(dev.key)),
@@ -770,7 +781,7 @@ def link(mods, image, lock=None, *, sharc_stream=None):
             users = sorted({k[0] for k in handles})
             raise ModError('%s mark%s storage fields as handles, which %s does not keep (no table %s)'
                            % (', '.join(users), 's' if len(users) == 1 else '', core.label(), store.HANDLES_TABLE))
-        new_lock, store_notes = store.allocate(lock, decls, dev.key, core.version, locks, ccs, inits)
+        new_lock, store_notes = store.allocate(lock, decls, dev.key, core.version, locks, ccs, inits, cvs)
         store_syms, ids = store.symbols(new_lock, dev.key)
         store_syms.setdefault(store.LOCK_DST, 0)    # not placed: no LFO field
         store_syms.setdefault(store.FX_LOCK_DST, 0)

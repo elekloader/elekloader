@@ -1051,9 +1051,16 @@ for 2.x builds with it too.
 | `fw_voice_locks` (4.2) | 0x4009bec8 | 0x4009bee8 | `locks(voice, list, fw_voice_params)`: a p-lock list into a starting voice, as the render puts a step's (`ev_voice_ready`) |
 | `fw_voice_locked` (4.2) | 0x431f16b4 | 0x431f26b4 | each voice's slots that locks set as it started, 3 longs a voice: its next note of the same sound loads them from the sound again |
 | `fw_param_uirec` (4.2) | 0x400899c4 | 0x400899e4 | `uirec(id)`: a parameter's UI record as the pages use it; bit 0 of its first long: it takes no p-locks |
+| `fw_brain_key` (5.0.1) | 0x40016fc0 | 0x40016fc0 | `key(brain, event)`: the stock key dispatch, where `ev_key` hands a key on; a handler may pass it an event of its own (a copy of its own, +12 the key and +16 the flags changed) to replay a key or a combo |
+| `fw_sound_load` (5.0.1) | 0x4001d710 | 0x4001d710 | `load(kit, sound, track)`: the kit (the project + 0x250) puts a 0x146-byte sound on a track; `ev_sound_load` sees it |
+| `fw_midi_chan` (5.0.1) | 0x41367d30 | 0x41368d30 | MIDI CONFIG > CHANNELS: track t's channel (0-15), a long, t 0-3 the synth tracks |
+| `fw_pool_sounds` (5.1) | 0x4135d74a | 0x4135e74a | the project's pool sounds, 0x146 bytes each: what a step's sound lock plays (a note event's +0x2c) |
+| `fw_patterns` (5.1) | 0x407fc414 | 0x407fd414 | the 128 patterns, live, 0x1611d bytes apart: `fw_pattern` points at one |
 
-A name marked 3.1, 3.2, 3.3, 4.0, 4.1 or 4.2 needs that core-dn1 (`"resources": {"core": "3.1"}`,
-`"3.2"`, `"3.3"`, `"4.0"`, `"4.1"` or `"4.2"`).
+A name marked 3.1, 3.2, 3.3, 4.0, 4.1, 4.2, 5.0.1, 5.1 or 5.2 needs that core-dn1 (`"resources": {"core": "3.1"}`,
+`"3.2"`, `"3.3"`, `"4.0"`, `"4.1"`, `"4.2"`, `"5.0.1"`, `"5.1"` or `"5.2"`). Core-dn1 5.0.1's calls (`core_midi_receive`,
+`core_pool_load`, `core_mutes`, `core_mute_set`) and its event `ev_seq_midi` are in core3.h's 5.0.1 section and
+mods/core-dn1/README.md.
 
 gcc calls libgcc's `__ashldi3`, `__lshrdi3` and `__ashrdi3` for a 64-bit value shifted by a
 variable count, and a mod links no libgcc. From core-dn1 3.3, core exports the firmware's
@@ -1274,16 +1281,16 @@ machine-pages, whose sites it overlaps.
 
 A Digitone mk1 parameter is an id (0-181) with a 60-byte record; the knob
 code, its pop-up, its value text, its p-locks, copy and paste all go through
-the id. From core-dn1 2.1 a mod can add ids 182, 183 and 184: core raises the
-firmware's id bounds (58 of them) and puts the records right after the stock
-ones, so the stock UI handles them as its own. The mod contributes to the
+the id. A mod can add ids 182-191 (core-dn1 5.1; 182-184 from 2.1): core
+raises the firmware's id bounds (58 of them) and puts the records right after
+the stock ones, so the stock UI handles them as its own. The mod contributes to the
 table `core_params` a pointer to a descriptor:
 
 | offset | field | |
 |---|---|---|
-| +0 | id | 182, 183 or 184: claim it as the resource `param:<id>` |
+| +0 | id | 182-191 (182-184 before 5.1): claim it as the resource `param:<id>` |
 | +4 | group | the page group: 1 Amp, 2 Filter, ... (a sound page's, for a sound parameter) |
-| +8 | slot | the sound parameter it edits (0-78): a slot no stock parameter of that kind uses, e.g. 26 on a synth track. The linker claims it for the mod as `soundslot:<slot>` (below) |
+| +8 | slot | the sound parameter it edits (0-78): a slot no stock parameter of that kind uses, e.g. 26 on a synth track. The linker claims it for the mod as `soundslot:<slot>` (below). `CORE_SLOT_LANE` (-1, core-dn1 5.1) keeps the values in core instead ("Lane parameters", below) |
 | +12, +16, +20 | min, max, default | 8.8 fixed point, as the slot holds them |
 | +24 | flags | 0 |
 | +28 | cc | MIDI CC (MSB << 16 \| LSB), or -1 for none |
@@ -1292,13 +1299,11 @@ table `core_params` a pointer to a descriptor:
 | +56 | format | `void f(int value, char *buf)`: the value's text |
 | +60 | | the firmware's empty string: `fw_str_empty` (core-dn1 3.0), `0x401ddbcd` in 1.43 |
 | +64 | look | the stock parameter whose knob it borrows (graphic, how a turn moves the value, scale), or 0 for PTIM's (24): a plain knob in whole steps |
+| +68 | lane flags | a lane's (5.1): `CORE_LANE_NOLOCK` for a value per track that takes no p-locks |
 
-To put it on a stock page, replace the instruction of the page's static
-constructor that writes that knob's id (or give it a page of its own: "Mod
-pages", below): a page's eight ids are written with
-immediates, not read from a table: AMP page 1's knob F, empty, is cleared
-by `clrl 0x4136b6d4` at `0x4016affe`, so a `jsr` there to a routine that
-writes 182 puts id 182 on it.
+To put it on a stock page's empty box, contribute a `core_knob` (core-dn1
+5.1; "Lane parameters, knobs on pages and TRIG's second page" in
+ADAPTING.md), or give it a page of its own ("Mod pages", below).
 
 **Sound slots are scarce.** A Digitone sound is 79 slots, and only three hold
 no stock parameter: 0, 26 and 65 (no knob, 0 in every factory sound, no effect
@@ -1349,9 +1354,24 @@ page, and returns 0 if the view was never built: from a Mod Menu entry,
 say (below). `int core_page_shown(void *brain, descriptor *page)` is 1
 while the page is on screen with nothing (a menu, a browser) over it.
 
+From core-dn1 5.2, `int32_t core_page_list(int32_t first, const int32_t *list,
+int32_t n)` gives a page key another list of pages for a while: the key
+whose stock list starts with page `first` (SYN1 2, SYN2 4, FLTR 6, AMP 8,
+LFO 10) steps through `list[0..n-1]` instead, stock pages or mod pages, and
+heads the screen with their titles; `n` 0 puts the stock list back. A list
+is never longer than the stock one (with the mod pages core put in it), and
+the page shown goes back to the first when it is past the new end. Call it
+from the UI task (`ev_tick`, `ev_key`), set `ev_tick`'s redraw flag after a
+change, and keep one mod per key: the last call wins. A mod page that only
+such a list shows takes an `after` no stock list holds (-1). It returns 0
+while the key's view is not built yet. machines-dn1 uses it to show an SDK
+alpha machine's pages behind SYN2 in place of FM's envelope page, whose
+graphs are drawn for page 4 whatever its knobs.
+
 Core-dn1 2.1 owns two more sites, by jmp at their entries: 0x40089a2c, the
 page record lookup (`core_page_rec`), and 0x40044490, the routine each
-view's constructor gives its page list to (`core_view_init`).
+view's constructor gives its page list to (`core_view_init`; from 5.2 it
+also notes the view for `core_page_list`).
 
 ### Project data (core-dn1 2.1, Digitone mk1)
 
@@ -2314,6 +2334,132 @@ its knob B, AMP PAN again, is shown while the count of PAN's turn updates
 (the bar) is odd and empty while it is even. Checked in rytm-emu's A4 build
 and on a unit (24 Oct 2026).
 
+### Lockable parameters (core-a4 0.5, Analog Four MKII)
+
+core-a4 0.5 has the first part of the lock service, core-ar2's design
+("Lockable parameters" and "Mod p-locks", above) with the A4's track
+kinds, from part 2 its destinations, from part 3 the value read and from
+part 4 MIDI.
+
+A storage field declared `"lock": true` gets a lock code from the lockfile,
+numbered within its kind, as stock keeps one parameter table per kind:
+
+| field | kind | tracks |
+|---|---|---|
+| sound | synth | 1..4 |
+| kit | FX | 5 |
+| kit, with `"track": "cv"` | CV | 6 |
+
+Each kind has the codes 0x70..0x7f (stock's columns end at 0x6f), so a
+build has at most 16 lockable parameters of each. On the A4 `"mod"` covers
+the LFOs too, and `"lfo"` is refused; `"cc"` gives the parameter a CC
+(part 4, below). The mod
+registers each parameter in `core_lock_params` as on the Rytm
+(`analog-four-mk2/lock.h`): `id` is its page knob, an id stock does not
+have (above 0x126), unique within its kind.
+
+A parameter is p-locked like a stock one: hold a trig and turn its page
+knob, or turn the knob while live recording runs. The lock is a row in the
+pattern's 128 rows with the field's code, so it is saved, loaded, copied,
+pasted and cleared with the pattern and its trigs, and stock's locks always
+fit first (127 rows at most). A parameter above 127 takes two rows per
+track and keeps its whole value. A pattern's SysEx dump and a received
+pattern carry the mod rows with a marker, as on the Rytm.
+
+The mod reads the lock while the trig plays:
+
+```c
+#include "analog-four-mk2/lock.h"
+
+int v = core_lock_value(track, STORE(my_depth));      /* min..max, or -1: none */
+int w = core_lock_value_voice(voice, core_lock_code(STORE(my_depth)));
+int d = core_slide_delta_voice(voice, core_lock_code(STORE(my_depth)));
+```
+
+What differs from the Rytm:
+- A lock lasts while its trig plays: the next trig on the voice without one
+  gives -1 (the parameter jumps back to the sound's value), as stock's
+  locks on the A4 do.
+- The locks are per voice (0..3 the synth voices, 4 the FX track's, 5 the
+  CV track's), set at the trig's event accept in the audio interrupt, before
+  it sounds. `core_lock_value(track, field)` is the voice the track's last
+  trig went to (on a poly track, the last-played voice).
+- `core_slide_delta_voice(voice, code)` is Param Slide's change from the
+  trig to the next trig or lock trig, in the field's steps, by stock's
+  rules; a set of the field (its knob, MIDI) ends it. The ramp itself is in
+  the value read (part 3).
+- A project load, a kit change and CREATE NEW clear every voice's locks.
+
+A mod knob shows its parameter's `short_name` as its label and its `name`
+as the screen's title while a trig is held (from part 2).
+
+**Destinations (part 2).** A lockable field also declared `"mod": true` is
+a destination of every modulation source on its track: the five routes
+(velocity, pitch bend, mod wheel, breath, aftertouch), the four Dest knobs
+(EnvF, Env2, LFO1, LFO2, A and B), the ten performance macros and CONTROL
+IN 1 and 2. Every one of their lists ends with it, as `CATEGORY:Name`
+(`MOD` when it has no category), only on tracks of its kind; a Dest knob
+shows its `short_name`. The route, Dest or macro keeps the field's lock
+code in its own byte, so kit saves, loads and copies carry it. Core notes,
+per voice, which sources point at which codes when stock pushes a sound,
+for the value read (part 3):
+
+```c
+int r, d, n;
+const struct core_dst *e = core_dst_voice(voice, &r, &d);  /* r routes, then d Dests */
+const struct core_dst *m = core_dst_macros(&n);           /* every macro's targets */
+```
+
+A kit or sound of another layout loads with its codes as None. Stock 1.56
+shows such a destination as ERR and sends it nowhere.
+
+**The value read (part 3).** The value stock would play for the parameter
+now, as it computes a stock coarse parameter of the same range: the sound's
+(the kit's) value, the playing lock in its place, smoothed, Param Slide's
+ramp, then for a `"mod"` field the routes, the macros and CONTROL IN, and
+LFO2, Env2, LFO1 and EnvF, clamped after each as stock clamps. Read it in
+the audio interrupt (`ev_render_in`, `ev_render_out`), every block:
+
+```c
+static int h[2];
+int v[2];
+if (!h[0]) {
+    h[0] = core_param_handle(STORE(my_depth));
+    h[1] = core_param_handle(STORE(my_rate));
+}
+core_param_values(track, h, 2, 0, v);           /* 8.8 steps of each field */
+core_param_values_voice(voice, h, 2, 0, v);     /* one voice of a poly track */
+int one = core_param_value(track, STORE(my_depth));
+```
+
+A track's read is the voice its last trig went to. `CORE_PARAM_ENGINE`
+gives the engine's 0..0x7fff instead. A handle is a build's own number: look
+it up at boot or on the first read, and never keep one in a project. In the
+emulator the values match stock's own parameter block for block (core-a4's
+README, "Checked so far").
+
+**MIDI (part 4).** Every lockable parameter is NRPN MSB 0, LSB its lock
+code (112..127), on its track's channel; stock's synth, FX and CV tables use
+MSBs 1 to 3 and nothing at MSB 0. A parameter up to 127 takes the data entry
+MSB; one above 127 takes the whole 14-bit value, as stock's fine
+parameters. A field declared `"cc": true` also gets a CC from the lockfile,
+one no stock table maps on a track's channel (a kit field's also free of the
+FX and CV tables), kept from build to build; the build's notes say which.
+Both set the field as its knob does, and lock it on the playing step while
+live recording runs; a mod knob's turn sends its NRPN, or its CC, as
+PARAM OUTPUT says, on the channel stock's own knobs use. On a channel shared
+with PERF, an NRPN reaches the active track, as stock's do.
+
+`examples/lock-check-a4` is the smallest mod on it: one lockable parameter
+of each kind and a fine one, on a LOCK CHECK page per kind, with what it
+reads each audio block in `lk_seen` for the emulator, from 1.1 its value
+read beside a stock parameter's (`lk_ring`) and the read's cost, and from
+1.2 CCs on A and V and the stored values each tick (`lk_midi`).
+`examples/sound-check-a4` makes one heard: a test tone whose level (LVL)
+and pitch (PIT) are lockable mod parameters, read on each synth voice every
+block with `core_param_values_voice` and added to the effects' return (the
+DAC words 4 and 5 of the TX block at `ev_render_out`).
+
 ### Machines (core-ar2 0.5, Analog Rytm MKII)
 
 The Rytm has 53 machine slots. 34..52 hold hidden factory machines: stock
@@ -2482,7 +2628,7 @@ wants to (on its own tracks, say) by contributing to the table
 | offset | field | |
 |---|---|---|
 | +0 | ui | `void *ui(int id)`: a UI record (84 bytes, the stock layout) for the id, or 0 for the stock one |
-| +4 | name | `const char *name(int id, int field)`: the label for field 0x30 (the knob's short name), or 0 |
+| +4 | name | `const char *name(int id, int field)`: the label for field 0x30 (the knob's short name), or 0; core-dn1 5.2 also asks for 0x28 (LFO destination name) and 0x2c (its group) |
 
 Either may be 0; the first mod that answers wins. The value, its sound slot
 and its range stay the stock parameter's. A UI record holds the knob's kind
@@ -2497,10 +2643,12 @@ from another parameter brings that parameter's turn along: a plain knob's
 over ALGO jumps two algorithms a detent. Core consults the table in the UI
 record lookups (0x400899c8 and 0x400899e6) and replaces the routine that
 makes a knob's label (0x400207b8, by jmp; the same address in 1.44). The
-pop-up's long name, the LFO destination lists and a page's group headings
-read the parameter records on their own and keep the stock names, and a
-page view's own drawing stays (SYN1's algorithm diagram, SYN2's envelope
-graphs).
+LFO destination list and DEST box also consult the table: 0x28 names the
+destination, 0x2c its group. The box and an over-wide list row keep their
+stock short name when no 0x28 override answers. Native sound
+slots, destination order and modulation stay unchanged. The value pop-up's
+long name and a page's group headings keep their stock names, and a page
+view's own drawing stays (SYN1's algorithm diagram, SYN2's envelope graphs).
 
 **`core_sound_set`.** `void core_sound_set(int track, int slot, int value)`
 sets the sound slot (0-78) of synth track `track` (0-3) to `value` (8.8)
@@ -2859,6 +3007,65 @@ Core-dn1 4.2 owns five more sites, 0x400455ba (`core_param_turn`),
 variable project data blocks (above). `tests/test_sdk.py` checks it keeps
 all of the released 4.1, 4.0, 3.2 and 2.3.
 
+### Lane parameters, knobs on pages and TRIG's second page (core-dn1 5.1, Digitone mk1)
+
+A Digitone sound has three spare slots ("Parameter slots", above), so a mod
+parameter that keeps its values in a sound and takes p-locks there is
+scarce. A **lane parameter** keeps them in core instead: a `core_params`
+descriptor whose slot (+8) is `CORE_SLOT_LANE` (-1). It has a value per
+track in each pattern, as a trig parameter (NOTE, VELOCITY) has, and a
+p-lock on any step: with trig keys held in GRID REC its knob edits the held
+steps' locks, drawn inverted, and otherwise the track's value.
+`CORE_LANE_NOLOCK` in the lane flags (+68) makes it a track value only.
+Values are whole numbers: the record's min, max and default >> 8, min 0 or
+more. A trig removed takes its lane locks with it.
+
+```c
+int32_t core_lane_value(int32_t id, int32_t track, int32_t step);  /* the lock, else the track's */
+int32_t core_lane_lock(int32_t id, int32_t track, int32_t step);   /* the step's lock, or -1 */
+int32_t core_lane_track(int32_t id, int32_t track);                /* the track's value */
+int32_t core_lane_set(int32_t id, int32_t track, int32_t step, int32_t value);  /* UI task; step -1: the track's */
+```
+
+They read the pattern the sequencer plays (in `ev_note_built`, the one the
+note came from). Core keeps every pattern's lanes in its RAM, by pattern
+number, and stores them with the pattern as lock rows: after stock's rows, a
+row `0x80 + lane` for each track with locks, and a row `0xC0 + lane` for the
+tracks' values (lane = id - 182). The stock OS skips rows whose id is 79 or
+more, so a project saved with lanes loads on it, without them. A pattern has
+80 rows: stock's go first, and a lane row that no longer fits is left out of
+that save. Lane rows count toward stock's limit of 79 too: in a pattern
+nearly full of locks, a new stock lock can show "Lock mem full" sooner,
+although a save still writes stock's rows first. A pattern, track or page copied and pasted carries no lanes, and
+a pattern cleared keeps them.
+
+**Knobs.** A `core_knobs` entry, `struct core_knob {page, knob, id}`, puts a
+parameter on a page's empty box (knob 0-7, A-H; claim `knob:<page>:<knob>`).
+Page 1-26 is a stock page: 19, the MIDI tracks' TRIG page, has E, G and H
+empty. `CORE_PAGE_TRIG2` (30) is core's second TRIG page for the synth
+tracks, "Trig Parameters (2/2)", shown once a mod puts a knob on it: TRIG
+pressed again steps to it (`core_trig2` is its descriptor, for
+`core_page_open`).
+
+**The notes the sequencer builds.** `ev_note_built(track, step, event)` runs
+as the sequencer builds a step's note (tracks 0-3 a synth track's, 4-7 a
+MIDI track's), before it is queued, and a handler may change the note:
+`CORE_EVENT_SOUND(event)` is the sound a synth note plays, the track's or a
+pool sound for a sound lock (`fw_pool_sounds` + 0x146 n, n below
+`core_pool_count()`). Interrupt level. `core_note_step(event)`, from
+`ev_voice_on` or `ev_voice_ready`, gives the step a note came from, or -1
+for the keys, MIDI and the arpeggiator. PLAY plays a first step the
+sequencer built ahead while stopped: core builds it again when a lane
+changes while stopped, and `core_note_step` knows the copy PLAY makes of it.
+
+Core-dn1 5.1 owns ten more sites: four more table moves for the ids, the
+lock rows' save (0x400090f2) and load (0x40008ee6), by jmp at their entries,
+and the note builders' four calls (0x40094d4e, 0x40094d7e, 0x40095b28,
+0x40095b3a; in 1.44 0x20 further on). Mods on it:
+[digichoke](https://github.com/irpina/digichoke) (CHK),
+[digipcsound](https://github.com/irpina/digipcsound) (PRG) and
+[digiloop](https://github.com/irpina/digiloop) (LOOP).
+
 ### The mods' RAM (core-dn1 4.0, Digitone mk1; core 4.0, Digitakt mk1)
 
 The linker lays every mod's `.run`, the tables and every `.bss` out in one
@@ -3030,7 +3237,12 @@ active one at a time; opening another's entry hands it the audio.
   byte at +0x2800 (0x400241f6), and a lock trig on a step with no trig. So
   the stock saves, loads, copies and pastes them with the pattern, and the
   sequencer fires them: `ev_note_queue` hands fxkit each trig of the lock
-  track with its time, and its locks hold until the track's next trig (the
+  track with its time, and its locks last that step, at the lock track's
+  SCALE: a track's own at `+0x3c7` of its 976 bytes in per-track mode (the
+  pattern's `+0x160f8 + 0x19` is 1), else the pattern's at `+0x160f8 + 0x1a`,
+  0-6 for 2x, 3/2x, 1x, 3/4x, 1/2x, 1/4x, 1/8x (measured on 1.43). fxkit 0.1
+  held them to the track's next trig, which on a lock track with trigs only
+  where there are locks kept a knob locked for the rest of the loop (the
   first step's, as PLAY starts, fxkit reads from the lock table). The lock
   track should play nothing of its own in a pattern where the effect has
   locks: its notes would take them too, and an arpeggiator on it turns its
@@ -3051,7 +3263,10 @@ active one at a time; opening another's entry hands it the audio.
   `fw_slot_ids`), WAVE and SPH as one picture of the wave from its start
   phase, DEST's box and its list (a turn opens it, YES picks with
   "Confirmed!" in the title, NO closes it), SPD and DEP in the stock's fine
-  steps, and the stock's defaults. On the MIXER and LFO pages a turned
+  steps, gathering speed with the knob as the stock's do (measured with the
+  panel's counts one a message: 0.11 a detent 150 ms apart, 0.25 at 75 ms,
+  0.46 at 30 ms, 0.68 at 15 ms), the lists (MULT, WAVE, MODE, DEST's) a step
+  every second detent, and the stock's defaults. On the MIXER and LFO pages a turned
   knob's value shows under it for a while, in the stock's text, as on the
   stock pages. While one of them is on screen an effect gives its keys to
   `fx_page_key` first (DEST's list takes YES, NO, UP and DOWN), adds
@@ -3063,8 +3278,12 @@ active one at a time; opening another's entry hands it the audio.
   saved with fewer loads with the rest zero, which `fx_unpack` reads as the
   format before); pack again when `fx_serial(e)` (a count of the changes to
   its values) moves, not every tick: the UI task's time is the firmware's
-  too. fxkit's own block (`FXKT`) holds the lock track. The locks are the
-  pattern's.
+  too. fxkit's own block (`FXKT`) holds the lock track and the inputs. The
+  locks are the pattern's.
+- **The inputs.** `fx_input_mono()` (fxkit 0.2) is one STEREO/MONO setting
+  for every effect: an effect's SETUP shows and sets it
+  (`fx_input_mono_set`) and its render applies it (input L on both sides).
+  fxkit saves it; a project without it keeps what is set.
 
 An effect mod contributes to the table `fx_effects` a pointer to a `struct
 fx_effect` (`digitone-mk1/fxkit.h`): its name, its knobs (each a slot, a
@@ -3907,6 +4126,7 @@ Some differences from an octabam build, by design:
 | `CM_KNOB: draw= needs flags=CM_DRAW` or `CM_KNOB: with CM_DRAW, +36 is draw` (assembly, `core3.inc`) | a knob's `draw=` without `flags=CM_DRAW`, or its `gfx=` with it | give the knob `flags=CM_DRAW` with `draw=`, or `draw=` in place of `gfx=`; the page's `CM_UI` needs `abi=cm_ui_v31` |
 | `imports N, which no given mod exports` | a missing dependency, or a typo | add the mod that exports N, fix the name, or list N under `weak` |
 | `adds to table T, which no given mod declares` | the table's owner is missing, or the event name is wrong | add core (or the owner); check the event name |
+| `T holds at most N entries on <device> <OS>; A and B add M` | the mods together add more to T than the OS uses (the device profile's `table_limits`; for `sdk_alpha_machines`, the SDK machines it lists) | build with fewer of those mods, or fewer machines in them |
 | `both export S` | two mods define the same global | prefix your globals with your mod id; make internals `static` |
 | `relocation type N` | a reference the linker cannot relocate (e.g. 16-bit absolute) | use 32-bit addressing for your own symbols; build with the SDK's flags |
 | `section X is not one elekloader places` | code or data in a section the linker does not know | C: default sections; asm: `.section .run, "ax"`, `.fast` or `.bss` |

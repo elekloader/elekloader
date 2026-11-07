@@ -625,7 +625,7 @@ def test_digitone_core_builds_and_links():
             dn = json.load(fh)
         with open(built_core()) as fh:
             dt = json.load(fh)
-        # 8 hook bus sites, the voice note-on, the parameter slots' 64 (3
+        # 8 hook bus sites, the voice note-on, the parameter slots' 68 (7
         # table moves, 2 UI record lookups, 58 raised id bounds and the short
         # name), the mod pages' 2 (the page record lookup and the views'
         # builder), the project data's 5 (the serializer, two loads, two new
@@ -642,20 +642,24 @@ def test_digitone_core_builds_and_links():
         # KEYBOARD mode's note-on and note-off, the three mute writers, the view
         # stack's push, replace and pop, the pattern menu's save and reload, the
         # track reload, the sound manager's seven actions and the browser's paste,
-        # the sound load and the track sound clear.
-        assert dn['target']['device'] == 'digitone-mk1' and len(dn['sites']) == 148
+        # the sound load and the track sound clear; 5.0.1's 2: the sequencer's MIDI
+        # engine's two appends (ev_seq_midi); and 5.1's 6 besides its 4 table moves: the
+        # pattern's lock rows saved and loaded, and the note builders' four calls.
+        assert dn['target']['device'] == 'digitone-mk1' and len(dn['sites']) == 160
         assert sorted(dn['collections']) == sorted(
             HOOK_BUS + ['core_menu', 'core_pages', 'core_params', 'core_projdata',
                         'ev_hold', 'ev_voice_on', 'core_param_override', 'ev_render_voices',
                         'core_audio', 'ev_midi_cc', 'ev_key_leds', 'ev_render_params', 'ev_midi_pc',
                         'ev_note_queue', 'ev_param_turn', 'ev_param_value', 'ev_voice_ready']
-            + CORE_DN1_50_EVENTS + ['ev_idle'])
+            + CORE_DN1_50_EVENTS + ['ev_idle', 'ev_seq_midi', 'ev_note_built', 'core_knobs'])
         # The same core.s as core 2.1's, with the Digitone's addresses, and
         # each of its labels where core 2.1 has it.
         assert sorted(dn['build']['sources']) == ['audio.s', 'block.s', 'core.s', 'edit.s', 'events.s', 'fw.s',
+                                                  'lanes.c', 'lanes.s',
                                                   'leds.s', 'menu.s', 'midi.s', 'pages.s', 'params.s',
                                                   'projdata.s', 'queue.s', 'render.s', 'rows.s',
-                                                  'settings.s', 'system.s', 'voice.s', 'voices.s']
+                                                  'seqmidi.s', 'settings.s', 'system.s', 'track.s',
+                                                  'voice.s', 'voices.s']
         assert dn['build']['sources']['core.s'] == dt['build']['sources']['core.s']
         # Only the labels of the sources both cores build (core.s, settings.s,
         # render.s): a name each core defines in a file of its own, such as
@@ -711,6 +715,8 @@ CORE_DN411 = ['core_row_add', 'core_row_new']   # 4.1.1's: the SETTINGS rows' st
 # 4.2's: the pages' knob turns and values, the voice once it has its locks (five sites, three tables)
 CORE_DN42 = ['core_param_turn', 'core_param_value', 'core_param_value58', 'core_param_value_syn', 'core_voice_ready',
              'fw_voice_locks', 'fw_voice_locked', 'fw_param_uirec']
+# 5.2's: page lists and LFO destination names (four sites)
+CORE_DN52 = ['core_page_list', 'core_views', 'core_lfo_list', 'core_lfo_compact', 'core_lfo_group', 'core_lfo_name']
 COLL_DN42 = ['ev_param_turn', 'ev_param_value', 'ev_voice_ready']
 CORE_DN3 = ['core_note_queue', 'core_audio_caps', 'core_key_leds', 'core_menu_open', 'core_midi_cc', 'core_midi_pc', 'core_param_short',
             'core_param_ui_make', 'core_render_master', 'core_render_params', 'core_render_voices', 'core_sound_set',
@@ -725,8 +731,9 @@ def check_dn_superset(old_path, new_path):
     key LEDs and the block's parameters (3.3: two sites, two tables), their
     calls and 3.3's firmware exports, the program changes (4.0: a site,
     a table), the note queue (4.1: a site, a table), the rows' storage
-    (4.1.1: two routines) and the pages' turns and values and the voice
-    with its locks (4.2: five sites, three tables, three firmware exports)."""
+    (4.1.1: two routines), the pages' turns and values and the voice
+    with its locks (4.2: five sites, three tables, three firmware exports)
+    and page lists and LFO names (5.2: four sites)."""
     with open(old_path) as fh:
         old = json.load(fh)
     with open(new_path) as fh:
@@ -735,12 +742,12 @@ def check_dn_superset(old_path, new_path):
     for k in ('target', 'contribute', 'resources'):
         assert new[k] == old[k], k
     assert all(s in new['sites'] for s in old['sites'])
-    assert len(new['sites']) == len(old['sites']) + 9 + 5
+    assert len(new['sites']) == len(old['sites']) + 9 + 5 + 4
     assert sorted(set(new['collections']) - set(old['collections'])) == sorted([
         'core_audio', 'core_param_override', 'ev_key_leds', 'ev_midi_cc', 'ev_midi_pc', 'ev_note_queue',
         'ev_render_params', 'ev_render_voices'] + COLL_DN42)
     assert all(new['collections'][k] == v for k, v in old['collections'].items())
-    assert sorted(set(new['exports']) - set(old['exports'])) == sorted(CORE_DN3 + FW_DN + CORE_DN411 + CORE_DN42)
+    assert sorted(set(new['exports']) - set(old['exports'])) == sorted(CORE_DN3 + FW_DN + CORE_DN411 + CORE_DN42 + CORE_DN52)
     assert all(new['symbols'][k][0] == v[0] for k, v in old['symbols'].items())
 
 
@@ -833,7 +840,8 @@ def check_dn_32(old_path, new_path):
     audio (a flag and core_audio_caps, with no site) and program changes (a
     site and a table) (its bigger area is the profile's, not the core's),
     4.1's note queue (a site and a table), 4.1.1's rows' storage (two
-    routines) and 4.2's turns, values and voice (five sites, three tables)."""
+    routines), 4.2's turns, values and voice (five sites, three tables)
+    and 5.2's LFO names (four sites)."""
     with open(old_path) as fh:
         old = json.load(fh)
     with open(new_path) as fh:
@@ -846,11 +854,11 @@ def check_dn_32(old_path, new_path):
     assert all(new['collections'][k] == v for k, v in old['collections'].items())
     assert sorted(set(new['exports']) - set(old['exports'])) == sorted(DN33_EXPORTS + ['core_audio_caps',
                                                                                      'core_midi_pc']
-                                                                       + CORE_DN41 + CORE_DN411 + CORE_DN42)
+                                                                       + CORE_DN41 + CORE_DN411 + CORE_DN42 + CORE_DN52)
 
     def what(d):
         return [(s['addr'], s['len'], s['kind'], s['new'], s.get('relocs')) for s in d['sites']]
-    assert all(x in what(new) for x in what(old)) and len(new['sites']) == len(old['sites']) + 4 + 5
+    assert all(x in what(new) for x in what(old)) and len(new['sites']) == len(old['sites']) + 4 + 5 + 4
     assert all(new['symbols'][k][0] == v[0] for k, v in old['symbols'].items())
 
 
@@ -872,7 +880,8 @@ def check_dn_40(old_path, new_path):
     """core-dn1 4.1 keeps all of 4.0: its sites, tables, contributions, resources
     and exports, every symbol of 4.0's in the same section; it adds the note
     queue (a site at the queue's entry, the table ev_note_queue), 4.1.1
-    the rows' storage (two routines) and 4.2 the turns, values and voice."""
+    the rows' storage (two routines), 4.2 the turns, values and voice
+    and 5.2 the LFO names."""
     with open(old_path) as fh:
         old = json.load(fh)
     with open(new_path) as fh:
@@ -882,11 +891,11 @@ def check_dn_40(old_path, new_path):
         assert new[k] == old[k], k
     assert sorted(set(new['collections']) - set(old['collections'])) == sorted(['ev_note_queue'] + COLL_DN42)
     assert all(new['collections'][k] == v for k, v in old['collections'].items())
-    assert sorted(set(new['exports']) - set(old['exports'])) == sorted(CORE_DN41 + CORE_DN411 + CORE_DN42)
+    assert sorted(set(new['exports']) - set(old['exports'])) == sorted(CORE_DN41 + CORE_DN411 + CORE_DN42 + CORE_DN52)
 
     def what(d):
         return [(s['addr'], s['len'], s['kind'], s['new'], s.get('relocs')) for s in d['sites']]
-    assert all(x in what(new) for x in what(old)) and len(new['sites']) == len(old['sites']) + 1 + 5
+    assert all(x in what(new) for x in what(old)) and len(new['sites']) == len(old['sites']) + 1 + 5 + 4
     assert all(new['symbols'][k][0] == v[0] for k, v in old['symbols'].items())
 
 
@@ -909,7 +918,8 @@ def check_dn_41(old_path, new_path):
     contributions and resources, every site and table of 4.1's, every symbol
     of 4.1's in the same section, and core_additem where it was; it adds
     core_row_new and core_row_add (rows.s) and their row pool in .bss, and
-    4.2 five sites and three tables (edit.s, voice.s) and three exports."""
+    4.2 five sites and three tables (edit.s, voice.s) and its exports, and
+    5.2 four sites (names.s), core_page_list (lists.c) and the views it finds (core_views)."""
     with open(old_path) as fh:
         old = json.load(fh)
     with open(new_path) as fh:
@@ -917,10 +927,10 @@ def check_dn_41(old_path, new_path):
     assert old['version'] == '4.1' and new['version'] == DN_VERSION
     for k in ('target', 'contribute', 'resources'):
         assert new[k] == old[k], k
-    assert all(s in new['sites'] for s in old['sites']) and len(new['sites']) == len(old['sites']) + 5
+    assert all(s in new['sites'] for s in old['sites']) and len(new['sites']) == len(old['sites']) + 5 + 4
     assert sorted(set(new['collections']) - set(old['collections'])) == sorted(COLL_DN42)
     assert all(new['collections'][k] == v for k, v in old['collections'].items())
-    assert sorted(set(new['exports']) - set(old['exports'])) == sorted(CORE_DN411 + CORE_DN42)
+    assert sorted(set(new['exports']) - set(old['exports'])) == sorted(CORE_DN411 + CORE_DN42 + CORE_DN52)
     assert all(new['symbols'][k] == v for k, v in old['symbols'].items()
                if k in ('core_settings', 'core_additem'))
     assert all(new['symbols'][k][0] == v[0] for k, v in old['symbols'].items())
@@ -1176,7 +1186,7 @@ def test_digitone_insert_audio_example():
 
 
 def test_digiswarm_builds_and_links():
-    """mods/digiswarm-dn1 (DigiSwarm) 0.2, an effect on fxkit: it patches no
+    """mods/digiswarm-dn1 (DigiSwarm) 0.3, an effect on fxkit: it patches no
     site, needs core-dn1 4.1 and fxkit, carries the same code for 1.43 and
     1.44 (an empty port), keeps its buffers in a region of the bulk area,
     links beside fxkit, THRU and the machines mod (two owners of the output
@@ -1192,7 +1202,7 @@ def test_digiswarm_builds_and_links():
         dpath, d = build.build(os.path.join(ROOT, 'mods', 'digiswarm-dn1'), DN_STOCK, tmp)
         tpath, _t = build.build(os.path.join(ROOT, 'examples', 'dn-thru'), DN_STOCK, tmp)
         mpath, _m = build.build(os.path.join(ROOT, 'mods', 'machines-dn1'), DN_STOCK, tmp)
-        assert os.path.basename(dpath) == 'digiswarm-0.2.elemod'
+        assert os.path.basename(dpath) == 'digiswarm-0.3.elemod'
         assert d.needs_core == '4.1' and not d.sites
         assert {'fx_activate', 'fx_deactivate', 'fx_set', 'fx_set_later', 'fx_lock_key', 'fx_turned',
                 'fx_pack', 'fx_unpack'} <= set(d.imports), d.imports
@@ -1200,15 +1210,15 @@ def test_digiswarm_builds_and_links():
         rc, r = lint_json(dpath, '--stock', DN_STOCK, '--with', core3, '--with', fxk, '--with', tpath,
                           '--with', mpath)
         assert rc == 0, r['problems']
-        assert r['link']['order'] == ['core ' + DN_VERSION, 'digiswarm 0.2', 'dnthru 1.0', 'fxkit 0.1',
+        assert r['link']['order'] == ['core ' + DN_VERSION, 'digiswarm 0.3', 'dnthru 1.0', 'fxkit 0.2',
                                        'machines ' + MACH_VERSION], r['link']['order']
         if CORE_DN40 and os.path.exists(CORE_DN40):
             rc, r = lint_json(dpath, '--stock', DN_STOCK, '--with', CORE_DN40, '--with', fxk)
-            assert rc == 1 and 'digiswarm 0.2 needs core 4.1 or newer, and this build has core 4.0' \
+            assert rc == 1 and 'digiswarm 0.3 needs core 4.1 or newer, and this build has core 4.0' \
                 in r['problems'], r['problems']
         if DN_STOCK_144 and os.path.exists(DN_STOCK_144):
             path4, d4 = build.build(os.path.join(ROOT, 'mods', 'digiswarm-dn1'), DN_STOCK_144, tmp)
-            assert path4.endswith('digiswarm-0.2-os1.44.elemod')
+            assert path4.endswith('digiswarm-0.3-os1.44.elemod')
             images = []
             for st, x in ((DN_STOCK, d), (DN_STOCK_144, d4)):
                 s, dv, _rel = formats.load(st)
@@ -1218,7 +1228,7 @@ def test_digiswarm_builds_and_links():
 
 
 def test_digiprism_builds_and_links():
-    """mods/digiprism-dn1 (DigiPrism) 0.2, an effect on fxkit with an
+    """mods/digiprism-dn1 (DigiPrism) 0.3, an effect on fxkit with an
     insert of its own (core_audio): it patches no site, needs core-dn1 4.1
     and fxkit, carries the same code for 1.43 and 1.44 (an empty port), keeps
     its buffers in a region of the bulk area beside DigiSwarm's, links beside
@@ -1236,7 +1246,7 @@ def test_digiprism_builds_and_links():
         dpath, _d = build.build(os.path.join(ROOT, 'mods', 'digiswarm-dn1'), DN_STOCK, tmp)
         tpath, _t = build.build(os.path.join(ROOT, 'examples', 'dn-thru'), DN_STOCK, tmp)
         mpath, _m = build.build(os.path.join(ROOT, 'mods', 'machines-dn1'), DN_STOCK, tmp)
-        assert os.path.basename(hpath) == 'digiprism-0.2.elemod'
+        assert os.path.basename(hpath) == 'digiprism-0.3.elemod'
         assert h.needs_core == '4.1' and not h.sites
         assert {'core_audio_caps', 'fx_activate', 'fx_chain', 'fx_deactivate', 'fx_set', 'fx_set_later',
                 'fx_lock_key', 'fx_pack'} <= set(h.imports), h.imports
@@ -1245,15 +1255,15 @@ def test_digiprism_builds_and_links():
         rc, r = lint_json(hpath, '--stock', DN_STOCK, '--with', core3, '--with', fxk, '--with', dpath,
                           '--with', tpath, '--with', mpath)
         assert rc == 0, r['problems']
-        assert r['link']['order'] == ['core ' + DN_VERSION, 'digiprism 0.2', 'digiswarm 0.2', 'dnthru 1.0',
-                                       'fxkit 0.1', 'machines ' + MACH_VERSION], r['link']['order']
+        assert r['link']['order'] == ['core ' + DN_VERSION, 'digiprism 0.3', 'digiswarm 0.3', 'dnthru 1.0',
+                                       'fxkit 0.2', 'machines ' + MACH_VERSION], r['link']['order']
         if CORE_DN40 and os.path.exists(CORE_DN40):
             rc, r = lint_json(hpath, '--stock', DN_STOCK, '--with', CORE_DN40, '--with', fxk)
-            assert rc == 1 and 'digiprism 0.2 needs core 4.1 or newer, and this build has core 4.0' \
+            assert rc == 1 and 'digiprism 0.3 needs core 4.1 or newer, and this build has core 4.0' \
                 in r['problems'], r['problems']
         if DN_STOCK_144 and os.path.exists(DN_STOCK_144):
             path4, h4 = build.build(os.path.join(ROOT, 'mods', 'digiprism-dn1'), DN_STOCK_144, tmp)
-            assert path4.endswith('digiprism-0.2-os1.44.elemod')
+            assert path4.endswith('digiprism-0.3-os1.44.elemod')
             images = []
             for st, x in ((DN_STOCK, h), (DN_STOCK_144, h4)):
                 s, dv, _rel = formats.load(st)
@@ -1353,7 +1363,7 @@ GAS_PEDALS = [('digitide', 0x47300000, 0x47700000), ('digitriad', 0x47B00000, 0x
 
 def test_gas_pedals_build_and_link():
     """The five effects pedals on the pedal shell (mods/digitide-dn1, digitriad-dn1, digireel-dn1,
-    digihoard-dn1, digihalo-dn1), 0.2, each a whole Digitone mod and an effect on fxkit: each patches no
+    digihoard-dn1, digihalo-dn1), 0.3, each a whole Digitone mod and an effect on fxkit: each patches no
     site, needs core-dn1 4.1 and fxkit, keeps its buffers in a region of its own in the bulk area and
     carries the same code for 1.43 and 1.44 (an empty port). All five, DigiSwarm, DigiPrism, fxkit and GAIN
     link together with the tree's core (over 128 KB together, they need its 1.25 MB), and beside the
@@ -1369,18 +1379,18 @@ def test_gas_pedals_build_and_link():
         paths = []
         for name, lo, hi in GAS_PEDALS:
             path, m = build.build(os.path.join(ROOT, 'mods', name + '-dn1'), DN_STOCK, tmp)
-            assert os.path.basename(path) == name + '-0.2.elemod'
+            assert os.path.basename(path) == name + '-0.3.elemod'
             assert m.needs_core == '4.1' and not m.sites, name
             assert [(g['area'], g['lo'], g['hi']) for g in m.regions] == [('bulk', lo, hi)], (name, m.regions)
             rc, r = lint_json(path, '--stock', DN_STOCK, '--with', core, '--with', fxk)
             assert rc == 0, (name, r['problems'])
             if CORE_DN40 and os.path.exists(CORE_DN40):
                 rc, r = lint_json(path, '--stock', DN_STOCK, '--with', CORE_DN40, '--with', fxk)
-                assert rc == 1 and '%s 0.2 needs core 4.1 or newer, and this build has core 4.0' % name \
+                assert rc == 1 and '%s 0.3 needs core 4.1 or newer, and this build has core 4.0' % name \
                     in r['problems'], r['problems']
             if DN_STOCK_144 and os.path.exists(DN_STOCK_144):
                 path4, m4 = build.build(os.path.join(ROOT, 'mods', name + '-dn1'), DN_STOCK_144, tmp)
-                assert path4.endswith(name + '-0.2-os1.44.elemod')
+                assert path4.endswith(name + '-0.3-os1.44.elemod')
                 images = []
                 for st, x in ((DN_STOCK, m), (DN_STOCK_144, m4)):
                     sd, dv, _rel = formats.load(st)
@@ -1412,7 +1422,7 @@ def test_fxkit_and_gain_build_and_link():
         core = dn_core(tmp)
         fpath, f = build.build(os.path.join(ROOT, 'mods', 'fxkit-dn1'), DN_STOCK, tmp)
         gpath, g = build.build(os.path.join(ROOT, 'examples', 'dn-fx-gain'), DN_STOCK, tmp)
-        assert os.path.basename(fpath) == 'fxkit-0.1.elemod' and os.path.basename(gpath) == 'dnfxgain-1.0.elemod'
+        assert os.path.basename(fpath) == 'fxkit-0.2.elemod' and os.path.basename(gpath) == 'dnfxgain-1.0.elemod'
         assert f.needs_core == '4.1' and not f.sites and g.needs_core == '4.1' and not g.sites
         assert {'fw_pattern', 'fw_timeline', 'fw_tempo', 'fw_transport', 'fx_effects'} <= set(f.imports), f.imports
         assert {'fx_activate', 'fx_deactivate', 'fx_lock_key', 'fx_page_draw', 'fx_pack', 'fx_unpack'} \
@@ -1420,10 +1430,10 @@ def test_fxkit_and_gain_build_and_link():
         assert {'fx_activate', 'fx_set', 'fx_turned', 'fx_lock_mask', 'fx_pack'} <= set(f.exports), f.exports
         rc, r = lint_json(gpath, '--stock', DN_STOCK, '--with', core, '--with', fpath)
         assert rc == 0, r['problems']
-        assert r['link']['order'] == ['core ' + DN_VERSION, 'dnfxgain 1.0', 'fxkit 0.1'], r['link']['order']
+        assert r['link']['order'] == ['core ' + DN_VERSION, 'dnfxgain 1.0', 'fxkit 0.2'], r['link']['order']
         if CORE_DN40 and os.path.exists(CORE_DN40):
             rc, r = lint_json(fpath, '--stock', DN_STOCK, '--with', CORE_DN40)
-            assert rc == 1 and 'fxkit 0.1 needs core 4.1 or newer, and this build has core 4.0' \
+            assert rc == 1 and 'fxkit 0.2 needs core 4.1 or newer, and this build has core 4.0' \
                 in r['problems'], r['problems']
         if DN_STOCK_144 and os.path.exists(DN_STOCK_144):
             for d, x in ((os.path.join(ROOT, 'mods', 'fxkit-dn1'), f), (os.path.join(ROOT, 'examples', 'dn-fx-gain'), g)):
@@ -1499,6 +1509,65 @@ def test_example_port_to_154_builds_and_links():
 DN_STOCK_144 = os.environ.get('ELEKLOADER_DN_SYX_144', '')
 
 
+CORE_DN50_BUILT = os.environ.get('ELEKLOADER_CORE_DN1_50', '')
+# 5.0.1's: the sequencer's MIDI out (two sites, one table), a message played in, a pool sound on a track, the
+# global mutes, and the key dispatch, the sound load and the track channels as exports
+CORE_DN501 = ['core_seq_midi_a', 'core_seq_midi_b', 'core_midi_receive', 'core_pool_load', 'core_mutes',
+              'core_mute_set', 'fw_brain_key', 'fw_sound_load', 'fw_midi_chan']
+
+
+# 5.1's: lane parameters, the note builders' calls (ev_note_built), the knobs on pages and TRIG's second page,
+# the pool's count and sounds, the live patterns; with the sites' routines lanes.c and lanes.s export
+CORE_DN51 = ['core_lane_lock', 'core_lane_track', 'core_lane_value', 'core_lane_set', 'core_note_step',
+             'core_pool_count', 'core_trig2', 'fw_pool_sounds', 'fw_patterns']
+CORE_DN51_INNER = ['core_build_midi_a', 'core_build_midi_b', 'core_build_syn_a', 'core_build_syn_b', 'core_held',
+                   'core_knobs_apply', 'core_knobs_fix', 'core_lanes_dirty', 'core_lanes_load', 'core_lanes_new',
+                   'core_lanes_save', 'core_lanes_step_clear', 'core_lanes_tick', 'core_lanes_turn',
+                   'core_lanes_value', 'core_note_built', 'core_rearm', 'core_rows_load', 'core_rows_save',
+                   'core_trig2_on']
+
+
+def check_dn_51(old_path, new_path):
+    """core-dn1 5.1 and 5.2 are 5.0 and more (5.0.1's, 5.1's and 5.2's four LFO name sites): the same target, every site of 5.0's at the same address
+    with the same stock bytes, the same code but for the 58 id bounds it raises again (182-191: 192 where 5.0 has
+    185, 191 for 184), 5.0's tables and exports with 5.0.1's and 5.1's added, its contributions with core's own
+    ev_tick subscription (lanes.c's redraw and re-arm), and page 30 (TRIG's second page) claimed."""
+    with open(old_path) as fh:
+        old = json.load(fh)
+    with open(new_path) as fh:
+        new = json.load(fh)
+    assert old['version'] == '5.0' and new['version'] == DN_VERSION
+    assert new['target'] == old['target']
+    assert new['resources']['names'] == old['resources']['names'] + ['page:30']
+    added = [c for c in new['contribute'] if c not in old['contribute']]
+    assert all(c in new['contribute'] for c in old['contribute'])
+    assert [(c['to'], c['relocs'][0][2]) for c in added] == [('ev_tick', 'sym:core_lanes_tick')]
+    olds = {s['addr']: s for s in old['sites']}
+    news = {s['addr']: s for s in new['sites']}
+    assert all(a in news and news[a]['stock_sha256'] == s['stock_sha256'] for a, s in olds.items())
+    assert len(news) == len(olds) + 2 + 10 + 4
+    raised = [a for a, s in olds.items() if news[a] != s]
+    assert len(raised) == 58
+    for a in raised:
+        o, n = bytes.fromhex(olds[a]['new']), bytes.fromhex(news[a]['new'])
+        assert o[:-1] == n[:-1] and (o[-1], n[-1]) in ((185, 192), (184, 191)), a
+    assert sorted(set(new['collections']) - set(old['collections'])) == ['core_knobs', 'ev_note_built', 'ev_seq_midi']
+    assert all(new['collections'][k] == v for k, v in old['collections'].items())
+    assert sorted(set(new['exports']) - set(old['exports'])) == sorted(CORE_DN501 + CORE_DN51 + CORE_DN51_INNER + CORE_DN52)
+    assert all(new['symbols'][k][0] == v[0] for k, v in old['symbols'].items())
+
+
+def test_digitone_core_5_1_is_5_0_and_more():
+    if not CORE_DN50_BUILT or not os.path.exists(CORE_DN50_BUILT):
+        raise Skip('missing ELEKLOADER_CORE_DN1_50 (core-dn1 5.0 built, core-5.0.elemod)')
+    with tempfile.TemporaryDirectory() as tmp:
+        check_dn_51(CORE_DN50_BUILT, dn_core(tmp))
+        other = CORE_DN50_BUILT.replace('core-5.0.elemod', 'core-5.0-os1.44.elemod')
+        if DN_STOCK_144 and os.path.exists(DN_STOCK_144) and os.path.exists(other):
+            path4, _m = build.build(os.path.join(ROOT, 'mods', 'core-dn1'), DN_STOCK_144, tmp)
+            check_dn_51(other, path4)
+
+
 def test_digitone_core_port_to_144_is_the_same_core():
     """mods/core-dn1's 1.44 port: the same code and the same sites, at 1.44's
     addresses; a 1.43 core-dn1 is refused on 1.44."""
@@ -1521,7 +1590,7 @@ def test_digitone_core_port_to_144_is_the_same_core():
 
         def what(d):                # each site's new bytes and targets, not where it is
             return [(s['len'], s['kind'], s['new'], s.get('relocs')) for s in d['sites']]
-        assert len(new['sites']) == 148 and what(new) == what(old)
+        assert len(new['sites']) == 160 and what(new) == what(old)
         rc, r = lint_json(path, '--stock', DN_STOCK_144)
         assert rc == 0, r['problems']
         rc, r = lint_json(old_path, '--stock', DN_STOCK_144)

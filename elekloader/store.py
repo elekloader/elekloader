@@ -113,6 +113,25 @@ a kit-scope "lfo" field there imports core_fx_lfo_dst: the linker places it,
 as the core's own kit field of the device's `fx_lock_dst` bits, in a build
 with a kit-scope "lfo" field (0 otherwise).
 
+Lock codes per track kind (core-a4 0.5, the Analog Four MKII). Stock keeps
+a parameter table per track kind, so a code is numbered within its kind,
+0x70..0x7f (112..127), 16 a kind: a sound field is the synth tracks'
+parameter (kind "synth"), a kit field the FX track's ("fx"), or the CV
+track's when it declares `"track": "cv"` ("cv"). Each code entry says its
+kind, "next_code" gives the next never-used code of each kind, and a code
+freed in one kind is given again only in that kind:
+
+     "codes": [{"mod", "sym", "code", "kind"}], "freed_codes": [...],
+     "next_code": {"synth": 112, "fx": 112, "cv": 112}
+
+A field whose kind changes is a new parameter: its old code is freed. The
+kind is part of the layout ID. On the A4 every modulation source can target
+a mod parameter, so `"mod": true` there covers the LFOs too (no "lfo"), and
+a kit field can have it. A CV field's code has CV_FLAG set in
+core_lock_codes. A `"cc": true` field takes a CC from the A4's pool (core-a4
+0.5): the CCs no table of stock's maps on a track's channel; a kit field
+(FX or CV) only those the FX and CV tables leave free too.
+
 Field defaults (core-ar2 0.10). A field declared with `"init": N` (0 < N <
 2**bits) reads N where its bits are zero: in a new project, after its scope
 was reset, and in data saved by another layout. The core keeps a field's
@@ -161,11 +180,13 @@ FX_LOCK_DST = 'core_fx_lfo_dst'                 # core-ar2 0.9: the FX LFO's cod
 LFO_FLAG = 0x100                                # in core_lock_codes: the field is an LFO destination
 SMOOTH_OFF = 0x200                              # in core_lock_codes: the field's value jumps (core-ar2 0.9)
 ROUTE_FLAG = 0x400                              # in core_lock_codes: a velocity/aftertouch destination (core-ar2 0.9)
-FIRST_CODE, LAST_CODE = 42, 127
+CV_FLAG = 0x800                                 # in core_lock_codes: a kit field of the CV track (core-a4 0.5)
+FIRST_CODE, LAST_CODE = 42, 127                 # a device's codes unless its spec says others
 INITS_TABLE = 'core_field_inits'                # core-ar2 0.10: the fields' inits, by slot
 HANDLES_TABLE = 'core_handles'                  # core-ar2 0.11: the handle fields' descriptors
 MAX_INITS = 63                                  # slots 1..63, in the descriptor's bits 16..21
 LOCK_SCOPES = ('sound', 'kit')
+KIND_NAMES = {'synth': 'the synth tracks', 'fx': 'the FX track', 'cv': 'the CV track'}
 
 # Per device: each scope's bits in its live home, and the tagged store.
 DEVICES = {
@@ -190,6 +211,17 @@ DEVICES = {
         'store': 4352 - 10,
         'items': {'track': 129 * 6, 'pattern': 129},
         'split': {'track': 2, 'pattern': 4},
+        # core-a4 0.5: codes per track kind (stock's synth, FX and CV parameter tables), 0x70..0x7f each;
+        # every source is a destination of a "mod" field, so no "lfo"
+        'codes': (0x70, 0x7f),
+        'kinds': ('synth', 'fx', 'cv'),
+        'no_lfo': True,
+        # core-a4 0.5: the CCs no table of stock's maps on a track's channel (the synth kind's and the controller
+        # kinds' MISC, TRACK and PERF, nor bank select 0 and 32, from the records at 0x40186af4), those the FX and CV
+        # kinds map first, so the synth tracks' fields take them before the CCs every kind leaves free
+        'ccs': (12, 13, 14, 15, 28, 29, 30, 31, 35, 36, 37) + tuple(range(39, 48)) + (60, 61, 62, 63, 96, 97, 100, 101),
+        # of the pool, the CCs the FX (12..14, 28..31) or CV (12..15) tables map: a kit field gets none of them
+        'fx_ccs_taken': (12, 13, 14, 15, 28, 29, 30, 31),
     },
 }
 
@@ -206,6 +238,43 @@ def lock_dst_bits(dev_key):
 def fx_lock_dst_bits(dev_key):
     """The bits of core_fx_lfo_dst on the device, 0 where the core keeps none."""
     return _spec(dev_key).get('fx_lock_dst', 0)
+
+
+def code_range(dev_key):
+    """-> (first, last) lock code on the device."""
+    return _spec(dev_key).get('codes', (FIRST_CODE, LAST_CODE))
+
+
+def kinds(dev_key):
+    """-> the device's track kinds that number codes apart, or () where one range serves every track."""
+    return _spec(dev_key).get('kinds', ())
+
+
+def kind_of(dev_key, scope, cv):
+    """A lockable field's kind on the device: None where codes have no kinds."""
+    if not kinds(dev_key):
+        return None
+    return 'synth' if scope == 'sound' else 'cv' if cv else 'fx'
+
+
+def check_flags(dev_key, scopes, lfos=(), routes=(), cvs=(), ccs=()):
+    """The lockable fields' flags the device can't take; scopes: {(mod, sym): scope}. Raises ModError
+    '<mod>: storage field ...', as a declaration's own refusals read."""
+    sp = _spec(dev_key)
+    for k in sorted(lfos):
+        if sp.get('no_lfo'):
+            raise ModError('%s: storage field %r: on the %s every modulation source can target a "mod" field; '
+                           '"lfo" is the Analog Rytm MKII\'s' % (k[0], k[1], dev_key))
+    for k in sorted(routes):
+        if scopes.get(k) == 'kit' and not kinds(dev_key):
+            raise ModError('%s: storage field %r: a kit field (the FX track\'s) cannot be a velocity or aftertouch '
+                           'destination: the FX track has no routes' % k)
+    for k in sorted(cvs):
+        if 'cv' not in kinds(dev_key):
+            raise ModError('%s: storage field %r: the %s has no CV track' % (k[0], k[1], dev_key))
+    for k in sorted(ccs):
+        if not sp.get('ccs'):
+            raise ModError('%s: storage field %r: the %s keeps no CCs for mod parameters' % (k[0], k[1], dev_key))
 
 
 def _spec(dev_key):
@@ -278,6 +347,11 @@ def parse_routes(m):
     return [f['sym'] for f in m.get('storage', []) if isinstance(f, dict) and f.get('mod') is True]
 
 
+def parse_cvs(m):
+    """A mod document's "storage" -> the syms of its fields declared "track": "cv" (core-a4 0.5), in order."""
+    return [f['sym'] for f in m.get('storage', []) if isinstance(f, dict) and f.get('track') == 'cv']
+
+
 def parse_ccs(m):
     """A mod document's "storage" -> the syms of its fields with a CC, in order."""
     return [f['sym'] for f in m.get('storage', []) if isinstance(f, dict) and f.get('cc') is True]
@@ -301,7 +375,7 @@ def parse_decls(m):
     if not isinstance(st, list):
         raise ModError('"storage" is a list of fields')
     for f in st:
-        if not isinstance(f, dict) or set(f) - {'sym', 'scope', 'bits', 'lock', 'cc', 'lfo', 'smooth', 'mod', 'init',
+        if not isinstance(f, dict) or set(f) - {'sym', 'scope', 'bits', 'lock', 'cc', 'lfo', 'smooth', 'mod', 'track', 'init',
                                                 'handle'}:
             raise ModError('a storage field is {"sym", "scope", "bits"}, and "lock" for a lockable one')
         for k in ('lock', 'cc', 'lfo', 'smooth', 'mod', 'handle'):
@@ -328,9 +402,9 @@ def parse_decls(m):
         if f.get('lock') and f.get('scope') not in LOCK_SCOPES:
             raise ModError('storage field %r: only %s fields can be lockable'
                            % (f.get('sym'), ' and '.join(LOCK_SCOPES)))
-        if f.get('mod') and f.get('scope') == 'kit':
-            raise ModError('storage field %r: a kit field (the FX track\'s) cannot be a velocity or aftertouch '
-                           'destination: the FX track has no routes' % (f.get('sym'),))
+        if 'track' in f and (f['track'] != 'cv' or f.get('scope') != 'kit' or not f.get('lock')):
+            raise ModError('storage field %r: "track" is "cv", on a lockable kit field (the CV track\'s)'
+                           % (f.get('sym'),))
         sym, scope, bits = f.get('sym'), f.get('scope'), f.get('bits')
         if not isinstance(sym, str) or not re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]*', sym):
             raise ModError('storage field %r: "sym" is a C name' % (sym,))
@@ -363,8 +437,14 @@ def layout_id(lock):
         what.append([[f['scope'], f['offset'], f['bits'], f['mod'], f['sym']] + ([f['init']] if f.get('init') else [])
                      for f in sorted(lock[k], key=_field_key)])
     if lock.get('codes') or lock.get('freed_codes'):   # a lockfile with no codes keeps its ID
-        what.append([lock['next_code']] + [[c['code'], c['mod'], c['sym']] for k in ('codes', 'freed_codes')
-                                           for c in sorted(lock[k], key=lambda c: c['code'])])
+        if isinstance(lock['next_code'], dict):         # codes per track kind (core-a4 0.5): the kind counts
+            ks = kinds(lock['device'])
+            what.append([[lock['next_code'][k] for k in ks]]
+                        + [[c['code'], c['mod'], c['sym'], c['kind']] for k in ('codes', 'freed_codes')
+                           for c in sorted(lock[k], key=lambda c: (ks.index(c['kind']), c['code']))])
+        else:
+            what.append([lock['next_code']] + [[c['code'], c['mod'], c['sym']] for k in ('codes', 'freed_codes')
+                                               for c in sorted(lock[k], key=lambda c: c['code'])])
     return int(hashlib.sha256(json.dumps(what).encode('ascii')).hexdigest()[:8], 16) or 1
 
 
@@ -431,8 +511,14 @@ def check_lock(lock, dev_key):
                 raise ModError('lockfile: field %s of %s lies past its scope\'s used bits'
                                % (f['sym'], f['mod']))
     if any(k in lock for k in ('codes', 'freed_codes', 'next_code')):
+        first, last = code_range(dev_key)
+        ks = kinds(dev_key)
         nc = lock.get('next_code')
-        if not _whole(nc) or not FIRST_CODE <= nc <= LAST_CODE + 1:
+        if ks:                          # one range a track kind (core-a4 0.5)
+            if not isinstance(nc, dict) or set(nc) != set(ks) or \
+                    not all(_whole(nc[k]) and first <= nc[k] <= last + 1 for k in ks):
+                raise ModError('lockfile: "next_code" %r' % (nc,))
+        elif not _whole(nc) or not first <= nc <= last + 1:
             raise ModError('lockfile: "next_code" %r' % (nc,))
         seen = set()
         for k in ('codes', 'freed_codes'):
@@ -440,14 +526,18 @@ def check_lock(lock, dev_key):
             if not isinstance(cs, list):
                 raise ModError('lockfile: "%s" is a list' % k)
             for c in cs:
-                if not isinstance(c, dict) or set(c) != {'mod', 'sym', 'code'} \
+                if not isinstance(c, dict) or set(c) != ({'mod', 'sym', 'code', 'kind'} if ks else {'mod', 'sym', 'code'}) \
                         or not isinstance(c['mod'], str) or not isinstance(c['sym'], str) \
-                        or not _whole(c['code']) or not FIRST_CODE <= c['code'] < nc or c['code'] in seen:
+                        or (ks and c['kind'] not in ks) or not _whole(c['code']) \
+                        or not first <= c['code'] < (nc[c['kind']] if ks else nc) \
+                        or (c.get('kind'), c['code']) in seen:
                     raise ModError('lockfile: a bad entry in "%s"' % k)
-                seen.add(c['code'])
-        placed = {(f['mod'], f['sym']) for f in lock['fields'] if f['scope'] in LOCK_SCOPES}
+                seen.add((c.get('kind'), c['code']))
+        placed = {(f['mod'], f['sym']): f['scope'] for f in lock['fields'] if f['scope'] in LOCK_SCOPES}
         if any((c['mod'], c['sym']) not in placed for c in lock['codes']):
             raise ModError('lockfile: a code for a field that is not a placed sound or kit field')
+        if ks and any((placed[(c['mod'], c['sym'])] == 'sound') != (c['kind'] == 'synth') for c in lock['codes']):
+            raise ModError('lockfile: a code of a kind its field\'s scope does not have')
     if 'ccs' in lock or 'freed_ccs' in lock:
         pool, seen = _spec(dev_key).get('ccs', ()), set()
         for k in ('ccs', 'freed_ccs'):
@@ -477,13 +567,13 @@ def _bump(g):
     return 1 if g >= 255 else g + 1
 
 
-def allocate(lock, decls, dev_key, core=None, locks=(), ccs=(), inits=None):
+def allocate(lock, decls, dev_key, core=None, locks=(), ccs=(), inits=None, cvs=()):
     """lock: a lockfile (dict) or None for a new one; decls: [(mod id, sym,
     scope, bits)]; core: the build's core's version (None: the newest core's
     room); locks: [(mod id, sym)] of the lockable fields; ccs: those of them
     with a CC; inits: {(mod id, sym): init} of the fields with an init other
-    than 0. -> (the new lockfile, [notes]). The lockfile given is not
-    changed."""
+    than 0 (core-ar2 0.10); cvs: those declared "track": "cv" (core-a4 0.5).
+    -> (the new lockfile, [notes]). The lockfile given is not changed."""
     inits = {k: v for k, v in (inits or {}).items() if v}
     notes = []
     if lock is None:
@@ -611,8 +701,11 @@ def allocate(lock, decls, dev_key, core=None, locks=(), ccs=(), inits=None):
     # format 2 from the first init: an older elekloader refuses it rather than reading the inits' fields as 0
     if any(f.get('init') for k in ('fields', 'freed') for f in lock[k]):
         lock['elekloader_store'] = 2
-    recoded = _codes(lock, set(locks), {(f['mod'], f['sym']) for f in kept},
-                     {(f['mod'], f['sym']) for f in added if (f['mod'], f['sym']) in back}, notes)
+    scope_of = {(f['mod'], f['sym']): f['scope'] for f in fields}
+    cvs = set(cvs)
+    recoded = _codes(lock, {k: kind_of(dev_key, scope_of.get(k), k in cvs) for k in locks},
+                     {(f['mod'], f['sym']) for f in kept},
+                     {(f['mod'], f['sym']) for f in added if (f['mod'], f['sym']) in back}, notes, dev_key)
     _ccs(lock, set(ccs), _spec(dev_key).get('ccs', ()), notes,
          {(f['mod'], f['sym']) for f in fields if f['scope'] == 'kit'}, _spec(dev_key).get('fx_ccs_taken', ()))
     if new:
@@ -633,50 +726,68 @@ def allocate(lock, decls, dev_key, core=None, locks=(), ccs=(), inits=None):
     return lock, notes
 
 
-def _codes(lock, want, kept, back, notes):
-    """Give each lockable field (mod, sym) in want its lock code, in lock
-    (changed in place). kept: the fields that kept their place; back: freed
-    fields that came back to theirs. -> whether any code changed."""
+def _codes(lock, want, kept, back, notes, dev_key):
+    """Give each lockable field (mod, sym) in want ({field: kind}, kind None
+    where the device has no kinds) its lock code, in lock (changed in
+    place). kept: the fields that kept their place; back: freed fields that
+    came back to theirs. -> whether any code changed."""
     had = lock.get('codes', []), lock.get('freed_codes', [])
     if not want and not had[0] and not had[1]:
         return False                    # a lockfile that never had a lockable field stays as it was
+    first, last = code_range(dev_key)
+    ks = kinds(dev_key)
     codes, freed = [], [dict(c) for c in had[1]]
-    nxt = lock.get('next_code', FIRST_CODE)
+    if ks:
+        nxt = dict(lock.get('next_code') or {k: first for k in ks})
+    else:
+        nxt = {None: lock.get('next_code', first)}
+
+    def of(k):                          # a note's ' (FX track)'
+        return ' (%s)' % KIND_NAMES[k][4:] if k else ''
     changed = False
     for c in had[0]:
         k = (c['mod'], c['sym'])
-        if k in want and k in kept:
+        if k in want and k in kept and c.get('kind') == want[k]:
             codes.append(dict(c))
         else:
             freed.append(dict(c))
             changed = True
-            notes.append('%s %s: lock code %d %s' % (c['mod'], c['sym'], c['code'],
+            notes.append('%s %s: lock code %d%s %s' % (c['mod'], c['sym'], c['code'], of(c.get('kind')),
                          'kept for it while it is out of the build' if k not in want or k not in kept
                          else 'freed'))
     have = {(c['mod'], c['sym']) for c in codes}
-    for k in sorted(want - have):
-        same = [c for c in freed if (c['mod'], c['sym']) == k]
+    for k in sorted(set(want) - have):
+        kind = want[k]
+        mine = [c for c in freed if c.get('kind') == kind]
+        same = [c for c in mine if (c['mod'], c['sym']) == k]
         if same and k in back:          # back in its old place: its old code, with its rows
             c = same[-1]
             freed.remove(c)
-            notes.append('%s %s: back with lock code %d' % (k[0], k[1], c['code']))
-        elif nxt <= LAST_CODE:
-            c = {'mod': k[0], 'sym': k[1], 'code': nxt}
-            nxt += 1
-            notes.append('%s %s: lock code %d' % (k[0], k[1], c['code']))
-        elif freed:                     # the never-used codes are gone: the oldest freed one
-            old = freed.pop(0)
+            notes.append('%s %s: back with lock code %d%s' % (k[0], k[1], c['code'], of(kind)))
+        elif nxt[kind] <= last:
+            c = {'mod': k[0], 'sym': k[1], 'code': nxt[kind]}
+            if kind:
+                c['kind'] = kind
+            nxt[kind] += 1
+            notes.append('%s %s: lock code %d%s' % (k[0], k[1], c['code'], of(kind)))
+        elif mine:                      # the never-used codes are gone: the oldest freed one
+            old = mine[0]
+            freed.remove(old)
             c = {'mod': k[0], 'sym': k[1], 'code': old['code']}
-            notes.append('%s %s: lock code %d (was %s %s\'s)' % (k[0], k[1], c['code'], old['mod'], old['sym']))
+            if kind:
+                c['kind'] = kind
+            notes.append('%s %s: lock code %d%s (was %s %s\'s)' % (k[0], k[1], c['code'], of(kind),
+                                                                   old['mod'], old['sym']))
         else:
-            raise ModError('the mods have more than %d lockable parameters' % (LAST_CODE - FIRST_CODE + 1))
+            raise ModError('the mods have more than %d lockable parameters%s'
+                           % (last - first + 1, ' on %s' % KIND_NAMES[kind] if kind else ''))
         for d in [d for d in freed if (d['mod'], d['sym']) == k]:
             freed.remove(d)             # a field has one code
         codes.append(c)
         changed = True
-    lock['codes'] = sorted(codes, key=lambda c: c['code'])
+    lock['codes'] = sorted(codes, key=lambda c: (ks.index(c['kind']) if ks else 0, c['code']))
     lock['freed_codes'] = freed
-    lock['next_code'] = nxt
+    lock['next_code'] = nxt if ks else nxt[None]
     return changed
 
 
@@ -771,14 +882,16 @@ def symbols(lock, dev_key):
 
 def code_entries(lock, lfos=(), rough=(), routes=()):
     """-> the table core_lock_codes' entries: {field descriptor, code}, 8 bytes
-    each, by code; the code of a field in lfos ((mod, sym)) has LFO_FLAG set,
-    of one in rough SMOOTH_OFF, of one in routes ROUTE_FLAG."""
+    each, by code (by kind, then code, where codes have kinds); the code of
+    a field in lfos ((mod, sym)) has LFO_FLAG set, of one in rough
+    SMOOTH_OFF, of one in routes ROUTE_FLAG, of a CV field CV_FLAG."""
     desc = descriptors(lock)
     lfos, rough, routes = set(lfos), set(rough), set(routes)
     return [desc[(c['mod'], c['sym'])].to_bytes(4, 'big')
             + (c['code'] | (LFO_FLAG if (c['mod'], c['sym']) in lfos else 0)
                | (SMOOTH_OFF if (c['mod'], c['sym']) in rough else 0)
-               | (ROUTE_FLAG if (c['mod'], c['sym']) in routes else 0)).to_bytes(4, 'big')
+               | (ROUTE_FLAG if (c['mod'], c['sym']) in routes else 0)
+               | (CV_FLAG if c.get('kind') == 'cv' else 0)).to_bytes(4, 'big')
             for c in lock.get('codes', [])]
 
 

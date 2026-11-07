@@ -285,9 +285,11 @@ class PairLinkTests(unittest.TestCase):
             return (value >> 16).to_bytes(2, 'little') + (value & 0xffff).to_bytes(2, 'little')
         jump = adapter.find(bytes.fromhex('3e06') + word(stock_arm), offset)
         self.assertTrue(offset < jump < offset + 80)  # JUMP to the arm the stock table named
-        # Before it: ASTATX kept, the capture arrays' base loaded (the stores), ASTATX back.
+        # Before it: ASTATX kept, the capture arrays' base loaded (the stores), ASTATX back,
+        # in the adapter's zeroed state at the end of the filter's range (MACHINES-DN2-FILTER.md).
+        state = PROFILE['filter_range'][1] - PROFILE['filter_state_bytes']
         at = offset
-        for address in (0x20097d38, 0x20097d40, 0x20097d38):
+        for address in (state + 0x138, state + 0x140, state + 0x138):
             at = adapter.find(word(address), at + 1, jump)
             self.assertNotEqual(at, -1, hex(address))
 

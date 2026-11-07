@@ -74,6 +74,8 @@ class Device:
                                  # uses itself; ids from `own` up are a mod's own, so two mods' entries
                                  # may not share one; an own_only table's entries take only those
                                  # (link.Mod2.id_ranges, link.check)
+    table_limits: dict = field(default_factory=dict)   # table -> the most entries all mods together
+                                 # may add to it: the OS uses no more (link.check)
     sram_code: tuple = (0, 0)    # the linker's area for .fast code
     fast_table: str = ''         # the table .fast sections are copied through
     image_free: tuple = ()       # ((lo, hi), ...): zero runs inside the main OS that
