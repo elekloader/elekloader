@@ -1486,10 +1486,90 @@ static void check_next(void)
         VIEW_DIRTY((char *)view + 0x38);          /* draws it keeps drawn_at fresh, so the next follows */
 }
 
+/* The route's changes over USB (route.c): dl_fs_gen counts them, and a move leaves its FROM and TO
+ * until the page takes them (dl_move_seen). */
+extern volatile unsigned dl_fs_gen;
+extern volatile int dl_move_seen;
+extern char dl_move_from[], dl_move_to[];
+static unsigned seen_gen;
+
+/* `p` (DL_NAME_MAX + 1 bytes) after a move of `from` to `to`: renamed when it is from or below it */
+static void follow_move(char *p, const char *from, const char *to)
+{
+    char t[DL_NAME_MAX + 1];
+    u32 k = dl_strlen(from), n = dl_strlen(p);
+    if ((n == k && !dl_strcmp(p, from)) || below(p, from)) {
+        if (dl_strlen(to) + n - k > DL_NAME_MAX)
+            return;
+        copy_str(t, p + k, sizeof t);
+        copy_str(p, to, DL_NAME_MAX + 1);
+        copy_str(p + dl_strlen(to), t, DL_NAME_MAX + 1 - dl_strlen(to));
+    }
+}
+
+/* DL_DIR "/" rel is a folder: its parent lists it as one. Under dl_lock. */
+static int folder_there(const char *rel)
+{
+    char parent[DL_NAME_MAX + 1];
+    const char *b = base_of(rel);
+    struct dl_ent *ents;
+    int n, i, r = 0;
+    copy_str(parent, rel, (u32)(b - rel) > 0 ? (u32)(b - rel) : 1);
+    n = dl_list_dir(parent, 0, 0);
+    ents = dl_alloc((u32)(n > 0 ? n : 1) * sizeof *ents);
+    if (!ents)
+        return 1;                        /* no memory: keep the folder */
+    n = dl_list_dir(parent, ents, n);
+    for (i = 0; i < n && !r; i++)
+        r = ents[i].dir && !dl_strcmp(ents[i].name, b);
+    dl_free(ents);
+    return r;
+}
+
+/* After a change over USB: the page's files and its open folder follow a move, the open folder
+ * goes up while it is gone (a move or DELETE DIR over USB), and the folder is read again, as after
+ * the page's own changes. Not while a save runs: a move waits for it (the route answers "Busy"). */
+static void follow_route(void)
+{
+    unsigned g;
+    int i;
+    if (job.what || (seen_gen == dl_fs_gen && dl_move_seen))
+        return;
+    dl_lock();
+    if (!dl_move_seen) {
+        for (i = 0; i < nfiles; i++)
+            follow_move(files[i].name, dl_move_from, dl_move_to);
+        follow_move(cwd, dl_move_from, dl_move_to);
+        dl_move_seen = 1;
+    }
+    g = dl_fs_gen;
+    if (lrows)
+        while (cwd[0] && !folder_there(cwd)) {
+            i = (int)(base_of(cwd) - cwd);
+            cwd[i > 0 ? i - 1 : 0] = 0;
+        }
+    dl_unlock();
+    seen_gen = g;
+    if (!lrows)                          /* the page hasn't been opened */
+        return;
+    for (depth = 0, i = 0; cwd[0] && cwd[i]; i++)
+        depth += cwd[i] == '/';
+    depth += cwd[0] != 0;
+    if (read_folder())
+        return;
+    build_list();
+    if (view) {
+        page_rows();
+        cursor_to(0);
+    }
+    redraw = 1;
+}
+
 void dl_page_tick(void *ctrl)
 {
     ticks++;
     dl_readers_poll(ticks);
+    follow_route();
     check_next();
     if (job.what && !(ticks % CHECK_EVERY) && ticks - last_input >= QUIET)
         save_step();

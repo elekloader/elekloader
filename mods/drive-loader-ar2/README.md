@@ -23,6 +23,7 @@ a third `RouteTypeHandler`, so the unit's Data root listing shows `mods`:
 | `/mods/<folder>`... | one folder's folders and files, to 3 folders below `/mods` (`DL_DEPTH`). A folder inside a third-level one (made over USB) is left out of its listing and off the MODS page, and no route reaches it or its files (`tests/drive_depth_host.c`, `tests/test_drive_route.py`) |
 | `/mods/<name>`, `/mods/<folder>/.../<name>` | read, upload or Clear one file, in `/mods` or a folder up to 3 deep. Uploads take `*.elemod` (at any depth) and `active` (in `/mods` only); an upload makes the folders it needs. Other files can be read and cleared. A Clear of a folder removes it when it is empty, as SAMPLES' DELETE DIR |
 | `/mods/<folder>/.../.dir` | upload only: an upload (of nothing, `elekloader mods mkdir`) makes the folder, and any parents not there yet, empty, up to 3 deep. No file is written, and a folder already there is kept |
+| `/mods/.mv` | upload only: an upload of `FROM\nTO` (paths below `/mods`; `elekloader mods mv`) moves or renames a `.elemod` file or a folder with everything in it, and rewrites `/mods/active`'s lines naming FROM or a file below it. No file is written |
 | `/mods/.build` | read only: the build descriptor, byte for byte (`python -m elekloader.desc dump`) |
 | `/mods/.status` | read only: plain text, the route's last commit or delete, the boot's time, then the boot linker's records |
 
@@ -84,8 +85,23 @@ refused like any other dot file. Neither flag is set by default.
   folder), so no pattern is added and a fourth level stays out of reach.
 - The route can't tell a read, an upload and a Clear apart when it resolves a path, so the
   entry carries every function, each closure holding the file's name.
-- Stock's Rename refuses RAM entries, so `/mods` has no rename. A new upload under the same
-  name replaces the file.
+- Stock's Rename refuses RAM entries, so the router's own rename doesn't reach `/mods`: a move or
+  rename is an upload of `FROM\nTO` to `.mv` (`DL_MOVE`), up to 256 bytes, whose after-change call
+  does it (route.c's `move`). It checks the names (names.inc's `move_why`: plain names, a file
+  stays a `.elemod` in a folder up to 3 deep; a folder with its deepest folder within 3 and its
+  longest path within 127 bytes, never into itself), that FROM is there, TO isn't (no overwrite)
+  and TO's folder is (none is made), and that folder's entry count (stock's rename skips ekFS's
+  2000). Stock's rename (`0x4007bcd2`, a link then an unlink) moves a file to any folder but a
+  folder only within its parent, so a folder going to another parent is made there with mkdir, its
+  contents moved in one by one and the emptied folder removed, as SAMPLES' MOVE moves each item
+  (`0x400ea92a`); a failure part way leaves what moved where it went. Then `/mods/active`'s lines
+  follow (`keep_active`, written as an upload's commit is), and the MODS page renames its own
+  files and open folder at its next tick (`dl_move_from`, `dl_move_to`); a next move waits for it
+  (`Busy: the MODS page`). The page also reads its folder again after any change the route makes
+  (`dl_fs_gen`: uploads, deletes, new folders, DELETE DIR), and goes up while its folder is gone.
+  The after-change call can't report a refusal: `.status` notes it (`move: ...`), and the clients
+  read both listings afterwards (`Mods.move`). A new upload under the same name replaces the
+  file.
 - One transfer at a time per Data handler: stock drops an open transfer when the next one
   opens, and a dropped upload never commits.
 - Calls come from the SysEx receive tasks. The loader's mutex (`dl_lock`) covers the staging
@@ -103,7 +119,7 @@ All addresses are OS 1.74's. They were read in Ghidra.
 | std::string ctor, dtor, the empty string | `0x401bcff0`, `0x401bb540`, `0x419f2a0c` |
 | operator new, delete | `0x40082a40`, `0x40082a4c` |
 | ekFS file ctor (0x2c bytes; 0 read, 1 write), dtor, read, write, node, node size (less 16, for FsSample's own header) | `0x4007dcfa`, `0x4007d956`, `0x4007d822`, `0x4007d860`, `0x4007d9d2`, `0x4007d9ec` |
-| ekFS delete (files only), rename (files and folders), rmdir (an empty folder only; `0x4007daa4` is its bool wrapper), mkdir (one folder, its parent there; called by SAMPLES' CREATE DIR, `0x400ea5b6`) | `0x4007da78`, `0x4007da8c`, `0x4007bef8`, `0x4007c1dc` |
+| ekFS delete (files only), rename (the bool wrapper of `0x4007bcd2`: a file to any folder, a folder within its parent; never over a name there), rmdir (an empty folder only; `0x4007daa4` is its bool wrapper), mkdir (one folder, its parent there; called by SAMPLES' CREATE DIR, `0x400ea5b6`) | `0x4007da78`, `0x4007da8c`, `0x4007bef8`, `0x4007c1dc` |
 | Directory ctor (0x130 bytes), dtor, count, child, shared_ptr release | `0x4007ed48`, `0x4007ee02`, `0x4007e1bc`, `0x4007e794`, `0x40170bd8` |
 | mutex lock, unlock | `0x400010bc`, `0x400011ee` |
 

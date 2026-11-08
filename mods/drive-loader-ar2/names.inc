@@ -18,7 +18,7 @@ static int seg_ok(const char *s)
  * them P_READ), which start with "." */
 static int name_ok(const char *s)
 {
-    if (same(s, ".build") || same(s, ".status"))
+    if (same(s, ".build") || same(s, ".status") || same(s, DL_MOVE))
         return 1;
 #ifdef DL_TEST_ARMED
     if (same(s, ".armed"))               /* test builds only: plant the crash flag */
@@ -41,7 +41,7 @@ static unsigned mkdir_of(const char *s)
  * folder's DL_MKDIR */
 static int writable(const char *s)
 {
-    if (mkdir_of(s))
+    if (mkdir_of(s) || same(s, DL_MOVE))
         return 1;
 #ifdef DL_TEST_ARMED
     if (same(s, ".armed"))
@@ -82,4 +82,76 @@ static int join_caps(char *out, void **caps)
 static const char *dir_clear_why(int entries)
 {
     return entries > 0 ? "Folder not empty" : 0;
+}
+
+/* A path below DL_DIR as a move names it: plain names (seg_ok) joined by "/", at most DL_NAME_MAX.
+ * -> its folders (the segments less one), or -1 */
+static int rel_folders(const char *s)
+{
+    char seg[DL_SEG_MAX + 2];
+    unsigned n = len(s), i, k = 0;
+    int folders = 0;
+    if (!n || n > DL_NAME_MAX)
+        return -1;
+    for (i = 0; i <= n; i++) {
+        if (i < n && s[i] != '/') {
+            if (k > DL_SEG_MAX)
+                return -1;
+            seg[k++] = s[i];
+            continue;
+        }
+        seg[k] = 0;
+        if (!seg_ok(seg))
+            return -1;
+        if (i < n)
+            folders++;
+        k = 0;
+    }
+    return folders;
+}
+
+/* A move or rename (an upload of "FROM\nTO" to DL_MOVE): of a file when `dir` is 0, or of a folder
+ * whose deepest folder is `below` levels under it (0: no folder in it) and whose longest path is
+ * `longer` bytes past FROM's own (0: empty). Both are paths below DL_DIR. A file stays a .elemod, in a
+ * folder up to DL_DEPTH deep; a folder, with everything in it, stays within DL_DEPTH and
+ * DL_NAME_MAX and doesn't go into itself. "active" and the route's own dot files are no plain names,
+ * so they never move. The route checks after this that FROM is there, TO isn't, and TO's folder
+ * is. -> 0, or the refusal */
+static const char *move_why(const char *from, const char *to, int dir, int below, unsigned longer)
+{
+    int f = rel_folders(from), t = rel_folders(to);
+    unsigned k = len(from);
+    if (f < 0 || t < 0)
+        return "Invalid name";
+    if (same(from, to))
+        return "Same name";
+    if (!dir)
+        return ends(from, ".elemod") && len(from) > 7 && ends(to, ".elemod") && len(to) > 7 && t <= DL_DEPTH
+            ? 0 : "Invalid name";
+    if (len(to) > k && to[k] == '/') {
+        unsigned i = 0;
+        while (i < k && from[i] == to[i])
+            i++;
+        if (i == k)
+            return "Into itself";
+    }
+    if (t + 1 + below > DL_DEPTH)
+        return "Too deep";
+    return len(to) + longer <= DL_NAME_MAX ? 0 : "Name too long";
+}
+
+/* /mods/active's line for `name` after a move of FROM to TO: the same line when `name` (the line's
+ * name, `n` bytes) is neither FROM nor below it, else TO and the rest of the name. Writes the new
+ * name to out (at most DL_NAME_MAX + 1 with the NUL). -> 1 when it changed */
+static int moved_name(char *out, const char *name, unsigned n, const char *from, const char *to)
+{
+    unsigned k = len(from), t = len(to), i;
+    for (i = 0; i < k && i < n && name[i] == from[i]; i++)
+        ;
+    if (i < k || (n > k && name[k] != '/') || t + (n - k) > DL_NAME_MAX)
+        return 0;
+    copy(out, to, t);
+    copy(out + t, name + k, n - k);
+    out[t + n - k] = 0;
+    return 1;
 }

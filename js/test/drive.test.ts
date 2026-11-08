@@ -206,3 +206,26 @@ test('Mods.mkdir uploads nothing to FOLDER/.dir, then finds the folder in its pa
   for (const bad of ['', '.x', '~T A/.x', 'a//b', 'a/b/c/d', '../x']) await assert.rejects(mods.mkdir(bad, head), ModError, bad)
   assert.equal(calls.length, 0)
 })
+
+test('Mods.move uploads "FROM\\nTO" to .mv, then reads both listings, as the Python does', async () => {
+  const calls: string[] = []
+  const listing: Record<string, datarpc.Entry[]> = { '/mods': [['~T A', 1, 0], ['~T C', 1, 0]], '/mods/~T A': [['x.elemod', 2, 9]], '/mods/~T C': [] }
+  const client = {
+    async put(path: string, data: Uint8Array) {
+      calls.push(`put ${path} ${new TextDecoder().decode(container.parse(data)[1])}`)
+      listing['/mods/~T C'] = [['x.elemod', 2, 9]]; listing['/mods/~T A'] = []
+    },
+    async ls(path: string) { calls.push(`ls ${path}`); return listing[path] },
+  } as unknown as datarpc.Client
+  const mods = new datarpc.Mods(client)
+  const head = { family: 2, device: 5, release: 0x30313736 } as container.Head
+  await mods.move('~T A/x.elemod', '~T C/x.elemod', head)
+  assert.equal(calls[1], 'put /mods/.mv ~T A/x.elemod\n~T C/x.elemod')
+  listing['/mods/~T C'] = [['x.elemod', 2, 9]]
+  await assert.rejects(mods.move('~T C/x.elemod', '~T A/y.elemod', head, false), ModError)
+  calls.length = 0
+  for (const [from, to, folder] of [['~T A/x.elemod', '~T A/x.txt', false], ['active', 'a.elemod', false], ['~T A', '~T A/~T B', true],
+    ['~T A', 'a/b/c/d', true], ['~T A', '.x', true], ['~T A', '~T A', true], ['a.elemod', 'a/b/c/d/a.elemod', false]] as [string, string, boolean][])
+    await assert.rejects(mods.move(from, to, head, folder), ModError, `${from} ${to}`)
+  assert.equal(calls.length, 0)
+})

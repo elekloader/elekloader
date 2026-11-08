@@ -21,8 +21,10 @@ number at +2, its command | 0x80 at +4 and a status byte at +5 (1: done). The Da
 
 What goes through it is a data container (container.py). The Drive Loader's `/mods` route takes
 `.elemod` files and `active`, and serves `.build` (the build descriptor) and `.status`. The router has
-no command for a folder: an upload of an empty file to `FOLDER/.dir` asks the route to make FOLDER
-(`Mods.mkdir`), and a clear of an empty folder removes it.
+no command for a folder and refuses its own Rename on the route's entries: an upload of an empty
+file to `FOLDER/.dir` asks the route to make FOLDER (`Mods.mkdir`), an upload of "FROM\nTO" to `.mv`
+to move or rename a file or a folder (`Mods.move`; `/mods/active` follows it), and a clear of an
+empty folder removes it.
 """
 import os
 import struct
@@ -43,6 +45,8 @@ NO_REPLY = 'no reply from the unit to command 0x%02x'
 FOLDER = '/mods'
 DEPTH = 3                       # folders below FOLDER the route reaches (the loader's DL_DEPTH)
 MKDIR = '.dir'                  # an upload to FOLDER/.dir makes FOLDER (the loader's DL_MKDIR)
+MOVE = '.mv'                    # an upload of "FROM\nTO" to .mv moves FROM to TO (the loader's DL_MOVE)
+NAME_MAX, SEG_MAX = 127, 63     # a path below FOLDER, one name in it, in bytes (DL_NAME_MAX, DL_SEG_MAX)
 
 
 def pack7(data):
@@ -256,6 +260,56 @@ class Mods:
         if not any(n == name and kind == 1 for n, kind, _size in self.ls(parent)):
             raise ModError('the unit did not make %s (see %s/.status)' % (self.folder_path(sub), self.folder))
 
+    def _ls(self, sub):
+        try:
+            return self.ls(sub)
+        except RpcError:                        # no such folder
+            return []
+
+    def is_folder(self, sub):
+        """`sub` (below the folder) is a folder on the unit."""
+        return bool(sub) and any(n == _base(sub) and kind == 1 for n, kind, _s in self._ls(_parent(sub)))
+
+    def move(self, frm, to, head, folder=None):
+        """Move or rename the file or folder `frm` to `to` (paths below the folder; a folder's
+        files and folders go with it), as one upload of "FROM\nTO" to `.mv`. The route keeps
+        /mods/active's lines naming them, refuses a name already there, and keeps the depth and
+        name rules; it can't refuse once the upload is in, so the listings say whether it moved.
+        `folder`: whether frm is a folder (None: look in its parent)."""
+        frm, to = frm.strip('/'), to.strip('/')
+        if folder is None:
+            folder = self.is_folder(frm)
+        for p in (frm, to):
+            parts = p.split('/')
+            if not p or any(not q or q.startswith('.') or len(q.encode('latin-1', 'replace')) > SEG_MAX
+                            for q in parts) or len(p.encode('latin-1', 'replace')) > NAME_MAX:
+                raise ModError('%r is not a name in %s' % (p, self.folder))
+        if frm == to:
+            raise ModError('%s is already %s' % (frm, to))
+        if folder:
+            if to.startswith(frm + '/'):
+                raise ModError('%s can\'t go into itself' % self.folder_path(frm))
+            if to.count('/') + 1 > DEPTH:
+                raise ModError('folders go %d deep below %s' % (DEPTH, self.folder))
+        elif not (frm.endswith('.elemod') and to.endswith('.elemod') and len(_base(to)) > 7):
+            raise ModError('a mod file is moved to a .elemod name (%r)' % to)
+        elif to.count('/') > DEPTH:
+            raise ModError('%r is not a file name in %s' % (to, self.folder))
+        self.put(MOVE, ('%s\n%s' % (frm, to)).encode('latin-1'), head)
+        there = any(n == _base(to) and kind == (1 if folder else 2) for n, kind, _s in self._ls(_parent(to)))
+        gone = not any(n == _base(frm) for n, _k, _s in self._ls(_parent(frm)))
+        if not there or not gone:
+            raise ModError('the unit did not move %s/%s to %s/%s (see %s/.status)'
+                           % (self.folder, frm, self.folder, to, self.folder))
+
+
+def _parent(p):
+    return p.rpartition('/')[0]
+
+
+def _base(p):
+    return p.rpartition('/')[2]
+
 
 # ---- ports ---------------------------------------------------------------------------------------
 
@@ -320,6 +374,9 @@ def add_arguments(p):
     q.add_argument('name')
     q = sub.add_parser('mkdir', help='make an empty folder below /mods, up to %d deep, with its parents' % DEPTH)
     q.add_argument('folder_path')
+    q = sub.add_parser('mv', help='move or rename a file or a folder below /mods (/mods/active follows it)')
+    q.add_argument('source')
+    q.add_argument('dest', help='the new path below /mods; a folder that is there takes it in, keeping its name')
     q = sub.add_parser('active', help='choose the mods the unit loads at its next boot, in this order')
     q.add_argument('names', nargs='*', help='local .elemod files, or names already in /mods')
 
@@ -342,6 +399,13 @@ def run(a, mods, log=print):
         log('DELETED %s' % mods.path(a.name))
         return 0
     build, head = mods.build()
+    if a.op == 'mv':
+        src, dest = a.source.strip('/'), a.dest.strip('/')
+        if dest == '' or mods.is_folder(dest):
+            dest = '%s/%s' % (dest, _base(src)) if dest else _base(src)   # into that folder
+        mods.move(src, dest, head)
+        log('MOVED %s/%s to %s/%s' % (mods.folder, src, mods.folder, dest))
+        return 0
     if a.op == 'mkdir':
         sub = a.folder_path.strip('/')
         mods.mkdir(sub, head)

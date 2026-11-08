@@ -137,6 +137,130 @@ class Route(unittest.TestCase):
         self.assertEqual(r.stdout.splitlines(), ['cleared', 'Folder not empty', 'Folder not empty'])
 
 
+class Moves(unittest.TestCase):
+    """Rename and move (an upload of "FROM\nTO" to /mods/.mv) and a new folder, on a made-up ekFS
+    with stock 1.74's rename, mkdir and rmdir (tests/drive_move_host.c runs route.c's move and
+    make_folder): a file moves to any folder; a folder moves within its parent by stock's rename
+    and to another parent by a new folder its contents move into; /mods/active follows."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.work = tempfile.TemporaryDirectory()
+        cls.exe = os.path.join(cls.work.name, 'drive_move_host')
+        subprocess.run(['cc', '-O1', '-w', '-no-pie', '-o', cls.exe, os.path.join(HERE, 'drive_move_host.c'),
+                        '-Wl,--unresolved-symbols=ignore-all'], check=True)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.work.cleanup()
+
+    ACTIVE = 'active=~T A/x.elemod 1234abcd|# a note|~T AB/y.elemod 00000001|~T A/~T B/z.elemod 00000002|'
+    TREE = ['~T A/x.elemod', '~T A/~T B/z.elemod', '~T AB/y.elemod', '~T C/', ACTIVE]
+
+    def run_(self, *requests, tree=None):
+        """-> [(answer, tree, active)] per request."""
+        r = subprocess.run([self.exe], capture_output=True, text=True, check=True,
+                           input='\n'.join((self.TREE if tree is None else tree) + ['--'] + list(requests)) + '\n')
+        lines = r.stdout.splitlines()
+        return [(lines[i], lines[i + 1][5:].split(' ; '), lines[i + 2][7:]) for i in range(0, len(lines), 3)]
+
+    def test_a_file_moves_to_another_folder_and_active_follows(self):
+        (why, tree, active), = self.run_('mv ~T A/x.elemod|~T C/x.elemod')
+        self.assertEqual(why, 'ok')
+        self.assertIn('~T C/x.elemod', tree)
+        self.assertNotIn('~T A/x.elemod', tree)
+        self.assertEqual(active, '~T C/x.elemod 1234abcd|# a note|~T AB/y.elemod 00000001|~T A/~T B/z.elemod 00000002|')
+
+    def test_a_file_is_renamed(self):
+        (why, tree, active), = self.run_('mv ~T A/x.elemod|~T A/w.elemod')
+        self.assertEqual(why, 'ok')
+        self.assertIn('~T A/w.elemod', tree)
+        self.assertTrue(active.startswith('~T A/w.elemod 1234abcd|'))
+
+    def test_a_folder_is_renamed_with_every_ticked_mod_below_it(self):
+        (why, tree, active), = self.run_('mv ~T A|~T D')
+        self.assertEqual(why, 'ok')
+        self.assertEqual([t for t in tree if t.startswith('~T D')], ['~T D/', '~T D/x.elemod', '~T D/~T B/', '~T D/~T B/z.elemod'])
+        self.assertFalse(any(t.startswith('~T A/') for t in tree))
+        # ~T AB is not below ~T A: its line stays
+        self.assertEqual(active, '~T D/x.elemod 1234abcd|# a note|~T AB/y.elemod 00000001|~T D/~T B/z.elemod 00000002|')
+
+    def test_a_folder_moves_into_another_folder(self):
+        # stock's rename keeps a folder in its parent: the route makes it there and moves what is in it
+        (why, tree, active), = self.run_('mv ~T A|~T C/~T A')
+        self.assertEqual(why, 'ok')
+        self.assertEqual([t for t in tree if t.startswith('~T C')],
+                         ['~T C/', '~T C/~T A/', '~T C/~T A/x.elemod', '~T C/~T A/~T B/', '~T C/~T A/~T B/z.elemod'])
+        self.assertNotIn('~T A/', tree)
+        self.assertIn('~T C/~T A/~T B/z.elemod 00000002', active)
+        # and back up to /mods
+        (why, tree, _a), = self.run_('mv ~T C/~T A|~T A', tree=[t for t in tree if t != 'active'] + [
+            'active=x 0|'])
+        self.assertEqual(why, 'ok')
+        self.assertIn('~T A/~T B/z.elemod', tree)
+
+    def test_a_new_folder_and_its_parents(self):
+        (why, tree, _a), = self.run_('mkdir ~T N/~T O/~T P')
+        self.assertEqual(why, 'ok')
+        self.assertTrue({'~T N/', '~T N/~T O/', '~T N/~T O/~T P/'} <= set(tree))
+        (why, _t, _a), = self.run_('mkdir ~T A')               # there already: kept
+        self.assertEqual(why, 'ok')
+        (why, _t, _a), = self.run_('mkdir ~T A/x.elemod')      # a file of that name
+        self.assertEqual(why, 'failed')
+
+    def test_refusals_leave_everything_as_it_was(self):
+        cases = {
+            'mv ~T A/x.elemod|~T AB/y.elemod': 'Already there',       # no overwrite
+            'mv ~T A|~T AB': 'Already there',
+            'mv ~T A|~T A/~T B/~T A': 'Into itself',
+            'mv ~T A|~T C/~T D/~T A': 'Too deep',                       # its ~T B would be 4 deep
+            'mv ~T A/x.elemod|~T C/x.txt': 'Invalid name',              # a mod stays a .elemod
+            'mv active|~T C/active.elemod': 'Invalid name',             # the route's own files never move
+            'mv .build|x.elemod': 'Invalid name',
+            'mv ~T A/x.elemod|.hidden/x.elemod': 'Invalid name',
+            'mv ~T A/x.elemod|~T Q/x.elemod': 'No such folder',         # no folder is made for a move
+            'mv ~T Z|~T Y': 'Not there',
+            'mv ~T A|~T A': 'Same name',
+            'mv ~T A|' + 'x' * 64: 'Invalid name',                     # a name past DL_SEG_MAX
+            'mv ~T A|' + '/'.join(['y' * 60, 'z' * 60]): 'Name too long',   # ~T B/z.elemod past 127
+            'mv ~T A/x.elemod': 'Invalid name',                         # no TO
+        }
+        for req, want in cases.items():
+            (why, tree, active), = self.run_(req)
+            self.assertEqual(why, want, req)
+            self.assertEqual(sorted(tree), sorted(self.run_('mkdir ~T C')[0][1]), req)   # unchanged
+            self.assertEqual(active, self.ACTIVE[7:], req)
+
+    def test_mods_move_checks_names_then_reads_the_listings(self):
+        calls = []
+        listing = {'/mods': [('~T A', 1, 0), ('~T C', 1, 0)], '/mods/~T A': [('x.elemod', 2, 9)],
+                   '/mods/~T C': []}
+
+        class Client:
+            def put(self, path, data):
+                calls.append(('put', path, datarpc.container.parse(data)[1]))
+                listing['/mods/~T C'] = [('x.elemod', 2, 9)]
+                listing['/mods/~T A'] = []
+
+            def ls(self, path):
+                calls.append(('ls', path))
+                return listing[path]
+        mods = datarpc.Mods(Client())
+        head = {'family': 2, 'device': 5, 'release': 0x30313736}
+        mods.move('~T A/x.elemod', '~T C/x.elemod', head)
+        self.assertEqual(calls[1], ('put', '/mods/.mv', b'~T A/x.elemod\n~T C/x.elemod'))
+        listing['/mods/~T C'] = [('x.elemod', 2, 9)]          # put() leaves it where it was:
+        with self.assertRaises(datarpc.ModError):              # the listings don't show it moved
+            mods.move('~T C/x.elemod', '~T A/y.elemod', head, folder=False)
+        calls.clear()
+        for frm, to, folder in (('~T A/x.elemod', '~T A/x.txt', False), ('active', 'a.elemod', False),
+                                ('~T A', '~T A/~T B', True), ('~T A', 'a/b/c/d', True), ('~T A', '.x', True),
+                                ('~T A', '~T A', True), ('a.elemod', 'a/b/c/d/a.elemod', False)):
+            with self.assertRaises(datarpc.ModError, msg=(frm, to)):
+                mods.move(frm, to, head, folder=folder)
+        self.assertEqual(calls, [])                             # refused before anything is sent
+
+
 class PastTheThirdLevel(unittest.TestCase):
     """A folder inside a third-level folder (made by USB or a host tool): the route's listing and
     the MODS page hide it, the computer's walk doesn't enter it, and nothing reaches its files.

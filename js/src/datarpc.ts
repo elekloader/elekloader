@@ -21,6 +21,10 @@ const noReply = (cmd: number) => `no reply from the unit to command 0x${hex2(cmd
 export const FOLDER = '/mods'
 export const DEPTH = 3                 // folders below FOLDER the route reaches (the loader's DL_DEPTH)
 export const MKDIR = '.dir'            // an upload to FOLDER/.dir makes FOLDER (the loader's DL_MKDIR)
+export const MOVE = '.mv'              // an upload of "FROM\nTO" to .mv moves FROM to TO (the loader's DL_MOVE)
+export const NAME_MAX = 127, SEG_MAX = 63   // a path below FOLDER, one name in it, in bytes (DL_NAME_MAX, DL_SEG_MAX)
+const parentOf = (p: string) => { const i = p.lastIndexOf('/'); return i < 0 ? '' : p.slice(0, i) }
+const baseOf = (p: string) => p.slice(p.lastIndexOf('/') + 1)
 
 export class RpcError extends ModError {}
 
@@ -247,5 +251,42 @@ export class Mods {
     const i = sub.lastIndexOf('/'), parent = i < 0 ? '' : sub.slice(0, i), name = sub.slice(i + 1)
     if (!(await this.ls(parent)).some(([n, kind]) => n === name && kind === 1))
       throw new ModError(`the unit did not make ${this.folderPath(sub)} (see ${this.folder}/.status)`)
+  }
+
+  private async lsOrNone(sub: string): Promise<Entry[]> {
+    try { return await this.ls(sub) } catch (e) { if (e instanceof RpcError) return []; throw e }
+  }
+
+  /** `sub` (below the folder) is a folder on the unit. datarpc.Mods.is_folder. */
+  async isFolder(sub: string): Promise<boolean> {
+    return !!sub && (await this.lsOrNone(parentOf(sub))).some(([n, kind]) => n === baseOf(sub) && kind === 1)
+  }
+
+  /** Move or rename the file or folder `from` to `to` (paths below the folder; a folder's files and folders go with
+   * it), as one upload of "FROM\nTO" to `.mv`. The route keeps /mods/active's lines naming them, refuses a name already
+   * there, and keeps the depth and name rules; it can't refuse once the upload is in, so the listings say whether it
+   * moved. `folder`: whether from is a folder (undefined: look in its parent). datarpc.Mods.move. */
+  async move(from: string, to: string, head: container.Head, folder?: boolean): Promise<void> {
+    from = from.replace(/^\/+|\/+$/g, ''); to = to.replace(/^\/+|\/+$/g, '')
+    if (folder === undefined) folder = await this.isFolder(from)
+    for (const p of [from, to]) {
+      const parts = p.split('/')
+      if (!p || parts.some(q => !q || q.startsWith('.') || latin1(q).length > SEG_MAX) || latin1(p).length > NAME_MAX)
+        throw new ModError(`${repr(p)} is not a name in ${this.folder}`)
+    }
+    if (from === to) throw new ModError(`${from} is already ${to}`)
+    if (folder) {
+      if (to.startsWith(from + '/')) throw new ModError(`${this.folderPath(from)} can't go into itself`)
+      if (to.split('/').length > DEPTH) throw new ModError(`folders go ${DEPTH} deep below ${this.folder}`)
+    } else if (!(from.endsWith('.elemod') && to.endsWith('.elemod') && baseOf(to).length > 7)) {
+      throw new ModError(`a mod file is moved to a .elemod name (${repr(to)})`)
+    } else if (to.split('/').length - 1 > DEPTH) {
+      throw new ModError(`${repr(to)} is not a file name in ${this.folder}`)
+    }
+    await this.put(MOVE, latin1(`${from}\n${to}`), head)
+    const there = (await this.lsOrNone(parentOf(to))).some(([n, kind]) => n === baseOf(to) && kind === (folder ? 1 : 2))
+    const gone = !(await this.lsOrNone(parentOf(from))).some(([n]) => n === baseOf(from))
+    if (!there || !gone)
+      throw new ModError(`the unit did not move ${this.folder}/${from} to ${this.folder}/${to} (see ${this.folder}/.status)`)
   }
 }

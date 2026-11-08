@@ -17,8 +17,10 @@
 /* std::string: copy-on-write, one pointer to the chars */
 #define STR_NEW ((void (*)(void *, const char *, void *))0x401bcff0)
 #define STR_EMPTY 0x419f2a0cu                  /* the empty string, never freed */
+#ifndef DL_HOST_FS                             /* tests/drive_move_host.c: its own heap and ekFS */
 #define NEW ((void *(*)(unsigned))0x40082a40)  /* operator new */
 #define DELETE ((void (*)(void *))0x40082a4c)  /* operator delete */
+#endif
 
 /* ekFS's Directory (0x130 bytes) */
 #define DIR_NEW ((void (*)(void *, const char *, int))0x4007ed48)
@@ -120,6 +122,14 @@ static int same(const char *a, const char *b)
     return *a == *b;
 }
 
+/* the first n bytes of a and b are the same */
+static int same_n(const char *a, const char *b, unsigned n)
+{
+    while (n && *a == *b)
+        a++, b++, n--;
+    return !n;
+}
+
 static int ends(const char *s, const char *tail)
 {
     unsigned n = len(s), k = len(tail);
@@ -180,7 +190,9 @@ static void set_str(unsigned char *slot, const char *msg)
 
 /* a closure: what the function is for and the file's name; on the heap, as
  * stock's are, so the router may copy and destroy entries as it likes */
-enum { C_FILE = 1, C_BUILD, C_STATUS, C_DIR, C_MKDIR };
+enum { C_FILE = 1, C_BUILD, C_STATUS, C_DIR, C_MKDIR, C_MOVE };
+#define MAX_ENTRIES 2000                     /* ekFS's entries in one folder: stock's rename doesn't check */
+#define MOVE_MAX (2 * (DL_NAME_MAX + 1))    /* a .mv upload: "FROM\nTO\n" */
 struct clo {
     int what;
     int reading;                          /* set by the fill: counted in dl_reads */
@@ -320,13 +332,13 @@ void dl_fill(void **f)
 unsigned dl_hdr(unsigned char *res, void **f, const unsigned char *h)
 {
     const char *why = 0;
-    (void)f;
+    const struct clo *c = *f;
     zero(res, 12);
     if (be32(h + H_TYPE) != EMOD)
         why = "Invalid file type";
     else if (h[H_COMPRESSED])
         why = "Compressed uploads are not supported";
-    else if (be32(h + H_PAYLOAD) > DL_STAGING_SIZE)
+    else if (be32(h + H_PAYLOAD) > (c->what == C_MOVE ? MOVE_MAX : DL_STAGING_SIZE))
         why = "Invalid payload size";
     else if (dl_staging_owner)
         why = "Busy: the loader is using /mods";
@@ -342,6 +354,9 @@ unsigned dl_hdr(unsigned char *res, void **f, const unsigned char *h)
 }
 
 static int make_folder(const char *rel);
+extern volatile unsigned dl_fs_gen;
+extern volatile int dl_move_seen;
+static const char *move(unsigned n);
 
 /* +0x4c: after an upload (the header) or a Clear (0). An upload goes to
  * <name>.tmp, then over <name>. It can't refuse: a failure is noted for
@@ -357,6 +372,22 @@ void dl_change(void **f, const unsigned char *h)
         path_of(path, c->name, "");
         dl_lock();
         note(dl_fs_rmdir(path) ? "rmdir failed (not empty?):" : "removed", c->name);
+        dl_fs_gen++;
+        dl_unlock();
+        return;
+    }
+    if (c->what == C_MOVE) {               /* an upload of "FROM\nTO" to .mv: move or rename, writing no file */
+        const char *why;
+        if (!h)
+            return;
+        dl_lock();
+        n = be32(h + H_PAYLOAD);
+        if (dl_staging_owner || n > MOVE_MAX || dl_upload_epoch != dl_staging_epoch)
+            note("move dropped:", "");
+        else if ((why = move(n)) != 0)
+            note("move:", why);
+        else
+            note("moved to", (const char *)drive_staging + len((const char *)drive_staging) + 1);
         dl_unlock();
         return;
     }
@@ -364,6 +395,7 @@ void dl_change(void **f, const unsigned char *h)
         if (h) {
             dl_lock();
             note(make_folder(c->name) ? "mkdir failed:" : "made", c->name);
+            dl_fs_gen++;
             dl_unlock();
         }
         return;
@@ -374,6 +406,7 @@ void dl_change(void **f, const unsigned char *h)
     dl_lock();
     if (!h) {
         note(dl_fs_delete(path) ? "delete failed:" : "deleted", c->name);
+        dl_fs_gen++;
         dl_unlock();
         return;
     }
@@ -403,6 +436,7 @@ void dl_change(void **f, const unsigned char *h)
     } else {
         note("saved", c->name);
     }
+    dl_fs_gen++;
     dl_unlock();
 }
 
@@ -533,6 +567,221 @@ static int make_folder(const char *rel)
     return is_folder(rel) ? 0 : -1;
 }
 
+/* What is under DL_DIR "/" rel: how many folder levels (0: no folder in it), to DL_DEPTH + 1 at
+ * most, and the longest path below it past rel's own length (0: empty). Under dl_lock. */
+static void measure(const char *rel, int at, int *levels, unsigned *longest)
+{
+    char sub[DL_NAME_MAX + 1];
+    struct dl_ent *ents;
+    int n, i;
+    unsigned a = len(rel);
+    *levels = 0;
+    *longest = 0;
+    if (at > DL_DEPTH + 1)
+        return;
+    n = dl_list_dir(rel, 0, 0);
+    ents = heap_ents(n);
+    n = dl_list_dir(rel, ents, n);
+    for (i = 0; i < n; i++) {
+        unsigned b = len(ents[i].name), here = 1 + b, l = 0;
+        int d = 0;
+        if (here > *longest)
+            *longest = here;
+        if (!ents[i].dir || a + 1 + b > DL_NAME_MAX)
+            continue;
+        copy(sub, rel, a);
+        sub[a] = '/';
+        copy(sub + a + 1, ents[i].name, b + 1);
+        measure(sub, at + 1, &d, &l);
+        if (1 + d > *levels)
+            *levels = 1 + d;
+        if (here + l > *longest)
+            *longest = here + l;
+    }
+    DELETE(ents);
+}
+
+/* the last move, for the MODS page (page.c dl_page_moved): the page renames its own files and its
+ * open folder after it, and re-reads the folder, at its next tick. dl_fs_gen counts every change
+ * the route makes, so the page re-reads after an upload, a delete or a new folder too. A move
+ * waits for the page to have taken the last one (dl_move_seen). Under dl_lock. */
+volatile unsigned dl_fs_gen;
+volatile int dl_move_seen = 1;
+char dl_move_from[DL_NAME_MAX + 1], dl_move_to[DL_NAME_MAX + 1];
+
+/* /mods/active with every line naming FROM, or a file below it, naming TO instead (moved_name),
+ * written as an upload's commit is: to active.tmp, then over active. Under dl_lock. -> 0 (also
+ * when there is no active, or nothing in it moved), or -1 */
+static int keep_active(const char *from, const char *to)
+{
+    char path[DL_PATH_MAX], tmp[DL_PATH_MAX], name[DL_NAME_MAX + 1];
+    char *text, *out;
+    dl_file fl;
+    int size, n = 0, r = 0, changed = 0;
+    unsigned i = 0, o = 0;
+    path_of(path, "active", "");
+    path_of(tmp, "active", ".tmp");
+    size = dl_fs_file_size(path);
+    if (size <= 0)
+        return 0;
+    text = NEW((unsigned)size + 1);
+    if (!text)
+        return -1;
+    if (dl_fs_open(&fl, path, 0) == 0)
+        n = dl_fs_read(&fl, text, (unsigned)size);
+    dl_fs_close(&fl);
+    for (i = 0, o = 1; n == size && i < (unsigned)n; i++)
+        o += text[i] == '\n';
+    out = n == size ? NEW((unsigned)size + o * DL_NAME_MAX) : 0;   /* each line's name may grow */
+    if (!out) {
+        DELETE(text);
+        return -1;
+    }
+    i = o = 0;
+    while (i < (unsigned)n) {                /* each line: the name before its last run of blanks */
+        unsigned s = i, e = i, cut, ne;
+        while (e < (unsigned)n && text[e] != '\n')
+            e++;
+        for (cut = e; cut > s && text[cut - 1] != ' ' && text[cut - 1] != '\t'; cut--)
+            ;
+        for (ne = cut; ne > s && (text[ne - 1] == ' ' || text[ne - 1] == '\t' || text[ne - 1] == '\r'); ne--)
+            ;
+        while (s < ne && (text[s] == ' ' || text[s] == '\t'))
+            s++;
+        if (cut > i && text[s] != '#' && ne > s && moved_name(name, text + s, ne - s, from, to)) {
+            unsigned k = len(name);
+            copy(out + o, text + i, s - i);
+            o += s - i;
+            copy(out + o, name, k);
+            o += k;
+            copy(out + o, text + ne, e - ne);
+            o += e - ne;
+            changed = 1;
+        } else {
+            copy(out + o, text + i, e - i);
+            o += e - i;
+        }
+        if (e < (unsigned)n)
+            out[o++] = '\n';
+        i = e + 1;
+    }
+    DELETE(text);
+    if (changed) {
+        r = dl_fs_open(&fl, tmp, 1) || dl_fs_write(&fl, out, o) ? -1 : 0;
+        dl_fs_close(&fl);
+        if (!r && dl_fs_file_size(tmp) != (int)o)
+            r = -1;
+        if (!r) {
+            dl_fs_delete(path);
+            r = dl_fs_rename(tmp, path);
+        } else
+            dl_fs_delete(tmp);
+    }
+    DELETE(out);
+    return r;
+}
+
+/* Stock's rename (0x4007bcd2: a link, then an unlink) moves a file to any folder, but a folder only
+ * within its own parent: it keeps the folder's "..". So a folder going to another parent is made
+ * there (stock's mkdir), its files moved into it one by one and its folders likewise, and the
+ * emptied folder removed, as SAMPLES' MOVE moves each item. A failure part way leaves what moved
+ * where it went. Under dl_lock. -> 0, or -1 */
+static int move_tree(const char *from, const char *to, int dir)
+{
+    char a[DL_PATH_MAX], b[DL_PATH_MAX], f2[DL_NAME_MAX + 1], t2[DL_NAME_MAX + 1];
+    struct dl_ent *ents;
+    unsigned fa = len(from), ta = len(to), i, k;
+    int n, j, r = 0;
+    path_of(a, from, "");
+    path_of(b, to, "");
+    for (i = fa; i && from[i - 1] != '/'; i--)
+        ;
+    for (k = ta; k && to[k - 1] != '/'; k--)
+        ;
+    if (!dir || (i == k && same_n(from, to, i)))
+        return dl_fs_rename(a, b);       /* a file anywhere, or a folder in its own parent */
+    if (dl_fs_mkdir(b))
+        return -1;
+    n = dl_list_dir(from, 0, 0);
+    ents = heap_ents(n);
+    n = dl_list_dir(from, ents, n);
+    for (j = 0; j < n && !r; j++) {
+        unsigned q = len(ents[j].name);
+        if (fa + 1 + q > DL_NAME_MAX || ta + 1 + q > DL_NAME_MAX) {
+            r = -1;
+            break;
+        }
+        copy(f2, from, fa);
+        f2[fa] = '/';
+        copy(f2 + fa + 1, ents[j].name, q + 1);
+        copy(t2, to, ta);
+        t2[ta] = '/';
+        copy(t2 + ta + 1, ents[j].name, q + 1);
+        r = move_tree(f2, t2, ents[j].dir);
+    }
+    DELETE(ents);
+    return r ? r : dl_fs_rmdir(a);
+}
+
+/* The move a .mv upload asks for: the staging buffer's n bytes, "FROM\nTO" (a last "\n" may
+ * follow), paths below DL_DIR. Stock's rename moves the file or folder (README, "The /mods
+ * route"), then /mods/active follows it (keep_active), and the MODS page at its next tick. The
+ * staging buffer keeps the two names, NUL-ended, for the note. Under dl_lock. -> 0, or the
+ * refusal */
+static const char *move(unsigned n)
+{
+    char *from = (char *)drive_staging, *to = 0, a[DL_PATH_MAX], b[DL_PATH_MAX];
+    char parent[DL_NAME_MAX + 1];
+    const char *why;
+    unsigned i, k, longest = 0;
+    int dir, levels = 0;
+    if (n && from[n - 1] == '\n')
+        n--;
+    for (i = 0; i < n; i++) {
+        if (!from[i])
+            return "Invalid name";
+        if (from[i] == '\n' && !to) {
+            from[i] = 0;
+            to = from + i + 1;
+        }
+    }
+    if (!to)
+        return "Invalid name";
+    from[n] = 0;
+    if (rel_folders(from) < 0 || rel_folders(to) < 0)
+        return "Invalid name";
+    if (!dl_move_seen)
+        return "Busy: the MODS page";
+    path_of(a, from, "");
+    path_of(b, to, "");
+    dir = dl_fs_file_size(a) < 0;
+    if (dir && !is_folder(from))
+        return "Not there";
+    if (dir)
+        measure(from, rel_folders(from) + 1, &levels, &longest);
+    why = move_why(from, to, dir, levels, longest);
+    if (why)
+        return why;
+    if (dl_fs_file_size(b) >= 0 || is_folder(to))
+        return "Already there";
+    k = len(to);
+    while (k && to[k - 1] != '/')
+        k--;
+    copy(parent, to, k ? k - 1 : 0);
+    parent[k ? k - 1 : 0] = 0;
+    if (parent[0] && !is_folder(parent))
+        return "No such folder";
+    if (dl_list_dir(parent, 0, 0) >= MAX_ENTRIES)
+        return "Folder full";
+    if (move_tree(from, to, dir))
+        return "move failed (see the listings)";
+    copy(dl_move_from, from, len(from) + 1);
+    copy(dl_move_to, to, len(to) + 1);
+    dl_move_seen = 0;
+    dl_fs_gen++;
+    return keep_active(from, to) ? "moved, but active not rewritten" : 0;
+}
+
 /* /mods/<name>: expected<entry, string>, 0x84 bytes: {u8 has_value, string
  * error +4, entry +8}. caps[0] is the name. It runs at a ReadOpen, a
  * WriteOpen, an upload's first chunk and a Clear, and can't tell which. */
@@ -568,6 +817,15 @@ unsigned dl_entry(unsigned char *res, void **f, void **caps)
         c.what = C_STATUS;
     } else if (dl_staging_owner) {
         why = "Busy: the loader is using /mods";
+    } else if (same(name, DL_MOVE) && !dl_move_seen) {
+        why = "Busy: the MODS page";      /* it hasn't taken the last move yet: try again */
+    } else if (same(name, DL_MOVE)) {      /* .mv: an upload of "FROM\nTO" moves or renames */
+        put32(e + E_TYPE, EMOD);
+        put32(e + E_ADDR, (unsigned)drive_staging);
+        perm = P_WRITE;
+        size = 0;
+        c.what = C_MOVE;
+        copy(c.name, name, len(name) + 1);
     } else if (mkdir_of(name)) {           /* FOLDER/.dir: an upload of it makes FOLDER */
         char path[DL_PATH_MAX];
         name[mkdir_of(name)] = 0;
@@ -635,7 +893,7 @@ made:
     put32(e + E_VERSION, 2);
     if (c.what == C_DIR)
         set_fn(e + E_CHANGE, &c, dl_change);
-    if (c.what == C_MKDIR) {
+    if (c.what == C_MKDIR || c.what == C_MOVE) {
         set_fn(e + E_PRE, &c, dl_pre_inv);
         set_fn(e + E_CHANGE, &c, dl_change);
         set_fn(e + E_HEADER, &c, dl_hdr_inv);
@@ -675,6 +933,7 @@ static void folder_item(unsigned char *it, int index, const char *name)
 }
 
 /* The entries of DL_DIR "/" rel (route.c's one Directory object, under dl_lock). */
+#ifndef DL_HOST_FS
 int dl_list_dir(const char *rel, struct dl_ent *out, int max)
 {
     int i, n, k = 0;
@@ -708,6 +967,7 @@ int dl_list_dir(const char *rel, struct dl_ent *out, int max)
     DIR_DEL(dl_dir_obj);
     return k;
 }
+#endif
 
 /* DL_DIR "/" rel's folders (above DL_DEPTH only) and files as items from `at` (0: count only),
  * under dl_lock; `folders` is rel's depth. -> how many */

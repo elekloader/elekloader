@@ -23,6 +23,8 @@ static int ends(const char *s, const char *tail)
 
 int main(void)
 {
+    (void)move_why;                         /* the move's checks: tests/drive_move_host.c runs them */
+    (void)moved_name;
     char line[512], out[DL_NAME_MAX + 1];
     while (fgets(line, sizeof line, stdin)) {
         const char *v[16];

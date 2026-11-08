@@ -18,6 +18,7 @@
 #define DL_DEPTH 3                     /* folders below DL_DIR, at most (decided 2026-11-08) */
 #define DL_PATH_MAX 144                /* DL_DIR "/" path ".tmp", with the NUL */
 #define DL_MKDIR ".dir"                /* an upload to FOLDER "/" DL_MKDIR makes FOLDER (names.inc) */
+#define DL_MOVE ".mv"                  /* an upload of "FROM\nTO" to DL_DIR "/" DL_MOVE moves or renames (names.inc) */
 
 /* stock's ekFS file object (0x2c bytes, ctor 0x4007dcfa), kept opaque, then the
  * loader's own: the files carry a 16-byte header (README, "Files on the +Drive") */
