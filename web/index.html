@@ -29,6 +29,8 @@
       <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M13.5 3.5 6.5 13h5l-1 7.5 7-9.5h-5z"/></svg>Build Firmware<span class="badge" id="nav-count">0</span></a>
     <a class="nav-link" id="nav-make" href="#make">
       <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8zM18.5 15.5l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7z"/></svg>Make your own mod!</a>
+    <a class="nav-link" id="nav-splash" href="#splash">
+      <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="18" height="12" rx="2"/><path d="M7 14.5 10 11l2.5 2.5L14.5 11l2.5 3.5"/></svg>Splash screen maker</a>
     <a class="nav-link" id="nav-submit" href="#submit">
       <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5M5 15v3.5A1.5 1.5 0 0 0 6.5 20h11a1.5 1.5 0 0 0 1.5-1.5V15"/></svg>Submit your mod</a>
     <a class="nav-link" id="nav-contribute" href="#contribute">
@@ -116,6 +118,7 @@
         <option value="name">Name</option>
         <option value="device">Device</option>
       </select>
+      <a class="btn outline small" href="#splash" title="Your own picture or animation on the boot screen, made into a mod here">Make a splash screen</a>
       <button type="button" class="btn outline small" id="add-mods">+ Add your own .elemod</button>
       <input type="file" id="mod-files" accept=".elemod,.dtmod" multiple hidden>
     </div>
@@ -341,6 +344,8 @@ python -m elekloader.patch --stock Digitakt_OS1.53.syx --mod mods/core/out/core-
           writes the code, checks it on your computer, and builds a firmware file you can try on your unit. This page
           is what a mod is, what you need, what to ask, and what to expect.</p>
       </header>
+      <p class="callout">Just want your own picture on the boot screen? The <a href="#splash">Splash screen maker</a>
+        makes that mod right here, from a PNG or a GIF, with no agent and no setup.</p>
 
       <h2>What is a mod?</h2>
       <p>A mod is a small file (<code>.elemod</code>) that adds something to your Elektron's operating system: a new
@@ -417,6 +422,122 @@ python -m elekloader.patch --stock Digitakt_OS1.53.syx --mod mods/core/out/core-
       </ul>
       <p class="next">Next: <a href="#submit">Submit your mod</a></p>
     </article>
+  </section>
+
+  <!-- the Splash screen maker (splash.js, loaded when the view first opens; gif.js decodes GIFs) -->
+  <section class="view" id="view-splash" aria-labelledby="splash-title" hidden>
+    <header class="page-head">
+      <p class="eyebrow">No coding needed</p>
+      <h1 id="splash-title">Splash screen maker</h1>
+      <p class="sub">Put your own picture or animation on the boot screen. Drop in a PNG or a GIF, adjust it until the
+        preview looks right, and it becomes a mod: add it to your build like any other. For the Digitakt and the
+        Digitone / Digitone Keys. Your picture stays in this tab: nothing is uploaded.</p>
+    </header>
+    <div class="splash-grid">
+      <div class="col">
+        <section class="step" aria-labelledby="sp-h1">
+          <h2 id="sp-h1"><span class="n">01</span>Your picture</h2>
+          <div class="drop mini" id="sp-drop" tabindex="0" role="button" aria-describedby="sp-drop-text">
+            <svg class="drop-ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="14" rx="2"/><circle cx="9" cy="10" r="1.8"/><path d="m20.5 16-5-5-8 8"/></svg>
+            <span id="sp-drop-text"><strong>Drop a PNG or a GIF here</strong>, or click to choose one. JPEG and WebP work
+              too. An animated GIF plays as it does in a browser.</span>
+          </div>
+          <input type="file" id="sp-file" accept="image/png,image/gif,image/jpeg,image/webp,.png,.gif,.jpg,.jpeg,.webp" hidden>
+          <p class="bad small" id="sp-error" role="alert" hidden></p>
+          <p class="muted small" id="sp-source" hidden></p>
+          <p class="small"><button type="button" class="linkish muted" id="sp-sample">No picture handy? Try a sample.</button></p>
+        </section>
+
+        <section class="step sp-preview-step" aria-labelledby="sp-h2">
+          <h2 id="sp-h2"><span class="n">02</span>Preview<span class="tally" id="sp-tally"></span></h2>
+          <div class="oled" id="sp-oled">
+            <canvas id="sp-screen" width="128" height="64" role="img" aria-label="The boot screen, as your unit will show it"></canvas>
+            <p class="oled-empty" id="sp-empty">Your picture appears here, 128 × 64 pixels in black and white, as the
+              screen shows it.</p>
+          </div>
+          <div class="sp-player" id="sp-player" hidden>
+            <button type="button" class="btn outline small" id="sp-play" aria-pressed="true">Pause</button>
+            <input type="range" id="sp-scrub" min="0" max="0" step="1" value="0" aria-label="Position in the animation">
+            <span class="mono small muted" id="sp-time"></span>
+          </div>
+          <p class="muted small" id="sp-facts"></p>
+          <p class="warn small" id="sp-warn" hidden></p>
+        </section>
+      </div>
+
+      <div class="col">
+        <section class="step" aria-labelledby="sp-h3">
+          <h2 id="sp-h3"><span class="n">03</span>Adjust<button type="button" class="btn outline small sp-reset" id="sp-reset">Reset</button></h2>
+          <div class="sp-controls" id="sp-controls">
+            <fieldset class="sp-group">
+              <legend>Fit</legend>
+              <div class="seg" role="radiogroup" aria-label="Fit">
+                <label><input type="radio" name="sp-fit" value="fit" checked><span>Fit</span></label>
+                <label><input type="radio" name="sp-fit" value="fill"><span>Fill</span></label>
+                <label><input type="radio" name="sp-fit" value="stretch"><span>Stretch</span></label>
+              </div>
+            </fieldset>
+            <label class="sp-range">Zoom <output id="sp-zoom-v">100%</output>
+              <input type="range" id="sp-zoom" min="25" max="400" step="5" value="100"></label>
+            <label class="sp-range">Move left / right <output id="sp-dx-v">0</output>
+              <input type="range" id="sp-dx" min="-128" max="128" step="1" value="0"></label>
+            <label class="sp-range">Move up / down <output id="sp-dy-v">0</output>
+              <input type="range" id="sp-dy" min="-64" max="64" step="1" value="0"></label>
+            <fieldset class="sp-group">
+              <legend>Black and white</legend>
+              <div class="seg" role="radiogroup" aria-label="How shades become black and white">
+                <label><input type="radio" name="sp-dither" value="threshold" checked><span>Sharp</span></label>
+                <label><input type="radio" name="sp-dither" value="floyd"><span>Dither</span></label>
+                <label><input type="radio" name="sp-dither" value="atkinson"><span>Atkinson</span></label>
+                <label><input type="radio" name="sp-dither" value="bayer"><span>Pattern</span></label>
+              </div>
+            </fieldset>
+            <label class="sp-range">Threshold <output id="sp-threshold-v">128</output>
+              <input type="range" id="sp-threshold" min="1" max="254" step="1" value="128"></label>
+            <label class="sp-range">Brightness <output id="sp-bright-v">0</output>
+              <input type="range" id="sp-bright" min="-100" max="100" step="1" value="0"></label>
+            <label class="sp-range">Contrast <output id="sp-contrast-v">0</output>
+              <input type="range" id="sp-contrast" min="-100" max="100" step="1" value="0"></label>
+            <div class="sp-checks">
+              <label><input type="checkbox" id="sp-invert"> Invert</label>
+              <label><input type="checkbox" id="sp-bgwhite"> Transparent parts lit</label>
+            </div>
+            <div class="sp-anim" id="sp-anim" hidden>
+              <label class="sp-range">Speed <output id="sp-speed-v">1×</output>
+                <input type="range" id="sp-speed" min="0" max="8" step="1" value="4"></label>
+              <div class="sp-checks">
+                <label><input type="checkbox" id="sp-loop" checked> Loop</label>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="step" aria-labelledby="sp-h4">
+          <h2 id="sp-h4"><span class="n">04</span>Make the mod</h2>
+          <div class="sp-out">
+            <label class="field">Its name
+              <input id="sp-title" maxlength="40" placeholder="My splash" autocomplete="off"></label>
+            <label class="field"><span>Your name <span class="muted">(optional)</span></span>
+              <input id="sp-author" maxlength="60" autocomplete="off"></label>
+            <label class="field">For
+              <select id="sp-target"></select></label>
+          </div>
+          <p class="muted small" id="sp-target-note"></p>
+          <div class="sheet-acts">
+            <button type="button" class="btn primary" id="sp-add" disabled>Add to my build</button>
+            <button type="button" class="btn outline" id="sp-download" disabled>Download .elemod</button>
+          </div>
+          <p class="small" id="sp-status" role="status"></p>
+          <div class="recovery sp-note">
+            <h3>Good to know</h3>
+            <p>Your splash is shown while the unit starts up, in place of Elektron's intro animation: about 3.3
+              seconds, at 15 frames a second. Then the screen carries on as usual. It needs the core mod, which comes
+              with it, and only one splash mod can go in a build.</p>
+            <p>To go back, build without it, or send Elektron's own OS file to your unit.</p>
+          </div>
+        </section>
+      </div>
+    </div>
   </section>
 
   <section class="view" id="view-submit" aria-labelledby="submit-title" hidden>

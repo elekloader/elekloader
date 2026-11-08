@@ -17,6 +17,8 @@ docs match its code.
   Mod Menu, say).
 - **[The web page](WEB.md)**: elekloader in your browser, its mod shop, and
   how the shop's list is kept.
+- **[The Splash screen maker](SPLASH.md)**: your own picture or GIF on the
+  boot screen of a Digitakt or Digitone, made into a mod in the web page.
 
 ## Writing mods
 

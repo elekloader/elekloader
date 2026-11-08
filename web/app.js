@@ -1040,7 +1040,7 @@ function toast(text) {
 // ---- the frame: the three views, your setup, the counts ----
 
 const view = () => location.hash === '#build' ? 'build' : location.hash === '#submit' ? 'submit'
-  : location.hash === '#make' ? 'make'
+  : location.hash === '#make' ? 'make' : location.hash === '#splash' ? 'splash'
   : /^#contribute(\/|$)/.test(location.hash) ? 'contribute' : 'library';
 // Contribute's pages: #contribute is the overview, #contribute/<page> the others (index.html, cp-<page>)
 const CPAGES = ['overview', 'start', 'core', 'pr', 'test'];
@@ -1051,7 +1051,7 @@ const cpage = () => {
 
 function route() {
   const v = view(), cp = cpage();
-  for (const n of ['library', 'build', 'make', 'submit', 'contribute']) $('view-' + n).hidden = v !== n;
+  for (const n of ['library', 'build', 'make', 'splash', 'submit', 'contribute']) $('view-' + n).hidden = v !== n;
   for (const p of CPAGES) $('cp-' + p).hidden = p !== cp;
   for (const a of document.querySelectorAll('[data-cpage]')) {
     a.classList.toggle('on', v === 'contribute' && a.dataset.cpage === cp);
@@ -1060,13 +1060,49 @@ function route() {
   }
   $('nav-csub').hidden = v !== 'contribute';
   const page = v === 'contribute' && cp !== 'overview' ? $('cp-' + cp).querySelector('h1').textContent : null;
-  document.title = (page || { build: 'Build Firmware', make: 'Make your own mod!', submit: 'Submit your mod', contribute: 'Contribute', library: 'Mod Shop' }[v]) + ' · elekloader';
+  document.title = (page || { build: 'Build Firmware', make: 'Make your own mod!', splash: 'Splash screen maker', submit: 'Submit your mod', contribute: 'Contribute', library: 'Mod Shop' }[v]) + ' · elekloader';
+  if (v === 'splash') openSplash();
   $('content').scrollTop = 0;
   $('topbar').classList.remove('solid');
   window.scrollTo(0, 0);
   renderLibrary();
   renderChrome();
   if (v === 'contribute' && cp === 'overview') renderTodo();
+}
+
+// ---- the Splash screen maker (splash.js, loaded the first time its view opens) ----
+
+let splashUi = null, splashLoading = null;
+function openSplash() {
+  if (splashUi) { splashUi.refresh(); return; }
+  if (splashLoading) return;
+  splashLoading = import(site('./splash.js')).then(mod => {
+    splashUi = mod.mount({
+      engine,
+      info: () => (st.ready ? st.info : null),
+      // the device and OS of the stock file in use, else of the current profile
+      target: () => {
+        if (dev()) return { device: dev().key, os: st.stock.os, name: dev().name };
+        const p = cur();
+        return p && p.device && p.os ? { device: p.device, os: p.os, name: deviceName(p.device) } : null;
+      },
+      // the made .elemod, added as a file of yours (ticked when it is for the stock file in use)
+      add: async (name, data) => {
+        if (st.busy) return { ok: false, error: 'Wait for the build to finish.' };
+        const r = await addMod(name, data);
+        if (!r.ok) return r;
+        await refresh();
+        remember();
+        changed();
+        return { ok: true, ticked: st.enabled.has(r.mod.path) };
+      },
+      toast,
+    });
+    splashUi.refresh();
+  }).catch(e => {
+    splashLoading = null;
+    note('The Splash screen maker did not load: ' + e.message);
+  });
 }
 
 // ---- Contribute: the leaderboard (shop/claims.json) and the to-do list for the core (shop/bounties.json) ----
@@ -1212,7 +1248,9 @@ function renderChrome() {
     $(id).textContent = String(n);
     $(id).classList.toggle('on', n > 0);
   }
+  if (splashUi) splashUi.refresh();
   for (const [id, on] of [['nav-library', v === 'library'], ['nav-build', build], ['nav-make', v === 'make'],
+    ['nav-splash', v === 'splash'],
     ['nav-submit', v === 'submit'], ['nav-contribute', v === 'contribute'], ['tab-library', v === 'library'],
     ['tab-build', build], ['tab-make', v === 'make'], ['tab-submit', v === 'submit'],
     ['tab-contribute', v === 'contribute']]) {
@@ -1355,6 +1393,7 @@ async function boot() {
     $('engine').classList.add('ok');
     renderAbout(r);
     st.ready = true;
+    if (splashUi) splashUi.refresh();  // what the Splash screen maker can make
     renderLibrary();                   // its devices, and its Add buttons on
   } catch (e) {
     $('engine').textContent = 'The build engine did not load: ' + e.message;

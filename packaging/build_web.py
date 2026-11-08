@@ -76,7 +76,7 @@ PYODIDE_URL = ('https://github.com/pyodide/pyodide/releases/download/%s/pyodide-
 # what the page needs: the loader, the runtime, the standard library, the lock file
 PYODIDE_FILES = ('pyodide.mjs', 'pyodide.asm.mjs', 'pyodide.asm.wasm', 'python_stdlib.zip',
                  'pyodide-lock.json')
-WEB_FILES = ('index.html', 'style.css', 'app.js', 'worker.js', 'bridge.py')
+WEB_FILES = ('index.html', 'style.css', 'app.js', 'worker.js', 'bridge.py', 'splash.js', 'gif.js')
 # licences under which the site may pass a mod on (SPDX identifiers)
 SHOP_LICENCES = {'GPL-2.0', 'GPL-2.0-only', 'GPL-2.0-or-later', 'GPL-3.0', 'GPL-3.0-only',
                  'GPL-3.0-or-later', 'LGPL-2.1-or-later', 'LGPL-3.0-or-later', 'MIT',

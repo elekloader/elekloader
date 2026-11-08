@@ -1781,6 +1781,74 @@ def test_authors_can_opt_out_of_automatic_updates():
     assert submit_mod.release_text(publish.release_notes('A.', '', False)) == {'summary': 'A.', 'auto_update': False}
 
 
+def test_the_splash_maker_writes_a_mod_the_loader_takes():
+    from elekloader import splash
+    rows = [[(x + y) % 3 == 0 for x in range(128)] for y in range(64)]
+    f0 = splash.pack(rows)
+    assert len(f0) == 1024 and splash.unpack(f0) == [[int(v) for v in r] for r in rows]
+    # the panel's layout: (0, 0) is page 7's bit 0, (127, 63) page 0's bit 7
+    one = [[0] * 128 for _ in range(64)]
+    one[0][0] = one[63][127] = 1
+    assert splash.pack(one)[7] == 1 and splash.pack(one)[8 * 127] == 0x80
+    f1 = bytes(1024)
+    for t in splash.targets():
+        doc = splash.make([f0, f1], [0, 0, 1], device=t['device'], os=t['os'], title='  My  logo ',
+                          loop=False, source='logo.gif')
+        raw = splash.dumps(doc)
+        m = link.Mod2(json.loads(raw), 'splash')
+        assert m.id == 'splash' and (m.dev.key, m.rel.version) == (t['device'], t['os'])
+        assert doc['title'] == 'My logo' and doc['exports'] == ['splash_diff', 'splash_flush', 'splash_tick']
+        body = bytes.fromhex(doc['sections']['.run']['parts'][0][1])
+        code = splash.code(t['device'], t['os'])
+        assert body.startswith(code) and len(code) % 4 == 0
+        tab = splash.TABLES[(t['device'], t['os'])]
+        for k, at in splash.FIELDS.items():
+            assert int.from_bytes(body[at:at + 4], 'big') == tab[k]
+        d = body[len(code):]
+        n, pos, start, loop = struct.unpack('>4I', d[:16])
+        assert (n, pos, loop) == (3, 0, 0) and d[16:22] == bytes.fromhex('000000000001')
+        assert d[start:start + 1024] == f0 and d[start + 1024:] == f1
+        # every intro call to a present goes through the splash, and the timer's post
+        assert len(doc['sites']) == len(tab['diff_sites']) + len(tab['flush_sites']) + 1
+        assert [s['relocs'][0][2] for s in doc['sites']].count('sym:splash_tick') == 1
+        assert doc['sites'][-1]['addr'] == '0x%08x' % (tab['isr'] + splash.TICK_SITE)
+    for bad in (lambda: splash.make([], device='digitakt-mk1', os='1.54'),
+                lambda: splash.make([f0], [1], device='digitakt-mk1', os='1.54'),
+                lambda: splash.make([f0] * (splash.MAX_FRAMES + 1), device='digitakt-mk1', os='1.54'),
+                lambda: splash.make([f0], device='digitakt-mk1', os='1.52'),
+                lambda: splash.make([f0[:10]], device='digitone-mk1', os='1.44')):
+        try:
+            bad()
+            raise AssertionError('not refused')
+        except splash.SplashError:
+            pass
+    assert splash.file_name('digitone-mk1', '1.44') == 'splash-dn-os1.44.elemod'
+
+
+def test_the_splash_code_is_its_source_assembled():
+    """CODE is examples/splash/splash.s, when the cross assembler is there."""
+    import shutil
+    import subprocess
+    from elekloader import splash
+    asm = shutil.which('m68k-linux-gnu-as')
+    if not asm:
+        print('  skipped: no m68k-linux-gnu-as')
+        return
+    src = os.path.join(os.path.dirname(HERE), 'examples', 'splash', 'splash.s')
+    for t in splash.targets():
+        tab = splash.TABLES[(t['device'], t['os'])]
+        with tempfile.TemporaryDirectory() as d:
+            o = os.path.join(d, 's.o')
+            subprocess.run([asm, '-mcpu=54455', '-o', o, src] + [
+                a for k in ('ISR', 'FB', 'DIFF', 'FLUSH', 'POST')
+                for a in ('--defsym', '%s=0x%08x' % (k, tab[k.lower()]))], check=True)
+            b = os.path.join(d, 's.bin')
+            subprocess.run([asm.replace('-as', '-objcopy'), '-O', 'binary', '--only-section=.run', o, b],
+                           check=True)
+            with open(b, 'rb') as fh:
+                assert fh.read() == splash.code(t['device'], t['os'])
+
+
 if __name__ == '__main__':
     import traceback
     ok = failed = 0

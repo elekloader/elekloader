@@ -102,6 +102,25 @@ check('the check asks for the stock file first', !chk.ok && /stock firmware firs
 const b = JSON.parse(bridge.call('build', JSON.stringify({ enabled: [], version: '2.0a', name: 'x.syx' }), undefined, null));
 check('the build asks for the stock file first', !b.ok && /stock firmware first/.test(b.error), b.error);
 
+// the Splash screen maker (web/splash.js): its frames -> a mod the page adds as a file of yours
+const sp = info.splash || { targets: [] };
+check('the splash maker knows its devices', sp.targets.length >= 4 && sp.rate === 15,
+  sp.targets.map(t => `${t.device} ${t.os}`).join(', '));
+const frames = new Uint8Array(2048);
+frames.fill(0xff, 1024);
+for (const t of sp.targets) {
+  const m = call('make_splash', { device: t.device, os: t.os, sequence: [0, 1, 1], loop: true, title: 'Test splash',
+    source: 'logo.gif' }, frames);
+  const r = m.ok ? call('add_mod', { name: m.name }, new TextEncoder().encode(m.text)) : m;
+  check(`a splash for ${t.name} ${t.os}`, r.ok && r.mod.id === 'splash' && r.mod.title === 'Test splash',
+    r.ok ? `${m.name}, ${r.mod.sites.length} sites` : r.error);
+  if (r.ok) call('remove_mod', { path: r.mod.path });
+}
+const bad = call('make_splash', { device: 'digitakt-mk1', os: '1.54', sequence: [2] }, frames);
+check('a splash naming a frame it has not is refused', !bad.ok && /sequence names frames/.test(bad.error), bad.error);
+const torn = call('make_splash', { device: 'digitakt-mk1', os: '1.54' }, frames.subarray(0, 1000));
+check('torn frames are refused', !torn.ok, torn.error);
+
 // 3. the mod shop: every listed file is there, is the one listed, and loads
 let items = [];
 try { items = JSON.parse(readFileSync(join(SITE, 'shop', 'index.json'), 'utf8')); } catch { /* no shop */ }
