@@ -43,6 +43,16 @@
    "event": "ev_settings",
    "fn": "dl_settings",
    "order": 90
+  },
+  {
+   "event": "ev_key",
+   "fn": "dl_key",
+   "order": 1
+  },
+  {
+   "event": "ev_enc",
+   "fn": "dl_enc",
+   "order": 1
   }
  ],
  "resources": {

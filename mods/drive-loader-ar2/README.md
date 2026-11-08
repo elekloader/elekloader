@@ -199,6 +199,11 @@ The page is stock's two-pane file view, the one SAMPLES and PROJECTS are built o
   USB stay free between files (decided 2026-11-08: the CB11 unit run's LOAD of 18 files of 482 KB
   in one call held them for minutes). A box says `CHECKING n MODS`, and the result's box follows.
   Until it ends, the page's actions answer `BUSY: TRY AGAIN` and its background check waits.
+- **Keys first.** A file's check holds the UI task, and a key that arrives meanwhile waits for
+  it (analoghealth's remote keys expire after 2 s). So the background check and the save's
+  steps wait 2 s after any key or encoder turn (`ev_key`, `ev_enc`, taking nothing), each check
+  reads its file once (`dl_check_buf`), and long checks sleep 1 ms each 32 KB for the lower
+  tasks (`dl_breathe`).
 - **The boot's verdicts** come from the boot's own records, matched by file name
   (`dl_boot_choice`), so a second file with a loaded mod's id isn't shown as loaded.
 - **Reading files.** The page reads each file into the staging buffer, which it takes only

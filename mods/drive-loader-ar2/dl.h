@@ -148,6 +148,10 @@ int dl_check_start(u32 desc, int n, u8 *buf, u32 max, struct dl_status *st, char
 int dl_check_step(const struct dl_choice *ch);
 int dl_check_finish(void);
 void dl_check_cancel(void);
+/* dl_check of one file the caller has already read into buf (len bytes; its CRC is taken as
+ * the caller's): pass 1, checks and layout without a second read. */
+int dl_check_buf(u32 desc, const struct dl_choice *ch, s32 len, u8 *buf, u32 max,
+                 struct dl_status *st, char (*det)[32], char (*ver)[DL_VER_MAX]);
 
 /* The set the boot linked, in /mods/active order: dl_status[i] is dl_boot_choice[i]'s
  * (dl_status_n of them, from the heap; 0 when the boot linked nothing). */

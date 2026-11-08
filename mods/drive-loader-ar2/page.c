@@ -118,6 +118,7 @@ static int page_alloc(int n)
 static u8 redraw;                        /* ask the next ev_tick for a frame */
 static volatile u32 ticks, drawn_at;     /* the page's rows were drawn at this tick */
 static int next_check;                   /* the next row the background checks (check_next) */
+static volatile u32 last_input;          /* the tick of the last key or encoder event */
 static unsigned held[2];                 /* our shared_ptr to the page's view: it outlives a close */
 
 /* ---- text ---- */
@@ -256,15 +257,6 @@ static int save_active(void)
     return r;
 }
 
-static int check(int n)
-{
-    int r;
-    dl_lock();                           /* every file read in the check */
-    r = dl_check((u32)core_desc, choice, n, drive_staging, DL_STAGING_SIZE, cst, cdet, cver);
-    dl_unlock();
-    return r;
-}
-
 /* the boot linker's record of a row: the line of the boot's set that named its file */
 static void boot_record(struct row *r)
 {
@@ -368,7 +360,8 @@ static int inspect(struct row *r)
         r->crc = dl_crc32(drive_staging, (u32)len);
         copy_str(choice[0].name, r->name, DL_LINE_NAME_MAX);
         choice[0].crc = r->crc;
-        if (check(1) >= 0) {
+        if (dl_check_buf((u32)core_desc, &choice[0], len, drive_staging, DL_STAGING_SIZE, cst, cdet,
+                         cver) >= 0) {           /* the file just read, not read again */
             c = cst[0].code;
             copy_str(r->id, cst[0].id, sizeof r->id);
             copy_str(r->ver, cver[0], sizeof r->ver);
@@ -1011,6 +1004,21 @@ static const void *const mods_row[4] = {
     (const void *)dl_mods_icon, (const void *)nothing,
 };
 
+/* ev_key, ev_enc: note the time, take nothing (the page's checks wait QUIET ticks after it) */
+int dl_key(void *brain, void *ev)
+{
+    (void)brain, (void)ev;
+    last_input = ticks;
+    return 0;
+}
+
+int dl_enc(void *brain, void *ev)
+{
+    (void)brain, (void)ev;
+    last_input = ticks;
+    return 0;
+}
+
 /* ev_settings: GLOBAL's rows are built; MODS goes last */
 void dl_settings(void *menu)
 {
@@ -1031,10 +1039,14 @@ unsigned dl_page_now(void)
  * mark: the page holds its own reference to it (held) until the next MODS opening. */
 #define CHECK_EVERY 2
 #define SHOWN 10
+#define QUIET 40                         /* ticks (2 s) after a key or a turn with no check: a file's
+                                          * check holds the UI task, and a key sent meanwhile can
+                                          * expire (CB11 unit run 2, 2026-11-08) */
 
 static void check_next(void)
 {
-    if (!view || !rows || job.what || ticks - drawn_at > SHOWN || ticks % CHECK_EVERY)
+    if (!view || !rows || job.what || ticks - drawn_at > SHOWN || ticks % CHECK_EVERY
+        || ticks - last_input < QUIET)
         return;
     while (next_check < nrows && rows[next_check].checked)
         next_check++;
@@ -1049,7 +1061,7 @@ void dl_page_tick(void *ctrl)
     ticks++;
     dl_readers_poll(ticks);
     check_next();
-    if (job.what && !(ticks % CHECK_EVERY))
+    if (job.what && !(ticks % CHECK_EVERY) && ticks - last_input >= QUIET)
         save_step();
     if (redraw) {
         redraw = 0;

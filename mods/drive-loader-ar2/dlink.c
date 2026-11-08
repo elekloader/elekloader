@@ -1591,8 +1591,9 @@ static int begin_start(u32 desc, int n, u8 *buf, u32 max, struct dl_status *st_o
     return 1;
 }
 
-/* Pass 1 for line i of the set (lines in order, each once): its file read into the buffer. */
-static void begin_line(const struct dl_choice *ch, int i)
+/* Pass 1 for line i of the set (lines in order, each once): its file read into the buffer, or
+ * (have >= 0) already there, have bytes of it. */
+static void begin_line(const struct dl_choice *ch, int i, s32 have)
 {
     struct dmod *m = &L.mods[L.nmods];
     struct dl_status *st = &L.st[i];
@@ -1605,7 +1606,7 @@ static void begin_line(const struct dl_choice *ch, int i)
     dl_memset(m, 0, sizeof *m);
     m->choice = (u16)i;
     m->id = m->version = m->core = NONE;
-    len = load(m, ch);
+    len = have >= 0 ? have : load(m, ch);
     if (len < 0) {
         set_status(m, -len == DL_R_TOO_BIG ? DL_ST_REFUSED : DL_ST_DROPPED, -len, 0, 0);
         return;
@@ -1663,7 +1664,7 @@ static int begin(u32 desc, const struct dl_choice *choice, int n, u8 *buf, u32 m
     if (b <= 0)
         return b;
     for (i = 0; i < n; i++)
-        begin_line(&choice[i], i);
+        begin_line(&choice[i], i, -1);
     return begin_end();
 }
 
@@ -1739,7 +1740,7 @@ int dl_check_step(const struct dl_choice *ch)
 {
     if (S.next >= S.n)
         return 0;
-    begin_line(ch, S.next++);
+    begin_line(ch, S.next++, -1);
     return S.n - S.next;
 }
 
@@ -1754,6 +1755,23 @@ int dl_check_finish(void)
     }
     S.next = 0;
     return check_end(n, S.ver);
+}
+
+/* dl_check of one file already in buf (len bytes, read by the caller, its CRC the caller's):
+ * the MODS page's check of a file it has just read, without reading it again. */
+int dl_check_buf(u32 desc, const struct dl_choice *ch, s32 len, u8 *buf, u32 max,
+                 struct dl_status *st, char (*det)[32], char (*ver)[DL_VER_MAX])
+{
+    if (begin_start(desc, 1, buf, max, st, det) <= 0) {
+        finish();
+        return -1;
+    }
+    begin_line(ch, 0, len);
+    if (begin_end() < 0) {
+        finish();
+        return -1;
+    }
+    return check_end(1, ver);
 }
 
 /* A check started with dl_check_start, given up: its memory back. */
