@@ -16,6 +16,45 @@ CF_CALL = os.environ.get('ELEKLOADER_CF_CALL')
 STOCK = os.environ.get('ELEKLOADER_DN2_SYX')
 
 
+def kernel(*kernels):
+    """A dn2-kernel-v1 artifact (elekloader/sharc.py) of one 48-bit NOP, a kernel for each (kind, id): the
+    ColdFire side does not run it."""
+    from elekloader.sharc import KERNEL_ABI
+    return {'abi': KERNEL_ABI, 'code': '00' * 6, 'data': '', 'code_pc16': 0xbc8400, 'data_address': 0x20098000,
+            'data_align': 4, 'relocs': [], 'exports': {},
+            'kernels': [{'kind': kind, 'id': mid, 'entry': 0, **({'knobs': []} if kind == 'sdk' else {})}
+                        for kind, mid in kernels]}
+
+
+def mk2_mod(work, name, source, contribute, kernels):
+    """Build an mk2 mod: its C, its contributions {table: symbol} and its kernels."""
+    from elekloader.sdk import build as sdk
+    stage = work / name
+    stage.mkdir()
+    (stage / 'machine.c').write_text('#include "mk2/machines.h"\n' + source)
+    (stage / 'kernel.json').write_text(json.dumps(kernel(*kernels)))
+    (stage / 'mod.json').write_text(json.dumps({
+        'id': name, 'version': '0.1', 'device': 'digitone-mk2', 'os': '1.12',
+        'sources': ['machine.c'], 'sharc': {'artifact': 'kernel.json'},
+        'resources': {'core': '0.1'}, 'requires': ['core', 'machines-dn2'],
+        'contribute': [{'to': table, 'data': '00000000', 'relocs': [[0, 'abs32', 'sym:' + symbol, 0]]}
+                       for table, symbol in contribute]}))
+    return sdk.build(str(stage), STOCK, str(stage / 'build'))[0]
+
+
+def cf_calls(firmware, calls, pokes=()):
+    """Run calls [(pc, args)] in DigiKit's ColdFire: one result row each."""
+    from elekloader import syx
+    request = Path(firmware).with_suffix('.json')
+    request.write_text(json.dumps({'pokes': list(pokes), 'calls': [{'pc': hex(pc), 'args': [str(a) for a in args],
+                                                                  **({'reads': reads} if reads else {})}
+                                                                 for pc, args, *reads in calls]}))
+    result = subprocess.run([CF_CALL, str(firmware), str(request), '--base-sha', syx.Syx.load(STOCK).sha256],
+                            capture_output=True, text=True, timeout=300)
+    assert result.returncode == 0, result.stderr
+    return [json.loads(line) for line in result.stdout.splitlines() if line.startswith('{')]
+
+
 @unittest.skipUnless(CC, 'native C compiler is unavailable')
 class RegistryTests(unittest.TestCase):
     def test_stock_registered_and_missing_ids(self):
@@ -88,29 +127,19 @@ class VoicePagesTests(unittest.TestCase):
     def test_stock_readers_see_the_pages_and_their_rows(self):
         from elekloader import patch, syx
         from elekloader.sdk import build as sdk
-        from elekloader.sdk.sharc import voice_artifact
 
         stock = syx.Syx.load(STOCK)
         with tempfile.TemporaryDirectory() as tmp:
             work = Path(tmp)
             base = [sdk.build(str(ROOT / 'mods' / source), STOCK, str(work / source))[0]
                     for source in ('core-dn2', 'machines-dn2')]
+            mod = mk2_mod(work, 'paged',
+                          'const struct mk2_synth voice = {8, "PAGED", "PAGED"};\n'
+                          'static const struct mk2_param a = {"ALPH", 100}, b = {"BETA", 3};\n'
+                          'static const struct mk2_page two[2] = {{{&a, 0, &b}}, {{0}}};\n'
+                          'const struct mk2_voice_pages pages = {8, 2, two};\n',
+                          (('mk2_voice_synths', 'voice'), ('mk2_voice_pages', 'pages')), [('mk2-voice', 8)])
             stage = work / 'paged'
-            stage.mkdir()
-            (stage / 'machine.c').write_text(
-                '#include "mk2/machines.h"\n'
-                'const struct mk2_synth voice = {8, "PAGED", "PAGED"};\n'
-                'static const struct mk2_param a = {"ALPH", 100}, b = {"BETA", 3};\n'
-                'static const struct mk2_page two[2] = {{{&a, 0, &b}}, {{0}}};\n'
-                'const struct mk2_voice_pages pages = {8, 2, two};\n')
-            (stage / 'kernel.json').write_text(json.dumps(voice_artifact(bytes(4), bytes(4), 0, 8, 20)))
-            (stage / 'mod.json').write_text(json.dumps({
-                'id': 'paged', 'version': '0.1', 'device': 'digitone-mk2', 'os': '1.12',
-                'sources': ['machine.c'], 'sharc': {'artifact': 'kernel.json'},
-                'resources': {'core': '0.1'}, 'requires': ['core', 'machines-dn2'],
-                'contribute': [{'to': table, 'data': '00000000', 'relocs': [[0, 'abs32', 'sym:' + symbol, 0]]}
-                               for table, symbol in (('mk2_voice_synths', 'voice'), ('mk2_voice_pages', 'pages'))]}))
-            mod = sdk.build(str(stage), STOCK, str(stage / 'build'))[0]
             outputs, _manifest = patch.build(STOCK, base + [mod], 'TEST', log=lambda *args: None)
             firmware = stage / 'test.syx'
             firmware.write_bytes(outputs['syx'])
@@ -161,7 +190,6 @@ class ParameterDispatchTests(unittest.TestCase):
         from elekloader import patch, syx
         from elekloader.devices.digitone_mk2 import DEVICE
         from elekloader.sdk import build as sdk
-        from elekloader.sdk.sharc import filter_artifact, voice_artifact
 
         stock = syx.Syx.load(STOCK)
         image = stock.section(3)
@@ -172,23 +200,14 @@ class ParameterDispatchTests(unittest.TestCase):
             work = Path(tmp)
             base = [sdk.build(str(ROOT / 'mods' / source), STOCK, str(work / source))[0]
                     for source in ('core-dn2', 'machines-dn2')]
-            for kind, first, getter_pc, type_offset, producer, dispatch in (
-                    ('synth', 5, 0x40036462, 0xde, voice_artifact, (0,)),
-                    ('filter', 6, 0x40036486, 0xdf, filter_artifact, (1, 8))):
+            for kind, first, getter_pc, type_offset, kernel_kind, dispatch in (
+                    ('synth', 5, 0x40036462, 0xde, 'mk2-voice', (0,)),
+                    ('filter', 6, 0x40036486, 0xdf, 'mk2-filter', (1, 8))):
                 with self.subTest(kind=kind):
-                    stage = work / kind
-                    stage.mkdir()
-                    (stage / 'machine.c').write_text('#include "mk2/machines.h"\n'
-                        'const struct mk2_%s custom={8,"CUSTOM","CUSTOM"};\n' % kind)
-                    (stage / 'kernel.json').write_text(json.dumps(producer(bytes(4), bytes(4), 0, 8, 20)))
-                    (stage / 'mod.json').write_text(json.dumps({
-                        'id': kind + '-dispatch-test', 'version': '0.1', 'device': 'digitone-mk2', 'os': '1.12',
-                        'sources': ['machine.c'], 'sharc': {'artifact': 'kernel.json'},
-                        'resources': {'core': '0.1'}, 'requires': ['core', 'machines-dn2'],
-                        'contribute': [{'to': table, 'data': '00000000',
-                                        'relocs': [[0, 'abs32', 'sym:' + symbol, 0]]}
-                                       for table, symbol in [('mk2_voice_' + kind + 's', 'custom')]]}))
-                    mod = sdk.build(str(stage), STOCK, str(stage / 'build'))[0]
+                    mod = mk2_mod(work, kind + '-dispatch-test',
+                                  'const struct mk2_%s custom={8,"CUSTOM","CUSTOM"};\n' % kind,
+                                  [('mk2_voice_' + kind + 's', 'custom')], [(kernel_kind, 8)])
+                    stage = work / (kind + '-dispatch-test')
                     outputs, manifest = patch.build(STOCK, base + [mod], 'TEST', log=lambda *args: None)
                     firmware = stage / 'test.syx'
                     firmware.write_bytes(outputs['syx'])
@@ -270,7 +289,6 @@ class ParameterDispatchTests(unittest.TestCase):
     def test_g_takes_the_row_after_a_full_synth_and_leaves_stock_filters_alone(self):
         from elekloader import patch, syx
         from elekloader.sdk import build as sdk
-        from elekloader.sdk.sharc import filter_artifact, voice_artifact
 
         stock = syx.Syx.load(STOCK)
         with tempfile.TemporaryDirectory() as tmp:
@@ -278,30 +296,16 @@ class ParameterDispatchTests(unittest.TestCase):
             mods = [sdk.build(str(ROOT / 'mods' / source), STOCK, str(work / source))[0]
                     for source in ('core-dn2', 'machines-dn2')]
             knobs = ', '.join('{"K%d", %d}' % (n, n) for n in range(40))
-            for name, source, artifact, table, symbol in (
-                    ('full', 'static const struct mk2_param k[40] = {%s};\n'
-                             'static const struct mk2_page five[5] = {%s};\n'
-                             'const struct mk2_synth voice = {8, "FULL", "FULL"};\n'
-                             'const struct mk2_voice_pages pages = {8, 5, five};\n'
-                     % (knobs, ', '.join('{{%s}}' % ', '.join('&k[%d]' % (8 * p + i) for i in range(8))
-                                         for p in range(5))),
-                     voice_artifact, 'mk2_voice_synths', 'voice'),
-                    ('g', 'static const struct mk2_param g = {"MODE", 9};\n'
-                          'const struct mk2_filter filter = {9, "GEE", "GEE", 0, &g};\n',
-                     filter_artifact, 'mk2_voice_filters', 'filter')):
-                stage = work / name
-                stage.mkdir()
-                (stage / 'machine.c').write_text('#include "mk2/machines.h"\n' + source)
-                (stage / 'kernel.json').write_text(json.dumps(artifact(bytes(4), bytes(4), 0, 8 if name == 'full' else 9, 12)))
-                contribute = [{'to': table, 'data': '00000000', 'relocs': [[0, 'abs32', 'sym:' + symbol, 0]]}]
-                if name == 'full':
-                    contribute.append({'to': 'mk2_voice_pages', 'data': '00000000',
-                                       'relocs': [[0, 'abs32', 'sym:pages', 0]]})
-                (stage / 'mod.json').write_text(json.dumps({
-                    'id': name, 'version': '0.1', 'device': 'digitone-mk2', 'os': '1.12',
-                    'sources': ['machine.c'], 'sharc': {'artifact': 'kernel.json'},
-                    'resources': {'core': '0.1'}, 'requires': ['core', 'machines-dn2'], 'contribute': contribute}))
-                mods.append(sdk.build(str(stage), STOCK, str(stage / 'build'))[0])
+            mods.append(mk2_mod(work, 'full', 'static const struct mk2_param k[40] = {%s};\n'
+                                'static const struct mk2_page five[5] = {%s};\n'
+                                'const struct mk2_synth voice = {8, "FULL", "FULL"};\n'
+                                'const struct mk2_voice_pages pages = {8, 5, five};\n'
+                                % (knobs, ', '.join('{{%s}}' % ', '.join('&k[%d]' % (8 * p + i) for i in range(8))
+                                                    for p in range(5))),
+                                (('mk2_voice_synths', 'voice'), ('mk2_voice_pages', 'pages')), [('mk2-voice', 8)]))
+            mods.append(mk2_mod(work, 'g', 'static const struct mk2_param g = {"MODE", 9};\n'
+                                'const struct mk2_filter filter = {9, "GEE", "GEE", 0, &g};\n',
+                                [('mk2_voice_filters', 'filter')], [('mk2-filter', 9)]))
             outputs, _manifest = patch.build(STOCK, mods, 'TEST', log=lambda *args: None)
             firmware = work / 'test.syx'
             firmware.write_bytes(outputs['syx'])
@@ -333,32 +337,103 @@ class ParameterDispatchTests(unittest.TestCase):
                     self.assertEqual(row['d'][0], want, (hex(pc), args))
             self.assertEqual(rows[-2]['d'][0], rows[-1]['d'][0])  # G's value class is TYPE's
 
+    def test_several_voices_and_filters_from_several_mods(self):
+        from elekloader import patch
+        from elekloader.sdk import build as sdk
+
+        with tempfile.TemporaryDirectory() as tmp:
+            work = Path(tmp)
+            mods = [sdk.build(str(ROOT / 'mods' / source), STOCK, str(work / source))[0]
+                    for source in ('core-dn2', 'machines-dn2')]
+            tables = (('mk2_voice_synths', 'voice'), ('mk2_voice_pages', 'pages'), ('mk2_voice_filters', 'filter'))
+            mods.append(mk2_mod(work, 'two', 'const struct mk2_synth voice = {8, "PAGED", "PAGED"};\n'
+                                'static const struct mk2_param a = {"ALPH", 100}, b = {"BETA", 3}, g = {"MODE", 9};\n'
+                                'static const struct mk2_page two[2] = {{{&a, 0, &b}}, {{0}}};\n'
+                                'const struct mk2_voice_pages pages = {8, 2, two};\n'
+                                'const struct mk2_filter filter = {9, "GEE", "GEE", 0, &g};\n',
+                                tables, [('mk2-voice', 8), ('mk2-filter', 9)]))
+            mods.append(mk2_mod(work, 'five', 'const struct mk2_synth voice5 = {10, "WIDE", "WIDE"};\n'
+                                'static const struct mk2_param o = {"OTHER", 7}, l = {"LAST", 50}, g = {"TONE", 20};\n'
+                                'static const struct mk2_page five[5] = {{{&o}}, {{0}}, {{0}}, {{0}}, {{[7] = &l}}};\n'
+                                'const struct mk2_voice_pages pages5 = {10, 5, five};\n'
+                                'const struct mk2_filter filter5 = {11, "TONE", "TONE", 0, &g};\n',
+                                [(t, n + '5') for t, n in tables], [('mk2-voice', 10), ('mk2-filter', 11)]))
+            outputs, manifest = patch.build(STOCK, mods, 'TEST', log=lambda *args: None)
+            firmware = work / 'test.syx'
+            firmware.write_bytes(outputs['syx'])
+            page_count, slot_code, cc_code, name = 0x400c2636, 0x400dc18e, 0x400dc978, 0x400dc496
+            # Seven pages in all, past the five of 0.2's pool. A slot is one row for every voice; G's is
+            # one row for every filter with a G; MIDI follows.
+            rows = cf_calls(firmware, [
+                (page_count, [8]), (page_count, [10]),
+                (slot_code, [25, 8, 0]), (slot_code, [25, 10, 0]), (slot_code, [27, 8, 0]), (slot_code, [27, 10, 0]),
+                (slot_code, [64, 10, 0]), (slot_code, [64, 8, 0]),
+                (slot_code, [66, 0, 9]), (slot_code, [66, 0, 11]), (cc_code, [0, 10, 11, 18]),
+                (cc_code, [0, 10, 0, 40]), (cc_code, [0, 8, 9, 42])])
+            self.assertTrue(all(r['ok'] for r in rows), rows)
+            self.assertEqual([r['d'][0] for r in rows], [2, 5, 321, 321, 323, 0, 360, 0, 361, 361, 361, 321, 323])
+            # The shared rows' defaults are the active track's machine's (the range accessor's dn2_range).
+            mod = json.loads((ROOT / 'mods/machines-dn2/mod.json').read_text())['defsym']
+            sound, out = int(mod['SOUNDS'], 16), 0x47f3a000
+            for synth, filt, want in ((8, 9, [100, None, 9]), (10, 11, [7, 50, 20])):
+                rows = cf_calls(firmware, [(manifest['_map']['dn2_range'], [hex(out), code],
+                                            {'addr': hex(out), 'len': 12}) for code in (321, 360, 361)],
+                                pokes=[{'addr': mod['ACTIVE_TRACK'], 'hex': '00'},
+                                       {'addr': hex(sound + 0xde), 'hex': '%02x%02x' % (synth, filt)}])
+                defaults = [int(r['reads'][0][16:24], 16) >> 8 for r in rows]
+                self.assertEqual([d if w is not None else None for d, w in zip(defaults, want)], want, synth)
+                self.assertEqual({r['reads'][0][:16] for r in rows}, {'00000000' '00007f00'})
+
+    def test_an_sdk_machine_with_a_render_sends_its_own_type(self):
+        from unittest import mock
+        from elekloader import patch
+        from elekloader.sdk import build as sdk
+        from elekloader.sdk.sdk_alpha_build import sdk_alpha_build
+
+        with tempfile.TemporaryDirectory() as tmp:
+            work = Path(tmp)
+            mods = [sdk.build(str(ROOT / 'mods' / source), STOCK, str(work / source))[0]
+                    for source in ('core-dn2', 'machines-dn2')]
+            stage = work / 'renders'
+            stage.mkdir()
+            (stage / 'machine.c').write_text(
+                '#include "elekloader/sdk_alpha_machine.h"\n'
+                'void tone_render(const struct elek_voice *v, elek_sample *out);\n'
+                'static const struct elek_machine tone = {.id = 40, .name = "Tone", .short_name = "TONE",'
+                ' .render = tone_render}, quiet = {.id = 41, .name = "Quiet", .short_name = "QUIE"};\n'
+                'ELEK_REGISTER_MACHINE(tone);\nELEK_REGISTER_MACHINE(quiet);\n')
+            (stage / 'tone.s').write_text('.SECTION/SW seg_swco;\n.GLOBAL tone_render.;\ntone_render.:\n')
+            (stage / 'mod.json').write_text(json.dumps({
+                'id': 'renders', 'version': '0.1', 'devices': {'digitone-mk2': ['1.12']}, 'sources': ['machine.c'],
+                'sharc': {'sources': ['tone.s']}}))
+            with mock.patch('elekloader.sdk.sharc.kernel_artifact', lambda sources, work, kernels:
+                            kernel(*[(k[0], k[1]) for k in kernels])):
+                mods.append(sdk_alpha_build(str(stage), STOCK, str(stage / 'build'))[0])
+            outputs, manifest = patch.build(STOCK, mods, 'TEST', log=lambda *args: None)
+            firmware = work / 'test.syx'
+            firmware.write_bytes(outputs['syx'])
+            # The frame's synth type (dn2_frame_type): the render's kernel plays 40; FM TONE plays 41.
+            rows = cf_calls(firmware, [(manifest['_map']['dn2_dsp_type'], [t]) for t in (40, 41, 0)])
+            self.assertTrue(all(r['ok'] for r in rows), rows)
+            self.assertEqual([r['d'][0] for r in rows], [40, 0, 0])
+
     def test_curve_plotter_draws_only_inside_the_graph(self):
         from elekloader import patch, syx
         from elekloader.sdk import build as sdk
-        from elekloader.sdk.sharc import filter_artifact
 
         with tempfile.TemporaryDirectory() as tmp:
             work = Path(tmp)
             base = [sdk.build(str(ROOT / 'mods' / source), STOCK, str(work / source))[0]
                     for source in ('core-dn2', 'machines-dn2')]
-            stage = work / 'curve'
-            stage.mkdir()
             # In range, above 16 (drawn at the top) and 0xff (no dot), across all 51 columns; g is 0
             # without a declared G.
-            (stage / 'machine.c').write_text('#include "mk2/machines.h"\n'
-                'static void curve(uint32_t freq, uint32_t reso, uint32_t g, uint8_t y[51]) {\n'
-                '    for (unsigned x = 0; x < 51; ++x) y[x] = x % 4 == 3 ? 0xff : x < 17 ? x : 200;\n'
-                '    y[0] = freq >> 8; y[1] = reso >> 8; y[2] = g; }\n'
-                'const struct mk2_filter custom = {8,"CURVE","CURVE",curve};\n')
-            (stage / 'kernel.json').write_text(json.dumps(filter_artifact(bytes(4), bytes(4), 0, 8, 20)))
-            (stage / 'mod.json').write_text(json.dumps({
-                'id': 'curve-test', 'version': '0.1', 'device': 'digitone-mk2', 'os': '1.12',
-                'sources': ['machine.c'], 'sharc': {'artifact': 'kernel.json'}, 'resources': {'core': '0.1'},
-                'requires': ['core', 'machines-dn2'],
-                'contribute': [{'to': 'mk2_voice_filters', 'data': '00000000',
-                                'relocs': [[0, 'abs32', 'sym:custom', 0]]}]}))
-            mod = sdk.build(str(stage), STOCK, str(stage / 'build'))[0]
+            mod = mk2_mod(work, 'curve-test',
+                          'static void curve(uint32_t freq, uint32_t reso, uint32_t g, uint8_t y[51]) {\n'
+                          '    for (unsigned x = 0; x < 51; ++x) y[x] = x % 4 == 3 ? 0xff : x < 17 ? x : 200;\n'
+                          '    y[0] = freq >> 8; y[1] = reso >> 8; y[2] = g; }\n'
+                          'const struct mk2_filter custom = {8,"CURVE","CURVE",curve};\n',
+                          [('mk2_voice_filters', 'custom')], [('mk2-filter', 8)])
+            stage = work / 'curve-test'
             outputs, manifest = patch.build(STOCK, base + [mod], 'TEST', log=lambda *args: None)
             firmware = stage / 'test.syx'
             firmware.write_bytes(outputs['syx'])

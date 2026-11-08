@@ -28,6 +28,7 @@ INCLUDE = Path(__file__).resolve().parent / 'include'
 RATE = 48000
 
 PRELUDE = r'''#include "elekloader/sdk_alpha_machine.h"
+#undef ELEK_TARGET_SHARC    /* --float: the samples are float, and a mod's C render runs, not its SHARC one */
 #undef ELEK_REGISTER_MACHINE
 #define ELEK_REGISTER_MACHINE(m) const struct elek_machine *const elek_host_machine = &(m)
 '''

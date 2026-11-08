@@ -159,6 +159,19 @@ dn2_stock_nrpn:
     movem.l %d2-%d4,(%sp)
     jmp NRPN_CONTINUE
 
+| The range accessor, {min, max, default} of a parameter code: a0 is where its result goes, 4(sp)
+| the code; it returns a0 in d0, as stock does. machines.c's dn2_range gives the shared rows the
+| active track's machine's defaults.
+    .globl dn2_range_entry
+dn2_range_entry:
+    move.l %a0,-(%sp)
+    move.l 8(%sp),-(%sp)
+    move.l %a0,-(%sp)
+    jsr dn2_range
+    addq.l #8,%sp
+    move.l (%sp)+,%d0
+    rts
+
 | The value-class accessor: an added parameter code uses its template's object.
     .globl dn2_t2
 dn2_t2:

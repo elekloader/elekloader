@@ -148,9 +148,9 @@ the one a mod that uses it names in `resources.core`.
   memory peek (ADAPTING.md, "The DSP peek"). The optional
   [dspbusy-dn2 companion](../mods/dspbusy-dn2/README.md) enables the busy
   measure for a build with a SHARC mod. The
-  [machines companion](MACHINES-DN2.md) adds a
-  [selectable track synth](MACHINES-DN2-VOICE.md) and a
-  [custom filter](MACHINES-DN2-FILTER.md) through the `mk2_*` tables. An
+  [machines companion](MACHINES-DN2.md) adds
+  [selectable track synths](MACHINES-DN2-VOICE.md) and
+  [custom filters](MACHINES-DN2-FILTER.md) through the `mk2_*` tables. An
   elekloader without SHARC support, such as the 0.4.0 apps, refuses a 0.2
   file, so 0.2 is released with an elekloader release.
 - **Analog Rytm MKII** ([mods/core-ar2](../mods/core-ar2)): SETTINGS rows

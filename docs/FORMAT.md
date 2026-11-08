@@ -91,30 +91,47 @@ into the `.elemod` as `sharc` and records its hash in
 `build.sharc_artifact_sha256`. The artifact is already compiled and linked,
 so no SHARC compiler runs during build, lint or patch. Any compiler or
 assembler can make one; the [sine example](../examples/sharc-sine/README.md)
-makes one from C or assembly.
+makes one from C or assembly. An SDK machine's `render`
+([SDK.md](SDK.md#render-on-the-digitone-ii)) instead lists its assembly,
+`"sharc": {"sources": ["render.s"]}`: relative `.s` files in the mod's
+folder, which the SDK builder assembles with Selache into a kernel
+artifact.
 
-**A selectable synth or filter object** uses the fields below, plus
-`machine_id`; `entries` contains only `render_offset_bytes` and cannot be
-`null`. The same mod must contribute one matching descriptor to its table:
+**A machine kernel object**, `"abi": "dn2-kernel-v1"`, holds synths',
+filters' or SDK machines' DSP code, or machines-dn2's dispatcher, which
+calls them. It is relocatable: the linker places it anywhere in the
+machine pool, loader `[0x20090000,0x200b0000)`.
+`elekloader.sdk.sharc.machine_artifact` makes one for an mk2 synth or
+filter, and the SDK builder one for SDK machines. It has exactly these
+fields:
 
-| `abi` | `machine_id` | native table |
-|---|---|---|
-| `dn2-voice-mono32-l2-v1` | 5..31 | `mk2_voice_synths` |
-| `dn2-filter-mono32-l2-v1` | 6..31 | `mk2_voice_filters` |
+| field | value |
+|---|---|
+| `abi` | `"dn2-kernel-v1"` |
+| `code` | hex: the code as the executable stores it, whole 16-bit parcels |
+| `data` | hex: the data |
+| `code_pc16`, `data_address` | the bases `code` and `data` were linked at |
+| `data_align` | the data's alignment in bytes: 4, 8, 16, 32, 64 or 128 |
+| `relocs` | `[section, offset, width, kind]`: an address field in `code` (3 or 4 bytes, big-endian) or `data` (4 bytes, little-endian) that moves with `kind`'s base, `"code"` or `"data"` |
+| `kernels` | `{"kind", "id", "entry"}` each, `entry` counting 16-bit parcels into `code`: kind `"mk2-voice"` (id 5..31) or `"mk2-filter"` (6..31) with an optional `state_bytes` a slot, in whole words; or `"sdk"` (5..127) with `knobs`, up to 15 `[min, max]` pairs of int32 |
+| `exports` | machines-dn2's dispatcher only: its labels `dn2_voice_hook.`, `dn2_filter_hook.`, `dn2_filter_capture.`, `dn2_voice_table.` and `dn2_filter_table.`; `{}` otherwise |
 
-Each kind has its own ID namespace. A build accepts at most one of
-each kind, with separate 64 KiB owners, and cannot mix them with a
-master-output mod. Each machine artifact starts with the profiled 2 KiB
-adapter and ends with exactly 1 KiB of zeroed adapter state. Author bytes
-and the render entry must stay outside those reservations. An optional
-`voice_state: {"offset_bytes", "voice_bytes"}` reserves state for each of
-the 16 voices: `offset_bytes` is 8-byte aligned, `voice_bytes` a whole
-number of words, and the 16 voices lie inside one of the mod's `zero`
-ranges. The linker writes each callback's address and ID into its adapter
-state, the voice state's address and one voice's size 32 bytes after them,
-zero-fills that kind's 4 KiB stack in L1 with a guard word at its base,
-and patches that kind's stock hook. It leaves the master hook and L1 bridge untouched.
-The callback references above define the memory bounds and stack limits.
+Synths and SDK machines share one ID space; filters have their own. Each
+kernel needs a registration with its ID in its own mod (`mk2_voice_synths`,
+`mk2_voice_filters` or `sdk_alpha_machines`), and each mk2 registration its
+kernel. When the build has a kernel, the linker refuses it without exactly
+one dispatcher, beside another SHARC mod, or with two kernels of one ID.
+It places the dispatcher, then each mod's code, with a 64-byte NOP guard,
+and data; each SDK kernel's knob map; and each kernel's 16 slots of state
+(`state_bytes` each, 256 for an SDK machine), zero-filled. It rebases each
+artifact by its relocations, fills the dispatcher's tables (by ID: the
+kernel's entry, its state, its state bytes a slot and its knob map),
+zero-fills each kind's 4 KiB stack in L1 with a guard word at its base, and
+patches the stock voice and filter hooks and the filter setup table's
+entry 0 to the dispatcher. It leaves the master hook and L1 bridge
+untouched. Without a kernel in the build, the dispatcher is not placed.
+The [synth](MACHINES-DN2-VOICE.md) and [filter](MACHINES-DN2-FILTER.md)
+contracts say what a kernel gets.
 
 **The master-output object** has exactly these fields:
 
@@ -140,7 +157,7 @@ example's at 176 and 238; both declare 128 bytes of stack.
   ahead.
 
 For master-output mods, linking also refuses unless:
-- only one mod in the build has `sharc`;
+- it is the only SHARC mod in the build;
 - a mod with entries has a core whose bridge is the one the device profile
   pins: its bytes, its entry and its stack. That is core-dn2 0.2 or newer;
   set `"resources": {"core": "0.2"}` so the loader picks it;
@@ -163,7 +180,7 @@ right, and that every other section is stock. Without a SHARC mod, section 7
 stays stock, with core 0.2 too.
 
 A mod's code, data and callback offsets may change from build to build with
-no change to elekloader: only its core bridge or machine adapter is pinned.
+no change to elekloader: only its core bridge is pinned.
 These checks cover the packaging. They cannot prove what the instructions
 do, how much stack they really use, or that they finish in time, so test
 each program on its own.

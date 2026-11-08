@@ -2,6 +2,7 @@
  "id": "sdk-sine",
  "version": "0.1",
  "license": "GPL-2.0-or-later",
- "devices": {"digitakt-mk1": ["1.54"], "digitone-mk1": ["1.44"]},
- "sources": ["sine.c"]
+ "devices": {"digitakt-mk1": ["1.54"], "digitone-mk1": ["1.44"], "digitone-mk2": ["1.12"]},
+ "sources": ["sine.c"],
+ "sharc": {"sources": ["sine-dn2.s"]}
 }

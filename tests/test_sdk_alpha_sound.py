@@ -1,13 +1,96 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 """A machine's .render makes its sound: a sine at the note played, tuned by a FINE knob, measured in
 what the device outputs. Without .render a machine plays what it did before (nothing on the
-Digitakt, FM on the Digitone).
+Digitakt, FM on the Digitones).
 
 Run as tests/sdk_alpha_harness.py says.
 """
 import unittest
 
-from sdk_alpha_harness import sdk_machine, sdk_tests
+from sdk_alpha_harness import ROOT, sdk_machine, sdk_tests
+
+# SINE's render on the Digitone II, whose DSP plays it: the probes below, then examples/sdk-sine's
+# sine (sine-dn2.s), which reads FINE as cents too. R4 = v, R8 = out, as the dispatcher calls it.
+SINE_PROBES_DN2 = """
+.SECTION/DM seg_dmda;
+.GLOBAL sound_test_pitch.;
+.GLOBAL sound_test_control.;
+.GLOBAL sound_test_start_count.;
+.GLOBAL sound_test_overlap.;
+.GLOBAL sound_test_starts.;
+.VAR sound_test_pitch. = 0;
+.VAR sound_test_control. = 0;
+.VAR sound_test_start_count. = 0;
+.VAR sound_test_overlap. = 0;
+.VAR sound_test_starts. = 0;        // [2][3]: track, state, pitch
+.VAR = 0;
+.VAR = 0;
+.VAR = 0;
+.VAR = 0;
+.VAR = 0;
+
+.SECTION/SW seg_swco;
+.GLOBAL sound_test_render.;
+sound_test_render.:
+    I4=R4;
+    R0=DM(I4,M5);                   // knob
+    I4=R0;
+    R0=DM(I4,M5);                   // FINE
+    DM(sound_test_control.)=R0;
+    R3=4;
+    R0=R4+R3;
+    I4=R0;
+    R9=DM(I4,M5);                   // track
+    R0=12;
+    R0=R4+R0;
+    I4=R0;
+    R10=DM(I4,M5);                  // pitch
+    DM(sound_test_pitch.)=R10;
+    R0=20;
+    R0=R4+R0;
+    I4=R0;
+    R11=DM(I4,M5);                  // state
+    R0=8;
+    R0=R4+R0;
+    I4=R0;
+    R0=DM(I4,M5);                   // start
+    R1=DM(sound_test_start_count.);
+    R0=PASS R0;
+    IF EQ JUMP sound_test_started;
+    R2=2;
+    COMP(R1,R2);
+    IF GE JUMP sound_test_counted;
+    R2=12;
+    R2=R1*R2 (SSI);
+    R0=sound_test_starts.;
+    R2=R2+R0;
+    I4=R2;
+    DM(I4,M5)=R9;
+    R2=R2+R3;
+    I4=R2;
+    DM(I4,M5)=R11;
+    R2=R2+R3;
+    I4=R2;
+    DM(I4,M5)=R10;
+sound_test_counted:
+    R1=R1+1;
+    DM(sound_test_start_count.)=R1;
+sound_test_started:
+    R2=2;
+    COMP(R1,R2);
+    IF LT JUMP sound_test_play;
+    R0=sound_test_starts.;
+    R0=R0+R3;
+    I4=R0;
+    R0=DM(I4,M5);                   // the first note's state
+    COMP(R0,R11);
+    IF NE JUMP sound_test_play;
+    R0=DM(sound_test_overlap.);
+    R0=R0+1;
+    DM(sound_test_overlap.)=R0;
+sound_test_play:
+    JUMP sine_render.;
+"""
 
 # SINE plays a sine at the note, FINE cents (-100..100, from 0) away. sound_test_pitch is the last
 # pitch it was given, so a test can say which note the key played. Writable globals here
@@ -17,6 +100,10 @@ SINE = sdk_machine("Sine", """
 
     enum { FINE };
     static const struct elek_knob knobs[] = { [FINE] = { "FINE", .min = -100, .max = 100 } };
+    #ifdef ELEK_TARGET_SHARC
+    void sound_test_render(const struct elek_voice *v, elek_sample *out);
+    #define RENDER sound_test_render
+    #else
     struct state { uint32_t phase; };
     volatile int32_t sound_test_pitch;
     volatile int32_t sound_test_control;
@@ -58,13 +145,16 @@ SINE = sdk_machine("Sine", """
             state->phase += inc;
         }
     }
+    #define RENDER render
+    #endif
 
     static const struct elek_machine sine_machine = {
         .id = @ID@, .name = "Sine", .short_name = "SINE", ELEK_KNOBS(knobs),
-        .pages = { { "SINE", { [ELEK_A] = &knobs[FINE] } } }, .render = render,
+        .pages = { { "SINE", { [ELEK_A] = &knobs[FINE] } } }, .render = RENDER,
     };
     ELEK_REGISTER_MACHINE(sine_machine);
-""")
+""", sharc={'probes-dn2.s': SINE_PROBES_DN2,
+            'sine-dn2.s': (ROOT / 'examples/sdk-sine/sine-dn2.s').read_text()})
 
 # The same page, and no .render.
 SILENT = sdk_machine("Silent", """

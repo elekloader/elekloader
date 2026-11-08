@@ -1,9 +1,10 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
-/* machines-dn2 0.2: the SDK alpha's machines (elekloader/sdk_alpha_machine.h) on the Digitone II. A mod
+/* machines-dn2: the SDK alpha's machines (elekloader/sdk_alpha_machine.h) on the Digitone II. A mod
  * built by sdk_alpha_build contributes each machine to the table sdk_alpha_machines. Each machine is
- * a synth in MACHINE SEL that FM TONE plays (no DSP code), with its pages (two at most) as SYN's pages.
- * Logical knob i keeps its value in sound slot 25 + i, whichever page shows it; every SDK machine
- * shares the parameter rows ROWS + SDK_ROW + i, labelled for the active track's machine. */
+ * a synth in MACHINE SEL, which its render's SHARC kernel plays (FM TONE without a render), with its
+ * pages (two at most) as SYN's pages. Logical knob i keeps its value in sound slot 25 + i, whichever
+ * page shows it; every SDK machine shares the parameter rows ROWS + SDK_ROW + i, labelled for the
+ * active track's machine and taking its defaults (dn2_sdk_default). */
 #include "mk2/machines.h"
 #include "dev.h"
 #include "dn2.h"
@@ -76,6 +77,13 @@ const struct descriptor *dn2_sdk_page(uint32_t type, uint32_t page)
 {
     int32_t i = machine_of(type);
     return i < 0 ? 0 : &pages[i][page];
+}
+
+/* Whether the machine has a render: sdk_alpha_build paired it with its SHARC kernel. */
+uint32_t dn2_sdk_renders(uint32_t type)
+{
+    int32_t i = machine_of(type);
+    return i >= 0 && declared(i)->render;
 }
 
 /* The parameter code of the machine's sound slot (25 + logical knob), 0 when it has no such knob. */
@@ -161,6 +169,20 @@ const struct sdk_alpha_entry *dn2_sdk_active(void)
     return i < 0 ? 0 : &sdk_alpha_entries[i];
 }
 
+/* The active track's synth type, or with `filter` its filter type. */
+uint32_t dn2_active_type(uint32_t filter)
+{
+    uint32_t t = *dn2_active_track;
+    return t < 16 ? dn2_sounds[SOUND_SIZE * t + SOUND_TYPE + (filter ? 1 : 0)] : 0;
+}
+
+/* Knob `knob`'s default, raw 8.8, for the active track's machine; -1 when it has no such knob. */
+int32_t dn2_sdk_default(uint32_t knob)
+{
+    const struct sdk_alpha_entry *e = dn2_sdk_active();
+    return e && knob < e->count ? sdk_alpha_default(&e->machine->knobs[knob]) : -1;
+}
+
 /* Knob `id`'s stored value on track t: slot 25 + id, a big-endian word (the sounds are packed). */
 static int32_t raw_of(uint32_t t, uint32_t id)
 {
@@ -201,6 +223,7 @@ static int32_t shown_knob(int32_t i, int32_t k)
 void dn2_sdk_tick(uint8_t *ctrl)
 {
     init();
+    dn2_rows_follow();              /* the mk2 voices' and filters' shared rows */
     if (!count)
         return;                     /* no SDK machine: leave Brain and SYN's methods alone */
     uint32_t t = *dn2_active_track;

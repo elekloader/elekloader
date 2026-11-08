@@ -84,23 +84,18 @@ DEVICE = Device(
                 # Bounded L2 mod reservation; not a general free-memory map.
                 'l2_abi': 'dn2-master-mono32-l2-v1',
                 'l2_app_range': (0x20090000, 0x20098000),
-                'voice_abi': 'dn2-voice-mono32-l2-v1',
-                'voice_range': (0x20090000, 0x200a0000),
-                'voice_table': 'mk2_voice_synths',
-                'voice_adapter_sha256': '5bbf8b98c5ff13d4121a17e2d7a8ca550f05821b4564a67c0ce84737319da3f0',
-                'voice_adapter_bytes': 2048,
-                'voice_state_bytes': 1024,
-                'voice_stack': (0x282de000, 0x282df000),  # L1: a FreeRTOS context switch saves through the PM bus
-                'voice_binding_offset': 65024,
-                'voice_stack_max': 2048,         # of the 4 KiB stack; interrupts taken during a call use the rest
-                'voice_hook': (0x20004a36, '8715ffffeeff', '3e06bc000080'),
-                'filter_abi': 'dn2-filter-mono32-l2-v1',
-                'filter_range': (0x200a0000, 0x200b0000),
-                'filter_table': 'mk2_voice_filters',
+                # Machine kernels (sharc.place_kernels): machines-dn2's dispatcher and every mod's kernels,
+                # anywhere in the pool; 16 slots of state each (an SDK machine's ELEK_VOICE_STATE_MAX a slot).
+                'kernel_abi': 'dn2-kernel-v1',
+                'pool': (0x20090000, 0x200b0000),
+                'kernel_state_bytes': 256,
+                # The tables whose entries name a machine by id: (table, kernel kind, needs its kernel).
+                'kernel_registrations': (('mk2_voice_synths', 'mk2-voice', True),
+                                         ('mk2_voice_filters', 'mk2-filter', True),
+                                         ('sdk_alpha_machines', 'sdk', False)),
                 'filter_g_at': 16,              # mk2_filter's g (mk2/machines.h)
-                'filter_adapter_sha256': '10576ba32964c88b620a72c73cd46aadb8bb66095eef98cfce29280f648b42c4',
-                'filter_adapter_bytes': 2048,
-                'filter_state_bytes': 1024,
+                'voice_stack': (0x282de000, 0x282df000),  # L1: a FreeRTOS context switch saves through the PM bus
+                'voice_hook': (0x20004a36, '8715ffffeeff'),
                 'filter_stack': (0x282df000, 0x282e0000),
                 'stack_guard': 0x57ac6a2d,
                 # core-dn2's DSP peek (mods/core-dn2/peek.s, rebuild_peek.py), with any SHARC mod:
@@ -110,11 +105,9 @@ DEVICE = Device(
                 'peek_hook': (0x28393cbe, '01112600388a', '3e0617000000'),
                 # Optional companion sites: exact stock/replacement bytes, not automatic patches.
                 'data_sites': {0x20011576: ('3e07ff00f0ff', '3e0617004501')},
-                'filter_binding_offset': 65024,
-                'filter_stack_max': 2048,
-                'filter_hook': (0x28392b0e, '140f5280c0db', '3e06bd000000'),
-                # The filter setup table's internal type 0 entry, sent to the adapter's capture entry.
-                'filter_capture': (0x8052dba4, '7e921c00', '8703bd00'),
+                'filter_hook': (0x28392b0e, '140f5280c0db'),
+                # The filter setup table's internal type 0 entry, sent to the dispatcher's capture entry.
+                'filter_capture': (0x8052dba4, '7e921c00'),
                 'core_range': (0x282dd600, 0x282dda00),
                 'stack_max': 544,
                 'code_guard_bytes': 64,
