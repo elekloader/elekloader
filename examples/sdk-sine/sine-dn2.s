@@ -2,7 +2,8 @@
 // SDK Sine's sound on the Digitone II's SHARC: sine.c's C render, step for step in integers, so the
 // samples are the same. sine.c declares it under ELEK_TARGET_SHARC:
 //   void sine_render(const struct elek_voice *v, elek_sample *out);
-// R4 = v: +0 knob (FINE, cents, at knob[0]), +8 start, +12 pitch (16.16), +20 state; R8 = out (32 floats).
+// R4 = v: +0 knob (FINE, cents, at knob[0]), +8 start, +12 pitch (16.16), +20 state, +28 cc (each CC's
+// value since the last block, or -1); R8 = out (32 floats).
 // The state's first word is the phase, 2^32 a cycle. It writes only R0, R1, R3-R7, I4 and I12 (the C
 // ABI's scratch registers), and reads its constants from its own data.
 .SECTION/DM seg_dmda;
@@ -66,6 +67,19 @@ sine_render.:
     R1=R4+R1;
     I4=R1;
     R3=DM(I4,M5);                   // start
+    // cc[9] >= 0, CC 9 since the last block, restarts the wave as a note's start does.
+    R1=28;
+    R1=R4+R1;
+    I4=R1;
+    R1=DM(I4,M5);                   // cc
+    R5=36;
+    R1=R1+R5;
+    I4=R1;
+    R1=DM(I4,M5);                   // cc[9]
+    R1=PASS R1;
+    IF LT JUMP sine_cc_done;        // -1: none came
+    R3=1;
+sine_cc_done:
     R1=12;
     R1=R4+R1;
     I4=R1;
@@ -112,7 +126,7 @@ sine_render.:
     R4=LSHIFT R4 BY R0;
     R7=R7+R4;
     R7=LSHIFT R7 BY R1;             // inc, a sample
-    R1=0;                           // each note starts its wave at zero
+    R1=0;                           // each note, and CC 9, start the wave at zero
     R3=PASS R3;
     IF NE JUMP sine_go;
     I4=R6;

@@ -210,6 +210,9 @@ no SDK machines.
   gets the stock's note moved by the keys' difference, so TUNE and the
   pitch LFO still apply, and `start` stays clear. The sequencer's trigs do
   not pass there.
+- **MIDI CCs** (1.9, core 4.3): it subscribes to `ev_midi_cc` and keeps
+  each audio track's CCs for `v->cc` (`sdk_alpha_midi_cc` in the shared
+  `machine.c`), and never takes one, so the stock applies it as before.
 
 ## Beside the shop's mods
 

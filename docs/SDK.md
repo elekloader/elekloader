@@ -10,12 +10,13 @@ change, and mods must be rebuilt when it does.
 | | Digitakt mk1 | Digitone mk1 / Keys | Digitone II |
 |---|---|---|---|
 | Stock OS | 1.54 | 1.44 | 1.12 |
-| Core and companion | `mods/core`, `mods/machine-pages` | `mods/core-dn1` (5.2 or later; 5.3 for `pick`), `mods/machines-dn1` | `mods/core-dn2` (0.2 or later), `mods/machines-dn2` |
+| Core and companion | `mods/core` (4.3 or later), `mods/machine-pages` | `mods/core-dn1` (5.3 or later), `mods/machines-dn1` | `mods/core-dn2` (0.4 or later), `mods/machines-dn2` |
 | Choose a machine | FUNC+SRC machine menu | hold a track key, Mod Menu → MACHINES | FUNC+SYN → MACHINE SEL |
 | Its pages show on | SRC | SYN2, in place of its pages on that track | SYN |
 | Pages, labels, hiding, glyphs | yes | yes | yes |
 | `render` and knob defaults | yes | yes | yes, `render` in SHARC assembly ([`render` on the Digitone II](#render-on-the-digitone-ii)) |
 | Mono machines ([`play` and `prio`](#play-and-prio)) | yes, live keys (the trig keys, keyboard mode, MIDI notes; not the sequencer's trigs) | yes, live keys (KEYBOARD mode, MIDI notes; not the sequencer's trigs), and one voice a track | yes: the track's own PLAY MODE and MONO NOTE PRIO, which machines-dn2 sets from the machine |
+| MIDI CCs in `render` (`v->cc`) | yes | yes | yes |
 
 Other devices and OS releases, the Digitakt II among them, are not SDK
 targets. The builder's `SDK_ALPHA_TARGETS`
@@ -124,8 +125,8 @@ python -m elekloader.patch --stock $STOCK --mod build/core-*.elemod \
   --mod build/machine*.elemod --mod build/my-saw-*.elemod --out test.syx --version SAW1
 ```
 
-Lint prints two `OK:` lines, the second `OK: links as core 4.1 >
-machine-pages 1.7 > my-saw 0.1`; patch ends with `WROTE test.syx`. Load it
+Lint prints two `OK:` lines, the second `OK: links as core 4.3 >
+machine-pages 1.9 > my-saw 0.1`; patch ends with `WROTE test.syx`. Load it
 as in [Adapting your mod](ADAPTING.md).
 
 ## Reference
@@ -223,6 +224,29 @@ counts its frames. A machine whose state should move on regardless
 catches up from `idle`: a free-running oscillator adds `inc * idle` to its
 phase.
 
+**MIDI CCs.** `v->cc[n]`, `n` 0..127, is the value, 0..127, of MIDI CC
+`n` if one came on the voice's track since this voice's last render, and
+-1 otherwise:
+
+```c
+if (v->cc[9] >= 0)              /* CC 9, any value: start over */
+    s->phase = 0;
+```
+
+[sdk-sine](../examples/sdk-sine) restarts its wave on CC 9, in C and in
+its Digitone II SHARC render.
+
+- Every CC on the track's channel (or on the auto channel, while the
+  track is the active one) reaches every voice of the track, once, at its
+  next render. A silent voice gets it when it renders again.
+- Several of the same CC before a render read as the last one. Which of
+  two different CCs came first is not kept.
+- The stock still applies the CC: a knob's CC still turns the knob. The
+  machine decides what any CC means to it.
+- A voice changes machine at the track's next note. Its first render on
+  the machine gets the CCs that came since its track took that machine,
+  so a CC sent after choosing the machine reaches its first note.
+
 **Voice state.** The companion keeps a 256-byte block
 (`ELEK_VOICE_STATE_MAX`) for each voice, and passes the same block to every
 `render` call for that voice, so what the code writes there is there in the
@@ -231,8 +255,8 @@ switches to another machine, never otherwise. `ELEK_STATE(struct my_state,
 v)` returns it as a `struct my_state *`, and fails to compile when the
 struct does not fit.
 
-`render` may read its arguments, its voice state and constant data. A
-writable global is not a channel from the UI. Do not allocate, block or
+`render` may read its arguments (`cc` among them), its voice state and
+constant data. A writable global is not a channel from the UI. Do not allocate, block or
 call the firmware. Without `.render` the device's own sound plays: the
 Digitones play FM, whose parameters the SDK knobs then turn; the Digitakt
 plays nothing.
@@ -285,7 +309,8 @@ and a missing label (`render is sine_render, but no file in mod.json's
 machines-dn2's dispatcher calls the routine for each voice slot that plays
 the machine, with R4 = `v` and R8 = `out`, 32 floats. `v` is
 `struct elek_voice` as the header lays it out: `knob` at +0, `track` +4,
-`start` +8, `pitch` +12, `velocity` +16, `state` +20.
+`start` +8, `pitch` +12, `velocity` +16, `state` +20, `idle` +24 (always
+0) and `cc` +28.
 
 - `knob[ID]` is `sdk_alpha_map`'s value for this voice's raw value, as on
   the other devices;
@@ -293,7 +318,9 @@ the machine, with R4 = `v` and R8 = `out`, 32 floats. `v` is
 - `pitch` is 16.16 and `velocity` 1..127;
 - `start` is set in the block after the note's trigger, whose own block
   is silent;
-- `state` is the slot's 256 bytes, zeroed when the slot's machine changes.
+- `state` is the slot's 256 bytes, zeroed when the slot's machine changes;
+- `cc` is 128 words, CC n's value or -1 at word n: `R0=DM(7,I0); I1=R0;
+  R0=DM(9,I1);` with I0 = R4 reads `cc[9]`.
 
 The routine may change what the dispatcher saves and restores around the
 call: R0–R15, I0–I5, I12, I13, M0–M4, L0–L5, LCNTR and the ASTAT and
@@ -409,6 +436,7 @@ gives the peak (1.0 is full scale) and the pitch it found.
 | `--track T` | the track, from 0, for `present` and the render (default 0) |
 | `--page P` | the page `present` is shown, from 0 (default 0); refused if the machine has no such page |
 | `--retrigger N` | start a new note (`start` set) every N blocks (default: one held note) |
+| `--cc B:N=V` | MIDI CC N = V on the track before block B, in the next render's `v->cc`; repeat it for more |
 | `--blocks N` | how long to render, in blocks of 32 samples (default 375: 0.25 s) |
 | `--wav out.wav` | write the render as a 48 kHz mono WAV, to listen to |
 | `--float` | build with the SHARC's float samples instead of the ColdFire's Q31 |

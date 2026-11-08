@@ -38,6 +38,20 @@ static const struct elek_machine machine = {
 ELEK_REGISTER_MACHINE(machine);
 '''
 
+# Plays CC 9's value from the block that sees it, for as long as it lasts, and silence otherwise.
+CCS = r'''#include "elekloader/sdk_alpha_machine.h"
+static const struct elek_knob knobs[] = { { "K", .max = 1 } };
+static void render(const struct elek_voice *v, elek_sample *out)
+{
+    int32_t value = v->cc[9];
+    for (int i = 0; i < ELEK_VOICE_FRAMES; ++i)
+        out[i] = value < 0 ? 0 : elek_level(value, 127);
+}
+static const struct elek_machine machine = { .id = 201, .name = "CCS", .short_name = "CCS", ELEK_KNOBS(knobs),
+                                             .render = render };
+ELEK_REGISTER_MACHINE(machine);
+'''
+
 
 def host(*args):
     done = subprocess.run([sys.executable, '-m', 'elekloader.sdk.sdk_alpha_host', *args], cwd=ROOT,
@@ -85,6 +99,15 @@ class HostRunTests(unittest.TestCase):
         self.assertNotEqual(held[7 * 32], 0)
         self.assertEqual((again[7 * 32], again[14 * 32]), (0, 0))
         self.assertEqual(again[:7 * 32], held[:7 * 32])
+
+    def test_cc_9_restarts_the_sines_wave(self):
+        with contextlib.redirect_stdout(io.StringIO()):
+            held = sdk_alpha_host.host(ROOT / 'examples/sdk-sine', blocks=20)
+            reset = sdk_alpha_host.host(ROOT / 'examples/sdk-sine', blocks=20, ccs=['7:9=0', '9:10=1'])
+        self.assertNotEqual(held[7 * 32], 0)
+        self.assertEqual(reset[7 * 32], 0)                  # its block starts at zero, once
+        self.assertEqual(reset[:7 * 32], held[:7 * 32])
+        self.assertEqual(reset[8 * 32:9 * 32], held[32:2 * 32])
 
     def test_present_starts_from_the_knob_values(self):
         code, out = host('examples/sdk-hello-world', '--knob', 'AMNT=5')
@@ -154,6 +177,15 @@ class HostRunTests(unittest.TestCase):
         self.assertEqual(played[17][1], 'no change')
         self.assertEqual(played[18][1], 'play 42 (velocity 100): the AMP restarts, start set')
 
+    def test_a_cc_reaches_the_render_of_its_block_once(self):
+        with tempfile.TemporaryDirectory() as tmp, contextlib.redirect_stdout(io.StringIO()) as out:
+            Path(tmp, 'mod.json').write_text('{"sources": ["m.c"]}')
+            Path(tmp, 'm.c').write_text(CCS)
+            samples = sdk_alpha_host.host(tmp, blocks=6, ccs=['4:9=127', '2:9=64', '2:9=32', '3:10=1'])
+        self.assertIn('CC 9=64 before block 2, CC 9=32 before block 2, CC 10=1 before block 3', out.getvalue())
+        levels = [round(samples[32 * b], 3) for b in range(6)]
+        self.assertEqual(levels, [0, 0, round(32 / 127, 3), 0, 1.0, 0])     # the last of a block's CCs, once
+
     def test_refusals(self):
         code, out = host('examples/sdk-sine', '--keys', '60+')
         self.assertTrue(code and '--keys: SDK Sine is ELEK_POLY' in out, out)
@@ -165,7 +197,9 @@ class HostRunTests(unittest.TestCase):
                               (['--velocity', '0'], '--velocity 0: give 1..127'),
                               (['--track', '-1'], '--track -1: give a track from 0'),
                               (['--note', '127.5'], '--note 127.5: give a MIDI note 0..127'),
-                              (['--retrigger', '-1'], '--retrigger -1: give blocks between notes')):
+                              (['--retrigger', '-1'], '--retrigger -1: give blocks between notes'),
+                              (['--cc', '0:128=1'], '--cc 0:128=1: give B:N=V'),
+                              (['--cc', '9=1'], '--cc 9=1: give B:N=V')):
             code, out = host('examples/sdk-sine', *args)
             self.assertTrue(code and message in out, out)
         code, out = host('examples/hello-marker')

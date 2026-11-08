@@ -18,7 +18,11 @@ the DSP receives FM TONE's type for one without. From 0.4 a mono machine's
 `.play` and `.prio` ([SDK.md](SDK.md#play-and-prio)) set its track's TRK
 SETUP PLAY MODE and MONO NOTE PRIO, through the menu's own setters
 (`0x4004b6d6`, `0x4004b786`) on each tick, so the OS's voice allocator
-carries them out and a change in the menu goes back. SDK and SHARC synths
+carries them out and a change in the menu goes back. Its `ev_midi_cc` handler
+posts each CC on a track, with the track's machine, to the dispatcher
+(`core_dsp_post`, core-dn2 0.4, from machines-dn2 0.5), which keeps each track's CCs for the
+render's `v->cc` ([its SDK section](SDK.md#render-on-the-digitone-ii)).
+SDK and SHARC synths
 share the `mk2-synth` ID namespace; filters have their own namespace.
 
 A build takes any number of SHARC synths and filters, from any number of

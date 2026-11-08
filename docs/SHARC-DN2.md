@@ -137,6 +137,13 @@ SHARC mod, and builds without one keep a stock DSP.
 - **Cost:** about a dozen DSP instructions per block when idle and about 60
   during a read; eight halfword stores and two reads per frame on the
   ColdFire. One halfword per block is about 3 KB/s.
+- **Posts** (core-dn2 0.4, `core_dsp_post`) follow the request in the
+  tail: words 4 + 2i and 5 + 2i, five of them, a post's number (from 1; 0
+  is none) and its 25-bit word with the number's low seven bits above it,
+  so a reader skips a post the DSP is still receiving. OS 1.12's DSP
+  receives the frames alternately at `0x2c29d0` and `0x2c39d0`: the posts
+  are at `0x2c3460` and `0x2c4460`, and a reader takes both buffers'
+  posts in number order (machines-dn2's dispatcher, `cc_take`).
 - **Ownership:** the frame tail and reply word 2 are the peek's. DigiKit's
   `core/dsp-link` and the `sharc` branch's metrics core use the same places;
   only one can be in a build.

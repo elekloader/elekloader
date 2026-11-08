@@ -111,7 +111,7 @@ and the shared `mods/sdk-alpha/machine.c` with each mk1 adapter) and
 
 The other `test_sdk_alpha_*.py` files boot the machines they define on
 each device's emulator: machines, knobs, labels, value texts, hiding, glyphs, LFO
-destinations, saving, defaults and sound. Device facts (addresses,
+destinations, saving, defaults, sound and MIDI CCs. Device facts (addresses,
 navigation, screen geometry) live in `tests/sdk_alpha_devices.py`. Run one
 file at a time, as `tests/sdk_alpha_harness.py` says. The Digitakt and
 the Digitone mk1 run in digiemu, with its Python:
@@ -122,8 +122,13 @@ ELEKLOADER_STOCK_DN1_144=<Digitone_and_Digitone_Keys_OS1.44.syx> ELEKLOADER_CROS
 uv run --project "$ELEKLOADER_DIGIEMU" python tests/test_sdk_alpha_hiding.py
 ```
 
+`test_sdk_alpha_midi.py` sends MIDI to digiemu's MIDI input; on the
+Digitone mk1 the harness first sets INPUT FROM to MIDI+USB, which the
+setup leaves at USB.
+
 The Digitone II runs in DigiKit's ColdFire emulator, and its sound
-(`test_sdk_alpha_sound.py`) in DigiKit's coupled emulator, which runs the
+(`test_sdk_alpha_sound.py`, `test_sdk_alpha_midi.py`, with MIDI through
+`midi.usb.in`) in DigiKit's coupled emulator, which runs the
 DSP too: `ELEKLOADER_DIGI_EMUD_COUPLED` is a digi-emud built with coupled
 audio, `ELEKLOADER_DN2_EMU_READY` its ready inputs, and `SELACHE` assembles
 the test machines' SHARC renders. The probes such a render keeps are read

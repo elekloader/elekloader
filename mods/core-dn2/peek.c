@@ -3,7 +3,8 @@
  * The frame sender's call of the SPI driver comes here. The driver's transmit queue has one
  * 32-bit entry per frame halfword, command half first, and it writes data halves only for the
  * data it is given: the frame's tail keeps the data halves written here, which carry the
- * request. The reply it copies carries the DSP's answer in word 2 and its span in word 0. */
+ * request, and from 0.4 the words posted for DSP code (core_dsp_post). The reply it copies carries the
+ * DSP's answer in word 2 and its span in word 0. */
 #include "digitone-mk2/core.h"
 
 extern void DSP_FRAME(unsigned data_bytes, const void *data, unsigned frame_bytes, void *reply);
@@ -16,15 +17,36 @@ static volatile unsigned short words[2 * CORE_DSP_PEEK_MAX];
 static volatile unsigned char got[2 * CORE_DSP_PEEK_MAX / 8];
 static volatile unsigned received, total, refused, seq;
 static volatile unsigned span, span_peak;
+/* The newest CORE_DSP_POSTS posts, as tail words 4 + 2i (its number) and 5 + 2i (the word, its number's
+ * low seven bits above it). */
+static volatile unsigned posts[CORE_DSP_POSTS][2], post_seq, post_at;
+
+/* The DSP reads word k of the tail as halfword 2k + 1 above halfword 2k. */
+static void tail(unsigned at, unsigned k, unsigned word)
+{
+    DSP_QUEUE[2 * (at + 2 * k) + 1] = word & 0xffff;
+    DSP_QUEUE[2 * (at + 2 * k + 1) + 1] = word >> 16;
+}
+
+void core_dsp_post(unsigned word)
+{
+    unsigned sr = core_keys_lock(), i;          /* interrupts masked: a post is whole in each frame */
+    i = post_at = (post_at + 1) % CORE_DSP_POSTS;
+    post_seq = post_seq + 1 ? post_seq + 1 : 1;     /* 0 is no post */
+    posts[i][1] = (word & CORE_DSP_POST_MASK) | post_seq << 25;
+    posts[i][0] = post_seq;
+    core_keys_unlock(sr);
+}
 
 void core_dsp_frame(unsigned data_bytes, const void *data, unsigned frame_bytes, void *reply)
 {
     const volatile unsigned short *r = reply;
     unsigned i, at = data_bytes / 2, tag, index;
-    /* The DSP reads word k of the tail as halfword 2k + 1 above halfword 2k. */
-    for (i = 0; i < 4; ++i) {
-        DSP_QUEUE[2 * (at + 2 * i) + 1] = request[i] & 0xffff;
-        DSP_QUEUE[2 * (at + 2 * i + 1) + 1] = request[i] >> 16;
+    for (i = 0; i < 4; ++i)
+        tail(at, i, request[i]);
+    for (i = 0; i < CORE_DSP_POSTS; ++i) {
+        tail(at, 4 + 2 * i, posts[i][0]);
+        tail(at, 5 + 2 * i, posts[i][1]);
     }
     DSP_FRAME(data_bytes, data, frame_bytes, reply);
     /* The DSP stores its words with the halves swapped, so word 0 reads whole. */

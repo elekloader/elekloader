@@ -194,4 +194,11 @@ extern void fw_note_on(int32_t track, int32_t note, int32_t vel, int32_t source,
                        int32_t flag);
 extern void fw_note_off(int32_t track, int32_t note, int32_t source);
 
+/* ---- core 4.3: ev_midi_cc --------------------------------------------------------------------------- */
+/* Each MIDI CC the unit receives, before the stock applies it: track 0-7 the audio tracks, 8-15 the MIDI
+ * tracks, 16 the FX track; flags CORE_MIDI_CC_AUTO when it came on the auto channel. cc and value 0-127.
+ * Nonzero takes it: the stock does not apply it. The MIDI task, not interrupt level. */
+#define CORE_MIDI_CC_AUTO  1u
+typedef int32_t (*ev_midi_cc_fn)(int32_t track, int32_t cc, int32_t value, int32_t flags);
+
 #endif

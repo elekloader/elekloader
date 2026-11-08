@@ -26,6 +26,16 @@ The optional [dspbusy-dn2 companion](../dspbusy-dn2/README.md) enables the
 busy measure in builds with a SHARC mod; without it the record stays zero
 and the peek still works.
 
+Core **0.4** adds `ev_midi_cc` ([midi.s](midi.s)): each MIDI CC the unit
+receives, `f(track, cc, value, flags)`, before the stock applies it, as
+core-dn1's; a handler that returns nonzero takes it. The site is the CC
+router's flags load and CC 95 check, 0x4003f106 (the router is
+0x4003f0ec). It also adds `core_dsp_post(word)`: up to five numbered
+25-bit words a frame for DSP code, in the frame's tail after the peek's
+request ([SHARC-DN2.md](../../docs/SHARC-DN2.md#the-dsp-peek)).
+machines-dn2 posts each CC to its dispatcher with it. A mod that uses
+either sets `resources.core: "0.4"`.
+
 `bridge.sharc.json` is the bridge, already compiled and linked from
 `sharc-bridge.s`, with the slot and pitch reader the
 [sine example](../../examples/sharc-sine/README.md) relies on. The linker
@@ -92,8 +102,8 @@ Build it with the SDK (it needs m68k binutils; with Homebrew's
 `m68k-elf-binutils`, set `ELEKLOADER_CROSS=m68k-elf-`):
 
 ```bash
-python -m elekloader.sdk.build mods/core-dn2 --stock Digitone_II_OS1.12.syx      # out/core-0.3.elemod
-python -m elekloader.lint mods/core-dn2/out/core-0.3.elemod --stock Digitone_II_OS1.12.syx
+python -m elekloader.sdk.build mods/core-dn2 --stock Digitone_II_OS1.12.syx      # out/core-0.4.elemod
+python -m elekloader.lint mods/core-dn2/out/core-0.4.elemod --stock Digitone_II_OS1.12.syx
 ```
 
 ## Input bridge and SysEx observers
@@ -131,7 +141,7 @@ No arbitrary memory-write or function-call command is added.
 
 ## Validation and limits
 
-Core 0.3 is experimental. `tests/test_digitone2.py` checks the stock sites,
+Core 0.4 is experimental. `tests/test_digitone2.py` checks the stock sites,
 stack/queue contracts, clock setup and exact patch boundaries.
 `tests/test_dn2_input.py` checks ownership and input/queue bounds without
 firmware. Digikit's ColdFire emulator checks stock-identical core-only

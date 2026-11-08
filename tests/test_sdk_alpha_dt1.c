@@ -22,7 +22,7 @@ static int32_t effective[8][15], blocks[8 * ELEK_VOICE_FRAMES];
 static uint8_t kit[0x20 + 8 * 0xa2];
 static uint32_t calls[8];
 static struct elek_voice last[8];
-static int32_t value[8];
+static int32_t value[8], cc9[8], cc12[8], cc74[8];
 
 int32_t cm_src_value(int32_t track, int32_t knob) { return effective[track][knob]; }
 int32_t mp_shown_value(void *view, uint32_t id, uint8_t *locked)
@@ -34,6 +34,8 @@ static void render(const struct elek_voice *v, elek_sample *out)
     assert(v->state && v->knob);
     last[v->track] = *v;
     value[v->track] = v->knob[0];
+    assert(v->cc);
+    cc9[v->track] = v->cc[9]; cc12[v->track] = v->cc[12]; cc74[v->track] = v->cc[74];
     uint32_t *state = ELEK_STATE(uint32_t, v);
     out[0] = ++*state;
     ++calls[v->track];
@@ -126,6 +128,46 @@ int main(void)
     fw_render_machine[0] = 0; sdk_alpha_render(blocks);
     fw_render_machine[0] = 100; fw_amp_env[1] = 1; sdk_alpha_render(blocks);
     assert(calls[0] == before + 3 && last[0].idle == 0 && blocks[0] == 1);
+    /* CCs: each reaches its track's voice once, at its next render, the stock still applying it. */
+    fw_voice_start = 0; fw_amp_env[1] = fw_amp_env[4] = 1;
+    sdk_alpha_render(blocks);
+    assert(cc9[0] == -1 && cc9[1] == -1);
+    assert(sdk_alpha_midi_cc(0, 9, 64, 0) == 0);
+    sdk_alpha_midi_cc(0, 9, 100, 0);             /* the same CC again: its last value */
+    sdk_alpha_midi_cc(1, 74, 5, 1);
+    assert(sdk_alpha_midi_cc(8, 9, 1, 0) == 0 && sdk_alpha_midi_cc(16, 9, 1, 0) == 0);  /* MIDI and FX tracks */
+    assert(sdk_alpha_midi_cc(0, 128, 1, 0) == 0 && sdk_alpha_midi_cc(-1, 9, 1, 0) == 0);
+    sdk_alpha_render(blocks);
+    assert(cc9[0] == 100 && cc74[0] == -1 && cc9[1] == -1 && cc74[1] == 5);
+    sdk_alpha_render(blocks);
+    assert(cc9[0] == -1 && cc74[1] == -1);       /* once */
+    fw_amp_env[1] = 0;                           /* a silent track keeps it until it renders again */
+    sdk_alpha_midi_cc(0, 12, 1, 0);
+    sdk_alpha_render(blocks); sdk_alpha_render(blocks);
+    assert(cc12[1] == -1);
+    fw_amp_env[1] = 1;
+    sdk_alpha_render(blocks);
+    assert(cc12[0] == 1);
+    /* The track's voice takes a machine at its next note, after the kit has: a CC in between is for the
+     * new machine; one while the kit had another machine is not, and none comes twice. */
+    FW_SOUND(kit, 0)[FW_SOUND_MACHINE] = 0;
+    fw_render_machine[0] = 0; sdk_alpha_render(blocks);
+    sdk_alpha_midi_cc(0, 9, 3, 0);               /* for the stock machine */
+    FW_SOUND(kit, 0)[FW_SOUND_MACHINE] = 100;
+    sdk_alpha_midi_cc(0, 12, 4, 0);              /* for machine 100, before its first note */
+    sdk_alpha_render(blocks);
+    fw_render_machine[0] = 100; sdk_alpha_render(blocks);
+    assert(cc9[0] == -1 && cc12[0] == 4);
+    fw_render_machine[0] = 0; sdk_alpha_render(blocks);
+    fw_render_machine[0] = 100; sdk_alpha_render(blocks);
+    assert(cc12[0] == -1);                       /* back on it: not again */
+    cc_count = CC_COUNT - 1;                     /* the count wraps */
+    sdk_alpha_render(blocks);
+    sdk_alpha_midi_cc(0, 9, 11, 0); sdk_alpha_midi_cc(0, 12, 22, 0); sdk_alpha_midi_cc(0, 74, 33, 0);
+    sdk_alpha_render(blocks);
+    assert(cc_count == 2 && cc9[0] == 11 && cc12[0] == 22 && cc74[0] == 33);
+    sdk_alpha_render(blocks);
+    assert(cc9[0] == -1 && cc12[0] == -1 && cc74[0] == -1);
     assert(sdk_alpha_map(&knobs[0], sdk_alpha_default(&knobs[0])) == 0);   /* omitted: 0 */
     struct elek_knob level = { "LEVEL", .max = 127, .def = 100 };
     assert(sdk_alpha_map(&level, sdk_alpha_default(&level)) == 100);

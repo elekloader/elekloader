@@ -21,12 +21,12 @@ from elekloader.sdk import build
 Target = collections.namedtuple('Target', 'companions first_id features native')
 SDK_ALPHA_TARGETS = {
     ('digitakt-mk1', '1.54'): Target(('core', 'machine-pages'), 4,
-                                     frozenset(('render', 'defaults', 'mono')), 'core_machines'),
+                                     frozenset(('render', 'defaults', 'mono', 'midi_cc')), 'core_machines'),
     ('digitone-mk1', '1.44'): Target(('core', 'machines'), 4,
-                                     frozenset(('render', 'defaults', 'mono')), None),
+                                     frozenset(('render', 'defaults', 'mono', 'midi_cc')), None),
     # the Digitone II's synth type 4 is MIDI; its render is SHARC code ('kernels'): the C is built with
     # ELEK_TARGET_SHARC and .render names a label in mod.json's "sharc": {"sources": [...]}
-    ('digitone-mk2', '1.12'): Target(('core', 'machines-dn2'), 5, frozenset(('kernels', 'defaults', 'mono')),
+    ('digitone-mk2', '1.12'): Target(('core', 'machines-dn2'), 5, frozenset(('kernels', 'defaults', 'mono', 'midi_cc')),
                                      None),
 }
 SDK_ALPHA_TABLE = 'sdk_alpha_machines'   # pointers to struct elek_machine, read by each companion
