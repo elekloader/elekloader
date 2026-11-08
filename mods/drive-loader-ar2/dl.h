@@ -15,7 +15,8 @@ typedef int s32;
 
 #define DL_MAX_MODS 256                      /* lines of /mods/active a boot links */
 #define DL_ID_MAX 28                     /* a mod id, NUL included, as the status keeps it */
-#define DL_LINE_NAME_MAX 64                   /* a file name in /mods/active, NUL included */
+#define DL_LINE_NAME_MAX 128                  /* a path below /mods in /mods/active (folders
+                                             * included: "a/b/c/x.elemod"), NUL included */
 #define DL_VER_MAX 12                        /* a version as dl_check reports it, NUL included */
 
 /* ---- status records: /mods/.status and the MODS page (32 bytes per /mods/active line) -- */

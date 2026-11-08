@@ -39,6 +39,7 @@ CHUNK = 0x2000
 READ_CHUNKS = (CHUNK, 0x300)
 NO_REPLY = 'no reply from the unit to command 0x%02x'
 FOLDER = '/mods'
+DEPTH = 3                       # folders below FOLDER the route reaches (the loader's DL_DEPTH)
 
 
 def pack7(data):
@@ -112,20 +113,21 @@ class Client:
 
     # -- the Data router
     def ls(self, path):
-        """-> [(name, kind, size)] (kind 1 a folder, 2 an item)."""
+        """-> [(name, kind, size)] (kind 1 a folder, 2 an item). An item whose children byte is
+        set can be listed itself (a route's folder, as /soundbanks' banks): it is given as kind 1."""
         msg = self.call(LIST, path.encode('latin-1') + b'\0' + struct.pack('>iiB', 0, 0, 1))
         out, at = [], 18
         while at < len(msg):
             end = msg.index(b'\0', at)
             name = msg[at:end].decode('latin-1')
-            _children, kind = msg[end + 1], msg[end + 2]
+            children, kind = msg[end + 1], msg[end + 2]
             at = end + 3
             if kind == 1:
                 out.append((name, 1, 0))
                 at += 4
             else:
                 _index, size = struct.unpack_from('>iI', msg, at)
-                out.append((name, 2, size))
+                out.append((name, 1, 0) if children else (name, 2, size))
                 at += 12
         return out
 
@@ -191,12 +193,31 @@ class Mods:
         self.c, self.folder = client, folder.rstrip('/')
 
     def path(self, name):
-        if '/' in name or not name:
+        """`name`: a file below the folder, in up to DEPTH folders ("drums/kicks/x.elemod")."""
+        parts = name.split('/')
+        if not name or len(parts) > DEPTH + 1 or any(not p or p in ('.', '..') for p in parts) \
+                or any(p.startswith('.') for p in parts[:-1]):
             raise ModError('%r is not a file name in %s' % (name, self.folder))
         return '%s/%s' % (self.folder, name)
 
-    def ls(self):
-        return self.c.ls(self.folder)
+    def ls(self, sub=''):
+        """One folder: [(name, kind, size)] (kind 1 a folder, 2 a file)."""
+        return self.c.ls('%s/%s' % (self.folder, sub) if sub else self.folder)
+
+    def walk(self):
+        """Every file below the folder, to DEPTH folders deep, one listing a folder:
+        [(path below the folder, size)], the folder's own files first, then each folder's."""
+        out, todo = [], ['']
+        while todo:
+            sub = todo.pop(0)
+            for name, kind, size in self.ls(sub):
+                p = '%s/%s' % (sub, name) if sub else name
+                if kind == 1:
+                    if p.count('/') < DEPTH:
+                        todo.append(p)
+                else:
+                    out.append((p, size))
+        return out
 
     def get(self, name):
         """-> (the container's header, the file's bytes)."""
@@ -265,13 +286,16 @@ def add_arguments(p):
     p.add_argument('--port', help='the MIDI port, or a part of its name (default: Rytm)')
     p.add_argument('--folder', default=FOLDER, help='the route\'s folder (default /mods)')
     sub = p.add_subparsers(dest='op', required=True)
-    sub.add_parser('ls', help='list /mods')
+    q = sub.add_parser('ls', help='list /mods, or one of its folders')
+    q.add_argument('folder_path', nargs='?', help='a folder below /mods (default: /mods itself)')
     q = sub.add_parser('get', help='download a file (also .build and .status)')
     q.add_argument('name')
     q.add_argument('--out', help='where to write it (default: its name)')
     q = sub.add_parser('put', help='check the files against the unit\'s build, then upload them')
     q.add_argument('files', nargs='+')
-    q = sub.add_parser('rm', help='delete a file')
+    q.add_argument('--into', help='a folder below /mods to upload into, up to %d deep ("fx/delays"); '
+                   'its folders are made as needed' % DEPTH)
+    q = sub.add_parser('rm', help='delete a file, or an empty folder')
     q.add_argument('name')
     q = sub.add_parser('active', help='choose the mods the unit loads at its next boot, in this order')
     q.add_argument('names', nargs='*', help='local .elemod files, or names already in /mods')
@@ -280,7 +304,7 @@ def add_arguments(p):
 def run(a, mods, log=print):
     """`elekloader mods` with a Mods object. -> the exit code."""
     if a.op == 'ls':
-        for name, kind, size in mods.ls():
+        for name, kind, size in mods.ls(getattr(a, 'folder_path', None) or ''):
             log('%s%s %d' % (name, '/' if kind == 1 else '', size))
         return 0
     if a.op == 'get':
@@ -297,6 +321,11 @@ def run(a, mods, log=print):
     build, head = mods.build()
     if a.op == 'put':
         files = drive._files(a.files)
+        into = (getattr(a, 'into', None) or '').strip('/')
+        if into:
+            files = [('%s/%s' % (into, n), raw) for n, raw in files]
+            for n, _raw in files:
+                mods.path(n)                    # refused here, before anything is checked or sent
         r = drive.check(build, files)
         drive.print_result(r, log)
         if not all(c.state == drive.LOADED for c in r.choices):

@@ -313,8 +313,8 @@ Pyodide, and `app.js` loads it only when the view first opens:
   drops SysEx over about 1 KB), the read starts again with 768-byte chunks
   and the view keeps that size, so the first read there takes one timeout
   (5 s) longer.
-- **`/mods`** lists the folder's `.elemod` files, each downloaded and checked
-  alone against the build (`drive.check`), with Download and Delete (a second
+- **`/mods`** lists the folder's `.elemod` files, those in its folders too (to 3
+  deep, each by its path below `/mods`), each downloaded and checked alone against the build (`drive.check`), with Download and Delete (a second
   press deletes).
 - **Uploads**, dropped or chosen, are checked first, together with the files
   in `/mods` they require. If one would not load, nothing is sent.

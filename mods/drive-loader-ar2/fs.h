@@ -13,8 +13,10 @@
 #define DL_DIR "/mods"
 #endif
 
-#define DL_NAME_MAX 63                 /* a file name in DL_DIR, without the NUL */
-#define DL_PATH_MAX 80                 /* DL_DIR "/" name ".tmp", with the NUL */
+#define DL_NAME_MAX 127                /* a path below DL_DIR ("a/b/x.elemod"), without the NUL */
+#define DL_SEG_MAX 63                  /* one folder or file name in it, without the NUL */
+#define DL_DEPTH 3                     /* folders below DL_DIR, at most (decided 2026-11-08) */
+#define DL_PATH_MAX 144                /* DL_DIR "/" path ".tmp", with the NUL */
 
 /* stock's ekFS file object (0x2c bytes, ctor 0x4007dcfa), kept opaque, then the
  * loader's own: the files carry a 16-byte header (README, "Files on the +Drive") */
@@ -36,6 +38,17 @@ void dl_fs_close(dl_file *f);
 int dl_fs_delete(const char *path);      /* 0, or < 0 (also when the file isn't there) */
 int dl_fs_rename(const char *from, const char *to);   /* 0, or < 0; delete `to` first */
 int dl_fs_file_size(const char *path);   /* the data size of a file, or < 0 */
+int dl_fs_rmdir(const char *path);       /* 0, or < 0: an empty folder only, as SAMPLES' DELETE DIR */
+
+/* one entry of a folder below DL_DIR (route.c, dl_list_dir) */
+struct dl_ent {
+    char name[DL_SEG_MAX + 1];
+    unsigned char dir;                   /* a folder */
+};
+/* the entries of DL_DIR "/" rel (rel "" for DL_DIR itself), folders and files, without "." and
+ * ".." and without a name past DL_SEG_MAX, up to max; out == 0 gives the folder's entry count, an
+ * upper bound on them. The caller holds dl_lock. -> how many */
+int dl_list_dir(const char *rel, struct dl_ent *out, int max);
 
 /* the loader's mutex: the staging buffer, the route's commits and the MODS
  * page's view of the files. Take it before ekFS calls (which take their own),

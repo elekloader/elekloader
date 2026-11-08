@@ -17,7 +17,7 @@ import { crc32 } from './zip.ts'
 export const MAX_MODS = 256                // lines of /mods/active, and status records
 export const ID_MAX = 28                   // a status record's id field (27 bytes and a NUL)
 export const DETAIL = 32                   // a detail string (31 bytes and a NUL)
-export const NAME_MAX = 64                 // a file name in /mods/active (63 bytes)
+export const NAME_MAX = 128                // a path below /mods in /mods/active (127 bytes, folders included)
 export const RECORD = 32
 // the boot linker's own room (dl.h DL_POOL_*, dlink.c pools()): each pool per started MB of the +Drive area (at least
 // 1), the symbols past the flashed build's own names, each capped at POOL_CAP; past one a mod is refused with LIMIT

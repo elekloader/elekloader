@@ -29,7 +29,7 @@ from .link import _align, by_id, entry_key, lay_out, put_reloc
 MAX_MODS = 256                 # lines of /mods/active, and status records
 ID_MAX = 28                    # a status record's id field (27 bytes and a NUL)
 DETAIL = 32                    # a detail string (31 bytes and a NUL)
-NAME_MAX = 64                  # a file name in /mods/active (63 bytes)
+NAME_MAX = 128                 # a path below /mods in /mods/active (127 bytes, folders included)
 RECORD = 32                    # a status record's bytes
 # the boot linker's own room (dl.h DL_POOL_*, dlink.c pools()): each pool per started MB of the
 # +Drive area (at least 1), the symbols past the flashed build's own names, each capped at

@@ -368,10 +368,11 @@ names and `NAME_n` (the count after the merge), `core_desc`, and the other
 it has one, is called after the link as `void drive_init(void)`, in id
 order; it is never a global name. Its id is under 28 bytes.
 
-**`/mods/active`** lists the chosen files, one line each: the file name, a
+**`/mods/active`** lists the chosen files, one line each: the file's path
+below `/mods` (`x.elemod`, or in up to 3 folders, `fx/delays/x.elemod`), a
 space, its CRC-32 (zlib's, as 8 hex digits; `0x` is optional). Blank lines,
-`#` lines and lines without a CRC are skipped; the name is everything
-before the last run of spaces, under 64 bytes. More than 256 lines and
+`#` lines and lines without a CRC are skipped; the path is everything
+before the last run of spaces, under 128 bytes. More than 256 lines and
 nothing loads.
 
 **The link**, in this order:
@@ -487,10 +488,12 @@ compressed.
 
 `elekloader mods` moves files over USB MIDI (`elekloader/datarpc.py`; on
 Windows through winmm, `elekloader/winmm.py`, as python-rtmidi drops SysEx
-over 1 KB there; elsewhere with `mido` and `python-rtmidi`): `ls`, `get NAME` (also `.build` and
-`.status`), `put FILES...` (checked against the unit's `.build` first;
-nothing is uploaded if one is refused), `rm NAME` and `active NAMES...`
-(writes `/mods/active` when the set loads). `--folder` names the route's
+over 1 KB there; elsewhere with `mido` and `python-rtmidi`): `ls [FOLDER]`, `get NAME` (also `.build` and
+`.status`), `put FILES... [--into FOLDER]` (checked against the unit's `.build` first;
+nothing is uploaded if one is refused; the folders are made as needed), `rm NAME` (a file, or an empty
+folder) and `active NAMES...` (writes `/mods/active` when the set loads). A NAME is a path below
+`/mods`, in up to 3 folders (`fx/delays/x.elemod`); the route lists a folder as an item whose
+children byte is 1, as stock's `/soundbanks` lists its banks, and `Mods.walk` lists every folder. `--folder` names the route's
 folder (`/mods`). The TypeScript engine has `check` (`js/src/drive.ts`),
 the container and the same requests (`container.ts`, `datarpc.ts`, over any
 port: Web MIDI on a page), with the same results and bytes

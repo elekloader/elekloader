@@ -195,6 +195,11 @@ def test_active_reads_as_the_boot_linker_reads_it():
     assert drive.parse_active('# x\n\n  a.elemod   0x1F \r\nnocrc\nb.elemod zz\n') == [('a.elemod', 0x1f)]
     assert drive.parse_active(''.join('m%d.elemod 1\n' % i for i in range(257))) is None
     assert len(drive.parse_active(''.join('m%d.elemod 1\n' % i for i in range(256)))) == 256
+    # paths below /mods, folders included (decided 2026-11-08), to 127 bytes
+    deep = 'drums/kicks/' + 'k' * (127 - 12 - 7) + '.elemod'
+    assert len(deep) == 127 and drive.parse_active('%s 1\n%sx 2\nfx/a b/c.elemod 3\n' % (deep, deep)) == \
+        [(deep, 1), ('fx/a b/c.elemod', 3)]
+    assert drive.active_text([('a/b.elemod', b'x')]).startswith('a/b.elemod ')
     for bad in ('#x', ' a', 'a\nb', ''):
         try:
             drive.active_text([(bad, b'')])
@@ -550,12 +555,18 @@ class FakeUnit:
         msg = datarpc.unframe(raw)
         seq, cmd, a = struct.unpack_from('>H', msg)[0], msg[4], msg[5:]
         ok, extra = 1, b''
-        if cmd == datarpc.LIST:
+        if cmd == datarpc.LIST:                 # one folder: its folders, then its files
+            sub = self.rel(a)
+            pre = sub + '/' if sub else ''
+            kids = sorted({n[len(pre):].split('/')[0] for n in self.files if n.startswith(pre) and '/' in n[len(pre):]})
+            for d in kids:                      # as the route: an item whose children byte is 1
+                extra += d.encode() + b'\0' + bytes((1, 2)) + struct.pack('>iIHBB', 0, 0, 0, 1, 0)
             for n in sorted(self.files):
-                extra += n.encode() + b'\0' + bytes((0, 2)) + struct.pack('>iIHBB', 0, len(self.files[n]), 0, 1, 0)
+                if n.startswith(pre) and '/' not in n[len(pre):]:
+                    extra += n[len(pre):].encode() + b'\0' + bytes((0, 2)) + struct.pack('>iIHBB', 0, len(self.files[n]), 0, 1, 0)
             extra = bytes(12) + extra
         elif cmd == datarpc.ROPEN:
-            name = a[:a.index(b'\0')].decode().rsplit('/', 1)[1]
+            name = self.rel(a)
             if name not in self.files:
                 ok = 0
             else:
@@ -575,7 +586,7 @@ class FakeUnit:
         elif cmd == datarpc.WOPEN:
             size = struct.unpack_from('>I', a)[0]
             j = self.nj = self.nj + 1
-            self.jobs[j] = [a[4:a.index(b'\0', 4)].decode().rsplit('/', 1)[1], bytearray(), size]
+            self.jobs[j] = [self.rel(a[4:]), bytearray(), size]
             extra = struct.pack('>I', j)
         elif cmd == datarpc.WRITE:
             j, s, crc, n = struct.unpack_from('>IIII', a)
@@ -597,9 +608,15 @@ class FakeUnit:
                 self.files[name] = body
             extra = struct.pack('>II', j, len(data))
         elif cmd == datarpc.CLEAR:
-            name = a[:a.index(b'\0')].decode().rsplit('/', 1)[1]
+            name = self.rel(a)
             ok = int(self.files.pop(name, None) is not None)
         self.out.append(datarpc.frame(struct.pack('>HH', 0, seq) + bytes((cmd | 0x80, ok)) + extra))
+
+    @staticmethod
+    def rel(a):
+        """A request's path, below /mods ('' for /mods itself)."""
+        p = a[:a.index(b'\0')].decode()
+        return p[len('/mods/'):] if p.startswith('/mods/') else ''
 
     def receive(self, timeout):
         return self.out.pop(0) if self.out else None
@@ -705,6 +722,22 @@ def test_mods_put_ls_get_active_and_rm_over_the_data_router():
             assert open(g, 'rb').read() == open(paths[0], 'rb').read()
             assert datarpc.run(argparse.Namespace(op='rm', name='drive-hello.elemod'), mods, log.append) == 0
             assert 'drive-hello.elemod' not in unit.files
+            # folders (decided 2026-11-08): an upload into one, the walk, a set from two folders, rm
+            assert datarpc.run(argparse.Namespace(op='put', files=paths[:1], into='fx/delays'), mods, log.append) == 0
+            assert unit.files['fx/delays/drive-hello.elemod'] == open(paths[0], 'rb').read()
+            assert ('fx/delays/drive-hello.elemod', len(unit.files['fx/delays/drive-hello.elemod'])) in mods.walk()
+            assert [(n, k) for n, k, _s in mods.ls('fx')] == [('delays', 1)]
+            assert datarpc.run(argparse.Namespace(op='active', names=['fx/delays/drive-hello.elemod',
+                                                                         'drive-hello-user.elemod']), mods, log.append) == 0
+            assert [n for n, _c in drive.parse_active(unit.files['active'].decode())] == \
+                ['fx/delays/drive-hello.elemod', 'drive-hello-user.elemod']
+            try:
+                datarpc.run(argparse.Namespace(op='put', files=paths[:1], into='a/b/c/d'), mods, log.append)
+                assert False, 'four folders deep'
+            except ModError:
+                pass
+            assert datarpc.run(argparse.Namespace(op='rm', name='fx/delays/drive-hello.elemod'), mods, log.append) == 0
+            assert not any(n.startswith('fx/') for n in unit.files)
 
 
 def test_the_7_bit_packing_round_trips():

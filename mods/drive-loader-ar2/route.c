@@ -180,11 +180,11 @@ static void set_str(unsigned char *slot, const char *msg)
 
 /* a closure: what the function is for and the file's name; on the heap, as
  * stock's are, so the router may copy and destroy entries as it likes */
-enum { C_FILE = 1, C_BUILD, C_STATUS };
+enum { C_FILE = 1, C_BUILD, C_STATUS, C_DIR };
 struct clo {
     int what;
     int reading;                          /* set by the fill: counted in dl_reads */
-    char name[DL_NAME_MAX + 1];
+    char name[DL_NAME_MAX + 1];           /* a path below DL_DIR */
 };
 
 /* A read's reader copies the entry, closures and all, after the fill, and destroys the
@@ -351,6 +351,13 @@ void dl_change(void **f, const unsigned char *h)
     dl_file fl;
     unsigned n;
     int r;
+    if (c->what == C_DIR && !h) {          /* a Clear of a folder: stock's rmdir, empty only */
+        path_of(path, c->name, "");
+        dl_lock();
+        note(dl_fs_rmdir(path) ? "rmdir failed (not empty?):" : "removed", c->name);
+        dl_unlock();
+        return;
+    }
     if (c->what != C_FILE)
         return;
     path_of(path, c->name, "");
@@ -465,14 +472,11 @@ static int status_text(void)
 
 /* ---- the routes ---- */
 
-static int name_ok(const char *s)
+/* one folder or file name in a path */
+static int seg_ok(const char *s)
 {
     unsigned n = len(s), i;
-#ifdef DL_TEST_ARMED
-    if (same(s, ".armed"))               /* test builds only: plant the crash flag */
-        return 1;
-#endif
-    if (!n || n > DL_NAME_MAX || s[0] == '.')
+    if (!n || n > DL_SEG_MAX || s[0] == '.')
         return 0;
     for (i = 0; i < n; i++)
         if (s[i] == '/' || s[i] == '\\' || (unsigned char)s[i] < 0x20)
@@ -480,6 +484,16 @@ static int name_ok(const char *s)
     return 1;
 }
 
+static int name_ok(const char *s)
+{
+#ifdef DL_TEST_ARMED
+    if (same(s, ".armed"))               /* test builds only: plant the crash flag */
+        return 1;
+#endif
+    return seg_ok(s);
+}
+
+/* a path below DL_DIR that may be uploaded: "active" at the top, or a .elemod at any depth */
 static int writable(const char *s)
 {
 #ifdef DL_TEST_ARMED
@@ -489,21 +503,75 @@ static int writable(const char *s)
     return same(s, "active") || (ends(s, ".elemod") && len(s) > 7);
 }
 
+/* The route's captures (a vector of std::string, one pointer to the chars each: one a `*` of the
+ * pattern, so one a folder or file name) joined into a path below DL_DIR. -> its folders (the
+ * captures less one), or -1 for a name that isn't one (the first may be .build, .status, .armed:
+ * name_ok; the others must be plain names) or a path past DL_NAME_MAX. */
+static int join_caps(char *out, void **caps)
+{
+    const char *const *v = (const char *const *)caps[0], *const *e = (const char *const *)caps[1];
+    unsigned at = 0, k;
+    int n = (int)(e - v), i;
+    out[0] = 0;
+    for (i = 0; i < n; i++) {
+        const char *s = v[i];
+        if (n == 1 ? !name_ok(s) : !seg_ok(s))
+            return -1;
+        k = len(s);
+        if (at + (i ? 1 : 0) + k > DL_NAME_MAX)
+            return -1;
+        if (i)
+            out[at++] = '/';
+        copy(out + at, s, k + 1);
+        at += k;
+    }
+    return n - 1;
+}
+
+static void *heap_ents(int n)
+{
+    return NEW((unsigned)(n > 0 ? n : 1) * sizeof(struct dl_ent));
+}
+
+/* the path below DL_DIR names a folder there (its parent lists it as one); under dl_lock */
+static int is_folder(const char *rel)
+{
+    char parent[DL_NAME_MAX + 1];
+    const char *base = rel;
+    unsigned i, k = len(rel);
+    struct dl_ent *ents;
+    int n, j, r = 0;
+    for (i = 0; i < k; i++)
+        if (rel[i] == '/')
+            base = rel + i + 1;
+    copy(parent, rel, (unsigned)(base - rel));
+    parent[base > rel ? base - rel - 1 : 0] = 0;
+    n = dl_list_dir(parent, 0, 0);
+    ents = heap_ents(n);
+    n = dl_list_dir(parent, ents, n);
+    for (j = 0; j < n && !r; j++)
+        r = ents[j].dir && same(ents[j].name, base);
+    DELETE(ents);
+    return r;
+}
+
 /* /mods/<name>: expected<entry, string>, 0x84 bytes: {u8 has_value, string
  * error +4, entry +8}. caps[0] is the name. It runs at a ReadOpen, a
  * WriteOpen, an upload's first chunk and a Clear, and can't tell which. */
 unsigned dl_entry(unsigned char *res, void **f, void **caps)
 {
     unsigned char *e = res + 8;
-    const char *name;
+    char name[DL_NAME_MAX + 1];
     const char *why = 0;
     struct clo c;
-    int size = 0, perm = 0;
+    int size = 0, perm = 0, folders;
     (void)f;
     zero(res, 8 + ENTRY_SIZE);
-    name = caps[0] != caps[1] ? *(const char **)caps[0] : "";
+    folders = join_caps(name, caps);
     zero(&c, sizeof c);
-    if (same(name, ".build")) {
+    if (folders < 0) {
+        why = "Invalid name";
+    } else if (same(name, ".build")) {
         put32(e + E_TYPE, TYPE_DESC);
         put32(e + E_ADDR, (unsigned)core_desc);
         size = be32(core_desc + 8);
@@ -520,8 +588,6 @@ unsigned dl_entry(unsigned char *res, void **f, void **caps)
         size = len(text);
         perm = P_READ;
         c.what = C_STATUS;
-    } else if (!name_ok(name)) {
-        why = "Invalid name";
     } else if (dl_staging_owner) {
         why = "Busy: the loader is using /mods";
     } else {
@@ -529,6 +595,16 @@ unsigned dl_entry(unsigned char *res, void **f, void **caps)
         path_of(path, name, "");
         dl_lock();
         size = dl_fs_file_size(path);
+        if (size < 0 && is_folder(name)) {   /* a folder: Clear removes it when it is empty */
+            dl_unlock();
+            put32(e + E_TYPE, EMOD);
+            put32(e + E_ADDR, (unsigned)drive_staging);
+            perm = P_CLEAR;
+            size = 0;
+            c.what = C_DIR;
+            copy(c.name, name, len(name) + 1);
+            goto made;
+        }
         dl_unlock();
         if (size > DL_STAGING_SIZE)
             why = "File too large";
@@ -549,10 +625,13 @@ unsigned dl_entry(unsigned char *res, void **f, void **caps)
         set_str(res + 4, why);
         return (unsigned)res;
     }
+made:
     put32(e + E_KIND, 1);
     *(unsigned short *)(e + E_PERM) = perm;
     put32(e + E_SIZE, size);
     put32(e + E_VERSION, 2);
+    if (c.what == C_DIR)
+        set_fn(e + E_CHANGE, &c, dl_change);
     if (c.what == C_FILE) {
         set_fn(e + E_PRE, &c, dl_pre_inv);
         set_fn(e + E_FILL, &c, dl_fill);
@@ -566,7 +645,8 @@ unsigned dl_entry(unsigned char *res, void **f, void **caps)
 
 extern void dl_call_a0(unsigned fn, void *res, void *a, unsigned b);
 
-/* one list item, 0x14 bytes: {index, string name, size, u16 ops, u8 valid, u8, u8} */
+/* one list item, 0x14 bytes: {index, string name, size, u16 ops, u8 valid (a filtered list sends
+ * only these), u8, u8 children} */
 static void item(unsigned char *it, int index, const char *name, int size, int ops)
 {
     zero(it, 0x14);
@@ -577,44 +657,26 @@ static void item(unsigned char *it, int index, const char *name, int size, int o
     it[0xe] = 1;
 }
 
-/* the files in DL_DIR (not its folders), up to `max`, as items from `at`;
- * -> how many */
-static int walk(unsigned char *at, int max)
+/* A folder's item in a listing. Stock's list reply (0x4008b008) sends an item's +0x10 as its
+ * "children" byte: 1 says it can be listed itself, as /soundbanks' banks A..P (0x40030708). Its
+ * kind stays 2 (an item); kind 1 is only for the router's own folder table (resolver +0x00). */
+static void folder_item(unsigned char *it, int index, const char *name)
 {
-    int i, n, k = 0;
-    DIR_NEW(dl_dir_obj, DL_DIR, 0);
-    n = DIR_COUNT(dl_dir_obj);
-    for (i = 0; i < n && k < max; i++) {
-        unsigned sp[2] = {0, 0};
-        const unsigned char *node;
-        dl_call_a0(DIR_CHILD, sp, dl_dir_obj, i);
-        node = (const unsigned char *)sp[0];
-        if (node && *(const unsigned short *)(node + NODE_KIND) != 1) {
-            const char *nm = (const char *)node + NODE_NAME;
-            if (at) {
-                char path[DL_PATH_MAX];
-                path_of(path, nm, "");
-                item(at + 0x14 * k, k + 1, nm, dl_fs_file_size(path),
-                     P_READ | P_CLEAR | (writable(nm) ? P_WRITE : 0));
-            }
-            k++;
-        }
-        if (sp[1])
-            SP_RELEASE(&sp[1]);
-    }
-    DIR_DEL(dl_dir_obj);
-    return k;
+    item(it, index, name, 0, 0);
+    it[0x10] = 1;
 }
 
-/* the names of DL_DIR's files (not its folders), up to `max`, for the MODS page;
- * the caller holds dl_lock. -> how many */
-/* The files in DL_DIR (names == 0: the folder's entry count, an upper bound on them). */
-int dl_list_files(char (*names)[DL_NAME_MAX + 1], int max)
+/* The entries of DL_DIR "/" rel (route.c's one Directory object, under dl_lock). */
+int dl_list_dir(const char *rel, struct dl_ent *out, int max)
 {
     int i, n, k = 0;
-    DIR_NEW(dl_dir_obj, DL_DIR, 0);
+    char path[DL_PATH_MAX];
+    path_of(path, rel, "");
+    if (!rel[0])
+        path[len(path) - 1] = 0;          /* DL_DIR itself, without the "/" */
+    DIR_NEW(dl_dir_obj, path, 0);
     n = DIR_COUNT(dl_dir_obj);
-    if (!names) {
+    if (!out) {
         DIR_DEL(dl_dir_obj);
         return n;
     }
@@ -623,11 +685,12 @@ int dl_list_files(char (*names)[DL_NAME_MAX + 1], int max)
         const unsigned char *node;
         dl_call_a0(DIR_CHILD, sp, dl_dir_obj, i);
         node = (const unsigned char *)sp[0];
-        if (node && *(const unsigned short *)(node + NODE_KIND) != 1) {
+        if (node) {
             const char *nm = (const char *)node + NODE_NAME;
             unsigned q = len(nm);
-            if (q <= DL_NAME_MAX) {
-                copy(names[k], nm, q + 1);
+            if (q && q <= DL_SEG_MAX && !same(nm, ".") && !same(nm, "..")) {
+                copy(out[k].name, nm, q + 1);
+                out[k].dir = *(const unsigned short *)(node + NODE_KIND) == 1;
                 k++;
             }
         }
@@ -638,29 +701,78 @@ int dl_list_files(char (*names)[DL_NAME_MAX + 1], int max)
     return k;
 }
 
-#define LIST_MAX 254
+/* DL_DIR "/" rel's folders (above DL_DEPTH only) and files as items from `at` (0: count only),
+ * under dl_lock; `folders` is rel's depth. -> how many */
+static int walk(unsigned char *at, const char *rel, int folders, struct dl_ent *ents, int n)
+{
+    int i, k = 0;
+    char p[DL_NAME_MAX + 1], path[DL_PATH_MAX];
+    for (i = 0; i < n; i++) {
+        const char *nm = ents[i].name;
+        unsigned a = len(rel);
+        if (nm[0] == '.' || a + (a ? 1 : 0) + len(nm) > DL_NAME_MAX)
+            continue;
+        if (ents[i].dir && folders >= DL_DEPTH)
+            continue;                     /* past the route's patterns: not reachable */
+        copy(p, rel, a);
+        if (a)
+            p[a++] = '/';
+        copy(p + a, nm, len(nm) + 1);
+        if (at) {
+            if (ents[i].dir)
+                folder_item(at + 0x14 * k, k + 1, nm);
+            else {
+                path_of(path, p, "");
+                item(at + 0x14 * k, k + 1, nm, dl_fs_file_size(path),
+                     P_READ | P_CLEAR | (writable(p) ? P_WRITE : 0));
+            }
+        }
+        k++;
+    }
+    return k;
+}
 
-/* /mods: optional<vector<item>>, 0x14 bytes: {u8 has_value, string error +4,
- * begin +8, end +0xc, cap +0x10}. The router frees the items and their names. */
-unsigned dl_list(unsigned char *res, void **f, void *caps)
+/* /mods, /mods/<folder>...: optional<vector<item>>, 0x14 bytes: {u8 has_value, string error +4,
+ * begin +8, end +0xc, cap +0x10}. The router frees the items and their names. The vector is sized
+ * to the folder (no cap: 254 left files of a full /mods unlisted). DL_DIR itself also lists .build
+ * and .status. */
+unsigned dl_list(unsigned char *res, void **f, void **caps)
 {
     unsigned char *v;
-    int n;
-    (void)f, (void)caps;
+    char rel[DL_NAME_MAX + 1];
+    struct dl_ent *ents;
+    int n, k, top, folders = 0;
+    (void)f;
     zero(res, 0x14);
-    v = NEW(0x14 * (LIST_MAX + 2));
+    if (caps && caps[0] != caps[1]) {
+        folders = join_caps(rel, caps) + 1;
+        if (folders <= 0 || ((const char *const *)caps[0])[0][0] == '.') {
+            set_str(res + 4, "Invalid name");
+            return (unsigned)res;
+        }
+    } else
+        rel[0] = 0;
+    top = !rel[0];
     dl_lock();
-    n = walk(v, LIST_MAX);
+    n = dl_list_dir(rel, 0, 0);
+    ents = heap_ents(n);
+    n = dl_list_dir(rel, ents, n);
+    k = walk(0, rel, folders, ents, n);
+    v = NEW(0x14 * (unsigned)(k + 2));
+    k = walk(v, rel, folders, ents, n);
     dl_unlock();
-    item(v + 0x14 * n, n + 1, ".build", be32(core_desc + 8), P_READ);
-    n++;
-    item(v + 0x14 * n, n + 1, ".status", 0, P_READ);
-    n++;
+    DELETE(ents);
+    if (top) {
+        item(v + 0x14 * k, k + 1, ".build", be32(core_desc + 8), P_READ);
+        k++;
+        item(v + 0x14 * k, k + 1, ".status", 0, P_READ);
+        k++;
+    }
     res[0] = 1;
     put32(res + 4, STR_EMPTY);
     put32(res + 8, (unsigned)v);
-    put32(res + 0xc, (unsigned)(v + 0x14 * n));
-    put32(res + 0x10, (unsigned)(v + 0x14 * (LIST_MAX + 2)));
+    put32(res + 0xc, (unsigned)(v + 0x14 * k));
+    put32(res + 0x10, (unsigned)(v + 0x14 * k));
     return (unsigned)res;
 }
 
@@ -707,7 +819,15 @@ static void add(unsigned char *table, const char *pattern, void *inv)
  * (0x4002da4a) from route.s's site */
 void dl_register_route(void *self, unsigned char *resolver)
 {
+    /* Stock's matcher (0x4002f29c) takes a path only of its pattern's segment count, each `*` one
+     * segment, so a route has one pattern per depth, in both tables, as /soundbanks does
+     * (0x40030708): folders to DL_DEPTH below DL_DIR, and the files in each. */
+    static const char *const lists[] = {"/mods", "/mods/*", "/mods/*/*", "/mods/*/*/*"};
+    static const char *const entries[] = {"/mods/*", "/mods/*/*", "/mods/*/*/*", "/mods/*/*/*/*"};
+    unsigned i;
     (void)self;
-    add(resolver + LIST_TABLE, "/mods", dl_list_inv);
-    add(resolver + ENTRY_TABLE, "/mods/*", dl_entry_inv);
+    for (i = 0; i <= DL_DEPTH; i++) {
+        add(resolver + LIST_TABLE, lists[i], dl_list_inv);
+        add(resolver + ENTRY_TABLE, entries[i], dl_entry_inv);
+    }
 }

@@ -154,10 +154,10 @@ function renderRoom(r = null) {
 // ---- /mods -----------------------------------------------------------------------------------------------------
 
 async function refresh() {
-  const list = await S.mods.ls();
+  const list = await S.mods.walk();      // every folder, to datarpc.DEPTH deep; names are paths below /mods
   const files = [];
-  for (const [name, kind, size] of list) {
-    if (kind !== 2 || SPECIAL.has(name)) continue;
+  for (const [name, size] of list) {
+    if (SPECIAL.has(name)) continue;
     const f = { name, size, raw: null, id: null, version: null };
     try { f.raw = (await S.mods.get(name))[1]; } catch (e) { f.error = e.message; }
     files.push(f);

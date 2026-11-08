@@ -19,8 +19,9 @@ a third `RouteTypeHandler`, so the unit's Data root listing shows `mods`:
 
 | path | what |
 |---|---|
-| `/mods` | the files in the +Drive's `/mods` folder (`DL_DIR` in `fs.h`), then `.build` and `.status` |
-| `/mods/<name>` | read, upload or Clear one file. Uploads take `*.elemod` and `active` only. Other files there can be read and cleared |
+| `/mods` | the folders and files in the +Drive's `/mods` folder (`DL_DIR` in `fs.h`), then `.build` and `.status` |
+| `/mods/<folder>`... | one folder's folders and files, to 3 folders below `/mods` (`DL_DEPTH`) |
+| `/mods/<name>`, `/mods/<folder>/.../<name>` | read, upload or Clear one file, in `/mods` or a folder up to 3 deep. Uploads take `*.elemod` (at any depth) and `active` (in `/mods` only); an upload makes the folders it needs. Other files can be read and cleared. A Clear of a folder removes it when it is empty, as SAMPLES' DELETE DIR |
 | `/mods/.build` | read only: the build descriptor, byte for byte (`python -m elekloader.desc dump`) |
 | `/mods/.status` | read only: plain text, the route's last commit or delete, the boot's time, then the boot linker's records |
 
@@ -57,7 +58,12 @@ refused like any other dot file. Neither flag is set by default.
 - One site, `0x400a005e`, in the resolver's getter (`0x4009febc`): after stock adds its two
   handlers, `dl_route_site` sets the getter's guard (the instruction it displaces) and adds the
   loader's handler with stock's `0x4002da4a`, which takes a `shared_ptr` to it (one with no control block: the handler is never freed). That calls the handler's `register_route`, which
-  adds `/mods` to the list table and `/mods/*` to the entry table.
+  adds one pattern a depth to each table: `/mods` to `/mods/*/*/*` to the list table and
+  `/mods/*` to `/mods/*/*/*/*` to the entry table. Stock's matcher (`0x4002f29c`) takes only a
+  path of its pattern's segment count, each `*` one segment, so `/mods/*` never matches
+  `/mods/a/b`; `/soundbanks` registers its depths the same way (`0x40030708`). The route joins
+  the captures into the path below `/mods`. A path is at most 127 bytes (`DL_NAME_MAX`), a
+  folder or file name at most 63 (`DL_SEG_MAX`), and no folder name starts with `.`.
 - `/mods/*` resolves to a RAM entry (kind 1) over the staging buffer. Its functions do the rest:
   `+0x1c` refuses with "busy" while a loader part holds the buffer (`dl_staging_take`); `+0x2c`
   fills the buffer from the file once a read stream exists; `+0x6c` checks the container's
@@ -85,7 +91,7 @@ All addresses are OS 1.74's. They were read in Ghidra.
 | std::string ctor, dtor, the empty string | `0x401bcff0`, `0x401bb540`, `0x419f2a0c` |
 | operator new, delete | `0x40082a40`, `0x40082a4c` |
 | ekFS file ctor (0x2c bytes; 0 read, 1 write), dtor, read, write, node, node size (less 16, for FsSample's own header) | `0x4007dcfa`, `0x4007d956`, `0x4007d822`, `0x4007d860`, `0x4007d9d2`, `0x4007d9ec` |
-| ekFS delete, rename | `0x4007da78`, `0x4007da8c` |
+| ekFS delete (files only), rename (files and folders), rmdir (an empty folder only) | `0x4007da78`, `0x4007da8c`, `0x4007daa4` |
 | Directory ctor (0x130 bytes), dtor, count, child, shared_ptr release | `0x4007ed48`, `0x4007ee02`, `0x4007e1bc`, `0x4007e794`, `0x40170bd8` |
 | mutex lock, unlock | `0x400010bc`, `0x400011ee` |
 
@@ -168,15 +174,35 @@ The page is stock's two-pane file view, the one SAMPLES and PROJECTS are built o
   and the box gives the first refusal (`NEEDS drive-hello`). Unlike SAMPLES the ticks stay after
   a load: they are the build. The page never loads or unloads code: the next boot links the
   saved set.
-- **DELETE** deletes the ticked files after its confirm, refusing a file that is in the saved
-  build (`MOD IN USE`: unload it first).
+- **Folders** (decided 2026-11-08). The file list shows one folder of `/mods` at a time, to 3
+  folders deep, as SAMPLES does: `..` first (not in `/mods` itself), then the folders as `NAME/`,
+  then the `.elemod` files. YES on a folder opens it with the cursor at the top; YES on `..` goes
+  up with the cursor back on the folder just left (SAMPLES' select, `0x400e92f8`). Each folder is
+  read when it is opened, and the background checks only the open folder's files, so no scan of
+  every folder holds the UI task. A folder row shows `n SEL` on the right when n files below it
+  are ticked. A mod is known by its path below `/mods` (`drums/kicks/x.elemod`), the name
+  `/mods/active` keeps (at most 127 bytes).
+- **Ticks across folders.** Unlike SAMPLES, which clears its ticks whenever the folder changes
+  (`0x400722c4`), the ticks stay (decided 2026-11-08): they are the build, and a build takes mods
+  from any folder. The page keeps them itself, one flag a file; stock's tick vector only shows the
+  open folder's. LOAD TO BUILD takes every ticked file in every folder. At most 256 files can be
+  ticked (`OVER 256 MODS`).
+- **SELECT ALL and DESELECT ALL** tick or untick the open folder's files, as SAMPLES'
+  (`0x400e6620`): no folder row, nothing below.
+- **DELETE** deletes the open folder's ticked files after its confirm, refusing a file that is in
+  the saved build (`MOD IN USE`: unload it first). With none of the open folder's files ticked and
+  the cursor on a folder, it reads DELETE DIR and asks `DELETE DIR?`, as SAMPLES
+  (`0x400e9ee6`, `0x400e77b2`): stock's rmdir removes an empty folder only, and a folder with
+  anything in it gives `ERROR (NOT EMPTY?)`. Stock never deletes a folder's files for you, and
+  neither does the page.
 - **The build list.** LEFT opens a one-row left panel, VIEW BUILD (VIEW +DRIVE in the build
   list), like SAMPLES' VIEW RAM, which switches the list and closes the panel (`0x400734a8`).
-  The build list shows the saved set, each mod with what the next boot does: `KEEP` (loaded
+  The build list shows the saved set, each mod by its path below `/mods` (decided 2026-11-08, so
+  two files of one name in two folders tell apart), with what the next boot does: `KEEP` (loaded
   now, stays), `ADD` (loads at the next boot), `DROP` (loaded now, gone after the next boot;
   these rows stay until the reboot) or `!` (the last boot refused it). Its action panel has
   UNLOAD, which saves the build without the ticked mods through the same checks (`MOD NOT LOADED` for a ticked mod the build does not hold).
-- **No files.** With no `.elemod` in `/mods` the list has one row, `NO MODS ON +DRIVE`, which
+- **No files.** With no `.elemod` and no folder in `/mods` the list has one row, `NO MODS ON +DRIVE`, which
   YES does nothing to, and neither panel opens (decided 2026-11-07). Stock's file view hangs
   the UI when it is first shown with no row at all; its own lists never are (a folder has
   `..`, VIEW RAM its 128 slots).
@@ -197,7 +223,8 @@ The page is stock's two-pane file view, the one SAMPLES and PROJECTS are built o
   the files read and checked so far, `N` the files listed, so it reads `N/N` (`256/256` for
   256 files) once the background has checked every file (decided 2026-11-08, so that a test
   plan can prove the check finished before its first key). It takes the place of the top
-  row's size and is drawn with the rows, so an open panel or box covers it; `ev_draw` only
+  row's size and is drawn with the rows, so an open panel or box covers it. It counts the open
+  folder's files only; `ev_draw` only
   marks each frame's end, from which the next frame knows the top row. Not in the build list.
 - **A save in steps.** LOAD TO BUILD, UPDATE BUILD, UNLOAD and CLEAR BUILD check the new set one
   file a tick (`dl_check_start`, `dl_check_step`, `dl_check_finish`: the same check as

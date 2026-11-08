@@ -72,14 +72,14 @@ static void path_of(char *out, const char *name)
     while (*d)
         out[k++] = *d++;
     out[k++] = '/';
-    while (*name && k < 127)
+    while (*name && k < DL_PATH_MAX - 1)
         out[k++] = *name++;
     out[k] = 0;
 }
 
 s32 dl_read_file(const char *name, u8 *buf, u32 max)
 {
-    char path[128];
+    char path[DL_PATH_MAX];
     dl_file f;
     u32 got = 0;
     s32 r;
@@ -109,7 +109,7 @@ s32 dl_read_file(const char *name, u8 *buf, u32 max)
 
 static int exists(const char *name)
 {
-    char path[128];
+    char path[DL_PATH_MAX];
     dl_file f;
     int r;
     path_of(path, name);
@@ -121,14 +121,14 @@ static int exists(const char *name)
 
 static void remove_file(const char *name)
 {
-    char path[128];
+    char path[DL_PATH_MAX];
     path_of(path, name);
     dl_fs_delete(path);
 }
 
 static void write_armed(void)
 {
-    char path[128];
+    char path[DL_PATH_MAX];
     dl_file f;
     static const char text[] = "armed\n";
     path_of(path, ".armed");
@@ -191,7 +191,7 @@ void dl_boot(void)
 /* /mods/active, read whole into the heap (the caller frees it). -> its length, <= 0 none. */
 static s32 read_active(char **text)
 {
-    char path[128];
+    char path[DL_PATH_MAX];
     s32 size, len;
     *text = 0;
     path_of(path, "active");

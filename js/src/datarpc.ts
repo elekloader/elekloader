@@ -19,6 +19,7 @@ export const CHUNK = 0x2000
 export const READ_CHUNKS = [CHUNK, 0x300]
 const noReply = (cmd: number) => `no reply from the unit to command 0x${hex2(cmd)}`
 export const FOLDER = '/mods'
+export const DEPTH = 3                 // folders below FOLDER the route reaches (the loader's DL_DEPTH)
 
 export class RpcError extends ModError {}
 
@@ -110,7 +111,8 @@ export class Client {
     }
   }
 
-  /** -> [[name, kind, size]] (kind 1 a folder, 2 an item). */
+  /** -> [[name, kind, size]] (kind 1 a folder, 2 an item). An item whose children byte is set can be
+   * listed itself (a route's folder, as /soundbanks' banks): it is given as kind 1. Client.ls. */
   async ls(path: string): Promise<Entry[]> {
     const msg = await this.call(LIST, cat(path0(path), be([0, 4], [0, 4], [1, 1])))
     const out: Entry[] = []
@@ -118,10 +120,10 @@ export class Client {
     while (at < msg.length) {
       const end = msg.indexOf(0, at)
       if (end < 0) throw new RpcError('a listing cut short')
-      const name = unlatin1(msg.subarray(at, end)), kind = msg[end + 2]
+      const name = unlatin1(msg.subarray(at, end)), children = msg[end + 1], kind = msg[end + 2]
       at = end + 3
       if (kind === 1) { out.push([name, 1, 0]); at += 4 }
-      else { out.push([name, 2, rd32(msg, at + 4)]); at += 12 }
+      else { out.push(children ? [name, 1, 0] : [name, 2, rd32(msg, at + 4)]); at += 12 }
     }
     return out
   }
@@ -189,12 +191,32 @@ export class Mods {
   folder: string
   constructor(c: Client, folder = FOLDER) { this.c = c; this.folder = folder.replace(/\/+$/, '') }
 
+  /** `name`: a file below the folder, in up to DEPTH folders ("drums/kicks/x.elemod"). */
   path(name: string): string {
-    if (!name || name.includes('/')) throw new ModError(`${repr(name)} is not a file name in ${this.folder}`)
+    const parts = name.split('/')
+    if (!name || parts.length > DEPTH + 1 || parts.some(p => !p || p === '.' || p === '..')
+        || parts.slice(0, -1).some(p => p.startsWith('.')))
+      throw new ModError(`${repr(name)} is not a file name in ${this.folder}`)
     return `${this.folder}/${name}`
   }
 
-  ls(): Promise<Entry[]> { return this.c.ls(this.folder) }
+  /** One folder: [name, kind, size] (kind 1 a folder, 2 a file). */
+  ls(sub = ''): Promise<Entry[]> { return this.c.ls(sub ? `${this.folder}/${sub}` : this.folder) }
+
+  /** Every file below the folder, to DEPTH folders deep, one listing a folder: [path below the
+   * folder, size], the folder's own files first, then each folder's. datarpc.Mods.walk. */
+  async walk(): Promise<[string, number][]> {
+    const out: [string, number][] = [], todo = ['']
+    while (todo.length) {
+      const sub = todo.shift() as string
+      for (const [name, kind, size] of await this.ls(sub)) {
+        const p = sub ? `${sub}/${name}` : name
+        if (kind === 1) { if (p.split('/').length - 1 < DEPTH) todo.push(p) }
+        else out.push([p, size])
+      }
+    }
+    return out
+  }
 
   /** -> [the container's header, the file's bytes]. */
   async get(name: string): Promise<[container.Head, Uint8Array]> {

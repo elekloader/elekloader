@@ -96,7 +96,9 @@ def main():
         body = b'{"elemod": 2}'
         wrapped = container.wrap(body, 2, 5, 0x30313736)
         texts = ['# x\n\n  a.elemod   0x1F \r\nnocrc\nb.elemod zz\n', 'a.elemod -1\nb.elemod 1_f\nc.elemod 0x0x2\n',
-                 ''.join('m%d.elemod 1\n' % i for i in range(257)), 'x 123456789ab\ny 0xffffffff\n']
+                 ''.join('m%d.elemod 1\n' % i for i in range(257)), 'x 123456789ab\ny 0xffffffff\n',
+                 # paths below /mods, to 127 bytes (decided 2026-11-08), and one byte past
+                 'fx/a b/c.elemod 3\n%s 1\n%sx 2\n' % ('d/' + 'k' * 118 + '.elemod', 'd/' + 'k' * 118 + '.elemod')]
         extra = {
             'build': blk.hex(), 'label': drive.load_build(blk).label(),
             'container': {'body': body.hex(), 'wrapped': wrapped.hex(),
