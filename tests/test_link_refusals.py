@@ -176,6 +176,8 @@ external('link', 'SHARC mod needs the stock section-7 stream', 'tests/test_sharc
          'SHARC mod needs the stock section-7 stream')
 external('link', 'SHARC stored section exceeds the profile limit', 'tests/test_sharc_active.py',
          'SHARC stored section exceeds the profile limit')
+external('link', 'two raw SHARC patches overlap at 0x<>', 'tests/test_digitakt2.py',
+         'two raw SHARC patches overlap')
 
 
 def edit_region(name, lo, hi):
@@ -716,6 +718,15 @@ def _(B):
                   fast(room + 4), fast(room))
 
 
+@row('link', '<>: a jsr/jmp at 0x<> goes to the odd address 0x<> (align the code: .balign 2 at the start of '
+     'each .run section)', device='digitakt-mk1')
+def _(B):
+    def target(at):
+        return lambda d: d[1]['symbols'].update(fn_m=['.run', at])
+    return B.pair('m 1 site 0x%08x: a jsr/jmp at 0x%08x goes to the odd address 0x' % (B.at(0x1000), B.at(0x1000)),
+                  target(1), target(2))
+
+
 external('link', 'the DSP code for payload <> needs P words to 0x<>, past the <> words <> frees (<> over)',
          'tests/test_octatrack.py', 'the DSP code for payload A needs P words to 0x00bd9')
 
@@ -1013,7 +1024,7 @@ def test_octatrack_fixtures():
 
 
 def test_digitakt_fixtures():
-    assert run_rows('digitakt-mk1') == 3
+    assert run_rows('digitakt-mk1') == 4
 
 
 def test_analog_rytm_fixtures():

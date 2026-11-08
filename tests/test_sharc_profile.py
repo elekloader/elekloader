@@ -44,7 +44,12 @@ class ProfileTests(unittest.TestCase):
         self.assertEqual(PROFILE['pitch_range'], (0x282dda00, 0x282dde00))
         self.assertEqual(DEVICE.dsp_payloads, {})  # OT/DSP56300 support remains separate.
         self.assertEqual([(d.key, r.version) for d in devices.devices()
-                          for r in d.releases.values() if r.sharc], [('digitone-mk2', '1.12')])
+                          for r in d.releases.values() if r.sharc],
+                         [('digitakt-mk2', '1.17'), ('digitone-mk2', '1.12')])
+        # the Digitakt II's takes raw payloads only (sharc_raw), not the Digitone II's bridge
+        dt2 = [d for d in devices.devices() if d.key == 'digitakt-mk2'][0].releases['1.17'].sharc
+        self.assertTrue(dt2['raw'])
+        self.assertNotIn('abi', dt2)
 
     def test_alias_units_and_capacity_endpoints(self):
         # Datasheet L1 byte aliases and independent stock data/PC landmarks.

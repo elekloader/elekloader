@@ -83,7 +83,7 @@ export async function build(stock: File, modFiles: File[], version: string | nul
   try {
     if (v2.length) {
       if (v2.length !== mods.length) throw new ModError('a whole-build bundle (format 1) cannot be combined with separate mods (format 2)')
-      const dsp = v2.some(m => m.sharc) ? parsed.section(rel.sharc!.section) : null
+      const dsp = v2.some(m => m.sharc || m.sharcRaw) ? parsed.section(rel.sharc!.section) : null
       linked = link(v2, img0, lock, dsp)
       img = linked.image
     } else {
