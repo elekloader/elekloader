@@ -275,13 +275,13 @@ function renderFiles() {
   const here = folders.filter(d => parent(d) === cwd);
   const files = S.files.filter(f => parent(f.name) === cwd);
   const rows = [];
-  if (cwd) rows.push(el('tr', { class: 'dm-folder' }, el('td', {}), el('td', { colspan: 5 },
+  if (cwd) rows.push(el('tr', { class: 'dm-folder', ...dropTarget(parent(cwd)) }, el('td', {}), el('td', { colspan: 5 },
     el('button', { type: 'button', class: 'dm-open', 'aria-label': 'Up one folder', onclick: () => open_(parent(cwd)) }, '..'))));
   for (const d of here) {
     const below = S.files.filter(f => inside(f.name, d));
     const ticked = below.filter(f => S.chosen.has(f.name)).length;
     const empty = !below.length && !folders.some(x => inside(x, d));
-    rows.push(el('tr', { class: 'dm-folder' },
+    rows.push(el('tr', { class: 'dm-folder', 'data-dir': d, ...dropTarget(d) },
       el('td', { class: 'small muted' }, ticked ? `${ticked} ticked` : ''),
       el('td', {}, el('code', {}, el('button', { type: 'button', class: 'dm-open', 'aria-label': `Open ${d}`, onclick: () => open_(d) }, `${base(d)}/`))),
       el('td', { class: 'muted' }, `${below.length} mod${below.length === 1 ? '' : 's'}`),

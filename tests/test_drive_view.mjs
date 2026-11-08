@@ -288,6 +288,21 @@ try {
   await page.dispatchEvent('#dm-tree .dm-node[data-dir="fx/a/b"]', 'drop', { dataTransfer: dropped });
   await page.waitForFunction(n => `fx/a/b/${n}` in window.__unit.files, hello.name, { timeout: 15000 });
   check('files dropped on a tree folder go into it, and it opens', (await page.textContent('#dm-into')) === '/mods/fx/a/b');
+  // ... and on a folder row in the list
+  await page.click('#dm-tree .dm-node[data-dir="fx"]');
+  const dropped2 = await page.evaluateHandle(([n, hex]) => {
+    const dt = new DataTransfer();
+    dt.items.add(new File([Uint8Array.from(hex.match(/../g), x => parseInt(x, 16))], n, { type: 'application/json' }));
+    return dt;
+  }, ['row-drop.elemod', hello.raw.toString('hex')]);
+  await page.waitForFunction(() => !document.querySelector('#view-drive button:disabled:not(#dm-save-set):not(#dm-new-folder-btn):not(.dm-danger)'));
+  await page.dispatchEvent('#dm-file-list tr[data-dir="fx/a"]', 'drop', { dataTransfer: dropped2 });
+  await page.waitForFunction(() => 'fx/a/row-drop.elemod' in window.__unit.files, null, { timeout: 15000 });
+  await page.waitForFunction(() => /^Uploaded/.test(document.getElementById('dm-upload-msg').textContent));
+  check('files dropped on a folder row go into it', (await page.textContent('#dm-into')) === '/mods/fx/a');
+  const rd = page.locator('#dm-file-list button[aria-label="Delete fx/a/row-drop.elemod"]');
+  await rd.click(); await rd.click();
+  await page.waitForFunction(() => !('fx/a/row-drop.elemod' in window.__unit.files));
   await page.click('#dm-crumbs button:has-text("/mods")');
   const rootDel = rowOf(hello.name).filter({ hasNot: page.locator('button.dm-open') }).locator('button.dm-danger');
   await rootDel.click(); await rootDel.click();

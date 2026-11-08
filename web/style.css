@@ -587,6 +587,7 @@ details summary:hover { color: var(--text); }
 .dm-node .dm-count { margin-left: auto; color: var(--faint); font-size: 11px; }
 .dm-pane { min-width: 0; }
 .dm-pane .dm-t code, .dm-pane .dm-t .dm-num, .dm-pane .dm-t td:first-child:not([colspan]), .dm-pane .dm-t td:last-child:not([colspan]) { white-space: nowrap; }
+.dm-t tr.dm-over td { background: var(--accent-soft); }
 .dm-pane.dm-over { outline: 1.5px dashed var(--accent); outline-offset: 4px; border-radius: 6px; }
 .dm-crumbs { display: flex; flex-wrap: wrap; align-items: center; gap: 2px; font-family: var(--mono); font-size: 13px; flex: 1 1 auto; min-width: 0; }
 .dm-crumbs button { background: none; border: 0; padding: 2px 4px; font: inherit; color: var(--accent); cursor: pointer; }

@@ -333,7 +333,7 @@ Pyodide, and `app.js` loads it only when the view first opens:
   a folder with anything in it can't be deleted, and the route refuses one
   with `Folder not empty`.
 - **Uploads**, dropped or chosen, go into the open folder; files dropped on
-  a folder in the tree go into that one. They are checked
+  a folder, in the tree or in the list, go into that one. They are checked
   first, together with the files in `/mods`, in any folder, that they
   require. If one would not load, nothing is sent.
 - **The set** for the next boot is the ticked files, in every folder: the
