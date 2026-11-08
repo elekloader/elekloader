@@ -282,7 +282,8 @@
       "device": "digitone-mk1", "needs_core": "4.0",
       "sha256": "59b4655fdd53750fee338c579a8391ca0ceb10827a16572cad976150b918bbd2",
       "summary": "Routes the Digitone or Digitakt inputs or internal tracks into a track with a low-CPU pitch shifter and an on-page oscilloscope.",
-      "on_unit": "Tested on hardware; fully functional and stable."
+      "on_unit": "Tested on hardware; fully functional and stable.",
+      "thumb": {"tag": "v1.0", "file": "thumb.png", "sha256": "db614559be2bf21d2131452051e491a53fcb316a416560c2c0fe0eb02b94dba8"}
     },
     {
       "repo": "DigiAlchemydsp/CTRL-PLUS", "tag": "v0.6a", "file": "usercfg-0.6a.elemod",
@@ -769,7 +770,8 @@
       "device": "digitakt-mk1", "needs_core": "4.0",
       "sha256": "9e9fa4c5c3be54dec5d915e0a7ac19dbf704f2c24ca2743992836137fc442ff6",
       "summary": "Routes the Digitone or Digitakt inputs or internal tracks into a track with a low-CPU pitch shifter and an on-page oscilloscope.",
-      "on_unit": "Tested on hardware; fully functional and stable."
+      "on_unit": "Tested on hardware; fully functional and stable.",
+      "thumb": {"tag": "v1.0", "file": "thumb.png", "sha256": "db614559be2bf21d2131452051e491a53fcb316a416560c2c0fe0eb02b94dba8"}
     },
     {
       "repo": "DigiAlchemydsp/FILTER-PLUS", "tag": "v1.0", "file": "filterplus-1.0.elemod",
