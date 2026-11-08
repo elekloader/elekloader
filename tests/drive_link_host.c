@@ -126,7 +126,16 @@ int main(int argc, char **argv)
     if (getenv("DL_HOST_CHECK")) {
         static struct dl_status st[DL_MAX_MODS];
         static char det[DL_MAX_MODS][32], ver[DL_MAX_MODS][DL_VER_MAX];
-        loaded = dl_check(strtoul(argv[5], 0, 0), ch, k, staging, sizeof staging, st, det, ver);
+        if (getenv("DL_HOST_STEP")) {    /* the MODS page's save: the same check in steps */
+            int j;
+            loaded = dl_check_start(strtoul(argv[5], 0, 0), k, staging, sizeof staging, st, det, ver);
+            for (j = 0; loaded >= 0 && j < k; j++)
+                dl_check_step(&ch[j]);
+            if (loaded >= 0)
+                loaded = dl_check_finish();
+        } else {
+            loaded = dl_check(strtoul(argv[5], 0, 0), ch, k, staging, sizeof staging, st, det, ver);
+        }
         f = fopen(argv[7], "wb");
         fwrite(ram, 1, ram_len, f);
         fclose(f);

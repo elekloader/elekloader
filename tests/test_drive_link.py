@@ -88,7 +88,7 @@ def drive_mod(B, ident, **extra):
     return d
 
 
-def run(exe, F, mods, work, active=None, raw=None, extra_files=None, check=False):
+def run(exe, F, mods, work, active=None, raw=None, extra_files=None, check=False, step=False):
     """Link `mods` (docs, in this /mods/active order). -> (summary, RAM after).
     With check, run the MODS page's dl_check instead of dl_link."""
     d = tempfile.mkdtemp(dir=work)
@@ -111,7 +111,8 @@ def run(exe, F, mods, work, active=None, raw=None, extra_files=None, check=False
         fh.write(F.B.img)
     r = subprocess.run([exe, ramf, '0x%x' % F.ram_base, stockf, '0x%x' % F.B.dev.main_load,
                         '0x%x' % F.desc_at, d, outf], capture_output=True, text=True,
-                       env=dict(os.environ, DL_HOST_CHECK='1') if check else None)
+                       env=dict(os.environ, DL_HOST_CHECK='1', **({'DL_HOST_STEP': '1'} if step else {}))
+                       if check else None)
     if r.returncode:
         raise AssertionError('host linker failed: %s %s' % (r.stdout, r.stderr))
     with open(outf, 'rb') as fh:
@@ -316,6 +317,14 @@ def main():
         twin = drive.link(drive.load_build(F.out.image), files)
         check('256 mods: the twin writes the same area',
               twin.area == bytes(area(F, ram, len(twin.area))) and len(twin.live) == 256)
+
+        # the check in steps (the MODS page's save) gives what the check gives, refusals included
+        for name, mods in (('two that load', [user, hello]), ('a chain of 256', chain[::-1]),
+                           ('a refused require', [dep, base])):
+            a_, _r = run(exe, F, mods, work, check=True)
+            b_, _r = run(exe, F, mods, work, check=True, step=True)
+            check('stepped check = check: ' + name, a_ == b_, (a_, b_))
+
 
         # the boot's time (dl.h, dl_bus_us): bus ticks at 132 MHz to ﾂｵs, across DTIM0's wrap
         src = os.path.join(work, 'bus_us.c')

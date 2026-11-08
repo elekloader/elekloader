@@ -382,15 +382,6 @@ static int inspect(struct row *r)
     return 0;
 }
 
-/* Every row with keep[i] checked now (a save needs their CRCs). -> 0, -1 busy. */
-static int inspect_kept(const u8 *keep)
-{
-    int i;
-    for (i = 0; i < nrows; i++)
-        if (keep[i] && inspect(&rows[i]))
-            return -1;
-    return 0;
-}
 
 /* ---- the page: stock's two-pane file view, as SAMPLES' ---- */
 
@@ -611,53 +602,140 @@ static const char *count_msg(int n, const char *what)
     return msg;
 }
 
-/* A new build: the boot linker's pass 1, checks and layout on it (dl_check, reads only); a
- * set where every mod would load is written to DL_DIR/active, one that wouldn't isn't, and
- * the box says why. keep[i]: file i in the new set. -> 0 saved, < 0 not. */
-static int save_set(const u8 *keep)
+/* A new build: the boot linker's pass 1, checks and layout on it (dl_check in steps, reads
+ * only), one file a tick, so the key path and USB stay free between files (decided 2026-11-08:
+ * the CB11 unit run's LOAD of 18 files of 482 KB held them for minutes in one call). A set
+ * where every mod would load is written to DL_DIR/active, one that wouldn't isn't, and the box
+ * says why. While a save runs the page takes no other action and checks nothing else. */
+enum { J_NONE, J_LOAD, J_CLEAR, J_UNLOAD };
+enum { JP_FILES, JP_START, JP_STEPS, JP_END };
+static struct {
+    u8 what, phase, first;
+    int m, i, k, n;                      /* set size, next line or row, unloaded, ticked */
+    u32 tries;                           /* ticks the buffer was busy, in a row */
+} job;
+#define JOB_BUSY 600                     /* ticks (30 s) of a busy buffer before the save gives up */
+
+static void job_end(const char *box)
 {
-    int i, m = 0, ok, k;
-    for (i = 0; i < nrows; i++)
-        m += keep[i] != 0;
-    if (m > DL_MAX_MODS) {               /* the boot links at most DL_MAX_MODS lines */
-        show_box("OVER 256 MODS");
-        return -1;
-    }
-    if (inspect_kept(keep)) {            /* their CRCs, before the set is named */
-        show_box("BUSY: TRY AGAIN");
-        return -1;
-    }
-    for (i = 0, m = 0; i < nrows; i++)
-        if (keep[i]) {
-            copy_str(choice[m].name, rows[i].name, DL_LINE_NAME_MAX);
-            choice[m].crc = rows[i].crc;
-            choice_row[m++] = i;
+    job.what = J_NONE;
+    show_box(box);
+}
+
+/* the save done: the rows, the lists and the box, as each action says */
+static void job_saved(void)
+{
+    u8 what = job.what;
+    build_list();
+    page_rows();
+    if (what == J_LOAD)
+        cursor_to(0);                    /* as stock after LOAD TO PROJ */
+    job_end(what == J_LOAD ? (job.first ? count_msg(job.n, "LOADED") : "BUILD UPDATED")
+            : what == J_CLEAR ? "BUILD CLEARED" : count_msg(job.k, "UNLOADED"));
+}
+
+/* one step of the save: a file read (its CRC, or its pass 1), or the start, or the end */
+static void save_step(void)
+{
+    int i, ok, k;
+    if (!job.what)
+        return;
+    if (job.phase == JP_FILES) {         /* the kept rows the background hasn't read yet */
+        while (job.i < nrows && (!keep_now[job.i] || rows[job.i].checked))
+            job.i++;
+        if (job.i < nrows) {
+            if (inspect(&rows[job.i])) {
+                if (++job.tries > JOB_BUSY)
+                    job_end("BUSY: TRY AGAIN");
+                return;
+            }
+            job.tries = 0;
+            job.i++;
+            return;
         }
-    if (!dl_staging_take_idle(ticks, READ_STALL)) {
-        show_box("BUSY: TRY AGAIN");
-        return -1;
+        job.phase = JP_START;
     }
-    ok = check(m);
-    dl_staging_give();
-    if (ok != m) {
+    if (job.phase == JP_START) {
+        for (i = 0, job.m = 0; i < nrows; i++)
+            if (keep_now[i]) {
+                copy_str(choice[job.m].name, rows[i].name, DL_LINE_NAME_MAX);
+                choice[job.m].crc = rows[i].crc;
+                choice_row[job.m++] = i;
+            }
+        if (dl_check_start((u32)core_desc, job.m, drive_staging, DL_STAGING_SIZE, cst, cdet, 0) < 0) {
+            job_end("NOT SAVED");
+            return;
+        }
+        job.i = 0;
+        job.phase = JP_STEPS;
+        return;
+    }
+    if (job.phase == JP_STEPS && job.i < job.m) {
+        if (!dl_staging_take_idle(ticks, READ_STALL)) {
+            if (++job.tries > JOB_BUSY) {
+                dl_check_cancel();
+                job_end("BUSY: TRY AGAIN");
+            }
+            return;
+        }
+        job.tries = 0;
+        dl_lock();
+        dl_check_step(&choice[job.i++]);
+        dl_unlock();
+        dl_staging_give();
+        return;
+    }
+    ok = dl_check_finish();
+    if (ok != job.m) {
         msg[0] = 0;
-        for (k = 0; k < m && ok >= 0; k++)
+        for (k = 0; k < job.m && ok >= 0; k++)
             if (cst[k].state != DL_ST_LOADED) {
                 reason(msg, msg + sizeof msg, cst[k].code ? cst[k].code : DL_R_LIMIT, cst[k].arg, cdet[k]);
                 break;
             }
-        show_box(msg[0] ? msg : "NOT SAVED");
-        return -1;
+        job_end(msg[0] ? msg : "NOT SAVED");
+        return;
     }
     for (i = 0; i < nrows; i++) {
         was[i] = rows[i].on;
-        rows[i].on = keep[i];
+        rows[i].on = keep_now[i];
     }
     if (save_active()) {
         for (i = 0; i < nrows; i++)
             rows[i].on = was[i];
-        show_box("SAVE FAILED");
+        job_end("SAVE FAILED");
+        return;
+    }
+    job_saved();
+}
+
+/* Start a save of keep_now (what: J_*). -> 0 started, -1 not (a box says why). */
+static int save_set(u8 what, int n, int k)
+{
+    int i, m = 0;
+    if (job.what) {
+        show_box("BUSY: TRY AGAIN");
         return -1;
+    }
+    for (i = 0; i < nrows; i++)
+        m += keep_now[i] != 0;
+    if (m > DL_MAX_MODS) {               /* the boot links at most DL_MAX_MODS lines */
+        show_box("OVER 256 MODS");
+        return -1;
+    }
+    dl_memset(&job, 0, sizeof job);
+    job.what = what;
+    job.first = (u8)build_empty();
+    job.n = n;
+    job.k = k;
+    job.phase = JP_FILES;
+    if (m) {                             /* "CHECKING 18 MODS": the box the result replaces */
+        char *end = msg + sizeof msg;
+        cat(num(cat(msg, end, "CHECKING "), end, (u32)m), end, m == 1 ? " MOD" : " MODS");
+        show_box(msg);
+    } else {
+        while (job.what)                 /* an empty set: no file to read, done at once */
+            save_step();
     }
     return 0;
 }
@@ -665,52 +743,36 @@ static int save_set(const u8 *keep)
 /* LOAD TO BUILD / UPDATE BUILD: the ticked files are the whole build (decided 2026-11-07) */
 static void do_load(void)
 {
-    u8 *keep = keep_now;
-    int n = ticked(sel), i, first = build_empty();
-    dl_memset(keep, 0, (u32)cap);
+    int n = ticked(sel), i;
+    dl_memset(keep_now, 0, (u32)cap);
     for (i = 0; i < n; i++)
-        keep[sel[i]] = 1;
-    if (save_set(keep))
-        return;
-    build_list();
-    page_rows();
-    cursor_to(0);                        /* as stock after LOAD TO PROJ */
-    show_box(first ? count_msg(n, "LOADED") : "BUILD UPDATED");
+        keep_now[sel[i]] = 1;
+    save_set(J_LOAD, n, 0);
 }
 
 /* CLEAR BUILD: an empty build (LOAD TO BUILD with nothing ticked does nothing; decided 2026-11-07) */
 static void do_clear(void)
 {
-    u8 *keep = keep_now;
-    dl_memset(keep, 0, (u32)cap);
-    if (save_set(keep))
-        return;
-    build_list();
-    page_rows();
-    show_box("BUILD CLEARED");
+    dl_memset(keep_now, 0, (u32)cap);
+    save_set(J_CLEAR, 0, 0);
 }
 
 /* UNLOAD in the build list: the build without the ticked mods */
 static void do_unload(void)
 {
-    u8 *keep = keep_now;
     int n = ticked(sel), i, k = 0;
     for (i = 0; i < nrows; i++)
-        keep[i] = rows[i].on;
+        keep_now[i] = rows[i].on;
     for (i = 0; i < n; i++)
-        if (keep[sel[i]]) {
-            keep[sel[i]] = 0;
+        if (keep_now[sel[i]]) {
+            keep_now[sel[i]] = 0;
             k++;
         }
     if (!k) {
         show_box("MOD NOT LOADED");
         return;
     }
-    if (save_set(keep))
-        return;
-    build_list();
-    page_rows();
-    show_box(count_msg(k, "UNLOADED"));
+    save_set(J_UNLOAD, n, k);
 }
 
 /* DELETE: the ticked files, none of them in the saved build */
@@ -823,6 +885,10 @@ void dl_page_select(void **f)
     int i = (int)*f, r;
     if (!view)
         return;
+    if (job.what && i >= I_ACT) {         /* a save is running: no other action until it ends */
+        show_box("BUSY: TRY AGAIN");
+        return;
+    }
     if (i < I_ACT) {
         toggle_advance();
         return;
@@ -909,6 +975,11 @@ void dl_mods_open(void **f)
     void *menu = *f, *p;
     unsigned sp[2] = {0, 0};
     int busy;
+    if (job.what) {                      /* a save left running when its page closed */
+        if (job.phase == JP_STEPS)
+            dl_check_cancel();
+        job.what = J_NONE;
+    }
     view = 0;                            /* the last page (not showing: GLOBAL is) goes */
     if (held[1])
         SP_RELEASE(&held[1]);
@@ -963,7 +1034,7 @@ unsigned dl_page_now(void)
 
 static void check_next(void)
 {
-    if (!view || !rows || ticks - drawn_at > SHOWN || ticks % CHECK_EVERY)
+    if (!view || !rows || job.what || ticks - drawn_at > SHOWN || ticks % CHECK_EVERY)
         return;
     while (next_check < nrows && rows[next_check].checked)
         next_check++;
@@ -978,6 +1049,8 @@ void dl_page_tick(void *ctrl)
     ticks++;
     dl_readers_poll(ticks);
     check_next();
+    if (job.what && !(ticks % CHECK_EVERY))
+        save_step();
     if (redraw) {
         redraw = 0;
         *((volatile u8 *)ctrl + 0x20) = 1;

@@ -129,6 +129,19 @@ extern u32 dl_used_lo, dl_used_hi;
 int dl_check(u32 desc, const struct dl_choice *choice, int n, u8 *buf, u32 max,
              struct dl_status *st, char (*det)[32], char (*ver)[DL_VER_MAX]);
 
+/* dl_check in steps, so a caller can read one file at a time and let other tasks in between
+ * (the MODS page's save: one file a tick). dl_check_start takes the memory and the flashed
+ * build's names (-> 0, or -1 as dl_check); dl_check_step reads line i's file (lines in order,
+ * each once, the buffer and descriptor as given to start) and gives how many lines are left;
+ * dl_check_finish gives what dl_check gives; dl_check_cancel gives the memory back. The steps
+ * use the same link state as dl_check and dl_link: nothing else may check or link between
+ * start and finish. */
+int dl_check_start(u32 desc, int n, u8 *buf, u32 max, struct dl_status *st, char (*det)[32],
+                   char (*ver)[DL_VER_MAX]);
+int dl_check_step(const struct dl_choice *ch);
+int dl_check_finish(void);
+void dl_check_cancel(void);
+
 /* The set the boot linked, in /mods/active order: dl_status[i] is dl_boot_choice[i]'s
  * (dl_status_n of them, from the heap; 0 when the boot linked nothing). */
 extern struct dl_choice *dl_boot_choice;

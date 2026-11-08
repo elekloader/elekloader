@@ -192,8 +192,13 @@ The page is stock's two-pane file view, the one SAMPLES and PROJECTS are built o
   every 2 ticks (about 10 a second for small files) while the page's rows are drawn: a row
   shows its file name and size until then, and its id and `!` after. Each file is checked
   alone for its own verdict (id, version, a refusal of the file itself), so no number of files
-  reaches a set's limits. Ticking never reads a file (a row not yet checked shows no `!` and no reason box), and a
-  change checks every file of the new set first.
+  reaches a set's limits. Ticking never reads a file (a row not yet checked shows no `!` and no reason box).
+- **A save in steps.** LOAD TO BUILD, UPDATE BUILD, UNLOAD and CLEAR BUILD check the new set one
+  file a tick (`dl_check_start`, `dl_check_step`, `dl_check_finish`: the same check as
+  `dl_check`), taking the staging buffer and the mutex for one file at a time, so the key path and
+  USB stay free between files (decided 2026-11-08: the CB11 unit run's LOAD of 18 files of 482 KB
+  in one call held them for minutes). A box says `CHECKING n MODS`, and the result's box follows.
+  Until it ends, the page's actions answer `BUSY: TRY AGAIN` and its background check waits.
 - **The boot's verdicts** come from the boot's own records, matched by file name
   (`dl_boot_choice`), so a second file with a loaded mod's id isn't shown as loaded.
 - **Reading files.** The page reads each file into the staging buffer, which it takes only

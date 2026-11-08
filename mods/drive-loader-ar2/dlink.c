@@ -1539,16 +1539,12 @@ static s32 load(struct dmod *m, const struct dl_choice *ch)
     return len;
 }
 
-/* The flashed build's names, then pass 1 over every chosen file, the symbols' buckets and the
- * id order: what a link and a check share. The records go to st/det (n of them, zeroed
- * here). -> 1, 0 when the descriptor isn't one the loader reads, -1 when the heap has no room
- * for the link state. Every return is followed by finish(). */
-static int begin(u32 desc, const struct dl_choice *choice, int n, u8 *buf, u32 max,
-                 struct dl_status *st_out, char (*det)[32])
+/* The link state for n lines and the flashed build's names: the first part of a link and a
+ * check. The records go to st/det (n of them, zeroed here). -> 1, 0 when the descriptor isn't
+ * one the loader reads, -1 when the heap has no room for the link state. */
+static int begin_start(u32 desc, int n, u8 *buf, u32 max, struct dl_status *st_out, char (*det)[32])
 {
-    int i, k;
-    const char *what;
-    u32 e, nb;
+    u32 e;
 
     finish();
     dl_memset(&L, 0, (u32)((u8 *)&L.crc_table - (u8 *)&L));   /* the crc table stays */
@@ -1589,38 +1585,47 @@ static int begin(u32 desc, const struct dl_choice *choice, int n, u8 *buf, u32 m
     }
     add_sym(dl_hash("core_desc", 9), FLASHED, SEC_ABS, desc);
     L.flashed_syms = L.nsyms;
+    return 1;
+}
 
-    /* pass 1 */
-    for (i = 0; i < n; i++) {
-        struct dmod *m = &L.mods[L.nmods];
-        struct dl_status *st = &L.st[i];
-        s32 len;
-        int code;
-        u32 q;
-        for (q = 0; q < DL_ID_MAX - 1 && choice[i].name[q]; q++)
-            st->id[q] = choice[i].name[q];
-        dl_memset(m, 0, sizeof *m);
-        m->choice = (u16)i;
-        m->id = m->version = m->core = NONE;
-        len = load(m, &choice[i]);
-        if (len < 0) {
-            set_status(m, -len == DL_R_TOO_BIG ? DL_ST_REFUSED : DL_ST_DROPPED, -len, 0, 0);
-            continue;
-        }
-        code = scan(m, buf, (u32)len, &what);
-        if (code) {
-            /* a file pass 1 refuses leaves nothing behind: its exports, its entries */
-            set_status(m, DL_ST_REFUSED, code, 0, what);
-            if (m->exp_n)
-                L.nsyms = m->exp_first;
-            if (m->ctr_n)
-                L.nctr = m->ctr_first;
-            continue;
-        }
-        m->alive = 1;
-        L.nmods++;
+/* Pass 1 for line i of the set (lines in order, each once): its file read into the buffer. */
+static void begin_line(const struct dl_choice *ch, int i)
+{
+    struct dmod *m = &L.mods[L.nmods];
+    struct dl_status *st = &L.st[i];
+    const char *what;
+    s32 len;
+    int code;
+    u32 q;
+    for (q = 0; q < DL_ID_MAX - 1 && ch->name[q]; q++)
+        st->id[q] = ch->name[q];
+    dl_memset(m, 0, sizeof *m);
+    m->choice = (u16)i;
+    m->id = m->version = m->core = NONE;
+    len = load(m, ch);
+    if (len < 0) {
+        set_status(m, -len == DL_R_TOO_BIG ? DL_ST_REFUSED : DL_ST_DROPPED, -len, 0, 0);
+        return;
     }
+    code = scan(m, L.buf, (u32)len, &what);
+    if (code) {
+        /* a file pass 1 refuses leaves nothing behind: its exports, its entries */
+        set_status(m, DL_ST_REFUSED, code, 0, what);
+        if (m->exp_n)
+            L.nsyms = m->exp_first;
+        if (m->ctr_n)
+            L.nctr = m->ctr_first;
+        return;
+    }
+    m->alive = 1;
+    L.nmods++;
+}
 
+/* After pass 1: the symbols' buckets and the id order. -> 1, -1 when the heap has no room. */
+static int begin_end(void)
+{
+    int i, k;
+    u32 nb;
     /* the symbols' buckets: a power of two, at least as many as the symbols */
     for (nb = 16; nb < L.nsyms; nb <<= 1)
         ;
@@ -1645,23 +1650,25 @@ static int begin(u32 desc, const struct dl_choice *choice, int n, u8 *buf, u32 m
     return 1;
 }
 
-/* The MODS page's check of a set: pass 1, the checks and the layout, as dl_link, without
- * pass 2 and without writing anything outside the link state (the area, the tables and
- * dl_status stay as the boot left them). A mod that would load gets DL_ST_LOADED. The
- * refusals only pass 2 finds (a pc16 out of range, a relocation to a name nothing
- * defines) are not seen. -> how many would load, or -1 when the descriptor isn't one the
- * loader reads, the set is over DL_MAX_MODS or the heap has no room for the check. */
-int dl_check(u32 desc, const struct dl_choice *choice, int n, u8 *buf, u32 max,
-             struct dl_status *st, char (*det)[32], char (*ver)[DL_VER_MAX])
+/* The flashed build's names, then pass 1 over every chosen file, the symbols' buckets and the
+ * id order: what a link and a check share. -> as begin_start. Every return is followed by
+ * finish(). */
+static int begin(u32 desc, const struct dl_choice *choice, int n, u8 *buf, u32 max,
+                 struct dl_status *st_out, char (*det)[32])
+{
+    int i, b = begin_start(desc, n, buf, max, st_out, det);
+    if (b <= 0)
+        return b;
+    for (i = 0; i < n; i++)
+        begin_line(&choice[i], i);
+    return begin_end();
+}
+
+/* The check's last part, after pass 1: versions, check rounds, layout, verdicts. */
+static int check_end(int n, char (*ver)[DL_VER_MAX])
 {
     u32 lo = dl_used_lo, hi = dl_used_hi;
     int i, rounds, ok = 0;
-    if (n < 0 || n > DL_MAX_MODS)
-        return -1;
-    if (begin(desc, choice, n, buf, max, st, det) <= 0) {
-        finish();
-        return -1;
-    }
     if (ver) {
         dl_memset(ver, 0, (u32)n * sizeof *ver);
         for (i = 0; i < L.nmods; i++) {
@@ -1686,6 +1693,71 @@ int dl_check(u32 desc, const struct dl_choice *choice, int n, u8 *buf, u32 max,
     dl_used_hi = hi;
     finish();
     return ok;
+}
+
+/* The MODS page's check of a set: pass 1, the checks and the layout, as dl_link, without
+ * pass 2 and without writing anything outside the link state (the area, the tables and
+ * dl_status stay as the boot left them). A mod that would load gets DL_ST_LOADED. The
+ * refusals only pass 2 finds (a pc16 out of range, a relocation to a name nothing
+ * defines) are not seen. -> how many would load, or -1 when the descriptor isn't one the
+ * loader reads, the set is over DL_MAX_MODS or the heap has no room for the check. */
+int dl_check(u32 desc, const struct dl_choice *choice, int n, u8 *buf, u32 max,
+             struct dl_status *st, char (*det)[32], char (*ver)[DL_VER_MAX])
+{
+    if (n < 0 || n > DL_MAX_MODS)
+        return -1;
+    if (begin(desc, choice, n, buf, max, st, det) <= 0) {
+        finish();
+        return -1;
+    }
+    return check_end(n, ver);
+}
+
+/* dl_check in steps (dl.h): the same check, one file's pass 1 a call. */
+static struct {
+    int n, next;
+    char (*ver)[DL_VER_MAX];
+} S;
+
+int dl_check_start(u32 desc, int n, u8 *buf, u32 max, struct dl_status *st, char (*det)[32],
+                   char (*ver)[DL_VER_MAX])
+{
+    S.n = S.next = 0;
+    if (n < 0 || n > DL_MAX_MODS || begin_start(desc, n, buf, max, st, det) <= 0) {
+        finish();
+        return -1;
+    }
+    S.n = n;
+    S.ver = ver;
+    return 0;
+}
+
+int dl_check_step(const struct dl_choice *ch)
+{
+    if (S.next >= S.n)
+        return 0;
+    begin_line(ch, S.next++);
+    return S.n - S.next;
+}
+
+int dl_check_finish(void)
+{
+    int n = S.n;
+    S.n = 0;
+    if (S.next < n || begin_end() < 0) {
+        finish();
+        S.next = 0;
+        return -1;
+    }
+    S.next = 0;
+    return check_end(n, S.ver);
+}
+
+/* A check started with dl_check_start, given up: its memory back. */
+void dl_check_cancel(void)
+{
+    finish();
+    S.n = S.next = 0;
 }
 
 /* The boot's records, for n lines, in place of the last link's. -> 0 when the heap has none. */
