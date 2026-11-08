@@ -99,6 +99,7 @@ export class Mod2 implements AnyMod {
   sites: Site[]
   collections: Map<string, number>
   spare: Map<string, number>                 // a table's spare entries, for a build descriptor
+  cap: Map<string, number>                   // a table's most entries, flashed and spare ("max")
   render: Set<string>                        // the render tables it declares
   dspTables: Map<string, [string, Uint8Array, Uint8Array]>   // name -> [payload tag, head, end]
   contribute: Contribution[]
@@ -179,6 +180,7 @@ export class Mod2 implements AnyMod {
     this.collections = new Map()
     this.dspTables = new Map()
     this.spare = new Map()
+    this.cap = new Map()
     this.render = new Set()
     for (const [c, d] of items(get(doc, 'collections', {}))) {
       const e = int(get(d, 'entry'), name)
@@ -186,6 +188,11 @@ export class Mod2 implements AnyMod {
         const n = int(d.spare, name)
         this.spare.set(c, n)
         if (!(n >= 0 && n <= MAX_SPARE)) throw new ModError(`${name}: table ${c} spare ${n} (0 to ${MAX_SPARE})`)
+      }
+      if (isDict(d) && 'max' in d) {           // the spare entries stop at this many in all
+        const n = int(d.max, name)
+        this.cap.set(c, n)
+        if (!(n >= 1 && n <= MAX_SPARE)) throw new ModError(`${name}: table ${c} max ${n} (1 to ${MAX_SPARE})`)
       }
       if (truthy(get(d, 'render'))) this.render.add(c)
       const space = get(d, 'space')
@@ -876,6 +883,12 @@ export function link(mods: Mod2[], image: Uint8Array, lock: store.Lock | null = 
       if (!(c.order >= 0 && c.order < desc.LINKER_ORDER))
         throw new ModError(`${m.label()}: its entry for ${c.to} has the order ${c.order}; with a build descriptor an order is 0 to ${desc.LINKER_ORDER - 1}`)
     for (const [c, [owner]] of tables) spare.set(c, fixed.has(c) ? 0 : owner.spare.get(c) ?? desc.SPARE)
+    for (const [c, [owner, e]] of tables) {   // a "max": the flashed entries and the spare ones fit it
+      const cap = owner.cap.get(c)
+      if (cap === undefined || !entries.has(c)) continue
+      const n = Math.floor(entries.get(c)!.reduce((k, x) => k + x[4].data.length, 0) / e)
+      spare.set(c, Math.max(0, Math.min(spare.get(c)!, cap - n)))
+    }
   }
   const tableLen = (c: string) => {
     let n = entries.get(c)!.reduce((k, e) => k + e[4].data.length, 0)

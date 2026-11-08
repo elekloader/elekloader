@@ -70,7 +70,7 @@ A format-2 mod is a relocatable object:
 | `exports` | the symbols other mods may use |
 | `imports`, `weak` | the names it uses from others; a weak one resolves to `core_zero` (zeros) if no mod provides it |
 | `relocs` | `[section, offset, "abs32"/"pc32"/"pc16"/"dsp24", target, addend]`; target `"sym:NAME"`, `"sec:NAME"` or `"abs"` |
-| `collections` | tables this mod declares: `{"ev_tick": {"entry": 4}}`, or a DSP table (below); a core's may add `"spare"` (0 to 4,096) and `"render": true` for the build descriptor ("The build descriptor" below) |
+| `collections` | tables this mod declares: `{"ev_tick": {"entry": 4}}`, or a DSP table (below); a core's may add `"spare"` (0 to 4,096), `"max"` (1 to 4,096) and `"render": true` for the build descriptor ("The build descriptor" below) |
 | `contribute` | entries for tables: `{"to", "order", "data", "relocs", "claims"}` |
 | `copied` | `[{"lo", "hi", "to"}]`: a block of the image this mod copies elsewhere at run time |
 | `storage` | fields this mod keeps with the project: `[{"sym", "scope", "bits"}]` (the Analog Rytm MKII from core-ar2 0.2, the Analog Four MKII from core-a4 0.1; "Mod storage" below) |
@@ -299,7 +299,9 @@ image>` prints it.
 
 - **Spare entries.** Each table gets spare zero entries after its zero
   entry, so a loader can merge more entries in at boot: 16, or the
-  table's `"spare"` in the declaring mod's `collections`. Tables the
+  table's `"spare"` in the declaring mod's `collections`. A `"max"` there
+  caps the table's entries in all: the spare ones are only what the
+  build's own entries leave of it (none when they reach it). Tables the
   linker fills itself get none: `core_store_ids`, `core_lock_codes`,
   `core_lock_ccs`, `core_field_inits`, `core_handles`, `core_payloads`,
   the `.fast` copy table and DSP tables. `NAME_n` stays the count of

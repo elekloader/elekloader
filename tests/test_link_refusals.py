@@ -921,6 +921,13 @@ def _(B):
                   lambda d: (d[0]['collections']['ev_x'].update(spare=4096), loader(d)))
 
 
+
+@row('Mod2.__init__', '<>: table <> max <> (1 to <>)', device='analog-rytm-mk2')
+def _(B):
+    return B.pair('core: table ev_x max 0 (1 to 4096)',
+                  lambda d: d[0]['collections']['ev_x'].update(max=0),
+                  lambda d: (d[0]['collections']['ev_x'].update(spare=8, max=8), loader(d)))
+
 @row('check', '<> exports <>, the name of the build descriptor the linker writes', device='analog-rytm-mk2')
 def _(B):
     def thief(d):
@@ -1048,7 +1055,7 @@ def test_digitakt_fixtures():
 
 
 def test_analog_rytm_fixtures():
-    assert run_rows('analog-rytm-mk2') == 16
+    assert run_rows('analog-rytm-mk2') == 17
 
 
 def test_the_lfo_destination_field_is_placed_only_with_an_lfo_field():

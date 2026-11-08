@@ -195,12 +195,17 @@ class Mod2:
             self.relocs.append((sec, off, typ, tgt, _int(add, name)))
         self.sites = parse_sites(doc, name, self.dev, self.rel, relocs=True)
         self.collections, self.dsp_tables, self.spare, self.render = {}, {}, {}, set()
+        self.cap = {}                           # a table's most entries, flashed and spare ("max")
         for c, d in doc.get('collections', {}).items():
             e = _int(d.get('entry'), name)
             if 'spare' in d:                    # for a build descriptor: room for more entries
                 self.spare[c] = _int(d['spare'], name)
                 if not 0 <= self.spare[c] <= MAX_SPARE:
                     raise ModError('%s: table %s spare %d (0 to %d)' % (name, c, self.spare[c], MAX_SPARE))
+            if 'max' in d:                      # the spare entries stop at this many in all
+                self.cap[c] = _int(d['max'], name)
+                if not 1 <= self.cap[c] <= MAX_SPARE:
+                    raise ModError('%s: table %s max %d (1 to %d)' % (name, c, self.cap[c], MAX_SPARE))
             if d.get('render'):
                 self.render.add(c)
             space = d.get('space')
@@ -891,6 +896,11 @@ def link(mods, image, lock=None, *, sharc_stream=None):
                     raise ModError('%s: its entry for %s has the order %d; with a build descriptor an '
                                    'order is 0 to %d' % (m.label(), c['to'], c['order'], desc.LINKER_ORDER - 1))
         spare = {c: 0 if c in fixed else tables[c][0].spare.get(c, desc.SPARE) for c in tables}
+        for c in tables:                        # a "max": the flashed entries and the spare ones fit it
+            cap = tables[c][0].cap.get(c)
+            if cap is not None and c in entries:
+                n = sum(len(e[4]['data']) for e in entries[c]) // tables[c][1]
+                spare[c] = max(0, min(spare[c], cap - n))
 
     def table_len(c):
         n = sum(len(e[4]['data']) for e in entries[c])

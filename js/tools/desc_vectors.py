@@ -39,6 +39,12 @@ def cases(B):
     d[0]['collections']['ev_x']['spare'] = -1
     out['a negative spare'] = d
     d = T.descriptor_mods(B)
+    d[0]['collections']['ev_x'].update(spare=40, max=3)
+    out['a max under the spare'] = d
+    d = T.descriptor_mods(B)
+    d[0]['collections']['ev_x']['max'] = 0
+    out['a max of 0'] = d
+    d = T.descriptor_mods(B)
     d[2]['symbols']['core_desc'] = ['.run', 0]
     d[2]['exports'] = ['core_desc']
     out['a mod exports core_desc'] = d
