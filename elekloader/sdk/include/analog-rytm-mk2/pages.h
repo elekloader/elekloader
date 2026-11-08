@@ -147,7 +147,8 @@ struct core_param {
  * look is a stock id (1..468): the knob is drawn as that id's knob, its
  * graphic (dial, switch, select box, bipolar dial, ...), the parts its flags
  * draw, its turn's steps, its pop-ups, and its range, which min and max
- * replace when min < max (8.8, as the parameter record's). ui, when not 0,
+ * replace when min < max (8.8, as the parameter record's); then the graphic
+ * also spans min..max (core moves the value onto look's range for it). ui, when not 0,
  * answers an 84-byte UI record of the mod's own for the id (stock's layout:
  * flags +0, steps +4..+0x10, delegates +0x14 text, +0x24 graphic, +0x34,
  * +0x44 pop-up), or 0 for look's; a mod builds one by copying a stock record,
@@ -162,7 +163,7 @@ struct core_knob_look {
     int32_t first, last;    /* the ids this entry answers for */
     int32_t look;           /* the stock id whose knob these look like, 1..468 (0: record 0) */
     const void *(*ui)(int32_t id);  /* an 84-byte UI record of the mod's own, or 0 for look's */
-    int32_t min, max;       /* min < max: the range (8.8) in place of look's */
+    int32_t min, max;       /* min < max: the range (8.8) in place of look's, the graphic's too */
 };
 
 /* the stock UI record of id (0..468; record 0 for any other id), to copy */

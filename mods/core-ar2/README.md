@@ -1087,12 +1087,13 @@ ids the look of any stock knob, a range of their own, or a UI record of the
 mod's own. An id without an entry is as in 0.11.
 
 Stock finds a knob's look in two places, both one routine, and core answers
-both from their first instruction:
+both from their first instruction, and takes the graphic's call for a range:
 
 | lookup | what it answers | core, for an entry's id |
 |---|---|---|
 | 0x400ff5c2, `uirec(id)` (12 callers) | the UI record, 84 bytes an id in RAM from 0x419a4888, built at boot: flags at +0 (the parts the knob draws), the turn's steps at +4..+0x10, and four delegates of 16 bytes from +0x14 (the value text, the graphic at +0x24, one at +0x34, the value pop-up at +0x44) | the entry's `ui(id)` when it answers, else look's stock record |
 | 0x40006ff0, `range(id)` (32 callers: the pop-ups, the header) | 12 bytes from the parameter record's +8 (52 bytes an id from 0x401bfbc8): min, max and the record's default, 8.8 | look's, with the entry's min and max when min < max |
+| 0x400a85e8, a knob's graphic (set, id, value, bitmap, x, y) | calls the UI record's +0x24 delegate with the value | with min < max, the value moved from min..max onto look's range |
 
 Both are behind a `cmpi.l #469` bound in stock (record 0 above it). Nothing
 else is taken from look: the label and the name stay `core_param_locks'`,
@@ -1100,9 +1101,14 @@ the value and its text `core_params'`, and the parameter record's other
 fields (its sound slot, the +0x24 flags that put it in the LFO and
 modulation lists and open a list on a turn, MIDI) are read for the knob's
 own id as before, so a knob that looks like a stock one does nothing that
-stock one does. Stock's graphics draw the knob's value on their own fixed
-scale (the dial's 0..127, which several graphics map their value to and
-clamp, 0x400ff86c..0x400ffa14), not on the range.
+stock one does. Stock's graphics draw the knob's value on the scale of
+the parameter they were made for (the dial's 0..127, which several graphics
+map their value to and clamp, 0x400ff86c..0x400ffa14), not on the range. So
+for an entry with min < max core also takes the graphic's call, 0x400a85e8
+(the knob sets' vtable +88, which calls the delegate at +0x24 with the
+value), and moves the value from min..max onto look's range there: the
+graphic spans the knob's own range. The value text and the knob's value
+are unchanged.
 
 A stock 1.74 boot builds 87 different UI records (by their flags, steps and
 delegates) over 469 ids, with 46 different graphics;

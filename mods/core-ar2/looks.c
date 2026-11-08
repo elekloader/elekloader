@@ -88,3 +88,43 @@ void core_param_range(int32_t *out, int32_t id)
         out[1] = l->max;
     }
 }
+
+/* looks.s, from 0x400a85e8, a knob's graphic (set, id, value, ...): the
+ * UI record's delegate at +0x24 draws value on the scale of the parameter
+ * it was made for (a dial: 0..127). For an entry with min < max, value
+ * moves from min..max onto look's range (0..127 where look's is 0..0), so
+ * the graphic spans the knob's own range: min at its start, max at its end. */
+int32_t core_knob_dial(int32_t id, int32_t value)
+{
+    const struct core_knob_look *l = (uint32_t)id < STOCK_IDS ? 0 : look_of(id);
+    const int32_t *r;
+    int32_t lo, hi;
+    uint32_t span, off, out;
+    int sh;
+    if (!l || l->min >= l->max)
+        return value;
+    r = (const int32_t *)(PARAMS + 8 + PARAM_SIZE * ((uint32_t)l->look < STOCK_IDS ? l->look : 0));
+    lo = r[0];
+    hi = r[1];
+    if (lo >= hi) {
+        lo = 0;
+        hi = 127 << 8;
+    }
+    if (value <= l->min)
+        return lo;
+    if (value >= l->max)
+        return hi;
+    off = (uint32_t)(value - l->min);           /* 0 < off < span */
+    span = (uint32_t)(l->max - l->min);
+    out = (uint32_t)(hi - lo);
+    sh = 0;
+    while (out > 0xffff) {                      /* off * out in 32 bits */
+        out >>= 1;
+        sh++;
+    }
+    while (off > 0xffff) {
+        off >>= 1;
+        span >>= 1;
+    }
+    return lo + (int32_t)((off * out / (span ? span : 1)) << sh);
+}

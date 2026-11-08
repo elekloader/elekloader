@@ -13,7 +13,8 @@ same pixel for pixel when core gives the look. The pairs take one stock id
 of each of the 87 different UI records a stock 1.74 boot builds (`looks.h`):
 every knob display stock has. The last page adds a knob whose record comes
 from a `ui` callback (a copy of 457's) and one with COMP MIX's look and a
-range of 0..12.
+range of 0..12, whose dial core spans over 0..12: its stock partner shows
+the value moved onto 0..127, so the pair is the same when core does.
 
 While it is in, its `core_params` entry for 1..468 also answers the 87
 stock ids on stock's own pages. It is a test, not for a project you keep.

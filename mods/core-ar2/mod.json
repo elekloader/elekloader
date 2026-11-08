@@ -153,6 +153,7 @@
   {"addr": "0x400a864c", "stock": "4fefffec48d70c1c", "op": "jmp", "target": "core_param_text"},
   {"addr": "0x400ff5c2", "stock": "222f00040c81000001d5", "op": "jmp", "target": "core_uirec_hook"},
   {"addr": "0x40006ff0", "stock": "2f02202f0008", "op": "jmp", "target": "core_range_hook"},
+  {"addr": "0x400a85e8", "stock": "4feffff048d7003c", "op": "jmp", "target": "core_graphic_hook"},
   {"addr": "0x400caf04", "stock": "72012f01203c401e1dd8", "op": "jmp", "target": "core_view_0"},
   {"addr": "0x400caf7e", "stock": "72022f01203c401e1dd0", "op": "jmp", "target": "core_view_1"},
   {"addr": "0x400cafee", "stock": "72012f01203c401e1dcc", "op": "jmp", "target": "core_view_2"},

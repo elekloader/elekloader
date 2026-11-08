@@ -66,6 +66,9 @@ static int pair_of(int32_t id, const void *view_unused)
 static int32_t lo(int k) { return k == RANGE_PAIR ? RANGE_MIN : P_MIN(looks[k]); }
 static int32_t hi(int k) { return k == RANGE_PAIR ? RANGE_MAX : P_MAX(looks[k]); }
 
+/* the range pair's value on COMP MIX's 0..127, as core draws it (looks.c) */
+static int32_t dial(int32_t v) { return (int32_t)((uint32_t)(v - RANGE_MIN) * (127 << 8) / (RANGE_MAX - RANGE_MIN)); }
+
 static int p_get(int32_t id, int32_t *v)
 {
     int k = pair_of(id, 0);
@@ -74,6 +77,8 @@ static int p_get(int32_t id, int32_t *v)
     if (!value[k])
         value[k] = lo(k) + ((hi(k) - lo(k)) * 3 / 8 & ~0xff);
     *v = value[k];
+    if (k == RANGE_PAIR && own_ix(id) < 0)  /* the stock knob: where core draws the own one */
+        *v = dial(*v);
     return 1;
 }
 
@@ -96,6 +101,8 @@ static int p_text(struct core_text *t)
     int k = pair_of(t->id, 0);
     if (k < 0)
         return CORE_TEXT_PASS;
+    if (k == RANGE_PAIR && own_ix(t->id) >= 0)
+        t->value = dial(t->value);
     t->id = looks[k];
     return CORE_TEXT_STOCK;
 }

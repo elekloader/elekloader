@@ -1974,9 +1974,10 @@ const struct core_knob_look my_looks = {CORE_KNOB(0), CORE_KNOB(0), 457, 0, 0, 0
   Pick an id whose knob looks as yours should; any id with the same record
   looks the same. `mods/core-ar2/knob-looks-1.74.md` lists 1.74's 87 looks,
   with a sample id, its stock name and every id that shares it.
-- `min`, `max`: when min < max, the range (8.8) in place of look's, for the
-  pop-ups and the header. The graphic itself draws the value on its own
-  scale (a dial 0..127), so a value outside it is clamped there.
+- `min`, `max`: when min < max, the knob's range (8.8) in place of look's:
+  the pop-ups and the header take it, and core moves the value the graphic
+  draws from min..max onto look's range (0..127 where look's is 0..0), so a
+  dial is at its start at min and at its end at max.
 - `ui(id)`: when not 0, an 84-byte UI record of your own for the id, or 0
   for look's. Build it once from a stock one,
   `memcpy(mine, core_knob_stock_ui(94), 84)`, and change fields (flags +0,
