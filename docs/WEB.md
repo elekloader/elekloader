@@ -89,6 +89,20 @@ yourself (the "Your files" shelf). Once you have dropped in a stock file, it
 opens on that file's device. A device you pick before that says which stock
 OS file it needs.
 
+**Sections.** A repository with many small mods of one kind can have a page
+of its own instead of crowding the shelves: `web/sections.json` lists each
+section (`id`, `title`, `nav`, `blurb`, optional `tools`: pages of the site such
+as `#splash`, listed under it) and its
+packs, one repository each. Its mods leave the Mod Shop's shelves; the side
+bar links the section's page (`#s/<id>`, a shelf per pack, the device chips
+and the search work there), and the Mod Shop shows one row that opens it
+(with a search, how many match there). A repository's later releases land in
+its section by themselves. `build_web.py` checks the file and publishes it as
+`shop/sections.json`. The first: **Splash & screens**, DigiSplash and
+DigiCandy, with the Splash screen maker as its tool: while either page is
+open, the side bar lists Mods and Splash screen maker under the section, and
+both pages show the same row of tabs.
+
 Each card's cover is the mod's name over line art, in its kind's colour.
 - **Keywords pick the art.** `MOTIFS` in `app.js` matches the mod's id and title,
   and the first match wins:

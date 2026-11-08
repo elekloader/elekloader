@@ -129,6 +129,49 @@ def package_zip():
     return out.getvalue(), [n for n, _ in files]
 
 
+def sections(items, path=None):
+    """web/sections.json, checked: the shop's own sections, each a page of whole repositories' mods (app.js).
+    -> [{id, title, nav, blurb, tools: [{href, title}], packs: [{repo, title, blurb}]}]. A repository in no section stays on the
+    Mod Shop's shelves; one in the list that the shop does not carry (yet) is kept, and named."""
+    path = path or os.path.join(ROOT, 'web', 'sections.json')
+    if not os.path.exists(path):
+        return []
+    with open(path, encoding='utf-8') as fh:
+        doc = json.load(fh)
+    out, ids, repos, tools_seen = [], set(), set(), set()
+    have = {e['repo'] for e in items}
+    for s in doc.get('sections', []):
+        if not re.match(r'^[a-z][a-z0-9-]*$', s.get('id', '')) or s['id'] in ids:
+            sys.exit('web/sections.json: a section id is lowercase letters, digits and -, each once: %r'
+                     % s.get('id'))
+        if s['id'] in ('library', 'build', 'make', 'splash', 'submit', 'contribute'):
+            sys.exit('web/sections.json: %s is one of the page\'s views' % s['id'])
+        ids.add(s['id'])
+        if not s.get('title') or not s.get('packs'):
+            sys.exit('web/sections.json: section %s needs a title and packs' % s['id'])
+        packs = []
+        for p in s['packs']:
+            r = p.get('repo', '')
+            if not re.match(r'^[\w.-]+/[\w.-]+$', r) or r in repos:
+                sys.exit('web/sections.json: %s: a pack is one owner/name repository, in one section: %r'
+                         % (s['id'], r))
+            repos.add(r)
+            if r not in have:
+                print('web/sections.json: %s: the shop carries nothing from %s yet' % (s['id'], r))
+            packs.append({'repo': r, 'title': p.get('title') or r.split('/')[1], 'blurb': p.get('blurb', '')})
+        tools = []
+        for t in s.get('tools', []):
+            if not re.match(r'^#[a-z][a-z0-9/-]*$', t.get('href', '')) or not t.get('title'):
+                sys.exit('web/sections.json: %s: a tool is a #view of the page and a title: %r' % (s['id'], t))
+            if t['href'] in tools_seen:
+                sys.exit('web/sections.json: %s is a tool of two sections' % t['href'])
+            tools_seen.add(t['href'])
+            tools.append({'href': t['href'], 'title': t['title']})
+        out.append({'id': s['id'], 'title': s['title'], 'nav': s.get('nav') or s['title'],
+                    'blurb': s.get('blurb', ''), 'tools': tools, 'packs': packs})
+    return out
+
+
 def pyodide_files(tarball):
     with open(tarball, 'rb') as fh:
         raw = fh.read()
@@ -462,7 +505,8 @@ def main(argv=None):
     for n, png in pictures.items():
         site['shop/' + n] = png
     site['shop/index.json'] = json.dumps([e for e, _ in items], indent=1).encode()
-    if a.upstream is None:                  # the upstream lists the repository has
+    site['shop/sections.json'] = json.dumps(sections([e for e, _ in items]), indent=1).encode()
+    if a.upstream is None:                 # the upstream lists the repository has
         up = os.path.join(ROOT, 'web', 'upstream')
         a.upstream = sorted(os.path.join(up, n) for n in os.listdir(up)
                             if n.endswith('.json')) if os.path.isdir(up) else []
