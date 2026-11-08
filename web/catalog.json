@@ -361,7 +361,8 @@
       "device": "digitone-mk1", "needs_core": "4.0",
       "sha256": "19324605026c1f727c1f651cf213e57fbf1443cd201388b431b83ee084efd883",
       "summary": "Seven filter-based FX modes for the Digitakt mk1 and Digitone mk1/Keys: VOWEL, BANK, FOLD, CRUSH, RING, PHASER and FLANGER.",
-      "on_unit": "Tested on hardware; fully functional and stable."
+      "on_unit": "Tested on hardware; fully functional and stable.",
+      "thumb": {"tag": "v1.2", "file": "thumb.png", "sha256": "a121ebb05a28e7dd37b64dc663698cb75c8eebba73d6ac494f3b617ac412ae2f"}
     },
     {
       "repo": "DigiAlchemydsp/Tone-FX", "tag": "v4.0c", "file": "tonefx-4.0c-os1.44.elemod",
@@ -799,7 +800,8 @@
       "device": "digitakt-mk1",
       "sha256": "ce501eec504a9aae5687f4b3e7b3f8b180e66430073f715e5c990e152047075a",
       "summary": "Seven filter-based FX modes for the Digitakt mk1 and Digitone mk1/Keys: VOWEL, BANK, FOLD, CRUSH, RING, PHASER and FLANGER.",
-      "on_unit": "Tested on hardware; fully functional and stable."
+      "on_unit": "Tested on hardware; fully functional and stable.",
+      "thumb": {"tag": "v1.2", "file": "thumb.png", "sha256": "a121ebb05a28e7dd37b64dc663698cb75c8eebba73d6ac494f3b617ac412ae2f"}
     },
     {
       "repo": "DigiAlchemydsp/Tone-FX", "tag": "v4.0c", "file": "tonefx-4.0c-dt-os1.54.elemod",
