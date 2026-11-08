@@ -285,7 +285,7 @@ export class LoaderModel {
         }
       }
       L = link(mods as Mod2[], this.img!, null,
-        v2.some(m => (m as Mod2).sharc) ? this.sharcStream() : null)
+        v2.some(m => (m as Mod2).sharc || (m as Mod2).sharcRaw) ? this.sharcStream() : null)
     } catch (e) {
       if (!(e instanceof ModError) && !(e instanceof OSError_)) throw e
       const lines0 = e.message.split('\n').slice(1).map(x => x.trim())

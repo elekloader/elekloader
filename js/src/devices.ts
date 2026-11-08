@@ -24,6 +24,7 @@ export type SharcProfile = {
   protected: [number, number, string][]         // loader-byte exclusions
   ownedRanges: Range[]                         // qualified loader-byte intervals only
   patchRanges?: Range[]                        // exact stock instruction intervals
+  raw?: boolean                                 // takes raw payloads (`sharc_raw`: sharc.rawPayload), the Digitakt II
   activeKeyedCore?: { segments: [number, string, string][], zero: [number, number][], entries: Record<string, number>, stackBytes: number }
   hook?: [number, string, string]               // loader address, stock bytes, replacement bytes
   abi?: string
@@ -131,11 +132,30 @@ export const DIGITAKT_MK2: Device = {
   ...base,
   key: 'digitakt-mk2', name: 'Digitakt II', sysexId: 0x14,
   releases: [
-    rel('1.17', '26c22f6652625ac2cfd47f7ee970d388ed8b6427dae3563c0a6a2f2d334350d5',
+    { ...rel('1.17', '26c22f6652625ac2cfd47f7ee970d388ed8b6427dae3563c0a6a2f2d334350d5',
       'a1e7b657b705eba1a19d81c33c1e11ba9c409816447ad74005d7bbf36da6d964', 3275616),
+      // Section 7 for raw SHARC mods (`sharc_raw`, docs/FORMAT.md): new loads in the L2 the stock stream leaves
+      // unused, and patches of whole stock instructions in the L1 code load. Measured on 1.17.
+      sharc: {
+        section: 7, processor: 'ADSP-21569', isa: 'sharc+-visa', siliconRevision: null,
+        storedSha256: '39113a8ae7f7ac7336bda4a56eeb45108f0618ea451bcf9f466803017184375d', storedLen: 184856,
+        decodedSha256: '0f514a12a2255f5c081e292c47f1f29462003177658da4bbae0a22fd737fffa2', decodedLen: 321016,
+        storedMax: 0x100000, decodedMax: 0xfffff, recordCount: 104,
+        l1Aliases: [[0x240000, 0x270000, 0x28240000], [0x2c0000, 0x2f0000, 0x282c0000],
+          [0x300000, 0x320000, 0x28300000], [0x380000, 0x3a0000, 0x28380000]],
+        l2Bytes: [0x20000000, 0x20100000], l2Pc16: [0xb80000, 0xc00000, 0x20000000],
+        ddrBytes: [0x80000000, 0xa0000000],
+        protected: [[0x200fa000, 0x200fe000, 'DT2 L2 window two functions load as literals'],
+          [0x200fe000, 0x20100000, 'Boot ROM workspace'], [0x282ec000, 0x282f0000, 'L1 block 1 cache'],
+          [0x2831c000, 0x28320000, 'L1 block 2 cache'], [0x2839c000, 0x283a0000, 'L1 block 3 cache']],
+        raw: true,
+        ownedRanges: [[0x2001ab7c, 0x200fa000]],
+        patchRanges: [[0x283827cc, 0x283827cc + 104500]],
+      } },
   ],
   stage: 0x40400000, flashAt: 0x80000, flashLimit: 0x380000, trailer: 'hmac', hmacKeyFrom: [2, 'Master Overdrive'],
-  areas: { ddr: [0x47f00000, 0x47f40000], 'sram-tail': [0x8000f100, 0x80010000], 'sram-block': [0x80006e80, 0x80008000] },
+  // ddr-low: below the linker's area, above the DSP buffers; what mods that place code at fixed addresses claim
+  areas: { ddr: [0x47f00000, 0x47f40000], 'ddr-low': [0x47e7b000, 0x47f00000], 'sram-tail': [0x8000f100, 0x80010000], 'sram-block': [0x80006e80, 0x80008000] },
   ddr: [0x47f00000, 0x47f40000], sramCode: [0x8000f100, 0x80010000], fastTable: 'core_fast',
   recovery: 'hold FUNC while powering on for the STARTUP menu, press TRIG 4 (OS UPGRADE), '
     + 'then send the stock .syx over MIDI (not USB)',
