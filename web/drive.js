@@ -4,6 +4,8 @@
 // js/'s TypeScript as the site serves it (engine/): the build-checker (drive.js), the data container (container.js)
 // and the Data router's requests (datarpc.js), each the Python's, byte for byte. Every write goes through
 // datarpc.Mods, whose paths are inside /mods; an upload and the set are checked against the unit's build first.
+// /mods shows one folder at a time, to datarpc.DEPTH deep, as the unit's MODS page and stock's SAMPLES do; the
+// ticks are the build, so they stay across folders.
 
 const V = new URL(import.meta.url).search;
 const ENGINE = document.querySelector('meta[name="engine"]')?.content || 'engine';
@@ -26,6 +28,12 @@ const kb = n => (n >= 10240 ? `${Math.round(n / 1024)} KB` : n >= 1024 ? `${(n /
 const hex8 = n => '0x' + (n >>> 0).toString(16).padStart(8, '0');
 const say = (id, text, cls = '') => { const e = $(id); e.textContent = text; e.className = `small ${cls}`; };
 const SPECIAL = new Set(['.build', '.status', 'active']);
+const SEG_MAX = 63;                       // a folder or file name, in bytes (the loader's DL_SEG_MAX)
+const ulen = s => new TextEncoder().encode(s).length;
+const depth = p => (p ? p.split('/').length : 0);
+const parent = p => p.split('/').slice(0, -1).join('/');
+const base = p => p.split('/').pop();
+const inside = (p, dir) => (dir ? p.startsWith(dir + '/') : true);
 const KINDS = ['core', 'flashed', 'loader'];
 
 // ---- the port --------------------------------------------------------------------------------------------------
@@ -55,7 +63,11 @@ class MidiPort {
 
 const S = {
   access: null, port: null, mods: null, build: null, head: null,
-  files: [],            // [{name, size, raw, id, version, alone (a check result)}]
+  files: [],            // [{name, size, raw, id, version, alone (a check result)}], name a path below /mods
+  folders: [],          // the unit's folders below /mods, as paths, to datarpc.DEPTH deep
+  made: new Set(),      // folders made here, empty until a file is uploaded into one (the router makes no empty folder)
+  cwd: '',              // the open folder, '' for /mods itself
+  shop: null,           // the shop's mods for this build: [{e, raw, kind, why}]
   chosen: new Set(),    // file names ticked for /mods/active
   order: [],            // /mods/active's order, then ticks in the order they were made
   busy: false,
@@ -64,10 +76,12 @@ const S = {
 async function busy(f) {
   if (S.busy) return;
   S.busy = true;
-  for (const b of $('view-drive').querySelectorAll('button')) b.disabled = true;
+  const held = [...$('view-drive').querySelectorAll('button')].filter(b => !b.disabled);
+  for (const b of held) b.disabled = true;
   try { return await f(); } finally {
     S.busy = false;
-    for (const b of $('view-drive').querySelectorAll('button')) b.disabled = false;
+    for (const b of held) b.disabled = false;   // a button disabled for its own reason stays so
+    if (S.build && !$('dm-files').hidden) renderCrumbs();
     renderSet();
   }
 }
@@ -153,8 +167,26 @@ function renderRoom(r = null) {
 
 // ---- /mods -----------------------------------------------------------------------------------------------------
 
+/** Every folder and file below /mods, to datarpc.DEPTH folders deep, one listing a folder, as datarpc.Mods.walk
+ * reads them, but keeping the folders, so that an empty one shows. -> [[path, size]], [path] */
+async function walk() {
+  const files = [], folders = [], todo = [''];
+  while (todo.length) {
+    const sub = todo.shift();
+    for (const [name, kind, size] of await S.mods.ls(sub)) {
+      const p = sub ? `${sub}/${name}` : name;
+      if (kind !== 1) files.push([p, size]);
+      else if (depth(p) <= datarpc.DEPTH) { folders.push(p); todo.push(p); }
+    }
+  }
+  return [files, folders];
+}
+
 async function refresh() {
-  const list = await S.mods.walk();      // every folder, to datarpc.DEPTH deep; names are paths below /mods
+  const [list, folders] = await walk();
+  S.folders = folders;
+  for (const m of [...S.made]) if (folders.includes(m)) S.made.delete(m);
+  while (S.cwd && !folders.includes(S.cwd) && !S.made.has(S.cwd)) S.cwd = parent(S.cwd);
   const files = [];
   for (const [name, size] of list) {
     if (SPECIAL.has(name)) continue;
@@ -186,22 +218,106 @@ async function refresh() {
   $('dm-status-text').textContent = status.trim() || 'Nothing loaded at the last boot.';
   $('dm-files').hidden = false;
   renderFiles();
+  renderShop();
+}
+
+/** The folders below `dir` on the unit or made here, and whether each holds anything. */
+function allFolders() { return [...new Set([...S.folders, ...S.made])].sort(); }
+
+function open_(dir) { S.cwd = dir; say('dm-upload-msg', ''); renderFiles(); renderShop(); }
+
+function renderCrumbs() {
+  const parts = S.cwd ? S.cwd.split('/') : [];
+  const crumbs = [el('button', { type: 'button', 'aria-current': parts.length ? null : 'location', onclick: () => open_('') }, '/mods')];
+  parts.forEach((p, k) => {
+    const dir = parts.slice(0, k + 1).join('/');
+    crumbs.push('/', el('button', { type: 'button', 'aria-current': k === parts.length - 1 ? 'location' : null, onclick: () => open_(dir) }, p));
+  });
+  $('dm-crumbs').replaceChildren(...crumbs);
+  $('dm-into').textContent = S.cwd ? `/mods/${S.cwd}` : '/mods';
+  const deep = depth(S.cwd) >= datarpc.DEPTH;
+  $('dm-new-folder').disabled = deep;
+  $('dm-new-folder-btn').disabled = deep;
+  $('dm-new-folder-btn').title = deep ? `Folders go ${datarpc.DEPTH} deep below /mods` : '';
 }
 
 function renderFiles() {
-  $('dm-file-list').replaceChildren(
-    el('tr', {}, el('th', {}, 'Load'), el('th', {}, 'File'), el('th', {}, 'Mod'), el('th', { class: 'dm-num' }, 'Size'), el('th', {}, 'Alone on this build'), el('th', {}, '')),
-    ...S.files.map(f => el('tr', {},
+  renderCrumbs();
+  const cwd = S.cwd, folders = allFolders();
+  const here = folders.filter(d => parent(d) === cwd);
+  const files = S.files.filter(f => parent(f.name) === cwd);
+  const rows = [];
+  if (cwd) rows.push(el('tr', { class: 'dm-folder' }, el('td', {}), el('td', { colspan: 5 },
+    el('button', { type: 'button', class: 'dm-open', 'aria-label': 'Up one folder', onclick: () => open_(parent(cwd)) }, '..'))));
+  for (const d of here) {
+    const below = S.files.filter(f => inside(f.name, d));
+    const ticked = below.filter(f => S.chosen.has(f.name)).length;
+    const empty = !below.length && !folders.some(x => inside(x, d));
+    const made = S.made.has(d);
+    rows.push(el('tr', { class: 'dm-folder' },
+      el('td', { class: 'small muted' }, ticked ? `${ticked} ticked` : ''),
+      el('td', {}, el('code', {}, el('button', { type: 'button', class: 'dm-open', 'aria-label': `Open ${d}`, onclick: () => open_(d) }, `${base(d)}/`))),
+      el('td', { class: 'muted' }, made ? 'new: made on the unit with its first upload' : `${below.length} mod${below.length === 1 ? '' : 's'}`),
+      el('td', { class: 'dm-num' }, ''), el('td', {}, ''),
+      el('td', {}, el('button', { type: 'button', class: 'dm-mini dm-danger', 'aria-label': `Delete folder ${d}`, disabled: !empty,
+        title: empty ? null : 'Not empty: delete or move what is in it first, as on the unit', onclick: e => removeDir(d, e.target) }, 'Delete dir'))));
+  }
+  for (const f of files) rows.push(el('tr', {},
       el('td', {}, el('input', { type: 'checkbox', 'aria-label': `Load ${f.name}`, checked: S.chosen.has(f.name), disabled: !f.raw,
         onchange: e => { if (e.target.checked) { S.chosen.add(f.name); if (!S.order.includes(f.name)) S.order.push(f.name); } else S.chosen.delete(f.name); renderSet(); } })),
-      el('td', {}, el('code', {}, f.name)),
+      el('td', { title: `/mods/${f.name}` }, el('code', {}, base(f.name))),
       el('td', {}, f.id ? `${f.id} ${f.version ?? ''}` : ''),
       el('td', { class: 'dm-num' }, kb(f.size)),
       el('td', { class: f.error ? 'bad' : f.alone.state === drive.LOADED ? 'ok' : 'warn' }, f.error || (f.alone.state === drive.LOADED ? 'loads' : f.alone.why())),
-      el('td', {}, el('button', { type: 'button', class: 'dm-mini', disabled: !f.raw, onclick: () => download(f.name, f.raw) }, 'Download'), ' ',
-        el('button', { type: 'button', class: 'dm-mini dm-danger', onclick: e => remove(f, e.target) }, 'Delete')))));
-  if (!S.files.length) $('dm-file-list').append(el('tr', {}, el('td', { colspan: 6, class: 'muted' }, 'No mods in /mods yet.')));
+      el('td', {}, el('button', { type: 'button', class: 'dm-mini', disabled: !f.raw, onclick: () => download(base(f.name), f.raw) }, 'Download'), ' ',
+        el('button', { type: 'button', class: 'dm-mini dm-danger', 'aria-label': `Delete ${f.name}`, onclick: e => remove(f, e.target) }, 'Delete'))));
+  if (!here.length && !files.length)
+    rows.push(el('tr', {}, el('td', { colspan: 6, class: 'muted' }, cwd ? 'This folder is empty.' : 'No mods in /mods yet.')));
+  if (depth(cwd) >= datarpc.DEPTH)
+    rows.push(el('tr', {}, el('td', { colspan: 6, class: 'muted small', id: 'dm-deep' },
+      `Folders go ${datarpc.DEPTH} deep below /mods. A folder inside this one is not shown here or on the unit, and the loader can't load its mods.`)));
+  const elsewhere = [...S.chosen].filter(n => parent(n) !== cwd && S.files.some(f => f.name === n)).length;
+  $('dm-file-list').replaceChildren(
+    el('tr', {}, el('th', {}, 'Load'), el('th', {}, 'File'), el('th', {}, 'Mod'), el('th', { class: 'dm-num' }, 'Size'), el('th', {}, 'Alone on this build'), el('th', {}, '')),
+    ...rows);
+  if (elsewhere) $('dm-file-list').append(el('tr', {}, el('td', { colspan: 6, class: 'muted small' },
+    `${elsewhere} more ticked in other folders: the set takes every ticked mod, in any folder.`)));
   renderSet();
+}
+
+/** Make a folder in the open one. The Data router has no command for an empty folder, so it is kept here and the
+ * unit makes it with the first file uploaded into it (an upload makes the folders it needs). */
+function makeFolder() {
+  const name = $('dm-new-folder').value.trim();
+  const path = S.cwd ? `${S.cwd}/${name}` : name;
+  let why = '';
+  if (!name) why = 'give it a name';
+  else if (depth(S.cwd) >= datarpc.DEPTH) why = `folders go ${datarpc.DEPTH} deep below /mods`;
+  else if (name.includes('/') || name.startsWith('.')) why = 'a folder name has no / and does not start with .';
+  else if (/[\x00-\x1f\x7f]/.test(name)) why = 'a folder name has no control characters';
+  else if (ulen(name) > SEG_MAX) why = `a folder name is at most ${SEG_MAX} bytes`;
+  else if (ulen(path) + 2 >= 128) why = 'the path would leave no room for a file name (127 bytes)';
+  else if (allFolders().includes(path) || S.files.some(f => f.name === path)) why = `${path} is already there`;
+  if (why) { say('dm-upload-msg', `REFUSED: ${why}`, 'bad'); return; }
+  S.made.add(path);
+  $('dm-new-folder').value = '';
+  open_(path);
+  say('dm-upload-msg', `New folder /mods/${path}: the unit makes it when the first mod is uploaded into it.`, 'ok');
+}
+
+async function removeDir(d, button) {
+  if (button.dataset.sure !== '1') {                     // a second press deletes, as DELETE DIR? on the unit
+    button.dataset.sure = '1';
+    button.textContent = 'Delete dir?';
+    setTimeout(() => { if (button.isConnected) { button.dataset.sure = ''; button.textContent = 'Delete dir'; } }, 4000);
+    return;
+  }
+  if (S.made.has(d)) { S.made.delete(d); say('dm-upload-msg', `Deleted /mods/${d}.`, 'ok'); renderFiles(); return; }
+  await busy(async () => {
+    try { await S.mods.rm(d); } catch (e) { say('dm-upload-msg', `/mods/${d}: ${e.message}`, 'bad'); await refresh(); return; }
+    say('dm-upload-msg', `Deleted /mods/${d}.`, 'ok');
+    await refresh();
+  });
 }
 
 function chosenFiles() {
@@ -271,12 +387,16 @@ function withRequired(news) {
   return out;
 }
 
-/** Check `files` ([{name, raw}]) against the build, with what they require from /mods, then upload them all, or none. */
+/** Check `files` ([{name, raw}], name a path below /mods) against the build, with what they require from /mods, then
+ * upload them all, or none. */
 async function upload(files) {
   if (!S.build) return;
   await busy(async () => {
     for (const f of files) {
       if (!/\.elemod$/.test(f.name)) { say('dm-upload-msg', `REFUSED: ${f.name} is not an .elemod file; nothing was uploaded`, 'bad'); return; }
+      try { S.mods.path(f.name); } catch (e) { say('dm-upload-msg', `REFUSED: ${e.message}; nothing was uploaded`, 'bad'); return; }
+      if (ulen(base(f.name)) > SEG_MAX) { say('dm-upload-msg', `REFUSED: ${base(f.name)} is longer than ${SEG_MAX} bytes; nothing was uploaded`, 'bad'); return; }
+      if (ulen(f.name) >= 128) { say('dm-upload-msg', `REFUSED: /mods/${f.name} is longer than 127 bytes; nothing was uploaded`, 'bad'); return; }
       const c = drive.check(S.build, [[f.name, f.raw]]).choices[0];
       f.id = c.id;
       f.requires = c.mod ? c.mod.requires : [];
@@ -299,8 +419,10 @@ async function upload(files) {
   });
 }
 
+/** Chosen or dropped files, named into the open folder. */
 async function readFiles(list) {
-  return Promise.all([...list].map(async f => ({ name: f.name, raw: new Uint8Array(await f.arrayBuffer()) })));
+  const into = S.cwd;
+  return Promise.all([...list].map(async f => ({ name: into ? `${into}/${f.name}` : f.name, raw: new Uint8Array(await f.arrayBuffer()) })));
 }
 
 // ---- the shop --------------------------------------------------------------------------------------------------
@@ -314,7 +436,7 @@ async function catalog() {
   } catch { return; }
   items = items.filter(e => e.available && e.device === S.build.deviceKey && e.os === S.build.os);
   if (!items.length) return;
-  const rows = [];
+  S.shop = [];
   for (const e of items) {
     let raw = null, kind = 'flash', why = '';
     try {
@@ -322,14 +444,26 @@ async function catalog() {
       const only = drive.flashOnly(JSON.parse(new TextDecoder().decode(raw)));
       if (only === null) kind = '+Drive'; else why = `uses ${only}`;
     } catch { why = 'not readable'; }
+    S.shop.push({ e, raw, kind, why });
+  }
+  renderShop();
+}
+
+/** The shop's rows. A mod already in /mods, in any folder, is uploaded again where it is; a new one goes into the
+ * open folder. */
+function renderShop() {
+  if (!S.shop) return;
+  const rows = S.shop.map(({ e, raw, kind, why }) => {
     const c = kind === '+Drive' ? drive.check(S.build, [[e.file, raw]]).choices[0] : null;
-    rows.push(el('tr', {},
+    const copy = S.files.find(f => base(f.name) === e.file);
+    const to = copy ? copy.name : S.cwd ? `${S.cwd}/${e.file}` : e.file;
+    return el('tr', {},
       el('td', {}, e.title || e.id, el('div', { class: 'muted small' }, `${e.id} ${e.version}`)),
       el('td', {}, el('span', { class: `dm-tag ${kind === '+Drive' ? 'dm-drive' : ''}` }, kind), why ? el('div', { class: 'muted small' }, why) : ''),
       el('td', { class: c ? (c.state === drive.LOADED ? 'ok' : 'warn') : 'muted' }, c ? (c.state === drive.LOADED ? 'loads alone' : c.why()) : ''),
-      el('td', {}, kind === '+Drive' ? el('button', { type: 'button', class: 'dm-mini', onclick: () => upload([{ name: e.file, raw }]) },
-        S.files.some(f => f.name === e.file) ? 'Upload again' : 'Upload') : '')));
-  }
+      el('td', {}, kind === '+Drive' ? [el('button', { type: 'button', class: 'dm-mini', onclick: () => upload([{ name: to, raw }]) },
+        copy ? 'Upload again' : 'Upload'), el('div', { class: 'muted small' }, copy ? `replaces /mods/${to}` : `into /mods${S.cwd ? '/' + S.cwd : ''}`)] : ''));
+  });
   $('dm-catalog').hidden = false;
   $('dm-catalog-list').replaceChildren(el('tr', {}, el('th', {}, 'Mod'), el('th', {}, 'Where'), el('th', {}, 'On this build'), el('th', {}, '')), ...rows);
 }
@@ -338,6 +472,8 @@ async function catalog() {
 
 $('dm-connect-btn').addEventListener('click', connect);
 $('dm-save-set').addEventListener('click', saveSet);
+$('dm-new-folder-btn').addEventListener('click', makeFolder);
+$('dm-new-folder').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); makeFolder(); } });
 $('dm-pick').addEventListener('change', async e => { const f = await readFiles(e.target.files); e.target.value = ''; upload(f); });
 const drop = $('dm-drop');
 drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('dm-over'); });

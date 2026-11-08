@@ -3,7 +3,9 @@
 // The mock is a fake unit (tests/test_drive.py's FakeUnit, in JavaScript) holding the made-up build of
 // js/test/drive-vectors.json, whose replies are the ones js/tools/drive_vectors.py recorded from `elekloader mods`.
 // The patcher's own engine (Pyodide) is not on this test's site: only the view is tested. It connects, reads the build, lists /mods, refuses an upload the checker refuses (nothing is sent), uploads
-// the two example mods with the very requests the CLI sent, saves the set, reads it back, and deletes a file.
+// the two example mods with the very requests the CLI sent, saves the set, reads it back, and deletes a file. Then the
+// folders: it makes one, uploads into it, keeps ticks across folders, goes 3 deep, finds a shop mod's copy in a folder,
+// and deletes an empty folder (DELETE DIR), as the loader's route takes them (mods/drive-loader-ar2/README.md).
 //
 //   node tests/test_drive_view.mjs      (Playwright with its Chromium; it skips without them)
 //   DRIVE_VIEW_SHOT=page.png node tests/test_drive_view.mjs    (and a screenshot, once the set is saved)
@@ -79,19 +81,30 @@ function mock(buildHex) {
   const cstr = (d, o) => { let e = o; while (d[e]) e++; return new TextDecoder().decode(d.slice(o, e)); };
   const wrap = body => [...be([0xac11d303, 4]), 2, ...be([2, 2], [5, 2], [0x30313736, 4], [0x454d4f44, 4], [2, 4], [0, 4], [body.length, 4]), 0, 12,
     ...body, ...be([crc(body, 0xffffffff), 4], [body.length, 4], [0xaaa1daaa, 4])];
+  // files by their path below /mods; folders too, as the route keeps them (an upload makes the ones it needs)
   const files = { '.build': [...hexb(buildHex)], '.status': [...new TextEncoder().encode('drive-hello.elemod loaded 0 loaded\n')] };
+  const dirs = new Set(), DEPTH = 3;
+  const up = p => p.split('/').slice(0, -1).join('/');
   const jobs = {};
   let nj = 1;
   const sent = [], listeners = [];
-  window.__unit = { files, sent };
+  window.__unit = { files, dirs, sent };
   function answer(raw) {
     const msg = unpack7(raw.slice(6, -1)), seq = (msg[0] << 8) | msg[1], cmd = msg[4], a = msg.slice(5);
     sent.push(Array.from(msg));
     let ok = 1, extra = [];
-    const name = () => cstr(a, cmd === 0x57 ? 4 : 0).split('/').pop();
+    const name = () => cstr(a, cmd === 0x57 ? 4 : 0).replace(/^\/mods\/?/, '');
+    const enc = s => [...new TextEncoder().encode(s)];
     if (cmd === 0x53) {
-      extra = new Array(12).fill(0);
-      for (const n of Object.keys(files).sort()) extra.push(...new TextEncoder().encode(n), 0, 0, 2, ...be([0, 4], [files[n].length, 4], [0, 2]), 1, 0);
+      const at = name();
+      if (at && !dirs.has(at)) ok = 0;
+      else {
+        extra = new Array(12).fill(0);
+        const here = p => up(p) === at, last = p => p.split('/').pop();
+        if (at.split('/').length - (at ? 0 : 1) < DEPTH)        // folders above the route's depth only
+          for (const d of [...dirs].filter(here).sort()) extra.push(...enc(last(d)), 0, 1, 2, ...be([0, 4], [0, 4], [0, 2]), 0, 0);
+        for (const n of Object.keys(files).filter(here).sort()) extra.push(...enc(last(n)), 0, 0, 2, ...be([0, 4], [files[n].length, 4], [0, 2]), 1, 0);
+      }
     } else if (cmd === 0x54) {
       const n = name();
       if (!(n in files)) ok = 0; else { const j = ++nj; jobs[j] = wrap(files[n]); extra = be([j, 4], [CHUNK, 4], [0, 1]); }
@@ -111,12 +124,13 @@ function mock(buildHex) {
       const body = d.slice(31, d.length - 12);
       ok = u32(d, 0) === 0xac11d303 && ((d[5] << 8) | d[6]) === 2 && u32(d, 13) === 0x454d4f44 && !d[29]
         && u32(d, d.length - 12) === crc(body, 0xffffffff) ? 1 : 0;
-      if (ok) files[n] = body;
+      if (ok) { files[n] = body; for (let d = up(n); d; d = up(d)) dirs.add(d); }
       extra = be([j, 4], [d.length, 4]);
     } else if (cmd === 0x5c) {
       const n = name();
-      ok = n in files ? 1 : 0;
-      delete files[n];
+      if (n in files) delete files[n];
+      else if (dirs.has(n) && ![...dirs, ...Object.keys(files)].some(p => p.startsWith(n + '/'))) dirs.delete(n);
+      else { ok = 0; if (dirs.has(n)) extra = [...enc('Folder not empty'), 0]; }
     }
     const reply = [...HEAD, ...pack7([0, 0, ...be([seq, 2]), cmd | 0x80, ok, ...extra]), 0xf7];
     setTimeout(() => listeners.forEach(f => f({ data: Uint8Array.from(reply) })), 0);
@@ -206,6 +220,94 @@ try {
   check('the file is deleted on the unit', true);
   await page.waitForFunction(() => /drop/.test(document.getElementById('dm-set-check').textContent));
   check('the set says the unit will drop it', true);
+
+  // ---- folders ----
+  const unit = () => page.evaluate(() => ({ files: Object.keys(window.__unit.files), dirs: [...window.__unit.dirs] }));
+  const rowOf = text => page.locator('#dm-file-list tr', { hasText: text });
+  const sentNow = () => page.evaluate(() => window.__unit.sent.length);
+  const msg = () => page.textContent('#dm-upload-msg');
+  // a new folder: kept here until a file goes into it (the router makes no empty folder)
+  let n0 = await sentNow();
+  await page.fill('#dm-new-folder', 'fx');
+  await page.click('#dm-new-folder-btn');
+  check('a new folder opens, with the upload going into it', (await page.textContent('#dm-crumbs')).replace(/\s/g, '') === '/mods/fx'
+    && (await page.textContent('#dm-into')) === '/mods/fx', await page.textContent('#dm-crumbs'));
+  check('... sending nothing yet', (await sentNow()) === n0);
+  check('... and it is empty', (await page.textContent('#dm-file-list')).includes('This folder is empty'));
+  await page.fill('#dm-new-folder', '.hidden');
+  await page.click('#dm-new-folder-btn');
+  check('a folder name starting with . is refused', /REFUSED/.test(await msg()), await msg());
+  await page.setInputFiles('#dm-pick', [{ name: user.name, mimeType: 'application/json', buffer: user.raw }]);
+  await page.waitForFunction(() => /^Uploaded/.test(document.getElementById('dm-upload-msg').textContent), null, { timeout: 15000 });
+  let u = await unit();
+  check('an upload lands in the open folder', u.files.includes(`fx/${user.name}`) && u.dirs.includes('fx') && !u.files.includes(user.name),
+    JSON.stringify(u));
+  check('... with its requirement found in another folder', (await msg()).includes(`/mods/fx/${user.name}`), await msg());
+  await page.check(`#dm-file-list input[aria-label="Load fx/${user.name}"]`);
+  await page.click('#dm-crumbs button:has-text("/mods")');
+  await page.waitForSelector('#dm-file-list button[aria-label="Open fx"]');
+  check('ticks stay across folders', /1 ticked/.test(await rowOf('fx/').textContent())
+    && await page.isChecked(`#dm-file-list input[aria-label="Load ${hello.name}"]`), await page.textContent('#dm-file-list'));
+  check('... and the set checks every ticked mod, in any folder', /LOADED\s+fx\/drive-hello-user\.elemod/.test(await page.textContent('#dm-set-check'))
+    && !(await page.isDisabled('#dm-save-set')), await page.textContent('#dm-set-check'));
+  check('a folder with a mod in it can\'t be deleted', await page.isDisabled('#dm-file-list button[aria-label="Delete folder fx"]'));
+  await page.click('#dm-save-set');
+  await page.waitForFunction(() => /fx\/drive-hello-user/.test(new TextDecoder().decode(Uint8Array.from(window.__unit.files.active || []))));
+  check('/mods/active names the mod by its path', true);
+  // 3 deep: the note, and no deeper folder
+  await page.click('#dm-file-list button[aria-label="Open fx"]');
+  for (const d of ['a', 'b']) { await page.fill('#dm-new-folder', d); await page.click('#dm-new-folder-btn'); }
+  check('3 folders deep, a note says nothing deeper shows', (await page.textContent('#dm-into')) === '/mods/fx/a/b'
+    && /3 deep/.test(await page.textContent('#dm-file-list')), await page.textContent('#dm-file-list'));
+  check('... and no folder can be made there', await page.isDisabled('#dm-new-folder-btn'));
+  // the shop's copy: one in a folder is found, and uploaded again where it is
+  check('the shop finds the copy in /mods', /Upload again\s*replaces \/mods\/drive-hello\.elemod/.test(await page.textContent('#dm-catalog-list')),
+    (await page.textContent('#dm-catalog-list')).replace(/\s+/g, ' '));
+  await page.setInputFiles('#dm-pick', [{ name: hello.name, mimeType: 'application/json', buffer: hello.raw }]);
+  await page.waitForFunction(n => `fx/a/b/${n}` in window.__unit.files, hello.name, { timeout: 15000 });
+  await page.click('#dm-crumbs button:has-text("/mods")');
+  const rootDel = rowOf(hello.name).filter({ hasNot: page.locator('button.dm-open') }).locator('button.dm-danger');
+  await rootDel.click(); await rootDel.click();
+  await page.waitForFunction(n => !(n in window.__unit.files), hello.name);
+  await page.waitForFunction(() => /replaces \/mods\/fx\/a\/b\//.test(document.getElementById('dm-catalog-list').textContent));
+  check('the shop finds a copy inside a folder', /Upload again/.test(await page.textContent('#dm-catalog-list')),
+    (await page.textContent('#dm-catalog-list')).replace(/\s+/g, ' '));
+  n0 = await sentNow();
+  await page.click('#dm-catalog-list button:has-text("Upload again")');
+  await page.waitForFunction(() => /^Uploaded/.test(document.getElementById('dm-upload-msg').textContent), null, { timeout: 15000 });
+  const opened = (await page.evaluate(() => window.__unit.sent)).slice(n0).filter(m => m[4] === 0x57)
+    .map(m => { const a = m.slice(9); return Buffer.from(a.slice(0, a.indexOf(0))).toString(); });
+  u = await unit();
+  check('... and Upload again replaces it there, not at the root', opened.join() === `/mods/fx/a/b/${hello.name}` && !u.files.includes(hello.name),
+    opened.join(' '));
+  // DELETE DIR: an empty folder only
+  await page.click('#dm-file-list button[aria-label="Open fx"]');
+  await page.click('#dm-file-list button[aria-label="Open fx/a"]');
+  await page.click('#dm-file-list button[aria-label="Open fx/a/b"]');
+  const del2 = page.locator(`#dm-file-list button[aria-label="Delete fx/a/b/${hello.name}"]`);
+  await del2.click(); await del2.click();
+  await page.waitForFunction(n => !(`fx/a/b/${n}` in window.__unit.files), hello.name);
+  await page.waitForFunction(() => /This folder is empty/.test(document.getElementById('dm-file-list').textContent));
+  check('an emptied folder stays, and shows', (await unit()).dirs.includes('fx/a/b'));
+  await page.click('#dm-file-list button[aria-label="Up one folder"]');
+  await page.click('#dm-file-list button[aria-label="Up one folder"]');
+  check('a folder that holds a folder can\'t be deleted', await page.isDisabled('#dm-file-list button[aria-label="Delete folder fx/a"]'));
+  await page.click('#dm-file-list button[aria-label="Open fx/a"]');
+  const dd = page.locator('#dm-file-list button[aria-label="Delete folder fx/a/b"]');
+  await dd.click();
+  check('delete dir asks once more', /Delete dir\?/.test(await dd.textContent()));
+  await dd.click();
+  await page.waitForFunction(() => !window.__unit.dirs.has('fx/a/b'));
+  await page.waitForFunction(() => !document.querySelector('#dm-file-list button[aria-label="Open fx/a/b"]'));   // the listing read again
+  check('the empty folder is deleted on the unit', /Deleted \/mods\/fx\/a\/b\./.test(await msg()), await msg());
+  n0 = await sentNow();
+  await page.fill('#dm-new-folder', 'tmp');
+  await page.click('#dm-new-folder-btn');
+  await page.click('#dm-file-list button[aria-label="Up one folder"]');
+  const dt = page.locator('#dm-file-list button[aria-label="Delete folder fx/a/tmp"]');
+  await dt.click(); await dt.click();
+  check('a folder made here and never used goes without a request', (await sentNow()) === n0
+    && !(await page.locator('#dm-file-list button[aria-label="Open fx/a/tmp"]').count()));
 
   const writes = (await page.evaluate(() => window.__unit.sent)).filter(m => [0x57, 0x5c].includes(m[4]));
   const paths = writes.map(m => { const a = m.slice(m[4] === 0x57 ? 9 : 5); return Buffer.from(a.slice(0, a.indexOf(0))).toString(); });

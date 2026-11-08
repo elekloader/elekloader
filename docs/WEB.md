@@ -313,12 +313,27 @@ Pyodide, and `app.js` loads it only when the view first opens:
   drops SysEx over about 1 KB), the read starts again with 768-byte chunks
   and the view keeps that size, so the first read there takes one timeout
   (5 s) longer.
-- **`/mods`** lists the folder's `.elemod` files, those in its folders too (to 3
-  deep, each by its path below `/mods`), each downloaded and checked alone against the build (`drive.check`), with Download and Delete (a second
-  press deletes).
-- **Uploads**, dropped or chosen, are checked first, together with the files
-  in `/mods` they require. If one would not load, nothing is sent.
-- **The set** for the next boot is the ticked files. The view checks it as you
+- **`/mods`** shows one folder at a time, as the unit's MODS page and stock's
+  SAMPLES do: `..` (below `/mods`), its folders, then its `.elemod` files. A
+  folder opens with a click, and the path above the list goes back up. The
+  view reads every folder to 3 deep when it connects, so an empty folder
+  shows too, and each file is downloaded and checked alone against the build
+  (`drive.check`), with Download and Delete (a second press deletes). A
+  folder row says how many mods are below it and how many are ticked. In a
+  folder 3 deep, a note says that nothing deeper shows: the route lists no
+  folder there, and the loader can't reach one.
+- **New folder** makes a folder in the open one (no `/`, not starting with
+  `.`, at most 63 bytes, 3 deep at most) and opens it. The Data router has
+  no request that makes an empty folder, so the view keeps it until the
+  first upload into it makes it on the unit. **Delete dir** on a folder row
+  deletes an empty folder (a second press deletes), as SAMPLES' DELETE DIR;
+  a folder with anything in it can't be deleted, and the route refuses one
+  with `Folder not empty`.
+- **Uploads**, dropped or chosen, go into the open folder. They are checked
+  first, together with the files in `/mods`, in any folder, that they
+  require. If one would not load, nothing is sent.
+- **The set** for the next boot is the ticked files, in every folder: the
+  ticks stay when you open another folder. The view checks it as you
   tick, and Save writes `/mods/active` only when every one loads, as
   `elekloader mods active` does. A line of `/mods/active` whose file is
   missing or changed is named: the unit drops it.
@@ -326,12 +341,17 @@ Pyodide, and `app.js` loads it only when the view first opens:
 - **The shop's mods** for the build's device and OS are each marked
   **+Drive** or **flash** (`drive.flashOnly`: sites, storage and the other
   things only a flashed build carries), and a +Drive one can be uploaded from
-  there.
+  there, into the open folder. A shop mod already in `/mods`, in any folder
+  (found by its file name), reads Upload again and replaces that copy where
+  it is.
 
 `tests/test_drive_view.mjs` runs the view in Chromium (Playwright) against a
 mocked MIDI port: a fake unit with the made-up build of
 `js/test/drive-vectors.json`, whose uploads must be the requests
-`elekloader mods` sent, byte for byte.
+`elekloader mods` sent, byte for byte. The fake unit keeps folders as the
+route does, and the test makes one, uploads into it, ticks across folders,
+goes 3 deep, finds a shop mod's copy in a folder and deletes an empty
+folder.
 
 ## What stays private, and how
 

@@ -644,8 +644,12 @@ python -m elekloader.patch --stock Digitakt_OS1.53.syx --mod mods/core/out/core-
 
       <section class="dm-card" id="dm-files" hidden>
         <h2><code>/mods</code></h2>
+        <div class="dm-row" id="dm-folder-bar"><nav class="dm-crumbs" id="dm-crumbs" aria-label="Folder"></nav>
+          <span class="dm-new"><input type="text" id="dm-new-folder" aria-label="New folder name" placeholder="folder name" maxlength="63" spellcheck="false">
+            <button type="button" class="dm-mini" id="dm-new-folder-btn">New folder</button></span></div>
         <div class="dm-drop" id="dm-drop" tabindex="0">Drop <code>.elemod</code> files here, or
-          <label class="linkish">choose them<input type="file" id="dm-pick" accept=".elemod" multiple hidden></label>.
+          <label class="linkish">choose them<input type="file" id="dm-pick" accept=".elemod" multiple hidden></label>,
+          to upload into <code id="dm-into">/mods</code>.
           Each is checked against the build before it is sent.</div>
         <p id="dm-upload-msg" class="small" role="status"></p>
         <table class="dm-t" id="dm-file-list"></table>
