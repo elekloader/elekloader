@@ -584,6 +584,8 @@ details summary:hover { color: var(--text); }
 .dm-pane .dm-t { display: table; }
 .dm-pane .dm-t td:not([colspan]), .dm-pane .dm-t th { white-space: nowrap; }
 .dm-pane .dm-t td:not(:first-child):not([colspan]), .dm-pane .dm-t th:not(:first-child) { width: 1%; }
+/* Buttons sit right, so a folder's Rename and Delete line up with a file's. */
+.dm-pane .dm-t td:last-child:not([colspan]) { text-align: right; }
 .dm-pane .dm-t td.bad { white-space: normal; min-width: 14em; }
 .dm-pane .dm-t tr[draggable] { cursor: grab; }
 .dm-rename { background: var(--well); color: var(--text); border: 1px solid var(--accent); border-radius: 5px; padding: 1px 6px; font-family: var(--mono); font-size: 13px; width: 100%; min-width: 10em; }

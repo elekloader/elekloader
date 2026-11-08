@@ -391,6 +391,12 @@ try {
   await page.press('#dm-file-list input.dm-rename', 'Enter');
   await page.waitForFunction(() => /^Moved \/mods\/box to \/mods\/kept/.test(document.getElementById('dm-upload-msg').textContent), null, { timeout: 15000 });
   check('Rename renames a folder', (await unit()).files.includes('kept/n.elemod'));
+  await page.click('#dm-file-list button[aria-label="Open fx"]');
+  check('a folder\'s Rename and Delete line up with a file\'s', await page.evaluate(() => {
+    const x = s => document.querySelector(`#dm-file-list button[aria-label="${s}"]`).getBoundingClientRect().left;
+    const f = document.querySelector('#dm-file-list tr[data-file] button[aria-label^="Rename"]').getAttribute('aria-label').slice(7);
+    return Math.abs(x('Rename folder fx/a') - x(`Rename ${f}`)) < 1 && Math.abs(x('Delete folder fx/a') - x(`Delete ${f}`)) < 1;
+  }));
   check('the folder view spans the card', await page.evaluate(() => {
     const t = document.getElementById('dm-file-list'), p = document.getElementById('dm-pane');
     return Math.abs(t.getBoundingClientRect().width - p.getBoundingClientRect().width) < 2;
