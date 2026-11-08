@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { DIGITONE_MK2, devices } from '../src/devices.ts'
+import { DIGITAKT_MK2, DIGITONE_MK2, devices } from '../src/devices.ts'
 
 const profile = DIGITONE_MK2.releases[0].sharc!
 
@@ -18,7 +18,11 @@ test('DN2 SHARC profile grants the H1 core and mod reservation', () => {
   assert.deepEqual(profile.pitchRange, [0x282dda00, 0x282dde00])
   assert.deepEqual(DIGITONE_MK2.dspPayloads, {})
   assert.deepEqual(devices().flatMap(d => d.releases.filter(r => r.sharc).map(r => [d.key, r.version])),
-    [['digitone-mk2', '1.12']])
+    [['digitakt-mk2', '1.17'], ['digitone-mk2', '1.12']])
+  // the Digitakt II's takes raw payloads only (sharc_raw), not the Digitone II's bridge
+  const dt2 = DIGITAKT_MK2.releases[0].sharc!
+  assert.equal(dt2.raw, true)
+  assert.equal(dt2.abi, undefined)
 })
 
 test('DN2 address units and capacity endpoints remain distinct', () => {
