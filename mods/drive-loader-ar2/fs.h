@@ -43,6 +43,22 @@ int dl_fs_file_size(const char *path);   /* the data size of a file, or < 0 */
 int dl_fs_rmdir(const char *path);       /* 0, or < 0: an empty folder only, as SAMPLES' DELETE DIR */
 int dl_fs_mkdir(const char *path);       /* 0, or < 0: one folder, its parent there (route.c makes each level) */
 
+/* A file below DL_DIR read a stretch (32 KB) a call, its CRC-32 taken as it comes, so the
+ * MODS page reads one stretch a tick and no tick blocks the UI task in a whole file's read
+ * (page.c, read_step: the UI event queue it lets grow refuses keys). The caller holds
+ * the staging buffer from the open to the end, and dl_lock during each call. */
+struct dl_reader {
+    dl_file f;
+    unsigned got;                        /* bytes read so far */
+    unsigned crc;                        /* the CRC-32 register; ~crc is the file's at the end */
+    unsigned char open;
+};
+int dl_read_open(struct dl_reader *rd, const char *name);   /* 0, or -1 missing (closed) */
+/* -> 0 more to read, 1 at the end (rd->got bytes in buf), -2 larger than max, -3 a read
+ * error; closed at any answer but 0 */
+int dl_read_more(struct dl_reader *rd, unsigned char *buf, unsigned max);
+void dl_read_close(struct dl_reader *rd);                   /* a read given up */
+
 /* one entry of a folder below DL_DIR (route.c, dl_list_dir) */
 struct dl_ent {
     char name[DL_SEG_MAX + 1];

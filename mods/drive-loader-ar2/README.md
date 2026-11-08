@@ -262,12 +262,16 @@ The page is stock's two-pane file view, the one SAMPLES and PROJECTS are built o
   USB stay free between files (decided 2026-11-08: the CB11 unit run's LOAD of 18 files of 482 KB
   in one call held them for minutes). A box says `CHECKING n MODS`, and the result's box follows.
   Until it ends, the page's actions answer `BUSY: TRY AGAIN` and its background check waits.
-- **Keys first.** A file's check holds the UI task, and a key that arrives meanwhile waits for
-  it (analoghealth's remote keys expire after 2 s). So the background check and the save's
-  steps wait 1 s after any key or encoder turn (`ev_key`, `ev_enc`, taking nothing), each check
-  reads its file once (`dl_check_buf`), and long checks sleep 1 ms each 32 KB for the lower
-  tasks (`dl_breathe`). The boot's link doesn't sleep: it runs before the UI task and the
-  audio start.
+- **Keys first.** Work in the UI task holds stock's UI event queue. Reading a whole 481 KB file
+  every 2 ticks let it grow about 40 events a second, and past 16 queued analoghealth refuses a
+  remote key as busy until it expires at 2 s (emulator, 2026-11-08: a key 1.8 s into the check of
+  18 such files; the refused key never reaches `ev_key`, so it can't pause the check). So the
+  background check and the save read a file 32 KB a tick (`dl_read_open`, `dl_read_more`, its
+  CRC taken as it comes; the queue stayed at 8 or under), holding the staging buffer from the
+  open to the file's check, and check it once read (`dl_check_buf`, `dl_check_step_buf`). Both
+  wait 1 s after any key or encoder turn (`ev_key`, `ev_enc`, taking nothing), and long checks
+  sleep 1 ms each 32 KB for the lower tasks (`dl_breathe`). The cost is time: 18 files of 481 KB
+  take about 41 s to check with a key every 1.5 s, against 14 s for whole-file reads.
 - **Long scans.** A file's CRC and its long strings (its hex) are read through tables, 32 KB
   between breaths, and a hex string in one walk. In the emulator 18 files of 482 KB link in
   3.2 s (11.1 s before, 2026-11-08).

@@ -104,6 +104,7 @@ void dl_memset(void *d, int c, u32 n);
 int dl_strcmp(const char *a, const char *b);
 u32 dl_strlen(const char *s);
 u32 dl_crc32(const u8 *p, u32 n);
+u32 dl_crc32_add(u32 c, const u8 *p, u32 n);   /* the register carried on: ~0 to start, ~ at the end */
 u32 dl_hash(const char *s, u32 n);       /* FNV-1a, 32 bits */
 
 /* ---- what the linker asks of its host ------------------------------------------------ */
@@ -147,6 +148,10 @@ int dl_check(u32 desc, const struct dl_choice *choice, int n, u8 *buf, u32 max,
 int dl_check_start(u32 desc, int n, u8 *buf, u32 max, struct dl_status *st, char (*det)[32],
                    char (*ver)[DL_VER_MAX]);
 int dl_check_step(const struct dl_choice *ch);
+/* dl_check_step of line i's file the caller has already read into the buffer (len bytes, or
+ * -1 missing, -2 larger than the buffer, -3 a read error), crc its CRC-32: the page reads a file
+ * a stretch a tick, so no one tick holds the UI task for the whole file */
+int dl_check_step_buf(const struct dl_choice *ch, s32 len, u32 crc);
 int dl_check_finish(void);
 void dl_check_cancel(void);
 /* dl_check of one file the caller has already read into buf (len bytes; its CRC is taken as

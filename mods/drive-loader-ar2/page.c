@@ -94,8 +94,29 @@ static struct dl_status *cst;
 static char (*cdet)[32];
 static char label[48];
 
+/* The file being read, a stretch a tick (read_step): the staging buffer is the page's from its
+ * open until the caller has checked what it read and given the buffer back. */
+static struct dl_reader rd;
+static const char *rd_name;              /* whose read: a file's or a save line's name */
+static u8 reading;
+static s32 rd_len;                       /* at a read's end: its bytes, or -1 missing, -2 too big, -3 */
+static u32 rd_crc;
+
+/* a read given up (its file, its line or the page gone): the buffer back */
+static void read_stop(void)
+{
+    if (!reading)
+        return;
+    dl_lock();
+    dl_read_close(&rd);
+    dl_unlock();
+    dl_staging_give();
+    reading = 0;
+}
+
 static void set_free(void)
 {
+    read_stop();
     dl_free(choice);
     dl_free(cst);
     dl_free(cdet);
@@ -356,6 +377,7 @@ static int read_folder(void)
     struct lrow *nl;
     int *nb, *ns;
     char p[DL_NAME_MAX + 1], path[DL_PATH_MAX];
+    read_stop();                         /* the rows' names go */
     dl_lock();
     n = dl_list_dir(cwd, 0, 0);
     if (n < 0)
@@ -497,10 +519,49 @@ static int scan(void)
     return 0;
 }
 
-/* One file read: its CRC-32 and size, then a check of it alone for its id, version and
- * pass-1 verdict (a check's set refusals mean nothing here: only codes about the file itself
- * are kept), so no number of files reaches a set's limits. Holds the staging buffer and the
- * loader's mutex for this one file only. -> 0 (the file is checked), -1 busy. */
+/* One stretch (32 KB) of name's read, from its open: one a tick, so no tick blocks the UI task
+ * in a whole file's read. Whole-file reads every 2 ticks let stock's UI event queue grow (about
+ * 40 events a second with 481 KB files); past 16 queued, analoghealth refuses a remote key as busy,
+ * the refused key never reaches ev_key to start the QUIET pause, and after 2 s it expires
+ * (emulator, 2026-11-08: a key 1.8 s into the check of 18 files of 481 KB; a stretch a tick
+ * kept the queue at 8 or under). A read of another name first gives up the one
+ * running. -> 1 more to read, 0 read (rd_len, rd_crc; the caller holds the staging buffer and
+ * gives it back after its check), -1 busy (the buffer is the route's). */
+static int read_step(const char *name)
+{
+    int res;
+    if (reading && rd_name != name)
+        read_stop();
+    if (!reading) {
+        if (!dl_staging_take_idle(ticks, READ_STALL))
+            return -1;
+        dl_lock();
+        res = dl_read_open(&rd, name);
+        dl_unlock();
+        if (res < 0) {
+            rd_len = -1;
+            rd_crc = 0;
+            return 0;
+        }
+        reading = 1;
+        rd_name = name;
+    }
+    dl_lock();
+    res = dl_read_more(&rd, drive_staging, DL_STAGING_SIZE);
+    dl_unlock();
+    if (!res)
+        return 1;
+    reading = 0;
+    rd_len = res == 1 ? (s32)rd.got : res;
+    rd_crc = ~rd.crc;
+    return 0;
+}
+
+/* One file read, a stretch a call (read_step): its CRC-32 and size, then a check of it alone
+ * for its id, version and pass-1 verdict (a check's set refusals mean nothing here: only codes
+ * about the file itself are kept), so no number of files reaches a set's limits. Holds the
+ * staging buffer from the read's open to the check's end. -> 0 (the file is checked), 1 more
+ * to read, -1 busy. */
 static int inspect(struct file *r)
 {
     static struct dl_choice one;
@@ -510,11 +571,10 @@ static int inspect(struct file *r)
     int c;
     if (r->checked)
         return 0;
-    if (!dl_staging_take_idle(ticks, READ_STALL))
-        return -1;
-    dl_lock();
-    len = dl_read_file(r->name, drive_staging, DL_STAGING_SIZE);
-    dl_unlock();
+    c = read_step(r->name);
+    if (c)
+        return c;
+    len = rd_len;
     r->checked = 1;
     if (len == -2)
         r->file_code = DL_R_TOO_BIG;
@@ -522,7 +582,7 @@ static int inspect(struct file *r)
         r->file_code = DL_R_MISSING;
     else {
         r->size = (u32)len;
-        r->crc = dl_crc32(drive_staging, (u32)len);
+        r->crc = rd_crc;
         copy_str(one.name, r->name, DL_LINE_NAME_MAX);
         one.crc = r->crc;
         if (dl_check_buf((u32)core_desc, &one, len, drive_staging, DL_STAGING_SIZE, &one_st, one_det,
@@ -969,7 +1029,12 @@ static void save_step(void)
         while (job.i < nfiles && (!files[job.i].keep || files[job.i].checked))
             job.i++;
         if (job.i < nfiles) {
-            if (inspect(&files[job.i])) {
+            k = inspect(&files[job.i]);
+            if (k > 0) {                 /* a stretch read; the rest on the next ticks */
+                job.tries = 0;
+                return;
+            }
+            if (k) {
                 if (++job.tries > JOB_BUSY)
                     job_end("BUSY: TRY AGAIN");
                 return;
@@ -1008,7 +1073,8 @@ static void save_step(void)
         return;
     }
     if (job.phase == JP_STEPS && job.i < job.m) {
-        if (!dl_staging_take_idle(ticks, READ_STALL)) {
+        k = read_step(choice[job.i].name);  /* a stretch a tick, as the background's reads */
+        if (k < 0) {
             if (++job.tries > JOB_BUSY) {
                 dl_check_cancel();
                 job_end("BUSY: TRY AGAIN");
@@ -1016,9 +1082,10 @@ static void save_step(void)
             return;
         }
         job.tries = 0;
-        dl_lock();
-        dl_check_step(&choice[job.i++]);
-        dl_unlock();
+        if (k > 0)
+            return;
+        dl_check_step_buf(&choice[job.i], rd_len, rd_crc);
+        job.i++;
         dl_staging_give();
         return;
     }
@@ -1391,6 +1458,7 @@ void dl_mods_open(void **f)
     void *menu = *f, *p;
     unsigned sp[2] = {0, 0};
     int busy;
+    read_stop();                         /* a read left running when its page closed */
     if (job.what) {                      /* a save left running when its page closed */
         if (job.phase == JP_STEPS)
             dl_check_cancel();
@@ -1469,7 +1537,7 @@ unsigned dl_page_now(void)
 static void check_next(void)
 {
     static u32 probed;
-    if (!view || !lrows || job.what || ticks % CHECK_EVERY || ticks - last_input < QUIET)
+    if (!view || !lrows || job.what || (!reading && ticks % CHECK_EVERY) || ticks - last_input < QUIET)
         return;
     while (next_check < nlrows && (lrows[next_check].kind != R_FILE || files[lrows[next_check].f].checked))
         next_check++;
@@ -1482,7 +1550,8 @@ static void check_next(void)
         }
         return;
     }
-    if (!inspect(&files[lrows[next_check].f]))   /* its row now shows its id or "!"; the frame that */
+    if (!inspect(&files[lrows[next_check].f]))   /* checked (not a stretch of its read, not busy): its
+                                                  * row now shows its id or "!"; the frame that */
         VIEW_DIRTY((char *)view + 0x38);          /* draws it keeps drawn_at fresh, so the next follows */
 }
 
@@ -1571,8 +1640,8 @@ void dl_page_tick(void *ctrl)
     dl_readers_poll(ticks);
     follow_route();
     check_next();
-    if (job.what && !(ticks % CHECK_EVERY) && ticks - last_input >= QUIET)
-        save_step();
+    if (job.what && (reading || !(ticks % CHECK_EVERY)) && ticks - last_input >= QUIET)
+        save_step();                     /* a file being read goes on each tick */
     if (redraw) {
         redraw = 0;
         *((volatile u8 *)ctrl + 0x20) = 1;

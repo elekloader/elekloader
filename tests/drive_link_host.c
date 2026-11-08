@@ -134,7 +134,15 @@ int main(int argc, char **argv)
             int j;
             loaded = dl_check_start(strtoul(argv[5], 0, 0), k, staging, sizeof staging, st, det, ver);
             for (j = 0; loaded >= 0 && j < k; j++)
-                dl_check_step(&ch[j]);
+                if (!strcmp(getenv("DL_HOST_STEP"), "buf")) {   /* the page's read a stretch at a time */
+                    s32 len = dl_read_file(ch[j].name, staging, sizeof staging);
+                    u32 c = 0xFFFFFFFF, o;
+                    for (o = 0; len > 0 && o < (u32)len; o += DL_BREATHE)
+                        c = dl_crc32_add(c, staging + o, (u32)len - o < DL_BREATHE ? (u32)len - o : DL_BREATHE);
+                    dl_check_step_buf(&ch[j], len, ~c);
+                } else {
+                    dl_check_step(&ch[j]);
+                }
             if (loaded >= 0)
                 loaded = dl_check_finish();
         } else {

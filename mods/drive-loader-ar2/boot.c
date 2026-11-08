@@ -107,6 +107,48 @@ s32 dl_read_file(const char *name, u8 *buf, u32 max)
     return r > 0 ? -2 : (s32)got;
 }
 
+int dl_read_open(struct dl_reader *rd, const char *name)
+{
+    char path[DL_PATH_MAX];
+    path_of(path, name);
+    dl_memset(rd, 0, sizeof *rd);
+    if (dl_fs_open(&rd->f, path, 0) < 0) {
+        dl_fs_close(&rd->f);
+        return -1;
+    }
+    rd->open = 1;
+    rd->crc = 0xFFFFFFFF;
+    return 0;
+}
+
+void dl_read_close(struct dl_reader *rd)
+{
+    if (rd->open)
+        dl_fs_close(&rd->f);
+    rd->open = 0;
+}
+
+int dl_read_more(struct dl_reader *rd, u8 *buf, u32 max)
+{
+    s32 r;
+    u8 more;
+    if (!rd->open)
+        return -3;
+    if (rd->got < max) {                 /* one stretch, as dl_read_file reads them */
+        r = dl_fs_read(&rd->f, buf + rd->got, max - rd->got < DL_BREATHE ? max - rd->got : DL_BREATHE);
+        if (r > 0) {
+            rd->crc = dl_crc32_add(rd->crc, buf + rd->got, (u32)r);
+            rd->got += (u32)r;
+            return 0;
+        }
+        dl_read_close(rd);
+        return r < 0 ? -3 : 1;
+    }
+    r = dl_fs_read(&rd->f, &more, 1);    /* full: one byte more is a file too large */
+    dl_read_close(rd);
+    return r > 0 ? -2 : 1;
+}
+
 static int exists(const char *name)
 {
     char path[DL_PATH_MAX];

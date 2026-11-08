@@ -164,9 +164,11 @@ u32 dl_hash(const char *s, u32 n)
     return h;
 }
 
-u32 dl_crc32(const u8 *p, u32 n)
+/* The CRC-32 register c carried over n more bytes (no inversions, no breath): a file's CRC
+ * taken a stretch at a time as it is read (the MODS page's reads, one stretch a tick). */
+u32 dl_crc32_add(u32 c, const u8 *p, u32 n)
 {
-    u32 c = 0xFFFFFFFF;
+    const u8 *e = p + n;
     if (!L.crc_table[1]) {
         u32 i, k, v;
         for (i = 0; i < 256; i++) {
@@ -175,18 +177,25 @@ u32 dl_crc32(const u8 *p, u32 n)
             L.crc_table[i] = v;
         }
     }
-    while (n) {                          /* 32 KB stretches, four bytes a turn, a breath between */
+    for (; p + 4 <= e; p += 4) {         /* four bytes a turn */
+        c = L.crc_table[(c ^ p[0]) & 0xFF] ^ (c >> 8);
+        c = L.crc_table[(c ^ p[1]) & 0xFF] ^ (c >> 8);
+        c = L.crc_table[(c ^ p[2]) & 0xFF] ^ (c >> 8);
+        c = L.crc_table[(c ^ p[3]) & 0xFF] ^ (c >> 8);
+    }
+    while (p < e)
+        c = L.crc_table[(c ^ *p++) & 0xFF] ^ (c >> 8);
+    return c;
+}
+
+u32 dl_crc32(const u8 *p, u32 n)
+{
+    u32 c = 0xFFFFFFFF;
+    while (n) {                          /* 32 KB stretches, a breath between */
         u32 k = n > DL_BREATHE ? DL_BREATHE : n;
-        const u8 *e = p + k;
+        c = dl_crc32_add(c, p, k);
+        p += k;
         n -= k;
-        for (; p + 4 <= e; p += 4) {
-            c = L.crc_table[(c ^ p[0]) & 0xFF] ^ (c >> 8);
-            c = L.crc_table[(c ^ p[1]) & 0xFF] ^ (c >> 8);
-            c = L.crc_table[(c ^ p[2]) & 0xFF] ^ (c >> 8);
-            c = L.crc_table[(c ^ p[3]) & 0xFF] ^ (c >> 8);
-        }
-        while (p < e)
-            c = L.crc_table[(c ^ *p++) & 0xFF] ^ (c >> 8);
         if (n)
             dl_breathe();
     }
@@ -1602,8 +1611,8 @@ static int begin_start(u32 desc, int n, u8 *buf, u32 max, struct dl_status *st_o
 }
 
 /* Pass 1 for line i of the set (lines in order, each once): its file read into the buffer, or
- * (have >= 0) already there, have bytes of it. */
-static void begin_line(const struct dl_choice *ch, int i, s32 have)
+ * (have >= 0) already there, have bytes of it, or (why) not readable for that reason. */
+static void begin_line(const struct dl_choice *ch, int i, s32 have, int why)
 {
     struct dmod *m = &L.mods[L.nmods];
     struct dl_status *st = &L.st[i];
@@ -1616,7 +1625,7 @@ static void begin_line(const struct dl_choice *ch, int i, s32 have)
     dl_memset(m, 0, sizeof *m);
     m->choice = (u16)i;
     m->id = m->version = m->core = NONE;
-    len = have >= 0 ? have : load(m, ch);
+    len = why ? -why : have >= 0 ? have : load(m, ch);
     if (len < 0) {
         set_status(m, -len == DL_R_TOO_BIG ? DL_ST_REFUSED : DL_ST_DROPPED, -len, 0, 0);
         return;
@@ -1674,7 +1683,7 @@ static int begin(u32 desc, const struct dl_choice *choice, int n, u8 *buf, u32 m
     if (b <= 0)
         return b;
     for (i = 0; i < n; i++)
-        begin_line(&choice[i], i, -1);
+        begin_line(&choice[i], i, -1, 0);
     return begin_end();
 }
 
@@ -1750,7 +1759,16 @@ int dl_check_step(const struct dl_choice *ch)
 {
     if (S.next >= S.n)
         return 0;
-    begin_line(ch, S.next++, -1);
+    begin_line(ch, S.next++, -1, 0);
+    return S.n - S.next;
+}
+
+int dl_check_step_buf(const struct dl_choice *ch, s32 len, u32 crc)
+{
+    if (S.next >= S.n)
+        return 0;
+    begin_line(ch, S.next++, len, len == -2 ? DL_R_TOO_BIG : len < 0 ? DL_R_MISSING
+                                  : crc != ch->crc ? DL_R_CHANGED : 0);
     return S.n - S.next;
 }
 
@@ -1776,7 +1794,7 @@ int dl_check_buf(u32 desc, const struct dl_choice *ch, s32 len, u8 *buf, u32 max
         finish();
         return -1;
     }
-    begin_line(ch, 0, len);
+    begin_line(ch, 0, len, 0);
     if (begin_end() < 0) {
         finish();
         return -1;

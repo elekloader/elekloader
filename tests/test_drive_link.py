@@ -111,7 +111,7 @@ def run(exe, F, mods, work, active=None, raw=None, extra_files=None, check=False
         fh.write(F.B.img)
     r = subprocess.run([exe, ramf, '0x%x' % F.ram_base, stockf, '0x%x' % F.B.dev.main_load,
                         '0x%x' % F.desc_at, d, outf], capture_output=True, text=True,
-                       env=dict(os.environ, DL_HOST_CHECK='1', **({'DL_HOST_STEP': '1'} if step else {}))
+                       env=dict(os.environ, DL_HOST_CHECK='1', **({'DL_HOST_STEP': '1' if step is True else step} if step else {}))
                        if check else None)
     if r.returncode:
         raise AssertionError('host linker failed: %s %s' % (r.stdout, r.stderr))
@@ -228,6 +228,9 @@ def main():
                        and (detail is None or cgot.get('detail') == detail))
             cok = cok and cst['good']['state'] == 1 and untouched(F, cram) and c['boot_status_n'] == 0
             check('check agrees: ' + name, cok, c)
+            b, _r = run(exe, F, mods, work, raw=raw, active=active, check=True, step='buf')
+            check('stepped check of read files agrees: ' + name,
+                  b['status'] == c['status'] and b['loaded'] == c['loaded'], (b, c))
             return s
 
         refused('a flashed id', drive_mod(B, 'flm'), 8, detail='flm')
@@ -324,6 +327,8 @@ def main():
             a_, _r = run(exe, F, mods, work, check=True)
             b_, _r = run(exe, F, mods, work, check=True, step=True)
             check('stepped check = check: ' + name, a_ == b_, (a_, b_))
+            c_, _r = run(exe, F, mods, work, check=True, step='buf')
+            check('stepped check of read files = check: ' + name, a_ == c_, (a_, c_))
 
 
         # the boot's time (dl.h, dl_bus_us): bus ticks at 132 MHz to ﾂｵs, across DTIM0's wrap
