@@ -201,7 +201,7 @@ The page is stock's two-pane file view, the one SAMPLES and PROJECTS are built o
   Until it ends, the page's actions answer `BUSY: TRY AGAIN` and its background check waits.
 - **Keys first.** A file's check holds the UI task, and a key that arrives meanwhile waits for
   it (analoghealth's remote keys expire after 2 s). So the background check and the save's
-  steps wait 2 s after any key or encoder turn (`ev_key`, `ev_enc`, taking nothing), each check
+  steps wait 1 s after any key or encoder turn (`ev_key`, `ev_enc`, taking nothing), each check
   reads its file once (`dl_check_buf`), and long checks sleep 1 ms each 32 KB for the lower
   tasks (`dl_breathe`).
 - **The boot's verdicts** come from the boot's own records, matched by file name

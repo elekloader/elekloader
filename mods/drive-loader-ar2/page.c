@@ -1039,19 +1039,26 @@ unsigned dl_page_now(void)
  * mark: the page holds its own reference to it (held) until the next MODS opening. */
 #define CHECK_EVERY 2
 #define SHOWN 10
-#define QUIET 40                         /* ticks (2 s) after a key or a turn with no check: a file's
+#define QUIET 20                         /* ticks (1 s) after a key or a turn with no check: a file's
                                           * check holds the UI task, and a key sent meanwhile can
                                           * expire (CB11 unit run 2, 2026-11-08) */
 
 static void check_next(void)
 {
-    if (!view || !rows || job.what || ticks - drawn_at > SHOWN || ticks % CHECK_EVERY
-        || ticks - last_input < QUIET)
+    static u32 probed;
+    if (!view || !rows || job.what || ticks % CHECK_EVERY || ticks - last_input < QUIET)
         return;
     while (next_check < nrows && rows[next_check].checked)
         next_check++;
     if (next_check >= nrows)
         return;
+    if (ticks - drawn_at > SHOWN) {      /* not drawn lately: ask for a frame; a page that shows */
+        if (ticks - probed > SHOWN) {    /* draws its rows (drawn_at), one that doesn't stays still */
+            probed = ticks;
+            VIEW_DIRTY((char *)view + 0x38);
+        }
+        return;
+    }
     if (!inspect(&rows[next_check]))     /* its row now shows its id or "!"; the frame that draws */
         VIEW_DIRTY((char *)view + 0x38);  /* it keeps drawn_at fresh, so the next check follows */
 }
