@@ -236,7 +236,8 @@ the Digitone needs it. On its own it changes nothing the unit does.
   - the UI task: `ev_ui_msg(msg)` for each message it takes (0x40019cda);
   - KEYBOARD mode and mutes: `ev_keyboard_note(state, on, track, note)`, may
     take a press, at the note-on dispatcher (0x4003b198) and the note-off
-    (0x4003b26e), and `ev_mute(where, track, muted, row)` before a track's
+    (0x4003b26e), from 5.2.1 hooked 6 bytes into each (0x4003b19e,
+    0x4003b274), so a mod that hooks their entries runs first, and `ev_mute(where, track, muted, row)` before a track's
     mute is set: the global mute (FUNC + a track key, 0x4002f994), the
     pattern's mutes (0x400238ee) or a song row's (0x40033bee);
   - the pattern menu: `ev_pattern_op(op, index, what)` as FUNC+YES saves
@@ -340,15 +341,21 @@ the Digitone needs it. On its own it changes nothing the unit does.
   destination's name and group (four sites, [names.s](names.s)).
 
   5.2 keeps all of 5.1.
+- **5.2.1, room for DigiArp MIDI** ([events.s](events.s)): `ev_keyboard_note`'s
+  two sites move 6 bytes into their routines (0x4003b19e, 0x4003b274), past
+  the instructions [DigiArp MIDI](https://github.com/aleks-karachevtsev/Digitone-MIDI-Arpeggiator)
+  hooks; with 5.0-5.2 the two could not be built together. A mod that hooks
+  a routine's entry and goes on at its + 6 runs before the event; one that
+  takes the press there leaves the event unsent. Nothing else changes.
 - **OS 1.44:** every site has its port (`ports` in mod.json): the same
   code, moved, and RAM 0x1000 further on.
 
 Build it with the SDK (it needs m68k binutils):
 
 ```bash
-python -m elekloader.sdk.build mods/core-dn1 --stock Digitone_and_Digitone_Keys_OS1.43.syx   # out/core-5.2.elemod
-python -m elekloader.sdk.build mods/core-dn1 --stock Digitone_and_Digitone_Keys_OS1.44.syx   # out/core-5.2-os1.44.elemod
-python -m elekloader.lint mods/core-dn1/out/core-5.2-os1.44.elemod --stock Digitone_and_Digitone_Keys_OS1.44.syx
+python -m elekloader.sdk.build mods/core-dn1 --stock Digitone_and_Digitone_Keys_OS1.43.syx   # out/core-5.2.1.elemod
+python -m elekloader.sdk.build mods/core-dn1 --stock Digitone_and_Digitone_Keys_OS1.44.syx   # out/core-5.2.1-os1.44.elemod
+python -m elekloader.lint mods/core-dn1/out/core-5.2.1-os1.44.elemod --stock Digitone_and_Digitone_Keys_OS1.44.syx
 ```
 
 The LFO name hooks have ColdFire ABI probes (stock fallback, first answer,
@@ -359,8 +366,8 @@ file is needed:
 ELEKLOADER_CROSS=m68k-elf- python tests/test_digitone_lfo_names.py
 ```
 
-A release names them `core-dn1-5.2.elemod` and `core-dn1-5.2-os1.44.elemod`.
-5.2, 5.1, 5.0.1, 5.0, 4.2 and 4.1.1 are not released yet; 4.1's are on the [core-dn1-v4.1](https://github.com/irpina/elekloader/releases/tag/core-dn1-v4.1) pre-release,
+A release names them `core-dn1-5.2.1.elemod` and `core-dn1-5.2.1-os1.44.elemod`.
+5.2.1, 5.2, 5.1, 5.0.1, 5.0, 4.2 and 4.1.1 are not released yet; 4.1's are on the [core-dn1-v4.1](https://github.com/irpina/elekloader/releases/tag/core-dn1-v4.1) pre-release,
 4.0's on the [core-dn1-v4.0](https://github.com/irpina/elekloader/releases/tag/core-dn1-v4.0) pre-release
 (3.3 was not released);
 3.2's are on the [core-dn1-v3.2](https://github.com/irpina/elekloader/releases/tag/core-dn1-v3.2) pre-release
