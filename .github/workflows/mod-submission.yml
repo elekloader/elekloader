@@ -81,7 +81,7 @@ jobs:
           if [ "$MODE" = remove ]; then how=--remove; else how="--cores-dir build/core"; fi
           set +e
           python packaging/submit_mod.py --issue-body "$RUNNER_TEMP/body.md" --files-dir build/shop $how \
-            --report "$RUNNER_TEMP/report.md" --result "$RUNNER_TEMP/result.json"
+            --report "$RUNNER_TEMP/report.md" --result "$RUNNER_TEMP/result.json" --previews "$RUNNER_TEMP/previews"
           echo "status=$?" >> "$GITHUB_OUTPUT"
           # whether the issue is the repository owner's, and the change only touches its own entries
           python -c "import json, os, sys; r = json.load(open(os.environ['RUNNER_TEMP'] + '/result.json')); owner = r['repo'].split('/')[0]; print('owner=' + owner); print('own=' + ('yes' if owner.lower() == sys.argv[1].lower() else '')); print('auto=' + ('yes' if r['auto_ok'] else ''))" "$OPENER" >> "$GITHUB_OUTPUT"
@@ -113,6 +113,15 @@ jobs:
             url=$(gh pr create --base "$BASE" --head "$branch" --title "$title" --body-file "$RUNNER_TEMP/pr.md")
           fi
           echo "url=$url" >> "$GITHUB_OUTPUT"
+          # many new thumbnails: their pixels, as text, in comments (the report says how many); each set once
+          if ls "$RUNNER_TEMP"/previews/previews-*.md >/dev/null 2>&1; then
+            mark=$(head -n 1 "$RUNNER_TEMP/previews/previews-1.md")
+            if ! gh pr view "$url" --json comments --jq '.comments[].body' | grep -qF -- "$mark"; then
+              for f in $(ls "$RUNNER_TEMP"/previews/previews-*.md | sort -V); do
+                gh pr comment "$url" --body-file "$f" >/dev/null
+              done
+            fi
+          fi
       - name: Merge an author's own change
         id: merge
         if: steps.pr.outputs.url != ''

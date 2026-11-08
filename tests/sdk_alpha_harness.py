@@ -27,11 +27,14 @@ Digitone mk1 run in digiemu, with its Python:
   ELEKLOADER_STOCK_DN1_144=<Digitone_and_Digitone_Keys_OS1.44.syx> ELEKLOADER_CROSS=m68k-elf- \\
   uv run --project "$ELEKLOADER_DIGIEMU" python tests/test_sdk_alpha_hiding.py
 
-The Digitone II runs in DigiKit's ColdFire emulator (sdk_alpha_devices.DigiKit):
+The Digitone II runs in DigiKit's ColdFire emulator (sdk_alpha_devices.DigiKit), and its sound in
+DigiKit's coupled emulator, with a digi-emud built with coupled audio and its ready inputs; Selache
+assembles the SHARC renders:
 
   ELEKLOADER_DIGIKIT=<digikit> ELEKLOADER_DIGI_EMUD=<digi-emud> \\
+  ELEKLOADER_DIGI_EMUD_COUPLED=<coupled digi-emud> ELEKLOADER_DN2_EMU_READY=<ready inputs> SELACHE=<selache> \\
   ELEKLOADER_DN2_SYX=<Digitone_II_OS1.12.syx> ELEKLOADER_CROSS=m68k-elf- \\
-  python tests/test_sdk_alpha_hiding.py
+  python tests/test_sdk_alpha_sound.py
 """
 import atexit
 from contextlib import contextmanager
@@ -66,9 +69,10 @@ REGISTRY = []
 class SdkMachine:
     """An SDK mod a test uses: C written in the test file, or an example's folder."""
 
-    def __init__(self, name, source=None, directory=None, substitutions=None, register=True):
+    def __init__(self, name, source=None, directory=None, substitutions=None, register=True, sharc=None):
         self.name, self.source, self.directory = name, source, directory
         self.substitutions = substitutions or {}
+        self.sharc = sharc or {}            # file name -> SHARC assembly: its render on the Digitone II
         if source is None:
             self.id = None              # a folder's own id, once built
         elif register:
@@ -85,23 +89,34 @@ class SdkMachine:
         """The mod's folder, for sdk_alpha_build."""
         if self.directory is not None:
             return str(self.directory)
-        slug = self.name.lower().replace(' ', '-')
-        path = Path(folder) / slug
+        path = Path(folder) / self.slug
         path.mkdir(parents=True)
         source = self.source.replace('@ID@', str(self.id))
         for key, text in self.substitutions.items():
             source = source.replace('@%s@' % key, text)
         (path / 'machine.c').write_text(source)
+        for name, text in self.sharc.items():
+            (path / name).write_text(text)
         (path / 'mod.json').write_text(json.dumps({
-            'id': 'sdk-test-' + slug, 'version': '0.1', 'license': 'GPL-2.0-or-later',
-            'devices': DEVICES_LISTED, 'sources': ['machine.c']}))
+            'id': self.mod_id, 'version': '0.1', 'license': 'GPL-2.0-or-later',
+            'devices': DEVICES_LISTED, 'sources': ['machine.c'],
+            **({'sharc': {'sources': list(self.sharc)}} if self.sharc else {})}))
         return str(path)
 
+    @property
+    def slug(self):
+        return self.name.lower().replace(' ', '-')
 
-def sdk_machine(name, c, **substitutions):
+    @property
+    def mod_id(self):
+        return 'sdk-test-' + self.slug
+
+
+def sdk_machine(name, c, sharc=None, **substitutions):
     """A machine written as SDK C in the test file. `@ID@` stands for the id the harness gives it;
-    any other `@NAME@` is replaced by the keyword argument of that name."""
-    return SdkMachine(name, source=textwrap.dedent(c),
+    any other `@NAME@` is replaced by the keyword argument of that name. `sharc` maps file names to
+    the SHARC assembly of its render on the Digitone II (docs/SDK.md, "render on the Digitone II")."""
+    return SdkMachine(name, source=textwrap.dedent(c), sharc=sharc,
                       substitutions={key.upper(): text for key, text in substitutions.items()})
 
 
@@ -141,6 +156,8 @@ class Firmware:
             raise RuntimeError('%s: patch failed\n%s' % (device.key, done.stdout[-2000:]))
         with open(syx + '.map.json') as fh:
             self.symbols = json.load(fh)
+        self.dsp_symbols = (dsp_symbols(syx, [m for m in REGISTRY if m.sharc and m not in self.refused], self.work)
+                            if 'kernels' in device.features else {})
         self.booted = device.backend(syx, stock, self.work)
         self.cwd = self.booted.cwd
 
@@ -151,6 +168,27 @@ class Firmware:
     def session(self, audio=False):
         """A new emulator at the settled user interface, whatever happened to the last."""
         return self.booted.session(audio=audio)
+
+
+def dsp_symbols(syx, machines, work):
+    """name -> DSP byte address of the data labels of the machines' SHARC renders, where the linker
+    placed them: the same sources linked again for their symbols, at the mod's place in the build."""
+    if not machines:
+        return {}
+    from elekloader.sdk import sharc
+    with open(syx + '.json') as fh:
+        placed = {m['id']: m['data'][0] for m in json.load(fh)['link']['layout']['sharc']['kernels']['mods']}
+    tools, found = sharc.selache_tools(), {}
+    for machine in machines:
+        folder = Path(work) / machine.slug
+        objects = [folder / (name + '.doj') for name in machine.sharc]
+        for obj in objects:
+            subprocess.run([str(tools / 'selas'), '-proc', 'ADSP-21569', '-o', str(obj), str(obj)[:-4]], check=True)
+        with tempfile.TemporaryDirectory() as tmp:
+            symbols = sharc._relocatable(tools, objects, tmp)['symbols']
+        found.update({name[:-1]: placed[machine.mod_id] + at for name, (kind, at) in symbols.items()
+                      if kind == 'data' and name.endswith('.')})    # a C name's SHARC label ends in a dot
+    return found
 
 
 _firmware = {}
@@ -483,7 +521,10 @@ class SdkTestCase(unittest.TestCase):
                 raise
 
     def read(self, symbol, index=0):
-        """A word of a variable a test machine keeps for the test (an array's `index`th)."""
+        """A word of a variable a test machine keeps for the test (an array's `index`th): its SHARC
+        render's, on the Digitone II."""
+        if symbol in self.fw.dsp_symbols:
+            return self.panel.dsp_word(self.fw.dsp_symbols[symbol] + 4 * index)
         return self.panel.read(symbol, 4 * index)
 
     def wait(self, ms):

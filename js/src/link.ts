@@ -22,7 +22,8 @@ import {
 import { PCREL, decodeColdFire, readerAt } from './isa/coldfire.ts'
 import { AttributeError, KeyError, PyException, ValueError, hex8, pyType, repr, str } from './py.ts'
 import * as store from './store.ts'
-import { modulePayload, type SharcPayload } from './sharc.ts'
+import { KERNEL_ABI, KERNEL_TABLE, kernelPayload, modulePayload, placeKernels, type KernelKind, type KernelLayout,
+  type KernelPayload, type SharcPayload } from './sharc.ts'
 import * as sharcRecords from './sharc.ts'
 import * as syx from './syx.ts'
 
@@ -85,7 +86,7 @@ export class Mod2 implements AnyMod {
   dev: Device
   rel: Release
   sections: Map<string, Sec>
-  sharc: SharcPayload | null
+  sharc: SharcPayload | KernelPayload | null
   symbols: Map<string, [string, number]>
   exports: string[]
   imports: string[]
@@ -147,7 +148,8 @@ export class Mod2 implements AnyMod {
       if (n !== int(get(d, 'len', n), name)) throw new ModError(`${name} ${sec}: parts make ${n} bytes, not ${str(get(d, 'len'))}`)
       this.sections.set(sec, { align: al, parts, len: n })
     }
-    this.sharc = 'sharc' in doc ? modulePayload(doc.sharc, this.rel.sharc, this.sections.has('.boot')) : null
+    this.sharc = !('sharc' in doc) ? null : isDict(doc.sharc) && doc.sharc.abi === KERNEL_ABI ? kernelPayload(doc.sharc, this.rel.sharc)
+      : modulePayload(doc.sharc, this.rel.sharc, this.sections.has('.boot'))
     this.symbols = new Map()
     for (const [nm, v] of items(get(doc, 'symbols', {}))) {
       if (!Array.isArray(v) || v.length !== 2) throw new ModError(`${name}: symbol ${nm}`)
@@ -400,6 +402,32 @@ function dspNeeds(m: Mod2): Set<string> {
   return out
 }
 
+const isKernel = (m: Mod2): boolean => !!m.sharc && 'abi' in m.sharc && m.sharc.abi === KERNEL_ABI
+const kernel = (m: Mod2): KernelPayload => m.sharc as KernelPayload
+type Active = Mod2 & { sharc: SharcPayload }
+
+/** [the DN2 kernel mods, the other SHARC mods but the core]. A dispatcher without kernels is inert. link.sharc_split. */
+function sharcSplit(mods: Mod2[]): [Mod2[], Active[]] {
+  let kernelMods = mods.filter(isKernel)
+  if (!kernelMods.some(m => kernel(m).kernels.length)) kernelMods = []
+  return [kernelMods, mods.filter(m => m.sharc && !m.sections.has('.boot') && !isKernel(m)) as Active[]]
+}
+
+/** The DN2 machines m registers, by the profile's kernelRegistrations: {"kind:id": [table, needs its kernel]}.
+ * link.kernel_registrations. */
+function kernelRegistrations(m: Mod2, image: Uint8Array): Map<string, [string, boolean]> {
+  const out = new Map<string, [string, boolean]>()
+  for (const [table, kind, needs] of m.rel.sharc?.kernelRegistrations ?? [])
+    for (const nm of m.impliedNames(image, table)) out.set(`${kind}:${Number(nm.slice(nm.lastIndexOf(':') + 1))}`, [table, needs])
+  return out
+}
+
+/** Python's sorted() over (kind, id) keys. */
+const byKindId = (a: string, b: string) => {
+  const [ka, ia] = a.split(':'), [kb, ib] = b.split(':')
+  return ka < kb ? -1 : ka > kb ? 1 : Number(ia) - Number(ib)
+}
+
 /** Static checks that need no layout. -> problems. */
 export function check(mods: Mod2[], image: Uint8Array): string[] {
   const spans: Span<AnyMod>[] = []
@@ -429,34 +457,41 @@ export function check(mods: Mod2[], image: Uint8Array): string[] {
       if (m.needsCore && cmpVersions(cores[0].version, m.needsCore) < 0)
         bad.push(`${m.label()} needs core ${m.needsCore} or newer, and this build has core ${cores[0].version}`)
   }
-  const sharcMods = mods.filter(m => m.sharc && !m.sections.has('.boot'))
+  const [kernelMods, sharcMods] = sharcSplit(mods)
   for (const m of mods)
-    if (!sharcMods.length && m.sites.some(s => sharcSite(m.rel, s.addr)))
+    if (!sharcMods.length && !kernelMods.length && m.sites.some(s => sharcSite(m.rel, s.addr)))
       bad.push(`${m.label()}: SHARC data site requires a SHARC mod`)
-  if (sharcMods.length > 1 && sharcMods.map(m => m.sharc!.machineKind).sort().join(',') !== 'filter,voice')
-    bad.push('SHARC mods may combine only one DN2 voice and one DN2 filter')
-  for (const kind of ['voice', 'filter'] as const) {
-    const table = mods[0].rel.sharc?.[`${kind}Table`]
-    for (const m of mods)
-      if (table && m.contribute.some(c => c.to === table) && m.sharc?.machineKind !== kind)
-        bad.push(`${m.label()}: DN2 ${kind} registration requires a matching SHARC ${kind} payload`)
+  if (kernelMods.length) {
+    const dispatchers = kernelMods.filter(m => Object.keys(kernel(m).exports).length).map(m => m.label())
+    if (dispatchers.length !== 1)
+      bad.push(`DN2 machine kernels need one dispatcher (machines-dn2); this build has ${dispatchers.join(', ') || 'none'}`)
+    if (sharcMods.length) bad.push(`DN2 machine kernels do not combine with ${sharcMods.map(m => m.label()).join(', ')}`)
+    const owners = new Map<string, Mod2>()
+    for (const m of kernelMods) for (const k of kernel(m).kernels) {
+      const key = `${KERNEL_TABLE[k.kind]}:${k.id}`
+      if (owners.has(key)) bad.push(`${owners.get(key)!.label()} and ${m.label()} both have a DN2 ${KERNEL_TABLE[k.kind]} kernel with id ${k.id}`)
+      owners.set(key, m)
+    }
+  }
+  if (sharcMods.length > 1) bad.push(`a build takes one SHARC mod; this one has ${sharcMods.map(m => m.label()).join(', ')}`)
+  for (const m of mods) {                   // DN2 machines: each registration and its kernel, in one mod
+    const regs = kernelRegistrations(m, image)
+    const have = new Set(isKernel(m) ? kernel(m).kernels.map(k => `${k.kind}:${k.id}`) : [])
+    for (const key of [...regs.keys()].sort(byKindId)) {
+      const [table, needs] = regs.get(key)!, [kind, mid] = key.split(':')
+      if (needs && !have.has(key)) bad.push(`${m.label()}: its ${table} entry ${mid} needs a SHARC ${kind} kernel with that id`)
+    }
+    for (const key of [...have].filter(k => !regs.has(k)).sort(byKindId)) {
+      const [kind, mid] = key.split(':')
+      bad.push(`${m.label()}: its SHARC ${kind} kernel ${mid} has no registration with that id in its mod`)
+    }
+    const gTables = new Set((m.rel.sharc?.kernelRegistrations ?? []).filter(([, kind]) => kind === 'mk2-filter').map(([t]) => t))
+    if (m.contribute.some(c => gTables.has(c.to) && !m.dn2FilterGOk(c, image)))
+      bad.push(`${m.label()}: DN2 filter G needs a label of 1..5 printable ASCII characters and a default of 0..127`)
   }
   for (const app of sharcMods) {
-    const kind = app.sharc!.machineKind
-    if (kind) {
-      const profile = app.rel.sharc!, table = profile[`${kind}Table`]
-      const contributions = app.contribute.filter(c => c.to === table)
-      const expected = app.dev.slotClaims.filter(([name]) => name === table)
-        .map(([, , , prefix]) => `${prefix}:${app.sharc!.machineId}`)
-      if (contributions.length !== 1 || contributions[0].data.length !== 4 ||
-        !expected.length || JSON.stringify(app.impliedNames(image, table)) !== JSON.stringify(expected))
-        bad.push(`${app.label()}: SHARC ${kind} machine_id must match its single native ${kind} registration`)
-      else if (kind === 'filter' && !app.dn2FilterGOk(contributions[0], image))
-        bad.push(`${app.label()}: DN2 filter G needs a label of 1..5 printable ASCII characters and a default of 0..127`)
-      continue
-    }
-    if (app.sharc!.entries === null) continue
-    const core = cores.length === 1 ? cores[0] : null
+    if (app.sharc.entries === null) continue
+    const core = cores.length === 1 ? cores[0] as Active : null
     if (!core?.sharc) { bad.push('active SHARC mod requires a qualified matching core bridge'); continue }
     const profile = app.rel.sharc!
     const qualified = profile.activeKeyedCore!
@@ -644,8 +679,7 @@ export type Layout = {
   reserve?: { units: number; end: number }   // a core sized to the mods: the pages it takes, and where they end
   dsp?: Record<string, DspLayout>              // words: P addresses of each payload's area
   sharc?: { decoded: number; decoded_sha256: string; stored: number; stored_sha256: string;
-    mods?: { id: string; owner: [number, number]; hook: number }[];
-    owner?: [number, number]; app?: string; core?: [number, number]; hook?: number }
+    owner?: [number, number]; app?: string; core?: [number, number]; hook?: number; kernels?: KernelLayout }
 }
 
 export type Linked = {
@@ -681,45 +715,24 @@ export function link(mods: Mod2[], image: Uint8Array, lock: store.Lock | null = 
   const [ddrBase, ddrEnd] = ddrFor(dev, core.version)
   const [fastBase, fastEnd] = dev.sramCode
   const order = [core, ...mods.filter(m => m !== core).sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))]
-  const sharcMods = order.filter(m => m.sharc && m !== core)
-  let dspStream: Uint8Array | null = null, dspStored: Uint8Array | null = null
-  if (sharcMods.length) {
+  const [kernelMods, sharcMods] = sharcSplit(order)
+  let dspStream: Uint8Array | null = null, dspStored: Uint8Array | null = null, kernelLayout: KernelLayout | undefined
+  if (kernelMods.length || sharcMods.length) {
     if (sharcStream === null) throw new ModError('SHARC mod needs the stock section-7 stream')
     const allLoads: [number, Uint8Array][] = [], allFills: [number, number, number][] = []
     const allPatches: [number, Uint8Array, Uint8Array][] = []
+    if (kernelMods.length) {
+      const [loads, fills, patches, placed] = placeKernels(kernelMods.map(m => [m.id, kernel(m)]), rel.sharc!)
+      allLoads.push(...loads); allFills.push(...fills); allPatches.push(...patches)
+      kernelLayout = placed
+    }
     for (const mod of sharcMods) {
-      const payload = mod.sharc!, base = payload.owner[0]
+      const payload = mod.sharc, base = payload.owner[0]
       let loads: [number, Uint8Array][] = payload.segments.map(([off, , data]) => [base + off, data])
       let fills: [number, number, number][] = payload.zero.map(([off, count]) => [base + off, count, 0])
       let patches: [number, Uint8Array, Uint8Array][] = []
-      const kind = payload.machineKind
-      if (kind) {
-        const at = rel.sharc![`${kind}BindingOffset`]!
-        const binding = new Uint8Array(8), words = new DataView(binding.buffer)
-        words.setUint32(0, sharcRecords.pc16(rel.sharc!, base + payload.entries!.render_offset_bytes), true)
-        words.setUint32(4, payload.machineId!, true)
-        // At +0x20 the adapter finds the per-voice state: its address and one voice's size.
-        const state = new Uint8Array(8), stateWords = new DataView(state.buffer)
-        if (payload.voiceState) {
-          stateWords.setUint32(0, base + payload.voiceState[0], true)
-          stateWords.setUint32(4, payload.voiceState[1], true)
-        }
-        const lo = payload.owner[1] - rel.sharc![`${kind}StateBytes`]!
-        fills = fills.filter(([address]) => address !== lo)
-        fills.push([lo, base + at - lo, 0], [base + at + 8, 0x18, 0],
-          [base + at + 0x28, payload.owner[1] - base - at - 0x28, 0])
-        loads.push([base + at, binding], [base + at + 0x20, state])
-        // The callback's own stack, in L1: zeroed, with the guard word the adapter checks at its base.
-        const [stackLo, stackHi] = rel.sharc![`${kind}Stack`]!
-        const guard = new Uint8Array(4)
-        new DataView(guard.buffer).setUint32(0, rel.sharc!.stackGuard!, true)
-        fills.push([stackLo + 4, stackHi - stackLo - 4, 0])
-        loads.push([stackLo, guard])
-        const capture = kind === 'filter' ? rel.sharc!.filterCapture : undefined
-        patches = [rel.sharc![`${kind}Hook`]!, ...(capture ? [capture] : [])].map(([site, old, replacement]) =>
-          [site, hexBytes(old, 'SHARC stock hook'), hexBytes(replacement, 'SHARC bridge hook')])
-      } else if (payload.entries !== null) {
-        const bridge = core.sharc!
+      if (payload.entries !== null) {
+        const bridge = (core as Active).sharc
         const pc16 = (off: number) => sharcRecords.pc16(rel.sharc!, base + off)
         const binding = new Uint8Array(12), words = new DataView(binding.buffer)
         words.setUint32(0, pc16(payload.entries.init_offset_bytes), true)
@@ -1154,17 +1167,16 @@ export function link(mods: Mod2[], image: Uint8Array, lock: store.Lock | null = 
     blob_len: blob.length, payload: payMods.length ? [payAt, payEnd] : null, sections, ddr_spare: ddrEnd - bssEnd, fast_spare: fastEnd - fastAt, ddr_size: ddrEnd - ddrBase,
     fast_size: fastEnd - fastBase,
   }
-  if (sharcMods.length) {
+  if (kernelMods.length || sharcMods.length) {
     layout.sharc = { decoded: dspStream!.length, decoded_sha256: sha(dspStream!),
       stored: dspStored!.length, stored_sha256: sha(dspStored!) }
-    if (sharcMods[0].sharc!.machineKind) {
-      layout.sharc.mods = sharcMods.map(m => ({ id: m.id, owner: m.sharc!.owner,
-        hook: rel.sharc![`${m.sharc!.machineKind!}Hook`]![0] }))
+    if (kernelMods.length) {
+      layout.sharc.kernels = kernelLayout
     } else {
-      layout.sharc.owner = sharcMods[0].sharc!.owner
+      layout.sharc.owner = sharcMods[0].sharc.owner
       layout.sharc.app = sharcMods[0].id
-      if (sharcMods[0].sharc!.entries !== null) {
-        layout.sharc.core = core.sharc!.owner
+      if (sharcMods[0].sharc.entries !== null) {
+        layout.sharc.core = (core as Active).sharc.owner
         layout.sharc.hook = rel.sharc!.hook![0]
       }
     }

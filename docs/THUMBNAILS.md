@@ -5,6 +5,7 @@ screen instead of its drawn cover. It's optional, and it lives in your own
 release: elekloader's repository only records its sha256.
 
 - [The rules](#the-rules)
+- [One picture per mod](#one-picture-per-mod)
 - [Making one](#making-one)
 - [Check it](#check-it)
 - [Add it to the shop](#add-it-to-the-shop)
@@ -13,7 +14,9 @@ release: elekloader's repository only records its sha256.
 
 ## The rules
 
-A thumbnail is a file named **`thumb.png`**, and it has to be:
+A thumbnail is a PNG in your release named **`thumb.png`**, or
+**`thumb-<mod id>.png`** for one mod's own picture
+([below](#one-picture-per-mod)). It has to be:
 
 - **exactly 128×64 pixels**, the size of the screen;
 - **exactly two solid colours**: no greys, no smoothing, no transparency;
@@ -26,6 +29,27 @@ itself can show, which keeps the shop safe to browse and quick to review.
 
 The shop draws the lighter of your two colours lit, in the card's colour, on
 black, so amber on navy and white on black come out the same.
+
+## One picture per mod
+
+A release with many mods (a pack of splash screens, say) can give each mod
+its own picture. Name each **`thumb-<mod id>.png`**: `thumb-horror.png` goes
+on the mod whose id is `horror`, on every device it's built for, so one
+picture covers both `dn-horror.elemod` and `dt-horror.elemod`. The id is the
+`id` in the mod's `mod.json`, not its file name.
+
+A plain `thumb.png` in the same release goes on the mods without a picture
+of their own. A mod whose own picture fails the check gets no picture at
+all, not `thumb.png`.
+
+For a big pack: upload them all and submit the release once. One submission
+takes up to 200 pictures; a picture named for an id that no mod in the
+release has is listed in the bot's comment as not used.
+
+```bash
+python packaging/thumbs.py thumb-*.png     # every picture, one line each
+gh release upload v1.2 thumb-*.png
+```
 
 ## Making one
 
@@ -57,6 +81,7 @@ From an elekloader checkout:
 
 ```bash
 python packaging/thumbs.py thumb.png         # "taken", or why not
+python packaging/thumbs.py thumb-*.png       # several at once, one line each
 python packaging/thumbs.py thumb.png --md    # what a maintainer sees
 ```
 
@@ -72,19 +97,20 @@ python packaging/thumbs.py thumb.png --md    # what a maintainer sees
 
 ## Add it to the shop
 
-Attach `thumb.png` to the release, beside your `.elemod` files: drag it in
-on the release page, or
+Attach the pictures to the release, beside your `.elemod` files: drag them
+in on the release page, or
 
 ```bash
 gh release upload v1.0 thumb.png
 ```
 
-For a mod pinned to a commit, keep one `thumb.png` anywhere in the
+For a mod pinned to a commit, keep each picture once anywhere in the
 repository at that commit.
 
 Then [submit the release](SHOP.md#2-open-the-form), as for a new mod. When
 the shop already has your files, submit the release it has: only the
-picture changes. The bot's comment says whether it was taken.
+pictures change. The bot's comment lists each picture: which mods it goes
+on, or why it wasn't taken.
 
 A picture that fails never stops your mod: the mod goes in, and the card
 keeps the picture it had, or its drawn cover.
@@ -93,7 +119,9 @@ keeps the picture it had, or its drawn cover.
 
 A maintainer looks at every new picture before it goes in, so a submission
 that brings one never merges by itself. In the pull request the bot shows
-the picture as text, each pixel a braille dot, and never as an image:
+each picture as text, each pixel a braille dot, and never as an image.
+When there are many, they go in comments on the pull request, about 50 to a
+comment:
 
 ```text
 ⡏⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⠉⢹
@@ -121,7 +149,7 @@ and your mod goes in without it.
 ## Changing or removing it
 
 - **Updates keep it.** When your newer release carries the same
-  `thumb.png`, the daily update takes it along. When it carries a new one,
+  picture, the daily update takes it along. When it carries a new one,
   the update keeps the old picture and its report says so: send that
   release through the form to change it.
 - **A thumbnail outlives its release.** It's pinned on its own, so the card

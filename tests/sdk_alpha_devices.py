@@ -51,6 +51,8 @@ def mod_defines(mod):
 DIGIEMU = os.environ.get('ELEKLOADER_DIGIEMU', '')
 DIGIKIT = os.environ.get('ELEKLOADER_DIGIKIT', '')
 DIGI_EMUD = os.environ.get('ELEKLOADER_DIGI_EMUD', '')
+DIGI_EMUD_COUPLED = os.environ.get('ELEKLOADER_DIGI_EMUD_COUPLED', '')    # a digi-emud with coupled audio
+DN2_EMU_READY = os.environ.get('ELEKLOADER_DN2_EMU_READY', '')            # its ready inputs
 
 
 class Digiemu:
@@ -112,9 +114,19 @@ class DigiKitSession:
                 STOP=21, PAGE=22, PTN=23, SONG=24, **{str(n): 24 + n for n in range(1, 17)},
                 **{'PUSH ' + c: 41 + i for i, c in enumerate('ABCDEFGH')})
 
-    def __init__(self, emu):
+    def __init__(self, emu, capture=None):
         self.emu, self.ms, self.frames, self.revision = emu, 0, [], None
+        self.capture, self.record_audio = capture, capture is not None
         self._frame()
+
+    @property
+    def pcm(self):
+        """What the DSP output since the session started, as digiemu's Session.pcm: 48 kHz stereo
+        signed 16-bit LE (DigiKit's capture is 32-bit float)."""
+        with open(self.capture, 'rb') as fh:
+            data = fh.read()
+        floats = struct.unpack('<%df' % (len(data) // 4), data[:len(data) - len(data) % 4])
+        return struct.pack('<%dh' % len(floats), *(max(-32768, min(32767, round(x * 32768))) for x in floats))
 
     def code(self, name):
         return self.KEYS[name]
@@ -167,6 +179,8 @@ class DigiKitSession:
             return 'fault: %s at %#x' % (cf.get('error'), cf.get('pc', 0))
         if status.get('heartbeat', {}).get('stalled'):
             return 'the main loop stalled'
+        if (status.get('audio') or {}).get('halted'):
+            return 'the DSP halted: %s' % status['audio']['halted']
         return None
 
     def close(self):
@@ -176,7 +190,9 @@ class DigiKitSession:
 class DigiKit:
     """DigiKit's ColdFire-only daemon (no DSP): the Digitone II's emulator. One daemon a firmware. Its
     boot cache keeps the image's ready state (the main screen), and every firmware.load restores it:
-    each test starts there, whatever the last one did."""
+    each test starts there, whatever the last one did. An audio session runs both processors in a
+    second daemon, DigiKit's coupled emulator, whose boot cache restores both the same way (the first
+    boot takes about a minute), and captures the DSP's output."""
     cwd = None
     STOCK_SHA256 = '7e5b8a733d4ab1fdf7e5d22757f7d8eddaa3cbf71d0858874a791844c02ceb35'   # OS 1.12
 
@@ -189,7 +205,7 @@ class DigiKit:
         import atexit
         sys.path.insert(0, DIGIKIT)
         from tools.control.digi_client import Emu
-        self.syx = syx
+        self.syx, self.stock, self.work, self.coupled = syx, stock, work, None
         self.emu = Emu.spawn(binary=DIGI_EMUD, timeout=300, run_dir=os.path.join(work, 'digikit'))
         atexit.register(self.emu.close)
         self._load()
@@ -205,10 +221,27 @@ class DigiKit:
 
     def session(self, audio=False):
         if audio:
-            raise CannotYet('audio capture in the DigiKit UI backend')
+            return self._audio_session()
         self._load()
         session = DigiKitSession(self.emu)
         session.run_ms(300)     # the first UI-loop passes
+        return session
+
+    def _audio_session(self):
+        if not (DIGI_EMUD_COUPLED and os.path.isfile(DIGI_EMUD_COUPLED) and DN2_EMU_READY
+                and os.path.isdir(DN2_EMU_READY)):
+            raise unittest.SkipTest('needs ELEKLOADER_DIGI_EMUD_COUPLED and ELEKLOADER_DN2_EMU_READY')
+        if self.coupled is None:
+            import atexit
+            from tools.control.digi_client import Emu
+            self.coupled = Emu.spawn_coupled(self.stock, DN2_EMU_READY, binary=DIGI_EMUD_COUPLED, timeout=300,
+                                             run_dir=os.path.join(self.work, 'coupled'), env={'SHARC_AOT': '0'})
+            atexit.register(self.coupled.close)
+        self.coupled.call('firmware.load', syx=self.syx, start='auto', force=True, auto_no=True)
+        capture = os.path.join(self.work, 'coupled', 'pcm.f32')
+        self.coupled.call('pcm.tap', action='capture', path=capture)
+        session = DigiKitSession(self.coupled, capture)
+        session.run_ms(300)
         return session
 
     @staticmethod
@@ -261,6 +294,9 @@ class Device:
 
     def set_lfo_depth(self):
         raise CannotYet('LFO depth')
+
+    def dsp_word(self, addr):
+        raise CannotYet('the DSP\'s memory')
 
     def keyboard(self):
         raise CannotYet('the keyboard')
@@ -754,6 +790,27 @@ class Digitone2(Device):
     track_count = 16
     lfo_count = 3
     settings_key = 'SETTINGS'
+    features = frozenset(('render', 'polyphony', 'audio_modulation'))
+    sound_without_render = True     # FM TONE plays an SDK machine without a render
+    KEYS = Digitakt1.KEYS           # KEYBOARD's chromatic keys, from the octave's C
+
+    def keyboard(self):
+        if not getattr(self, '_keyboard', False):
+            self.tap('KEYBOARD')
+            self._keyboard = True
+
+    def press_key(self, key):
+        self.s.press(self.s.code(self.KEYS[key]))
+
+    def release_key(self, key):
+        self.s.release(self.s.code(self.KEYS[key]))
+
+    def set_lfo_depth(self):
+        self.turn('H', 64)
+
+    def dsp_word(self, addr):
+        """A word of the DSP's memory (little-endian), in an audio session."""
+        return struct.unpack('<I', bytes.fromhex(self.s.emu.call('dsp.peek', addr=addr, len=4)['hex']))[0]
 
     MOD, H = mod_defines('machines-dn2'), c_defines(ROOT / 'mods/machines-dn2/dn2.h')
     ACTIVE_TRACK = MOD['ACTIVE_TRACK']  # a byte: the track the panel edits (checked on a unit with DigiHealth)

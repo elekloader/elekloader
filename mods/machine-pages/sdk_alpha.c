@@ -69,21 +69,37 @@ int32_t sdk_alpha_snapshot(const struct sdk_alpha_entry *e, int32_t page, void *
     return sdk_alpha_present(e, track, page, raw, 0) | (before != e);
 }
 
+/* A track the AMP envelope has silenced and no trig starts: inaudible after the AMP page, so it is not
+ * rendered (the level is 0 only then). render's idle counts its frames. */
+static int silent(uint32_t track)
+{
+    return !(fw_voice_start & (1u << track)) && fw_amp_env[3 * track + 1] == 0;
+}
+
 void sdk_alpha_render(int32_t *blocks)
 {
+    static uint32_t idle[8];
     for (uint32_t track = 0; track < 8; ++track) {
         int32_t id = fw_render_machine[track];
         const struct sdk_alpha_entry *e = sdk_alpha_find(id);
         sdk_alpha_select(track, id);
         if (!e || !e->machine->render) continue;
+        if (silent(track)) {
+            for (uint32_t i = 0; i < ELEK_VOICE_FRAMES; ++i)
+                blocks[ELEK_VOICE_FRAMES * track + i] = 0;
+            if (idle[track] <= UINT32_MAX - ELEK_VOICE_FRAMES)
+                idle[track] += ELEK_VOICE_FRAMES;
+            continue;
+        }
         int32_t raw[SDK_ALPHA_KNOBS];
         for (uint32_t k = 0; k < e->count; ++k)
             raw[k] = cm_src_value(track, k);
         struct elek_voice voice = {
             .track = track, .pitch = fw_voice_note[track], .velocity = fw_voice_vel[track] >> 8,
         };
-        sdk_alpha_voice(e, track, &voice, raw, (fw_voice_start & (1u << track)) != 0,
+        sdk_alpha_voice(e, track, &voice, raw, (fw_voice_start & (1u << track)) != 0, idle[track],
                         blocks + ELEK_VOICE_FRAMES * track);
+        idle[track] = 0;
     }
 }
 

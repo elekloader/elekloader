@@ -691,36 +691,8 @@ def test_dn2_machines_declares_only_custom_machine_tables():
         assert not [p for p in link.check([machines, registration(table)], image) if 'adds to table' in p]
 
 
-def test_dn2_filter_g_is_refused_unless_valid():
-    from elekloader.sdk.sharc import filter_artifact
-    dn = next(d for d in devices.devices() if d.key == 'digitone-mk2')
-    r = dn.releases['1.12']
-    target, image = devices.target_of(dn, r), bytes(r.main_len)
-    core = link.Mod2({'elemod': 2, 'id': 'core', 'version': '0.1', 'target': target,
-                      'sections': {'.boot': {'align': 4, 'parts': [['hex', '00000000']]}},
-                      'collections': {'mk2_voice_filters': {'entry': 4}}}, 'core')
-
-    def mod(label, default, g=True):
-        """The descriptor {8, name, label, curve, g} at 0, G {label, default} at 20 and its label at 28."""
-        text = '00000008' + '00' * 20 + '%08x' % default + (label or '').encode('latin1').hex() + '00'
-        return link.Mod2({'elemod': 2, 'id': 'g', 'version': '0.1', 'target': target,
-                          'sections': {'.run': {'align': 4, 'parts': [['hex', text]]}},
-                          'symbols': {'descriptor': ['.run', 0], 'g': ['.run', 20], 'label': ['.run', 28]},
-                          'relocs': ([['.run', 16, 'abs32', 'sym:g', 0]] if g else [])
-                          + ([['.run', 20, 'abs32', 'sym:label', 0]] if label is not None else []),
-                          'contribute': [{'to': 'mk2_voice_filters', 'data': '00000000',
-                                          'relocs': [[0, 'abs32', 'sym:descriptor', 0]]}],
-                          'sharc': filter_artifact(bytes(4), bytes(4), 0, 8, 12)}, 'g')
-    refusal = 'g 0.1: DN2 filter G needs a label of 1..5 printable ASCII characters and a default of 0..127'
-    for label, default in (('MODE', 0), ('HIGH5', 127)):
-        assert link.check([core, mod(label, default)], image) == []
-    assert link.check([core, mod(None, 0, g=False)], image) == []
-    for label, default in (('MODE', 128), ('TOOWIDE', 1), ('', 1), ('M\tX', 1), (None, 1)):
-        assert link.check([core, mod(label, default)], image) == [refusal], (label, default)
-
-
 def test_dn2_machine_ids_can_span_stored_parts():
-    from elekloader.sdk.sharc import voice_artifact
+    from test_sharc_kernels import MACHINES, kernel
     dn = next(d for d in devices.devices() if d.key == 'digitone-mk2')
     r = dn.releases['1.12']
     target = devices.target_of(dn, r)
@@ -737,7 +709,7 @@ def test_dn2_machine_ids_can_span_stored_parts():
                           'symbols': {'descriptor': ['.run', 0]}, 'relocs': list(relocs),
                           'contribute': [{'to': 'mk2_voice_synths', 'data': '00000000',
                                           'relocs': [[0, 'abs32', 'sym:descriptor', 0]]}],
-                          'sharc': voice_artifact(bytes(4), b'', 0, 5, 0)}, 'voice')
+                          'sharc': kernel(('mk2-voice', 5))}, 'voice')
 
     for split in (1, 2, 3):
         for left_stock in (False, True):
@@ -748,11 +720,11 @@ def test_dn2_machine_ids_can_span_stored_parts():
                           else ['hex', machine_id[split:].hex()]), ['hex', '00' * 12]]
                 voice = mod(parts)
                 assert voice.implied_names(image) == ['mk2-synth:5'], parts
-                assert link.check([core, voice], image) == [], parts
+                assert link.check([core, MACHINES, voice], image) == [], parts
                 relocated = mod(parts, [('.run', 0, 'abs32', 'abs', 5)])
                 assert relocated.implied_names(image) == []
-                assert 'voice 0.1: SHARC voice machine_id must match its single native voice registration' in link.check(
-                    [core, relocated], image)
+                assert 'voice 0.1: its SHARC mk2-voice kernel 5 has no registration with that id in its mod' in link.check(
+                    [core, MACHINES, relocated], image)
 
 
 def test_kept_bytes_refuse_every_write():
@@ -1580,10 +1552,70 @@ def test_a_new_thumbnail_waits_for_a_maintainer():
             # a picture that fails never stops the mod: it goes in with the picture it had
             status, r, items = run('v1.3')
             assert status == 0 and items[0]['file'] == 'x-1.3.elemod' and items[0]['thumb']['sha256'] == h(two)
-            assert '`thumb.png` was not taken: it looks dithered' in submit_mod.report_md(status, r)
+            assert '- `thumb.png`: not taken: it looks dithered' in submit_mod.report_md(status, r)
             assert r['same_repo_update']
     finally:
         submit_mod.get, submit_mod.facts = real
+
+
+def test_a_release_brings_a_picture_for_each_mod():
+    """submit_mod.py: thumb-<mod id>.png is that mod's picture on every device, thumb.png the others'; many new
+    pictures go to the pull request's comments in parts, each part marked once."""
+    submit_mod = submit_mod_module()
+    if submit_mod is None:
+        return
+    import hashlib
+    thumbs = thumbs_module()
+    pic = lambda k: thumbs.canonical_png([row[k:] + row[:k] for row in screen_bits()])
+    def mod(id_, device):
+        return {'id': id_, 'version': '1', 'device': device, 'os': '1.43' if device == 'digitone-mk1' else '1.53',
+                'license': 'MIT', 'named_license': True, 'title': id_, 'core': False, 'requires': [], 'needs_core': None,
+                'description': ''}
+    FACTS = {'dn-beep.elemod': mod('beep', 'digitone-mk1'), 'dt-beep.elemod': mod('beep', 'digitakt-mk1'),
+             'dn-horror.elemod': mod('horror', 'digitone-mk1'), 'dt-horror.elemod': mod('horror', 'digitakt-mk1'),
+             'dt-loop.elemod': mod('loop', 'digitakt-mk1')}
+    PICTURES = {'thumb-beep.png': pic(1), 'thumb-horror.png': thumbs.canonical_png(screen_bits('dithered')),
+                'thumb.png': pic(2), 'thumb-gone.png': pic(3), 'thumbnail.png': pic(4)}
+    def get(url, accept='', limit=0):
+        if '/releases/tags/' in url:
+            return json.dumps({'html_url': 'https://github.com/o/splash/releases/tag/v1', 'prerelease': False,
+                               'assets': [{'name': n} for n in list(FACTS) + list(PICTURES)]}).encode()
+        name = url.rsplit('/', 1)[1]
+        return PICTURES[name] if name in PICTURES else ('file ' + name).encode()
+    real = submit_mod.get, submit_mod.facts
+    submit_mod.get, submit_mod.facts = get, lambda path, license='': dict(FACTS[os.path.basename(path)])
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            catalog = os.path.join(tmp, 'catalog.json')
+            with open(catalog, 'w', encoding='utf-8') as fh:
+                fh.write(submit_mod.render({'about': '', 'items': []}))
+            status, r = submit_mod.submit({'repo': 'o/splash', 'tag': 'v1', 'summary': 'A splash.'}, catalog)
+            with open(catalog, encoding='utf-8') as fh:
+                got = {i['file']: (i.get('thumb') or {}).get('file') for i in json.load(fh)['items']}
+            assert status == 0 and not r['same_repo_update']
+            # beep's own picture on both devices; horror's failed, so it gets none (not thumb.png); loop gets thumb.png
+            assert got == {'dn-beep.elemod': 'thumb-beep.png', 'dt-beep.elemod': 'thumb-beep.png', 'dn-horror.elemod': None,
+                           'dt-horror.elemod': None, 'dt-loop.elemod': 'thumb.png'}, got
+            md = submit_mod.report_md(status, r)
+            for said in ('- `thumb-beep.png`: new on beep', '- `thumb-horror.png`: not taken: it looks dithered',
+                         '- `thumb.png`: new on loop', '- `thumb-gone.png`: not used: no mod this submission adds or '
+                         'changes has the id gone'):
+                assert said in md, said
+            assert 'thumbnail.png' not in md and md.count('```text') == 2
+    finally:
+        submit_mod.get, submit_mod.facts = real
+    # 60 new pictures: more than a comment holds, so they go out in parts, each under GitHub's limit, marked alike
+    r = {'thumbs': {}, 'thumb_on': {}, 'thumb_new': ['m'], 'thumb_waits': []}
+    for i in range(60):
+        data = pic(i)
+        r['thumbs']['thumb-m%d.png' % i] = thumbs.check(data)
+        r['thumb_on']['thumb-m%d.png' % i] = {'new': {'m%d' % i}}
+    parts = submit_mod.previews(r)
+    assert len(parts) == 2 and all(len(p) < 65536 for p in parts)
+    mark = parts[0].split('\n')[0]
+    assert mark.startswith('<!-- shop-pictures ') and parts[1].startswith(mark) and 'part 2 of 2' in parts[1]
+    assert sum(p.count('```text') for p in parts) == 60
+    assert 'in 2 comments on the pull request' in submit_mod.report_md(0, dict(r, repo='o/x', tag='v1', rows=[], errors=[]))
 
 
 def test_publish_fills_in_the_form_and_writes_notes_the_shop_reads():

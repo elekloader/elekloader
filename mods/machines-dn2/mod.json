@@ -1,6 +1,6 @@
 {
  "id": "machines-dn2",
- "version": "0.2",
+ "version": "0.3",
  "license": "GPL-2.0-or-later",
  "title": "DN2 synth and filter machines",
  "description": "SHARC synths and filters, and SDK alpha machine UIs, in the Digitone II machine selector. SYN shows each synth's pages. Needs core 0.2.",
@@ -13,6 +13,7 @@
   "sdk_alpha.c",
   "../sdk-alpha/machine.c"
  ],
+ "sharc": {"artifact": "dispatch.sharc.json"},
  "cflags": [
   "-DSOUND_SIZE=0x48b", "-DSOUND_TYPE=0xde", "-DSOUND_SLOTS=20",
   "-DVIEW_METHODS=60", "-DVIEW_CUR=144", "-DVIEW_DIRTY=0x14",
@@ -144,6 +145,12 @@
    "stock": "222f0008202f000c",
    "op": "jmp",
    "target": "dn2_page"
+  },
+  {
+   "addr": "0x400dc154",
+   "stock": "2f02222f0008",
+   "op": "jmp",
+   "target": "dn2_range_entry"
   },
   {
    "addr": "0x400dc196",

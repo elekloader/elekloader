@@ -196,7 +196,9 @@ no SDK machines.
   locks and LFOs; its start, note and velocity are the firmware's
   (`fw_voice_start`, `fw_voice_note`, `fw_voice_vel`). A track's voice
   state is kept across notes, and cleared when the track's rendered
-  machine changes.
+  machine changes. From 1.7 a track whose AMP envelope level is 0 and that
+  no trig starts is not rendered: its block is zeroed and its frames go to
+  the next render's `idle`.
 
 ## Beside the shop's mods
 

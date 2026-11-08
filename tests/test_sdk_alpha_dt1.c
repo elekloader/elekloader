@@ -16,6 +16,7 @@ uint8_t *volatile fw_kit;
 volatile uint8_t fw_render_machine[8];
 volatile int32_t fw_voice_note[8];
 volatile int16_t fw_voice_vel[8];
+volatile int32_t fw_amp_env[3 * 8];
 static int32_t effective[8][15], blocks[8 * ELEK_VOICE_FRAMES];
 static uint8_t kit[0x20 + 8 * 0xa2];
 static uint32_t calls[8];
@@ -54,6 +55,7 @@ int main(void)
         fw_voice_note[t] = (60 + t) << 16;
         fw_voice_vel[t] = 100 << 8;
         effective[t][0] = t ? SDK_ALPHA_RAW_MAX : 0;
+        fw_amp_env[3 * t + 1] = 1;          /* sounding */
     }
     fw_voice_start = 3;
     sdk_alpha_render(blocks);
@@ -75,6 +77,23 @@ int main(void)
     fw_voice_start = 0;
     sdk_alpha_render(blocks);
     assert(!last[1].start);
+    /* A track whose AMP envelope has ended and no trig starts is not rendered; idle counts its frames. */
+    uint32_t before = calls[0], other = calls[1];
+    fw_amp_env[1] = 0;
+    sdk_alpha_render(blocks); sdk_alpha_render(blocks); sdk_alpha_render(blocks);
+    assert(calls[0] == before && blocks[0] == 0);
+    assert(calls[1] == other + 3 && last[1].idle == 0);
+    fw_voice_start = 1;                         /* a trig renders it while the level is still 0 */
+    sdk_alpha_render(blocks);
+    assert(calls[0] == before + 1 && last[0].start && last[0].idle == 3 * ELEK_VOICE_FRAMES);
+    fw_voice_start = 0; fw_amp_env[1] = 1;
+    sdk_alpha_render(blocks);
+    assert(last[0].idle == 0);
+    fw_amp_env[1] = 0;                          /* silent, then another machine: its first render gets 0 */
+    sdk_alpha_render(blocks);
+    fw_render_machine[0] = 0; sdk_alpha_render(blocks);
+    fw_render_machine[0] = 100; fw_amp_env[1] = 1; sdk_alpha_render(blocks);
+    assert(calls[0] == before + 3 && last[0].idle == 0 && blocks[0] == 1);
     assert(sdk_alpha_map(&knobs[0], sdk_alpha_default(&knobs[0])) == 0);   /* omitted: 0 */
     struct elek_knob level = { "LEVEL", .max = 127, .def = 100 };
     assert(sdk_alpha_map(&level, sdk_alpha_default(&level)) == 100);

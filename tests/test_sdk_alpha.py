@@ -7,6 +7,7 @@ compiler (ELEKLOADER_CROSS); the Digitone II's need ELEKLOADER_DN2_SYX (OS 1.12)
 from contextlib import redirect_stdout
 import io
 import json
+import os
 import re
 from pathlib import Path
 import shutil
@@ -65,7 +66,17 @@ RENDERS = SdkMachine("Renders", register=False, source=textwrap.dedent("""
     };
     ELEK_REGISTER_MACHINE(renders);
 """))
-# A knob that starts above its min, which the Digitone II cannot do yet.
+# A render in SHARC assembly, as the Digitone II takes it: declared in C, defined in the mod's "sharc" sources.
+SHARC_RENDER = SdkMachine("Sharc render", register=False, source=textwrap.dedent("""
+    #include "elekloader/sdk_alpha_machine.h"
+    void tone_render(const struct elek_voice *v, elek_sample *out);
+    static const struct elek_knob knobs[] = { { "KNOB", .max = 127 } };
+    static const struct elek_machine tone = {
+        .id = @ID@, .name = "Sharc render", .short_name = "TONE", ELEK_KNOBS(knobs), .render = tone_render,
+    };
+    ELEK_REGISTER_MACHINE(tone);
+"""))
+# A knob that starts above its min.
 DEFAULTS = SdkMachine("Defaults", register=False, source=ONE_PAGE.source.replace(
     '.max = 127', '.min = -50, .max = 50'))
 # Sixteen machines in one mod: more than the Digitone mk1's MACHINES menu lists.
@@ -330,9 +341,8 @@ class SdkAlphaTests(unittest.TestCase):
                                                       r'0x40001000, not null or an address in this mod$'):
             sdk_alpha_registrations(doc, {'.run': raw})
         doc, raw = sdk_alpha_test_render_document()
-        doc['relocs'][-1][3] = 'sym:external_render'
-        with self.assertRaisesRegex(build.BuildError, 'render points at external_render, outside this mod'):
-            sdk_alpha_registrations(doc, {'.run': raw})
+        doc['relocs'][-1][3] = 'sym:external_render'      # declared only: the builder pairs it, or refuses
+        self.assertEqual(sdk_alpha_registrations(doc, {'.run': raw})[120]['render'], 'external_render')
 
     def test_a_voice_state_too_big_does_not_compile(self):
         cc = shutil.which('cc')
@@ -510,7 +520,8 @@ class SdkAlphaTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             core = build.build(str(ROOT / 'mods/core-dn2'), stock, tmp)[1]
             machines = build.build(str(ROOT / 'mods/machines-dn2'), stock, tmp)[1]
-            firmware, dev, _ = formats.load(stock)
+            firmware, dev, rel = formats.load(stock)
+            dsp = firmware.section(rel.sharc['section'])     # machines-dn2's dispatcher
             image = formats.main_image(firmware, dev)
             built = {}
             for name, folder in (('empty', EMPTY.write(tmp)), ('one page', ONE_PAGE.write(tmp)),
@@ -518,7 +529,7 @@ class SdkAlphaTests(unittest.TestCase):
                 path, mod, _ = sdk_alpha_build(folder, stock, tmp)
                 built[name] = path, mod
                 self.assertEqual(mod.requires, ['core', 'machines-dn2'])
-                link.link([core, machines, mod], image)
+                link.link([core, machines, mod], image, sharc_stream=dsp)
             # The SDK's IDs reach 127: the synths' claims, which native SHARC voices share.
             self.assertEqual(built['empty'][1].implied_names(image), ['mk2-synth:%d' % EMPTY.id])
             self.assertEqual(built['glyphs'][1].implied_names(image), ['mk2-synth:127'])
@@ -526,14 +537,58 @@ class SdkAlphaTests(unittest.TestCase):
                 duplicate = json.load(fh)
             duplicate['id'], duplicate['exports'] = 'sdk-alpha-conflict', []
             with self.assertRaisesRegex(elemod.ModError, 'mk2-synth:%d' % EMPTY.id):
-                link.link([core, machines, built['empty'][1], link.Mod2(duplicate, 'conflict')], image)
-            with self.assertRaisesRegex(build.BuildError, r'^sdk alpha: machine "Renders" \(id \d+\): render is not '
-                                                          r'supported on digitone-mk2 1\.12 yet$'):
+                link.link([core, machines, built['empty'][1], link.Mod2(duplicate, 'conflict')], image,
+                          sharc_stream=dsp)
+            with self.assertRaisesRegex(build.BuildError, r'^sdk alpha: machine "Renders" \(id \d+\): render is C, '
+                                                          r'which digitone-mk2 1\.12 cannot play: write it in SHARC '
+                                                          r'assembly, declare it under #ifdef ELEK_TARGET_SHARC'):
                 sdk_alpha_build(RENDERS.write(tmp + '/renders'), stock, tmp)
-            with self.assertRaisesRegex(build.BuildError, r'^sdk alpha: machine "One page" \(id \d+\), knobs\[0\] '
-                                                          r'"KNOB": def 0 is not min -50; defaults are not supported '
-                                                          r'on digitone-mk2 1\.12 yet$'):
-                sdk_alpha_build(DEFAULTS.write(tmp + '/defaults'), stock, tmp)
+            defaults = sdk_alpha_build(DEFAULTS.write(tmp + '/defaults'), stock, tmp)[1]
+            link.link([core, machines, defaults], image, sharc_stream=dsp)
+
+    def sharc_render(self, tmp, assembly):
+        """SHARC_RENDER's folder, with tone.s and mod.json's "sharc" sources."""
+        folder = Path(SHARC_RENDER.write(tmp))
+        (folder / 'tone.s').write_text(assembly)
+        mod = json.loads((folder / 'mod.json').read_text())
+        mod['sharc'] = {'sources': ['tone.s']}
+        (folder / 'mod.json').write_text(json.dumps(mod))
+        return str(folder)
+
+    def test_sdk_alpha_pairs_a_digitone_ii_render_with_its_sharc_label(self):
+        stock = Digitone2.stock()
+        body = ('.SECTION/SW seg_swco;\n%s\ntone_render.:\n'
+                '    I12=DM(M7,I6);\n    JUMP(M14,I12) (DB);\n    RFRAME;\n    NOP;\n')
+        where = r'^sdk alpha: machine "Sharc render" \(id \d+\): '
+        for name, assembly, refusal in (
+                ('missing', body % '.GLOBAL other_render.;',
+                 where + r'render is tone_render, but no file in mod.json\'s "sharc": \{"sources": \[...\]\} has '
+                         r'the global label tone_render\.$'),):
+            with self.subTest(name), tempfile.TemporaryDirectory() as tmp:
+                with self.assertRaisesRegex(build.BuildError, refusal):
+                    sdk_alpha_build(self.sharc_render(tmp, assembly), stock, tmp)
+        if not os.environ.get('SELACHE'):
+            self.skipTest('the kernel needs the pinned Selache (SELACHE)')
+        with tempfile.TemporaryDirectory() as tmp:
+            core = build.build(str(ROOT / 'mods/core-dn2'), stock, tmp)[1]
+            machines = build.build(str(ROOT / 'mods/machines-dn2'), stock, tmp)[1]
+            firmware, dev, rel = formats.load(stock)
+            dsp = firmware.section(rel.sharc['section'])     # machines-dn2's dispatcher
+            image = formats.main_image(firmware, dev)
+            for folder, mid, knobs in ((self.sharc_render(tmp, body % '.GLOBAL tone_render.;'), SHARC_RENDER.id,
+                                        [[0, 127]]),
+                                       (str(ROOT / 'examples/sdk-sine'), 123, [[-50, 50]])):
+                path, mod, layouts = sdk_alpha_build(folder, stock, tmp)
+                doc = json.loads(Path(path).read_text())
+                self.assertEqual([(k['kind'], k['id'], k['knobs']) for k in doc['sharc']['kernels']],
+                                 [('sdk', mid, knobs)])
+                self.assertEqual(doc['imports'], [B.SDK_ALPHA_ABI])
+                # .render is nonzero on the ColdFire, which never calls it: an rts in the mod
+                sec, off = layouts[mid]['at']
+                r, = [r for r in doc['relocs'] if r[:2] == [sec, off + B.MACHINE_RENDER]]
+                run = elemod.parts_bytes(mod.sections['.run']['parts'], image, dev)
+                self.assertEqual((r[3], run[r[4]:r[4] + 2]), ('sec:.run', b'\x4e\x75'))
+                link.link([core, machines, mod], image, sharc_stream=dsp)
             midi = SdkMachine("Midi slot", register=False, source=EMPTY.source)
             midi.id = 4                                 # 4..127 elsewhere; MIDI's type on the Digitone II
             with self.assertRaisesRegex(build.BuildError, r'^sdk alpha: machine "Empty" \(id 4\): id 4 is outside '

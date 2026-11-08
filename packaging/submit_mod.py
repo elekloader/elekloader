@@ -29,10 +29,12 @@ form or the release's notes give new ones ("Shop summary: ..." and "Tested on a 
 the one the shop lists is left out. With --update (packaging/shop_updates.py) only newer files of mods this
 repository already has go in, and a pre-release replaces only what came from a pre-release.
 
-A thumbnail (packaging/thumbs.py: a 128x64 picture of the screen in two colours) is a release's thumb.png, or the
-one thumb.png in a commit's tree. One that passes the check goes on the entries this submission adds or changes, and
-on this repository's entries the form lists already; the report shows its pixels as text, and the change is never one
-that merges by itself (same_repo_update is false), so a maintainer looks at every new picture. A thumbnail is pinned
+A thumbnail (packaging/thumbs.py: a 128x64 picture of the screen in two colours) is a release's thumb-<mod id>.png,
+for that mod on every device, or its thumb.png, for the mods with none of their own (in a commit, each name once
+anywhere in its tree). One that passes the check goes on the entries this submission adds or changes, and on this
+repository's entries the form lists already; the report shows each new picture's pixels as text (with --previews, in
+parts for the pull request's comments when there are many), and the change is never one that merges by itself
+(same_repo_update is false), so a maintainer looks at every new picture. A thumbnail is pinned
 on its own ("thumb": tag and file, or commit and path, and sha256), so it outlives the release its mod moves on from.
 With --update a release's thumbnail goes in only when it is the very picture the entry has (the pin moves to it);
 another one waits for the form, and the entry keeps its own.
@@ -207,7 +209,7 @@ def submit(fields, catalog=CATALOG, files_dir=None, cores_dir=None, update=False
     fields may be empty; a pre-release replaces only what came from a pre-release. The report's same_repo_update says
     whether every change is such an update, in either mode."""
     r = {'repo': '', 'tag': '', 'rows': [], 'errors': [], 'changed': False, 'prerelease': False, 'same_repo_update': False,
-         'thumb': None, 'thumb_new': [], 'thumb_waits': []}
+         'thumbs': {}, 'thumb_new': [], 'thumb_waits': [], 'thumb_on': {}}
     repo, tag = fields.get('repo', '').strip(), fields.get('tag', '').strip()
     commit = fields.get('commit', '').strip().lower()
     repo = re.sub(r'^https://github\.com/|/$|\.git$', '', repo)
@@ -252,12 +254,17 @@ def submit(fields, catalog=CATALOG, files_dir=None, cores_dir=None, update=False
         assets = [{'name': e['path'].rsplit('/', 1)[-1], 'path': e['path']} for e in tree.get('tree', [])
                   if e.get('type') == 'blob' and FILE.fullmatch(e['path'].rsplit('/', 1)[-1])
                   and PATH.fullmatch(e['path']) and '..' not in e['path'].split('/')]
-        pictures = [e['path'] for e in tree.get('tree', []) if e.get('type') == 'blob'
-                    and e['path'].rsplit('/', 1)[-1] == thumbs.NAME and PATH.fullmatch(e['path'])
-                    and '..' not in e['path'].split('/')]
-        if len(pictures) > 1:
-            r['thumb'] = {'ok': False, 'reason': 'the commit has more than one %s' % thumbs.NAME}
-        picture = {'path': pictures[0]} if len(pictures) == 1 else None
+        pictures = {}
+        for e in tree.get('tree', []):
+            n = e['path'].rsplit('/', 1)[-1]
+            if (e.get('type') == 'blob' and thumbs.PICTURE.fullmatch(n) and PATH.fullmatch(e['path'])
+                    and '..' not in e['path'].split('/')):
+                pictures.setdefault(n, []).append({'path': e['path']})
+        for n, found in list(pictures.items()):
+            if len(found) > 1:
+                r['thumbs'][n] = {'ok': False, 'reason': 'the commit has more than one'}
+                del pictures[n]
+        pictures = {n: found[0] for n, found in pictures.items()}
         names = [a['name'] for a in assets]
         twice = sorted({n for n in names if names.count(n) > 1})
         if twice:
@@ -275,7 +282,8 @@ def submit(fields, catalog=CATALOG, files_dir=None, cores_dir=None, update=False
             return 1, r
         canonical = re.match(r'https://github\.com/([^/]+/[^/]+)/releases/', release.get('html_url', ''))
         assets = [a for a in release.get('assets', []) if FILE.fullmatch(a['name'])]
-        picture = next(({'digest': a.get('digest')} for a in release.get('assets', []) if a['name'] == thumbs.NAME), None)
+        pictures = {a['name']: {'digest': a.get('digest')} for a in release.get('assets', [])
+                    if thumbs.PICTURE.fullmatch(a['name'])}
     r['prerelease'] = bool(release.get('prerelease'))
     if canonical:                                  # the name GitHub gives it now, if it moved
         repo = r['repo'] = canonical.group(1)
@@ -356,38 +364,54 @@ def submit(fields, catalog=CATALOG, files_dir=None, cores_dir=None, update=False
                 pre_tags[(it['repo'], it['tag'])] = False
         return pre_tags[(it['repo'], it['tag'])]
 
-    # the release's thumbnail, checked: the pin it goes in with when it passes
-    th = None
-    if picture:
+    # the release's thumbnails, checked: the pins they go in with when they pass
+    pins = {}
+    for n in sorted(pictures)[:thumbs.MAX_PICTURES]:
+        picture = pictures[n]
         try:
             data = (get(api + '%s/contents/%s?ref=%s' % (repo, urllib.parse.quote(picture['path']), commit),
                         'application/vnd.github.raw', thumbs.MAX_BYTES) if commit
-                    else get('https://github.com/%s/releases/download/%s/%s' % (repo, tag, thumbs.NAME),
-                             limit=thumbs.MAX_BYTES))
+                    else get('https://github.com/%s/releases/download/%s/%s' % (repo, tag, n), limit=thumbs.MAX_BYTES))
         except ValueError:
-            r['thumb'] = {'ok': False, 'reason': 'it is larger than %d bytes' % thumbs.MAX_BYTES}
+            r['thumbs'][n] = {'ok': False, 'reason': 'it is larger than %d bytes' % thumbs.MAX_BYTES}
+            continue
         except urllib.error.URLError as e:
-            r['thumb'] = {'ok': False, 'reason': 'it could not be downloaded (%s)' % e}
-        else:
-            r['thumb'] = thumbs.check(data)
-            if picture.get('digest') and picture['digest'] != 'sha256:' + r['thumb']['sha256']:
-                r['thumb'] = {'ok': False, 'reason': 'it is not the file GitHub lists'}
-            elif r['thumb']['ok']:
-                th = dict(commit=commit, path=picture['path']) if commit else dict(tag=tag, file=thumbs.NAME)
-                th['sha256'] = r['thumb']['sha256']
+            r['thumbs'][n] = {'ok': False, 'reason': 'it could not be downloaded (%s)' % e}
+            continue
+        r['thumbs'][n] = thumbs.check(data)
+        if picture.get('digest') and picture['digest'] != 'sha256:' + r['thumbs'][n]['sha256']:
+            r['thumbs'][n] = {'ok': False, 'reason': 'it is not the file GitHub lists'}
+        elif r['thumbs'][n]['ok']:
+            pins[n] = dict(commit=commit, path=picture['path']) if commit else dict(tag=tag, file=n)
+            pins[n]['sha256'] = r['thumbs'][n]['sha256']
+    for n in sorted(pictures)[thumbs.MAX_PICTURES:]:
+        r['thumbs'][n] = {'ok': False, 'reason': 'one submission takes at most %d pictures; send the rest in another'
+                                                 % thumbs.MAX_PICTURES}
 
-    def thumb_for(entry, old, title):
+    def picture_for(mod_id):
+        """-> (name, pin or None): the mod's own picture if the release has one (None when it failed), or else the
+        release's thumb.png."""
+        own = 'thumb-%s.png' % mod_id
+        if own in r['thumbs']:
+            return own, pins.get(own)
+        return thumbs.NAME, pins.get(thumbs.NAME)
+
+    def thumb_for(entry, old, title, mod_id):
         """The thumbnail an entry goes in with: the release's when it passes (through the form; with --update only
         when it is the picture the entry has already), or else the one the entry it replaces has."""
+        n, th = picture_for(mod_id)
         had = (old or {}).get('thumb')
         if th and had and had['sha256'] == th['sha256']:
             entry['thumb'] = th
+            r['thumb_on'].setdefault(n, {}).setdefault('kept', set()).add(title)
         elif th and not update:
             entry['thumb'] = th
             r['thumb_new'].append(title)
+            r['thumb_on'].setdefault(n, {}).setdefault('new', set()).add(title)
         else:
             if th:
                 r['thumb_waits'].append(title)
+                r['thumb_on'].setdefault(n, {}).setdefault('waits', set()).add(title)
             if had:
                 entry['thumb'] = had
 
@@ -546,7 +570,7 @@ def submit(fields, catalog=CATALOG, files_dir=None, cores_dir=None, update=False
             note = on_unit or as_of(old.get('on_unit', ''), was)
             if note:
                 entry['on_unit'] = note
-            thumb_for(entry, old, f['title'])
+            thumb_for(entry, old, f['title'], f['id'])
             at = items.index(f['older'][0]) if f['older'] else None       # an update takes the old entry's place
             for it in f['older']:
                 items.remove(it)
@@ -580,13 +604,15 @@ def submit(fields, catalog=CATALOG, files_dir=None, cores_dir=None, update=False
                     del it['auto_update']
                 flips.append(it)
                 row['result'] = 'auto-update turned %s (already in the shop)' % ('off' if off else 'on')
-        for row in r['rows'] if th and not update else []:     # a new picture for files the shop has already
+        for row in r['rows'] if pins and not update else []:   # a new picture for files the shop has already
             it = by_name.get(row['file'])
-            if (row['result'].endswith('already in the shop)') or row['result'] == 'already in the shop') \
-                    and not row.get('core') and it and same_repo(it['repo']) == same_repo(repo) \
-                    and (it.get('thumb') or {}).get('sha256') != th['sha256']:
+            n, th = picture_for(row.get('id'))
+            if (th and (row['result'].endswith('already in the shop)') or row['result'] == 'already in the shop')
+                    and not row.get('core') and it and same_repo(it['repo']) == same_repo(repo)
+                    and (it.get('thumb') or {}).get('sha256') != th['sha256']):
                 it['thumb'] = th
                 r['thumb_new'].append(row.get('title', row['file']))
+                r['thumb_on'].setdefault(n, {}).setdefault('new', set()).add(row.get('title', row['file']))
                 if it not in flips:
                     flips.append(it)
                 row['result'] = ('thumbnail changed (already in the shop)' if row['result'] == 'already in the shop'
@@ -694,6 +720,33 @@ def remove(fields, catalog=CATALOG, files_dir=None):
     return 0, r
 
 
+INLINE = 24000          # the most picture text a report carries itself (GitHub takes 65536 characters a comment)
+PART = 60000            # the most a comment of pictures carries
+
+
+def previews(r):
+    """The new pictures' pixels as text, in parts of at most PART characters, each part marked with the set's
+    hash (so a workflow posts a set once)."""
+    blocks = []
+    for n, t in sorted(r.get('thumbs', {}).items()):
+        if t['ok'] and r['thumb_on'].get(n, {}).get('new'):
+            blocks.append('`%s`, for %s (%d bytes, sha256 `%s`):\n\n```text\n%s\n```\n' % (
+                n, ', '.join(sorted(r['thumb_on'][n]['new'])), t['bytes'], t['sha256'][:12], thumbs.braille(t['bits'])))
+    parts, cur = [], ''
+    for b in blocks:
+        if cur and len(cur) + len(b) > PART - 200:
+            parts.append(cur)
+            cur = ''
+        cur += b + '\n'
+    if cur:
+        parts.append(cur)
+    mark = hashlib.sha256(''.join(parts).encode()).hexdigest()[:16]
+    if len(parts) == 1 and len(parts[0]) <= INLINE:
+        return parts
+    return ['<!-- shop-pictures %s -->\n**New thumbnails, part %d of %d**\n\n%s' % (mark, i + 1, len(parts), p)
+            for i, p in enumerate(parts)]
+
+
 def report_md(status, r):
     lines = ['### %s %s%s' % (r['repo'] or '?', r['tag'] or '?', ' (a pre-release)' if r.get('prerelease') else ''), '']
     lines += ['- %s' % e for e in r['errors']]
@@ -705,14 +758,28 @@ def report_md(status, r):
             lines.append('| `%s` | %s | %s | %s | %s | %s |' % (
                 row['file'], (row.get('title', '') + ' ' + row.get('version', '')).strip(),
                 ('%s %s' % (row.get('device', ''), row.get('os', ''))).strip(), needs, row.get('license', ''), row['result']))
-    if r.get('thumb'):
-        lines += ['', '**Thumbnail.** ' + thumbs.preview_md(r['thumb'])]
+    if r.get('thumbs'):
+        lines += ['', '**Thumbnails.**', '']
+        for n, t in sorted(r['thumbs'].items()):
+            on = r['thumb_on'].get(n, {})
+            uses = [('new on ', 'new'), ('the same picture on ', 'kept'), ('waits, for ', 'waits')]
+            said = '; '.join(w + ', '.join(sorted(on[k])) for w, k in uses if on.get(k))
+            if not t['ok']:
+                said = 'not taken: ' + t['reason']
+            elif not said:
+                said = ('not used: no mod this submission adds or changes has the id %s' % n[len('thumb-'):-len('.png')]
+                        if n != thumbs.NAME else 'not used: no mod this submission adds or changes is without its own')
+            lines.append('- `%s`: %s' % (n, said))
         if r.get('thumb_new'):
-            lines.append('It goes on %s. A maintainer looks at a new thumbnail before it goes in.\n'
-                         % ', '.join(sorted(set(r['thumb_new']))))
+            parts = previews(r)
+            lines += ['', 'A maintainer looks at each new picture before it goes in. %s' % (
+                'Their pixels, as text (no image is shown here):' if len(parts) == 1 and len(parts[0]) <= INLINE
+                else 'They are many: their pixels, as text, are in %d comments on the pull request.' % len(parts)), '']
+            if len(parts) == 1 and len(parts[0]) <= INLINE:
+                lines.append(parts[0])
         if r.get('thumb_waits'):
-            lines.append('An automatic update keeps the shop\'s thumbnail for %s: send this release through the Submit a '
-                         'mod form to change it.\n' % ', '.join(sorted(set(r['thumb_waits']))))
+            lines += ['', 'An automatic update keeps the shop\'s thumbnail for %s: send this release through the Submit a '
+                      'mod form to change it.' % ', '.join(sorted(set(r['thumb_waits']))), '']
     noted = [row for row in r['rows'] if row.get('notes')]
     if noted:
         lines += ['', 'Good to know (not a refusal):']
@@ -768,6 +835,8 @@ def main(argv=None):
     ap.add_argument('--report', help='write the report (Markdown) here')
     ap.add_argument('--result', help='write the result (JSON) here: status, changed, titles, removal, auto_ok (the '
                                      'change touches only the repository\'s own entries: an update, or a removal)')
+    ap.add_argument('--previews', help='a folder: the new pictures\' pixels, when too many for the report, as '
+                                       'previews-<n>.md, one pull request comment each')
     a = ap.parse_args(argv)
     if a.issue_body:
         with open(a.issue_body, encoding='utf-8') as fh:
@@ -780,6 +849,12 @@ def main(argv=None):
     else:
         status, r = submit(fields, a.catalog, a.files_dir, a.cores_dir, a.update)
     text = report_md(status, r)
+    parts = previews(r) if r.get('thumb_new') else []
+    if a.previews and parts and parts[0].startswith('<!-- shop-pictures '):
+        os.makedirs(a.previews, exist_ok=True)
+        for i, part in enumerate(parts):
+            with open(os.path.join(a.previews, 'previews-%d.md' % (i + 1)), 'w', encoding='utf-8') as fh:
+                fh.write(part)
     if a.report:
         with open(a.report, 'w', encoding='utf-8') as fh:
             fh.write(text)

@@ -2,7 +2,8 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 """A shop card's thumbnail: a picture of the device's screen, checked.
 
-    python packaging/thumbs.py thumb.png [--md] [--png out.png]
+    python packaging/thumbs.py thumb.png [thumb-<mod id>.png ...] [--md]
+    python packaging/thumbs.py thumb.png --png out.png      # the canonical PNG the site serves
 
 A thumbnail is exactly 128x64 pixels in exactly two solid colours: the size and
 colours of the Elektron screens (docs/THUMBNAILS.md). Nothing else is
@@ -18,12 +19,15 @@ stays recognisable, so the check refuses dithering too. What passes becomes
 Standard library only (it runs in the workflows and in the tests).
 """
 import hashlib
+import re
 import struct
 import sys
 import zlib
 
 W, H = 128, 64
-NAME = 'thumb.png'               # the name the shop looks for in a release (or a commit's tree)
+NAME = 'thumb.png'               # a release's picture for its mods that have none of their own
+PICTURE = re.compile(r'thumb(?:-([\w.-]+))?\.png')   # thumb.png, or thumb-<mod id>.png: one mod's, on every device
+MAX_PICTURES = 200               # the most one submission takes
 MAX_BYTES = 16 << 10             # a 1-bit 128x64 PNG is under 1 KB; this allows an editor's RGBA save
 # Dithering: real screens and drawings measure at most 0.09 and 0.03 here, Floyd-Steinberg and ordered
 # (Bayer) dithers 0.34 and more on both. The limits sit in the gap.
@@ -186,20 +190,27 @@ def preview_md(r, name=NAME):
 
 def main(argv=None):
     args = sys.argv[1:] if argv is None else argv
-    if not args or args[0].startswith('-'):
+    out = args[args.index('--png') + 1] if '--png' in args else None
+    files = [a for a in args if not a.startswith('-') and a != out]
+    if not files or (out and len(files) > 1):
         sys.exit(__doc__)
-    with open(args[0], 'rb') as fh:
-        r = check(fh.read())
     if '--md' in args:
         sys.stdout.reconfigure(encoding='utf-8')
-        sys.stdout.write(preview_md(r, args[0]))
-    else:
-        print('taken (isolated %.3f, checker %.3f)' % (r['isolated'], r['checker']) if r['ok']
-              else 'refused: ' + r['reason'])
-    if r['ok'] and '--png' in args:
-        with open(args[args.index('--png') + 1], 'wb') as fh:
-            fh.write(canonical_png(r['bits']))
-    return 0 if r['ok'] else 1
+    bad = 0
+    for path in files:
+        with open(path, 'rb') as fh:
+            r = check(fh.read())
+        bad += not r['ok']
+        if '--md' in args:
+            sys.stdout.write(preview_md(r, path))
+        else:
+            print('%s%s' % (path + ': ' if len(files) > 1 else '',
+                            'taken (isolated %.3f, checker %.3f)' % (r['isolated'], r['checker']) if r['ok']
+                            else 'refused: ' + r['reason']))
+        if r['ok'] and out:
+            with open(out, 'wb') as fh:
+                fh.write(canonical_png(r['bits']))
+    return 1 if bad else 0
 
 
 if __name__ == '__main__':

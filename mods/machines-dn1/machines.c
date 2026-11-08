@@ -231,11 +231,14 @@ void dnm_render(int32_t *voices)
         if (vs[v].stage == OFF && vs[v].level == 0 && !(m->flags & DNM_OWN_ENV)) {
             for (i = 0; i < 32; i++)
                 block[i] = 0;               /* silent: no FM either */
+            if (vs[v].v.idle <= UINT32_MAX - 32)
+                vs[v].v.idle += 32;
             continue;
         }
         vs[v].v.pitch = fw_voice_pitch[v];
         m->render(v, block, &vs[v].v);
         vs[v].v.fresh = 0;
+        vs[v].v.idle = 0;
         if (!(m->flags & DNM_OWN_ENV))
             envelope(v, block);
     }

@@ -66,12 +66,12 @@ The companion ignores an invalid entry (an unregistered or non-SHARC ID,
 a second entry for one ID, a count outside 1..5, a bad label or default)
 and the synth keeps its empty page. The linker refuses two mods that give pages to one ID.
 
-The same mod must carry a `dn2-voice-mono32-l2-v1` artifact with a matching
-`machine_id` and `entries: {"render_offset_bytes": ...}`. Require `core`
-(core 0.2) and `machines-dn2`. The linker refuses a missing/mismatched
-payload or conflicting IDs.
-A build accepts at most one SHARC synth and one SHARC filter, in separate memory
-regions. Neither can be combined with a master-output SHARC mod.
+The same mod must carry the synth's DSP code: a `dn2-kernel-v1` artifact
+whose kernel has the synth's ID (below). Require `core` (core 0.2) and
+`machines-dn2`. The linker refuses a registration without its kernel, a
+kernel without a registration with its ID in the same mod, and two kernels
+with one ID. A build takes any number of SHARC synths and filters, from any
+number of mods; none can be combined with a master-output SHARC mod.
 
 ```c
 #include "digitone-mk2/voice.h"
@@ -97,16 +97,17 @@ DN2_VOICE_STATE(struct voice);
 ```
 
 `in->state` then points at this slot's `struct voice`. There are 16, one
-per slot, zeroed when the DSP loads and kept between calls and across
-notes: the adapter never clears them, so reset what needs it on START.
-Without the macro `state` is null. `machine_from_executable` reads the
-size from the executable and reserves the 16 after the data, in the
-31 KiB data area; it refuses with the sizes when they do not fit.
+per slot, zeroed when the DSP loads and when the slot's machine changes,
+and kept between calls and across notes: reset what needs it on START.
+Without the macro `state` is null. `machine_artifact` reads the size
+(`sharc_voice_state_bytes`, which the macro defines) and the linker
+reserves the 16 in the machine pool.
 
 ## Context and memory
 
-The adapter preserves PEx R0–R15 in full through PX, both halves of PX,
-I0–I5/I12/I13, M0–M7/M13–M15, L0–L5, MODE1 and both ASTAT/STKY pairs.
+machines-dn2's dispatcher calls every synth's and filter's kernel. It
+preserves PEx R0–R15 in full through PX, both halves of PX,
+I0–I5/I12/I13, M0–M7/M13–M15, L0–L5, LCNTR, MODE1 and both ASTAT/STKY pairs.
 It pins M5=0, M6=1, M7=-1, M13=0, M14=1, M15=-1, L0–L5=0, SIMD off,
 32-bit floating-point rounding on, saturation/truncation off. Register
 banks and interrupt enablement are retained. The other stock caller passes
@@ -119,60 +120,52 @@ interrupts. Use the short-word C call/return convention (input in R4),
 return I6/I7 unchanged and retain the pinned constants needed by that
 convention.
 
-The callback runs on its own 4 KiB stack in L1, `0x2de000..0x2df000`
-(loader `0x282de000`), not on the stock Audio Task's. It is in L1 like
-stock's stacks: a FreeRTOS context switch saves the task's registers onto
-the running stack, partly through the PM bus. The adapter points I7 at its
-top, with B7 at its base and L7 = 0 (linear), and puts stock's I7, B7 and
-L7 back afterwards. Writing B7 also loads I7, so it writes B7 first, with
-interrupts off for those few instructions. The callback may declare at
-most **2,048 stack bytes**, plus the adapter's eight-byte call frame. The
-rest is for interrupts: one taken during the call (its dispatcher, its C
-handler, a context switch's 516-byte save) pushes onto the same stack.
+Every synth's kernel runs on the synths' 4 KiB stack in L1,
+`0x2de000..0x2df000` (loader `0x282de000`), not on the stock Audio Task's.
+It is in L1 like stock's stacks: a FreeRTOS context switch saves the task's
+registers onto the running stack, partly through the PM bus. The
+dispatcher points I7 at its top, with B7 at its base and L7 = 0 (linear),
+and puts stock's I7, B7 and L7 back afterwards. Writing B7 also loads I7,
+so it writes B7 first, with interrupts off for those few instructions. The
+kernel shares the stack with the dispatcher's eight-byte call frame and
+with interrupts: one taken during the call (the interrupt dispatcher, its C handler,
+a context switch's 516-byte save) pushes onto the same stack.
 
 The linker zero-fills the stack and writes a guard word at its base. The
-adapter checks the guard before and after every call. Once an overrun has
-broken it, the machine is called no more until the DSP reloads and its
-slots play silence; a tool reads the guard to see that. The overrun
-itself has already written below the stack by then. A declaration is not
-a measurement or an instruction sandbox.
+dispatcher checks the guard after every call. A call that has broken it
+mutes that machine: its slots play silence and it is called no more until
+the DSP reloads. The dispatcher rewrites the guard, so the other synths
+keep running; a tool reads the guard to see an overrun. The overrun itself
+has already written below the stack by then. The guard is not a
+measurement or an instruction sandbox.
 
-The synth owns 64 KiB of L2:
-
-| Part | Loader byte range | Size |
-|---|---|---|
-| Pinned adapter, including guard | `0x20090000..0x20090800` | 2 KiB |
-| Author code, including 64-byte guard | `0x20090800..0x20098000` | 30 KiB |
-| Author data | `0x20098000..0x2009fc00` | 31 KiB |
-| Zeroed adapter state | `0x2009fc00..0x200a0000` | 1 KiB |
-
-Ranges exclude their end. A mod's build never names them: it compiles the
-kernel, links it with the script `elekloader.sdk.sharc.machine_linker_script('voice')`
-writes (code from `seg_swco`, data from `seg_dmda`, entry
-`sharc_voice_render`), and passes the linked executable to
-`machine_from_executable('voice', executable, machine_id)`. That checks the
-placement, guard and entry and returns the artifact; `stack_bytes` defaults to
-the limit below. Compilation belongs to the mod. A producer that links some other
-way can call `voice_artifact(code, data, render_offset_bytes, machine_id,
-stack_bytes)` with the bounds `machine_layout('voice')` gives. The SDK adds the
-pinned adapter, the code's NOP guard and the zero ranges (zeroed words are NOPs, so unused code
-space costs no update bytes). The linker writes the render PC and ID at
-`0x2009fe00`, and the voice state's address and one voice's size at `0x2009fe20`. Keep writes in the author data area and supplied voice buffer.
+The linker packs the dispatcher and every mod's kernels into the machine
+pool, loader `0x20090000..0x200b0000` (128 KiB of L2, end excluded): each
+code block followed by a 64-byte NOP guard, its data at its alignment, and
+each kernel's 16 slots of state. It refuses a build whose kernels do not
+fit. A mod's build never names an address: it compiles the kernel with
+Selache (code in `seg_swco`, data in `seg_dmda`, entry
+`sharc_voice_render`) and passes the objects to
+`elekloader.sdk.sharc.machine_artifact('voice', objects, machine_id)`. That
+links them with the pinned Selache (`SELACHE`) at more than one base,
+records the address fields that move as relocations, and returns the
+relocatable `dn2-kernel-v1` artifact for mod.json's
+`"sharc": {"artifact": ...}`. Compilation belongs to the mod. Keep writes
+in the kernel's own data and state and the supplied voice buffer.
 
 The exact OS 1.12 hook is PC16 `0xb8251b`, loader `0x20004a36`, called by
 the voice pipeline at `0x1c9459`. Its guarded six-byte stack adjustment is
-`8715ffffeeff`; the adapter executes it and continues at `0xb8251e`.
-Rebuild both machine adapters from `mods/machines-dn2/*-bridge.s` with
-`rebuild_voice.py`; the Selache pin is
-`2b26d3b75c53063575bc5c820fa0d38879335187`. The voice adapter's 1,980 code
-bytes are padded to 2 KiB, SHA-256
-`5bbf8b98c5ff13d4121a17e2d7a8ca550f05821b4564a67c0ce84737319da3f0`.
+`8715ffffeeff`; the dispatcher executes it and continues at `0xb8251e`.
+machines-dn2 carries the dispatcher prebuilt as `dispatch.sharc.json`;
+rebuild it from `dispatch.s` with `rebuild_dispatch.py` (`--check`
+compares). The Selache pin is `2b26d3b75c53063575bc5c820fa0d38879335187`.
 
-The adapter uses register counts for right shifts. This Selache pin omits
+The dispatcher uses register counts for right shifts. This Selache pin omits
 the required sign-extension bits in negative immediate shifts, which can
 halt the physical DSP even when emulation passes. See the
 [DN2 instruction investigation](https://github.com/angellinares/dn2_firmware_explore/blob/main/docs/waverider-dsp-compare.md#11-the-cause-found-on-silicon-negative-shift-immediates-2026-09-29).
-The unit suite checks the generated adapter for this encoding defect.
+`lint` lists what looks like such a shift in a kernel's code
+(`sharc_shifts`).
 
 ## Example and checks
 
@@ -187,7 +180,8 @@ octaves, one per 16; FINE (`param[12]`) is declared but unused. This
 example rounds fractional TUNE values down.
 
 Run `python tests/test_units.py` and the TypeScript suite for the artifact,
-registration, callback binding and stack-bound checks. Runtime checks must
+registration and placement checks, and `tests/test_dn2_dispatch.py` for the
+dispatcher. Runtime checks must
 cover native selection, overlapping notes and slot reuse, stock-track
 coexistence, AMP/filter controls, preset copy and saved/missing registrations.
 Run these checks in the coupled emulator and on the device for each
