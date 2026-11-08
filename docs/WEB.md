@@ -317,8 +317,8 @@ Pyodide, and `app.js` loads it only when the view first opens:
   and the view keeps that size, so the first read there takes one timeout
   (5 s) longer.
 - **`/mods`** shows one folder at a time: its path on top (`/mods/fx/a`),
-  each part of which opens that folder, then `..` (below `/mods`), its
-  folders (`/NAME`) and its `.elemod` files. A folder opens with a click. The view reads every folder when it connects, so an empty
+  each part of which opens that folder, then its folders (`/NAME`) and its
+  `.elemod` files. A folder opens with a click. The view reads every folder when it connects, so an empty
   folder shows too, and each file is downloaded for its id and version
   (and for what it requires, when an upload needs it), with Download and Delete (a second press deletes). A mod
   `/mods/active` names, the saved build, can't be deleted, as the unit's
@@ -330,7 +330,7 @@ Pyodide, and `app.js` loads it only when the view first opens:
   `.`, at most 63 bytes, 3 deep at most) on the unit, empty, and opens it.
   The Data router has no request for a folder, so the view uploads nothing
   to `FOLDER/.dir`, which the loader's route takes as one (`Mods.mkdir`),
-  and then reads the parent's listing to see it there. **Delete dir** on a folder row
+  and then reads the parent's listing to see it there. **Delete** on a folder row
   deletes an empty folder (a second press deletes), as SAMPLES' DELETE DIR;
   a folder with anything in it can't be deleted, and the route refuses one
   with `Folder not empty`.

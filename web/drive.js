@@ -258,8 +258,6 @@ function renderFiles() {
   const here = folders.filter(d => parent(d) === cwd);
   const files = S.files.filter(f => parent(f.name) === cwd);
   const rows = [];
-  if (cwd) rows.push(el('tr', { class: 'dm-folder', ...dropTarget(parent(cwd)) }, el('td', { colspan: 4 },
-    el('button', { type: 'button', class: 'dm-open', 'aria-label': 'Up one folder', onclick: () => open_(parent(cwd)) }, '..'))));
   for (const d of here) {
     const below = S.files.filter(f => inside(f.name, d));
     const empty = !below.length && !folders.some(x => inside(x, d));
@@ -268,7 +266,7 @@ function renderFiles() {
       el('td', { class: 'muted' }, `${below.length} mod${below.length === 1 ? '' : 's'}`),
       el('td', { class: 'dm-num' }, ''),
       el('td', {}, el('button', { type: 'button', class: 'dm-mini dm-danger', 'aria-label': `Delete folder ${d}`, disabled: !empty,
-        title: empty ? null : 'Not empty: delete or move what is in it first, as on the unit', onclick: e => removeDir(d, e.target) }, 'Delete dir'))));
+        title: empty ? null : 'Not empty: delete or move what is in it first, as on the unit', onclick: e => removeDir(d, e.target) }, 'Delete'))));
   }
   for (const f of files) rows.push(el('tr', {},
       el('td', { title: `/mods/${f.name}` }, el('code', {}, base(f.name))),
@@ -283,7 +281,7 @@ function renderFiles() {
     rows.push(el('tr', {}, el('td', { colspan: 4, class: 'muted small', id: 'dm-deep' },
       `Folders go ${datarpc.DEPTH} deep below /mods. A folder inside this one is not shown here or on the unit, and the loader can't load its mods.`)));
   $('dm-file-list').replaceChildren(
-    el('tr', {}, el('th', {}, 'File'), el('th', {}, 'Mod'), el('th', { class: 'dm-num' }, 'Size'), el('th', {}, '')),
+    el('tr', {}, el('th', {}, 'Name'), el('th', {}, 'Mod'), el('th', { class: 'dm-num' }, 'Size'), el('th', {}, '')),
     ...rows);
 }
 
@@ -313,8 +311,8 @@ async function makeFolder() {
 async function removeDir(d, button) {
   if (button.dataset.sure !== '1') {                     // a second press deletes, as DELETE DIR? on the unit
     button.dataset.sure = '1';
-    button.textContent = 'Delete dir?';
-    setTimeout(() => { if (button.isConnected) { button.dataset.sure = ''; button.textContent = 'Delete dir'; } }, 4000);
+    button.textContent = 'Delete?';
+    setTimeout(() => { if (button.isConnected) { button.dataset.sure = ''; button.textContent = 'Delete'; } }, 4000);
     return;
   }
   await busy(async () => {

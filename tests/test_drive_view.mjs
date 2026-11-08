@@ -264,6 +264,7 @@ try {
   // drops: files dropped on a folder row, or on a part of the path on top, go into that folder
   await page.click('#dm-crumbs button[data-dir="fx/a"]');
   check('a part of the path opens its folder', (await page.textContent('#dm-into')) === '/mods/fx/a');
+  check('no .. row: the path goes up', !/\.\./.test(await page.textContent('#dm-file-list')) && /^Name/.test(await page.textContent('#dm-file-list tr')));
   const dropped = await page.evaluateHandle(([n, hex]) => {
     const dt = new DataTransfer();
     dt.items.add(new File([Uint8Array.from(hex.match(/../g), x => parseInt(x, 16))], n, { type: 'application/json' }));
@@ -311,13 +312,12 @@ try {
   await page.waitForFunction(n => !(`fx/a/b/${n}` in window.__unit.files), hello.name);
   await page.waitForFunction(() => /This folder is empty/.test(document.getElementById('dm-file-list').textContent));
   check('an emptied folder stays, and shows', (await unit()).dirs.includes('fx/a/b'));
-  await page.click('#dm-file-list button[aria-label="Up one folder"]');
-  await page.click('#dm-file-list button[aria-label="Up one folder"]');
+  await page.click('#dm-crumbs button[data-dir="fx"]');
   check('a folder that holds a folder can\'t be deleted', await page.isDisabled('#dm-file-list button[aria-label="Delete folder fx/a"]'));
   await page.click('#dm-file-list button[aria-label="Open fx/a"]');
   const dd = page.locator('#dm-file-list button[aria-label="Delete folder fx/a/b"]');
   await dd.click();
-  check('delete dir asks once more', /Delete dir\?/.test(await dd.textContent()));
+  check('a folder\'s Delete asks once more', /^Delete\?$/.test(await dd.textContent()));
   await dd.click();
   await page.waitForFunction(() => !window.__unit.dirs.has('fx/a/b'));
   await page.waitForFunction(() => !document.querySelector('#dm-file-list button[aria-label="Open fx/a/b"]'));   // the listing read again
@@ -326,7 +326,7 @@ try {
   await page.click('#dm-new-folder-btn');
   await page.waitForFunction(() => window.__unit.dirs.has('fx/a/tmp'));
   await page.waitForFunction(() => /^Made \/mods\/fx\/a\/tmp/.test(document.getElementById('dm-upload-msg').textContent));
-  await page.click('#dm-file-list button[aria-label="Up one folder"]');
+  await page.click('#dm-crumbs button[data-dir="fx/a"]');
   const dt = page.locator('#dm-file-list button[aria-label="Delete folder fx/a/tmp"]');
   await dt.click(); await dt.click();
   await page.waitForFunction(() => !window.__unit.dirs.has('fx/a/tmp'));
