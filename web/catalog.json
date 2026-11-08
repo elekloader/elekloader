@@ -347,7 +347,8 @@
       "device": "digitone-mk1", "needs_core": "4.0",
       "sha256": "806ed6ff7215db1d5c2bd4c4c51c6448a72fff7bc1c5a901ee3cedd94aaa317e",
       "summary": "Six extra per-track filter modes for the Digitakt mk1 and Digitone mk1/Keys: BP, BP2, COMB, TRASH, OB4 and OB2.",
-      "on_unit": "Tested on hardware; fully functional and stable."
+      "on_unit": "Tested on hardware; fully functional and stable.",
+      "thumb": {"tag": "v1.3", "file": "thumb.png", "sha256": "2955e0e2305da5034e5da16b9ec353d689e09c58712ae394a6ee35eb1d91522f"}
     },
     {
       "repo": "DigiAlchemydsp/Filter-FX", "tag": "v1.2", "file": "filter-fx-dn-1.2.elemod",
@@ -782,7 +783,8 @@
       "device": "digitakt-mk1", "needs_core": "4.0",
       "sha256": "05169b93bde4dfd698f2844b664f3530270941c1a256fac2b79b1899901a3c23",
       "summary": "Six extra per-track filter modes for the Digitakt mk1 and Digitone mk1/Keys: BP, BP2, COMB, TRASH, OB4 and OB2.",
-      "on_unit": "Tested on hardware; fully functional and stable."
+      "on_unit": "Tested on hardware; fully functional and stable.",
+      "thumb": {"tag": "v1.3", "file": "thumb.png", "sha256": "2955e0e2305da5034e5da16b9ec353d689e09c58712ae394a6ee35eb1d91522f"}
     },
     {
       "repo": "DigiAlchemydsp/Filter-FX", "tag": "v1.2", "file": "filter-fx-1.2-dt.elemod",
