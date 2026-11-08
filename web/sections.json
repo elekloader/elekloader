@@ -5,7 +5,7 @@
       "id": "screens",
       "title": "Splash & screens",
       "nav": "Splash & screens",
-      "blurb": "Boot splashes and full-screen pictures for the Digitakt and the Digitone. One splash per build: any two draw over the same boot intro.",
+      "blurb": "Your own boot splash from a PNG or GIF, a few examples to start from, and full-screen pictures for the Digitakt and the Digitone. One splash per build: any two draw over the same boot intro.",
       "tools": [
         { "href": "#splash", "title": "Splash screen maker" }
       ],
@@ -13,7 +13,7 @@
         {
           "repo": "DigiAlchemydsp/DigiSplash",
           "title": "DigiSplash",
-          "blurb": "Animated boot splashes, plus Elektron's rare stock intro."
+          "blurb": "Five example splashes, including Elektron's rare stock intro. The rest of the set is on DigiSplash's release."
         },
         {
           "repo": "DigiAlchemydsp/DigiCandy",

@@ -103,6 +103,15 @@ DigiCandy, with the Splash screen maker as its tool: while either page is
 open, the side bar lists Mods and Splash screen maker under the section, and
 both pages show the same row of tabs.
 
+**Splash screens: a few examples, not the whole set.** Anyone can make a
+splash in the maker, so the shop lists five of DigiSplash's (`rare-splash`,
+`aba-bootanim`, `digitrash`, `match`, `vinyl`, for each device) and links the
+rest on its release. The daily updates only take newer files of mods the
+shop already lists, so the others stay out. A new splash pack goes in the
+same way: a few files, named under **Only these files** ([SHOP.md](SHOP.md)).
+Their `"thumb": null` turns off the release's one `thumb.png`, which shows
+none of them; a `thumb-<mod id>.png` per splash would bring pictures back.
+
 Each card's cover is the mod's name over line art, in its kind's colour.
 - **Keywords pick the art.** `MOTIFS` in `app.js` matches the mod's id and title,
   and the first match wins:
