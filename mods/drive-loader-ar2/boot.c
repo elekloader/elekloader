@@ -49,10 +49,16 @@ void dl_free(void *p)
         OP_DELETE(p);
 }
 
-/* dl.h: 1 ms for the tasks below the caller's, each 32 KB of a long check */
+/* dl.h: 1 ms for the tasks below the caller's, each 32 KB of a long check. Not during the
+ * boot's link: main() runs it before the UI task and the audio start, the T178 boot linked
+ * 6.3 MB without them, and the sleeps (about 2 ms each, 8 for each 32 KB of a file over both passes) made up
+ * about 4 s of an 8.7 MB link (T178 against T192). */
+static u8 booting;
+
 void dl_breathe(void)
 {
-    SLEEP_US(1000);
+    if (!booting)
+        SLEEP_US(1000);
 }
 
 struct dl_choice *dl_boot_choice;        /* the boot's set: dl_status[i] is line i's */
@@ -168,7 +174,9 @@ void dl_boot(void)
 {
     u32 t0 = DTCN0, t1;
     t_checks = t_link = 0;
+    booting = 1;
     boot();
+    booting = 0;
     t1 = DTCN0;
     if (!t_checks)
         t_checks = t1;

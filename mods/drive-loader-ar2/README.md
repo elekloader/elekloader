@@ -203,7 +203,11 @@ The page is stock's two-pane file view, the one SAMPLES and PROJECTS are built o
   it (analoghealth's remote keys expire after 2 s). So the background check and the save's
   steps wait 1 s after any key or encoder turn (`ev_key`, `ev_enc`, taking nothing), each check
   reads its file once (`dl_check_buf`), and long checks sleep 1 ms each 32 KB for the lower
-  tasks (`dl_breathe`).
+  tasks (`dl_breathe`). The boot's link doesn't sleep: it runs before the UI task and the
+  audio start.
+- **Long scans.** A file's CRC and its long strings (its hex) are read through tables, 32 KB
+  between breaths, and a hex string in one walk. In the emulator 18 files of 482 KB link in
+  3.2 s (11.1 s before, 2026-11-08).
 - **The boot's verdicts** come from the boot's own records, matched by file name
   (`dl_boot_choice`), so a second file with a loaded mod's id isn't shown as loaded.
 - **Reading files.** The page reads each file into the staging buffer, which it takes only

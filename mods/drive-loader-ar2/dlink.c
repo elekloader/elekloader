@@ -175,9 +175,19 @@ u32 dl_crc32(const u8 *p, u32 n)
             L.crc_table[i] = v;
         }
     }
-    while (n--) {
-        c = L.crc_table[(c ^ *p++) & 0xFF] ^ (c >> 8);
-        if (!(n & (DL_BREATHE - 1)))
+    while (n) {                          /* 32 KB stretches, four bytes a turn, a breath between */
+        u32 k = n > DL_BREATHE ? DL_BREATHE : n;
+        const u8 *e = p + k;
+        n -= k;
+        for (; p + 4 <= e; p += 4) {
+            c = L.crc_table[(c ^ p[0]) & 0xFF] ^ (c >> 8);
+            c = L.crc_table[(c ^ p[1]) & 0xFF] ^ (c >> 8);
+            c = L.crc_table[(c ^ p[2]) & 0xFF] ^ (c >> 8);
+            c = L.crc_table[(c ^ p[3]) & 0xFF] ^ (c >> 8);
+        }
+        while (p < e)
+            c = L.crc_table[(c ^ *p++) & 0xFF] ^ (c >> 8);
+        if (n)
             dl_breathe();
     }
     return ~c;

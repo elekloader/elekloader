@@ -72,28 +72,53 @@ int js_next(js_t *j, int close, int *first)
     return 1;
 }
 
+/* The scans of long strings run through tables, 32 KB between breaths: most of a +Drive mod
+ * file is one hex string, which the boot reads twice (found 2026-11-08: the per-character
+ * tests were most of an 8.7 MB boot link). STR_STOP marks what ends a run of plain string
+ * characters; HEX_V is a hex digit's value + 1, HEX_WS a space, 0 anything else. */
+static const u8 STR_STOP[256] = { [0 ... 0x1f] = 1, ['"'] = 1, ['\\'] = 1 };
+#define HEX_WS 17
+static const u8 HEX_V[256] = {
+    ['0'] = 1, ['1'] = 2, ['2'] = 3, ['3'] = 4, ['4'] = 5, ['5'] = 6, ['6'] = 7, ['7'] = 8,
+    ['8'] = 9, ['9'] = 10, ['a'] = 11, ['b'] = 12, ['c'] = 13, ['d'] = 14, ['e'] = 15, ['f'] = 16,
+    ['A'] = 11, ['B'] = 12, ['C'] = 13, ['D'] = 14, ['E'] = 15, ['F'] = 16,
+    [' '] = HEX_WS,                      /* a raw tab or line end is a control character: no JSON */
+};
+
+/* the end of the next stretch of a long scan: at most DL_BREATHE bytes on */
+static const u8 *stretch(const u8 *q, const u8 *e)
+{
+    return (u32)(e - q) > DL_BREATHE ? q + DL_BREATHE : e;
+}
+
 int js_str(js_t *j, const char **s, u32 *n)
 {
-    const char *q;
+    const u8 *q, *e, *ce;
     if (js_peek(j) != '"')
         return fail(j);
-    q = ++j->p;
-    while (q < j->end && *q != '"') {
-        if (!(((u32)(q - j->p) + 1) & (DL_BREATHE - 1)))
-            dl_breathe();
-        if ((u8)*q < 0x20)
+    q = (const u8 *)++j->p;
+    e = (const u8 *)j->end;
+    for (;;) {
+        ce = stretch(q, e);
+        while (q < ce && !STR_STOP[*q])
+            q++;
+        if (q >= e)
             return fail(j);
-        if (*q == '\\') {
-            if (++q >= j->end)
-                return fail(j);
+        if (q >= ce) {
+            dl_breathe();
+            continue;
         }
+        if (*q == '"')
+            break;
+        if (*q < 0x20)
+            return fail(j);
+        if (++q >= e)                    /* a backslash: the next character is escaped */
+            return fail(j);
         q++;
     }
-    if (q >= j->end)
-        return fail(j);
     *s = j->p;
-    *n = q - j->p;
-    j->p = q + 1;
+    *n = (u32)((const char *)q - j->p);
+    j->p = (const char *)q + 1;
     return 1;
 }
 
@@ -260,40 +285,64 @@ int js_skip(js_t *j)
     return fail(j);
 }
 
+/* One walk over the string: a hex string has no escape and no control character, so
+ * anything but a digit, whitespace between bytes or the closing quote fails it, as the
+ * string read followed by bytes.fromhex would. */
 int js_hex(js_t *j, u8 *dst, u32 max, u32 *n)
 {
-    const char *s, *e;
-    u32 len, k = 0;
-    int hi = -1, d;
-    if (!js_str(j, &s, &len))
-        return 0;
-    for (e = s + len; s < e; s++) {
-        if (!(((u32)(e - s)) & (DL_BREATHE - 1)))
-            dl_breathe();
-        if (*s == ' ' || *s == '\t' || *s == '\n' || *s == '\r') {
-            if (hi >= 0)                 /* bytes.fromhex: spaces only between bytes */
-                return fail(j);
-            continue;
-        }
-        d = digit(*s, 16);
-        if (d < 0)
-            return fail(j);
-        if (hi < 0) {
-            hi = d;
-            continue;
-        }
-        if (dst) {
-            if (k >= max)
-                return fail(j);
-            dst[k] = (u8)(hi << 4 | d);
-        }
-        k++;
-        hi = -1;
-    }
-    if (hi >= 0)
+    const u8 *q, *e, *ce;
+    u32 k = 0;
+    int hi = -1;
+    u32 a, b;
+    if (js_peek(j) != '"')
         return fail(j);
-    *n = k;
-    return 1;
+    q = (const u8 *)++j->p;
+    e = (const u8 *)j->end;
+    for (;;) {
+        ce = stretch(q, e);
+        while (q < ce) {
+            if (hi < 0) {                /* whole bytes, two digits at a time */
+                while (q + 1 < ce && (a = HEX_V[q[0]]) - 1u < 16u && (b = HEX_V[q[1]]) - 1u < 16u) {
+                    if (dst) {
+                        if (k >= max)
+                            return fail(j);
+                        dst[k] = (u8)((a - 1) << 4 | (b - 1));
+                    }
+                    k++;
+                    q += 2;
+                }
+                if (q >= ce)
+                    break;
+            }
+            a = HEX_V[*q];
+            if (a - 1u < 16u) {
+                if (hi < 0) {
+                    hi = (int)a - 1;
+                } else {
+                    if (dst) {
+                        if (k >= max)
+                            return fail(j);
+                        dst[k] = (u8)(hi << 4 | (a - 1));
+                    }
+                    k++;
+                    hi = -1;
+                }
+            } else if (a == HEX_WS) {
+                if (hi >= 0)             /* bytes.fromhex: spaces only between bytes */
+                    return fail(j);
+            } else if (*q == '"' && hi < 0) {
+                j->p = (const char *)q + 1;
+                *n = k;
+                return 1;
+            } else {
+                return fail(j);
+            }
+            q++;
+        }
+        if (q >= e)
+            return fail(j);
+        dl_breathe();
+    }
 }
 
 int js_eq(const char *s, u32 n, const char *lit)
