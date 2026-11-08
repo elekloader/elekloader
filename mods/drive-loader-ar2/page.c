@@ -386,7 +386,7 @@ static int read_folder(void)
     }
     for (i = 0, kept = 0; i < nfiles; i++)
         if (files[i].pick || files[i].on || files[i].boot == DL_ST_LOADED) {
-            nf[kept] = files[i];
+            dl_memcpy(&nf[kept], &files[i], sizeof *nf);
             nf[kept++].here = 0;
         }
     dl_free(files);
