@@ -376,7 +376,8 @@
       "device": "digitone-mk1",
       "sha256": "3b37cf1ce083ff34d099975a6a6bfef9cfc770aa7b31fa944ba05973d6a42423",
       "summary": "A pocket arcade for the Digitone mk1: a DOOM-style raycaster, Space Invaders and Snake on the 128x64 screen.",
-      "on_unit": "Tested on hardware; fully functional and stable."
+      "on_unit": "Tested on hardware; fully functional and stable.",
+      "thumb": {"tag": "v0.21", "file": "thumb.png", "sha256": "6cb259264c8b609027831d5037dbb9aba739ec597c351bae9db95a5e64195f41"}
     },
     {
       "repo": "DigiAlchemydsp/DigiSplash", "tag": "v1.2", "file": "dn-aba-bootanim.elemod",
