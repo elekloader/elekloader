@@ -589,8 +589,8 @@ details summary:hover { color: var(--text); }
 .dm-pane .dm-t code, .dm-pane .dm-t .dm-num, .dm-pane .dm-t td:first-child:not([colspan]), .dm-pane .dm-t td:last-child:not([colspan]) { white-space: nowrap; }
 .dm-t tr.dm-over td { background: var(--accent-soft); }
 .dm-pane.dm-over { outline: 1.5px dashed var(--accent); outline-offset: 4px; border-radius: 6px; }
-.dm-crumbs { display: flex; flex-wrap: wrap; align-items: center; gap: 2px; font-family: var(--mono); font-size: 13px; flex: 1 1 auto; min-width: 0; }
-.dm-crumbs button { background: none; border: 0; padding: 2px 4px; font: inherit; color: var(--accent); cursor: pointer; }
+.dm-crumbs { display: flex; flex-wrap: wrap; align-items: center; gap: 0; font-family: var(--mono); font-size: 13px; flex: 1 1 auto; min-width: 0; }
+.dm-crumbs button { background: none; border: 0; padding: 2px 0; font: inherit; color: var(--accent); cursor: pointer; }
 .dm-crumbs button[aria-current] { color: var(--text); cursor: default; }
 .dm-new { display: flex; gap: 6px; align-items: center; }
 .dm-new input { background: var(--well); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 3px 7px; font: inherit; font-size: 12.5px; width: 12em; }
