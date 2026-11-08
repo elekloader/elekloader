@@ -4,7 +4,8 @@
 // js/test/drive-vectors.json, whose replies are the ones js/tools/drive_vectors.py recorded from `elekloader mods`.
 // The patcher's own engine (Pyodide) is not on this test's site: only the view is tested. It connects, reads the build, lists /mods, refuses an upload the checker refuses (nothing is sent), uploads
 // the two example mods with the very requests the CLI sent, saves the set, reads it back, and deletes a file. Then the
-// folders: it makes one, uploads into it, keeps ticks across folders, goes 3 deep, finds a shop mod's copy in a folder,
+// folders: it makes one, uploads into it, keeps ticks across folders, goes 3 deep, browses and drops onto the folder tree,
+// finds a shop mod's copy in a folder,
 // and deletes an empty folder (DELETE DIR), as the loader's route takes them (mods/drive-loader-ar2/README.md).
 //
 //   node tests/test_drive_view.mjs      (Playwright with its Chromium; it skips without them)
@@ -263,8 +264,20 @@ try {
   // the shop's copy: one in a folder is found, and uploaded again where it is
   check('the shop finds the copy in /mods', /Upload again\s*replaces \/mods\/drive-hello\.elemod/.test(await page.textContent('#dm-catalog-list')),
     (await page.textContent('#dm-catalog-list')).replace(/\s+/g, ' '));
-  await page.setInputFiles('#dm-pick', [{ name: hello.name, mimeType: 'application/json', buffer: hello.raw }]);
+  // the tree: every folder, a click opens one, and files dropped on one go into it (as Transfer's browser)
+  check('the tree lists /mods and every folder', JSON.stringify(await page.$$eval('#dm-tree .dm-node', b => b.map(x => x.dataset.dir)))
+    === JSON.stringify(['', 'fx', 'fx/a', 'fx/a/b']), await page.textContent('#dm-tree'));
+  await page.click('#dm-tree .dm-node[data-dir=""]');
+  check('a tree folder opens with a click', (await page.textContent('#dm-into')) === '/mods'
+    && (await page.getAttribute('#dm-tree .dm-node[data-dir=""]', 'aria-current')) === 'true');
+  const dropped = await page.evaluateHandle(([n, hex]) => {
+    const dt = new DataTransfer();
+    dt.items.add(new File([Uint8Array.from(hex.match(/../g), x => parseInt(x, 16))], n, { type: 'application/json' }));
+    return dt;
+  }, [hello.name, hello.raw.toString('hex')]);
+  await page.dispatchEvent('#dm-tree .dm-node[data-dir="fx/a/b"]', 'drop', { dataTransfer: dropped });
   await page.waitForFunction(n => `fx/a/b/${n}` in window.__unit.files, hello.name, { timeout: 15000 });
+  check('files dropped on a tree folder go into it, and it opens', (await page.textContent('#dm-into')) === '/mods/fx/a/b');
   await page.click('#dm-crumbs button:has-text("/mods")');
   const rootDel = rowOf(hello.name).filter({ hasNot: page.locator('button.dm-open') }).locator('button.dm-danger');
   await rootDel.click(); await rootDel.click();

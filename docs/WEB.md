@@ -313,11 +313,13 @@ Pyodide, and `app.js` loads it only when the view first opens:
   drops SysEx over about 1 KB), the read starts again with 768-byte chunks
   and the view keeps that size, so the first read there takes one timeout
   (5 s) longer.
-- **`/mods`** shows one folder at a time, as the unit's MODS page and stock's
-  SAMPLES do: `..` (below `/mods`), its folders, then its `.elemod` files. A
-  folder opens with a click, and the path above the list goes back up. The
-  view reads every folder to 3 deep when it connects, so an empty folder
-  shows too, and each file is downloaded and checked alone against the build
+- **`/mods`** is a directory browser, as Elektron Transfer's: on the left
+  the folder tree (`/mods` and every folder to 3 deep, each with how many
+  mods are below it and how many are ticked), on the right the open folder:
+  `..` (below `/mods`), its folders, then its `.elemod` files. A folder
+  opens with a click, in the tree or the list, and the path above the list
+  goes back up. The view reads every folder when it connects, so an empty
+  folder shows too, and each file is downloaded and checked alone against the build
   (`drive.check`), with Download and Delete (a second press deletes). A
   folder row says how many mods are below it and how many are ticked. In a
   folder 3 deep, a note says that nothing deeper shows: the route lists no
@@ -329,7 +331,8 @@ Pyodide, and `app.js` loads it only when the view first opens:
   deletes an empty folder (a second press deletes), as SAMPLES' DELETE DIR;
   a folder with anything in it can't be deleted, and the route refuses one
   with `Folder not empty`.
-- **Uploads**, dropped or chosen, go into the open folder. They are checked
+- **Uploads**, dropped or chosen, go into the open folder; files dropped on
+  a folder in the tree go into that one. They are checked
   first, together with the files in `/mods`, in any folder, that they
   require. If one would not load, nothing is sent.
 - **The set** for the next boot is the ticked files, in every folder: the
@@ -350,8 +353,8 @@ mocked MIDI port: a fake unit with the made-up build of
 `js/test/drive-vectors.json`, whose uploads must be the requests
 `elekloader mods` sent, byte for byte. The fake unit keeps folders as the
 route does, and the test makes one, uploads into it, ticks across folders,
-goes 3 deep, finds a shop mod's copy in a folder and deletes an empty
-folder.
+goes 3 deep, browses and drops onto the folder tree, finds a shop mod's
+copy in a folder and deletes an empty folder.
 
 ## What stays private, and how
 

@@ -4,8 +4,9 @@
 // js/'s TypeScript as the site serves it (engine/): the build-checker (drive.js), the data container (container.js)
 // and the Data router's requests (datarpc.js), each the Python's, byte for byte. Every write goes through
 // datarpc.Mods, whose paths are inside /mods; an upload and the set are checked against the unit's build first.
-// /mods shows one folder at a time, to datarpc.DEPTH deep, as the unit's MODS page and stock's SAMPLES do; the
-// ticks are the build, so they stay across folders.
+// /mods is a directory browser, as Elektron Transfer's: the folder tree (to datarpc.DEPTH deep) on the left, the open
+// folder's folders and files on the right. Files dropped on a tree folder go into it. The ticks are the build, so they
+// stay across folders.
 
 const V = new URL(import.meta.url).search;
 const ENGINE = document.querySelector('meta[name="engine"]')?.content || 'engine';
@@ -241,8 +242,37 @@ function renderCrumbs() {
   $('dm-new-folder-btn').title = deep ? `Folders go ${datarpc.DEPTH} deep below /mods` : '';
 }
 
+/** The folder tree: /mods and every folder below it, each with how many mods are below it and how many are
+ * ticked. A click opens a folder; files dropped on one are uploaded into it. */
+function renderTree() {
+  const node = (dir, label, made = false) => {
+    const below = S.files.filter(f => inside(f.name, dir));
+    const ticked = below.filter(f => S.chosen.has(f.name)).length;
+    return el('button', { type: 'button', class: `dm-node dm-d${depth(dir)}${made ? ' dm-made' : ''}`, 'data-dir': dir,
+      'aria-current': dir === S.cwd ? 'true' : null, title: made ? 'New: made on the unit with its first upload' : null, onclick: () => open_(dir), ...dropTarget(dir) },
+      el('span', {}, label), el('span', { class: 'dm-count' }, `${below.length}${ticked ? ` · ${ticked}✓` : ''}`));
+  };
+  $('dm-tree').replaceChildren(node('', '/mods'), ...allFolders().map(d => node(d, `${base(d)}/`, S.made.has(d))));
+}
+
+/** Drag-and-drop handlers that upload dropped files into `dir` (a function: the open folder). */
+function dropTarget(dir) {
+  const where = () => (typeof dir === 'function' ? dir() : dir);
+  return {
+    ondragover: e => { if (![...e.dataTransfer.types].includes('Files')) return; e.preventDefault(); e.stopPropagation(); e.currentTarget.classList.add('dm-over'); },
+    ondragleave: e => e.currentTarget.classList.remove('dm-over'),
+    ondrop: async e => {
+      e.preventDefault(); e.stopPropagation(); e.currentTarget.classList.remove('dm-over');
+      const into = where();
+      if (into !== S.cwd) open_(into);
+      upload(await readFiles(e.dataTransfer.files, into));
+    },
+  };
+}
+
 function renderFiles() {
   renderCrumbs();
+  renderTree();
   const cwd = S.cwd, folders = allFolders();
   const here = folders.filter(d => parent(d) === cwd);
   const files = S.files.filter(f => parent(f.name) === cwd);
@@ -419,9 +449,8 @@ async function upload(files) {
   });
 }
 
-/** Chosen or dropped files, named into the open folder. */
-async function readFiles(list) {
-  const into = S.cwd;
+/** Chosen or dropped files, named into a folder (the open one unless given). */
+async function readFiles(list, into = S.cwd) {
   return Promise.all([...list].map(async f => ({ name: into ? `${into}/${f.name}` : f.name, raw: new Uint8Array(await f.arrayBuffer()) })));
 }
 
@@ -479,6 +508,8 @@ const drop = $('dm-drop');
 drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('dm-over'); });
 drop.addEventListener('dragleave', () => drop.classList.remove('dm-over'));
 drop.addEventListener('drop', async e => { e.preventDefault(); drop.classList.remove('dm-over'); upload(await readFiles(e.dataTransfer.files)); });
+{ const pane = $('dm-pane'), t = dropTarget(() => S.cwd);
+  for (const [k, f] of Object.entries(t)) pane.addEventListener(k.slice(2), f); }
 drop.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $('dm-pick').click(); } });
 let started = false;
 /** The view is open: ask for MIDI the first time (the browser's prompt comes then, not when the page loads). */
