@@ -193,6 +193,11 @@ The page is stock's two-pane file view, the one SAMPLES and PROJECTS are built o
   shows its file name and size until then, and its id and `!` after. Each file is checked
   alone for its own verdict (id, version, a refusal of the file itself), so no number of files
   reaches a set's limits. Ticking never reads a file (a row not yet checked shows no `!` and no reason box).
+- **The checked count.** Over the top row's right-hand column the file list shows `n/N`: `n`
+  the files read and checked so far, `N` the files listed, so it reads `N/N` (`256/256` for
+  256 files) once the background has checked every file (decided 2026-11-08, so that a test
+  plan can prove the check finished before its first key). It is drawn on `ev_draw` after a
+  frame that drew the list's rows, at the place those rows give, and not in the build list.
 - **A save in steps.** LOAD TO BUILD, UPDATE BUILD, UNLOAD and CLEAR BUILD check the new set one
   file a tick (`dl_check_start`, `dl_check_step`, `dl_check_finish`: the same check as
   `dl_check`), taking the staging buffer and the mutex for one file at a time, so the key path and

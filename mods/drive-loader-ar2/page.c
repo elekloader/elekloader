@@ -488,6 +488,39 @@ unsigned dl_page_text(int i)
     return (unsigned)label;
 }
 
+/* The checked count (decided 2026-11-08, the 256-mod run: a plan proves on screen that the
+ * background check is done before its first key). After a frame that drew the file list's rows,
+ * ev_draw writes "n/N" over the top row's right-hand column: n the files read and checked, N
+ * the files listed; n = N once the background has checked every file. The rows' own draw gives
+ * the place, in the canvas's coordinates (y = 0 the bottom row, so the top row has the largest
+ * y), so it moves with the list as stock lays it out. */
+static u8 rows_drawn;                    /* a row was drawn since the last ev_draw */
+static int count_x, count_y;
+
+static void count_at(int x, int y)
+{
+    if (!rows_drawn || y > count_y)
+        count_y = y;
+    count_x = x;
+    rows_drawn = 1;
+}
+
+void dl_page_overlay(void *bmp, void *ctrl)
+{
+    char t[24], *end = t + sizeof t;
+    int i, n = 0;
+    (void)ctrl;
+    if (!rows_drawn)
+        return;
+    rows_drawn = 0;
+    if (!view || !rows || mode != M_DRIVE || !nrows)
+        return;
+    for (i = 0; i < nrows; i++)
+        n += rows[i].checked;
+    num(cat(num(t, end, (u32)n), end, "/"), end, (u32)nrows);
+    TEXT(bmp, FONT_LIST, count_x, count_y, 2, 0, "XXXXXXXXX", "%s", t);
+}
+
 /* the right-hand column, where SAMPLES puts sizes (0x400e5f94: x + width - 9, right-aligned).
  * Files: whole KB rounded up, "!" for a file pass 1 refuses (a file over the 512 KB staging
  * buffer included). Build: KEEP (loaded now, stays), ADD (loads at the next boot), DROP
@@ -501,6 +534,7 @@ void dl_page_draw(void **f, void *item, void *canvas, int x, int y)
     drawn_at = ticks;
     if (!view || i < 0 || i >= list_n())
         return;
+    count_at(x + ((int (*)(void *))VCALL(V_WIDTH))(view) - 9, y);
     r = &rows[file_k(i)];
     t[0] = 0;
     if (mode == M_DRIVE) {
