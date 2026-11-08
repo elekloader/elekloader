@@ -196,8 +196,9 @@ The page is stock's two-pane file view, the one SAMPLES and PROJECTS are built o
 - **The checked count.** Over the top row's right-hand column the file list shows `n/N`: `n`
   the files read and checked so far, `N` the files listed, so it reads `N/N` (`256/256` for
   256 files) once the background has checked every file (decided 2026-11-08, so that a test
-  plan can prove the check finished before its first key). It is drawn on `ev_draw` after a
-  frame that drew the list's rows, at the place those rows give, and not in the build list.
+  plan can prove the check finished before its first key). It takes the place of the top
+  row's size and is drawn with the rows, so an open panel or box covers it; `ev_draw` only
+  marks each frame's end, from which the next frame knows the top row. Not in the build list.
 - **A save in steps.** LOAD TO BUILD, UPDATE BUILD, UNLOAD and CLEAR BUILD check the new set one
   file a tick (`dl_check_start`, `dl_check_step`, `dl_check_finish`: the same check as
   `dl_check`), taking the staging buffer and the mutex for one file at a time, so the key path and

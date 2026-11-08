@@ -489,36 +489,39 @@ unsigned dl_page_text(int i)
 }
 
 /* The checked count (decided 2026-11-08, the 256-mod run: a plan proves on screen that the
- * background check is done before its first key). After a frame that drew the file list's rows,
- * ev_draw writes "n/N" over the top row's right-hand column: n the files read and checked, N
- * the files listed; n = N once the background has checked every file. The rows' own draw gives
- * the place, in the canvas's coordinates (y = 0 the bottom row, so the top row has the largest
- * y), so it moves with the list as stock lays it out. */
-static u8 rows_drawn;                    /* a row was drawn since the last ev_draw */
-static int count_x, count_y;
+ * background check is done before its first key). The file list's top row shows "n/N" in its
+ * right-hand column in place of its size: n the files read and checked, N the files listed;
+ * n = N once the background has checked every file. The top row is the one with the largest y
+ * (y = 0 the bottom row), learnt from the frame before: ev_draw closes each frame. The count is
+ * drawn with the row, so an open panel or a box covers it as it covers the rows (drawn after
+ * the frame, on ev_draw, it covered the action panel's SELECT ALL: the 256-mod emulator record,
+ * 2026-11-08). */
+static u8 rows_drawn, top_known;         /* a row was drawn this frame; top_y is the last frame's */
+static int frame_top, top_y;
 
-static void count_at(int x, int y)
+static void row_seen(int y)
 {
-    if (!rows_drawn || y > count_y)
-        count_y = y;
-    count_x = x;
+    if (!rows_drawn || y > frame_top)
+        frame_top = y;
     rows_drawn = 1;
 }
 
 void dl_page_overlay(void *bmp, void *ctrl)
 {
-    char t[24], *end = t + sizeof t;
-    int i, n = 0;
+    (void)bmp;
     (void)ctrl;
-    if (!rows_drawn)
-        return;
+    top_known = rows_drawn;
+    if (rows_drawn)
+        top_y = frame_top;
     rows_drawn = 0;
-    if (!view || !rows || mode != M_DRIVE || !nrows)
-        return;
+}
+
+static char *checked_count(char *t, char *end)
+{
+    int i, n = 0;
     for (i = 0; i < nrows; i++)
         n += rows[i].checked;
-    num(cat(num(t, end, (u32)n), end, "/"), end, (u32)nrows);
-    TEXT(bmp, FONT_LIST, count_x, count_y, 2, 0, "XXXXXXXXX", "%s", t);
+    return num(cat(num(t, end, (u32)n), end, "/"), end, (u32)nrows);
 }
 
 /* the right-hand column, where SAMPLES puts sizes (0x400e5f94: x + width - 9, right-aligned).
@@ -534,7 +537,7 @@ void dl_page_draw(void **f, void *item, void *canvas, int x, int y)
     drawn_at = ticks;
     if (!view || i < 0 || i >= list_n())
         return;
-    count_at(x + ((int (*)(void *))VCALL(V_WIDTH))(view) - 9, y);
+    row_seen(y);
     r = &rows[file_k(i)];
     t[0] = 0;
     if (mode == M_DRIVE) {
@@ -548,6 +551,12 @@ void dl_page_draw(void **f, void *item, void *canvas, int x, int y)
         cat(t, end, "DROP");
     else
         cat(t, end, r->boot == DL_ST_LOADED ? "KEEP" : "ADD");
+    if (mode == M_DRIVE && top_known && y == top_y) {
+        t[0] = 0;
+        checked_count(t, end);
+        TEXT(canvas, FONT_LIST, x + ((int (*)(void *))VCALL(V_WIDTH))(view) - 9, y, 2, 0, "XXXXXXXXX", "%s", t);
+        return;
+    }
     TEXT(canvas, FONT_LIST, x + ((int (*)(void *))VCALL(V_WIDTH))(view) - 9, y, 2, 0, "XXXXMB", "%s", t);
 }
 
