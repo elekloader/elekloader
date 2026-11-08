@@ -290,7 +290,8 @@
       "device": "digitone-mk1", "needs_core": "4.0",
       "sha256": "c905fef2f5321a2362ed41cf9d918f4fc9f3b87d7bf4c9f024346a1ccb361708",
       "summary": "Adds the Digitone Keys User Mode page to the regular Digitone's TRIG rotation and a USER CFG page for assigning the eight encoders.",
-      "on_unit": "Tested on hardware; fully functional and stable."
+      "on_unit": "Tested on hardware; fully functional and stable.",
+      "thumb": {"tag": "v0.6a", "file": "thumb.png", "sha256": "cb67221e7bc23a624421d18adf4d85ff18f5447021004045a9ae06043623e5f2"}
     },
     {
       "repo": "DigiAlchemydsp/ESOTERIKA", "tag": "v1.2.1", "file": "crepus-1.0-os1.44.elemod",
