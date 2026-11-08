@@ -72,7 +72,7 @@ from build_web import SHOP_LICENCES, clash, footprint  # noqa: E402
 import thumbs  # noqa: E402
 from elekloader import link  # noqa: E402
 
-CATALOG = os.path.join(ROOT, 'web', 'catalog.json')
+CATALOG = os.environ.get('ELEKLOADER_CATALOG') or os.path.join(ROOT, 'web', 'catalog.json')   # build_web.catalog_path
 REPO = re.compile(r'[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+')
 TAG = re.compile(r'[A-Za-z0-9_.+-]{1,100}')
 FILE = re.compile(r'[\w.-]+\.(elemod|dtmod)')

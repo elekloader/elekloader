@@ -129,11 +129,22 @@ def package_zip():
     return out.getvalue(), [n for n, _ in files]
 
 
+def catalog_path(path=None):
+    """The shop's list: `path` if given, else $ELEKLOADER_CATALOG (the catalog.json of a clone of the shop's
+    repository, as pages.yml checks out the repository variable SHOP_REPO), else web/catalog.json."""
+    return path or os.environ.get('ELEKLOADER_CATALOG') or os.path.join(ROOT, 'web', 'catalog.json')
+
+
+def sections_path(catalog=None):
+    """sections.json, beside the list (catalog_path)."""
+    return os.path.join(os.path.dirname(os.path.abspath(catalog_path(catalog))), 'sections.json')
+
+
 def sections(items, path=None):
     """web/sections.json, checked: the shop's own sections, each a page of whole repositories' mods (app.js).
     -> [{id, title, nav, blurb, tools: [{href, title}], packs: [{repo, title, blurb}]}]. A repository in no section stays on the
     Mod Shop's shelves; one in the list that the shop does not carry (yet) is kept, and named."""
-    path = path or os.path.join(ROOT, 'web', 'sections.json')
+    path = path or sections_path()
     if not os.path.exists(path):
         return []
     with open(path, encoding='utf-8') as fh:
@@ -444,7 +455,9 @@ def main(argv=None):
     ap.add_argument('--core', nargs='*', default=[], help='the core mods to list (the release\'s)')
     ap.add_argument('--release', help='the release the cores come from (its tag, fetched): the '
                                       'page says whether its package is that release\'s')
-    ap.add_argument('--catalog', help="the mod shop's curated list (web/catalog.json)")
+    ap.add_argument('--catalog', help="the mod shop's curated list (default: $ELEKLOADER_CATALOG, else "
+                                      "web/catalog.json)")
+    ap.add_argument('--sections', help="the shop's sections (default: sections.json beside the list)")
     ap.add_argument('--catalog-dir', help='where its files were downloaded')
     ap.add_argument('--catalog-list', metavar='CATALOG',
                     help='print each item as "release repo tag file" or "commit repo '
@@ -458,6 +471,8 @@ def main(argv=None):
     ap.add_argument('--no-thumbs', action='store_true', help="leave the shop's thumbnails out (SHOP_THUMBS=false)")
     ap.add_argument('--out', help='the site folder to write (emptied first)')
     a = ap.parse_args(argv)
+    if a.catalog is None and os.environ.get('ELEKLOADER_CATALOG'):
+        a.catalog = catalog_path()
     if a.pyodide_url:
         print(PYODIDE_URL)
         return 0
@@ -505,7 +520,8 @@ def main(argv=None):
     for n, png in pictures.items():
         site['shop/' + n] = png
     site['shop/index.json'] = json.dumps([e for e, _ in items], indent=1).encode()
-    site['shop/sections.json'] = json.dumps(sections([e for e, _ in items]), indent=1).encode()
+    site['shop/sections.json'] = json.dumps(sections([e for e, _ in items], a.sections or sections_path(a.catalog)),
+                                            indent=1).encode()
     if a.upstream is None:                 # the upstream lists the repository has
         up = os.path.join(ROOT, 'web', 'upstream')
         a.upstream = sorted(os.path.join(up, n) for n in os.listdir(up)
@@ -533,6 +549,10 @@ def main(argv=None):
         'elekloader': __version__, 'commit': commit, 'site_version': token,
         # the repository the site is built from (the workflow's), for its links: issues, commits
         'repository': os.environ.get('GITHUB_REPOSITORY') or 'elekloader/elekloader',
+        # the repository the shop's list comes from (SHOP_REPO), for its forms: submit, remove, report a picture;
+        # and its commit, when it is not this one
+        'shop_repository': os.environ.get('SHOP_REPO') or os.environ.get('GITHUB_REPOSITORY') or 'elekloader/elekloader',
+        'shop_commit': os.environ.get('SHOP_COMMIT') or None,
         'commit_date': git('log', '-1', '--format=%cI').decode().strip(),
         # the zip is HEAD's package; a working tree with changes there is not in it
         'package_changes_not_in_zip': dirty,

@@ -111,7 +111,7 @@
     <div class="filters">
       <span class="chips" id="device-buttons" role="group" aria-label="Device"></span>
       <span class="grow"></span>
-      <a class="btn outline submit-mod" href="https://github.com/elekloader/elekloader/issues/new?template=submit-mod.yml" target="_blank" rel="noopener"
+      <a class="btn outline submit-mod" href="https://github.com/elekloader/elekloader/issues/new?template=submit-mod.yml" data-shop-form="submit-mod.yml" target="_blank" rel="noopener"
          title="Made a mod? Submit its GitHub release: a check runs on it, and a maintainer adds it to the shop.">Submit a mod</a>
       <label class="inline" for="f-sort">Sort</label>
       <select id="f-sort">
@@ -603,7 +603,7 @@ python -m elekloader.patch --stock Digitakt_OS1.53.syx --mod mods/core/out/core-
         <li><strong>A maintainer merges</strong> the pull request the bot opened, and the next deploy puts your mod on
           the Mod Shop.</li>
       </ol>
-      <p><a class="btn primary" href="https://github.com/elekloader/elekloader/issues/new?template=submit-mod.yml" target="_blank" rel="noopener">Open the Submit a mod form</a></p>
+      <p><a class="btn primary" href="https://github.com/elekloader/elekloader/issues/new?template=submit-mod.yml" data-shop-form="submit-mod.yml" target="_blank" rel="noopener">Open the Submit a mod form</a></p>
 
       <h2>After it's in</h2>
       <p><strong>Publish a release, and the shop takes it.</strong> Every day the shop looks for newer releases of the
@@ -621,7 +621,7 @@ python -m elekloader.patch --stock Digitakt_OS1.53.syx --mod mods/core/out/core-
         <li><strong>Build your <code>.elemod</code></strong> for each OS version.
           <a href="https://github.com/elekloader/elekloader/blob/main/docs/ADAPTING.md" rel="noreferrer" target="_blank">Adapting your mod</a></li>
         <li><strong>Take a mod out</strong> of the shop.
-          <a href="https://github.com/elekloader/elekloader/issues/new?template=remove-mod.yml" rel="noreferrer" target="_blank">Remove a mod form</a></li>
+          <a href="https://github.com/elekloader/elekloader/issues/new?template=remove-mod.yml" data-shop-form="remove-mod.yml" rel="noreferrer" target="_blank">Remove a mod form</a></li>
         <li><strong>Stuck?</strong> Leave a comment on your issue and a maintainer will look.
           <a href="https://github.com/elekloader/elekloader/issues" rel="noreferrer" target="_blank">The issues</a></li>
       </ul>

@@ -444,7 +444,7 @@ function screen(path) {
   return c;
 }
 // the "Report a picture" form, about this card
-const reportPicture = (en, path) => `https://github.com/${repository()}/issues/new?template=report-picture.yml`
+const reportPicture = (en, path) => `https://github.com/${shopRepository()}/issues/new?template=report-picture.yml`
   + `&title=${encodeURIComponent('Picture: ' + en.title)}`
   + `&mod=${encodeURIComponent(`${en.title} (${(en.shop[0] || {}).repo || ''}, ${path})`)}`;
 
@@ -1483,8 +1483,10 @@ async function boot() {
     const r = await engine.call('init');
     st.info = r.info;
     st.build = r.build;
-    // the repository the site was built from: its "Submit a mod" form
-    for (const a of document.querySelectorAll('a.submit-mod')) a.href = `https://github.com/${repository()}/issues/new?template=submit-mod.yml`;
+    // the shop's forms (submit, remove), in the repository its list comes from
+    for (const a of document.querySelectorAll('a[data-shop-form]')) {
+      a.href = `https://github.com/${shopRepository()}/issues/new?template=${a.dataset.shopForm}`;
+    }
     const got = r.fetched.filter(f => /\/(pyodide\/|elekloader\.zip|bridge\.py|core\/|build\.json)/.test(f.url));
     const over = got.reduce((a, f) => a + f.transferred, 0);
     $('engine').textContent = `Engine ready: elekloader ${st.info.version}, Python ${r.python}, `
@@ -1773,6 +1775,8 @@ function note(text) {
 
 // the repository the site was built from (build.json), or elekloader's
 const repository = () => (/^[\w.-]+\/[\w.-]+$/.test(st.build?.repository || '') ? st.build.repository : 'elekloader/elekloader');
+// the repository the shop's list and its forms are in (SHOP_REPO when the build had one; else the site's own)
+const shopRepository = () => (/^[\w.-]+\/[\w.-]+$/.test(st.build?.shop_repository || '') ? st.build.shop_repository : repository());
 
 function renderAbout(r) {
   const b = r.build || {};
