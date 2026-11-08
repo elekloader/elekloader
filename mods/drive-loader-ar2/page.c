@@ -458,9 +458,13 @@ static const char *const acts_drive[] = {"SELECT ALL", "DESELECT ALL", "LOAD TO 
 static const char *const acts_build[] = {"SELECT ALL", "DESELECT ALL", "UNLOAD"};
 #define NACT_DRIVE 5
 #define NACT_BUILD 3
-#define I_ACT 100                        /* functor index of the action panel's rows */
-#define I_LEFT 300                       /* and of the left panel's row */
-#define I_EMPTY 200                      /* the file list's one row when /mods holds no file */
+/* functor indices: list rows are 1..list_n(), and the list has no file limit (one row a file in
+ * /mods), so the other rows sit far above any list row. At 100/200/300 the 256-mod emulator
+ * record drew list row 100 as SELECT ALL, rows from 200 as NO MODS ON +DRIVE and rows from 300
+ * as VIEW BUILD (2026-11-08). A row needs a heap entry, so no list reaches 0x10000000. */
+#define I_ACT 0x10000000                 /* functor index of the action panel's rows */
+#define I_EMPTY 0x20000000               /* the file list's one row when /mods holds no file */
+#define I_LEFT 0x30000000                /* and of the left panel's row */
 
 /* a row's label: list rows 1.., the action panel I_ACT.., the left panel I_LEFT */
 unsigned dl_page_text(int i)
