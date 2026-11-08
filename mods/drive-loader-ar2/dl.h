@@ -91,6 +91,13 @@ static inline void dl_wr16(u8 *p, u32 v) { p[0] = v >> 8; p[1] = v; }
 void *dl_alloc(u32 n);
 void dl_free(void *p);
 
+/* Long work (a file's CRC, the scans of its long strings) calls dl_breathe with each 32 KB it
+ * has done: on the unit it sleeps 1 ms, so lower tasks (USB, the Data router, analoghealth's
+ * RPC) run while the UI task checks the MODS page's files (found 2026-11-08: one 482 KB file's
+ * check held them for seconds in the emulator); on the host it does nothing. */
+#define DL_BREATHE 0x8000u
+void dl_breathe(void);
+
 void dl_memcpy(void *d, const void *s, u32 n);
 void dl_memset(void *d, int c, u32 n);
 int dl_strcmp(const char *a, const char *b);

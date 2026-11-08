@@ -79,6 +79,8 @@ int js_str(js_t *j, const char **s, u32 *n)
         return fail(j);
     q = ++j->p;
     while (q < j->end && *q != '"') {
+        if (!(((u32)(q - j->p) + 1) & (DL_BREATHE - 1)))
+            dl_breathe();
         if ((u8)*q < 0x20)
             return fail(j);
         if (*q == '\\') {
@@ -266,6 +268,8 @@ int js_hex(js_t *j, u8 *dst, u32 max, u32 *n)
     if (!js_str(j, &s, &len))
         return 0;
     for (e = s + len; s < e; s++) {
+        if (!(((u32)(e - s)) & (DL_BREATHE - 1)))
+            dl_breathe();
         if (*s == ' ' || *s == '\t' || *s == '\n' || *s == '\r') {
             if (hi >= 0)                 /* bytes.fromhex: spaces only between bytes */
                 return fail(j);

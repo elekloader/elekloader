@@ -175,8 +175,11 @@ u32 dl_crc32(const u8 *p, u32 n)
             L.crc_table[i] = v;
         }
     }
-    while (n--)
+    while (n--) {
         c = L.crc_table[(c ^ *p++) & 0xFF] ^ (c >> 8);
+        if (!(n & (DL_BREATHE - 1)))
+            dl_breathe();
+    }
     return ~c;
 }
 

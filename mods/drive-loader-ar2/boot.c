@@ -49,6 +49,12 @@ void dl_free(void *p)
         OP_DELETE(p);
 }
 
+/* dl.h: 1 ms for the tasks below the caller's, each 32 KB of a long check */
+void dl_breathe(void)
+{
+    SLEEP_US(1000);
+}
+
 struct dl_choice *dl_boot_choice;        /* the boot's set: dl_status[i] is line i's */
 static u32 armed_ticks;
 static u8 armed;
@@ -79,7 +85,9 @@ s32 dl_read_file(const char *name, u8 *buf, u32 max)
         return -1;
     }
     while (got < max) {                  /* to the file's end, or max */
-        r = dl_fs_read(&f, buf + got, max - got);
+        r = dl_fs_read(&f, buf + got, max - got < DL_BREATHE ? max - got : DL_BREATHE);
+        if (r > 0)                       /* 32 KB at a time, 1 ms for the tasks below between */
+            dl_breathe();
         if (r < 0) {
             dl_fs_close(&f);
             return -3;

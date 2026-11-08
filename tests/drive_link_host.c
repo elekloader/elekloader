@@ -40,6 +40,10 @@ void dl_free(void *p)
     free(p);
 }
 
+void dl_breathe(void)
+{
+}
+
 static u8 *slurp(const char *path, u32 *n)
 {
     FILE *f = fopen(path, "rb");
