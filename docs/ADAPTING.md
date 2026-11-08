@@ -262,6 +262,19 @@ each OS version: look it up for the release you target, and build one
 `.elemod` per device and OS (a mod's `device` and `os`, or one of its
 `ports`, pick the stock file: 3.10).
 
+### Raw SHARC payloads (Digitakt II 1.17)
+
+Experimental. On the Digitakt II 1.17 a mod can add code and data to the DSP's
+boot stream with `sharc_raw` ([FORMAT.md](FORMAT.md#digitakt-ii-raw-sharc-payload)):
+relocatable DSP objects (digikit's `.dko.json`), which the linker places in the
+L2 the stock stream leaves unused, tables mods add rows to, and patches of whole
+stock instructions that reach the new code. There is no bridge and no callback
+contract here: the core that declares the tables and patches the stock voice
+loop defines what a row means. In `mod.json`, `"sharc_raw": "sharc_raw.json"`
+names the file the SDK reads (`objects` may name a `.dko.json` in the mod's
+folder). The DSP side is the Digitone II's kernels' counterpart; its machines are
+not SDK machines.
+
 ### SHARC mods (core-dn2 0.2, Digitone II)
 
 Experimental. On the Digitone II 1.12 a mod can run code on the DSP, at the
@@ -4160,6 +4173,13 @@ Some differences from an octabam build, by design:
 | `active SHARC mod requires a qualified matching core bridge` / `has unqualified active SHARC core bytes or entry` | the core is older than core-dn2 0.2, or its bridge is not the one the profile pins | build with core-dn2 0.2 or newer, its bridge unchanged; set `"resources": {"core": "0.2"}` |
 | `active SHARC stack exceeds the profile limit` | the mod declares more than 428 bytes of stack (the bridge's 116 and yours may not pass 544) | use less stack, and declare what you use |
 | `a build takes one SHARC mod; this one has ...` | the build has two master-output SHARC mods | use one |
+| `a jsr/jmp at 0x... goes to the odd address 0x...` | a site or `.run` code jumps to an odd address in the mods' RAM: the ColdFire stops with an address error there (an emulator may run on) | align the code: `.balign 2` at the start of each `.run` section |
+| `this device takes no raw SHARC payload` | a mod with `sharc_raw` is built for a device or OS without a raw profile | build it for the Digitakt II 1.17 |
+| `sharc_raw load 0x... is unaligned or outside the owned L2` / `sharc_raw patch 0x... is outside the profile patch range` | a load or patch outside the profile's ranges ([FORMAT.md](FORMAT.md#digitakt-ii-raw-sharc-payload)) | place loads in the owned L2, 4-byte aligned; patch whole stock instructions in the L1 range |
+| `two raw SHARC patches overlap at 0x...` | two mods patch the same stock DSP instruction | build with one of them, or give the hook to a table both add rows to |
+| `the SHARC symbol S is defined by A and B` / `the SHARC symbol S is defined by no mod in the build` | two DSP objects export S, or a relocation names a symbol nobody exports | prefix DSP globals with the mod id; add the mod that exports S |
+| `A adds to the SHARC table T, which no mod declares` / `both give row N of the SHARC table T` | a row for a missing table, or two mods claiming one indexed row | add the mod that declares T (the core); give each machine its own row |
+| `the raw SHARC objects and tables need L2 to 0x..., past 0x...` | the DSP objects and tables do not fit the owned L2 | build with fewer DSP mods, or smaller code |
 
 ## 6. Definition of done
 
