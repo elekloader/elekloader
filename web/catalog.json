@@ -370,14 +370,16 @@
       "device": "digitone-mk1", "needs_core": "4.0",
       "sha256": "d6be0f9bc55e566672a0453c0fbe8c45e919ad17cc8088c9532edb98f82cfebb",
       "summary": "A master effect suite for the Digitone mk1/Keys and Digitakt mk1: ring, fold, tilt EQ, crush, pitch/stereo, delays, macros and performance pads.",
-      "on_unit": "Tested on hardware; fully functional and stable."
+      "on_unit": "Tested on hardware; fully functional and stable.",
+      "thumb": {"tag": "v4.0c", "file": "thumb.png", "sha256": "57a06dcf11062f09d996685057fba4827a50e167e36675221a291490bd952997"}
     },
     {
       "repo": "DigiAlchemydsp/Tone-FX", "tag": "v4.0c", "file": "tonefx-4.0c.elemod",
       "device": "digitone-mk1", "needs_core": "4.0",
       "sha256": "9ff2fc72225a009666d903676129748960a577f552fa0e5c946f24a50e49616d",
       "summary": "A master effect suite for the Digitone mk1/Keys and Digitakt mk1: ring, fold, tilt EQ, crush, pitch/stereo, delays, macros and performance pads.",
-      "on_unit": "Tested on hardware; fully functional and stable."
+      "on_unit": "Tested on hardware; fully functional and stable.",
+      "thumb": {"tag": "v4.0c", "file": "thumb.png", "sha256": "57a06dcf11062f09d996685057fba4827a50e167e36675221a291490bd952997"}
     },
     {
       "repo": "DigiAlchemydsp/DigiAlchemy-GamePack-1", "tag": "v0.21", "file": "digidoom-0.21.elemod",
@@ -809,14 +811,16 @@
       "device": "digitakt-mk1",
       "sha256": "4239d3613835dabf8d072acaee43e028bb469e60435ce838081a2e3f94e476c8",
       "summary": "A master effect suite for the Digitone mk1/Keys and Digitakt mk1: ring, fold, tilt EQ, crush, pitch/stereo, delays, macros and performance pads.",
-      "on_unit": "Tested on hardware; fully functional and stable."
+      "on_unit": "Tested on hardware; fully functional and stable.",
+      "thumb": {"tag": "v4.0c", "file": "thumb.png", "sha256": "57a06dcf11062f09d996685057fba4827a50e167e36675221a291490bd952997"}
     },
     {
       "repo": "DigiAlchemydsp/Tone-FX", "tag": "v4.0c", "file": "tonefx-4.0c-dt.elemod",
       "device": "digitakt-mk1",
       "sha256": "9cb5a223ac0de3bb0c34a0ad71f21ecdbcd8e0c29782f12cdda50178fc4ee37f",
       "summary": "A master effect suite for the Digitone mk1/Keys and Digitakt mk1: ring, fold, tilt EQ, crush, pitch/stereo, delays, macros and performance pads.",
-      "on_unit": "Tested on hardware; fully functional and stable."
+      "on_unit": "Tested on hardware; fully functional and stable.",
+      "thumb": {"tag": "v4.0c", "file": "thumb.png", "sha256": "57a06dcf11062f09d996685057fba4827a50e167e36675221a291490bd952997"}
     },
     {
       "repo": "DigiAlchemydsp/DigiSplash", "tag": "v1.2", "file": "dt-aba-bootanim.elemod",
