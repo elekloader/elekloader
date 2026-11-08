@@ -39,6 +39,7 @@ CORE_KNOBS;
 
 static const int16_t looks[NOWN] = {LOOK_IDS, UI_LOOK, RANGE_LOOK};
 static int32_t value[NOWN];             /* each pair's value, 8.8 */
+static uint8_t set[NOWN];               /* value[k] holds a value (0 is one) */
 static uint8_t own_ui[84];
 
 struct {
@@ -74,8 +75,10 @@ static int p_get(int32_t id, int32_t *v)
     int k = pair_of(id, 0);
     if (k < 0)
         return 0;
-    if (!value[k])
+    if (!set[k]) {
         value[k] = lo(k) + ((hi(k) - lo(k)) * 3 / 8 & ~0xff);
+        set[k] = 1;
+    }
     *v = value[k];
     if (k == RANGE_PAIR && own_ix(id) < 0)  /* the stock knob: where core draws the own one */
         *v = dial(*v);
