@@ -165,7 +165,8 @@ def test_core_ar2_sites():
         assert x['op'] == 'jmp' and len(x['stock']) // 2 in (6, 8), x
         assert int(d[k], 16) == int(x['addr'], 16) + len(x['stock']) // 2, k
     # pages whose entry a function answers (core-ar2 0.6), asked before core_pages
-    assert mod['collections'].get('core_page_fns') == 4 and mod['collections'].get('core_pages') == 4
+    # (0.11: with the page key's room as +Drive spares, tests/test_drive.py)
+    assert all(mod['collections'].get(c) == {'entry': 4, 'spare': 149} for c in ('core_page_fns', 'core_pages'))
     # the page keys' lists (core-ar2 0.4): each view's `moveq #n,%d1; movel
     # %d1,%sp@-; movel #list,%d0` is a site, and defsym has its list, length
     # and resume
