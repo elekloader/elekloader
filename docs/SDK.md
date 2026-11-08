@@ -25,8 +25,8 @@ every type and field. For other kinds of mod, start with
 
 ## Quickstart
 
-A saw with two pages: LEVEL, and TUNE in semitones, whose label shows its
-value and whose glyph is an arrow when it is tuned up. Put it in
+A saw with two pages: LEVEL, and TUNE in semitones, whose value shows a
+sign when it is tuned up, and whose glyph is then an arrow. Put it in
 `my-saw/machine.c`:
 
 ```c
@@ -41,8 +41,9 @@ static const struct elek_knob knobs[] = {
 
 static void present(const struct elek_ui *ui)
 {
-    elek_label_num(ui->view[TUNE].label, "T", ui->knob[TUNE]);    /* "T-12" .. "T12" */
-    ui->view[TUNE].glyph = ui->knob[TUNE] > 0 ? &sharp : 0;      /* 0: the stock graphic */
+    int32_t tune = ui->knob[TUNE];
+    ui->view[TUNE].value = elek_num(ui, tune > 0 ? "+" : "", tune);   /* "-12" .. "+12" */
+    ui->view[TUNE].glyph = tune > 0 ? &sharp : 0;                    /* 0: the stock graphic */
 }
 
 struct state { uint32_t phase; };           /* this voice's, kept from block to block */
@@ -152,7 +153,8 @@ as in [Adapting your mod](ADAPTING.md).
 without a label is absent, and the second needs the first. One knob may
 sit on both pages: it keeps one value. A machine that leaves `.pages` out
 shows one blank page titled with its name. The value under a knob is its
-mapped value ([Device differences](#device-differences) has its width).
+mapped value, or the text `present` gives it ([Device differences](#device-differences)
+has its width).
 
 ### `present` and `elek_view`
 
@@ -161,22 +163,39 @@ mapped value ([Device differences](#device-differences) has its width).
 page, such as naming LFO destinations, or for a page-less machine's blank
 page) and `ui->knob[ID]`, every knob's mapped value, on every page.
 
-It writes `ui->view[ID]`, which each call starts from the declaration:
+It sets `ui->view[ID]`, which each call starts from the declaration:
 
-- `label`: write it with `elek_label_set(label, "SAW")` or
-  `elek_label_num(label, "T", value)` (there is no libc). It shows at most
-  five characters; `elek_label_num` cuts the prefix to fit the number, and
-  writes `#` when the number alone needs more. Nonprintable bytes show
-  as `?`, and a device may show letters in upper case.
+```c
+ui->view[OSC].label = "OSC2";                                    /* text: assign it */
+ui->view[TYPE].value = ui->knob[TYPE] ? "PULS" : "SAW";
+ui->view[FINE].value = elek_fixed(ui, fine > 0 ? "+" : "", fine, 1);   /* 24: "+2.4" */
+ui->view[FREQ].value = elek_num(ui, freq > 0 ? "+" : "", freq);        /* "+7", "-12" */
+```
+
+- `label`: the knob's name. Null is the declared one.
+- `value`: the text for `ui->knob[ID]`, under the knob and in the pop-up.
+  Null, which each call starts as, or empty shows the number. For tenths,
+  declare a finer range, such as `-500..500` for -50.0..50.0 cents.
 - `hidden`: nonzero blanks the knob on every page. It keeps its value and
   its LFO identity; its encoder does not edit it while hidden.
 - `glyph`: sixteen rows of sixteen bits, top row first, bit 15 leftmost;
   it replaces the knob's graphic. Null is the stock graphic. Keep glyphs
   in static const storage: the screen reads them after the call.
 
+Text is a string literal, constant data, or what `elek_num(ui, prefix, v)`
+or `elek_fixed(ui, prefix, v, places)` returns: `v` in decimal, with
+`places` decimals for `elek_fixed`, after the prefix, which is cut to fit.
+Do not point at a local buffer: it is gone when the companion reads the
+text. A text shows at most five characters, `#` when a
+number alone needs more; nonprintable bytes show as `?`, and a device may
+show letters in upper case.
+
 A companion calls `.present` when the machine, the track, the page or a
 knob's value has changed since its last call, and may call it again with
-the same inputs. Keep it pure: no state, no counting calls.
+the same inputs. To show a value it was not given (a lock, an LFO's, the
+pop-up's), it calls `.present` again with that value in `ui->knob[ID]`,
+the other inputs as before, and uses only `view[ID].value`. Keep it pure:
+no state, no counting calls.
 
 ### `render` and `elek_voice`
 
@@ -314,7 +333,7 @@ changes.
 | First machine id | 4 | 4 | 5 (4 is MIDI) |
 | SDK machines in a build | 32 | 15 | 16 |
 | LFO destination lists | 2 | 2 | 3 |
-| Value text | `#` past five characters under the knob; the pop-up shows the whole number | `#` past five characters | `#` past five characters |
+| Value text | a number `#` past five characters under the knob, whole in the pop-up | a number `#` past five characters | a number `#` past five characters |
 | Voices | one a track | eight, on four tracks | sixteen voice slots, which the OS allocates to tracks |
 | After `render` | the native overdrive, filter and AMP; whether the AMP applies velocity is not checked | the companion's AMP envelope, which applies velocity (use it for timbre, not level), then the filter | the voice envelope, the selected stock or custom filter, pan, sends and mixer, as an mk2 synth's |
 
@@ -338,15 +357,16 @@ python -m elekloader.sdk.sdk_alpha_host examples/sdk-sine
 SDK Sine (id 123), Q31 (ColdFire)
   FINE  -50..50, default 0
 present on page 0, track 0, the other knobs at FINE=0:
-  FINE=-50   FINE "FINE" glyph
-  FINE=0     FINE "FINE" glyph
-  FINE=50    FINE "FINE" glyph
+  FINE=-50   FINE "FINE"="-50" glyph
+  FINE=0     FINE "FINE"="0" glyph
+  FINE=50    FINE "FINE"="+50" glyph
 render: note 60, velocity 100, track 0, 375 blocks: peak 0.500, about 261.6 Hz
 ```
 
 Each knob goes to its min, default and max, with the others at their
 `--knob` values (or defaults), and each line shows every knob's label as
-`present` left it, plus `hidden` and `glyph` where set. The render line
+`present` left it, then its value text quoted (or, when `present` sets
+none, the number the device shows), plus `hidden` and `glyph` where set. The render line
 gives the peak (1.0 is full scale) and the pitch it found.
 
 | option | what it does |

@@ -6,7 +6,8 @@
                                             [--blocks N] [--wav out.wav] [--glyphs]
 
 It compiles the mod's C sources with the host compiler (cc, or $CC) and a small host main, prints what
-present shows with each knob at its min, default and max, then renders the note and prints its peak and
+present shows (each knob's label, then its value text quoted, or the number shown when it sets none) with
+each knob at its min, default and max, then renders the note and prints its peak and
 frequency. --float builds the SHARC's float samples instead of the ColdFire's Q31.
 
 The machine is found without reading the registration: every source is compiled with a prelude that
@@ -52,15 +53,16 @@ static void present(const struct elek_machine *m, const int32_t *knob, int32_t p
                     uint32_t id, int32_t value)
 {
     struct elek_view view[ELEK_UI_KNOB_MAX];
+    struct elek_scratch scratch = {0};
     int32_t values[ELEK_UI_KNOB_MAX];
     memcpy(values, knob, sizeof values);
     values[id] = value;
     for (uint32_t i = 0; i < m->knob_count; ++i) {
         memset(&view[i], 0, sizeof view[i]);
-        strncpy(view[i].label, m->knobs[i].label, ELEK_UI_LABEL_MAX);
+        view[i].label = m->knobs[i].label;
         view[i].glyph = m->knobs[i].glyph;
     }
-    struct elek_ui ui = {.knob = values, .view = view, .page = page, .track = track};
+    struct elek_ui ui = {.knob = values, .view = view, .page = page, .track = track, .scratch = &scratch};
     m->present(&ui);
     printf("present %u %d\n", id, value);
     for (uint32_t i = 0; i < m->knob_count; ++i) {
@@ -70,7 +72,8 @@ static void present(const struct elek_machine *m, const int32_t *knob, int32_t p
                 printf("%04x", view[i].glyph->rows[r]);
         else
             printf("-");
-        printf(" %.*s\n", ELEK_UI_LABEL_MAX, view[i].label);
+        printf(" %.*s\n", ELEK_UI_LABEL_MAX, view[i].label ? view[i].label : m->knobs[i].label);
+        printf("value %u %.*s\n", i, ELEK_UI_LABEL_MAX, view[i].value ? view[i].value : "");
     }
 }
 
@@ -165,10 +168,15 @@ def frequency(samples, rate=RATE):
     return rate * (len(rises) - 1) / (rises[-1] - rises[0]) if len(rises) > 1 else None
 
 
-def show(view):
-    hidden, glyph, label = view
-    text = ''.join(c if ' ' <= c <= '~' else '?' for c in label)
-    return '"%s"%s%s' % (text, ' hidden' if hidden else '', ' glyph' if glyph else '')
+def printable(text):
+    return ''.join(c if ' ' <= c <= '~' else '?' for c in text)
+
+
+def show(view, number):
+    """The label, then the value text quoted, or the number the companion shows when it is empty."""
+    hidden, glyph, label, value = view
+    return '"%s"=%s%s%s' % (printable(label), '"%s"' % printable(value) if value else number,
+                             ' hidden' if hidden else '', ' glyph' if glyph else '')
 
 
 def draw(glyph):
@@ -215,20 +223,23 @@ def host(moddir, sample_float=False, note=60, knobs=(), blocks=375, wav=None, gl
     for label, lo, d, hi in decl:
         print('  %-5s %d..%d, default %d' % (label, lo, hi, d))
     lines = out.stdout.splitlines()
-    samples = [float(x) for x in lines if not x.startswith(('present ', 'view '))]
-    presents = [line for line in lines if line.startswith(('present ', 'view '))]
+    samples = [float(x) for x in lines if not x.startswith(('present ', 'view ', 'value '))]
+    presents = [line for line in lines if line.startswith(('present ', 'view ', 'value '))]
     if presents:
         print('present on page %d, track %d, the other knobs at %s:' % (page, track, ', '.join('%s=%d' % (k[0], v) for k, v in zip(decl, values))))
     for line in presents:
         if line.startswith('present '):
             kid, value = map(int, line.split()[1:])
-            views = []
+            views, shown = [], values[:kid] + [value] + values[kid + 1:]
             print('  %-11s' % ('%s=%d' % (decl[kid][0], value)), end='')
             continue
-        _, vid, hidden, glyph, label = (line + ' ').split(' ', 4)
-        views.append((int(hidden), glyph != '-' and glyph, label[:-1]))
+        if line.startswith('view '):
+            _, vid, hidden, glyph, label = (line + ' ').split(' ', 4)
+            views.append([int(hidden), glyph != '-' and glyph, label[:-1]])
+            continue
+        views[-1].append(line.split(' ', 2)[2])
         if len(views) == len(decl):
-            print('  '.join('%s %s' % (decl[i][0], show(v)) for i, v in enumerate(views)))
+            print('  '.join('%s %s' % (decl[i][0], show(v, shown[i])) for i, v in enumerate(views)))
             if glyphs:
                 for i, v in enumerate(views):
                     if v[1]:

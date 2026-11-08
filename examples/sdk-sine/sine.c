@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
 /* Private SDK example: a sine at the note played, FINE cents (-50..50) away. FINE's glyph shows which way
- * it is tuned: an arrow down when flat, a sine when in tune, an arrow up when sharp. On the Digitone II
+ * it is tuned: an arrow down when flat, a sine when in tune, an arrow up when sharp; its value shows a sign
+ * when sharp, +7 say. On the Digitone II
  * the sound is sine-dn2.s, the same sine on the SHARC. */
 #include "elekloader/sdk_alpha_machine.h"
 
@@ -21,6 +22,7 @@ static void present(const struct elek_ui *ui)
 {
     int32_t cents = ui->knob[FINE];
     ui->view[FINE].glyph = &tuning[cents < 0 ? FLAT : cents > 0 ? SHARP : IN_TUNE];
+    ui->view[FINE].value = elek_num(ui, cents > 0 ? "+" : "", cents);
 }
 
 #ifdef ELEK_TARGET_SHARC

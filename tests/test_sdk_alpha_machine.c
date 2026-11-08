@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
 /* The shared part (mods/sdk-alpha/machine.c) as the Digitone II builds it, table by table: the value
- * mapping over the whole signed range, the defaults' inverse, the value text, the index's checks, label
- * sanitising, the skip of unchanged inputs and the glyph blit. */
+ * mapping over the whole signed range, the defaults' inverse, the value text (the number or .present's),
+ * the index's checks, label sanitising, the skip of unchanged inputs and the glyph blit. */
 #include <assert.h>
 #include <stdint.h>
 #include <string.h>
@@ -26,9 +26,10 @@ const struct sdk_alpha_entry *dn2_sdk_active(void)
 }
 
 /* The present callback: one label (0 keeps the declared one), visibility and glyph per call, from these. */
-static const char *want_label;
-static uint32_t want_visible = 1, presents;
-static int32_t seen_page, seen_value;
+static const char *want_label, *want_value;  /* want_value "V": "V" and knob 0's value */
+static int null_label;                       /* assigns label a null pointer */
+static uint32_t want_visible = 1, presents, seen_track_p;
+static int32_t seen_page, seen_value, seen_other;
 static char seen_label[ELEK_UI_LABEL_MAX + 1];
 static const struct elek_glyph glyph = { .rows = { 0x8000, [15] = 0x0001 } };
 static const struct elek_glyph *want_glyph;
@@ -37,12 +38,19 @@ static void present(const struct elek_ui *ui)
     ++presents;
     seen_page = ui->page;
     seen_value = ui->knob[0];
-    memcpy(seen_label, ui->view[0].label, sizeof seen_label);
-    assert(!ui->view[0].hidden && ui->view[0].glyph == 0);  /* each call starts from the declaration */
-    if (want_label) {
-        size_t n = strlen(want_label);
-        memcpy(ui->view[0].label, want_label, n < ELEK_UI_LABEL_MAX ? n + 1 : ELEK_UI_LABEL_MAX);
-    }
+    seen_other = ui->knob[1];
+    seen_track_p = ui->track;
+    strcpy(seen_label, ui->view[0].label);
+    /* each call starts from the declaration */
+    assert(!ui->view[0].hidden && ui->view[0].glyph == 0 && !ui->view[0].value && !ui->view[1].value);
+    if (want_value && !strcmp(want_value, "V"))
+        ui->view[0].value = elek_num(ui, "V", ui->knob[0]);
+    else
+        ui->view[0].value = want_value;
+    if (want_label)
+        ui->view[0].label = want_label;
+    if (null_label)
+        ui->view[0].label = 0;
     ui->view[0].hidden = !want_visible;
     if (want_glyph) ui->view[0].glyph = want_glyph;
 }
@@ -168,6 +176,11 @@ int main(void)
         assert(!strcmp(seen_label, "A"));
         assert(!strcmp(sdk_alpha_label(e, 0), labels[i].shown) && !strcmp(sdk_alpha_label(e, 1), "B"));
     }
+    null_label = 1;                                     /* null: the declared label */
+    present_label(e, "X", 1);
+    assert(!strcmp(sdk_alpha_label(e, 0), "A"));
+    null_label = 0;
+    present_label(e, "", 1);
     assert(!present_label(e, "", 1));                   /* the same presentation is no change */
     assert(present_label(e, "", 0) && !sdk_alpha_visible(e, 0) && sdk_alpha_visible(e, 1));
     assert(!sdk_alpha_label(e, 2) && !sdk_alpha_visible(e, 2));
@@ -199,6 +212,35 @@ int main(void)
     assert(sdk_alpha_label(e, 0) == knobs[0].label);           /* not the last presented: as declared */
     sdk_alpha_present(e, 1, ELEK_UI_NO_PAGE, raw, 0);
     assert(presents == 5);
+
+    /* A value text is .present's for the shown value, the others as it last saw them; else the number. */
+    int32_t shown[2] = { R / 2, 9 << 8 };
+    sdk_alpha_present(e, 3, 1, shown, 0);
+    char label[ELEK_UI_LABEL_MAX + 1];
+    memcpy(label, sdk_alpha_label(e, 0), sizeof label);
+    want_label = "VALUE";
+    want_value = "V";
+    active = e;
+    sdk_alpha_value_texts[0](R, text);
+    assert(!strcmp(text, "V50") && seen_value == 50 && seen_other == 9 && seen_page == 1 && seen_track_p == 3);
+    sdk_alpha_value(e, 0, 0, text, 1);                  /* the pop-up: the same text */
+    assert(!strcmp(text, "V-50"));
+    sdk_alpha_value_texts[1](64 << 8, text);            /* knob 1 has no value text: its number */
+    assert(!strcmp(text, "64"));
+    want_value = "a\x01" "bcdefg";
+    sdk_alpha_value_texts[0](R, text);
+    assert(!strcmp(text, "a?bcd"));
+    want_value = "";                                    /* empty: the number */
+    sdk_alpha_value_texts[0](R, text);
+    assert(!strcmp(text, "50"));
+    assert(!strcmp(sdk_alpha_label(e, 0), label));     /* the presentation is untouched */
+    want_label = 0;
+    sdk_alpha_present(sdk_alpha_find(101), 1, 0, raw, 0);
+    want_value = "V";
+    sdk_alpha_value_texts[0](R / 2, text);              /* not the machine last presented: the defaults */
+    assert(!strcmp(text, "V0") && seen_other == 0 && seen_page == ELEK_UI_NO_PAGE && seen_track_p == 0);
+    want_value = 0;
+    active = 0;
 
     /* The blit: cleared, then the glyph's top row at y + 16 and its bottom row at y. */
     memset(lit, 1, sizeof lit);

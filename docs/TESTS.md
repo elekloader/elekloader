@@ -110,7 +110,7 @@ and the shared `mods/sdk-alpha/machine.c` with each mk1 adapter) and
 `test_sdk_alpha_host.py` (`sdk_alpha_host` on the examples).
 
 The other `test_sdk_alpha_*.py` files boot the machines they define on
-each device's emulator: machines, knobs, labels, hiding, glyphs, LFO
+each device's emulator: machines, knobs, labels, value texts, hiding, glyphs, LFO
 destinations, saving, defaults and sound. Device facts (addresses,
 navigation, screen geometry) live in `tests/sdk_alpha_devices.py`. Run one
 file at a time, as `tests/sdk_alpha_harness.py` says. The Digitakt and
