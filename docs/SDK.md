@@ -123,7 +123,7 @@ python -m elekloader.patch --stock $STOCK --mod build/core-*.elemod \
 ```
 
 Lint prints two `OK:` lines, the second `OK: links as core 4.1 >
-machine-pages 1.6 > my-saw 0.1`; patch ends with `WROTE test.syx`. Load it
+machine-pages 1.7 > my-saw 0.1`; patch ends with `WROTE test.syx`. Load it
 as in [Adapting your mod](ADAPTING.md).
 
 ## Reference
@@ -192,7 +192,16 @@ samples at `ELEK_SAMPLE_RATE` (48 kHz). `v` gives:
 - `track` from 0, `pitch` in MIDI semitones, 16.16 (69 << 16 is 440 Hz),
   and `velocity` 1..127;
 - `start`, nonzero in a note's first block: the code decides what to reset;
-- `state`, read with `ELEK_STATE`.
+- `state`, read with `ELEK_STATE`;
+- `idle`, the frames the voice was not rendered since its last render
+  (below), up to `UINT32_MAX`, and 0 in the first render after its state
+  is zeroed.
+
+**Silent voices.** A voice whose AMP envelope has ended, with no note
+starting it, is not rendered: the companion writes silence for it and
+counts its frames. A machine whose state should move on regardless
+catches up from `idle`: a free-running oscillator adds `inc * idle` to its
+phase.
 
 **Voice state.** The companion keeps a 256-byte block
 (`ELEK_VOICE_STATE_MAX`) for each voice, and passes the same block to every

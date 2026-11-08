@@ -75,7 +75,9 @@ port adds `sdk_alpha.c` and the shared `../sdk-alpha/machine.c`, with
   applies the AMP envelope to FM before its output, so this applies it to
   the machine: ATK, DEC, SUS and REL from the voice's slots 66-69, started
   by `ev_voice_on` and released by `fw_gate_off`, and the note's velocity.
-  A voice whose envelope has ended is silent.
+  A voice whose envelope has ended is silent and not rendered; from 0.4
+  `struct dnm_voice`'s `idle` counts its frames until its next render,
+  and an SDK machine gets it as `elek_voice`'s `idle`.
 
 The fields of `struct dnm_machine` and `struct dnm_knob` are in
 [docs/ADAPTING.md](../../docs/ADAPTING.md), "Machines on the Digitone".
