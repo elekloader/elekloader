@@ -277,7 +277,8 @@ opt back in, submit the form again with **Updates** unticked, or put
 ## A thumbnail
 
 Your card can show a picture of the device's screen: a `thumb.png` in the
-release, 128×64 pixels in two colours. [THUMBNAILS.md](THUMBNAILS.md) has
+release, or a `thumb-<mod id>.png` for each mod of a pack, 128×64 pixels in
+two colours. [THUMBNAILS.md](THUMBNAILS.md) has
 the rules, how to make one, and how it's reviewed.
 
 ## Take a mod out
