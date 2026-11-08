@@ -331,7 +331,8 @@
       "device": "digitone-mk1", "needs_core": "4.0",
       "sha256": "82daf461ea712751bb85f7404b43292620c610df77d701531cf840ce2f9d6101",
       "summary": "13 extra filter types for the Digitakt mk1 and Digitone mk1/Keys, all cheaper than the stock Elektron filter types.",
-      "on_unit": "Tested on hardware; fully functional and stable."
+      "on_unit": "Tested on hardware; fully functional and stable.",
+      "thumb": {"tag": "v1.0", "file": "thumb.png", "sha256": "263e205d7cedb3114d7fd452e3a504cda57bb9979409bf7a8185200a2dea5967"}
     },
     {
       "repo": "DigiAlchemydsp/DRUM-PLUS", "tag": "v1.0.1", "file": "drumplus-1.0.elemod",
@@ -772,7 +773,8 @@
       "device": "digitakt-mk1", "needs_core": "4.0",
       "sha256": "1a311d337c243a0d4a204172d61671c7aeacdc1fa535f0138def6f074f333656",
       "summary": "13 extra filter types for the Digitakt mk1 and Digitone mk1/Keys, all cheaper than the stock Elektron filter types.",
-      "on_unit": "Tested on hardware; fully functional and stable."
+      "on_unit": "Tested on hardware; fully functional and stable.",
+      "thumb": {"tag": "v1.0", "file": "thumb.png", "sha256": "263e205d7cedb3114d7fd452e3a504cda57bb9979409bf7a8185200a2dea5967"}
     },
     {
       "repo": "DigiAlchemydsp/DigiFilter", "tag": "v1.3", "file": "digifilter-1.3.elemod",
