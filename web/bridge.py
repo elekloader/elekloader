@@ -18,7 +18,7 @@ import shutil
 import time
 
 import elekloader
-from elekloader import devices, elemod, formats, gui, patch
+from elekloader import devices, elemod, formats, gui, patch, splash
 
 WORK = '/work'
 STOCK, MODS, CORE, OUT = (os.path.join(WORK, d) for d in ('stock', 'mods', 'core', 'out'))
@@ -60,7 +60,10 @@ def describe(path):
 def info(args, data):
     return {'version': elekloader.__version__, 'supported': devices.supported(),
             'devices': [_device(d) for d in devices.devices()],
-            'exts': list(elemod.EXTS)}
+            'exts': list(elemod.EXTS),
+            # what the Splash screen maker can make, and its limits
+            'splash': {'targets': splash.targets(), 'max_frames': splash.MAX_FRAMES,
+                       'max_sequence': splash.MAX_SEQUENCE, 'rate': splash.TICKS_PER_SECOND, 'intro': splash.INTRO_TICKS}}
 
 
 def add_core(args, data):
@@ -114,6 +117,24 @@ def add_mod(args, data):
         os.remove(path)
         return {'ok': False, 'file': name, 'error': str(e)}
     return {'ok': True, 'mod': describe(path)}
+
+
+def make_splash(args, data):
+    """The Splash screen maker: the page's frames (1024 bytes each, packed) and
+    sequence -> the .elemod's text and its file name. The page adds it as it
+    adds any file of yours (add_mod)."""
+    raw = data.to_bytes() if data is not None else b''
+    if len(raw) % splash.FRAME:
+        return {'ok': False, 'error': 'the frames are not whole 1024-byte frames'}
+    frames = [raw[i:i + splash.FRAME] for i in range(0, len(raw), splash.FRAME)]
+    try:
+        doc = splash.make(frames, args.get('sequence'), device=args['device'], os=args['os'],
+                          title=args.get('title') or 'My splash', loop=bool(args.get('loop', True)),
+                          author=args.get('author') or '', source=_name(args['source']) if args.get('source') else '')
+    except splash.SplashError as e:
+        return {'ok': False, 'error': str(e)}
+    return {'ok': True, 'name': splash.file_name(args['device'], args['os']),
+            'text': splash.dumps(doc).decode()}
 
 
 def remove_mod(args, data):
@@ -214,8 +235,8 @@ def build(args, data, progress=None):
             'store': man.get('store')}
 
 
-CALLS = {f.__name__: f for f in (info, add_core, set_stock, add_mod, remove_mod, mods, tick,
-                                  check, version)}
+CALLS = {f.__name__: f for f in (info, add_core, set_stock, add_mod, make_splash, remove_mod, mods,
+                                  tick, check, version)}
 
 
 def call(name, args_json, data=None, progress=None):
