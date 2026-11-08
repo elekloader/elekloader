@@ -250,7 +250,7 @@ function renderTree() {
       'aria-current': dir === S.cwd ? 'true' : null, onclick: () => open_(dir), ...dropTarget(dir) },
       el('span', {}, label), el('span', { class: 'dm-count' }, `${below.length}${ticked ? ` · ${ticked}✓` : ''}`));
   };
-  $('dm-tree').replaceChildren(node('', '/mods'), ...allFolders().map(d => node(d, `${base(d)}/`)));
+  $('dm-tree').replaceChildren(node('', '/mods'), ...allFolders().map(d => node(d, base(d))));
 }
 
 /** Drag-and-drop handlers that upload dropped files into `dir` (a function: the open folder). */
