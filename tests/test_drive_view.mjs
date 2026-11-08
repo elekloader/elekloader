@@ -5,8 +5,8 @@
 // The patcher's own engine (Pyodide) is not on this test's site: only the view is tested. It connects, reads the build, lists /mods, refuses an upload the checker refuses (nothing is sent), uploads
 // the two example mods with the very requests the CLI sent, keeps a mod of the saved build (/mods/active, chosen on the
 // unit) from being deleted, and deletes another. Then the folders: it makes one (an empty upload to FOLDER/.dir), uploads
-// into it, goes 3 deep, browses
-// and drops onto the folder tree, finds a shop mod's copy in a folder,
+// into it, goes 3 deep, drops
+// onto folder rows and the path, finds a shop mod's copy in a folder,
 // and deletes an empty folder (DELETE DIR), as the loader's route takes them (mods/drive-loader-ar2/README.md).
 //
 //   node tests/test_drive_view.mjs      (Playwright with its Chromium; it skips without them)
@@ -261,33 +261,29 @@ try {
   // the shop's copy: one in a folder is found, and uploaded again where it is
   check('the shop finds the copy in /mods', /Upload again\s*replaces \/mods\/drive-hello\.elemod/.test(await page.textContent('#dm-catalog-list')),
     (await page.textContent('#dm-catalog-list')).replace(/\s+/g, ' '));
-  // the tree: every folder, a click opens one, and files dropped on one go into it (as Transfer's browser)
-  check('the tree lists /mods and every folder', JSON.stringify(await page.$$eval('#dm-tree .dm-node', b => b.map(x => x.dataset.dir)))
-    === JSON.stringify(['', 'fx', 'fx/a', 'fx/a/b']), await page.textContent('#dm-tree'));
-  await page.click('#dm-tree .dm-node[data-dir=""]');
-  check('a tree folder opens with a click', (await page.textContent('#dm-into')) === '/mods'
-    && (await page.getAttribute('#dm-tree .dm-node[data-dir=""]', 'aria-current')) === 'true');
+  // drops: files dropped on a folder row, or on a part of the path on top, go into that folder
+  await page.click('#dm-crumbs button[data-dir="fx/a"]');
+  check('a part of the path opens its folder', (await page.textContent('#dm-into')) === '/mods/fx/a');
   const dropped = await page.evaluateHandle(([n, hex]) => {
     const dt = new DataTransfer();
     dt.items.add(new File([Uint8Array.from(hex.match(/../g), x => parseInt(x, 16))], n, { type: 'application/json' }));
     return dt;
   }, [hello.name, hello.raw.toString('hex')]);
   await page.evaluate(() => { delete window.__unit.files.active; });   // unloaded on the unit; read with the next listing
-  await page.dispatchEvent('#dm-tree .dm-node[data-dir="fx/a/b"]', 'drop', { dataTransfer: dropped });
+  await page.dispatchEvent('#dm-file-list tr[data-dir="fx/a/b"]', 'drop', { dataTransfer: dropped });
   await page.waitForFunction(n => `fx/a/b/${n}` in window.__unit.files, hello.name, { timeout: 15000 });
-  check('files dropped on a tree folder go into it, and it opens', (await page.textContent('#dm-into')) === '/mods/fx/a/b');
-  // ... and on a folder row in the list
-  await page.click('#dm-tree .dm-node[data-dir="fx"]');
+  await page.waitForFunction(() => /^Uploaded/.test(document.getElementById('dm-upload-msg').textContent));
+  check('files dropped on a folder row go into it, and it opens', (await page.textContent('#dm-into')) === '/mods/fx/a/b');
   const dropped2 = await page.evaluateHandle(([n, hex]) => {
     const dt = new DataTransfer();
     dt.items.add(new File([Uint8Array.from(hex.match(/../g), x => parseInt(x, 16))], n, { type: 'application/json' }));
     return dt;
   }, ['row-drop.elemod', hello.raw.toString('hex')]);
-  await page.waitForFunction(() => !document.querySelector('#view-drive button:disabled:not(#dm-save-set):not(#dm-new-folder-btn):not(.dm-danger)'));
-  await page.dispatchEvent('#dm-file-list tr[data-dir="fx/a"]', 'drop', { dataTransfer: dropped2 });
+  await page.waitForFunction(() => !document.getElementById('view-drive').dataset.busy);
+  await page.dispatchEvent('#dm-crumbs button[data-dir="fx/a"]', 'drop', { dataTransfer: dropped2 });
   await page.waitForFunction(() => 'fx/a/row-drop.elemod' in window.__unit.files, null, { timeout: 15000 });
   await page.waitForFunction(() => /^Uploaded/.test(document.getElementById('dm-upload-msg').textContent));
-  check('files dropped on a folder row go into it', (await page.textContent('#dm-into')) === '/mods/fx/a');
+  check('files dropped on a part of the path go into that folder', (await page.textContent('#dm-into')) === '/mods/fx/a');
   const rd = page.locator('#dm-file-list button[aria-label="Delete fx/a/row-drop.elemod"]');
   await rd.click(); await rd.click();
   await page.waitForFunction(() => !('fx/a/row-drop.elemod' in window.__unit.files));

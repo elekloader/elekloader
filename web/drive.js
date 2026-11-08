@@ -4,8 +4,8 @@
 // js/'s TypeScript as the site serves it (engine/): the build-checker (drive.js), the data container (container.js)
 // and the Data router's requests (datarpc.js), each the Python's, byte for byte. Every write goes through
 // datarpc.Mods, whose paths are inside /mods; an upload and the set are checked against the unit's build first.
-// /mods is a directory browser, as Elektron Transfer's: the folder tree (to datarpc.DEPTH deep) on the left, the open
-// folder's folders and files on the right. Files dropped on a tree folder go into it. The view only puts files on the
+// /mods shows one folder at a time (to datarpc.DEPTH deep): its path on top, each part of which opens that folder, then its
+// folders and files. Files dropped on a folder row or a part of the path go into that folder. The view only puts files on the
 // unit: the build (/mods/active) is chosen on the unit's MODS page, and a mod in it can't be deleted here (MOD IN USE).
 
 const V = new URL(import.meta.url).search;
@@ -75,10 +75,12 @@ const S = {
 async function busy(f) {
   if (S.busy) return;
   S.busy = true;
+  $('view-drive').dataset.busy = '1';                    // for tests: a request is under way
   const held = [...$('view-drive').querySelectorAll('button')].filter(b => !b.disabled);
   for (const b of held) b.disabled = true;
   try { return await f(); } finally {
     S.busy = false;
+    delete $('view-drive').dataset.busy;
     for (const b of held) b.disabled = false;   // a button disabled for its own reason stays so
     if (S.build && !$('dm-files').hidden) renderCrumbs();
   }
@@ -222,10 +224,10 @@ function open_(dir) { S.cwd = dir; say('dm-upload-msg', ''); renderFiles(); rend
 
 function renderCrumbs() {
   const parts = S.cwd ? S.cwd.split('/') : [];
-  const crumbs = [el('button', { type: 'button', 'aria-current': parts.length ? null : 'location', onclick: () => open_('') }, '/mods')];
+  const crumbs = [el('button', { type: 'button', 'data-dir': '', 'aria-current': parts.length ? null : 'location', onclick: () => open_(''), ...dropTarget('') }, '/mods')];
   parts.forEach((p, k) => {
     const dir = parts.slice(0, k + 1).join('/');
-    crumbs.push('/', el('button', { type: 'button', 'aria-current': k === parts.length - 1 ? 'location' : null, onclick: () => open_(dir) }, p));
+    crumbs.push('/', el('button', { type: 'button', 'data-dir': dir, 'aria-current': k === parts.length - 1 ? 'location' : null, onclick: () => open_(dir), ...dropTarget(dir) }, p));
   });
   $('dm-crumbs').replaceChildren(...crumbs);
   $('dm-into').textContent = S.cwd ? `/mods/${S.cwd}` : '/mods';
@@ -233,17 +235,6 @@ function renderCrumbs() {
   $('dm-new-folder').disabled = deep;
   $('dm-new-folder-btn').disabled = deep;
   $('dm-new-folder-btn').title = deep ? `Folders go ${datarpc.DEPTH} deep below /mods` : '';
-}
-
-/** The folder tree: /mods and every folder below it, each with how many mods are below it. A click opens a folder; files dropped on one are uploaded into it. */
-function renderTree() {
-  const node = (dir, label) => {
-    const below = S.files.filter(f => inside(f.name, dir));
-    return el('button', { type: 'button', class: `dm-node dm-d${depth(dir)}`, 'data-dir': dir,
-      'aria-current': dir === S.cwd ? 'true' : null, onclick: () => open_(dir), ...dropTarget(dir) },
-      el('span', {}, label), el('span', { class: 'dm-count' }, String(below.length)));
-  };
-  $('dm-tree').replaceChildren(node('', '/mods'), ...allFolders().map(d => node(d, base(d))));
 }
 
 /** Drag-and-drop handlers that upload dropped files into `dir` (a function: the open folder). */
@@ -263,7 +254,6 @@ function dropTarget(dir) {
 
 function renderFiles() {
   renderCrumbs();
-  renderTree();
   const cwd = S.cwd, folders = allFolders();
   const here = folders.filter(d => parent(d) === cwd);
   const files = S.files.filter(f => parent(f.name) === cwd);

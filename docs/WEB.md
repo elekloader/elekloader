@@ -316,12 +316,9 @@ Pyodide, and `app.js` loads it only when the view first opens:
   drops SysEx over about 1 KB), the read starts again with 768-byte chunks
   and the view keeps that size, so the first read there takes one timeout
   (5 s) longer.
-- **`/mods`** is a directory browser, as Elektron Transfer's: on the left
-  the folder tree (`/mods` and every folder to 3 deep, each with how many
-  mods are below it), on the right the open folder: `..` (below `/mods`),
-  its folders (`/NAME`), then its `.elemod` files. A folder
-  opens with a click, in the tree or the list, and the path above the list
-  goes back up. The view reads every folder when it connects, so an empty
+- **`/mods`** shows one folder at a time: its path on top (`/mods/fx/a`),
+  each part of which opens that folder, then `..` (below `/mods`), its
+  folders (`/NAME`) and its `.elemod` files. A folder opens with a click. The view reads every folder when it connects, so an empty
   folder shows too, and each file is downloaded for its id and version
   (and for what it requires, when an upload needs it), with Download and Delete (a second press deletes). A mod
   `/mods/active` names, the saved build, can't be deleted, as the unit's
@@ -338,7 +335,7 @@ Pyodide, and `app.js` loads it only when the view first opens:
   a folder with anything in it can't be deleted, and the route refuses one
   with `Folder not empty`.
 - **Uploads**, dropped or chosen, go into the open folder; files dropped on
-  a folder, in the tree or in the list, go into that one. They are checked
+  a folder row, or on a part of the path, go into that folder. They are checked
   first, together with the files in `/mods`, in any folder, that they
   require. If one would not load, nothing is sent.
 - **The last boot** shows `/mods/.status`.
@@ -354,7 +351,7 @@ mocked MIDI port: a fake unit with the made-up build of
 `js/test/drive-vectors.json`, whose uploads must be the requests
 `elekloader mods` sent, byte for byte. The fake unit keeps folders as the
 route does, and the test makes one, uploads into it, keeps a mod of the
-saved build from being deleted, checks the view never writes `/mods/active`, goes 3 deep, browses and drops onto the folder tree, finds a shop mod's
+saved build from being deleted, checks the view never writes `/mods/active`, goes 3 deep, drops onto folder rows and the path, finds a shop mod's
 copy in a folder and deletes an empty folder.
 
 ## What stays private, and how
