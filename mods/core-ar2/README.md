@@ -1075,6 +1075,16 @@ Opt-in, by the knob's id; a parameter without an entry is as in 0.10.
   so a depth's get notes its id and DMA timer 0's count, and the text
   within 4 ms takes it, as `core_held_step` does.
 
+## Room for +Drive mods (0.11)
+
+In a build with the Drive Loader (docs/FORMAT.md, "+Drive mods") each table
+gets spare entries the loader fills at boot. Core's events (every `ev_*`
+table) declare 256, as many as the loader links, so each +Drive mod can add
+a handler to any event; `core_machines` declares 10, its hidden slots
+34..43. Every other table keeps the linker's 16. An `ev_*` spare costs its
+4 bytes of RAM in the flashed build, about 15 KB in all, which the +Drive
+area gives up.
+
 ## Checked so far
 
 On a unit (OS 1.73). With test images built by rytm-mods-src (its `elemod`

@@ -4,7 +4,8 @@ elekloader's mod manager as a TypeScript package with no dependencies, for web p
 - Elektron OS files: the Digitakt mk1 and II, the Digitone mk1 and II, the Octatrack, the Analog Rytm MKII and the Analog Four MKII;
 - the `.elemod` checks and the linker;
 - the build with its verification;
-- the web page's bridge.
+- the web page's bridge;
+- +Drive mods: the build-checker (`drive.ts`), the data container (`container.ts`) and the unit's Data router over any MIDI port (`datarpc.ts`).
 
 The Python package in this repository is the reference. For the same stock file and mods, this engine writes the same files byte for byte (the `.syx`, the `.bin`, the manifest, the symbol map). It refuses the same things with the same messages and says the same about each mod. `tools/parity.ts` checks all of that against the Python.
 
@@ -34,7 +35,7 @@ The calls are `web/bridge.py`'s: the same names and arguments, and the same resu
 
 Each `src/` file says which Python module it ports.
 
-Nothing here touches the network or a device, and files stay in memory (`Store`).
+Nothing here touches the network, and files stay in memory (`Store`). Only `datarpc.ts` talks to a device, through a port its caller gives it.
 
 ## The kit, for websites
 
@@ -57,6 +58,8 @@ The unit tests compare against what Python gave for synthetic inputs (`test/vect
 - SHA-256 and HMAC;
 - `json.loads` and its messages, `int(x, 0)`, `repr()`, `json.dumps`;
 - the zip reader.
+
+`test/drive-vectors.json` (`tools/drive_vectors.py`) holds the build-checker's results for every fixture of `tests/test_drive.py` and a recording of `elekloader mods`' requests and a fake unit's replies, which `test/drive.test.ts` replays. Run the tool again after a change to `drive.py`, `container.py` or `datarpc.py`.
 
 With your own stock files and mods (which never go in the repository), compare everything against the Python:
 

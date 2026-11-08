@@ -736,11 +736,11 @@ def _(B):
 
 external('link.place', '<>: <> is a <> reference to a <> address', 'tests/test_octatrack.py',
          ('is a DSP reference to a ', 'is a ColdFire reference to a DSP address'))
-external('link.put', '<>: a DSP address out of range (0x<>)', 'tests/test_octatrack.py',
+external('put_reloc', '<>: a DSP address out of range (0x<>)', 'tests/test_octatrack.py',
          'a DSP address out of range (0x1000000)')
 
 
-@row('link.put', '<>: a 16-bit PC-relative reference spans <> bytes')
+@row('put_reloc', '<>: a 16-bit PC-relative reference spans <> bytes')
 def _(B):
     def far(at):
         def f(d):
@@ -907,6 +907,37 @@ def _(B):
         [knobs(B), both(B, 560, 573), answering(B, 574, 580, 'core_param_locks', 'n')]
 
 
+# ---- the build descriptor (core_desc, elekloader/desc.py) ------------------------------------------
+
+def loader(d):
+    """The plain mod `m` made a loader: it imports core_desc, so the build carries the descriptor."""
+    d[1]['imports'] = d[1]['imports'] + ['core_desc']
+
+
+@row('Mod2.__init__', '<>: table <> spare <> (0 to <>)', device='analog-rytm-mk2')
+def _(B):
+    return B.pair('core: table ev_x spare 4097 (0 to 4096)',
+                  lambda d: d[0]['collections']['ev_x'].update(spare=4097),
+                  lambda d: (d[0]['collections']['ev_x'].update(spare=4096), loader(d)))
+
+
+@row('check', '<> exports <>, the name of the build descriptor the linker writes', device='analog-rytm-mk2')
+def _(B):
+    def thief(d):
+        d[1]['symbols']['core_desc'] = ['.run', 4]
+        d[1]['exports'] = ['core_desc']
+    return B.pair('m 1 exports core_desc, the name of the build descriptor the linker writes', thief, loader)
+
+
+@row('link', '<>: its entry for <> has the order <>; with a build descriptor an order is 0 to <>',
+     device='analog-rytm-mk2')
+def _(B):
+    def late(d):
+        d[1]['contribute'][0]['order'] = 65535
+    return B.pair('m 1: its entry for ev_x has the order 65535; with a build descriptor an order is 0 to 65534',
+                  lambda d: (late(d), loader(d)), late)
+
+
 def both(B, first, last):
     """One mod's core_params and core_param_locks entries for the same ids: allowed."""
     d = answering(B, first, last)
@@ -1017,7 +1048,7 @@ def test_digitakt_fixtures():
 
 
 def test_analog_rytm_fixtures():
-    assert run_rows('analog-rytm-mk2') == 13
+    assert run_rows('analog-rytm-mk2') == 16
 
 
 def test_the_lfo_destination_field_is_placed_only_with_an_lfo_field():
@@ -1291,6 +1322,83 @@ def test_every_refusal_has_a_fixture():
             held = fh.read()
         for t in ([text] if isinstance(text, str) else text):
             assert t in held, '%s no longer holds %r (%r)' % (path, t, key)
+
+
+def descriptor_mods(B, with_loader=True):
+    """A core with mod storage, two tables (one a render table with 2 spare entries) and a
+    storage table; `m`, which stores a field and (with_loader) imports core_desc; `n`, with entries
+    at two orders and a site. For the descriptor's tests and js/tools/desc_vectors.py."""
+    core = keeper(B)
+    core['collections'].update({'ev_render_x': {'entry': 4, 'render': True, 'spare': 2},
+                                'core_handles': {'entry': 4}})
+    core['symbols']['core_zero'] = ['.boot', 0]
+    core['exports'] = ['core_zero', 'core_fn']
+    m = B.mod('m', storage=[{'sym': 'st_a', 'scope': 'kit', 'bits': 5}],
+              resources={'names': ['sysex:7d']})
+    if with_loader:
+        m['imports'] = m['imports'] + ['core_desc']
+        m['relocs'] = [['.run', 4, 'abs32', 'sym:core_desc', 0]]
+        m['symbols']['drive_staging_size'] = ['abs', 0x80000]
+        m['exports'] = ['drive_staging_size']
+    n = B.mod('n')
+    n['contribute'] = [{'to': 'ev_x', 'order': 10, 'data': '0000000000000000',
+                        'relocs': [[0, 'abs32', 'sym:fn_n', 0], [4, 'abs32', 'sym:fn_n', 2]]},
+                       {'to': 'ev_render_x', 'order': 60, 'data': '00000000',
+                        'relocs': [[0, 'abs32', 'sym:fn_n', 0]]}]
+    n['sites'] = [B.jmp_site(B.at(0x1000), 'fn_n')]
+    return [core, m, n]
+
+
+def test_the_build_descriptor():
+    """A mod that imports core_desc makes the linker write the build descriptor (desc.py) after the
+    tables, with spare zero entries in each table more mods may join; it reads back as what was
+    linked, and the same mods without that import link to the image they always did."""
+    from elekloader import desc
+    with Bench('analog-rytm-mk2') as B:
+        out = link.link([link.Mod2(d, d['id']) for d in descriptor_mods(B)], B.img)
+        plain = link.link([link.Mod2(d, d['id']) for d in descriptor_mods(B, False)], B.img)
+        assert 'desc' not in plain.layout and b'ELKD' not in plain.image
+        assert desc.SYM not in plain.map
+        found = desc.find(out.image)
+        assert len(found) == 1
+        d = desc.decode(out.image, found[0])
+        at, end = out.layout['desc']
+        assert out.map['core_desc'] == at and found[0] == B.dev.image_end(B.rel) - B.dev.main_load \
+            + out.layout['run_load'] - out.layout['boot'][0] + at - out.layout['ddr'][0]
+        assert d['size'] == end - at and d['abi'] == (1, 0) and d['os'] == 'SYN'
+        assert (d['family'], d['device_key']) == (2, 'analog-rytm-mk2')
+        assert [(x['name'], x['kind'], x['flags'], len(x['exports'])) for x in d['modules']] == \
+            [('core', 0, 0, 2), ('m', 2, 0, 1), ('n', 1, 1, 0)]
+        assert d['modules'][0]['exports'] == [('core_fn', out.map['core_fn']), ('core_zero', out.map['core_zero'])]
+        tabs = {t['name']: t for t in d['tables']}
+        assert sorted(tabs) == sorted(out.tables)
+        for c, (a, n, e) in out.tables.items():
+            assert (tabs[c]['address'], tabs[c]['count'], tabs[c]['entry']) == (a, n, e), c
+        assert out.map['ev_x_n'] == 3 and tabs['ev_x']['capacity'] == 3 + desc.SPARE
+        assert tabs['ev_x']['keys'] == [10 << 16 | 2] * 2 + [50 << 16 | 1]
+        assert tabs['ev_x']['flags'] == desc.F_MORE
+        assert tabs['ev_render_x']['flags'] == desc.F_MORE | desc.F_RENDER
+        assert (tabs['ev_render_x']['count'], tabs['ev_render_x']['capacity']) == (1, 3)
+        ids = tabs['core_store_ids']
+        assert ids['flags'] == 0 and ids['capacity'] == ids['count'] == 1
+        assert ids['keys'] == [desc.LINKER_ORDER << 16 | 0]
+        assert d['claims'] == [(desc.CLAIM_NAME, 1, 'sysex:7d')]
+        end = out.layout['bss'][1]           # the +Drive area: the rest of core 0.11's, from 4 KB
+        assert d['area'] == (end, link._align(end, 0x1000), 0x47FFF000, 0, 0x80000)
+        kit = [s for s in d['storage']['scopes'] if s[0] == 'kit'][0]
+        assert kit[2] == 5 and kit[3] == 1
+        tr = d['storage']['trailer']
+        o = tr[0] - B.dev.main_load
+        assert out.image[o:o + 8] == store.TRAILER and len(out.image) == o + tr[1]
+        # each table: its entries, its zero entry and its spare zero entries, then the next one
+        ddr = out.image[found[0] - (at - out.layout['ddr'][0]):]
+        x = tabs['ev_x']
+        o = x['address'] - out.layout['ddr'][0]
+        assert ddr[o + 12:o + 4 * (x['capacity'] + 1)] == bytes(4 * (x['capacity'] - 2))
+        # the loader's reference to core_desc is relocated to it
+        run = out.layout['sections']['m .run'] - out.layout['ddr'][0]
+        assert int.from_bytes(ddr[run + 4:run + 8], 'big') == at
+        assert 'module 1 m 1 (loader)' in desc.dump(d)
 
 
 if __name__ == '__main__':
