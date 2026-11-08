@@ -590,6 +590,114 @@
       "thumb": {"tag": "v1.2", "file": "thumb.png", "sha256": "371c28c8b466b404f1b57e3ff3635111ecf136dfe564a542640902c8b9a866da"}
     },
     {
+      "repo": "DigiAlchemydsp/DigiCandy", "commit": "2c36609dd20ddf5b6651cb88842c65e40d004c85",
+      "path": "releases/aba-dn.elemod",
+      "device": "digitone-mk1",
+      "sha256": "a675d635c1fddda3bc71fca130743a28fe7d98ff01bd4c9b75eba1a543634116",
+      "summary": "Eye Candy for the Digis: on-command full-screen images and effects.",
+      "on_unit": "Tested on hardware; fully functional and stable.",
+      "thumb": {"commit": "2c36609dd20ddf5b6651cb88842c65e40d004c85", "path": "thumb.png", "sha256": "371c28c8b466b404f1b57e3ff3635111ecf136dfe564a542640902c8b9a866da"}
+    },
+    {
+      "repo": "DigiAlchemydsp/DigiCandy", "commit": "2c36609dd20ddf5b6651cb88842c65e40d004c85",
+      "path": "releases/bzme-dn.elemod",
+      "device": "digitone-mk1",
+      "sha256": "2efdedb0db97cf60446cd2507470cfbb1a2a208d1443e717adf61a09be80c902",
+      "summary": "Eye Candy for the Digis: on-command full-screen images and effects.",
+      "on_unit": "Tested on hardware; fully functional and stable.",
+      "thumb": {"commit": "2c36609dd20ddf5b6651cb88842c65e40d004c85", "path": "thumb.png", "sha256": "371c28c8b466b404f1b57e3ff3635111ecf136dfe564a542640902c8b9a866da"}
+    },
+    {
+      "repo": "DigiAlchemydsp/DigiCandy", "commit": "2c36609dd20ddf5b6651cb88842c65e40d004c85",
+      "path": "releases/catbooting-dn.elemod",
+      "device": "digitone-mk1",
+      "sha256": "596b2fdf99273cb9ff28f127df4e422788be2cd9fd43f5603d2714e7d481ce79",
+      "summary": "Eye Candy for the Digis: on-command full-screen images and effects.",
+      "on_unit": "Tested on hardware; fully functional and stable.",
+      "thumb": {"commit": "2c36609dd20ddf5b6651cb88842c65e40d004c85", "path": "thumb.png", "sha256": "371c28c8b466b404f1b57e3ff3635111ecf136dfe564a542640902c8b9a866da"}
+    },
+    {
+      "repo": "DigiAlchemydsp/DigiCandy", "commit": "2c36609dd20ddf5b6651cb88842c65e40d004c85",
+      "path": "releases/claw-dn.elemod",
+      "device": "digitone-mk1",
+      "sha256": "057edd2389e1a3955cb9725d3ab7efe25b66a0b5e75081d27e7ff9f2f509156d",
+      "summary": "Eye Candy for the Digis: on-command full-screen images and effects.",
+      "on_unit": "Tested on hardware; fully functional and stable.",
+      "thumb": {"commit": "2c36609dd20ddf5b6651cb88842c65e40d004c85", "path": "thumb.png", "sha256": "371c28c8b466b404f1b57e3ff3635111ecf136dfe564a542640902c8b9a866da"}
+    },
+    {
+      "repo": "DigiAlchemydsp/DigiCandy", "commit": "2c36609dd20ddf5b6651cb88842c65e40d004c85",
+      "path": "releases/digitrash-dn.elemod",
+      "device": "digitone-mk1",
+      "sha256": "1ceaeb2bd9e13bccc8f11958d17967c3e754563615fa59284cf3f2e9a3bcc4f6",
+      "summary": "Eye Candy for the Digis: on-command full-screen images and effects.",
+      "on_unit": "Tested on hardware; fully functional and stable.",
+      "thumb": {"commit": "2c36609dd20ddf5b6651cb88842c65e40d004c85", "path": "thumb.png", "sha256": "371c28c8b466b404f1b57e3ff3635111ecf136dfe564a542640902c8b9a866da"}
+    },
+    {
+      "repo": "DigiAlchemydsp/DigiCandy", "commit": "2c36609dd20ddf5b6651cb88842c65e40d004c85",
+      "path": "releases/loox-dn.elemod",
+      "device": "digitone-mk1",
+      "sha256": "e12ed56b54a7dc37bcfca113ce27239032ccd248680676dffc0a5e0b7a34a554",
+      "summary": "Eye Candy for the Digis: on-command full-screen images and effects.",
+      "on_unit": "Tested on hardware; fully functional and stable.",
+      "thumb": {"commit": "2c36609dd20ddf5b6651cb88842c65e40d004c85", "path": "thumb.png", "sha256": "371c28c8b466b404f1b57e3ff3635111ecf136dfe564a542640902c8b9a866da"}
+    },
+    {
+      "repo": "DigiAlchemydsp/DigiCandy", "commit": "2c36609dd20ddf5b6651cb88842c65e40d004c85",
+      "path": "releases/mount-dn.elemod",
+      "device": "digitone-mk1",
+      "sha256": "c2819083f15e70428c77c4f77ef01df44387e2f6964eca047890e3bbc9743c2b",
+      "summary": "Eye Candy for the Digis: on-command full-screen images and effects.",
+      "on_unit": "Tested on hardware; fully functional and stable.",
+      "thumb": {"commit": "2c36609dd20ddf5b6651cb88842c65e40d004c85", "path": "thumb.png", "sha256": "371c28c8b466b404f1b57e3ff3635111ecf136dfe564a542640902c8b9a866da"}
+    },
+    {
+      "repo": "DigiAlchemydsp/DigiCandy", "commit": "2c36609dd20ddf5b6651cb88842c65e40d004c85",
+      "path": "releases/pfft-dn.elemod",
+      "device": "digitone-mk1",
+      "sha256": "90879964a983dee0bcd582731486d24d2c1ea2395a21e7de4bf8e9be5ae9d067",
+      "summary": "Eye Candy for the Digis: on-command full-screen images and effects.",
+      "on_unit": "Tested on hardware; fully functional and stable.",
+      "thumb": {"commit": "2c36609dd20ddf5b6651cb88842c65e40d004c85", "path": "thumb.png", "sha256": "371c28c8b466b404f1b57e3ff3635111ecf136dfe564a542640902c8b9a866da"}
+    },
+    {
+      "repo": "DigiAlchemydsp/DigiCandy", "commit": "2c36609dd20ddf5b6651cb88842c65e40d004c85",
+      "path": "releases/planet1-dn.elemod",
+      "device": "digitone-mk1",
+      "sha256": "7749c381acbfd922b40a9e36ab9f64be44fd1f9676ce71962aed1a1cee2eb8b2",
+      "summary": "Eye Candy for the Digis: on-command full-screen images and effects.",
+      "on_unit": "Tested on hardware; fully functional and stable.",
+      "thumb": {"commit": "2c36609dd20ddf5b6651cb88842c65e40d004c85", "path": "thumb.png", "sha256": "371c28c8b466b404f1b57e3ff3635111ecf136dfe564a542640902c8b9a866da"}
+    },
+    {
+      "repo": "DigiAlchemydsp/DigiCandy", "commit": "2c36609dd20ddf5b6651cb88842c65e40d004c85",
+      "path": "releases/reach-dn.elemod",
+      "device": "digitone-mk1",
+      "sha256": "d7d614246dd28d50e5d31701173e4592d91e56376cc65d084530de97b32fbf19",
+      "summary": "Eye Candy for the Digis: on-command full-screen images and effects.",
+      "on_unit": "Tested on hardware; fully functional and stable.",
+      "thumb": {"commit": "2c36609dd20ddf5b6651cb88842c65e40d004c85", "path": "thumb.png", "sha256": "371c28c8b466b404f1b57e3ff3635111ecf136dfe564a542640902c8b9a866da"}
+    },
+    {
+      "repo": "DigiAlchemydsp/DigiCandy", "commit": "2c36609dd20ddf5b6651cb88842c65e40d004c85",
+      "path": "releases/tidemoon-dn.elemod",
+      "device": "digitone-mk1",
+      "sha256": "96ab48ba7921d36e89c8b16841a39a9808a4901762b5741e3964de1d813340b5",
+      "summary": "Eye Candy for the Digis: on-command full-screen images and effects.",
+      "on_unit": "Tested on hardware; fully functional and stable.",
+      "thumb": {"commit": "2c36609dd20ddf5b6651cb88842c65e40d004c85", "path": "thumb.png", "sha256": "371c28c8b466b404f1b57e3ff3635111ecf136dfe564a542640902c8b9a866da"}
+    },
+    {
+      "repo": "DigiAlchemydsp/DigiCandy", "commit": "2c36609dd20ddf5b6651cb88842c65e40d004c85",
+      "path": "releases/tussy-dn.elemod",
+      "device": "digitone-mk1",
+      "sha256": "cecbc4cc80a37ac358c95489106b797bd08dbf95278ea856db0faff15de920e3",
+      "summary": "Eye Candy for the Digis: on-command full-screen images and effects.",
+      "on_unit": "Tested on hardware; fully functional and stable.",
+      "thumb": {"commit": "2c36609dd20ddf5b6651cb88842c65e40d004c85", "path": "thumb.png", "sha256": "371c28c8b466b404f1b57e3ff3635111ecf136dfe564a542640902c8b9a866da"}
+    },
+    {
       "repo": "irpina/digineighbor", "tag": "v0.6", "file": "digineighbor-0.6.elemod",
       "device": "digitakt-mk1", "needs_core": "2.1", "title": "digineighbor", "version": "0.6",
       "sha256": "380837f86c05cf6d0aba2dfc930a4309cc6b2e99b2e8c6a450f0abe6e844dccd",
@@ -1046,6 +1154,114 @@
       "summary": "Boot-splash mods for the Digitakt mk1 and Digitone mk1/Keys: the rare stock animation plus animated splash screens.",
       "on_unit": "Hardware stress-tested over 3 days: PASS on the Digitakt mk1 and Digitone mk1; fully functional and stable.",
       "thumb": {"tag": "v1.2", "file": "thumb.png", "sha256": "371c28c8b466b404f1b57e3ff3635111ecf136dfe564a542640902c8b9a866da"}
+    },
+    {
+      "repo": "DigiAlchemydsp/DigiCandy", "commit": "2c36609dd20ddf5b6651cb88842c65e40d004c85",
+      "path": "releases/aba-dt.elemod",
+      "device": "digitakt-mk1",
+      "sha256": "d27020441b8e3965485614eeec69dcca1947fdee32c154eba093b2f8fffb79cb",
+      "summary": "Eye Candy for the Digis: on-command full-screen images and effects.",
+      "on_unit": "Tested on hardware; fully functional and stable.",
+      "thumb": {"commit": "2c36609dd20ddf5b6651cb88842c65e40d004c85", "path": "thumb.png", "sha256": "371c28c8b466b404f1b57e3ff3635111ecf136dfe564a542640902c8b9a866da"}
+    },
+    {
+      "repo": "DigiAlchemydsp/DigiCandy", "commit": "2c36609dd20ddf5b6651cb88842c65e40d004c85",
+      "path": "releases/bzme-dt.elemod",
+      "device": "digitakt-mk1",
+      "sha256": "6127d73e65b73adc673807f8d97d6c7207aa9357bd459c70c51e9ba74039e512",
+      "summary": "Eye Candy for the Digis: on-command full-screen images and effects.",
+      "on_unit": "Tested on hardware; fully functional and stable.",
+      "thumb": {"commit": "2c36609dd20ddf5b6651cb88842c65e40d004c85", "path": "thumb.png", "sha256": "371c28c8b466b404f1b57e3ff3635111ecf136dfe564a542640902c8b9a866da"}
+    },
+    {
+      "repo": "DigiAlchemydsp/DigiCandy", "commit": "2c36609dd20ddf5b6651cb88842c65e40d004c85",
+      "path": "releases/catbooting-dt.elemod",
+      "device": "digitakt-mk1",
+      "sha256": "d621901fdff72b277f5978049ae11a8a802fca511fca3c7d560b2f934320d6ca",
+      "summary": "Eye Candy for the Digis: on-command full-screen images and effects.",
+      "on_unit": "Tested on hardware; fully functional and stable.",
+      "thumb": {"commit": "2c36609dd20ddf5b6651cb88842c65e40d004c85", "path": "thumb.png", "sha256": "371c28c8b466b404f1b57e3ff3635111ecf136dfe564a542640902c8b9a866da"}
+    },
+    {
+      "repo": "DigiAlchemydsp/DigiCandy", "commit": "2c36609dd20ddf5b6651cb88842c65e40d004c85",
+      "path": "releases/claw-dt.elemod",
+      "device": "digitakt-mk1",
+      "sha256": "0eea1ef0587a0817dc47e64333e939f90062acbfdce547f9e62e0a4506478a31",
+      "summary": "Eye Candy for the Digis: on-command full-screen images and effects.",
+      "on_unit": "Tested on hardware; fully functional and stable.",
+      "thumb": {"commit": "2c36609dd20ddf5b6651cb88842c65e40d004c85", "path": "thumb.png", "sha256": "371c28c8b466b404f1b57e3ff3635111ecf136dfe564a542640902c8b9a866da"}
+    },
+    {
+      "repo": "DigiAlchemydsp/DigiCandy", "commit": "2c36609dd20ddf5b6651cb88842c65e40d004c85",
+      "path": "releases/digitrash-dt.elemod",
+      "device": "digitakt-mk1",
+      "sha256": "a70f949d345c067311373479ee0683f3b275a0dd7dce3deb21278242a7b18614",
+      "summary": "Eye Candy for the Digis: on-command full-screen images and effects.",
+      "on_unit": "Tested on hardware; fully functional and stable.",
+      "thumb": {"commit": "2c36609dd20ddf5b6651cb88842c65e40d004c85", "path": "thumb.png", "sha256": "371c28c8b466b404f1b57e3ff3635111ecf136dfe564a542640902c8b9a866da"}
+    },
+    {
+      "repo": "DigiAlchemydsp/DigiCandy", "commit": "2c36609dd20ddf5b6651cb88842c65e40d004c85",
+      "path": "releases/loox-dt.elemod",
+      "device": "digitakt-mk1",
+      "sha256": "7c219504be529570938e1beeecde757076f671658b25cce26def81f2c1bc4e00",
+      "summary": "Eye Candy for the Digis: on-command full-screen images and effects.",
+      "on_unit": "Tested on hardware; fully functional and stable.",
+      "thumb": {"commit": "2c36609dd20ddf5b6651cb88842c65e40d004c85", "path": "thumb.png", "sha256": "371c28c8b466b404f1b57e3ff3635111ecf136dfe564a542640902c8b9a866da"}
+    },
+    {
+      "repo": "DigiAlchemydsp/DigiCandy", "commit": "2c36609dd20ddf5b6651cb88842c65e40d004c85",
+      "path": "releases/mount-dt.elemod",
+      "device": "digitakt-mk1",
+      "sha256": "cd2462cd97faf4a898f3b7f4a3c27b63654bf0d984763d55c83d8859e028b4d6",
+      "summary": "Eye Candy for the Digis: on-command full-screen images and effects.",
+      "on_unit": "Tested on hardware; fully functional and stable.",
+      "thumb": {"commit": "2c36609dd20ddf5b6651cb88842c65e40d004c85", "path": "thumb.png", "sha256": "371c28c8b466b404f1b57e3ff3635111ecf136dfe564a542640902c8b9a866da"}
+    },
+    {
+      "repo": "DigiAlchemydsp/DigiCandy", "commit": "2c36609dd20ddf5b6651cb88842c65e40d004c85",
+      "path": "releases/pfft-dt.elemod",
+      "device": "digitakt-mk1",
+      "sha256": "4988c54589e3ef546f00d391ba366b3fdb3ee05486dd864fb45049961d84e3db",
+      "summary": "Eye Candy for the Digis: on-command full-screen images and effects.",
+      "on_unit": "Tested on hardware; fully functional and stable.",
+      "thumb": {"commit": "2c36609dd20ddf5b6651cb88842c65e40d004c85", "path": "thumb.png", "sha256": "371c28c8b466b404f1b57e3ff3635111ecf136dfe564a542640902c8b9a866da"}
+    },
+    {
+      "repo": "DigiAlchemydsp/DigiCandy", "commit": "2c36609dd20ddf5b6651cb88842c65e40d004c85",
+      "path": "releases/planet1-dt.elemod",
+      "device": "digitakt-mk1",
+      "sha256": "ad43fb1102ce3dd7bc1dc1a8eda470279dcdbf0945be8b0e0b773b32ba2945ad",
+      "summary": "Eye Candy for the Digis: on-command full-screen images and effects.",
+      "on_unit": "Tested on hardware; fully functional and stable.",
+      "thumb": {"commit": "2c36609dd20ddf5b6651cb88842c65e40d004c85", "path": "thumb.png", "sha256": "371c28c8b466b404f1b57e3ff3635111ecf136dfe564a542640902c8b9a866da"}
+    },
+    {
+      "repo": "DigiAlchemydsp/DigiCandy", "commit": "2c36609dd20ddf5b6651cb88842c65e40d004c85",
+      "path": "releases/reach-dt.elemod",
+      "device": "digitakt-mk1",
+      "sha256": "91c92906569801e9095b4c187ff4c3cb80347adaf5c2dfddfad949a9276d8655",
+      "summary": "Eye Candy for the Digis: on-command full-screen images and effects.",
+      "on_unit": "Tested on hardware; fully functional and stable.",
+      "thumb": {"commit": "2c36609dd20ddf5b6651cb88842c65e40d004c85", "path": "thumb.png", "sha256": "371c28c8b466b404f1b57e3ff3635111ecf136dfe564a542640902c8b9a866da"}
+    },
+    {
+      "repo": "DigiAlchemydsp/DigiCandy", "commit": "2c36609dd20ddf5b6651cb88842c65e40d004c85",
+      "path": "releases/tidemoon-dt.elemod",
+      "device": "digitakt-mk1",
+      "sha256": "d2c3c5c169db72760c2eba9729c71e426ef291fa11bf68169ae96f5730a058d0",
+      "summary": "Eye Candy for the Digis: on-command full-screen images and effects.",
+      "on_unit": "Tested on hardware; fully functional and stable.",
+      "thumb": {"commit": "2c36609dd20ddf5b6651cb88842c65e40d004c85", "path": "thumb.png", "sha256": "371c28c8b466b404f1b57e3ff3635111ecf136dfe564a542640902c8b9a866da"}
+    },
+    {
+      "repo": "DigiAlchemydsp/DigiCandy", "commit": "2c36609dd20ddf5b6651cb88842c65e40d004c85",
+      "path": "releases/tussy-dt.elemod",
+      "device": "digitakt-mk1",
+      "sha256": "f1e71236c642f66671f240838975aef8fc195d21fd0a92409bb9d75736cc01ea",
+      "summary": "Eye Candy for the Digis: on-command full-screen images and effects.",
+      "on_unit": "Tested on hardware; fully functional and stable.",
+      "thumb": {"commit": "2c36609dd20ddf5b6651cb88842c65e40d004c85", "path": "thumb.png", "sha256": "371c28c8b466b404f1b57e3ff3635111ecf136dfe564a542640902c8b9a866da"}
     },
     {
       "repo": "irpina/elekloader", "tag": "core-ot-v0.3.1", "file": "core-ot-0.3.1.elemod", "kind": "core",
