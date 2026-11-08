@@ -462,6 +462,36 @@ def test_core_ar2_events_take_256_drive_mods():
         assert r.choices[40].code == drive.CODE['full'], r.choices[40].why()
 
 
+
+def test_core_ar2_tables_take_their_own_limits():
+    """core-ar2's other tables are sized by what each can hold (2026-11-08), not the default 16: the
+    page tables by the views' room (10 views of VIEW_MAX 16 pages, 11 of them stock's), the id-range
+    tables by the loader's mods, and core_step_owners stops at its 8 owners (steps.c OWNERS)."""
+    with open(os.path.join(ROOT, 'mods', 'core-ar2', 'mod.json'), encoding='utf-8') as fh:
+        cols = json.load(fh)['collections']
+    for name in ('core_pages', 'core_page_fns', 'core_view_pages'):
+        assert cols[name] == {'entry': 4, 'spare': 10 * 16 - 11}, name
+    for name in ('core_params', 'core_param_locks', 'core_param_scales'):
+        assert cols[name] == {'entry': 4, 'spare': drive.MAX_MODS}, name
+    assert cols['core_step_owners'] == {'entry': 4, 'spare': 8, 'max': 8}
+    assert cols['core_lock_params'] == 4      # +Drive mods have no storage, so no lock codes
+    # a "max" counts the flashed entries: the spare ones take only what is left
+    with Bench('analog-rytm-mk2') as B:
+        docs = flashed(B)
+        docs[0]['collections']['ev_tick'] = {'entry': 4, 'spare': 40, 'max': 5}
+        out = link.link([link.Mod2(d, d['id']) for d in docs], B.img)
+        t = drive.load_build(out.image)
+        t = t.tables[t.table['ev_tick']]
+        assert t['capacity'] == 5 and t['count'] <= 5, t
+        docs[0]['collections']['ev_tick'] = {'entry': 4, 'spare': 40, 'max': 0}
+        try:
+            link.link([link.Mod2(d, d['id']) for d in docs], B.img)
+        except ModError as e:
+            assert 'max 0' in str(e), e
+        else:
+            raise AssertionError('max 0 was taken')
+
+
 def test_format_md_lists_every_code_and_state():
     with open(os.path.join(ROOT, 'docs', 'FORMAT.md'), encoding='utf-8') as fh:
         doc = fh.read()

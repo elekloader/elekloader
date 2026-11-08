@@ -1081,9 +1081,17 @@ In a build with the Drive Loader (docs/FORMAT.md, "+Drive mods") each table
 gets spare entries the loader fills at boot. Core's events (every `ev_*`
 table) declare 256, as many as the loader links, so each +Drive mod can add
 a handler to any event; `core_machines` declares 10, its hidden slots
-34..43. Every other table keeps the linker's 16. An `ev_*` spare costs its
-4 bytes of RAM in the flashed build, about 15 KB in all, which the +Drive
-area gives up.
+34..43. The other tables declare what each can hold:
+
+| table | spare | its limit |
+|---|---|---|
+| `core_pages`, `core_page_fns`, `core_view_pages` | 149 | the page key's room: 10 views of `VIEW_MAX` 16 pages (pages.s), 11 of them stock's; a view drops pages past its 16 |
+| `core_params`, `core_param_locks`, `core_param_scales` | 256 | none of their own (id ranges, from 555 for a mod's ids), so as many as the loader links |
+| `core_step_owners` | 8, `"max": 8` | `OWNERS` 8 (steps.c), flashed and +Drive owners together: the spare ones are what the flashed build leaves |
+| `core_lock_params` | the linker's 16 | a +Drive mod has no storage, so no lock codes (42..127, all from the flashed lockfile) |
+
+A spare entry costs its 4 bytes of RAM in the flashed build, about 20 KB
+in all, which the +Drive area gives up.
 
 ## Checked so far
 
