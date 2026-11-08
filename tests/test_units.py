@@ -1813,6 +1813,42 @@ def test_authors_can_opt_out_of_automatic_updates():
     assert submit_mod.release_text(publish.release_notes('A.', '', False)) == {'summary': 'A.', 'auto_update': False}
 
 
+def test_the_shops_sections_are_checked():
+    """web/sections.json: whole repositories on a page of their own (build_web.sections)."""
+    sys.path.insert(0, os.path.join(os.path.dirname(HERE), 'packaging'))
+    import build_web
+    with open(os.path.join(os.path.dirname(HERE), 'web', 'sections.json'), encoding='utf-8') as fh:
+        real = json.load(fh)
+    with open(os.path.join(os.path.dirname(HERE), 'web', 'catalog.json'), encoding='utf-8') as fh:
+        repos = {i['repo'] for i in json.load(fh)['items']}
+    # every pack names a repository the shop carries
+    assert all(p['repo'] in repos for s in real['sections'] for p in s['packs'])
+    out = build_web.sections([{'repo': r} for r in repos])
+    assert [s['id'] for s in out] == [s['id'] for s in real['sections']] and all(s['nav'] for s in out)
+    # the Splash screen maker is a tool of Splash & screens
+    assert {'href': '#splash', 'title': 'Splash screen maker'} in next(s for s in out if s['id'] == 'screens')['tools']
+    with tempfile.TemporaryDirectory() as d:
+        p = os.path.join(d, 's.json')
+        for bad in ({'sections': [{'id': 'A b', 'title': 'x', 'packs': [{'repo': 'a/b'}]}]},
+                    {'sections': [{'id': 'build', 'title': 'x', 'packs': [{'repo': 'a/b'}]}]},
+                    {'sections': [{'id': 'x', 'title': 'x', 'packs': [{'repo': 'a/b'}]},
+                                  {'id': 'y', 'title': 'y', 'packs': [{'repo': 'a/b'}]}]},
+                    {'sections': [{'id': 'x', 'title': 'x', 'packs': []}]},
+                    {'sections': [{'id': 'x', 'title': 'x', 'packs': [{'repo': 'a/b'}],
+                                   'tools': [{'href': 'https://x', 'title': 't'}]}]},
+                    {'sections': [{'id': 'x', 'title': 'x', 'packs': [{'repo': 'a/b'}],
+                                   'tools': [{'href': '#splash', 'title': 't'}]},
+                                  {'id': 'y', 'title': 'y', 'packs': [{'repo': 'c/d'}],
+                                   'tools': [{'href': '#splash', 'title': 't'}]}]}):
+            with open(p, 'w') as fh:
+                json.dump(bad, fh)
+            try:
+                build_web.sections([], p)
+                raise AssertionError('not refused: %r' % bad)
+            except SystemExit:
+                pass
+        assert build_web.sections([], os.path.join(d, 'none.json')) == []
+
 def test_the_splash_maker_writes_a_mod_the_loader_takes():
     from elekloader import splash
     rows = [[(x + y) % 3 == 0 for x in range(128)] for y in range(64)]

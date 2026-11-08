@@ -149,7 +149,14 @@ const desc = p => st.mods.find(d => d.path === p);
 // their files are on this site, next to it) and the mods you added yourself,
 // as one collection of cards, one per mod.
 
-const shop = { items: [], devices: null };
+const shop = { items: [], devices: null, sections: [] };
+// The shop's own sections (shop/sections.json: web/sections.json): whole repositories listed on a page of their own,
+// #s/<id>, instead of the Mod Shop's shelves. -> the section a repository's mods are in, or undefined.
+const sectionOf = repo => shop.sections.find(x => x.packs.some(p => p.repo === repo));
+// the section open now: its own page (#s/<id>), or one of its tools (#splash is Splash & screens')
+const openSection = () => shop.sections.find(x => location.hash === '#s/' + x.id
+  || (x.tools || []).some(t => t.href === location.hash));
+const sectionId = () => (location.hash.match(/^#s\/([a-z0-9-]+)$/) || [])[1] || null;
 const lib = { device: S.libDevice || (S.profiles.find(p => p.id === S.current) || {}).device || null,
   type: S.libType || null, sort: S.libSort || 'collection', query: '' };
 const OWN = '\u0000own';                         // the "Your files" kind
@@ -248,7 +255,8 @@ function libEntries() {
     out.push({ shop: g, title: e.title || e.id, id: e.id || e.title, version: e.version || '',
       device: e.device, category: e.category || '', author: e.author || '', license: e.license || '',
       summary: e.summary || e.description || '', oses: g.map(x => x.os).filter(Boolean),
-      available: g.some(x => x.available), onUnit: e.on_unit || '' });
+      available: g.some(x => x.available), onUnit: e.on_unit || '', repo: e.repo,
+      section: (sectionOf(e.repo) || {}).id || null });
   }
   const own = new Map();
   for (const d of st.mods) {
@@ -300,10 +308,13 @@ async function loadShop() {
       return null;
     }
   };
-  const [items, devices] = await Promise.all([json('shop/index.json'), json('devices.json')]);
+  const [items, devices, sections] = await Promise.all([json('shop/index.json'), json('devices.json'),
+    json('shop/sections.json')]);
   shop.items = items || [];
+  shop.sections = Array.isArray(sections) ? sections : [];
   shop.devices = devices;
   renderMods();
+  renderLibrary();                     // the sections' cards leave the shelves; their links and pages
 }
 
 // the devices to pick from: the engine's, or (before it loads) the site's devices.json, the same list;
@@ -330,7 +341,8 @@ function setFilter(k, v) {
   lib[k] = v;
   S['lib' + k[0].toUpperCase() + k.slice(1)] = v;
   saveSettings();
-  if (location.hash !== '#library' && location.hash !== '') location.hash = '#library';
+  // a section's page keeps its own filters; anywhere else the choice shows in the library
+  if (view() !== 'section' && location.hash !== '#library' && location.hash !== '') location.hash = '#library';
   renderLibrary();
 }
 
@@ -813,11 +825,13 @@ function swatchFor(kind) {
 }
 
 function renderLibrary() {
-  const all = libEntries();
+  const every = libEntries();
+  const all = every.filter(en => !en.section);     // the Mod Shop's shelves: the sections have pages of their own
   const sd = dev();
   const devs = pickable();
   const inLib = view() === 'library';
-  renderStart(all);
+  renderStart(every);
+  renderSections(every);
   const forDev = lib.device ? all.filter(en => en.device === lib.device) : all;
   const kinds = [...new Set(all.filter(en => !en.own).map(en => en.category).filter(Boolean))];
   const ownN = forDev.filter(en => en.own).length;
@@ -856,11 +870,97 @@ function renderLibrary() {
   if (own) { shelves.delete('Your files'); shelves.set('Your files', own); }
   $('lib-cards').replaceChildren(...[...shelves].map(([name, ens]) => el('section', { class: 'shelf' },
     el('h2', {}, name, el('span', { class: 'n' }, String(ens.length))), el('div', { class: 'cards' }, ...ens.map(card)))));
-  if (!list.length) {
+  // each section, as one row that opens its page; with a search, what matches there
+  $('lib-sections').replaceChildren(...shop.sections.map(x => {
+    const q = lib.query.trim().toLowerCase();
+    const ens = every.filter(en => en.section === x.id && (!lib.device || en.device === lib.device)
+      && (!q || [en.title, en.id, en.summary, en.category, en.author].join(' ').toLowerCase().includes(q)));
+    if (!ens.length) return '';
+    return sectionPromo(x, ens, !!lib.query.trim());
+  }));
+  if (!list.length && !$('lib-sections').childElementCount) {
     $('lib-cards').append(el('p', { class: 'empty' }, lib.query.trim() ? 'No mod matches that.'
       : `No mods ${chosen ? 'for the ' + chosen.name + ' ' : ''}here yet. Add your own with + Add your own .elemod.`));
   }
   renderNeed();
+}
+
+// ---- the shop's sections (shop/sections.json): a page each, #s/<id>, a pack (one repository) per shelf ----
+
+const SECTION_ICON = 'M3 6.5A1.5 1.5 0 0 1 4.5 5h15A1.5 1.5 0 0 1 21 6.5v11a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 17.5zM7 14.5 10 11l2.5 2.5L14.5 11l2.5 3.5';
+
+// the row in the Mod Shop that opens a section: a few of its screens, its name, how many; with a search, the matches
+function sectionPromo(x, ens, searching) {
+  const pics = ens.map(cardPicture).filter(Boolean).slice(0, 4);
+  return el('a', { class: 'section-promo', href: '#s/' + x.id },
+    el('span', { class: 'promo-pics', 'aria-hidden': 'true' }, ...pics.map(p => el('span', { class: 'promo-pic' }, screen(p)))),
+    el('span', { class: 'promo-text' },
+      el('strong', {}, searching ? `${ens.length} match${ens.length === 1 ? '' : 'es'} in ${x.title}` : x.title),
+      el('span', {}, searching ? 'Open the section to see them.'
+        : `${ens.length} mod${ens.length === 1 ? '' : 's'} from ${x.packs.map(p => p.title).join(' and ')}, on a page of their own.`)),
+    el('span', { class: 'promo-go', 'aria-hidden': 'true' }, '→'));
+}
+
+function renderSections(every) {
+  const sid = sectionId(), on = view() === 'section';
+  const forDev = en => !lib.device || en.device === lib.device;
+  const count = x => every.filter(en => en.section === x.id && forDev(en)).length;
+  const open = openSection();    // the section whose page, or one of whose tools, is showing
+  // a section's pages: its mods, then its tools (the sidebar under its link, and a row of chips on each page)
+  const pages = x => [{ href: '#s/' + x.id, title: 'Mods', n: count(x) }, ...(x.tools || [])];
+  const here = p => p.href === location.hash;
+  $('nav-sections').replaceChildren(...shop.sections.flatMap(x => [
+    el('a', { class: 'nav-link' + (x === open ? ' on' : ''), href: '#s/' + x.id,
+      'aria-current': on && sid === x.id ? 'page' : null },
+    icon(SECTION_ICON), x.nav, el('span', { class: 'badge' }, String(count(x)))),
+    x === open ? el('div', { class: 'side-sub' }, ...pages(x).map(p => el('a', {
+      class: 'sub-link' + (here(p) ? ' on' : ''), href: p.href, 'aria-current': here(p) ? 'page' : null }, p.title)))
+      : '']));
+  for (const nav of document.querySelectorAll('[data-secnav]')) {
+    if (!open || nav.closest('.view').hidden) { nav.replaceChildren(); continue; }
+    nav.replaceChildren(...pages(open).map(p => el('a', { class: 'chip' + (here(p) ? ' on' : ''), href: p.href,
+      'aria-current': here(p) ? 'page' : null }, p.title, p.n != null ? el('span', { class: 'n' }, String(p.n)) : '')));
+  }
+  const tool = open && (open.tools || []).find(here);   // the maker's page says which section it is in
+  $('splash-eyebrow').replaceChildren(...(tool ? [el('a', { href: '#library' }, 'Mod Shop'), ' / ',
+    el('a', { href: '#s/' + open.id }, open.title)] : ['No coding needed']));
+  if (!on) return;
+  const x = shop.sections.find(s => s.id === sid);
+  if (!x) {
+    $('sec-title').textContent = shop.sections.length ? 'No such section' : 'Loading…';
+    $('sec-sub').textContent = '';
+    $('sec-packs').replaceChildren();
+    return;
+  }
+  document.title = x.title + ' · elekloader';
+  $('sec-title').textContent = x.title;
+  $('sec-sub').textContent = x.blurb;
+  const mine = every.filter(en => en.section === x.id);
+  const sd = dev();
+  const devs = pickable().filter(d => d.key === lib.device || mine.some(en => en.device === d.key));
+  $('sec-devices').replaceChildren(...[{ key: null, name: 'All' }, ...devs].map(d => {
+    const pressed = lib.device === d.key;
+    return el('button', { type: 'button', class: 'chip' + (pressed ? ' on' : ''), 'aria-pressed': String(pressed),
+      onclick: () => setFilter('device', d.key) },
+    sd && sd.key === d.key ? el('span', { class: 'yours', title: 'Your stock file is for this device' }) : '',
+    d.name, el('span', { class: 'n' }, String(mine.filter(en => !d.key || en.device === d.key).length)));
+  }));
+  const q = lib.query.trim().toLowerCase();        // the device and the search; the Mod Shop's kinds are not here
+  const shown = sorted(mine.filter(en => forDev(en)
+    && (!q || [en.title, en.id, en.summary, en.category, en.author].join(' ').toLowerCase().includes(q))));
+  $('sec-packs').replaceChildren(...x.packs.map(p => {
+    const ens = shown.filter(en => en.repo === p.repo);
+    if (!ens.length) return '';
+    return el('section', { class: 'shelf pack' },
+      el('h2', {}, p.title, el('span', { class: 'n' }, String(ens.length)),
+        el('a', { class: 'pack-src', href: 'https://github.com/' + p.repo, rel: 'noreferrer', target: '_blank' }, p.repo)),
+      p.blurb ? el('p', { class: 'pack-blurb' }, p.blurb) : '',
+      el('div', { class: 'cards' }, ...ens.map(card)));
+  }));
+  if (!shown.length) {
+    $('sec-packs').append(el('p', { class: 'empty' }, lib.query.trim() ? 'Nothing here matches that.'
+      : `Nothing here ${lib.device ? 'for the ' + deviceName(lib.device) + ' ' : ''}yet.`));
+  }
 }
 
 // what a card's button does now, if anything
@@ -1041,6 +1141,7 @@ function toast(text) {
 
 const view = () => location.hash === '#build' ? 'build' : location.hash === '#submit' ? 'submit'
   : location.hash === '#make' ? 'make' : location.hash === '#splash' ? 'splash'
+  : /^#s\//.test(location.hash) ? 'section'
   : /^#contribute(\/|$)/.test(location.hash) ? 'contribute' : 'library';
 // Contribute's pages: #contribute is the overview, #contribute/<page> the others (index.html, cp-<page>)
 const CPAGES = ['overview', 'start', 'core', 'pr', 'test'];
@@ -1051,7 +1152,7 @@ const cpage = () => {
 
 function route() {
   const v = view(), cp = cpage();
-  for (const n of ['library', 'build', 'make', 'splash', 'submit', 'contribute']) $('view-' + n).hidden = v !== n;
+  for (const n of ['library', 'build', 'make', 'splash', 'section', 'submit', 'contribute']) $('view-' + n).hidden = v !== n;
   for (const p of CPAGES) $('cp-' + p).hidden = p !== cp;
   for (const a of document.querySelectorAll('[data-cpage]')) {
     a.classList.toggle('on', v === 'contribute' && a.dataset.cpage === cp);
@@ -1060,7 +1161,7 @@ function route() {
   }
   $('nav-csub').hidden = v !== 'contribute';
   const page = v === 'contribute' && cp !== 'overview' ? $('cp-' + cp).querySelector('h1').textContent : null;
-  document.title = (page || { build: 'Build Firmware', make: 'Make your own mod!', splash: 'Splash screen maker', submit: 'Submit your mod', contribute: 'Contribute', library: 'Mod Shop' }[v]) + ' · elekloader';
+  document.title = (page || { build: 'Build Firmware', make: 'Make your own mod!', splash: 'Splash screen maker', section: 'Mod Shop', submit: 'Submit your mod', contribute: 'Contribute', library: 'Mod Shop' }[v]) + ' · elekloader';
   if (v === 'splash') openSplash();
   $('content').scrollTop = 0;
   $('topbar').classList.remove('solid');
@@ -1250,7 +1351,6 @@ function renderChrome() {
   }
   if (splashUi) splashUi.refresh();
   for (const [id, on] of [['nav-library', v === 'library'], ['nav-build', build], ['nav-make', v === 'make'],
-    ['nav-splash', v === 'splash'],
     ['nav-submit', v === 'submit'], ['nav-contribute', v === 'contribute'], ['tab-library', v === 'library'],
     ['tab-build', build], ['tab-make', v === 'make'], ['tab-submit', v === 'submit'],
     ['tab-contribute', v === 'contribute']]) {
@@ -2121,7 +2221,7 @@ function wire() {
   });
   $('search').addEventListener('input', e => {
     lib.query = e.target.value;
-    if (view() !== 'library') location.hash = '#library';
+    if (view() !== 'library' && view() !== 'section') location.hash = '#library';
     renderLibrary();
   });
   $('f-sort').addEventListener('change', e => setFilter('sort', e.target.value || 'collection'));

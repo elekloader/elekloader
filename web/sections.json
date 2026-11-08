@@ -1,0 +1,26 @@
+{
+  "about": "The shop's own sections: whole repositories whose mods are listed on a page of their own instead of the Mod Shop's shelves (app.js, renderSection). A repository's later releases land in its section by themselves. Each pack is one repository; its title and blurb head its shelf there. A section's tools are pages of the site (a #view) listed under it.",
+  "sections": [
+    {
+      "id": "screens",
+      "title": "Splash & screens",
+      "nav": "Splash & screens",
+      "blurb": "Your own boot splash from a PNG or GIF, a few examples to start from, and full-screen pictures for the Digitakt and the Digitone. One splash per build: any two draw over the same boot intro.",
+      "tools": [
+        { "href": "#splash", "title": "Splash screen maker" }
+      ],
+      "packs": [
+        {
+          "repo": "DigiAlchemydsp/DigiSplash",
+          "title": "DigiSplash",
+          "blurb": "Five example splashes, including Elektron's rare stock intro. The rest of the set is on DigiSplash's release."
+        },
+        {
+          "repo": "DigiAlchemydsp/DigiCandy",
+          "title": "DigiCandy",
+          "blurb": "Eye candy on command: a full-screen picture over whatever is running (Digitakt TRK + YES, Digitone MIDI + YES). Five examples; the rest of the set is on DigiCandy's repository."
+        }
+      ]
+    }
+  ]
+}

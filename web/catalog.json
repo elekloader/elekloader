@@ -395,47 +395,7 @@
       "sha256": "bb3e4a7c5322ef3cd6e30f96c4ee050ba33a6054d716dd00f5bde685546b4e75",
       "summary": "Boot-splash mods for the Digitakt mk1 and Digitone mk1/Keys: the rare stock animation plus animated splash screens.",
       "on_unit": "Hardware stress-tested over 3 days: PASS on the Digitakt mk1 and Digitone mk1; fully functional and stable.",
-      "thumb": {"tag": "v1.2", "file": "thumb.png", "sha256": "371c28c8b466b404f1b57e3ff3635111ecf136dfe564a542640902c8b9a866da"}
-    },
-    {
-      "repo": "DigiAlchemydsp/DigiSplash", "tag": "v1.2", "file": "dn-beep.elemod",
-      "device": "digitone-mk1",
-      "sha256": "75e5c44b6ffca9e2b5c983e02287676dfee8f0f19b9dcd83dd3915f4b150b025",
-      "summary": "Boot-splash mods for the Digitakt mk1 and Digitone mk1/Keys: the rare stock animation plus animated splash screens.",
-      "on_unit": "Hardware stress-tested over 3 days: PASS on the Digitakt mk1 and Digitone mk1; fully functional and stable.",
-      "thumb": {"tag": "v1.2", "file": "thumb.png", "sha256": "371c28c8b466b404f1b57e3ff3635111ecf136dfe564a542640902c8b9a866da"}
-    },
-    {
-      "repo": "DigiAlchemydsp/DigiSplash", "tag": "v1.2", "file": "dn-bzme.elemod",
-      "device": "digitone-mk1",
-      "sha256": "3fc88b531052d2cad7ce79b0843409131d987a7e2e6ac719935f65f0bc44aaed",
-      "summary": "Boot-splash mods for the Digitakt mk1 and Digitone mk1/Keys: the rare stock animation plus animated splash screens.",
-      "on_unit": "Hardware stress-tested over 3 days: PASS on the Digitakt mk1 and Digitone mk1; fully functional and stable.",
-      "thumb": {"tag": "v1.2", "file": "thumb.png", "sha256": "371c28c8b466b404f1b57e3ff3635111ecf136dfe564a542640902c8b9a866da"}
-    },
-    {
-      "repo": "DigiAlchemydsp/DigiSplash", "tag": "v1.2", "file": "dn-catbooting.elemod",
-      "device": "digitone-mk1",
-      "sha256": "f04fbc9f991abac66a5fe5ca1b3d6eb430d7ad08fc848d5561e72c88819f2437",
-      "summary": "Boot-splash mods for the Digitakt mk1 and Digitone mk1/Keys: the rare stock animation plus animated splash screens.",
-      "on_unit": "Hardware stress-tested over 3 days: PASS on the Digitakt mk1 and Digitone mk1; fully functional and stable.",
-      "thumb": {"tag": "v1.2", "file": "thumb.png", "sha256": "371c28c8b466b404f1b57e3ff3635111ecf136dfe564a542640902c8b9a866da"}
-    },
-    {
-      "repo": "DigiAlchemydsp/DigiSplash", "tag": "v1.2", "file": "dn-catscan.elemod",
-      "device": "digitone-mk1",
-      "sha256": "6b7dc56ab82f1d81f36e6d188876a9c9f181c290e3d80e7cc1ea7d1e88c902bb",
-      "summary": "Boot-splash mods for the Digitakt mk1 and Digitone mk1/Keys: the rare stock animation plus animated splash screens.",
-      "on_unit": "Hardware stress-tested over 3 days: PASS on the Digitakt mk1 and Digitone mk1; fully functional and stable.",
-      "thumb": {"tag": "v1.2", "file": "thumb.png", "sha256": "371c28c8b466b404f1b57e3ff3635111ecf136dfe564a542640902c8b9a866da"}
-    },
-    {
-      "repo": "DigiAlchemydsp/DigiSplash", "tag": "v1.2", "file": "dn-claw.elemod",
-      "device": "digitone-mk1",
-      "sha256": "ef1125aa8df7c9ab3ddd5f1503c385548959598652a951bcd17cbdbaafed7a81",
-      "summary": "Boot-splash mods for the Digitakt mk1 and Digitone mk1/Keys: the rare stock animation plus animated splash screens.",
-      "on_unit": "Hardware stress-tested over 3 days: PASS on the Digitakt mk1 and Digitone mk1; fully functional and stable.",
-      "thumb": {"tag": "v1.2", "file": "thumb.png", "sha256": "371c28c8b466b404f1b57e3ff3635111ecf136dfe564a542640902c8b9a866da"}
+      "thumb": null
     },
     {
       "repo": "DigiAlchemydsp/DigiSplash", "tag": "v1.2", "file": "dn-digitrash.elemod",
@@ -443,71 +403,7 @@
       "sha256": "6e8388e88f2995310bb7d6a0e13ffad72b6a29f5fc14187ab6c25901e6fd8cae",
       "summary": "Boot-splash mods for the Digitakt mk1 and Digitone mk1/Keys: the rare stock animation plus animated splash screens.",
       "on_unit": "Hardware stress-tested over 3 days: PASS on the Digitakt mk1 and Digitone mk1; fully functional and stable.",
-      "thumb": {"tag": "v1.2", "file": "thumb.png", "sha256": "371c28c8b466b404f1b57e3ff3635111ecf136dfe564a542640902c8b9a866da"}
-    },
-    {
-      "repo": "DigiAlchemydsp/DigiSplash", "tag": "v1.2", "file": "dn-digitussy.elemod",
-      "device": "digitone-mk1",
-      "sha256": "1984fe3d23a571de1383a151cb728d137dcdf5c8e6aa4ec9d6edb063f1db58ae",
-      "summary": "Boot-splash mods for the Digitakt mk1 and Digitone mk1/Keys: the rare stock animation plus animated splash screens.",
-      "on_unit": "Hardware stress-tested over 3 days: PASS on the Digitakt mk1 and Digitone mk1; fully functional and stable.",
-      "thumb": {"tag": "v1.2", "file": "thumb.png", "sha256": "371c28c8b466b404f1b57e3ff3635111ecf136dfe564a542640902c8b9a866da"}
-    },
-    {
-      "repo": "DigiAlchemydsp/DigiSplash", "tag": "v1.2", "file": "dn-discover.elemod",
-      "device": "digitone-mk1",
-      "sha256": "48b4fcc071742625211b2941259087309fefb9270b97559128c51ed462e1d336",
-      "summary": "Boot-splash mods for the Digitakt mk1 and Digitone mk1/Keys: the rare stock animation plus animated splash screens.",
-      "on_unit": "Hardware stress-tested over 3 days: PASS on the Digitakt mk1 and Digitone mk1; fully functional and stable.",
-      "thumb": {"tag": "v1.2", "file": "thumb.png", "sha256": "371c28c8b466b404f1b57e3ff3635111ecf136dfe564a542640902c8b9a866da"}
-    },
-    {
-      "repo": "DigiAlchemydsp/DigiSplash", "tag": "v1.2", "file": "dn-experience.elemod",
-      "device": "digitone-mk1",
-      "sha256": "d1c0ad2ff42d8798eca81420defee0116a1cd0866207ecb443a56b2d85503e50",
-      "summary": "Boot-splash mods for the Digitakt mk1 and Digitone mk1/Keys: the rare stock animation plus animated splash screens.",
-      "on_unit": "Hardware stress-tested over 3 days: PASS on the Digitakt mk1 and Digitone mk1; fully functional and stable.",
-      "thumb": {"tag": "v1.2", "file": "thumb.png", "sha256": "371c28c8b466b404f1b57e3ff3635111ecf136dfe564a542640902c8b9a866da"}
-    },
-    {
-      "repo": "DigiAlchemydsp/DigiSplash", "tag": "v1.2", "file": "dn-horror.elemod",
-      "device": "digitone-mk1",
-      "sha256": "e9289936b9402650f0ce0056ec5d882117645c6d69aef6d87f8d733a9896163f",
-      "summary": "Boot-splash mods for the Digitakt mk1 and Digitone mk1/Keys: the rare stock animation plus animated splash screens.",
-      "on_unit": "Hardware stress-tested over 3 days: PASS on the Digitakt mk1 and Digitone mk1; fully functional and stable.",
-      "thumb": {"tag": "v1.2", "file": "thumb.png", "sha256": "371c28c8b466b404f1b57e3ff3635111ecf136dfe564a542640902c8b9a866da"}
-    },
-    {
-      "repo": "DigiAlchemydsp/DigiSplash", "tag": "v1.2", "file": "dn-kofight.elemod",
-      "device": "digitone-mk1",
-      "sha256": "da73c03d660b1c1c34fcfea40948226a17839a544c05f235fc7c51d0ebea9c3c",
-      "summary": "Boot-splash mods for the Digitakt mk1 and Digitone mk1/Keys: the rare stock animation plus animated splash screens.",
-      "on_unit": "Hardware stress-tested over 3 days: PASS on the Digitakt mk1 and Digitone mk1; fully functional and stable.",
-      "thumb": {"tag": "v1.2", "file": "thumb.png", "sha256": "371c28c8b466b404f1b57e3ff3635111ecf136dfe564a542640902c8b9a866da"}
-    },
-    {
-      "repo": "DigiAlchemydsp/DigiSplash", "tag": "v1.2", "file": "dn-loop.elemod",
-      "device": "digitone-mk1",
-      "sha256": "330f87d118ffbb17af2d2ff73ee53ca330a9b9d9144ac87e8ad80461b9059548",
-      "summary": "Boot-splash mods for the Digitakt mk1 and Digitone mk1/Keys: the rare stock animation plus animated splash screens.",
-      "on_unit": "Hardware stress-tested over 3 days: PASS on the Digitakt mk1 and Digitone mk1; fully functional and stable.",
-      "thumb": {"tag": "v1.2", "file": "thumb.png", "sha256": "371c28c8b466b404f1b57e3ff3635111ecf136dfe564a542640902c8b9a866da"}
-    },
-    {
-      "repo": "DigiAlchemydsp/DigiSplash", "tag": "v1.2", "file": "dn-loox.elemod",
-      "device": "digitone-mk1",
-      "sha256": "322ba79ebe20ba9518f2f0ecd2fcd7e50f148cc61abe10105076ba3de5ade210",
-      "summary": "Boot-splash mods for the Digitakt mk1 and Digitone mk1/Keys: the rare stock animation plus animated splash screens.",
-      "on_unit": "Hardware stress-tested over 3 days: PASS on the Digitakt mk1 and Digitone mk1; fully functional and stable.",
-      "thumb": {"tag": "v1.2", "file": "thumb.png", "sha256": "371c28c8b466b404f1b57e3ff3635111ecf136dfe564a542640902c8b9a866da"}
-    },
-    {
-      "repo": "DigiAlchemydsp/DigiSplash", "tag": "v1.2", "file": "dn-majestic.elemod",
-      "device": "digitone-mk1",
-      "sha256": "e6aa454c39bdacd6ba348df8950cd9ed4c6fa9ce7c774ac0b558b42309494317",
-      "summary": "Boot-splash mods for the Digitakt mk1 and Digitone mk1/Keys: the rare stock animation plus animated splash screens.",
-      "on_unit": "Hardware stress-tested over 3 days: PASS on the Digitakt mk1 and Digitone mk1; fully functional and stable.",
-      "thumb": {"tag": "v1.2", "file": "thumb.png", "sha256": "371c28c8b466b404f1b57e3ff3635111ecf136dfe564a542640902c8b9a866da"}
+      "thumb": null
     },
     {
       "repo": "DigiAlchemydsp/DigiSplash", "tag": "v1.2", "file": "dn-match.elemod",
@@ -515,39 +411,7 @@
       "sha256": "bd2b1a0e61f248af78ff1836b9b8111649d7a6c7f10c9914956fa79203dcebc1",
       "summary": "Boot-splash mods for the Digitakt mk1 and Digitone mk1/Keys: the rare stock animation plus animated splash screens.",
       "on_unit": "Hardware stress-tested over 3 days: PASS on the Digitakt mk1 and Digitone mk1; fully functional and stable.",
-      "thumb": {"tag": "v1.2", "file": "thumb.png", "sha256": "371c28c8b466b404f1b57e3ff3635111ecf136dfe564a542640902c8b9a866da"}
-    },
-    {
-      "repo": "DigiAlchemydsp/DigiSplash", "tag": "v1.2", "file": "dn-milkyway.elemod",
-      "device": "digitone-mk1",
-      "sha256": "8ee198c1e81bba0716dbb9907b92c34fd75bc9e3065961e334726e561fe89973",
-      "summary": "Boot-splash mods for the Digitakt mk1 and Digitone mk1/Keys: the rare stock animation plus animated splash screens.",
-      "on_unit": "Hardware stress-tested over 3 days: PASS on the Digitakt mk1 and Digitone mk1; fully functional and stable.",
-      "thumb": {"tag": "v1.2", "file": "thumb.png", "sha256": "371c28c8b466b404f1b57e3ff3635111ecf136dfe564a542640902c8b9a866da"}
-    },
-    {
-      "repo": "DigiAlchemydsp/DigiSplash", "tag": "v1.2", "file": "dn-mount.elemod",
-      "device": "digitone-mk1",
-      "sha256": "65102a449d5621a75794e8f8ad09d15d8b9ffc7f687b112c09705f5c9c277f10",
-      "summary": "Boot-splash mods for the Digitakt mk1 and Digitone mk1/Keys: the rare stock animation plus animated splash screens.",
-      "on_unit": "Hardware stress-tested over 3 days: PASS on the Digitakt mk1 and Digitone mk1; fully functional and stable.",
-      "thumb": {"tag": "v1.2", "file": "thumb.png", "sha256": "371c28c8b466b404f1b57e3ff3635111ecf136dfe564a542640902c8b9a866da"}
-    },
-    {
-      "repo": "DigiAlchemydsp/DigiSplash", "tag": "v1.2", "file": "dn-pfft.elemod",
-      "device": "digitone-mk1",
-      "sha256": "03e5a063d7d775214ffa3b7f47e443805fe1e8c09383144f3bf0b69f9feb1000",
-      "summary": "Boot-splash mods for the Digitakt mk1 and Digitone mk1/Keys: the rare stock animation plus animated splash screens.",
-      "on_unit": "Hardware stress-tested over 3 days: PASS on the Digitakt mk1 and Digitone mk1; fully functional and stable.",
-      "thumb": {"tag": "v1.2", "file": "thumb.png", "sha256": "371c28c8b466b404f1b57e3ff3635111ecf136dfe564a542640902c8b9a866da"}
-    },
-    {
-      "repo": "DigiAlchemydsp/DigiSplash", "tag": "v1.2", "file": "dn-planet1.elemod",
-      "device": "digitone-mk1",
-      "sha256": "b719f41e6dd8a6d710fb51fe5bce73c6cb3b30650308724f60b592a7cb09453e",
-      "summary": "Boot-splash mods for the Digitakt mk1 and Digitone mk1/Keys: the rare stock animation plus animated splash screens.",
-      "on_unit": "Hardware stress-tested over 3 days: PASS on the Digitakt mk1 and Digitone mk1; fully functional and stable.",
-      "thumb": {"tag": "v1.2", "file": "thumb.png", "sha256": "371c28c8b466b404f1b57e3ff3635111ecf136dfe564a542640902c8b9a866da"}
+      "thumb": null
     },
     {
       "repo": "DigiAlchemydsp/DigiSplash", "tag": "v1.2", "file": "dn-rare-splash.elemod",
@@ -555,31 +419,7 @@
       "sha256": "ab7582343354c7f4261900ab967dab28aed540b8c3583e0ffcbdc347ec0b85ae",
       "summary": "Boot-splash mods for the Digitakt mk1 and Digitone mk1/Keys: the rare stock animation plus animated splash screens.",
       "on_unit": "Hardware stress-tested over 3 days: PASS on the Digitakt mk1 and Digitone mk1; fully functional and stable.",
-      "thumb": {"tag": "v1.2", "file": "thumb.png", "sha256": "371c28c8b466b404f1b57e3ff3635111ecf136dfe564a542640902c8b9a866da"}
-    },
-    {
-      "repo": "DigiAlchemydsp/DigiSplash", "tag": "v1.2", "file": "dn-reach.elemod",
-      "device": "digitone-mk1",
-      "sha256": "e20ec1d47b8708f0cc46b88619e0878faed219b5e35b7397d3a99272fdf3ff00",
-      "summary": "Boot-splash mods for the Digitakt mk1 and Digitone mk1/Keys: the rare stock animation plus animated splash screens.",
-      "on_unit": "Hardware stress-tested over 3 days: PASS on the Digitakt mk1 and Digitone mk1; fully functional and stable.",
-      "thumb": {"tag": "v1.2", "file": "thumb.png", "sha256": "371c28c8b466b404f1b57e3ff3635111ecf136dfe564a542640902c8b9a866da"}
-    },
-    {
-      "repo": "DigiAlchemydsp/DigiSplash", "tag": "v1.2", "file": "dn-tidemoon.elemod",
-      "device": "digitone-mk1",
-      "sha256": "3dd538c268dae69a5b4ee15f8fa7ad78d51ddaf89c45cc49fc2081fe6c4a9af2",
-      "summary": "Boot-splash mods for the Digitakt mk1 and Digitone mk1/Keys: the rare stock animation plus animated splash screens.",
-      "on_unit": "Hardware stress-tested over 3 days: PASS on the Digitakt mk1 and Digitone mk1; fully functional and stable.",
-      "thumb": {"tag": "v1.2", "file": "thumb.png", "sha256": "371c28c8b466b404f1b57e3ff3635111ecf136dfe564a542640902c8b9a866da"}
-    },
-    {
-      "repo": "DigiAlchemydsp/DigiSplash", "tag": "v1.2", "file": "dn-tussy.elemod",
-      "device": "digitone-mk1",
-      "sha256": "a6e02f9bd6354e9579a91d3ad02e9432fdd3362ed1ce1d5693dd2d57619b9360",
-      "summary": "Boot-splash mods for the Digitakt mk1 and Digitone mk1/Keys: the rare stock animation plus animated splash screens.",
-      "on_unit": "Hardware stress-tested over 3 days: PASS on the Digitakt mk1 and Digitone mk1; fully functional and stable.",
-      "thumb": {"tag": "v1.2", "file": "thumb.png", "sha256": "371c28c8b466b404f1b57e3ff3635111ecf136dfe564a542640902c8b9a866da"}
+      "thumb": null
     },
     {
       "repo": "DigiAlchemydsp/DigiSplash", "tag": "v1.2", "file": "dn-vinyl.elemod",
@@ -587,43 +427,7 @@
       "sha256": "49347ccf10d9ae266bc9cdfb4da19f83254f9dfc4f5a1564564da130aef98ec1",
       "summary": "Boot-splash mods for the Digitakt mk1 and Digitone mk1/Keys: the rare stock animation plus animated splash screens.",
       "on_unit": "Hardware stress-tested over 3 days: PASS on the Digitakt mk1 and Digitone mk1; fully functional and stable.",
-      "thumb": {"tag": "v1.2", "file": "thumb.png", "sha256": "371c28c8b466b404f1b57e3ff3635111ecf136dfe564a542640902c8b9a866da"}
-    },
-    {
-      "repo": "DigiAlchemydsp/DigiCandy", "commit": "2c36609dd20ddf5b6651cb88842c65e40d004c85",
-      "path": "releases/aba-dn.elemod",
-      "device": "digitone-mk1",
-      "sha256": "a675d635c1fddda3bc71fca130743a28fe7d98ff01bd4c9b75eba1a543634116",
-      "summary": "Eye Candy for the Digis: on-command full-screen images and effects.",
-      "on_unit": "Tested on hardware; fully functional and stable.",
-      "thumb": {"commit": "2c36609dd20ddf5b6651cb88842c65e40d004c85", "path": "thumb.png", "sha256": "371c28c8b466b404f1b57e3ff3635111ecf136dfe564a542640902c8b9a866da"}
-    },
-    {
-      "repo": "DigiAlchemydsp/DigiCandy", "commit": "2c36609dd20ddf5b6651cb88842c65e40d004c85",
-      "path": "releases/bzme-dn.elemod",
-      "device": "digitone-mk1",
-      "sha256": "2efdedb0db97cf60446cd2507470cfbb1a2a208d1443e717adf61a09be80c902",
-      "summary": "Eye Candy for the Digis: on-command full-screen images and effects.",
-      "on_unit": "Tested on hardware; fully functional and stable.",
-      "thumb": {"commit": "2c36609dd20ddf5b6651cb88842c65e40d004c85", "path": "thumb.png", "sha256": "371c28c8b466b404f1b57e3ff3635111ecf136dfe564a542640902c8b9a866da"}
-    },
-    {
-      "repo": "DigiAlchemydsp/DigiCandy", "commit": "2c36609dd20ddf5b6651cb88842c65e40d004c85",
-      "path": "releases/catbooting-dn.elemod",
-      "device": "digitone-mk1",
-      "sha256": "596b2fdf99273cb9ff28f127df4e422788be2cd9fd43f5603d2714e7d481ce79",
-      "summary": "Eye Candy for the Digis: on-command full-screen images and effects.",
-      "on_unit": "Tested on hardware; fully functional and stable.",
-      "thumb": {"commit": "2c36609dd20ddf5b6651cb88842c65e40d004c85", "path": "thumb.png", "sha256": "371c28c8b466b404f1b57e3ff3635111ecf136dfe564a542640902c8b9a866da"}
-    },
-    {
-      "repo": "DigiAlchemydsp/DigiCandy", "commit": "2c36609dd20ddf5b6651cb88842c65e40d004c85",
-      "path": "releases/claw-dn.elemod",
-      "device": "digitone-mk1",
-      "sha256": "057edd2389e1a3955cb9725d3ab7efe25b66a0b5e75081d27e7ff9f2f509156d",
-      "summary": "Eye Candy for the Digis: on-command full-screen images and effects.",
-      "on_unit": "Tested on hardware; fully functional and stable.",
-      "thumb": {"commit": "2c36609dd20ddf5b6651cb88842c65e40d004c85", "path": "thumb.png", "sha256": "371c28c8b466b404f1b57e3ff3635111ecf136dfe564a542640902c8b9a866da"}
+      "thumb": null
     },
     {
       "repo": "DigiAlchemydsp/DigiCandy", "commit": "2c36609dd20ddf5b6651cb88842c65e40d004c85",
@@ -632,7 +436,7 @@
       "sha256": "1ceaeb2bd9e13bccc8f11958d17967c3e754563615fa59284cf3f2e9a3bcc4f6",
       "summary": "Eye Candy for the Digis: on-command full-screen images and effects.",
       "on_unit": "Tested on hardware; fully functional and stable.",
-      "thumb": {"commit": "2c36609dd20ddf5b6651cb88842c65e40d004c85", "path": "thumb.png", "sha256": "371c28c8b466b404f1b57e3ff3635111ecf136dfe564a542640902c8b9a866da"}
+      "thumb": null
     },
     {
       "repo": "DigiAlchemydsp/DigiCandy", "commit": "2c36609dd20ddf5b6651cb88842c65e40d004c85",
@@ -641,25 +445,7 @@
       "sha256": "e12ed56b54a7dc37bcfca113ce27239032ccd248680676dffc0a5e0b7a34a554",
       "summary": "Eye Candy for the Digis: on-command full-screen images and effects.",
       "on_unit": "Tested on hardware; fully functional and stable.",
-      "thumb": {"commit": "2c36609dd20ddf5b6651cb88842c65e40d004c85", "path": "thumb.png", "sha256": "371c28c8b466b404f1b57e3ff3635111ecf136dfe564a542640902c8b9a866da"}
-    },
-    {
-      "repo": "DigiAlchemydsp/DigiCandy", "commit": "2c36609dd20ddf5b6651cb88842c65e40d004c85",
-      "path": "releases/mount-dn.elemod",
-      "device": "digitone-mk1",
-      "sha256": "c2819083f15e70428c77c4f77ef01df44387e2f6964eca047890e3bbc9743c2b",
-      "summary": "Eye Candy for the Digis: on-command full-screen images and effects.",
-      "on_unit": "Tested on hardware; fully functional and stable.",
-      "thumb": {"commit": "2c36609dd20ddf5b6651cb88842c65e40d004c85", "path": "thumb.png", "sha256": "371c28c8b466b404f1b57e3ff3635111ecf136dfe564a542640902c8b9a866da"}
-    },
-    {
-      "repo": "DigiAlchemydsp/DigiCandy", "commit": "2c36609dd20ddf5b6651cb88842c65e40d004c85",
-      "path": "releases/pfft-dn.elemod",
-      "device": "digitone-mk1",
-      "sha256": "90879964a983dee0bcd582731486d24d2c1ea2395a21e7de4bf8e9be5ae9d067",
-      "summary": "Eye Candy for the Digis: on-command full-screen images and effects.",
-      "on_unit": "Tested on hardware; fully functional and stable.",
-      "thumb": {"commit": "2c36609dd20ddf5b6651cb88842c65e40d004c85", "path": "thumb.png", "sha256": "371c28c8b466b404f1b57e3ff3635111ecf136dfe564a542640902c8b9a866da"}
+      "thumb": null
     },
     {
       "repo": "DigiAlchemydsp/DigiCandy", "commit": "2c36609dd20ddf5b6651cb88842c65e40d004c85",
@@ -668,7 +454,7 @@
       "sha256": "7749c381acbfd922b40a9e36ab9f64be44fd1f9676ce71962aed1a1cee2eb8b2",
       "summary": "Eye Candy for the Digis: on-command full-screen images and effects.",
       "on_unit": "Tested on hardware; fully functional and stable.",
-      "thumb": {"commit": "2c36609dd20ddf5b6651cb88842c65e40d004c85", "path": "thumb.png", "sha256": "371c28c8b466b404f1b57e3ff3635111ecf136dfe564a542640902c8b9a866da"}
+      "thumb": null
     },
     {
       "repo": "DigiAlchemydsp/DigiCandy", "commit": "2c36609dd20ddf5b6651cb88842c65e40d004c85",
@@ -677,7 +463,7 @@
       "sha256": "d7d614246dd28d50e5d31701173e4592d91e56376cc65d084530de97b32fbf19",
       "summary": "Eye Candy for the Digis: on-command full-screen images and effects.",
       "on_unit": "Tested on hardware; fully functional and stable.",
-      "thumb": {"commit": "2c36609dd20ddf5b6651cb88842c65e40d004c85", "path": "thumb.png", "sha256": "371c28c8b466b404f1b57e3ff3635111ecf136dfe564a542640902c8b9a866da"}
+      "thumb": null
     },
     {
       "repo": "DigiAlchemydsp/DigiCandy", "commit": "2c36609dd20ddf5b6651cb88842c65e40d004c85",
@@ -686,16 +472,7 @@
       "sha256": "96ab48ba7921d36e89c8b16841a39a9808a4901762b5741e3964de1d813340b5",
       "summary": "Eye Candy for the Digis: on-command full-screen images and effects.",
       "on_unit": "Tested on hardware; fully functional and stable.",
-      "thumb": {"commit": "2c36609dd20ddf5b6651cb88842c65e40d004c85", "path": "thumb.png", "sha256": "371c28c8b466b404f1b57e3ff3635111ecf136dfe564a542640902c8b9a866da"}
-    },
-    {
-      "repo": "DigiAlchemydsp/DigiCandy", "commit": "2c36609dd20ddf5b6651cb88842c65e40d004c85",
-      "path": "releases/tussy-dn.elemod",
-      "device": "digitone-mk1",
-      "sha256": "cecbc4cc80a37ac358c95489106b797bd08dbf95278ea856db0faff15de920e3",
-      "summary": "Eye Candy for the Digis: on-command full-screen images and effects.",
-      "on_unit": "Tested on hardware; fully functional and stable.",
-      "thumb": {"commit": "2c36609dd20ddf5b6651cb88842c65e40d004c85", "path": "thumb.png", "sha256": "371c28c8b466b404f1b57e3ff3635111ecf136dfe564a542640902c8b9a866da"}
+      "thumb": null
     },
     {
       "repo": "irpina/digineighbor", "tag": "v0.6", "file": "digineighbor-0.6.elemod",
@@ -961,47 +738,7 @@
       "sha256": "573b504eb2f4320811432551ebdb1f23573aad59bcaba7182f69eb86cba444a0",
       "summary": "Boot-splash mods for the Digitakt mk1 and Digitone mk1/Keys: the rare stock animation plus animated splash screens.",
       "on_unit": "Hardware stress-tested over 3 days: PASS on the Digitakt mk1 and Digitone mk1; fully functional and stable.",
-      "thumb": {"tag": "v1.2", "file": "thumb.png", "sha256": "371c28c8b466b404f1b57e3ff3635111ecf136dfe564a542640902c8b9a866da"}
-    },
-    {
-      "repo": "DigiAlchemydsp/DigiSplash", "tag": "v1.2", "file": "dt-beep.elemod",
-      "device": "digitakt-mk1",
-      "sha256": "f0a97475d78719bf3a070114fe5b5b05b9ebd784a4bffa661f6f06f472476d7f",
-      "summary": "Boot-splash mods for the Digitakt mk1 and Digitone mk1/Keys: the rare stock animation plus animated splash screens.",
-      "on_unit": "Hardware stress-tested over 3 days: PASS on the Digitakt mk1 and Digitone mk1; fully functional and stable.",
-      "thumb": {"tag": "v1.2", "file": "thumb.png", "sha256": "371c28c8b466b404f1b57e3ff3635111ecf136dfe564a542640902c8b9a866da"}
-    },
-    {
-      "repo": "DigiAlchemydsp/DigiSplash", "tag": "v1.2", "file": "dt-bzme.elemod",
-      "device": "digitakt-mk1",
-      "sha256": "7b099365840a7bd94a92b615f8000dcf959029e995e70bb565aaefd79d2660fb",
-      "summary": "Boot-splash mods for the Digitakt mk1 and Digitone mk1/Keys: the rare stock animation plus animated splash screens.",
-      "on_unit": "Hardware stress-tested over 3 days: PASS on the Digitakt mk1 and Digitone mk1; fully functional and stable.",
-      "thumb": {"tag": "v1.2", "file": "thumb.png", "sha256": "371c28c8b466b404f1b57e3ff3635111ecf136dfe564a542640902c8b9a866da"}
-    },
-    {
-      "repo": "DigiAlchemydsp/DigiSplash", "tag": "v1.2", "file": "dt-catbooting.elemod",
-      "device": "digitakt-mk1",
-      "sha256": "4cea7c6df64bbe7722dc3b87dec23de67d4d98c498c1af301d6a6ecb569fa0a8",
-      "summary": "Boot-splash mods for the Digitakt mk1 and Digitone mk1/Keys: the rare stock animation plus animated splash screens.",
-      "on_unit": "Hardware stress-tested over 3 days: PASS on the Digitakt mk1 and Digitone mk1; fully functional and stable.",
-      "thumb": {"tag": "v1.2", "file": "thumb.png", "sha256": "371c28c8b466b404f1b57e3ff3635111ecf136dfe564a542640902c8b9a866da"}
-    },
-    {
-      "repo": "DigiAlchemydsp/DigiSplash", "tag": "v1.2", "file": "dt-catscan.elemod",
-      "device": "digitakt-mk1",
-      "sha256": "6b927fdb32c164966eac14311a13045ddcf17f979974b00a2712e0059663ff64",
-      "summary": "Boot-splash mods for the Digitakt mk1 and Digitone mk1/Keys: the rare stock animation plus animated splash screens.",
-      "on_unit": "Hardware stress-tested over 3 days: PASS on the Digitakt mk1 and Digitone mk1; fully functional and stable.",
-      "thumb": {"tag": "v1.2", "file": "thumb.png", "sha256": "371c28c8b466b404f1b57e3ff3635111ecf136dfe564a542640902c8b9a866da"}
-    },
-    {
-      "repo": "DigiAlchemydsp/DigiSplash", "tag": "v1.2", "file": "dt-claw.elemod",
-      "device": "digitakt-mk1",
-      "sha256": "bad32fd1ed0b7835c16b30137157a99b8b7751e4a79308c28c3ca024484f722b",
-      "summary": "Boot-splash mods for the Digitakt mk1 and Digitone mk1/Keys: the rare stock animation plus animated splash screens.",
-      "on_unit": "Hardware stress-tested over 3 days: PASS on the Digitakt mk1 and Digitone mk1; fully functional and stable.",
-      "thumb": {"tag": "v1.2", "file": "thumb.png", "sha256": "371c28c8b466b404f1b57e3ff3635111ecf136dfe564a542640902c8b9a866da"}
+      "thumb": null
     },
     {
       "repo": "DigiAlchemydsp/DigiSplash", "tag": "v1.2", "file": "dt-digitrash.elemod",
@@ -1009,71 +746,7 @@
       "sha256": "88b83a8cf980e2fc4c92f0307681833f563a691d2401a855de3304a4dbc9672f",
       "summary": "Boot-splash mods for the Digitakt mk1 and Digitone mk1/Keys: the rare stock animation plus animated splash screens.",
       "on_unit": "Hardware stress-tested over 3 days: PASS on the Digitakt mk1 and Digitone mk1; fully functional and stable.",
-      "thumb": {"tag": "v1.2", "file": "thumb.png", "sha256": "371c28c8b466b404f1b57e3ff3635111ecf136dfe564a542640902c8b9a866da"}
-    },
-    {
-      "repo": "DigiAlchemydsp/DigiSplash", "tag": "v1.2", "file": "dt-digitussy.elemod",
-      "device": "digitakt-mk1",
-      "sha256": "57c4a6dbcfef284cfe34cbd89b7308bd44ba1b15f6b8720dd9ad3d3c525e3045",
-      "summary": "Boot-splash mods for the Digitakt mk1 and Digitone mk1/Keys: the rare stock animation plus animated splash screens.",
-      "on_unit": "Hardware stress-tested over 3 days: PASS on the Digitakt mk1 and Digitone mk1; fully functional and stable.",
-      "thumb": {"tag": "v1.2", "file": "thumb.png", "sha256": "371c28c8b466b404f1b57e3ff3635111ecf136dfe564a542640902c8b9a866da"}
-    },
-    {
-      "repo": "DigiAlchemydsp/DigiSplash", "tag": "v1.2", "file": "dt-discover.elemod",
-      "device": "digitakt-mk1",
-      "sha256": "7460c98e1b55cb27e3e5cce1a5a49b808a176e88d1e2818c92385301217db94c",
-      "summary": "Boot-splash mods for the Digitakt mk1 and Digitone mk1/Keys: the rare stock animation plus animated splash screens.",
-      "on_unit": "Hardware stress-tested over 3 days: PASS on the Digitakt mk1 and Digitone mk1; fully functional and stable.",
-      "thumb": {"tag": "v1.2", "file": "thumb.png", "sha256": "371c28c8b466b404f1b57e3ff3635111ecf136dfe564a542640902c8b9a866da"}
-    },
-    {
-      "repo": "DigiAlchemydsp/DigiSplash", "tag": "v1.2", "file": "dt-experience.elemod",
-      "device": "digitakt-mk1",
-      "sha256": "76e71ba7d9d0d30b8f999b2f7b037ecebeeca3037572a7ca86ee87dfa1bc6af7",
-      "summary": "Boot-splash mods for the Digitakt mk1 and Digitone mk1/Keys: the rare stock animation plus animated splash screens.",
-      "on_unit": "Hardware stress-tested over 3 days: PASS on the Digitakt mk1 and Digitone mk1; fully functional and stable.",
-      "thumb": {"tag": "v1.2", "file": "thumb.png", "sha256": "371c28c8b466b404f1b57e3ff3635111ecf136dfe564a542640902c8b9a866da"}
-    },
-    {
-      "repo": "DigiAlchemydsp/DigiSplash", "tag": "v1.2", "file": "dt-horror.elemod",
-      "device": "digitakt-mk1",
-      "sha256": "c892ee0ef1c4bf8d44e9168346e100e3f4d812b3e513314527ba75f71b454e1f",
-      "summary": "Boot-splash mods for the Digitakt mk1 and Digitone mk1/Keys: the rare stock animation plus animated splash screens.",
-      "on_unit": "Hardware stress-tested over 3 days: PASS on the Digitakt mk1 and Digitone mk1; fully functional and stable.",
-      "thumb": {"tag": "v1.2", "file": "thumb.png", "sha256": "371c28c8b466b404f1b57e3ff3635111ecf136dfe564a542640902c8b9a866da"}
-    },
-    {
-      "repo": "DigiAlchemydsp/DigiSplash", "tag": "v1.2", "file": "dt-kofight.elemod",
-      "device": "digitakt-mk1",
-      "sha256": "27dc5b8206ee78bdd521e888101e8af01170955858e2bb348d786bf674afd86d",
-      "summary": "Boot-splash mods for the Digitakt mk1 and Digitone mk1/Keys: the rare stock animation plus animated splash screens.",
-      "on_unit": "Hardware stress-tested over 3 days: PASS on the Digitakt mk1 and Digitone mk1; fully functional and stable.",
-      "thumb": {"tag": "v1.2", "file": "thumb.png", "sha256": "371c28c8b466b404f1b57e3ff3635111ecf136dfe564a542640902c8b9a866da"}
-    },
-    {
-      "repo": "DigiAlchemydsp/DigiSplash", "tag": "v1.2", "file": "dt-loop.elemod",
-      "device": "digitakt-mk1",
-      "sha256": "864b937b60208f60d01da0853b764959cfd20770cd1d2da8f02569ad2e153ae0",
-      "summary": "Boot-splash mods for the Digitakt mk1 and Digitone mk1/Keys: the rare stock animation plus animated splash screens.",
-      "on_unit": "Hardware stress-tested over 3 days: PASS on the Digitakt mk1 and Digitone mk1; fully functional and stable.",
-      "thumb": {"tag": "v1.2", "file": "thumb.png", "sha256": "371c28c8b466b404f1b57e3ff3635111ecf136dfe564a542640902c8b9a866da"}
-    },
-    {
-      "repo": "DigiAlchemydsp/DigiSplash", "tag": "v1.2", "file": "dt-loox.elemod",
-      "device": "digitakt-mk1",
-      "sha256": "3ac0681be2bc7071bfbf045988f2081958c0426184ff80d248798bdebed16dc2",
-      "summary": "Boot-splash mods for the Digitakt mk1 and Digitone mk1/Keys: the rare stock animation plus animated splash screens.",
-      "on_unit": "Hardware stress-tested over 3 days: PASS on the Digitakt mk1 and Digitone mk1; fully functional and stable.",
-      "thumb": {"tag": "v1.2", "file": "thumb.png", "sha256": "371c28c8b466b404f1b57e3ff3635111ecf136dfe564a542640902c8b9a866da"}
-    },
-    {
-      "repo": "DigiAlchemydsp/DigiSplash", "tag": "v1.2", "file": "dt-majestic.elemod",
-      "device": "digitakt-mk1",
-      "sha256": "86e3f00a7f7fe45ba8829059bac089edf2aefa1f1afbdb3f2534afefcbce7c49",
-      "summary": "Boot-splash mods for the Digitakt mk1 and Digitone mk1/Keys: the rare stock animation plus animated splash screens.",
-      "on_unit": "Hardware stress-tested over 3 days: PASS on the Digitakt mk1 and Digitone mk1; fully functional and stable.",
-      "thumb": {"tag": "v1.2", "file": "thumb.png", "sha256": "371c28c8b466b404f1b57e3ff3635111ecf136dfe564a542640902c8b9a866da"}
+      "thumb": null
     },
     {
       "repo": "DigiAlchemydsp/DigiSplash", "tag": "v1.2", "file": "dt-match.elemod",
@@ -1081,39 +754,7 @@
       "sha256": "f463ea384da0e576021484c192841617fc177b7c5d105030dc944197a8e8266c",
       "summary": "Boot-splash mods for the Digitakt mk1 and Digitone mk1/Keys: the rare stock animation plus animated splash screens.",
       "on_unit": "Hardware stress-tested over 3 days: PASS on the Digitakt mk1 and Digitone mk1; fully functional and stable.",
-      "thumb": {"tag": "v1.2", "file": "thumb.png", "sha256": "371c28c8b466b404f1b57e3ff3635111ecf136dfe564a542640902c8b9a866da"}
-    },
-    {
-      "repo": "DigiAlchemydsp/DigiSplash", "tag": "v1.2", "file": "dt-milkyway.elemod",
-      "device": "digitakt-mk1",
-      "sha256": "8ea6996b54f6d5f46490430f30460ca19b88dc56da2bcd9291519061c0afd86a",
-      "summary": "Boot-splash mods for the Digitakt mk1 and Digitone mk1/Keys: the rare stock animation plus animated splash screens.",
-      "on_unit": "Hardware stress-tested over 3 days: PASS on the Digitakt mk1 and Digitone mk1; fully functional and stable.",
-      "thumb": {"tag": "v1.2", "file": "thumb.png", "sha256": "371c28c8b466b404f1b57e3ff3635111ecf136dfe564a542640902c8b9a866da"}
-    },
-    {
-      "repo": "DigiAlchemydsp/DigiSplash", "tag": "v1.2", "file": "dt-mount.elemod",
-      "device": "digitakt-mk1",
-      "sha256": "da0e1f6bca99e0c7c4a6d4aa48934e931151bf540c2b0a4c45fad7fc62e3455b",
-      "summary": "Boot-splash mods for the Digitakt mk1 and Digitone mk1/Keys: the rare stock animation plus animated splash screens.",
-      "on_unit": "Hardware stress-tested over 3 days: PASS on the Digitakt mk1 and Digitone mk1; fully functional and stable.",
-      "thumb": {"tag": "v1.2", "file": "thumb.png", "sha256": "371c28c8b466b404f1b57e3ff3635111ecf136dfe564a542640902c8b9a866da"}
-    },
-    {
-      "repo": "DigiAlchemydsp/DigiSplash", "tag": "v1.2", "file": "dt-pfft.elemod",
-      "device": "digitakt-mk1",
-      "sha256": "26277c822754486d501069fb3183e416adc4bf9b59d80cdc6615b540f5ca612a",
-      "summary": "Boot-splash mods for the Digitakt mk1 and Digitone mk1/Keys: the rare stock animation plus animated splash screens.",
-      "on_unit": "Hardware stress-tested over 3 days: PASS on the Digitakt mk1 and Digitone mk1; fully functional and stable.",
-      "thumb": {"tag": "v1.2", "file": "thumb.png", "sha256": "371c28c8b466b404f1b57e3ff3635111ecf136dfe564a542640902c8b9a866da"}
-    },
-    {
-      "repo": "DigiAlchemydsp/DigiSplash", "tag": "v1.2", "file": "dt-planet1.elemod",
-      "device": "digitakt-mk1",
-      "sha256": "f05a10b561930f3fbc424872c11263a876af693c2fc2ea8d5256120a595534c3",
-      "summary": "Boot-splash mods for the Digitakt mk1 and Digitone mk1/Keys: the rare stock animation plus animated splash screens.",
-      "on_unit": "Hardware stress-tested over 3 days: PASS on the Digitakt mk1 and Digitone mk1; fully functional and stable.",
-      "thumb": {"tag": "v1.2", "file": "thumb.png", "sha256": "371c28c8b466b404f1b57e3ff3635111ecf136dfe564a542640902c8b9a866da"}
+      "thumb": null
     },
     {
       "repo": "DigiAlchemydsp/DigiSplash", "tag": "v1.2", "file": "dt-rare-splash.elemod",
@@ -1121,31 +762,7 @@
       "sha256": "3249ce123063e535d7778847731d5fb1487d0a54fa853a6d7c617d4f98f801f3",
       "summary": "Boot-splash mods for the Digitakt mk1 and Digitone mk1/Keys: the rare stock animation plus animated splash screens.",
       "on_unit": "Hardware stress-tested over 3 days: PASS on the Digitakt mk1 and Digitone mk1; fully functional and stable.",
-      "thumb": {"tag": "v1.2", "file": "thumb.png", "sha256": "371c28c8b466b404f1b57e3ff3635111ecf136dfe564a542640902c8b9a866da"}
-    },
-    {
-      "repo": "DigiAlchemydsp/DigiSplash", "tag": "v1.2", "file": "dt-reach.elemod",
-      "device": "digitakt-mk1",
-      "sha256": "b66743be70de93c0f093640f713d0eba7428df5e64830ba2b7d954f8aabaca3d",
-      "summary": "Boot-splash mods for the Digitakt mk1 and Digitone mk1/Keys: the rare stock animation plus animated splash screens.",
-      "on_unit": "Hardware stress-tested over 3 days: PASS on the Digitakt mk1 and Digitone mk1; fully functional and stable.",
-      "thumb": {"tag": "v1.2", "file": "thumb.png", "sha256": "371c28c8b466b404f1b57e3ff3635111ecf136dfe564a542640902c8b9a866da"}
-    },
-    {
-      "repo": "DigiAlchemydsp/DigiSplash", "tag": "v1.2", "file": "dt-tidemoon.elemod",
-      "device": "digitakt-mk1",
-      "sha256": "0c86c7d43dfcf066445942b4c1814e4d179021f46181bade33d1759d43f53ae2",
-      "summary": "Boot-splash mods for the Digitakt mk1 and Digitone mk1/Keys: the rare stock animation plus animated splash screens.",
-      "on_unit": "Hardware stress-tested over 3 days: PASS on the Digitakt mk1 and Digitone mk1; fully functional and stable.",
-      "thumb": {"tag": "v1.2", "file": "thumb.png", "sha256": "371c28c8b466b404f1b57e3ff3635111ecf136dfe564a542640902c8b9a866da"}
-    },
-    {
-      "repo": "DigiAlchemydsp/DigiSplash", "tag": "v1.2", "file": "dt-tussy.elemod",
-      "device": "digitakt-mk1",
-      "sha256": "3876c98068337819d6f52214ac2998491d355a07ea0da2fe1691c8df46d36995",
-      "summary": "Boot-splash mods for the Digitakt mk1 and Digitone mk1/Keys: the rare stock animation plus animated splash screens.",
-      "on_unit": "Hardware stress-tested over 3 days: PASS on the Digitakt mk1 and Digitone mk1; fully functional and stable.",
-      "thumb": {"tag": "v1.2", "file": "thumb.png", "sha256": "371c28c8b466b404f1b57e3ff3635111ecf136dfe564a542640902c8b9a866da"}
+      "thumb": null
     },
     {
       "repo": "DigiAlchemydsp/DigiSplash", "tag": "v1.2", "file": "dt-vinyl.elemod",
@@ -1153,43 +770,7 @@
       "sha256": "a894bfeedc96a72ec9395bd940810b8b99111a274b9f300645637eee55aaaa8f",
       "summary": "Boot-splash mods for the Digitakt mk1 and Digitone mk1/Keys: the rare stock animation plus animated splash screens.",
       "on_unit": "Hardware stress-tested over 3 days: PASS on the Digitakt mk1 and Digitone mk1; fully functional and stable.",
-      "thumb": {"tag": "v1.2", "file": "thumb.png", "sha256": "371c28c8b466b404f1b57e3ff3635111ecf136dfe564a542640902c8b9a866da"}
-    },
-    {
-      "repo": "DigiAlchemydsp/DigiCandy", "commit": "2c36609dd20ddf5b6651cb88842c65e40d004c85",
-      "path": "releases/aba-dt.elemod",
-      "device": "digitakt-mk1",
-      "sha256": "d27020441b8e3965485614eeec69dcca1947fdee32c154eba093b2f8fffb79cb",
-      "summary": "Eye Candy for the Digis: on-command full-screen images and effects.",
-      "on_unit": "Tested on hardware; fully functional and stable.",
-      "thumb": {"commit": "2c36609dd20ddf5b6651cb88842c65e40d004c85", "path": "thumb.png", "sha256": "371c28c8b466b404f1b57e3ff3635111ecf136dfe564a542640902c8b9a866da"}
-    },
-    {
-      "repo": "DigiAlchemydsp/DigiCandy", "commit": "2c36609dd20ddf5b6651cb88842c65e40d004c85",
-      "path": "releases/bzme-dt.elemod",
-      "device": "digitakt-mk1",
-      "sha256": "6127d73e65b73adc673807f8d97d6c7207aa9357bd459c70c51e9ba74039e512",
-      "summary": "Eye Candy for the Digis: on-command full-screen images and effects.",
-      "on_unit": "Tested on hardware; fully functional and stable.",
-      "thumb": {"commit": "2c36609dd20ddf5b6651cb88842c65e40d004c85", "path": "thumb.png", "sha256": "371c28c8b466b404f1b57e3ff3635111ecf136dfe564a542640902c8b9a866da"}
-    },
-    {
-      "repo": "DigiAlchemydsp/DigiCandy", "commit": "2c36609dd20ddf5b6651cb88842c65e40d004c85",
-      "path": "releases/catbooting-dt.elemod",
-      "device": "digitakt-mk1",
-      "sha256": "d621901fdff72b277f5978049ae11a8a802fca511fca3c7d560b2f934320d6ca",
-      "summary": "Eye Candy for the Digis: on-command full-screen images and effects.",
-      "on_unit": "Tested on hardware; fully functional and stable.",
-      "thumb": {"commit": "2c36609dd20ddf5b6651cb88842c65e40d004c85", "path": "thumb.png", "sha256": "371c28c8b466b404f1b57e3ff3635111ecf136dfe564a542640902c8b9a866da"}
-    },
-    {
-      "repo": "DigiAlchemydsp/DigiCandy", "commit": "2c36609dd20ddf5b6651cb88842c65e40d004c85",
-      "path": "releases/claw-dt.elemod",
-      "device": "digitakt-mk1",
-      "sha256": "0eea1ef0587a0817dc47e64333e939f90062acbfdce547f9e62e0a4506478a31",
-      "summary": "Eye Candy for the Digis: on-command full-screen images and effects.",
-      "on_unit": "Tested on hardware; fully functional and stable.",
-      "thumb": {"commit": "2c36609dd20ddf5b6651cb88842c65e40d004c85", "path": "thumb.png", "sha256": "371c28c8b466b404f1b57e3ff3635111ecf136dfe564a542640902c8b9a866da"}
+      "thumb": null
     },
     {
       "repo": "DigiAlchemydsp/DigiCandy", "commit": "2c36609dd20ddf5b6651cb88842c65e40d004c85",
@@ -1198,7 +779,7 @@
       "sha256": "a70f949d345c067311373479ee0683f3b275a0dd7dce3deb21278242a7b18614",
       "summary": "Eye Candy for the Digis: on-command full-screen images and effects.",
       "on_unit": "Tested on hardware; fully functional and stable.",
-      "thumb": {"commit": "2c36609dd20ddf5b6651cb88842c65e40d004c85", "path": "thumb.png", "sha256": "371c28c8b466b404f1b57e3ff3635111ecf136dfe564a542640902c8b9a866da"}
+      "thumb": null
     },
     {
       "repo": "DigiAlchemydsp/DigiCandy", "commit": "2c36609dd20ddf5b6651cb88842c65e40d004c85",
@@ -1207,25 +788,7 @@
       "sha256": "7c219504be529570938e1beeecde757076f671658b25cce26def81f2c1bc4e00",
       "summary": "Eye Candy for the Digis: on-command full-screen images and effects.",
       "on_unit": "Tested on hardware; fully functional and stable.",
-      "thumb": {"commit": "2c36609dd20ddf5b6651cb88842c65e40d004c85", "path": "thumb.png", "sha256": "371c28c8b466b404f1b57e3ff3635111ecf136dfe564a542640902c8b9a866da"}
-    },
-    {
-      "repo": "DigiAlchemydsp/DigiCandy", "commit": "2c36609dd20ddf5b6651cb88842c65e40d004c85",
-      "path": "releases/mount-dt.elemod",
-      "device": "digitakt-mk1",
-      "sha256": "cd2462cd97faf4a898f3b7f4a3c27b63654bf0d984763d55c83d8859e028b4d6",
-      "summary": "Eye Candy for the Digis: on-command full-screen images and effects.",
-      "on_unit": "Tested on hardware; fully functional and stable.",
-      "thumb": {"commit": "2c36609dd20ddf5b6651cb88842c65e40d004c85", "path": "thumb.png", "sha256": "371c28c8b466b404f1b57e3ff3635111ecf136dfe564a542640902c8b9a866da"}
-    },
-    {
-      "repo": "DigiAlchemydsp/DigiCandy", "commit": "2c36609dd20ddf5b6651cb88842c65e40d004c85",
-      "path": "releases/pfft-dt.elemod",
-      "device": "digitakt-mk1",
-      "sha256": "4988c54589e3ef546f00d391ba366b3fdb3ee05486dd864fb45049961d84e3db",
-      "summary": "Eye Candy for the Digis: on-command full-screen images and effects.",
-      "on_unit": "Tested on hardware; fully functional and stable.",
-      "thumb": {"commit": "2c36609dd20ddf5b6651cb88842c65e40d004c85", "path": "thumb.png", "sha256": "371c28c8b466b404f1b57e3ff3635111ecf136dfe564a542640902c8b9a866da"}
+      "thumb": null
     },
     {
       "repo": "DigiAlchemydsp/DigiCandy", "commit": "2c36609dd20ddf5b6651cb88842c65e40d004c85",
@@ -1234,7 +797,7 @@
       "sha256": "ad43fb1102ce3dd7bc1dc1a8eda470279dcdbf0945be8b0e0b773b32ba2945ad",
       "summary": "Eye Candy for the Digis: on-command full-screen images and effects.",
       "on_unit": "Tested on hardware; fully functional and stable.",
-      "thumb": {"commit": "2c36609dd20ddf5b6651cb88842c65e40d004c85", "path": "thumb.png", "sha256": "371c28c8b466b404f1b57e3ff3635111ecf136dfe564a542640902c8b9a866da"}
+      "thumb": null
     },
     {
       "repo": "DigiAlchemydsp/DigiCandy", "commit": "2c36609dd20ddf5b6651cb88842c65e40d004c85",
@@ -1243,7 +806,7 @@
       "sha256": "91c92906569801e9095b4c187ff4c3cb80347adaf5c2dfddfad949a9276d8655",
       "summary": "Eye Candy for the Digis: on-command full-screen images and effects.",
       "on_unit": "Tested on hardware; fully functional and stable.",
-      "thumb": {"commit": "2c36609dd20ddf5b6651cb88842c65e40d004c85", "path": "thumb.png", "sha256": "371c28c8b466b404f1b57e3ff3635111ecf136dfe564a542640902c8b9a866da"}
+      "thumb": null
     },
     {
       "repo": "DigiAlchemydsp/DigiCandy", "commit": "2c36609dd20ddf5b6651cb88842c65e40d004c85",
@@ -1252,16 +815,7 @@
       "sha256": "d2c3c5c169db72760c2eba9729c71e426ef291fa11bf68169ae96f5730a058d0",
       "summary": "Eye Candy for the Digis: on-command full-screen images and effects.",
       "on_unit": "Tested on hardware; fully functional and stable.",
-      "thumb": {"commit": "2c36609dd20ddf5b6651cb88842c65e40d004c85", "path": "thumb.png", "sha256": "371c28c8b466b404f1b57e3ff3635111ecf136dfe564a542640902c8b9a866da"}
-    },
-    {
-      "repo": "DigiAlchemydsp/DigiCandy", "commit": "2c36609dd20ddf5b6651cb88842c65e40d004c85",
-      "path": "releases/tussy-dt.elemod",
-      "device": "digitakt-mk1",
-      "sha256": "f1e71236c642f66671f240838975aef8fc195d21fd0a92409bb9d75736cc01ea",
-      "summary": "Eye Candy for the Digis: on-command full-screen images and effects.",
-      "on_unit": "Tested on hardware; fully functional and stable.",
-      "thumb": {"commit": "2c36609dd20ddf5b6651cb88842c65e40d004c85", "path": "thumb.png", "sha256": "371c28c8b466b404f1b57e3ff3635111ecf136dfe564a542640902c8b9a866da"}
+      "thumb": null
     },
     {
       "repo": "irpina/elekloader", "tag": "core-ot-v0.3.1", "file": "core-ot-0.3.1.elemod", "kind": "core",

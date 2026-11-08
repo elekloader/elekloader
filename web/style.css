@@ -464,6 +464,35 @@ details summary:hover { color: var(--text); }
 .board li.top1 .rank { color: var(--accent); }
 .board li.top2 .rank, .board li.top3 .rank { color: var(--text); }
 
+/* ---- the shop's sections: the row in the Mod Shop that opens one, and its page ---- */
+.section-promos { display: grid; gap: 10px; margin-top: 18px; }
+.section-promos:empty { display: none; }
+.section-promo { display: flex; align-items: center; gap: 16px; padding: 12px 16px; border-radius: var(--r);
+  background: var(--surface); border: 1px solid var(--line); color: var(--text); transition: border-color 0.2s; }
+.section-promo:hover { border-color: var(--outline); text-decoration: none; }
+.promo-pics { display: flex; flex: none; }
+.promo-pic { display: block; width: 72px; aspect-ratio: 2 / 1; border-radius: 4px; overflow: hidden; background: #000;
+  border: 1px solid var(--line-2); }
+.promo-pic + .promo-pic { margin-left: -18px; box-shadow: -4px 0 8px rgba(0, 0, 0, 0.5); }
+.promo-pic canvas { display: block; width: 100%; height: 100%; image-rendering: pixelated; }
+.promo-text { display: flex; flex-direction: column; min-width: 0; line-height: 1.35; }
+.promo-text strong { font-size: 15.5px; }
+.promo-text span { color: var(--muted); font-size: 13px; }
+.promo-go { margin-left: auto; color: var(--accent); font-size: 20px; }
+.sec-head { display: flex; align-items: flex-end; gap: 18px; }
+.sec-head .head-text { flex: 1; }
+.sec-head .eyebrow a, #splash-eyebrow a { color: inherit; }
+.secnav { padding-top: 14px; }
+.secnav:empty { display: none; }
+.secnav .chip .n { margin-left: 6px; }
+.pack > h2 .pack-src { margin-left: auto; color: var(--faint); font: 12px var(--mono); }
+.pack-blurb { margin: -6px 0 12px; color: var(--muted); font-size: 13.5px; }
+@media (max-width: 760px) {
+  .sec-head { flex-direction: column; align-items: flex-start; }
+  .promo-pics .promo-pic:nth-child(n+3) { display: none; }
+  .promo-pic { width: 56px; }
+}
+
 /* ---- the Splash screen maker (splash.js) ---- */
 .splash-grid { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 16px; align-items: start; }
 .callout { max-width: 760px; margin: 0 0 6px; padding: 11px 15px; border-radius: 8px; border: 1px solid rgba(245, 207, 69, 0.35);
