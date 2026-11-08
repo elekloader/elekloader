@@ -297,35 +297,40 @@
       "device": "digitone-mk1",
       "sha256": "949c85c27c3063b4a0a116ea5e4810378128e17cda9c9c0889e34d06f600090c",
       "summary": "ESOTERIKA: four Digitone voices, RUIN, XTAL, VOID and CREPUS.",
-      "on_unit": "Tested on hardware; fully functional and stable."
+      "on_unit": "Tested on hardware; fully functional and stable.",
+      "thumb": {"tag": "v1.2.1", "file": "thumb.png", "sha256": "2f8ee697fde32657bea305bc198d765d828714019730fade0aee7d68d0a207db"}
     },
     {
       "repo": "DigiAlchemydsp/ESOTERIKA", "tag": "v1.2.1", "file": "esoterika-1.0-os1.44.elemod",
       "device": "digitone-mk1",
       "sha256": "1de88714d8118cba04b88d3806a48fa57f72e9ff534d5823e1911abf9a84cfc1",
       "summary": "ESOTERIKA: four Digitone voices, RUIN, XTAL, VOID and CREPUS.",
-      "on_unit": "Tested on hardware; fully functional and stable."
+      "on_unit": "Tested on hardware; fully functional and stable.",
+      "thumb": {"tag": "v1.2.1", "file": "thumb.png", "sha256": "2f8ee697fde32657bea305bc198d765d828714019730fade0aee7d68d0a207db"}
     },
     {
       "repo": "DigiAlchemydsp/ESOTERIKA", "tag": "v1.2.1", "file": "ruin-1.1-os1.44.elemod",
       "device": "digitone-mk1",
       "sha256": "b2e329c97516b0e5875c63eb72035ea02ae67e8ac410d137e0e7300964bf5a98",
       "summary": "ESOTERIKA: four Digitone voices, RUIN, XTAL, VOID and CREPUS.",
-      "on_unit": "Tested on hardware; fully functional and stable."
+      "on_unit": "Tested on hardware; fully functional and stable.",
+      "thumb": {"tag": "v1.2.1", "file": "thumb.png", "sha256": "2f8ee697fde32657bea305bc198d765d828714019730fade0aee7d68d0a207db"}
     },
     {
       "repo": "DigiAlchemydsp/ESOTERIKA", "tag": "v1.2.1", "file": "void-1.1-os1.44.elemod",
       "device": "digitone-mk1",
       "sha256": "f1b3112e770ba365a017cb521b40ffb19316fd3be5ac9360b59ca18c792d2935",
       "summary": "ESOTERIKA: four Digitone voices, RUIN, XTAL, VOID and CREPUS.",
-      "on_unit": "Tested on hardware; fully functional and stable."
+      "on_unit": "Tested on hardware; fully functional and stable.",
+      "thumb": {"tag": "v1.2.1", "file": "thumb.png", "sha256": "2f8ee697fde32657bea305bc198d765d828714019730fade0aee7d68d0a207db"}
     },
     {
       "repo": "DigiAlchemydsp/ESOTERIKA", "tag": "v1.2.1", "file": "xtal-1.1-os1.44.elemod",
       "device": "digitone-mk1",
       "sha256": "3ac47f178e13adbb2511f7aa0a55dd1cf56652a22e56e0ebeac042758ab257e9",
       "summary": "ESOTERIKA: four Digitone voices, RUIN, XTAL, VOID and CREPUS.",
-      "on_unit": "Tested on hardware; fully functional and stable."
+      "on_unit": "Tested on hardware; fully functional and stable.",
+      "thumb": {"tag": "v1.2.1", "file": "thumb.png", "sha256": "2f8ee697fde32657bea305bc198d765d828714019730fade0aee7d68d0a207db"}
     },
     {
       "repo": "DigiAlchemydsp/FILTER-PLUS", "tag": "v1.0", "file": "filterplus-dn-1.0.elemod",
