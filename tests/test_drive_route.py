@@ -13,6 +13,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(HERE))
@@ -21,6 +22,13 @@ from elekloader import datarpc                                   # noqa: E402
 
 SRC = os.path.join(os.path.dirname(HERE), 'mods', 'drive-loader-ar2')
 DEPTH = 3                                  # fs.h DL_DEPTH: the route's patterns go to /mods/*/*/*/*
+
+
+# A /mods with a folder at every level to one past DL_DEPTH, each holding a file
+TREE = ['~T NAV/', '~T NAV/~T a-0.1.elemod', '~T NAV/~T A/', '~T NAV/~T A/~T b-0.1.elemod',
+        '~T NAV/~T A/~T B/', '~T NAV/~T A/~T B/~T c-0.1.elemod',
+        '~T NAV/~T A/~T B/~T C/', '~T NAV/~T A/~T B/~T C/~T d-0.1.elemod']
+LEVELS = ['', '~T NAV', '~T NAV/~T A', '~T NAV/~T A/~T B']      # the open folder at 0..DEPTH
 
 
 class Route(unittest.TestCase):
@@ -89,6 +97,85 @@ class Route(unittest.TestCase):
         r = subprocess.run([self.exe], input='rmdir 0\nrmdir 1\nrmdir 3\n', capture_output=True,
                            text=True, check=True)
         self.assertEqual(r.stdout.splitlines(), ['cleared', 'Folder not empty', 'Folder not empty'])
+
+
+class PastTheThirdLevel(unittest.TestCase):
+    """A folder inside a third-level folder (made by USB or a host tool): the route's listing and
+    the MODS page hide it, the computer's walk doesn't enter it, and nothing reaches its files.
+    tests/drive_depth_host.c runs page.c's read_folder and route.c's walk on a made-up +Drive."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.work = tempfile.TemporaryDirectory()
+        cls.exe = {}
+        for m in ('PAGE', 'ROUTE'):
+            cls.exe[m] = os.path.join(cls.work.name, 'drive_depth_' + m.lower())
+            subprocess.run(['cc', '-O1', '-w', '-no-pie', '-DDEPTH_' + m, '-o', cls.exe[m],
+                            os.path.join(HERE, 'drive_depth_host.c'),
+                            '-Wl,--unresolved-symbols=ignore-all'], check=True)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.work.cleanup()
+
+    def ask(self, mode, queries, tree=TREE):
+        r = subprocess.run([self.exe[mode]], capture_output=True, text=True, check=True,
+                           input='\n'.join(tree + ['--'] + ['%d %s' % q for q in queries]) + '\n')
+        return r.stdout.splitlines()
+
+    def test_the_page_shows_no_folder_in_a_third_level_folder(self):
+        rows = self.ask('PAGE', list(enumerate(LEVELS)))
+        self.assertEqual(rows, ['~T NAV/',
+                                '../|~T A/|~T NAV/~T a-0.1.elemod',
+                                '../|~T B/|~T NAV/~T A/~T b-0.1.elemod',
+                                '../|~T NAV/~T A/~T B/~T c-0.1.elemod'])     # no "~T C/" row
+        self.assertNotIn('~T d-0.1.elemod', ''.join(rows))
+
+    def test_the_route_lists_no_folder_in_a_third_level_folder(self):
+        # each level: its folder and its file, the third its file only
+        self.assertEqual(self.ask('ROUTE', list(enumerate(LEVELS))), ['1', '2', '2', '1'])
+
+    def test_a_third_level_folder_of_folders_only_lists_empty(self):
+        tree = [t for t in TREE if not t.endswith('~T c-0.1.elemod')]
+        self.assertEqual(self.ask('ROUTE', [(3, LEVELS[3])], tree), ['0'])
+        self.assertEqual(self.ask('PAGE', [(3, LEVELS[3])], tree), ['../'])
+
+    def test_no_route_pattern_lists_or_reaches_the_fourth_level(self):
+        with open(os.path.join(SRC, 'route.c'), encoding='utf-8') as fh:
+            route = fh.read()
+        self.assertIn('"/mods/*/*/*"};', route)          # the deepest listing: a third-level folder
+        self.assertIn('"/mods/*/*/*/*"};', route)        # the deepest entry: a file in one
+        self.assertNotIn('"/mods/*/*/*/*/*"', route)
+
+    def test_the_computer_walk_does_not_enter_the_fourth_level(self):
+        class Fake:                    # a route that did list the fourth-level folder
+            def ls(self, path):
+                rel = path[len('/mods/'):] if path != '/mods' else ''
+                out = []
+                for t in TREE:
+                    d = t.rstrip('/')
+                    parent = d.rpartition('/')[0]
+                    if parent == rel:
+                        out.append((d.rpartition('/')[2], 1 if t.endswith('/') else 2, 100))
+                return out
+        got = [p for p, _ in datarpc.Mods(Fake()).walk()]
+        self.assertEqual(got, ['~T NAV/~T a-0.1.elemod', '~T NAV/~T A/~T b-0.1.elemod',
+                               '~T NAV/~T A/~T B/~T c-0.1.elemod'])
+
+    def test_put_into_a_fourth_level_folder_is_refused_before_sending(self):
+        sent = []
+
+        class Fake(datarpc.Mods):
+            def build(self):
+                return None, None
+
+            def put(self, name, raw, head):
+                sent.append(name)
+        a = type('A', (), {'op': 'put', 'files': [], 'into': '~T NAV/~T A/~T B/~T C'})()
+        with mock.patch.object(datarpc.drive, '_files', return_value=[('~T d-0.1.elemod', b'')]), \
+                self.assertRaises(datarpc.ModError):
+            datarpc.run(a, Fake(None), log=lambda *_: None)
+        self.assertEqual(sent, [])
 
 
 if __name__ == '__main__':

@@ -164,3 +164,27 @@ test('a read whose replies are lost starts again with small chunks, and the clie
   assert.deepEqual(container.parse(await client.get('/mods/big.elemod'))[1], body)
   assert.equal(client.readChunk, 0x300)
 })
+
+test('Mods.walk stops at DEPTH folders, and path() refuses a file a fourth folder down', async () => {
+  // a route that did list a folder inside a third-level folder (the loader's own listing hides it)
+  const tree = ['~T NAV/', '~T NAV/a.elemod', '~T NAV/~T A/', '~T NAV/~T A/b.elemod', '~T NAV/~T A/~T B/',
+    '~T NAV/~T A/~T B/c.elemod', '~T NAV/~T A/~T B/~T C/', '~T NAV/~T A/~T B/~T C/d.elemod']
+  const asked: string[] = []
+  const client = {
+    async ls(path: string) {
+      asked.push(path)
+      const rel = path === '/mods' ? '' : path.slice('/mods/'.length)
+      return tree.filter(t => {
+        const d = t.replace(/\/$/, '')
+        return (d.includes('/') ? d.slice(0, d.lastIndexOf('/')) : '') === rel
+      }).map(t => [t.replace(/\/$/, '').split('/').pop(), t.endsWith('/') ? 1 : 2, 100])
+    },
+  } as unknown as datarpc.Client
+  const mods = new datarpc.Mods(client)
+  assert.equal(datarpc.DEPTH, 3)
+  assert.deepEqual((await mods.walk()).map(([p]) => p),
+    ['~T NAV/a.elemod', '~T NAV/~T A/b.elemod', '~T NAV/~T A/~T B/c.elemod'])
+  assert.ok(!asked.includes('/mods/~T NAV/~T A/~T B/~T C'))
+  assert.equal(mods.path('~T NAV/~T A/~T B/c.elemod'), '/mods/~T NAV/~T A/~T B/c.elemod')
+  assert.throws(() => mods.path('~T NAV/~T A/~T B/~T C/d.elemod'), ModError)
+})
