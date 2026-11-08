@@ -301,13 +301,16 @@ python packaging/shop_updates.py --apply owner/name --catalog /tmp/catalog.json 
 The page's +Drive mods view (`#drive`, `drive.js`) manages the `/mods`
 folder of a unit running a build with the Drive Loader (FORMAT.md, "+Drive
 mods"), over Web MIDI with SysEx. The browser asks for MIDI the first time
-the view opens, not before. The view writes nothing but files in `/mods`:
+the view opens, not before. It only puts mods on the unit: the build
+itself (`/mods/active`) is chosen on the unit, on its MODS page (SETTINGS >
+GLOBAL > MODS, LOAD TO BUILD), and the view never writes it. The view writes
+nothing but files in `/mods`:
 every request goes through `datarpc.Mods`, whose paths are inside that
 folder. It runs `js/`'s engine as the site serves it (`engine/`), not
 Pyodide, and `app.js` loads it only when the view first opens:
 - **Connect** picks a MIDI port (one named like "Rytm" first) and reads
   `/mods/.build`, the build descriptor. The view shows the build (its
-  modules, the +Drive area and what the ticked set uses of it, the largest
+  modules, the +Drive area, the largest
   file the loader takes) and each table's spare entries. Reads ask for
   8 KB chunks; where a reply never arrives (Firefox's Web MIDI on Windows
   drops SysEx over about 1 KB), the read starts again with 768-byte chunks
@@ -315,13 +318,15 @@ Pyodide, and `app.js` loads it only when the view first opens:
   (5 s) longer.
 - **`/mods`** is a directory browser, as Elektron Transfer's: on the left
   the folder tree (`/mods` and every folder to 3 deep, each with how many
-  mods are below it and how many are ticked), on the right the open folder:
-  `..` (below `/mods`), its folders, then its `.elemod` files. A folder
+  mods are below it), on the right the open folder: `..` (below `/mods`),
+  its folders (`/NAME`), then its `.elemod` files. A folder
   opens with a click, in the tree or the list, and the path above the list
   goes back up. The view reads every folder when it connects, so an empty
-  folder shows too, and each file is downloaded and checked alone against the build
-  (`drive.check`), with Download and Delete (a second press deletes). A
-  folder row says how many mods are below it and how many are ticked. In a
+  folder shows too, and each file is downloaded for its id and version
+  (and for what it requires, when an upload needs it), with Download and Delete (a second press deletes). A mod
+  `/mods/active` names, the saved build, can't be deleted, as the unit's
+  MOD IN USE: unload it there first. A folder row says how many mods are
+  below it. In a
   folder 3 deep, a note says that nothing deeper shows: the route lists no
   folder there, and the loader can't reach one.
 - **New folder** makes a folder in the open one (no `/`, not starting with
@@ -336,11 +341,6 @@ Pyodide, and `app.js` loads it only when the view first opens:
   a folder, in the tree or in the list, go into that one. They are checked
   first, together with the files in `/mods`, in any folder, that they
   require. If one would not load, nothing is sent.
-- **The set** for the next boot is the ticked files, in every folder: the
-  ticks stay when you open another folder. The view checks it as you
-  tick, and Save writes `/mods/active` only when every one loads, as
-  `elekloader mods active` does. A line of `/mods/active` whose file is
-  missing or changed is named: the unit drops it.
 - **The last boot** shows `/mods/.status`.
 - **The shop's mods** for the build's device and OS are each marked
   **+Drive** or **flash** (`drive.flashOnly`: sites, storage and the other
@@ -353,8 +353,8 @@ Pyodide, and `app.js` loads it only when the view first opens:
 mocked MIDI port: a fake unit with the made-up build of
 `js/test/drive-vectors.json`, whose uploads must be the requests
 `elekloader mods` sent, byte for byte. The fake unit keeps folders as the
-route does, and the test makes one, uploads into it, ticks across folders,
-goes 3 deep, browses and drops onto the folder tree, finds a shop mod's
+route does, and the test makes one, uploads into it, keeps a mod of the
+saved build from being deleted, checks the view never writes `/mods/active`, goes 3 deep, browses and drops onto the folder tree, finds a shop mod's
 copy in a folder and deletes an empty folder.
 
 ## What stays private, and how

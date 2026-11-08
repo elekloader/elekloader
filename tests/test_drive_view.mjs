@@ -3,13 +3,14 @@
 // The mock is a fake unit (tests/test_drive.py's FakeUnit, in JavaScript) holding the made-up build of
 // js/test/drive-vectors.json, whose replies are the ones js/tools/drive_vectors.py recorded from `elekloader mods`.
 // The patcher's own engine (Pyodide) is not on this test's site: only the view is tested. It connects, reads the build, lists /mods, refuses an upload the checker refuses (nothing is sent), uploads
-// the two example mods with the very requests the CLI sent, saves the set, reads it back, and deletes a file. Then the
-// folders: it makes one (an empty upload to FOLDER/.dir), uploads into it, keeps ticks across folders, goes 3 deep, browses
+// the two example mods with the very requests the CLI sent, keeps a mod of the saved build (/mods/active, chosen on the
+// unit) from being deleted, and deletes another. Then the folders: it makes one (an empty upload to FOLDER/.dir), uploads
+// into it, goes 3 deep, browses
 // and drops onto the folder tree, finds a shop mod's copy in a folder,
 // and deletes an empty folder (DELETE DIR), as the loader's route takes them (mods/drive-loader-ar2/README.md).
 //
 //   node tests/test_drive_view.mjs      (Playwright with its Chromium; it skips without them)
-//   DRIVE_VIEW_SHOT=page.png node tests/test_drive_view.mjs    (and a screenshot, once the set is saved)
+//   DRIVE_VIEW_SHOT=page.png node tests/test_drive_view.mjs    (and a screenshot, once both mods are uploaded)
 import { createRequire } from 'node:module';
 import { createServer } from 'node:http';
 import { execFileSync } from 'node:child_process';
@@ -158,6 +159,10 @@ try {
   await page.goto(url);
   await page.waitForFunction(() => document.getElementById('dm-port').options.length > 0);
   check('the page asks for MIDI with SysEx', await page.evaluate(() => window.__sysex));
+  // the saved build names drive-hello (chosen on the unit): the view never deletes it, and never writes /mods/active
+  const activeLines = Buffer.from(V.exchanges.find(s => s.op === 'put' && s.args[0] === 'active').args[1], 'hex').toString()
+    .split('\n').filter(l => l.startsWith(hello.name + ' ')).map(l => l + '\n').join('');
+  await page.evaluate(t => { window.__unit.files.active = [...new TextEncoder().encode(t)]; }, activeLines);
   await page.click('#dm-connect-btn');
   await page.waitForSelector('#dm-build:not([hidden])');
   await page.waitForSelector('#dm-files:not([hidden])');
@@ -196,22 +201,13 @@ try {
   check('the uploads are the CLI\'s requests, byte for byte (but the job id)', want.length > 0 && JSON.stringify(got) === JSON.stringify(want),
     `${got.length} of ${want.length} requests, first difference at ${got.findIndex((m, i) => m !== want[i])}`);
   check('the unit holds the files', await page.evaluate(([a, b]) => a in window.__unit.files && b in window.__unit.files, [hello.name, user.name]));
-  await page.waitForFunction(() => document.querySelectorAll('#dm-file-list input[type=checkbox]').length === 2);
+  await page.waitForFunction(() => document.querySelectorAll('#dm-file-list button[aria-label^="Delete "]').length === 2);
   const list = await page.textContent('#dm-file-list');
-  check('/mods lists both, each checked alone', /drive-hello\.elemod.*loads/s.test(list) && /requires drive-hello/.test(list), list.replace(/\s+/g, ' '));
+  check('/mods lists both, with their ids', /drive-hello-user\.elemod\s*drive-hello-user 1/.test(list) && /drive-hello\.elemod\s*drive-hello 1/.test(list)
+    && !/Alone on this build/.test(list), list.replace(/\s+/g, ' '));
 
-  // the set: only the user ticked is refused; both are saved
-  await page.check(`#dm-file-list input[aria-label="Load ${user.name}"]`);
-  check('a set that would not load cannot be saved', await page.isDisabled('#dm-save-set'), await page.textContent('#dm-set-check'));
-  await page.check(`#dm-file-list input[aria-label="Load ${hello.name}"]`);
-  check('a set that loads can', !(await page.isDisabled('#dm-save-set')), await page.textContent('#dm-set-check'));
-  await page.click('#dm-save-set');
-  await page.waitForFunction(() => /^Saved/.test(document.getElementById('dm-set-msg').textContent));
-  const active = await page.evaluate(() => new TextDecoder().decode(Uint8Array.from(window.__unit.files.active)));
-  const want2 = V.exchanges.find(s => s.op === 'put' && s.args[0] === 'active').args[1];
-  check('/mods/active is the CLI\'s for the same set', Buffer.from(active).toString('hex') === want2, JSON.stringify(active));
-  await page.waitForFunction(() => document.querySelectorAll('#dm-file-list input:checked').length === 2);
-  check('the set reads back from the unit', true);
+  check('nothing to tick: the build is chosen on the unit', !(await page.$('#dm-file-list input[type=checkbox]')) && !(await page.$('#dm-save-set')));
+  check('a mod in the saved build can\'t be deleted', await page.isDisabled(`#dm-file-list button[aria-label="Delete ${hello.name}"]`));
   if (process.env.DRIVE_VIEW_SHOT) await page.screenshot({ path: process.env.DRIVE_VIEW_SHOT, fullPage: true });
 
   // delete: two presses
@@ -221,8 +217,6 @@ try {
   await del.click();
   await page.waitForFunction(n => !(n in window.__unit.files), user.name);
   check('the file is deleted on the unit', true);
-  await page.waitForFunction(() => /drop/.test(document.getElementById('dm-set-check').textContent));
-  check('the set says the unit will drop it', true);
 
   // ---- folders ----
   const unit = () => page.evaluate(() => ({ files: Object.keys(window.__unit.files), dirs: [...window.__unit.dirs] }));
@@ -251,17 +245,10 @@ try {
   check('an upload lands in the open folder', u.files.includes(`fx/${user.name}`) && u.dirs.includes('fx') && !u.files.includes(user.name),
     JSON.stringify(u));
   check('... with its requirement found in another folder', (await msg()).includes(`/mods/fx/${user.name}`), await msg());
-  await page.check(`#dm-file-list input[aria-label="Load fx/${user.name}"]`);
   await page.click('#dm-crumbs button:has-text("/mods")');
   await page.waitForSelector('#dm-file-list button[aria-label="Open fx"]');
-  check('ticks stay across folders', /1 ticked/.test(await rowOf('fx/').textContent())
-    && await page.isChecked(`#dm-file-list input[aria-label="Load ${hello.name}"]`), await page.textContent('#dm-file-list'));
-  check('... and the set checks every ticked mod, in any folder', /LOADED\s+fx\/drive-hello-user\.elemod/.test(await page.textContent('#dm-set-check'))
-    && !(await page.isDisabled('#dm-save-set')), await page.textContent('#dm-set-check'));
+  check('a folder row reads /name', (await page.textContent('#dm-file-list button[aria-label="Open fx"]')) === '/fx');
   check('a folder with a mod in it can\'t be deleted', await page.isDisabled('#dm-file-list button[aria-label="Delete folder fx"]'));
-  await page.click('#dm-save-set');
-  await page.waitForFunction(() => /fx\/drive-hello-user/.test(new TextDecoder().decode(Uint8Array.from(window.__unit.files.active || []))));
-  check('/mods/active names the mod by its path', true);
   // 3 deep: the note, and no deeper folder
   await page.click('#dm-file-list button[aria-label="Open fx"]');
   for (const d of ['a', 'b']) {
@@ -285,6 +272,7 @@ try {
     dt.items.add(new File([Uint8Array.from(hex.match(/../g), x => parseInt(x, 16))], n, { type: 'application/json' }));
     return dt;
   }, [hello.name, hello.raw.toString('hex')]);
+  await page.evaluate(() => { delete window.__unit.files.active; });   // unloaded on the unit; read with the next listing
   await page.dispatchEvent('#dm-tree .dm-node[data-dir="fx/a/b"]', 'drop', { dataTransfer: dropped });
   await page.waitForFunction(n => `fx/a/b/${n}` in window.__unit.files, hello.name, { timeout: 15000 });
   check('files dropped on a tree folder go into it, and it opens', (await page.textContent('#dm-into')) === '/mods/fx/a/b');
@@ -350,6 +338,7 @@ try {
 
   const writes = (await page.evaluate(() => window.__unit.sent)).filter(m => [0x57, 0x5c].includes(m[4]));
   const paths = writes.map(m => { const a = m.slice(m[4] === 0x57 ? 9 : 5); return Buffer.from(a.slice(0, a.indexOf(0))).toString(); });
+  check('the view never writes /mods/active', !paths.includes('/mods/active'), paths.join(' '));
   check('every write is inside /mods', paths.length > 0 && paths.every(p => p.startsWith('/mods/')), paths.join(' '));
   check('no errors from the view', !errors.length, errors.join(' | '));
 } finally {

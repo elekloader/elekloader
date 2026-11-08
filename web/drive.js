@@ -5,8 +5,8 @@
 // and the Data router's requests (datarpc.js), each the Python's, byte for byte. Every write goes through
 // datarpc.Mods, whose paths are inside /mods; an upload and the set are checked against the unit's build first.
 // /mods is a directory browser, as Elektron Transfer's: the folder tree (to datarpc.DEPTH deep) on the left, the open
-// folder's folders and files on the right. Files dropped on a tree folder go into it. The ticks are the build, so they
-// stay across folders.
+// folder's folders and files on the right. Files dropped on a tree folder go into it. The view only puts files on the
+// unit: the build (/mods/active) is chosen on the unit's MODS page, and a mod in it can't be deleted here (MOD IN USE).
 
 const V = new URL(import.meta.url).search;
 const ENGINE = document.querySelector('meta[name="engine"]')?.content || 'engine';
@@ -68,8 +68,7 @@ const S = {
   folders: [],          // the unit's folders below /mods, as paths, to datarpc.DEPTH deep
   cwd: '',              // the open folder, '' for /mods itself
   shop: null,           // the shop's mods for this build: [{e, raw, kind, why}]
-  chosen: new Set(),    // file names ticked for /mods/active
-  order: [],            // /mods/active's order, then ticks in the order they were made
+  inUse: new Set(),     // the files /mods/active names: the saved build, which the view never deletes
   busy: false,
 };
 
@@ -82,7 +81,6 @@ async function busy(f) {
     S.busy = false;
     for (const b of held) b.disabled = false;   // a button disabled for its own reason stays so
     if (S.build && !$('dm-files').hidden) renderCrumbs();
-    renderSet();
   }
 }
 
@@ -157,11 +155,10 @@ function renderBuild() {
   renderRoom();
 }
 
-function renderRoom(r = null) {
-  const b = S.build, used = r ? r.end - b.lo : 0;
+function renderRoom() {
+  const b = S.build;
   $('dm-room').replaceChildren(
     el('dt', {}, '+Drive area'), el('dd', {}, `${hex8(b.lo)}..${hex8(b.hi)} (${kb(b.hi - b.lo)})`),
-    el('dt', {}, 'The chosen set'), el('dd', {}, `${kb(used)} used, ${kb(b.hi - b.lo - used)} free`),
     el('dt', {}, 'Largest file'), el('dd', {}, b.stagingSize ? kb(b.stagingSize) : 'no limit given'));
 }
 
@@ -200,7 +197,7 @@ async function refresh() {
     f.version = f.alone.mod ? f.alone.mod.version : null;
   }
   S.files = files;
-  // the set: /mods/active as the unit reads it
+  // the saved build, /mods/active, only so that its mods are not deleted from here
   let active = [];
   try {
     const [, body] = await S.mods.get('active');
@@ -208,9 +205,7 @@ async function refresh() {
   } catch (e) {
     if (!(e instanceof datarpc.RpcError)) throw e;          // none yet
   }
-  S.order = active.map(([n]) => n);
-  S.chosen = new Set(S.order.filter(n => files.some(f => f.name === n)));
-  S.stale = active.filter(([n, crc]) => { const f = files.find(x => x.name === n); return !f || !f.raw || drive.fileCrc(f.raw) !== crc; }).map(([n]) => n);
+  S.inUse = new Set(active.map(([n]) => n));
   let status = '';
   try { status = new TextDecoder().decode((await S.mods.get('.status'))[1]); } catch (e) { if (!(e instanceof datarpc.RpcError)) throw e; }
   $('dm-status').hidden = false;
@@ -240,15 +235,13 @@ function renderCrumbs() {
   $('dm-new-folder-btn').title = deep ? `Folders go ${datarpc.DEPTH} deep below /mods` : '';
 }
 
-/** The folder tree: /mods and every folder below it, each with how many mods are below it and how many are
- * ticked. A click opens a folder; files dropped on one are uploaded into it. */
+/** The folder tree: /mods and every folder below it, each with how many mods are below it. A click opens a folder; files dropped on one are uploaded into it. */
 function renderTree() {
   const node = (dir, label) => {
     const below = S.files.filter(f => inside(f.name, dir));
-    const ticked = below.filter(f => S.chosen.has(f.name)).length;
     return el('button', { type: 'button', class: `dm-node dm-d${depth(dir)}`, 'data-dir': dir,
       'aria-current': dir === S.cwd ? 'true' : null, onclick: () => open_(dir), ...dropTarget(dir) },
-      el('span', {}, label), el('span', { class: 'dm-count' }, `${below.length}${ticked ? ` · ${ticked}✓` : ''}`));
+      el('span', {}, label), el('span', { class: 'dm-count' }, String(below.length)));
   };
   $('dm-tree').replaceChildren(node('', '/mods'), ...allFolders().map(d => node(d, base(d))));
 }
@@ -275,41 +268,33 @@ function renderFiles() {
   const here = folders.filter(d => parent(d) === cwd);
   const files = S.files.filter(f => parent(f.name) === cwd);
   const rows = [];
-  if (cwd) rows.push(el('tr', { class: 'dm-folder', ...dropTarget(parent(cwd)) }, el('td', {}), el('td', { colspan: 5 },
+  if (cwd) rows.push(el('tr', { class: 'dm-folder', ...dropTarget(parent(cwd)) }, el('td', { colspan: 4 },
     el('button', { type: 'button', class: 'dm-open', 'aria-label': 'Up one folder', onclick: () => open_(parent(cwd)) }, '..'))));
   for (const d of here) {
     const below = S.files.filter(f => inside(f.name, d));
-    const ticked = below.filter(f => S.chosen.has(f.name)).length;
     const empty = !below.length && !folders.some(x => inside(x, d));
     rows.push(el('tr', { class: 'dm-folder', 'data-dir': d, ...dropTarget(d) },
-      el('td', { class: 'small muted' }, ticked ? `${ticked} ticked` : ''),
-      el('td', {}, el('code', {}, el('button', { type: 'button', class: 'dm-open', 'aria-label': `Open ${d}`, onclick: () => open_(d) }, `${base(d)}/`))),
+      el('td', {}, el('code', {}, el('button', { type: 'button', class: 'dm-open', 'aria-label': `Open ${d}`, onclick: () => open_(d) }, `/${base(d)}`))),
       el('td', { class: 'muted' }, `${below.length} mod${below.length === 1 ? '' : 's'}`),
-      el('td', { class: 'dm-num' }, ''), el('td', {}, ''),
+      el('td', { class: 'dm-num' }, ''),
       el('td', {}, el('button', { type: 'button', class: 'dm-mini dm-danger', 'aria-label': `Delete folder ${d}`, disabled: !empty,
         title: empty ? null : 'Not empty: delete or move what is in it first, as on the unit', onclick: e => removeDir(d, e.target) }, 'Delete dir'))));
   }
   for (const f of files) rows.push(el('tr', {},
-      el('td', {}, el('input', { type: 'checkbox', 'aria-label': `Load ${f.name}`, checked: S.chosen.has(f.name), disabled: !f.raw,
-        onchange: e => { if (e.target.checked) { S.chosen.add(f.name); if (!S.order.includes(f.name)) S.order.push(f.name); } else S.chosen.delete(f.name); renderSet(); } })),
       el('td', { title: `/mods/${f.name}` }, el('code', {}, base(f.name))),
-      el('td', {}, f.id ? `${f.id} ${f.version ?? ''}` : ''),
+      el('td', { class: f.error ? 'bad' : null }, f.error || (f.id ? `${f.id} ${f.version ?? ''}` : '')),
       el('td', { class: 'dm-num' }, kb(f.size)),
-      el('td', { class: f.error ? 'bad' : f.alone.state === drive.LOADED ? 'ok' : 'warn' }, f.error || (f.alone.state === drive.LOADED ? 'loads' : f.alone.why())),
       el('td', {}, el('button', { type: 'button', class: 'dm-mini', disabled: !f.raw, onclick: () => download(base(f.name), f.raw) }, 'Download'), ' ',
-        el('button', { type: 'button', class: 'dm-mini dm-danger', 'aria-label': `Delete ${f.name}`, onclick: e => remove(f, e.target) }, 'Delete'))));
+        el('button', { type: 'button', class: 'dm-mini dm-danger', 'aria-label': `Delete ${f.name}`, disabled: S.inUse.has(f.name),
+          title: S.inUse.has(f.name) ? 'In the build: unload it on the unit first (MODS, UNLOAD)' : null, onclick: e => remove(f, e.target) }, 'Delete'))));
   if (!here.length && !files.length)
-    rows.push(el('tr', {}, el('td', { colspan: 6, class: 'muted' }, cwd ? 'This folder is empty.' : 'No mods in /mods yet.')));
+    rows.push(el('tr', {}, el('td', { colspan: 4, class: 'muted' }, cwd ? 'This folder is empty.' : 'No mods in /mods yet.')));
   if (depth(cwd) >= datarpc.DEPTH)
-    rows.push(el('tr', {}, el('td', { colspan: 6, class: 'muted small', id: 'dm-deep' },
+    rows.push(el('tr', {}, el('td', { colspan: 4, class: 'muted small', id: 'dm-deep' },
       `Folders go ${datarpc.DEPTH} deep below /mods. A folder inside this one is not shown here or on the unit, and the loader can't load its mods.`)));
-  const elsewhere = [...S.chosen].filter(n => parent(n) !== cwd && S.files.some(f => f.name === n)).length;
   $('dm-file-list').replaceChildren(
-    el('tr', {}, el('th', {}, 'Load'), el('th', {}, 'File'), el('th', {}, 'Mod'), el('th', { class: 'dm-num' }, 'Size'), el('th', {}, 'Alone on this build'), el('th', {}, '')),
+    el('tr', {}, el('th', {}, 'File'), el('th', {}, 'Mod'), el('th', { class: 'dm-num' }, 'Size'), el('th', {}, '')),
     ...rows);
-  if (elsewhere) $('dm-file-list').append(el('tr', {}, el('td', { colspan: 6, class: 'muted small' },
-    `${elsewhere} more ticked in other folders: the set takes every ticked mod, in any folder.`)));
-  renderSet();
 }
 
 /** Make an empty folder on the unit, in the open one, and open it. The Data router has no command for a folder: the
@@ -349,37 +334,6 @@ async function removeDir(d, button) {
   });
 }
 
-function chosenFiles() {
-  return S.order.filter(n => S.chosen.has(n)).map(n => S.files.find(f => f.name === n)).filter(f => f && f.raw);
-}
-
-function renderSet() {
-  if (!S.build || $('dm-files').hidden) return;
-  const set = chosenFiles();
-  const r = drive.check(S.build, set.map(f => [f.name, f.raw]));
-  const lines = drive.resultLines(r);
-  if (S.stale && S.stale.length) lines.push(`/mods/active names ${S.stale.join(', ')}, which the unit will drop (missing or changed)`);
-  $('dm-set-check').textContent = lines.join('\n');
-  renderRoom(r);
-  const ok = r.choices.every(c => c.state === drive.LOADED);
-  $('dm-save-set').disabled = S.busy || !ok;
-  return r;
-}
-
-async function saveSet() {
-  await busy(async () => {
-    const set = chosenFiles();
-    const r = drive.check(S.build, set.map(f => [f.name, f.raw]));
-    if (!r.choices.every(c => c.state === drive.LOADED)) { say('dm-set-msg', 'REFUSED: /mods/active is unchanged', 'bad'); return; }
-    const text = drive.activeText(set.map(f => [f.name, f.raw]));
-    try {
-      await S.mods.put('active', new TextEncoder().encode(text), S.head);
-    } catch (e) { say('dm-set-msg', e.message, 'bad'); return; }
-    say('dm-set-msg', `Saved: ${set.length} mod${set.length === 1 ? '' : 's'} at the next boot.`, 'ok');
-    await refresh();
-  });
-}
-
 function download(name, raw) {
   const a = el('a', { href: URL.createObjectURL(new Blob([raw], { type: 'application/json' })), download: name });
   document.body.append(a);
@@ -390,10 +344,11 @@ function download(name, raw) {
 async function remove(f, button) {
   if (button.dataset.sure !== '1') {                     // a second press deletes
     button.dataset.sure = '1';
-    button.textContent = S.chosen.has(f.name) ? 'In the set: delete?' : 'Delete?';
+    button.textContent = 'Delete?';
     setTimeout(() => { if (button.isConnected) { button.dataset.sure = ''; button.textContent = 'Delete'; } }, 4000);
     return;
   }
+  if (S.inUse.has(f.name)) return;                      // the unit's MOD IN USE: unload it there first
   await busy(async () => {
     try { await S.mods.rm(f.name); } catch (e) { say('dm-upload-msg', e.message, 'bad'); return; }
     say('dm-upload-msg', `Deleted ${S.mods.path(f.name)}.`, 'ok');
@@ -442,8 +397,7 @@ async function upload(files) {
         await S.mods.put(f.name, f.raw, S.head, (sent, total) => say('dm-upload-msg', `Uploading ${f.name}: ${Math.round(100 * sent / total)}%`));
       } catch (e) { say('dm-upload-msg', `${f.name}: ${e.message}`, 'bad'); await refresh(); return; }
     }
-    say('dm-upload-msg', `Uploaded ${files.map(f => S.mods.path(f.name)).join(', ')}. Tick ${files.length === 1 ? 'it' : 'them'} to load at the next boot.`, 'ok');
-    for (const f of files) if (!S.order.includes(f.name)) S.order.push(f.name);
+    say('dm-upload-msg', `Uploaded ${files.map(f => S.mods.path(f.name)).join(', ')}. Add ${files.length === 1 ? 'it' : 'them'} to the build on the unit (MODS, LOAD TO BUILD).`, 'ok');
     await refresh();
   });
 }
@@ -499,7 +453,6 @@ function renderShop() {
 // ---- wiring ----------------------------------------------------------------------------------------------------
 
 $('dm-connect-btn').addEventListener('click', connect);
-$('dm-save-set').addEventListener('click', saveSet);
 $('dm-new-folder-btn').addEventListener('click', makeFolder);
 $('dm-new-folder').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); makeFolder(); } });
 $('dm-pick').addEventListener('change', async e => { const f = await readFiles(e.target.files); e.target.value = ''; upload(f); });
