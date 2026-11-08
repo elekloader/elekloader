@@ -27,9 +27,22 @@ static int name_ok(const char *s)
     return seg_ok(s);
 }
 
-/* a path below DL_DIR that may be uploaded: "active" at the top, or a .elemod at any depth */
+/* An empty folder: an upload to "FOLDER/.dir" (DL_MKDIR) asks the route to make FOLDER, and its
+ * missing parents, up to DL_DEPTH below DL_DIR (the route's deepest entry pattern is a third-level
+ * folder's ".dir"). The Data router has no command for a folder, so the upload is the request; it
+ * writes no file. -> FOLDER's length, or 0 when `s` is not such a request. */
+static unsigned mkdir_of(const char *s)
+{
+    unsigned n = len(s), k = sizeof DL_MKDIR - 1;
+    return n > k + 1 && s[n - k - 1] == '/' && same(s + n - k, DL_MKDIR) ? n - k - 1 : 0;
+}
+
+/* a path below DL_DIR that may be uploaded: "active" at the top, a .elemod at any depth, or a
+ * folder's DL_MKDIR */
 static int writable(const char *s)
 {
+    if (mkdir_of(s))
+        return 1;
 #ifdef DL_TEST_ARMED
     if (same(s, ".armed"))
         return 1;
@@ -40,7 +53,8 @@ static int writable(const char *s)
 /* The route's captures (a vector of std::string, one pointer to the chars each: one a `*` of the
  * pattern, so one a folder or file name) joined into a path below DL_DIR. -> its folders (the
  * captures less one), or -1 for a name that isn't one (the first may be .build, .status, .armed:
- * name_ok; the others must be plain names) or a path past DL_NAME_MAX. */
+ * name_ok; the others must be plain names, but for a last DL_MKDIR after a folder) or a path past
+ * DL_NAME_MAX. */
 static int join_caps(char *out, void **caps)
 {
     const char *const *v = (const char *const *)caps[0], *const *e = (const char *const *)caps[1];
@@ -49,7 +63,7 @@ static int join_caps(char *out, void **caps)
     out[0] = 0;
     for (i = 0; i < n; i++) {
         const char *s = v[i];
-        if (n == 1 ? !name_ok(s) : !seg_ok(s))
+        if (n == 1 ? !name_ok(s) : !seg_ok(s) && !(i == n - 1 && same(s, DL_MKDIR)))
             return -1;
         k = len(s);
         if (at + (i ? 1 : 0) + k > DL_NAME_MAX)

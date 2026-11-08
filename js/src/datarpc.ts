@@ -20,6 +20,7 @@ export const READ_CHUNKS = [CHUNK, 0x300]
 const noReply = (cmd: number) => `no reply from the unit to command 0x${hex2(cmd)}`
 export const FOLDER = '/mods'
 export const DEPTH = 3                 // folders below FOLDER the route reaches (the loader's DL_DEPTH)
+export const MKDIR = '.dir'            // an upload to FOLDER/.dir makes FOLDER (the loader's DL_MKDIR)
 
 export class RpcError extends ModError {}
 
@@ -229,4 +230,22 @@ export class Mods {
   }
 
   rm(name: string): Promise<void> { return this.c.clear(this.path(name)) }
+
+  /** `sub`: a folder below the folder, up to DEPTH deep ("drums/kicks"). datarpc.Mods.folder_path. */
+  folderPath(sub: string): string {
+    const parts = sub.split('/')
+    if (!sub || parts.length > DEPTH || parts.some(p => !p || p.startsWith('.')))
+      throw new ModError(`${repr(sub)} is not a folder name in ${this.folder} (up to ${DEPTH} deep, no part starting with .)`)
+    return `${this.folder}/${sub}`
+  }
+
+  /** Make the folder `sub` below the folder, and its parents, empty: an upload of nothing to `sub/.dir`. The route
+   * can't refuse once the upload is in, so the parent's listing says whether the folder is there. datarpc.Mods.mkdir. */
+  async mkdir(sub: string, head: container.Head): Promise<void> {
+    this.folderPath(sub)
+    await this.put(`${sub}/${MKDIR}`, new Uint8Array(0), head)
+    const i = sub.lastIndexOf('/'), parent = i < 0 ? '' : sub.slice(0, i), name = sub.slice(i + 1)
+    if (!(await this.ls(parent)).some(([n, kind]) => n === name && kind === 1))
+      throw new ModError(`the unit did not make ${this.folderPath(sub)} (see ${this.folder}/.status)`)
+  }
 }

@@ -585,7 +585,6 @@ details summary:hover { color: var(--text); }
 .dm-node[aria-current] { background: var(--accent-soft); color: var(--accent); }
 .dm-node.dm-over { outline: 1.5px dashed var(--accent); }
 .dm-node .dm-count { margin-left: auto; color: var(--faint); font-size: 11px; }
-.dm-node.dm-made { font-style: italic; }
 .dm-pane { min-width: 0; }
 .dm-pane .dm-t code, .dm-pane .dm-t .dm-num, .dm-pane .dm-t td:first-child:not([colspan]), .dm-pane .dm-t td:last-child:not([colspan]) { white-space: nowrap; }
 .dm-pane.dm-over { outline: 1.5px dashed var(--accent); outline-offset: 4px; border-radius: 6px; }

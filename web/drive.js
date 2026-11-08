@@ -66,7 +66,6 @@ const S = {
   access: null, port: null, mods: null, build: null, head: null,
   files: [],            // [{name, size, raw, id, version, alone (a check result)}], name a path below /mods
   folders: [],          // the unit's folders below /mods, as paths, to datarpc.DEPTH deep
-  made: new Set(),      // folders made here, empty until a file is uploaded into one (the router makes no empty folder)
   cwd: '',              // the open folder, '' for /mods itself
   shop: null,           // the shop's mods for this build: [{e, raw, kind, why}]
   chosen: new Set(),    // file names ticked for /mods/active
@@ -186,8 +185,7 @@ async function walk() {
 async function refresh() {
   const [list, folders] = await walk();
   S.folders = folders;
-  for (const m of [...S.made]) if (folders.includes(m)) S.made.delete(m);
-  while (S.cwd && !folders.includes(S.cwd) && !S.made.has(S.cwd)) S.cwd = parent(S.cwd);
+  while (S.cwd && !folders.includes(S.cwd)) S.cwd = parent(S.cwd);
   const files = [];
   for (const [name, size] of list) {
     if (SPECIAL.has(name)) continue;
@@ -222,8 +220,8 @@ async function refresh() {
   renderShop();
 }
 
-/** The folders below `dir` on the unit or made here, and whether each holds anything. */
-function allFolders() { return [...new Set([...S.folders, ...S.made])].sort(); }
+/** The unit's folders below /mods. */
+function allFolders() { return [...S.folders].sort(); }
 
 function open_(dir) { S.cwd = dir; say('dm-upload-msg', ''); renderFiles(); renderShop(); }
 
@@ -245,14 +243,14 @@ function renderCrumbs() {
 /** The folder tree: /mods and every folder below it, each with how many mods are below it and how many are
  * ticked. A click opens a folder; files dropped on one are uploaded into it. */
 function renderTree() {
-  const node = (dir, label, made = false) => {
+  const node = (dir, label) => {
     const below = S.files.filter(f => inside(f.name, dir));
     const ticked = below.filter(f => S.chosen.has(f.name)).length;
-    return el('button', { type: 'button', class: `dm-node dm-d${depth(dir)}${made ? ' dm-made' : ''}`, 'data-dir': dir,
-      'aria-current': dir === S.cwd ? 'true' : null, title: made ? 'New: made on the unit with its first upload' : null, onclick: () => open_(dir), ...dropTarget(dir) },
+    return el('button', { type: 'button', class: `dm-node dm-d${depth(dir)}`, 'data-dir': dir,
+      'aria-current': dir === S.cwd ? 'true' : null, onclick: () => open_(dir), ...dropTarget(dir) },
       el('span', {}, label), el('span', { class: 'dm-count' }, `${below.length}${ticked ? ` · ${ticked}✓` : ''}`));
   };
-  $('dm-tree').replaceChildren(node('', '/mods'), ...allFolders().map(d => node(d, `${base(d)}/`, S.made.has(d))));
+  $('dm-tree').replaceChildren(node('', '/mods'), ...allFolders().map(d => node(d, `${base(d)}/`)));
 }
 
 /** Drag-and-drop handlers that upload dropped files into `dir` (a function: the open folder). */
@@ -283,11 +281,10 @@ function renderFiles() {
     const below = S.files.filter(f => inside(f.name, d));
     const ticked = below.filter(f => S.chosen.has(f.name)).length;
     const empty = !below.length && !folders.some(x => inside(x, d));
-    const made = S.made.has(d);
     rows.push(el('tr', { class: 'dm-folder' },
       el('td', { class: 'small muted' }, ticked ? `${ticked} ticked` : ''),
       el('td', {}, el('code', {}, el('button', { type: 'button', class: 'dm-open', 'aria-label': `Open ${d}`, onclick: () => open_(d) }, `${base(d)}/`))),
-      el('td', { class: 'muted' }, made ? 'new: made on the unit with its first upload' : `${below.length} mod${below.length === 1 ? '' : 's'}`),
+      el('td', { class: 'muted' }, `${below.length} mod${below.length === 1 ? '' : 's'}`),
       el('td', { class: 'dm-num' }, ''), el('td', {}, ''),
       el('td', {}, el('button', { type: 'button', class: 'dm-mini dm-danger', 'aria-label': `Delete folder ${d}`, disabled: !empty,
         title: empty ? null : 'Not empty: delete or move what is in it first, as on the unit', onclick: e => removeDir(d, e.target) }, 'Delete dir'))));
@@ -315,9 +312,9 @@ function renderFiles() {
   renderSet();
 }
 
-/** Make a folder in the open one. The Data router has no command for an empty folder, so it is kept here and the
- * unit makes it with the first file uploaded into it (an upload makes the folders it needs). */
-function makeFolder() {
+/** Make an empty folder on the unit, in the open one, and open it. The Data router has no command for a folder: the
+ * loader's route makes one for an upload of nothing to FOLDER/.dir (datarpc.Mods.mkdir). */
+async function makeFolder() {
   const name = $('dm-new-folder').value.trim();
   const path = S.cwd ? `${S.cwd}/${name}` : name;
   let why = '';
@@ -329,10 +326,13 @@ function makeFolder() {
   else if (ulen(path) + 2 >= 128) why = 'the path would leave no room for a file name (127 bytes)';
   else if (allFolders().includes(path) || S.files.some(f => f.name === path)) why = `${path} is already there`;
   if (why) { say('dm-upload-msg', `REFUSED: ${why}`, 'bad'); return; }
-  S.made.add(path);
-  $('dm-new-folder').value = '';
-  open_(path);
-  say('dm-upload-msg', `New folder /mods/${path}: the unit makes it when the first mod is uploaded into it.`, 'ok');
+  await busy(async () => {
+    try { await S.mods.mkdir(path, S.head); } catch (e) { say('dm-upload-msg', `/mods/${path}: ${e.message}`, 'bad'); await refresh(); return; }
+    $('dm-new-folder').value = '';
+    await refresh();
+    open_(path);
+    say('dm-upload-msg', `Made /mods/${path}.`, 'ok');
+  });
 }
 
 async function removeDir(d, button) {
@@ -342,7 +342,6 @@ async function removeDir(d, button) {
     setTimeout(() => { if (button.isConnected) { button.dataset.sure = ''; button.textContent = 'Delete dir'; } }, 4000);
     return;
   }
-  if (S.made.has(d)) { S.made.delete(d); say('dm-upload-msg', `Deleted /mods/${d}.`, 'ok'); renderFiles(); return; }
   await busy(async () => {
     try { await S.mods.rm(d); } catch (e) { say('dm-upload-msg', `/mods/${d}: ${e.message}`, 'bad'); await refresh(); return; }
     say('dm-upload-msg', `Deleted /mods/${d}.`, 'ok');

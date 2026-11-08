@@ -22,6 +22,7 @@ a third `RouteTypeHandler`, so the unit's Data root listing shows `mods`:
 | `/mods` | the folders and files in the +Drive's `/mods` folder (`DL_DIR` in `fs.h`), then `.build` and `.status` |
 | `/mods/<folder>`... | one folder's folders and files, to 3 folders below `/mods` (`DL_DEPTH`). A folder inside a third-level one (made over USB) is left out of its listing and off the MODS page, and no route reaches it or its files (`tests/drive_depth_host.c`, `tests/test_drive_route.py`) |
 | `/mods/<name>`, `/mods/<folder>/.../<name>` | read, upload or Clear one file, in `/mods` or a folder up to 3 deep. Uploads take `*.elemod` (at any depth) and `active` (in `/mods` only); an upload makes the folders it needs. Other files can be read and cleared. A Clear of a folder removes it when it is empty, as SAMPLES' DELETE DIR |
+| `/mods/<folder>/.../.dir` | upload only: an upload (of nothing, `elekloader mods mkdir`) makes the folder, and any parents not there yet, empty, up to 3 deep. No file is written, and a folder already there is kept |
 | `/mods/.build` | read only: the build descriptor, byte for byte (`python -m elekloader.desc dump`) |
 | `/mods/.status` | read only: plain text, the route's last commit or delete, the boot's time, then the boot linker's records |
 
@@ -74,6 +75,13 @@ refused like any other dot file. Neither flag is set by default.
   after-change call removes it with stock's rmdir. That call can't report a failure, so a folder
   with anything in it is refused when it resolves (`Folder not empty`), and `elekloader mods rm`
   exits with that refusal.
+- The router has no request for a folder, so `FOLDER/.dir` (`DL_MKDIR`, names.inc's `mkdir_of`)
+  resolves to a write-only entry whose after-change call makes each missing level of FOLDER with
+  stock's mkdir (route.c's `make_folder`). It can't report a failure either, so a file of the
+  folder's name is refused when it resolves (`A file has that name`), and the clients read the
+  parent's listing afterwards to see the folder there (`Mods.mkdir`; `.status` notes `made` or
+  `mkdir failed:`). The `.dir` pattern is the entry table's own (`/mods/*/*/*/*` for a third-level
+  folder), so no pattern is added and a fourth level stays out of reach.
 - The route can't tell a read, an upload and a Clear apart when it resolves a path, so the
   entry carries every function, each closure holding the file's name.
 - Stock's Rename refuses RAM entries, so `/mods` has no rename. A new upload under the same
@@ -95,7 +103,7 @@ All addresses are OS 1.74's. They were read in Ghidra.
 | std::string ctor, dtor, the empty string | `0x401bcff0`, `0x401bb540`, `0x419f2a0c` |
 | operator new, delete | `0x40082a40`, `0x40082a4c` |
 | ekFS file ctor (0x2c bytes; 0 read, 1 write), dtor, read, write, node, node size (less 16, for FsSample's own header) | `0x4007dcfa`, `0x4007d956`, `0x4007d822`, `0x4007d860`, `0x4007d9d2`, `0x4007d9ec` |
-| ekFS delete (files only), rename (files and folders), rmdir (an empty folder only) | `0x4007da78`, `0x4007da8c`, `0x4007daa4` |
+| ekFS delete (files only), rename (files and folders), rmdir (an empty folder only; `0x4007daa4` is its bool wrapper), mkdir (one folder, its parent there; called by SAMPLES' CREATE DIR, `0x400ea5b6`) | `0x4007da78`, `0x4007da8c`, `0x4007bef8`, `0x4007c1dc` |
 | Directory ctor (0x130 bytes), dtor, count, child, shared_ptr release | `0x4007ed48`, `0x4007ee02`, `0x4007e1bc`, `0x4007e794`, `0x40170bd8` |
 | mutex lock, unlock | `0x400010bc`, `0x400011ee` |
 

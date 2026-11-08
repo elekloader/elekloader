@@ -325,9 +325,10 @@ Pyodide, and `app.js` loads it only when the view first opens:
   folder 3 deep, a note says that nothing deeper shows: the route lists no
   folder there, and the loader can't reach one.
 - **New folder** makes a folder in the open one (no `/`, not starting with
-  `.`, at most 63 bytes, 3 deep at most) and opens it. The Data router has
-  no request that makes an empty folder, so the view keeps it until the
-  first upload into it makes it on the unit. **Delete dir** on a folder row
+  `.`, at most 63 bytes, 3 deep at most) on the unit, empty, and opens it.
+  The Data router has no request for a folder, so the view uploads nothing
+  to `FOLDER/.dir`, which the loader's route takes as one (`Mods.mkdir`),
+  and then reads the parent's listing to see it there. **Delete dir** on a folder row
   deletes an empty folder (a second press deletes), as SAMPLES' DELETE DIR;
   a folder with anything in it can't be deleted, and the route refuses one
   with `Folder not empty`.

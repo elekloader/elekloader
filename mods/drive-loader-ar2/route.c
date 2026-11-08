@@ -180,7 +180,7 @@ static void set_str(unsigned char *slot, const char *msg)
 
 /* a closure: what the function is for and the file's name; on the heap, as
  * stock's are, so the router may copy and destroy entries as it likes */
-enum { C_FILE = 1, C_BUILD, C_STATUS, C_DIR };
+enum { C_FILE = 1, C_BUILD, C_STATUS, C_DIR, C_MKDIR };
 struct clo {
     int what;
     int reading;                          /* set by the fill: counted in dl_reads */
@@ -341,6 +341,8 @@ unsigned dl_hdr(unsigned char *res, void **f, const unsigned char *h)
     return (unsigned)res;
 }
 
+static int make_folder(const char *rel);
+
 /* +0x4c: after an upload (the header) or a Clear (0). An upload goes to
  * <name>.tmp, then over <name>. It can't refuse: a failure is noted for
  * .status. */
@@ -356,6 +358,14 @@ void dl_change(void **f, const unsigned char *h)
         dl_lock();
         note(dl_fs_rmdir(path) ? "rmdir failed (not empty?):" : "removed", c->name);
         dl_unlock();
+        return;
+    }
+    if (c->what == C_MKDIR) {              /* an upload to FOLDER/.dir: make FOLDER, writing no file */
+        if (h) {
+            dl_lock();
+            note(make_folder(c->name) ? "mkdir failed:" : "made", c->name);
+            dl_unlock();
+        }
         return;
     }
     if (c->what != C_FILE)
@@ -501,6 +511,28 @@ static int is_folder(const char *rel)
     return r;
 }
 
+/* Make the folder DL_DIR "/" rel and any of its parents not there yet, as an upload makes the
+ * folders it needs; a folder already there is kept. Under dl_lock. -> 0 when rel is a folder
+ * afterwards, or -1 */
+static int make_folder(const char *rel)
+{
+    char sub[DL_NAME_MAX + 1], path[DL_PATH_MAX];
+    unsigned i, k = len(rel);
+    for (i = 1; i <= k; i++) {
+        if (i < k && rel[i] != '/')
+            continue;
+        copy(sub, rel, i);
+        sub[i] = 0;
+        if (is_folder(sub))
+            continue;
+        path_of(path, sub, "");
+        if (dl_fs_file_size(path) >= 0)   /* a file of the folder's name: no folder there */
+            return -1;
+        dl_fs_mkdir(path);
+    }
+    return is_folder(rel) ? 0 : -1;
+}
+
 /* /mods/<name>: expected<entry, string>, 0x84 bytes: {u8 has_value, string
  * error +4, entry +8}. caps[0] is the name. It runs at a ReadOpen, a
  * WriteOpen, an upload's first chunk and a Clear, and can't tell which. */
@@ -536,6 +568,23 @@ unsigned dl_entry(unsigned char *res, void **f, void **caps)
         c.what = C_STATUS;
     } else if (dl_staging_owner) {
         why = "Busy: the loader is using /mods";
+    } else if (mkdir_of(name)) {           /* FOLDER/.dir: an upload of it makes FOLDER */
+        char path[DL_PATH_MAX];
+        name[mkdir_of(name)] = 0;
+        path_of(path, name, "");
+        dl_lock();
+        size = dl_fs_file_size(path);
+        dl_unlock();
+        if (size >= 0) {
+            why = "A file has that name";
+        } else {
+            put32(e + E_TYPE, EMOD);
+            put32(e + E_ADDR, (unsigned)drive_staging);
+            perm = P_WRITE;
+            size = 0;
+            c.what = C_MKDIR;
+            copy(c.name, name, len(name) + 1);
+        }
     } else {
         char path[DL_PATH_MAX];
         path_of(path, name, "");
@@ -586,6 +635,11 @@ made:
     put32(e + E_VERSION, 2);
     if (c.what == C_DIR)
         set_fn(e + E_CHANGE, &c, dl_change);
+    if (c.what == C_MKDIR) {
+        set_fn(e + E_PRE, &c, dl_pre_inv);
+        set_fn(e + E_CHANGE, &c, dl_change);
+        set_fn(e + E_HEADER, &c, dl_hdr_inv);
+    }
     if (c.what == C_FILE) {
         set_fn(e + E_PRE, &c, dl_pre_inv);
         set_fn(e + E_FILL, &c, dl_fill);

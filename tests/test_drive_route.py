@@ -91,6 +91,44 @@ class Route(unittest.TestCase):
         self.assertEqual(self.entry('active'), [(0, True, 'active')])
 
 
+    def test_an_upload_to_dot_dir_makes_its_folder(self):
+        # `elekloader mods mkdir`, the web view's New folder: an empty upload to FOLDER/.dir
+        r = subprocess.run([self.exe], capture_output=True, text=True, check=True,
+                           input='~T NAV/.dir\n~T NAV/~T A/~T B/.dir\n')
+        self.assertEqual(r.stdout.splitlines(), ['ok 1 1 ~T NAV/.dir mkdir ~T NAV',
+                                                 'ok 3 1 ~T NAV/~T A/~T B/.dir mkdir ~T NAV/~T A/~T B'])
+        # a fourth-level folder has no pattern (/mods/*/*/*/*/* is not registered)
+        self.assertEqual(self.entry('~T NAV/~T A/~T B/~T C/.dir'), [None])
+        # .dir alone (no folder), inside a folder name, after a dot folder, or a .dir folder
+        for bad in ('.dir', '.hidden/.dir', '~T NAV/.dir/x.elemod', '~T NAV/.dir/.dir', '~T NAV/x.dir'):
+            got = self.entry(bad)[0]
+            self.assertTrue(got is None or not got[1], (bad, got))
+        self.assertEqual(self.entry('~T NAV/x.dir'), [(1, False, '~T NAV/x.dir')])
+
+    def test_mkdir_checks_the_name_then_reads_the_parent(self):
+        calls = []
+
+        class Client:
+            def put(self, path, data):
+                calls.append(('put', path, data))
+
+            def ls(self, path):
+                calls.append(('ls', path))
+                return [('~T B', 1, 0)] if path == '/mods/~T A' else []
+        mods = datarpc.Mods(Client())
+        head = {'family': 2, 'device': 5, 'release': 0x30313736}
+        mods.mkdir('~T A/~T B', head)
+        self.assertEqual(calls[0][:2], ('put', '/mods/~T A/~T B/.dir'))
+        self.assertEqual(datarpc.container.parse(calls[0][2])[1], b'')
+        self.assertEqual(calls[1], ('ls', '/mods/~T A'))
+        with self.assertRaises(datarpc.ModError):       # not in the parent's listing afterwards
+            mods.mkdir('~T C', head)
+        calls.clear()
+        for bad in ('', '.x', '~T A/.x', 'a//b', 'a/b/c/d', '../x'):
+            with self.assertRaises(datarpc.ModError, msg=bad):
+                mods.mkdir(bad, head)
+        self.assertEqual(calls, [])                     # refused before anything is sent
+
     def test_a_folder_with_entries_is_not_cleared(self):
         # FN02 (53d8c12) in the emulator: `mods rm` of a folder holding a file printed DELETED and
         # the folder stayed (stock's rmdir refused after the route had said yes)

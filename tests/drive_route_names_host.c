@@ -2,8 +2,9 @@
 /* The /mods route's names (mods/drive-loader-ar2/names.inc) built for the computer:
  * tests/test_drive_route.py builds it with the host's cc and drives it.
  * Each stdin line is a path below /mods as the router hands it to the route: its segments, one
- * capture each. Each output line: "ok FOLDERS WRITABLE JOINED" or "refused". A line "rmdir N"
- * asks about a Clear of a folder with N entries: "cleared" or the refusal. */
+ * capture each. Each output line: "ok FOLDERS WRITABLE JOINED", with " mkdir FOLDER" after it for
+ * an upload that makes a folder (FOLDER/.dir), or "refused". A line "rmdir N" asks about a Clear of
+ * a folder with N entries: "cleared" or the refusal. */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -47,6 +48,8 @@ int main(void)
         folders = join_caps(out, caps);
         if (folders < 0)
             printf("refused\n");
+        else if (mkdir_of(out))
+            printf("ok %d %d %s mkdir %.*s\n", folders, writable(out), out, (int)mkdir_of(out), out);
         else
             printf("ok %d %d %s\n", folders, writable(out), out);
     }

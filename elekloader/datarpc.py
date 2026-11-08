@@ -20,7 +20,9 @@ number at +2, its command | 0x80 at +4 and a status byte at +5 (1: done). The Da
   0x5c clear   path
 
 What goes through it is a data container (container.py). The Drive Loader's `/mods` route takes
-`.elemod` files and `active`, and serves `.build` (the build descriptor) and `.status`.
+`.elemod` files and `active`, and serves `.build` (the build descriptor) and `.status`. The router has
+no command for a folder: an upload of an empty file to `FOLDER/.dir` asks the route to make FOLDER
+(`Mods.mkdir`), and a clear of an empty folder removes it.
 """
 import os
 import struct
@@ -40,6 +42,7 @@ READ_CHUNKS = (CHUNK, 0x300)
 NO_REPLY = 'no reply from the unit to command 0x%02x'
 FOLDER = '/mods'
 DEPTH = 3                       # folders below FOLDER the route reaches (the loader's DL_DEPTH)
+MKDIR = '.dir'                  # an upload to FOLDER/.dir makes FOLDER (the loader's DL_MKDIR)
 
 
 def pack7(data):
@@ -235,6 +238,24 @@ class Mods:
     def rm(self, name):
         self.c.clear(self.path(name))
 
+    def folder_path(self, sub):
+        """`sub`: a folder below the folder, up to DEPTH deep ("drums/kicks")."""
+        parts = sub.split('/')
+        if not sub or len(parts) > DEPTH or any(not p or p.startswith('.') for p in parts):
+            raise ModError('%r is not a folder name in %s (up to %d deep, no part starting with .)'
+                           % (sub, self.folder, DEPTH))
+        return '%s/%s' % (self.folder, sub)
+
+    def mkdir(self, sub, head):
+        """Make the folder `sub` below the folder, and its parents, empty (an upload of nothing to
+        `sub/.dir`, in a container as `put`'s). The route can't refuse once the upload is in, so the
+        parent's listing says whether the folder is there."""
+        self.folder_path(sub)
+        self.put('%s/%s' % (sub, MKDIR), b'', head)
+        parent, _, name = sub.rpartition('/')
+        if not any(n == name and kind == 1 for n, kind, _size in self.ls(parent)):
+            raise ModError('the unit did not make %s (see %s/.status)' % (self.folder_path(sub), self.folder))
+
 
 # ---- ports ---------------------------------------------------------------------------------------
 
@@ -297,6 +318,8 @@ def add_arguments(p):
                    'its folders are made as needed' % DEPTH)
     q = sub.add_parser('rm', help='delete a file, or an empty folder')
     q.add_argument('name')
+    q = sub.add_parser('mkdir', help='make an empty folder below /mods, up to %d deep, with its parents' % DEPTH)
+    q.add_argument('folder_path')
     q = sub.add_parser('active', help='choose the mods the unit loads at its next boot, in this order')
     q.add_argument('names', nargs='*', help='local .elemod files, or names already in /mods')
 
@@ -319,6 +342,11 @@ def run(a, mods, log=print):
         log('DELETED %s' % mods.path(a.name))
         return 0
     build, head = mods.build()
+    if a.op == 'mkdir':
+        sub = a.folder_path.strip('/')
+        mods.mkdir(sub, head)
+        log('MADE %s' % mods.folder_path(sub))
+        return 0
     if a.op == 'put':
         files = drive._files(a.files)
         into = (getattr(a, 'into', None) or '').strip('/')

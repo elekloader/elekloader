@@ -188,3 +188,21 @@ test('Mods.walk stops at DEPTH folders, and path() refuses a file a fourth folde
   assert.equal(mods.path('~T NAV/~T A/~T B/c.elemod'), '/mods/~T NAV/~T A/~T B/c.elemod')
   assert.throws(() => mods.path('~T NAV/~T A/~T B/~T C/d.elemod'), ModError)
 })
+
+test('Mods.mkdir uploads nothing to FOLDER/.dir, then finds the folder in its parent, as the Python does', async () => {
+  const calls: [string, string, Uint8Array?][] = []
+  const client = {
+    async put(path: string, data: Uint8Array) { calls.push(['put', path, data]) },
+    async ls(path: string) { calls.push(['ls', path]); return path === '/mods/~T A' ? [['~T B', 1, 0]] : [] },
+  } as unknown as datarpc.Client
+  const mods = new datarpc.Mods(client)
+  const head = { family: 2, device: 5, release: 0x30313736 } as container.Head
+  await mods.mkdir('~T A/~T B', head)
+  assert.equal(calls[0][1], '/mods/~T A/~T B/.dir')
+  assert.equal(container.parse(calls[0][2]!)[1].length, 0)
+  assert.deepEqual(calls[1], ['ls', '/mods/~T A'])
+  await assert.rejects(mods.mkdir('~T C', head), ModError)
+  calls.length = 0
+  for (const bad of ['', '.x', '~T A/.x', 'a//b', 'a/b/c/d', '../x']) await assert.rejects(mods.mkdir(bad, head), ModError, bad)
+  assert.equal(calls.length, 0)
+})

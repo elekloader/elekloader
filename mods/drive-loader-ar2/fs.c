@@ -18,6 +18,7 @@
 #define FS_DELETE ((int (*)(const char *))0x4007da78)
 #define FS_RENAME ((int (*)(const char *, const char *))0x4007da8c)  /* true on success */
 #define FS_RMDIR ((int (*)(const char *))0x4007bef8)     /* 0, or -1: an empty folder only (SAMPLES' DELETE DIR, 0x400e77b2); takes ekFS's mutex */
+#define FS_MKDIR ((int (*)(const char *))0x4007c1dc)     /* 0, or -1 (there already, a file or no parent): one folder, absolute path (SAMPLES' CREATE DIR, 0x400ea5b6); takes ekFS's mutex */
 
 #define MUTEX_LOCK ((void (*)(void *))0x400010bc)
 #define MUTEX_UNLOCK ((void (*)(void *))0x400011ee)
@@ -118,6 +119,11 @@ int dl_fs_rename(const char *from, const char *to)
 int dl_fs_rmdir(const char *path)
 {
     return FS_RMDIR(path) ? -1 : 0;
+}
+
+int dl_fs_mkdir(const char *path)
+{
+    return FS_MKDIR(path) ? -1 : 0;
 }
 
 int dl_fs_file_size(const char *path)

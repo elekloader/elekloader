@@ -17,6 +17,7 @@
 #define DL_SEG_MAX 63                  /* one folder or file name in it, without the NUL */
 #define DL_DEPTH 3                     /* folders below DL_DIR, at most (decided 2026-11-08) */
 #define DL_PATH_MAX 144                /* DL_DIR "/" path ".tmp", with the NUL */
+#define DL_MKDIR ".dir"                /* an upload to FOLDER "/" DL_MKDIR makes FOLDER (names.inc) */
 
 /* stock's ekFS file object (0x2c bytes, ctor 0x4007dcfa), kept opaque, then the
  * loader's own: the files carry a 16-byte header (README, "Files on the +Drive") */
@@ -39,6 +40,7 @@ int dl_fs_delete(const char *path);      /* 0, or < 0 (also when the file isn't 
 int dl_fs_rename(const char *from, const char *to);   /* 0, or < 0; delete `to` first */
 int dl_fs_file_size(const char *path);   /* the data size of a file, or < 0 */
 int dl_fs_rmdir(const char *path);       /* 0, or < 0: an empty folder only, as SAMPLES' DELETE DIR */
+int dl_fs_mkdir(const char *path);       /* 0, or < 0: one folder, its parent there (route.c makes each level) */
 
 /* one entry of a folder below DL_DIR (route.c, dl_list_dir) */
 struct dl_ent {
