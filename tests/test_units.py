@@ -1197,7 +1197,7 @@ def test_the_shop_list_keeps_its_layout():
     submit_mod = submit_mod_module()
     if submit_mod is None:
         return
-    with open(os.path.join(os.path.dirname(HERE), 'web', 'catalog.json'), encoding='utf-8') as fh:
+    with open(submit_mod.CATALOG, encoding='utf-8') as fh:
         text = fh.read()
     assert submit_mod.render(json.loads(text)) == text
 
@@ -1813,13 +1813,35 @@ def test_authors_can_opt_out_of_automatic_updates():
     assert submit_mod.release_text(publish.release_notes('A.', '', False)) == {'summary': 'A.', 'auto_update': False}
 
 
+def test_the_shops_list_can_come_from_another_repository():
+    """$ELEKLOADER_CATALOG: the shop's list from a clone of its own repository (SHOP_REPO), sections beside it."""
+    sys.path.insert(0, os.path.join(os.path.dirname(HERE), 'packaging'))
+    import build_web
+    old = os.environ.pop('ELEKLOADER_CATALOG', None)
+    try:
+        assert build_web.catalog_path() == os.path.join(build_web.ROOT, 'web', 'catalog.json')
+        assert build_web.sections_path() == os.path.join(build_web.ROOT, 'web', 'sections.json')
+        with tempfile.TemporaryDirectory() as d:
+            os.environ['ELEKLOADER_CATALOG'] = os.path.join(d, 'catalog.json')
+            assert build_web.catalog_path() == os.path.join(d, 'catalog.json')
+            assert build_web.catalog_path('x.json') == 'x.json'
+            assert build_web.sections_path() == os.path.join(os.path.abspath(d), 'sections.json')
+            with open(os.path.join(d, 'sections.json'), 'w') as fh:
+                json.dump({'sections': [{'id': 'pics', 'title': 'Pictures', 'packs': [{'repo': 'a/b'}]}]}, fh)
+            assert [s['id'] for s in build_web.sections([{'repo': 'a/b'}])] == ['pics']
+    finally:
+        os.environ.pop('ELEKLOADER_CATALOG', None)
+        if old is not None:
+            os.environ['ELEKLOADER_CATALOG'] = old
+
+
 def test_the_shops_sections_are_checked():
     """web/sections.json: whole repositories on a page of their own (build_web.sections)."""
     sys.path.insert(0, os.path.join(os.path.dirname(HERE), 'packaging'))
     import build_web
-    with open(os.path.join(os.path.dirname(HERE), 'web', 'sections.json'), encoding='utf-8') as fh:
+    with open(build_web.sections_path(), encoding='utf-8') as fh:
         real = json.load(fh)
-    with open(os.path.join(os.path.dirname(HERE), 'web', 'catalog.json'), encoding='utf-8') as fh:
+    with open(build_web.catalog_path(), encoding='utf-8') as fh:
         repos = {i['repo'] for i in json.load(fh)['items']}
     # every pack names a repository the shop carries
     assert all(p['repo'] in repos for s in real['sections'] for p in s['packs'])

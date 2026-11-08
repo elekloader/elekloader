@@ -7,7 +7,8 @@
 # runs the unit tests and the page's bridge under Pyodide on that very site
 # (tests/test_web.mjs), and deploys it.
 #
-# It also puts the mod shop on the site: each mod web/catalog.json lists,
+# It also puts the mod shop on the site: each mod the shop's list (web/catalog.json, or
+# catalog.json of the repository the variable SHOP_REPO names) lists,
 # from its author's GitHub release, checked against the sha256 the catalog
 # pins, and each card's thumbnail the same way (packaging/thumbs.py checks
 # it again; the repository variable SHOP_THUMBS=false leaves them all out).
@@ -50,6 +51,20 @@ jobs:
         with:
           node-version: "24"
           package-manager-cache: false
+      - name: The shop's list (web/catalog.json, or the repository variable SHOP_REPO's)
+        env:
+          SHOP_REPO: ${{ vars.SHOP_REPO }}
+        run: |
+          # SHOP_REPO (owner/name): a public repository with catalog.json and sections.json at its root, as its
+          # main has them; unset, the list is this repository's web/catalog.json (docs/WEB.md, "Where the list is")
+          if [ -n "$SHOP_REPO" ]; then
+            git clone -q --depth 1 "https://github.com/$SHOP_REPO" build/shop-list
+            echo "ELEKLOADER_CATALOG=$PWD/build/shop-list/catalog.json" >> "$GITHUB_ENV"
+            echo "SHOP_REPO=$SHOP_REPO" >> "$GITHUB_ENV"
+            echo "SHOP_COMMIT=$(git -C build/shop-list rev-parse HEAD)" >> "$GITHUB_ENV"
+          else
+            echo "ELEKLOADER_CATALOG=$PWD/web/catalog.json" >> "$GITHUB_ENV"
+          fi
       - name: Unit tests
         run: |
           python tests/test_units.py
@@ -69,7 +84,7 @@ jobs:
           # and each card's thumbnail ("thumb"), to thumbs/<sha256>.png; one that can't be fetched leaves its card's
           # drawn cover (build_web.py checks each again)
           mkdir -p build/shop/thumbs
-          python packaging/build_web.py --catalog-list web/catalog.json --thumbs | while read -r how repo ref path sum; do
+          python packaging/build_web.py --catalog-list "$ELEKLOADER_CATALOG" --thumbs | while read -r how repo ref path sum; do
             if [ "$how" = thumb-commit ]; then
               gh api "repos/$repo/contents/$path?ref=$ref" -H "Accept: application/vnd.github.raw" > "build/shop/thumbs/$sum.png" \
                 || { rm -f "build/shop/thumbs/$sum.png"; echo "::warning::$repo $ref $path: thumbnail not downloadable"; }
@@ -99,7 +114,7 @@ jobs:
         env:
           # the maintainers' switch: the repository variable SHOP_THUMBS set to false leaves every thumbnail out
           SHOP_THUMBS: ${{ vars.SHOP_THUMBS }}
-        run: python packaging/build_web.py --pyodide build/pyodide-core.tar.bz2 --core build/core/core-*.elemod --release "$TAG" --catalog web/catalog.json --catalog-dir build/shop --prs build/prs.json --out build/site $([ "$SHOP_THUMBS" = false ] && echo --no-thumbs)
+        run: python packaging/build_web.py --pyodide build/pyodide-core.tar.bz2 --core build/core/core-*.elemod --release "$TAG" --catalog "$ELEKLOADER_CATALOG" --catalog-dir build/shop --prs build/prs.json --out build/site $([ "$SHOP_THUMBS" = false ] && echo --no-thumbs)
       - name: The engine under Pyodide, from the assembled site
         run: node tests/test_web.mjs build/site
       - uses: actions/upload-pages-artifact@v5

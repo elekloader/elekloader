@@ -198,6 +198,30 @@ the file's path, and its sha256. A shop mod that requires another shop mod
 machine needs machines) shows "Needs machines" with a + beside it, which adds the shop's for your OS and ticks it. A mod with a file for each OS version gets an item per file; the page
 shows them as one card (the same repository, mod, version and device).
 
+### Where the list is
+
+The list and its sections can live in a repository of their own, so the
+shop's submissions and the daily updates don't commit to this one. The
+repository variable **`SHOP_REPO`** (`owner/name`, public, with
+`catalog.json` and `sections.json` at its root) makes `pages.yml` and
+`kit-build.yml` clone that repository's `main` and use its list; unset, they
+use `web/catalog.json` and `web/sections.json` here. The site's `build.json`
+then names it (`shop_repository`, `shop_commit`), and the page's Submit,
+Remove and Report a picture links open that repository's forms. A kit's
+catalog takes the list's commit as its `revision`.
+
+On your machine the scripts take the same setting: **`ELEKLOADER_CATALOG`**
+is the path of the list (`sections.json` is read beside it), for
+`build_web.py`, `submit_mod.py`, `shop_updates.py` and the unit tests;
+**`ELEKLOADER_SHOP_REPO`** is the repository `python -m elekloader.sdk.publish`
+opens the form in.
+
+```sh
+git clone https://github.com/<owner>/<shop repository> ../shop
+export ELEKLOADER_CATALOG=$PWD/../shop/catalog.json
+python tests/test_units.py
+```
+
 ### Submitting a mod
 
 Authors don't need to edit the list themselves; [SHOP.md](SHOP.md) is their page. The shop's
