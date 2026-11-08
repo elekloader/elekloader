@@ -339,7 +339,8 @@
       "device": "digitone-mk1", "needs_core": "4.0",
       "sha256": "59b8dcc775b6dd0d7ebf17bf3205f40cc8f410c688d5b1f4c3d2ed2ba39ea487",
       "summary": "A one-shot FM percussion machine for the Digitone mk1/Keys built around the stock FM voice.",
-      "on_unit": "Tested on hardware; fully functional and stable."
+      "on_unit": "Tested on hardware; fully functional and stable.",
+      "thumb": {"tag": "v1.0.1", "file": "thumb.png", "sha256": "8e59aed2e7947b4ca4d5a381eea4933bd3ba2fa8fd667b50cafe26fa16ef9ed3"}
     },
     {
       "repo": "DigiAlchemydsp/DigiFilter", "tag": "v1.3", "file": "digifilter-dn-1.3.elemod",
