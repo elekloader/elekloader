@@ -579,7 +579,14 @@ details summary:hover { color: var(--text); }
 .dm-tag.dm-drive { background: var(--accent-soft); color: var(--accent); }
 .dm-browser { margin-top: 10px; }
 .dm-pane { min-width: 0; }
-.dm-pane .dm-t code, .dm-pane .dm-t .dm-num, .dm-pane .dm-t td:first-child:not([colspan]), .dm-pane .dm-t td:last-child:not([colspan]) { white-space: nowrap; }
+/* The folder view spans the card: every column is as wide as its content, the Name column takes the rest. */
+.dm-pane { overflow-x: auto; }
+.dm-pane .dm-t { display: table; }
+.dm-pane .dm-t td:not([colspan]), .dm-pane .dm-t th { white-space: nowrap; }
+.dm-pane .dm-t td:not(:first-child):not([colspan]), .dm-pane .dm-t th:not(:first-child) { width: 1%; }
+.dm-pane .dm-t td.bad { white-space: normal; min-width: 14em; }
+.dm-pane .dm-t tr[draggable] { cursor: grab; }
+.dm-rename { background: var(--well); color: var(--text); border: 1px solid var(--accent); border-radius: 5px; padding: 1px 6px; font-family: var(--mono); font-size: 13px; width: 100%; min-width: 10em; }
 .dm-t tr.dm-over td { background: var(--accent-soft); }
 .dm-pane.dm-over { outline: 1.5px dashed var(--accent); outline-offset: 4px; border-radius: 6px; }
 .dm-crumbs { display: flex; flex-wrap: wrap; align-items: center; gap: 0; font-family: var(--mono); font-size: 13px; flex: 1 1 auto; min-width: 0; }

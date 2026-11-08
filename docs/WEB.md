@@ -316,7 +316,7 @@ Pyodide, and `app.js` loads it only when the view first opens:
   drops SysEx over about 1 KB), the read starts again with 768-byte chunks
   and the view keeps that size, so the first read there takes one timeout
   (5 s) longer.
-- **`/mods`** shows one folder at a time: its path on top (`/mods/fx/a`),
+- **Mods on +Drive** (the card for `/mods`) shows one folder at a time: its path on top (`/mods/fx/a`),
   each part of which opens that folder, then its folders (`/NAME`) and its
   `.elemod` files. A folder opens with a click. The view reads every folder when it connects, so an empty
   folder shows too, and each file is downloaded for its id and version
@@ -326,6 +326,16 @@ Pyodide, and `app.js` loads it only when the view first opens:
   below it. In a
   folder 3 deep, a note says that nothing deeper shows: the route lists no
   folder there, and the loader can't reach one.
+  The table spans the card: the Name column takes what the others leave.
+- **Move and rename**: a file or folder row dragged onto a folder row, or
+  onto a part of the path, moves there, and **Rename** on a row makes its
+  name a text box (Enter renames, Escape keeps it). Either is one upload of
+  `FROM\nTO` to `/mods/.mv` (`Mods.move`); the route moves a folder with what
+  is in it and keeps `/mods/active`'s lines naming them, so a mod in the
+  build can move too. The view refuses first a name already there, a folder
+  into itself, a file without a `.elemod` name, and a result past 3 deep or
+  127 bytes; while the MODS page hasn't caught up with the last move, the
+  route answers `Busy: the MODS page`, which the view shows.
 - **New folder** makes a folder in the open one (no `/`, not starting with
   `.`, at most 63 bytes, 3 deep at most) on the unit, empty, and opens it.
   The Data router has no request for a folder, so the view uploads nothing
@@ -352,7 +362,8 @@ mocked MIDI port: a fake unit with the made-up build of
 `elekloader mods` sent, byte for byte. The fake unit keeps folders as the
 route does, and the test makes one, uploads into it, keeps a mod of the
 saved build from being deleted, checks the view never writes `/mods/active`, goes 3 deep, drops onto folder rows and the path, finds a shop mod's
-copy in a folder and deletes an empty folder.
+copy in a folder, deletes an empty folder, and moves and renames files and
+folders (its `.mv` moves them, and `/mods/active`'s lines, as the route does).
 
 ## What stays private, and how
 

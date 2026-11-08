@@ -5,7 +5,8 @@
 // and the Data router's requests (datarpc.js), each the Python's, byte for byte. Every write goes through
 // datarpc.Mods, whose paths are inside /mods; an upload and the set are checked against the unit's build first.
 // /mods shows one folder at a time (to datarpc.DEPTH deep): its path on top, each part of which opens that folder, then its
-// folders and files. Files dropped on a folder row or a part of the path go into that folder. The view only puts files on the
+// folders and files. Files dropped on a folder row or a part of the path go into that folder, and a row dragged there moves
+// there (datarpc.Mods.move); Rename renames a row in place. The view only puts files on the
 // unit: the build (/mods/active) is chosen on the unit's MODS page, and a mod in it can't be deleted here (MOD IN USE).
 
 const V = new URL(import.meta.url).search;
@@ -237,19 +238,105 @@ function renderCrumbs() {
   $('dm-new-folder-btn').title = deep ? `Folders go ${datarpc.DEPTH} deep below /mods` : '';
 }
 
-/** Drag-and-drop handlers that upload dropped files into `dir` (a function: the open folder). */
+const DRAG = 'application/x-elekloader-path';   // a row dragged within the view: its path below /mods
+
+/** Drag-and-drop handlers for a folder (`dir`, or a function giving the open one): files from the computer upload into
+ * it, and a row of the view dragged onto it moves there. */
 function dropTarget(dir) {
   const where = () => (typeof dir === 'function' ? dir() : dir);
+  const ours = e => [...e.dataTransfer.types].includes(DRAG);
   return {
-    ondragover: e => { if (![...e.dataTransfer.types].includes('Files')) return; e.preventDefault(); e.stopPropagation(); e.currentTarget.classList.add('dm-over'); },
+    ondragover: e => {
+      const types = [...e.dataTransfer.types];
+      if (!types.includes('Files') && !ours(e)) return;
+      e.preventDefault(); e.stopPropagation();
+      e.dataTransfer.dropEffect = ours(e) ? 'move' : 'copy';
+      e.currentTarget.classList.add('dm-over');
+    },
     ondragleave: e => e.currentTarget.classList.remove('dm-over'),
     ondrop: async e => {
       e.preventDefault(); e.stopPropagation(); e.currentTarget.classList.remove('dm-over');
       const into = where();
+      if (ours(e)) { moveInto(e.dataTransfer.getData(DRAG), into); return; }
       if (into !== S.cwd) open_(into);
       upload(await readFiles(e.dataTransfer.files, into));
     },
   };
+}
+
+/** A row's drag handlers: it carries its path, for a folder row or a part of the path to move it. */
+const dragSource = path => ({
+  draggable: 'true',
+  ondragstart: e => { e.dataTransfer.setData(DRAG, path); e.dataTransfer.effectAllowed = 'move'; },
+});
+
+const isDir = p => S.folders.includes(p);
+const taken = p => S.folders.includes(p) || S.files.some(f => f.name === p);
+
+/** Why `from` can't move to `to`, or ''. The route checks it all again; this says it before a request. */
+function whyNotMove(from, to) {
+  const folder = isDir(from);
+  if (from === to) return '';
+  if (folder && inside(to, from)) return `/mods/${from} can't go into itself`;
+  if (taken(to)) return `/mods/${to} is already there`;
+  if (to.split('/').some(q => ulen(q) > SEG_MAX)) return `a name is at most ${SEG_MAX} bytes`;
+  if (ulen(to) >= 128) return `/mods/${to} is longer than 127 bytes`;
+  if (folder) {
+    const deepest = Math.max(0, ...S.folders.filter(d => inside(d, from)).map(d => depth(d) - depth(from)));
+    if (depth(to) + deepest > datarpc.DEPTH) return `folders go ${datarpc.DEPTH} deep below /mods`;
+    if (S.files.some(f => inside(f.name, from) && ulen(to + f.name.slice(from.length)) >= 128))
+      return `a path in it would be longer than 127 bytes`;
+  }
+  return '';
+}
+
+/** Move or rename the file or folder `from` to `to` on the unit (datarpc.Mods.move: the route keeps /mods/active's
+ * lines naming it). */
+async function move(from, to) {
+  if (from === to) return;
+  const why = whyNotMove(from, to);
+  if (why) { say('dm-upload-msg', `REFUSED: ${why}`, 'bad'); return; }
+  const folder = isDir(from);
+  await busy(async () => {
+    try { await S.mods.move(from, to, S.head, folder); } catch (e) { say('dm-upload-msg', `/mods/${from}: ${e.message}`, 'bad'); await refresh(); return; }
+    if (folder && (S.cwd === from || inside(S.cwd, from))) S.cwd = to + S.cwd.slice(from.length);
+    await refresh();
+    say('dm-upload-msg', `Moved /mods/${from} to /mods/${to}.`, 'ok');
+  });
+}
+
+/** A row dropped on a folder: it moves into it, keeping its name. */
+function moveInto(from, dir) {
+  if (!from || from === dir || parent(from) === dir) return;   // onto itself, or already there
+  move(from, dir ? `${dir}/${base(from)}` : base(from));
+}
+
+/** Rename in place: the name cell becomes a text box; Enter renames, Escape or leaving it keeps the name. */
+function startRename(path, cell) {
+  const folder = isDir(path), old = base(path);
+  const box = el('input', { type: 'text', class: 'dm-rename', value: old, 'aria-label': `New name for ${path}`, maxlength: SEG_MAX, spellcheck: 'false' });
+  let done = false;
+  const finish = ok => {
+    if (done) return;
+    done = true;
+    const name = box.value.trim();
+    if (!ok || !name || name === old) { renderFiles(); return; }
+    let why = '';
+    if (name.includes('/') || name.startsWith('.')) why = 'a name has no / and does not start with .';
+    else if (/[\x00-\x1f\x7f]/.test(name)) why = 'a name has no control characters';
+    else if (!folder && !/.\.elemod$/.test(name)) why = 'a mod file keeps a .elemod name';
+    if (why) { renderFiles(); say('dm-upload-msg', `REFUSED: ${why}`, 'bad'); return; }
+    const p = parent(path);
+    move(path, p ? `${p}/${name}` : name);
+  };
+  box.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); finish(true); }
+    else if (e.key === 'Escape') { e.preventDefault(); finish(false); }
+  });
+  box.addEventListener('blur', () => finish(false));
+  cell.replaceChildren(box);
+  box.focus();
+  if (!folder) box.setSelectionRange(0, old.length - '.elemod'.length); else box.select();
 }
 
 function renderFiles() {
@@ -261,20 +348,26 @@ function renderFiles() {
   for (const d of here) {
     const below = S.files.filter(f => inside(f.name, d));
     const empty = !below.length && !folders.some(x => inside(x, d));
-    rows.push(el('tr', { class: 'dm-folder', 'data-dir': d, ...dropTarget(d) },
-      el('td', {}, el('code', {}, el('button', { type: 'button', class: 'dm-open', 'aria-label': `Open ${d}`, onclick: () => open_(d) }, `/${base(d)}`))),
+    const name = el('td', {}, el('code', {}, el('button', { type: 'button', class: 'dm-open', 'aria-label': `Open ${d}`, onclick: () => open_(d) }, `/${base(d)}`)));
+    rows.push(el('tr', { class: 'dm-folder', 'data-dir': d, ...dropTarget(d), ...dragSource(d) },
+      name,
       el('td', { class: 'muted' }, `${below.length} mod${below.length === 1 ? '' : 's'}`),
       el('td', { class: 'dm-num' }, ''),
-      el('td', {}, el('button', { type: 'button', class: 'dm-mini dm-danger', 'aria-label': `Delete folder ${d}`, disabled: !empty,
+      el('td', {}, el('button', { type: 'button', class: 'dm-mini', 'aria-label': `Rename folder ${d}`, onclick: () => startRename(d, name) }, 'Rename'), ' ',
+        el('button', { type: 'button', class: 'dm-mini dm-danger', 'aria-label': `Delete folder ${d}`, disabled: !empty,
         title: empty ? null : 'Not empty: delete or move what is in it first, as on the unit', onclick: e => removeDir(d, e.target) }, 'Delete'))));
   }
-  for (const f of files) rows.push(el('tr', {},
-      el('td', { title: `/mods/${f.name}` }, el('code', {}, base(f.name))),
+  for (const f of files) {
+    const name = el('td', { title: `/mods/${f.name}` }, el('code', {}, base(f.name)));
+    rows.push(el('tr', { 'data-file': f.name, ...dragSource(f.name) },
+      name,
       el('td', { class: f.error ? 'bad' : null }, f.error || (f.id ? `${f.id} ${f.version ?? ''}` : '')),
       el('td', { class: 'dm-num' }, kb(f.size)),
       el('td', {}, el('button', { type: 'button', class: 'dm-mini', disabled: !f.raw, onclick: () => download(base(f.name), f.raw) }, 'Download'), ' ',
+        el('button', { type: 'button', class: 'dm-mini', 'aria-label': `Rename ${f.name}`, onclick: () => startRename(f.name, name) }, 'Rename'), ' ',
         el('button', { type: 'button', class: 'dm-mini dm-danger', 'aria-label': `Delete ${f.name}`, disabled: S.inUse.has(f.name),
           title: S.inUse.has(f.name) ? 'In the build: unload it on the unit first (MODS, UNLOAD)' : null, onclick: e => remove(f, e.target) }, 'Delete'))));
+  }
   if (!here.length && !files.length)
     rows.push(el('tr', {}, el('td', { colspan: 4, class: 'muted' }, cwd ? 'This folder is empty.' : 'No mods in /mods yet.')));
   if (depth(cwd) >= datarpc.DEPTH)

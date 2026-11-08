@@ -127,7 +127,14 @@ function mock(buildHex) {
       const body = d.slice(31, d.length - 12);
       ok = u32(d, 0) === 0xac11d303 && ((d[5] << 8) | d[6]) === 2 && u32(d, 13) === 0x454d4f44 && !d[29]
         && u32(d, d.length - 12) === crc(body, 0xffffffff) ? 1 : 0;
-      if (ok && n.endsWith('/.dir')) for (let d = up(n); d; d = up(d)) dirs.add(d);
+      if (ok && n === '.mv') {                           // "FROM\nTO": the route moves FROM, with what is in it, and its active lines
+        const [from, to] = new TextDecoder().decode(Uint8Array.from(body)).split('\n');
+        const re = p => (p === from ? to : p.startsWith(from + '/') ? to + p.slice(from.length) : p);
+        if (dirs.has(from)) for (const x of [...dirs]) { dirs.delete(x); dirs.add(re(x)); }
+        for (const k of Object.keys(files)) if (re(k) !== k) { files[re(k)] = files[k]; delete files[k]; }
+        for (let x = up(to); x; x = up(x)) dirs.add(x);
+        if (files.active) files.active = enc(new TextDecoder().decode(Uint8Array.from(files.active)).split('\n').map(l => { const i = l.indexOf(' '); return i < 0 ? re(l) : re(l.slice(0, i)) + l.slice(i); }).join('\n'));
+      } else if (ok && n.endsWith('/.dir')) for (let d = up(n); d; d = up(d)) dirs.add(d);
       else if (ok) { files[n] = body; for (let d = up(n); d; d = up(d)) dirs.add(d); }
       extra = be([j, 4], [d.length, 4]);
     } else if (cmd === 0x5c) {
@@ -331,6 +338,63 @@ try {
   await dt.click(); await dt.click();
   await page.waitForFunction(() => !window.__unit.dirs.has('fx/a/tmp'));
   check('a new empty folder is on the unit, and DELETE DIR removes it there', true);
+
+  // move and rename: a row dragged onto a folder row or a part of the path moves there; Rename renames in place
+  const rowDrag = path => page.evaluateHandle(p => { const dt = new DataTransfer(); dt.setData('application/x-elekloader-path', p); return dt; }, path);
+  const moves = async from => (await page.evaluate(() => window.__unit.sent)).slice(from).filter(m => m[4] === 0x57)
+    .map(m => { const a = m.slice(9); return Buffer.from(a.slice(0, a.indexOf(0))).toString(); }).filter(p => p === '/mods/.mv');
+  const mLine = activeLines.slice(hello.name.length);    // drive-hello's line in /mods/active, for fx/a/m.elemod
+  await page.evaluate(([raw, t]) => { window.__unit.files['fx/a/m.elemod'] = raw; window.__unit.files.active = [...new TextEncoder().encode(t)]; },
+    [[...hello.raw], 'fx/a/m.elemod' + mLine]);
+  await page.fill('#dm-new-folder', 'box');
+  await page.click('#dm-new-folder-btn');
+  await page.waitForFunction(() => /^Made \/mods\/fx\/a\/box/.test(document.getElementById('dm-upload-msg').textContent));
+  await page.click('#dm-crumbs button[data-dir="fx/a"]');
+  check('a mod in the build can be moved and renamed, not deleted', await page.isDisabled('#dm-file-list button[aria-label="Delete fx/a/m.elemod"]')
+    && await page.isEnabled('#dm-file-list button[aria-label="Rename fx/a/m.elemod"]')
+    && (await page.getAttribute('#dm-file-list tr[data-file="fx/a/m.elemod"]', 'draggable')) === 'true');
+  n0 = await sentNow();
+  await page.dispatchEvent('#dm-file-list tr[data-dir="fx/a/box"]', 'drop', { dataTransfer: await rowDrag('fx/a/m.elemod') });
+  await page.waitForFunction(() => /^Moved/.test(document.getElementById('dm-upload-msg').textContent), null, { timeout: 15000 });
+  u = await unit();
+  check('a file row dropped on a folder row moves into it, by one upload to /mods/.mv', u.files.includes('fx/a/box/m.elemod')
+    && !u.files.includes('fx/a/m.elemod') && (await moves(n0)).length === 1, `${await msg()} ${u.files.join(' ')}`);
+  check('... and the route keeps /mods/active naming it', await page.evaluate(() => new TextDecoder().decode(Uint8Array.from(window.__unit.files.active))) === 'fx/a/box/m.elemod' + mLine);
+  n0 = await sentNow();
+  await page.dispatchEvent('#dm-file-list tr[data-dir="fx/a/box"]', 'drop', { dataTransfer: await rowDrag('fx/a/box') });
+  check('a folder dropped on itself sends nothing', (await sentNow()) === n0);
+  await page.click('#dm-file-list button[aria-label="Open fx/a/box"]');
+  await page.click('#dm-file-list button[aria-label="Rename fx/a/box/m.elemod"]');
+  check('Rename makes the name a text box', (await page.inputValue('#dm-file-list input.dm-rename')) === 'm.elemod');
+  await page.fill('#dm-file-list input.dm-rename', 'n');
+  await page.press('#dm-file-list input.dm-rename', 'Enter');
+  check('a mod file keeps a .elemod name', /REFUSED: a mod file keeps a \.elemod name/.test(await msg()), await msg());
+  await page.click('#dm-file-list button[aria-label="Rename fx/a/box/m.elemod"]');
+  await page.fill('#dm-file-list input.dm-rename', 'n.elemod');
+  await page.press('#dm-file-list input.dm-rename', 'Enter');
+  await page.waitForFunction(() => /^Moved \/mods\/fx\/a\/box\/m\.elemod to \/mods\/fx\/a\/box\/n\.elemod/.test(document.getElementById('dm-upload-msg').textContent), null, { timeout: 15000 });
+  check('Rename renames a file on the unit', (await unit()).files.includes('fx/a/box/n.elemod'));
+  n0 = await sentNow();
+  await page.dispatchEvent('#dm-crumbs button[data-dir=""]', 'drop', { dataTransfer: await rowDrag('fx/a/box') });
+  await page.waitForFunction(() => /^Moved \/mods\/fx\/a\/box to \/mods\/box/.test(document.getElementById('dm-upload-msg').textContent), null, { timeout: 15000 });
+  u = await unit();
+  check('a folder dropped on a part of the path moves there, with what is in it', u.files.includes('box/n.elemod') && u.dirs.includes('box') && !u.dirs.includes('fx/a/box'));
+  check('... and the open folder follows it', (await page.textContent('#dm-into')) === '/mods/box');
+  await page.click('#dm-crumbs button[data-dir=""]');
+  n0 = await sentNow();
+  await page.click('#dm-file-list button[aria-label="Rename folder box"]');
+  await page.fill('#dm-file-list input.dm-rename', 'fx');
+  await page.press('#dm-file-list input.dm-rename', 'Enter');
+  check('a name already there is refused before any request', /REFUSED: \/mods\/fx is already there/.test(await msg()) && (await sentNow()) === n0, await msg());
+  await page.click('#dm-file-list button[aria-label="Rename folder box"]');
+  await page.fill('#dm-file-list input.dm-rename', 'kept');
+  await page.press('#dm-file-list input.dm-rename', 'Enter');
+  await page.waitForFunction(() => /^Moved \/mods\/box to \/mods\/kept/.test(document.getElementById('dm-upload-msg').textContent), null, { timeout: 15000 });
+  check('Rename renames a folder', (await unit()).files.includes('kept/n.elemod'));
+  check('the folder view spans the card', await page.evaluate(() => {
+    const t = document.getElementById('dm-file-list'), p = document.getElementById('dm-pane');
+    return Math.abs(t.getBoundingClientRect().width - p.getBoundingClientRect().width) < 2;
+  }));
 
   const writes = (await page.evaluate(() => window.__unit.sent)).filter(m => [0x57, 0x5c].includes(m[4]));
   const paths = writes.map(m => { const a = m.slice(m[4] === 0x57 ? 9 : 5); return Buffer.from(a.slice(0, a.indexOf(0))).toString(); });
