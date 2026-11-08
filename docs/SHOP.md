@@ -74,7 +74,7 @@ You'll be asked to sign in to GitHub if you aren't.
 | **Summary** | One sentence for your mod's card (up to 300 characters). |
 | **Tested on a unit** | What you've run on real hardware, and what you haven't yet. Be honest: it's shown on the card, and "not yet" is a fine answer. |
 | **Licence** | Only if your files don't name one themselves. |
-| **Only these files** | Only if the release holds files you *don't* want listed. Leave it empty to submit them all. A pack of boot splashes: name a few examples here, not the whole set; anyone can make their own in the [Splash screen maker](https://elekloader.github.io/elekloader/#splash). |
+| **Only these files** | Only if the release holds files you *don't* want listed. Leave it empty to submit them all. A pack of boot splashes or screen pictures: name a few examples here, not the whole set; anyone can make their own in the [Splash screen maker](https://elekloader.github.io/elekloader/#splash). |
 | **Updates** | Leave it unticked. See [Updates](#updates-publish-a-release-thats-all). |
 | **Checks** | Tick both: you wrote the mod (or its licence lets it be passed on), and the files carry no Elektron firmware. |
 
