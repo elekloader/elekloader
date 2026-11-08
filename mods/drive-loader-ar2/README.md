@@ -70,6 +70,10 @@ refused like any other dot file. Neither flag is set by default.
   header; `+0x4c` is stock's after-change call. WriteClose calls it with the header after a
   successful upload, which is when the route commits. Clear calls it with no header, which is
   when the route deletes the file.
+- A path that names a folder resolves for a Clear only: an empty folder gets an entry whose
+  after-change call removes it with stock's rmdir. That call can't report a failure, so a folder
+  with anything in it is refused when it resolves (`Folder not empty`), and `elekloader mods rm`
+  exits with that refusal.
 - The route can't tell a read, an upload and a Clear apart when it resolves a path, so the
   entry carries every function, each closure holding the file's name.
 - Stock's Rename refuses RAM entries, so `/mods` has no rename. A new upload under the same

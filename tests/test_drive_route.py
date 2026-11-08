@@ -83,5 +83,13 @@ class Route(unittest.TestCase):
         self.assertEqual(self.entry('active'), [(0, True, 'active')])
 
 
+    def test_a_folder_with_entries_is_not_cleared(self):
+        # FN02 (53d8c12) in the emulator: `mods rm` of a folder holding a file printed DELETED and
+        # the folder stayed (stock's rmdir refused after the route had said yes)
+        r = subprocess.run([self.exe], input='rmdir 0\nrmdir 1\nrmdir 3\n', capture_output=True,
+                           text=True, check=True)
+        self.assertEqual(r.stdout.splitlines(), ['cleared', 'Folder not empty', 'Folder not empty'])
+
+
 if __name__ == '__main__':
     unittest.main()

@@ -542,7 +542,14 @@ unsigned dl_entry(unsigned char *res, void **f, void **caps)
         dl_lock();
         size = dl_fs_file_size(path);
         if (size < 0 && is_folder(name)) {   /* a folder: Clear removes it when it is empty */
+            int n = dl_list_dir(name, 0, 0);
+            struct dl_ent *ents = heap_ents(n);
+            n = dl_list_dir(name, ents, n);
+            DELETE(ents);
             dl_unlock();
+            why = dir_clear_why(n);          /* a Clear can't fail after the entry is made: refuse here */
+            if (why)
+                goto refused;
             put32(e + E_TYPE, EMOD);
             put32(e + E_ADDR, (unsigned)drive_staging);
             perm = P_CLEAR;
@@ -567,6 +574,7 @@ unsigned dl_entry(unsigned char *res, void **f, void **caps)
         }
     }
     if (why) {
+refused:
         zero(e, ENTRY_SIZE);
         set_str(res + 4, why);
         return (unsigned)res;

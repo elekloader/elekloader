@@ -61,3 +61,11 @@ static int join_caps(char *out, void **caps)
     }
     return n - 1;
 }
+
+/* A Clear of a folder (`elekloader mods rm FOLDER`): stock's rmdir removes only an empty one, and
+ * the entry's after-change call can't report a failure, so a folder with `entries` (its files and
+ * folders, without . and ..) is refused when it resolves. -> 0, or the refusal. */
+static const char *dir_clear_why(int entries)
+{
+    return entries > 0 ? "Folder not empty" : 0;
+}

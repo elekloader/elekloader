@@ -2,8 +2,10 @@
 /* The /mods route's names (mods/drive-loader-ar2/names.inc) built for the computer:
  * tests/test_drive_route.py builds it with the host's cc and drives it.
  * Each stdin line is a path below /mods as the router hands it to the route: its segments, one
- * capture each. Each output line: "ok FOLDERS WRITABLE JOINED" or "refused". */
+ * capture each. Each output line: "ok FOLDERS WRITABLE JOINED" or "refused". A line "rmdir N"
+ * asks about a Clear of a folder with N entries: "cleared" or the refusal. */
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include "../mods/drive-loader-ar2/fs.h"
 
@@ -27,6 +29,11 @@ int main(void)
         int n = 0, folders;
         char *p = line, *e = line + strcspn(line, "\r\n");
         *e = 0;
+        if (!strncmp(line, "rmdir ", 6)) {   /* "rmdir N": a Clear of a folder holding N entries */
+            const char *why = dir_clear_why(atoi(line + 6));
+            printf("%s\n", why ? why : "cleared");
+            continue;
+        }
         while (n < 16) {                    /* split on '/', keeping empty segments */
             char *s = strchr(p, '/');
             v[n++] = p;
