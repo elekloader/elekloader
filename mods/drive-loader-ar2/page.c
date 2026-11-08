@@ -569,6 +569,22 @@ static int inspect(struct file *r)
 #define BOX_SP ((void (*)(void *, void *))0x401832ec)       /* (&shared_ptr, box) */
 #define SHOW ((void (*)(void *, void *, int))0x40079462)    /* (*(view + 0x64), &sp, 0) */
 #define FONT_LIST 0x4027aa28u            /* the browser's font */
+/* stock's text width in pixels (font, -1, &string), as its TEXT (0x4007154c) measures */
+#define TEXT_W ((int (*)(unsigned, int, void *))0x40071bf2)
+#define LABEL_X 8                        /* the list's label starts this far into a row */
+#define STATE_GAP 3                      /* pixels kept free before the state column */
+
+#include "clip.inc"
+
+static int text_w(const char *s)
+{
+    void *str;
+    int w;
+    STR_NEW(&str, s, 0);
+    w = TEXT_W(FONT_LIST, -1, &str);
+    STR_DEL(&str);
+    return w;
+}
 
 struct fn {                              /* std::function: functor[2], manager, invoker */
     void *functor[2];
@@ -683,7 +699,11 @@ unsigned dl_page_text(int i)
         int k = file_k(i);
         if (k >= 0) {
             const struct file *r = &files[k];
-            cat(label, end, mode == M_BUILD ? r->name : r->id[0] ? r->id : base_of(r->name));
+            if (mode == M_BUILD && view)     /* the path, clipped left of the state column */
+                clip_tail(label, end, r->name, ((int (*)(void *))VCALL(V_WIDTH))(view) - 9 -
+                          text_w("KEEP") - LABEL_X - STATE_GAP, text_w);
+            else
+                cat(label, end, mode == M_BUILD ? r->name : r->id[0] ? r->id : base_of(r->name));
         } else if (lrows[i].kind == R_UP)
             cat(label, end, "..");
         else

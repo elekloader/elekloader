@@ -202,7 +202,9 @@ The page is stock's two-pane file view, the one SAMPLES and PROJECTS are built o
 - **The build list.** LEFT opens a one-row left panel, VIEW BUILD (VIEW +DRIVE in the build
   list), like SAMPLES' VIEW RAM, which switches the list and closes the panel (`0x400734a8`).
   The build list shows the saved set, each mod by its path below `/mods` (decided 2026-11-08, so
-  two files of one name in two folders tell apart), with what the next boot does: `KEEP` (loaded
+  two files of one name in two folders tell apart; a path too wide for the row keeps its tail
+  behind a `<`, measured with stock's font so that it ends before the state column: `clip.inc`,
+  `tests/test_drive_page.py`), with what the next boot does: `KEEP` (loaded
   now, stays), `ADD` (loads at the next boot), `DROP` (loaded now, gone after the next boot;
   these rows stay until the reboot) or `!` (the last boot refused it). Its action panel has
   UNLOAD, which saves the build without the ticked mods through the same checks (`MOD NOT LOADED` for a ticked mod the build does not hold).
