@@ -16,7 +16,7 @@ docs match its code.
   which OS, how a build picks one, and what each core adds (the Digitone's
   Mod Menu, say).
 - **[The web page](WEB.md)**: elekloader in your browser, its mod shop, and
-  how the shop's list is kept.
+  how the shop's list is kept (in [elekloader/shop](https://github.com/elekloader/shop)).
 - **[The Splash screen maker](SPLASH.md)**: your own picture or GIF on the
   boot screen of a Digitakt or Digitone, made into a mod in the web page.
 

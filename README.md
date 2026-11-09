@@ -79,7 +79,9 @@ Made one? Publish it in a GitHub release and fill in the
 [Submit a mod](https://github.com/elekloader/shop/issues/new?template=submit-mod.yml)
 form: a check reads your files and opens the shop's pull request for you.
 After that, your newer releases reach the shop by themselves
-([Your mod in the shop](docs/SHOP.md)).
+([Your mod in the shop](docs/SHOP.md)). The shop's list, its forms and its
+bots have a repository of their own, [elekloader/shop](https://github.com/elekloader/shop); this one
+holds the code and the web page.
 
 **Contributions are welcome and encouraged.** The core grows from what mods
 need: when yours needs an event, a table or a firmware address the core

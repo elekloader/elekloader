@@ -108,7 +108,7 @@ Copy button:
 Submit my elekloader mod to the Elekloader Shop. First read the section "Using an AI agent" of
 https://github.com/elekloader/elekloader/blob/main/docs/SHOP.md and follow it. In short: build the
 .elemod files for each OS version I support, publish them in a GitHub release on my repository, then
-open a "Submit a mod" issue on elekloader/elekloader with gh issue create. A bot checks the issue and
+open a "Submit a mod" issue on elekloader/shop with gh issue create. A bot checks the issue and
 opens the pull request, so don't open one yourself. Before you publish or submit anything, show me the
 release notes, the summary and the "Tested on a unit" text, and wait for my OK: I am the one declaring
 that I wrote the mod (or its licence lets it be passed on) and that the files hold no Elektron
@@ -183,7 +183,7 @@ the pull request itself.
    ```
 
    ```bash
-   gh issue create --repo elekloader/elekloader --title "Submit a mod: My Mod" --body-file body.md
+   gh issue create --repo elekloader/shop --title "Submit a mod: My Mod" --body-file body.md
    ```
 
    Leave "Updates" unticked unless the author wants to opt out of automatic
@@ -191,7 +191,7 @@ the pull request itself.
    instead of a release, leave the tag empty and give the whole 40-character
    commit id under "Or a commit".
 4. **Read the answer.** Within a minute or two the bot comments on the issue:
-   `gh issue view NUMBER --repo elekloader/elekloader --comments`. If it
+   `gh issue view NUMBER --repo elekloader/shop --comments`. If it
    refused something, [If it says no](#if-it-says-no) says what to change; fix
    the release (or the issue's text with `gh issue edit NUMBER --body-file
    body.md`) and the check runs again. If it passed, it has opened the pull

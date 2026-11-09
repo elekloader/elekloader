@@ -216,11 +216,19 @@ a picture links open its forms. A kit's catalog takes the list's commit as
 its `revision`. The leaderboard counts the claims on both repositories'
 merged pull requests.
 
-A merge in the shop repository reaches the site by starting this
-repository's pages workflow, with the shop repository's secret
-**`SITE_DISPATCH`**: a token that may only start workflows here (Actions:
-write on elekloader/elekloader). Without it, the site takes the change at its
-next build (a push to main, or pages run by hand).
+A change to the list reaches the site within minutes: the shop repository
+starts this repository's pages workflow with its secret **`SITE_DISPATCH`**, a
+fine-grained token that may only start workflows here (resource owner
+elekloader, repository elekloader/elekloader, Actions: read and write).
+- The bots' own merges (a submission, a daily update) start it themselves.
+- Any other change to `catalog.json` or `sections.json` on the shop's `main`
+  (a maintainer's merge, a push) runs its `site.yml`, which starts it. A push
+  made with a workflow's token starts no workflow, so a bot's merge redeploys
+  once. Run it by hand from elekloader/shop's Actions > Redeploy the site.
+- **The token expires.** Then the shop's runs warn or fail at that step and
+  the site takes the change only at its next build (a push to main here, or
+  pages run by hand). Make a new one and store it with
+  `gh secret set SITE_DISPATCH -R elekloader/shop`.
 
 On your machine the scripts read the list from `build/shop-list/`, or from
 **`ELEKLOADER_CATALOG`** (the path of `catalog.json`; `sections.json` is read
