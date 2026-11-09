@@ -1,22 +1,26 @@
 | SPDX-License-Identifier: GPL-2.0-or-later
-| core 4.2 (Digitakt mk1): the played notes. A note played on a track, before
-| its voice, as an event a handler may take (ev_live_note), and the stock
-| routines past it (fw_note_on, fw_note_off), so a mod that took a note can
-| play another without the event seeing it. digipoly, digislicer and ob1 hook
-| the note submits inside these routines for themselves; the sites here are
-| the routines' entries, so they still link. Last in sources, so the code
-| before it keeps its place. The addresses in the comments are OS 1.53's; the
-| code takes them from mod.json's defsym, one set per OS:
-|   NOTE_ON   0x400d53dc  note_on(track, note, vel, source, skip, sound, flag)
-|   NOTE_OFF  0x400d575e  note_off(track, note, source)
+| core 4.2 (Digitakt mk1) and core-dn1 5.3 (Digitone mk1): the played notes.
+| A note played on a track, before its voice, as an event a handler may take
+| (ev_live_note), and the stock routines past it (fw_note_on, fw_note_off), so
+| a mod that took a note can play another without the event seeing it. Last in
+| sources, so the code before it keeps its place. The code takes the addresses
+| and the routines' frame sizes from mod.json's defsym, one set per device and
+| OS; the comments give the Digitakt's 1.53 and the Digitone's 1.44:
+|   NOTE_ON   0x400d53dc, 0x400eae5c   note_on(track, note, vel, source, skip, sound[, flag])
+|   NOTE_OFF  0x400d575e, 0x400eabb4   note_off(track, note, source)
 | source is where the note came from (0x40 the trig keys, keyboard mode and the
-| preview, 2 MIDI); skip nonzero counts the key without playing it (a note
-| recorded live); the trig keys pass sound and flag -1. Both count the keys
-| held on each track and each note (0x4219c0e0, 0x4219bc98) before they send
-| the voice its message.
+| preview, 2 MIDI on the Digitakt); skip nonzero counts the key without playing
+| it (a note recorded live); the trig keys pass sound (and on the Digitakt
+| flag) -1. Both count the keys held on each track and each note (Digitakt
+| 0x4219c0e0, 0x4219bc98; Digitone 0x41994e80, 0x419952a8) before they send
+| the voice its message. Each starts with link.w %fp, #NOTE_ON_LINK (or
+| NOTE_OFF_LINK) and moveq #127, %d0, the 6 bytes its site replaces.
+| digipoly, digislicer and ob1 hook the Digitakt's note submits inside these
+| routines for themselves; the sites here are the routines' entries, so they
+| still link.
 
         .section .run, "ax"
-        .balign 4                       | after 4.1's .run, which it leaves as it was
+        .balign 4                       | after the .run before it, which it leaves as it was
 
 | ev_live_note: f(int track, int note, int vel, int on, int source), may take.
 | on 1 (NOTE_ON's entry): a press, vel its velocity; on 0 (NOTE_OFF's entry):
@@ -33,7 +37,7 @@ core_note_on:
         bsr.s   live_note
         bne.s   8f
 fw_note_on:
-        link.w  %fp, #-104              | NOTE_ON's first two instructions
+        link.w  %fp, #NOTE_ON_LINK      | NOTE_ON's first two instructions
         moveq   #127, %d0
         jmp     NOTE_ON + 6
 8:      rts
@@ -43,7 +47,7 @@ core_note_off:
         bsr.s   live_note
         bne.s   8f
 fw_note_off:
-        link.w  %fp, #-108              | NOTE_OFF's first two instructions
+        link.w  %fp, #NOTE_OFF_LINK     | NOTE_OFF's first two instructions
         moveq   #127, %d0
         jmp     NOTE_OFF + 6
 8:      rts

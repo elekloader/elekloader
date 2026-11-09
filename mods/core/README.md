@@ -7,8 +7,8 @@ changes nothing the unit does.
 `core.s`, `settings.s`, `render.s`, `machines.s`, `fw.s`, `master.s` and `notes.s` have no addresses:
 `mod.json` gives them (`defsym`), with the sites, for 1.53, and again for
 1.54 under `ports`. The stock file you build with picks them.
-[../core-dn1](../core-dn1) builds the same `core.s`, `settings.s` and
-`render.s` for the Digitone mk1, and [../core-dt2](../core-dt2) `core.s`,
+[../core-dn1](../core-dn1) builds the same `core.s`, `settings.s`,
+`render.s` and (from 5.3) `notes.s` for the Digitone mk1, and [../core-dt2](../core-dt2) `core.s`,
 `settings.s` and `fast.s` (with its own `personalize.s`) for the
 Digitakt II. The addresses in this README and in the sources' comments
 are 1.53's.
@@ -71,7 +71,8 @@ are 1.53's.
   - `fw_note_on` and `fw_note_off`: those routines past the event.
 
   With no subscriber the unit is stock. machine-pages 1.8 carries out the
-  SDK's mono machines on it.
+  SDK's mono machines on it. Each device gives the routines' addresses and
+  their frames' sizes (`NOTE_ON_LINK`, `NOTE_OFF_LINK`).
 
 Build it with the SDK (it needs m68k binutils):
 

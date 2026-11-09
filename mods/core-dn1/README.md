@@ -2,7 +2,8 @@
 
 The boot copier and the hook bus for the Digitone mk1 and Digitone Keys,
 OS 1.43 and 1.44. It is [../core/core.s](../core/core.s), with
-[settings.s](../core/settings.s) and [render.s](../core/render.s), built with the
+[settings.s](../core/settings.s), [render.s](../core/render.s) and from 5.3
+[notes.s](../core/notes.s), built with the
 Digitone's addresses and sites (`mod.json`: 1.43's, and 1.44's under
 `ports`). Every set of linkable (format 2) mods for
 the Digitone needs it. On its own it changes nothing the unit does.
@@ -347,15 +348,30 @@ the Digitone needs it. On its own it changes nothing the unit does.
   hooks; with 5.0-5.2 the two could not be built together. A mod that hooks
   a routine's entry and goes on at its + 6 runs before the event; one that
   takes the press there leaves the event unsent. Nothing else changes.
+- **5.3, the played notes** ([../core/notes.s](../core/notes.s), the
+  Digitakt core 4.2's, last in `sources`). Two sites more, the entries of
+  the stock note-on and note-off routines that KEYBOARD mode's trig keys
+  and a MIDI note on a track's channel reach (1.44: 0x400eae5c,
+  0x400eabb4; 1.43: 0x400eabe8, 0x400ea940, 0x274 earlier as the rest of
+  that code):
+  - `ev_live_note(track, note, vel, on, source)`, which a handler may
+    take, press or release: the stock then neither counts the key nor
+    plays (or releases) it. `source` is 0x40 or 0x80 from KEYBOARD mode,
+    and the port for MIDI (8 or 0x10 DIN, 2 or 4 USB);
+  - `fw_note_on(track, note, vel, source, skip, sound)` and
+    `fw_note_off(track, note, source)`: those routines past the event.
+
+  With no subscriber the unit is stock. machines-dn1 0.5 carries out the
+  SDK's mono machines on it.
 - **OS 1.44:** every site has its port (`ports` in mod.json): the same
   code, moved, and RAM 0x1000 further on.
 
 Build it with the SDK (it needs m68k binutils):
 
 ```bash
-python -m elekloader.sdk.build mods/core-dn1 --stock Digitone_and_Digitone_Keys_OS1.43.syx   # out/core-5.2.1.elemod
-python -m elekloader.sdk.build mods/core-dn1 --stock Digitone_and_Digitone_Keys_OS1.44.syx   # out/core-5.2.1-os1.44.elemod
-python -m elekloader.lint mods/core-dn1/out/core-5.2.1-os1.44.elemod --stock Digitone_and_Digitone_Keys_OS1.44.syx
+python -m elekloader.sdk.build mods/core-dn1 --stock Digitone_and_Digitone_Keys_OS1.43.syx   # out/core-5.3.elemod
+python -m elekloader.sdk.build mods/core-dn1 --stock Digitone_and_Digitone_Keys_OS1.44.syx   # out/core-5.3-os1.44.elemod
+python -m elekloader.lint mods/core-dn1/out/core-5.3-os1.44.elemod --stock Digitone_and_Digitone_Keys_OS1.44.syx
 ```
 
 The LFO name hooks have ColdFire ABI probes (stock fallback, first answer,
@@ -366,8 +382,8 @@ file is needed:
 ELEKLOADER_CROSS=m68k-elf- python tests/test_digitone_lfo_names.py
 ```
 
-A release names them `core-dn1-5.2.1.elemod` and `core-dn1-5.2.1-os1.44.elemod`.
-5.2.1, 5.2, 5.1, 5.0.1, 5.0, 4.2 and 4.1.1 are not released yet; 4.1's are on the [core-dn1-v4.1](https://github.com/irpina/elekloader/releases/tag/core-dn1-v4.1) pre-release,
+A release names them `core-dn1-5.3.elemod` and `core-dn1-5.3-os1.44.elemod`.
+5.3, 5.2.1, 5.2, 5.1, 5.0.1, 5.0, 4.2 and 4.1.1 are not released yet; 4.1's are on the [core-dn1-v4.1](https://github.com/irpina/elekloader/releases/tag/core-dn1-v4.1) pre-release,
 4.0's on the [core-dn1-v4.0](https://github.com/irpina/elekloader/releases/tag/core-dn1-v4.0) pre-release
 (3.3 was not released);
 3.2's are on the [core-dn1-v3.2](https://github.com/irpina/elekloader/releases/tag/core-dn1-v3.2) pre-release

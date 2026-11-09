@@ -652,19 +652,20 @@ def test_digitone_core_builds_and_links():
         # the sound load and the track sound clear; 5.0.1's 2: the sequencer's MIDI
         # engine's two appends (ev_seq_midi); and 5.1's 6 besides its 4 table moves: the
         # pattern's lock rows saved and loaded, and the note builders' four calls; and
-        # 5.2's 4: the LFO destination list's name, compact name, group and DEST box.
-        assert dn['target']['device'] == 'digitone-mk1' and len(dn['sites']) == 164
+        # 5.2's 4: the LFO destination list's name, compact name, group and DEST box; and 5.3's 2:
+        # the live note-on and note-off routines' entries (ev_live_note).
+        assert dn['target']['device'] == 'digitone-mk1' and len(dn['sites']) == 166
         assert sorted(dn['collections']) == sorted(
             HOOK_BUS + ['core_menu', 'core_pages', 'core_params', 'core_projdata',
                         'ev_hold', 'ev_voice_on', 'core_param_override', 'ev_render_voices',
                         'core_audio', 'ev_midi_cc', 'ev_key_leds', 'ev_render_params', 'ev_midi_pc',
                         'ev_note_queue', 'ev_param_turn', 'ev_param_value', 'ev_voice_ready']
-            + CORE_DN1_50_EVENTS + ['ev_idle', 'ev_seq_midi', 'ev_note_built', 'core_knobs'])
+            + CORE_DN1_50_EVENTS + ['ev_idle', 'ev_seq_midi', 'ev_note_built', 'core_knobs', 'ev_live_note'])
         # The same core.s as core 2.1's, with the Digitone's addresses, and
         # each of its labels where core 2.1 has it.
         assert sorted(dn['build']['sources']) == ['audio.s', 'block.s', 'core.s', 'edit.s', 'events.s', 'fw.s',
                                                   'lanes.c', 'lanes.s',
-                                                  'leds.s', 'lists.c', 'menu.s', 'midi.s', 'names.s', 'pages.s', 'params.s',
+                                                  'leds.s', 'lists.c', 'menu.s', 'midi.s', 'names.s', 'notes.s', 'pages.s', 'params.s',
                                                   'projdata.s', 'queue.s', 'render.s', 'rows.s',
                                                   'seqmidi.s', 'settings.s', 'system.s', 'track.s',
                                                   'voice.s', 'voices.s']
@@ -1605,7 +1606,7 @@ def test_digitone_core_port_to_144_is_the_same_core():
 
         def what(d):                # each site's new bytes and targets, not where it is
             return [(s['len'], s['kind'], s['new'], s.get('relocs')) for s in d['sites']]
-        assert len(new['sites']) == 164 and what(new) == what(old)
+        assert len(new['sites']) == 166 and what(new) == what(old)
         rc, r = lint_json(path, '--stock', DN_STOCK_144)
         assert rc == 0, r['problems']
         rc, r = lint_json(old_path, '--stock', DN_STOCK_144)

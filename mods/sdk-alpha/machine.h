@@ -71,4 +71,13 @@ void sdk_alpha_select(uint32_t slot, int32_t id);
  * first render), mapping raw[0..count-1] as sdk_alpha_present does. */
 void sdk_alpha_voice(const struct sdk_alpha_entry *e, uint32_t slot, struct elek_voice *v,
                      const int32_t *raw, int start, uint32_t idle, elek_sample *out);
+/* Swaps two slots' machine and state: a mono track's sound moving to another voice. */
+void sdk_alpha_swap(uint32_t a, uint32_t b);
+
+/* Mono machines (.play), on a device whose core has ev_live_note (dev.h's SDK_ALPHA_TRACKS). The handler:
+ * every live key on a track whose machine's .play is not ELEK_POLY is taken, and the stock plays only the
+ * note .prio chooses, through dev_note_on and dev_note_off, so it holds one key at a time. */
+int32_t sdk_alpha_live_note(int32_t track, int32_t note, int32_t vel, int32_t on, int32_t source);
+/* The pitch the track's voice renders for machine id, from the stock's: legato moves it. */
+int32_t sdk_alpha_pitch(uint32_t track, int32_t id, int32_t pitch);
 #endif

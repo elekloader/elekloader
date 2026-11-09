@@ -7,7 +7,10 @@
  *   dev_fillrect         the firmware's fillrect(bmp, x0, y0, x1, y1, on);
  *   dev_active           the active track's machine, or 0, on a device whose value formatter is given
  *                        no knob;
- *   SDK_ALPHA_VOICES     the voices it renders, when it renders. */
+ *   SDK_ALPHA_VOICES     the voices it renders, when it renders;
+ *   SDK_ALPHA_TRACKS     its tracks, when it carries out mono machines (.play), with
+ *   dev_track_machine(t) the native id of track t's machine, or -1;
+ *   dev_note_on(t, n, v, source), dev_note_off(t, n, source)  the core's stock note routines. */
 #include "dev.h"
 
 struct sdk_alpha_entry sdk_alpha_entries[SDK_ALPHA_MACHINES];
@@ -282,5 +285,99 @@ void sdk_alpha_voice(const struct sdk_alpha_entry *e, uint32_t slot, struct elek
     e->machine->render(v, out);
     voices[slot].start = 0;
     voices[slot].rendered = 1;
+}
+
+void sdk_alpha_swap(uint32_t a, uint32_t b)
+{
+    uint32_t *x = (uint32_t *)&voices[a], *y = (uint32_t *)&voices[b];
+    for (uint32_t i = 0; i < sizeof voices[0] / 4; ++i) {
+        uint32_t t = x[i];
+        x[i] = y[i];
+        y[i] = t;
+    }
+}
+#endif
+
+#ifdef SDK_ALPHA_TRACKS
+#include "elekloader/sdk_alpha_keys.h"
+
+static struct {
+    struct sdk_alpha_keys keys;
+    int32_t id;                         /* the machine they are for */
+    int32_t stock;                      /* the note the stock holds, or -1 */
+} mono[SDK_ALPHA_TRACKS];
+static volatile int32_t mono_bend[SDK_ALPHA_TRACKS];   /* 16.16, added to the stock's note: legato's pitch */
+
+static uint16_t mono_lock(void)
+{
+    uint16_t sr = 0;
+#ifdef __m68k__
+    __asm__ volatile("move.w %%sr,%0\n\tmove.w #0x2700,%%sr" : "=d"(sr) :: "memory", "cc");
+#endif
+    return sr;
+}
+
+static void mono_unlock(uint16_t sr)
+{
+#ifdef __m68k__
+    __asm__ volatile("move.w %0,%%sr" :: "d"(sr) : "memory", "cc");
+#else
+    (void)sr;
+#endif
+}
+
+int32_t sdk_alpha_live_note(int32_t track, int32_t note, int32_t vel, int32_t on, int32_t source)
+{
+    if ((uint32_t)track >= SDK_ALPHA_TRACKS || (uint32_t)note > 127)
+        return 0;
+    int32_t id = dev_track_machine(track);
+    const struct sdk_alpha_entry *e = sdk_alpha_find(id);
+    if (!e || e->machine->play == ELEK_POLY)
+        return 0;
+    /* shortcut: the lock covers the choice, not the stock calls, so a UI key and a MIDI note on one track
+     * at the same instant may play in either order; widen it if that is ever heard. */
+    uint16_t sr = mono_lock();
+    if (mono[track].id != id) {
+        for (uint8_t *p = (uint8_t *)&mono[track].keys; p < (uint8_t *)(&mono[track].keys + 1); ++p)
+            *p = 0;
+        mono[track].id = id;
+        mono[track].stock = -1;
+        mono_bend[track] = 0;
+    }
+    /* a release of a key not held (pressed before the machine came) is the stock's */
+    if (!on && sdk_alpha_held(&mono[track].keys, note << 16) < 0) {
+        mono_unlock(sr);
+        return 0;
+    }
+    struct sdk_alpha_held key = {0, 0};
+    int32_t did = sdk_alpha_key(&mono[track].keys, e->machine, note << 16, on ? vel : 0, on, &key);
+    int32_t was = mono[track].stock, play = key.pitch >> 16;
+    if (did == SDK_ALPHA_PLAY) {
+        mono[track].stock = play;
+        mono_bend[track] = 0;
+    } else if (did == SDK_ALPHA_LEGATO) {
+        mono_bend[track] = key.pitch - (was << 16);
+    } else if (did == SDK_ALPHA_SILENCE) {
+        mono[track].stock = -1;
+        mono_bend[track] = 0;
+    }
+    mono_unlock(sr);
+    if (did == SDK_ALPHA_PLAY) {
+        if (was >= 0)
+            dev_note_off(track, was, source);
+        if (on && play == note)
+            return 0;                   /* the key pressed: the stock plays it, with its own arguments */
+        dev_note_on(track, play, key.velocity, source);
+    } else if (did == SDK_ALPHA_SILENCE) {
+        if (!on && was == note)
+            return 0;                   /* the key released: the stock releases it */
+        dev_note_off(track, was, source);
+    }
+    return 1;
+}
+
+int32_t sdk_alpha_pitch(uint32_t track, int32_t id, int32_t pitch)
+{
+    return track < SDK_ALPHA_TRACKS && mono[track].id == id ? pitch + mono_bend[track] : pitch;
 }
 #endif

@@ -10,12 +10,12 @@ change, and mods must be rebuilt when it does.
 | | Digitakt mk1 | Digitone mk1 / Keys | Digitone II |
 |---|---|---|---|
 | Stock OS | 1.54 | 1.44 | 1.12 |
-| Core and companion | `mods/core`, `mods/machine-pages` | `mods/core-dn1` (5.2 or later), `mods/machines-dn1` | `mods/core-dn2` (0.2 or later), `mods/machines-dn2` |
+| Core and companion | `mods/core`, `mods/machine-pages` | `mods/core-dn1` (5.2 or later; 5.3 for `pick`), `mods/machines-dn1` | `mods/core-dn2` (0.2 or later), `mods/machines-dn2` |
 | Choose a machine | FUNC+SRC machine menu | hold a track key, Mod Menu → MACHINES | FUNC+SYN → MACHINE SEL |
 | Its pages show on | SRC | SYN2, in place of its pages on that track | SYN |
 | Pages, labels, hiding, glyphs | yes | yes | yes |
 | `render` and knob defaults | yes | yes | yes, `render` in SHARC assembly ([`render` on the Digitone II](#render-on-the-digitone-ii)) |
-| Mono machines ([`play` and `prio`](#play-and-prio)) | yes, live keys (the trig keys, keyboard mode, MIDI notes; not the sequencer's trigs) | not yet | not yet |
+| Mono machines ([`play` and `prio`](#play-and-prio)) | yes, live keys (the trig keys, keyboard mode, MIDI notes; not the sequencer's trigs) | yes, live keys (KEYBOARD mode, MIDI notes; not the sequencer's trigs), and one voice a track | not yet |
 
 Other devices and OS releases, the Digitakt II among them, are not SDK
 targets. The builder's `SDK_ALPHA_TARGETS`
@@ -346,7 +346,7 @@ several machines; the linker refuses more than the device holds (below).
 The builder refuses what breaks a rule above, and says where, as the C
 would: `sdk alpha: machine "Two Page" (id 40), knobs[0]: label "CUTOFF" has
 6 characters (at most 5)`. It refuses a mono machine where the companion
-does not carry it out yet (`ELEK_MONO is not supported on digitone-mk1 1.44 yet`). It also refuses floating point, imports no
+does not carry it out yet (`ELEK_MONO is not supported on digitone-mk2 1.12 yet`). It also refuses floating point, imports no
 companion exports, and machine claims written in `mod.json` (each machine
 claims its id itself). The messages are in
 elekloader/sdk/sdk_alpha_build.py. Every SDK mod imports
@@ -361,7 +361,7 @@ changes.
 | SDK machines in a build | 32 | 15 | 16 |
 | LFO destination lists | 2 | 2 | 3 |
 | Value text | a number `#` past five characters under the knob, whole in the pop-up | a number `#` past five characters | a number `#` past five characters |
-| Voices | one a track | eight, on four tracks | sixteen voice slots, which the OS allocates to tracks |
+| Voices | one a track | eight, on four tracks; a mono machine's track sounds on one at a time | sixteen voice slots, which the OS allocates to tracks |
 | After `render` | the native overdrive, filter and AMP; whether the AMP applies velocity is not checked | the companion's AMP envelope, which applies velocity (use it for timbre, not level), then the filter | the voice envelope, the selected stock or custom filter, pan, sends and mixer, as an mk2 synth's |
 
 Only a mono machine's companion follows the keys' releases (the support
