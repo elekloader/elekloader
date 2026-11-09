@@ -15,11 +15,11 @@ Good things to send:
   [docs/CONTRIBUTE.md](docs/CONTRIBUTE.md) has the community's to-do list.
 - **A new device or OS version**: [docs/DEVICES.md](docs/DEVICES.md).
 - **A mod for the shop**: publish it in a GitHub release and fill in the
-  [Submit a mod](https://github.com/elekloader/elekloader/issues/new?template=submit-mod.yml)
+  [Submit a mod](https://github.com/elekloader/shop/issues/new?template=submit-mod.yml)
   form; a check opens the pull request, and your later releases follow by
   themselves ([docs/SHOP.md](docs/SHOP.md)). Or add an item to
-  `web/catalog.json` pointing at your release yourself
-  ([docs/WEB.md](docs/WEB.md#submitting-a-mod)).
+  [elekloader/shop](https://github.com/elekloader/shop)'s `catalog.json` pointing at your release
+  yourself, in a pull request there ([docs/WEB.md](docs/WEB.md#submitting-a-mod)).
 - **Fixes and docs**: a refusal message that misled you, a step that did
   not work, a page that was unclear.
 

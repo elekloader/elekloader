@@ -145,12 +145,12 @@ const dev = () => (st.stock && st.stock.ok ? st.stock.dev : null);
 const desc = p => st.mods.find(d => d.path === p);
 
 // ---- the library -------------------------------------------------------------------------
-// The shop's mods (shop/index.json: packaging/build_web.py, from web/catalog.json;
+// The shop's mods (shop/index.json: packaging/build_web.py, from catalog.json;
 // their files are on this site, next to it) and the mods you added yourself,
 // as one collection of cards, one per mod.
 
 const shop = { items: [], devices: null, sections: [] };
-// The shop's own sections (shop/sections.json: web/sections.json): whole repositories listed on a page of their own,
+// The shop's own sections (shop/sections.json: sections.json): whole repositories listed on a page of their own,
 // #s/<id>, instead of the Mod Shop's shelves. -> the section a repository's mods are in, or undefined.
 const sectionOf = repo => shop.sections.find(x => x.packs.some(p => p.repo === repo));
 // the section open now: its own page (#s/<id>), or one of its tools (#splash is Splash & screens')
@@ -427,7 +427,7 @@ function channelsOf(id) {
 }
 
 // a cover's line: drawn from the mod's motif or kind, varied by its name
-// A shop card's thumbnail, when its author gave one (web/catalog.json's "thumb", docs/SHOP.md): the site's copy,
+// A shop card's thumbnail, when its author gave one (catalog.json's "thumb", docs/SHOP.md): the site's copy,
 // a 128x64 1-bit PNG (packaging/thumbs.py), drawn pixel for pixel with its lit pixels in the card's colour.
 const cardPicture = en => (en.shop ? (shopPick(en.shop) || {}).thumb || (en.shop.find(x => x.thumb) || {}).thumb : null);
 function screen(path) {
@@ -1775,8 +1775,8 @@ function note(text) {
 
 // the repository the site was built from (build.json), or elekloader's
 const repository = () => (/^[\w.-]+\/[\w.-]+$/.test(st.build?.repository || '') ? st.build.repository : 'elekloader/elekloader');
-// the repository the shop's list and its forms are in (SHOP_REPO when the build had one; else the site's own)
-const shopRepository = () => (/^[\w.-]+\/[\w.-]+$/.test(st.build?.shop_repository || '') ? st.build.shop_repository : repository());
+// the repository the shop's list and its forms are in (build.json's, the build's SHOP_REPO), or elekloader's shop
+const shopRepository = () => (/^[\w.-]+\/[\w.-]+$/.test(st.build?.shop_repository || '') ? st.build.shop_repository : 'elekloader/shop');
 
 function renderAbout(r) {
   const b = r.build || {};

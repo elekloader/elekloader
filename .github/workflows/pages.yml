@@ -7,8 +7,8 @@
 # runs the unit tests and the page's bridge under Pyodide on that very site
 # (tests/test_web.mjs), and deploys it.
 #
-# It also puts the mod shop on the site: each mod the shop's list (web/catalog.json, or
-# catalog.json of the repository the variable SHOP_REPO names) lists,
+# It also puts the mod shop on the site: each mod the shop's list (catalog.json of
+# elekloader/shop, or of the repository the variable SHOP_REPO names) lists,
 # from its author's GitHub release, checked against the sha256 the catalog
 # pins, and each card's thumbnail the same way (packaging/thumbs.py checks
 # it again; the repository variable SHOP_THUMBS=false leaves them all out).
@@ -51,20 +51,16 @@ jobs:
         with:
           node-version: "24"
           package-manager-cache: false
-      - name: The shop's list (web/catalog.json, or the repository variable SHOP_REPO's)
+      - name: The shop's list (elekloader/shop, or the repository variable SHOP_REPO's)
         env:
-          SHOP_REPO: ${{ vars.SHOP_REPO }}
+          SHOP_REPO: ${{ vars.SHOP_REPO || 'elekloader/shop' }}
         run: |
-          # SHOP_REPO (owner/name): a public repository with catalog.json and sections.json at its root, as its
-          # main has them; unset, the list is this repository's web/catalog.json (docs/WEB.md, "Where the list is")
-          if [ -n "$SHOP_REPO" ]; then
-            git clone -q --depth 1 "https://github.com/$SHOP_REPO" build/shop-list
-            echo "ELEKLOADER_CATALOG=$PWD/build/shop-list/catalog.json" >> "$GITHUB_ENV"
-            echo "SHOP_REPO=$SHOP_REPO" >> "$GITHUB_ENV"
-            echo "SHOP_COMMIT=$(git -C build/shop-list rev-parse HEAD)" >> "$GITHUB_ENV"
-          else
-            echo "ELEKLOADER_CATALOG=$PWD/web/catalog.json" >> "$GITHUB_ENV"
-          fi
+          # a public repository with catalog.json and sections.json at its root, as its main has them
+          # (docs/WEB.md, "Where the list is")
+          git clone -q --depth 1 "https://github.com/$SHOP_REPO" build/shop-list
+          echo "ELEKLOADER_CATALOG=$PWD/build/shop-list/catalog.json" >> "$GITHUB_ENV"
+          echo "SHOP_REPO=$SHOP_REPO" >> "$GITHUB_ENV"
+          echo "SHOP_COMMIT=$(git -C build/shop-list rev-parse HEAD)" >> "$GITHUB_ENV"
       - name: Unit tests
         run: |
           python tests/test_units.py
@@ -78,7 +74,7 @@ jobs:
           git fetch --depth=1 --no-tags origin "refs/tags/$tag:refs/tags/$tag"
       - name: The mod shop's files, from their authors' releases and commits
         run: |
-          # web/catalog.json pins each file's sha256 (build_web.py checks them); one that
+          # catalog.json pins each file's sha256 (build_web.py checks them); one that
           # cannot be fetched (a draft release) is listed in the shop as not available
           mkdir -p build/shop
           # and each card's thumbnail ("thumb"), to thumbs/<sha256>.png; one that can't be fetched leaves its card's
@@ -108,6 +104,13 @@ jobs:
           gh pr list --repo "$GITHUB_REPOSITORY" --state merged --limit 1000 \
             --json number,title,body,author,mergedAt,url > build/prs.json \
             || { echo "::warning::merged pull requests not listed: the leaderboard is empty"; echo '[]' > build/prs.json; }
+          # and the shop repository's (a mod moved onto the core is claimed where it enters the list)
+          if gh pr list --repo "$SHOP_REPO" --state merged --limit 1000 \
+               --json number,title,body,author,mergedAt,url > build/prs-shop.json; then
+            jq -s add build/prs.json build/prs-shop.json > build/prs-all.json && mv build/prs-all.json build/prs.json
+          else
+            echo "::warning::$SHOP_REPO's merged pull requests not listed: their claims are not counted"
+          fi
       - name: Pyodide, the pinned release
         run: curl -fsSL --retry 3 --create-dirs -o build/pyodide-core.tar.bz2 "$(python packaging/build_web.py --pyodide-url)"
       - name: Assemble the site
