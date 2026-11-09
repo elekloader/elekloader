@@ -548,8 +548,9 @@ def main(argv=None):
     from elekloader import __version__
     site['build.json'] = json.dumps({
         'elekloader': __version__, 'commit': commit, 'site_version': token,
-        # the repository the site is built from (the workflow's), for its links: issues, commits
-        'repository': os.environ.get('GITHUB_REPOSITORY') or 'elekloader/elekloader',
+        # elekloader's repository, for the page's links to its commits: $ELEKLOADER_REPOSITORY when another
+        # repository builds the site from a checkout of elekloader (elekloader/shop), else the workflow's
+        'repository': os.environ.get('ELEKLOADER_REPOSITORY') or os.environ.get('GITHUB_REPOSITORY') or 'elekloader/elekloader',
         # the repository the shop's list comes from (SHOP_REPO), for its forms: submit, remove, report a picture;
         # and its commit
         'shop_repository': os.environ.get('SHOP_REPO') or 'elekloader/shop',
