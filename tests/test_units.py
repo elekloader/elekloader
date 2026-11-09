@@ -1193,9 +1193,9 @@ def submit_mod_module():
 
 
 def test_the_shop_list_keeps_its_layout():
-    """packaging/submit_mod.py rewrites web/catalog.json: it writes the file as it is laid out by hand."""
+    """packaging/submit_mod.py rewrites catalog.json: it writes the file as it is laid out by hand."""
     submit_mod = submit_mod_module()
-    if submit_mod is None:
+    if submit_mod is None or shop_list_or_skip(submit_mod.CATALOG) is None:
         return
     with open(submit_mod.CATALOG, encoding='utf-8') as fh:
         text = fh.read()
@@ -1813,14 +1813,34 @@ def test_authors_can_opt_out_of_automatic_updates():
     assert submit_mod.release_text(publish.release_notes('A.', '', False)) == {'summary': 'A.', 'auto_update': False}
 
 
+def build_web_module():
+    """packaging/build_web.py, or None where the repository isn't (under Pyodide, as submit_mod_module)."""
+    folder = os.path.join(os.path.dirname(HERE), 'packaging')
+    if not os.path.isdir(folder):
+        return None
+    sys.path.insert(0, folder)
+    import build_web
+    return build_web
+
+
+def shop_list_or_skip(path):
+    """The shop's real list (a clone of elekloader/shop: $ELEKLOADER_CATALOG, else build/shop-list/), or None,
+    said, where there is none (tests.yml clones it; docs/WEB.md, "Where the list is")."""
+    if os.path.exists(path):
+        return path
+    print('  skipped: no shop list at %s (git clone https://github.com/elekloader/shop build/shop-list)' % path)
+    return None
+
+
 def test_the_shops_list_can_come_from_another_repository():
     """$ELEKLOADER_CATALOG: the shop's list from a clone of its own repository (SHOP_REPO), sections beside it."""
-    sys.path.insert(0, os.path.join(os.path.dirname(HERE), 'packaging'))
-    import build_web
+    build_web = build_web_module()
+    if build_web is None:
+        return
     old = os.environ.pop('ELEKLOADER_CATALOG', None)
     try:
-        assert build_web.catalog_path() == os.path.join(build_web.ROOT, 'web', 'catalog.json')
-        assert build_web.sections_path() == os.path.join(build_web.ROOT, 'web', 'sections.json')
+        assert build_web.catalog_path() == os.path.join(build_web.ROOT, 'build', 'shop-list', 'catalog.json')
+        assert build_web.sections_path() == os.path.join(build_web.ROOT, 'build', 'shop-list', 'sections.json')
         with tempfile.TemporaryDirectory() as d:
             os.environ['ELEKLOADER_CATALOG'] = os.path.join(d, 'catalog.json')
             assert build_web.catalog_path() == os.path.join(d, 'catalog.json')
@@ -1836,9 +1856,10 @@ def test_the_shops_list_can_come_from_another_repository():
 
 
 def test_the_shops_sections_are_checked():
-    """web/sections.json: whole repositories on a page of their own (build_web.sections)."""
-    sys.path.insert(0, os.path.join(os.path.dirname(HERE), 'packaging'))
-    import build_web
+    """sections.json: whole repositories on a page of their own (build_web.sections)."""
+    build_web = build_web_module()
+    if build_web is None or shop_list_or_skip(build_web.catalog_path()) is None:
+        return
     with open(build_web.sections_path(), encoding='utf-8') as fh:
         real = json.load(fh)
     with open(build_web.catalog_path(), encoding='utf-8') as fh:

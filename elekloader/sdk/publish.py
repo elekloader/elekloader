@@ -29,7 +29,7 @@ import urllib.request
 
 from . import build as sdk_build
 
-SHOP = os.environ.get('ELEKLOADER_SHOP_REPO') or 'elekloader/elekloader'   # the repository with the Submit a mod form
+SHOP = os.environ.get('ELEKLOADER_SHOP_REPO') or 'elekloader/shop'        # the repository with the Submit a mod form
 INDEX_URL = 'https://elekloader.github.io/elekloader/shop/index.json'    # what each of the shop's files is
 
 

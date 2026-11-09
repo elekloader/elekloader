@@ -90,7 +90,7 @@ opens on that file's device. A device you pick before that says which stock
 OS file it needs.
 
 **Sections.** A repository with many small mods of one kind can have a page
-of its own instead of crowding the shelves: `web/sections.json` lists each
+of its own instead of crowding the shelves: the shop repository's `sections.json` lists each
 section (`id`, `title`, `nav`, `blurb`, optional `tools`: pages of the site such
 as `#splash`, listed under it) and its
 packs, one repository each. Its mods leave the Mod Shop's shelves; the side
@@ -155,7 +155,8 @@ file dropped in, the card adds the file for that OS; before one, it adds
 every OS's file, and the list shows the one that fits once you drop in your
 stock file.
 
-- **The list** is `web/catalog.json`, committed and edited by hand. Each
+- **The list** is `catalog.json` in [elekloader/shop](https://github.com/elekloader/shop), changed by pull
+  requests there (the forms' and the daily updates', or a maintainer's). Each
   item names a file of a GitHub release (`repo`, `tag`, `file`), or a file
   in a repository at a commit (`repo`, `commit`, `path`), its `sha256`, its
   `device`, and optionally:
@@ -189,7 +190,7 @@ stock file.
 To add a mod to the shop, publish its `.elemod` in a GitHub release and
 submit it with the **Submit a mod** form ([Submitting a mod](#submitting-a-mod)):
 a check opens the pull request for you. By hand, add an
-item to `web/catalog.json` with the asset's sha256 (the release page shows
+item to the shop repository's `catalog.json` with the asset's sha256 (the release page shows
 it, or `gh release view --json assets`), and merge: the next deploy takes
 it. A mod whose author keeps its `.elemod` files in their repository
 instead (as digi1_mods does) is pinned to a commit: the whole commit id,
@@ -200,32 +201,44 @@ shows them as one card (the same repository, mod, version and device).
 
 ### Where the list is
 
-The list and its sections can live in a repository of their own, so the
-shop's submissions and the daily updates don't commit to this one. The
-repository variable **`SHOP_REPO`** (`owner/name`, public, with
-`catalog.json` and `sections.json` at its root) makes `pages.yml` and
-`kit-build.yml` clone that repository's `main` and use its list; unset, they
-use `web/catalog.json` and `web/sections.json` here. The site's `build.json`
-then names it (`shop_repository`, `shop_commit`), and the page's Submit,
-Remove and Report a picture links open that repository's forms. A kit's
-catalog takes the list's commit as its `revision`.
+The list (`catalog.json`), its sections (`sections.json`), the shop's forms
+and its two bots live in [elekloader/shop](https://github.com/elekloader/shop), so submissions and the
+daily updates don't commit here. Its workflows check out elekloader's `main`
+into `el/` and run the scripts from there, and its `check` workflow runs
+elekloader's unit tests on the list for every pull request.
 
-On your machine the scripts take the same setting: **`ELEKLOADER_CATALOG`**
-is the path of the list (`sections.json` is read beside it), for
-`build_web.py`, `submit_mod.py`, `shop_updates.py` and the unit tests;
+`pages.yml`, `kit-build.yml` and `tests.yml` clone the shop repository's
+`main` into `build/shop-list`: elekloader/shop, or the repository the
+variable **`SHOP_REPO`** names (`owner/name`, public, with `catalog.json` and
+`sections.json` at its root). The site's `build.json` names it
+(`shop_repository`, `shop_commit`), and the page's Submit, Remove and Report
+a picture links open its forms. A kit's catalog takes the list's commit as
+its `revision`. The leaderboard counts the claims on both repositories'
+merged pull requests.
+
+A merge in the shop repository reaches the site by starting this
+repository's pages workflow, with the shop repository's secret
+**`SITE_DISPATCH`**: a token that may only start workflows here (Actions:
+write on elekloader/elekloader). Without it, the site takes the change at its
+next build (a push to main, or pages run by hand).
+
+On your machine the scripts read the list from `build/shop-list/`, or from
+**`ELEKLOADER_CATALOG`** (the path of `catalog.json`; `sections.json` is read
+beside it): `build_web.py`, `submit_mod.py`, `shop_updates.py` and the unit
+tests, whose checks of the real list say they skipped without it.
 **`ELEKLOADER_SHOP_REPO`** is the repository `python -m elekloader.sdk.publish`
-opens the form in.
+opens the form in (elekloader/shop by default).
 
 ```sh
-git clone https://github.com/<owner>/<shop repository> ../shop
-export ELEKLOADER_CATALOG=$PWD/../shop/catalog.json
+git clone https://github.com/elekloader/shop build/shop-list
 python tests/test_units.py
+python packaging/build_web.py --catalog build/shop-list/catalog.json ...
 ```
 
 ### Submitting a mod
 
 Authors don't need to edit the list themselves; [SHOP.md](SHOP.md) is their page. The shop's
-**Submit a mod** button opens the [issue form](../.github/ISSUE_TEMPLATE/submit-mod.yml): the
+**Submit a mod** button opens the [issue form](https://github.com/elekloader/shop/blob/main/.github/ISSUE_TEMPLATE/submit-mod.yml) in elekloader/shop: the
 repository, the release tag or a commit, a one-sentence summary, what has been tested on a unit, the
 licence if the files name none, and optionally which of the files to submit. A release or a
 pre-release; a draft is refused until it is published. With a commit (its whole id), the files are
@@ -233,8 +246,8 @@ the `.elemod` files in the commit's tree, and the entries pin the commit and eac
 `python -m elekloader.sdk.publish` (in the package) builds a mod for each stock file, makes the
 release with `gh`, and opens this form filled in from its address.
 
-When the issue is opened (or edited), `.github/workflows/mod-submission.yml` runs
-`packaging/submit_mod.py` on it:
+When the issue is opened (or edited), elekloader/shop's `.github/workflows/mod-submission.yml` runs
+elekloader's `packaging/submit_mod.py` (from main) on it:
 - **The check.** It downloads the release's (or the commit's) `.elemod` files and checks each
   against the sha256 GitHub lists. It reads each with elekloader (id, version, device, OS, licence,
   requirements) and refuses a licence that doesn't allow the site to pass the file on
@@ -261,17 +274,17 @@ When the issue is opened (or edited), `.github/workflows/mod-submission.yml` run
   know" it says, for each file that goes in, the core it builds with, its RAM, and the shop's mods
   for its device and OS it can't share a build with (`build_web.clash`, the page's rules); that is
   never a refusal. A note says when the issue isn't from the repository's owner.
-- **The pull request.** When files pass, it writes them into `web/catalog.json` (in the list's own
+- **The pull request.** When files pass, it writes them into `catalog.json` (in the list's own
   layout, which `tests/test_units.py` keeps exact) and opens a pull request from branch
   `mod-submission/<issue>`. The pull request closes the issue when it merges, and the next deploy
-  puts the mods on the site. The workflow starts the tests workflow on it (its own token's pushes
-  start none).
+  puts the mods on the site. The workflow starts the shop's check workflow on it (its own token's
+  pushes start none).
 - **An author's own update merges itself.** When the repository's owner opened the issue and every
   change is a newer file of a mod that repository already has in the shop (no new mod, no clash,
   no core, no held entry), the unit tests run and the pull request merges, and pages redeploys.
   Everything else waits for a maintainer.
 
-The **Remove a mod** form ([remove-mod.yml](../.github/ISSUE_TEMPLATE/remove-mod.yml)) goes through
+The **Remove a mod** form ([remove-mod.yml](https://github.com/elekloader/shop/blob/main/.github/ISSUE_TEMPLATE/remove-mod.yml)) goes through
 the same workflow (`submit_mod.py --remove`): the repository's entries, all or the files it names,
 leave the list (cores stay: a maintainer removes those), and the report names every other shop mod
 for the same device and OS that requires a mod that goes. It merges by itself when the repository's
@@ -289,7 +302,7 @@ Tested on a unit: What ran on hardware, and what not yet.
 A file older than the one the shop lists is left out.
 
 Nothing in a submitted file runs. The issue's text reaches the script as a file, never the shell.
-The repository needs **Settings > Actions > General > Allow GitHub Actions to create and approve
+The shop repository needs **Settings > Actions > General > Allow GitHub Actions to create and approve
 pull requests** (in an organisation, allowed in the organisation's settings first).
 
 The same check runs locally, on a copy of the list, with the shop's files and the latest release's
@@ -303,7 +316,7 @@ python packaging/submit_mod.py --repo owner/name --tag v1.0 --summary "One sente
 ### Updates, by themselves
 
 Once a mod is in the shop, its author only publishes releases. Every day
-`.github/workflows/shop-updates.yml` runs `packaging/shop_updates.py`:
+elekloader/shop's `.github/workflows/shop-updates.yml` runs elekloader's `packaging/shop_updates.py`:
 
 - **It finds the newer releases.** For each repository the shop takes mods from by a release tag,
   the releases GitHub published after the earliest one the shop takes (no drafts, and none whose
@@ -314,7 +327,7 @@ Once a mod is in the shop, its author only publishes releases. Every day
   cores, older files, held entries, and a pre-release over a file that came from a release.
 - **It opens a pull request** from branch `shop-update/<owner>-<name>`, or refreshes the one open,
   and closes one that main has caught up with. When every change is such an update, the unit tests
-  run and it merges, and pages redeploys; otherwise it waits for a maintainer, with the tests
+  run and it merges, and pages redeploys; otherwise it waits for a maintainer, with the check
   workflow started on it.
 
 **Authors can opt out.** Updates are on for every entry unless it says `"auto_update": false`.
@@ -326,16 +339,17 @@ entry is left alone by the daily check, and its releases come in through the for
 
 Three switches, for maintainers:
 
-- **`"hold"`** on an entry in `web/catalog.json` (true, or a reason) keeps that mod's file where it
+- **`"hold"`** on an entry in the shop's `catalog.json` (true, or a reason) keeps that mod's file where it
   is: the daily check leaves it, and an update through the form waits for a review (and stays
   held). For a mod others build on, such as machine-pages, when a new version needs a look first.
 - **The repository variable `SHOP_THUMBS`** set to `false` leaves every thumbnail off the site at
   the next deploy (the pages workflow passes `--no-thumbs`); the catalog keeps them. "Report a
-  picture" issues (`.github/ISSUE_TEMPLATE/report-picture.yml`) come from a card's details.
-- **The repository variable `SHOP_AUTO_MERGE`** set to `false` (Settings > Secrets and variables >
-  Actions > Variables) stops both workflows merging; their pull requests still open.
+  picture" issues ([report-picture.yml](https://github.com/elekloader/shop/blob/main/.github/ISSUE_TEMPLATE/report-picture.yml), in elekloader/shop) come from a card's details.
+- **The shop repository's variable `SHOP_AUTO_MERGE`** set to `false` (Settings > Secrets and variables >
+  Actions > Variables) stops both workflows merging; their pull requests still open. The daily run
+  runs on its schedule only while its variable `SHOP_LIVE` is `true`.
 
-Run it by hand from Actions > Shop updates > Run workflow (one repository, if you name it), or
+Run it by hand from elekloader/shop's Actions > Shop updates > Run workflow (one repository, if you name it), or
 locally on a copy of the list:
 
 ```bash

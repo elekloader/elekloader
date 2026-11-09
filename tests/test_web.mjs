@@ -47,6 +47,7 @@ py.FS.writeFile('/work/tests/test_octatrack.py', read(join(HERE, 'test_octatrack
 for (const file of [
   ...readdirSync(HERE).filter(name => /^test_sharc.*\.py$/.test(name)).map(name => 'tests/' + name),
   'tests/test_dn2_machines.py', 'mods/machines-dn2/mod.json', 'mods/machines-dn2/machines.c',
+  'mods/machines-dn2/dispatch.sharc.json', 'tests/test_digitakt2.py',
   'mods/machines-dn2/dn2.h', 'mods/machine-pages/src.h',
   'tests/test_dn2_dsp_peek.py',
   'tests/test_sdk_alpha.py', 'tests/sdk_alpha_harness.py', 'tests/sdk_alpha_devices.py',

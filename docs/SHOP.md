@@ -64,7 +64,7 @@ step 3.)
 ### 2. Open the form
 
 Click **Submit a mod** on the shop page, or go straight to the
-[Submit a mod form](https://github.com/elekloader/elekloader/issues/new?template=submit-mod.yml).
+[Submit a mod form](https://github.com/elekloader/shop/issues/new?template=submit-mod.yml).
 You'll be asked to sign in to GitHub if you aren't.
 
 | Field | What to put |
@@ -283,7 +283,7 @@ the rules, how to make one, and how it's reviewed.
 
 ## Take a mod out
 
-The [Remove a mod form](https://github.com/elekloader/elekloader/issues/new?template=remove-mod.yml)
+The [Remove a mod form](https://github.com/elekloader/shop/issues/new?template=remove-mod.yml)
 takes your files out of the shop: all of them, or the ones you name. When you
 own the repository and no other shop mod needs your files, it goes through by
 itself. Otherwise a maintainer looks first, and the check's comment says which

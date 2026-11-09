@@ -5,8 +5,8 @@
     python packaging/build_web.py --pyodide-url          # the pinned Pyodide's URL
     python packaging/build_web.py --pyodide pyodide-core-314.0.7.tar.bz2 \\
         --core core-2.1.elemod [core-dn1-2.0a.elemod ...] \\
-        [--catalog web/catalog.json --catalog-dir build/shop] --out build/site
-    python packaging/build_web.py --catalog-list web/catalog.json [--thumbs]   # what to download
+        [--catalog catalog.json --catalog-dir build/shop] --out build/site
+    python packaging/build_web.py --catalog-list catalog.json [--thumbs]   # what to download
 
 The site holds:
   - web/'s files (the page, its worker and the Python bridge);
@@ -16,7 +16,7 @@ The site holds:
     the same code a release of that commit carries;
   - core/: the core mods given (the release's), and the cores the catalog
     lists, with core/index.json;
-  - shop/: the mod shop: each mod web/catalog.json lists, taken from its
+  - shop/: the mod shop: each mod catalog.json lists, taken from its
     author's release or from their repository at a commit (the workflow
     downloads them into --catalog-dir), checked against the sha256 the
     catalog pins, and listed in shop/index.json with what its file says
@@ -130,9 +130,10 @@ def package_zip():
 
 
 def catalog_path(path=None):
-    """The shop's list: `path` if given, else $ELEKLOADER_CATALOG (the catalog.json of a clone of the shop's
-    repository, as pages.yml checks out the repository variable SHOP_REPO), else web/catalog.json."""
-    return path or os.environ.get('ELEKLOADER_CATALOG') or os.path.join(ROOT, 'web', 'catalog.json')
+    """The shop's list: `path` if given, else $ELEKLOADER_CATALOG, else build/shop-list/catalog.json: the
+    catalog.json of a clone of the shop's repository (elekloader/shop, or the variable SHOP_REPO's), where the
+    workflows clone it (docs/WEB.md, "Where the list is")."""
+    return path or os.environ.get('ELEKLOADER_CATALOG') or os.path.join(ROOT, 'build', 'shop-list', 'catalog.json')
 
 
 def sections_path(catalog=None):
@@ -141,7 +142,7 @@ def sections_path(catalog=None):
 
 
 def sections(items, path=None):
-    """web/sections.json, checked: the shop's own sections, each a page of whole repositories' mods (app.js).
+    """sections.json, checked: the shop's own sections, each a page of whole repositories' mods (app.js).
     -> [{id, title, nav, blurb, tools: [{href, title}], packs: [{repo, title, blurb}]}]. A repository in no section stays on the
     Mod Shop's shelves; one in the list that the shop does not carry (yet) is kept, and named."""
     path = path or sections_path()
@@ -153,29 +154,29 @@ def sections(items, path=None):
     have = {e['repo'] for e in items}
     for s in doc.get('sections', []):
         if not re.match(r'^[a-z][a-z0-9-]*$', s.get('id', '')) or s['id'] in ids:
-            sys.exit('web/sections.json: a section id is lowercase letters, digits and -, each once: %r'
+            sys.exit('sections.json: a section id is lowercase letters, digits and -, each once: %r'
                      % s.get('id'))
         if s['id'] in ('library', 'build', 'make', 'splash', 'submit', 'contribute'):
-            sys.exit('web/sections.json: %s is one of the page\'s views' % s['id'])
+            sys.exit('sections.json: %s is one of the page\'s views' % s['id'])
         ids.add(s['id'])
         if not s.get('title') or not s.get('packs'):
-            sys.exit('web/sections.json: section %s needs a title and packs' % s['id'])
+            sys.exit('sections.json: section %s needs a title and packs' % s['id'])
         packs = []
         for p in s['packs']:
             r = p.get('repo', '')
             if not re.match(r'^[\w.-]+/[\w.-]+$', r) or r in repos:
-                sys.exit('web/sections.json: %s: a pack is one owner/name repository, in one section: %r'
+                sys.exit('sections.json: %s: a pack is one owner/name repository, in one section: %r'
                          % (s['id'], r))
             repos.add(r)
             if r not in have:
-                print('web/sections.json: %s: the shop carries nothing from %s yet' % (s['id'], r))
+                print('sections.json: %s: the shop carries nothing from %s yet' % (s['id'], r))
             packs.append({'repo': r, 'title': p.get('title') or r.split('/')[1], 'blurb': p.get('blurb', '')})
         tools = []
         for t in s.get('tools', []):
             if not re.match(r'^#[a-z][a-z0-9/-]*$', t.get('href', '')) or not t.get('title'):
-                sys.exit('web/sections.json: %s: a tool is a #view of the page and a title: %r' % (s['id'], t))
+                sys.exit('sections.json: %s: a tool is a #view of the page and a title: %r' % (s['id'], t))
             if t['href'] in tools_seen:
-                sys.exit('web/sections.json: %s is a tool of two sections' % t['href'])
+                sys.exit('sections.json: %s is a tool of two sections' % t['href'])
             tools_seen.add(t['href'])
             tools.append({'href': t['href'], 'title': t['title']})
         out.append({'id': s['id'], 'title': s['title'], 'nav': s.get('nav') or s['title'],
@@ -456,7 +457,7 @@ def main(argv=None):
     ap.add_argument('--release', help='the release the cores come from (its tag, fetched): the '
                                       'page says whether its package is that release\'s')
     ap.add_argument('--catalog', help="the mod shop's curated list (default: $ELEKLOADER_CATALOG, else "
-                                      "web/catalog.json)")
+                                      "catalog.json)")
     ap.add_argument('--sections', help="the shop's sections (default: sections.json beside the list)")
     ap.add_argument('--catalog-dir', help='where its files were downloaded')
     ap.add_argument('--catalog-list', metavar='CATALOG',
@@ -550,8 +551,8 @@ def main(argv=None):
         # the repository the site is built from (the workflow's), for its links: issues, commits
         'repository': os.environ.get('GITHUB_REPOSITORY') or 'elekloader/elekloader',
         # the repository the shop's list comes from (SHOP_REPO), for its forms: submit, remove, report a picture;
-        # and its commit, when it is not this one
-        'shop_repository': os.environ.get('SHOP_REPO') or os.environ.get('GITHUB_REPOSITORY') or 'elekloader/elekloader',
+        # and its commit
+        'shop_repository': os.environ.get('SHOP_REPO') or 'elekloader/shop',
         'shop_commit': os.environ.get('SHOP_COMMIT') or None,
         'commit_date': git('log', '-1', '--format=%cI').decode().strip(),
         # the zip is HEAD's package; a working tree with changes there is not in it
