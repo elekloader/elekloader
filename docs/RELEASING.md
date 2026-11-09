@@ -82,9 +82,11 @@ pre-release again and the last full release is the latest
 
 The list is `catalog.json` in [elekloader/shop](https://github.com/elekloader/shop), changed by pull
 requests there: each item pins a file of a GitHub release, or of a repository
-at a commit, by sha256 ([WEB.md](WEB.md#where-the-list-is)). A merge there
-starts pages here (with its `SITE_DISPATCH` secret), or the next pages run
-puts it on the site.
+at a commit, by sha256 ([WEB.md](WEB.md#where-the-list-is)). Every change
+to the list there starts pages here, with the shop repository's
+`SITE_DISPATCH` token. When that token expires, renew it
+(`gh secret set SITE_DISPATCH -R elekloader/shop`); until then, run pages by
+hand after a shop merge.
 
 ## Rules
 
