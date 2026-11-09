@@ -11,7 +11,7 @@ static void hello_present(const struct elek_ui *ui)
 {
     int32_t amount = ui->knob[AMOUNT];
     if (amount)
-        elek_label_num(ui->view[PITCH].label, "A ", amount);
+        ui->view[PITCH].label = elek_num(ui, "A ", amount);
     ui->view[PITCH].hidden = amount == 127;
 }
 static const struct elek_machine sdk_hello_world = {

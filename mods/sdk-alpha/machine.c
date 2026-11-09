@@ -105,7 +105,10 @@ void sdk_alpha_number(int32_t value, char *buf, int wide)
 static void value_text(uint32_t k, int32_t raw, char *buf)
 {
     const struct sdk_alpha_entry *e = dev_active();
-    sdk_alpha_number(e && k < e->count ? sdk_alpha_map(&e->machine->knobs[k], raw) : raw >> 8, buf, 0);
+    if (e && k < e->count)
+        sdk_alpha_value(e, k, raw, buf, 0);
+    else
+        sdk_alpha_number(raw >> 8, buf, 0);
 }
 #define VALUE_TEXT(k) static void value_text##k(int32_t raw, char *buf) { value_text(k, raw, buf); }
 VALUE_TEXT(0) VALUE_TEXT(1) VALUE_TEXT(2) VALUE_TEXT(3) VALUE_TEXT(4) VALUE_TEXT(5) VALUE_TEXT(6)
@@ -126,6 +129,36 @@ const struct sdk_alpha_entry *sdk_alpha_seen;
 int32_t sdk_alpha_seen_page = ELEK_UI_NO_PAGE;
 static uint32_t seen_track;
 static int32_t seen_raw[SDK_ALPHA_KNOBS];
+
+static struct elek_scratch scratch;     /* the UI task's: one .present call at a time */
+
+/* Each .present call starts from the declaration, with no text built. */
+static void start(struct elek_view *view, const struct elek_machine *m, uint32_t n)
+{
+    for (uint32_t k = 0; k < n; ++k) {
+        view[k].label = m->knobs[k].label;
+        view[k].hidden = 0;
+        view[k].glyph = m->knobs[k].glyph;
+        view[k].value = 0;
+    }
+    scratch.used = 0;
+}
+
+/* text's first ELEK_UI_LABEL_MAX characters into out, nonprintable ones as ?; -> nonzero when out changed. */
+static int32_t copy_text(char *out, const char *text)
+{
+    int32_t changed = 0;
+    uint32_t c = 0;
+    for (; c < ELEK_UI_LABEL_MAX && text[c]; ++c) {
+        unsigned char ch = text[c];
+        char next = ch >= 32 && ch <= 126 ? ch : '?';
+        changed |= out[c] != next;
+        out[c] = next;
+    }
+    changed |= out[c] != 0;
+    out[c] = 0;
+    return changed;
+}
 
 int32_t sdk_alpha_present(const struct sdk_alpha_entry *e, uint32_t track, int32_t page,
                           const int32_t *raw, int force)
@@ -148,27 +181,16 @@ int32_t sdk_alpha_present(const struct sdk_alpha_entry *e, uint32_t track, int32
     for (k = 0; k < n; ++k) {
         seen_raw[k] = clamped[k];
         knob[k] = sdk_alpha_map(&m->knobs[k], clamped[k]);
-        elek_label_set(view[k].label, m->knobs[k].label);
-        view[k].hidden = 0;
-        view[k].glyph = m->knobs[k].glyph;
     }
+    start(view, m, n);
     sdk_alpha_seen = e;
     seen_track = track;
     sdk_alpha_seen_page = page;
-    const struct elek_ui ui = { .knob = knob, .view = view, .page = page, .track = track };
+    const struct elek_ui ui = { .knob = knob, .view = view, .page = page, .track = track, .scratch = &scratch };
     if (m->present)
         m->present(&ui);
     for (k = 0; k < n; ++k) {
-        const char *label = view[k].label;
-        uint32_t c = 0;
-        for (; c < ELEK_UI_LABEL_MAX && label[c]; ++c) {
-            unsigned char ch = label[c];
-            char next = ch >= 32 && ch <= 126 ? ch : '?';
-            changed |= sdk_alpha_labels[k][c] != next;
-            sdk_alpha_labels[k][c] = next;
-        }
-        changed |= sdk_alpha_labels[k][c] != 0;
-        sdk_alpha_labels[k][c] = 0;
+        changed |= copy_text(sdk_alpha_labels[k], view[k].label ? view[k].label : m->knobs[k].label);
         uint8_t visible = view[k].hidden == 0;
         changed |= sdk_alpha_visibility[k] != visible;
         sdk_alpha_visibility[k] = visible;
@@ -176,6 +198,29 @@ int32_t sdk_alpha_present(const struct sdk_alpha_entry *e, uint32_t track, int32
         sdk_alpha_glyphs[k] = view[k].glyph;
     }
     return changed;
+}
+
+void sdk_alpha_value(const struct sdk_alpha_entry *e, uint32_t k, int32_t raw, char *buf, int wide)
+{
+    static int32_t knob[SDK_ALPHA_KNOBS];      /* static: formatters run deep in the firmware's UI stack */
+    static struct elek_view view[SDK_ALPHA_KNOBS];
+    const struct elek_machine *m = e->machine;
+    int seen = e == sdk_alpha_seen;
+    int32_t value = sdk_alpha_map(&m->knobs[k], raw);
+    if (m->present) {
+        for (uint32_t i = 0; i < e->count; ++i)
+            knob[i] = sdk_alpha_map(&m->knobs[i], seen ? seen_raw[i] : sdk_alpha_default(&m->knobs[i]));
+        knob[k] = value;
+        start(view, m, e->count);
+        const struct elek_ui ui = { .knob = knob, .view = view, .page = seen ? sdk_alpha_seen_page : ELEK_UI_NO_PAGE,
+                                    .track = seen ? seen_track : 0, .scratch = &scratch };
+        m->present(&ui);
+        if (view[k].value && view[k].value[0]) {
+            copy_text(buf, view[k].value);
+            return;
+        }
+    }
+    sdk_alpha_number(value, buf, wide);
 }
 
 const char *sdk_alpha_label(const struct sdk_alpha_entry *e, uint32_t k)

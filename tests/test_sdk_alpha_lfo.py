@@ -26,7 +26,7 @@ LFO = sdk_machine("Lfo", """
     {
         lfo_page = ui->page;
         if (ui->knob[1]) {
-            elek_label_set(ui->view[0].label, "QWE");
+            ui->view[0].label = "QWE";
             ui->view[0].hidden = ui->knob[1] == 127;
         }
     }
@@ -55,7 +55,7 @@ FIFTEEN = sdk_machine("Fifteen", """
     {
         fifteen_page = ui->page;
         if (ui->knob[1]) {
-            elek_label_set(ui->view[0].label, "QWE");
+            ui->view[0].label = "QWE";
             ui->view[0].hidden = ui->knob[1] == 127;
         }
     }

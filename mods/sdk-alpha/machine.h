@@ -34,8 +34,12 @@ int32_t sdk_alpha_default(const struct elek_knob *knob);
  * SDK_ALPHA_VALUE_MAX characters, which is what fits under a knob. */
 #define SDK_ALPHA_VALUE_MAX 5
 void sdk_alpha_number(int32_t value, char *buf, int wide);
-/* On a device whose value formatter f(raw, buf) is given no knob (dev.h defines dev_active): knob k's,
- * for the active track's machine; the native number for another machine. */
+/* Knob k's value text for native value raw (ELEK_UI_LABEL_MAX characters, or a wide number): the view's
+ * value from .present with knob k at raw and the others, track and page as it last saw them for e (else
+ * the defaults, track 0, ELEK_UI_NO_PAGE), or else sdk_alpha_number of the mapped value. */
+void sdk_alpha_value(const struct sdk_alpha_entry *e, uint32_t k, int32_t raw, char *buf, int wide);
+/* On a device whose value formatter f(raw, buf) is given no knob (dev.h defines dev_active): knob k's
+ * sdk_alpha_value, for the active track's machine; the native number for another machine. */
 extern void (*const sdk_alpha_value_texts[SDK_ALPHA_KNOBS])(int32_t raw, char *buf);
 
 /* What .present last left, and for which machine, track and page. */

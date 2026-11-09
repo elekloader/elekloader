@@ -17,17 +17,13 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from elekloader.sdk import sdk_alpha_host  # noqa: E402
 
-# Shows the track and page in its knob's label, and renders its velocity on track 3 only.
+# Shows the track in its knob's label and the page in its value text, and renders its velocity on track 3 only.
 PROBE = r'''#include "elekloader/sdk_alpha_machine.h"
 static const struct elek_knob knobs[] = { { "K", .max = 1 } };
 static void present(const struct elek_ui *ui)
 {
-    char page[ELEK_UI_LABEL_MAX + 1];
-    elek_label_num(page, "P", ui->page);
-    elek_label_num(ui->view[0].label, "T", (int32_t)ui->track);
-    ui->view[0].label[2] = page[0];
-    ui->view[0].label[3] = page[1];
-    ui->view[0].label[4] = 0;
+    ui->view[0].label = elek_num(ui, "T", (int32_t)ui->track);
+    ui->view[0].value = elek_num(ui, "P", ui->page);
 }
 static void render(const struct elek_voice *v, elek_sample *out)
 {
@@ -56,7 +52,7 @@ class HostRunTests(unittest.TestCase):
             with self.subTest(flags=flags):
                 code, out = host('examples/sdk-sine', '--note', '69', '--knob', 'FINE=50', *flags)
                 self.assertEqual(code, 0, out)
-                self.assertIn('FINE=50    FINE "FINE" glyph', out)
+                self.assertIn('FINE=50    FINE "FINE"="+50" glyph', out)
                 self.assertIn('peak 0.500', out)
                 hz = float(re.search(r'about ([\d.]+) Hz', out).group(1))
                 self.assertAlmostEqual(hz, 440 * 2 ** (0.5 / 12), delta=0.2)
@@ -72,7 +68,7 @@ class HostRunTests(unittest.TestCase):
     def test_hello_world_presents_and_has_no_render(self):
         code, out = host('examples/sdk-hello-world')
         self.assertEqual(code, 0, out)
-        self.assertIn('AMNT=127   PITCH "A 127" hidden  AMNT "AMNT"', out)
+        self.assertIn('AMNT=127   PITCH "A 127"=10 hidden  AMNT "AMNT"=127', out)
         self.assertIn('no render', out)
 
     def test_fractional_note(self):
@@ -93,7 +89,7 @@ class HostRunTests(unittest.TestCase):
     def test_present_starts_from_the_knob_values(self):
         code, out = host('examples/sdk-hello-world', '--knob', 'AMNT=5')
         self.assertEqual(code, 0, out)
-        self.assertIn('PITCH=20   PITCH "A 5"', out)
+        self.assertIn('PITCH=20   PITCH "A 5"=20', out)
 
     def test_velocity_track_and_page_reach_the_machine(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -102,7 +98,7 @@ class HostRunTests(unittest.TestCase):
             code, out = host(tmp, '--velocity', '30', '--track', '3', '--page', '1', '--blocks', '1')
             self.assertEqual(code, 0, out)
             self.assertIn('present on page 1, track 3,', out)
-            self.assertIn('K "T3P1"', out)
+            self.assertIn('K "T3"="P1"', out)
             self.assertIn('velocity 30, track 3, 1 blocks: peak 0.236', out)
             code, out = host(tmp, '--page', '2')
             self.assertTrue(code and '--page 2: PROBE has 2 page(s)' in out, out)

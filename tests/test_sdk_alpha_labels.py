@@ -20,7 +20,7 @@ LABELS = sdk_machine("Labels", """
     static void present(const struct elek_ui *ui)
     {
         if (ui->knob[0])
-            elek_label_num(ui->view[1].label, "A ", ui->knob[0]);
+            ui->view[1].label = elek_num(ui, "A ", ui->knob[0]);
     }
     static const struct elek_machine labels = {
         .id = @ID@, .name = "Labels", .short_name = "LABL", ELEK_KNOBS(knobs),
@@ -48,7 +48,7 @@ LONG = sdk_machine("Long label", """
     static const struct elek_knob knobs[] = { { "SHORT", .max = 127 } };
     static void present(const struct elek_ui *ui)
     {
-        elek_label_set(ui->view[0].label, "ABCDEFGH");
+        ui->view[0].label = "ABCDEFGH";
     }
     static const struct elek_machine long_label = {
         .id = @ID@, .name = "Long label", .short_name = "LONG", ELEK_KNOBS(knobs),

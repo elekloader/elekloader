@@ -103,12 +103,13 @@ void sdk_alpha_render(int32_t *blocks)
     }
 }
 
-/* A mapped integer's text fits the native value field; long values retain their popup text. */
+/* .present's value text, or the mapped integer, fits the native value field; long numbers keep their
+ * popup text. */
 int32_t sdk_alpha_value_text(int32_t machine, int32_t k, int32_t raw, char *buf, int popup)
 {
     const struct sdk_alpha_entry *e = sdk_alpha_find(machine);
     if (!e || (uint32_t)k >= e->count)
         return 0;
-    sdk_alpha_number(sdk_alpha_map(&e->machine->knobs[k], raw), buf, popup);
+    sdk_alpha_value(e, (uint32_t)k, raw, buf, popup);
     return 1;
 }

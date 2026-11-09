@@ -62,22 +62,26 @@ static void check_phase(void)
     assert(elek_phase_inc(-1) == elek_phase_inc(0) && elek_phase_inc(200 << 16) == elek_phase_inc(127 << 16));
 }
 
-/* The label helpers: no libc on the device. */
-static void check_labels(void)
+/* The text helpers: no libc on the device. */
+static void check_text(void)
 {
-    static const struct { const char *prefix; int32_t v; const char *want; } nums[] = {
-        {"F", 7, "F7"}, {"A ", 37, "A 37"}, {"F", -50, "F-50"}, {"LONG", 127, "LO127"}, {"", 0, "0"},
-        {"X", 99999, "99999"}, {"X", -9999, "-9999"}, {"X", 100000, "#"}, {"X", INT32_MIN, "#"},
+    static const struct { const char *prefix; int32_t v; int places; const char *want; } nums[] = {
+        {"F", 7, 0, "F7"}, {"A ", 37, 0, "A 37"}, {"F", -50, 0, "F-50"}, {"LONG", 127, 0, "LO127"},
+        {"", 0, 0, "0"}, {"X", 99999, 0, "99999"}, {"X", -9999, 0, "-9999"}, {"X", 100000, 0, "#"},
+        {"X", INT32_MIN, 0, "#"}, {"+", 24, 1, "+2.4"}, {"", -24, 1, "-2.4"}, {"", 5, 1, "0.5"},
+        {"", -3, 2, "-0.03"}, {"", 0, 1, "0.0"}, {"+", 500, 1, "+50.0"}, {"", -500, 1, "-50.0"},
+        {"", 12345, 2, "#"}, {"", 7, -1, "7"},
     };
-    char label[ELEK_UI_LABEL_MAX + 1];
-    for (unsigned i = 0; i < sizeof nums / sizeof *nums; ++i) {
-        elek_label_num(label, nums[i].prefix, nums[i].v);
-        assert(!strcmp(label, nums[i].want));
-    }
-    elek_label_set(label, "SAW");
-    assert(!strcmp(label, "SAW"));
-    elek_label_set(label, "TOOLONG");
-    assert(!strcmp(label, "TOOLO"));
+    struct elek_scratch scratch = {0};
+    const struct elek_ui ui = { .scratch = &scratch };
+    const char *kept = elek_num(&ui, "K", 1);
+    for (unsigned i = 0; i < sizeof nums / sizeof *nums; ++i)
+        assert(!strcmp(elek_fixed(&ui, nums[i].prefix, nums[i].v, nums[i].places), nums[i].want));
+    assert(!strcmp(elek_num(&ui, "+", 7), "+7"));
+    assert(!strcmp(kept, "K1"));                    /* each text is its own, kept through the call */
+    while (scratch.used < ELEK_TEXT_MAX)
+        elek_num(&ui, "", 1);
+    assert(!strcmp(elek_num(&ui, "", 1), "#"));     /* past the call's texts */
 }
 
 /* The example authors start from, examples/sdk-sine, as it is: the registration becomes a pointer here. */
@@ -99,7 +103,7 @@ int main(int argc, char **argv)
     check_float();
 #endif
     check_phase();
-    check_labels();
+    check_text();
     int32_t knob[1] = {argc > 1 ? atoi(argv[1]) : 0};
     struct state state = {12345};               /* a previous note's phase: the start must reset it */
     struct elek_voice voice = {.knob = knob, .start = 1, .pitch = (argc > 2 ? atoi(argv[2]) : 69) << 16,
