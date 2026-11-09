@@ -363,11 +363,14 @@ static void count_sel(void)
     }
 }
 
+static void build_list(void);
+
 /* Read the open folder's listing (cwd): its folders, and each .elemod's size, without reading
  * any mod (decided 2026-11-07: opening the page with many large files held the key path and USB
  * for seconds, T178). Each file is read later, one at a time (inspect). The files the page keeps
  * across folders (ticked, saved, loaded at boot) stay with what is known of them. -> 0, -2 no
- * memory (nothing changed). */
+ * memory (nothing changed). The arrays are new, so the build list (build_rows) is made again
+ * here, for every caller (a folder opened or left, a change over USB, a delete). */
 static int read_folder(void)
 {
     int i, n, kept = 0, k;
@@ -463,6 +466,9 @@ static int read_folder(void)
     dl_unlock();
     dl_free(ents);
     count_sel();
+    build_list();                        /* build_rows is new (zeroed): left as it is, every build row
+                                          * read files[0] (the FCR emulator run, 2026-11-09: VIEW BUILD
+                                          * after a folder change drew one mod three times) */
     next_check = 0;
     return 0;
 }
@@ -1218,7 +1224,6 @@ static void do_delete(void)
         show_box("NO MEMORY");
         return;
     }
-    build_list();
     page_rows();
     cursor_to(0);
     show_box(done == n ? count_msg(done, "DELETED") : "DELETE FAILED");
@@ -1626,7 +1631,6 @@ static void follow_route(void)
     depth += cwd[0] != 0;
     if (read_folder())
         return;
-    build_list();
     if (view) {
         page_rows();
         cursor_to(0);
