@@ -1,8 +1,10 @@
 # elekloader
 
-A mod loader for Elektron firmware. You pick mods and supply the stock OS
-file Elektron publishes for your device. elekloader builds a custom OS
-file on your own machine, and you flash it the way you flash any OS update.
+An open modding platform for Elektron instruments. Browse a shop of mods,
+combine the ones you want, and build your own custom OS from the stock file
+Elektron publishes, in your browser or on your computer. Mod makers get an
+SDK, a shared core that lets mods from different authors work together, and
+a one-form route into the shop.
 
 - **Nothing from Elektron is distributed.** A mod (`.elemod`) carries only
   its author's bytes, the short instruction fragments needed to hook the OS,
