@@ -82,7 +82,7 @@ class CaptureTests(unittest.TestCase):
         cls.firmware.write_bytes(outputs['syx'])
         sys.path.insert(0, DIGIKIT)
         from tools.control.digi_client import Emu
-        cls.emu = Emu.spawn_coupled(STOCK, READY, binary=EMUD, timeout=300, run_dir=work / 'run', env={'SHARC_AOT': '0'})
+        cls.emu = Emu.spawn_coupled(STOCK, READY, binary=EMUD, timeout=300, run_dir=work / 'run')
         cls.addClassCleanup(cls.emu.close)
         cls.addClassCleanup(cls.emu.call, 'quit')
         cls.emu.call('firmware.load', syx=str(cls.firmware), start='cold', force=True, auto_no=True)

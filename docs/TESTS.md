@@ -149,12 +149,29 @@ docs/sharc/SOURCES.md; `tools/devtools/refstext.py` extracts it, with
 ```bash
 cd <digikit>
 mise run gen:core                                   # the shared core, out/native/shared-core/gen
-export SHARC_GEN_DIR=$PWD/out/native/shared-core/gen
-mise run emu:serve -- --build-only                  # ELEKLOADER_DIGI_EMUD: out/native/target/nogen/release/digi-emud
-uv run python -m tools.emulator.native_emu --daemon --coupled --build-only
-                                                    # ELEKLOADER_DIGI_EMUD_COUPLED: out/native/target/generic/release/digi-emud
-uv run python -m tools.emulator.ready dn2 --syx <Digitone_II_OS1.12.syx> --force
+SHARC_GEN_DIR=$PWD/out/native/shared-core/gen uv run python -m tools.emulator.ready dn2 --syx <Digitone_II_OS1.12.syx> --force
                                                     # ELEKLOADER_DN2_EMU_READY: out/snapshots/dn2-audio-ready-cold-2026-10-20
+DIGI_EMU_SYX=<Digitone_II_OS1.12.syx> mise run perf:aot -- dn2
+                                                    # the DSP core with the OS's code compiled: out/native/dn2-audio/gen
+mise run emu:serve -- --build-only --cf-only        # ELEKLOADER_DIGI_EMUD: out/native/target/nogen/release/digi-emud
+SHARC_GEN_DIR=$PWD/out/native/dn2-audio/gen uv run python -m tools.emulator.native_emu --daemon --coupled --build-only
+                                                    # ELEKLOADER_DIGI_EMUD_COUPLED: out/native/target/prod/release/digi-emud
+```
+
+`perf:aot` (about 4 minutes, then about 6 for the coupled build) compiles
+the hot DSP code of the stock OS, which makes the sound tests three to four
+times faster than on the shared core alone. A block whose code a mod changed
+runs interpreted. When a DigiKit update changes its `CORE_FINGERPRINT`, the
+build refuses the core as stale: run `perf:aot` again.
+
+`perf:aot -- dn2` needs [DigiKit PR 377](https://github.com/ElekLabs/digikit/pull/377);
+DigiKit's `main` takes only `dt2` until it lands. Until then, run the steps
+from that PR's branch:
+
+```bash
+cd <digikit>
+git fetch https://github.com/simonjohansson/digikit.git aot-gen-dn2
+git switch --detach FETCH_HEAD
 ```
 
 `SDK_WATCH=1` shows the emulated screen, the actions and the result in a
