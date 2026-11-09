@@ -398,6 +398,25 @@ def stamp(html, token):
     return out
 
 
+SHOP_URL = 'https://elekloader.github.io/shop/'
+
+
+def page_mode(html, page, shop_url=SHOP_URL):
+    """index.html as the page `page` is: 'shop' (the whole page, as it is) or 'builder' (elekloader's page for your
+    own .elemod files: <html data-page="builder" data-shop-url>; app.js and style.css hide the shop and send its
+    routes to `shop_url`, the shop's own site)."""
+    if page == 'shop':
+        return html
+    if page != 'builder':
+        sys.exit('--page: shop or builder, not %r' % page)
+    if not re.fullmatch(r'https://[A-Za-z0-9.-]+/[A-Za-z0-9._~/-]*', shop_url or '') or not shop_url.endswith('/'):
+        sys.exit('--shop-url: an https:// address ending in /, not %r' % shop_url)
+    tag = '<html lang="en">'
+    if html.count(tag) != 1:
+        sys.exit('web/index.html: expected one %s' % tag)
+    return html.replace(tag, '<html lang="en" data-page="builder" data-shop-url="%s">' % shop_url)
+
+
 def to_do(core_paths, folder, items, cs, upstream=()):
     """The community's to-do list for the core (elekloader.sdk.bounties) over
     the shop's files and the cores, and the upstream lists' paths, grouped by distance."""
@@ -470,6 +489,10 @@ def main(argv=None):
     ap.add_argument('--thumbs', action='store_true', help='with --catalog-list: the thumbnails too, as '
                                                          '"thumb-release repo tag file sha256" or "thumb-commit repo commit path sha256"')
     ap.add_argument('--no-thumbs', action='store_true', help="leave the shop's thumbnails out (SHOP_THUMBS=false)")
+    ap.add_argument('--page', default='shop', choices=('shop', 'builder'),
+                    help="the page: the whole shop (default), or elekloader's builder for your own files, whose shop "
+                         "links go to --shop-url")
+    ap.add_argument('--shop-url', default=SHOP_URL, help="the shop's own site, for the builder's links (%(default)s)")
     ap.add_argument('--out', help='the site folder to write (emptied first)')
     a = ap.parse_args(argv)
     if a.catalog is None and os.environ.get('ELEKLOADER_CATALOG'):
@@ -538,7 +561,7 @@ def main(argv=None):
     # the site's version: its files but the page, which names it
     token = sha(''.join('%s %s\n' % (n, sha(b)) for n, b in sorted(site.items()) if n != 'index.html')
                 .encode())[:12]
-    site['index.html'] = stamp(site['index.html'].decode('utf-8'), token).encode('utf-8')
+    site['index.html'] = page_mode(stamp(site['index.html'].decode('utf-8'), token), a.page, a.shop_url).encode('utf-8')
     commit = git('rev-parse', 'HEAD').decode().strip()
     dirty = bool(git('status', '--porcelain', '--', 'elekloader').strip())
     tree = git('rev-parse', 'HEAD:elekloader').decode().strip()
@@ -555,6 +578,8 @@ def main(argv=None):
         # and its commit
         'shop_repository': os.environ.get('SHOP_REPO') or 'elekloader/shop',
         'shop_commit': os.environ.get('SHOP_COMMIT') or None,
+        # the page: the whole shop, or the builder (its shop is at shop_url)
+        'page': a.page, 'shop_url': a.shop_url if a.page == 'builder' else None,
         'commit_date': git('log', '-1', '--format=%cI').decode().strip(),
         # the zip is HEAD's package; a working tree with changes there is not in it
         'package_changes_not_in_zip': dirty,

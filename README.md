@@ -30,9 +30,11 @@ file on your own machine, and you flash it the way you flash any OS update.
 
 ## Get started
 
-- **In your browser, nothing to install:** <https://elekloader.github.io/elekloader/>.
-  Drop in your stock OS file, add mods from its shop or your own, build, and
-  download the result. Your files are never uploaded.
+- **In your browser, nothing to install:** the **[Mod Shop](https://elekloader.github.io/shop/)**: pick
+  mods for your device, drop in your stock OS file, build, and download the
+  result. Already have `.elemod` files of your own? The
+  [builder](https://elekloader.github.io/elekloader/) takes them. Either way
+  your files are never uploaded.
 - **Windows or macOS:** the apps on
   [Releases](https://github.com/irpina/elekloader/releases/latest), with the
   core mods built in.

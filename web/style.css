@@ -584,3 +584,25 @@ details summary:hover { color: var(--text); }
   .tab.on { color: var(--accent); }
   .tab .badge { position: absolute; top: 5px; left: calc(50% + 7px); min-width: 18px; line-height: 17px; font-size: 10.5px; padding: 0 5px; }
 }
+
+/* ---- the builder page (build_web.py --page builder, <html data-page="builder">): the shop's parts are hidden,
+   and its links lead to the shop's own site ---- */
+html:not([data-page="builder"]) .builder-only { display: none !important; }
+html[data-page="builder"] .shop-only { display: none !important; }
+.nav-link.shop-link { color: var(--accent); }
+.nav-link.shop-link .ico { color: var(--accent); }
+.shop-out { margin-left: auto; }
+.btn.shop-btn { background: var(--accent-soft); color: var(--accent); border: 1px solid var(--accent); }
+.btn.shop-btn:hover { background: var(--accent); color: var(--on-accent); text-decoration: none; }
+.shop-banner { display: flex; align-items: center; gap: 16px; margin: 0 0 22px; padding: 16px 18px;
+  border-radius: var(--r); background: var(--accent-soft); border: 1px solid var(--accent); color: var(--text); }
+.shop-banner:hover { text-decoration: none; border-color: var(--accent-hi); }
+.shop-banner .banner-ico .ico { width: 30px; height: 30px; color: var(--accent); }
+.shop-banner .promo-text strong { font-size: 16px; }
+.shop-banner .btn { margin-left: auto; flex: none; }
+@media (max-width: 720px) {
+  .shop-banner { flex-direction: column; align-items: flex-start; }
+  .shop-banner .banner-ico { display: none; }
+  .shop-banner .btn { margin-left: 0; }
+  .btn.shop-btn { padding-left: 10px; padding-right: 10px; }
+}

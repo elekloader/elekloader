@@ -23,16 +23,20 @@
     <span class="mark"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13.5 3.5 6.5 13h5l-1 7.5 7-9.5h-5z"/></svg></span>
     <span class="brand-text"><strong>elekloader</strong><small>Elektron firmware mods</small></span></a>
   <nav class="side-nav">
-    <a class="nav-link" id="nav-library" href="#library">
+    <a class="nav-link shop-only" id="nav-library" href="#library">
       <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></svg>Mod Shop</a>
     <!-- the shop's sections (shop/sections.json), one link each, and under the open one its pages
          (its mods, its tools such as the Splash screen maker): app.js renderSections -->
-    <div id="nav-sections"></div>
+    <div class="shop-only" id="nav-sections"></div>
+    <!-- the builder page (build_web.py --page builder): the shop is a site of its own; app.js sets each
+         data-shop-link's address from <html data-shop-url> -->
+    <a class="nav-link shop-link builder-only" data-shop-link href="https://elekloader.github.io/shop/">
+      <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></svg>Mod Shop<span class="shop-out" aria-hidden="true">&#8599;</span></a>
     <a class="nav-link" id="nav-build" href="#build">
       <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M13.5 3.5 6.5 13h5l-1 7.5 7-9.5h-5z"/></svg>Build Firmware<span class="badge" id="nav-count">0</span></a>
     <a class="nav-link" id="nav-make" href="#make">
       <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8zM18.5 15.5l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7z"/></svg>Make your own mod!</a>
-    <a class="nav-link" id="nav-submit" href="#submit">
+    <a class="nav-link shop-only" id="nav-submit" href="#submit">
       <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5M5 15v3.5A1.5 1.5 0 0 0 6.5 20h11a1.5 1.5 0 0 0 1.5-1.5V15"/></svg>Submit your mod</a>
     <a class="nav-link" id="nav-contribute" href="#contribute">
       <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/></svg>Contribute</a>
@@ -44,8 +48,8 @@
       <a class="sub-link" href="#contribute/pr" data-cpage="pr">Your first pull request</a>
       <a class="sub-link" href="#contribute/test" data-cpage="test">Test before you flash</a>
     </div>
-    <h3 class="side-h">Categories</h3>
-    <ul class="side-list" id="nav-types"></ul>
+    <h3 class="side-h shop-only">Categories</h3>
+    <ul class="side-list shop-only" id="nav-types"></ul>
     <h3 class="side-h">Profiles
       <button type="button" class="round" id="save-profile" title="New profile: a stock OS and its mods" aria-label="New profile">
         <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button></h3>
@@ -59,8 +63,9 @@
 </aside>
 
 <header class="topbar" id="topbar">
-  <label class="search"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4 4"/></svg>
+  <label class="search shop-only"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4 4"/></svg>
     <input type="search" id="search" placeholder="Search mods" aria-label="Search mods" autocomplete="off"></label>
+  <a class="btn shop-btn builder-only" data-shop-link href="https://elekloader.github.io/shop/"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></svg>Browse the Mod Shop</a>
   <span class="grow"></span>
   <a class="btn outline" href="#build" id="cfg-btn">
     <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M13.5 3.5 6.5 13h5l-1 7.5 7-9.5h-5z"/></svg>Build<span class="count" id="cfg-count">0</span></a>
@@ -639,6 +644,12 @@ python -m elekloader.patch --stock Digitakt_OS1.53.syx --mod mods/core/out/core-
         <p class="sub" id="build-sub">Drop in your stock OS file, check the mods you ticked, and build.</p>
       </div>
     </header>
+    <a class="shop-banner builder-only" data-shop-link href="https://elekloader.github.io/shop/">
+      <span class="banner-ico" aria-hidden="true"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></svg></span>
+      <span class="promo-text"><strong>Looking for mods? They're in the elekloader Mod Shop.</strong>
+        <span>Over a hundred mods for the Digitakt, Digitone, Octatrack, Analog Rytm and more: pick them there and
+          build in the same place. This page builds with <code>.elemod</code> files you already have.</span></span>
+      <span class="btn primary">Open the Mod Shop</span></a>
     <div class="build-grid">
       <div class="col">
         <section class="step" id="step-stock">
@@ -724,13 +735,15 @@ python -m elekloader.patch --stock Digitakt_OS1.53.syx --mod mods/core/out/core-
 </main>
 
 <nav class="tabbar" aria-label="Views">
-  <a class="tab" id="tab-library" href="#library">
+  <a class="tab builder-only" data-shop-link href="https://elekloader.github.io/shop/">
+    <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></svg>Shop</a>
+  <a class="tab shop-only" id="tab-library" href="#library">
     <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></svg>Mod Shop</a>
   <a class="tab" id="tab-build" href="#build">
     <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M13.5 3.5 6.5 13h5l-1 7.5 7-9.5h-5z"/></svg>Build Firmware<span class="badge" id="tab-count">0</span></a>
   <a class="tab" id="tab-make" href="#make">
     <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8zM18.5 15.5l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7z"/></svg>Make</a>
-  <a class="tab" id="tab-submit" href="#submit">
+  <a class="tab shop-only" id="tab-submit" href="#submit">
     <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5M5 15v3.5A1.5 1.5 0 0 0 6.5 20h11a1.5 1.5 0 0 0 1.5-1.5V15"/></svg>Submit</a>
   <a class="tab" id="tab-contribute" href="#contribute">
     <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/></svg>Contribute</a>

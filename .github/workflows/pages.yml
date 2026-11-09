@@ -1,5 +1,10 @@
 # The web patcher (web/) on GitHub Pages: elekloader in the browser, in Pyodide.
 #
+# This site is the builder (build_web.py --page builder): your stock OS file and your own .elemod files. The shop
+# is its own site, https://elekloader.github.io/shop/, built by elekloader/shop from the same web/; the builder's
+# shop links and old shop addresses (#library, #s/..., #splash, #submit) go there. This site still carries the
+# shop's files and shop/index.json, for older SDKs (publish) and other sites that read them here.
+#
 # On every push to main, and by hand (Actions > pages > Run workflow). It takes
 # the core mods from the latest release (as windows-build takes them from its
 # release), the elekloader package as this commit has it, and the pinned
@@ -117,7 +122,7 @@ jobs:
         env:
           # the maintainers' switch: the repository variable SHOP_THUMBS set to false leaves every thumbnail out
           SHOP_THUMBS: ${{ vars.SHOP_THUMBS }}
-        run: python packaging/build_web.py --pyodide build/pyodide-core.tar.bz2 --core build/core/core-*.elemod --release "$TAG" --catalog "$ELEKLOADER_CATALOG" --catalog-dir build/shop --prs build/prs.json --out build/site $([ "$SHOP_THUMBS" = false ] && echo --no-thumbs)
+        run: python packaging/build_web.py --pyodide build/pyodide-core.tar.bz2 --core build/core/core-*.elemod --release "$TAG" --catalog "$ELEKLOADER_CATALOG" --catalog-dir build/shop --prs build/prs.json --page builder --out build/site $([ "$SHOP_THUMBS" = false ] && echo --no-thumbs)
       - name: The engine under Pyodide, from the assembled site
         run: node tests/test_web.mjs build/site
       - uses: actions/upload-pages-artifact@v5

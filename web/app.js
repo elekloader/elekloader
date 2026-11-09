@@ -150,6 +150,10 @@ const desc = p => st.mods.find(d => d.path === p);
 // as one collection of cards, one per mod.
 
 const shop = { items: [], devices: null, sections: [] };
+// The page this build is (build_web.py --page): the whole shop, or elekloader's builder for your own .elemod files,
+// whose shop links go to the shop's own site (<html data-page="builder" data-shop-url>).
+const BUILDER = document.documentElement.dataset.page === 'builder';
+const SHOP_URL = document.documentElement.dataset.shopUrl || 'https://elekloader.github.io/shop/';
 // The shop's own sections (shop/sections.json: sections.json): whole repositories listed on a page of their own,
 // #s/<id>, instead of the Mod Shop's shelves. -> the section a repository's mods are in, or undefined.
 const sectionOf = repo => shop.sections.find(x => x.packs.some(p => p.repo === repo));
@@ -308,8 +312,9 @@ async function loadShop() {
       return null;
     }
   };
-  const [items, devices, sections] = await Promise.all([json('shop/index.json'), json('devices.json'),
-    json('shop/sections.json')]);
+  // the builder shows no shop: only the devices
+  const [items, devices, sections] = await Promise.all([BUILDER ? null : json('shop/index.json'), json('devices.json'),
+    BUILDER ? null : json('shop/sections.json')]);
   shop.items = items || [];
   shop.sections = Array.isArray(sections) ? sections : [];
   shop.devices = devices;
@@ -1151,6 +1156,15 @@ const cpage = () => {
 };
 
 function route() {
+  if (BUILDER) {
+    // the shop's pages are on its own site; anything else that isn't the builder's opens the build
+    const h = location.hash;
+    if (h === '#library' || /^#s\//.test(h) || h === '#splash' || h === '#submit') {
+      location.replace(SHOP_URL + h);
+      return;
+    }
+    if (!['build', 'make', 'contribute'].includes(view())) history.replaceState(null, '', '#build');
+  }
   const v = view(), cp = cpage();
   for (const n of ['library', 'build', 'make', 'splash', 'section', 'submit', 'contribute']) $('view-' + n).hidden = v !== n;
   for (const p of CPAGES) $('cp-' + p).hidden = p !== cp;
@@ -1837,7 +1851,10 @@ function needButtons(d, on, cls) {
     const mine = newest(st.mods.filter(x => x.fits && !x.error && x.id === r));
     const item = !mine && newest(shop.items.filter(i => i.available && i.id === r && i.device === dev().key
       && i.os === st.stock.os));
-    if (!mine && !item) return null;
+    if (!mine && !item) {
+      return BUILDER ? el('a', { class: 'add-need', href: SHOP_URL, title: `Find ${r} in the Mod Shop`,
+        'aria-label': `Find ${r} in the Mod Shop` }, '\u2197') : null;
+    }
     const name = (mine || item).title || r;
     return el('button', {
       type: 'button', class: 'add-need', disabled: st.busy,
@@ -2152,6 +2169,13 @@ async function takeFiles(list) {
 }
 
 function wire() {
+  // the builder: its links to the shop's site, and its home is the build
+  for (const a of document.querySelectorAll('[data-shop-link]')) a.href = SHOP_URL;
+  if (BUILDER) {
+    const brand = document.querySelector('.brand');
+    brand.href = '#build';
+    brand.setAttribute('aria-label', 'elekloader: build firmware');
+  }
   // a drop zone opens its file chooser on a click or Enter (a drop anywhere is taken below)
   for (const [drop, input] of [['stock-drop', 'stock-file'], ['start-drop', 'stock-file'], ['mods-drop', 'mod-files']]) {
     $(drop).addEventListener('click', () => $(input).click());

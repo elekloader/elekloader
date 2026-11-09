@@ -1,7 +1,22 @@
 # elekloader in the browser
 
-<https://elekloader.github.io/elekloader/> is elekloader's patcher as a static
-web page. You pick mods from its library or add your own `.elemod` files,
+elekloader's patcher as a static web page, in two builds of the same `web/`
+(`build_web.py --page`):
+
+- **The Mod Shop**, <https://elekloader.github.io/shop/>: the whole page below, built by
+  [elekloader/shop](https://github.com/elekloader/shop) with its list.
+- **The builder**, <https://elekloader.github.io/elekloader/> (`--page builder`,
+  this repository's `pages.yml`): the build, Make your own mod and Contribute,
+  for your own `.elemod` files. The library, the sections, the Splash screen
+  maker and Submit are the shop's: the builder hides them, says where the shop
+  is (the side bar, the top bar, a banner over the build, the phone's tab bar),
+  and sends their addresses (`#library`, `#s/...`, `#splash`, `#submit`) to the
+  same place on the shop's site. A missing requirement links to the shop
+  instead of adding it. It still carries the shop's files and
+  `shop/index.json`, for older copies of `publish` and other sites that read
+  them there.
+
+In the shop you pick mods from its library or add your own `.elemod` files,
 drop in your stock OS file, tick mods, and download the patched `.syx` (and,
 for the Octatrack, the `.bin`), with the build manifest. The build runs in
 the page. Nothing is uploaded, and the site hosts no firmware.
