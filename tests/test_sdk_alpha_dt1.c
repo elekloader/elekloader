@@ -11,7 +11,7 @@
 #include "../mods/machine-pages/sdk_alpha.c"
 #include "../mods/sdk-alpha/machine.c"
 
-const char cm_ui_v32[] = "native UI";
+const char cm_ui_v33[] = "native UI";
 volatile uint32_t fw_active_track, fw_voice_start;
 uint8_t *volatile fw_kit;
 volatile uint8_t fw_render_machine[8];
@@ -55,7 +55,16 @@ static const struct elek_machine legato_machine = {
     .id = 102, .name = "Legato", .short_name = "LEG", ELEK_KNOBS(knobs),
     .pages = { { "LEG", { &knobs[0] } } }, .render = render, .play = ELEK_MONO_LEGATO,
 };
-const struct elek_machine *const sdk_alpha_machines[] = { &machine, &mono_machine, &legato_machine, 0 };
+/* Ten knobs: ids 8 and 9 are the first two extra values. */
+#define K(n) { "K" #n, .max = 127 }
+static const struct elek_knob wide_knobs[] = { K(0), K(1), K(2), K(3), K(4), K(5), K(6), K(7), K(8), K(9) };
+static const struct elek_machine wide_machine = {
+    .id = 103, .name = "Wide", .short_name = "WIDE", ELEK_KNOBS(wide_knobs),
+    .pages = { { "ONE", { &wide_knobs[0], &wide_knobs[1], &wide_knobs[2], &wide_knobs[3],
+                          &wide_knobs[4], &wide_knobs[5], &wide_knobs[6], &wide_knobs[7] } },
+               { "TWO", { &wide_knobs[8], &wide_knobs[9] } } },
+};
+const struct elek_machine *const sdk_alpha_machines[] = { &machine, &mono_machine, &legato_machine, &wide_machine, 0 };
 
 /* The stock note routines, as calls: "+60/90" a note on (with its velocity), "-60" an off. */
 static char played[64];
@@ -211,5 +220,14 @@ int main(void)
     KEY(64, 0, 0, 1, "-60 ");                   /* the last key up: the stock's C off */
     sdk_alpha_render(blocks);
     assert(last[2].pitch == 60 << 16);          /* no bend once silent */
+
+    /* MIDI CCs: knob ids 8-14 take CC 24-30, only for the knobs the machine declares; A-H none. */
+    const struct cm_ui32 *wide = sdk_alpha_ui(103), *one = sdk_alpha_ui(100);
+    assert(wide->base.abi == cm_ui_v33 && one->base.abi == cm_ui_v33);
+    assert(wide->extra[0].cc == 24 && wide->extra[1].cc == 25 && !wide->extra[2].cc);
+    for (int k = 0; k < 8; ++k)
+        assert(!wide->base.knob[k].cc && !one->base.knob[k].cc);
+    for (int k = 0; k < CM_EXTRAS; ++k)
+        assert(!one->extra[k].cc);
     return 0;
 }

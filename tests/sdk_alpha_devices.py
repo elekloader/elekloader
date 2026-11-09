@@ -522,6 +522,7 @@ class Digitakt1(Device):
     key, stock_env = 'digitakt-mk1', 'ELEKLOADER_STOCK_154'
     track_count = 8
 
+    features = frozenset(('knob_ccs_past_h',))
     sound_without_render = False
     KEYS = {0: '9', 1: '2', 2: '10', 3: '3', 4: '11', 5: '12', 6: '5', 7: '13',
             8: '6', 9: '14', 10: '7', 11: '15', 12: '16'}
@@ -605,9 +606,7 @@ class Digitakt1(Device):
         return DT1_SLOT_A + knob if knob < 8 else DT1_EXTRA_SLOT(knob - 8)
 
     def knob_cc(self, knob):
-        """The CC that sets the knob on its track: SRC A-H's, 16-23."""
-        if knob >= 8:
-            raise CannotYet('a CC for a knob past H')
+        """The CC that sets the knob on its track: SRC A-H's, 16-23, then machine-pages' 24-30."""
         return 16 + knob
 
     def destination(self, lfo, track=0):

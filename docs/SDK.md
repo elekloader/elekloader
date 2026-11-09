@@ -126,7 +126,7 @@ python -m elekloader.patch --stock $STOCK --mod build/core-*.elemod \
 ```
 
 Lint prints two `OK:` lines, the second `OK: links as core 4.3 >
-machine-pages 1.9 > my-saw 0.1`; patch ends with `WROTE test.syx`. Load it
+machine-pages 1.10 > my-saw 0.1`; patch ends with `WROTE test.syx`. Load it
 as in [Adapting your mod](ADAPTING.md).
 
 ## Reference
@@ -243,6 +243,8 @@ its Digitone II SHARC render.
   two different CCs came first is not kept.
 - The stock still applies the CC: a knob's CC still turns the knob. The
   machine decides what any CC means to it.
+- On the Digitakt mk1, knob ids 0-7 take CC 16-23 and ids 8-14 CC 24-30,
+  in knob id order (machine-pages 1.10).
 - A voice changes machine at the track's next note. Its first render on
   the machine gets the CCs that came since its track took that machine,
   so a CC sent after choosing the machine reaches its first note.
