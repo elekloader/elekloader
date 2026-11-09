@@ -10,6 +10,13 @@
  *   mv FROM|TO    a move over USB (route.c move: the tree changes, dl_move_from/to are set),
  *                 then the page's next tick (follow_route)
  *   build         the build list's labels, as VIEW BUILD shows them -> "BUILD l1|l2|..."
+ *   drive         the open folder's rows, label and right-hand column, the first row as the top
+ *                 row -> "DRIVE l1=c1|l2=c2|..."
+ *   checked PATH  the background check has read PATH (no id learnt)
+ *   id PATH|ID    a check has named PATH's mod ID (the save's)
+ *   boot PATH|ID  the boot's record of PATH holds ID (the mod's id, or dlink's path prefix),
+ *                 as the page's opening reads it (boot_record)
+ *   info N        INFO's box on build row N (from 0) -> "INFO line1~line2~..."
  * Only the functions these call are stubbed; the rest of page.c is linked against nothing and
  * never runs. */
 #include <stdio.h>
@@ -126,6 +133,52 @@ int main(void)
             dl_move_seen = 0;
             dl_fs_gen++;
             follow_route();
+        } else if (!strncmp(line, "checked ", 8) || !strncmp(line, "id ", 3) || !strncmp(line, "boot ", 5)) {
+            char *arg = strchr(line, ' ') + 1, *id = strchr(arg, '|');
+            int f;
+            if (id)
+                *id++ = 0;
+            f = find_file(arg);
+            if (f < 0)
+                continue;
+            if (line[0] == 'c')
+                files[f].checked = 1;
+            else if (line[0] == 'i')
+                copy_str(files[f].id, id ? id : "", sizeof files[f].id);
+            else {
+                static struct dl_choice bc;
+                static struct dl_status bs;
+                static char bd[1][32];
+                copy_str(bc.name, arg, sizeof bc.name);
+                memset(&bs, 0, sizeof bs);
+                bs.state = DL_ST_LOADED;
+                strncpy(bs.id, id ? id : "", DL_ID_MAX - 1);
+                dl_boot_choice = &bc;
+                dl_status = &bs;
+                dl_detail = bd;
+                dl_status_n = 1;
+                files[f].id[0] = 0;
+                boot_record(&files[f]);
+                dl_status_n = 0;
+            }
+        } else if (!strncmp(line, "info ", 5)) {
+            char t[160], *c;
+            int row = atoi(line + 5);
+            if (row < 0 || row >= nbuild)
+                continue;
+            info_text(&files[build_rows[row]], t, t + sizeof t);
+            for (c = t; *c; c++)
+                if (*c == '\n')
+                    *c = '~';
+            printf("INFO %s\n", t);
+        } else if (!strcmp(line, "drive")) {
+            char t[16];
+            printf("DRIVE");
+            for (i = 0; i < nlrows; i++) {
+                row_column(i, i == 0, t, t + sizeof t);
+                printf("%c%s=%s", i ? '|' : ' ', (const char *)dl_page_text(i + 1), t);
+            }
+            printf("\n");
         } else if (!strcmp(line, "build")) {
             mode = M_BUILD;
             printf("BUILD");

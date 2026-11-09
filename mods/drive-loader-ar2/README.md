@@ -203,12 +203,14 @@ The page is stock's two-pane file view, the one SAMPLES and PROJECTS are built o
   a load: they are the build. The page never loads or unloads code: the next boot links the
   saved set.
 - **Folders** (decided 2026-11-08). The file list shows one folder of `/mods` at a time, to 3
-  folders deep, as SAMPLES does: `..` first (not in `/mods` itself), then the folders as `NAME/`,
-  then the `.elemod` files. YES on a folder opens it with the cursor at the top; YES on `..` goes
+  folders deep, as SAMPLES does: `..` first (not in `/mods` itself), then the folders, then the
+  `.elemod` files. A folder row and `..` show the bare name with `(D)` on the right, as SAMPLES
+  (decided 2026-11-09); a file row shows its file name without `.elemod` (`syntakt-art-0.1`),
+  never the mod's id, so rows don't change under the check (decided 2026-11-09). YES on a folder opens it with the cursor at the top; YES on `..` goes
   up with the cursor back on the folder just left (SAMPLES' select, `0x400e92f8`). Each folder is
   read when it is opened, and the background checks only the open folder's files, so no scan of
-  every folder holds the UI task. A folder row shows `n SEL` on the right when n files below it
-  are ticked. A mod is known by its path below `/mods` (`drums/kicks/x.elemod`), the name
+  every folder holds the UI task. A folder row shows `n SEL` in place of `(D)` when n files below
+  it are ticked. A mod is known by its path below `/mods` (`drums/kicks/x.elemod`), the name
   `/mods/active` keeps (at most 127 bytes).
 - **Ticks across folders.** Unlike SAMPLES, which clears its ticks whenever the folder changes
   (`0x400722c4`), the ticks stay (decided 2026-11-08): they are the build, and a build takes mods
@@ -225,13 +227,19 @@ The page is stock's two-pane file view, the one SAMPLES and PROJECTS are built o
   neither does the page.
 - **The build list.** LEFT opens a one-row left panel, VIEW BUILD (VIEW +DRIVE in the build
   list), like SAMPLES' VIEW RAM, which switches the list and closes the panel (`0x400734a8`).
-  The build list shows the saved set, each mod by its path below `/mods` (decided 2026-11-08, so
-  two files of one name in two folders tell apart; a path too wide for the row keeps its tail
-  behind a `<`, measured with stock's font so that it ends before the state column: `clip.inc`,
-  `tests/test_drive_page.py`), with what the next boot does: `KEEP` (loaded
+  The build list shows the saved set, each mod by its id (decided 2026-11-09, replacing
+  2026-11-08's paths): the mods the last boot read take it from the boot's status records, so
+  it shows at once, and a mod added since takes it from the save's check; a mod with no id known
+  shows its file name without `.elemod`. Ids can't repeat in a build (the linker refuses
+  `SAME ID AS`). A label too wide for the row keeps its tail behind a `<`, measured with stock's
+  font so that it ends before the state column (`clip.inc`, `tests/test_drive_page.py`). Each
+  row shows what the next boot does: `KEEP` (loaded
   now, stays), `ADD` (loads at the next boot), `DROP` (loaded now, gone after the next boot;
   these rows stay until the reboot) or `!` (the last boot refused it). Its action panel has
-  UNLOAD, which saves the build without the ticked mods through the same checks (`MOD NOT LOADED` for a ticked mod the build does not hold).
+  UNLOAD, which saves the build without the ticked mods through the same checks (`MOD NOT LOADED` for a ticked mod the build does not hold),
+  and INFO, which shows the cursor's mod's folder (`/mods/drums/kicks`, clipped from the left
+  behind a `<` past 30 characters) and its file name below it (30 characters a line) in a box
+  closed with NO (decided 2026-11-09).
 - **No files.** With no `.elemod` and no folder in `/mods` the list has one row, `NO MODS ON +DRIVE`, which
   YES does nothing to, and neither panel opens (decided 2026-11-07). Stock's file view hangs
   the UI when it is first shown with no row at all; its own lists never are (a folder has
@@ -246,14 +254,15 @@ The page is stock's two-pane file view, the one SAMPLES and PROJECTS are built o
   (decided 2026-11-07, after T178: opening with 13 files of 484 KB held the key path and USB
   for over 5 s). The files are then read and checked one at a time in the background, one
   every 2 ticks (about 10 a second for small files) while the page's rows are drawn: a row
-  shows its file name and size until then, and its id and `!` after. Each file is checked
+  shows its size until then, and `!` after for a file pass 1 refuses. Each file is checked
   alone for its own verdict (id, version, a refusal of the file itself), so no number of files
   reaches a set's limits. Ticking never reads a file (a row not yet checked shows no `!` and no reason box).
-- **The checked count.** Over the top row's right-hand column the file list shows `n/N`: `n`
-  the files read and checked so far, `N` the files listed, so it reads `N/N` (`256/256` for
-  256 files) once the background has checked every file (decided 2026-11-08, so that a test
-  plan can prove the check finished before its first key). It takes the place of the top
-  row's size and is drawn with the rows, so an open panel or box covers it. It counts the open
+- **The checked count.** While the background check runs, the top row's right-hand column
+  shows `n/N`: `n` the files read and checked so far, `N` the files listed (decided
+  2026-11-08, so that a test plan can prove the check finished before its first key). Once
+  every file is checked the count goes and the top row shows its own size or `(D)` again
+  (decided 2026-11-09): a plan's "check finished" is the count gone (a folder with no file
+  never shows one). It is drawn with the rows, so an open panel or box covers it. It counts the open
   folder's files only; `ev_draw` only
   marks each frame's end, from which the next frame knows the top row. Not in the build list.
 - **A save in steps.** LOAD TO BUILD, UPDATE BUILD, UNLOAD and CLEAR BUILD check the new set one

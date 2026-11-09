@@ -200,6 +200,34 @@ static const char *base_of(const char *p)
     return b;
 }
 
+/* A status record's id is the mod's own once pass 1 has read it; before that (a file missing,
+ * too big or not JSON) dlink.c's begin_line leaves the first DL_ID_MAX - 1 bytes of the file's
+ * path there. -> 1 when `id` is the mod's id. */
+static int real_id(const char *id, const char *path)
+{
+    u32 i;
+    if (!id[0])
+        return 0;
+    for (i = 0; i < DL_ID_MAX - 1 && path[i]; i++)
+        if (id[i] != path[i])
+            return 1;
+    return id[i] != 0;
+}
+
+/* a file's name as the rows show it: without its folders and without ".elemod" (decided
+ * 2026-11-09: "syntakt-art-0.1") */
+static char *bare_name(char *at, char *end, const char *path)
+{
+    const char *b = base_of(path);
+    u32 n = dl_strlen(b);
+    if (ends_elemod(b))
+        n -= 7;
+    while (n-- && at < end - 1)
+        *at++ = *b++;
+    *at = 0;
+    return at;
+}
+
 /* `p` lies below the folder `dir` (a path below DL_DIR, "" DL_DIR itself) */
 static int below(const char *p, const char *dir)
 {
@@ -324,6 +352,8 @@ static void boot_record(struct file *r)
             r->boot_code = dl_status[i].code;
             r->boot_arg = dl_status[i].arg;
             copy_str(r->boot_detail, dl_detail[i], sizeof r->boot_detail);
+            if (!r->id[0] && real_id(dl_status[i].id, r->name))   /* the build list's label from */
+                copy_str(r->id, dl_status[i].id, sizeof r->id);    /* the page's opening on */
             return;
         }
 }
@@ -594,7 +624,8 @@ static int inspect(struct file *r)
         if (dl_check_buf((u32)core_desc, &one, len, drive_staging, DL_STAGING_SIZE, &one_st, one_det,
                          one_ver) >= 0) {        /* the file just read, not read again */
             c = one_st.code;
-            copy_str(r->id, one_st.id, sizeof r->id);
+            if (real_id(one_st.id, r->name))
+                copy_str(r->id, one_st.id, sizeof r->id);
             copy_str(r->ver, one_ver[0], sizeof r->ver);
             if (one_st.state != DL_ST_LOADED && c && (c <= DL_R_FEATURE || c == DL_R_CORE)) {
                 r->file_code = (u8)c;
@@ -731,9 +762,9 @@ static int delete_dir_now(void)
 }
 
 static const char *const acts_drive[] = {"SELECT ALL", "DESELECT ALL", "LOAD TO BUILD", "CLEAR BUILD", "DELETE"};
-static const char *const acts_build[] = {"SELECT ALL", "DESELECT ALL", "UNLOAD"};
+static const char *const acts_build[] = {"SELECT ALL", "DESELECT ALL", "UNLOAD", "INFO"};
 #define NACT_DRIVE 5
-#define NACT_BUILD 3
+#define NACT_BUILD 4
 /* functor indices: list rows are 1..list_n(), and the list has no file limit (one row a file in
  * /mods), so the other rows sit far above any list row. At 100/200/300 the 256-mod emulator
  * record drew list row 100 as SELECT ALL, rows from 200 as NO MODS ON +DRIVE and rows from 300
@@ -743,9 +774,12 @@ static const char *const acts_build[] = {"SELECT ALL", "DESELECT ALL", "UNLOAD"}
 #define I_LEFT 0x30000000                /* and of the left panel's row */
 
 /* a row's label: list rows 1.., the action panel I_ACT.., the left panel I_LEFT. The file list
- * shows a folder as "NAME/" and a file by its id (its file name until one is known); the build
- * list shows each mod's path below /mods (decided 2026-11-08), so two files of one name in two
- * folders tell apart. */
+ * shows a folder by its bare name, as SAMPLES (its "(D)" is dl_page_draw's), and a file by its
+ * file name without ".elemod", never its id (decided 2026-11-09: the rows don't change under the
+ * check). The build list shows each mod's id (decided 2026-11-09, replacing 2026-11-08's paths):
+ * the boot's record names the mods it read, the save's check the ones added since; a mod with no
+ * id known shows its file name as the file list does. Ids can't repeat in a build (dlink
+ * DL_R_DUPLICATE); INFO shows a build row's path. */
 unsigned dl_page_text(int i)
 {
     char *end = label + sizeof label;
@@ -765,23 +799,30 @@ unsigned dl_page_text(int i)
         int k = file_k(i);
         if (k >= 0) {
             const struct file *r = &files[k];
-            if (mode == M_BUILD && view)     /* the path, clipped left of the state column */
-                clip_tail(label, end, r->name, ((int (*)(void *))VCALL(V_WIDTH))(view) - 9 -
+            char name[DL_SEG_MAX + 1];
+            if (mode == M_BUILD && r->id[0])
+                copy_str(name, r->id, sizeof name);
+            else
+                bare_name(name, name + sizeof name, r->name);
+            if (mode == M_BUILD && view)     /* clipped left of the state column */
+                clip_tail(label, end, name, ((int (*)(void *))VCALL(V_WIDTH))(view) - 9 -
                           text_w("KEEP") - LABEL_X - STATE_GAP, text_w);
             else
-                cat(label, end, mode == M_BUILD ? r->name : r->id[0] ? r->id : base_of(r->name));
+                cat(label, end, name);
         } else if (lrows[i].kind == R_UP)
             cat(label, end, "..");
         else
-            cat(cat(label, end, lrows[i].name), end, "/");
+            cat(label, end, lrows[i].name);
     }
     return (unsigned)label;
 }
 
 /* The checked count (decided 2026-11-08, the 256-mod run: a plan proves on screen that the
- * background check is done before its first key). The file list's top row shows "n/N" in its
- * right-hand column in place of its size: n the open folder's files read and checked, N its
- * files; n = N once the background has checked every one. The top row is the one with the largest y
+ * background check is done before its first key). While the background check runs, the file
+ * list's top row shows "n/N" in its right-hand column in place of its size or "(D)": n the open
+ * folder's files read and checked, N its files. Once it has checked every one the count goes
+ * and the row shows its own column again (decided 2026-11-09): the count gone is a plan's "check
+ * finished". The top row is the one with the largest y
  * (y = 0 the bottom row), learnt from the frame before: ev_draw closes each frame. The count is
  * drawn with the row, so an open panel or a box covers it as it covers the rows (drawn after
  * the frame, on ev_draw, it covered the action panel's SELECT ALL: the 256-mod emulator record,
@@ -806,7 +847,8 @@ void dl_page_overlay(void *bmp, void *ctrl)
     rows_drawn = 0;
 }
 
-static char *checked_count(char *t, char *end)
+/* "n/N" into t while the open folder's check runs. -> 0 once every file is checked (t untouched) */
+static int checked_count(char *t, char *end)
 {
     int i, n = 0, all = 0;
     for (i = 0; i < nlrows; i++)
@@ -814,29 +856,32 @@ static char *checked_count(char *t, char *end)
             all++;
             n += files[lrows[i].f].checked;
         }
-    return num(cat(num(t, end, (u32)n), end, "/"), end, (u32)all);
+    if (n >= all)
+        return 0;
+    num(cat(num(t, end, (u32)n), end, "/"), end, (u32)all);
+    return 1;
 }
 
 /* the right-hand column, where SAMPLES puts sizes (0x400e5f94: x + width - 9, right-aligned).
  * Files: whole KB rounded up, "!" for a file pass 1 refuses (a file over the 512 KB staging
- * buffer included). Folders: "n SEL", the ticked files below it, when there are any. Build: KEEP
+ * buffer included). Folders and "..": "(D)", as SAMPLES (decided 2026-11-09); a folder with
+ * ticked files below it: "n SEL". Build: KEEP
  * (loaded now, stays), ADD (loads at the next boot), DROP (loaded now, gone after the next boot),
  * "!" (the last boot refused it). */
-void dl_page_draw(void **f, void *item, void *canvas, int x, int y)
+/* list row i's right-hand column into t; top: it is the top row (the count's). -> 1 when t is
+ * the count (drawn wider) */
+static int row_column(int i, int top, char *t, char *end)
 {
-    int i = (int)*f - 1, k;
+    int k = file_k(i);
     const struct file *r;
-    char t[16], *end = t + sizeof t;
-    (void)item;
-    drawn_at = ticks;
-    if (!view || i < 0 || i >= list_n())
-        return;
-    row_seen(y);
-    k = file_k(i);
     t[0] = 0;
+    if (mode == M_DRIVE && top && checked_count(t, end))
+        return 1;
     if (k < 0) {
         if (lrows[i].kind == R_DIR && lrows[i].sel)
             cat(num(t, end, lrows[i].sel), end, " SEL");
+        else
+            cat(t, end, "(D)");
     } else if (r = &files[k], mode == M_DRIVE) {
         if (r->file_code)
             cat(t, end, "!");
@@ -848,13 +893,20 @@ void dl_page_draw(void **f, void *item, void *canvas, int x, int y)
         cat(t, end, "DROP");
     else
         cat(t, end, r->boot == DL_ST_LOADED ? "KEEP" : "ADD");
-    if (mode == M_DRIVE && top_known && y == top_y) {
-        t[0] = 0;
-        checked_count(t, end);
-        TEXT(canvas, FONT_LIST, x + ((int (*)(void *))VCALL(V_WIDTH))(view) - 9, y, 2, 0, "XXXXXXXXX", "%s", t);
+    return 0;
+}
+
+void dl_page_draw(void **f, void *item, void *canvas, int x, int y)
+{
+    int i = (int)*f - 1;
+    char t[16];
+    (void)item;
+    drawn_at = ticks;
+    if (!view || i < 0 || i >= list_n())
         return;
-    }
-    TEXT(canvas, FONT_LIST, x + ((int (*)(void *))VCALL(V_WIDTH))(view) - 9, y, 2, 0, "XXXXXXX", "%s", t);
+    row_seen(y);
+    TEXT(canvas, FONT_LIST, x + ((int (*)(void *))VCALL(V_WIDTH))(view) - 9, y, 2, 0,
+         row_column(i, top_known && y == top_y, t, t + sizeof t) ? "XXXXXXXXX" : "XXXXXXX", "%s", t);
 }
 
 static void show_box(const char *s)
@@ -1106,9 +1158,11 @@ static void save_step(void)
         job_end(msg[0] ? msg : "NOT SAVED");
         return;
     }
-    for (i = 0; i < nfiles; i++) {
+    for (i = 0, k = 0; i < nfiles; i++) {
         files[i].was = files[i].on;
         files[i].on = files[i].keep;
+        if (files[i].keep && k < job.m && real_id(cst[k++].id, files[i].name))   /* the save's check names */
+            copy_str(files[i].id, cst[k - 1].id, sizeof files[i].id);          /* the rows added since boot */
     }
     if (save_active()) {
         for (i = 0; i < nfiles; i++)
@@ -1311,6 +1365,47 @@ static int row_reason(const struct file *r, char *out, char *end)
     return 1;
 }
 
+/* INFO's text for a file (decided 2026-11-09): its folder ("/mods/a/b") on one line, clipped
+ * from the left behind "<" past BOX_LINE characters, then its file name, BOX_LINE characters a
+ * line (DL_SEG_MAX: at most 3). out holds 160. */
+static void info_text(const struct file *r, char *out, char *end)
+{
+    char dir[DL_PATH_MAX];
+    const char *b = base_of(r->name);
+    u32 n;
+    char *at;
+    at = cat(dir, dir + sizeof dir, DL_DIR);
+    if (b > r->name) {
+        at = cat(at, dir + sizeof dir, "/");
+        n = (u32)(b - r->name) - 1;
+        if (at + n > dir + sizeof dir - 1)
+            n = (u32)(dir + sizeof dir - 1 - at);
+        dl_memcpy(at, r->name, n);
+        at[n] = 0;
+    }
+    n = dl_strlen(dir);
+    at = n > BOX_LINE ? cat(cat(out, end, CLIP_MARK), end, dir + n - (BOX_LINE - 1)) : cat(out, end, dir);
+    while (*b && at < end - 2) {
+        *at++ = '\n';
+        for (n = 0; n < BOX_LINE && *b && at < end - 1; n++)
+            *at++ = *b++;
+    }
+    *at = 0;
+}
+
+/* INFO in the build list: the cursor's mod's folder and file name, in a box closed with NO */
+static void do_info(void)
+{
+    static char info[160];
+    int row = cursor_row();
+    if (row < 0 || row >= nbuild) {
+        show_box("NO MODS IN BUILD");
+        return;
+    }
+    info_text(&files[build_rows[row]], info, info + sizeof info);
+    show_box(info);
+}
+
 /* a file row's tick, the page's and the view's; -> 0 when the build is full (nothing changed) */
 static int set_pick(int row, int on)
 {
@@ -1365,7 +1460,8 @@ void dl_page_select(void **f)
     int i = (int)*f, r;
     if (!view)
         return;
-    if (job.what && i >= I_ACT) {         /* a save is running: no other action until it ends */
+    if (job.what && i >= I_ACT && !(mode == M_BUILD && i == I_ACT + 3)) {   /* a save is running: no other
+                                                                    * action until it ends (INFO reads only) */
         show_box("BUSY: TRY AGAIN");
         return;
     }
@@ -1391,6 +1487,8 @@ void dl_page_select(void **f)
         VIEW_DIRTY((char *)view + 0x38);
     } else if (i == 2)
         ask(mode == M_DRIVE ? "LOAD" : "UNLOAD", mode == M_DRIVE ? P_LOAD : P_UNLOAD);
+    else if (i == 3 && mode == M_BUILD)
+        do_info();
     else if (i == 3 && mode == M_DRIVE) {
         pending = P_CLEAR;
         confirm("CLEAR THE BUILD?");
