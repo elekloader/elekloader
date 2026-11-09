@@ -395,21 +395,22 @@ static void count_sel(void)
 
 static void build_list(void);
 
-/* Read the open folder's listing (cwd): its folders, and each .elemod's size, without reading
- * any mod (decided 2026-11-07: opening the page with many large files held the key path and USB
- * for seconds, T178). Each file is read later, one at a time (inspect). The files the page keeps
+/* Read the open folder's listing (cwd): its folders and .elemod files, without opening any file
+ * (decided 2026-11-07: opening the page with many large files held the key path and USB for
+ * seconds, T178; T230, 2026-11-09: opening each of 257 files for its size alone, on the unit's
+ * card, held the UI task long enough that the first DOWN after YES was refused). Each file is
+ * read later, one at a time (inspect), which learns its size. The files the page keeps
  * across folders (ticked, saved, loaded at boot) stay with what is known of them. -> 0, -2 no
  * memory (nothing changed). The arrays are new, so the build list (build_rows) is made again
  * here, for every caller (a folder opened or left, a change over USB, a delete). */
 static int read_folder(void)
 {
     int i, n, kept = 0, k;
-    s32 size;
     struct dl_ent *ents;
     struct file *nf;
     struct lrow *nl;
     int *nb, *ns;
-    char p[DL_NAME_MAX + 1], path[DL_PATH_MAX];
+    char p[DL_NAME_MAX + 1];
     read_stop();                         /* the rows' names go */
     dl_lock();
     n = dl_list_dir(cwd, 0, 0);
@@ -476,19 +477,8 @@ static int read_folder(void)
             r = &files[f];
             dl_memset(r, 0, sizeof *r);
             copy_str(r->name, p, sizeof r->name);
-            boot_record(r);
-            path_of(path, p);
-            size = dl_fs_file_size(path);
-            if (size < 0) {
-                r->file_code = DL_R_MISSING;
-                r->checked = 1;
-            } else {
-                r->size = (u32)size;
-                if (r->size > DL_STAGING_SIZE) {   /* as the boot: a file past the staging buffer */
-                    r->file_code = DL_R_TOO_BIG;
-                    r->checked = 1;
-                }
-            }
+            boot_record(r);              /* its size, a file gone or one past the staging buffer:
+                                          * the background check's read (inspect) */
         }
         files[f].here = 1;
         lrows[nlrows].kind = R_FILE;
@@ -648,7 +638,9 @@ static int inspect(struct file *r)
 #define PANE_LEFT 0x1ac                  /* the left panel (+0x6b words): VIEW BUILD / VIEW +DRIVE */
 #define PANE_RIGHT 0x358                 /* the action panel (+0xd6 words) */
 #define LIST_CLEAR ((void (*)(void *))0x40072914)
+#ifndef VIEW_DIRTY                       /* (tests/drive_check_tick_host.c has its own) */
 #define VIEW_DIRTY ((void (*)(void *))0x40078580)       /* (view + 0x38) */
+#endif
 #define FOCUS ((void (*)(void *, void *))0x400734a8)    /* (view, panel); (view, view) closes the panels */
 /* the list view's calls (vtable offsets; the two-pane view's table 0x401d6974): +0x18 move the cursor
  * by n rows (0x40072024: relative, clamped to the list; found 2026-11-07, the CB11 runs: with the
@@ -846,7 +838,7 @@ static void publish_check(void)
 }
 
 /* the right-hand column, where SAMPLES puts sizes (0x400e5f94: x + width - 9, right-aligned).
- * Files: whole KB rounded up, "!" for a file pass 1 refuses (a file over the 512 KB staging
+ * Files: whole KB rounded up once the check has read the file (blank before), "!" for a file pass 1 refuses (a file over the 512 KB staging
  * buffer included). Folders and "..": "(D)", as SAMPLES; a folder with n ticked files below it
  * "(n)" in its place (decided 2026-11-09). Build: KEEP
  * (loaded now, stays), ADD (loads at the next boot), DROP (loaded now, gone after the next boot),
@@ -865,7 +857,7 @@ static void row_column(int i, char *t, char *end)
     } else if (r = &files[k], mode == M_DRIVE) {
         if (r->file_code)
             cat(t, end, "!");
-        else
+        else if (r->checked)             /* the size once the check has read the file */
             cat(num(t, end, (r->size + 1023) / 1024), end, "KB");
     } else if (r->boot == DL_ST_REFUSED || r->boot == DL_ST_DROPPED)
         cat(t, end, "!");
@@ -1615,10 +1607,19 @@ unsigned dl_page_now(void)
                                           * check holds the UI task, and a key sent meanwhile can
                                           * expire (CB11 unit run 2, 2026-11-08) */
 
+static u32 probed;                       /* the tick check_next last asked for a frame */
+
 static void check_next(void)
 {
-    static u32 probed;
-    if (!view || !lrows || job.what || (!reading && ticks % CHECK_EVERY) || ticks - last_input < QUIET)
+    if (!view || !lrows || job.what)
+        return;
+    /* A frame asked for SHOWN ticks ago never came: the page has closed (or something covers it)
+     * partway through a file's read. The staging buffer goes back, so the route no longer answers
+     * "Busy" (T230, 2026-11-09: the page closed at 32/257 left /mods Busy until a power cycle);
+     * the file is read again from its start when the page shows again. */
+    if (reading && ticks - drawn_at > SHOWN && ticks - probed > SHOWN && (s32)(probed - drawn_at) > 0)
+        read_stop();
+    if ((!reading && ticks % CHECK_EVERY) || ticks - last_input < QUIET)
         return;
     while (next_check < nlrows && (lrows[next_check].kind != R_FILE || files[lrows[next_check].f].checked))
         next_check++;
@@ -1714,15 +1715,34 @@ static void follow_route(void)
     redraw = 1;
 }
 
+/* The background's share of the UI task (decided 2026-11-09, T230): the check's and the save's
+ * work on a tick is timed with the bus clock (DTCN0, dl.h "boot time"), and the work then rests
+ * for WORK_SHARE - 1 times as long, so it takes at most 1/WORK_SHARE of the UI task whatever the
+ * card's speed, and stock's UI event queue drains between stretches. A tick is 50 ms (20 a
+ * second). On the unit, 257 files read one every 2 ticks held the UI task long enough that a
+ * remote key was refused as busy (queue over 16) and never reached ev_key to start QUIET; the
+ * emulator's faster card hid it. */
+#ifndef DL_BUS_NOW                        /* (tests/drive_check_tick_host.c has its own) */
+#define DL_BUS_NOW() (*(volatile u32 *)0xfc07000c)
+#endif
+#define WORK_SHARE 4
+#define TICK_US 50000u
+static u32 rest_until;                   /* the tick the background may work again */
+
 void dl_page_tick(void *ctrl)
 {
     ticks++;
     dl_readers_poll(ticks);
     follow_route();
-    check_next();
+    if ((s32)(ticks - rest_until) >= 0) {
+        u32 t0 = DL_BUS_NOW(), us;
+        check_next();
+        if (job.what && (reading || !(ticks % CHECK_EVERY)) && ticks - last_input >= QUIET)
+            save_step();                 /* a file being read goes on each tick it may work */
+        us = dl_bus_us(t0, DL_BUS_NOW());
+        rest_until = ticks + 1 + (us > 10 * TICK_US ? 10 * TICK_US : us) * (WORK_SHARE - 1) / TICK_US;
+    }
     publish_check();
-    if (job.what && (reading || !(ticks % CHECK_EVERY)) && ticks - last_input >= QUIET)
-        save_step();                     /* a file being read goes on each tick */
     if (redraw) {
         redraw = 0;
         *((volatile u8 *)ctrl + 0x20) = 1;

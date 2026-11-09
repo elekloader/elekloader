@@ -135,7 +135,12 @@ class BuildRows(unittest.TestCase):
 
     def test_folders_show_d_and_the_count_of_ticks_below(self):
         got = self.lines(['open ~T FCR', 'drive', 'open ~T FCR/~T MKA', 'drive'], 'DRIVE')
-        self.assertEqual(got, ['..=(D)|~T SRC=(2)|~T MKA=(D)|~T fnm-01-0.1=0KB', '..=(D)|~T MKB=(D)'])
+        self.assertEqual(got, ['..=(D)|~T SRC=(2)|~T MKA=(D)|~T fnm-01-0.1=', '..=(D)|~T MKB=(D)'])
+
+    def test_a_file_shows_its_size_once_checked(self):
+        # T230 (2026-11-09): the folder's read opens no file, so the size waits for the check
+        got = self.lines(['open ~T FCR', 'drive', 'checked ~T FCR/~T fnm-01-0.1.elemod', 'drive'], 'DRIVE')
+        self.assertEqual([g.split('|')[-1] for g in got], ['~T fnm-01-0.1=', '~T fnm-01-0.1=0KB'])
 
     def test_the_check_count_goes_to_the_status_not_the_screen(self):
         # decided 2026-11-09: /mods/.status's "check: n/N FOLDER", nothing drawn
@@ -147,6 +152,48 @@ class BuildRows(unittest.TestCase):
         tree = ['%s/' % ('a' * 40), '%s/%s.elemod' % ('a' * 40, 'n' * 50)]
         info = self.lines(['info 0'], 'INFO', tree=tree, active=[tree[1]])[0].split('~')
         self.assertEqual(info, ['<' + ('/mods/' + 'a' * 40)[-29:], 'n' * 30, 'n' * 20 + '.elemod'])
+
+
+class CheckTick(unittest.TestCase):
+    """The background check tick by tick on a made-up card whose calls take bus time
+    (tests/drive_check_tick_host.c). T230 (2026-11-09, the unit, 257 tiny files): the first DOWN
+    after YES into the folder was refused, and closing the page partway left /mods Busy."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.work = tempfile.TemporaryDirectory()
+        cls.exe = os.path.join(cls.work.name, 'drive_check_tick_host')
+        subprocess.run(['cc', '-O1', '-w', '-no-pie', '-o', cls.exe, os.path.join(HERE, 'drive_check_tick_host.c'),
+                        '-Wl,--unresolved-symbols=ignore-all'], check=True)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.work.cleanup()
+
+    def run_check(self, files=257, open_us=10000, read_us=5000, check_us=5000, show=100000, ticks=2000, keys=0):
+        r = subprocess.run([self.exe] + [str(a) for a in (files, open_us, read_us, check_us, show, ticks, keys)],
+                           capture_output=True, text=True, check=True)
+        return dict(l.split(' ', 1) for l in r.stdout.splitlines())
+
+    def test_reading_a_folder_opens_no_file(self):
+        self.assertEqual(self.run_check(ticks=0)['OPENS_AT_FOLDER'], '0')
+
+    def test_the_check_finishes_while_the_page_shows(self):
+        got = self.run_check(ticks=4000, keys=30)
+        self.assertEqual((got['CHECKED'], got['STAGING'], got['READING']), ('257/257', '0', '0'))
+
+    def test_the_check_takes_a_quarter_of_the_ui_task_on_a_slow_card(self):
+        # each file: a 40 ms open, two 30 ms reads, a 20 ms check; at most 1/4 of any second
+        # (one step past it allowed), where whole-tick work took more than the second (1.2 s)
+        got = self.run_check(open_us=40000, read_us=30000, check_us=20000)
+        self.assertLessEqual(int(got['BUSIEST_US']), 250000 + 70000)
+
+    def test_closing_mid_read_gives_the_staging_buffer_back(self):
+        # NO x4 at the close starts QUIET while a file is half read (T230: 32/257, /mods Busy)
+        for close in range(100, 106):
+            got = self.run_check(show=close, ticks=600)
+            self.assertEqual((got['STAGING'], got['READING']), ('0', '0'), close)
+            self.assertNotEqual(got['CHECKED'], '257/257')
 
 
 if __name__ == '__main__':

@@ -183,7 +183,8 @@ The page is stock's two-pane file view, the one SAMPLES and PROJECTS are built o
 (`0x400734f2`), and works like SAMPLES:
 
 - **The file list.** One row a file: its id (its file name until one is known) and, on the
-  right where SAMPLES puts sizes, its size in whole KB, or `!` for a file pass 1 refuses (a bad
+  right where SAMPLES puts sizes, its size in whole KB once the check has read it (blank
+  before), or `!` for a file pass 1 refuses (a bad
   file, another device, a newer core, over 512 KB). The ticks start as the saved build on entering MODS
   and after each change; coming back from the build list keeps the ticks as they were.
 - **Why a `!`.** Ticking a `!` row also shows its whole refusal in stock's message box
@@ -252,11 +253,12 @@ The page is stock's two-pane file view, the one SAMPLES and PROJECTS are built o
   links); `NO MEMORY` when the heap has no room for the list.
 - **No file limit.** The list grows like SAMPLES' (decided 2026-11-07): the page takes its
   per-file arrays from the heap when it reads the folder, sized to the folder's count, and gives
-  them back at the next read. Opening reads only the folder's listing and each file's size
+  them back at the next read. Opening reads only the folder's listing, opening no file
   (decided 2026-11-07, after T178: opening with 13 files of 484 KB held the key path and USB
-  for over 5 s). The files are then read and checked one at a time in the background, one
-  every 2 ticks (about 10 a second for small files) while the page's rows are drawn: a row
-  shows its size until then, and `!` after for a file pass 1 refuses. Each file is checked
+  for over 5 s; T230, 2026-11-09: opening 257 files for their sizes alone lost a key on the
+  unit). The files are then read and checked one at a time in the background, at most one
+  every 2 ticks and within a quarter of the UI task ("A quarter of the UI task"), while the
+  page's rows are drawn: a row shows its size once read, and `!` for a file pass 1 refuses. Each file is checked
   alone for its own verdict (id, version, a refusal of the file itself), so no number of files
   reaches a set's limits. Ticking never reads a file (a row not yet checked shows no `!` and no reason box).
 - **The checked count.** `/mods/.status` has a line `check: n/N /mods/FOLDER`: `n` the open
@@ -264,6 +266,9 @@ The page is stock's two-pane file view, the one SAMPLES and PROJECTS are built o
   folder), so that a test plan can prove the check finished before its first key (decided
   2026-11-08). It is not drawn on the page (decided 2026-11-09: the page looks like SAMPLES).
   The check runs only while the page shows, so `n` stays below `N` after the page closes early.
+  A page closed partway through a file's read gives the staging buffer back once a frame it
+  asked for doesn't come (T230, 2026-11-09: closed at 32/257 with NO pressed mid-read, /mods
+  stayed Busy until a power cycle); the file is read again from its start at the next showing.
 - **A save in steps.** LOAD TO BUILD, UPDATE BUILD, UNLOAD and CLEAR BUILD check the new set one
   file a tick (`dl_check_start`, `dl_check_step`, `dl_check_finish`: the same check as
   `dl_check`), taking the staging buffer and the mutex for one file at a time, so the key path and
@@ -280,6 +285,12 @@ The page is stock's two-pane file view, the one SAMPLES and PROJECTS are built o
   wait 1 s after any key or encoder turn (`ev_key`, `ev_enc`, taking nothing), and long checks
   sleep 1 ms each 32 KB for the lower tasks (`dl_breathe`). The cost is time: 18 files of 481 KB
   take about 41 s to check with a key every 1.5 s, against 14 s for whole-file reads.
+- **A quarter of the UI task.** The unit's card is slower than the emulator's, and T230
+  (2026-11-09, 257 tiny files) lost the first DOWN after YES into the folder. So reading a
+  folder opens no file (a file's size shows once the check has read it), and the check's and the
+  save's work on a tick is timed with the bus clock (DTCN0) and then rests three times as long,
+  so the background takes at most a quarter of the UI task whatever the card's speed
+  (`WORK_SHARE`; `tests/drive_check_tick_host.c` times it on a made-up slow card).
 - **Long scans.** A file's CRC and its long strings (its hex) are read through tables, 32 KB
   between breaths, and a hex string in one walk. In the emulator 18 files of 482 KB link in
   3.2 s (11.1 s before, 2026-11-08).
