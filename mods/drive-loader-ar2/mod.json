@@ -53,11 +53,6 @@
    "event": "ev_enc",
    "fn": "dl_enc",
    "order": 1
-  },
-  {
-   "event": "ev_draw",
-   "fn": "dl_page_overlay",
-   "order": 90
   }
  ],
  "resources": {

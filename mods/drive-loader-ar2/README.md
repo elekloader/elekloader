@@ -25,7 +25,7 @@ a third `RouteTypeHandler`, so the unit's Data root listing shows `mods`:
 | `/mods/<folder>/.../.dir` | upload only: an upload (of nothing, `elekloader mods mkdir`) makes the folder, and any parents not there yet, empty, up to 3 deep. No file is written, and a folder already there is kept |
 | `/mods/.mv` | upload only: an upload of `FROM\nTO` (paths below `/mods`; `elekloader mods mv`) moves or renames a `.elemod` file or a folder with everything in it, and rewrites `/mods/active`'s lines naming FROM or a file below it. No file is written |
 | `/mods/.build` | read only: the build descriptor, byte for byte (`python -m elekloader.desc dump`) |
-| `/mods/.status` | read only: plain text, the route's last commit or delete, the boot's time, then the boot linker's records |
+| `/mods/.status` | read only: plain text, the route's last commit or delete, the MODS page's check (`check: n/N /mods/FOLDER`), the boot's time, then the boot linker's records |
 
 Each transfer goes through stock's data container (31-byte header, body, 12-byte footer with
 CRC-32). An upload's header must say family 2, file type `0x454d4f44` (`'EMOD'`), not
@@ -259,14 +259,11 @@ The page is stock's two-pane file view, the one SAMPLES and PROJECTS are built o
   shows its size until then, and `!` after for a file pass 1 refuses. Each file is checked
   alone for its own verdict (id, version, a refusal of the file itself), so no number of files
   reaches a set's limits. Ticking never reads a file (a row not yet checked shows no `!` and no reason box).
-- **The checked count.** While the background check runs, the top row's right-hand column
-  shows `n/N`: `n` the files read and checked so far, `N` the files listed (decided
-  2026-11-08, so that a test plan can prove the check finished before its first key). Once
-  every file is checked the count goes and the top row shows its own size or `(D)` again
-  (decided 2026-11-09): a plan's "check finished" is the count gone (a folder with no file
-  never shows one). It is drawn with the rows, so an open panel or box covers it. It counts the open
-  folder's files only; `ev_draw` only
-  marks each frame's end, from which the next frame knows the top row. Not in the build list.
+- **The checked count.** `/mods/.status` has a line `check: n/N /mods/FOLDER`: `n` the open
+  folder's files read and checked so far, `N` its files (`check: -` before the page has read a
+  folder), so that a test plan can prove the check finished before its first key (decided
+  2026-11-08). It is not drawn on the page (decided 2026-11-09: the page looks like SAMPLES).
+  The check runs only while the page shows, so `n` stays below `N` after the page closes early.
 - **A save in steps.** LOAD TO BUILD, UPDATE BUILD, UNLOAD and CLEAR BUILD check the new set one
   file a tick (`dl_check_start`, `dl_check_step`, `dl_check_finish`: the same check as
   `dl_check`), taking the staging buffer and the mutex for one file at a time, so the key path and

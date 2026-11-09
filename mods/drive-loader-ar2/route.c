@@ -80,6 +80,9 @@ extern int dl_status_n __attribute__((weak));
 extern unsigned char dl_skip_reason __attribute__((weak));
 extern char (*dl_detail)[32] __attribute__((weak));     /* a refusal's name argument */
 extern unsigned dl_boot_us[] __attribute__((weak));     /* the boot's time: whole, checks, link, inits */
+extern volatile int dl_check_n __attribute__((weak));   /* the MODS page's check: files done, -1 none yet */
+extern volatile int dl_check_all __attribute__((weak)); /* ... of the open folder's files */
+extern char dl_check_dir[] __attribute__((weak));       /* ... that folder, below DL_DIR */
 
 static char dl_note[64];
 static unsigned dl_upload_epoch;               /* dl_staging_epoch when the upload's header came */
@@ -474,6 +477,16 @@ static int status_text(void)
         at = cat(at, end, " ");
         at = num(at, end, (unsigned)dl_last_io[i]);
     }
+    at = cat(at, end, "\ncheck: ");     /* the MODS page's background check (page.c, decided 2026-11-09) */
+    if (&dl_check_n && dl_check_n >= 0) {
+        at = num(at, end, (unsigned)dl_check_n);
+        at = cat(at, end, "/");
+        at = num(at, end, (unsigned)dl_check_all);
+        at = cat(at, end, " " DL_DIR);
+        if (dl_check_dir[0])
+            at = cat(cat(at, end, "/"), end, dl_check_dir);
+    } else
+        at = cat(at, end, "-");
     at = cat(at, end, "\n");
     if (&dl_boot_us) {
         static const char *const part[] = {"boot: ", " us (checks ", ", link ", ", inits "};

@@ -10,8 +10,8 @@
  *   mv FROM|TO    a move over USB (route.c move: the tree changes, dl_move_from/to are set),
  *                 then the page's next tick (follow_route)
  *   build         the build list's labels, as VIEW BUILD shows them -> "BUILD l1|l2|..."
- *   drive         the open folder's rows, label and right-hand column, the first row as the top
- *                 row -> "DRIVE l1=c1|l2=c2|..."
+ *   drive         the open folder's rows, label and right-hand column -> "DRIVE l1=c1|l2=c2|..."
+ *   check         the background check's progress as /mods/.status shows it -> "CHECK n/N FOLDER"
  *   checked PATH  the background check has read PATH (no id learnt)
  *   id PATH|ID    a check has named PATH's mod ID (the save's)
  *   boot PATH|ID  the boot's record of PATH holds ID (the mod's id, or dlink's path prefix),
@@ -171,11 +171,14 @@ int main(void)
                 if (*c == '\n')
                     *c = '~';
             printf("INFO %s\n", t);
+        } else if (!strcmp(line, "check")) {
+            publish_check();
+            printf("CHECK %d/%d %s\n", dl_check_n, dl_check_all, dl_check_dir);
         } else if (!strcmp(line, "drive")) {
             char t[16];
             printf("DRIVE");
             for (i = 0; i < nlrows; i++) {
-                row_column(i, i == 0, t, t + sizeof t);
+                row_column(i, t, t + sizeof t);
                 printf("%c%s=%s", i ? '|' : ' ', (const char *)dl_page_text(i + 1), t);
             }
             printf("\n");

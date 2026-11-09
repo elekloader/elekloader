@@ -133,12 +133,15 @@ class BuildRows(unittest.TestCase):
         rows = [r.split('=') for r in got[0].split('|')]
         self.assertEqual([r[0] for r in rows], ['..', '~T SRC', '~T MKA', '~T fnm-01-0.1'])
 
-    def test_folders_show_d_and_the_count_only_while_the_check_runs(self):
-        got = self.lines(['open ~T FCR', 'drive', 'checked ~T FCR/~T fnm-01-0.1.elemod', 'drive',
-                          'open ~T FCR/~T MKA', 'drive'], 'DRIVE')
-        self.assertEqual(got, ['..=0/1|~T SRC=(2)|~T MKA=(D)|~T fnm-01-0.1=0KB',
-                               '..=(D)|~T SRC=(2)|~T MKA=(D)|~T fnm-01-0.1=0KB',
-                               '..=(D)|~T MKB=(D)'])
+    def test_folders_show_d_and_the_count_of_ticks_below(self):
+        got = self.lines(['open ~T FCR', 'drive', 'open ~T FCR/~T MKA', 'drive'], 'DRIVE')
+        self.assertEqual(got, ['..=(D)|~T SRC=(2)|~T MKA=(D)|~T fnm-01-0.1=0KB', '..=(D)|~T MKB=(D)'])
+
+    def test_the_check_count_goes_to_the_status_not_the_screen(self):
+        # decided 2026-11-09: /mods/.status's "check: n/N FOLDER", nothing drawn
+        got = self.lines(['check', 'open ~T FCR', 'check', 'checked ~T FCR/~T fnm-01-0.1.elemod', 'check',
+                          'open ~T FCR/~T MKA', 'check', 'drive'], 'CHECK')
+        self.assertEqual(got, ['0/0 ', '0/1 ~T FCR', '1/1 ~T FCR', '0/0 ~T FCR/~T MKA'])
 
     def test_info_clips_a_long_folder_from_the_left(self):
         tree = ['%s/' % ('a' * 40), '%s/%s.elemod' % ('a' * 40, 'n' * 50)]

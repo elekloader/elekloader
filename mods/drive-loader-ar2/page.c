@@ -818,49 +818,31 @@ unsigned dl_page_text(int i)
     return (unsigned)label;
 }
 
-/* The checked count (decided 2026-11-08, the 256-mod run: a plan proves on screen that the
- * background check is done before its first key). While the background check runs, the file
- * list's top row shows "n/N" in its right-hand column in place of its size or "(D)": n the open
- * folder's files read and checked, N its files. Once it has checked every one the count goes
- * and the row shows its own column again (decided 2026-11-09): the count gone is a plan's "check
- * finished". The top row is the one with the largest y
- * (y = 0 the bottom row), learnt from the frame before: ev_draw closes each frame. The count is
- * drawn with the row, so an open panel or a box covers it as it covers the rows (drawn after
- * the frame, on ev_draw, it covered the action panel's SELECT ALL: the 256-mod emulator record,
- * 2026-11-08). */
-static u8 rows_drawn, top_known;         /* a row was drawn this frame; top_y is the last frame's */
-static int frame_top, top_y;
+/* The background check's progress (decided 2026-11-08, the 256-mod run: a plan proves the check
+ * is done before its first key). From 2026-11-09 it is not drawn: the page looks like SAMPLES, and
+ * /mods/.status has a line "check: n/N FOLDER" (route.c), n the open folder's files read and
+ * checked, N its files, "check: -" before the page has read a folder. dl_page_tick publishes
+ * it under dl_lock, so the route's read never sees a half-written folder. */
+volatile int dl_check_n = -1, dl_check_all;
+char dl_check_dir[DL_NAME_MAX + 1];
 
-static void row_seen(int y)
-{
-    if (!rows_drawn || y > frame_top)
-        frame_top = y;
-    rows_drawn = 1;
-}
-
-void dl_page_overlay(void *bmp, void *ctrl)
-{
-    (void)bmp;
-    (void)ctrl;
-    top_known = rows_drawn;
-    if (rows_drawn)
-        top_y = frame_top;
-    rows_drawn = 0;
-}
-
-/* "n/N" into t while the open folder's check runs. -> 0 once every file is checked (t untouched) */
-static int checked_count(char *t, char *end)
+static void publish_check(void)
 {
     int i, n = 0, all = 0;
+    if (!lrows)
+        return;
     for (i = 0; i < nlrows; i++)
         if (lrows[i].kind == R_FILE) {
             all++;
             n += files[lrows[i].f].checked;
         }
-    if (n >= all)
-        return 0;
-    num(cat(num(t, end, (u32)n), end, "/"), end, (u32)all);
-    return 1;
+    if (n == dl_check_n && all == dl_check_all && !dl_strcmp(cwd, dl_check_dir))
+        return;
+    dl_lock();
+    copy_str(dl_check_dir, cwd, sizeof dl_check_dir);
+    dl_check_all = all;
+    dl_check_n = n;
+    dl_unlock();
 }
 
 /* the right-hand column, where SAMPLES puts sizes (0x400e5f94: x + width - 9, right-aligned).
@@ -869,15 +851,12 @@ static int checked_count(char *t, char *end)
  * "(n)" in its place (decided 2026-11-09). Build: KEEP
  * (loaded now, stays), ADD (loads at the next boot), DROP (loaded now, gone after the next boot),
  * "!" (the last boot refused it). */
-/* list row i's right-hand column into t; top: it is the top row (the count's). -> 1 when t is
- * the count (drawn wider) */
-static int row_column(int i, int top, char *t, char *end)
+/* list row i's right-hand column into t */
+static void row_column(int i, char *t, char *end)
 {
     int k = file_k(i);
     const struct file *r;
     t[0] = 0;
-    if (mode == M_DRIVE && top && checked_count(t, end))
-        return 1;
     if (k < 0) {
         if (lrows[i].kind == R_DIR && lrows[i].sel)   /* "(3)": 3 ticked files below it */
             cat(num(cat(t, end, "("), end, lrows[i].sel), end, ")");
@@ -894,7 +873,6 @@ static int row_column(int i, int top, char *t, char *end)
         cat(t, end, "DROP");
     else
         cat(t, end, r->boot == DL_ST_LOADED ? "KEEP" : "ADD");
-    return 0;
 }
 
 void dl_page_draw(void **f, void *item, void *canvas, int x, int y)
@@ -905,9 +883,8 @@ void dl_page_draw(void **f, void *item, void *canvas, int x, int y)
     drawn_at = ticks;
     if (!view || i < 0 || i >= list_n())
         return;
-    row_seen(y);
-    TEXT(canvas, FONT_LIST, x + ((int (*)(void *))VCALL(V_WIDTH))(view) - 9, y, 2, 0,
-         row_column(i, top_known && y == top_y, t, t + sizeof t) ? "XXXXXXXXX" : "XXXXXXX", "%s", t);
+    row_column(i, t, t + sizeof t);
+    TEXT(canvas, FONT_LIST, x + ((int (*)(void *))VCALL(V_WIDTH))(view) - 9, y, 2, 0, "XXXXXXX", "%s", t);
 }
 
 static void show_box(const char *s)
@@ -1743,6 +1720,7 @@ void dl_page_tick(void *ctrl)
     dl_readers_poll(ticks);
     follow_route();
     check_next();
+    publish_check();
     if (job.what && (reading || !(ticks % CHECK_EVERY)) && ticks - last_input >= QUIET)
         save_step();                     /* a file being read goes on each tick */
     if (redraw) {
