@@ -3,12 +3,14 @@
 
     python -m elekloader.sdk.sdk_alpha_host <moddir> [--float] [--note 60] [--knob NAME=V ...]
                                             [--velocity V] [--track T] [--page P] [--retrigger N]
-                                            [--blocks N] [--wav out.wav] [--glyphs]
+                                            [--blocks N] [--wav out.wav] [--glyphs] [--keys "60+ 64+ 64- 60-"]
 
 It compiles the mod's C sources with the host compiler (cc, or $CC) and a small host main, prints what
 present shows (each knob's label, then its value text quoted, or the number shown when it sets none) with
 each knob at its min, default and max, then renders the note and prints its peak and
-frequency. --float builds the SHARC's float samples instead of the ColdFire's Q31.
+frequency. --float builds the SHARC's float samples instead of the ColdFire's Q31. --keys plays keys at a
+mono machine (.play and .prio), through the companions' own logic (sdk_alpha_keys.h), and prints what each
+one does.
 
 The machine is found without reading the registration: every source is compiled with a prelude that
 includes the SDK header and redefines ELEK_REGISTER_MACHINE(m) to export a pointer to m, so whatever
@@ -25,6 +27,8 @@ import tempfile
 import wave
 from pathlib import Path
 
+from elekloader.sdk.sdk_alpha_build import PLAY_NAMES, PRIO_NAMES
+
 INCLUDE = Path(__file__).resolve().parent / 'include'
 RATE = 48000
 
@@ -36,11 +40,12 @@ PRELUDE = r'''#include "elekloader/sdk_alpha_machine.h"
 
 # argv: "knobs" prints the declarations; "run pitch blocks velocity track page retrigger v0 v1 ..." prints
 # present's views with each knob at its min, default and max (the others at v), then the rendered samples,
-# -1.0..1.0, with start set every retrigger blocks (0: on the first only).
+# -1.0..1.0, with start set every retrigger blocks (0: on the first only); "keys velocity 60+ 64+ 64- ..."
+# prints, for each key, what the companion does and the keys then held.
 MAIN = r'''#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "elekloader/sdk_alpha_machine.h"
+#include "elekloader/sdk_alpha_keys.h"
 
 extern const struct elek_machine *const elek_host_machine;
 
@@ -86,9 +91,24 @@ int main(int argc, char **argv)
         int pages = 0;
         while (pages < ELEK_UI_PAGE_MAX && m->pages[pages].label)
             ++pages;
-        printf("machine %d %d %d %s\n", m->id, m->render != 0, pages, m->name);
+        printf("machine %d %d %d %d %d %s\n", m->id, m->render != 0, pages, m->play, m->prio, m->name);
         for (uint32_t i = 0; i < m->knob_count; ++i)
             printf("knob %d %d %d %s\n", m->knobs[i].min, def(&m->knobs[i]), m->knobs[i].max, m->knobs[i].label);
+        return 0;
+    }
+    if (!strcmp(argv[1], "keys")) {
+        static struct sdk_alpha_keys keys;
+        if (argc < 3 || m->play == ELEK_POLY)
+            return 2;
+        for (int a = 3; a < argc; ++a) {
+            struct sdk_alpha_held key = {0, 0};
+            int32_t did = sdk_alpha_key(&keys, m, atoi(argv[a]) << 16, atoi(argv[2]), strchr(argv[a], '+') != 0,
+                                        &key);
+            printf("key %s %d %d %d", argv[a], did, key.pitch, key.velocity);
+            for (uint32_t i = 0; i < keys.count; ++i)
+                printf(" %d", keys.held[i].pitch);
+            printf("\n");
+        }
         return 0;
     }
     if (argc != 8 + (int)m->knob_count)
@@ -185,8 +205,9 @@ def draw(glyph):
 
 
 def host(moddir, sample_float=False, note=60, knobs=(), blocks=375, wav=None, glyphs=False,
-         velocity=100, track=0, page=0, retrigger=0):
-    """Print what the machine in moddir presents and renders; return its samples."""
+         velocity=100, track=0, page=0, retrigger=0, keys=None):
+    """Print what the machine in moddir presents and renders, and what a mono machine makes of keys (a
+    string of presses and releases, "60+ 64+ 64-"); return its samples."""
     if not 0 <= note <= 127:
         raise Refused('--note %g: give a MIDI note 0..127, fractions allowed' % note)
     if not 1 <= velocity <= 127:
@@ -195,11 +216,17 @@ def host(moddir, sample_float=False, note=60, knobs=(), blocks=375, wav=None, gl
         raise Refused('--track %d: give a track from 0' % track)
     if retrigger < 0:
         raise Refused('--retrigger %d: give blocks between notes, from 1 (0: one held note)' % retrigger)
+    events = (keys or '').split()
+    for event in events:
+        if not re.fullmatch(r'\d{1,3}[+-]', event) or int(event[:-1]) > 127:
+            raise Refused('--keys %s: give presses and releases of MIDI notes 0..127, as "60+ 64+ 64- 60-"' % event)
     with tempfile.TemporaryDirectory() as tmp:
         program = Path(tmp) / 'machine'
         compile_mod(moddir, program, sample_float)
         info = subprocess.run([str(program), 'knobs'], capture_output=True, text=True, check=True).stdout.splitlines()
-        _, mid, has_render, pages, name = info[0].split(' ', 4)
+        _, mid, has_render, pages, play, prio, name = info[0].split(' ', 6)
+        if keys is not None and play == '0':
+            raise Refused('--keys: %s is ELEK_POLY: it plays every key, as the device allocates them' % name)
         if page and not 0 <= page < int(pages):
             raise Refused('--page %d: %s has %s page(s), from 0' % (page, name, pages))
         decl = [line.split(' ', 4)[1:] for line in info[1:]]
@@ -219,6 +246,10 @@ def host(moddir, sample_float=False, note=60, knobs=(), blocks=375, wav=None, gl
                              capture_output=True, text=True, errors='replace')
         if out.returncode:
             raise Refused('the machine stopped (exit %d):\n%s' % (out.returncode, out.stderr.strip()))
+        played = subprocess.run([str(program), 'keys', str(velocity), *events],
+                                capture_output=True, text=True, errors='replace') if events else None
+        if played and played.returncode:
+            raise Refused('the machine stopped (exit %d):\n%s' % (played.returncode, played.stderr.strip()))
     print('%s (id %s), %s' % (name, mid, sample_float and 'float (SHARC)' or 'Q31 (ColdFire)'))
     for label, lo, d, hi in decl:
         print('  %-5s %d..%d, default %d' % (label, lo, hi, d))
@@ -245,6 +276,14 @@ def host(moddir, sample_float=False, note=60, knobs=(), blocks=375, wav=None, gl
                     if v[1]:
                         print('    %s:' % decl[i][0])
                         print('\n'.join(draw(v[1])))
+    if played:
+        print('keys at velocity %d, %s, %s:' % (velocity, PLAY_NAMES[int(play)], PRIO_NAMES[int(prio)]))
+        for line in played.stdout.splitlines():
+            _, event, did, pitch, vel, *held = line.split()
+            note_of = lambda p: '%g' % (int(p) / 65536)         # noqa: E731
+            what = ('no change', 'play %s (velocity %s): the AMP restarts, start set' % (note_of(pitch), vel),
+                    'legato to %s: the AMP runs on, start clear' % note_of(pitch), 'silence')[int(did)]
+            print('  %-4s  %-52s  held %s' % (event, what, ' '.join(map(note_of, held)) or '-'))
     if has_render == '0':
         print('no render: the device plays its own sound')
         return samples
@@ -276,10 +315,12 @@ def main(argv=None):
     p.add_argument('--blocks', type=int, default=375, help='render blocks of 32 samples (default 375: 0.25 s)')
     p.add_argument('--wav', help='write the render as a 48 kHz mono WAV')
     p.add_argument('--glyphs', action='store_true', help='draw each glyph present shows')
+    p.add_argument('--keys', metavar='"60+ 64+ 64- 60-"',
+                   help='presses (+) and releases (-) for a mono machine, at --velocity')
     a = p.parse_args(argv)
     try:
         host(a.moddir, a.float, a.note, a.knob, a.blocks, a.wav, a.glyphs, a.velocity, a.track, a.page,
-             a.retrigger)
+             a.retrigger, a.keys)
     except Refused as e:
         sys.exit('refused: %s' % e)
 

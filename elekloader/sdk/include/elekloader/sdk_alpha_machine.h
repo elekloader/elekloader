@@ -176,6 +176,10 @@ struct elek_voice {
 #define ELEK_STATE(type, v) \
     ((void)sizeof(char[sizeof(type) <= ELEK_VOICE_STATE_MAX ? 1 : -1]), (type *)(v)->state)
 
+/* Mono machines (.play and .prio): the Digitone II's TRK SETUP PLAY MODE and MONO NOTE PRIO. */
+enum { ELEK_POLY, ELEK_MONO, ELEK_MONO_LEGATO };          /* .play */
+enum { ELEK_PRIO_LAST, ELEK_PRIO_LOW, ELEK_PRIO_HIGH };   /* .prio, for ELEK_MONO and ELEK_MONO_LEGATO */
+
 struct elek_machine {
     int32_t id;                    /* native machine slot, 4..127 (Digitone II: 5..127); declared only here */
     const char *name, *short_name; /* 1..ELEK_UI_NAME_MAX and 1..ELEK_UI_SHORT_NAME_MAX ASCII characters */
@@ -188,6 +192,10 @@ struct elek_machine {
     /* Optional: the machine's sound, one voice at a time (without it the device's own plays).
      * It may read only its arguments, its state and constant data. */
     void (*render)(const struct elek_voice *, elek_sample *out);
+    /* Optional: how the track plays live keys. ELEK_POLY (0): every key, as the device allocates voices.
+     * ELEK_MONO: one note at a time, the held key .prio chooses, the AMP restarted at each change.
+     * ELEK_MONO_LEGATO: the same, but a change while a note sounds moves its pitch, the AMP running on. */
+    uint8_t play, prio;
 };
 
 #define ELEK_KNOBS(k) .knobs = (k), .knob_count = sizeof(k) / sizeof((k)[0])
@@ -213,7 +221,9 @@ ELEK_OFFSET(elek_machine, knobs, 12);
 ELEK_OFFSET(elek_machine, knob_count, 16);
 ELEK_OFFSET(elek_machine, pages, 20);
 ELEK_OFFSET(elek_machine, render, 96);
-ELEK_SIZE(elek_machine, 100);
+ELEK_OFFSET(elek_machine, play, 100);
+ELEK_OFFSET(elek_machine, prio, 101);
+ELEK_SIZE(elek_machine, 102);
 ELEK_OFFSET(elek_page, label, 0);
 ELEK_OFFSET(elek_page, encoder, 4);
 ELEK_SIZE(elek_page, 36);
