@@ -181,6 +181,15 @@ static int32_t sdk_knob(const struct dnm_machine *m, int32_t k)
     return -1;
 }
 
+/* SYN knob k's step for machine m, a turn of parameter `param` on `view`: sdk_alpha_step for an SDK knob that
+ * sets clicks, from the value the turn starts at; else delta. */
+int32_t dnm_sdk_step(const struct dnm_machine *m, int32_t k, void *view, int32_t param, int32_t delta)
+{
+    int32_t id = sdk_knob(m, k);
+    const struct elek_knob *kn = id < 0 ? 0 : &entry_of(m)->machine->knobs[id];
+    return kn && kn->clicks > 0 ? sdk_alpha_step(kn, core_param_shown(view, param), delta) : delta;
+}
+
 const char *dnm_sdk_label(const struct dnm_machine *m, int32_t k)
 {
     int32_t id = sdk_knob(m, k);

@@ -22,6 +22,9 @@ carries them out and a change in the menu goes back. Its `ev_midi_cc` handler
 posts each CC on a track, with the track's machine, to the dispatcher
 (`core_dsp_post`, core-dn2 0.4, from machines-dn2 0.5), which keeps each track's CCs for the
 render's `v->cc` ([its SDK section](SDK.md#render-on-the-digitone-ii)).
+Its `ev_param_step` handler (core-dn2 0.5, from machines-dn2 0.6) steps a
+turn of the active track's SDK knob that sets `clicks`, into the sound or a
+held trig's lock alike ([SDK.md](SDK.md#machine-and-knobs)).
 SDK and SHARC synths
 share the `mk2-synth` ID namespace; filters have their own namespace.
 

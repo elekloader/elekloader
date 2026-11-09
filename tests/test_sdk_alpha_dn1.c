@@ -79,6 +79,7 @@ static const struct elek_machine legato_machine = {
     .pages = { { "LEG", { &controls[0] } } }, .render = sound, .play = ELEK_MONO_LEGATO,
 };
 const struct elek_machine *const sdk_alpha_machines[] = { &test, &mono_machine, &legato_machine, 0 };
+int32_t core_param_shown(void *view, int32_t id) { (void)view; (void)id; return 0; }
 
 /* The stock note routines, as calls: "+60/90" a note on (with its velocity), "-60" an off. */
 static char played[64];

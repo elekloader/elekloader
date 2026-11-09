@@ -26,6 +26,9 @@ struct elek_knob {
     int32_t min, max;              /* the mapped range; max is required and above min */
     int32_t def;                   /* the value it starts at, clamped into min..max (omitted: 0) */
     const struct elek_glyph *glyph; /* null uses the stock encoder graphic */
+    int32_t clicks;                /* encoder clicks from one value to the next; 0 spaces the values
+                                    * evenly over the encoder's 128 positions. A knob with more than
+                                    * 128 values takes none; clicks x values is at most 128 */
 };
 struct elek_page {
     const char *label;             /* 1..ELEK_UI_PAGE_LABEL_MAX printable ASCII characters; a page without
@@ -237,7 +240,8 @@ ELEK_OFFSET(elek_knob, min, 4);
 ELEK_OFFSET(elek_knob, max, 8);
 ELEK_OFFSET(elek_knob, def, 12);
 ELEK_OFFSET(elek_knob, glyph, 16);
-ELEK_SIZE(elek_knob, 20);
+ELEK_OFFSET(elek_knob, clicks, 20);
+ELEK_SIZE(elek_knob, 24);
 ELEK_SIZE(elek_glyph, 32);
 #undef ELEK_OFFSET
 #undef ELEK_SIZE

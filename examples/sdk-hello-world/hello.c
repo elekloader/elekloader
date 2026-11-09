@@ -3,7 +3,7 @@
 
 enum { PITCH, AMOUNT };
 static const struct elek_knob knobs[] = {
-    [PITCH] = { "PITCH", .min = 10, .max = 20 },
+    [PITCH] = { "PITCH", .min = 10, .max = 20, .clicks = 1 },     /* a value an encoder click */
     [AMOUNT] = { "AMNT", .max = 127 },
 };
 /* AMOUNT renames PITCH, "A 37" say, and at 127 hides it. */

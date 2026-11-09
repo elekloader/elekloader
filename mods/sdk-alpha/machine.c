@@ -70,12 +70,17 @@ const struct sdk_alpha_entry *sdk_alpha_find(int32_t id)
     return 0;
 }
 
-/* Split the product so the full signed-32-bit bound range needs no 64-bit runtime. */
+/* Up to 128 values, each takes an equal share of the 128 positions: raw's nearest position (a value the
+ * smoother or an LFO leaves between positions counts as the nearest) times values / 128, so the last
+ * position, 127, is max. More values: the nearest, splitting the product so the full signed-32-bit bound
+ * range needs no 64-bit runtime. */
 int32_t sdk_alpha_map(const struct elek_knob *knob, int32_t raw)
 {
     uint32_t span = (uint32_t)knob->max - (uint32_t)knob->min;
     if (raw < 0) raw = 0;
     if (raw > SDK_ALPHA_RAW_MAX) raw = SDK_ALPHA_RAW_MAX;
+    if (span < 128)
+        return (int32_t)((uint32_t)knob->min + (((((uint32_t)raw + 128) >> 8) * (span + 1)) >> 7));
     uint32_t offset = (span / SDK_ALPHA_RAW_MAX) * (uint32_t)raw +
         ((span % SDK_ALPHA_RAW_MAX) * (uint32_t)raw + SDK_ALPHA_RAW_MAX / 2) / SDK_ALPHA_RAW_MAX;
     return (int32_t)((uint32_t)knob->min + offset);
@@ -91,6 +96,31 @@ int32_t sdk_alpha_default(const struct elek_knob *knob)
         else hi = mid;
     }
     return lo;
+}
+
+/* Point g of a knob's points as a whole native position: ceil(128 g / points), so each value holds
+ * exactly clicks points (values x clicks <= 128, which the builder checks). */
+static int32_t point(int32_t g, int32_t points)
+{
+    return (128 * g + points - 1) / points;
+}
+
+int32_t sdk_alpha_step(const struct elek_knob *knob, int32_t raw, int32_t delta)
+{
+    uint32_t span = (uint32_t)knob->max - (uint32_t)knob->min;
+    if (knob->clicks <= 0 || span >= 128 || !delta)
+        return delta;
+    int32_t points = (int32_t)(span + 1) * knob->clicks;
+    if (points > 128)
+        return delta;
+    int32_t at = raw < 0 ? 0 : raw > SDK_ALPHA_RAW_MAX ? SDK_ALPHA_RAW_MAX : raw;
+    int32_t position = (at + 128) >> 8, g = position * points / 128;      /* as sdk_alpha_map reads it */
+    int32_t clicks = (delta < 0 ? -delta + 128 : delta + 128) >> 8;      /* the nearest, at least one */
+    if (!clicks)
+        clicks = 1;
+    g += delta < 0 ? -clicks : clicks;     /* a value between points counts as its cell's point */
+    g = g < 0 ? 0 : g >= points ? points - 1 : g;
+    return (point(g, points) << 8) - raw;
 }
 
 void sdk_alpha_number(int32_t value, char *buf, int wide)

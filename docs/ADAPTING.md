@@ -131,6 +131,7 @@ event (lower first; the shipped mods use 10-90).
 | `ev_voice_ready` | Digitone mk1 only (core-dn1 4.2): a voice starting a note, once it holds its sound and the event's p-locks, in the render | `void f(int voice, int track, void *event)` | interrupt level, after `ev_voice_on` in the same pass. What the voice has here is what plays; `fw_voice_locks` puts more locks into it as the render puts a step's ("Parameter pages and the starting voice" below) |
 | `ev_param_turn` | Digitone mk1 only (core-dn1 4.2): a knob turn on a parameter page that the stock would put into the track's sound (no trig held); UI task | `int f(void *view, int id, int delta, int knob)` | return nonzero to take it: the stock neither edits the sound nor shows its pop-up. `delta` is the stock's step (8.8). GRID REC's held trigs keep their turns and are never asked |
 | `ev_param_value` | Digitone mk1 only (core-dn1 4.2): the value a parameter page shows on a knob, every frame it draws them; UI task | `int f(void *view, int id, int32_t *value, uint8_t *locked)` | return nonzero to answer: `*value` is shown, inverted as a p-lock when `*locked` is 1 |
+| `ev_param_step` | Digitakt mk1 (core 4.4), Digitone mk1 (core-dn1 5.4) and Digitone II (core-dn2 0.5): the step a knob turn on a parameter page adds, into the track's sound or, with GRID REC's trigs held, into their p-locks; UI task | `int32_t f(void *view, int id, int32_t delta, int knob)` | return the step to add: `delta` itself for a parameter that is not yours, 0 for none. Each handler gets the step the one before it left; every turn on every page asks every handler. `core_param_shown(view, id)` gives the value the turn starts from. "Knob turn steps" below |
 | `ev_live_note` | Digitakt mk1 (core 4.2) and Digitone mk1 (core-dn1 5.3): a note played live on a track (the trig keys, keyboard mode, the preview, a MIDI note on its channel), before its voice; the UI or the MIDI task. The sequencer's trigs do not pass here | `int f(int track, int note, int vel, int on, int source)` | return nonzero to take it: the stock neither counts the key nor plays (or releases) it. On a release `vel` is the source; `source` 0x40 the panel, 2 MIDI on the Digitakt; 0x40 or 0x80 KEYBOARD mode, the port (8 or 0x10 DIN, 2 or 4 USB) for MIDI on the Digitone. `fw_note_on` and `fw_note_off` (core3.h) play a note past the event; each counts the key, so pair them |
 
 The events, their prototypes and their conventions are the same on every
@@ -3001,6 +3002,9 @@ parameter, and put them into the voices that start notes:
   from `locked`. A page asks for each knob every frame it draws, and draws only
   when something on it changed: a mod that changes what it answers sets
   `ctrl + 0x20` in `ev_tick` to have the frame drawn again.
+- **`ev_param_step(view, id, delta, knob)`** (5.4), at the same question,
+  asked first: the step the stock then adds, to the sound or to the held
+  steps' locks ("Knob turn steps" below).
 - `core3.h` gives a page's own answers for these handlers:
   `CORE_VIEW_KNOB_ID(view, knob)` (the parameter on a knob) and
   `CORE_VIEW_SOUND_VALUE(view, id)` (the value with no trig held: the
@@ -3190,6 +3194,48 @@ and the page's place in its list). The smallest mod that uses all of it is
 [examples/master-mono](../examples/master-mono): a page after the internal
 mixer whose knob A sends the outputs stereo, mono or swapped. Digi EQ and
 Tone+FX are built on it, and combine.
+
+### Knob turn steps (core 4.4, Digitakt mk1; core-dn1 5.4, Digitone mk1; core-dn2 0.5, Digitone II)
+
+A knob turn on a parameter page gives the stock a step (8.8: a whole step is
+256, the encoder's acceleration in), which it adds to the track's sound or,
+with GRID REC's trigs held, to their p-locks. `ev_param_step` lets a mod
+change that step first; the stock then clamps it, stores it and shows its
+pop-up as for any turn. The SDK's knob `clicks` are built on it
+([SDK.md](SDK.md#machine-and-knobs)). Four steps a click for one parameter:
+
+```c
+static int32_t four_steps(void *view, int32_t id, int32_t delta, int32_t knob)
+{
+    (void)view; (void)knob;
+    if (id != MY_PARAM)             /* every turn on every page comes here: not mine, first */
+        return delta;
+    return delta > 0 ? 4 * 256 : -4 * 256;
+}
+```
+
+```json
+"subscribe": [{"event": "ev_param_step", "fn": "four_steps", "order": 50}]
+```
+
+- Handlers run in `order`, each getting the step the one before it left.
+  Return `delta` unchanged for every parameter that is not yours: two mods
+  that change the same parameter's step compound.
+- `core_param_shown(view, id)` gives the value the turn starts from (8.8):
+  a held trig's lock, else the sound's. Ask it about your own parameters
+  only: it is a page lookup, and every turn reaches the handlers.
+- `id` is the firmware's parameter id, the Digitone II's parameter row
+  code; `knob` 0-7 for A-H.
+- The sites: the Digitakt mk1's page views' encoder handler where it keeps
+  the step (0x40032bc4, 1.53 and 1.54; mods/core/param.s); the Digitone
+  mk1's knob handler's question (0x400455ba, before `ev_param_turn`;
+  mods/core-dn1/param.s); the Digitone II's page views' handler
+  (0x400675c4; mods/core-dn2/param.s). The walk and `core_param_shown` are
+  mods/core/step.s, which all three build. With no handler the turn is the
+  stock's: the same step and flags.
+- `examples/sdk-hello-world` steps its PITCH knob (10..20) a value a click
+  with the SDK's `.clicks = 1`, which machine-pages 1.11, machines-dn1 0.7
+  and machines-dn2 0.6 carry out with this event.
 
 ### Key LEDs and each block's sound parameters (core-dn1 3.3, Digitone mk1)
 

@@ -30,6 +30,10 @@ const struct sdk_alpha_entry *sdk_alpha_find(int32_t id);
 int32_t sdk_alpha_map(const struct elek_knob *knob, int32_t raw);
 /* The first native step whose mapped value reaches the knob's default. */
 int32_t sdk_alpha_default(const struct elek_knob *knob);
+/* A turn of a knob with clicks: the stock's 8.8 delta (its acceleration included) for the knob at raw, as
+ * the delta that moves it that many clicks over its values x clicks points, stopping at the ends; delta
+ * unchanged for a knob without clicks. */
+int32_t sdk_alpha_step(const struct elek_knob *knob, int32_t raw, int32_t delta);
 /* A knob's value text: the decimal number (12 bytes at most); unless wide, "#" when it needs more than
  * SDK_ALPHA_VALUE_MAX characters, which is what fits under a knob. */
 #define SDK_ALPHA_VALUE_MAX 5

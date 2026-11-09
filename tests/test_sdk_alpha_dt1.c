@@ -64,7 +64,15 @@ static const struct elek_machine wide_machine = {
                           &wide_knobs[4], &wide_knobs[5], &wide_knobs[6], &wide_knobs[7] } },
                { "TWO", { &wide_knobs[8], &wide_knobs[9] } } },
 };
-const struct elek_machine *const sdk_alpha_machines[] = { &machine, &mono_machine, &legato_machine, &wide_machine, 0 };
+/* Four values, a click each: ev_param_step's. */
+static const struct elek_knob step_knobs[] = { { "STEP", .max = 3, .clicks = 1 } };
+static const struct elek_machine step_machine = {
+    .id = 104, .name = "Step", .short_name = "STEP", ELEK_KNOBS(step_knobs), .pages = { { "STEP", { &step_knobs[0] } } },
+};
+const struct elek_machine *const sdk_alpha_machines[] = { &machine, &mono_machine, &legato_machine, &wide_machine,
+                                                          &step_machine, 0 };
+static int32_t shown_value, shown_calls;
+int32_t core_param_shown(void *view, int32_t id) { (void)view; (void)id; ++shown_calls; return shown_value; }
 
 /* The stock note routines, as calls: "+60/90" a note on (with its velocity), "-60" an off. */
 static char played[64];
@@ -229,5 +237,18 @@ int main(void)
         assert(!wide->base.knob[k].cc && !one->base.knob[k].cc);
     for (int k = 0; k < CM_EXTRAS; ++k)
         assert(!one->extra[k].cc);
+
+    /* ev_param_step: another page's parameter, or a knob without clicks, keeps the stock's step without
+     * looking the value up; a knob with clicks moves a whole value from where the turn starts. */
+    fw_active_track = 0;
+    FW_SOUND(kit, 0)[FW_SOUND_MACHINE] = 100;
+    assert(sdk_alpha_param_step(0, 30, 256, 0) == 256);                 /* not an SDK page's knob */
+    assert(sdk_alpha_param_step(0, 0x84, 256, 0) == 256 && !shown_calls);   /* FINE: no clicks */
+    FW_SOUND(kit, 0)[FW_SOUND_MACHINE] = 104;
+    shown_value = 32 << 8;                                              /* value 1 of 4 */
+    assert(sdk_alpha_param_step(0, 0x84, 256, 0) == (64 << 8) - (32 << 8) && shown_calls == 1);
+    assert(sdk_alpha_param_step(0, 0x84, -256, 0) == -(32 << 8));
+    fw_active_track = 8;                                                /* a MIDI track */
+    assert(sdk_alpha_param_step(0, 0x84, 256, 0) == 256);
     return 0;
 }

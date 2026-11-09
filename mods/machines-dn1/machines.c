@@ -39,6 +39,7 @@ const char *dnm_sdk_lfo_name(const struct dnm_machine *m, int32_t k, int32_t fie
 void dnm_sdk_tick(const struct dnm_machine *m, void *ctrl);
 const char *dnm_sdk_label(const struct dnm_machine *m, int32_t k);
 int32_t dnm_sdk_mono_on(int32_t voice, int32_t track);
+int32_t dnm_sdk_step(const struct dnm_machine *m, int32_t k, void *view, int32_t id, int32_t delta);
 #else                                                      /* no SDK machines on this OS */
 #define dnm_sdk_machine(i) ((const struct dnm_machine *)0)
 #define dnm_sdk_present(m, force) ((void)0)
@@ -329,6 +330,20 @@ static const char *dnm_name(int32_t id, int32_t field)
 }
 
 const struct core_param_override dnm_override = { dnm_ui, dnm_name };
+
+#ifdef SDK_ALPHA_DN1
+/* ev_param_step (core-dn1 5.4): a turn of an SDK knob that sets clicks moves it click by click, into the sound
+ * or the held steps' locks alike; every other turn keeps the stock's step. */
+int32_t dnm_param_step(void *view, int32_t id, int32_t delta, int32_t knob)
+{
+    int32_t mid = active_machine(), k;
+    const struct dnm_machine *m;
+    (void)knob;
+    if (mid <= 0 || (k = knob_of(id)) < 0 || !(m = find(mid)))   /* FM's tracks first: the cheapest answer */
+        return delta;
+    return dnm_sdk_step(m, k, view, id, delta);
+}
+#endif
 
 /* ev_tick, the UI task: an SDK machine's pages and values follow the active track (sdk_alpha.c). */
 void dnm_tick(void *ctrl)

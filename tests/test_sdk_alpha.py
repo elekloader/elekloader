@@ -237,6 +237,13 @@ class SdkAlphaTests(unittest.TestCase):
                 with self.assertRaisesRegex(build.BuildError, '^sdk alpha: ' + message):
                     sdk_alpha_registrations(doc, {'.run': raw})
 
+    def test_sdk_alpha_knob_clicks(self):
+        doc, raw = sdk_alpha_test_controls_document()
+        self.assertEqual(sdk_alpha_registrations(doc, {'.run': raw})[120]['knobs'][4]['clicks'], 0)
+        struct.pack_into('>iii', raw, knob_at(4, B.KNOB_MIN), 0, 3, 0)
+        struct.pack_into('>i', raw, knob_at(4, B.KNOB_CLICKS), 32)      # 4 values x 32: all 128 positions
+        self.assertEqual(sdk_alpha_registrations(doc, {'.run': raw})[120]['knobs'][4]['clicks'], 32)
+
     def test_sdk_alpha_pages_hold_the_machines_own_knobs(self):
         doc, raw = sdk_alpha_test_controls_document()
         layouts = sdk_alpha_registrations(doc, {'.run': raw})
@@ -263,6 +270,16 @@ class SdkAlphaTests(unittest.TestCase):
                  machine + r', knobs\[4\] "Empty": max 5 is not above min 5$'),
                 (lambda doc, raw: struct.pack_into('>ii', raw, knob_at(4, B.KNOB_MIN), 0, -1),
                  machine + r', knobs\[4\] "Empty": max -1 is not above min 0$'),
+                (lambda doc, raw: struct.pack_into('>iii', raw, knob_at(4, B.KNOB_MIN), 0, 3, 0) or
+                 struct.pack_into('>i', raw, knob_at(4, B.KNOB_CLICKS), 33),
+                 machine + r', knobs\[4\] "Empty": clicks 33 x 4 values is more than the encoder\'s 128 positions '
+                           r'\(at most 32 clicks\)$'),
+                (lambda doc, raw: struct.pack_into('>iii', raw, knob_at(4, B.KNOB_MIN), 0, 200, 0) or
+                 struct.pack_into('>i', raw, knob_at(4, B.KNOB_CLICKS), 1),
+                 machine + r', knobs\[4\] "Empty": clicks 1 on 201 values: a knob of more than 128 values '
+                           r'takes no clicks$'),
+                (lambda doc, raw: struct.pack_into('>i', raw, knob_at(4, B.KNOB_CLICKS), -1),
+                 machine + r', knobs\[4\] "Empty": clicks -1 is negative \(0 spaces the values evenly\)$'),
                 (lambda doc, raw: without(doc, page_at(1)),
                  machine + r', pages\[1\]: has knobs but no label \(give the page a label\)$'),
                 (lambda doc, raw: without(doc, page_at(0), *[page_at(0, e) for e in range(8)]),

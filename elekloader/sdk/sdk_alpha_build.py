@@ -21,12 +21,12 @@ from elekloader.sdk import build
 Target = collections.namedtuple('Target', 'companions first_id features native')
 SDK_ALPHA_TARGETS = {
     ('digitakt-mk1', '1.54'): Target(('core', 'machine-pages'), 4,
-                                     frozenset(('render', 'defaults', 'mono', 'midi_cc')), 'core_machines'),
+                                     frozenset(('render', 'defaults', 'mono', 'midi_cc', 'clicks')), 'core_machines'),
     ('digitone-mk1', '1.44'): Target(('core', 'machines'), 4,
-                                     frozenset(('render', 'defaults', 'mono', 'midi_cc')), None),
+                                     frozenset(('render', 'defaults', 'mono', 'midi_cc', 'clicks')), None),
     # the Digitone II's synth type 4 is MIDI; its render is SHARC code ('kernels'): the C is built with
     # ELEK_TARGET_SHARC and .render names a label in mod.json's "sharc": {"sources": [...]}
-    ('digitone-mk2', '1.12'): Target(('core', 'machines-dn2'), 5, frozenset(('kernels', 'defaults', 'mono', 'midi_cc')),
+    ('digitone-mk2', '1.12'): Target(('core', 'machines-dn2'), 5, frozenset(('kernels', 'defaults', 'mono', 'midi_cc', 'clicks')),
                                      None),
 }
 SDK_ALPHA_TABLE = 'sdk_alpha_machines'   # pointers to struct elek_machine, read by each companion
@@ -46,7 +46,7 @@ LAYOUT = {
     ('elek_machine', None): 102,
     ('elek_page', 'label'): 0, ('elek_page', 'encoder'): 4, ('elek_page', None): 36,
     ('elek_knob', 'label'): 0, ('elek_knob', 'min'): 4, ('elek_knob', 'max'): 8, ('elek_knob', 'def'): 12,
-    ('elek_knob', 'glyph'): 16, ('elek_knob', None): 20, ('elek_glyph', None): 32,
+    ('elek_knob', 'glyph'): 16, ('elek_knob', 'clicks'): 20, ('elek_knob', None): 24, ('elek_glyph', None): 32,
 }
 ELEK_UI_LABEL_MAX, ELEK_UI_KNOB_MAX, ELEK_UI_PAGE_MAX = (
     LIMITS['ELEK_UI_LABEL_MAX'], LIMITS['ELEK_UI_KNOB_MAX'], LIMITS['ELEK_UI_PAGE_MAX'])
@@ -56,7 +56,9 @@ ELEK_UI_LABEL_MAX, ELEK_UI_KNOB_MAX, ELEK_UI_PAGE_MAX = (
 PLAY_NAMES = ('ELEK_POLY', 'ELEK_MONO', 'ELEK_MONO_LEGATO')
 PRIO_NAMES = ('ELEK_PRIO_LAST', 'ELEK_PRIO_LOW', 'ELEK_PRIO_HIGH')
 PAGE_LABEL, PAGE_ENCODER, PAGE_SIZE = (LAYOUT['elek_page', f] for f in ('label', 'encoder', None))
-KNOB_LABEL, KNOB_MIN, KNOB_GLYPH, KNOB_SIZE = (LAYOUT['elek_knob', f] for f in ('label', 'min', 'glyph', None))
+KNOB_LABEL, KNOB_MIN, KNOB_GLYPH, KNOB_CLICKS, KNOB_SIZE = (
+    LAYOUT['elek_knob', f] for f in ('label', 'min', 'glyph', 'clicks', None))
+POSITIONS = 128                         # an encoder's positions over a knob's native 0..127
 GLYPH_SIZE = LAYOUT['elek_glyph', None]
 
 
@@ -160,8 +162,18 @@ def sdk_alpha_registrations(doc, sections):
                     fail(at, 'glyph is at an odd address (point it at a struct elek_glyph)')
                 read(at, glyph, GLYPH_SIZE, 'glyph runs past the end of its data '
                                             '(point it at a struct elek_glyph)')
+            clicks, = struct.unpack_from('>i', kd, KNOB_CLICKS)
+            values = high - low + 1
+            if clicks < 0:
+                fail(at, 'clicks %d is negative (0 spaces the values evenly)' % clicks)
+            if clicks and values > POSITIONS:
+                fail(at, 'clicks %d on %d values: a knob of more than %d values takes no clicks'
+                     % (clicks, values, POSITIONS))
+            if clicks and clicks * values > POSITIONS:
+                fail(at, 'clicks %d x %d values is more than the encoder\'s %d positions (at most %d clicks)'
+                     % (clicks, values, POSITIONS, POSITIONS // values))
             knob_layouts.append({'id': k, 'label': label, 'min': low, 'max': high,
-                                 'def': min(max(default, low), high)})
+                                 'def': min(max(default, low), high), 'clicks': clicks})
         page_layouts = []
         for page in range(ELEK_UI_PAGE_MAX):
             at_page = field(machine, MACHINE_PAGES + PAGE_SIZE * page)

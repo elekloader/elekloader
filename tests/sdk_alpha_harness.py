@@ -223,8 +223,11 @@ class Knob:
 
     @property
     def value(self):
-        """The raw value mapped onto the knob's bounds, rounded to nearest (halves up)."""
+        """The raw value mapped onto the knob's bounds as sdk_alpha_map does: up to 128 values, an equal
+        share of the 128 positions each, from raw's nearest position; more, rounded to nearest (halves up)."""
         low, high = self.spec['min'], self.spec['max']
+        if high - low < 128:
+            return low + ((max(0, min(self.raw, RAW_MAX)) + 128) >> 8) * (high - low + 1) // 128
         return low + ((high - low) * self.raw + RAW_MAX // 2) // RAW_MAX
 
     def _settled(self):

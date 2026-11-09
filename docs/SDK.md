@@ -10,13 +10,14 @@ change, and mods must be rebuilt when it does.
 | | Digitakt mk1 | Digitone mk1 / Keys | Digitone II |
 |---|---|---|---|
 | Stock OS | 1.54 | 1.44 | 1.12 |
-| Core and companion | `mods/core` (4.3 or later), `mods/machine-pages` | `mods/core-dn1` (5.3 or later), `mods/machines-dn1` | `mods/core-dn2` (0.4 or later), `mods/machines-dn2` |
+| Core and companion | `mods/core` (4.4 or later), `mods/machine-pages` | `mods/core-dn1` (5.4 or later), `mods/machines-dn1` | `mods/core-dn2` (0.5 or later), `mods/machines-dn2` |
 | Choose a machine | FUNC+SRC machine menu | hold a track key, Mod Menu → MACHINES | FUNC+SYN → MACHINE SEL |
 | Its pages show on | SRC | SYN2, in place of its pages on that track | SYN |
 | Pages, labels, hiding, glyphs | yes | yes | yes |
 | `render` and knob defaults | yes | yes | yes, `render` in SHARC assembly ([`render` on the Digitone II](#render-on-the-digitone-ii)) |
 | Mono machines ([`play` and `prio`](#play-and-prio)) | yes, live keys (the trig keys, keyboard mode, MIDI notes; not the sequencer's trigs) | yes, live keys (KEYBOARD mode, MIDI notes; not the sequencer's trigs), and one voice a track | yes: the track's own PLAY MODE and MONO NOTE PRIO, which machines-dn2 sets from the machine |
 | MIDI CCs in `render` (`v->cc`) | yes | yes | yes |
+| Knob `clicks`, in turns and GRID REC's p-locks | yes | yes | yes |
 
 Other devices and OS releases, the Digitakt II among them, are not SDK
 targets. The builder's `SDK_ALPHA_TARGETS`
@@ -125,8 +126,8 @@ python -m elekloader.patch --stock $STOCK --mod build/core-*.elemod \
   --mod build/machine*.elemod --mod build/my-saw-*.elemod --out test.syx --version SAW1
 ```
 
-Lint prints two `OK:` lines, the second `OK: links as core 4.3 >
-machine-pages 1.10 > my-saw 0.1`; patch ends with `WROTE test.syx`. Load it
+Lint prints two `OK:` lines, the second `OK: links as core 4.4 >
+machine-pages 1.11 > my-saw 0.1`; patch ends with `WROTE test.syx`. Load it
 as in [Adapting your mod](ADAPTING.md).
 
 ## Reference
@@ -142,7 +143,22 @@ as in [Adapting your mod](ADAPTING.md).
   and its LFO destination, and a new label or hiding does not change it.
 - A knob's `label` has 1..5 printable ASCII characters. `max` is required
   and above `min` (0 when omitted). The value the code sees is the native
-  value mapped onto `min..max`, rounded to the nearest integer, halves up.
+  value (0..127, an encoder click a position) mapped onto `min..max`: up to
+  128 values share the 128 positions evenly, as near as whole positions go,
+  so a `0..3` knob takes 32 clicks a value and a `0..127` one a click; a
+  knob of more values gets the nearest, halves up.
+- `clicks`, optional, is the encoder clicks from one value to the next:
+  `{ "WAVE", .max = 3, .clicks = 1 }` steps its four values a click each
+  ([sdk-hello-world](../examples/sdk-hello-world)'s PITCH is one),
+  and its encoder stops at `min` and `max`. Clicks x values is at most 128;
+  the builder refuses more and says the most the knob can take (32 for four
+  values). Omitted (0), the values share the clicks evenly. The stored value
+  stays 0..127 and maps as above, so a MIDI CC (0..127) spreads over all
+  the values, an LFO moves through them, and a sound reads the same with or
+  without `clicks`. A turn with GRID REC's trigs held steps their p-lock
+  the same way. A fast turn moves as many clicks as the stock's
+  accelerated step holds whole steps; the emulators' and the devices'
+  encoders decide what a detent sends.
 - `def` is the value the knob starts at, clamped into `min..max`; omitted,
   it is 0, so a `-12..12` knob starts at 0 and a `10..20` one at 10.
   Selecting the machine and clearing a sound use it; paste and project load

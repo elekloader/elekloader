@@ -106,6 +106,22 @@ void sdk_alpha_render(int32_t *blocks)
     }
 }
 
+/* ev_param_step (core 4.4): a turn of the active track's SDK knob that sets clicks moves it click by click,
+ * into the sound or the held steps' locks alike; every other turn keeps the stock's step. */
+int32_t sdk_alpha_param_step(void *view, int32_t id, int32_t delta, int32_t knob)
+{
+    uint32_t track = fw_active_track, k = (uint32_t)id - 0x84;
+    const uint8_t *kit = fw_kit;
+    (void)knob;
+    if ((uint32_t)id - MP_EXTRA_ID < SDK_ALPHA_KNOBS - 8)
+        k = (uint32_t)id - MP_EXTRA_ID + 8;
+    else if (k >= 8)
+        return delta;                   /* not an SDK page's knob: the cheap answer for every other turn */
+    const struct sdk_alpha_entry *e = track < 8 && kit ? sdk_alpha_find(FW_SOUND(kit, track)[FW_SOUND_MACHINE]) : 0;
+    const struct elek_knob *kn = e && k < e->count ? &e->machine->knobs[k] : 0;
+    return kn && kn->clicks > 0 ? sdk_alpha_step(kn, core_param_shown(view, id), delta) : delta;
+}
+
 /* .present's value text, or the mapped integer, fits the native value field; long numbers keep their
  * popup text. */
 int32_t sdk_alpha_value_text(int32_t machine, int32_t k, int32_t raw, char *buf, int popup)

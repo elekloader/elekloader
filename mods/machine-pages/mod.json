@@ -1,5 +1,5 @@
 {
- "id": "machine-pages", "version": "1.10",
+ "id": "machine-pages", "version": "1.11",
  "license": "GPL-2.0-or-later",
  "title": "machine pages", "category": "Framework", "author": "irpina",
  "description": "Draws the SRC and LFO pages of the SRC machines that describe their own (core 3.0), and gives the render an event for machines that make or take a track's sound, so several machine mods combine. On its own, and for machines that do not describe a page, it changes nothing the unit does but the machine menu, which gains a filter tab.",
@@ -180,9 +180,10 @@
    "cflags": ["-DSDK_ALPHA_DT1"],
    "collections": {"ev_render_voices": 4, "sdk_alpha_machines": 4},
    "subscribe": [{"event": "ev_live_note", "fn": "sdk_alpha_live_note", "order": 50},
-                  {"event": "ev_midi_cc", "fn": "sdk_alpha_midi_cc", "order": 90}],
+                  {"event": "ev_midi_cc", "fn": "sdk_alpha_midi_cc", "order": 90},
+                  {"event": "ev_param_step", "fn": "sdk_alpha_param_step", "order": 50}],
    "resources": {"names": ["soundslot:46", "soundslot:47", "soundslot:48", "soundslot:49", "soundslot:50",
-                           "soundslot:51", "soundslot:52"], "core": "4.3"},
+                           "soundslot:51", "soundslot:52"], "core": "4.4"},
    "defsym": {
     "SDK_ALPHA_DT1": 1,
     "SRC_TRACK_FN": "0x4001d24e",
