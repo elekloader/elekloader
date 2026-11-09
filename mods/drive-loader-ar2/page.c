@@ -864,8 +864,8 @@ static int checked_count(char *t, char *end)
 
 /* the right-hand column, where SAMPLES puts sizes (0x400e5f94: x + width - 9, right-aligned).
  * Files: whole KB rounded up, "!" for a file pass 1 refuses (a file over the 512 KB staging
- * buffer included). Folders and "..": "(D)", as SAMPLES (decided 2026-11-09); a folder with
- * ticked files below it: "n SEL". Build: KEEP
+ * buffer included). Folders and "..": "(D)", as SAMPLES; a folder with n ticked files below it
+ * "(n)" in its place (decided 2026-11-09). Build: KEEP
  * (loaded now, stays), ADD (loads at the next boot), DROP (loaded now, gone after the next boot),
  * "!" (the last boot refused it). */
 /* list row i's right-hand column into t; top: it is the top row (the count's). -> 1 when t is
@@ -878,8 +878,8 @@ static int row_column(int i, int top, char *t, char *end)
     if (mode == M_DRIVE && top && checked_count(t, end))
         return 1;
     if (k < 0) {
-        if (lrows[i].kind == R_DIR && lrows[i].sel)
-            cat(num(t, end, lrows[i].sel), end, " SEL");
+        if (lrows[i].kind == R_DIR && lrows[i].sel)   /* "(3)": 3 ticked files below it */
+            cat(num(cat(t, end, "("), end, lrows[i].sel), end, ")");
         else
             cat(t, end, "(D)");
     } else if (r = &files[k], mode == M_DRIVE) {

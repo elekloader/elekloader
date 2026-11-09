@@ -209,8 +209,8 @@ The page is stock's two-pane file view, the one SAMPLES and PROJECTS are built o
   never the mod's id, so rows don't change under the check (decided 2026-11-09). YES on a folder opens it with the cursor at the top; YES on `..` goes
   up with the cursor back on the folder just left (SAMPLES' select, `0x400e92f8`). Each folder is
   read when it is opened, and the background checks only the open folder's files, so no scan of
-  every folder holds the UI task. A folder row shows `n SEL` in place of `(D)` when n files below
-  it are ticked. A mod is known by its path below `/mods` (`drums/kicks/x.elemod`), the name
+  every folder holds the UI task. A folder row shows `(n)` in place of `(D)` when n files below
+  it are ticked (`(3)`; decided 2026-11-09). A mod is known by its path below `/mods` (`drums/kicks/x.elemod`), the name
   `/mods/active` keeps (at most 127 bytes).
 - **Ticks across folders.** Unlike SAMPLES, which clears its ticks whenever the folder changes
   (`0x400722c4`), the ticks stay (decided 2026-11-08): they are the build, and a build takes mods

@@ -136,8 +136,8 @@ class BuildRows(unittest.TestCase):
     def test_folders_show_d_and_the_count_only_while_the_check_runs(self):
         got = self.lines(['open ~T FCR', 'drive', 'checked ~T FCR/~T fnm-01-0.1.elemod', 'drive',
                           'open ~T FCR/~T MKA', 'drive'], 'DRIVE')
-        self.assertEqual(got, ['..=0/1|~T SRC=2 SEL|~T MKA=(D)|~T fnm-01-0.1=0KB',
-                               '..=(D)|~T SRC=2 SEL|~T MKA=(D)|~T fnm-01-0.1=0KB',
+        self.assertEqual(got, ['..=0/1|~T SRC=(2)|~T MKA=(D)|~T fnm-01-0.1=0KB',
+                               '..=(D)|~T SRC=(2)|~T MKA=(D)|~T fnm-01-0.1=0KB',
                                '..=(D)|~T MKB=(D)'])
 
     def test_info_clips_a_long_folder_from_the_left(self):
