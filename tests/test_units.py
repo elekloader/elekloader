@@ -1855,6 +1855,36 @@ def test_the_shops_list_can_come_from_another_repository():
             os.environ['ELEKLOADER_CATALOG'] = old
 
 
+def test_the_builder_page_names_the_shops_site():
+    """build_web.page_mode: the shop page as it is; the builder stamped <html data-page="builder" data-shop-url>."""
+    build_web = build_web_module()
+    if build_web is None:
+        return
+    html = '<!doctype html>\n<html lang="en">\n<head>'
+    assert build_web.page_mode(html, 'shop') == html
+    assert build_web.page_mode(html, 'builder') == html.replace(
+        '<html lang="en">', '<html lang="en" data-page="builder" data-shop-url="https://elekloader.github.io/shop/">')
+    for bad in (('builder', 'http://x.example/'), ('builder', 'https://x.example'), ('builder', 'https://x/"><script>/'),
+                ('other', build_web.SHOP_URL)):
+        try:
+            build_web.page_mode(html, bad[0], bad[1])
+            raise AssertionError('not refused: %r' % (bad,))
+        except SystemExit:
+            pass
+    # the page's parts: the shop's hidden on the builder, its links to the shop's site shown only there
+    web = os.path.join(build_web.ROOT, 'web')
+    with open(os.path.join(web, 'style.css'), encoding='utf-8') as fh:
+        css = fh.read()
+    assert 'html[data-page="builder"] .shop-only { display: none !important; }' in css
+    assert 'html:not([data-page="builder"]) .builder-only { display: none !important; }' in css
+    with open(os.path.join(web, 'index.html'), encoding='utf-8') as fh:
+        page = fh.read()
+    for shop_part in ('id="nav-library"', 'id="nav-sections"', 'id="nav-submit"', 'id="tab-library"', 'id="tab-submit"'):
+        tag = page[page.rindex('<', 0, page.index(shop_part)):page.index('>', page.index(shop_part))]
+        assert 'shop-only' in tag, shop_part
+    assert page.count('data-shop-link') >= 4 and 'shop-banner builder-only' in page
+
+
 def test_the_shops_sections_are_checked():
     """sections.json: whole repositories on a page of their own (build_web.sections)."""
     build_web = build_web_module()
