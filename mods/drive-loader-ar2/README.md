@@ -4,6 +4,13 @@ The +Drive mods loader's flashed part, for core-ar2 0.11 and newer on OS 1.74. I
 `core_desc`, so the linker writes the build descriptor into every build that has it
 (docs/FORMAT.md, "The build descriptor"), and it exports the staging buffer as `drive_staging`
 and `drive_staging_size` (512 KB, its `.bss`), which the descriptor's area record names.
+The 512 KB is the loader's own choice, not a limit of the unit: it is `DL_STAGING_SIZE` in
+`fs.h` and the `.space` and `drive_staging_size` in `route.s`, and the three change together.
+The route, the boot link and the MODS page use `DL_STAGING_SIZE`, and `elekloader mods` and the
+web view read the size from the descriptor, so a build with another size refuses only files
+larger than its own buffer. The buffer is in the loader's
+`.bss`, which the +Drive area starts after, so every KB added to it is a KB less of area
+(below, "The area"), and a smaller buffer gives area back but takes smaller mod files.
 
 From 0.1 it holds the `/mods` route, links the mods `/mods/active` names into the +Drive
 mods' area at boot, and adds the MODS page in SETTINGS > GLOBAL, which writes `/mods/active`.
@@ -29,7 +36,7 @@ a third `RouteTypeHandler`, so the unit's Data root listing shows `mods`:
 
 Each transfer goes through stock's data container (31-byte header, body, 12-byte footer with
 CRC-32). An upload's header must say family 2, file type `0x454d4f44` (`'EMOD'`), not
-compressed, and a payload of at most 512 KB. Anything else is refused at the header, and
+compressed, and a payload no larger than the staging buffer (512 KB as built). Anything else is refused at the header, and
 nothing is written. The router checks the CRC at the footer, and only a transfer that passes
 every check reaches the commit: the body goes to `<name>.tmp`, the old file is deleted, and the
 tmp file is renamed over it.
