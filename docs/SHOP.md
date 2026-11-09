@@ -10,6 +10,11 @@ GitHub repository, fill in one form, and a bot checks your files and does the
 rest. There is nothing to add to elekloader's repository, no evidence files,
 and no account but GitHub's. A picture for your card is optional.
 
+**Where:** the shop's list and all its forms are in
+[elekloader/shop](https://github.com/elekloader/shop/issues/new/choose), not
+in elekloader/elekloader. You don't open a pull request to list a mod: the
+form does it.
+
 The shop lists *your files*. Your code, your releases and your repository stay
 yours, and so do questions and bug reports about your mod.
 
