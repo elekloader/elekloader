@@ -220,6 +220,12 @@ class Moves(unittest.TestCase):
         (why, _t, _a), = self.run_('mkdir ~T A/x.elemod')      # a file of that name
         self.assertEqual(why, 'failed')
 
+    def test_a_folder_on_a_fresh_card_makes_mods_first(self):
+        # the DLX2 emulator run (2026-11-09): a mkdir before any upload, with no /mods yet, failed
+        (why, tree, _a), = self.run_('mkdir ~T N/~T O', tree=['!nomods'])
+        self.assertEqual(why, 'ok')
+        self.assertTrue({'~T N/', '~T N/~T O/'} <= set(tree), tree)
+
     def test_refusals_leave_everything_as_it_was(self):
         cases = {
             'mv ~T A/x.elemod|~T AB/y.elemod': 'Already there',       # no overwrite

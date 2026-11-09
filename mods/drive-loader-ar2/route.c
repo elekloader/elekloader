@@ -545,13 +545,18 @@ static int is_folder(const char *rel)
     return r;
 }
 
-/* Make the folder DL_DIR "/" rel and any of its parents not there yet, as an upload makes the
- * folders it needs; a folder already there is kept. Under dl_lock. -> 0 when rel is a folder
- * afterwards, or -1 */
+/* Make the folder DL_DIR "/" rel and any of its parents not there yet, DL_DIR itself included,
+ * as an upload makes the folders it needs; a folder already there is kept. Under dl_lock. -> 0
+ * when rel is a folder afterwards, or -1 */
 static int make_folder(const char *rel)
 {
     char sub[DL_NAME_MAX + 1], path[DL_PATH_MAX];
     unsigned i, k = len(rel);
+    if (dl_list_dir("", 0, 0) <= 2)      /* DL_DIR empty (the count has "." and ".."), or not there yet
+                                          * on a fresh card (the DLX2 emulator run, 2026-11-09: a mkdir
+                                          * before any upload failed); stock's mkdir refuses a folder
+                                          * already there */
+        dl_fs_mkdir(DL_DIR);
     for (i = 1; i <= k; i++) {
         if (i < k && rel[i] != '/')
             continue;

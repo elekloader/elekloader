@@ -6,7 +6,8 @@
  * there; rmdir an empty folder only; a file opened to write makes its folders.
  * tests/test_drive_route.py builds it with the host's cc and drives it.
  * stdin: the tree, paths below DL_DIR one a line (a folder ends in "/", a file may end in
- * "=TEXT", "|" a newline in it), then "--", then requests:
+ * "=TEXT", "|" a newline in it; a first line "!nomods": no DL_DIR yet, as on a fresh card), then
+ * "--", then requests:
  *   mv FROM|TO     an upload of "FROM\nTO" to .mv     -> "ok" or the refusal
  *   mkdir FOLDER   an upload to FOLDER/.dir           -> "ok" or "failed"
  * After each, the tree: "TREE p1 ; p2 ; ..." sorted, and "ACTIVE text" with "|" for newlines. */
@@ -235,6 +236,10 @@ int main(void)
         line[strcspn(line, "\r\n")] = 0;
         if (!strcmp(line, "--"))
             break;
+        if (!strcmp(line, "!nomods")) {
+            fsn[find(DL_DIR)].path[0] = 0;
+            continue;
+        }
         eq = strchr(line, '=');
         if (eq)
             *eq++ = 0;
