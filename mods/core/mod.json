@@ -62,7 +62,9 @@
   "FW_INVALIDATE": "0x400c9812",
   "MV_CLEAR": "0x40039982",
   "NOTE_ON": "0x400d53dc",
-  "NOTE_OFF": "0x400d575e"
+  "NOTE_OFF": "0x400d575e",
+  "NOTE_ON_LINK": "-104",
+  "NOTE_OFF_LINK": "-108"
  },
  "sites": [
   {"addr": "0x40000538", "stock": "4eb940001c94", "op": "jsr", "target": "boot"},
@@ -173,7 +175,9 @@
     "FW_INVALIDATE": "0x400c9a3a",
     "MV_CLEAR": "0x40039982",
     "NOTE_ON": "0x400d5604",
-    "NOTE_OFF": "0x400d5986"
+    "NOTE_OFF": "0x400d5986",
+    "NOTE_ON_LINK": "-104",
+    "NOTE_OFF_LINK": "-108"
    },
    "sites": [
     {"addr": "0x40000538", "stock": "4eb940001c94", "op": "jsr", "target": "boot"},

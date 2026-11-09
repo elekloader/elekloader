@@ -539,4 +539,15 @@ extern uint8_t fw_pool_sounds[];        /* the pool's sounds, sound n at + 0x146
 extern int32_t core_pool_count(void);   /* pool sounds 0 to this less one exist */
 extern uint8_t fw_patterns[];           /* the 128 live patterns, k at + 0x1611d k (fw_pattern is one) */
 
+/* ---- 5.3: the played notes, as the Digitakt's core 4.2 has them --------------------------------------- */
+/* ev_live_note: a note played live on a track reaches it before its voice (KEYBOARD mode's trig keys, a MIDI
+ * note on a track's channel): on 1, vel its velocity; on 0 its release (vel: the routine's third argument,
+ * the source). Nonzero takes it, press or release: the key is not counted and the track does not play (or
+ * release) it. The UI or the MIDI task; the sequencer's trigs do not pass here. */
+typedef int32_t (*ev_live_note_fn)(int32_t track, int32_t note, int32_t vel, int32_t on, int32_t source);
+/* The stock routines past the event, to play a note again: skip nonzero counts the key without playing it;
+ * KEYBOARD mode passes sound -1. Each counts the key held on its track, so pair them. */
+extern void fw_note_on(int32_t track, int32_t note, int32_t vel, int32_t source, int32_t skip, int32_t sound);
+extern void fw_note_off(int32_t track, int32_t note, int32_t source);
+
 #endif

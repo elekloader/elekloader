@@ -150,5 +150,42 @@ class Mono:
         self.assertEqual(self.heard(), (4, starts + 1))         # no return to C: the stock's own way
 
 
+@sdk_tests
+class MidiIn(Mono):
+    """Mono's checks again, with MIDI notes on the track's channel for the trig keys."""
+    requires = ('mono', 'midi_in')
+
+    def key(self, key, down):
+        self.panel.midi_note(self.track.index, 60 + key, 100 if down else 0)
+        self.wait(60)
+
+
+@sdk_tests
+class OneVoice:
+    """Where the tracks share the voices, a mono machine's track sounds on one, whichever the stock gives
+    each note."""
+    audio = True
+    requires = ('mono', 'polyphony')
+
+    def voices_after(self, machine, keys):
+        self.track.use(machine)
+        self.panel.keyboard()
+        self.wait(50)
+        for key in keys:
+            self.panel.press_key(key)
+            self.wait(60)
+        return self.panel.sounding_voices(self.track.index)
+
+    def test_a_mono_track_sounds_on_one_voice(self):
+        self.assertEqual(self.voices_after(MONO, (0, 4, 7)), 1)
+        for key in (7, 4):                                      # back to E, then C: retriggers
+            self.panel.release_key(key)
+            self.wait(60)
+            self.assertEqual(self.panel.sounding_voices(self.track.index), 1)
+
+    def test_a_poly_machine_sounds_on_a_voice_a_key(self):
+        self.assertEqual(self.voices_after(POLY, (0, 4)), 2)
+
+
 if __name__ == '__main__':
     unittest.main()

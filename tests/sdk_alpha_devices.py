@@ -311,6 +311,14 @@ class Device:
         """How many keys the firmware counts as held on the track."""
         raise CannotYet('the firmware\'s held keys')
 
+    def sounding_voices(self, track):
+        """How many voices sound for the track (its machine's, through the companion's envelope)."""
+        raise CannotYet('the voices sounding')
+
+    def midi_note(self, track, note, velocity):
+        """A note on (velocity 0: its note off) into the MIDI input, on the track's channel."""
+        raise CannotYet('MIDI in')
+
     def audio_position(self):
         if not getattr(self.s, 'record_audio', False):
             raise CannotYet('audio capture (set audio = True on the test class)')
@@ -607,7 +615,7 @@ class Digitakt1(Device):
 class Digitone1(Device):
     key, stock_env = 'digitone-mk1', 'ELEKLOADER_STOCK_DN1_144'
     track_count = 4
-    features = frozenset(('polyphony', 'audio_modulation'))
+    features = frozenset(('polyphony', 'audio_modulation', 'midi_in'))
     sound_without_render = True
     KEYS = Digitakt1.KEYS
 
@@ -622,6 +630,37 @@ class Digitone1(Device):
 
     def release_key(self, key):
         self.s.release(self.s.code(self.KEYS[key]))
+
+    HELD = 0x41994e80               # OS 1.44's count of the keys held on each track (core's NOTE_ON adds one)
+
+    def held_keys(self, track):
+        return self.peek32(self.HELD + 4 * track)
+
+    def sounding_voices(self, track):
+        """The voices playing a machine (slot 0 of fw_voice_params) whose envelope in machines-dn1's vs
+        (struct dnm_voice, then its stage and level) is not over, on the track."""
+        at, params = int(self.symbols['machines:vs'], 16), int(self.symbols['fw_voice_params'], 16)
+        machine = lambda v: struct.unpack('>h', bytes(self.s.m.uc.mem_read(params + 18 + 158 * v, 2)))[0]
+        return sum(machine(v) > 0 and self.peek32(at + 32 * v + 12) == track and
+                   bool(self.peek32(at + 32 * v + 24) or self.peek32(at + 32 * v + 28)) for v in range(8))
+
+    MIDI_IN_FROM = 0x41368d64       # OS 1.44's MIDI CONFIG > INPUT FROM: bit 0 DIN, bit 1 USB
+    MIDI_NOTES = 0x41368d88         # and RECEIVE NOTES
+
+    def midi_note(self, track, note, velocity):
+        from emu import midi
+        from unicorn.m68k_const import UC_M68K_REG_PC
+        m = self.s.m
+        m.uc.mem_write(self.MIDI_IN_FROM, struct.pack('>I', self.peek32(self.MIDI_IN_FROM) | 1))
+        m.uc.mem_write(self.MIDI_NOTES, struct.pack('>I', 1))
+        channel = self.read('fw_midi_chan', 4 * track)
+        midi.feed(m, bytes((0x90 | channel, note, velocity)))
+        for _ in range(100):            # vector 156 drains the ring, once the CPU's level lets it
+            if midi._take(m, 156):
+                self.s.pc = m.uc.reg_read(UC_M68K_REG_PC)     # the session resumes at its own pc
+                return
+            self.s.run_ms(1)
+        raise AssertionError('MIDI in: vector 156 was never taken')
 
     SDK_PAGE, SYN2_FIRST = 29, 4    # machines-dn1's first page, and the first page of SYN2's stock list
     # machines-dn1's sdk_pos: the SYN parameter that holds each logical knob, whichever page shows it
@@ -664,7 +703,11 @@ class Digitone1(Device):
         if machine_id not in entries:
             return False
         self.pick(track, entries.index(machine_id) + 1)
-        return self.machine(track) == machine_id
+        for _ in range(20):                 # the sound changes a frame or two after the list closes
+            if self.machine(track) == machine_id:
+                return True
+            self.s.run_ms(50)
+        return False
 
     def syn2_pages(self):
         """SYN2's list of pages now, from the view core-dn1 notes (core_views)."""
