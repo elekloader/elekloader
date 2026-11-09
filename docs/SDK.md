@@ -15,7 +15,7 @@ change, and mods must be rebuilt when it does.
 | Its pages show on | SRC | SYN2, in place of its pages on that track | SYN |
 | Pages, labels, hiding, glyphs | yes | yes | yes |
 | `render` and knob defaults | yes | yes | yes, `render` in SHARC assembly ([`render` on the Digitone II](#render-on-the-digitone-ii)) |
-| Mono machines ([`play` and `prio`](#play-and-prio)) | not yet | not yet | not yet |
+| Mono machines ([`play` and `prio`](#play-and-prio)) | yes, live keys (the trig keys, keyboard mode, MIDI notes; not the sequencer's trigs) | not yet | not yet |
 
 Other devices and OS releases, the Digitakt II among them, are not SDK
 targets. The builder's `SDK_ALPHA_TARGETS`
@@ -346,7 +346,7 @@ several machines; the linker refuses more than the device holds (below).
 The builder refuses what breaks a rule above, and says where, as the C
 would: `sdk alpha: machine "Two Page" (id 40), knobs[0]: label "CUTOFF" has
 6 characters (at most 5)`. It refuses a mono machine where the companion
-does not carry it out yet (`ELEK_MONO is not supported on digitakt-mk1 1.54 yet`). It also refuses floating point, imports no
+does not carry it out yet (`ELEK_MONO is not supported on digitone-mk1 1.44 yet`). It also refuses floating point, imports no
 companion exports, and machine claims written in `mod.json` (each machine
 claims its id itself). The messages are in
 elekloader/sdk/sdk_alpha_build.py. Every SDK mod imports
@@ -364,8 +364,8 @@ changes.
 | Voices | one a track | eight, on four tracks | sixteen voice slots, which the OS allocates to tracks |
 | After `render` | the native overdrive, filter and AMP; whether the AMP applies velocity is not checked | the companion's AMP envelope, which applies velocity (use it for timbre, not level), then the filter | the voice envelope, the selected stock or custom filter, pan, sends and mixer, as an mk2 synth's |
 
-No device tells `render` when a key is released: the AMP envelope ends the
-note. How each companion stores knobs and renders voices is in its own
+Only a mono machine's companion follows the keys' releases (the support
+table above); otherwise the AMP envelope ends the note. How each companion stores knobs and renders voices is in its own
 documentation: [machine-pages](../mods/machine-pages/README.md),
 [machines-dn1](../mods/machines-dn1/README.md) and
 [Digitone II machines](MACHINES-DN2.md). How the SDK is tested is in

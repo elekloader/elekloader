@@ -307,6 +307,10 @@ class Device:
     def release_key(self, key):
         raise CannotYet('a note key')
 
+    def held_keys(self, track):
+        """How many keys the firmware counts as held on the track."""
+        raise CannotYet('the firmware\'s held keys')
+
     def audio_position(self):
         if not getattr(self.s, 'record_audio', False):
             raise CannotYet('audio capture (set audio = True on the test class)')
@@ -485,6 +489,11 @@ class Digitakt1(Device):
 
     def release_key(self, key):
         self.s.release(self.s.code(self.KEYS[key]))
+
+    HELD = 0x4219cc98               # OS 1.54's count of the keys held on each track (core's NOTE_ON adds one)
+
+    def held_keys(self, track):
+        return self.peek32(self.HELD + 4 * track)
 
     STOCK = (0, 1, 2, 3)            # the stock machines, first in the machine list
     PAGE_LEDS = {'SRC': 19, 'LFO': 22}

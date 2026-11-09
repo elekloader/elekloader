@@ -361,6 +361,9 @@ class SdkAlphaTests(unittest.TestCase):
     def test_a_mono_machine_is_refused_where_no_companion_carries_it_out(self):
         for device in (Digitakt1, Digitone1, Digitone2):
             if 'mono' in device.features:
+                with self.subTest(device=device.key), tempfile.TemporaryDirectory() as tmp:
+                    _path, _mod, layouts = sdk_alpha_build(str(ROOT / 'examples/sdk-mono'), device.stock(), tmp)
+                    self.assertEqual(layouts[124]['play'], 1)
                 continue
             with self.subTest(device=device.key), tempfile.TemporaryDirectory() as tmp, \
                     self.assertRaisesRegex(build.BuildError, r'^sdk alpha: machine "SDK Mono" \(id 124\): ELEK_MONO '

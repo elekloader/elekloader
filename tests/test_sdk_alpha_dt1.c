@@ -3,6 +3,7 @@
 #undef NDEBUG                   /* the checks below are asserts */
 #include <assert.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <string.h>
 #include "digitakt-mk1/core3.h"
 #include "elekloader/sdk_alpha_machine.h"
@@ -42,7 +43,38 @@ static const struct elek_machine machine = {
     .id = 100, .name = "Test", .short_name = "TEST", ELEK_KNOBS(knobs),
     .pages = { { "TEST", { &knobs[0] } } }, .render = render,
 };
-const struct elek_machine *const sdk_alpha_machines[] = { &machine, 0 };
+/* Mono machines, the newest key sounding: 101 restarts the AMP at each change, 102 changes the pitch with
+ * the AMP running on. */
+static const struct elek_machine mono_machine = {
+    .id = 101, .name = "Mono", .short_name = "MONO", ELEK_KNOBS(knobs),
+    .pages = { { "MONO", { &knobs[0] } } }, .render = render, .play = ELEK_MONO,
+};
+static const struct elek_machine legato_machine = {
+    .id = 102, .name = "Legato", .short_name = "LEG", ELEK_KNOBS(knobs),
+    .pages = { { "LEG", { &knobs[0] } } }, .render = render, .play = ELEK_MONO_LEGATO,
+};
+const struct elek_machine *const sdk_alpha_machines[] = { &machine, &mono_machine, &legato_machine, 0 };
+
+/* The stock note routines, as calls: "+60/90" a note on (with its velocity), "-60" an off. */
+static char played[64];
+void fw_note_on(int32_t track, int32_t note, int32_t vel, int32_t source, int32_t skip, int32_t sound, int32_t flag)
+{
+    assert(track == 2 && source == 0x40 && !skip && sound == -1 && flag == -1);
+    sprintf(played + strlen(played), "+%d/%d ", note, vel);
+}
+void fw_note_off(int32_t track, int32_t note, int32_t source)
+{
+    assert(track == 2 && source == 0x40);
+    sprintf(played + strlen(played), "-%d ", note);
+}
+/* A key on track 2: what the handler returns (1: taken), then the stock calls it made, in played. */
+static int32_t key(int32_t note, int32_t vel, int32_t on)
+{
+    played[0] = 0;
+    return sdk_alpha_live_note(2, note, on ? vel : 0x40, on, 0x40);
+}
+#define KEY(note, vel, on, taken, calls) \
+    do { assert(key(note, vel, on) == (taken)); assert(!strcmp(played, calls)); } while (0)
 void fw_fillrect(void *bmp, int32_t x0, int32_t y0, int32_t x1, int32_t y1, int32_t colour)
 { (void)bmp; (void)x0; (void)y0; (void)x1; (void)y1; (void)colour; }
 
@@ -99,5 +131,43 @@ int main(void)
     assert(sdk_alpha_map(&level, sdk_alpha_default(&level)) == 100);
     struct elek_knob above = { "ABOVE", .min = 10, .max = 20 };
     assert(sdk_alpha_default(&above) == 0);                                /* 0, clamped to min */
+
+    /* Mono, retrigger: the stock holds one key at a time; the key pressed or released plays itself. */
+    FW_SOUND(kit, 2)[FW_SOUND_MACHINE] = 101;
+    fw_render_machine[2] = 101;
+    KEY(60, 90, 1, 0, "");                      /* C: the stock plays it */
+    KEY(64, 100, 1, 0, "-60 ");                 /* E: C off first, then the stock plays E */
+    KEY(64, 0, 0, 1, "-64 +60/90 ");            /* E up: C again, with its own velocity */
+    KEY(60, 0, 0, 0, "");                       /* C up: the stock releases it */
+    KEY(60, 90, 1, 0, "");
+    KEY(64, 100, 1, 0, "-60 ");
+    KEY(60, 0, 0, 1, "");                       /* an older key up: E plays on */
+    KEY(64, 0, 0, 0, "");
+    KEY(67, 0, 0, 0, "");                       /* a key not held: the stock's */
+    KEY(60, 90, 1, 0, "");
+    KEY(60, 80, 1, 0, "-60 ");                  /* the same key again: off, then the stock plays it */
+    KEY(60, 0, 0, 0, "");
+    assert(sdk_alpha_live_note(0, 60, 90, 1, 0x40) == 0);   /* ELEK_POLY: every key is the stock's */
+    assert(sdk_alpha_live_note(9, 60, 90, 1, 0x40) == 0);   /* a MIDI track */
+    assert(!played[0]);
+
+    /* Mono, legato: a change of key moves the pitch the render gets; start stays clear. */
+    FW_SOUND(kit, 2)[FW_SOUND_MACHINE] = 102;
+    fw_render_machine[2] = 102;
+    fw_voice_note[2] = 60 << 16;
+    fw_amp_env[3 * 2 + 1] = 1;
+    KEY(60, 90, 1, 0, "");
+    KEY(64, 100, 1, 1, "");                     /* E: taken, the stock holds C */
+    fw_voice_start = 0;
+    sdk_alpha_render(blocks);
+    assert(last[2].pitch == 64 << 16 && !last[2].start);
+    KEY(64, 0, 0, 1, "");                       /* E up: back to C, the AMP running on */
+    sdk_alpha_render(blocks);
+    assert(last[2].pitch == 60 << 16 && !last[2].start);
+    KEY(64, 100, 1, 1, "");
+    KEY(60, 0, 0, 1, "");                       /* C up: E sounds on */
+    KEY(64, 0, 0, 1, "-60 ");                   /* the last key up: the stock's C off */
+    sdk_alpha_render(blocks);
+    assert(last[2].pitch == 60 << 16);          /* no bend once silent */
     return 0;
 }

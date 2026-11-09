@@ -21,7 +21,7 @@ from elekloader.sdk import build
 Target = collections.namedtuple('Target', 'companions first_id features native')
 SDK_ALPHA_TARGETS = {
     ('digitakt-mk1', '1.54'): Target(('core', 'machine-pages'), 4,
-                                     frozenset(('render', 'defaults')), 'core_machines'),
+                                     frozenset(('render', 'defaults', 'mono')), 'core_machines'),
     ('digitone-mk1', '1.44'): Target(('core', 'machines'), 4,
                                      frozenset(('render', 'defaults')), None),
     # the Digitone II's synth type 4 is MIDI; its render is SHARC code ('kernels'): the C is built with
