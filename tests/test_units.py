@@ -1194,11 +1194,11 @@ def submit_mod_module():
 
 
 def test_the_shop_list_keeps_its_layout():
-    """packaging/submit_mod.py rewrites web/catalog.json: it writes the file as it is laid out by hand."""
+    """packaging/submit_mod.py rewrites catalog.json: it writes the file as it is laid out by hand."""
     submit_mod = submit_mod_module()
-    if submit_mod is None:
+    if submit_mod is None or shop_list_or_skip(submit_mod.CATALOG) is None:
         return
-    with open(os.path.join(os.path.dirname(HERE), 'web', 'catalog.json'), encoding='utf-8') as fh:
+    with open(submit_mod.CATALOG, encoding='utf-8') as fh:
         text = fh.read()
     assert submit_mod.render(json.loads(text)) == text
 
@@ -1813,6 +1813,115 @@ def test_authors_can_opt_out_of_automatic_updates():
     assert publish.release_notes('A.', '', auto_update=False) == 'Shop summary: A.\nShop auto-update: off\n'
     assert submit_mod.release_text(publish.release_notes('A.', '', False)) == {'summary': 'A.', 'auto_update': False}
 
+
+def build_web_module():
+    """packaging/build_web.py, or None where the repository isn't (under Pyodide, as submit_mod_module)."""
+    folder = os.path.join(os.path.dirname(HERE), 'packaging')
+    if not os.path.isdir(folder):
+        return None
+    sys.path.insert(0, folder)
+    import build_web
+    return build_web
+
+
+def shop_list_or_skip(path):
+    """The shop's real list (a clone of elekloader/shop: $ELEKLOADER_CATALOG, else build/shop-list/), or None,
+    said, where there is none (tests.yml clones it; docs/WEB.md, "Where the list is")."""
+    if os.path.exists(path):
+        return path
+    print('  skipped: no shop list at %s (git clone https://github.com/elekloader/shop build/shop-list)' % path)
+    return None
+
+
+def test_the_shops_list_can_come_from_another_repository():
+    """$ELEKLOADER_CATALOG: the shop's list from a clone of its own repository (SHOP_REPO), sections beside it."""
+    build_web = build_web_module()
+    if build_web is None:
+        return
+    old = os.environ.pop('ELEKLOADER_CATALOG', None)
+    try:
+        assert build_web.catalog_path() == os.path.join(build_web.ROOT, 'build', 'shop-list', 'catalog.json')
+        assert build_web.sections_path() == os.path.join(build_web.ROOT, 'build', 'shop-list', 'sections.json')
+        with tempfile.TemporaryDirectory() as d:
+            os.environ['ELEKLOADER_CATALOG'] = os.path.join(d, 'catalog.json')
+            assert build_web.catalog_path() == os.path.join(d, 'catalog.json')
+            assert build_web.catalog_path('x.json') == 'x.json'
+            assert build_web.sections_path() == os.path.join(os.path.abspath(d), 'sections.json')
+            with open(os.path.join(d, 'sections.json'), 'w') as fh:
+                json.dump({'sections': [{'id': 'pics', 'title': 'Pictures', 'packs': [{'repo': 'a/b'}]}]}, fh)
+            assert [s['id'] for s in build_web.sections([{'repo': 'a/b'}])] == ['pics']
+    finally:
+        os.environ.pop('ELEKLOADER_CATALOG', None)
+        if old is not None:
+            os.environ['ELEKLOADER_CATALOG'] = old
+
+
+def test_the_builder_page_names_the_shops_site():
+    """build_web.page_mode: the shop page as it is; the builder stamped <html data-page="builder" data-shop-url>."""
+    build_web = build_web_module()
+    if build_web is None:
+        return
+    html = '<!doctype html>\n<html lang="en">\n<head>'
+    assert build_web.page_mode(html, 'shop') == html
+    assert build_web.page_mode(html, 'builder') == html.replace(
+        '<html lang="en">', '<html lang="en" data-page="builder" data-shop-url="https://elekloader.github.io/shop/">')
+    for bad in (('builder', 'http://x.example/'), ('builder', 'https://x.example'), ('builder', 'https://x/"><script>/'),
+                ('other', build_web.SHOP_URL)):
+        try:
+            build_web.page_mode(html, bad[0], bad[1])
+            raise AssertionError('not refused: %r' % (bad,))
+        except SystemExit:
+            pass
+    # the page's parts: the shop's hidden on the builder, its links to the shop's site shown only there
+    web = os.path.join(build_web.ROOT, 'web')
+    with open(os.path.join(web, 'style.css'), encoding='utf-8') as fh:
+        css = fh.read()
+    assert 'html[data-page="builder"] .shop-only { display: none !important; }' in css
+    assert 'html:not([data-page="builder"]) .builder-only { display: none !important; }' in css
+    with open(os.path.join(web, 'index.html'), encoding='utf-8') as fh:
+        page = fh.read()
+    for shop_part in ('id="nav-library"', 'id="nav-sections"', 'id="nav-submit"', 'id="tab-library"', 'id="tab-submit"'):
+        tag = page[page.rindex('<', 0, page.index(shop_part)):page.index('>', page.index(shop_part))]
+        assert 'shop-only' in tag, shop_part
+    assert page.count('data-shop-link') >= 4 and 'shop-banner builder-only' in page
+
+
+def test_the_shops_sections_are_checked():
+    """sections.json: whole repositories on a page of their own (build_web.sections)."""
+    build_web = build_web_module()
+    if build_web is None or shop_list_or_skip(build_web.catalog_path()) is None:
+        return
+    with open(build_web.sections_path(), encoding='utf-8') as fh:
+        real = json.load(fh)
+    with open(build_web.catalog_path(), encoding='utf-8') as fh:
+        repos = {i['repo'] for i in json.load(fh)['items']}
+    # every pack names a repository the shop carries
+    assert all(p['repo'] in repos for s in real['sections'] for p in s['packs'])
+    out = build_web.sections([{'repo': r} for r in repos])
+    assert [s['id'] for s in out] == [s['id'] for s in real['sections']] and all(s['nav'] for s in out)
+    # the Splash screen maker is a tool of Splash & screens
+    assert {'href': '#splash', 'title': 'Splash screen maker'} in next(s for s in out if s['id'] == 'screens')['tools']
+    with tempfile.TemporaryDirectory() as d:
+        p = os.path.join(d, 's.json')
+        for bad in ({'sections': [{'id': 'A b', 'title': 'x', 'packs': [{'repo': 'a/b'}]}]},
+                    {'sections': [{'id': 'build', 'title': 'x', 'packs': [{'repo': 'a/b'}]}]},
+                    {'sections': [{'id': 'x', 'title': 'x', 'packs': [{'repo': 'a/b'}]},
+                                  {'id': 'y', 'title': 'y', 'packs': [{'repo': 'a/b'}]}]},
+                    {'sections': [{'id': 'x', 'title': 'x', 'packs': []}]},
+                    {'sections': [{'id': 'x', 'title': 'x', 'packs': [{'repo': 'a/b'}],
+                                   'tools': [{'href': 'https://x', 'title': 't'}]}]},
+                    {'sections': [{'id': 'x', 'title': 'x', 'packs': [{'repo': 'a/b'}],
+                                   'tools': [{'href': '#splash', 'title': 't'}]},
+                                  {'id': 'y', 'title': 'y', 'packs': [{'repo': 'c/d'}],
+                                   'tools': [{'href': '#splash', 'title': 't'}]}]}):
+            with open(p, 'w') as fh:
+                json.dump(bad, fh)
+            try:
+                build_web.sections([], p)
+                raise AssertionError('not refused: %r' % bad)
+            except SystemExit:
+                pass
+        assert build_web.sections([], os.path.join(d, 'none.json')) == []
 
 def test_the_splash_maker_writes_a_mod_the_loader_takes():
     from elekloader import splash

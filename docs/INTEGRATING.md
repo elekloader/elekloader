@@ -217,10 +217,11 @@ Each release attaches the kit and the catalog: run the **kit-build** workflow (A
 
 ```bash
 python packaging/build_kit.py --out build/kit                   # elekloader-kit-<version>.zip, and its sha256
-python packaging/build_web.py --catalog-list web/catalog.json   # the list's files: download each (as pages.yml does)
-node js/tools/kit.ts feed --list web/catalog.json --files build/shop --core build/core/core-*.elemod \
-     --core-source irpina/elekloader@<tag> --revision $(git rev-parse HEAD) --out build/elekloader-catalog.json
+git clone -q --depth 1 https://github.com/elekloader/shop build/shop-list
+python packaging/build_web.py --catalog-list build/shop-list/catalog.json   # the list's files: download each (as pages.yml does)
+node js/tools/kit.ts feed --list build/shop-list/catalog.json --files build/shop --core build/core/core-*.elemod \
+     --core-source elekloader/elekloader@<tag> --revision $(git -C build/shop-list rev-parse HEAD) --out build/elekloader-catalog.json
 ```
 
-- **The curated list** is `web/catalog.json`, the one elekloader's shop used.
+- **The curated list** is [elekloader/shop](https://github.com/elekloader/shop)'s `catalog.json`, the one elekloader's shop uses.
 - **`feed`** reads every listed file with the engine and refuses one whose sha256 or device is not the list's.

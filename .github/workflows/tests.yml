@@ -37,6 +37,16 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
+      - name: The shop's list (elekloader/shop, or the repository variable SHOP_REPO's)
+        env:
+          SHOP_REPO: ${{ vars.SHOP_REPO || 'elekloader/shop' }}
+        run: |
+          # a public repository with catalog.json and sections.json at its root, as its main has them
+          # (docs/WEB.md, "Where the list is")
+          git clone -q --depth 1 "https://github.com/$SHOP_REPO" build/shop-list
+          echo "ELEKLOADER_CATALOG=$PWD/build/shop-list/catalog.json" >> "$GITHUB_ENV"
+          echo "SHOP_REPO=$SHOP_REPO" >> "$GITHUB_ENV"
+          echo "SHOP_COMMIT=$(git -C build/shop-list rev-parse HEAD)" >> "$GITHUB_ENV"
       - name: Unit tests
         run: python tests/test_units.py
       - name: The linker's refusals

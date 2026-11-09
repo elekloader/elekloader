@@ -49,7 +49,7 @@ where the stock files are, and only the cores are uploaded.
    signing secrets.
 5. **The kit.** Run **kit-build** with the tag. It attaches
    `elekloader-kit-<version>.zip` and `elekloader-catalog.json` (the feed of
-   `web/catalog.json`, with the release's cores) with their checksums
+   elekloader/shop's `catalog.json`, with the release's cores) with their checksums
    ([INTEGRATING.md](INTEGRATING.md)). Node is pinned, so the zip is the one
    `packaging/build_kit.py` gives on your machine with the same Node. With
    **test** ticked it builds the branch it is run on and keeps the two files
@@ -74,15 +74,19 @@ pre-release again and the last full release is the latest
   elekloader's at that tag, so a second kit pre-release needs a new version.
 - **One device's core (`core-dn1-v2.3`, say):** a pre-release carrying that
   core's files and `SHA256SUMS.txt`, and items of kind `core` in
-  `web/catalog.json` that point at it ([WEB.md](WEB.md)). The web page's shop
+  elekloader/shop's `catalog.json` that point at it ([WEB.md](WEB.md)). The web page's shop
   and the kit's next catalog take the core from there. The next full
   release carries it as its own.
 
 ## The mod shop's list
 
-`web/catalog.json` is edited by hand and merged like code: each item pins a
-file of a GitHub release, or of a repository at a commit, by sha256
-([WEB.md](WEB.md)). The next pages run puts it on the site.
+The list is `catalog.json` in [elekloader/shop](https://github.com/elekloader/shop), changed by pull
+requests there: each item pins a file of a GitHub release, or of a repository
+at a commit, by sha256 ([WEB.md](WEB.md#where-the-list-is)). Every change
+to the list there starts pages here, with the shop repository's
+`SITE_DISPATCH` token. When that token expires, renew it
+(`gh secret set SITE_DISPATCH -R elekloader/shop`); until then, run pages by
+hand after a shop merge.
 
 ## Rules
 

@@ -24,7 +24,7 @@ import { AttributeError, KeyError, PyException, ValueError, hex8, pyType, repr, 
 import * as desc from './desc.ts'
 import * as store from './store.ts'
 import { KERNEL_ABI, KERNEL_TABLE, kernelPayload, modulePayload, placeKernels, type KernelKind, type KernelLayout,
-  type KernelPayload, type SharcPayload } from './sharc.ts'
+  type KernelPayload, type RawPayload, type SharcPayload, linkRaw, rawPayload } from './sharc.ts'
 import * as sharcRecords from './sharc.ts'
 import * as syx from './syx.ts'
 
@@ -91,6 +91,7 @@ export class Mod2 implements AnyMod {
   rel: Release
   sections: Map<string, Sec>
   sharc: SharcPayload | KernelPayload | null
+  sharcRaw: RawPayload | null
   symbols: Map<string, [string, number]>
   exports: string[]
   imports: string[]
@@ -125,7 +126,8 @@ export class Mod2 implements AnyMod {
     this.name = name
     this.sha256 = raw ? sha(raw) : null
     if (!pyEq(formatOf(doc), FORMAT2)) throw new ModError(`${name}: not a format-2 .elemod file`)
-    const more = new Set(['sections', 'symbols', 'exports', 'imports', 'weak', 'relocs', 'collections', 'contribute', 'copied', 'storage', 'sharc'])
+    const more = new Set(['sections', 'symbols', 'exports', 'imports', 'weak', 'relocs', 'collections', 'contribute', 'copied', 'storage', 'sharc',
+      'sharc_raw'])
     const extra = Object.keys(doc).filter(k => !COMMON.has(k) && !more.has(k)).sort()
     if (extra.length) throw new ModError(`${name}: unknown fields ${repr(extra)}`)
     for (const k of ['id', 'version', 'target', 'sections']) if (!(k in doc)) throw new ModError(`${name}: no "${k}"`)
@@ -157,6 +159,7 @@ export class Mod2 implements AnyMod {
     }
     this.sharc = !('sharc' in doc) ? null : isDict(doc.sharc) && doc.sharc.abi === KERNEL_ABI ? kernelPayload(doc.sharc, this.rel.sharc)
       : modulePayload(doc.sharc, this.rel.sharc, this.sections.has('.boot'))
+    this.sharcRaw = 'sharc_raw' in doc ? rawPayload(doc.sharc_raw, this.rel.sharc) : null
     this.symbols = new Map()
     for (const [nm, v] of items(get(doc, 'symbols', {}))) {
       if (!Array.isArray(v) || v.length !== 2) throw new ModError(`${name}: symbol ${nm}`)
@@ -787,6 +790,22 @@ export function link(mods: Mod2[], image: Uint8Array, lock: store.Lock | null = 
     dspStored = syx.packMain(dspStream)
     if (dspStored.length > rel.sharc!.storedMax) throw new ModError('SHARC stored section exceeds the profile limit')
   }
+  const rawMods = order.filter(m => m.sharcRaw)
+  let rawLayout: { owner: [number, number]; app: string } | null = null
+  if (rawMods.length) {
+    // (a device's profile takes raw payloads or a bridge's modules, never both: rawPayload refuses a profile
+    // without raw, and modulePayload one without the bridge's ABI)
+    if (sharcStream === null) throw new ModError('SHARC mod needs the stock section-7 stream')
+    const [loads, patches] = linkRaw(rawMods.map(m => [m.id, m.sharcRaw!]), sharcStream, rel.sharc!)
+    const spans = patches.map(([a, o]): [number, number] => [a, a + o.length]).sort((x, y) => x[0] - y[0] || x[1] - y[1])
+    for (let i = 1; i < spans.length; i++)
+      if (spans[i][0] < spans[i - 1][1]) throw new ModError(`two raw SHARC patches overlap at 0x${spans[i][0].toString(16)}`)
+    dspStream = sharcRecords.insert(sharcStream, rel.sharc!, loads, [], patches)
+    dspStored = syx.packMain(dspStream)
+    if (dspStored.length > rel.sharc!.storedMax) throw new ModError('SHARC stored section exceeds the profile limit')
+    rawLayout = { owner: loads.length ? [Math.min(...loads.map(([a]) => a)), Math.max(...loads.map(([a, d]) => a + d.length))]
+      : [0, 0], app: rawMods[0].id }
+  }
   const tables = new Map<string, [Mod2, number]>()
   for (const m of order) for (const [c, e] of m.collections) tables.set(c, [m, e])
 
@@ -1218,6 +1237,27 @@ export function link(mods: Mod2[], image: Uint8Array, lock: store.Lock | null = 
   img.set(blob, image.length)
   img.set(tail, image.length + blob.length)
   const bad = copiedRules(order, img, dev)
+  if (dev.isa === 'coldfire') {
+    // ColdFire stops with an address error on an odd jump target (an emulator may not): a jsr or jmp abs.l in
+    // the mods' code, in a site or in the RAM image, must name an even address
+    const code: [number, Uint8Array, string][] = []
+    for (const m of order) for (const s of m.sites) if (s.kind === 'code')
+      code.push([s.addr, img.slice(s.addr - dev.mainLoad, s.addr - dev.mainLoad + s.len), `${m.label()} site ${hex8(s.addr)}`])
+    for (const m of order) if (m.size('.run')) {
+      const at = base.get(key(m.id, '.run'))!
+      code.push([at, ddr.slice(at - ddrBase, at - ddrBase + m.size('.run')), `${m.label()} .run`])
+    }
+    for (const [at, data, what] of code) {
+      for (let i = 0; i < data.length - 5; i += 2) {
+        if (data[i] === 0x4e && (data[i + 1] === 0xb9 || data[i + 1] === 0xf9)) {
+          const t = ((data[i + 2] << 24) | (data[i + 3] << 16) | (data[i + 4] << 8) | data[i + 5]) >>> 0
+          if (t % 2 && ddrBase <= t && t < bssEnd)
+            bad.push(`${what}: a jsr/jmp at ${hex8(at + i)} goes to the odd address ${hex8(t)} (align the code: `
+              + '.balign 2 at the start of each .run section)')
+        }
+      }
+    }
+  }
   for (const m of order) {
     for (const s of m.sites) {
       if (s.kind === 'code') {
@@ -1263,11 +1303,14 @@ export function link(mods: Mod2[], image: Uint8Array, lock: store.Lock | null = 
     blob_len: blob.length, payload: payMods.length ? [payAt, payEnd] : null, sections, ddr_spare: ddrEnd - bssEnd, fast_spare: fastEnd - fastAt, ddr_size: ddrEnd - ddrBase,
     fast_size: fastEnd - fastBase,
   }
-  if (kernelMods.length || sharcMods.length) {
+  if (kernelMods.length || sharcMods.length || rawLayout) {
     layout.sharc = { decoded: dspStream!.length, decoded_sha256: sha(dspStream!),
       stored: dspStored!.length, stored_sha256: sha(dspStored!) }
     if (kernelMods.length) {
       layout.sharc.kernels = kernelLayout
+    } else if (rawLayout) {
+      layout.sharc.owner = rawLayout.owner
+      layout.sharc.app = rawLayout.app
     } else {
       layout.sharc.owner = sharcMods[0].sharc.owner
       layout.sharc.app = sharcMods[0].id

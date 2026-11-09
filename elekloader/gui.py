@@ -291,7 +291,7 @@ class LoaderModel:
                             'blob': len(img) - len(self.img),
                             'sites': sum(len(m.sites) for m in mods)}
                 L = link.link(mods, self.img, self.store_lock(),
-                              sharc_stream=self.sharc_stream() if any(m.sharc for m in v2) else None)
+                              sharc_stream=self.sharc_stream() if any(m.sharc or m.sharc_raw for m in v2) else None)
             except (OSError, elemod.ModError) as e:
                 lines = [x.strip() for x in str(e).split('\n')[1:]] or [str(e)]
                 for p in paths:

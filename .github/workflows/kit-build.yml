@@ -1,12 +1,14 @@
 # The kit for websites (docs/INTEGRATING.md), built for a release: elekloader-kit-<version>.zip and
-# elekloader-catalog.json, attached to that release with their checksums in SHA256SUMS.txt.
+# elekloader-catalog.json, attached to that release with their checksums in SHA256SUMS.txt. The list is the
+# shop's: catalog.json of elekloader/shop, or of the repository the variable SHOP_REPO names.
 #
 # Run it by hand (Actions > kit-build > Run workflow) with the release's tag, once the release exists:
 #   - vX.Y.Z, an elekloader release: the catalog's cores are that release's core-*.elemod files;
 #   - kit-vX.Y.Z, a kit-only pre-release (never the latest, so the page and the apps keep the
 #     latest release's cores): the catalog's cores are the latest release's.
-# Either way the version is elekloader's at that tag. The catalog is web/catalog.json's list at
-# that tag, each file downloaded from its author's release or commit and read by the engine
+# Either way the version is elekloader's at that tag. The catalog is the list as the shop
+# repository's main has it now (the catalog's revision names that commit), each file downloaded
+# from its author's release or commit and read by the engine
 # (js/tools/kit.ts feed); then every pinned file is fetched again from its source, as a site's
 # sync does. Node is pinned: the same commit and Node give the same zip (packaging/build_kit.py).
 #
@@ -75,11 +77,21 @@ jobs:
           esac
           echo "CORES=$src" >> "$GITHUB_ENV"
           gh release download "$src" --repo "$GITHUB_REPOSITORY" --pattern "core-*.elemod" --dir build/core
+      - name: The shop's list (elekloader/shop, or the repository variable SHOP_REPO's)
+        env:
+          SHOP_REPO: ${{ vars.SHOP_REPO || 'elekloader/shop' }}
+        run: |
+          # a public repository with catalog.json and sections.json at its root, as its main has them
+          # (docs/WEB.md, "Where the list is")
+          git clone -q --depth 1 "https://github.com/$SHOP_REPO" build/shop-list
+          echo "ELEKLOADER_CATALOG=$PWD/build/shop-list/catalog.json" >> "$GITHUB_ENV"
+          echo "SHOP_REPO=$SHOP_REPO" >> "$GITHUB_ENV"
+          echo "SHOP_COMMIT=$(git -C build/shop-list rev-parse HEAD)" >> "$GITHUB_ENV"
       - name: The mod shop's files, from their authors' releases and commits
         run: |
           # as pages.yml fetches them; feed leaves out a file that cannot be fetched (a draft release)
           mkdir -p build/shop
-          python packaging/build_web.py --catalog-list web/catalog.json | while read -r how repo ref path; do
+          python packaging/build_web.py --catalog-list "$ELEKLOADER_CATALOG" | while read -r how repo ref path; do
             if [ "$how" = commit ]; then
               out="build/shop/${path##*/}"
               gh api "repos/$repo/contents/$path?ref=$ref" -H "Accept: application/vnd.github.raw" > "$out.part" \
@@ -92,8 +104,10 @@ jobs:
           done
       - name: The catalog
         run: |
-          node js/tools/kit.ts feed --list web/catalog.json --files build/shop --core build/core/core-*.elemod \
-            --core-source "$GITHUB_REPOSITORY@$CORES" --revision "$(git rev-parse HEAD)" --out build/kit/elekloader-catalog.json
+          # the revision is the list's commit, the shop repository's
+          node js/tools/kit.ts feed --list "$ELEKLOADER_CATALOG" --files build/shop --core build/core/core-*.elemod \
+            --core-source "$GITHUB_REPOSITORY@$CORES" --revision "$SHOP_COMMIT" \
+            --out build/kit/elekloader-catalog.json
       - name: Every pinned file downloads from its source, as a site's sync does
         run: node js/tools/kit.ts sync build/kit/elekloader-catalog.json build/sync-check
       - name: Keep as the run's artifact

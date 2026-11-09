@@ -490,3 +490,306 @@ def place_kernels(payloads, profile):
         loads.append((s_lo, struct.pack('<I', profile['stack_guard'])))
         fills.append((s_lo + 4, s_hi - s_lo - 4, 0))
     return loads, fills, patches, {'pool': [lo, hi], 'used': at - lo, 'mods': layout}
+
+
+RAW_KEYS = {'loads', 'patches', 'objects', 'tables', 'contribute'}
+RELOC_TYPES = ('sharc.abs24', 'sharc.abs32', 'hi16', 'lo16', 'le32')
+
+
+def _parts(parts, what):
+    """Load parts: ["hex", "..."] or ["stock", "0x...", n] -> ([bytes | (addr, n)], length)."""
+    data, n = [], 0
+    for part in parts if isinstance(parts, list) else [None]:
+        if isinstance(part, list) and len(part) == 2 and part[0] == 'hex' and isinstance(part[1], str) \
+                and re.fullmatch(r'(?:[0-9a-fA-F]{2})*', part[1]):
+            data.append(bytes.fromhex(part[1]))
+            n += len(data[-1])
+        elif isinstance(part, list) and len(part) == 3 and part[0] == 'stock' \
+                and isinstance(part[2], int) and part[2] > 0:
+            # bytes of the stock DSP stream's loads, read from the user's file at link time
+            data.append((int(part[1], 16), part[2]))
+            n += part[2]
+        else:
+            raise ModError('%s: a part must be ["hex", "..."] or ["stock", "0x...", n]' % what)
+    return data, n
+
+
+def _relocs(rel, size, what):
+    out = []
+    for r in rel or []:
+        if not (isinstance(r, list) and len(r) == 4 and isinstance(r[0], int) and r[1] in RELOC_TYPES
+                and isinstance(r[2], str) and r[2].startswith('sym:') and isinstance(r[3], int)):
+            raise ModError('%s: a relocation is [offset, type, "sym:NAME", addend], type one of %s'
+                           % (what, ', '.join(RELOC_TYPES)))
+        width = {'sharc.abs24': 6, 'sharc.abs32': 6, 'hi16': 2, 'lo16': 2, 'le32': 4}[r[1]]
+        if r[0] < 0 or r[0] + width > size:
+            raise ModError('%s: a relocation at +%d runs past its bytes' % (what, r[0]))
+        out.append((r[0], r[1], r[2][4:], r[3]))
+    return out
+
+
+def _object(doc, what):
+    """A relocatable DSP object (digikit's .dko.json layout): sections, symbols, relocs."""
+    if not isinstance(doc, dict) or not {'name', 'sections', 'symbols', 'relocs'} <= set(doc):
+        raise ModError('%s: an object has name, sections, symbols and relocs' % what)
+    secs = []
+    for sc in doc['sections']:
+        kind, align = sc.get('kind'), sc.get('align', 4)
+        if kind not in ('text', 'data', 'bss') or align not in (1, 2, 4, 8, 16, 32, 64) or not sc.get('name'):
+            raise ModError('%s: section %r needs a name, a kind (text, data, bss) and an align'
+                           % (what, sc.get('name')))
+        if kind == 'bss':
+            data, size = b'', int(sc['size'])
+        else:
+            data = bytes.fromhex(sc['hex'])
+            size = len(data)
+            if kind == 'text' and size % 2:
+                raise ModError('%s: text section %s is not whole parcels' % (what, sc['name']))
+        secs.append({'name': sc['name'], 'kind': kind, 'align': max(8 if kind == 'text' else 4, align),
+                     'data': data, 'size': size})
+    secs.sort(key=lambda x: ('text', 'data', 'bss').index(x['kind']))   # stable: digikit's layout
+    names = {sc['name'] for sc in secs}
+    syms = {}
+    for sy in doc['symbols']:
+        sec = sy.get('section')
+        if sec is None and 'abs' not in sy:
+            continue                            # an import
+        if sec is not None and sec not in names:
+            raise ModError('%s: symbol %s in unknown section %s' % (what, sy.get('name'), sec))
+        syms[sy['name']] = (sec, int(sy['abs'] if sec is None else sy['value']), bool(sy.get('global')))
+    rels = []
+    for r in doc['relocs']:
+        sc = next((x for x in secs if x['name'] == r.get('section')), None)
+        if sc is None or sc['kind'] != 'text' or r.get('type') not in ('sharc.abs24', 'sharc.abs32'):
+            raise ModError('%s: a relocation needs a text section and type sharc.abs24 or sharc.abs32' % what)
+        if r['offset'] * 2 + 6 > sc['size']:
+            raise ModError('%s: a relocation at parcel %d runs past %s' % (what, r['offset'], sc['name']))
+        rels.append((sc['name'], int(r['offset']) * 2, r['type'], r['symbol'], int(r.get('addend', 0))))
+    return {'name': doc['name'], 'sections': secs, 'symbols': syms, 'relocs': rels}
+
+
+def raw_payload(doc, profile):
+    """A raw SHARC payload (`sharc_raw`): loads at fixed addresses in owned L2, relocatable objects the
+    linker places there, tables mods add rows to, and whole-instruction patches of stock L1 code (their
+    bytes may name symbols). Checked against the profile; the stream is checked again by insert()."""
+    if not profile or not profile.get('raw'):
+        raise ModError('this device takes no raw SHARC payload')
+    if not isinstance(doc, dict) or not set(doc) <= RAW_KEYS:
+        raise ModError('sharc_raw has only %s' % ', '.join(sorted(RAW_KEYS)))
+    loads, patches, objects, tables, contrib = [], [], [], {}, []
+    for item in doc.get('loads', []):
+        if not isinstance(item, dict) or set(item) not in ({'addr', 'hex'}, {'addr', 'parts'}):
+            raise ModError('sharc_raw load needs exactly addr and hex or parts')
+        addr = int(item['addr'], 16)
+        data, n = _parts([['hex', item['hex']]] if 'hex' in item else item['parts'], 'sharc_raw load')
+        lo, hi = byte_span(profile, addr, n)
+        if addr % 4 or n % 4 or not any(s <= lo and hi <= e for s, e in profile['owned_ranges']):
+            raise ModError('sharc_raw load 0x%x is unaligned or outside the owned L2' % addr)
+        loads.append((addr, data[0] if len(data) == 1 and isinstance(data[0], bytes) else data))
+    for item in doc.get('patches', []):
+        if not isinstance(item, dict) or not {'addr', 'stock', 'new'} <= set(item) <= {'addr', 'stock', 'new', 'relocs'}:
+            raise ModError('sharc_raw patch needs addr, stock, new (and relocs)')
+        addr = int(item['addr'], 16)
+        old, new = bytes.fromhex(item['stock']), bytes.fromhex(item['new'])
+        if not old or len(old) != len(new) or addr % 2 or len(old) % 2:
+            raise ModError('sharc_raw patch 0x%x needs equal, even, nonempty stock and new' % addr)
+        lo, hi = byte_span(profile, addr, len(old), check_protected=False)
+        if not any(s <= lo and hi <= e for s, e in profile['patch_ranges']):
+            raise ModError('sharc_raw patch 0x%x is outside the profile patch range' % addr)
+        patches.append((addr, old, new, _relocs(item.get('relocs'), len(new), 'sharc_raw patch 0x%x' % addr)))
+    for i, ob in enumerate(doc.get('objects', [])):
+        objects.append(_object(ob, 'sharc_raw object %d' % i))
+    for name, t in doc.get('tables', {}).items():
+        if not isinstance(t, dict) or not isinstance(t.get('row'), int) or t['row'] <= 0 or t['row'] % 4 \
+                or t.get('kind') not in ('list', 'indexed'):
+            raise ModError('sharc_raw table %s: {"kind": "list" or "indexed", "row": bytes (a multiple of 4)}'
+                           % name)
+        if t['kind'] == 'list':
+            end, _n = _parts([['hex', t.get('end', '')]], 'table %s end' % name)
+            if not isinstance(t.get('max'), int) or t['max'] <= 0:
+                raise ModError('sharc_raw table %s: a list table needs max (rows)' % name)
+            tables[name] = {'kind': 'list', 'row': t['row'], 'max': t['max'], 'end': end[0]}
+        else:
+            if not isinstance(t.get('rows'), int) or t['rows'] <= 0:
+                raise ModError('sharc_raw table %s: an indexed table needs rows' % name)
+            dflt, n = _parts(t.get('default', [['hex', '00' * t['row']]]), 'table %s default' % name)
+            if n != t['row']:
+                raise ModError('sharc_raw table %s: its default row is not %d bytes' % (name, t['row']))
+            tables[name] = {'kind': 'indexed', 'row': t['row'], 'rows': t['rows'], 'default': dflt}
+    for c in doc.get('contribute', []):
+        if not isinstance(c, dict) or not isinstance(c.get('to'), str):
+            raise ModError('sharc_raw contribute: {"to", "parts", "relocs", "order" or "index"}')
+        data, n = _parts(c.get('parts', []), 'sharc_raw contribute to %s' % c['to'])
+        contrib.append({'to': c['to'], 'order': int(c.get('order', 50)), 'index': c.get('index'),
+                        'data': data, 'len': n,
+                        'relocs': _relocs(c.get('relocs'), n, 'sharc_raw contribute to %s' % c['to'])})
+    if not (loads or patches or objects or tables or contrib):
+        raise ModError('sharc_raw is empty')
+    return {'loads': loads, 'patches': patches, 'objects': objects, 'tables': tables, 'contribute': contrib}
+
+
+def _put(buf, at, kind, v):
+    """Write value `v` at byte `at` of `buf` by relocation kind (digikit's encodings)."""
+    if kind == 'sharc.abs24':
+        if not 0 <= v < 1 << 24:
+            raise ModError('SHARC relocation: 0x%x does not fit 24 bits' % v)
+        buf[at + 2] = (v >> 16) & 0xff
+        buf[at + 4:at + 6] = (v & 0xffff).to_bytes(2, 'little')
+    elif kind == 'sharc.abs32':
+        v &= 0xffffffff
+        buf[at + 2:at + 4] = (v >> 16).to_bytes(2, 'little')
+        buf[at + 4:at + 6] = (v & 0xffff).to_bytes(2, 'little')
+    elif kind == 'hi16':
+        buf[at:at + 2] = ((v >> 16) & 0xffff).to_bytes(2, 'little')
+    elif kind == 'lo16':
+        buf[at:at + 2] = (v & 0xffff).to_bytes(2, 'little')
+    else:                                      # le32: a data word
+        buf[at:at + 4] = (v & 0xffffffff).to_bytes(4, 'little')
+
+
+def l2_pc(profile, addr):
+    """An L2 byte address -> the short-word PC of the instruction there."""
+    lo, hi, base = profile['l2_pc16']
+    pc = lo + (addr - base) // 2
+    if addr % 2 or not lo <= pc < hi:
+        raise ModError('SHARC code at 0x%x has no L2 short-word PC' % addr)
+    return pc
+
+
+def link_raw(payloads, stream, profile):
+    """Link the raw payloads of a build, in order (core first): the fixed loads stay where they are;
+    each object is placed, in order, at the lowest free address of the owned L2 (its bss reserved, not
+    loaded), then each table; symbols resolve across payloads (an object's text symbols are short-word
+    PCs, its data symbols and the tables byte addresses). -> (loads, patches, symbols)."""
+    loads = [(a, resolve_load(stream, profile, d)) for _id, p in payloads for a, d in p['loads']]
+    stock = [byte_span(profile, r.target, r.count, check_protected=False)
+             for r in parse(stream, profile) if r.flags in (LOAD, FILL)]
+    taken = sorted([(a, a + len(d)) for a, d in loads] + stock)
+    (own_lo, own_hi), = profile['owned_ranges']
+
+    def place(size, align):
+        at = (own_lo + align - 1) // align * align
+        for lo, hi in taken:
+            if at + size <= lo:
+                break
+            if hi > at:
+                at = (hi + align - 1) // align * align
+        if at + size > own_hi:
+            raise ModError('the raw SHARC objects and tables need L2 to 0x%x, past 0x%x' % (at + size, own_hi))
+        taken.append((at, at + size))
+        taken.sort()
+        return at
+
+    symbols, owner, placed = {}, {}, []
+
+    def define(mid, name, v):
+        if name in symbols and owner[name] != mid:
+            raise ModError('the SHARC symbol %s is defined by %s and %s' % (name, owner[name], mid))
+        symbols[name], owner[name] = v, mid
+
+    for mid, p in payloads:
+        for ob in p['objects']:
+            align = max(sc['align'] for sc in ob['sections'])
+            at, size, base = 0, 0, {}
+            for sc in ob['sections']:          # text and data first, then bss (as digikit lays them out)
+                if sc['kind'] != 'bss':
+                    at = (at + sc['align'] - 1) // sc['align'] * sc['align']
+                    base[sc['name']] = at
+                    at += sc['size']
+            loaded = (at + 3) // 4 * 4
+            at = loaded
+            for sc in ob['sections']:
+                if sc['kind'] == 'bss':
+                    at = (at + sc['align'] - 1) // sc['align'] * sc['align']
+                    base[sc['name']] = at
+                    at += sc['size']
+            addr = place(max(at, 4), align)
+            placed.append((mid, ob, addr, base, loaded))
+            for nm, (sec, v, glob) in ob['symbols'].items():
+                if sec is None:
+                    val = v
+                else:
+                    kind = next(sc['kind'] for sc in ob['sections'] if sc['name'] == sec)
+                    val = l2_pc(profile, addr + base[sec]) + v if kind == 'text' else addr + base[sec] + v
+                if glob:
+                    define(mid, nm, val)
+                ob.setdefault('_local', {})[nm] = val
+    tabs = {}
+    for mid, p in payloads:
+        for name, t in p['tables'].items():
+            if name in tabs:
+                raise ModError('the SHARC table %s is declared by %s and %s' % (name, tabs[name][0], mid))
+            n = t['max'] + 1 if t['kind'] == 'list' else t['rows']
+            size = t['row'] * n if t['kind'] == 'indexed' else t['row'] * t['max'] + len(t['end'])
+            tabs[name] = (mid, t, place((size + 3) // 4 * 4, 4))
+            define(mid, name, tabs[name][2])
+
+    def value(mid, name, local=None):
+        if local and name in local:
+            return local[name]
+        if name not in symbols:
+            raise ModError('%s: the SHARC symbol %s is defined by no mod in the build' % (mid, name))
+        return symbols[name]
+
+    out = list(loads)
+    for mid, ob, addr, base, loaded in placed:
+        img = bytearray(loaded)
+        for sc in ob['sections']:
+            if sc['kind'] != 'bss':
+                img[base[sc['name']]:base[sc['name']] + sc['size']] = sc['data']
+        for sec, off, kind, sym, add in ob['relocs']:
+            _put(img, base[sec] + off, kind, value(mid, sym, ob['_local']) + add)
+        if loaded:
+            out.append((addr, bytes(img)))
+    rows = {name: [] for name in tabs}
+    for mid, p in payloads:
+        for c in p['contribute']:
+            if c['to'] not in tabs:
+                raise ModError('%s adds to the SHARC table %s, which no mod declares' % (mid, c['to']))
+            t = tabs[c['to']][1]
+            if c['len'] != t['row']:
+                raise ModError('%s: a row of the SHARC table %s is not %d bytes' % (mid, c['to'], t['row']))
+            row = bytearray(resolve_load(stream, profile, c['data']))
+            for off, kind, sym, add in c['relocs']:
+                _put(row, off, kind, value(mid, sym) + add)
+            rows[c['to']].append((c['order'], mid, c['index'], bytes(row)))
+    for name, (mid, t, addr) in tabs.items():
+        if t['kind'] == 'list':
+            rs = sorted(rows[name], key=lambda r: r[:2])
+            if len(rs) > t['max']:
+                raise ModError('the SHARC table %s takes %d rows, not %d' % (name, t['max'], len(rs)))
+            data = b''.join(r[3] for r in rs) + t['end']
+        else:
+            body = [resolve_load(stream, profile, t['default'])] * t['rows']
+            by = {}
+            for _o, m, i, r in rows[name]:
+                if not isinstance(i, int) or not 0 <= i < t['rows']:
+                    raise ModError('%s: a row of the SHARC table %s needs an index 0-%d' % (m, name, t['rows'] - 1))
+                if i in by:
+                    raise ModError('%s and %s both give row %d of the SHARC table %s' % (by[i], m, i, name))
+                by[i], body[i] = m, r
+            data = b''.join(body)
+        out.append((addr, data + bytes(-len(data) % 4)))
+    patches = []
+    for mid, p in payloads:
+        for a, old, new, rel in p['patches']:
+            new = bytearray(new)
+            for off, kind, sym, add in rel:
+                _put(new, off, kind, value(mid, sym) + add)
+            patches.append((a, old, bytes(new)))
+    return out, patches, symbols
+
+
+def stock_bytes(stream, profile, addr, n):
+    """-> `n` bytes the stock DSP stream loads at loader address `addr` (one stock load holds them)."""
+    for r in parse(stream, profile):
+        if r.flags == LOAD and r.target <= addr and addr + n <= r.target + r.count:
+            return r.raw[16 + addr - r.target:16 + addr - r.target + n]
+    raise ModError('sharc_raw stock part 0x%x+%d is not inside one stock load' % (addr, n))
+
+
+def resolve_load(stream, profile, data):
+    """A raw load's data: bytes, or its parts with each stock part read from `stream`."""
+    if isinstance(data, bytes):
+        return data
+    return b''.join(p if isinstance(p, bytes) else stock_bytes(stream, profile, p[0], p[1]) for p in data)

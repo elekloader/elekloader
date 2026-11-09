@@ -13,9 +13,19 @@
 
 #define SDK_ALPHA_MACHINES 16
 #define SDK_ALPHA_VOICES 8
+#define SDK_ALPHA_TRACKS 4             /* the synth tracks: their CCs, and mono machines */
 #define dev_fillrect fw_fillrect
 #define dev_active dnm_sdk_active
 const struct sdk_alpha_entry *dnm_sdk_active(void);   /* sdk_alpha.c */
+/* mono machines, on core-dn1 5.3's ev_live_note */
+#define dev_note_on(t, n, v, source) fw_note_on(t, n, v, source, 0, -1)
+#define dev_note_off fw_note_off
+
+static inline int32_t dev_track_machine(int32_t track)
+{
+    uint8_t *kit = fw_kit;
+    return kit ? FW_SOUND_SLOT(kit, track, 0) >> 8 : -1;      /* slot 0: the machine */
+}
 
 extern const struct elek_machine *const sdk_alpha_machines[];   /* the table, ending in 0 */
 

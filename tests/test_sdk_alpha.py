@@ -344,6 +344,32 @@ class SdkAlphaTests(unittest.TestCase):
         doc['relocs'][-1][3] = 'sym:external_render'      # declared only: the builder pairs it, or refuses
         self.assertEqual(sdk_alpha_registrations(doc, {'.run': raw})[120]['render'], 'external_render')
 
+    def test_sdk_alpha_play_and_prio_registration(self):
+        doc, raw = sdk_alpha_test_document()
+        layout = sdk_alpha_registrations(doc, {'.run': raw})[120]
+        self.assertEqual((layout['play'], layout['prio']), (0, 0))         # ELEK_POLY by default
+        raw[M + B.MACHINE_PLAY], raw[M + B.MACHINE_PRIO] = 2, 1
+        layout = sdk_alpha_registrations(doc, {'.run': raw})[120]
+        self.assertEqual((layout['play'], layout['prio']), (2, 1))
+        for field, name in ((B.MACHINE_PLAY, 'play'), (B.MACHINE_PRIO, 'prio')):
+            doc, raw = sdk_alpha_test_document()
+            raw[M + field] = 3
+            with self.subTest(field=name), self.assertRaisesRegex(
+                    build.BuildError, r'^sdk alpha: machine "Empty" \(id 120\): %s is 3: give ELEK_' % name):
+                sdk_alpha_registrations(doc, {'.run': raw})
+
+    def test_a_mono_machine_is_refused_where_no_companion_carries_it_out(self):
+        for device in (Digitakt1, Digitone1, Digitone2):
+            if 'mono' in device.features:
+                with self.subTest(device=device.key), tempfile.TemporaryDirectory() as tmp:
+                    _path, _mod, layouts = sdk_alpha_build(str(ROOT / 'examples/sdk-mono'), device.stock(), tmp)
+                    self.assertEqual(layouts[124]['play'], 1)
+                continue
+            with self.subTest(device=device.key), tempfile.TemporaryDirectory() as tmp, \
+                    self.assertRaisesRegex(build.BuildError, r'^sdk alpha: machine "SDK Mono" \(id 124\): ELEK_MONO '
+                                                             r'is not supported on %s [\d.]+ yet$' % device.key):
+                sdk_alpha_build(str(ROOT / 'examples/sdk-mono'), device.stock(), tmp)
+
     def test_a_voice_state_too_big_does_not_compile(self):
         cc = shutil.which('cc')
         if not cc:
@@ -365,6 +391,8 @@ class SdkAlphaTests(unittest.TestCase):
         layout = {(t, f): int(n) for t, f, n in re.findall(r'^ELEK_OFFSET\((\w+), (\w+), (\d+)\);', header, re.M)}
         layout.update({(t, None): int(n) for t, n in re.findall(r'^ELEK_SIZE\((\w+), (\d+)\);', header, re.M)})
         self.assertEqual(layout, B.LAYOUT)
+        for names in (B.PLAY_NAMES, B.PRIO_NAMES):                       # the enums, in order
+            self.assertIn('enum { %s };' % ', '.join(names), header)
         self.assertEqual(ELEK_STATE_BYTES, int(re.search(r'#define ELEK_VOICE_STATE_MAX (\d+)', header)[1]))
 
     def test_a_callbacks_input_is_read_only(self):

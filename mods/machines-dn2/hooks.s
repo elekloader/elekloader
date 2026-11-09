@@ -371,3 +371,14 @@ dn2_load_type:
     .globl dn2_brain, dn2_syn_methods
     .set dn2_brain, BRAIN
     .set dn2_syn_methods, SYN_METHODS
+| TRK SETUP's PLAY MODE and MONO NOTE PRIO (sdk_alpha.c): the owner of the tracks' settings objects, made
+| once at boot (0x4018e89e returns it), the object of track t (0x40030e66(*(owner + TRACK_LIST), t)), and
+| the menu's own getters and setters, which also tell the voice allocator.
+    .globl dn2_tracks_root, dn2_track_object
+    .globl dn2_play_mode, dn2_set_play_mode, dn2_mono_prio, dn2_set_mono_prio
+    .set dn2_tracks_root, TRACKS_ROOT
+    .set dn2_track_object, TRACK_OBJECT
+    .set dn2_play_mode, PLAY_MODE_GET
+    .set dn2_set_play_mode, PLAY_MODE_SET
+    .set dn2_mono_prio, MONO_PRIO_GET
+    .set dn2_set_mono_prio, MONO_PRIO_SET

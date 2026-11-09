@@ -132,7 +132,8 @@ class Mod2:
         if format_of(doc) != FORMAT2:
             raise ModError('%s: not a format-2 .elemod file' % name)
         extra = set(doc) - COMMON - {'sections', 'symbols', 'exports', 'imports', 'weak',
-                                     'relocs', 'collections', 'contribute', 'copied', 'storage', 'sharc'}
+                                     'relocs', 'collections', 'contribute', 'copied', 'storage', 'sharc',
+                                     'sharc_raw'}
         if extra:
             raise ModError('%s: unknown fields %s' % (name, sorted(extra)))
         for k in ('id', 'version', 'target', 'sections'):
@@ -170,6 +171,8 @@ class Mod2:
             self.sharc = sharc.kernel_payload(doc['sharc'], self.rel.sharc)
         else:
             self.sharc = sharc.module_payload(doc['sharc'], self.rel.sharc, '.boot' in self.sections)
+        self.sharc_raw = (sharc.raw_payload(doc['sharc_raw'], self.rel.sharc)
+                          if 'sharc_raw' in doc else None)
         self.symbols = {}
         for nm, v in doc.get('symbols', {}).items():
             if not isinstance(v, list) or len(v) != 2:
@@ -796,6 +799,25 @@ def link(mods, image, lock=None, *, sharc_stream=None):
         dsp_stored = syx.pack_main(dsp_stream)
         if len(dsp_stored) > rel.sharc['stored_max']:
             raise ModError('SHARC stored section exceeds the profile limit')
+    raw_mods = [m for m in order if m.sharc_raw]
+    if raw_mods:
+        # (a device's profile takes raw payloads or a bridge's modules, never both: raw_payload
+        # refuses a profile without 'raw', and module_payload one without the bridge's ABI)
+        if sharc_stream is None:
+            raise ModError('SHARC mod needs the stock section-7 stream')
+        loads, patches, _dsp_syms = sharc.link_raw([(m.id, m.sharc_raw) for m in raw_mods],
+                                                   sharc_stream, rel.sharc)
+        spans = sorted((a, a + len(o)) for a, o, _n in patches)
+        for (a0, a1), (b0, _b1) in zip(spans, spans[1:]):
+            if b0 < a1:
+                raise ModError('two raw SHARC patches overlap at 0x%x' % b0)
+        dsp_stream = sharc.insert(sharc_stream, rel.sharc, loads=loads, patches=patches)
+        dsp_stored = syx.pack_main(dsp_stream)
+        if len(dsp_stored) > rel.sharc['stored_max']:
+            raise ModError('SHARC stored section exceeds the profile limit')
+        payload = {'owner': (min(a for a, _d in loads), max(a + len(d) for a, d in loads))
+                   if loads else (0, 0), 'entries': None}
+        sharc_mods = raw_mods
     tables = {c: (m, e) for m in order for c, e in m.collections.items()}
 
     entries = {c: [] for c in tables}
@@ -1186,6 +1208,21 @@ def link(mods, image, lock=None, *, sharc_stream=None):
     if new_lock is not None:
         img += store.trailer(new_lock)
     bad = _copied_rules(order, bytes(img), dev)
+    if dev.isa == 'coldfire':
+        # ColdFire stops with an address error on an odd jump target (an emulator may not): a jsr or jmp
+        # abs.l in the mods' code, in a site or in the RAM image, must name an even address
+        code = [(s['addr'], bytes(img[s['addr'] - dev.main_load:s['addr'] - dev.main_load + s['len']]),
+                 '%s site 0x%08x' % (m.label(), s['addr'])) for m in order for s in m.sites if s['kind'] == 'code']
+        code += [(base[(m.id, '.run')], bytes(ddr[base[(m.id, '.run')] - ddr_base:
+                                                  base[(m.id, '.run')] - ddr_base + m.size('.run')]),
+                  '%s .run' % m.label()) for m in order if m.size('.run')]
+        for at, data, what in code:
+            for i in range(0, len(data) - 5, 2):
+                if data[i:i + 2] in (b'\x4e\xb9', b'\x4e\xf9'):
+                    t = int.from_bytes(data[i + 2:i + 6], 'big')
+                    if t % 2 and ddr_base <= t < bss_end:
+                        bad.append('%s: a jsr/jmp at 0x%08x goes to the odd address 0x%08x (align the code: '
+                                   '.balign 2 at the start of each .run section)' % (what, at + i, t))
     for m in order:
         for s in m.sites:
             if s['kind'] == 'code':

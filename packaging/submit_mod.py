@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-2.0-or-later
-"""A mod submitted with the "Submit a mod" issue form, checked and written into web/catalog.json.
+"""A mod submitted with the "Submit a mod" issue form, checked and written into catalog.json.
 
     python packaging/submit_mod.py --issue-body body.md [--files-dir build/shop] [--cores-dir build/core]
                                    [--report report.md]
@@ -39,13 +39,13 @@ on its own ("thumb": tag and file, or commit and path, and sha256), so it outliv
 With --update a release's thumbnail goes in only when it is the very picture the entry has (the pin moves to it);
 another one waits for the form, and the entry keeps its own.
 
-Automatic updates are on for every entry unless its author opts out ("auto_update": false in web/catalog.json): the
+Automatic updates are on for every entry unless its author opts out ("auto_update": false in catalog.json): the
 form's "Updates" box ticked, or a "Shop auto-update: off" line in the release's notes, sets it on the files that go in
 (and on this repository's files the form lists already, when only the setting changes); the box unticked, or "Shop
 auto-update: on" in the notes, clears it. With --update an opted-out entry is left alone, and a newer release whose
 notes say "off" is not taken: it opts the repository out instead.
 
-web/catalog.json keeps its own layout (render() reproduces it byte for byte). Nothing in the release is run.
+catalog.json keeps its own layout (render() reproduces it byte for byte). Nothing in the release is run.
 
 Exit 0: entries added or changed (the report says what); 1: nothing added, refused (the report says why);
 2: nothing new.
@@ -72,7 +72,7 @@ from build_web import SHOP_LICENCES, clash, footprint  # noqa: E402
 import thumbs  # noqa: E402
 from elekloader import link  # noqa: E402
 
-CATALOG = os.path.join(ROOT, 'web', 'catalog.json')
+CATALOG = os.environ.get('ELEKLOADER_CATALOG') or os.path.join(ROOT, 'build', 'shop-list', 'catalog.json')   # build_web.catalog_path
 REPO = re.compile(r'[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+')
 TAG = re.compile(r'[A-Za-z0-9_.+-]{1,100}')
 FILE = re.compile(r'[\w.-]+\.(elemod|dtmod)')
@@ -82,17 +82,17 @@ COMMIT = re.compile(r'[0-9a-f]{40}')
 CORE_REPOS = {(os.environ.get('GITHUB_REPOSITORY') or 'elekloader/elekloader').lower(), 'elekloader/elekloader'}
 # repositories that moved, by their old names (the shop's list still names some by these)
 MOVED = {'irpina/elekloader': 'elekloader/elekloader'}
-# the issue form's fields (.github/ISSUE_TEMPLATE/submit-mod.yml), by their labels
+# the issue form's fields (elekloader/shop's .github/ISSUE_TEMPLATE/submit-mod.yml), by their labels
 FIELDS = {'Repository': 'repo', 'Release tag': 'tag', 'Or a commit': 'commit', 'Summary': 'summary',
           'Tested on a unit': 'on_unit', 'Licence, for files that name none': 'license', 'Only these files': 'files',
           'Why': 'why', 'Updates': 'updates'}
-# web/catalog.json's layout: these keys share a line, in this order; any other key gets a line of its own
+# catalog.json's layout: these keys share a line, in this order; any other key gets a line of its own
 LINES = (('repo', 'tag', 'file', 'kind', 'commit'), ('path',), ('device', 'needs_core', 'title', 'version', 'license'),
          ('sha256',), ('summary',), ('on_unit',))
 
 
 def render(doc):
-    """web/catalog.json as it is laid out by hand: an item's short keys on shared lines."""
+    """catalog.json as it is laid out by hand: an item's short keys on shared lines."""
     def item(it):
         lines, used = [], set()
         for group in LINES:
@@ -649,7 +649,7 @@ def submit(fields, catalog=CATALOG, files_dir=None, cores_dir=None, update=False
 
 def remove(fields, catalog=CATALOG, files_dir=None):
     """The "Remove a mod" form: the shop's entries from one repository (all, or those "Only these files" names) leave
-    web/catalog.json. Cores stay (a maintainer removes those). The report's own_only says whether nothing else is
+    catalog.json. Cores stay (a maintainer removes those). The report's own_only says whether nothing else is
     touched: no held entry, and no other shop mod for the same device and OS needs a mod that goes.
     -> (status, report): 0 entries removed, 1 refused, 2 nothing to remove."""
     r = {'repo': '', 'tag': '', 'rows': [], 'errors': [], 'changed': False, 'removal': True, 'own_only': False}

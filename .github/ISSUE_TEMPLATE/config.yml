@@ -1,0 +1,10 @@
+# The shop's forms (Submit a mod, Remove a mod, Report a picture) are in elekloader/shop, with the list they
+# change; an old link or an older `elekloader publish` lands here, one click from them.
+blank_issues_enabled: true
+contact_links:
+  - name: Submit, update or remove a mod in the shop
+    url: https://github.com/elekloader/shop/issues/new/choose
+    about: The shop's list and its forms are in elekloader/shop.
+  - name: Report a shop picture
+    url: https://github.com/elekloader/shop/issues/new?template=report-picture.yml
+    about: A thumbnail in the shop that shouldn't be there.

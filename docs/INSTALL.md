@@ -7,8 +7,9 @@ needs the stock OS file for your device ([below](#the-stock-os-file)).
 
 ## In your browser
 
-Nothing to install: <https://elekloader.github.io/elekloader/>.
-Drop in your stock OS file, add mods from its library or your own, tick them,
+Nothing to install: the [Mod Shop](https://elekloader.github.io/shop/) for mods from the shop, or the
+[builder](https://elekloader.github.io/elekloader/) for `.elemod` files you already have.
+Drop in your stock OS file, add mods, tick them,
 build, and download the `.syx` (and, for the Octatrack, the `.bin`). The build runs in the page, in
 Python compiled to WebAssembly ([Pyodide](https://pyodide.org)), with
 elekloader's own code, unchanged. The page shows its version and commit, and

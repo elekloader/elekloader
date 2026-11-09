@@ -2,9 +2,9 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 """The shop's mods, kept up to date from their authors' newer releases (.github/workflows/shop-updates.yml).
 
-    python packaging/shop_updates.py --list [--repo owner/name] [--catalog web/catalog.json]
+    python packaging/shop_updates.py --list [--repo owner/name] [--catalog catalog.json]
     python packaging/shop_updates.py --apply owner/name --files-dir build/shop --cores-dir build/core
-                                     [--catalog web/catalog.json] [--report report.md] [--result result.json]
+                                     [--catalog catalog.json] [--report report.md] [--result result.json]
 
 Every mod is followed unless its author opted out (an entry with "auto_update": false: the Submit a mod form's
 "Updates" box, or "Shop auto-update: off" in the release's notes).

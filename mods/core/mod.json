@@ -1,10 +1,10 @@
 {
- "id": "core", "version": "4.1",
+ "id": "core", "version": "4.3",
  "license": "GPL-2.0-or-later",
  "title": "core", "category": "Framework", "author": "irpina",
- "description": "The boot copier, the hook bus, SRC machine slots, from 3.0 the firmware locations as named exports and machines that describe their own page, and from 4.0 256 KB for the mods' code, tables and variables (from 0x47BC0000, in place of the 128 KB at 0x47BE0000), and from 4.1 the master output: the master pair before it goes out (ev_render_master), pages of the mods' own among the master pages (core_mpages) and rows in SETTINGS > GLOBAL FX/MIX (ev_fxmix): every other mod needs it. On its own it changes nothing the unit does.",
+ "description": "The boot copier, the hook bus, SRC machine slots, from 3.0 the firmware locations as named exports and machines that describe their own page, and from 4.0 256 KB for the mods' code, tables and variables (from 0x47BC0000, in place of the 128 KB at 0x47BE0000), and from 4.1 the master output: the master pair before it goes out (ev_render_master), pages of the mods' own among the master pages (core_mpages) and rows in SETTINGS > GLOBAL FX/MIX (ev_fxmix), and from 4.2 the played notes (ev_live_note, fw_note_on, fw_note_off), and from 4.3 the MIDI CCs the unit receives, before the stock applies them (ev_midi_cc): every other mod needs it. On its own it changes nothing the unit does.",
  "device": "digitakt-mk1", "os": "1.53",
- "sources": ["core.s", "settings.s", "render.s", "machines.s", "fw.s", "master.s"],
+ "sources": ["core.s", "settings.s", "render.s", "machines.s", "fw.s", "master.s", "notes.s", "midi.s"],
  "defsym": {
   "DRAWALL": "0x400ca382",
   "KEYDISP": "0x400084fe",
@@ -60,7 +60,12 @@
   "MV_NAMES": "0x4197cf88",
   "FXMIX_RET": "0x40044ad2",
   "FW_INVALIDATE": "0x400c9812",
-  "MV_CLEAR": "0x40039982"
+  "MV_CLEAR": "0x40039982",
+  "NOTE_ON": "0x400d53dc",
+  "NOTE_OFF": "0x400d575e",
+  "NOTE_ON_LINK": "-104",
+  "NOTE_OFF_LINK": "-108",
+  "ROUTER_EXIT": "0x40015adc"
  },
  "sites": [
   {"addr": "0x40000538", "stock": "4eb940001c94", "op": "jsr", "target": "boot"},
@@ -108,7 +113,10 @@
   {"addr": "0x401845ec", "stock": "400395dc", "op": "ptr", "target": "core_mview_draw"},
   {"addr": "0x40184628", "stock": "40030930", "op": "ptr", "target": "core_mview_title"},
   {"addr": "0x401846bc", "stock": "400388ee", "op": "ptr", "target": "core_mview_enc"},
-  {"addr": "0x40184698", "stock": "40039982", "op": "ptr", "target": "core_mview_clear"}
+  {"addr": "0x40184698", "stock": "40039982", "op": "ptr", "target": "core_mview_clear"},
+  {"addr": "0x400d53dc", "stock": "4e56ff98707f", "op": "jmp", "target": "core_note_on"},
+  {"addr": "0x400d575e", "stock": "4e56ff94707f", "op": "jmp", "target": "core_note_off"},
+  {"addr": "0x400158ec", "stock": "2c2f002cb082", "op": "jsr", "target": "core_midi_cc"}
  ],
  "ports": {
   "1.54": {
@@ -167,7 +175,12 @@
     "MV_NAMES": "0x4197df88",
     "FXMIX_RET": "0x40044ad2",
     "FW_INVALIDATE": "0x400c9a3a",
-    "MV_CLEAR": "0x40039982"
+    "MV_CLEAR": "0x40039982",
+    "NOTE_ON": "0x400d5604",
+    "NOTE_OFF": "0x400d5986",
+    "NOTE_ON_LINK": "-104",
+    "NOTE_OFF_LINK": "-108",
+    "ROUTER_EXIT": "0x40015adc"
    },
    "sites": [
     {"addr": "0x40000538", "stock": "4eb940001c94", "op": "jsr", "target": "boot"},
@@ -215,7 +228,10 @@
     {"addr": "0x401848ec", "stock": "400395dc", "op": "ptr", "target": "core_mview_draw"},
     {"addr": "0x40184928", "stock": "40030930", "op": "ptr", "target": "core_mview_title"},
     {"addr": "0x401849bc", "stock": "400388ee", "op": "ptr", "target": "core_mview_enc"},
-    {"addr": "0x40184998", "stock": "40039982", "op": "ptr", "target": "core_mview_clear"}
+    {"addr": "0x40184998", "stock": "40039982", "op": "ptr", "target": "core_mview_clear"},
+    {"addr": "0x400d5604", "stock": "4e56ff98707f", "op": "jmp", "target": "core_note_on"},
+    {"addr": "0x400d5986", "stock": "4e56ff94707f", "op": "jmp", "target": "core_note_off"},
+    {"addr": "0x400158ec", "stock": "2c2f002cb082", "op": "jsr", "target": "core_midi_cc"}
    ]
   }
  },
@@ -223,7 +239,8 @@
  "collections": {
   "ev_tick": 4, "ev_draw": 4, "ev_key": 4, "ev_enc": 4, "ev_settings": 4,
   "ev_render_in": 4, "ev_render_out": 4, "core_machines": 4,
-  "ev_render_master": 4, "core_mpages": 4, "ev_fxmix": 4
+  "ev_render_master": 4, "core_mpages": 4, "ev_fxmix": 4, "ev_live_note": 4,
+  "ev_midi_cc": 4
  },
  "resources": {"names": ["timer:DTIM0"]}
 }

@@ -15,7 +15,7 @@
 // - mk2 synth, struct dn2_voice_input (digitone-mk2/voice.h): output, slot, 8.8 pitch, flags
 //   (START the block after a trigger edge, whose block is silent), param (40 words), state;
 // - SDK machine, struct elek_voice (elekloader/sdk_alpha_machine.h): knob, track, start (as START),
-//   16.16 pitch, velocity, state;
+//   16.16 pitch, velocity, state, idle (0), cc (each CC since the slot's last render, or -1);
 // - mk2 filter, struct dn2_filter_input (digitone-mk2/filter.h): samples, slot, flags (RESET on
 //   entering the filter and on a trigger edge), cutoff, resonance, g, state.
 // A slot's state is zeroed when its machine changes. A call that breaks its stack's guard word mutes
@@ -69,6 +69,27 @@
 .VAR sv_i4 = 0;
 .VAR save_area = 0;
 .ALIGN 1318;
+// The MIDI CCs, for SDK machines' cc: core-dn2's posts (core_dsp_post) of machines-dn2's ev_midi_cc,
+// each machine << 18 | track << 14 | cc << 7 | value. cc_last the number of the last post taken;
+// cc_count the CCs taken (1..0x1ffffff, then 1 again; 0: none yet); cc_fresh a bit a slot: its machine
+// changed and it has not rendered since; cc_took per track, cc_count before its first CC on the machine
+// it had then << 7 | the machine; cc_seen per slot, cc_count at its last render; cc_table per track 128
+// words, a CC's cc_count << 7 | its value (0: none came); cc_built the 128 values a render's cc points
+// at, built for the track, from and now in cc_btrack, cc_bfrom and cc_bnow (cc_btrack -1: all -1).
+.VAR cc_last = 0;                   // word 1318
+.VAR cc_count = 0;
+.VAR cc_fresh = 0;
+.VAR cc_btrack = 0;
+.VAR cc_bfrom = 0;
+.VAR cc_bnow = 0;
+.VAR cc_took = 0;                   // word 1324
+.ALIGN 1340;
+.VAR cc_seen = 0;                   // word 1340
+.ALIGN 1356;
+.VAR cc_built = 0;                  // word 1356
+.ALIGN 1484;
+.VAR cc_table = 0;                  // word 1484
+.ALIGN 3532;
 
 .SECTION/SW seg_swco;
 .GLOBAL dn2_voice_hook.;
@@ -94,6 +115,10 @@ R1=R1+R2;
 COMP(R12,R1);
 IF NE JUMP leave;
 DM(5,I2)=R12;
+R1=PASS R0;
+IF NE JUMP voice_type;
+CALL cc_take;                       // once a block: slot 0 comes first
+voice_type:
 R1=74;                              // the voice's type: frame halfword 74 + slot
 R5=0;
 JUMP common;
@@ -179,6 +204,9 @@ DM(I4,M6)=R4;
 R3=R3-1;
 IF NE JUMP zero;
 zeroed:
+R4=DM(cc_fresh);
+R4=R4 OR R7;
+DM(cc_fresh)=R4;
 R4=DM(12,I2);
 R4=R4 AND R8;
 DM(12,I2)=R4;
@@ -288,6 +316,7 @@ velocity_high:
 DM(4,I5)=R2;
 R4=DM(10,I2);
 DM(5,I5)=R4;
+CALL cc_voice;
 R4=DM(3,I3);
 I0=R4;
 R5=DM(I0,M6);
@@ -461,6 +490,207 @@ R4=31;
 R4=R2 AND R4;
 R3=1;
 R3=LSHIFT R3 BY R4;
+RTS;
+
+// Slot R0's CCs, in input words 6 and 7 (input word 1 is its track): idle 0, and cc, the values of the
+// track's CCs since the slot's last render, or -1. From is the slot's last render, or after its machine
+// changed the later of that and when its track took the machine (its first CC on it then): a CC sent
+// after choosing the machine reaches its first note, one sent for the machine before does not. Uses
+// R1-R4, R6, R9, R10, R12-R14, I1 and I4.
+cc_voice:
+R2=0;
+DM(6,I5)=R2;
+R2=cc_built;
+DM(7,I5)=R2;
+R1=DM(1,I5);
+R2=15;
+R1=R1 AND R2;                       // the track, inside the table
+R2=LSHIFT R0 BY 2;
+R3=cc_seen;
+R2=R2+R3;
+I4=R2;
+R9=DM(0,I4);                        // from
+R10=DM(cc_count);                   // now
+DM(0,I4)=R10;
+R3=1;
+R3=LSHIFT R3 BY R0;
+R4=DM(cc_fresh);
+R6=R4 AND R3;
+IF EQ JUMP cc_span;
+R4=R4 XOR R3;
+DM(cc_fresh)=R4;
+R2=LSHIFT R1 BY 2;
+R3=cc_took;
+R2=R2+R3;
+I1=R2;
+R2=DM(0,I1);                        // took
+R12=R10;                            // since: now, unless the track took this machine
+R3=127;
+R3=R2 AND R3;
+R4=DM(8,I2);
+COMP(R3,R4);
+IF NE JUMP cc_since;
+R3=-7;
+R12=LSHIFT R2 BY R3;
+cc_since:
+R14=0x1ffffff;
+R13=R9-R12;
+R13=R13 AND R14;
+R2=R10-R12;
+R2=R2 AND R14;
+COMPU(R13,R2);
+IF LE JUMP cc_span;                 // its last render was after that
+R9=R12;
+cc_span:
+R14=0x1ffffff;
+R3=R10-R9;
+R3=R3 AND R14;                      // the CCs since from
+IF EQ JUMP cc_none;
+R2=DM(cc_btrack);
+COMP(R2,R1);
+IF NE JUMP cc_build;
+R2=DM(cc_bfrom);
+COMP(R2,R9);
+IF NE JUMP cc_build;
+R2=DM(cc_bnow);
+COMP(R2,R10);
+IF EQ JUMP cc_done;                 // built for this track and window
+cc_build:
+DM(cc_btrack)=R1;
+DM(cc_bfrom)=R9;
+DM(cc_bnow)=R10;
+R2=LSHIFT R1 BY 9;
+R4=cc_table;
+R2=R2+R4;
+I4=R2;
+I1=cc_built;
+R6=128;
+cc_build_next:
+R2=DM(I4,M6);
+R4=-7;
+R12=LSHIFT R2 BY R4;                // when it came
+R12=PASS R12;
+IF EQ JUMP cc_old;                  // never
+R12=R12-R9;
+R12=R12-1;
+R12=R12 AND R14;
+COMPU(R12,R3);
+IF GE JUMP cc_old;                  // before from
+R4=127;
+R2=R2 AND R4;
+JUMP cc_put;
+cc_old:
+R2=-1;
+cc_put:
+DM(I1,M6)=R2;
+R6=R6-1;
+IF NE JUMP cc_build_next;
+JUMP cc_done;
+cc_none:
+R2=DM(cc_btrack);
+R4=-1;
+COMP(R2,R4);
+IF EQ JUMP cc_done;                 // all -1 already
+DM(cc_btrack)=R4;
+I1=cc_built;
+R6=128;
+cc_none_next:
+DM(I1,M6)=R4;
+R6=R6-1;
+IF NE JUMP cc_none_next;
+cc_done:
+RTS;
+
+// Take the posts numbered after cc_last, oldest first, into the CC tables. OS 1.12's DSP receives the
+// frames alternately at 0x2c29d0 and 0x2c39d0; the posts are tail words 4..13 (tail at +0xa80): a
+// number and a word, the number's low seven bits in the word's bits 25-31. One that does not match is
+// still being received: the next block takes it. Uses R1-R4, R6, R9, R10, R12-R14 and I4.
+cc_take:
+R9=DM(cc_last);
+cc_next:
+R13=-1;                             // the closest number after cc_last, as a distance; -1: none
+I4=0x2c3460;
+R6=10;
+cc_record:
+R1=DM(I4,M6);                       // a number
+R2=DM(I4,M6);                       // its word
+R3=6;
+COMP(R6,R3);
+IF NE JUMP cc_check;
+I4=0x2c4460;                        // the other buffer's posts, after the first five
+cc_check:
+R1=PASS R1;
+IF EQ JUMP cc_skip;
+R3=-25;
+R3=LSHIFT R2 BY R3;
+R4=127;
+R4=R1 AND R4;
+COMP(R3,R4);
+IF NE JUMP cc_skip;
+R3=R1-R9;
+IF EQ JUMP cc_skip;
+R4=0x7fffffff;
+COMPU(R3,R4);
+IF GT JUMP cc_skip;                 // not after cc_last
+COMPU(R3,R13);
+IF GE JUMP cc_skip;
+R13=R3;
+R12=R2;
+R10=R1;
+cc_skip:
+R6=R6-1;
+IF NE JUMP cc_record;
+R4=-1;
+COMP(R13,R4);
+IF EQ JUMP cc_taken;
+DM(cc_last)=R10;
+R9=R10;
+// Apply word R12: count it, note when its track took its machine, and store it in the track's table.
+R14=DM(cc_count);
+R1=R14+1;
+R2=0x1ffffff;
+COMPU(R1,R2);
+IF LE JUMP cc_counted;
+R1=1;
+cc_counted:
+DM(cc_count)=R1;
+R3=-14;
+R2=LSHIFT R12 BY R3;
+R3=15;
+R2=R2 AND R3;                       // track
+R3=LSHIFT R2 BY 2;
+R4=cc_took;
+R3=R3+R4;
+I4=R3;
+R3=-18;
+R3=LSHIFT R12 BY R3;
+R4=127;
+R3=R3 AND R4;                       // machine
+R4=DM(0,I4);
+R6=127;
+R4=R4 AND R6;
+COMP(R4,R3);
+IF EQ JUMP cc_kept;
+R4=LSHIFT R14 BY 7;
+R4=R4 OR R3;
+DM(0,I4)=R4;
+cc_kept:
+R3=LSHIFT R2 BY 9;
+R4=cc_table;
+R3=R3+R4;
+R4=-7;
+R4=LSHIFT R12 BY R4;
+R6=127;
+R4=R4 AND R6;                       // cc
+R4=LSHIFT R4 BY 2;
+R3=R3+R4;
+I4=R3;
+R4=LSHIFT R1 BY 7;
+R3=R12 AND R6;                      // value
+R4=R4 OR R3;
+DM(0,I4)=R4;
+JUMP cc_next;
+cc_taken:
 RTS;
 
 // R1 = the frame halfword of slot R0's first knob, 0x6d + 0x49 slot; uses R2.

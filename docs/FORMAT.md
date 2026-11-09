@@ -75,6 +75,31 @@ A format-2 mod is a relocatable object:
 | `copied` | `[{"lo", "hi", "to"}]`: a block of the image this mod copies elsewhere at run time |
 | `storage` | fields this mod keeps with the project: `[{"sym", "scope", "bits"}]` (the Analog Rytm MKII from core-ar2 0.2, the Analog Four MKII from core-a4 0.1; "Mod storage" below) |
 | `sharc` | Digitone II 1.12 only: compiled code for the DSP ("Digitone II SHARC mod" below) |
+| `sharc_raw` | Digitakt II 1.17 only: raw additions to the DSP's boot stream ("Digitakt II raw SHARC payload" below) |
+
+### Digitakt II raw SHARC payload
+
+On the Digitakt II 1.17 a format-2 mod may carry `sharc_raw`, raw changes to
+the DSP's boot stream (section 7) with no bridge and no callbacks: the mod
+brings DSP code that stock code reaches through instructions it patches.
+This is experimental.
+
+| field | value |
+|---|---|
+| `loads` | `[{"addr", "hex"}]` or `[{"addr", "parts"}]`: new load records; each inside the profile's owned L2 (`[0x2001ab7c, 0x200fa000)`), 4-byte aligned. `parts` is a list of `["hex", "..."]` and `["stock", "0x...", n]`, the latter `n` bytes the stock stream loads at that address, read from the user's file when linking |
+| `patches` | `[{"addr", "stock", "new", "relocs"}]`: whole stock instructions replaced in one stock load inside the profile's L1 patch range; `stock` must match the stock stream, `new` has its length |
+| `objects` | relocatable DSP objects (digikit's `.dko.json` layout: `name`, `sections` of kind text, data or bss, `symbols`, `relocs` of type `sharc.abs24` or `sharc.abs32` in text). The linker places each, core's first, at the lowest free address of the owned L2 (text, then data, then bss, which is reserved and not loaded). A text symbol is a short-word PC, a data symbol a byte address; a global symbol is every mod's. In mod.json's sharc_raw file, `{"dko": "file.dko.json", "name", "externs": {name: address}, "rename": {old: new}}` is such an object read from the mod's folder |
+| `tables` | `{"name": {"kind": "list", "row": bytes, "max": rows, "end": hex}}`: the rows mods give, in (`order`, mod) order, then `end`; or `{"kind": "indexed", "row", "rows", "default": parts}`: `rows` rows, each the default unless a mod gives it. Placed after the objects; the name is a symbol (its byte address) |
+| `contribute` | `[{"to", "order" or "index", "parts", "relocs"}]`: a row of a table |
+
+A relocation is `[offset, type, "sym:NAME", addend]` in bytes of `new` or of a row: `sharc.abs24` and
+`sharc.abs32` (an instruction's 24-bit address or 32-bit literal, as digikit encodes them), `hi16` and
+`lo16` (a 16-bit literal field, little-endian), `le32` (a data word).
+
+The linker checks the stock section by its hash, applies the patches, adds
+the loads before FINAL, and parses the result again. It refuses two patches
+that overlap (from any mods), a load over another load, anything outside
+the profile's ranges, a symbol two mods define or none does, and a row of an indexed table two mods give.
 
 ### Digitone II SHARC mod
 
