@@ -103,7 +103,62 @@ class HostRunTests(unittest.TestCase):
             code, out = host(tmp, '--page', '2')
             self.assertTrue(code and '--page 2: PROBE has 2 page(s)' in out, out)
 
+    def keys(self, keys, play='ELEK_MONO', prio='ELEK_PRIO_LAST'):
+        """What each key in keys did with sdk-mono at play and prio, as the host printed it: [(key, what,
+        held)]."""
+        with tempfile.TemporaryDirectory() as tmp:
+            shutil.copytree(ROOT / 'examples/sdk-mono', tmp, dirs_exist_ok=True)
+            source = Path(tmp, 'mono.c')
+            source.write_text(source.read_text().replace('.play = ELEK_MONO, .prio = ELEK_PRIO_LAST',
+                                                          '.play = %s, .prio = %s' % (play, prio)))
+            code, out = host(tmp, '--keys', keys)
+        self.assertEqual(code, 0, out)
+        self.assertIn('keys at velocity 100, %s, %s:' % (play, prio), out)
+        return re.findall(r'^  (\d+[+-]) +(.+?) +held (.+)$', out, re.M)
+
+    def test_last_note_returns_to_the_key_still_held(self):
+        self.assertEqual(self.keys('60+ 64+ 64- 60-'), [
+            ('60+', 'play 60 (velocity 100): the AMP restarts, start set', '60'),
+            ('64+', 'play 64 (velocity 100): the AMP restarts, start set', '60 64'),
+            ('64-', 'play 60 (velocity 100): the AMP restarts, start set', '60'),
+            ('60-', 'silence', '-')])
+        played = self.keys('60+ 64+ 60- 64-')       # releasing an older key leaves the newest playing
+        self.assertEqual([what for _, what, _ in played][2:], ['no change', 'silence'])
+
+    def test_a_key_pressed_again_plays_again_and_a_key_not_held_changes_nothing(self):
+        self.assertEqual(self.keys('60+ 60+ 62- 60-'), [
+            ('60+', 'play 60 (velocity 100): the AMP restarts, start set', '60'),
+            ('60+', 'play 60 (velocity 100): the AMP restarts, start set', '60'),
+            ('62-', 'no change', '60'),
+            ('60-', 'silence', '-')])
+
+    def test_low_and_high_note(self):
+        self.assertEqual([(k, what[:7]) for k, what, _ in self.keys('60+ 64+ 57+ 57-', prio='ELEK_PRIO_LOW')], [
+            ('60+', 'play 60'), ('64+', 'no chan'), ('57+', 'play 57'), ('57-', 'play 60')])
+        self.assertEqual([(k, what[:7]) for k, what, _ in self.keys('60+ 57+ 64+ 64-', prio='ELEK_PRIO_HIGH')], [
+            ('60+', 'play 60'), ('57+', 'no chan'), ('64+', 'play 64'), ('64-', 'play 60')])
+
+    def test_single_trigger_keeps_the_amp_running_until_every_key_is_up(self):
+        self.assertEqual([what for _, what, _ in self.keys('60+ 64+ 64- 60- 62+', play='ELEK_MONO_LEGATO')], [
+            'play 60 (velocity 100): the AMP restarts, start set',
+            'legato to 64: the AMP runs on, start clear',
+            'legato to 60: the AMP runs on, start clear',
+            'silence',
+            'play 62 (velocity 100): the AMP restarts, start set'])
+
+    def test_a_press_past_the_held_keys_drops_the_oldest(self):
+        presses = ' '.join('%d+' % n for n in range(40, 57))       # 17 keys, one more than SDK_ALPHA_HELD_MAX
+        played = self.keys(presses + ' 56- 41-', prio='ELEK_PRIO_LOW')
+        self.assertEqual(played[16][2], ' '.join(map(str, range(41, 57))))
+        self.assertEqual(played[16][1], 'play 41 (velocity 100): the AMP restarts, start set')   # 40 is gone
+        self.assertEqual(played[17][1], 'no change')
+        self.assertEqual(played[18][1], 'play 42 (velocity 100): the AMP restarts, start set')
+
     def test_refusals(self):
+        code, out = host('examples/sdk-sine', '--keys', '60+')
+        self.assertTrue(code and '--keys: SDK Sine is ELEK_POLY' in out, out)
+        code, out = host('examples/sdk-mono', '--keys', '60+ 128-')
+        self.assertTrue(code and '--keys 128-: give presses and releases' in out, out)
         code, out = host('examples/sdk-sine', '--knob', 'FINE=99')
         self.assertTrue(code and 'FINE takes -50..50' in out, out)
         for args, message in ((['--page', '1'], '--page 1: SDK Sine has 1 page(s)'),

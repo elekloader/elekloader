@@ -1,0 +1,7 @@
+{
+ "id": "sdk-mono",
+ "version": "0.1",
+ "license": "GPL-2.0-or-later",
+ "devices": {"digitakt-mk1": ["1.54"], "digitone-mk1": ["1.44"], "digitone-mk2": ["1.12"]},
+ "sources": ["mono.c"]
+}

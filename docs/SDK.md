@@ -15,6 +15,7 @@ change, and mods must be rebuilt when it does.
 | Its pages show on | SRC | SYN2, in place of its pages on that track | SYN |
 | Pages, labels, hiding, glyphs | yes | yes | yes |
 | `render` and knob defaults | yes | yes | yes, `render` in SHARC assembly ([`render` on the Digitone II](#render-on-the-digitone-ii)) |
+| Mono machines ([`play` and `prio`](#play-and-prio)) | not yet | not yet | not yet |
 
 Other devices and OS releases, the Digitakt II among them, are not SDK
 targets. The builder's `SDK_ALPHA_TARGETS`
@@ -312,6 +313,31 @@ It runs on the synths' 4 KiB stack in L1, which interrupts share; a call
 that overruns it mutes that machine
 ([MACHINES-DN2-VOICE.md](MACHINES-DN2-VOICE.md#context-and-memory)).
 
+### `play` and `prio`
+
+```c
+.play = ELEK_MONO, .prio = ELEK_PRIO_LAST,
+```
+
+`.play` says how the machine's track plays live keys. These are the
+Digitone II's PLAY MODE and MONO NOTE PRIO (TRK SETUP), and every device
+carries them out the same way:
+
+| `.play` | the track |
+|---|---|
+| `ELEK_POLY` (0, the default) | plays every key, as the device allocates its voices |
+| `ELEK_MONO` | plays one note at a time: the held key `.prio` chooses, with the AMP restarted and `start` set in `render` at each change |
+| `ELEK_MONO_LEGATO` | the same, but a change while a note sounds moves its pitch, with the AMP running on and `start` clear (single trigger) |
+
+| `.prio` | the key that sounds |
+|---|---|
+| `ELEK_PRIO_LAST` (0, the default) | the last pressed; when it is released, the newest key still held |
+| `ELEK_PRIO_LOW` | the lowest held |
+| `ELEK_PRIO_HIGH` | the highest held |
+
+A mono track keeps at most 16 held keys; a press past them drops the
+oldest. See [sdk-mono](../examples/sdk-mono/mono.c).
+
 ### Limits and refusals
 
 The header's `ELEK_UI_*` names the limits above. A mod may register
@@ -319,7 +345,8 @@ several machines; the linker refuses more than the device holds (below).
 
 The builder refuses what breaks a rule above, and says where, as the C
 would: `sdk alpha: machine "Two Page" (id 40), knobs[0]: label "CUTOFF" has
-6 characters (at most 5)`. It also refuses floating point, imports no
+6 characters (at most 5)`. It refuses a mono machine where the companion
+does not carry it out yet (`ELEK_MONO is not supported on digitakt-mk1 1.54 yet`). It also refuses floating point, imports no
 companion exports, and machine claims written in `mod.json` (each machine
 claims its id itself). The messages are in
 elekloader/sdk/sdk_alpha_build.py. Every SDK mod imports
@@ -381,5 +408,21 @@ gives the peak (1.0 is full scale) and the pitch it found.
 | `--wav out.wav` | write the render as a 48 kHz mono WAV, to listen to |
 | `--float` | build with the SHARC's float samples instead of the ColdFire's Q31 |
 | `--glyphs` | draw each glyph `present` shows, as 16 rows of `#` and `.` |
+| `--keys "60+ 64+ 64- 60-"` | presses (`+`) and releases (`-`) of MIDI notes for a mono machine, at `--velocity`: each line shows what the companion does and the keys then held |
+
+`--keys` runs the companions' own key logic
+(elekloader/sdk/include/elekloader/sdk_alpha_keys.h):
+
+```bash
+python -m elekloader.sdk.sdk_alpha_host examples/sdk-mono --keys "60+ 64+ 64- 60-"
+```
+
+```
+keys at velocity 100, ELEK_MONO, ELEK_PRIO_LAST:
+  60+   play 60 (velocity 100): the AMP restarts, start set   held 60
+  64+   play 64 (velocity 100): the AMP restarts, start set   held 60 64
+  64-   play 60 (velocity 100): the AMP restarts, start set   held 60
+  60-   silence                                               held -
+```
 
 The mod must register exactly one machine.

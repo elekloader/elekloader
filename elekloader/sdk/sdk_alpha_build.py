@@ -41,15 +41,19 @@ LIMITS = {'ELEK_UI_LABEL_MAX': 5, 'ELEK_UI_KNOB_MAX': 15, 'ELEK_UI_PAGE_MAX': 2,
 LAYOUT = {
     ('elek_machine', 'id'): 0, ('elek_machine', 'name'): 4, ('elek_machine', 'short_name'): 8,
     ('elek_machine', 'knobs'): 12, ('elek_machine', 'knob_count'): 16, ('elek_machine', 'pages'): 20,
-    ('elek_machine', 'render'): 96, ('elek_machine', None): 100,
+    ('elek_machine', 'render'): 96, ('elek_machine', 'play'): 100, ('elek_machine', 'prio'): 101,
+    ('elek_machine', None): 102,
     ('elek_page', 'label'): 0, ('elek_page', 'encoder'): 4, ('elek_page', None): 36,
     ('elek_knob', 'label'): 0, ('elek_knob', 'min'): 4, ('elek_knob', 'max'): 8, ('elek_knob', 'def'): 12,
     ('elek_knob', 'glyph'): 16, ('elek_knob', None): 20, ('elek_glyph', None): 32,
 }
 ELEK_UI_LABEL_MAX, ELEK_UI_KNOB_MAX, ELEK_UI_PAGE_MAX = (
     LIMITS['ELEK_UI_LABEL_MAX'], LIMITS['ELEK_UI_KNOB_MAX'], LIMITS['ELEK_UI_PAGE_MAX'])
-MACHINE_NAME, MACHINE_SHORT_NAME, MACHINE_KNOBS, MACHINE_KNOB_COUNT, MACHINE_PAGES, MACHINE_RENDER, MACHINE_SIZE = (
-    LAYOUT['elek_machine', f] for f in ('name', 'short_name', 'knobs', 'knob_count', 'pages', 'render', None))
+(MACHINE_NAME, MACHINE_SHORT_NAME, MACHINE_KNOBS, MACHINE_KNOB_COUNT, MACHINE_PAGES, MACHINE_RENDER, MACHINE_PLAY,
+ MACHINE_PRIO, MACHINE_SIZE) = (LAYOUT['elek_machine', f] for f in ('name', 'short_name', 'knobs', 'knob_count', 'pages',
+                                                                     'render', 'play', 'prio', None))
+PLAY_NAMES = ('ELEK_POLY', 'ELEK_MONO', 'ELEK_MONO_LEGATO')
+PRIO_NAMES = ('ELEK_PRIO_LAST', 'ELEK_PRIO_LOW', 'ELEK_PRIO_HIGH')
 PAGE_LABEL, PAGE_ENCODER, PAGE_SIZE = (LAYOUT['elek_page', f] for f in ('label', 'encoder', None))
 KNOB_LABEL, KNOB_MIN, KNOB_GLYPH, KNOB_SIZE = (LAYOUT['elek_knob', f] for f in ('label', 'min', 'glyph', None))
 GLYPH_SIZE = LAYOUT['elek_glyph', None]
@@ -59,8 +63,8 @@ def sdk_alpha_registrations(doc, sections):
     """The machines ELEK_REGISTER_MACHINE declared, checked: their layouts by machine id,
     {'at': (section, offset) of the struct elek_machine, 'name', 'knobs': [{'id', 'label', 'min', 'max',
     'def'}], 'pages': [{'label', 'knobs': {encoder 0-7: knob}}], 'render': False, True (a function in
-    the mod) or the name of the function it imports (a SHARC label on the Digitone II)}. A refusal names
-    where it is: the machine, then its page, encoder or knob."""
+    the mod) or the name of the function it imports (a SHARC label on the Digitone II), 'play' and
+    'prio': its .play and .prio}. A refusal names where it is: the machine, then its page, encoder or knob."""
     def fail(where, message):
         raise build.BuildError('sdk alpha: %s: %s' % (where, message))
 
@@ -188,8 +192,13 @@ def sdk_alpha_registrations(doc, sections):
             render = rs[0][3][4:]           # declared, not defined: the builder pairs it (sdk_alpha_build)
         else:
             render = target(where, (sec, off), 'render') is not None
+        play, prio = data[MACHINE_PLAY], data[MACHINE_PRIO]
+        if play >= len(PLAY_NAMES):
+            fail(where, 'play is %d: give %s' % (play, ', '.join(PLAY_NAMES)))
+        if prio >= len(PRIO_NAMES):
+            fail(where, 'prio is %d: give %s' % (prio, ', '.join(PRIO_NAMES)))
         layouts[mid] = {'at': machine, 'name': machine_name, 'pages': page_layouts, 'knobs': knob_layouts,
-                        'render': render}
+                        'render': render, 'play': play, 'prio': prio}
     if not layouts:
         raise build.BuildError('sdk alpha: no machine registered: add ELEK_REGISTER_MACHINE(machine)')
     if SDK_ALPHA_ABI not in doc['imports']:
@@ -289,6 +298,9 @@ def sdk_alpha_build(moddir, stock, out=None):
                 raise build.BuildError('%s: id %d is outside %d..127 on %s %s' % (where, mid, low, device, release))
             if layout['render'] and not features & {'render', 'kernels'}:
                 raise build.BuildError('%s: render is not supported on %s %s yet' % (where, device, release))
+            if layout['play'] and 'mono' not in features:
+                raise build.BuildError('%s: %s is not supported on %s %s yet'
+                                       % (where, PLAY_NAMES[layout['play']], device, release))
             if 'defaults' not in features:
                 for knob in layout['knobs']:
                     if knob['def'] != knob['min']:
