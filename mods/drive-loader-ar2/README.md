@@ -65,7 +65,9 @@ refused like any other dot file. Neither flag is set by default.
   path of its pattern's segment count, each `*` one segment, so `/mods/*` never matches
   `/mods/a/b`; `/soundbanks` registers its depths the same way (`0x40030708`). The route joins
   the captures into the path below `/mods`. A path is at most 127 bytes (`DL_NAME_MAX`), a
-  folder or file name at most 63 (`DL_SEG_MAX`), and no folder name starts with `.`.
+  folder or file name at most 63 (`DL_SEG_MAX`), no folder name starts with `.`, and no
+  folder or file name starts with a space (decided 2026-11-09: `/mods/active`'s reader trims a
+  line's leading blanks, so such a name would save and not load; the MODS page doesn't list one).
 - `/mods/*` resolves to a RAM entry (kind 1) over the staging buffer. Its functions do the rest:
   `+0x1c` refuses with "busy" while a loader part holds the buffer (`dl_staging_take`); `+0x2c`
   fills the buffer from the file once a read stream exists; `+0x6c` checks the container's

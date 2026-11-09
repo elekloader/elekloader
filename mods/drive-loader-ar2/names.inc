@@ -2,11 +2,12 @@
  * (tests/drive_route_names_host.c). route.c includes this after its helpers len, copy, same and
  * ends, and fs.h. */
 
-/* one folder or file name in a path */
+/* one folder or file name in a path: not starting with "." or " " (decided 2026-11-09: the
+ * /mods/active reader trims a line's leading blanks, so such a name would save and not load) */
 static int seg_ok(const char *s)
 {
     unsigned n = len(s), i;
-    if (!n || n > DL_SEG_MAX || s[0] == '.')
+    if (!n || n > DL_SEG_MAX || s[0] == '.' || s[0] == ' ')
         return 0;
     for (i = 0; i < n; i++)
         if (s[i] == '/' || s[i] == '\\' || (unsigned char)s[i] < 0x20)

@@ -90,6 +90,18 @@ class Route(unittest.TestCase):
         self.assertEqual(self.entry('~T NAV'), [(0, False, '~T NAV')])
         self.assertEqual(self.entry('active'), [(0, True, 'active')])
 
+    def test_a_leading_space_is_refused(self):
+        # decided 2026-11-09: /mods/active's reader trims a line's leading blanks (route.c), so a
+        # top-level " x" would save and not load; every segment is refused alike, here and in the CLI
+        for bad in (' x.elemod', ' Jazz Kit/x.elemod', '~T NAV/ A/x.elemod', ' Jazz Kit'):
+            self.assertEqual(self.entry(bad), [None], bad)
+        self.assertTrue(self.put('Jazz Kit /x .elemod'))   # a space elsewhere is fine
+        mods = datarpc.Mods(None)
+        for call in (lambda: mods.path(' x.elemod'), lambda: mods.path('a/ b/x.elemod'),
+                     lambda: mods.folder_path(' Jazz Kit')):
+            with self.assertRaises(datarpc.ModError):
+                call()
+
 
     def test_an_upload_to_dot_dir_makes_its_folder(self):
         # `elekloader mods mkdir`, the web view's New folder: an empty upload to FOLDER/.dir

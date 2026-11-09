@@ -203,7 +203,7 @@ class Mods:
         """`name`: a file below the folder, in up to DEPTH folders ("drums/kicks/x.elemod")."""
         parts = name.split('/')
         if not name or len(parts) > DEPTH + 1 or any(not p or p in ('.', '..') for p in parts) \
-                or any(p.startswith('.') for p in parts[:-1]):
+                or any(p.startswith('.') for p in parts[:-1]) or any(p.startswith(' ') for p in parts):
             raise ModError('%r is not a file name in %s' % (name, self.folder))
         return '%s/%s' % (self.folder, name)
 
@@ -245,8 +245,8 @@ class Mods:
     def folder_path(self, sub):
         """`sub`: a folder below the folder, up to DEPTH deep ("drums/kicks")."""
         parts = sub.split('/')
-        if not sub or len(parts) > DEPTH or any(not p or p.startswith('.') for p in parts):
-            raise ModError('%r is not a folder name in %s (up to %d deep, no part starting with .)'
+        if not sub or len(parts) > DEPTH or any(not p or p.startswith(('.', ' ')) for p in parts):
+            raise ModError('%r is not a folder name in %s (up to %d deep, no part starting with . or a space)'
                            % (sub, self.folder, DEPTH))
         return '%s/%s' % (self.folder, sub)
 
@@ -281,7 +281,7 @@ class Mods:
             folder = self.is_folder(frm)
         for p in (frm, to):
             parts = p.split('/')
-            if not p or any(not q or q.startswith('.') or len(q.encode('latin-1', 'replace')) > SEG_MAX
+            if not p or any(not q or q.startswith(('.', ' ')) or len(q.encode('latin-1', 'replace')) > SEG_MAX
                             for q in parts) or len(p.encode('latin-1', 'replace')) > NAME_MAX:
                 raise ModError('%r is not a name in %s' % (p, self.folder))
         if frm == to:

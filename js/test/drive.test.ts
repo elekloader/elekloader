@@ -229,3 +229,12 @@ test('Mods.move uploads "FROM\\nTO" to .mv, then reads both listings, as the Pyt
     await assert.rejects(mods.move(from, to, head, folder), ModError, `${from} ${to}`)
   assert.equal(calls.length, 0)
 })
+
+test('a name starting with a space is refused before sending, as the Python does (decided 2026-11-09)', async () => {
+  const mods = new datarpc.Mods(null as unknown as datarpc.Client)
+  for (const bad of [' x.elemod', 'a/ b/x.elemod'])
+    assert.throws(() => mods.path(bad), ModError, bad)
+  assert.throws(() => mods.folderPath(' Jazz Kit'), ModError)
+  await assert.rejects(mods.move('a.elemod', ' a.elemod', null, false), ModError)
+  assert.equal(mods.path('Jazz Kit /x .elemod'), '/mods/Jazz Kit /x .elemod')
+})

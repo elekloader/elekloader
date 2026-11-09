@@ -458,14 +458,15 @@ static int read_folder(void)
     if (depth)                           /* "..", as stock's folders have it */
         lrows[nlrows++].kind = R_UP;
     for (i = 0; i < n; i++)              /* the folders, to DL_DEPTH below DL_DIR */
-        if (ents[i].dir && depth < DL_DEPTH && ents[i].name[0] != '.' && join(p, cwd, ents[i].name)) {
+        if (ents[i].dir && depth < DL_DEPTH && ents[i].name[0] != '.' && ents[i].name[0] != ' ' &&
+            join(p, cwd, ents[i].name)) {
             lrows[nlrows].kind = R_DIR;
             copy_str(lrows[nlrows++].name, ents[i].name, DL_SEG_MAX + 1);
         }
     for (i = 0; i < n; i++) {            /* then the .elemod files */
         struct file *r;
         int f;
-        if (ents[i].dir || !ends_elemod(ents[i].name) || !join(p, cwd, ents[i].name))
+        if (ents[i].dir || !ends_elemod(ents[i].name) || ents[i].name[0] == ' ' || !join(p, cwd, ents[i].name))
             continue;
         f = find_file(p);
         if (f < 0) {

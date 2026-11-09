@@ -200,7 +200,7 @@ export class Mods {
   path(name: string): string {
     const parts = name.split('/')
     if (!name || parts.length > DEPTH + 1 || parts.some(p => !p || p === '.' || p === '..')
-        || parts.slice(0, -1).some(p => p.startsWith('.')))
+        || parts.slice(0, -1).some(p => p.startsWith('.')) || parts.some(p => p.startsWith(' ')))
       throw new ModError(`${repr(name)} is not a file name in ${this.folder}`)
     return `${this.folder}/${name}`
   }
@@ -238,8 +238,8 @@ export class Mods {
   /** `sub`: a folder below the folder, up to DEPTH deep ("drums/kicks"). datarpc.Mods.folder_path. */
   folderPath(sub: string): string {
     const parts = sub.split('/')
-    if (!sub || parts.length > DEPTH || parts.some(p => !p || p.startsWith('.')))
-      throw new ModError(`${repr(sub)} is not a folder name in ${this.folder} (up to ${DEPTH} deep, no part starting with .)`)
+    if (!sub || parts.length > DEPTH || parts.some(p => !p || p.startsWith('.') || p.startsWith(' ')))
+      throw new ModError(`${repr(sub)} is not a folder name in ${this.folder} (up to ${DEPTH} deep, no part starting with . or a space)`)
     return `${this.folder}/${sub}`
   }
 
@@ -271,7 +271,7 @@ export class Mods {
     if (folder === undefined) folder = await this.isFolder(from)
     for (const p of [from, to]) {
       const parts = p.split('/')
-      if (!p || parts.some(q => !q || q.startsWith('.') || latin1(q).length > SEG_MAX) || latin1(p).length > NAME_MAX)
+      if (!p || parts.some(q => !q || q.startsWith('.') || q.startsWith(' ') || latin1(q).length > SEG_MAX) || latin1(p).length > NAME_MAX)
         throw new ModError(`${repr(p)} is not a name in ${this.folder}`)
     }
     if (from === to) throw new ModError(`${from} is already ${to}`)
