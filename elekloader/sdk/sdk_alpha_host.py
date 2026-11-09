@@ -3,7 +3,8 @@
 
     python -m elekloader.sdk.sdk_alpha_host <moddir> [--float] [--note 60] [--knob NAME=V ...]
                                             [--velocity V] [--track T] [--page P] [--retrigger N]
-                                            [--blocks N] [--wav out.wav] [--glyphs] [--keys "60+ 64+ 64- 60-"]
+                                            [--cc B:N=V ...] [--blocks N] [--wav out.wav] [--glyphs]
+                                            [--keys "60+ 64+ 64- 60-"]
 
 It compiles the mod's C sources with the host compiler (cc, or $CC) and a small host main, prints what
 present shows (each knob's label, then its value text quoted, or the number shown when it sets none) with
@@ -38,9 +39,10 @@ PRELUDE = r'''#include "elekloader/sdk_alpha_machine.h"
 #define ELEK_REGISTER_MACHINE(m) const struct elek_machine *const elek_host_machine = &(m)
 '''
 
-# argv: "knobs" prints the declarations; "run pitch blocks velocity track page retrigger v0 v1 ..." prints
-# present's views with each knob at its min, default and max (the others at v), then the rendered samples,
-# -1.0..1.0, with start set every retrigger blocks (0: on the first only); "keys velocity 60+ 64+ 64- ..."
+# argv: "knobs" prints the declarations; "run pitch blocks velocity track page retrigger v0 v1 ... [b n v ...]"
+# prints present's views with each knob at its min, default and max (the others at v), then the rendered
+# samples, -1.0..1.0, with start set every retrigger blocks (0: on the first only) and CC n = v on the
+# track before block b (in block order), each in the next render's v->cc; "keys velocity 60+ 64+ 64- ..."
 # prints, for each key, what the companion does and the keys then held.
 MAIN = r'''#include <stdio.h>
 #include <stdlib.h>
@@ -111,7 +113,7 @@ int main(int argc, char **argv)
         }
         return 0;
     }
-    if (argc != 8 + (int)m->knob_count)
+    if (argc < 8 + (int)m->knob_count || (argc - 8 - (int)m->knob_count) % 3)
         return 2;
     int32_t knob[ELEK_UI_KNOB_MAX] = {0};
     for (uint32_t i = 0; i < m->knob_count; ++i)
@@ -127,10 +129,16 @@ int main(int argc, char **argv)
     if (!m->render)
         return 0;
     static union { unsigned char bytes[ELEK_VOICE_STATE_MAX]; long double align; } state;
+    static int32_t cc[128];
+    int next = 8 + (int)m->knob_count;
     struct elek_voice voice = {.knob = knob, .track = track, .pitch = atoi(argv[2]), .velocity = atoi(argv[4]),
-                               .state = &state};
+                               .state = &state, .cc = cc};
     elek_sample block[ELEK_VOICE_FRAMES];
     for (int b = 0, n = atoi(argv[3]); b < n; ++b) {
+        for (int k = 0; k < 128; ++k)
+            cc[k] = -1;
+        for (; next < argc && atoi(argv[next]) == b; next += 3)
+            cc[atoi(argv[next + 1])] = atoi(argv[next + 2]);
         voice.start = b == 0 || (retrigger && b % retrigger == 0);
         m->render(&voice, block);
         for (int i = 0; i < ELEK_VOICE_FRAMES; ++i)
@@ -205,7 +213,7 @@ def draw(glyph):
 
 
 def host(moddir, sample_float=False, note=60, knobs=(), blocks=375, wav=None, glyphs=False,
-         velocity=100, track=0, page=0, retrigger=0, keys=None):
+         velocity=100, track=0, page=0, retrigger=0, keys=None, ccs=()):
     """Print what the machine in moddir presents and renders, and what a mono machine makes of keys (a
     string of presses and releases, "60+ 64+ 64-"); return its samples."""
     if not 0 <= note <= 127:
@@ -216,10 +224,17 @@ def host(moddir, sample_float=False, note=60, knobs=(), blocks=375, wav=None, gl
         raise Refused('--track %d: give a track from 0' % track)
     if retrigger < 0:
         raise Refused('--retrigger %d: give blocks between notes, from 1 (0: one held note)' % retrigger)
-    events = (keys or '').split()
-    for event in events:
+    presses = (keys or '').split()
+    for event in presses:
         if not re.fullmatch(r'\d{1,3}[+-]', event) or int(event[:-1]) > 127:
             raise Refused('--keys %s: give presses and releases of MIDI notes 0..127, as "60+ 64+ 64- 60-"' % event)
+    events = []
+    for setting in ccs:
+        found = re.fullmatch(r'(\d+):(\d+)=(\d+)', setting)
+        if not found or int(found[2]) > 127 or int(found[3]) > 127:
+            raise Refused('--cc %s: give B:N=V, CC N (0..127) = V (0..127) before block B' % setting)
+        events.append(tuple(map(int, found.groups())))
+    events.sort(key=lambda e: e[0])                     # stable: one block's CCs keep their order
     with tempfile.TemporaryDirectory() as tmp:
         program = Path(tmp) / 'machine'
         compile_mod(moddir, program, sample_float)
@@ -241,13 +256,14 @@ def host(moddir, sample_float=False, note=60, knobs=(), blocks=375, wav=None, gl
             if not lo <= int(value) <= hi:
                 raise Refused('--knob %s: %s takes %d..%d' % (setting, decl[ids[0]][0], lo, hi))
             values[ids[0]] = int(value)
-        args = round(note * 65536), blocks, velocity, track, page, retrigger, *values
+        args = (round(note * 65536), blocks, velocity, track, page, retrigger, *values,
+                *(x for event in events for x in event))
         out = subprocess.run([str(program), 'run', *map(str, args)],
                              capture_output=True, text=True, errors='replace')
         if out.returncode:
             raise Refused('the machine stopped (exit %d):\n%s' % (out.returncode, out.stderr.strip()))
-        played = subprocess.run([str(program), 'keys', str(velocity), *events],
-                                capture_output=True, text=True, errors='replace') if events else None
+        played = subprocess.run([str(program), 'keys', str(velocity), *presses],
+                                capture_output=True, text=True, errors='replace') if presses else None
         if played and played.returncode:
             raise Refused('the machine stopped (exit %d):\n%s' % (played.returncode, played.stderr.strip()))
     print('%s (id %s), %s' % (name, mid, sample_float and 'float (SHARC)' or 'Q31 (ColdFire)'))
@@ -288,8 +304,10 @@ def host(moddir, sample_float=False, note=60, knobs=(), blocks=375, wav=None, gl
         print('no render: the device plays its own sound')
         return samples
     hz = frequency(samples)
-    print('render: note %g, velocity %d, track %d, %d blocks%s: peak %.3f, %s' % (
-        note, velocity, track, blocks, retrigger and ', a new note every %d' % retrigger or '', max(map(abs, samples), default=0), 'about %.1f Hz' % hz if hz else 'no pitch found'))
+    print('render: note %g, velocity %d, track %d, %d blocks%s%s: peak %.3f, %s' % (
+        note, velocity, track, blocks, retrigger and ', a new note every %d' % retrigger or '',
+        ''.join(', CC %d=%d before block %d' % (n, v, b) for b, n, v in events),
+        max(map(abs, samples), default=0), 'about %.1f Hz' % hz if hz else 'no pitch found'))
     if wav:
         with wave.open(str(wav), 'wb') as w:
             w.setnchannels(1)
@@ -312,6 +330,8 @@ def main(argv=None):
     p.add_argument('--page', type=int, default=0, help="the page present is shown, from 0 (default 0)")
     p.add_argument('--retrigger', type=int, default=0, metavar='N',
                    help='start a new note every N blocks (default: one held note)')
+    p.add_argument('--cc', action='append', default=[], metavar='B:N=V',
+                   help="CC N = V on the track before block B, in render's v->cc; repeat it for more")
     p.add_argument('--blocks', type=int, default=375, help='render blocks of 32 samples (default 375: 0.25 s)')
     p.add_argument('--wav', help='write the render as a 48 kHz mono WAV')
     p.add_argument('--glyphs', action='store_true', help='draw each glyph present shows')
@@ -320,7 +340,7 @@ def main(argv=None):
     a = p.parse_args(argv)
     try:
         host(a.moddir, a.float, a.note, a.knob, a.blocks, a.wav, a.glyphs, a.velocity, a.track, a.page,
-             a.retrigger, a.keys)
+             a.retrigger, a.keys, a.cc)
     except Refused as e:
         sys.exit('refused: %s' % e)
 

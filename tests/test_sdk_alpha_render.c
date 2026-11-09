@@ -106,8 +106,11 @@ int main(int argc, char **argv)
     check_text();
     int32_t knob[1] = {argc > 1 ? atoi(argv[1]) : 0};
     struct state state = {12345};               /* a previous note's phase: the start must reset it */
+    int32_t cc[128];                            /* no CC came */
+    for (int n = 0; n < 128; ++n)
+        cc[n] = -1;
     struct elek_voice voice = {.knob = knob, .start = 1, .pitch = (argc > 2 ? atoi(argv[2]) : 69) << 16,
-                               .velocity = 100, .state = &state};
+                               .velocity = 100, .state = &state, .cc = cc};
     elek_sample block[ELEK_VOICE_FRAMES];
     for (int b = 0; b < 64; ++b) {
         example->render(&voice, block);

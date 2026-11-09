@@ -5,6 +5,7 @@
  * pages (two at most) as SYN's pages. Logical knob i keeps its value in sound slot 25 + i, whichever
  * page shows it; every SDK machine shares the parameter rows ROWS + SDK_ROW + i, labelled for the
  * active track's machine and taking its defaults (dn2_sdk_default). */
+#include "digitone-mk2/core.h"
 #include "mk2/machines.h"
 #include "dev.h"
 #include "dn2.h"
@@ -160,6 +161,17 @@ static int page_layout(int sdk)
 static int32_t track_machine(uint32_t t)
 {
     return t < 16 ? machine_of(dn2_sounds[SOUND_SIZE * t + SOUND_TYPE]) : -1;
+}
+
+/* ev_midi_cc (core-dn2 0.4): each CC on a track, with the track's machine, to the dispatcher on the DSP,
+ * which keeps them for its SDK machines' v->cc (dispatch.s). The stock applies the CC as before. */
+int32_t dn2_sdk_midi_cc(int32_t track, int32_t cc, int32_t value, int32_t flags)
+{
+    (void)flags;
+    if ((uint32_t)track < 16 && (uint32_t)cc < 128)
+        core_dsp_post((uint32_t)(dn2_sounds[SOUND_SIZE * track + SOUND_TYPE] & 127) << 18 |
+                      (uint32_t)track << 14 | (uint32_t)cc << 7 | ((uint32_t)value & 127));
+    return 0;
 }
 
 /* The active track's SDK machine, or 0: the one whose knobs' value texts the shared rows show. */

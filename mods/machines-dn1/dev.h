@@ -13,10 +13,11 @@
 
 #define SDK_ALPHA_MACHINES 16
 #define SDK_ALPHA_VOICES 8
+#define SDK_ALPHA_TRACKS 4             /* the synth tracks: their CCs, and mono machines */
 #define dev_fillrect fw_fillrect
 #define dev_active dnm_sdk_active
 const struct sdk_alpha_entry *dnm_sdk_active(void);   /* sdk_alpha.c */
-#define SDK_ALPHA_TRACKS 4              /* mono machines, on core-dn1 5.3's ev_live_note */
+/* mono machines, on core-dn1 5.3's ev_live_note */
 #define dev_note_on(t, n, v, source) fw_note_on(t, n, v, source, 0, -1)
 #define dev_note_off fw_note_off
 

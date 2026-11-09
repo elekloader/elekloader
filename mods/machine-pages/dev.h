@@ -10,8 +10,9 @@
 
 #define SDK_ALPHA_MACHINES 32           /* the machines with a page, as pages.c */
 #define SDK_ALPHA_VOICES 8              /* one a track */
+#define SDK_ALPHA_TRACKS 8              /* the audio tracks: their CCs, and mono machines */
 #define dev_fillrect fw_fillrect
-#define SDK_ALPHA_TRACKS 8              /* mono machines, on core 4.2's ev_live_note */
+/* mono machines, on core 4.2's ev_live_note */
 #define dev_note_on(t, n, v, source) fw_note_on(t, n, v, source, 0, -1, -1)
 #define dev_note_off fw_note_off
 

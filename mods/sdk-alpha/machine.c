@@ -8,9 +8,10 @@
  *   dev_active           the active track's machine, or 0, on a device whose value formatter is given
  *                        no knob;
  *   SDK_ALPHA_VOICES     the voices it renders, when it renders;
- *   SDK_ALPHA_TRACKS     its tracks, when it carries out mono machines (.play), with
- *   dev_track_machine(t) the native id of track t's machine, or -1;
- *   dev_note_on(t, n, v, source), dev_note_off(t, n, source)  the core's stock note routines. */
+ *   SDK_ALPHA_TRACKS     the tracks those voices play, from 0 (their MIDI CCs, and mono machines), with
+ *   dev_track_machine(t) the native id of track t's machine (what the UI chose), or -1;
+ *   dev_note_on(t, n, v, source), dev_note_off(t, n, source)  the core's stock note routines, when it
+ *                        carries out mono machines (.play). */
 #include "dev.h"
 
 struct sdk_alpha_entry sdk_alpha_entries[SDK_ALPHA_MACHINES];
@@ -259,8 +260,38 @@ static struct {
     int32_t id;
     uint8_t start;                      /* the device's start flag lasts one block; kept until render */
     uint8_t rendered;                   /* rendered since its state was cleared: idle means something */
+    uint32_t cc_seen;                   /* cc_count at its last render: the CCs after it are new */
     uint32_t state[ELEK_VOICE_STATE_MAX / 4];
 } voices[SDK_ALPHA_VOICES];
+
+/* Each track's CCs: the last value of each, with cc_count when it came (bits 7 up; 0: none came). The MIDI
+ * task writes them; the render reads them, and takes only those cc_count had counted when it began. */
+#define CC_COUNT 0x1ffffffu             /* cc_count's mask, 25 bits */
+static uint32_t cc_table[SDK_ALPHA_TRACKS][128];
+static volatile uint32_t cc_count;      /* the last CC's count: 1..CC_COUNT, 0 before the first */
+/* What v->cc points at: -1 for every CC when none came, else the CCs built for one track and window. */
+static const int32_t cc_none[128] = { [0 ... 127] = -1 };
+static int32_t cc_built[128];
+static uint32_t built_track = UINT32_MAX, built_from, built_now;
+/* Each track's machine at its last CC, and cc_count before its first CC on it: count << 7 | id. A voice's
+ * first render on the machine takes the track's CCs from there, not the ones for the machine before:
+ * the voice changes machine only at the track's next note, after the UI chose it. */
+static volatile uint32_t cc_took[SDK_ALPHA_TRACKS];
+
+int32_t sdk_alpha_midi_cc(int32_t track, int32_t cc, int32_t value, int32_t flags)
+{
+    (void)flags;
+    if ((uint32_t)track < SDK_ALPHA_TRACKS && (uint32_t)cc < 128) {
+        uint32_t n = cc_count % CC_COUNT + 1;  /* never 0, which a CC that never came has */
+        uint32_t id = (uint32_t)dev_track_machine(track) & 127;
+        if ((cc_took[track] & 127) != id)
+            cc_took[track] = cc_count << 7 | id;
+        cc_table[track][cc] = n << 7 | ((uint32_t)value & 127);
+        __asm__ volatile ("" ::: "memory");     /* the word before the count that makes it new */
+        cc_count = n;
+    }
+    return 0;
+}
 
 void sdk_alpha_select(uint32_t slot, int32_t id)
 {
@@ -282,9 +313,31 @@ void sdk_alpha_voice(const struct sdk_alpha_entry *e, uint32_t slot, struct elek
     v->start = voices[slot].start;
     v->state = voices[slot].state;
     v->idle = voices[slot].rendered ? idle : 0;
+    uint32_t now = cc_count, from = voices[slot].cc_seen;
+    if (!voices[slot].rendered) {       /* the CCs since its track took the machine, but none twice */
+        uint32_t took = v->track < SDK_ALPHA_TRACKS ? cc_took[v->track] : 0;
+        uint32_t since = (int32_t)(took & 127) == voices[slot].id ? took >> 7 : now;
+        if (((from - since) & CC_COUNT) > ((now - since) & CC_COUNT))
+            from = since;               /* its last render, on the machine before, was before that */
+    }
+    uint32_t span = (now - from) & CC_COUNT;
+    v->cc = cc_none;
+    if (span && v->track < SDK_ALPHA_TRACKS) {     /* a CC came: its values, built once a track and window */
+        if (built_track != v->track || built_from != from || built_now != now) {
+            for (uint32_t n = 0; n < 128; ++n) {
+                uint32_t word = cc_table[v->track][n];
+                cc_built[n] = word >> 7 && (((word >> 7) - from - 1) & CC_COUNT) < span ? (int32_t)(word & 127) : -1;
+            }
+            built_track = v->track;
+            built_from = from;
+            built_now = now;
+        }
+        v->cc = cc_built;
+    }
     e->machine->render(v, out);
     voices[slot].start = 0;
     voices[slot].rendered = 1;
+    voices[slot].cc_seen = now;
 }
 
 void sdk_alpha_swap(uint32_t a, uint32_t b)
@@ -298,7 +351,7 @@ void sdk_alpha_swap(uint32_t a, uint32_t b)
 }
 #endif
 
-#ifdef SDK_ALPHA_TRACKS
+#ifdef dev_note_on
 #include "elekloader/sdk_alpha_keys.h"
 
 static struct {

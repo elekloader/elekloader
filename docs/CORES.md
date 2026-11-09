@@ -34,6 +34,7 @@ older ones people still have:
 | Digitone II | 1.12 | `core-dn2-0.3.elemod` | the [v0.10.0](https://github.com/elekloader/elekloader/releases/tag/v0.10.0) release, built into its apps, and the web page (experimental) |
 | Analog Rytm MKII | 1.74 | `core-ar2-0.11.elemod` | the [v0.10.0](https://github.com/elekloader/elekloader/releases/tag/v0.10.0) release, built into its apps, and the web page. Mods with pages built for 0.3 (rytm2_mods v1.2's lfo-rnd, voice-dac, euclid-accents, velocity-humanise, comp-preview) do not link with it: their sites overlap core's page sites |
 | Analog Rytm MKII | 1.74 | `core-ar2-0.3.elemod` | the [core-ar2-v0.3](https://github.com/elekloader/elekloader/releases/tag/core-ar2-v0.3) pre-release, and the shop |
+| Digitone II | 1.12 | `core-dn2-0.4.elemod` | on main, not released: build it ([below](#building-a-core)) |
 | Analog Rytm MKII | 1.73 | `core-ar2-0.2.elemod` | not released: the last core with 1.73; build it from commit 92a99c9 ([below](#building-a-core)) |
 | Analog Four MKII | 1.56 | `core-a4-0.5.elemod` | the [v0.10.0](https://github.com/elekloader/elekloader/releases/tag/v0.10.0) release, built into its apps, and the web page (a proof of concept) |
 | Octatrack MKI, MKII | 1.40C | `core-ot-0.8.elemod` | the [v0.10.0](https://github.com/elekloader/elekloader/releases/tag/v0.10.0) release, built into its apps, and the web page |
@@ -100,6 +101,7 @@ the one a mod that uses it names in `resources.core`.
   The notes played live on a track, before its voice, which a handler may
   take, and the stock routines past them (`ev_live_note`, `fw_note_on`,
   `fw_note_off`; core 4.2), so mono machines play one key at a time.
+  MIDI CCs before the stock applies them (`ev_midi_cc`, core 4.3).
 - **Digitone mk1** ([mods/core-dn1](../mods/core-dn1)): the Digitakt mk1's
   events, and:
   - the voices' note-on, parameter slots, mod pages and project data
@@ -148,7 +150,9 @@ the one a mod that uses it names in `resources.core`.
   mods, one mod's code on the DSP at the master output (core-dn2 0.2;
   ADAPTING.md, "SHARC mods"; the [callback contract](SHARC-DN2-ABI.md) and
   the [sine example](../examples/sharc-sine/README.md)); from 0.3 a DSP
-  memory peek (ADAPTING.md, "The DSP peek"). The optional
+  memory peek (ADAPTING.md, "The DSP peek"); from 0.4 MIDI CCs before the
+  stock applies them (`ev_midi_cc`) and words posted to DSP code
+  (`core_dsp_post`, ADAPTING.md, "The DSP peek"). The optional
   [dspbusy-dn2 companion](../mods/dspbusy-dn2/README.md) enables the busy
   measure for a build with a SHARC mod. The
   [machines companion](MACHINES-DN2.md) adds

@@ -289,6 +289,7 @@ class Device:
 
     def __init__(self, session, symbols, machines, layouts=None):
         self.s, self.symbols = session, symbols
+        self.midi_sent = []
         self.machines = sorted(machines)    # the SDK machine ids in this build
         self.layouts = layouts
 
@@ -332,6 +333,44 @@ class Device:
 
     def tap(self, name, after_ms=300):
         self.s.tap(self.s.code(name), after_ms=after_ms)
+
+    def midi(self, data, after_ms=50):
+        """MIDI bytes into the device's MIDI input, as digiemu's window sends them: its port, an event
+        source of the session, puts them in the input's ring a moment later."""
+        if self.backend is not Digiemu:
+            raise CannotYet('MIDI in')
+        port = getattr(self.s, 'sdk_midi_in', None)
+        if port is None:
+            self.midi_input()
+            from emu import midi
+            port = self.s.sdk_midi_in = midi.MidiIn()
+            port.attach(self.s.m, self.s.ips)
+            out = self.s.sdk_midi_out = midi.MidiOut(self.midi_sent.append)     # what the device sends
+            out.install(self.s.m)
+            out.attach(self.s.m, self.s.ips)
+            self.s.sources = tuple(self.s.sources) + (port, out)
+        sent = port.delivered + len(data)
+        # The port maps host time to emulated time; a busy host slows the emulator below real time and
+        # the mapping drifts ahead, so start it again: the bytes go in about 15 emulated ms from now.
+        port.set_ips(self.s.ips)
+        port.put(bytes(data))
+        if not self.wait_until(lambda: port.delivered >= sent, limit_ms=1000):
+            raise AssertionError('the MIDI input never took %s' % bytes(data).hex())
+        self.wait(after_ms)
+
+    def midi_input(self):
+        """Let MIDI IN's bytes in (MIDI CONFIG > PORT CONFIG > INPUT FROM), where the setup leaves them out."""
+
+    def knob_cc(self, knob):
+        raise CannotYet('a CC for a knob')
+
+    def cc(self, channel, number, value, after_ms=50):
+        """A MIDI CC on `channel` (1..16)."""
+        self.midi((0xB0 | (channel - 1), number, value), after_ms)
+
+    def note(self, channel, note, velocity, after_ms=50):
+        """A MIDI note on (velocity 0: off) on `channel` (1..16)."""
+        self.midi((0x90 | (channel - 1), note, velocity), after_ms)
 
     def wait(self, ms):
         self.s.run_ms(ms)
@@ -565,6 +604,12 @@ class Digitakt1(Device):
     def destination_for(self, knob):
         return DT1_SLOT_A + knob if knob < 8 else DT1_EXTRA_SLOT(knob - 8)
 
+    def knob_cc(self, knob):
+        """The CC that sets the knob on its track: SRC A-H's, 16-23."""
+        if knob >= 8:
+            raise CannotYet('a CC for a knob past H')
+        return 16 + knob
+
     def destination(self, lfo, track=0):
         at = DT1['FW_SOUND'](self.kit(), track) + DT1_SLOTS + 2 * (4 + 8 * lfo)
         return struct.unpack('>H', bytes(self.s.m.uc.mem_read(at, 2)))[0] >> 8
@@ -621,6 +666,27 @@ class Digitone1(Device):
 
     def set_lfo_depth(self):
         self.turn('H', 64)
+
+    def midi_input(self):
+        """INPUT FROM is USB after the setup: SETTINGS > MIDI CONFIG > PORT CONFIG, its fourth row, to
+        MIDI+USB (the last choice: RIGHT stops there)."""
+        self.tap('GLOBAL')
+        self._top()
+        for key in ('DOWN',) * 4 + ('YES',):            # MIDI CONFIG
+            self.tap(key)
+        self._top()
+        self.tap('DOWN')
+        self.tap('YES')                                 # PORT CONFIG
+        self._top(12)
+        for key in ('DOWN',) * 3 + ('RIGHT',) * 3:
+            self.tap(key)
+        self._leave_settings()
+
+    def knob_cc(self, knob):
+        """The CC that sets the knob on its track: knob 0 is SYN2's A, CC 75."""
+        if knob:
+            raise CannotYet('a CC for a knob past the first')
+        return 75
 
     def keyboard(self):
         pass                        # DN1's trig keys already play its chromatic keyboard.
@@ -859,6 +925,18 @@ class Digitone2(Device):
 
     def set_lfo_depth(self):
         self.turn('H', 64)
+
+    def knob_cc(self, knob):
+        """The CC that sets the knob on its track: knob 0 is SYN's A, CC 40 (FM TONE's)."""
+        if knob:
+            raise CannotYet('a CC for a knob past the first')
+        return 40
+
+    def midi(self, data, after_ms=50):
+        """MIDI bytes into the firmware's USB MIDI receive callback (DigiKit's midi.usb.in), which INPUT
+        FROM's setup (USB) lets in."""
+        self.s.emu.call('midi.usb.in', bytes=bytes(data).hex())
+        self.wait(after_ms)
 
     def dsp_word(self, addr):
         """A word of the DSP's memory (little-endian), in an audio session."""

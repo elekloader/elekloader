@@ -4,7 +4,7 @@ The boot copier and the hook bus for Digitakt mk1 OS 1.53 and 1.54. Every
 set of linkable (format 2) mods needs exactly one core. On its own it
 changes nothing the unit does.
 
-`core.s`, `settings.s`, `render.s`, `machines.s`, `fw.s`, `master.s` and `notes.s` have no addresses:
+`core.s`, `settings.s`, `render.s`, `machines.s`, `fw.s`, `master.s`, `notes.s` and `midi.s` have no addresses:
 `mod.json` gives them (`defsym`), with the sites, for 1.53, and again for
 1.54 under `ports`. The stock file you build with picks them.
 [../core-dn1](../core-dn1) builds the same `core.s`, `settings.s`,
@@ -73,6 +73,12 @@ are 1.53's.
   With no subscriber the unit is stock. machine-pages 1.8 carries out the
   SDK's mono machines on it. Each device gives the routines' addresses and
   their frames' sizes (`NOTE_ON_LINK`, `NOTE_OFF_LINK`).
+- **4.3: `ev_midi_cc`** ([midi.s](midi.s), last in `sources`): each MIDI
+  CC the unit receives, `f(track, cc, value, flags)`, before the stock
+  applies it, as core-dn1's; a handler that returns nonzero takes it. The
+  site is the CC router's flags load and FX check, 0x400158ec (the router
+  is 0x400158d2, the same in 1.53 and 1.54). OB-1's CC hook, at the CC
+  lookup's entry (0x4007919e), links beside it.
 
 Build it with the SDK (it needs m68k binutils):
 

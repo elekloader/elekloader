@@ -22,6 +22,8 @@ PROFILE = DEVICE.releases['1.12'].sharc
 # OS 1.12's DSP, as dispatch.s reads it: the frame copy and its halfwords, the slot-to-track map, the voice
 # buffers, the hooks' continuations and the capture arrays.
 FRAME, MAP, BUFFERS = 0x25c48c, 0x257898, 0x804acf90
+# core-dn2's posts, as the DSP receives the frames: tail words 4..13 of its two receive buffers.
+POSTS = (0x2c29d0 + 0xa80 + 16, 0x2c39d0 + 0xa80 + 16)
 TYPE = {'voice': 74, 'filter': 90}
 PITCH, VELOCITY, PARAMS, PARAM_STEP, NOTE_ON = 1, 26, 0x6d, 0x49, 0x11
 EXIT = {'voice': 0xb8251e, 'filter': 0x1c958a}
@@ -104,6 +106,7 @@ class Machine:
                      for k in ('voice', 'filter')}
         self.capture = dispatch['data'][0] + 4 * CAP_WORD
         self.regions.update({FRAME & ~0xff: bytearray(0xa00), MAP & ~0xff: bytearray(0x100),
+                             POSTS[0] & ~0xff: bytearray(0x1100),
                              BUFFERS: bytearray(16 * 128), STOCK_STACK: bytearray(0x1000)})
 
     def _at(self, address):
@@ -241,6 +244,56 @@ class DispatchTests(unittest.TestCase):
         self.assertEqual(m.probe('sdk-9', 8), [0])
         self.assertEqual(m.word(state), 0x5a5a5a5a)
 
+    def post(self, m, buffer, i, number, machine, track, cc, value, check=None):
+        """Post i of a receive buffer's tail: its number and its word, the number's low bits in bits 25-31."""
+        m.word(POSTS[buffer] + 8 * i, number)
+        word = machine << 18 | track << 14 | cc << 7 | value
+        m.word(POSTS[buffer] + 8 * i + 4, word | ((number if check is None else check) & 127) << 25)
+
+    def cc9(self, m, slot):
+        """cc[9] as the slot's SDK machine saw it in its last render, after slot 0's call took the posts
+        (once a block)."""
+        if slot:
+            m.block('voice', 0)
+        m.block('voice', slot)
+        return [v - 2 ** 32 if v >= 2 ** 31 else v for v in m.probe('sdk-9', 59)][0]
+
+    def test_an_sdk_machine_reads_the_ccs_posted_for_its_track(self):
+        m = self.machine('sdk-9', 'sdk-40')
+        slot = 3
+        m.halfword(TYPE['voice'] + slot, 9)
+        m.halfword(slot, 5, MAP)                    # the slot plays track 6 (5 from 0)
+        self.assertEqual(self.cc9(m, slot), -1)
+        self.post(m, 0, 0, 1, 9, 5, 9, 64)
+        self.assertEqual(self.cc9(m, slot), 64)
+        self.assertEqual(self.cc9(m, slot), -1)      # once
+        # In both buffers, any order: oldest first, so the last value is the newest's.
+        self.post(m, 1, 2, 3, 9, 5, 9, 71)
+        self.post(m, 0, 4, 2, 9, 5, 9, 70)
+        self.assertEqual(self.cc9(m, slot), 71)
+        self.assertEqual(m.word(m.placed['machines-dn2']['data'][0] + 4 * 1318), 3)    # cc_last
+        # A post whose check does not match its number is still arriving: taken once it does.
+        self.post(m, 0, 1, 4, 9, 5, 9, 99, check=0)
+        self.assertEqual(self.cc9(m, slot), -1)
+        self.post(m, 0, 1, 4, 9, 5, 9, 99)
+        self.assertEqual(self.cc9(m, slot), 99)
+        # Another track's CC, or an old number, does not reach it.
+        self.post(m, 0, 2, 5, 9, 6, 9, 1)
+        self.post(m, 1, 0, 2, 9, 5, 9, 2)
+        self.assertEqual(self.cc9(m, slot), -1)
+        # A CC for the track's machine before the slot plays it reaches its first render there; one for
+        # the machine before does not.
+        m.halfword(TYPE['voice'] + slot, 40)
+        m.block('voice', slot)
+        self.post(m, 0, 3, 6, 9, 5, 9, 33)           # the track has 9 again, the slot still plays 40
+        m.halfword(TYPE['voice'] + slot, 9)
+        self.assertEqual(self.cc9(m, slot), 33)
+        m.halfword(TYPE['voice'] + slot, 40)
+        m.block('voice', slot)
+        self.post(m, 1, 1, 7, 40, 5, 9, 44)           # for machine 40
+        m.halfword(TYPE['voice'] + slot, 9)
+        self.assertEqual(self.cc9(m, slot), -1)
+
     def test_the_knobs_run_as_the_model_says(self):
         import random
         rng = random.Random(7)
@@ -272,6 +325,12 @@ class DispatchTests(unittest.TestCase):
         self.assertTrue(all(abs(x) <= 1 for x in out) and max(out) > 0.1)
         rising = [i for i in range(1, len(out)) if out[i - 1] < 0 <= out[i]]
         self.assertAlmostEqual((rising[-1] - rising[0]) / (len(rising) - 1), 48000 / 440, delta=1)
+        # CC 9 on its track (0) restarts the wave at zero, as a note does.
+        self.assertNotEqual(m.block('voice', 2)[0], 0.0)
+        self.post(m, 0, 0, 1, 123, 0, 9, 5)
+        m.block('voice', 0)                                   # slot 0's call takes the post
+        self.assertEqual(m.block('voice', 2)[0], 0.0)
+        self.assertNotEqual(m.block('voice', 2)[0], 0.0)
 
     def test_an_mk2_synth_gets_dn2_voice_input(self):
         m = self.machine('voice-5', 'voice-31')

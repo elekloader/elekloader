@@ -1,12 +1,12 @@
 {
- "id": "core", "version": "0.3",
+ "id": "core", "version": "0.4",
  "license": "GPL-2.0-or-later",
  "title": "core", "category": "Framework", "author": "irpina",
  "description": "The boot copier and the hook bus for the Digitone II: every other mod needs it. On its own it changes nothing the unit does.",
  "device": "digitone-mk2", "os": "1.12",
  "sharc": {"artifact": "bridge.sharc.json"},
  "sources": ["../core/core.s", "../core/settings.s", "../core-dt2/personalize.s",
-             "input.c", "input.s", "sysex.s", "peek.c"],
+             "input.c", "input.s", "sysex.s", "peek.c", "midi.s"],
  "defsym": {
   "DRAWALL": "0x4011d60a",
   "KEYDISP": "0x4002c5c8",
@@ -22,7 +22,8 @@
   "KEY_STATE": "0x445a2e30", "UI_QUEUE": "0x4059e214",
   "PANEL_ENCODER": "0x4011ff0c", "PANEL_COUNTER": "0x466768b0",
   "SYSEX_SEND": "0x401236d2", "SYSEX_TABLE": "0x40207f9e",
-  "DSP_FRAME": "0x400cf922", "DSP_QUEUE": "0x80002510"
+  "DSP_FRAME": "0x400cf922", "DSP_QUEUE": "0x80002510",
+  "ROUTER_EXIT": "0x4003f1a2"
  },
  "sites": [
   {"addr": "0x40000538", "stock": "4eb9400019b0", "op": "jsr", "target": "boot"},
@@ -35,7 +36,9 @@
   {"addr": "0x4011fc8c", "stock": "4fefffbc48d77cfc", "op": "jmp", "target": "core_panel_buttons"},
   {"addr": "0x4011f8c4", "stock": "52b9466768b0", "op": "jsr", "target": "core_panel_clock"},
   {"addr": "0x4012197a", "stock": "47f940207f9e", "op": "jsr", "target": "core_sysex"},
-  {"addr": "0x40025e9e", "stock": "4eb9400cf922", "op": "jsr", "target": "core_dsp_frame"}
+  {"addr": "0x40025e9e", "stock": "4eb9400cf922", "op": "jsr", "target": "core_dsp_frame"},
+  {"addr": "0x4003f106", "stock": "2a2f0028b083", "op": "jsr", "target": "core_midi_cc"}
  ],
- "collections": {"ev_tick": 4, "ev_draw": 4, "ev_key": 4, "ev_enc": 4, "ev_settings": 4, "ev_personalize": 4, "ev_sysex": 4}
+ "collections": {"ev_tick": 4, "ev_draw": 4, "ev_key": 4, "ev_enc": 4, "ev_settings": 4, "ev_personalize": 4, "ev_sysex": 4,
+                 "ev_midi_cc": 4}
 }

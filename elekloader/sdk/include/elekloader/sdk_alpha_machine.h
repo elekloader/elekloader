@@ -171,6 +171,11 @@ struct elek_voice {
                                     * machine, kept between calls and notes: read it with ELEK_STATE */
     uint32_t idle;                 /* frames the voice was not rendered (silent) since its last render, up to
                                     * UINT32_MAX; 0 in the first render after its state is zeroed */
+    /* cc[n], n 0..127: the value, 0..127, of MIDI CC n if one came on the voice's track since this voice's
+     * last render (while it was silent too), else -1. Several of the same CC read as the last one; which
+     * of two different CCs came first is not kept. The stock applies the CC as it would anyway. Valid
+     * during the call only. */
+    const int32_t *cc;
 };
 /* The voice's state as a type*, which must fit in ELEK_VOICE_STATE_MAX bytes (a compile error if not). */
 #define ELEK_STATE(type, v) \

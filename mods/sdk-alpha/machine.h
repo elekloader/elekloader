@@ -67,8 +67,9 @@ void sdk_alpha_blit(void *bmp, int32_t x, int32_t y, const struct elek_glyph *gl
 /* The machine id voice `slot` plays: another id zeroes its state and drops a pending start. */
 void sdk_alpha_select(uint32_t slot, int32_t id);
 /* One block of voice `slot`: start latches v->start until a block is rendered; fills v's knob, start,
- * state and idle (the companion's count of frames not rendered since the last render; 0 in the state's
- * first render), mapping raw[0..count-1] as sdk_alpha_present does. */
+ * state, idle (the companion's count of frames not rendered since the last render; 0 in the state's
+ * first render) and cc, the CCs on v->track since the slot's last render, mapping raw[0..count-1] as
+ * sdk_alpha_present does. */
 void sdk_alpha_voice(const struct sdk_alpha_entry *e, uint32_t slot, struct elek_voice *v,
                      const int32_t *raw, int start, uint32_t idle, elek_sample *out);
 /* Swaps two slots' machine and state: a mono track's sound moving to another voice. */
@@ -80,4 +81,7 @@ void sdk_alpha_swap(uint32_t a, uint32_t b);
 int32_t sdk_alpha_live_note(int32_t track, int32_t note, int32_t vel, int32_t on, int32_t source);
 /* The pitch the track's voice renders for machine id, from the stock's: legato moves it. */
 int32_t sdk_alpha_pitch(uint32_t track, int32_t id, int32_t pitch);
+/* ev_midi_cc's handler (dev.h's SDK_ALPHA_TRACKS: the tracks with voices, from 0): records the CC for
+ * the voices of the track to read in v->cc. -> 0: the stock applies it as before. */
+int32_t sdk_alpha_midi_cc(int32_t track, int32_t cc, int32_t value, int32_t flags);
 #endif

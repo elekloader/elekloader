@@ -299,13 +299,14 @@ def built(moddir, tmp):
     return sdkbuild.build(os.path.join(os.path.dirname(HERE), moddir), SYX, tmp)[0]
 
 
-# core's sites (core-dn2 0.1): boot, UI events, menu builders, panel input/clock and SysEx observer
+# core's sites: boot, UI events, menu builders, panel input/clock and SysEx observer (0.1), the
+# frame sender (0.3) and the CC router (0.4)
 CORE_SITES = ((0x40000538, '4eb9400019b0'), (0x4002e464, '4eb94011d5d4'),
               (0x4002e4ca, '4eb94011d60a'), (0x4002f20c, '4eb94002c5c8'),
               (0x4002f256, '4eb94002c55c'), (0x4009ff88, '205248780002'),
               (0x400987a2, '4cef7c7c0018'), (0x4011fc8c, '4fefffbc48d77cfc'),
               (0x4011f8c4, '52b9466768b0'), (0x4012197a, '47f940207f9e'),
-              (0x40025e9e, '4eb9400cf922'))
+              (0x40025e9e, '4eb9400cf922'), (0x4003f106, '2a2f0028b083'))
 
 
 def at(img, addr, n):
@@ -373,7 +374,8 @@ CORE_HOOKS = {0x40000538: ('4eb9', 'boot'), 0x4002e464: ('4eb9', 'core_tick'),
               0x4011fc8c: ('4ef9', 'core_panel_buttons'),
               0x4011f8c4: ('4eb9', 'core_panel_clock'),
               0x4012197a: ('4eb9', 'core_sysex'),
-              0x40025e9e: ('4eb9', 'core_dsp_frame')}
+              0x40025e9e: ('4eb9', 'core_dsp_frame'),
+              0x4003f106: ('4eb9', 'core_midi_cc')}
 
 
 def assert_hooked(new, man):
@@ -489,23 +491,28 @@ def test_hooks_check_links_with_core():
 
 
 PEEK_SITE = 0x40025e9e          # 0.3: the frame sender's call of the SPI driver
+CC_SITE = 0x4003f106            # 0.4: the CC router's flags load and CC 95 check
 PEEK_EXPORTS = {'core_dsp_frame', 'core_dsp_peek', 'core_dsp_peek_status', 'core_dsp_peek_data',
-                'core_dsp_peek_stop', 'core_dsp_span'}
+                'core_dsp_peek_stop', 'core_dsp_span', 'core_dsp_post', 'core_midi_cc'}
 
 
 def test_core_0_3_keeps_the_0_1_control_contract_and_adds_only_the_peek():
-    """0.2 added its dormant SHARC bridge and 0.3 the DSP peek: one site at the frame sender,
-    and its code after 0.1's. Every 0.1 site, symbol, relocation, table and reservation stays."""
+    """0.2 added its dormant SHARC bridge, 0.3 the DSP peek (one site at the frame sender) and 0.4
+    ev_midi_cc (one site at the CC router, its table) and the posts, its code after 0.1's. Every 0.1
+    site, symbol, relocation, table and reservation stays."""
     old = json.loads(need(CORE_01, 'ELEKLOADER_DN2_CORE_01'))
     with tempfile.TemporaryDirectory() as tmp:
         with open(built(os.path.join('mods', 'core-dn2'), tmp)) as fh:
             new = json.load(fh)
-    assert old['version'] == '0.1' and new['version'] == '0.3'
-    for key in ('target', 'imports', 'collections', 'contribute', 'resources', 'copied', 'weak'):
+    assert old['version'] == '0.1' and new['version'] == '0.4'
+    for key in ('target', 'contribute', 'resources', 'copied', 'weak'):
         assert new[key] == old[key], key
+    assert new['collections'] == {**old['collections'], 'ev_midi_cc': 4}
+    assert sorted(new['imports']) == sorted(old['imports'] + ['ev_midi_cc'])
     added = [x for x in new['sites'] if x not in old['sites']]
     assert [x for x in new['sites'] if x in old['sites']] == old['sites']
-    assert [(int(x['addr'], 0), x['relocs']) for x in added] == [(PEEK_SITE, [[2, 'abs32', 'sym:core_dsp_frame', 0]])]
+    assert [(int(x['addr'], 0), x['relocs']) for x in added] == [(PEEK_SITE, [[2, 'abs32', 'sym:core_dsp_frame', 0]]),
+                                                                 (CC_SITE, [[2, 'abs32', 'sym:core_midi_cc', 0]])]
     assert all(new['symbols'].get(k) == v for k, v in old['symbols'].items())   # 0.1's code has not moved
     assert set(new['exports']) - set(old['exports']) == PEEK_EXPORTS
     assert all(r in new['relocs'] for r in old['relocs'])
@@ -522,7 +529,7 @@ def check_control_firmware_adds_only_the_peek(old, new, mods):
         parsed = formats.parse(output['syx'], DEV)
         assert parsed.stored[7] == stock()[0].stored[7]
         images.append(formats.main_image(parsed, DEV))
-    sites = [(PEEK_SITE, 6)]
+    sites = [(PEEK_SITE, 6), (CC_SITE, 6)]
     for mod in mods:
         with open(mod) as fh:
             sites += [(int(x['addr'], 0), x['len']) for x in json.load(fh)['sites']]

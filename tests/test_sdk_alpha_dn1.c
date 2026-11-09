@@ -28,7 +28,7 @@ static int32_t blocks[8][ELEK_VOICE_FRAMES];
 static struct dnm_voice native[8];
 static uint32_t calls[8], fallback_reset;
 static struct elek_voice last[8];
-static int32_t input[8][3];
+static int32_t input[8][3], cc9[8];
 static int32_t set_track, set_slot, set_value;
 
 int32_t dnm_sdk_param(int32_t k) { return 100 + k; }
@@ -51,6 +51,7 @@ static void sound(const struct elek_voice *v, elek_sample *out)
     assert(v->state && v->knob);
     last[rendering] = *v;
     for (int k = 0; k < 3; ++k) input[rendering][k] = v->knob[k];
+    cc9[rendering] = v->cc[9];
     out[0] = ELEK_SAMPLE(1.0);
     out[1] = 16 * ++*ELEK_STATE(uint32_t, v);
     ++calls[rendering];
@@ -196,5 +197,20 @@ int main(void)
     fw_voice_track[4] = 1;                      /* taken by another track */
     assert(dnm_sdk_mono_on(5, 2) == -1);
     assert(dnm_sdk_mono_on(6, 0) == -1 && dnm_sdk_mono_on(7, 0) == -1);   /* ELEK_POLY */
+
+    /* A CC reaches every voice of its track once, and no voice of another. */
+    render(5, blocks[5], &native[5]); render(7, blocks[7], &native[7]);
+    assert(sdk_alpha_midi_cc(0, 9, 7, 0) == 0);
+    render(5, blocks[5], &native[5]); render(7, blocks[7], &native[7]);
+    assert(cc9[5] == 7 && cc9[7] == -1);
+    fw_voice_track[7] = 0;
+    sdk_alpha_midi_cc(0, 9, 8, 0);
+    render(5, blocks[5], &native[5]); render(7, blocks[7], &native[7]);
+    assert(cc9[5] == 8 && cc9[7] == 8);
+    render(5, blocks[5], &native[5]);
+    assert(cc9[5] == -1);
+    assert(sdk_alpha_midi_cc(4, 9, 1, 0) == 0 && sdk_alpha_midi_cc(8, 9, 1, 0) == 0);   /* MIDI, FX tracks */
+    render(5, blocks[5], &native[5]);
+    assert(cc9[5] == -1);
     return 0;
 }
