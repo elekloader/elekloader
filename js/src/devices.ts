@@ -78,9 +78,9 @@ export type Device = {
   trailer: null | 'hmac'
   isa: 'coldfire'
   hmacKeyFrom: [number, string] | null          // for 'hmac': the section and seed the key is derived from
-  container: 'ele3' | 'elek'
+  container: 'ele3' | 'ele2' | 'elek'
   versionLen: number
-  versionAt: number                             // 'ele3': where the version field is in the container header
+  versionAt: number                             // 'ele3', 'ele2': where the version field is in the container header
   versionOptional: boolean                      // true: a build given no version keeps stock's field
   protected: [number, number, string][]        // main OS bytes no mod may change
   relocatable: [number, number, number[], string][]
@@ -253,6 +253,30 @@ export const ANALOG_RYTM_MK2: Device = {
   paramIds: [555, [469, 554, "core's lockable parameters' ids"], [['core_params', false], ['core_param_locks', true]]],
 }
 
+export const ANALOG_RYTM_MK1: Device = {
+  ...base,
+  key: 'analog-rytm-mk1', name: 'Analog Rytm MKI', sysexId: 0x07, container: 'ele2', versionAt: 0x10,
+  releases: [
+    rel('1.73', '9115c3888354bb388f90410e0445cd312bf020593ed99f768a99e475d1d6157c',
+      '3db73d3a5524d10db110f6e50d722274cd0b72a01292f4a97032165e4f97e175', 2824228),
+    rel('1.74', '4f0d59051b4b3ac01f336639918ceb8186e0ae1a1abf2ed9bc028b8718514cff',
+      '6d021e22e8912cfc1ee84e619c35db0174455cbc42bf64dbec1f1d06a5ab811d', 2824228),
+  ],
+  stage: 0x40200000, flashAt: 0x20000, flashLimit: 0x780000,   // the calibration records start at 0x780000
+  protected: [
+    [0x40000592, 0x400005d8, "the OS entry's bootstrap version compare and the call to BOOTSTRAP UPGRADE"],
+    [0x4028c708, 0x402a1b84, 'the copy of the bootstrap (with its version) the OS writes into flash: '
+      + "1.73's at 0x4028c708, 1.74's at 0x4028c768"],
+  ],
+  areas: { ddr: [0x47be0000, 0x47c00000] },   // checked on a 1.74 unit (devices/analog_rytm_mk1.py)
+  ddr: [0x47be0000, 0x47c00000],
+  recovery: 'hold FUNC while powering on for the startup menu, press TRIG 4 (OS UPGRADE), '
+    + 'then send the stock .syx over MIDI DIN (not USB)',
+  slotClaims: [['core_machines', 0, 53, 'machine']],   // 53 machine slots, as the MKII
+  // core-ar2's knob ids, as on the MKII: stock's records are 0..468 here too
+  paramIds: [555, [469, 554, "core's lockable parameters' ids"], [['core_params', false], ['core_param_locks', true]]],
+}
+
 export const ANALOG_FOUR_MK2: Device = {
   ...base,
   key: 'analog-four-mk2', name: 'Analog Four MKII', sysexId: 0x0b,
@@ -323,14 +347,17 @@ export const DIGITONE_MK2: Device = {
 }
 
 const DEVICES: Device[] = [DIGITAKT_MK1, DIGITAKT_MK2, DIGITONE_MK1, OCTATRACK, MODEL_CYCLES, MODEL_SAMPLES,
-  ANALOG_RYTM_MK2, ANALOG_FOUR_MK2, DIGITONE_MK2]
+  ANALOG_RYTM_MK2, ANALOG_FOUR_MK2, DIGITONE_MK2, ANALOG_RYTM_MK1]
 
 export const devices = (): Device[] => DEVICES
 
-/** -> where the version field of an 'ele3' file with this device byte is. */
-export function versionAt(sysexId: number): number {
-  for (const d of DEVICES) if (d.container === 'ele3' && d.sysexId === sysexId) return d.versionAt
-  return 0x14
+/** The file families syx.ts reads and writes. */
+export const SYX_FAMILIES: readonly string[] = ['ele3', 'ele2']
+
+/** -> where the version field of a syx.ts file of this family with this device byte is. */
+export function versionAt(sysexId: number, container: 'ele3' | 'ele2' = 'ele3'): number {
+  for (const d of DEVICES) if (d.container === container && d.sysexId === sysexId) return d.versionAt
+  return container === 'ele2' ? 0x10 : 0x14
 }
 
 export function releaseFor(d: Device, syxSha256?: string, mainSha256?: string): Release | null {

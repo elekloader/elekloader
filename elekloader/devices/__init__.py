@@ -150,7 +150,7 @@ def version_at(sysex_id, container='ele3'):
     for d in devices():
         if d.container == container and d.sysex_id == sysex_id:
             return d.version_at
-    return 0x14
+    return 0x10 if container == 'ele2' else 0x14
 
 
 def identify(syx_sha256):

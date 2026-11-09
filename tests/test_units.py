@@ -259,6 +259,43 @@ def test_a_longer_section_table_moves_the_data_start():
     assert all(o.stored[k] == s.stored[k] for k in (5, 2, 4, 6, 7, 8))
 
 
+
+def test_an_ele2_file_round_trips_and_its_checks_refuse():
+    """ELE2 (the Analog Rytm MKI): a 0x14-byte header, the load address and the
+    one section, padded to 4. Read, rewritten byte for byte, given a version,
+    verified, and refused when the header or the load address changes."""
+    dev = [d for d in devices.devices() if d.key == 'analog-rytm-mk1'][0]
+    body = b'an mki main os ' * 400
+    sec = syx.pack_main(body)
+    cont = bytearray(b'ELE2' + b'0176' + b' ' * 8 + b'1.74') + struct.pack('>I', dev.main_load) + sec
+    cont += bytes(-len(cont) % 4)
+    cont = bytes(cont)
+    stream = struct.pack('>II', len(cont), transport.content_checksum(cont)) + cont
+    f0, f1 = bytearray(FRAMING0), bytearray(FRAMING1)
+    f0[4] = f1[4] = 0x07                               # the MKI's device byte
+    raw = transport.encode_syx(stream, 0x07, bytes(f0), bytes(f1))
+    s = syx.Syx(raw)
+    assert s.family == 'ELE2' and s.version == '1.74' and s.section(3) == body
+    assert [(t[0], t[1], t[3]) for t in s.table] == [(3, 0x18, dev.main_load)]
+    assert syx.write(s, s.stored[3], dev) == raw
+    out = syx.write(s, syx.pack_main(body + b'!'), dev, 'MW01')
+    o = syx.Syx(out)
+    assert o.version == 'MW01' and o.section(3) == body + b'!' and o.container[:0x10] == cont[:0x10]
+
+    def tampered(at):
+        c = bytearray(syx.Syx(out).container)
+        c[at] ^= 1
+        st2 = struct.pack('>II', len(c), transport.content_checksum(bytes(c))) + bytes(c)
+        return transport.encode_syx(st2, 0x07, bytes(f0), bytes(f1))
+
+    for at, word in ((5, 'header'), (0x15, 'destinations')):      # 0x14: the load address
+        try:
+            syx.verify(tampered(at), s, body + b'!', dev, 'MW01')
+        except syx.SyxError as e:
+            assert word in str(e), e
+        else:
+            raise AssertionError('not refused: byte 0x%x' % at)
+
 def test_the_update_limit_counts_the_preamble_and_is_optional():
     from dataclasses import replace
     body = b'main os image ' * 300

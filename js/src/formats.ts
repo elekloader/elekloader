@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// One interface over the OS file families a device profile names (Device.container): 'ele3' (syx.ts) and 'elek'
+// One interface over the OS file families a device profile names (Device.container): 'ele3' and 'ele2' (syx.ts) and 'elek'
 // (elek.ts). Ported from elekloader's formats.py (GPL-2.0-or-later).
 //
 //     const [stock, dev, rel] = await load(bytes)     // a stock file (or Elektron's zip of it), known by its hash
@@ -7,7 +7,7 @@
 //     const outputs = write(stock, storedMain, dev, version)   // {syx} or {syx, bin}
 //     const facts = verify(outputs, stock, wantMain, dev, version)
 import { encodeAsciiReplace, equal, sha } from './bytes.ts'
-import { type Device, type Release, UnknownFirmware, identify, supported } from './devices.ts'
+import { type Device, type Release, SYX_FAMILIES, UnknownFirmware, identify, supported } from './devices.ts'
 import * as elek from './elek.ts'
 import { hexw } from './py.ts'
 import * as syx from './syx.ts'
@@ -20,7 +20,7 @@ export type Parsed = syx.Syx | elek.ElekFile
 /** A file of `dev`'s family -> its parsed form. */
 export function parse(raw: Uint8Array, dev: Device): Parsed {
   try {
-    if (dev.container === 'ele3') return new syx.Syx(raw)
+    if (SYX_FAMILIES.includes(dev.container)) return new syx.Syx(raw)
     if (dev.container === 'elek') return new elek.ElekFile(raw)
   } catch (e) {
     if (e instanceof syx.SyxError || e instanceof elek.ElekError) throw new FormatError(e.message)
@@ -68,13 +68,13 @@ export const mainImage = (parsed: Parsed, dev: Device): Uint8Array => parsed.sec
 export function checkVersion(dev: Device, version: string | null): void {
   if (version === null) return
   const n = encodeAsciiReplace(version).length
-  if (dev.container === 'ele3' && n !== dev.versionLen) throw new FormatError(`the version is exactly ${dev.versionLen} ASCII characters`)
+  if (SYX_FAMILIES.includes(dev.container) && n !== dev.versionLen) throw new FormatError(`the version is exactly ${dev.versionLen} ASCII characters`)
   if (!(n > 0 && n <= dev.versionLen)) throw new FormatError(`the version is 1 to ${dev.versionLen} ASCII characters`)
 }
 
 /** Main OS image -> its stored section, as `dev`'s family stores it. */
 export const packMain = (image: Uint8Array, dev: Device): Uint8Array =>
-  dev.container === 'ele3' ? syx.packMain(image) : elek.packMain(image)
+  SYX_FAMILIES.includes(dev.container) ? syx.packMain(image) : elek.packMain(image)
 
 export type Outputs = { syx: Uint8Array; bin?: Uint8Array }
 
@@ -83,7 +83,7 @@ export function write(stock: Parsed, storedMain: Uint8Array, dev: Device, versio
   storedSharc: Uint8Array | null = null): Outputs {
   checkVersion(dev, version)
   try {
-    if (dev.container === 'ele3') return { syx: syx.write(stock as syx.Syx, storedMain, dev, version, storedSharc) }
+    if (SYX_FAMILIES.includes(dev.container)) return { syx: syx.write(stock as syx.Syx, storedMain, dev, version, storedSharc) }
     if (storedSharc !== null) throw new FormatError('the stock file has no profiled SHARC section')
     return elek.write(stock as elek.ElekFile, storedMain, dev, version)
   } catch (e) {
@@ -100,11 +100,12 @@ export function verify(outputs: Outputs, stock: Parsed, wantMain: Uint8Array, de
   const stockMain = mainImage(stock, dev)
   let facts: Record<string, any>
   try {
-    if (dev.container === 'ele3') {
+    if (SYX_FAMILIES.includes(dev.container)) {
       facts = syx.verify(outputs.syx, stock as syx.Syx, wantMain, dev, version, wantSharc)
       const same = [...(facts.sections as Map<string, syx.Section>)].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
         .filter(([, v]) => v.stock).map(([s]) => s)
-      facts.untouched = [`sections ${same.join(', ')}, byte for byte`]
+      facts.untouched = dev.container === 'ele2' ? ['the container header but its version field, and the load address']
+        : [`sections ${same.join(', ')}, byte for byte`]
     } else {
       if (wantSharc !== null) throw new FormatError('the stock file has no profiled SHARC section')
       facts = elek.verify(outputs as Record<string, Uint8Array>, stock as elek.ElekFile, wantMain, dev, stockMain, version)
