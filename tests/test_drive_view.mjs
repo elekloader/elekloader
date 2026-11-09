@@ -174,6 +174,12 @@ try {
   await page.waitForSelector('#dm-build:not([hidden])');
   await page.waitForSelector('#dm-files:not([hidden])');
   check('the build reads as the Python labels it', (await page.textContent('#dm-build-label')) === V.label, await page.textContent('#dm-build-label'));
+  check('the +Drive area reads size first, area in brackets', /^\d+(\.\d)? K?B \(0x[0-9a-f]{8}\.\.0x[0-9a-f]{8}\)$/.test(await page.textContent('#dm-room dd')),
+    await page.textContent('#dm-room dd'));
+  check('the spare entries are collapsed', !(await page.evaluate(() => document.getElementById('dm-spares').open))
+    && !(await page.isVisible('#dm-tables')));
+  await page.click('#dm-spares summary');
+  check('... and open on a click', await page.isVisible('#dm-tables'));
   const tables = await page.textContent('#dm-tables');
   check('the spare entries per event table', /ev_x.*0 of 1.*1/s.test(tables) && /ev_draw/.test(tables), tables.replace(/\s+/g, ' '));
   check('the last boot\'s /mods/.status', (await page.textContent('#dm-status-text')).includes('drive-hello.elemod loaded'));

@@ -560,7 +560,8 @@ details summary:hover { color: var(--text); }
 .dm { display: flex; flex-direction: column; gap: 16px; max-width: 980px; }
 .dm-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 16px 18px; min-width: 0; }
 .dm-card h2 { font-size: 16px; margin: 0 0 10px; }
-.dm-card h3 { font-size: 13px; margin: 14px 0 6px; color: var(--muted); }
+.dm-card h3, .dm-spares summary { font-size: 13px; margin: 14px 0 6px; color: var(--muted); font-weight: 600; }
+.dm-spares[open] summary { color: var(--text); }
 .dm-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 10px; }
 .dm-row:first-child { margin-top: 0; }
 .dm select { background: var(--well); color: var(--text); border: 1px solid var(--line-2); border-radius: 7px; padding: 6px 8px; max-width: 100%; }

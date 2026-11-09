@@ -161,7 +161,7 @@ function renderBuild() {
 function renderRoom() {
   const b = S.build;
   $('dm-room').replaceChildren(
-    el('dt', {}, '+Drive area'), el('dd', {}, `${hex8(b.lo)}..${hex8(b.hi)} (${kb(b.hi - b.lo)})`),
+    el('dt', {}, '+Drive area'), el('dd', {}, `${kb(b.hi - b.lo)} (${hex8(b.lo)}..${hex8(b.hi)})`),
     el('dt', {}, 'Largest file'), el('dd', {}, b.stagingSize ? kb(b.stagingSize) : 'no limit given'));
 }
 

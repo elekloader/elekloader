@@ -310,8 +310,9 @@ folder. It runs `js/`'s engine as the site serves it (`engine/`), not
 Pyodide, and `app.js` loads it only when the view first opens:
 - **Connect** picks a MIDI port (one named like "Rytm" first) and reads
   `/mods/.build`, the build descriptor. The view shows the build (its
-  modules, the +Drive area, the largest
-  file the loader takes) and each table's spare entries. Reads ask for
+  modules, the +Drive area's size with its addresses in brackets, the
+  largest file the loader takes) and each table's spare entries, folded
+  until clicked. Reads ask for
   8 KB chunks; where a reply never arrives (Firefox's Web MIDI on Windows
   drops SysEx over about 1 KB), the read starts again with 768-byte chunks
   and the view keeps that size, so the first read there takes one timeout
