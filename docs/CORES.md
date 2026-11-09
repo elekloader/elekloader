@@ -25,16 +25,16 @@ older ones people still have:
 | device | OS | core | where |
 |---|---|---|---|
 | Digitakt mk1 | 1.53, 1.54 | `core-4.1.elemod`, `core-4.1-os1.54.elemod` | the [v0.10.0](https://github.com/elekloader/elekloader/releases/tag/v0.10.0) release, built into its apps, and the web page |
-| Digitakt mk1 | 1.53, 1.54 | `core-4.2.elemod`, `core-4.2-os1.54.elemod` | on main, not released: build it ([below](#building-a-core)) |
+| Digitakt mk1 | 1.53, 1.54 | `core-4.4.elemod`, `core-4.4-os1.54.elemod` | on main, not released: build it ([below](#building-a-core)) |
 | Digitakt mk1 | 1.53, 1.54 | `core-2.1.elemod`, `core-2.1-os1.54.elemod` | the v0.4.0 release, built into its apps |
 | Digitone mk1, Digitone Keys | 1.43, 1.44 | `core-dn1-5.2.1.elemod`, `core-dn1-5.2.1-os1.44.elemod` | the [v0.10.0](https://github.com/elekloader/elekloader/releases/tag/v0.10.0) release, built into its apps, and the web page |
-| Digitone mk1, Digitone Keys | 1.43, 1.44 | `core-dn1-5.3.elemod`, `core-dn1-5.3-os1.44.elemod` | on main, not released: build it ([below](#building-a-core)) |
+| Digitone mk1, Digitone Keys | 1.43, 1.44 | `core-dn1-5.4.elemod`, `core-dn1-5.4-os1.44.elemod` | on main, not released: build it ([below](#building-a-core)) |
 | Digitone mk1, Digitone Keys | 1.43, 1.44 | `core-dn1-2.0a.elemod`, `core-dn1-2.0a-os1.44.elemod` | the v0.4.0 release, built into its apps |
 | Digitakt II | 1.17 | `core-dt2-1.0.elemod` | the [v0.10.0](https://github.com/elekloader/elekloader/releases/tag/v0.10.0) release, built into its apps, and the web page |
 | Digitone II | 1.12 | `core-dn2-0.3.elemod` | the [v0.10.0](https://github.com/elekloader/elekloader/releases/tag/v0.10.0) release, built into its apps, and the web page (experimental) |
 | Analog Rytm MKII | 1.74 | `core-ar2-0.11.elemod` | the [v0.10.0](https://github.com/elekloader/elekloader/releases/tag/v0.10.0) release, built into its apps, and the web page. Mods with pages built for 0.3 (rytm2_mods v1.2's lfo-rnd, voice-dac, euclid-accents, velocity-humanise, comp-preview) do not link with it: their sites overlap core's page sites |
 | Analog Rytm MKII | 1.74 | `core-ar2-0.3.elemod` | the [core-ar2-v0.3](https://github.com/elekloader/elekloader/releases/tag/core-ar2-v0.3) pre-release, and the shop |
-| Digitone II | 1.12 | `core-dn2-0.4.elemod` | on main, not released: build it ([below](#building-a-core)) |
+| Digitone II | 1.12 | `core-dn2-0.5.elemod` | on main, not released: build it ([below](#building-a-core)) |
 | Analog Rytm MKII | 1.73 | `core-ar2-0.2.elemod` | not released: the last core with 1.73; build it from commit 92a99c9 ([below](#building-a-core)) |
 | Analog Four MKII | 1.56 | `core-a4-0.5.elemod` | the [v0.10.0](https://github.com/elekloader/elekloader/releases/tag/v0.10.0) release, built into its apps, and the web page (a proof of concept) |
 | Octatrack MKI, MKII | 1.40C | `core-ot-0.8.elemod` | the [v0.10.0](https://github.com/elekloader/elekloader/releases/tag/v0.10.0) release, built into its apps, and the web page |
@@ -101,7 +101,10 @@ the one a mod that uses it names in `resources.core`.
   The notes played live on a track, before its voice, which a handler may
   take, and the stock routines past them (`ev_live_note`, `fw_note_on`,
   `fw_note_off`; core 4.2), so mono machines play one key at a time.
-  MIDI CCs before the stock applies them (`ev_midi_cc`, core 4.3).
+  MIDI CCs before the stock applies them (`ev_midi_cc`, core 4.3). The
+  step a knob turn adds, for the sound and GRID REC's p-locks alike
+  (`ev_param_step`, `core_param_shown`; core 4.4; ADAPTING.md, "Knob turn
+  steps").
 - **Digitone mk1** ([mods/core-dn1](../mods/core-dn1)): the Digitakt mk1's
   events, and:
   - the voices' note-on, parameter slots, mod pages and project data
@@ -140,7 +143,9 @@ the one a mod that uses it names in `resources.core`.
     parameter ids, knobs on the stock pages' empty boxes and a second TRIG page, and each note the
     sequencer builds (5.1; ADAPTING.md, "Lane parameters, knobs on pages and TRIG's second page");
   - the notes played live on a track, as the Digitakt's core 4.2 has them (`ev_live_note`,
-    `fw_note_on`, `fw_note_off`; 5.3), so mono machines play one key at a time.
+    `fw_note_on`, `fw_note_off`; 5.3), so mono machines play one key at a time;
+  - the step a knob turn adds, as the Digitakt's core 4.4 (`ev_param_step`, `core_param_shown`; 5.4;
+    ADAPTING.md, "Knob turn steps").
 - **Digitakt II** ([mods/core-dt2](../mods/core-dt2)): SETTINGS and
   PERSONALIZE rows, and `.fast` code in SRAM. No render events: its audio
   renders on the DSP.
@@ -152,7 +157,9 @@ the one a mod that uses it names in `resources.core`.
   the [sine example](../examples/sharc-sine/README.md)); from 0.3 a DSP
   memory peek (ADAPTING.md, "The DSP peek"); from 0.4 MIDI CCs before the
   stock applies them (`ev_midi_cc`) and words posted to DSP code
-  (`core_dsp_post`, ADAPTING.md, "The DSP peek"). The optional
+  (`core_dsp_post`, ADAPTING.md, "The DSP peek"); from 0.5 the step a knob
+  turn adds (`ev_param_step`, `core_param_shown`; ADAPTING.md, "Knob turn
+  steps"). The optional
   [dspbusy-dn2 companion](../mods/dspbusy-dn2/README.md) enables the busy
   measure for a build with a SHARC mod. The
   [machines companion](MACHINES-DN2.md) adds

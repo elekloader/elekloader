@@ -36,6 +36,18 @@ request ([SHARC-DN2.md](../../docs/SHARC-DN2.md#the-dsp-peek)).
 machines-dn2 posts each CC to its dispatcher with it. A mod that uses
 either sets `resources.core: "0.4"`.
 
+Core **0.5** adds `ev_param_step` ([param.s](param.s), with the walk and
+`core_param_shown` in [../core/step.s](../core/step.s), shared with the
+Digitakt mk1's core 4.4 and core-dn1 5.4): the step a knob turn on a page
+adds, `f(view, id, delta, knob)` -> the step to add. The page views'
+encoder handler (0x40067470) keeps the step in d4 at 0x400675c4, before it
+chooses an edit, so the answer goes into the sound (view +88) and the held
+trigs' locks (+92, +96, +100) alike; the stock then clamps and shows its
+pop-up. `id` is the parameter row code; `core_param_shown(view, id)` is the
+page's value, a lock being edited first (`SHOWN_FN`, 0x4006538e). With no
+handler the turn is the stock's. machines-dn2 0.6 steps SDK knobs with
+`clicks` on it.
+
 `bridge.sharc.json` is the bridge, already compiled and linked from
 `sharc-bridge.s`, with the slot and pitch reader the
 [sine example](../../examples/sharc-sine/README.md) relies on. The linker
@@ -102,8 +114,8 @@ Build it with the SDK (it needs m68k binutils; with Homebrew's
 `m68k-elf-binutils`, set `ELEKLOADER_CROSS=m68k-elf-`):
 
 ```bash
-python -m elekloader.sdk.build mods/core-dn2 --stock Digitone_II_OS1.12.syx      # out/core-0.4.elemod
-python -m elekloader.lint mods/core-dn2/out/core-0.4.elemod --stock Digitone_II_OS1.12.syx
+python -m elekloader.sdk.build mods/core-dn2 --stock Digitone_II_OS1.12.syx      # out/core-0.5.elemod
+python -m elekloader.lint mods/core-dn2/out/core-0.5.elemod --stock Digitone_II_OS1.12.syx
 ```
 
 ## Input bridge and SysEx observers

@@ -8,8 +8,9 @@
 // dn2_voice_table., dn2_filter_table.: 128 entries of 16 bytes, by machine ID (the frame's type
 // halfword; 128 and above take the stock path): +0 kernel PC16 (0: stock), +4 state base (16 slots),
 // +8 state bytes a slot, +12 an SDK machine's knob map (0: an mk2 machine). A knob map is the count,
-// then per knob min, q and r (sharc.knob_map): knob = min + q * raw + (r * raw + 16256) / 32512 is
-// sdk_alpha_map's value, raw the knob's frame halfword clamped to 32512.
+// then per knob min, q and r (sharc.knob_map): sdk_alpha_map's value is knob = min + (((raw + 128) >> 8)
+// * (r + 1)) >> 7 when q is 0 and r below 128 (a knob of up to 128 values: raw's nearest position), else
+// min + q * raw + (r * raw + 16256) / 32512, raw the knob's frame halfword clamped to 32512.
 //
 // Each kernel is a C function called with R4 = its input and R8 = the voice buffer:
 // - mk2 synth, struct dn2_voice_input (digitone-mk2/voice.h): output, slot, 8.8 pitch, flags
@@ -334,6 +335,23 @@ clamped:
 R9=DM(I0,M6);                       // min
 R10=DM(I0,M6);                      // q
 R12=DM(I0,M6);                      // r
+R10=PASS R10;
+IF NE JUMP linear;
+R3=127;
+COMP(R3,R12);
+IF LT JUMP linear;
+// Up to 128 values (r is the span): raw's nearest position times the values, / 128.
+R4=R12+1;
+R3=128;
+R12=R2+R3;
+R3=-8;
+R12=LSHIFT R12 BY R3;
+R12=R4*R12(SSI);
+R3=-7;
+R12=LSHIFT R12 BY R3;
+R9=R9+R12;
+JUMP stored;
+linear:
 R10=R10*R2(SSI);
 R12=R12*R2(SSI);
 R3=16256;
@@ -369,6 +387,7 @@ divided:
 R12=R13;
 R9=R9+R10;
 R9=R9+R12;
+stored:
 DM(I1,M6)=R9;
 R1=R1+1;
 R5=R5-1;

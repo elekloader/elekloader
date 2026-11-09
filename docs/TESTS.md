@@ -126,6 +126,12 @@ uv run --project "$ELEKLOADER_DIGIEMU" python tests/test_sdk_alpha_hiding.py
 Digitone mk1 the harness first sets INPUT FROM to MIDI+USB, which the
 setup leaves at USB.
 
+`test_sdk_alpha_clicks.py` checks knob `clicks` on all three devices: the
+even spacing, a knob that sets clicks, its stop at the top, a CC spread
+over the values and a GRID REC p-lock that steps and plays. The emulators'
+encoders swallow some detents, so it counts clicks on a plain 0..127 knob
+on the same encoder, turned alike.
+
 The Digitone II runs in DigiKit's ColdFire emulator, and its sound
 (`test_sdk_alpha_sound.py`, `test_sdk_alpha_midi.py`, with MIDI through
 `midi.usb.in`) in DigiKit's coupled emulator, which runs the

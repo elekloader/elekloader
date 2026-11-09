@@ -31,13 +31,17 @@ CAP_WORD = 1152
 STOCK_STACK = 0x2d0000
 KNOBS = [(0, 127), (-12, 12), (-2147483648, 2147483647), (20, 20000), (-100, -99), (0, 32512),
          (0, 32513), (5, 6), (-1, 1000000)]
+MAP_ONLY = [(0, 1), (0, 3), (-64, 63), (0, 128)]   # more knobs than a machine takes beside KNOBS
 
 
 def sdk_alpha_map(lo, hi, raw):
     """mods/sdk-alpha/machine.c's sdk_alpha_map, in uint32 arithmetic."""
     span = (hi - lo) % 2 ** 32
     raw = max(0, min(raw, 32512))
-    offset = (span // 32512 * raw + ((span % 32512) * raw + 16256) // 32512) % 2 ** 32
+    if span < 128:                      # up to 128 values: raw's nearest position's share of them
+        offset = ((raw + 128) >> 8) * (span + 1) >> 7
+    else:
+        offset = (span // 32512 * raw + ((span % 32512) * raw + 16256) // 32512) % 2 ** 32
     value = (lo + offset) % 2 ** 32
     return value - 2 ** 32 if value >= 2 ** 31 else value
 
@@ -54,7 +58,10 @@ def dispatched(knob_map, raw):
     """dispatch.s's knob value for one knob's map words (min, q, r) and frame halfword."""
     mn, q, r = knob_map
     c = min(raw, 32512)
-    value = (mn + q * c + divide(r * c + 16256)) % 2 ** 32
+    if q == 0 and r < 128:              # up to 128 values: r is the span
+        value = (mn + (((c + 128) >> 8) * (r + 1) >> 7)) % 2 ** 32
+    else:
+        value = (mn + q * c + divide(r * c + 16256)) % 2 ** 32
     return value - 2 ** 32 if value >= 2 ** 31 else value
 
 
@@ -70,8 +77,8 @@ class KnobMapTests(unittest.TestCase):
                 self.fail(t)
 
     def test_every_raw_value_of_every_knob(self):
-        for lo, hi in KNOBS:
-            count, *words = struct.unpack('<4I', sharc.knob_map([(lo, hi)]))
+        for lo, hi in KNOBS + MAP_ONLY:
+            count, *words = struct.unpack('<4I',sharc.knob_map([(lo, hi)]))
             self.assertEqual(count, 1)
             for raw in range(0, 65536):
                 if dispatched(words, raw) != sdk_alpha_map(lo, hi, raw):

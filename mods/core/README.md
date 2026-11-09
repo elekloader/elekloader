@@ -79,13 +79,24 @@ are 1.53's.
   site is the CC router's flags load and FX check, 0x400158ec (the router
   is 0x400158d2, the same in 1.53 and 1.54). OB-1's CC hook, at the CC
   lookup's entry (0x4007919e), links beside it.
+- **4.4: `ev_param_step`** ([param.s](param.s), and the walk and
+  `core_param_shown` in [step.s](step.s), which core-dn1 and core-dn2 build
+  too; both last in `sources`): the step a knob turn on a parameter page
+  adds, `f(view, id, delta, knob)` -> the step to add, as core-dn1's (5.4).
+  The page views' encoder handler (0x40032a78) keeps the step in d5 at
+  0x40032bc4, before it chooses an edit, so the answer goes into the sound
+  (view +88), GRID REC's held steps' locks (+124) and +92's alike; the
+  stock then clamps and shows its pop-up. `core_param_shown(view, id)` is
+  the views' value, a held step's lock first (`SHOWN_FN`, 0x4003171c). The
+  same in 1.53 and 1.54; with no handler the turn is the stock's.
+  machine-pages 1.11 steps SDK knobs with `clicks` on it.
 
 Build it with the SDK (it needs m68k binutils):
 
 ```bash
-python -m elekloader.sdk.build mods/core --stock Digitakt_OS1.53.syx      # out/core-4.2.elemod
-python -m elekloader.sdk.build mods/core --stock Digitakt_OS1.54.syx      # out/core-4.2-os1.54.elemod
-python -m elekloader.lint mods/core/out/core-4.2-os1.54.elemod --stock Digitakt_OS1.54.syx
+python -m elekloader.sdk.build mods/core --stock Digitakt_OS1.53.syx      # out/core-4.4.elemod
+python -m elekloader.sdk.build mods/core --stock Digitakt_OS1.54.syx      # out/core-4.4-os1.54.elemod
+python -m elekloader.lint mods/core/out/core-4.4-os1.54.elemod --stock Digitakt_OS1.54.syx
 ```
 
 Core 3.0's files are on the

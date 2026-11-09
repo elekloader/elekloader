@@ -121,11 +121,11 @@ class Machines:
 
     def test_the_hello_world_example_edits_pitch_on_both_its_pages(self):
         pitch, = self.track.use(HELLO).knobs("PITCH")
-        pitch.turn(+16)
+        pitch.turn(+16)                             # a value a click (.clicks = 1): to the top, 20
         first = pitch.raw
         self.assertGreater(first, 0)
-        pitch.turn(+16, page=1)
-        self.assertGreater(pitch.raw, first)
+        pitch.turn(-16, page=1)
+        self.assertLess(pitch.raw, first)
 
 
 class DigitonePages(SdkTestCase):

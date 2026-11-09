@@ -348,6 +348,17 @@ the Digitone needs it. On its own it changes nothing the unit does.
   hooks; with 5.0-5.2 the two could not be built together. A mod that hooks
   a routine's entry and goes on at its + 6 runs before the event; one that
   takes the press there leaves the event unsent. Nothing else changes.
+- **5.4, `ev_param_step`** ([param.s](param.s), and the walk and
+  `core_param_shown` in [../core/step.s](../core/step.s), last in
+  `sources`): the step a knob turn on a parameter page adds,
+  `f(view, id, delta, knob)` -> the step to add, as the Digitakt core 4.4's.
+  `core_param_turn` asks first, at the knob handler's question (0x400455ba,
+  the same in 1.44), before `ev_param_turn` and the held-steps check, and
+  the stock adds the answer (d3) to the sound or to GRID REC's held steps'
+  locks alike, then clamps it and shows its pop-up. `core_param_shown` is
+  the page's value (`VALUE_FN`), the held step's lock first. No new site;
+  three lines in `edit.s`. machines-dn1 0.7 steps SDK knobs with `clicks` on
+  it.
 - **5.3, the played notes** ([../core/notes.s](../core/notes.s), the
   Digitakt core 4.2's, last in `sources`). Two sites more, the entries of
   the stock note-on and note-off routines that KEYBOARD mode's trig keys
@@ -369,9 +380,9 @@ the Digitone needs it. On its own it changes nothing the unit does.
 Build it with the SDK (it needs m68k binutils):
 
 ```bash
-python -m elekloader.sdk.build mods/core-dn1 --stock Digitone_and_Digitone_Keys_OS1.43.syx   # out/core-5.3.elemod
-python -m elekloader.sdk.build mods/core-dn1 --stock Digitone_and_Digitone_Keys_OS1.44.syx   # out/core-5.3-os1.44.elemod
-python -m elekloader.lint mods/core-dn1/out/core-5.3-os1.44.elemod --stock Digitone_and_Digitone_Keys_OS1.44.syx
+python -m elekloader.sdk.build mods/core-dn1 --stock Digitone_and_Digitone_Keys_OS1.43.syx   # out/core-5.4.elemod
+python -m elekloader.sdk.build mods/core-dn1 --stock Digitone_and_Digitone_Keys_OS1.44.syx   # out/core-5.4-os1.44.elemod
+python -m elekloader.lint mods/core-dn1/out/core-5.4-os1.44.elemod --stock Digitone_and_Digitone_Keys_OS1.44.syx
 ```
 
 The LFO name hooks have ColdFire ABI probes (stock fallback, first answer,

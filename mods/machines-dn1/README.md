@@ -14,8 +14,8 @@ the mod shop, beside the cores: a machine mod that requires it (`"requires": ["c
 
 | | |
 |---|---|
-| needs | core-dn1 5.2 (`resources.core`; 0.2: 3.1; the 1.44 port from 0.5: 5.3) |
-| sites | none: it uses core's `ev_voice_on`, `ev_render_voices`, `ev_tick`, `ev_render_params` and `ev_enc` (0.3, OS 1.44: an SDK machine's render and presentation), `ev_live_note` (0.5, OS 1.44: mono machines), `ev_midi_cc` (0.6: its CCs), `core_param_override`, `core_sound_set` and `core_menu_open` |
+| needs | core-dn1 5.2 (`resources.core`; 0.2: 3.1; the 1.44 port from 0.5: 5.3; from 0.7: 5.4) |
+| sites | none: it uses core's `ev_voice_on`, `ev_render_voices`, `ev_tick`, `ev_render_params` and `ev_enc` (0.3, OS 1.44: an SDK machine's render and presentation), `ev_live_note` (0.5, OS 1.44: mono machines), `ev_midi_cc` (0.6: its CCs), `ev_param_step` (0.7: knob clicks), `core_param_override`, `core_sound_set` and `core_menu_open` |
 | table | `dn_machines`: a machine mod contributes a pointer to its `struct dnm_machine`; `sdk_alpha_machines` (0.3, OS 1.44): the SDK alpha builder contributes a pointer to each SDK machine's `struct elek_machine` (`elekloader/sdk_alpha_machine.h`) |
 | exports | `dnm_knob`, `dnm_knob_range`, `dnm_phase_inc`, `dnm_sin` (`digitone-mk1/machines.h`) |
 | version | 0.3: SDK alpha machines, empty or with up to two pages and fifteen knobs, each knob kept in one SYN parameter (SYN2's first page's eight, then DTUN, FDBK, MIX, ADEL, BDEL and two ratio offsets) whichever page shows it, on pages of their own which SYN2 shows in place of its pages on the machine's track (`core_page_list`), each track keeping its page, with the SDK labels, a four-column grid without FM's algorithm diagram, and blank positions for undeclared knobs; `.present` runs again when a value changes, applies five-character labels, visibility and optional 16×16 glyphs, and blocks hidden encoders while retaining their values in native page copy, clear/undo and paste. Both native LFOs target its logical knobs with current labels, even while hidden; destination naming calls `.present` with `ELEK_UI_NO_PAGE`. A machine with no render plays FM. 0.2: a machine may take the SYN pages' second pages (`DNM_PAGES2`) |
@@ -61,6 +61,11 @@ port adds `sdk_alpha.c` and the shared `../sdk-alpha/machine.c`, with
   each synth track's CCs for `v->cc` (`sdk_alpha_midi_cc` in the shared
   `machine.c`), for every voice of the track; it never takes one, so the
   stock applies it as before.
+- **Clicks** (0.7, core-dn1 5.4): it subscribes to `ev_param_step`, and a
+  turn of the active track's SDK knob that sets `clicks` adds the step to
+  the next of its values x clicks points (`sdk_alpha_step` in the shared
+  `machine.c`), into the sound or a held step's lock alike. Other turns,
+  FM's among them, keep the stock's step.
 
 ## How it works
 

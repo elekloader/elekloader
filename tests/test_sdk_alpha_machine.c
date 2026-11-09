@@ -93,9 +93,10 @@ static int32_t present_label(const struct sdk_alpha_entry *e, const char *label,
 
 int main(void)
 {
-    /* Mapping: the split product equals 64-bit nearest rounding, halves toward max, raw clamped. */
+    /* Mapping, raw clamped: up to 128 values, an equal share of the 128 positions each (raw's nearest
+     * position * values / 128); more, the split product equals 64-bit nearest rounding, halves toward max. */
     static const struct { int32_t min, max; } bounds[] = {
-        { 0, 127 }, { -50, 50 }, { 0, 1 }, { -1000000, 1000000 },
+        { 0, 127 }, { -50, 50 }, { 0, 1 }, { 0, 3 }, { 0, 2 }, { -64, 63 }, { 0, 128 }, { -1000000, 1000000 },
         { INT32_MIN, INT32_MAX }, { INT32_MIN, INT32_MIN + 1 }, { INT32_MAX - 1, INT32_MAX },
     };
     static const int32_t raws[] = { INT32_MIN, -1, 0, 1, 127, 128, R / 2, R / 2 + 1, R - 1, R, R + 1, INT32_MAX };
@@ -105,12 +106,19 @@ int main(void)
         int32_t last = INT32_MIN;
         for (unsigned j = 0; j < sizeof raws / sizeof *raws; ++j) {
             int64_t r = raws[j] < 0 ? 0 : raws[j] > R ? R : raws[j];
-            int64_t want = bounds[i].min + (span * r + R / 2) / R;
+            int64_t want = span < 128 ? bounds[i].min + ((r + 128) >> 8) * (span + 1) / 128
+                                      : bounds[i].min + (span * r + R / 2) / R;
             int32_t got = sdk_alpha_map(&k, raws[j]);
             assert(got == want && got >= last);
             last = got;
         }
         assert(sdk_alpha_map(&k, 0) == bounds[i].min && sdk_alpha_map(&k, R) == bounds[i].max);
+        if (span < 128)                 /* each value spans 128 / values positions, as near as whole ones go */
+            for (int64_t v = 0; v <= span; ++v) {
+                int32_t first = 0;
+                while (sdk_alpha_map(&k, first << 8) < bounds[i].min + v) ++first;
+                assert(first == (v * 128 + span) / (span + 1));
+            }
 
         /* Defaults: the first native step that reaches the default, clamped into min..max (0 when
          * omitted). */
@@ -123,6 +131,47 @@ int main(void)
             assert(d == 0 || sdk_alpha_map(&k, d - 1) < want);
         }
     }
+
+    /* Clicks: turning one click at a time from either end, each value holds exactly `clicks` clicks and the
+     * encoder stops at the ends; a faster turn's delta moves that many clicks; a knob without clicks keeps
+     * the stock's delta. */
+    static const struct { int32_t min, max, clicks; } stepped[] = {
+        { 0, 1, 1 }, { 0, 1, 64 }, { 0, 3, 1 }, { 0, 3, 2 }, { 0, 3, 10 }, { 0, 3, 32 }, { 0, 2, 42 },
+        { -32, 31, 2 }, { 0, 127, 1 }, { 5, 9, 25 },
+    };
+    for (unsigned i = 0; i < sizeof stepped / sizeof *stepped; ++i) {
+        struct elek_knob k = { .label = "K", .min = stepped[i].min, .max = stepped[i].max, .clicks = stepped[i].clicks };
+        int32_t values = k.max - k.min + 1, points = values * k.clicks;
+        for (int dir = 1; dir >= -1; dir -= 2) {
+            int32_t raw = dir > 0 ? 0 : R, held[128] = { 0 }, turns = 0;
+            held[sdk_alpha_map(&k, raw) - k.min]++;
+            for (;;) {
+                int32_t next = raw + sdk_alpha_step(&k, raw, 256 * dir);
+                assert(next >= 0 && next <= R && next % 256 == 0);
+                if (next == raw)
+                    break;                          /* the end: it stops */
+                raw = next;
+                held[sdk_alpha_map(&k, raw) - k.min]++;
+                assert(++turns < points);
+            }
+            assert(turns == points - 1 && sdk_alpha_map(&k, raw) == (dir > 0 ? k.max : k.min));
+            for (int32_t v = 0; v < values; ++v)
+                assert(held[v] == k.clicks);
+        }
+        int32_t fast = sdk_alpha_step(&k, 0, 3 * 256 + 40);        /* three clicks at once */
+        int32_t three = 0;
+        for (int n = 0; n < 3; ++n)
+            three += sdk_alpha_step(&k, three, 256);
+        assert(fast == three);
+        assert(sdk_alpha_step(&k, 0, 1) == sdk_alpha_step(&k, 0, 256));   /* a sliver is one click */
+        /* From a value set between points (a CC, a load): it counts as its cell's point, so a click down and
+         * one back up land on that point, with the value it had. */
+        int32_t between = (R / 4 * 3) | 77, below = between + sdk_alpha_step(&k, between, -256);
+        int32_t back = below + sdk_alpha_step(&k, below, 256);
+        assert(below < between && back <= between && sdk_alpha_map(&k, back) == sdk_alpha_map(&k, between));
+    }
+    struct elek_knob plain = { .label = "K", .min = 0, .max = 3 };
+    assert(sdk_alpha_step(&plain, 1000, 256) == 256 && sdk_alpha_step(&plain, 1000, -3) == -3);
 
     /* The value text: the number, "#" past five characters unless wide. */
     static const struct { int32_t value; const char *text, *wide; } numbers[] = {

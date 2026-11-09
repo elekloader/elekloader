@@ -164,6 +164,11 @@ CORE_42_EXPORTS = ['fw_note_on', 'fw_note_off']
 # What core 4.3 adds, in midi.s after 4.2: the MIDI CCs the unit receives (ev_midi_cc at the CC router).
 CORE_43_SITES = ['core_midi_cc']
 CORE_43_TABLES = ['ev_midi_cc']
+# What core 4.4 adds, in param.s and step.s after 4.3: the step a knob turn adds (ev_param_step at the page
+# views' encoder handler) and the value a turn starts from (core_param_shown).
+CORE_44_SITES = ['core_param_step']
+CORE_44_TABLES = ['ev_param_step']
+CORE_44_EXPORTS = ['core_param_step_run', 'core_param_shown']
 
 
 def site_targets(sites):
@@ -176,15 +181,16 @@ def test_core_builds_and_lints():
     (machines.s, Digitakt mk1 only: 31 sites and the table core_machines),
     the machine page reader (core_machine_ui), the firmware locations
     (fw.s: absolute exports, no site), from 4.1 the master output and pages (master.s: 7 sites
-    and three tables) and from 4.2 the played notes (notes.s: 2 sites and a table)."""
+    and three tables), from 4.2 the played notes (notes.s: 2 sites and a table), from 4.3 the MIDI CCs (midi.s:
+    a site and a table) and from 4.4 the turn's step (param.s and step.s: a site and a table)."""
     path = built_core()
     with open(path) as fh:
         doc = json.load(fh)
     assert doc['id'] == 'core' and doc['version'] == DT_VERSION
-    assert '.boot' in doc['sections'] and len(doc['sites']) == 39 + len(CORE_41_SITES + CORE_42_SITES + CORE_43_SITES)
-    assert site_targets(doc['sites'][39:]) == [[x] for x in CORE_41_SITES + CORE_42_SITES + CORE_43_SITES]
-    assert sorted(doc['collections']) == sorted(HOOK_BUS + ['core_machines'] + CORE_41_TABLES + CORE_42_TABLES + CORE_43_TABLES)
-    assert set(FW + CORE_41_EXPORTS + CORE_42_EXPORTS + ['core_machine', 'core_machine_ui']) <= set(doc['exports'])
+    assert '.boot' in doc['sections'] and len(doc['sites']) == 39 + len(CORE_41_SITES + CORE_42_SITES + CORE_43_SITES + CORE_44_SITES)
+    assert site_targets(doc['sites'][39:]) == [[x] for x in CORE_41_SITES + CORE_42_SITES + CORE_43_SITES + CORE_44_SITES]
+    assert sorted(doc['collections']) == sorted(HOOK_BUS + ['core_machines'] + CORE_41_TABLES + CORE_42_TABLES + CORE_43_TABLES + CORE_44_TABLES)
+    assert set(FW + CORE_41_EXPORTS + CORE_42_EXPORTS + CORE_44_EXPORTS + ['core_machine', 'core_machine_ui']) <= set(doc['exports'])
     assert all(doc['symbols'][x][0] == 'abs' for x in FW)
     rc, r = lint_json(path, '--stock', stock())
     assert rc == 0 and r['link']['order'][0].startswith('core')
@@ -223,13 +229,13 @@ def check_superset(old_path, new_path, st):
 
 
 def check_41_adds(old, new):
-    """What 4.1 and 4.2 add to a core before them (2.1, 3.0, 4.0: the same sites and tables): their
+    """What 4.1 to 4.4 add to a core before them (2.1, 3.0, 4.0: the same sites and tables): their
     sites after the old ones, their tables, and 4.1's words of .bss after the old .bss."""
     n = len(old['sites'])
     assert new['sites'][:n] == old['sites']
-    assert site_targets(new['sites'][n:]) == [[x] for x in CORE_41_SITES + CORE_42_SITES + CORE_43_SITES]
+    assert site_targets(new['sites'][n:]) == [[x] for x in CORE_41_SITES + CORE_42_SITES + CORE_43_SITES + CORE_44_SITES]
     assert new['collections'] == dict(old['collections'],
-                                      **{c: {'entry': 4} for c in CORE_41_TABLES + CORE_42_TABLES + CORE_43_TABLES})
+                                      **{c: {'entry': 4} for c in CORE_41_TABLES + CORE_42_TABLES + CORE_43_TABLES + CORE_44_TABLES})
     ob, nb = old['sections']['.bss'], new['sections']['.bss']
     assert ob['align'] == nb['align'] and nb['size'] == ob['size'] + 8, (ob, nb)
 
@@ -237,10 +243,10 @@ def check_41_adds(old, new):
 CORE_40 = os.environ.get('ELEKLOADER_CORE_40', '')
 
 
-def test_digitakt_core_4_3_is_4_0_and_more():
-    """core 4.3 is 4.0, the master output and pages (4.1), the played notes (4.2) and the MIDI CCs: 4.0's
-    sites with the same bytes, its tables and exports, every symbol where it was, 4.0's .run at the start
-    of 4.3's."""
+def test_digitakt_core_4_4_is_4_0_and_more():
+    """core 4.4 is 4.0, the master output and pages (4.1), the played notes (4.2), the MIDI CCs (4.3) and the
+    turn's step (4.4): 4.0's sites with the same bytes, its tables and exports, every symbol where it was,
+    4.0's .run at the start of 4.4's."""
     if not CORE_40 or not os.path.exists(CORE_40):
         raise Skip('missing ELEKLOADER_CORE_40 (the released core-4.0.elemod)')
     new_path = built_core()
@@ -251,7 +257,8 @@ def test_digitakt_core_4_3_is_4_0_and_more():
     assert old['version'] == '4.0' and new['version'] == DT_VERSION
     check_41_adds(old, new)
     assert sorted(set(new['exports']) - set(old['exports'])) == sorted(
-        CORE_41_EXPORTS + CORE_41_SITES + CORE_42_EXPORTS + CORE_42_SITES + CORE_43_SITES)
+        CORE_41_EXPORTS + CORE_41_SITES + CORE_42_EXPORTS + CORE_42_SITES + CORE_43_SITES + CORE_44_SITES
+        + CORE_44_EXPORTS)
     assert all(new['symbols'][k] == v for k, v in old['symbols'].items())
     stock_, dev, _rel = formats.load(stock())
     image = formats.main_image(stock_, dev)
@@ -664,14 +671,15 @@ def test_digitone_core_builds_and_links():
                         'ev_hold', 'ev_voice_on', 'core_param_override', 'ev_render_voices',
                         'core_audio', 'ev_midi_cc', 'ev_key_leds', 'ev_render_params', 'ev_midi_pc',
                         'ev_note_queue', 'ev_param_turn', 'ev_param_value', 'ev_voice_ready']
-            + CORE_DN1_50_EVENTS + ['ev_idle', 'ev_seq_midi', 'ev_note_built', 'core_knobs', 'ev_live_note'])
+            + CORE_DN1_50_EVENTS + ['ev_idle', 'ev_seq_midi', 'ev_note_built', 'core_knobs', 'ev_live_note']
+            + COLL_DN54)
         # The same core.s as core 2.1's, with the Digitone's addresses, and
         # each of its labels where core 2.1 has it.
         assert sorted(dn['build']['sources']) == ['audio.s', 'block.s', 'core.s', 'edit.s', 'events.s', 'fw.s',
                                                   'lanes.c', 'lanes.s',
-                                                  'leds.s', 'lists.c', 'menu.s', 'midi.s', 'names.s', 'notes.s', 'pages.s', 'params.s',
-                                                  'projdata.s', 'queue.s', 'render.s', 'rows.s',
-                                                  'seqmidi.s', 'settings.s', 'system.s', 'track.s',
+                                                  'leds.s', 'lists.c', 'menu.s', 'midi.s', 'names.s', 'notes.s', 'pages.s', 'param.s',
+                                                  'params.s', 'projdata.s', 'queue.s', 'render.s', 'rows.s',
+                                                  'seqmidi.s', 'settings.s', 'step.s', 'system.s', 'track.s',
                                                   'voice.s', 'voices.s']
         assert dn['build']['sources']['core.s'] == dt['build']['sources']['core.s']
         # Only the labels of the sources both cores build (core.s, settings.s,
@@ -731,6 +739,8 @@ CORE_DN42 = ['core_param_turn', 'core_param_value', 'core_param_value58', 'core_
 # 5.2's: page lists and LFO destination names (four sites)
 CORE_DN52 = ['core_page_list', 'core_views', 'core_lfo_list', 'core_lfo_compact', 'core_lfo_group', 'core_lfo_name']
 COLL_DN42 = ['ev_param_turn', 'ev_param_value', 'ev_voice_ready']
+COLL_DN54 = ['ev_param_step']                     # 5.4's: the step a knob turn adds (param.s, ../core/step.s)
+CORE_DN54 = ['core_param_step_d3', 'core_param_step_run', 'core_param_shown']
 CORE_DN3 = ['core_note_queue', 'core_audio_caps', 'core_key_leds', 'core_menu_open', 'core_midi_cc', 'core_midi_pc', 'core_param_short',
             'core_param_ui_make', 'core_render_master', 'core_render_params', 'core_render_voices', 'core_sound_set',
             'core_voices_gate']
@@ -758,9 +768,10 @@ def check_dn_superset(old_path, new_path):
     assert len(new['sites']) == len(old['sites']) + 9 + 5 + 4
     assert sorted(set(new['collections']) - set(old['collections'])) == sorted([
         'core_audio', 'core_param_override', 'ev_key_leds', 'ev_midi_cc', 'ev_midi_pc', 'ev_note_queue',
-        'ev_render_params', 'ev_render_voices'] + COLL_DN42)
+        'ev_render_params', 'ev_render_voices'] + COLL_DN42 + COLL_DN54)
     assert all(new['collections'][k] == v for k, v in old['collections'].items())
-    assert sorted(set(new['exports']) - set(old['exports'])) == sorted(CORE_DN3 + FW_DN + CORE_DN411 + CORE_DN42 + CORE_DN52)
+    assert sorted(set(new['exports']) - set(old['exports'])) == sorted(CORE_DN3 + FW_DN + CORE_DN411 + CORE_DN42 + CORE_DN52
+                                                                   + CORE_DN54)
     assert all(new['symbols'][k][0] == v[0] for k, v in old['symbols'].items())
 
 
@@ -863,11 +874,11 @@ def check_dn_32(old_path, new_path):
     for k in ('target', 'contribute', 'resources'):
         assert new[k] == old[k], k
     assert sorted(set(new['collections']) - set(old['collections'])) == sorted(
-        ['ev_key_leds', 'ev_midi_pc', 'ev_note_queue', 'ev_render_params'] + COLL_DN42)
+        ['ev_key_leds', 'ev_midi_pc', 'ev_note_queue', 'ev_render_params'] + COLL_DN42 + COLL_DN54)
     assert all(new['collections'][k] == v for k, v in old['collections'].items())
     assert sorted(set(new['exports']) - set(old['exports'])) == sorted(DN33_EXPORTS + ['core_audio_caps',
                                                                                      'core_midi_pc']
-                                                                       + CORE_DN41 + CORE_DN411 + CORE_DN42 + CORE_DN52)
+                                                                       + CORE_DN41 + CORE_DN411 + CORE_DN42 + CORE_DN52 + CORE_DN54)
 
     def what(d):
         return [(s['addr'], s['len'], s['kind'], s['new'], s.get('relocs')) for s in d['sites']]
@@ -902,9 +913,10 @@ def check_dn_40(old_path, new_path):
     assert old['version'] == '4.0' and new['version'] == DN_VERSION
     for k in ('target', 'contribute', 'resources'):
         assert new[k] == old[k], k
-    assert sorted(set(new['collections']) - set(old['collections'])) == sorted(['ev_note_queue'] + COLL_DN42)
+    assert sorted(set(new['collections']) - set(old['collections'])) == sorted(['ev_note_queue'] + COLL_DN42 + COLL_DN54)
     assert all(new['collections'][k] == v for k, v in old['collections'].items())
-    assert sorted(set(new['exports']) - set(old['exports'])) == sorted(CORE_DN41 + CORE_DN411 + CORE_DN42 + CORE_DN52)
+    assert sorted(set(new['exports']) - set(old['exports'])) == sorted(CORE_DN41 + CORE_DN411 + CORE_DN42 + CORE_DN52
+                                                                   + CORE_DN54)
 
     def what(d):
         return [(s['addr'], s['len'], s['kind'], s['new'], s.get('relocs')) for s in d['sites']]
@@ -941,9 +953,9 @@ def check_dn_41(old_path, new_path):
     for k in ('target', 'contribute', 'resources'):
         assert new[k] == old[k], k
     assert all(s in new['sites'] for s in old['sites']) and len(new['sites']) == len(old['sites']) + 5 + 4
-    assert sorted(set(new['collections']) - set(old['collections'])) == sorted(COLL_DN42)
+    assert sorted(set(new['collections']) - set(old['collections'])) == sorted(COLL_DN42 + COLL_DN54)
     assert all(new['collections'][k] == v for k, v in old['collections'].items())
-    assert sorted(set(new['exports']) - set(old['exports'])) == sorted(CORE_DN411 + CORE_DN42 + CORE_DN52)
+    assert sorted(set(new['exports']) - set(old['exports'])) == sorted(CORE_DN411 + CORE_DN42 + CORE_DN52 + CORE_DN54)
     assert all(new['symbols'][k] == v for k, v in old['symbols'].items()
                if k in ('core_settings', 'core_additem'))
     assert all(new['symbols'][k][0] == v[0] for k, v in old['symbols'].items())
@@ -1571,9 +1583,11 @@ def check_dn_51(old_path, new_path):
     for a in raised:
         o, n = bytes.fromhex(olds[a]['new']), bytes.fromhex(news[a]['new'])
         assert o[:-1] == n[:-1] and (o[-1], n[-1]) in ((185, 192), (184, 191)), a
-    assert sorted(set(new['collections']) - set(old['collections'])) == ['core_knobs', 'ev_note_built', 'ev_seq_midi']
+    assert sorted(set(new['collections']) - set(old['collections'])) == sorted(['core_knobs', 'ev_note_built', 'ev_seq_midi']
+                                                                               + COLL_DN54)
     assert all(new['collections'][k] == v for k, v in old['collections'].items())
-    assert sorted(set(new['exports']) - set(old['exports'])) == sorted(CORE_DN501 + CORE_DN51 + CORE_DN51_INNER + CORE_DN52)
+    assert sorted(set(new['exports']) - set(old['exports'])) == sorted(CORE_DN501 + CORE_DN51 + CORE_DN51_INNER + CORE_DN52
+                                                                   + CORE_DN54)
     assert all(new['symbols'][k][0] == v[0] for k, v in old['symbols'].items())
 
 

@@ -34,7 +34,10 @@
         .section .run, "ax"
         .globl  core_param_turn
 core_param_turn:
-        move.l  4(%sp), -(%sp)          | 5.1: a lane parameter's is core's (lanes.c)
+        tst.l   ev_param_step           | 5.4: the step first, for the sound and the held steps' locks alike
+        beq.s   0f
+        jsr     core_param_step_d3      | param.s
+0:      move.l  4(%sp), -(%sp)          | 5.1: a lane parameter's is core's (lanes.c)
         move.l  %d3, -(%sp)
         move.l  %d2, -(%sp)
         move.l  %a2, -(%sp)

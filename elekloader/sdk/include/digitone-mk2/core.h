@@ -47,4 +47,14 @@ void core_dsp_post(unsigned word);
  * 16 the FX track; flags bit 0 (CORE_MIDI_CC_AUTO), on the auto channel. Nonzero takes it. */
 enum { CORE_MIDI_CC_AUTO = 1 };
 typedef int32_t (*ev_midi_cc_fn)(int32_t track, int32_t cc, int32_t value, int32_t flags);
+/* core-dn2 0.5: the step a knob turn on a page adds, into the track's sound or the held trigs' p-locks.
+ * view: the page; id: the parameter (its row code); delta: the step the stock would add (8.8, a whole step 256,
+ * acceleration in); knob 0-7 for A-H. Return the step to add: delta itself for a parameter that is not the
+ * handler's own, 0 for none. Each handler gets the step the one before it left. Every turn on every page
+ * asks every handler, so decide "not mine" first, in a few instructions. The stock then edits, clamps and
+ * shows its pop-up as for any turn. The UI task. */
+typedef int32_t (*ev_param_step_fn)(void *view, int32_t id, int32_t delta, int32_t knob);
+/* The value a turn of parameter id on that page starts from (8.8): the held step's lock with steps held, else
+ * the sound's. For an ev_param_step handler, about its own parameters only. The UI task. */
+extern int32_t core_param_shown(void *view, int32_t id);
 #endif
