@@ -355,7 +355,7 @@ function renderFiles() {
       el('td', { class: 'dm-num' }, ''),
       el('td', {}, el('button', { type: 'button', class: 'dm-mini', 'aria-label': `Rename folder ${d}`, onclick: () => startRename(d, name) }, 'Rename'), ' ',
         el('button', { type: 'button', class: 'dm-mini dm-danger', 'aria-label': `Delete folder ${d}`, disabled: !empty,
-        title: empty ? null : 'Not empty: delete or move what is in it first, as on the unit', onclick: e => removeDir(d, e.target) }, 'Delete'))));
+        title: empty ? null : 'Not empty: delete or move what is in it first, as on the unit', onclick: () => removeDir(d) }, 'Delete'))));
   }
   for (const f of files) {
     const name = el('td', { title: `/mods/${f.name}` }, el('code', {}, base(f.name)));
@@ -366,7 +366,7 @@ function renderFiles() {
       el('td', {}, el('button', { type: 'button', class: 'dm-mini', disabled: !f.raw, onclick: () => download(base(f.name), f.raw) }, 'Download'), ' ',
         el('button', { type: 'button', class: 'dm-mini', 'aria-label': `Rename ${f.name}`, onclick: () => startRename(f.name, name) }, 'Rename'), ' ',
         el('button', { type: 'button', class: 'dm-mini dm-danger', 'aria-label': `Delete ${f.name}`, disabled: S.inUse.has(f.name),
-          title: S.inUse.has(f.name) ? 'In the build: unload it on the unit first (MODS, UNLOAD)' : null, onclick: e => remove(f, e.target) }, 'Delete'))));
+          title: S.inUse.has(f.name) ? 'In the build: unload it on the unit first (MODS, UNLOAD)' : null, onclick: () => remove(f) }, 'Delete'))));
   }
   if (!here.length && !files.length)
     rows.push(el('tr', {}, el('td', { colspan: 4, class: 'muted' }, cwd ? 'This folder is empty.' : 'No mods in /mods yet.')));
@@ -401,13 +401,8 @@ async function makeFolder() {
   });
 }
 
-async function removeDir(d, button) {
-  if (button.dataset.sure !== '1') {                     // a second press deletes, as DELETE DIR? on the unit
-    button.dataset.sure = '1';
-    button.textContent = 'Delete?';
-    setTimeout(() => { if (button.isConnected) { button.dataset.sure = ''; button.textContent = 'Delete'; } }, 4000);
-    return;
-  }
+/** Delete the empty folder d at once, with no second press (decided 2026-11-09). */
+async function removeDir(d) {
   await busy(async () => {
     try { await S.mods.rm(d); } catch (e) { say('dm-upload-msg', `/mods/${d}: ${e.message}`, 'bad'); await refresh(); return; }
     say('dm-upload-msg', `Deleted /mods/${d}.`, 'ok');
@@ -422,13 +417,8 @@ function download(name, raw) {
   setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
 }
 
-async function remove(f, button) {
-  if (button.dataset.sure !== '1') {                     // a second press deletes
-    button.dataset.sure = '1';
-    button.textContent = 'Delete?';
-    setTimeout(() => { if (button.isConnected) { button.dataset.sure = ''; button.textContent = 'Delete'; } }, 4000);
-    return;
-  }
+/** Delete the file f at once, with no second press (decided 2026-11-09). */
+async function remove(f) {
   if (S.inUse.has(f.name)) return;                      // the unit's MOD IN USE: unload it there first
   await busy(async () => {
     try { await S.mods.rm(f.name); } catch (e) { say('dm-upload-msg', e.message, 'bad'); return; }

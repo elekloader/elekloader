@@ -321,7 +321,7 @@ Pyodide, and `app.js` loads it only when the view first opens:
   each part of which opens that folder, then its folders (`/NAME`) and its
   `.elemod` files. A folder opens with a click. The view reads every folder when it connects, so an empty
   folder shows too, and each file is downloaded for its id and version
-  (and for what it requires, when an upload needs it), with Download and Delete (a second press deletes). A mod
+  (and for what it requires, when an upload needs it), with Download and Delete (one press deletes). A mod
   `/mods/active` names, the saved build, can't be deleted, as the unit's
   MOD IN USE: unload it there first. A folder row says how many mods are
   below it. In a
@@ -342,7 +342,7 @@ Pyodide, and `app.js` loads it only when the view first opens:
   The Data router has no request for a folder, so the view uploads nothing
   to `FOLDER/.dir`, which the loader's route takes as one (`Mods.mkdir`),
   and then reads the parent's listing to see it there. **Delete** on a folder row
-  deletes an empty folder (a second press deletes), as SAMPLES' DELETE DIR;
+  deletes an empty folder (one press, no second ask), as SAMPLES' DELETE DIR;
   a folder with anything in it can't be deleted, and the route refuses one
   with `Folder not empty`.
 - **Uploads**, dropped or chosen, go into the open folder; files dropped on

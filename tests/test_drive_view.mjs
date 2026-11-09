@@ -223,10 +223,8 @@ try {
   check('a mod in the saved build can\'t be deleted', await page.isDisabled(`#dm-file-list button[aria-label="Delete ${hello.name}"]`));
   if (process.env.DRIVE_VIEW_SHOT) await page.screenshot({ path: process.env.DRIVE_VIEW_SHOT, fullPage: true });
 
-  // delete: two presses
+  // delete: one press, no second ask (decided 2026-11-09)
   const del = page.locator('#dm-file-list tr', { hasText: user.name }).locator('button.dm-danger');
-  await del.click();
-  check('delete asks once more', /delete\?/i.test(await del.textContent()));
   await del.click();
   await page.waitForFunction(n => !(n in window.__unit.files), user.name);
   check('the file is deleted on the unit', true);
@@ -299,11 +297,11 @@ try {
   await page.waitForFunction(() => /^Uploaded/.test(document.getElementById('dm-upload-msg').textContent));
   check('files dropped on a part of the path go into that folder', (await page.textContent('#dm-into')) === '/mods/fx/a');
   const rd = page.locator('#dm-file-list button[aria-label="Delete fx/a/row-drop.elemod"]');
-  await rd.click(); await rd.click();
+  await rd.click();
   await page.waitForFunction(() => !('fx/a/row-drop.elemod' in window.__unit.files));
   await page.click('#dm-crumbs button:has-text("/mods")');
   const rootDel = rowOf(hello.name).filter({ hasNot: page.locator('button.dm-open') }).locator('button.dm-danger');
-  await rootDel.click(); await rootDel.click();
+  await rootDel.click();
   await page.waitForFunction(n => !(n in window.__unit.files), hello.name);
   await page.waitForFunction(() => /replaces \/mods\/fx\/a\/b\//.test(document.getElementById('dm-catalog-list').textContent));
   check('the shop finds a copy inside a folder', /Upload again/.test(await page.textContent('#dm-catalog-list')),
@@ -321,7 +319,7 @@ try {
   await page.click('#dm-file-list button[aria-label="Open fx/a"]');
   await page.click('#dm-file-list button[aria-label="Open fx/a/b"]');
   const del2 = page.locator(`#dm-file-list button[aria-label="Delete fx/a/b/${hello.name}"]`);
-  await del2.click(); await del2.click();
+  await del2.click();
   await page.waitForFunction(n => !(`fx/a/b/${n}` in window.__unit.files), hello.name);
   await page.waitForFunction(() => /This folder is empty/.test(document.getElementById('dm-file-list').textContent));
   check('an emptied folder stays, and shows', (await unit()).dirs.includes('fx/a/b'));
@@ -329,8 +327,6 @@ try {
   check('a folder that holds a folder can\'t be deleted', await page.isDisabled('#dm-file-list button[aria-label="Delete folder fx/a"]'));
   await page.click('#dm-file-list button[aria-label="Open fx/a"]');
   const dd = page.locator('#dm-file-list button[aria-label="Delete folder fx/a/b"]');
-  await dd.click();
-  check('a folder\'s Delete asks once more', /^Delete\?$/.test(await dd.textContent()));
   await dd.click();
   await page.waitForFunction(() => !window.__unit.dirs.has('fx/a/b'));
   await page.waitForFunction(() => !document.querySelector('#dm-file-list button[aria-label="Open fx/a/b"]'));   // the listing read again
@@ -341,7 +337,7 @@ try {
   await page.waitForFunction(() => /^Made \/mods\/fx\/a\/tmp/.test(document.getElementById('dm-upload-msg').textContent));
   await page.click('#dm-crumbs button[data-dir="fx/a"]');
   const dt = page.locator('#dm-file-list button[aria-label="Delete folder fx/a/tmp"]');
-  await dt.click(); await dt.click();
+  await dt.click();
   await page.waitForFunction(() => !window.__unit.dirs.has('fx/a/tmp'));
   check('a new empty folder is on the unit, and DELETE DIR removes it there', true);
 
