@@ -79,13 +79,21 @@ pick what your mods add:
   the first build to done. For one C machine on the Digitakt, the Digitone
   and the Digitone II, there is the [shared machine SDK](docs/SDK.md)
   (alpha).
-- **Publish it:** put it in a GitHub release and fill in the
-  [Submit a mod](https://github.com/elekloader/shop/issues/new?template=submit-mod.yml)
-  form. A check reads your files and opens the shop's pull request for you,
-  and your newer releases reach the shop by themselves
-  ([docs/SHOP.md](docs/SHOP.md)). The shop's list, forms and bots live in
-  [elekloader/shop](https://github.com/elekloader/shop); this repository
-  holds the code and the builder.
+
+## Submitting a mod to the shop
+
+**Mods are submitted in [elekloader/shop](https://github.com/elekloader/shop),
+not in this repository.** Put your `.elemod` files in a release on your own
+GitHub repository and fill in the
+**[Submit a mod](https://github.com/elekloader/shop/issues/new?template=submit-mod.yml)**
+form there. A bot checks your files and opens the shop's pull request for
+you, and your newer releases reach the shop by themselves. You don't open a
+pull request or an issue here to list a mod.
+[docs/SHOP.md](docs/SHOP.md) is the whole guide, and the shop's other forms
+(Remove a mod, Report a picture) are
+[in the same place](https://github.com/elekloader/shop/issues/new/choose).
+
+## Contributing
 
 **Contributions are welcome and encouraged.** The core grows from what mods
 need: when yours needs an event, a table or a firmware address the core
