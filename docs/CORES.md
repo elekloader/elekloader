@@ -25,6 +25,7 @@ older ones people still have:
 | device | OS | core | where |
 |---|---|---|---|
 | Digitakt mk1 | 1.53, 1.54 | `core-4.1.elemod`, `core-4.1-os1.54.elemod` | the [v0.10.0](https://github.com/elekloader/elekloader/releases/tag/v0.10.0) release, built into its apps, and the web page |
+| Digitakt mk1 | 1.53, 1.54 | `core-4.2.elemod`, `core-4.2-os1.54.elemod` | on main, not released: build it ([below](#building-a-core)) |
 | Digitakt mk1 | 1.53, 1.54 | `core-2.1.elemod`, `core-2.1-os1.54.elemod` | the v0.4.0 release, built into its apps |
 | Digitone mk1, Digitone Keys | 1.43, 1.44 | `core-dn1-5.2.1.elemod`, `core-dn1-5.2.1-os1.44.elemod` | the [v0.10.0](https://github.com/elekloader/elekloader/releases/tag/v0.10.0) release, built into its apps, and the web page |
 | Digitone mk1, Digitone Keys | 1.43, 1.44 | `core-dn1-2.0a.elemod`, `core-dn1-2.0a-os1.44.elemod` | the v0.4.0 release, built into its apps |
@@ -95,6 +96,9 @@ the one a mod that uses it names in `resources.core`.
   (core 3.0; ADAPTING.md, "Machine pages"). The master output, the mods'
   own master pages and rows in SETTINGS > GLOBAL FX/MIX, so master effects
   combine (core 4.1; ADAPTING.md, "The master output and the master pages").
+  The notes played live on a track, before its voice, which a handler may
+  take, and the stock routines past them (`ev_live_note`, `fw_note_on`,
+  `fw_note_off`; core 4.2), so mono machines play one key at a time.
 - **Digitone mk1** ([mods/core-dn1](../mods/core-dn1)): the Digitakt mk1's
   events, and:
   - the voices' note-on, parameter slots, mod pages and project data

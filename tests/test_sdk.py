@@ -156,6 +156,11 @@ CORE_41_SITES = ['core_render_master', 'core_fxmix', 'core_mview_key', 'core_mvi
                  'core_mview_title', 'core_mview_enc', 'core_mview_clear']
 CORE_41_TABLES = ['ev_render_master', 'core_mpages', 'ev_fxmix']
 CORE_41_EXPORTS = ['core_mpage_shown', 'core_mview', 'core_mview_draws', 'fw_invalidate']
+# What core 4.2 adds, in notes.s after 4.1: the played notes (ev_live_note at the entries of the stock
+# note-on and note-off routines) and those routines past the event.
+CORE_42_SITES = ['core_note_on', 'core_note_off']
+CORE_42_TABLES = ['ev_live_note']
+CORE_42_EXPORTS = ['fw_note_on', 'fw_note_off']
 
 
 def site_targets(sites):
@@ -164,19 +169,19 @@ def site_targets(sites):
 
 
 def test_core_builds_and_lints():
-    """core (3.0 and 4.0, the same code, and 4.1): the hook bus (core.s, 8 sites), the SRC machine slots
+    """core (3.0 and 4.0, the same code, 4.1 and 4.2): the hook bus (core.s, 8 sites), the SRC machine slots
     (machines.s, Digitakt mk1 only: 31 sites and the table core_machines),
     the machine page reader (core_machine_ui), the firmware locations
-    (fw.s: absolute exports, no site) and from 4.1 the master output and pages (master.s: 7 sites
-    and three tables)."""
+    (fw.s: absolute exports, no site), from 4.1 the master output and pages (master.s: 7 sites
+    and three tables) and from 4.2 the played notes (notes.s: 2 sites and a table)."""
     path = built_core()
     with open(path) as fh:
         doc = json.load(fh)
     assert doc['id'] == 'core' and doc['version'] == DT_VERSION
-    assert '.boot' in doc['sections'] and len(doc['sites']) == 39 + len(CORE_41_SITES)
-    assert site_targets(doc['sites'][39:]) == [[x] for x in CORE_41_SITES]
-    assert sorted(doc['collections']) == sorted(HOOK_BUS + ['core_machines'] + CORE_41_TABLES)
-    assert set(FW + CORE_41_EXPORTS + ['core_machine', 'core_machine_ui']) <= set(doc['exports'])
+    assert '.boot' in doc['sections'] and len(doc['sites']) == 39 + len(CORE_41_SITES + CORE_42_SITES)
+    assert site_targets(doc['sites'][39:]) == [[x] for x in CORE_41_SITES + CORE_42_SITES]
+    assert sorted(doc['collections']) == sorted(HOOK_BUS + ['core_machines'] + CORE_41_TABLES + CORE_42_TABLES)
+    assert set(FW + CORE_41_EXPORTS + CORE_42_EXPORTS + ['core_machine', 'core_machine_ui']) <= set(doc['exports'])
     assert all(doc['symbols'][x][0] == 'abs' for x in FW)
     rc, r = lint_json(path, '--stock', stock())
     assert rc == 0 and r['link']['order'][0].startswith('core')
@@ -215,12 +220,13 @@ def check_superset(old_path, new_path, st):
 
 
 def check_41_adds(old, new):
-    """What 4.1 adds to a core before it (2.1, 3.0, 4.0: the same sites and tables): its sites
-    after the old ones, its tables, and its words of .bss after the old .bss."""
+    """What 4.1 and 4.2 add to a core before them (2.1, 3.0, 4.0: the same sites and tables): their
+    sites after the old ones, their tables, and 4.1's words of .bss after the old .bss."""
     n = len(old['sites'])
     assert new['sites'][:n] == old['sites']
-    assert site_targets(new['sites'][n:]) == [[x] for x in CORE_41_SITES]
-    assert new['collections'] == dict(old['collections'], **{c: {'entry': 4} for c in CORE_41_TABLES})
+    assert site_targets(new['sites'][n:]) == [[x] for x in CORE_41_SITES + CORE_42_SITES]
+    assert new['collections'] == dict(old['collections'],
+                                      **{c: {'entry': 4} for c in CORE_41_TABLES + CORE_42_TABLES})
     ob, nb = old['sections']['.bss'], new['sections']['.bss']
     assert ob['align'] == nb['align'] and nb['size'] == ob['size'] + 8, (ob, nb)
 
@@ -228,9 +234,9 @@ def check_41_adds(old, new):
 CORE_40 = os.environ.get('ELEKLOADER_CORE_40', '')
 
 
-def test_digitakt_core_4_1_is_4_0_and_more():
-    """core 4.1 is 4.0 and the master output and pages: 4.0's sites with the same bytes, its
-    tables and exports, every symbol where it was, 4.0's .run at the start of 4.1's."""
+def test_digitakt_core_4_2_is_4_0_and_more():
+    """core 4.2 is 4.0, the master output and pages (4.1) and the played notes: 4.0's sites with the
+    same bytes, its tables and exports, every symbol where it was, 4.0's .run at the start of 4.2's."""
     if not CORE_40 or not os.path.exists(CORE_40):
         raise Skip('missing ELEKLOADER_CORE_40 (the released core-4.0.elemod)')
     new_path = built_core()
@@ -240,7 +246,8 @@ def test_digitakt_core_4_1_is_4_0_and_more():
         new = json.load(fh)
     assert old['version'] == '4.0' and new['version'] == DT_VERSION
     check_41_adds(old, new)
-    assert sorted(set(new['exports']) - set(old['exports'])) == sorted(CORE_41_EXPORTS + CORE_41_SITES)
+    assert sorted(set(new['exports']) - set(old['exports'])) == sorted(
+        CORE_41_EXPORTS + CORE_41_SITES + CORE_42_EXPORTS + CORE_42_SITES)
     assert all(new['symbols'][k] == v for k, v in old['symbols'].items())
     stock_, dev, _rel = formats.load(stock())
     image = formats.main_image(stock_, dev)
