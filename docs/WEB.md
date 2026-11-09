@@ -6,8 +6,8 @@ elekloader's patcher as a static web page, in two builds of the same `web/`
 - **The Mod Shop**, <https://elekloader.github.io/shop/>: the whole page below, built by
   [elekloader/shop](https://github.com/elekloader/shop) with its list.
 - **The builder**, <https://elekloader.github.io/elekloader/> (`--page builder`,
-  this repository's `pages.yml`): the build, Make your own mod and Contribute,
-  for your own `.elemod` files. The library, the sections, the Splash screen
+  this repository's `pages.yml`): the build, Make your own mod, Contribute and
+  the +Drive mods view, for your own `.elemod` files. The library, the sections, the Splash screen
   maker and Submit are the shop's: the builder hides them, says where the shop
   is (the side bar, the top bar, a banner over the build, the phone's tab bar),
   and sends their addresses (`#library`, `#s/...`, `#splash`, `#submit`) to the
