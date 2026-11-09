@@ -11,8 +11,12 @@ from sdk_alpha_harness import sdk_machine, sdk_tests
 
 MONO_SOURCE = """
     #include "elekloader/sdk_alpha_machine.h"
-    volatile int32_t @TAG@_pitch, @TAG@_starts;
     static const struct elek_knob knobs[] = { { "NONE", .max = 1 } };
+    #ifdef ELEK_TARGET_SHARC
+    void @TAG@_render(const struct elek_voice *v, elek_sample *out);
+    #define RENDER @TAG@_render
+    #else
+    volatile int32_t @TAG@_pitch, @TAG@_starts;
     static void render(const struct elek_voice *v, elek_sample *out)
     {
         @TAG@_pitch = v->pitch;
@@ -20,34 +24,76 @@ MONO_SOURCE = """
         for (int i = 0; i < ELEK_VOICE_FRAMES; ++i)
             out[i] = 0;
     }
+    #define RENDER render
+    #endif
     static const struct elek_machine @TAG@_machine = {
         .id = @ID@, .name = "@TAG@", .short_name = "MONO", ELEK_KNOBS(knobs),
-        .pages = { { "MONO", { &knobs[0] } } }, .render = render, .play = @PLAY@, .prio = @PRIO@,
+        .pages = { { "MONO", { &knobs[0] } } }, .render = RENDER, .play = @PLAY@, .prio = @PRIO@,
     };
     ELEK_REGISTER_MACHINE(@TAG@_machine);
 """
-MONO = sdk_machine('mono', MONO_SOURCE, tag='mono', play='ELEK_MONO', prio='ELEK_PRIO_LAST')
-LOW = sdk_machine('low', MONO_SOURCE, tag='low', play='ELEK_MONO', prio='ELEK_PRIO_LOW')
-HIGH = sdk_machine('high', MONO_SOURCE, tag='high', play='ELEK_MONO', prio='ELEK_PRIO_HIGH')
-LEGATO = sdk_machine('legato', MONO_SOURCE, tag='legato', play='ELEK_MONO_LEGATO', prio='ELEK_PRIO_LAST')
 
-POLY = sdk_machine('poly', """
-    #include "elekloader/sdk_alpha_machine.h"
-    volatile int32_t poly_pitch, poly_starts;
-    static const struct elek_knob knobs[] = { { "NONE", .max = 1 } };
-    static void render(const struct elek_voice *v, elek_sample *out)
-    {
-        poly_pitch = v->pitch;
-        poly_starts += v->start != 0;
-        for (int i = 0; i < ELEK_VOICE_FRAMES; ++i)
-            out[i] = 0;
-    }
-    static const struct elek_machine poly_machine = {
-        .id = @ID@, .name = "poly", .short_name = "POLY", ELEK_KNOBS(knobs),
-        .pages = { { "NONE", { &knobs[0] } } }, .render = render,
-    };
-    ELEK_REGISTER_MACHINE(poly_machine);
-""")
+
+def sharc_render(tag):
+    """The same render on the Digitone II, whose DSP runs it for every slot of the machine's type, each
+    block: pitch is the slot's that started last, so another slot's release does not overwrite it.
+    R4 = v (start at +8, pitch at +12, state at +20: one per slot), R8 = out."""
+    return """
+.SECTION/DM seg_dmda;
+.GLOBAL {0}_pitch.;
+.GLOBAL {0}_starts.;
+.VAR {0}_pitch. = 0;
+.VAR {0}_starts. = 0;
+.VAR {0}_slot. = 0;
+
+.SECTION/SW seg_swco;
+.GLOBAL {0}_render.;
+{0}_render.:
+    R0=20;
+    R0=R4+R0;
+    I4=R0;
+    R11=DM(I4,M5);
+    R0=8;
+    R0=R4+R0;
+    I4=R0;
+    R0=DM(I4,M5);
+    R0=PASS R0;
+    IF EQ JUMP {0}_running;
+    R1=DM({0}_starts.);
+    R1=R1+1;
+    DM({0}_starts.)=R1;
+    DM({0}_slot.)=R11;
+{0}_running:
+    R1=DM({0}_slot.);
+    COMP(R1,R11);
+    IF NE JUMP {0}_silence;
+    R0=12;
+    R0=R4+R0;
+    I4=R0;
+    R10=DM(I4,M5);
+    DM({0}_pitch.)=R10;
+{0}_silence:
+    I4=R8;
+    R0=0;
+    LCNTR=32, DO {0}_zero UNTIL LCE;
+{0}_zero:
+    DM(I4,M6)=R0;
+    I12=DM(M7,I6);
+    JUMP(M14,I12)(DB);
+    RFRAME;
+    NOP;
+""".format(tag)
+
+
+def machine(tag, play, prio='ELEK_PRIO_LAST'):
+    return sdk_machine(tag, MONO_SOURCE, sharc={'render-dn2.s': sharc_render(tag)}, tag=tag, play=play, prio=prio)
+
+
+MONO = machine('mono', 'ELEK_MONO')
+LOW = machine('low', 'ELEK_MONO', 'ELEK_PRIO_LOW')
+HIGH = machine('high', 'ELEK_MONO', 'ELEK_PRIO_HIGH')
+LEGATO = machine('legato', 'ELEK_MONO_LEGATO')
+POLY = machine('poly', 'ELEK_POLY')
 
 
 @sdk_tests
@@ -186,6 +232,30 @@ class OneVoice:
     def test_a_poly_machine_sounds_on_a_voice_a_key(self):
         self.assertEqual(self.voices_after(POLY, (0, 4)), 2)
 
+
+
+@sdk_tests
+class TrackSetup:
+    """The Digitone II's own PLAY MODE and MONO NOTE PRIO (TRK SETUP) carry .play and .prio out there:
+    the track's settings follow its SDK machine, and the machine's values win."""
+    requires = ('mono', 'trk_setup')
+
+    def setup_after(self, machine):
+        self.track.use(machine)
+        self.wait(100)
+        return self.panel.trk_setup(self.track.index)
+
+    def test_the_track_takes_the_machines_play_mode_and_prio(self):
+        self.assertEqual(self.setup_after(LEGATO), (3, 0))
+        self.assertEqual(self.setup_after(LOW), (2, 1))
+        self.assertEqual(self.setup_after(HIGH), (2, 2))
+        self.assertEqual(self.setup_after(POLY), (0, 2))    # POLY: MONO NOTE PRIO shows N/A, left as it was
+
+    def test_a_change_in_trk_setup_goes_back(self):
+        self.assertEqual(self.setup_after(MONO), (2, 0))
+        self.panel.step_play_mode()
+        self.wait(100)
+        self.assertEqual(self.panel.trk_setup(self.track.index), (2, 0))
 
 if __name__ == '__main__':
     unittest.main()

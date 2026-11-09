@@ -15,7 +15,7 @@ change, and mods must be rebuilt when it does.
 | Its pages show on | SRC | SYN2, in place of its pages on that track | SYN |
 | Pages, labels, hiding, glyphs | yes | yes | yes |
 | `render` and knob defaults | yes | yes | yes, `render` in SHARC assembly ([`render` on the Digitone II](#render-on-the-digitone-ii)) |
-| Mono machines ([`play` and `prio`](#play-and-prio)) | yes, live keys (the trig keys, keyboard mode, MIDI notes; not the sequencer's trigs) | yes, live keys (KEYBOARD mode, MIDI notes; not the sequencer's trigs), and one voice a track | not yet |
+| Mono machines ([`play` and `prio`](#play-and-prio)) | yes, live keys (the trig keys, keyboard mode, MIDI notes; not the sequencer's trigs) | yes, live keys (KEYBOARD mode, MIDI notes; not the sequencer's trigs), and one voice a track | yes: the track's own PLAY MODE and MONO NOTE PRIO, which machines-dn2 sets from the machine |
 
 Other devices and OS releases, the Digitakt II among them, are not SDK
 targets. The builder's `SDK_ALPHA_TARGETS`
@@ -335,8 +335,13 @@ carries them out the same way:
 | `ELEK_PRIO_LOW` | the lowest held |
 | `ELEK_PRIO_HIGH` | the highest held |
 
-A mono track keeps at most 16 held keys; a press past them drops the
-oldest. See [sdk-mono](../examples/sdk-mono/mono.c).
+On the Digitakt mk1 and Digitone mk1 the companion carries them out on
+live keys, and keeps at most 16 held keys a track; a press past them drops
+the oldest. On the Digitone II the OS does: machines-dn2 sets the track's
+PLAY MODE and MONO NOTE PRIO to the machine's values (`ELEK_POLY` sets
+POLY and leaves MONO NOTE PRIO), and puts them back after a change in TRK
+SETUP. A track whose machine is not an SDK machine keeps its settings. See
+[sdk-mono](../examples/sdk-mono/mono.c).
 
 ### Limits and refusals
 
@@ -346,7 +351,7 @@ several machines; the linker refuses more than the device holds (below).
 The builder refuses what breaks a rule above, and says where, as the C
 would: `sdk alpha: machine "Two Page" (id 40), knobs[0]: label "CUTOFF" has
 6 characters (at most 5)`. It refuses a mono machine where the companion
-does not carry it out yet (`ELEK_MONO is not supported on digitone-mk2 1.12 yet`). It also refuses floating point, imports no
+does not carry it out (`ELEK_MONO is not supported on <device> <os> yet`). It also refuses floating point, imports no
 companion exports, and machine claims written in `mod.json` (each machine
 claims its id itself). The messages are in
 elekloader/sdk/sdk_alpha_build.py. Every SDK mod imports
