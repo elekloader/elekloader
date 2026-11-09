@@ -213,6 +213,10 @@ no SDK machines.
 - **MIDI CCs** (1.9, core 4.3): it subscribes to `ev_midi_cc` and keeps
   each audio track's CCs for `v->cc` (`sdk_alpha_midi_cc` in the shared
   `machine.c`), and never takes one, so the stock applies it as before.
+- **CCs for knobs 9-15** (1.10): the page is a `cm_ui_v33` one, and each
+  knob the machine declares from id 8 takes CC 24 + (id - 8), so a machine
+  with 15 knobs answers CC 16-30 in knob id order. The CC sets the stored
+  value as knobs A-H's do, and also reaches `v->cc`.
 
 ## Beside the shop's mods
 

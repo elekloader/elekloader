@@ -21,7 +21,7 @@ const struct cm_ui32 *sdk_alpha_ui(int32_t id)
     struct sdk_alpha_page *p = &sdk_alpha_pages[e - sdk_alpha_entries];
     if (p->ui.pages)
         return &p->ui;
-    p->ui.base.abi = cm_ui_v32;
+    p->ui.base.abi = cm_ui_v33;
     p->ui.base.page_from = 3;
     p->ui.base.group = m->name;
     p->ui.page_count = e->pages;
@@ -33,6 +33,8 @@ const struct cm_ui32 *sdk_alpha_ui(int32_t id)
         if (k < e->count) {
             n->name = n->lname = m->knobs[k].label;
             n->def = sdk_alpha_default(&m->knobs[k]);
+            if (k >= 8)
+                n->cc = 24 + k - 8;     /* A-H keep CC 16-23, so knob ids 0-14 answer CC 16-30 */
         } else
             n->flags |= CM_HIDDEN;
     }
