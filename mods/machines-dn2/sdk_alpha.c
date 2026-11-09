@@ -219,6 +219,37 @@ static int32_t shown_knob(int32_t i, int32_t k)
     return sdk_alpha_entries[i].encoder[page_of(i)][k];
 }
 
+/* Mono machines: a track's TRK SETUP PLAY MODE (0 POLY, 1 POLY M.LFO, 2 MONO, 3 MONO LEG.) and MONO NOTE
+ * PRIO (0 LAST, 1 LOW, 2 HIGH) follow its SDK machine's .play and .prio. They go through the menu's own
+ * setters, which tell the voice allocator, and each tick puts back a change made in TRK SETUP. A track
+ * whose machine is not an SDK one keeps what it has. */
+extern void *const volatile dn2_tracks_root[];
+void *dn2_track_object(void *tracks, int32_t track);
+int32_t dn2_play_mode(void *track);
+void dn2_set_play_mode(void *track, int32_t mode);
+int32_t dn2_mono_prio(void *track);
+void dn2_set_mono_prio(void *track, int32_t prio);
+
+static void mono_follow(void)
+{
+    static const int8_t mode[] = { [ELEK_POLY] = 0, [ELEK_MONO] = 2, [ELEK_MONO_LEGATO] = 3 };
+    const uint8_t *root = dn2_tracks_root[0];
+    void *tracks = root ? *(void *const *)(root + TRACK_LIST) : 0;
+    if (!tracks)
+        return;                     /* before the project is up */
+    for (uint32_t t = 0; t < 16; ++t) {
+        int32_t i = track_machine(t);
+        if (i < 0 || declared(i)->play > ELEK_MONO_LEGATO || declared(i)->prio > ELEK_PRIO_HIGH)
+            continue;
+        const struct elek_machine *m = declared(i);
+        void *track = dn2_track_object(tracks, (int32_t)t);
+        if (dn2_play_mode(track) != mode[m->play])
+            dn2_set_play_mode(track, mode[m->play]);
+        if (m->play != ELEK_POLY && dn2_mono_prio(track) != m->prio)
+            dn2_set_mono_prio(track, m->prio);
+    }
+}
+
 /* ev_tick, the UI task: each track keeps its page and .present sees the active track's values. */
 void dn2_sdk_tick(uint8_t *ctrl)
 {
@@ -226,6 +257,7 @@ void dn2_sdk_tick(uint8_t *ctrl)
     dn2_rows_follow();              /* the mk2 voices' and filters' shared rows */
     if (!count)
         return;                     /* no SDK machine: leave Brain and SYN's methods alone */
+    mono_follow();
     uint32_t t = *dn2_active_track;
     /* At power-on SYN shows under the project's name: its title accessor (hooks.s) has not run yet. */
     if (!dn2_syn_view) {

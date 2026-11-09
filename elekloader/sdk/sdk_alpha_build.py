@@ -26,7 +26,8 @@ SDK_ALPHA_TARGETS = {
                                      frozenset(('render', 'defaults', 'mono')), None),
     # the Digitone II's synth type 4 is MIDI; its render is SHARC code ('kernels'): the C is built with
     # ELEK_TARGET_SHARC and .render names a label in mod.json's "sharc": {"sources": [...]}
-    ('digitone-mk2', '1.12'): Target(('core', 'machines-dn2'), 5, frozenset(('kernels', 'defaults')), None),
+    ('digitone-mk2', '1.12'): Target(('core', 'machines-dn2'), 5, frozenset(('kernels', 'defaults', 'mono')),
+                                     None),
 }
 SDK_ALPHA_TABLE = 'sdk_alpha_machines'   # pointers to struct elek_machine, read by each companion
 SDK_ALPHA_ABI = 'sdk_alpha_abi_v1'       # the one symbol the companions export to SDK machines

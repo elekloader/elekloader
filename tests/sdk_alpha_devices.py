@@ -842,7 +842,7 @@ class Digitone2(Device):
     track_count = 16
     lfo_count = 3
     settings_key = 'SETTINGS'
-    features = frozenset(('render', 'polyphony', 'audio_modulation'))
+    features = frozenset(('render', 'polyphony', 'audio_modulation', 'trk_setup'))
     sound_without_render = True     # FM TONE plays an SDK machine without a render
     KEYS = Digitakt1.KEYS           # KEYBOARD's chromatic keys, from the octave's C
 
@@ -883,6 +883,30 @@ class Digitone2(Device):
 
     def switch_track(self, track):
         self.chord('TRK', str(track + 1))
+
+    HELD = 0x445e3364               # OS 1.12's count of each track's keys held, by note (note-on 0x40121db2 adds one)
+    VOICES = 0x40288306             # OS 1.12's voice slots: slot v's track, a signed byte at + 0x14 v (-1: none)
+
+    def held_keys(self, track):
+        return sum(struct.unpack('>128I', self.mem(self.HELD + 512 * track, 512)))
+
+    def sounding_voices(self, track):
+        """The voice slots the OS has given the track."""
+        return sum(struct.unpack('b', self.mem(self.VOICES + 0x14 * v, 1))[0] == track for v in range(16))
+
+    def trk_setup(self, track):
+        """The track's TRK SETUP PLAY MODE (0 POLY, 1 POLY M.LFO, 2 MONO, 3 MONO LEG.) and MONO NOTE PRIO
+        (0 LAST, 1 LOW, 2 HIGH): big-endian words at + 0x146 and + 0x14a of its sound."""
+        return struct.unpack('>ii', self.mem(self.sound(track) + 0x146, 8))
+
+    def step_play_mode(self):
+        """FUNC+FLTR's SETUP, its sixth row (the active track's PLAY MODE), one step right, then closed."""
+        self.chord('FUNC', 'FLTR')
+        for _ in range(5):
+            self.tap('DOWN')
+        self.tap('RIGHT')
+        self.tap('NO')
+        self.tap('NO')
 
     def entries(self):
         """MACHINE SEL's synths, in its order (machines-dn2's dn2_list)."""
