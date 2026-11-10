@@ -86,9 +86,41 @@ the container and the same requests (`container.ts`, `datarpc.ts`, over any
 port: Web MIDI on a page), with the same results and bytes
 (`js/test/drive.test.ts`).
 
+## The build descriptor
+
+A build that will link more mods on the unit (the +Drive mods loader)
+needs to know what was flashed. When a mod imports `core_desc`, the
+linker writes one block, the build descriptor, into the RAM image after
+the tables, and defines `core_desc` as its address. A build without such
+a mod is the same as before, byte for byte. `elekloader/desc.py` writes
+and reads it; `python -m elekloader.desc dump <built .syx or main OS
+image>` prints it.
+
+- **Spare entries.** Each table gets spare zero entries after its zero
+  entry, so a loader can merge more entries in at boot: 16, or the
+  table's `"spare"` in the declaring mod's `collections`. A `"max"` there
+  caps the table's entries in all: the spare ones are only what the
+  build's own entries leave of it (none when they reach it). Tables the
+  linker fills itself get none: `core_store_ids`, `core_lock_codes`,
+  `core_lock_ccs`, `core_field_inits`, `core_handles`, `core_payloads`,
+  the `.fast` copy table and DSP tables. `NAME_n` stays the count of
+  entries the build has. The spare entries and the block count toward
+  the RAM budget.
+- **The +Drive area.** On a device whose profile has `drive_align` (the
+  Analog Rytm MKII's is 4 KB), the +Drive mods' area is what the flashed
+  build leaves of the core's linker area: from the build's RAM end (its
+  last `.bss`, the Drive Loader's own included) rounded up to `drive_align`,
+  to the top of that area (0x47FFF000 with core-ar2 0.11). A bigger flashed
+  build leaves a smaller area; the linker's own RAM limit is the only cap.
+- **Orders.** Each entry's sort key is kept as `order << 16 | module`, so
+  an order must be 0 to 65,534. The linker's own entries (storage,
+  payloads, `.fast` copies) have order 65,535.
+
+Its bytes (ABI 1.0) are below, "The descriptor's bytes".
+
 ## The descriptor's bytes
 
-The build descriptor (FORMAT.md, "The build descriptor"), ABI 1.0, is big-endian, its records 4-byte aligned, and its
+The build descriptor ("The build descriptor" above), ABI 1.0, is big-endian, its records 4-byte aligned, and its
 names offsets into its string pool (UTF-8, NUL-terminated):
 
 | offset | field |

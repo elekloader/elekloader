@@ -70,7 +70,7 @@ A format-2 mod is a relocatable object:
 | `exports` | the symbols other mods may use |
 | `imports`, `weak` | the names it uses from others; a weak one resolves to `core_zero` (zeros) if no mod provides it |
 | `relocs` | `[section, offset, "abs32"/"abs16"/"pc32"/"pc16"/"dsp24", target, addend]`; target `"sym:NAME"`, `"sec:NAME"` or `"abs"`; `abs16` writes two big-endian bytes, -32768..65535 |
-| `collections` | tables this mod declares: `{"ev_tick": {"entry": 4}}`, or a DSP table (below); a core's may add `"spare"` (0 to 4,096), `"max"` (1 to 4,096) and `"render": true` for the build descriptor ("The build descriptor" below) |
+| `collections` | tables this mod declares: `{"ev_tick": {"entry": 4}}`, or a DSP table (below); a core's may add `"spare"` (0 to 4,096), `"max"` (1 to 4,096) and `"render": true` for the build descriptor (DRIVE.md, "The build descriptor") |
 | `contribute` | entries for tables: `{"to", "order", "data", "relocs", "claims"}` |
 | `copied` | `[{"lo", "hi", "to"}]`: a block of the image this mod copies elsewhere at run time |
 | `knobs` | a count of knob ids, 0..1024, the linker gives this mod (the Analog Rytm MKII, core-ar2 0.13; "Knob ids" below) |
@@ -266,7 +266,7 @@ each program on its own.
    as an absolute symbol, its descriptor. When a mod declares `knobs`, the
    linker gives it its run of ids ("Knob ids" below).
    When a mod imports `core_desc`, the linker also writes the build
-   descriptor and gives tables spare entries ("The build descriptor" below).
+   descriptor and gives tables spare entries (DRIVE.md, "The build descriptor").
 4. **Relocates** the sections, the table entries and the sites.
 5. **Checks again** on the result: code sites are still whole
    instructions, the copied-block rules hold, and the image is what the
@@ -313,38 +313,6 @@ Nothing is built unless all of these pass:
   sections and DSP table entries, at whole words, and only `dsp24` there;
   and a DSP address and a ColdFire address are never written in place of
   each other.
-
-### The build descriptor
-
-A build that will link more mods on the unit (the +Drive mods loader)
-needs to know what was flashed. When a mod imports `core_desc`, the
-linker writes one block, the build descriptor, into the RAM image after
-the tables, and defines `core_desc` as its address. A build without such
-a mod is the same as before, byte for byte. `elekloader/desc.py` writes
-and reads it; `python -m elekloader.desc dump <built .syx or main OS
-image>` prints it.
-
-- **Spare entries.** Each table gets spare zero entries after its zero
-  entry, so a loader can merge more entries in at boot: 16, or the
-  table's `"spare"` in the declaring mod's `collections`. A `"max"` there
-  caps the table's entries in all: the spare ones are only what the
-  build's own entries leave of it (none when they reach it). Tables the
-  linker fills itself get none: `core_store_ids`, `core_lock_codes`,
-  `core_lock_ccs`, `core_field_inits`, `core_handles`, `core_payloads`,
-  the `.fast` copy table and DSP tables. `NAME_n` stays the count of
-  entries the build has. The spare entries and the block count toward
-  the RAM budget.
-- **The +Drive area.** On a device whose profile has `drive_align` (the
-  Analog Rytm MKII's is 4 KB), the +Drive mods' area is what the flashed
-  build leaves of the core's linker area: from the build's RAM end (its
-  last `.bss`, the Drive Loader's own included) rounded up to `drive_align`,
-  to the top of that area (0x47FFF000 with core-ar2 0.11). A bigger flashed
-  build leaves a smaller area; the linker's own RAM limit is the only cap.
-- **Orders.** Each entry's sort key is kept as `order << 16 | module`, so
-  an order must be 0 to 65,534. The linker's own entries (storage,
-  payloads, `.fast` copies) have order 65,535.
-
-Its bytes (ABI 1.0) are in DRIVE.md, "The descriptor's bytes".
 
 ### +Drive mods
 

@@ -2,7 +2,7 @@
 
 The +Drive mods loader's flashed part, for core-ar2 0.12 and newer on OS 1.74. It imports
 `core_desc`, so the linker writes the build descriptor into every build that has it
-(docs/FORMAT.md, "The build descriptor"), and it exports the staging buffer as `drive_staging`
+(docs/DRIVE.md, "The build descriptor"), and it exports the staging buffer as `drive_staging`
 and `drive_staging_size` (512 KB, its `.bss`), which the descriptor's area record names.
 The 512 KB is the loader's own choice, not a limit of the unit, so a later version of the
 loader can change it: it is `DL_STAGING_SIZE` in `fs.h` and the `.space` and

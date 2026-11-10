@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
-"""The build descriptor, `core_desc` (docs/FORMAT.md, "The build descriptor").
+"""The build descriptor, `core_desc` (docs/DRIVE.md, "The build descriptor").
 
 A mod that imports `core_desc` (the +Drive mods loader) makes the linker write one binary block
 into the build's RAM image, after the tables: what the flashed build is, for code that links more

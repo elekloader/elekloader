@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// The build descriptor, `core_desc` (docs/FORMAT.md, "The build descriptor"). Ported from elekloader's desc.py
+// The build descriptor, `core_desc` (docs/DRIVE.md, "The build descriptor"). Ported from elekloader's desc.py
 // (GPL-2.0-or-later): the same block, byte for byte. A mod that imports core_desc makes the linker write it after the
 // tables: the modules, their exports, every table with its room for more entries and each entry's sort key, the names
 // the modules claim, the RAM line and the mod storage's room. desc.py's docstring gives the layout.
