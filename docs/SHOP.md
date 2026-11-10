@@ -215,7 +215,11 @@ has four parts:
   release comes along.
 - **Good to know:** the core it builds with, how much RAM it takes, and
   which shop mods it can't share a build with. This is *not* a refusal: the
-  page just greys out those cards beside yours.
+  page just greys out those cards beside yours. If it says your mod builds
+  with an older core, *not the newest*, your mod patches a place the newest
+  core patches too: it still builds, but not beside a mod that needs the
+  newer core, until you build it on that core's event
+  ([CORES.md](CORES.md), "Which file").
 - **What it refuses, and why:** in plain words, so you know what to fix.
 
 ## If it says no

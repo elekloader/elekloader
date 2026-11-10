@@ -32,6 +32,7 @@ older ones people still have:
 | Digitone mk1, Digitone Keys | 1.43, 1.44 | `core-dn1-2.0a.elemod`, `core-dn1-2.0a-os1.44.elemod` | the v0.4.0 release, built into its apps |
 | Digitakt II | 1.17 | `core-dt2-1.0.elemod` | the [v0.10.0](https://github.com/elekloader/elekloader/releases/tag/v0.10.0) release, built into its apps, and the web page |
 | Digitone II | 1.12 | `core-dn2-0.3.elemod` | the [v0.10.0](https://github.com/elekloader/elekloader/releases/tag/v0.10.0) release, built into its apps, and the web page (experimental) |
+| Analog Rytm MKII | 1.74 | `core-ar2-0.12.elemod` | on main: build it ([below](#building-a-core)). The Drive Loader needs it: the +Drive mods' spare entries in its tables |
 | Analog Rytm MKII | 1.74 | `core-ar2-0.11.elemod` | the [v0.10.0](https://github.com/elekloader/elekloader/releases/tag/v0.10.0) release, built into its apps, and the web page. Mods with pages built for 0.3 (rytm2_mods v1.2's lfo-rnd, voice-dac, euclid-accents, velocity-humanise, comp-preview) do not link with it: their sites overlap core's page sites |
 | Analog Rytm MKII | 1.74 | `core-ar2-0.3.elemod` | the [core-ar2-v0.3](https://github.com/elekloader/elekloader/releases/tag/core-ar2-v0.3) pre-release, and the shop |
 | Digitone II | 1.12 | `core-dn2-0.4.elemod` | on main, not released: build it ([below](#building-a-core)) |
@@ -50,13 +51,33 @@ older core links with the newest as it did with its own, and a build takes
 the newest. The older files stay on their releases (core-v3.0,
 core-dn1-v2.3, core-dn1-v3.2 and core-dn1-v4.0).
 
+One kind of mod does not link with a newer core: a mod that patches a
+place itself which a later core took for every mod. The Digitakt mk1's
+core 4.1 patches the master output's places, and Digi EQ 1.0c and
+Tone+FX's Digitakt files (3.2a3 and 4.0c) patch them too: they link
+with core 4.0 and are refused with 4.1 (*"core 4.1 site ... and tonefx
+4.0c site ... overlap"*). Such a mod builds with the newest core that
+leaves its places alone ([below](#how-a-build-picks-one)), and not beside
+a mod that needs a newer core, until its author builds it on the core's
+event.
+
 ## How a build picks one
 
 A mod says which core it needs at least (`resources.core` in the file,
 `needs_core` in the shop's list). A build takes the newest core it has for
-the stock OS (on the web page, the newest released core in the table
-above), for a mod built for an older core too. A mod that needs a core
-newer than any listed is refused with *"needs core ... or newer"*.
+the stock OS that takes its mods, for a mod built for an older core too. A
+core takes the mods when:
+
+- **it is new enough** for each of them. A mod that needs a core newer than
+  any listed is refused with *"needs core ... or newer"*;
+- **its RAM holds them** (the next paragraph);
+- **it patches no place one of them patches** (the list each file gives of
+  its sites). A mod that patches a place core 4.1 patches gets core 4.0
+  when the builder has it: the web page and the kit do, the apps when you
+  add the older core's file.
+
+When no core does all three, the build takes the newest that is new
+enough, and the check says what is wrong.
 
 Cores 4.0 and newer give the mods' code, tables and variables more RAM:
 1.25 MB on the Digitone, 256 KB on the Digitakt mk1, where older cores give
@@ -69,15 +90,17 @@ area (`ram_area`). The linker never lays them out in more. A build takes
 the newest core that holds them; when none does, the newest, and the
 check says how many bytes are over.
 
-The web page lists only the newest core of each device and OS (the site
-carries the older ones too). The web page, the kit and the window (from
-source, and the apps after 0.4.0) tick that core for you and keep one: a
-core you ticked yourself (your own file, added to the page or the
-window's library) stays while it is new enough and holds the mods, and
-gives way to the newest when it does not. A profile the page saved with an
-older core takes the newest in its place. The 0.4.0 apps refuse a build
-with two cores ticked: there, untick the built-in one when you add a newer
-core.
+The web page lists one core of each device and OS: the one the build
+takes. That is the newest, or an older one of the site's while a ticked
+mod cannot link with the newest; the row then names that mod, and the
+newest comes back when the mod is unticked. The web page, the kit and the
+window (from source, and the apps after 0.4.0) tick the core for you and
+keep one: a core you ticked yourself (your own file, added to the page or
+the window's library) stays while it takes the mods, and gives way to the
+newest that does when it does not. A profile the page saved with one of
+the site's cores takes the core a build of its mods takes. The 0.4.0 apps
+refuse a build with two cores ticked: there, untick the built-in one when
+you add a newer core.
 
 ## What each core adds
 
@@ -178,7 +201,8 @@ the one a mod that uses it names in `resources.core`.
   other than 0, its `init` (0.10; ADAPTING.md, "Mod storage (core-ar2 0.2,
   Analog Rytm MKII)"). P-locks a mod keeps itself, on knob ids from 555
   (0.11; ADAPTING.md, "Locks a mod keeps itself (core-ar2 0.11, Analog Rytm
-  MKII)").
+  MKII)"). Spare entries in its tables for +Drive mods, which the Drive
+  Loader fills at boot (0.12; the core's README, "Room for +Drive mods").
 - **Analog Four MKII** ([mods/core-a4](../mods/core-a4), a proof of
   concept): core-ar2's events and mod storage at the A4's addresses
   (ADAPTING.md, "Mod storage (core-a4 0.1)"), and parameter pages, whose

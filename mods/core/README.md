@@ -60,7 +60,11 @@ are 1.53's.
 
   With no subscriber the unit is stock. Digi EQ and Tone+FX, which took
   the same places, combine on it; [examples/master-mono](../../examples/master-mono)
-  is the smallest mod that uses it. [docs/ADAPTING.md](../../docs/ADAPTING.md),
+  is the smallest mod that uses it. Their files made before 4.1 (Digi EQ
+  1.0c, Tone+FX 3.2a3 and 4.0c) still patch those places themselves, so a
+  build with one takes core 4.0
+  ([docs/CORES.md](../../docs/CORES.md), "How a build picks one").
+  [docs/ADAPTING.md](../../docs/ADAPTING.md),
   "The master output and the master pages".
 - **4.2: the played notes** (Digitakt mk1, `notes.s`, last in `sources`).
   Two sites more, the entries of the stock note-on and note-off routines
@@ -83,16 +87,17 @@ are 1.53's.
 Build it with the SDK (it needs m68k binutils):
 
 ```bash
-python -m elekloader.sdk.build mods/core --stock Digitakt_OS1.53.syx      # out/core-4.2.elemod
-python -m elekloader.sdk.build mods/core --stock Digitakt_OS1.54.syx      # out/core-4.2-os1.54.elemod
-python -m elekloader.lint mods/core/out/core-4.2-os1.54.elemod --stock Digitakt_OS1.54.syx
+python -m elekloader.sdk.build mods/core --stock Digitakt_OS1.53.syx      # out/core-4.3.elemod
+python -m elekloader.sdk.build mods/core --stock Digitakt_OS1.54.syx      # out/core-4.3-os1.54.elemod
+python -m elekloader.lint mods/core/out/core-4.3-os1.54.elemod --stock Digitakt_OS1.54.syx
 ```
 
 Core 3.0's files are on the
-[core-v3.0](https://github.com/irpina/elekloader/releases/tag/core-v3.0)
-pre-release and in the mod shop; 2.1's are in the latest release (v0.4.0);
-4.0's are on the [core-v4.0](https://github.com/irpina/elekloader/releases/tag/core-v4.0)
-pre-release; 4.1 and 4.2 are on main, not released yet.
+[core-v3.0](https://github.com/elekloader/elekloader/releases/tag/core-v3.0)
+pre-release and in the mod shop; 2.1's are in release v0.4.0;
+4.0's are on the [core-v4.0](https://github.com/elekloader/elekloader/releases/tag/core-v4.0)
+pre-release; 4.1's are in the latest release; 4.2 and 4.3 are on main, not
+released yet.
 
 The 1.54 port is the same core: the same code, sites and sections, built
 with 1.54's addresses. Of its 39 sites, 38 are where 1.53 has them, and
