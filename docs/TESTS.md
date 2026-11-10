@@ -7,6 +7,14 @@ page) and takes its input files from environment variables. A test whose
 input files are not given is skipped, not passed: say which ran. Firmware
 files never go in this repository.
 
+The docs have a check of their own, which needs no files and runs on every
+pull request:
+`python .claude/skills/doc-hygiene/scripts/doc_audit.py --strict --ratchet origin/main`.
+It fails on a broken link or section reference, and when a change makes the
+docs worse than main has them
+([the doc-hygiene skill](../.claude/skills/doc-hygiene/SKILL.md) says what
+that means, and each failure prints its fix).
+
 `test_units.py` also runs the `test_sharc*.py` files. With
 `ELEKLOADER_DN2_SYX` they check the real stock file too, and with
 `ELEKLOADER_CROSS` they build core with its bridge. With `SELACHE`, a clean

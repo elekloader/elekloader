@@ -1990,6 +1990,37 @@ def test_the_splash_code_is_its_source_assembled():
                 assert fh.read() == splash.code(t['device'], t['os'])
 
 
+# Folders that had no README, and examples no page named, when the test below was written. The
+# lists only get shorter: write the README (or name the example) and take the folder out.
+MODS_WITHOUT_README = {'core-mc', 'core-ms', 'machines-dn2', 'sdk-alpha', 'seq-events'}
+EXAMPLES_NOWHERE = {'boot-marker-mc', 'crush-machine-ot', 'hello-marker-model', 'hooks-check-dn1', 'machine-ar2',
+                    'master-mono', 'sdk-glyphs', 'sdk-hello-world', 'sdk-mono', 'sdk-sine', 'track-marker-mc'}
+
+
+def test_every_mod_has_a_readme_and_every_example_is_listed():
+    """A mod's sites, build and checks live in mods/<mod>/README.md (the doc-hygiene skill, "One
+    home per fact"). An example has a README of its own, or docs/README.md or examples/README.md
+    names it."""
+    root = os.path.dirname(HERE)
+    folders = lambda top: sorted(d for d in os.listdir(os.path.join(root, top))
+                                 if os.path.isdir(os.path.join(root, top, d)))
+    has = lambda *p: os.path.exists(os.path.join(root, *p))
+    bare = {m for m in folders('mods') if not has('mods', m, 'README.md')}
+    assert bare == MODS_WITHOUT_README, (
+        'mods/<mod>/README.md is missing: %s; has one now, take it out of MODS_WITHOUT_README: %s'
+        % (sorted(bare - MODS_WITHOUT_README), sorted(MODS_WITHOUT_README - bare)))
+    index = ''
+    for page in (('docs', 'README.md'), ('examples', 'README.md')):
+        if has(*page):
+            with open(os.path.join(root, *page), encoding='utf-8') as f:
+                index += f.read()
+    listed = lambda e: '`%s`' % e in index or 'examples/%s)' % e in index or '(%s)' % e in index
+    lost = {e for e in folders('examples') if not has('examples', e, 'README.md') and not listed(e)}
+    assert lost == EXAMPLES_NOWHERE, (
+        'an example with no README that docs/README.md does not name: %s; named now, take it out of '
+        'EXAMPLES_NOWHERE: %s' % (sorted(lost - EXAMPLES_NOWHERE), sorted(EXAMPLES_NOWHERE - lost)))
+
+
 if __name__ == '__main__':
     import traceback
     ok = failed = 0
