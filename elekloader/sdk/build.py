@@ -25,6 +25,8 @@ mod.json:
      "collections": {"my_table": 8},                  tables you declare (entry size)
      "contribute": [{"to", "order", "data", "relocs", "claims"}],
      "dsp": [{"source": "my.asm", "payload": "A"}],   optional: DSP56300 code (see below)
+     "sharc_raw": "raw.json",                         optional: the Digitakt II's raw SHARC payload
+                                                     (docs/FORMAT.md), a file in the mod folder
      "subscribe_dsp": [{"event", "fn", "addend", "order"}],   jsr >fn in a DSP table
      "weak": ["name"], "copied": [...],
      "resources": {"regions": [...], "names": [...]},
@@ -240,7 +242,7 @@ def for_release(mod, dev, rel):
 
 def build(mdir, stock_path, out_dir=None, extra=None):
     """-> (the path of the .elemod written, its Mod2). `extra` ({'sites', 'contribute',
-    'sources'}) lets a generator add parts it computed."""
+    'sources', 'cflags'}) lets a generator add parts it computed."""
     with open(os.path.join(mdir, 'mod.json')) as fh:
         mod = json.load(fh)
     extra = extra or {}
@@ -249,9 +251,19 @@ def build(mdir, stock_path, out_dir=None, extra=None):
     except (devices.UnknownFirmware, formats.FormatError) as e:
         raise BuildError(str(e))
     mod, ported = for_release(mod, dev, rel)
-    sharc_doc = None
-    if 'sharc' in mod:
-        spec = mod['sharc']
+    sharc_doc, sharc_sources = None, []
+    spec = mod.get('sharc')
+    if isinstance(spec, dict) and set(spec) == {'sources'}:
+        # SDK machines' SHARC render, which sdk_alpha_build assembles; targets without kernels skip it
+        root = os.path.realpath(mdir)
+        names = spec['sources'] if isinstance(spec['sources'], list) else []
+        paths = [os.path.realpath(os.path.join(root, n)) for n in names
+                 if isinstance(n, str) and n.endswith('.s') and not os.path.isabs(n)]
+        if not names or len(paths) < len(names) or any(not p.startswith(root + os.sep) for p in paths):
+            raise BuildError('mod.json: sharc sources are relative .s files in the mod folder')
+        if (rel.sharc or {}).get('kernel_abi'):
+            sharc_sources = paths
+    elif 'sharc' in mod:
         if not isinstance(spec, dict) or set(spec) != {'artifact'} or not isinstance(spec['artifact'], str) \
                 or not spec['artifact'] or os.path.isabs(spec['artifact']):
             raise BuildError('mod.json: sharc is {"artifact": "relative-file.sharc.json"}')
@@ -269,6 +281,48 @@ def build(mdir, stock_path, out_dir=None, extra=None):
             sharc_doc = json.loads(artifact_raw)
         except (OSError, ValueError) as e:
             raise BuildError('SHARC artifact: %s' % e) from e
+    raw_doc = None
+    if 'sharc_raw' in mod:                  # a raw SHARC payload (the Digitakt II): a JSON file in the mod
+        spec = mod['sharc_raw']
+        if not isinstance(spec, str) or not spec or os.path.isabs(spec):
+            raise BuildError('mod.json: sharc_raw is "relative-file.json"')
+        root = os.path.realpath(mdir)
+        path = os.path.realpath(os.path.join(root, spec))
+        try:
+            inside = os.path.commonpath((root, path)) == root
+        except ValueError:
+            inside = False
+        if not inside:
+            raise BuildError('mod.json: sharc_raw file escapes the mod folder')
+        try:
+            with open(path, 'rb') as fh:
+                raw_raw = fh.read()
+            raw_doc = json.loads(raw_raw)
+        except (OSError, ValueError) as e:
+            raise BuildError('sharc_raw: %s' % e) from e
+        objs = []
+        for ob in raw_doc.get('objects', []):   # {"dko": "file.dko.json", "name", "externs", "rename"}:
+            if isinstance(ob, dict) and 'dko' in ob:    # a digikit object from the mod folder
+                dp = os.path.realpath(os.path.join(root, ob['dko']))
+                if os.path.commonpath((root, dp)) != root:
+                    raise BuildError('sharc_raw: the object %s escapes the mod folder' % ob['dko'])
+                try:
+                    with open(dp, 'rb') as fh:
+                        dko = json.loads(fh.read())
+                except (OSError, ValueError) as e:
+                    raise BuildError('sharc_raw object: %s' % e) from e
+                if dko.get('arch') != 'sharc' or dko.get('format') != 1:
+                    raise BuildError('sharc_raw: %s is not a SHARC object' % ob['dko'])
+                ren = ob.get('rename', {})
+                syms = [x for x in dko['symbols'] if x.get('section') is not None]
+                syms += [{'name': k, 'section': None, 'abs': int(v, 16) if isinstance(v, str) else v,
+                          'global': False} for k, v in ob.get('externs', {}).items()]
+                ob = {'name': ob.get('name', os.path.basename(ob['dko'])), 'sections': dko['sections'],
+                      'symbols': syms,
+                      'relocs': [dict(r, symbol=ren.get(r['symbol'], r['symbol'])) for r in dko['relocs']]}
+            objs.append(ob)
+        if objs:
+            raw_doc = dict(raw_doc, objects=objs)
     image = formats.main_image(stock, dev)
     if sha(image) != rel.main_sha256:
         raise BuildError('the stock main OS is not the known image')
@@ -289,7 +343,7 @@ def build(mdir, stock_path, out_dir=None, extra=None):
                      'str_name: .asciz "%s %s"\n        .balign 2\n' % (mod['name_string'], version))
         srcs.append(p)
     if not srcs and not mod.get('sites') and not extra.get('sites') and not mod.get('fixed') \
-            and not mod.get('dsp') and sharc_doc is None:
+            and not mod.get('dsp') and sharc_doc is None and raw_doc is None:
         raise BuildError('mod.json names no sources and no sites: nothing to build')
     defs = []
     for k, v in mod.get('defsym', {}).items():
@@ -298,8 +352,8 @@ def build(mdir, stock_path, out_dir=None, extra=None):
     for s in srcs:
         o = os.path.join(work, os.path.basename(s) + '.o')
         if s.endswith('.c'):
-            run([prefix + 'gcc'] + tc['cflags'] + mod.get('cflags', []) + ['-I', mdir, '-I', INCLUDE,
-                                                                            '-c', s, '-o', o])
+            run([prefix + 'gcc'] + tc['cflags'] + mod.get('cflags', []) + extra.get('cflags', [])
+                + ['-I', mdir, '-I', INCLUDE, '-c', s, '-o', o])
         else:
             run([prefix + 'as'] + tc['asflags'] + ['-I', mdir, '-I', INCLUDE] + defs + ['-o', o, s])
         objs.append(o)
@@ -547,7 +601,7 @@ def build(mdir, stock_path, out_dir=None, extra=None):
     imports |= set(weak)
 
     source_hashes = {}
-    for s in srcs + dsrcs:
+    for s in srcs + dsrcs + sharc_sources:
         with open(s, 'rb') as fh:
             source_hashes[os.path.basename(s)] = sha(fh.read())
 
@@ -568,6 +622,9 @@ def build(mdir, stock_path, out_dir=None, extra=None):
         'build': {'sources': source_hashes},
         'signature': None,
     }
+    if raw_doc is not None:
+        doc['sharc_raw'] = raw_doc
+        doc['build']['sharc_raw_sha256'] = sha(raw_raw)
     if sharc_doc is not None:
         doc['sharc'] = sharc_doc
         doc['build']['sharc_artifact_sha256'] = sha(artifact_raw)

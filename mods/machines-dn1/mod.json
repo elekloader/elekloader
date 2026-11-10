@@ -1,8 +1,8 @@
 {
- "id": "machines", "version": "0.3",
+ "id": "machines", "version": "0.6",
  "license": "GPL-2.0-or-later",
  "title": "machines", "category": "Framework", "author": "irpina",
- "description": "Machines for the Digitone mk1 and Digitone Keys: sounds that play a machine mod's voice in place of FM, through the Digitone's own filter, mixer and effects, with the AMP page's envelope. MACHINES in core-dn1's Mod Menu (hold a track key) picks the held track's machine; a machine track's SYN1 and SYN2 knobs are the machine's parameters, relabelled, and from 0.2 their second pages too for a machine that takes them (27 knobs). On its own it adds the menu and nothing else: machines come in mods of their own. From 0.3 also the SDK alpha's machines, whose page replaces SYN2's pages on their tracks. Needs core-dn1 5.2 (0.2: 3.1).",
+ "description": "Machines for the Digitone mk1 and Digitone Keys: sounds that play a machine mod's voice in place of FM, through the Digitone's own filter, mixer and effects, with the AMP page's envelope. MACHINES in core-dn1's Mod Menu (hold a track key) picks the held track's machine; a machine track's SYN1 and SYN2 knobs are the machine's parameters, relabelled, and from 0.2 their second pages too for a machine that takes them (27 knobs). On its own it adds the menu and nothing else: machines come in mods of their own. From 0.3 also the SDK alpha's machines, whose page replaces SYN2's pages on their tracks, and from 0.4 a voice's count of the silent frames it was not rendered (idle), and from 0.5 mono machines (.pick), one key and one voice at a time on their tracks. Needs core-dn1 5.2 (0.2: 3.1; the 1.44 port from 0.5, 5.3).",
  "device": "digitone-mk1", "os": "1.43",
  "ports": {
   "1.44": {
@@ -15,7 +15,9 @@
     {"event": "ev_voice_on", "fn": "dnm_voice_on", "order": 20},
     {"event": "ev_render_voices", "fn": "dnm_render", "order": 50},
     {"event": "ev_tick", "fn": "dnm_tick", "order": 50},
-    {"event": "ev_enc", "fn": "dnm_sdk_enc", "order": 50}
+    {"event": "ev_enc", "fn": "dnm_sdk_enc", "order": 50},
+    {"event": "ev_live_note", "fn": "sdk_alpha_live_note", "order": 50},
+    {"event": "ev_midi_cc", "fn": "sdk_alpha_midi_cc", "order": 90}
    ],
    "contribute": [
     {"to": "core_menu", "order": 40, "data": "00000000",
@@ -28,7 +30,7 @@
      "relocs": [[0, "abs32", "sym:dnm_override", 0]]}
    ],
    "collections": {"dn_machines": 4, "sdk_alpha_machines": 4},
-   "resources": {"names": ["soundslot:0", "page:29", "page:28"], "core": "5.2"}
+   "resources": {"names": ["soundslot:0", "page:29", "page:28"], "core": "5.3"}
   }
  },
  "sources": ["machines.c"],

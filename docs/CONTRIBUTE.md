@@ -111,8 +111,9 @@ claimed it until it leaves the list.
 - **Open it as a draft early,** with its `Claims:` line, so others see the
   entry is taken.
 - **A "move onto the core" entry** is done in the mod's own repository; its
-  claim goes on the pull request here that brings the rebuilt mod into the
-  shop (`web/catalog.json`).
+  claim goes on the pull request that brings the rebuilt mod into the
+  shop (elekloader/shop's `catalog.json`); the board counts that repository's
+  merged pull requests too.
 - **Your merge is the review:** a claim counts only on a merged pull
   request here, and the maintainers merge what does the entry.
 

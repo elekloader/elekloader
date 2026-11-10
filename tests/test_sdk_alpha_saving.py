@@ -19,7 +19,7 @@ SAVED = sdk_machine("Saved", """
     static void present(const struct elek_ui *ui)
     {
         if (ui->knob[0]) {
-            elek_label_set(ui->view[1].label, "QWE");
+            ui->view[1].label = "QWE";
             ui->view[1].hidden = ui->knob[0] == 127;
         }
     }

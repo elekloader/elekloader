@@ -251,6 +251,36 @@ test('prepare: the newest of the catalog\'s cores whose RAM holds the mods', asy
   assert.deepEqual(await coreOf(ids.slice(0, 2)), ['/work/core/core-dn1-3.2.elemod'])
 })
 
+test('prepare: the newest of the catalog\'s cores that patches no place the mods patch', async () => {
+  const cat = structuredClone(CATALOG) as any
+  cat.cores.push(core('core-4.0.elemod', '1.53', '4.0'), core('core-4.1.elemod', '1.53', '4.1'))
+  cat.mods.push(mod('tone', '1.53'), mod('health', '1.53'), mod('master', '1.53', { needs_core: '4.1' }))
+  const c = parseCatalog(cat)
+  const code = (addr: number) => [addr, 6, 'code', '']
+  const sites: Record<string, unknown[]> = { tone: [code(0x400721e6)], health: [code(0x40020000)], master: [] }
+  const fake = {
+    load: async () => ({}),
+    setStock: async () => ({ ok: true, file: 'x.syx', device: 'Digitakt mk1', os: '1.53', dev: { key: 'digitakt-mk1' } }),
+    addCatalogMod: async (file: string) => ({ ok: true, mod: { path: '/work/mods/' + file } }),
+    tick: async (enabled: string[], path: string) => [...new Set([...enabled, path])].sort(),
+    mods: async () => [
+      { path: '/work/core/core-4.0.elemod', file: 'core-4.0.elemod', id: 'core', builtin: true, fits: true, format: 2, sites: [code(0x40010000)] },
+      { path: '/work/core/core-4.1.elemod', file: 'core-4.1.elemod', id: 'core', builtin: true, fits: true, format: 2, sites: [code(0x40010000), code(0x400721e6)] },
+      ...Object.keys(sites).map(id => ({ path: `/work/mods/${id}-1.53.elemod`, file: `${id}-1.53.elemod`, id, builtin: false, fits: true, format: 2, sites: sites[id] })),
+    ],
+    check: async (enabled: string[]) => ({ ok: true, order: enabled }),
+  } as any
+  const stock = new File([new Uint8Array(4)], 'x.syx')
+  const coreOf = async (sel: string[]) => {
+    const p = await prepare(fake, { catalog: c, device: 'digitakt-mk1', os: '1.53', stock, ids: sel })
+    return p.ok && p.enabled.filter(x => x.startsWith('/work/core/'))
+  }
+  assert.deepEqual(await coreOf(['health']), ['/work/core/core-4.1.elemod'])           // the newest
+  assert.deepEqual(await coreOf(['tone']), ['/work/core/core-4.0.elemod'])             // a mod made before 4.1 took its place
+  assert.deepEqual(await coreOf(['health', 'tone']), ['/work/core/core-4.0.elemod'])
+  assert.deepEqual(await coreOf(['tone', 'master']), ['/work/core/core-4.1.elemod'])   // no core takes both: the check says why
+})
+
 test('the build steps and the build log', () => {
   const lines = ['stock: Digitakt mk1 OS 1.53 (…)', 'mod core 2.1  39 sites', 'the mods combine: …', 'linked core 2.1: RAM …', 'packed the main OS: 1 -> 1 bytes (0.2 s)', 'verified: …']
   let step = buildStep(lines[0])

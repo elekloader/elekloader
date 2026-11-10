@@ -181,4 +181,24 @@ extern struct core_mpage *core_mpage_shown(void *view);
 extern void *volatile core_mview;
 extern volatile uint32_t core_mview_draws;
 
+/* ---- core 4.2: the played notes ------------------------------------------------------------------ */
+/* ev_live_note: a note played on a track reaches it before its voice (the trig keys, keyboard mode, the
+ * preview, a MIDI note on a track's channel): on 1, vel its velocity; on 0 its release (vel: the routine's
+ * third argument, the source). source: 0x40 the trig keys, keyboard mode and the preview, 2 MIDI. Nonzero
+ * takes it: the key is not counted and the track does not play (or release) it. The UI or the MIDI task;
+ * the sequencer's trigs do not pass here. */
+typedef int32_t (*ev_live_note_fn)(int32_t track, int32_t note, int32_t vel, int32_t on, int32_t source);
+/* The stock routines past the event, to play a note again: skip nonzero counts the key without playing it;
+ * the trig keys pass sound and flag -1. Each counts the key held on its track, so pair them. */
+extern void fw_note_on(int32_t track, int32_t note, int32_t vel, int32_t source, int32_t skip, int32_t sound,
+                       int32_t flag);
+extern void fw_note_off(int32_t track, int32_t note, int32_t source);
+
+/* ---- core 4.3: ev_midi_cc --------------------------------------------------------------------------- */
+/* Each MIDI CC the unit receives, before the stock applies it: track 0-7 the audio tracks, 8-15 the MIDI
+ * tracks, 16 the FX track; flags CORE_MIDI_CC_AUTO when it came on the auto channel. cc and value 0-127.
+ * Nonzero takes it: the stock does not apply it. The MIDI task, not interrupt level. */
+#define CORE_MIDI_CC_AUTO  1u
+typedef int32_t (*ev_midi_cc_fn)(int32_t track, int32_t cc, int32_t value, int32_t flags);
+
 #endif

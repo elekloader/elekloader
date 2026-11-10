@@ -86,7 +86,7 @@ def build(stock_path, mod_paths, version=None, check_only=False, log=print, lock
             if len(v2) != len(mods):
                 raise elemod.ModError('a whole-build bundle (format 1) cannot be combined '
                                       'with separate mods (format 2)')
-            dsp = stock.section(rel.sharc['section']) if any(m.sharc for m in v2) else None
+            dsp = stock.section(rel.sharc['section']) if any(m.sharc or m.sharc_raw for m in v2) else None
             linked = link.link(mods, img0, lock, sharc_stream=dsp)
             img = linked.image
         else:

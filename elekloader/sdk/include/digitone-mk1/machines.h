@@ -39,6 +39,7 @@ struct dnm_voice {                  /* the companion's account of a voice, for t
     int32_t fresh;                  /* +8  1 on the first block of a note: start its phases */
     int32_t track;                  /* +12 0-3 */
     int32_t gate;                   /* +16 1 until the note is released */
+    uint32_t idle;                  /* +20 frames not rendered (silent) since its last render, up to UINT32_MAX */
 };
 
 #define DNM_OWN_ENV 1               /* flags: the machine applies its own envelope (no AMP envelope) */

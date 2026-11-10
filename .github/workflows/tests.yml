@@ -34,13 +34,36 @@ jobs:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
+          fetch-depth: 0          # the docs' ratchet compares with the base branch
       - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
+      - name: The shop's list (elekloader/shop, or the repository variable SHOP_REPO's)
+        env:
+          SHOP_REPO: ${{ vars.SHOP_REPO || 'elekloader/shop' }}
+        run: |
+          # a public repository with catalog.json and sections.json at its root, as its main has them
+          # (docs/WEB.md, "Where the list is")
+          git clone -q --depth 1 "https://github.com/$SHOP_REPO" build/shop-list
+          echo "ELEKLOADER_CATALOG=$PWD/build/shop-list/catalog.json" >> "$GITHUB_ENV"
+          echo "SHOP_REPO=$SHOP_REPO" >> "$GITHUB_ENV"
+          echo "SHOP_COMMIT=$(git -C build/shop-list rev-parse HEAD)" >> "$GITHUB_ENV"
       - name: Unit tests
         run: python tests/test_units.py
       - name: The linker's refusals
         run: python tests/test_link_refusals.py
+      # Broken links and section references always fail. On a pull request, so does a change that
+      # makes the docs worse than its base has them: a file past its budget that grew, more history
+      # phrasing, more repeated paragraphs (.claude/skills/doc-hygiene/SKILL.md).
+      - name: The docs' audit
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          if [ -n "$BASE_REF" ]; then
+            python .claude/skills/doc-hygiene/scripts/doc_audit.py --strict --ratchet "origin/$BASE_REF"
+          else
+            python .claude/skills/doc-hygiene/scripts/doc_audit.py --strict
+          fi
 
   node:
     runs-on: ubuntu-24.04

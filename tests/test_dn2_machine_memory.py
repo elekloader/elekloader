@@ -3,7 +3,7 @@
 
 Static analysis says stock never references L2 [0x2008823c, 0x200f9fff] or L1 above core's
 bridge. This boots core and machines-dn2 with no machine, so the stock voice pipeline runs, fills
-both 64 KiB machine areas and both machines' 4 KiB L1 stacks with an address-derived pattern,
+the 128 KiB machine pool and both kinds' 4 KiB L1 stacks with an address-derived pattern,
 plays every track hard (chords on all 16 channels, filter and parameter sweeps, several
 seconds), and checks that no word of the pattern changed.
 """
@@ -14,9 +14,10 @@ import tempfile
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
 STOCK = os.environ.get('ELEKLOADER_DN2_SYX')
 DIGIKIT = os.environ.get('ELEKLOADER_DIGIKIT')
-EMUD = os.environ.get('ELEKLOADER_DIGI_EMUD')
+EMUD = os.environ.get('ELEKLOADER_DIGI_EMUD_COUPLED')   # a digi-emud built with coupled-audio
 READY = os.environ.get('ELEKLOADER_DN2_EMU_READY')
 MS = 132000  # emulated instructions per millisecond
 
@@ -33,9 +34,7 @@ class MachineMemoryTests(unittest.TestCase):
         from elekloader.devices.digitone_mk2 import DEVICE
         from elekloader.sdk import build as sdk
         profile = DEVICE.releases['1.12'].sharc
-        areas = [(profile['voice_range'][0], profile['filter_range'][1]),
-                 (profile['voice_stack'][0], profile['filter_stack'][1])]
-        self.assertEqual(profile['voice_range'][1], profile['filter_range'][0])
+        areas = [profile['pool'], (profile['voice_stack'][0], profile['filter_stack'][1])]
         self.assertEqual(profile['voice_stack'][1], profile['filter_stack'][0])
         with tempfile.TemporaryDirectory() as tmp:
             work = Path(tmp)
@@ -45,7 +44,7 @@ class MachineMemoryTests(unittest.TestCase):
             firmware.write_bytes(outputs['syx'])
             sys.path.insert(0, DIGIKIT)
             from tools.control.digi_client import Emu
-            emu = Emu.spawn_coupled(STOCK, READY, binary=EMUD, timeout=300, run_dir=work / 'run', env={'SHARC_AOT': '0'})
+            emu = Emu.spawn_coupled(STOCK, READY, binary=EMUD, timeout=300, run_dir=work / 'run')
             try:
                 def wait(ms):
                     left = int(ms * MS)

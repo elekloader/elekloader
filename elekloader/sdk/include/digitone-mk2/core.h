@@ -35,4 +35,16 @@ void core_dsp_span(unsigned *latest, unsigned *peak);
  * cycles a block). Busy (1 - idle / all) is time outside FreeRTOS's idle task, which includes
  * stock's audio task waiting, so it is not headroom. */
 enum { CORE_DSP_BUSY_RECORD = 0x2e0630 };
+/* core-dn2 0.4: 25-bit words for DSP code. Each frame to the DSP carries the newest CORE_DSP_POSTS posts in
+ * its tail (byte 0xa80), after the peek's request: tail word 4 + 2i a post's number, 1, 2, ... wrapping
+ * past 0xffffffff to 1 (0: none), and 5 + 2i its word, with the number's low seven bits in bits 25-31, in
+ * no order. DSP code takes the ones numbered after the last it took, oldest first, and skips one whose
+ * bits 25-31 do not match its number: the DSP was still receiving it. More posts than CORE_DSP_POSTS
+ * between two frames lose the oldest. From any task or interrupt. */
+enum { CORE_DSP_POSTS = 5, CORE_DSP_POST_MASK = 0x1ffffff };
+void core_dsp_post(unsigned word);
+/* core-dn2 0.4: each MIDI CC the unit receives, before the stock applies it (the MIDI task): track 0-15,
+ * 16 the FX track; flags bit 0 (CORE_MIDI_CC_AUTO), on the auto channel. Nonzero takes it. */
+enum { CORE_MIDI_CC_AUTO = 1 };
+typedef int32_t (*ev_midi_cc_fn)(int32_t track, int32_t cc, int32_t value, int32_t flags);
 #endif

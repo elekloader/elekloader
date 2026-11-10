@@ -318,7 +318,7 @@ below was found again in 1.17.
   - In the last build, the 15 mods it carried were tested in use, and all
     worked: the 14 non-USB mods but SCENES P2, and USB IO TRACKS MAIN CUE AB.
     The shop's details sheet says, mod by mod, what has been checked
-    (`on_unit` in web/catalog.json).
+    (`on_unit` in elekloader/shop's catalog.json).
   - Not yet run on an MKI.
 
 ## The Model:Cycles and Model:Samples (1.13)
@@ -543,8 +543,9 @@ smaller core-only CO02 build then flashed and booted successfully (below).
   assembly with `mise run build-c` or `mise run build-asm`; packaging a mod
   that is already compiled needs no SHARC compiler.
   [SHARC-DN2.md](SHARC-DN2.md) has where the memory comes from and what the
-  checks cannot show. The same 32 KiB can instead hold one custom synth and
-  one custom filter (machines-dn2), a half each with its own adapter: the
+  checks cannot show. Instead, machines-dn2's dispatcher and the kernels of
+  any number of synths, filters and SDK machines can share the 128 KiB
+  machine pool `[0x20090000,0x200b0000)`, which holds those 32 KiB: the
   [track-synth](MACHINES-DN2-VOICE.md) and [filter](MACHINES-DN2-FILTER.md)
   contracts. A build has either those or one master-output mod.
 - **Machine registration.** The `machines-dn2` companion owns the native

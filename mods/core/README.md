@@ -4,11 +4,11 @@ The boot copier and the hook bus for Digitakt mk1 OS 1.53 and 1.54. Every
 set of linkable (format 2) mods needs exactly one core. On its own it
 changes nothing the unit does.
 
-`core.s`, `settings.s`, `render.s`, `machines.s`, `fw.s` and `master.s` have no addresses:
+`core.s`, `settings.s`, `render.s`, `machines.s`, `fw.s`, `master.s`, `notes.s` and `midi.s` have no addresses:
 `mod.json` gives them (`defsym`), with the sites, for 1.53, and again for
 1.54 under `ports`. The stock file you build with picks them.
-[../core-dn1](../core-dn1) builds the same `core.s`, `settings.s` and
-`render.s` for the Digitone mk1, and [../core-dt2](../core-dt2) `core.s`,
+[../core-dn1](../core-dn1) builds the same `core.s`, `settings.s`,
+`render.s` and (from 5.3) `notes.s` for the Digitone mk1, and [../core-dt2](../core-dt2) `core.s`,
 `settings.s` and `fast.s` (with its own `personalize.s`) for the
 Digitakt II. The addresses in this README and in the sources' comments
 are 1.53's.
@@ -60,22 +60,44 @@ are 1.53's.
 
   With no subscriber the unit is stock. Digi EQ and Tone+FX, which took
   the same places, combine on it; [examples/master-mono](../../examples/master-mono)
-  is the smallest mod that uses it. [docs/ADAPTING.md](../../docs/ADAPTING.md),
+  is the smallest mod that uses it. Their files made before 4.1 (Digi EQ
+  1.0c, Tone+FX 3.2a3 and 4.0c) still patch those places themselves, so a
+  build with one takes core 4.0
+  ([docs/CORES.md](../../docs/CORES.md), "How a build picks one").
+  [docs/ADAPTING.md](../../docs/ADAPTING.md),
   "The master output and the master pages".
+- **4.2: the played notes** (Digitakt mk1, `notes.s`, last in `sources`).
+  Two sites more, the entries of the stock note-on and note-off routines
+  (NOTE_ON 0x400d53dc, NOTE_OFF 0x400d575e; 1.54: 0x400d5604, 0x400d5986),
+  whose note submits digipoly, digislicer and ob1 hook for themselves:
+  - `ev_live_note`: a note played live on a track, before its voice, which
+    a handler may take;
+  - `fw_note_on` and `fw_note_off`: those routines past the event.
+
+  With no subscriber the unit is stock. machine-pages 1.8 carries out the
+  SDK's mono machines on it. Each device gives the routines' addresses and
+  their frames' sizes (`NOTE_ON_LINK`, `NOTE_OFF_LINK`).
+- **4.3: `ev_midi_cc`** ([midi.s](midi.s), last in `sources`): each MIDI
+  CC the unit receives, `f(track, cc, value, flags)`, before the stock
+  applies it, as core-dn1's; a handler that returns nonzero takes it. The
+  site is the CC router's flags load and FX check, 0x400158ec (the router
+  is 0x400158d2, the same in 1.53 and 1.54). OB-1's CC hook, at the CC
+  lookup's entry (0x4007919e), links beside it.
 
 Build it with the SDK (it needs m68k binutils):
 
 ```bash
-python -m elekloader.sdk.build mods/core --stock Digitakt_OS1.53.syx      # out/core-4.1.elemod
-python -m elekloader.sdk.build mods/core --stock Digitakt_OS1.54.syx      # out/core-4.1-os1.54.elemod
-python -m elekloader.lint mods/core/out/core-4.1-os1.54.elemod --stock Digitakt_OS1.54.syx
+python -m elekloader.sdk.build mods/core --stock Digitakt_OS1.53.syx      # out/core-4.3.elemod
+python -m elekloader.sdk.build mods/core --stock Digitakt_OS1.54.syx      # out/core-4.3-os1.54.elemod
+python -m elekloader.lint mods/core/out/core-4.3-os1.54.elemod --stock Digitakt_OS1.54.syx
 ```
 
 Core 3.0's files are on the
-[core-v3.0](https://github.com/irpina/elekloader/releases/tag/core-v3.0)
-pre-release and in the mod shop; 2.1's are in the latest release (v0.4.0);
-4.0's are on the [core-v4.0](https://github.com/irpina/elekloader/releases/tag/core-v4.0)
-pre-release; 4.1 is on main, not released yet.
+[core-v3.0](https://github.com/elekloader/elekloader/releases/tag/core-v3.0)
+pre-release and in the mod shop; 2.1's are in release v0.4.0;
+4.0's are on the [core-v4.0](https://github.com/elekloader/elekloader/releases/tag/core-v4.0)
+pre-release; 4.1's are in the latest release; 4.2 and 4.3 are on main, not
+released yet.
 
 The 1.54 port is the same core: the same code, sites and sections, built
 with 1.54's addresses. Of its 39 sites, 38 are where 1.53 has them, and

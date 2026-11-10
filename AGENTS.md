@@ -69,8 +69,8 @@ python -m elekloader.patch --stock <stock.syx> --mod <core.elemod> --mod <mod.el
 | `mods/usb-ot/`, `mods/usb-midi-ot/`, `mods/usb-audio-ot/`, `mods/usb-audio-in-ot/` | the Octatrack's USB companion: owns the stock USB stack's 18 places once, composes the configuration descriptors at boot from the USB functions in `ot_usb_functions` and routes requests and endpoint completions to them (docs/ADAPTING.md, "USB functions on the Octatrack"; `elekloader/sdk/include/octatrack/usb.h`); from 0.3 it also holds the frame transfer chain's state 7 (0x40004bc0) as `ev_dsp_feed`, one more block a frame to DSP core 0 (`feed.c`); `-midi-ot` is USB MIDI, the first function; `-audio-ot` is USB audio out (UAC2, EP3 IN, fed from `ev_frame_end`), whose layout is an early card setting (settings-ot) that usb-ot's `enabled` hook reads at the controller's init; `-audio-in-ot` is its audio in, an add-on (its DSP side needs the DSP bus): usb-audio imports its record `usba_in` weakly (`octatrack/usbaudio.h`) and describes EP3 OUT, the add-on runs it from `ev_dsp_feed` and writes the host's samples over the inputs on `ev_dsp_rx` |
 | `mods/machine-pages/` | the Digitakt mk1's machine page companion (core 3.0): owns the SRC page's, the LFO page's and the render point's sites once, and draws every added machine's page from its descriptor's tail; from 1.6 the machine menu's filter tab (`menu.c`, `menu.s`); `elekloader/sdk/include/digitakt-mk1/core3.h` and `core3.inc` describe it to mods |
 | `mods/machines-dn1/` | the Digitone mk1's machines (core-dn1 5.2): voices in place of FM; `sdk_alpha.c` adapts SDK machines and their pages behind SYN2 (docs/ADAPTING.md, "Machines on the Digitone") |
-| `mods/machines-dn2/` | the Digitone II's machines (core-dn2 0.2): SHARC synths and filters in FUNC+SYN, and SDK machines' UIs (`sdk_alpha.c`; docs/MACHINES-DN2.md) |
-| `mods/sdk-alpha/` | the SDK machines' part every companion shares (`machine.c`: the index, value mapping, `.present` and its caches, the voices, the glyph blit), built by machine-pages (1.54), machines-dn1 and machines-dn2 with their own `dev.h` and `sdk_alpha.c` |
+| `mods/machines-dn2/` | the Digitone II's machines (core-dn2 0.2): SHARC synths and filters in FUNC+SYN, SDK machines (`sdk_alpha.c`), and the DSP dispatcher calling their kernels (`dispatch.s`; docs/MACHINES-DN2.md) |
+| `mods/sdk-alpha/` | the SDK machines' part every companion shares (`machine.c`: the index, value mapping, `.present` and its caches, the voices, the glyph blit, the mono machines' live keys), built by machine-pages (1.54), machines-dn1 and machines-dn2 with their own `dev.h` and `sdk_alpha.c` |
 | `mods/digiswarm-dn1/` | DigiSwarm, a whole Digitone mod on core-dn1 3.2's exclusive audio: an effects engine for the inputs: grains, micro-loops and a looper (docs/ADAPTING.md, "Exclusive audio") |
 | `mods/digiprism-dn1/` | DigiPrism, a whole Digitone mod on core-dn1 3.2's exclusive audio: a pedal for the inputs with four reorderable modules of effects (docs/ADAPTING.md, "Exclusive audio") |
 | `mods/digitide-dn1/`, `mods/digitriad-dn1/`, `mods/digireel-dn1/`, `mods/digihoard-dn1/`, `mods/digihalo-dn1/` | five more pedals for the inputs on core-dn1 3.2's exclusive audio: a wet channel and a looper, a three-voice pitch shifter, a tape time-warp, an echo collector and twelve reverbs. They share a pedal shell, a copy in each folder (`pedal.h`, `pedal_dsp.inc`, `pedal_ui.inc`, `pedal_tables.py`): the pages, SETUP, presets, TAP, BYPASS, the CPU guard and the project data |
@@ -79,8 +79,8 @@ python -m elekloader.patch --stock <stock.syx> --mod <core.elemod> --mod <mod.el
 | `packaging/`, `.github/workflows/windows-build.yml`, `macos-build.yml` | the apps: `elekloader-<version>-windows.exe`, and `elekloader-<version>-macos.dmg` (signed and notarized), with core built in (`elekloader/bundled`, never committed) |
 | `js/` | the engine in TypeScript (GPL-3.0-or-later; js/README.md): the formats, the checks, the linker, the build and the web bridge, ported from the Python and matching it byte for byte, messages included (`js/tools/parity.ts` checks with your stock files) |
 | `js/src/kit/`, `js/tools/kit.ts`, `js/examples/minimal/`, `packaging/build_kit.py`, `.github/workflows/kit-build.yml` | the kit for websites (docs/INTEGRATING.md): the builder worker, the page's client, the catalog format and elekloader's curated catalog, the lock and its checks. It names no website |
-| `web/`, `packaging/build_web.py`, `.github/workflows/pages.yml` | the web page (GitHub Pages): elekloader in Pyodide, in a worker; `bridge.py` is its only Python, a thin layer over `gui.LoaderModel` and `patch`; `catalog.json` is its mod shop's curated list (docs/WEB.md); `upstream/` holds the upstream lists for the to-do list (`sdk.octabam --sites`: the stock code octabam's newer modules hook). Everything it loads comes from the site itself |
-| `packaging/submit_mod.py`, `packaging/shop_updates.py`, `elekloader/sdk/publish.py`, `.github/workflows/mod-submission.yml`, `.github/workflows/shop-updates.yml`, `.github/ISSUE_TEMPLATE/submit-mod.yml`, `remove-mod.yml` | the shop's Submit a mod and Remove a mod forms, its daily updates, and the authors' publish command (docs/SHOP.md): the check reads a release's files, refuses a mod whose core or required mods the site can't supply (cores only from elekloader's releases), and opens the pull request that writes `web/catalog.json` in its own layout; an author's newer files of mods already in the shop merge by themselves, unless an entry is `hold` or `SHOP_AUTO_MERGE` is false (docs/WEB.md, "Submitting a mod") |
+| `web/`, `packaging/build_web.py`, `.github/workflows/pages.yml` | the web page (GitHub Pages): elekloader in Pyodide, in a worker; `bridge.py` is its only Python, a thin layer over `gui.LoaderModel` and `patch`; its mod shop's curated list is elekloader/shop's `catalog.json` (docs/WEB.md, "Where the list is"); `upstream/` holds the upstream lists for the to-do list (`sdk.octabam --sites`: the stock code octabam's newer modules hook). Everything it loads comes from the site itself |
+| `packaging/submit_mod.py`, `packaging/shop_updates.py`, `packaging/thumbs.py`, `elekloader/sdk/publish.py` (the forms and the workflows that run them are elekloader/shop's) | the shop's Submit a mod and Remove a mod forms, its daily updates, and the authors' publish command (docs/SHOP.md): the check reads a release's files, refuses a mod whose core or required mods the site can't supply (cores only from elekloader's releases), and opens the pull request that writes `web/catalog.json` in its own layout; an author's newer files of mods already in the shop merge by themselves, unless an entry is `hold` or `SHOP_AUTO_MERGE` is false (docs/WEB.md, "Submitting a mod"); a card's thumbnail (`thumb-<mod id>.png` or `thumb.png`, 128x64 in two colours) never merges by itself |
 
 Tests:
 
@@ -99,7 +99,8 @@ ELEKLOADER_AR2_SYX=... python tests/test_rytm_mk2.py
 ELEKLOADER_A4_SYX=... python tests/test_analog_four_mk2.py
 ELEKLOADER_DN2_SYX=... python tests/test_digitone2.py
 ELEKLOADER_MC_SYX=... python tests/test_model_cycles.py    # core-mc 0.3 against 0.2 and 0.1, its exports and ev_boot
-ELEKLOADER_DN2_SYX=... ELEKLOADER_CROSS=... ELEKLOADER_DIGIKIT=... ELEKLOADER_DIGI_EMUD=... ELEKLOADER_DN2_EMU_READY=... python tests/test_dn2_filter_capture.py   # the filter capture, in DigiKit's coupled emulator
+ELEKLOADER_DN2_SYX=... ELEKLOADER_CROSS=... ELEKLOADER_DIGIKIT=... ELEKLOADER_DIGI_EMUD_COUPLED=... ELEKLOADER_DN2_EMU_READY=... SELACHE=... python tests/test_dn2_filter_capture.py   # the filter capture, in DigiKit's coupled emulator
+ELEKLOADER_DIGIKIT=... SELACHE=... python tests/test_dn2_dispatch.py   # machines-dn2's dispatcher, in DigiKit's SHARC runner
 ELEKLOADER_RELEASES=<folder of stock files> python tests/test_releases.py   # every known release, and the cores for it
 ELEKLOADER_STOCK=... ELEKLOADER_OT_SYX=... ELEKLOADER_MODS=... python tests/test_gui.py   # the window, hidden (Tk)
 python packaging/build_web.py --pyodide pyodide-core-<v>.tar.bz2 --core core-*.elemod --out build/site
@@ -127,9 +128,9 @@ Rules:
   its pages or its accounts. A change to a call or a reply raises `PROTOCOL`
   (js/src/kit/protocol.ts); a change to the catalog format raises
   `CATALOG_SCHEMA`. docs/INTEGRATING.md changes with them.
-- **Docs say how things are now, once, in their home.** Before you add to
-  them, see .claude/skills/doc-hygiene/SKILL.md, and run its audit after
-  you move a heading.
+- **Docs say how things are now, once, in their home**
+  (.claude/skills/doc-hygiene/SKILL.md). Its audit must pass:
+  `doc_audit.py --strict --ratchet origin/main`.
 - **A change to the file format** needs docs/FORMAT.md, docs/ADAPTING.md and
   tests updated with it. Keep reading older files: the legacy `.dtmod`
   extension and `"dtmod"` key are still accepted.
@@ -141,7 +142,7 @@ Rules:
   files nowhere, and only offers downloads: no Web MIDI or USB. Its Python
   goes through `elekloader` unchanged. The site never holds firmware or a
   build; the only mods on it are the cores and the shop's
-  (`web/catalog.json`), each from its author's release, pinned by sha256,
+  (elekloader/shop's `catalog.json`), each from its author's release, pinned by sha256,
   under a licence that allows passing it on.
 
 Done means all of these:

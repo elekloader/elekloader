@@ -1,6 +1,6 @@
 {
  "id": "machines-dn2",
- "version": "0.2",
+ "version": "0.5",
  "license": "GPL-2.0-or-later",
  "title": "DN2 synth and filter machines",
  "description": "SHARC synths and filters, and SDK alpha machine UIs, in the Digitone II machine selector. SYN shows each synth's pages. Needs core 0.2.",
@@ -13,8 +13,9 @@
   "sdk_alpha.c",
   "../sdk-alpha/machine.c"
  ],
+ "sharc": {"artifact": "dispatch.sharc.json"},
  "cflags": [
-  "-DSOUND_SIZE=0x48b", "-DSOUND_TYPE=0xde", "-DSOUND_SLOTS=20",
+  "-DSOUND_SIZE=0x48b", "-DSOUND_TYPE=0xde", "-DSOUND_SLOTS=20", "-DTRACK_LIST=0x10058",
   "-DVIEW_METHODS=60", "-DVIEW_CUR=144", "-DVIEW_DIRTY=0x14",
   "-DBRAIN_STACK_FIRST=0x54", "-DBRAIN_STACK_LAST=0x5c", "-DSTACK_MANAGER=8", "-DMANAGER_VIEW=0xc0",
   "-DBRAIN_SCREEN=0xe8"
@@ -82,7 +83,13 @@
   "SHOWN_PAGE": "0x42432a74",
   "SOUNDS": "0x4210d0c0",
   "SYN_TITLE_RETURN": "0x400177ee",
-  "FILLRECT": "0x40114b22"
+  "FILLRECT": "0x40114b22",
+  "TRACKS_ROOT": "0x44648990",
+  "TRACK_OBJECT": "0x40030e66",
+  "PLAY_MODE_GET": "0x4004b6a6",
+  "PLAY_MODE_SET": "0x4004b6d6",
+  "MONO_PRIO_GET": "0x4004b756",
+  "MONO_PRIO_SET": "0x4004b786"
  },
  "sites": [
   {
@@ -144,6 +151,12 @@
    "stock": "222f0008202f000c",
    "op": "jmp",
    "target": "dn2_page"
+  },
+  {
+   "addr": "0x400dc154",
+   "stock": "2f02222f0008",
+   "op": "jmp",
+   "target": "dn2_range_entry"
   },
   {
    "addr": "0x400dc196",
@@ -1005,7 +1018,8 @@
  "subscribe": [
   {"event": "ev_draw", "fn": "dn2_sdk_draw", "order": 50},
   {"event": "ev_tick", "fn": "dn2_sdk_tick", "order": 50},
-  {"event": "ev_enc", "fn": "dn2_sdk_enc", "order": 50}
+  {"event": "ev_enc", "fn": "dn2_sdk_enc", "order": 50},
+  {"event": "ev_midi_cc", "fn": "dn2_sdk_midi_cc", "order": 90}
  ],
  "collections": {
   "mk2_voice_synths": 4,
@@ -1014,7 +1028,7 @@
   "sdk_alpha_machines": 4
  },
  "resources": {
-  "core": "0.2",
+  "core": "0.4",
   "names": [
    "mk2-synth:0",
    "mk2-synth:1",

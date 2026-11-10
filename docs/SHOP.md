@@ -1,6 +1,6 @@
 # How to upload your mod to the Elekloader Shop
 
-The shop is the library of mods on the [Elekloader web page](https://elekloader.github.io/elekloader/).
+The shop is the library of mods on the [elekloader Mod Shop](https://elekloader.github.io/shop/), its own site.
 Anyone can open it, tick the mods they want, and build a patched firmware in
 their browser. This page is everything you need to get your mod listed, keep
 it up to date, and take it down.
@@ -8,7 +8,12 @@ it up to date, and take it down.
 **The short version:** put your `.elemod` files in a release on your own
 GitHub repository, fill in one form, and a bot checks your files and does the
 rest. There is nothing to add to elekloader's repository, no evidence files,
-no screenshots, and no account but GitHub's.
+and no account but GitHub's. A picture for your card is optional.
+
+**Where:** the shop's list and all its forms are in
+[elekloader/shop](https://github.com/elekloader/shop/issues/new/choose), not
+in elekloader/elekloader. You don't open a pull request to list a mod: the
+form does it.
 
 The shop lists *your files*. Your code, your releases and your repository stay
 yours, and so do questions and bug reports about your mod.
@@ -19,6 +24,7 @@ yours, and so do questions and bug reports about your mod.
 - [What the check tells you](#what-the-check-tells-you)
 - [If it says no](#if-it-says-no)
 - [Updates: publish a release, that's all](#updates-publish-a-release-thats-all)
+- [A thumbnail](#a-thumbnail)
 - [Take a mod out](#take-a-mod-out)
 - [Questions](#questions)
 
@@ -63,7 +69,7 @@ step 3.)
 ### 2. Open the form
 
 Click **Submit a mod** on the shop page, or go straight to the
-[Submit a mod form](https://github.com/elekloader/elekloader/issues/new?template=submit-mod.yml).
+[Submit a mod form](https://github.com/elekloader/shop/issues/new?template=submit-mod.yml).
 You'll be asked to sign in to GitHub if you aren't.
 
 | Field | What to put |
@@ -73,7 +79,7 @@ You'll be asked to sign in to GitHub if you aren't.
 | **Summary** | One sentence for your mod's card (up to 300 characters). |
 | **Tested on a unit** | What you've run on real hardware, and what you haven't yet. Be honest: it's shown on the card, and "not yet" is a fine answer. |
 | **Licence** | Only if your files don't name one themselves. |
-| **Only these files** | Only if the release holds files you *don't* want listed. Leave it empty to submit them all. |
+| **Only these files** | Only if the release holds files you *don't* want listed. Leave it empty to submit them all. A pack of boot splashes or screen pictures: name a few examples here, not the whole set; anyone can make their own in the [Splash screen maker](https://elekloader.github.io/shop/#splash). |
 | **Updates** | Leave it unticked. See [Updates](#updates-publish-a-release-thats-all). |
 | **Checks** | Tick both: you wrote the mod (or its licence lets it be passed on), and the files carry no Elektron firmware. |
 
@@ -107,7 +113,7 @@ Copy button:
 Submit my elekloader mod to the Elekloader Shop. First read the section "Using an AI agent" of
 https://github.com/elekloader/elekloader/blob/main/docs/SHOP.md and follow it. In short: build the
 .elemod files for each OS version I support, publish them in a GitHub release on my repository, then
-open a "Submit a mod" issue on elekloader/elekloader with gh issue create. A bot checks the issue and
+open a "Submit a mod" issue on elekloader/shop with gh issue create. A bot checks the issue and
 opens the pull request, so don't open one yourself. Before you publish or submit anything, show me the
 release notes, the summary and the "Tested on a unit" text, and wait for my OK: I am the one declaring
 that I wrote the mod (or its licence lets it be passed on) and that the files hold no Elektron
@@ -182,7 +188,7 @@ the pull request itself.
    ```
 
    ```bash
-   gh issue create --repo elekloader/elekloader --title "Submit a mod: My Mod" --body-file body.md
+   gh issue create --repo elekloader/shop --title "Submit a mod: My Mod" --body-file body.md
    ```
 
    Leave "Updates" unticked unless the author wants to opt out of automatic
@@ -190,7 +196,7 @@ the pull request itself.
    instead of a release, leave the tag empty and give the whole 40-character
    commit id under "Or a commit".
 4. **Read the answer.** Within a minute or two the bot comments on the issue:
-   `gh issue view NUMBER --repo elekloader/elekloader --comments`. If it
+   `gh issue view NUMBER --repo elekloader/shop --comments`. If it
    refused something, [If it says no](#if-it-says-no) says what to change; fix
    the release (or the issue's text with `gh issue edit NUMBER --body-file
    body.md`) and the check runs again. If it passed, it has opened the pull
@@ -209,7 +215,11 @@ has four parts:
   release comes along.
 - **Good to know:** the core it builds with, how much RAM it takes, and
   which shop mods it can't share a build with. This is *not* a refusal: the
-  page just greys out those cards beside yours.
+  page just greys out those cards beside yours. If it says your mod builds
+  with an older core, *not the newest*, your mod patches a place the newest
+  core patches too: it still builds, but not beside a mod that needs the
+  newer core, until you build it on that core's event
+  ([CORES.md](CORES.md), "Which file").
 - **What it refuses, and why:** in plain words, so you know what to fix.
 
 ## If it says no
@@ -273,9 +283,16 @@ Opted out, you send each new release through the form, as the first time. To
 opt back in, submit the form again with **Updates** unticked, or put
 `Shop auto-update: on` in the release's notes.
 
+## A thumbnail
+
+Your card can show a picture of the device's screen: a `thumb.png` in the
+release, or a `thumb-<mod id>.png` for each mod of a pack, 128×64 pixels in
+two colours. [THUMBNAILS.md](THUMBNAILS.md) has
+the rules, how to make one, and how it's reviewed.
+
 ## Take a mod out
 
-The [Remove a mod form](https://github.com/elekloader/elekloader/issues/new?template=remove-mod.yml)
+The [Remove a mod form](https://github.com/elekloader/shop/issues/new?template=remove-mod.yml)
 takes your files out of the shop: all of them, or the ones you name. When you
 own the repository and no other shop mod needs your files, it goes through by
 itself. Otherwise a maintainer looks first, and the check's comment says which

@@ -24,39 +24,29 @@ export type SharcProfile = {
   protected: [number, number, string][]         // loader-byte exclusions
   ownedRanges: Range[]                         // qualified loader-byte intervals only
   patchRanges?: Range[]                        // exact stock instruction intervals
+  raw?: boolean                                 // takes raw payloads (`sharc_raw`: sharc.rawPayload), the Digitakt II
   activeKeyedCore?: { segments: [number, string, string][], zero: [number, number][], entries: Record<string, number>, stackBytes: number }
   hook?: [number, string, string]               // loader address, stock bytes, replacement bytes
   abi?: string
   pitchRange?: Range
   l2Abi?: string
   l2AppRange?: Range
-  voiceAbi?: string
-  voiceRange?: Range
-  voiceTable?: string
-  voiceAdapterSha256?: string
-  voiceAdapterBytes?: number
-  voiceStateBytes?: number
-  voiceBindingOffset?: number
-  voiceStack?: Range                            // the callback's own stack, in L1
-  voiceStackMax?: number
-  voiceHook?: [number, string, string]
-  filterAbi?: string
-  filterRange?: Range
-  filterTable?: string
-  filterGAt?: number
-  filterAdapterSha256?: string
-  filterAdapterBytes?: number
-  filterStateBytes?: number
-  filterBindingOffset?: number
+  kernelAbi?: string                            // machine kernels (sharc.placeKernels): the dispatcher and every mod's kernels
+  pool?: Range
+  kernelStateBytes?: number
+  // The tables whose entries name a machine by id: [table, kernel kind, needs its kernel].
+  kernelRegistrations?: [string, 'sdk' | 'mk2-voice' | 'mk2-filter', boolean][]
+  filterGAt?: number                            // mk2_filter's g (mk2/machines.h)
+  voiceStack?: Range                            // the kernels' own stack, in L1
+  voiceHook?: [number, string]
   filterStack?: Range
-  stackGuard?: number                           // at each machine stack's base; the adapters check it
+  stackGuard?: number                           // at each machine stack's base; the dispatcher checks it
   peekRange?: Range                             // core-dn2's DSP peek (mods/core-dn2/peek.s), with any SHARC mod
   peekCode?: string
   peekHook?: [number, string, string]
   dataSites?: Record<number, [string, string]>   // optional companion sites: exact stock/replacement bytes
-  filterStackMax?: number
-  filterHook?: [number, string, string]
-  filterCapture?: [number, string, string]      // the filter setup table's internal type 0 entry, sent to the adapter
+  filterHook?: [number, string]
+  filterCapture?: [number, string]              // the filter setup table's internal type 0 entry, sent to the dispatcher
   coreRange?: Range
   stackMax?: number
   codeGuardBytes?: number
@@ -142,11 +132,30 @@ export const DIGITAKT_MK2: Device = {
   ...base,
   key: 'digitakt-mk2', name: 'Digitakt II', sysexId: 0x14,
   releases: [
-    rel('1.17', '26c22f6652625ac2cfd47f7ee970d388ed8b6427dae3563c0a6a2f2d334350d5',
+    { ...rel('1.17', '26c22f6652625ac2cfd47f7ee970d388ed8b6427dae3563c0a6a2f2d334350d5',
       'a1e7b657b705eba1a19d81c33c1e11ba9c409816447ad74005d7bbf36da6d964', 3275616),
+      // Section 7 for raw SHARC mods (`sharc_raw`, docs/FORMAT.md): new loads in the L2 the stock stream leaves
+      // unused, and patches of whole stock instructions in the L1 code load. Measured on 1.17.
+      sharc: {
+        section: 7, processor: 'ADSP-21569', isa: 'sharc+-visa', siliconRevision: null,
+        storedSha256: '39113a8ae7f7ac7336bda4a56eeb45108f0618ea451bcf9f466803017184375d', storedLen: 184856,
+        decodedSha256: '0f514a12a2255f5c081e292c47f1f29462003177658da4bbae0a22fd737fffa2', decodedLen: 321016,
+        storedMax: 0x100000, decodedMax: 0xfffff, recordCount: 104,
+        l1Aliases: [[0x240000, 0x270000, 0x28240000], [0x2c0000, 0x2f0000, 0x282c0000],
+          [0x300000, 0x320000, 0x28300000], [0x380000, 0x3a0000, 0x28380000]],
+        l2Bytes: [0x20000000, 0x20100000], l2Pc16: [0xb80000, 0xc00000, 0x20000000],
+        ddrBytes: [0x80000000, 0xa0000000],
+        protected: [[0x200fa000, 0x200fe000, 'DT2 L2 window two functions load as literals'],
+          [0x200fe000, 0x20100000, 'Boot ROM workspace'], [0x282ec000, 0x282f0000, 'L1 block 1 cache'],
+          [0x2831c000, 0x28320000, 'L1 block 2 cache'], [0x2839c000, 0x283a0000, 'L1 block 3 cache']],
+        raw: true,
+        ownedRanges: [[0x2001ab7c, 0x200fa000]],
+        patchRanges: [[0x283827cc, 0x283827cc + 104500]],
+      } },
   ],
   stage: 0x40400000, flashAt: 0x80000, flashLimit: 0x380000, trailer: 'hmac', hmacKeyFrom: [2, 'Master Overdrive'],
-  areas: { ddr: [0x47f00000, 0x47f40000], 'sram-tail': [0x8000f100, 0x80010000], 'sram-block': [0x80006e80, 0x80008000] },
+  // ddr-low: below the linker's area, above the DSP buffers; what mods that place code at fixed addresses claim
+  areas: { ddr: [0x47f00000, 0x47f40000], 'ddr-low': [0x47e7b000, 0x47f00000], 'sram-tail': [0x8000f100, 0x80010000], 'sram-block': [0x80006e80, 0x80008000] },
   ddr: [0x47f00000, 0x47f40000], sramCode: [0x8000f100, 0x80010000], fastTable: 'core_fast',
   recovery: 'hold FUNC while powering on for the STARTUP menu, press TRIG 4 (OS UPGRADE), '
     + 'then send the stock .syx over MIDI (not USB)',
@@ -279,22 +288,18 @@ export const DIGITONE_MK2: Device = {
           [0x2839c000, 0x283a0000, 'L1 block 3 cache']],
         abi: 'dn2-master-mono32-v1', pitchRange: [0x282dda00, 0x282dde00],
         l2Abi: 'dn2-master-mono32-l2-v1', l2AppRange: [0x20090000, 0x20098000],
-        voiceAbi: 'dn2-voice-mono32-l2-v1', voiceRange: [0x20090000, 0x200a0000],
-        voiceTable: 'mk2_voice_synths',
-        voiceAdapterSha256: '5bbf8b98c5ff13d4121a17e2d7a8ca550f05821b4564a67c0ce84737319da3f0',
-        voiceAdapterBytes: 2048, voiceStateBytes: 1024, voiceBindingOffset: 65024, voiceStackMax: 2048,
+        kernelAbi: 'dn2-kernel-v1', pool: [0x20090000, 0x200b0000], kernelStateBytes: 256,
+        kernelRegistrations: [['mk2_voice_synths', 'mk2-voice', true], ['mk2_voice_filters', 'mk2-filter', true],
+          ['sdk_alpha_machines', 'sdk', false]],
+        filterGAt: 16,
         voiceStack: [0x282de000, 0x282df000],
-        voiceHook: [0x20004a36, '8715ffffeeff', '3e06bc000080'],
-        filterAbi: 'dn2-filter-mono32-l2-v1', filterRange: [0x200a0000, 0x200b0000],
-        filterTable: 'mk2_voice_filters', filterGAt: 16,
-        filterAdapterSha256: '10576ba32964c88b620a72c73cd46aadb8bb66095eef98cfce29280f648b42c4',
-        filterAdapterBytes: 2048, filterStateBytes: 1024, filterBindingOffset: 65024, filterStackMax: 2048,
+        voiceHook: [0x20004a36, '8715ffffeeff'],
         filterStack: [0x282df000, 0x282e0000], stackGuard: 0x57ac6a2d,
         peekRange: [0x282e0000, 0x282e0800], peekHook: [0x28393cbe, '01112600388a', '3e0617000000'],
         dataSites: { 0x20011576: ['3e07ff00f0ff', '3e0617004501'] },
         peekCode: '01112600388a0d102e001006ddc20006170050000d102e001806ddc50d112e0018068e0fff03decc200617005000be76bf860e102e0020060d112e0020060f102e0010060b102e001c060f112e001c06eec2000617005000dec1fbc10e102e003006eec50e112e0030060f112e0034060d112e0038060b102e003c06bbc20006170047008001fbb0220617004d000f112e003c060d112e0040060e112e004406089c7d058b0f800aabc0bf703f09089480060b0f0000ffff8401db0b0e0f0000eed5bec3200617003e0108940107089482078401de2aafce0b0f5a5a5a5aabce08948305abc3200617003e018b0ff0ffa001db0a0b102e000006abc30006170089000a112e0000068b0f00000b112e000406bfc68d0fff038001bdb0240617002c018b0f03008401eb0b200617002c013e020000bf02bec08001beb0040617002c010d0f240000008001edb0020617002c010d0f270000008001bdb004061700f1000d0f2c0000008001edb0020617002c010d0f2e0000c08001bdb004061700f1000d0f300000008001edb0020617002c010d0f310000c08001bdb004061700f1000d0f380000008001edb0020617002c010d0f390000c08001bdb004061700f1000d0f002000008001edb0020617002c010d0f0f2000a08001bdb0240617002c010d102e0004068b0fffffa001db0b3e020000bb02bec0bf70bf89089680053e0233000d00100617000a018e0ff0ffa001be0b0e0f0000ffffbecc8e0f0f008401ae0e3e020000ee0cedcd3e020000ee10ebcd08990207ddc53e020000bf01dbc30206170026018d0f00000d112e0004063e061c00629e8e0f0f008401ae0e3e020000ee0c8d0fff0fedcd3e020000ee10089902073e061c00629e8e0f0000089902073e061c00629ebe763f8001102e00140600112e00140601c1810fb80b800101b02206b800ab8a01102e00100610c001112e0010063e06b800ab8a0100',
-        filterHook: [0x28392b0e, '140f5280c0db', '3e06bd000000'],
-        filterCapture: [0x8052dba4, '7e921c00', '8703bd00'],
+        filterHook: [0x28392b0e, '140f5280c0db'],
+        filterCapture: [0x8052dba4, '7e921c00'],
         coreRange: [0x282dd600, 0x282dda00], stackMax: 544, codeGuardBytes: 64,
         keyedPitchTable: [920, '314d5900969c5e00d23c6400b1326a004c837000073477009b4a7e0015cd8500e1c18d00c92f9600031e9f002e94a800'],
         ownedRanges: [[0x282dd600, 0x282e0800], [0x20090000, 0x200b0000]],

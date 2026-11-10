@@ -23,13 +23,20 @@
     <span class="mark"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13.5 3.5 6.5 13h5l-1 7.5 7-9.5h-5z"/></svg></span>
     <span class="brand-text"><strong>elekloader</strong><small>Elektron firmware mods</small></span></a>
   <nav class="side-nav">
-    <a class="nav-link" id="nav-library" href="#library">
+    <a class="nav-link shop-only" id="nav-library" href="#library">
       <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></svg>Mod Shop</a>
+    <!-- the shop's sections (shop/sections.json), one link each, and under the open one its pages
+         (its mods, its tools such as the Splash screen maker): app.js renderSections -->
+    <div class="shop-only" id="nav-sections"></div>
+    <!-- the builder page (build_web.py --page builder): the shop is a site of its own; app.js sets each
+         data-shop-link's address from <html data-shop-url> -->
+    <a class="nav-link shop-link builder-only" data-shop-link href="https://elekloader.github.io/shop/">
+      <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></svg>Mod Shop<span class="shop-out" aria-hidden="true">&#8599;</span></a>
     <a class="nav-link" id="nav-build" href="#build">
       <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M13.5 3.5 6.5 13h5l-1 7.5 7-9.5h-5z"/></svg>Build Firmware<span class="badge" id="nav-count">0</span></a>
     <a class="nav-link" id="nav-make" href="#make">
       <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8zM18.5 15.5l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7z"/></svg>Make your own mod!</a>
-    <a class="nav-link" id="nav-submit" href="#submit">
+    <a class="nav-link shop-only" id="nav-submit" href="#submit">
       <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5M5 15v3.5A1.5 1.5 0 0 0 6.5 20h11a1.5 1.5 0 0 0 1.5-1.5V15"/></svg>Submit your mod</a>
     <a class="nav-link" id="nav-contribute" href="#contribute">
       <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/></svg>Contribute</a>
@@ -41,8 +48,8 @@
       <a class="sub-link" href="#contribute/pr" data-cpage="pr">Your first pull request</a>
       <a class="sub-link" href="#contribute/test" data-cpage="test">Test before you flash</a>
     </div>
-    <h3 class="side-h">Categories</h3>
-    <ul class="side-list" id="nav-types"></ul>
+    <h3 class="side-h shop-only">Categories</h3>
+    <ul class="side-list shop-only" id="nav-types"></ul>
     <h3 class="side-h">Profiles
       <button type="button" class="round" id="save-profile" title="New profile: a stock OS and its mods" aria-label="New profile">
         <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button></h3>
@@ -56,8 +63,9 @@
 </aside>
 
 <header class="topbar" id="topbar">
-  <label class="search"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4 4"/></svg>
+  <label class="search shop-only"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4 4"/></svg>
     <input type="search" id="search" placeholder="Search mods" aria-label="Search mods" autocomplete="off"></label>
+  <a class="btn shop-btn builder-only" data-shop-link href="https://elekloader.github.io/shop/"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></svg>Browse the Mod Shop</a>
   <span class="grow"></span>
   <a class="btn outline" href="#build" id="cfg-btn">
     <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M13.5 3.5 6.5 13h5l-1 7.5 7-9.5h-5z"/></svg>Build<span class="count" id="cfg-count">0</span></a>
@@ -108,7 +116,7 @@
     <div class="filters">
       <span class="chips" id="device-buttons" role="group" aria-label="Device"></span>
       <span class="grow"></span>
-      <a class="btn outline submit-mod" href="https://github.com/elekloader/elekloader/issues/new?template=submit-mod.yml" target="_blank" rel="noopener"
+      <a class="btn outline submit-mod" href="https://github.com/elekloader/shop/issues/new?template=submit-mod.yml" data-shop-form="submit-mod.yml" target="_blank" rel="noopener"
          title="Made a mod? Submit its GitHub release: a check runs on it, and a maintainer adds it to the shop.">Submit a mod</a>
       <label class="inline" for="f-sort">Sort</label>
       <select id="f-sort">
@@ -116,10 +124,12 @@
         <option value="name">Name</option>
         <option value="device">Device</option>
       </select>
+      <a class="btn outline small" href="#splash" title="Your own picture or animation on the boot screen, made into a mod here">Make a splash screen</a>
       <button type="button" class="btn outline small" id="add-mods">+ Add your own .elemod</button>
       <input type="file" id="mod-files" accept=".elemod,.dtmod" multiple hidden>
     </div>
     <p class="device-note" id="device-note"></p>
+    <div class="section-promos" id="lib-sections"></div>
     <div class="shelves" id="lib-cards"></div>
     <p class="muted small lib-foot">Every mod here comes from its author's release, checked by its sha256
       against the site's list. Your own <code>.elemod</code> files appear here too, under Your files.</p>
@@ -341,6 +351,8 @@ python -m elekloader.patch --stock Digitakt_OS1.53.syx --mod mods/core/out/core-
           writes the code, checks it on your computer, and builds a firmware file you can try on your unit. This page
           is what a mod is, what you need, what to ask, and what to expect.</p>
       </header>
+      <p class="callout">Just want your own picture on the boot screen? The <a href="#splash">Splash screen maker</a>
+        makes that mod right here, from a PNG or a GIF, with no agent and no setup.</p>
 
       <h2>What is a mod?</h2>
       <p>A mod is a small file (<code>.elemod</code>) that adds something to your Elektron's operating system: a new
@@ -419,6 +431,139 @@ python -m elekloader.patch --stock Digitakt_OS1.53.syx --mod mods/core/out/core-
     </article>
   </section>
 
+  <!-- the Splash screen maker (splash.js, loaded when the view first opens; gif.js decodes GIFs) -->
+  <section class="view" id="view-splash" aria-labelledby="splash-title" hidden>
+    <header class="page-head">
+      <p class="eyebrow" id="splash-eyebrow">No coding needed</p>
+      <h1 id="splash-title">Splash screen maker</h1>
+      <p class="sub">Put your own picture or animation on the boot screen. Drop in a PNG or a GIF, adjust it until the
+        preview looks right, and it becomes a mod: add it to your build like any other. For the Digitakt and the
+        Digitone / Digitone Keys. Your picture stays in this tab: nothing is uploaded.</p>
+    </header>
+    <nav class="cnav chips secnav" data-secnav aria-label="This section's pages"></nav>
+    <div class="splash-grid">
+      <div class="col">
+        <section class="step" aria-labelledby="sp-h1">
+          <h2 id="sp-h1"><span class="n">01</span>Your picture</h2>
+          <div class="drop mini" id="sp-drop" tabindex="0" role="button" aria-describedby="sp-drop-text">
+            <svg class="drop-ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="14" rx="2"/><circle cx="9" cy="10" r="1.8"/><path d="m20.5 16-5-5-8 8"/></svg>
+            <span id="sp-drop-text"><strong>Drop a PNG or a GIF here</strong>, or click to choose one. JPEG and WebP work
+              too. An animated GIF plays as it does in a browser.</span>
+          </div>
+          <input type="file" id="sp-file" accept="image/png,image/gif,image/jpeg,image/webp,.png,.gif,.jpg,.jpeg,.webp" hidden>
+          <p class="bad small" id="sp-error" role="alert" hidden></p>
+          <p class="muted small" id="sp-source" hidden></p>
+          <p class="small"><button type="button" class="linkish muted" id="sp-sample">No picture handy? Try a sample.</button></p>
+        </section>
+
+        <section class="step sp-preview-step" aria-labelledby="sp-h2">
+          <h2 id="sp-h2"><span class="n">02</span>Preview<span class="tally" id="sp-tally"></span></h2>
+          <div class="oled" id="sp-oled">
+            <canvas id="sp-screen" width="128" height="64" role="img" aria-label="The boot screen, as your unit will show it"></canvas>
+            <p class="oled-empty" id="sp-empty">Your picture appears here, 128 × 64 pixels in black and white, as the
+              screen shows it.</p>
+          </div>
+          <div class="sp-player" id="sp-player" hidden>
+            <button type="button" class="btn outline small" id="sp-play" aria-pressed="true">Pause</button>
+            <input type="range" id="sp-scrub" min="0" max="0" step="1" value="0" aria-label="Position in the animation">
+            <span class="mono small muted" id="sp-time"></span>
+          </div>
+          <p class="muted small" id="sp-facts"></p>
+          <p class="warn small" id="sp-warn" hidden></p>
+        </section>
+      </div>
+
+      <div class="col">
+        <section class="step" aria-labelledby="sp-h3">
+          <h2 id="sp-h3"><span class="n">03</span>Adjust<button type="button" class="btn outline small sp-reset" id="sp-reset">Reset</button></h2>
+          <div class="sp-controls" id="sp-controls">
+            <fieldset class="sp-group">
+              <legend>Fit</legend>
+              <div class="seg" role="radiogroup" aria-label="Fit">
+                <label><input type="radio" name="sp-fit" value="fit" checked><span>Fit</span></label>
+                <label><input type="radio" name="sp-fit" value="fill"><span>Fill</span></label>
+                <label><input type="radio" name="sp-fit" value="stretch"><span>Stretch</span></label>
+              </div>
+            </fieldset>
+            <label class="sp-range">Zoom <output id="sp-zoom-v">100%</output>
+              <input type="range" id="sp-zoom" min="25" max="400" step="5" value="100"></label>
+            <label class="sp-range">Move left / right <output id="sp-dx-v">0</output>
+              <input type="range" id="sp-dx" min="-128" max="128" step="1" value="0"></label>
+            <label class="sp-range">Move up / down <output id="sp-dy-v">0</output>
+              <input type="range" id="sp-dy" min="-64" max="64" step="1" value="0"></label>
+            <fieldset class="sp-group">
+              <legend>Black and white</legend>
+              <div class="seg" role="radiogroup" aria-label="How shades become black and white">
+                <label><input type="radio" name="sp-dither" value="threshold" checked><span>Sharp</span></label>
+                <label><input type="radio" name="sp-dither" value="floyd"><span>Dither</span></label>
+                <label><input type="radio" name="sp-dither" value="atkinson"><span>Atkinson</span></label>
+                <label><input type="radio" name="sp-dither" value="bayer"><span>Pattern</span></label>
+              </div>
+            </fieldset>
+            <label class="sp-range">Threshold <output id="sp-threshold-v">128</output>
+              <input type="range" id="sp-threshold" min="1" max="254" step="1" value="128"></label>
+            <label class="sp-range">Brightness <output id="sp-bright-v">0</output>
+              <input type="range" id="sp-bright" min="-100" max="100" step="1" value="0"></label>
+            <label class="sp-range">Contrast <output id="sp-contrast-v">0</output>
+              <input type="range" id="sp-contrast" min="-100" max="100" step="1" value="0"></label>
+            <div class="sp-checks">
+              <label><input type="checkbox" id="sp-invert"> Invert</label>
+              <label><input type="checkbox" id="sp-bgwhite"> Transparent parts lit</label>
+            </div>
+            <div class="sp-anim" id="sp-anim" hidden>
+              <label class="sp-range">Speed <output id="sp-speed-v">1×</output>
+                <input type="range" id="sp-speed" min="0" max="8" step="1" value="4"></label>
+              <div class="sp-checks">
+                <label><input type="checkbox" id="sp-loop" checked> Loop</label>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="step" aria-labelledby="sp-h4">
+          <h2 id="sp-h4"><span class="n">04</span>Make the mod</h2>
+          <div class="sp-out">
+            <label class="field">Its name
+              <input id="sp-title" maxlength="40" placeholder="My splash" autocomplete="off"></label>
+            <label class="field"><span>Your name <span class="muted">(optional)</span></span>
+              <input id="sp-author" maxlength="60" autocomplete="off"></label>
+            <label class="field">For
+              <select id="sp-target"></select></label>
+          </div>
+          <p class="muted small" id="sp-target-note"></p>
+          <div class="sheet-acts">
+            <button type="button" class="btn primary" id="sp-add" disabled>Add to my build</button>
+            <button type="button" class="btn outline" id="sp-download" disabled>Download .elemod</button>
+          </div>
+          <p class="small" id="sp-status" role="status"></p>
+          <div class="recovery sp-note">
+            <h3>Good to know</h3>
+            <p>Your splash is shown while the unit starts up, in place of Elektron's intro animation: about 3.3
+              seconds, at 15 frames a second. Then the screen carries on as usual. It needs the core mod, which comes
+              with it, and only one splash mod can go in a build.</p>
+            <p>To go back, build without it, or send Elektron's own OS file to your unit.</p>
+          </div>
+        </section>
+      </div>
+    </div>
+  </section>
+
+  <!-- a section of the shop (#s/<id>, shop/sections.json): whole repositories' mods, one shelf a pack -->
+  <section class="view" id="view-section" aria-labelledby="sec-title" hidden>
+    <header class="page-head sec-head">
+      <div class="head-text">
+        <p class="eyebrow"><a href="#library">Mod Shop</a> / Section</p>
+        <h1 id="sec-title">Loading…</h1>
+        <p class="sub" id="sec-sub"></p>
+      </div>
+    </header>
+    <nav class="cnav chips secnav" data-secnav aria-label="This section's pages"></nav>
+    <div class="filters">
+      <span class="chips" id="sec-devices" role="group" aria-label="Device"></span>
+    </div>
+    <div class="shelves" id="sec-packs"></div>
+  </section>
+
   <section class="view" id="view-submit" aria-labelledby="submit-title" hidden>
     <article class="guide-page">
       <header class="page-head">
@@ -432,7 +577,7 @@ python -m elekloader.patch --stock Digitakt_OS1.53.syx --mod mods/core/out/core-
       <h2>Using an AI agent?</h2>
       <p>Most people do. Paste this to your agent. It can do the whole thing from the command line: build, release,
         submit, and read the bot's answer.</p>
-      <pre class="prompt"><code id="agent-prompt">Submit my elekloader mod to the Elekloader Shop. First read the section "Using an AI agent" of https://github.com/elekloader/elekloader/blob/main/docs/SHOP.md and follow it. In short: build the .elemod files for each OS version I support, publish them in a GitHub release on my repository, then open a "Submit a mod" issue on elekloader/elekloader with gh issue create. A bot checks the issue and opens the pull request, so don't open one yourself. Before you publish or submit anything, show me the release notes, the summary and the "Tested on a unit" text, and wait for my OK: I am the one declaring that I wrote the mod (or its licence lets it be passed on) and that the files hold no Elektron firmware. Then read the bot's comment on the issue and fix whatever it refuses.</code></pre>
+      <pre class="prompt"><code id="agent-prompt">Submit my elekloader mod to the Elekloader Shop. First read the section "Using an AI agent" of https://github.com/elekloader/elekloader/blob/main/docs/SHOP.md and follow it. In short: build the .elemod files for each OS version I support, publish them in a GitHub release on my repository, then open a "Submit a mod" issue on elekloader/shop with gh issue create. A bot checks the issue and opens the pull request, so don't open one yourself. Before you publish or submit anything, show me the release notes, the summary and the "Tested on a unit" text, and wait for my OK: I am the one declaring that I wrote the mod (or its licence lets it be passed on) and that the files hold no Elektron firmware. Then read the bot's comment on the issue and fix whatever it refuses.</code></pre>
       <p><button type="button" class="btn primary small" id="copy-prompt">Copy the prompt</button>
         <span class="muted small" id="copy-note" role="status"></span></p>
       <p>The agent needs GitHub's command line tool (<code>gh</code>), signed in as you. You stay in charge of two
@@ -463,7 +608,7 @@ python -m elekloader.patch --stock Digitakt_OS1.53.syx --mod mods/core/out/core-
         <li><strong>A maintainer merges</strong> the pull request the bot opened, and the next deploy puts your mod on
           the Mod Shop.</li>
       </ol>
-      <p><a class="btn primary" href="https://github.com/elekloader/elekloader/issues/new?template=submit-mod.yml" target="_blank" rel="noopener">Open the Submit a mod form</a></p>
+      <p><a class="btn primary" href="https://github.com/elekloader/shop/issues/new?template=submit-mod.yml" data-shop-form="submit-mod.yml" target="_blank" rel="noopener">Open the Submit a mod form</a></p>
 
       <h2>After it's in</h2>
       <p><strong>Publish a release, and the shop takes it.</strong> Every day the shop looks for newer releases of the
@@ -481,7 +626,7 @@ python -m elekloader.patch --stock Digitakt_OS1.53.syx --mod mods/core/out/core-
         <li><strong>Build your <code>.elemod</code></strong> for each OS version.
           <a href="https://github.com/elekloader/elekloader/blob/main/docs/ADAPTING.md" rel="noreferrer" target="_blank">Adapting your mod</a></li>
         <li><strong>Take a mod out</strong> of the shop.
-          <a href="https://github.com/elekloader/elekloader/issues/new?template=remove-mod.yml" rel="noreferrer" target="_blank">Remove a mod form</a></li>
+          <a href="https://github.com/elekloader/shop/issues/new?template=remove-mod.yml" data-shop-form="remove-mod.yml" rel="noreferrer" target="_blank">Remove a mod form</a></li>
         <li><strong>Stuck?</strong> Leave a comment on your issue and a maintainer will look.
           <a href="https://github.com/elekloader/elekloader/issues" rel="noreferrer" target="_blank">The issues</a></li>
       </ul>
@@ -499,6 +644,12 @@ python -m elekloader.patch --stock Digitakt_OS1.53.syx --mod mods/core/out/core-
         <p class="sub" id="build-sub">Drop in your stock OS file, check the mods you ticked, and build.</p>
       </div>
     </header>
+    <a class="shop-banner builder-only" data-shop-link href="https://elekloader.github.io/shop/">
+      <span class="banner-ico" aria-hidden="true"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></svg></span>
+      <span class="promo-text"><strong>Looking for mods? They're in the elekloader Mod Shop.</strong>
+        <span>Over a hundred mods for the Digitakt, Digitone, Octatrack, Analog Rytm and more: pick them there and
+          build in the same place. This page builds with <code>.elemod</code> files you already have.</span></span>
+      <span class="btn primary">Open the Mod Shop</span></a>
     <div class="build-grid">
       <div class="col">
         <section class="step" id="step-stock">
@@ -584,13 +735,15 @@ python -m elekloader.patch --stock Digitakt_OS1.53.syx --mod mods/core/out/core-
 </main>
 
 <nav class="tabbar" aria-label="Views">
-  <a class="tab" id="tab-library" href="#library">
+  <a class="tab builder-only" data-shop-link href="https://elekloader.github.io/shop/">
+    <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></svg>Shop</a>
+  <a class="tab shop-only" id="tab-library" href="#library">
     <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></svg>Mod Shop</a>
   <a class="tab" id="tab-build" href="#build">
     <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M13.5 3.5 6.5 13h5l-1 7.5 7-9.5h-5z"/></svg>Build Firmware<span class="badge" id="tab-count">0</span></a>
   <a class="tab" id="tab-make" href="#make">
     <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8zM18.5 15.5l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7z"/></svg>Make</a>
-  <a class="tab" id="tab-submit" href="#submit">
+  <a class="tab shop-only" id="tab-submit" href="#submit">
     <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5M5 15v3.5A1.5 1.5 0 0 0 6.5 20h11a1.5 1.5 0 0 0 1.5-1.5V15"/></svg>Submit</a>
   <a class="tab" id="tab-contribute" href="#contribute">
     <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/></svg>Contribute</a>

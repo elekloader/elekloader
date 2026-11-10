@@ -7,16 +7,29 @@ category, using the `mk2_*` interface in `mk2/machines.h`. A mod registers
 a descriptor and carries its DSP code, without firmware addresses or hook
 sites of its own; those pages show how.
 
-`machines-dn2` 0.2 also adapts the private [SDK alpha's machine UIs](SDK.md)
+`machines-dn2` also adapts the private [SDK alpha's machines](SDK.md)
 through `sdk_alpha_machines`: synth IDs 5..127 in the same selector, with
 two SYN pages and fifteen logical knobs. Their values use sound slots
-25..39, shared placements use one value, and the DSP receives FM TONE's
-type. These machines carry no SHARC payload: the builder refuses an SDK
-machine's `render`, and a knob whose `def` is not its `min`. The
-[native voice input](../elekloader/sdk/include/digitone-mk2/voice.h) has
-pitch, start, slot, controls and state, but not the track and velocity
-`elek_voice` gives. SDK and SHARC synths share
-the `mk2-synth` ID namespace; filters have their own namespace.
+25..39, shared placements use one value, and selecting the machine or
+clearing a sound starts each knob at its `def`. A machine with a `render`
+plays its SHARC kernel through the same dispatcher as the synths below
+([its SDK section](SDK.md#render-on-the-digitone-ii));
+the DSP receives FM TONE's type for one without. From 0.4 a mono machine's
+`.play` and `.prio` ([SDK.md](SDK.md#play-and-prio)) set its track's TRK
+SETUP PLAY MODE and MONO NOTE PRIO, through the menu's own setters
+(`0x4004b6d6`, `0x4004b786`) on each tick, so the OS's voice allocator
+carries them out and a change in the menu goes back. Its `ev_midi_cc` handler
+posts each CC on a track, with the track's machine, to the dispatcher
+(`core_dsp_post`, core-dn2 0.4, from machines-dn2 0.5), which keeps each track's CCs for the
+render's `v->cc` ([its SDK section](SDK.md#render-on-the-digitone-ii)).
+SDK and SHARC synths
+share the `mk2-synth` ID namespace; filters have their own namespace.
+
+A build takes any number of SHARC synths and filters, from any number of
+mods, beside SDK machines. machines-dn2 carries the DSP dispatcher
+(`dispatch.s`) that calls each one's kernel. The linker places it only
+when the build has a kernel, so machines-dn2 combines with a master-output
+SHARC mod when no mod in the build has one.
 
 Each descriptor starts with a permanent ID: 5..31 for synths, 6..31 for
 filters, two separate namespaces. Give each independently distributed mod a
@@ -62,7 +75,10 @@ A small wrapper gives the native track-type accessor the real reader without emb
 parameter rows after the stock table's 321: at boot, before the OS's
 initializers, the companion copies the table (`0x401f83a4`) to its RAM,
 points the table's 56 references at the copy and raises its 54 row bounds
-by 56, for 40 SHARC synth knobs, fifteen shared SDK knobs and a filter's G; the value-class accessor (`0x400c257c`) gives an added row its
+by 56, for 40 SHARC synth knobs, fifteen shared SDK knobs and a filter's G. Every synth's page p,
+knob k shares row 321 + 8p + k, and every filter with a G shares G's row: each tick relabels them for
+the active track's machine, and a hook on the range accessor (`0x400dc154`) gives them, and the SDK
+knobs' rows, its defaults. The value-class accessor (`0x400c257c`) gives an added row its
 template's object (the SDK knobs' rows keep their own formatter, `+0x34`, which `0x400c25a0` calls with the value and a buffer), and the bounds that end loops keep the stock count. The CC
 and NRPN lookups (`0x400dc978`, `0x400dca5a`) ask FM TONE's map for a paged
 synth, and an FM TONE row found there becomes the synth's row for its slot. The sound-load bound

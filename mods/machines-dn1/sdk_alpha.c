@@ -125,6 +125,23 @@ const struct sdk_alpha_entry *dnm_sdk_active(void)
     return t < 4 && fw_kit ? sdk_alpha_find(FW_SOUND_SLOT(fw_kit, t, 0) >> 8) : 0;   /* slot 0: the machine */
 }
 
+/* ev_voice_on (machines.c), the render: a mono machine's track sounds on one voice, whichever the stock
+ * gives each note. The track's voice before, while the track still has it, hands its state over and goes
+ * silent: -> that voice, whose envelope machines.c moves, or -1. */
+static int8_t mono_voice[4] = { -1, -1, -1, -1 };
+int32_t dnm_sdk_mono_on(int32_t voice, int32_t track)
+{
+    if ((uint32_t)track >= 4)
+        return -1;
+    const struct sdk_alpha_entry *e = sdk_alpha_find(dev_track_machine(track));
+    int32_t from = mono_voice[track];
+    mono_voice[track] = e && e->machine->play != ELEK_POLY ? voice : -1;
+    if (mono_voice[track] < 0 || from < 0 || from == voice || fw_voice_track[from] != track)
+        return -1;
+    sdk_alpha_swap(from, voice);
+    return from;
+}
+
 /* SDK machine i, or 0 past the last. */
 const struct dnm_machine *dnm_sdk_machine(int32_t i)
 {
@@ -343,8 +360,8 @@ static void render(int32_t voice, int32_t *block, const struct dnm_voice *v)
         int32_t slot = ((const int32_t *)fw_params)[15 * dnm_sdk_param(sdk_pos[k]) + 1];
         raw[k] = render_params ? render_params[79 * voice + slot] : dnm_knob(voice, sdk_pos[k]);
     }
-    struct elek_voice sv = { .track = track, .pitch = v->pitch, .velocity = v->velocity };
-    sdk_alpha_voice(e, voice, &sv, raw, v->fresh, block);
+    struct elek_voice sv = { .track = track, .pitch = sdk_alpha_pitch(track, id, v->pitch), .velocity = v->velocity };
+    sdk_alpha_voice(e, voice, &sv, raw, v->fresh, v->idle, block);
     for (int k = 0; k < ELEK_VOICE_FRAMES; ++k)
         block[k] >>= 4;              /* SDK Q31 full scale to DNM_PEAK, before native AMP/filter. */
 }

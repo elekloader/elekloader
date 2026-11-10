@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-2.0-or-later
-"""A mod submitted with the "Submit a mod" issue form, checked and written into web/catalog.json.
+"""A mod submitted with the "Submit a mod" issue form, checked and written into catalog.json.
 
     python packaging/submit_mod.py --issue-body body.md [--files-dir build/shop] [--cores-dir build/core]
                                    [--report report.md]
@@ -29,13 +29,23 @@ form or the release's notes give new ones ("Shop summary: ..." and "Tested on a 
 the one the shop lists is left out. With --update (packaging/shop_updates.py) only newer files of mods this
 repository already has go in, and a pre-release replaces only what came from a pre-release.
 
-Automatic updates are on for every entry unless its author opts out ("auto_update": false in web/catalog.json): the
+A thumbnail (packaging/thumbs.py: a 128x64 picture of the screen in two colours) is a release's thumb-<mod id>.png,
+for that mod on every device, or its thumb.png, for the mods with none of their own (in a commit, each name once
+anywhere in its tree). One that passes the check goes on the entries this submission adds or changes, and on this
+repository's entries the form lists already; the report shows each new picture's pixels as text (with --previews, in
+parts for the pull request's comments when there are many), and the change is never one that merges by itself
+(same_repo_update is false), so a maintainer looks at every new picture. A thumbnail is pinned
+on its own ("thumb": tag and file, or commit and path, and sha256), so it outlives the release its mod moves on from.
+With --update a release's thumbnail goes in only when it is the very picture the entry has (the pin moves to it);
+another one waits for the form, and the entry keeps its own.
+
+Automatic updates are on for every entry unless its author opts out ("auto_update": false in catalog.json): the
 form's "Updates" box ticked, or a "Shop auto-update: off" line in the release's notes, sets it on the files that go in
 (and on this repository's files the form lists already, when only the setting changes); the box unticked, or "Shop
 auto-update: on" in the notes, clears it. With --update an opted-out entry is left alone, and a newer release whose
 notes say "off" is not taken: it opts the repository out instead.
 
-web/catalog.json keeps its own layout (render() reproduces it byte for byte). Nothing in the release is run.
+catalog.json keeps its own layout (render() reproduces it byte for byte). Nothing in the release is run.
 
 Exit 0: entries added or changed (the report says what); 1: nothing added, refused (the report says why);
 2: nothing new.
@@ -59,9 +69,10 @@ sys.path.insert(0, os.path.join(ROOT, 'packaging'))
 
 from elekloader import elemod  # noqa: E402
 from build_web import SHOP_LICENCES, clash, footprint  # noqa: E402
+import thumbs  # noqa: E402
 from elekloader import link  # noqa: E402
 
-CATALOG = os.path.join(ROOT, 'web', 'catalog.json')
+CATALOG = os.environ.get('ELEKLOADER_CATALOG') or os.path.join(ROOT, 'build', 'shop-list', 'catalog.json')   # build_web.catalog_path
 REPO = re.compile(r'[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+')
 TAG = re.compile(r'[A-Za-z0-9_.+-]{1,100}')
 FILE = re.compile(r'[\w.-]+\.(elemod|dtmod)')
@@ -71,17 +82,17 @@ COMMIT = re.compile(r'[0-9a-f]{40}')
 CORE_REPOS = {(os.environ.get('GITHUB_REPOSITORY') or 'elekloader/elekloader').lower(), 'elekloader/elekloader'}
 # repositories that moved, by their old names (the shop's list still names some by these)
 MOVED = {'irpina/elekloader': 'elekloader/elekloader'}
-# the issue form's fields (.github/ISSUE_TEMPLATE/submit-mod.yml), by their labels
+# the issue form's fields (elekloader/shop's .github/ISSUE_TEMPLATE/submit-mod.yml), by their labels
 FIELDS = {'Repository': 'repo', 'Release tag': 'tag', 'Or a commit': 'commit', 'Summary': 'summary',
           'Tested on a unit': 'on_unit', 'Licence, for files that name none': 'license', 'Only these files': 'files',
           'Why': 'why', 'Updates': 'updates'}
-# web/catalog.json's layout: these keys share a line, in this order; any other key gets a line of its own
+# catalog.json's layout: these keys share a line, in this order; any other key gets a line of its own
 LINES = (('repo', 'tag', 'file', 'kind', 'commit'), ('path',), ('device', 'needs_core', 'title', 'version', 'license'),
          ('sha256',), ('summary',), ('on_unit',))
 
 
 def render(doc):
-    """web/catalog.json as it is laid out by hand: an item's short keys on shared lines."""
+    """catalog.json as it is laid out by hand: an item's short keys on shared lines."""
     def item(it):
         lines, used = [], set()
         for group in LINES:
@@ -133,13 +144,26 @@ def facts(path, license=''):
             'ram': (m.size('.run') + m.size('.bss')) if v2 else (m.blob['len'] if m.blob else 0)}
 
 
-def heads_up(f, known, site_cores):
-    """What the author may want to know about a file that goes in: the core it builds with, its RAM, and the shop's
-    mods for its device and OS it can't share a build with (the page greys them out beside it)."""
+def heads_up(f, known, site_cores, core_prints=None):
+    """What the author may want to know about a file that goes in: the core it builds with (as a builder takes it,
+    gui.with_core: of the site's cores that are new enough for it, the newest it can share a build with, by
+    `core_prints`, each core's footprint by (device, os, version)), its RAM, and the shop's mods for its device and
+    OS it can't share a build with (the page greys them out beside it)."""
     out = []
-    top = newest(site_cores.get((f['device'], f['os']), []))
-    if 'core' in f['requires'] and top:
-        out.append('builds with core %s' % top)
+    mine = sorted(site_cores.get((f['device'], f['os']), []), key=elemod.version_key)
+    if 'core' in f['requires'] and mine:
+        ok = [v for v in mine if not f.get('need') or elemod.version_key(v) >= elemod.version_key(f['need'])] or mine
+        prints = {v: (core_prints or {}).get((f['device'], f['os'], v)) for v in ok}
+        why = {v: clash(f['footprint'], prints[v]) if f.get('footprint') and prints[v] else '' for v in ok}
+        takes = [v for v in ok if not why[v]]
+        if not takes:
+            out.append("can't be built on the site: it can't link with core %s (%s), nor with an older one the site has"
+                       % (ok[-1], why[ok[-1]]))
+        elif takes[-1] == ok[-1]:
+            out.append('builds with core %s' % ok[-1])
+        else:
+            out.append("builds with core %s, not the newest: it can't link with core %s (%s), so it can't share a "
+                       'build with a mod that needs a newer core than %s' % (takes[-1], ok[-1], why[ok[-1]], takes[-1]))
     if f.get('ram'):
         out.append('%.1f KB of RAM' % (f['ram'] / 1024.0))
     if f.get('footprint'):
@@ -197,7 +221,8 @@ def submit(fields, catalog=CATALOG, files_dir=None, cores_dir=None, update=False
     device); the summary and the hardware note come from the release's notes or else the entry they replace, so the
     fields may be empty; a pre-release replaces only what came from a pre-release. The report's same_repo_update says
     whether every change is such an update, in either mode."""
-    r = {'repo': '', 'tag': '', 'rows': [], 'errors': [], 'changed': False, 'prerelease': False, 'same_repo_update': False}
+    r = {'repo': '', 'tag': '', 'rows': [], 'errors': [], 'changed': False, 'prerelease': False, 'same_repo_update': False,
+         'thumbs': {}, 'thumb_new': [], 'thumb_waits': [], 'thumb_on': {}}
     repo, tag = fields.get('repo', '').strip(), fields.get('tag', '').strip()
     commit = fields.get('commit', '').strip().lower()
     repo = re.sub(r'^https://github\.com/|/$|\.git$', '', repo)
@@ -242,6 +267,17 @@ def submit(fields, catalog=CATALOG, files_dir=None, cores_dir=None, update=False
         assets = [{'name': e['path'].rsplit('/', 1)[-1], 'path': e['path']} for e in tree.get('tree', [])
                   if e.get('type') == 'blob' and FILE.fullmatch(e['path'].rsplit('/', 1)[-1])
                   and PATH.fullmatch(e['path']) and '..' not in e['path'].split('/')]
+        pictures = {}
+        for e in tree.get('tree', []):
+            n = e['path'].rsplit('/', 1)[-1]
+            if (e.get('type') == 'blob' and thumbs.PICTURE.fullmatch(n) and PATH.fullmatch(e['path'])
+                    and '..' not in e['path'].split('/')):
+                pictures.setdefault(n, []).append({'path': e['path']})
+        for n, found in list(pictures.items()):
+            if len(found) > 1:
+                r['thumbs'][n] = {'ok': False, 'reason': 'the commit has more than one'}
+                del pictures[n]
+        pictures = {n: found[0] for n, found in pictures.items()}
         names = [a['name'] for a in assets]
         twice = sorted({n for n in names if names.count(n) > 1})
         if twice:
@@ -259,6 +295,8 @@ def submit(fields, catalog=CATALOG, files_dir=None, cores_dir=None, update=False
             return 1, r
         canonical = re.match(r'https://github\.com/([^/]+/[^/]+)/releases/', release.get('html_url', ''))
         assets = [a for a in release.get('assets', []) if FILE.fullmatch(a['name'])]
+        pictures = {a['name']: {'digest': a.get('digest')} for a in release.get('assets', [])
+                    if thumbs.PICTURE.fullmatch(a['name'])}
     r['prerelease'] = bool(release.get('prerelease'))
     if canonical:                                  # the name GitHub gives it now, if it moved
         repo = r['repo'] = canonical.group(1)
@@ -308,6 +346,7 @@ def submit(fields, catalog=CATALOG, files_dir=None, cores_dir=None, update=False
     key = lambda f: (f['id'], f['device'], f['os'])
     shop_mods = {key(k) for k in known.values()}
     site_cores = {}                               # (device, os) -> the core versions the site has
+    core_prints = {}                              # (device, os, version) -> that core's footprint (heads_up)
     cores_known = cores_dir is not None
     for p in sorted(glob.glob(os.path.join(cores_dir, '*.elemod'))) if cores_known else []:
         try:
@@ -316,9 +355,11 @@ def submit(fields, catalog=CATALOG, files_dir=None, cores_dir=None, update=False
             continue
         if f['core']:
             site_cores.setdefault((f['device'], f['os']), []).append(f['version'])
+            core_prints[(f['device'], f['os'], f['version'])] = f.get('footprint')
     for k in known.values():
         if k['core']:
             site_cores.setdefault((k['device'], k['os']), []).append(k['version'])
+            core_prints.setdefault((k['device'], k['os'], k['version']), k.get('footprint'))
     own_entries = {}                              # (id, device) -> this repository's entries in the shop, any OS
     for it in items:
         k = known.get(name(it))
@@ -338,6 +379,57 @@ def submit(fields, catalog=CATALOG, files_dir=None, cores_dir=None, update=False
             except (urllib.error.URLError, ValueError):
                 pre_tags[(it['repo'], it['tag'])] = False
         return pre_tags[(it['repo'], it['tag'])]
+
+    # the release's thumbnails, checked: the pins they go in with when they pass
+    pins = {}
+    for n in sorted(pictures)[:thumbs.MAX_PICTURES]:
+        picture = pictures[n]
+        try:
+            data = (get(api + '%s/contents/%s?ref=%s' % (repo, urllib.parse.quote(picture['path']), commit),
+                        'application/vnd.github.raw', thumbs.MAX_BYTES) if commit
+                    else get('https://github.com/%s/releases/download/%s/%s' % (repo, tag, n), limit=thumbs.MAX_BYTES))
+        except ValueError:
+            r['thumbs'][n] = {'ok': False, 'reason': 'it is larger than %d bytes' % thumbs.MAX_BYTES}
+            continue
+        except urllib.error.URLError as e:
+            r['thumbs'][n] = {'ok': False, 'reason': 'it could not be downloaded (%s)' % e}
+            continue
+        r['thumbs'][n] = thumbs.check(data)
+        if picture.get('digest') and picture['digest'] != 'sha256:' + r['thumbs'][n]['sha256']:
+            r['thumbs'][n] = {'ok': False, 'reason': 'it is not the file GitHub lists'}
+        elif r['thumbs'][n]['ok']:
+            pins[n] = dict(commit=commit, path=picture['path']) if commit else dict(tag=tag, file=n)
+            pins[n]['sha256'] = r['thumbs'][n]['sha256']
+    for n in sorted(pictures)[thumbs.MAX_PICTURES:]:
+        r['thumbs'][n] = {'ok': False, 'reason': 'one submission takes at most %d pictures; send the rest in another'
+                                                 % thumbs.MAX_PICTURES}
+
+    def picture_for(mod_id):
+        """-> (name, pin or None): the mod's own picture if the release has one (None when it failed), or else the
+        release's thumb.png."""
+        own = 'thumb-%s.png' % mod_id
+        if own in r['thumbs']:
+            return own, pins.get(own)
+        return thumbs.NAME, pins.get(thumbs.NAME)
+
+    def thumb_for(entry, old, title, mod_id):
+        """The thumbnail an entry goes in with: the release's when it passes (through the form; with --update only
+        when it is the picture the entry has already), or else the one the entry it replaces has."""
+        n, th = picture_for(mod_id)
+        had = (old or {}).get('thumb')
+        if th and had and had['sha256'] == th['sha256']:
+            entry['thumb'] = th
+            r['thumb_on'].setdefault(n, {}).setdefault('kept', set()).add(title)
+        elif th and not update:
+            entry['thumb'] = th
+            r['thumb_new'].append(title)
+            r['thumb_on'].setdefault(n, {}).setdefault('new', set()).add(title)
+        else:
+            if th:
+                r['thumb_waits'].append(title)
+                r['thumb_on'].setdefault(n, {}).setdefault('waits', set()).add(title)
+            if had:
+                entry['thumb'] = had
 
     tmp = tempfile.mkdtemp()
     try:
@@ -494,13 +586,14 @@ def submit(fields, catalog=CATALOG, files_dir=None, cores_dir=None, update=False
             note = on_unit or as_of(old.get('on_unit', ''), was)
             if note:
                 entry['on_unit'] = note
+            thumb_for(entry, old, f['title'], f['id'])
             at = items.index(f['older'][0]) if f['older'] else None       # an update takes the old entry's place
             for it in f['older']:
                 items.remove(it)
             f['result'] = (('replaces ' + ', '.join(name(it) for it in f['older'])) if f['older']
                            else 'added, beside %s from %s' % (f['id'], f['clash'][0]['repo']) if f['clash']
                            else 'added: %s needs it' % f['brought_by'] if f.get('brought_by') else 'added')
-            f['notes'] = heads_up(f, known, site_cores)
+            f['notes'] = heads_up(f, known, site_cores, core_prints)
             new.append((entry, at))
         # a core of the release goes in when it is elekloader's and a mod of it needs that core
         for (device, os_), c in cores.items():
@@ -527,6 +620,19 @@ def submit(fields, catalog=CATALOG, files_dir=None, cores_dir=None, update=False
                     del it['auto_update']
                 flips.append(it)
                 row['result'] = 'auto-update turned %s (already in the shop)' % ('off' if off else 'on')
+        for row in r['rows'] if pins and not update else []:   # a new picture for files the shop has already
+            it = by_name.get(row['file'])
+            n, th = picture_for(row.get('id'))
+            if (th and (row['result'].endswith('already in the shop)') or row['result'] == 'already in the shop')
+                    and not row.get('core') and it and same_repo(it['repo']) == same_repo(repo)
+                    and (it.get('thumb') or {}).get('sha256') != th['sha256']):
+                it['thumb'] = th
+                r['thumb_new'].append(row.get('title', row['file']))
+                r['thumb_on'].setdefault(n, {}).setdefault('new', set()).add(row.get('title', row['file']))
+                if it not in flips:
+                    flips.append(it)
+                row['result'] = ('thumbnail changed (already in the shop)' if row['result'] == 'already in the shop'
+                                 else 'thumbnail changed; ' + row['result'])
         if new or flips:
             for e, at in new:                      # in the old entry's place, or after the shop's last item for its device
                 if at is None:
@@ -540,10 +646,11 @@ def submit(fields, catalog=CATALOG, files_dir=None, cores_dir=None, update=False
             r['changed'] = True
             r['auto_off'] = None if update else off
             r['titles'] = sorted({f.get('title', f['file']) for f in r['rows']
-                                  if f['result'].startswith(('added', 'replaces', 'auto-update'))})
-            # every change a newer file of a mod this repository already has: no new mod, no clash, no core, none held
+                                  if f['result'].startswith(('added', 'replaces', 'auto-update', 'thumbnail'))})
+            # every change a newer file of a mod this repository already has: no new mod, no clash, no core, none held,
+            # and no new picture (a maintainer looks at each)
             r['same_repo_update'] = (all(f['update_of'] is not None and not f['clash'] and not f['held'] for f in taken)
-                                     and len(new) == len(taken))
+                                     and len(new) == len(taken) and not r['thumb_new'])
             if files_dir:                          # a later check in the same run knows these files
                 for f in taken:
                     shutil.copyfile(os.path.join(tmp, f['file']), os.path.join(files_dir, f['file']))
@@ -558,7 +665,7 @@ def submit(fields, catalog=CATALOG, files_dir=None, cores_dir=None, update=False
 
 def remove(fields, catalog=CATALOG, files_dir=None):
     """The "Remove a mod" form: the shop's entries from one repository (all, or those "Only these files" names) leave
-    web/catalog.json. Cores stay (a maintainer removes those). The report's own_only says whether nothing else is
+    catalog.json. Cores stay (a maintainer removes those). The report's own_only says whether nothing else is
     touched: no held entry, and no other shop mod for the same device and OS needs a mod that goes.
     -> (status, report): 0 entries removed, 1 refused, 2 nothing to remove."""
     r = {'repo': '', 'tag': '', 'rows': [], 'errors': [], 'changed': False, 'removal': True, 'own_only': False}
@@ -629,6 +736,33 @@ def remove(fields, catalog=CATALOG, files_dir=None):
     return 0, r
 
 
+INLINE = 24000          # the most picture text a report carries itself (GitHub takes 65536 characters a comment)
+PART = 60000            # the most a comment of pictures carries
+
+
+def previews(r):
+    """The new pictures' pixels as text, in parts of at most PART characters, each part marked with the set's
+    hash (so a workflow posts a set once)."""
+    blocks = []
+    for n, t in sorted(r.get('thumbs', {}).items()):
+        if t['ok'] and r['thumb_on'].get(n, {}).get('new'):
+            blocks.append('`%s`, for %s (%d bytes, sha256 `%s`):\n\n```text\n%s\n```\n' % (
+                n, ', '.join(sorted(r['thumb_on'][n]['new'])), t['bytes'], t['sha256'][:12], thumbs.braille(t['bits'])))
+    parts, cur = [], ''
+    for b in blocks:
+        if cur and len(cur) + len(b) > PART - 200:
+            parts.append(cur)
+            cur = ''
+        cur += b + '\n'
+    if cur:
+        parts.append(cur)
+    mark = hashlib.sha256(''.join(parts).encode()).hexdigest()[:16]
+    if len(parts) == 1 and len(parts[0]) <= INLINE:
+        return parts
+    return ['<!-- shop-pictures %s -->\n**New thumbnails, part %d of %d**\n\n%s' % (mark, i + 1, len(parts), p)
+            for i, p in enumerate(parts)]
+
+
 def report_md(status, r):
     lines = ['### %s %s%s' % (r['repo'] or '?', r['tag'] or '?', ' (a pre-release)' if r.get('prerelease') else ''), '']
     lines += ['- %s' % e for e in r['errors']]
@@ -640,6 +774,28 @@ def report_md(status, r):
             lines.append('| `%s` | %s | %s | %s | %s | %s |' % (
                 row['file'], (row.get('title', '') + ' ' + row.get('version', '')).strip(),
                 ('%s %s' % (row.get('device', ''), row.get('os', ''))).strip(), needs, row.get('license', ''), row['result']))
+    if r.get('thumbs'):
+        lines += ['', '**Thumbnails.**', '']
+        for n, t in sorted(r['thumbs'].items()):
+            on = r['thumb_on'].get(n, {})
+            uses = [('new on ', 'new'), ('the same picture on ', 'kept'), ('waits, for ', 'waits')]
+            said = '; '.join(w + ', '.join(sorted(on[k])) for w, k in uses if on.get(k))
+            if not t['ok']:
+                said = 'not taken: ' + t['reason']
+            elif not said:
+                said = ('not used: no mod this submission adds or changes has the id %s' % n[len('thumb-'):-len('.png')]
+                        if n != thumbs.NAME else 'not used: no mod this submission adds or changes is without its own')
+            lines.append('- `%s`: %s' % (n, said))
+        if r.get('thumb_new'):
+            parts = previews(r)
+            lines += ['', 'A maintainer looks at each new picture before it goes in. %s' % (
+                'Their pixels, as text (no image is shown here):' if len(parts) == 1 and len(parts[0]) <= INLINE
+                else 'They are many: their pixels, as text, are in %d comments on the pull request.' % len(parts)), '']
+            if len(parts) == 1 and len(parts[0]) <= INLINE:
+                lines.append(parts[0])
+        if r.get('thumb_waits'):
+            lines += ['', 'An automatic update keeps the shop\'s thumbnail for %s: send this release through the Submit a '
+                      'mod form to change it.' % ', '.join(sorted(set(r['thumb_waits']))), '']
     noted = [row for row in r['rows'] if row.get('notes')]
     if noted:
         lines += ['', 'Good to know (not a refusal):']
@@ -695,6 +851,8 @@ def main(argv=None):
     ap.add_argument('--report', help='write the report (Markdown) here')
     ap.add_argument('--result', help='write the result (JSON) here: status, changed, titles, removal, auto_ok (the '
                                      'change touches only the repository\'s own entries: an update, or a removal)')
+    ap.add_argument('--previews', help='a folder: the new pictures\' pixels, when too many for the report, as '
+                                       'previews-<n>.md, one pull request comment each')
     a = ap.parse_args(argv)
     if a.issue_body:
         with open(a.issue_body, encoding='utf-8') as fh:
@@ -707,6 +865,12 @@ def main(argv=None):
     else:
         status, r = submit(fields, a.catalog, a.files_dir, a.cores_dir, a.update)
     text = report_md(status, r)
+    parts = previews(r) if r.get('thumb_new') else []
+    if a.previews and parts and parts[0].startswith('<!-- shop-pictures '):
+        os.makedirs(a.previews, exist_ok=True)
+        for i, part in enumerate(parts):
+            with open(os.path.join(a.previews, 'previews-%d.md' % (i + 1)), 'w', encoding='utf-8') as fh:
+                fh.write(part)
     if a.report:
         with open(a.report, 'w', encoding='utf-8') as fh:
             fh.write(text)

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // The kit's tools for a website and for elekloader's releases (docs/INTEGRATING.md):
 //
-//   node js/tools/kit.ts feed --list web/catalog.json --files <downloaded> --revision <commit>
+//   node js/tools/kit.ts feed --list catalog.json --files <downloaded> --revision <commit>
 //        [--core <core.elemod>... --core-source owner/repo@tag] --out catalog.json
 //     elekloader's curated catalog, from its list and the files it names: each file read by the engine for what it
 //     says about itself (id, version, device, OS, licence, requires), with the list's summary and checks on a unit.
@@ -49,7 +49,7 @@ function facts(path: string, source: Source, license?: string): Pin & { doc: Rec
 }
 
 function feed() {
-  const list = json(flag('list') ?? die('feed: --list <web/catalog.json>')).items as Record<string, any>[]
+  const list = json(flag('list') ?? die('feed: --list <catalog.json>')).items as Record<string, any>[]
   const files = flag('files') ?? die('feed: --files <the folder the listed files were downloaded to>')
   const revision = flag('revision') ?? die('feed: --revision <the commit of the list>')
   const out = flag('out') ?? die('feed: --out <catalog.json>')

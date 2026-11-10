@@ -38,12 +38,14 @@ void dnm_sdk_present(const struct dnm_machine *m, int force);
 const char *dnm_sdk_lfo_name(const struct dnm_machine *m, int32_t k, int32_t field);
 void dnm_sdk_tick(const struct dnm_machine *m, void *ctrl);
 const char *dnm_sdk_label(const struct dnm_machine *m, int32_t k);
+int32_t dnm_sdk_mono_on(int32_t voice, int32_t track);
 #else                                                      /* no SDK machines on this OS */
 #define dnm_sdk_machine(i) ((const struct dnm_machine *)0)
 #define dnm_sdk_present(m, force) ((void)0)
 #define dnm_sdk_lfo_name(m, k, field) ((const char *)0)
 #define dnm_sdk_tick(m, ctrl) ((void)(ctrl))
 #define dnm_sdk_label(m, k) ((const char *)0)
+#define dnm_sdk_mono_on(voice, track) (-1)
 #endif
 
 /* The SYN knobs' parameter ids: A-H of SYN1's first page and of SYN2's, then (DNM_PAGES2) of SYN1's second page
@@ -163,6 +165,12 @@ void dnm_voice_on(int32_t voice, int32_t track, void *event)
     vs[voice].v.fresh = 1;
     vs[voice].v.gate = 1;
     vs[voice].stage = ATK;          /* from the level it has: a retrigger does not click */
+    int32_t from = dnm_sdk_mono_on(voice, track);
+    if (from >= 0) {                /* a mono machine's track: its sound moves here, the AMP from its level */
+        vs[voice].level = vs[from].level;
+        vs[from].stage = OFF;
+        vs[from].level = 0;
+    }
 }
 
 static int32_t amp(int32_t voice, int32_t slot)
@@ -231,11 +239,14 @@ void dnm_render(int32_t *voices)
         if (vs[v].stage == OFF && vs[v].level == 0 && !(m->flags & DNM_OWN_ENV)) {
             for (i = 0; i < 32; i++)
                 block[i] = 0;               /* silent: no FM either */
+            if (vs[v].v.idle <= UINT32_MAX - 32)
+                vs[v].v.idle += 32;
             continue;
         }
         vs[v].v.pitch = fw_voice_pitch[v];
         m->render(v, block, &vs[v].v);
         vs[v].v.fresh = 0;
+        vs[v].v.idle = 0;
         if (!(m->flags & DNM_OWN_ENV))
             envelope(v, block);
     }

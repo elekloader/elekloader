@@ -21,7 +21,7 @@ const struct cm_ui32 *sdk_alpha_ui(int32_t id)
     struct sdk_alpha_page *p = &sdk_alpha_pages[e - sdk_alpha_entries];
     if (p->ui.pages)
         return &p->ui;
-    p->ui.base.abi = cm_ui_v32;
+    p->ui.base.abi = cm_ui_v33;
     p->ui.base.page_from = 3;
     p->ui.base.group = m->name;
     p->ui.page_count = e->pages;
@@ -33,6 +33,8 @@ const struct cm_ui32 *sdk_alpha_ui(int32_t id)
         if (k < e->count) {
             n->name = n->lname = m->knobs[k].label;
             n->def = sdk_alpha_default(&m->knobs[k]);
+            if (k >= 8)
+                n->cc = 24 + k - 8;     /* A-H keep CC 16-23, so knob ids 0-14 answer CC 16-30 */
         } else
             n->flags |= CM_HIDDEN;
     }
@@ -69,30 +71,48 @@ int32_t sdk_alpha_snapshot(const struct sdk_alpha_entry *e, int32_t page, void *
     return sdk_alpha_present(e, track, page, raw, 0) | (before != e);
 }
 
+/* A track the AMP envelope has silenced and no trig starts: inaudible after the AMP page, so it is not
+ * rendered (the level is 0 only then). render's idle counts its frames. */
+static int silent(uint32_t track)
+{
+    return !(fw_voice_start & (1u << track)) && fw_amp_env[3 * track + 1] == 0;
+}
+
 void sdk_alpha_render(int32_t *blocks)
 {
+    static uint32_t idle[8];
     for (uint32_t track = 0; track < 8; ++track) {
         int32_t id = fw_render_machine[track];
         const struct sdk_alpha_entry *e = sdk_alpha_find(id);
         sdk_alpha_select(track, id);
         if (!e || !e->machine->render) continue;
+        if (silent(track)) {
+            for (uint32_t i = 0; i < ELEK_VOICE_FRAMES; ++i)
+                blocks[ELEK_VOICE_FRAMES * track + i] = 0;
+            if (idle[track] <= UINT32_MAX - ELEK_VOICE_FRAMES)
+                idle[track] += ELEK_VOICE_FRAMES;
+            continue;
+        }
         int32_t raw[SDK_ALPHA_KNOBS];
         for (uint32_t k = 0; k < e->count; ++k)
             raw[k] = cm_src_value(track, k);
         struct elek_voice voice = {
-            .track = track, .pitch = fw_voice_note[track], .velocity = fw_voice_vel[track] >> 8,
+            .track = track, .pitch = sdk_alpha_pitch(track, id, fw_voice_note[track]),
+            .velocity = fw_voice_vel[track] >> 8,
         };
-        sdk_alpha_voice(e, track, &voice, raw, (fw_voice_start & (1u << track)) != 0,
+        sdk_alpha_voice(e, track, &voice, raw, (fw_voice_start & (1u << track)) != 0, idle[track],
                         blocks + ELEK_VOICE_FRAMES * track);
+        idle[track] = 0;
     }
 }
 
-/* A mapped integer's text fits the native value field; long values retain their popup text. */
+/* .present's value text, or the mapped integer, fits the native value field; long numbers keep their
+ * popup text. */
 int32_t sdk_alpha_value_text(int32_t machine, int32_t k, int32_t raw, char *buf, int popup)
 {
     const struct sdk_alpha_entry *e = sdk_alpha_find(machine);
     if (!e || (uint32_t)k >= e->count)
         return 0;
-    sdk_alpha_number(sdk_alpha_map(&e->machine->knobs[k], raw), buf, popup);
+    sdk_alpha_value(e, (uint32_t)k, raw, buf, popup);
     return 1;
 }

@@ -21,11 +21,13 @@ from elekloader.sdk import build
 Target = collections.namedtuple('Target', 'companions first_id features native')
 SDK_ALPHA_TARGETS = {
     ('digitakt-mk1', '1.54'): Target(('core', 'machine-pages'), 4,
-                                     frozenset(('render', 'defaults')), 'core_machines'),
+                                     frozenset(('render', 'defaults', 'mono', 'midi_cc')), 'core_machines'),
     ('digitone-mk1', '1.44'): Target(('core', 'machines'), 4,
-                                     frozenset(('render', 'defaults')), None),
-    # the Digitone II's synth type 4 is MIDI
-    ('digitone-mk2', '1.12'): Target(('core', 'machines-dn2'), 5, frozenset(), None),
+                                     frozenset(('render', 'defaults', 'mono', 'midi_cc')), None),
+    # the Digitone II's synth type 4 is MIDI; its render is SHARC code ('kernels'): the C is built with
+    # ELEK_TARGET_SHARC and .render names a label in mod.json's "sharc": {"sources": [...]}
+    ('digitone-mk2', '1.12'): Target(('core', 'machines-dn2'), 5, frozenset(('kernels', 'defaults', 'mono', 'midi_cc')),
+                                     None),
 }
 SDK_ALPHA_TABLE = 'sdk_alpha_machines'   # pointers to struct elek_machine, read by each companion
 SDK_ALPHA_ABI = 'sdk_alpha_abi_v1'       # the one symbol the companions export to SDK machines
@@ -40,15 +42,19 @@ LIMITS = {'ELEK_UI_LABEL_MAX': 5, 'ELEK_UI_KNOB_MAX': 15, 'ELEK_UI_PAGE_MAX': 2,
 LAYOUT = {
     ('elek_machine', 'id'): 0, ('elek_machine', 'name'): 4, ('elek_machine', 'short_name'): 8,
     ('elek_machine', 'knobs'): 12, ('elek_machine', 'knob_count'): 16, ('elek_machine', 'pages'): 20,
-    ('elek_machine', 'render'): 96, ('elek_machine', None): 100,
+    ('elek_machine', 'render'): 96, ('elek_machine', 'play'): 100, ('elek_machine', 'prio'): 101,
+    ('elek_machine', None): 102,
     ('elek_page', 'label'): 0, ('elek_page', 'encoder'): 4, ('elek_page', None): 36,
     ('elek_knob', 'label'): 0, ('elek_knob', 'min'): 4, ('elek_knob', 'max'): 8, ('elek_knob', 'def'): 12,
     ('elek_knob', 'glyph'): 16, ('elek_knob', None): 20, ('elek_glyph', None): 32,
 }
 ELEK_UI_LABEL_MAX, ELEK_UI_KNOB_MAX, ELEK_UI_PAGE_MAX = (
     LIMITS['ELEK_UI_LABEL_MAX'], LIMITS['ELEK_UI_KNOB_MAX'], LIMITS['ELEK_UI_PAGE_MAX'])
-MACHINE_NAME, MACHINE_SHORT_NAME, MACHINE_KNOBS, MACHINE_KNOB_COUNT, MACHINE_PAGES, MACHINE_RENDER, MACHINE_SIZE = (
-    LAYOUT['elek_machine', f] for f in ('name', 'short_name', 'knobs', 'knob_count', 'pages', 'render', None))
+(MACHINE_NAME, MACHINE_SHORT_NAME, MACHINE_KNOBS, MACHINE_KNOB_COUNT, MACHINE_PAGES, MACHINE_RENDER, MACHINE_PLAY,
+ MACHINE_PRIO, MACHINE_SIZE) = (LAYOUT['elek_machine', f] for f in ('name', 'short_name', 'knobs', 'knob_count', 'pages',
+                                                                     'render', 'play', 'prio', None))
+PLAY_NAMES = ('ELEK_POLY', 'ELEK_MONO', 'ELEK_MONO_LEGATO')
+PRIO_NAMES = ('ELEK_PRIO_LAST', 'ELEK_PRIO_LOW', 'ELEK_PRIO_HIGH')
 PAGE_LABEL, PAGE_ENCODER, PAGE_SIZE = (LAYOUT['elek_page', f] for f in ('label', 'encoder', None))
 KNOB_LABEL, KNOB_MIN, KNOB_GLYPH, KNOB_SIZE = (LAYOUT['elek_knob', f] for f in ('label', 'min', 'glyph', None))
 GLYPH_SIZE = LAYOUT['elek_glyph', None]
@@ -57,8 +63,9 @@ GLYPH_SIZE = LAYOUT['elek_glyph', None]
 def sdk_alpha_registrations(doc, sections):
     """The machines ELEK_REGISTER_MACHINE declared, checked: their layouts by machine id,
     {'at': (section, offset) of the struct elek_machine, 'name', 'knobs': [{'id', 'label', 'min', 'max',
-    'def'}], 'pages': [{'label', 'knobs': {encoder 0-7: knob}}], 'render': bool}. A refusal names
-    where it is: the machine, then its page, encoder or knob."""
+    'def'}], 'pages': [{'label', 'knobs': {encoder 0-7: knob}}], 'render': False, True (a function in
+    the mod) or the name of the function it imports (a SHARC label on the Digitone II), 'play' and
+    'prio': its .play and .prio}. A refusal names where it is: the machine, then its page, encoder or knob."""
     def fail(where, message):
         raise build.BuildError('sdk alpha: %s: %s' % (where, message))
 
@@ -179,15 +186,68 @@ def sdk_alpha_registrations(doc, sections):
                     fail(at_encoder, 'does not point at one of the machine\'s knobs (use &knobs[ID], %s)'
                          % ('ID below %d' % knob_count if knob_count else 'and give the knobs with ELEK_KNOBS'))
                 page_layouts[page]['knobs'][encoder] = knob_layouts[k]
-        render = target(where, field(machine, MACHINE_RENDER), 'render') is not None
+        sec, off = field(machine, MACHINE_RENDER)
+        rs = [r for r in doc['relocs'] if r[0] == sec and r[1] == off]
+        if len(rs) == 1 and rs[0][2] == 'abs32' and rs[0][3].startswith('sym:') \
+                and rs[0][3][4:] not in doc['symbols']:
+            render = rs[0][3][4:]           # declared, not defined: the builder pairs it (sdk_alpha_build)
+        else:
+            render = target(where, (sec, off), 'render') is not None
+        play, prio = data[MACHINE_PLAY], data[MACHINE_PRIO]
+        if play >= len(PLAY_NAMES):
+            fail(where, 'play is %d: give %s' % (play, ', '.join(PLAY_NAMES)))
+        if prio >= len(PRIO_NAMES):
+            fail(where, 'prio is %d: give %s' % (prio, ', '.join(PRIO_NAMES)))
         layouts[mid] = {'at': machine, 'name': machine_name, 'pages': page_layouts, 'knobs': knob_layouts,
-                        'render': render}
+                        'render': render, 'play': play, 'prio': prio}
     if not layouts:
         raise build.BuildError('sdk alpha: no machine registered: add ELEK_REGISTER_MACHINE(machine)')
     if SDK_ALPHA_ABI not in doc['imports']:
         raise build.BuildError('sdk alpha: the mod does not use %s: rebuild it with this SDK\'s header'
                                % SDK_ALPHA_ABI)
     return layouts
+
+
+def sdk_alpha_sharc(doc, layouts, moddir, spec, work, target):
+    """A 'kernels' target's render: each machine's .render names a global label of the mod's SHARC
+    assembly (mod.json's "sharc": {"sources": [...]}), which the DSP calls as C would. Puts the kernels
+    in doc['sharc'], and points each .render, which the ColdFire never calls, at an rts."""
+    sources = [os.path.join(moddir, n) for n in (spec.get('sources', []) if isinstance(spec, dict) else [])]
+    labels = set()
+    for path in sources:
+        with open(path) as fh:
+            text = re.sub(r'/\*.*?\*/|//[^\n]*', '', fh.read(), flags=re.S)
+        for names in re.findall(r'\.GLOBAL\s+([^;]*);', text, re.I):
+            labels.update(n.strip() for n in names.split(',') if n.strip())
+    kernels, imported = [], set()
+    for mid, layout in sorted(layouts.items()):
+        where = 'sdk alpha: machine %s (id %d)' % (json.dumps(layout['name']), mid)
+        if layout['render'] is True:
+            raise build.BuildError('%s: render is C, which %s cannot play: write it in SHARC assembly, declare '
+                                   'it under #ifdef ELEK_TARGET_SHARC and list the file in mod.json\'s "sharc": '
+                                   '{"sources": [...]}' % (where, target))
+        if layout['render']:
+            label = layout['render'] + '.'          # the SHARC name of the C function
+            if label not in labels:
+                raise build.BuildError('%s: render is %s, but no file in mod.json\'s "sharc": {"sources": [...]} '
+                                       'has the global label %s' % (where, layout['render'], label))
+            imported.add(layout['render'])
+            kernels.append(('sdk', mid, label, [(k['min'], k['max']) for k in layout['knobs']]))
+    if not kernels:
+        return
+    from elekloader.sdk import sharc
+    try:
+        doc['sharc'] = sharc.kernel_artifact(sources, work, kernels=kernels)
+    except ValueError as e:
+        raise build.BuildError(str(e)) from e
+    run = doc['sections']['.run']
+    at = run['len'] + run['len'] % 2
+    run['parts'].append(['hex', (bytes(at - run['len']) + b'\x4e\x75').hex()])
+    run['len'] = at + 2
+    for r in doc['relocs']:
+        if r[3].startswith('sym:') and r[3][4:] in imported:
+            r[3], r[4] = 'sec:.run', at
+    doc['imports'] = [n for n in doc['imports'] if n not in imported]
 
 
 def sdk_alpha_build(moddir, stock, out=None):
@@ -198,8 +258,10 @@ def sdk_alpha_build(moddir, stock, out=None):
         raise build.BuildError('mod.json: "devices" maps each device to its OS versions')
     if listed is not None and {'device', 'os'} & set(source):
         raise build.BuildError('mod.json: "devices" replaces "device" and "os"; give one or the other')
+    firmware, dev, rel = formats.load(stock)
+    kernels = 'kernels' in getattr(SDK_ALPHA_TARGETS.get((dev.key, rel.version)), 'features', ())
     with tempfile.TemporaryDirectory(prefix='sdk-alpha-') as tmp:
-        path, mod = build.build(moddir, stock, tmp)
+        path, mod = build.build(moddir, stock, tmp, {'cflags': ['-DELEK_TARGET_SHARC']} if kernels else None)
         with open(path) as fh:
             doc = json.load(fh)
         device, release = doc['target']['device'], doc['target']['os']
@@ -212,7 +274,6 @@ def sdk_alpha_build(moddir, stock, out=None):
             raise build.BuildError('sdk alpha: only %s and %s are supported' % (', '.join(supported[:-1]), supported[-1]))
         companions, low, features, native = SDK_ALPHA_TARGETS[device, release]
         tables = (SDK_ALPHA_TABLE,) + ((native,) if native else ())
-        firmware, dev, _ = formats.load(stock)
         image = formats.main_image(firmware, dev)
         sections = {s: elemod.parts_bytes(d['parts'], image, dev)
                     for s, d in mod.sections.items() if 'parts' in d}
@@ -221,6 +282,8 @@ def sdk_alpha_build(moddir, stock, out=None):
         if len(layouts) > limit:
             raise build.BuildError('sdk alpha: %s %s holds at most %d SDK machines; this mod registers %d'
                                    % (device, release, limit, len(layouts)))
+        if kernels:
+            sdk_alpha_sharc(doc, layouts, moddir, source.get('sharc'), tmp, '%s %s' % (device, release))
         unresolved = sorted(set(doc['imports']) - {SDK_ALPHA_ABI})
         soft_float = [n for n in unresolved if re.fullmatch(r'__\w*?[sdtx]f\w*', n)]    # libgcc's
         if soft_float:
@@ -234,8 +297,11 @@ def sdk_alpha_build(moddir, stock, out=None):
             where = 'sdk alpha: machine %s (id %d)' % (json.dumps(layout['name']), mid)
             if mid < low:
                 raise build.BuildError('%s: id %d is outside %d..127 on %s %s' % (where, mid, low, device, release))
-            if layout['render'] and 'render' not in features:
+            if layout['render'] and not features & {'render', 'kernels'}:
                 raise build.BuildError('%s: render is not supported on %s %s yet' % (where, device, release))
+            if layout['play'] and 'mono' not in features:
+                raise build.BuildError('%s: %s is not supported on %s %s yet'
+                                       % (where, PLAY_NAMES[layout['play']], device, release))
             if 'defaults' not in features:
                 for knob in layout['knobs']:
                     if knob['def'] != knob['min']:

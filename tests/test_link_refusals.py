@@ -148,23 +148,26 @@ def external(fn, template, path, text):
     EXTERNAL[(fn, template)] = (path, text)
 
 
-external('check', 'SHARC mods may combine only one DN2 voice and one DN2 filter',
-         'tests/test_sharc_filter.py', ['SHARC mods may combine only one DN2 voice and one DN2 filter',
-                                      'test_pair_binds_both_hooks_and_is_order_independent'])
 external('check', 'active SHARC mod requires a qualified matching core bridge', 'tests/test_sharc_active.py',
          'active SHARC mod requires a qualified matching core bridge')
 external('check', '<> has unqualified active SHARC core bytes or entry', 'tests/test_sharc_active.py',
          'unqualified active SHARC core bytes or entry')
 external('check', 'active SHARC stack exceeds the profile limit', 'tests/test_sharc_active.py',
          'active SHARC stack exceeds the profile limit')
-external('check', '<>: DN2 <> registration requires a matching SHARC <> payload',
-         'tests/test_sharc_filter.py', ['DN2 %s registration requires a matching SHARC %s payload',
-                                      'test_pair_binds_both_hooks_and_is_order_independent'])
-external('check', '<>: SHARC <> machine_id must match its single native <> registration',
-         'tests/test_sharc_filter.py', ['SHARC %s machine_id must match its single native %s registration',
-                                      'test_pair_binds_both_hooks_and_is_order_independent'])
+external('check', 'DN2 machine kernels need one dispatcher (machines-dn2); this build has <>',
+         'tests/test_sharc_kernels.py', ['need one dispatcher', 'test_kernels_need_one_dispatcher'])
+external('check', 'DN2 machine kernels do not combine with <>', 'tests/test_sharc_kernels.py',
+         ['DN2 machine kernels do not combine with master 0.1', 'test_kernels_do_not_combine_with_another_sharc_mod'])
+external('check', 'a build takes one SHARC mod; this one has <>', 'tests/test_sharc_kernels.py',
+         ['a build takes one SHARC mod', 'test_a_build_takes_one_sharc_mod'])
+external('check', '<> and <> both have a DN2 <> kernel with id <>', 'tests/test_sharc_kernels.py',
+         ['both have a DN2 voice kernel with id 9', 'test_an_id_has_one_kernel'])
+external('check', '<>: its <> entry <> needs a SHARC <> kernel with that id', 'tests/test_sharc_kernels.py',
+         ['needs a SHARC %s kernel with that id', 'test_an_mk2_registration_needs_its_kernel'])
+external('check', '<>: its SHARC <> kernel <> has no registration with that id in its mod', 'tests/test_sharc_kernels.py',
+         ['has no registration with that id in its mod', 'test_a_kernel_needs_its_registration_in_its_mod'])
 external('check', '<>: DN2 filter G needs a label of 1..5 printable ASCII characters and a default of 0..127',
-         'tests/test_sharc_filter.py', ['DN2 filter G needs a label', 'test_refuses_an_invalid_g_and_links_a_valid_one'])
+         'tests/test_sharc_kernels.py', ['DN2 filter G needs a label', 'test_refuses_an_invalid_g_and_links_a_valid_one'])
 external('parse_sites', '<>: unqualified SHARC data site', 'tests/test_sharc_filter.py',
          ['unqualified SHARC data site', 'test_only_the_exact_profiled_sharc_data_site_is_accepted'])
 external('check', '<>: SHARC data site requires a SHARC mod', 'tests/test_sharc_filter.py',
@@ -173,6 +176,8 @@ external('link', 'SHARC mod needs the stock section-7 stream', 'tests/test_sharc
          'SHARC mod needs the stock section-7 stream')
 external('link', 'SHARC stored section exceeds the profile limit', 'tests/test_sharc_active.py',
          'SHARC stored section exceeds the profile limit')
+external('link', 'two raw SHARC patches overlap at 0x<>', 'tests/test_digitakt2.py',
+         'two raw SHARC patches overlap')
 
 
 def edit_region(name, lo, hi):
@@ -713,6 +718,15 @@ def _(B):
                   fast(room + 4), fast(room))
 
 
+@row('link', '<>: a jsr/jmp at 0x<> goes to the odd address 0x<> (align the code: .balign 2 at the start of '
+     'each .run section)', device='digitakt-mk1')
+def _(B):
+    def target(at):
+        return lambda d: d[1]['symbols'].update(fn_m=['.run', at])
+    return B.pair('m 1 site 0x%08x: a jsr/jmp at 0x%08x goes to the odd address 0x' % (B.at(0x1000), B.at(0x1000)),
+                  target(1), target(2))
+
+
 external('link', 'the DSP code for payload <> needs P words to 0x<>, past the <> words <> frees (<> over)',
          'tests/test_octatrack.py', 'the DSP code for payload A needs P words to 0x00bd9')
 
@@ -1076,7 +1090,7 @@ def test_octatrack_fixtures():
 
 
 def test_digitakt_fixtures():
-    assert run_rows('digitakt-mk1') == 3
+    assert run_rows('digitakt-mk1') == 4
 
 
 def test_analog_rytm_fixtures():

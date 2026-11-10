@@ -33,12 +33,20 @@ struct elek_page {
     const struct elek_knob *encoder[8]; /* &knobs[ID] or null for an empty position; pages may share */
 };
 /* What .present shows for one knob. Each call starts from the knob's declaration: its label, shown,
- * its glyph. */
+ * its glyph and no value text. Assign text: a string literal, constant data, or elek_num's or
+ * elek_fixed's. At most ELEK_UI_LABEL_MAX characters show; nonprintable ones show as ?. */
 struct elek_view {
-    char label[ELEK_UI_LABEL_MAX + 1]; /* write it with elek_label_set or elek_label_num; nonprintable
-                                        * characters show as ? */
+    const char *label;             /* null shows the declared label */
     uint32_t hidden;               /* nonzero blanks the knob on every page; it keeps its value */
     const struct elek_glyph *glyph; /* null selects the stock graphic; must stay readable */
+    const char *value;             /* the text for ui->knob[ID], under the knob and in the pop-up; null or
+                                    * empty shows the number */
+};
+#define ELEK_TEXT_MAX 32        /* the texts elek_num and elek_fixed build in one call */
+/* Private: where elek_num and elek_fixed build text, kept until the companion has read the call's views. */
+struct elek_scratch {
+    uint32_t used;
+    char text[ELEK_TEXT_MAX][ELEK_UI_LABEL_MAX + 1];
 };
 struct elek_ui {
     const int32_t *knob;           /* by id, mapped to min..max: every knob, on every page */
@@ -46,26 +54,36 @@ struct elek_ui {
     int32_t page;                  /* the page shown, or ELEK_UI_NO_PAGE (e.g. naming LFO destinations),
                                     * also for machines with pages: check before indexing */
     uint32_t track;                /* the track this call is for, from zero: not always the active one */
+    struct elek_scratch *scratch;  /* private: elek_num's and elek_fixed's */
 };
-/* Labels, as there is no libc: text, cut at ELEK_UI_LABEL_MAX characters. */
-static inline void elek_label_set(char *label, const char *text)
+/* prefix then v / 10^places with places decimals (0..9), as text for a view: elek_fixed(ui, "", 24, 1) is
+ * "2.4". The prefix is cut to fit the number; "#" when the number alone needs more than ELEK_UI_LABEL_MAX
+ * characters, or past ELEK_TEXT_MAX texts in one call. */
+static inline const char *elek_fixed(const struct elek_ui *ui, const char *prefix, int32_t v, int places)
 {
-    int n = 0;
-    while (n < ELEK_UI_LABEL_MAX && text[n]) { label[n] = text[n]; ++n; }
-    label[n] = 0;
-}
-/* prefix then v in decimal, the prefix cut to fit the number; "#" when the number alone does not fit. */
-static inline void elek_label_num(char *label, const char *prefix, int32_t v)
-{
-    char digits[11];
+    char digits[12], *out;
     uint32_t n = v < 0 ? 0u - (uint32_t)v : (uint32_t)v;
-    int count = 0, pos = 0;
-    do digits[count++] = (char)('0' + n % 10); while (n /= 10);
-    if (v < 0) digits[count++] = '-';
-    if (count > ELEK_UI_LABEL_MAX) { label[0] = '#'; label[1] = 0; return; }
-    while (pos < ELEK_UI_LABEL_MAX - count && prefix[pos]) { label[pos] = prefix[pos]; ++pos; }
-    while (count) label[pos++] = digits[--count];
-    label[pos] = 0;
+    int count = 0, pos = 0, size;
+    if (places < 0) places = 0;
+    if (places > 9) places = 9;
+    do digits[count++] = (char)('0' + n % 10); while ((n /= 10) || count <= places);
+    size = count + (places > 0) + (v < 0);
+    if (size > ELEK_UI_LABEL_MAX || ui->scratch->used >= ELEK_TEXT_MAX)
+        return "#";
+    out = ui->scratch->text[ui->scratch->used++];
+    while (pos < ELEK_UI_LABEL_MAX - size && prefix[pos]) { out[pos] = prefix[pos]; ++pos; }
+    if (v < 0) out[pos++] = '-';
+    while (count--) {
+        if (count + 1 == places) out[pos++] = '.';
+        out[pos++] = digits[count];
+    }
+    out[pos] = 0;
+    return out;
+}
+/* prefix then v: elek_num(ui, "+", 7) is "+7". As elek_fixed with no decimals. */
+static inline const char *elek_num(const struct elek_ui *ui, const char *prefix, int32_t v)
+{
+    return elek_fixed(ui, prefix, v, 0);
 }
 
 /* Sound. render fills one voice's block. The same C builds for every device: samples are the
@@ -151,10 +169,21 @@ struct elek_voice {
     int32_t velocity;              /* 1..127; the Digitone's AMP already applies it: use it for timbre */
     void *state;                   /* ELEK_VOICE_STATE_MAX bytes, zeroed at boot and when the voice changes
                                     * machine, kept between calls and notes: read it with ELEK_STATE */
+    uint32_t idle;                 /* frames the voice was not rendered (silent) since its last render, up to
+                                    * UINT32_MAX; 0 in the first render after its state is zeroed */
+    /* cc[n], n 0..127: the value, 0..127, of MIDI CC n if one came on the voice's track since this voice's
+     * last render (while it was silent too), else -1. Several of the same CC read as the last one; which
+     * of two different CCs came first is not kept. The stock applies the CC as it would anyway. Valid
+     * during the call only. */
+    const int32_t *cc;
 };
 /* The voice's state as a type*, which must fit in ELEK_VOICE_STATE_MAX bytes (a compile error if not). */
 #define ELEK_STATE(type, v) \
     ((void)sizeof(char[sizeof(type) <= ELEK_VOICE_STATE_MAX ? 1 : -1]), (type *)(v)->state)
+
+/* Mono machines (.play and .prio): the Digitone II's TRK SETUP PLAY MODE and MONO NOTE PRIO. */
+enum { ELEK_POLY, ELEK_MONO, ELEK_MONO_LEGATO };          /* .play */
+enum { ELEK_PRIO_LAST, ELEK_PRIO_LOW, ELEK_PRIO_HIGH };   /* .prio, for ELEK_MONO and ELEK_MONO_LEGATO */
 
 struct elek_machine {
     int32_t id;                    /* native machine slot, 4..127 (Digitone II: 5..127); declared only here */
@@ -168,6 +197,10 @@ struct elek_machine {
     /* Optional: the machine's sound, one voice at a time (without it the device's own plays).
      * It may read only its arguments, its state and constant data. */
     void (*render)(const struct elek_voice *, elek_sample *out);
+    /* Optional: how the track plays live keys. ELEK_POLY (0): every key, as the device allocates voices.
+     * ELEK_MONO: one note at a time, the held key .prio chooses, the AMP restarted at each change.
+     * ELEK_MONO_LEGATO: the same, but a change while a note sounds moves its pitch, the AMP running on. */
+    uint8_t play, prio;
 };
 
 #define ELEK_KNOBS(k) .knobs = (k), .knob_count = sizeof(k) / sizeof((k)[0])
@@ -193,7 +226,9 @@ ELEK_OFFSET(elek_machine, knobs, 12);
 ELEK_OFFSET(elek_machine, knob_count, 16);
 ELEK_OFFSET(elek_machine, pages, 20);
 ELEK_OFFSET(elek_machine, render, 96);
-ELEK_SIZE(elek_machine, 100);
+ELEK_OFFSET(elek_machine, play, 100);
+ELEK_OFFSET(elek_machine, prio, 101);
+ELEK_SIZE(elek_machine, 102);
 ELEK_OFFSET(elek_page, label, 0);
 ELEK_OFFSET(elek_page, encoder, 4);
 ELEK_SIZE(elek_page, 36);

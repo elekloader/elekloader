@@ -78,7 +78,7 @@ class ActiveSineTests(unittest.TestCase):
             large_stack = copy.deepcopy(app.doc)
             large_stack['sharc']['stack_bytes'] = rel.sharc['stack_max']
             for message, mods in (
-                ('SHARC mods may combine only one DN2 voice and one DN2 filter', [core, app, asm]),
+                ('a build takes one SHARC mod', [core, app, asm]),
                 ('active SHARC mod requires a qualified matching core bridge',
                  [link.Mod2(old_core, 'old-core'), app]),
                 ('unqualified active SHARC core bytes or entry',
@@ -119,6 +119,17 @@ class ActiveSineTests(unittest.TestCase):
                 facts = formats.verify(outputs, stock, linked.image, dev,
                                        want_sharc=linked.sharc_stream)
                 self.assertIn('sections 2, 4, 5, 8, byte for byte', facts['untouched'])
+
+            # machines-dn2 carries the kernel dispatcher; without kernels it changes nothing on the DSP, so a
+            # master app with core-dn2's bridge, the DSP peek and dspbusy-dn2's data site link as without it.
+            machines = elemod.load_any(sdk.build(str(ROOT / 'mods/machines-dn2'), STOCK, work + '/machines')[0])
+            busy = elemod.load_any(sdk.build(str(ROOT / 'mods/dspbusy-dn2'), STOCK, work + '/busy')[0])
+            for extra in ([], [busy]):
+                alone = link.link([core, app] + extra, image, sharc_stream=stock.section(7))
+                self.assertEqual(link.check([core, machines, app] + extra, image), [])
+                beside = link.link([core, machines, app] + extra, image, sharc_stream=stock.section(7))
+                self.assertEqual((beside.sharc_stream, beside.sharc_stored, beside.layout['sharc']),
+                                 (alone.sharc_stream, alone.sharc_stored, alone.layout['sharc']))
 
 
 if __name__ == '__main__':

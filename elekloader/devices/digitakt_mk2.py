@@ -55,7 +55,38 @@ DEVICE = Device(
             version='1.17',
             syx_sha256='26c22f6652625ac2cfd47f7ee970d388ed8b6427dae3563c0a6a2f2d334350d5',
             main_sha256='a1e7b657b705eba1a19d81c33c1e11ba9c409816447ad74005d7bbf36da6d964',
-            main_len=3275616)
+            main_len=3275616,
+            # Section 7 (the ADSP-21569's boot stream), for raw SHARC mods (`sharc_raw`, docs/FORMAT.md):
+            # new loads in the L2 that the stock stream leaves unused, and patches of whole stock
+            # instructions in the L1 code load. Measured on 1.17; the free L2 is digikit's
+            # (devices/ports/dt2-1.17.toml region dsp.l2, with its exclude).
+            sharc={
+                'section': 7,
+                'processor': 'ADSP-21569',
+                'isa': 'sharc+-visa',
+                'stored_sha256': '39113a8ae7f7ac7336bda4a56eeb45108f0618ea451bcf9f466803017184375d',
+                'stored_len': 184856,
+                'decoded_sha256': '0f514a12a2255f5c081e292c47f1f29462003177658da4bbae0a22fd737fffa2',
+                'decoded_len': 321016,
+                'stored_max': 0x100000,
+                'decoded_max': 0xfffff,
+                'record_count': 104,
+                'l1_aliases': ((0x240000, 0x270000, 0x28240000),
+                               (0x2c0000, 0x2f0000, 0x282c0000),
+                               (0x300000, 0x320000, 0x28300000),
+                               (0x380000, 0x3a0000, 0x28380000)),
+                'l2_bytes': (0x20000000, 0x20100000),
+                'l2_pc16': (0xb80000, 0xc00000, 0x20000000),
+                'ddr_bytes': (0x80000000, 0xa0000000),
+                'protected': ((0x200fa000, 0x200fe000, 'DT2 L2 window two functions load as literals'),
+                              (0x200fe000, 0x20100000, 'Boot ROM workspace'),
+                              (0x282ec000, 0x282f0000, 'L1 block 1 cache'),
+                              (0x2831c000, 0x28320000, 'L1 block 2 cache'),
+                              (0x2839c000, 0x283a0000, 'L1 block 3 cache')),
+                'raw': True,
+                'owned_ranges': ((0x2001ab7c, 0x200fa000),),
+                'patch_ranges': ((0x283827cc, 0x283827cc + 104500),),
+            })
     },
     main_section=3,
     main_load=0x40000400,
@@ -67,6 +98,10 @@ DEVICE = Device(
     isa='coldfire',
     areas={
         'ddr': (0x47F00000, 0x47F40000),          # above the DSP buffers, below the boot stack
+        # below the linker's area, above the DSP buffers (0x47E30000-0x47E7AE80): what mods that place
+        # code at fixed addresses claim (`resources.regions`); digikit's patchkit puts its expansion
+        # region at 0x47E8B000
+        'ddr-low': (0x47E7B000, 0x47F00000),
         'sram-tail': (0x8000F100, 0x80010000),    # the SRAM's free tail
         'sram-block': (0x80006E80, 0x80008000),   # free SRAM after the first half's data
     },

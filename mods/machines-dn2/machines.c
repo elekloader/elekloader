@@ -35,14 +35,17 @@ uint32_t dn2_list[COUNT], dn2_list_bytes;
 static const struct mk2_synth *registered[COUNT];
 static struct descriptor descriptors[COUNT];
 static struct string_rep strings[COUNT][2];
-static uint8_t ui_only[COUNT];      /* an SDK machine (sdk_alpha.c): FM TONE plays it */
+static uint8_t ui_only[COUNT];      /* an SDK machine (sdk_alpha.c) */
+static uint8_t sdk_render[COUNT];   /* an SDK machine with a render: its SHARC kernel plays it, not FM TONE */
 static uint32_t ready;
 struct row dn2_t1[T1_END];     /* the stock rows are copied in at boot (start.s) */
-static struct descriptor pages[ADDED / 8];
-static uint8_t first_page[COUNT], page_count[COUNT];
+/* A voice's page p, knob k is sound slot 25 + 8p + k, whose row ROWS + 8p + k every voice shares,
+ * labelled for the active track's voice (dn2_rows_follow) and taking its default (dn2_range). */
+static struct descriptor pages[VOICE_COUNT][ADDED / 8];
+static const struct mk2_voice_pages *voice_pages[VOICE_COUNT];
+static uint8_t page_count[COUNT];
 static struct string_rep tabs[ADDED / 8];
 static struct string_rep labels[T1_END - ROWS];
-static unsigned used_pages;
 
 const char *dn2_representation(struct string_rep *r, const char *s, unsigned max)
 {
@@ -68,8 +71,8 @@ static unsigned label_length(const char *s)
 
 static int valid_pages(const struct mk2_voice_pages *p)
 {
-    if (p->id >= COUNT || !registered[p->id] || page_count[p->id]
-            || !p->page || !p->count || used_pages + p->count > ADDED / 8)
+    if (p->id >= VOICE_COUNT || !registered[p->id] || page_count[p->id]
+            || !p->page || !p->count || p->count > ADDED / 8)
         return 0;
     for (unsigned i = 0; i < p->count; ++i)
         for (unsigned k = 0; k < 8; ++k) {
@@ -131,24 +134,27 @@ void dn2_row_format(uint32_t code, void (*format)(int32_t value, char *buf))
     dn2_t1[code].format = (uint32_t)(uintptr_t)format;
 }
 
-/* Each declared knob gets a parameter row after the stock ones, copied from TEMPLATE. */
+/* Each declared knob's slot gets a parameter row after the stock ones, copied from TEMPLATE. */
 static void build_pages(void)
 {
     const struct mk2_voice_pages *const *e;
+    for (unsigned i = 0; i < ADDED / 8; ++i) {
+        const char tab[] = {'S', 'Y', 'N', '1' + i, 0};
+        dn2_representation(&tabs[i], tab, 4);
+    }
     for (e = mk2_voice_pages; *e; ++e) {
         const struct mk2_voice_pages *p = *e;
         if (!valid_pages(p))
             continue;
-        first_page[p->id] = used_pages;
+        voice_pages[p->id] = p;
         page_count[p->id] = p->count;
-        for (unsigned i = 0; i < p->count; ++i, ++used_pages) {
-            const char tab[] = {'S', 'Y', 'N', '1' + i, 0};
-            struct descriptor *d = &pages[used_pages];
-            d->name = dn2_representation(&tabs[used_pages], tab, 4);
+        for (unsigned i = 0; i < p->count; ++i) {
+            struct descriptor *d = &pages[p->id][i];
+            d->name = tabs[i].text;
             d->label = strings[p->id][0].text;
             for (unsigned k = 0; k < 8; ++k) {
                 const struct mk2_param *m = p->page[i].knob[k];
-                unsigned code = ROWS + 8 * used_pages + k;
+                unsigned code = ROWS + 8 * i + k;
                 d->params[k] = m ? code : 0;
                 if (m)
                     dn2_add_row(code, SLOT + 8 * i + k, m->label, m->def, strings[p->id][0].text);
@@ -177,6 +183,7 @@ void dn2_ensure(void)
             continue;
         registered[s->id] = s;
         ui_only[s->id] = 1;
+        sdk_render[s->id] = dn2_sdk_renders(s->id);
         descriptors[s->id].name = dn2_representation(&strings[s->id][0], s->name, 31);
         descriptors[s->id].label = dn2_representation(&strings[s->id][1], s->label, 7);
     }
@@ -208,9 +215,11 @@ uint32_t dn2_is_voice(uint32_t type)
     return type < COUNT && registered[type];
 }
 
+/* The type the frame sends the DSP: a voice's own, whose kernel plays it; FM TONE for an SDK machine
+ * without a render. */
 uint32_t dn2_dsp_type(uint32_t type)
 {
-    return dn2_is_voice(type) && !ui_only[type] ? type : dn2_host_type(type);
+    return dn2_is_voice(type) && (!ui_only[type] || sdk_render[type]) ? type : dn2_host_type(type);
 }
 
 uint32_t dn2_voice_page_count(uint32_t type)
@@ -230,7 +239,7 @@ uintptr_t dn2_voice_page(uint32_t type, uint32_t page)
         return (uintptr_t)&dn2_stock_descriptors[4];
     if (ui_only[type])
         return (uintptr_t)dn2_sdk_page(type, page);
-    return (uintptr_t)(page_count[type] ? &pages[first_page[type] + page] : &descriptors[type]);
+    return (uintptr_t)(page_count[type] ? &pages[type][page] : &descriptors[type]);
 }
 
 /* The parameter code of a voice's sound slot 25..64, 0 for an empty one. */
@@ -241,7 +250,7 @@ uint32_t dn2_voice_code(uint32_t type, uint32_t slot)
         return dn2_sdk_code(type, slot);
     if (!dn2_is_voice(type) || slot < SLOT || page >= page_count[type])
         return 0;
-    return pages[first_page[type] + page].params[(slot - SLOT) % 8];
+    return pages[type][page].params[(slot - SLOT) % 8];
 }
 
 /* MIDI CC and NRPN lookups (track, synth, filter, number) -> parameter code. The stock maps
@@ -337,16 +346,15 @@ static const struct mk2_filter *filters[FILTER_COUNT];
 static struct descriptor filter_descriptors[FILTER_COUNT];
 static struct string_rep filter_strings[FILTER_COUNT][2];
 static uint32_t filters_ready;
-static uint32_t g_filter;           /* the custom filter G's row belongs to, or 0 */
 static struct string_rep g_label;
 
-/* G's row: MULTI-MODE's slot-66 row, owned by the host, with the filter's label and default.
- * The linker allows one SHARC filter a build, so one row serves it; another registration's G
- * is ignored, as an invalid one is. */
+/* G's row: MULTI-MODE's slot-66 row, owned by the host. Every filter with a G shares it, labelled for
+ * the active track's filter (dn2_rows_follow) and taking its default (dn2_range); an invalid G is
+ * ignored. */
 static void add_g(const struct mk2_filter *f)
 {
     const struct mk2_param *m = f->g;
-    if (!m || g_filter || m->def > 127 || !label_length(m->label))
+    if (!m || m->def > 127 || !label_length(m->label))
         return;
     struct row *r = &dn2_t1[G_CODE];
     copy_row(r, &dn2_t1[G_TEMPLATE]);
@@ -356,7 +364,6 @@ static void add_g(const struct mk2_filter *f)
     r->name = r->label = dn2_representation(&g_label, m->label, 5);
     r->owner_name = dn2_t1[G_TEMPLATE].owner_name;
     filter_descriptors[f->id].params[G_CELL] = G_CODE;
-    g_filter = f->id;
 }
 
 void dn2_filters_ensure(void)
@@ -385,6 +392,14 @@ void dn2_filters_ensure(void)
     filters_ready = 1;
 }
 
+/* The filter's G, or 0. */
+static const struct mk2_param *g_of(uint32_t type)
+{
+    dn2_filters_ensure();
+    return type < FILTER_COUNT && filters[type] && filter_descriptors[type].params[G_CELL] == G_CODE
+           ? filters[type]->g : 0;
+}
+
 uint32_t dn2_filter_host_type(uint32_t type)
 {
     if (type < 6 || type >= FILTER_COUNT)
@@ -403,7 +418,7 @@ uint32_t dn2_filter_dsp_type(uint32_t type)
 uint32_t dn2_filter_code(uint32_t slot, uint32_t type)
 {
     dn2_filters_ensure();
-    return slot == G_SLOT && g_filter && type == g_filter ? G_CODE : 0;
+    return slot == G_SLOT && g_of(type) ? G_CODE : 0;
 }
 
 /* The stock maps know no custom filter: it asks its host's, and G's number is the one the
@@ -417,7 +432,7 @@ static uint32_t filter_lookup(lookup *stock, uint32_t track, uint32_t synth, uin
     if (!filters[*filter])
         return 0;
     uint32_t code = 0;
-    if (*filter == g_filter) {
+    if (g_of(*filter)) {
         code = stock(track, synth, 0, key);
         code = code < ROWS && dn2_t1[code].owner == dn2_t1[G_TEMPLATE].owner
                && dn2_t1[code].slot == G_SLOT ? G_CODE : 0;
@@ -470,8 +485,58 @@ void dn2_filter_draw_curve(uint32_t type, void *canvas, uint32_t freq, uint32_t 
     uint8_t y[51], flag;
     for (unsigned x = 0; x < 51; ++x)
         y[x] = 0xff;
-    f->curve(freq, reso, type == g_filter ? dn2_shown(page, G_CODE, &flag) : 0, y);
+    f->curve(freq, reso, g_of(type) ? dn2_shown(page, G_CODE, &flag) : 0, y);
     for (unsigned x = 0; x < 51; ++x)
         if (y[x] != 0xff)
             dn2_pixel(canvas, 21 + x, 7 + (y[x] > 16 ? 16 : y[x]), 1);
+}
+
+/* The active track's voice's knob in sound slot `slot`, or 0. */
+static const struct mk2_param *active_knob(uint32_t slot)
+{
+    uint32_t type = dn2_active_type(0), i = slot - SLOT;
+    const struct mk2_voice_pages *p = dn2_is_voice(type) && type < VOICE_COUNT ? voice_pages[type] : 0;
+    return p && i / 8 < p->count ? p->page[i / 8].knob[i % 8] : 0;
+}
+
+/* ev_tick: the shared rows' labels and owner for the active track's voice and filter. */
+void dn2_rows_follow(void)
+{
+    static int32_t voice = -1, filter = -1;
+    uint32_t type = dn2_active_type(0), f = dn2_active_type(1);
+    if ((int32_t)type != voice && dn2_is_voice(type) && page_count[type]) {
+        for (uint32_t code = ROWS; code < ROWS + ADDED; ++code) {
+            const struct mk2_param *m = active_knob(SLOT + code - ROWS);
+            if (m)
+                dn2_row_label(code, m->label, strings[type][0].text);
+        }
+        voice = type;
+    }
+    const struct mk2_param *g = g_of(f);
+    if ((int32_t)f != filter && g) {
+        dn2_representation(&g_label, g->label, 5);
+        filter = f;
+    }
+}
+
+/* The stock range accessor's {min, max, default} of a parameter code (hooks.s), the row's own, but
+ * the shared rows take the default of the active track's machine: stock reads it after a selection
+ * has written the track's new machine, and when a page or a sound is cleared. */
+void dn2_range(int32_t *out, uint32_t code)
+{
+    const struct row *r = &dn2_t1[code < T1_END ? code : 0];
+    int32_t def = r->def;
+    if (code >= ROWS && code < ROWS + ADDED) {
+        const struct mk2_param *m = active_knob(SLOT + code - ROWS);
+        def = m ? (int32_t)m->def << 8 : def;
+    } else if (code == G_CODE) {
+        const struct mk2_param *g = g_of(dn2_active_type(1));
+        def = g ? (int32_t)g->def << 8 : def;
+    } else if (code >= ROWS + SDK_ROW && code < T1_END) {
+        int32_t d = dn2_sdk_default(code - ROWS - SDK_ROW);
+        def = d >= 0 ? d : def;
+    }
+    out[0] = r->min;
+    out[1] = r->max;
+    out[2] = def;
 }

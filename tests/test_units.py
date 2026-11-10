@@ -113,6 +113,50 @@ def test_a_selection_too_big_for_its_core_takes_one_with_more_ram():
     assert one_core(d, {c23, c32, c40, 'lib/tiny.elemod'}) == {c40, 'lib/tiny.elemod'}
 
 
+def test_a_mod_that_patches_a_place_the_newest_core_took_takes_the_newest_core_that_leaves_it():
+    from elekloader.gui import one_core, with_requirements
+    # the Digitakt's core 4.1 took the master output's place (0x400721e6) for every mod; a mod made for 4.0
+    # (Tone+FX 4.0c, Digi EQ 1.0c) still patches it itself
+    code = lambda addr, n=6: (addr, n, 'code', '')
+    d = {
+        'app/core-4.0.elemod': {'id': 'core', 'version': '4.0', 'fits': True, 'requires': [], 'format': 2,
+                                'sites': [code(0x40010000)]},
+        'app/core-4.1.elemod': {'id': 'core', 'version': '4.1', 'fits': True, 'requires': [], 'format': 2,
+                                'sites': [code(0x40010000), code(0x400721e6)]},
+        'lib/tone.elemod': {'id': 'tone', 'fits': True, 'requires': ['core'], 'format': 2,
+                            'sites': [code(0x400721e6), code(0x40184628, 4)]},
+        'lib/health.elemod': {'id': 'health', 'fits': True, 'requires': ['core'], 'format': 2,
+                              'sites': [code(0x40020000, 4)]},
+        'lib/before.elemod': {'id': 'before', 'fits': True, 'requires': ['core'], 'format': 2,
+                              'sites': [code(0x400721e0)]},
+        'lib/master.elemod': {'id': 'master', 'fits': True, 'requires': ['core'], 'format': 2,
+                              'needs_core': '4.1', 'sites': []},
+        'lib/whole.elemod': {'id': 'whole', 'fits': True, 'format': 1, 'sites': [code(0x400721e6)]},
+    }
+    c40, c41 = 'app/core-4.0.elemod', 'app/core-4.1.elemod'
+    tone, health, master = 'lib/tone.elemod', 'lib/health.elemod', 'lib/master.elemod'
+    # the newest core, for a mod that leaves its places alone
+    assert with_requirements(d, set(), health) == {health, c41}
+    # the mod that patches a place 4.1 patches: 4.0, the newest core that does not, also in 4.1's place
+    assert with_requirements(d, set(), tone) == {tone, c40}
+    assert with_requirements(d, {c41}, tone) == {tone, c40}
+    assert with_requirements(d, {c41, health}, tone) == {tone, health, c40}
+    # and 4.0 stays for what is ticked after it
+    assert with_requirements(d, {tone, c40}, health) == {tone, health, c40}
+    # a site that ends where the core's begins is beside it, not on it; a byte further is on it
+    assert with_requirements(d, {c41}, 'lib/before.elemod') == {'lib/before.elemod', c41}
+    d['lib/before.elemod']['sites'] = [code(0x400721e1)]
+    assert with_requirements(d, {c41}, 'lib/before.elemod') == {'lib/before.elemod', c40}
+    # with a mod that needs 4.1, no core takes both: the newest that is new enough, for the check to say why
+    assert with_requirements(d, {tone, c40}, master) == {tone, master, c41}
+    assert with_requirements(d, set(), master) == {master, c41}
+    # a whole build goes with no core at all (the check says so): what it patches moves no core
+    assert with_requirements(d, {'lib/whole.elemod', c41}, health) == {'lib/whole.elemod', health, c41}
+    # the first run's ticks: one core, the newest that takes the mods
+    assert one_core(d, {c40, c41, tone, health}) == {tone, health, c40}
+    assert one_core(d, {c40, c41, health}) == {health, c41}
+
+
 def test_a_mod_that_needs_core_3_ticks_core_3():
     from elekloader.gui import one_core, with_requirements
     d = {
@@ -691,36 +735,8 @@ def test_dn2_machines_declares_only_custom_machine_tables():
         assert not [p for p in link.check([machines, registration(table)], image) if 'adds to table' in p]
 
 
-def test_dn2_filter_g_is_refused_unless_valid():
-    from elekloader.sdk.sharc import filter_artifact
-    dn = next(d for d in devices.devices() if d.key == 'digitone-mk2')
-    r = dn.releases['1.12']
-    target, image = devices.target_of(dn, r), bytes(r.main_len)
-    core = link.Mod2({'elemod': 2, 'id': 'core', 'version': '0.1', 'target': target,
-                      'sections': {'.boot': {'align': 4, 'parts': [['hex', '00000000']]}},
-                      'collections': {'mk2_voice_filters': {'entry': 4}}}, 'core')
-
-    def mod(label, default, g=True):
-        """The descriptor {8, name, label, curve, g} at 0, G {label, default} at 20 and its label at 28."""
-        text = '00000008' + '00' * 20 + '%08x' % default + (label or '').encode('latin1').hex() + '00'
-        return link.Mod2({'elemod': 2, 'id': 'g', 'version': '0.1', 'target': target,
-                          'sections': {'.run': {'align': 4, 'parts': [['hex', text]]}},
-                          'symbols': {'descriptor': ['.run', 0], 'g': ['.run', 20], 'label': ['.run', 28]},
-                          'relocs': ([['.run', 16, 'abs32', 'sym:g', 0]] if g else [])
-                          + ([['.run', 20, 'abs32', 'sym:label', 0]] if label is not None else []),
-                          'contribute': [{'to': 'mk2_voice_filters', 'data': '00000000',
-                                          'relocs': [[0, 'abs32', 'sym:descriptor', 0]]}],
-                          'sharc': filter_artifact(bytes(4), bytes(4), 0, 8, 12)}, 'g')
-    refusal = 'g 0.1: DN2 filter G needs a label of 1..5 printable ASCII characters and a default of 0..127'
-    for label, default in (('MODE', 0), ('HIGH5', 127)):
-        assert link.check([core, mod(label, default)], image) == []
-    assert link.check([core, mod(None, 0, g=False)], image) == []
-    for label, default in (('MODE', 128), ('TOOWIDE', 1), ('', 1), ('M\tX', 1), (None, 1)):
-        assert link.check([core, mod(label, default)], image) == [refusal], (label, default)
-
-
 def test_dn2_machine_ids_can_span_stored_parts():
-    from elekloader.sdk.sharc import voice_artifact
+    from test_sharc_kernels import MACHINES, kernel
     dn = next(d for d in devices.devices() if d.key == 'digitone-mk2')
     r = dn.releases['1.12']
     target = devices.target_of(dn, r)
@@ -737,7 +753,7 @@ def test_dn2_machine_ids_can_span_stored_parts():
                           'symbols': {'descriptor': ['.run', 0]}, 'relocs': list(relocs),
                           'contribute': [{'to': 'mk2_voice_synths', 'data': '00000000',
                                           'relocs': [[0, 'abs32', 'sym:descriptor', 0]]}],
-                          'sharc': voice_artifact(bytes(4), b'', 0, 5, 0)}, 'voice')
+                          'sharc': kernel(('mk2-voice', 5))}, 'voice')
 
     for split in (1, 2, 3):
         for left_stock in (False, True):
@@ -748,11 +764,11 @@ def test_dn2_machine_ids_can_span_stored_parts():
                           else ['hex', machine_id[split:].hex()]), ['hex', '00' * 12]]
                 voice = mod(parts)
                 assert voice.implied_names(image) == ['mk2-synth:5'], parts
-                assert link.check([core, voice], image) == [], parts
+                assert link.check([core, MACHINES, voice], image) == [], parts
                 relocated = mod(parts, [('.run', 0, 'abs32', 'abs', 5)])
                 assert relocated.implied_names(image) == []
-                assert 'voice 0.1: SHARC voice machine_id must match its single native voice registration' in link.check(
-                    [core, relocated], image)
+                assert 'voice 0.1: its SHARC mk2-voice kernel 5 has no registration with that id in its mod' in link.check(
+                    [core, MACHINES, relocated], image)
 
 
 def test_kept_bytes_refuse_every_write():
@@ -1221,13 +1237,42 @@ def submit_mod_module():
 
 
 def test_the_shop_list_keeps_its_layout():
-    """packaging/submit_mod.py rewrites web/catalog.json: it writes the file as it is laid out by hand."""
+    """packaging/submit_mod.py rewrites catalog.json: it writes the file as it is laid out by hand."""
+    submit_mod = submit_mod_module()
+    if submit_mod is None or shop_list_or_skip(submit_mod.CATALOG) is None:
+        return
+    with open(submit_mod.CATALOG, encoding='utf-8') as fh:
+        text = fh.read()
+    assert submit_mod.render(json.loads(text)) == text
+
+
+def test_a_submission_is_told_the_core_it_builds_with():
+    """submit_mod.py's heads-up names the core a builder takes for the file (gui.with_core): the newest the site has
+    that is new enough and that it can share a build with, not the newest whatever the file patches."""
     submit_mod = submit_mod_module()
     if submit_mod is None:
         return
-    with open(os.path.join(os.path.dirname(HERE), 'web', 'catalog.json'), encoding='utf-8') as fh:
-        text = fh.read()
-    assert submit_mod.render(json.loads(text)) == text
+    fp = lambda *spans: {'id': 'core', 'format': 2, 'conflicts': [], 'names': [], 'exports': [], 'tables': [],
+                         'spans': [list(s) for s in spans], 'regions': []}
+    at = ('digitakt-mk1', '1.53')
+    cores = {at: ['4.0', '4.1', '2.1']}
+    prints = {at + ('2.1',): fp((0x40010000, 0x40010006)), at + ('4.0',): fp((0x40010000, 0x40010006)),
+              at + ('4.1',): fp((0x40010000, 0x40010006), (0x400721e6, 0x400721ec))}
+    mod = lambda need, *spans: {'id': 'm', 'device': at[0], 'os': at[1], 'requires': ['core'], 'need': need,
+                                'footprint': dict(fp(*spans), id='m')}
+    core_note = lambda f, p=prints: submit_mod.heads_up(f, {}, cores, p)[0]
+    assert core_note(mod(None, (0x40020000, 0x40020004))) == 'builds with core 4.1'
+    # a mod made before 4.1 took the master output's place: 4.0, and why it is not the newest
+    assert core_note(mod('2.1', (0x400721e6, 0x400721ec))) == (
+        "builds with core 4.0, not the newest: it can't link with core 4.1 (both patch the same place in the "
+        "firmware), so it can't share a build with a mod that needs a newer core than 4.0")
+    # one that needs 4.1 and patches its place: no core the site has
+    assert core_note(mod('4.1', (0x400721e6, 0x400721ec))) == (
+        "can't be built on the site: it can't link with core 4.1 (both patch the same place in the firmware), "
+        'nor with an older one the site has')
+    # without the cores' footprints (no --cores-dir): the newest, as far as the check can tell
+    assert core_note(mod(None, (0x400721e6, 0x400721ec)), None) == 'builds with core 4.1'
+    assert submit_mod.heads_up(dict(mod(None), requires=[]), {}, cores, prints) == []
 
 
 def test_the_submit_a_mod_form_is_read():
@@ -1399,6 +1444,251 @@ def test_shop_updates_take_only_newer_files_of_the_repositorys_own_mods():
         submit_mod.get, submit_mod.facts = real
     assert submit_mod.as_of('Ran on a unit.', '1.0') == 'As of 1.0: Ran on a unit.'
     assert submit_mod.release_text('') == {}
+
+
+def thumbs_module():
+    """packaging/thumbs.py, or None where the repository isn't (under Pyodide)."""
+    folder = os.path.join(os.path.dirname(HERE), 'packaging')
+    if not os.path.exists(os.path.join(folder, 'thumbs.py')):
+        return None
+    sys.path.insert(0, folder)
+    import thumbs
+    return thumbs
+
+
+def png_rgba(rows):
+    """An 8-bit RGBA PNG of rows of (r, g, b, a), as an image editor saves one."""
+    import zlib
+    w, h = len(rows[0]), len(rows)
+    raw = b''.join(b'\x00' + bytes(v for p in row for v in p) for row in rows)
+    def chunk(k, d):
+        return struct.pack('>I', len(d)) + k + d + struct.pack('>I', zlib.crc32(k + d))
+    return (b'\x89PNG\r\n\x1a\n' + chunk(b'IHDR', struct.pack('>IIBBBBB', w, h, 8, 6, 0, 0, 0))
+            + chunk(b'IDAT', zlib.compress(raw)) + chunk(b'IEND', b''))
+
+
+def screen_bits(kind='drawing'):
+    """A 128x64 picture: a frame, a sine and bars (a drawing), a checkerboard of shading (dithered)."""
+    import math
+    bits = [[0] * 128 for _ in range(64)]
+    for y in range(64):
+        for x in range(128):
+            if kind == 'dithered':
+                bits[y][x] = (x + y) % 2 if 20 < x < 110 else (x * 7 + y * 3) % 5 == 0
+            elif y in (0, 63) or x in (0, 127) or y == int(32 + 20 * math.sin(x / 8)) or (x % 32 == 4 and y > 40):
+                bits[y][x] = 1
+    return bits
+
+
+def test_shop_thumbnails_are_screen_pictures():
+    """packaging/thumbs.py: exactly 128x64 in two solid colours, drawn, not dithered; nothing is converted."""
+    thumbs = thumbs_module()
+    if thumbs is None:
+        return
+    bits = screen_bits()
+    canon = thumbs.canonical_png(bits)
+    r = thumbs.check(canon)
+    assert r['ok'] and r['bits'] == bits and len(canon) < 1024, r.get('reason')
+    assert thumbs.canonical_png(thumbs.check(canon)['bits']) == canon       # the site's file is stable
+    # an editor's RGBA save of two colours (amber on navy) is the same picture; the lighter colour is lit
+    two = png_rgba([[(250, 190, 60, 255) if v else (20, 24, 60, 255) for v in row] for row in bits])
+    assert thumbs.check(two)['bits'] == bits
+    text = thumbs.braille(bits).split('\n')
+    assert len(text) == 16 and all(len(t) == 64 for t in text) and text[0][0] == chr(0x2800 + 0x4f)
+    refused = {
+        'not a PNG': (b'GIF89a' + bytes(100), 'not a PNG'),
+        'too big': (png_rgba([[(0, 0, 0, 255)] * 256 for _ in range(128)]), 'is 256x128'),
+        'greys': (png_rgba([[(v * 2, v * 2, v * 2, 255) for v in range(128)] for _ in range(64)]), 'has 128 colours'),
+        'transparent': (png_rgba([[(255, 255, 255, 255 if v else 0) for v in row] for row in bits]), 'transparent'),
+        'flat': (thumbs.canonical_png([[0] * 128 for _ in range(64)]), 'one flat colour'),
+        'dithered': (thumbs.canonical_png(screen_bits('dithered')), 'looks dithered'),
+        'large': (canon + b'\0' * thumbs.MAX_BYTES, 'at most'),
+    }
+    for name, (data, said) in refused.items():
+        r = thumbs.check(data)
+        assert not r['ok'] and said in r['reason'], (name, r.get('reason'))
+    assert 'not taken: it looks dithered' in thumbs.preview_md(thumbs.check(refused['dithered'][0]))
+    assert '```text\n' + thumbs.braille(bits) in thumbs.preview_md(thumbs.check(canon))
+
+
+def test_the_site_takes_a_thumbnail_only_as_pinned_and_checked():
+    """build_web.py: a "thumb" is pinned like a file, listed once for download, checked again, and served as the
+    canonical PNG; one missing, changed or failing leaves the card's drawn cover."""
+    thumbs = thumbs_module()
+    if thumbs is None:
+        return
+    import contextlib
+    import hashlib
+    import io
+    import build_web
+    good = thumbs.canonical_png(screen_bits())
+    bad = thumbs.canonical_png(screen_bits('dithered'))
+    sums = {n: hashlib.sha256(b).hexdigest() for n, b in (('good', good), ('bad', bad))}
+    with tempfile.TemporaryDirectory() as tmp:
+        cat = os.path.join(tmp, 'catalog.json')
+        def items(*thumbs_):
+            return [{'repo': 'o/r', 'tag': 'v1', 'file': 'm%d.elemod' % i, 'device': 'digitakt-mk1', 'sha256': '0' * 64,
+                     'thumb': t} for i, t in enumerate(thumbs_)]
+        def read(*thumbs_):
+            with open(cat, 'w') as fh:
+                json.dump({'about': '', 'items': items(*thumbs_)}, fh)
+            return build_web.read_catalog(cat)
+        pin = {'tag': 'v1', 'file': 'thumb.png', 'sha256': sums['good']}
+        got = read(pin, dict(pin), {'commit': 'a' * 40, 'path': 'art/thumb.png', 'sha256': sums['bad']})
+        assert build_web.thumb_list(got) == sorted([('thumb-release', 'o/r', 'v1', 'thumb.png', sums['good']),
+                                                    ('thumb-commit', 'o/r', 'a' * 40, 'art/thumb.png', sums['bad'])],
+                                                   key=lambda t: t[-1])
+        for wrong in ({'tag': 'v1', 'file': 'thumb.gif', 'sha256': sums['good']}, {'tag': 'v1', 'sha256': sums['good']},
+                      {'commit': 'a' * 40, 'path': '../thumb.png', 'sha256': sums['good']}, dict(pin, sha256='x')):
+            try:
+                read(wrong)
+            except SystemExit as e:
+                assert '"thumb" is' in str(e)
+            else:
+                raise AssertionError(wrong)
+        os.mkdir(os.path.join(tmp, 'thumbs'))
+        for n, b in (('good', good), ('bad', bad)):
+            with open(os.path.join(tmp, 'thumbs', sums[n] + '.png'), 'wb') as fh:
+                fh.write(b)
+        with contextlib.redirect_stdout(io.StringIO()) as said:
+            assert build_web.thumb({'file': 'a', 'repo': 'o/r', 'tag': 'v1', 'thumb': pin}, tmp) == good
+            assert build_web.thumb({'file': 'b', 'repo': 'o/r', 'tag': 'v1',
+                                    'thumb': dict(pin, sha256=sums['bad'])}, tmp) is None
+            assert build_web.thumb({'file': 'c', 'repo': 'o/r', 'tag': 'v1', 'thumb': dict(pin, sha256='1' * 64)}, tmp) is None
+            assert build_web.thumb({'file': 'd', 'repo': 'o/r', 'tag': 'v1'}, tmp) is None
+        said = said.getvalue()
+        assert 'thumbnail of b is left out: it looks dithered' in said and 'thumbnail of c (o/r v1) is not there' in said
+
+
+def test_a_new_thumbnail_waits_for_a_maintainer():
+    """submit_mod.py: a release's thumb.png goes on the entries a form submission adds or changes, and on files the
+    shop has already, and never merges by itself; a daily update moves the pin only to the same picture."""
+    submit_mod = submit_mod_module()
+    if submit_mod is None:
+        return
+    import hashlib
+    thumbs = thumbs_module()
+    one, two = thumbs.canonical_png(screen_bits()), thumbs.canonical_png([r[::-1] for r in screen_bits()])
+    dots = thumbs.canonical_png(screen_bits('dithered'))
+    h = lambda b: hashlib.sha256(b).hexdigest()
+    def mod(version):
+        return {'id': 'x', 'version': version, 'device': 'digitakt-mk1', 'os': '1.53', 'license': 'MIT',
+                'named_license': True, 'title': 'X', 'core': False, 'requires': [], 'needs_core': None, 'description': ''}
+    FACTS = {'x-1.0.elemod': mod('1.0'), 'x-1.1.elemod': mod('1.1'), 'x-1.2.elemod': mod('1.2'), 'x-1.3.elemod': mod('1.3')}
+    RELEASES = {'v1.0': (['x-1.0.elemod'], one), 'v1.1': (['x-1.1.elemod'], one), 'v1.2': (['x-1.2.elemod'], two),
+                'v1.3': (['x-1.3.elemod'], dots)}
+    def get(url, accept='', limit=0):
+        if '/releases/tags/' in url:
+            tag = url.rsplit('/', 1)[1]
+            return json.dumps({'html_url': 'https://github.com/o/x/releases/tag/' + tag, 'prerelease': False,
+                               'assets': [{'name': n} for n in RELEASES[tag][0] + ['thumb.png']]}).encode()
+        if url.endswith('/thumb.png'):
+            return RELEASES[url.split('/download/')[1].split('/')[0]][1]
+        return ('file ' + url.rsplit('/', 1)[1]).encode()
+    real = submit_mod.get, submit_mod.facts
+    submit_mod.get, submit_mod.facts = get, lambda path, license='': dict(FACTS[os.path.basename(path)])
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            shop = os.path.join(tmp, 'shop')
+            os.mkdir(shop)
+            catalog = os.path.join(tmp, 'catalog.json')
+            def start(items):
+                for it in items:
+                    open(os.path.join(shop, it['file']), 'wb').close()
+                with open(catalog, 'w', encoding='utf-8') as fh:
+                    fh.write(submit_mod.render({'about': '', 'items': items}))
+            def run(tag, update=False):
+                status, r = submit_mod.submit({'repo': 'o/x', 'tag': tag, 'summary': '' if update else 'X.'}, catalog,
+                                              shop, None, update=update)
+                with open(catalog, encoding='utf-8') as fh:
+                    return status, r, json.load(fh)['items']
+            entry = {'repo': 'o/x', 'tag': 'v1.0', 'file': 'x-1.0.elemod', 'device': 'digitakt-mk1', 'sha256': h(b'file x-1.0.elemod'),
+                     'summary': 'X.'}
+            # the form, for a file the shop has already: the picture goes on, and waits for a review
+            start([dict(entry)])
+            status, r, items = run('v1.0')
+            assert status == 0 and items[0]['thumb'] == {'tag': 'v1.0', 'file': 'thumb.png', 'sha256': h(one)}, items
+            assert not r['same_repo_update'] and r['rows'][0]['result'] == 'thumbnail changed (already in the shop)'
+            md = submit_mod.report_md(status, r)
+            assert '```text\n' + thumbs.braille(thumbs.check(one)['bits']) in md and 'A maintainer looks at' in md
+            # a daily update with the same picture: the pin moves to the newer release, and it merges by itself
+            status, r, items = run('v1.1', update=True)
+            assert status == 0 and r['same_repo_update'] and items[0]['file'] == 'x-1.1.elemod', r
+            assert items[0]['thumb'] == {'tag': 'v1.1', 'file': 'thumb.png', 'sha256': h(one)}
+            # a daily update with a new picture: the file goes in, the card keeps its picture, the report says so
+            status, r, items = run('v1.2', update=True)
+            assert status == 0 and r['same_repo_update'] and items[0]['file'] == 'x-1.2.elemod'
+            assert items[0]['thumb']['tag'] == 'v1.1' and 'keeps the shop\'s thumbnail for X' in submit_mod.report_md(status, r)
+            # the same release through the form: now it changes, with a review
+            status, r, items = run('v1.2')
+            assert status == 0 and not r['same_repo_update'] and items[0]['thumb']['sha256'] == h(two)
+            # a picture that fails never stops the mod: it goes in with the picture it had
+            status, r, items = run('v1.3')
+            assert status == 0 and items[0]['file'] == 'x-1.3.elemod' and items[0]['thumb']['sha256'] == h(two)
+            assert '- `thumb.png`: not taken: it looks dithered' in submit_mod.report_md(status, r)
+            assert r['same_repo_update']
+    finally:
+        submit_mod.get, submit_mod.facts = real
+
+
+def test_a_release_brings_a_picture_for_each_mod():
+    """submit_mod.py: thumb-<mod id>.png is that mod's picture on every device, thumb.png the others'; many new
+    pictures go to the pull request's comments in parts, each part marked once."""
+    submit_mod = submit_mod_module()
+    if submit_mod is None:
+        return
+    import hashlib
+    thumbs = thumbs_module()
+    pic = lambda k: thumbs.canonical_png([row[k:] + row[:k] for row in screen_bits()])
+    def mod(id_, device):
+        return {'id': id_, 'version': '1', 'device': device, 'os': '1.43' if device == 'digitone-mk1' else '1.53',
+                'license': 'MIT', 'named_license': True, 'title': id_, 'core': False, 'requires': [], 'needs_core': None,
+                'description': ''}
+    FACTS = {'dn-beep.elemod': mod('beep', 'digitone-mk1'), 'dt-beep.elemod': mod('beep', 'digitakt-mk1'),
+             'dn-horror.elemod': mod('horror', 'digitone-mk1'), 'dt-horror.elemod': mod('horror', 'digitakt-mk1'),
+             'dt-loop.elemod': mod('loop', 'digitakt-mk1')}
+    PICTURES = {'thumb-beep.png': pic(1), 'thumb-horror.png': thumbs.canonical_png(screen_bits('dithered')),
+                'thumb.png': pic(2), 'thumb-gone.png': pic(3), 'thumbnail.png': pic(4)}
+    def get(url, accept='', limit=0):
+        if '/releases/tags/' in url:
+            return json.dumps({'html_url': 'https://github.com/o/splash/releases/tag/v1', 'prerelease': False,
+                               'assets': [{'name': n} for n in list(FACTS) + list(PICTURES)]}).encode()
+        name = url.rsplit('/', 1)[1]
+        return PICTURES[name] if name in PICTURES else ('file ' + name).encode()
+    real = submit_mod.get, submit_mod.facts
+    submit_mod.get, submit_mod.facts = get, lambda path, license='': dict(FACTS[os.path.basename(path)])
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            catalog = os.path.join(tmp, 'catalog.json')
+            with open(catalog, 'w', encoding='utf-8') as fh:
+                fh.write(submit_mod.render({'about': '', 'items': []}))
+            status, r = submit_mod.submit({'repo': 'o/splash', 'tag': 'v1', 'summary': 'A splash.'}, catalog)
+            with open(catalog, encoding='utf-8') as fh:
+                got = {i['file']: (i.get('thumb') or {}).get('file') for i in json.load(fh)['items']}
+            assert status == 0 and not r['same_repo_update']
+            # beep's own picture on both devices; horror's failed, so it gets none (not thumb.png); loop gets thumb.png
+            assert got == {'dn-beep.elemod': 'thumb-beep.png', 'dt-beep.elemod': 'thumb-beep.png', 'dn-horror.elemod': None,
+                           'dt-horror.elemod': None, 'dt-loop.elemod': 'thumb.png'}, got
+            md = submit_mod.report_md(status, r)
+            for said in ('- `thumb-beep.png`: new on beep', '- `thumb-horror.png`: not taken: it looks dithered',
+                         '- `thumb.png`: new on loop', '- `thumb-gone.png`: not used: no mod this submission adds or '
+                         'changes has the id gone'):
+                assert said in md, said
+            assert 'thumbnail.png' not in md and md.count('```text') == 2
+    finally:
+        submit_mod.get, submit_mod.facts = real
+    # 60 new pictures: more than a comment holds, so they go out in parts, each under GitHub's limit, marked alike
+    r = {'thumbs': {}, 'thumb_on': {}, 'thumb_new': ['m'], 'thumb_waits': []}
+    for i in range(60):
+        data = pic(i)
+        r['thumbs']['thumb-m%d.png' % i] = thumbs.check(data)
+        r['thumb_on']['thumb-m%d.png' % i] = {'new': {'m%d' % i}}
+    parts = submit_mod.previews(r)
+    assert len(parts) == 2 and all(len(p) < 65536 for p in parts)
+    mark = parts[0].split('\n')[0]
+    assert mark.startswith('<!-- shop-pictures ') and parts[1].startswith(mark) and 'part 2 of 2' in parts[1]
+    assert sum(p.count('```text') for p in parts) == 60
+    assert 'in 2 comments on the pull request' in submit_mod.report_md(0, dict(r, repo='o/x', tag='v1', rows=[], errors=[]))
 
 
 def test_publish_fills_in_the_form_and_writes_notes_the_shop_reads():
@@ -1594,6 +1884,239 @@ def test_authors_can_opt_out_of_automatic_updates():
     from elekloader.sdk import publish
     assert publish.release_notes('A.', '', auto_update=False) == 'Shop summary: A.\nShop auto-update: off\n'
     assert submit_mod.release_text(publish.release_notes('A.', '', False)) == {'summary': 'A.', 'auto_update': False}
+
+
+def build_web_module():
+    """packaging/build_web.py, or None where the repository isn't (under Pyodide, as submit_mod_module)."""
+    folder = os.path.join(os.path.dirname(HERE), 'packaging')
+    if not os.path.isdir(folder):
+        return None
+    sys.path.insert(0, folder)
+    import build_web
+    return build_web
+
+
+def shop_list_or_skip(path):
+    """The shop's real list (a clone of elekloader/shop: $ELEKLOADER_CATALOG, else build/shop-list/), or None,
+    said, where there is none (tests.yml clones it; docs/WEB.md, "Where the list is")."""
+    if os.path.exists(path):
+        return path
+    print('  skipped: no shop list at %s (git clone https://github.com/elekloader/shop build/shop-list)' % path)
+    return None
+
+
+def test_the_shops_list_can_come_from_another_repository():
+    """$ELEKLOADER_CATALOG: the shop's list from a clone of its own repository (SHOP_REPO), sections beside it."""
+    build_web = build_web_module()
+    if build_web is None:
+        return
+    old = os.environ.pop('ELEKLOADER_CATALOG', None)
+    try:
+        assert build_web.catalog_path() == os.path.join(build_web.ROOT, 'build', 'shop-list', 'catalog.json')
+        assert build_web.sections_path() == os.path.join(build_web.ROOT, 'build', 'shop-list', 'sections.json')
+        with tempfile.TemporaryDirectory() as d:
+            os.environ['ELEKLOADER_CATALOG'] = os.path.join(d, 'catalog.json')
+            assert build_web.catalog_path() == os.path.join(d, 'catalog.json')
+            assert build_web.catalog_path('x.json') == 'x.json'
+            assert build_web.sections_path() == os.path.join(os.path.abspath(d), 'sections.json')
+            with open(os.path.join(d, 'sections.json'), 'w') as fh:
+                json.dump({'sections': [{'id': 'pics', 'title': 'Pictures', 'packs': [{'repo': 'a/b'}]}]}, fh)
+            assert [s['id'] for s in build_web.sections([{'repo': 'a/b'}])] == ['pics']
+    finally:
+        os.environ.pop('ELEKLOADER_CATALOG', None)
+        if old is not None:
+            os.environ['ELEKLOADER_CATALOG'] = old
+
+
+def test_the_builder_page_names_the_shops_site():
+    """build_web.page_mode: the shop page as it is; the builder stamped <html data-page="builder" data-shop-url>."""
+    build_web = build_web_module()
+    if build_web is None:
+        return
+    html = '<!doctype html>\n<html lang="en">\n<head>'
+    assert build_web.page_mode(html, 'shop') == html
+    assert build_web.page_mode(html, 'builder') == html.replace(
+        '<html lang="en">', '<html lang="en" data-page="builder" data-shop-url="https://elekloader.github.io/shop/">')
+    for bad in (('builder', 'http://x.example/'), ('builder', 'https://x.example'), ('builder', 'https://x/"><script>/'),
+                ('other', build_web.SHOP_URL)):
+        try:
+            build_web.page_mode(html, bad[0], bad[1])
+            raise AssertionError('not refused: %r' % (bad,))
+        except SystemExit:
+            pass
+    # the page's parts: the shop's hidden on the builder, its links to the shop's site shown only there
+    web = os.path.join(build_web.ROOT, 'web')
+    with open(os.path.join(web, 'style.css'), encoding='utf-8') as fh:
+        css = fh.read()
+    assert 'html[data-page="builder"] .shop-only { display: none !important; }' in css
+    assert 'html:not([data-page="builder"]) .builder-only { display: none !important; }' in css
+    with open(os.path.join(web, 'index.html'), encoding='utf-8') as fh:
+        page = fh.read()
+    for shop_part in ('id="nav-library"', 'id="nav-sections"', 'id="nav-submit"', 'id="tab-library"', 'id="tab-submit"'):
+        tag = page[page.rindex('<', 0, page.index(shop_part)):page.index('>', page.index(shop_part))]
+        assert 'shop-only' in tag, shop_part
+    assert page.count('data-shop-link') >= 4 and 'shop-banner builder-only' in page
+
+
+def test_the_shops_sections_are_checked():
+    """sections.json: whole repositories on a page of their own (build_web.sections)."""
+    build_web = build_web_module()
+    if build_web is None or shop_list_or_skip(build_web.catalog_path()) is None:
+        return
+    with open(build_web.sections_path(), encoding='utf-8') as fh:
+        real = json.load(fh)
+    with open(build_web.catalog_path(), encoding='utf-8') as fh:
+        repos = {i['repo'] for i in json.load(fh)['items']}
+    # every pack names a repository the shop carries
+    assert all(p['repo'] in repos for s in real['sections'] for p in s['packs'])
+    out = build_web.sections([{'repo': r} for r in repos])
+    assert [s['id'] for s in out] == [s['id'] for s in real['sections']] and all(s['nav'] for s in out)
+    # the Splash screen maker is a tool of Splash & screens
+    assert {'href': '#splash', 'title': 'Splash screen maker'} in next(s for s in out if s['id'] == 'screens')['tools']
+    with tempfile.TemporaryDirectory() as d:
+        p = os.path.join(d, 's.json')
+        for bad in ({'sections': [{'id': 'A b', 'title': 'x', 'packs': [{'repo': 'a/b'}]}]},
+                    {'sections': [{'id': 'build', 'title': 'x', 'packs': [{'repo': 'a/b'}]}]},
+                    {'sections': [{'id': 'x', 'title': 'x', 'packs': [{'repo': 'a/b'}]},
+                                  {'id': 'y', 'title': 'y', 'packs': [{'repo': 'a/b'}]}]},
+                    {'sections': [{'id': 'x', 'title': 'x', 'packs': []}]},
+                    {'sections': [{'id': 'x', 'title': 'x', 'packs': [{'repo': 'a/b'}],
+                                   'tools': [{'href': 'https://x', 'title': 't'}]}]},
+                    {'sections': [{'id': 'x', 'title': 'x', 'packs': [{'repo': 'a/b'}],
+                                   'tools': [{'href': '#splash', 'title': 't'}]},
+                                  {'id': 'y', 'title': 'y', 'packs': [{'repo': 'c/d'}],
+                                   'tools': [{'href': '#splash', 'title': 't'}]}]}):
+            with open(p, 'w') as fh:
+                json.dump(bad, fh)
+            try:
+                build_web.sections([], p)
+                raise AssertionError('not refused: %r' % bad)
+            except SystemExit:
+                pass
+        assert build_web.sections([], os.path.join(d, 'none.json')) == []
+
+def test_the_splash_maker_writes_a_mod_the_loader_takes():
+    from elekloader import splash
+    rows = [[(x + y) % 3 == 0 for x in range(128)] for y in range(64)]
+    f0 = splash.pack(rows)
+    assert len(f0) == 1024 and splash.unpack(f0) == [[int(v) for v in r] for r in rows]
+    # the panel's layout: (0, 0) is page 7's bit 0, (127, 63) page 0's bit 7
+    one = [[0] * 128 for _ in range(64)]
+    one[0][0] = one[63][127] = 1
+    assert splash.pack(one)[7] == 1 and splash.pack(one)[8 * 127] == 0x80
+    f1 = bytes(1024)
+    for t in splash.targets():
+        doc = splash.make([f0, f1], [0, 0, 1], device=t['device'], os=t['os'], title='  My  logo ',
+                          loop=False, source='logo.gif')
+        raw = splash.dumps(doc)
+        m = link.Mod2(json.loads(raw), 'splash')
+        assert m.id == 'splash' and (m.dev.key, m.rel.version) == (t['device'], t['os'])
+        assert doc['title'] == 'My logo' and doc['exports'] == ['splash_diff', 'splash_flush', 'splash_tick']
+        body = bytes.fromhex(doc['sections']['.run']['parts'][0][1])
+        code = splash.code(t['device'], t['os'])
+        assert body.startswith(code) and len(code) % 4 == 0
+        tab = splash.TABLES[(t['device'], t['os'])]
+        for k, at in splash.FIELDS.items():
+            assert int.from_bytes(body[at:at + 4], 'big') == tab[k]
+        d = body[len(code):]
+        n, pos, start, loop = struct.unpack('>4I', d[:16])
+        assert (n, pos, loop) == (3, 0, 0) and d[16:22] == bytes.fromhex('000000000001')
+        assert d[start:start + 1024] == f0 and d[start + 1024:] == f1
+        # every intro call to a present goes through the splash, and the timer's post
+        assert len(doc['sites']) == len(tab['diff_sites']) + len(tab['flush_sites']) + 1
+        assert [s['relocs'][0][2] for s in doc['sites']].count('sym:splash_tick') == 1
+        assert doc['sites'][-1]['addr'] == '0x%08x' % (tab['isr'] + splash.TICK_SITE)
+    for bad in (lambda: splash.make([], device='digitakt-mk1', os='1.54'),
+                lambda: splash.make([f0], [1], device='digitakt-mk1', os='1.54'),
+                lambda: splash.make([f0] * (splash.MAX_FRAMES + 1), device='digitakt-mk1', os='1.54'),
+                lambda: splash.make([f0], device='digitakt-mk1', os='1.52'),
+                lambda: splash.make([f0[:10]], device='digitone-mk1', os='1.44')):
+        try:
+            bad()
+            raise AssertionError('not refused')
+        except splash.SplashError:
+            pass
+    assert splash.file_name('digitone-mk1', '1.44') == 'splash-dn-os1.44.elemod'
+
+
+def test_the_splash_code_is_its_source_assembled():
+    """CODE is examples/splash/splash.s, when the cross assembler is there."""
+    import shutil
+    import subprocess
+    from elekloader import splash
+    asm = shutil.which('m68k-linux-gnu-as')
+    if not asm:
+        print('  skipped: no m68k-linux-gnu-as')
+        return
+    src = os.path.join(os.path.dirname(HERE), 'examples', 'splash', 'splash.s')
+    for t in splash.targets():
+        tab = splash.TABLES[(t['device'], t['os'])]
+        with tempfile.TemporaryDirectory() as d:
+            o = os.path.join(d, 's.o')
+            subprocess.run([asm, '-mcpu=54455', '-o', o, src] + [
+                a for k in ('ISR', 'FB', 'DIFF', 'FLUSH', 'POST')
+                for a in ('--defsym', '%s=0x%08x' % (k, tab[k.lower()]))], check=True)
+            b = os.path.join(d, 's.bin')
+            subprocess.run([asm.replace('-as', '-objcopy'), '-O', 'binary', '--only-section=.run', o, b],
+                           check=True)
+            with open(b, 'rb') as fh:
+                assert fh.read() == splash.code(t['device'], t['os'])
+
+
+# Folders that had no README, and examples no page named, when the test below was written. The
+# lists only get shorter: write the README (or name the example) and take the folder out.
+MODS_WITHOUT_README = {'core-mc', 'core-ms', 'machines-dn2', 'sdk-alpha', 'seq-events'}
+EXAMPLES_NOWHERE = {'boot-marker-mc', 'crush-machine-ot', 'hello-marker-model', 'hooks-check-dn1', 'machine-ar2',
+                    'master-mono', 'sdk-glyphs', 'sdk-hello-world', 'sdk-mono', 'sdk-sine', 'track-marker-mc'}
+
+
+def test_every_mod_has_a_readme_and_every_example_is_listed():
+    """A mod's sites, build and checks live in mods/<mod>/README.md (the doc-hygiene skill, "One
+    home per fact"). An example has a README of its own, or docs/README.md or examples/README.md
+    names it."""
+    root = os.path.dirname(HERE)
+    folders = lambda top: sorted(d for d in os.listdir(os.path.join(root, top))
+                                 if os.path.isdir(os.path.join(root, top, d)))
+    has = lambda *p: os.path.exists(os.path.join(root, *p))
+    if not has('packaging', 'build_web.py'):
+        return      # under Pyodide (tests/test_web.mjs): a few of the repository's files, not its folders
+    bare = {m for m in folders('mods') if not has('mods', m, 'README.md')}
+    assert bare == MODS_WITHOUT_README, (
+        'mods/<mod>/README.md is missing: %s; has one now, take it out of MODS_WITHOUT_README: %s'
+        % (sorted(bare - MODS_WITHOUT_README), sorted(MODS_WITHOUT_README - bare)))
+    index = ''
+    for page in (('docs', 'README.md'), ('examples', 'README.md')):
+        if has(*page):
+            with open(os.path.join(root, *page), encoding='utf-8') as f:
+                index += f.read()
+    listed = lambda e: '`%s`' % e in index or 'examples/%s)' % e in index or '(%s)' % e in index
+    lost = {e for e in folders('examples') if not has('examples', e, 'README.md') and not listed(e)}
+    assert lost == EXAMPLES_NOWHERE, (
+        'an example with no README that docs/README.md does not name: %s; named now, take it out of '
+        'EXAMPLES_NOWHERE: %s' % (sorted(lost - EXAMPLES_NOWHERE), sorted(EXAMPLES_NOWHERE - lost)))
+
+
+def test_core_ar2_0_12_room_for_drive_mods():
+    """core-ar2 0.12's tables have room for +Drive mods (mods/core-ar2/README.md, "Room for +Drive
+    mods"): its events for as many handlers as the Drive Loader links (256), not the default 16
+    (found 2026-11-07: a 17th ev_tick handler was refused `full`), the machines table for its 10
+    hidden slots, the page tables by the views' room (10 views of VIEW_MAX 16 pages, 11 of them
+    stock's), the id-range tables by the loader's mods, and core_step_owners stopping at its 8
+    owners (steps.c OWNERS)."""
+    with open(os.path.join(HERE, '..', 'mods', 'core-ar2', 'mod.json'), encoding='utf-8') as fh:
+        doc = json.load(fh)
+    cols = doc['collections']
+    assert tuple(map(int, doc['version'].split('.'))) >= (0, 12)
+    for name, v in cols.items():
+        if name.startswith('ev_'):
+            assert isinstance(v, dict) and v.get('spare') == 256, (name, v)
+    assert cols['core_machines'] == {'entry': 4, 'spare': 10}
+    for name in ('core_pages', 'core_page_fns', 'core_view_pages'):
+        assert cols[name] == {'entry': 4, 'spare': 10 * 16 - 11}, name
+    for name in ('core_params', 'core_param_locks', 'core_param_scales'):
+        assert cols[name] == {'entry': 4, 'spare': 256}, name
+    assert cols['core_step_owners'] == {'entry': 4, 'spare': 8, 'max': 8}
+    assert cols['core_lock_params'] == 4      # +Drive mods have no storage, so no lock codes
 
 
 if __name__ == '__main__':

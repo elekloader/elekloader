@@ -33,6 +33,7 @@ export type Mod = {
   version?: string; os?: string; fits?: boolean; title?: string; description?: string; category?: string; author?: string
   license?: string; sha256?: string; requires?: string[]; conflicts?: string[]; ram?: number; fast?: number
   ram_bound?: number; ram_area?: number           // the most it takes of the linker's area; a core's area (withCore)
+  sites?: [number, number, string, string][]      // the places it patches: address, length, kind, target (withCore)
   for_device?: string; for_label?: string; status?: string
   [fact: string]: unknown
 }

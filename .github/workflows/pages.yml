@@ -1,5 +1,10 @@
 # The web patcher (web/) on GitHub Pages: elekloader in the browser, in Pyodide.
 #
+# This site is the builder (build_web.py --page builder): your stock OS file and your own .elemod files. The shop
+# is its own site, https://elekloader.github.io/shop/, built by elekloader/shop from the same web/; the builder's
+# shop links and old shop addresses (#library, #s/..., #splash, #submit) go there. This site still carries the
+# shop's files and shop/index.json, for older SDKs (publish) and other sites that read them here.
+#
 # On every push to main, and by hand (Actions > pages > Run workflow). It takes
 # the core mods from the latest release (as windows-build takes them from its
 # release), the elekloader package as this commit has it, and the pinned
@@ -7,9 +12,11 @@
 # runs the unit tests and the page's bridge under Pyodide on that very site
 # (tests/test_web.mjs), and deploys it.
 #
-# It also puts the mod shop on the site: each mod web/catalog.json lists,
+# It also puts the mod shop on the site: each mod the shop's list (catalog.json of
+# elekloader/shop, or of the repository the variable SHOP_REPO names) lists,
 # from its author's GitHub release, checked against the sha256 the catalog
-# pins.
+# pins, and each card's thumbnail the same way (packaging/thumbs.py checks
+# it again; the repository variable SHOP_THUMBS=false leaves them all out).
 #
 # No firmware reaches this workflow, and the site holds none: the page reads
 # the user's stock OS file only in their browser, and builds there.
@@ -49,6 +56,16 @@ jobs:
         with:
           node-version: "24"
           package-manager-cache: false
+      - name: The shop's list (elekloader/shop, or the repository variable SHOP_REPO's)
+        env:
+          SHOP_REPO: ${{ vars.SHOP_REPO || 'elekloader/shop' }}
+        run: |
+          # a public repository with catalog.json and sections.json at its root, as its main has them
+          # (docs/WEB.md, "Where the list is")
+          git clone -q --depth 1 "https://github.com/$SHOP_REPO" build/shop-list
+          echo "ELEKLOADER_CATALOG=$PWD/build/shop-list/catalog.json" >> "$GITHUB_ENV"
+          echo "SHOP_REPO=$SHOP_REPO" >> "$GITHUB_ENV"
+          echo "SHOP_COMMIT=$(git -C build/shop-list rev-parse HEAD)" >> "$GITHUB_ENV"
       - name: Unit tests
         run: |
           python tests/test_units.py
@@ -62,11 +79,20 @@ jobs:
           git fetch --depth=1 --no-tags origin "refs/tags/$tag:refs/tags/$tag"
       - name: The mod shop's files, from their authors' releases and commits
         run: |
-          # web/catalog.json pins each file's sha256 (build_web.py checks them); one that
+          # catalog.json pins each file's sha256 (build_web.py checks them); one that
           # cannot be fetched (a draft release) is listed in the shop as not available
           mkdir -p build/shop
-          python packaging/build_web.py --catalog-list web/catalog.json | while read -r how repo ref path; do
-            if [ "$how" = commit ]; then
+          # and each card's thumbnail ("thumb"), to thumbs/<sha256>.png; one that can't be fetched leaves its card's
+          # drawn cover (build_web.py checks each again)
+          mkdir -p build/shop/thumbs
+          python packaging/build_web.py --catalog-list "$ELEKLOADER_CATALOG" --thumbs | while read -r how repo ref path sum; do
+            if [ "$how" = thumb-commit ]; then
+              gh api "repos/$repo/contents/$path?ref=$ref" -H "Accept: application/vnd.github.raw" > "build/shop/thumbs/$sum.png" \
+                || { rm -f "build/shop/thumbs/$sum.png"; echo "::warning::$repo $ref $path: thumbnail not downloadable"; }
+            elif [ "$how" = thumb-release ]; then
+              gh release download "$ref" --repo "$repo" --pattern "$path" --output "build/shop/thumbs/$sum.png" --clobber \
+                || echo "::warning::$repo $ref $path: thumbnail not downloadable"
+            elif [ "$how" = commit ]; then
               out="build/shop/${path##*/}"
               gh api "repos/$repo/contents/$path?ref=$ref" -H "Accept: application/vnd.github.raw" > "$out.part" \
                 && mv "$out.part" "$out" \
@@ -83,10 +109,20 @@ jobs:
           gh pr list --repo "$GITHUB_REPOSITORY" --state merged --limit 1000 \
             --json number,title,body,author,mergedAt,url > build/prs.json \
             || { echo "::warning::merged pull requests not listed: the leaderboard is empty"; echo '[]' > build/prs.json; }
+          # and the shop repository's (a mod moved onto the core is claimed where it enters the list)
+          if gh pr list --repo "$SHOP_REPO" --state merged --limit 1000 \
+               --json number,title,body,author,mergedAt,url > build/prs-shop.json; then
+            jq -s add build/prs.json build/prs-shop.json > build/prs-all.json && mv build/prs-all.json build/prs.json
+          else
+            echo "::warning::$SHOP_REPO's merged pull requests not listed: their claims are not counted"
+          fi
       - name: Pyodide, the pinned release
         run: curl -fsSL --retry 3 --create-dirs -o build/pyodide-core.tar.bz2 "$(python packaging/build_web.py --pyodide-url)"
       - name: Assemble the site
-        run: python packaging/build_web.py --pyodide build/pyodide-core.tar.bz2 --core build/core/core-*.elemod --release "$TAG" --catalog web/catalog.json --catalog-dir build/shop --prs build/prs.json --out build/site
+        env:
+          # the maintainers' switch: the repository variable SHOP_THUMBS set to false leaves every thumbnail out
+          SHOP_THUMBS: ${{ vars.SHOP_THUMBS }}
+        run: python packaging/build_web.py --pyodide build/pyodide-core.tar.bz2 --core build/core/core-*.elemod --release "$TAG" --catalog "$ELEKLOADER_CATALOG" --catalog-dir build/shop --prs build/prs.json --page builder --out build/site $([ "$SHOP_THUMBS" = false ] && echo --no-thumbs)
       - name: The engine under Pyodide, from the assembled site
         run: node tests/test_web.mjs build/site
       - uses: actions/upload-pages-artifact@v5

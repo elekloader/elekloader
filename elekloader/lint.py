@@ -69,15 +69,15 @@ def core_candidates(m):
 
 
 def sharc_shifts(m):
-    """Leads to shifts by a negative immediate in a mod's own SHARC code, past a machine's
-    pinned adapter: byte offsets in its area."""
+    """Leads to shifts by a negative immediate in a mod's own SHARC code: byte offsets in its
+    area, or in a kernel artifact's code."""
     payload = getattr(m, 'sharc', None)
     if not payload:
         return []
-    kind = payload.get('machine_kind')
-    skip = m.rel.sharc[kind + '_adapter_bytes'] if kind else 0
+    if 'kernels' in payload:
+        return [{'mod': m.id, 'offset': at} for at in sharc.suspect_shifts(sharc._parcels(payload['code']))]
     return [{'mod': m.id, 'offset': off + at} for off, k, data in payload['segments']
-            if k == 'code' and off >= skip for at in sharc.suspect_shifts(data)]
+            if k == 'code' for at in sharc.suspect_shifts(data)]
 
 
 def main(argv=None):
@@ -124,7 +124,7 @@ def main(argv=None):
                         raise elemod.ModError('x:\n  a whole build (format 1) cannot be '
                                              'combined with format-2 mods')
                     if v2:
-                        dsp = st.section(rel.sharc['section']) if any(m.sharc for m in v2) else None
+                        dsp = st.section(rel.sharc['section']) if any(m.sharc or m.sharc_raw for m in v2) else None
                         L = link.link(loaded, img, sharc_stream=dsp)
                         lay = L.layout
                         report['link'] = {

@@ -1,10 +1,10 @@
 {
- "id": "core", "version": "5.2",
+ "id": "core", "version": "5.3",
  "license": "GPL-2.0-or-later",
  "title": "core", "category": "Framework", "author": "irpina",
- "description": "The boot copier and the hook bus for the Digitone mk1 and Digitone Keys: every other mod needs it. From 2.1 also the voice note-on event, parameter slots, mod pages and project data, from 2.2 the Mod Menu (hold a track key), from 2.3 its grid of icons, from 3.0 the firmware locations mods use, as exports, so a mod that names only them builds for 1.43 and 1.44 alike, and from 3.1 what machines need: the voices' sound before the filter (ev_render_voices), stock parameters a mod relabels for its tracks (core_param_override), sound edits the voices hear (core_sound_set) and submenus in the Mod Menu, and from 3.2 exclusive audio: one mod may take the output from the master stage, with the voices muted if it likes (core_audio), the tempo (fw_tempo) and the MIDI CCs the unit receives, before the stock applies them (ev_midi_cc), and from 3.3 the key-LED frame before the stock views (ev_key_leds), each block's sound parameters before the controllers and LFOs (ev_render_params) and more firmware locations: its C library (fw_memcpy, fw_crc32, the 64-bit shifts, ...), its text box, the transport, the active pattern and the project, and from 4.0 insert audio: an owner may take the master stage's output instead, an effect on everything the Digitone plays (CORE_AUDIO_INSERT), 1.25 MB for the mods' code, tables and variables (from 0x43EC0000, in place of the 128 KB at 0x47BE0000) and the program changes the unit receives, before the stock applies them (ev_midi_pc), and from 4.1 each event a note source queues, with the time it plays (ev_note_queue): a step's p-locks at the step, for a mod that plays them itself, in 4.1.1 SETTINGS rows that take none of the firmware's heap (with 4.1, two could stall a first boot), and from 4.2 the parameter pages' knob turns and values, for a mod that keeps values of its own for a stock parameter (ev_param_turn, ev_param_value), each starting voice once it has its sound and its p-locks (ev_voice_ready) and project data blocks that save only what they hold, and from 5.0 the firmware's moments as events (a prototype): the +Drive ready, the boot, USB, crashes and a restart that cannot hang, project saves, transport, the sequencer's tick, every MIDI message in and out, SysEx, voices released, the UI task's messages, sequencer edits, parameter commits and the master's effect stages, with the +Drive's block calls and SysEx out as exports, and in 5.0.1 the sequencer's MIDI out (ev_seq_midi), a message played into the unit as if it came in (core_midi_receive), a pool sound put on a track (core_pool_load), the global mutes (core_mutes, core_mute_set) and the key dispatch, the sound load and the track channels as exports, and in 5.1 ten mod parameter ids, lane parameters (a mod's values per track and per step, p-locked, saved in the pattern), knobs on the stock pages' empty boxes and a second TRIG page, and each note the sequencer builds (ev_note_built, core_note_step), and from 5.2 a page key's list of pages replaced for a while (core_page_list): a machine's track can show its own pages behind SYN2, and LFO destination names and groups through core_param_override. On its own it changes nothing the unit does.",
+ "description": "The boot copier and the hook bus for the Digitone mk1 and Digitone Keys: every other mod needs it. From 2.1 also the voice note-on event, parameter slots, mod pages and project data, from 2.2 the Mod Menu (hold a track key), from 2.3 its grid of icons, from 3.0 the firmware locations mods use, as exports, so a mod that names only them builds for 1.43 and 1.44 alike, and from 3.1 what machines need: the voices' sound before the filter (ev_render_voices), stock parameters a mod relabels for its tracks (core_param_override), sound edits the voices hear (core_sound_set) and submenus in the Mod Menu, and from 3.2 exclusive audio: one mod may take the output from the master stage, with the voices muted if it likes (core_audio), the tempo (fw_tempo) and the MIDI CCs the unit receives, before the stock applies them (ev_midi_cc), and from 3.3 the key-LED frame before the stock views (ev_key_leds), each block's sound parameters before the controllers and LFOs (ev_render_params) and more firmware locations: its C library (fw_memcpy, fw_crc32, the 64-bit shifts, ...), its text box, the transport, the active pattern and the project, and from 4.0 insert audio: an owner may take the master stage's output instead, an effect on everything the Digitone plays (CORE_AUDIO_INSERT), 1.25 MB for the mods' code, tables and variables (from 0x43EC0000, in place of the 128 KB at 0x47BE0000) and the program changes the unit receives, before the stock applies them (ev_midi_pc), and from 4.1 each event a note source queues, with the time it plays (ev_note_queue): a step's p-locks at the step, for a mod that plays them itself, in 4.1.1 SETTINGS rows that take none of the firmware's heap (with 4.1, two could stall a first boot), and from 4.2 the parameter pages' knob turns and values, for a mod that keeps values of its own for a stock parameter (ev_param_turn, ev_param_value), each starting voice once it has its sound and its p-locks (ev_voice_ready) and project data blocks that save only what they hold, and from 5.0 the firmware's moments as events (a prototype): the +Drive ready, the boot, USB, crashes and a restart that cannot hang, project saves, transport, the sequencer's tick, every MIDI message in and out, SysEx, voices released, the UI task's messages, sequencer edits, parameter commits and the master's effect stages, with the +Drive's block calls and SysEx out as exports, and in 5.0.1 the sequencer's MIDI out (ev_seq_midi), a message played into the unit as if it came in (core_midi_receive), a pool sound put on a track (core_pool_load), the global mutes (core_mutes, core_mute_set) and the key dispatch, the sound load and the track channels as exports, and in 5.1 ten mod parameter ids, lane parameters (a mod's values per track and per step, p-locked, saved in the pattern), knobs on the stock pages' empty boxes and a second TRIG page, and each note the sequencer builds (ev_note_built, core_note_step), and from 5.2 a page key's list of pages replaced for a while (core_page_list): a machine's track can show its own pages behind SYN2, and LFO destination names and groups through core_param_override, and in 5.2.1 KEYBOARD mode's note event hooked past the first instructions of its two routines, so a mod that hooks their entries (DigiArp MIDI) links with it, and from 5.3 the played notes: a note played live on a track (KEYBOARD mode, MIDI in), before its voice, which a handler may take, press or release (ev_live_note), and the stock routines past it (fw_note_on, fw_note_off), the Digitakt's. On its own it changes nothing the unit does.",
  "device": "digitone-mk1", "os": "1.43",
- "sources": ["../core/core.s", "../core/settings.s", "../core/render.s", "voice.s", "params.s", "names.s", "pages.s", "projdata.s", "menu.s", "fw.s", "voices.s", "audio.s", "midi.s", "leds.s", "block.s", "queue.s", "rows.s", "edit.s", "system.s", "events.s", "seqmidi.s", "track.s", "lanes.s", "lanes.c", "lists.c"],
+ "sources": ["../core/core.s", "../core/settings.s", "../core/render.s", "voice.s", "params.s", "names.s", "pages.s", "projdata.s", "menu.s", "fw.s", "voices.s", "audio.s", "midi.s", "leds.s", "block.s", "queue.s", "rows.s", "edit.s", "system.s", "events.s", "seqmidi.s", "track.s", "lanes.s", "lanes.c", "lists.c", "../core/notes.s"],
  "cflags": ["-Os", "-fno-tree-loop-distribute-patterns"],
  "subscribe": [{"event": "ev_tick", "fn": "core_lanes_tick", "order": 0}],
  "defsym": {
@@ -174,7 +174,11 @@
   "POOL_GET": "0x40033540",
   "POOL_OFF": "0x1dcc8",
   "KIT_OFF": "0x250",
-  "MUTES_OFF": "0x30"
+  "MUTES_OFF": "0x30",
+  "NOTE_ON": "0x400eabe8",
+  "NOTE_OFF": "0x400ea940",
+  "NOTE_ON_LINK": "-108",
+  "NOTE_OFF_LINK": "-116"
  },
  "sites": [
   {"addr": "0x40000538", "stock": "4eb940001df4", "op": "jsr", "target": "core_dn_boot"},
@@ -312,8 +316,8 @@
   {"addr": "0x400fde0c", "stock": "2039419e9f60", "op": "jmp", "target": "core_pattern_switch"},
   {"addr": "0x4009d6a0", "stock": "223c41391fac", "op": "jsr", "target": "core_arp_step"},
   {"addr": "0x4009f700", "stock": "2801e98c1a2f003f", "op": "jsr", "target": "core_voice_steal"},
-  {"addr": "0x4003b198", "stock": "4fefffe87007", "op": "jmp", "target": "core_kbd_on"},
-  {"addr": "0x4003b26e", "stock": "598f2f037207", "op": "jmp", "target": "core_kbd_off"},
+  {"addr": "0x4003b19e", "stock": "48d7047c246f001c", "op": "jmp", "target": "core_kbd_on"},
+  {"addr": "0x4003b274", "stock": "2f02206f0010", "op": "jmp", "target": "core_kbd_off"},
   {"addr": "0x4002f994", "stock": "4e56ffd048d73c7c", "op": "jmp", "target": "core_mute"},
   {"addr": "0x40027a00", "stock": "4fefffcc48d77cfc", "op": "jmp", "target": "core_pattern_save"},
   {"addr": "0x40027e4a", "stock": "4fefffcc48d77cfc", "op": "jmp", "target": "core_pattern_reload"},
@@ -340,7 +344,9 @@
   {"addr": "0x40094d7e", "stock": "2f024ebafb1e", "op": "jmp", "target": "core_build_midi_a"},
   {"addr": "0x40095b28", "stock": "4ebae9d46012", "op": "jmp", "target": "core_build_syn_b"},
   {"addr": "0x40095b3a", "stock": "2f024ebaed62", "op": "jmp", "target": "core_build_midi_b"},
-  {"addr": "0x400f39a6", "stock": "73b9419b08ed2f02", "op": "jmp", "target": "core_seq_midi_b"}
+  {"addr": "0x400f39a6", "stock": "73b9419b08ed2f02", "op": "jmp", "target": "core_seq_midi_b"},
+  {"addr": "0x400eabe8", "stock": "4e56ff94707f", "op": "jmp", "target": "core_note_on"},
+  {"addr": "0x400ea940", "stock": "4e56ff8c707f", "op": "jmp", "target": "core_note_off"}
  ],
  "ports": {
   "1.44": {
@@ -512,7 +518,11 @@
     "POOL_GET": "0x40033540",
     "POOL_OFF": "0x1dcc8",
     "KIT_OFF": "0x250",
-    "MUTES_OFF": "0x30"
+    "MUTES_OFF": "0x30",
+    "NOTE_ON": "0x400eae5c",
+    "NOTE_OFF": "0x400eabb4",
+    "NOTE_ON_LINK": "-108",
+    "NOTE_OFF_LINK": "-116"
    },
    "sites": [
     {"addr": "0x40000538", "stock": "4eb940001df4", "op": "jsr", "target": "core_dn_boot"},
@@ -650,8 +660,8 @@
     {"addr": "0x400fe080", "stock": "2039419eaf60", "op": "jmp", "target": "core_pattern_switch"},
     {"addr": "0x4009d6c0", "stock": "223c41392fac", "op": "jsr", "target": "core_arp_step"},
     {"addr": "0x4009f720", "stock": "2801e98c1a2f003f", "op": "jsr", "target": "core_voice_steal"},
-    {"addr": "0x4003b198", "stock": "4fefffe87007", "op": "jmp", "target": "core_kbd_on"},
-    {"addr": "0x4003b26e", "stock": "598f2f037207", "op": "jmp", "target": "core_kbd_off"},
+    {"addr": "0x4003b19e", "stock": "48d7047c246f001c", "op": "jmp", "target": "core_kbd_on"},
+    {"addr": "0x4003b274", "stock": "2f02206f0010", "op": "jmp", "target": "core_kbd_off"},
     {"addr": "0x4002f994", "stock": "4e56ffd048d73c7c", "op": "jmp", "target": "core_mute"},
     {"addr": "0x40027a00", "stock": "4fefffcc48d77cfc", "op": "jmp", "target": "core_pattern_save"},
     {"addr": "0x40027e4a", "stock": "4fefffcc48d77cfc", "op": "jmp", "target": "core_pattern_reload"},
@@ -678,7 +688,9 @@
     {"addr": "0x40094d9e", "stock": "2f024ebafb1e", "op": "jmp", "target": "core_build_midi_a"},
     {"addr": "0x40095b48", "stock": "4ebae9d46012", "op": "jmp", "target": "core_build_syn_b"},
     {"addr": "0x40095b5a", "stock": "2f024ebaed62", "op": "jmp", "target": "core_build_midi_b"},
-    {"addr": "0x400f3c1a", "stock": "73b9419b18ed2f02", "op": "jmp", "target": "core_seq_midi_b"}
+    {"addr": "0x400f3c1a", "stock": "73b9419b18ed2f02", "op": "jmp", "target": "core_seq_midi_b"},
+    {"addr": "0x400eae5c", "stock": "4e56ff94707f", "op": "jmp", "target": "core_note_on"},
+    {"addr": "0x400eabb4", "stock": "4e56ff8c707f", "op": "jmp", "target": "core_note_off"}
    ]
   }
  },
@@ -692,7 +704,7 @@
   "ev_boot_ui": 4, "ev_usb": 4, "ev_project_saving": 4, "ev_project_saved": 4, "ev_transport": 4, "ev_seq_tick": 4, "ev_pattern_request": 4, "ev_midi_in": 4, "ev_midi_out": 4, "ev_voice_free": 4, "ev_ui_msg": 4, "ev_trig_set": 4, "ev_step_note": 4, "ev_plock_store": 4, "ev_plock_clear": 4, "ev_step_clear": 4, "ev_track_length": 4, "ev_param_set": 4, "ev_sound_live": 4, "ev_render_fx": 4,
   "ev_tempo": 4, "ev_pattern_switch": 4,
   "ev_arp_step": 4, "ev_voice_steal": 4,
-  "ev_keyboard_note": 4, "ev_mute": 4,
+  "ev_keyboard_note": 4, "ev_mute": 4, "ev_live_note": 4,
   "ev_pattern_op": 4,
   "ev_view": 4,
   "ev_track_reload": 4,

@@ -4,42 +4,46 @@ and its G.
 
 Track 1 plays stock LOWPASS 4 and track 2 a custom filter registered on it, with the same
 controls and the same note in the same block. LOWPASS 4's setup-table entry is pointed at the
-adapter's capture entry too, so both voices' stock cutoffs land in the capture arrays in the
+dispatcher's capture entry too, so both voices' stock cutoffs land in the capture arrays in the
 same preparation pass; they must be equal in every block while the envelope moves them. The
 custom filter declares G, which CC 18 sets; the kernel's input carries it, and its voice's
-state: the reserved base plus its slot times one voice's size. The kernel is larger than the old
+state: the table's base plus its slot times one voice's size. The kernel is larger than the old
 16 KiB machine area: 12 KB of NOPs run into its return, after which come 13 KB of data.
 """
 import json
 import os
 from pathlib import Path
 import struct
+import subprocess
 import sys
 import tempfile
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
 STOCK = os.environ.get('ELEKLOADER_DN2_SYX')
 DIGIKIT = os.environ.get('ELEKLOADER_DIGIKIT')
-EMUD = os.environ.get('ELEKLOADER_DIGI_EMUD')
+EMUD = os.environ.get('ELEKLOADER_DIGI_EMUD_COUPLED')   # a digi-emud built with coupled-audio
 READY = os.environ.get('ELEKLOADER_DN2_EMU_READY')
 MS = 132000  # emulated instructions per millisecond
-CUTOFF, RESONANCE, G, INPUT = 0x200afd40, 0x200afd80, 0x200afdc0, 0x200afd00
+CAP_WORD, INPUT_WORD, FILTER_TABLE_WORD = 1152, 1200, 512   # mods/machines-dn2/dispatch.s's data
 # DigiKit's DN2 panel codes (tools/patchkit/pk_harness.py).
 SYN, YES, UP, NO, DOWN, RIGHT, TRK, FUNC, STOP = 2, 10, 11, 12, 14, 15, 16, 17, 21
 FLTR_LIST = [0, 1, 4, 3, 5, 2, 8]  # MACHINE SEL's FLTR side, in screen order
-RETURN = 'fe4d3f0e3f083f3401190100'  # I12=DM(M7,I6); JUMP(M14,I12)(DB); RFRAME; NOP;
+RETURN = 'I12=DM(M7,I6);\nJUMP(M14,I12)(DB);\nRFRAME;\nNOP;\n'
 
 
-@unittest.skipUnless(STOCK and DIGIKIT and EMUD and READY and os.environ.get('ELEKLOADER_CROSS'),
-                     'needs DN2 stock, the cross compiler, DigiKit, its digi-emud and ready inputs')
+@unittest.skipUnless(STOCK and DIGIKIT and EMUD and READY and os.environ.get('ELEKLOADER_CROSS')
+                     and os.environ.get('SELACHE'),
+                     'needs DN2 stock, the cross compiler, Selache, DigiKit, its digi-emud and ready inputs')
 class CaptureTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         from elekloader import patch
         from elekloader.devices.digitone_mk2 import DEVICE
         from elekloader.sdk import build as sdk
-        from elekloader.sdk.sharc import filter_artifact
+        from elekloader import sharc
+        from elekloader.sdk.sharc import machine_artifact, selache_tools
         cls.profile = DEVICE.releases['1.12'].sharc
         cls.tmp = tempfile.TemporaryDirectory()
         cls.addClassCleanup(cls.tmp.cleanup)
@@ -50,23 +54,35 @@ class CaptureTests(unittest.TestCase):
         (stage / 'machine.c').write_text('#include "mk2/machines.h"\n'
                                          'static const struct mk2_param g = {"MODE", 0};\n'
                                          'const struct mk2_filter custom = {8,"CUSTOM","CUSTOM",0,&g};\n')
-        sled, data = b'\x01\x00' * 6144, bytes(range(256)) * 52        # 12 KiB of NOPs, 13 KiB of data
-        kernel = filter_artifact(sled + bytes.fromhex(RETURN), data, 0, 8, 0, voice_bytes=12)
-        cls.data = cls.profile['filter_range'][0] + kernel['segments'][2]['offset_bytes'], data
-        cls.voice_state = cls.profile['filter_range'][0] + kernel['voice_state']['offset_bytes']
-        (stage / 'kernel.json').write_text(json.dumps(kernel))
+        data = bytes(range(256)) * 52                                   # 12 KiB of NOPs, 13 KiB of data
+        (stage / 'kernel.s').write_text(
+            '.SECTION/DM seg_dmda;\n.GLOBAL sharc_filter_state_bytes.;\n.VAR sharc_filter_state_bytes. = 12;\n'
+            + ''.join('.VAR = 0x%08x;\n' % int.from_bytes(data[i:i + 4], 'little') for i in range(0, len(data), 4))
+            + '.SECTION/SW seg_swco;\n.GLOBAL sharc_filter_render.;\nsharc_filter_render.:\n' + 'NOP;\n' * 6144 + RETURN)
+        subprocess.run([str(selache_tools() / 'selas'), '-proc', 'ADSP-21569', '-o', str(stage / 'kernel.doj'),
+                        str(stage / 'kernel.s')], check=True)
+        (stage / 'kernel.json').write_text(json.dumps(machine_artifact('filter', [stage / 'kernel.doj'], 8)))
         (stage / 'mod.json').write_text(json.dumps({
             'id': 'capture-test', 'version': '0.1', 'device': 'digitone-mk2', 'os': '1.12',
             'sources': ['machine.c'], 'sharc': {'artifact': 'kernel.json'}, 'resources': {'core': '0.1'},
             'requires': ['core', 'machines-dn2'],
             'contribute': [{'to': 'mk2_voice_filters', 'data': '00000000', 'relocs': [[0, 'abs32', 'sym:custom', 0]]}]}))
         mods.append(sdk.build(str(stage), STOCK, str(stage / 'build'))[0])
-        outputs, _manifest = patch.build(STOCK, mods, 'TEST', log=lambda *args: None)
+        outputs, manifest = patch.build(STOCK, mods, 'TEST', log=lambda *args: None)
+        placed = {m['id']: m for m in manifest['link']['layout']['sharc']['kernels']['mods']}
+        cls.data = placed['capture-test']['data'][0] + 4, data
+        base = placed['machines-dn2']['data'][0]
+        cls.cutoff = base + 4 * CAP_WORD
+        cls.resonance, cls.g, cls.input = cls.cutoff + 64, cls.cutoff + 128, base + 4 * INPUT_WORD
+        cls.filter_entry = base + 4 * FILTER_TABLE_WORD + 16 * 8
+        dispatch = json.loads((ROOT / 'mods/machines-dn2/dispatch.sharc.json').read_text())
+        cls.capture = (sharc.pc16(cls.profile, placed['machines-dn2']['code'][0])
+                       + dispatch['exports']['dn2_filter_capture.'][1])
         cls.firmware = work / 'capture.syx'
         cls.firmware.write_bytes(outputs['syx'])
         sys.path.insert(0, DIGIKIT)
         from tools.control.digi_client import Emu
-        cls.emu = Emu.spawn_coupled(STOCK, READY, binary=EMUD, timeout=300, run_dir=work / 'run', env={'SHARC_AOT': '0'})
+        cls.emu = Emu.spawn_coupled(STOCK, READY, binary=EMUD, timeout=300, run_dir=work / 'run')
         cls.addClassCleanup(cls.emu.close)
         cls.addClassCleanup(cls.emu.call, 'quit')
         cls.emu.call('firmware.load', syx=str(cls.firmware), start='cold', force=True, auto_no=True)
@@ -110,7 +126,7 @@ class CaptureTests(unittest.TestCase):
     def test_custom_filter_gets_stock_lowpass_4s_cutoff_in_every_block(self):
         self.select_filter(1, 1)  # stock LOWPASS 4
         self.select_filter(2, 8)  # the custom filter
-        capture = int.from_bytes(bytes.fromhex(self.profile['filter_capture'][2]), 'little')
+        capture = self.capture
         lowpass_4_arm, = self.words(self.profile['filter_capture'][0] + 12, 1)
         self.patch_entry(3, capture, lowpass_4_arm)  # LOWPASS 4 is internal type 3
         # FREQ, RESO, ENV, ATK, DEC, SUS and pre-delay on both tracks' channels, and LFO 1 on FREQ
@@ -126,10 +142,10 @@ class CaptureTests(unittest.TestCase):
         self.assertEqual(sorted(types), [0, 3], 'voices 0 and 1 should play LOWPASS 4 and the custom filter')
 
         def pair():
-            cutoff, resonance = self.words(CUTOFF, 2, 'f'), self.words(RESONANCE, 2, 'f')
+            cutoff, resonance = self.words(self.cutoff, 2, 'f'), self.words(self.resonance, 2, 'f')
             if cutoff[0] != cutoff[1]:  # paused between the two voices' preparation
                 self.emu.step(20000)
-                cutoff, resonance = self.words(CUTOFF, 2, 'f'), self.words(RESONANCE, 2, 'f')
+                cutoff, resonance = self.words(self.cutoff, 2, 'f'), self.words(self.resonance, 2, 'f')
             return cutoff, resonance
 
         seen = set()
@@ -144,11 +160,14 @@ class CaptureTests(unittest.TestCase):
         # The kernel's input carries the custom voice's values (its slot word is shared by every voice):
         # G is CC 18's 100, as G/127.
         custom = types.index(0)
-        given = self.words(INPUT + 12, 3, 'f')
-        self.assertEqual(given, tuple(self.words(array + 4 * custom, 1, 'f')[0] for array in (CUTOFF, RESONANCE, G)))
+        given = self.words(self.input + 12, 3, 'f')
+        self.assertEqual(given, tuple(self.words(array + 4 * custom, 1, 'f')[0]
+                                      for array in (self.cutoff, self.resonance, self.g)))
         self.assertAlmostEqual(given[2], 100 / 127, places=6)
         self.assertEqual(custom, 1, 'the state check needs a slot past 0')
-        self.assertEqual(self.words(INPUT + 0x18, 1)[0], self.voice_state + 12 * custom)
+        state, each = self.words(self.filter_entry + 4, 2)
+        self.assertEqual(each, 12)
+        self.assertEqual(self.words(self.input + 0x18, 1)[0], state + 12 * custom)
         at, data = self.data
         self.assertEqual(bytes.fromhex(self.emu.call('dsp.peek', addr=at + len(data) - 64, len=64)['hex']), data[-64:])
         status = self.emu.status()
@@ -162,7 +181,7 @@ class CaptureTests(unittest.TestCase):
         self.wait(20)
         differ = 0
         for _ in range(20):
-            cutoff = self.words(CUTOFF, 2, 'f')
+            cutoff = self.words(self.cutoff, 2, 'f')
             differ += cutoff[0] != cutoff[1]
             self.wait(32 / 48)
         self.assertGreater(differ, 10)

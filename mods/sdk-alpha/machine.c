@@ -7,7 +7,11 @@
  *   dev_fillrect         the firmware's fillrect(bmp, x0, y0, x1, y1, on);
  *   dev_active           the active track's machine, or 0, on a device whose value formatter is given
  *                        no knob;
- *   SDK_ALPHA_VOICES     the voices it renders, when it renders. */
+ *   SDK_ALPHA_VOICES     the voices it renders, when it renders;
+ *   SDK_ALPHA_TRACKS     the tracks those voices play, from 0 (their MIDI CCs, and mono machines), with
+ *   dev_track_machine(t) the native id of track t's machine (what the UI chose), or -1;
+ *   dev_note_on(t, n, v, source), dev_note_off(t, n, source)  the core's stock note routines, when it
+ *                        carries out mono machines (.play). */
 #include "dev.h"
 
 struct sdk_alpha_entry sdk_alpha_entries[SDK_ALPHA_MACHINES];
@@ -105,7 +109,10 @@ void sdk_alpha_number(int32_t value, char *buf, int wide)
 static void value_text(uint32_t k, int32_t raw, char *buf)
 {
     const struct sdk_alpha_entry *e = dev_active();
-    sdk_alpha_number(e && k < e->count ? sdk_alpha_map(&e->machine->knobs[k], raw) : raw >> 8, buf, 0);
+    if (e && k < e->count)
+        sdk_alpha_value(e, k, raw, buf, 0);
+    else
+        sdk_alpha_number(raw >> 8, buf, 0);
 }
 #define VALUE_TEXT(k) static void value_text##k(int32_t raw, char *buf) { value_text(k, raw, buf); }
 VALUE_TEXT(0) VALUE_TEXT(1) VALUE_TEXT(2) VALUE_TEXT(3) VALUE_TEXT(4) VALUE_TEXT(5) VALUE_TEXT(6)
@@ -126,6 +133,36 @@ const struct sdk_alpha_entry *sdk_alpha_seen;
 int32_t sdk_alpha_seen_page = ELEK_UI_NO_PAGE;
 static uint32_t seen_track;
 static int32_t seen_raw[SDK_ALPHA_KNOBS];
+
+static struct elek_scratch scratch;     /* the UI task's: one .present call at a time */
+
+/* Each .present call starts from the declaration, with no text built. */
+static void start(struct elek_view *view, const struct elek_machine *m, uint32_t n)
+{
+    for (uint32_t k = 0; k < n; ++k) {
+        view[k].label = m->knobs[k].label;
+        view[k].hidden = 0;
+        view[k].glyph = m->knobs[k].glyph;
+        view[k].value = 0;
+    }
+    scratch.used = 0;
+}
+
+/* text's first ELEK_UI_LABEL_MAX characters into out, nonprintable ones as ?; -> nonzero when out changed. */
+static int32_t copy_text(char *out, const char *text)
+{
+    int32_t changed = 0;
+    uint32_t c = 0;
+    for (; c < ELEK_UI_LABEL_MAX && text[c]; ++c) {
+        unsigned char ch = text[c];
+        char next = ch >= 32 && ch <= 126 ? ch : '?';
+        changed |= out[c] != next;
+        out[c] = next;
+    }
+    changed |= out[c] != 0;
+    out[c] = 0;
+    return changed;
+}
 
 int32_t sdk_alpha_present(const struct sdk_alpha_entry *e, uint32_t track, int32_t page,
                           const int32_t *raw, int force)
@@ -148,27 +185,16 @@ int32_t sdk_alpha_present(const struct sdk_alpha_entry *e, uint32_t track, int32
     for (k = 0; k < n; ++k) {
         seen_raw[k] = clamped[k];
         knob[k] = sdk_alpha_map(&m->knobs[k], clamped[k]);
-        elek_label_set(view[k].label, m->knobs[k].label);
-        view[k].hidden = 0;
-        view[k].glyph = m->knobs[k].glyph;
     }
+    start(view, m, n);
     sdk_alpha_seen = e;
     seen_track = track;
     sdk_alpha_seen_page = page;
-    const struct elek_ui ui = { .knob = knob, .view = view, .page = page, .track = track };
+    const struct elek_ui ui = { .knob = knob, .view = view, .page = page, .track = track, .scratch = &scratch };
     if (m->present)
         m->present(&ui);
     for (k = 0; k < n; ++k) {
-        const char *label = view[k].label;
-        uint32_t c = 0;
-        for (; c < ELEK_UI_LABEL_MAX && label[c]; ++c) {
-            unsigned char ch = label[c];
-            char next = ch >= 32 && ch <= 126 ? ch : '?';
-            changed |= sdk_alpha_labels[k][c] != next;
-            sdk_alpha_labels[k][c] = next;
-        }
-        changed |= sdk_alpha_labels[k][c] != 0;
-        sdk_alpha_labels[k][c] = 0;
+        changed |= copy_text(sdk_alpha_labels[k], view[k].label ? view[k].label : m->knobs[k].label);
         uint8_t visible = view[k].hidden == 0;
         changed |= sdk_alpha_visibility[k] != visible;
         sdk_alpha_visibility[k] = visible;
@@ -176,6 +202,29 @@ int32_t sdk_alpha_present(const struct sdk_alpha_entry *e, uint32_t track, int32
         sdk_alpha_glyphs[k] = view[k].glyph;
     }
     return changed;
+}
+
+void sdk_alpha_value(const struct sdk_alpha_entry *e, uint32_t k, int32_t raw, char *buf, int wide)
+{
+    static int32_t knob[SDK_ALPHA_KNOBS];      /* static: formatters run deep in the firmware's UI stack */
+    static struct elek_view view[SDK_ALPHA_KNOBS];
+    const struct elek_machine *m = e->machine;
+    int seen = e == sdk_alpha_seen;
+    int32_t value = sdk_alpha_map(&m->knobs[k], raw);
+    if (m->present) {
+        for (uint32_t i = 0; i < e->count; ++i)
+            knob[i] = sdk_alpha_map(&m->knobs[i], seen ? seen_raw[i] : sdk_alpha_default(&m->knobs[i]));
+        knob[k] = value;
+        start(view, m, e->count);
+        const struct elek_ui ui = { .knob = knob, .view = view, .page = seen ? sdk_alpha_seen_page : ELEK_UI_NO_PAGE,
+                                    .track = seen ? seen_track : 0, .scratch = &scratch };
+        m->present(&ui);
+        if (view[k].value && view[k].value[0]) {
+            copy_text(buf, view[k].value);
+            return;
+        }
+    }
+    sdk_alpha_number(value, buf, wide);
 }
 
 const char *sdk_alpha_label(const struct sdk_alpha_entry *e, uint32_t k)
@@ -210,8 +259,39 @@ void sdk_alpha_blit(void *bmp, int32_t x, int32_t y, const struct elek_glyph *gl
 static struct {
     int32_t id;
     uint8_t start;                      /* the device's start flag lasts one block; kept until render */
+    uint8_t rendered;                   /* rendered since its state was cleared: idle means something */
+    uint32_t cc_seen;                   /* cc_count at its last render: the CCs after it are new */
     uint32_t state[ELEK_VOICE_STATE_MAX / 4];
 } voices[SDK_ALPHA_VOICES];
+
+/* Each track's CCs: the last value of each, with cc_count when it came (bits 7 up; 0: none came). The MIDI
+ * task writes them; the render reads them, and takes only those cc_count had counted when it began. */
+#define CC_COUNT 0x1ffffffu             /* cc_count's mask, 25 bits */
+static uint32_t cc_table[SDK_ALPHA_TRACKS][128];
+static volatile uint32_t cc_count;      /* the last CC's count: 1..CC_COUNT, 0 before the first */
+/* What v->cc points at: -1 for every CC when none came, else the CCs built for one track and window. */
+static const int32_t cc_none[128] = { [0 ... 127] = -1 };
+static int32_t cc_built[128];
+static uint32_t built_track = UINT32_MAX, built_from, built_now;
+/* Each track's machine at its last CC, and cc_count before its first CC on it: count << 7 | id. A voice's
+ * first render on the machine takes the track's CCs from there, not the ones for the machine before:
+ * the voice changes machine only at the track's next note, after the UI chose it. */
+static volatile uint32_t cc_took[SDK_ALPHA_TRACKS];
+
+int32_t sdk_alpha_midi_cc(int32_t track, int32_t cc, int32_t value, int32_t flags)
+{
+    (void)flags;
+    if ((uint32_t)track < SDK_ALPHA_TRACKS && (uint32_t)cc < 128) {
+        uint32_t n = cc_count % CC_COUNT + 1;  /* never 0, which a CC that never came has */
+        uint32_t id = (uint32_t)dev_track_machine(track) & 127;
+        if ((cc_took[track] & 127) != id)
+            cc_took[track] = cc_count << 7 | id;
+        cc_table[track][cc] = n << 7 | ((uint32_t)value & 127);
+        __asm__ volatile ("" ::: "memory");     /* the word before the count that makes it new */
+        cc_count = n;
+    }
+    return 0;
+}
 
 void sdk_alpha_select(uint32_t slot, int32_t id)
 {
@@ -219,10 +299,11 @@ void sdk_alpha_select(uint32_t slot, int32_t id)
     for (uint32_t i = 0; i < ELEK_VOICE_STATE_MAX / 4; ++i) voices[slot].state[i] = 0;
     voices[slot].id = id;
     voices[slot].start = 0;
+    voices[slot].rendered = 0;
 }
 
 void sdk_alpha_voice(const struct sdk_alpha_entry *e, uint32_t slot, struct elek_voice *v,
-                     const int32_t *raw, int start, elek_sample *out)
+                     const int32_t *raw, int start, uint32_t idle, elek_sample *out)
 {
     int32_t knob[SDK_ALPHA_KNOBS];
     if (start) voices[slot].start = 1;
@@ -231,7 +312,125 @@ void sdk_alpha_voice(const struct sdk_alpha_entry *e, uint32_t slot, struct elek
     v->knob = knob;
     v->start = voices[slot].start;
     v->state = voices[slot].state;
+    v->idle = voices[slot].rendered ? idle : 0;
+    uint32_t now = cc_count, from = voices[slot].cc_seen;
+    if (!voices[slot].rendered) {       /* the CCs since its track took the machine, but none twice */
+        uint32_t took = v->track < SDK_ALPHA_TRACKS ? cc_took[v->track] : 0;
+        uint32_t since = (int32_t)(took & 127) == voices[slot].id ? took >> 7 : now;
+        if (((from - since) & CC_COUNT) > ((now - since) & CC_COUNT))
+            from = since;               /* its last render, on the machine before, was before that */
+    }
+    uint32_t span = (now - from) & CC_COUNT;
+    v->cc = cc_none;
+    if (span && v->track < SDK_ALPHA_TRACKS) {     /* a CC came: its values, built once a track and window */
+        if (built_track != v->track || built_from != from || built_now != now) {
+            for (uint32_t n = 0; n < 128; ++n) {
+                uint32_t word = cc_table[v->track][n];
+                cc_built[n] = word >> 7 && (((word >> 7) - from - 1) & CC_COUNT) < span ? (int32_t)(word & 127) : -1;
+            }
+            built_track = v->track;
+            built_from = from;
+            built_now = now;
+        }
+        v->cc = cc_built;
+    }
     e->machine->render(v, out);
     voices[slot].start = 0;
+    voices[slot].rendered = 1;
+    voices[slot].cc_seen = now;
+}
+
+void sdk_alpha_swap(uint32_t a, uint32_t b)
+{
+    uint32_t *x = (uint32_t *)&voices[a], *y = (uint32_t *)&voices[b];
+    for (uint32_t i = 0; i < sizeof voices[0] / 4; ++i) {
+        uint32_t t = x[i];
+        x[i] = y[i];
+        y[i] = t;
+    }
+}
+#endif
+
+#ifdef dev_note_on
+#include "elekloader/sdk_alpha_keys.h"
+
+static struct {
+    struct sdk_alpha_keys keys;
+    int32_t id;                         /* the machine they are for */
+    int32_t stock;                      /* the note the stock holds, or -1 */
+} mono[SDK_ALPHA_TRACKS];
+static volatile int32_t mono_bend[SDK_ALPHA_TRACKS];   /* 16.16, added to the stock's note: legato's pitch */
+
+static uint16_t mono_lock(void)
+{
+    uint16_t sr = 0;
+#ifdef __m68k__
+    __asm__ volatile("move.w %%sr,%0\n\tmove.w #0x2700,%%sr" : "=d"(sr) :: "memory", "cc");
+#endif
+    return sr;
+}
+
+static void mono_unlock(uint16_t sr)
+{
+#ifdef __m68k__
+    __asm__ volatile("move.w %0,%%sr" :: "d"(sr) : "memory", "cc");
+#else
+    (void)sr;
+#endif
+}
+
+int32_t sdk_alpha_live_note(int32_t track, int32_t note, int32_t vel, int32_t on, int32_t source)
+{
+    if ((uint32_t)track >= SDK_ALPHA_TRACKS || (uint32_t)note > 127)
+        return 0;
+    int32_t id = dev_track_machine(track);
+    const struct sdk_alpha_entry *e = sdk_alpha_find(id);
+    if (!e || e->machine->play == ELEK_POLY)
+        return 0;
+    /* shortcut: the lock covers the choice, not the stock calls, so a UI key and a MIDI note on one track
+     * at the same instant may play in either order; widen it if that is ever heard. */
+    uint16_t sr = mono_lock();
+    if (mono[track].id != id) {
+        for (uint8_t *p = (uint8_t *)&mono[track].keys; p < (uint8_t *)(&mono[track].keys + 1); ++p)
+            *p = 0;
+        mono[track].id = id;
+        mono[track].stock = -1;
+        mono_bend[track] = 0;
+    }
+    /* a release of a key not held (pressed before the machine came) is the stock's */
+    if (!on && sdk_alpha_held(&mono[track].keys, note << 16) < 0) {
+        mono_unlock(sr);
+        return 0;
+    }
+    struct sdk_alpha_held key = {0, 0};
+    int32_t did = sdk_alpha_key(&mono[track].keys, e->machine, note << 16, on ? vel : 0, on, &key);
+    int32_t was = mono[track].stock, play = key.pitch >> 16;
+    if (did == SDK_ALPHA_PLAY) {
+        mono[track].stock = play;
+        mono_bend[track] = 0;
+    } else if (did == SDK_ALPHA_LEGATO) {
+        mono_bend[track] = key.pitch - (was << 16);
+    } else if (did == SDK_ALPHA_SILENCE) {
+        mono[track].stock = -1;
+        mono_bend[track] = 0;
+    }
+    mono_unlock(sr);
+    if (did == SDK_ALPHA_PLAY) {
+        if (was >= 0)
+            dev_note_off(track, was, source);
+        if (on && play == note)
+            return 0;                   /* the key pressed: the stock plays it, with its own arguments */
+        dev_note_on(track, play, key.velocity, source);
+    } else if (did == SDK_ALPHA_SILENCE) {
+        if (!on && was == note)
+            return 0;                   /* the key released: the stock releases it */
+        dev_note_off(track, was, source);
+    }
+    return 1;
+}
+
+int32_t sdk_alpha_pitch(uint32_t track, int32_t id, int32_t pitch)
+{
+    return track < SDK_ALPHA_TRACKS && mono[track].id == id ? pitch + mono_bend[track] : pitch;
 }
 #endif

@@ -7,8 +7,9 @@ needs the stock OS file for your device ([below](#the-stock-os-file)).
 
 ## In your browser
 
-Nothing to install: <https://elekloader.github.io/elekloader/>.
-Drop in your stock OS file, add mods from its library or your own, tick them,
+Nothing to install: the [Mod Shop](https://elekloader.github.io/shop/) for mods from the shop, or the
+[builder](https://elekloader.github.io/elekloader/) for `.elemod` files you already have.
+Drop in your stock OS file, add mods, tick them,
 build, and download the `.syx` (and, for the Octatrack, the `.bin`). The build runs in the page, in
 Python compiled to WebAssembly ([Pyodide](https://pyodide.org)), with
 elekloader's own code, unchanged. The page shows its version and commit, and
@@ -20,7 +21,7 @@ core for your device is listed and ticked for you. See
 ## Windows
 
 Download `elekloader-<version>-windows.exe` from
-[Releases](https://github.com/irpina/elekloader/releases/latest) and run it.
+[Releases](https://github.com/elekloader/elekloader/releases/latest) and run it.
 There is nothing to install and no Python needed. The first time, it asks
 for your stock OS file. The **core** mod is built in: it is listed in the window, and ticked for you
 with any mod that needs it. The exe is not signed, so Windows may say it
@@ -29,11 +30,14 @@ protected your PC: choose **More info**, then **Run anyway**.
 ## macOS
 
 Download `elekloader-<version>-macos.dmg` from
-[Releases](https://github.com/irpina/elekloader/releases/latest), open it,
+[Releases](https://github.com/elekloader/elekloader/releases/latest), open it,
 and drag **elekloader** to **Applications**. It runs on Apple silicon and
 Intel Macs, with no Python needed, and it is signed and notarized by Apple.
 As on Windows, the first time it asks for your stock OS file, and core is
 built in.
+
+Not every release carries the macOS app. When the latest has no `.dmg`,
+use the web page or run elekloader from source (below).
 
 ## From source, on any system
 
@@ -44,7 +48,7 @@ window. With `pip install .` the commands are `elekloader` (the window) and
 `elekpatch` (the command line: [BUILDING.md](BUILDING.md#on-the-command-line)).
 
 From source, core is not built in. Take your device's from
-[Releases](https://github.com/irpina/elekloader/releases/latest) (or build
+[Releases](https://github.com/elekloader/elekloader/releases/latest) (or build
 it), and install it like any mod. [CORES.md](CORES.md#which-file) lists the
 file for each device and OS.
 

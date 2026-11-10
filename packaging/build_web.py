@@ -5,8 +5,8 @@
     python packaging/build_web.py --pyodide-url          # the pinned Pyodide's URL
     python packaging/build_web.py --pyodide pyodide-core-314.0.7.tar.bz2 \\
         --core core-2.1.elemod [core-dn1-2.0a.elemod ...] \\
-        [--catalog web/catalog.json --catalog-dir build/shop] --out build/site
-    python packaging/build_web.py --catalog-list web/catalog.json   # what to download
+        [--catalog catalog.json --catalog-dir build/shop] --out build/site
+    python packaging/build_web.py --catalog-list catalog.json [--thumbs]   # what to download
 
 The site holds:
   - web/'s files (the page, its worker and the Python bridge);
@@ -16,13 +16,17 @@ The site holds:
     the same code a release of that commit carries;
   - core/: the core mods given (the release's), and the cores the catalog
     lists, with core/index.json;
-  - shop/: the mod shop: each mod web/catalog.json lists, taken from its
+  - shop/: the mod shop: each mod catalog.json lists, taken from its
     author's release or from their repository at a commit (the workflow
     downloads them into --catalog-dir), checked against the sha256 the
     catalog pins, and listed in shop/index.json with what its file says
     about it. A mod goes in only under a licence that allows passing it on
     (SHOP_LICENCES); one whose file is not there (a draft release) is listed
-    as not available. shop/bounties.json is the community's to-do list for
+    as not available. An item's thumbnail ("thumb", pinned on its own and
+    downloaded to --catalog-dir's thumbs/<sha256>.png) is checked again
+    (packaging/thumbs.py) and goes in as shop/thumbs/<sha256>.png, the
+    canonical 1-bit PNG; one that is not there or fails is left out, and
+    --no-thumbs leaves them all out (the maintainers' switch); shop/bounties.json is the community's to-do list for
     the core, made from those files and the cores (elekloader.sdk.bounties,
     grouped by distance: the site has no stock file), and from the upstream
     lists (--upstream, by default web/upstream/*.json: the stock code
@@ -56,6 +60,9 @@ import sys
 import tarfile
 import zipfile
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import thumbs  # noqa: E402
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
@@ -69,7 +76,7 @@ PYODIDE_URL = ('https://github.com/pyodide/pyodide/releases/download/%s/pyodide-
 # what the page needs: the loader, the runtime, the standard library, the lock file
 PYODIDE_FILES = ('pyodide.mjs', 'pyodide.asm.mjs', 'pyodide.asm.wasm', 'python_stdlib.zip',
                  'pyodide-lock.json')
-WEB_FILES = ('index.html', 'style.css', 'app.js', 'worker.js', 'bridge.py')
+WEB_FILES = ('index.html', 'style.css', 'app.js', 'worker.js', 'bridge.py', 'splash.js', 'gif.js')
 # licences under which the site may pass a mod on (SPDX identifiers)
 SHOP_LICENCES = {'GPL-2.0', 'GPL-2.0-only', 'GPL-2.0-or-later', 'GPL-3.0', 'GPL-3.0-only',
                  'GPL-3.0-or-later', 'LGPL-2.1-or-later', 'LGPL-3.0-or-later', 'MIT',
@@ -120,6 +127,61 @@ def package_zip():
             info.create_system = 3          # zipfile writes the running OS's (0 on Windows)
             z.writestr(info, data)
     return out.getvalue(), [n for n, _ in files]
+
+
+def catalog_path(path=None):
+    """The shop's list: `path` if given, else $ELEKLOADER_CATALOG, else build/shop-list/catalog.json: the
+    catalog.json of a clone of the shop's repository (elekloader/shop, or the variable SHOP_REPO's), where the
+    workflows clone it (docs/WEB.md, "Where the list is")."""
+    return path or os.environ.get('ELEKLOADER_CATALOG') or os.path.join(ROOT, 'build', 'shop-list', 'catalog.json')
+
+
+def sections_path(catalog=None):
+    """sections.json, beside the list (catalog_path)."""
+    return os.path.join(os.path.dirname(os.path.abspath(catalog_path(catalog))), 'sections.json')
+
+
+def sections(items, path=None):
+    """sections.json, checked: the shop's own sections, each a page of whole repositories' mods (app.js).
+    -> [{id, title, nav, blurb, tools: [{href, title}], packs: [{repo, title, blurb}]}]. A repository in no section stays on the
+    Mod Shop's shelves; one in the list that the shop does not carry (yet) is kept, and named."""
+    path = path or sections_path()
+    if not os.path.exists(path):
+        return []
+    with open(path, encoding='utf-8') as fh:
+        doc = json.load(fh)
+    out, ids, repos, tools_seen = [], set(), set(), set()
+    have = {e['repo'] for e in items}
+    for s in doc.get('sections', []):
+        if not re.match(r'^[a-z][a-z0-9-]*$', s.get('id', '')) or s['id'] in ids:
+            sys.exit('sections.json: a section id is lowercase letters, digits and -, each once: %r'
+                     % s.get('id'))
+        if s['id'] in ('library', 'build', 'make', 'splash', 'submit', 'contribute'):
+            sys.exit('sections.json: %s is one of the page\'s views' % s['id'])
+        ids.add(s['id'])
+        if not s.get('title') or not s.get('packs'):
+            sys.exit('sections.json: section %s needs a title and packs' % s['id'])
+        packs = []
+        for p in s['packs']:
+            r = p.get('repo', '')
+            if not re.match(r'^[\w.-]+/[\w.-]+$', r) or r in repos:
+                sys.exit('sections.json: %s: a pack is one owner/name repository, in one section: %r'
+                         % (s['id'], r))
+            repos.add(r)
+            if r not in have:
+                print('sections.json: %s: the shop carries nothing from %s yet' % (s['id'], r))
+            packs.append({'repo': r, 'title': p.get('title') or r.split('/')[1], 'blurb': p.get('blurb', '')})
+        tools = []
+        for t in s.get('tools', []):
+            if not re.match(r'^#[a-z][a-z0-9/-]*$', t.get('href', '')) or not t.get('title'):
+                sys.exit('sections.json: %s: a tool is a #view of the page and a title: %r' % (s['id'], t))
+            if t['href'] in tools_seen:
+                sys.exit('sections.json: %s is a tool of two sections' % t['href'])
+            tools_seen.add(t['href'])
+            tools.append({'href': t['href'], 'title': t['title']})
+        out.append({'id': s['id'], 'title': s['title'], 'nav': s.get('nav') or s['title'],
+                    'blurb': s.get('blurb', ''), 'tools': tools, 'packs': packs})
+    return out
 
 
 def pyodide_files(tarball):
@@ -176,7 +238,47 @@ def read_catalog(path):
         if it['file'] in names:              # they are all downloaded into one folder
             sys.exit('%s: two items named %s' % (path, it['file']))
         names.add(it['file'])
+        th = it.get('thumb')
+        if th is not None:                   # a thumbnail: pinned like a file, on its own
+            pin = ('commit', 'path') if 'commit' in th else ('tag', 'file')
+            if (not isinstance(th, dict) or set(th) != set(pin) | {'sha256'} or not re.fullmatch('[0-9a-f]{64}', th['sha256'])
+                    or ('commit' in th and (not re.fullmatch('[0-9a-f]{40}', th['commit'])
+                                            or not re.fullmatch(r'[\w.-]+(/[\w.-]+)*\.png', th['path'])
+                                            or '..' in th['path'].split('/')))
+                    or ('tag' in th and not re.fullmatch(r'[\w.-]+\.png', th['file']))):
+                sys.exit('%s: %s: "thumb" is {"tag", "file"} or {"commit", "path"}, and "sha256": a .png'
+                         % (path, it['file']))
     return doc['items']
+
+
+def thumb_list(items):
+    """The thumbnails to download, once each: (how, repo, ref, path, sha256)."""
+    out = {}
+    for it in items:
+        th = it.get('thumb')
+        if th:
+            out[th['sha256']] = (('thumb-commit', it['repo'], th['commit'], th['path']) if 'commit' in th
+                                 else ('thumb-release', it['repo'], th['tag'], th['file'])) + (th['sha256'],)
+    return sorted(out.values(), key=lambda t: t[-1])
+
+
+def thumb(it, folder):
+    """An item's thumbnail from `folder`/thumbs, checked. -> the canonical PNG, or None (with a warning)."""
+    th = it.get('thumb')
+    if not th:
+        return None
+    p = os.path.join(folder or '', 'thumbs', th['sha256'] + '.png')
+    if not folder or not os.path.exists(p):
+        print('WARNING: the thumbnail of %s (%s) is not there: its card keeps its drawn cover' % (it['file'], source(it)))
+        return None
+    with open(p, 'rb') as fh:
+        raw = fh.read()
+    r = thumbs.check(raw)
+    if r['sha256'] != th['sha256'] or not r['ok']:
+        print('WARNING: the thumbnail of %s is left out: %s' % (it['file'], r.get('reason') or
+                                                                'sha256 %s, not the one the catalog names' % r['sha256']))
+        return None
+    return thumbs.canonical_png(r['bits'])
 
 
 def source(it):
@@ -184,10 +286,10 @@ def source(it):
     return it['repo'] + ' ' + (it['commit'][:7] if it.get('commit') else it['tag'])
 
 
-def shop(path, folder):
+def shop(path, folder, with_thumbs=True):
     """The catalog's items, from `folder`. -> (cores [(entry, bytes)],
-    shop [(entry, bytes or None)])."""
-    cs, out = [], []
+    shop [(entry, bytes or None)], thumbnails {site name: canonical PNG})."""
+    cs, out, pictures = [], [], {}
     for it in read_catalog(path):
         f = it['file']
         base = {'file': f, 'sha256': it['sha256'], 'device': it['device'], 'repo': it['repo'],
@@ -198,6 +300,10 @@ def shop(path, folder):
                                 'https://github.com/%s/releases/tag/%s' % (it['repo'], it['tag'])),
                 'summary': it.get('summary', ''), 'needs_core': it.get('needs_core'),
                 'on_unit': it.get('on_unit', '')}
+        png = thumb(it, folder) if with_thumbs else None
+        if png:
+            base['thumb'] = 'thumbs/%s.png' % it['thumb']['sha256']
+            pictures[base['thumb']] = png
         p = os.path.join(folder, f) if folder else ''
         if not p or not os.path.exists(p):
             print('WARNING: %s (%s) is not there: the shop lists it as not available'
@@ -234,7 +340,7 @@ def shop(path, folder):
                          ram=(m.size('.run') + m.size('.bss')) if v2 else 0,
                          fast=m.size('.fast') if v2 else 0, sites=len(m.sites),
                          footprint=footprint(m)), raw))
-    return cs, out
+    return cs, out, pictures
 
 
 def footprint(m):
@@ -290,6 +396,25 @@ def stamp(html, token):
             sys.exit('web/index.html: expected one %s' % a)
         out = out.replace(a, a[:-1] + '?v=%s"' % token)
     return out
+
+
+SHOP_URL = 'https://elekloader.github.io/shop/'
+
+
+def page_mode(html, page, shop_url=SHOP_URL):
+    """index.html as the page `page` is: 'shop' (the whole page, as it is) or 'builder' (elekloader's page for your
+    own .elemod files: <html data-page="builder" data-shop-url>; app.js and style.css hide the shop and send its
+    routes to `shop_url`, the shop's own site)."""
+    if page == 'shop':
+        return html
+    if page != 'builder':
+        sys.exit('--page: shop or builder, not %r' % page)
+    if not re.fullmatch(r'https://[A-Za-z0-9.-]+/[A-Za-z0-9._~/-]*', shop_url or '') or not shop_url.endswith('/'):
+        sys.exit('--shop-url: an https:// address ending in /, not %r' % shop_url)
+    tag = '<html lang="en">'
+    if html.count(tag) != 1:
+        sys.exit('web/index.html: expected one %s' % tag)
+    return html.replace(tag, '<html lang="en" data-page="builder" data-shop-url="%s">' % shop_url)
 
 
 def to_do(core_paths, folder, items, cs, upstream=()):
@@ -350,7 +475,9 @@ def main(argv=None):
     ap.add_argument('--core', nargs='*', default=[], help='the core mods to list (the release\'s)')
     ap.add_argument('--release', help='the release the cores come from (its tag, fetched): the '
                                       'page says whether its package is that release\'s')
-    ap.add_argument('--catalog', help="the mod shop's curated list (web/catalog.json)")
+    ap.add_argument('--catalog', help="the mod shop's curated list (default: $ELEKLOADER_CATALOG, else "
+                                      "catalog.json)")
+    ap.add_argument('--sections', help="the shop's sections (default: sections.json beside the list)")
     ap.add_argument('--catalog-dir', help='where its files were downloaded')
     ap.add_argument('--catalog-list', metavar='CATALOG',
                     help='print each item as "release repo tag file" or "commit repo '
@@ -359,22 +486,34 @@ def main(argv=None):
                                   "number,title,body,author,mergedAt,url), for the leaderboard")
     ap.add_argument('--upstream', nargs='*', default=None, metavar='LIST.json',
                     help='upstream lists for the to-do list (default: web/upstream/*.json)')
+    ap.add_argument('--thumbs', action='store_true', help='with --catalog-list: the thumbnails too, as '
+                                                         '"thumb-release repo tag file sha256" or "thumb-commit repo commit path sha256"')
+    ap.add_argument('--no-thumbs', action='store_true', help="leave the shop's thumbnails out (SHOP_THUMBS=false)")
+    ap.add_argument('--page', default='shop', choices=('shop', 'builder'),
+                    help="the page: the whole shop (default), or elekloader's builder for your own files, whose shop "
+                         "links go to --shop-url")
+    ap.add_argument('--shop-url', default=SHOP_URL, help="the shop's own site, for the builder's links (%(default)s)")
     ap.add_argument('--out', help='the site folder to write (emptied first)')
     a = ap.parse_args(argv)
+    if a.catalog is None and os.environ.get('ELEKLOADER_CATALOG'):
+        a.catalog = catalog_path()
     if a.pyodide_url:
         print(PYODIDE_URL)
         return 0
     if a.catalog_list:
-        for it in read_catalog(a.catalog_list):
+        items = read_catalog(a.catalog_list)
+        for it in items:
             print(*(('commit', it['repo'], it['commit'], it['path']) if 'commit' in it
                     else ('release', it['repo'], it['tag'], it['file'])))
+        for t in thumb_list(items) if a.thumbs else []:
+            print(*t)
         return 0
     if not a.pyodide or not a.out:
         ap.error('--pyodide and --out are required')
     py = pyodide_files(a.pyodide)
     zipped, names = package_zip()
     cs = cores(a.core)
-    shop_cores, items = shop(a.catalog, a.catalog_dir) if a.catalog else ([], [])
+    shop_cores, items, pictures = shop(a.catalog, a.catalog_dir, not a.no_thumbs) if a.catalog else ([], [], {})
     for c, raw in shop_cores:                # the catalog's cores join the release's
         same_name = [x for x, _ in cs if x['file'] == c['file']]
         if same_name and same_name[0]['sha256'] != c['sha256']:
@@ -402,8 +541,12 @@ def main(argv=None):
     for e, raw in items:
         if raw is not None:
             site['shop/' + e['file']] = raw
+    for n, png in pictures.items():
+        site['shop/' + n] = png
     site['shop/index.json'] = json.dumps([e for e, _ in items], indent=1).encode()
-    if a.upstream is None:                  # the upstream lists the repository has
+    site['shop/sections.json'] = json.dumps(sections([e for e, _ in items], a.sections or sections_path(a.catalog)),
+                                            indent=1).encode()
+    if a.upstream is None:                 # the upstream lists the repository has
         up = os.path.join(ROOT, 'web', 'upstream')
         a.upstream = sorted(os.path.join(up, n) for n in os.listdir(up)
                             if n.endswith('.json')) if os.path.isdir(up) else []
@@ -418,7 +561,7 @@ def main(argv=None):
     # the site's version: its files but the page, which names it
     token = sha(''.join('%s %s\n' % (n, sha(b)) for n, b in sorted(site.items()) if n != 'index.html')
                 .encode())[:12]
-    site['index.html'] = stamp(site['index.html'].decode('utf-8'), token).encode('utf-8')
+    site['index.html'] = page_mode(stamp(site['index.html'].decode('utf-8'), token), a.page, a.shop_url).encode('utf-8')
     commit = git('rev-parse', 'HEAD').decode().strip()
     dirty = bool(git('status', '--porcelain', '--', 'elekloader').strip())
     tree = git('rev-parse', 'HEAD:elekloader').decode().strip()
@@ -428,8 +571,15 @@ def main(argv=None):
     from elekloader import __version__
     site['build.json'] = json.dumps({
         'elekloader': __version__, 'commit': commit, 'site_version': token,
-        # the repository the site is built from (the workflow's), for its links: issues, commits
-        'repository': os.environ.get('GITHUB_REPOSITORY') or 'elekloader/elekloader',
+        # elekloader's repository, for the page's links to its commits: $ELEKLOADER_REPOSITORY when another
+        # repository builds the site from a checkout of elekloader (elekloader/shop), else the workflow's
+        'repository': os.environ.get('ELEKLOADER_REPOSITORY') or os.environ.get('GITHUB_REPOSITORY') or 'elekloader/elekloader',
+        # the repository the shop's list comes from (SHOP_REPO), for its forms: submit, remove, report a picture;
+        # and its commit
+        'shop_repository': os.environ.get('SHOP_REPO') or 'elekloader/shop',
+        'shop_commit': os.environ.get('SHOP_COMMIT') or None,
+        # the page: the whole shop, or the builder (its shop is at shop_url)
+        'page': a.page, 'shop_url': a.shop_url if a.page == 'builder' else None,
         'commit_date': git('log', '-1', '--format=%cI').decode().strip(),
         # the zip is HEAD's package; a working tree with changes there is not in it
         'package_changes_not_in_zip': dirty,

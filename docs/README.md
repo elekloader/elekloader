@@ -16,7 +16,9 @@ docs match its code.
   which OS, how a build picks one, and what each core adds (the Digitone's
   Mod Menu, say).
 - **[The web page](WEB.md)**: elekloader in your browser, its mod shop, and
-  how the shop's list is kept.
+  how the shop's list is kept (in [elekloader/shop](https://github.com/elekloader/shop)).
+- **[The Splash screen maker](SPLASH.md)**: your own picture or GIF on the
+  boot screen of a Digitakt or Digitone, made into a mod in the web page.
 
 ## Writing mods
 
@@ -27,6 +29,7 @@ docs match its code.
   the Digitone mk1 and the Digitone II, from a quickstart to the reference.
 - **[Your mod in the shop](SHOP.md)**: publish it, submit it with one form,
   and let later releases update it by themselves; take it out the same way.
+  [A thumbnail for its card](THUMBNAILS.md): a picture of the screen.
 - **[Digitone II machines](MACHINES-DN2.md)**: register
   [SHARC voices](MACHINES-DN2-VOICE.md) and [filters](MACHINES-DN2-FILTER.md),
   with a [paired C example](https://github.com/simonjohansson/digitone-2-mod-hack).

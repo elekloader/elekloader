@@ -81,36 +81,43 @@ def with_requirements(descs, enabled, path):
 
 
 def with_core(descs, out):
-    """-> `out` with the core its mods need (their resources.core) and whose RAM
-    holds them: the core enabled when it is new enough and holds them (or no
-    core listed for the stock firmware does both), else the one
-    elemod.pick_core takes of those listed, in its place (the newest, when none
-    is new enough, for the check to say so). A core holds the mods when its
-    area (describe's ram_area) is at least their ram_bound and its own."""
+    """-> `out` with the core its mods need (their resources.core) and that takes
+    them: the core enabled when it is new enough and takes them (or no core
+    listed for the stock firmware does both), else the one elemod.pick_core
+    takes of those listed, in its place (the newest, when none is new enough,
+    for the check to say so). A core takes the mods when it holds them, its
+    area (describe's ram_area) at least their ram_bound and its own, and
+    patches no byte one of them patches (describe's sites): a mod made before
+    a core took a place for every mod still patches that place itself, and
+    builds with the newest core that leaves the place alone."""
     need = None
     for p in out:
         v = descs.get(p, {}).get('needs_core')
         if v and (need is None or elemod.version_key(v) > elemod.version_key(need)):
             need = v
-    ram = sum(descs.get(p, {}).get('ram_bound', 0) for p in out
-              if descs.get(p, {}).get('id') != 'core')
+    mods = [descs.get(p, {}) for p in out if descs.get(p, {}).get('id') != 'core']
+    ram = sum(x.get('ram_bound', 0) for x in mods)
+    # (a whole build goes with no core at all: the check says so, whatever it patches)
+    theirs = [(s[0], s[0] + s[1]) for x in mods if x.get('format') != 1 for s in x.get('sites', ())]
 
     def new_enough(p):
         return need is None or elemod.version_key(descs[p].get('version', '')) >= elemod.version_key(need)
 
-    def holds(p):
-        return 'ram_area' not in descs[p] or ram + descs[p].get('ram_bound', 0) <= descs[p]['ram_area']
+    def takes(p):
+        if 'ram_area' in descs[p] and ram + descs[p].get('ram_bound', 0) > descs[p]['ram_area']:
+            return False
+        return not any(s[0] < hi and lo < s[0] + s[1] for s in descs[p].get('sites', ()) for lo, hi in theirs)
 
     on = [p for p in out if descs.get(p, {}).get('id') == 'core']
     cands = sorted((p for p, x in descs.items()
                     if x.get('id') == 'core' and x.get('fits') and 'error' not in x),
                    key=os.path.basename)
-    if on and all(new_enough(p) for p in on) and (all(holds(p) for p in on)
-                                                  or not any(new_enough(p) and holds(p) for p in cands)):
+    if on and all(new_enough(p) for p in on) and (all(takes(p) for p in on)
+                                                  or not any(new_enough(p) and takes(p) for p in cands)):
         return out
     if not cands:
         return out
-    i = elemod.pick_core([descs[p].get('version', '') for p in cands], need, [holds(p) for p in cands])
+    i = elemod.pick_core([descs[p].get('version', '') for p in cands], need, [takes(p) for p in cands])
     if i is None:
         if on:
             return out
@@ -291,7 +298,7 @@ class LoaderModel:
                             'blob': len(img) - len(self.img),
                             'sites': sum(len(m.sites) for m in mods)}
                 L = link.link(mods, self.img, self.store_lock(),
-                              sharc_stream=self.sharc_stream() if any(m.sharc for m in v2) else None)
+                              sharc_stream=self.sharc_stream() if any(m.sharc or m.sharc_raw for m in v2) else None)
             except (OSError, elemod.ModError) as e:
                 lines = [x.strip() for x in str(e).split('\n')[1:]] or [str(e)]
                 for p in paths:

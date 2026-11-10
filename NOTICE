@@ -69,6 +69,17 @@ tests/test_dn2_filter_capture.py runs DigiKit's coupled emulator from a
 checkout the user supplies (ELEKLOADER_DIGIKIT); no DigiKit code is
 included here.
 
+DigiSplash
+----------
+The Splash screen maker's mod (examples/splash/splash.s, elekloader/splash.py)
+hooks the intro's present calls and gates on the intro's PIT3 vector as
+DigiAlchemydsp/DigiSplash's boot animations do
+(https://github.com/DigiAlchemydsp/DigiSplash, GPL-2.0-or-later): their
+call sites, present addresses and front buffer pointer for Digitakt mk1 1.53
+and Digitone mk1 1.43, and the shape of the code that copies a frame and
+jumps to the present, come from there. The 1.54 and 1.44 addresses and the
+timer tick are elekloader's.
+
 Elektron
 --------
 Elektron, Digitakt, Digitone, Syntakt and Analog are trademarks of Elektron

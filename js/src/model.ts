@@ -4,7 +4,7 @@
 // it, such as the site's cores), describe(), the live check, build(), with_requirements and suggested_name.
 import { sha } from './bytes.ts'
 import type { Device, Release } from './devices.ts'
-import { type AnyMod, EXTS, ModError, cmpVersions, get, pickCore } from './elemod.ts'
+import { type AnyMod, EXTS, ModError, cmpVersions, coreTakes, get, pickCore } from './elemod.ts'
 import * as formats from './formats.ts'
 import { type Mod2, ddrFor, link } from './link.ts'
 import { apply, type Mod } from './elemod.ts'
@@ -80,25 +80,26 @@ export function withRequirements(descs: Map<string, Desc>, enabled: Iterable<str
   return core ? withCore(descs, out) : out
 }
 
-/** `out` with the core its mods need (their resources.core) and whose RAM holds them: the core enabled when it is new
- * enough and holds them (or no core listed for the stock firmware does both), else the one pickCore takes of those
- * listed, in its place (the newest, when none is new enough, for the check to say so). A core holds the mods when its
- * area (describe's ram_area) is at least their ram_bound and its own. gui.with_core. */
+/** `out` with the core its mods need (their resources.core) and that takes them: the core enabled when it is new
+ * enough and takes them (or no core listed for the stock firmware does both), else the one pickCore takes of those
+ * listed, in its place (the newest, when none is new enough, for the check to say so). A core takes the mods when it
+ * holds them and patches no byte one of them patches (elemod.ts coreTakes): a mod made before a core took a place for
+ * every mod still patches that place itself, and builds with the newest core that leaves the place alone.
+ * gui.with_core. */
 export function withCore(descs: Map<string, Desc>, out: Set<string>): Set<string> {
   let need: string | null = null
   for (const p of out) {
     const v = descs.get(p)?.needs_core
     if (v && (need === null || cmpVersions(v, need) > 0)) need = v
   }
-  let ram = 0
-  for (const p of out) if (descs.get(p)?.id !== 'core') ram += descs.get(p)?.ram_bound ?? 0
+  const mods = [...out].map(p => descs.get(p) ?? {}).filter(x => x.id !== 'core')
   const newEnough = (p: string) => need === null || cmpVersions(descs.get(p)!.version ?? '', need) >= 0
-  const holds = (p: string) => !('ram_area' in descs.get(p)!) || ram + (descs.get(p)!.ram_bound ?? 0) <= descs.get(p)!.ram_area
+  const takes = (p: string) => coreTakes(descs.get(p)!, mods)
   const on = [...out].filter(p => descs.get(p)?.id === 'core')
   const cands = candidates(descs, 'core')
-  if (on.length && on.every(newEnough) && (on.every(holds) || !cands.some(p => newEnough(p) && holds(p)))) return out
+  if (on.length && on.every(newEnough) && (on.every(takes) || !cands.some(p => newEnough(p) && takes(p)))) return out
   if (!cands.length) return out
-  let i = pickCore(cands.map(p => descs.get(p)!.version ?? ''), need, cands.map(holds))
+  let i = pickCore(cands.map(p => descs.get(p)!.version ?? ''), need, cands.map(takes))
   if (i === null) {
     if (on.length) return out
     i = cands.length - 1
@@ -285,7 +286,7 @@ export class LoaderModel {
         }
       }
       L = link(mods as Mod2[], this.img!, null,
-        v2.some(m => (m as Mod2).sharc) ? this.sharcStream() : null)
+        v2.some(m => (m as Mod2).sharc || (m as Mod2).sharcRaw) ? this.sharcStream() : null)
     } catch (e) {
       if (!(e instanceof ModError) && !(e instanceof OSError_)) throw e
       const lines0 = e.message.split('\n').slice(1).map(x => x.trim())

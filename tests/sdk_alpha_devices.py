@@ -51,6 +51,8 @@ def mod_defines(mod):
 DIGIEMU = os.environ.get('ELEKLOADER_DIGIEMU', '')
 DIGIKIT = os.environ.get('ELEKLOADER_DIGIKIT', '')
 DIGI_EMUD = os.environ.get('ELEKLOADER_DIGI_EMUD', '')
+DIGI_EMUD_COUPLED = os.environ.get('ELEKLOADER_DIGI_EMUD_COUPLED', '')    # a digi-emud with coupled audio
+DN2_EMU_READY = os.environ.get('ELEKLOADER_DN2_EMU_READY', '')            # its ready inputs
 
 
 class Digiemu:
@@ -112,9 +114,19 @@ class DigiKitSession:
                 STOP=21, PAGE=22, PTN=23, SONG=24, **{str(n): 24 + n for n in range(1, 17)},
                 **{'PUSH ' + c: 41 + i for i, c in enumerate('ABCDEFGH')})
 
-    def __init__(self, emu):
+    def __init__(self, emu, capture=None):
         self.emu, self.ms, self.frames, self.revision = emu, 0, [], None
+        self.capture, self.record_audio = capture, capture is not None
         self._frame()
+
+    @property
+    def pcm(self):
+        """What the DSP output since the session started, as digiemu's Session.pcm: 48 kHz stereo
+        signed 16-bit LE (DigiKit's capture is 32-bit float)."""
+        with open(self.capture, 'rb') as fh:
+            data = fh.read()
+        floats = struct.unpack('<%df' % (len(data) // 4), data[:len(data) - len(data) % 4])
+        return struct.pack('<%dh' % len(floats), *(max(-32768, min(32767, round(x * 32768))) for x in floats))
 
     def code(self, name):
         return self.KEYS[name]
@@ -167,6 +179,8 @@ class DigiKitSession:
             return 'fault: %s at %#x' % (cf.get('error'), cf.get('pc', 0))
         if status.get('heartbeat', {}).get('stalled'):
             return 'the main loop stalled'
+        if (status.get('audio') or {}).get('halted'):
+            return 'the DSP halted: %s' % status['audio']['halted']
         return None
 
     def close(self):
@@ -176,7 +190,9 @@ class DigiKitSession:
 class DigiKit:
     """DigiKit's ColdFire-only daemon (no DSP): the Digitone II's emulator. One daemon a firmware. Its
     boot cache keeps the image's ready state (the main screen), and every firmware.load restores it:
-    each test starts there, whatever the last one did."""
+    each test starts there, whatever the last one did. An audio session runs both processors in a
+    second daemon, DigiKit's coupled emulator, whose boot cache restores both the same way (the first
+    boot takes about a minute), and captures the DSP's output."""
     cwd = None
     STOCK_SHA256 = '7e5b8a733d4ab1fdf7e5d22757f7d8eddaa3cbf71d0858874a791844c02ceb35'   # OS 1.12
 
@@ -189,7 +205,7 @@ class DigiKit:
         import atexit
         sys.path.insert(0, DIGIKIT)
         from tools.control.digi_client import Emu
-        self.syx = syx
+        self.syx, self.stock, self.work, self.coupled = syx, stock, work, None
         self.emu = Emu.spawn(binary=DIGI_EMUD, timeout=300, run_dir=os.path.join(work, 'digikit'))
         atexit.register(self.emu.close)
         self._load()
@@ -205,10 +221,27 @@ class DigiKit:
 
     def session(self, audio=False):
         if audio:
-            raise CannotYet('audio capture in the DigiKit UI backend')
+            return self._audio_session()
         self._load()
         session = DigiKitSession(self.emu)
         session.run_ms(300)     # the first UI-loop passes
+        return session
+
+    def _audio_session(self):
+        if not (DIGI_EMUD_COUPLED and os.path.isfile(DIGI_EMUD_COUPLED) and DN2_EMU_READY
+                and os.path.isdir(DN2_EMU_READY)):
+            raise unittest.SkipTest('needs ELEKLOADER_DIGI_EMUD_COUPLED and ELEKLOADER_DN2_EMU_READY')
+        if self.coupled is None:
+            import atexit
+            from tools.control.digi_client import Emu
+            self.coupled = Emu.spawn_coupled(self.stock, DN2_EMU_READY, binary=DIGI_EMUD_COUPLED, timeout=300,
+                                             run_dir=os.path.join(self.work, 'coupled'))
+            atexit.register(self.coupled.close)
+        self.coupled.call('firmware.load', syx=self.syx, start='auto', force=True, auto_no=True)
+        capture = os.path.join(self.work, 'coupled', 'pcm.f32')
+        self.coupled.call('pcm.tap', action='capture', path=capture)
+        session = DigiKitSession(self.coupled, capture)
+        session.run_ms(300)
         return session
 
     @staticmethod
@@ -256,11 +289,15 @@ class Device:
 
     def __init__(self, session, symbols, machines, layouts=None):
         self.s, self.symbols = session, symbols
+        self.midi_sent = []
         self.machines = sorted(machines)    # the SDK machine ids in this build
         self.layouts = layouts
 
     def set_lfo_depth(self):
         raise CannotYet('LFO depth')
+
+    def dsp_word(self, addr):
+        raise CannotYet('the DSP\'s memory')
 
     def keyboard(self):
         raise CannotYet('the keyboard')
@@ -270,6 +307,18 @@ class Device:
 
     def release_key(self, key):
         raise CannotYet('a note key')
+
+    def held_keys(self, track):
+        """How many keys the firmware counts as held on the track."""
+        raise CannotYet('the firmware\'s held keys')
+
+    def sounding_voices(self, track):
+        """How many voices sound for the track (its machine's, through the companion's envelope)."""
+        raise CannotYet('the voices sounding')
+
+    def midi_note(self, track, note, velocity):
+        """A note on (velocity 0: its note off) into the MIDI input, on the track's channel."""
+        raise CannotYet('MIDI in')
 
     def audio_position(self):
         if not getattr(self.s, 'record_audio', False):
@@ -284,6 +333,44 @@ class Device:
 
     def tap(self, name, after_ms=300):
         self.s.tap(self.s.code(name), after_ms=after_ms)
+
+    def midi(self, data, after_ms=50):
+        """MIDI bytes into the device's MIDI input, as digiemu's window sends them: its port, an event
+        source of the session, puts them in the input's ring a moment later."""
+        if self.backend is not Digiemu:
+            raise CannotYet('MIDI in')
+        port = getattr(self.s, 'sdk_midi_in', None)
+        if port is None:
+            self.midi_input()
+            from emu import midi
+            port = self.s.sdk_midi_in = midi.MidiIn()
+            port.attach(self.s.m, self.s.ips)
+            out = self.s.sdk_midi_out = midi.MidiOut(self.midi_sent.append)     # what the device sends
+            out.install(self.s.m)
+            out.attach(self.s.m, self.s.ips)
+            self.s.sources = tuple(self.s.sources) + (port, out)
+        sent = port.delivered + len(data)
+        # The port maps host time to emulated time; a busy host slows the emulator below real time and
+        # the mapping drifts ahead, so start it again: the bytes go in about 15 emulated ms from now.
+        port.set_ips(self.s.ips)
+        port.put(bytes(data))
+        if not self.wait_until(lambda: port.delivered >= sent, limit_ms=1000):
+            raise AssertionError('the MIDI input never took %s' % bytes(data).hex())
+        self.wait(after_ms)
+
+    def midi_input(self):
+        """Let MIDI IN's bytes in (MIDI CONFIG > PORT CONFIG > INPUT FROM), where the setup leaves them out."""
+
+    def knob_cc(self, knob):
+        raise CannotYet('a CC for a knob')
+
+    def cc(self, channel, number, value, after_ms=50):
+        """A MIDI CC on `channel` (1..16)."""
+        self.midi((0xB0 | (channel - 1), number, value), after_ms)
+
+    def note(self, channel, note, velocity, after_ms=50):
+        """A MIDI note on (velocity 0: off) on `channel` (1..16)."""
+        self.midi((0x90 | (channel - 1), note, velocity), after_ms)
 
     def wait(self, ms):
         self.s.run_ms(ms)
@@ -435,6 +522,7 @@ class Digitakt1(Device):
     key, stock_env = 'digitakt-mk1', 'ELEKLOADER_STOCK_154'
     track_count = 8
 
+    features = frozenset(('knob_ccs_past_h',))
     sound_without_render = False
     KEYS = {0: '9', 1: '2', 2: '10', 3: '3', 4: '11', 5: '12', 6: '5', 7: '13',
             8: '6', 9: '14', 10: '7', 11: '15', 12: '16'}
@@ -449,6 +537,11 @@ class Digitakt1(Device):
 
     def release_key(self, key):
         self.s.release(self.s.code(self.KEYS[key]))
+
+    HELD = 0x4219cc98               # OS 1.54's count of the keys held on each track (core's NOTE_ON adds one)
+
+    def held_keys(self, track):
+        return self.peek32(self.HELD + 4 * track)
 
     STOCK = (0, 1, 2, 3)            # the stock machines, first in the machine list
     PAGE_LEDS = {'SRC': 19, 'LFO': 22}
@@ -512,6 +605,10 @@ class Digitakt1(Device):
     def destination_for(self, knob):
         return DT1_SLOT_A + knob if knob < 8 else DT1_EXTRA_SLOT(knob - 8)
 
+    def knob_cc(self, knob):
+        """The CC that sets the knob on its track: SRC A-H's, 16-23, then machine-pages' 24-30."""
+        return 16 + knob
+
     def destination(self, lfo, track=0):
         at = DT1['FW_SOUND'](self.kit(), track) + DT1_SLOTS + 2 * (4 + 8 * lfo)
         return struct.unpack('>H', bytes(self.s.m.uc.mem_read(at, 2)))[0] >> 8
@@ -562,12 +659,33 @@ class Digitakt1(Device):
 class Digitone1(Device):
     key, stock_env = 'digitone-mk1', 'ELEKLOADER_STOCK_DN1_144'
     track_count = 4
-    features = frozenset(('polyphony', 'audio_modulation'))
+    features = frozenset(('polyphony', 'audio_modulation', 'midi_in'))
     sound_without_render = True
     KEYS = Digitakt1.KEYS
 
     def set_lfo_depth(self):
         self.turn('H', 64)
+
+    def midi_input(self):
+        """INPUT FROM is USB after the setup: SETTINGS > MIDI CONFIG > PORT CONFIG, its fourth row, to
+        MIDI+USB (the last choice: RIGHT stops there)."""
+        self.tap('GLOBAL')
+        self._top()
+        for key in ('DOWN',) * 4 + ('YES',):            # MIDI CONFIG
+            self.tap(key)
+        self._top()
+        self.tap('DOWN')
+        self.tap('YES')                                 # PORT CONFIG
+        self._top(12)
+        for key in ('DOWN',) * 3 + ('RIGHT',) * 3:
+            self.tap(key)
+        self._leave_settings()
+
+    def knob_cc(self, knob):
+        """The CC that sets the knob on its track: knob 0 is SYN2's A, CC 75."""
+        if knob:
+            raise CannotYet('a CC for a knob past the first')
+        return 75
 
     def keyboard(self):
         pass                        # DN1's trig keys already play its chromatic keyboard.
@@ -577,6 +695,37 @@ class Digitone1(Device):
 
     def release_key(self, key):
         self.s.release(self.s.code(self.KEYS[key]))
+
+    HELD = 0x41994e80               # OS 1.44's count of the keys held on each track (core's NOTE_ON adds one)
+
+    def held_keys(self, track):
+        return self.peek32(self.HELD + 4 * track)
+
+    def sounding_voices(self, track):
+        """The voices playing a machine (slot 0 of fw_voice_params) whose envelope in machines-dn1's vs
+        (struct dnm_voice, then its stage and level) is not over, on the track."""
+        at, params = int(self.symbols['machines:vs'], 16), int(self.symbols['fw_voice_params'], 16)
+        machine = lambda v: struct.unpack('>h', bytes(self.s.m.uc.mem_read(params + 18 + 158 * v, 2)))[0]
+        return sum(machine(v) > 0 and self.peek32(at + 32 * v + 12) == track and
+                   bool(self.peek32(at + 32 * v + 24) or self.peek32(at + 32 * v + 28)) for v in range(8))
+
+    MIDI_IN_FROM = 0x41368d64       # OS 1.44's MIDI CONFIG > INPUT FROM: bit 0 DIN, bit 1 USB
+    MIDI_NOTES = 0x41368d88         # and RECEIVE NOTES
+
+    def midi_note(self, track, note, velocity):
+        from emu import midi
+        from unicorn.m68k_const import UC_M68K_REG_PC
+        m = self.s.m
+        m.uc.mem_write(self.MIDI_IN_FROM, struct.pack('>I', self.peek32(self.MIDI_IN_FROM) | 1))
+        m.uc.mem_write(self.MIDI_NOTES, struct.pack('>I', 1))
+        channel = self.read('fw_midi_chan', 4 * track)
+        midi.feed(m, bytes((0x90 | channel, note, velocity)))
+        for _ in range(100):            # vector 156 drains the ring, once the CPU's level lets it
+            if midi._take(m, 156):
+                self.s.pc = m.uc.reg_read(UC_M68K_REG_PC)     # the session resumes at its own pc
+                return
+            self.s.run_ms(1)
+        raise AssertionError('MIDI in: vector 156 was never taken')
 
     SDK_PAGE, SYN2_FIRST = 29, 4    # machines-dn1's first page, and the first page of SYN2's stock list
     # machines-dn1's sdk_pos: the SYN parameter that holds each logical knob, whichever page shows it
@@ -619,7 +768,11 @@ class Digitone1(Device):
         if machine_id not in entries:
             return False
         self.pick(track, entries.index(machine_id) + 1)
-        return self.machine(track) == machine_id
+        for _ in range(20):                 # the sound changes a frame or two after the list closes
+            if self.machine(track) == machine_id:
+                return True
+            self.s.run_ms(50)
+        return False
 
     def syn2_pages(self):
         """SYN2's list of pages now, from the view core-dn1 notes (core_views)."""
@@ -754,6 +907,39 @@ class Digitone2(Device):
     track_count = 16
     lfo_count = 3
     settings_key = 'SETTINGS'
+    features = frozenset(('render', 'polyphony', 'audio_modulation', 'trk_setup'))
+    sound_without_render = True     # FM TONE plays an SDK machine without a render
+    KEYS = Digitakt1.KEYS           # KEYBOARD's chromatic keys, from the octave's C
+
+    def keyboard(self):
+        if not getattr(self, '_keyboard', False):
+            self.tap('KEYBOARD')
+            self._keyboard = True
+
+    def press_key(self, key):
+        self.s.press(self.s.code(self.KEYS[key]))
+
+    def release_key(self, key):
+        self.s.release(self.s.code(self.KEYS[key]))
+
+    def set_lfo_depth(self):
+        self.turn('H', 64)
+
+    def knob_cc(self, knob):
+        """The CC that sets the knob on its track: knob 0 is SYN's A, CC 40 (FM TONE's)."""
+        if knob:
+            raise CannotYet('a CC for a knob past the first')
+        return 40
+
+    def midi(self, data, after_ms=50):
+        """MIDI bytes into the firmware's USB MIDI receive callback (DigiKit's midi.usb.in), which INPUT
+        FROM's setup (USB) lets in."""
+        self.s.emu.call('midi.usb.in', bytes=bytes(data).hex())
+        self.wait(after_ms)
+
+    def dsp_word(self, addr):
+        """A word of the DSP's memory (little-endian), in an audio session."""
+        return struct.unpack('<I', bytes.fromhex(self.s.emu.call('dsp.peek', addr=addr, len=4)['hex']))[0]
 
     MOD, H = mod_defines('machines-dn2'), c_defines(ROOT / 'mods/machines-dn2/dn2.h')
     ACTIVE_TRACK = MOD['ACTIVE_TRACK']  # a byte: the track the panel edits (checked on a unit with DigiHealth)
@@ -774,6 +960,30 @@ class Digitone2(Device):
 
     def switch_track(self, track):
         self.chord('TRK', str(track + 1))
+
+    HELD = 0x445e3364               # OS 1.12's count of each track's keys held, by note (note-on 0x40121db2 adds one)
+    VOICES = 0x40288306             # OS 1.12's voice slots: slot v's track, a signed byte at + 0x14 v (-1: none)
+
+    def held_keys(self, track):
+        return sum(struct.unpack('>128I', self.mem(self.HELD + 512 * track, 512)))
+
+    def sounding_voices(self, track):
+        """The voice slots the OS has given the track."""
+        return sum(struct.unpack('b', self.mem(self.VOICES + 0x14 * v, 1))[0] == track for v in range(16))
+
+    def trk_setup(self, track):
+        """The track's TRK SETUP PLAY MODE (0 POLY, 1 POLY M.LFO, 2 MONO, 3 MONO LEG.) and MONO NOTE PRIO
+        (0 LAST, 1 LOW, 2 HIGH): big-endian words at + 0x146 and + 0x14a of its sound."""
+        return struct.unpack('>ii', self.mem(self.sound(track) + 0x146, 8))
+
+    def step_play_mode(self):
+        """FUNC+FLTR's SETUP, its sixth row (the active track's PLAY MODE), one step right, then closed."""
+        self.chord('FUNC', 'FLTR')
+        for _ in range(5):
+            self.tap('DOWN')
+        self.tap('RIGHT')
+        self.tap('NO')
+        self.tap('NO')
 
     def entries(self):
         """MACHINE SEL's synths, in its order (machines-dn2's dn2_list)."""

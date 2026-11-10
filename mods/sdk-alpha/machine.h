@@ -34,8 +34,12 @@ int32_t sdk_alpha_default(const struct elek_knob *knob);
  * SDK_ALPHA_VALUE_MAX characters, which is what fits under a knob. */
 #define SDK_ALPHA_VALUE_MAX 5
 void sdk_alpha_number(int32_t value, char *buf, int wide);
-/* On a device whose value formatter f(raw, buf) is given no knob (dev.h defines dev_active): knob k's,
- * for the active track's machine; the native number for another machine. */
+/* Knob k's value text for native value raw (ELEK_UI_LABEL_MAX characters, or a wide number): the view's
+ * value from .present with knob k at raw and the others, track and page as it last saw them for e (else
+ * the defaults, track 0, ELEK_UI_NO_PAGE), or else sdk_alpha_number of the mapped value. */
+void sdk_alpha_value(const struct sdk_alpha_entry *e, uint32_t k, int32_t raw, char *buf, int wide);
+/* On a device whose value formatter f(raw, buf) is given no knob (dev.h defines dev_active): knob k's
+ * sdk_alpha_value, for the active track's machine; the native number for another machine. */
 extern void (*const sdk_alpha_value_texts[SDK_ALPHA_KNOBS])(int32_t raw, char *buf);
 
 /* What .present last left, and for which machine, track and page. */
@@ -62,8 +66,22 @@ void sdk_alpha_blit(void *bmp, int32_t x, int32_t y, const struct elek_glyph *gl
 /* The voices, on a device that renders (dev.h's SDK_ALPHA_VOICES). */
 /* The machine id voice `slot` plays: another id zeroes its state and drops a pending start. */
 void sdk_alpha_select(uint32_t slot, int32_t id);
-/* One block of voice `slot`: start latches v->start until a block is rendered; fills v's knob, start
- * and state, mapping raw[0..count-1] as sdk_alpha_present does. */
+/* One block of voice `slot`: start latches v->start until a block is rendered; fills v's knob, start,
+ * state, idle (the companion's count of frames not rendered since the last render; 0 in the state's
+ * first render) and cc, the CCs on v->track since the slot's last render, mapping raw[0..count-1] as
+ * sdk_alpha_present does. */
 void sdk_alpha_voice(const struct sdk_alpha_entry *e, uint32_t slot, struct elek_voice *v,
-                     const int32_t *raw, int start, elek_sample *out);
+                     const int32_t *raw, int start, uint32_t idle, elek_sample *out);
+/* Swaps two slots' machine and state: a mono track's sound moving to another voice. */
+void sdk_alpha_swap(uint32_t a, uint32_t b);
+
+/* Mono machines (.play), on a device whose core has ev_live_note (dev.h's SDK_ALPHA_TRACKS). The handler:
+ * every live key on a track whose machine's .play is not ELEK_POLY is taken, and the stock plays only the
+ * note .prio chooses, through dev_note_on and dev_note_off, so it holds one key at a time. */
+int32_t sdk_alpha_live_note(int32_t track, int32_t note, int32_t vel, int32_t on, int32_t source);
+/* The pitch the track's voice renders for machine id, from the stock's: legato moves it. */
+int32_t sdk_alpha_pitch(uint32_t track, int32_t id, int32_t pitch);
+/* ev_midi_cc's handler (dev.h's SDK_ALPHA_TRACKS: the tracks with voices, from 0): records the CC for
+ * the voices of the track to read in v->cc. -> 0: the stock applies it as before. */
+int32_t sdk_alpha_midi_cc(int32_t track, int32_t cc, int32_t value, int32_t flags);
 #endif

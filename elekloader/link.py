@@ -97,7 +97,7 @@ class Mod2:
             raise ModError('%s: not a format-2 .elemod file' % name)
         extra = set(doc) - COMMON - {'sections', 'symbols', 'exports', 'imports', 'weak',
                                      'relocs', 'collections', 'contribute', 'copied', 'storage', 'sharc',
-                                     'knobs'}
+                                     'sharc_raw', 'knobs'}
         if extra:
             raise ModError('%s: unknown fields %s' % (name, sorted(extra)))
         for k in ('id', 'version', 'target', 'sections'):
@@ -129,8 +129,14 @@ class Mod2:
             if n != _int(d.get('len', n), name):
                 raise ModError('%s %s: parts make %d bytes, not %s' % (name, sec, n, d.get('len')))
             self.sections[sec] = {'align': align, 'parts': parts, 'len': n}
-        self.sharc = (sharc.module_payload(doc['sharc'], self.rel.sharc, '.boot' in self.sections)
-                      if 'sharc' in doc else None)
+        if 'sharc' not in doc:
+            self.sharc = None
+        elif isinstance(doc['sharc'], dict) and doc['sharc'].get('abi') == sharc.KERNEL_ABI:
+            self.sharc = sharc.kernel_payload(doc['sharc'], self.rel.sharc)
+        else:
+            self.sharc = sharc.module_payload(doc['sharc'], self.rel.sharc, '.boot' in self.sections)
+        self.sharc_raw = (sharc.raw_payload(doc['sharc_raw'], self.rel.sharc)
+                          if 'sharc_raw' in doc else None)
         self.symbols = {}
         for nm, v in doc.get('symbols', {}).items():
             if not isinstance(v, list) or len(v) != 2:
@@ -410,6 +416,28 @@ def _dsp_needs(m):
             | {t for t, _h, _e in m.dsp_tables.values()})
 
 
+def kernel_payload(m):
+    return isinstance(m.sharc, dict) and m.sharc.get('abi') == sharc.KERNEL_ABI
+
+
+def sharc_split(mods):
+    """(the DN2 kernel mods, the other SHARC mods but the core). A dispatcher without kernels is inert."""
+    kernel_mods = [m for m in mods if kernel_payload(m)]
+    if not any(m.sharc['kernels'] for m in kernel_mods):
+        kernel_mods = []
+    return kernel_mods, [m for m in mods if m.sharc and '.boot' not in m.sections and not kernel_payload(m)]
+
+
+def kernel_registrations(m, image):
+    """The DN2 machines m registers, by the profile's kernel_registrations: {(kernel kind, id): (table,
+    needs its kernel)}."""
+    out = {}
+    for table, kind, needs in (m.rel.sharc or {}).get('kernel_registrations', ()):
+        for nm in m.implied_names(image, table):
+            out[kind, int(nm.rsplit(':', 1)[1])] = (table, needs)
+    return out
+
+
 def check(mods, image):
     """Static checks that need no layout. -> [problems]."""
     spans = []
@@ -447,36 +475,40 @@ def check(mods, image):
             if m.needs_core and version_key(cores[0].version) < version_key(m.needs_core):
                 bad.append('%s needs core %s or newer, and this build has core %s'
                            % (m.label(), m.needs_core, cores[0].version))
-    sharc_mods = [m for m in mods if m.sharc and '.boot' not in m.sections]
+    kernel_mods, sharc_mods = sharc_split(mods)
     for m in mods:
-        if not sharc_mods and any(sharc_site(m.rel, s['addr']) for s in m.sites):
+        if not sharc_mods and not kernel_mods and any(sharc_site(m.rel, s['addr']) for s in m.sites):
             bad.append('%s: SHARC data site requires a SHARC mod' % m.label())
-    if len(sharc_mods) > 1 and (len(sharc_mods) != 2 or
-            {m.sharc.get('machine_kind') for m in sharc_mods} != {'voice', 'filter'}):
-        bad.append('SHARC mods may combine only one DN2 voice and one DN2 filter')
-    for kind in ('voice', 'filter'):
-        table = (mods[0].rel.sharc or {}).get(kind + '_table')
-        for m in mods:
-            if table and any(c['to'] == table for c in m.contribute) \
-                    and (not m.sharc or m.sharc.get('machine_kind') != kind):
-                bad.append('%s: DN2 %s registration requires a matching SHARC %s payload'
-                           % (m.label(), kind, kind))
+    if kernel_mods:
+        dispatchers = [m.label() for m in kernel_mods if m.sharc['exports']]
+        if len(dispatchers) != 1:
+            bad.append('DN2 machine kernels need one dispatcher (machines-dn2); this build has %s'
+                       % (', '.join(dispatchers) or 'none'))
+        if sharc_mods:
+            bad.append('DN2 machine kernels do not combine with %s' % ', '.join(m.label() for m in sharc_mods))
+        owners = {}
+        for m in kernel_mods:
+            for k in m.sharc['kernels']:
+                key = (sharc.KERNEL_TABLE[k['kind']], k['id'])
+                if key in owners:
+                    bad.append('%s and %s both have a DN2 %s kernel with id %d'
+                               % (owners[key].label(), m.label(), *key))
+                owners[key] = m
+    if len(sharc_mods) > 1:
+        bad.append('a build takes one SHARC mod; this one has %s' % ', '.join(m.label() for m in sharc_mods))
+    for m in mods:                          # DN2 machines: each registration and its kernel, in one mod
+        regs = kernel_registrations(m, image)
+        have = {(k['kind'], k['id']) for k in m.sharc['kernels']} if kernel_payload(m) else set()
+        for (kind, mid), (table, needs) in sorted(regs.items()):
+            if needs and (kind, mid) not in have:
+                bad.append('%s: its %s entry %d needs a SHARC %s kernel with that id' % (m.label(), table, mid, kind))
+        for kind, mid in sorted(have - set(regs)):
+            bad.append('%s: its SHARC %s kernel %d has no registration with that id in its mod' % (m.label(), kind, mid))
+        g_tables = {t for t, kind, _n in (m.rel.sharc or {}).get('kernel_registrations', ()) if kind == 'mk2-filter'}
+        if any(c['to'] in g_tables and not m.dn2_filter_g_ok(c, image) for c in m.contribute):
+            bad.append('%s: DN2 filter G needs a label of 1..5 printable ASCII characters and '
+                       'a default of 0..127' % m.label())
     for app in sharc_mods:
-        kind = app.sharc.get('machine_kind')
-        if kind:
-            profile = app.rel.sharc
-            table = profile[kind + '_table']
-            contributions = [c for c in app.contribute if c['to'] == table]
-            expected = ['%s:%d' % (prefix, app.sharc['machine_id'])
-                        for name, _at, _count, prefix in app.dev.slot_claims if name == table]
-            if len(contributions) != 1 or len(contributions[0]['data']) != 4 \
-                    or not expected or app.implied_names(image, table) != expected:
-                bad.append('%s: SHARC %s machine_id must match its single native %s registration'
-                           % (app.label(), kind, kind))
-            elif kind == 'filter' and not app.dn2_filter_g_ok(contributions[0], image):
-                bad.append('%s: DN2 filter G needs a label of 1..5 printable ASCII characters and '
-                           'a default of 0..127' % app.label())
-            continue
         if app.sharc['entries'] is None:
             continue
         core = cores[0] if len(cores) == 1 else None
@@ -712,39 +744,20 @@ def link(mods, image, lock=None, *, sharc_stream=None):
     ddr_base, ddr_end = dev.ddr_for(core.version)
     fast_base, fast_end = dev.sram_code
     order = [core] + sorted((m for m in mods if m is not core), key=lambda m: m.id)
-    sharc_mods = [m for m in order if m.sharc and m is not core]
+    kernel_mods, sharc_mods = sharc_split(order)
     dsp_stream = dsp_stored = None
-    if sharc_mods:
+    if kernel_mods or sharc_mods:
         if sharc_stream is None:
             raise ModError('SHARC mod needs the stock section-7 stream')
         loads, fills, patches = [], [], []
+        if kernel_mods:
+            loads, fills, patches, kernel_layout = sharc.place_kernels([(m.id, m.sharc) for m in kernel_mods], rel.sharc)
         for mod in sharc_mods:
             payload = mod.sharc
             base = payload['owner'][0]
             loads += [(base + off, data) for off, _kind, data in payload['segments']]
             fills += [(base + off, count, 0) for off, count in payload['zero']]
-            kind = payload.get('machine_kind')
-            if kind:
-                at = rel.sharc[kind + '_binding_offset']
-                binding = struct.pack('<II', sharc.pc16(rel.sharc, base + payload['entries']['render_offset_bytes']),
-                                      payload['machine_id'])
-                # At +0x20 the adapter finds the per-voice state: its address and one voice's size.
-                voice = payload['voice_state']
-                state = struct.pack('<II', base + voice[0], voice[1]) if voice else bytes(8)
-                lo = payload['owner'][1] - rel.sharc[kind + '_state_bytes']
-                fills = [f for f in fills if f[0] != lo]
-                fills += [(lo, base + at - lo, 0), (base + at + 8, 0x18, 0),
-                          (base + at + 0x28, payload['owner'][1] - base - at - 0x28, 0)]
-                loads += [(base + at, binding), (base + at + 0x20, state)]
-                # The callback's own stack, in L1: zeroed, with the guard word the adapter checks at its base.
-                stack = rel.sharc[kind + '_stack']
-                fills.append((stack[0] + 4, stack[1] - stack[0] - 4, 0))
-                loads.append((stack[0], struct.pack('<I', rel.sharc['stack_guard'])))
-                for hook in (kind + '_hook', kind + '_capture'):
-                    if hook in rel.sharc:
-                        site, old, new = rel.sharc[hook]
-                        patches.append((site, bytes.fromhex(old), bytes.fromhex(new)))
-            elif payload['entries'] is not None:
+            if payload['entries'] is not None:
                 bridge = core.sharc
                 def pc16(off):
                     return sharc.pc16(rel.sharc, base + off)
@@ -778,6 +791,25 @@ def link(mods, image, lock=None, *, sharc_stream=None):
         dsp_stored = syx.pack_main(dsp_stream)
         if len(dsp_stored) > rel.sharc['stored_max']:
             raise ModError('SHARC stored section exceeds the profile limit')
+    raw_mods = [m for m in order if m.sharc_raw]
+    if raw_mods:
+        # (a device's profile takes raw payloads or a bridge's modules, never both: raw_payload
+        # refuses a profile without 'raw', and module_payload one without the bridge's ABI)
+        if sharc_stream is None:
+            raise ModError('SHARC mod needs the stock section-7 stream')
+        loads, patches, _dsp_syms = sharc.link_raw([(m.id, m.sharc_raw) for m in raw_mods],
+                                                   sharc_stream, rel.sharc)
+        spans = sorted((a, a + len(o)) for a, o, _n in patches)
+        for (a0, a1), (b0, _b1) in zip(spans, spans[1:]):
+            if b0 < a1:
+                raise ModError('two raw SHARC patches overlap at 0x%x' % b0)
+        dsp_stream = sharc.insert(sharc_stream, rel.sharc, loads=loads, patches=patches)
+        dsp_stored = syx.pack_main(dsp_stream)
+        if len(dsp_stored) > rel.sharc['stored_max']:
+            raise ModError('SHARC stored section exceeds the profile limit')
+        payload = {'owner': (min(a for a, _d in loads), max(a + len(d) for a, d in loads))
+                   if loads else (0, 0), 'entries': None}
+        sharc_mods = raw_mods
     tables = {c: (m, e) for m in order for c, e in m.collections.items()}
 
     entries = {c: [] for c in tables}
@@ -1130,6 +1162,21 @@ def link(mods, image, lock=None, *, sharc_stream=None):
     if new_lock is not None:
         img += store.trailer(new_lock)
     bad = _copied_rules(order, bytes(img), dev)
+    if dev.isa == 'coldfire':
+        # ColdFire stops with an address error on an odd jump target (an emulator may not): a jsr or jmp
+        # abs.l in the mods' code, in a site or in the RAM image, must name an even address
+        code = [(s['addr'], bytes(img[s['addr'] - dev.main_load:s['addr'] - dev.main_load + s['len']]),
+                 '%s site 0x%08x' % (m.label(), s['addr'])) for m in order for s in m.sites if s['kind'] == 'code']
+        code += [(base[(m.id, '.run')], bytes(ddr[base[(m.id, '.run')] - ddr_base:
+                                                  base[(m.id, '.run')] - ddr_base + m.size('.run')]),
+                  '%s .run' % m.label()) for m in order if m.size('.run')]
+        for at, data, what in code:
+            for i in range(0, len(data) - 5, 2):
+                if data[i:i + 2] in (b'\x4e\xb9', b'\x4e\xf9'):
+                    t = int.from_bytes(data[i + 2:i + 6], 'big')
+                    if t % 2 and ddr_base <= t < bss_end:
+                        bad.append('%s: a jsr/jmp at 0x%08x goes to the odd address 0x%08x (align the code: '
+                                   '.balign 2 at the start of each .run section)' % (what, at + i, t))
     for m in order:
         for s in m.sites:
             if s['kind'] == 'code':
@@ -1176,13 +1223,11 @@ def link(mods, image, lock=None, *, sharc_stream=None):
         'ddr_spare': ddr_end - bss_end, 'fast_spare': fast_end - fast_at,
         'ddr_size': ddr_end - ddr_base, 'fast_size': fast_end - fast_base,
     }
-    if sharc_mods:
+    if kernel_mods or sharc_mods:
         info = out.layout['sharc'] = {'decoded': len(dsp_stream), 'decoded_sha256': sha(dsp_stream),
                                       'stored': len(dsp_stored), 'stored_sha256': sha(dsp_stored)}
-        if sharc_mods[0].sharc.get('machine_kind'):
-            info['mods'] = [{'id': m.id, 'owner': list(m.sharc['owner']),
-                             'hook': rel.sharc[m.sharc['machine_kind'] + '_hook'][0]}
-                            for m in sharc_mods]
+        if kernel_mods:
+            info['kernels'] = kernel_layout
         else:
             info.update(owner=list(payload['owner']), app=sharc_mods[0].id)
             if payload['entries'] is not None:
