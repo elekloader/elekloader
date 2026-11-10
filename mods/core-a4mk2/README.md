@@ -7,8 +7,11 @@ the A4's addresses, which `mod.json` gives (`defsym`, `sites`), as
 and `store.s` (Mod storage, below), and from 0.5 `lock.c`, `rows.c` and
 `rows.s` (Lockable parameters, Mod p-locks), `dests.c` and `dests.s`
 (Destinations), `value.c` (The value read) and `midi.c` and `midi.s` (Mod
-parameters on MIDI). On its own it changes nothing
-the unit does.
+parameters on MIDI), and core-ar2 0.10..0.13's foundations (0.6, below):
+field defaults, the modified mark, `ev_project_save`, payloads in a 37.7 MB
+mods' area, knob looks (`looks.c`, `looks.s`) and the screen calls
+(`screen.c`).
+On its own it changes nothing the unit does.
 
 The A4 MKII is the Rytm MKII's platform (a ColdFire MCF5441x): its OS entry,
 bootstrap loader and UI loop are the Rytm's, instruction for instruction
@@ -471,185 +474,156 @@ Stock's tables are left alone: an unknown number finds no id there, so a
 mod NRPN or CC never reaches stock's sets, hooked or not, and under stock
 firmware a mod NRPN does nothing.
 
+## Field defaults (0.6)
+
+core-ar2 0.10's (its README, "Field defaults"): a storage field declared
+with `"init": N` reads N where its bits are zero. The linker gives each such
+field a slot in `core_field_inits` (1..63, the descriptor's bits 16..21),
+and `core_store_get` and `core_store_set` XOR the value with it, so the
+offset keeps bits 0..15 (the project scope, the largest, has 34,736 bits).
+value.c's fast read XORs the same init; every other read and write in core
+goes through the two calls. No new sites.
+
+## The modified mark (0.6)
+
+core-ar2 0.8's: after an edit of only mod fields, a project load asks
+first, as after a stock edit. Stock marks the project modified with
+0x400a5bba(model, 1) (the page edits' call is 0x400befce), keeping the mark
+in the settings block's byte 0x4045c8c2; the load reads it (0x4003df98,
+through 0x400a5bea) and asks ANY CHANGES WILL BE LOST for the active slot,
+or SAVE ... BEFORE LOADING for another when the request asks for it.
+`core_project_edited()` asks for the mark from any context and
+`core_edit_tick` (`ev_tick`, order 0) makes it, with the project model in
+the shared_ptr at 0x418717c8 (written only by its get-or-create,
+0x401494de). Core calls it after a turn a mod's page knob takes and after
+a lockable parameter's CC or NRPN; a mod calls it after its own keys,
+encoders or settings change a field. RANDOMIZE and RELOAD PAGE on a mod
+knob are not handled on the A4 yet.
+
+## The project save (0.6)
+
+core-ar2 0.10's `ev_project_save`, `void f(unsigned pre, unsigned how)`,
+before (`pre` 1) and after (`pre` 0) every whole save of the live project
+to a +Drive slot, with the same `how` (store.h). On 1.56 every such save
+ends in 0x400a771a(project model, slot, progress), the Rytm's 0x400b07a4 in
+shape and prologue, which holds the file save site 0x400a77e4: it
+serializes the live project into the slot's image, writes it to the
++Drive, and on success makes the slot the active one (0x400a5b74) and
+clears the modified mark; it returns 0 when the save failed. Core takes
+its first 8 bytes (`jmp`, `st_proj_save`). Two jobs call it:
+
+- **The save job** (0x4003da46, its call at 0x4003dacc), built with its
+  SAVING box by 0x4003d448, which 0x4003ecbe queues after its OVERWRITE and
+  WRITE PROTECTED asks (the Rytm's 0x40052908 and 0x4005417e in one).
+  0x4003ecbe has six callers (0x4003eff8, 0x4003f07a, 0x40040380,
+  0x40040444, 0x400bf7ea, 0x400e13a0): the front panel's saves.
+- **The load job** (0x4003daf0): LOAD of an empty slot runs CREATE NEW
+  (0x400a9f1e(model, -1), so `ev_project` with `how` 0 first) and then the
+  save, whose return address (0x4003dc26) tells `CORE_SAVE_NEW`.
+
+The active slot getter is 0x400a5b9c(model), -1 for none. Of core's other
+file save sites, 0x400a503c is in the background job 0x400a5008 and
+0x40020772 in the buffer save 0x40020732 (called only by 0x40069900):
+neither writes a slot, and no other whole save does (the other calls of the
+file save, 0x4001141e, copy the project into RAM: the boot's 0x400f1b18,
+0x40096d90, 0x40020732). Not covered, as on the Rytm: a project received
+over SysEx, and the project manager's changes to a slot without the live
+project.
+
+## Payloads and the mods' area (0.6)
+
+core-ar2 0.11's payloads (`../core-ar2/payload.c`, `core_payloads`;
+docs/ADAPTING.md, "Payloads (core-a4mk2 0.6, Analog Four MKII)"). With core
+0.6 the linker lays the mods out from 0x45650000 to 0x47C00000 (the profile's
+`core_ddr`, 37.7 MB): the gap above the OS's fixed buffers, which
+ddr-canary-a4mk2 checked untouched on a unit (21 Oct 2026), from its first
+64 KB boundary, with the 128 KB area above it. A build with an older core
+keeps the 128 KB. The flash budget is the tighter limit for a payload.
+
+## Knob looks (0.6)
+
+core-ar2 0.13's (`looks.c`, `looks.s`; its README, "Knob looks"): an entry
+in `core_knob_looks` (`analog-four-mk2/pages.h`) gives a mod's own knob ids
+(above 0x126) the look of a stock knob, a range of their own, or a UI
+record of the mod's own; an id without one draws as record 0, as before.
+
+| lookup | A4 1.56 | Rytm 1.74 | what differs |
+|---|---|---|---|
+| `uirec(id)` | 0x400f6232 (18 calls) | 0x400ff5c2 | 84-byte records in RAM from 0x41856c44, ids below 0x127; the jmp ends inside the bound's `cmpi`, so the site is 10 bytes |
+| `range(id)` | 0x40007798 (81 calls) | 0x40006ff0 | 56-byte parameter records from 0x40186af4 (the Rytm's 52), the range at +8; the id is loaded into `%d1` |
+| a knob's graphic | 0x4009eaaa, the parameter sets' vtable +0x84 (8 vtables) | 0x400a85e8, +88 | |
+
+## Screen calls (0.6)
+
+core-ar2 0.13's (`screen.c`, declared in
+`elekloader/sdk/include/analog-four-mk2/screen.h`; docs/ADAPTING.md,
+"Screen calls (core-a4mk2 0.6, Analog Four MKII)"). Core calls stock's own
+routines; nothing of their code or glyphs is copied.
+
+| call | stock's on 1.56 |
+|---|---|
+| `core_bitmap_init` | 0x40059222 |
+| `core_text_draw`, `core_text_width`, `core_font_height`, `core_font_descent` | the 17 font objects at 0x41735764 + 8 i (in the Rytm's order: 0..3 and 5..11 compared), their data (0x4005b3dc), the text routine 0x4005ad40, the width 0x4005b3e6 over a `std::string` (0x4018471e, 0x40182c6e) |
+| `core_stock_key` | Brain::key 0x40098b36, with the brain `core_screen_key` keeps from `ev_key` |
+| `core_stock_overlay` | the view controller's list, the Rytm's layout (its push, 0x4006293a, is the Rytm's byte for byte); HelpBubbleView (0x4018d228) is the main screen's last view |
+| `core_level_readout`, `core_level_field_save`, `core_level_field_put` | `core_screen_enc` starts 47 ticks on the LEVEL / DATA encoder, 10 (11 on an Analog Keys: bit 20 of the boot word 0x401ff54c, the OS's own test) |
+| `core_progress_open`, `_set`, `_close` | SAVE PROJECT's SAVING box (0x4003d448): a ProgressWindow of 0x88 bytes (ctor 0x40060462, fill 0x400603c8), its shared_ptr's count (new 0x4014f2e8, copy 0x401465dc, release 0x40144764), pushed onto the controller (0x4006293a), closed by its vtable +0x2c |
+
+What differs from the Rytm:
+
+- **Brain::key** drops the view controller's answer (0x4006304c) and
+  returns its listeners' call's (0x40096aee), so `core_stock_key` returns 0
+  once stock had the event, not whether a view took it.
+- **The main screen's last view** is HelpBubbleView. TOTAL RECALL
+  (TotalRecallMenuView) is pushed after it, so it counts as an overlay.
+- **The views that draw nothing** (View's own draw) are KeyboardView,
+  QuickPerformanceView, QuickPerformanceSelectionView, TrackSelectionView,
+  PatternGridView and StepAttrView: the last two of the Rytm's overlays
+  list are none here. The other overlays are the A4's classes that draw.
+- **The encoders** are A..J, 0..9, and LEVEL / DATA is 10.
+
+Not yet checked: the readout field's rows and columns and how long stock
+shows it (the Rytm's are assumed), which of the classes stock pushes in
+use, and fonts 4 and 12..16.
+
 ## Checked so far
 
-On a unit (OS 1.56, 20 Oct 2026) [hw]: build HC56 (core with
-[hooks-check](../../examples/hooks-check-a4mk2)) booted and passed every
-check: the tick, draw, key, encoder and SETTINGS events and the render's
-entry and exit. Build SC56 (core with
-[store-check](../../examples/store-check-a4mk2), 21 Oct 2026) read every
-marker back after SAVE PROJECT AS and a power cycle, loading another
-project (zeros, as it should) and loading the project back, a power cycle,
-and a Transfer round trip of the project file; CREATE NEW cleared every
-field, and on the new project, marking and a power cycle without saving
-kept the project fields. With every marker set, a pattern on all four
-synth tracks and the effects sounded the same by ear as before. With
-[ddr-canary](../../examples/ddr-canary-a4mk2) (CA56), no word changed in the
-mods' area after the mods' data or in the two unused gaps, through a session
-of normal use (Overbridge included) and after a power cycle (21 Oct 2026).
-Recovery (the STARTUP menu, TRIG 4, the stock file over MIDI DIN) brought
-the unit back to stock 1.56 (21 Oct 2026). With core 0.2 and
-[pages-check](../../examples/pages-check-a4mk2) (PA56, 23 Oct 2026), the
-parameter routines and the views passed every check ("Parameter pages
-(0.2)" above). With core 0.3 (24 Oct 2026), core alone (A403H) drew Check
-4's stock screens as stock, and with pages-check 0.2 (PF56H) CHECK's
-knob B followed `core_page_fns` at each redraw and an empty B took no turn
-("Parameter pages (0.2, 0.3)" above).
+The runs' logs are in their pull requests; what they established:
 
-In an emulator (rytm-emu, with a local change that accepts modified A4
-images; 20 Oct 2026):
-
-- **The hook bus** [emu]: with core alone (A401) the unit boots as stock, with
-  the same frames and a final screen identical to stock's.
-  [hello-marker-a4](../../examples/hello-marker-a4) (HM56) differs from stock
-  only at its 3x3 square, on the main page, the OSC1 page, after edits and
-  in the settings menu. [hooks-check](../../examples/hooks-check-a4mk2)
-  (HC56): every event fired; the tick at about 20 Hz, keys and encoder
-  detents counted, the render's entry and exit counts never apart, and the
-  HOOK TEST row listed after SYSTEM and counted when selected.
-- **Mod storage** [emu], with [store-check](../../examples/store-check-a4mk2)
-  marking every field of every item:
-  - after marking, every marker read back;
-  - SAVE PROJECT AS, then a power cycle straight away: every marker read
-    back (before the copy into the stored project, only the project scope
-    did);
-  - SAVE PROJECT AS, then loading another project: every scope dropped
-    (zeros; the project event reported the track, pattern and project
-    scopes dropped);
-  - loading the project back: every marker read back, nothing dropped;
-  - a power cycle after that: every marker read back;
-  - CREATE NEW: every field zero, as a new-project event;
-  - a power cycle after marking without saving: the project scope, the
-    current kit and its 4 sounds read back (the write-through), other kits
-    and the pool did not (stock's own unsaved edits to them don't either);
-  - trigs placed in grid recording after marking (stock's track save, 4
-    calls): the pattern's 6 track fields reached the stored project and came
-    back after a power cycle; an unedited pattern's did not;
-  - `ev_project` came once at boot (a load; with all four scopes dropped on
-    the first boot), once per project load, and as `CORE_PROJECT_NEW` after
-    CREATE NEW.
-- **The live homes** [emu]: a watch over the live track homes (tracks 1 and
-  6), the pattern home, the kit home and a pool sound's bytes through the
-  save, the load and a session of playback, song mode, chain, pattern keys
-  and encoder edits saw no stock access to them other than core's own and a
-  memcpy of a whole pool sound.
-- **Page functions** [emu] (core 0.3, 24 Oct 2026): core alone (A403) as
-  stock on every screen of Check 4's stock steps; with pages-check 0.2
-  (PF56) CHECK's knob B followed `core_page_fns` at each redraw, and an
-  empty B took no turn ("Parameter pages (0.2, 0.3)" above).
-- **Mod p-locks** [emu] (core 0.5 with
-  [lock-check](../../examples/lock-check-a4mk2), dtboot, 5 Nov 2026), on
-  track 1 of the first pattern, stopped, in grid recording:
-  - T1 held and LOCK CHECK's knob A turned: the lock went into the ledger
-    (set-and-kept), and the trig played it on that voice, read back as A's
-    lock in `lk_seen` (works);
-  - trig copy of step 1 and paste onto step 3 carried the lock; the trig's
-    clear on step 1 dropped it there and left step 3's (set-and-kept);
-  - SAVE PROJECT AS, the lock cleared, the project loaded back: the lock
-    came back (set-and-kept);
-  - stock 1.56, booted on that card, loaded the project and played it with
-    no fault, with step 1's record and flags as core's (works);
-  - locks of 4 and 9 on steps 1 and 2, step 1 a slide trig: step 1 played
-    4 with a slide delta of +5, step 2 played 9 (works);
-  - locks set while stopped play on PLAY's first step (works), through the
-    accept's refill (above).
-  Not checked yet: track clear, the SysEx dump out and in, the kit change's
-  and CREATE NEW's clear, the FX and CV kinds' knobs, a fine parameter.
-- **Destinations** [emu] (core 0.5 with lock-check, its A, K and V
-  `"mod": true`, dtboot, 5 Nov 2026):
-  - with a trig held in grid recording, LOCK CHECK's knobs read LKA and LKC
-    and a turn of A titles the screen LOCK CHECK A (core 0.5 part 1: ERR,
-    ERR and INVALID PARAMET) (works, screen);
-  - track 1's LFO1 Dest A list ends with MOD:Lock Check A after ENVF:Depth
-    B, the FX track's with MOD:Lock Check K, the CV track's with MOD:Lock
-    Check V, none with another kind's (works, screen);
-  - choosing it and YES stored 0x7000 in the sound's Dest word, the knob
-    showed LKA, and voice 0's notes held {Dest place 4, 0x58, 0x70}
-    (set-and-kept, data read);
-  - without the Dest value check's site, the same steps stop at ENVF:Depth
-    B (0x49): stock's check refuses a pseudo id on the knob's step, so the
-    site is needed (works, data read);
-  - a wheel route {0x4000, 0, 0x70} (poked) and a note: voice 0's notes held
-    {wheel, 0, 0x70, 0x4000}; a route to 0x71 (C, no "mod") was left out
-    (works, data read);
-  - macro targets {0x7f00, T1, 0x70}, {0x7f00, FX, 0x70}, {0x7f00, T1,
-    0x71} (poked) and a PERF turn: the notes held the first two; the setup
-    screen (FUNC+PERF, PERF CONFIGURE, HPF) showed T1 MOD LKA, FX MOD LKK,
-    T1 ERR (works, screen and data read);
-  - item 8: EnvF Dest A at 0x5c (LFO1 depth A) or 0x48 (its own depth),
-    set by poke and a note or by NRPN 1:66: voice 0's selector slot held
-    the sink 0x24b; at 0x12 (in its list) and 0x44 (not a depth) stock's
-    slots (0x3c, 0x1f9) (works, data read);
-  - SAVE KIT, the Dest word, route and macro target poked back to stock's,
-    LOAD KIT: all three came back with their codes (set-and-kept).
-  Not checked yet: RANDOMIZE landing on a mod parameter, the five route
-  screens' lists (the macro setup shares their view), a kit of another
-  layout loading as None, stock 1.56 with such a kit (ERR and the sink, as
-  found 2026-11-04 with pokes).
-- **The value read** [emu] (core 0.5 with lock-check 1.1, dtboot, 5 Nov
-  2026): each block, core's read of A on a voice in the engine's scale
-  beside stock's engine copy (0x80005af0) of a stock coarse parameter on
-  the same voice with the same value and the same modulation (track 1's
-  0x24, the FX track's 0x1b, the CV track's 0x00), set by poked sound and
-  kit words and a push from the UI, compared over the last 1,500 to 2,000
-  blocks of each run (works, data read):
-  - a knob step (A set, the stock parameter through the knob push
-    0x401005b8 in the same tick): the same glide, within 1 (42 of 700
-    blocks off by 1, the lazy step's rounding);
-  - p-locks on 48 of 64 steps, PLAY: the same jump into each lock and back
-    to the sound's value at each unlocked trig, exactly;
-  - every step a slide trig, the same locks: the same ramps, exactly;
-  - each route source (velocity by notes, bend, wheel, breath, aftertouch
-    by MIDI) at depth +0x5000 and -0x4000: exactly, clamps at 0 and
-    0x7fff included;
-  - a macro target, unipolar and bipolar with a negative depth: exactly;
-  - LFO1 and LFO2 on Dest A (A) and B (the stock parameter), EnvF and Env2
-    by notes, positive and negative depths: exactly;
-  - all at once (LFO1, LFO2, EnvF, Env2, a wheel and a velocity route, a
-    macro, locks and slides, playing): exactly, 660 blocks at the clamp;
-  - the FX track (K, LFO1 and LFO2), the CV track (V, LFO1 and ENV1) and a
-    second synth voice (track 2 on voice 1): exactly;
-  - the batch of four against single reads: no mismatch; the track call
-    followed the voices' tracks (0, 1, 2, 3, 4, 5).
-  Not checked yet: a poly track's two voices, a sound-locked trig's pool
-  sound as the target, a `"smooth": false` field, a field wider than 7
-  bits against a stock fine parameter, CONTROL IN.
-- **MIDI** [emu] (core 0.5 with lock-check 1.2, whose A and V declare
-  `"cc": true`, dtboot, 5 Nov 2026), each field read back as stored
-  (`lk_midi`) after DIN messages (works, data read):
-  - NRPN 0:112 on channel 1 (A, 77), 0:113 on channel 2 with data MSB 3
-    and LSB 0x20 (C, 416), 0:112 on channel 5 (K, 99) and channel 6 (V,
-    55): each landed in its track's item, no other changed; core's read of
-    A on track 1 (`core_param_value_ex`) followed (77 << 8);
-  - CC 12 on channels 1 and 3 set A on tracks 1 and 3; CC 35 on channel 6
-    set V; CC 35 on channel 1 and CC 12 on channel 5 set nothing;
-  - a stock NRPN (1:80) and two stock CCs (16, 74) on channel 1: the same
-    kit bytes changed to the same values as on stock 1.56;
-  - live recording (RECORD + PLAY), NRPN 0:112 = 90 on channel 1: the lock
-    played on the next pass for one step's blocks (281), value 90; without
-    RECORD no lock;
-  - the PERF channel set to channel 1 with track 2 active: NRPN 0:112 on
-    channel 1 set track 2's A, as stock delivers its own there;
-  - knob turns with MIDI out on (poked) and PARAM OUTPUT NRPN: A sent 0:112
-    with the value in the data MSB, C 0:113 with 14 bits, K (FX) and V (CV)
-    0:112, on the channel stock's own knobs used; PARAM OUTPUT CC: A sent CC
-    12, V CC 35, C and K (no CC) nothing. Stock's AMP knob sent the same
-    NRPN and CC on both builds.
-  Not checked yet: an NRPN while a trig is held (stock's
-  +0x38 path with a held step), USB MIDI (the same dispatch), the MIDI
-  CONFIG screens' own settings (poked here).
-- **Sound** [emu] (core 0.5 with lock-check 1.2 and
-  [sound-check](../../examples/sound-check-a4mk2) 1.0, dtboot
-  `--analog-wav`, 5 Nov 2026): a mod parameter read every block drives a
-  tone in the outputs (works, WAV): LVL 100 gave a clean 110 Hz sine, PIT
-  12 220 Hz; LFO1 on PIT and LFO2 on LVL moved the tone's pitch and level
-  with stock's parameter 0x24 under the same LFO's Dest B (correlation
-  0.98 and 0.97 over 2,048 blocks).
-- Statically, against the stock image (python, no toolchain): every site's
-  stock bytes, that each covers whole instructions, that each body in
-  `store.s` jumps back to its site plus the 8 bytes it displaced, and that
-  the serializers never name the bytes mod storage uses
-  (tests/test_analog_four_mk2.py).
+- **On a unit** (OS 1.56) [hw]: core with
+  [hooks-check](../../examples/hooks-check-a4mk2) passed every event;
+  with [store-check](../../examples/store-check-a4mk2) every scope's
+  markers came back through SAVE PROJECT AS, loads, power cycles and a
+  Transfer round trip, CREATE NEW cleared them, and the pattern sounded as
+  before; [ddr-canary](../../examples/ddr-canary-a4mk2) found the mods'
+  area and both gaps untouched by stock; recovery to stock 1.56 worked; the
+  parameter routines, views and page functions passed with
+  [pages-check](../../examples/pages-check-a4mk2) ("Parameter pages
+  (0.2, 0.3)" above).
+- **In rytm-emu's A4 build** [emu]: core alone runs as stock, frame for
+  frame; every mod storage case above (saves, loads, power cycles, the
+  write-through, per-part saves, `ev_project`); no stock access to the live
+  homes other than core's.
+- **The lock service (0.5)** [emu], with
+  [lock-check](../../examples/lock-check-a4mk2) and
+  [sound-check](../../examples/sound-check-a4mk2): p-locks set, copied,
+  cleared, saved, loaded and played, with Param Slide, and stock 1.56
+  playing such a project with no fault; destinations in every list of their
+  kind, kept through SAVE KIT and LOAD KIT, and the Dest value check's site
+  shown to be needed; the value read equal to stock's engine copy of a
+  stock parameter under every modulation stage, on the synth, FX and CV
+  tracks; NRPNs and CCs in and out, live recording and the PERF channel; a
+  mod parameter heard driving a test tone.
+- Not checked yet: the lock service on a unit; track clear, SysEx dump out
+  and in, the kit change's and CREATE NEW's clear of locks; a fine
+  parameter; RANDOMIZE landing on a mod parameter; the route screens'
+  lists; a kit of another layout; a poly track's two voices, a sound-locked
+  trig's pool sound, `"smooth": false`, CONTROL IN; an NRPN with a trig
+  held, USB MIDI. Everything in 0.6 is traced and built, not yet run.
+- Statically, against the stock image: every site's stock bytes, that each
+  covers whole instructions, that each body in `store.s` and `looks.s`
+  resumes after the bytes its site displaced, and that the serializers
+  never name the bytes mod storage uses (tests/test_analog_four_mk2.py).
 
 ## Building
 

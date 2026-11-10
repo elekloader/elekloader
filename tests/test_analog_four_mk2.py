@@ -178,8 +178,9 @@ def test_core_a4mk2_sites():
     # 0.5's 31 lock sites: 19 in code (rows.s) and 12 vtable entries; and 0.5's
     # 21 destination sites (dests.s): 15 in code and 6 vtable entries; and
     # 0.5's 2 MIDI sites (midi.s), the three sets' NRPN in and CC in, each a
-    # jmp resuming after the 8 bytes it displaced
-    assert len(mod['sites']) == 102
+    # jmp resuming after the 8 bytes it displaced; and 0.6's whole project
+    # save (store.s) and three knob look sites (looks.s)
+    assert len(mod['sites']) == 106
     midi = [x for x in mod['sites'] if x.get('target') in ('core_nrpn_site', 'core_cc_site')]
     assert [(x['addr'], x['op'], x['stock']) for x in midi] == \
         [('0x4009ff56', 'jmp', '4fefffec48d7043c'), ('0x400a0b62', 'jmp', '4e56ffd848d71cfc')]
@@ -187,7 +188,17 @@ def test_core_a4mk2_sites():
         src = fh.read()
     assert 'jmp     0x4009ff5e' in src and 'jmp     0x400a0b6a' in src
     assert mod['collections'].get('core_lock_ccs') == 8
-    locks = [x for x in mod['sites'] if x['addr'] not in {y['addr'] for y in j['sites'][:48]} and x not in midi]
+    new06 = [x for x in mod['sites'] if x.get('target') in ('st_proj_save', 'core_uirec_hook', 'core_range_hook',
+                                                           'core_graphic_hook')]
+    assert [(x['addr'], x['stock']) for x in new06] == [
+        ('0x400a771a', '4fefffd048d77c1c'),             # lea -48(sp); movem.l d2-d4/a2-a6: the Rytm's prologue
+        ('0x400f6232', '222f00040c8100000127'),         # move.l 4(sp),d1; cmpi.l #0x127,d1: stock's 0..0x126
+        ('0x40007798', '2f02222f0008'),                 # move.l d2,-(sp); move.l 8(sp),d1
+        ('0x4009eaaa', '4feffff048d7003c')]             # lea -16(sp); movem.l d2-d5
+    with open(os.path.join(ROOT, 'mods', 'core-a4mk2', 'looks.s')) as fh:
+        assert 'jmp     0x4009eab2' in fh.read()
+    locks = [x for x in mod['sites'] if x['addr'] not in {y['addr'] for y in j['sites'][:48]} and x not in midi
+             and x not in new06]
     dests = [x for x in locks if x.get('target', '').startswith(('core_dst', 'core_id_index', 'core_index_id',
                                                                    'core_push_', 'core_set_'))]
     assert len(dests) == 21 and len([x for x in dests if x['op'] == 'ptr']) == 6
@@ -199,7 +210,7 @@ def test_core_a4mk2_sites():
     assert x['op'] == 'jsr' and x['stock'] == '41f980006178', x
     x = [x for x in mod['sites'] if x.get('target') == 'core_finish_drain'][0]
     assert x['op'] == 'jsr' and x['stock'] == '46fc27004eb9' + d['FINISH_DRAIN'][2:], x
-    assert len([x for x in mod['sites'] if x.get('target', '').startswith('st_')]) == 28
+    assert len([x for x in mod['sites'] if x.get('target', '').startswith('st_')]) == 29
 
 
 def test_core_a4mk2_store_bodies():
@@ -211,7 +222,7 @@ def test_core_a4mk2_store_bodies():
     with open(os.path.join(ROOT, 'mods', 'core-a4mk2', 'store.s')) as fh:
         src = fh.read()
     bodies = re.findall(r'^(st_\w+)_body:\s*\|\s*(0x[0-9a-f]+).*?^\s+jmp\s+(0x[0-9a-f]+)', src, re.M | re.S)
-    assert len(bodies) == 14
+    assert len(bodies) == 15
     for name, addr, back in bodies:
         x = sites[name]
         assert int(x['addr'], 16) == int(addr, 16), name

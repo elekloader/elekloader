@@ -1584,7 +1584,7 @@ sets things up per project, subscribes to `ev_project`:
 | event | when | C prototype | notes |
 |---|---|---|---|
 | `ev_project` | Analog Rytm MKII (core-ar2 from 0.2) and Analog Four MKII (core-a4mk2 0.1): after CREATE NEW or the project reset (`how` 0, `CORE_PROJECT_NEW`), and after every project load (`how` 1, `CORE_PROJECT_LOADED`: at boot too); the stored project and its mod data are in place | `void f(int how, unsigned dropped)` | `dropped` has `STORE_DROPPED(scope)` set for each of `STORE_GLOBAL`, `STORE_TRACK`, `STORE_PATTERN` and `STORE_PROJECT` that loaded as zeros: saved by another layout, or with no mods. Sounds and kits are checked one by one as they load, so they are not in it. It comes from inside the load: keep it short, and don't start another load or save from it |
-| `ev_project_save` | Analog Rytm MKII (core-ar2 0.10): before (`pre` 1) and after (`pre` 0) every whole save of the live project to a +Drive slot: SAVE PROJECT, SAVE PROJECT AS, the project manager's saves, SAVE ... BEFORE LOADING, and LOAD of an empty slot, which writes a new project there | `void f(unsigned pre, unsigned how)` | `CORE_SAVE_KIND(how)`: `CORE_SAVE_SAME` (the active slot), `CORE_SAVE_OTHER` (another slot, or a project with none yet), `CORE_SAVE_NEW` (the empty slot's LOAD, after `ev_project`'s `CORE_PROJECT_NEW`); `CORE_SAVE_SLOT(how)` 0..127, the screen's number less one (255: none); `CORE_SAVE_FAILED` in the call after when the slot was not written. A field set in the call before is in the saved copy. From the save's job, not a UI tick: keep it short, start no load or save, leave MIDI and USB to `ev_tick`, and don't call `core_project_edited` (mods/core-ar2/README.md, "The project save") |
+| `ev_project_save` | Analog Rytm MKII (core-ar2 0.10) and Analog Four MKII (core-a4mk2 0.6, `analog-four-mk2/store.h`; mods/core-a4mk2/README.md, "The project save (0.6)"): before (`pre` 1) and after (`pre` 0) every whole save of the live project to a +Drive slot: SAVE PROJECT, SAVE PROJECT AS, the project manager's saves, SAVE ... BEFORE LOADING, and LOAD of an empty slot, which writes a new project there | `void f(unsigned pre, unsigned how)` | `CORE_SAVE_KIND(how)`: `CORE_SAVE_SAME` (the active slot), `CORE_SAVE_OTHER` (another slot, or a project with none yet), `CORE_SAVE_NEW` (the empty slot's LOAD, after `ev_project`'s `CORE_PROJECT_NEW`); `CORE_SAVE_SLOT(how)` 0..127, the screen's number less one (255: none); `CORE_SAVE_FAILED` in the call after when the slot was not written. A field set in the call before is in the saved copy. From the save's job, not a UI tick: keep it short, start no load or save, leave MIDI and USB to `ev_tick`, and don't call `core_project_edited` (mods/core-ar2/README.md, "The project save") |
 
 Core-ar2 0.2 owns 22 more sites, the same on 1.73 and 1.74 except the file
 save (0x400b0804 on 1.73, 0x400b0870 on 1.74) and the SysEx copies: 0x4000937c and 0x40009146
@@ -1632,7 +1632,7 @@ differs:
   survives a power cycle straight after SAVE PROJECT AS: core copies what
   the save wrote of its own bytes back into the stored project.
 - No velocity routes: the sound's room needs no extra sites.
-- Field defaults: from core-a4mk2 0.6 a field's `init` works as on the
+- Field defaults (core-a4mk2 0.6): a field's `init` works as on the
   Rytm (above), with no new sites: p-locks, destinations, MIDI and
   `core_param_values` work on the value.
 - core-a4mk2 owns 28 storage sites (mods/core-a4mk2/README.md lists them), among
@@ -2469,6 +2469,21 @@ Oct 2026). From 0.2 (for core-a4mk2 0.3) CHECK comes from `core_page_fns`, and
 its knob B, AMP PAN again, is shown while the count of PAN's turn updates
 (the bar) is odd and empty while it is even. Checked in rytm-emu's A4 build
 and on a unit (24 Oct 2026).
+
+### Knob looks (core-a4mk2 0.6, Analog Four MKII)
+
+The Rytm's knob looks (above) with `analog-four-mk2/pages.h`: an entry in
+`core_knob_looks` covers a mod's own knob ids, which on the A4 are above
+0x126, and `look` is a stock id, 1..0x126. The A4 has no `"knobs"` ids
+from the linker: a mod picks its ids as for `core_params`.
+
+### Screen calls (core-a4mk2 0.6, Analog Four MKII)
+
+The Rytm's screen calls (above) with `analog-four-mk2/screen.h` and
+`"core": "0.6"`. What differs: `core_stock_key` returns 0 once stock had
+the event (the A4's Brain::key doesn't pass on whether a view took it), the
+progress box is SAVE PROJECT's, and TOTAL RECALL counts as an overlay
+(mods/core-a4mk2/README.md, "Screen calls (0.6)").
 
 ### Lockable parameters (core-a4mk2 0.5, Analog Four MKII)
 

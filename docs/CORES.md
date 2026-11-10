@@ -238,8 +238,10 @@ the one a mod that uses it names in `resources.core`.
   "Parameter pages (core-a4mk2 0.2)"). Lockable parameters for each track
   kind, their p-locks, their destinations, their value as stock would
   play it and their NRPNs and CCs (ADAPTING.md, "Lockable parameters (core-a4mk2 0.5, Analog Four
-  MKII)"). Its render events cover the effects, not the analog
-  voices.
+  MKII)"). Core-ar2 0.10..0.13's foundations (0.6): field defaults, the
+  modified mark, `ev_project_save`, payloads in a 37.7 MB mods' area, knob
+  looks and the screen calls (the core's README). Its render events
+  cover the effects, not the analog voices.
 - **Octatrack** ([mods/core-ot](../mods/core-ot)): a source of its own. It
   takes the mods' RAM from the sample and recorder memory, only what they
   use and at most 10 MB, and has a hook bus of the Octatrack's own: the UI,

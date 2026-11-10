@@ -918,14 +918,18 @@ void core_store_set(unsigned field, void *item, int index, unsigned value)
 /* 0.6: the modified mark (core-ar2 0.8's). After an edit of the live
  * project, a project load asks first; stock marks the project modified
  * (SET_MODIFIED(model, 1)) from the UI task on the project's change signal,
- * and an edit of only mod fields sends none. core_project_edited asks for
- * the mark from any task or the audio interrupt; core_edit_tick (ev_tick,
- * the UI task) makes it, with the project model stock keeps at
- * PROJECT_MODEL. Core calls it for its own edits (a mod page's knob, a
+ * and an edit of only mod fields sends none (the page edits' mark is
+ * 0x400befce's call). The mark is the byte 0x4045c8c2 of the settings
+ * block, which the load reads (0x4003df98, through 0x400a5bea): ANY CHANGES
+ * WILL BE LOST for the active slot, SAVE ... BEFORE LOADING for another.
+ * core_project_edited asks for the mark from any task or the audio
+ * interrupt; core_edit_tick (ev_tick, the UI task) makes it, with the
+ * project model in the shared_ptr at 0x418717c8 (written only by its
+ * get-or-create, 0x401494de). Core calls it for its own edits (a mod page's knob, a
  * lockable parameter's CC or NRPN); a mod calls it after its own keys or
  * settings change a field. */
-#define PROJECT_MODEL (*(void *volatile *)TRACE_PROJECT_MODEL)
-#define SET_MODIFIED ((int (*)(void *, int))TRACE_SET_MODIFIED)
+#define PROJECT_MODEL (*(void *volatile *)0x418717c8)   /* a shared_ptr: the model, its count at +4 */
+#define SET_MODIFIED ((int (*)(void *, int))0x400a5bba)  /* 0 when no project is loaded */
 
 static volatile unsigned char edited;
 
@@ -942,4 +946,53 @@ void core_edit_tick(void *ctrl)
         return;
     edited = 0;
     SET_MODIFIED(model, 1);
+}
+
+/* ---- ev_project_save (0.6, core-ar2 0.10's): a whole save of the live project ----
+ * Every front-panel save of the project ends in one routine,
+ * 0x400a771a(project model, slot, progress), which holds the file save site
+ * 0x400a77e4 (st_file_save): it serializes the live project into the slot's
+ * image, writes it to the +Drive and, when that worked, makes the slot the
+ * active one (0x400a5b74) and clears the modified mark; it returns a byte, 0
+ * when the save failed. Two jobs call it: the save job (0x4003da46, built by
+ * 0x4003d448 with its SAVING box, which 0x4003ecbe queues after its
+ * OVERWRITE and WRITE PROTECTED asks), and the load job (0x4003daf0) for
+ * LOAD of an empty slot, after CREATE NEW (0x400a9f1e(model, -1), so
+ * ev_project 0 first), returning to 0x4003dc26. No other whole save writes
+ * a slot: the other calls of the file save (0x4001141e) copy the project
+ * into RAM. Core calls the mods' ev_project_save handlers f(pre, how) around
+ * it as core-ar2 does (store.h): how's kind in bits 0..7 (1 the active
+ * slot, 2 another, 3 the empty slot's LOAD), the slot in bits 8..15 (255:
+ * none) and, in the call after, bit 16 when the save failed. */
+typedef void (*ev_project_save_t)(unsigned pre, unsigned how);
+extern const ev_project_save_t ev_project_save[];
+extern int st_proj_save_body(void *model, int slot, void *progress);
+
+#define ACTIVE_SLOT ((int (*)(void *))0x400a5b9c)     /* -1: none */
+#define SAVE_NEW_RET 0x4003dc26u                        /* the empty slot's LOAD: the call's return */
+#define SAVE_SAME 1
+#define SAVE_OTHER 2
+#define SAVE_NEW 3
+#define SAVE_FAILED 0x10000
+
+static void save_event(unsigned pre, unsigned how)
+{
+    const ev_project_save_t *f;
+    for (f = ev_project_save; *f; f++)
+        (*f)(pre, how);
+}
+
+int st_proj_save(void *model, int slot, void *progress)
+{
+    int active = ACTIVE_SLOT(model), to = slot < 0 ? active : slot, r;
+    unsigned how;
+    if ((unsigned)__builtin_return_address(0) == SAVE_NEW_RET)
+        how = SAVE_NEW;
+    else
+        how = to >= 0 && to == active ? SAVE_SAME : SAVE_OTHER;
+    how |= ((unsigned)to < 128 ? (unsigned)to : 255) << 8;
+    save_event(1, how);
+    r = st_proj_save_body(model, slot, progress);
+    save_event(0, (r & 255) ? how : how | SAVE_FAILED);
+    return r;
 }

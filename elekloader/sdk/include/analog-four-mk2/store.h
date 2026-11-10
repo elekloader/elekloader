@@ -12,8 +12,8 @@
  *
  * Zero is the default: a field reads 0 in a new project, in one saved by
  * another layout, and after its scope was reset. From core-a4mk2 0.6 a field
- * declared with "init": N reads N there instead (docs/ADAPTING.md, "Field
- * defaults"); the bits keep value ^ N, and both calls take and give the value. Both calls mask
+ * declared with "init": N reads N there instead (docs/ADAPTING.md, "Mod
+ * storage (core-ar2 0.2, Analog Rytm MKII)"); the bits keep value ^ N, and both calls take and give the value. Both calls mask
  * interrupts while they read or write the field: use them from any context,
  * the audio interrupt too.
  *
