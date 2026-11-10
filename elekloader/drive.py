@@ -346,7 +346,7 @@ def pass1(build, c, state):
                 return c.refuse('feature', 'claims')
         if to is None or n is None:
             return c.refuse('format', note='a contribution without "to" or "data"')
-        if not 0 <= order < desc.LINKER_ORDER:
+        if not desc.ORDER_MIN <= order < desc.LINKER_ORDER:
             return c.refuse('format', note='an order of %r' % (order,))
         if not n or n % build.tables[build.table[to]]['entry']:
             return c.refuse('table', to)
@@ -557,9 +557,9 @@ def _bind(build, live, placed):
             return None
         flashed = build.ram(t['address'], cnt * e)
         rows = []
-        for i, k in enumerate(t['keys']):
-            nm = names[k & 0xFFFF]
-            rows.append((entry_key(k >> 16, nm.encode('utf-8'), i), nm, k >> 16,
+        for i, (o, mi) in enumerate(t['entries']):
+            nm = names[mi]
+            rows.append((entry_key(o, nm.encode('utf-8'), i), nm, o,
                          None if flashed is None else flashed[i * e:(i + 1) * e], []))
         for c, x, data, rel in new:
             for k in range(len(data) // e):

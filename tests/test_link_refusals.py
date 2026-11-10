@@ -952,12 +952,13 @@ def _(B):
     return B.pair('m 1 exports core_desc, the name of the build descriptor the linker writes', thief, loader)
 
 
-@row('link', '<>: its entry for <> has the order <>; with a build descriptor an order is 0 to <>',
+@row('link', '<>: its entry for <> has the order <>; with a build descriptor an order is <> to <>',
      device='analog-rytm-mk2')
 def _(B):
     def late(d):
-        d[1]['contribute'][0]['order'] = 65535
-    return B.pair('m 1: its entry for ev_x has the order 65535; with a build descriptor an order is 0 to 65534',
+        d[1]['contribute'][0]['order'] = 2147483647
+    return B.pair('m 1: its entry for ev_x has the order 2147483647; with a build descriptor an order is '
+                  '-2147483648 to 2147483646',
                   lambda d: (late(d), loader(d)), late)
 
 
@@ -1485,7 +1486,7 @@ def test_the_build_descriptor():
         at, end = out.layout['desc']
         assert out.map['core_desc'] == at and found[0] == B.dev.image_end(B.rel) - B.dev.main_load \
             + out.layout['run_load'] - out.layout['boot'][0] + at - out.layout['ddr'][0]
-        assert d['size'] == end - at and d['abi'] == (1, 0) and d['os'] == 'SYN'
+        assert d['size'] == end - at and d['abi'] == (1, 1) and d['os'] == 'SYN'
         assert (d['family'], d['device_key']) == (2, 'analog-rytm-mk2')
         assert [(x['name'], x['kind'], x['flags'], len(x['exports'])) for x in d['modules']] == \
             [('core', 0, 0, 2), ('m', 2, 0, 1), ('n', 1, 1, 0)]
@@ -1495,13 +1496,13 @@ def test_the_build_descriptor():
         for c, (a, n, e) in out.tables.items():
             assert (tabs[c]['address'], tabs[c]['count'], tabs[c]['entry']) == (a, n, e), c
         assert out.map['ev_x_n'] == 3 and tabs['ev_x']['capacity'] == 3 + desc.SPARE
-        assert tabs['ev_x']['keys'] == [10 << 16 | 2] * 2 + [50 << 16 | 1]
+        assert tabs['ev_x']['entries'] == [(10, 2)] * 2 + [(50, 1)]
         assert tabs['ev_x']['flags'] == desc.F_MORE
         assert tabs['ev_render_x']['flags'] == desc.F_MORE | desc.F_RENDER
         assert (tabs['ev_render_x']['count'], tabs['ev_render_x']['capacity']) == (1, 3)
         ids = tabs['core_store_ids']
         assert ids['flags'] == 0 and ids['capacity'] == ids['count'] == 1
-        assert ids['keys'] == [desc.LINKER_ORDER << 16 | 0]
+        assert ids['entries'] == [(desc.LINKER_ORDER, 0)]
         assert d['claims'] == [(desc.CLAIM_NAME, 1, 'sysex:7d')]
         end = out.layout['bss'][1]           # the +Drive area: the rest of core 0.11's, from 4 KB
         assert d['area'] == (end, link._align(end, 0x1000), 0x47FFF000, 0, 0x80000)
@@ -1519,6 +1520,62 @@ def test_the_build_descriptor():
         run = out.layout['sections']['m .run'] - out.layout['ddr'][0]
         assert int.from_bytes(ddr[run + 4:run + 8], 'big') == at
         assert 'module 1 m 1 (loader)' in desc.dump(d)
+
+
+def test_the_build_descriptor_keeps_whole_orders():
+    """ABI 1.1: each entry's order as a signed 32-bit number (core-ar2 0.13's screen handlers are at
+    -1000000 and 1000000), the keys holding it to 0..65534 for a 1.0 reader; a 1.0 block's orders
+    are its keys'. The order the linker keeps for itself is refused, as are orders past 32 bits."""
+    import struct
+    import zlib
+    from elekloader import desc
+    with Bench('analog-rytm-mk2') as B:
+        docs = descriptor_mods(B)
+        docs[2]['contribute'][0]['order'] = -1000000
+        docs[2]['contribute'].append({'to': 'ev_x', 'order': 1000000, 'data': '00000000',
+                                      'relocs': [[0, 'abs32', 'sym:fn_n', 0]]})
+        out = link.link([link.Mod2(d, d['id']) for d in docs], B.img)
+        at = desc.find(out.image)[0]
+        d = desc.decode(out.image, at)
+        x = {t['name']: t for t in d['tables']}['ev_x']
+        assert x['entries'] == [(-1000000, 2)] * 2 + [(50, 1), (1000000, 2)], x['entries']
+        blk = bytearray(out.image[at:at + d['size']])
+        o_key = struct.unpack_from('>I', blk, o_tab_of(blk, 'ev_x') + 16)[0]
+        assert struct.unpack_from('>4I', blk, o_key) == (2, 2, 50 << 16 | 1, 0xFFFE << 16 | 2)
+        # the same block as ABI 1.0 wrote it: no orders, the keys' stand
+        struct.pack_into('>H', blk, 6, 0)
+        for i in range(struct.unpack_from('>H', blk, 0x24)[0]):
+            struct.pack_into('>I', blk, struct.unpack_from('>I', blk, 0x30)[0] + 24 * i + 20, 0)
+        struct.pack_into('>I', blk, 0x0c, 0)
+        struct.pack_into('>I', blk, 0x0c, zlib.crc32(bytes(blk)) & 0xFFFFFFFF)
+        old = desc.decode(bytes(blk))
+        assert old['abi'] == (1, 0)
+        assert {t['name']: t for t in old['tables']}['ev_x']['entries'] == [(0, 2)] * 2 + [(50, 1), (65534, 2)]
+        assert {t['name']: t for t in old['tables']}['core_store_ids']['entries'] == [(desc.LINKER_ORDER, 0)]
+        for bad in (desc.LINKER_ORDER, desc.ORDER_MIN - 1):
+            docs = descriptor_mods(B)
+            docs[2]['contribute'][0]['order'] = bad
+            try:
+                link.link([link.Mod2(d, d['id']) for d in docs], B.img)
+            except ModError as e:
+                assert 'with a build descriptor an order is -2147483648 to 2147483646' in str(e), e
+            else:
+                raise AssertionError('linked an order of %d' % bad)
+        docs = descriptor_mods(B)
+        docs[2]['contribute'][0]['order'] = desc.ORDER_MIN
+        link.link([link.Mod2(d, d['id']) for d in docs], B.img)
+
+
+def o_tab_of(blk, name):
+    """The offset of the table record named `name` in a descriptor block."""
+    import struct
+    pool, ntab, o_tab = struct.unpack_from('>I', blk, 0x18)[0], struct.unpack_from('>H', blk, 0x24)[0], \
+        struct.unpack_from('>I', blk, 0x30)[0]
+    for i in range(ntab):
+        n = struct.unpack_from('>I', blk, o_tab + 24 * i)[0]
+        if bytes(blk[pool + n:blk.index(b'\0', pool + n)]).decode() == name:
+            return o_tab + 24 * i
+    raise KeyError(name)
 
 
 if __name__ == '__main__':

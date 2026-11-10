@@ -79,7 +79,7 @@ function items(d: unknown): [string, any][] {
 }
 
 type Sec = { align: number; parts?: Part[]; len?: number; size?: number }
-export type Contribution = { to: string; order: number; data: Uint8Array; relocs: [number, string, string, number][]; claims: [number, number][]; i: number }
+export type Contribution = { to: string; order: number; data: Uint8Array; relocs: [number, string, string, number][]; claims: [number, number][]; i: number; linker?: boolean }
 
 /** A loaded, validated format-2 mod. */
 export class Mod2 implements AnyMod {
@@ -905,11 +905,11 @@ export function link(mods: Mod2[], image: Uint8Array, lock: store.Lock | null = 
     if (!storeSyms.has(store.FX_LOCK_DST)) storeSyms.set(store.FX_LOCK_DST, 0)
     for (const [table, made] of [[store.CODES_TABLE, (l: store.Lock) => store.codeEntries(l, lfos, rough, routes)], [store.CCS_TABLE, store.ccEntries], [store.INITS_TABLE, store.initEntries], [store.HANDLES_TABLE, (l: store.Lock) => store.handleEntries(l, handles)]] as const)
       if (tables.has(table))
-        made(newLock).forEach((data, i) => entries.get(table)!.push([-1, '', i, core, { to: table, order: -1, data, relocs: [], claims: [], i }]))
+        made(newLock).forEach((data, i) => entries.get(table)!.push([-1, '', i, core, { to: table, order: -1, data, relocs: [], claims: [], i, linker: true }]))
     const taken = new Set(order.flatMap(m => m.exports))
     for (const nm of storeSyms.keys())
       if (taken.has(nm) || LINKER_SYMS.has(nm)) throw new ModError(`the storage field ${nm} has the name of a symbol a mod exports`)
-    ids.forEach((data, i) => entries.get(store.IDS_TABLE)!.push([-1, '', i, core, { to: store.IDS_TABLE, order: -1, data, relocs: [], claims: [], i }]))
+    ids.forEach((data, i) => entries.get(store.IDS_TABLE)!.push([-1, '', i, core, { to: store.IDS_TABLE, order: -1, data, relocs: [], claims: [], i, linker: true }]))
   }
   // knob ids: each "knobs" mod's run, past the ids mods' entries name themselves
   let knobBase = new Map<string, number>(), knobNotes: string[] = []
@@ -935,7 +935,7 @@ export function link(mods: Mod2[], image: Uint8Array, lock: store.Lock | null = 
       const v = new DataView(data.buffer)
       v.setUint32(0, i)
       v.setUint32(8, m.size('.payload'))
-      entries.get(PAYLOADS)!.push([-1, m.id, 0, m, { to: PAYLOADS, order: -1, data, relocs: [[4, 'abs32', 'sec:.payload', 0]], claims: [], i: 0 }])
+      entries.get(PAYLOADS)!.push([-1, m.id, 0, m, { to: PAYLOADS, order: -1, data, relocs: [[4, 'abs32', 'sec:.payload', 0]], claims: [], i: 0, linker: true }])
     }
   }
   for (const list of entries.values()) {
@@ -950,8 +950,8 @@ export function link(mods: Mod2[], image: Uint8Array, lock: store.Lock | null = 
   const fixed = new Set([...NO_SPARE, dev.fastTable, ...dspTables.keys()])
   if (withDesc) {
     for (const m of order) for (const c of m.contribute)
-      if (!(c.order >= 0 && c.order < desc.LINKER_ORDER))
-        throw new ModError(`${m.label()}: its entry for ${c.to} has the order ${c.order}; with a build descriptor an order is 0 to ${desc.LINKER_ORDER - 1}`)
+      if (!(c.order >= desc.ORDER_MIN && c.order < desc.LINKER_ORDER))
+        throw new ModError(`${m.label()}: its entry for ${c.to} has the order ${c.order}; with a build descriptor an order is ${desc.ORDER_MIN} to ${desc.LINKER_ORDER - 1}`)
     for (const [c, [owner]] of tables) spare.set(c, fixed.has(c) ? 0 : owner.spare.get(c) ?? desc.SPARE)
     for (const [c, [owner, e]] of tables) {   // a "max": the flashed entries and the spare ones fit it
       const cap = owner.cap.get(c)
@@ -1010,14 +1010,14 @@ export function link(mods: Mod2[], image: Uint8Array, lock: store.Lock | null = 
       exports: [...m.exports].sort(cmp).map(nm => [nm, w('sym', m, nm)] as [string, number]),
     }))
     const tabs = [...tables.keys()].sort(cmp).map(c => {
-      const e = tables.get(c)![1], keys: number[] = []
+      const e = tables.get(c)![1], keys: [number, number][] = []
       for (const [o, , , m, x] of entries.get(c)!) {
-        const k = ((o < 0 ? desc.LINKER_ORDER : o) * 0x10000 + index.get(m.id)!)
+        const k: [number, number] = [x.linker ? desc.LINKER_ORDER : o, index.get(m.id)!]
         for (let i = 0; i < Math.floor(x.data.length / e); i++) keys.push(k)
       }
-      if (c === dev.fastTable) for (const m of fastMods) keys.push(desc.LINKER_ORDER * 0x10000 + index.get(m.id)!)
+      if (c === dev.fastTable) for (const m of fastMods) keys.push([desc.LINKER_ORDER, index.get(m.id)!])
       const n = tableCount(c)
-      return { name: c, address: w('table', c), entry: e, count: n, capacity: n + spare.get(c)!, keys,
+      return { name: c, address: w('table', c), entry: e, count: n, capacity: n + spare.get(c)!, entries: keys,
         flags: (fixed.has(c) ? 0 : desc.F_MORE) | (tables.get(c)![0].render.has(c) ? desc.F_RENDER : 0) | (dspTables.has(c) ? desc.F_DSP : 0) }
     })
     let scopes: [string, number, number, number][] = []

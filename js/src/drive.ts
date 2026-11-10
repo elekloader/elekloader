@@ -279,7 +279,7 @@ export function pass1(build: Build, c: Choice, state: State): boolean {
     }
     if (to === null || n === null) return c.refuse('format', '', 0, 'a contribution without "to" or "data"')
     const o = order as number
-    if (!(o >= 0 && o < desc.LINKER_ORDER)) return c.refuse('format', '', 0, `an order of ${repr(order)}`)
+    if (!(o >= desc.ORDER_MIN && o < desc.LINKER_ORDER)) return c.refuse('format', '', 0, `an order of ${repr(order)}`)
     if (!n || n % build.tables[build.table.get(to)!].entry) return c.refuse('table', to)
     if (state.contribs + contribs >= build.pools.contribs) return c.refuse('limit', '', 0, 'contributions')
     contribs++

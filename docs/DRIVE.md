@@ -112,15 +112,17 @@ image>` prints it.
   last `.bss`, the Drive Loader's own included) rounded up to `drive_align`,
   to the top of that area (0x47FFF000 with core-ar2 0.11). A bigger flashed
   build leaves a smaller area; the linker's own RAM limit is the only cap.
-- **Orders.** Each entry's sort key is kept as `order << 16 | module`, so
-  an order must be 0 to 65,534. The linker's own entries (storage,
-  payloads, `.fast` copies) have order 65,535.
+- **Orders.** Each entry's order is kept whole, a signed 32-bit number,
+  so a +Drive entry sorts against core-ar2 0.13's screen handlers (at
+  -1,000,000 and 1,000,000) as the flashed build's linker sorted them. An
+  order must be -2,147,483,648 to 2,147,483,646; the linker's own entries
+  (storage, payloads, `.fast` copies) have 2,147,483,647.
 
-Its bytes (ABI 1.0) are below, "The descriptor's bytes".
+Its bytes (ABI 1.1) are below, "The descriptor's bytes".
 
 ## The descriptor's bytes
 
-The build descriptor ("The build descriptor" above), ABI 1.0, is big-endian, its records 4-byte aligned, and its
+The build descriptor ("The build descriptor" above), ABI 1.1, is big-endian, its records 4-byte aligned, and its
 names offsets into its string pool (UTF-8, NUL-terminated):
 
 | offset | field |
@@ -136,11 +138,12 @@ names offsets into its string pool (UTF-8, NUL-terminated):
 |---|---|---|
 | module | 16 | name, version, u8 kind (0 core, 1 flashed mod, 2 a mod that imports `core_desc`), u8 flags (bit 0: has sites), u16 index, u16 first export, u16 export count. Index 0 is the core, then the mods by id |
 | export | 8 | name, u32 address. Grouped by module in module order, by name within a module |
-| table | 24 | name, u32 address, u16 entry size, u16 count, u16 capacity (count + spare), u16 flags (bit 0: more entries may be added; bit 1: a render table, the collection's `"render": true`; bit 2: a DSP table), u32 offset of its keys, u32 0 |
-| keys | 4 an entry | `order << 16 \| module index`, in table order |
+| table | 24 | name, u32 address, u16 entry size, u16 count, u16 capacity (count + spare), u16 flags (bit 0: more entries may be added; bit 1: a render table, the collection's `"render": true`; bit 2: a DSP table), u32 offset of its keys, u32 offset of its orders (0 in ABI 1.0) |
+| keys | 4 an entry | `order << 16 \| module index`, in table order, the order held to 0..65,534 (the linker's own entries 65,535) for an ABI 1.0 reader |
 | claim | 8 | u16 kind (1: a resource name), u16 module index, u32 the name |
 | area | 20 | the flashed build's RAM end, the +Drive area's start and end, the staging buffer's address and size (the exports `drive_staging` and `drive_staging_size`, else 0) |
 | storage | 12 + 16 a scope | u32 address and u32 length of the lockfile's trailer in the main OS image (for the host: nothing on the unit reads it), u16 scope count, u16 0; per scope: name, u32 room in bits, u32 bits used, u32 generation |
+| orders | 4 an entry | s32: each entry's order, in table order; after the storage record (ABI 1.1). An ABI 1.0 block has none, and its keys' orders stand |
 
 A loader accepts any minor of its major; a minor adds fields in reserved
 space or records at the end, a major changes a record.

@@ -25,6 +25,8 @@ int js_key(js_t *j, const char **s, u32 *n);
 int js_str(js_t *j, const char **s, u32 *n);
 /* A number, or a string holding one the way Python's int(v, 0) reads it. */
 int js_int(js_t *j, s32 *v);
+/* A JSON integer (not a string) that fits an s32, as Python's type(v) is int within 32 bits */
+int js_int32(js_t *j, s32 *v);
 /* true / false. */
 int js_bool(js_t *j, int *v);
 /* Skip one value of any kind. */

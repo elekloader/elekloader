@@ -58,8 +58,8 @@ struct dmod {
 };
 
 struct contrib {
+    s32 order;
     u16 table;                           /* the descriptor's table index */
-    u16 order;
     u16 nent;                            /* entries it adds */
     u16 index;                           /* its place in the mod's contribute list */
 };
@@ -77,10 +77,10 @@ struct erel {
 };
 
 struct item {                            /* one entry of a table being merged */
-    u16 order;
-    u16 seq;
+    s32 order;
     const char *id;
     const u8 *data;
+    u16 seq;
     u16 entry;                           /* NONE for a flashed entry, else its entry */
     u16 sub;                             /* which entry of that contribution */
 };
@@ -257,6 +257,15 @@ static u32 table_count(u32 i) { return D16(o_table(i) + 10); }
 static u32 table_cap(u32 i) { return D16(o_table(i) + 12); }
 static u32 table_flags(u32 i) { return D16(o_table(i) + 14); }
 static u32 table_key(u32 i, u32 k) { return D32(D32(o_table(i) + 16) + 4 * k); }
+/* An entry's order: ABI 1.1's orders array, else (1.0) the key's, 0xFFFF the linker's own */
+static s32 table_order(u32 i, u32 k)
+{
+    u32 o = D32(o_table(i) + 20), key;
+    if (o)
+        return (s32)D32(o + 4 * k);
+    key = table_key(i, k) >> 16;
+    return key == 0xFFFF ? 0x7FFFFFFF : (s32)key;
+}
 #define F_MORE 1
 #define F_DSP 4
 
@@ -801,7 +810,7 @@ static int scan(struct dmod *m, const u8 *buf, u32 len, const char **what)
                         return DL_R_TABLE;
                     }
                 } else if (js_eq(s, n, "order")) {
-                    if (!js_int(&j, &order))
+                    if (!js_int32(&j, &order))
                         return DL_R_FORMAT;
                 } else if (js_eq(s, n, "data")) {
                     if (!js_hex(&j, 0, 0, &dlen))
@@ -819,7 +828,7 @@ static int scan(struct dmod *m, const u8 *buf, u32 len, const char **what)
             }
             if (j.err || t < 0 || !had_data)
                 return DL_R_FORMAT;
-            if (order < 0 || order > 0xFFFE)
+            if (order == 0x7FFFFFFF)     /* the linker's own entries' */
                 return DL_R_FORMAT;
             if (!dlen || dlen % table_entry(t)) {
                 *what = table_name(t);
@@ -829,7 +838,7 @@ static int scan(struct dmod *m, const u8 *buf, u32 len, const char **what)
                 return DL_R_LIMIT;
             c = &L.ctr[L.nctr++];
             c->table = (u16)t;
-            c->order = (u16)order;
+            c->order = order;
             c->nent = (u16)(dlen / table_entry(t));
             c->index = index++;
             m->ctr_n++;
@@ -1360,10 +1369,9 @@ static int bind(int write)
             return 0;
         dl_memcpy(L.mdata, tab, cnt * esz);
         for (i = 0; i < cnt; i++) {
-            u32 key = table_key(t, i);
             struct item *it = &L.items[n++];
-            it->order = (u16)(key >> 16);
-            it->id = module_name(key & 0xFFFF);
+            it->order = table_order(t, i);
+            it->id = module_name(table_key(t, i) & 0xFFFF);
             it->seq = (u16)i;
             it->data = L.mdata + i * esz;
             it->entry = NONE;

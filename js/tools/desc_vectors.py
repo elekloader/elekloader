@@ -29,8 +29,12 @@ def cases(B):
     d[2]['contribute'][1]['order'] = 0
     out['no spare in ev_x, an order of 0'] = d
     d = T.descriptor_mods(B)
-    d[2]['contribute'][0]['order'] = 65535
-    out['an order past the keys\''] = d
+    d[2]['contribute'][0]['order'] = -1000000
+    d[2]['contribute'][1]['order'] = 1000000
+    out['whole orders, -1000000 and 1000000'] = d
+    d = T.descriptor_mods(B)
+    d[2]['contribute'][0]['order'] = 2147483647
+    out['the linker\'s own order'] = d
     d = T.descriptor_mods(B)
     d[0]['version'] = '0.11'
     d[1]['sections']['.bss']['size'] = 0x200000

@@ -23,9 +23,12 @@ into its string pool (UTF-8, NUL-terminated):
   export (8): name, u32 address. Grouped by module, in module order; by name within a module.
   table (24): name, u32 address, u16 entry size, u16 count, u16 capacity, u16 flags (bit 0: more
     entries may be added, bit 1: a render table, bit 2: a DSP table, its address in words),
-    u32 offset of its keys, u32 0
-  keys: one u32 per entry, in table order: order << 16 | module index; the entries the linker
-    makes itself (storage, payloads, .fast copies) have order 0xFFFF
+    u32 offset of its keys, u32 offset of its orders (ABI 1.1; 0 in 1.0)
+  keys: one u32 per entry, in table order: order << 16 | module index, the order held to 0..65534
+    for a 1.0 reader; the entries the linker makes itself (storage, payloads, .fast copies) have
+    0xFFFF
+  orders (ABI 1.1, after the storage record): one s32 per entry, in table order: the entry's
+    order; the linker's own entries have 0x7FFFFFFF. A 1.0 block has none: its key's order stands
   claim (8): u16 kind (1: a resource name), u16 module index, u32 name
   area (20): the flashed build's RAM end, the +Drive mods' area (lo, hi), the staging buffer's
     address and size (a mod's exports drive_staging, drive_staging_size; 0 without)
@@ -41,11 +44,13 @@ from .elemod import ModError
 
 SYM = 'core_desc'
 MAGIC = b'ELKD'
-ABI = (1, 0)
+ABI = (1, 1)
 HEADER = 0x60
 SPARE = 16                       # a table's spare entries, unless its collection says
 F_MORE, F_RENDER, F_DSP = 1, 2, 4
-LINKER_ORDER = 0xFFFF            # the key's order of an entry the linker makes itself
+LINKER_ORDER = 0x7FFFFFFF        # the order of an entry the linker makes itself
+ORDER_MIN = -0x80000000          # with a descriptor, an order is ORDER_MIN to LINKER_ORDER - 1
+KEY_LINKER = 0xFFFF              # a key's order (ABI 1.0's field) for the linker's own entries
 KIND_CORE, KIND_FLASHED, KIND_LOADER = 0, 1, 2
 CLAIM_NAME = 1
 STAGING = ('drive_staging', 'drive_staging_size')
@@ -64,6 +69,13 @@ class _Pool:
         return self.at[s]
 
 
+def key(order, module):
+    """An entry's key: ABI 1.0's field, `order << 16 | module`, its order held to 0..65534 (the
+    full order is in the orders array)."""
+    k = KEY_LINKER if order == LINKER_ORDER else max(0, min(order, KEY_LINKER - 1))
+    return k << 16 | module
+
+
 def encode(d):
     """A descriptor's fields (link.py gathers them) -> the block's bytes. Its size depends only on
     the counts and the names, so the linker can call it with addresses still 0 to size it."""
@@ -72,7 +84,7 @@ def encode(d):
     pool(d['os'])
     mods, tables, claims = d['modules'], d['tables'], d['claims']
     exports = [x for m in mods for x in m['exports']]
-    nkeys = sum(len(t['keys']) for t in tables)
+    nkeys = sum(len(t['entries']) for t in tables)
     scopes = d['storage']['scopes']
     o_mod = HEADER
     o_exp = o_mod + MODULE * len(mods)
@@ -81,7 +93,8 @@ def encode(d):
     o_key = o_clm + CLAIM * len(claims)
     o_area = o_key + 4 * nkeys
     o_sto = o_area + AREA
-    o_pool = o_sto + 12 + SCOPE * len(scopes)
+    o_ord = o_sto + 12 + SCOPE * len(scopes)
+    o_pool = o_ord + 4 * nkeys
     body = bytearray()
     first = 0
     for i, m in enumerate(mods):
@@ -90,20 +103,22 @@ def encode(d):
         first += len(m['exports'])
     for nm, a in exports:
         body += struct.pack('>II', pool(nm), a & 0xFFFFFFFF)
-    k = o_key
+    k = 0
     for t in tables:
         body += struct.pack('>IIHHHHII', pool(t['name']), t['address'] & 0xFFFFFFFF, t['entry'],
-                            t['count'], t['capacity'], t['flags'], k, 0)
-        k += 4 * len(t['keys'])
+                            t['count'], t['capacity'], t['flags'], o_key + k, o_ord + k)
+        k += 4 * len(t['entries'])
     for kind, mi, name in claims:
         body += struct.pack('>HHI', kind, mi, pool(name))
     for t in tables:
-        body += b''.join(struct.pack('>I', x) for x in t['keys'])
+        body += b''.join(struct.pack('>I', key(o, mi)) for o, mi in t['entries'])
     body += struct.pack('>5I', *(v & 0xFFFFFFFF for v in d['area']))
     st = d['storage']
     body += struct.pack('>IIHH', st['trailer'][0] & 0xFFFFFFFF, st['trailer'][1], len(scopes), 0)
     for nm, room, used, gen in scopes:
         body += struct.pack('>IIII', pool(nm), room, used, gen)
+    for t in tables:
+        body += b''.join(struct.pack('>i', o) for o, _mi in t['entries'])
     assert HEADER + len(body) == o_pool
     raw = bytes(pool.raw) + bytes(-len(pool.raw) % 4)
     size = o_pool + len(raw)
@@ -148,9 +163,14 @@ def decode(blk, at=0):
                      'exports': exports[first:first + cnt]})
     tables = []
     for i in range(ntab):
-        n, a, e, cnt, cap, flags, ko, _r = struct.unpack_from('>IIHHHHII', b, o_tab + TABLE * i)
+        n, a, e, cnt, cap, flags, ko, oo = struct.unpack_from('>IIHHHHII', b, o_tab + TABLE * i)
+        keys = struct.unpack_from('>%dI' % cnt, b, ko)
+        if oo:                                  # ABI 1.1: each entry's whole order
+            orders = struct.unpack_from('>%di' % cnt, b, oo)
+        else:                                   # ABI 1.0: the key's
+            orders = [LINKER_ORDER if k >> 16 == KEY_LINKER else k >> 16 for k in keys]
         tables.append({'name': name(n), 'address': a, 'entry': e, 'count': cnt, 'capacity': cap,
-                       'flags': flags, 'keys': list(struct.unpack_from('>%dI' % cnt, b, ko))})
+                       'flags': flags, 'entries': [(o, k & 0xFFFF) for o, k in zip(orders, keys)]})
     claims = [(k, m, name(n)) for k, m, n in
               (struct.unpack_from('>HHI', b, o_clm + CLAIM * i) for i in range(nclm))]
     t_at, t_len, nsc, _z = struct.unpack_from('>IIHH', b, o_sto)
@@ -193,8 +213,8 @@ def dump(d):
         out.append('table %s at 0x%08x, %d-byte entries, %d of %d%s' % (
             t['name'], t['address'], t['entry'], t['count'], t['capacity'],
             (' (%s)' % ', '.join(fl)) if fl else ''))
-        if t['keys']:
-            out.append('  keys ' + ' '.join('%d:%d' % (k >> 16, k & 0xFFFF) for k in t['keys']))
+        if t['entries']:
+            out.append('  keys ' + ' '.join('%d:%d' % x for x in t['entries']))
     for kind, mi, n in d['claims']:
         out.append('claim %s by module %d: %s' % ('name' if kind == CLAIM_NAME else kind, mi, n))
     a = d['area']

@@ -37,7 +37,7 @@ class Flashed:
     """A flashed build: core (tables ev_x, ev_y with one spare, ev_z with none and closed),
     the loader stub (imports core_desc) and a flashed mod `flm` on ev_x."""
 
-    def __init__(self, B):
+    def __init__(self, B, orders=(50, 50)):
         self.B = B
         core = B.core(version='0.11',
                       collections={'ev_x': {'entry': 4}, 'ev_y': {'entry': 4, 'spare': 1},
@@ -52,9 +52,9 @@ class Flashed:
                   'resources': {'names': ['settings:MODS']}}
         loader['sections']['.run'] = {'align': 4, 'len': 8, 'parts': [['hex', '0000000000000000']]}
         flm = B.mod('flm', exports=['fn_flm'],
-                    contribute=[{'to': 'ev_x', 'order': 50, 'data': '00000000',
+                    contribute=[{'to': 'ev_x', 'order': orders[0], 'data': '00000000',
                                  'relocs': [[0, 'abs32', 'sym:fn_flm', 0]]},
-                                {'to': 'ev_y', 'order': 50, 'data': '00000000',
+                                {'to': 'ev_y', 'order': orders[1], 'data': '00000000',
                                  'relocs': [[0, 'abs32', 'sym:fn_flm', 0]]}])
         self.docs = [core, loader, flm]
         out = link.link([link.Mod2(d, d['id']) for d in self.docs], B.img)
@@ -330,6 +330,50 @@ def main():
             c_, _r = run(exe, F, mods, work, check=True, step='buf')
             check('stepped check of read files = check: ' + name, a_ == c_, (a_, c_))
 
+        # whole orders (descriptor ABI 1.1): a flashed build whose entries sit at -1000000 and
+        # 1000000, as core-ar2 0.13's screen handlers do; +Drive entries land before, between,
+        # tied with and after them, the same in the boot linker and its twin
+        W = Flashed(B, orders=(-1000000, 1000000))
+        check('ABI 1.1: the flashed orders read back whole', W.d['abi'] == (1, 1)
+              and W.tables['ev_x']['entries'][0][0] == -1000000 and W.tables['ev_y']['entries'][0][0] == 1000000,
+              (W.d['abi'], W.tables['ev_x']['entries'], W.tables['ev_y']['entries']))
+        wfn = W.out.map['flm:fn_flm']
+
+        def at(ident, order, to='ev_x'):
+            return drive_mod(B, ident, contribute=[{'to': to, 'order': order, 'data': '00000000',
+                                                    'relocs': [[0, 'abs32', 'sym:fn_' + ident, 0]]}])
+        wm = [at('wa', -1000000), at('wz', -1000000), at('wlo', -2147483648), at('wb', -1000001),
+              at('wc', 0), at('wd', 2147483646), at('we', 999999, 'ev_y'), at('wf', 1000001)]
+        s, ram = run(exe, W, wm, work)
+        ids = sorted(m['id'] for m in wm)
+        fn = {i: AREA + 8 * k for k, i in enumerate(ids)}
+        xs = W.table_words(ram, 'ev_x', 9)
+        want = [fn['wlo'], fn['wb'], wfn, fn['wa'], fn['wz'], fn['wc'], fn['wf'], fn['wd'], 0]
+        check('whole orders: ev_x by order, then id (flashed flm before wa and wz)',
+              s['loaded'] == 8 and xs == want, ([hex(v) for v in xs], [hex(v) for v in want]))
+        ys = W.table_words(ram, 'ev_y', 3)
+        check('whole orders: ev_y we(999999) before flm(1000000)', ys == [fn['we'], wfn, 0], [hex(v) for v in ys])
+        files = [(m['id'] + '.elemod', (json.dumps(m, indent=1) + '\n').encode()) for m in wm]
+        twin = drive.link(drive.load_build(W.out.image), files)
+        for t in ('ev_x', 'ev_y'):
+            n = 4 * (W.tables[t]['capacity'] + 1)
+            o = W.tables[t]['address'] - W.ram_base
+            check('whole orders: the twin writes the same ' + t,
+                  twin.tables[t]['bytes'] == bytes(ram[o:o + n]))
+        for name, order in (('the linker\'s own order', '2147483647'), ('past 32 bits', '2147483648'),
+                            ('under 32 bits', '-2147483649'), ('wrapping to 50', '4294967346'),
+                            ('a string', '"50"')):
+            bad = at('wbad', 0)
+            raw = (json.dumps(bad, indent=1) + '\n').encode().replace(b'"order": 0', b'"order": ' + order.encode())
+            s, _ = run(exe, W, [at('good', 0), bad], work, raw={'wbad': raw})
+            st = {x['id']: x for x in s['status']}
+            got = st.get('wbad') or st.get('wbad.elemod', {})
+            tw = drive.check(drive.load_build(W.out.image),
+                             [('good.elemod', (json.dumps(at('good', 0), indent=1) + '\n').encode()),
+                              ('wbad.elemod', raw)])
+            tst = [c for c in tw.choices if c.name == 'wbad.elemod'][0]
+            check('whole orders: refuses an order ' + name + ', as the twin does',
+                  got.get('code') == 5 and st['good']['state'] == 1 and tst.code == 5, (s, tst.code))
 
         # the boot's time (dl.h, dl_bus_us): bus ticks at 132 MHz to ﾂｵs, across DTIM0's wrap
         src = os.path.join(work, 'bus_us.c')

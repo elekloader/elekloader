@@ -327,7 +327,7 @@ relocations only in `.run` (`abs32`, `pc32`, `pc16`), and none of `sites`,
 `collections`, `copied`, `storage`, `sharc`, `resources.regions` or a
 contribution's `claims`. It adds entries only to tables whose descriptor
 flags say more may be added (not a DSP table), in whole entries, at an
-order of 0 to 65,534. Its imports are the build's exports, the tables'
+order of -2,147,483,648 to 2,147,483,646. Its imports are the build's exports, the tables'
 names and `NAME_n` (the count after the merge), `core_desc`, and the other
 +Drive mods' exports. Its own symbol `drive_init` (in `.run` or `.bss`), if
 it has one, is called after the link as `void drive_init(void)`, in id

@@ -7,18 +7,21 @@ import { crc32 } from './zip.ts'
 import { ModError } from './elemod.ts'
 
 export const SYM = 'core_desc'
-export const ABI: [number, number] = [1, 0]
+export const ABI: [number, number] = [1, 1]
 export const HEADER = 0x60
 export const SPARE = 16                     // a table's spare entries, unless its collection says
 export const F_MORE = 1, F_RENDER = 2, F_DSP = 4
-export const LINKER_ORDER = 0xffff          // the key's order of an entry the linker makes itself
+export const LINKER_ORDER = 0x7fffffff      // the order of an entry the linker makes itself
+export const ORDER_MIN = -0x80000000        // with a descriptor, an order is ORDER_MIN to LINKER_ORDER - 1
+export const KEY_LINKER = 0xffff            // a key's order (ABI 1.0's field) for the linker's own entries
 export const KIND_CORE = 0, KIND_FLASHED = 1, KIND_LOADER = 2
 export const CLAIM_NAME = 1
 export const STAGING = ['drive_staging', 'drive_staging_size'] as const
 const MODULE = 16, EXPORT = 8, TABLE = 24, CLAIM = 8, AREA = 20, SCOPE = 16
 
 export type DescModule = { name: string; version: string; kind: number; flags: number; exports: [string, number][] }
-export type DescTable = { name: string; address: number; entry: number; count: number; capacity: number; flags: number; keys: number[] }
+export type DescTable = { name: string; address: number; entry: number; count: number; capacity: number; flags: number
+  entries: [number, number][] }               // each entry's [order, module index]
 export type DescFields = {
   family: number; device: number; release: number; deviceKey: string; os: string
   modules: DescModule[]; tables: DescTable[]; claims: [number, number, string][]
@@ -27,6 +30,13 @@ export type DescFields = {
 }
 
 const utf8 = new TextEncoder()
+
+/** An entry's key: ABI 1.0's field, `order << 16 | module`, its order held to 0..65534 (the whole order is in the
+ * orders array). desc.key. */
+export function key(order: number, module: number): number {
+  const k = order === LINKER_ORDER ? KEY_LINKER : Math.max(0, Math.min(order, KEY_LINKER - 1))
+  return k * 0x10000 + module
+}
 
 /** A descriptor's fields (link.ts gathers them) -> the block's bytes. desc.encode. */
 export function encode(d: DescFields): Uint8Array {
@@ -41,10 +51,10 @@ export function encode(d: DescFields): Uint8Array {
   str(d.deviceKey)
   str(d.os)
   const exports = d.modules.flatMap(m => m.exports)
-  const nkeys = d.tables.reduce((n, t) => n + t.keys.length, 0)
+  const nkeys = d.tables.reduce((n, t) => n + t.entries.length, 0)
   const oMod = HEADER, oExp = oMod + MODULE * d.modules.length, oTab = oExp + EXPORT * exports.length
   const oClm = oTab + TABLE * d.tables.length, oKey = oClm + CLAIM * d.claims.length, oArea = oKey + 4 * nkeys
-  const oSto = oArea + AREA, oPool = oSto + 12 + SCOPE * d.storage.scopes.length
+  const oSto = oArea + AREA, oOrd = oSto + 12 + SCOPE * d.storage.scopes.length, oPool = oOrd + 4 * nkeys
   // names first, so the pool's size is known before the block is laid out (as desc.py adds them while it packs)
   d.modules.forEach(m => { str(m.name); str(m.version) })
   for (const [nm] of exports) str(nm)
@@ -70,19 +80,20 @@ export function encode(d: DescFields): Uint8Array {
     o += MODULE
   })
   for (const [nm, a] of exports) { u32(o, str(nm)); u32(o + 4, a); o += EXPORT }
-  let k = oKey
+  let k = 0
   for (const t of d.tables) {
     u32(o, str(t.name)); u32(o + 4, t.address); v.setUint16(o + 8, t.entry); v.setUint16(o + 10, t.count)
-    v.setUint16(o + 12, t.capacity); v.setUint16(o + 14, t.flags); u32(o + 16, k)
-    k += 4 * t.keys.length
+    v.setUint16(o + 12, t.capacity); v.setUint16(o + 14, t.flags); u32(o + 16, oKey + k); u32(o + 20, oOrd + k)
+    k += 4 * t.entries.length
     o += TABLE
   }
   for (const [kind, mi, nm] of d.claims) { v.setUint16(o, kind); v.setUint16(o + 2, mi); u32(o + 4, str(nm)); o += CLAIM }
-  for (const t of d.tables) for (const x of t.keys) { u32(o, x); o += 4 }
+  for (const t of d.tables) for (const [ord, mi] of t.entries) { u32(o, key(ord, mi)); o += 4 }
   for (const x of d.area) { u32(o, x); o += 4 }
   u32(o, d.storage.trailer[0]); u32(o + 4, d.storage.trailer[1]); v.setUint16(o + 8, d.storage.scopes.length)
   o += 12
   for (const [nm, room, used, gen] of d.storage.scopes) { u32(o, str(nm)); u32(o + 4, room); u32(o + 8, used); u32(o + 12, gen); o += SCOPE }
+  for (const t of d.tables) for (const [ord] of t.entries) { v.setInt32(o, ord); o += 4 }
   b.set(pool, oPool)
   u32(0x0c, crc32(b))
   return b
@@ -125,9 +136,14 @@ export function decode(blk: Uint8Array, at = 0): Decoded {
       exports: exports.slice(first, first + cnt) }
   })
   const tables = Array.from({ length: ntab }, (_, i) => {
-    const o = oTab + TABLE * i, cnt = u16(o + 10), ko = u32(o + 16)
+    const o = oTab + TABLE * i, cnt = u16(o + 10), ko = u32(o + 16), oo = u32(o + 20)
+    const entries = Array.from({ length: cnt }, (_, k): [number, number] => {
+      const key = u32(ko + 4 * k), ord = key >>> 16
+      // ABI 1.1: each entry's whole order; 1.0: the key's
+      return [oo ? v.getInt32(oo + 4 * k) : ord === KEY_LINKER ? LINKER_ORDER : ord, key & 0xffff]
+    })
     return { name: name(u32(o)), address: u32(o + 4), entry: u16(o + 8), count: cnt, capacity: u16(o + 12), flags: u16(o + 14),
-      keys: Array.from({ length: cnt }, (_, k) => u32(ko + 4 * k)) }
+      entries }
   })
   const claims = Array.from({ length: nclm }, (_, i): [number, number, string] =>
     [u16(oClm + CLAIM * i), u16(oClm + CLAIM * i + 2), name(u32(oClm + CLAIM * i + 4))])

@@ -935,13 +935,13 @@ def link(mods, image, lock=None, *, sharc_stream=None):
                             (store.HANDLES_TABLE, lambda l: store.handle_entries(l, handles))):
             if table in tables:
                 for i, data in enumerate(made(new_lock)):
-                    entries[table].append((-1, '', i, core, {'data': data, 'relocs': []}))
+                    entries[table].append((-1, '', i, core, {'data': data, 'relocs': [], 'linker': True}))
         taken = {nm for m in order for nm in m.exports}
         for nm in store_syms:
             if nm in taken or nm in LINKER_SYMS:
                 raise ModError('the storage field %s has the name of a symbol a mod exports' % nm)
         for i, data in enumerate(ids):
-            entries[store.IDS_TABLE].append((-1, '', i, core, {'data': data, 'relocs': []}))
+            entries[store.IDS_TABLE].append((-1, '', i, core, {'data': data, 'relocs': [], 'linker': True}))
     # knob ids: each "knobs" mod's run, past the ids mods' entries name themselves
     knob_base, knob_notes = {}, []
     if dev.param_ids and (any(m.knobs for m in order) or (new_lock or {}).get('knobs')
@@ -968,7 +968,7 @@ def link(mods, image, lock=None, *, sharc_stream=None):
             ids[i] = m.id
             entries[PAYLOADS].append((-1, m.id, 0, m, {
                 'data': struct.pack('>III', i, 0, m.size('.payload')),
-                'relocs': [(4, 'abs32', 'sec:.payload', 0)]}))
+                'relocs': [(4, 'abs32', 'sec:.payload', 0)], 'linker': True}))
     for c in entries:
         entries[c].sort(key=lambda e: entry_key(*e[:3]))
     dsp_tables = {c: t for m in order for c, t in m.dsp_tables.items()}
@@ -979,9 +979,10 @@ def link(mods, image, lock=None, *, sharc_stream=None):
     if with_desc:
         for m in order:
             for c in m.contribute:
-                if not 0 <= c['order'] < desc.LINKER_ORDER:
+                if not desc.ORDER_MIN <= c['order'] < desc.LINKER_ORDER:
                     raise ModError('%s: its entry for %s has the order %d; with a build descriptor an '
-                                   'order is 0 to %d' % (m.label(), c['to'], c['order'], desc.LINKER_ORDER - 1))
+                                   'order is %d to %d' % (m.label(), c['to'], c['order'], desc.ORDER_MIN,
+                                                          desc.LINKER_ORDER - 1))
         spare = {c: 0 if c in fixed else tables[c][0].spare.get(c, desc.SPARE) for c in tables}
         for c in tables:                        # a "max": the flashed entries and the spare ones fit it
             cap = tables[c][0].cap.get(c)
@@ -1037,13 +1038,13 @@ def link(mods, image, lock=None, *, sharc_stream=None):
         for c in sorted(tables):
             keys = []
             for o, _id, _i, m, e in entries[c]:
-                k = (desc.LINKER_ORDER if o < 0 else o) << 16 | index[m.id]
+                k = (desc.LINKER_ORDER if e.get('linker') else o, index[m.id])
                 keys += [k] * (len(e['data']) // tables[c][1])
             if c == dev.fast_table:
-                keys += [desc.LINKER_ORDER << 16 | index[m.id] for m in fast_mods]
+                keys += [(desc.LINKER_ORDER, index[m.id]) for m in fast_mods]
             n = table_count(c)
             tabs.append({'name': c, 'address': w('table', c), 'entry': tables[c][1], 'count': n,
-                         'capacity': n + spare[c], 'keys': keys,
+                         'capacity': n + spare[c], 'entries': keys,
                          'flags': (0 if c in fixed else desc.F_MORE)
                          | (desc.F_RENDER if c in tables[c][0].render else 0)
                          | (desc.F_DSP if c in dsp_tables else 0)})

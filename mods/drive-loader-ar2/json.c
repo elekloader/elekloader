@@ -218,6 +218,27 @@ int js_int(js_t *j, s32 *v)
     return fail(j);
 }
 
+int js_int32(js_t *j, s32 *v)
+{
+    const char *s, *d, *top;
+    u32 n, i;
+    if (js_peek(j) != '0')               /* a number, not a string */
+        return fail(j);
+    s = j->p;
+    if (!js_int(j, v))
+        return 0;
+    d = *s == '-' ? s + 1 : s;           /* its digits; js_int let no leading zero through */
+    n = (u32)(j->p - d);
+    top = *s == '-' ? "2147483648" : "2147483647";
+    if (n > 10)
+        return fail(j);
+    for (i = 0; n == 10 && i < 10 && d[i] == top[i]; i++)
+        ;
+    if (n == 10 && i < 10 && d[i] > top[i])
+        return fail(j);
+    return 1;
+}
+
 static int word(js_t *j, const char *w)
 {
     const char *q = j->p;
