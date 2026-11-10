@@ -1,6 +1,6 @@
 # drive-loader (Analog Rytm MKII)
 
-The +Drive mods loader's flashed part, for core-ar2 0.11 and newer on OS 1.74. It imports
+The +Drive mods loader's flashed part, for core-ar2 0.12 and newer on OS 1.74. It imports
 `core_desc`, so the linker writes the build descriptor into every build that has it
 (docs/FORMAT.md, "The build descriptor"), and it exports the staging buffer as `drive_staging`
 and `drive_staging_size` (512 KB, its `.bss`), which the descriptor's area record names.
@@ -354,5 +354,5 @@ emulator through its `--usb-midi-tcp` port.
 ```bash
 python -m elekloader.sdk.build mods/core-ar2 --stock Analog-Rytm_MKII_OS1.74.syx
 python -m elekloader.sdk.build mods/drive-loader-ar2 --stock Analog-Rytm_MKII_OS1.74.syx
-python -m elekloader.patch --stock Analog-Rytm_MKII_OS1.74.syx --mod core-0.11.elemod --mod drive-loader-0.3.elemod --out drive-loader.syx --version 1.74
+python -m elekloader.patch --stock Analog-Rytm_MKII_OS1.74.syx --mod core-0.12.elemod --mod drive-loader-0.3.elemod --out drive-loader.syx --version 1.74
 ```

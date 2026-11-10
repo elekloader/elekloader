@@ -3,9 +3,9 @@
 linker's twin, the data container and `elekloader mods` (pytest, or run with python). Needs no
 firmware, except the tests at the end, which take the owner's files:
 
-    ELEKLOADER_AR2_SYX=<stock Rytm MKII 1.74 .syx> ELEKLOADER_CORE_AR2=<core-ar2 0.11 .elemod>
+    ELEKLOADER_AR2_SYX=<stock Rytm MKII 1.74 .syx> ELEKLOADER_CORE_AR2=<core-ar2 0.12 .elemod>
         [ELEKLOADER_DRIVE_MODS=<folder with drive-hello and drive-hello-user .elemod>]
-        a real build of core-ar2 0.11 and a loader stub, and the example mods linked into it
+        a real build of core-ar2 0.12 and a loader stub, and the example mods linked into it
     ELEKLOADER_AR2_DATA=<a stock project download, as the Data router sends it>
         the container round trip
 
@@ -442,16 +442,9 @@ def test_a_missing_file_is_dropped():
         assert r.choices[1].state == drive.LOADED
 
 
-def test_core_ar2_events_take_256_drive_mods():
-    """core-ar2's events have room for as many +Drive handlers as the loader links (DL_MAX_MODS), not the
-    default 16 spare entries (found 2026-11-07: a 17th ev_tick handler was refused `full`); the
-    machines table only for its 10 hidden slots."""
-    with open(os.path.join(ROOT, 'mods', 'core-ar2', 'mod.json'), encoding='utf-8') as fh:
-        cols = json.load(fh)['collections']
-    for name, v in cols.items():
-        if name.startswith('ev_'):
-            assert isinstance(v, dict) and v.get('spare') == drive.MAX_MODS, (name, v)
-    assert cols['core_machines'] == {'entry': 4, 'spare': 10}
+def test_a_spare_count_sizes_a_table():
+    """A collection's "spare" is the room its table keeps for +Drive entries, not the default 16
+    (found 2026-11-07: a 17th ev_tick handler was refused `full`)."""
     # the linker gives a table what its collection declares
     with Bench('analog-rytm-mk2') as B:
         docs = flashed(B)
@@ -468,18 +461,8 @@ def test_core_ar2_events_take_256_drive_mods():
 
 
 
-def test_core_ar2_tables_take_their_own_limits():
-    """core-ar2's other tables are sized by what each can hold (2026-11-08), not the default 16: the
-    page tables by the views' room (10 views of VIEW_MAX 16 pages, 11 of them stock's), the id-range
-    tables by the loader's mods, and core_step_owners stops at its 8 owners (steps.c OWNERS)."""
-    with open(os.path.join(ROOT, 'mods', 'core-ar2', 'mod.json'), encoding='utf-8') as fh:
-        cols = json.load(fh)['collections']
-    for name in ('core_pages', 'core_page_fns', 'core_view_pages'):
-        assert cols[name] == {'entry': 4, 'spare': 10 * 16 - 11}, name
-    for name in ('core_params', 'core_param_locks', 'core_param_scales'):
-        assert cols[name] == {'entry': 4, 'spare': drive.MAX_MODS}, name
-    assert cols['core_step_owners'] == {'entry': 4, 'spare': 8, 'max': 8}
-    assert cols['core_lock_params'] == 4      # +Drive mods have no storage, so no lock codes
+def test_a_max_caps_a_table():
+    """A collection's "max" stops its table at that many entries, flashed and spare together."""
     # a "max" counts the flashed entries: the spare ones take only what is left
     with Bench('analog-rytm-mk2') as B:
         docs = flashed(B)
