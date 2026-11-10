@@ -56,6 +56,12 @@ def test_profile():
     assert DEV.linkable() and DEV.flash_limit == 0x300000 and DEV.trailer is None
     assert (DEV.flash_limit - DEV.flash_at) % 0x40000 == 0      # whole 256 KB units
     assert DEV.ddr == DEV.areas['ddr'] == (0x47BE0000, 0x47C00000)
+    # core-a4mk2 0.6: the mods' area moves into the gap checked on a unit (ddr-canary-a4mk2),
+    # from its first 64 KB boundary, joined to the 128 KB area above it
+    assert DEV.ddr_for('0.5') == DEV.ddr
+    lo, hi = DEV.ddr_for('0.6')
+    assert (lo, hi) == (0x45650000, 0x47C00000) and lo % 0x10000 == 0
+    assert DEV.areas['gap'][0] <= lo and DEV.areas['gap'][1] == DEV.areas['ddr'][0] and hi == DEV.areas['ddr'][1]
     assert DEV.sysex_id == 0x0B
     assert len({d.sysex_id for d in devices.devices() if d.container == 'ele3'}) == \
         len([d for d in devices.devices() if d.container == 'ele3'])

@@ -2,7 +2,7 @@
 // The linker's checks that need no firmware: tests/test_units.py's counterparts.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { ANALOG_RYTM_MK2, DIGITONE_MK2, DIGITAKT_MK1, DIGITONE_MK1, OCTATRACK, devices, targetOf } from '../src/devices.ts'
+import { ANALOG_FOUR_MK2, ANALOG_RYTM_MK2, DIGITONE_MK2, DIGITAKT_MK1, DIGITONE_MK1, OCTATRACK, devices, targetOf } from '../src/devices.ts'
 import { sha } from '../src/bytes.ts'
 import { Mod, check as check1 } from '../src/elemod.ts'
 import { Mod2, check, ddrFor, imageProblems, link, payloadId } from '../src/link.ts'
@@ -229,6 +229,11 @@ test('a payload id is link.py payload_id, and core-ar2 0.11 moves the Rytm\'s mo
   assert.notEqual(payloadId('porbxw'), payloadId('puscrb'))
   assert.deepEqual(ddrFor(ANALOG_RYTM_MK2, '0.10'), [0x47be0000, 0x47c00000])
   assert.deepEqual(ddrFor(ANALOG_RYTM_MK2, '0.11'), [0x47b10000, 0x47fff000])
+})
+
+test('core-a4mk2 0.6 moves the A4\'s mods\' area into the canary-checked gap', () => {
+  assert.deepEqual(ddrFor(ANALOG_FOUR_MK2, '0.5'), [0x47be0000, 0x47c00000])
+  assert.deepEqual(ddrFor(ANALOG_FOUR_MK2, '0.6'), [0x45650000, 0x47c00000])
 })
 
 test('knob ids from 555 past fixed ids, abs32 and abs16, kept by the lockfile (tests/test_link_refusals.py)', () => {

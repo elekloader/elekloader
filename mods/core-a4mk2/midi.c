@@ -69,6 +69,7 @@ int core_lock_max(const struct core_lock_param *p);
 int core_lock_shift(const struct core_lock_param *p);
 int core_lock_clamp(const struct core_lock_param *p, int v);
 void core_store_set(unsigned field, void *item, int index, unsigned value);
+void core_project_edited(void);
 void core_lock_record(int track, int code, int value);
 
 static unsigned rd32(const unsigned char *a)
@@ -102,6 +103,7 @@ static void set(int kind, unsigned code, int value, int cc, int track, int rec)
                    0, value);
     if (rec)
         core_lock_record(track, code, value);
+    core_project_edited();                     /* (0.6) store.c */
 }
 
 /* the routines' record flag: the caller's, else MIDI CONFIG's */

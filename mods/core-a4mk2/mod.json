@@ -1,14 +1,14 @@
 {
- "id": "core", "version": "0.5",
+ "id": "core", "version": "0.6",
  "license": "GPL-2.0-or-later",
  "title": "core", "category": "Framework", "author": "irpina, Iced-Cream",
  "description": "The boot copier, the hook bus and mod storage for the Analog Four MKII: every other mod needs it. The Digitakt mk1's core.s, settings.s and render.s with the A4's addresses, as core-ar2 builds them for the Analog Rytm MKII, store.c: fields mods declare, placed by elekloader from the build's lockfile and kept in bytes stock never uses or always holds at 0; from 0.2, pages.s: the four routines every parameter page goes through, asked through core_pages and core_params (and from 0.3 core_page_fns, a page whose knobs follow the sound), and views behind the page keys through core_view_pages, and core-ar2's load.s: the audio interrupt's load. On its own it changes nothing the unit does. And core-ar2's finish.s: an OS upgrade's restart sends the panel link's and the UART's queued bytes before it masks interrupts, where stock can hang on SUCCESS! REBOOTING. From 0.5 the lock service's first part: lockable parameters with codes per track kind (lock.c) and their p-locks as lock rows in each pattern, kept in a ledger that follows stock's step records, with the playing trig's locks and Param Slide's deltas per voice (rows.c, rows.s); and its second part, destinations: mod parameters at the end of every route, Dest, macro and CONTROL IN list of their track kind, their codes kept in those bytes, their names on the knobs, lists and setup screens, and per voice the sources pointing at them, noted at each of stock's pushes (dests.c, dests.s). And its third part, the value read: core_param_values, the value stock would play for a lockable parameter, in stock's stages and order with its clamps, from the inputs of the block taken at ev_render_out, per voice, with the track read on the last-played voice (value.c). And its fourth part, MIDI: each mod parameter is NRPN MSB 0, LSB its code, on its track's channel, and a field declared \"cc\": true also gets a CC stock leaves unused there; both set it as its knob does, and a mod knob's turn sends it as stock's parameter out sends its own (midi.c, midi.s).",
  "device": "analog-four-mk2", "os": "1.56",
- "sources": ["../core/core.s", "../core/settings.s", "../core/render.s", "store.c", "store.s", "pages.s", "lock.c", "rows.c", "rows.s", "dests.c", "dests.s", "value.c", "midi.c", "midi.s", "../core-ar2/load.s", "../core-ar2/finish.s"],
+ "sources": ["../core/core.s", "../core/settings.s", "../core/render.s", "store.c", "store.s", "pages.s", "lock.c", "rows.c", "rows.s", "dests.c", "dests.s", "value.c", "midi.c", "midi.s", "../core-ar2/load.s", "../core-ar2/finish.s", "../core-ar2/payload.c"],
  "subscribe": [
   {"event": "ev_render_in", "fn": "core_load_in", "order": 0},
   {"event": "ev_render_out", "fn": "core_value_snapshot", "order": 1},
-  {"event": "ev_render_out", "fn": "core_load_out", "order": 100}
+  {"event": "ev_render_out", "fn": "core_load_out", "order": 100}, {"event": "ev_tick", "fn": "core_edit_tick", "order": 0}
  ],
  "defsym": {
   "FINISH_PANEL": "0x4133cfc0", "FINISH_UART": "0x4133cfd0", "FINISH_DRAIN": "0x40002766",
@@ -146,6 +146,6 @@
   {"addr": "0x4009ff56", "stock": "4fefffec48d7043c", "op": "jmp", "target": "core_nrpn_site"},
   {"addr": "0x400a0b62", "stock": "4e56ffd848d71cfc", "op": "jmp", "target": "core_cc_site"}
  ],
- "collections": {"ev_tick": 4, "ev_draw": 4, "ev_key": 4, "ev_enc": 4, "ev_settings": 4, "ev_render_in": 4, "ev_render_out": 4, "ev_project": 4, "core_store_ids": 4, "core_pages": 4, "core_params": 4, "core_view_pages": 4, "core_page_fns": 4, "core_lock_params": 4, "core_lock_codes": 8, "core_lock_ccs": 8},
+ "collections": {"ev_tick": 4, "ev_draw": 4, "ev_key": 4, "ev_enc": 4, "ev_settings": 4, "ev_render_in": 4, "ev_render_out": 4, "ev_project": 4, "ev_project_save": 4, "core_store_ids": 4, "core_pages": 4, "core_params": 4, "core_view_pages": 4, "core_page_fns": 4, "core_lock_params": 4, "core_lock_codes": 8, "core_lock_ccs": 8, "core_field_inits": 4, "core_payloads": 12},
  "resources": {"names": ["timer:DTIM0"]}
 }

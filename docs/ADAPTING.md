@@ -1632,6 +1632,9 @@ differs:
   survives a power cycle straight after SAVE PROJECT AS: core copies what
   the save wrote of its own bytes back into the stored project.
 - No velocity routes: the sound's room needs no extra sites.
+- Field defaults: from core-a4mk2 0.6 a field's `init` works as on the
+  Rytm (above), with no new sites: p-locks, destinations, MIDI and
+  `core_param_values` work on the value.
 - core-a4mk2 owns 28 storage sites (mods/core-a4mk2/README.md lists them), among
   them a kit init the Rytm's core does not need.
 - Checked in rytm-emu's A4 build and on a unit (store-check-a4mk2). The spare sound and
@@ -2210,6 +2213,15 @@ my_blob:
   overtakes its own input. The patcher refuses either and says by how much.
   A 1 MB payload that packs to about 80 % fits beside core and a check mod
   (sidecar-check-ar2 part 6).
+
+### Payloads (core-a4mk2 0.6, Analog Four MKII)
+
+The Rytm's payloads, above, with `analog-four-mk2/payload.h`. From
+core-a4mk2 0.6 the mods' area is 0x45650000-0x47C00000, 37.7 MB for code,
+tables, payloads and `.bss` (docs/DEVICES.md, the Analog Four MKII); a
+build with core-a4mk2 0.5 or older keeps the 128 KB at 0x47BE0000. As on
+the Rytm, the flash budget is the tighter limit for a payload, and the
+patcher says by how much a build is over.
 
 ### Screen calls (core-ar2 0.13, Analog Rytm MKII)
 

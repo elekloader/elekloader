@@ -64,6 +64,10 @@ evidence.
   ddr-canary-a4mk2 filled the area after the mods' data and both gaps with
   address ^ 0xC0DEF00D and read them back with no word changed, through a
   session of normal use (Overbridge included) and after a power cycle.
+  So from core-a4mk2 0.6 the linker lays the mods out from 0x45650000 to
+  0x47C00000 (core_ddr, 37.7 MB, payloads included): that gap from its
+  first 64 KB boundary, with the 128 KB area above it. The flash budget
+  (the container below 0x300000) is the tighter limit for a payload.
 - UI: the periodic UI routine (0x40098754) is the Rytm's (0x400A2AAA on
   1.73) instruction for instruction, with its object's fields moved (the
   idle counter +0x918, the Rytm's +0x748): about 20 Hz, a 128 x 64
@@ -95,8 +99,10 @@ DEVICE = Device(
     isa='coldfire',
     areas={
         'ddr': (0x47BE0000, 0x47C00000),          # static and rytm-emu, see above
+        'gap': (0x456472C0, 0x47BE0000),          # canary-checked on a unit, 21 Oct 2026, see above
     },
     ddr=(0x47BE0000, 0x47C00000),
+    core_ddr=(('0.6', (0x45650000, 0x47C00000)),),   # core-a4mk2 0.6: 37.7 MB, the gap and the area
     recovery=('hold FUNC while powering on for the STARTUP menu, press TRIG 4 (OS UPGRADE), '
               'then send the stock .syx over MIDI DIN (not USB)'),
     toolchain={

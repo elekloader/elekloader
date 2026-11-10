@@ -269,8 +269,9 @@ export const ANALOG_FOUR_MK2: Device = {
       '748fec15ddc61bc3ff66047facba74328934c5fb59f427ddaf34a4e2629a474c', 2500408),
   ],
   stage: 0x40200000, flashAt: 0x80000, flashLimit: 0x300000,
-  areas: { ddr: [0x47be0000, 0x47c00000] },
+  areas: { ddr: [0x47be0000, 0x47c00000], gap: [0x456472c0, 0x47be0000] },
   ddr: [0x47be0000, 0x47c00000],
+  coreDdr: [['0.6', [0x45650000, 0x47c00000]]],   // core-a4mk2 0.6: 37.7 MB, the canary-checked gap and the area
   recovery: 'hold FUNC while powering on for the STARTUP menu, press TRIG 4 (OS UPGRADE), '
     + 'then send the stock .syx over MIDI DIN (not USB)',
 }

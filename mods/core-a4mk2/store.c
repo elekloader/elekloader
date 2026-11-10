@@ -6,7 +6,8 @@
  * Mods declare fields in their mod.json ("storage"); elekloader places them
  * at build time from the build's lockfile (docs/ADAPTING.md, "Mod storage")
  * and gives each one an absolute symbol, its descriptor, which a mod passes to
- * core_store_get and core_store_set. Zero always means the mod's default.
+ * core_store_get and core_store_set. Zero bits always mean the mod's default:
+ * 0, or from 0.6 the field's "init" (field_init below).
  *
  * Each item keeps its fields in a live home inside stock's own objects, so
  * copy, paste, undo and pattern switch carry them with no hooks:
@@ -851,9 +852,26 @@ static void write_through(unsigned scope, unsigned char *item)
         }
 }
 
+/* 0.6: a field's init (core-ar2 0.10's). Its descriptor carries the field's
+ * slot in the table core_field_inits (1..63) in bits 16..21, 0 for a field
+ * without one; no scope keeps 2^16 bits (the largest, the project's, keeps
+ * 34,736), so the offset is bits 0..15. The field's bits keep value ^ init:
+ * cleared bits (a new project, an init, another layout's data) read the
+ * init, and every value goes through unchanged. Every core read and write
+ * of a field comes here (rows.c, midi.c, value.c's slow read; value.c's fast
+ * read XORs the same init), so p-locks, MIDI and the value read see the
+ * value; the saves, loads, SysEx and the write-through copy the bits. */
+extern const unsigned core_field_inits[];
+
+static unsigned field_init(unsigned field)
+{
+    unsigned k = field >> 16 & 63;
+    return k ? core_field_inits[k - 1] : 0;
+}
+
 unsigned core_store_get(unsigned field, void *item, int index)
 {
-    unsigned scope = field >> 28, w = field >> 22 & 63, o = field & 0x3fffff, v = 0, i, k, n;
+    unsigned scope = field >> 28, w = field >> 22 & 63, o = field & 0xffff, v = 0, i, k, n;
     volatile unsigned char *base = field_base(scope, item, index);
     unsigned short sr;
     if (scope != SC_PROJECT && !base)
@@ -870,16 +888,17 @@ unsigned core_store_get(unsigned field, void *item, int index)
         for (i = 0; i < w; i++, o++)
             v = v << 1 | (B(field_byte(scope, base, o >> 3)) >> (7 - (o & 7)) & 1);
     irq_restore(sr);
-    return v;
+    return v ^ field_init(field);
 }
 
 void core_store_set(unsigned field, void *item, int index, unsigned value)
 {
-    unsigned scope = field >> 28, w = field >> 22 & 63, o = field & 0x3fffff, i;
+    unsigned scope = field >> 28, w = field >> 22 & 63, o = field & 0xffff, i;
     volatile unsigned char *base = field_base(scope, item, index), *p;
     unsigned short sr;
     if (scope != SC_PROJECT && !base)
         return;
+    value ^= field_init(field);
     sr = irq_mask();
     for (i = 0; i < w; i++, o++) {
         unsigned bit = 0x80 >> (o & 7);
@@ -894,4 +913,33 @@ void core_store_set(unsigned field, void *item, int index, unsigned value)
     irq_restore(sr);
     if (scope == SC_SOUND || scope == SC_KIT)
         core_lock_cancel(field, item);         /* no slide of it now (rows.c, 0.5) */
+}
+
+/* 0.6: the modified mark (core-ar2 0.8's). After an edit of the live
+ * project, a project load asks first; stock marks the project modified
+ * (SET_MODIFIED(model, 1)) from the UI task on the project's change signal,
+ * and an edit of only mod fields sends none. core_project_edited asks for
+ * the mark from any task or the audio interrupt; core_edit_tick (ev_tick,
+ * the UI task) makes it, with the project model stock keeps at
+ * PROJECT_MODEL. Core calls it for its own edits (a mod page's knob, a
+ * lockable parameter's CC or NRPN); a mod calls it after its own keys or
+ * settings change a field. */
+#define PROJECT_MODEL (*(void *volatile *)TRACE_PROJECT_MODEL)
+#define SET_MODIFIED ((int (*)(void *, int))TRACE_SET_MODIFIED)
+
+static volatile unsigned char edited;
+
+void core_project_edited(void)
+{
+    edited = 1;
+}
+
+void core_edit_tick(void *ctrl)
+{
+    void *model = PROJECT_MODEL;
+    (void)ctrl;
+    if (!edited || !model)
+        return;
+    edited = 0;
+    SET_MODIFIED(model, 1);
 }

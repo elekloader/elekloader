@@ -10,8 +10,10 @@
  *     unsigned v = core_store_get(STORE(my_accent), live_pattern, track);
  *     core_store_set(STORE(my_accent), live_pattern, track, v + 1);
  *
- * Zero is always the default: a field reads 0 in a new project, in one saved
- * by another layout, and after its scope was reset. Both calls mask
+ * Zero is the default: a field reads 0 in a new project, in one saved by
+ * another layout, and after its scope was reset. From core-a4mk2 0.6 a field
+ * declared with "init": N reads N there instead (docs/ADAPTING.md, "Field
+ * defaults"); the bits keep value ^ N, and both calls take and give the value. Both calls mask
  * interrupts while they read or write the field: use them from any context,
  * the audio interrupt too.
  *
@@ -33,7 +35,8 @@
 
 #define STORE_SCOPE(f) ((f) >> 28)            /* 1 sound .. 6 project */
 #define STORE_BITS(f) ((f) >> 22 & 63)        /* 1..32 */
-#define STORE_OFFSET(f) ((f) & 0x3fffff)      /* the first bit, most significant first */
+#define STORE_OFFSET(f) ((f) & 0xffff)        /* the first bit, most significant first (bits
+                                                 16..21: the init's slot, from 0.6) */
 
 #define STORE_SOUND 1
 #define STORE_KIT 2
@@ -52,7 +55,35 @@
 #define CORE_PROJECT_LOADED 1
 #define STORE_DROPPED(scope) (1u << (scope))
 
+/* core-a4mk2 0.6: ev_project_save handlers: void f(unsigned pre, unsigned how),
+ * subscribed in mod.json ({"event": "ev_project_save", "fn": ...}), called
+ * around every whole save of the live project to a +Drive slot: pre 1 before
+ * anything is written, pre 0 after. CORE_SAVE_KIND(how) is CORE_SAVE_SAME (a
+ * save to the active slot: SAVE PROJECT), CORE_SAVE_OTHER (to another slot:
+ * SAVE PROJECT AS, or a new project's first save) or CORE_SAVE_NEW (LOAD of
+ * an empty slot, which writes the new project there after ev_project's
+ * CORE_PROJECT_NEW); CORE_SAVE_SLOT(how) is the slot, 0..127 (the screen's
+ * number less one; 255: none); CORE_SAVE_FAILED is set in the call after
+ * when the slot was not written. A field set with core_store_set in the call
+ * before is in the saved copy. Both calls come from the job stock starts for
+ * the save, not from a UI tick: keep them short, start no load or save, and
+ * leave slow work (MIDI, USB) to the next ev_tick. Don't call
+ * core_project_edited from them: the save clears the modified mark after the
+ * call before. (mods/core-a4mk2/README.md, "The project save (0.6)") */
+#define CORE_SAVE_SAME 1
+#define CORE_SAVE_OTHER 2
+#define CORE_SAVE_NEW 3
+#define CORE_SAVE_KIND(how) ((how) & 255)
+#define CORE_SAVE_SLOT(how) ((how) >> 8 & 255)
+#define CORE_SAVE_FAILED 0x10000u
+
 unsigned core_store_get(unsigned field, void *item, int index);
 void core_store_set(unsigned field, void *item, int index, unsigned value);
+
+/* core-a4mk2 0.6: after a mod's own keys, encoders or settings change a field
+ * of the live project, so that a project load asks first, as after a stock
+ * edit. Any context; the mark is made on the next UI tick. Core calls it
+ * itself for a mod page's knob and a lockable parameter's CC or NRPN. */
+void core_project_edited(void);
 
 #endif

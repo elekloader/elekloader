@@ -486,7 +486,10 @@ a project load and a power cycle.
   is unused as well. On a unit (21 Oct 2026), ddr-canary-a4mk2 filled the
   mods' area after the mods' data, 0x448B6D50-0x44C00000 and that gap with a
   pattern and read them back with no word changed, through a session of
-  normal use (Overbridge included) and after a power cycle.
+  normal use (Overbridge included) and after a power cycle. From
+  core-a4mk2 0.6 the mods run from `0x45650000` to `0x47C00000` (37.7 MB,
+  the profile's `core_ddr`): that gap from its first 64 KB boundary, with
+  the 128 KB area above it.
 - **The core** (mods/core-a4mk2) has the Rytm's events at the A4's sites, and
   mod storage in bytes of the A4's own structures (mods/core-a4mk2/README.md);
   from 0.2, core-ar2 0.4's parameter routines, and views added behind the

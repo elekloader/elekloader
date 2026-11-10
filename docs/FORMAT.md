@@ -255,7 +255,9 @@ each program on its own.
      0x43EC0000 (1.25 MB) with core-dn1 4.0, the Digitakt mk1's from
      0x47BC0000 (256 KB) with core 4.0, and both from 0x47BE0000 (128 KB)
      with an older core; the Analog Rytm MKII's from 0x47B10000 to
-     0x47FFF000 (5 MB) with core-ar2 0.11, from 0x47BE0000 (128 KB) before.
+     0x47FFF000 (5 MB) with core-ar2 0.11, from 0x47BE0000 (128 KB) before;
+     the Analog Four MKII's from 0x45650000 to 0x47C00000 (37.7 MB) with
+     core-a4mk2 0.6, from 0x47BE0000 (128 KB) before.
 3. **Builds the tables.** Each table's entries are sorted by (`order`, mod
    id), followed by one zero entry. A table defines two symbols: `NAME` (its
    address) and `NAME_n` (its count). Each `.fast` section is added to the
