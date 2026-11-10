@@ -433,6 +433,7 @@ class SdkAlphaTests(unittest.TestCase):
             self.assertEqual(built['hello'][1].implied_names(image), ['machine:122'])
             with open(built['hello'][0]) as fh:
                 doc = json.load(fh)
+            self.assertFalse(any(name.startswith(B.SDK_ALPHA_REGISTRATION) for name in doc['exports']))
             self.assertEqual([c['to'] for c in doc['contribute']], ['sdk_alpha_machines', 'core_machines'])
             self.assertEqual(doc['contribute'][1]['relocs'][0][2], 'sec:.run')
             at = doc['contribute'][1]['relocs'][0][3]                   # the descriptor the builder wrote
@@ -444,6 +445,10 @@ class SdkAlphaTests(unittest.TestCase):
             duplicate['id'], duplicate['exports'] = 'sdk-alpha-conflict', []   # keep the refusal to the slot
             with self.assertRaisesRegex(elemod.ModError, 'machine:%d' % EMPTY.id):
                 link.link([core, pages, built['empty'][1], link.Mod2(duplicate, 'conflict')], image)
+            other = SdkMachine('Other empty', register=False, source=EMPTY.source)
+            other.id = EMPTY.id + 1
+            other_mod = sdk_alpha_build(other.write(tmp + '/other'), stock, tmp)[1]
+            link.link([core, pages, built['empty'][1], other_mod], image)
 
     def test_the_ordinary_build_command_runs_the_sdk_step(self):
         stock = self.stocks()['digitakt-mk1']
