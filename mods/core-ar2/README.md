@@ -415,12 +415,12 @@ per slot, 19), which latches, for the voice v it is called with, the
 owner track t = `0x40291138[v]` (bytes), whether the trig state
 `0x8000e508 + 4t` is 1 (trig; 2 is release), and the velocity word
 `0x800067c4 + 2t`, then calls the mod's engine. The audio interrupt's trig
-intake runs before the per-voice engine calls (firmware reference 6.1),
+intake runs before the per-voice engine calls,
 so the latch holds this block's trig. `core_voice_trigged(v)` and
 `core_voice_velocity(v)` read the latch: plain reads, for the engine's own
 voice.
 
-Checked in the emulator only (analog-emu run headless on the PC, OS 1.74, 7 Nov 2026), with a
+Checked in the emulator only (analog-emu run headless, OS 1.74, 7 Nov 2026), with a
 check mod holding BD SLOT44 (slot 44 on the BD voice, BD CLASSIC's
 engine) and CB SLOT52 (slot 52 on the CY/CB voice) whose engines count
 `core_voice_trigged` and keep `core_voice_velocity`:
