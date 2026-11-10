@@ -18,13 +18,16 @@ volatile uint8_t fw_render_machine[8];
 volatile int32_t fw_voice_note[8];
 volatile int16_t fw_voice_vel[8];
 volatile int32_t fw_amp_env[3 * 8];
-static int32_t effective[8][15], blocks[8 * ELEK_VOICE_FRAMES];
+volatile int16_t fw_voice_params[53 * 8];
+volatile uint8_t core_track_machine[8];
+static int32_t blocks[8 * ELEK_VOICE_FRAMES];
 static uint8_t kit[0x20 + 8 * 0xa2];
 static uint32_t calls[8];
 static struct elek_voice last[8];
 static int32_t value[8], cc9[8], cc12[8], cc74[8];
 
-int32_t cm_src_value(int32_t track, int32_t knob) { return effective[track][knob]; }
+static int extras = 1;                      /* the track's machine has the extra values */
+const struct cm_ui32 *mp_src_for(int32_t machine) { (void)machine; return extras ? (void *)1 : 0; }
 int32_t mp_shown_value(void *view, uint32_t id, uint8_t *locked)
 { (void)view; (void)id; *locked = 0; return 0; }
 uint32_t mp_stock_layout(int32_t machine) { (void)machine; return 0; }
@@ -58,13 +61,29 @@ static const struct elek_machine legato_machine = {
 /* Ten knobs: ids 8 and 9 are the first two extra values. */
 #define K(n) { "K" #n, .max = 127 }
 static const struct elek_knob wide_knobs[] = { K(0), K(1), K(2), K(3), K(4), K(5), K(6), K(7), K(8), K(9) };
+/* The render's mapping, from each knob's kept quotient and remainder, is sdk_alpha_map's. */
+static const struct elek_knob edge_knobs[] = {
+    { "E0", .min = INT32_MIN, .max = INT32_MAX }, { "E1", .max = 0 }, { "E2", .min = -512, .max = 504 }, { "E3", .max = 1 },
+    K(4), K(5), K(6), K(7), { "E8", .min = -1000000, .max = 1000000 },
+};
+static int32_t edge_raw[9];
+static void edge_render(const struct elek_voice *v, elek_sample *out)
+{
+    for (int k = 0; k < 9; ++k)
+        assert(v->knob[k] == sdk_alpha_map(&edge_knobs[k], edge_raw[k]));
+    out[0] = 0;
+    ++calls[v->track];
+}
+static const struct elek_machine edge_machine = {
+    .id = 104, .name = "Edge", .short_name = "EDGE", ELEK_KNOBS(edge_knobs), .render = edge_render,
+};
 static const struct elek_machine wide_machine = {
     .id = 103, .name = "Wide", .short_name = "WIDE", ELEK_KNOBS(wide_knobs),
     .pages = { { "ONE", { &wide_knobs[0], &wide_knobs[1], &wide_knobs[2], &wide_knobs[3],
                           &wide_knobs[4], &wide_knobs[5], &wide_knobs[6], &wide_knobs[7] } },
                { "TWO", { &wide_knobs[8], &wide_knobs[9] } } },
 };
-const struct elek_machine *const sdk_alpha_machines[] = { &machine, &mono_machine, &legato_machine, &wide_machine, 0 };
+const struct elek_machine *const sdk_alpha_machines[] = { &machine, &mono_machine, &legato_machine, &wide_machine, &edge_machine, 0 };
 
 /* The stock note routines, as calls: "+60/90" a note on (with its velocity), "-60" an off. */
 static char played[64];
@@ -97,7 +116,7 @@ int main(void)
         fw_render_machine[t] = 100;
         fw_voice_note[t] = (60 + t) << 16;
         fw_voice_vel[t] = 100 << 8;
-        effective[t][0] = t ? SDK_ALPHA_RAW_MAX : 0;
+        fw_voice_params[53 * t] = t ? SDK_ALPHA_RAW_MAX : 0;
         fw_amp_env[3 * t + 1] = 1;          /* sounding */
     }
     fw_voice_start = 3;
@@ -220,6 +239,23 @@ int main(void)
     KEY(64, 0, 0, 1, "-60 ");                   /* the last key up: the stock's C off */
     sdk_alpha_render(blocks);
     assert(last[2].pitch == 60 << 16);          /* no bend once silent */
+
+    /* Every raw value of every knob, kept ones too (knob 3 changes every second block); knob 8 is the
+     * first extra value, 0 while the track's machine has none. */
+    fw_render_machine[3] = 104;
+    fw_amp_env[3 * 3 + 1] = 1;
+    for (int32_t raw = -2; raw <= INT16_MAX; ++raw) {
+        for (int k = 0; k < 9; ++k)
+            edge_raw[k] = k == 3 ? raw / 2 : raw;
+        for (int k = 0; k < 8; ++k)
+            fw_voice_params[53 * 3 + k] = edge_raw[k];
+        fw_voice_params[53 * 3 + 46 - 17] = raw;
+        extras = raw & 4;
+        if (!extras) edge_raw[8] = 0;
+        sdk_alpha_render(blocks);
+    }
+    assert(calls[3] == INT16_MAX + 3);
+    extras = 1;
 
     /* MIDI CCs: knob ids 8-14 take CC 24-30, only for the knobs the machine declares; A-H none. */
     const struct cm_ui32 *wide = sdk_alpha_ui(103), *one = sdk_alpha_ui(100);

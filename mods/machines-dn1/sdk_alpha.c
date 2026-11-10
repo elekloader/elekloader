@@ -8,10 +8,12 @@
 #include "digitone-mk1/machines.h"
 
 #define SDK_KNOBS SDK_ALPHA_KNOBS
+#define DNM_SDK_Q31 0x80000000u         /* machines.c: its envelope scales the block from Q31 full scale */
 const char sdk_alpha_abi_v1[] = "sdk alpha 1";
 static struct dnm_machine machines[SDK_ALPHA_MACHINES];   /* sdk_alpha_entries' machines, in their order */
 static struct dnm_knob knobs[SDK_ALPHA_MACHINES][DNM_KNOBS_ALL];
 static int16_t defaults[SDK_ALPHA_MACHINES][DNM_KNOBS_ALL];
+static int32_t sdk_slot[SDK_KNOBS];        /* logical knob i's slot among a voice's parameter words */
 static int32_t count = -1;
 
 int32_t dnm_sdk_raw(int32_t track, int32_t encoder);  /* machines.c: the native sound value */
@@ -84,12 +86,14 @@ static void init(void)
     if (count >= 0)
         return;
     sdk_alpha_init();
+    for (uint32_t i = 0; i < SDK_KNOBS; ++i)
+        sdk_slot[i] = ((const int32_t *)fw_params)[15 * dnm_sdk_param(sdk_pos[i]) + 1];
     for (int32_t n = 0; n < sdk_alpha_count; ++n) {
         const struct sdk_alpha_entry *e = &sdk_alpha_entries[n];
         machines[n].id = e->machine->id;
         machines[n].name = e->machine->name;
         machines[n].knobs = knobs[n];
-        machines[n].flags = DNM_PAGES2;
+        machines[n].flags = DNM_PAGES2 | DNM_SDK_Q31;
         machines[n].render = e->machine->render ? render : 0;
         for (int k = 0; k < DNM_KNOBS_ALL; ++k)
             defaults[n][k] = -1;
@@ -356,12 +360,9 @@ static void render(int32_t voice, int32_t *block, const struct dnm_voice *v)
     if (!e || track >= 4) return;
     sdk_alpha_select(voice, id);
     int32_t raw[SDK_KNOBS];
-    for (uint32_t k = 0; k < e->count; ++k) {
-        int32_t slot = ((const int32_t *)fw_params)[15 * dnm_sdk_param(sdk_pos[k]) + 1];
-        raw[k] = render_params ? render_params[79 * voice + slot] : dnm_knob(voice, sdk_pos[k]);
-    }
+    const int16_t *words = render_params ? render_params + 79 * voice : 0;
+    for (uint32_t k = 0; k < e->count; ++k)
+        raw[k] = words ? words[sdk_slot[k]] : dnm_knob(voice, sdk_pos[k]);
     struct elek_voice sv = { .track = track, .pitch = sdk_alpha_pitch(track, id, v->pitch), .velocity = v->velocity };
-    sdk_alpha_voice(e, voice, &sv, raw, v->fresh, v->idle, block);
-    for (int k = 0; k < ELEK_VOICE_FRAMES; ++k)
-        block[k] >>= 4;              /* SDK Q31 full scale to DNM_PEAK, before native AMP/filter. */
+    sdk_alpha_voice(e, voice, &sv, raw, v->fresh, v->idle, block);   /* Q31 full scale: DNM_SDK_Q31 */
 }
