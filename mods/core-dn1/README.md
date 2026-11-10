@@ -383,12 +383,15 @@ ELEKLOADER_CROSS=m68k-elf- python tests/test_digitone_lfo_names.py
 ```
 
 A release names them `core-dn1-5.3.elemod` and `core-dn1-5.3-os1.44.elemod`.
-5.3, 5.2.1, 5.2, 5.1, 5.0.1, 5.0, 4.2 and 4.1.1 are not released yet; 4.1's are on the [core-dn1-v4.1](https://github.com/irpina/elekloader/releases/tag/core-dn1-v4.1) pre-release,
-4.0's on the [core-dn1-v4.0](https://github.com/irpina/elekloader/releases/tag/core-dn1-v4.0) pre-release
+5.3 is on main, not released yet; 5.2.1's are in the latest release, and
+5.1's on the [core-dn1-v5.1](https://github.com/elekloader/elekloader/releases/tag/core-dn1-v5.1) pre-release
+(5.2, 5.0.1, 5.0 and 4.2 were not released);
+4.1.1's are in release v0.9.0, 4.1's on the [core-dn1-v4.1](https://github.com/elekloader/elekloader/releases/tag/core-dn1-v4.1) pre-release,
+4.0's on the [core-dn1-v4.0](https://github.com/elekloader/elekloader/releases/tag/core-dn1-v4.0) pre-release
 (3.3 was not released);
-3.2's are on the [core-dn1-v3.2](https://github.com/irpina/elekloader/releases/tag/core-dn1-v3.2) pre-release
+3.2's are on the [core-dn1-v3.2](https://github.com/elekloader/elekloader/releases/tag/core-dn1-v3.2) pre-release
 (3.0 and 3.1 were not released), and
-2.3's on the [core-dn1-v2.3](https://github.com/irpina/elekloader/releases/tag/core-dn1-v2.3) pre-release.
+2.3's on the [core-dn1-v2.3](https://github.com/elekloader/elekloader/releases/tag/core-dn1-v2.3) pre-release.
 
 Checked by cold-booting it in digikit's emulator against stock (docs/DEVICES.md):
 - every stage passes, and every screen is identical;

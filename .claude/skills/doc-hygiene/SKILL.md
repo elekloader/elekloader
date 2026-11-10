@@ -193,7 +193,7 @@ options.
    correct what is wrong.
 3. Before you cut a fact, find where else it survives. Most versions were
    never released, so the release notes are not enough on their own. Look
-   in the merged PR (`gh pr list -R irpina/elekloader --state merged
+   in the merged PR (`gh pr list -R elekloader/elekloader --state merged
    --search "<words>"`), in `git log -S"<phrase>"`, in a comment by the
    code, or in another doc. A published release's notes are the
    maintainer's, so ask before you edit one; otherwise put the text in your

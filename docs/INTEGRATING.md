@@ -28,7 +28,7 @@ What stays yours: your pages, their design, your accounts and your community. Th
 
 ### 1. Take the kit and a catalog
 
-- **The kit:** `elekloader-kit-<version>.zip` from an [elekloader release](https://github.com/irpina/elekloader/releases). Check it against the sha256 in the release notes. `kit.json` inside names the commit it was built from, the protocol, and every file's sha256.
+- **The kit:** `elekloader-kit-<version>.zip` from an [elekloader release](https://github.com/elekloader/elekloader/releases). Check it against the sha256 in the release notes. `kit.json` inside names the commit it was built from, the protocol, and every file's sha256.
 - **The catalog:** `elekloader-catalog.json` from the same release. Copy its files to your site:
   ```bash
   node tools/kit.ts sync elekloader-catalog.json <catalog dir> --device digitakt-mk1 --device digitone-mk1
