@@ -3,10 +3,10 @@
 MCF5441x-family CPU, the Digitakt mk1's); the main OS runs from DDR at
 0x40000400. Measured on OS 1.56, by comparison with the Rytm 1.74
 (elekloader's analog-rytm-mk2 profile and mods/core-ar2 0.3, the core
-mods/core-a4 starts from) in Ghidra and on the stock images, with rytm-emu's
+mods/core-a4mk2 starts from) in Ghidra and on the stock images, with rytm-emu's
 A4 build where noted. Proof-of-concept profile: on a unit (20 Oct 2026),
-a build of core-a4 with hooks-check-a4 booted and ran every event, and
-(21 Oct 2026) one with store-check-a4 kept its mod storage through saves,
+a build of core-a4mk2 with hooks-check-a4mk2 booted and ran every event, and
+(21 Oct 2026) one with store-check-a4mk2 kept its mod storage through saves,
 loads and power cycles; the facts below are otherwise static and emulator
 evidence.
 
@@ -61,7 +61,7 @@ evidence.
   a power-off save, SysEx sent and received (a whole-project dump of
   2.3 MB included) and a five-minute mixed session;
   the boot stack used only 0x47FFFFD0-0x47FFFFFF. On a unit (21 Oct 2026)
-  ddr-canary-a4 filled the area after the mods' data and both gaps with
+  ddr-canary-a4mk2 filled the area after the mods' data and both gaps with
   address ^ 0xC0DEF00D and read them back with no word changed, through a
   session of normal use (Overbridge included) and after a power cycle.
 - UI: the periodic UI routine (0x40098754) is the Rytm's (0x400A2AAA on

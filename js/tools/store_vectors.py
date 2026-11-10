@@ -59,7 +59,7 @@ CORE_RUNS = {
     'core 0.3: sound past 24 bits': ('0.3', [[F('a', 's', 'sound', 24)],
                                              [F('a', 's', 'sound', 24), F('b', 's2', 'sound', 32)]]),
 }
-# runs on another device (each scope's room is that device's): the Analog Four MKII (core-a4)
+# runs on another device (each scope's room is that device's): the Analog Four MKII (core-a4mk2)
 DEV_RUNS = {
     'a4: every scope': ('analog-four-mk2', [EVERY + [F('c', 'c_kit', 'kit', 32), F('c', 'c_glo', 'global', 32)]]),
     'a4: room': ('analog-four-mk2', [[F('a', 's', 'sound', 32), F('a', 'k%d' % i, 'kit', 32)] for i in range(1)]
@@ -213,7 +213,7 @@ HANDLE_RUNS = {
                 [['a', 'a_p'], ['b', 'b_t']]],
     'none': [[['a', 'a_k', 'kit', 16]], []],
 }
-# runs with codes per track kind (core-a4 0.5, the Analog Four MKII): each step is (decls, lockable, CV fields)
+# runs with codes per track kind (core-a4mk2 0.5, the Analog Four MKII): each step is (decls, lockable, CV fields)
 A4 = 'analog-four-mk2'
 AK = [F('a', 's1', 'sound', 7), F('a', 's2', 'sound', 8), F('a', 'k1', 'kit', 7), F('b', 'k2', 'kit', 4),
       F('b', 'c1', 'kit', 6)]
@@ -229,7 +229,7 @@ KIND_RUNS = {
         ([F('m', 'f%02d' % i, 'kit', 1) for i in range(17)], [['m', 'f%02d' % i] for i in range(17)], []),
         ([F('m', 'f%02d' % i, 'kit', 1) for i in range(17)] + [F('m', 's', 'sound', 1)],
          [['m', 'f%02d' % i] for i in range(1, 17)] + [['m', 's']], [['m', 'f16']])],
-    # core-a4 0.5: a fourth list, the fields with a CC: the synth fields take the CCs the FX and CV tables map, a kit
+    # core-a4mk2 0.5: a fourth list, the fields with a CC: the synth fields take the CCs the FX and CV tables map, a kit
     # field (FX or CV) only those every kind leaves free
     'kinds: CCs, synth first, kits past the FX and CV tables': [
         (AK, AL, [['b', 'c1']], [['a', 's1'], ['a', 'k1'], ['b', 'c1']]),

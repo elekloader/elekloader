@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later
- * core-a4 0.2: the audio interrupt's load (mods/core-ar2/load.s, which core-a4 builds).
+ * core-a4mk2 0.2: the audio interrupt's load (mods/core-ar2/load.s, which core-a4mk2 builds).
  *
  * The last audio block's time, from core's ev_render_in (order 0) to its
  * ev_render_out (order 100), as a share of the time between two blocks, in

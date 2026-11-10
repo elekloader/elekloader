@@ -1,0 +1,33 @@
+{
+ "id": "store-check",
+ "version": "1.0",
+ "title": "Store check",
+ "category": "Examples",
+ "license": "GPL-2.0-or-later",
+ "author": "Iced-Cream",
+ "description": "The smallest user of core-a4mk2's mod storage: it declares a field in every scope, and STORE CHECK in SETTINGS writes a marker into each of them, in every pattern track, pattern, sound, kit and global slot and in the project. Columns on the screen show how many markers no longer read back.",
+ "device": "analog-four-mk2",
+ "os": "1.56",
+ "sources": ["check.c", "label.s"],
+ "cflags": ["-DFILLRECT_AT=0x40059f1a"],
+ "defsym": {"STRING_CTOR": "0x4018471e"},
+ "storage": [
+  {"sym": "sc_track", "scope": "track", "bits": 16},
+  {"sym": "sc_pattern", "scope": "pattern", "bits": 32},
+  {"sym": "sc_sound", "scope": "sound", "bits": 32},
+  {"sym": "sc_kit_a", "scope": "kit", "bits": 32},
+  {"sym": "sc_kit_b", "scope": "kit", "bits": 32},
+  {"sym": "sc_global_a", "scope": "global", "bits": 32},
+  {"sym": "sc_global_b", "scope": "global", "bits": 8},
+  {"sym": "sc_project_a", "scope": "project", "bits": 32},
+  {"sym": "sc_project_b", "scope": "project", "bits": 7}
+ ],
+ "subscribe": [
+  {"event": "ev_tick", "fn": "sc_tick", "order": 60},
+  {"event": "ev_draw", "fn": "sc_draw", "order": 60},
+  {"event": "ev_settings", "fn": "sc_settings", "order": 60},
+  {"event": "ev_project", "fn": "sc_project", "order": 60}
+ ],
+ "resources": {"names": ["settings:STORE CHECK"]},
+ "requires": ["core"]
+}
