@@ -95,6 +95,28 @@ HIGH = machine('high', 'ELEK_MONO', 'ELEK_PRIO_HIGH')
 LEGATO = machine('legato', 'ELEK_MONO_LEGATO')
 POLY = machine('poly', 'ELEK_POLY')
 
+# A mono machine whose state fills ELEK_VOICE_STATE_MAX: each render counts in its first word and its last,
+# and counts the renders that found them apart. Only the Digitone mk1 moves a voice's state (no SHARC render).
+WHOLE = sdk_machine('whole', """
+    #include "elekloader/sdk_alpha_machine.h"
+    static const struct elek_knob knobs[] = { { "NONE", .max = 1 } };
+    struct state { uint32_t first, middle[ELEK_VOICE_STATE_MAX / 4 - 2], last; };
+    volatile int32_t whole_renders, whole_torn;
+    static void render(const struct elek_voice *v, elek_sample *out)
+    {
+        struct state *s = ELEK_STATE(struct state, v);
+        whole_torn += ++s->first != ++s->last;
+        whole_renders++;
+        for (int i = 0; i < ELEK_VOICE_FRAMES; ++i)
+            out[i] = 0;
+    }
+    static const struct elek_machine whole_machine = {
+        .id = @ID@, .name = "whole", .short_name = "WHOL", ELEK_KNOBS(knobs),
+        .pages = { { "WHOL", { &knobs[0] } } }, .render = render, .play = ELEK_MONO,
+    };
+    ELEK_REGISTER_MACHINE(whole_machine);
+""")
+
 
 @sdk_tests
 class Mono:
@@ -231,6 +253,13 @@ class OneVoice:
 
     def test_a_poly_machine_sounds_on_a_voice_a_key(self):
         self.assertEqual(self.voices_after(POLY, (0, 4)), 2)
+
+    def test_the_whole_state_moves_with_the_voice(self):
+        if self.device.key != 'digitone-mk1':
+            self.skipTest('only the Digitone mk1 moves a mono voice\'s state')
+        self.assertEqual(self.voices_after(WHOLE, (0, 4, 7)), 1)
+        self.assertGreater(self.read('whole_renders'), 0)
+        self.assertEqual(self.read('whole_torn'), 0)
 
 
 

@@ -273,8 +273,8 @@ void sdk_alpha_blit(void *bmp, int32_t x, int32_t y, const struct elek_glyph *gl
 #ifdef SDK_ALPHA_VOICES
 static struct {
     int32_t id;
-    uint8_t start;                      /* the device's start flag lasts one block; kept until render */
-    uint8_t rendered;                   /* rendered since its state was cleared: idle means something */
+    uint16_t start;                     /* the device's start flag lasts one block; kept until render */
+    uint16_t rendered;                  /* rendered since its state was cleared: idle means something */
     uint32_t cc_seen;                   /* cc_count at its last render: the CCs after it are new */
     int32_t raw[SDK_ALPHA_KNOBS];       /* each knob's clamped raw value + 1 that knob[] was mapped from; 0: none */
     int32_t knob[SDK_ALPHA_KNOBS];      /* v->knob: a knob is mapped again only when its raw value changed */
@@ -370,6 +370,8 @@ void sdk_alpha_voice(const struct sdk_alpha_entry *e, uint32_t slot, struct elek
     voices[slot].cc_seen = now;
 }
 
+/* Whole words, or the swap leaves the last bytes of state behind (the ColdFire aligns to 2 bytes). */
+_Static_assert(sizeof voices[0] % 4 == 0, "sdk_alpha_swap swaps whole words");
 void sdk_alpha_swap(uint32_t a, uint32_t b)
 {
     uint32_t *x = (uint32_t *)&voices[a], *y = (uint32_t *)&voices[b];
