@@ -11,9 +11,10 @@ export type Prepared =
   | { ok: false; error: string; device?: Device; check?: Check }
 
 /** The owner's stock file and a selection of catalog mod ids, loaded and checked: the stock file must be the device
- * and OS asked for, each mod comes from the catalog with what it requires, and the core is the plan's, made again
- * once the mods are loaded with what each core takes in it (its RAM, and the places it patches), as the engine's tick
- * takes it (model.ts withCore). */
+ * and OS asked for, each mod comes from the catalog with what it requires (of a required mod the catalog lists in
+ * several versions, the newest the selection links with: model.ts withRequirements), and the core is the plan's, made
+ * again once the mods are loaded with what each core takes in it (its RAM, and the places it patches), as the engine's
+ * tick takes it (model.ts withCore). */
 export async function prepare(builder: Builder, input: { catalog: Catalog; device: string; os: string; stock: Blob & { name: string }; ids: readonly string[] }): Promise<Prepared> {
   const plan = planBuild(input.catalog, input.device, input.os, input.ids)
   if (!plan.core) return { ok: false, error: `The catalog has no core for ${input.device} OS ${input.os}.` }
@@ -23,6 +24,16 @@ export async function prepare(builder: Builder, input: { catalog: Catalog; devic
   if (!stock.ok) return { ok: false, error: stock.error }
   if (stock.dev.key !== input.device || stock.os !== input.os)
     return { ok: false, error: `This OS file is ${stock.device} ${stock.os}, not the ${input.device} OS ${input.os} chosen.`, device: stock.dev }
+  // the catalog's other versions of a mod the selection requires are added too (not ticked), so the tick takes the
+  // newest that links with the selection: a mod made for an older version of what it requires builds with that one
+  // (model.ts withRequirements)
+  const required = new Set(plan.mods.flatMap(m => m.requires))
+  for (const mod of plan.mods.filter(m => required.has(m.id))) {
+    for (const other of input.catalog.mods.filter(x => x.id === mod.id && x.device === mod.device && x.os === mod.os && x.file !== mod.file)) {
+      const added = await builder.addCatalogMod(other.file)
+      if (!added.ok) return { ok: false, error: added.error, device: stock.dev }
+    }
+  }
   let enabled: string[] = []
   for (const mod of plan.mods) {
     const added = await builder.addCatalogMod(mod.file)
