@@ -121,6 +121,8 @@ export async function build(stock: File, modFiles: File[], version: string | nul
       man.store = linked.store
       for (const n of linked.storeNotes) log('storage: ' + n)
     }
+    if (linked.knobs.size) man.knobs = Object.fromEntries(linked.knobs)
+    for (const n of linked.knobNotes) log('knobs: ' + n)
   }
   if (mods.length === 1 && !v2.length) {
     const b = get(mods[0].doc, 'build')

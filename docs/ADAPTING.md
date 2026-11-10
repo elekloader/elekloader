@@ -102,7 +102,9 @@ what you see when it is broken (section 5 has the fixes).
     inside ... copied block"*.
 11. **Say what you need.** `requires` names the mods yours depends on (always
     `core` for format 2); `conflicts` names the ones it cannot live with.
-    *"X requires Y"*.
+    *"X requires Y"*. `resources.core` names the core you built for: the
+    file keeps building as newer cores come
+    ([CORES.md](CORES.md), "A mod and newer cores").
 12. **One file, one release.** A mod targets one stock release by hash.
     Porting to another OS version means finding every address again.
 
@@ -1952,6 +1954,68 @@ The linker refuses a `core_params` or `core_param_locks` entry whose ids
 take 469..554, a `core_param_locks` entry below 555, and entries of two
 mods that share an id from 555.
 
+**Knob ids by count (core-ar2 0.13).** Rather than pick ids from 555 up,
+declare how many the mod needs in mod.json, `"knobs": 4`, and use
+`__knobs + k` for knob k. The linker gives each mod its own run past every
+other mod's ids and keeps it from build to build in the lockfile
+(docs/FORMAT.md, "Knob ids"):
+
+```c
+#include "analog-rytm-mk2/pages.h"
+CORE_KNOBS;                         /* extern char __knobs[] */
+const struct core_page my_page = {14, "MY PAGE", {CORE_KNOB(0), CORE_KNOB(1), CORE_KNOB(2), CORE_KNOB(3)}};
+const struct core_param_lock my_locks = {CORE_KNOB(0), CORE_KNOB(3), my_get, my_turn,
+                                         my_set, my_clear, my_label, my_name};
+```
+
+`CORE_KNOB(k)` is a constant in a const table (an `abs32`); a 16-bit field
+in assembly, `.short __knobs + 2`, is an `abs16`. The addend must be below
+the mod's `"knobs"`.
+
+Keep your values by `id - CORE_KNOB(0)`, never by the id itself: a build
+with other mods may give the mod other ids.
+
+### Knob looks (core-ar2 0.13, Analog Rytm MKII)
+
+A knob id of the mod's own (555 up) has no stock records: without more,
+stock draws it as record 0's dial with a range of 0..0, so its pointer
+never moves, whatever the value. To draw it as any stock knob draws (a
+switch, a select box, a bipolar dial, a dial with its own steps), give the
+ids a look in `core_knob_looks`, with `analog-rytm-mk2/pages.h`:
+
+```json
+{"to": "core_knob_looks", "order": 50, "data": "00000000",
+ "relocs": [[0, "abs32", "sym:my_looks", 0]]}
+```
+
+```c
+CORE_KNOBS;
+/* {first, last, look, ui, min, max} */
+const struct core_knob_look my_looks = {CORE_KNOB(0), CORE_KNOB(0), 457, 0, 0, 0};  /* CB TEST's switch */
+```
+
+- `look`: a stock id (1..468). The knob takes its UI record (the graphic,
+  the parts its flags draw, the turn's steps, its pop-ups) and its range.
+  Pick an id whose knob looks as yours should; any id with the same record
+  looks the same. `examples/look-check-ar2/looks.h` lists one sample id of
+  each of 1.74's 87 looks, and its `looks_table.py` prints their stock names
+  and the ids that share each from your own OS file.
+- `min`, `max`: when min < max, the knob's range (8.8) in place of look's:
+  the pop-ups and the header take it, and core moves the value the graphic
+  draws from min..max onto look's range (0..127 where look's is 0..0), so a
+  dial is at its start at min and at its end at max.
+- `ui(id)`: when not 0, an 84-byte UI record of your own for the id, or 0
+  for look's. Build it once from a stock one,
+  `memcpy(mine, core_knob_stock_ui(94), 84)`, and change fields (flags +0,
+  steps +4..+0x10, delegates +0x14, +0x24 the graphic, +0x34, +0x44): stock
+  builds its records at boot, so copy at the first call, not in `ev_boot`.
+  Its pointer is read from %a0 (in assembly, return it in %a0 and %d0).
+
+The label and name stay your `core_param_locks` entry's, the value and its
+text your `core_params` entry's; nothing else of the stock parameter (its
+sound slot, its lists, MIDI) comes with its look. The linker refuses an
+entry below 555 and two mods' entries that share an id.
+
 ### Step tags (core-ar2 0.11, Analog Rytm MKII)
 
 A mod that keeps a record of its own for some steps (for the Sidecar mods,
@@ -2146,6 +2210,43 @@ my_blob:
   overtakes its own input. The patcher refuses either and says by how much.
   A 1 MB payload that packs to about 80 % fits beside core and a check mod
   (sidecar-check-ar2 part 6).
+
+### Screen calls (core-ar2 0.13, Analog Rytm MKII)
+
+Text in stock's own fonts, a key handed back to stock, whether a stock
+overlay is up, the TRK LEVEL readout and stock's progress box
+(`analog-rytm-mk2/screen.h`; ask for `"core": "0.13"` in `resources`).
+All are for the UI task: `ev_tick`, `ev_draw`, `ev_key`, `ev_enc` and what
+they call. `examples/screen-check-ar2` uses each of them.
+
+- **Text.** `core_text_draw(bmp, font, x, y, align, str)` draws `str` in
+  one of stock's 17 fonts (16 is the main screen's) with stock's own
+  routine, into `ev_draw`'s frame or a bitmap you make over your own
+  buffers with `core_bitmap_init` (`CORE_BITMAP_SIZE` bytes; 1 KB of bits
+  for 128 x 64). `y` counts from the bottom: for a glass top row `t`, pass
+  `64 - core_font_height(font) - t`. `align` is `CORE_ALIGN_LEFT`,
+  `_CENTRE` or `_RIGHT`, with `CORE_TEXT_INVERT` for light text on a set
+  bar. A `%` in `str` is drawn as a `%`. `core_text_width` measures.
+- **Keys back to stock.** `core_stock_key(ev)` hands a key event to stock
+  alone, skipping the other mods' handlers. To act on a key and let stock
+  have it later, return 1 from `ev_key`, keep a copy of the event
+  (`CORE_KEY_EVENT_SIZE` bytes) and hand the copy over from `ev_tick`.
+- **Overlays.** `core_stock_overlay()` answers `CORE_OVERLAY_VIEW` while a
+  stock menu or overlay view is stacked over the main screen (TEMPO, SCALE,
+  the FUNC + key menus, a browser, TRK held), `CORE_OVERLAY_WINDOW` while
+  a stock window is up (a popup, a confirm box, a progress box) and
+  `CORE_OVERLAY_SCREEN` while the main screen isn't up at all (GLOBAL).
+  The pad modes' views don't count. A mod that draws over the screen steps
+  aside while it is not 0.
+- **The TRK LEVEL readout.** After a LEVEL turn that reached stock,
+  `core_level_readout()` counts down 47 ticks (2.35 s, inside stock's own
+  readout). Save the header's field with `core_level_field_save` before you
+  draw over it and put it back with `core_level_field_put`, and stock's
+  `TRK LEVEL <v>` shows through your page.
+- **The progress box.** `h = core_progress_open("TITLE")` shows stock's
+  progress box (up to four at once), `core_progress_set(h, done, total)`
+  fills its bar and `core_progress_close(h)` takes it away. The box takes
+  no keys: catch NO in your `ev_key` and close it.
 
 ### Mod scene and performance locks (core-ar2 0.8, Analog Rytm MKII)
 
@@ -2519,9 +2620,18 @@ sounds store the knobs and MIDI reaches them as any machine's. A knob
 whose name is 0 keeps its record as stock has it. Slots 35..42 have all
 eight records; 34 and 43 have five, and a knob with no record is ignored.
 Each entry's slot is the resource `machine:<n>`, which elekloader names
-for it, so a second mod with the same slot is refused at link. Slots
-44..52 (the TEST machines) are not offered, since mods already use their
-records as spare parameters.
+for it, so a second mod with the same slot is refused at link.
+
+The TEST machines' slots 44..52 are offered too (core-ar2 0.13: ask
+for `"core": "0.13"`). Their records have no MIDI of their own, so at
+boot core gives each record a knob uses the hidden machines' CC 16 + k
+and NRPN 1:k (k = the sound index less 9). They have fewer records: BD,
+RS and CY TEST (44, 46, 51) all eight; SD TEST (45) 9..12, 15 and 16;
+BT TEST (47) 9..13; LT and MT TEST (48, 49) 9..12; HH TEST (50) 9..13 and
+16; CB TEST (52) 10..12 and 16, with no LEV. Mods that kept spare
+parameters in those records (fx-sends, duck, voice-dac) move off them
+for this core; one that still uses a slot's records declares `"machine:<n>"` in
+its resources, and the linker refuses it next to a machine in that slot.
 
 The engine is called once per 32-frame block for each voice running the
 machine, from the audio interrupt, as stock's are: `frame` is the analog
@@ -2530,6 +2640,14 @@ sound's index 9 + k). It may call a stock engine (`CORE_ENGINE_*`) with a
 block it fills itself, which is how the AE TX machines are built. A value's
 text, or how a knob turns, can be changed through `core_params` (Parameter
 pages, above).
+
+The engine table holds core's trampoline for the slot,
+which latches the voice's trig and velocity and then calls the engine.
+In the engine, `core_voice_trigged(voice)` is 1 when the voice's track
+trigged this block (sequencer, pad, chromatic, MIDI in, a retrig of a
+sounding voice alike) and `core_voice_velocity(voice)` is the track's
+velocity, `velocity << 8` (a MIDI note at 64 gives `0x4000`), before
+accent.
 
 A kit or sound that uses the machine, loaded on a build without the mod,
 gets DISABLE on that track, as stock does for any machine its voice may
@@ -4154,7 +4272,10 @@ Some differences from an octabam build, by design:
 | `adds to table T, which no given mod declares` | the table's owner is missing, or the event name is wrong | add core (or the owner); check the event name |
 | `T holds at most N entries on <device> <OS>; A and B add M` | the mods together add more to T than the OS uses (the device profile's `table_limits`; for `sdk_alpha_machines`, the SDK machines it lists) | build with fewer of those mods, or fewer machines in them |
 | `both export S` | two mods define the same global | prefix your globals with your mod id; make internals `static` |
-| `relocation type N` | a reference the linker cannot relocate (e.g. 16-bit absolute) | use 32-bit addressing for your own symbols; build with the SDK's flags |
+| `relocation type N` | a reference the linker cannot relocate (e.g. 8-bit) | use 32-bit addressing for your own symbols; build with the SDK's flags |
+| `a 16-bit value out of range` | an `abs16` names an address or a number past 65535 | use 32 bits; `abs16` is for ids such as `__knobs + k` |
+| `is a ... reference to __knobs+N; one takes abs32 or abs16 with an addend below its "knobs"` | the mod uses a knob past the count it declares, or a PC-relative reference to it | raise `"knobs"` in mod.json, or fix the index |
+| `asks for knob ids ("knobs"), which the <device> does not give mods` | only a device with mod knob ids (the Analog Rytm MKII) has them | drop `"knobs"` |
 | `section X is not one elekloader places` | code or data in a section the linker does not know | C: default sections; asm: `.section .run, "ax"`, `.fast` or `.bss` |
 | `the mods need RAM to ...` / `.fast code needs SRAM to ...` | over budget | shrink tables and buffers; keep `.fast` for the hottest code only |
 | `has .fast code, which needs ...` | `.fast` is copied in by FAST AUDIO | require `fast-audio`, or use `.run` |

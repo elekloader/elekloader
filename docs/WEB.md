@@ -151,6 +151,11 @@ versions, the summary from the catalog, and its patch sites. The cover and
 and the files with their sha256.
 
 - **+ Add** puts the mod in your mods and ticks it with what it requires.
+  Of a required mod the shop lists in several versions (machine pages), every
+  version comes, and the build takes the newest that links with its mods
+  ([CORES.md](CORES.md), "How a build picks one").
+  Before you have given the stock file, it goes in your mods, and the page
+  ticks it when the stock file it is for comes; so with a file of your own.
 - **✓ In build** marks a mod in your build; a click takes it out of the
   build, and it stays in your mods.
 - **Remove** takes it out of your mods.
@@ -199,16 +204,16 @@ stock file.
   (docs/CORES.md, "How a build picks one"): the newest of the device and OS,
   or an older one of the site's while a ticked mod cannot link with the
   newest (Tone+FX 4.0c on the Digitakt mk1 patches a place core 4.1
-  patches, so it builds with core 4.0). The page says so as the core
-  changes, and the core's row names the mod. If a mod needs a newer
+  patches, so it builds with core 4.0). If a mod needs a newer
   core than one you ticked yourself (`needs_core`, or the file's own
-  `resources.core`), the newest is ticked in its place, and the page says
-  so. So is the newest when the ticked core's RAM does not hold the mods
+  `resources.core`), the newest is ticked in its place. So is the newest
+  when the ticked core's RAM does not hold the mods
   (core-dn1 4.0's 1.25 MB on the Digitone, core 4.0's 256 KB on the
-  Digitakt mk1, in place of 128 KB). A card is greyed out against the core
-  only when no core of the site's takes the build with it: a mod in the
-  build needs a newer core than the card's mod links with, or the other
-  way round, and the card says which.
+  Digitakt mk1, in place of 128 KB). The page changes the core without a
+  word: it speaks of a core only when one stops a build. A card is greyed
+  out against the core when no core of the site's takes the build with it
+  (a mod in the build needs a newer core than the card's mod links with, or
+  the other way round), and the card says which; the check says the rest.
 
 To add a mod to the shop, publish its `.elemod` in a GitHub release and
 submit it with the **Submit a mod** form ([Submitting a mod](#submitting-a-mod)):

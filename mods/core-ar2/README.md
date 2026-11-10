@@ -383,13 +383,48 @@ machine as it does its own. elekloader names an entry's slot as the resource
 `machine:<n>` (the profile's `slot_claims`), so two mods that take one slot
 are refused at link.
 
-Slots 44..52 (the TEST machines) are not offered: mods use their records as
-spare parameters (fx-sends, voice-dac). A kit saved with an added machine
+Slots 44..52 (the TEST machines) are offered too ("Machine slots 44..52
+and the trig getters (0.13)" below). A kit saved with an added machine
 loads on a build without the mod with that track's machine set to DISABLE,
 as stock does for a machine its voice may not run (checked on a unit, below).
 
 `examples/machine-ar2` is the smallest machine: BD COPY in slot 36, which
 runs BD CLASSIC with BD CLASSIC's knobs.
+
+## Machine slots 44..52 and the trig getters (0.13)
+
+**The slots.** `SLOT_LAST` is 52, so a mod may take any of 34..52; the
+profile's `slot_claims` already covered 0..53. The TEST machines' records
+(408..460) have no MIDI: +0x18 and +0x1c are -1. For each record a mod
+knob uses in 44..52, `core_boot_init` copies +0x18 (CC 16 + k in the high
+half, LSB 0xffff) and +0x1c (NRPN 1:k, `1 << 7 | k`) from slot 35's record
+at the same sound index, which carries what 34..42 carry. Stock builds its
+CC map (`0x413dd3b4 + 32 m`, one record id per CC 16..23) from the records
+after core's writes. +0x20 is 0 on every hidden record, 34..43 included,
+so it is not written. Fewer records: SD TEST 9..12, 15, 16; BT TEST
+9..13; LT and MT TEST 9..12; HH TEST 9..13, 16; CB TEST 10..12, 16 (no
+LEV); BD, RS and CY TEST all eight (machines.h). The TEST records also
+have +0x24 = 0, where 34..42 and every public machine record have 0x600,
+the list kinds that make a record an LFO, velocity and aftertouch
+destination; 0.13 leaves it as it is, so a knob in 44..52 is not offered
+as one of those destinations.
+
+**The trig getters.** `ENGINES[s]` is core's trampoline for slot s (one
+per slot, 19), which latches, for the voice v it is called with, the
+owner track t = `0x40291138[v]` (bytes), whether the trig state
+`0x8000e508 + 4t` is 1 (trig; 2 is release), and the velocity word
+`0x800067c4 + 2t`, then calls the mod's engine. The audio interrupt's trig
+intake runs before the per-voice engine calls,
+so the latch holds this block's trig. `core_voice_trigged(v)` and
+`core_voice_velocity(v)` read the latch: plain reads, for the engine's own
+voice.
+
+A check mod holding slot 44 on the BD voice and slot 52 on the CY/CB voice
+shows the trampolines, the records' CCs and NRPNs, CC 15 choosing slot 44,
+and one count and the velocity per trig from the sequencer, pads, notes and
+a retrig. A knob on a record that is 14-bit in stock (BD TEST's TUNE2) shows
+whole values but its engine word keeps a fraction: read the high byte for
+the display value.
 
 ## The OS upgrade's restart (0.7)
 
@@ -1095,6 +1130,71 @@ a handler to any event; `core_machines` declares 10, its hidden slots
 A spare entry costs its 4 bytes of RAM in the flashed build, about 20 KB
 in all, which the +Drive area gives up.
 
+## Screen calls (0.13)
+
+`screen.c`, declared in `elekloader/sdk/include/analog-rytm-mk2/screen.h`
+(docs/ADAPTING.md, "Screen calls (core-ar2 0.13, Analog Rytm MKII)"). Core
+calls stock's own routines; nothing of their code or glyphs is copied.
+
+| call | stock's |
+|---|---|
+| `core_bitmap_init` | the 28-byte bitmap over a caller's buffers (0x4006fa2e, owned 0) |
+| `core_text_draw`, `core_text_width`, `core_font_height`, `core_font_descent` | the 17 font objects at 0x417e381c + 8 i, their data (0x40071be8), the text routine 0x4007154c with a fixed `"%s"`, the width 0x40071bf2 over a `std::string` |
+| `core_stock_key` | Brain::key 0x400a0336, with the brain `core_screen_key` keeps from `ev_key` (order -1000000, before every mod) |
+| `core_stock_overlay` | the view controller ev_tick passes: its list (+28 the first node, +20 the end, a node's +8 its view); classes by their RTTI names, SamplerLedView 0x4023502c the main screen's last view |
+| `core_level_readout`, `core_level_field_save`, `core_level_field_put` | `core_screen_enc` (`ev_enc`, order 1000000, so only a turn no mod took) starts 47 ticks on encoder 8; the field is rows 0..8, columns 0..69 of the frame |
+| `core_progress_open`, `_set`, `_close` | COPYING SOUNDS' (0x400634cc): a ProgressWindow of 0x88 bytes (ctor 0x40076c4a), its shared_ptr's count (0x40185926), pushed onto the controller (0x40079462, the controller COPYING SOUNDS reaches as `*(host + 100)`); filled by 0x40076bb0, closed by its vtable +0x2c, and freed when core's count and the controller's are released |
+
+- Stock returns pointers in `%d0`, so screen.c declares those routines as
+  returning `uintptr_t`.
+- Stock's popups, confirm boxes and progress boxes are views on the same
+  list as the screen's, pushed after them: a window is a view whose class
+  name ends in Window.
+
+## Knob looks (0.13)
+
+`looks.c`, `looks.s`: a mod's own knob id (555 up, `core_params` and
+`core_param_locks`) has no stock records, so stock drew every such knob as
+record 0's dial on record 0's range (0..0), whatever it showed: a switch
+like voice-dac's POL became a dial whose pointer never moves. An entry in
+`core_knob_looks` (`elekloader/sdk/include/analog-rytm-mk2/pages.h`,
+docs/ADAPTING.md "Knob looks (core-ar2 0.13, Analog Rytm MKII)") gives its
+ids the look of any stock knob, a range of their own, or a UI record of the
+mod's own. An id without an entry draws as record 0.
+
+Stock finds a knob's look in two places, both one routine, and core answers
+both from their first instruction, and takes the graphic's call for a range:
+
+| lookup | what it answers | core, for an entry's id |
+|---|---|---|
+| 0x400ff5c2, `uirec(id)` (12 callers) | the UI record, 84 bytes an id in RAM from 0x419a4888, built at boot: flags at +0 (the parts the knob draws), the turn's steps at +4..+0x10, and four delegates of 16 bytes from +0x14 (the value text, the graphic at +0x24, one at +0x34, the value pop-up at +0x44) | the entry's `ui(id)` when it answers, else look's stock record |
+| 0x40006ff0, `range(id)` (32 callers: the pop-ups, the header) | 12 bytes from the parameter record's +8 (52 bytes an id from 0x401bfbc8): min, max and the record's default, 8.8 | look's, with the entry's min and max when min < max |
+| 0x400a85e8, a knob's graphic (set, id, value, bitmap, x, y) | calls the UI record's +0x24 delegate with the value | with min < max, the value moved from min..max onto look's range |
+
+Both are behind a bound of 469 ids in stock (record 0 above it). Nothing
+else is taken from look: the label and the name stay `core_param_locks'`,
+the value and its text `core_params'`, and the parameter record's other
+fields (its sound slot, the +0x24 flags that put it in the LFO and
+modulation lists and open a list on a turn, MIDI) are read for the knob's
+own id as before, so a knob that looks like a stock one does nothing that
+stock one does. Stock's graphics draw the knob's value on the scale of
+the parameter they were made for (the dial's 0..127, which several graphics
+map their value to and clamp, 0x400ff86c..0x400ffa14), not on the range. So
+for an entry with min < max core also takes the graphic's call, 0x400a85e8
+(the knob sets' vtable +88, which calls the delegate at +0x24 with the
+value), and moves the value from min..max onto look's range there: the
+graphic spans the knob's own range. The value text and the knob's value
+are unchanged.
+
+A stock 1.74 boot builds 87 different UI records (by their flags, steps and
+delegates) over 469 ids, with 46 different graphics;
+`examples/look-check-ar2` draws one stock id of each beside a mod knob that
+takes its look (its `looks.h` lists a sample id of each, and its
+`looks_table.py` prints their stock names from your own OS file). A mod that kept its knobs on hidden
+machines' records keeps their look by setting `look` to the record it used:
+COMP MIX's 94 (the same UI record as 191 and 82 other ids) for duck's and
+fx-sends' knobs, CB TEST's 457, a switch, for voice-dac's POL.
+
 ## Checked so far
 
 On a unit (OS 1.73 and 1.74): the boot site and its DDR area, both render
@@ -1185,8 +1285,7 @@ stock bytes, and that each covers whole instructions.
   36's Tune record its range 32..96 and default 58; the machine list on
   the BD track showed BD COPY, and choosing it set the track's machine to
   36 and the voice's engine to the example's; its SRC page matched BD
-  CLASSIC's. Not checked: its sound (the emulator's audio is too quiet to
-  compare), and a kit with it loading as DISABLE without the mod.
+  CLASSIC's.
 
 - **Machines (0.5) on a unit** (22 Oct 2026), with the example and all
   eleven rytm2_mods v1.3 mods (M5A4): BD COPY was in the BD track's machine
@@ -1194,117 +1293,20 @@ stock bytes, and that each covers whole instructions.
   power cycle and RELOAD. On the same build without the example (M5N4) that
   kit loaded with BD on DISABLE and the rest as saved.
 
-- **Write-through and SAVE PROJECT AS (0.7)**, in an emulator (OS 1.74,
-  24 Oct 2026), with store-check 1.1 on a fresh card: STORE CHECK, then a
-  power-off without a save and a cold boot: every column read back empty
-  (core 0.6 lost the pattern-track, pattern, kit-sound, pool-sound, kit and
-  global markers there). The SAVE PROJECT AS copy was checked by itself on
-  a build with the write-through call taken out: STORE CHECK, SAVE PROJECT
-  AS, a power-off and a cold boot read back empty, and the same build
-  powered off without the save lost those six columns.
-  On a unit (25 Oct 2026), with store-check 1.2.1 and analoghealth 1.2: on
-  core 0.7 (W07F) STORE CHECK then a power cycle with no save read back
-  empty. On a test build with the write-through call taken out (W07N) the
-  same lost the pattern-track, pattern, kit-sound, pool-sound, kit and global
-  markers (the project's stayed: they live in the stored project's tagged
-  store), and STORE CHECK, SAVE PROJECT AS and a power cycle read back empty.
-  A Total Recall take before the power cycle kept nothing (see SAVE PROJECT
-  AS above). On core 0.7 a take carries every marker, since write-through
-  keeps the stored project current: a take restored onto the unit brought
-  them back, and they survived a power cycle with no save; a take restored
-  onto a build with another layout ID loaded with the mods' fields at their
-  defaults. Before that, on core 0.8 with store-check 1.2 (which carries
-  this code unchanged), the same power cycle read back empty.
-  Cost: three STORE CHECKs (about 5,400 sets each) under audio gave no
-  dropout, and raised the 1 s CPU average by 1 to 4 points, the same as on
-  the build without write-through. Not measured on a unit: the time
-  core_store_set holds interrupts masked; in an emulator write-through adds
-  about 143 instructions to an average set (805 against 662), and the
-  longest masked stretch, about 1,130 instructions, is the field loop's, as
-  without write-through.
+- **Write-through and SAVE PROJECT AS (0.7)**, in an emulator and on a
+  unit (OS 1.74): every marker of store-check survives a power cycle with
+  no save, and a SAVE PROJECT AS copy one with a save; a build without the
+  write-through call loses the pattern-track, pattern, kit-sound,
+  pool-sound, kit and global markers. Three STORE CHECKs under audio gave
+  no dropout.
 
-- **Lockable parameters (0.8)**, in an emulator (OS 1.74, 24 Oct 2026),
-  with [lock-check](../../examples/lock-check-ar2) (codes 42 and 43): DST
-  set to 42 over NRPN showed LCA on the LFO page, and turning DST opened the
-  menu with the cursor on MOD:LOCK CHECK A, after stock's AMP entries;
-  with DEP at its top, `core_lfo_offset` swung about +-30,000 (about
-  +-120 steps) while the code stayed 42; DST 43 moved the code to 43, and a
-  stock DST (5) cleared it and modulated the stock slot. On the LOCK CHECK
-  page four RANDOMIZE PAGEs set `lc_a` to 0, 92, 4 and 101, and RELOAD PAGE
-  took it back to the saved kit's 0. On 25 Oct the page's knob A showed
-  LCA, its short name, and the SRC page kept stock's labels. On 26 Oct, 80
-  RANDOMIZE PAGEs on the stock LFO page set DST to LCA, LCB or LCC 7 times
-  (3 of the list's 36 entries) and to stock destinations otherwise, with
-  the mod code in the sound's DST byte. With track 1's machine byte (sound
-  +104) written to each of 0..35 in turn, RANDOMIZE PAGE put a mod code
-  in DST for every one (stock lists of 28 to 33 entries, the mod
-  parameters after them); the machine was written, not switched through
-  its menu. RELOAD PAGE
-  took `lc_a` from 10 back to the saved kit's 77. With a trig held, knob A
-  shows its lock's value (it showed ERR before 0.8's value text), and a
-  stock knob its own. With DST on LCA, turning DST scrolls the menu down
-  to MOD:LOCK CHECK B and C and up to stock's AMP entries, and YES on
-  C sets DST to LCC (the DST byte holds 44). Also on 26 Oct: PAGE + RECORD,
-  PAGE + PLAY and PAGE + STOP (copy, clear, paste) take a page's mod locks
-  away and bring them back, both of C's rows included; a paste over a page
-  whose locks changed puts the copied ones back and drops the new; PAGE +
-  STOP again (undo) brings the changed ones back. A scene lock saved with
-  SAVE PROJECT, changed, and loaded back after another project, comes back
-  as saved. Track init (0x400118e8) writes only a track's settings
-  (length, scale, speed), so it moves no lock, stock's or a mod's; its
-  callers are pattern init and the pattern load (row load), checked above,
-  and a third (0x400c19dc) no code refers to. DST set to LCA (NRPN 1:35,
-  42), SAVE PROJECT, DST changed, the project loaded: DST is LCA again
-  (L8H6, before `core_lfo_dst`, brought it back as FIN, 18). With
-  lock-check 1.4 (`"lfo"` on A and C) the DST menu ends with MOD:LOCK
-  CHECK A and C, B's code by NRPN shows ERR, and LCC comes back through a
-  save and a load; that project loaded on stock 1.74 has DST None (stored
-  41, shown `…`). On stock 1.74, sound dumps of each stored value 42..127
-  load as the slots its table gives (5 of them stock parameters), and a
-  stock save of slot 64 (what the earlier stored 42 loaded as) comes back
-  as ACC; on 0.8 the stock sounds whose byte loads as 64 or 47 load as
-  None. On a unit (OS 1.74, 26 Oct
-  2026, core 0.8 with lock-check 1.3 and analoghealth) remote turns
-  reached MOD:LOCK CHECK C and YES set LCC; an earlier unit run (T37)
-  stopped on MOD:LOCK CHECK A because its turns were one count each, too
-  few for a list menu to move. The same run passed trig p-locks and trig
-  copy, the lock rows through a power cycle, a scene lock and a
-  performance depth on the knob and in the bar, pad pressure, RELOAD and
-  RANDOMIZE PAGE, NRPN and CC, and 75 s of play with the LFO on LCA (CPU
-  75-85 %, no dropouts). A second unit run (L8H9: core 0.8 with lock-check
-  1.4 and analoghealth) passed page copy, clear, paste and undo of a
-  trig's lock; live recording (above); a scene lock and DST on LCA through
-  SAVE PROJECT and a load, with LCB's code by NRPN showing ERR; and NRPN
-  4:2 at 16383 setting C to 1000. Both flashes came back in 15 s. Then,
-  on stock 1.74 on the unit, that project (DST LCA) loaded with DST None
-  (`…`), and kept it through two rounds of SAVE PROJECT, another
-  project's load and a load back. By hand on the unit (L8H9): the DST
-  list ends with MOD:LOCK CHECK A and C, without B; knob A with a trig held
-  sets that trig's lock, shown when held again and in the second bar as it
-  plays; a scene lock set with the scene's pad held shows on the knob in
-  scene edit only and in the third bar while the scene is active, as a stock
-  parameter's scene lock does; and Overbridge shows the LFO destination
-  LCA as None. By hand on the unit (L8C2, 8cfa555, lock-check 1.5): the DST
-  list ends with MOD:Lock Check A and LCHK:Lock Check C, without B, and
-  picking C shows LCC. In an emulator, a 240-character short name, a
-  7-character category and a 62-character name show as 4, 4 and the menu's
-  width, with no fault. Unit run T51 (27 Oct, L8C3: 1db9bfc, lock-check
-  1.6): a saved sound with DST LCA stores stock's None (41) in stock's byte
-  and the code in core's field, read back from slot 125; a performance's
-  depth on C follows its pad's pressure (lock-check's bar for C full at 127,
-  empty at 0); the velocity and aftertouch lists end with stock's AMP
-  entries (its Euclid step never turned Euclid on, so it checked nothing);
-  RANDOMIZE PAGE put a mod
-  destination in DST once in 12; every machine in BD's list (28) ends its
-  DST list with A, C and D; D's 200-character short name shows as LCDX and
-  its name cut at the menu's width; RELOAD PAGE from kit 2 brings A back. A
-  kit dump sent back is received, but C's value after it was not read.
-  Unit run T53 (27 Oct, L8C4): kit dumps of the saved kit with C at 800
-  and at 0 differ in one data byte and the checksum; the 800 dump sent back
-  brings C back to 800, and a fresh dump then equals the first.
-  Unit run T54 (27 Oct, L8C4): with Euclid on (PL1 4) and C and the
-  filter's FRQ locked on hit step 5, TRO -15 and FREEZE TRACK move both
-  locks to step 6 and leave step 5 with neither.
+- **Lockable parameters (0.8)**, in an emulator and on a unit (OS 1.74),
+  with [lock-check](../../examples/lock-check-ar2): the LFO's DST list ends
+  with the mod's `"lfo"` parameters and keeps their code through a save and
+  a load (stock 1.74 loads it as None); RANDOMIZE and RELOAD PAGE, page copy,
+  clear, paste and undo, trig p-locks, scene locks and performance depths,
+  NRPN and CC, live recording, kit dumps, and TRO and FREEZE TRACK moving a
+  step's locks; 75 s of play with the LFO on a mod code had no dropouts.
 
 - **The smoothed value (0.9)**, in an emulator only (analog-emu, OS 1.74,
   1 Nov 2026), with [lock-check 1.7](../../examples/lock-check-ar2)'s

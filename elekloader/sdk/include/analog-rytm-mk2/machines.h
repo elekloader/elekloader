@@ -2,7 +2,8 @@
 /* core-ar2 0.5: machines mods add (docs/ADAPTING.md, "Machines (core-ar2 0.5,
  * Analog Rytm MKII)"). The Rytm has 53 machine slots; 34..52 are hidden
  * factory machines (mask 0: no voice may pick them). A mod takes one of
- * slots 34..43 through the table core_machines, contributed in mod.json:
+ * slots 34..52 (44..52 from core 0.13) through the table core_machines,
+ * contributed in mod.json:
  *
  *     "contribute": [
  *       {"to": "core_machines", "order": 50, "data": "00000000",
@@ -18,10 +19,24 @@
  * NRPN, so a sound stores the knobs as it stores any machine's. A knob
  * whose name is 0 keeps the stock record as it is. Slots 35..42 (the hidden
  * "2" machines) have all eight records; 34 (BT IMPROVED) and 43 (FUNC. GEN.)
- * have five (LEV and four more), and a knob with no record is ignored. The
- * TEST machines' slots 44..52 are not offered: mods already use their records
- * as spare parameters (fx-sends, voice-dac). The value's text and the
- * knob's turn can be changed through core_params (pages.h).
+ * have five (LEV and four more), and a knob with no record is ignored.
+ *
+ * From core 0.13 the TEST machines' slots 44..52 are offered too (ask for
+ * "core": "0.13"). Their records have no MIDI of their own: core gives each
+ * record a mod knob uses CC 16 + k and NRPN 1:k (k = sound index - 9), as
+ * the hidden machines 34..42 have. They have fewer records:
+ *
+ *     44 BD TEST   9..16 (all eight)     49 MT TEST   9..12
+ *     45 SD TEST   9..12, 15, 16         50 HH TEST   9..13, 16
+ *     46 RS TEST   9..16 (all eight)     51 CY TEST   9..16 (all eight)
+ *     47 BT TEST   9..13                 52 CB TEST   10..12, 16 (no LEV)
+ *     48 LT TEST   9..12
+ *
+ * Mods that used these records as spare parameters (fx-sends, duck,
+ * voice-dac) move off them for 0.13; one that still uses a slot's records
+ * declares "machine:<n>" in its resources, so the linker refuses it next to
+ * a machine in that slot. The value's text and the knob's turn can be
+ * changed through core_params (pages.h).
  *
  * A kit or sound that names the machine loads on a build without the mod (or
  * on stock) with that sound's machine set to DISABLE: stock's kit load does
@@ -35,6 +50,19 @@
  * frame is the analog control frame (0x800063c0), blk the track's parameter
  * block (word k is sound index 9 + k, so word 0 is LEV), pitch the note. An
  * engine may run a stock engine (CORE_ENGINE_*) with a block of its own.
+ *
+ * From core 0.13 the engine table holds core's trampoline, which calls the
+ * mod's engine after latching, for the voice, what the interrupt's trig
+ * intake set for its owner track this block (the intake runs before the
+ * engines):
+ *
+ *     core_voice_trigged(voice)   1 when the track trigged this block, else 0
+ *     core_voice_velocity(voice)  the track's velocity word (0x800067c4 + 2t),
+ *                                 before accent
+ *
+ * Call them from the engine, for its own voice: they read the latch of the
+ * voice's last call, so outside it they hold that call's values. Plain
+ * reads, no locks.
  */
 #ifndef ELEKLOADER_AR2_MACHINES_H
 #define ELEKLOADER_AR2_MACHINES_H
@@ -52,7 +80,7 @@ struct core_machine_knob {
 };
 
 struct core_machine {
-    int32_t slot;           /* 34..43 */
+    int32_t slot;           /* 34..43; 34..52 from core 0.13 */
     core_engine engine;
     int8_t home;            /* the track the machine list files it under: 0 BD,
                                1 SD, 4 BT, -1 none (as XT CLASSIC) */
@@ -79,5 +107,9 @@ struct core_machine {
 #define CORE_ENGINE_BT_CLASSIC ((core_engine)0x4011b5a0)
 #define CORE_ENGINE_XT_CLASSIC ((core_engine)0x4011b850)
 #define CORE_ENGINE_DISABLE ((core_engine)0x40113f68)
+
+/* core 0.13 */
+int core_voice_trigged(int32_t voice);
+int core_voice_velocity(int32_t voice);
 
 #endif

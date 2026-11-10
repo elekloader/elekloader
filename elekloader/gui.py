@@ -58,11 +58,35 @@ BUNDLED = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'bundled')
 def with_requirements(descs, enabled, path):
     """-> `enabled` plus `path`, plus the mods it requires (and theirs) that are
     listed and made for the stock firmware, when none enabled already provides
-    them. descs: {path: describe(path)}. Of several files with the id, the last
-    (by file name) is taken, and for core the one with_core takes; a
-    requirement nothing provides is left for the check to report."""
+    them. descs: {path: describe(path)}. Of several files with the id (the
+    versions of a mod other mods build on, machine-pages say), the newest that
+    takes the selection is taken, the newest when none does, and for core the
+    one with_core takes; a requirement nothing provides is left for the check
+    to report. A file takes the selection when it patches no byte another mod
+    of it patches (describe's sites): a mod made for an older version of what
+    it requires, which patches a place the newer version has since taken,
+    builds with the version it was made for. A required mod that is enabled
+    and does not take the selection gives way to a version that does."""
     out = set(enabled) | {path}
     todo, core = [path], False
+
+    def spans(p):
+        x = descs.get(p, {})
+        return [] if x.get('format') == 1 else [(s[0], s[0] + s[1]) for s in x.get('sites', ())]
+
+    def versions(rid):
+        """The listed files with the id, made for the stock firmware, oldest first."""
+        return sorted((p for p, x in descs.items()
+                       if x.get('id') == rid and x.get('fits') and 'error' not in x),
+                      key=lambda p: (elemod.version_key(descs[p].get('version', '')), os.path.basename(p)))
+
+    def takes(p, rid):
+        """`p` patches no byte a mod of the selection patches (its other versions and the core apart)."""
+        mine = spans(p)
+        return not any(lo < h and l < hi for q in out
+                       if q != p and descs.get(q, {}).get('id') not in (rid, 'core')
+                       for l, h in spans(q) for lo, hi in mine)
+
     while todo:
         d = descs.get(todo.pop(), {})
         for rid in d.get('requires', []):
@@ -71,12 +95,19 @@ def with_requirements(descs, enabled, path):
                 continue
             if any(descs.get(p, {}).get('id') == rid for p in out):
                 continue
-            cands = sorted((p for p, x in descs.items()
-                            if x.get('id') == rid and x.get('fits') and 'error' not in x),
-                           key=os.path.basename)
+            cands = versions(rid)
             if cands:
-                out.add(cands[-1])
-                todo.append(cands[-1])
+                pick = ([p for p in cands if takes(p, rid)] or cands)[-1]
+                out.add(pick)
+                todo.append(pick)
+    # a required mod that is enabled and patches a place another mod of the selection patches: a version that
+    # does not, in its place (the one enabled stays when none does, for the check to say why)
+    for rid in sorted({r for p in out for r in descs.get(p, {}).get('requires', []) if r != 'core'}):
+        on = [p for p in out if descs.get(p, {}).get('id') == rid]
+        if len(on) == 1 and not takes(on[0], rid):
+            ok = [p for p in versions(rid) if takes(p, rid)]
+            if ok:
+                out = (out - set(on)) | {ok[-1]}
     return with_core(descs, out) if core else out
 
 

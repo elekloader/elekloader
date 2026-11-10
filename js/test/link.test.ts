@@ -5,7 +5,7 @@ import assert from 'node:assert/strict'
 import { ANALOG_RYTM_MK2, DIGITONE_MK2, DIGITAKT_MK1, DIGITONE_MK1, OCTATRACK, devices, targetOf } from '../src/devices.ts'
 import { sha } from '../src/bytes.ts'
 import { Mod, check as check1 } from '../src/elemod.ts'
-import { Mod2, check, ddrFor, imageProblems, payloadId } from '../src/link.ts'
+import { Mod2, check, ddrFor, imageProblems, link, payloadId } from '../src/link.ts'
 
 test('a parameter slot claims its sound slot (soundslot:<n>), from its own bytes or the stock image', () => {
   const dn = DIGITONE_MK1, r = dn.releases.find(x => x.version === '1.43')!
@@ -229,4 +229,49 @@ test('a payload id is link.py payload_id, and core-ar2 0.11 moves the Rytm\'s mo
   assert.notEqual(payloadId('porbxw'), payloadId('puscrb'))
   assert.deepEqual(ddrFor(ANALOG_RYTM_MK2, '0.10'), [0x47be0000, 0x47c00000])
   assert.deepEqual(ddrFor(ANALOG_RYTM_MK2, '0.11'), [0x47b10000, 0x47fff000])
+})
+
+test('knob ids from 555 past fixed ids, abs32 and abs16, kept by the lockfile (tests/test_link_refusals.py)', () => {
+  const ar = ANALOG_RYTM_MK2, real = ar.releases.find(x => x.version === '1.74')!
+  const image = new Uint8Array(real.mainLen)
+  for (let i = 0; i < image.length; i += 2) image.set([0x4e, 0x71], i)
+  const rel = { version: 'SYN', syxSha256: sha(new TextEncoder().encode('synthetic knobs')), mainSha256: sha(image), mainLen: image.length, binSha256: '' }
+  ar.releases.push(rel)
+  try {
+    const target = targetOf(ar, rel)
+    const hex8 = (n: number) => n.toString(16).padStart(8, '0')
+    const core = (keeps: boolean) => ({ elemod: 2, id: 'core', version: '1', target,
+      sections: { '.boot': { align: 4, len: 2, parts: [['hex', '4e75']] } }, symbols: { core_fn: ['.boot', 0] }, exports: ['core_fn'],
+      collections: { ev_x: { entry: 4 }, core_params: { entry: 4 }, core_param_locks: { entry: 4 }, ...(keeps ? { core_store_ids: { entry: 4 } } : {}) },
+      ...(keeps ? { imports: ['__store_gen', '__store_gen2'] } : {}) })
+    const fixed = { elemod: 2, id: 'f', version: '1', target, requires: ['core'],
+      sections: { '.run': { align: 4, len: 8, parts: [['hex', hex8(555) + hex8(560)]] } }, symbols: { e_f: ['.run', 0] },
+      imports: ['core_fn'], contribute: [{ to: 'core_param_locks', data: '00000000', relocs: [[0, 'abs32', 'sym:e_f', 0]] }] }
+    const knobbed = (id: string, count: number, short = 1) => ({ elemod: 2, id, version: '1', target, requires: ['core'], knobs: count,
+      sections: { '.run': { align: 4, len: 12, parts: [['hex', '00'.repeat(12)]] } }, symbols: { ['e_' + id]: ['.run', 0] },
+      imports: ['core_fn', '__knobs'],
+      relocs: [['.run', 0, 'abs32', 'sym:__knobs', 0], ['.run', 4, 'abs32', 'sym:__knobs', count - 1], ['.run', 8, 'abs16', 'sym:__knobs', short]],
+      contribute: [{ to: 'core_param_locks', data: '00000000', relocs: [[0, 'abs32', `sym:e_${id}`, 0]] }] })
+    const mods = (...docs: Record<string, any>[]) => docs.map(d => new Mod2(structuredClone(d), d.id))
+    const out = link(mods(core(false), fixed, knobbed('k', 4, 2), knobbed('j', 2)), image)
+    assert.deepEqual([...out.knobs], [['j', [561, 2]], ['k', [563, 4]]])
+    assert.deepEqual(out.knobNotes, ['j: knob ids 561..562', 'k: knob ids 563..566'])
+    assert.equal(out.map.get('k:__knobs'), 563)
+    const at = out.layout.run_load - ar.mainLoad + out.layout.sections['k .run'] - out.layout.ddr[0]
+    const v = new DataView(out.image.buffer, out.image.byteOffset + at, 10)
+    assert.deepEqual([v.getUint32(0), v.getUint32(4), v.getUint16(8)], [563, 566, 565])
+    assert.deepEqual(check(mods(core(false), knobbed('k', 4, 4)), image), [
+      'k 1: .run+0x8 is a abs16 reference to __knobs+4; one takes abs32 or abs16 with an addend below its "knobs" (4)'])
+    assert.throws(() => new Mod2({ ...knobbed('k', 4), knobs: 1025 }, 'k'), { message: 'k: "knobs" is a count of knob ids, 0..1024' })
+    const one = link(mods(core(true), knobbed('k', 4), knobbed('j', 2)), image)
+    assert.deepEqual([...one.knobs], [['j', [555, 2]], ['k', [557, 4]]])
+    const two = link(mods(core(true), knobbed('k', 4), knobbed('a', 3)), image, one.store)
+    assert.deepEqual([...two.knobs], [['a', [561, 3]], ['k', [557, 4]]])
+    assert.equal(two.store!.id, one.store!.id)
+    const three = link(mods(core(true), knobbed('k', 4), knobbed('j', 2), knobbed('a', 3)), image, two.store)
+    assert.deepEqual([...three.knobs], [['a', [561, 3]], ['j', [555, 2]], ['k', [557, 4]]])
+    assert.deepEqual(three.knobNotes, ['j: back with knob ids 555..556'])
+  } finally {
+    ar.releases.splice(ar.releases.indexOf(rel), 1)
+  }
 })

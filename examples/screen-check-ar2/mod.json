@@ -1,0 +1,19 @@
+{
+ "id": "screen-check",
+ "version": "0.1",
+ "title": "Screen check",
+ "category": "Examples",
+ "license": "GPL-2.0-or-later",
+ "author": "Iced-Cream",
+ "description": "A test for core-ar2 0.13's screen calls on the Analog Rytm MKII, on screen. PLAYMODE steps through four modes: off (stock untouched); FONTS (each of stock's 17 fonts drawn by core_text_draw, RIGHT steps the font, with its width, height and descent, the label drawn through the mod's own bitmap); CALLS (a bottom bar with core_stock_overlay, core_level_readout, the key events held and the progress box: FLTR's events held and handed to stock through core_stock_key a second later, QPER opens a progress box that fills and closes, NO closes it at once); COVER (CALLS over a checkerboard that keeps the TRK LEVEL readout's field while it runs).",
+ "device": "analog-rytm-mk2",
+ "os": "1.74",
+ "sources": ["check.c"],
+ "subscribe": [
+  {"event": "ev_tick", "fn": "ck_tick", "order": 60},
+  {"event": "ev_draw", "fn": "ck_draw", "order": 60},
+  {"event": "ev_key", "fn": "ck_key", "order": 60}
+ ],
+ "resources": {"core": "0.13"},
+ "requires": ["core"]
+}
