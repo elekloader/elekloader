@@ -118,7 +118,7 @@ DEVICE = Device(
     # core-ar2's knob ids: stock's records are 0..468, core's lockable parameters take 469..554
     # (469 + code - 42, lock.c) and a mod's own ids start at 555 (pages.h CORE_PARAM_LOCK_FIRST)
     param_ids=(555, (469, 554, "core's lockable parameters' ids"),
-               (('core_params', False), ('core_param_locks', True))),
+               (('core_params', False), ('core_param_locks', True), ('core_knob_looks', True))),
     toolchain={
         'prefix': 'm68k-linux-gnu-',              # or ELEKLOADER_CROSS=m68k-elf-
         'asflags': ['-mcpu=54455'],                 # ColdFire V4 (the MCF5441x's ISA), as the Digitakt mk1

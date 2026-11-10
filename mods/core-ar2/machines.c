@@ -22,8 +22,8 @@
  * (0.13) The engine table gets core's trampoline for the slot, which latches
  * the voice's trig and velocity for core_voice_trigged and
  * core_voice_velocity and calls the mod's engine. In the audio interrupt
- * the trig intake runs before the per-voice engine calls (firmware
- * reference 6.1), so the latch holds this block's trig.
+ * the trig intake runs before the per-voice engine calls, so the latch
+ * holds this block's trig.
  */
 #include <stdint.h>
 #include "analog-rytm-mk2/machines.h"
