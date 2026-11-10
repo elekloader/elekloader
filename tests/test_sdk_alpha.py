@@ -442,7 +442,7 @@ class SdkAlphaTests(unittest.TestCase):
             self.assertEqual(struct.unpack_from('>ii', run, at + 16), (3, 122))         # params, render
             with open(built['empty'][0]) as fh:
                 duplicate = json.load(fh)
-            duplicate['id'], duplicate['exports'] = 'sdk-alpha-conflict', []   # keep the refusal to the slot
+            duplicate['id'] = 'sdk-alpha-conflict'
             with self.assertRaisesRegex(elemod.ModError, 'machine:%d' % EMPTY.id):
                 link.link([core, pages, built['empty'][1], link.Mod2(duplicate, 'conflict')], image)
             other = SdkMachine('Other empty', register=False, source=EMPTY.source)
@@ -512,7 +512,7 @@ class SdkAlphaTests(unittest.TestCase):
             core = build.build(str(ROOT / 'mods/core-dn1'), dn, tmp)[1]
             machines = build.build(str(ROOT / 'mods/machines-dn1'), dn, tmp)[1]
             link.link([core, machines, dn_mod], image)
-            doc['id'], doc['exports'] = 'sdk-alpha-conflict', []
+            doc['id'] = 'sdk-alpha-conflict'
             with self.assertRaisesRegex(elemod.ModError, 'dnmachine:%d' % EMPTY.id):
                 link.link([core, machines, dn_mod, link.Mod2(doc, 'conflict')], image)
             link.link([core, machines, sdk_alpha_build(ONE_PAGE.write(tmp + '/one'), dn, tmp)[1]], image)
@@ -568,7 +568,7 @@ class SdkAlphaTests(unittest.TestCase):
             self.assertEqual(built['glyphs'][1].implied_names(image), ['mk2-synth:127'])
             with open(built['empty'][0]) as fh:
                 duplicate = json.load(fh)
-            duplicate['id'], duplicate['exports'] = 'sdk-alpha-conflict', []
+            duplicate['id'] = 'sdk-alpha-conflict'
             with self.assertRaisesRegex(elemod.ModError, 'mk2-synth:%d' % EMPTY.id):
                 link.link([core, machines, built['empty'][1], link.Mod2(duplicate, 'conflict')], image,
                           sharc_stream=dsp)
