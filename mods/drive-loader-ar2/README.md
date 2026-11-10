@@ -164,8 +164,10 @@ start and the UI task haven't run, so nothing reads the tables the link rewrites
   number of mods.
 - **The cache.** `dl_flush` pushes every data-cache line by set and way (the V4's CPUSHL takes
   an index, not an address), then sets CACR to `0xA40CE100`: stock's value without DCINVA.
-- **The crash guard.** With a mod loaded, it writes `/mods/.armed`, calls each `drive_init` in
-  id order, and deletes `.armed` 200 `ev_tick`s (about 10 s) later.
+- **The crash guard.** With a set chosen, it writes `/mods/.armed` before the link, so a link
+  that faults or hangs is caught as well as the mods' inits. When the link loads nothing it
+  deletes `.armed` at once; otherwise it calls each `drive_init` in id order and deletes
+  `.armed` 200 `ev_tick`s (about 10 s) later.
 - **The time.** `dl_boot` reads DTIM0's count (`0xfc07000c`, free running from the 132 MHz bus
   clock; stock's own clock at `0x401006bc` reads it) as it starts, after the checks, after the
   link and the flush, and as it ends. `/mods/.status` shows it as `boot: N us (checks N, link N, inits N)`

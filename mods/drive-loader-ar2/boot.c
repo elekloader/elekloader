@@ -205,7 +205,7 @@ static int skip_key(void)
 }
 
 /* The boot's time in µs: the whole of dl_boot, then its checks (drive, skip key, crash
- * guard), the link (/mods/active, the linker, the cache flush) and the inits (.armed, each
+ * guard), the link (/mods/active, .armed, the linker, the cache flush) and the inits (each
  * drive_init). A part the boot didn't reach takes 0. */
 u32 dl_boot_us[4];
 static u32 t_checks, t_link;
@@ -288,12 +288,15 @@ static void boot(void)
         dl_skip_reason = DL_SKIP_MEMORY;
         return;
     }
+    write_armed();                       /* before the link, so a link that faults or hangs is
+                                          * caught too: the next boot skips the set */
     loaded = dl_link((u32)core_desc, dl_boot_choice, n, (u8 *)drive_staging, DL_STAGING_SIZE);
     dl_flush();
     t_link = DTCN0;
-    if (loaded <= 0)
+    if (loaded <= 0) {
+        remove_file(".armed");           /* nothing runs, so nothing to guard */
         return;
-    write_armed();
+    }
     armed = 1;
     armed_ticks = 0;
     for (i = 0; i < dl_inits_n; i++)
