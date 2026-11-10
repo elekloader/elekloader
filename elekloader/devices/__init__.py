@@ -90,7 +90,9 @@ class Device:
     recovery: str = ''           # how to get back to stock, said to the user
     toolchain: dict = field(default_factory=dict)   # for the SDK: prefix, asflags, cflags
     notes: str = ''
-    update_max: int = None       # maximum decoded ELE3 update bytes (8-byte preamble + container)
+    update_max: int = None       # maximum decoded update bytes (8-byte preamble + container)
+    no_link: tuple = ()          # ((lo, hi, why), ...): firmware routines no mod may link to (a
+                                 # symbol or relocation inside one is refused); ordinary calls only
 
     def release_for(self, syx_sha256=None, main_sha256=None):
         for r in self.releases.values():

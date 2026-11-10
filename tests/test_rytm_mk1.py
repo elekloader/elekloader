@@ -4,7 +4,7 @@ sets (pytest, or run with python).
 
 Needs the stock file, which never goes in the repo, named by an environment
 variable; a test whose input is missing is skipped, not passed:
-  ELEKLOADER_RYTM_SYX   Analog-Rytm_OS1.73.syx or Analog-Rytm_OS1.74.syx
+  ELEKLOADER_AR1_SYX   Analog-Rytm_OS1.74.syx (the only MKI release supported)
 """
 import json
 import os
@@ -15,11 +15,12 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(HERE))
 
 from elekloader import devices, elemod, formats, link, mkmod, patch, syx   # noqa: E402
+from elekloader.codec import aplib                                        # noqa: E402
 from elekloader.elemod import sha                                         # noqa: E402
 
-SYX = os.environ.get('ELEKLOADER_RYTM_SYX', '')
+SYX = os.environ.get('ELEKLOADER_AR1_SYX', '')
 DEV = [d for d in devices.devices() if d.key == 'analog-rytm-mk1'][0]
-SPOT = 0x402a2780          # zeros on 1.73 and 1.74, outside every protected range
+SPOT = 0x402a2780          # zeros on 1.74, outside every protected range
 DDR = DEV.areas['ddr']
 
 
@@ -29,7 +30,7 @@ class Skip(Exception):
 
 def need(p):
     if not p or not os.path.exists(p):
-        raise Skip('missing %s' % (p or 'ELEKLOADER_RYTM_SYX'))
+        raise Skip('missing %s' % (p or 'ELEKLOADER_AR1_SYX'))
     with open(p, 'rb') as fh:
         return fh.read()
 
@@ -180,12 +181,50 @@ def test_refuses_the_protected_ranges():
 
 
 def test_the_bootstrap_copy_is_protected():
-    # 1.74's version halfword (0x0602) and image; 1.73's sit 0x60 bytes earlier
+    # the version words (0x0602 at 0x4028c768) and the image
     lo, hi, _why = DEV.protected[1]
-    assert lo <= 0x4028c708 and hi >= 0x402a1b84
-    if rel().version == '1.74':
-        _st, img = stock()
-        assert img[0x4028c768 - DEV.main_load:][:2] == b'\x06\x02'
+    assert lo <= 0x4028c768 and hi >= 0x402a1b84
+    _st, img = stock()
+    assert img[0x4028c768 - DEV.main_load:][:2] == b'\x06\x02'
+
+
+def test_mods_may_not_link_to_the_flash_routines():
+    # BOOTSTRAP UPGRADE, the two erases and the program routine
+    starts = sorted(lo for lo, _hi, _why in DEV.no_link)
+    assert starts == [0x40096a6c, 0x40096ac2, 0x40096af6, 0x4011a7a4]
+    _st, img = stock()
+    for lo, hi, _why in DEV.no_link:            # each ends in an rts, the next one's start
+        assert img[hi - 2 - DEV.main_load:][:2] == b'\x4e\x75', hex(hi)
+
+
+def test_a_stream_not_a_multiple_of_4_is_padded_and_verifies():
+    st, img = stock()
+    for n in range(1, 9):                       # n literal bytes: the stream grows by about n
+        changed = bytearray(img)
+        o = SPOT - DEV.main_load
+        changed[o:o + 2 * n] = bytes(range(0x11, 0x11 + 2 * n))
+        stored = aplib.pack_section(bytes(changed))   # pack_main pads; the writer must too
+        if len(stored) % 4:
+            break
+    else:
+        raise AssertionError('no stream of a length that is not a multiple of 4')
+    out = formats.write(st, stored, DEV)
+    parsed = formats.parse(out['syx'], DEV)
+    assert len(parsed.container) % 4 == 0
+    formats.verify(out, st, bytes(changed), DEV)
+
+
+def test_the_update_size_cap():
+    # the OS upgrade's 2 MiB decode buffer: 20,763 packets of 101 bytes
+    assert DEV.update_max < 20763 * 101
+    st, img = stock()
+    out = formats.write(st, st.stored[3], DEV)
+    keep = DEV.update_max
+    try:
+        DEV.update_max = len(formats.parse(out['syx'], DEV).container)   # one byte short of 8 + it
+        expect(lambda: formats.verify(out, st, img, DEV), 'update limit')
+    finally:
+        DEV.update_max = keep
 
 
 def test_version_is_four_characters():

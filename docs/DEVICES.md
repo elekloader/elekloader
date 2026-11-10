@@ -703,56 +703,74 @@ Mods are made per release: a mod's target names one stock file by hash, so
 supporting a new OS version means adding its release to the profile and
 rebuilding the mods for it (below).
 
-## The Analog Rytm MKI (1.73, 1.74)
+## The Analog Rytm MKI (1.74)
 
-`analog_rytm_mk1.py`. gdeo607 measured 1.73 ([rytm1_mods](https://github.com/gdeo607/rytm1_mods),
-issue #11); draadpiraat measured 1.74 on the stock image, in rytm-emu and on
-a unit (Modwerk's `docs/RYTM_MKI_OS_RESEARCH.md` has the evidence). The two
-releases' main OS images have the same length.
+`analog_rytm_mk1.py`. Only 1.74 is supported: it is the release Elektron
+distributes. draadpiraat measured it on the stock image, in rytm-emu and on a
+unit (Modwerk's `docs/RYTM_MKI_OS_RESEARCH.md` has the evidence), building on
+gdeo607's 1.73 findings ([rytm1_mods](https://github.com/gdeo607/rytm1_mods),
+issue #11). 1.73 is left out: its bootstrap copy sits 0x60 bytes earlier, and
+its mods area and entry compare were never checked.
 
-- **Files.** `Analog-Rytm_OS1.73.syx` and `Analog-Rytm_OS1.74.syx`: the
+- **Files.** `Analog-Rytm_OS1.74.syx`: the
   Digitakt mk1's SysEx transport (device id `0x07`; the same counters,
   checksums and framing) around an **ELE2** container. That is a `0x14`-byte
   header (`ELE2`, the build, spaces, the version at `0x10`: the profile's
   `version_at`), the load address `0x40000400`, and the one packed section
   (the main OS) at `0x18`, with no table, digest or seal. The container is
   padded to 4 bytes. From its own section stream, the writer reproduces the
-  stock file byte for byte (`tests/test_rytm.py`, both releases).
+  stock file byte for byte (`tests/test_rytm_mk1.py`).
 - **Unpacking.** The bootstrap lives in flash below `0x20000` and the
   container starts at `0x20000`. At boot the bootstrap depacks from flash
   (`0x20018` to the address at `0x20014`). After an upgrade it depacks the
   section staged at `0x40200000` to `0x40000400` in place. Both use one
   routine, at flash `0x2a` (356 bytes), **byte-identical** to the Digitakt
   mk1 bootstrap's depacker (`0x8000009e`), so this packer's streams are valid
-  here too. Stock's in-place gap is 558,719 bytes (1.73), 558,611 (1.74).
+  here too. Stock's in-place gap is 558,611 bytes.
 - **Flash.** The OS reads calibration records (`RBOW`) at `0x780000`,
   `0x7C0000` and `0x7F0000`, and no other flash address between the container
   and them (1.74); reads near `0x100000` go to the +Drive by sector, not to the
   NOR. So `flash_limit` is `0x780000`. The bootstrap's MIDI upgrade erases
   only the 64 KB sectors the received length needs, from `0x20000`.
-- **Protected.** The main OS carries a copy of the bootstrap: on 1.74 its
-  version halfword (`0x0602`) at `0x4028c768` and the 87,060-byte image at
-  `0x4028c770-0x402a1b84`; on 1.73 the same, 0x60 bytes earlier. At every
+- **Size.** The in-OS upgrade decodes the file into a fixed 2 MiB RAM buffer
+  (`0x40366570`), 101 bytes a packet, with the index checked only against the
+  file's own count and other statics right after the buffer: at most 20,763
+  packets (2,097,063 decoded bytes, about 2,657,696 bytes of .syx). So
+  `update_max` is `0x1F0000`; `flash_limit` is never reached first.
+- **Protected.** The main OS carries a copy of the bootstrap: its version
+  words (`0x0602`) at `0x4028c768` and the 87,060-byte image at
+  `0x4028c770-0x402a1b84`. At every
   boot the OS entry (`0x40000592-0x400005d8`) compares that version with the
   installed bootstrap's (flash `0x1fff8`), and only if the installed one is
   lower calls BOOTSTRAP UPGRADE (`0x4011a7a4` on 1.74), which erases the boot
   sectors and writes exactly that image to flash 0. The startup menu is inside
-  that image. Both copies and the compare are protected.
+  that image. The copy, its version words and the compare are protected.
+- **The boot flash** (`0-0x1FFFF`) runs the startup menu before any OS code
+  and unpacks the OS from `0x20000` unchecked, so DIN recovery survives a
+  broken main OS; only damage to that flash breaks it, and the flash has no
+  write protection. Mods may not link to the routines that can write it
+  (`no_link`): BOOTSTRAP UPGRADE, the erase used only for the bootstrap
+  (`0x40096ac2`), the erase the OS store and calibration use (`0x40096a6c`)
+  and the program routine every writer uses (`0x40096af6`). That refuses a
+  symbol or relocation inside them, so ordinary calls only.
 - **Mods' area** `0x47BE0000-0x47C00000`, the MKII's. On a 1.74 unit
   (8 November 2026), a canary filled `0x47B00000-0x47F00000` at boot and read
   it back with no word changed, with the sample memory full, sound locks,
-  playback and a save. Not checked on 1.73. Linkable mods need a core there;
-  none ships here yet (Modwerk's MKI base is the MKII base's core-ar2 0.7 at
-  the MKI's addresses). core-ar2's ids and machine slots hold: stock's
-  parameter records are 0..468 and there are 53 machines, as on the MKII.
+  playback and a save. Linkable mods need a core there; none ships here yet
+  (Modwerk's MKI base is the MKII base's core-ar2 0.7 at the MKI's addresses),
+  so the profile has no mod storage, slot claims or parameter ids: those come
+  with a core.
 - **The version field** is a build's own: a 1.74 build marked `MW01` booted
   and its start-up screen showed `MW01`.
 - **On a unit (1.74):** builds that differ from stock only in the main OS
   stream and the version field, flashed with Transfer over USB (the in-OS
   upgrade), booted and played; the stock file brought the unit back over USB
   and over MIDI DIN from the startup menu. Those builds were written by
-  Modwerk's ELE2 writer, which matches this one; a file written by elekloader
-  has not been flashed yet.
+  Modwerk's ELE2 writer, which matches this one. A file written by elekloader
+  itself, EL01 (stock 1.74 repacked, version field `EL01`, sha256
+  `e3745dce04231c93d814ed727ee1f6b298b1df6738d10877d84e6b837e9085c8`), was
+  flashed with Transfer on 10 November 2026, booted and played, and the stock
+  file brought the unit back.
 - **1.73's patch sets.** gdeo607's 1.73 profile placed patch sets' code in
   three zero runs (`cave`, `cave2`, `cave3`). They are not zero at those
   addresses on 1.74, a profile has one set of areas for all its releases, and

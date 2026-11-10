@@ -2,9 +2,9 @@
 """Every refusal the linker and the mod loader make, each with a fixture that must be refused and
 one that must link (pytest, or run with python). Needs no firmware.
 
-The fixtures run on made-up releases of three real device profiles (the Octatrack's, the Digitakt
-mk1's and the Analog Rytm MKII's): an image of nops, as long as the real one, registered for the
-test only. The profile is the real one, so its protected and kept ranges, its free areas, its RAM
+The fixtures run on made-up releases of four real device profiles (the Octatrack's, the Digitakt
+mk1's, the Analog Rytm MKII's and the MKI's): an image of nops, as long as the real one, registered
+for the test only. The profile is the real one, so its protected and kept ranges, its free areas, its RAM
 and its fast SRAM are the ones a build meets. A fixture's must-pass twin is the smallest change that
 makes the must-refuse one link, and it goes through `link.link` whole, the image check included.
 
@@ -571,6 +571,17 @@ def _(B):
     return B.pair('m 1 site 0x%08x is inside 0x%08x-0x%08x' % (lo, lo, hi), site(lo), site(lo - 4))
 
 
+@row('check', '<>: <> links to 0x<>, inside 0x<>-0x<>, <>: no mod may link to it on the <>',
+     'analog-rytm-mk1')
+def _(B):
+    lo, hi, _why = B.dev.no_link[0]
+
+    def sym(v):
+        return lambda d: d[1]['symbols'].update(flash=['abs', v])
+    return B.pair('m 1: symbol flash links to 0x%08x, inside 0x%08x-0x%08x' % (lo, lo, hi),
+                  sym(lo), sym(hi))
+
+
 @row('common_checks', '<> site 0x<> writes into 0x<>-0x<>, which stays stock on the <>: <>')
 def _(B):
     lo, hi, _why = B.dev.keep[0]
@@ -1029,6 +1040,10 @@ def test_digitakt_fixtures():
 
 def test_analog_rytm_fixtures():
     assert run_rows('analog-rytm-mk2') == 13
+
+
+def test_analog_rytm_mk1_fixtures():
+    assert run_rows('analog-rytm-mk1') == 1
 
 
 def test_the_lfo_destination_field_is_placed_only_with_an_lfo_field():

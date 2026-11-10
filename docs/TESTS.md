@@ -68,7 +68,7 @@ ELEKLOADER_DN_SYX=Digitone_and_Digitone_Keys_OS1.43.syx python tests/test_digito
 ELEKLOADER_DT2_SYX=Digitakt_II_OS1.17.syx python tests/test_digitakt2.py
 ELEKLOADER_AR2_SYX=Analog-Rytm_MKII_OS1.74.syx python tests/test_rytm_mk2.py   # or 1.73
 ELEKLOADER_A4_SYX=Analog-Four_MKII_OS1.56.syx python tests/test_analog_four_mk2.py
-ELEKLOADER_RYTM_SYX=Analog-Rytm_OS1.74.syx python tests/test_rytm.py    # the Analog Rytm MKI; or 1.73
+ELEKLOADER_AR1_SYX=Analog-Rytm_OS1.74.syx python tests/test_rytm_mk1.py    # the Analog Rytm MKI (1.74 only)
 ELEKLOADER_DN2_SYX=Digitone_II_OS1.12.syx ELEKLOADER_DN2_ZIP=Digitone_II_OS1.12_dist.zip python tests/test_digitone2.py
 ELEKLOADER_MC_SYX=Model_Cycles_OS1.13.syx python tests/test_model_cycles.py   # core-mc 0.3 against 0.2 and 0.1, its exports and ev_boot
 ELEKLOADER_DN2_SYX=... ELEKLOADER_CROSS=... ELEKLOADER_DIGIKIT=... ELEKLOADER_DIGI_EMUD_COUPLED=... ELEKLOADER_DN2_EMU_READY=... SELACHE=... python tests/test_dn2_filter_capture.py

@@ -315,7 +315,7 @@ def test_the_update_limit_counts_the_preamble_and_is_optional():
         else:
             raise AssertionError('accepted an update over the limit')
     assert [(d.key, d.update_max) for d in devices.devices() if d.update_max is not None] == [
-        ('digitone-mk2', 0x200000)]
+        ('digitone-mk2', 0x200000), ('analog-rytm-mk1', 0x1F0000)]
 
 
 def test_the_main_os_is_stored_padded_to_4():

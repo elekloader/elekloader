@@ -84,15 +84,6 @@ const DEVICES: Record<string, Spec> = {
     // of the pool, the CCs stock maps on the FX channel (0x413dcb14): a kit field (the FX track's) gets none of them
     fxCcsTaken: [84, 85],
   },
-  'analog-rytm-mk1': {                          // the MKII's core-ar2 at the MKI's addresses (Modwerk's MKI base):
-    fixed: { sound: 24, kit: 64, global: 40 },  // the same stored and live layouts as the MKII
-    coreFixed: [['0.3', { sound: 56 }]],
-    live: { track: 512, pattern: 512 },
-    store: 4352 - 10,
-    items: { track: 129 * 13, pattern: 129 },
-    split: { track: 2, pattern: 4 },
-    // no CCs or LFO destinations for fields: the MKI's CC map is not checked yet (core-ar2 0.9's)
-  },
   'analog-four-mk2': {                          // core-a4 (mods/core-a4/store.c)
     fixed: { sound: 32, kit: 128, global: 64 },
     coreFixed: [],

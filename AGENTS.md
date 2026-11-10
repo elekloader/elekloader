@@ -97,7 +97,7 @@ ELEKLOADER_DN_SYX=... python tests/test_digitone.py
 ELEKLOADER_DT2_SYX=... python tests/test_digitakt2.py
 ELEKLOADER_AR2_SYX=... python tests/test_rytm_mk2.py
 ELEKLOADER_A4_SYX=... python tests/test_analog_four_mk2.py
-ELEKLOADER_RYTM_SYX=... python tests/test_rytm.py           # the Analog Rytm MKI (1.73 or 1.74)
+ELEKLOADER_AR1_SYX=... python tests/test_rytm_mk1.py           # the Analog Rytm MKI (1.74)
 ELEKLOADER_DN2_SYX=... python tests/test_digitone2.py
 ELEKLOADER_MC_SYX=... python tests/test_model_cycles.py    # core-mc 0.3 against 0.2 and 0.1, its exports and ev_boot
 ELEKLOADER_DN2_SYX=... ELEKLOADER_CROSS=... ELEKLOADER_DIGIKIT=... ELEKLOADER_DIGI_EMUD_COUPLED=... ELEKLOADER_DN2_EMU_READY=... SELACHE=... python tests/test_dn2_filter_capture.py   # the filter capture, in DigiKit's coupled emulator

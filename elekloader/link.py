@@ -429,6 +429,18 @@ def check(mods, image):
     if bad and bad[0].startswith('the mods are for different firmware'):
         return bad
     dev = mods[0].dev
+    for m in mods:
+        refs = [('symbol ' + nm, v) for nm, (sec, v) in m.symbols.items() if sec == 'abs']
+        refs += [('a relocation in ' + sec, add) for sec, _o, _t, tgt, add in m.relocs if tgt == 'abs']
+        refs += [('site 0x%08x' % s['addr'], r[3]) for s in m.sites for r in s.get('relocs', ())
+                 if r[2] == 'abs']
+        refs += [('its %s entry' % c['to'], r[3]) for c in m.contribute for r in c['relocs']
+                 if r[2] == 'abs']
+        for what, v in refs:
+            for lo, hi, why in dev.no_link:
+                if lo <= v < hi:
+                    bad.append('%s: %s links to 0x%08x, inside 0x%08x-0x%08x, %s: no mod may link to '
+                               'it on the %s' % (m.label(), what, v, lo, hi, why, dev.name))
     if not dev.linkable():
         return ['the %s has no linkable (format-2) mods yet: only whole builds (format 1) '
                 'can be used on it' % dev.name]
