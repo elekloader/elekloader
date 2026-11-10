@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-2.0-or-later
-"""look-check: the table in mods/core-ar2/knob-looks-1.74.md, from the UI record dump (gen_looks.py) and the
-decoded stock 1.74 main OS image (elekloader.formats.main_image). python3 looks_table.py DUMP.bin MAIN.bin"""
+"""look-check: prints a table of 1.74's 87 knob looks (a sample id, its stock name and range, the ids that share it)
+from the UI record dump (gen_looks.py) and your own decoded stock 1.74 main OS image (elekloader.formats.main_image),
+for your own use: it is read from the stock OS, so it is not in the repository. python3 looks_table.py DUMP.bin MAIN.bin"""
 import struct,collections,sys
 dump,img=sys.argv[1],sys.argv[2]
 d=open(dump,'rb').read(); B=0x419a4000; R=0x419a4888

@@ -1972,8 +1972,9 @@ const struct core_knob_look my_looks = {CORE_KNOB(0), CORE_KNOB(0), 457, 0, 0, 0
 - `look`: a stock id (1..468). The knob takes its UI record (the graphic,
   the parts its flags draw, the turn's steps, its pop-ups) and its range.
   Pick an id whose knob looks as yours should; any id with the same record
-  looks the same. `mods/core-ar2/knob-looks-1.74.md` lists 1.74's 87 looks,
-  with a sample id, its stock name and every id that shares it.
+  looks the same. `examples/look-check-ar2/looks.h` lists one sample id of
+  each of 1.74's 87 looks, and its `looks_table.py` prints their stock names
+  and the ids that share each from your own OS file.
 - `min`, `max`: when min < max, the knob's range (8.8) in place of look's:
   the pop-ups and the header take it, and core moves the value the graphic
   draws from min..max onto look's range (0..127 where look's is 0..0), so a
