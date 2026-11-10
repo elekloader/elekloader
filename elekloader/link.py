@@ -63,13 +63,13 @@ LINKER_SYMS = {'__run_load', '__run_start', '__run_words', '__bss_start', '__bss
                '__bss_words', '__run_hash', desc.SYM}
 MAX_SPARE = 4096                  # a table's spare entries (a collection's "spare")
 # the tables a build descriptor gives no spare entries: the linker fills them, from storage and payloads
-NO_SPARE = (store.HANDLES_TABLE, PAYLOADS)
+NO_SPARE = (PAYLOADS,)
 # the tables the linker fills from storage that a build descriptor opens to the loader alone (desc.F_LOADER):
 # spare entries for the +Drive mods' fields, which a mod's own contributions may not take
-LOADER_ONLY = (store.IDS_TABLE, store.CODES_TABLE, store.CCS_TABLE, store.INITS_TABLE)
+LOADER_ONLY = (store.IDS_TABLE, store.CODES_TABLE, store.CCS_TABLE, store.INITS_TABLE, store.HANDLES_TABLE)
 # a table's spare entries in a build descriptor where its collection gives no "spare" (else desc.SPARE)
 DRIVE_SPARE = {'core_lock_params': 32, store.CODES_TABLE: 32, store.CCS_TABLE: 32, store.INITS_TABLE: 32,
-               store.IDS_TABLE: 1 + store.MAX_ANCESTORS}
+               store.HANDLES_TABLE: 32, store.IDS_TABLE: 1 + store.MAX_ANCESTORS}
 # a table's most entries, flashed and spare, where its collection gives no "max"
 DRIVE_MAX = {store.INITS_TABLE: store.MAX_INITS}
 HASH_SEED, HASH_MUL = 5381, 33    # __run_hash: h = seed; h = h * 33 + word (mod 2^32), per word

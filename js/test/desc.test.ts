@@ -71,7 +71,7 @@ test('ABI 1.2: the lock tables open to the loader alone, the site map, and pre-l
   const c = V.cases.find((x: { name: string }) => x.name === 'the lock tables for the loader, a copied block')
   const d = decode(Uint8Array.from(c.desc.match(/../g).map((h: string) => parseInt(h, 16))))
   const t = Object.fromEntries(d.tables.map(x => [x.name, x]))
-  for (const [n, spare] of [['core_lock_codes', 32], ['core_lock_ccs', 32], ['core_field_inits', 32], ['core_store_ids', 16]] as const)
+  for (const [n, spare] of [['core_lock_codes', 32], ['core_lock_ccs', 32], ['core_field_inits', 32], ['core_handles', 32], ['core_store_ids', 16]] as const)
     assert.deepEqual([t[n].flags, t[n].capacity - t[n].count], [F_LOADER, spare], n)
   assert.equal(t.core_lock_params.capacity, 32)
   assert.ok(d.sites!.some(([, , k, mi]) => k === SITE_SITE && mi === 2))

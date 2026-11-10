@@ -1503,7 +1503,7 @@ def test_the_build_descriptor():
         ids = tabs['core_store_ids']             # open to the loader alone: the layout ID and 15 ancestors
         assert ids['flags'] == desc.F_LOADER and ids['count'] == 1 and ids['capacity'] == 1 + 16
         assert ids['entries'] == [(desc.LINKER_ORDER, 0)]
-        assert tabs['core_handles']['flags'] == 0 and tabs['core_handles']['capacity'] == 0
+        assert tabs['core_handles']['flags'] == desc.F_LOADER and tabs['core_handles']['capacity'] == 32
         # ABI 1.2: the site map: n's site, the boot copier, the RAM image's copy and the trailer
         site = B.at(0x1000)
         taken = {k: (lo, hi, mi) for lo, hi, k, mi in d['sites']}

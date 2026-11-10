@@ -106,9 +106,9 @@ image>` prints it.
   collection gives no `"spare"`, `core_lock_params` gets 32. The storage
   tables the linker fills, `core_store_ids` (16: a layout ID and 15
   ancestors), `core_lock_codes`, `core_lock_ccs` (32 each) and
-  `core_field_inits` (32, at most 63 in all), are open to the loader
-  alone (flag bit 3): it adds the +Drive mods' fields there, and a
-  mod's own entries for them are refused. `core_handles`,
+  `core_field_inits` (32, at most 63 in all) and `core_handles` (32),
+  are open to the loader alone (flag bit 3): it adds the +Drive mods'
+  fields there, and a mod's own entries for them are refused.
   `core_payloads`, the `.fast` copy table and DSP tables get none.
   `NAME_n` stays the count of entries the build has. The spare entries
   and the block count toward the RAM budget.

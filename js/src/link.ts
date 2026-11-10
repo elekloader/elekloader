@@ -51,13 +51,13 @@ const MAX_ALIGN = 4096                      // a section's alignment: a power of
 const LINKER_SYMS = new Set(['__run_load', '__run_start', '__run_words', '__bss_start', '__bss_end', '__bss_words', '__run_hash', desc.SYM])
 const MAX_SPARE = 4096                      // a table's spare entries (a collection's "spare")
 // the tables a build descriptor gives no spare entries: the linker fills them, from storage and payloads
-const NO_SPARE = [store.HANDLES_TABLE, PAYLOADS]
+const NO_SPARE = [PAYLOADS]
 // the tables the linker fills from storage that a build descriptor opens to the loader alone (desc.F_LOADER):
 // spare entries for the +Drive mods' fields, which a mod's own contributions may not take
-const LOADER_ONLY = new Set([store.IDS_TABLE, store.CODES_TABLE, store.CCS_TABLE, store.INITS_TABLE])
+const LOADER_ONLY = new Set([store.IDS_TABLE, store.CODES_TABLE, store.CCS_TABLE, store.INITS_TABLE, store.HANDLES_TABLE])
 // a table's spare entries in a build descriptor where its collection gives no "spare" (else desc.SPARE)
 const DRIVE_SPARE = new Map<string, number>([['core_lock_params', 32], [store.CODES_TABLE, 32], [store.CCS_TABLE, 32],
-  [store.INITS_TABLE, 32], [store.IDS_TABLE, 1 + store.MAX_ANCESTORS]])
+  [store.INITS_TABLE, 32], [store.HANDLES_TABLE, 32], [store.IDS_TABLE, 1 + store.MAX_ANCESTORS]])
 // a table's most entries, flashed and spare, where its collection gives no "max"
 const DRIVE_MAX = new Map<string, number>([[store.INITS_TABLE, store.MAX_INITS]])
 export const HASH_SEED = 5381, HASH_MUL = 33       // __run_hash: h = seed; h = h * 33 + word (mod 2^32), per word
