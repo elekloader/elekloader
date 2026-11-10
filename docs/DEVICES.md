@@ -442,12 +442,12 @@ A proof of concept: the profile (`analog_four_mk2.py`, where each fact's
 evidence is) and a core (mods/core-a4mk2) built from core-ar2 0.3's sources.
 The A4 runs on the Analog Rytm MKII's platform, but every address, size and
 count here was found again in the A4's own image (Ghidra, and rytm-emu's A4
-build, 20 Oct 2026), none copied from the Rytm. On a unit, a build of core-a4mk2
-with hooks-check-a4mk2 (HC56, 20 Oct 2026) booted and every event ran as
-expected, and one with store-check-a4mk2 (SC56, 21 Oct 2026) kept every scope's
+build, 20 Oct 2026), none copied from the Rytm. On a unit, a build of core
+with hooks-check (HC56, 20 Oct 2026) booted and every event ran as
+expected, and one with store-check (SC56, 21 Oct 2026) kept every scope's
 fields through saves, loads, power cycles and a Transfer round trip.
-Recovery to stock worked on the unit (21 Oct 2026). core-a4mk2 0.2's
-parameter pages and views, with pages-check-a4mk2 (PA56, 23 Oct 2026), drew
+Recovery to stock worked on the unit (21 Oct 2026). core 0.2's
+parameter pages and views, with pages-check (PA56, 23 Oct 2026), drew
 every screen checked as in the emulator, and a mod's view came back after
 a project load and a power cycle.
 
@@ -495,8 +495,8 @@ a project load and a power cycle.
   In rytm-emu (with a fallback added so it accepts a patched A4 image), a
   build with core alone runs as stock does, with the same frames and a
   byte-identical screen; hello-marker-a4 differs from stock only in its
-  square; hooks-check-a4mk2 counted every event and listed its SETTINGS row.
-  With store-check-a4mk2, every scope's markers read back after a project
+  square; hooks-check counted every event and listed its SETTINGS row.
+  With store-check, every scope's markers read back after a project
   save, loading another project, loading it back, and a power cycle, and
   CREATE NEW cleared them all.
 - **Recovery.** The STARTUP menu (FUNC at power-on), TRIG 4 for OS UPGRADE,

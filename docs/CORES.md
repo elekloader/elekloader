@@ -37,7 +37,7 @@ older ones people still have:
 | Analog Rytm MKII | 1.74 | `core-ar2-0.3.elemod` | the [core-ar2-v0.3](https://github.com/elekloader/elekloader/releases/tag/core-ar2-v0.3) pre-release, and the shop |
 | Digitone II | 1.12 | `core-dn2-0.4.elemod` | on main, not released: build it ([below](#building-a-core)) |
 | Analog Rytm MKII | 1.73 | `core-ar2-0.2.elemod` | not released: the last core with 1.73; build it from commit 92a99c9 ([below](#building-a-core)) |
-| Analog Four MKII | 1.56 | `core-a4-0.5.elemod` | the [v0.10.0](https://github.com/elekloader/elekloader/releases/tag/v0.10.0) release, built into its apps, and the web page (a proof of concept). It is mods/core-a4mk2's 0.5, released before the folder's rename; from 0.6 the file is `core-a4mk2-<version>.elemod` |
+| Analog Four MKII | 1.56 | `core-a4-0.5.elemod` | the [v0.10.0](https://github.com/elekloader/elekloader/releases/tag/v0.10.0) release, built into its apps, and the web page (a proof of concept). It is [mods/core-a4mk2](../mods/core-a4mk2) 0.5 under its old name; its next files are `core-a4mk2-<version>.elemod` |
 | Octatrack MKI, MKII | 1.40C | `core-ot-0.8.elemod` | the [v0.10.0](https://github.com/elekloader/elekloader/releases/tag/v0.10.0) release, built into its apps, and the web page |
 | Octatrack MKI, MKII | 1.40C | `core-ot-0.1.elemod` | the v0.4.0 release: PURGE SAMPLES freezes the unit with it, so use 0.3.1 or newer |
 | Model:Cycles | 1.13 | `core-mc-0.3.elemod` | the [v0.10.0](https://github.com/elekloader/elekloader/releases/tag/v0.10.0) release, built into its apps, and the web page |

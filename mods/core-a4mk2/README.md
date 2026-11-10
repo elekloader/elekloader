@@ -109,7 +109,7 @@ lookup, so the knobs follow at the next redraw. The view's constructor
 at boot, so the name stays the first entry's. Additive: no new sites, and
 a build with no entries in it behaves as 0.2.
 
-pages-check-a4mk2 0.2 (for core 0.3) answers CHECK through `core_page_fns`,
+pages-check 0.2 (for core 0.3) answers CHECK through `core_page_fns`,
 with knob B (AMP PAN again) shown while its count of PAN's turns is odd.
 The count is one per delta call, that is per turn update (the bar's
 length), not per value step.
@@ -118,7 +118,7 @@ In rytm-emu's A4 build (24 Oct 2026) [emu], core 0.3 alone (A403, with
 analoghealth's remote keys) drew every screen of Check 4's stock steps
 (a new project; track 1's OSC1, OSC2, FLTR, AMP, ENV and LFO pages, turned;
 the FX track's and the CV track's pages; AMP pressed three times) identical
-to stock's references, pixel for pixel. With pages-check-a4mk2 0.2 (PF56,
+to stock's references, pixel for pixel. With pages-check 0.2 (PF56,
 with the remote keys) the AMP key stayed on AMP until PAN turned, then
 stepped AMP, CHECK, AMP, CHECK, with CHECK's title CHECK each time; PAN
 read in hex (`7F` at the end stop) and the bar grew with each turn update.
@@ -130,7 +130,7 @@ nothing on the screen and left the count as it was.
 On a unit (OS 1.56, 24 Oct 2026) [hw], the same two plans passed. A403H
 (core 0.3 alone, with analoghealth 1.2's remote keys) matched stock's
 references on every screen of Check 4's stock steps. On PF56H (core 0.3,
-pages-check-a4mk2 0.2, analoghealth 1.2) the AMP key stayed on AMP until PAN
+pages-check 0.2, analoghealth 1.2) the AMP key stayed on AMP until PAN
 turned, then stepped AMP, CHECK, AMP, CHECK with CHECK's title each time;
 PAN read in hex (`7F` at the end stop, `75` after a turn back) and the bar
 grew with each turn update. On CHECK, knob A turned PAN, and knob B was PAN
@@ -140,7 +140,7 @@ at 54.
 
 In rytm-emu's A4 build (22 Oct 2026), core 0.2 alone (A402) drew every
 screen checked (main, AMP, FILTERS, OSC1, an FX track's CHORUS, with
-knobs turned) identical to stock's, pixel for pixel; with pages-check-a4mk2
+knobs turned) identical to stock's, pixel for pixel; with pages-check
 (PC56), AMP PAN read its value in hex (centre `40`), the bar counted each
 step, and every other knob was stock's. `core_audio_load` read about 0x7a
 (48%) there, an emulator figure. With the views, A402 drew all 90 screens
@@ -154,7 +154,7 @@ view's page id only through page_info and to pick the parameter set
 (0x400a647c, which singles out pages 1, 3, 4, 5 and 47), so mod pages from
 48 are safe.
 
-On a unit (OS 1.56, 23 Oct 2026) [hw], PA56 (core 0.2 with pages-check-a4mk2
+On a unit (OS 1.56, 23 Oct 2026) [hw], PA56 (core 0.2 with pages-check
 and analoghealth's remote keys) passed the same plan as in the emulator,
 every screen checked identical to the emulator's: every synth, FX and CV
 page as on stock; AMP staying on AMP until PAN turned; PAN in hex and the
@@ -267,7 +267,7 @@ What it does not do:
 - The spare sound and FX words reach the engine through stock's parameter
   pushes, into the slot every unused parameter goes to; that nothing reads
   that slot is inferred from the code, and on a unit (21 Oct 2026) a
-  pattern sounded the same by ear before and after store-check-a4mk2 set
+  pattern sounded the same by ear before and after store-check set
   every sound's markers.
 
 ## The OS upgrade's restart (0.4)
@@ -473,26 +473,26 @@ firmware a mod NRPN does nothing.
 
 ## Checked so far
 
-On a unit (OS 1.56, 20 Oct 2026) [hw]: build HC56 (core-a4mk2 with
-[hooks-check-a4mk2](../../examples/hooks-check-a4mk2)) booted and passed every
+On a unit (OS 1.56, 20 Oct 2026) [hw]: build HC56 (core with
+[hooks-check](../../examples/hooks-check-a4mk2)) booted and passed every
 check: the tick, draw, key, encoder and SETTINGS events and the render's
-entry and exit. Build SC56 (core-a4mk2 with
-[store-check-a4mk2](../../examples/store-check-a4mk2), 21 Oct 2026) read every
+entry and exit. Build SC56 (core with
+[store-check](../../examples/store-check-a4mk2), 21 Oct 2026) read every
 marker back after SAVE PROJECT AS and a power cycle, loading another
 project (zeros, as it should) and loading the project back, a power cycle,
 and a Transfer round trip of the project file; CREATE NEW cleared every
 field, and on the new project, marking and a power cycle without saving
 kept the project fields. With every marker set, a pattern on all four
 synth tracks and the effects sounded the same by ear as before. With
-[ddr-canary-a4mk2](../../examples/ddr-canary-a4mk2) (CA56), no word changed in the
+[ddr-canary](../../examples/ddr-canary-a4mk2) (CA56), no word changed in the
 mods' area after the mods' data or in the two unused gaps, through a session
 of normal use (Overbridge included) and after a power cycle (21 Oct 2026).
 Recovery (the STARTUP menu, TRIG 4, the stock file over MIDI DIN) brought
 the unit back to stock 1.56 (21 Oct 2026). With core 0.2 and
-[pages-check-a4mk2](../../examples/pages-check-a4mk2) (PA56, 23 Oct 2026), the
+[pages-check](../../examples/pages-check-a4mk2) (PA56, 23 Oct 2026), the
 parameter routines and the views passed every check ("Parameter pages
 (0.2)" above). With core 0.3 (24 Oct 2026), core alone (A403H) drew Check
-4's stock screens as stock, and with pages-check-a4mk2 0.2 (PF56H) CHECK's
+4's stock screens as stock, and with pages-check 0.2 (PF56H) CHECK's
 knob B followed `core_page_fns` at each redraw and an empty B took no turn
 ("Parameter pages (0.2, 0.3)" above).
 
@@ -503,11 +503,11 @@ images; 20 Oct 2026):
   the same frames and a final screen identical to stock's.
   [hello-marker-a4](../../examples/hello-marker-a4) (HM56) differs from stock
   only at its 3x3 square, on the main page, the OSC1 page, after edits and
-  in the settings menu. [hooks-check-a4mk2](../../examples/hooks-check-a4mk2)
+  in the settings menu. [hooks-check](../../examples/hooks-check-a4mk2)
   (HC56): every event fired; the tick at about 20 Hz, keys and encoder
   detents counted, the render's entry and exit counts never apart, and the
   HOOK TEST row listed after SYSTEM and counted when selected.
-- **Mod storage** [emu], with [store-check-a4mk2](../../examples/store-check-a4mk2)
+- **Mod storage** [emu], with [store-check](../../examples/store-check-a4mk2)
   marking every field of every item:
   - after marking, every marker read back;
   - SAVE PROJECT AS, then a power cycle straight away: every marker read
@@ -534,11 +534,11 @@ images; 20 Oct 2026):
   and encoder edits saw no stock access to them other than core's own and a
   memcpy of a whole pool sound.
 - **Page functions** [emu] (core 0.3, 24 Oct 2026): core alone (A403) as
-  stock on every screen of Check 4's stock steps; with pages-check-a4mk2 0.2
+  stock on every screen of Check 4's stock steps; with pages-check 0.2
   (PF56) CHECK's knob B followed `core_page_fns` at each redraw, and an
   empty B took no turn ("Parameter pages (0.2, 0.3)" above).
 - **Mod p-locks** [emu] (core 0.5 with
-  [lock-check-a4mk2](../../examples/lock-check-a4mk2), dtboot, 5 Nov 2026), on
+  [lock-check](../../examples/lock-check-a4mk2), dtboot, 5 Nov 2026), on
   track 1 of the first pattern, stopped, in grid recording:
   - T1 held and LOCK CHECK's knob A turned: the lock went into the ledger
     (set-and-kept), and the trig played it on that voice, read back as A's
@@ -555,7 +555,7 @@ images; 20 Oct 2026):
     accept's refill (above).
   Not checked yet: track clear, the SysEx dump out and in, the kit change's
   and CREATE NEW's clear, the FX and CV kinds' knobs, a fine parameter.
-- **Destinations** [emu] (core 0.5 with lock-check-a4mk2, its A, K and V
+- **Destinations** [emu] (core 0.5 with lock-check, its A, K and V
   `"mod": true`, dtboot, 5 Nov 2026):
   - with a trig held in grid recording, LOCK CHECK's knobs read LKA and LKC
     and a turn of A titles the screen LOCK CHECK A (core 0.5 part 1: ERR,
@@ -586,7 +586,7 @@ images; 20 Oct 2026):
   screens' lists (the macro setup shares their view), a kit of another
   layout loading as None, stock 1.56 with such a kit (ERR and the sink, as
   found 2026-11-04 with pokes).
-- **The value read** [emu] (core 0.5 with lock-check-a4mk2 1.1, dtboot, 5 Nov
+- **The value read** [emu] (core 0.5 with lock-check 1.1, dtboot, 5 Nov
   2026): each block, core's read of A on a voice in the engine's scale
   beside stock's engine copy (0x80005af0) of a stock coarse parameter on
   the same voice with the same value and the same modulation (track 1's
@@ -614,7 +614,7 @@ images; 20 Oct 2026):
   Not checked yet: a poly track's two voices, a sound-locked trig's pool
   sound as the target, a `"smooth": false` field, a field wider than 7
   bits against a stock fine parameter, CONTROL IN.
-- **MIDI** [emu] (core 0.5 with lock-check-a4mk2 1.2, whose A and V declare
+- **MIDI** [emu] (core 0.5 with lock-check 1.2, whose A and V declare
   `"cc": true`, dtboot, 5 Nov 2026), each field read back as stored
   (`lk_midi`) after DIN messages (works, data read):
   - NRPN 0:112 on channel 1 (A, 77), 0:113 on channel 2 with data MSB 3
@@ -638,8 +638,8 @@ images; 20 Oct 2026):
   Not checked yet: an NRPN while a trig is held (stock's
   +0x38 path with a held step), USB MIDI (the same dispatch), the MIDI
   CONFIG screens' own settings (poked here).
-- **Sound** [emu] (core 0.5 with lock-check-a4mk2 1.2 and
-  [sound-check-a4mk2](../../examples/sound-check-a4mk2) 1.0, dtboot
+- **Sound** [emu] (core 0.5 with lock-check 1.2 and
+  [sound-check](../../examples/sound-check-a4mk2) 1.0, dtboot
   `--analog-wav`, 5 Nov 2026): a mod parameter read every block drives a
   tone in the outputs (works, WAV): LVL 100 gave a clean 110 Hz sine, PIT
   12 220 Hz; LFO1 on PIT and LFO2 on LVL moved the tone's pitch and level
