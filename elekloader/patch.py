@@ -123,6 +123,10 @@ def build(stock_path, mod_paths, version=None, check_only=False, log=print, lock
             man['store'] = linked.store
             for n in linked.store_notes:
                 log('storage: ' + n)
+        if linked.knobs:
+            man['knobs'] = linked.knobs
+        for n in linked.knob_notes:
+            log('knobs: ' + n)
     if len(mods) == 1 and not v2 and (mods[0].doc.get('build') or {}).get('section3_sha256'):
         want = mods[0].doc['build'].get('section3_sha256')
         man['bundle_matches_build'] = want == sha(img)

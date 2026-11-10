@@ -156,6 +156,27 @@ lockfile's order, which core_handle_fields walks over every item of the
 project, so a mod can list every handle a project uses. A handle is not a
 parameter (no "lock") and has no init (0 is none).
 
+Knob ids (core-ar2 0.13). A mod that declares `"knobs": n` in its mod.json
+gets a run of n knob ids from the device's first mod id up (555 on the
+Analog Rytm MKII, the profile's param_ids), and the symbol `__knobs` is its
+first. The ids are not stored data (the core keeps no lock of a mod-kept
+knob, and saved locks name lock codes), so they are not part of the layout ID;
+the lockfile keeps them only so screens and test sheets stay the same from
+one build to the next, in three more keys written once a build has such a
+mod:
+
+     "knobs": [{"mod", "first", "count"}], "freed_knobs": [{"mod", "first", "count"}],
+     "next_knob": 567
+
+A mod keeps its run while it asks for the same count. A mod that leaves the
+build keeps its run in "freed_knobs" and gets it back when it returns. A mod
+whose count changes keeps its first id when the new run has room there, and
+otherwise takes never-used ids from "next_knob" up, past the ids other mods
+take (fixed ids in their entries included). Only when the never-used ids run
+out are the freed runs given out again. A core that keeps no lockfile still
+gets the same ids for the same mods: they are given out from the first id in
+the order of the mods' ids.
+
 Nothing here is random: the same lockfile (or none) and mods always link to
 the same bytes.
 """
@@ -184,6 +205,7 @@ CV_FLAG = 0x800                                 # in core_lock_codes: a kit fiel
 FIRST_CODE, LAST_CODE = 42, 127                 # a device's codes unless its spec says others
 INITS_TABLE = 'core_field_inits'                # core-ar2 0.10: the fields' inits, by slot
 HANDLES_TABLE = 'core_handles'                  # core-ar2 0.11: the handle fields' descriptors
+KNOB_TOP = 0xFFFF                               # the last knob id: page knob lists hold 16 bits (abs16)
 MAX_INITS = 63                                  # slots 1..63, in the descriptor's bits 16..21
 LOCK_SCOPES = ('sound', 'kit')
 KIND_NAMES = {'synth': 'the synth tracks', 'fx': 'the FX track', 'cv': 'the CV track'}
@@ -557,6 +579,95 @@ def check_lock(lock, dev_key):
         coded = {(c['mod'], c['sym']) for c in lock.get('codes', [])}
         if any((c['mod'], c['sym']) not in coded for c in lock['ccs']):
             raise ModError('lockfile: a CC for a field that has no lock code')
+    _check_knobs(lock)
+
+
+def _check_knobs(lock):
+    if not any(k in lock for k in ('knobs', 'freed_knobs', 'next_knob')):
+        return
+    nk = lock.get('next_knob')
+    if not _whole(nk) or not 0 <= nk <= KNOB_TOP + 1:
+        raise ModError('lockfile: "next_knob" %r' % (nk,))
+    seen = set()
+    for k in ('knobs', 'freed_knobs'):
+        ks = lock.get(k)
+        if not isinstance(ks, list):
+            raise ModError('lockfile: "%s" is a list' % k)
+        for r in ks:
+            if not isinstance(r, dict) or set(r) != {'mod', 'first', 'count'} \
+                    or not isinstance(r['mod'], str) or not _whole(r['first']) or not _whole(r['count']) \
+                    or r['count'] < 1 or r['first'] < 0 or r['first'] + r['count'] > nk \
+                    or k == 'knobs' and r['mod'] in seen:
+                raise ModError('lockfile: a bad entry in "%s"' % k)
+            if k == 'knobs':
+                seen.add(r['mod'])
+    runs = sorted((r['first'], r['first'] + r['count'] - 1) for r in lock['knobs'])
+    if any(b[0] <= a[1] for a, b in zip(runs, runs[1:])):
+        raise ModError('lockfile: two mods\' knob ids overlap')
+
+
+def knobs(lock, want, first, fixed=(), top=KNOB_TOP):
+    """Give each mod in want ({mod id: count}) a run of knob ids from first up, in lock
+    (changed in place; a dict, {} for a build without a lockfile), past the runs in fixed
+    ([(first, last)]: ids mods' entries name themselves). Not part of the layout ID.
+    -> ({mod id: its first id}, [notes]). Raises ModError."""
+    had, freed0 = lock.get('knobs', []), lock.get('freed_knobs', [])
+    if not want and not had and not freed0:
+        return {}, []
+    fixed = [(a, b) for a, b in fixed if b >= first]
+    nxt = max(first, lock.get('next_knob', first))
+    notes, runs, freed = [], [], [dict(r) for r in freed0]
+
+    def clash(a, n, taken):
+        return [y for x, y in taken if a <= y and x <= a + n - 1]
+
+    def span(r):
+        return (r['first'], r['first'] + r['count'] - 1)
+    for r in had:
+        hit = clash(r['first'], r['count'], fixed)
+        if want.get(r['mod']) == r['count'] and not hit:
+            runs.append(dict(r))
+            continue
+        freed.append(dict(r))
+        if r['mod'] not in want:
+            notes.append('%s: knob ids %d..%d freed, and kept for it until the unused ids run out'
+                         % ((r['mod'],) + span(r)))
+    for mod in sorted(set(want) - {r['mod'] for r in runs}):
+        n = want[mod]
+        taken = fixed + [span(r) for r in runs] + [span(r) for r in freed if r['mod'] != mod]
+        at = next((r['first'] for r in reversed([r for r in freed if r['mod'] == mod])
+                   if r['first'] + n - 1 <= top and not clash(r['first'], n, taken)), None)
+        freed = [r for r in freed if r['mod'] != mod]
+        if at is not None:
+            notes.append('%s: back with knob ids %d..%d' % (mod, at, at + n - 1))
+        else:
+            for again in (False, True):
+                if again:              # the never-used ids are gone: give the freed runs out again
+                    if not freed:
+                        at = None
+                        break
+                    notes.append('knob ids freed by %s given out again' % ', '.join(sorted({r['mod'] for r in freed})))
+                    freed = []
+                    taken = fixed + [span(r) for r in runs]
+                at = first if again else nxt
+                while True:
+                    hit = clash(at, n, taken)
+                    if not hit:
+                        break
+                    at = max(hit) + 1
+                if at + n - 1 <= top:
+                    break
+                at = None
+            if at is None:
+                raise ModError('%s asks for %d knob ids, and ids %d..%d have no run that long free'
+                               % (mod, n, first, top))
+            notes.append('%s: knob ids %d..%d' % (mod, at, at + n - 1))
+        runs.append({'mod': mod, 'first': at, 'count': n})
+        nxt = max(nxt, at + n)
+    lock['knobs'] = sorted(runs, key=lambda r: r['first'])
+    lock['freed_knobs'] = freed
+    lock['next_knob'] = max([nxt] + [r['first'] + r['count'] for r in runs + freed])
+    return {r['mod']: r['first'] for r in runs}, notes
 
 
 def _whole(v):

@@ -882,7 +882,7 @@ def answering(B, first, last, table='core_params', ident='m'):
     return d
 
 
-@row('check', "<>: its <> entry takes ids <>..<>, and <>..<> are <>; a mod's own ids start at <>",
+@row('id_problems', "<>: its <> entry takes ids <>..<>, and <>..<> are <>; a mod's own ids start at <>",
      device='analog-rytm-mk2')
 def _(B):
     return [("m 1: its core_params entry takes ids 470..483, and 469..554 are core's lockable "
@@ -890,14 +890,14 @@ def _(B):
         [knobs(B), answering(B, 560, 573)]
 
 
-@row('check', "<>: its <> entry takes ids <>..<>; that table's ids start at <>", device='analog-rytm-mk2')
+@row('id_problems', "<>: its <> entry takes ids <>..<>; that table's ids start at <>", device='analog-rytm-mk2')
 def _(B):
     return [("m 1: its core_param_locks entry takes ids 1..4; that table's ids start at 555",
              [knobs(B), answering(B, 1, 4, 'core_param_locks')])], \
         [knobs(B), answering(B, 1, 4)]
 
 
-@row('check', '<> and <> both take ids <>..<> (<>, <>)', device='analog-rytm-mk2')
+@row('id_problems', '<> and <> both take ids <>..<> (<>, <>)', device='analog-rytm-mk2')
 def _(B):
     return [('m 1 and n 1 both take ids 570..573 (core_params, core_param_locks)',
              [knobs(B), answering(B, 560, 573), answering(B, 570, 580, 'core_param_locks', 'n')])], \
@@ -909,6 +909,67 @@ def both(B, first, last):
     d = answering(B, first, last)
     d['contribute'].append(dict(d['contribute'][0], to='core_param_locks'))
     return d
+
+
+def knobbed(B, count=4, ident='k', add=(0, 3), typ='abs32', short_add=1):
+    """A mod with "knobs": count, whose core_param_locks entry answers for __knobs+add[0]..+add[1]
+    and whose .run holds a 16-bit knob list entry, __knobs+short_add, at +8."""
+    d = B.other(ident)
+    d['knobs'] = count
+    d['sections']['.run'] = {'align': 4, 'len': 12, 'parts': [['hex', '00' * 12]]}
+    d['symbols'] = {'e_' + ident: ['.run', 0]}
+    d['imports'] = ['core_fn', '__knobs']
+    d['relocs'] = [['.run', 0, typ, 'sym:__knobs', add[0]], ['.run', 4, 'abs32', 'sym:__knobs', add[1]],
+                   ['.run', 8, 'abs16', 'sym:__knobs', short_add]]
+    d['contribute'] = [{'to': 'core_param_locks', 'data': '00000000',
+                        'relocs': [[0, 'abs32', 'sym:e_' + ident, 0]]}]
+    return d
+
+
+@row('Mod2.__init__', '<>: "knobs" is a count of knob ids, 0..<>', device='analog-rytm-mk2')
+def _(B):
+    def count(n):
+        d = knobbed(B, 4)
+        d['knobs'] = n
+        return [knobs(B), d]
+    return [('k: "knobs" is a count of knob ids, 0..1024', count(1025)),
+            ('k: "knobs" is a count of knob ids, 0..1024', count('4'))], count(1024)
+
+
+@row('Mod2.__init__', "<>: <> is the linker's (its first knob id), not a symbol of a mod", device='analog-rytm-mk2')
+def _(B):
+    bad = knobbed(B)
+    bad['symbols']['__knobs'] = ['abs', 600]
+    return [("k: __knobs is the linker's (its first knob id), not a symbol of a mod", [knobs(B), bad])], \
+        [knobs(B), knobbed(B)]
+
+
+@row('check', '<> asks for knob ids ("knobs"), which the <> does not give mods')
+def _(B):
+    return B.pair('m 1 asks for knob ids ("knobs"), which the Octatrack does not give mods',
+                  lambda d: d[1].update(knobs=2), lambda d: d[1].update(knobs=0))
+
+
+@row('check', '<>: <> is a <> reference to <>+<>; one takes abs32 or abs16 with an addend below its "knobs" (<>)',
+     device='analog-rytm-mk2')
+def _(B):
+    return [('k 1: .run+0x0 is a abs32 reference to __knobs+4; one takes abs32 or abs16 with an addend below '
+             'its "knobs" (4)', [knobs(B), knobbed(B, 4, add=(4, 3))]),
+            ('k 1: .run+0x0 is a pc32 reference to __knobs+0; one takes abs32 or abs16 with an addend below '
+             'its "knobs" (4)', [knobs(B), knobbed(B, 4, typ='pc32')]),
+            ('k 1: .run+0x8 is a abs16 reference to __knobs+-1; one takes abs32 or abs16 with an addend below '
+             'its "knobs" (4)', [knobs(B), knobbed(B, 4, short_add=-1)])], \
+        [knobs(B), knobbed(B, 5, add=(4, 4))]
+
+
+@row('link.put', '<>: a 16-bit value out of range (<>)', device='analog-rytm-mk2')
+def _(B):
+    def short(tgt, add):
+        d = knobbed(B)
+        d['relocs'][2] = ['.run', 8, 'abs16', tgt, add]
+        return [knobs(B), d]
+    return [('.run+0x8: a 16-bit value out of range (%d)' % (0x47be0000), short('abs', 0x47be0000))], \
+        short('abs', 0xFFFF)
 
 
 # ---- the finished image against the stock one (link.image_problems) -------------------------------------------
@@ -1014,7 +1075,7 @@ def test_digitakt_fixtures():
 
 
 def test_analog_rytm_fixtures():
-    assert run_rows('analog-rytm-mk2') == 13
+    assert run_rows('analog-rytm-mk2') == 17
 
 
 def test_the_lfo_destination_field_is_placed_only_with_an_lfo_field():
@@ -1272,6 +1333,42 @@ def messages(path):
     with open(os.path.join(ROOT, path), encoding='utf-8') as fh:
         V().visit(ast.parse(fh.read()))
     return out
+
+
+def test_knob_ids_are_given_from_555_past_fixed_ids_and_written_as_abs32_and_abs16():
+    import struct
+    with Bench('analog-rytm-mk2') as B:
+        fixed = answering(B, 555, 560, 'core_param_locks', 'f')     # a mod with fixed ids 555..560
+        mods = [knobs(B), fixed, knobbed(B, 4, 'k', (0, 3), short_add=2), knobbed(B, 2, 'j', (0, 1))]
+        out = link.link([link.Mod2(d, d['id']) for d in mods], B.img)
+        assert out.knobs == {'j': [561, 2], 'k': [563, 4]}         # by mod id, past 555..560
+        assert out.knob_notes == ['j: knob ids 561..562', 'k: knob ids 563..566']
+        assert out.map['k:__knobs'] == 563 and out.store is None
+        run = out.layout['sections']['k .run'] - out.layout['ddr'][0]
+        at = out.layout['run_load'] - B.dev.main_load + run
+        assert struct.unpack('>IIH', out.image[at:at + 10]) == (563, 566, 565)
+        # the linked mods' ids are checked again: a run on another mod's ids is refused
+        k = link.Mod2(mods[2], 'k')
+        assert link.id_problems([k, link.Mod2(fixed, 'f')], B.img, {'k': 558}) == \
+            ['k 1 and f 1 both take ids 558..560 (core_param_locks, core_param_locks)']
+
+
+def test_a_core_with_a_lockfile_keeps_the_knob_ids_from_build_to_build():
+    with Bench('analog-rytm-mk2') as B:
+        core = keeper(B)
+        core['collections'].update(knobs(B)['collections'])
+
+        def build(lock, *mods):
+            return link.link([link.Mod2(copy.deepcopy(d), d['id']) for d in (core,) + mods], B.img, lock)
+        one = build(None, knobbed(B, 4, 'k'), knobbed(B, 2, 'j', (0, 1)))
+        assert one.knobs == {'j': [555, 2], 'k': [557, 4]}
+        assert one.store['knobs'] == [{'mod': 'j', 'first': 555, 'count': 2}, {'mod': 'k', 'first': 557, 'count': 4}]
+        two = build(one.store, knobbed(B, 4, 'k'), knobbed(B, 3, 'a', (0, 2)))      # j out, a in: k keeps its ids
+        assert two.knobs == {'a': [561, 3], 'k': [557, 4]}
+        assert two.store['id'] == one.store['id'] and store.from_image(two.image)['knobs'] == two.store['knobs']
+        three = build(two.store, knobbed(B, 4, 'k'), knobbed(B, 2, 'j', (0, 1)), knobbed(B, 3, 'a', (0, 2)))
+        assert three.knobs == {'a': [561, 3], 'j': [555, 2], 'k': [557, 4]}
+        assert three.knob_notes == ['j: back with knob ids 555..556']
 
 
 def test_every_refusal_has_a_fixture():
