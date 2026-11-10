@@ -2146,7 +2146,10 @@ def test_core_ar2_0_12_room_for_drive_mods():
     hidden slots, the page tables by the views' room (10 views of VIEW_MAX 16 pages, 11 of them
     stock's), the id-range tables by the loader's mods, and core_step_owners stopping at its 8
     owners (steps.c OWNERS)."""
-    with open(os.path.join(HERE, '..', 'mods', 'core-ar2', 'mod.json'), encoding='utf-8') as fh:
+    path = os.path.join(HERE, '..', 'mods', 'core-ar2', 'mod.json')
+    if not os.path.exists(path):
+        return      # under Pyodide (tests/test_web.mjs): a few of the repository's files, not its folders
+    with open(path, encoding='utf-8') as fh:
         doc = json.load(fh)
     cols = doc['collections']
     assert tuple(map(int, doc['version'].split('.'))) >= (0, 12)
