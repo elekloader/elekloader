@@ -1,0 +1,4651 @@
+{
+ "mods": {
+  "a": {
+   "id": "a",
+   "storage": [
+    {
+     "bits": 4,
+     "scope": "sound",
+     "sym": "a1"
+    }
+   ]
+  },
+  "b": {
+   "id": "b",
+   "storage": [
+    {
+     "bits": 4,
+     "scope": "sound",
+     "sym": "b1"
+    }
+   ]
+  },
+  "duck": {
+   "id": "duck",
+   "storage": [
+    {
+     "bits": 4,
+     "cc": true,
+     "lock": true,
+     "scope": "kit",
+     "sym": "duck_src"
+    },
+    {
+     "bits": 28,
+     "init": 5,
+     "lock": true,
+     "scope": "kit",
+     "sym": "duck_amt"
+    }
+   ]
+  },
+  "duck2": {
+   "id": "duck",
+   "storage": [
+    {
+     "bits": 5,
+     "cc": true,
+     "lock": true,
+     "scope": "kit",
+     "sym": "duck_src"
+    },
+    {
+     "bits": 28,
+     "init": 5,
+     "lock": true,
+     "scope": "kit",
+     "sym": "duck_amt"
+    }
+   ]
+  },
+  "fx": {
+   "id": "fx-sends",
+   "storage": [
+    {
+     "bits": 25,
+     "scope": "kit",
+     "sym": "fx_k"
+    },
+    {
+     "bits": 24,
+     "scope": "kit",
+     "sym": "fx_k2"
+    },
+    {
+     "bits": 7,
+     "cc": true,
+     "lock": true,
+     "scope": "sound",
+     "sym": "fx_s"
+    }
+   ]
+  },
+  "kitcc": {
+   "id": "kitcc",
+   "storage": [
+    {
+     "bits": 1,
+     "cc": true,
+     "lock": true,
+     "scope": "kit",
+     "sym": "kc"
+    }
+   ]
+  },
+  "lfo": {
+   "id": "lfo-rnd",
+   "storage": [
+    {
+     "bits": 16,
+     "lfo": true,
+     "lock": true,
+     "scope": "sound",
+     "sym": "lr_a"
+    }
+   ]
+  },
+  "one": {
+   "id": "one",
+   "storage": [
+    {
+     "bits": 1,
+     "lock": true,
+     "scope": "sound",
+     "sym": "o1"
+    }
+   ]
+  },
+  "rough": {
+   "id": "rough",
+   "storage": [
+    {
+     "bits": 3,
+     "init": 2,
+     "lock": true,
+     "mod": true,
+     "scope": "sound",
+     "smooth": false,
+     "sym": "rg"
+    }
+   ]
+  },
+  "s": {
+   "id": "s",
+   "storage": [
+    {
+     "bits": 1,
+     "cc": true,
+     "lock": true,
+     "scope": "sound",
+     "sym": "s1"
+    }
+   ]
+  },
+  "sidecar": {
+   "id": "sidecar",
+   "storage": [
+    {
+     "bits": 16,
+     "handle": true,
+     "scope": "project",
+     "sym": "sc_h"
+    }
+   ]
+  },
+  "small": {
+   "id": "small",
+   "storage": [
+    {
+     "bits": 8,
+     "scope": "kit",
+     "sym": "sm"
+    }
+   ]
+  },
+  "two": {
+   "id": "two",
+   "storage": [
+    {
+     "bits": 1,
+     "lock": true,
+     "scope": "sound",
+     "sym": "t1"
+    },
+    {
+     "bits": 1,
+     "lock": true,
+     "scope": "sound",
+     "sym": "t2"
+    }
+   ]
+  },
+  "utf": {
+   "id": "\u00e9cho",
+   "storage": [
+    {
+     "bits": 3,
+     "scope": "global",
+     "sym": "ec"
+    }
+   ]
+  },
+  "vdac": {
+   "id": "voice-dac",
+   "storage": [
+    {
+     "bits": 32,
+     "scope": "sound",
+     "sym": "vd_s"
+    },
+    {
+     "bits": 7,
+     "scope": "sound",
+     "sym": "vd_s2"
+    },
+    {
+     "bits": 1,
+     "scope": "global",
+     "sym": "vd_g"
+    }
+   ]
+  },
+  "zed": {
+   "id": "zed",
+   "storage": [
+    {
+     "bits": 2,
+     "scope": "global",
+     "sym": "zz"
+    }
+   ]
+  }
+ },
+ "runs": [
+  {
+   "name": "fresh, nothing",
+   "results": [
+    {
+     "ancestors": [
+      "0x00001234"
+     ],
+     "ccs": [],
+     "codes": [],
+     "fields": {},
+     "generations": {
+      "global": 1,
+      "kit": 1,
+      "pattern": 1,
+      "project": 1,
+      "sound": 1,
+      "track": 1
+     },
+     "handles": [],
+     "id": "0x5a17c0de",
+     "inits": [],
+     "notes": [],
+     "parked": [],
+     "store": "444c53540001000000000058f92685925a17c0de5a17c0de7f000000000000000000000000000000010100000000003801010000000000400101000000000028010100000000001001010000000000200101000000000ec0"
+    }
+   ],
+   "steps": [
+    [
+     {
+      "ancestors": [
+       4660
+      ],
+      "ccs": [],
+      "codes": [],
+      "device": "analog-rytm-mk2",
+      "flashed_id": 1511506142,
+      "inits": 0,
+      "room": {
+       "core_field_inits": 32,
+       "core_handles": 32,
+       "core_lock_ccs": 32,
+       "core_lock_codes": 32
+      },
+      "scopes": {
+       "global": [
+        40,
+        0,
+        1
+       ],
+       "kit": [
+        64,
+        0,
+        1
+       ],
+       "pattern": [
+        32,
+        0,
+        1
+       ],
+       "project": [
+        3776,
+        0,
+        1
+       ],
+       "sound": [
+        56,
+        0,
+        1
+       ],
+       "track": [
+        16,
+        0,
+        1
+       ]
+      }
+     },
+     [
+      "place",
+      []
+     ]
+    ]
+   ]
+  },
+  {
+   "name": "fresh, two mods",
+   "results": [
+    {
+     "ancestors": [
+      "0x5a17c0de",
+      "0x00001234"
+     ],
+     "ccs": [
+      "2100002000000077"
+     ],
+     "codes": [
+      "140000280000007d",
+      "210000200000007e",
+      "270100240000007f"
+     ],
+     "fields": {
+      "duck/duck_amt": "0x27010024",
+      "duck/duck_src": "0x21000020",
+      "lfo-rnd/lr_a": "0x14000028"
+     },
+     "generations": {
+      "global": 1,
+      "kit": 1,
+      "pattern": 1,
+      "project": 1,
+      "sound": 1,
+      "track": 1
+     },
+     "handles": [],
+     "id": "0x2a23bfbe",
+     "inits": [
+      "00000005"
+     ],
+     "notes": [
+      "duck duck_amt: 28 bits of kit storage at bit 36",
+      "duck duck_src: 4 bits of kit storage at bit 32",
+      "lfo-rnd lr_a: 16 bits of sound storage at bit 40",
+      "duck duck_amt: lock code 127",
+      "duck duck_src: lock code 126",
+      "lfo-rnd lr_a: lock code 125",
+      "duck duck_src: CC 119",
+      "lfo-rnd lr_a: not an LFO destination on this build, which places no core_lfo_dst",
+      "layout ID 0x2a23bfbe (from 0x5a17c0de, whose projects it still reads)"
+     ],
+     "parked": [],
+     "store": "444c535400010000000000e4a1351c4f5a17c0de2a23bfbe7c010003000000030000000100000000010100000000002801010000000000200101000000000028010100000000001001010000000000200101000000000ec05a17c0de0110002800000000070400006c666f2d726e646c725f61000204002000000000040800006475636b6475636b5f737263021c002400000005040800006475636b6475636b5f616d747d0704006c666f2d726e646c725f61007e0408006475636b6475636b5f7372637f0408006475636b6475636b5f616d74770408006475636b6475636b5f737263"
+    }
+   ],
+   "steps": [
+    [
+     {
+      "ancestors": [
+       4660
+      ],
+      "ccs": [],
+      "codes": [],
+      "device": "analog-rytm-mk2",
+      "flashed_id": 1511506142,
+      "inits": 0,
+      "room": {
+       "core_field_inits": 32,
+       "core_handles": 32,
+       "core_lock_ccs": 32,
+       "core_lock_codes": 32
+      },
+      "scopes": {
+       "global": [
+        40,
+        0,
+        1
+       ],
+       "kit": [
+        64,
+        8,
+        1
+       ],
+       "pattern": [
+        32,
+        0,
+        1
+       ],
+       "project": [
+        3776,
+        0,
+        1
+       ],
+       "sound": [
+        56,
+        20,
+        1
+       ],
+       "track": [
+        16,
+        0,
+        1
+       ]
+      }
+     },
+     [
+      "place",
+      [
+       "duck",
+       "lfo"
+      ]
+     ]
+    ]
+   ]
+  },
+  {
+   "name": "park and return",
+   "results": [
+    {
+     "ancestors": [
+      "0x5a17c0de",
+      "0x00001234"
+     ],
+     "ccs": [
+      "2100002000000077"
+     ],
+     "codes": [
+      "140000280000007d",
+      "210000200000007e",
+      "270100240000007f"
+     ],
+     "fields": {
+      "duck/duck_amt": "0x27010024",
+      "duck/duck_src": "0x21000020",
+      "lfo-rnd/lr_a": "0x14000028"
+     },
+     "generations": {
+      "global": 1,
+      "kit": 1,
+      "pattern": 1,
+      "project": 1,
+      "sound": 1,
+      "track": 1
+     },
+     "handles": [],
+     "id": "0x2a23bfbe",
+     "inits": [
+      "00000005"
+     ],
+     "notes": [
+      "duck duck_amt: 28 bits of kit storage at bit 36",
+      "duck duck_src: 4 bits of kit storage at bit 32",
+      "lfo-rnd lr_a: 16 bits of sound storage at bit 40",
+      "duck duck_amt: lock code 127",
+      "duck duck_src: lock code 126",
+      "lfo-rnd lr_a: lock code 125",
+      "duck duck_src: CC 119",
+      "lfo-rnd lr_a: not an LFO destination on this build, which places no core_lfo_dst",
+      "layout ID 0x2a23bfbe (from 0x5a17c0de, whose projects it still reads)"
+     ],
+     "parked": [],
+     "store": "444c535400010000000000e4a1351c4f5a17c0de2a23bfbe7c010003000000030000000100000000010100000000002801010000000000200101000000000028010100000000001001010000000000200101000000000ec05a17c0de0110002800000000070400006c666f2d726e646c725f61000204002000000000040800006475636b6475636b5f737263021c002400000005040800006475636b6475636b5f616d747d0704006c666f2d726e646c725f61007e0408006475636b6475636b5f7372637f0408006475636b6475636b5f616d74770408006475636b6475636b5f737263"
+    },
+    {
+     "ancestors": [
+      "0x5a17c0de",
+      "0x00001234"
+     ],
+     "ccs": [],
+     "codes": [
+      "140000280000007d"
+     ],
+     "fields": {
+      "lfo-rnd/lr_a": "0x14000028"
+     },
+     "generations": {
+      "global": 1,
+      "kit": 1,
+      "pattern": 1,
+      "project": 1,
+      "sound": 1,
+      "track": 1
+     },
+     "handles": [],
+     "id": "0x2a23bfbe",
+     "inits": [],
+     "notes": [
+      "duck duck_src (kit): parked; its bits and values are kept for when it comes back",
+      "duck duck_amt (kit): parked; its bits and values are kept for when it comes back",
+      "duck duck_src: lock code 126 kept for it while it is out",
+      "duck duck_amt: lock code 127 kept for it while it is out",
+      "duck duck_src: CC 119 kept for it until the unused CCs run out",
+      "lfo-rnd lr_a: not an LFO destination on this build, which places no core_lfo_dst"
+     ],
+     "parked": [
+      "duck/duck_src 0x21000020",
+      "duck/duck_amt 0x27000024"
+     ],
+     "store": "444c535400010000000000e4b3c3e81e5a17c0de2a23bfbe7c010001000200010002000000010000010100000000002801010000000000200101000000000028010100000000001001010000000000200101000000000ec05a17c0de0110002800000000070400006c666f2d726e646c725f61000204002000000000040800006475636b6475636b5f737263021c002400000005040800006475636b6475636b5f616d747d0704006c666f2d726e646c725f61007e0408006475636b6475636b5f7372637f0408006475636b6475636b5f616d74770408006475636b6475636b5f737263"
+    },
+    {
+     "ancestors": [
+      "0x2a23bfbe",
+      "0x5a17c0de",
+      "0x00001234"
+     ],
+     "ccs": [],
+     "codes": [
+      "140000280000007d"
+     ],
+     "fields": {
+      "lfo-rnd/lr_a": "0x14000028",
+      "small/sm": "0x22000018"
+     },
+     "generations": {
+      "global": 1,
+      "kit": 1,
+      "pattern": 1,
+      "project": 1,
+      "sound": 1,
+      "track": 1
+     },
+     "handles": [],
+     "id": "0x684bc9a3",
+     "inits": [],
+     "notes": [
+      "small sm: 8 bits of kit storage at bit 24",
+      "lfo-rnd lr_a: not an LFO destination on this build, which places no core_lfo_dst",
+      "layout ID 0x684bc9a3 (from 0x2a23bfbe, whose projects it still reads)"
+     ],
+     "parked": [
+      "duck/duck_src 0x21000020",
+      "duck/duck_amt 0x27000024"
+     ],
+     "store": "444c535400010000000000fcf5d87c985a17c0de684bc9a37c020002000200010002000000010000010100000000002801010000000000180101000000000028010100000000001001010000000000200101000000000ec02a23bfbe5a17c0de0110002800000000070400006c666f2d726e646c725f6100020800180000000005020000736d616c6c736d000204002000000000040800006475636b6475636b5f737263021c002400000005040800006475636b6475636b5f616d747d0704006c666f2d726e646c725f61007e0408006475636b6475636b5f7372637f0408006475636b6475636b5f616d74770408006475636b6475636b5f737263"
+    },
+    {
+     "ancestors": [
+      "0x2a23bfbe",
+      "0x5a17c0de",
+      "0x00001234"
+     ],
+     "ccs": [
+      "2100002000000077"
+     ],
+     "codes": [
+      "140000280000007d",
+      "210000200000007e",
+      "270100240000007f"
+     ],
+     "fields": {
+      "duck/duck_amt": "0x27010024",
+      "duck/duck_src": "0x21000020",
+      "lfo-rnd/lr_a": "0x14000028",
+      "small/sm": "0x22000018"
+     },
+     "generations": {
+      "global": 1,
+      "kit": 1,
+      "pattern": 1,
+      "project": 1,
+      "sound": 1,
+      "track": 1
+     },
+     "handles": [],
+     "id": "0x684bc9a3",
+     "inits": [
+      "00000005"
+     ],
+     "notes": [
+      "duck duck_amt: back at bit 36 of kit storage, with the values it had",
+      "duck duck_src: back at bit 32 of kit storage, with the values it had",
+      "duck duck_amt: back with lock code 127",
+      "duck duck_src: back with lock code 126",
+      "duck duck_src: back with CC 119",
+      "lfo-rnd lr_a: not an LFO destination on this build, which places no core_lfo_dst"
+     ],
+     "parked": [],
+     "store": "444c535400010000000000fc515b81655a17c0de684bc9a37c020004000000030000000100000000010100000000002801010000000000180101000000000028010100000000001001010000000000200101000000000ec02a23bfbe5a17c0de0110002800000000070400006c666f2d726e646c725f6100020800180000000005020000736d616c6c736d000204002000000000040800006475636b6475636b5f737263021c002400000005040800006475636b6475636b5f616d747d0704006c666f2d726e646c725f61007e0408006475636b6475636b5f7372637f0408006475636b6475636b5f616d74770408006475636b6475636b5f737263"
+    }
+   ],
+   "steps": [
+    [
+     {
+      "ancestors": [
+       4660
+      ],
+      "ccs": [],
+      "codes": [],
+      "device": "analog-rytm-mk2",
+      "flashed_id": 1511506142,
+      "inits": 0,
+      "room": {
+       "core_field_inits": 32,
+       "core_handles": 32,
+       "core_lock_ccs": 32,
+       "core_lock_codes": 32
+      },
+      "scopes": {
+       "global": [
+        40,
+        0,
+        1
+       ],
+       "kit": [
+        64,
+        0,
+        1
+       ],
+       "pattern": [
+        32,
+        0,
+        1
+       ],
+       "project": [
+        3776,
+        0,
+        1
+       ],
+       "sound": [
+        56,
+        0,
+        1
+       ],
+       "track": [
+        16,
+        0,
+        1
+       ]
+      }
+     },
+     [
+      "place",
+      [
+       "duck",
+       "lfo"
+      ]
+     ]
+    ],
+    [
+     {
+      "ancestors": [
+       4660
+      ],
+      "ccs": [],
+      "codes": [],
+      "device": "analog-rytm-mk2",
+      "flashed_id": 1511506142,
+      "inits": 0,
+      "room": {
+       "core_field_inits": 32,
+       "core_handles": 32,
+       "core_lock_ccs": 32,
+       "core_lock_codes": 32
+      },
+      "scopes": {
+       "global": [
+        40,
+        0,
+        1
+       ],
+       "kit": [
+        64,
+        0,
+        1
+       ],
+       "pattern": [
+        32,
+        0,
+        1
+       ],
+       "project": [
+        3776,
+        0,
+        1
+       ],
+       "sound": [
+        56,
+        0,
+        1
+       ],
+       "track": [
+        16,
+        0,
+        1
+       ]
+      }
+     },
+     [
+      "place",
+      [
+       "lfo"
+      ]
+     ]
+    ],
+    [
+     {
+      "ancestors": [
+       4660
+      ],
+      "ccs": [],
+      "codes": [],
+      "device": "analog-rytm-mk2",
+      "flashed_id": 1511506142,
+      "inits": 0,
+      "room": {
+       "core_field_inits": 32,
+       "core_handles": 32,
+       "core_lock_ccs": 32,
+       "core_lock_codes": 32
+      },
+      "scopes": {
+       "global": [
+        40,
+        0,
+        1
+       ],
+       "kit": [
+        64,
+        0,
+        1
+       ],
+       "pattern": [
+        32,
+        0,
+        1
+       ],
+       "project": [
+        3776,
+        0,
+        1
+       ],
+       "sound": [
+        56,
+        0,
+        1
+       ],
+       "track": [
+        16,
+        0,
+        1
+       ]
+      }
+     },
+     [
+      "place",
+      [
+       "lfo",
+       "small"
+      ]
+     ]
+    ],
+    [
+     {
+      "ancestors": [
+       4660
+      ],
+      "ccs": [],
+      "codes": [],
+      "device": "analog-rytm-mk2",
+      "flashed_id": 1511506142,
+      "inits": 0,
+      "room": {
+       "core_field_inits": 32,
+       "core_handles": 32,
+       "core_lock_ccs": 32,
+       "core_lock_codes": 32
+      },
+      "scopes": {
+       "global": [
+        40,
+        0,
+        1
+       ],
+       "kit": [
+        64,
+        0,
+        1
+       ],
+       "pattern": [
+        32,
+        0,
+        1
+       ],
+       "project": [
+        3776,
+        0,
+        1
+       ],
+       "sound": [
+        56,
+        0,
+        1
+       ],
+       "track": [
+        16,
+        0,
+        1
+       ]
+      }
+     },
+     [
+      "place",
+      [
+       "duck",
+       "lfo",
+       "small"
+      ]
+     ]
+    ]
+   ]
+  },
+  {
+   "name": "run out, repack",
+   "results": [
+    {
+     "ancestors": [
+      "0x5a17c0de",
+      "0x00001234"
+     ],
+     "ccs": [
+      "2100002000000077"
+     ],
+     "codes": [
+      "210000200000007e",
+      "270100240000007f"
+     ],
+     "fields": {
+      "duck/duck_amt": "0x27010024",
+      "duck/duck_src": "0x21000020"
+     },
+     "generations": {
+      "global": 1,
+      "kit": 1,
+      "pattern": 1,
+      "project": 1,
+      "sound": 1,
+      "track": 1
+     },
+     "handles": [],
+     "id": "0x0b3296d1",
+     "inits": [
+      "00000005"
+     ],
+     "notes": [
+      "duck duck_amt: 28 bits of kit storage at bit 36",
+      "duck duck_src: 4 bits of kit storage at bit 32",
+      "duck duck_amt: lock code 127",
+      "duck duck_src: lock code 126",
+      "duck duck_src: CC 119",
+      "layout ID 0x0b3296d1 (from 0x5a17c0de, whose projects it still reads)"
+     ],
+     "parked": [],
+     "store": "444c535400010000000000bc4e532fcc5a17c0de0b3296d17d010002000000020000000100000000010100000000003801010000000000200101000000000028010100000000001001010000000000200101000000000ec05a17c0de0204002000000000040800006475636b6475636b5f737263021c002400000005040800006475636b6475636b5f616d747e0408006475636b6475636b5f7372637f0408006475636b6475636b5f616d74770408006475636b6475636b5f737263"
+    },
+    {
+     "ancestors": [
+      "0x5a17c0de",
+      "0x00001234"
+     ],
+     "ccs": [],
+     "codes": [],
+     "fields": {},
+     "generations": {
+      "global": 1,
+      "kit": 1,
+      "pattern": 1,
+      "project": 1,
+      "sound": 1,
+      "track": 1
+     },
+     "handles": [],
+     "id": "0x0b3296d1",
+     "inits": [],
+     "notes": [
+      "duck duck_src (kit): parked; its bits and values are kept for when it comes back",
+      "duck duck_amt (kit): parked; its bits and values are kept for when it comes back",
+      "duck duck_src: lock code 126 kept for it while it is out",
+      "duck duck_amt: lock code 127 kept for it while it is out",
+      "duck duck_src: CC 119 kept for it until the unused CCs run out"
+     ],
+     "parked": [
+      "duck/duck_src 0x21000020",
+      "duck/duck_amt 0x27000024"
+     ],
+     "store": "444c535400010000000000bc723ad3345a17c0de0b3296d17d010000000200000002000000010000010100000000003801010000000000200101000000000028010100000000001001010000000000200101000000000ec05a17c0de0204002000000000040800006475636b6475636b5f737263021c002400000005040800006475636b6475636b5f616d747e0408006475636b6475636b5f7372637f0408006475636b6475636b5f616d74770408006475636b6475636b5f737263"
+    },
+    {
+     "ancestors": [
+      "0x0b3296d1",
+      "0x5a17c0de",
+      "0x00001234"
+     ],
+     "ccs": [
+      "11c0003100000074"
+     ],
+     "codes": [
+      "11c000310000007d"
+     ],
+     "fields": {
+      "fx-sends/fx_k": "0x26400027",
+      "fx-sends/fx_k2": "0x2600000f",
+      "fx-sends/fx_s": "0x11c00031"
+     },
+     "generations": {
+      "global": 1,
+      "kit": 2,
+      "pattern": 1,
+      "project": 1,
+      "sound": 1,
+      "track": 1
+     },
+     "handles": [],
+     "id": "0xf456455b",
+     "inits": [],
+     "notes": [
+      "+Drive kit storage repacked (generation 2), as its never-used bits ran out: projects and sounds saved before load it at defaults",
+      "fx-sends fx_k: 25 bits of kit storage at bit 39",
+      "fx-sends fx_k2: 24 bits of kit storage at bit 15",
+      "fx-sends fx_s: 7 bits of sound storage at bit 49",
+      "fx-sends fx_s: lock code 125",
+      "fx-sends fx_s: CC 116",
+      "layout ID 0xf456455b (from 0x0b3296d1, whose projects it still reads)"
+     ],
+     "parked": [],
+     "store": "444c535400010000000000fc688c3b4b5a17c0def456455b7c0200030000000100020001000100000101000000000031010200000000000f0101000000000028010100000000001001010000000000200101000000000ec00b3296d15a17c0de01070031000000000804000066782d73656e647366785f730218000f000000000805000066782d73656e647366785f6b3200000002190027000000000804000066782d73656e647366785f6b7d08040066782d73656e647366785f737e0408006475636b6475636b5f7372637f0408006475636b6475636b5f616d747408040066782d73656e647366785f73770408006475636b6475636b5f737263"
+    },
+    {
+     "error": "fx-sends does not fit: kit is 18 short"
+    }
+   ],
+   "steps": [
+    [
+     {
+      "ancestors": [
+       4660
+      ],
+      "ccs": [],
+      "codes": [],
+      "device": "analog-rytm-mk2",
+      "flashed_id": 1511506142,
+      "inits": 0,
+      "room": {
+       "core_field_inits": 32,
+       "core_handles": 32,
+       "core_lock_ccs": 32,
+       "core_lock_codes": 32
+      },
+      "scopes": {
+       "global": [
+        40,
+        0,
+        1
+       ],
+       "kit": [
+        64,
+        0,
+        1
+       ],
+       "pattern": [
+        32,
+        0,
+        1
+       ],
+       "project": [
+        3776,
+        0,
+        1
+       ],
+       "sound": [
+        56,
+        0,
+        1
+       ],
+       "track": [
+        16,
+        0,
+        1
+       ]
+      }
+     },
+     [
+      "place",
+      [
+       "duck"
+      ]
+     ]
+    ],
+    [
+     {
+      "ancestors": [
+       4660
+      ],
+      "ccs": [],
+      "codes": [],
+      "device": "analog-rytm-mk2",
+      "flashed_id": 1511506142,
+      "inits": 0,
+      "room": {
+       "core_field_inits": 32,
+       "core_handles": 32,
+       "core_lock_ccs": 32,
+       "core_lock_codes": 32
+      },
+      "scopes": {
+       "global": [
+        40,
+        0,
+        1
+       ],
+       "kit": [
+        64,
+        0,
+        1
+       ],
+       "pattern": [
+        32,
+        0,
+        1
+       ],
+       "project": [
+        3776,
+        0,
+        1
+       ],
+       "sound": [
+        56,
+        0,
+        1
+       ],
+       "track": [
+        16,
+        0,
+        1
+       ]
+      }
+     },
+     [
+      "place",
+      []
+     ]
+    ],
+    [
+     {
+      "ancestors": [
+       4660
+      ],
+      "ccs": [],
+      "codes": [],
+      "device": "analog-rytm-mk2",
+      "flashed_id": 1511506142,
+      "inits": 0,
+      "room": {
+       "core_field_inits": 32,
+       "core_handles": 32,
+       "core_lock_ccs": 32,
+       "core_lock_codes": 32
+      },
+      "scopes": {
+       "global": [
+        40,
+        0,
+        1
+       ],
+       "kit": [
+        64,
+        0,
+        1
+       ],
+       "pattern": [
+        32,
+        0,
+        1
+       ],
+       "project": [
+        3776,
+        0,
+        1
+       ],
+       "sound": [
+        56,
+        0,
+        1
+       ],
+       "track": [
+        16,
+        0,
+        1
+       ]
+      }
+     },
+     [
+      "place",
+      [
+       "fx"
+      ]
+     ]
+    ],
+    [
+     {
+      "ancestors": [
+       4660
+      ],
+      "ccs": [],
+      "codes": [],
+      "device": "analog-rytm-mk2",
+      "flashed_id": 1511506142,
+      "inits": 0,
+      "room": {
+       "core_field_inits": 32,
+       "core_handles": 32,
+       "core_lock_ccs": 32,
+       "core_lock_codes": 32
+      },
+      "scopes": {
+       "global": [
+        40,
+        0,
+        1
+       ],
+       "kit": [
+        64,
+        0,
+        1
+       ],
+       "pattern": [
+        32,
+        0,
+        1
+       ],
+       "project": [
+        3776,
+        0,
+        1
+       ],
+       "sound": [
+        56,
+        0,
+        1
+       ],
+       "track": [
+        16,
+        0,
+        1
+       ]
+      }
+     },
+     [
+      "place",
+      [
+       "fx",
+       "lfo",
+       "duck2"
+      ]
+     ]
+    ]
+   ]
+  },
+  {
+   "name": "forget",
+   "results": [
+    {
+     "ancestors": [
+      "0x5a17c0de",
+      "0x00001234"
+     ],
+     "ccs": [
+      "2100002000000077"
+     ],
+     "codes": [
+      "140000280000007d",
+      "210000200000007e",
+      "270100240000007f"
+     ],
+     "fields": {
+      "duck/duck_amt": "0x27010024",
+      "duck/duck_src": "0x21000020",
+      "lfo-rnd/lr_a": "0x14000028"
+     },
+     "generations": {
+      "global": 1,
+      "kit": 1,
+      "pattern": 1,
+      "project": 1,
+      "sound": 1,
+      "track": 1
+     },
+     "handles": [],
+     "id": "0x2a23bfbe",
+     "inits": [
+      "00000005"
+     ],
+     "notes": [
+      "duck duck_amt: 28 bits of kit storage at bit 36",
+      "duck duck_src: 4 bits of kit storage at bit 32",
+      "lfo-rnd lr_a: 16 bits of sound storage at bit 40",
+      "duck duck_amt: lock code 127",
+      "duck duck_src: lock code 126",
+      "lfo-rnd lr_a: lock code 125",
+      "duck duck_src: CC 119",
+      "lfo-rnd lr_a: not an LFO destination on this build, which places no core_lfo_dst",
+      "layout ID 0x2a23bfbe (from 0x5a17c0de, whose projects it still reads)"
+     ],
+     "parked": [],
+     "store": "444c535400010000000000e4a1351c4f5a17c0de2a23bfbe7c010003000000030000000100000000010100000000002801010000000000200101000000000028010100000000001001010000000000200101000000000ec05a17c0de0110002800000000070400006c666f2d726e646c725f61000204002000000000040800006475636b6475636b5f737263021c002400000005040800006475636b6475636b5f616d747d0704006c666f2d726e646c725f61007e0408006475636b6475636b5f7372637f0408006475636b6475636b5f616d74770408006475636b6475636b5f737263"
+    },
+    {
+     "ancestors": [
+      "0x5a17c0de",
+      "0x00001234"
+     ],
+     "ccs": [],
+     "codes": [
+      "140000280000007d"
+     ],
+     "fields": {
+      "lfo-rnd/lr_a": "0x14000028"
+     },
+     "generations": {
+      "global": 1,
+      "kit": 1,
+      "pattern": 1,
+      "project": 1,
+      "sound": 1,
+      "track": 1
+     },
+     "handles": [],
+     "id": "0x2a23bfbe",
+     "inits": [],
+     "notes": [
+      "duck duck_src (kit): parked; its bits and values are kept for when it comes back",
+      "duck duck_amt (kit): parked; its bits and values are kept for when it comes back",
+      "duck duck_src: lock code 126 kept for it while it is out",
+      "duck duck_amt: lock code 127 kept for it while it is out",
+      "duck duck_src: CC 119 kept for it until the unused CCs run out",
+      "lfo-rnd lr_a: not an LFO destination on this build, which places no core_lfo_dst"
+     ],
+     "parked": [
+      "duck/duck_src 0x21000020",
+      "duck/duck_amt 0x27000024"
+     ],
+     "store": "444c535400010000000000e4b3c3e81e5a17c0de2a23bfbe7c010001000200010002000000010000010100000000002801010000000000200101000000000028010100000000001001010000000000200101000000000ec05a17c0de0110002800000000070400006c666f2d726e646c725f61000204002000000000040800006475636b6475636b5f737263021c002400000005040800006475636b6475636b5f616d747d0704006c666f2d726e646c725f61007e0408006475636b6475636b5f7372637f0408006475636b6475636b5f616d74770408006475636b6475636b5f737263"
+    },
+    {
+     "changed": true,
+     "store": "444c535400010000000000845189f9a25a17c0de2a23bfbe7c010001000000010000000000000000010100000000002801010000000000200101000000000028010100000000001001010000000000200101000000000ec05a17c0de0110002800000000070400006c666f2d726e646c725f61007d0704006c666f2d726e646c725f6100"
+    },
+    {
+     "ancestors": [
+      "0x2a23bfbe",
+      "0x5a17c0de",
+      "0x00001234"
+     ],
+     "ccs": [
+      "2100000000000077"
+     ],
+     "codes": [
+      "210000000000007b",
+      "270100040000007c",
+      "140000280000007d"
+     ],
+     "fields": {
+      "duck/duck_amt": "0x27010004",
+      "duck/duck_src": "0x21000000",
+      "lfo-rnd/lr_a": "0x14000028"
+     },
+     "generations": {
+      "global": 1,
+      "kit": 1,
+      "pattern": 1,
+      "project": 1,
+      "sound": 1,
+      "track": 1
+     },
+     "handles": [],
+     "id": "0x8cc5aee5",
+     "inits": [
+      "00000005"
+     ],
+     "notes": [
+      "duck duck_amt: 28 bits of kit storage at bit 4",
+      "duck duck_src: 4 bits of kit storage at bit 0",
+      "duck duck_amt: lock code 124",
+      "duck duck_src: lock code 123",
+      "duck duck_src: CC 119",
+      "lfo-rnd lr_a: not an LFO destination on this build, which places no core_lfo_dst",
+      "layout ID 0x8cc5aee5 (from 0x2a23bfbe, whose projects it still reads)"
+     ],
+     "parked": [],
+     "store": "444c535400010000000000e81906619b5a17c0de8cc5aee57a020003000000030000000100000000010100000000002801010000000000000101000000000028010100000000001001010000000000200101000000000ec02a23bfbe5a17c0de0110002800000000070400006c666f2d726e646c725f61000204000000000000040800006475636b6475636b5f737263021c000400000005040800006475636b6475636b5f616d747b0408006475636b6475636b5f7372637c0408006475636b6475636b5f616d747d0704006c666f2d726e646c725f6100770408006475636b6475636b5f737263"
+    }
+   ],
+   "steps": [
+    [
+     {
+      "ancestors": [
+       4660
+      ],
+      "ccs": [],
+      "codes": [],
+      "device": "analog-rytm-mk2",
+      "flashed_id": 1511506142,
+      "inits": 0,
+      "room": {
+       "core_field_inits": 32,
+       "core_handles": 32,
+       "core_lock_ccs": 32,
+       "core_lock_codes": 32
+      },
+      "scopes": {
+       "global": [
+        40,
+        0,
+        1
+       ],
+       "kit": [
+        64,
+        0,
+        1
+       ],
+       "pattern": [
+        32,
+        0,
+        1
+       ],
+       "project": [
+        3776,
+        0,
+        1
+       ],
+       "sound": [
+        56,
+        0,
+        1
+       ],
+       "track": [
+        16,
+        0,
+        1
+       ]
+      }
+     },
+     [
+      "place",
+      [
+       "duck",
+       "lfo"
+      ]
+     ]
+    ],
+    [
+     {
+      "ancestors": [
+       4660
+      ],
+      "ccs": [],
+      "codes": [],
+      "device": "analog-rytm-mk2",
+      "flashed_id": 1511506142,
+      "inits": 0,
+      "room": {
+       "core_field_inits": 32,
+       "core_handles": 32,
+       "core_lock_ccs": 32,
+       "core_lock_codes": 32
+      },
+      "scopes": {
+       "global": [
+        40,
+        0,
+        1
+       ],
+       "kit": [
+        64,
+        0,
+        1
+       ],
+       "pattern": [
+        32,
+        0,
+        1
+       ],
+       "project": [
+        3776,
+        0,
+        1
+       ],
+       "sound": [
+        56,
+        0,
+        1
+       ],
+       "track": [
+        16,
+        0,
+        1
+       ]
+      }
+     },
+     [
+      "place",
+      [
+       "lfo"
+      ]
+     ]
+    ],
+    [
+     {
+      "ancestors": [
+       4660
+      ],
+      "ccs": [],
+      "codes": [],
+      "device": "analog-rytm-mk2",
+      "flashed_id": 1511506142,
+      "inits": 0,
+      "room": {
+       "core_field_inits": 32,
+       "core_handles": 32,
+       "core_lock_ccs": 32,
+       "core_lock_codes": 32
+      },
+      "scopes": {
+       "global": [
+        40,
+        0,
+        1
+       ],
+       "kit": [
+        64,
+        0,
+        1
+       ],
+       "pattern": [
+        32,
+        0,
+        1
+       ],
+       "project": [
+        3776,
+        0,
+        1
+       ],
+       "sound": [
+        56,
+        0,
+        1
+       ],
+       "track": [
+        16,
+        0,
+        1
+       ]
+      }
+     },
+     [
+      "forget",
+      "duck"
+     ]
+    ],
+    [
+     {
+      "ancestors": [
+       4660
+      ],
+      "ccs": [],
+      "codes": [],
+      "device": "analog-rytm-mk2",
+      "flashed_id": 1511506142,
+      "inits": 0,
+      "room": {
+       "core_field_inits": 32,
+       "core_handles": 32,
+       "core_lock_ccs": 32,
+       "core_lock_codes": 32
+      },
+      "scopes": {
+       "global": [
+        40,
+        0,
+        1
+       ],
+       "kit": [
+        64,
+        0,
+        1
+       ],
+       "pattern": [
+        32,
+        0,
+        1
+       ],
+       "project": [
+        3776,
+        0,
+        1
+       ],
+       "sound": [
+        56,
+        0,
+        1
+       ],
+       "track": [
+        16,
+        0,
+        1
+       ]
+      }
+     },
+     [
+      "place",
+      [
+       "lfo",
+       "duck"
+      ]
+     ]
+    ]
+   ]
+  },
+  {
+   "name": "flashed growth",
+   "results": [
+    {
+     "ancestors": [
+      "0x5a17c0de",
+      "0x00001234"
+     ],
+     "ccs": [],
+     "codes": [],
+     "fields": {
+      "a/a1": "0x11000034",
+      "b/b1": "0x11000030"
+     },
+     "generations": {
+      "global": 1,
+      "kit": 1,
+      "pattern": 1,
+      "project": 1,
+      "sound": 1,
+      "track": 1
+     },
+     "handles": [],
+     "id": "0xee20d2ed",
+     "inits": [],
+     "notes": [
+      "a a1: 4 bits of sound storage at bit 52",
+      "b b1: 4 bits of sound storage at bit 48",
+      "layout ID 0xee20d2ed (from 0x5a17c0de, whose projects it still reads)"
+     ],
+     "parked": [],
+     "store": "444c5354000100000000007ce7f611ec5a17c0deee20d2ed7f010002000000000000000000000000010100000000003001010000000000400101000000000028010100000000001001010000000000200101000000000ec05a17c0de0104003000000000010200006262310001040034000000000102000061613100"
+    },
+    {
+     "ancestors": [
+      "0x5a17c0de",
+      "0x00001234"
+     ],
+     "ccs": [],
+     "codes": [],
+     "fields": {
+      "a/a1": "0x11000034"
+     },
+     "generations": {
+      "global": 1,
+      "kit": 1,
+      "pattern": 1,
+      "project": 1,
+      "sound": 1,
+      "track": 1
+     },
+     "handles": [],
+     "id": "0xee20d2ed",
+     "inits": [],
+     "notes": [
+      "b b1 (sound): parked; its bits and values are kept for when it comes back"
+     ],
+     "parked": [
+      "b/b1 0x11000030"
+     ],
+     "store": "444c5354000100000000007c94912de05a17c0deee20d2ed7f010001000100000000000000000000010100000000003001010000000000400101000000000028010100000000001001010000000000200101000000000ec05a17c0de0104003400000000010200006161310001040030000000000102000062623100"
+    },
+    {
+     "ancestors": [
+      "0xee20d2ed",
+      "0x5a17c0de",
+      "0x00001234"
+     ],
+     "ccs": [],
+     "codes": [],
+     "fields": {
+      "a/a1": "0x11000034"
+     },
+     "generations": {
+      "global": 1,
+      "kit": 1,
+      "pattern": 1,
+      "project": 1,
+      "sound": 2,
+      "track": 1
+     },
+     "handles": [],
+     "id": "0x9b8ed875",
+     "inits": [],
+     "notes": [
+      "+Drive sound storage repacked (generation 2), as the flashed build took its bits: projects and sounds saved before load it at defaults",
+      "layout ID 0x9b8ed875 (from 0xee20d2ed, whose projects it still reads)"
+     ],
+     "parked": [],
+     "store": "444c535400010000000000701b5ee5b55a17c0de9b8ed8757f020001000000000000000000000000010200000000003401010000000000400101000000000028010100000000001001010000000000200101000000000ec0ee20d2ed5a17c0de01040034000000000102000061613100"
+    },
+    {
+     "ancestors": [
+      "0x9b8ed875",
+      "0xee20d2ed",
+      "0x5a17c0de",
+      "0x00001234"
+     ],
+     "ccs": [],
+     "codes": [],
+     "fields": {
+      "a/a1": "0x11000034"
+     },
+     "generations": {
+      "global": 1,
+      "kit": 1,
+      "pattern": 1,
+      "project": 1,
+      "sound": 3,
+      "track": 1
+     },
+     "handles": [],
+     "id": "0x51b89769",
+     "inits": [],
+     "notes": [
+      "+Drive sound storage repacked (generation 3), as the flashed build repacked it: projects and sounds saved before load it at defaults",
+      "layout ID 0x51b89769 (from 0x9b8ed875, whose projects it still reads)"
+     ],
+     "parked": [],
+     "store": "444c53540001000000000074a452e3425a17c0de51b897697f030001000000000000000000000000020300000000003401010000000000400101000000000028010100000000001001010000000000200101000000000ec09b8ed875ee20d2ed5a17c0de01040034000000000102000061613100"
+    }
+   ],
+   "steps": [
+    [
+     {
+      "ancestors": [
+       4660
+      ],
+      "ccs": [],
+      "codes": [],
+      "device": "analog-rytm-mk2",
+      "flashed_id": 1511506142,
+      "inits": 0,
+      "room": {
+       "core_field_inits": 32,
+       "core_handles": 32,
+       "core_lock_ccs": 32,
+       "core_lock_codes": 32
+      },
+      "scopes": {
+       "global": [
+        40,
+        0,
+        1
+       ],
+       "kit": [
+        64,
+        0,
+        1
+       ],
+       "pattern": [
+        32,
+        0,
+        1
+       ],
+       "project": [
+        3776,
+        0,
+        1
+       ],
+       "sound": [
+        56,
+        0,
+        1
+       ],
+       "track": [
+        16,
+        0,
+        1
+       ]
+      }
+     },
+     [
+      "place",
+      [
+       "a",
+       "b"
+      ]
+     ]
+    ],
+    [
+     {
+      "ancestors": [
+       4660
+      ],
+      "ccs": [],
+      "codes": [],
+      "device": "analog-rytm-mk2",
+      "flashed_id": 1511506142,
+      "inits": 0,
+      "room": {
+       "core_field_inits": 32,
+       "core_handles": 32,
+       "core_lock_ccs": 32,
+       "core_lock_codes": 32
+      },
+      "scopes": {
+       "global": [
+        40,
+        0,
+        1
+       ],
+       "kit": [
+        64,
+        0,
+        1
+       ],
+       "pattern": [
+        32,
+        0,
+        1
+       ],
+       "project": [
+        3776,
+        0,
+        1
+       ],
+       "sound": [
+        56,
+        0,
+        1
+       ],
+       "track": [
+        16,
+        0,
+        1
+       ]
+      }
+     },
+     [
+      "place",
+      [
+       "a"
+      ]
+     ]
+    ],
+    [
+     {
+      "ancestors": [
+       4660
+      ],
+      "ccs": [],
+      "codes": [],
+      "device": "analog-rytm-mk2",
+      "flashed_id": 1511506142,
+      "inits": 0,
+      "room": {
+       "core_field_inits": 32,
+       "core_handles": 32,
+       "core_lock_ccs": 32,
+       "core_lock_codes": 32
+      },
+      "scopes": {
+       "global": [
+        40,
+        0,
+        1
+       ],
+       "kit": [
+        64,
+        0,
+        1
+       ],
+       "pattern": [
+        32,
+        0,
+        1
+       ],
+       "project": [
+        3776,
+        0,
+        1
+       ],
+       "sound": [
+        56,
+        50,
+        1
+       ],
+       "track": [
+        16,
+        0,
+        1
+       ]
+      }
+     },
+     [
+      "place",
+      [
+       "a"
+      ]
+     ]
+    ],
+    [
+     {
+      "ancestors": [
+       4660
+      ],
+      "ccs": [],
+      "codes": [],
+      "device": "analog-rytm-mk2",
+      "flashed_id": 1511506142,
+      "inits": 0,
+      "room": {
+       "core_field_inits": 32,
+       "core_handles": 32,
+       "core_lock_ccs": 32,
+       "core_lock_codes": 32
+      },
+      "scopes": {
+       "global": [
+        40,
+        0,
+        1
+       ],
+       "kit": [
+        64,
+        0,
+        1
+       ],
+       "pattern": [
+        32,
+        0,
+        1
+       ],
+       "project": [
+        3776,
+        0,
+        1
+       ],
+       "sound": [
+        56,
+        50,
+        2
+       ],
+       "track": [
+        16,
+        0,
+        1
+       ]
+      }
+     },
+     [
+      "place",
+      [
+       "a"
+      ]
+     ]
+    ]
+   ]
+  },
+  {
+   "name": "flashed repack",
+   "results": [
+    {
+     "ancestors": [
+      "0x5a17c0de",
+      "0x00001234"
+     ],
+     "ccs": [
+      "2100002000000077"
+     ],
+     "codes": [
+      "140000280000007d",
+      "210000200000007e",
+      "270100240000007f"
+     ],
+     "fields": {
+      "duck/duck_amt": "0x27010024",
+      "duck/duck_src": "0x21000020",
+      "lfo-rnd/lr_a": "0x14000028"
+     },
+     "generations": {
+      "global": 1,
+      "kit": 1,
+      "pattern": 1,
+      "project": 1,
+      "sound": 1,
+      "track": 1
+     },
+     "handles": [],
+     "id": "0x2a23bfbe",
+     "inits": [
+      "00000005"
+     ],
+     "notes": [
+      "duck duck_amt: 28 bits of kit storage at bit 36",
+      "duck duck_src: 4 bits of kit storage at bit 32",
+      "lfo-rnd lr_a: 16 bits of sound storage at bit 40",
+      "duck duck_amt: lock code 127",
+      "duck duck_src: lock code 126",
+      "lfo-rnd lr_a: lock code 125",
+      "duck duck_src: CC 119",
+      "lfo-rnd lr_a: not an LFO destination on this build, which places no core_lfo_dst",
+      "layout ID 0x2a23bfbe (from 0x5a17c0de, whose projects it still reads)"
+     ],
+     "parked": [],
+     "store": "444c535400010000000000e4a1351c4f5a17c0de2a23bfbe7c010003000000030000000100000000010100000000002801010000000000200101000000000028010100000000001001010000000000200101000000000ec05a17c0de0110002800000000070400006c666f2d726e646c725f61000204002000000000040800006475636b6475636b5f737263021c002400000005040800006475636b6475636b5f616d747d0704006c666f2d726e646c725f61007e0408006475636b6475636b5f7372637f0408006475636b6475636b5f616d74770408006475636b6475636b5f737263"
+    },
+    {
+     "ancestors": [
+      "0x2a23bfbe",
+      "0x5a17c0de",
+      "0x00001234"
+     ],
+     "ccs": [
+      "2100002000000077"
+     ],
+     "codes": [
+      "140000280000007d",
+      "210000200000007e",
+      "270100240000007f"
+     ],
+     "fields": {
+      "duck/duck_amt": "0x27010024",
+      "duck/duck_src": "0x21000020",
+      "lfo-rnd/lr_a": "0x14000028"
+     },
+     "generations": {
+      "global": 1,
+      "kit": 2,
+      "pattern": 1,
+      "project": 1,
+      "sound": 1,
+      "track": 1
+     },
+     "handles": [],
+     "id": "0x104afa32",
+     "inits": [
+      "00000005"
+     ],
+     "notes": [
+      "+Drive kit storage repacked (generation 2), as the flashed build repacked it: projects and sounds saved before load it at defaults",
+      "lfo-rnd lr_a: not an LFO destination on this build, which places no core_lfo_dst",
+      "layout ID 0x104afa32 (from 0x2a23bfbe, whose projects it still reads)"
+     ],
+     "parked": [],
+     "store": "444c535400010000000000e80e431ae35a17c0de104afa327c020003000000030000000100000000010100000000002802020000000000200101000000000028010100000000001001010000000000200101000000000ec02a23bfbe5a17c0de0110002800000000070400006c666f2d726e646c725f61000204002000000000040800006475636b6475636b5f737263021c002400000005040800006475636b6475636b5f616d747d0704006c666f2d726e646c725f61007e0408006475636b6475636b5f7372637f0408006475636b6475636b5f616d74770408006475636b6475636b5f737263"
+    },
+    {
+     "ancestors": [
+      "0x104afa32",
+      "0x2a23bfbe",
+      "0x5a17c0de",
+      "0x0badcafe",
+      "0x00001234"
+     ],
+     "ccs": [
+      "2100002000000077"
+     ],
+     "codes": [
+      "210000200000007e",
+      "270100240000007f"
+     ],
+     "fields": {
+      "duck/duck_amt": "0x27010024",
+      "duck/duck_src": "0x21000020"
+     },
+     "generations": {
+      "global": 3,
+      "kit": 2,
+      "pattern": 1,
+      "project": 1,
+      "sound": 1,
+      "track": 1
+     },
+     "handles": [],
+     "id": "0x0b023d75",
+     "inits": [
+      "00000005"
+     ],
+     "notes": [
+      "lfo-rnd lr_a (sound): parked; its bits and values are kept for when it comes back",
+      "lfo-rnd lr_a: lock code 125 kept for it while it is out",
+      "layout ID 0x0b023d75 (from 0x104afa32, whose projects it still reads)"
+     ],
+     "parked": [
+      "lfo-rnd/lr_a 0x14000028"
+     ],
+     "store": "444c535400010000000000ec6147faa60badcafe0b023d757c030002000100020001000100000000010100000000002802020000000000200303000000000028010100000000001001010000000000200101000000000ec0104afa322a23bfbe5a17c0de0204002000000000040800006475636b6475636b5f737263021c002400000005040800006475636b6475636b5f616d740110002800000000070400006c666f2d726e646c725f61007e0408006475636b6475636b5f7372637f0408006475636b6475636b5f616d747d0704006c666f2d726e646c725f6100770408006475636b6475636b5f737263"
+    }
+   ],
+   "steps": [
+    [
+     {
+      "ancestors": [
+       4660
+      ],
+      "ccs": [],
+      "codes": [],
+      "device": "analog-rytm-mk2",
+      "flashed_id": 1511506142,
+      "inits": 0,
+      "room": {
+       "core_field_inits": 32,
+       "core_handles": 32,
+       "core_lock_ccs": 32,
+       "core_lock_codes": 32
+      },
+      "scopes": {
+       "global": [
+        40,
+        0,
+        1
+       ],
+       "kit": [
+        64,
+        0,
+        1
+       ],
+       "pattern": [
+        32,
+        0,
+        1
+       ],
+       "project": [
+        3776,
+        0,
+        1
+       ],
+       "sound": [
+        56,
+        0,
+        1
+       ],
+       "track": [
+        16,
+        0,
+        1
+       ]
+      }
+     },
+     [
+      "place",
+      [
+       "duck",
+       "lfo"
+      ]
+     ]
+    ],
+    [
+     {
+      "ancestors": [
+       4660
+      ],
+      "ccs": [],
+      "codes": [],
+      "device": "analog-rytm-mk2",
+      "flashed_id": 1511506142,
+      "inits": 0,
+      "room": {
+       "core_field_inits": 32,
+       "core_handles": 32,
+       "core_lock_ccs": 32,
+       "core_lock_codes": 32
+      },
+      "scopes": {
+       "global": [
+        40,
+        0,
+        1
+       ],
+       "kit": [
+        64,
+        0,
+        2
+       ],
+       "pattern": [
+        32,
+        0,
+        1
+       ],
+       "project": [
+        3776,
+        0,
+        1
+       ],
+       "sound": [
+        56,
+        0,
+        1
+       ],
+       "track": [
+        16,
+        0,
+        1
+       ]
+      }
+     },
+     [
+      "place",
+      [
+       "duck",
+       "lfo"
+      ]
+     ]
+    ],
+    [
+     {
+      "ancestors": [
+       4660
+      ],
+      "ccs": [],
+      "codes": [],
+      "device": "analog-rytm-mk2",
+      "flashed_id": 195939070,
+      "inits": 0,
+      "room": {
+       "core_field_inits": 32,
+       "core_handles": 32,
+       "core_lock_ccs": 32,
+       "core_lock_codes": 32
+      },
+      "scopes": {
+       "global": [
+        40,
+        0,
+        3
+       ],
+       "kit": [
+        64,
+        0,
+        2
+       ],
+       "pattern": [
+        32,
+        0,
+        1
+       ],
+       "project": [
+        3776,
+        0,
+        1
+       ],
+       "sound": [
+        56,
+        0,
+        1
+       ],
+       "track": [
+        16,
+        0,
+        1
+       ]
+      }
+     },
+     [
+      "place",
+      [
+       "duck"
+      ]
+     ]
+    ]
+   ]
+  },
+  {
+   "name": "codes",
+   "results": [
+    {
+     "ancestors": [
+      "0x5a17c0de",
+      "0x00001234"
+     ],
+     "ccs": [
+      "2100002000000077"
+     ],
+     "codes": [
+      "10c100250000067c",
+      "140000280000007d",
+      "210000200000007e",
+      "270200240000007f"
+     ],
+     "fields": {
+      "duck/duck_amt": "0x27020024",
+      "duck/duck_src": "0x21000020",
+      "lfo-rnd/lr_a": "0x14000028",
+      "rough/rg": "0x10c10025"
+     },
+     "generations": {
+      "global": 1,
+      "kit": 1,
+      "pattern": 1,
+      "project": 1,
+      "sound": 1,
+      "track": 1
+     },
+     "handles": [],
+     "id": "0x5f1b5510",
+     "inits": [
+      "00000002",
+      "00000005"
+     ],
+     "notes": [
+      "duck duck_amt: 28 bits of kit storage at bit 36",
+      "duck duck_src: 4 bits of kit storage at bit 32",
+      "lfo-rnd lr_a: 16 bits of sound storage at bit 40",
+      "rough rg: 3 bits of sound storage at bit 37",
+      "duck duck_amt: lock code 127",
+      "duck duck_src: lock code 126",
+      "lfo-rnd lr_a: lock code 125",
+      "rough rg: lock code 124",
+      "duck duck_src: CC 119",
+      "lfo-rnd lr_a: not an LFO destination on this build, which places no core_lfo_dst",
+      "layout ID 0x5f1b5510 (from 0x5a17c0de, whose projects it still reads)"
+     ],
+     "parked": [],
+     "store": "444c5354000100000000010460799d6c5a17c0de5f1b55107b010004000000040000000100000000010100000000002501010000000000200101000000000028010100000000001001010000000000200101000000000ec05a17c0de010300250000000205020000726f7567687267000110002800000000070400006c666f2d726e646c725f61000204002000000000040800006475636b6475636b5f737263021c002400000005040800006475636b6475636b5f616d747c050200726f7567687267007d0704006c666f2d726e646c725f61007e0408006475636b6475636b5f7372637f0408006475636b6475636b5f616d74770408006475636b6475636b5f737263"
+    },
+    {
+     "ancestors": [
+      "0x5f1b5510",
+      "0x5a17c0de",
+      "0x00001234"
+     ],
+     "ccs": [
+      "2100002000000077"
+     ],
+     "codes": [
+      "210000200000007b",
+      "10c100250000067c",
+      "140000280000007d",
+      "270200240000007f"
+     ],
+     "fields": {
+      "duck/duck_amt": "0x27020024",
+      "duck/duck_src": "0x21000020",
+      "lfo-rnd/lr_a": "0x14000028",
+      "rough/rg": "0x10c10025"
+     },
+     "generations": {
+      "global": 1,
+      "kit": 1,
+      "pattern": 1,
+      "project": 1,
+      "sound": 1,
+      "track": 1
+     },
+     "handles": [],
+     "id": "0x99f28aa2",
+     "inits": [
+      "00000002",
+      "00000005"
+     ],
+     "notes": [
+      "duck duck_src: lock code 126 is the flashed build's now",
+      "duck duck_src: lock code 123",
+      "lfo-rnd lr_a: not an LFO destination on this build, which places no core_lfo_dst",
+      "layout ID 0x99f28aa2 (from 0x5f1b5510, whose projects it still reads)"
+     ],
+     "parked": [],
+     "store": "444c535400010000000001082790daec5a17c0de99f28aa27b020004000000040000000100000000010100000000002501010000000000200101000000000028010100000000001001010000000000200101000000000ec05f1b55105a17c0de010300250000000205020000726f7567687267000110002800000000070400006c666f2d726e646c725f61000204002000000000040800006475636b6475636b5f737263021c002400000005040800006475636b6475636b5f616d747b0408006475636b6475636b5f7372637c050200726f7567687267007d0704006c666f2d726e646c725f61007f0408006475636b6475636b5f616d74770408006475636b6475636b5f737263"
+    },
+    {
+     "ancestors": [
+      "0x5f1b5510",
+      "0x5a17c0de",
+      "0x00001234"
+     ],
+     "ccs": [],
+     "codes": [
+      "140000280000017d"
+     ],
+     "fields": {
+      "lfo-rnd/lr_a": "0x14000028"
+     },
+     "generations": {
+      "global": 1,
+      "kit": 1,
+      "pattern": 1,
+      "project": 1,
+      "sound": 1,
+      "track": 1
+     },
+     "handles": [],
+     "id": "0x99f28aa2",
+     "inits": [],
+     "notes": [
+      "rough rg (sound): parked; its bits and values are kept for when it comes back",
+      "duck duck_src (kit): parked; its bits and values are kept for when it comes back",
+      "duck duck_amt (kit): parked; its bits and values are kept for when it comes back",
+      "duck duck_src: lock code 123 kept for it while it is out",
+      "rough rg: lock code 124 kept for it while it is out",
+      "duck duck_amt: lock code 127 kept for it while it is out",
+      "duck duck_src: CC 119 kept for it until the unused CCs run out"
+     ],
+     "parked": [
+      "rough/rg 0x10c00025",
+      "duck/duck_src 0x21000020",
+      "duck/duck_amt 0x27000024"
+     ],
+     "store": "444c53540001000000000108cc72f2f25a17c0de99f28aa27b020001000300010003000000010000010100000000002501010000000000200101000000000028010100000000001001010000000000200101000000000ec05f1b55105a17c0de0110002800000000070400006c666f2d726e646c725f6100010300250000000205020000726f7567687267000204002000000000040800006475636b6475636b5f737263021c002400000005040800006475636b6475636b5f616d747d0704006c666f2d726e646c725f61007b0408006475636b6475636b5f7372637c050200726f7567687267007f0408006475636b6475636b5f616d74770408006475636b6475636b5f737263"
+    }
+   ],
+   "steps": [
+    [
+     {
+      "ancestors": [
+       4660
+      ],
+      "ccs": [],
+      "codes": [
+       [
+        268435456,
+        42
+       ],
+       [
+        268435456,
+        120
+       ]
+      ],
+      "device": "analog-rytm-mk2",
+      "flashed_id": 1511506142,
+      "inits": 0,
+      "room": {
+       "core_field_inits": 32,
+       "core_handles": 32,
+       "core_lock_ccs": 32,
+       "core_lock_codes": 32
+      },
+      "scopes": {
+       "global": [
+        40,
+        0,
+        1
+       ],
+       "kit": [
+        64,
+        0,
+        1
+       ],
+       "pattern": [
+        32,
+        0,
+        1
+       ],
+       "project": [
+        3776,
+        0,
+        1
+       ],
+       "sound": [
+        56,
+        0,
+        1
+       ],
+       "track": [
+        16,
+        0,
+        1
+       ]
+      }
+     },
+     [
+      "place",
+      [
+       "duck",
+       "lfo",
+       "rough"
+      ]
+     ]
+    ],
+    [
+     {
+      "ancestors": [
+       4660
+      ],
+      "ccs": [],
+      "codes": [
+       [
+        268435456,
+        42
+       ],
+       [
+        268435456,
+        120
+       ],
+       [
+        268435456,
+        126
+       ]
+      ],
+      "device": "analog-rytm-mk2",
+      "flashed_id": 1511506142,
+      "inits": 0,
+      "room": {
+       "core_field_inits": 32,
+       "core_handles": 32,
+       "core_lock_ccs": 32,
+       "core_lock_codes": 32
+      },
+      "scopes": {
+       "global": [
+        40,
+        0,
+        1
+       ],
+       "kit": [
+        64,
+        0,
+        1
+       ],
+       "pattern": [
+        32,
+        0,
+        1
+       ],
+       "project": [
+        3776,
+        0,
+        1
+       ],
+       "sound": [
+        56,
+        0,
+        1
+       ],
+       "track": [
+        16,
+        0,
+        1
+       ]
+      }
+     },
+     [
+      "place",
+      [
+       "duck",
+       "lfo",
+       "rough"
+      ]
+     ]
+    ],
+    [
+     {
+      "ancestors": [
+       4660
+      ],
+      "ccs": [],
+      "codes": [
+       [
+        281018368,
+        298
+       ]
+      ],
+      "device": "analog-rytm-mk2",
+      "flashed_id": 1511506142,
+      "inits": 0,
+      "room": {
+       "core_field_inits": 32,
+       "core_handles": 32,
+       "core_lock_ccs": 32,
+       "core_lock_codes": 32
+      },
+      "scopes": {
+       "global": [
+        40,
+        0,
+        1
+       ],
+       "kit": [
+        64,
+        0,
+        1
+       ],
+       "pattern": [
+        32,
+        0,
+        1
+       ],
+       "project": [
+        3776,
+        0,
+        1
+       ],
+       "sound": [
+        56,
+        0,
+        1
+       ],
+       "track": [
+        16,
+        0,
+        1
+       ]
+      }
+     },
+     [
+      "place",
+      [
+       "lfo"
+      ]
+     ]
+    ]
+   ]
+  },
+  {
+   "name": "codes run out",
+   "results": [
+    {
+     "ancestors": [
+      "0x5a17c0de",
+      "0x00001234"
+     ],
+     "ccs": [],
+     "codes": [
+      "104000360000007e",
+      "104000370000007f"
+     ],
+     "fields": {
+      "two/t1": "0x10400037",
+      "two/t2": "0x10400036"
+     },
+     "generations": {
+      "global": 1,
+      "kit": 1,
+      "pattern": 1,
+      "project": 1,
+      "sound": 1,
+      "track": 1
+     },
+     "handles": [],
+     "id": "0x93c908e4",
+     "inits": [],
+     "notes": [
+      "two t1: 1 bits of sound storage at bit 55",
+      "two t2: 1 bits of sound storage at bit 54",
+      "two t1: lock code 127",
+      "two t2: lock code 126",
+      "layout ID 0x93c908e4 (from 0x5a17c0de, whose projects it still reads)"
+     ],
+     "parked": [],
+     "store": "444c5354000100000000009ce234187d5a17c0de93c908e47d010002000000020000000000000000010100000000003601010000000000400101000000000028010100000000001001010000000000200101000000000ec05a17c0de01010036000000000302000074776f743200000001010037000000000302000074776f74310000007e03020074776f74320000007f03020074776f7431000000"
+    },
+    {
+     "ancestors": [
+      "0x93c908e4",
+      "0x5a17c0de",
+      "0x00001234"
+     ],
+     "ccs": [],
+     "codes": [
+      "104000350000007e"
+     ],
+     "fields": {
+      "one/o1": "0x10400035"
+     },
+     "generations": {
+      "global": 1,
+      "kit": 1,
+      "pattern": 1,
+      "project": 1,
+      "sound": 1,
+      "track": 1
+     },
+     "handles": [],
+     "id": "0xc52929b7",
+     "inits": [],
+     "notes": [
+      "two t2 (sound): parked; its bits and values are kept for when it comes back",
+      "two t1 (sound): parked; its bits and values are kept for when it comes back",
+      "one o1: 1 bits of sound storage at bit 53",
+      "two t2: lock code 126 kept for it while it is out",
+      "two t1: lock code 127 kept for it while it is out",
+      "one o1: lock code 126 (was two t2's)",
+      "layout ID 0xc52929b7 (from 0x93c908e4, whose projects it still reads)"
+     ],
+     "parked": [
+      "two/t2 0x10400036",
+      "two/t1 0x10400037"
+     ],
+     "store": "444c535400010000000000b490c2f3805a17c0dec52929b77d020001000200010001000000000000010100000000003501010000000000400101000000000028010100000000001001010000000000200101000000000ec093c908e45a17c0de0101003500000000030200006f6e656f3100000001010036000000000302000074776f743200000001010037000000000302000074776f74310000007e0302006f6e656f310000007f03020074776f7431000000"
+    },
+    {
+     "fit": [
+      [
+       "two",
+       "codes",
+       1
+      ]
+     ]
+    }
+   ],
+   "steps": [
+    [
+     {
+      "ancestors": [
+       4660
+      ],
+      "ccs": [],
+      "codes": [
+       [
+        268435456,
+        42
+       ],
+       [
+        268435456,
+        43
+       ],
+       [
+        268435456,
+        44
+       ],
+       [
+        268435456,
+        45
+       ],
+       [
+        268435456,
+        46
+       ],
+       [
+        268435456,
+        47
+       ],
+       [
+        268435456,
+        48
+       ],
+       [
+        268435456,
+        49
+       ],
+       [
+        268435456,
+        50
+       ],
+       [
+        268435456,
+        51
+       ],
+       [
+        268435456,
+        52
+       ],
+       [
+        268435456,
+        53
+       ],
+       [
+        268435456,
+        54
+       ],
+       [
+        268435456,
+        55
+       ],
+       [
+        268435456,
+        56
+       ],
+       [
+        268435456,
+        57
+       ],
+       [
+        268435456,
+        58
+       ],
+       [
+        268435456,
+        59
+       ],
+       [
+        268435456,
+        60
+       ],
+       [
+        268435456,
+        61
+       ],
+       [
+        268435456,
+        62
+       ],
+       [
+        268435456,
+        63
+       ],
+       [
+        268435456,
+        64
+       ],
+       [
+        268435456,
+        65
+       ],
+       [
+        268435456,
+        66
+       ],
+       [
+        268435456,
+        67
+       ],
+       [
+        268435456,
+        68
+       ],
+       [
+        268435456,
+        69
+       ],
+       [
+        268435456,
+        70
+       ],
+       [
+        268435456,
+        71
+       ],
+       [
+        268435456,
+        72
+       ],
+       [
+        268435456,
+        73
+       ],
+       [
+        268435456,
+        74
+       ],
+       [
+        268435456,
+        75
+       ],
+       [
+        268435456,
+        76
+       ],
+       [
+        268435456,
+        77
+       ],
+       [
+        268435456,
+        78
+       ],
+       [
+        268435456,
+        79
+       ],
+       [
+        268435456,
+        80
+       ],
+       [
+        268435456,
+        81
+       ],
+       [
+        268435456,
+        82
+       ],
+       [
+        268435456,
+        83
+       ],
+       [
+        268435456,
+        84
+       ],
+       [
+        268435456,
+        85
+       ],
+       [
+        268435456,
+        86
+       ],
+       [
+        268435456,
+        87
+       ],
+       [
+        268435456,
+        88
+       ],
+       [
+        268435456,
+        89
+       ],
+       [
+        268435456,
+        90
+       ],
+       [
+        268435456,
+        91
+       ],
+       [
+        268435456,
+        92
+       ],
+       [
+        268435456,
+        93
+       ],
+       [
+        268435456,
+        94
+       ],
+       [
+        268435456,
+        95
+       ],
+       [
+        268435456,
+        96
+       ],
+       [
+        268435456,
+        97
+       ],
+       [
+        268435456,
+        98
+       ],
+       [
+        268435456,
+        99
+       ],
+       [
+        268435456,
+        100
+       ],
+       [
+        268435456,
+        101
+       ],
+       [
+        268435456,
+        102
+       ],
+       [
+        268435456,
+        103
+       ],
+       [
+        268435456,
+        104
+       ],
+       [
+        268435456,
+        105
+       ],
+       [
+        268435456,
+        106
+       ],
+       [
+        268435456,
+        107
+       ],
+       [
+        268435456,
+        108
+       ],
+       [
+        268435456,
+        109
+       ],
+       [
+        268435456,
+        110
+       ],
+       [
+        268435456,
+        111
+       ],
+       [
+        268435456,
+        112
+       ],
+       [
+        268435456,
+        113
+       ],
+       [
+        268435456,
+        114
+       ],
+       [
+        268435456,
+        115
+       ],
+       [
+        268435456,
+        116
+       ],
+       [
+        268435456,
+        117
+       ],
+       [
+        268435456,
+        118
+       ],
+       [
+        268435456,
+        119
+       ],
+       [
+        268435456,
+        120
+       ],
+       [
+        268435456,
+        121
+       ],
+       [
+        268435456,
+        122
+       ],
+       [
+        268435456,
+        123
+       ],
+       [
+        268435456,
+        124
+       ],
+       [
+        268435456,
+        125
+       ]
+      ],
+      "device": "analog-rytm-mk2",
+      "flashed_id": 1511506142,
+      "inits": 0,
+      "room": {
+       "core_field_inits": 32,
+       "core_handles": 32,
+       "core_lock_ccs": 32,
+       "core_lock_codes": 32
+      },
+      "scopes": {
+       "global": [
+        40,
+        0,
+        1
+       ],
+       "kit": [
+        64,
+        0,
+        1
+       ],
+       "pattern": [
+        32,
+        0,
+        1
+       ],
+       "project": [
+        3776,
+        0,
+        1
+       ],
+       "sound": [
+        56,
+        0,
+        1
+       ],
+       "track": [
+        16,
+        0,
+        1
+       ]
+      }
+     },
+     [
+      "place",
+      [
+       "two"
+      ]
+     ]
+    ],
+    [
+     {
+      "ancestors": [
+       4660
+      ],
+      "ccs": [],
+      "codes": [
+       [
+        268435456,
+        42
+       ],
+       [
+        268435456,
+        43
+       ],
+       [
+        268435456,
+        44
+       ],
+       [
+        268435456,
+        45
+       ],
+       [
+        268435456,
+        46
+       ],
+       [
+        268435456,
+        47
+       ],
+       [
+        268435456,
+        48
+       ],
+       [
+        268435456,
+        49
+       ],
+       [
+        268435456,
+        50
+       ],
+       [
+        268435456,
+        51
+       ],
+       [
+        268435456,
+        52
+       ],
+       [
+        268435456,
+        53
+       ],
+       [
+        268435456,
+        54
+       ],
+       [
+        268435456,
+        55
+       ],
+       [
+        268435456,
+        56
+       ],
+       [
+        268435456,
+        57
+       ],
+       [
+        268435456,
+        58
+       ],
+       [
+        268435456,
+        59
+       ],
+       [
+        268435456,
+        60
+       ],
+       [
+        268435456,
+        61
+       ],
+       [
+        268435456,
+        62
+       ],
+       [
+        268435456,
+        63
+       ],
+       [
+        268435456,
+        64
+       ],
+       [
+        268435456,
+        65
+       ],
+       [
+        268435456,
+        66
+       ],
+       [
+        268435456,
+        67
+       ],
+       [
+        268435456,
+        68
+       ],
+       [
+        268435456,
+        69
+       ],
+       [
+        268435456,
+        70
+       ],
+       [
+        268435456,
+        71
+       ],
+       [
+        268435456,
+        72
+       ],
+       [
+        268435456,
+        73
+       ],
+       [
+        268435456,
+        74
+       ],
+       [
+        268435456,
+        75
+       ],
+       [
+        268435456,
+        76
+       ],
+       [
+        268435456,
+        77
+       ],
+       [
+        268435456,
+        78
+       ],
+       [
+        268435456,
+        79
+       ],
+       [
+        268435456,
+        80
+       ],
+       [
+        268435456,
+        81
+       ],
+       [
+        268435456,
+        82
+       ],
+       [
+        268435456,
+        83
+       ],
+       [
+        268435456,
+        84
+       ],
+       [
+        268435456,
+        85
+       ],
+       [
+        268435456,
+        86
+       ],
+       [
+        268435456,
+        87
+       ],
+       [
+        268435456,
+        88
+       ],
+       [
+        268435456,
+        89
+       ],
+       [
+        268435456,
+        90
+       ],
+       [
+        268435456,
+        91
+       ],
+       [
+        268435456,
+        92
+       ],
+       [
+        268435456,
+        93
+       ],
+       [
+        268435456,
+        94
+       ],
+       [
+        268435456,
+        95
+       ],
+       [
+        268435456,
+        96
+       ],
+       [
+        268435456,
+        97
+       ],
+       [
+        268435456,
+        98
+       ],
+       [
+        268435456,
+        99
+       ],
+       [
+        268435456,
+        100
+       ],
+       [
+        268435456,
+        101
+       ],
+       [
+        268435456,
+        102
+       ],
+       [
+        268435456,
+        103
+       ],
+       [
+        268435456,
+        104
+       ],
+       [
+        268435456,
+        105
+       ],
+       [
+        268435456,
+        106
+       ],
+       [
+        268435456,
+        107
+       ],
+       [
+        268435456,
+        108
+       ],
+       [
+        268435456,
+        109
+       ],
+       [
+        268435456,
+        110
+       ],
+       [
+        268435456,
+        111
+       ],
+       [
+        268435456,
+        112
+       ],
+       [
+        268435456,
+        113
+       ],
+       [
+        268435456,
+        114
+       ],
+       [
+        268435456,
+        115
+       ],
+       [
+        268435456,
+        116
+       ],
+       [
+        268435456,
+        117
+       ],
+       [
+        268435456,
+        118
+       ],
+       [
+        268435456,
+        119
+       ],
+       [
+        268435456,
+        120
+       ],
+       [
+        268435456,
+        121
+       ],
+       [
+        268435456,
+        122
+       ],
+       [
+        268435456,
+        123
+       ],
+       [
+        268435456,
+        124
+       ],
+       [
+        268435456,
+        125
+       ]
+      ],
+      "device": "analog-rytm-mk2",
+      "flashed_id": 1511506142,
+      "inits": 0,
+      "room": {
+       "core_field_inits": 32,
+       "core_handles": 32,
+       "core_lock_ccs": 32,
+       "core_lock_codes": 32
+      },
+      "scopes": {
+       "global": [
+        40,
+        0,
+        1
+       ],
+       "kit": [
+        64,
+        0,
+        1
+       ],
+       "pattern": [
+        32,
+        0,
+        1
+       ],
+       "project": [
+        3776,
+        0,
+        1
+       ],
+       "sound": [
+        56,
+        0,
+        1
+       ],
+       "track": [
+        16,
+        0,
+        1
+       ]
+      }
+     },
+     [
+      "place",
+      [
+       "one"
+      ]
+     ]
+    ],
+    [
+     {
+      "ancestors": [
+       4660
+      ],
+      "ccs": [],
+      "codes": [
+       [
+        268435456,
+        42
+       ],
+       [
+        268435456,
+        43
+       ],
+       [
+        268435456,
+        44
+       ],
+       [
+        268435456,
+        45
+       ],
+       [
+        268435456,
+        46
+       ],
+       [
+        268435456,
+        47
+       ],
+       [
+        268435456,
+        48
+       ],
+       [
+        268435456,
+        49
+       ],
+       [
+        268435456,
+        50
+       ],
+       [
+        268435456,
+        51
+       ],
+       [
+        268435456,
+        52
+       ],
+       [
+        268435456,
+        53
+       ],
+       [
+        268435456,
+        54
+       ],
+       [
+        268435456,
+        55
+       ],
+       [
+        268435456,
+        56
+       ],
+       [
+        268435456,
+        57
+       ],
+       [
+        268435456,
+        58
+       ],
+       [
+        268435456,
+        59
+       ],
+       [
+        268435456,
+        60
+       ],
+       [
+        268435456,
+        61
+       ],
+       [
+        268435456,
+        62
+       ],
+       [
+        268435456,
+        63
+       ],
+       [
+        268435456,
+        64
+       ],
+       [
+        268435456,
+        65
+       ],
+       [
+        268435456,
+        66
+       ],
+       [
+        268435456,
+        67
+       ],
+       [
+        268435456,
+        68
+       ],
+       [
+        268435456,
+        69
+       ],
+       [
+        268435456,
+        70
+       ],
+       [
+        268435456,
+        71
+       ],
+       [
+        268435456,
+        72
+       ],
+       [
+        268435456,
+        73
+       ],
+       [
+        268435456,
+        74
+       ],
+       [
+        268435456,
+        75
+       ],
+       [
+        268435456,
+        76
+       ],
+       [
+        268435456,
+        77
+       ],
+       [
+        268435456,
+        78
+       ],
+       [
+        268435456,
+        79
+       ],
+       [
+        268435456,
+        80
+       ],
+       [
+        268435456,
+        81
+       ],
+       [
+        268435456,
+        82
+       ],
+       [
+        268435456,
+        83
+       ],
+       [
+        268435456,
+        84
+       ],
+       [
+        268435456,
+        85
+       ],
+       [
+        268435456,
+        86
+       ],
+       [
+        268435456,
+        87
+       ],
+       [
+        268435456,
+        88
+       ],
+       [
+        268435456,
+        89
+       ],
+       [
+        268435456,
+        90
+       ],
+       [
+        268435456,
+        91
+       ],
+       [
+        268435456,
+        92
+       ],
+       [
+        268435456,
+        93
+       ],
+       [
+        268435456,
+        94
+       ],
+       [
+        268435456,
+        95
+       ],
+       [
+        268435456,
+        96
+       ],
+       [
+        268435456,
+        97
+       ],
+       [
+        268435456,
+        98
+       ],
+       [
+        268435456,
+        99
+       ],
+       [
+        268435456,
+        100
+       ],
+       [
+        268435456,
+        101
+       ],
+       [
+        268435456,
+        102
+       ],
+       [
+        268435456,
+        103
+       ],
+       [
+        268435456,
+        104
+       ],
+       [
+        268435456,
+        105
+       ],
+       [
+        268435456,
+        106
+       ],
+       [
+        268435456,
+        107
+       ],
+       [
+        268435456,
+        108
+       ],
+       [
+        268435456,
+        109
+       ],
+       [
+        268435456,
+        110
+       ],
+       [
+        268435456,
+        111
+       ],
+       [
+        268435456,
+        112
+       ],
+       [
+        268435456,
+        113
+       ],
+       [
+        268435456,
+        114
+       ],
+       [
+        268435456,
+        115
+       ],
+       [
+        268435456,
+        116
+       ],
+       [
+        268435456,
+        117
+       ],
+       [
+        268435456,
+        118
+       ],
+       [
+        268435456,
+        119
+       ],
+       [
+        268435456,
+        120
+       ],
+       [
+        268435456,
+        121
+       ],
+       [
+        268435456,
+        122
+       ],
+       [
+        268435456,
+        123
+       ],
+       [
+        268435456,
+        124
+       ],
+       [
+        268435456,
+        125
+       ]
+      ],
+      "device": "analog-rytm-mk2",
+      "flashed_id": 1511506142,
+      "inits": 0,
+      "room": {
+       "core_field_inits": 32,
+       "core_handles": 32,
+       "core_lock_ccs": 32,
+       "core_lock_codes": 32
+      },
+      "scopes": {
+       "global": [
+        40,
+        0,
+        1
+       ],
+       "kit": [
+        64,
+        0,
+        1
+       ],
+       "pattern": [
+        32,
+        0,
+        1
+       ],
+       "project": [
+        3776,
+        0,
+        1
+       ],
+       "sound": [
+        56,
+        0,
+        1
+       ],
+       "track": [
+        16,
+        0,
+        1
+       ]
+      }
+     },
+     [
+      "fit",
+      [
+       "one",
+       "two"
+      ]
+     ]
+    ]
+   ]
+  },
+  {
+   "name": "ccs",
+   "results": [
+    {
+     "ancestors": [
+      "0x5a17c0de",
+      "0x00001234"
+     ],
+     "ccs": [
+      "1040003700000073",
+      "2100002000000074"
+     ],
+     "codes": [
+      "104000370000007d",
+      "210000200000007e",
+      "270100240000007f"
+     ],
+     "fields": {
+      "duck/duck_amt": "0x27010024",
+      "duck/duck_src": "0x21000020",
+      "s/s1": "0x10400037"
+     },
+     "generations": {
+      "global": 1,
+      "kit": 1,
+      "pattern": 1,
+      "project": 1,
+      "sound": 1,
+      "track": 1
+     },
+     "handles": [],
+     "id": "0xe403dcf9",
+     "inits": [
+      "00000005"
+     ],
+     "notes": [
+      "duck duck_amt: 28 bits of kit storage at bit 36",
+      "duck duck_src: 4 bits of kit storage at bit 32",
+      "s s1: 1 bits of sound storage at bit 55",
+      "duck duck_amt: lock code 127",
+      "duck duck_src: lock code 126",
+      "s s1: lock code 125",
+      "duck duck_src: CC 116",
+      "s s1: CC 115",
+      "layout ID 0xe403dcf9 (from 0x5a17c0de, whose projects it still reads)"
+     ],
+     "parked": [],
+     "store": "444c535400010000000000dc5763b71b5a17c0dee403dcf97c010003000000030000000200000000010100000000003701010000000000200101000000000028010100000000001001010000000000200101000000000ec05a17c0de010100370000000001020000737331000204002000000000040800006475636b6475636b5f737263021c002400000005040800006475636b6475636b5f616d747d010200737331007e0408006475636b6475636b5f7372637f0408006475636b6475636b5f616d747301020073733100740408006475636b6475636b5f737263"
+    },
+    {
+     "ancestors": [
+      "0xe403dcf9",
+      "0x5a17c0de",
+      "0x00001234"
+     ],
+     "ccs": [],
+     "codes": [
+      "2040001f0000007c"
+     ],
+     "fields": {
+      "kitcc/kc": "0x2040001f"
+     },
+     "generations": {
+      "global": 1,
+      "kit": 1,
+      "pattern": 1,
+      "project": 1,
+      "sound": 1,
+      "track": 1
+     },
+     "handles": [],
+     "id": "0x5109f6d2",
+     "inits": [],
+     "notes": [
+      "s s1 (sound): parked; its bits and values are kept for when it comes back",
+      "duck duck_src (kit): parked; its bits and values are kept for when it comes back",
+      "duck duck_amt (kit): parked; its bits and values are kept for when it comes back",
+      "kitcc kc: 1 bits of kit storage at bit 31",
+      "s s1: lock code 125 kept for it while it is out",
+      "duck duck_src: lock code 126 kept for it while it is out",
+      "duck duck_amt: lock code 127 kept for it while it is out",
+      "kitcc kc: lock code 124",
+      "s s1: CC 115 is the flashed build's now",
+      "duck duck_src: CC 116 is the flashed build's now",
+      "kitcc kc: no CC left; it is on MIDI by its NRPN only",
+      "layout ID 0x5109f6d2 (from 0xe403dcf9, whose projects it still reads)"
+     ],
+     "parked": [
+      "s/s1 0x10400037",
+      "duck/duck_src 0x21000020",
+      "duck/duck_amt 0x27000024"
+     ],
+     "store": "444c535400010000000000e8b04ecf3a5a17c0de5109f6d27b0200010003000100030000000000000101000000000037010100000000001f0101000000000028010100000000001001010000000000200101000000000ec0e403dcf95a17c0de0201001f00000000050200006b697463636b6300010100370000000001020000737331000204002000000000040800006475636b6475636b5f737263021c002400000005040800006475636b6475636b5f616d747c0502006b697463636b63007d010200737331007e0408006475636b6475636b5f7372637f0408006475636b6475636b5f616d74"
+    },
+    {
+     "fit": []
+    }
+   ],
+   "steps": [
+    [
+     {
+      "ancestors": [
+       4660
+      ],
+      "ccs": [
+       [
+        0,
+        119
+       ]
+      ],
+      "codes": [],
+      "device": "analog-rytm-mk2",
+      "flashed_id": 1511506142,
+      "inits": 0,
+      "room": {
+       "core_field_inits": 32,
+       "core_handles": 32,
+       "core_lock_ccs": 32,
+       "core_lock_codes": 32
+      },
+      "scopes": {
+       "global": [
+        40,
+        0,
+        1
+       ],
+       "kit": [
+        64,
+        0,
+        1
+       ],
+       "pattern": [
+        32,
+        0,
+        1
+       ],
+       "project": [
+        3776,
+        0,
+        1
+       ],
+       "sound": [
+        56,
+        0,
+        1
+       ],
+       "track": [
+        16,
+        0,
+        1
+       ]
+      }
+     },
+     [
+      "place",
+      [
+       "duck",
+       "s"
+      ]
+     ]
+    ],
+    [
+     {
+      "ancestors": [
+       4660
+      ],
+      "ccs": [
+       [
+        0,
+        8
+       ],
+       [
+        0,
+        9
+       ],
+       [
+        0,
+        48
+       ],
+       [
+        0,
+        49
+       ],
+       [
+        0,
+        50
+       ],
+       [
+        0,
+        51
+       ],
+       [
+        0,
+        52
+       ],
+       [
+        0,
+        53
+       ],
+       [
+        0,
+        54
+       ],
+       [
+        0,
+        55
+       ],
+       [
+        0,
+        56
+       ],
+       [
+        0,
+        57
+       ],
+       [
+        0,
+        58
+       ],
+       [
+        0,
+        59
+       ],
+       [
+        0,
+        60
+       ],
+       [
+        0,
+        61
+       ],
+       [
+        0,
+        62
+       ],
+       [
+        0,
+        63
+       ],
+       [
+        0,
+        65
+       ],
+       [
+        0,
+        66
+       ],
+       [
+        0,
+        67
+       ],
+       [
+        0,
+        68
+       ],
+       [
+        0,
+        69
+       ],
+       [
+        0,
+        110
+       ],
+       [
+        0,
+        111
+       ],
+       [
+        0,
+        112
+       ],
+       [
+        0,
+        113
+       ],
+       [
+        0,
+        114
+       ],
+       [
+        0,
+        115
+       ],
+       [
+        0,
+        116
+       ],
+       [
+        0,
+        119
+       ]
+      ],
+      "codes": [],
+      "device": "analog-rytm-mk2",
+      "flashed_id": 1511506142,
+      "inits": 0,
+      "room": {
+       "core_field_inits": 32,
+       "core_handles": 32,
+       "core_lock_ccs": 32,
+       "core_lock_codes": 32
+      },
+      "scopes": {
+       "global": [
+        40,
+        0,
+        1
+       ],
+       "kit": [
+        64,
+        0,
+        1
+       ],
+       "pattern": [
+        32,
+        0,
+        1
+       ],
+       "project": [
+        3776,
+        0,
+        1
+       ],
+       "sound": [
+        56,
+        0,
+        1
+       ],
+       "track": [
+        16,
+        0,
+        1
+       ]
+      }
+     },
+     [
+      "place",
+      [
+       "kitcc"
+      ]
+     ]
+    ],
+    [
+     {
+      "ancestors": [
+       4660
+      ],
+      "ccs": [],
+      "codes": [],
+      "device": "analog-rytm-mk2",
+      "flashed_id": 1511506142,
+      "inits": 0,
+      "room": {
+       "core_field_inits": 0,
+       "core_handles": 0,
+       "core_lock_ccs": 0,
+       "core_lock_codes": 0
+      },
+      "scopes": {
+       "global": [
+        40,
+        0,
+        1
+       ],
+       "kit": [
+        64,
+        0,
+        1
+       ],
+       "pattern": [
+        32,
+        0,
+        1
+       ],
+       "project": [
+        3776,
+        0,
+        1
+       ],
+       "sound": [
+        56,
+        0,
+        1
+       ],
+       "track": [
+        16,
+        0,
+        1
+       ]
+      }
+     },
+     [
+      "fit",
+      [
+       "vdac"
+      ]
+     ]
+    ]
+   ]
+  },
+  {
+   "name": "fit",
+   "results": [
+    {
+     "fit": [
+      [
+       "fx-sends",
+       "kit",
+       17
+      ]
+     ]
+    },
+    {
+     "fit": [
+      [
+       "voice-dac",
+       "sound",
+       6
+      ]
+     ]
+    },
+    {
+     "fit": [
+      [
+       "lfo-rnd",
+       "core_lock_codes",
+       1
+      ]
+     ]
+    },
+    {
+     "error": "fx-sends does not fit: kit is 17 short"
+    }
+   ],
+   "steps": [
+    [
+     {
+      "ancestors": [
+       4660
+      ],
+      "ccs": [],
+      "codes": [],
+      "device": "analog-rytm-mk2",
+      "flashed_id": 1511506142,
+      "inits": 0,
+      "room": {
+       "core_field_inits": 32,
+       "core_handles": 32,
+       "core_lock_ccs": 32,
+       "core_lock_codes": 32
+      },
+      "scopes": {
+       "global": [
+        40,
+        0,
+        1
+       ],
+       "kit": [
+        64,
+        0,
+        1
+       ],
+       "pattern": [
+        32,
+        0,
+        1
+       ],
+       "project": [
+        3776,
+        0,
+        1
+       ],
+       "sound": [
+        56,
+        0,
+        1
+       ],
+       "track": [
+        16,
+        0,
+        1
+       ]
+      }
+     },
+     [
+      "fit",
+      [
+       "duck",
+       "fx"
+      ]
+     ]
+    ],
+    [
+     {
+      "ancestors": [
+       4660
+      ],
+      "ccs": [],
+      "codes": [],
+      "device": "analog-rytm-mk2",
+      "flashed_id": 1511506142,
+      "inits": 0,
+      "room": {
+       "core_field_inits": 32,
+       "core_handles": 32,
+       "core_lock_ccs": 32,
+       "core_lock_codes": 32
+      },
+      "scopes": {
+       "global": [
+        40,
+        0,
+        1
+       ],
+       "kit": [
+        64,
+        0,
+        1
+       ],
+       "pattern": [
+        32,
+        0,
+        1
+       ],
+       "project": [
+        3776,
+        0,
+        1
+       ],
+       "sound": [
+        56,
+        0,
+        1
+       ],
+       "track": [
+        16,
+        0,
+        1
+       ]
+      }
+     },
+     [
+      "fit",
+      [
+       "fx",
+       "lfo",
+       "vdac"
+      ]
+     ]
+    ],
+    [
+     {
+      "ancestors": [
+       4660
+      ],
+      "ccs": [],
+      "codes": [],
+      "device": "analog-rytm-mk2",
+      "flashed_id": 1511506142,
+      "inits": 0,
+      "room": {
+       "core_field_inits": 0,
+       "core_handles": 0,
+       "core_lock_ccs": 0,
+       "core_lock_codes": 0
+      },
+      "scopes": {
+       "global": [
+        40,
+        0,
+        1
+       ],
+       "kit": [
+        64,
+        0,
+        1
+       ],
+       "pattern": [
+        32,
+        0,
+        1
+       ],
+       "project": [
+        3776,
+        0,
+        1
+       ],
+       "sound": [
+        56,
+        0,
+        1
+       ],
+       "track": [
+        16,
+        0,
+        1
+       ]
+      }
+     },
+     [
+      "fit",
+      [
+       "lfo"
+      ]
+     ]
+    ],
+    [
+     {
+      "ancestors": [
+       4660
+      ],
+      "ccs": [],
+      "codes": [],
+      "device": "analog-rytm-mk2",
+      "flashed_id": 1511506142,
+      "inits": 0,
+      "room": {
+       "core_field_inits": 32,
+       "core_handles": 32,
+       "core_lock_ccs": 32,
+       "core_lock_codes": 32
+      },
+      "scopes": {
+       "global": [
+        40,
+        0,
+        1
+       ],
+       "kit": [
+        64,
+        0,
+        1
+       ],
+       "pattern": [
+        32,
+        0,
+        1
+       ],
+       "project": [
+        3776,
+        0,
+        1
+       ],
+       "sound": [
+        56,
+        0,
+        1
+       ],
+       "track": [
+        16,
+        0,
+        1
+       ]
+      }
+     },
+     [
+      "place",
+      [
+       "duck",
+       "fx"
+      ]
+     ]
+    ]
+   ]
+  },
+  {
+   "name": "names and handles",
+   "results": [
+    {
+     "ancestors": [
+      "0x5a17c0de",
+      "0x00001234"
+     ],
+     "ccs": [],
+     "codes": [],
+     "fields": {
+      "sidecar/sc_h": "0x64000eb0",
+      "voice-dac/vd_g": "0x30400027",
+      "voice-dac/vd_s": "0x18000018",
+      "voice-dac/vd_s2": "0x11c00011",
+      "zed/zz": "0x30800025",
+      "\u00e9cho/ec": "0x30c00022"
+     },
+     "generations": {
+      "global": 1,
+      "kit": 1,
+      "pattern": 1,
+      "project": 1,
+      "sound": 1,
+      "track": 1
+     },
+     "handles": [
+      "64000eb0"
+     ],
+     "id": "0x80fbd8e7",
+     "inits": [],
+     "notes": [
+      "sidecar sc_h: 16 bits of project storage at bit 3760",
+      "voice-dac vd_g: 1 bits of global storage at bit 39",
+      "voice-dac vd_s: 32 bits of sound storage at bit 24",
+      "voice-dac vd_s2: 7 bits of sound storage at bit 17",
+      "zed zz: 2 bits of global storage at bit 37",
+      "\u00e9cho ec: 3 bits of global storage at bit 34",
+      "layout ID 0x80fbd8e7 (from 0x5a17c0de, whose projects it still reads)"
+     ],
+     "parked": [],
+     "store": "444c535400010000000000f09fbf30af5a17c0de80fbd8e77f010006000000000000000000000000010100000000001101010000000000400101000000000022010100000000001001010000000000200101000000000eb05a17c0de010700110000000009050000766f6963652d64616376645f73320000012000180000000009040000766f6963652d64616376645f73000000030300220000000005020000c3a963686f6563000302002500000000030200007a65647a7a000000030100270000000009040000766f6963652d64616376645f6700000006100eb000000000070400007369646563617273635f6800"
+    },
+    {
+     "ancestors": [
+      "0x5a17c0de",
+      "0x00001234"
+     ],
+     "ccs": [],
+     "codes": [],
+     "fields": {
+      "sidecar/sc_h": "0x64000eb0",
+      "zed/zz": "0x30800025"
+     },
+     "generations": {
+      "global": 1,
+      "kit": 1,
+      "pattern": 1,
+      "project": 1,
+      "sound": 1,
+      "track": 1
+     },
+     "handles": [
+      "64000eb0"
+     ],
+     "id": "0x80fbd8e7",
+     "inits": [],
+     "notes": [
+      "voice-dac vd_s2 (sound): parked; its bits and values are kept for when it comes back",
+      "voice-dac vd_s (sound): parked; its bits and values are kept for when it comes back",
+      "\u00e9cho ec (global): parked; its bits and values are kept for when it comes back",
+      "voice-dac vd_g (global): parked; its bits and values are kept for when it comes back"
+     ],
+     "parked": [
+      "voice-dac/vd_s2 0x11c00011",
+      "voice-dac/vd_s 0x18000018",
+      "\u00e9cho/ec 0x30c00022",
+      "voice-dac/vd_g 0x30400027"
+     ],
+     "store": "444c535400010000000000f03453f5045a17c0de80fbd8e77f010002000400000000000000000000010100000000001101010000000000400101000000000022010100000000001001010000000000200101000000000eb05a17c0de0302002500000000030200007a65647a7a00000006100eb000000000070400007369646563617273635f6800010700110000000009050000766f6963652d64616376645f73320000012000180000000009040000766f6963652d64616376645f73000000030300220000000005020000c3a963686f656300030100270000000009040000766f6963652d64616376645f67000000"
+    }
+   ],
+   "steps": [
+    [
+     {
+      "ancestors": [
+       4660
+      ],
+      "ccs": [],
+      "codes": [],
+      "device": "analog-rytm-mk2",
+      "flashed_id": 1511506142,
+      "inits": 0,
+      "room": {
+       "core_field_inits": 32,
+       "core_handles": 32,
+       "core_lock_ccs": 32,
+       "core_lock_codes": 32
+      },
+      "scopes": {
+       "global": [
+        40,
+        0,
+        1
+       ],
+       "kit": [
+        64,
+        0,
+        1
+       ],
+       "pattern": [
+        32,
+        0,
+        1
+       ],
+       "project": [
+        3776,
+        0,
+        1
+       ],
+       "sound": [
+        56,
+        0,
+        1
+       ],
+       "track": [
+        16,
+        0,
+        1
+       ]
+      }
+     },
+     [
+      "place",
+      [
+       "utf",
+       "zed",
+       "sidecar",
+       "vdac"
+      ]
+     ]
+    ],
+    [
+     {
+      "ancestors": [
+       4660
+      ],
+      "ccs": [],
+      "codes": [],
+      "device": "analog-rytm-mk2",
+      "flashed_id": 1511506142,
+      "inits": 0,
+      "room": {
+       "core_field_inits": 32,
+       "core_handles": 32,
+       "core_lock_ccs": 32,
+       "core_lock_codes": 32
+      },
+      "scopes": {
+       "global": [
+        40,
+        0,
+        1
+       ],
+       "kit": [
+        64,
+        0,
+        1
+       ],
+       "pattern": [
+        32,
+        0,
+        1
+       ],
+       "project": [
+        3776,
+        0,
+        1
+       ],
+       "sound": [
+        56,
+        0,
+        1
+       ],
+       "track": [
+        16,
+        0,
+        1
+       ]
+      }
+     },
+     [
+      "place",
+      [
+       "zed",
+       "sidecar"
+      ]
+     ]
+    ]
+   ]
+  }
+ ]
+}

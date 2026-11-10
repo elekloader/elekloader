@@ -86,6 +86,73 @@ the container and the same requests (`container.ts`, `datarpc.ts`, over any
 port: Web MIDI on a page), with the same results and bytes
 (`js/test/drive.test.ts`).
 
+## +Drive storage
+
+A +Drive mod's storage fields go in the same bytes as the flashed build's,
+so saves, write-through, SysEx and library sounds carry them as they carry
+flashed fields. The loader places them at boot; `elekloader/drive_store.py`
+is that allocator on the computer, and `js/src/drivestore.ts` its port (the
+same placements, `.store` bytes and notes: `js/test/drivestore.test.ts`).
+Pass 1 still refuses `storage` until the loader runs it.
+
+It reads only what the unit can read: each scope's room, used bits and
+generation (the descriptor's storage record), the layout ID and ancestors
+(`core_store_ids`), and the codes, CCs and inits the build gives its own
+fields (`core_lock_codes`, `core_lock_ccs`, `core_field_inits`). The
+descriptor alone (`/mods/.build`) is enough for `fit`, not for placing.
+
+- **Pool**: a scope's bits from the build's used bits to its room. Fields
+  go in from the room's top down, in (mod id, symbol) order (UTF-8 bytes),
+  so a later flashed build that grows from its used bits meets them late.
+- **Kept**: a field keeps its bits while its mod declares it with the same
+  scope, width and init.
+- **Parked**: a field no chosen mod declares keeps its bits and values; the
+  core counts it as owned, and it gets its place back when its mod
+  returns. `forget` (FORGET DATA) drops a parked mod's fields, codes and
+  CCs; their bits are given out again only by a repack.
+- **Repack**: when a scope's never-used bits (below its low mark) run out,
+  or the flashed build repacked the scope, grew into a field or has less
+  room, the scope gets a new generation, its parked fields are dropped and
+  its fields are packed again from the top. Items saved before load the
+  scope at defaults, flashed fields too. A flashed repack alone gives the
+  scope the build's generation.
+- **Codes**: from the range's top down (127, 126, ...), past the build's
+  highest code; kept while the field keeps its place, kept for a parked
+  field, and the one freed longest ago is given out once the codes above
+  the build's are gone. A code the build has taken since is given up.
+- **CCs**: from the device's pool, from its end, past the build's own; a
+  kit field skips those stock maps on the FX channel. A full
+  `core_lock_ccs` leaves a field on its NRPN only.
+- **Room**: `fit` refuses the last mod in id order while a scope, the free
+  codes, or `core_lock_codes`', `core_field_inits`' or `core_handles`'
+  spare entries are short, and checks again.
+- **Layout ID**: the flashed ID while `.store` holds nothing and no
+  generation moved; otherwise the first 4 bytes of a SHA-256 of `ELKDRIVE`,
+  the flashed ID, each scope's generation, every field (parked too: u8
+  scope, u8 bits, u16 offset, u32 init, then the mod id and symbol, each a
+  u8 length and its bytes, by scope then offset) and every code and freed
+  code (u8 code, the two names, by code), 0 read as 1. A park moves no bit,
+  so it keeps the ID. The ancestors are the last 15 live IDs, then the
+  flashed ID and its ancestors, at most 15.
+
+**/mods/.store** (format 1, big-endian, records 4-aligned), rewritten only
+when its bytes change; a missing, short or bad file (magic, format, size,
+CRC) reads as none, a fresh placement:
+
+| offset | |
+|---|---|
+| +0x00 | `DLST`, u16 format, u16 0, u32 size, u32 CRC-32 of the file with this word 0 |
+| +0x10 | u32 the flashed layout ID it was written for, u32 the live layout ID |
+| +0x18 | u8 next code, u8 ID count, u16 counts: fields, parked fields, codes, freed codes, CCs, freed CCs; u16 0 |
+| +0x28 | per scope (sound, kit, global, track, pattern, project): u8 flashed generation, u8 live generation, u16 0, u32 low mark |
+| then | the IDs, u32 each, newest first |
+| then | fields (by scope, offset), then parked fields (oldest first): u8 scope, u8 bits, u16 offset, u32 init, u8 and u8 the names' lengths, u16 0, the names, zeros to 4 |
+| then | codes (by code), freed codes (oldest first), CCs (by CC), freed CCs: u8 code or CC, u8 and u8 the names' lengths, u8 0, the names, zeros to 4 |
+
+`js/tools/drivestore_vectors.py` writes the runs in
+`js/test/drivestore-vectors.json` (placements, notes and `.store` bytes);
+the loader's own host test can read them too.
+
 ## The build descriptor
 
 A build that will link more mods on the unit (the +Drive mods loader)

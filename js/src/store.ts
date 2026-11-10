@@ -125,6 +125,12 @@ export function fxLockDstBits(devKey: string): number {
   return spec(devKey).fxLockDst ?? 0
 }
 
+/** -> [the device's CC pool in the order fields get them, the CCs of it a kit field gets none of]. store.cc_pool. */
+export function ccPool(devKey: string): [number[], number[]] {
+  const sp = spec(devKey)
+  return [[...(sp.ccs ?? [])], [...(sp.fxCcsTaken ?? [])]]
+}
+
 /** -> [first, last] lock code on the device. store.code_range. */
 export function codeRange(devKey: string): [number, number] {
   return spec(devKey).codes ?? [FIRST_CODE, LAST_CODE]
