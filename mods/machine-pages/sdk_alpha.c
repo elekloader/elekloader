@@ -94,8 +94,11 @@ void sdk_alpha_render(int32_t *blocks)
             continue;
         }
         int32_t raw[SDK_ALPHA_KNOBS];
+        /* cm_src_value's values, without its call and checks a knob */
+        const volatile int16_t *params = &fw_voice_params[53 * track];
+        int extras = mp_src_for(core_track_machine[track]) != 0;
         for (uint32_t k = 0; k < e->count; ++k)
-            raw[k] = cm_src_value(track, k);
+            raw[k] = k < 8 ? params[k] : extras ? params[MP_EXTRA_SLOT(k - 8) - 17] : 0;
         struct elek_voice voice = {
             .track = track, .pitch = sdk_alpha_pitch(track, id, fw_voice_note[track]),
             .velocity = fw_voice_vel[track] >> 8,

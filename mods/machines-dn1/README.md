@@ -42,9 +42,9 @@ port adds `sdk_alpha.c` and the shared `../sdk-alpha/machine.c`, with
   companion's voice record. Knob values come from the native
   block-parameter buffer that `ev_render_params` gives, read after the
   controllers and LFOs have run, so each voice gets its own locks and
-  modulation. The wrapper scales SDK full scale to `DNM_PEAK` (1/16);
-  the companion's AMP envelope and velocity, then the multimode filter,
-  mixer and effects follow.
+  modulation. The companion's AMP envelope and velocity follow, their
+  pass scaling SDK full scale to `DNM_PEAK` (1/16), then the multimode
+  filter, mixer and effects.
 - **Mono machines.** On core-dn1 5.3's `ev_live_note`, a track whose
   machine's `.play` is `ELEK_MONO` or `ELEK_MONO_LEGATO` plays one key at a time, as machine-pages 1.8 does
   on the Digitakt (the shared `../sdk-alpha/machine.c`): every live key

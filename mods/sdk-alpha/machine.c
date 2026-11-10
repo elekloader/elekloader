@@ -16,13 +16,19 @@
 
 struct sdk_alpha_entry sdk_alpha_entries[SDK_ALPHA_MACHINES];
 int32_t sdk_alpha_count = -1;
+static uint8_t by_id[128];              /* an id's entry + 1; 0: none */
+#ifdef SDK_ALPHA_VOICES
+/* Each machine's knobs for the render, sdk_alpha_map's two fixed divides made once:
+ * value = min + q raw + (r raw + SDK_ALPHA_RAW_MAX / 2) / SDK_ALPHA_RAW_MAX. */
+static struct knob_map { int32_t min; uint32_t q, r; } maps[SDK_ALPHA_MACHINES][SDK_ALPHA_KNOBS];
+#endif
 
 /* The checks the builder makes too, once: a machine refused here is not an SDK machine. The entry is
  * written only with its final values, which a reentrant run writes again. */
 static int index_machine(struct sdk_alpha_entry *e, const struct elek_machine *m)
 {
     uint32_t count = m->knob_count, pages = 0;
-    if (count > SDK_ALPHA_KNOBS || (count && !m->knobs))
+    if (count > SDK_ALPHA_KNOBS || (count && !m->knobs) || (uint32_t)m->id >= sizeof by_id)
         return 0;
     while (pages < ELEK_UI_PAGE_MAX && m->pages[pages].label)
         ++pages;
@@ -41,6 +47,14 @@ static int index_machine(struct sdk_alpha_entry *e, const struct elek_machine *m
         e->title[page] = m->pages[page].label;
     if (!pages)
         e->title[pages++] = m->name;
+#ifdef SDK_ALPHA_VOICES
+    for (uint32_t k = 0; k < count; ++k) {
+        uint32_t span = (uint32_t)m->knobs[k].max - (uint32_t)m->knobs[k].min;
+        maps[e - sdk_alpha_entries][k].min = m->knobs[k].min;
+        maps[e - sdk_alpha_entries][k].q = span / SDK_ALPHA_RAW_MAX;
+        maps[e - sdk_alpha_entries][k].r = span % SDK_ALPHA_RAW_MAX;
+    }
+#endif
     e->count = count;
     e->pages = pages;
     e->machine = m;
@@ -55,19 +69,20 @@ void sdk_alpha_init(void)
     if (sdk_alpha_count >= 0)
         return;
     for (uint32_t i = 0; n < SDK_ALPHA_MACHINES && dev_candidate(i, &m); ++i)
-        if (m && index_machine(&sdk_alpha_entries[n], m))
+        if (m && index_machine(&sdk_alpha_entries[n], m)) {
             ++n;
+            if (!by_id[m->id])          /* the first with an id is the one found */
+                by_id[m->id] = n;
+        }
     __asm__ volatile ("" ::: "memory");
     sdk_alpha_count = n;
 }
 
 const struct sdk_alpha_entry *sdk_alpha_find(int32_t id)
 {
-    sdk_alpha_init();
-    for (int32_t i = 0; i < sdk_alpha_count; ++i)
-        if (sdk_alpha_entries[i].machine->id == id)
-            return &sdk_alpha_entries[i];
-    return 0;
+    if (sdk_alpha_count < 0)
+        sdk_alpha_init();
+    return (uint32_t)id < sizeof by_id && by_id[id] ? &sdk_alpha_entries[by_id[id] - 1] : 0;
 }
 
 /* Split the product so the full signed-32-bit bound range needs no 64-bit runtime. */
@@ -261,6 +276,8 @@ static struct {
     uint8_t start;                      /* the device's start flag lasts one block; kept until render */
     uint8_t rendered;                   /* rendered since its state was cleared: idle means something */
     uint32_t cc_seen;                   /* cc_count at its last render: the CCs after it are new */
+    int32_t raw[SDK_ALPHA_KNOBS];       /* each knob's clamped raw value + 1 that knob[] was mapped from; 0: none */
+    int32_t knob[SDK_ALPHA_KNOBS];      /* v->knob: a knob is mapped again only when its raw value changed */
     uint32_t state[ELEK_VOICE_STATE_MAX / 4];
 } voices[SDK_ALPHA_VOICES];
 
@@ -269,6 +286,7 @@ static struct {
 #define CC_COUNT 0x1ffffffu             /* cc_count's mask, 25 bits */
 static uint32_t cc_table[SDK_ALPHA_TRACKS][128];
 static volatile uint32_t cc_count;      /* the last CC's count: 1..CC_COUNT, 0 before the first */
+static volatile uint32_t cc_last[SDK_ALPHA_TRACKS];    /* cc_count at each track's last CC; 0: none came */
 /* What v->cc points at: -1 for every CC when none came, else the CCs built for one track and window. */
 static const int32_t cc_none[128] = { [0 ... 127] = -1 };
 static int32_t cc_built[128];
@@ -287,6 +305,7 @@ int32_t sdk_alpha_midi_cc(int32_t track, int32_t cc, int32_t value, int32_t flag
         if ((cc_took[track] & 127) != id)
             cc_took[track] = cc_count << 7 | id;
         cc_table[track][cc] = n << 7 | ((uint32_t)value & 127);
+        cc_last[track] = n;
         __asm__ volatile ("" ::: "memory");     /* the word before the count that makes it new */
         cc_count = n;
     }
@@ -297,6 +316,7 @@ void sdk_alpha_select(uint32_t slot, int32_t id)
 {
     if (voices[slot].id == id) return;
     for (uint32_t i = 0; i < ELEK_VOICE_STATE_MAX / 4; ++i) voices[slot].state[i] = 0;
+    for (uint32_t k = 0; k < SDK_ALPHA_KNOBS; ++k) voices[slot].raw[k] = 0;
     voices[slot].id = id;
     voices[slot].start = 0;
     voices[slot].rendered = 0;
@@ -305,10 +325,17 @@ void sdk_alpha_select(uint32_t slot, int32_t id)
 void sdk_alpha_voice(const struct sdk_alpha_entry *e, uint32_t slot, struct elek_voice *v,
                      const int32_t *raw, int start, uint32_t idle, elek_sample *out)
 {
-    int32_t knob[SDK_ALPHA_KNOBS];
+    int32_t *seen = voices[slot].raw, *knob = voices[slot].knob;
     if (start) voices[slot].start = 1;
-    for (uint32_t k = 0; k < e->count; ++k)
-        knob[k] = sdk_alpha_map(&e->machine->knobs[k], raw[k]);
+    for (uint32_t k = 0; k < e->count; ++k) {
+        int32_t r = raw[k] < 0 ? 0 : raw[k] > SDK_ALPHA_RAW_MAX ? SDK_ALPHA_RAW_MAX : raw[k];
+        if (seen[k] != r + 1) {
+            const struct knob_map *map = &maps[e - sdk_alpha_entries][k];
+            seen[k] = r + 1;
+            knob[k] = (int32_t)((uint32_t)map->min + map->q * (uint32_t)r +
+                                (map->r * (uint32_t)r + SDK_ALPHA_RAW_MAX / 2) / SDK_ALPHA_RAW_MAX);
+        }
+    }
     v->knob = knob;
     v->start = voices[slot].start;
     v->state = voices[slot].state;
@@ -322,7 +349,10 @@ void sdk_alpha_voice(const struct sdk_alpha_entry *e, uint32_t slot, struct elek
     }
     uint32_t span = (now - from) & CC_COUNT;
     v->cc = cc_none;
-    if (span && v->track < SDK_ALPHA_TRACKS) {     /* a CC came: its values, built once a track and window */
+    /* A CC came on this track since: its values, built once a track and window. cc_last is at most one
+     * past now, a CC whose count is not written yet: then the build leaves that one out. */
+    uint32_t last = v->track < SDK_ALPHA_TRACKS ? cc_last[v->track] : 0;
+    if (span && last && ((last - from - 1) & CC_COUNT) <= span) {
         if (built_track != v->track || built_from != from || built_now != now) {
             for (uint32_t n = 0; n < 128; ++n) {
                 uint32_t word = cc_table[v->track][n];
