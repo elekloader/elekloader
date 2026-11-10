@@ -32,7 +32,8 @@ older ones people still have:
 | Digitone mk1, Digitone Keys | 1.43, 1.44 | `core-dn1-2.0a.elemod`, `core-dn1-2.0a-os1.44.elemod` | the v0.4.0 release, built into its apps |
 | Digitakt II | 1.17 | `core-dt2-1.0.elemod` | the [v0.10.0](https://github.com/elekloader/elekloader/releases/tag/v0.10.0) release, built into its apps, and the web page |
 | Digitone II | 1.12 | `core-dn2-0.3.elemod` | the [v0.10.0](https://github.com/elekloader/elekloader/releases/tag/v0.10.0) release, built into its apps, and the web page (experimental) |
-| Analog Rytm MKII | 1.74 | `core-ar2-0.12.elemod` | on main: build it ([below](#building-a-core)). The Drive Loader needs it: the +Drive mods' spare entries in its tables |
+| Analog Rytm MKII | 1.74 | `core-ar2-0.14.elemod` | build it ([below](#building-a-core)). Drive Loader 0.5 needs it: +Drive storage at boot (`ev_boot_drive`, `core_store_gens`) |
+| Analog Rytm MKII | 1.74 | `core-ar2-0.12.elemod` | on main: build it ([below](#building-a-core)). Drive Loader 0.4 needs it: the +Drive mods' spare entries in its tables |
 | Analog Rytm MKII | 1.74 | `core-ar2-0.11.elemod` | the [v0.10.0](https://github.com/elekloader/elekloader/releases/tag/v0.10.0) release, built into its apps, and the web page. Mods with pages built for 0.3 (rytm2_mods v1.2's lfo-rnd, voice-dac, euclid-accents, velocity-humanise, comp-preview) do not link with it: their sites overlap core's page sites |
 | Analog Rytm MKII | 1.74 | `core-ar2-0.3.elemod` | the [core-ar2-v0.3](https://github.com/elekloader/elekloader/releases/tag/core-ar2-v0.3) pre-release, and the shop |
 | Digitone II | 1.12 | `core-dn2-0.4.elemod` | on main, not released: build it ([below](#building-a-core)) |

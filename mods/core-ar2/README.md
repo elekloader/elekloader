@@ -11,7 +11,7 @@ and from 0.8 with lockable parameters in `lock.c` and `lock.s` (Lockable paramet
 their p-locks in `rows.c` and `rows.s` (Mod p-locks, below), and from 0.9 the smoothed value,
 velocity and aftertouch destinations and the FX track's parameters (below), and from 0.10 field
 defaults and the event `ev_project_save` around every project save (below), and from 0.11 locks a mod keeps
-itself (below). On its own it changes nothing
+itself (below), and +Drive storage at boot (below). On its own it changes nothing
 the unit does, apart from that restart, which it makes safe.
 
 The Rytm runs on the Digitakt mk1's platform (a ColdFire MCF5441x), and its OS
@@ -1116,7 +1116,7 @@ In a build with the Drive Loader (`mods/drive-loader-ar2`, which loads mods
 from the +Drive at boot) each table gets spare entries the loader fills at
 boot. A linker without +Drive support reads only each table's `entry` and
 leaves the rest, so without the loader the tables are the same as 0.11's. Core's events (every `ev_*`
-table) declare 256, as many as the loader links, so each +Drive mod can add
+table but 0.14's `ev_boot_drive`, which has none) declare 256, as many as the loader links, so each +Drive mod can add
 a handler to any event; `core_machines` declares 10, its hidden slots
 34..43. The other tables declare what each can hold:
 
@@ -1195,6 +1195,39 @@ machines' records keeps their look by setting `look` to the record it used:
 COMP MIX's 94 (the same UI record as 191 and 82 other ids) for duck's and
 fx-sends' knobs, CB TEST's 457, a switch, for voice-dac's POL.
 
+## +Drive storage at boot (0.14)
+
+A Drive Loader that places +Drive fields in the flashed build's bytes at
+boot ([docs/DRIVE.md](../../docs/DRIVE.md)) sets the layout core reads with:
+
+- **The layout.** `core_store_ids` holds the layout ID, then its ancestors,
+  then 0; the loader may fill its spare entries with the live layout ID
+  and its ancestors. `core_store_gens` (6 bytes,
+  sound, kit, global, track, pattern, project) holds each scope's
+  generation, set from the build's (`__store_gen`, `__store_gen2`) in
+  `.boot` (`core_store_boot_init`, from `core_boot_init`); every load and
+  save reads it. The track and pattern split stays the build's. A parked
+  field needs nothing: core copies a scope's bytes whole.
+- **`ev_boot_drive`**: f(), once, from core's site `0x401009e0` in `main()`
+  (after stock's `jsr 0x4009da0e`, `store.s`): the +Drive is mounted, the
+  working project loaded, and audio and the UI not started. The Drive
+  Loader links there; the table has no spare entries for +Drive mods.
+- **The boot's project load waits.** `main()` loads the working project at
+  `0x40100966`, before the hook. From
+  `.boot` until `ev_boot_drive` returns, a load of the stored project
+  (`st_proj_load`) only loads: it leaves the stored project's store,
+  globals and mod p-locks as they were and calls no `ev_project`. After
+  `ev_boot_drive`, if the layout ID, an ancestor or a generation changed,
+  core loads the working project again through `0x4000e846` (main()'s own
+  load, from the stored project), which reads every item with the live
+  layout and finishes in `st_proj_load` as any load does; otherwise it
+  finishes the first load as it is. Either way `ev_project(1, dropped)`
+  comes once, after the +Drive mods are linked, so they hear it too.
+  CREATE NEW or the reset at boot (`st_proj_init`) leaves nothing to finish.
+- **Limits.** A project stock upgrades at boot is saved before the hook,
+  so its +Drive fields load at defaults. A SysEx pattern dump's mod
+  p-locks load only under the live ID itself (rows.c).
+
 ## Checked so far
 
 On a unit (OS 1.73 and 1.74): the boot site and its DDR area, both render
@@ -1205,52 +1238,21 @@ sites, the boot copier and every event, with
 Statically, against the stock image (python, no toolchain): every site's
 stock bytes, and that each covers whole instructions.
 
-- **Mod storage (0.2)**, in an emulator (OS 1.74 and 1.73, 19 Oct 2026), with
-  [store-check-ar2](../../examples/store-check-ar2) marking every field of
-  every item: after save, loading another project (all zeros), loading the
-  project back, and a power cycle, every marker read back. A build with an
-  ancestor layout read all of it and rewrote the header; a build with the
-  kit generation bumped read zeros for kits only; a build with a fresh
-  layout read zeros everywhere; CREATE NEW cleared everything. A global
-  slot received as SysEx came in with its mod data cleared, and the other
-  three slots and every other scope kept theirs. `ev_project` came once
-  at boot (a load; on the first boot with all four scopes dropped, after a
-  power cycle with none), once per project load, not on save, and as
-  `CORE_PROJECT_NEW` after CREATE NEW. On 1.73 the same chain, CREATE
-  NEW, the SysEx global and the events gave the same results; the ancestor,
-  kit generation and other-layout builds ran on 1.74 only.
+- **Mod storage (0.2)**, in an emulator (OS 1.74 and 1.73, 19 Oct 2026) and
+  on a unit (19 Oct 2026), with [store-check-ar2](../../examples/store-check-ar2):
+  every field of every item kept through save, another project's load, the
+  load back, a power cycle, .arprj export and import, and a Total Recall
+  sync; an ancestor layout read all of it, a bumped kit generation read
+  zeros for kits only, a fresh layout read zeros everywhere, CREATE NEW and
+  a SysEx global cleared what they should, and `ev_project` came once at
+  boot and once per load.
 
-- **Mod storage (0.2) on a unit** (19 Oct 2026), sent with Transfer over
-  USB, with store-check (builds SC74, OTHER74 and SC73: two layouts, both
-  OS versions). On 1.74: every column stayed empty after marking, saving,
-  loading the project back and a power cycle, and was full after loading a
-  stock-saved project (with all four drop flags); the project exported as
-  .arprj and imported into another slot kept everything, as did a Total
-  Recall sync and recall; CREATE NEW cleared everything, as a new-project
-  event. The same mods built with another lockfile read none of the saved
-  project (all four drop flags), and the first build read all of it again
-  afterwards. On 1.73 the project saved on 1.74 read in full, and marking,
-  saving, loading another project, loading back and a power cycle passed.
-  One flash (OTHER74) stopped at SUCCESS: REBOOTING and booted normally
-  after a power cycle.
-
-- **Mod storage (0.3)**, in an emulator (OS 1.74, 20 Oct 2026; before 0.3
-  dropped 1.73, the same checks also passed with a 1.73 build of it):
-  with 0.2, a track and a pattern field put in a live pattern, then a trig
-  placed on that track (stock's track save), read 0 after a power cycle;
-  with 0.3 they read back, and the stock track record was the same as with
-  0.2. A parameter lock alone (the locks save) and a SCALE menu edit alone
-  (the settings save) each carried them too. store-check with a 24-bit and
-  a 32-bit sound field: marking, SAVE PROJECT AS, loading it back and a
-  power cycle kept every marker. With velocity amounts' low bytes set, the
-  VELOCITY MOD menu (open, edit all four amounts, negative ones too) drew
-  every frame as stock did from the same amounts, and the edited amounts
-  and the engine's copies were stock's, with the low bytes kept in the
-  sound and 0 in the engine (with 0.2 they reached the engine, and the menu
-  drew negative amounts one step nearer 0); copy, clear (FUNC+PLAY) and
-  paste kept them; SAVE KIT and RELOAD brought them back. A 0.2 build's
-  lockfile built with 0.3 read the 0.2 project's sound fields in place
-  (checked on 1.73 only, with that 1.73 build).
+- **Mod storage (0.3)**, in an emulator (OS 1.74, 20 Oct 2026): track and
+  pattern fields survive stock's track, locks and settings saves and a power
+  cycle; 24- and 32-bit sound fields survive SAVE PROJECT AS and a power
+  cycle; velocity amounts' low bytes stay in the sound and out of the
+  engine, with the VELOCITY MOD menu drawn as stock's, through copy, clear,
+  paste, SAVE KIT and RELOAD.
 
 - **Parameter pages (0.4)**, in an emulator (OS 1.74, 21 Oct 2026): with
   rytm2_mods' 0.4 versions, every page screen of the same key and knob

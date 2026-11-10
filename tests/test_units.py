@@ -2154,8 +2154,10 @@ def test_core_ar2_0_12_room_for_drive_mods():
     cols = doc['collections']
     assert tuple(map(int, doc['version'].split('.'))) >= (0, 12)
     for name, v in cols.items():
-        if name.startswith('ev_'):
+        if name.startswith('ev_') and name != 'ev_boot_drive':
             assert isinstance(v, dict) and v.get('spare') == 256, (name, v)
+    # 0.14: the boot link's own event, which no +Drive mod joins (README, "+Drive storage at boot")
+    assert cols['ev_boot_drive'] == {'entry': 4, 'spare': 0}
     assert cols['core_machines'] == {'entry': 4, 'spare': 10}
     for name in ('core_pages', 'core_page_fns', 'core_view_pages'):
         assert cols[name] == {'entry': 4, 'spare': 10 * 16 - 11}, name

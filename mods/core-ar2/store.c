@@ -171,7 +171,18 @@ volatile unsigned char core_store_globals[4][5];
  * version loads */
 static unsigned char *st_image = S;
 
+/* (0.14) the live generations, one byte a scope (sound .. project): this
+ * build's from .boot, which the Drive Loader may change in ev_boot_drive to
+ * the live +Drive layout's, with the layout ID and its ancestors in
+ * core_store_ids (its spare entries); the T and P split stays the build's */
+unsigned char core_store_gens[6];
+
 static unsigned gen(int scope)
+{
+    return core_store_gens[scope - 1];
+}
+
+static unsigned built_gen(int scope)
 {
     unsigned g = scope <= SC_TRACK ? (unsigned)__store_gen : (unsigned)__store_gen2;
     return g >> (24 - 8 * ((scope - 1) & 3)) & 255;
@@ -772,11 +783,18 @@ void st_vel_defaults(unsigned char *routes)
 
 void core_rows_now_reset(void);
 
+/* (0.14) the boot's project load, until ev_boot_drive (below) */
+#define BOOT_IDS 17                     /* the layout ID, 15 ancestors, the 0 */
+static int boot_wait, boot_loaded, boot_done;
+static unsigned boot_ids[BOOT_IDS];
+static unsigned char boot_gens[6];
+
 /* CREATE NEW and the project reset: a fresh store, no global data, and no
  * playing trig's mod locks (rows.c) */
 int st_proj_init(void *project, int a, int b, int c)
 {
     int r = st_proj_init_body(project, a, b, c), g, j;
+    boot_loaded = 0;                    /* (0.14) nothing of a boot load is left to finish */
     core_rows_now_reset();
     store_clear(S, 0, STORE_BYTES);
     store_header(S);
@@ -791,13 +809,17 @@ int st_proj_init(void *project, int a, int b, int c)
  * can't read, then takes this build's header, and the mods hear of it, with
  * the scopes the loaded image (a file's buffer, else the stored project) had
  * nothing for. A file of an older project version (st_image 0) brings no
- * project data. */
+ * project data.
+ *
+ * (0.14) The boot's own load of the working project runs before the +Drive
+ * mods are linked (main() at 0x40100966, the hook at 0x401009e0), so it
+ * leaves the stored project as it is and tells no mod: core finishes it at
+ * the hook, after ev_boot_drive (core_boot_drive below). */
 void core_rows_forget(void);
 
-int st_proj_load(void *live, unsigned char *src, void *progress)
+static void proj_finish(unsigned char *from)
 {
-    int r = st_proj_load_body(live, src, progress), g, j, s;
-    unsigned char *from = is_image(src) ? src : st_image;
+    int g, j, s;
     unsigned dropped = 0;
     /* its mod p-locks' codes are its layout's (rows.c, 0.8); no trig of it
      * has played yet */
@@ -818,8 +840,82 @@ int st_proj_load(void *live, unsigned char *src, void *progress)
             for (j = 0; j < 5; j++)
                 S[GLOBALS_AT + 80 * g + 0x4b + j] = 0;
     store_header(S);
+    boot_done = 1;
     project_event(1, dropped);
+}
+
+int st_proj_load(void *live, unsigned char *src, void *progress)
+{
+    int r = st_proj_load_body(live, src, progress), i;
+    unsigned char *from = is_image(src) ? src : st_image;
+    if (boot_wait && from == S) {
+        const volatile unsigned *ids = core_store_ids;
+        core_rows_now_reset();
+        for (i = 0; i < BOOT_IDS && (boot_ids[i] = ids[i]); i++)
+            ;
+        for (i = 0; i < 6; i++)
+            boot_gens[i] = core_store_gens[i];
+        boot_loaded = 1;
+        return r;
+    }
+    proj_finish(from);
     return r;
+}
+
+/* (0.14) .boot (core_boot_init): this build's generations, and the boot's
+ * project load waits for ev_boot_drive */
+void core_store_boot_init(void)
+{
+    int s;
+    for (s = SC_SOUND; s <= SC_PROJECT; s++)
+        core_store_gens[s - 1] = built_gen(s);
+    boot_wait = 1;
+}
+
+/* (0.14) did ev_boot_drive change the layout the boot's load read with? */
+static int layout_moved(void)
+{
+    const volatile unsigned *ids = core_store_ids;
+    int i;
+    for (i = 0; i < 6; i++)
+        if (core_store_gens[i] != boot_gens[i])
+            return 1;
+    for (i = 0; i < BOOT_IDS; i++) {
+        if (ids[i] != boot_ids[i])
+            return 1;
+        if (!ids[i])
+            return 0;
+    }
+    return 0;
+}
+
+/* (0.14) ev_boot_drive: f(), once at boot, from the site 0x401009e0 in
+ * main() (store.s) after its own call: the +Drive is mounted and the working
+ * project loaded, and the audio interrupt and the UI task have not started.
+ * The Drive Loader links the +Drive mods there and may set the live layout
+ * (core_store_ids, core_store_gens). Then core finishes the boot's project
+ * load: if the layout moved, it loads the working project again
+ * (FUN_4000e846, main()'s own load, through st_proj_load) so every item is
+ * read with the live layout; else it finishes the first load as is. Either
+ * way ev_project(1, dropped) comes then, to the +Drive mods too. The
+ * collection has no spare entries: a +Drive mod is not called in it. */
+typedef void (*ev_boot_drive_t)(void);
+extern const ev_boot_drive_t ev_boot_drive[];
+#define PROJECT_CHECK_LOAD ((int (*)(void *, void *))0x4000e846)
+
+void core_boot_drive(void)
+{
+    const ev_boot_drive_t *f;
+    for (f = ev_boot_drive; *f; f++)
+        (*f)();
+    boot_wait = 0;
+    if (!boot_loaded)
+        return;
+    boot_loaded = boot_done = 0;
+    if (layout_moved())
+        PROJECT_CHECK_LOAD(LIVE_PROJECT, S);
+    if (!boot_done)
+        proj_finish(S);
 }
 
 /* ---- the project file calls: the serializers work on the file's buffer ---- */
