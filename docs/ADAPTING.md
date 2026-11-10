@@ -102,7 +102,9 @@ what you see when it is broken (section 5 has the fixes).
     inside ... copied block"*.
 11. **Say what you need.** `requires` names the mods yours depends on (always
     `core` for format 2); `conflicts` names the ones it cannot live with.
-    *"X requires Y"*.
+    *"X requires Y"*. `resources.core` names the core you built for: the
+    file keeps building as newer cores come
+    ([CORES.md](CORES.md), "A mod and newer cores").
 12. **One file, one release.** A mod targets one stock release by hash.
     Porting to another OS version means finding every address again.
 

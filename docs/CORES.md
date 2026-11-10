@@ -50,15 +50,36 @@ older core links with the newest as it did with its own, and a build takes
 the newest. The older files stay on their releases (core-v3.0,
 core-dn1-v2.3, core-dn1-v3.2 and core-dn1-v4.0).
 
-One kind of mod does not link with a newer core: a mod that patches a
-place itself which a later core took for every mod. The Digitakt mk1's
-core 4.1 patches the master output's places, and Digi EQ 1.0c and
-Tone+FX's Digitakt files (3.2a3 and 4.0c) patch them too: they link
-with core 4.0 and are refused with 4.1 (*"core 4.1 site ... and tonefx
-4.0c site ... overlap"*). Such a mod builds with the newest core that
-leaves its places alone ([below](#how-a-build-picks-one)), and not beside
-a mod that needs a newer core, until its author builds it on the core's
-event.
+## A mod and newer cores
+
+A mod names the core it was built for (`resources.core`) and keeps
+building, with no new file from its author, whatever cores come after it:
+
+- **A newer core keeps the older one's interface** (above), so the mod
+  links with it as it did with its own.
+- **A core that does not take the mod leaves it the one before.** One kind
+  of mod does not link with a newer core: a mod that patches a place itself
+  which a later core took for every mod. The Digitakt mk1's core 4.1
+  patches the master output's places, and Digi EQ 1.0c and Tone+FX's
+  Digitakt files (3.2a3 and 4.0c) patch them too: they link with core 4.0
+  and are refused with 4.1 (*"core 4.1 site ... and tonefx 4.0c site ...
+  overlap"*). A build with such a mod takes the newest core that leaves its
+  places alone ([below](#how-a-build-picks-one)).
+- **A released file stays.** A core stays on its release, and in the shop's
+  list, for as long as a listed mod builds with nothing newer.
+
+The same holds for a mod other mods build on (machine-pages, machines):
+its older versions stay beside the newest, and a mod made for an older one
+builds with that one. machine-pages 1.3 and newer patch the MIDI CC range
+lookup, which OB-1 0.6 patches itself, so a build with OB-1 takes
+machine-pages 1.2.
+
+So an author follows a newer core for two reasons only: to use what it
+adds, or so that the mod shares a build with mods that need it. A mod that
+patches a place a newer core took builds alone and with mods as old as it,
+not beside one that needs the newer core, until it is built on the core's
+event. A mod that only subscribes to events, adds to tables and calls
+exports is never in that case.
 
 ## How a build picks one
 
@@ -78,6 +99,12 @@ core takes the mods when:
 When no core does all three, the build takes the newest that is new
 enough, and the check says what is wrong.
 
+A mod that other mods require is picked the same way. Of the versions a
+builder has of it, a build takes the newest that patches no place a
+selected mod patches, and a version that is ticked gives way to one that
+does. The web page brings every version the shop lists of a required mod,
+lists the one the build takes, and changes it as the core, without a word.
+
 Cores 4.0 and newer give the mods' code, tables and variables more RAM:
 1.25 MB on the Digitone, 256 KB on the Digitakt mk1, where older cores give
 them 128 KB ([ADAPTING.md](ADAPTING.md), "The mods' RAM"). How
@@ -91,8 +118,9 @@ check says how many bytes are over.
 
 The web page lists one core of each device and OS: the one the build
 takes. That is the newest, or an older one of the site's while a ticked
-mod cannot link with the newest; the row then names that mod, and the
-newest comes back when the mod is unticked. The web page, the kit and the
+mod cannot link with the newest; the newest comes back when the mod is
+unticked. The page changes the core without a word, and speaks of a core
+only when one stops a build. The web page, the kit and the
 window (from source, and the apps after 0.4.0) tick the core for you and
 keep one: a core you ticked yourself (your own file, added to the page or
 the window's library) stays while it takes the mods, and gives way to the
