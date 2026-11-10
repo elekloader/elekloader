@@ -1220,10 +1220,12 @@ boot ([docs/DRIVE.md](../../docs/DRIVE.md)) sets the layout core reads with:
   `ev_boot_drive`, if the layout ID, an ancestor or a generation changed,
   core loads the working project again through `0x4000e846` (main()'s own
   load, from the stored project), which reads every item with the live
-  layout and finishes in `st_proj_load` as any load does; otherwise it
+  layout and finishes in `st_proj_load` as any load does (keeping what
+  main()'s reset after a requested reset wrote, flags 0x40272874 & 0xa);
+  otherwise it
   finishes the first load as it is. Either way `ev_project(1, dropped)`
   comes once, after the +Drive mods are linked, so they hear it too.
-  CREATE NEW or the reset at boot (`st_proj_init`) leaves nothing to finish.
+  CREATE NEW at boot (`st_proj_init`) leaves nothing to finish.
 - **Limits.** A project stock upgrades at boot is saved before the hook,
   so its +Drive fields load at defaults. A SysEx pattern dump's mod
   p-locks load only under the live ID itself (rows.c).

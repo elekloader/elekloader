@@ -895,25 +895,60 @@ static int layout_moved(void)
  * The Drive Loader links the +Drive mods there and may set the live layout
  * (core_store_ids, core_store_gens). Then core finishes the boot's project
  * load: if the layout moved, it loads the working project again
- * (FUN_4000e846, main()'s own load, through st_proj_load) so every item is
+ * (FUN_4000e846, main()'s own load, through st_proj_load; on a valid
+ * version 9 image it neither upgrades, saves nor inits) so every item is
  * read with the live layout; else it finishes the first load as is. Either
  * way ev_project(1, dropped) comes then, to the +Drive mods too. The
  * collection has no spare entries: a +Drive mod is not called in it. */
 typedef void (*ev_boot_drive_t)(void);
 extern const ev_boot_drive_t ev_boot_drive[];
-#define PROJECT_CHECK_LOAD ((int (*)(void *, void *))0x4000e846)
+/* (live, stored, bool *upgraded): it writes *upgraded whenever that is not
+ * 0; returns 1 when loaded (low byte) */
+#define PROJECT_CHECK_LOAD ((int (*)(void *, void *, unsigned char *))0x4000e846)
+
+/* main()'s reset after its load (FUN_400fb268, 0x400fb2ae..0x400fb2ee, when
+ * its flags, the word at 0x40272874, have 0x2 or 0x8: a reset asked for
+ * before the reboot): the settings block's parts, the four global slots and
+ * one 0x1e24-byte item, none through a routine core hooks. A second load
+ * would bring the stored values back, so core keeps these bytes across it. */
+#define BOOT_FLAGS (*(volatile unsigned *)0x40272874)
+static const struct { unsigned at, n; } kept[] = {
+    {0x41318977, 0x988},                /* the settings block, live +0xb4ffac */
+    {0x413192ff, 0x390},                /* the four global slots */
+    {0x412f3be3, 0x1e24},               /* live +0xb2b218 */
+};
+static unsigned char kept_bytes[0x988 + 0x390 + 0x1e24];
+
+static void keep_reset(int back)
+{
+    unsigned i, j;
+    unsigned char *k = kept_bytes;
+    for (i = 0; i < sizeof kept / sizeof kept[0]; i++)
+        for (j = 0; j < kept[i].n; j++, k++)
+            if (back)
+                B(kept[i].at + j) = *k;
+            else
+                *k = B(kept[i].at + j);
+}
 
 void core_boot_drive(void)
 {
     const ev_boot_drive_t *f;
+    unsigned char upgraded = 0;
     for (f = ev_boot_drive; *f; f++)
         (*f)();
     boot_wait = 0;
     if (!boot_loaded)
         return;
     boot_loaded = boot_done = 0;
-    if (layout_moved())
-        PROJECT_CHECK_LOAD(LIVE_PROJECT, S);
+    if (layout_moved()) {
+        int reset = BOOT_FLAGS & 0xa;
+        if (reset)
+            keep_reset(0);
+        PROJECT_CHECK_LOAD(LIVE_PROJECT, S, &upgraded);
+        if (reset)
+            keep_reset(1);
+    }
     if (!boot_done)
         proj_finish(S);
 }
