@@ -1215,8 +1215,8 @@ boot ([docs/DRIVE.md](../../docs/DRIVE.md)) sets the layout core reads with:
 - **The boot's project load waits.** `main()` loads the working project at
   `0x40100966`, before the hook. From
   `.boot` until `ev_boot_drive` returns, a load of the stored project
-  (`st_proj_load`) only loads: it leaves the stored project's store,
-  globals and mod p-locks as they were and calls no `ev_project`. After
+  (`st_proj_load`) only loads: the stored project's store, globals and mod
+  p-locks stay, and no `ev_project` fires. After
   `ev_boot_drive`, if the layout ID, an ancestor or a generation changed,
   core loads the working project again through `0x4000e846` (main()'s own
   load, from the stored project), which reads every item with the live
