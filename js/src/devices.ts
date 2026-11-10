@@ -241,7 +241,7 @@ export const ANALOG_RYTM_MK2: Device = {
   slotClaims: [['core_machines', 0, 53, 'machine']],   // a machine's descriptor names its slot at +0
   // core-ar2's knob ids: stock's records are 0..468, core's lockable parameters take 469..554
   // (469 + code - 42, lock.c) and a mod's own ids start at 555 (pages.h CORE_PARAM_LOCK_FIRST)
-  paramIds: [555, [469, 554, "core's lockable parameters' ids"], [['core_params', false], ['core_param_locks', true]]],
+  paramIds: [555, [469, 554, "core's lockable parameters' ids"], [['core_params', false], ['core_param_locks', true], ['core_knob_looks', true]]],
 }
 
 export const ANALOG_FOUR_MK2: Device = {
