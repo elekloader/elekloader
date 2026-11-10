@@ -33,7 +33,7 @@ mod.json:
                                                      linker places from the lockfile; "lock":
                                                      true on a sound field gives it a lock
                                                      code (core-ar2 0.8)
-     "knobs": 4,                                      knob ids (core-ar2 0.12): the linker gives
+     "knobs": 4,                                      knob ids (core-ar2 0.13): the linker gives
                                                      the mod 4 ids from 555 up; __knobs is the
                                                      first (`.short __knobs + 2` in a const
                                                      table is an abs16)

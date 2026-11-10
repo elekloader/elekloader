@@ -26,7 +26,7 @@
 // A field declared with "handle": true (core-ar2 0.11) holds a mod's handle on something kept elsewhere, 0 for none:
 // placed, kept and read like any field, not in the lockfile and not part of the layout ID. The linker gives the core
 // the table core_handles, each handle field's descriptor in the lockfile's order. A handle has no "lock" and no init.
-// A mod that declares "knobs": n (core-ar2 0.12) gets a run of n knob ids from the device's first mod id up (knobs),
+// A mod that declares "knobs": n (core-ar2 0.13) gets a run of n knob ids from the device's first mod id up (knobs),
 // kept in "knobs", "freed_knobs" and "next_knob" so screens and test sheets stay the same; not stored data, so not part
 // of the layout ID. A mod keeps its run while its count stays, gets it back when it returns, keeps its first id when
 // a new count has room there, and otherwise takes never-used ids past every other run; freed runs are given out again

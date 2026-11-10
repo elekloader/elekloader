@@ -156,7 +156,7 @@ lockfile's order, which core_handle_fields walks over every item of the
 project, so a mod can list every handle a project uses. A handle is not a
 parameter (no "lock") and has no init (0 is none).
 
-Knob ids (core-ar2 0.12). A mod that declares `"knobs": n` in its mod.json
+Knob ids (core-ar2 0.13). A mod that declares `"knobs": n` in its mod.json
 gets a run of n knob ids from the device's first mod id up (555 on the
 Analog Rytm MKII, the profile's param_ids), and the symbol `__knobs` is its
 first. The ids are not stored data (the core keeps no lock of a mod-kept

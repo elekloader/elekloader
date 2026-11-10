@@ -73,7 +73,7 @@ A format-2 mod is a relocatable object:
 | `collections` | tables this mod declares: `{"ev_tick": {"entry": 4}}`, or a DSP table (below) |
 | `contribute` | entries for tables: `{"to", "order", "data", "relocs", "claims"}` |
 | `copied` | `[{"lo", "hi", "to"}]`: a block of the image this mod copies elsewhere at run time |
-| `knobs` | a count of knob ids, 0..1024, the linker gives this mod (the Analog Rytm MKII from core-ar2 0.12; "Knob ids" below) |
+| `knobs` | a count of knob ids, 0..1024, the linker gives this mod (the Analog Rytm MKII from core-ar2 0.13; "Knob ids" below) |
 | `storage` | fields this mod keeps with the project: `[{"sym", "scope", "bits"}]` (the Analog Rytm MKII from core-ar2 0.2, the Analog Four MKII from core-a4 0.1; "Mod storage" below) |
 | `sharc` | Digitone II 1.12 only: compiled code for the DSP ("Digitone II SHARC mod" below) |
 

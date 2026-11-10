@@ -120,7 +120,7 @@ struct core_param {
 #define CORE_PARAM_LOCK_FIRST 555
 #define CORE_LOCK_RECORDING 0x100   /* in step: live recording; the step is step & 0xff */
 
-/* core-ar2 0.12: knob ids by count. A mod that declares "knobs": n in its
+/* core-ar2 0.13: knob ids by count. A mod that declares "knobs": n in its
  * mod.json gets n ids in a row from 555 up, past every other mod's; the
  * linker defines __knobs, the mod's own, as the first. CORE_KNOB(k) is knob
  * k's id, 0..n-1, a constant in a const table (an abs32 relocation):

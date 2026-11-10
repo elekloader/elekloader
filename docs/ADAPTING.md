@@ -1929,7 +1929,7 @@ The linker refuses a `core_params` or `core_param_locks` entry whose ids
 take 469..554, a `core_param_locks` entry below 555, and entries of two
 mods that share an id from 555.
 
-**Knob ids by count (core-ar2 0.12).** Rather than pick ids from 555 up,
+**Knob ids by count (core-ar2 0.13).** Rather than pick ids from 555 up,
 declare how many the mod needs in mod.json, `"knobs": 4`, and use
 `__knobs + k` for knob k. The linker gives each mod its own run past every
 other mod's ids and keeps it from build to build in the lockfile
