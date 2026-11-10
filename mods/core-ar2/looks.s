@@ -1,5 +1,5 @@
 | SPDX-License-Identifier: GPL-2.0-or-later
-| core-ar2 0.12: knob looks (looks.c). Two stock lookups, from their first
+| core-ar2 0.13: knob looks (looks.c). Two stock lookups, from their first
 | instruction:
 |
 | 0x400ff5c2, uirec(id): `move.l 4(%sp),%d1; cmpi.l #469,%d1`. Stock's body

@@ -1,7 +1,7 @@
-# look-check (Analog Rytm MKII, core-ar2 0.12)
+# look-check (Analog Rytm MKII, core-ar2 0.13)
 
-A test for core-ar2 0.12's knob looks (`core_knob_looks`, docs/ADAPTING.md
-"Knob looks (core-ar2 0.12, Analog Rytm MKII)").
+A test for core-ar2 0.13's knob looks (`core_knob_looks`, docs/ADAPTING.md
+"Knob looks (core-ar2 0.13, Analog Rytm MKII)").
 
 23 LOOK CHECK pages: 1..12 after the LFO key's stock page, 13..23 after the
 AMP key's. Each has four pairs of knobs, A|B, C|D, E|F and G|H: on the left

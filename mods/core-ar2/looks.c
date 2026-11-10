@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
-/* core-ar2 0.12: knob looks (README, "Knob looks (0.12)"). A mod's own knob
+/* core-ar2 0.13: knob looks (README, "Knob looks (0.13)"). A mod's own knob
  * id (555 up, core_params / core_param_locks) has no stock records: stock
  * reads record 0 for it, so the knob draws as record 0's dial with record
  * 0's range, whatever it shows. An entry in core_knob_looks gives the ids

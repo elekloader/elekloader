@@ -1075,14 +1075,14 @@ Opt-in, by the knob's id; a parameter without an entry is as in 0.10.
   so a depth's get notes its id and DMA timer 0's count, and the text
   within 4 ms takes it, as `core_held_step` does.
 
-## Knob looks (0.12)
+## Knob looks (0.13)
 
 `looks.c`, `looks.s`: a mod's own knob id (555 up, `core_params` and
 `core_param_locks`) has no stock records, so stock drew every such knob as
 record 0's dial on record 0's range (0..0), whatever it showed: a switch
 like voice-dac's POL became a dial whose pointer never moves. An entry in
 `core_knob_looks` (`elekloader/sdk/include/analog-rytm-mk2/pages.h`,
-docs/ADAPTING.md "Knob looks (core-ar2 0.12, Analog Rytm MKII)") gives its
+docs/ADAPTING.md "Knob looks (core-ar2 0.13, Analog Rytm MKII)") gives its
 ids the look of any stock knob, a range of their own, or a UI record of the
 mod's own. An id without an entry is as in 0.11.
 
@@ -1114,7 +1114,7 @@ A stock 1.74 boot builds 87 different UI records (by their flags, steps and
 delegates) over 469 ids, with 46 different graphics;
 `examples/look-check-ar2` draws one stock id of each beside a mod knob that
 takes its look, and [knob-looks-1.74.md](knob-looks-1.74.md) lists them all: a sample
-id of each, its stock name, and every id that looks the same. Before 0.12, mods that borrowed hidden machines' records
+id of each, its stock name, and every id that looks the same. Before 0.13, mods that borrowed hidden machines' records
 had a stock record's look: duck and fx-sends 1.0 copied COMP MIX's (94) steps
 and dial into HH TEST's and CY TEST's records, which gives exactly the UI
 record of 191 (and 82 other ids); voice-dac 1.5's POL was CB TEST's 457, a

@@ -32,8 +32,8 @@ for k in range(n):
     c.append({"to":"core_knob_looks","order":50,"data":"00000000","relocs":[[0,"abs32","sym:lk_looks_each",24*k]]})
 c.append(contrib('core_knob_looks','lk_look_ui')); c.append(contrib('core_knob_looks','lk_look_range'))
 m={"id":"look-check","version":"0.1","title":"Look check","category":"Examples","license":"GPL-2.0-or-later","author":"Iced-Cream",
- "description":"A test for core-ar2 0.12's knob looks (core_knob_looks). LOOK CHECK pages, %d of them (the first 12 behind the LFO key, the rest behind AMP), four pairs of knobs a page: a stock id on A, C, E and G and on B, D, F and H a knob id of the mod's own that takes that id's look, for one stock id of each of the %d different UI records of 1.74; both knobs of a pair show the same value, text, label and name, so the two cells of a pair are the same pixel for pixel when core gives the look. The last page's own knobs take a UI record from a ui callback (a copy of CB TEST's) and COMP MIX's look with a range of 0..12. After the magic LKC1, what core's UI record and range lookups answer for every own knob." % (pages, n),
- "device":"analog-rytm-mk2","os":"1.74","knobs":nown,"resources":{"core":"0.12"},"requires":["core"],
+ "description":"A test for core-ar2 0.13's knob looks (core_knob_looks). LOOK CHECK pages, %d of them (the first 12 behind the LFO key, the rest behind AMP), four pairs of knobs a page: a stock id on A, C, E and G and on B, D, F and H a knob id of the mod's own that takes that id's look, for one stock id of each of the %d different UI records of 1.74; both knobs of a pair show the same value, text, label and name, so the two cells of a pair are the same pixel for pixel when core gives the look. The last page's own knobs take a UI record from a ui callback (a copy of CB TEST's) and COMP MIX's look with a range of 0..12. After the magic LKC1, what core's UI record and range lookups answer for every own knob." % (pages, n),
+ "device":"analog-rytm-mk2","os":"1.74","knobs":nown,"resources":{"core":"0.13"},"requires":["core"],
  "sources":["look.c","pages.c"],
  "subscribe":[{"event":"ev_tick","fn":"lk_tick","order":60}],
  "contribute":c}

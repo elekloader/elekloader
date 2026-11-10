@@ -5,12 +5,12 @@
  "category": "Examples",
  "license": "GPL-2.0-or-later",
  "author": "Iced-Cream",
- "description": "A test for core-ar2 0.12's knob looks (core_knob_looks). LOOK CHECK pages, 23 of them (the first 12 behind the LFO key, the rest behind AMP), four pairs of knobs a page: a stock id on A, C, E and G and on B, D, F and H a knob id of the mod's own that takes that id's look, for one stock id of each of the 87 different UI records of 1.74; both knobs of a pair show the same value, text, label and name, so the two cells of a pair are the same pixel for pixel when core gives the look. The last page's own knobs take a UI record from a ui callback (a copy of CB TEST's) and COMP MIX's look with a range of 0..12. After the magic LKC1, what core's UI record and range lookups answer for every own knob.",
+ "description": "A test for core-ar2 0.13's knob looks (core_knob_looks). LOOK CHECK pages, 23 of them (the first 12 behind the LFO key, the rest behind AMP), four pairs of knobs a page: a stock id on A, C, E and G and on B, D, F and H a knob id of the mod's own that takes that id's look, for one stock id of each of the 87 different UI records of 1.74; both knobs of a pair show the same value, text, label and name, so the two cells of a pair are the same pixel for pixel when core gives the look. The last page's own knobs take a UI record from a ui callback (a copy of CB TEST's) and COMP MIX's look with a range of 0..12. After the magic LKC1, what core's UI record and range lookups answer for every own knob.",
  "device": "analog-rytm-mk2",
  "os": "1.74",
  "knobs": 89,
  "resources": {
-  "core": "0.12"
+  "core": "0.13"
  },
  "requires": [
   "core"

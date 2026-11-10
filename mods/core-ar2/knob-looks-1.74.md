@@ -1,7 +1,7 @@
 # Knob looks on the Analog Rytm MKII, OS 1.74
 
-The stock ids a mod knob can borrow in `core_knob_looks` (core-ar2 0.12,
-docs/ADAPTING.md "Knob looks (core-ar2 0.12, Analog Rytm MKII)"). A stock
+The stock ids a mod knob can borrow in `core_knob_looks` (core-ar2 0.13,
+docs/ADAPTING.md "Knob looks (core-ar2 0.13, Analog Rytm MKII)"). A stock
 1.74 boot builds a UI record for each of the 469 ids; by their flags, turn
 steps and four delegates there are 87 different ones, and the ids in a row
 below all draw alike. Borrow any id of the row whose knob looks as yours

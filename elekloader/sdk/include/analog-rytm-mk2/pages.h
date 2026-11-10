@@ -120,7 +120,7 @@ struct core_param {
 #define CORE_PARAM_LOCK_FIRST 555
 #define CORE_LOCK_RECORDING 0x100   /* in step: live recording; the step is step & 0xff */
 
-/* core-ar2 0.12: knob ids by count. A mod that declares "knobs": n in its
+/* core-ar2 0.13: knob ids by count. A mod that declares "knobs": n in its
  * mod.json gets n ids in a row from 555 up, past every other mod's; the
  * linker defines __knobs, the mod's own, as the first. CORE_KNOB(k) is knob
  * k's id, 0..n-1, a constant in a const table (an abs32 relocation):
@@ -134,7 +134,7 @@ struct core_param {
 #define CORE_KNOBS extern char __knobs[]
 #define CORE_KNOB(k) ((int32_t)__knobs + (k))
 
-/* core-ar2 0.12: knob looks. A mod's own id (555 up) has no stock records,
+/* core-ar2 0.13: knob looks. A mod's own id (555 up) has no stock records,
  * so stock draws its knob as record 0's dial on record 0's range. An entry
  * in core_knob_looks gives the ids the look of any stock knob, or a UI
  * record of the mod's own:

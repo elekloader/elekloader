@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
-/* look-check (Analog Rytm MKII): core-ar2 0.12's knob looks (README).
+/* look-check (Analog Rytm MKII): core-ar2 0.13's knob looks (README).
  *
  * LOOK CHECK pages behind the LFO key, four pairs of knobs a page: on A, C,
  * E and G a stock id L, on B, D, F and H a knob id of the mod's own whose
