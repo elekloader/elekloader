@@ -2,6 +2,7 @@
 """Where elekloader's markdown is growing, and what a move would break.
 
     python .claude/skills/doc-hygiene/scripts/doc_audit.py [--since REF] [--detail FILE] [--strict]
+                                                           [--ratchet REF]
 
 Run from the repository's root. It reports:
 
@@ -21,7 +22,13 @@ Run from the repository's root. It reports:
 `--since REF` adds what changed since a git ref (a branch's own growth:
 `--since origin/main`). `--detail FILE` lists that file's sections with
 their sizes and history phrasing, line by line. `--strict` exits 1 when a
-link or a section reference is broken.
+link or a section reference is broken, or a line has a BANNED string.
+
+`--ratchet REF` compares the tree with where it left REF (`origin/main`) and
+exits 1 when the docs got worse: a file past its budget grew, a file gained
+history phrasing, or a pair of files shares more paragraphs. What is already
+there does not fail it. Each failure names its fix. tests.yml runs it on
+every pull request.
 """
 import argparse
 import collections
@@ -44,6 +51,17 @@ BUDGETS = [  # (path pattern, KB); the first match counts
     ('*', 16),
 ]
 SECTION_KB = 8
+# Files the ratchet lets grow past their budget, each with the reason. Take a line out when its
+# reason ends.
+MAY_GROW = {
+    'docs/ADAPTING.md': 'the per-device API reference is its section 2 until docs/api exists',
+}
+HISTORY_FLOOR = 5   # a file with fewer history lines than this never fails the ratchet
+# Strings no markdown line may have (--strict): (pattern, what to write instead)
+BANNED = [
+    (r'github\.com/irpina/elekloader|-R irpina/elekloader',
+     'the repository is elekloader/elekloader'),
+]
 SKIP_DIRS = {'.git', 'node_modules', 'build', 'dist', 'out', '__pycache__', '.venv'}
 CODE_EXT = ('.py', '.ts', '.js', '.mjs', '.c', '.h', '.s', '.inc', '.json', '.yml')
 
@@ -57,8 +75,10 @@ HISTORY = [
     (r'\((?:it |they )?was [^)]{1,40}\)', '(was ...)'),
     (r'(?<![\w/&])#\d{2,4}\b', 'PR #'),
     (r'\b20\d\d-\d\d-\d\d\b', 'date'),
+    (r'\bnot (?:yet )?released(?: yet)?\b|\b(?:latest|newest) release \(v?\d', 'release state'),
 ]
 HISTORY_RE = [(re.compile(p), name) for p, name in HISTORY]
+BANNED_RE = [(re.compile(p), why) for p, why in BANNED]
 
 LINK_RE = re.compile(r'!?\[[^\]]*\]\(([^)\s]+)(?:\s+"[^"]*")?\)')
 # `ADAPTING.md, "Exclusive audio"`, and `"Mod storage" in ADAPTING.md`; matched over whole
@@ -121,10 +141,12 @@ def slug(title):
 
 
 class Doc:
-    def __init__(self, root, path):
+    def __init__(self, root, path, text=None):
         self.path = path
-        with open(os.path.join(root, path), encoding='utf-8') as f:
-            self.text = f.read()
+        if text is None:
+            with open(os.path.join(root, path), encoding='utf-8') as f:
+                text = f.read()
+        self.text = text
         self.lines = self.text.splitlines()
         self.size = len(self.text.encode('utf-8'))
         self.prose = []      # (line number, text) outside code fences
@@ -316,6 +338,66 @@ def since(root, ref):
     return sorted(rows, reverse=True), None
 
 
+def git(root, *args):
+    return subprocess.run(['git'] + list(args), cwd=root, capture_output=True, text=True,
+                          encoding='utf-8', check=True).stdout
+
+
+def base_docs(root, ref):
+    """The markdown as it was where the tree left `ref`: (commit, {path: Doc})."""
+    try:
+        base = git(root, 'merge-base', ref, 'HEAD').strip()
+    except subprocess.CalledProcessError:
+        base = git(root, 'rev-parse', '--verify', ref + '^{commit}').strip()
+    out = {}
+    for p in git(root, 'ls-tree', '-r', '--name-only', base).splitlines():
+        if p.endswith('.md') and not SKIP_DIRS & set(p.split('/')):
+            out[p] = Doc(root, p, git(root, 'show', f'{base}:{p}'))
+    return base, out
+
+
+def check_banned(docs):
+    return [(d.path, n, why, line.strip()) for d in docs for n, line in enumerate(d.lines, 1)
+            for rx, why in BANNED_RE if rx.search(line)]
+
+
+def ratchet(docs, old):
+    """What got worse since `old` ({path: Doc}): a list of (path, what, how to fix it, lines)."""
+    skill = '.claude/skills/doc-hygiene/SKILL.md'
+    fails = []
+    for d in docs:
+        o = old.get(d.path)
+        size, was = d.size - d.generated, (o.size - o.generated) if o else 0
+        if size > budget(d.path) * 1024 and size > was and d.path not in MAY_GROW:
+            fails.append((d.path,
+                          f'is past its budget of {budget(d.path)} KB and grew by {size - was} bytes '
+                          f'({kb(was).strip()} to {kb(size).strip()} KB)',
+                          f'put the text in its home ({skill}, "One home per fact") and link to it, '
+                          'or trim this file by as much in the same change', []))
+        new, had = d.history(), o.history() if o else []
+        if len(new) > len(had) and len(new) >= HISTORY_FLOOR:
+            seen = collections.Counter(text for _, _, text in had)
+            lines = []
+            for n, names, text in new:
+                if seen[text]:
+                    seen[text] -= 1
+                else:
+                    lines.append(f'L{n} ({", ".join(names)}): {text[:100]}')
+            fails.append((d.path,
+                          f'gained history phrasing ({len(had)} to {len(new)} lines)',
+                          'say what is true now; a version\'s story goes in the pull request and the '
+                          f'release notes ({skill}, "The bloat this repo grows")', lines))
+    now, _ = repeated(docs, 0)
+    then, _ = repeated(list(old.values()), 0)
+    for files, n in sorted(now.items()):
+        if n > then.get(files, 0):
+            fails.append((' = '.join(files),
+                          f'share more paragraphs ({then.get(files, 0)} to {n})',
+                          f'say it once, at its home, and link to it from the other ({skill}, '
+                          '"One home per fact")', []))
+    return fails
+
+
 def kb(n):
     return f'{n / 1024:6.1f}'
 
@@ -341,7 +423,10 @@ def main():
     ap.add_argument('--root', default='.')
     ap.add_argument('--since', help='a git ref: also show what each file gained since it')
     ap.add_argument('--detail', help='one markdown file: its sections and history phrasing')
-    ap.add_argument('--strict', action='store_true', help='exit 1 on a broken link or section reference')
+    ap.add_argument('--strict', action='store_true',
+                    help='exit 1 on a broken link, a broken section reference or a banned string')
+    ap.add_argument('--ratchet', metavar='REF',
+                    help='a git ref (origin/main): exit 1 when the docs got worse since the tree left it')
     ap.add_argument('--top', type=int, default=12, help='rows per list (default 12)')
     args = ap.parse_args()
     if hasattr(sys.stdout, 'reconfigure'):
@@ -415,7 +500,27 @@ def main():
     for path, n, ref in refs[:50]:
         print(f'  {path}:{n}  {ref}')
 
-    if args.strict and (broken or refs):
+    banned = check_banned(docs)
+    print(f'\nBanned strings: {len(banned)}')
+    for path, n, why, line in banned[:50]:
+        print(f'  {path}:{n}  {why}: {line[:90]}')
+
+    fails = []
+    if args.ratchet:
+        try:
+            base, old = base_docs(root, args.ratchet)
+        except (subprocess.CalledProcessError, FileNotFoundError) as e:
+            sys.exit(f'--ratchet {args.ratchet}: {getattr(e, "stderr", "") or e}')
+        fails = ratchet(docs, old)
+        print(f'\nRatchet against {args.ratchet} ({base[:7]}): '
+              + (f'{len(fails)} got worse' if fails else 'nothing got worse'))
+        for path, what, fix, lines in fails:
+            print(f'  {path} {what}')
+            for line in lines[:8]:
+                print(f'      {line}')
+            print(f'    fix: {fix}')
+
+    if (args.strict and (broken or refs or banned)) or fails:
         sys.exit(1)
 
 
