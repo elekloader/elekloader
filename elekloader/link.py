@@ -63,8 +63,15 @@ LINKER_SYMS = {'__run_load', '__run_start', '__run_words', '__bss_start', '__bss
                '__bss_words', '__run_hash', desc.SYM}
 MAX_SPARE = 4096                  # a table's spare entries (a collection's "spare")
 # the tables a build descriptor gives no spare entries: the linker fills them, from storage and payloads
-NO_SPARE = (store.IDS_TABLE, store.CODES_TABLE, store.CCS_TABLE, store.INITS_TABLE, store.HANDLES_TABLE,
-            PAYLOADS)
+NO_SPARE = (PAYLOADS,)
+# the tables the linker fills from storage that a build descriptor opens to the loader alone (desc.F_LOADER):
+# spare entries for the +Drive mods' fields, which a mod's own contributions may not take
+LOADER_ONLY = (store.IDS_TABLE, store.CODES_TABLE, store.CCS_TABLE, store.INITS_TABLE, store.HANDLES_TABLE)
+# a table's spare entries in a build descriptor where its collection gives no "spare" (else desc.SPARE)
+DRIVE_SPARE = {'core_lock_params': 32, store.CODES_TABLE: 32, store.CCS_TABLE: 32, store.INITS_TABLE: 32,
+               store.HANDLES_TABLE: 32, store.IDS_TABLE: 1 + store.MAX_ANCESTORS}
+# a table's most entries, flashed and spare, where its collection gives no "max"
+DRIVE_MAX = {store.INITS_TABLE: store.MAX_INITS}
 HASH_SEED, HASH_MUL = 5381, 33    # __run_hash: h = seed; h = h * 33 + word (mod 2^32), per word
 
 
@@ -983,9 +990,10 @@ def link(mods, image, lock=None, *, sharc_stream=None):
                     raise ModError('%s: its entry for %s has the order %d; with a build descriptor an '
                                    'order is %d to %d' % (m.label(), c['to'], c['order'], desc.ORDER_MIN,
                                                           desc.LINKER_ORDER - 1))
-        spare = {c: 0 if c in fixed else tables[c][0].spare.get(c, desc.SPARE) for c in tables}
+        spare = {c: 0 if c in fixed else tables[c][0].spare.get(c, DRIVE_SPARE.get(c, desc.SPARE))
+                 for c in tables}
         for c in tables:                        # a "max": the flashed entries and the spare ones fit it
-            cap = tables[c][0].cap.get(c)
+            cap = tables[c][0].cap.get(c, DRIVE_MAX.get(c))
             if cap is not None and c in entries:
                 n = sum(len(e[4]['data']) for e in entries[c]) // tables[c][1]
                 spare[c] = max(0, min(spare[c], cap - n))
@@ -1029,7 +1037,7 @@ def link(mods, image, lock=None, *, sharc_stream=None):
     def desc_fields(where):
         """The descriptor's fields; `where` (a function of the layout) gives the addresses, or None:
         all 0, to size the block."""
-        w = where or (lambda kind, *a: 0)
+        w = where or (lambda kind, *a: (0, 0) if kind == 'run_image' else 0)
         mods = [{'name': m.id, 'version': m.version, 'flags': 1 if m.sites else 0,
                  'kind': desc.KIND_CORE if m is core else desc.KIND_LOADER if desc.SYM in m.imports
                  else desc.KIND_FLASHED,
@@ -1045,7 +1053,7 @@ def link(mods, image, lock=None, *, sharc_stream=None):
             n = table_count(c)
             tabs.append({'name': c, 'address': w('table', c), 'entry': tables[c][1], 'count': n,
                          'capacity': n + spare[c], 'entries': keys,
-                         'flags': (0 if c in fixed else desc.F_MORE)
+                         'flags': (0 if c in fixed else desc.F_LOADER if c in LOADER_ONLY else desc.F_MORE)
                          | (desc.F_RENDER if c in tables[c][0].render else 0)
                          | (desc.F_DSP if c in dsp_tables else 0)})
         scopes = []
@@ -1058,7 +1066,25 @@ def link(mods, image, lock=None, *, sharc_stream=None):
                 'claims': [(desc.CLAIM_NAME, index[m.id], nm) for m in order for nm in m.names],
                 'area': (w('bss_end'),) + drive_area(w('bss_end'))
                          + (w('glob', desc.STAGING[0]), w('glob', desc.STAGING[1])),
-                'storage': {'trailer': (w('trailer'), trailer_len), 'scopes': scopes}}
+                'storage': {'trailer': (w('trailer'), trailer_len), 'scopes': scopes},
+                'sites': site_map(w), 'prelink': [(lo, hi, k) for lo, hi, k, _what in rel.prelink]}
+
+    def site_map(w):
+        """The flashed main OS's taken byte ranges, for the loader's conflict checks (ABI 1.2): each
+        site and copied block (by its module), the device's protected and kept ranges, and the
+        appended code: the boot copier, the RAM image and the lockfile's trailer."""
+        out = [(s['addr'], s['addr'] + s['len'], desc.SITE_SITE, index[m.id])
+               for m in order for s in m.sites if not sharc_site(rel, s['addr'])]
+        out += [(lo, hi, desc.SITE_COPIED, index[m.id]) for m in order for lo, hi, _to in m.copied]
+        out += [(lo, hi, desc.SITE_DEVICE, desc.NO_MODULE) for lo, hi, _why in tuple(dev.protected) + tuple(dev.keep)]
+        boot = w('boot')
+        out.append((boot, boot + boot_len, desc.SITE_BOOT, index[core.id]))
+        run, run_len = w('run_image')
+        out.append((run, run + run_len, desc.SITE_RUN, desc.NO_MODULE))
+        if trailer_len:
+            t = w('trailer')
+            out.append((t, t + trailer_len, desc.SITE_TRAILER, desc.NO_MODULE))
+        return sorted(out)
     desc_at = desc_len = None
     if with_desc:
         desc_len = len(desc.encode(desc_fields(None)))
@@ -1242,6 +1268,10 @@ def link(mods, image, lock=None, *, sharc_stream=None):
                 return glob.get(a[0], 0)
             if kind == 'bss_end':
                 return bss_end
+            if kind == 'boot':
+                return image_end
+            if kind == 'run_image':                # the RAM image's copy in the flashed image
+                return (run_load, len(ddr))
             return dev.main_load + len(image) + run_load - image_end + len(ddr)   # the trailer
         block = desc.encode(desc_fields(where))
         assert len(block) == desc_len

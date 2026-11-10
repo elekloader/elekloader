@@ -1117,7 +1117,7 @@ from the +Drive at boot) each table gets spare entries the loader fills at
 boot. A linker without +Drive support reads only each table's `entry` and
 leaves the rest, so without the loader the tables are the same as 0.11's. Core's events (every `ev_*`
 table) declare 256, as many as the loader links, so each +Drive mod can add
-a handler to any event; `core_machines` declares 10, its hidden slots
+a handler to any event; `core_machines` caps at 10, its hidden slots
 34..43. The other tables declare what each can hold:
 
 | table | spare | its limit |

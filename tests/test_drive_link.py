@@ -334,7 +334,7 @@ def main():
         # 1000000, as core-ar2 0.13's screen handlers do; +Drive entries land before, between,
         # tied with and after them, the same in the boot linker and its twin
         W = Flashed(B, orders=(-1000000, 1000000))
-        check('ABI 1.1: the flashed orders read back whole', W.d['abi'] == (1, 1)
+        check('ABI 1.1: the flashed orders read back whole', W.d['abi'] == (1, 2)
               and W.tables['ev_x']['entries'][0][0] == -1000000 and W.tables['ev_y']['entries'][0][0] == 1000000,
               (W.d['abi'], W.tables['ev_x']['entries'], W.tables['ev_y']['entries']))
         wfn = W.out.map['flm:fn_flm']

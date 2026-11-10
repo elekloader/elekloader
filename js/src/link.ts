@@ -51,7 +51,15 @@ const MAX_ALIGN = 4096                      // a section's alignment: a power of
 const LINKER_SYMS = new Set(['__run_load', '__run_start', '__run_words', '__bss_start', '__bss_end', '__bss_words', '__run_hash', desc.SYM])
 const MAX_SPARE = 4096                      // a table's spare entries (a collection's "spare")
 // the tables a build descriptor gives no spare entries: the linker fills them, from storage and payloads
-const NO_SPARE = [store.IDS_TABLE, store.CODES_TABLE, store.CCS_TABLE, store.INITS_TABLE, store.HANDLES_TABLE, PAYLOADS]
+const NO_SPARE = [PAYLOADS]
+// the tables the linker fills from storage that a build descriptor opens to the loader alone (desc.F_LOADER):
+// spare entries for the +Drive mods' fields, which a mod's own contributions may not take
+const LOADER_ONLY = new Set([store.IDS_TABLE, store.CODES_TABLE, store.CCS_TABLE, store.INITS_TABLE, store.HANDLES_TABLE])
+// a table's spare entries in a build descriptor where its collection gives no "spare" (else desc.SPARE)
+const DRIVE_SPARE = new Map<string, number>([['core_lock_params', 32], [store.CODES_TABLE, 32], [store.CCS_TABLE, 32],
+  [store.INITS_TABLE, 32], [store.HANDLES_TABLE, 32], [store.IDS_TABLE, 1 + store.MAX_ANCESTORS]])
+// a table's most entries, flashed and spare, where its collection gives no "max"
+const DRIVE_MAX = new Map<string, number>([[store.INITS_TABLE, store.MAX_INITS]])
 export const HASH_SEED = 5381, HASH_MUL = 33       // __run_hash: h = seed; h = h * 33 + word (mod 2^32), per word
 
 const align = (v: number, a: number) => Math.ceil(v / a) * a
@@ -952,9 +960,9 @@ export function link(mods: Mod2[], image: Uint8Array, lock: store.Lock | null = 
     for (const m of order) for (const c of m.contribute)
       if (!(c.order >= desc.ORDER_MIN && c.order < desc.LINKER_ORDER))
         throw new ModError(`${m.label()}: its entry for ${c.to} has the order ${c.order}; with a build descriptor an order is ${desc.ORDER_MIN} to ${desc.LINKER_ORDER - 1}`)
-    for (const [c, [owner]] of tables) spare.set(c, fixed.has(c) ? 0 : owner.spare.get(c) ?? desc.SPARE)
+    for (const [c, [owner]] of tables) spare.set(c, fixed.has(c) ? 0 : owner.spare.get(c) ?? DRIVE_SPARE.get(c) ?? desc.SPARE)
     for (const [c, [owner, e]] of tables) {   // a "max": the flashed entries and the spare ones fit it
-      const cap = owner.cap.get(c)
+      const cap = owner.cap.get(c) ?? DRIVE_MAX.get(c)
       if (cap === undefined || !entries.has(c)) continue
       const n = Math.floor(entries.get(c)!.reduce((k, x) => k + x[4].data.length, 0) / e)
       spare.set(c, Math.max(0, Math.min(spare.get(c)!, cap - n)))
@@ -1018,7 +1026,7 @@ export function link(mods: Mod2[], image: Uint8Array, lock: store.Lock | null = 
       if (c === dev.fastTable) for (const m of fastMods) keys.push([desc.LINKER_ORDER, index.get(m.id)!])
       const n = tableCount(c)
       return { name: c, address: w('table', c), entry: e, count: n, capacity: n + spare.get(c)!, entries: keys,
-        flags: (fixed.has(c) ? 0 : desc.F_MORE) | (tables.get(c)![0].render.has(c) ? desc.F_RENDER : 0) | (dspTables.has(c) ? desc.F_DSP : 0) }
+        flags: (fixed.has(c) ? 0 : LOADER_ONLY.has(c) ? desc.F_LOADER : desc.F_MORE) | (tables.get(c)![0].render.has(c) ? desc.F_RENDER : 0) | (dspTables.has(c) ? desc.F_DSP : 0) }
     })
     let scopes: [string, number, number, number][] = []
     if (newLock) {
@@ -1028,7 +1036,26 @@ export function link(mods: Mod2[], image: Uint8Array, lock: store.Lock | null = 
     return { family: dev.dataFamily, device: dev.dataDevice, release: rel.dataRelease ?? 0, deviceKey: dev.key, os: rel.version, modules, tables: tabs,
       claims: order.flatMap(m => m.names.map(nm => [desc.CLAIM_NAME, index.get(m.id)!, nm] as [number, number, string])),
       area: [w('bss_end'), ...driveArea(w('bss_end')), w('glob', desc.STAGING[0]), w('glob', desc.STAGING[1])],
-      storage: { trailer: [w('trailer'), trailerLen], scopes } }
+      storage: { trailer: [w('trailer'), trailerLen], scopes },
+      sites: siteMap(w), prelink: (rel.prelink ?? []).map(([lo, hi, k]) => [lo, hi, k] as [number, number, number]) }
+  }
+  // the flashed main OS's taken byte ranges, for the loader's conflict checks (ABI 1.2): each site and copied block
+  // (by its module), the device's protected and kept ranges, and the appended code: the boot copier, the RAM image
+  // and the lockfile's trailer. link.py's site_map
+  const siteMap = (w: Where): [number, number, number, number][] => {
+    const out: [number, number, number, number][] = []
+    for (const m of order) for (const s of m.sites) if (!sharcSite(rel, s.addr)) out.push([s.addr, s.addr + s.len, desc.SITE_SITE, index.get(m.id)!])
+    for (const m of order) for (const [lo, hi] of m.copied) out.push([lo, hi, desc.SITE_COPIED, index.get(m.id)!])
+    for (const [lo, hi] of [...dev.protected, ...dev.keep]) out.push([lo, hi, desc.SITE_DEVICE, desc.NO_MODULE])
+    const boot = w('boot')
+    out.push([boot, boot + bootLen, desc.SITE_BOOT, index.get(core.id)!])
+    const run = w('run_image'), runLen = w('run_image_len')
+    out.push([run, run + runLen, desc.SITE_RUN, desc.NO_MODULE])
+    if (trailerLen) {
+      const t = w('trailer')
+      out.push([t, t + trailerLen, desc.SITE_TRAILER, desc.NO_MODULE])
+    }
+    return out.sort((a, b) => a[0] - b[0] || a[1] - b[1] || a[2] - b[2] || a[3] - b[3])
   }
   let descAt = 0, descLen = 0
   if (withDesc) {
@@ -1261,6 +1288,9 @@ export function link(mods: Mod2[], image: Uint8Array, lock: store.Lock | null = 
       if (kind === 'table') return tabAt.get(a[0])!
       if (kind === 'glob') return glob.get(a[0]) ?? 0
       if (kind === 'bss_end') return bssEnd
+      if (kind === 'boot') return end
+      if (kind === 'run_image') return runLoad               // the RAM image's copy in the flashed image
+      if (kind === 'run_image_len') return ddr.length
       return dev.mainLoad + image.length + runLoad - end + ddr.length   // the trailer
     }))
     if (block.length !== descLen) throw new Error('the build descriptor changed size')

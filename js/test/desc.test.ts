@@ -8,7 +8,7 @@ import { readFileSync } from 'node:fs'
 import { ANALOG_RYTM_MK2 } from '../src/devices.ts'
 import { sha, toHex } from '../src/bytes.ts'
 import { Mod2, link } from '../src/link.ts'
-import { decode } from '../src/desc.ts'
+import { decode, encode, F_LOADER, PRE_CODE, PRE_DATA, SITE_COPIED, SITE_SITE } from '../src/desc.ts'
 import { crc32 } from '../src/zip.ts'
 import { ModError } from '../src/elemod.ts'
 
@@ -50,7 +50,7 @@ test('the build descriptor keeps whole orders (ABI 1.1), and reads a 1.0 block\'
   const c = V.cases.find((x: { name: string }) => x.name === 'whole orders, -1000000 and 1000000')
   const blk = Uint8Array.from(c.desc.match(/../g).map((h: string) => parseInt(h, 16)))
   const d = decode(blk)
-  assert.deepEqual(d.abi, [1, 1])
+  assert.deepEqual(d.abi, [1, 2])
   const x = d.tables.find(t => t.name === 'ev_x')!, r = d.tables.find(t => t.name === 'ev_render_x')!
   assert.deepEqual(x.entries, [[-1000000, 2], [-1000000, 2], [50, 1]])
   assert.deepEqual(r.entries, [[1000000, 2]])
@@ -61,7 +61,22 @@ test('the build descriptor keeps whole orders (ABI 1.1), and reads a 1.0 block\'
   v.setUint32(0x0c, 0)
   v.setUint32(0x0c, crc32(blk))
   const old = decode(blk)
+  assert.deepEqual([old.sites, old.prelink], [[], []])
   assert.deepEqual(old.tables.find(t => t.name === 'ev_x')!.entries, [[0, 2], [0, 2], [50, 1]])
   assert.deepEqual(old.tables.find(t => t.name === 'ev_render_x')!.entries, [[65534, 2]])
   assert.deepEqual(old.tables.find(t => t.name === 'core_store_ids')!.entries, [[0x7fffffff, 0]])
+})
+
+test('ABI 1.2: the lock tables open to the loader alone, the site map, and pre-link ranges read back', () => {
+  const c = V.cases.find((x: { name: string }) => x.name === 'the lock tables for the loader, a copied block')
+  const d = decode(Uint8Array.from(c.desc.match(/../g).map((h: string) => parseInt(h, 16))))
+  const t = Object.fromEntries(d.tables.map(x => [x.name, x]))
+  for (const [n, spare] of [['core_lock_codes', 32], ['core_lock_ccs', 32], ['core_field_inits', 32], ['core_handles', 32], ['core_store_ids', 16]] as const)
+    assert.deepEqual([t[n].flags, t[n].capacity - t[n].count], [F_LOADER, spare], n)
+  assert.equal(t.core_lock_params.capacity, 32)
+  assert.ok(d.sites!.some(([, , k, mi]) => k === SITE_SITE && mi === 2))
+  assert.ok(d.sites!.some(([, , k, mi]) => k === SITE_COPIED && mi === 2))
+  const pre: [number, number, number][] = [[0x40000500, 0x40000600, PRE_CODE], [0x40100000, 0x40100010, PRE_DATA]]
+  const again = decode(encode({ ...d, prelink: pre }))
+  assert.deepEqual([again.sites, again.prelink], [d.sites, pre])
 })

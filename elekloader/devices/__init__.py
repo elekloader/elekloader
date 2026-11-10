@@ -32,6 +32,9 @@ class Release:
     bin_sha256: str = ''         # the stock card file (.bin), where the device has one
     sharc: dict = field(default_factory=dict)  # section-7 identity/limits; no ownership implied
     data_release: int = 0        # the OS release word of the data container's header (0: not known)
+    prelink: tuple = ()          # ((lo, hi, kind, what), ...): main OS code (kind 1) and data (2) the
+                                 # OS is done with before the +Drive boot link runs; a build descriptor
+                                 # lists them so no +Drive site goes there (desc.py, ABI 1.2)
 
 
 @dataclass

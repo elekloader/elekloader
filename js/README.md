@@ -61,6 +61,8 @@ The unit tests compare against what Python gave for synthetic inputs (`test/vect
 
 `test/drive-vectors.json` (`tools/drive_vectors.py`) holds the build-checker's results for every fixture of `tests/test_drive.py` and a recording of `elekloader mods`' requests and a fake unit's replies, which `test/drive.test.ts` replays. Run the tool again after a change to `drive.py`, `container.py` or `datarpc.py`.
 
+`test/drivestore-vectors.json` (`tools/drivestore_vectors.py`) holds runs of +Drive storage placements, which `test/drivestore.test.ts` replays. Run it again after a change to `drive_store.py`.
+
 With your own stock files and mods (which never go in the repository), compare everything against the Python:
 
 ```bash

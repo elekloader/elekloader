@@ -262,6 +262,12 @@ def fx_lock_dst_bits(dev_key):
     return _spec(dev_key).get('fx_lock_dst', 0)
 
 
+def cc_pool(dev_key):
+    """-> (the device's CC pool in the order fields get them, the CCs of it a kit field gets none of)."""
+    sp = _spec(dev_key)
+    return tuple(sp.get('ccs', ())), tuple(sp.get('fx_ccs_taken', ()))
+
+
 def code_range(dev_key):
     """-> (first, last) lock code on the device."""
     return _spec(dev_key).get('codes', (FIRST_CODE, LAST_CODE))
