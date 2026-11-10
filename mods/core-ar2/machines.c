@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
 /* core-ar2 0.5: machines mods add, in the hidden slots 34..43 (OS 1.74);
- * from 0.12 in 34..52, the TEST machines' slots 44..52 included, with
+ * from 0.13 in 34..52, the TEST machines' slots 44..52 included, with
  * per-voice trig and velocity getters (core_voice_trigged, _velocity).
  *
  * The machine table is three arrays of the main OS's data, each indexed by
@@ -19,7 +19,7 @@
  * own machines. elekloader refuses two entries for one slot (the profile's
  * slot_claims), so the first entry for a slot is the only one.
  *
- * (0.12) The engine table gets core's trampoline for the slot, which latches
+ * (0.13) The engine table gets core's trampoline for the slot, which latches
  * the voice's trig and velocity for core_voice_trigged and
  * core_voice_velocity and calls the mod's engine. In the audio interrupt
  * the trig intake runs before the per-voice engine calls (firmware
@@ -36,11 +36,11 @@
 #define RECORD_COUNT 469
 #define SLOT_FIRST 34
 #define SLOT_LAST 52
-#define SLOT_TEST 44                /* 44..52: the TEST machines (0.12) */
+#define SLOT_TEST 44                /* 44..52: the TEST machines (0.13) */
 #define SLOT_REF 35                 /* a hidden machine with all eight records */
 #define NSLOTS (SLOT_LAST - SLOT_FIRST + 1)
 
-/* (0.12) the per-voice trig getters' sources (README, "Trig getters") */
+/* (0.13) the per-voice trig getters' sources (README, "Trig getters") */
 #define VOICES 8
 #define TRACKS 13
 #define OWNER ((const volatile uint8_t *)0x40291138)    /* the track voice v plays (bytes) */
@@ -51,7 +51,7 @@ extern const struct core_machine *const core_machines[];
 
 #define L(p, o) (*(volatile int32_t *)((p) + (o)))
 
-/* (0.12) The engine table holds core's trampoline for each slot a mod
+/* (0.13) The engine table holds core's trampoline for each slot a mod
  * fills: it latches the voice's trig and velocity, as the audio interrupt
  * has them for this block (trig intake runs before the engines), then calls
  * the mod's engine. */
@@ -94,7 +94,7 @@ static const core_engine tramps[NSLOTS] = {
     tramp_8, tramp_9, tramp_10, tramp_11, tramp_12, tramp_13, tramp_14,
     tramp_15, tramp_16, tramp_17, tramp_18};
 
-/* (0.12) A TEST record has no MIDI (+0x18 and +0x1c -1). A mod knob on one
+/* (0.13) A TEST record has no MIDI (+0x18 and +0x1c -1). A mod knob on one
  * takes the hidden machines' CC 16 + k (+0x18: the CC in the high half, no
  * LSB 0xffff in the low) and NRPN 1:k (+0x1c: msb << 7 | lsb) for sound
  * index 9 + k, copied from slot 35's record at the same index (34..42 carry

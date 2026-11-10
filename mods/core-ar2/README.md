@@ -383,16 +383,16 @@ machine as it does its own. elekloader names an entry's slot as the resource
 `machine:<n>` (the profile's `slot_claims`), so two mods that take one slot
 are refused at link.
 
-Until 0.12, slots 44..52 (the TEST machines) were not offered, since mods
+Until 0.13, slots 44..52 (the TEST machines) were not offered, since mods
 used their records as spare parameters; see "Machine slots 44..52 and the
-trig getters (0.12)" below. A kit saved with an added machine
+trig getters (0.13)" below. A kit saved with an added machine
 loads on a build without the mod with that track's machine set to DISABLE,
 as stock does for a machine its voice may not run (checked on a unit, below).
 
 `examples/machine-ar2` is the smallest machine: BD COPY in slot 36, which
 runs BD CLASSIC with BD CLASSIC's knobs.
 
-## Machine slots 44..52 and the trig getters (0.12)
+## Machine slots 44..52 and the trig getters (0.13)
 
 **The slots.** `SLOT_LAST` is 52, so a mod may take any of 34..52; the
 profile's `slot_claims` already covered 0..53. The TEST machines' records
@@ -407,7 +407,7 @@ so it is not written. Fewer records: SD TEST 9..12, 15, 16; BT TEST
 LEV); BD, RS and CY TEST all eight (machines.h). The TEST records also
 have +0x24 = 0, where 34..42 and every public machine record have 0x600,
 the list kinds that make a record an LFO, velocity and aftertouch
-destination; 0.12 leaves it as it is, so a knob in 44..52 is not offered
+destination; 0.13 leaves it as it is, so a knob in 44..52 is not offered
 as one of those destinations.
 
 **The trig getters.** `ENGINES[s]` is core's trampoline for slot s (one

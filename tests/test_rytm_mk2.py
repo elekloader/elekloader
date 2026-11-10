@@ -343,14 +343,14 @@ def test_core_ar2_machines():
 
 
 def test_core_ar2_machine_slots_44_52():
-    """core-ar2 0.12 (machines.c): slots 44..52 are offered. Their TEST records have no MIDI
+    """core-ar2 0.13 (machines.c): slots 44..52 are offered. Their TEST records have no MIDI
     (+0x18 and +0x1c -1) and the indices machines.h lists; slot 35's record at index 9 + k
     carries CC 16 + k (no LSB) and NRPN 1:k, which core copies; +0x20 is 0 on every hidden
     record. The trig getters' sources: the owner bytes (8 voices, tracks 0..11) and the engine
     table's 53 entries are data in the image."""
     _r, _s, img = stock()
     if REL.version != '1.74':
-        raise Skip('core-ar2 0.12 is for 1.74')
+        raise Skip('core-ar2 0.13 is for 1.74')
 
     def l(a):
         return struct.unpack('>I', img[a - DEV.main_load:a - DEV.main_load + 4])[0]

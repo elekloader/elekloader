@@ -2498,15 +2498,15 @@ eight records; 34 and 43 have five, and a knob with no record is ignored.
 Each entry's slot is the resource `machine:<n>`, which elekloader names
 for it, so a second mod with the same slot is refused at link.
 
-From core-ar2 0.12 the TEST machines' slots 44..52 are offered too (ask
-for `"core": "0.12"`). Their records have no MIDI of their own, so at
+From core-ar2 0.13 the TEST machines' slots 44..52 are offered too (ask
+for `"core": "0.13"`). Their records have no MIDI of their own, so at
 boot core gives each record a knob uses the hidden machines' CC 16 + k
 and NRPN 1:k (k = the sound index less 9). They have fewer records: BD,
 RS and CY TEST (44, 46, 51) all eight; SD TEST (45) 9..12, 15 and 16;
 BT TEST (47) 9..13; LT and MT TEST (48, 49) 9..12; HH TEST (50) 9..13 and
 16; CB TEST (52) 10..12 and 16, with no LEV. Mods that kept spare
 parameters in those records (fx-sends, duck, voice-dac) move off them for
-0.12; one that still uses a slot's records declares `"machine:<n>"` in
+0.13; one that still uses a slot's records declares `"machine:<n>"` in
 its resources, and the linker refuses it next to a machine in that slot.
 
 The engine is called once per 32-frame block for each voice running the
@@ -2517,7 +2517,7 @@ block it fills itself, which is how the AE TX machines are built. A value's
 text, or how a knob turns, can be changed through `core_params` (Parameter
 pages, above).
 
-From core-ar2 0.12 the engine table holds core's trampoline for the slot,
+From core-ar2 0.13 the engine table holds core's trampoline for the slot,
 which latches the voice's trig and velocity and then calls the engine.
 In the engine, `core_voice_trigged(voice)` is 1 when the voice's track
 trigged this block (sequencer, pad, chromatic, MIDI in, a retrig of a

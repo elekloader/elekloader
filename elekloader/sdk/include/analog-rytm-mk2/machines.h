@@ -2,7 +2,7 @@
 /* core-ar2 0.5: machines mods add (docs/ADAPTING.md, "Machines (core-ar2 0.5,
  * Analog Rytm MKII)"). The Rytm has 53 machine slots; 34..52 are hidden
  * factory machines (mask 0: no voice may pick them). A mod takes one of
- * slots 34..52 (44..52 from core 0.12) through the table core_machines,
+ * slots 34..52 (44..52 from core 0.13) through the table core_machines,
  * contributed in mod.json:
  *
  *     "contribute": [
@@ -21,8 +21,8 @@
  * "2" machines) have all eight records; 34 (BT IMPROVED) and 43 (FUNC. GEN.)
  * have five (LEV and four more), and a knob with no record is ignored.
  *
- * From core 0.12 the TEST machines' slots 44..52 are offered too (ask for
- * "core": "0.12"). Their records have no MIDI of their own: core gives each
+ * From core 0.13 the TEST machines' slots 44..52 are offered too (ask for
+ * "core": "0.13"). Their records have no MIDI of their own: core gives each
  * record a mod knob uses CC 16 + k and NRPN 1:k (k = sound index - 9), as
  * the hidden machines 34..42 have. They have fewer records:
  *
@@ -33,7 +33,7 @@
  *     48 LT TEST   9..12
  *
  * Mods that used these records as spare parameters (fx-sends, duck,
- * voice-dac) move off them for 0.12; one that still uses a slot's records
+ * voice-dac) move off them for 0.13; one that still uses a slot's records
  * declares "machine:<n>" in its resources, so the linker refuses it next to
  * a machine in that slot. The value's text and the knob's turn can be
  * changed through core_params (pages.h).
@@ -51,7 +51,7 @@
  * block (word k is sound index 9 + k, so word 0 is LEV), pitch the note. An
  * engine may run a stock engine (CORE_ENGINE_*) with a block of its own.
  *
- * From core 0.12 the engine table holds core's trampoline, which calls the
+ * From core 0.13 the engine table holds core's trampoline, which calls the
  * mod's engine after latching, for the voice, what the interrupt's trig
  * intake set for its owner track this block (the intake runs before the
  * engines):
@@ -80,7 +80,7 @@ struct core_machine_knob {
 };
 
 struct core_machine {
-    int32_t slot;           /* 34..43; 34..52 from core 0.12 */
+    int32_t slot;           /* 34..43; 34..52 from core 0.13 */
     core_engine engine;
     int8_t home;            /* the track the machine list files it under: 0 BD,
                                1 SD, 4 BT, -1 none (as XT CLASSIC) */
@@ -108,7 +108,7 @@ struct core_machine {
 #define CORE_ENGINE_XT_CLASSIC ((core_engine)0x4011b850)
 #define CORE_ENGINE_DISABLE ((core_engine)0x40113f68)
 
-/* core 0.12 */
+/* core 0.13 */
 int core_voice_trigged(int32_t voice);
 int core_voice_velocity(int32_t voice);
 
