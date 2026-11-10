@@ -990,9 +990,10 @@ takes the newest core it has for the stock OS, which keeps all of every
 older one: core 4.0 on the Digitakt mk1, core-dn1 4.0 on the Digitone, for
 a selection that needs nothing from 3.0 too. Of the cores new enough for
 every selected mod's `resources.core` (the catalog's `needs_core`), it
-takes the newest whose RAM holds the mods ("The mods' RAM", below;
-[CORES.md](CORES.md), "How a build picks one"). A core chosen by hand that
-is new enough and holds the mods is kept.
+takes the newest whose RAM holds the mods ("The mods' RAM", below) and
+that patches no place one of them patches
+([CORES.md](CORES.md), "How a build picks one"). A core chosen by hand that
+is new enough and takes the mods is kept.
 
 ### Firmware locations (core 3.0, Digitakt mk1)
 

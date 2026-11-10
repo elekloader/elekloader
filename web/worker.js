@@ -76,16 +76,10 @@ async function init() {
   py.FS.writeFile('/elek/bridge.py', src);
   py.runPython("import sys; sys.path.insert(0, '/elek')");
   bridge = py.pyimport('bridge');
-  // the newest core of each device and OS: each keeps all of the one before it (docs/CORES.md)
-  const newest = new Map();
-  for (const c of cores) {
-    const k = c.device + ' ' + c.os, was = newest.get(k);
-    if (!was || was.version.localeCompare(c.version, undefined, { numeric: true }) < 0) newest.set(k, c);
-  }
-  for (const c of newest.values()) {
-    const raw = await bytes('core/' + c.file);
-    call('add_core', { name: c.file, sha256: c.sha256 }, raw);
-  }
+  // every core the site lists: a build takes the newest its mods link with, which for a mod made before a core took
+  // a place it patches is an older one (docs/CORES.md). The page lists one for each device and OS (app.js)
+  const raws = await Promise.all(cores.map(c => bytes('core/' + c.file)));
+  cores.forEach((c, i) => call('add_core', { name: c.file, sha256: c.sha256 }, raws[i]));
   const t2 = performance.now();
   return {
     info: call('info', {}), build, python: py.runPython('import sys; sys.version.split()[0]'),

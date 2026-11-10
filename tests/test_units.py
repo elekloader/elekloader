@@ -113,6 +113,50 @@ def test_a_selection_too_big_for_its_core_takes_one_with_more_ram():
     assert one_core(d, {c23, c32, c40, 'lib/tiny.elemod'}) == {c40, 'lib/tiny.elemod'}
 
 
+def test_a_mod_that_patches_a_place_the_newest_core_took_takes_the_newest_core_that_leaves_it():
+    from elekloader.gui import one_core, with_requirements
+    # the Digitakt's core 4.1 took the master output's place (0x400721e6) for every mod; a mod made for 4.0
+    # (Tone+FX 4.0c, Digi EQ 1.0c) still patches it itself
+    code = lambda addr, n=6: (addr, n, 'code', '')
+    d = {
+        'app/core-4.0.elemod': {'id': 'core', 'version': '4.0', 'fits': True, 'requires': [], 'format': 2,
+                                'sites': [code(0x40010000)]},
+        'app/core-4.1.elemod': {'id': 'core', 'version': '4.1', 'fits': True, 'requires': [], 'format': 2,
+                                'sites': [code(0x40010000), code(0x400721e6)]},
+        'lib/tone.elemod': {'id': 'tone', 'fits': True, 'requires': ['core'], 'format': 2,
+                            'sites': [code(0x400721e6), code(0x40184628, 4)]},
+        'lib/health.elemod': {'id': 'health', 'fits': True, 'requires': ['core'], 'format': 2,
+                              'sites': [code(0x40020000, 4)]},
+        'lib/before.elemod': {'id': 'before', 'fits': True, 'requires': ['core'], 'format': 2,
+                              'sites': [code(0x400721e0)]},
+        'lib/master.elemod': {'id': 'master', 'fits': True, 'requires': ['core'], 'format': 2,
+                              'needs_core': '4.1', 'sites': []},
+        'lib/whole.elemod': {'id': 'whole', 'fits': True, 'format': 1, 'sites': [code(0x400721e6)]},
+    }
+    c40, c41 = 'app/core-4.0.elemod', 'app/core-4.1.elemod'
+    tone, health, master = 'lib/tone.elemod', 'lib/health.elemod', 'lib/master.elemod'
+    # the newest core, for a mod that leaves its places alone
+    assert with_requirements(d, set(), health) == {health, c41}
+    # the mod that patches a place 4.1 patches: 4.0, the newest core that does not, also in 4.1's place
+    assert with_requirements(d, set(), tone) == {tone, c40}
+    assert with_requirements(d, {c41}, tone) == {tone, c40}
+    assert with_requirements(d, {c41, health}, tone) == {tone, health, c40}
+    # and 4.0 stays for what is ticked after it
+    assert with_requirements(d, {tone, c40}, health) == {tone, health, c40}
+    # a site that ends where the core's begins is beside it, not on it; a byte further is on it
+    assert with_requirements(d, {c41}, 'lib/before.elemod') == {'lib/before.elemod', c41}
+    d['lib/before.elemod']['sites'] = [code(0x400721e1)]
+    assert with_requirements(d, {c41}, 'lib/before.elemod') == {'lib/before.elemod', c40}
+    # with a mod that needs 4.1, no core takes both: the newest that is new enough, for the check to say why
+    assert with_requirements(d, {tone, c40}, master) == {tone, master, c41}
+    assert with_requirements(d, set(), master) == {master, c41}
+    # a whole build goes with no core at all (the check says so): what it patches moves no core
+    assert with_requirements(d, {'lib/whole.elemod', c41}, health) == {'lib/whole.elemod', health, c41}
+    # the first run's ticks: one core, the newest that takes the mods
+    assert one_core(d, {c40, c41, tone, health}) == {tone, health, c40}
+    assert one_core(d, {c40, c41, health}) == {health, c41}
+
+
 def test_a_mod_that_needs_core_3_ticks_core_3():
     from elekloader.gui import one_core, with_requirements
     d = {
@@ -1202,6 +1246,35 @@ def test_the_shop_list_keeps_its_layout():
     assert submit_mod.render(json.loads(text)) == text
 
 
+def test_a_submission_is_told_the_core_it_builds_with():
+    """submit_mod.py's heads-up names the core a builder takes for the file (gui.with_core): the newest the site has
+    that is new enough and that it can share a build with, not the newest whatever the file patches."""
+    submit_mod = submit_mod_module()
+    if submit_mod is None:
+        return
+    fp = lambda *spans: {'id': 'core', 'format': 2, 'conflicts': [], 'names': [], 'exports': [], 'tables': [],
+                         'spans': [list(s) for s in spans], 'regions': []}
+    at = ('digitakt-mk1', '1.53')
+    cores = {at: ['4.0', '4.1', '2.1']}
+    prints = {at + ('2.1',): fp((0x40010000, 0x40010006)), at + ('4.0',): fp((0x40010000, 0x40010006)),
+              at + ('4.1',): fp((0x40010000, 0x40010006), (0x400721e6, 0x400721ec))}
+    mod = lambda need, *spans: {'id': 'm', 'device': at[0], 'os': at[1], 'requires': ['core'], 'need': need,
+                                'footprint': dict(fp(*spans), id='m')}
+    core_note = lambda f, p=prints: submit_mod.heads_up(f, {}, cores, p)[0]
+    assert core_note(mod(None, (0x40020000, 0x40020004))) == 'builds with core 4.1'
+    # a mod made before 4.1 took the master output's place: 4.0, and why it is not the newest
+    assert core_note(mod('2.1', (0x400721e6, 0x400721ec))) == (
+        "builds with core 4.0, not the newest: it can't link with core 4.1 (both patch the same place in the "
+        "firmware), so it can't share a build with a mod that needs a newer core than 4.0")
+    # one that needs 4.1 and patches its place: no core the site has
+    assert core_note(mod('4.1', (0x400721e6, 0x400721ec))) == (
+        "can't be built on the site: it can't link with core 4.1 (both patch the same place in the firmware), "
+        'nor with an older one the site has')
+    # without the cores' footprints (no --cores-dir): the newest, as far as the check can tell
+    assert core_note(mod(None, (0x400721e6, 0x400721ec)), None) == 'builds with core 4.1'
+    assert submit_mod.heads_up(dict(mod(None), requires=[]), {}, cores, prints) == []
+
+
 def test_the_submit_a_mod_form_is_read():
     submit_mod = submit_mod_module()
     if submit_mod is None:
@@ -2005,6 +2078,8 @@ def test_every_mod_has_a_readme_and_every_example_is_listed():
     folders = lambda top: sorted(d for d in os.listdir(os.path.join(root, top))
                                  if os.path.isdir(os.path.join(root, top, d)))
     has = lambda *p: os.path.exists(os.path.join(root, *p))
+    if not has('packaging', 'build_web.py'):
+        return      # under Pyodide (tests/test_web.mjs): a few of the repository's files, not its folders
     bare = {m for m in folders('mods') if not has('mods', m, 'README.md')}
     assert bare == MODS_WITHOUT_README, (
         'mods/<mod>/README.md is missing: %s; has one now, take it out of MODS_WITHOUT_README: %s'

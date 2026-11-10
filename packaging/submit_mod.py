@@ -144,13 +144,26 @@ def facts(path, license=''):
             'ram': (m.size('.run') + m.size('.bss')) if v2 else (m.blob['len'] if m.blob else 0)}
 
 
-def heads_up(f, known, site_cores):
-    """What the author may want to know about a file that goes in: the core it builds with, its RAM, and the shop's
-    mods for its device and OS it can't share a build with (the page greys them out beside it)."""
+def heads_up(f, known, site_cores, core_prints=None):
+    """What the author may want to know about a file that goes in: the core it builds with (as a builder takes it,
+    gui.with_core: of the site's cores that are new enough for it, the newest it can share a build with, by
+    `core_prints`, each core's footprint by (device, os, version)), its RAM, and the shop's mods for its device and
+    OS it can't share a build with (the page greys them out beside it)."""
     out = []
-    top = newest(site_cores.get((f['device'], f['os']), []))
-    if 'core' in f['requires'] and top:
-        out.append('builds with core %s' % top)
+    mine = sorted(site_cores.get((f['device'], f['os']), []), key=elemod.version_key)
+    if 'core' in f['requires'] and mine:
+        ok = [v for v in mine if not f.get('need') or elemod.version_key(v) >= elemod.version_key(f['need'])] or mine
+        prints = {v: (core_prints or {}).get((f['device'], f['os'], v)) for v in ok}
+        why = {v: clash(f['footprint'], prints[v]) if f.get('footprint') and prints[v] else '' for v in ok}
+        takes = [v for v in ok if not why[v]]
+        if not takes:
+            out.append("can't be built on the site: it can't link with core %s (%s), nor with an older one the site has"
+                       % (ok[-1], why[ok[-1]]))
+        elif takes[-1] == ok[-1]:
+            out.append('builds with core %s' % ok[-1])
+        else:
+            out.append("builds with core %s, not the newest: it can't link with core %s (%s), so it can't share a "
+                       'build with a mod that needs a newer core than %s' % (takes[-1], ok[-1], why[ok[-1]], takes[-1]))
     if f.get('ram'):
         out.append('%.1f KB of RAM' % (f['ram'] / 1024.0))
     if f.get('footprint'):
@@ -333,6 +346,7 @@ def submit(fields, catalog=CATALOG, files_dir=None, cores_dir=None, update=False
     key = lambda f: (f['id'], f['device'], f['os'])
     shop_mods = {key(k) for k in known.values()}
     site_cores = {}                               # (device, os) -> the core versions the site has
+    core_prints = {}                              # (device, os, version) -> that core's footprint (heads_up)
     cores_known = cores_dir is not None
     for p in sorted(glob.glob(os.path.join(cores_dir, '*.elemod'))) if cores_known else []:
         try:
@@ -341,9 +355,11 @@ def submit(fields, catalog=CATALOG, files_dir=None, cores_dir=None, update=False
             continue
         if f['core']:
             site_cores.setdefault((f['device'], f['os']), []).append(f['version'])
+            core_prints[(f['device'], f['os'], f['version'])] = f.get('footprint')
     for k in known.values():
         if k['core']:
             site_cores.setdefault((k['device'], k['os']), []).append(k['version'])
+            core_prints.setdefault((k['device'], k['os'], k['version']), k.get('footprint'))
     own_entries = {}                              # (id, device) -> this repository's entries in the shop, any OS
     for it in items:
         k = known.get(name(it))
@@ -577,7 +593,7 @@ def submit(fields, catalog=CATALOG, files_dir=None, cores_dir=None, update=False
             f['result'] = (('replaces ' + ', '.join(name(it) for it in f['older'])) if f['older']
                            else 'added, beside %s from %s' % (f['id'], f['clash'][0]['repo']) if f['clash']
                            else 'added: %s needs it' % f['brought_by'] if f.get('brought_by') else 'added')
-            f['notes'] = heads_up(f, known, site_cores)
+            f['notes'] = heads_up(f, known, site_cores, core_prints)
             new.append((entry, at))
         # a core of the release goes in when it is elekloader's and a mod of it needs that core
         for (device, os_), c in cores.items():

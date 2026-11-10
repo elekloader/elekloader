@@ -1,12 +1,20 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 """The catalog against a new core (pytest, or run with python): every Digitakt
 mk1 mod of a catalog, alone and with every other, linked against the
-catalog's core 2.1 and against mods/core built from this tree. The core
-built here keeps all of 2.1, and a builder takes it (elemod.pick_core takes
-the newest) for every selection, so every selection must link or be
-refused with it as it is with 2.1, with the same messages. A selection with
-a mod that needs core 3.0 (machine-pages, say) is the exception: 2.1
-refuses it for that.
+catalog's core 2.1 and against the core a builder takes for it
+(gui.with_core) of the catalog's and mods/core built from this tree. The
+core built here keeps all of 2.1, and a builder takes it for every
+selection it takes, so every selection must link or be refused with it as
+it is with 2.1, with the same messages. Three kinds of selection are the
+exceptions:
+- one with a mod that needs core 3.0 (machine-pages, say): 2.1 refuses it
+  for that;
+- one whose mods take more RAM than core 2.1's 128 KB: 2.1 refuses it for
+  that, and the builder's core has 256 KB;
+- one with a mod that patches a place the core built here patches (Digi EQ
+  1.0c and Tone+FX 4.0c patch the master output's, which core 4.1 took):
+  the builder takes the newest of the catalog's cores that leaves the place
+  alone, and with that core the selection links or is refused as with 2.1.
 
 Needs files named by environment variables; without them it skips:
   ELEKLOADER_CATALOG_DIR  a folder with the catalog's .elemod files, cores
@@ -27,7 +35,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
 
-from elekloader import devices, elemod, formats, link     # noqa: E402
+from elekloader import devices, elemod, formats, gui, link     # noqa: E402
 from elekloader.sdk import build                          # noqa: E402
 
 CATALOG = os.environ.get('ELEKLOADER_CATALOG_DIR', '')
@@ -47,8 +55,31 @@ def outcome(mods, image):
         return str(e)
 
 
+def describe(m):
+    """What gui.with_core reads of a file, as gui.LoaderModel.describe lists it."""
+    d = {'id': m.id, 'version': m.version, 'fits': True, 'needs_core': getattr(m, 'needs_core', None),
+         'sites': [(s['addr'], s['len']) for s in m.sites]}
+    if not isinstance(m, link.Mod2):
+        return dict(d, format=1)
+    d.update(format=2, ram_bound=m.ram_bound())
+    if '.boot' in m.sections:
+        lo, hi = m.dev.ddr_for(m.version)
+        d['ram_area'] = hi - lo
+    return d
+
+
+def taken(cores, ms):
+    """The core a builder takes for a selection (gui.with_core), of `cores`: the newest that is new enough for
+    the mods and takes them."""
+    descs = {'core/%02d' % i: describe(c) for i, c in enumerate(cores)}
+    descs.update(('mods/%02d' % i, describe(m)) for i, m in enumerate(ms))
+    on = gui.with_core(descs, {p for p in descs if p.startswith('mods/')})
+    return cores[int(next(p for p in on if p.startswith('core/'))[5:])]
+
+
 def matrix(os_version, tmp):
-    """-> [(selection, 2.1's outcome, 3.0's outcome)] for one OS, and the cores."""
+    """-> [(selection, 2.1's outcome, the outcome with the core built here, its mods, the core a builder takes)]
+    for one OS, and the cores."""
     st = STOCKS[os_version]
     if not st or not os.path.exists(st):
         raise Skip('missing the stock file for %s' % os_version)
@@ -62,6 +93,7 @@ def matrix(os_version, tmp):
     new = link.Mod2(*_load(build.build(os.path.join(ROOT, 'mods', 'core'), st, tmp)[0]))
     mods = [m for m in files if m.id != 'core']
     byid = {m.id: m for m in mods}
+    cores = sorted((m for m in files if m.id == 'core'), key=lambda m: elemod.version_key(m.version)) + [new]
 
     def with_requirements(sel):
         out = list(sel)
@@ -74,7 +106,7 @@ def matrix(os_version, tmp):
         ms = with_requirements(sel)
         a = outcome([old[0]] + ms, image).replace(old[0].label(), 'core')
         b = outcome([new] + ms, image).replace(new.label(), 'core')
-        rows.append(([m.label() for m in sel], a, b, ms))
+        rows.append(([m.label() for m in sel], a, b, ms, taken(cores, ms)))
     return rows, old[0], new, image
 
 
@@ -92,16 +124,26 @@ def check_os(os_version):
     with tempfile.TemporaryDirectory() as tmp:
         rows, old, new, _image = matrix(os_version, tmp)
         assert elemod.version_key(new.version) >= elemod.version_key('3.0') and rows
-        same, on3 = [], []
-        for sel, a, b, ms in rows:
-            needs = [m.needs_core for m in ms if m.needs_core]
-            need = max(needs, key=elemod.version_key) if needs else None
-            # the core a builder takes: the newest, the one built here
-            assert elemod.pick_core([old.version, new.version], need) == 1, sel
+        same, on3, older, big = [], [], [], []
+        for sel, a, b, ms, pick in rows:
+            needs = [getattr(m, 'needs_core', None) for m in ms]
+            need = max((v for v in needs if v), key=elemod.version_key, default=None)
+            if pick is new:
+                # the core a builder takes: the newest, the one built here
+                assert elemod.pick_core([old.version, new.version], need) == 1, sel
+            else:
+                # a mod of the selection patches a place the core built here patches: the linker says so, and
+                # the builder takes an older core of the catalog's, which leaves the place alone
+                assert ' overlap ' in b and elemod.version_key(pick.version) < elemod.version_key(new.version), (sel, b)
+                b = outcome([pick] + ms, _image).replace(pick.label(), 'core')
+                older.append((sel, pick.version))
             if need and elemod.version_key(need) > elemod.version_key(old.version):
                 # a mod that needs 3.0: refused with 2.1 for that
                 assert 'needs core %s or newer' % need in a, (sel, a)
                 on3.append((sel, b))
+            elif a.startswith('the mods need RAM') and describe(pick)['ram_area'] > describe(old)['ram_area']:
+                # more than 2.1's 128 KB: refused with 2.1 for that, and the builder's core has more
+                big.append((sel, b))
             else:
                 # with the same outcome as with 2.1
                 assert a == b, (sel, a, b)
@@ -113,6 +155,14 @@ def check_os(os_version):
             print('  %s: %d need core 3.0: %d link, %d are refused'
                   % (os_version, len(on3), sum(b == 'links' for _s, b in on3),
                      sum(b != 'links' for _s, b in on3)))
+        if big:
+            print('  %s: %d take more RAM than core 2.1 has: %d link, %d are refused'
+                  % (os_version, len(big), sum(b == 'links' for _s, b in big),
+                     sum(b != 'links' for _s, b in big)))
+        if older:
+            print('  %s: %d take an older core than %s, for a place both patch: %s'
+                  % (os_version, len(older), new.version,
+                     ', '.join(sorted({'%s (core %s)' % (sel[0], v) for sel, v in older if len(sel) == 1}))))
 
 
 def test_the_catalog_links_with_the_newest_core_as_with_core_2_1():

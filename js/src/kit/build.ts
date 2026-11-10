@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // What a site's build page does around the builder, the same on every site: load a selection from the catalog and
 // check it, follow a build in three steps, and keep its log as text for a bug report.
+import { coreTakes } from '../elemod.ts'
 import { planBuild, type Catalog, type Pin } from './catalog.ts'
 import type { Builder } from './client.ts'
 import type { BuildResult, Check, Device, Ready } from './protocol.ts'
@@ -11,7 +12,8 @@ export type Prepared =
 
 /** The owner's stock file and a selection of catalog mod ids, loaded and checked: the stock file must be the device
  * and OS asked for, each mod comes from the catalog with what it requires, and the core is the plan's, made again
- * once the mods are loaded with the core's RAM in it, as the engine's tick takes it (model.ts withCore). */
+ * once the mods are loaded with what each core takes in it (its RAM, and the places it patches), as the engine's tick
+ * takes it (model.ts withCore). */
 export async function prepare(builder: Builder, input: { catalog: Catalog; device: string; os: string; stock: Blob & { name: string }; ids: readonly string[] }): Promise<Prepared> {
   const plan = planBuild(input.catalog, input.device, input.os, input.ids)
   if (!plan.core) return { ok: false, error: `The catalog has no core for ${input.device} OS ${input.os}.` }
@@ -27,16 +29,16 @@ export async function prepare(builder: Builder, input: { catalog: Catalog; devic
     if (!added.ok) return { ok: false, error: added.error, device: stock.dev }
     enabled = await builder.tick(enabled, added.mod.path)
   }
-  // the plan's core, in place of any other the ticks chose (a build has one core): of those new enough, one whose RAM
-  // holds the mods (its ram_area, at least their ram_bound and its own), as withCore takes it
+  // the plan's core, in place of any other the ticks chose (a build has one core): of those new enough, one that
+  // takes the mods (its RAM holds them, and it patches no place one of them patches), as withCore takes it
   const listed = await builder.mods()
   const cores = listed.filter(m => m.builtin && m.id === 'core')
-  const ram = listed.filter(m => m.id !== 'core' && enabled.includes(m.path)).reduce((n, m) => n + (m.ram_bound ?? 0), 0)
-  const holds = (pin: Pin) => {
+  const mods = listed.filter(m => m.id !== 'core' && enabled.includes(m.path))
+  const takes = (pin: Pin) => {
     const c = cores.find(m => m.file === pin.file)
-    return c?.ram_area === undefined || ram + (c.ram_bound ?? 0) <= c.ram_area
+    return !c || coreTakes(c, mods)
   }
-  const pick = planBuild(input.catalog, input.device, input.os, input.ids, holds).core!
+  const pick = planBuild(input.catalog, input.device, input.os, input.ids, takes).core!
   const core = cores.find(m => m.file === pick.file)
   if (!core || !core.fits) return { ok: false, error: `${pick.file} does not fit this OS file.`, device: stock.dev }
   enabled = [...enabled.filter(p => !cores.some(c => c.path === p)), core.path].sort()
