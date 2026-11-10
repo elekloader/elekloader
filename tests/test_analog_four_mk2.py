@@ -102,7 +102,7 @@ def test_the_os_keeps_its_calibration_at_0x300000():
     assert at(img, 0x400f18e8, 22) == bytes.fromhex('2f3940214c1048780e562f3c003000004eb9401155a2')
 
 
-def test_core_a4_sites():
+def test_core_a4mk2_sites():
     """Every site's stock bytes, and that each covers whole instructions."""
     _r, _s, img = stock()
     with open(os.path.join(ROOT, 'mods', 'core-a4mk2', 'mod.json')) as fh:
@@ -196,7 +196,7 @@ def test_core_a4_sites():
     assert len([x for x in mod['sites'] if x.get('target', '').startswith('st_')]) == 28
 
 
-def test_core_a4_store_bodies():
+def test_core_a4mk2_store_bodies():
     """store.s: each jmp site's displaced instructions, then a jump back to
     the site plus the bytes it displaced (8 for each)."""
     import re
