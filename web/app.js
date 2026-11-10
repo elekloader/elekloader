@@ -1307,6 +1307,7 @@ function toast(text) {
 
 const view = () => location.hash === '#build' ? 'build' : location.hash === '#submit' ? 'submit'
   : location.hash === '#make' ? 'make' : location.hash === '#splash' ? 'splash'
+  : location.hash === '#drive' ? 'drive'
   : /^#s\//.test(location.hash) ? 'section'
   : /^#contribute(\/|$)/.test(location.hash) ? 'contribute' : 'library';
 // Contribute's pages: #contribute is the overview, #contribute/<page> the others (index.html, cp-<page>)
@@ -1324,10 +1325,10 @@ function route() {
       location.replace(SHOP_URL + h);
       return;
     }
-    if (!['build', 'make', 'contribute'].includes(view())) history.replaceState(null, '', '#build');
+    if (!['build', 'make', 'contribute', 'drive'].includes(view())) history.replaceState(null, '', '#build');
   }
   const v = view(), cp = cpage();
-  for (const n of ['library', 'build', 'make', 'splash', 'section', 'submit', 'contribute']) $('view-' + n).hidden = v !== n;
+  for (const n of ['library', 'build', 'make', 'splash', 'section', 'submit', 'contribute', 'drive']) $('view-' + n).hidden = v !== n;
   for (const p of CPAGES) $('cp-' + p).hidden = p !== cp;
   for (const a of document.querySelectorAll('[data-cpage]')) {
     a.classList.toggle('on', v === 'contribute' && a.dataset.cpage === cp);
@@ -1336,7 +1337,7 @@ function route() {
   }
   $('nav-csub').hidden = v !== 'contribute';
   const page = v === 'contribute' && cp !== 'overview' ? $('cp-' + cp).querySelector('h1').textContent : null;
-  document.title = (page || { build: 'Build Firmware', make: 'Make your own mod!', splash: 'Splash screen maker', section: 'Mod Shop', submit: 'Submit your mod', contribute: 'Contribute', library: 'Mod Shop' }[v]) + ' · elekloader';
+  document.title = (page || { build: 'Build Firmware', make: 'Make your own mod!', splash: 'Splash screen maker', section: 'Mod Shop', submit: 'Submit your mod', contribute: 'Contribute', library: 'Mod Shop', drive: '+Drive mods' }[v]) + ' · elekloader';
   if (v === 'splash') openSplash();
   $('content').scrollTop = 0;
   $('topbar').classList.remove('solid');
@@ -1344,6 +1345,15 @@ function route() {
   renderLibrary();
   renderChrome();
   if (v === 'contribute' && cp === 'overview') renderTodo();
+  if (v === 'drive') openDrive();
+}
+
+// ---- +Drive mods: a unit's /mods over Web MIDI (drive.js, loaded the first time the view opens) ----
+
+let driveView = null;
+function openDrive() {
+  if (!driveView) driveView = import(site('./drive.js').href);
+  driveView.then(m => m.open(), e => { $('dm-conn').textContent = `The +Drive view did not load: ${e.message}`; });
 }
 
 // ---- the Splash screen maker (splash.js, loaded the first time its view opens) ----
@@ -1528,7 +1538,7 @@ function renderChrome() {
   for (const [id, on] of [['nav-library', v === 'library'], ['nav-build', build], ['nav-make', v === 'make'],
     ['nav-submit', v === 'submit'], ['nav-contribute', v === 'contribute'], ['tab-library', v === 'library'],
     ['tab-build', build], ['tab-make', v === 'make'], ['tab-submit', v === 'submit'],
-    ['tab-contribute', v === 'contribute']]) {
+    ['tab-contribute', v === 'contribute'], ['nav-drive', v === 'drive'], ['tab-drive', v === 'drive']]) {
     $(id).classList.toggle('on', on);
     if (on) $(id).setAttribute('aria-current', 'page'); else $(id).removeAttribute('aria-current');
   }

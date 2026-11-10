@@ -70,7 +70,7 @@ A format-2 mod is a relocatable object:
 | `exports` | the symbols other mods may use |
 | `imports`, `weak` | the names it uses from others; a weak one resolves to `core_zero` (zeros) if no mod provides it |
 | `relocs` | `[section, offset, "abs32"/"abs16"/"pc32"/"pc16"/"dsp24", target, addend]`; target `"sym:NAME"`, `"sec:NAME"` or `"abs"`; `abs16` writes two big-endian bytes, -32768..65535 |
-| `collections` | tables this mod declares: `{"ev_tick": {"entry": 4}}`, or a DSP table (below) |
+| `collections` | tables this mod declares: `{"ev_tick": {"entry": 4}}`, or a DSP table (below); a core's may add `"spare"` (0 to 4,096), `"max"` (1 to 4,096) and `"render": true` for the build descriptor (DRIVE.md, "The build descriptor") |
 | `contribute` | entries for tables: `{"to", "order", "data", "relocs", "claims"}` |
 | `copied` | `[{"lo", "hi", "to"}]`: a block of the image this mod copies elsewhere at run time |
 | `knobs` | a count of knob ids, 0..1024, the linker gives this mod (the Analog Rytm MKII, core-ar2 0.13; "Knob ids" below) |
@@ -265,6 +265,8 @@ each program on its own.
    build's lockfile ("Mod storage" below) and defines each field's `sym`
    as an absolute symbol, its descriptor. When a mod declares `knobs`, the
    linker gives it its run of ids ("Knob ids" below).
+   When a mod imports `core_desc`, the linker also writes the build
+   descriptor and gives tables spare entries (DRIVE.md, "The build descriptor").
 4. **Relocates** the sections, the table entries and the sites.
 5. **Checks again** on the result: code sites are still whole
    instructions, the copied-block rules hold, and the image is what the
@@ -311,6 +313,94 @@ Nothing is built unless all of these pass:
   sections and DSP table entries, at whole words, and only `dsp24` there;
   and a DSP address and a ColdFire address are never written in place of
   each other.
+
+### +Drive mods
+
+A build with the Drive Loader (`mods/drive-loader-ar2/`, which imports
+`core_desc`) links more mods at boot from `/mods` on the unit's +Drive
+into the +Drive area. This section is what such a mod and `/mods/active`
+may hold; the boot link and the computer's tools are in
+[DRIVE.md](DRIVE.md).
+
+**What a +Drive mod is.** A format-2 mod with only `.run` and `.bss`,
+relocations only in `.run` (`abs32`, `pc32`, `pc16`), and none of `sites`,
+`collections`, `copied`, `storage`, `sharc`, `resources.regions` or a
+contribution's `claims`. It adds entries only to tables whose descriptor
+flags say more may be added (not a DSP table), in whole entries, at an
+order of -2,147,483,648 to 2,147,483,646. Its imports are the build's exports, the tables'
+names and `NAME_n` (the count after the merge), `core_desc`, and the other
++Drive mods' exports. Its own symbol `drive_init` (in `.run` or `.bss`), if
+it has one, is called after the link as `void drive_init(void)`, in id
+order; it is never a global name. Its id is under 28 bytes.
+
+**`/mods/active`** lists the chosen files, one line each: the file's path
+below `/mods` (`x.elemod`, or in up to 3 folders, `fx/delays/x.elemod`), a
+space, its CRC-32 (zlib's, as 8 hex digits; `0x` is optional). Blank lines,
+`#` lines and lines without a CRC are skipped; the path is everything
+before the last run of spaces, under 128 bytes. More than 256 lines and
+nothing loads.
+
+The link's order and its status records are in DRIVE.md, "The boot link".
+
+#### +Drive refusal codes
+
+| state | name |
+|---|---|
+| 0 | `none` |
+| 1 | `loaded` |
+| 2 | `refused` |
+| 3 | `dropped` (missing or changed) |
+
+| code | name | the argument and detail |
+|---|---|---|
+| 0 | `ok` | |
+| 1 | `missing` | the file is not in `/mods` |
+| 2 | `changed` | its CRC-32 is not the one `/mods/active` has |
+| 3 | `too-big` | larger than the staging buffer |
+| 4 | `json` | not a JSON object |
+| 5 | `format` | not a format-2 mod the loader reads (the id, version, a relocation, an order, an export) |
+| 6 | `target` | made for another device or OS |
+| 7 | `feature` | a field or section +Drive mods cannot use (detail: its name) |
+| 8 | `duplicate` | the id of a flashed module or of an earlier mod (detail: the id) |
+| 9 | `core` | needs a newer core (detail: the version) |
+| 10 | `requires` | detail: the first missing id |
+| 11 | `conflicts` | detail: the other id |
+| 12 | `export` | detail: the name |
+| 13 | `claim` | detail: the name |
+| 14 | `import` | detail: the name |
+| 15 | `table` | a table +Drive mods cannot add to, or not whole entries (detail: the table) |
+| 16 | `full` | argument: the table's spare entries; detail: the table |
+| 17 | `room` | argument: KB over the area, rounded up |
+| 18 | `range` | a `pc16` out of range |
+| 19 | `limit` | past the loader's own room (above) |
+| 20 | `count` | more than 256 lines in `/mods/active` |
+
+When nothing is linked, the loader keeps why:
+
+| skip | name |
+|---|---|
+| 0 | `none` |
+| 1 | `key` ([NO] held at power-on) |
+| 2 | `armed` (the last start failed: `/mods/.armed`) |
+| 3 | `drive` (no eMMC or no ekFS) |
+| 4 | `abi` (another descriptor ABI major) |
+| 5 | `unstable` (the check never settled, or a merge passed the loader's room) |
+| 6 | `count` |
+| 7 | `memory` (the heap had no room for the records or the link) |
+
+#### The data container
+
+The Data router sends and takes every file in Elektron's data container
+(`elekloader/container.py`): a 31-byte header (u32 `0xac11d303`, u8 header
+version 2, u16 family, u16 device id, u32 OS release, u32 file type, i32
+file version, i32 file index, u32 payload size uncompressed, u8 compressed,
+u8 footer size 12), the body, and a 12-byte footer (u32 the body's CRC-32,
+zlib's from `0xffffffff`; u32 the body's size as sent; u32 `0xaaa1daaa`). A
+stock Analog Rytm MKII 1.74 project reads family 2, device 5, OS release
+`0x30313736`; the build descriptor carries them (the profile's
+`data_family`, `data_device` and each release's `data_release`). Uploads to
+`/mods` are file type `0x454d4f44` ('EMOD'), version 2, index 0, not
+compressed.
 
 ### Mod storage
 

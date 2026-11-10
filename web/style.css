@@ -586,6 +586,54 @@ details summary:hover { color: var(--text); }
   .tab .badge { position: absolute; top: 5px; left: calc(50% + 7px); min-width: 18px; line-height: 17px; font-size: 10.5px; padding: 0 5px; }
 }
 
+/* ---- the +Drive mods view (drive.js) ---- */
+.dm { display: flex; flex-direction: column; gap: 16px; max-width: 980px; }
+.dm-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 16px 18px; min-width: 0; }
+.dm-card h2 { font-size: 16px; margin: 0 0 10px; }
+.dm-card h3, .dm-spares summary { font-size: 13px; margin: 14px 0 6px; color: var(--muted); font-weight: 600; }
+.dm-spares[open] summary { color: var(--text); }
+.dm-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 10px; }
+.dm-row:first-child { margin-top: 0; }
+.dm select { background: var(--well); color: var(--text); border: 1px solid var(--line-2); border-radius: 7px; padding: 6px 8px; max-width: 100%; }
+.dm-mini { background: var(--raised); color: var(--text); border: 0; border-radius: 6px; padding: 3px 9px; font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer; }
+.dm-mini:hover { background: var(--hover); }
+.dm-mini:disabled { opacity: 0.45; cursor: default; }
+.dm-danger { color: var(--bad); }
+.dm-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 24px; }
+.dm-t { width: 100%; border-collapse: collapse; font-size: 13px; display: block; overflow-x: auto; }
+.dm-t td, .dm-t th { padding: 5px 8px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+.dm-t th { color: var(--faint); font-weight: 600; }
+.dm-num { text-align: right !important; font-family: var(--mono); }
+.dm-kv { display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; margin: 0; font-size: 13px; }
+.dm-kv dt { color: var(--muted); } .dm-kv dd { margin: 0; font-family: var(--mono); }
+.dm-tag { display: inline-block; padding: 0 7px; border-radius: 99px; font-size: 11.5px; font-weight: 700; background: var(--raised); }
+.dm-tag.dm-drive { background: var(--accent-soft); color: var(--accent); }
+.dm-browser { margin-top: 10px; }
+.dm-pane { min-width: 0; }
+/* The folder view spans the card: every column is as wide as its content, the Name column takes the rest. */
+.dm-pane { overflow-x: auto; }
+.dm-pane .dm-t { display: table; }
+.dm-pane .dm-t td:not([colspan]), .dm-pane .dm-t th { white-space: nowrap; }
+.dm-pane .dm-t td:not(:first-child):not([colspan]), .dm-pane .dm-t th:not(:first-child) { width: 1%; }
+/* Buttons sit right, so a folder's Rename and Delete line up with a file's. */
+.dm-pane .dm-t td:last-child:not([colspan]) { text-align: right; }
+.dm-pane .dm-t td.bad { white-space: normal; min-width: 14em; }
+.dm-pane .dm-t tr[draggable] { cursor: grab; }
+.dm-rename { background: var(--well); color: var(--text); border: 1px solid var(--accent); border-radius: 5px; padding: 1px 6px; font-family: var(--mono); font-size: 13px; width: 100%; min-width: 10em; }
+.dm-t tr.dm-over td { background: var(--accent-soft); }
+.dm-pane.dm-over { outline: 1.5px dashed var(--accent); outline-offset: 4px; border-radius: 6px; }
+.dm-crumbs { display: flex; flex-wrap: wrap; align-items: center; gap: 0; font-family: var(--mono); font-size: 13px; flex: 1 1 auto; min-width: 0; }
+.dm-crumbs button { background: none; border: 0; padding: 2px 0; font: inherit; color: var(--accent); cursor: pointer; }
+.dm-crumbs button[aria-current] { color: var(--text); cursor: default; }
+.dm-crumbs button.dm-over { background: var(--accent-soft); border-radius: 4px; }
+.dm-new { display: flex; gap: 6px; align-items: center; }
+.dm-new input { background: var(--well); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 3px 7px; font: inherit; font-size: 12.5px; width: 12em; }
+.dm-folder button.dm-open { background: none; border: 0; padding: 0; font: inherit; color: var(--accent); cursor: pointer; }
+.dm-drop { border: 1.5px dashed var(--line-2); border-radius: 9px; padding: 18px; text-align: center; color: var(--muted); }
+.dm-drop.dm-over { border-color: var(--accent); background: var(--accent-soft); color: var(--text); }
+.dm-out { background: var(--well); border: 1px solid var(--line); border-radius: 7px; padding: 8px 10px; margin: 6px 0; min-height: 2.2em; font-size: 12.5px; }
+@media (max-width: 720px) { .dm-grid2 { grid-template-columns: 1fr; } }
+
 /* ---- the builder page (build_web.py --page builder, <html data-page="builder">): the shop's parts are hidden,
    and its links lead to the shop's own site ---- */
 html:not([data-page="builder"]) .builder-only { display: none !important; }
