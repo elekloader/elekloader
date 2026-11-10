@@ -180,7 +180,7 @@ def test_core_a4mk2_sites():
     # 0.5's 2 MIDI sites (midi.s), the three sets' NRPN in and CC in, each a
     # jmp resuming after the 8 bytes it displaced; and 0.6's whole project
     # save (store.s) and three knob look sites (looks.s)
-    assert len(mod['sites']) == 106
+    assert len(mod['sites']) == 107
     midi = [x for x in mod['sites'] if x.get('target') in ('core_nrpn_site', 'core_cc_site')]
     assert [(x['addr'], x['op'], x['stock']) for x in midi] == \
         [('0x4009ff56', 'jmp', '4fefffec48d7043c'), ('0x400a0b62', 'jmp', '4e56ffd848d71cfc')]
