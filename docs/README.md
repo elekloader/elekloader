@@ -64,7 +64,7 @@ docs match its code.
   [mods/core-dt2](../mods/core-dt2) (Digitakt II),
   [mods/core-dn2](../mods/core-dn2) (Digitone II, experimental),
   [mods/core-ar2](../mods/core-ar2) (Analog Rytm MKII),
-  [mods/core-a4](../mods/core-a4) (Analog Four MKII), and
+  [mods/core-a4mk2](../mods/core-a4mk2) (Analog Four MKII), and
   [mods/core-ot](../mods/core-ot) with [mods/dspbus-ot](../mods/dspbus-ot),
   [mods/intercepts-ot](../mods/intercepts-ot),
   [mods/machines-ot](../mods/machines-ot) and [mods/usb-ot](../mods/usb-ot)
@@ -91,9 +91,9 @@ docs match its code.
     `hello-marker-a4` on the Analog Four MKII;
   - `hooks-check-ar2`, a test for the Analog Rytm MKII's core: it
     subscribes to every event core-ar2 has and shows what it counts
-    (`hooks-check-a4`: the same for core-a4 on the Analog Four MKII;
-    `store-check-a4` checks its mod storage and `ddr-canary-a4` the DDR
-    the profile calls unused; `pages-check-a4` core-a4's parameter
+    (`hooks-check-a4mk2`: the same for core-a4mk2 on the Analog Four MKII;
+    `store-check-a4mk2` checks its mod storage and `ddr-canary-a4mk2` the DDR
+    the profile calls unused; `pages-check-a4mk2` core-a4mk2's parameter
     routines; `hooks-check-dn2` for core-dn2 on the Digitone II, with rows in
     SETTINGS and PERSONALIZE, two key handlers in order and a key it takes
     once armed);

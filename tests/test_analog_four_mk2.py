@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
-"""The Analog Four MKII: its profile, its file, and core-a4's sites (pytest,
+"""The Analog Four MKII: its profile, its file, and core-a4mk2's sites (pytest,
 or run with python).
 
 Needs a stock file, which never goes in the repo, named by an environment
@@ -105,7 +105,7 @@ def test_the_os_keeps_its_calibration_at_0x300000():
 def test_core_a4_sites():
     """Every site's stock bytes, and that each covers whole instructions."""
     _r, _s, img = stock()
-    with open(os.path.join(ROOT, 'mods', 'core-a4', 'mod.json')) as fh:
+    with open(os.path.join(ROOT, 'mods', 'core-a4mk2', 'mod.json')) as fh:
         j = json.load(fh)
     assert j['os'] == '1.56' and not j.get('ports')
     mod, port = build.for_release(j, DEV, REL)
@@ -150,7 +150,7 @@ def test_core_a4_sites():
     assert pages['core_page_info'] == '722f202f0004'
     assert pages['core_param_get'] == pages['core_param_delta'] == '4feffff448d7040c'
     assert pages['core_param_text'] == '2f032f02242f0014'
-    # pages whose entry a function answers (core-a4 0.3, core-ar2 0.6's), asked before core_pages
+    # pages whose entry a function answers (core-a4mk2 0.3, core-ar2 0.6's), asked before core_pages
     assert mod['collections'].get('core_page_fns') == 4 and mod['collections'].get('core_pages') == 4
     # the audio load (0.2): core times its own render events, first in and last out
     sub = {x['event']: x for x in mod['subscribe']}
@@ -167,7 +167,7 @@ def test_core_a4_sites():
     for x in clamps:
         assert x['stock'][2:] == '1c' and x['new'] == x['stock'][:2] + '2c', x
         assert x['stock'][0] == '7' and int(x['stock'][1], 16) % 2 == 0, x     # moveq #28,Dn
-    # mod storage's sites (core-a4 0.1: 28 of the 36), and 0.2's 4 page
+    # mod storage's sites (core-a4mk2 0.1: 28 of the 36), and 0.2's 4 page
     # sites, 2 view sites and 5 range bytes, 0.4's OS upgrade restart, and
     # 0.5's 31 lock sites: 19 in code (rows.s) and 12 vtable entries; and 0.5's
     # 21 destination sites (dests.s): 15 in code and 6 vtable entries; and
@@ -177,7 +177,7 @@ def test_core_a4_sites():
     midi = [x for x in mod['sites'] if x.get('target') in ('core_nrpn_site', 'core_cc_site')]
     assert [(x['addr'], x['op'], x['stock']) for x in midi] == \
         [('0x4009ff56', 'jmp', '4fefffec48d7043c'), ('0x400a0b62', 'jmp', '4e56ffd848d71cfc')]
-    with open(os.path.join(ROOT, 'mods', 'core-a4', 'midi.s')) as fh:
+    with open(os.path.join(ROOT, 'mods', 'core-a4mk2', 'midi.s')) as fh:
         src = fh.read()
     assert 'jmp     0x4009ff5e' in src and 'jmp     0x400a0b6a' in src
     assert mod['collections'].get('core_lock_ccs') == 8
@@ -200,9 +200,9 @@ def test_core_a4_store_bodies():
     """store.s: each jmp site's displaced instructions, then a jump back to
     the site plus the bytes it displaced (8 for each)."""
     import re
-    with open(os.path.join(ROOT, 'mods', 'core-a4', 'mod.json')) as fh:
+    with open(os.path.join(ROOT, 'mods', 'core-a4mk2', 'mod.json')) as fh:
         sites = {x['target']: x for x in json.load(fh)['sites'] if x['op'] == 'jmp'}
-    with open(os.path.join(ROOT, 'mods', 'core-a4', 'store.s')) as fh:
+    with open(os.path.join(ROOT, 'mods', 'core-a4mk2', 'store.s')) as fh:
         src = fh.read()
     bodies = re.findall(r'^(st_\w+)_body:\s*\|\s*(0x[0-9a-f]+).*?^\s+jmp\s+(0x[0-9a-f]+)', src, re.M | re.S)
     assert len(bodies) == 14

@@ -139,7 +139,7 @@ changes nothing else the unit does.
 
   | event | site (was) | when |
   |---|---|---|
-  | `ev_project(how, dropped)` | 0x4008484e (`pea 0x460d17ce`, the receive every job goes back to), a jmp; 0x4008485e (the job switch) notes the job | when a job that loads a whole project (3, 4 LOAD PROJECT, 5 the power-up, 19 RELOAD) or makes one (9, 10, 13) has ended; the same prototype and constants as core-ar2's and core-a4's |
+  | `ev_project(how, dropped)` | 0x4008484e (`pea 0x460d17ce`, the receive every job goes back to), a jmp; 0x4008485e (the job switch) notes the job | when a job that loads a whole project (3, 4 LOAD PROJECT, 5 the power-up, 19 RELOAD) or makes one (9, 10, 13) has ended; the same prototype and constants as core-ar2's and core-a4mk2's |
   | `ev_banks_load(pre, mask)` | 0x40090504 and 0x400905d4, the bank loads, wrapped | before and after |
   | `ev_banks_write(pre, mask)` | 0x400918aa (inside the bank writer) and 0x400917c8 (around it) | before the first bank file, and after |
   | `ev_project_store(pre)`, `ev_project_reload(pre)` | 0x4008ee74 and 0x4008f180, wrapped | SAVE PROJECT's `.work` to `.strd` copy, RELOAD's copy back |

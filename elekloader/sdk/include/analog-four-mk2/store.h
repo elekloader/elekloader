@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
-/* core-a4 0.1: mod storage on the Analog Four MKII (docs/ADAPTING.md, "Mod
+/* core-a4mk2 0.1: mod storage on the Analog Four MKII (docs/ADAPTING.md, "Mod
  * storage"; the design is core-ar2's). Declare each field in mod.json:
  *
  *     "storage": [{"sym": "my_accent", "scope": "track", "bits": 4}]

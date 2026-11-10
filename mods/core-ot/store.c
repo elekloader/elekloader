@@ -4,7 +4,7 @@
  * (docs/ADAPTING.md, "Project data on the Octatrack"; the declarations are in
  * elekloader/sdk/include/octatrack/core.h, the sites in store.s).
  *
- * - ev_project(how, dropped), as core-ar2's and core-a4's: after a job that loads a whole project
+ * - ev_project(how, dropped), as core-ar2's and core-a4mk2's: after a job that loads a whole project
  *   (LOAD PROJECT, the power-up's load, RELOAD) or makes a new one.
  * - ot_engine_post: a mod's function run by the engine task, where the firmware does its own card
  *   I/O; the file calls are for there.

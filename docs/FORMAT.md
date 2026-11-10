@@ -74,7 +74,7 @@ A format-2 mod is a relocatable object:
 | `contribute` | entries for tables: `{"to", "order", "data", "relocs", "claims"}` |
 | `copied` | `[{"lo", "hi", "to"}]`: a block of the image this mod copies elsewhere at run time |
 | `knobs` | a count of knob ids, 0..1024, the linker gives this mod (the Analog Rytm MKII, core-ar2 0.13; "Knob ids" below) |
-| `storage` | fields this mod keeps with the project: `[{"sym", "scope", "bits"}]` (the Analog Rytm MKII from core-ar2 0.2, the Analog Four MKII from core-a4 0.1; "Mod storage" below) |
+| `storage` | fields this mod keeps with the project: `[{"sym", "scope", "bits"}]` (the Analog Rytm MKII from core-ar2 0.2, the Analog Four MKII from core-a4mk2 0.1; "Mod storage" below) |
 | `sharc` | Digitone II 1.12 only: compiled code for the DSP ("Digitone II SHARC mod" below) |
 | `sharc_raw` | Digitakt II 1.17 only: raw additions to the DSP's boot stream ("Digitakt II raw SHARC payload" below) |
 
@@ -332,10 +332,10 @@ lockable one or one with an `init` can take `"handle": true` (core-ar2
 0.11): it holds a mod's handle on something kept elsewhere, 0 for none;
 the mark is not in the lockfile or the layout ID, and it is refused with
 a core that has no table `core_handles`. Only a core
-that imports `__store_gen` takes them (core-ar2 from 0.2, core-a4); with another
+that imports `__store_gen` takes them (core-ar2 from 0.2, core-a4mk2); with another
 core a mod that declares storage is refused. A scope's room can depend on
 the core's version (a sound's: 24 bits with core-ar2 0.2, 56 from 0.3,
-which is for OS 1.74 only: a 1.73 build has 0.2's 24; 32 with core-a4 0.1). The
+which is for OS 1.74 only: a 1.73 build has 0.2's 24; 32 with core-a4mk2 0.1). The
 linker:
 
 - reads the build's lockfile, or starts one, and places every field
@@ -388,7 +388,7 @@ field of its own (`mod` its id, the device's bits: 7 on the Analog Rytm
 MKII), placed like a mod's, and in a build with a kit `"lfo"` field one that
 imports `core_fx_lfo_dst` gets that as a kit field (7 bits); in a build
 without one the symbol is 0 and the field is not placed. docs/ADAPTING.md ("Mod storage
-(core-ar2 0.2, Analog Rytm MKII)" and "Mod storage (core-a4 0.1, Analog
+(core-ar2 0.2, Analog Rytm MKII)" and "Mod storage (core-a4mk2 0.1, Analog
 Four MKII)") has the rest.
 
 ### Knob ids
@@ -480,10 +480,10 @@ from 0.10 the event `ev_project_save` (before and after every project save
 to a +Drive slot, the routine at 0x400b07a4),
 and the table `core_store_ids` (entry 4, filled by the linker: below); no
 `.fast` copy table, so no `.fast` code.
-The Analog Four MKII's core (core-a4 0.1, OS 1.56) has core-ar2 0.3's
+The Analog Four MKII's core (core-a4mk2 0.1, OS 1.56) has core-ar2 0.3's
 events, `ev_project` and `core_store_ids`, at 0x40098898, 0x40098900,
 0x400999f8, 0x40099a40, 0x400d05d2, 0x401013c6 and 0x401040f6
-(`mods/core-a4/mod.json`), and no `.fast` code either. From 0.2 it declares
+(`mods/core-a4mk2/mod.json`), and no `.fast` code either. From 0.2 it declares
 `core_pages`, `core_params` and `core_view_pages` too (0x400f6212,
 0x40023d54, 0x400232e2 and 0x4009ea68; the views at 0x400c2370 and
 0x400c4202), its view entries the A4's own; from 0.3 `core_page_fns`

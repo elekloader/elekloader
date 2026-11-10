@@ -37,7 +37,7 @@ older ones people still have:
 | Analog Rytm MKII | 1.74 | `core-ar2-0.3.elemod` | the [core-ar2-v0.3](https://github.com/elekloader/elekloader/releases/tag/core-ar2-v0.3) pre-release, and the shop |
 | Digitone II | 1.12 | `core-dn2-0.4.elemod` | on main, not released: build it ([below](#building-a-core)) |
 | Analog Rytm MKII | 1.73 | `core-ar2-0.2.elemod` | not released: the last core with 1.73; build it from commit 92a99c9 ([below](#building-a-core)) |
-| Analog Four MKII | 1.56 | `core-a4-0.5.elemod` | the [v0.10.0](https://github.com/elekloader/elekloader/releases/tag/v0.10.0) release, built into its apps, and the web page (a proof of concept) |
+| Analog Four MKII | 1.56 | `core-a4-0.5.elemod` | the [v0.10.0](https://github.com/elekloader/elekloader/releases/tag/v0.10.0) release, built into its apps, and the web page (a proof of concept). It is mods/core-a4mk2's 0.5, released before the folder's rename; from 0.6 the file is `core-a4mk2-<version>.elemod` |
 | Octatrack MKI, MKII | 1.40C | `core-ot-0.8.elemod` | the [v0.10.0](https://github.com/elekloader/elekloader/releases/tag/v0.10.0) release, built into its apps, and the web page |
 | Octatrack MKI, MKII | 1.40C | `core-ot-0.1.elemod` | the v0.4.0 release: PURGE SAMPLES freezes the unit with it, so use 0.3.1 or newer |
 | Model:Cycles | 1.13 | `core-mc-0.3.elemod` | the [v0.10.0](https://github.com/elekloader/elekloader/releases/tag/v0.10.0) release, built into its apps, and the web page |
@@ -203,13 +203,13 @@ the one a mod that uses it names in `resources.core`.
   (0.11; ADAPTING.md, "Locks a mod keeps itself (core-ar2 0.11, Analog Rytm
   MKII)"). Spare entries in its tables for +Drive mods, which the Drive
   Loader fills at boot (0.12; the core's README, "Room for +Drive mods").
-- **Analog Four MKII** ([mods/core-a4](../mods/core-a4), a proof of
+- **Analog Four MKII** ([mods/core-a4mk2](../mods/core-a4mk2), a proof of
   concept): core-ar2's events and mod storage at the A4's addresses
-  (ADAPTING.md, "Mod storage (core-a4 0.1)"), and parameter pages, whose
-  knobs can follow the selected sound (core-a4 0.2 and 0.3; ADAPTING.md,
-  "Parameter pages (core-a4 0.2)"). Lockable parameters for each track
+  (ADAPTING.md, "Mod storage (core-a4mk2 0.1)"), and parameter pages, whose
+  knobs can follow the selected sound (core-a4mk2 0.2 and 0.3; ADAPTING.md,
+  "Parameter pages (core-a4mk2 0.2)"). Lockable parameters for each track
   kind, their p-locks, their destinations, their value as stock would
-  play it and their NRPNs and CCs (ADAPTING.md, "Lockable parameters (core-a4 0.5, Analog Four
+  play it and their NRPNs and CCs (ADAPTING.md, "Lockable parameters (core-a4mk2 0.5, Analog Four
   MKII)"). Its render events cover the effects, not the analog
   voices.
 - **Octatrack** ([mods/core-ot](../mods/core-ot)): a source of its own. It
@@ -272,7 +272,7 @@ device's addresses ([mods/core](../mods/core) for the Digitakt mk1,
 [mods/core-dn1](../mods/core-dn1) for the Digitone mk1,
 [mods/core-dt2](../mods/core-dt2) for the Digitakt II,
 [mods/core-dn2](../mods/core-dn2) for the Digitone II,
-[mods/core-ar2](../mods/core-ar2) for the Analog Rytm MKII, [mods/core-a4](../mods/core-a4)
+[mods/core-ar2](../mods/core-ar2) for the Analog Rytm MKII, [mods/core-a4mk2](../mods/core-a4mk2)
 for the Analog Four MKII, [mods/core-mc](../mods/core-mc)
 and [mods/core-ms](../mods/core-ms) for the Model:Cycles and the Model:Samples). Each `mod.json`
 gives the addresses of every OS it supports (its `os`, and its `ports`):
@@ -286,7 +286,7 @@ python -m elekloader.sdk.build mods/core-dn1 --stock Digitone_and_Digitone_Keys_
 python -m elekloader.sdk.build mods/core-dt2 --stock Digitakt_II_OS1.17.syx                      # the Digitakt II's
 python -m elekloader.sdk.build mods/core-dn2 --stock Digitone_II_OS1.12.syx                      # the Digitone II's
 python -m elekloader.sdk.build mods/core-ar2 --stock Analog-Rytm_MKII_OS1.74.syx                  # the Analog Rytm MKII's (1.74 only)
-python -m elekloader.sdk.build mods/core-a4 --stock Analog-Four_MKII_OS1.56.syx                   # the Analog Four MKII's
+python -m elekloader.sdk.build mods/core-a4mk2 --stock Analog-Four_MKII_OS1.56.syx                   # the Analog Four MKII's
 python -m elekloader.sdk.build mods/core-ot --stock OCTATRACK_OS1.40C.syx                    # the Octatrack's
 python -m elekloader.sdk.build mods/core-mc --stock Model_Cycles_OS1.13.syx                  # the Model:Cycles'
 python -m elekloader.sdk.build mods/core-ms --stock Model_Samples_OS1.13.syx                 # the Model:Samples'
