@@ -2096,6 +2096,29 @@ def test_every_mod_has_a_readme_and_every_example_is_listed():
         'EXAMPLES_NOWHERE: %s' % (sorted(lost - EXAMPLES_NOWHERE), sorted(EXAMPLES_NOWHERE - lost)))
 
 
+def test_core_ar2_0_12_room_for_drive_mods():
+    """core-ar2 0.12's tables have room for +Drive mods (mods/core-ar2/README.md, "Room for +Drive
+    mods"): its events for as many handlers as the Drive Loader links (256), not the default 16
+    (found 2026-11-07: a 17th ev_tick handler was refused `full`), the machines table for its 10
+    hidden slots, the page tables by the views' room (10 views of VIEW_MAX 16 pages, 11 of them
+    stock's), the id-range tables by the loader's mods, and core_step_owners stopping at its 8
+    owners (steps.c OWNERS)."""
+    with open(os.path.join(HERE, '..', 'mods', 'core-ar2', 'mod.json'), encoding='utf-8') as fh:
+        doc = json.load(fh)
+    cols = doc['collections']
+    assert doc['version'] == '0.12'
+    for name, v in cols.items():
+        if name.startswith('ev_'):
+            assert isinstance(v, dict) and v.get('spare') == 256, (name, v)
+    assert cols['core_machines'] == {'entry': 4, 'spare': 10}
+    for name in ('core_pages', 'core_page_fns', 'core_view_pages'):
+        assert cols[name] == {'entry': 4, 'spare': 10 * 16 - 11}, name
+    for name in ('core_params', 'core_param_locks', 'core_param_scales'):
+        assert cols[name] == {'entry': 4, 'spare': 256}, name
+    assert cols['core_step_owners'] == {'entry': 4, 'spare': 8, 'max': 8}
+    assert cols['core_lock_params'] == 4      # +Drive mods have no storage, so no lock codes
+
+
 if __name__ == '__main__':
     import traceback
     ok = failed = 0

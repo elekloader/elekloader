@@ -1075,36 +1075,32 @@ Opt-in, by the knob's id; a parameter without an entry is as in 0.10.
   so a depth's get notes its id and DMA timer 0's count, and the text
   within 4 ms takes it, as `core_held_step` does.
 
+## Room for +Drive mods (0.12)
+
+In a build with the Drive Loader (`mods/drive-loader-ar2`, which loads mods
+from the +Drive at boot) each table gets spare entries the loader fills at
+boot. A linker without +Drive support reads only each table's `entry` and
+leaves the rest, so without the loader the tables are the same as 0.11's. Core's events (every `ev_*`
+table) declare 256, as many as the loader links, so each +Drive mod can add
+a handler to any event; `core_machines` declares 10, its hidden slots
+34..43. The other tables declare what each can hold:
+
+| table | spare | its limit |
+|---|---|---|
+| `core_pages`, `core_page_fns`, `core_view_pages` | 149 | the page key's room: 10 views of `VIEW_MAX` 16 pages (pages.s), 11 of them stock's; a view drops pages past its 16 |
+| `core_params`, `core_param_locks`, `core_param_scales` | 256 | none of their own (id ranges, from 555 for a mod's ids), so as many as the loader links |
+| `core_step_owners` | 8, `"max": 8` | `OWNERS` 8 (steps.c), flashed and +Drive owners together: the spare ones are what the flashed build leaves |
+| `core_lock_params` | the linker's 16 | a +Drive mod has no storage, so no lock codes (42..127, all from the flashed lockfile) |
+
+A spare entry costs its 4 bytes of RAM in the flashed build, about 20 KB
+in all, which the +Drive area gives up.
+
 ## Checked so far
 
-On a unit (OS 1.73). With test images built by rytm-mods-src (its `elemod`
-branch):
-
-- **The boot site**, and the DDR area the linker uses: mod 0016 filled
-  0x47BE0000-0x47C00000 from 0x400008c0 at boot, and a readout showed no word
-  of it changed after a long, hard session and a power cycle.
-- **Both render sites**: mod 0017 armed a flag at `ev_render_in` and cleared
-  the effect returns from `ev_render_out` on alternate 0.7 s stretches. The
-  delay and the reverb pulsed, each on its own setting, with the reverb return
-  PRE or POST.
-
-- **This core**, with [hello-marker-ar2](../../examples/hello-marker-ar2), built
-  and patched by elekloader (11 Oct 2026): the unit booted the build, reported
-  its version (HM01), and drew the 3x3 square on every screen. So the boot
-  copier, the linked image in DDR and `ev_draw` work.
-
-- **Every event**, with [hooks-check-ar2](../../examples/hooks-check-ar2)
-  (11 Oct 2026, build HC01): `ev_tick` blinked its square and requested
-  redraws, `ev_render_in` advanced its bar steadily and never disagreed with
-  `ev_render_out`, `ev_key` and `ev_enc` counted every key and encoder event
-  while the unit acted on each as stock does, and `ev_settings` listed the
-  HOOK TEST row through `core_additem`, which counted each selection while
-  the other rows worked as stock. The same through a short session with a
-  pattern playing into the delay and reverb.
-
-On a unit (OS 1.74, 17 Oct 2026), sent with Transfer over USB: the 1.74
-builds with hello-marker-ar2 (HM74) and hooks-check-ar2 (HC74) work as the
-1.73 ones do.
+On a unit (OS 1.73 and 1.74): the boot site and its DDR area, both render
+sites, the boot copier and every event, with
+[hello-marker-ar2](../../examples/hello-marker-ar2) and
+[hooks-check-ar2](../../examples/hooks-check-ar2).
 
 Statically, against the stock image (python, no toolchain): every site's
 stock bytes, and that each covers whole instructions.
