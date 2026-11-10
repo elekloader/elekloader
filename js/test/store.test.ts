@@ -4,7 +4,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { allocate, ccEntries, checkFlags, codeEntries, dumps, fromImage, handleEntries, initEntries, layoutId, parseCcs, parseCvs, parseDecls, parseHandles, parseInits, parseLfos, parseLocks, parseRough, parseRoutes, symbols, trailer, type Decl, type Lock } from '../src/store.ts'
+import { allocate, ccEntries, checkFlags, checkLock, fresh, knobs, codeEntries, dumps, fromImage, handleEntries, initEntries, layoutId, parseCcs, parseCvs, parseDecls, parseHandles, parseInits, parseLfos, parseLocks, parseRough, parseRoutes, symbols, trailer, type Decl, type Lock } from '../src/store.ts'
 
 const V = JSON.parse(readFileSync(new URL('./store-vectors.json', import.meta.url), 'utf8'))
 const DEV = 'analog-rytm-mk2'
@@ -178,4 +178,27 @@ test('the build carries the lockfile, as store.py writes it', () => {
   image.set(t, 1000)
   assert.deepEqual(fromImage(image), lock)
   assert.equal(fromImage(new Uint8Array(1000)), null)
+})
+
+test('knob ids: the same runs, notes and refusals as store.knobs', () => {
+  for (const [name, run] of Object.entries<any>(V.knob_runs)) {
+    const lock: Record<string, any> = run.start === 'fresh' ? fresh(DEV) : {}
+    run.steps.forEach(([want, first, fixed, top]: [Record<string, number>, number, [number, number][], number], i: number) => {
+      const res = run.results[i]
+      const w = new Map(Object.entries(want))
+      if (res.error) {
+        assert.throws(() => knobs(lock, w, first, fixed, top), (e: Error) => e.message === res.error, `${name} step ${i}`)
+        return
+      }
+      const [base, notes] = knobs(lock, w, first, fixed, top)
+      assert.deepEqual(Object.fromEntries(base), res.base, `${name} step ${i}: ids`)
+      assert.deepEqual(notes, res.notes, `${name} step ${i}: notes`)
+      assert.deepEqual(lock, res.lock, `${name} step ${i}: lockfile`)
+      if (res.layout_id !== null) assert.equal(layoutId(lock as Lock), res.layout_id, `${name} step ${i}: layout ID`)
+    })
+  }
+  for (const [name, c] of Object.entries<any>(V.knob_locks)) {
+    if (c.error) assert.throws(() => checkLock(c.lock, DEV), (e: Error) => e.message === c.error, name)
+    else checkLock(c.lock, DEV)
+  }
 })

@@ -2106,7 +2106,7 @@ def test_core_ar2_0_12_room_for_drive_mods():
     with open(os.path.join(HERE, '..', 'mods', 'core-ar2', 'mod.json'), encoding='utf-8') as fh:
         doc = json.load(fh)
     cols = doc['collections']
-    assert doc['version'] == '0.12'
+    assert tuple(map(int, doc['version'].split('.'))) >= (0, 12)
     for name, v in cols.items():
         if name.startswith('ev_'):
             assert isinstance(v, dict) and v.get('spare') == 256, (name, v)

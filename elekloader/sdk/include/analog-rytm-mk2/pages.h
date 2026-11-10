@@ -120,6 +120,55 @@ struct core_param {
 #define CORE_PARAM_LOCK_FIRST 555
 #define CORE_LOCK_RECORDING 0x100   /* in step: live recording; the step is step & 0xff */
 
+/* core-ar2 0.13: knob ids by count. A mod that declares "knobs": n in its
+ * mod.json gets n ids in a row from 555 up, past every other mod's; the
+ * linker defines __knobs, the mod's own, as the first. CORE_KNOB(k) is knob
+ * k's id, 0..n-1, a constant in a const table (an abs32 relocation):
+ *
+ *     CORE_KNOBS;
+ *     const struct core_page my_page = {14, "MY PAGE", {CORE_KNOB(0), CORE_KNOB(1)}};
+ *     const struct core_param_lock my_locks = {CORE_KNOB(0), CORE_KNOB(1), ...};
+ *
+ * The ids can differ from one build to the next with other mods, so keep a
+ * knob's values by id - CORE_KNOB(0), never by the id. */
+#define CORE_KNOBS extern char __knobs[]
+#define CORE_KNOB(k) ((int32_t)__knobs + (k))
+
+/* core-ar2 0.13: knob looks. A mod's own id (555 up) has no stock records,
+ * so stock draws its knob as record 0's dial on record 0's range. An entry
+ * in core_knob_looks gives the ids the look of any stock knob, or a UI
+ * record of the mod's own:
+ *
+ *     {"to": "core_knob_looks", "order": 50, "data": "00000000",
+ *      "relocs": [[0, "abs32", "sym:my_looks", 0]]}
+ *
+ *     const struct core_knob_look my_looks = {CORE_KNOB(0), CORE_KNOB(0), 457, 0, 0, 0};
+ *
+ * look is a stock id (1..468): the knob is drawn as that id's knob, its
+ * graphic (dial, switch, select box, bipolar dial, ...), the parts its flags
+ * draw, its turn's steps, its pop-ups, and its range, which min and max
+ * replace when min < max (8.8, as the parameter record's); then the graphic
+ * also spans min..max (core moves the value onto look's range for it). ui, when not 0,
+ * answers an 84-byte UI record of the mod's own for the id (stock's layout:
+ * flags +0, steps +4..+0x10, delegates +0x14 text, +0x24 graphic, +0x34,
+ * +0x44 pop-up), or 0 for look's; a mod builds one by copying a stock record,
+ * core_knob_stock_ui(id), and changing fields, once stock has built its
+ * records (any draw: not in ev_boot). Like a label, a pointer it returns is
+ * read from %a0 (asm: return it in %a0 and %d0). The label and the name
+ * stay core_param_locks', the value and its text core_params', and nothing
+ * else of look's parameter (its sound slot, its lists, MIDI) comes along.
+ * The linker refuses an entry below 555 and two mods' entries sharing an
+ * id, as for core_param_locks. */
+struct core_knob_look {
+    int32_t first, last;    /* the ids this entry answers for */
+    int32_t look;           /* the stock id whose knob these look like, 1..468 (0: record 0) */
+    const void *(*ui)(int32_t id);  /* an 84-byte UI record of the mod's own, or 0 for look's */
+    int32_t min, max;       /* min < max: the range (8.8) in place of look's, the graphic's too */
+};
+
+/* the stock UI record of id (0..468; record 0 for any other id), to copy */
+const void *core_knob_stock_ui(int32_t id);
+
 struct core_param_lock {
     int32_t first, last;    /* the ids this entry answers for */
     /* step's lock of id on track, 8.8, or -1 for none (what the knob shows) */

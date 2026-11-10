@@ -131,7 +131,7 @@ def parse_sites(doc, name, dev, rel, relocs=False):
             for r in s.get('relocs', []):
                 off, typ, tgt, add = r
                 off = _int(off, what)
-                size = {'abs32': 4, 'pc32': 4, 'pc16': 2, 'dsp24': 3}.get(typ) \
+                size = {'abs32': 4, 'abs16': 2, 'pc32': 4, 'pc16': 2, 'dsp24': 3}.get(typ) \
                     if isinstance(typ, str) else None
                 if size is None or off < 0 or off + size > n:
                     raise ModError('%s: bad relocation %r' % (what, r))

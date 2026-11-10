@@ -97,7 +97,7 @@ export function partsBytes(parts: Part[], image: Uint8Array, dev: Device): Uint8
 export type Reloc = [number, string, string, number]          // offset, type, target, addend
 
 /** Each relocation type's size in bytes. */
-export const RSIZE = new Map([['abs32', 4], ['pc32', 4], ['pc16', 2], ['dsp24', 3]])
+export const RSIZE = new Map([['abs32', 4], ['abs16', 2], ['pc32', 4], ['pc16', 2], ['dsp24', 3]])
 export type Site = { addr: number; len: number; new: Uint8Array; kind: string; stock_sha256: string; relocs: Reloc[] }
 
 export function sharcSite(rel: Release, address: number): [string, string] | undefined {
