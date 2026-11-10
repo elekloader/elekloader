@@ -2124,11 +2124,11 @@ my_blob:
   A 1 MB payload that packs to about 80 % fits beside core and a check mod
   (sidecar-check-ar2 part 6).
 
-### Screen calls (core-ar2 0.12, Analog Rytm MKII)
+### Screen calls (core-ar2 0.13, Analog Rytm MKII)
 
 Text in stock's own fonts, a key handed back to stock, whether a stock
 overlay is up, the TRK LEVEL readout and stock's progress box
-(`analog-rytm-mk2/screen.h`; ask for `"core": "0.12"` in `resources`).
+(`analog-rytm-mk2/screen.h`; ask for `"core": "0.13"` in `resources`).
 All are for the UI task: `ev_tick`, `ev_draw`, `ev_key`, `ev_enc` and what
 they call. `examples/screen-check-ar2` uses each of them.
 

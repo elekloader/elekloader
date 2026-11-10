@@ -1075,10 +1075,10 @@ Opt-in, by the knob's id; a parameter without an entry is as in 0.10.
   so a depth's get notes its id and DMA timer 0's count, and the text
   within 4 ms takes it, as `core_held_step` does.
 
-## Screen calls (0.12)
+## Screen calls (0.13)
 
 `screen.c`, declared in `elekloader/sdk/include/analog-rytm-mk2/screen.h`
-(docs/ADAPTING.md, "Screen calls (core-ar2 0.12, Analog Rytm MKII)"). Core
+(docs/ADAPTING.md, "Screen calls (core-ar2 0.13, Analog Rytm MKII)"). Core
 calls stock's own routines; nothing of their code or glyphs is copied.
 
 | call | stock's |

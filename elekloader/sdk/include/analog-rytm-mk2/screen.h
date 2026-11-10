@@ -1,8 +1,8 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
-/* core-ar2 0.12: screen calls (docs/ADAPTING.md, "Screen calls (core-ar2
- * 0.12, Analog Rytm MKII)"). Text in stock's own fonts, a key handed back
+/* core-ar2 0.13: screen calls (docs/ADAPTING.md, "Screen calls (core-ar2
+ * 0.13, Analog Rytm MKII)"). Text in stock's own fonts, a key handed back
  * to stock, whether a stock overlay is up, the TRK LEVEL readout and
- * stock's progress box. A mod that uses them asks for "core": "0.12".
+ * stock's progress box. A mod that uses them asks for "core": "0.13".
  *
  * All of them are for the UI task: ev_tick, ev_draw, ev_key, ev_enc and
  * what those call.

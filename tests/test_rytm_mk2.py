@@ -402,10 +402,10 @@ def _class(img, vt):
 
 
 def test_core_ar2_screen():
-    """core-ar2 0.12's screen calls (screen.c): what they assume of 1.74."""
+    """core-ar2 0.13's screen calls (screen.c): what they assume of 1.74."""
     _r, _s, img = stock()
     if REL.version != '1.74':
-        raise Skip('core-ar2 0.12 is for 1.74')
+        raise Skip('core-ar2 0.13 is for 1.74')
 
     def l(a):
         return struct.unpack('>I', here(img, a, 4))[0]
@@ -455,19 +455,19 @@ def test_core_ar2_screen():
     assert ('ev_key', 'core_screen_key', -1000000) in sub
     assert ('ev_enc', 'core_screen_enc', 1000000) in sub
     assert ('ev_tick', 'core_screen_tick', 3) in sub
-    assert 'screen.c' in j['sources'] and j['version'] == '0.12'
+    assert 'screen.c' in j['sources'] and j['version'] == '0.13'
 
 
 def test_core_ar2_screen_check_needs_0_12():
-    """The screen check asks for core 0.12: refused with a core that says 0.11, built with
-    0.12 (needs the cross toolchain)."""
+    """The screen check asks for core 0.13: refused with a core that says 0.11, built with
+    0.13 (needs the cross toolchain)."""
     import shutil
     import tempfile
     from elekloader import patch
     from elekloader.sdk import build as sdkbuild
     stock()
     if REL.version != '1.74':
-        raise Skip('core-ar2 0.12 is for 1.74')
+        raise Skip('core-ar2 0.13 is for 1.74')
     if not shutil.which(os.environ.get('ELEKLOADER_CROSS', DEV.toolchain['prefix']) + 'as'):
         raise Skip('no cross assembler (ELEKLOADER_CROSS)')
     with tempfile.TemporaryDirectory() as tmp:
@@ -483,11 +483,11 @@ def test_core_ar2_screen_check_needs_0_12():
         old = sdkbuild.build(os.path.join(tmp, 'mods', 'core-ar2'), SYX, out)[0]
         new = sdkbuild.build(os.path.join(ROOT, 'mods', 'core-ar2'), SYX, os.path.join(out, 'new'))[0]
         app = sdkbuild.build(os.path.join(ROOT, 'examples', 'screen-check-ar2'), SYX, out)[0]
-        assert elemod.load_any(app).needs_core == '0.12'
+        assert elemod.load_any(app).needs_core == '0.13'
         try:
             patch.build(SYX, [old, app], log=lambda *a: None)
         except patch.PatchError as e:
-            assert 'needs core 0.12 or newer, and this build has core 0.11' in str(e), e
+            assert 'needs core 0.13 or newer, and this build has core 0.11' in str(e), e
         else:
             raise AssertionError('the screen check linked with core 0.11')
         patch.build(SYX, [new, app], version='1.74', log=lambda *a: None)

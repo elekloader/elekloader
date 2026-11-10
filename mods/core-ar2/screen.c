@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
-/* core-ar2 0.12: the screen calls (README, "Screen calls (0.12)";
+/* core-ar2 0.13: the screen calls (README, "Screen calls (0.13)";
  * elekloader/sdk/include/analog-rytm-mk2/screen.h). Every address is OS
  * 1.74's; nothing of stock's code or glyphs is copied, core calls it.
  *

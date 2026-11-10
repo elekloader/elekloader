@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
-/* screen-check: core-ar2 0.12's screen calls on the Analog Rytm MKII (OS
+/* screen-check: core-ar2 0.13's screen calls on the Analog Rytm MKII (OS
  * 1.74), on screen. PLAYMODE (taken) steps through four modes; mode 0
  * changes nothing the unit does.
  *
