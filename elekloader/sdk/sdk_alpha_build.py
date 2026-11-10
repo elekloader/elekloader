@@ -31,6 +31,7 @@ SDK_ALPHA_TARGETS = {
 }
 SDK_ALPHA_TABLE = 'sdk_alpha_machines'   # pointers to struct elek_machine, read by each companion
 SDK_ALPHA_ABI = 'sdk_alpha_abi_v1'       # the one symbol the companions export to SDK machines
+SDK_ALPHA_REGISTRATION = 'sdk_alpha_registration_'
 # core's struct cm_machine (digitakt-mk1/core3.h): id, name, short name, icon, params (3: SLICE's
 # parameters), render (its own id: an empty voice for SDK render), and no page tail: machine-pages
 # finds the SDK machine in SDK_ALPHA_TABLE.
@@ -119,9 +120,9 @@ def sdk_alpha_registrations(doc, sections):
 
     layouts = {}
     for name in sorted(doc['exports']):
-        if not name.startswith('sdk_alpha_registration_'):
+        if not name.startswith(SDK_ALPHA_REGISTRATION):
             continue
-        where = 'ELEK_REGISTER_MACHINE(%s)' % name[len('sdk_alpha_registration_'):]
+        where = 'ELEK_REGISTER_MACHINE(%s)' % name[len(SDK_ALPHA_REGISTRATION):]
         machine = target(where, tuple(doc['symbols'][name]), 'the registration')
         if not machine:
             fail(where, 'registers no machine')
@@ -278,6 +279,7 @@ def sdk_alpha_build(moddir, stock, out=None):
         sections = {s: elemod.parts_bytes(d['parts'], image, dev)
                     for s, d in mod.sections.items() if 'parts' in d}
         layouts = sdk_alpha_registrations(doc, sections)
+        doc['exports'] = [name for name in doc['exports'] if not name.startswith(SDK_ALPHA_REGISTRATION)]
         limit = dev.table_limits[SDK_ALPHA_TABLE]
         if len(layouts) > limit:
             raise build.BuildError('sdk alpha: %s %s holds at most %d SDK machines; this mod registers %d'
