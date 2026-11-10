@@ -60,7 +60,11 @@ are 1.53's.
 
   With no subscriber the unit is stock. Digi EQ and Tone+FX, which took
   the same places, combine on it; [examples/master-mono](../../examples/master-mono)
-  is the smallest mod that uses it. [docs/ADAPTING.md](../../docs/ADAPTING.md),
+  is the smallest mod that uses it. Their files made before 4.1 (Digi EQ
+  1.0c, Tone+FX 3.2a3 and 4.0c) still patch those places themselves, so a
+  build with one takes core 4.0
+  ([docs/CORES.md](../../docs/CORES.md), "How a build picks one").
+  [docs/ADAPTING.md](../../docs/ADAPTING.md),
   "The master output and the master pages".
 - **4.2: the played notes** (Digitakt mk1, `notes.s`, last in `sources`).
   Two sites more, the entries of the stock note-on and note-off routines

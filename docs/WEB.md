@@ -194,13 +194,20 @@ stock file.
   released yet.
 - **In the page,** a mod from the shop comes from this site like everything
   else, and the worker checks it against the catalog's sha256 again before
-  adding it. The page ticks the newest core of the device and OS, the one
-  it lists (docs/CORES.md, "How a build picks one"). If a mod needs a newer
+  adding it. The page ticks the core the build takes, the one it lists
+  (docs/CORES.md, "How a build picks one"): the newest of the device and OS,
+  or an older one of the site's while a ticked mod cannot link with the
+  newest (Tone+FX 4.0c on the Digitakt mk1 patches a place core 4.1
+  patches, so it builds with core 4.0). The page says so as the core
+  changes, and the core's row names the mod. If a mod needs a newer
   core than one you ticked yourself (`needs_core`, or the file's own
   `resources.core`), the newest is ticked in its place, and the page says
   so. So is the newest when the ticked core's RAM does not hold the mods
   (core-dn1 4.0's 1.25 MB on the Digitone, core 4.0's 256 KB on the
-  Digitakt mk1, in place of 128 KB).
+  Digitakt mk1, in place of 128 KB). A card is greyed out against the core
+  only when no core of the site's takes the build with it: a mod in the
+  build needs a newer core than the card's mod links with, or the other
+  way round, and the card says which.
 
 To add a mod to the shop, publish its `.elemod` in a GitHub release and
 submit it with the **Submit a mod** form ([Submitting a mod](#submitting-a-mod)):
@@ -286,17 +293,18 @@ elekloader's `packaging/submit_mod.py` (from main) on it:
   - **its core:** the site has a core for its device and OS (the latest release's, or the shop's)
     at least as new as the one the file names (`resources.core`), or as the core its release
     carries. That version becomes the entry's `needs_core`. Cores come from elekloader's own
-    releases only: the page builds with the newest core for a device and OS, so a core from a
-    mod's release would become every build's. A mod's release that carries one is fine; the core
-    stays out;
+    releases only: the page builds with the newest core for a device and OS that takes the mods,
+    so a core from a mod's release would become every build's. A mod's release that carries one
+    is fine; the core stays out;
   - **the mods it requires** (machine-pages, fxkit, machines, ...): the shop's for its device and
     OS, or else the release's own, which comes along even when "Only these files" leaves it out
     (with the summary its file gives). A mod whose requirement is in neither is refused.
 - **The answer.** It comments on the issue with a table of what it found, and labels the issue
   `needs-changes` if nothing could be added. Editing the issue runs the check again. Under "Good to
-  know" it says, for each file that goes in, the core it builds with, its RAM, and the shop's mods
-  for its device and OS it can't share a build with (`build_web.clash`, the page's rules); that is
-  never a refusal. A note says when the issue isn't from the repository's owner.
+  know" it says, for each file that goes in, the core it builds with (the newest of the site's it
+  can share a build with: an older one, and why, for a file that patches a place the newest
+  patches), its RAM, and the shop's mods for its device and OS it can't share a build with
+  (`build_web.clash`, the page's rules); that is never a refusal. A note says when the issue isn't from the repository's owner.
 - **The pull request.** When files pass, it writes them into `catalog.json` (in the list's own
   layout, which `tests/test_units.py` keeps exact) and opens a pull request from branch
   `mod-submission/<issue>`. The pull request closes the issue when it merges, and the next deploy
@@ -419,7 +427,7 @@ python packaging/shop_updates.py --apply owner/name --catalog /tmp/catalog.json 
 | `index.html`, `style.css`, `app.js`, `worker.js`, `bridge.py` | `web/`, as committed, but for one change: index.html names `app.js?v=` and `style.css?v=` with the site's version (a hash of every other file), and the page and its worker pass that `?v=` on to every file they load, so a browser's cache never mixes two deploys |
 | `devices.json` | the devices the engine knows (key, name, OS versions), so the page lists them all before the engine has loaded |
 | `elekloader.zip` | the elekloader package, exactly as the commit has it (`git archive HEAD elekloader`), stored, sorted, fixed dates: its sha256 follows from the commit |
-| `core/*.elemod`, `core/index.json` | the cores of the latest release, and the cores the catalog lists, with their sha256; the worker loads the newest of each device and OS and checks it |
+| `core/*.elemod`, `core/index.json` | the cores of the latest release, and the cores the catalog lists, with their sha256; the worker loads and checks each one, and the page lists the one a build takes |
 | `shop/*.elemod`, `shop/index.json` | the shop: the catalog's mods, from their authors' releases, with what each file says about itself |
 | `shop/thumbs/<sha256>.png` | the cards' thumbnails: each the canonical 1-bit PNG of the picture the catalog pins (`packaging/thumbs.py`), named by the sha256 of the author's file |
 | `shop/claims.json` | the leaderboard: the to-do list's entries claimed by the repository's merged pull requests (`Claims:` lines; [CONTRIBUTE.md](CONTRIBUTE.md#claiming-an-entry)), from `gh pr list --state merged` |
