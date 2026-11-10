@@ -39,6 +39,48 @@ def test_requirements_are_ticked_with_a_mod():
     assert with_requirements(d, set(), 'app/core-2.0a.elemod') == {'app/core-2.0a.elemod'}
 
 
+def test_a_required_mod_comes_in_the_newest_version_the_selection_links_with():
+    from elekloader.gui import with_requirements
+    # machine-pages 1.3 and newer patch the CC range lookup (0x40010d50) for every machine; OB-1 0.6, made for
+    # 1.2, patches it itself
+    code = lambda addr, n=6: (addr, n, 'code', '')
+    d = {
+        'app/core-4.1.elemod': {'id': 'core', 'version': '4.1', 'fits': True, 'requires': [], 'format': 2, 'sites': []},
+        'lib/machine-pages-1.2.elemod': {'id': 'pages', 'version': '1.2', 'fits': True, 'requires': ['core'],
+                                         'format': 2, 'sites': [code(0x40030000)]},
+        'lib/machine-pages-1.7.elemod': {'id': 'pages', 'version': '1.7', 'fits': True, 'requires': ['core'],
+                                         'format': 2, 'sites': [code(0x40030000), code(0x40010d50)]},
+        'lib/machine-pages-1.10.elemod': {'id': 'pages', 'version': '1.10', 'fits': False, 'requires': ['core'],
+                                          'format': 2, 'sites': [code(0x40030000), code(0x40010d50)]},
+        'lib/ob1.elemod': {'id': 'ob1', 'fits': True, 'requires': ['core', 'pages'], 'format': 2,
+                           'sites': [code(0x40010d50)]},
+        'lib/fm.elemod': {'id': 'fm', 'fits': True, 'requires': ['core', 'pages'], 'format': 2,
+                          'sites': [code(0x40040000)]},
+        'lib/cc.elemod': {'id': 'cc', 'fits': True, 'requires': ['core'], 'format': 2, 'sites': [code(0x40010d52, 2)]},
+    }
+    core, p12, p17 = 'app/core-4.1.elemod', 'lib/machine-pages-1.2.elemod', 'lib/machine-pages-1.7.elemod'
+    ob1, fm, cc = 'lib/ob1.elemod', 'lib/fm.elemod', 'lib/cc.elemod'
+    # the newest version made for the stock firmware, for a mod that leaves its places alone
+    assert with_requirements(d, set(), fm) == {fm, p17, core}
+    # the mod that patches a place 1.7 patches: 1.2, the newest that does not
+    assert with_requirements(d, set(), ob1) == {ob1, p12, core}
+    # 1.7 is enabled, for another mod: 1.2 in its place, and both mods build
+    assert with_requirements(d, {fm, p17, core}, ob1) == {fm, ob1, p12, core}
+    # and it stays 1.2 for what is ticked after it
+    assert with_requirements(d, {ob1, p12, core}, fm) == {ob1, fm, p12, core}
+    # a version enabled that takes the selection is kept: nothing moves to a newer one by itself
+    assert with_requirements(d, {p12, core}, fm) == {fm, p12, core}
+    # a mod that requires nothing of it and patches its place: the version other mods require gives way too
+    assert with_requirements(d, {fm, p17, core}, cc) == {fm, cc, p12, core}
+    # no version takes the selection: the one enabled stays, or the newest comes, for the check to say why
+    d[p12]['sites'].append(code(0x40010d50))
+    assert with_requirements(d, {fm, p17, core}, ob1) == {fm, ob1, p17, core}
+    assert with_requirements(d, set(), ob1) == {ob1, p17, core}
+    # versions as numbers (1.10 after 1.7), once 1.10 is made for the stock firmware
+    d['lib/machine-pages-1.10.elemod']['fits'] = True
+    assert with_requirements(d, set(), fm) == {fm, 'lib/machine-pages-1.10.elemod', core}
+
+
 def test_versions_sort_and_the_core_a_build_takes():
     order = ['', '0.13a', '0.13b', '2', '2.0', '2.0a', '2.1', '2.9', '2.10', '3.0', '10.0']
     assert sorted(reversed(order), key=elemod.version_key) == order

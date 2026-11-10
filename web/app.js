@@ -136,6 +136,7 @@ const st = {
   modFiles: new Map(),    // file name -> data: the mods the user added, for IndexedDB
   mods: [],               // describe() of every listed mod
   enabled: new Set(),     // paths in the worker
+  wanted: new Set(),      // file names: the mods added while no stock file they fit was here (tickWanted)
   check: null, checking: null, checkedFor: null,
   selected: null, busy: false, nameEdited: false, versionOk: false,
   urls: [],
@@ -234,30 +235,17 @@ function coreFor(mods) {
 
 // The build's core follows its mods: the site's core that is ticked gives way to the one a build of the ticked mods
 // takes (coreFor). A core of your own stays (the engine's tick keeps it while it will do), and so does a build with
-// no core, or with two. -> [the core it was, the core it is now] when it changed.
+// no core, or with two. The page says nothing of it: which core a build takes is the page's business, and a core
+// that stops a build shows in the check and on the cards (clashes). -> whether it changed.
 function settleCore() {
   const on = [...st.enabled].map(desc).filter(d => d && !d.error);
   const cores = on.filter(d => d.id === 'core');
-  if (cores.length !== 1 || !cores[0].builtin) return null;
+  if (cores.length !== 1 || !cores[0].builtin) return false;
   const now = coreFor(linked(on));
-  if (!now || now.path === cores[0].path) return null;
+  if (!now || now.path === cores[0].path) return false;
   st.enabled.delete(cores[0].path);
   st.enabled.add(now.path);
-  return [cores[0], now];
-}
-
-// A changed core, in a toast, with why the build takes this one (`d`: the mod just ticked, if one was).
-function coreChanged([was, now], d) {
-  const mods = linked([...st.enabled].map(desc));
-  const older = cmpVer(now.version, was.version) < 0;
-  const stuck = older && mods.map(m => [m, clash(footprint(was), footprint(m))]).find(([, why]) => why);
-  const need = d && needsCore(d);
-  toast(`Core ${was.version} → ${now.version}: ` + (
-    stuck ? `${stuck[0].title} can't link with core ${was.version} (${stuck[1]}).`
-      : (now.ram_area || 0) > (was.ram_area || 0)
-        ? `your mods need more RAM than core ${was.version}'s ${Math.round(was.ram_area / 1024)} KB.`
-        : need && cmpVer(was.version, need) < 0 ? `${d.title} needs core ${need} or newer.`
-          : 'the newest core your mods build with.'));
+  return true;
 }
 
 // Of the site's cores for one device and OS, the build list shows one: the one in the build, else the newest.
@@ -267,29 +255,83 @@ function shownCore(d) {
     && !same.some(c => cmpVer(c.version, d.version) > 0));
 }
 
-// Why the build's core is not the site's newest: the ticked mod that cannot link with the newest, or ''.
-function coreHeldBy(d) {
-  const newest = pickCore(siteCores());
-  if (!d.builtin || !st.enabled.has(d.path) || !newest || newest.path === d.path) return '';
-  const fn = footprint(newest);
-  const m = linked([...st.enabled].map(desc)).find(x => clash(fn, footprint(x)));
-  return m ? `${m.title} can't link with core ${newest.version}` : '';
+// A mod other mods build on (machine pages) may be in the shop in several versions: a mod made for an older one,
+// which patches a place the newer has since taken, builds with the one it was made for. The shop's files of the mod
+// a file is (same repository and id), for the stock OS: one, for most mods.
+function shopVersions(x) {
+  const e = x && (x.repo ? x : shopItem(x)), sd = dev();
+  return e && sd ? shop.items.filter(i => i.available && i.id === e.id && i.repo === e.repo
+    && i.device === sd.key && i.os === st.stock.os) : [];
+}
+// your files of those versions, made for the stock firmware (a file of your own is its only version)
+const myVersions = d => (shopItem(d) ? shopVersions(d).map(owned).filter(v => v && v.fits && !v.error) : [d]);
+
+// Of a mod's versions, the one a build with these mods takes (gui.with_requirements): the newest that the link
+// check refuses with none of them (clash), the newest when none.
+function versionFor(versions, mods) {
+  const vs = [...versions].sort((a, b) => cmpVer(a.version, b.version));
+  return vs.filter(v => !mods.some(d => d.id !== v.id && clash(footprint(v), footprint(d)))).pop() || vs.pop();
+}
+
+// A mod other ticked mods require follows the build as the core does: of the versions of it you have (the shop's Add
+// brings them all, shopAdd), the build takes the newest that links with the rest. -> whether it changed.
+function settleRequired() {
+  const on = linked([...st.enabled].map(desc));
+  const required = new Set(on.flatMap(d => d.requires || []));
+  let moved = false;
+  for (const r of on.filter(d => required.has(d.id))) {
+    const mine = myVersions(r);
+    if (mine.length < 2 || !st.enabled.has(r.path)) continue;
+    const best = versionFor(mine, on.filter(d => d.id !== r.id));
+    if (best.path !== r.path) {
+      st.enabled.delete(r.path);
+      st.enabled.add(best.path);
+      moved = true;
+    }
+  }
+  return moved;
+}
+
+// an older version of a shop mod you also have a newer one of: ticking everything ticks the newest, and the build
+// then takes the one that links (settleRequired)
+const olderVersion = d => !d.builtin && myVersions(d).some(v => v !== d && cmpVer(v.version, d.version) > 0);
+
+// A version of such a mod that the build does not take: another version of it is ticked, for a mod that requires
+// it. The build list leaves it out, and its card offers nothing: the page picks the version.
+function spareVersion(d) {
+  if (d.builtin || d.error || st.enabled.has(d.path) || !shopItem(d)) return false;
+  const on = [...st.enabled].map(desc).filter(Boolean);
+  return myVersions(d).some(v => v !== d && st.enabled.has(v.path)) && on.some(m => (m.requires || []).includes(d.id));
 }
 
 // The mods in the build a file clashes with, itself or by a mod it brings along (what it requires and the build does
-// not have: your file of it for this OS, else the shop's newest, as Add and the tick take them): [{title, why}].
+// not have: of your files of it and the shop's for this OS, the version the build takes with it, versionFor, as Add
+// and the tick take it): [{title, why}].
 // The site's core in the build is no clash while another of the site's takes the build with the file (settleCore
 // swaps them as the file is ticked); when none does, the clash is with the core the build would take, or with the
-// mod in the build that cannot link with the core the file needs.
+// mod in the build that cannot link with the core the file needs. Nor is a mod others require a clash while another
+// version of it takes the build with the file (settleRequired).
 function clashes(x) {
   const sd = dev();
   const build = [...st.enabled].map(desc).filter(d => d && !d.error && d.sha256 !== x.sha256);
   const have = new Set(build.map(d => d.id));
   const newest = list => list.sort((a, b) => cmpVer(a.version, b.version)).pop();
-  const along = (x.requires || []).filter(r => r !== 'core' && r !== x.id && !have.has(r))
-    .map(r => newest(st.mods.filter(d => !d.builtin && !d.error && d.id === r && d.fits))
-      || newest(shop.items.filter(i => i.available && i.id === r && sd && i.device === sd.key && i.os === st.stock.os)))
-    .filter(Boolean);
+  const along = (x.requires || []).filter(r => r !== 'core' && r !== x.id && !have.has(r)).map(r => {
+    const mine = st.mods.filter(d => !d.builtin && !d.error && d.id === r && d.fits);
+    const theirs = shopVersions(newest(shop.items.filter(i => i.available && i.id === r && sd && i.device === sd.key
+      && i.os === st.stock.os))).filter(i => !owned(i));
+    return mine.length + theirs.length ? versionFor([...mine, ...theirs], [x, ...linked(build)]) : null;
+  }).filter(Boolean);
+  // another version of a mod in the build that takes the build with the file, when the tick can swap them: you
+  // have it, or the file requires the mod and so brings its versions (shopAdd)
+  const swapFor = d => {
+    const vs = shopVersions(d);
+    if (vs.length < 2) return null;
+    const rest = [x, ...along, ...linked(build).filter(b => b.id !== d.id)];
+    const alt = versionFor(vs, rest);
+    return (owned(alt) || (x.requires || []).includes(d.id))
+      && !rest.some(b => b.id !== alt.id && clash(footprint(alt), footprint(b))) ? alt : null;
+  };
   const cores = build.filter(d => d.id === 'core');
   const swaps = cores.length === 1 && cores[0].builtin && x.id !== 'core' && x.format !== 1;
   const out = [];
@@ -299,7 +341,7 @@ function clashes(x) {
     for (const y of [x, ...along]) {
       const why = clash(footprint(y), fd);
       if (why) {
-        out.push({ title: d.title || d.id, why: y === x ? why : `it needs ${y.title || y.id}, and ${why}` });
+        if (!swapFor(d)) out.push({ title: d.title || d.id, why: y === x ? why : `it needs ${y.title || y.id}, and ${why}` });
         break;
       }
     }
@@ -1077,6 +1119,7 @@ function action(en, s) {
       run: () => untick(s.mine.map(d => d.path)) };
   }
   if (s.clashing.length) return { kind: 'clash', label: clashNote(s.clashing), disabled: true };
+  if (s.fitting && sd && spareVersion(s.fitting)) return null;   // the build takes another version of it
   if (s.fitting && sd) {
     return { kind: 'add', label: `Add ${en.title} to your build`, disabled: st.busy,
       run: async () => { await tickWithCore(s.fitting.path); remember(); changed(); } };
@@ -1180,33 +1223,49 @@ function openSheet(en) {
   $('mod-sheet').showModal();
 }
 
+// shop files into your mods, each checked as the file the shop lists; none is ticked -> add_mod's answers
+async function bring(items) {
+  const out = [];
+  for (const x of items) {
+    const r0 = await fetch(site('shop/' + x.file));
+    if (!r0.ok) throw new Error(`${x.file}: ${r0.status} ${r0.statusText}`);
+    const r = await addMod(x.file, await r0.arrayBuffer(), false, x.sha256);
+    if (!r.ok) throw new Error(r.error);
+    out.push(r);
+  }
+  if (items.length) await refresh();
+  return out;
+}
+
 // a card's files (one, or before a stock file every OS's): added, and the one
 // that fits the stock file ticked
 async function shopAdd(files, btn) {
   btn.disabled = true;
   btn.textContent = 'Adding…';
   const e = files[0];
-  // the shop mods these need besides the core (digichain for Digi Mono), for the same OS: added first, so
-  // ticking finds them
+  // the shop mods these need besides the core (machine pages for DT-FM), for the same OS: added first, so ticking
+  // finds them. Every version the shop lists of one comes, the newest's repository's: the tick takes the newest
+  // that links with the build (the engine's tick, and settleRequired)
   const needs = new Set(files.flatMap(x => (x.requires || []).filter(r => r !== 'core')));
-  const best = new Map();
-  for (const i of shop.items.filter(i => i.available && needs.has(i.id) && !owned(i)
-    && files.some(x => x.device === i.device && x.os === i.os))) {
-    const k = i.id + '|' + i.os, was = best.get(k);
-    if (!was || cmpVer(i.version, was.version) > 0) best.set(k, i);
+  const extra = [];
+  for (const id of needs) {
+    for (const os of new Set(files.map(x => x.os))) {
+      const all = shop.items.filter(i => i.available && i.id === id && i.os === os && files.some(x => x.device === i.device))
+        .sort((a, b) => cmpVer(a.version, b.version));
+      const top = all[all.length - 1];
+      if (top) extra.push(...all.filter(i => i.repo === top.repo && !owned(i)));
+    }
   }
-  const extra = [...best.values()];
   try {
     let ticked = false;
-    for (const x of [...extra, ...files]) {
-      const r0 = await fetch(site('shop/' + x.file));
-      if (!r0.ok) throw new Error(`${x.file}: ${r0.status} ${r0.statusText}`);
-      const r = await addMod(x.file, await r0.arrayBuffer(), false, x.sha256);
-      if (!r.ok) throw new Error(r.error);
-      await refresh();
+    await bring(extra);                           // not ticked: the mod's own tick brings the version the build takes
+    for (const x of files) {
+      const [r] = await bring([x]);
       if (dev() && r.mod.fits) {
         await tickWithCore(r.mod.path);
         ticked = true;
+      } else {
+        st.wanted.add(r.mod.file);                // for the stock file it fits, when that comes (tickWanted)
       }
     }
     remember();
@@ -1222,8 +1281,6 @@ async function shopAdd(files, btn) {
 
 async function untick(paths) {
   for (const p of paths) st.enabled.delete(p);
-  const core = settleCore();           // the core the mods left build with: the newest again, when the mod that
-  if (core) coreChanged(core);         // could not link with it is the one taken out
   remember();
   changed();
 }
@@ -1237,7 +1294,7 @@ function renderNeed() {
   else if (d) $('stock-need').textContent = `For the ${d.name}: Elektron's OS ${d.os} file.`;
 }
 
-// (two at once stack: a mod added, and the core that changed for it)
+// (two at once stack)
 function toast(text) {
   const t = el('div', { class: 'toast', role: 'status' }, text);
   if (!$('toasts')) document.body.append(el('div', { id: 'toasts' }));
@@ -1552,7 +1609,7 @@ async function freshTicks(withMods) {
   const core = pickCore(fits.filter(d => d.id === 'core').sort((a, b) => a.file.localeCompare(b.file)));
   let on = core ? [core.path] : [];
   if (withMods) {
-    for (const d of fits.filter(x => !x.builtin && x.format === 2 && x.id !== 'core')) {
+    for (const d of fits.filter(x => !x.builtin && x.format === 2 && x.id !== 'core' && !olderVersion(x))) {
       on = await engine.call('tick', { enabled: on, path: d.path });
     }
   }
@@ -1677,7 +1734,8 @@ async function setStock(name, data) {
       if (had) toast(`Profile "${p.name}": ${osLabel(p)}. Each profile keeps its own stock OS.`);
     }
     S.current = p.id;
-    if (fresh) remember(); else saveSettings();
+    const late = await tickWanted();   // the mods added before this file was here
+    if (fresh || late) remember(); else saveSettings();
     $('version').value = S.versions[k] || r.dev.default_version;
     st.nameEdited = false;
     lib.device = k;                    // the library follows the stock file
@@ -1700,8 +1758,29 @@ async function addMod(name, data, tickIt = true, sha256 = null) {
   if (S.remember) Files.put('mod:' + r.mod.file, { name: r.mod.file, data }).catch(() => {});
   if (tickIt && dev() && r.mod.fits) {
     st.enabled = new Set(await engine.call('tick', { enabled: [...st.enabled], path: r.mod.path }));
+  } else if (tickIt) {
+    st.wanted.add(r.mod.file);                    // for the stock file it fits, when that comes
   }
   return r;
+}
+
+// The mods added before the stock file they are for (the shop's Add, a file dropped in) go in its build, as a mod
+// added with the stock file here does. One that cannot go in with what the profile has ticked stays out, and the
+// page says why. -> how many it ticked.
+async function tickWanted() {
+  let n = 0;
+  for (const d of st.mods.filter(x => x.fits && !x.error && st.wanted.has(x.file))) {
+    st.wanted.delete(d.file);
+    if (st.enabled.has(d.path)) continue;
+    const cs = clashes(d);
+    if (cs.length) {
+      toast(`${d.title} is in your mods, not in the build. ${clashNote(cs)}`);
+      continue;
+    }
+    await tickWithCore(d.path);
+    n++;
+  }
+  return n;
 }
 
 // Tick a mod with what it requires (gui.with_requirements). A build has one
@@ -1711,8 +1790,7 @@ async function addMod(name, data, tickIt = true, sha256 = null) {
 async function tickWithCore(p) {
   const d = desc(p);
   const want = d && (shopItem(d) || {}).needs_core;
-  const coreOn = () => st.mods.find(x => x.id === 'core' && st.enabled.has(x.path));
-  const was = coreOn();
+  const was = st.mods.find(x => x.id === 'core' && st.enabled.has(x.path));
   if (want) {
     const cores = st.mods.filter(x => x.id === 'core' && x.fits);
     if (was && cmpVer(was.version, want) < 0) {
@@ -1727,9 +1805,8 @@ async function tickWithCore(p) {
   // mods whose RAM is more than the core's area holds (core-dn1 4.0 has 1.25 MB, 3.2 128 KB), and for a mod that
   // patches a place the core does
   st.enabled = new Set(await engine.call('tick', { enabled: [...st.enabled], path: p }));
+  settleRequired();
   settleCore();
-  const now = coreOn();
-  if (was && now && was.path !== now.path && d) coreChanged([was, now], d);
 }
 
 async function addMods(files) {
@@ -1757,6 +1834,7 @@ async function removeMods(paths) {
     await engine.call('remove_mod', { path: d.path });
     for (const p of S.profiles) p.mods = p.mods.filter(f => f !== d.file);
     st.modFiles.delete(d.file);
+    st.wanted.delete(d.file);
     Files.del('mod:' + d.file).catch(() => {});
     st.enabled.delete(d.path);
     if (st.selected === d.path) st.selected = null;
@@ -1784,11 +1862,12 @@ async function refresh() {
   renderMods();
 }
 
-// a change to the ticked mods: the site's core follows them (a profile's ticks, Enable all, a mod removed), then
-// check again, after a pause (the window waits 120 ms)
+// a change to the ticked mods: the mods others require and the site's core follow them (a profile's ticks, Enable
+// all, a mod removed), then check again, after a pause (the window waits 120 ms)
 let pending = null;
 function changed() {
-  if (settleCore()) remember();
+  const moved = settleRequired();       // (both run: the core follows the version taken)
+  if (settleCore() || moved) remember();
   renderMods();
   renderCheck(null);                   // "Checking…" from now: the last result is stale
   clearTimeout(pending);
@@ -1970,8 +2049,15 @@ function needButtons(d, on, cls) {
           changed();
           toast(`${name} ticked.`);
         } else {
-          await shopAdd([item], ev.currentTarget);
-          renderMods();
+          try {
+            await bring(shopVersions(item).filter(i => !owned(i)));
+            await tickWithCore(d.path);          // the mod that needs it: its tick takes the version the build links with
+            remember();
+            changed();
+            toast(`${name} added and ticked.`);
+          } catch (err) {
+            note('Not added: ' + err.message);
+          }
         }
       },
     }, '+');
@@ -1984,6 +2070,7 @@ function renderMods() {
   let hidden = 0;
   const shown = st.mods.filter(d => {
     if (d.builtin && d.id === 'core' && !shownCore(d)) return false;   // the site's other cores for that OS
+    if (spareVersion(d)) return false;                                 // another version of it is in the build
     const other = !d.error && !d.fits && dev();
     if (other && !st.enabled.has(d.path) && !S.showOther) { hidden++; return false; }
     return true;
@@ -1996,7 +2083,6 @@ function renderMods() {
   rows.replaceChildren(...shown.map(d => {
     const on = st.enabled.has(d.path);
     const [cls, text] = rowStatus(d);
-    const held = coreHeldBy(d);        // an older core of the site's in the build: the mod it is there for
     const box = el('input', {
       type: 'checkbox', checked: on, disabled: st.busy || !dev() || (!d.fits && !on),
       'aria-label': (on ? 'Disable ' : 'Enable ') + d.title,
@@ -2012,7 +2098,7 @@ function renderMods() {
     },
     el('td', { class: 'on' }, box),
     el('td', {}, el('span', { class: 'title' }, d.title || d.file),
-      el('span', { class: 'file' }, d.builtin ? `${d.file} · built in` + (held ? ` · ${held}` : '')
+      el('span', { class: 'file' }, d.builtin ? `${d.file} · built in`
         : shopItem(d) ? `${d.file} · from the shop` : d.file)),
     el('td', {}, d.version || ''),
     el('td', { class: 'state' }, el('span', { class: 'pill ' + cls }, text), ...needButtons(d, on, cls)),
@@ -2300,7 +2386,7 @@ function wire() {
   });
   $('enable-all').addEventListener('click', () => {
     // every mod that links, with one of the site's cores: the one a build of them takes
-    const mods = st.mods.filter(d => d.format === 2 && d.fits && !(d.builtin && d.id === 'core'));
+    const mods = st.mods.filter(d => d.format === 2 && d.fits && !(d.builtin && d.id === 'core') && !olderVersion(d));
     const core = coreFor(linked(mods));
     st.enabled = new Set([...mods, core].filter(Boolean).map(d => d.path));
     remember();
