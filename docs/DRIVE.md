@@ -186,8 +186,10 @@ image>` prints it.
   overlaps one.
 - **Pre-link ranges.** Main OS code and data the OS is done with before
   the boot link runs (the release's `prelink` in its device profile), so
-  no +Drive site goes where it would never run. The Analog Rytm MKII's
-  list is empty until the boot-order trace fills it.
+  no +Drive site goes where it would never run. The Analog Rytm MKII
+  1.74's come from a Ghidra trace of its boot (main() up to the hook at
+  0x401009e0, the reset path, the start task, the RTOS init, the boot
+  project load and the static constructors).
 - **The +Drive area.** On a device whose profile has `drive_align` (the
   Analog Rytm MKII's is 4 KB), the +Drive mods' area is what the flashed
   build leaves of the core's linker area: from the build's RAM end (its
