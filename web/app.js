@@ -900,7 +900,7 @@ const DOWNLOADS = {
   octatrack: { label: 'Octatrack (MKI and MKII use the same file)', url: 'https://www.elektron.se/support-downloads/octatrack-mkii' },
 };
 
-function renderStart(all) {
+function renderStart(all) {    // all: the Mod Shop's entries, not the sections' (a splash is on its own page)
   const s = st.stock, sd = dev();
   $('welcome').hidden = !!sd;
   $('lib-head').hidden = !sd;
@@ -977,7 +977,7 @@ function renderLibrary() {
   const sd = dev();
   const devs = pickable();
   const inLib = view() === 'library';
-  renderStart(every);
+  renderStart(all);
   renderSections(every);
   const forDev = lib.device ? all.filter(en => en.device === lib.device) : all;
   const kinds = [...new Set(all.filter(en => !en.own).map(en => en.category).filter(Boolean))];
