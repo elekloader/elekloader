@@ -349,10 +349,16 @@ def base_docs(root, ref):
         base = git(root, 'merge-base', ref, 'HEAD').strip()
     except subprocess.CalledProcessError:
         base = git(root, 'rev-parse', '--verify', ref + '^{commit}').strip()
+    # a file renamed since keeps its old text under its new path, so a rename is not growth
+    moved = {}
+    for line in git(root, 'diff', '-M', '--name-status', '--diff-filter=R', base).splitlines():
+        _, src, dst = line.split('\t')
+        moved[src] = dst
     out = {}
     for p in git(root, 'ls-tree', '-r', '--name-only', base).splitlines():
         if p.endswith('.md') and not SKIP_DIRS & set(p.split('/')):
-            out[p] = Doc(root, p, git(root, 'show', f'{base}:{p}'))
+            now = moved.get(p, p)
+            out[now] = Doc(root, now, git(root, 'show', f'{base}:{p}'))
     return base, out
 
 

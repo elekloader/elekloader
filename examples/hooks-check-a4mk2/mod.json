@@ -1,0 +1,24 @@
+{
+ "id": "hooks-check",
+ "version": "0.1",
+ "title": "Hooks check",
+ "category": "Examples",
+ "license": "GPL-2.0-or-later",
+ "description": "A test for core-a4mk2 on the Analog Four MKII: subscribes to every event, takes none, and draws what it counts as bars along the top of the screen; adds a HOOK TEST row to SETTINGS.",
+ "device": "analog-four-mk2",
+ "os": "1.56",
+ "sources": ["../hooks-check-ar2/hooks.c", "../hooks-check-ar2/label.s"],
+ "cflags": ["-DFILLRECT_AT=0x40059f1a"],
+ "defsym": {"STRING_CTOR": "0x4018471e"},
+ "subscribe": [
+  {"event": "ev_tick", "fn": "hc_tick", "order": 60},
+  {"event": "ev_draw", "fn": "hc_draw", "order": 60},
+  {"event": "ev_key", "fn": "hc_key", "order": 60},
+  {"event": "ev_enc", "fn": "hc_enc", "order": 60},
+  {"event": "ev_settings", "fn": "hc_settings", "order": 60},
+  {"event": "ev_render_in", "fn": "hc_render_in", "order": 60},
+  {"event": "ev_render_out", "fn": "hc_render_out", "order": 60}
+ ],
+ "resources": {"names": ["settings:HOOK TEST"]},
+ "requires": ["core"]
+}

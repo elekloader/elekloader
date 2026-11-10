@@ -147,7 +147,7 @@ unsigned ot_midi_paced_space(void);     /* bytes the queue can take: a message n
 
 /* ==== core-ot 0.6: the project, the card and CS1 ================================================== */
 
-/* ---- ev_project(how, dropped), as core-ar2's and core-a4's ------------------------------------------
+/* ---- ev_project(how, dropped), as core-ar2's and core-a4mk2's ------------------------------------------
  * After the firmware's engine task has loaded a whole project (LOAD PROJECT, the power-up's load,
  * RELOAD) or made a new one (CREATE EMPTY PROJECT), when the job has ended: the banks, the Parts and
  * the mods' blocks below are in place. It runs in the engine task: a mod may use the file calls. */

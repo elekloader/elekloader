@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
-/* core-a4 0.2, 0.3: parameter pages and parameter overrides (docs/ADAPTING.md,
- * "Parameter pages (core-a4 0.2, Analog Four MKII)"): core-ar2 0.4's
+/* core-a4mk2 0.2, 0.3: parameter pages and parameter overrides (docs/ADAPTING.md,
+ * "Parameter pages (core-a4mk2 0.2, Analog Four MKII)"): core-ar2 0.4's
  * (analog-rytm-mk2/pages.h) at the A4's routines. Core owns the entries of
  * stock's four page routines (page_info, page_get_value, param_apply_delta,
  * param_value_text) and asks the mods through two tables, contributed in
@@ -21,7 +21,7 @@
  * A page id must be one stock does not have (stock's are 0..47) and no other
  * mod uses. A function left 0 passes.
  *
- * From core-a4 0.3 (core-ar2 0.6's) a page whose knobs change with the
+ * From core-a4mk2 0.3 (core-ar2 0.6's) a page whose knobs change with the
  * sound (a knob that means nothing for the selected type left empty)
  * contributes to core_page_fns instead: page_info asks info(page) on each
  * call, before core_pages, and answers the entry it returns; 0 passes.
@@ -65,7 +65,7 @@ struct core_page {
     int32_t ids[10];        /* knobs A..J, 0 for none */
 };
 
-/* core-a4 0.3: the entry page_info answers for page, asked on each call */
+/* core-a4mk2 0.3: the entry page_info answers for page, asked on each call */
 struct core_page_fn {
     int32_t page;
     const struct core_page *(*info)(int32_t page);   /* 0: pass */

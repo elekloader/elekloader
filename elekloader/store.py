@@ -113,7 +113,7 @@ a kit-scope "lfo" field there imports core_fx_lfo_dst: the linker places it,
 as the core's own kit field of the device's `fx_lock_dst` bits, in a build
 with a kit-scope "lfo" field (0 otherwise).
 
-Lock codes per track kind (core-a4 0.5, the Analog Four MKII). Stock keeps
+Lock codes per track kind (core-a4mk2 0.5, the Analog Four MKII). Stock keeps
 a parameter table per track kind, so a code is numbered within its kind,
 0x70..0x7f (112..127), 16 a kind: a sound field is the synth tracks'
 parameter (kind "synth"), a kit field the FX track's ("fx"), or the CV
@@ -128,7 +128,7 @@ A field whose kind changes is a new parameter: its old code is freed. The
 kind is part of the layout ID. On the A4 every modulation source can target
 a mod parameter, so `"mod": true` there covers the LFOs too (no "lfo"), and
 a kit field can have it. A CV field's code has CV_FLAG set in
-core_lock_codes. A `"cc": true` field takes a CC from the A4's pool (core-a4
+core_lock_codes. A `"cc": true` field takes a CC from the A4's pool (core-a4mk2
 0.5): the CCs no table of stock's maps on a track's channel; a kit field
 (FX or CV) only those the FX and CV tables leave free too.
 
@@ -201,7 +201,7 @@ FX_LOCK_DST = 'core_fx_lfo_dst'                 # core-ar2 0.9: the FX LFO's cod
 LFO_FLAG = 0x100                                # in core_lock_codes: the field is an LFO destination
 SMOOTH_OFF = 0x200                              # in core_lock_codes: the field's value jumps (core-ar2 0.9)
 ROUTE_FLAG = 0x400                              # in core_lock_codes: a velocity/aftertouch destination (core-ar2 0.9)
-CV_FLAG = 0x800                                 # in core_lock_codes: a kit field of the CV track (core-a4 0.5)
+CV_FLAG = 0x800                                 # in core_lock_codes: a kit field of the CV track (core-a4mk2 0.5)
 FIRST_CODE, LAST_CODE = 42, 127                 # a device's codes unless its spec says others
 INITS_TABLE = 'core_field_inits'                # core-ar2 0.10: the fields' inits, by slot
 HANDLES_TABLE = 'core_handles'                  # core-ar2 0.11: the handle fields' descriptors
@@ -227,18 +227,18 @@ DEVICES = {
         # of the pool, the CCs stock maps on the FX channel (0x413dcb14): a kit field (the FX track's) gets none of them
         'fx_ccs_taken': (84, 85),
     },
-    'analog-four-mk2': {                            # core-a4 (mods/core-a4/store.c)
+    'analog-four-mk2': {                            # core-a4mk2 (mods/core-a4mk2/store.c)
         'fixed': {'sound': 32, 'kit': 128, 'global': 64},
         'live': {'track': 512, 'pattern': 512},
         'store': 4352 - 10,
         'items': {'track': 129 * 6, 'pattern': 129},
         'split': {'track': 2, 'pattern': 4},
-        # core-a4 0.5: codes per track kind (stock's synth, FX and CV parameter tables), 0x70..0x7f each;
+        # core-a4mk2 0.5: codes per track kind (stock's synth, FX and CV parameter tables), 0x70..0x7f each;
         # every source is a destination of a "mod" field, so no "lfo"
         'codes': (0x70, 0x7f),
         'kinds': ('synth', 'fx', 'cv'),
         'no_lfo': True,
-        # core-a4 0.5: the CCs no table of stock's maps on a track's channel (the synth kind's and the controller
+        # core-a4mk2 0.5: the CCs no table of stock's maps on a track's channel (the synth kind's and the controller
         # kinds' MISC, TRACK and PERF, nor bank select 0 and 32, from the records at 0x40186af4), those the FX and CV
         # kinds map first, so the synth tracks' fields take them before the CCs every kind leaves free
         'ccs': (12, 13, 14, 15, 28, 29, 30, 31, 35, 36, 37) + tuple(range(39, 48)) + (60, 61, 62, 63, 96, 97, 100, 101),
@@ -370,7 +370,7 @@ def parse_routes(m):
 
 
 def parse_cvs(m):
-    """A mod document's "storage" -> the syms of its fields declared "track": "cv" (core-a4 0.5), in order."""
+    """A mod document's "storage" -> the syms of its fields declared "track": "cv" (core-a4mk2 0.5), in order."""
     return [f['sym'] for f in m.get('storage', []) if isinstance(f, dict) and f.get('track') == 'cv']
 
 
@@ -459,7 +459,7 @@ def layout_id(lock):
         what.append([[f['scope'], f['offset'], f['bits'], f['mod'], f['sym']] + ([f['init']] if f.get('init') else [])
                      for f in sorted(lock[k], key=_field_key)])
     if lock.get('codes') or lock.get('freed_codes'):   # a lockfile with no codes keeps its ID
-        if isinstance(lock['next_code'], dict):         # codes per track kind (core-a4 0.5): the kind counts
+        if isinstance(lock['next_code'], dict):         # codes per track kind (core-a4mk2 0.5): the kind counts
             ks = kinds(lock['device'])
             what.append([[lock['next_code'][k] for k in ks]]
                         + [[c['code'], c['mod'], c['sym'], c['kind']] for k in ('codes', 'freed_codes')
@@ -536,7 +536,7 @@ def check_lock(lock, dev_key):
         first, last = code_range(dev_key)
         ks = kinds(dev_key)
         nc = lock.get('next_code')
-        if ks:                          # one range a track kind (core-a4 0.5)
+        if ks:                          # one range a track kind (core-a4mk2 0.5)
             if not isinstance(nc, dict) or set(nc) != set(ks) or \
                     not all(_whole(nc[k]) and first <= nc[k] <= last + 1 for k in ks):
                 raise ModError('lockfile: "next_code" %r' % (nc,))
@@ -683,7 +683,7 @@ def allocate(lock, decls, dev_key, core=None, locks=(), ccs=(), inits=None, cvs=
     scope, bits)]; core: the build's core's version (None: the newest core's
     room); locks: [(mod id, sym)] of the lockable fields; ccs: those of them
     with a CC; inits: {(mod id, sym): init} of the fields with an init other
-    than 0 (core-ar2 0.10); cvs: those declared "track": "cv" (core-a4 0.5).
+    than 0 (core-ar2 0.10); cvs: those declared "track": "cv" (core-a4mk2 0.5).
     -> (the new lockfile, [notes]). The lockfile given is not changed."""
     inits = {k: v for k, v in (inits or {}).items() if v}
     notes = []
