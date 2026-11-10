@@ -100,12 +100,27 @@ image>` prints it.
   entry, so a loader can merge more entries in at boot: 16, or the
   table's `"spare"` in the declaring mod's `collections`. A `"max"` there
   caps the table's entries in all: the spare ones are only what the
-  build's own entries leave of it (none when they reach it). Tables the
-  linker fills itself get none: `core_store_ids`, `core_lock_codes`,
-  `core_lock_ccs`, `core_field_inits`, `core_handles`, `core_payloads`,
-  the `.fast` copy table and DSP tables. `NAME_n` stays the count of
-  entries the build has. The spare entries and the block count toward
-  the RAM budget.
+  build's own entries leave of it (none when they reach it), so
+  core-ar2's `core_machines` (`"max": 10`) leaves the +Drive mods the
+  hidden slots the flashed mods' machines don't take. Where the
+  collection gives no `"spare"`, `core_lock_params` gets 32. The storage
+  tables the linker fills, `core_store_ids` (16: a layout ID and 15
+  ancestors), `core_lock_codes`, `core_lock_ccs` (32 each) and
+  `core_field_inits` (32, at most 63 in all), are open to the loader
+  alone (flag bit 3): it adds the +Drive mods' fields there, and a
+  mod's own entries for them are refused. `core_handles`,
+  `core_payloads`, the `.fast` copy table and DSP tables get none.
+  `NAME_n` stays the count of entries the build has. The spare entries
+  and the block count toward the RAM budget.
+- **The site map.** Every byte range of the flashed main OS that is
+  taken: each site and copied block with its module, the device's
+  protected and kept ranges, the boot copier, the RAM image's copy and
+  the lockfile's trailer, so the loader can refuse a +Drive site that
+  overlaps one.
+- **Pre-link ranges.** Main OS code and data the OS is done with before
+  the boot link runs (the release's `prelink` in its device profile), so
+  no +Drive site goes where it would never run. The Analog Rytm MKII's
+  list is empty until the boot-order trace fills it.
 - **The +Drive area.** On a device whose profile has `drive_align` (the
   Analog Rytm MKII's is 4 KB), the +Drive mods' area is what the flashed
   build leaves of the core's linker area: from the build's RAM end (its
@@ -118,11 +133,11 @@ image>` prints it.
   order must be -2,147,483,648 to 2,147,483,646; the linker's own entries
   (storage, payloads, `.fast` copies) have 2,147,483,647.
 
-Its bytes (ABI 1.1) are below, "The descriptor's bytes".
+Its bytes (ABI 1.2) are below, "The descriptor's bytes".
 
 ## The descriptor's bytes
 
-The build descriptor ("The build descriptor" above), ABI 1.1, is big-endian, its records 4-byte aligned, and its
+The build descriptor ("The build descriptor" above), ABI 1.2, is big-endian, its records 4-byte aligned, and its
 names offsets into its string pool (UTF-8, NUL-terminated):
 
 | offset | field |
@@ -132,18 +147,21 @@ names offsets into its string pool (UTF-8, NUL-terminated):
 | +0x18 | u32 string pool offset, u32 its size |
 | +0x20 | u16 counts: modules, exports, tables, claims |
 | +0x28 | u32 offsets: modules, exports, tables, claims, key arrays, area record, storage record |
-| +0x44 | u32 the device key, u32 the OS version (names); zero to +0x60 |
+| +0x44 | u32 the device key, u32 the OS version (names) |
+| +0x4c | ABI 1.2: u32 offset of the site map, u16 its count, u16 the pre-link count, u32 offset of the pre-link ranges; zero to +0x60 |
 
 | record | bytes | fields |
 |---|---|---|
 | module | 16 | name, version, u8 kind (0 core, 1 flashed mod, 2 a mod that imports `core_desc`), u8 flags (bit 0: has sites), u16 index, u16 first export, u16 export count. Index 0 is the core, then the mods by id |
 | export | 8 | name, u32 address. Grouped by module in module order, by name within a module |
-| table | 24 | name, u32 address, u16 entry size, u16 count, u16 capacity (count + spare), u16 flags (bit 0: more entries may be added; bit 1: a render table, the collection's `"render": true`; bit 2: a DSP table), u32 offset of its keys, u32 offset of its orders (0 in ABI 1.0) |
+| table | 24 | name, u32 address, u16 entry size, u16 count, u16 capacity (count + spare), u16 flags (bit 0: more entries may be added; bit 1: a render table, the collection's `"render": true`; bit 2: a DSP table; bit 3: the loader may add entries of its own, a mod's may not), u32 offset of its keys, u32 offset of its orders (0 in ABI 1.0) |
 | keys | 4 an entry | `order << 16 \| module index`, in table order, the order held to 0..65,534 (the linker's own entries 65,535) for an ABI 1.0 reader |
 | claim | 8 | u16 kind (1: a resource name), u16 module index, u32 the name |
 | area | 20 | the flashed build's RAM end, the +Drive area's start and end, the staging buffer's address and size (the exports `drive_staging` and `drive_staging_size`, else 0) |
 | storage | 12 + 16 a scope | u32 address and u32 length of the lockfile's trailer in the main OS image (for the host: nothing on the unit reads it), u16 scope count, u16 0; per scope: name, u32 room in bits, u32 bits used, u32 generation |
 | orders | 4 an entry | s32: each entry's order, in table order; after the storage record (ABI 1.1). An ABI 1.0 block has none, and its keys' orders stand |
+| site map | 12 a range | u32 start, u32 end (exclusive), u16 kind (1 site, 2 copied block, 3 the device's protected or kept range, 4 boot copier, 5 the RAM image's copy, 6 lockfile trailer), u16 module index (0xFFFF: none); sorted by start, end, kind, module, and ranges may overlap; after the orders (ABI 1.2) |
+| pre-link | 12 a range | u32 start, u32 end, u16 kind (1 code, 2 data), u16 0; after the site map (ABI 1.2) |
 
 A loader accepts any minor of its major; a minor adds fields in reserved
 space or records at the end, a major changes a record.

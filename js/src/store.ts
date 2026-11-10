@@ -40,7 +40,7 @@ export const FORMAT = 2                        // 2 only for a lockfile with a f
 export const SCOPES = ['sound', 'kit', 'global', 'track', 'pattern', 'project'] as const
 export type Scope = typeof SCOPES[number]
 const SCOPE_NUM: Record<string, number> = Object.fromEntries(SCOPES.map((s, i) => [s, i + 1]))
-const MAX_ANCESTORS = 15
+export const MAX_ANCESTORS = 15
 const MAX_BITS = 32
 export const GEN_SYMS = ['__store_gen', '__store_gen2']
 export const IDS_TABLE = 'core_store_ids'
@@ -56,7 +56,7 @@ const FIRST_CODE = 42, LAST_CODE = 127         // a device's codes unless its sp
 export const INITS_TABLE = 'core_field_inits'  // core-ar2 0.10: the fields' inits, by slot
 export const HANDLES_TABLE = 'core_handles'    // core-ar2 0.11: the handle fields' descriptors
 export const KNOB_TOP = 0xFFFF                 // the last knob id: page knob lists hold 16 bits (abs16)
-const MAX_INITS = 63                           // slots 1..63, in the descriptor's bits 16..21
+export const MAX_INITS = 63                           // slots 1..63, in the descriptor's bits 16..21
 const LOCK_SCOPES = ['sound', 'kit']
 const KIND_NAMES: Record<string, string> = { synth: 'the synth tracks', fx: 'the FX track', cv: 'the CV track' }
 

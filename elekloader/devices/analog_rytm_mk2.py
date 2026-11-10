@@ -98,7 +98,8 @@ DEVICE = Device(
             syx_sha256='cb0f99d620edde994fb860c0e79cc2464e427d06882828cfdfb00fc53700e123',
             main_sha256='34cd0c4da8e4b810d1b25284475a99ea53821e2ab7d30a978bf15dc578251f3b',
             main_len=3005432,
-            data_release=0x30313736),                 # a stock 1.74 project download's header
+            data_release=0x30313736,                  # a stock 1.74 project download's header
+            prelink=()),                              # to come from the boot-order trace in Ghidra
     },
     main_section=3,
     main_load=0x40000400,

@@ -1486,7 +1486,7 @@ def test_the_build_descriptor():
         at, end = out.layout['desc']
         assert out.map['core_desc'] == at and found[0] == B.dev.image_end(B.rel) - B.dev.main_load \
             + out.layout['run_load'] - out.layout['boot'][0] + at - out.layout['ddr'][0]
-        assert d['size'] == end - at and d['abi'] == (1, 1) and d['os'] == 'SYN'
+        assert d['size'] == end - at and d['abi'] == (1, 2) and d['os'] == 'SYN'
         assert (d['family'], d['device_key']) == (2, 'analog-rytm-mk2')
         assert [(x['name'], x['kind'], x['flags'], len(x['exports'])) for x in d['modules']] == \
             [('core', 0, 0, 2), ('m', 2, 0, 1), ('n', 1, 1, 0)]
@@ -1500,9 +1500,21 @@ def test_the_build_descriptor():
         assert tabs['ev_x']['flags'] == desc.F_MORE
         assert tabs['ev_render_x']['flags'] == desc.F_MORE | desc.F_RENDER
         assert (tabs['ev_render_x']['count'], tabs['ev_render_x']['capacity']) == (1, 3)
-        ids = tabs['core_store_ids']
-        assert ids['flags'] == 0 and ids['capacity'] == ids['count'] == 1
+        ids = tabs['core_store_ids']             # open to the loader alone: the layout ID and 15 ancestors
+        assert ids['flags'] == desc.F_LOADER and ids['count'] == 1 and ids['capacity'] == 1 + 16
         assert ids['entries'] == [(desc.LINKER_ORDER, 0)]
+        assert tabs['core_handles']['flags'] == 0 and tabs['core_handles']['capacity'] == 0
+        # ABI 1.2: the site map: n's site, the boot copier, the RAM image's copy and the trailer
+        site = B.at(0x1000)
+        taken = {k: (lo, hi, mi) for lo, hi, k, mi in d['sites']}
+        assert len(d['sites']) == 4 and d['sites'] == sorted(d['sites'])
+        assert taken[desc.SITE_SITE][0] == site and taken[desc.SITE_SITE][2] == 2
+        assert taken[desc.SITE_BOOT] == (out.layout['boot'][0], out.layout['boot'][1], 0)
+        assert taken[desc.SITE_RUN][:2] == (out.layout['run_load'], out.layout['run_load'] + out.layout['blob_len']
+                                            - (out.layout['run_load'] - out.layout['boot'][0]))
+        assert taken[desc.SITE_TRAILER][:2] == (d['storage']['trailer'][0], sum(d['storage']['trailer']))
+        assert d['prelink'] == []
+        assert 'taken 0x%08x' % site in desc.dump(d)
         assert d['claims'] == [(desc.CLAIM_NAME, 1, 'sysex:7d')]
         end = out.layout['bss'][1]           # the +Drive area: the rest of core 0.11's, from 4 KB
         assert d['area'] == (end, link._align(end, 0x1000), 0x47FFF000, 0, 0x80000)
@@ -1549,7 +1561,7 @@ def test_the_build_descriptor_keeps_whole_orders():
         struct.pack_into('>I', blk, 0x0c, 0)
         struct.pack_into('>I', blk, 0x0c, zlib.crc32(bytes(blk)) & 0xFFFFFFFF)
         old = desc.decode(bytes(blk))
-        assert old['abi'] == (1, 0)
+        assert old['abi'] == (1, 0) and old['sites'] == [] and old['prelink'] == []
         assert {t['name']: t for t in old['tables']}['ev_x']['entries'] == [(0, 2)] * 2 + [(50, 1), (65534, 2)]
         assert {t['name']: t for t in old['tables']}['core_store_ids']['entries'] == [(desc.LINKER_ORDER, 0)]
         for bad in (desc.LINKER_ORDER, desc.ORDER_MIN - 1):
@@ -1592,3 +1604,47 @@ if __name__ == '__main__':
             failed += 1
     print('%d passed, %d failed' % (ok, failed))
     sys.exit(1 if failed else 0)
+
+
+def test_the_build_descriptor_opens_the_lock_tables_to_the_loader():
+    """+Drive storage (descriptor ABI 1.2): the tables the linker fills from storage get spare entries
+    the loader alone may fill (F_LOADER, not F_MORE): 32 lock codes and CCs, 32 inits held to 63 in
+    all, the layout ID and 15 ancestors; core_lock_params gets 32 spare where its collection says
+    none; a collection's "spare" still wins. Pre-link ranges come from the release's profile, and a
+    copied block and the device's kept ranges are in the site map."""
+    import dataclasses
+    from elekloader import desc
+    with Bench('analog-rytm-mk2') as B:
+        docs = descriptor_mods(B)
+        core = docs[0]
+        core['collections'].update({'core_lock_codes': {'entry': 8}, 'core_lock_ccs': {'entry': 8},
+                                    'core_field_inits': {'entry': 4}, 'core_lock_params': {'entry': 4}})
+        docs[1]['storage'] = [{'sym': 'st_a', 'scope': 'kit', 'bits': 5},
+                              {'sym': 'st_b', 'scope': 'sound', 'bits': 4, 'lock': True, 'cc': True, 'init': 3}]
+        docs[2]['copied'] = [{'lo': hex(B.at(0x2000)), 'hi': hex(B.at(0x2010)), 'to': hex(B.at(0x2000))}]
+        out = link.link([link.Mod2(d, d['id']) for d in docs], B.img)
+        d = desc.decode(out.image, desc.find(out.image)[0])
+        tabs = {t['name']: t for t in d['tables']}
+        for name, n, spare in (('core_lock_codes', 1, 32), ('core_lock_ccs', 1, 32), ('core_field_inits', 1, 32),
+                               ('core_store_ids', 1, 16)):
+            t = tabs[name]
+            assert (t['flags'], t['count'], t['capacity']) == (desc.F_LOADER, n, n + spare), (name, t)
+        assert (tabs['core_lock_params']['flags'], tabs['core_lock_params']['capacity']) == (desc.F_MORE, 32)
+        assert ('copied' in desc.dump(d)) and any(
+            k == desc.SITE_COPIED and (lo, hi, mi) == (B.at(0x2000), B.at(0x2010), 2) for lo, hi, k, mi in d['sites'])
+        # a collection's "spare" and "max" still decide
+        core['collections']['core_lock_codes']['spare'] = 4
+        core['collections']['core_field_inits']['max'] = 2
+        out = link.link([link.Mod2(x, x['id']) for x in docs], B.img)
+        d = desc.decode(out.image, desc.find(out.image)[0])
+        tabs = {t['name']: t for t in d['tables']}
+        assert tabs['core_lock_codes']['capacity'] == 5 and tabs['core_field_inits']['capacity'] == 2
+        # the release's pre-link ranges
+        rel = dataclasses.replace(B.rel, prelink=((B.at(0x10), B.at(0x40), desc.PRE_CODE, 'main'),
+                                                  (B.at(0x80), B.at(0x90), desc.PRE_DATA, 'boot data')))
+        mods = [link.Mod2(x, x['id']) for x in docs]
+        for m in mods:
+            m.rel = rel
+        d = desc.decode(*(lambda o: (o.image, desc.find(o.image)[0]))(link.link(mods, B.img)))
+        assert d['prelink'] == [(B.at(0x10), B.at(0x40), desc.PRE_CODE), (B.at(0x80), B.at(0x90), desc.PRE_DATA)]
+        assert 'pre-link 0x%08x-0x%08x code' % (B.at(0x10), B.at(0x40)) in desc.dump(d)

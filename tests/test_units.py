@@ -2143,7 +2143,7 @@ def test_core_ar2_0_12_room_for_drive_mods():
     """core-ar2 0.12's tables have room for +Drive mods (mods/core-ar2/README.md, "Room for +Drive
     mods"): its events for as many handlers as the Drive Loader links (256), not the default 16
     (found 2026-11-07: a 17th ev_tick handler was refused `full`), the machines table for its 10
-    hidden slots, the page tables by the views' room (10 views of VIEW_MAX 16 pages, 11 of them
+    hidden slots less the flashed mods' machines, the page tables by the views' room (10 views of VIEW_MAX 16 pages, 11 of them
     stock's), the id-range tables by the loader's mods, and core_step_owners stopping at its 8
     owners (steps.c OWNERS)."""
     path = os.path.join(HERE, '..', 'mods', 'core-ar2', 'mod.json')
@@ -2156,13 +2156,13 @@ def test_core_ar2_0_12_room_for_drive_mods():
     for name, v in cols.items():
         if name.startswith('ev_'):
             assert isinstance(v, dict) and v.get('spare') == 256, (name, v)
-    assert cols['core_machines'] == {'entry': 4, 'spare': 10}
+    assert cols['core_machines'] == {'entry': 4, 'spare': 10, 'max': 10}   # less the flashed mods' machines
     for name in ('core_pages', 'core_page_fns', 'core_view_pages'):
         assert cols[name] == {'entry': 4, 'spare': 10 * 16 - 11}, name
     for name in ('core_params', 'core_param_locks', 'core_param_scales'):
         assert cols[name] == {'entry': 4, 'spare': 256}, name
     assert cols['core_step_owners'] == {'entry': 4, 'spare': 8, 'max': 8}
-    assert cols['core_lock_params'] == 4      # +Drive mods have no storage, so no lock codes
+    assert cols['core_lock_params'] == 4      # its 32 spare are the linker's (link.DRIVE_SPARE)
 
 
 if __name__ == '__main__':

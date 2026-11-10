@@ -7,17 +7,21 @@ import { crc32 } from './zip.ts'
 import { ModError } from './elemod.ts'
 
 export const SYM = 'core_desc'
-export const ABI: [number, number] = [1, 1]
+export const ABI: [number, number] = [1, 2]
 export const HEADER = 0x60
 export const SPARE = 16                     // a table's spare entries, unless its collection says
-export const F_MORE = 1, F_RENDER = 2, F_DSP = 4
+export const F_MORE = 1, F_RENDER = 2, F_DSP = 4, F_LOADER = 8   // F_LOADER (ABI 1.2): the loader's entries only
 export const LINKER_ORDER = 0x7fffffff      // the order of an entry the linker makes itself
 export const ORDER_MIN = -0x80000000        // with a descriptor, an order is ORDER_MIN to LINKER_ORDER - 1
 export const KEY_LINKER = 0xffff            // a key's order (ABI 1.0's field) for the linker's own entries
 export const KIND_CORE = 0, KIND_FLASHED = 1, KIND_LOADER = 2
 export const CLAIM_NAME = 1
 export const STAGING = ['drive_staging', 'drive_staging_size'] as const
-const MODULE = 16, EXPORT = 8, TABLE = 24, CLAIM = 8, AREA = 20, SCOPE = 16
+const MODULE = 16, EXPORT = 8, TABLE = 24, CLAIM = 8, AREA = 20, SCOPE = 16, RANGE = 12
+// a site map range's kind (ABI 1.2)
+export const SITE_SITE = 1, SITE_COPIED = 2, SITE_DEVICE = 3, SITE_BOOT = 4, SITE_RUN = 5, SITE_TRAILER = 6
+export const PRE_CODE = 1, PRE_DATA = 2      // a pre-link range's kind (ABI 1.2)
+export const NO_MODULE = 0xffff
 
 export type DescModule = { name: string; version: string; kind: number; flags: number; exports: [string, number][] }
 export type DescTable = { name: string; address: number; entry: number; count: number; capacity: number; flags: number
@@ -27,6 +31,8 @@ export type DescFields = {
   modules: DescModule[]; tables: DescTable[]; claims: [number, number, string][]
   area: [number, number, number, number, number]
   storage: { trailer: [number, number]; scopes: [string, number, number, number][] }
+  sites?: [number, number, number, number][]   // ABI 1.2: [lo, hi, kind, module index], sorted
+  prelink?: [number, number, number][]          // ABI 1.2: [lo, hi, kind]
 }
 
 const utf8 = new TextEncoder()
@@ -54,7 +60,9 @@ export function encode(d: DescFields): Uint8Array {
   const nkeys = d.tables.reduce((n, t) => n + t.entries.length, 0)
   const oMod = HEADER, oExp = oMod + MODULE * d.modules.length, oTab = oExp + EXPORT * exports.length
   const oClm = oTab + TABLE * d.tables.length, oKey = oClm + CLAIM * d.claims.length, oArea = oKey + 4 * nkeys
-  const oSto = oArea + AREA, oOrd = oSto + 12 + SCOPE * d.storage.scopes.length, oPool = oOrd + 4 * nkeys
+  const sites = d.sites ?? [], pre = d.prelink ?? []
+  const oSto = oArea + AREA, oOrd = oSto + 12 + SCOPE * d.storage.scopes.length, oMap = oOrd + 4 * nkeys
+  const oPre = oMap + RANGE * sites.length, oPool = oPre + RANGE * pre.length
   // names first, so the pool's size is known before the block is laid out (as desc.py adds them while it packs)
   d.modules.forEach(m => { str(m.name); str(m.version) })
   for (const [nm] of exports) str(nm)
@@ -72,6 +80,7 @@ export function encode(d: DescFields): Uint8Array {
   v.setUint16(0x24, d.tables.length); v.setUint16(0x26, d.claims.length)
   ;[oMod, oExp, oTab, oClm, oKey, oArea, oSto].forEach((x, i) => u32(0x28 + 4 * i, x))
   u32(0x44, str(d.deviceKey)); u32(0x48, str(d.os))
+  u32(0x4c, oMap); v.setUint16(0x50, sites.length); v.setUint16(0x52, pre.length); u32(0x54, oPre)
   let o = oMod, first = 0
   d.modules.forEach((m, i) => {
     u32(o, str(m.name)); u32(o + 4, str(m.version)); b[o + 8] = m.kind; b[o + 9] = m.flags
@@ -94,6 +103,8 @@ export function encode(d: DescFields): Uint8Array {
   o += 12
   for (const [nm, room, used, gen] of d.storage.scopes) { u32(o, str(nm)); u32(o + 4, room); u32(o + 8, used); u32(o + 12, gen); o += SCOPE }
   for (const t of d.tables) for (const [ord] of t.entries) { v.setInt32(o, ord); o += 4 }
+  for (const [lo, hi, kind, mi] of sites) { u32(o, lo); u32(o + 4, hi); v.setUint16(o + 8, kind); v.setUint16(o + 10, mi); o += RANGE }
+  for (const [lo, hi, kind] of pre) { u32(o, lo); u32(o + 4, hi); v.setUint16(o + 8, kind); o += RANGE }
   b.set(pool, oPool)
   u32(0x0c, crc32(b))
   return b
@@ -147,6 +158,15 @@ export function decode(blk: Uint8Array, at = 0): Decoded {
   })
   const claims = Array.from({ length: nclm }, (_, i): [number, number, string] =>
     [u16(oClm + CLAIM * i), u16(oClm + CLAIM * i + 2), name(u32(oClm + CLAIM * i + 4))])
+  let sites: [number, number, number, number][] = [], prelink: [number, number, number][] = []
+  if (minor >= 2) {                           // ABI 1.2: the site map and the pre-link ranges
+    const oMap = u32(0x4c), nmap = u16(0x50), npre = u16(0x52), oPre = u32(0x54)
+    if (oMap + RANGE * nmap > b.length || oPre + RANGE * npre > b.length) throw new ModError('the build descriptor is cut short')
+    sites = Array.from({ length: nmap }, (_, i): [number, number, number, number] =>
+      [u32(oMap + RANGE * i), u32(oMap + RANGE * i + 4), u16(oMap + RANGE * i + 8), u16(oMap + RANGE * i + 10)])
+    prelink = Array.from({ length: npre }, (_, i): [number, number, number] =>
+      [u32(oPre + RANGE * i), u32(oPre + RANGE * i + 4), u16(oPre + RANGE * i + 8)])
+  }
   const nsc = u16(oSto + 8)
   const scopes = Array.from({ length: nsc }, (_, i): [string, number, number, number] => {
     const o = oSto + 12 + SCOPE * i
@@ -155,5 +175,5 @@ export function decode(blk: Uint8Array, at = 0): Decoded {
   return { abi: [major, minor], size, crc, family: u16(0x10), device: u16(0x12), release: u32(0x14),
     deviceKey: name(u32(0x44)), os: name(u32(0x48)), modules, tables, claims,
     area: Array.from({ length: 5 }, (_, i) => u32(oArea + 4 * i)) as [number, number, number, number, number],
-    storage: { trailer: [u32(oSto), u32(oSto + 4)], scopes } }
+    storage: { trailer: [u32(oSto), u32(oSto + 4)], scopes }, sites, prelink }
 }

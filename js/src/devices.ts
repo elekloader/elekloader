@@ -61,6 +61,8 @@ export type Release = {
   binSha256: string      // the stock card file (.bin), where the device has one
   sharc?: SharcProfile   // absent unless this release has measured section-7 facts
   dataRelease?: number   // the OS release word of the data container's header (absent: not known)
+  prelink?: [number, number, number, string][]   // main OS code (kind 1) and data (2) the OS is done with before the
+                         // +Drive boot link runs; a build descriptor lists them (desc.ts, ABI 1.2)
 }
 
 export type Range = [number, number]
@@ -244,7 +246,8 @@ export const ANALOG_RYTM_MK2: Device = {
       '28d9ef40c895e03f17dfce096543109adaf708947392db72818fc2a412d685d6', 3005432),
     { ...rel('1.74', 'cb0f99d620edde994fb860c0e79cc2464e427d06882828cfdfb00fc53700e123',
       '34cd0c4da8e4b810d1b25284475a99ea53821e2ab7d30a978bf15dc578251f3b', 3005432),
-      dataRelease: 0x30313736 },                   // a stock 1.74 project download's header
+      dataRelease: 0x30313736,                     // a stock 1.74 project download's header
+      prelink: [] },                               // to come from the boot-order trace in Ghidra
   ],
   stage: 0x40200000, flashAt: 0x80000, flashLimit: 0x300000,
   areas: { ddr: [0x47be0000, 0x47c00000], big: [0x47938000, 0x47fff000] },
