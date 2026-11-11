@@ -238,6 +238,7 @@ struct clo {
     int reading;                          /* set by the fill: counted in dl_reads */
     char name[DL_NAME_MAX + 1];           /* a path below DL_DIR */
     unsigned size;                        /* a file's size when its entry was made */
+    int big;                              /* over the stage then: the entry's size is 0 (entry_size) */
 };
 
 /* A read's reader copies the entry, closures and all, after the fill, and destroys the
@@ -318,8 +319,8 @@ static void set_fn(unsigned char *slot, const struct clo *proto, void *inv)
  * header's payload size at +0x10, and stock 1.74 writes the first chunk's body to the
  * entry's address before the +0x6c check (FUN_4008c1c6) and puts no limit of its own on
  * a RAM entry's size (traced 2026-11-11): so this is the check that keeps an upload inside
- * the stage, and dl_hdr's is the second line. A read's size is the file's, which
- * big_perm already keeps within the stage. */
+ * the stage, and dl_hdr's is the second line. A read's size is the file's: 0 in the entry
+ * for one over the stage (entry_size), which the closure's size refuses here. */
 unsigned dl_pre(unsigned char *res, void **f, const unsigned char *entry)
 {
     const struct clo *c = *f;
@@ -329,6 +330,8 @@ unsigned dl_pre(unsigned char *res, void **f, const unsigned char *entry)
         set_str(res + 4, "Busy: the loader is using /mods");
         return (unsigned)res;
     }
+    if (c->what == C_FILE && c->big && size == 0)
+        size = c->size;                   /* a read of a file over the stage (entry_size) */
     if (size > (c->what == C_MOVE ? MOVE_MAX : c->what == C_FILE ? dl_stage_len : DL_STAGING_SIZE)) {
         set_str(res + 4, "Too large for the free room (see /mods/.status, stage)");
         return (unsigned)res;
@@ -901,6 +904,18 @@ static int big_perm(int size, int perm)
     return (unsigned)size > dl_stage_len ? perm & ~P_READ : perm;
 }
 
+/* The size a file's entry gives stock: 0 for a file over the stage. Stock's Clear (worker
+ * 0x4002d0b4, traced 2026-11-11) zeroes [addr, addr + size) of a RAM entry before the +0x4c
+ * call, with no bound, so a file's real size there wrote past the +Drive area's end and froze
+ * the unit. 0 zeroes nothing and the +0x4c call still deletes. A read of it is refused by
+ * dl_pre from the closure's size; an upload over it gets its payload's size from stock. The
+ * listing keeps the real size. */
+static int entry_size(struct clo *c, int size)
+{
+    c->big = (unsigned)size > dl_stage_len;
+    return c->big ? 0 : size;
+}
+
 /* a file's entry, at any size: -> the refusal, or 0 with *size (0 for a new file) and *perm
  * (tests/drive_move_host.c runs it) */
 static const char *file_perm(const char *name, int *size, int *perm)
@@ -1030,7 +1045,7 @@ made:
     c.size = (unsigned)size;
     put32(e + E_KIND, 1);
     *(unsigned short *)(e + E_PERM) = perm;
-    put32(e + E_SIZE, size);
+    put32(e + E_SIZE, c.what == C_FILE ? entry_size(&c, size) : size);
     put32(e + E_VERSION, 2);
     if (c.what == C_DIR)
         set_fn(e + E_CHANGE, &c, dl_change);

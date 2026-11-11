@@ -212,5 +212,5 @@ emulator through its `--usb-midi-tcp` port.
 ```bash
 python -m elekloader.sdk.build mods/core-ar2 --stock Analog-Rytm_MKII_OS1.74.syx
 python -m elekloader.sdk.build mods/drive-loader-ar2 --stock Analog-Rytm_MKII_OS1.74.syx
-python -m elekloader.patch --stock Analog-Rytm_MKII_OS1.74.syx --mod core-0.14.elemod --mod drive-loader-0.6.elemod --out drive-loader.syx --version 1.74
+python -m elekloader.patch --stock Analog-Rytm_MKII_OS1.74.syx --mod core-0.14.elemod --mod drive-loader-0.7.elemod --out drive-loader.syx --version 1.74
 ```
