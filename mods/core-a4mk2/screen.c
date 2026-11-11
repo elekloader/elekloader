@@ -69,8 +69,8 @@
 /* ---- the LEVEL readout's field: rows 0..8 (from the top), columns 0..69,
  * in a 128 x 64 bitmap: pixels at +16, 8 bytes a column, byte 7 - (row / 8)
  * holding row & 7's bit (rows count from the bottom, so the top row is byte
- * 7's bit 7 ... ); the Rytm's field, which the A4's "Trk Level %d" is drawn
- * in by the same routine family (0x40021a54) ---- */
+ * 7's bit 7 ... ); the Rytm's field: where the A4 draws its "Trk Level %d"
+ * (0x400bed54, through 0x40021a54) is not yet seen on a unit ---- */
 #define FIELD_COLS 70
 
 static void *brain;

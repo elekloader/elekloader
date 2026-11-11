@@ -60,9 +60,9 @@
  * around every whole save of the live project to a +Drive slot: pre 1 before
  * anything is written, pre 0 after. CORE_SAVE_KIND(how) is CORE_SAVE_SAME (a
  * save to the active slot: SAVE PROJECT), CORE_SAVE_OTHER (to another slot:
- * SAVE PROJECT AS, or a new project's first save) or CORE_SAVE_NEW (LOAD of
- * an empty slot, which writes the new project there after ev_project's
- * CORE_PROJECT_NEW); CORE_SAVE_SLOT(how) is the slot, 0..127 (the screen's
+ * SAVE PROJECT AS, SAVE TO an empty slot, or a new project's first save) or
+ * CORE_SAVE_NEW (the load job's new project for an empty slot, after
+ * ev_project's CORE_PROJECT_NEW; no panel action on 1.56 reaches it); CORE_SAVE_SLOT(how) is the slot, 0..127 (the screen's
  * number less one; 255: none); CORE_SAVE_FAILED is set in the call after
  * when the slot was not written. A field set with core_store_set in the call
  * before is in the saved copy. Both calls come from the job stock starts for

@@ -24,8 +24,8 @@
 #define CORE_BITMAP_SIZE 28
 void core_bitmap_init(void *bmp, int w, int h, void *bits, void *mask);
 
-/* fonts 0..16, stock's 17, in the Rytm's order (fonts 0..3, 5..11 checked
- * against the Rytm's); another number draws nothing. core_font_height and
+/* fonts 0..16, stock's 17, in the Rytm's order; another number draws
+ * nothing. core_font_height and
  * core_font_descent give each one's size. */
 #define CORE_FONTS 17
 #define CORE_FONT_MAIN 16
@@ -74,10 +74,11 @@ int core_stock_key(void *ev);
 int core_stock_overlay(void);
 
 /* ---- the track level readout ----
- * After a LEVEL turn, stock shows its track level in the header's left
- * field (glass rows 0..8, columns 0..69, the Rytm's) for about 2.4 s.
- * core_level_readout is the ticks left of core's window for it (47 ticks,
- * 2.35 s, from the last LEVEL turn that reached stock; 0: none). Stock draws its whole screen
+ * The Rytm's: whether and where the A4 shows its track level after a LEVEL
+ * turn is not yet seen on a unit (the emulator shows none). Core keeps the
+ * Rytm's field, glass rows 0..8, columns 0..69. core_level_readout is the
+ * ticks left of core's window for it (47 ticks, about 2.35 s, from the last
+ * LEVEL turn that reached stock; 0: none). Stock draws its whole screen
  * before ev_draw, so a mod that draws over the header keeps the readout by
  * saving the field before it draws and putting it back after:
  *

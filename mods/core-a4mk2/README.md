@@ -497,8 +497,10 @@ or SAVE ... BEFORE LOADING for another when the request asks for it.
 the shared_ptr at 0x418717c8 (written only by its get-or-create,
 0x401494de). Core calls it after a turn a mod's page knob takes and after
 a lockable parameter's CC or NRPN; a mod calls it after its own keys,
-encoders or settings change a field. RANDOMIZE and RELOAD PAGE on a mod
-knob are not handled on the A4 yet.
+encoders or settings change a field. Stock itself sets the mark on every
+page or track key and after every load, and only a save clears it, so core's
+mark matters after a save. RANDOMIZE and RELOAD PAGE on a mod knob are not
+handled on the A4 yet.
 
 ## The project save (0.6)
 
@@ -517,9 +519,12 @@ its first 8 bytes (`jmp`, `st_proj_save`). Two jobs call it:
   WRITE PROTECTED asks (the Rytm's 0x40052908 and 0x4005417e in one).
   0x4003ecbe has six callers (0x4003eff8, 0x4003f07a, 0x40040380,
   0x40040444, 0x400bf7ea, 0x400e13a0): the front panel's saves.
-- **The load job** (0x4003daf0): LOAD of an empty slot runs CREATE NEW
+- **The load job** (0x4003daf0): an empty slot's load runs CREATE NEW
   (0x400a9f1e(model, -1), so `ev_project` with `how` 0 first) and then the
-  save, whose return address (0x4003dc26) tells `CORE_SAVE_NEW`.
+  save, whose return address (0x4003dc26) tells `CORE_SAVE_NEW`. No panel
+  action reaches it on 1.56: an empty slot offers INIT NEW (no save, no
+  event), SAVE TO (`CORE_SAVE_OTHER`) and TOGGLE, and LOAD lists only full
+  slots.
 
 The active slot getter is 0x400a5b9c(model), -1 for none. Of core's other
 file save sites, 0x400a503c is in the background job 0x400a5008 and
@@ -581,10 +586,10 @@ What differs from the Rytm:
   PatternGridView and StepAttrView: the last two of the Rytm's overlays
   list are none here. The other overlays are the A4's classes that draw.
 - **The encoders** are A..J, 0..9, and LEVEL / DATA is 10.
-
-Not yet checked: the readout field's rows and columns and how long stock
-shows it (the Rytm's are assumed), which of the classes stock pushes in
-use, and fonts 4 and 12..16.
+- **The level readout**: in the emulator stock draws none in the header
+  after a LEVEL turn (it keeps the kit's name), so `core_level_readout`'s
+  window and the kept field (rows 0..8, columns 0..69) are the Rytm's
+  until a unit shows where, and for how long, the A4 shows the level.
 
 ## Checked so far
 
@@ -619,7 +624,8 @@ The runs' logs are in their pull requests; what they established:
   parameter; RANDOMIZE landing on a mod parameter; the route screens'
   lists; a kit of another layout; a poly track's two voices, a sound-locked
   trig's pool sound, `"smooth": false`, CONTROL IN; an NRPN with a trig
-  held, USB MIDI. Everything in 0.6 is traced and built, not yet run.
+  held, USB MIDI. 0.6 has run in the emulator only (the check mods'
+  plans), not on a unit.
 - Statically, against the stock image: every site's stock bytes, that each
   covers whole instructions, that each body in `store.s` and `looks.s`
   resumes after the bytes its site displaced, and that the serializers
