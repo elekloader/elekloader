@@ -8,7 +8,7 @@
  "subscribe": [
   {"event": "ev_render_in", "fn": "core_load_in", "order": 0},
   {"event": "ev_render_out", "fn": "core_value_snapshot", "order": 1},
-  {"event": "ev_render_out", "fn": "core_load_out", "order": 100}, {"event": "ev_tick", "fn": "core_edit_tick", "order": 0}
+  {"event": "ev_render_out", "fn": "core_load_out", "order": 100}, {"event": "ev_tick", "fn": "core_edit_tick", "order": 0}, {"event": "ev_tick", "fn": "core_screen_tick", "order": 1}, {"event": "ev_key", "fn": "core_screen_key", "order": -1000000}, {"event": "ev_enc", "fn": "core_screen_enc", "order": 1000000}
  ],
  "defsym": {
   "FINISH_PANEL": "0x4133cfc0", "FINISH_UART": "0x4133cfd0", "FINISH_DRAIN": "0x40002766",

@@ -162,6 +162,11 @@ def test_core_a4mk2_sites():
     sub = {x['event']: x for x in mod['subscribe']}
     assert sub['ev_render_in']['fn'] == 'core_load_in' and sub['ev_render_in']['order'] == 0
     assert sub['ev_render_out']['fn'] == 'core_load_out' and sub['ev_render_out']['order'] == 100
+    # 0.6: the modified mark's and the screen calls' handlers (store.c, screen.c): the brain from
+    # ev_key before every mod, the LEVEL turn from ev_enc after every mod, the controller from ev_tick
+    subs = {(x['event'], x['fn']): x['order'] for x in mod['subscribe']}
+    assert subs[('ev_tick', 'core_edit_tick')] == 0 and subs[('ev_tick', 'core_screen_tick')] == 1
+    assert subs[('ev_key', 'core_screen_key')] == -1000000 and subs[('ev_enc', 'core_screen_enc')] == 1000000
     # views (0.2): the hook after the main screen's last view and the page
     # key's step, each resuming after its 8 bytes; and the current view's
     # range, 0..28, widened in the setter and the loader
