@@ -221,7 +221,7 @@ What it does not do:
 - **Pattern tracks** are limited to 16 bits each: three bytes a track would
   not fit in the store.
 - **Sounds**: 56 bits, set by the stored sound's spare bytes, 49 for mods
-  in a build with an `"lfo"` parameter (`core_lfo_dst`, below). The four
+  once an `"lfo"` parameter is there (`core_lfo_dst`, below). The four
   aftertouch routes' low bytes are free in a live sound too, but there is
   no stored byte left to keep them in.
 - **voice-dac** (rytm2_mods) hooks the same velocity-route sites itself
@@ -483,7 +483,7 @@ and names, and the code is the slot, so the LFO's DST byte holds it.
 | id to slot | 0x40006ea8 (`jmp`) | a pseudo id's slot is its code; the sound setter then rejects it (slot above 41), as for any stock id it can't set |
 | slot to id | sound vtable +76, 0x401dce70 (`ptr`) | a slot with a code gives its pseudo id, so the DST value and the menu's cursor find it |
 | sound edit's write | 0x400bd412 (`jmp`, store.c, `st_sound_through`, 0.9) | stock writes each sound edit into the stored copy at once, the DST byte through 0x40007602, which `core_code_id` passes for 42..127 (for the scene and performance entries), so a code reached the stored byte (0.8: after a power-off it loaded as 0xfb, on core and on stock). After stock's write, a code in the stored byte becomes 41 (None) and goes into `core_lfo_dst` of the live sound the stored one is kept from; a stock destination clears it |
-| sound save, load | 0x4000843a, 0x400081f6 (store.c, `st_sound_save`, `st_sound_load`) | stock saves the LFO's destination (live sound +28, a slot) as the stored sound's +100 through a table of its 42 parameters (0x401c5c7c) and loads it through the inverse (0x401c5d24), which have no entry for a code: a code would come back as a stock parameter (42 as FIN). Core keeps the code, less 41, in its sound field `core_lfo_dst` (7 bits, placed by the linker in a build with an `"lfo"` field) and writes 41 into the stored byte, stock's own None (META:None, slot 0): stock, or a build that does not know the code, loads that LFO with no destination, and stock's saves keep it so. Neither table has a bound: a slot above 41 that stock saves comes back as one of its parameters (64, as 42 loads, as ACC, 39), so on load a slot of 42..127 that `core_lfo_dst` did not give (a sound from stock or another layout) is set to None |
+| sound save, load | 0x4000843a, 0x400081f6 (store.c, `st_sound_save`, `st_sound_load`) | stock saves the LFO's destination (live sound +28, a slot) as the stored sound's +100 through a table of its 42 parameters (0x401c5c7c) and loads it through the inverse (0x401c5d24), which have no entry for a code: a code would come back as a stock parameter (42 as FIN). Core keeps the code, less 41, in its sound field `core_lfo_dst` (7 bits, placed by the linker in a build with an `"lfo"` field, or from 0.14 by the Drive Loader for a +Drive one) and writes 41 into the stored byte, stock's own None (META:None, slot 0): stock, or a build that does not know the code, loads that LFO with no destination, and stock's saves keep it so. Neither table has a bound: a slot above 41 that stock saves comes back as one of its parameters (64, as 42 loads, as ACC, 39), so on load a slot of 42..127 that `core_lfo_dst` did not give (a sound from stock or another layout) is set to None |
 | list end | 0x400aa31e (`jmp`) | the destination list builder (0x400aa280) appends the pseudo ids for a sound's set (one whose +76 is core's), in the LFO's list (kind 0x600) only: the velocity and aftertouch lists (0x200) index the audio side's parameter table by code, where a code above 41 is another track's parameter |
 | menu label | 0x4004a7e8 (`jmp`) | the category (at most 4 characters; `MOD` when there is none), a colon and the name, through stock's `%.16s:%.32s` |
 | DST value | 0x400ffab2 (`jmp`) | the short name |
@@ -841,7 +841,7 @@ it through the inverse (0x401c5be4), neither bounded, so a code would load
 as a stock slot (46 as 40). `st_kit_save` and `st_kit_load` treat the byte
 as `st_sound_save` and `st_sound_load` treat a sound's: None in the stored
 kit, the code in `core_fx_lfo_dst` (7 bits, placed in a build with a kit
-`"lfo"` field), and on load a byte of 42..127 that field did not give is
+`"lfo"` field, or from 0.14 at boot for a +Drive one), and on load a byte of 42..127 that field did not give is
 None. Scenes and performances (scenes.c, scenes.s: `pass` takes track 12),
 NRPN and CC (midi.c, on the FX track's channel), the smoothed value
 (smooth.c) and `core_reload` take track 12 with the kit as its item. A
@@ -1208,6 +1208,13 @@ boot ([docs/DRIVE.md](../../docs/DRIVE.md)) sets the layout core reads with:
   `.boot` (`core_store_boot_init`, from `core_boot_init`); every load and
   save reads it. The track and pattern split stays the build's. A parked
   field needs nothing: core copies a scope's bytes whole.
+- **The LFO destinations.** `core_lfo_dsts` (two words: the sound's, then
+  the kit's) holds the descriptors of the fields that keep an LFO's mod
+  destination, set in `.boot` from the build's `core_lfo_dst` and
+  `core_fx_lfo_dst` (0 where the build places none); every save, load and
+  edit write reads it. A build places neither unless one of its mods has an
+  `"lfo"` field of that scope, so the loader places core's field itself,
+  and writes its descriptor here, only while a +Drive mod has one.
 - **`ev_boot_drive`**: f(), once, from core's site `0x401009e0` in `main()`
   (after stock's `jsr 0x4009da0e`, `store.s`): the +Drive is mounted, the
   working project loaded, and audio and the UI not started. The Drive
