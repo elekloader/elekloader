@@ -171,7 +171,18 @@ volatile unsigned char core_store_globals[4][5];
  * version loads */
 static unsigned char *st_image = S;
 
+/* (0.14) the live generations, one byte a scope (sound .. project): this
+ * build's from .boot, which the Drive Loader may change in ev_boot_drive to
+ * the live +Drive layout's, with the layout ID and its ancestors in
+ * core_store_ids (its spare entries); the T and P split stays the build's */
+unsigned char core_store_gens[6];
+
 static unsigned gen(int scope)
+{
+    return core_store_gens[scope - 1];
+}
+
+static unsigned built_gen(int scope)
 {
     unsigned g = scope <= SC_TRACK ? (unsigned)__store_gen : (unsigned)__store_gen2;
     return g >> (24 - 8 * ((scope - 1) & 3)) & 255;
@@ -439,7 +450,8 @@ int st_locks_save(unsigned char *dst, unsigned char *live, int a)
  * and loads it back through the inverse table, which has no entry for a
  * lock code: a mod parameter's would come back as a stock one. So core
  * keeps the code, less 41, in its own sound field core_lfo_dst (the linker
- * places it in a build with an "lfo" field; 0, none, otherwise), and the
+ * places it in a build with an "lfo" field, the Drive Loader at boot for a
+ * +Drive one (0.14); 0, none, otherwise), and the
  * stored byte gets DST_NONE, stock's own None (META:None, slot 0): stock,
  * or a build that does not know the code, loads an LFO with no destination,
  * and keeps it so through its own saves. Neither table has a bound, so a
@@ -447,6 +459,15 @@ int st_locks_save(unsigned char *dst, unsigned char *live, int a)
  * load, a slot of 42..127 that core_lfo_dst did not give (a sound from
  * stock or from another layout) would read as a code, so it loads as None. */
 extern char core_lfo_dst[];
+
+/* (0.14) the two LFO destinations' fields, live: [0] the sound's (the
+ * build's core_lfo_dst), [1] the kit's (core_fx_lfo_dst); this build's from
+ * .boot, 0 where it places none. The Drive Loader may set one in
+ * ev_boot_drive to a field it placed itself, for a +Drive "lfo" field of
+ * that scope, so a build places neither unless a mod has such a field. */
+unsigned core_lfo_dsts[2];
+#define LFO_DST core_lfo_dsts[0]
+#define FX_LFO_DST core_lfo_dsts[1]
 #define LIVE_DST 28
 #define STORED_DST 100
 #define DST_NONE 41
@@ -458,7 +479,7 @@ void core_store_set(unsigned field, void *item, int index, unsigned value);
 
 int st_sound_save(unsigned char *dst, unsigned char *live, int a)
 {
-    unsigned f = (unsigned)core_lfo_dst, c = live ? live[LIVE_DST] : 0;
+    unsigned f = LFO_DST, c = live ? live[LIVE_DST] : 0;
     int mine = f && c >= 42 && c <= 127 && core_lock_lfo(c), r;
     if (f && live)
         core_store_set(f, live, 0, mine ? c - 41 : 0);
@@ -488,10 +509,10 @@ int st_sound_load(unsigned char *live, unsigned char *src)
             live[SOUND_HOME + sound_at(j)] =
                 ok ? src[j < 3 ? SOUND_SPARE + j : SOUND_SPARE2 + j - 3] : 0;
         core_routes_load(live, ok);
-        if (core_lfo_dst) {
+        if (LFO_DST) {
             if (live[LIVE_DST] >= 42 && live[LIVE_DST] <= 127)
                 live[LIVE_DST] = 0;
-            if ((j = core_store_get((unsigned)core_lfo_dst, live, 0)) && core_lock_lfo(j + 41))
+            if ((j = core_store_get(LFO_DST, live, 0)) && core_lock_lfo(j + 41))
                 live[LIVE_DST] = j + 41;
         }
     }
@@ -534,7 +555,7 @@ static unsigned char *live_of_stored(const unsigned char *dst)
 int st_sound_through(void *obj, unsigned char *dst, void *edit)
 {
     int r = st_sound_through_body(obj, dst, edit);
-    unsigned f = (unsigned)core_lfo_dst, c, v;
+    unsigned f = LFO_DST, c, v;
     unsigned char *live;
     if (!f || !dst)
         return r;
@@ -565,9 +586,9 @@ static unsigned char *words_of(void *obj)
  * it through two 38-entry tables with no bound (0x401c5b4c, 0x401c5be4), so a
  * code would read past them. As for a sound's LFO, core keeps a kit
  * parameter's code, less 41, in its kit field core_fx_lfo_dst (placed in a
- * build with a kit-scope "lfo" field), and stock saves stock's None (slot 0)
- * in its place: the live byte is None while stock's save runs, and the code
- * again after. On load, a slot of 42..127 (none stock's) becomes None, and
+ * build with a kit-scope "lfo" field, or at boot for a +Drive one), and
+ * stock saves stock's None (slot 0) in its place: the live byte is None
+ * while stock's save runs, and the code again after. On load, a slot of 42..127 (none stock's) becomes None, and
  * core_fx_lfo_dst gives the code back. Stock writes a FX edit straight into
  * the stored kit's FX words (0x400a545c, a jsr of the FX words' save
  * 0x40007f58 with the live FX block), not through the kit's save, so core
@@ -584,7 +605,7 @@ const struct core_lock_param *core_lock_fx_lfo(unsigned code);
  * nothing to put back */
 static unsigned fx_dst_out(unsigned char *live)
 {
-    unsigned f = (unsigned)core_fx_lfo_dst, c = live ? live[LIVE_FX_DST] : 0;
+    unsigned f = FX_LFO_DST, c = live ? live[LIVE_FX_DST] : 0;
     int mine = f && c >= 42 && c <= 127 && core_lock_fx_lfo(c);
     if (f && live)
         core_store_set(f, live, 0, mine ? c - 41 : 0);
@@ -631,7 +652,7 @@ extern int st_fx_through_body(void *obj, unsigned char *dst, void *edit);
 int st_fx_through(void *obj, unsigned char *dst, void *edit)
 {
     int r = st_fx_through_body(obj, dst, edit);
-    unsigned f = (unsigned)core_fx_lfo_dst, c, v;
+    unsigned f = FX_LFO_DST, c, v;
     unsigned char *fx, *live;
     if (!f || !obj || !dst)
         return r;
@@ -672,10 +693,10 @@ int st_kit_load(unsigned char *live, unsigned char *src)
                  src[KIT_SPARE + 12] == gen(SC_KIT);
         for (j = 0; j < 8; j++)
             live[KIT_HOME + j] = ok ? src[KIT_SPARE + j] : 0;
-        if (core_fx_lfo_dst) {
+        if (FX_LFO_DST) {
             if (live[LIVE_FX_DST] >= 42 && live[LIVE_FX_DST] <= 127)
                 live[LIVE_FX_DST] = FX_DST_NONE;
-            if ((j = core_store_get((unsigned)core_fx_lfo_dst, live, 0)) && core_lock_fx_lfo(j + 41))
+            if ((j = core_store_get(FX_LFO_DST, live, 0)) && core_lock_fx_lfo(j + 41))
                 live[LIVE_FX_DST] = j + 41;
         }
         /* its scenes' and performances' mod entries are its layout's codes
@@ -772,11 +793,18 @@ void st_vel_defaults(unsigned char *routes)
 
 void core_rows_now_reset(void);
 
+/* (0.14) the boot's project load, until ev_boot_drive (below) */
+#define BOOT_IDS 17                     /* the layout ID, 15 ancestors, the 0 */
+static int boot_wait, boot_loaded, boot_done;
+static unsigned boot_ids[BOOT_IDS];
+static unsigned char boot_gens[6];
+
 /* CREATE NEW and the project reset: a fresh store, no global data, and no
  * playing trig's mod locks (rows.c) */
 int st_proj_init(void *project, int a, int b, int c)
 {
     int r = st_proj_init_body(project, a, b, c), g, j;
+    boot_loaded = 0;                    /* (0.14) nothing of a boot load is left to finish */
     core_rows_now_reset();
     store_clear(S, 0, STORE_BYTES);
     store_header(S);
@@ -791,13 +819,17 @@ int st_proj_init(void *project, int a, int b, int c)
  * can't read, then takes this build's header, and the mods hear of it, with
  * the scopes the loaded image (a file's buffer, else the stored project) had
  * nothing for. A file of an older project version (st_image 0) brings no
- * project data. */
+ * project data.
+ *
+ * (0.14) The boot's own load of the working project runs before the +Drive
+ * mods are linked (main() at 0x40100966, the hook at 0x401009e0), so it
+ * leaves the stored project as it is and tells no mod: core finishes it at
+ * the hook, after ev_boot_drive (core_boot_drive below). */
 void core_rows_forget(void);
 
-int st_proj_load(void *live, unsigned char *src, void *progress)
+static void proj_finish(unsigned char *from)
 {
-    int r = st_proj_load_body(live, src, progress), g, j, s;
-    unsigned char *from = is_image(src) ? src : st_image;
+    int g, j, s;
     unsigned dropped = 0;
     /* its mod p-locks' codes are its layout's (rows.c, 0.8); no trig of it
      * has played yet */
@@ -818,8 +850,119 @@ int st_proj_load(void *live, unsigned char *src, void *progress)
             for (j = 0; j < 5; j++)
                 S[GLOBALS_AT + 80 * g + 0x4b + j] = 0;
     store_header(S);
+    boot_done = 1;
     project_event(1, dropped);
+}
+
+int st_proj_load(void *live, unsigned char *src, void *progress)
+{
+    int r = st_proj_load_body(live, src, progress), i;
+    unsigned char *from = is_image(src) ? src : st_image;
+    if (boot_wait && from == S) {
+        const volatile unsigned *ids = core_store_ids;
+        core_rows_now_reset();
+        for (i = 0; i < BOOT_IDS && (boot_ids[i] = ids[i]); i++)
+            ;
+        for (i = 0; i < 6; i++)
+            boot_gens[i] = core_store_gens[i];
+        boot_loaded = 1;
+        return r;
+    }
+    proj_finish(from);
     return r;
+}
+
+/* (0.14) .boot (core_boot_init): this build's generations and LFO
+ * destinations' fields, and the boot's project load waits for ev_boot_drive */
+void core_store_boot_init(void)
+{
+    int s;
+    for (s = SC_SOUND; s <= SC_PROJECT; s++)
+        core_store_gens[s - 1] = built_gen(s);
+    core_lfo_dsts[0] = (unsigned)core_lfo_dst;
+    core_lfo_dsts[1] = (unsigned)core_fx_lfo_dst;
+    boot_wait = 1;
+}
+
+/* (0.14) did ev_boot_drive change the layout the boot's load read with? */
+static int layout_moved(void)
+{
+    const volatile unsigned *ids = core_store_ids;
+    int i;
+    for (i = 0; i < 6; i++)
+        if (core_store_gens[i] != boot_gens[i])
+            return 1;
+    for (i = 0; i < BOOT_IDS; i++) {
+        if (ids[i] != boot_ids[i])
+            return 1;
+        if (!ids[i])
+            return 0;
+    }
+    return 0;
+}
+
+/* (0.14) ev_boot_drive: f(), once at boot, from the site 0x401009e0 in
+ * main() (store.s) after its own call: the +Drive is mounted and the working
+ * project loaded, and the audio interrupt and the UI task have not started.
+ * The Drive Loader links the +Drive mods there and may set the live layout
+ * (core_store_ids, core_store_gens). Then core finishes the boot's project
+ * load: if the layout moved, it loads the working project again
+ * (FUN_4000e846, main()'s own load, through st_proj_load; on a valid
+ * version 9 image it neither upgrades, saves nor inits) so every item is
+ * read with the live layout; else it finishes the first load as is. Either
+ * way ev_project(1, dropped) comes then, to the +Drive mods too. The
+ * collection has no spare entries: a +Drive mod is not called in it. */
+typedef void (*ev_boot_drive_t)(void);
+extern const ev_boot_drive_t ev_boot_drive[];
+/* (live, stored, bool *upgraded): it writes *upgraded whenever that is not
+ * 0; returns 1 when loaded (low byte) */
+#define PROJECT_CHECK_LOAD ((int (*)(void *, void *, unsigned char *))0x4000e846)
+
+/* main()'s reset after its load (FUN_400fb268, 0x400fb2ae..0x400fb2ee, when
+ * its flags, the word at 0x40272874, have 0x2 or 0x8: a reset asked for
+ * before the reboot): the settings block's parts, the four global slots and
+ * one 0x1e24-byte item, none through a routine core hooks. A second load
+ * would bring the stored values back, so core keeps these bytes across it. */
+#define BOOT_FLAGS (*(volatile unsigned *)0x40272874)
+static const struct { unsigned at, n; } kept[] = {
+    {0x41318977, 0x988},                /* the settings block, live +0xb4ffac */
+    {0x413192ff, 0x390},                /* the four global slots */
+    {0x412f3be3, 0x1e24},               /* live +0xb2b218 */
+};
+static unsigned char kept_bytes[0x988 + 0x390 + 0x1e24];
+
+static void keep_reset(int back)
+{
+    unsigned i, j;
+    unsigned char *k = kept_bytes;
+    for (i = 0; i < sizeof kept / sizeof kept[0]; i++)
+        for (j = 0; j < kept[i].n; j++, k++)
+            if (back)
+                B(kept[i].at + j) = *k;
+            else
+                *k = B(kept[i].at + j);
+}
+
+void core_boot_drive(void)
+{
+    const ev_boot_drive_t *f;
+    unsigned char upgraded = 0;
+    for (f = ev_boot_drive; *f; f++)
+        (*f)();
+    boot_wait = 0;
+    if (!boot_loaded)
+        return;
+    boot_loaded = boot_done = 0;
+    if (layout_moved()) {
+        int reset = BOOT_FLAGS & 0xa;
+        if (reset)
+            keep_reset(0);
+        PROJECT_CHECK_LOAD(LIVE_PROJECT, S, &upgraded);
+        if (reset)
+            keep_reset(1);
+    }
+    if (!boot_done)
+        proj_finish(S);
 }
 
 /* ---- the project file calls: the serializers work on the file's buffer ---- */
