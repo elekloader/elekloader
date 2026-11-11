@@ -175,7 +175,7 @@ def test_core_a4mk2_sites():
         assert x['stock'][0] == '7' and int(x['stock'][1], 16) % 2 == 0, x     # moveq #28,Dn
     # mod storage's sites (core-a4mk2 0.1: 28 of the 36), and 0.2's 4 page
     # sites, 2 view sites and 5 range bytes, 0.4's OS upgrade restart, and
-    # 0.5's 31 lock sites: 19 in code (rows.s) and 12 vtable entries; and 0.5's
+    # 0.5's 32 lock sites: 20 in code (rows.s; the voice apply among them) and 12 vtable entries; and 0.5's
     # 21 destination sites (dests.s): 15 in code and 6 vtable entries; and
     # 0.5's 2 MIDI sites (midi.s), the three sets' NRPN in and CC in, each a
     # jmp resuming after the 8 bytes it displaced; and 0.6's whole project
@@ -203,7 +203,7 @@ def test_core_a4mk2_sites():
                                                                    'core_push_', 'core_set_'))]
     assert len(dests) == 21 and len([x for x in dests if x['op'] == 'ptr']) == 6
     locks = [x for x in locks if x not in dests]
-    assert len(locks) == 31 and len([x for x in locks if x['op'] == 'ptr']) == 12
+    assert len(locks) == 32 and len([x for x in locks if x['op'] == 'ptr']) == 12
     # the event accept is a jsr over stock's `lea 0x80006178,a0`, which core's
     # stub does before it returns (rows.s)
     x = [x for x in locks if x.get('target') == 'core_accept'][0]
