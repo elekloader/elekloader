@@ -2166,6 +2166,48 @@ def test_core_ar2_0_12_room_for_drive_mods():
 
 
 
+def test_core_a4mk2_0_7_std_midi_sites():
+    """core-a4mk2 0.7's MIDI events and ev_seq_tick (stdmidi.c, stdmidi.s): seven std tables, a
+    site for each stock routine read in 1.56, every target a global of stdmidi.s, and each jmp
+    site's stub resuming right after the stock bytes it displaced (a jsr site's stub tail-calls the
+    status handler instead, and the tick's stub ends in rte)."""
+    import re
+    root = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
+    mdir = os.path.join(root, 'mods', 'core-a4mk2')
+    with open(os.path.join(mdir, 'mod.json'), encoding='utf-8') as fh:
+        doc = json.load(fh)
+    events = ('ev_midi_in', 'ev_sysex_in', 'ev_midi_cc', 'ev_midi_pc', 'ev_midi_out', 'ev_seq_midi',
+              'ev_seq_tick')
+    for e in events:
+        assert doc['std'][e] == 'std_' + e[3:] and doc['collections']['std_' + e[3:]] == 4, e
+    assert 'stdmidi.c' in doc['sources'] and 'stdmidi.s' in doc['sources']
+    with open(os.path.join(mdir, 'stdmidi.s'), encoding='utf-8') as fh:
+        asm = fh.read()
+    globs = set(re.findall(r'core_std_\w+_site', ' '.join(re.findall(r'\.globl\s+(.*)', asm))))
+    want = {'0x4006578a': ('jsr', 'core_std_in_din_site'), '0x40065818': ('jsr', 'core_std_in_usb_site'),
+            '0x40066320': ('jmp', 'core_std_sysex_site'), '0x40068632': ('jmp', 'core_std_cc_site'),
+            '0x40065e9e': ('jmp', 'core_std_pc_site'), '0x400687aa': ('jmp', 'core_std_send_site'),
+            '0x40068698': ('jmp', 'core_std_bits_site'), '0x40068704': ('jmp', 'core_std_rt_site'),
+            '0x40101acc': ('jmp', 'core_std_seq_midi_site'), '0x4007badc': ('jmp', 'core_std_seq_tick_site')}
+    sites = {s['addr']: s for s in doc['sites'] if s.get('target') in globs}
+    assert set(sites) == set(want)
+    for addr, (op, target) in want.items():
+        s = sites[addr]
+        assert (s['op'], s['target']) == (op, target), addr
+        stub = asm.split(target + ':', 1)[1].split('\n\n', 1)[0]
+        if op == 'jsr':
+            assert len(s['stock']) == 12 and 'jmp     (%a0)' in stub, addr
+        elif target == 'core_std_seq_tick_site':
+            assert stub.rstrip().endswith('rte')
+        else:
+            resume = int(addr, 16) + len(s['stock']) // 2
+            assert ('0x%08x' % resume) in stub, (addr, hex(resume))
+    with open(os.path.join(root, 'elekloader', 'sdk', 'include', 'analog-four-mk2', 'ports.h'),
+              encoding='utf-8') as fh:
+        ports = fh.read()
+    for name in ('CORE_MIDI_CC_AUTO', 'CORE_MIDI_PC_STOCK', 'CORE_MIDI_CC_PERF'):
+        assert name in ports
+
 def test_core_a4mk2_0_7_std_map():
     """core-a4mk2 0.7 serves std1 at the sites it owns: each map entry is a std1.h event and one
     of core's tables, the native table for the same prototype or its first part, a std_ table of
@@ -2178,13 +2220,22 @@ def test_core_a4mk2_0_7_std_map():
     with open(os.path.join(root, 'elekloader', 'sdk', 'include', 'std1.h'), encoding='utf-8') as fh:
         events = set(re.findall(r'\(\*std1_(ev_\w+)_fn\)', fh.read()))
     std = doc['std']
-    assert set(std) == {'ev_boot', 'ev_tick', 'ev_draw', 'ev_key', 'ev_settings', 'ev_project',
+    assert set(std) >= {'ev_boot', 'ev_tick', 'ev_draw', 'ev_key', 'ev_settings', 'ev_project',
                         'ev_render_in', 'ev_param_turn'}
     assert set(std) <= events
     assert all(t in doc['collections'] for t in std.values())
     native = {e for e, t in std.items() if t == e}
     assert native == {'ev_tick', 'ev_draw', 'ev_settings', 'ev_project', 'ev_render_in'}
-    assert {std[e] for e in set(std) - native} == {'std_boot', 'std_key', 'std_param_turn'}
+    assert {std[e] for e in ('ev_boot', 'ev_key', 'ev_param_turn')} == {'std_boot', 'std_key', 'std_param_turn'}
+    # every other entry is core's own std_<event> table, which one of its C sources walks
+    csrc = ''
+    for name in doc['sources']:
+        if name.endswith('.c') and not name.startswith('..'):
+            with open(os.path.join(mdir, name), encoding='utf-8') as fh:
+                csrc += fh.read()
+    for e in set(std) - native:
+        assert std[e] == 'std_' + e[3:], e
+        assert re.search(r'^extern const \w+ %s\[\];' % std[e], csrc, re.M), e
     assert doc['defsym'].get('BOOT_INIT') == '1' and 'std.c' in doc['sources']
     subs = {(x['event'], x['fn']): x['order'] for x in doc['subscribe']}
     assert subs[('ev_key', 'core_std_key')] == 0

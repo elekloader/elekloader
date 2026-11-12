@@ -580,16 +580,17 @@ What differs from the Rytm:
 
 ## Standard events (0.7)
 
-`std.c` serves std1 (docs/ADAPTING.md, "Standard events (std1)") at sites
-core owns; A4 numbers are in `analog-four-mk2/keys.h`, `params.h`, `ports.h`
+`std.c` and `stdmidi.c` serve std1 (docs/ADAPTING.md, "Standard events
+(std1)"); A4 numbers are in `analog-four-mk2/keys.h`, `params.h`, `ports.h`
 (`leds.h` is empty).
 
 | std1 event | table | how |
 |---|---|---|
 | `ev_tick`, `ev_draw`, `ev_settings`, `ev_project`, `ev_render_in` | native | = or prefix, sorted by `order` |
 | `ev_boot` | `std_boot` | `.boot` calls `core_boot_init` (`BOOT_INIT`) |
-| `ev_key` | `std_key` | core's `ev_key` handler, order 0: the KeyEvent's code; bit 0 clear is `KEY_RELEASE` (none for a key a view took) |
-| `ev_param_turn` | `std_param_turn` | `param_apply_delta` after `core_params`: a plain turn's sound edit, not a held trig's lock (std.c); `knob` its encoder |
+| `ev_key` | `std_key` | core's `ev_key` handler, order 0 (`std.c` has the flags) |
+| `ev_param_turn` | `std_param_turn` | `param_apply_delta` after `core_params` (`std.c` says which turns) |
+| `ev_midi_in`, `_cc`, `_pc`, `_out`, `ev_sysex_in`, `ev_seq_midi`, `ev_seq_tick` | `std_` + name | stdmidi.c |
 
 `core_post` (32 queued) and `core_timer` (16) run in core's first
 `ev_tick` handler (UI task), `core_redraw` in its last.
