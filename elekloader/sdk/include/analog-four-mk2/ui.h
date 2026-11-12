@@ -57,10 +57,12 @@ const char *core_view_name(const void *view);
  * before stock does it; nonzero takes it (stock does not). pattern 0..127,
  * or PATTERN_NONE. In the UI task, except PATTERN_SET from MIDI's multi map
  * and PATTERN_SPP, which come in the MIDI task. A stop drops a queued change
- * without an event. */
+ * without an event. The pattern view's select reports once, before it
+ * touches the song's row, so a take there leaves the playing pattern; its
+ * song modes report as PATTERN_QUEUE. */
 #define PATTERN_CHANGED 0               /* pre 0 */
 #define PATTERN_QUEUE 1                 /* playing: the change waits for the boundary */
-#define PATTERN_CANCEL 2                /* playing: a queued change is dropped; pattern PATTERN_NONE */
+#define PATTERN_CANCEL 2                /* playing: a queued change is dropped (the playing pattern selected again, or PATTERN_NONE) */
 #define PATTERN_NOW 3                   /* stopped: the pattern changes at once */
 #define PATTERN_SET 4                   /* playing, song modes and MIDI's multi map */
 #define PATTERN_START 5                 /* playing, the pattern view's restart request [I] */
@@ -91,7 +93,7 @@ typedef int (*ev_knob_turn_fn)(void *view, int id, int delta, int knob, int how)
  * KNOB_ID_LEVEL(track): knob ENC_LEVEL or ENC_A + track, delta in 8.8, how
  * TURN_MULTI while a track key is held on the LEVEL encoder, else
  * TURN_SOUND. view is MainScreenView or the mixer page. Taken: the level
- * stays. These are not std1 parameters (std1 has no track level id). */
+ * stays (the mixer page still shows its level popup). These are not std1 parameters (std1 has no track level id). */
 #define KNOB_ID_LEVEL(t) (0x10000 + (t))
 
 /* ---- ev_analog_frame(words), a native event (not std1): the analog

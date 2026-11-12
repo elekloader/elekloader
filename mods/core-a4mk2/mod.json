@@ -193,6 +193,7 @@
   {"addr": "0x40062b00", "stock": "206900207601", "op": "jsr", "target": "core_view_remove_site"},
   {"addr": "0x400633c8", "stock": "206900204e90", "op": "jsr", "target": "core_view_replace_old_site"},
   {"addr": "0x400633fc", "stock": "22502269001c", "op": "jsr", "target": "core_view_replace_new_site"},
+  {"addr": "0x40029b9e", "stock": "4fefffe4707f", "op": "jmp", "target": "core_pattern_view_site"},
   {"addr": "0x4007c6e4", "stock": "41ef000423d0412817564e75", "op": "jmp", "target": "core_pattern_queue_site"},
   {"addr": "0x4007c5fc", "stock": "4feffff048d7041c", "op": "jmp", "target": "core_pattern_jump_site"},
   {"addr": "0x4007c186", "stock": "2f027401202f0008", "op": "jmp", "target": "core_pattern_set_site"},

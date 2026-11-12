@@ -284,6 +284,33 @@ core_view_replace_new_site:
         bne.s   9f
         .endm
 
+| the pattern view's select 0x40029b9e(view, pattern): `lea -28(%sp),%sp;
+| moveq #127,%d0` (6 bytes). Reported before it writes the row; unless taken
+| the stub runs it (through a copy of those two instructions) with its two
+| arguments, then lets the routines below report again.
+        .globl  core_pattern_view_site
+core_pattern_view_site:
+        lea     -12(%sp),%sp
+        movem.l %d1/%a0-%a1,(%sp)
+        move.l  20(%sp),-(%sp)            | pattern
+        move.l  20(%sp),-(%sp)            | view
+        jsr     core_pattern_view
+        addq.l  #8,%sp
+        movem.l (%sp),%d1/%a0-%a1
+        lea     12(%sp),%sp
+        tst.l   %d0
+        bne.s   9f
+        move.l  8(%sp),-(%sp)
+        move.l  8(%sp),-(%sp)
+        jsr     core_pattern_view_stock
+        addq.l  #8,%sp
+        jsr     core_pattern_view_end
+9:      rts
+core_pattern_view_stock:
+        lea     -28(%sp),%sp
+        moveq   #127,%d0
+        jmp     0x40029ba4
+
 | queue 0x4007c6e4(row): `lea 4(%sp),%a0; move.l (%a0),0x41281756; rts`
 | (12 bytes, the whole routine)
         PREQ    core_pattern_queue_site, core_pattern_queue

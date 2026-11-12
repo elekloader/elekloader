@@ -28,7 +28,8 @@
  *   ev_view       std_view       the view stack's push (0x40062a60) and its
  *                                three removes (0x40062c7c, 0x40062b00,
  *                                0x400633c8); a page swap's new view (0x400633fc)
- *   ev_pattern    std_pattern    also pre 1, the requests: queue (0x4007c6e4),
+ *   ev_pattern    std_pattern    also pre 1, the requests: the pattern view's
+ *                                select (0x40029b9e), queue (0x4007c6e4),
  *                                jump now (0x4007c5fc), set while playing
  *                                (0x4007c186), restart (0x40079eaa), song
  *                                position (0x4007c3bc)
@@ -443,10 +444,44 @@ static int pattern_req(unsigned pattern, unsigned how)
     return 0;
 }
 
+/* The pattern view's select (0x40029b9e(view, pattern), at its entry)
+ * reports its request itself, before it writes the new pattern into the
+ * playing row (0x400afac2) and queues that row: a take there leaves the row
+ * as it was, so the playing pattern stays. While it runs, the routines below
+ * stay quiet (pattern_in_view), so one select is one event. Playing, the
+ * playing pattern selected again while another is queued is a CANCEL;
+ * stock queues its row again. The view's song modes report as QUEUE. */
+#define QUEUED_ROW (*(volatile int32_t *)0x41281756u)
+static volatile uint8_t pattern_in_view;
+
+int core_pattern_view(uint8_t *view, uint32_t pattern)
+{
+    unsigned how;
+    if (!std_pattern[0] || pattern > 0x7fu)
+        return 0;
+    if (TRANSPORT != 1)
+        how = PATTERN_NOW;
+    else if (view[0xc6])
+        how = PATTERN_START;
+    else if (pattern == PATTERN_BYTE && QUEUED_ROW >= 0)
+        how = PATTERN_CANCEL;
+    else
+        how = PATTERN_QUEUE;
+    if (pattern_req(pattern, how))
+        return 1;
+    pattern_in_view = 1;
+    return 0;
+}
+
+void core_pattern_view_end(void)
+{
+    pattern_in_view = 0;
+}
+
 /* 0x4007c6e4(row): queue a row, -1 cancels */
 int core_pattern_queue(int32_t row)
 {
-    if (!std_pattern[0])
+    if (!std_pattern[0] || pattern_in_view)
         return 0;
     if (row < 0)
         return pattern_req(PATTERN_NONE, PATTERN_CANCEL);
@@ -459,7 +494,7 @@ int core_pattern_queue(int32_t row)
  * above 0xff) */
 int core_pattern_jump(uint32_t row)
 {
-    if (!std_pattern[0] || row > 0xffu)
+    if (!std_pattern[0] || pattern_in_view || row > 0xffu)
         return 0;
     return pattern_req(ROW_PATTERN(row), PATTERN_NOW);
 }
@@ -469,7 +504,7 @@ int core_pattern_jump(uint32_t row)
  * reported there) */
 int core_pattern_set(uint32_t pattern)
 {
-    if (!std_pattern[0] || TRANSPORT != 1)
+    if (!std_pattern[0] || pattern_in_view || TRANSPORT != 1)
         return 0;
     return pattern_req(pattern & 0xffu, PATTERN_SET);
 }
@@ -478,7 +513,7 @@ int core_pattern_set(uint32_t pattern)
  * restart flag (view+0xc6) */
 int core_pattern_start(uint32_t pattern)
 {
-    if (!std_pattern[0] || TRANSPORT != 1)
+    if (!std_pattern[0] || pattern_in_view || TRANSPORT != 1)
         return 0;
     return pattern_req(pattern & 0xffu, PATTERN_START);
 }

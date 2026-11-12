@@ -2220,10 +2220,10 @@ def test_core_a4mk2_0_7_ui_sites():
     globs |= {m for m in re.findall(r'^\s*(?:CLIP|PREQ)\s+(\w+),', asm, re.M)}
     cfns = set(re.findall(r'^\w[\w ]*?\b(core_\w+)\(', src, re.M))
     ui_sites = [s for s in doc['sites'] if s.get('target') in globs | cfns]
-    assert len(ui_sites) == 49
+    assert len(ui_sites) == 50
     assert len([s for s in ui_sites if s['target'].startswith('core_clip_')]) == 22
     assert len([s for s in ui_sites if s['target'].startswith('core_view_')]) == 5
-    assert len([s for s in ui_sites if s['target'].startswith('core_pattern_') and s['target'] != 'core_pattern_site']) == 5
+    assert len([s for s in ui_sites if s['target'].startswith('core_pattern_') and s['target'] != 'core_pattern_site']) == 6
     for s in ui_sites:
         assert len(s['stock']) // 2 >= (4 if s['op'] == 'ptr' else 6), s
         if s['op'] == 'keep2':
