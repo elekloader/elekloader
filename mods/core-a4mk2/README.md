@@ -541,7 +541,7 @@ core-ar2 0.11's payloads (`../core-ar2/payload.c`, `core_payloads`;
 docs/ADAPTING.md, "Payloads (core-a4mk2 0.6, Analog Four MKII)"). With core
 0.6 the linker lays the mods out from 0x45650000 to 0x47C00000 (the profile's
 `core_ddr`, 37.7 MB): the gap above the OS's fixed buffers, which
-ddr-canary-a4mk2 checked untouched on a unit (21 Oct 2026), from its first
+ddr-canary checked untouched on a unit (21 Oct 2026), from its first
 64 KB boundary, with the 128 KB area above it. A build with an older core
 keeps the 128 KB. The flash budget is the tighter limit for a payload.
 
@@ -624,8 +624,15 @@ The runs' logs are in their pull requests; what they established:
   parameter; RANDOMIZE landing on a mod parameter; the route screens'
   lists; a kit of another layout; a poly track's two voices, a sound-locked
   trig's pool sound, `"smooth": false`, CONTROL IN; an NRPN with a trig
-  held, USB MIDI. 0.6 has run in the emulator only (the check mods'
-  plans), not on a unit.
+  held, USB MIDI.
+- **0.6 on a unit** (OS 1.56, 11-12 Nov 2026) [hw]: the check mods'
+  plans passed as in the emulator: `ev_project_save` around saves onto the
+  active slot, into another and of a new project into an empty slot (stock's
+  own load request with create-if-empty set, made from a page knob inside
+  the view dispatch: `CORE_SAVE_NEW`), the modified mark, payloads, knob
+  looks and the screen calls (fonts, overlays, the LEVEL readout's window,
+  `core_key_native`, the progress box); CPU about 73 % with analoghealth
+  (the emulator's about 50 %), the heap flat.
 - Statically, against the stock image: every site's stock bytes, that each
   covers whole instructions, that each body in `store.s` and `looks.s`
   resumes after the bytes its site displaced, and that the serializers
