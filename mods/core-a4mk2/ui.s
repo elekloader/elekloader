@@ -109,7 +109,7 @@ core_knob_site:
         jmp     0x40025b82
 1:      jmp     0x40025d32
 
-| ---- ev_clip: 22 routines' entries. Each stub asks core_clip_pre(code, a1,
+| ---- ev_clip: 23 routines' entries. Each stub asks core_clip_pre(code, a1,
 | a2); unless a handler took it, it calls the routine through a copy of its
 | first instructions with four of its arguments, then core_clip_post(code, a1,
 | a2), and returns the routine's %d0. code = kind | op << 8 | flags << 16
@@ -185,3 +185,33 @@ core_knob_site:
         CLIP    core_clip_trigs_copy,   0x400b8e66, 8,  0x00000007, 0x4e56, 0xff84, 0x48d7, 0x3cfc
 | the SONG editor's copy virtual (+0x34), FUNC+REC: the row under the cursor
         CLIP    core_clip_chain_copy,   0x40044844, 8,  0x00080008, 0x4e56, 0xfff0, 0x2f0a, 0x2f02
+
+| ---- ev_clip, the PROJECT list's copy. Its handler 0x4003c380(pm, key)
+| (link.w %fp,#-44; movem.l %d2/%a2-%a3,(%sp): 8 bytes) queues a "Project
+| Copy" job and always returns 1 (handled): pre here, with the slot under the
+| cursor; a take returns 1 and queues nothing. The job's done callback
+| 0x4003ea96(closure, ok) runs in the UI task once the copy ended (link.w
+| %fp,#-36; movem.l %d2-%d3/%a2,(%sp): 8 bytes): post there, after it.
+        .globl  core_clip_project_copy
+core_clip_project_copy:
+        move.l  4(%sp),-(%sp)             | pm
+        jsr     core_clip_project_pre
+        addq.l  #4,%sp
+        tst.l   %d0
+        bne.s   1f
+        .short  0x4e56, 0xffd4, 0x48d7, 0x0c04
+        jmp     0x4003c388
+1:      moveq   #1,%d0
+        rts
+
+        .globl  core_clip_project_done
+core_clip_project_done:
+        move.l  8(%sp),-(%sp)             | ok
+        move.l  8(%sp),-(%sp)             | closure
+        jsr     core_clip_project_done_stock
+        jsr     core_clip_project_post
+        addq.l  #8,%sp
+        rts
+core_clip_project_done_stock:
+        .short  0x4e56, 0xffdc, 0x48d7, 0x040c
+        jmp     0x4003ea9e

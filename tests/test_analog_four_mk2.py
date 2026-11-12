@@ -187,9 +187,9 @@ def test_core_a4mk2_sites():
     # 21 destination sites (dests.s): 15 in code and 6 vtable entries; and
     # 0.5's 2 MIDI sites (midi.s), the three sets' NRPN in and CC in, each a
     # jmp resuming after the 8 bytes it displaced; and 0.6's whole project
-    # save (store.s) and three knob look sites (looks.s); and 0.7's 39 UI and system sites (ui.s,
+    # save (store.s) and three knob look sites (looks.s); and 0.7's 41 UI and system sites (ui.s,
     # ui.c; tests/test_units.py, test_core_a4mk2_0_7_ui_sites)
-    assert len(mod["sites"]) == 146
+    assert len(mod["sites"]) == 148
     midi = [x for x in mod['sites'] if x.get('target') in ('core_nrpn_site', 'core_cc_site')]
     assert [(x['addr'], x['op'], x['stock']) for x in midi] == \
         [('0x4009ff56', 'jmp', '4fefffec48d7043c'), ('0x400a0b62', 'jmp', '4e56ffd848d71cfc')]

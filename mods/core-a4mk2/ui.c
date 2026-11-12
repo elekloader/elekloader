@@ -348,6 +348,48 @@ void core_clip_post(uint32_t code, uint32_t a1, uint32_t a2)
         (*f)(0, &c);
 }
 
+/* The PROJECT list's copy (ui.s): pre at its handler, which only queues
+ * the copy, post at the job's done callback in the UI task, whether the copy
+ * worked or showed ERROR. The slot is the list's item under the cursor
+ * (pm's +0x24 virtual, the cursor clamped as stock clamps it, then the
+ * 8-byte item at *(pm + 4)): its +4 is -1 for the working project, else
+ * 0..127. A done callback stock could not post (its ring entry busy) brings
+ * no post. */
+static uint8_t project_slot(int32_t slot)
+{
+    if (slot == -1)
+        return CLIP_SLOT_WORKING;
+    return slot >= 0 && slot < 128 ? (uint8_t)slot : CLIP_NONE;
+}
+
+int core_clip_project_pre(char *pm)
+{
+    typedef int32_t (*cursor_t)(void *);
+    struct core_clip c = {CLIP_PROJECT, CLIP_COPY, CLIP_NONE, CLIP_NONE};
+    const fn_clip *f;
+    int32_t idx;
+    if (!std_clip[0])
+        return 0;
+    idx = (*(cursor_t *)(*(char **)pm + 0x24))(pm);
+    c.slot = project_slot(*(int32_t *)(*(char **)(*(char **)(pm + 4) + idx * 8) + 4));
+    for (f = std_clip; *f; f++)
+        if ((*f)(1, &c))
+            return 1;
+    return 0;
+}
+
+void core_clip_project_post(int32_t **closure, int32_t ok)
+{
+    struct core_clip c = {CLIP_PROJECT, CLIP_COPY, CLIP_NONE, CLIP_NONE};
+    const fn_clip *f;
+    (void)ok;
+    if (!std_clip[0])
+        return;
+    c.slot = project_slot(**closure);
+    for (f = std_clip; *f; f++)
+        (*f)(0, &c);
+}
+
 /* STOP and PLAY outside grid record: the pattern view's paste and clear
  * (0x400c0a74, 0x400c0b48; only when no undo is possible) call the pattern's
  * own routines, hooked at those calls (keep2): 0x400a2cba(pattern, 1) and

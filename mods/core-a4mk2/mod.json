@@ -190,7 +190,9 @@
   {"addr": "0x400a2aa4", "stock": "4e56ffdc48d71c0c", "op": "jmp", "target": "core_clip_pattern_copy"},
   {"addr": "0x400b933c", "stock": "4e56ffd848d73c0c", "op": "jmp", "target": "core_clip_page_copy"},
   {"addr": "0x400b8e66", "stock": "4e56ff8448d73cfc", "op": "jmp", "target": "core_clip_trigs_copy"},
-  {"addr": "0x40044844", "stock": "4e56fff02f0a2f02", "op": "jmp", "target": "core_clip_chain_copy"}
+  {"addr": "0x40044844", "stock": "4e56fff02f0a2f02", "op": "jmp", "target": "core_clip_chain_copy"},
+  {"addr": "0x4003c380", "stock": "4e56ffd448d70c04", "op": "jmp", "target": "core_clip_project_copy"},
+  {"addr": "0x4003ea96", "stock": "4e56ffdc48d7040c", "op": "jmp", "target": "core_clip_project_done"}
  ],
  "collections": {"ev_tick": 4, "ev_draw": 4, "ev_key": 4, "ev_enc": 4, "ev_settings": 4, "ev_render_in": 4, "ev_render_out": 4, "ev_project": 4, "ev_project_save": 4, "core_store_ids": 4, "core_pages": 4, "core_params": 4, "core_view_pages": 4, "core_page_fns": 4, "core_lock_params": 4, "core_lock_codes": 8, "core_lock_ccs": 8, "core_field_inits": 4, "core_payloads": 12, "core_knob_looks": 4, "std_boot": 4, "std_key": 4, "std_param_turn": 4, "std_boot_done": 4, "std_idle": 4, "std_crash": 4, "std_usb": 4, "std_key_leds": 4, "std_mode": 4, "std_param_set": 4, "std_clip": 4, "std_pattern": 4, "std_mute": 4, "ev_knob_turn": 4},
  "resources": {"names": ["timer:DTIM0"]}
