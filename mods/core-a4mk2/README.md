@@ -589,7 +589,7 @@ core owns; A4 numbers are in `analog-four-mk2/keys.h`, `params.h`, `ports.h`
 | `ev_tick`, `ev_draw`, `ev_settings`, `ev_project`, `ev_render_in` | native | = or prefix, sorted by `order` |
 | `ev_boot` | `std_boot` | `.boot` calls `core_boot_init` (`BOOT_INIT`) |
 | `ev_key` | `std_key` | core's `ev_key` handler, order 0: the KeyEvent's code; bit 0 clear is `KEY_RELEASE` (none for a key a view took) |
-| `ev_param_turn` | `std_param_turn` | `param_apply_delta` once every `core_params` entry passed, held trigs included; `knob` the turn's encoder; a take: no edit, no lock |
+| `ev_param_turn` | `std_param_turn` | `param_apply_delta` after `core_params`: a plain turn's sound edit, not a held trig's lock (std.c); `knob` its encoder |
 
 `core_post` (32 queued) and `core_timer` (16) run in core's first
 `ev_tick` handler (UI task), `core_redraw` in its last.

@@ -101,7 +101,11 @@ int core_std_enc(void *brain, void *ev)
 }
 
 /* pages.s, when no core_params entry took the turn: (view, id, delta 8.8,
- * func); knob is the turning encoder, 0..9 A..J (ENC_* in keys.h) */
+ * func); knob is the turning encoder, 0..9 A..J (ENC_* in keys.h). The page
+ * view's turn (0x4002598c) calls it only for a plain turn's sound edit: a
+ * held trig's p-lock and a held track key's multi-track edit go elsewhere,
+ * as std1 asks (no steps held), and a turn below the accelerator's step
+ * makes no call. */
 int core_std_param_turn(void *view, int32_t id, int32_t delta, int32_t func)
 {
     const fn_turn *f;
