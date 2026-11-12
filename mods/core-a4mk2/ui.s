@@ -173,3 +173,206 @@ core_knob_site:
         CLIP    core_clip_tsound_paste, 0x400c89ec, 10, 0x00020105, 0x4e56, 0xffe4, 0x7003, 0x48d7, 0x1c00
         CLIP    core_clip_pattern_clear, 0x4002a440, 8, 0x00000200, 0x4e56, 0xffb8, 0x206e, 0x0008
         CLIP    core_clip_pattern_paste, 0x4002a55e, 8, 0x00000100, 0x4e56, 0xffd8, 0x206e, 0x0008
+
+| ---- ev_view: the view stack. Each stub reports (op, ctrl, view) through
+| core_view_report, keeping the scratch registers the code around it holds.
+| push: 0x40062a60 `jsr 0x40180992` (keep2), the funnel's list insert (two
+| stacked args); %a2 the controller, (%a3) the new view. Reported after the
+| insert, before the relayout and the view's on-push.
+        .globl  core_view_push_site
+core_view_push_site:
+        move.l  8(%sp),-(%sp)
+        move.l  8(%sp),-(%sp)
+        jsr     0x40180992
+        addq.l  #8,%sp
+        lea     -16(%sp),%sp
+        movem.l %d0-%d1/%a0-%a1,(%sp)
+        move.l  (%a3),-(%sp)
+        move.l  %a2,-(%sp)
+        clr.l   -(%sp)                    | VIEW_PUSH
+        jsr     core_view_report
+        lea     12(%sp),%sp
+        movem.l (%sp),%d0-%d1/%a0-%a1
+        lea     16(%sp),%sp
+        rts
+
+| pop (close sweep): 0x40062c7c `movea.l 0x20(%a0),%a0; jsr (%a0)` (jsr
+| here; 6 bytes): %a4 the view, %a3 the controller, %a0 its vtable; its
+| on-remove's args (view, ctrl) are stacked under the return address
+| 0x40062c82, so the stub ends in a jmp to it
+        .globl  core_view_sweep_site
+core_view_sweep_site:
+        move.l  %a0,-(%sp)
+        move.l  %a4,-(%sp)
+        move.l  %a3,-(%sp)
+        moveq   #2,%d0                    | VIEW_POP
+        move.l  %d0,-(%sp)
+        jsr     core_view_report
+        lea     12(%sp),%sp
+        movea.l (%sp)+,%a0
+        movea.l 0x20(%a0),%a0
+        jmp     (%a0)
+
+| pop (remove one): 0x40062b00 `movea.l 0x20(%a1),%a0; moveq #1,%d3` (jsr
+| here); %a0 the view, %a1 its vtable, %a3 the controller; the on-remove's
+| jsr (%a0) follows at 0x40062b06
+        .globl  core_view_remove_site
+core_view_remove_site:
+        lea     -16(%sp),%sp
+        movem.l %d0-%d1/%a0-%a1,(%sp)
+        move.l  %a0,-(%sp)
+        move.l  %a3,-(%sp)
+        moveq   #2,%d0                    | VIEW_POP
+        move.l  %d0,-(%sp)
+        jsr     core_view_report
+        lea     12(%sp),%sp
+        movem.l (%sp),%d0-%d1/%a0-%a1
+        lea     16(%sp),%sp
+        movea.l 0x20(%a1),%a0
+        moveq   #1,%d3
+        rts
+
+| pop (replace, the old view): 0x400633c8 `movea.l 0x20(%a1),%a0; jsr
+| (%a0)` (jsr here); %a0 the old view, %a1 its vtable, %a3 the controller;
+| ends in a jmp to its on-remove as the sweep's
+        .globl  core_view_replace_old_site
+core_view_replace_old_site:
+        move.l  %a1,-(%sp)
+        move.l  %a0,-(%sp)
+        move.l  %a3,-(%sp)
+        moveq   #2,%d0                    | VIEW_POP
+        move.l  %d0,-(%sp)
+        jsr     core_view_report
+        lea     12(%sp),%sp
+        movea.l (%sp)+,%a1
+        movea.l 0x20(%a1),%a0
+        jmp     (%a0)
+
+| push (replace, the new view): 0x400633fc `movea.l (%a0),%a1; movea.l
+| 0x1c(%a1),%a1` (jsr here); %a0 the new view, %a3 the controller; its
+| on-push follows at 0x40063402
+        .globl  core_view_replace_new_site
+core_view_replace_new_site:
+        lea     -16(%sp),%sp
+        movem.l %d0-%d1/%a0-%a1,(%sp)
+        move.l  %a0,-(%sp)
+        move.l  %a3,-(%sp)
+        clr.l   -(%sp)                    | VIEW_PUSH
+        jsr     core_view_report
+        lea     12(%sp),%sp
+        movem.l (%sp),%d0-%d1/%a0-%a1
+        lea     16(%sp),%sp
+        movea.l (%a0),%a1
+        movea.l 0x1c(%a1),%a1
+        rts
+
+| ---- ev_pattern pre 1: the requests, at each routine's entry (jmp). The
+| C side (core_pattern_*) takes the routine's first argument; nonzero takes
+| the request and the routine returns at once. The scratch registers are kept,
+| as some callers reach these through a register.
+        .macro  PREQ name, fn
+        .globl  \name
+\name:
+        lea     -12(%sp),%sp
+        movem.l %d1/%a0-%a1,(%sp)
+        move.l  16(%sp),-(%sp)
+        jsr     \fn
+        addq.l  #4,%sp
+        movem.l (%sp),%d1/%a0-%a1
+        lea     12(%sp),%sp
+        tst.l   %d0
+        bne.s   9f
+        .endm
+
+| queue 0x4007c6e4(row): `lea 4(%sp),%a0; move.l (%a0),0x41281756; rts`
+| (12 bytes, the whole routine)
+        PREQ    core_pattern_queue_site, core_pattern_queue
+        lea     4(%sp),%a0
+        move.l  (%a0),0x41281756
+9:      rts
+
+| jump now 0x4007c5fc(row, offset): `lea -16(%sp),%sp; movem.l
+| %d2-%d4/%a2,(%sp)` (8 bytes)
+        PREQ    core_pattern_jump_site, core_pattern_jump
+        lea     -16(%sp),%sp
+        movem.l %d2-%d4/%a2,(%sp)
+        jmp     0x4007c604
+9:      rts
+
+| set 0x4007c186(pattern, flag): `move.l %d2,-(%sp); moveq #1,%d2; move.l
+| 8(%sp),%d0` (8 bytes)
+        PREQ    core_pattern_set_site, core_pattern_set
+        move.l  %d2,-(%sp)
+        moveq   #1,%d2
+        move.l  8(%sp),%d0
+        jmp     0x4007c18e
+9:      rts
+
+| restart 0x40079eaa(pattern): `moveq #1,%d0; cmp.l 0x80006a88,%d0` (8
+| bytes); a bne.b on its flags follows
+        PREQ    core_pattern_start_site, core_pattern_start
+        moveq   #1,%d0
+        cmp.l   0x80006a88,%d0
+        jmp     0x40079eb2
+9:      rts
+
+| song position 0x4007c3bc(position): `link.w %fp,#-24; moveq #1,%d0` (6
+| bytes)
+        PREQ    core_pattern_spp_site, core_pattern_spp
+        link.w  %fp,#-24
+        moveq   #1,%d0
+        jmp     0x4007c3c2
+9:      rts
+
+| ---- ev_knob_turn, the LEVEL encoder: 0x400bedb2 `jsr 0x400589ee` (keep2),
+| MainScreenView's accelerator step (five stacked args), before it tests the
+| event is the LEVEL encoder. %a2 the view, %d2 the event, %d3 the active
+| track, %d4.b the external/frozen flag. Returns the delta stock goes on with.
+        .globl  core_level_site
+core_level_site:
+        move.l  20(%sp),-(%sp)
+        move.l  20(%sp),-(%sp)
+        move.l  20(%sp),-(%sp)
+        move.l  20(%sp),-(%sp)
+        move.l  20(%sp),-(%sp)
+        jsr     0x400589ee
+        lea     20(%sp),%sp
+        tst.l   %d0
+        beq.s   1f
+        move.l  %d0,-(%sp)
+        move.l  %d4,-(%sp)
+        move.l  %d3,-(%sp)
+        move.l  %d2,-(%sp)
+        move.l  %a2,-(%sp)
+        jsr     core_level_turn
+        lea     20(%sp),%sp
+1:      rts
+
+| ---- ev_knob_turn, the mixer page: 0x400c543a `jsr 0x4009dc3a` (keep2),
+| its level set (settings, track, value, send); %a2 the view. The caller
+| pops the arguments and does not use %d0.
+        .globl  core_mixer_site
+core_mixer_site:
+        move.l  16(%sp),-(%sp)
+        move.l  16(%sp),-(%sp)
+        move.l  16(%sp),-(%sp)
+        move.l  16(%sp),-(%sp)
+        move.l  %a2,-(%sp)
+        jsr     core_mixer_level
+        lea     20(%sp),%sp
+        rts
+
+| ---- ev_analog_frame: 0x40103da6 `jsr 0x400fc614` (keep2), the CV builder
+| at the end of the audio interrupt's block, just before the frame (0x80003d6c)
+| is packed (0x40103db4)
+        .globl  core_analog_frame_site
+core_analog_frame_site:
+        jsr     0x400fc614
+        tst.l   ev_analog_frame
+        beq.s   1f
+        lea     -16(%sp),%sp
+        movem.l %d0-%d1/%a0-%a1,(%sp)
+        jsr     core_analog_frame
+        movem.l (%sp),%d0-%d1/%a0-%a1
+        lea     16(%sp),%sp
+1:      rts

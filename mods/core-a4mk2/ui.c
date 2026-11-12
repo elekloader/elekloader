@@ -22,7 +22,18 @@
  *                                (case 9, 0x40099c84), when the pattern changed
  *   ev_mute       std_mute       the mute setter's entry (0x400aeb8e)
  *   ev_knob_turn  (native)       the page view's turn (0x4002598c) after its
- *                                step and lockout checks (0x40025b78)
+ *                                step and lockout checks (0x40025b78), the
+ *                                LEVEL encoder (0x400bedb2) and the mixer
+ *                                page's level set (0x400c543a)
+ *   ev_view       std_view       the view stack's push (0x40062a60) and its
+ *                                three removes (0x40062c7c, 0x40062b00,
+ *                                0x400633c8); a page swap's new view (0x400633fc)
+ *   ev_pattern    std_pattern    also pre 1, the requests: queue (0x4007c6e4),
+ *                                jump now (0x4007c5fc), set while playing
+ *                                (0x4007c186), restart (0x40079eaa), song
+ *                                position (0x4007c3bc)
+ *   ev_analog_frame (native)     the analog frame before it is packed
+ *                                (0x40103da6), audio interrupt
  */
 
 #include <stdint.h>
@@ -54,6 +65,9 @@ extern const fn_clip std_clip[];
 extern const fn_pattern std_pattern[];
 extern const fn_mute std_mute[];
 extern const ev_knob_turn_fn ev_knob_turn[];
+typedef int (*fn_view)(int, void *, void *, void *);
+extern const fn_view std_view[];
+extern const ev_analog_frame_fn ev_analog_frame[];
 
 static unsigned short irq_mask(void)
 {
@@ -389,25 +403,122 @@ uint32_t core_clip_pclear(void *pattern, int32_t whole, int32_t undo)
 /* The sequencer posts message 9 to the UI task at every pattern boundary:
  * a queued change's commit, an immediate switch and a plain loop restart.
  * The pattern byte (0x80006acc) tells a change from a restart. Only the
- * change is reported, after it (pre 0, how 0); the request is not hooked. */
-#define PATTERN_NOW (*(volatile uint8_t *)0x80006accu)
+ * change is reported, after it (pre 0, PATTERN_CHANGED). */
+#define PATTERN_BYTE (*(volatile uint8_t *)0x80006accu)
 static unsigned pattern_last = 0x100u;
 
 static void pattern_seed(void)
 {
     if (pattern_last > 0xffu)
-        pattern_last = PATTERN_NOW;
+        pattern_last = PATTERN_BYTE;
 }
 
 void core_pattern_msg(void)
 {
-    unsigned now = PATTERN_NOW;
+    unsigned now = PATTERN_BYTE;
     const fn_pattern *f;
     if (pattern_last <= 0xffu && now != pattern_last)
         for (f = std_pattern; *f; f++)
-            if ((*f)(0, now, 0))
+            if ((*f)(0, now, PATTERN_CHANGED))
                 break;
     pattern_last = now;
+}
+
+/* The requests (pre 1), each at its routine's entry (ui.s), before stock
+ * acts; nonzero from a handler takes it, and the routine returns at once.
+ * A queued change is a row of the active song's row table (0x4127fbd4,
+ * 0x14 bytes a row, 256 rows), whose pattern byte (+0x11) is the one the
+ * tick's resolver (0x400793e4) and the jump (0x4007c5fc) read. The pattern
+ * view writes the new pattern into the row (0x400afac2) before it queues
+ * it, so the byte is the request's. */
+#define TRANSPORT (*(volatile int32_t *)0x80006a88u)  /* 1 playing */
+#define ROW_PATTERN(r) (*(volatile uint8_t *)(0x4127fbe5u + (uint32_t)(r) * 0x14u))
+
+static int pattern_req(unsigned pattern, unsigned how)
+{
+    const fn_pattern *f;
+    for (f = std_pattern; *f; f++)
+        if ((*f)(1, pattern, how))
+            return 1;
+    return 0;
+}
+
+/* 0x4007c6e4(row): queue a row, -1 cancels */
+int core_pattern_queue(int32_t row)
+{
+    if (!std_pattern[0])
+        return 0;
+    if (row < 0)
+        return pattern_req(PATTERN_NONE, PATTERN_CANCEL);
+    if (row > 0xff)
+        return 0;
+    return pattern_req(ROW_PATTERN(row), PATTERN_QUEUE);
+}
+
+/* 0x4007c5fc(row, offset): stopped, go to a row now (stock ignores rows
+ * above 0xff) */
+int core_pattern_jump(uint32_t row)
+{
+    if (!std_pattern[0] || row > 0xffu)
+        return 0;
+    return pattern_req(ROW_PATTERN(row), PATTERN_NOW);
+}
+
+/* 0x4007c186(pattern, flag): playing, a request the tick takes; stopped,
+ * the pattern is set at once (the jump's and the song position's own call,
+ * reported there) */
+int core_pattern_set(uint32_t pattern)
+{
+    if (!std_pattern[0] || TRANSPORT != 1)
+        return 0;
+    return pattern_req(pattern & 0xffu, PATTERN_SET);
+}
+
+/* 0x40079eaa(pattern): playing only, the pattern view's request with its
+ * restart flag (view+0xc6) */
+int core_pattern_start(uint32_t pattern)
+{
+    if (!std_pattern[0] || TRANSPORT != 1)
+        return 0;
+    return pattern_req(pattern & 0xffu, PATTERN_START);
+}
+
+/* 0x4007c3bc(position): stopped only, stock stops, picks the row for the
+ * position and sets its pattern; the pattern is not known before */
+int core_pattern_spp(void)
+{
+    if (!std_pattern[0] || TRANSPORT == 1)
+        return 0;
+    return pattern_req(PATTERN_NONE, PATTERN_SPP);
+}
+
+/* ================================= ev_view ================================= */
+
+/* ui.s's sites: the push funnel's list insert (0x4006293a, at 0x40062a60),
+ * the close sweep (0x40062c1c), the remove of one view (0x40062a98) and the
+ * replace (0x40063330, the page swap: old out, new in). The view's class
+ * name is at view+0x28. */
+void core_view_report(int op, void *ctrl, void *view)
+{
+    const fn_view *f;
+    for (f = std_view; *f; f++)
+        (*f)(op, ctrl, view, 0);
+}
+
+const char *core_view_name(const void *view)
+{
+    return view ? *(const char *const *)((const uint8_t *)view + 0x28) : 0;
+}
+
+/* ============================= ev_analog_frame ============================= */
+
+/* 0x40103da6, in the audio interrupt: after the CV builder (0x400fc614),
+ * before 0x400639a4 packs the 100 words at 0x80003d6c */
+void core_analog_frame(void)
+{
+    const ev_analog_frame_fn *f;
+    for (f = ev_analog_frame; *f; f++)
+        (*f)((uint16_t *)0x80003d6cu);
 }
 
 /* ================================= ev_mute ================================= */
@@ -465,6 +576,59 @@ int core_knob_turn(void *view, int32_t id, int32_t delta, int32_t knob)
         if ((*f)(view, id, delta, knob, how))
             return 1;
     return 0;
+}
+
+/* The LEVEL encoder: MainScreenView's encoder virtual (0x400bed54) steps
+ * every encoder event through the accelerator (0x400589ee, at 0x400bedb2)
+ * and only then tests it is the LEVEL encoder (0x40058724). Its edit
+ * (0x400beef4) sets the active track's level, or T1-T4's while their keys
+ * are held, by delta; an external or frozen track's turn is its Ext. Vol.
+ * Stock edits nothing on the CV track (5) unless it is external, nor with
+ * FUNC held (it opens a view instead) unless the track is FX, or external,
+ * or boot flag 0x100000 is set. ui.s passes the step's delta; the return is
+ * the delta stock uses (0: taken, the level stays). */
+typedef uint8_t (*is_level_t)(int32_t event);
+#define IS_LEVEL ((is_level_t)0x40058724u)
+#define BOOT_FLAGS (*(volatile uint32_t *)0x401ff54cu)
+
+int32_t core_level_turn(void *view, int32_t event, int32_t track, uint32_t ext, int32_t delta)
+{
+    const ev_knob_turn_fn *f;
+    int how;
+    ext &= 0xffu;
+    if (!ev_knob_turn[0] || !delta || !IS_LEVEL(event))
+        return delta;
+    if (track == TRACK_CV && !ext)
+        return delta;
+    if (!ext && !(BOOT_FLAGS & 0x100000u) && KEY_HELD(KEYID_FUNC) && track != TRACK_FX)
+        return delta;
+    how = (KEY_HELD(0x20) || KEY_HELD(0x21) || KEY_HELD(0x22) || KEY_HELD(0x23)) ? TURN_MULTI : TURN_SOUND;
+    for (f = ev_knob_turn; *f; f++)
+        if ((*f)(view, KNOB_ID_LEVEL(track), delta, ENC_LEVEL, how))
+            return 0;
+    return delta;
+}
+
+/* The mixer page (0x401a6d00, key 0xb3) handles knobs A..E itself: knob n
+ * sets track n's level in whole steps, 0x4009dc3a(settings, n, old + counts,
+ * send), with no accelerator. ui.s calls this in place of that call. */
+typedef int32_t (*level_get_t)(void *settings, int32_t track);
+typedef int32_t (*level_set_t)(void *settings, int32_t track, int32_t value, int32_t send);
+#define LEVEL_GET ((level_get_t)0x4009c8d4u)
+#define LEVEL_SET ((level_set_t)0x4009dc3au)
+
+int32_t core_mixer_level(void *view, void *settings, int32_t track, int32_t value, int32_t send)
+{
+    if (ev_knob_turn[0] && (uint32_t)track <= TRACK_FX) {
+        int32_t delta = value - (int8_t)LEVEL_GET(settings, track);
+        if (delta) {
+            const ev_knob_turn_fn *f;
+            for (f = ev_knob_turn; *f; f++)
+                if ((*f)(view, KNOB_ID_LEVEL(track), delta * 0x100, ENC_A + track, TURN_SOUND))
+                    return 0;
+        }
+    }
+    return LEVEL_SET(settings, track, value, send);
 }
 
 /* ================================ the tick ================================= */

@@ -588,13 +588,12 @@ first comment lists its events, sites and contexts. A4 numbers are in
 | std1 event | table |
 |---|---|
 | `ev_tick`, `ev_draw`, `ev_settings`, `ev_project`, `ev_render_in` | native (= or prefix) |
-| `ev_boot`, `ev_key`, `ev_param_turn` and the ten in `ui.c` | `std_` + the name |
+| `ev_boot`, `ev_key`, `ev_param_turn` and the eleven in `ui.c` | `std_` + the name |
 
-`ev_knob_turn` (native, `ui.h`) is every page knob turn, with `how` sound,
-lock or multi-track; `ev_param_turn` only the sound edits.
-Not here yet: `core_setting_add`, the draw helpers, `ev_view`, the
-pattern request (`pre` 1). Unconfirmed: `keys.h`'s [emu] ids, the LED ids
-and colours. Test mods: [std-check](../../examples/std-check-a4mk2),
+Native events and the A4's numbering for `ev_view`, `ev_pattern`'s requests
+and `ev_knob_turn`'s level turns: `ui.h`.
+Not here yet: `core_setting_add`, the draw helpers. Unconfirmed: `keys.h`'s
+[emu] ids, the LED ids and colours. Test mods: [std-check](../../examples/std-check-a4mk2),
 [ui-check](../../examples/ui-check-a4mk2).
 
 ## Checked so far

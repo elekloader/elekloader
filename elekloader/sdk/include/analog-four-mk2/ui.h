@@ -40,6 +40,33 @@ struct core_clip {
     uint8_t slot;                       /* CLIP_NONE on the A4 so far */
 };
 
+/* ---- ev_view(op, ctrl, view, 0): the view stack, in the UI task, under
+ * the stack's lock (a handler must not push or close a view). ctrl is the
+ * view controller, view the view. On the A4 every op is reported, and the
+ * return value is not used (a push cannot be taken here yet). A page key
+ * swaps the page's view: a VIEW_POP of the old page, then a VIEW_PUSH of the
+ * new. Boot pushes MainScreenView's children in a burst, before
+ * ev_boot_done. core_view_name(view) is the view's class name, e.g.
+ * "MainScreenView". */
+#define VIEW_PUSH 0                     /* in the stack, before its own on-push */
+#define VIEW_POP 2                      /* leaving the stack, before its own on-remove */
+const char *core_view_name(const void *view);
+
+/* ---- ev_pattern(pre, pattern, how). pre 0: the playing pattern changed
+ * (how PATTERN_CHANGED, at the boundary). pre 1: a change is asked for,
+ * before stock does it; nonzero takes it (stock does not). pattern 0..127,
+ * or PATTERN_NONE. In the UI task, except PATTERN_SET from MIDI's multi map
+ * and PATTERN_SPP, which come in the MIDI task. A stop drops a queued change
+ * without an event. */
+#define PATTERN_CHANGED 0               /* pre 0 */
+#define PATTERN_QUEUE 1                 /* playing: the change waits for the boundary */
+#define PATTERN_CANCEL 2                /* playing: a queued change is dropped; pattern PATTERN_NONE */
+#define PATTERN_NOW 3                   /* stopped: the pattern changes at once */
+#define PATTERN_SET 4                   /* playing, song modes and MIDI's multi map */
+#define PATTERN_START 5                 /* playing, the pattern view's restart request [I] */
+#define PATTERN_SPP 6                   /* stopped: a song position (MIDI SPP, a stop's return); pattern PATTERN_NONE */
+#define PATTERN_NONE 0xffu
+
 /* ---- the USB mode of the last ev_usb: 4 USB MIDI, 6 USB AUDIO/MIDI,
  * 7 OVERBRIDGE (0 before the first) */
 unsigned core_usb_mode(void);
@@ -59,5 +86,19 @@ unsigned core_usb_mode(void);
 #define TURN_LOCK 1                     /* a held trig's or live record's p-lock */
 #define TURN_MULTI 2                    /* every held track key's track (synth tracks) */
 typedef int (*ev_knob_turn_fn)(void *view, int id, int delta, int knob, int how);
+/* The track LEVEL encoder and the mixer page (the view of key 0xb3, its
+ * knobs A..E for tracks 1..4 and FX) report on ev_knob_turn too, with the id
+ * KNOB_ID_LEVEL(track): knob ENC_LEVEL or ENC_A + track, delta in 8.8, how
+ * TURN_MULTI while a track key is held on the LEVEL encoder, else
+ * TURN_SOUND. view is MainScreenView or the mixer page. Taken: the level
+ * stays. These are not std1 parameters (std1 has no track level id). */
+#define KNOB_ID_LEVEL(t) (0x10000 + (t))
+
+/* ---- ev_analog_frame(words), a native event (not std1): the analog
+ * control frame, 100 words, after stock built it and before it is packed
+ * for the analog board, in the audio interrupt, every block. A handler may
+ * change the words; it must be short. Which word drives what is not mapped.
+ * A mod subscribes by contributing to the "ev_analog_frame" table. */
+typedef void (*ev_analog_frame_fn)(uint16_t *words);
 
 #endif

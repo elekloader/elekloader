@@ -2179,7 +2179,7 @@ def test_core_a4mk2_0_7_std_map():
         events = set(re.findall(r'\(\*std1_(ev_\w+)_fn\)', fh.read()))
     std = doc['std']
     ui = {'ev_boot_done', 'ev_idle', 'ev_crash', 'ev_usb', 'ev_key_leds', 'ev_mode', 'ev_param_set',
-          'ev_clip', 'ev_pattern', 'ev_mute'}
+          'ev_clip', 'ev_pattern', 'ev_mute', 'ev_view'}
     assert set(std) == {'ev_boot', 'ev_tick', 'ev_draw', 'ev_key', 'ev_settings', 'ev_project',
                         'ev_render_in', 'ev_param_turn'} | ui
     assert set(std) <= events
@@ -2205,8 +2205,8 @@ def test_core_a4mk2_0_7_std_map():
 
 def test_core_a4mk2_0_7_ui_sites():
     """core-a4mk2 0.7's UI and system events (ui.c, ui.s): every site's target is a global of ui.s
-    or a function of ui.c, each std table is read in ui.c, the native ev_knob_turn has its table,
-    and core_ui_tick runs right after core_std_tick."""
+    or a function of ui.c, each std table is read in ui.c, the native ev_knob_turn and
+    ev_analog_frame have their tables, and core_ui_tick runs right after core_std_tick."""
     import re
     root = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
     mdir = os.path.join(root, 'mods', 'core-a4mk2')
@@ -2217,19 +2217,23 @@ def test_core_a4mk2_0_7_ui_sites():
     with open(os.path.join(mdir, 'ui.c'), encoding='utf-8') as fh:
         src = fh.read()
     globs = set(re.findall(r'^\s*\.globl\s+(\w+)', asm, re.M))
-    globs |= {m for m in re.findall(r'^\s*CLIP\s+(\w+),', asm, re.M)}
+    globs |= {m for m in re.findall(r'^\s*(?:CLIP|PREQ)\s+(\w+),', asm, re.M)}
     cfns = set(re.findall(r'^\w[\w ]*?\b(core_\w+)\(', src, re.M))
     ui_sites = [s for s in doc['sites'] if s.get('target') in globs | cfns]
-    assert len(ui_sites) == 36
+    assert len(ui_sites) == 49
     assert len([s for s in ui_sites if s['target'].startswith('core_clip_')]) == 22
+    assert len([s for s in ui_sites if s['target'].startswith('core_view_')]) == 5
+    assert len([s for s in ui_sites if s['target'].startswith('core_pattern_') and s['target'] != 'core_pattern_site']) == 5
     for s in ui_sites:
         assert len(s['stock']) // 2 >= (4 if s['op'] == 'ptr' else 6), s
         if s['op'] == 'keep2':
             assert s['stock'].startswith('4eb9'), s
     for t in ('std_boot_done', 'std_idle', 'std_crash', 'std_usb', 'std_key_leds', 'std_mode',
-              'std_param_set', 'std_clip', 'std_pattern', 'std_mute'):
+              'std_param_set', 'std_clip', 'std_pattern', 'std_mute', 'std_view'):
         assert re.search(r'\b%s\[' % t, src), t
     assert doc['collections']['ev_knob_turn'] == 4 and 'ev_knob_turn[0]' in src
+    assert doc['collections']['std_view'] == 4 and doc['std']['ev_view'] == 'std_view'
+    assert doc['collections']['ev_analog_frame'] == 4 and 'tst.l   ev_analog_frame' in asm
     assert 'ui.c' in doc['sources'] and 'ui.s' in doc['sources']
     subs = {(x['event'], x['fn']): x['order'] for x in doc['subscribe']}
     assert subs[('ev_tick', 'core_ui_tick')] == -999999
