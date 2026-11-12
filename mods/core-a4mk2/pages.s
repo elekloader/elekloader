@@ -130,6 +130,8 @@ core_param_get:
 
 | param_apply_delta (0x400232e2): `lea %sp@(-12),%sp; moveml %d2-%d3/%a2,%sp@`.
 | Frame: 0 the cursor, 8 view, 12 id, 16 delta, 20 func (its low byte).
+| From 0.7 a turn no core_params entry took goes to the std1 mods'
+| ev_param_turn handlers (std.c) before stock.
 core_param_delta:
         lea     core_params,%a1
         subq.l  #4,%sp
@@ -158,7 +160,22 @@ core_param_delta:
         jsr     VIEW_INVALIDATE
         addq.l  #8,%sp
         rts
-9:      addq.l  #4,%sp
+9:      tst.l   std_param_turn            | (0.7) no entry took it: std1's ev_param_turn
+        beq.s   8f
+        mvz.b   23(%sp),%d0
+        move.l  %d0,-(%sp)                | func
+        move.l  20(%sp),-(%sp)            | delta
+        move.l  20(%sp),-(%sp)            | id
+        move.l  20(%sp),-(%sp)            | view
+        jsr     core_std_param_turn       | std.c
+        lea     16(%sp),%sp
+        tst.l   %d0
+        beq.s   8f
+        move.l  8(%sp),-(%sp)             | taken: stock makes no lock; redraw the view
+        jsr     VIEW_INVALIDATE
+        addq.l  #8,%sp
+        rts
+8:      addq.l  #4,%sp
         lea     -12(%sp),%sp
         movem.l %d2-%d3/%a2,(%sp)
         jmp     DELTA_RET

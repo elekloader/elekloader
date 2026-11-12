@@ -42,6 +42,18 @@
 #define KEY_REPEAT  0x08u
 #define KEY_RELEASE 0x10u
 
+/* -- helpers every core that maps std1 events provides
+ * core_redraw   any context: the frame is composed again at the next ev_tick.
+ * core_post     any context, interrupts included: fn(arg) runs once, soon, in a task (the UI task
+ *               on the cores so far); 0, or -1 when the queue is full.
+ * core_timer    fn runs in that task every (mask + 1)th tick of CORE_TICK_HZ when mask is
+ *               0, 1, 3, 7, ...: on the ticks whose count has no bit of mask set. Again with
+ *               the same fn changes its mask; CORE_TIMER_STOP removes it. 0, or -1 when full. */
+void core_redraw(void);
+int core_post(void (*fn)(void *arg), void *arg);
+#define CORE_TIMER_STOP 0xffffffffu
+int core_timer(void (*fn)(void), unsigned mask);
+
 struct core_setting;                        /* a settings row (ev_settings), given by the core */
 struct core_clip;                           /* a clipboard operation (ev_clip), given by the core */
 
