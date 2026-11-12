@@ -155,8 +155,10 @@ struct info {
     int32_t range;                            /* max - min, at least 1 */
     unsigned char smooth, route, n, rshift;   /* n: the field's bytes (0: core_store_get) */
     uint16_t off[4];                          /* from the sound or the kit */
-    uint32_t mask;
+    uint32_t mask, init;                      /* (0.6) the field's init, which its bits keep XORed */
 };
+
+extern const unsigned core_field_inits[];
 
 static struct info info[KINDS][CODES];
 static volatile unsigned char made;
@@ -187,7 +189,8 @@ static void make(void)
                 in->route = (fl & ROUTE) != 0;
                 scope = f >> 28;
                 w = f >> 22 & 63;
-                o = f & 0x3fffff;
+                o = f & 0xffff;
+                in->init = (f >> 16 & 63) ? core_field_inits[(f >> 16 & 63) - 1] : 0;   /* store.c's field_init */
                 in->n = ((o & 7) + w + 7) >> 3;
                 if ((scope != SC_SOUND && scope != SC_KIT) || in->n > 4 || !w) {
                     in->n = 0;
@@ -455,7 +458,7 @@ static int one(const struct info *in, int v, int code, const unsigned char *s, u
     case 4: b = (uint32_t)s[in->off[0]] << 24 | s[in->off[1]] << 16 | s[in->off[2]] << 8 | s[in->off[3]]; break;
     default: b = 0;
     }
-    x = in->n ? (int32_t)(b >> in->rshift & in->mask) : (int32_t)slow_get(in, s);
+    x = in->n ? (int32_t)((b >> in->rshift & in->mask) ^ in->init) : (int32_t)slow_get(in, s);
     if ((lock = core_lock_now[v][c]) != 0)
         x = lock - 1;
     x = x < in->min ? in->min : x > in->max ? in->max : x;

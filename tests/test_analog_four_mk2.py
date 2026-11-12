@@ -56,6 +56,12 @@ def test_profile():
     assert DEV.linkable() and DEV.flash_limit == 0x300000 and DEV.trailer is None
     assert (DEV.flash_limit - DEV.flash_at) % 0x40000 == 0      # whole 256 KB units
     assert DEV.ddr == DEV.areas['ddr'] == (0x47BE0000, 0x47C00000)
+    # core-a4mk2 0.6: the mods' area moves into the gap checked on a unit (ddr-canary-a4mk2),
+    # from its first 64 KB boundary, joined to the 128 KB area above it
+    assert DEV.ddr_for('0.5') == DEV.ddr
+    lo, hi = DEV.ddr_for('0.6')
+    assert (lo, hi) == (0x45650000, 0x47C00000) and lo % 0x10000 == 0
+    assert DEV.areas['gap'][0] <= lo and DEV.areas['gap'][1] == DEV.areas['ddr'][0] and hi == DEV.areas['ddr'][1]
     assert DEV.sysex_id == 0x0B
     assert len({d.sysex_id for d in devices.devices() if d.container == 'ele3'}) == \
         len([d for d in devices.devices() if d.container == 'ele3'])
@@ -156,6 +162,11 @@ def test_core_a4mk2_sites():
     sub = {x['event']: x for x in mod['subscribe']}
     assert sub['ev_render_in']['fn'] == 'core_load_in' and sub['ev_render_in']['order'] == 0
     assert sub['ev_render_out']['fn'] == 'core_load_out' and sub['ev_render_out']['order'] == 100
+    # 0.6: the modified mark's and the screen calls' handlers (store.c, screen.c): the brain from
+    # ev_key before every mod, the LEVEL turn from ev_enc after every mod, the controller from ev_tick
+    subs = {(x['event'], x['fn']): x['order'] for x in mod['subscribe']}
+    assert subs[('ev_tick', 'core_edit_tick')] == 0 and subs[('ev_tick', 'core_screen_tick')] == 1
+    assert subs[('ev_key', 'core_screen_key')] == -1000000 and subs[('ev_enc', 'core_screen_enc')] == 1000000
     # views (0.2): the hook after the main screen's last view and the page
     # key's step, each resuming after its 8 bytes; and the current view's
     # range, 0..28, widened in the setter and the loader
@@ -169,11 +180,12 @@ def test_core_a4mk2_sites():
         assert x['stock'][0] == '7' and int(x['stock'][1], 16) % 2 == 0, x     # moveq #28,Dn
     # mod storage's sites (core-a4mk2 0.1: 28 of the 36), and 0.2's 4 page
     # sites, 2 view sites and 5 range bytes, 0.4's OS upgrade restart, and
-    # 0.5's 31 lock sites: 19 in code (rows.s) and 12 vtable entries; and 0.5's
+    # 0.5's 32 lock sites: 20 in code (rows.s; the voice apply among them) and 12 vtable entries; and 0.5's
     # 21 destination sites (dests.s): 15 in code and 6 vtable entries; and
     # 0.5's 2 MIDI sites (midi.s), the three sets' NRPN in and CC in, each a
-    # jmp resuming after the 8 bytes it displaced
-    assert len(mod['sites']) == 102
+    # jmp resuming after the 8 bytes it displaced; and 0.6's whole project
+    # save (store.s) and three knob look sites (looks.s)
+    assert len(mod['sites']) == 107
     midi = [x for x in mod['sites'] if x.get('target') in ('core_nrpn_site', 'core_cc_site')]
     assert [(x['addr'], x['op'], x['stock']) for x in midi] == \
         [('0x4009ff56', 'jmp', '4fefffec48d7043c'), ('0x400a0b62', 'jmp', '4e56ffd848d71cfc')]
@@ -181,19 +193,29 @@ def test_core_a4mk2_sites():
         src = fh.read()
     assert 'jmp     0x4009ff5e' in src and 'jmp     0x400a0b6a' in src
     assert mod['collections'].get('core_lock_ccs') == 8
-    locks = [x for x in mod['sites'] if x['addr'] not in {y['addr'] for y in j['sites'][:48]} and x not in midi]
+    new06 = [x for x in mod['sites'] if x.get('target') in ('st_proj_save', 'core_uirec_hook', 'core_range_hook',
+                                                           'core_graphic_hook')]
+    assert [(x['addr'], x['stock']) for x in new06] == [
+        ('0x400a771a', '4fefffd048d77c1c'),             # lea -48(sp); movem.l d2-d4/a2-a6: the Rytm's prologue
+        ('0x400f6232', '222f00040c8100000127'),         # move.l 4(sp),d1; cmpi.l #0x127,d1: stock's 0..0x126
+        ('0x40007798', '2f02222f0008'),                 # move.l d2,-(sp); move.l 8(sp),d1
+        ('0x4009eaaa', '4feffff048d7003c')]             # lea -16(sp); movem.l d2-d5
+    with open(os.path.join(ROOT, 'mods', 'core-a4mk2', 'looks.s')) as fh:
+        assert 'jmp     0x4009eab2' in fh.read()
+    locks = [x for x in mod['sites'] if x['addr'] not in {y['addr'] for y in j['sites'][:48]} and x not in midi
+             and x not in new06]
     dests = [x for x in locks if x.get('target', '').startswith(('core_dst', 'core_id_index', 'core_index_id',
                                                                    'core_push_', 'core_set_'))]
     assert len(dests) == 21 and len([x for x in dests if x['op'] == 'ptr']) == 6
     locks = [x for x in locks if x not in dests]
-    assert len(locks) == 31 and len([x for x in locks if x['op'] == 'ptr']) == 12
+    assert len(locks) == 32 and len([x for x in locks if x['op'] == 'ptr']) == 12
     # the event accept is a jsr over stock's `lea 0x80006178,a0`, which core's
     # stub does before it returns (rows.s)
     x = [x for x in locks if x.get('target') == 'core_accept'][0]
     assert x['op'] == 'jsr' and x['stock'] == '41f980006178', x
     x = [x for x in mod['sites'] if x.get('target') == 'core_finish_drain'][0]
     assert x['op'] == 'jsr' and x['stock'] == '46fc27004eb9' + d['FINISH_DRAIN'][2:], x
-    assert len([x for x in mod['sites'] if x.get('target', '').startswith('st_')]) == 28
+    assert len([x for x in mod['sites'] if x.get('target', '').startswith('st_')]) == 29
 
 
 def test_core_a4mk2_store_bodies():
@@ -205,7 +227,7 @@ def test_core_a4mk2_store_bodies():
     with open(os.path.join(ROOT, 'mods', 'core-a4mk2', 'store.s')) as fh:
         src = fh.read()
     bodies = re.findall(r'^(st_\w+)_body:\s*\|\s*(0x[0-9a-f]+).*?^\s+jmp\s+(0x[0-9a-f]+)', src, re.M | re.S)
-    assert len(bodies) == 14
+    assert len(bodies) == 15
     for name, addr, back in bodies:
         x = sites[name]
         assert int(x['addr'], 16) == int(addr, 16), name

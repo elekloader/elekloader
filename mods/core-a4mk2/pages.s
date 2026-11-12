@@ -23,7 +23,8 @@
 |       1 and *value (8.8) when it answers, 0 to pass
 |   int delta(void *view, int32_t id, int32_t delta, int32_t func)
 |       delta in 8.8, func 1 while FUNC is held; 1 when it took the turn (core
-|       then redraws the view, and stock makes no lock), 0 to pass
+|       then marks the project modified (0.6, core_project_edited) and redraws
+|       the view, and stock makes no lock), 0 to pass
 |   int text(struct core_text *t)
 |       t is the routine's own arguments {obj, id, value, buf}: 0 to pass, 1
 |       when it wrote buf, 2 when stock should go on with t's id and value,
@@ -152,6 +153,7 @@ core_param_delta:
         move.l  12(%sp),-(%sp)            | taken: (0.5) a mod parameter's live record
         jsr     core_lock_turned
         addq.l  #4,%sp
+        jsr     core_project_edited       | the project is modified (0.6)
         move.l  8(%sp),-(%sp)             | and redraw the view now
         jsr     VIEW_INVALIDATE
         addq.l  #8,%sp

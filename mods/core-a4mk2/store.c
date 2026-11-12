@@ -6,7 +6,8 @@
  * Mods declare fields in their mod.json ("storage"); elekloader places them
  * at build time from the build's lockfile (docs/ADAPTING.md, "Mod storage")
  * and gives each one an absolute symbol, its descriptor, which a mod passes to
- * core_store_get and core_store_set. Zero always means the mod's default.
+ * core_store_get and core_store_set. Zero bits always mean the mod's default:
+ * 0, or from 0.6 the field's "init" (field_init below).
  *
  * Each item keeps its fields in a live home inside stock's own objects, so
  * copy, paste, undo and pattern switch carry them with no hooks:
@@ -851,9 +852,26 @@ static void write_through(unsigned scope, unsigned char *item)
         }
 }
 
+/* 0.6: a field's init (core-ar2 0.10's). Its descriptor carries the field's
+ * slot in the table core_field_inits (1..63) in bits 16..21, 0 for a field
+ * without one; no scope keeps 2^16 bits (the largest, the project's, keeps
+ * 34,736), so the offset is bits 0..15. The field's bits keep value ^ init:
+ * cleared bits (a new project, an init, another layout's data) read the
+ * init, and every value goes through unchanged. Every core read and write
+ * of a field comes here (rows.c, midi.c, value.c's slow read; value.c's fast
+ * read XORs the same init), so p-locks, MIDI and the value read see the
+ * value; the saves, loads, SysEx and the write-through copy the bits. */
+extern const unsigned core_field_inits[];
+
+static unsigned field_init(unsigned field)
+{
+    unsigned k = field >> 16 & 63;
+    return k ? core_field_inits[k - 1] : 0;
+}
+
 unsigned core_store_get(unsigned field, void *item, int index)
 {
-    unsigned scope = field >> 28, w = field >> 22 & 63, o = field & 0x3fffff, v = 0, i, k, n;
+    unsigned scope = field >> 28, w = field >> 22 & 63, o = field & 0xffff, v = 0, i, k, n;
     volatile unsigned char *base = field_base(scope, item, index);
     unsigned short sr;
     if (scope != SC_PROJECT && !base)
@@ -870,16 +888,17 @@ unsigned core_store_get(unsigned field, void *item, int index)
         for (i = 0; i < w; i++, o++)
             v = v << 1 | (B(field_byte(scope, base, o >> 3)) >> (7 - (o & 7)) & 1);
     irq_restore(sr);
-    return v;
+    return v ^ field_init(field);
 }
 
 void core_store_set(unsigned field, void *item, int index, unsigned value)
 {
-    unsigned scope = field >> 28, w = field >> 22 & 63, o = field & 0x3fffff, i;
+    unsigned scope = field >> 28, w = field >> 22 & 63, o = field & 0xffff, i;
     volatile unsigned char *base = field_base(scope, item, index), *p;
     unsigned short sr;
     if (scope != SC_PROJECT && !base)
         return;
+    value ^= field_init(field);
     sr = irq_mask();
     for (i = 0; i < w; i++, o++) {
         unsigned bit = 0x80 >> (o & 7);
@@ -894,4 +913,86 @@ void core_store_set(unsigned field, void *item, int index, unsigned value)
     irq_restore(sr);
     if (scope == SC_SOUND || scope == SC_KIT)
         core_lock_cancel(field, item);         /* no slide of it now (rows.c, 0.5) */
+}
+
+/* 0.6: the modified mark (core-ar2 0.8's). After an edit of the live
+ * project, a project load asks first; stock marks the project modified
+ * (SET_MODIFIED(model, 1)) from the UI task on the project's change signal,
+ * and an edit of only mod fields sends none (the page edits' mark is
+ * 0x400befce's call). The mark is the byte 0x4045c8c2 of the settings
+ * block, which the load reads (0x4003df98, through 0x400a5bea): ANY CHANGES
+ * WILL BE LOST for the active slot, SAVE ... BEFORE LOADING for another.
+ * core_project_edited asks for the mark from any task or the audio
+ * interrupt; core_edit_tick (ev_tick, the UI task) makes it, with the
+ * project model in the shared_ptr at 0x418717c8 (written only by its
+ * get-or-create, 0x401494de). Core calls it for its own edits (a mod page's knob, a
+ * lockable parameter's CC or NRPN); a mod calls it after its own keys or
+ * settings change a field. */
+#define PROJECT_MODEL (*(void *volatile *)0x418717c8)   /* a shared_ptr: the model, its count at +4 */
+#define SET_MODIFIED ((int (*)(void *, int))0x400a5bba)  /* 0 when no project is loaded */
+
+static volatile unsigned char edited;
+
+void core_project_edited(void)
+{
+    edited = 1;
+}
+
+void core_edit_tick(void *ctrl)
+{
+    void *model = PROJECT_MODEL;
+    (void)ctrl;
+    if (!edited || !model)
+        return;
+    edited = 0;
+    SET_MODIFIED(model, 1);
+}
+
+/* ---- ev_project_save (0.6, core-ar2 0.10's): a whole save of the live project ----
+ * Every front-panel save of the project ends in one routine,
+ * 0x400a771a(project model, slot, progress), which holds the file save site
+ * 0x400a77e4 (st_file_save): it serializes the live project into the slot's
+ * image, writes it to the +Drive and, when that worked, makes the slot the
+ * active one (0x400a5b74) and clears the modified mark; it returns a byte, 0
+ * when the save failed. Two jobs call it: the save job (0x4003da46, built by
+ * 0x4003d448 with its SAVING box, which 0x4003ecbe queues after its
+ * OVERWRITE and WRITE PROTECTED asks), and the load job (0x4003daf0) for
+ * LOAD of an empty slot, after CREATE NEW (0x400a9f1e(model, -1), so
+ * ev_project 0 first), returning to 0x4003dc26. No other whole save writes
+ * a slot: the other calls of the file save (0x4001141e) copy the project
+ * into RAM. Core calls the mods' ev_project_save handlers f(pre, how) around
+ * it as core-ar2 does (store.h): how's kind in bits 0..7 (1 the active
+ * slot, 2 another, 3 the empty slot's LOAD), the slot in bits 8..15 (255:
+ * none) and, in the call after, bit 16 when the save failed. */
+typedef void (*ev_project_save_t)(unsigned pre, unsigned how);
+extern const ev_project_save_t ev_project_save[];
+extern int st_proj_save_body(void *model, int slot, void *progress);
+
+#define ACTIVE_SLOT ((int (*)(void *))0x400a5b9c)     /* -1: none */
+#define SAVE_NEW_RET 0x4003dc26u                        /* the empty slot's LOAD: the call's return */
+#define SAVE_SAME 1
+#define SAVE_OTHER 2
+#define SAVE_NEW 3
+#define SAVE_FAILED 0x10000
+
+static void save_event(unsigned pre, unsigned how)
+{
+    const ev_project_save_t *f;
+    for (f = ev_project_save; *f; f++)
+        (*f)(pre, how);
+}
+
+int st_proj_save(void *model, int slot, void *progress)
+{
+    int active = ACTIVE_SLOT(model), to = slot < 0 ? active : slot, r;
+    unsigned how;
+    if ((unsigned)__builtin_return_address(0) == SAVE_NEW_RET)
+        how = SAVE_NEW;
+    else
+        how = to >= 0 && to == active ? SAVE_SAME : SAVE_OTHER;
+    how |= ((unsigned)to < 128 ? (unsigned)to : 255) << 8;
+    save_event(1, how);
+    r = st_proj_save_body(model, slot, progress);
+    save_event(0, (r & 255) ? how : how | SAVE_FAILED);
+    return r;
 }

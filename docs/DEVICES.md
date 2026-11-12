@@ -486,13 +486,14 @@ a project load and a power cycle.
   is unused as well. On a unit (21 Oct 2026), ddr-canary-a4mk2 filled the
   mods' area after the mods' data, 0x448B6D50-0x44C00000 and that gap with a
   pattern and read them back with no word changed, through a session of
-  normal use (Overbridge included) and after a power cycle.
+  normal use and after a power cycle. With
+  core-a4mk2 0.6 mods run from `0x45650000` to `0x47C00000` (`core_ddr`).
 - **The core** (mods/core-a4mk2) has the Rytm's events at the A4's sites, and
   mod storage in bytes of the A4's own structures (mods/core-a4mk2/README.md);
   from 0.2, core-ar2 0.4's parameter routines, and views added behind the
   page keys; from 0.3, core-ar2 0.6's page functions (`core_page_fns`); from
   0.4, core-ar2 0.7's OS upgrade restart (`finish.s`).
-  In rytm-emu (with a fallback added so it accepts a patched A4 image), a
+  In rytm-emu, a
   build with core alone runs as stock does, with the same frames and a
   byte-identical screen; hello-marker-a4 differs from stock only in its
   square; hooks-check counted every event and listed its SETTINGS row.
