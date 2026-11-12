@@ -23,15 +23,17 @@
 #define MUTE_SCOPE_PROJECT 0
 
 /* ---- ev_clip(pre, c) */
-#define CLIP_PATTERN 0                  /* a pattern (clear, paste) */
+#define CLIP_PATTERN 0                  /* a pattern (copy, paste, clear) */
 #define CLIP_TRACK 1                    /* a track's sequence: FUNC+REC/STOP/PLAY in grid record */
 #define CLIP_KIT 2
 #define CLIP_SOUND 3                    /* a sound in the project's pool */
 #define CLIP_SONG 4
 #define CLIP_TRACK_SOUND 5              /* the track's sound in the kit; track says which */
-#define CLIP_PAGE 6                     /* a page of the pattern's trigs (TRIG PAGE copy) */
-#define CLIP_CHAIN 7                    /* the pattern chain */
-#define CLIP_PROJECT 8                  /* a project slot (the PROJECT menu's copy) */
+#define CLIP_PAGE 6                     /* the active track's current 16-step page: PAGE held + REC */
+#define CLIP_TRIGS 7                    /* the held trigs of the active track: trigs held + REC */
+#define CLIP_CHAIN 8                    /* a SONG edit row (chain): FUNC+REC in the song editor */
+#define CLIP_PROJECT 9                  /* a project, slot says which: the PROJECT list's copy */
+#define CLIP_SLOT_WORKING 0xfeu         /* slot: the working project */
 #define CLIP_COPY 0                     /* to the clipboard */
 #define CLIP_PASTE 1                    /* from the clipboard */
 #define CLIP_CLEAR 2
@@ -40,7 +42,7 @@ struct core_clip {
     uint8_t kind;                       /* CLIP_PATTERN .. CLIP_PROJECT */
     uint8_t op;                         /* CLIP_COPY, CLIP_PASTE or CLIP_CLEAR */
     uint8_t track;                      /* params.h's track, or CLIP_NONE */
-    uint8_t slot;                       /* CLIP_NONE on the A4 so far */
+    uint8_t slot;                       /* CLIP_PROJECT: 0..127 or CLIP_SLOT_WORKING; else CLIP_NONE */
 };
 
 /* ---- the USB mode of the last ev_usb: 4 USB MIDI, 6 USB AUDIO/MIDI,

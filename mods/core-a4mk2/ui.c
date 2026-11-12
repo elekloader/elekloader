@@ -17,7 +17,8 @@
  *   ev_param_set  std_param_set  the three parameter sets' set virtuals
  *                                (vtable slots), queued and run at the next
  *                                tick in the UI task
- *   ev_clip       std_clip       19 copy, paste and clear routines (ui.s), the pattern view's 3 calls
+ *   ev_clip       std_clip       23 copy, paste and clear routines (ui.s), the pattern view's 2 calls,
+ *                                the project list's copy (its handler and its job's end)
  *   ev_pattern    std_pattern    the UI task's pattern boundary message
  *                                (case 9, 0x40099c84), when the pattern changed
  *   ev_mute       std_mute       the mute setter's entry (0x400aeb8e)
@@ -301,6 +302,7 @@ static void set_drain(void)
 #define CLIP_F_CONFIRM 1u
 #define CLIP_F_TRACK 2u
 #define CLIP_F_GRID 4u                  /* the sequencer view's FUNC+REC/STOP/PLAY */
+#define CLIP_F_HANDLED 8u               /* a view's virtual: a take still returns 1 */
 
 /* the sequencer view's copy, clear and paste virtuals act on the track only
  * in grid record (0x40021ca8: +0x161 and +0x168); otherwise they return 0
@@ -322,8 +324,8 @@ static int clip_fill(struct core_clip *c, uint32_t code, uint32_t a1, uint32_t a
     return 1;
 }
 
-/* 0: not taken. Taken: 1, the stub returns 0; 3 (a grid routine), the stub
- * returns 1, "handled", so the key does not go on to the pattern's. */
+/* 0: not taken. Taken: 1, the stub returns 0; 3 (a grid routine or a view's
+ * virtual), the stub returns 1, "handled", so the key goes no further. */
 int core_clip_pre(uint32_t code, uint32_t a1, uint32_t a2)
 {
     struct core_clip c;
@@ -332,7 +334,7 @@ int core_clip_pre(uint32_t code, uint32_t a1, uint32_t a2)
         return 0;
     for (f = std_clip; *f; f++)
         if ((*f)(1, &c))
-            return (code >> 16) & CLIP_F_GRID ? 3 : 1;
+            return (code >> 16) & (CLIP_F_GRID | CLIP_F_HANDLED) ? 3 : 1;
     return 0;
 }
 
@@ -346,13 +348,13 @@ void core_clip_post(uint32_t code, uint32_t a1, uint32_t a2)
         (*f)(0, &c);
 }
 
-/* FUNC+REC, STOP and PLAY outside grid record: the pattern view's copy,
- * paste and clear (0x400c0908, 0x400c0a74, 0x400c0b48; paste and clear only
- * when no undo is possible) call the pattern's own routines, hooked at those
- * calls (keep2): 0x400a2aa4(pattern), 0x400a2cba(pattern, 1) and
- * 0x400a2de0(pattern, whole, undo); a %d0 byte says each did it */
+/* STOP and PLAY outside grid record: the pattern view's paste and clear
+ * (0x400c0a74, 0x400c0b48; only when no undo is possible) call the pattern's
+ * own routines, hooked at those calls (keep2): 0x400a2cba(pattern, 1) and
+ * 0x400a2de0(pattern, whole, undo); a %d0 byte says each did it. The copy,
+ * 0x400a2aa4, is hooked at its entry (ui.s): its other caller, the pattern
+ * select view, calls it through a register. */
 typedef uint8_t (*pop_t)(void *, int32_t, int32_t);
-#define PATTERN_COPY ((pop_t)0x400a2aa4u)
 #define PATTERN_PASTE ((pop_t)0x400a2cbau)
 #define PATTERN_CLEAR ((pop_t)0x400a2de0u)
 
@@ -367,11 +369,6 @@ __attribute__((noipa)) static uint32_t pattern_op(pop_t fn, unsigned op, void *p
     r = fn(pattern, a, b);
     core_clip_post(code, 0, 0);
     return r;
-}
-
-uint32_t core_clip_pcopy(void *pattern)
-{
-    return pattern_op(PATTERN_COPY, CLIP_COPY, pattern, 0, 0);
 }
 
 uint32_t core_clip_ppaste(void *pattern, int32_t a)

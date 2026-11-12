@@ -19,6 +19,9 @@
  *   knob_*        the last ev_knob_turn's (id, delta, knob, how); knob_taken
  *                 and knob_how_n[3], the turns of each how
  *   leds[24]      the LED frame (0x4180e9b4) at the last tick
+ *   clip_slot     the last ev_clip's slot
+ *   clip_seen[3]  per op (copy, paste, clear), a bit 1 << kind for each kind
+ *                 whose post call came
  */
 #include <stdint.h>
 #include <std1.h>
@@ -43,6 +46,7 @@ struct ui_check {
     uint32_t knob_taken, knob_how_n[3];
     uint32_t armed, selects, ticks;
     uint8_t leds[24];
+    uint32_t clip_slot, clip_seen[3];
 };
 volatile struct ui_check ui_check;
 static unsigned idle_sub;
@@ -107,6 +111,9 @@ int uc_clip(unsigned pre, const struct core_clip *c)
     ui_check.clip_kind = c->kind;
     ui_check.clip_op = c->op;
     ui_check.clip_track = c->track;
+    ui_check.clip_slot = c->slot;
+    if (!pre && c->op < 3)
+        ui_check.clip_seen[c->op] |= 1u << c->kind;
     return 0;
 }
 
