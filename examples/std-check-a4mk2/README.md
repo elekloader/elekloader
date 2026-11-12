@@ -11,7 +11,15 @@ comment at the top of `std.c`. It takes nothing, except that while armed
 turn of encoder A on a parameter page.
 
 Its SETTINGS row uses core's own `core_additem`: std1's `core_setting_add`
-is not on the A4 yet. Not run yet in an emulator or on a unit.
+is not on the A4 yet.
+
+In the A4 emulator (OS 1.56, 12 Nov 2026), with analoghealth for the remote
+keys and memory reads, every event fired: `ev_boot` once, the tick about
+every 8th tick for `core_timer` (mask 8), one post per 1024 audio blocks
+with no refusal, key taps as a press and a `KEY_RELEASE` (0x10), a hold
+with `KEY_REPEAT`, `ev_settings` once at boot, a project load, and turns of
+32 counts or more on encoder A (smaller ones make no step and no call),
+taken while armed with the value unchanged. Not run on a unit yet.
 
 ```bash
 # needs m68k-linux-gnu binutils and gcc (or set ELEKLOADER_CROSS to another prefix)
