@@ -42,7 +42,7 @@ struct core_clip {
     uint8_t kind;                       /* CLIP_PATTERN .. CLIP_PROJECT */
     uint8_t op;                         /* CLIP_COPY, CLIP_PASTE or CLIP_CLEAR */
     uint8_t track;                      /* params.h's track, or CLIP_NONE */
-    uint8_t slot;                       /* CLIP_PROJECT: 0..127 or CLIP_SLOT_WORKING; else CLIP_NONE */
+    uint8_t slot;                       /* CLIP_PROJECT: 0..127 (list slot 1..128 less 1) or CLIP_SLOT_WORKING; else CLIP_NONE */
 };
 
 /* ---- the USB mode of the last ev_usb: 4 USB MIDI, 6 USB AUDIO/MIDI,
