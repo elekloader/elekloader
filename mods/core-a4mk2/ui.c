@@ -198,15 +198,20 @@ static void mode_poll(void)
 
 /* ============================== ev_param_set =============================== */
 
-/* the sets' "set value" virtuals: (set, id, value, track, recLock); the
- * synth set clamps value to the parameter's range, recLock also records it
- * into the held or recording steps' locks. Called by the panel's edits (UI
- * task) and MIDI CC and NRPN in (the MIDI task), so a set is queued and its
+/* the sets' value setters, their vtables' +0x30 and +0x38. +0x30 (set, id,
+ * value, track, rec, notify) is the panel's: the turn (+0x34) and the other
+ * edits end in it; it clamps value to the parameter's range, rec also records
+ * it into the held or recording steps, and it returns the value it stored.
+ * +0x38 (set, id, value, track, rec) is the other setter (ids up to 0x67).
+ * Both run in the UI task or the MIDI task, so a set is queued and its
  * handlers run at the next tick in the UI task. */
-typedef int32_t (*pset_t)(void *set, int32_t id, int32_t value, int32_t track, int32_t lock);
-#define PSET_SYNTH ((pset_t)0x400a0cecu)
-#define PSET_FX ((pset_t)0x400a0e1eu)
-#define PSET_CV ((pset_t)0x400a0f08u)
+typedef int32_t (*pset_t)(void *set, int32_t id, int32_t value, int32_t track, int32_t rec, int32_t notify);
+#define PSET_SYNTH ((pset_t)0x400a0046u)
+#define PSET_FX ((pset_t)0x400a0308u)
+#define PSET_CV ((pset_t)0x400a05c2u)
+#define PSET2_SYNTH ((pset_t)0x400a0cecu)
+#define PSET2_FX ((pset_t)0x400a0e1eu)
+#define PSET2_CV ((pset_t)0x400a0f08u)
 
 #define SETS 64                         /* a power of two */
 static struct { uint8_t track; uint16_t id; int32_t value; } sets[SETS];
@@ -231,23 +236,44 @@ static void set_queue(unsigned track, int32_t id, int32_t value)
     irq_restore(sr);
 }
 
-int32_t core_pset_synth(void *set, int32_t id, int32_t value, int32_t track, int32_t lock)
+int32_t core_pset_synth(void *set, int32_t id, int32_t value, int32_t track, int32_t rec, int32_t notify)
 {
-    int32_t r = PSET_SYNTH(set, id, value, track, lock);
+    int32_t r = PSET_SYNTH(set, id, value, track, rec, notify);
+    set_queue((unsigned)track, id, r);
+    return r;
+}
+
+int32_t core_pset_fx(void *set, int32_t id, int32_t value, int32_t track, int32_t rec, int32_t notify)
+{
+    int32_t r = PSET_FX(set, id, value, track, rec, notify);
+    set_queue(TRACK_FX, id, r);
+    return r;
+}
+
+int32_t core_pset_cv(void *set, int32_t id, int32_t value, int32_t track, int32_t rec, int32_t notify)
+{
+    int32_t r = PSET_CV(set, id, value, track, rec, notify);
+    set_queue(TRACK_CV, id, r);
+    return r;
+}
+
+int32_t core_pset2_synth(void *set, int32_t id, int32_t value, int32_t track, int32_t rec)
+{
+    int32_t r = PSET2_SYNTH(set, id, value, track, rec, 0);
     set_queue((unsigned)track, id, value);
     return r;
 }
 
-int32_t core_pset_fx(void *set, int32_t id, int32_t value, int32_t track, int32_t lock)
+int32_t core_pset2_fx(void *set, int32_t id, int32_t value, int32_t track, int32_t rec)
 {
-    int32_t r = PSET_FX(set, id, value, track, lock);
+    int32_t r = PSET2_FX(set, id, value, track, rec, 0);
     set_queue(TRACK_FX, id, value);
     return r;
 }
 
-int32_t core_pset_cv(void *set, int32_t id, int32_t value, int32_t track, int32_t lock)
+int32_t core_pset2_cv(void *set, int32_t id, int32_t value, int32_t track, int32_t rec)
 {
-    int32_t r = PSET_CV(set, id, value, track, lock);
+    int32_t r = PSET2_CV(set, id, value, track, rec, 0);
     set_queue(TRACK_CV, id, value);
     return r;
 }
@@ -274,11 +300,20 @@ static void set_drain(void)
  * neither call comes. CLIP_F_TRACK: the second argument is the track. */
 #define CLIP_F_CONFIRM 1u
 #define CLIP_F_TRACK 2u
+#define CLIP_F_GRID 4u                  /* the sequencer view's FUNC+REC/STOP/PLAY */
 
-static int clip_fill(struct core_clip *c, uint32_t code, uint32_t a2)
+/* the sequencer view's copy, clear and paste virtuals act on the track only
+ * in grid record (0x40021ca8: +0x161 and +0x168); otherwise they return 0
+ * and the key goes on to the pattern's copy, clear and paste */
+typedef uint8_t (*grid_rec_t)(void *);
+#define GRID_REC ((grid_rec_t)0x40021ca8u)
+
+static int clip_fill(struct core_clip *c, uint32_t code, uint32_t a1, uint32_t a2)
 {
     unsigned fl = code >> 16;
     if ((fl & CLIP_F_CONFIRM) && !(a2 & 0xffu))
+        return 0;
+    if ((fl & CLIP_F_GRID) && !GRID_REC(*(void **)(a1 + 0x6c)))
         return 0;
     c->kind = (uint8_t)code;
     c->op = (uint8_t)(code >> 8);
@@ -287,16 +322,17 @@ static int clip_fill(struct core_clip *c, uint32_t code, uint32_t a2)
     return 1;
 }
 
+/* 0: not taken. Taken: 1, the stub returns 0; 3 (a grid routine), the stub
+ * returns 1, "handled", so the key does not go on to the pattern's. */
 int core_clip_pre(uint32_t code, uint32_t a1, uint32_t a2)
 {
     struct core_clip c;
     const fn_clip *f;
-    (void)a1;
-    if (!std_clip[0] || !clip_fill(&c, code, a2))
+    if (!std_clip[0] || !clip_fill(&c, code, a1, a2))
         return 0;
     for (f = std_clip; *f; f++)
         if ((*f)(1, &c))
-            return 1;
+            return (code >> 16) & CLIP_F_GRID ? 3 : 1;
     return 0;
 }
 
@@ -304,8 +340,7 @@ void core_clip_post(uint32_t code, uint32_t a1, uint32_t a2)
 {
     struct core_clip c;
     const fn_clip *f;
-    (void)a1;
-    if (!std_clip[0] || !clip_fill(&c, code, a2))
+    if (!std_clip[0] || !clip_fill(&c, code, a1, a2))
         return;
     for (f = std_clip; *f; f++)
         (*f)(0, &c);
@@ -362,7 +397,7 @@ int core_mute_pre(int32_t track, int32_t muted)
  * makes a p-lock; else the turn edits the sound (then ev_param_turn). */
 typedef int32_t (*key_held_t)(int32_t key);
 typedef int32_t (*track_of_t)(void *);
-typedef void *(*lock_rec_t)(void *);
+typedef int32_t (*lock_rec_t)(void *);    /* a pointer, returned in %d0 */
 typedef uint8_t (*lock_live_t)(void *);
 #define KEY_HELD ((key_held_t)0x400647a2u)
 #define TRACK_OF ((track_of_t)0x400adbd2u)

@@ -140,7 +140,7 @@ core_knob_site:
         lea     12(%sp),%sp
         rts
 9:      lea     12(%sp),%sp
-        moveq   #0,%d0
+        lsr.l   #1,%d0                    | taken: 1 -> 0, 3 -> 1
         rts
 \name\()_stock:
         .short  \w0, \w1, \w2, \w3
@@ -153,10 +153,10 @@ core_knob_site:
 | code: kind | op << 8 | flags << 16; kinds 0 pattern, 1 track, 2 kit,
 | 3 sound, 4 song, 5 track sound; ops 0 copy, 1 paste, 2 clear; flags 1 a
 | confirm callback (YES in its second argument), 2 the second argument is the
-| track
-        CLIP    core_clip_track_copy,   0x40027e14, 8,  0x00000001, 0x4e56, 0xffe4, 0x48d7, 0x040c
-        CLIP    core_clip_track_paste,  0x40027e94, 8,  0x00000101, 0x4e56, 0xffe4, 0x48d7, 0x0c04
-        CLIP    core_clip_track_clear,  0x40027f78, 8,  0x00000201, 0x4e56, 0xffe4, 0x48d7, 0x0c04
+| track, 4 the sequencer view's virtual, acting only in grid record
+        CLIP    core_clip_track_copy,   0x40027e14, 8,  0x00040001, 0x4e56, 0xffe4, 0x48d7, 0x040c
+        CLIP    core_clip_track_paste,  0x40027e94, 8,  0x00040101, 0x4e56, 0xffe4, 0x48d7, 0x0c04
+        CLIP    core_clip_track_clear,  0x40027f78, 8,  0x00040201, 0x4e56, 0xffe4, 0x48d7, 0x0c04
         CLIP    core_clip_kit_copy,     0x4002e828, 8,  0x00000002, 0x4e56, 0xffe0, 0x48d7, 0x1c04
         CLIP    core_clip_kit_paste,    0x4002e906, 8,  0x00010102, 0x4e56, 0xffe4, 0x206e, 0x0008
         CLIP    core_clip_kit_clear,    0x4002e9b8, 8,  0x00010202, 0x4e56, 0xffe4, 0x206e, 0x0008

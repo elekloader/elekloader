@@ -24,7 +24,7 @@
 
 /* ---- ev_clip(pre, c) */
 #define CLIP_PATTERN 0                  /* a pattern (clear, paste) */
-#define CLIP_TRACK 1                    /* a track's sequence in the pattern */
+#define CLIP_TRACK 1                    /* a track's sequence: FUNC+REC/STOP/PLAY in grid record */
 #define CLIP_KIT 2
 #define CLIP_SOUND 3                    /* a sound in the project's pool */
 #define CLIP_SONG 4
