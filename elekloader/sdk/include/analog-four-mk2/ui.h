@@ -29,12 +29,15 @@
 #define CLIP_SOUND 3                    /* a sound in the project's pool */
 #define CLIP_SONG 4
 #define CLIP_TRACK_SOUND 5              /* the track's sound in the kit; track says which */
+#define CLIP_PAGE 6                     /* a page of the pattern's trigs (TRIG PAGE copy) */
+#define CLIP_CHAIN 7                    /* the pattern chain */
+#define CLIP_PROJECT 8                  /* a project slot (the PROJECT menu's copy) */
 #define CLIP_COPY 0                     /* to the clipboard */
 #define CLIP_PASTE 1                    /* from the clipboard */
 #define CLIP_CLEAR 2
 #define CLIP_NONE 0xffu                 /* track or slot: not known */
 struct core_clip {
-    uint8_t kind;                       /* CLIP_PATTERN .. CLIP_TRACK_SOUND */
+    uint8_t kind;                       /* CLIP_PATTERN .. CLIP_PROJECT */
     uint8_t op;                         /* CLIP_COPY, CLIP_PASTE or CLIP_CLEAR */
     uint8_t track;                      /* params.h's track, or CLIP_NONE */
     uint8_t slot;                       /* CLIP_NONE on the A4 so far */
