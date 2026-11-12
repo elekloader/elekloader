@@ -18,3 +18,9 @@ python -m elekloader.patch --stock Analog-Four_MKII_OS1.56.syx \
     --mod mods/core-a4mk2/out/core-0.7.elemod --mod examples/ui-check-a4mk2/out/ui-check-0.1.elemod \
     --out a4-ui.syx --version UI56
 ```
+
+In analog-emu a build whose mods handle `ev_idle` answers no USB MIDI: the
+emulator feeds USB MIDI only while main sits on one of the image's own
+self-branches, and with a handler main loops in core instead. Check
+`ev_idle` on the unit, and in the emulator build ui-check without its
+`ev_idle` subscription.

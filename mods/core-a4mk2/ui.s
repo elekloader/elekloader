@@ -19,14 +19,16 @@ core_boot_done_site:
 
 | ---- ev_idle: main's 0x40106302 `jsr 0x4009900c` (keep2): 0x4009900c makes
 | and starts the UI task, then main spins at 0x401062fa, the lowest priority
-| task. This never returns either. With no handler it ends in stock's own
-| one-instruction spin.
+| task. This never returns either. With no handler it jumps to stock's own
+| spin, the self-branch at 0x401062fa, so main idles at stock's PC (analog-emu
+| feeds USB MIDI and skips to the next interrupt only at the image's
+| self-branches).
         .globl  core_idle_start
 core_idle_start:
         jsr     0x4009900c
         tst.l   std_idle
         bne.s   1f
-0:      bra.s   0b
+        jmp     0x401062fa
 1:      jsr     core_idle_run
         bra.s   1b
 
