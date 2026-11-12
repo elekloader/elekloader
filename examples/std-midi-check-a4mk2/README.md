@@ -8,14 +8,16 @@ What it records, in its exported `std_midi`, is in the comment at the top of
 `midi.c`. It takes one message: the marker, CC 119 with value 119, in
 `ev_midi_in`, so `ev_midi_cc` (and stock) never see it.
 
-In the A4 emulator (OS 1.56, 12 Nov 2026), with analoghealth for the
-remote keys and memory reads, every event but two fired as `midi.c` says:
-CCs on a track's channel, on the auto channel (flag 1) and over DIN, each
-applied by stock; the marker taken before `ev_midi_cc`; NRPN, note, bend and
-aftertouch through `ev_midi_in`; SysEx; a knob's CC out to both ports; MIDI
-clock out, with 4 sequencer ticks per clock, which also run while stopped.
-`ev_seq_midi` never fired: stock sent no sequencer note there. `ev_midi_pc`
-was not sent (elkbench has no program-change step).
+In the A4 emulator and on a unit (OS 1.56, 12 Nov 2026), with analoghealth
+for the remote keys and memory reads, every event but `ev_midi_pc` fired as
+`midi.c` says: CCs on a track's channel, on the auto channel (flag 1) and
+over DIN, each applied by stock; the marker taken before `ev_midi_cc`; NRPN,
+note, bend and aftertouch through `ev_midi_in`; SysEx; a knob's CC out to
+both ports; MIDI clock out, with 4 sequencer ticks per clock, which also run
+while stopped; and, with the track's SEND MIDI on, its notes in
+`ev_seq_midi`. On the unit `ev_midi_out` also sees analoghealth's SysEx
+replies, on USB only. `ev_midi_pc` was not sent (elkbench has no
+program-change step).
 
 ```bash
 # needs m68k-linux-gnu binutils and gcc (or set ELEKLOADER_CROSS to another prefix)
