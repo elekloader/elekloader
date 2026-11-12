@@ -121,13 +121,15 @@ def test_core_a4mk2_sites():
         assert img[a - DEV.main_load:a - DEV.main_load + len(want)] == want, s
         if s['op'] == 'ptr':            # data (0.5): the lock get, set, clear and turn
             # (+0x48..+0x54) of the synth, FX and CV parameter sets' vtables; the turn is shared;
-            # and (part 2) their short and long names (+0x68, +0x6c), shared too
+            # and (part 2) their short and long names (+0x68, +0x6c), shared too; and (0.7, ui.c)
+            # their set value (+0x38), ev_param_set's
             ptrs = {}
             for vt, (g, st, c) in ((0x401a164c, (0x400a0190, 0x400a0218, 0x400a02a4)),
                                    (0x401a16ec, (0x400a044a, 0x400a04d2, 0x400a055e)),
                                    (0x401a178c, (0x400a0704, 0x400a078c, 0x400a0818))):
                 ptrs.update({vt + 0x48: g, vt + 0x4c: st, vt + 0x50: c, vt + 0x54: 0x4009e74c,
                              vt + 0x68: 0x4009e79e, vt + 0x6c: 0x4009e7c2})
+            ptrs.update({0x401a1684: 0x400a0cec, 0x401a1724: 0x400a0e1e, 0x401a17c4: 0x400a0f08})
             assert a in ptrs and want == ptrs[a].to_bytes(4, 'big'), s
             continue
         ok, note = elemod.insn_check(img, a, len(want), DEV)
@@ -184,8 +186,9 @@ def test_core_a4mk2_sites():
     # 21 destination sites (dests.s): 15 in code and 6 vtable entries; and
     # 0.5's 2 MIDI sites (midi.s), the three sets' NRPN in and CC in, each a
     # jmp resuming after the 8 bytes it displaced; and 0.6's whole project
-    # save (store.s) and three knob look sites (looks.s)
-    assert len(mod['sites']) == 107
+    # save (store.s) and three knob look sites (looks.s); and 0.7's 28 UI and system sites (ui.s,
+    # ui.c; tests/test_units.py, test_core_a4mk2_0_7_ui_sites)
+    assert len(mod['sites']) == 135
     midi = [x for x in mod['sites'] if x.get('target') in ('core_nrpn_site', 'core_cc_site')]
     assert [(x['addr'], x['op'], x['stock']) for x in midi] == \
         [('0x4009ff56', 'jmp', '4fefffec48d7043c'), ('0x400a0b62', 'jmp', '4e56ffd848d71cfc')]
