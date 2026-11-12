@@ -16,7 +16,9 @@
  *                 (0x40068704). Below them there is nothing a message can
  *                 reach the ports by without one of them.
  *   ev_seq_midi   the audio interrupt's queueing of a sequencer note-on for
- *                 the note-out task (0x40101acc).
+ *                 the note-out task (0x40101acc): only a track whose SEND
+ *                 MIDI is on sends notes (pattern track byte +0x2e8, off
+ *                 by default).
  *   ev_seq_tick   the sequencer tick interrupt's exit (0x4007badc).
  */
 
