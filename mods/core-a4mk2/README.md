@@ -313,7 +313,7 @@ records by address, as core-ar2's does.
 | paste's lock set | 0x400b51f6 (`jmp`) | a listed column of 0x70 or more is a mod lock |
 | trig fire | 0x40079fbe (`jmp`) | after stock builds a trig's lock list (the immediate list, three scheduled, the note path's), core fills its own slot for that list with the step's mod locks and Param Slide's deltas |
 | event accept | 0x40101d58 (`jsr`), 0x40101fb2 (`jmp`) | when the audio interrupt copies an event's list to its channel's list (0x8000e670 + channel x 0x390, a channel per track), core keeps its slot for that channel; a slot filled before the ledger last changed is filled again first, as stock fills a stopped sequencer's first step at STOP and again on its own lock edits only |
-| voice apply | 0x401025ac (`jsr`) | when the interrupt applies a channel's list (%a5) to a voice the allocator gave its note (%d2; on a poly track the voice it picks, in UNISON each poly voice in turn), core copies the channel's locks into `core_lock_now` and `core_slide_delta` for that voice (gap 7, 6 Nov 2026: until then core took the channel for the voice, so a poly or UNISON voice other than the track's own never had the locks) |
+| voice apply | 0x401025ac (`jsr`) | when the interrupt applies a channel's list (%a5) to a voice the allocator gave its note (%d2; on a poly track the voice it picks, in UNISON each poly voice in turn), core copies the channel's locks into `core_lock_now` and `core_slide_delta` for that voice |
 | dump out | 0x4006b492 (`jmp`) | a pattern's SysEx dump: a marker row (`{0x7f, 0xfe}`, then the layout ID) for its mod rows, or, with no free row, no mod rows |
 | dump in | 0x40011d44 (`jmp`) | a received pattern's unpack: its mod rows stay only with a marker holding this build's layout ID; the marker goes |
 
@@ -590,6 +590,7 @@ core owns; A4 numbers are in `analog-four-mk2/keys.h`, `params.h`, `ports.h`
 | `ev_boot` | `std_boot` | `.boot` calls `core_boot_init` (`BOOT_INIT`) |
 | `ev_key` | `std_key` | core's `ev_key` handler, order 0: the KeyEvent's code; bit 0 clear is `KEY_RELEASE` (none for a key a view took) |
 | `ev_param_turn` | `std_param_turn` | `param_apply_delta` after `core_params`: a plain turn's sound edit, not a held trig's lock (std.c); `knob` its encoder |
+| `ev_voice_start`, `ev_voice_end` | `std_voice_*` | apply 0x401025ac, frees 0x40102174, 0x40102e10; one end per start, steals too |
 
 `core_post` (32 queued) and `core_timer` (16) run in core's first
 `ev_tick` handler (UI task), `core_redraw` in its last.

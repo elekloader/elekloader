@@ -8,8 +8,8 @@
  *   end[v]       ev_voice_end's calls for voice v
  *   track[v]     the track of voice v's last start, 0xff before any
  *   playing      a bit per voice: started and not yet ended
- *   restart      starts on a voice already playing (a retrig, or a steal:
- *                core reports no end for a steal)
+ *   restart      starts on a voice already playing (0: core ends a stolen
+ *                voice just before its new start)
  *   orphan       ends on a voice not playing
  *   bad          calls with a voice or track out of range
  */

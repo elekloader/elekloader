@@ -297,16 +297,19 @@ core_accept_note:
 | 0x401025ac in the audio interrupt's apply, where channel %a5's list goes
 | to voice %d2 (one of the voices the allocator gave its note): `movea.l
 | -0x84(%a6),%a0; moveq #2,%d5`. d0, d1, a0 and a1 are set again before
-| stock reads them. From 0.7 also std1's ev_voice_start (voice.c).
+| stock reads them. From 0.7 also std1's voice events (voice.c): the apply
+| runs for note offs too, with the voices the release path freed.
 core_voice_apply:
         move.l  %a5,-(%sp)
         move.l  %d2,-(%sp)
         jsr     core_rows_voice
         addq.l  #8,%sp
+        movea.l -0x84(%a6),%a0            | the request's +0xc: 1 a note on, else
+        move.l  (%a0),-(%sp)              | the release path (2 a live note off)
         move.l  %a5,-(%sp)                | track (a channel per track)
         move.l  %d2,-(%sp)                | voice
-        jsr     core_std_voice_start      | ev_voice_start (voice.c)
-        addq.l  #8,%sp
+        jsr     core_voice_note           | ev_voice_start, ev_voice_end (voice.c)
+        lea     12(%sp),%sp
         movea.l -0x84(%a6),%a0
         moveq   #2,%d5
         rts
