@@ -2220,8 +2220,8 @@ def test_core_a4mk2_0_7_ui_sites():
     globs |= {m for m in re.findall(r'^\s*CLIP\s+(\w+),', asm, re.M)}
     cfns = set(re.findall(r'^\w[\w ]*?\b(core_\w+)\(', src, re.M))
     ui_sites = [s for s in doc['sites'] if s.get('target') in globs | cfns]
-    assert len(ui_sites) == 33
-    assert len([s for s in ui_sites if s['target'].startswith('core_clip_')]) == 19
+    assert len(ui_sites) == 35
+    assert len([s for s in ui_sites if s['target'].startswith('core_clip_')]) == 21
     for s in ui_sites:
         assert len(s['stock']) // 2 >= (4 if s['op'] == 'ptr' else 6), s
         if s['op'] == 'keep2':
