@@ -17,7 +17,7 @@
  *   ev_param_set  std_param_set  the three parameter sets' set virtuals
  *                                (vtable slots), queued and run at the next
  *                                tick in the UI task
- *   ev_clip       std_clip       17 copy, paste and clear routines (ui.s)
+ *   ev_clip       std_clip       18 copy, paste and clear routines (ui.s), a pattern clear call
  *   ev_pattern    std_pattern    the UI task's pattern boundary message
  *                                (case 9, 0x40099c84), when the pattern changed
  *   ev_mute       std_mute       the mute setter's entry (0x400aeb8e)
@@ -344,6 +344,23 @@ void core_clip_post(uint32_t code, uint32_t a1, uint32_t a2)
         return;
     for (f = std_clip; *f; f++)
         (*f)(0, &c);
+}
+
+/* FUNC+PLAY outside grid record (0x400c0b48, unless an undo is possible):
+ * its call (keep2, 0x400c0bc2) of the pattern clear 0x400a2de0(pattern,
+ * whole, undo), whose %d0 byte says it cleared */
+typedef uint8_t (*pclear_t)(void *, int32_t, int32_t);
+#define PATTERN_CLEAR ((pclear_t)0x400a2de0u)
+
+uint32_t core_clip_pclear(void *pattern, int32_t whole, int32_t undo)
+{
+    const uint32_t code = CLIP_PATTERN | CLIP_CLEAR << 8;
+    uint8_t r;
+    if (core_clip_pre(code, 0, 0))
+        return 0;
+    r = PATTERN_CLEAR(pattern, whole, undo);
+    core_clip_post(code, 0, 0);
+    return r;
 }
 
 /* =============================== ev_pattern ================================ */
