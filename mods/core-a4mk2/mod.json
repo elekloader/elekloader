@@ -179,6 +179,7 @@
   {"addr": "0x40042fa6", "stock": "4e56ffe048d71c04", "op": "jmp", "target": "core_clip_song_copy"},
   {"addr": "0x40043084", "stock": "4e56fff0206e0008", "op": "jmp", "target": "core_clip_song_paste"},
   {"addr": "0x40043114", "stock": "4e56fff0206e0008", "op": "jmp", "target": "core_clip_song_clear"},
+  {"addr": "0x40046648", "stock": "4e56fff0206e0008", "op": "jmp", "target": "core_clip_songmenu_clear"},
   {"addr": "0x400c86f8", "stock": "4e56ffd070032f0b", "op": "jmp", "target": "core_clip_tsound_copy"},
   {"addr": "0x400c8818", "stock": "4e56ffa8700348d71c1c", "op": "jmp", "target": "core_clip_tsound_clear"},
   {"addr": "0x400c89ec", "stock": "4e56ffe4700348d71c00", "op": "jmp", "target": "core_clip_tsound_paste"},
