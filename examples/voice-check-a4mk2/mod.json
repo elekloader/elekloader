@@ -1,0 +1,19 @@
+{
+ "id": "voice-check",
+ "version": "0.1",
+ "title": "std1 voice check",
+ "category": "Examples",
+ "license": "GPL-2.0-or-later",
+ "description": "A test for core-a4mk2 0.7's std1 voice events on the Analog Four MKII: a std1 mod that counts ev_voice_start and ev_voice_end per voice in voice_check (voice.c), with each voice's last track and the ends that came without a start. It changes nothing the unit does.",
+ "device": "analog-four-mk2",
+ "os": "1.56",
+ "events": "std1",
+ "sources": ["voice.c"],
+ "subscribe": [
+  {"event": "ev_boot", "fn": "vc_boot", "order": 61},
+  {"event": "ev_voice_start", "fn": "vc_start", "order": 61},
+  {"event": "ev_voice_end", "fn": "vc_end", "order": 61}
+ ],
+ "resources": {"core": "0.7"},
+ "requires": ["core"]
+}

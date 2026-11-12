@@ -2166,6 +2166,24 @@ def test_core_ar2_0_12_room_for_drive_mods():
 
 
 
+def test_core_a4mk2_0_7_voice_events():
+    """core-a4mk2 0.7's std1 voice events (voice.c) run in the audio interrupt: ev_voice_start from
+    rows.s's voice apply (0x401025ac), with the voice and the channel's track."""
+    import re
+    root = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
+    mdir = os.path.join(root, 'mods', 'core-a4mk2')
+    with open(os.path.join(mdir, 'mod.json'), encoding='utf-8') as fh:
+        doc = json.load(fh)
+    assert doc['std']['ev_voice_start'] == 'std_voice_start'
+    assert doc['collections']['std_voice_start'] == 4 and 'voice.c' in doc['sources']
+    assert any(s['addr'] == '0x401025ac' and s['target'] == 'core_voice_apply' for s in doc['sites'])
+    with open(os.path.join(mdir, 'voice.c'), encoding='utf-8') as fh:
+        assert re.search(r'^void core_std_voice_start\(unsigned v, unsigned track\)', fh.read(), re.M)
+    with open(os.path.join(mdir, 'rows.s'), encoding='utf-8') as fh:
+        body = fh.read().split('core_voice_apply:', 1)[1].split('rts', 1)[0]
+    assert body.index('jsr     core_rows_voice') < body.index('jsr     core_std_voice_start')
+
+
 def test_core_a4mk2_0_7_std_map():
     """core-a4mk2 0.7 serves std1 at the sites it owns: each map entry is a std1.h event and one
     of core's tables, the native table for the same prototype or its first part, a std_ table of
@@ -2178,13 +2196,14 @@ def test_core_a4mk2_0_7_std_map():
     with open(os.path.join(root, 'elekloader', 'sdk', 'include', 'std1.h'), encoding='utf-8') as fh:
         events = set(re.findall(r'\(\*std1_(ev_\w+)_fn\)', fh.read()))
     std = doc['std']
-    assert set(std) == {'ev_boot', 'ev_tick', 'ev_draw', 'ev_key', 'ev_settings', 'ev_project',
-                        'ev_render_in', 'ev_param_turn'}
+    assert set(std) >= {'ev_boot', 'ev_tick', 'ev_draw', 'ev_key', 'ev_settings', 'ev_project',
+                        'ev_render_in', 'ev_param_turn'}       # later phases add their own
     assert set(std) <= events
     assert all(t in doc['collections'] for t in std.values())
     native = {e for e, t in std.items() if t == e}
     assert native == {'ev_tick', 'ev_draw', 'ev_settings', 'ev_project', 'ev_render_in'}
-    assert {std[e] for e in set(std) - native} == {'std_boot', 'std_key', 'std_param_turn'}
+    assert {std[e] for e in set(std) - native} >= {'std_boot', 'std_key', 'std_param_turn'}
+    assert all(t.startswith('std_') for e, t in std.items() if e not in native)
     assert doc['defsym'].get('BOOT_INIT') == '1' and 'std.c' in doc['sources']
     subs = {(x['event'], x['fn']): x['order'] for x in doc['subscribe']}
     assert subs[('ev_key', 'core_std_key')] == 0
