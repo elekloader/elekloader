@@ -14,7 +14,7 @@
  *   project_how, project_dropped     the last ev_project's
  *   posted, timed         core_post's calls run (one posted per 1024 audio
  *                         blocks from ev_render_in) and core_timer's (mask
- *                         7: every 8th tick)
+ *                         8: every 8th tick)
  *   post_fail             core_post refusals
  * and on screen, 2-pixel bars from the left whose length (mod 128) is a
  * count: y 60 keys, y 56 param turns, y 52 STD TEST selects, y 48 posted
@@ -65,7 +65,7 @@ static void sc_posted(void *arg)
 void sc_tick(void)
 {
     if (std_check.tick++ == 0)
-        core_timer(sc_timed, 7);
+        core_timer(sc_timed, 8);
     if ((std_check.tick & 7) == 0)
         core_redraw();
 }

@@ -46,9 +46,10 @@
  * core_redraw   any context: the frame is composed again at the next ev_tick.
  * core_post     any context, interrupts included: fn(arg) runs once, soon, in a task (the UI task
  *               on the cores so far); 0, or -1 when the queue is full.
- * core_timer    fn runs in that task every (mask + 1)th tick of CORE_TICK_HZ when mask is
- *               0, 1, 3, 7, ...: on the ticks whose count has no bit of mask set. Again with
- *               the same fn changes its mask; CORE_TIMER_STOP removes it. 0, or -1 when full. */
+ * core_timer    fn runs in that task every 2^k ticks of CORE_TICK_HZ, mask a single bit 1 << k
+ *               (1 every tick, 2 every second, ...), as the kernels' soft timers take it. Again
+ *               with the same fn changes its mask; CORE_TIMER_STOP removes it. 0, or -1 when
+ *               full or mask is not one bit. */
 void core_redraw(void);
 int core_post(void (*fn)(void *arg), void *arg);
 #define CORE_TIMER_STOP 0xffffffffu

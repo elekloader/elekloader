@@ -60,11 +60,13 @@ void core_boot_init(void)
 
 /* ================================ ev_key ================================== */
 
-/* A4 KeyEvent flags are taken to be std1's bits as they are (the Digitone
- * mk1's framework, which the A4's shares): bit 0 down and bit 3 repeat are
- * read; bit 1 (FUNC held), bit 2 (double) and bit 4 (release) are not yet.
- * PHASE3-GAP: key flag bits 1, 2 and 4; the unit run confirms all five. */
-#define A4_KEY_FLAGS (KEY_PRESS | KEY_FUNC | KEY_DOUBLE | KEY_REPEAT | KEY_RELEASE)
+/* A4 KeyEvent flags (+16), read in 1.56: bit 0 down (kept on repeats), so a
+ * release is bit 0 clear; bits 1 FUNC held, 2 double and 3 repeat are std1's.
+ * Bit 4 is set only on a clean tap's release (a combo's release has 0 or 2),
+ * so it is not std1's KEY_RELEASE; bits 4..6 are not passed. A key a view
+ * consumed gets no release from stock. */
+#define A4_KEY_DOWN 0x01u
+#define A4_KEY_SAME (KEY_FUNC | KEY_DOUBLE | KEY_REPEAT)
 
 /* ev_key (native), order 0: the std handlers, in their own order; the first
  * nonzero takes the key from every later handler and from stock */
@@ -76,7 +78,8 @@ int core_std_key(void *brain, void *ev)
     if (!std_key[0] || !ev)
         return 0;
     key = *(const uint32_t *)((const uint8_t *)ev + EV_KEY);
-    flags = *(const uint32_t *)((const uint8_t *)ev + EV_FLAGS) & A4_KEY_FLAGS;
+    flags = *(const uint32_t *)((const uint8_t *)ev + EV_FLAGS);
+    flags = (flags & A4_KEY_SAME) | ((flags & A4_KEY_DOWN) ? KEY_PRESS : KEY_RELEASE);
     for (f = std_key; *f; f++)
         if ((*f)(key, flags))
             return 1;
@@ -120,12 +123,12 @@ void core_redraw(void)
 
 /* ===================== core_post and core_timer =========================== */
 
-/* Interim: both run from core's first ev_tick handler (UI task, CORE_TICK_HZ),
- * not from the kernel's own soft timer and deferred-call queue, whose A4
- * entries are carried from the Digitone mk1 and not read here.
- * PHASE3-GAP: timer register 0x40002e14 (its mask) and deferred post1
- * 0x4000163c (its arguments and task); the prototypes stay when core moves
- * onto them. */
+/* Both run from core's first ev_tick handler (UI task, CORE_TICK_HZ), not
+ * through the kernel's: its deferred post (0x4000163c) calls fn in the
+ * deferred task, not the UI task, with no check for a full ring; its soft
+ * timer (0x40002e14) has 16 slots shared with stock and drops a 17th
+ * silently. core_timer keeps the kernel timer's mask: one bit, 1 << k, runs
+ * fn every 2^k ticks. */
 #define POSTS 32                    /* a power of two */
 #define TIMERS 16
 
@@ -158,8 +161,8 @@ int core_timer(void (*fn)(void), unsigned mask)
 {
     unsigned short sr;
     int i, free_ = -1, r = -1;
-    if (!fn)
-        return -1;
+    if (!fn || (mask != CORE_TIMER_STOP && (!mask || (mask & (mask - 1)))))
+        return -1;                  /* one bit, as the kernel timer's */
     sr = irq_mask();
     for (i = 0; i < TIMERS; i++) {
         if (timers[i].fn == fn) {
@@ -199,7 +202,7 @@ void core_std_tick(void *ctrl)
     }
     for (i = 0; i < TIMERS; i++) {
         void (*fn)(void) = timers[i].fn;
-        if (fn && !(ticks & timers[i].mask))
+        if (fn && !(ticks & (timers[i].mask - 1)))
             fn();
     }
     ticks++;

@@ -30,14 +30,16 @@
 #define KEYID_ENV 0x37
 #define KEYID_LFO 0x38
 #define KEYID_MIX 0xb3
-#define KEYID_ARROW(n) (0x40 + (n))     /* the four arrows, n = 0..3 [emu]; which is which: to confirm */
+#define KEYID_LEFT 0x40                 /* [read] the tempo nudges */
+#define KEYID_RIGHT 0x41
+#define KEYID_UP_DOWN(n) (0x42 + (n))   /* up and down, n = 0..1 [emu]; which is which: to confirm */
 #define KEYID_YES 0x44                  /* [emu] */
 #define KEYID_NO 0x45
 #define KEYID_RECORD 0x50               /* [read] in the transport handler */
 #define KEYID_PLAY 0x51
 #define KEYID_STOP 0x52
-#define KEYID_ENC_PUSH(e) (0x70 + (e))  /* an encoder's push, e an ENC_* below [emu] */
-#define KEYID_FUNC 0x80                 /* [emu] */
+#define KEYID_ENC_PUSH(e) (0x70 + (e))  /* an encoder's push, e an ENC_* below [read] */
+#define KEYID_FUNC 0x80                 /* [read] */
 
 /* ---- encoders: std1 counts them 0 to ENC_COUNT - 1 from the left ----
  * A..J are 0..9 and LEVEL / DATA is 10 (on an Analog Keys, which runs the
