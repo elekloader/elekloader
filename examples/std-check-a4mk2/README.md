@@ -27,13 +27,14 @@ in glass coordinates (x 0 the left column, y 0 the top row), in this order:
 | 4 | `core_text(66, 36, TEXT_SMALL \| TEXT_LEFT, "STD1")` | font 16 from x 66, top row 36 |
 | 5 | `core_text(126, 36, TEXT_MEDIUM \| TEXT_RIGHT \| TEXT_INVERT, "STD1")` | font 1 ending at x 126, top row 36, light on a set box |
 | 6 | `core_text(66, 46, TEXT_LARGE \| TEXT_LEFT, "A4")` | font 6 from x 66, top row 46 |
+| 6b | `core_text(104, 56, TEXT_SMALL \| TEXT_CENTRE, "STD1")` | font 16 from x 104 - w / 2, top row 56 |
 | 7 | `core_px` at (64, 24), (127, 24), (64, 63), (127, 63) | the four corners set |
 | 8 | `core_px(128, 30, 1)` | nothing: off the frame |
 | 9 | `core_fill(124, 60, 8, 8, 1)` | x 124..127, y 60..63 set: clipped |
 
 `std_check` counts the frames drawn so (`drawn`) and the row's selects
-(`draw_selects`), and keeps the three widths `core_text` returned
-(`w_small`, `w_medium`, `w_large`); each should equal `core_text_width`'s
+(`draw_selects`), and keeps the four widths `core_text` returned
+(`w_small`, `w_medium`, `w_large`, `w_centre`); each should equal `core_text_width`'s
 for that font and text (in core-a4mk2 0.6's screen-check, font 16's
 widths come from the same routine). Steps 1-3 and 7-9 are exact pixels; the
 text's glyphs are stock's, so only their boxes are checked.

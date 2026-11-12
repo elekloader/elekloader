@@ -330,14 +330,21 @@ void core_blit(void *fb, int x, int y, int w, int h, const uint8_t *bits)
  * 2 below the line), all with lower case (screen-check-a4mk2's table) */
 static const uint8_t text_fonts[3] = {16, 1, 6};
 
+/* aligned here from core_text_width, drawn left-aligned: stock's right
+ * alignment ends the text one column before x (std-check 0.2's gate) */
 int core_text(void *fb, int x, int y, unsigned style, const char *str)
 {
     unsigned size = (style >> 8) & 3;
-    int font;
+    int font, w;
     if (!fb || !str || size > 2)
         return 0;
     font = text_fonts[size];
+    w = core_text_width(font, str);
+    if ((style & 3) == TEXT_RIGHT)
+        x -= w - 1;
+    else if ((style & 3) == TEXT_CENTRE)
+        x -= w / 2;
     core_text_draw(fb, font, x, BMP_H(fb) - core_font_height(font) - y,
-                   (int)(style & 3) | (int)(style & TEXT_INVERT), str);
-    return core_text_width(font, str);
+                   0 | (int)(style & TEXT_INVERT), str);
+    return w;
 }

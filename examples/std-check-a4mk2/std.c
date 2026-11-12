@@ -21,7 +21,7 @@
  *                         passes them on, beside ev_param_turn
  *   drawn, draw_selects   frames drawn with DRAW TEST's pattern, and its
  *                         row's selects
- *   w_small, w_medium, w_large   core_text's widths in that pattern
+ *   w_small, w_medium, w_large, w_centre   core_text's widths in that pattern
  * and on screen, drawn with core_fill, 2-pixel bars from the left whose
  * length (mod 128) is a count, at glass rows (from the top) 2 keys, 6 param
  * turns, 10 STD TEST selects, 14 posted calls, 18 timer calls; a 3x3 square
@@ -47,7 +47,8 @@ struct std_check {
     uint32_t delta;
     int32_t delta_id;
     uint32_t drawn, draw_selects;        /* DRAW TEST: frames with the pattern, its row's selects */
-    int32_t w_small, w_medium, w_large;  /* core_text's widths of "STD1" */
+    int32_t w_small, w_medium, w_large;  /* core_text's widths (README, "DRAW TEST") */
+    int32_t w_centre;
 };
 volatile struct std_check std_check;
 
@@ -164,6 +165,7 @@ static void sc_pattern(void *fb)
     std_check.w_small = core_text(fb, 66, 36, TEXT_SMALL | TEXT_LEFT, "STD1");
     std_check.w_medium = core_text(fb, 126, 36, TEXT_MEDIUM | TEXT_RIGHT | TEXT_INVERT, "STD1");
     std_check.w_large = core_text(fb, 66, 46, TEXT_LARGE | TEXT_LEFT, "A4");
+    std_check.w_centre = core_text(fb, 104, 56, TEXT_SMALL | TEXT_CENTRE, "STD1");
     core_px(fb, 64, 24, 1);
     core_px(fb, 127, 24, 1);
     core_px(fb, 64, 63, 1);

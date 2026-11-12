@@ -71,8 +71,8 @@ void core_setting_add(void *menu, const struct core_setting *s);
  * core_px      one pixel: on 1 sets it, 0 clears it.
  * core_fill    a w x h box from (x, y): set (on 1) or cleared (on 0).
  * core_text    str in the device's own font, its box's top row at y: style is a size, TEXT_SMALL,
- *              _MEDIUM or _LARGE, an alignment, TEXT_LEFT (x the first column), _CENTRE or _RIGHT
- *              (x the last), and TEXT_INVERT for light text on a set box. The box is cleared first.
+ *              _MEDIUM or _LARGE, an alignment, TEXT_LEFT (x the first column), _CENTRE (x - w / 2
+ *              the first) or _RIGHT (x the last), and TEXT_INVERT for light text on a set box. The box is cleared first.
  *              Returns the text's width in pixels.
  * core_blit    a w x h one-bit image, rows top first, each row (w + 7) / 8 bytes, the left pixel
  *              in its first byte's top bit: 1 sets, 0 clears. */
