@@ -61,6 +61,7 @@ MAX_KNOBS = 1024                  # a mod's "knobs": at most this many ids
 MAX_ALIGN = 4096                  # a section's alignment: a power of two up to this
 LINKER_SYMS = {'__run_load', '__run_start', '__run_words', '__bss_start', '__bss_end',
                '__bss_words', '__run_hash', desc.SYM}
+STD_SETS = ('std1',)              # what a mod's "events" names (ADAPTING.md, "Standard events (std1)")
 MAX_SPARE = 4096                  # a table's spare entries (a collection's "spare")
 # the tables a build descriptor gives no spare entries: the linker fills them, from storage and payloads
 NO_SPARE = (store.IDS_TABLE, store.CODES_TABLE, store.CCS_TABLE, store.INITS_TABLE, store.HANDLES_TABLE,
@@ -145,7 +146,7 @@ class Mod2:
             raise ModError('%s: not a format-2 .elemod file' % name)
         extra = set(doc) - COMMON - {'sections', 'symbols', 'exports', 'imports', 'weak',
                                      'relocs', 'collections', 'contribute', 'copied', 'storage', 'sharc',
-                                     'sharc_raw', 'knobs'}
+                                     'sharc_raw', 'knobs', 'events', 'std'}
         if extra:
             raise ModError('%s: unknown fields %s' % (name, sorted(extra)))
         for k in ('id', 'version', 'target', 'sections'):
@@ -242,6 +243,17 @@ class Mod2:
                     raise ModError('%s: DSP table %s is not whole 24-bit words' % (name, c))
                 self.dsp_tables[c] = (tag, head, end)
             self.collections[c] = e
+        self.events = doc.get('events')         # "std1": its subscriptions are standard events
+        if self.events is not None and self.events not in STD_SETS:
+            raise ModError('%s: "events" is %r; the standard event set is %s'
+                           % (name, self.events, ' or '.join('"%s"' % x for x in STD_SETS)))
+        std = doc.get('std', {})                # a core's map: standard event -> its own table
+        if not isinstance(std, dict) or not all(isinstance(k, str) and isinstance(v, str)
+                                                for k, v in std.items()):
+            raise ModError('%s: "std" maps each standard event\'s name to a table of the core' % name)
+        if std and '.boot' not in self.sections:
+            raise ModError('%s: a "std" map is a core\'s (the mod with .boot)' % name)
+        self.std = dict(std)
         self.contribute = []
         for i, c in enumerate(doc.get('contribute', [])):
             what = '%s contribution %d' % (name, i)
@@ -256,6 +268,11 @@ class Mod2:
             claims = [(_int(a, what), _int(b, what)) for a, b in c.get('claims', [])]
             self.contribute.append({'to': str(c['to']), 'order': _int(c.get('order', 50), what),
                                     'data': data, 'relocs': rel, 'claims': claims, 'i': i})
+            if c.get('std') is not None:        # a subscription to a standard event: the core's
+                if c['std'] is not True or self.events is None:   # map gives its table (std_tables)
+                    raise ModError('%s: a standard event\'s subscription ("std": true) needs the '
+                                   'mod\'s "events"' % what)
+                self.contribute[-1]['event'] = str(c['to'])
         try:
             self.storage = store.parse_decls(doc)
             self.locks = store.parse_locks(doc)
@@ -497,8 +514,40 @@ def kernel_registrations(m, image):
     return out
 
 
+def std_tables(mods):
+    """Each standard event a std mod subscribes to, to the table the core's "std" map names for it
+    (in place: the contribution's "to"; its "event" keeps the name). -> [problems]."""
+    cores = [m for m in mods if '.boot' in m.sections]
+    core = cores[0] if len(cores) == 1 else None
+    bad = []
+    if core:
+        declared = {c for m in mods for c in m.collections}
+        for ev, t in sorted(core.std.items()):
+            if t not in declared:
+                bad.append('%s: its std map sends %s to %s, which no given mod declares'
+                           % (core.label(), ev, t))
+    for m in mods:
+        missing = []
+        for c in m.contribute:
+            ev = c.get('event')
+            if ev is None:
+                continue
+            c['unmapped'] = not (core and ev in core.std)
+            c['to'] = ev if c['unmapped'] else core.std[ev]
+            if c['unmapped'] and ev not in missing:
+                missing.append(ev)
+        if missing and core and not core.std:
+            bad.append('%s subscribes to %s events, and %s maps none'
+                       % (m.label(), m.events, core.label()))
+        elif missing and core:
+            bad.append('%s subscribes to %s, which %s does not map' % (m.label(), ', '.join(missing),
+                                                                        core.label()))
+    return bad
+
+
 def check(mods, image):
     """Static checks that need no layout. -> [problems]."""
+    std_bad = std_tables(mods)
     spans = []
     for m in mods:
         for s in m.sites:
@@ -520,6 +569,7 @@ def check(mods, image):
     bad = common_checks(mods, image, spans)
     if bad and bad[0].startswith('the mods are for different firmware'):
         return bad
+    bad += std_bad
     dev = mods[0].dev
     if not dev.linkable():
         return ['the %s has no linkable (format-2) mods yet: only whole builds (format 1) '
@@ -633,6 +683,8 @@ def check(mods, image):
                 continue
             bad.append('%s imports %s, which no given mod exports' % (m.label(), x))
         for c in m.contribute:
+            if c.get('unmapped'):               # refused above (std_tables)
+                continue
             if c['to'] not in tables:
                 bad.append('%s adds to table %s, which no given mod declares' % (m.label(), c['to']))
             elif len(c['data']) % tables[c['to']][1]:
