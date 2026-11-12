@@ -19,7 +19,9 @@ every 8th tick for `core_timer` (mask 8), one post per 1024 audio blocks
 with no refusal, key taps as a press and a `KEY_RELEASE` (0x10), a hold
 with `KEY_REPEAT`, `ev_settings` once at boot, a project load, and turns of
 32 counts or more on encoder A (smaller ones make no step and no call),
-taken while armed with the value unchanged. Not run on a unit yet.
+taken while armed with the value unchanged. On a unit (OS 1.56, 12 Nov
+2026, SH56) the same plan passed with the same values; CPU about 73 %
+with analoghealth, the heap flat.
 
 ```bash
 # needs m68k-linux-gnu binutils and gcc (or set ELEKLOADER_CROSS to another prefix)
