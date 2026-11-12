@@ -13,12 +13,18 @@ selected in SETTINGS; select it again to disarm): then it takes encoder B's
 and the LEVEL encoder's turns, every mute and every queued pattern change,
 and lights LED 0x20 with `core_led_set`.
 
+A second row, UI CRASH, raises an illegal instruction in the UI task while
+armed (nothing otherwise), so `ev_crash` runs on a real fault: `ui_check`
+then holds the exception frame's first long and PC (`crash_head`,
+`crash_pc`) and `crash_magic` "CRSH". Stock's crash screen follows and the
+unit needs a power cycle.
+
 ```bash
 # needs m68k-linux-gnu binutils and gcc (or set ELEKLOADER_CROSS to another prefix)
 python -m elekloader.sdk.build mods/core-a4mk2 --stock Analog-Four_MKII_OS1.56.syx
 python -m elekloader.sdk.build examples/ui-check-a4mk2 --stock Analog-Four_MKII_OS1.56.syx
 python -m elekloader.patch --stock Analog-Four_MKII_OS1.56.syx \
-    --mod mods/core-a4mk2/out/core-0.7.elemod --mod examples/ui-check-a4mk2/out/ui-check-0.2.elemod \
+    --mod mods/core-a4mk2/out/core-0.7.elemod --mod examples/ui-check-a4mk2/out/ui-check-0.3.elemod \
     --out a4-ui.syx --version UI56
 ```
 

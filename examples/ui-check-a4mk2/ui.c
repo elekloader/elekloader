@@ -31,6 +31,19 @@
  *                 (palette 0x448b5b19 + id * 4), and the LedManager's
  *                 requested mode and colour (mgr+0x2c + id*4, mgr+0x7d4 + id)
  *                 at the last ev_key_leds
+ *   mode_n[4]     ev_mode's calls for each mode (MODE_*), mode_last_new[4]
+ *                 the new value each last reported
+ *   crash_head, crash_pc   the exception frame's first long (format, vector,
+ *                 SR) and PC at the last ev_crash; crash_magic 0x43525348
+ *                 ("CRSH") once a handler ran
+ *   mute_n, set_n each call of ev_mute and ev_param_set, as mute and
+ *                 param_set (kept apart so a plan can read them after the
+ *                 older fields)
+ *   faults        UI CRASH selects that raised the fault
+ *
+ * UI CRASH (a second SETTINGS row) raises an illegal instruction in the UI
+ * task, but only while armed, so ev_crash runs on a real fault. The unit
+ * then stops in stock's crash screen and needs a power cycle.
  */
 #include <stdint.h>
 #include <std1.h>
@@ -40,6 +53,7 @@
 
 extern void core_additem(void *menu, const void *row);
 extern void uc_label(void);
+extern void uc_crash_label(void);
 
 struct ui_check {
     uint32_t magic;
@@ -61,6 +75,10 @@ struct ui_check {
     uint32_t frame, frame_w0;
     int32_t led20_slot;
     uint32_t led20_shown, led20_steady, led20_colour, led20_req_mode, led20_req_colour;
+    uint32_t mode_n[4];
+    int32_t mode_last_new[4];
+    uint32_t crash_magic, crash_head, crash_pc;
+    uint32_t mute_n, set_n, faults;
 };
 volatile struct ui_check ui_check;
 static unsigned idle_sub;
@@ -81,8 +99,13 @@ void uc_idle(void)
 
 void uc_crash(const void *frame)
 {
-    (void)frame;
+    const volatile uint32_t *f = (const volatile uint32_t *)frame;
     ui_check.crash++;
+    if (f) {
+        ui_check.crash_head = f[0];
+        ui_check.crash_pc = f[1];
+    }
+    ui_check.crash_magic = 0x43525348u;
 }
 
 void uc_usb(unsigned configured)
@@ -107,11 +130,16 @@ void uc_mode(int mode, int old, int new_)
     ui_check.mode_mode = mode;
     ui_check.mode_old = old;
     ui_check.mode_new = new_;
+    if (mode >= 0 && mode < 4) {
+        ui_check.mode_n[mode]++;
+        ui_check.mode_last_new[mode] = new_;
+    }
 }
 
 void uc_param_set(unsigned track, unsigned id, int32_t value)
 {
     ui_check.param_set++;
+    ui_check.set_n++;
     ui_check.set_track = track;
     ui_check.set_id = id;
     ui_check.set_value = value;
@@ -178,6 +206,7 @@ void uc_analog_frame(uint16_t *words)
 int uc_mute(unsigned track, unsigned muted, unsigned scope)
 {
     ui_check.mute++;
+    ui_check.mute_n++;
     ui_check.mute_track = track;
     ui_check.mute_muted = muted;
     ui_check.mute_scope = scope;
@@ -237,6 +266,15 @@ static void uc_select(void)
     ui_check.armed ^= 1;
 }
 
+/* only while armed: an illegal instruction (0x4afc) in the UI task */
+static void uc_crash_select(void)
+{
+    if (!ui_check.armed)
+        return;
+    ui_check.faults++;
+    __asm__ volatile(".short 0x4afc" : : : "memory");
+}
+
 static int uc_nothing(void)
 {
     return 0;
@@ -247,7 +285,13 @@ static const void *const uc_row[4] = {
     (const void *)uc_nothing, (const void *)uc_nothing,
 };
 
+static const void *const uc_crash_row[4] = {
+    (const void *)uc_crash_label, (const void *)uc_crash_select,
+    (const void *)uc_nothing, (const void *)uc_nothing,
+};
+
 void uc_settings(void *menu)
 {
     core_additem(menu, uc_row);
+    core_additem(menu, uc_crash_row);
 }
