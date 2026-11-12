@@ -2480,7 +2480,8 @@ from the linker: a mod picks its ids as for `core_params`.
 ### Screen calls (core-a4mk2 0.6, Analog Four MKII)
 
 The Rytm's screen calls (above) with `analog-four-mk2/screen.h` and
-`"core": "0.6"`. What differs: `core_stock_key` returns 0 once stock had
+`"core": "0.6"`. What differs: the Rytm's `core_stock_key` is
+`core_key_native` here, std1's name for it, and returns 0 once stock had
 the event (the A4's Brain::key doesn't pass on whether a view took it), the
 progress box is SAVE PROJECT's, and TOTAL RECALL counts as an overlay
 (mods/core-a4mk2/README.md, "Screen calls (0.6)").

@@ -569,7 +569,7 @@ routines; nothing of their code or glyphs is copied.
 |---|---|
 | `core_bitmap_init` | 0x40059222 |
 | `core_text_draw`, `core_text_width`, `core_font_height`, `core_font_descent` | the 17 font objects at 0x41735764 + 8 i (in the Rytm's order: 0..3 and 5..11 compared), their data (0x4005b3dc), the text routine 0x4005ad40, the width 0x4005b3e6 over a `std::string` (0x4018471e, 0x40182c6e) |
-| `core_stock_key` | Brain::key 0x40098b36, with the brain `core_screen_key` keeps from `ev_key` |
+| `core_key_native` | Brain::key 0x40098b36, with the brain `core_screen_key` keeps from `ev_key` |
 | `core_stock_overlay` | the view controller's list, the Rytm's layout (its push, 0x4006293a, is the Rytm's byte for byte); HelpBubbleView (0x4018d228) is the main screen's last view |
 | `core_level_readout`, `core_level_field_save`, `core_level_field_put` | `core_screen_enc` starts 47 ticks on the LEVEL / DATA encoder, 10 (11 on an Analog Keys: bit 20 of the boot word 0x401ff54c, the OS's own test) |
 | `core_progress_open`, `_set`, `_close` | SAVE PROJECT's SAVING box (0x4003d448): a ProgressWindow of 0x88 bytes (ctor 0x40060462, fill 0x400603c8), its shared_ptr's count (new 0x4014f2e8, copy 0x401465dc, release 0x40144764), pushed onto the controller (0x4006293a), closed by its vtable +0x2c |
@@ -577,8 +577,8 @@ routines; nothing of their code or glyphs is copied.
 What differs from the Rytm:
 
 - **Brain::key** drops the view controller's answer (0x4006304c) and
-  returns its listeners' call's (0x40096aee), so `core_stock_key` returns 0
-  once stock had the event, not whether a view took it.
+  returns its listeners' call's (0x40096aee), so `core_key_native` returns 0
+  once stock had the event, not if a view took it.
 - **The main screen's last view** is HelpBubbleView. TOTAL RECALL
   (TotalRecallMenuView) is pushed after it, so it counts as an overlay.
 - **The views that draw nothing** (View's own draw) are KeyboardView,

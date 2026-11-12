@@ -54,7 +54,7 @@ int core_font_descent(int font);
  * boot's first key event (core learns where stock's key handler is from
  * it). */
 #define CORE_KEY_EVENT_SIZE 24
-int core_stock_key(void *ev);
+int core_key_native(void *ev);
 
 /* ---- overlays ----
  * What covers stock's main screen now, as bits:

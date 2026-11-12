@@ -128,7 +128,7 @@ int core_font_descent(int font)
 
 /* ================================ keys ==================================== */
 
-/* ev_key, before every other handler: keeps the brain for core_stock_key */
+/* ev_key, before every other handler: keeps the brain for core_key_native */
 int core_screen_key(void *b, void *ev)
 {
     (void)ev;
@@ -139,7 +139,7 @@ int core_screen_key(void *b, void *ev)
 /* the event to stock alone, as if no mod had taken it; -1 before the first
  * key event of the boot (no brain yet), else 0: the A4's Brain::key doesn't
  * pass the view controller's answer on */
-int core_stock_key(void *ev)
+int core_key_native(void *ev)
 {
     if (!brain || !ev)
         return -1;
