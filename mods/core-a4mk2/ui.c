@@ -356,7 +356,9 @@ typedef uint8_t (*pop_t)(void *, int32_t, int32_t);
 #define PATTERN_PASTE ((pop_t)0x400a2cbau)
 #define PATTERN_CLEAR ((pop_t)0x400a2de0u)
 
-static uint32_t pattern_op(pop_t fn, unsigned op, void *pattern, int32_t a, int32_t b)
+/* noipa: gcc turns an inlined call of a constant address passed in as fn into
+ * __builtin_unreachable */
+__attribute__((noipa)) static uint32_t pattern_op(pop_t fn, unsigned op, void *pattern, int32_t a, int32_t b)
 {
     const uint32_t code = CLIP_PATTERN | op << 8;
     uint8_t r;
