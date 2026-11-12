@@ -16,6 +16,9 @@
  *                         blocks from ev_render_in) and core_timer's (mask
  *                         8: every 8th tick)
  *   post_fail             core_post refusals
+ *   delta, delta_id       a native core_params entry over every stock id
+ *                         (0..0x126) that counts param_apply_delta's calls and
+ *                         passes them on, beside ev_param_turn
  * and on screen, 2-pixel bars from the left whose length (mod 128) is a
  * count: y 60 keys, y 56 param turns, y 52 STD TEST selects, y 48 posted
  * calls, y 44 timer calls; a 3x3 square top right blinks with the tick and
@@ -24,6 +27,7 @@
 #include <stdint.h>
 #include <std1.h>
 #include "analog-four-mk2/keys.h"
+#include "analog-four-mk2/pages.h"
 
 typedef void (*fillrect_t)(void *bmp, int x0, int y0, int x1, int y1, int colour);
 #ifndef FILLRECT_AT
@@ -43,6 +47,8 @@ struct std_check {
     uint32_t project_dropped;
     uint32_t posted, timed, post_fail;
     uint32_t armed, selects;
+    uint32_t delta;
+    int32_t delta_id;
 };
 volatile struct std_check std_check;
 
@@ -87,6 +93,17 @@ int sc_param_turn(void *view, int id, int delta, int knob)
     std_check.turn_knob = knob;
     return std_check.armed && knob == ENC_A;
 }
+
+/* core_params (native): every stock id, counted and passed on */
+static int sc_delta(void *view, int32_t id, int32_t delta, int32_t func)
+{
+    (void)view; (void)delta; (void)func;
+    std_check.delta++;
+    std_check.delta_id = id;
+    return 0;
+}
+
+const struct core_param sc_params = {0, 0x126, 0, sc_delta, 0};
 
 void sc_project(int how, unsigned dropped)
 {

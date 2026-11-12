@@ -21,6 +21,7 @@
   {"event": "ev_render_in", "fn": "sc_render_in", "order": 60},
   {"event": "ev_param_turn", "fn": "sc_param_turn", "order": 60}
  ],
+ "contribute": [{"to": "core_params", "order": 50, "data": "00000000", "relocs": [[0, "abs32", "sym:sc_params", 0]]}],
  "resources": {"names": ["settings:STD TEST"], "core": "0.7"},
  "requires": ["core"]
 }
