@@ -1,0 +1,30 @@
+{
+ "id": "ui-check",
+ "version": "0.1",
+ "title": "std1 UI check",
+ "category": "Examples",
+ "license": "GPL-2.0-or-later",
+ "description": "A test for core-a4mk2 0.7's UI and system events on the Analog Four MKII: a std1 mod that subscribes to ev_boot_done, ev_idle, ev_crash, ev_usb, ev_key_leds, ev_mode, ev_param_set, ev_clip, ev_pattern and ev_mute, and to core's own ev_knob_turn, and records what each passes in ui_check (ui.c); while armed (UI TEST in SETTINGS) it takes encoder B's turns and every mute, and lights LED 0x20.",
+ "device": "analog-four-mk2",
+ "os": "1.56",
+ "events": "std1",
+ "sources": ["ui.c", "label.s"],
+ "defsym": {"STRING_CTOR": "0x4018471e"},
+ "subscribe": [
+  {"event": "ev_tick", "fn": "uc_tick", "order": 70},
+  {"event": "ev_settings", "fn": "uc_settings", "order": 70},
+  {"event": "ev_boot_done", "fn": "uc_boot_done", "order": 70},
+  {"event": "ev_idle", "fn": "uc_idle", "order": 70},
+  {"event": "ev_crash", "fn": "uc_crash", "order": 70},
+  {"event": "ev_usb", "fn": "uc_usb", "order": 70},
+  {"event": "ev_key_leds", "fn": "uc_key_leds", "order": 70},
+  {"event": "ev_mode", "fn": "uc_mode", "order": 70},
+  {"event": "ev_param_set", "fn": "uc_param_set", "order": 70},
+  {"event": "ev_clip", "fn": "uc_clip", "order": 70},
+  {"event": "ev_pattern", "fn": "uc_pattern", "order": 70},
+  {"event": "ev_mute", "fn": "uc_mute", "order": 70}
+ ],
+ "contribute": [{"to": "ev_knob_turn", "order": 70, "data": "00000000", "relocs": [[0, "abs32", "sym:uc_knob_turn", 0]]}],
+ "resources": {"names": ["settings:UI TEST"], "core": "0.7"},
+ "requires": ["core"]
+}

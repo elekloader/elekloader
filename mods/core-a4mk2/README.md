@@ -580,21 +580,22 @@ What differs from the Rytm:
 
 ## Standard events (0.7)
 
-`std.c` serves std1 (docs/ADAPTING.md, "Standard events (std1)") at sites
-core owns; A4 numbers are in `analog-four-mk2/keys.h`, `params.h`, `ports.h`
-(`leds.h` is empty).
+std1 (docs/ADAPTING.md, "Standard events (std1)"): `std.c` at sites core
+owns, `ui.c` and `ui.s` the UI and system events at new sites; each file's
+first comment lists its events, sites and contexts. A4 numbers are in
+`analog-four-mk2/keys.h`, `leds.h`, `params.h`, `ports.h` and `ui.h`.
 
-| std1 event | table | how |
-|---|---|---|
-| `ev_tick`, `ev_draw`, `ev_settings`, `ev_project`, `ev_render_in` | native | = or prefix, sorted by `order` |
-| `ev_boot` | `std_boot` | `.boot` calls `core_boot_init` (`BOOT_INIT`) |
-| `ev_key` | `std_key` | core's `ev_key` handler, order 0: the KeyEvent's code; bit 0 clear is `KEY_RELEASE` (none for a key a view took) |
-| `ev_param_turn` | `std_param_turn` | `param_apply_delta` after `core_params`: a plain turn's sound edit, not a held trig's lock (std.c); `knob` its encoder |
+| std1 event | table |
+|---|---|
+| `ev_tick`, `ev_draw`, `ev_settings`, `ev_project`, `ev_render_in` | native (= or prefix) |
+| `ev_boot`, `ev_key`, `ev_param_turn` and the ten in `ui.c` | `std_` + the name |
 
-`core_post` (32 queued) and `core_timer` (16) run in core's first
-`ev_tick` handler (UI task), `core_redraw` in its last.
-Not here yet: `core_setting_add`, the draw helpers. Unconfirmed: `keys.h`'s
-[emu] ids.
+`ev_knob_turn` (native, `ui.h`) is every page knob turn, with `how` sound,
+lock or multi-track; `ev_param_turn` only the sound edits.
+Not here yet: `core_setting_add`, the draw helpers, `ev_view`, the
+pattern request (`pre` 1). Unconfirmed: `keys.h`'s [emu] ids, the LED ids
+and colours. Test mods: [std-check](../../examples/std-check-a4mk2),
+[ui-check](../../examples/ui-check-a4mk2).
 
 ## Checked so far
 
