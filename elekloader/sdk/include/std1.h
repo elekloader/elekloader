@@ -42,7 +42,7 @@
 #define KEY_REPEAT  0x08u
 #define KEY_RELEASE 0x10u
 
-/* -- helpers every core that maps std1 events provides
+/* -- helpers every core that maps std1 events provides (ev_settings' and ev_draw's below)
  * core_redraw   any context: the frame is composed again at the next ev_tick.
  * core_post     any context, interrupts included: fn(arg) runs once, soon, in a task (the UI task
  *               on the cores so far); 0, or -1 when the queue is full.
@@ -55,7 +55,39 @@ int core_post(void (*fn)(void *arg), void *arg);
 #define CORE_TIMER_STOP 0xffffffffu
 int core_timer(void (*fn)(void), unsigned mask);
 
-struct core_setting;                        /* a settings row (ev_settings), given by the core */
+/* -- ev_settings' row: core_setting_add(menu, s) from an ev_settings handler adds one row after
+ * the core's last, a separate row for each call. s stays the mod's: keep it (and name) in static
+ * storage, since the row reads them for as long as the menu shows. name is the row's text (upper
+ * case A-Z 0-9 space and - = & / # @ ? % $ ~, at most 15 characters), read again each time the
+ * row is drawn; select runs in the UI task when the row is chosen (YES), with s. */
+struct core_setting {
+    const char *name;
+    void (*select)(const struct core_setting *s);
+};
+void core_setting_add(void *menu, const struct core_setting *s);
+
+/* -- ev_draw's helpers, for fb, ev_draw's argument. On every core x 0 is the left column and y 0
+ * the top row (whatever the frame's own layout), and what falls off the frame is clipped.
+ * core_px      one pixel: on 1 sets it, 0 clears it.
+ * core_fill    a w x h box from (x, y): set (on 1) or cleared (on 0).
+ * core_text    str in the device's own font, its box's top row at y: style is a size, TEXT_SMALL,
+ *              _MEDIUM or _LARGE, an alignment, TEXT_LEFT (x the first column), _CENTRE or _RIGHT
+ *              (x the last), and TEXT_INVERT for light text on a set box. The box is cleared first.
+ *              Returns the text's width in pixels.
+ * core_blit    a w x h one-bit image, rows top first, each row (w + 7) / 8 bytes, the left pixel
+ *              in its first byte's top bit: 1 sets, 0 clears. */
+#define TEXT_SMALL  0x000u
+#define TEXT_MEDIUM 0x100u
+#define TEXT_LARGE  0x200u
+#define TEXT_LEFT   0x00u
+#define TEXT_CENTRE 0x01u
+#define TEXT_RIGHT  0x02u
+#define TEXT_INVERT 0x10u
+void core_px(void *fb, int x, int y, int on);
+void core_fill(void *fb, int x, int y, int w, int h, int on);
+int core_text(void *fb, int x, int y, unsigned style, const char *str);
+void core_blit(void *fb, int x, int y, int w, int h, const uint8_t *bits);
+
 struct core_clip;                           /* a clipboard operation (ev_clip), given by the core */
 
 /* -- system */

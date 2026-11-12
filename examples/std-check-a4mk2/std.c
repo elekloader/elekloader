@@ -19,24 +19,21 @@
  *   delta, delta_id       a native core_params entry over every stock id
  *                         (0..0x126) that counts param_apply_delta's calls and
  *                         passes them on, beside ev_param_turn
- * and on screen, 2-pixel bars from the left whose length (mod 128) is a
- * count: y 60 keys, y 56 param turns, y 52 STD TEST selects, y 48 posted
- * calls, y 44 timer calls; a 3x3 square top right blinks with the tick and
- * is drawn because core_redraw asks for a frame every 8 ticks.
+ *   drawn, draw_selects   frames drawn with DRAW TEST's pattern, and its
+ *                         row's selects
+ *   w_small, w_medium, w_large   core_text's widths in that pattern
+ * and on screen, drawn with core_fill, 2-pixel bars from the left whose
+ * length (mod 128) is a count, at glass rows (from the top) 2 keys, 6 param
+ * turns, 10 STD TEST selects, 14 posted calls, 18 timer calls; a 3x3 square
+ * top right blinks with the tick and is drawn because core_redraw asks for
+ * a frame every 8 ticks. Both rows are core_setting_add's; DRAW TEST
+ * (selected again to stop) draws the helpers' pattern in the right half,
+ * glass rows 24..63 (README).
  */
 #include <stdint.h>
 #include <std1.h>
 #include "analog-four-mk2/keys.h"
 #include "analog-four-mk2/pages.h"
-
-typedef void (*fillrect_t)(void *bmp, int x0, int y0, int x1, int y1, int colour);
-#ifndef FILLRECT_AT
-#error "FILLRECT_AT: fill_rect's address (mod.json cflags)"
-#endif
-#define FILLRECT ((fillrect_t)FILLRECT_AT)
-
-extern void core_additem(void *menu, const void *row);  /* core_setting_add is not on the A4 yet */
-extern void sc_label(void);                              /* label.s: the row's name */
 
 struct std_check {
     uint32_t magic;
@@ -49,6 +46,8 @@ struct std_check {
     uint32_t armed, selects;
     uint32_t delta;
     int32_t delta_id;
+    uint32_t drawn, draw_selects;        /* DRAW TEST: frames with the pattern, its row's selects */
+    int32_t w_small, w_medium, w_large;  /* core_text's widths of "STD1" */
 };
 volatile struct std_check std_check;
 
@@ -118,43 +117,70 @@ void sc_render_in(void)
         std_check.post_fail++;
 }
 
-static void sc_select(void)
+static void sc_select(const struct core_setting *s)
 {
+    (void)s;
     std_check.selects++;
     std_check.armed ^= 1;
 }
 
-static int sc_nothing(void)
+static uint32_t draw_armed;
+
+static void sc_draw_select(const struct core_setting *s)
 {
-    return 0;
+    (void)s;
+    std_check.draw_selects++;
+    draw_armed ^= 1;
 }
 
-static const void *const sc_row[4] = {
-    (const void *)sc_label, (const void *)sc_select,
-    (const void *)sc_nothing, (const void *)sc_nothing,
-};
+static const struct core_setting sc_row = {"STD TEST", sc_select};
+static const struct core_setting sc_draw_row = {"DRAW TEST", sc_draw_select};
 
 void sc_settings(void *menu)
 {
     std_check.settings++;
-    core_additem(menu, sc_row);
+    core_setting_add(menu, &sc_row);
+    core_setting_add(menu, &sc_draw_row);
 }
 
-static void sc_bar(void *bmp, int y, unsigned n)
+/* a bar 2 rows high from the left at glass row y (from the top) */
+static void sc_bar(void *fb, int y, unsigned n)
 {
     int len = n & 127;
-    FILLRECT(bmp, 0, y, 127, y + 1, 0);
-    if (len)
-        FILLRECT(bmp, 0, y, len - 1, y + 1, 1);
+    core_fill(fb, 0, y, 128, 2, 0);
+    core_fill(fb, 0, y, len, 2, 1);
+}
+
+/* DRAW TEST's 8 x 8 image: a frame with a diagonal, rows top first */
+static const uint8_t sc_image[8] = {0xff, 0xc1, 0xa1, 0x91, 0x89, 0x85, 0x83, 0xff};
+
+/* DRAW TEST: the right half, glass rows 24..63 (README, "DRAW TEST") */
+static void sc_pattern(void *fb)
+{
+    std_check.drawn++;
+    core_fill(fb, 64, 24, 64, 40, 0);
+    core_fill(fb, 66, 26, 10, 4, 1);
+    core_blit(fb, 80, 26, 8, 8, sc_image);
+    std_check.w_small = core_text(fb, 66, 36, TEXT_SMALL | TEXT_LEFT, "STD1");
+    std_check.w_medium = core_text(fb, 126, 36, TEXT_MEDIUM | TEXT_RIGHT | TEXT_INVERT, "STD1");
+    std_check.w_large = core_text(fb, 66, 46, TEXT_LARGE | TEXT_LEFT, "A4");
+    core_px(fb, 64, 24, 1);
+    core_px(fb, 127, 24, 1);
+    core_px(fb, 64, 63, 1);
+    core_px(fb, 127, 63, 1);
+    core_px(fb, 128, 30, 1);                  /* off the frame: clipped */
+    core_fill(fb, 124, 60, 8, 8, 1);          /* clipped to columns 124..127, rows 60..63 */
 }
 
 void sc_draw(void *fb)
 {
     std_check.draw++;
-    sc_bar(fb, 60, std_check.key);
-    sc_bar(fb, 56, std_check.param_turn);
-    sc_bar(fb, 52, std_check.selects);
-    sc_bar(fb, 48, std_check.posted);
-    sc_bar(fb, 44, std_check.timed);
-    FILLRECT(fb, 125, 61, 127, 63, (std_check.tick >> 4) & 1);
+    sc_bar(fb, 2, std_check.key);
+    sc_bar(fb, 6, std_check.param_turn);
+    sc_bar(fb, 10, std_check.selects);
+    sc_bar(fb, 14, std_check.posted);
+    sc_bar(fb, 18, std_check.timed);
+    core_fill(fb, 125, 0, 3, 3, (std_check.tick >> 4) & 1);
+    if (draw_armed)
+        sc_pattern(fb);
 }

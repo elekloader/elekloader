@@ -220,3 +220,124 @@ void core_std_tick_end(void *ctrl)
         *((volatile uint8_t *)ctrl + CTRL_DIRTY) = 1;
     }
 }
+
+/* ============================ core_setting_add ============================ */
+
+/* A SETTINGS row of the firmware's own (a 0x54-byte MenuItem, as
+ * core_additem builds it), whose label and select carry the mod's struct
+ * core_setting as their std::function's payload: stock calls each with the
+ * functor's address first, the payload in its first word (drive-loader-ar2's
+ * MODS page rows, the same MenuItem on the Rytm). The label is stdui.s's
+ * core_setting_label (it returns a std::string, so it is assembly). */
+#define OP_NEW ((uintptr_t (*)(unsigned))0x400653b8)
+#define ITEM_CTOR ((void (*)(void *, void *, void *, void *, void *, int, int))0x4005c7c4)
+#define MENU_ADD ((void (*)(void *, void *))0x4005bffa)
+#define FN_MGR 0x40164940u          /* std::function's manager for a plain pointer */
+
+struct fn { const void *payload[2]; uint32_t mgr; const void *invoke; };
+
+extern void core_setting_label(void);   /* stdui.s */
+
+static void setting_select(const struct core_setting *const *f)
+{
+    const struct core_setting *s = *f;
+    if (s && s->select)
+        s->select(s);
+}
+
+static int setting_nothing(void)
+{
+    return 0;
+}
+
+void core_setting_add(void *menu, const struct core_setting *s)
+{
+    struct fn l = {{s, 0}, FN_MGR, (const void *)core_setting_label};
+    struct fn c = {{s, 0}, FN_MGR, (const void *)setting_select};
+    struct fn d = {{0, 0}, FN_MGR, (const void *)setting_nothing};
+    struct fn h = {{menu, 0}, FN_MGR, (const void *)setting_nothing};
+    void *it;
+    if (!menu || !s || !s->name)
+        return;
+    it = (void *)OP_NEW(0x54);
+    if (!it)
+        return;
+    ITEM_CTOR(it, &l, &c, &d, &h, -1, 8);
+    MENU_ADD(menu, it);
+}
+
+/* ============================= draw helpers =============================== */
+
+/* fb is ev_draw's bmp: stock's bitmap record (+4 width, +8 height), whose
+ * rows count from the bottom. The helpers take rows from the top, clip to
+ * the record's size and draw through stock's fill (0x40059f1a: x0, y0, x1,
+ * y1 inclusive, rows from the bottom, colour 0 or 1) and screen.c's text. */
+#define FILL ((void (*)(void *, int, int, int, int, int))0x40059f1a)
+#define BMP_W(b) (*(const int32_t *)((const uint8_t *)(b) + 4))
+#define BMP_H(b) (*(const int32_t *)((const uint8_t *)(b) + 8))
+
+extern void core_text_draw(void *bmp, int font, int x, int y, int align, const char *str);
+extern int core_text_width(int font, const char *str);
+extern int core_font_height(int font);
+
+void core_fill(void *fb, int x, int y, int w, int h, int on)
+{
+    int fw, fh, x1, y1;
+    if (!fb || w <= 0 || h <= 0)
+        return;
+    fw = BMP_W(fb);
+    fh = BMP_H(fb);
+    x1 = x + w - 1;
+    y1 = y + h - 1;
+    if (x < 0)
+        x = 0;
+    if (y < 0)
+        y = 0;
+    if (x1 >= fw)
+        x1 = fw - 1;
+    if (y1 >= fh)
+        y1 = fh - 1;
+    if (x > x1 || y > y1)
+        return;
+    FILL(fb, x, fh - 1 - y1, x1, fh - 1 - y, on ? 1 : 0);
+}
+
+void core_px(void *fb, int x, int y, int on)
+{
+    core_fill(fb, x, y, 1, 1, on);
+}
+
+/* one row's runs of equal bits, each a fill */
+void core_blit(void *fb, int x, int y, int w, int h, const uint8_t *bits)
+{
+    int stride = (w + 7) / 8, r, c, start;
+    if (!fb || !bits || w <= 0 || h <= 0)
+        return;
+    for (r = 0; r < h; r++) {
+        const uint8_t *row = bits + r * stride;
+        start = 0;
+        for (c = 1; c <= w; c++) {
+            int prev = (row[(c - 1) >> 3] >> (7 - ((c - 1) & 7))) & 1;
+            if (c == w || ((row[c >> 3] >> (7 - (c & 7))) & 1) != prev) {
+                core_fill(fb, x + start, y + r, c - start, 1, prev);
+                start = c;
+            }
+        }
+    }
+}
+
+/* TEXT_SMALL, _MEDIUM, _LARGE: stock's fonts 16 (5 rows), 1 (9) and 6 (15,
+ * 2 below the line), all with lower case (screen-check-a4mk2's table) */
+static const uint8_t text_fonts[3] = {16, 1, 6};
+
+int core_text(void *fb, int x, int y, unsigned style, const char *str)
+{
+    unsigned size = (style >> 8) & 3;
+    int font;
+    if (!fb || !str || size > 2)
+        return 0;
+    font = text_fonts[size];
+    core_text_draw(fb, font, x, BMP_H(fb) - core_font_height(font) - y,
+                   (int)(style & 3) | (int)(style & TEXT_INVERT), str);
+    return core_text_width(font, str);
+}
