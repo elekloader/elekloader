@@ -205,8 +205,12 @@ def test_core_a4mk2_sites():
         ('0x4009eaaa', '4feffff048d7003c')]             # lea -16(sp); movem.l d2-d5
     with open(os.path.join(ROOT, 'mods', 'core-a4mk2', 'looks.s')) as fh:
         assert 'jmp     0x4009eab2' in fh.read()
+    ui = [x for x in mod['sites'] if x.get('target', '').startswith((
+        'core_boot_done_site', 'core_idle_start', 'core_crash_install', 'core_usb_site', 'core_key_leds_site',
+        'core_pset_', 'core_pattern_site', 'core_mute_site', 'core_knob_site', 'core_clip_'))]
+    assert len(ui) == 28                # 0.7's UI and system sites (ui.s, ui.c)
     locks = [x for x in mod['sites'] if x['addr'] not in {y['addr'] for y in j['sites'][:48]} and x not in midi
-             and x not in new06]
+             and x not in new06 and x not in ui]
     dests = [x for x in locks if x.get('target', '').startswith(('core_dst', 'core_id_index', 'core_index_id',
                                                                    'core_push_', 'core_set_'))]
     assert len(dests) == 21 and len([x for x in dests if x['op'] == 'ptr']) == 6
