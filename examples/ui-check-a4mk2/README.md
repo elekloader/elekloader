@@ -24,3 +24,6 @@ emulator feeds USB MIDI only while main sits on one of the image's own
 self-branches, and with a handler main loops in core instead. Check
 `ev_idle` on the unit, and in the emulator build ui-check without its
 `ev_idle` subscription.
+On the unit a build with an `ev_idle` handler answers USB as usual, and
+analoghealth's CPU figure reads 100 %: core's idle loop takes the place of
+stock's own spin, the time that figure counts as idle.
