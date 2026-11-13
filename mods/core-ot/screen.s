@@ -164,6 +164,37 @@ core_dial_src:
 core_dial_arp:
         DIAL2   4, a3, d3, d4, zero, d6, 0x4007a200     | OT_SETUP_ARP
 
+| ---- the MIDI CTRL pages' knobs (core-ot 0.26) -------------------------------------------------------------
+| 0x4004e382 (was: movea.l -52(a6),a1 ; movea.l 48(a1),a0 ; tst.l a0 ; bne.s ; lea 0x400479b4(pc),a0), in the
+| page drawer 0x4004d948: a knob of the MIDI tracks' CTRL pages about to be drawn with the SETUP widget:
+| -52(a6) its formatter record, a4 the knob, d0 the value, d5 the flags. octabam's MIDI SCENES (MIT) shows a
+| held scene's lock here. ev_setup_dial with page OT_PAGE_CTRL; the value, flags and widget come back.
+        .globl  core_dial_ctrl
+core_dial_ctrl:
+        movea.l -52(%a6), %a1
+        movea.l 48(%a1), %a0
+        tst.l   %a0
+        bne.s   1f
+        lea     DIAL_WIDGET, %a0
+1:      tst.l   ev_setup_dial
+        beq.s   2f
+        lea     -20(%sp), %sp
+        move.b  #5, (%sp)               | OT_PAGE_CTRL
+        move.l  %a4, %d1
+        move.b  %d1, 1(%sp)             | the knob
+        move.l  %d0, 4(%sp)
+        move.l  %d5, 8(%sp)
+        move.l  (%a1), 12(%sp)
+        move.l  %a0, 16(%sp)
+        pea     (%sp)
+        jsr     otd_dial
+        addq.l  #4, %sp
+        move.l  4(%sp), %d0
+        move.l  8(%sp), %d5
+        movea.l 16(%sp), %a0
+        lea     20(%sp), %sp
+2:      jmp     0x4004e392
+
 | ---- the track tabs (core-ot 0.17) ---------------------------------------------------------------------
 | 0x40040146 (was: moveq #4,d0 ; cmp.l a4,d0 ; bne.s 0x400401c6), in the track tabs' renderer 0x4003fed8
 | (the UI task's display loop): stock has just drawn track d4's machine letter at x d3, y a2 + 1 (a4 the

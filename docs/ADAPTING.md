@@ -816,7 +816,7 @@ The places octabam's EVENTS module holds for PLOCKS P2 and MIDI FOLLOW (MIT).
 
 `ev_setup_dial` covers every SETUP window that draws its knobs with the stock widget: AMP, FX1 and
 FX2 SETUP, SRC / NOTE SETUP (`page` `OT_P2_PLAYBACK`) and MIDI ARP SETUP (`page` `OT_SETUP_ARP`; both
-core-ot 0.22).
+core-ot 0.22), and the MIDI tracks' CTRL pages (`page` `OT_PAGE_CTRL`, core-ot 0.26).
 
 `ev_knob_draw` (core-ot 0.23) is the other knob widget's entry (0x400467a4): the pages whose parameter
 descriptors name it, RECORDING SETUP and two more drawers. `void f(struct ot_knob *k)` gets the widget's

@@ -813,6 +813,7 @@ EDIT_SITES = {
 DIAL2_SITES = {
     'core_dial_src': (0x40036698, '206c00304a88660641f9400479b4' '2f052f142f09', 0x400366ac, '7183'),   # mvz.b d3,d0
     'core_dial_arp': (0x4007a1ec, DIAL_BYTES + '2f062f1342a7', 0x4007a200, '7184'),                    # mvz.b d4,d0
+    'core_dial_ctrl': (0x4004e382, '226effcc206900304a88660441fa9624', 0x4004e392, '4879'),         # 0.26: pea canvas
 }
 EDIT_JSR = ('core_psel_begin', 'core_boot_early')
 # Routines a 0.8 stub wraps (a return slot each: entered again before they return, the slot is lost).
@@ -1200,6 +1201,8 @@ def test_the_core_dial2_sites():
     sites = {v[0] for v in EDIT_SITES.values() if v[2] == 'ev_setup_dial'} | {v[0] for v in DIAL2_SITES.values()}
     covered = {a + 8 for a in sites}                            # the lea is 8 bytes into each site
     assert set(widget) - covered == {0x4003ce40, 0x4003f5ee}, sorted(map(hex, set(widget) - covered))
+    o = 0x4004e38e - DEV.main_load                              # the CTRL pages' widget is a pc-relative lea
+    assert img[o:o + 4].hex() == '41fa9624' and _branch_target(img, o) == 0x400479b4
     for o in range(0, len(img) - 6, 2):
         hit = _branch_into(img, o, inside)
         assert hit is None or inside.get(DEV.main_load + o) == hit, hex(DEV.main_load + o)   # its own bne
