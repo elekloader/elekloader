@@ -143,6 +143,8 @@ enum {
 /* void ev_trig_box_draw(unsigned mode) (0.25): the trig mode box's drawer is done (mode = OT_TRIG_MODE); draw
  * over the box (ot_blit). */
 #define OT_TRIG_MODE        OT_L(0x460d16f0)
+/* void ev_bank_copied(const char *dst, const char *src, int result) (0.27): a per-bank SAVE or RELOAD just
+ * copied the bank's file (engine task). */
 #define OT_LED_MAP          ((volatile uint8_t *)0x460ba98cu)
 #define OT_LED_ON(m, id)    ((m)[(id) >> 3] |= (uint8_t)(1u << ((id) & 7)))
 #define OT_LED_OFF(m, id)   ((m)[(id) >> 3] &= (uint8_t)~(1u << ((id) & 7)))

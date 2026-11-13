@@ -8,7 +8,7 @@
 
 enum { MAGIC, APPLY_N, APPLY_BANK, APPLY_PART, CHAIN_N, CHAIN_PAT, CHAIN_LEN, RESET_N, PANIC_N,
        LEN_N, LEN_TRK, LEN_LEN, LEN_FORCE, WRAP_N, WRAP_NOW, WRAP_OLD, REC_N, REC_TRK, REC_LEN,
-       PAT_N, PAT_PEEK_N, PAT_LAST, PAT_FORCE, UI_N, REC_FORCE, CARD_N, CARD_OP, CARD_RES, CARD_INFLIGHT, SWITCH_N, TAB_N, TAB_LAST, DONE_N, DONE_OP, SET_N, SET_FRESH, SET_MAGIC, LFO_N, LFO_LAST, LFO_DIV, WORDS };
+       PAT_N, PAT_PEEK_N, PAT_LAST, PAT_FORCE, UI_N, REC_FORCE, CARD_N, CARD_OP, CARD_RES, CARD_INFLIGHT, SWITCH_N, TAB_N, TAB_LAST, DONE_N, DONE_OP, SET_N, SET_FRESH, SET_MAGIC, LFO_N, LFO_LAST, LFO_DIV, BCOPY_N, BCOPY_RES, BCOPY_DST, WORDS };
 volatile uint32_t sqp[WORDS] = { 0x53515031 };  /* 'SQP1' */
 
 void sq_part_apply(unsigned bank, unsigned part)
@@ -97,4 +97,12 @@ int sq_lfo_step(void *rec, unsigned lfo, int inc)
     ++sqp[LFO_N];
     sqp[LFO_LAST] = lfo << 28 | ((uint32_t)inc & 0x0fffffff);
     return sqp[LFO_DIV] ? inc / (int)sqp[LFO_DIV] : inc;
+}
+
+void sq_bank_copied(const char *dst, const char *src, int result)
+{
+    (void)src;
+    ++sqp[BCOPY_N];
+    sqp[BCOPY_RES] = (uint32_t)result;
+    sqp[BCOPY_DST] = (uint32_t)dst;
 }

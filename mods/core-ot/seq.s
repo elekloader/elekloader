@@ -461,3 +461,37 @@ core_tempo_open:
 9:      pea     0x40056930
         pea     5
         jmp     0x40059f00
+
+| ---- a bank's file copy (core-ot 0.27) --------------------------------------------------------------------
+| 0x4008ee48 / 0x4008f154 (was: lea 12(sp),sp ; tst.l d0), right after the per-bank SAVE (0x4008eda4,
+| .work -> .strd) and RELOAD (0x4008f0b0, .strd -> .work) copy the bank's file with copy(dst, src, 0)
+| (0x40016388; d0 its result, the arguments still on the stack). ev_project_store / ev_project_reload see
+| only the whole-set copies; these are the per-bank jobs. octabam's STORE (MIT) calls its clients here.
+| Handlers: void f(const char *dst, const char *src, int result), on the engine task: copy your own file
+| beside it.
+        .macro  BANKCOPY addr
+        .globl  core_bankcopy_\addr
+core_bankcopy_\addr:
+        tst.l   ev_bank_copied
+        beq.s   9f
+        lea     -20(%sp), %sp
+        movem.l %d0-%d1/%a0-%a2, (%sp)
+        lea     ev_bank_copied, %a2
+1:      move.l  (%a2)+, %d1
+        beq.s   2f
+        move.l  (%sp), -(%sp)           | the result (saved d0)
+        move.l  28(%sp), -(%sp)         | src (20 saved + 4 + dst)
+        move.l  28(%sp), -(%sp)         | dst
+        movea.l %d1, %a0
+        jsr     (%a0)
+        lea     12(%sp), %sp
+        bra.s   1b
+2:      movem.l (%sp), %d0-%d1/%a0-%a2
+        lea     20(%sp), %sp
+9:      lea     12(%sp), %sp
+        tst.l   %d0
+        jmp     \addr + 6
+        .endm
+
+        BANKCOPY 0x4008ee48
+        BANKCOPY 0x4008f154

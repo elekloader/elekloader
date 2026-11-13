@@ -812,7 +812,7 @@ The places octabam's EVENTS module holds for PLOCKS P2 and MIDI FOLLOW (MIT).
 | `ev_copy` | before one of the pattern data's copies (the clipboard, the undo buffer, the bank: 22 memcpy places, not every copy) | `void f(dst, src, len)` | the sys task |
 | `ev_midi_note_sent` | a MIDI track's note has gone out | `void f(trk, note, vel, pool)`; pool 1 is the arpeggiator's | the sequencer's task |
 
-`tests/fixtures/octatrack-held` is a probe of these, `ev_knob_draw`, `ev_leds` and `ev_trig_box_draw`; `"resources": {"core": "0.25"}`.
+`tests/fixtures/octatrack-held` is a probe of these, `ev_knob_draw`, `ev_leds` and `ev_trig_box_draw`; `"resources": {"core": "0.27"}`.
 
 `ev_setup_dial` covers every SETUP window that draws its knobs with the stock widget: AMP, FX1 and
 FX2 SETUP, SRC / NOTE SETUP (`page` `OT_P2_PLAYBACK`) and MIDI ARP SETUP (`page` `OT_SETUP_ARP`; both
@@ -830,6 +830,11 @@ key-repeat task and the redraws flush.
 
 `ev_trig_box_draw` (core-ot 0.25) runs as the trig mode box's drawer leaves (the keyboard of CHROMATIC,
 the slots, the arp): `void f(unsigned mode)` draws over the box (`ot_blit`); `mode` is `OT_TRIG_MODE`.
+
+`ev_bank_copied` (core-ot 0.27) runs on the engine task right after a per-bank SAVE (`.work` to `.strd`) or
+RELOAD (`.strd` to `.work`) copies the bank's file: `void f(const char *dst, const char *src, int result)`.
+`ev_project_store` and `ev_project_reload` see the whole-set copies; a mod that keeps a file per bank copies
+it here.
 
 ### The DSP bus on the Octatrack (dspbus 0.1)
 
