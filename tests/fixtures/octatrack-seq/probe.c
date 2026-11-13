@@ -6,7 +6,8 @@
 #include <stdint.h>
 #include "octatrack/core.h"
 
-enum { MAGIC, APPLY_N, APPLY_BANK, APPLY_PART, CHAIN_N, CHAIN_PAT, CHAIN_LEN, RESET_N, PANIC_N, WORDS };
+enum { MAGIC, APPLY_N, APPLY_BANK, APPLY_PART, CHAIN_N, CHAIN_PAT, CHAIN_LEN, RESET_N, PANIC_N,
+       LEN_N, LEN_TRK, LEN_LEN, LEN_FORCE, WRAP_N, WRAP_NOW, WRAP_OLD, WORDS };
 volatile uint32_t sqp[WORDS] = { 0x53515031 };  /* 'SQP1' */
 
 void sq_part_apply(unsigned bank, unsigned part)
@@ -25,3 +26,19 @@ void sq_chain_add(unsigned pattern)
 
 void sq_seq_reset(void) { ++sqp[RESET_N]; }
 void sq_midi_panic(void) { ++sqp[PANIC_N]; }
+
+/* With sqp[LEN_FORCE] poked nonzero, every track wraps at that length. */
+int sq_track_length(unsigned trk, int len)
+{
+    ++sqp[LEN_N];
+    sqp[LEN_TRK] = trk;
+    sqp[LEN_LEN] = (uint32_t)len;
+    return sqp[LEN_FORCE] ? (int)sqp[LEN_FORCE] : len;
+}
+
+void sq_pattern_wrap(unsigned bank, unsigned pattern, unsigned old_bank, unsigned old_pattern)
+{
+    ++sqp[WRAP_N];
+    sqp[WRAP_NOW] = bank << 8 | pattern;
+    sqp[WRAP_OLD] = old_bank << 8 | old_pattern;
+}

@@ -758,7 +758,14 @@ Four observers, each before the stock routine runs; handlers return nothing.
 | `ev_seq_reset` | the sequencer's stop and reset: STOP while stopped, and every menu that stops it first | `void f(void)` | the caller's task |
 | `ev_midi_panic` | the stop and reset is about to send CC 123 on each channel the MIDI tracks use | `void f(void)` | the caller's task |
 
-`tests/fixtures/octatrack-seq` is a probe of all four; `"resources": {"core": "0.10"}`.
+Two more (core-ot 0.12) run in the sequencer's tick, a timer interrupt: keep them to a few dozen instructions.
+
+| event | when | handler |
+|---|---|---|
+| `ev_track_length` | each track's advance: its step counter has moved on and is compared with the length it wraps at | `int f(trk, len)`: the length (chained); `trk` 0-7 the audio tracks, 8-15 the MIDI tracks |
+| `ev_pattern_wrap` | the master pattern wrapped and goes on (a queued pattern is now playing) | `void f(bank, pattern, old_bank, old_pattern)` |
+
+`tests/fixtures/octatrack-seq` is a probe of all six; `"resources": {"core": "0.12"}`.
 
 #### Held edits, copies and MIDI notes on the Octatrack (core-ot 0.11)
 

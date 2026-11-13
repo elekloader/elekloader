@@ -426,7 +426,11 @@ enum { OT_MUTE_AUDIO = 0, OT_MUTE_MIDI = 1 };
  *   void ev_part_apply(bank, part)   a pattern's Part is applied; also from the frame interrupt
  *   void ev_chain_add(pattern)       [PTN] adds a pattern to the chain (OT_CHAIN_LEN entries before it)
  *   void ev_seq_reset(void)          the sequencer's stop and reset
- *   void ev_midi_panic(void)         CC 123 is about to go out on the MIDI tracks' channels */
+ *   void ev_midi_panic(void)         CC 123 is about to go out on the MIDI tracks' channels
+ * In the sequencer's tick (0.12; a timer interrupt: keep them short):
+ *   int ev_track_length(trk, len)    each track's advance: return the length it wraps at (chained);
+ *                                    trk 0-7 audio, 8-15 MIDI
+ *   void ev_pattern_wrap(bank, pattern, old_bank, old_pattern)   the master pattern wrapped and goes on */
 #define OT_CHAIN_LEN        OT_L(0x8000654e)
 #define OT_CHAIN(i)         OT_L(0x80006552 + 4 * (i))  /* 0-15 */
 

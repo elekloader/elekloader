@@ -78,3 +78,70 @@ core_midi_panic:
         lea     -20(%sp), %sp
         movem.l %d2-%d4/%a2-%a3, (%sp)
         jmp     0x4009f290
+
+| ---- the sequencer's tick (core-ot 0.12) -------------------------------------------------------------------
+| The tick is a timer interrupt (0x400a1e0c, every register saved, the mask raised): handlers here run in
+| it and must be short. octabam's TRACK PATTERNS (MIT, proven on a unit) reads these places.
+|
+| 0x400a3d88 / 0x400a3ea8 (was: mvz.b d1,d1 ; mvs.b d0,d0 ; cmp.l d1,d0), each track's advance: d1 the step
+| counter just incremented, d0 the length it wraps at (stock's: the track's under PER TRACK, the
+| pattern's else), d3 the track (0-7 audio, 8-15 MIDI). Handlers: int f(unsigned trk, int len) -> the
+| length (chained). The compare and the bgt after it use what they return.
+        .macro  TLEN addr
+        .globl  core_tlen_\addr
+core_tlen_\addr:
+        mvz.b   %d1, %d1
+        mvs.b   %d0, %d0
+        tst.l   ev_track_length
+        beq.s   9f
+        lea     -16(%sp), %sp
+        movem.l %d1/%a0-%a2, (%sp)
+        lea     ev_track_length, %a2
+1:      move.l  (%a2)+, %d1
+        beq.s   2f
+        move.l  %d0, -(%sp)             | the length so far
+        move.l  %d3, -(%sp)             | the track
+        movea.l %d1, %a0
+        jsr     (%a0)
+        addq.l  #8, %sp
+        bra.s   1b
+2:      movem.l (%sp), %d1/%a0-%a2
+        lea     16(%sp), %sp
+9:      cmp.l   %d1, %d0
+        jmp     \addr + 6
+        .endm
+
+        TLEN    0x400a3d88
+        TLEN    0x400a3ea8
+
+| 0x400a44f4 (was: lea 0x80006634,a1), the master pattern's wrap, after a queued pattern (0x800065c0, if
+| any) has become the playing one: 0x800065bd the bank, 0x800065be the pattern; 0x800065c2 / 0x800065c1
+| the ones that just ended. Not reached when the wrap stops the sequencer (no next pattern). Handlers:
+| void f(unsigned bank, unsigned pattern, unsigned old_bank, unsigned old_pattern).
+        .globl  core_pattern_wrap
+core_pattern_wrap:
+        tst.l   ev_pattern_wrap
+        beq.s   9f
+        lea     -24(%sp), %sp
+        movem.l %d0-%d1/%a0-%a2/%d2, (%sp)
+        lea     ev_pattern_wrap, %a2
+1:      move.l  (%a2)+, %d2
+        beq.s   2f
+        lea     -16(%sp), %sp
+        moveq   #0, %d0
+        move.b  0x800065bd, %d0
+        move.l  %d0, (%sp)
+        move.b  0x800065be, %d0
+        move.l  %d0, 4(%sp)
+        move.b  0x800065c2, %d0
+        move.l  %d0, 8(%sp)
+        move.b  0x800065c1, %d0
+        move.l  %d0, 12(%sp)
+        movea.l %d2, %a0
+        jsr     (%a0)
+        lea     16(%sp), %sp
+        bra.s   1b
+2:      movem.l (%sp), %d0-%d1/%a0-%a2/%d2
+        lea     24(%sp), %sp
+9:      lea     0x80006634, %a1
+        jmp     0x400a44fa

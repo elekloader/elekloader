@@ -282,19 +282,12 @@ changes nothing else the unit does.
     too; `ev_voice_reset` in tasks and the frame interrupt, with the
     interrupts not yet masked; `ev_boot_early` before the OS. None but the
     reset is on the frame interrupt's path.
-- **0.9: the track mutes** (`mute.s`). `ev_mute(kind, word)` at all 30
-  places that copy a live mute word into the Part (the tests prove the
-  census); the handler returns the word the Part keeps (docs/ADAPTING.md,
-  "Track mutes on the Octatrack").
-- **0.10: the sequencer's moments** (`seq.s`). Observers at four routines'
-  entries: `ev_part_apply(bank, part)` (0x40009e00; also in the frame
-  interrupt), `ev_chain_add(pattern)` (0x4009c634), `ev_seq_reset()`
-  (0x400a10c8) and `ev_midi_panic()` (0x4009f288) (docs/ADAPTING.md,
-  "The sequencer's moments on the Octatrack").
-- **0.11: the held editor, the copies, the MIDI notes** (`held.s`).
-  `ev_edit_held` (0x400508e4, first taker wins), `ev_copy` (octabam EVENTS'
-  22 memcpy places) and `ev_midi_note_sent` (0x4009fbb2, 0x4009fcfa)
-  (docs/ADAPTING.md, "Held edits, copies and MIDI notes on the Octatrack").
+- **0.9 to 0.12: events from the map** (`mute.s`, `seq.s`, `held.s`; each
+  version's section in docs/ADAPTING.md, "Track mutes on the Octatrack" on).
+  0.9 `ev_mute` at all 30 Part copies of a mute word; 0.10 `ev_part_apply`,
+  `ev_chain_add`, `ev_seq_reset`, `ev_midi_panic`; 0.11 `ev_edit_held`,
+  `ev_copy`, `ev_midi_note_sent`; 0.12 `ev_track_length`, `ev_pattern_wrap`
+  (in the sequencer's timer interrupt).
 - **The draw gate** (`gate.s`). The OS composes the screen twice before the
   boot site, so before `.run` is in the reserve. The draw site therefore
   calls `core_draw_gate`, which `mod.json` places (`fixed`) in the last 24
