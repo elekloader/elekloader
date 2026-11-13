@@ -940,6 +940,15 @@ track's TRACK key tapped twice (stock opens the machine pool on an audio track, 
 double tap or a page change; kind 0 SRC/NOTE, 1 LFO, 2 AMP/ARP, 3 FX1/CTRL1, 4 FX2/CTRL2.
 `tests/fixtures/octatrack-opens` takes both.
 
+### A pattern's check and an effect's choice on the Octatrack (core-ot 0.36)
+
+`void ev_pattern_check(void *pattern)` runs just before stock's pattern validator checks a pattern: at
+boot's restore (all 16, before any mod's project data is back) and at every bank load. Stock clamps what it
+does not know, so a mod that keeps values in pattern bytes puts them right here. `int ev_fx_choose(unsigned
+slot, unsigned trk, unsigned id)` runs when YES in the FX1 (slot 0) or FX2 (slot 1) chooser is about to put
+effect `id` on track `trk`; nonzero refuses it (the first taker wins) and the chooser stays open.
+`tests/fixtures/octatrack-guard` is a probe of both.
+
 ### Timers and interrupt vectors on the Octatrack
 
 Two firmware services are calls in `octatrack/core.h`, no core site. `ot_timer_start(ticks, fn)` runs

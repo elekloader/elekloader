@@ -369,7 +369,7 @@ def test_the_core_moves_the_arena_past_its_reserve():
                           | set(DIAL2_SITES) | {'core_trig_box'}
                           | {v[1] for v in LFO_CODE.values()} | {'core_popup'}
                           | {v[1] for v in RATE_SITES.values()} | {'core_pers_count', 'core_tstretch'} | set(FILE_SITES.values())
-                          | {v[1] for v in OPENS_SITES.values()}), calls
+                          | {v[1] for v in OPENS_SITES.values()} | {v[1] for v in GUARD_SITES.values()}), calls
 
 
 def reserve_docs(img, bss, fixed=False):
@@ -572,7 +572,7 @@ def test_the_core_bus_sites():
                                                  'ot_lfo_waves', 'ev_popup', 'ev_play_increment',
                                                  'ot_ptn_rows', 'ot_track_rows', 'ot_midi_rows',
                                                  'ot_pers_label', 'ot_pers_get', 'ot_pers_set', 'ev_tstretch', 'ev_file', 'ev_track_double',
-                                                 'ev_setup_open'})
+                                                 'ev_setup_open', 'ev_pattern_check', 'ev_fx_choose'})
     assert j['collections']['ev_idle'] == 4
     for sym, target in JMP_BACK.items():       # a jmp stub goes back to the instruction after its site
         addr, stock_hex, _ev = BUS_SITES[target]
@@ -1688,6 +1688,47 @@ def test_the_core_opens_sites():
         assert struct.unpack('>II', ln.image[o:o + 8]) == (ln.map[fn], 0)
 
 
+# core-ot 0.36 (guard.s, guard.c): the pattern validator's entry and the FX choosers' YES handlers.
+GUARD_SITES = {0x4009a670: ('4fefffd448d77cfc', 'core_pattern_check', 0x4009a678),
+               0x400526e4: ('4fefffbc48d77cfc', 'core_fx1_choose', 0x400526ec),
+               0x40052474: ('4fefffbc48d77cfc', 'core_fx2_choose', 0x4005247c)}
+
+
+def test_the_core_guard_sites():
+    """core-ot 0.36's sites: stock, whole, entered only at the start (the validator's boot loop takes its
+    address by lea; the choosers' are keymap entries for YES), each stub going on past them; the probe
+    links."""
+    import re
+    with open(os.path.join(ROOT, 'mods', 'core-ot', 'mod.json')) as fh:
+        j = json.load(fh)
+    st, img = stock()
+    by = {int(x['addr'], 16): x for x in j['sites']}
+    src = open(os.path.join(ROOT, 'mods', 'core-ot', 'guard.s')).read()
+    inside = {}
+    for a, (h, target, nxt) in GUARD_SITES.items():
+        assert (by[a]['op'], by[a]['stock'], by[a]['target']) == ('jmp', h, target)
+        o = a - DEV.main_load
+        assert img[o:o + 8].hex() == h
+        ok, note = elemod.insn_check(img, a, 8, DEV)
+        assert ok, note
+        assert ('0x%08x' % nxt) in src
+        for k in range(a + 1, a + 8):
+            inside[k] = target
+    for k in range(0, len(img) - 6, 2):
+        assert _branch_into(img, k, inside) is None, hex(DEV.main_load + k)
+    for keymap, handler in ((0x400bc14a, 0x400526e4), (0x400bc374, 0x40052474)):   # YES -> the select
+        o = keymap - DEV.main_load
+        assert img[o - 2:o].hex() == '3100' and struct.unpack('>I', img[o:o + 4])[0] == handler
+    from elekloader.sdk import build
+    with tempfile.TemporaryDirectory() as tmp:
+        core = elemod.load_any(build.build(os.path.join(ROOT, 'mods', 'core-ot'), SYX, tmp)[0])
+        probe = elemod.load_any(build.build(os.path.join(HERE, 'fixtures', 'octatrack-guard'), SYX, tmp)[0])
+    ln = link.link([core, probe], img)
+    for ev, fn in (('ev_pattern_check', 'gp_pattern'), ('ev_fx_choose', 'gp_choose')):
+        o = ln.layout['run_load'] + (ln.tables[ev][0] - DEV.ddr[0]) - DEV.main_load
+        assert struct.unpack('>II', ln.image[o:o + 8]) == (ln.map[fn], 0)
+
+
 def test_the_core_tick_sites():
     """core-ot 0.12's sites: stock, whole, a bgt right after each compare (it tests what the stub's
     compare leaves), the sequencer's tick an interrupt handler, no branch inside, clear of every
@@ -2165,7 +2206,7 @@ def test_the_example_subscribes_to_the_bus():
                       'ev_bank_copied': 0, 'ot_lfo_waves': 0, 'ev_popup': 0, 'ev_play_increment': 0,
                       'ot_ptn_rows': 6, 'ot_track_rows': 6, 'ot_midi_rows': 6,
                       'ot_pers_label': 16, 'ot_pers_get': 16, 'ot_pers_set': 16, 'ev_tstretch': 0, 'ev_file': 0, 'ev_track_double': 0,
-                      'ev_setup_open': 0}, counts
+                      'ev_setup_open': 0, 'ev_pattern_check': 0, 'ev_fx_choose': 0}, counts
     at = ln.tables['ev_draw'][0]
     o = ln.layout['run_load'] + (at - DEV.ddr[0]) - DEV.main_load
     assert struct.unpack('>II', ln.image[o:o + 8]) == (ln.map['hello_draw'], 0)

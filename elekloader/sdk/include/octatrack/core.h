@@ -583,6 +583,13 @@ struct ot_menu_row {
  *                                       pool on an audio track, nothing in MIDI mode (ot_midi_mode())
  *   int ev_setup_open(unsigned kind)    a page's SETUP window is about to open, kind 0-4: SRC/NOTE, LFO,
  *                                       AMP/ARP, FX1/CTRL1, FX2/CTRL2 (0x400a7280) */
+/* 0.36:
+ *   void ev_pattern_check(void *pattern)   stock's pattern validator is about to check a pattern (boot's
+ *                                          restore, all 16 before any project load; a bank load): put a
+ *                                          mod's pattern bytes right before stock clamps them
+ *   int ev_fx_choose(unsigned slot, unsigned trk, unsigned id)   YES in the FX1 (slot 0) or FX2 (1) chooser
+ *                                          is about to put effect id on track trk: nonzero = refused
+ *                                          (the first taker), the chooser stays open. In the UI task. */
 /* ---- timers and interrupt vectors (firmware calls) -----------------------------------------------
  * ot_timer_start(ticks, fn): fn runs every `ticks` UI ticks (60 a second), in the UI task, from the next
  * due tick on, until ot_timer_cancel(slot); it returns the slot (0-31) or -1 when all 32 are busy (stock
