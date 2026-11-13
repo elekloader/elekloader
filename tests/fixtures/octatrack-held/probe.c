@@ -8,7 +8,7 @@
 
 enum { MAGIC, HELD_N, HELD_ENC, HELD_DELTA, TAKE, TAKEN, COPY_N, COPY_DST, COPY_SRC, COPY_LEN,
        NOTE_N, NOTE_TRK, NOTE_NOTE, NOTE_VEL, NOTE_POOL, SCN_N, SCN_ENC, SCN_TAKE, SCN_TAKEN,
-       TEMPO_N, TEMPO_TAKE, ARP_N, ARP_ENC, KNOB_N, KNOB_LAST, KNOB_FMT, KNOB_FORCE, WORDS };
+       TEMPO_N, TEMPO_TAKE, ARP_N, ARP_ENC, KNOB_N, KNOB_LAST, KNOB_FMT, KNOB_FORCE, LEDS_N, LEDS_LIGHT, WORDS };
 volatile uint32_t hdp[WORDS] = { 0x48445031 };  /* 'HDP1' */
 
 int hd_edit_held(unsigned enc, int delta)
@@ -64,4 +64,12 @@ void hd_knob_draw(struct ot_knob *k)
     hdp[KNOB_FMT] = (uint32_t)k->fmt;
     if (hdp[KNOB_FORCE])
         k->value = (int32_t)hdp[KNOB_FORCE];
+}
+
+/* With hdp[LEDS_LIGHT] poked to an LED id + 1, that LED is lit at every flush. */
+void hd_leds(uint8_t *map)
+{
+    ++hdp[LEDS_N];
+    if (hdp[LEDS_LIGHT])
+        OT_LED_ON(map, hdp[LEDS_LIGHT] - 1);
 }

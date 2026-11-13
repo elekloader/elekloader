@@ -136,6 +136,13 @@ enum {
 /* void ev_knob_draw(struct ot_knob *k) (0.23): the knob widget (0x400467a4) is about to draw a knob: the
  * pages whose parameter descriptors name it, RECORDING SETUP, two more drawers; k is its own arguments: change the value, the
  * flags or the formatter (fmt(buf, value), as stock's) and the widget draws that. In the drawing task. */
+/* void ev_leds(uint8_t *map) (0.24): the LED map (17 bytes, one bit an LED: id = byte * 8 + bit, the
+ * ids of the panel's LED list; trig and track LEDs are two-colour pairs, id and id + 1) is about to be
+ * sent to the panel; set or clear bits: stock rewrites its own on its next pass. */
+#define OT_LED_MAP          ((volatile uint8_t *)0x460ba98cu)
+#define OT_LED_ON(m, id)    ((m)[(id) >> 3] |= (uint8_t)(1u << ((id) & 7)))
+#define OT_LED_OFF(m, id)   ((m)[(id) >> 3] &= (uint8_t)~(1u << ((id) & 7)))
+
 struct ot_knob {
     int32_t x, y, mode;
     int32_t value;

@@ -812,7 +812,7 @@ The places octabam's EVENTS module holds for PLOCKS P2 and MIDI FOLLOW (MIT).
 | `ev_copy` | before one of the pattern data's copies (the clipboard, the undo buffer, the bank: 22 memcpy places, not every copy) | `void f(dst, src, len)` | the sys task |
 | `ev_midi_note_sent` | a MIDI track's note has gone out | `void f(trk, note, vel, pool)`; pool 1 is the arpeggiator's | the sequencer's task |
 
-`tests/fixtures/octatrack-held` is a probe of these and of `ev_knob_draw`; `"resources": {"core": "0.23"}`.
+`tests/fixtures/octatrack-held` is a probe of these, `ev_knob_draw` and `ev_leds`; `"resources": {"core": "0.24"}`.
 
 `ev_setup_dial` covers every SETUP window that draws its knobs with the stock widget: AMP, FX1 and
 FX2 SETUP, SRC / NOTE SETUP (`page` `OT_P2_PLAYBACK`) and MIDI ARP SETUP (`page` `OT_SETUP_ARP`; both
@@ -822,6 +822,11 @@ core-ot 0.22).
 descriptors name it, RECORDING SETUP and two more drawers. `void f(struct ot_knob *k)` gets the widget's
 own arguments (x, y, mode, value, flags, formatter, canvas; `octatrack/core.h`) and may change the value,
 the flags or the formatter before it draws: RLEN PLEN's and REC THRESHOLD's formatters, say.
+
+`ev_leds` (core-ot 0.24) runs at the LED flush, just before the LED map (`OT_LED_MAP`, 17 bytes, a bit an
+LED) goes out to the panel: `void f(uint8_t *map)` sets or clears bits (`OT_LED_ON`, `OT_LED_OFF`). Stock
+rewrites its own bits on its next pass, so a handler sets its LEDs at every flush. The UI task, the
+key-repeat task and the redraws flush.
 
 ### The DSP bus on the Octatrack (dspbus 0.1)
 

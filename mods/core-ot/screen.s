@@ -221,3 +221,30 @@ core_knob_draw:
 9:      lea     -48(%sp), %sp
         movem.l %d2-%d7/%a2-%a3, (%sp)
         jmp     0x400467ac
+
+| ---- the LEDs (core-ot 0.24) -------------------------------------------------------------------------------
+| 0x400136a8 (was: lea -20(sp),sp ; movem.l d2/a2-a5,(sp)), the LED flush: it sends the panel each of the 17
+| rows of the LED map (0x460ba98c, one bit an LED: the on/off routines 0x400131a0 / 0x400131c8 and their
+| two-bit forms set it) that differs from the copy last sent (0x460ba9ae). The UI task, the key-repeat task
+| and the redraws call it. octabam's CHORDS, SCALES and BAR LED (MIT) light other LEDs in the trig pass.
+| Handlers: void f(uint8_t *map), just before the rows go out: set or clear bits (OT_LED_*); stock writes
+| its own bits again on its next pass, so a handler sets its LEDs at each flush.
+        .globl  core_leds
+core_leds:
+        tst.l   ev_leds
+        beq.s   9f
+        lea     -20(%sp), %sp
+        movem.l %d0-%d1/%a0-%a2, (%sp)
+        lea     ev_leds, %a2
+1:      move.l  (%a2)+, %d1
+        beq.s   2f
+        pea     0x460ba98c
+        movea.l %d1, %a0
+        jsr     (%a0)
+        addq.l  #4, %sp
+        bra.s   1b
+2:      movem.l (%sp), %d0-%d1/%a0-%a2
+        lea     20(%sp), %sp
+9:      lea     -20(%sp), %sp
+        movem.l %d2/%a2-%a5, (%sp)
+        jmp     0x400136b0

@@ -1042,6 +1042,7 @@ SEQ_SITES = {
     'core_part_apply_heavy': (0x40009094, '4fefff9848d77cfc', 'ev_part_apply'),   # 0.21
     'core_tempo_open': (0x40059ef8, '487aca3648780005', 'ev_tempo_open'),     # 0.21: pea (pc) ; pea 5
     'core_knob_draw': (0x400467a4, '4fefffd048d70cfc', 'ev_knob_draw'),       # 0.23
+    'core_leds': (0x400136a8, '4fefffec48d73c04', 'ev_leds'),                 # 0.24: the LED flush
 }
 
 
@@ -1260,7 +1261,7 @@ def test_the_held_probe_links():
     probe_tables('octatrack-held', (('ev_edit_held', 'hd_edit_held'), ('ev_copy', 'hd_copy'),
                                     ('ev_midi_note_sent', 'hd_note_sent'), ('ev_scene_knob', 'hd_scene_knob'),
                                     ('ev_tempo_open', 'hd_tempo_open'), ('ev_arp_knob', 'hd_arp_knob'),
-                                    ('ev_knob_draw', 'hd_knob_draw')))
+                                    ('ev_knob_draw', 'hd_knob_draw'), ('ev_leds', 'hd_leds')))
 
 
 # core-ot 0.12 (seq.s): the sequencer tick's per-track advance (the length a track wraps at) and the
@@ -1752,7 +1753,7 @@ def test_the_example_subscribes_to_the_bus():
                       'ev_track_pattern': 0, 'ev_ui_tick': 0, 'ev_card_cmd': 0, 'ev_task_switch': 0,
                       'ev_track_tab_draw': 0, 'ev_card_done': 0, 'ev_settings_load': 0,
                       'ev_lfo_step': 0, 'ev_scene_knob': 0, 'ev_tempo_open': 0, 'ev_arp_knob': 0,
-                      'ev_knob_draw': 0}, counts
+                      'ev_knob_draw': 0, 'ev_leds': 0}, counts
     at = ln.tables['ev_draw'][0]
     o = ln.layout['run_load'] + (at - DEV.ddr[0]) - DEV.main_load
     assert struct.unpack('>II', ln.image[o:o + 8]) == (ln.map['hello_draw'], 0)
