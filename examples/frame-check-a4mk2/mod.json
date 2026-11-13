@@ -1,0 +1,19 @@
+{
+ "id": "frame-check",
+ "version": "0.1",
+ "title": "Analog frame write check",
+ "category": "Examples",
+ "license": "GPL-2.0-or-later",
+ "description": "A test for core-a4mk2 0.7's ev_analog_frame on the Analog Four MKII: while armed (FRAME TEST in SETTINGS) it copies voice 2's frame words over voice 1's every block, and each block it reads back the frame stock packed the block before and compares voice 1's words with what it left, recording both in frame_check (frame.c).",
+ "device": "analog-four-mk2",
+ "os": "1.56",
+ "events": "std1",
+ "sources": ["frame.c", "label.s"],
+ "defsym": {"STRING_CTOR": "0x4018471e"},
+ "subscribe": [
+  {"event": "ev_settings", "fn": "fc_settings", "order": 71}
+ ],
+ "contribute": [{"to": "ev_analog_frame", "order": 71, "data": "00000000", "relocs": [[0, "abs32", "sym:fc_frame", 0]]}],
+ "resources": {"names": ["settings:FRAME TEST"], "core": "0.7"},
+ "requires": ["core"]
+}
