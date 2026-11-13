@@ -41,6 +41,25 @@
 9:
         .endm
 
+| Calls every handler of \tab with one constant argument \arg; keeps every register.
+        .macro  OBSERVE_PTR tab, arg
+        tst.l   \tab
+        beq.s   9f
+        lea     -20(%sp), %sp
+        movem.l %d0-%d1/%a0-%a2, (%sp)
+        lea     \tab, %a2
+1:      move.l  (%a2)+, %d1
+        beq.s   2f
+        pea     \arg
+        movea.l %d1, %a0
+        jsr     (%a0)
+        addq.l  #4, %sp
+        bra.s   1b
+2:      movem.l (%sp), %d0-%d1/%a0-%a2
+        lea     20(%sp), %sp
+9:
+        .endm
+
 | ---- 0x40009e00 (was: lea -76(sp),sp ; movem.l d2-d7/a2-a6,(sp)): apply(bank, part), from the pattern
 | schedule (0x400a05f0, a pattern change) and from the frame builder (0x4000b1d8, the frame interrupt).
 | Handlers: void f(unsigned bank, unsigned part), before the Part reaches the engine.
@@ -339,3 +358,31 @@ core_task_switch:
         addq.l  #8, %sp
 9:      move.l  0x80006900, %d0
         jmp     0x4000056c
+
+| ---- a card command's end and the settings' load (core-ot 0.18) -------------------------------------------
+| 0x40015632 (was: clr.l 0x460bae18), in the card's interrupt (vector 0xb6, 0x40015304): a command that
+| was left in flight has finished (its data moved, its waiting task posted); the card is about to be
+| marked free and the next queued command started. The finished command is still at 0x46c86568.
+| Handlers: void f(const void *cmd), in the interrupt: keep them short.
+        .globl  core_card_done
+core_card_done:
+        OBSERVE_PTR ev_card_done, 0x46c86568
+        clr.l   0x460bae18
+        jmp     0x40015638
+
+| 0x4001f338 / 0x4001f3d4 (was: lea 12(sp),sp ; move.l (sp)+,d2), the ends of the battery-RAM settings'
+| two routines: 0x4001f298 makes the record (0x100fff00: checksum, then "ANDY" and 252 bytes) fresh with
+| stock's defaults, 0x4001f340 checks it (and makes it fresh if it is bad); both have just copied its first
+| 100 bytes to the live settings at 0x80000070. Callers: main's start (0x4001fa80) and two panel actions.
+| Handlers: void f(unsigned fresh), fresh 1 when stock's defaults were just written.
+        .macro  SETLOAD addr, fresh, next
+        .globl  core_setload_\addr
+core_setload_\addr:
+        lea     12(%sp), %sp
+        OBSERVE_PTR ev_settings_load, \fresh
+        move.l  (%sp)+, %d2
+        jmp     \next
+        .endm
+
+        SETLOAD 0x4001f338, 1, 0x4001f33e
+        SETLOAD 0x4001f3d4, 0, 0x4001f3da

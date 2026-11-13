@@ -433,6 +433,12 @@ enum { OT_MUTE_AUDIO = 0, OT_MUTE_MIDI = 1 };
  *   void ev_card_cmd(cmd, result)    the card's dispatcher issued a command (ATA byte at cmd + 5); result
  *                                    -1 = done, else the card's interrupt finishes it (0.16)
  *   void ev_task_switch(task)        every RTOS switch, interrupts masked: a few instructions only (0.16)
+ *   void ev_card_done(cmd)           a command left in flight finished, in the card's interrupt (0.18)
+ *   void ev_settings_load(fresh)     the battery-RAM settings were copied to the live ones (OT_SETTINGS);
+ *                                    fresh 1 = stock's defaults were just written (0.18) */
+#define OT_SETTINGS_SRAM    ((volatile uint8_t *)0x100fff00u)   /* checksum, "ANDY", 252 bytes */
+#define OT_SETTINGS         ((volatile uint8_t *)0x80000070u)   /* the live copy of its first 100 bytes */
+/*
  * In the sequencer's tick (0.12; a timer interrupt: keep them short):
  *   int ev_track_length(trk, len)    each track's advance: return the length it wraps at (chained);
  *                                    trk 0-7 audio, 8-15 MIDI

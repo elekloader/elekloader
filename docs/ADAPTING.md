@@ -778,14 +778,16 @@ routine: the tick's audio and MIDI passes (the sequencer's interrupt, `peek` 0) 
 an edit (the sys task, `peek` 1: answer the same, change nothing). With `ev_track_length` it gives
 each track a pattern of its own, as octabam's TRACK PATTERNS does.
 
-Two system observers (core-ot 0.16):
+System observers (core-ot 0.16, 0.18):
 
 | event | when | handler | runs in |
 |---|---|---|---|
 | `ev_card_cmd` | the CF card's dispatcher has issued a command (the 22-byte record, the ATA command byte at +5); `result` -1 means it is done, another value that the card's interrupt finishes it | `void f(const void *cmd, int result)` | a task or the card's interrupt |
 | `ev_task_switch` | at every RTOS switch, the outgoing task's registers saved in its block | `void f(void *task)` | that task's stack, every interrupt masked: a counter or a time stamp, nothing more |
+| `ev_card_done` (0.18) | a command left in flight has finished, in the card's interrupt, before the next one starts (the record still holds it) | `void f(const void *cmd)` | the card's interrupt |
+| `ev_settings_load` (0.18) | stock has just copied the battery-RAM settings record (0x100fff00, 100 bytes) to the live settings (0x80000070): at boot and two panel actions; `fresh` 1 when it wrote its defaults first | `void f(unsigned fresh)` | the caller's task |
 
-`tests/fixtures/octatrack-seq` is a probe of these and of `ev_track_tab_draw`; `"resources": {"core": "0.17"}`.
+`tests/fixtures/octatrack-seq` is a probe of these and of `ev_track_tab_draw`; `"resources": {"core": "0.18"}`.
 
 #### Held edits, copies and MIDI notes on the Octatrack (core-ot 0.11)
 
