@@ -578,6 +578,11 @@ struct ot_menu_row {
  * a call: op 0 open (a = path, b = mode string), 1 read, 2 write (a = buffer, b = length), 3 close (a, b 0).
  * In whatever task calls (the engine task, the UI task, core's own project data). A handler's own file calls
  * do not come back to it. Keep it short: a card write may be waiting. */
+/* In the UI task (0.35), nonzero = taken (the first taker wins; stock then opens nothing):
+ *   int ev_track_double(unsigned trk)   the current track's TRACK key tapped twice: stock opens the machine
+ *                                       pool on an audio track, nothing in MIDI mode (ot_midi_mode())
+ *   int ev_setup_open(unsigned kind)    a page's SETUP window is about to open, kind 0-4: SRC/NOTE, LFO,
+ *                                       AMP/ARP, FX1/CTRL1, FX2/CTRL2 (0x400a7280) */
 /* ---- timers and interrupt vectors (firmware calls) -----------------------------------------------
  * ot_timer_start(ticks, fn): fn runs every `ticks` UI ticks (60 a second), in the UI task, from the next
  * due tick on, until ot_timer_cancel(slot); it returns the slot (0-31) or -1 when all 32 are busy (stock

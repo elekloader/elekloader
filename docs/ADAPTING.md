@@ -931,6 +931,15 @@ it this pass (the first taker wins), for a mod that plays the track itself or sa
 2 write (a = buffer, b = length), 3 close. A handler's own file calls do not come back to it; keep it short,
 as a card write may be waiting. `tests/fixtures/octatrack-file` counts them.
 
+### What a double tap and a SETUP key open on the Octatrack (core-ot 0.35)
+
+Both run in the UI task; a handler returns nonzero to take the gesture (the first taker wins), and stock
+then opens nothing, so the mod opens its own window. `int ev_track_double(unsigned trk)`: the current
+track's TRACK key tapped twice (stock opens the machine pool on an audio track, nothing in MIDI mode).
+`int ev_setup_open(unsigned kind)`: a page's SETUP window is about to open from FUNC + the page key, a
+double tap or a page change; kind 0 SRC/NOTE, 1 LFO, 2 AMP/ARP, 3 FX1/CTRL1, 4 FX2/CTRL2.
+`tests/fixtures/octatrack-opens` takes both.
+
 ### Timers and interrupt vectors on the Octatrack
 
 Two firmware services are calls in `octatrack/core.h`, no core site. `ot_timer_start(ticks, fn)` runs
