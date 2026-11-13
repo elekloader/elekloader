@@ -319,10 +319,12 @@ typedef uint8_t (*grid_rec_t)(void *);
  * slot) its shown number, from 0 (-1 for the unnumbered end row "__:"). All
  * three only read. The copy (a view's virtual) passes the view, the clear
  * and paste calls the slot. */
-typedef void *(*objget_t)(void);
-typedef void *(*songget_t)(void *);
+/* stock returns these pointers in %d0, so they are uint32_t here: a C
+ * pointer result is read from %a0 */
+typedef uint32_t (*objget_t)(void);
+typedef uint32_t (*songget_t)(uint32_t);
 typedef int32_t (*rowslot_t)(void *);
-typedef int32_t (*rownum_t)(void *, int32_t);
+typedef int32_t (*rownum_t)(uint32_t, int32_t);
 #define SONG_OBJ ((objget_t)0x401494deu)
 #define SONG_OF ((songget_t)0x400a52feu)
 #define SONG_ROW_SLOT ((rowslot_t)0x400436d2u)
