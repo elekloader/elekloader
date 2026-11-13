@@ -520,4 +520,34 @@ struct ot_lfo_wave {
 };
 #define OT_LFO_WAVE_FIRST   19
 
+/* ---- popup rows (0.29) --------------------------------------------------------------------------
+ * void ev_popup(struct ot_popup *p): a popup list is about to open (the sample editor's SLICE, TRIM and
+ * EDIT menus, the file browser, every choose() dialog ...; the UI task). p->labels and p->callbacks are
+ * core's copies of its rows: change them, or add rows with ot_popup_add. menu is the caller's own labels
+ * array and ret its return address: they say which list this is. On YES the list closes, stores the
+ * cursor in *out (when out is not 0) and calls callbacks[cursor](). A list nobody changed opens as stock. */
+#define OT_POPUP_MAX        32
+struct ot_popup {
+    uint32_t n;                         /* rows */
+    int32_t cursor;                     /* the row it opens on */
+    int32_t *out;
+    const char **labels;
+    void (**callbacks)(void);
+    const char *const *menu;            /* the caller's labels: which list */
+    uint32_t ret;                       /* the caller's return address */
+};
+static inline int ot_popup_add(struct ot_popup *p, const char *label, void (*cb)(void))
+{
+    if (p->n >= OT_POPUP_MAX)
+        return -1;
+    p->labels[p->n] = label;
+    p->callbacks[p->n] = cb;
+    return (int)p->n++;
+}
+/* menu values: the AED SLICE menu on a slice (DISABLE LOOP ... CHANGE VIEW), off one (ADD SLICE HERE ...),
+ * and its CHANGE VIEW list */
+#define OT_POPUP_SLICE      ((const char *const *)0x400cebc8u)
+#define OT_POPUP_SLICE_ADD  ((const char *const *)0x400ceb8cu)
+#define OT_POPUP_VIEW       ((const char *const *)0x400cebf8u)
+
 #endif

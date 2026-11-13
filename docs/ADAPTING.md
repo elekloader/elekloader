@@ -864,6 +864,33 @@ const struct ot_lfo_wave my_wave = {"PLS", pulse};
   the EMAC alone.
 - `tests/fixtures/octatrack-lfo-wave` adds two (PLS and HALF).
 
+### Popup rows on the Octatrack (core-ot 0.29)
+
+Every popup list opens through one routine: the sample editor's SLICE, TRIM and EDIT menus, the file
+browser's, LFO DESIGN's, and every titled list dialog. `ev_popup` runs as one is about to open, with core's
+copies of its rows (`struct ot_popup`, `octatrack/core.h`). A handler changes them or adds rows:
+
+```c
+static void my_action(void) { /* the row was chosen: the list has closed */ }
+void my_popup(struct ot_popup *p)
+{
+    if (p->menu == OT_POPUP_SLICE)                   /* the SLICE menu, on a slice */
+        ot_popup_add(p, "MY ACTION", my_action);
+}
+```
+
+```json
+"subscribe": [{"event": "ev_popup", "fn": "my_popup", "order": 50}],
+"resources": {"core": "0.29"}
+```
+
+- **Which list.** `menu` is the caller's own labels array (`OT_POPUP_SLICE`, `OT_POPUP_SLICE_ADD`,
+  `OT_POPUP_VIEW`, or any other list's address) and `ret` the caller's return address.
+- **Rows.** Up to `OT_POPUP_MAX` (32); the list scrolls past four. On YES the list closes, stores the row
+  in `*out` when `out` is not 0, and calls the row's callback, `void f(void)`, in the UI task. A list no
+  handler changed opens exactly as stock opens it.
+- `tests/fixtures/octatrack-popup` adds PROBE ROW to the SLICE, CHANGE VIEW and LFO DESIGN lists.
+
 ### The DSP bus on the Octatrack (dspbus 0.1)
 
 `mods/dspbus-ot` is a second, optional bus, for code that runs on DSP core

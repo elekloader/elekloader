@@ -366,7 +366,7 @@ def test_the_core_moves_the_arena_past_its_reserve():
                           | entries | {'core_copy'} | {'core_note_0x%08x' % a for a in NOTE_SITES}
                           | {v[1] for v in TICK_SITES.values()} | {v[1] for v in PATTERN_SITES.values()}
                           | set(DIAL2_SITES) | {'core_trig_box'}
-                          | {v[1] for v in LFO_CODE.values()}), calls
+                          | {v[1] for v in LFO_CODE.values()} | {'core_popup'}), calls
 
 
 def reserve_docs(img, bss, fixed=False):
@@ -566,7 +566,7 @@ def test_the_core_bus_sites():
                                                  'ev_rec_length', 'ev_track_pattern', 'ev_card_cmd', 'ev_task_switch',
                                                  'ev_track_tab_draw', 'ev_card_done', 'ev_settings_load',
                                                  'ev_lfo_step', 'ev_trig_box_draw', 'ev_bank_copied',
-                                                 'ot_lfo_waves'})
+                                                 'ot_lfo_waves', 'ev_popup'})
     assert j['collections']['ev_idle'] == 4
     for sym, target in JMP_BACK.items():       # a jmp stub goes back to the instruction after its site
         addr, stock_hex, _ev = BUS_SITES[target]
@@ -1364,6 +1364,45 @@ def test_the_core_lfo_wave_sites():
         assert [lw(LFO_TABLE + 4 * k) for k in range(19, 32)] == [ln.map['core_wave_%d' % k] for k in range(19, 32)]
 
 
+# core-ot 0.29 (popup.s, popup.c): ev_popup at the popup list opener's entry.
+POPUP_SITE = (0x4006d94c, '4fefffdc48d71cfc')   # lea -36(sp) ; movem.l d2-d7/a2-a4,(sp)
+
+
+def test_the_core_popup_site():
+    """core-ot 0.29's site: the opener's whole first two instructions, stock, entered only at its start
+    (17 jsr callers and one lea a0 caller, every one at the entry); no octabam v1.0 or other OT mod byte
+    there; the body continues past it; the probe subscribes and links."""
+    with open(os.path.join(ROOT, 'mods', 'core-ot', 'mod.json')) as fh:
+        j = json.load(fh)
+    st, img = stock()
+    a, h = POPUP_SITE
+    n = len(h) // 2
+    s = {int(x['addr'], 16): x for x in j['sites']}[a]
+    assert (s['op'], s['stock'], s['target']) == ('jmp', h, 'core_popup')
+    o = a - DEV.main_load
+    assert img[o:o + n].hex() == h
+    ok, note = elemod.insn_check(img, a, n, DEV)
+    assert ok, note
+    assert img.count(bytes.fromhex('4eb94006d94c')) == 17 and img.count(bytes.fromhex('41f94006d94c')) == 1
+    inside = {k: 'core_popup' for k in range(a + 1, a + n)}
+    for k in range(0, len(img) - 6, 2):
+        assert _branch_into(img, k, inside) is None, hex(DEV.main_load + k)
+    for x in V10_NEIGHBOURS:
+        assert not (x[0] < a + n and a < x[0] + x[1]), hex(x[0])
+    import re
+    src = open(os.path.join(ROOT, 'mods', 'core-ot', 'popup.s')).read()
+    assert re.search(r'jmp\s+0x%08x' % (a + n), src)
+    assert j['collections']['ev_popup'] == 4
+    from elekloader.sdk import build
+    with tempfile.TemporaryDirectory() as tmp:
+        core = elemod.load_any(build.build(os.path.join(ROOT, 'mods', 'core-ot'), SYX, tmp)[0])
+        probe = elemod.load_any(build.build(os.path.join(HERE, 'fixtures', 'octatrack-popup'), SYX, tmp)[0])
+    ln = link.link([core, probe], img)
+    at = ln.tables['ev_popup'][0]
+    o = ln.layout['run_load'] + (at - DEV.ddr[0]) - DEV.main_load
+    assert struct.unpack('>II', ln.image[o:o + 8]) == (ln.map['pp_popup'], 0)
+
+
 def test_the_core_tick_sites():
     """core-ot 0.12's sites: stock, whole, a bgt right after each compare (it tests what the stub's
     compare leaves), the sequencer's tick an interrupt handler, no branch inside, clear of every
@@ -1838,7 +1877,7 @@ def test_the_example_subscribes_to_the_bus():
                       'ev_track_tab_draw': 0, 'ev_card_done': 0, 'ev_settings_load': 0,
                       'ev_lfo_step': 0, 'ev_scene_knob': 0, 'ev_tempo_open': 0, 'ev_arp_knob': 0,
                       'ev_knob_draw': 0, 'ev_leds': 0, 'ev_trig_box_draw': 0,
-                      'ev_bank_copied': 0, 'ot_lfo_waves': 0}, counts
+                      'ev_bank_copied': 0, 'ot_lfo_waves': 0, 'ev_popup': 0}, counts
     at = ln.tables['ev_draw'][0]
     o = ln.layout['run_load'] + (at - DEV.ddr[0]) - DEV.main_load
     assert struct.unpack('>II', ln.image[o:o + 8]) == (ln.map['hello_draw'], 0)
