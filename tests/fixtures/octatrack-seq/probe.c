@@ -8,7 +8,7 @@
 
 enum { MAGIC, APPLY_N, APPLY_BANK, APPLY_PART, CHAIN_N, CHAIN_PAT, CHAIN_LEN, RESET_N, PANIC_N,
        LEN_N, LEN_TRK, LEN_LEN, LEN_FORCE, WRAP_N, WRAP_NOW, WRAP_OLD, REC_N, REC_TRK, REC_LEN,
-       PAT_N, PAT_PEEK_N, PAT_LAST, PAT_FORCE, UI_N, REC_FORCE, CARD_N, CARD_OP, CARD_RES, CARD_INFLIGHT, SWITCH_N, TAB_N, TAB_LAST, DONE_N, DONE_OP, SET_N, SET_FRESH, SET_MAGIC, WORDS };
+       PAT_N, PAT_PEEK_N, PAT_LAST, PAT_FORCE, UI_N, REC_FORCE, CARD_N, CARD_OP, CARD_RES, CARD_INFLIGHT, SWITCH_N, TAB_N, TAB_LAST, DONE_N, DONE_OP, SET_N, SET_FRESH, SET_MAGIC, LFO_N, LFO_LAST, LFO_DIV, WORDS };
 volatile uint32_t sqp[WORDS] = { 0x53515031 };  /* 'SQP1' */
 
 void sq_part_apply(unsigned bank, unsigned part)
@@ -88,4 +88,13 @@ void sq_settings_load(unsigned fresh)
     ++sqp[SET_N];
     sqp[SET_FRESH] = fresh;
     sqp[SET_MAGIC] = OT_L(0x80000074);          /* the live copy's "ANDY" */
+}
+
+/* With sqp[LFO_DIV] poked nonzero, every LFO steps that many times slower. */
+int sq_lfo_step(void *rec, unsigned lfo, int inc)
+{
+    (void)rec;
+    ++sqp[LFO_N];
+    sqp[LFO_LAST] = lfo << 28 | ((uint32_t)inc & 0x0fffffff);
+    return sqp[LFO_DIV] ? inc / (int)sqp[LFO_DIV] : inc;
 }

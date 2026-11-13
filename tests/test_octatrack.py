@@ -561,7 +561,8 @@ def test_the_core_bus_sites():
                                               | {v[2] for tab in ENTRY_TABLES for v in tab.values()}
                                               | {'ev_copy', 'ev_midi_note_sent', 'ev_track_length', 'ev_pattern_wrap',
                                                  'ev_rec_length', 'ev_track_pattern', 'ev_card_cmd', 'ev_task_switch',
-                                                 'ev_track_tab_draw', 'ev_card_done', 'ev_settings_load'})
+                                                 'ev_track_tab_draw', 'ev_card_done', 'ev_settings_load',
+                                                 'ev_lfo_step'})
     assert j['collections']['ev_idle'] == 4
     for sym, target in JMP_BACK.items():       # a jmp stub goes back to the instruction after its site
         addr, stock_hex, _ev = BUS_SITES[target]
@@ -1141,7 +1142,8 @@ def test_the_seq_probe_links():
                                    ('ev_rec_length', 'sq_rec_length'), ('ev_track_pattern', 'sq_track_pattern'),
                                    ('ev_ui_tick', 'sq_ui_tick'), ('ev_card_cmd', 'sq_card_cmd'),
                                    ('ev_task_switch', 'sq_task_switch'), ('ev_track_tab_draw', 'sq_tab_draw'),
-                                   ('ev_card_done', 'sq_card_done'), ('ev_settings_load', 'sq_settings_load')))
+                                   ('ev_card_done', 'sq_card_done'), ('ev_settings_load', 'sq_settings_load'),
+                                   ('ev_lfo_step', 'sq_lfo_step')))
 
 
 # core-ot 0.11 (held.s): the held-step editor's entry, the pattern data's copies (octabam EVENTS' 22
@@ -1219,6 +1221,8 @@ TICK_SITES = {
     0x40015632: ('42b9460bae18', 'core_card_done', 'ev_card_done'),           # clr.l 0x460bae18 (0.18)
     0x4001f338: ('4fef000c241f', 'core_setload_0x4001f338', 'ev_settings_load'),   # lea 12(sp) ; move.l (sp)+,d2
     0x4001f3d4: ('4fef000c241f', 'core_setload_0x4001f3d4', 'ev_settings_load'),
+    0x40003c2e: ('dcab0018a184', 'core_lfo_0x40003c2e', 'ev_lfo_step'),      # add.l 24(a3),d6 ; move.l acc,d4 (0.19)
+    0x4000cfc8: ('dcab0018a184', 'core_lfo_0x4000cfc8', 'ev_lfo_step'),
 }
 
 
@@ -1235,6 +1239,7 @@ def test_the_core_tick_sites():
     for a in (0x4001f332, 0x4001f3ce):                       # the settings: memcpy(0x80000070, record, 100) before
         o = a - DEV.main_load
         assert img[o - 16:o + 6].hex() == '48780064' '4879100fff00' '487980000070' '4eb940020898'
+    assert img.count(bytes.fromhex('dcab0018a184')) == 2       # the LFO step: these two places only
     o = 0x4001568a - DEV.main_load                           # the card's interrupt ends in rte
     assert img[o:o + 2].hex() == '4e73'
     o = 0x4004013c - DEV.main_load                           # the tab's letter: ot_blit, then the site
@@ -1690,7 +1695,8 @@ def test_the_example_subscribes_to_the_bus():
                       'ev_midi_panic': 0, 'ev_edit_held': 0, 'ev_copy': 0, 'ev_midi_note_sent': 0,
                       'ev_track_length': 0, 'ev_pattern_wrap': 0, 'ev_rec_length': 0,
                       'ev_track_pattern': 0, 'ev_ui_tick': 0, 'ev_card_cmd': 0, 'ev_task_switch': 0,
-                      'ev_track_tab_draw': 0, 'ev_card_done': 0, 'ev_settings_load': 0}, counts
+                      'ev_track_tab_draw': 0, 'ev_card_done': 0, 'ev_settings_load': 0,
+                      'ev_lfo_step': 0}, counts
     at = ln.tables['ev_draw'][0]
     o = ln.layout['run_load'] + (at - DEV.ddr[0]) - DEV.main_load
     assert struct.unpack('>II', ln.image[o:o + 8]) == (ln.map['hello_draw'], 0)

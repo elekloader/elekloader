@@ -386,3 +386,38 @@ core_setload_\addr:
 
         SETLOAD 0x4001f338, 1, 0x4001f33e
         SETLOAD 0x4001f3d4, 0, 0x4001f3da
+
+| ---- the LFOs' step (core-ot 0.19) ------------------------------------------------------------------------
+| 0x40003c2e (the MIDI tracks' LFO engine 0x40003b90) and 0x4000cfc8 (the audio tracks', in the frame
+| builder), was: add.l 24(a3),d6 ; move.l acc,d4. d6 is this frame's phase increment of LFO d2 (0-2), the
+| speed times the tempo; a2 the track's LFO record (its MULT bytes at +24 + d2); 24(a3) the phase it is
+| added to. Every frame, in the frame interrupt. octabam's SLOW LFO (MIT) slows the LFOs here and in the
+| page table's MULT count (a data site). Handlers: int f(void *rec, unsigned lfo, int inc) -> the
+| increment (chained). They must not touch the EMAC: its accumulator is live here.
+        .macro  LFOSTEP addr
+        .globl  core_lfo_\addr
+core_lfo_\addr:
+        tst.l   ev_lfo_step
+        beq.s   9f
+        lea     -20(%sp), %sp
+        movem.l %d0-%d1/%a0-%a2, (%sp)
+        lea     ev_lfo_step, %a2
+1:      move.l  (%a2)+, %d1
+        beq.s   2f
+        move.l  %d6, -(%sp)             | the increment so far
+        move.l  %d2, -(%sp)             | the LFO
+        move.l  24(%sp), -(%sp)         | the record (the saved a2: 16 + 8 pushed)
+        movea.l %d1, %a0
+        jsr     (%a0)
+        lea     12(%sp), %sp
+        move.l  %d0, %d6
+        bra.s   1b
+2:      movem.l (%sp), %d0-%d1/%a0-%a2
+        lea     20(%sp), %sp
+9:      add.l   24(%a3), %d6
+        move.l  %acc, %d4
+        jmp     \addr + 6
+        .endm
+
+        LFOSTEP 0x40003c2e
+        LFOSTEP 0x4000cfc8

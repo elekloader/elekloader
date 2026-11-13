@@ -787,7 +787,13 @@ System observers (core-ot 0.16, 0.18):
 | `ev_card_done` (0.18) | a command left in flight has finished, in the card's interrupt, before the next one starts (the record still holds it) | `void f(const void *cmd)` | the card's interrupt |
 | `ev_settings_load` (0.18) | stock has just copied the battery-RAM settings record (0x100fff00, 100 bytes) to the live settings (0x80000070): at boot and two panel actions; `fresh` 1 when it wrote its defaults first | `void f(unsigned fresh)` | the caller's task |
 
-`tests/fixtures/octatrack-seq` is a probe of these and of `ev_track_tab_draw`; `"resources": {"core": "0.18"}`.
+`tests/fixtures/octatrack-seq` is a probe of these and of `ev_track_tab_draw`; `"resources": {"core": "0.19"}`.
+
+`ev_lfo_step` (core-ot 0.19) runs in the frame interrupt for each of the three LFOs of every track,
+audio and MIDI (24 calls a frame): `int f(void *rec, unsigned lfo, int inc)` returns the phase
+increment this frame (chained): divide it for slower LFOs, as octabam's SLOW LFO does (its larger
+MULT range is a data site on the page table). The EMAC's accumulator is live there: handlers must
+not use it, and must be short.
 
 The audio inputs need no event of their own: each frame interrupt advances `OT_INPUT_INDEX` (0-7) and
 points the input DMA at that 256-byte page, `OT_INPUT_PAGE(i)` (`octatrack/core.h`); read them from

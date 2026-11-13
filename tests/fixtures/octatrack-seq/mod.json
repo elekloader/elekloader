@@ -19,8 +19,9 @@
   {"event": "ev_task_switch", "fn": "sq_task_switch", "order": 50},
   {"event": "ev_track_tab_draw", "fn": "sq_tab_draw", "order": 50},
   {"event": "ev_card_done", "fn": "sq_card_done", "order": 50},
-  {"event": "ev_settings_load", "fn": "sq_settings_load", "order": 50}
+  {"event": "ev_settings_load", "fn": "sq_settings_load", "order": 50},
+  {"event": "ev_lfo_step", "fn": "sq_lfo_step", "order": 50}
  ],
  "requires": ["core"],
- "resources": {"core": "0.18"}
+ "resources": {"core": "0.19"}
 }
