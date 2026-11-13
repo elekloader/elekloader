@@ -725,6 +725,28 @@ OS's entry (REMIX SWITCH's chainloader), the scheduler (BRAIN), MIDI injected
 as input (MIDI LOOPBACK) and the bank pointer's stores (MIDI SCENES v1.0) are
 one module's each.
 
+#### Track mutes on the Octatrack (core-ot 0.9)
+
+`ev_mute` fires each time a track's mute word changes, from the panel, MIDI,
+the mixer or a project job, in the task that changed it. The handler gets
+the word just stored live and returns the word the Part keeps, which a SAVE
+writes; what plays stays stock's. The words and their Part copies are in
+`octatrack/core.h` (`OT_MUTES_AUDIO`, `OT_PART_MUTES_AUDIO`, ...). A mod
+that keeps mutes per pattern returns the Part's old word:
+
+```c
+#include "octatrack/core.h"
+
+unsigned my_mute(unsigned kind, unsigned word)
+{
+    remember(kind, word);                   /* yours: per pattern, say */
+    return kind == OT_MUTE_MIDI ? OT_PART_MUTES_MIDI : OT_PART_MUTES_AUDIO;
+}
+```
+
+`"subscribe": [{"event": "ev_mute", "fn": "my_mute", "order": 50}]`, and
+`"resources": {"core": "0.9"}`. `tests/fixtures/octatrack-mute` is a probe.
+
 ### The DSP bus on the Octatrack (dspbus 0.1)
 
 `mods/dspbus-ot` is a second, optional bus, for code that runs on DSP core

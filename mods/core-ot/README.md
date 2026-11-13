@@ -36,13 +36,8 @@ changes nothing else the unit does.
     `__arena_fill`, `__arena_clear`. Core with track meters and OT HEALTH
     takes 1 page, so the arena keeps 14,601 of its 14,602 pages; the most
     is 1,707 pages, 0.2's whole reserve (0x40a955e0-0x41495de0).
-  - 0.2 took 1,707 pages whatever the mods used, and exported the moved
-    base as `arena_base` itself. With 0.3 the linker defines `arena_base`,
-    for mods that compare against it.
-  - tests/test_octatrack.py derives each write from the page count: the
-    stock value at 0 pages, 0.2's at 1,707. Under octabam's port, the
-    OS's free-page count (0x80006920) after boot is 1,706 pages higher
-    with 0.3 than with 0.2, for the same mods.
+  - 0.2 took 1,707 pages whatever the mods used; from 0.3 the linker
+    defines `arena_base`.
 - **At boot.** The boot site 0x4000050c called 0x40001e50; it now calls
   `boot`, at the end of the OS image (0x4010fdf0), where the bootstrap
   unpacks it.
@@ -287,6 +282,10 @@ changes nothing else the unit does.
     too; `ev_voice_reset` in tasks and the frame interrupt, with the
     interrupts not yet masked; `ev_boot_early` before the OS. None but the
     reset is on the frame interrupt's path.
+- **0.9: the track mutes** (`mute.s`). `ev_mute(kind, word)` at all 30
+  places that copy a live mute word into the Part (the tests prove the
+  census); the handler returns the word the Part keeps (docs/ADAPTING.md,
+  "Track mutes on the Octatrack").
 - **The draw gate** (`gate.s`). The OS composes the screen twice before the
   boot site, so before `.run` is in the reserve. The draw site therefore
   calls `core_draw_gate`, which `mod.json` places (`fixed`) in the last 24

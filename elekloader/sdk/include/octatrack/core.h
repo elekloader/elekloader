@@ -406,4 +406,19 @@ struct ot_dial {
     void *widget;               /* widget(x, y, knob, value, flags, fmt, canvas) */
 };
 
+/* ---- the track mutes (0.9) --------------------------------------------------------------------------
+ * The live mute words, one for the audio tracks and one for the MIDI tracks: three byte fields of eight
+ * tracks each (bits 16-23, 8-15, 0-7; the panel's mute toggles bit 16 + n of the audio word). Which
+ * field is the mute, the cue and the pending change is not all mapped yet: change only bits you have
+ * read stock set. Each change is stored live and then copied into the Part, which a SAVE keeps.
+ *   unsigned ev_mute(kind, word)   a word has just been stored live (kind OT_MUTE_AUDIO or OT_MUTE_MIDI):
+ *                                  return the word the Part keeps (chained; return word for stock's). The
+ *                                  live word is not changed. In the task that changed it: the panel's
+ *                                  (sys), the MIDI task's or the engine's (a project job) */
+enum { OT_MUTE_AUDIO = 0, OT_MUTE_MIDI = 1 };
+#define OT_MUTES_AUDIO      OT_L(0x80000008)
+#define OT_MUTES_MIDI       OT_L(0x8000000c)
+#define OT_PART_MUTES_AUDIO OT_L(0x100b14d4)    /* the Part's copies */
+#define OT_PART_MUTES_MIDI  OT_L(0x100b14d8)
+
 #endif

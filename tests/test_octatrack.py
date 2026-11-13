@@ -359,7 +359,8 @@ def test_the_core_moves_the_arena_past_its_reserve():
     assert all(int(s['addr'], 16) != PURGE_BANKS_END + 2 for s in j['sites'])
     calls = {s['target']: int(s['addr'], 16) for s in j['sites'] if s['op'] in ('jsr', 'jmp')}
     assert calls.pop('boot') == 0x4000050c
-    assert set(calls) == set(BUS_SITES) | set(STORE_SITES) | set(VOICE_SITES) | set(EDIT_SITES), calls
+    mutes = {'core_mute_0x%08x' % m[0] for m in _mute_sites()}
+    assert set(calls) == set(BUS_SITES) | set(STORE_SITES) | set(VOICE_SITES) | set(EDIT_SITES) | mutes, calls
 
 
 def reserve_docs(img, bss, fixed=False):
@@ -553,7 +554,7 @@ def test_the_core_bus_sites():
     assert sorted(j['collections']) == sorted({e for _a, _s, e in BUS_SITES.values()} | {'ev_idle'}
                                               | {v[2] for v in STORE_SITES.values() if v[2]}
                                               | set(STORE_TABLES) | {v[2] for v in VOICE_SITES.values()}
-                                              | {v[2] for v in EDIT_SITES.values()})
+                                              | {v[2] for v in EDIT_SITES.values()} | {'ev_mute'})
     assert j['collections']['ev_idle'] == 4
     for sym, target in JMP_BACK.items():       # a jmp stub goes back to the instruction after its site
         addr, stock_hex, _ev = BUS_SITES[target]
@@ -938,6 +939,104 @@ def test_the_edit_probe_links():
         assert table(ln, t, 2) == (ln.map[fn], 0), t
 
 
+# core-ot 0.9 (mute.s): every copy of a live mute word into the Part, `move.l dN,0x100b14d4` (audio)
+# or `0x100b14d8` (MIDI), but the project load's range check (0x4000fe6c, 0x4000fe82: a constant) and
+# the project init's two clears (0x40025ac2, 0x40025ac8).
+MUTE_NOT = (0x4000fe6c, 0x4000fe82)
+
+
+def _mute_sites():
+    import re
+    with open(os.path.join(ROOT, 'mods', 'core-ot', 'mute.s')) as fh:
+        return [(int(a, 16), int(r[1]), int(k), int(d, 16))
+                for a, r, k, d in re.findall(r'MUTE\s+(0x[0-9a-f]+), (d\d), (\d), (0x[0-9a-f]+)', fh.read())]
+
+
+def test_the_core_mute_sites():
+    """core-ot 0.9's ev_mute: its 30 sites are every copy of a live mute word into the Part in the image
+    (each right after the live store, in the same register), each a whole 6-byte instruction no branch
+    lands inside, clear of every other site of core, its companions and the v1.0 conversions."""
+    with open(os.path.join(ROOT, 'mods', 'core-ot', 'mod.json')) as fh:
+        j = json.load(fh)
+    with open(os.path.join(ROOT, 'mods', 'intercepts-ot', 'mod.json')) as fh:
+        icpt = [(int(x['addr'], 16), len(x['stock']) // 2) for x in json.load(fh)['sites']]
+    st, img = stock()
+    sites = _mute_sites()
+    assert len(sites) == 30 and len({a for a, *_ in sites}) == 30
+    assert j['collections']['ev_mute'] == 4
+    js = {int(s['addr'], 16): s for s in j['sites'] if s['target'].startswith('core_mute_')}
+    assert sorted(js) == sorted(a for a, *_ in sites)
+    found = set()
+    for dst in (0x100b14d4, 0x100b14d8):        # the census: move.l dN,abs.l to a Part copy
+        pat = struct.pack('>I', dst)
+        k = 0
+        while True:
+            k = img.find(pat, k)
+            if k < 0:
+                break
+            op = struct.unpack('>H', img[k - 2:k])[0]
+            if op & 0xf1ff == 0x21c0 or op & 0xfff8 == 0x23c0:
+                found.add(DEV.main_load + k - 2)
+            k += 1
+    assert found - set(MUTE_NOT) == set(js), sorted(hex(a) for a in found ^ set(js))
+    taken = ([(a, len(h) // 2) for a, h, _e in BUS_SITES.values()]
+             + [(a, len(h) // 2) for a, h, _e, _b in STORE_SITES.values()]
+             + [(a, len(h) // 2) for a, h, _e, _b in VOICE_SITES.values()]
+             + [(a, len(h) // 2) for a, h, _e, _b in EDIT_SITES.values()]
+             + icpt + list(V10_NEIGHBOURS) + list(V10_VOICE) + list(V10_BUILDERS) + list(V10_EDIT))
+    inside = {}
+    for addr, reg, kind, dst in sites:
+        stock_hex = '%04x%08x' % (0x23c0 | reg, dst)
+        assert js[addr]['stock'] == stock_hex and js[addr]['op'] == 'jmp', hex(addr)
+        assert js[addr]['target'] == 'core_mute_0x%08x' % addr
+        assert (dst == 0x100b14d8) == (kind == 1)
+        o = addr - DEV.main_load
+        assert img[o:o + 6].hex() == stock_hex, hex(addr)
+        live = img[o - 6:o].hex()                # the live store just before, the same register
+        assert (live == '%04x%08x' % (0x23c0 | reg, 0x8000000c if kind else 0x80000008)
+                or img[o - 2:o].hex() == '%04x' % (0x2480 | reg)), (hex(addr), live)   # or move.l dN,(a2)
+        ok, note = elemod.insn_check(img, addr, 6, DEV)
+        assert ok, (hex(addr), note)
+        for a, m in taken:
+            assert not (a < addr + 6 and addr < a + m), (hex(addr), hex(a))
+        for t in range(addr + 1, addr + 6):
+            inside[t] = addr
+    for o in range(0, len(img) - 6, 2):         # no branch lands inside a site
+        w = struct.unpack('>H', img[o:o + 2])[0]
+        pc, tgt = DEV.main_load + o, None
+        if w & 0xf000 == 0x6000:
+            d8 = w & 0xff
+            if d8 == 0:
+                tgt = pc + 2 + struct.unpack('>h', img[o + 2:o + 4])[0]
+            elif d8 == 0xff:
+                tgt = pc + 2 + struct.unpack('>i', img[o + 2:o + 6])[0]
+            else:
+                tgt = pc + 2 + (d8 - 256 if d8 & 0x80 else d8)
+        elif w in (0x4ef9, 0x4eb9):
+            tgt = struct.unpack('>I', img[o + 2:o + 6])[0]
+        assert tgt not in inside, (hex(pc), hex(tgt))
+
+
+def test_the_mute_probe_links():
+    """tests/fixtures/octatrack-mute with core-ot 0.9: its handler is ev_mute's entry; core-ot alone
+    has none."""
+    import shutil
+    from elekloader.sdk import build
+    need(SYX)
+    if not shutil.which(os.environ.get('ELEKLOADER_CROSS', DEV.toolchain['prefix']) + 'gcc'):
+        raise Skip('no m68k cross compiler')
+    st, img = stock()
+    with tempfile.TemporaryDirectory() as tmp:
+        core = elemod.load_any(build.build(os.path.join(ROOT, 'mods', 'core-ot'), SYX, tmp)[0])
+        probe, m = build.build(os.path.join(HERE, 'fixtures', 'octatrack-mute'), SYX, tmp)
+        assert not m.imports, m.imports
+        alone = link.link([core], img)
+        ln = link.link([core, elemod.load_any(probe)], img)
+    assert alone.tables['ev_mute'][1] == 0
+    o = ln.layout['run_load'] + (ln.tables['ev_mute'][0] - DEV.ddr[0]) - DEV.main_load
+    assert struct.unpack('>2I', ln.image[o:o + 8]) == (ln.map['mu_mute'], 0)
+
+
 def test_the_store_probe_links():
     """tests/fixtures/octatrack-store with core-ot 0.6: its blocks, its CS1 claim and its
     handlers are the entries of core's tables; core-ot alone has none."""
@@ -1293,7 +1392,8 @@ def test_the_example_subscribes_to_the_bus():
                       'ev_voice_bind': 0, 'ev_voice_seek': 0, 'ev_trig_apply': 0, 'ev_dsp_trig': 0,
                       'ev_dsp_record': 0, 'ev_clip': 0, 'ev_part_saving': 0, 'ev_part_reload': 0,
                       'ev_part_select': 0, 'ev_part_init': 0, 'ev_project_init': 0, 'ev_voice_reset': 0,
-                      'ev_boot_early': 0, 'ev_track_icon': 0, 'ev_track_icon_draw': 0, 'ev_setup_dial': 0}, counts
+                      'ev_boot_early': 0, 'ev_track_icon': 0, 'ev_track_icon_draw': 0, 'ev_setup_dial': 0,
+                      'ev_mute': 0}, counts
     at = ln.tables['ev_draw'][0]
     o = ln.layout['run_load'] + (at - DEV.ddr[0]) - DEV.main_load
     assert struct.unpack('>II', ln.image[o:o + 8]) == (ln.map['hello_draw'], 0)
