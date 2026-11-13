@@ -42,8 +42,10 @@
  *   faults        UI CRASH selects that raised the fault
  *
  * UI CRASH (a second SETTINGS row) raises an illegal instruction in the UI
- * task, but only while armed, so ev_crash runs on a real fault. The unit
- * then stops in stock's crash screen and needs a power cycle.
+ * task, but only while armed, so ev_crash runs on a real fault. From 0.4
+ * ev_crash also draws its fields on screen rows 0-3 and holds them about
+ * 10 s (see "the crash screen" below). The unit then stops in stock's crash
+ * screen and needs a power cycle.
  */
 #include <stdint.h>
 #include <std1.h>
@@ -97,6 +99,124 @@ void uc_idle(void)
     }
 }
 
+/* ---- the crash screen ------------------------------------------------------
+ * After the fault the OS runs with interrupts masked, so nothing answers USB and
+ * the power cycle loses RAM. So uc_crash also shows its fields on the screen,
+ * the way stock's crash printer (0x4006380e) does: polled bytes to the front
+ * panel's UART (0x4006377c: wait for bit 3 of 0xec070004, write 0xec07000c),
+ * 0x51 + (row << 4 | col) the cursor, 0x52 + n the attribute, 0x50 + ch one
+ * character, 16 characters a row. Rows 0-3:
+ *   UC CRASH Nnn Fff   crash and faults
+ *   Mmmmmmmmm          crash_magic
+ *   Hhhhhhhhh          crash_head (format, vector, SR)
+ *   Ppppppppp          crash_pc
+ * in upper-case hex, as stock's own screen prints. It then holds about 10 s,
+ * redrawing each second, interrupts still masked, and returns, so core calls
+ * stock's printer, which writes over rows 0-7 from 0,0 and halts.
+ *
+ * The panel link may be inside a message when the fault lands (one longest
+ * message is 10 bytes: 0x1x, a column of pixels), and the panel would take
+ * the cursor command as its data; so each draw starts with nine 0x00 bytes
+ * (one-byte messages to the panel) first. No calls into stock. */
+#define PANEL_USR (*(const volatile uint8_t *)0xec070004u)
+#define PANEL_UTB (*(volatile uint8_t *)0xec07000cu)
+#define PANEL_TXRDY 0x08u
+#define PANEL_SPINS 200000u      /* most polls of TXRDY for one byte */
+
+/* DTIM0's count runs free from the bus clock, also with interrupts masked:
+ * stock's 64-bit clock (0x40105f84) adds its 32-bit unsigned differences, and
+ * the tap tempo (0x40054220) scales it as 132 MHz. */
+#define DTCN0 (*(const volatile uint32_t *)0xfc07000cu)
+#define BUS_HZ 132000000u
+#define HOLD_TICKS (10u * BUS_HZ)  /* 1.32e9 < 2^32 */
+/* A cap, should DTCN0 not move: 2^29 passes. One pass is one I/O read and
+ * about seven instructions, at least 8 cycles at 250 MHz, so 10 s take at most
+ * 312M passes and the cap never ends a running hold early; with a stopped
+ * counter it ends the hold after about 17-54 s (8-25 cycles a pass). */
+#define HOLD_SPINS 0x20000000u
+
+static void uc_tx(unsigned b)
+{
+    unsigned n;
+    for (n = 0; n < PANEL_SPINS && !(PANEL_USR & PANEL_TXRDY); n++)
+        ;
+    PANEL_UTB = (uint8_t)b;
+}
+
+static unsigned uc_put(unsigned col, unsigned ch)
+{
+    if (col < 16) {
+        uc_tx(0x50);
+        uc_tx(ch);
+    }
+    return col + 1;
+}
+
+static unsigned uc_puts(unsigned col, const char *s)
+{
+    while (*s)
+        col = uc_put(col, (unsigned char)*s++);
+    return col;
+}
+
+static unsigned uc_puthex(unsigned col, uint32_t v, int digits)
+{
+    while (digits-- > 0) {
+        unsigned d = (v >> (digits * 4)) & 15u;
+        col = uc_put(col, d < 10 ? '0' + d : 'A' + d - 10);
+    }
+    return col;
+}
+
+static void uc_row_start(unsigned row, unsigned attr)
+{
+    uc_tx(0x51);
+    uc_tx(row << 4);
+    uc_tx(0x52);
+    uc_tx(attr);
+}
+
+static void uc_row_end(unsigned col)
+{
+    while (col < 16)
+        col = uc_put(col, ' ');
+}
+
+static void uc_crash_draw(void)
+{
+    unsigned col, i;
+    for (i = 0; i < 9; i++)
+        uc_tx(0x00);
+    uc_row_start(0, 1);
+    col = uc_puts(0, "UC CRASH N");
+    col = uc_puthex(col, ui_check.crash, 2);
+    col = uc_puts(col, " F");
+    col = uc_puthex(col, ui_check.faults, 2);
+    uc_row_end(col);
+    uc_row_start(1, 0);
+    uc_row_end(uc_puthex(uc_put(0, 'M'), ui_check.crash_magic, 8));
+    uc_row_start(2, 0);
+    uc_row_end(uc_puthex(uc_put(0, 'H'), ui_check.crash_head, 8));
+    uc_row_start(3, 0);
+    uc_row_end(uc_puthex(uc_put(0, 'P'), ui_check.crash_pc, 8));
+}
+
+static void uc_crash_hold(void)
+{
+    uint32_t prev = DTCN0, now, d, held = 0, since = 0, n;
+    for (n = 0; n < HOLD_SPINS && held < HOLD_TICKS; n++) {
+        now = DTCN0;
+        d = now - prev;
+        prev = now;
+        held += d;
+        since += d;
+        if (since >= BUS_HZ) {
+            since = 0;
+            uc_crash_draw();
+        }
+    }
+}
+
 void uc_crash(const void *frame)
 {
     const volatile uint32_t *f = (const volatile uint32_t *)frame;
@@ -106,6 +226,8 @@ void uc_crash(const void *frame)
         ui_check.crash_pc = f[1];
     }
     ui_check.crash_magic = 0x43525348u;
+    uc_crash_draw();
+    uc_crash_hold();
 }
 
 void uc_usb(unsigned configured)
