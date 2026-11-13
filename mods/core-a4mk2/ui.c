@@ -450,7 +450,7 @@ static int pattern_req(unsigned pattern, unsigned how)
  * as it was, so the playing pattern stays. While it runs, the routines below
  * stay quiet (pattern_in_view), so one select is one event. Playing, the
  * playing pattern selected again while another is queued is a CANCEL;
- * stock queues its row again. The view's song modes report as QUEUE. */
+ * stock queues its row again. The view's pattern modes report as QUEUE (stock changes at once in the direct modes), TEMP JUMP as START. */
 #define QUEUED_ROW (*(volatile int32_t *)0x41281756u)
 static volatile uint8_t pattern_in_view;
 
