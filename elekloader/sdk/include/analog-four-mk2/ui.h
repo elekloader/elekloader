@@ -34,6 +34,7 @@
 #define CLIP_CHAIN 8                    /* a SONG edit row (chain): the song editor's copy, clear and paste (an UNDO brings none) */
 #define CLIP_PROJECT 9                  /* a project, slot says which: the PROJECT list's copy */
 #define CLIP_SLOT_WORKING 0xfeu         /* slot: the working project */
+#define CLIP_ROW_END 0xfdu              /* slot, CLIP_CHAIN: the song's unnumbered end row "__:" */
 #define CLIP_COPY 0                     /* to the clipboard */
 #define CLIP_PASTE 1                    /* from the clipboard */
 #define CLIP_CLEAR 2
@@ -42,7 +43,9 @@ struct core_clip {
     uint8_t kind;                       /* CLIP_PATTERN .. CLIP_PROJECT */
     uint8_t op;                         /* CLIP_COPY, CLIP_PASTE or CLIP_CLEAR */
     uint8_t track;                      /* params.h's track, or CLIP_NONE */
-    uint8_t slot;                       /* CLIP_PROJECT: 0..127 (list slot 1..128 less 1) or CLIP_SLOT_WORKING; else CLIP_NONE */
+    uint8_t slot;                       /* CLIP_PROJECT: 0..127 (list slot 1..128 less 1) or CLIP_SLOT_WORKING;
+                                         * CLIP_CHAIN: the row number the song editor shows (00 is 0) or
+                                         * CLIP_ROW_END; else CLIP_NONE */
 };
 
 /* ---- the USB mode of the last ev_usb: 4 USB MIDI, 6 USB AUDIO/MIDI,

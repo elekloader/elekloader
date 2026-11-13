@@ -311,6 +311,34 @@ static void set_drain(void)
 typedef uint8_t (*grid_rec_t)(void *);
 #define GRID_REC ((grid_rec_t)0x40021ca8u)
 
+/* CLIP_CHAIN's slot: the row number the song editor shows. Stock passes
+ * a row's storage slot (0..63), which differs from the number shown once
+ * rows were inserted, moved or deleted. The song is 0x400a52fe(0x401494de())
+ * (the global object at 0x418717c8 + 0x2560); 0x400436d2(view) is the
+ * editor's cursor row's slot (-1 without song data) and 0x400b06c4(song,
+ * slot) its shown number, from 0 (-1 for the unnumbered end row "__:"). All
+ * three only read. The copy (a view's virtual) passes the view, the clear
+ * and paste calls the slot. */
+typedef void *(*objget_t)(void);
+typedef void *(*songget_t)(void *);
+typedef int32_t (*rowslot_t)(void *);
+typedef int32_t (*rownum_t)(void *, int32_t);
+#define SONG_OBJ ((objget_t)0x401494deu)
+#define SONG_OF ((songget_t)0x400a52feu)
+#define SONG_ROW_SLOT ((rowslot_t)0x400436d2u)
+#define SONG_ROW_NUM ((rownum_t)0x400b06c4u)
+
+__attribute__((noipa)) static uint8_t chain_row(int32_t slot)
+{
+    int32_t n;
+    if (slot < 0 || slot > 63)
+        return CLIP_NONE;
+    n = SONG_ROW_NUM(SONG_OF(SONG_OBJ()), slot);
+    if (n < 0)
+        return CLIP_ROW_END;
+    return n < CLIP_ROW_END ? (uint8_t)n : CLIP_NONE;
+}
+
 static int clip_fill(struct core_clip *c, uint32_t code, uint32_t a1, uint32_t a2)
 {
     unsigned fl = code >> 16;
@@ -321,7 +349,8 @@ static int clip_fill(struct core_clip *c, uint32_t code, uint32_t a1, uint32_t a
     c->kind = (uint8_t)code;
     c->op = (uint8_t)(code >> 8);
     c->track = (fl & CLIP_F_TRACK) ? (uint8_t)a2 : CLIP_NONE;
-    c->slot = CLIP_NONE;
+    c->slot = (uint8_t)code == CLIP_CHAIN ? chain_row(fl & CLIP_F_HANDLED ? SONG_ROW_SLOT((void *)a1) : (int32_t)a2)
+                                          : CLIP_NONE;
     return 1;
 }
 
@@ -432,7 +461,8 @@ uint32_t core_clip_pclear(void *pattern, int32_t whole, int32_t undo)
  * 0x40044a02; a %d0 byte says each did it ("CLEAR CHAIN", "PASTE CHAIN").
  * pre comes before the routine (an empty clipboard or a row with nothing to
  * act on brings a pre without a post), post only when it acted; an undo
- * brings neither. A take returns 0: stock shows nothing and keeps no undo. */
+ * brings neither. A take returns 0: stock shows nothing and keeps no undo.
+ * Both carry the row (chain_row above). */
 typedef uint8_t (*cop_t)(void *, int32_t, int32_t);
 #define CHAIN_CLEAR ((cop_t)0x400b2412u)
 #define CHAIN_PASTE ((cop_t)0x400b223au)
@@ -441,11 +471,11 @@ __attribute__((noipa)) static uint32_t chain_op(cop_t fn, unsigned op, void *son
 {
     const uint32_t code = CLIP_CHAIN | op << 8;
     uint8_t r;
-    if (core_clip_pre(code, 0, 0))
+    if (core_clip_pre(code, 0, (uint32_t)row))
         return 0;
     r = fn(song, row, a);
     if (r)
-        core_clip_post(code, 0, 0);
+        core_clip_post(code, 0, (uint32_t)row);
     return r;
 }
 
