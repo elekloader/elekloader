@@ -556,4 +556,26 @@ static inline int ot_popup_add(struct ot_popup *p, const char *label, void (*cb)
  * applied); return the one it plays (chained). Stock's own is kept, so a handler always starts from it.
  * Keep it short; do not touch the EMAC. */
 
+/* ---- PATTERN SETTINGS rows (0.31) ---------------------------------------------------------------
+ * PATTERN SETTINGS (FUNC+PTN) is data: each right pane lists 24-byte rows. A mod adds rows to a table:
+ * ot_ptn_rows (the PAT pane), ot_track_rows (each audio track's), ot_midi_rows (each MIDI track's), after
+ * stock's six, in contribution order. edit(delta) runs on an encoder turn (delta +-) and on YES (0);
+ * text() returns the value shown at the right. A row with neither is a heading. ot_pset_track() is the
+ * track the pane shows (0-7), -1 on the PAT pane. They run in the UI task.
+ *   "contribute": [{"to": "ot_track_rows", "order": 50, "data": "000000000000000000000000000000000000000000000000",
+ *                   "relocs": [[0, "abs32", "sym:my_label", 0], [8, "abs32", "sym:my_edit", 0],
+ *                              [12, "abs32", "sym:my_text", 0]]}]                                       */
+struct ot_menu_row {
+    const char *label;
+    uint32_t r4;
+    void (*edit)(int32_t delta);
+    const char *(*text)(void);
+    uint32_t r16, r20;
+};
+static inline int ot_midi_mode(void) { return ((int (*)(void))0x40033970u)(); }
+static inline int ot_pset_track(void)
+{
+    return (int)*(volatile uint32_t *)(ot_midi_mode() ? 0x400d104cu : 0x400d0f34u) - 1;
+}
+
 #endif

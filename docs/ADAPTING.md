@@ -900,6 +900,15 @@ stock's value per track, so a frame where stock reuses the stored increment hand
 not what they returned. Keep it short and leave the EMAC alone. The sites sit beside octabam REPITCH's
 (0x40004100), which keeps working beside it; `tests/fixtures/octatrack-rate` is a probe.
 
+### PATTERN SETTINGS rows on the Octatrack (core-ot 0.31)
+
+PATTERN SETTINGS (FUNC+PTN) lists 24-byte rows (`struct ot_menu_row`, `octatrack/core.h`): a label, an
+`edit(delta)` that runs on an encoder turn (delta +-) and on YES (0), and a `text()` that returns the value
+shown at the right; a row with neither is a heading. Each pane is a table: `ot_ptn_rows` (PAT),
+`ot_track_rows` (every audio track's), `ot_midi_rows` (every MIDI track's). core puts stock's six rows first;
+a mod's rows follow in contribution order, and the pane scrolls past six. `ot_pset_track()` says which track
+the pane shows (-1 on PAT). `tests/fixtures/octatrack-pset` adds a row to the audio tracks' panes.
+
 ### The DSP bus on the Octatrack (dspbus 0.1)
 
 `mods/dspbus-ot` is a second, optional bus, for code that runs on DSP core

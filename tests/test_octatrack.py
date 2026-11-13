@@ -342,7 +342,7 @@ def test_the_core_moves_the_arena_past_its_reserve():
         o = int(s['addr'], 16) - DEV.main_load
         old = bytes.fromhex(s['stock'])
         assert img[o:o + len(old)] == old, s['addr']
-        if s['op'] == 'ptr' and s['target'] != 'core_copy' and not s['target'].startswith(('core_wave_', 'ot_lfo_waves')):   # 0.11's copies and 0.28's LFO waves are not the arena
+        if s['op'] == 'ptr' and s['target'] != 'core_copy' and not s['target'].startswith(('core_wave_', 'ot_lfo_waves', 'ot_ptn_rows', 'ot_track_rows', 'ot_midi_rows')):   # 0.11's copies and 0.28's LFO waves are not the arena
             v = int(s['stock'], 16)
             t, add = named[v]
             assert (s['target'], s.get('addend', 0)) == (t, add), s['addr']
@@ -567,7 +567,8 @@ def test_the_core_bus_sites():
                                                  'ev_rec_length', 'ev_track_pattern', 'ev_card_cmd', 'ev_task_switch',
                                                  'ev_track_tab_draw', 'ev_card_done', 'ev_settings_load',
                                                  'ev_lfo_step', 'ev_trig_box_draw', 'ev_bank_copied',
-                                                 'ot_lfo_waves', 'ev_popup', 'ev_play_increment'})
+                                                 'ot_lfo_waves', 'ev_popup', 'ev_play_increment',
+                                                 'ot_ptn_rows', 'ot_track_rows', 'ot_midi_rows'})
     assert j['collections']['ev_idle'] == 4
     for sym, target in JMP_BACK.items():       # a jmp stub goes back to the instruction after its site
         addr, stock_hex, _ev = BUS_SITES[target]
@@ -1449,6 +1450,47 @@ def test_the_core_rate_sites():
     assert struct.unpack('>II', ln.image[o:o + 8]) == (ln.map['rp_inc'], 0)
 
 
+# core-ot 0.31: PATTERN SETTINGS' panes as tables. Each pane's 28-byte header: +0 the row count,
+# +24 the rows (24 bytes each); core contributes stock's six rows to each table.
+PSET_PANES = {'ot_ptn_rows': ([0x400d0f44], 0x400d1228),
+              'ot_track_rows': ([0x400d0f60 + 28 * t for t in range(8)], 0x400d12b8),
+              'ot_midi_rows': ([0x400d105c + 28 * t for t in range(8)], 0x400d1420)}
+
+
+def test_the_core_pattern_settings_rows():
+    """core-ot 0.31: every pane header's count (6) and rows pointer are ptr sites on its table; core's
+    own entries are stock's rows byte for byte, first; linked alone each table holds stock's six at the
+    headers' new pointer, and with the probe the audio panes count 7."""
+    with open(os.path.join(ROOT, 'mods', 'core-ot', 'mod.json')) as fh:
+        j = json.load(fh)
+    st, img = stock()
+    by = {int(x['addr'], 16): x for x in j['sites']}
+    word = lambda im, a: struct.unpack('>I', im[a - DEV.main_load:a - DEV.main_load + 4])[0]
+    for tab, (headers, rows) in PSET_PANES.items():
+        assert j['collections'][tab] == 24
+        for h in headers:
+            assert word(img, h) == 6 and word(img, h + 24) == rows
+            assert (by[h]['op'], by[h]['target']) == ('ptr', tab + '_n')
+            assert (by[h + 24]['op'], by[h + 24]['target']) == ('ptr', tab)
+        mine = [c for c in j['contribute'] if c['to'] == tab]
+        assert [bytes.fromhex(c['data']) for c in mine] == [
+            img[rows + 24 * i - DEV.main_load:rows + 24 * (i + 1) - DEV.main_load] for i in range(6)]
+        assert all(c['order'] == -1000000 for c in mine)
+    from elekloader.sdk import build
+    with tempfile.TemporaryDirectory() as tmp:
+        core = elemod.load_any(build.build(os.path.join(ROOT, 'mods', 'core-ot'), SYX, tmp)[0])
+        probe = elemod.load_any(build.build(os.path.join(HERE, 'fixtures', 'octatrack-pset'), SYX, tmp)[0])
+    for mods, extra in (([core], 0), ([core, probe], 1)):
+        ln = link.link(mods, img)
+        for tab, (headers, rows) in PSET_PANES.items():
+            n = 6 + (extra if tab == 'ot_track_rows' else 0)
+            at = ln.tables[tab][0]
+            o = ln.layout['run_load'] + (at - DEV.ddr[0]) - DEV.main_load
+            assert ln.image[o:o + 144] == img[rows - DEV.main_load:rows + 144 - DEV.main_load], tab
+            for h in headers:
+                assert (word(ln.image, h), word(ln.image, h + 24)) == (n, at), (tab, hex(h))
+
+
 def test_the_core_tick_sites():
     """core-ot 0.12's sites: stock, whole, a bgt right after each compare (it tests what the stub's
     compare leaves), the sequencer's tick an interrupt handler, no branch inside, clear of every
@@ -1923,7 +1965,8 @@ def test_the_example_subscribes_to_the_bus():
                       'ev_track_tab_draw': 0, 'ev_card_done': 0, 'ev_settings_load': 0,
                       'ev_lfo_step': 0, 'ev_scene_knob': 0, 'ev_tempo_open': 0, 'ev_arp_knob': 0,
                       'ev_knob_draw': 0, 'ev_leds': 0, 'ev_trig_box_draw': 0,
-                      'ev_bank_copied': 0, 'ot_lfo_waves': 0, 'ev_popup': 0, 'ev_play_increment': 0}, counts
+                      'ev_bank_copied': 0, 'ot_lfo_waves': 0, 'ev_popup': 0, 'ev_play_increment': 0,
+                      'ot_ptn_rows': 6, 'ot_track_rows': 6, 'ot_midi_rows': 6}, counts
     at = ln.tables['ev_draw'][0]
     o = ln.layout['run_load'] + (at - DEV.ddr[0]) - DEV.main_load
     assert struct.unpack('>II', ln.image[o:o + 8]) == (ln.map['hello_draw'], 0)
@@ -2402,6 +2445,10 @@ def test_trig_events_ot_builds_and_links():
     w = TT_SITE - DEV.main_load
     w2 = TK_SITE - DEV.main_load
     windows = [(w, 6), (w2, 10)]
+    # core's pointers at its own tables (0.31's PATTERN SETTINGS panes) follow where the tables land
+    with open(os.path.join(ROOT, 'mods', 'core-ot', 'mod.json')) as fh:
+        windows += [(int(s['addr'], 16) - DEV.main_load, 4) for s in json.load(fh)['sites']
+                    if s['op'] == 'ptr' and s['target'] in PSET_PANES]
     if alone.layout['reserve'] != only_core.layout['reserve']:
         windows += core_sites
     for i in range(len(img)):
