@@ -82,6 +82,15 @@ extern volatile struct ot_frame_meter ot_meter;
 #define OT_DTCN3            OT_L(0xfc07c00c)    /* the counter itself */
 #define OT_FRAME_COUNTS     47891u              /* tpf until the first 1,024 frames are measured */
 void ot_meter_reset(void);
+/* Each track's renderer time (0.38): the frame builder's two renderer calls a track (0-7), timed on the
+ * same counter. Read in a task; zero it yourself to start again. */
+struct ot_render_meter {
+    uint32_t last[8];           /* the last call's counts */
+    uint32_t worst[8];
+    uint32_t calls[8];
+    uint32_t total[8];          /* wraps */
+};
+extern volatile struct ot_render_meter ot_render_meter;
 
 /* ---- the boot check ----------------------------------------------------------------------------
  * .boot copies the RAM image the linker built into the reserve and hashes the copy against the
@@ -593,6 +602,10 @@ struct ot_menu_row {
 /* int ev_boot_frame(unsigned frame, void *plane) (0.37): each frame of the start-up animation, before stock
  * draws it (the UI task, before any project): nonzero = you drew this frame on plane (ot_blit) and stock
  * draws nothing of its own; the screen flush and the LED sweep go on either way. */
+/* void *ev_track_start(unsigned trk, unsigned type, void *stock) (0.38): a track's trig is about to call its
+ * machine type's START (in the frame interrupt): return a START to call instead, start(trk, arg, flags) as
+ * stock's, or 0 for the next handler (the first nonzero wins). Declare it returning uint32_t in C (a
+ * returned pointer is read from a0, the bus reads d0). */
 /* ---- timers and interrupt vectors (firmware calls) -----------------------------------------------
  * ot_timer_start(ticks, fn): fn runs every `ticks` UI ticks (60 a second), in the UI task, from the next
  * due tick on, until ot_timer_cancel(slot); it returns the slot (0-31) or -1 when all 32 are busy (stock

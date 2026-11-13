@@ -370,7 +370,7 @@ def test_the_core_moves_the_arena_past_its_reserve():
                           | {v[1] for v in LFO_CODE.values()} | {'core_popup'}
                           | {v[1] for v in RATE_SITES.values()} | {'core_pers_count', 'core_tstretch'} | set(FILE_SITES.values())
                           | {v[1] for v in OPENS_SITES.values()} | {v[1] for v in GUARD_SITES.values()}
-                          | {'core_boot_frame'}), calls
+                          | {'core_boot_frame'} | {v[1] for v in START_SITES.values()}), calls
 
 
 def reserve_docs(img, bss, fixed=False):
@@ -574,7 +574,7 @@ def test_the_core_bus_sites():
                                                  'ot_ptn_rows', 'ot_track_rows', 'ot_midi_rows',
                                                  'ot_pers_label', 'ot_pers_get', 'ot_pers_set', 'ev_tstretch', 'ev_file', 'ev_track_double',
                                                  'ev_setup_open', 'ev_pattern_check', 'ev_fx_choose',
-                                                 'ev_boot_frame'})
+                                                 'ev_boot_frame', 'ev_track_start'})
     assert j['collections']['ev_idle'] == 4
     for sym, target in JMP_BACK.items():       # a jmp stub goes back to the instruction after its site
         addr, stock_hex, _ev = BUS_SITES[target]
@@ -1768,6 +1768,87 @@ def test_the_core_boot_frame_site():
     assert struct.unpack('>II', ln.image[o:o + 8]) == (ln.map['ba_frame'], 0)
 
 
+# core-ot 0.38 (start.s, rmeter.s): the START a trig calls, and each track's renderer time.
+START_SITES = {0x4000d47e: ('20714c004a88', 'core_track_start', None),       # movea.l (a1,d4.l*4),a0 ; tst.l a0
+               0x4000d43e: ('4e904fef0010', 'core_render_a', 0x4000d444),    # jsr (a0) ; lea 16(sp),sp
+               0x4000d52c: ('4e901012780f', 'core_render_b', 0x4000d532)}    # jsr (a0) ; move.b (a2),d0 ; moveq #15,d4
+
+
+def test_the_core_start_and_render_sites():
+    """core-ot 0.38's sites: stock, whole, nothing branching inside; clear of trig-events-ot's 0x4000d496;
+    the START stub goes on to the call (0x4000d486) or past it (0x4000d4d2) as stock's beq does; both
+    renderer calls push the track in d3 last; the probes link."""
+    with open(os.path.join(ROOT, 'mods', 'core-ot', 'mod.json')) as fh:
+        j = json.load(fh)
+    st, img = stock()
+    by = {int(x['addr'], 16): x for x in j['sites']}
+    src = open(os.path.join(ROOT, 'mods', 'core-ot', 'start.s')).read() + open(
+        os.path.join(ROOT, 'mods', 'core-ot', 'rmeter.s')).read()
+    inside = {}
+    for a, (h, target, nxt) in START_SITES.items():
+        assert (by[a]['op'], by[a]['stock'], by[a]['target']) == ('jmp', h, target)
+        o = a - DEV.main_load
+        assert img[o:o + 6].hex() == h
+        ok, note = elemod.insn_check(img, a, 6, DEV)
+        assert ok, note
+        assert not (a < TT_SITE + 6 and TT_SITE < a + 6)
+        assert ('0x%08x' % (nxt or 0x4000d486)) in src
+        for k in range(a + 1, a + 6):
+            inside[k] = target
+    assert _branch_target(img, 0x4000d484 - DEV.main_load) == 0x4000d4d2 and '0x4000d4d2' in src
+    for a in (0x4000d43a, 0x4000d52a):                       # move.l d3,-(sp): the track, the call's first word
+        assert img[a - DEV.main_load:a - DEV.main_load + 2].hex() == '2f03'
+    for k in range(0, len(img) - 6, 2):
+        assert _branch_into(img, k, inside) is None, hex(DEV.main_load + k)
+    from elekloader.sdk import build
+    with tempfile.TemporaryDirectory() as tmp:
+        core = elemod.load_any(build.build(os.path.join(ROOT, 'mods', 'core-ot'), SYX, tmp)[0])
+        probes = [elemod.load_any(build.build(os.path.join(HERE, 'fixtures', f), SYX, tmp)[0])
+                  for f in ('octatrack-start', 'octatrack-rmeter')]
+    ln = link.link([core] + probes, img)
+    o = ln.layout['run_load'] + (ln.tables['ev_track_start'][0] - DEV.ddr[0]) - DEV.main_load
+    assert struct.unpack('>II', ln.image[o:o + 8]) == (ln.map['sp_start'], 0)
+    assert 'ot_render_meter' in ln.map
+
+
+# seqrows-ot: CONTROL > SEQUENCER rows, a companion (QUANTIZER v1.0 owns the same places).
+SEQ_ARRAYS = {'ot_seq_label': (0x400b27d0, [0x40065bd8]), 'ot_seq_get': (0x400b27dc, [0x40065bde]),
+              'ot_seq_set': (0x400b282c, [0x40065cc4, 0x40065d3e, 0x40065d58, 0x40065d72])}
+
+
+def test_the_seqrows_companion():
+    """seqrows: its operands are the arrays' only references, its entries stock's 3, its two code sites
+    stock and whole; none of core's sites is among them; with core and the probe the arrays hold 4."""
+    with open(os.path.join(ROOT, 'mods', 'seqrows-ot', 'mod.json')) as fh:
+        j = json.load(fh)
+    with open(os.path.join(ROOT, 'mods', 'core-ot', 'mod.json')) as fh:
+        core_sites = [(int(s['addr'], 16), len(s['stock']) // 2) for s in json.load(fh)['sites']]
+    st, img = stock()
+    by = {int(x['addr'], 16): x for x in j['sites']}
+    word = lambda im, a: struct.unpack('>I', im[a - DEV.main_load:a - DEV.main_load + 4])[0]
+    for tab, (arr, ops) in SEQ_ARRAYS.items():
+        for a in ops:
+            assert word(img, a) == arr and (by[a]['op'], by[a]['target']) == ('ptr', tab)
+        assert img.count(struct.pack('>I', arr)) == len(ops), tab
+        mine = [c for c in j['contribute'] if c['to'] == tab]
+        assert [bytes.fromhex(c['data']) for c in mine] == [
+            img[arr + 4 * i - DEV.main_load:arr + 4 * i + 4 - DEV.main_load] for i in range(3)]
+    for a, n in ((0x40065c7c, 8), (0x40065bca, 6)):
+        assert img[a - DEV.main_load:a - DEV.main_load + n].hex() == by[a]['stock']
+        ok, note = elemod.insn_check(img, a, n, DEV)
+        assert ok, note
+    for a, n in [(int(s['addr'], 16), len(s['stock']) // 2) for s in j['sites']]:
+        assert not any(c < a + n and a < c + m for c, m in core_sites), hex(a)
+    from elekloader.sdk import build
+    with tempfile.TemporaryDirectory() as tmp:
+        mods = [elemod.load_any(build.build(os.path.join(ROOT, d), SYX, tmp)[0])
+                for d in ('mods/core-ot', 'mods/seqrows-ot', 'tests/fixtures/octatrack-seqrows')]
+    ln = link.link(mods, img)
+    for tab, (arr, ops) in SEQ_ARRAYS.items():
+        assert ln.tables[tab][1] == 4
+        assert all(word(ln.image, x) == ln.tables[tab][0] for x in ops)
+
+
 def test_the_core_tick_sites():
     """core-ot 0.12's sites: stock, whole, a bgt right after each compare (it tests what the stub's
     compare leaves), the sequencer's tick an interrupt handler, no branch inside, clear of every
@@ -2246,7 +2327,7 @@ def test_the_example_subscribes_to_the_bus():
                       'ot_ptn_rows': 6, 'ot_track_rows': 6, 'ot_midi_rows': 6,
                       'ot_pers_label': 16, 'ot_pers_get': 16, 'ot_pers_set': 16, 'ev_tstretch': 0, 'ev_file': 0, 'ev_track_double': 0,
                       'ev_setup_open': 0, 'ev_pattern_check': 0, 'ev_fx_choose': 0,
-                      'ev_boot_frame': 0}, counts
+                      'ev_boot_frame': 0, 'ev_track_start': 0}, counts
     at = ln.tables['ev_draw'][0]
     o = ln.layout['run_load'] + (at - DEV.ddr[0]) - DEV.main_load
     assert struct.unpack('>II', ln.image[o:o + 8]) == (ln.map['hello_draw'], 0)

@@ -958,6 +958,21 @@ animation, before any project loads: return nonzero after drawing the frame on `
 labels than stock's widget shows (Modwerk's "wide dial") swaps the widget in `ev_setup_dial`; no site of its
 own.
 
+### A trig's START and the renderers' time on the Octatrack (core-ot 0.38)
+
+`ev_track_start(unsigned trk, unsigned type, stock)` runs in the frame interrupt as a track's trig is about
+to call its machine type's START: return a START to call instead (`start(trk, arg, flags)`, as stock's) or 0
+for the next handler; declare it returning `uint32_t`, since the bus reads d0. `ot_render_meter` (core.h)
+holds each track's renderer time, both of the frame builder's calls, on the frame meter's counter: last,
+worst, calls and total per track. `tests/fixtures/octatrack-start` and `octatrack-rmeter` use them.
+
+### SEQUENCER rows on the Octatrack (seqrows 0.1)
+
+PROJECT > CONTROL > SEQUENCER works as PERSONALIZE does, with `ot_seq_label`, `ot_seq_get` and `ot_seq_set`
+(stock's three first), but they come from `mods/seqrows-ot`, a companion: octabam's SCALE QUANTIZER v1.0
+patches the same places for its own rows, and the two refuse each other. A mod with rows there requires
+`"seqrows"`; the list scrolls past three. `tests/fixtures/octatrack-seqrows` adds one.
+
 ### Timers and interrupt vectors on the Octatrack
 
 Two firmware services are calls in `octatrack/core.h`, no core site. `ot_timer_start(ticks, fn)` runs
