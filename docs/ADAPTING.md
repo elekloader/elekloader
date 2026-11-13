@@ -765,7 +765,12 @@ Two more (core-ot 0.12) run in the sequencer's tick, a timer interrupt: keep the
 | `ev_track_length` | each track's advance: its step counter has moved on and is compared with the length it wraps at | `int f(trk, len)`: the length (chained); `trk` 0-7 the audio tracks, 8-15 the MIDI tracks |
 | `ev_pattern_wrap` | the master pattern wrapped and goes on (a queued pattern is now playing) | `void f(bank, pattern, old_bank, old_pattern)` |
 
-`tests/fixtures/octatrack-seq` is a probe of all six; `"resources": {"core": "0.12"}`.
+`ev_rec_length` (core-ot 0.13) runs in the frame interrupt, in the recorder: every way a take's
+length is worked out (RLEN 1-64, MAX, free and sequencer-armed takes) ends with `int f(trk, len)`,
+the length in samples, which the handler returns (chained). The Part's RLEN byte says which way it
+came. A mod that gives RLEN a new value (a PLEN, say) sets the length here.
+
+`tests/fixtures/octatrack-seq` is a probe of all seven; `"resources": {"core": "0.13"}`.
 
 #### Held edits, copies and MIDI notes on the Octatrack (core-ot 0.11)
 

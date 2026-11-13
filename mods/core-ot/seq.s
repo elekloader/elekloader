@@ -145,3 +145,34 @@ core_pattern_wrap:
         lea     24(%sp), %sp
 9:      lea     0x80006634, %a1
         jmp     0x400a44fa
+
+| ---- the recorder's length (core-ot 0.13) -----------------------------------------------------------------
+| 0x40006e18 (was: move.l 128(sp),d3 ; beq.s 0x40006e24), in the recorder routine 0x400068e4 (the frame
+| interrupt's, through a3 at 0x4000d322): every way the length of a take is worked out (RLEN 1-64, MAX,
+| the free and the sequencer-armed takes) joins here with the length in samples in d4; 136(sp) is the
+| track (the routine's first argument). octabam's RLEN PLEN and RECORDER LOOP FIX (MIT) set it on these
+| paths. Handlers: int f(unsigned trk, int len) -> the length (chained).
+        .globl  core_rec_length
+core_rec_length:
+        tst.l   ev_rec_length
+        beq.s   9f
+        lea     -16(%sp), %sp
+        movem.l %d0-%d1/%a0-%a1, (%sp)
+        move.l  %a2, -(%sp)
+        lea     ev_rec_length, %a2
+1:      move.l  (%a2)+, %d1
+        beq.s   2f
+        move.l  %d4, -(%sp)             | the length so far
+        move.l  20+136+4(%sp), -(%sp)   | the track (20 saved, 4 pushed)
+        movea.l %d1, %a0
+        jsr     (%a0)
+        addq.l  #8, %sp
+        move.l  %d0, %d4
+        bra.s   1b
+2:      move.l  (%sp)+, %a2
+        movem.l (%sp), %d0-%d1/%a0-%a1
+        lea     16(%sp), %sp
+9:      move.l  128(%sp), %d3
+        beq.s   8f
+        jmp     0x40006e1e
+8:      jmp     0x40006e24

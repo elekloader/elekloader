@@ -11,8 +11,9 @@
   {"event": "ev_seq_reset", "fn": "sq_seq_reset", "order": 50},
   {"event": "ev_midi_panic", "fn": "sq_midi_panic", "order": 50},
   {"event": "ev_track_length", "fn": "sq_track_length", "order": 50},
-  {"event": "ev_pattern_wrap", "fn": "sq_pattern_wrap", "order": 50}
+  {"event": "ev_pattern_wrap", "fn": "sq_pattern_wrap", "order": 50},
+  {"event": "ev_rec_length", "fn": "sq_rec_length", "order": 50}
  ],
  "requires": ["core"],
- "resources": {"core": "0.12"}
+ "resources": {"core": "0.13"}
 }

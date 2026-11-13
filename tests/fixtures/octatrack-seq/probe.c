@@ -7,7 +7,7 @@
 #include "octatrack/core.h"
 
 enum { MAGIC, APPLY_N, APPLY_BANK, APPLY_PART, CHAIN_N, CHAIN_PAT, CHAIN_LEN, RESET_N, PANIC_N,
-       LEN_N, LEN_TRK, LEN_LEN, LEN_FORCE, WRAP_N, WRAP_NOW, WRAP_OLD, WORDS };
+       LEN_N, LEN_TRK, LEN_LEN, LEN_FORCE, WRAP_N, WRAP_NOW, WRAP_OLD, REC_N, REC_TRK, REC_LEN, WORDS };
 volatile uint32_t sqp[WORDS] = { 0x53515031 };  /* 'SQP1' */
 
 void sq_part_apply(unsigned bank, unsigned part)
@@ -41,4 +41,12 @@ void sq_pattern_wrap(unsigned bank, unsigned pattern, unsigned old_bank, unsigne
     ++sqp[WRAP_N];
     sqp[WRAP_NOW] = bank << 8 | pattern;
     sqp[WRAP_OLD] = old_bank << 8 | old_pattern;
+}
+
+int sq_rec_length(unsigned trk, int len)
+{
+    ++sqp[REC_N];
+    sqp[REC_TRK] = trk;
+    sqp[REC_LEN] = (uint32_t)len;
+    return len;
 }
