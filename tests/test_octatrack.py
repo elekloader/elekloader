@@ -1032,6 +1032,8 @@ SEQ_SITES = {
     'core_seq_reset': (0x400a10c8, '4fefffdc48d77c3c', 'ev_seq_reset'),
     'core_midi_panic': (0x4009f288, '4fefffec48d70c1c', 'ev_midi_panic'),
     'core_ui_tick': (0x40056c28, '2039460d1e6c', 'ev_ui_tick'),               # 0.15: move.l 0x460d1e6c,d0
+    'core_part_apply_heavy': (0x40009094, '4fefff9848d77cfc', 'ev_part_apply'),   # 0.21
+    'core_tempo_open': (0x40059ef8, '487aca3648780005', 'ev_tempo_open'),     # 0.21: pea (pc) ; pea 5
 }
 
 
@@ -1151,6 +1153,7 @@ def test_the_seq_probe_links():
 HELD_SITES = {
     'core_edit_held': (0x400508e4, '4fefffb048d77cfc', 'ev_edit_held'),
     'core_scene_knob': (0x40053498, '4fefffdc48d71cfc', 'ev_scene_knob'),    # 0.20
+    'core_arp_knob': (0x4007a2ec, '4fefffdc48d71cfc', 'ev_arp_knob'),        # 0.21
 }
 NOTE_SITES = {0x4009fbb2: 1, 0x4009fcfa: 0}          # mvs.b 0x400d807c,dN after midi_send
 COPY_JSR = (0x400267e8, 0x40026884, 0x40026ece, 0x40026f5e, 0x40027764, 0x40027834, 0x4002924c, 0x40029280,
@@ -1174,6 +1177,8 @@ def test_the_core_held_sites():
     assert [DEV.main_load + k for k in recs] == [0x400beddc + 22 * n for n in range(6)]
     recs = [k for k in range(len(img) - 3) if img[k:k + 4] == struct.pack('>I', 0x40053498)]
     assert [DEV.main_load + k for k in recs] == [0x400bae86 + 22 * n for n in range(7)]
+    recs = [k for k in range(len(img) - 3) if img[k:k + 4] == struct.pack('>I', 0x4007a2ec)]
+    assert [DEV.main_load + k for k in recs] == [0x400cfbca + 22 * n for n in range(7)]
     o = 0x40053a5c - DEV.main_load                           # the scene knob returns nothing (this exit, or a tail jmp)
     assert img[o:o + 10].hex() == '4cd71cfc' '4fef0024' '4e75'
     for a in COPY_JSR:
@@ -1210,7 +1215,8 @@ def test_the_core_held_sites():
 def test_the_held_probe_links():
     """tests/fixtures/octatrack-held with core-ot 0.11: its handlers are the entries of the three tables."""
     probe_tables('octatrack-held', (('ev_edit_held', 'hd_edit_held'), ('ev_copy', 'hd_copy'),
-                                    ('ev_midi_note_sent', 'hd_note_sent'), ('ev_scene_knob', 'hd_scene_knob')))
+                                    ('ev_midi_note_sent', 'hd_note_sent'), ('ev_scene_knob', 'hd_scene_knob'),
+                                    ('ev_tempo_open', 'hd_tempo_open'), ('ev_arp_knob', 'hd_arp_knob')))
 
 
 # core-ot 0.12 (seq.s): the sequencer tick's per-track advance (the length a track wraps at) and the
@@ -1701,7 +1707,7 @@ def test_the_example_subscribes_to_the_bus():
                       'ev_track_length': 0, 'ev_pattern_wrap': 0, 'ev_rec_length': 0,
                       'ev_track_pattern': 0, 'ev_ui_tick': 0, 'ev_card_cmd': 0, 'ev_task_switch': 0,
                       'ev_track_tab_draw': 0, 'ev_card_done': 0, 'ev_settings_load': 0,
-                      'ev_lfo_step': 0, 'ev_scene_knob': 0}, counts
+                      'ev_lfo_step': 0, 'ev_scene_knob': 0, 'ev_tempo_open': 0, 'ev_arp_knob': 0}, counts
     at = ln.tables['ev_draw'][0]
     o = ln.layout['run_load'] + (at - DEV.ddr[0]) - DEV.main_load
     assert struct.unpack('>II', ln.image[o:o + 8]) == (ln.map['hello_draw'], 0)

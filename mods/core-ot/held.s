@@ -142,3 +142,32 @@ core_scene_knob:
 9:      lea     -36(%sp), %sp
         movem.l %d2-%d7/%a2-%a4, (%sp)
         jmp     0x400534a0
+
+| ---- ARP SETUP's knobs (core-ot 0.21) --------------------------------------------------------------------
+| 0x4007a2ec (was: lea -36(sp),sp ; movem.l d2-d7/a2-a4,(sp)), ARP SETUP's encoder handler (its seven
+| records at 0x400cfbca + 22 n): 4(sp) the encoder, 8(sp) the turn; it returns nothing. octabam's SCALES and
+| MIDI SCALES (MIT) take its encoder F. Handlers: int f(unsigned enc, int delta), as ev_edit_held.
+        .globl  core_arp_knob
+core_arp_knob:
+        tst.l   ev_arp_knob
+        beq.s   9f
+        lea     -20(%sp), %sp
+        movem.l %d0-%d1/%a0-%a2, (%sp)
+        lea     ev_arp_knob, %a2
+1:      move.l  (%a2)+, %d1
+        beq.s   2f
+        move.l  28(%sp), -(%sp)
+        move.l  28(%sp), -(%sp)
+        movea.l %d1, %a0
+        jsr     (%a0)
+        addq.l  #8, %sp
+        tst.l   %d0
+        beq.s   1b
+        movem.l (%sp), %d0-%d1/%a0-%a2
+        lea     20(%sp), %sp
+        rts
+2:      movem.l (%sp), %d0-%d1/%a0-%a2
+        lea     20(%sp), %sp
+9:      lea     -36(%sp), %sp
+        movem.l %d2-%d7/%a2-%a4, (%sp)
+        jmp     0x4007a2f4

@@ -282,7 +282,7 @@ changes nothing else the unit does.
     too; `ev_voice_reset` in tasks and the frame interrupt, with the
     interrupts not yet masked; `ev_boot_early` before the OS. None but the
     reset is on the frame interrupt's path.
-- **0.9 to 0.20: events from the map** (`mute.s`, `seq.s`, `held.s`, `screen.s`; each
+- **0.9 to 0.21: events from the map** (`mute.s`, `seq.s`, `held.s`, `screen.s`; each
   version's section in docs/ADAPTING.md, "Track mutes on the Octatrack" on).
   0.9 `ev_mute` at all 30 Part copies of a mute word; 0.10 `ev_part_apply`,
   `ev_chain_add`, `ev_seq_reset`, `ev_midi_panic`; 0.11 `ev_edit_held`,
@@ -291,7 +291,7 @@ changes nothing else the unit does.
   `ev_track_pattern`; 0.15 `ev_ui_tick`;
   0.16 `ev_card_cmd`, `ev_task_switch`; 0.17 `ev_track_tab_draw`;
   0.18 `ev_card_done`, `ev_settings_load`; 0.19 `ev_lfo_step`; 0.20
-  `ev_scene_knob`.
+  `ev_scene_knob`; 0.21 `ev_arp_knob`, `ev_tempo_open`, the heavy Part apply.
 - **The draw gate** (`gate.s`). The OS composes the screen twice before the
   boot site, so before `.run` is in the reserve. The draw site therefore
   calls `core_draw_gate`, which `mod.json` places (`fixed`) in the last 24

@@ -421,3 +421,43 @@ core_lfo_\addr:
 
         LFOSTEP 0x40003c2e
         LFOSTEP 0x4000cfc8
+
+| ---- the heavy Part apply (core-ot 0.21) ----------------------------------------------------------------
+| 0x40009094 (was: lea -104(sp),sp ; movem.l d2-d7/a2-a6,(sp)), the heavy Part apply (bank, part): the
+| power-up and the bank loads (0x40025830, 0x40025b30), the Part change (0x4000983a, 0x40029af8). The
+| light one (0x40009e00) is ev_part_apply's first site; this is its second, with the same arguments.
+        .globl  core_part_apply_heavy
+core_part_apply_heavy:
+        OBSERVE ev_part_apply, 2
+        lea     -104(%sp), %sp
+        movem.l %d2-%d7/%a2-%a6, (%sp)
+        jmp     0x4000909c
+
+| ---- the TEMPO key's window (core-ot 0.21) --------------------------------------------------------------
+| 0x40059ef8 (was: pea 0x40056930 (pc) ; pea 5), in the TEMPO key's handler 0x40059ef0 (two views' key
+| tables, 0x400c00be, 0x400c06a2), past its test that no window is open: it is about to open the TEMPO
+| window. octabam's TUNER, SCOPE and TEMPO BUS (MIT) open their own windows here (v1.0's TUNER patches
+| the test itself, 0x40059ef0, so the site is the next instruction). Handlers: int f(void); the first
+| nonzero has taken the key and the stock window does not open (the handler returns nothing). In the
+| sys task.
+        .globl  core_tempo_open
+core_tempo_open:
+        tst.l   ev_tempo_open
+        beq.s   9f
+        lea     -20(%sp), %sp
+        movem.l %d0-%d1/%a0-%a2, (%sp)
+        lea     ev_tempo_open, %a2
+1:      move.l  (%a2)+, %d1
+        beq.s   2f
+        movea.l %d1, %a0
+        jsr     (%a0)
+        tst.l   %d0
+        beq.s   1b
+        movem.l (%sp), %d0-%d1/%a0-%a2  | taken
+        lea     20(%sp), %sp
+        rts
+2:      movem.l (%sp), %d0-%d1/%a0-%a2
+        lea     20(%sp), %sp
+9:      pea     0x40056930
+        pea     5
+        jmp     0x40059f00

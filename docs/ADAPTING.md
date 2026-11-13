@@ -754,7 +754,7 @@ Observers, each before the stock routine runs; handlers return nothing.
 
 | event | when | handler | runs in |
 |---|---|---|---|
-| `ev_part_apply` | a pattern's Part is applied to the engine: a pattern change, the transport's start, a load | `void f(bank, part)` | the sys task and the frame interrupt: keep it short |
+| `ev_part_apply` | a pattern's Part is applied to the engine: a pattern change, the transport's start, a load, the power-up and a Part change (the heavy apply, 0.21) | `void f(bank, part)` | the sys task and the frame interrupt: keep it short |
 | `ev_chain_add` | [PTN] adds a pattern to the chain; stock may still leave it out (full at 16, or already in it) | `void f(pattern)` | the sys task |
 | `ev_seq_reset` | the sequencer's stop and reset: STOP while stopped, and every menu that stops it first | `void f(void)` | the caller's task |
 | `ev_midi_panic` | the stop and reset is about to send CC 123 on each channel the MIDI tracks use | `void f(void)` | the caller's task |
@@ -807,10 +807,12 @@ The places octabam's EVENTS module holds for PLOCKS P2 and MIDI FOLLOW (MIT).
 |---|---|---|---|
 | `ev_edit_held` | an encoder turned while a trig is held (the held-step editor) | `int f(enc, delta)`: nonzero = taken; the first taker wins and stock's editor does not run | the sys task |
 | `ev_scene_knob` (0.20) | an encoder turned while a scene is held (the scene-lock knob handler) | `int f(enc, delta)`: as `ev_edit_held` | the sys task |
+| `ev_arp_knob` (0.21) | an encoder turned on ARP SETUP | `int f(enc, delta)`: as `ev_edit_held` | the sys task |
+| `ev_tempo_open` (0.21) | the TEMPO key is about to open the TEMPO window | `int f(void)`: nonzero = taken, the window does not open (open your own) | the sys task |
 | `ev_copy` | before one of the pattern data's copies (the clipboard, the undo buffer, the bank: 22 memcpy places, not every copy) | `void f(dst, src, len)` | the sys task |
 | `ev_midi_note_sent` | a MIDI track's note has gone out | `void f(trk, note, vel, pool)`; pool 1 is the arpeggiator's | the sequencer's task |
 
-`tests/fixtures/octatrack-held` is a probe of all four; `"resources": {"core": "0.20"}`.
+`tests/fixtures/octatrack-held` is a probe of all six; `"resources": {"core": "0.21"}`.
 
 ### The DSP bus on the Octatrack (dspbus 0.1)
 

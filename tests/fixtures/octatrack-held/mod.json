@@ -9,8 +9,10 @@
   {"event": "ev_edit_held", "fn": "hd_edit_held", "order": 50},
   {"event": "ev_copy", "fn": "hd_copy", "order": 50},
   {"event": "ev_midi_note_sent", "fn": "hd_note_sent", "order": 50},
-  {"event": "ev_scene_knob", "fn": "hd_scene_knob", "order": 50}
+  {"event": "ev_scene_knob", "fn": "hd_scene_knob", "order": 50},
+  {"event": "ev_tempo_open", "fn": "hd_tempo_open", "order": 50},
+  {"event": "ev_arp_knob", "fn": "hd_arp_knob", "order": 50}
  ],
  "requires": ["core"],
- "resources": {"core": "0.20"}
+ "resources": {"core": "0.21"}
 }

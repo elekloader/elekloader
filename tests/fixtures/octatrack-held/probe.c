@@ -7,7 +7,8 @@
 #include "octatrack/core.h"
 
 enum { MAGIC, HELD_N, HELD_ENC, HELD_DELTA, TAKE, TAKEN, COPY_N, COPY_DST, COPY_SRC, COPY_LEN,
-       NOTE_N, NOTE_TRK, NOTE_NOTE, NOTE_VEL, NOTE_POOL, SCN_N, SCN_ENC, SCN_TAKE, SCN_TAKEN, WORDS };
+       NOTE_N, NOTE_TRK, NOTE_NOTE, NOTE_VEL, NOTE_POOL, SCN_N, SCN_ENC, SCN_TAKE, SCN_TAKEN,
+       TEMPO_N, TEMPO_TAKE, ARP_N, ARP_ENC, WORDS };
 volatile uint32_t hdp[WORDS] = { 0x48445031 };  /* 'HDP1' */
 
 int hd_edit_held(unsigned enc, int delta)
@@ -51,3 +52,6 @@ int hd_scene_knob(unsigned enc, int delta)
     }
     return 0;
 }
+
+int hd_tempo_open(void) { ++hdp[TEMPO_N]; return hdp[TEMPO_TAKE] != 0; }
+int hd_arp_knob(unsigned enc, int delta) { (void)delta; ++hdp[ARP_N]; hdp[ARP_ENC] = enc; return 0; }
