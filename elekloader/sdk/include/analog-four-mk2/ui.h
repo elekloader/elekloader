@@ -13,7 +13,8 @@
  * stock stores them (0 off). Compared at each tick, so a mode set and
  * cleared within one tick (1/CORE_TICK_HZ) is not heard. GRID_REC and
  * STEP_REC are stored while armed; LIVE_REC takes effect only while playing. */
-#define MODE_KEYBOARD 0                 /* the keyboard mode (UI state +0x160) [read] */
+#define MODE_TRIG_HELD 0                /* a trig held in grid record (UI state +0x160); the A4
+                                         * has no keyboard mode: KB keys always play notes */
 #define MODE_GRID_REC 1                 /* RECORD: grid recording (+0x168) */
 #define MODE_LIVE_REC 2                 /* RECORD + PLAY: live recording (+0x169) */
 #define MODE_STEP_REC 3                 /* step recording (+0x16a) */

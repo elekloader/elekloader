@@ -376,18 +376,27 @@ core_level_site:
 1:      rts
 
 | ---- ev_knob_turn, the mixer page: 0x400c543a `jsr 0x4009dc3a` (keep2),
-| its level set (settings, track, value, send); %a2 the view. The caller
-| pops the arguments and does not use %d0.
+| its level set (settings, track, value, send); %a2 the view. Not taken: the
+| set, returning to 0x400c5440 as stock. Taken: past the set and the "Tn
+| LEVEL" popup to 0x400c547a (`lea 0x24(%sp),%sp`), where the caller's stack
+| is the same 9 longs as after the popup's call.
         .globl  core_mixer_site
 core_mixer_site:
-        move.l  16(%sp),-(%sp)
-        move.l  16(%sp),-(%sp)
-        move.l  16(%sp),-(%sp)
-        move.l  16(%sp),-(%sp)
+        lea     -12(%sp),%sp
+        movem.l %d1/%a0-%a1,(%sp)
+        move.l  24(%sp),-(%sp)
+        move.l  24(%sp),-(%sp)
+        move.l  24(%sp),-(%sp)
         move.l  %a2,-(%sp)
         jsr     core_mixer_level
-        lea     20(%sp),%sp
-        rts
+        lea     16(%sp),%sp
+        movem.l (%sp),%d1/%a0-%a1
+        lea     12(%sp),%sp
+        tst.l   %d0
+        bne.s   1f
+        jmp     0x4009dc3a
+1:      addq.l  #4,%sp
+        jmp     0x400c547a
 
 | ---- ev_analog_frame: 0x40103da6 `jsr 0x400fc614` (keep2), the CV builder
 | at the end of the audio interrupt's block, just before the frame (0x80003d6c)
