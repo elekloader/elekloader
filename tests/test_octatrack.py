@@ -341,7 +341,7 @@ def test_the_core_moves_the_arena_past_its_reserve():
         o = int(s['addr'], 16) - DEV.main_load
         old = bytes.fromhex(s['stock'])
         assert img[o:o + len(old)] == old, s['addr']
-        if s['op'] == 'ptr':
+        if s['op'] == 'ptr' and s['target'] != 'core_copy':      # 0.11's copies are not the arena
             v = int(s['stock'], 16)
             t, add = named[v]
             assert (s['target'], s.get('addend', 0)) == (t, add), s['addr']
@@ -362,7 +362,7 @@ def test_the_core_moves_the_arena_past_its_reserve():
     mutes = {'core_mute_0x%08x' % m[0] for m in _mute_sites()}
     entries = {t for tab in ENTRY_TABLES for t in tab}
     assert set(calls) == (set(BUS_SITES) | set(STORE_SITES) | set(VOICE_SITES) | set(EDIT_SITES) | mutes
-                          | entries), calls
+                          | entries | {'core_copy'} | {'core_note_0x%08x' % a for a in NOTE_SITES}), calls
 
 
 def reserve_docs(img, bss, fixed=False):
@@ -557,7 +557,8 @@ def test_the_core_bus_sites():
                                               | {v[2] for v in STORE_SITES.values() if v[2]}
                                               | set(STORE_TABLES) | {v[2] for v in VOICE_SITES.values()}
                                               | {v[2] for v in EDIT_SITES.values()} | {'ev_mute'}
-                                              | {v[2] for tab in ENTRY_TABLES for v in tab.values()})
+                                              | {v[2] for tab in ENTRY_TABLES for v in tab.values()}
+                                              | {'ev_copy', 'ev_midi_note_sent'})
     assert j['collections']['ev_idle'] == 4
     for sym, target in JMP_BACK.items():       # a jmp stub goes back to the instruction after its site
         addr, stock_hex, _ev = BUS_SITES[target]
@@ -1047,6 +1048,19 @@ def _branch_target(img, o):
     return None
 
 
+def _branch_into(img, o, inside):
+    """The site a real branch at offset o lands inside, or None. A raw word scan also reads operand
+    words; a hit counts only if o starts an instruction (elemod.insn_check's sweeps land on it)."""
+    tgt = _branch_target(img, o)
+    if tgt not in inside:
+        return None
+    pc = DEV.main_load + o
+    isa = DEV.decoder()
+    n = isa.decode(isa.reader(img, DEV.main_load)(pc), pc).length
+    ok, _note = elemod.insn_check(img, pc, n, DEV)
+    return inside[tgt] if ok else None
+
+
 def _taken_before_seq():
     with open(os.path.join(ROOT, 'mods', 'intercepts-ot', 'mod.json')) as fh:
         icpt = [(int(x['addr'], 16), len(x['stock']) // 2) for x in json.load(fh)['sites']]
@@ -1088,8 +1102,7 @@ def check_entry_sites(table, source):
         for t in range(addr + 1, addr + n):
             inside[t] = target
     for o in range(0, len(img) - 6, 2):
-        tgt = _branch_target(img, o)
-        assert tgt not in inside, (hex(DEV.main_load + o), hex(tgt), inside.get(tgt))
+        assert _branch_into(img, o, inside) is None, hex(DEV.main_load + o)
 
 
 def test_the_core_seq_sites():
@@ -1122,7 +1135,69 @@ def test_the_seq_probe_links():
                                    ('ev_seq_reset', 'sq_seq_reset'), ('ev_midi_panic', 'sq_midi_panic')))
 
 
-ENTRY_TABLES = [SEQ_SITES]
+# core-ot 0.11 (held.s): the held-step editor's entry, the pattern data's copies (octabam EVENTS' 22
+# places: 11 `jsr memcpy`, 11 `lea memcpy,aN` whose operand becomes core_copy) and the MIDI tracks' notes.
+HELD_SITES = {
+    'core_edit_held': (0x400508e4, '4fefffb048d77cfc', 'ev_edit_held'),
+}
+NOTE_SITES = {0x4009fbb2: 1, 0x4009fcfa: 0}          # mvs.b 0x400d807c,dN after midi_send
+COPY_JSR = (0x400267e8, 0x40026884, 0x40026ece, 0x40026f5e, 0x40027764, 0x40027834, 0x4002924c, 0x40029280,
+            0x40029316, 0x40029352, 0x40029980)
+COPY_LEA = {0x40029550: 4, 0x4002a426: 4, 0x40029652: 4, 0x4002978e: 4, 0x4002b370: 2, 0x4002b42e: 2,
+            0x4002b4b2: 4, 0x4002b692: 4, 0x4002b9da: 2, 0x4003de14: 3, 0x4003e036: 3}
+MEMCPY = 0x40020898
+
+
+def test_the_core_held_sites():
+    """core-ot 0.11's sites: the held editor's entry (as the 0.10 entries; its six encoder records point
+    at it); the copies: each `jsr memcpy` and each `lea memcpy,aN` (whose register the routine calls)
+    is stock and becomes core_copy; the two note sites are `mvs.b 0x400d807c,dN` right after
+    `jsr midi_send`, whole, with no branch inside, clear of every other site."""
+    check_entry_sites(HELD_SITES, 'held.s')
+    with open(os.path.join(ROOT, 'mods', 'core-ot', 'mod.json')) as fh:
+        j = json.load(fh)
+    st, img = stock()
+    by = {int(s['addr'], 16): s for s in j['sites']}
+    recs = [k for k in range(len(img) - 3) if img[k:k + 4] == struct.pack('>I', 0x400508e4)]
+    assert [DEV.main_load + k for k in recs] == [0x400beddc + 22 * n for n in range(6)]
+    for a in COPY_JSR:
+        o = a - DEV.main_load
+        assert img[o:o + 6].hex() == '4eb940020898', hex(a)
+        assert (by[a]['op'], by[a]['stock'], by[a]['target']) == ('jsr', '4eb940020898', 'core_copy')
+    for a, reg in COPY_LEA.items():
+        o = a - DEV.main_load
+        assert img[o:o + 6].hex() == '%04x40020898' % (0x41f9 | reg << 9), hex(a)
+        s = by[a + 2]
+        assert (s['op'], s['stock'], s['target']) == ('ptr', '40020898', 'core_copy'), hex(a)
+        call = '%04x' % (0x4e90 | reg)               # jsr (aN) follows in the routine
+        assert img[o + 6:o + 400].hex().find(call) >= 0, hex(a)
+    assert j['collections']['ev_copy'] == 4 and j['collections']['ev_midi_note_sent'] == 4
+    taken = _taken_before_seq() + [(a, len(h) // 2) for t2 in ENTRY_TABLES for a, h, _e in t2.values()]
+    inside = {}
+    for a, reg in NOTE_SITES.items():
+        o = a - DEV.main_load
+        stock_hex = '%04x400d807c' % (0x7139 | reg << 9)
+        assert img[o:o + 6].hex() == stock_hex and img[o - 6:o].hex() == '4eb940010bc8', hex(a)
+        assert (by[a]['op'], by[a]['stock'], by[a]['target']) == ('jmp', stock_hex, 'core_note_0x%08x' % a)
+        ok, note = elemod.insn_check(img, a, 6, DEV)
+        assert ok, (hex(a), note)
+        for t in range(a + 1, a + 6):
+            inside[t] = a
+    for a in list(COPY_JSR) + [x + 2 for x in COPY_LEA] + list(NOTE_SITES):
+        n = 4 if a - 2 in COPY_LEA else 6
+        for b, m in taken:
+            assert not (b < a + n and a < b + m), (hex(a), hex(b))
+    for o in range(0, len(img) - 6, 2):
+        assert _branch_into(img, o, inside) is None, hex(DEV.main_load + o)
+
+
+def test_the_held_probe_links():
+    """tests/fixtures/octatrack-held with core-ot 0.11: its handlers are the entries of the three tables."""
+    probe_tables('octatrack-held', (('ev_edit_held', 'hd_edit_held'), ('ev_copy', 'hd_copy'),
+                                    ('ev_midi_note_sent', 'hd_note_sent')))
+
+
+ENTRY_TABLES = [SEQ_SITES, HELD_SITES]
 
 
 def test_the_mute_probe_links():
@@ -1502,7 +1577,7 @@ def test_the_example_subscribes_to_the_bus():
                       'ev_part_select': 0, 'ev_part_init': 0, 'ev_project_init': 0, 'ev_voice_reset': 0,
                       'ev_boot_early': 0, 'ev_track_icon': 0, 'ev_track_icon_draw': 0, 'ev_setup_dial': 0,
                       'ev_mute': 0, 'ev_part_apply': 0, 'ev_chain_add': 0, 'ev_seq_reset': 0,
-                      'ev_midi_panic': 0}, counts
+                      'ev_midi_panic': 0, 'ev_edit_held': 0, 'ev_copy': 0, 'ev_midi_note_sent': 0}, counts
     at = ln.tables['ev_draw'][0]
     o = ln.layout['run_load'] + (at - DEV.ddr[0]) - DEV.main_load
     assert struct.unpack('>II', ln.image[o:o + 8]) == (ln.map['hello_draw'], 0)

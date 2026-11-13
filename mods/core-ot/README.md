@@ -291,6 +291,10 @@ changes nothing else the unit does.
   interrupt), `ev_chain_add(pattern)` (0x4009c634), `ev_seq_reset()`
   (0x400a10c8) and `ev_midi_panic()` (0x4009f288) (docs/ADAPTING.md,
   "The sequencer's moments on the Octatrack").
+- **0.11: the held editor, the copies, the MIDI notes** (`held.s`).
+  `ev_edit_held` (0x400508e4, first taker wins), `ev_copy` (octabam EVENTS'
+  22 memcpy places) and `ev_midi_note_sent` (0x4009fbb2, 0x4009fcfa)
+  (docs/ADAPTING.md, "Held edits, copies and MIDI notes on the Octatrack").
 - **The draw gate** (`gate.s`). The OS composes the screen twice before the
   boot site, so before `.run` is in the reserve. The draw site therefore
   calls `core_draw_gate`, which `mod.json` places (`fixed`) in the last 24
@@ -358,15 +362,7 @@ script:
 - **Core alone matches stock.** The firmware's key, encoder, CC and
   note-on handlers run as often as on stock, and the last frame the
   compositor sent to the LCD is the same, pixel for pixel.
-- **A test mod subscribed to every event** saw:
-  - 428 ticks and 440 frames composed;
-  - the 4 key events (the last, UP released: code 0x33, 0);
-  - both encoder turns (the last, encoder 3, -2);
-  - the MIDI messages that reached the firmware's handlers;
-  - 18,741 audio frames (2,756 a second).
-
-  No draw ran inside a tick. Its square was in the frame sent to the LCD,
-  and nothing else changed.
+- **A test mod subscribed to every event** saw each event the session made.
 - **With every handler taking its event**, the firmware's key, encoder, CC
   and note handlers never ran.
 

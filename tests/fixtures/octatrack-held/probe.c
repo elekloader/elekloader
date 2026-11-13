@@ -1,0 +1,40 @@
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ *
+ * A probe of core-ot 0.11's events: counts each and logs its last arguments into `hdp` (read back by a
+ * test harness from the emulator's memory). With hdp[TAKE] poked nonzero it takes the held editor's turns.
+ */
+#include <stdint.h>
+#include "octatrack/core.h"
+
+enum { MAGIC, HELD_N, HELD_ENC, HELD_DELTA, TAKE, TAKEN, COPY_N, COPY_DST, COPY_SRC, COPY_LEN,
+       NOTE_N, NOTE_TRK, NOTE_NOTE, NOTE_VEL, NOTE_POOL, WORDS };
+volatile uint32_t hdp[WORDS] = { 0x48445031 };  /* 'HDP1' */
+
+int hd_edit_held(unsigned enc, int delta)
+{
+    ++hdp[HELD_N];
+    hdp[HELD_ENC] = enc;
+    hdp[HELD_DELTA] = (uint32_t)delta;
+    if (hdp[TAKE]) {
+        ++hdp[TAKEN];
+        return 1;
+    }
+    return 0;
+}
+
+void hd_copy(void *dst, const void *src, unsigned len)
+{
+    ++hdp[COPY_N];
+    hdp[COPY_DST] = (uint32_t)dst;
+    hdp[COPY_SRC] = (uint32_t)src;
+    hdp[COPY_LEN] = len;
+}
+
+void hd_note_sent(unsigned trk, unsigned note, unsigned vel, unsigned pool)
+{
+    ++hdp[NOTE_N];
+    hdp[NOTE_TRK] = trk;
+    hdp[NOTE_NOTE] = note;
+    hdp[NOTE_VEL] = vel;
+    hdp[NOTE_POOL] = pool;
+}

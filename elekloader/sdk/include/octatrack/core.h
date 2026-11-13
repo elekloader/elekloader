@@ -430,4 +430,10 @@ enum { OT_MUTE_AUDIO = 0, OT_MUTE_MIDI = 1 };
 #define OT_CHAIN_LEN        OT_L(0x8000654e)
 #define OT_CHAIN(i)         OT_L(0x80006552 + 4 * (i))  /* 0-15 */
 
+/* ---- held edits, copies, MIDI notes (0.11) ---------------------------------------------------------
+ *   int ev_edit_held(enc, delta)            a trig held, an encoder turned: nonzero = you took it (the
+ *                                           first taker wins; stock's editor does not run)
+ *   void ev_copy(dst, src, len)             before one of the pattern data's copies (clipboard, undo, bank)
+ *   void ev_midi_note_sent(trk, note, vel, pool)   a MIDI track's note has gone out; pool 1 = the arp's */
+
 #endif
