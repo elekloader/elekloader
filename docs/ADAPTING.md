@@ -917,6 +917,13 @@ PROJECT > SYSTEM > PERSONALIZE keeps three parallel arrays, so a row is one entr
 with the same order; core puts stock's 16 first. On an MKI, whose list stops before LED BRIGHTNESS, a mod's
 rows bring that row into view too. `tests/fixtures/octatrack-pers` adds one.
 
+### The time-stretch helper on the Octatrack (core-ot 0.33)
+
+The time-stretch helper is a task of its own; each pass it works out the stretch of every track whose
+machine stretches. `ev_tstretch` runs before each such track: `int f(unsigned trk)` returns nonzero to skip
+it this pass (the first taker wins), for a mod that plays the track itself or saves the work.
+`tests/fixtures/octatrack-tstretch` is a probe.
+
 ### The DSP bus on the Octatrack (dspbus 0.1)
 
 `mods/dspbus-ot` is a second, optional bus, for code that runs on DSP core

@@ -282,20 +282,9 @@ changes nothing else the unit does.
     too; `ev_voice_reset` in tasks and the frame interrupt, with the
     interrupts not yet masked; `ev_boot_early` before the OS. None but the
     reset is on the frame interrupt's path.
-- **0.9 to 0.32: events from the map** (`mute.s` to `pers.s`;
-  ADAPTING.md, "Track mutes on the Octatrack" on).
-  0.9 `ev_mute` at all 30 Part copies of a mute word; 0.10 `ev_part_apply`,
-  `ev_chain_add`, `ev_seq_reset`, `ev_midi_panic`; 0.11 `ev_edit_held`,
-  `ev_copy`, `ev_midi_note_sent`; 0.12 `ev_track_length`, `ev_pattern_wrap`
-  (sequencer interrupt); 0.13 `ev_rec_length`; 0.14
-  `ev_track_pattern`; 0.15 `ev_ui_tick`;
-  0.16 `ev_card_cmd`, `ev_task_switch`; 0.17 `ev_track_tab_draw`;
-  0.18 `ev_card_done`, `ev_settings_load`; 0.19 `ev_lfo_step`; 0.20
-  `ev_scene_knob`; 0.21 `ev_arp_knob`, `ev_tempo_open`, heavy Part apply; 0.22
-  `ev_setup_dial` in NOTE SETUP and ARP SETUP; 0.23 `ev_knob_draw`, 0.24 `ev_leds`, 0.25
-  `ev_trig_box_draw`; 0.26 `ev_setup_dial` on the CTRL pages; 0.27
-  `ev_bank_copied`; 0.28 `ot_lfo_waves`; 0.29 `ev_popup`, 0.30
-  `ev_play_increment`; 0.31 PATTERN SETTINGS, 0.32 PERSONALIZE rows.
+- **0.9 to 0.33: events and tables from the map** (`mute.s` to `tstretch.s`).
+  Each has its section in docs/ADAPTING.md, from "Track mutes on the
+  Octatrack" on.
 - **The draw gate** (`gate.s`). The OS composes the screen twice before the
   boot site, so before `.run` is in the reserve. The draw site therefore
   calls `core_draw_gate`, which `mod.json` places (`fixed`) in the last 24

@@ -572,6 +572,8 @@ struct ot_menu_row {
     const char *(*text)(void);
     uint32_t r16, r20;
 };
+/* int ev_tstretch(unsigned trk) (0.33): the time-stretch helper task is about to work out a track's stretch
+ * (each pass, for each track whose machine stretches): nonzero = skip it this pass (the first taker wins). */
 static inline int ot_midi_mode(void) { return ((int (*)(void))0x40033970u)(); }
 static inline int ot_pset_track(void)
 {

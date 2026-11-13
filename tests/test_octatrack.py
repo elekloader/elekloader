@@ -367,7 +367,7 @@ def test_the_core_moves_the_arena_past_its_reserve():
                           | {v[1] for v in TICK_SITES.values()} | {v[1] for v in PATTERN_SITES.values()}
                           | set(DIAL2_SITES) | {'core_trig_box'}
                           | {v[1] for v in LFO_CODE.values()} | {'core_popup'}
-                          | {v[1] for v in RATE_SITES.values()} | {'core_pers_count'}), calls
+                          | {v[1] for v in RATE_SITES.values()} | {'core_pers_count', 'core_tstretch'}), calls
 
 
 def reserve_docs(img, bss, fixed=False):
@@ -569,7 +569,7 @@ def test_the_core_bus_sites():
                                                  'ev_lfo_step', 'ev_trig_box_draw', 'ev_bank_copied',
                                                  'ot_lfo_waves', 'ev_popup', 'ev_play_increment',
                                                  'ot_ptn_rows', 'ot_track_rows', 'ot_midi_rows',
-                                                 'ot_pers_label', 'ot_pers_get', 'ot_pers_set'})
+                                                 'ot_pers_label', 'ot_pers_get', 'ot_pers_set', 'ev_tstretch'})
     assert j['collections']['ev_idle'] == 4
     for sym, target in JMP_BACK.items():       # a jmp stub goes back to the instruction after its site
         addr, stock_hex, _ev = BUS_SITES[target]
@@ -1542,6 +1542,43 @@ def test_the_core_personalize_rows():
             assert all(word(ln.image, x) == at for x in ops)
 
 
+# core-ot 0.33 (tstretch.s): ev_tstretch in the time-stretch helper task's track loop.
+TSTRETCH_SITE = (0x40098b2c, '2053b1ef00bc672a')     # movea.l (a3),a0 ; cmpa.l 188(sp),a0 ; beq.s 0x40098b5e
+
+
+def test_the_core_tstretch_site():
+    """core-ot 0.33's site: stock, whole, nothing branching inside, its beq landing where the stub goes,
+    the task's next-track join where a taker goes; the probe links."""
+    import re
+    with open(os.path.join(ROOT, 'mods', 'core-ot', 'mod.json')) as fh:
+        j = json.load(fh)
+    st, img = stock()
+    a, h = TSTRETCH_SITE
+    s = {int(x['addr'], 16): x for x in j['sites']}[a]
+    assert (s['op'], s['stock'], s['target']) == ('jmp', h, 'core_tstretch')
+    o = a - DEV.main_load
+    assert img[o:o + 8].hex() == h
+    ok, note = elemod.insn_check(img, a, 8, DEV)
+    assert ok, note
+    assert _branch_target(img, o + 6) == 0x40098b5e
+    o = 0x40098b26 - DEV.main_load                          # tst.b d0 ; bne.w 0x40098cc8 just before
+    assert img[o:o + 6].hex() == '4a006600019e' and _branch_target(img, o + 2) == 0x40098cc8
+    inside = {k: 'core_tstretch' for k in range(a + 1, a + 8)}
+    for k in range(0, len(img) - 6, 2):
+        assert _branch_into(img, k, inside) is None, hex(DEV.main_load + k)
+    src = open(os.path.join(ROOT, 'mods', 'core-ot', 'tstretch.s')).read()
+    for x in (0x40098b34, 0x40098b5e, 0x40098cc8):
+        assert re.search(r'jmp\s+0x%08x' % x, src), hex(x)
+    from elekloader.sdk import build
+    with tempfile.TemporaryDirectory() as tmp:
+        core = elemod.load_any(build.build(os.path.join(ROOT, 'mods', 'core-ot'), SYX, tmp)[0])
+        probe = elemod.load_any(build.build(os.path.join(HERE, 'fixtures', 'octatrack-tstretch'), SYX, tmp)[0])
+    ln = link.link([core, probe], img)
+    at = ln.tables['ev_tstretch'][0]
+    o = ln.layout['run_load'] + (at - DEV.ddr[0]) - DEV.main_load
+    assert struct.unpack('>II', ln.image[o:o + 8]) == (ln.map['ts_track'], 0)
+
+
 def test_the_core_tick_sites():
     """core-ot 0.12's sites: stock, whole, a bgt right after each compare (it tests what the stub's
     compare leaves), the sequencer's tick an interrupt handler, no branch inside, clear of every
@@ -2018,7 +2055,7 @@ def test_the_example_subscribes_to_the_bus():
                       'ev_knob_draw': 0, 'ev_leds': 0, 'ev_trig_box_draw': 0,
                       'ev_bank_copied': 0, 'ot_lfo_waves': 0, 'ev_popup': 0, 'ev_play_increment': 0,
                       'ot_ptn_rows': 6, 'ot_track_rows': 6, 'ot_midi_rows': 6,
-                      'ot_pers_label': 16, 'ot_pers_get': 16, 'ot_pers_set': 16}, counts
+                      'ot_pers_label': 16, 'ot_pers_get': 16, 'ot_pers_set': 16, 'ev_tstretch': 0}, counts
     at = ln.tables['ev_draw'][0]
     o = ln.layout['run_load'] + (at - DEV.ddr[0]) - DEV.main_load
     assert struct.unpack('>II', ln.image[o:o + 8]) == (ln.map['hello_draw'], 0)
