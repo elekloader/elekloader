@@ -363,7 +363,8 @@ def test_the_core_moves_the_arena_past_its_reserve():
     entries = {t for tab in ENTRY_TABLES for t in tab}
     assert set(calls) == (set(BUS_SITES) | set(STORE_SITES) | set(VOICE_SITES) | set(EDIT_SITES) | mutes
                           | entries | {'core_copy'} | {'core_note_0x%08x' % a for a in NOTE_SITES}
-                          | {v[1] for v in TICK_SITES.values()} | {v[1] for v in PATTERN_SITES.values()}), calls
+                          | {v[1] for v in TICK_SITES.values()} | {v[1] for v in PATTERN_SITES.values()}
+                          | set(DIAL2_SITES)), calls
 
 
 def reserve_docs(img, bss, fixed=False):
@@ -807,6 +808,11 @@ EDIT_SITES = {
     'core_dial_fx1': (0x40037c06, DIAL_BYTES + '2f032f132f09', 'ev_setup_dial', 'DIAL_FX1_NEXT'),
     'core_dial_amp': (0x4003690c, DIAL_BYTES + '2f052f132f09', 'ev_setup_dial', 'DIAL_AMP_NEXT'),
 }
+# core-ot 0.22: the same widget call in SRC / NOTE SETUP (record in a4) and MIDI ARP SETUP (flags 0).
+DIAL2_SITES = {
+    'core_dial_src': (0x40036698, '206c00304a88660641f9400479b4' '2f052f142f09', 0x400366ac, '7183'),   # mvz.b d3,d0
+    'core_dial_arp': (0x4007a1ec, DIAL_BYTES + '2f062f1342a7', 0x4007a200, '7184'),                    # mvz.b d4,d0
+}
 EDIT_JSR = ('core_psel_begin', 'core_boot_early')
 # Routines a 0.8 stub wraps (a return slot each: entered again before they return, the slot is lost).
 EDIT_WRAPPED = ('core_clip_pcopy', 'core_clip_psnap', 'core_clip_pstore', 'core_clip_tcopy', 'core_clip_tstore',
@@ -1161,6 +1167,35 @@ COPY_JSR = (0x400267e8, 0x40026884, 0x40026ece, 0x40026f5e, 0x40027764, 0x400278
 COPY_LEA = {0x40029550: 4, 0x4002a426: 4, 0x40029652: 4, 0x4002978e: 4, 0x4002b370: 2, 0x4002b42e: 2,
             0x4002b4b2: 4, 0x4002b692: 4, 0x4002b9da: 2, 0x4003de14: 3, 0x4003e036: 3}
 MEMCPY = 0x40020898
+
+
+def test_the_core_dial2_sites():
+    """core-ot 0.22: two more SETUP windows' widget calls become ev_setup_dial sites: stock bytes, the
+    stub goes on to the value's push (the register it writes back), no branch inside, clear of every
+    other site. Every call of the stock widget with this shape in the image is now a site."""
+    with open(os.path.join(ROOT, 'mods', 'core-ot', 'mod.json')) as fh:
+        j = json.load(fh)
+    st, img = stock()
+    by = {x['target']: x for x in j['sites']}
+    inside = {}
+    for t, (a, h, nxt, valpush) in DIAL2_SITES.items():
+        n = len(h) // 2
+        o = a - DEV.main_load
+        assert img[o:o + n].hex() == h and a + n == nxt, t
+        assert img[o + n:o + n + 2].hex() == valpush, t
+        assert (int(by[t]['addr'], 16), by[t]['stock'], by[t]['op']) == (a, h, 'jmp')
+        ok, note = elemod.insn_check(img, a, n, DEV)
+        assert ok, (t, note)
+        for k in range(a + 1, a + n):
+            inside[k] = t
+    widget = [DEV.main_load + k - 2 for k in range(len(img) - 4) if img[k:k + 4] == bytes.fromhex('400479b4')
+              and img[k - 2:k] == bytes.fromhex('41f9')]
+    sites = {v[0] for v in EDIT_SITES.values() if v[2] == 'ev_setup_dial'} | {v[0] for v in DIAL2_SITES.values()}
+    covered = {a + 8 for a in sites}                            # the lea is 8 bytes into each site
+    assert set(widget) - covered == {0x4003ce40, 0x4003f5ee}, sorted(map(hex, set(widget) - covered))
+    for o in range(0, len(img) - 6, 2):
+        hit = _branch_into(img, o, inside)
+        assert hit is None or inside.get(DEV.main_load + o) == hit, hex(DEV.main_load + o)   # its own bne
 
 
 def test_the_core_held_sites():
@@ -2148,7 +2183,7 @@ def test_trig_events_ot_header_names_what_the_dispatch_reads():
 
 def test_trig_events_ot_builds_and_links():
     """mods/trig-events-ot with core-ot: no library call, the probe's two handlers land in its table
-    in order, the lot fits what core alone reserves, and linked with core alone the mod changes
+    in order, the lot needs at most one reserve unit more than core alone, and linked with core alone the mod changes
     only its site: the jmp the SDK promises, with the stub behind it."""
     import shutil
     from elekloader.sdk import build
@@ -2169,9 +2204,11 @@ def test_trig_events_ot_builds_and_links():
         alone = link.link([elemod.load_any(core), elemod.load_any(tt)], img)
         only_core = link.link([elemod.load_any(core)], img)
         core_sites = [(s['addr'] - DEV.main_load, s['len']) for s in elemod.load_any(core).sites]
-        # the lot takes no reserve unit of its own: it fits what core alone reserves
-        assert ln.layout['reserve']['units'] == only_core.layout['reserve']['units'], \
+        # the lot is small: at most the one 6 KB unit that core's own end spills into (core-ot 0.22
+        # fills its last unit, so the lot no longer always fits it)
+        assert ln.layout['reserve']['units'] - only_core.layout['reserve']['units'] in (0, 1), \
             (ln.layout['reserve'], only_core.layout['reserve'])
+        assert ln.layout['reserve']['end'] - only_core.layout['reserve']['end'] <= 6144
     assert ln.tables['ev_track_trig'][1] == 2 and alone.tables['ev_track_trig'][1] == 0
     at = ln.tables['ev_track_trig'][0]
     o = ln.layout['run_load'] + (at - DEV.ddr[0]) - DEV.main_load

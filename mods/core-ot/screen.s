@@ -118,6 +118,52 @@ core_dial_fx1:
 core_dial_amp:
         DIAL    1, %d5, DIAL_AMP_NEXT   | OT_P2_AMP
 
+| ---- two more SETUP windows (core-ot 0.22) -------------------------------------------------------------
+| The SRC / NOTE SETUP window (0x40036548, "CHAN": MIDI NOTE SETUP, FUNC + PLAYBACK in MIDI mode, and the
+| audio tracks' setup octabam's VARISPEED reaches; MIDI FOLLOW too, MIT) and MIDI ARP
+| SETUP (0x40079d48) draw their knobs with the same widget call. In each the knob's formatter slot is at
+| \base (widget at 48(\base)), the knob in \knob, its value byte in \val (unsigned), the canvas in
+| \canvas. The SRC window's flags are a1; ARP SETUP's are 0. Same contract as DIAL above; the value
+| goes back into \val's low byte, where the widget call takes it from.
+        .macro  DIAL2 page, base, knob, val, flags, canvas, next
+        movea.l 48(%\base), %a0
+        tst.l   %a0
+        bne.s   1f
+        lea     DIAL_WIDGET, %a0
+1:      .ifc    \flags, zero
+        suba.l  %a1, %a1
+        .endif
+        tst.l   ev_setup_dial
+        beq.s   2f
+        lea     -20(%sp), %sp
+        move.b  #\page, (%sp)
+        move.b  %\knob, 1(%sp)
+        moveq   #0, %d0
+        move.b  %\val, %d0
+        move.l  %d0, 4(%sp)
+        move.l  %a1, 8(%sp)
+        move.l  (%\base), 12(%sp)
+        move.l  %a0, 16(%sp)
+        pea     (%sp)
+        jsr     otd_dial
+        addq.l  #4, %sp
+        move.l  4(%sp), %d0
+        move.b  %d0, %\val
+        movea.l 8(%sp), %a1
+        movea.l 16(%sp), %a0
+        lea     20(%sp), %sp
+2:      move.l  %\canvas, -(%sp)
+        move.l  (%\base), -(%sp)
+        move.l  %a1, -(%sp)
+        jmp     \next
+        .endm
+
+        .globl  core_dial_src, core_dial_arp
+core_dial_src:
+        DIAL2   0, a4, d4, d3, a1, d5, 0x400366ac       | OT_P2_PLAYBACK
+core_dial_arp:
+        DIAL2   4, a3, d3, d4, zero, d6, 0x4007a200     | OT_SETUP_ARP
+
 | ---- the track tabs (core-ot 0.17) ---------------------------------------------------------------------
 | 0x40040146 (was: moveq #4,d0 ; cmp.l a4,d0 ; bne.s 0x400401c6), in the track tabs' renderer 0x4003fed8
 | (the UI task's display loop): stock has just drawn track d4's machine letter at x d3, y a2 + 1 (a4 the

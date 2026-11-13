@@ -131,6 +131,7 @@ enum {
     OT_P2_FX2      = 3,
 };
 #define OT_P2_REFUSED       ((int32_t)0x80000000)
+#define OT_SETUP_ARP        4                   /* ev_setup_dial's page: MIDI ARP SETUP (0.22) */
 int32_t ot_page2_write(unsigned trk, unsigned page, unsigned slot, int32_t val);
 
 /* ---- paced MIDI out -----------------------------------------------------------------------------
@@ -399,7 +400,8 @@ struct ot_bitmap {
  * about to draw knob d->slot; a handler may change what it shows: the value, the widget's flags,
  * the widget itself. Handlers are chained. In the task that draws the screen, once a knob a draw. */
 struct ot_dial {
-    uint8_t page;               /* OT_P2_AMP, OT_P2_FX1 or OT_P2_FX2 */
+    uint8_t page;               /* OT_P2_PLAYBACK (SRC / NOTE SETUP, 0.22), OT_P2_AMP, OT_P2_FX1, OT_P2_FX2,
+                                   OT_SETUP_ARP (0.22) */
     uint8_t slot;               /* 0-5 */
     uint8_t track, part;        /* OT_TRACK and OT_PART */
     int32_t value;              /* the value the knob shows: a signed byte (stock: the Part's) */
