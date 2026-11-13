@@ -749,7 +749,7 @@ unsigned my_mute(unsigned kind, unsigned word)
 
 #### The sequencer's moments on the Octatrack (core-ot 0.10)
 
-Four observers, each before the stock routine runs; handlers return nothing.
+Observers, each before the stock routine runs; handlers return nothing.
 
 | event | when | handler | runs in |
 |---|---|---|---|
@@ -757,6 +757,7 @@ Four observers, each before the stock routine runs; handlers return nothing.
 | `ev_chain_add` | [PTN] adds a pattern to the chain; stock may still leave it out (full at 16, or already in it) | `void f(pattern)` | the sys task |
 | `ev_seq_reset` | the sequencer's stop and reset: STOP while stopped, and every menu that stops it first | `void f(void)` | the caller's task |
 | `ev_midi_panic` | the stop and reset is about to send CC 123 on each channel the MIDI tracks use | `void f(void)` | the caller's task |
+| `ev_ui_tick` (0.15) | each tick of the UI task, the task that draws the screen (60 a second), before its own timers | `void f(void)` | the UI task |
 
 Two more (core-ot 0.12) run in the sequencer's tick, a timer interrupt: keep them to a few dozen instructions.
 
@@ -776,7 +777,7 @@ routine: the tick's audio and MIDI passes (the sequencer's interrupt, `peek` 0) 
 an edit (the sys task, `peek` 1: answer the same, change nothing). With `ev_track_length` it gives
 each track a pattern of its own, as octabam's TRACK PATTERNS does.
 
-`tests/fixtures/octatrack-seq` is a probe of all eight; `"resources": {"core": "0.14"}`.
+`tests/fixtures/octatrack-seq` is a probe of all nine; `"resources": {"core": "0.15"}`.
 
 #### Held edits, copies and MIDI notes on the Octatrack (core-ot 0.11)
 

@@ -8,7 +8,7 @@
 
 enum { MAGIC, APPLY_N, APPLY_BANK, APPLY_PART, CHAIN_N, CHAIN_PAT, CHAIN_LEN, RESET_N, PANIC_N,
        LEN_N, LEN_TRK, LEN_LEN, LEN_FORCE, WRAP_N, WRAP_NOW, WRAP_OLD, REC_N, REC_TRK, REC_LEN,
-       PAT_N, PAT_PEEK_N, PAT_LAST, PAT_FORCE, WORDS };
+       PAT_N, PAT_PEEK_N, PAT_LAST, PAT_FORCE, UI_N, WORDS };
 volatile uint32_t sqp[WORDS] = { 0x53515031 };  /* 'SQP1' */
 
 void sq_part_apply(unsigned bank, unsigned part)
@@ -61,3 +61,5 @@ int sq_track_pattern(unsigned trk, int pattern, unsigned step, unsigned peek)
         return (int)sqp[PAT_FORCE] - 1;
     return pattern;
 }
+
+void sq_ui_tick(void) { ++sqp[UI_N]; }

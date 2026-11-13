@@ -1029,6 +1029,7 @@ SEQ_SITES = {
     'core_chain_add': (0x4009c634, '2f02242f0008', 'ev_chain_add'),          # move.l d2,-(sp) ; move.l 8(sp),d2
     'core_seq_reset': (0x400a10c8, '4fefffdc48d77c3c', 'ev_seq_reset'),
     'core_midi_panic': (0x4009f288, '4fefffec48d70c1c', 'ev_midi_panic'),
+    'core_ui_tick': (0x40056c28, '2039460d1e6c', 'ev_ui_tick'),               # 0.15: move.l 0x460d1e6c,d0
 }
 
 
@@ -1136,7 +1137,8 @@ def test_the_seq_probe_links():
     probe_tables('octatrack-seq', (('ev_part_apply', 'sq_part_apply'), ('ev_chain_add', 'sq_chain_add'),
                                    ('ev_seq_reset', 'sq_seq_reset'), ('ev_midi_panic', 'sq_midi_panic'),
                                    ('ev_track_length', 'sq_track_length'), ('ev_pattern_wrap', 'sq_pattern_wrap'),
-                                   ('ev_rec_length', 'sq_rec_length'), ('ev_track_pattern', 'sq_track_pattern')))
+                                   ('ev_rec_length', 'sq_rec_length'), ('ev_track_pattern', 'sq_track_pattern'),
+                                   ('ev_ui_tick', 'sq_ui_tick')))
 
 
 # core-ot 0.11 (held.s): the held-step editor's entry, the pattern data's copies (octabam EVENTS' 22
@@ -1666,7 +1668,7 @@ def test_the_example_subscribes_to_the_bus():
                       'ev_mute': 0, 'ev_part_apply': 0, 'ev_chain_add': 0, 'ev_seq_reset': 0,
                       'ev_midi_panic': 0, 'ev_edit_held': 0, 'ev_copy': 0, 'ev_midi_note_sent': 0,
                       'ev_track_length': 0, 'ev_pattern_wrap': 0, 'ev_rec_length': 0,
-                      'ev_track_pattern': 0}, counts
+                      'ev_track_pattern': 0, 'ev_ui_tick': 0}, counts
     at = ln.tables['ev_draw'][0]
     o = ln.layout['run_load'] + (at - DEV.ddr[0]) - DEV.main_load
     assert struct.unpack('>II', ln.image[o:o + 8]) == (ln.map['hello_draw'], 0)

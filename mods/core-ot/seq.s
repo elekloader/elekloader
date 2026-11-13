@@ -273,3 +273,14 @@ core_tpat_mrebuild:
         mvs.b   0x800065be, %d2         | d2 as stock leaves it
         move.l  %d0, -(%sp)
         jmp     0x4009e3ea
+
+| ---- the UI task's tick (core-ot 0.15) --------------------------------------------------------------------
+| 0x40056c28 (was: move.l 0x460d1e6c,d0), the countdown the UI task (0x40056c40, the task that draws the
+| screen) calls for each tick message (type 1 from its queue 0x460d1664), before its timers (0x40056ab8).
+| octabam's FREE LOOP and RELOAD FROM PROJECT take this routine, TUNER and CC FEEDBACK the loop's head
+| (MIT). Handlers: void f(void), in the UI task.
+        .globl  core_ui_tick
+core_ui_tick:
+        OBSERVE ev_ui_tick, 0
+        move.l  0x460d1e6c, %d0
+        jmp     0x40056c2e

@@ -427,6 +427,7 @@ enum { OT_MUTE_AUDIO = 0, OT_MUTE_MIDI = 1 };
  *   void ev_chain_add(pattern)       [PTN] adds a pattern to the chain (OT_CHAIN_LEN entries before it)
  *   void ev_seq_reset(void)          the sequencer's stop and reset
  *   void ev_midi_panic(void)         CC 123 is about to go out on the MIDI tracks' channels
+ *   void ev_ui_tick(void)            each tick of the UI task (it draws the screen; 60 a second) (0.15)
  * In the sequencer's tick (0.12; a timer interrupt: keep them short):
  *   int ev_track_length(trk, len)    each track's advance: return the length it wraps at (chained);
  *                                    trk 0-7 audio, 8-15 MIDI
