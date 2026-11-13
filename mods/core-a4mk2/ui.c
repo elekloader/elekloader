@@ -661,7 +661,8 @@ int core_knob_turn(void *view, int32_t id, int32_t delta, int32_t knob)
  * Stock edits nothing on the CV track (5) unless it is external, nor with
  * FUNC held (it opens a view instead) unless the track is FX, or external,
  * or boot flag 0x100000 is set. ui.s passes the step's delta; the return is
- * the delta stock uses (0: taken, the level stays). */
+ * the delta stock uses, or 0: taken, and ui.s leaves the routine at its exit,
+ * so neither the level (nor Ext. Vol.) is set nor its popup shown. */
 typedef uint8_t (*is_level_t)(int32_t event);
 #define IS_LEVEL ((is_level_t)0x40058724u)
 #define BOOT_FLAGS (*(volatile uint32_t *)0x401ff54cu)

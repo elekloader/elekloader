@@ -355,6 +355,11 @@ core_pattern_view_stock:
 | MainScreenView's accelerator step (five stacked args), before it tests the
 | event is the LEVEL encoder. %a2 the view, %d2 the event, %d3 the active
 | track, %d4.b the external/frozen flag. Returns the delta stock goes on with.
+| Taken (core_level_turn returns 0 for a nonzero step): straight to the
+| routine's common exit 0x400bef76 (`moveq #1,%d0`, then the frame's movem and
+| unlk, so the stack depth there doesn't matter), past the set and its popup:
+| the external/frozen path (0x400bee36) has no delta test and would set Ext.
+| Vol. by 0 and show its popup.
         .globl  core_level_site
 core_level_site:
         move.l  20(%sp),-(%sp)
@@ -373,6 +378,10 @@ core_level_site:
         move.l  %a2,-(%sp)
         jsr     core_level_turn
         lea     20(%sp),%sp
+        tst.l   %d0
+        bne.s   1f
+        addq.l  #4,%sp
+        jmp     0x400bef76
 1:      rts
 
 | ---- ev_knob_turn, the mixer page: 0x400c543a `jsr 0x4009dc3a` (keep2),
