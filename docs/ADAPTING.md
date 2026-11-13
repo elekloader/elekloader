@@ -766,7 +766,7 @@ Two more (core-ot 0.12) run in the sequencer's tick, a timer interrupt: keep the
 | `ev_track_length` | each track's advance: its step counter has moved on and is compared with the length it wraps at | `int f(trk, len)`: the length (chained); `trk` 0-7 the audio tracks, 8-15 the MIDI tracks |
 | `ev_pattern_wrap` | the master pattern wrapped and goes on (a queued pattern is now playing) | `void f(bank, pattern, old_bank, old_pattern)` |
 
-`ev_rec_length` (core-ot 0.13) runs in the frame interrupt, in the recorder: every way a take's
+`ev_rec_length` (core-ot 0.13) runs in the recorder (from the frame interrupt and the sys task): every way a take's
 length is worked out (RLEN 1-64, MAX, free and sequencer-armed takes) ends with `int f(trk, len)`,
 the length in samples, which the handler returns (chained). The Part's RLEN byte says which way it
 came. A mod that gives RLEN a new value (a PLEN, say) sets the length here.
@@ -777,7 +777,14 @@ routine: the tick's audio and MIDI passes (the sequencer's interrupt, `peek` 0) 
 an edit (the sys task, `peek` 1: answer the same, change nothing). With `ev_track_length` it gives
 each track a pattern of its own, as octabam's TRACK PATTERNS does.
 
-`tests/fixtures/octatrack-seq` is a probe of all nine; `"resources": {"core": "0.15"}`.
+Two system observers (core-ot 0.16):
+
+| event | when | handler | runs in |
+|---|---|---|---|
+| `ev_card_cmd` | the CF card's dispatcher has issued a command (the 22-byte record, the ATA command byte at +5); `result` -1 means it is done, another value that the card's interrupt finishes it | `void f(const void *cmd, int result)` | a task or the card's interrupt |
+| `ev_task_switch` | at every RTOS switch, the outgoing task's registers saved in its block | `void f(void *task)` | that task's stack, every interrupt masked: a counter or a time stamp, nothing more |
+
+`tests/fixtures/octatrack-seq` is a probe of all eleven; `"resources": {"core": "0.16"}`.
 
 #### Held edits, copies and MIDI notes on the Octatrack (core-ot 0.11)
 

@@ -148,7 +148,7 @@ core_pattern_wrap:
 
 | ---- the recorder's length (core-ot 0.13) -----------------------------------------------------------------
 | 0x40006e18 (was: move.l 128(sp),d3 ; beq.s 0x40006e24), in the recorder routine 0x400068e4 (the frame
-| interrupt's, through a3 at 0x4000d322): every way the length of a take is worked out (RLEN 1-64, MAX,
+| interrupt's, through a3 at 0x4000d322, and the sys task's): every way the length of a take is worked out (RLEN 1-64, MAX,
 | the free and the sequencer-armed takes) joins here with the length in samples in d4; 136(sp) is the
 | track (the routine's first argument). octabam's RLEN PLEN and RECORDER LOOP FIX (MIT) set it on these
 | paths. Handlers: int f(unsigned trk, int len) -> the length (chained).
@@ -284,3 +284,58 @@ core_ui_tick:
         OBSERVE ev_ui_tick, 0
         move.l  0x460d1e6c, %d0
         jmp     0x40056c2e
+
+| ---- the card's commands and the task switch (core-ot 0.16) ----------------------------------------------
+| 0x40015284 (was: moveq #-1,d1 ; cmp.l d0,d1 ; bne.s 0x40015290), the CF card's command dispatcher
+| (0x40015098): a command taken from its queues has been copied to 0x46c86568 (22 bytes; the ATA
+| command byte at +5) and its handler has returned d0. -1 means it is done and the card is free;
+| any other value leaves it in flight, finished by the card's interrupt. octabam's BRAIN times this
+| place (MIT). Handlers: void f(const void *cmd, int result), wherever the dispatcher runs (a task
+| or the card's interrupt): keep them short.
+        .globl  core_card_cmd
+core_card_cmd:
+        tst.l   ev_card_cmd
+        beq.s   9f
+        lea     -20(%sp), %sp
+        movem.l %d0-%d1/%a0-%a2, (%sp)
+        lea     ev_card_cmd, %a2
+1:      move.l  (%a2)+, %d1
+        beq.s   2f
+        move.l  (%sp), -(%sp)           | the result (saved d0)
+        pea     0x46c86568
+        movea.l %d1, %a0
+        jsr     (%a0)
+        addq.l  #8, %sp
+        bra.s   1b
+2:      movem.l (%sp), %d0-%d1/%a0-%a2
+        lea     20(%sp), %sp
+9:      moveq   #-1, %d1
+        cmp.l   %d0, %d1
+        bne.s   8f
+        jmp     0x4001528a
+8:      jmp     0x40015290
+
+| 0x40000566 (was: move.l 0x80006900,d0), the RTOS's switch (trap #0 and the PIT0 tick, entered at
+| 0x40000550 with every interrupt masked): the outgoing task's registers are in its block (a0, from
+| 0x800068fc; d0-sp at +12, its a0 at 0x80006900). Handlers: void f(void *task), on that task's stack,
+| interrupts masked, at every switch: a few instructions only (a counter, a time stamp).
+        .globl  core_task_switch
+core_task_switch:
+        tst.l   ev_task_switch
+        beq.s   9f
+        lea     -8(%sp), %sp
+        move.l  %a0, (%sp)
+        move.l  %a2, 4(%sp)
+        lea     ev_task_switch, %a2
+1:      move.l  (%a2)+, %d0
+        beq.s   2f
+        move.l  (%sp), -(%sp)           | the task's block
+        movea.l %d0, %a0
+        jsr     (%a0)
+        addq.l  #4, %sp
+        bra.s   1b
+2:      movea.l (%sp), %a0
+        movea.l 4(%sp), %a2
+        addq.l  #8, %sp
+9:      move.l  0x80006900, %d0
+        jmp     0x4000056c

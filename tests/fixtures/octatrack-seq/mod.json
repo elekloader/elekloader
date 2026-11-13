@@ -14,8 +14,10 @@
   {"event": "ev_pattern_wrap", "fn": "sq_pattern_wrap", "order": 50},
   {"event": "ev_rec_length", "fn": "sq_rec_length", "order": 50},
   {"event": "ev_track_pattern", "fn": "sq_track_pattern", "order": 50},
-  {"event": "ev_ui_tick", "fn": "sq_ui_tick", "order": 50}
+  {"event": "ev_ui_tick", "fn": "sq_ui_tick", "order": 50},
+  {"event": "ev_card_cmd", "fn": "sq_card_cmd", "order": 50},
+  {"event": "ev_task_switch", "fn": "sq_task_switch", "order": 50}
  ],
  "requires": ["core"],
- "resources": {"core": "0.15"}
+ "resources": {"core": "0.16"}
 }

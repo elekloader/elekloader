@@ -8,7 +8,7 @@
 
 enum { MAGIC, APPLY_N, APPLY_BANK, APPLY_PART, CHAIN_N, CHAIN_PAT, CHAIN_LEN, RESET_N, PANIC_N,
        LEN_N, LEN_TRK, LEN_LEN, LEN_FORCE, WRAP_N, WRAP_NOW, WRAP_OLD, REC_N, REC_TRK, REC_LEN,
-       PAT_N, PAT_PEEK_N, PAT_LAST, PAT_FORCE, UI_N, WORDS };
+       PAT_N, PAT_PEEK_N, PAT_LAST, PAT_FORCE, UI_N, REC_FORCE, CARD_N, CARD_OP, CARD_RES, CARD_INFLIGHT, SWITCH_N, WORDS };
 volatile uint32_t sqp[WORDS] = { 0x53515031 };  /* 'SQP1' */
 
 void sq_part_apply(unsigned bank, unsigned part)
@@ -49,7 +49,7 @@ int sq_rec_length(unsigned trk, int len)
     ++sqp[REC_N];
     sqp[REC_TRK] = trk;
     sqp[REC_LEN] = (uint32_t)len;
-    return len;
+    return sqp[REC_FORCE] ? (int)sqp[REC_FORCE] : len;    /* poked: every take this long */
 }
 
 /* With sqp[PAT_FORCE] poked nonzero, track 0 plays pattern PAT_FORCE - 1. */
@@ -63,3 +63,14 @@ int sq_track_pattern(unsigned trk, int pattern, unsigned step, unsigned peek)
 }
 
 void sq_ui_tick(void) { ++sqp[UI_N]; }
+
+void sq_card_cmd(const uint8_t *cmd, int result)
+{
+    ++sqp[CARD_N];
+    sqp[CARD_OP] = cmd[5];                      /* the ATA command byte */
+    sqp[CARD_RES] = (uint32_t)result;
+    if (result != -1)
+        ++sqp[CARD_INFLIGHT];
+}
+
+void sq_task_switch(void *task) { (void)task; ++sqp[SWITCH_N]; }

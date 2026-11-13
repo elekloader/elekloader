@@ -560,7 +560,7 @@ def test_the_core_bus_sites():
                                               | {v[2] for v in EDIT_SITES.values()} | {'ev_mute'}
                                               | {v[2] for tab in ENTRY_TABLES for v in tab.values()}
                                               | {'ev_copy', 'ev_midi_note_sent', 'ev_track_length', 'ev_pattern_wrap',
-                                                 'ev_rec_length', 'ev_track_pattern'})
+                                                 'ev_rec_length', 'ev_track_pattern', 'ev_card_cmd', 'ev_task_switch'})
     assert j['collections']['ev_idle'] == 4
     for sym, target in JMP_BACK.items():       # a jmp stub goes back to the instruction after its site
         addr, stock_hex, _ev = BUS_SITES[target]
@@ -1138,7 +1138,8 @@ def test_the_seq_probe_links():
                                    ('ev_seq_reset', 'sq_seq_reset'), ('ev_midi_panic', 'sq_midi_panic'),
                                    ('ev_track_length', 'sq_track_length'), ('ev_pattern_wrap', 'sq_pattern_wrap'),
                                    ('ev_rec_length', 'sq_rec_length'), ('ev_track_pattern', 'sq_track_pattern'),
-                                   ('ev_ui_tick', 'sq_ui_tick')))
+                                   ('ev_ui_tick', 'sq_ui_tick'), ('ev_card_cmd', 'sq_card_cmd'),
+                                   ('ev_task_switch', 'sq_task_switch')))
 
 
 # core-ot 0.11 (held.s): the held-step editor's entry, the pattern data's copies (octabam EVENTS' 22
@@ -1210,6 +1211,8 @@ TICK_SITES = {
     0x400a3ea8: ('73817100b081', 'core_tlen_0x400a3ea8', 'ev_track_length'),
     0x400a44f4: ('43f980006634', 'core_pattern_wrap', 'ev_pattern_wrap'),       # lea 0x80006634,a1
     0x40006e18: ('262f00806706', 'core_rec_length', 'ev_rec_length'),         # move.l 128(sp),d3 ; beq.s (0.13)
+    0x40015284: ('72ffb2806606', 'core_card_cmd', 'ev_card_cmd'),             # moveq #-1,d1 ; cmp.l ; bne.s (0.16)
+    0x40000566: ('203980006900', 'core_task_switch', 'ev_task_switch'),       # move.l 0x80006900,d0 (0.16)
 }
 
 
@@ -1223,6 +1226,10 @@ def test_the_core_tick_sites():
     by = {int(x['addr'], 16): x for x in j['sites']}
     o = 0x400a1e0c - DEV.main_load
     assert img[o:o + 4].hex() == '46fc2700'                  # the tick: move #0x2700,sr
+    o = 0x40000550 - DEV.main_load                           # the switch: mask, a0 aside, registers saved
+    assert img[o:o + 22].hex() == '46fc2700' '23c880006900' '2079800068fc' '48e8ffff000c'
+    o = 0x40015280 - DEV.main_load                           # the dispatcher's handlers join here
+    assert img[o:o + 4].hex() == '4fef0010' and img[o + 10:o + 16].hex() == '42b9460bae18'
     o = 0x400068e4 - DEV.main_load                           # the recorder: track = 136(sp) after it
     assert img[o:o + 8].hex() == '4fefff7c48d77cfc'          # lea -132(sp) ; movem.l (11 registers... 44 B)
     o = 0x40006e18 - DEV.main_load
@@ -1668,7 +1675,7 @@ def test_the_example_subscribes_to_the_bus():
                       'ev_mute': 0, 'ev_part_apply': 0, 'ev_chain_add': 0, 'ev_seq_reset': 0,
                       'ev_midi_panic': 0, 'ev_edit_held': 0, 'ev_copy': 0, 'ev_midi_note_sent': 0,
                       'ev_track_length': 0, 'ev_pattern_wrap': 0, 'ev_rec_length': 0,
-                      'ev_track_pattern': 0, 'ev_ui_tick': 0}, counts
+                      'ev_track_pattern': 0, 'ev_ui_tick': 0, 'ev_card_cmd': 0, 'ev_task_switch': 0}, counts
     at = ln.tables['ev_draw'][0]
     o = ln.layout['run_load'] + (at - DEV.ddr[0]) - DEV.main_load
     assert struct.unpack('>II', ln.image[o:o + 8]) == (ln.map['hello_draw'], 0)

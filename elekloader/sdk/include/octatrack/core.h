@@ -428,11 +428,14 @@ enum { OT_MUTE_AUDIO = 0, OT_MUTE_MIDI = 1 };
  *   void ev_seq_reset(void)          the sequencer's stop and reset
  *   void ev_midi_panic(void)         CC 123 is about to go out on the MIDI tracks' channels
  *   void ev_ui_tick(void)            each tick of the UI task (it draws the screen; 60 a second) (0.15)
+ *   void ev_card_cmd(cmd, result)    the card's dispatcher issued a command (ATA byte at cmd + 5); result
+ *                                    -1 = done, else the card's interrupt finishes it (0.16)
+ *   void ev_task_switch(task)        every RTOS switch, interrupts masked: a few instructions only (0.16)
  * In the sequencer's tick (0.12; a timer interrupt: keep them short):
  *   int ev_track_length(trk, len)    each track's advance: return the length it wraps at (chained);
  *                                    trk 0-7 audio, 8-15 MIDI
  *   void ev_pattern_wrap(bank, pattern, old_bank, old_pattern)   the master pattern wrapped and goes on
- * In the recorder (0.13; the frame interrupt):
+ * In the recorder (0.13; the frame interrupt and the sys task):
  *   int ev_rec_length(trk, len)      a take's length in samples, however it was worked out: return it
  * The pattern each track plays (0.14):
  *   int ev_track_pattern(trk, pattern, step, peek)   return it (chained); peek 1 (the rebuild after an
