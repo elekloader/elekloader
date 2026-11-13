@@ -6,7 +6,7 @@
 // A .elemod is JSON. It carries only its author's bytes plus hashes of the stock bytes it expects. Format 2 may
 // carry a profiled DN2 SHARC mod; all other sections, including the bootloader, stay stock.
 import { concat, encodeAsciiReplace, equal, fromHex, sha } from './bytes.ts'
-import { type Device, type Release, UnknownFirmware, forTarget, imageEnd, linkable } from './devices.ts'
+import { type Device, type Release, SYX_FAMILIES, UnknownFirmware, forTarget, imageEnd, linkable } from './devices.ts'
 import { ILLEGAL, LINEF, FPU, decodeColdFire, readerAt } from './isa/coldfire.ts'
 import { AttributeError, PyFloat, TypeError_, ValueError, hex8, pyInt, pyType, repr, str, truthy } from './py.ts'
 import { decodeUtf8, loads } from './pyjson.ts'
@@ -272,7 +272,7 @@ export class Mod implements AnyMod {
     const ev = get(doc, 'ele3_version')              // the version the unit shows (any device)
     if (ev !== null) {
       const n = typeof ev === 'string' ? encodeAsciiReplace(ev).length : -1
-      const exact = this.dev.container === 'ele3'
+      const exact = SYX_FAMILIES.includes(this.dev.container)
       if ((exact && n !== this.dev.versionLen) || !(n > 0 && n <= this.dev.versionLen))
         throw new ModError(`${name}: ele3_version is ${exact ? 'exactly' : 'up to'} ${this.dev.versionLen} ASCII characters on the ${this.dev.name}`)
     }

@@ -12,7 +12,7 @@
 //   7. the .syx and, for a device with a card file (the Octatrack), the .bin; OUT.json (a manifest with every hash);
 //      and, for linked mods, OUT.map.json (every symbol's address).
 import { sha } from './bytes.ts'
-import { UnknownFirmware } from './devices.ts'
+import { SYX_FAMILIES, UnknownFirmware } from './devices.ts'
 import { type AnyMod, Mod, ModError, apply, formatOf, get, pyEq, readJson } from './elemod.ts'
 import * as formats from './formats.ts'
 import { Mod2, link, type Linked } from './link.ts'
@@ -143,7 +143,7 @@ export async function build(stock: File, modFiles: File[], version: string | nul
     if (!vs.length && dev.versionOptional) vs.push(parsed.version)
     if (vs.length !== 1) {
       const sorted = [...vs].sort((a, b) => (String(a) < String(b) ? -1 : String(a) > String(b) ? 1 : 0))
-      throw new PatchError(`give --version (${dev.container === 'ele3' ? `${dev.versionLen} characters` : `up to ${dev.versionLen} characters`}): `
+      throw new PatchError(`give --version (${SYX_FAMILIES.includes(dev.container) ? `${dev.versionLen} characters` : `up to ${dev.versionLen} characters`}): `
         + `the mods name ${sorted.length ? repr(sorted) : 'no version'}`)
     }
     version = str(vs[0])

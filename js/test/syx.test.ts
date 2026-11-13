@@ -32,5 +32,6 @@ test('the update limit counts the preamble and is optional', () => {
       `decoded update stream ${stream.length} bytes exceeds the measured USB update limit of ${updateMax} bytes`))
   assert.deepEqual(devices().filter(d => d.updateMax !== null).map(d => [d.key, d.updateMax]), [
     ['digitone-mk2', 0x200000],
+    ['analog-rytm-mk1', 0x1f0000],
   ])
 })
