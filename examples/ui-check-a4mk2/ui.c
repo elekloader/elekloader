@@ -104,7 +104,8 @@ void uc_idle(void)
  * the power cycle loses RAM. So uc_crash also shows its fields on the screen,
  * the way stock's crash printer (0x4006380e) does: polled bytes to the front
  * panel's UART (0x4006377c: wait for bit 3 of 0xec070004, write 0xec07000c),
- * 0x51 + (row << 4 | col) the cursor, 0x52 + n the attribute, 0x50 + ch one
+ * 0x51 + (col << 4 | row) the cursor (the column in the high nibble: unit T298;
+ * stock only ever sends 0,0), 0x52 + n the attribute, 0x50 + ch one
  * character, 16 characters a row. Rows 0-3:
  *   UC CRASH Nnn Fff   crash and faults
  *   Mmmmmmmmm          crash_magic
@@ -174,7 +175,7 @@ static unsigned uc_puthex(unsigned col, uint32_t v, int digits)
 static void uc_row_start(unsigned row, unsigned attr)
 {
     uc_tx(0x51);
-    uc_tx(row << 4);
+    uc_tx(row);                  /* (col << 4) | row, col 0 */
     uc_tx(0x52);
     uc_tx(attr);
 }

@@ -16,7 +16,7 @@ and lights LED 0x20 with `core_led_set`.
 A second row, UI CRASH, raises an illegal instruction in the UI task while
 armed (nothing otherwise), so `ev_crash` runs on a real fault: `ui_check`
 then holds the exception frame's first long and PC (`crash_head`,
-`crash_pc`) and `crash_magic` "CRSH". From 0.4 it also shows them, since
+`crash_pc`) and `crash_magic` "CRSH". From 0.4 it also shows them (0.5: on the right rows), since
 after the fault nothing answers USB and a power cycle loses RAM: rows 0-3 of
 the screen read `UC CRASH Nnn Fff` (crash, faults), `M` crash_magic, `H`
 crash_head and `P` crash_pc, in hex, written to the front panel's UART the
@@ -29,7 +29,7 @@ then returns: stock's crash screen follows and the unit needs a power cycle.
 python -m elekloader.sdk.build mods/core-a4mk2 --stock Analog-Four_MKII_OS1.56.syx
 python -m elekloader.sdk.build examples/ui-check-a4mk2 --stock Analog-Four_MKII_OS1.56.syx
 python -m elekloader.patch --stock Analog-Four_MKII_OS1.56.syx \
-    --mod mods/core-a4mk2/out/core-0.7.elemod --mod examples/ui-check-a4mk2/out/ui-check-0.4.elemod \
+    --mod mods/core-a4mk2/out/core-0.7.elemod --mod examples/ui-check-a4mk2/out/ui-check-0.5.elemod \
     --out a4-ui.syx --version UI56
 ```
 
