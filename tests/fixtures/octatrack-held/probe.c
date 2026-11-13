@@ -7,7 +7,7 @@
 #include "octatrack/core.h"
 
 enum { MAGIC, HELD_N, HELD_ENC, HELD_DELTA, TAKE, TAKEN, COPY_N, COPY_DST, COPY_SRC, COPY_LEN,
-       NOTE_N, NOTE_TRK, NOTE_NOTE, NOTE_VEL, NOTE_POOL, WORDS };
+       NOTE_N, NOTE_TRK, NOTE_NOTE, NOTE_VEL, NOTE_POOL, SCN_N, SCN_ENC, SCN_TAKE, SCN_TAKEN, WORDS };
 volatile uint32_t hdp[WORDS] = { 0x48445031 };  /* 'HDP1' */
 
 int hd_edit_held(unsigned enc, int delta)
@@ -37,4 +37,17 @@ void hd_note_sent(unsigned trk, unsigned note, unsigned vel, unsigned pool)
     hdp[NOTE_NOTE] = note;
     hdp[NOTE_VEL] = vel;
     hdp[NOTE_POOL] = pool;
+}
+
+/* With hdp[SCN_TAKE] poked nonzero it takes the scene knob's turns. */
+int hd_scene_knob(unsigned enc, int delta)
+{
+    (void)delta;
+    ++hdp[SCN_N];
+    hdp[SCN_ENC] = enc;
+    if (hdp[SCN_TAKE]) {
+        ++hdp[SCN_TAKEN];
+        return 1;
+    }
+    return 0;
 }

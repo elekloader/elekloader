@@ -806,10 +806,11 @@ The places octabam's EVENTS module holds for PLOCKS P2 and MIDI FOLLOW (MIT).
 | event | when | handler | runs in |
 |---|---|---|---|
 | `ev_edit_held` | an encoder turned while a trig is held (the held-step editor) | `int f(enc, delta)`: nonzero = taken; the first taker wins and stock's editor does not run | the sys task |
+| `ev_scene_knob` (0.20) | an encoder turned while a scene is held (the scene-lock knob handler) | `int f(enc, delta)`: as `ev_edit_held` | the sys task |
 | `ev_copy` | before one of the pattern data's copies (the clipboard, the undo buffer, the bank: 22 memcpy places, not every copy) | `void f(dst, src, len)` | the sys task |
 | `ev_midi_note_sent` | a MIDI track's note has gone out | `void f(trk, note, vel, pool)`; pool 1 is the arpeggiator's | the sequencer's task |
 
-`tests/fixtures/octatrack-held` is a probe of all three; `"resources": {"core": "0.11"}`.
+`tests/fixtures/octatrack-held` is a probe of all four; `"resources": {"core": "0.20"}`.
 
 ### The DSP bus on the Octatrack (dspbus 0.1)
 

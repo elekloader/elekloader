@@ -465,6 +465,7 @@ enum { OT_MUTE_AUDIO = 0, OT_MUTE_MIDI = 1 };
 /* ---- held edits, copies, MIDI notes (0.11) ---------------------------------------------------------
  *   int ev_edit_held(enc, delta)            a trig held, an encoder turned: nonzero = you took it (the
  *                                           first taker wins; stock's editor does not run)
+ *   int ev_scene_knob(enc, delta)           a scene held, an encoder turned: the same (0.20)
  *   void ev_copy(dst, src, len)             before one of the pattern data's copies (clipboard, undo, bank)
  *   void ev_midi_note_sent(trk, note, vel, pool)   a MIDI track's note has gone out; pool 1 = the arp's */
 
