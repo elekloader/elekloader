@@ -39,6 +39,10 @@ for that font and text (in core-a4mk2 0.6's screen-check, font 16's
 widths come from the same routine). Steps 1-3 and 7-9 are exact pixels; the
 text's glyphs are stock's, so only their boxes are checked.
 
+In the A4 emulator and on a unit (OS 1.56, 13 Nov 2026, SH58) the pattern
+was exact (24 of 24 checks), the widths 17, 23, 15 and 17, and both rows
+showed once each, after REMOTE KEYS.
+
 In the A4 emulator (OS 1.56, 12 Nov 2026), with analoghealth for the remote
 keys and memory reads, every event fired: `ev_boot` once, the tick about
 every 8th tick for `core_timer` (mask 8), one post per 1024 audio blocks
