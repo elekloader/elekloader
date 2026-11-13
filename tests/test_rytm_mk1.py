@@ -197,6 +197,16 @@ def test_mods_may_not_link_to_the_flash_routines():
         assert img[hi - 2 - DEV.main_load:][:2] == b'\x4e\x75', hex(hi)
 
 
+def test_the_flash_routines_are_protected_too():
+    # no_link stops calls into them; protected keeps their code stock in every build
+    for lo, hi, _why in DEV.no_link:
+        assert any(plo <= lo and hi <= phi for plo, phi, _w in DEV.protected), hex(lo)
+    for at in (0x4011a7a4, 0x40096a6c, 0x40096ac2, 0x40096af6, 0x40096b3c):
+        with tempfile.TemporaryDirectory() as tmp:
+            p = write_mod(tmp, patchset('rt-bad', [(at, b'\x4e\x71', 'data')], version='TST1'))
+            expect(lambda: patch.build(SYX, [p], log=lambda *a: None), 'protected')
+
+
 def test_a_stream_not_a_multiple_of_4_is_padded_and_verifies():
     st, img = stock()
     for n in range(1, 9):                       # n literal bytes: the stream grows by about n

@@ -44,7 +44,8 @@ entry compare were never checked.
   BOOTSTRAP UPGRADE and the flash helpers, two erases (0x40096ac2, used only
   for the bootstrap; 0x40096a6c, used by the OS store and calibration) and the
   program routine (0x40096af6), since programming alone can corrupt the
-  bootstrap. That stops ordinary calls only.
+  bootstrap. That stops ordinary calls only; their code is also protected,
+  so no build changes the routines every later store and calibration write use.
 - **Size.** The OS upgrade decodes the file into a fixed 2 MiB RAM buffer
   (0x40366570), 101 bytes a packet, the index checked only against the file's
   own count, with other statics right after it: at most 20,763 packets
@@ -96,7 +97,10 @@ DEVICE = Device(
     protected=((0x40000592, 0x400005d8,
                 "the OS entry's bootstrap version compare and the call to BOOTSTRAP UPGRADE"),
                (0x4028c768, 0x402a1b84,
-                'the copy of the bootstrap the OS writes into flash, with its version words')),
+                'the copy of the bootstrap the OS writes into flash, with its version words'),
+               # the routines that can write the boot flash, kept stock as well as unlinkable
+               (0x4011a7a4, 0x4011aa7a, 'BOOTSTRAP UPGRADE, which rewrites the boot flash'),
+               (0x40096a6c, 0x40096b3e, 'the flash erases and the program routine every flash writer uses')),
     no_link=((0x4011a7a4, 0x4011aa7a, 'BOOTSTRAP UPGRADE, which rewrites the boot flash'),
              (0x40096a6c, 0x40096ac2, 'the flash erase the OS store and calibration use'),
              (0x40096ac2, 0x40096af6, 'the flash erase used only for the bootstrap'),

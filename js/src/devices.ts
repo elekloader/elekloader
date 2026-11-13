@@ -265,6 +265,9 @@ export const ANALOG_RYTM_MK1: Device = {
   protected: [
     [0x40000592, 0x400005d8, "the OS entry's bootstrap version compare and the call to BOOTSTRAP UPGRADE"],
     [0x4028c768, 0x402a1b84, 'the copy of the bootstrap the OS writes into flash, with its version words'],
+    // the routines that can write the boot flash, kept stock as well as unlinkable
+    [0x4011a7a4, 0x4011aa7a, 'BOOTSTRAP UPGRADE, which rewrites the boot flash'],
+    [0x40096a6c, 0x40096b3e, 'the flash erases and the program routine every flash writer uses'],
   ],
   noLink: [
     [0x4011a7a4, 0x4011aa7a, 'BOOTSTRAP UPGRADE, which rewrites the boot flash'],

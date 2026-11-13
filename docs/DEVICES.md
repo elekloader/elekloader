@@ -752,7 +752,8 @@ its mods area and entry compare were never checked.
   (`no_link`): BOOTSTRAP UPGRADE, the erase used only for the bootstrap
   (`0x40096ac2`), the erase the OS store and calibration use (`0x40096a6c`)
   and the program routine every writer uses (`0x40096af6`). That refuses a
-  symbol or relocation inside them, so ordinary calls only.
+  symbol or relocation inside them, so ordinary calls only; their code is
+  also protected, so no build changes them.
 - **Mods' area** `0x47BE0000-0x47C00000`, the MKII's. On a 1.74 unit
   (8 November 2026), a canary filled `0x47B00000-0x47F00000` at boot and read
   it back with no word changed, with the sample memory full, sound locks,
