@@ -789,6 +789,10 @@ System observers (core-ot 0.16, 0.18):
 
 `tests/fixtures/octatrack-seq` is a probe of these and of `ev_track_tab_draw`; `"resources": {"core": "0.18"}`.
 
+The audio inputs need no event of their own: each frame interrupt advances `OT_INPUT_INDEX` (0-7) and
+points the input DMA at that 256-byte page, `OT_INPUT_PAGE(i)` (`octatrack/core.h`); read them from
+`ev_frame_begin` or `ev_frame_end`, as a level meter or a record threshold would.
+
 #### Held edits, copies and MIDI notes on the Octatrack (core-ot 0.11)
 
 The places octabam's EVENTS module holds for PLOCKS P2 and MIDI FOLLOW (MIT).

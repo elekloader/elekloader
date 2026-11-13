@@ -1463,7 +1463,8 @@ def test_core_h_names_the_places_the_image_uses():
     with open(h) as fh:
         src = fh.read()
     for a in (0x100b14cc, 0x100b14ce, 0x100b14cf, 0x80000000, 0x80000002, 0x80000003, 0x80000004,
-              0x8000182a, 0x80001832, 0x800065b8, 0x46c82456, 0xfc07c00c):
+              0x8000182a, 0x80001832, 0x800065b8, 0x46c82456, 0xfc07c00c, 0x46104d00, 0x100fff00,
+              0x80000070, 0x80000008, 0x8000000c, 0x100b14d4, 0x100b14d8, 0x8000654e):
         assert ('0x%08x' % a) in src.lower(), hex(a)
         pat = struct.pack('>I', a)
         hits = [i for i in range(2, len(img) - 3) if img[i:i + 4] == pat and (img[i - 1] & 0x3f) == 0x39]
