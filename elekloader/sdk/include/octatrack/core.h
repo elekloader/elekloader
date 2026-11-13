@@ -550,4 +550,10 @@ static inline int ot_popup_add(struct ot_popup *p, const char *label, void (*cb)
 #define OT_POPUP_SLICE_ADD  ((const char *const *)0x400ceb8cu)
 #define OT_POPUP_VIEW       ((const char *const *)0x400cebf8u)
 
+/* ---- the playback increment (0.30) --------------------------------------------------------------
+ * int32_t ev_play_increment(unsigned trk, int32_t inc): each STATIC, FLEX or PICKUP track (0-7), every
+ * frame, in the frame interrupt: inc is stock's playback increment (Q26, 0x04000000 = unity, PTCH and RATE
+ * applied); return the one it plays (chained). Stock's own is kept, so a handler always starts from it.
+ * Keep it short; do not touch the EMAC. */
+
 #endif

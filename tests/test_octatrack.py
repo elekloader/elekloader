@@ -366,7 +366,8 @@ def test_the_core_moves_the_arena_past_its_reserve():
                           | entries | {'core_copy'} | {'core_note_0x%08x' % a for a in NOTE_SITES}
                           | {v[1] for v in TICK_SITES.values()} | {v[1] for v in PATTERN_SITES.values()}
                           | set(DIAL2_SITES) | {'core_trig_box'}
-                          | {v[1] for v in LFO_CODE.values()} | {'core_popup'}), calls
+                          | {v[1] for v in LFO_CODE.values()} | {'core_popup'}
+                          | {v[1] for v in RATE_SITES.values()}), calls
 
 
 def reserve_docs(img, bss, fixed=False):
@@ -566,7 +567,7 @@ def test_the_core_bus_sites():
                                                  'ev_rec_length', 'ev_track_pattern', 'ev_card_cmd', 'ev_task_switch',
                                                  'ev_track_tab_draw', 'ev_card_done', 'ev_settings_load',
                                                  'ev_lfo_step', 'ev_trig_box_draw', 'ev_bank_copied',
-                                                 'ot_lfo_waves', 'ev_popup'})
+                                                 'ot_lfo_waves', 'ev_popup', 'ev_play_increment'})
     assert j['collections']['ev_idle'] == 4
     for sym, target in JMP_BACK.items():       # a jmp stub goes back to the instruction after its site
         addr, stock_hex, _ev = BUS_SITES[target]
@@ -1403,6 +1404,51 @@ def test_the_core_popup_site():
     assert struct.unpack('>II', ln.image[o:o + 8]) == (ln.map['pp_popup'], 0)
 
 
+# core-ot 0.30 (rate.s, rate.c): ev_play_increment beside REPITCH's 0x40004100.
+RATE_SITES = {
+    0x40004072: ('202b002460000090', 'core_inc_reuse'),    # move.l 36(a3),d0 ; bra.w 0x40004108
+    0x40004108: ('287980001c80', 'core_inc'),              # movea.l 0x80001c80,a4 (both paths meet)
+}
+REPITCH_RATE = (0x40004100, 8)                              # octabam REPITCH v1.0's, and Modwerk's site
+
+
+def test_the_core_rate_sites():
+    """core-ot 0.30's sites: stock, whole, the reuse path's branch landing on the meeting site's start,
+    nothing branching inside either, both clear of REPITCH's 8 bytes (the shop's v1.0 mod); the probe
+    links."""
+    with open(os.path.join(ROOT, 'mods', 'core-ot', 'mod.json')) as fh:
+        j = json.load(fh)
+    st, img = stock()
+    by = {int(x['addr'], 16): x for x in j['sites']}
+    inside = {}
+    for a, (h, target) in RATE_SITES.items():
+        n = len(h) // 2
+        assert (by[a]['op'], by[a]['stock'], by[a]['target']) == ('jmp', h, target)
+        o = a - DEV.main_load
+        assert img[o:o + n].hex() == h
+        ok, note = elemod.insn_check(img, a, n, DEV)
+        assert ok, (target, note)
+        r, m = REPITCH_RATE
+        assert not (r < a + n and a < r + m), hex(a)
+        for k in range(a + 1, a + n):
+            inside[k] = target
+    o = 0x40004076 - DEV.main_load                          # the reuse path's bra.w lands on core_inc's site
+    assert _branch_target(img, o) == 0x40004108
+    o = REPITCH_RATE[0] - DEV.main_load                     # REPITCH's bytes: movclr ; asr ; the store
+    assert img[o:o + 8].hex() == 'a1c0eca027400024'
+    for k in range(0, len(img) - 6, 2):
+        assert _branch_into(img, k, inside) is None, hex(DEV.main_load + k)
+    assert j['collections']['ev_play_increment'] == 4
+    from elekloader.sdk import build
+    with tempfile.TemporaryDirectory() as tmp:
+        core = elemod.load_any(build.build(os.path.join(ROOT, 'mods', 'core-ot'), SYX, tmp)[0])
+        probe = elemod.load_any(build.build(os.path.join(HERE, 'fixtures', 'octatrack-rate'), SYX, tmp)[0])
+    ln = link.link([core, probe], img)
+    at = ln.tables['ev_play_increment'][0]
+    o = ln.layout['run_load'] + (at - DEV.ddr[0]) - DEV.main_load
+    assert struct.unpack('>II', ln.image[o:o + 8]) == (ln.map['rp_inc'], 0)
+
+
 def test_the_core_tick_sites():
     """core-ot 0.12's sites: stock, whole, a bgt right after each compare (it tests what the stub's
     compare leaves), the sequencer's tick an interrupt handler, no branch inside, clear of every
@@ -1877,7 +1923,7 @@ def test_the_example_subscribes_to_the_bus():
                       'ev_track_tab_draw': 0, 'ev_card_done': 0, 'ev_settings_load': 0,
                       'ev_lfo_step': 0, 'ev_scene_knob': 0, 'ev_tempo_open': 0, 'ev_arp_knob': 0,
                       'ev_knob_draw': 0, 'ev_leds': 0, 'ev_trig_box_draw': 0,
-                      'ev_bank_copied': 0, 'ot_lfo_waves': 0, 'ev_popup': 0}, counts
+                      'ev_bank_copied': 0, 'ot_lfo_waves': 0, 'ev_popup': 0, 'ev_play_increment': 0}, counts
     at = ln.tables['ev_draw'][0]
     o = ln.layout['run_load'] + (at - DEV.ddr[0]) - DEV.main_load
     assert struct.unpack('>II', ln.image[o:o + 8]) == (ln.map['hello_draw'], 0)

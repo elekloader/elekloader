@@ -891,6 +891,15 @@ void my_popup(struct ot_popup *p)
   handler changed opens exactly as stock opens it.
 - `tests/fixtures/octatrack-popup` adds PROBE ROW to the SLICE, CHANGE VIEW and LFO DESIGN lists.
 
+### The playback increment on the Octatrack (core-ot 0.30)
+
+`ev_play_increment` runs for each STATIC, FLEX and PICKUP track every frame, in the frame interrupt:
+`int32_t f(unsigned trk, int32_t inc)` gets stock's playback increment (Q26: 0x04000000 plays at the
+sample's own speed; PTCH and RATE applied) and returns the one the track plays. Handlers chain. core keeps
+stock's value per track, so a frame where stock reuses the stored increment hands handlers stock's again,
+not what they returned. Keep it short and leave the EMAC alone. The sites sit beside octabam REPITCH's
+(0x40004100), which keeps working beside it; `tests/fixtures/octatrack-rate` is a probe.
+
 ### The DSP bus on the Octatrack (dspbus 0.1)
 
 `mods/dspbus-ot` is a second, optional bus, for code that runs on DSP core
