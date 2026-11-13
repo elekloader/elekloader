@@ -10,6 +10,7 @@ Building mods/core-ot also needs the cross assembler (m68k-linux-gnu-as).
 """
 import glob
 import json
+import re
 import os
 import struct
 import sys
@@ -1577,6 +1578,32 @@ def test_the_core_tstretch_site():
     at = ln.tables['ev_tstretch'][0]
     o = ln.layout['run_load'] + (at - DEV.ddr[0]) - DEV.main_load
     assert struct.unpack('>II', ln.image[o:o + 8]) == (ln.map['ts_track'], 0)
+
+
+# Firmware calls in octatrack/core.h: the UI tick's timers and the interrupt vector table.
+FW_CALLS = {0x40031a0c: '2f0a2f02226f000c41f9460d5a30',   # timer start: move.l a2,-(sp) ... lea 0x460d5a30
+            0x40031abc: '2f02242f00082002e98841f9460d5a28',   # timer cancel
+            0x40000d50: '202f00042079400b966843ef0008',   # vector set: table = *0x400b9668
+            0x40000d64: '202f00042079400b966820300c004e75'}   # vector get: d0 = table[n]
+
+
+def test_the_timer_and_vector_calls():
+    """The four routines core.h names are what it says, the timer tick is core's ev_tick routine (its clock
+    at 0x40031972) and the vector setter has 15 callers; the probe builds and links."""
+    st, img = stock()
+    for a, h in FW_CALLS.items():
+        o = a - DEV.main_load
+        assert img[o:o + len(h) // 2].hex() == h, hex(a)
+        assert re.search(r'0x%08xu' % a, open(os.path.join(ROOT, 'elekloader', 'sdk', 'include', 'octatrack',
+                                                             'core.h')).read()), hex(a)
+    o = 0x40031970 - DEV.main_load
+    assert img[o:o + 8].hex() == '2f0a52b9460d1e0c'
+    assert img.count(bytes.fromhex('4eb940000d50')) == 15
+    from elekloader.sdk import build
+    with tempfile.TemporaryDirectory() as tmp:
+        core = elemod.load_any(build.build(os.path.join(ROOT, 'mods', 'core-ot'), SYX, tmp)[0])
+        probe = elemod.load_any(build.build(os.path.join(HERE, 'fixtures', 'octatrack-timer'), SYX, tmp)[0])
+    assert link.link([core, probe], img).map['tm_boot']
 
 
 def test_the_core_tick_sites():

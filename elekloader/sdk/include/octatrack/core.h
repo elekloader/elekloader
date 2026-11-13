@@ -574,6 +574,18 @@ struct ot_menu_row {
 };
 /* int ev_tstretch(unsigned trk) (0.33): the time-stretch helper task is about to work out a track's stretch
  * (each pass, for each track whose machine stretches): nonzero = skip it this pass (the first taker wins). */
+/* ---- timers and interrupt vectors (firmware calls) -----------------------------------------------
+ * ot_timer_start(ticks, fn): fn runs every `ticks` UI ticks (60 a second), in the UI task, from the next
+ * due tick on, until ot_timer_cancel(slot); it returns the slot (0-31) or -1 when all 32 are busy (stock
+ * uses some). ot_vector_get(n) / ot_vector_set(n, handler): the interrupt vector table's entry n, the
+ * vector number stock installs with (0x41 the frame interrupt, 0x60 the sequencer's tick, 0xb6 the card).
+ * Some are installed after ev_boot_done: wrap a stock handler (get it, set yours, call the stock one from
+ * yours) from your first tick, not at boot. */
+#define ot_timer_start      ((int (*)(uint32_t ticks, void (*fn)(void)))0x40031a0cu)
+#define ot_timer_cancel     ((void (*)(int slot))0x40031abcu)
+#define ot_vector_get       ((uint32_t (*)(unsigned n))0x40000d64u)   /* d0: not void * (GCC reads a0) */
+#define ot_vector_set       ((void (*)(unsigned n, void *handler))0x40000d50u)
+
 static inline int ot_midi_mode(void) { return ((int (*)(void))0x40033970u)(); }
 static inline int ot_pset_track(void)
 {

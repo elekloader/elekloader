@@ -924,6 +924,15 @@ machine stretches. `ev_tstretch` runs before each such track: `int f(unsigned tr
 it this pass (the first taker wins), for a mod that plays the track itself or saves the work.
 `tests/fixtures/octatrack-tstretch` is a probe.
 
+### Timers and interrupt vectors on the Octatrack
+
+Two firmware services are calls in `octatrack/core.h`, no core site. `ot_timer_start(ticks, fn)` runs
+`fn` every `ticks` UI ticks (60 a second) in the UI task until `ot_timer_cancel(slot)`; it returns the slot,
+or -1 when stock's 32 are taken. `ot_vector_get(n)` and `ot_vector_set(n, handler)` read and write the
+interrupt vector table by the number stock installs with (0x41 the frame interrupt). `ot_vector_get`
+returns a `uint32_t`: the routine answers in d0, and GCC takes a returned pointer from a0.
+`tests/fixtures/octatrack-timer` uses both.
+
 ### The DSP bus on the Octatrack (dspbus 0.1)
 
 `mods/dspbus-ot` is a second, optional bus, for code that runs on DSP core
