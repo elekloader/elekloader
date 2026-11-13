@@ -167,15 +167,16 @@ unsigned core_usb_mode(void)
 /* Posts made while booting are lost: USB starts in main (0x401062e6) before
  * the UI task installs its queue (0x400996fc). So at ev_boot_done core reads
  * the level stock keeps beside the record (0x4133dbc0, the int every poster
- * writes) and the record's mode byte, and reports it as the first level. */
-#define USB_RECORD ((const uint8_t *)0x4133dba4u)
+ * writes) and the live mode (the int at 0x4133dbd8; the record's +8 holds
+ * nothing until a post), and reports it as the first level. */
+#define USB_MODE (*(volatile int32_t *)0x4133dbd8u)
 #define USB_CONFIGURED (*(volatile int32_t *)0x4133dbc0u)
 
 static void usb_boot(void)
 {
     const fn_u *f;
     unsigned configured = USB_CONFIGURED ? 1u : 0u;
-    usb_mode = USB_RECORD[8];
+    usb_mode = (uint8_t)USB_MODE;
     if (usb_last != 0xffu)
         return;
     usb_last = configured;
