@@ -8,6 +8,7 @@ variables; a test whose inputs are missing is skipped, not passed:
   ELEKLOADER_OT_BIN   OCTATRACK_OS1.40C.bin
 Building mods/core-ot also needs the cross assembler (m68k-linux-gnu-as).
 """
+import glob
 import json
 import os
 import struct
@@ -1040,6 +1041,7 @@ SEQ_SITES = {
     'core_ui_tick': (0x40056c28, '2039460d1e6c', 'ev_ui_tick'),               # 0.15: move.l 0x460d1e6c,d0
     'core_part_apply_heavy': (0x40009094, '4fefff9848d77cfc', 'ev_part_apply'),   # 0.21
     'core_tempo_open': (0x40059ef8, '487aca3648780005', 'ev_tempo_open'),     # 0.21: pea (pc) ; pea 5
+    'core_knob_draw': (0x400467a4, '4fefffd048d70cfc', 'ev_knob_draw'),       # 0.23
 }
 
 
@@ -1092,8 +1094,10 @@ def check_entry_sites(table, source):
     import re
     with open(os.path.join(ROOT, 'mods', 'core-ot', 'mod.json')) as fh:
         j = json.load(fh)
-    with open(os.path.join(ROOT, 'mods', 'core-ot', source)) as fh:
-        src = fh.read()
+    src = ''
+    for f in sorted(glob.glob(os.path.join(ROOT, 'mods', 'core-ot', '*.s'))):   # a stub may live in any of them
+        with open(f) as fh:
+            src += fh.read()
     st, img = stock()
     sites = {s['target']: s for s in j['sites']}
     taken = _taken_before_seq() + [(a, len(h) // 2) for t2 in ENTRY_TABLES if t2 is not table
@@ -1212,6 +1216,10 @@ def test_the_core_held_sites():
     assert [DEV.main_load + k for k in recs] == [0x400beddc + 22 * n for n in range(6)]
     recs = [k for k in range(len(img) - 3) if img[k:k + 4] == struct.pack('>I', 0x40053498)]
     assert [DEV.main_load + k for k in recs] == [0x400bae86 + 22 * n for n in range(7)]
+    refs = [DEV.main_load + k for k in range(2, len(img) - 3) if img[k:k + 4] == struct.pack('>I', 0x400467a4)]
+    code = [a - 2 for a in refs if a < 0x400d3000]
+    assert code == [0x4002fa1a, 0x4002faba, 0x4002fb58]       # RECORDING SETUP: two jsr, one lea (then jsr (a3))
+    assert all(0x400d3000 <= a < 0x400d6000 for a in refs if a >= 0x400d3000) and len(refs) - 3 >= 20   # descriptors
     recs = [k for k in range(len(img) - 3) if img[k:k + 4] == struct.pack('>I', 0x4007a2ec)]
     assert [DEV.main_load + k for k in recs] == [0x400cfbca + 22 * n for n in range(7)]
     o = 0x40053a5c - DEV.main_load                           # the scene knob returns nothing (this exit, or a tail jmp)
@@ -1251,7 +1259,8 @@ def test_the_held_probe_links():
     """tests/fixtures/octatrack-held with core-ot 0.11: its handlers are the entries of the three tables."""
     probe_tables('octatrack-held', (('ev_edit_held', 'hd_edit_held'), ('ev_copy', 'hd_copy'),
                                     ('ev_midi_note_sent', 'hd_note_sent'), ('ev_scene_knob', 'hd_scene_knob'),
-                                    ('ev_tempo_open', 'hd_tempo_open'), ('ev_arp_knob', 'hd_arp_knob')))
+                                    ('ev_tempo_open', 'hd_tempo_open'), ('ev_arp_knob', 'hd_arp_knob'),
+                                    ('ev_knob_draw', 'hd_knob_draw')))
 
 
 # core-ot 0.12 (seq.s): the sequencer tick's per-track advance (the length a track wraps at) and the
@@ -1742,7 +1751,8 @@ def test_the_example_subscribes_to_the_bus():
                       'ev_track_length': 0, 'ev_pattern_wrap': 0, 'ev_rec_length': 0,
                       'ev_track_pattern': 0, 'ev_ui_tick': 0, 'ev_card_cmd': 0, 'ev_task_switch': 0,
                       'ev_track_tab_draw': 0, 'ev_card_done': 0, 'ev_settings_load': 0,
-                      'ev_lfo_step': 0, 'ev_scene_knob': 0, 'ev_tempo_open': 0, 'ev_arp_knob': 0}, counts
+                      'ev_lfo_step': 0, 'ev_scene_knob': 0, 'ev_tempo_open': 0, 'ev_arp_knob': 0,
+                      'ev_knob_draw': 0}, counts
     at = ln.tables['ev_draw'][0]
     o = ln.layout['run_load'] + (at - DEV.ddr[0]) - DEV.main_load
     assert struct.unpack('>II', ln.image[o:o + 8]) == (ln.map['hello_draw'], 0)

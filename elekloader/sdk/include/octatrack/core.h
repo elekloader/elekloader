@@ -132,6 +132,17 @@ enum {
 };
 #define OT_P2_REFUSED       ((int32_t)0x80000000)
 #define OT_SETUP_ARP        4                   /* ev_setup_dial's page: MIDI ARP SETUP (0.22) */
+
+/* void ev_knob_draw(struct ot_knob *k) (0.23): the knob widget (0x400467a4) is about to draw a knob: the
+ * pages whose parameter descriptors name it, RECORDING SETUP, two more drawers; k is its own arguments: change the value, the
+ * flags or the formatter (fmt(buf, value), as stock's) and the widget draws that. In the drawing task. */
+struct ot_knob {
+    int32_t x, y, mode;
+    int32_t value;
+    uint32_t flags;
+    const void *fmt;
+    void *canvas;
+};
 int32_t ot_page2_write(unsigned trk, unsigned page, unsigned slot, int32_t val);
 
 /* ---- paced MIDI out -----------------------------------------------------------------------------

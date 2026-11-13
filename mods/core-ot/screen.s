@@ -194,3 +194,30 @@ core_tab_draw:
         bne.s   8f
         jmp     0x4004014c
 8:      jmp     0x400401c6
+
+| ---- the knob widget (core-ot 0.23) ---------------------------------------------------------------------
+| 0x400467a4 (was: lea -48(sp),sp ; movem.l d2-d7/a2-a3,(sp)), the knob widget: the page parameter
+| descriptors name it (their widget field, 0x400d3438 on), RECORDING SETUP calls it (0x4002fa1a, 0x4002faba,
+| 0x4002fb5e) and two drawers reach it by a tail branch (0x40047c76, 0x40047d04). Its arguments, at 4(sp) on entry: x, y, mode, value, flags, formatter, canvas (struct
+| ot_knob, core.h). octabam's RLEN PLEN and REC THRESHOLD (MIT) swap RECORDING SETUP's formatters at the
+| calls. Handlers: void f(struct ot_knob *k): read it, or change value, flags or the formatter; the
+| widget reads them after. In the task that draws the screen.
+        .globl  core_knob_draw
+core_knob_draw:
+        tst.l   ev_knob_draw
+        beq.s   9f
+        lea     -20(%sp), %sp
+        movem.l %d0-%d1/%a0-%a2, (%sp)
+        lea     ev_knob_draw, %a2
+1:      move.l  (%a2)+, %d1
+        beq.s   2f
+        pea     24(%sp)                 | the arguments (20 saved + the return address)
+        movea.l %d1, %a0
+        jsr     (%a0)
+        addq.l  #4, %sp
+        bra.s   1b
+2:      movem.l (%sp), %d0-%d1/%a0-%a2
+        lea     20(%sp), %sp
+9:      lea     -48(%sp), %sp
+        movem.l %d2-%d7/%a2-%a3, (%sp)
+        jmp     0x400467ac

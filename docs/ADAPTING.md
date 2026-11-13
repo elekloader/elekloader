@@ -812,11 +812,16 @@ The places octabam's EVENTS module holds for PLOCKS P2 and MIDI FOLLOW (MIT).
 | `ev_copy` | before one of the pattern data's copies (the clipboard, the undo buffer, the bank: 22 memcpy places, not every copy) | `void f(dst, src, len)` | the sys task |
 | `ev_midi_note_sent` | a MIDI track's note has gone out | `void f(trk, note, vel, pool)`; pool 1 is the arpeggiator's | the sequencer's task |
 
-`tests/fixtures/octatrack-held` is a probe of all six; `"resources": {"core": "0.22"}`.
+`tests/fixtures/octatrack-held` is a probe of these and of `ev_knob_draw`; `"resources": {"core": "0.23"}`.
 
 `ev_setup_dial` covers every SETUP window that draws its knobs with the stock widget: AMP, FX1 and
 FX2 SETUP, SRC / NOTE SETUP (`page` `OT_P2_PLAYBACK`) and MIDI ARP SETUP (`page` `OT_SETUP_ARP`; both
 core-ot 0.22).
+
+`ev_knob_draw` (core-ot 0.23) is the other knob widget's entry (0x400467a4): the pages whose parameter
+descriptors name it, RECORDING SETUP and two more drawers. `void f(struct ot_knob *k)` gets the widget's
+own arguments (x, y, mode, value, flags, formatter, canvas; `octatrack/core.h`) and may change the value,
+the flags or the formatter before it draws: RLEN PLEN's and REC THRESHOLD's formatters, say.
 
 ### The DSP bus on the Octatrack (dspbus 0.1)
 
