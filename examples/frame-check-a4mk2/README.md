@@ -7,7 +7,9 @@ copies voice 2's 13 frame words over voice 1's every block, so with trigs
 on track 1 only, track 1 should fall silent. Every block it also reads back
 the frame stock packed the block before and compares voice 1's words with
 what it left there. What it records, in its exported `frame_check`, is in
-the comment at the top of `frame.c`.
+the comment at the top of `frame.c`. On a unit (stock 1.56 base), track 1
+went silent while armed and came back when disarmed, with every packed
+frame matching what the mod left.
 
 ```bash
 # needs m68k-linux-gnu binutils and gcc (or set ELEKLOADER_CROSS to another prefix)
