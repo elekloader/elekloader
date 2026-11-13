@@ -1,6 +1,6 @@
 {
  "id": "frame-check",
- "version": "0.1",
+ "version": "0.2",
  "title": "Analog frame write check",
  "category": "Examples",
  "license": "GPL-2.0-or-later",

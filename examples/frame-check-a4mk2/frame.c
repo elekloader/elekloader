@@ -9,7 +9,7 @@
  * Each call it also reads back the analog frame stock packed the block
  * before (the DMA buffer 0x80002800 + i * 0x1f0, i the buffer index at
  * 0x417357f4; frame word w in the low half of the long at +0x10 + w * 4,
- * the high half 0x9001) and compares voice 1's 13 words with what this mod
+ * the high half 0x9001, with bit 26 also set on word 0's) and compares voice 1's 13 words with what this mod
  * left in the frame then: so a match proves a handler's write is what the
  * pack sends.
  *
@@ -78,7 +78,8 @@ void fc_frame(uint16_t *words)
         packed = PACK_BUF(PACK_INDEX & 1u);
         for (w = 0; w < VOICE_WORDS; w++) {
             uint32_t l = packed[w];
-            if ((l >> 16) != 0x9001u)
+            /* the pack sets bit 26 of word 0's long after filling it */
+            if (((l & ~0x04000000u) >> 16) != 0x9001u)
                 frame_check.pack_tag_bad++;
             if ((uint16_t)l != left[w] && !bad) {
                 bad = 1;

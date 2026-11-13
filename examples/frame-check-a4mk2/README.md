@@ -14,6 +14,6 @@ the comment at the top of `frame.c`.
 python -m elekloader.sdk.build mods/core-a4mk2 --stock Analog-Four_MKII_OS1.56.syx
 python -m elekloader.sdk.build examples/frame-check-a4mk2 --stock Analog-Four_MKII_OS1.56.syx
 python -m elekloader.patch --stock Analog-Four_MKII_OS1.56.syx \
-    --mod mods/core-a4mk2/out/core-0.7.elemod --mod examples/frame-check-a4mk2/out/frame-check-0.1.elemod \
+    --mod mods/core-a4mk2/out/core-0.7.elemod --mod examples/frame-check-a4mk2/out/frame-check-0.2.elemod \
     --out a4-frame.syx --version FC56
 ```
