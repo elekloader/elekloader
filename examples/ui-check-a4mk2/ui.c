@@ -116,12 +116,15 @@ void uc_idle(void)
  *
  * The panel link may be inside a message when the fault lands (one longest
  * message is 10 bytes: 0x1x, a column of pixels), and the panel would take
- * the cursor command as its data; so each draw starts with nine 0x00 bytes
- * (one-byte messages to the panel) first. No calls into stock. */
+ * the cursor command as its data; so each draw starts with nine 0xb8 bytes
+ * first: a one-byte message stock itself sends after each frame (about one
+ * header in five of its panel traffic), so the panel takes each as a whole
+ * message once the cut one is filled. No calls into stock. */
 #define PANEL_USR (*(const volatile uint8_t *)0xec070004u)
 #define PANEL_UTB (*(volatile uint8_t *)0xec07000cu)
 #define PANEL_TXRDY 0x08u
 #define PANEL_SPINS 200000u      /* most polls of TXRDY for one byte */
+#define PANEL_SYNC 0xb8u         /* a one-byte message (see above) */
 
 /* DTIM0's count runs free from the bus clock, also with interrupts masked:
  * stock's 64-bit clock (0x40105f84) adds its 32-bit unsigned differences, and
@@ -186,7 +189,7 @@ static void uc_crash_draw(void)
 {
     unsigned col, i;
     for (i = 0; i < 9; i++)
-        uc_tx(0x00);
+        uc_tx(PANEL_SYNC);
     uc_row_start(0, 1);
     col = uc_puts(0, "UC CRASH N");
     col = uc_puthex(col, ui_check.crash, 2);
