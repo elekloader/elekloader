@@ -590,6 +590,9 @@ struct ot_menu_row {
  *   int ev_fx_choose(unsigned slot, unsigned trk, unsigned id)   YES in the FX1 (slot 0) or FX2 (1) chooser
  *                                          is about to put effect id on track trk: nonzero = refused
  *                                          (the first taker), the chooser stays open. In the UI task. */
+/* int ev_boot_frame(unsigned frame, void *plane) (0.37): each frame of the start-up animation, before stock
+ * draws it (the UI task, before any project): nonzero = you drew this frame on plane (ot_blit) and stock
+ * draws nothing of its own; the screen flush and the LED sweep go on either way. */
 /* ---- timers and interrupt vectors (firmware calls) -----------------------------------------------
  * ot_timer_start(ticks, fn): fn runs every `ticks` UI ticks (60 a second), in the UI task, from the next
  * due tick on, until ot_timer_cancel(slot); it returns the slot (0-31) or -1 when all 32 are busy (stock

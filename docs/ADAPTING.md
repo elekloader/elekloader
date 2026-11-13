@@ -949,6 +949,15 @@ slot, unsigned trk, unsigned id)` runs when YES in the FX1 (slot 0) or FX2 (slot
 effect `id` on track `trk`; nonzero refuses it (the first taker wins) and the chooser stays open.
 `tests/fixtures/octatrack-guard` is a probe of both.
 
+### The start-up art on the Octatrack (core-ot 0.37)
+
+`int ev_boot_frame(unsigned frame, void *plane)` runs at the start of each frame of the start-up
+animation, before any project loads: return nonzero after drawing the frame on `plane` yourself
+(`ot_blit`), and stock draws none of its logo; the screen flush and the LED sweep go on either way.
+`tests/fixtures/octatrack-bootart` draws a bar instead of the logo. A SETUP page that needs a knob with more
+labels than stock's widget shows (Modwerk's "wide dial") swaps the widget in `ev_setup_dial`; no site of its
+own.
+
 ### Timers and interrupt vectors on the Octatrack
 
 Two firmware services are calls in `octatrack/core.h`, no core site. `ot_timer_start(ticks, fn)` runs
