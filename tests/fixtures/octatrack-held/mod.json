@@ -13,8 +13,9 @@
   {"event": "ev_tempo_open", "fn": "hd_tempo_open", "order": 50},
   {"event": "ev_arp_knob", "fn": "hd_arp_knob", "order": 50},
   {"event": "ev_knob_draw", "fn": "hd_knob_draw", "order": 50},
-  {"event": "ev_leds", "fn": "hd_leds", "order": 50}
+  {"event": "ev_leds", "fn": "hd_leds", "order": 50},
+  {"event": "ev_trig_box_draw", "fn": "hd_trig_box", "order": 50}
  ],
  "requires": ["core"],
- "resources": {"core": "0.24"}
+ "resources": {"core": "0.25"}
 }

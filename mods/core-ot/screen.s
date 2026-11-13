@@ -248,3 +248,29 @@ core_leds:
 9:      lea     -20(%sp), %sp
         movem.l %d2/%a2-%a5, (%sp)
         jmp     0x400136b0
+
+| ---- the trig mode box (core-ot 0.25) ------------------------------------------------------------------
+| 0x400453f8 (was: movem.l (sp),d2-d7/a2-a6 ; lea 44(sp),sp ; then rts), the one way out of the trig mode
+| box's drawer 0x40044920 (the keyboard of CHROMATIC, the slots, the arp), which the pages and the windows
+| call to draw it. octabam's QUANTIZER and CHORDS (MIT) draw over it (the octave number, the chord).
+| Handlers: void f(unsigned mode), mode the trig mode (0x460d16f0), after stock drew the box (or found
+| none to draw): draw over it.
+        .globl  core_trig_box
+core_trig_box:
+        tst.l   ev_trig_box_draw
+        beq.s   9f
+        lea     -20(%sp), %sp
+        movem.l %d0-%d1/%a0-%a2, (%sp)
+        lea     ev_trig_box_draw, %a2
+1:      move.l  (%a2)+, %d1
+        beq.s   2f
+        move.l  0x460d16f0, -(%sp)
+        movea.l %d1, %a0
+        jsr     (%a0)
+        addq.l  #4, %sp
+        bra.s   1b
+2:      movem.l (%sp), %d0-%d1/%a0-%a2
+        lea     20(%sp), %sp
+9:      movem.l (%sp), %d2-%d7/%a2-%a6
+        lea     44(%sp), %sp
+        rts

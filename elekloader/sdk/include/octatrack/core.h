@@ -139,6 +139,9 @@ enum {
 /* void ev_leds(uint8_t *map) (0.24): the LED map (17 bytes, one bit an LED: id = byte * 8 + bit, the
  * ids of the panel's LED list; trig and track LEDs are two-colour pairs, id and id + 1) is about to be
  * sent to the panel; set or clear bits: stock rewrites its own on its next pass. */
+/* void ev_trig_box_draw(unsigned mode) (0.25): the trig mode box's drawer is done (mode = OT_TRIG_MODE); draw
+ * over the box (ot_blit). */
+#define OT_TRIG_MODE        OT_L(0x460d16f0)
 #define OT_LED_MAP          ((volatile uint8_t *)0x460ba98cu)
 #define OT_LED_ON(m, id)    ((m)[(id) >> 3] |= (uint8_t)(1u << ((id) & 7)))
 #define OT_LED_OFF(m, id)   ((m)[(id) >> 3] &= (uint8_t)~(1u << ((id) & 7)))

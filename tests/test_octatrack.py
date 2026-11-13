@@ -365,7 +365,7 @@ def test_the_core_moves_the_arena_past_its_reserve():
     assert set(calls) == (set(BUS_SITES) | set(STORE_SITES) | set(VOICE_SITES) | set(EDIT_SITES) | mutes
                           | entries | {'core_copy'} | {'core_note_0x%08x' % a for a in NOTE_SITES}
                           | {v[1] for v in TICK_SITES.values()} | {v[1] for v in PATTERN_SITES.values()}
-                          | set(DIAL2_SITES)), calls
+                          | set(DIAL2_SITES) | {'core_trig_box'}), calls
 
 
 def reserve_docs(img, bss, fixed=False):
@@ -564,7 +564,7 @@ def test_the_core_bus_sites():
                                               | {'ev_copy', 'ev_midi_note_sent', 'ev_track_length', 'ev_pattern_wrap',
                                                  'ev_rec_length', 'ev_track_pattern', 'ev_card_cmd', 'ev_task_switch',
                                                  'ev_track_tab_draw', 'ev_card_done', 'ev_settings_load',
-                                                 'ev_lfo_step'})
+                                                 'ev_lfo_step', 'ev_trig_box_draw'})
     assert j['collections']['ev_idle'] == 4
     for sym, target in JMP_BACK.items():       # a jmp stub goes back to the instruction after its site
         addr, stock_hex, _ev = BUS_SITES[target]
@@ -1044,6 +1044,8 @@ SEQ_SITES = {
     'core_knob_draw': (0x400467a4, '4fefffd048d70cfc', 'ev_knob_draw'),       # 0.23
     'core_leds': (0x400136a8, '4fefffec48d73c04', 'ev_leds'),                 # 0.24: the LED flush
 }
+# core-ot 0.25: the trig mode box drawer's one way out (movem.l (sp) ; lea 44(sp) ; rts).
+TRIG_BOX_SITE = (0x400453f8, '4cd77cfc4fef002c')
 
 
 def _branch_target(img, o):
@@ -1203,6 +1205,28 @@ def test_the_core_dial2_sites():
         assert hit is None or inside.get(DEV.main_load + o) == hit, hex(DEV.main_load + o)   # its own bne
 
 
+def test_the_core_trig_box_site():
+    """core-ot 0.25: the trig mode box drawer (0x40044920, its prologue saves the same registers) leaves
+    only through 0x400453f8 (restore, lea, rts); the site is stock, whole, not entered past its start,
+    and clear of every other site."""
+    with open(os.path.join(ROOT, 'mods', 'core-ot', 'mod.json')) as fh:
+        j = json.load(fh)
+    st, img = stock()
+    a, h = TRIG_BOX_SITE
+    o = a - DEV.main_load
+    assert img[o:o + 10].hex() == h + '4e75'
+    assert img[0x40044920 - DEV.main_load:0x40044928 - DEV.main_load].hex() == '4fefffd448d77cfc'
+    by = {int(x['addr'], 16): x for x in j['sites']}
+    assert (by[a]['op'], by[a]['stock'], by[a]['target']) == ('jmp', h, 'core_trig_box')
+    assert j['collections']['ev_trig_box_draw'] == 4
+    taken = _taken_before_seq() + [(b, len(x) // 2) for t2 in ENTRY_TABLES for b, x, _e in t2.values()]
+    for b, m in taken:
+        assert not (b < a + 8 and a < b + m), hex(b)
+    inside = {k: 'trig_box' for k in range(a + 1, a + 8)}
+    for k in range(0, len(img) - 6, 2):
+        assert _branch_into(img, k, inside) is None, hex(DEV.main_load + k)
+
+
 def test_the_core_held_sites():
     """core-ot 0.11's sites: the held editor's entry (as the 0.10 entries; its six encoder records point
     at it); the copies: each `jsr memcpy` and each `lea memcpy,aN` (whose register the routine calls)
@@ -1261,7 +1285,8 @@ def test_the_held_probe_links():
     probe_tables('octatrack-held', (('ev_edit_held', 'hd_edit_held'), ('ev_copy', 'hd_copy'),
                                     ('ev_midi_note_sent', 'hd_note_sent'), ('ev_scene_knob', 'hd_scene_knob'),
                                     ('ev_tempo_open', 'hd_tempo_open'), ('ev_arp_knob', 'hd_arp_knob'),
-                                    ('ev_knob_draw', 'hd_knob_draw'), ('ev_leds', 'hd_leds')))
+                                    ('ev_knob_draw', 'hd_knob_draw'), ('ev_leds', 'hd_leds'),
+                                    ('ev_trig_box_draw', 'hd_trig_box')))
 
 
 # core-ot 0.12 (seq.s): the sequencer tick's per-track advance (the length a track wraps at) and the
@@ -1753,7 +1778,7 @@ def test_the_example_subscribes_to_the_bus():
                       'ev_track_pattern': 0, 'ev_ui_tick': 0, 'ev_card_cmd': 0, 'ev_task_switch': 0,
                       'ev_track_tab_draw': 0, 'ev_card_done': 0, 'ev_settings_load': 0,
                       'ev_lfo_step': 0, 'ev_scene_knob': 0, 'ev_tempo_open': 0, 'ev_arp_knob': 0,
-                      'ev_knob_draw': 0, 'ev_leds': 0}, counts
+                      'ev_knob_draw': 0, 'ev_leds': 0, 'ev_trig_box_draw': 0}, counts
     at = ln.tables['ev_draw'][0]
     o = ln.layout['run_load'] + (at - DEV.ddr[0]) - DEV.main_load
     assert struct.unpack('>II', ln.image[o:o + 8]) == (ln.map['hello_draw'], 0)
