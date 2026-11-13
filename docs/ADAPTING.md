@@ -909,6 +909,14 @@ shown at the right; a row with neither is a heading. Each pane is a table: `ot_p
 a mod's rows follow in contribution order, and the pane scrolls past six. `ot_pset_track()` says which track
 the pane shows (-1 on PAT). `tests/fixtures/octatrack-pset` adds a row to the audio tracks' panes.
 
+### PERSONALIZE rows on the Octatrack (core-ot 0.32)
+
+PROJECT > SYSTEM > PERSONALIZE keeps three parallel arrays, so a row is one entry in each of `ot_pers_label`
+(`const char *`), `ot_pers_get` (`const char *get(void)`, the value text) and `ot_pers_set`
+(`void set(int32_t delta, int32_t press)`; stock saves the settings after it). Contribute one entry to each,
+with the same order; core puts stock's 16 first. On an MKI, whose list stops before LED BRIGHTNESS, a mod's
+rows bring that row into view too. `tests/fixtures/octatrack-pers` adds one.
+
 ### The DSP bus on the Octatrack (dspbus 0.1)
 
 `mods/dspbus-ot` is a second, optional bus, for code that runs on DSP core

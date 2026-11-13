@@ -342,7 +342,7 @@ def test_the_core_moves_the_arena_past_its_reserve():
         o = int(s['addr'], 16) - DEV.main_load
         old = bytes.fromhex(s['stock'])
         assert img[o:o + len(old)] == old, s['addr']
-        if s['op'] == 'ptr' and s['target'] != 'core_copy' and not s['target'].startswith(('core_wave_', 'ot_lfo_waves', 'ot_ptn_rows', 'ot_track_rows', 'ot_midi_rows')):   # 0.11's copies and 0.28's LFO waves are not the arena
+        if s['op'] == 'ptr' and s['target'] != 'core_copy' and not s['target'].startswith(('core_wave_', 'ot_lfo_waves', 'ot_ptn_rows', 'ot_track_rows', 'ot_midi_rows', 'ot_pers_')):   # 0.11's copies and 0.28's LFO waves are not the arena
             v = int(s['stock'], 16)
             t, add = named[v]
             assert (s['target'], s.get('addend', 0)) == (t, add), s['addr']
@@ -367,7 +367,7 @@ def test_the_core_moves_the_arena_past_its_reserve():
                           | {v[1] for v in TICK_SITES.values()} | {v[1] for v in PATTERN_SITES.values()}
                           | set(DIAL2_SITES) | {'core_trig_box'}
                           | {v[1] for v in LFO_CODE.values()} | {'core_popup'}
-                          | {v[1] for v in RATE_SITES.values()}), calls
+                          | {v[1] for v in RATE_SITES.values()} | {'core_pers_count'}), calls
 
 
 def reserve_docs(img, bss, fixed=False):
@@ -568,7 +568,8 @@ def test_the_core_bus_sites():
                                                  'ev_track_tab_draw', 'ev_card_done', 'ev_settings_load',
                                                  'ev_lfo_step', 'ev_trig_box_draw', 'ev_bank_copied',
                                                  'ot_lfo_waves', 'ev_popup', 'ev_play_increment',
-                                                 'ot_ptn_rows', 'ot_track_rows', 'ot_midi_rows'})
+                                                 'ot_ptn_rows', 'ot_track_rows', 'ot_midi_rows',
+                                                 'ot_pers_label', 'ot_pers_get', 'ot_pers_set'})
     assert j['collections']['ev_idle'] == 4
     for sym, target in JMP_BACK.items():       # a jmp stub goes back to the instruction after its site
         addr, stock_hex, _ev = BUS_SITES[target]
@@ -1491,6 +1492,56 @@ def test_the_core_pattern_settings_rows():
                 assert (word(ln.image, h), word(ln.image, h + 24)) == (n, at), (tab, hex(h))
 
 
+# core-ot 0.32 (pers.s): PERSONALIZE's three parallel arrays as tables, their operands ptr sites.
+PERS_ARRAYS = {'ot_pers_label': (0x400b2a34, [0x40068efe]), 'ot_pers_get': (0x400b2a74, [0x40068f0a]),
+               'ot_pers_set': (0x400b2ac0, [0x40069022, 0x4006903e, 0x40069056])}
+PERS_COUNT = (0x40068fb2, '720f92802f01')            # moveq #15,d1 ; sub.l d0,d1 ; move.l d1,-(sp)
+
+
+def test_the_core_personalize_rows():
+    """core-ot 0.32: every operand naming one of the arrays is a ptr site on its table and the only
+    reference; core's entries are stock's 16, first; the count site is stock, whole, not branched into;
+    linked alone the tables hold stock's arrays where the operands now point."""
+    import re
+    with open(os.path.join(ROOT, 'mods', 'core-ot', 'mod.json')) as fh:
+        j = json.load(fh)
+    st, img = stock()
+    by = {int(x['addr'], 16): x for x in j['sites']}
+    word = lambda im, a: struct.unpack('>I', im[a - DEV.main_load:a - DEV.main_load + 4])[0]
+    dis = DEV.decoder()
+    for tab, (arr, ops) in PERS_ARRAYS.items():
+        assert j['collections'][tab] == 4
+        for a in ops:
+            assert word(img, a) == arr and (by[a]['op'], by[a]['target']) == ('ptr', tab)
+        assert img.count(struct.pack('>I', arr)) == len(ops), tab
+        mine = [c for c in j['contribute'] if c['to'] == tab]
+        assert [bytes.fromhex(c['data']) for c in mine] == [
+            img[arr + 4 * i - DEV.main_load:arr + 4 * i + 4 - DEV.main_load] for i in range(16)]
+        assert all(c['order'] == -1000000 for c in mine)
+    a, h = PERS_COUNT
+    assert (by[a]['op'], by[a]['stock'], by[a]['target']) == ('jmp', h, 'core_pers_count')
+    assert img[a - DEV.main_load:a - DEV.main_load + 6].hex() == h
+    ok, note = elemod.insn_check(img, a, 6, DEV)
+    assert ok, note
+    inside = {k: 'core_pers_count' for k in range(a + 1, a + 6)}
+    for k in range(0, len(img) - 6, 2):
+        assert _branch_into(img, k, inside) is None, hex(DEV.main_load + k)
+    src = open(os.path.join(ROOT, 'mods', 'core-ot', 'pers.s')).read()
+    assert re.search(r'jmp\s+0x%08x' % (a + 6), src)
+    from elekloader.sdk import build
+    with tempfile.TemporaryDirectory() as tmp:
+        core = elemod.load_any(build.build(os.path.join(ROOT, 'mods', 'core-ot'), SYX, tmp)[0])
+        probe = elemod.load_any(build.build(os.path.join(HERE, 'fixtures', 'octatrack-pers'), SYX, tmp)[0])
+    for mods, n in (([core], 16), ([core, probe], 17)):
+        ln = link.link(mods, img)
+        for tab, (arr, ops) in PERS_ARRAYS.items():
+            at = ln.tables[tab][0]
+            assert ln.tables[tab][1] == n
+            o = ln.layout['run_load'] + (at - DEV.ddr[0]) - DEV.main_load
+            assert ln.image[o:o + 64] == img[arr - DEV.main_load:arr + 64 - DEV.main_load], tab
+            assert all(word(ln.image, x) == at for x in ops)
+
+
 def test_the_core_tick_sites():
     """core-ot 0.12's sites: stock, whole, a bgt right after each compare (it tests what the stub's
     compare leaves), the sequencer's tick an interrupt handler, no branch inside, clear of every
@@ -1966,7 +2017,8 @@ def test_the_example_subscribes_to_the_bus():
                       'ev_lfo_step': 0, 'ev_scene_knob': 0, 'ev_tempo_open': 0, 'ev_arp_knob': 0,
                       'ev_knob_draw': 0, 'ev_leds': 0, 'ev_trig_box_draw': 0,
                       'ev_bank_copied': 0, 'ot_lfo_waves': 0, 'ev_popup': 0, 'ev_play_increment': 0,
-                      'ot_ptn_rows': 6, 'ot_track_rows': 6, 'ot_midi_rows': 6}, counts
+                      'ot_ptn_rows': 6, 'ot_track_rows': 6, 'ot_midi_rows': 6,
+                      'ot_pers_label': 16, 'ot_pers_get': 16, 'ot_pers_set': 16}, counts
     at = ln.tables['ev_draw'][0]
     o = ln.layout['run_load'] + (at - DEV.ddr[0]) - DEV.main_load
     assert struct.unpack('>II', ln.image[o:o + 8]) == (ln.map['hello_draw'], 0)
@@ -2448,7 +2500,7 @@ def test_trig_events_ot_builds_and_links():
     # core's pointers at its own tables (0.31's PATTERN SETTINGS panes) follow where the tables land
     with open(os.path.join(ROOT, 'mods', 'core-ot', 'mod.json')) as fh:
         windows += [(int(s['addr'], 16) - DEV.main_load, 4) for s in json.load(fh)['sites']
-                    if s['op'] == 'ptr' and s['target'] in PSET_PANES]
+                    if s['op'] == 'ptr' and (s['target'] in PSET_PANES or s['target'] in PERS_ARRAYS)]
     if alone.layout['reserve'] != only_core.layout['reserve']:
         windows += core_sites
     for i in range(len(img)):
