@@ -497,4 +497,27 @@ enum { OT_MUTE_AUDIO = 0, OT_MUTE_MIDI = 1 };
  *   void ev_copy(dst, src, len)             before one of the pattern data's copies (clipboard, undo, bank)
  *   void ev_midi_note_sent(trk, note, vel, pool)   a MIDI track's note has gone out; pool 1 = the arp's */
 
+/* ---- LFO waves (0.28) ---------------------------------------------------------------------------
+ * A mod adds a wave to every audio and MIDI LFO's WAVE list, after stock's 19 (TRI ... RND, T1-T8), in
+ * ot_lfo_waves order: value 19 is the first. Up to 13 (more count 32: the rest are SAW). Its handler runs
+ * every frame in the frame interrupt for each LFO set to it: read lfo->phase (0 .. 0x7fffff over one
+ * cycle), write lfo->out (-0x800000 .. 0x7fffff is full depth, as SAW's 2 * phase - 0x800000). restart is
+ * nonzero when the LFO restarts (a trig in TRIG, HOLD, ONE and HALF). state[] is the LFO's own (RND keeps
+ * its state there too, so start over on restart). Keep it short; do not touch the EMAC. The WAVE knob shows
+ * name (up to 4 characters) as text where stock draws an icon.
+ *   "contribute": [{"to": "ot_lfo_waves", "order": 50, "data": "00000000",
+ *                   "relocs": [[0, "abs32", "sym:my_wave", 0]]}]                                     */
+struct ot_lfo {
+    uint32_t phase;
+    int32_t out;
+    uint32_t r8;
+    uint32_t state[3];
+    uint32_t r24;
+};
+struct ot_lfo_wave {
+    const char *name;
+    void (*fn)(struct ot_lfo *lfo, int32_t restart);
+};
+#define OT_LFO_WAVE_FIRST   19
+
 #endif

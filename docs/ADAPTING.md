@@ -836,6 +836,34 @@ RELOAD (`.strd` to `.work`) copies the bank's file: `void f(const char *dst, con
 `ev_project_store` and `ev_project_reload` see the whole-set copies; a mod that keeps a file per bank copies
 it here.
 
+### LFO waves on the Octatrack (core-ot 0.28)
+
+A mod adds a waveform to every audio and MIDI LFO's WAVE list by contributing a pointer to a
+`struct ot_lfo_wave {name, fn}` to `ot_lfo_waves` (`octatrack/core.h`):
+
+```c
+static void pulse(struct ot_lfo *l, int32_t restart)
+{
+    l->out = l->phase < 0x200000u ? 0x7fffff : -0x800000;    /* a 25 % pulse */
+}
+const struct ot_lfo_wave my_wave = {"PLS", pulse};
+```
+
+```json
+"contribute": [{"to": "ot_lfo_waves", "order": 50, "data": "00000000",
+                "relocs": [[0, "abs32", "sym:my_wave", 0]]}],
+"resources": {"core": "0.28"}
+```
+
+- **Where it shows.** After stock's 19 waves (TRI to RND, T1-T8), in the table's order: the first mod
+  wave is value 19. The WAVE cell shows its name (up to 4 characters) as text; stock's waves keep their
+  icons. Up to 13 waves; a project that names a wave whose mod is gone plays SAW there.
+- **The handler** runs every frame in the frame interrupt for each LFO set to it. `lfo->phase` runs
+  0 to 0x7fffff over one cycle; write `lfo->out`, where -0x800000 to 0x7fffff is full depth. `restart`
+  is nonzero when the LFO restarts. `state[]` is the LFO's own, shared with RND. Keep it short and leave
+  the EMAC alone.
+- `tests/fixtures/octatrack-lfo-wave` adds two (PLS and HALF).
+
 ### The DSP bus on the Octatrack (dspbus 0.1)
 
 `mods/dspbus-ot` is a second, optional bus, for code that runs on DSP core

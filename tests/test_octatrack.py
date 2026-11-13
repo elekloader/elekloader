@@ -342,7 +342,7 @@ def test_the_core_moves_the_arena_past_its_reserve():
         o = int(s['addr'], 16) - DEV.main_load
         old = bytes.fromhex(s['stock'])
         assert img[o:o + len(old)] == old, s['addr']
-        if s['op'] == 'ptr' and s['target'] != 'core_copy':      # 0.11's copies are not the arena
+        if s['op'] == 'ptr' and s['target'] != 'core_copy' and not s['target'].startswith(('core_wave_', 'ot_lfo_waves')):   # 0.11's copies and 0.28's LFO waves are not the arena
             v = int(s['stock'], 16)
             t, add = named[v]
             assert (s['target'], s.get('addend', 0)) == (t, add), s['addr']
@@ -365,7 +365,8 @@ def test_the_core_moves_the_arena_past_its_reserve():
     assert set(calls) == (set(BUS_SITES) | set(STORE_SITES) | set(VOICE_SITES) | set(EDIT_SITES) | mutes
                           | entries | {'core_copy'} | {'core_note_0x%08x' % a for a in NOTE_SITES}
                           | {v[1] for v in TICK_SITES.values()} | {v[1] for v in PATTERN_SITES.values()}
-                          | set(DIAL2_SITES) | {'core_trig_box'}), calls
+                          | set(DIAL2_SITES) | {'core_trig_box'}
+                          | {v[1] for v in LFO_CODE.values()}), calls
 
 
 def reserve_docs(img, bss, fixed=False):
@@ -564,7 +565,8 @@ def test_the_core_bus_sites():
                                               | {'ev_copy', 'ev_midi_note_sent', 'ev_track_length', 'ev_pattern_wrap',
                                                  'ev_rec_length', 'ev_track_pattern', 'ev_card_cmd', 'ev_task_switch',
                                                  'ev_track_tab_draw', 'ev_card_done', 'ev_settings_load',
-                                                 'ev_lfo_step', 'ev_trig_box_draw', 'ev_bank_copied'})
+                                                 'ev_lfo_step', 'ev_trig_box_draw', 'ev_bank_copied',
+                                                 'ot_lfo_waves'})
     assert j['collections']['ev_idle'] == 4
     for sym, target in JMP_BACK.items():       # a jmp stub goes back to the instruction after its site
         addr, stock_hex, _ev = BUS_SITES[target]
@@ -1312,6 +1314,56 @@ TICK_SITES = {
 }
 
 
+# core-ot 0.28 (lfo.s): LFO waves mods add. Slots 19-31 of the wave table, both WAVE counts, the
+# label formatter's entry and the WAVE cell's icon test.
+LFO_TABLE, LFO_COUNTS = 0x400d6210, (0x400d38ac, 0x400d4218)
+LFO_CODE = {
+    0x4003be4c: ('202f00087213', 'core_wave_label'),        # move.l 8(sp),d0 ; moveq #19,d1 (the entry)
+    0x4004693c: ('7013b08265000166', 'core_wave_cell'),     # moveq #19,d0 ; cmp.l d2,d0 ; bcs.w
+}
+
+
+def test_the_core_lfo_wave_sites():
+    """core-ot 0.28's sites: slots 19-31 are SAW's padding and only data sites; both counts are 19 and
+    data; the two code sites are stock, whole, entered only at their start; with no wave contributed
+    the linked counts stay 19, with the probe's two they are 21 and slots 19-20 run core's stubs."""
+    with open(os.path.join(ROOT, 'mods', 'core-ot', 'mod.json')) as fh:
+        j = json.load(fh)
+    st, img = stock()
+    by = {int(x['addr'], 16): x for x in j['sites']}
+    word = lambda a: struct.unpack('>I', img[a - DEV.main_load:a - DEV.main_load + 4])[0]
+    assert [word(LFO_TABLE + 4 * k) for k in range(19, 32)] == [0x400038bc] * 13
+    assert len({word(LFO_TABLE + 4 * k) for k in range(19)}) > 10        # stock's own waves
+    for k in range(19, 32):
+        s = by[LFO_TABLE + 4 * k]
+        assert (s['op'], s['target'], s['stock']) == ('ptr', 'core_wave_%d' % k, '400038bc')
+    for a in LFO_COUNTS:
+        assert word(a) == 19
+        assert (by[a]['op'], by[a]['target'], by[a]['addend']) == ('ptr', 'ot_lfo_waves_n', 19)
+    inside = {}
+    for a, (stock_hex, target) in LFO_CODE.items():
+        n = len(stock_hex) // 2
+        assert (by[a]['op'], by[a]['stock'], by[a]['target']) == ('jmp', stock_hex, target)
+        o = a - DEV.main_load
+        assert img[o:o + n].hex() == stock_hex
+        ok, note = elemod.insn_check(img, a, n, DEV)
+        assert ok, (target, note)
+        for k in range(a + 1, a + n):
+            inside[k] = target
+    for o in range(0, len(img) - 6, 2):
+        assert _branch_into(img, o, inside) is None, hex(DEV.main_load + o)
+    assert j['collections']['ot_lfo_waves'] == 4
+    from elekloader.sdk import build
+    with tempfile.TemporaryDirectory() as tmp:
+        core = elemod.load_any(build.build(os.path.join(ROOT, 'mods', 'core-ot'), SYX, tmp)[0])
+        probe = elemod.load_any(build.build(os.path.join(HERE, 'fixtures', 'octatrack-lfo-wave'), SYX, tmp)[0])
+    for mods, n in (([core], 19), ([core, probe], 21)):
+        ln = link.link(mods, img)
+        lw = lambda a: struct.unpack('>I', ln.image[a - DEV.main_load:a - DEV.main_load + 4])[0]
+        assert [lw(a) for a in LFO_COUNTS] == [n, n]
+        assert [lw(LFO_TABLE + 4 * k) for k in range(19, 32)] == [ln.map['core_wave_%d' % k] for k in range(19, 32)]
+
+
 def test_the_core_tick_sites():
     """core-ot 0.12's sites: stock, whole, a bgt right after each compare (it tests what the stub's
     compare leaves), the sequencer's tick an interrupt handler, no branch inside, clear of every
@@ -1786,7 +1838,7 @@ def test_the_example_subscribes_to_the_bus():
                       'ev_track_tab_draw': 0, 'ev_card_done': 0, 'ev_settings_load': 0,
                       'ev_lfo_step': 0, 'ev_scene_knob': 0, 'ev_tempo_open': 0, 'ev_arp_knob': 0,
                       'ev_knob_draw': 0, 'ev_leds': 0, 'ev_trig_box_draw': 0,
-                      'ev_bank_copied': 0}, counts
+                      'ev_bank_copied': 0, 'ot_lfo_waves': 0}, counts
     at = ln.tables['ev_draw'][0]
     o = ln.layout['run_load'] + (at - DEV.ddr[0]) - DEV.main_load
     assert struct.unpack('>II', ln.image[o:o + 8]) == (ln.map['hello_draw'], 0)
