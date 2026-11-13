@@ -382,7 +382,9 @@ struct ot_part_select {
  *                                             0-3 and draws an empty box for the rest
  *   int ev_track_icon_draw(trk, state, x, y)  a state above 3: draw it (ot_blit at x, y; stock draws its
  *                                             7-wide glyphs at x, its 3-wide ones at x + 2) and return
- *                                             nonzero, or return 0 to leave the box empty */
+ *                                             nonzero, or return 0 to leave the box empty
+ *   void ev_track_tab_draw(trk, x, y)         a track tab, after stock drew its machine letter at x, y:
+ *                                             draw beside it (0.17) */
 struct ot_bitmap {
     uint32_t w, h;              /* at most 32 high */
     uint32_t one;               /* 1 */

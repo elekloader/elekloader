@@ -8,7 +8,7 @@
 
 enum { MAGIC, APPLY_N, APPLY_BANK, APPLY_PART, CHAIN_N, CHAIN_PAT, CHAIN_LEN, RESET_N, PANIC_N,
        LEN_N, LEN_TRK, LEN_LEN, LEN_FORCE, WRAP_N, WRAP_NOW, WRAP_OLD, REC_N, REC_TRK, REC_LEN,
-       PAT_N, PAT_PEEK_N, PAT_LAST, PAT_FORCE, UI_N, REC_FORCE, CARD_N, CARD_OP, CARD_RES, CARD_INFLIGHT, SWITCH_N, WORDS };
+       PAT_N, PAT_PEEK_N, PAT_LAST, PAT_FORCE, UI_N, REC_FORCE, CARD_N, CARD_OP, CARD_RES, CARD_INFLIGHT, SWITCH_N, TAB_N, TAB_LAST, WORDS };
 volatile uint32_t sqp[WORDS] = { 0x53515031 };  /* 'SQP1' */
 
 void sq_part_apply(unsigned bank, unsigned part)
@@ -74,3 +74,9 @@ void sq_card_cmd(const uint8_t *cmd, int result)
 }
 
 void sq_task_switch(void *task) { (void)task; ++sqp[SWITCH_N]; }
+
+void sq_tab_draw(unsigned trk, int x, int y)
+{
+    ++sqp[TAB_N];
+    sqp[TAB_LAST] = trk << 16 | (x & 0xff) << 8 | (y & 0xff);
+}

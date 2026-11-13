@@ -117,3 +117,34 @@ core_dial_fx1:
         DIAL    2, %d3, DIAL_FX1_NEXT   | OT_P2_FX1
 core_dial_amp:
         DIAL    1, %d5, DIAL_AMP_NEXT   | OT_P2_AMP
+
+| ---- the track tabs (core-ot 0.17) ---------------------------------------------------------------------
+| 0x40040146 (was: moveq #4,d0 ; cmp.l a4,d0 ; bne.s 0x400401c6), in the track tabs' renderer 0x4003fed8
+| (the UI task's display loop): stock has just drawn track d4's machine letter at x d3, y a2 + 1 (a4 the
+| track's machine). octabam's REC TRIG MUTE draws its dots here (MIT). Handlers: void f(unsigned trk,
+| int x, int y), after stock's letter: draw beside it (ot_blit). The tab's other marks come after.
+        .globl  core_tab_draw
+core_tab_draw:
+        tst.l   ev_track_tab_draw
+        beq.s   9f
+        lea     -24(%sp), %sp
+        movem.l %d0-%d2/%a0-%a2, (%sp)
+        move.l  %a2, %d2
+        addq.l  #1, %d2                 | the letter's y (d2: the handlers keep it)
+        lea     ev_track_tab_draw, %a2
+1:      move.l  (%a2)+, %d1
+        beq.s   2f
+        move.l  %d2, -(%sp)
+        move.l  %d3, -(%sp)
+        move.l  %d4, -(%sp)
+        movea.l %d1, %a0
+        jsr     (%a0)
+        lea     12(%sp), %sp
+        bra.s   1b
+2:      movem.l (%sp), %d0-%d2/%a0-%a2
+        lea     24(%sp), %sp
+9:      moveq   #4, %d0
+        cmp.l   %a4, %d0
+        bne.s   8f
+        jmp     0x4004014c
+8:      jmp     0x400401c6

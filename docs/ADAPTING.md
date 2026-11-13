@@ -394,6 +394,7 @@ declares"*).
 | `ev_boot_early` (0.8) | once, at boot, before the OS | `void f(void)` | core's code and data are in place and the on-chip SRAM has its stock values; no task, interrupt or OS call yet |
 | `ev_track_icon` (0.8) | an audio track's box on the screen | `unsigned f(unsigned trk, unsigned state)` | returns the state the box shows (chained). Stock's: bit 0 the track plays, bits 1-2 its recorder |
 | `ev_track_icon_draw` (0.8) | a box in a state stock has no glyph for (above 3) | `int f(unsigned trk, unsigned state, int x, int y)` | draw it (`ot_blit`) and return nonzero; 0 leaves the box empty |
+| `ev_track_tab_draw` (0.17) | a track tab, right after stock drew its machine letter | `void f(unsigned trk, int x, int y)` | draw beside the letter (`ot_blit`); the UI task |
 | `ev_setup_dial` (0.8) | a page-2 knob of AMP, FX1 or FX2 SETUP is about to be drawn | `void f(struct ot_dial *d)` | change the value, the widget's flags or the widget (chained) |
 
 The sites core-ot owns (Octatrack 1.40C): the boot site 0x4000050c, the 28
@@ -714,7 +715,7 @@ Which octabam module needs what:
 | BRAIN, BUFFER SAVER, STORE | the Part initialiser's end; LOAD PROJECT's call of the empty project's RAM; the routine itself | `ev_part_init`, `ev_project_init` |
 | MUTE MODES | the voice reset's entry | `ev_voice_reset` |
 | BOOT TRACE | the boot after core's | `ev_boot_early` |
-| REC THRESHOLD, REC TRIG MUTE | the track icons | `ev_track_icon`, `ev_track_icon_draw` |
+| REC THRESHOLD, REC TRIG MUTE | the track icons and tabs | `ev_track_icon`, `ev_track_icon_draw`, `ev_track_tab_draw` |
 | SCENES P2 | the FX SETUP knobs' Part byte | `ev_setup_dial` |
 
 **Not in 0.8.** The ATTRIBUTES page and the playback rate (REPITCH in
@@ -784,7 +785,7 @@ Two system observers (core-ot 0.16):
 | `ev_card_cmd` | the CF card's dispatcher has issued a command (the 22-byte record, the ATA command byte at +5); `result` -1 means it is done, another value that the card's interrupt finishes it | `void f(const void *cmd, int result)` | a task or the card's interrupt |
 | `ev_task_switch` | at every RTOS switch, the outgoing task's registers saved in its block | `void f(void *task)` | that task's stack, every interrupt masked: a counter or a time stamp, nothing more |
 
-`tests/fixtures/octatrack-seq` is a probe of all eleven; `"resources": {"core": "0.16"}`.
+`tests/fixtures/octatrack-seq` is a probe of these and of `ev_track_tab_draw`; `"resources": {"core": "0.17"}`.
 
 #### Held edits, copies and MIDI notes on the Octatrack (core-ot 0.11)
 
