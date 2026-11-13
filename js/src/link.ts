@@ -501,17 +501,6 @@ export function check(mods: Mod2[], image: Uint8Array): string[] {
   const bad = commonChecks(mods, image, spans)
   if (bad.length && bad[0].startsWith('the mods are for different firmware')) return bad
   const dev = mods[0].dev
-  for (const m of mods) {
-    const refs: [string, number][] = []
-    for (const [nm, [sec, v]] of m.symbols) if (sec === 'abs') refs.push(['symbol ' + nm, v])
-    for (const [sec, , , tgt, add] of m.relocs) if (tgt === 'abs') refs.push(['a relocation in ' + sec, add])
-    for (const s of m.sites) for (const [, , tgt, add] of s.relocs) if (tgt === 'abs') refs.push([`site ${hex8(s.addr)}`, add])
-    for (const c of m.contribute) for (const [, , tgt, add] of c.relocs) if (tgt === 'abs') refs.push([`its ${c.to} entry`, add])
-    for (const [what, v] of refs)
-      for (const [lo, hi, why] of dev.noLink)
-        if (lo <= v && v < hi)
-          bad.push(`${m.label()}: ${what} links to ${hex8(v)}, inside ${hex8(lo)}-${hex8(hi)}, ${why}: no mod may link to it on the ${dev.name}`)
-  }
   if (!linkable(dev)) return [`the ${dev.name} has no linkable (format-2) mods yet: only whole builds (format 1) can be used on it`]
   const cores = mods.filter(m => m.sections.has('.boot'))
   if (cores.length !== 1) bad.unshift(`exactly one mod must carry .boot (core); got ${cores.length ? repr(cores.map(m => m.label())) : 'none'}`)

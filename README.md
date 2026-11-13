@@ -28,7 +28,6 @@ file on your own machine, and you flash it the way you flash any OS update.
 | Digitakt II | 1.17 | experimental |
 | Digitone II | 1.12 | experimental, with SHARC (DSP) mods and [machines](docs/MACHINES-DN2.md) |
 | Analog Four MKII | 1.56 | experimental: a proof-of-concept core |
-| Analog Rytm MKI | 1.73, 1.74 | experimental: whole builds; linkable mods in its DDR area need a core, none ships here yet |
 
 Every device has a **core** mod, attached to each
 [release](https://github.com/elekloader/elekloader/releases/latest), that

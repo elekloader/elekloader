@@ -75,14 +75,13 @@ export type Device = {
   stage: number | null                          // null: unknown, so the in-place unpack is not simulated
   flashAt: number
   flashLimit: number
-  updateMax: number | null                      // decoded update bytes: 8-byte preamble + container
-  noLink: [number, number, string][]            // firmware routines no mod may link to (ordinary calls only)
+  updateMax: number | null                      // decoded ELE3 update bytes: 8-byte preamble + container
   trailer: null | 'hmac'
   isa: 'coldfire'
   hmacKeyFrom: [number, string] | null          // for 'hmac': the section and seed the key is derived from
-  container: 'ele3' | 'ele2' | 'elek'
+  container: 'ele3' | 'elek'
   versionLen: number
-  versionAt: number                             // 'ele3', 'ele2': where the version field is in the container header
+  versionAt: number                             // 'ele3': where the version field is in the container header
   versionOptional: boolean                      // true: a build given no version keeps stock's field
   protected: [number, number, string][]        // main OS bytes no mod may change
   relocatable: [number, number, number[], string][]
@@ -112,7 +111,7 @@ const rel = (version: string, syxSha256: string, mainSha256: string, mainLen: nu
 const base = {
   mainSection: 3, mainLoad: 0x40000400, isa: 'coldfire' as const, hmacKeyFrom: null, container: 'ele3' as const,
   versionLen: 4, versionAt: 0x14, versionOptional: false, protected: [], relocatable: [], keep: [], blobMax: null, driveAlign: 0, dataFamily: 0, dataDevice: 0, sramCode: [0, 0] as Range, coreDdr: [] as [string, Range][], slotClaims: [] as [string, number, number, string][], paramIds: null, tableLimits: {}, fastTable: '',
-  imageFree: [], reserve: null, dspPayloads: {}, dspAreas: [], trailer: null, updateMax: null, noLink: [] as [number, number, string][],
+  imageFree: [], reserve: null, dspPayloads: {}, dspAreas: [], trailer: null, updateMax: null,
 }
 
 export const DIGITAKT_MK1: Device = {
@@ -262,34 +261,6 @@ export const ANALOG_RYTM_MK2: Device = {
   paramIds: [555, [469, 554, "core's lockable parameters' ids"], [['core_params', false], ['core_param_locks', true], ['core_knob_looks', true]]],
 }
 
-export const ANALOG_RYTM_MK1: Device = {
-  ...base,
-  key: 'analog-rytm-mk1', name: 'Analog Rytm MKI', sysexId: 0x07, container: 'ele2', versionAt: 0x10,
-  releases: [
-    rel('1.74', '4f0d59051b4b3ac01f336639918ceb8186e0ae1a1abf2ed9bc028b8718514cff',
-      '6d021e22e8912cfc1ee84e619c35db0174455cbc42bf64dbec1f1d06a5ab811d', 2824228),
-  ],
-  stage: 0x40200000, flashAt: 0x20000, flashLimit: 0x780000,   // the calibration records start at 0x780000
-  protected: [
-    [0x40000592, 0x400005d8, "the OS entry's bootstrap version compare and the call to BOOTSTRAP UPGRADE"],
-    [0x4028c768, 0x402a1b84, 'the copy of the bootstrap the OS writes into flash, with its version words'],
-    // the routines that can write the boot flash, kept stock as well as unlinkable
-    [0x4011a7a4, 0x4011aa7a, 'BOOTSTRAP UPGRADE, which rewrites the boot flash'],
-    [0x40096a6c, 0x40096b3e, 'the flash erases and the program routine every flash writer uses'],
-  ],
-  noLink: [
-    [0x4011a7a4, 0x4011aa7a, 'BOOTSTRAP UPGRADE, which rewrites the boot flash'],
-    [0x40096a6c, 0x40096ac2, 'the flash erase the OS store and calibration use'],
-    [0x40096ac2, 0x40096af6, 'the flash erase used only for the bootstrap'],
-    [0x40096af6, 0x40096b3e, 'the flash program routine every flash writer uses'],
-  ],
-  updateMax: 0x1f0000,                           // under the OS upgrade's 2 MiB decode buffer (devices/analog_rytm_mk1.py)
-  areas: { ddr: [0x47be0000, 0x47c00000] },   // checked on a 1.74 unit (devices/analog_rytm_mk1.py)
-  ddr: [0x47be0000, 0x47c00000],
-  recovery: 'hold FUNC while powering on for the startup menu, press TRIG 4 (OS UPGRADE), '
-    + 'then send the stock .syx over MIDI DIN (not USB)',
-}
-
 export const ANALOG_FOUR_MK2: Device = {
   ...base,
   key: 'analog-four-mk2', name: 'Analog Four MKII', sysexId: 0x0b,
@@ -361,17 +332,14 @@ export const DIGITONE_MK2: Device = {
 }
 
 const DEVICES: Device[] = [DIGITAKT_MK1, DIGITAKT_MK2, DIGITONE_MK1, OCTATRACK, MODEL_CYCLES, MODEL_SAMPLES,
-  ANALOG_RYTM_MK2, ANALOG_FOUR_MK2, DIGITONE_MK2, ANALOG_RYTM_MK1]
+  ANALOG_RYTM_MK2, ANALOG_FOUR_MK2, DIGITONE_MK2]
 
 export const devices = (): Device[] => DEVICES
 
-/** The file families syx.ts reads and writes. */
-export const SYX_FAMILIES: readonly string[] = ['ele3', 'ele2']
-
-/** -> where the version field of a syx.ts file of this family with this device byte is. */
-export function versionAt(sysexId: number, container: 'ele3' | 'ele2' = 'ele3'): number {
-  for (const d of DEVICES) if (d.container === container && d.sysexId === sysexId) return d.versionAt
-  return container === 'ele2' ? 0x10 : 0x14
+/** -> where the version field of an 'ele3' file with this device byte is. */
+export function versionAt(sysexId: number): number {
+  for (const d of DEVICES) if (d.container === 'ele3' && d.sysexId === sysexId) return d.versionAt
+  return 0x14
 }
 
 export function releaseFor(d: Device, syxSha256?: string, mainSha256?: string): Release | null {

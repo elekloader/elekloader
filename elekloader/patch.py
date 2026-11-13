@@ -141,8 +141,7 @@ def build(stock_path, mod_paths, version=None, check_only=False, log=print, lock
             vs = {stock.version}
         if len(vs) != 1:
             raise PatchError('give --version (%s): the mods name %s'
-                             % ('%d characters' % dev.version_len
-                                if dev.container in devices.SYX_FAMILIES
+                             % ('%d characters' % dev.version_len if dev.container == 'ele3'
                                 else 'up to %d characters' % dev.version_len,
                                 sorted(vs) or 'no version'))
         version = vs.pop()

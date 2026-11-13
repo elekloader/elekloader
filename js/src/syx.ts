@@ -20,8 +20,6 @@ import { hexw, repr } from './py.ts'
 
 export const COUNT_OFF = 0x1c, TABLE_OFF = 0x20, ENTRY_SZ = 16
 export const DIGEST = 32                 // the HMAC-SHA256 trailer of a sealed device
-// ELE2 (the Analog Rytm MKI): a 0x14-byte header (version at 0x10), the load address, then the one section
-export const ELE2_VERSION = 0x10, ELE2_DEST = 0x14, ELE2_SECT = 0x18, ELE2_ALIGN = 4, ELE2_MAIN = 3
 const CHUNK = CHUNK_SIZE
 
 export class SyxError extends Error {}
@@ -87,7 +85,6 @@ export class Syx {
   readonly k: number
   readonly total: number
   readonly checksum: number
-  readonly family: 'ELE3' | 'ELE2'
   readonly container: Uint8Array
   readonly tail: Uint8Array
   readonly header: Uint8Array
@@ -110,25 +107,12 @@ export class Syx {
     this.deviceId = msgs[0][4]
     this.k = msgs[0][8]
     const dec = decode(this.data)
-    if (dec.length < 12) throw new SyxError('no ELE3 or ELE2 container')
+    if (dec.length < 8) throw new SyxError('no ELE3 container')
     this.total = u32(dec, 0)
     this.checksum = u32(dec, 4)
-    const fam = decodeAscii(dec.subarray(8, 12))
-    if ((fam !== 'ELE3' && fam !== 'ELE2') || 8 + this.total > dec.length) throw new SyxError('no ELE3 or ELE2 container')
-    this.family = fam
+    if (!equal(dec.subarray(8, 12), ascii('ELE3')) || 8 + this.total > dec.length) throw new SyxError('no ELE3 container')
     this.container = dec.slice(8, 8 + this.total)
     this.tail = dec.slice(8 + this.total)
-    if (fam === 'ELE2') {
-      // no table: the one section is the main OS, at 0x18
-      if (this.total < ELE2_SECT + 8) throw new SyxError('ELE2 container too short')
-      this.header = this.container.slice(0, ELE2_DEST)
-      const dest = u32(this.container, ELE2_DEST), ln = u32(this.container, ELE2_SECT)
-      if (ELE2_SECT + 8 + ln > this.total) throw new SyxError('the ELE2 section runs past the container')
-      this.table = [[ELE2_MAIN, ELE2_SECT, 8 + ln, dest]]
-      this.dataStart = ELE2_SECT
-      this.stored = new Map([[ELE2_MAIN, this.container.subarray(ELE2_SECT, ELE2_SECT + 8 + ln)]])
-      return
-    }
     this.header = this.container.slice(0, COUNT_OFF)
     const n = u32(this.container, COUNT_OFF)
     if (!(n > 0 && n <= 16) || TABLE_OFF + n * ENTRY_SZ > this.total)
@@ -147,7 +131,7 @@ export class Syx {
     }
   }
 
-  get versionAt(): number { return versionAt(this.deviceId, this.family === 'ELE2' ? 'ele2' : 'ele3') }
+  get versionAt(): number { return versionAt(this.deviceId) }
 
   get version(): string { return decodeAscii(this.header.subarray(this.versionAt, this.versionAt + 4)) }
 
@@ -200,13 +184,6 @@ export function write(stock: Syx, storedMain: Uint8Array, dev: Device, version: 
     const v = ascii(version)
     if (v.length !== 4) throw new SyxError('the version field is exactly 4 characters')
     header.set(v, dev.versionAt)
-  }
-  if (stock.family === 'ELE2') {
-    if (dev.mainSection !== ELE2_MAIN) throw new SyxError(`an ELE2 container holds section ${ELE2_MAIN} only`)
-    const body = concat([header, stock.container.subarray(ELE2_DEST, ELE2_SECT), storedMain])
-    const cont = concat([body, new Uint8Array((ELE2_ALIGN - (body.length % ELE2_ALIGN)) % ELE2_ALIGN)])
-    const stream = concat([be32(cont.length, contentChecksum(cont)), cont])
-    return encodeSyx(stream, stock.deviceId, stock.framing[0], stock.framing[1])
   }
   const parts: Uint8Array[] = []
   const head = stock.container.slice(0, stock.dataStart)  // the table area as stock has it
@@ -302,33 +279,28 @@ export function verify(out: Uint8Array, stock: Syx, wantMain: Uint8Array, dev: D
   if (got !== o.checksum) throw new SyxError(`content checksum 0x${hexw(got)} != preamble 0x${hexw(o.checksum)}`)
   if (o.tail.length >= CHUNK || o.tail.some(x => x !== 0)) throw new SyxError(`${o.tail.length} bytes after the container, or not zero`)
   const order = (t: Entry[]) => t.map(([s, , , d]) => s + ':' + d).join(',')
-  if (o.family !== stock.family) throw new SyxError(`an ${o.family} container, not ${stock.family} as stock`)
   if (order(o.table) !== order(stock.table)) throw new SyxError('section order or destinations differ from stock')
-  const align = o.family === 'ELE2' ? ELE2_ALIGN : 16
   let at = stock.dataStart
   for (const [sid, off, clen] of o.table) {
     if (off !== at) throw new SyxError(`section ${sid} at 0x${off.toString(16)}, not 0x${at.toString(16)}`)
-    at = off + clen + ((align - ((off + clen) % align)) % align)
+    at = off + clen + ((16 - ((off + clen) % 16)) % 16)
   }
   if (dev.trailer === 'hmac') {
     if (o.total !== at + DIGEST) throw new SyxError(`container length ${o.total} is not the 16-aligned end ${at} and the seal`)
     if (!equal(hmacSha256(sealKey(stock, dev), o.container.subarray(0, -DIGEST)), o.container.subarray(-DIGEST)))
       throw new SyxError('the HMAC trailer does not verify')
   } else if (o.total !== at) {
-    throw new SyxError(`container length ${o.total} is not the ${align}-aligned end ${at}`)
+    throw new SyxError(`container length ${o.total} is not the 16-aligned end ${at}`)
   }
   if (dev.flashAt + o.total > dev.flashLimit)
     throw new SyxError(`the container ends at flash 0x${(dev.flashAt + o.total).toString(16)} > 0x${dev.flashLimit.toString(16)}`)
   if (dev.updateMax !== null && 8 + o.total > dev.updateMax)
     throw new SyxError(`decoded update stream ${8 + o.total} bytes exceeds the measured USB update limit of ${dev.updateMax} bytes`)
   const hd: number[] = []
-  for (let i = 0; i < stock.header.length; i++) if (o.header[i] !== stock.header[i]) hd.push(i)
-  if (hd.some(i => !(i >= dev.versionAt && i < dev.versionAt + 4)))
-    throw new SyxError(`${o.family} header differs outside the version field: ${repr(hd)}`)
+  for (let i = 0; i < COUNT_OFF; i++) if (o.header[i] !== stock.header[i]) hd.push(i)
+  if (hd.some(i => !(i >= dev.versionAt && i < dev.versionAt + 4))) throw new SyxError(`ELE3 header differs outside the version field: ${repr(hd)}`)
   if (version !== null && o.version !== version) throw new SyxError(`version field ${repr(o.version)}, not ${repr(version)}`)
-  if (o.family === 'ELE2' && !equal(o.container.subarray(ELE2_DEST, ELE2_SECT), stock.container.subarray(ELE2_DEST, ELE2_SECT)))
-    throw new SyxError('the ELE2 load address differs from stock')
-  if (o.family === 'ELE3' && !equal(o.container.subarray(TABLE_OFF + ENTRY_SZ * o.table.length, stock.dataStart),
+  if (!equal(o.container.subarray(TABLE_OFF + ENTRY_SZ * o.table.length, stock.dataStart),
     stock.container.subarray(TABLE_OFF + ENTRY_SZ * stock.table.length, stock.dataStart)))
     throw new SyxError('the table area after the entries differs from stock')
   for (const sid of stock.stored.keys()) {
