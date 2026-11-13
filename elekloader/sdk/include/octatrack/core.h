@@ -442,6 +442,9 @@ enum { OT_MUTE_AUDIO = 0, OT_MUTE_MIDI = 1 };
  * that 256-byte page (0x4000ab66..0x4000ab80); read the pages from ev_frame_begin / ev_frame_end. */
 #define OT_INPUT_INDEX      OT_L(0x46104d00)
 #define OT_INPUT_PAGE(i)    ((volatile uint8_t *)(uintptr_t)(0x80005660u + 256u * ((i) & 7u)))
+/* The MIDI tracks' live settings (68 bytes a track): the channel, 1-16, 0 = OFF (the sequencer sends
+ * nothing for an OFF track; the panic walks the same table). */
+#define OT_MIDI_CHANNEL(t)  OT_B(0x46c76de0u + 68u * (t))
 /*
  * In the sequencer's tick (0.12; a timer interrupt: keep them short):
  *   int ev_track_length(trk, len)    each track's advance: return the length it wraps at (chained);
