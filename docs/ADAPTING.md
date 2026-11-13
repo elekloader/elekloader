@@ -924,6 +924,13 @@ machine stretches. `ev_tstretch` runs before each such track: `int f(unsigned tr
 it this pass (the first taker wins), for a mod that plays the track itself or saves the work.
 `tests/fixtures/octatrack-tstretch` is a probe.
 
+### The card file calls on the Octatrack (core-ot 0.34)
+
+`ev_file` sees each call of stock's card file layer before it runs, from every task:
+`void f(unsigned op, void *f, const void *a, uintptr_t b)`, op 0 open (a = path, b = mode), 1 read and
+2 write (a = buffer, b = length), 3 close. A handler's own file calls do not come back to it; keep it short,
+as a card write may be waiting. `tests/fixtures/octatrack-file` counts them.
+
 ### Timers and interrupt vectors on the Octatrack
 
 Two firmware services are calls in `octatrack/core.h`, no core site. `ot_timer_start(ticks, fn)` runs

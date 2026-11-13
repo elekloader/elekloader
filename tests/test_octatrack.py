@@ -368,7 +368,7 @@ def test_the_core_moves_the_arena_past_its_reserve():
                           | {v[1] for v in TICK_SITES.values()} | {v[1] for v in PATTERN_SITES.values()}
                           | set(DIAL2_SITES) | {'core_trig_box'}
                           | {v[1] for v in LFO_CODE.values()} | {'core_popup'}
-                          | {v[1] for v in RATE_SITES.values()} | {'core_pers_count', 'core_tstretch'}), calls
+                          | {v[1] for v in RATE_SITES.values()} | {'core_pers_count', 'core_tstretch'} | set(FILE_SITES.values())), calls
 
 
 def reserve_docs(img, bss, fixed=False):
@@ -570,7 +570,7 @@ def test_the_core_bus_sites():
                                                  'ev_lfo_step', 'ev_trig_box_draw', 'ev_bank_copied',
                                                  'ot_lfo_waves', 'ev_popup', 'ev_play_increment',
                                                  'ot_ptn_rows', 'ot_track_rows', 'ot_midi_rows',
-                                                 'ot_pers_label', 'ot_pers_get', 'ot_pers_set', 'ev_tstretch'})
+                                                 'ot_pers_label', 'ot_pers_get', 'ot_pers_set', 'ev_tstretch', 'ev_file'})
     assert j['collections']['ev_idle'] == 4
     for sym, target in JMP_BACK.items():       # a jmp stub goes back to the instruction after its site
         addr, stock_hex, _ev = BUS_SITES[target]
@@ -1606,6 +1606,46 @@ def test_the_timer_and_vector_calls():
     assert link.link([core, probe], img).map['tm_boot']
 
 
+# core-ot 0.34 (file.s, file.c): ev_file at the card file layer's four entries.
+FILE_SITES = {0x40016864: 'core_file_open', 0x40016564: 'core_file_read', 0x400166b8: 'core_file_write',
+              0x4001677c: 'core_file_close'}
+
+
+def test_the_core_file_sites():
+    """core-ot 0.34's sites: each routine's first 8 bytes, stock, whole, entered only at the start, each
+    stub replaying them and going on past them; core's own store.c calls the same four; the probe links."""
+    import re
+    with open(os.path.join(ROOT, 'mods', 'core-ot', 'mod.json')) as fh:
+        j = json.load(fh)
+    st, img = stock()
+    by = {int(x['addr'], 16): x for x in j['sites']}
+    src = open(os.path.join(ROOT, 'mods', 'core-ot', 'file.s')).read()
+    store = open(os.path.join(ROOT, 'mods', 'core-ot', 'store.c')).read()
+    inside = {}
+    for a, target in FILE_SITES.items():
+        s = by[a]
+        assert (s['op'], s['target']) == ('jmp', target) and len(s['stock']) == 16
+        o = a - DEV.main_load
+        assert img[o:o + 8].hex() == s['stock']
+        ok, note = elemod.insn_check(img, a, 8, DEV)
+        assert ok, note
+        body = src[src.index(target + ':'):]
+        assert re.search(r'jmp\s+0x%08x' % (a + 8), body[:400]), target
+        assert '0x%08x' % a in store, hex(a)
+        for k in range(a + 1, a + 8):
+            inside[k] = target
+    for k in range(0, len(img) - 6, 2):
+        assert _branch_into(img, k, inside) is None, hex(DEV.main_load + k)
+    from elekloader.sdk import build
+    with tempfile.TemporaryDirectory() as tmp:
+        core = elemod.load_any(build.build(os.path.join(ROOT, 'mods', 'core-ot'), SYX, tmp)[0])
+        probe = elemod.load_any(build.build(os.path.join(HERE, 'fixtures', 'octatrack-file'), SYX, tmp)[0])
+    ln = link.link([core, probe], img)
+    at = ln.tables['ev_file'][0]
+    o = ln.layout['run_load'] + (at - DEV.ddr[0]) - DEV.main_load
+    assert struct.unpack('>II', ln.image[o:o + 8]) == (ln.map['fp_file'], 0)
+
+
 def test_the_core_tick_sites():
     """core-ot 0.12's sites: stock, whole, a bgt right after each compare (it tests what the stub's
     compare leaves), the sequencer's tick an interrupt handler, no branch inside, clear of every
@@ -2082,7 +2122,7 @@ def test_the_example_subscribes_to_the_bus():
                       'ev_knob_draw': 0, 'ev_leds': 0, 'ev_trig_box_draw': 0,
                       'ev_bank_copied': 0, 'ot_lfo_waves': 0, 'ev_popup': 0, 'ev_play_increment': 0,
                       'ot_ptn_rows': 6, 'ot_track_rows': 6, 'ot_midi_rows': 6,
-                      'ot_pers_label': 16, 'ot_pers_get': 16, 'ot_pers_set': 16, 'ev_tstretch': 0}, counts
+                      'ot_pers_label': 16, 'ot_pers_get': 16, 'ot_pers_set': 16, 'ev_tstretch': 0, 'ev_file': 0}, counts
     at = ln.tables['ev_draw'][0]
     o = ln.layout['run_load'] + (at - DEV.ddr[0]) - DEV.main_load
     assert struct.unpack('>II', ln.image[o:o + 8]) == (ln.map['hello_draw'], 0)

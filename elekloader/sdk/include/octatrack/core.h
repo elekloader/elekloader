@@ -574,6 +574,10 @@ struct ot_menu_row {
 };
 /* int ev_tstretch(unsigned trk) (0.33): the time-stretch helper task is about to work out a track's stretch
  * (each pass, for each track whose machine stretches): nonzero = skip it this pass (the first taker wins). */
+/* void ev_file(unsigned op, void *f, const void *a, uintptr_t b) (0.34): the card file layer is about to run
+ * a call: op 0 open (a = path, b = mode string), 1 read, 2 write (a = buffer, b = length), 3 close (a, b 0).
+ * In whatever task calls (the engine task, the UI task, core's own project data). A handler's own file calls
+ * do not come back to it. Keep it short: a card write may be waiting. */
 /* ---- timers and interrupt vectors (firmware calls) -----------------------------------------------
  * ot_timer_start(ticks, fn): fn runs every `ticks` UI ticks (60 a second), in the UI task, from the next
  * due tick on, until ot_timer_cancel(slot); it returns the slot (0-31) or -1 when all 32 are busy (stock
