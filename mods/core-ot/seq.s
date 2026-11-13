@@ -176,3 +176,100 @@ core_rec_length:
         beq.s   8f
         jmp     0x40006e1e
 8:      jmp     0x40006e24
+
+| ---- the pattern each track plays (core-ot 0.14) -----------------------------------------------------------
+| Where stock passes the playing pattern to a track's step routine: the tick's audio and MIDI passes (in the
+| sequencer's interrupt) and the working-set rebuild after an edit, audio and MIDI (in the sys task). The
+| registers are those octabam's TRACK PATTERNS (MIT, proven on a unit) reads. Handlers:
+|   int f(unsigned trk, int pattern, unsigned step, unsigned peek) -> the pattern (chained)
+| trk 0-7 audio, 8-15 MIDI; step the track's counter; peek 1 at the rebuilds, which must change nothing.
+
+| core_tpat(trk, pattern, step, peek) -> d0 the pattern; keeps every other register.
+core_tpat:
+        move.l  8(%sp), %d0
+        tst.l   ev_track_pattern
+        beq.s   9f
+        lea     -16(%sp), %sp
+        movem.l %d1/%a0-%a2, (%sp)
+        lea     ev_track_pattern, %a2
+1:      move.l  (%a2)+, %d1
+        beq.s   2f
+        move.l  32(%sp), -(%sp)         | peek (16 saved + ret + trk, pattern, step)
+        move.l  32(%sp), -(%sp)         | step
+        move.l  %d0, -(%sp)             | the pattern so far
+        move.l  32(%sp), -(%sp)         | trk
+        movea.l %d1, %a0
+        jsr     (%a0)
+        lea     16(%sp), %sp
+        bra.s   1b
+2:      movem.l (%sp), %d1/%a0-%a2
+        lea     16(%sp), %sp
+9:      rts
+
+| 0x400a2d76 (was: move.l d3,-(sp) ; move.l 86(sp),-(sp)): the tick's audio pass, pushing
+| 0x4009d1e8(track, bank, pattern, step, n); the step is pushed, the pattern in d3, the track in d5,
+| the bank at 82(sp). d0/d1/a0/a1 are not read again before the call.
+        .globl  core_tpat_atick
+core_tpat_atick:
+        clr.l   -(%sp)                  | peek 0
+        lea     0x800064d0, %a0
+        moveq   #0, %d0
+        move.b  %a0@(0,%d5:l), %d0
+        move.l  %d0, -(%sp)             | step: the track's counter
+        move.l  %d3, -(%sp)
+        move.l  %d5, -(%sp)
+        jsr     core_tpat
+        lea     16(%sp), %sp
+        move.l  %d0, -(%sp)             | the pattern argument
+        move.l  86(%sp), -(%sp)         | the bank, as stock
+        jmp     0x400a2d7c
+
+| 0x400a39c0 (was: move.l d4,-(sp) ; move.l d3,-(sp) ; move.l d7,-(sp)): the tick's MIDI pass, pushing
+| 0x4009cf4c(track, bank, pattern, step, n): pattern d4, bank d3, MIDI track d7 (0-7), its counter
+| at 0x800064d8 + d7.
+        .globl  core_tpat_mtick
+core_tpat_mtick:
+        clr.l   -(%sp)
+        lea     0x800064d8, %a0
+        moveq   #0, %d0
+        move.b  %a0@(0,%d7:l), %d0
+        move.l  %d0, -(%sp)
+        move.l  %d4, -(%sp)
+        move.l  %d7, %d0
+        addq.l  #8, %d0
+        move.l  %d0, -(%sp)             | trk 8-15
+        jsr     core_tpat
+        lea     16(%sp), %sp
+        move.l  %d0, -(%sp)
+        move.l  %d3, -(%sp)
+        move.l  %d7, -(%sp)
+        jmp     0x400a39c6
+
+| 0x4009dc8c (was: mvs.b 0x800065be,d4 ; move.l d4,-(sp)): the rebuild 0x4009da20 for an audio track:
+| step d2, track d6; d4 keeps stock's pattern, only the pushed argument changes.
+        .globl  core_tpat_arebuild
+core_tpat_arebuild:
+        mvs.b   0x800065be, %d4
+        pea     1                       | peek
+        move.l  %d2, -(%sp)
+        move.l  %d4, -(%sp)
+        move.l  %d6, -(%sp)
+        jsr     core_tpat
+        lea     16(%sp), %sp
+        move.l  %d0, -(%sp)
+        jmp     0x4009dc94
+
+| 0x4009e3e2 (was: mvs.b 0x800065be,d2 ; move.l d2,-(sp)): its MIDI branch, d6 8-15, the step in d2
+| until the replayed load.
+        .globl  core_tpat_mrebuild
+core_tpat_mrebuild:
+        pea     1
+        move.l  %d2, -(%sp)             | the step, before the load takes d2
+        mvs.b   0x800065be, %d2
+        move.l  %d2, -(%sp)
+        move.l  %d6, -(%sp)
+        jsr     core_tpat
+        lea     16(%sp), %sp
+        mvs.b   0x800065be, %d2         | d2 as stock leaves it
+        move.l  %d0, -(%sp)
+        jmp     0x4009e3ea

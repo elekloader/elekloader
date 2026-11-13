@@ -770,7 +770,13 @@ length is worked out (RLEN 1-64, MAX, free and sequencer-armed takes) ends with 
 the length in samples, which the handler returns (chained). The Part's RLEN byte says which way it
 came. A mod that gives RLEN a new value (a PLEN, say) sets the length here.
 
-`tests/fixtures/octatrack-seq` is a probe of all seven; `"resources": {"core": "0.13"}`.
+`ev_track_pattern` (core-ot 0.14) picks the pattern each track plays: `int f(trk, pattern, step,
+peek)` returns it (chained), at the four places stock passes the playing pattern to a track's step
+routine: the tick's audio and MIDI passes (the sequencer's interrupt, `peek` 0) and the rebuild after
+an edit (the sys task, `peek` 1: answer the same, change nothing). With `ev_track_length` it gives
+each track a pattern of its own, as octabam's TRACK PATTERNS does.
+
+`tests/fixtures/octatrack-seq` is a probe of all eight; `"resources": {"core": "0.14"}`.
 
 #### Held edits, copies and MIDI notes on the Octatrack (core-ot 0.11)
 

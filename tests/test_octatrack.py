@@ -363,7 +363,7 @@ def test_the_core_moves_the_arena_past_its_reserve():
     entries = {t for tab in ENTRY_TABLES for t in tab}
     assert set(calls) == (set(BUS_SITES) | set(STORE_SITES) | set(VOICE_SITES) | set(EDIT_SITES) | mutes
                           | entries | {'core_copy'} | {'core_note_0x%08x' % a for a in NOTE_SITES}
-                          | {v[1] for v in TICK_SITES.values()}), calls
+                          | {v[1] for v in TICK_SITES.values()} | {v[1] for v in PATTERN_SITES.values()}), calls
 
 
 def reserve_docs(img, bss, fixed=False):
@@ -560,7 +560,7 @@ def test_the_core_bus_sites():
                                               | {v[2] for v in EDIT_SITES.values()} | {'ev_mute'}
                                               | {v[2] for tab in ENTRY_TABLES for v in tab.values()}
                                               | {'ev_copy', 'ev_midi_note_sent', 'ev_track_length', 'ev_pattern_wrap',
-                                                 'ev_rec_length'})
+                                                 'ev_rec_length', 'ev_track_pattern'})
     assert j['collections']['ev_idle'] == 4
     for sym, target in JMP_BACK.items():       # a jmp stub goes back to the instruction after its site
         addr, stock_hex, _ev = BUS_SITES[target]
@@ -1136,7 +1136,7 @@ def test_the_seq_probe_links():
     probe_tables('octatrack-seq', (('ev_part_apply', 'sq_part_apply'), ('ev_chain_add', 'sq_chain_add'),
                                    ('ev_seq_reset', 'sq_seq_reset'), ('ev_midi_panic', 'sq_midi_panic'),
                                    ('ev_track_length', 'sq_track_length'), ('ev_pattern_wrap', 'sq_pattern_wrap'),
-                                   ('ev_rec_length', 'sq_rec_length')))
+                                   ('ev_rec_length', 'sq_rec_length'), ('ev_track_pattern', 'sq_track_pattern')))
 
 
 # core-ot 0.11 (held.s): the held-step editor's entry, the pattern data's copies (octabam EVENTS' 22
@@ -1240,6 +1240,45 @@ def test_the_core_tick_sites():
         for b, m in taken:
             assert not (b < a + 6 and a < b + m), (hex(a), hex(b))
         for t in range(a + 1, a + 6):
+            inside[t] = a
+    for o in range(0, len(img) - 6, 2):
+        assert _branch_into(img, o, inside) is None, hex(DEV.main_load + o)
+
+
+# core-ot 0.14 (seq.s): where stock passes the playing pattern to a track's step routine.
+PATTERN_SITES = {
+    0x400a2d76: ('2f032f2f0056', 'core_tpat_atick', 0x4009d1e8),       # the tick's audio pass
+    0x400a39c0: ('2f042f032f07', 'core_tpat_mtick', 0x4009cf4c),       # its MIDI pass
+    0x4009dc8c: ('7939800065be2f04', 'core_tpat_arebuild', None),     # the rebuild, audio
+    0x4009e3e2: ('7539800065be2f02', 'core_tpat_mrebuild', None),     # its MIDI branch
+}
+
+
+def test_the_core_pattern_sites():
+    """core-ot 0.14's sites: stock, whole, each tick site followed by the step routine's call within a
+    few instructions, no branch inside, clear of every other site."""
+    with open(os.path.join(ROOT, 'mods', 'core-ot', 'mod.json')) as fh:
+        j = json.load(fh)
+    st, img = stock()
+    by = {int(x['addr'], 16): x for x in j['sites']}
+    assert j['collections']['ev_track_pattern'] == 4
+    taken = (_taken_before_seq() + [(a, len(h) // 2) for t2 in ENTRY_TABLES for a, h, _e in t2.values()]
+             + [(a, 6) for a in COPY_JSR] + [(a + 2, 4) for a in COPY_LEA] + [(a, 6) for a in NOTE_SITES]
+             + [(a, 6) for a in TICK_SITES])
+    inside = {}
+    for a, (h, target, step_fn) in PATTERN_SITES.items():
+        n = len(h) // 2
+        o = a - DEV.main_load
+        assert img[o:o + n].hex() == h, hex(a)
+        assert (by[a]['op'], by[a]['stock'], by[a]['target']) == ('jmp', h, target)
+        ok, note = elemod.insn_check(img, a, n, DEV)
+        assert ok, (hex(a), note)
+        if step_fn:                                    # the step routine's call, a few words on
+            assert any(_branch_target(img, k) == step_fn and img[k:k + 2].hex() == '4eba'
+                       for k in range(o + n, o + n + 12, 2)), hex(a)
+        for b, m in taken:
+            assert not (b < a + n and a < b + m), (hex(a), hex(b))
+        for t in range(a + 1, a + n):
             inside[t] = a
     for o in range(0, len(img) - 6, 2):
         assert _branch_into(img, o, inside) is None, hex(DEV.main_load + o)
@@ -1626,7 +1665,8 @@ def test_the_example_subscribes_to_the_bus():
                       'ev_boot_early': 0, 'ev_track_icon': 0, 'ev_track_icon_draw': 0, 'ev_setup_dial': 0,
                       'ev_mute': 0, 'ev_part_apply': 0, 'ev_chain_add': 0, 'ev_seq_reset': 0,
                       'ev_midi_panic': 0, 'ev_edit_held': 0, 'ev_copy': 0, 'ev_midi_note_sent': 0,
-                      'ev_track_length': 0, 'ev_pattern_wrap': 0, 'ev_rec_length': 0}, counts
+                      'ev_track_length': 0, 'ev_pattern_wrap': 0, 'ev_rec_length': 0,
+                      'ev_track_pattern': 0}, counts
     at = ln.tables['ev_draw'][0]
     o = ln.layout['run_load'] + (at - DEV.ddr[0]) - DEV.main_load
     assert struct.unpack('>II', ln.image[o:o + 8]) == (ln.map['hello_draw'], 0)

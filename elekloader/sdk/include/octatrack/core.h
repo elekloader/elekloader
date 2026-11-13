@@ -432,7 +432,11 @@ enum { OT_MUTE_AUDIO = 0, OT_MUTE_MIDI = 1 };
  *                                    trk 0-7 audio, 8-15 MIDI
  *   void ev_pattern_wrap(bank, pattern, old_bank, old_pattern)   the master pattern wrapped and goes on
  * In the recorder (0.13; the frame interrupt):
- *   int ev_rec_length(trk, len)      a take's length in samples, however it was worked out: return it */
+ *   int ev_rec_length(trk, len)      a take's length in samples, however it was worked out: return it
+ * The pattern each track plays (0.14):
+ *   int ev_track_pattern(trk, pattern, step, peek)   return it (chained); peek 1 (the rebuild after an
+ *                                    edit, the sys task): answer the same and change nothing; peek 0 in
+ *                                    the sequencer's interrupt */
 #define OT_CHAIN_LEN        OT_L(0x8000654e)
 #define OT_CHAIN(i)         OT_L(0x80006552 + 4 * (i))  /* 0-15 */
 
