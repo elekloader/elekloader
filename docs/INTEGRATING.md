@@ -28,7 +28,7 @@ What stays yours: your pages, their design, your accounts and your community. Th
 
 ### 1. Take the kit and a catalog
 
-- **The kit:** `elekloader-kit-<version>.zip` from an [elekloader release](https://github.com/irpina/elekloader/releases). Check it against the sha256 in the release notes. `kit.json` inside names the commit it was built from, the protocol, and every file's sha256.
+- **The kit:** `elekloader-kit-<version>.zip` from an [elekloader release](https://github.com/elekloader/elekloader/releases). Check it against the sha256 in the release notes. `kit.json` inside names the commit it was built from, the protocol, and every file's sha256.
 - **The catalog:** `elekloader-catalog.json` from the same release. Copy its files to your site:
   ```bash
   node tools/kit.ts sync elekloader-catalog.json <catalog dir> --device digitakt-mk1 --device digitone-mk1
@@ -98,7 +98,7 @@ const log = buildLogText({ title: 'Your site build log', builder: describeBuilde
 - **`prepare`** does the whole selection:
   - checks that the stock file is the device and OS chosen;
   - adds each mod from the catalog, with the mods it requires;
-  - ticks the core the plan needs, one whose RAM holds the mods;
+  - ticks the core the plan needs, one whose RAM holds the mods and that patches no place they patch;
   - runs the live check.
 - **`examples/minimal/`** does all of this, with downloads and the log, in about a hundred lines.
 
@@ -195,7 +195,7 @@ Cores come only from the catalog, at `init`. A page cannot add a core of its own
 
 - **What each file says about itself:** `file`, `sha256`, `id`, `version`, `device`, `os`, `license`, `requires` and `conflicts`. `kit.ts feed` reads them from the file with the engine.
 - **What a page shows:** `title`, `summary`, `description`, `category`, `author`, `needs_core` (the oldest core the mod links with) and `on_unit` (what has been checked on real hardware).
-- **Which core a build takes:** a catalog may list several cores for one device and OS (core 2.1, 3.0 and 4.0 for the Digitakt mk1). `planBuild` takes the newest that every selected mod's `needs_core` allows: each core keeps all of the one before it, so a mod built for 2.1 builds with 4.0 as it did with 2.1. The catalog cannot say how much RAM the mods take, so `prepare` plans again once they are loaded, with `planBuild`'s `holds`: of the cores that are new enough, the newest whose RAM holds them (the builder's mod list gives each file's `ram_bound`, and each core's `ram_area`; [CORES.md](CORES.md), "How a build picks one"). The app and elekloader's page take the same core.
+- **Which core a build takes:** a catalog may list several cores for one device and OS (core 2.1, 3.0 and 4.0 for the Digitakt mk1). `planBuild` takes the newest that every selected mod's `needs_core` allows: each core keeps all of the one before it, so a mod built for 2.1 builds with 4.0 as it did with 2.1. The catalog cannot say how much RAM the mods take or which places they patch, so `prepare` plans again once they are loaded, with `planBuild`'s `takes`: of the cores that are new enough, the newest whose RAM holds them and that patches no place one of them patches (the builder's mod list gives each file's `ram_bound` and `sites`, and each core's `ram_area`; [CORES.md](CORES.md), "How a build picks one"). A mod made before a core took a place for every mod, such as Tone+FX 4.0c on the Digitakt mk1 with core 4.1, so builds with the core before it: keep the older cores in your catalog. A mod other mods require (machine-pages) is picked the same way when the catalog lists several versions of it: `prepare` adds them all, and the tick takes the newest the selection links with, so keep its older versions too. The app and elekloader's page take the same core.
 - **Where the file comes from:** `source` is a GitHub release (`repo`, `tag`) or a commit (`repo`, the whole `commit`, `path`).
 - **File names are unique.** A site serves every file beside `catalog.json` under that name.
 

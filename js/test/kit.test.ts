@@ -6,6 +6,7 @@ import assert from 'node:assert/strict'
 import { sha } from '../src/bytes.ts'
 import { VERSION } from '../src/version.ts'
 import { cmpVersions, pickCore } from '../src/elemod.ts'
+import { withRequirements } from '../src/model.ts'
 import { CatalogError, parseCatalog, planBuild, releases, sourceUrl, type Catalog } from '../src/kit/catalog.ts'
 import { createBuilder } from '../src/kit/client.ts'
 import { buildLogText, buildStep, describeBuilder, prepare } from '../src/kit/build.ts'
@@ -249,6 +250,73 @@ test('prepare: the newest of the catalog\'s cores whose RAM holds the mods', asy
   assert.deepEqual(await coreOf(ids), ['/work/core/core-dn1-4.0.elemod'])
   area40 = 64 * kb                                                                     // a newest core too small for them
   assert.deepEqual(await coreOf(ids.slice(0, 2)), ['/work/core/core-dn1-3.2.elemod'])
+})
+
+test('prepare: the newest of the catalog\'s cores that patches no place the mods patch', async () => {
+  const cat = structuredClone(CATALOG) as any
+  cat.cores.push(core('core-4.0.elemod', '1.53', '4.0'), core('core-4.1.elemod', '1.53', '4.1'))
+  cat.mods.push(mod('tone', '1.53'), mod('health', '1.53'), mod('master', '1.53', { needs_core: '4.1' }))
+  const c = parseCatalog(cat)
+  const code = (addr: number) => [addr, 6, 'code', '']
+  const sites: Record<string, unknown[]> = { tone: [code(0x400721e6)], health: [code(0x40020000)], master: [] }
+  const fake = {
+    load: async () => ({}),
+    setStock: async () => ({ ok: true, file: 'x.syx', device: 'Digitakt mk1', os: '1.53', dev: { key: 'digitakt-mk1' } }),
+    addCatalogMod: async (file: string) => ({ ok: true, mod: { path: '/work/mods/' + file } }),
+    tick: async (enabled: string[], path: string) => [...new Set([...enabled, path])].sort(),
+    mods: async () => [
+      { path: '/work/core/core-4.0.elemod', file: 'core-4.0.elemod', id: 'core', builtin: true, fits: true, format: 2, sites: [code(0x40010000)] },
+      { path: '/work/core/core-4.1.elemod', file: 'core-4.1.elemod', id: 'core', builtin: true, fits: true, format: 2, sites: [code(0x40010000), code(0x400721e6)] },
+      ...Object.keys(sites).map(id => ({ path: `/work/mods/${id}-1.53.elemod`, file: `${id}-1.53.elemod`, id, builtin: false, fits: true, format: 2, sites: sites[id] })),
+    ],
+    check: async (enabled: string[]) => ({ ok: true, order: enabled }),
+  } as any
+  const stock = new File([new Uint8Array(4)], 'x.syx')
+  const coreOf = async (sel: string[]) => {
+    const p = await prepare(fake, { catalog: c, device: 'digitakt-mk1', os: '1.53', stock, ids: sel })
+    return p.ok && p.enabled.filter(x => x.startsWith('/work/core/'))
+  }
+  assert.deepEqual(await coreOf(['health']), ['/work/core/core-4.1.elemod'])           // the newest
+  assert.deepEqual(await coreOf(['tone']), ['/work/core/core-4.0.elemod'])             // a mod made before 4.1 took its place
+  assert.deepEqual(await coreOf(['health', 'tone']), ['/work/core/core-4.0.elemod'])
+  assert.deepEqual(await coreOf(['tone', 'master']), ['/work/core/core-4.1.elemod'])   // no core takes both: the check says why
+})
+
+test('prepare: a required mod in the newest of the catalog\'s versions the selection links with', async () => {
+  const cat = structuredClone(CATALOG) as any
+  const pages = (v: string) => ({ ...mod('pages', '1.53'), file: `pages-${v}.elemod`, version: v })
+  cat.mods.push(pages('1.2'), pages('1.7'), mod('ob1', '1.53', { requires: ['core', 'pages'] }), mod('fm', '1.53', { requires: ['core', 'pages'] }))
+  const c = parseCatalog(cat)
+  const code = (addr: number) => [addr, 6, 'code', '']
+  // what each file patches: pages 1.7 took the place ob1 patches itself
+  const sites: Record<string, unknown[]> = {
+    'pages-1.2.elemod': [code(0x40030000)], 'pages-1.7.elemod': [code(0x40030000), code(0x40010d50)],
+    'ob1-1.53.elemod': [code(0x40010d50)], 'fm-1.53.elemod': [code(0x40040000)],
+  }
+  const have = new Set<string>()
+  const descs = () => new Map<string, any>([
+    ['/work/core/core-2.2.elemod', { id: 'core', version: '2.2', fits: true, requires: [], format: 2, sites: [] }],
+    ...[...have].map(f => ['/work/mods/' + f, { id: f.split('-')[0], version: /pages-(.*)\.elemod/.exec(f)?.[1] ?? '1.0', fits: true, format: 2, sites: sites[f],
+      requires: f.startsWith('pages') ? ['core'] : ['core', 'pages'] }] as [string, any]),
+  ])
+  const fake = {
+    load: async () => ({}),
+    setStock: async () => ({ ok: true, file: 'x.syx', device: 'Digitakt mk1', os: '1.53', dev: { key: 'digitakt-mk1' } }),
+    addCatalogMod: async (file: string) => { have.add(file); return { ok: true, mod: { path: '/work/mods/' + file } } },
+    tick: async (enabled: string[], path: string) => [...withRequirements(descs(), enabled, path)].sort(),   // the engine's tick
+    mods: async () => [...descs()].map(([path, d]) => ({ path, file: path.split('/').pop(), builtin: path.startsWith('/work/core/'), ...d })),
+    check: async (enabled: string[]) => ({ ok: true, order: enabled }),
+  } as any
+  const stock = new File([new Uint8Array(4)], 'x.syx')
+  const pagesOf = async (sel: string[]) => {
+    have.clear()
+    const p = await prepare(fake, { catalog: c, device: 'digitakt-mk1', os: '1.53', stock, ids: sel })
+    return p.ok && p.enabled.filter(x => x.includes('pages-')).map(x => x.split('/').pop())
+  }
+  assert.deepEqual(await pagesOf(['fm']), ['pages-1.7.elemod'])              // the newest
+  assert.deepEqual(await pagesOf(['ob1']), ['pages-1.2.elemod'])             // the one ob1 was made for
+  assert.deepEqual(await pagesOf(['fm', 'ob1']), ['pages-1.2.elemod'])       // one that both build with
+  assert.deepEqual(await pagesOf(['pages', 'ob1']), ['pages-1.2.elemod'])    // asked for by name too
 })
 
 test('the build steps and the build log', () => {

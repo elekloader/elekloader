@@ -50,6 +50,64 @@ test('tick: the newest core, and one with more RAM in place of a core chosen by 
   is(oneCore(d, [c23, c32, c40, 'lib/tiny.elemod']), [c40, 'lib/tiny.elemod'])
 })
 
+test('tick: a mod that patches a place the newest core took takes the newest core that leaves it (test_units.py\'s cases)', () => {
+  const code = (addr: number, n = 6) => [addr, n, 'code', '']
+  const d = new Map<string, Desc>([
+    ['app/core-4.0.elemod', { id: 'core', version: '4.0', fits: true, requires: [], format: 2, sites: [code(0x40010000)] }],
+    ['app/core-4.1.elemod', { id: 'core', version: '4.1', fits: true, requires: [], format: 2, sites: [code(0x40010000), code(0x400721e6)] }],
+    ['lib/tone.elemod', { id: 'tone', fits: true, requires: ['core'], format: 2, sites: [code(0x400721e6), code(0x40184628, 4)] }],
+    ['lib/health.elemod', { id: 'health', fits: true, requires: ['core'], format: 2, sites: [code(0x40020000, 4)] }],
+    ['lib/before.elemod', { id: 'before', fits: true, requires: ['core'], format: 2, sites: [code(0x400721e0)] }],
+    ['lib/master.elemod', { id: 'master', fits: true, requires: ['core'], format: 2, needs_core: '4.1', sites: [] }],
+    ['lib/whole.elemod', { id: 'whole', fits: true, format: 1, sites: [code(0x400721e6)] }],
+  ])
+  const [c40, c41] = ['app/core-4.0.elemod', 'app/core-4.1.elemod']
+  const [tone, health, master] = ['lib/tone.elemod', 'lib/health.elemod', 'lib/master.elemod']
+  const tick = (on: Iterable<string>, p: string) => withRequirements(d, on, p)
+  const is = (got: Set<string>, want: string[]) => assert.deepEqual([...got].sort(), [...want].sort())
+  is(tick([], health), [health, c41])                             // the newest, for a mod that leaves its places alone
+  is(tick([], tone), [tone, c40])                                 // 4.0, the newest that does not patch what the mod does
+  is(tick([c41], tone), [tone, c40])                              // also in 4.1's place
+  is(tick([c41, health], tone), [tone, health, c40])
+  is(tick([tone, c40], health), [tone, health, c40])              // and 4.0 stays for what is ticked after it
+  is(tick([c41], 'lib/before.elemod'), ['lib/before.elemod', c41])   // a site that ends where the core's begins
+  d.get('lib/before.elemod')!.sites = [code(0x400721e1)]
+  is(tick([c41], 'lib/before.elemod'), ['lib/before.elemod', c40])   // a byte further is on it
+  is(tick([tone, c40], master), [tone, master, c41])              // no core takes both: the newest that is new enough
+  is(tick([], master), [master, c41])
+  is(tick(['lib/whole.elemod', c41], health), ['lib/whole.elemod', health, c41])   // a whole build moves no core
+  is(oneCore(d, [c40, c41, tone, health]), [tone, health, c40])
+  is(oneCore(d, [c40, c41, health]), [health, c41])
+})
+
+test('tick: a required mod comes in the newest version the selection links with (test_units.py\'s cases)', () => {
+  const code = (addr: number, n = 6) => [addr, n, 'code', '']
+  const d = new Map<string, Desc>([
+    ['app/core-4.1.elemod', { id: 'core', version: '4.1', fits: true, requires: [], format: 2, sites: [] }],
+    ['lib/machine-pages-1.2.elemod', { id: 'pages', version: '1.2', fits: true, requires: ['core'], format: 2, sites: [code(0x40030000)] }],
+    ['lib/machine-pages-1.7.elemod', { id: 'pages', version: '1.7', fits: true, requires: ['core'], format: 2, sites: [code(0x40030000), code(0x40010d50)] }],
+    ['lib/machine-pages-1.10.elemod', { id: 'pages', version: '1.10', fits: false, requires: ['core'], format: 2, sites: [code(0x40030000), code(0x40010d50)] }],
+    ['lib/ob1.elemod', { id: 'ob1', fits: true, requires: ['core', 'pages'], format: 2, sites: [code(0x40010d50)] }],
+    ['lib/fm.elemod', { id: 'fm', fits: true, requires: ['core', 'pages'], format: 2, sites: [code(0x40040000)] }],
+    ['lib/cc.elemod', { id: 'cc', fits: true, requires: ['core'], format: 2, sites: [code(0x40010d52, 2)] }],
+  ])
+  const [core, p12, p17] = ['app/core-4.1.elemod', 'lib/machine-pages-1.2.elemod', 'lib/machine-pages-1.7.elemod']
+  const [ob1, fm, cc] = ['lib/ob1.elemod', 'lib/fm.elemod', 'lib/cc.elemod']
+  const tick = (on: Iterable<string>, p: string) => withRequirements(d, on, p)
+  const is = (got: Set<string>, want: string[]) => assert.deepEqual([...got].sort(), [...want].sort())
+  is(tick([], fm), [fm, p17, core])                               // the newest made for the stock firmware
+  is(tick([], ob1), [ob1, p12, core])                             // 1.2, the newest that leaves the mod's place alone
+  is(tick([fm, p17, core], ob1), [fm, ob1, p12, core])            // 1.2 in the place of 1.7, enabled for another mod
+  is(tick([ob1, p12, core], fm), [ob1, fm, p12, core])            // and it stays 1.2 for what is ticked after it
+  is(tick([p12, core], fm), [fm, p12, core])                      // a version enabled that takes the selection is kept
+  is(tick([fm, p17, core], cc), [fm, cc, p12, core])              // for a mod that requires nothing of it, too
+  d.get(p12)!.sites.push(code(0x40010d50))
+  is(tick([fm, p17, core], ob1), [fm, ob1, p17, core])            // no version takes the selection: the one enabled
+  is(tick([], ob1), [ob1, p17, core])                             // or the newest, for the check to say why
+  d.get('lib/machine-pages-1.10.elemod')!.fits = true
+  is(tick([], fm), [fm, 'lib/machine-pages-1.10.elemod', core])   // versions as numbers
+})
+
 test('the version is elekloader\'s', () => {
   const init = readFileSync(new URL('../../elekloader/__init__.py', import.meta.url), 'utf8')
   assert.equal(VERSION, /__version__ = '([^']+)'/.exec(init)![1])

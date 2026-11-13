@@ -86,10 +86,11 @@ export type Plan = { core?: Pin; mods: CatalogMod[]; missing: string[] }
 
 /** The catalog files for a selection of mod ids on one device and OS version. Each mod brings the catalog mods it
  * requires (digichain for Digi Mono), required ones first; ids with no file for that OS are `missing`. The core is
- * the one pickCore takes for that OS and every chosen mod's needs_core: the newest the catalog lists, which links
- * every mod built for an older one. `holds`, once the mods are loaded (prepare), says whether a core's RAM holds
- * them: of those that are new enough, only the ones that do count. */
-export function planBuild(catalog: Catalog, device: string, os: string, ids: readonly string[], holds?: (core: Pin) => boolean): Plan {
+ * the one pickCore takes for that OS and every chosen mod's needs_core: the newest the catalog lists. `takes`, once
+ * the mods are loaded (prepare), says whether a core takes them (its RAM holds them, and it patches no place one of
+ * them patches: a mod made before a core took a place still patches it itself): of those that are new enough, only
+ * the ones that do count. */
+export function planBuild(catalog: Catalog, device: string, os: string, ids: readonly string[], takes?: (core: Pin) => boolean): Plan {
   const forOs = (p: Pin) => p.device === device && p.os === os
   const newest = (ps: CatalogMod[]) => ps.sort((a, b) => cmpVersion(b.version, a.version))[0] as CatalogMod | undefined
   const mods: CatalogMod[] = [], missing: string[] = []
@@ -103,7 +104,7 @@ export function planBuild(catalog: Catalog, device: string, os: string, ids: rea
   for (const id of ids) add(id, [])
   const need = mods.map(m => m.needs_core).filter((v): v is string => !!v).sort(cmpVersions).pop() ?? null
   const cores = catalog.cores.filter(forOs)
-  const i = pickCore(cores.map(c => c.version), need, holds ? cores.map(holds) : null)
+  const i = pickCore(cores.map(c => c.version), need, takes ? cores.map(takes) : null)
   return { core: i === null ? undefined : cores[i], mods, missing }
 }
 

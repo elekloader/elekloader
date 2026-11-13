@@ -32,6 +32,7 @@ From the repository's root:
 python .claude/skills/doc-hygiene/scripts/doc_audit.py
 python .claude/skills/doc-hygiene/scripts/doc_audit.py --since origin/main
 python .claude/skills/doc-hygiene/scripts/doc_audit.py --detail docs/CORES.md
+python .claude/skills/doc-hygiene/scripts/doc_audit.py --strict --ratchet origin/main
 ```
 
 The first lists files over their budget, sections over 8 KB, the files
@@ -40,14 +41,28 @@ logs), paragraphs repeated across files, and broken relative links and
 section references. `--since` adds what a branch made each file gain.
 `--detail` lists one file's sections, with their sizes (with and without
 their subsections) and every line of history phrasing. `--strict` exits 1
-on a broken link or reference.
+on a broken link or reference, or a string in the script's `BANNED` (the
+repository's old address).
+
+The last line is the gate every pull request passes (tests.yml). `--ratchet`
+compares your tree with where it left main, and exits 1 when the docs got
+worse:
+
+- a file past its budget grew (generated blocks apart; `MAY_GROW` in the
+  script lists the exceptions, each with its reason);
+- a file gained lines of history phrasing;
+- two files share more paragraphs than they did.
+
+What main already has fails nothing. Each failure prints its fix. Do not
+raise a budget, or add to `MAY_GROW`, to get past it: move the text to its
+home, or trim the file by as much.
 
 The reference check reads `FILE.md, "Title"` and `"Title" in FILE.md`,
 wrapped or not, in the docs and in the code's comments and messages. It
 cannot check a bare `("Insert audio")`, so name the file every time.
 
-A budget asks you to look, it is not a limit. A file over budget is one
-where you check what it carries. Blocks between
+A budget asks you to look. A file over budget is one where you check what
+it carries, and one the ratchet keeps from growing. Blocks between
 `<!-- name: generated ... -->` and `<!-- /name -->` are counted apart.
 Change them only through the tool that writes them.
 
@@ -193,7 +208,7 @@ options.
    correct what is wrong.
 3. Before you cut a fact, find where else it survives. Most versions were
    never released, so the release notes are not enough on their own. Look
-   in the merged PR (`gh pr list -R irpina/elekloader --state merged
+   in the merged PR (`gh pr list -R elekloader/elekloader --state merged
    --search "<words>"`), in `git log -S"<phrase>"`, in a comment by the
    code, or in another doc. A published release's notes are the
    maintainer's, so ask before you edit one; otherwise put the text in your

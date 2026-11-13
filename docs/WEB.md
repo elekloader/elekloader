@@ -6,8 +6,8 @@ elekloader's patcher as a static web page, in two builds of the same `web/`
 - **The Mod Shop**, <https://elekloader.github.io/shop/>: the whole page below, built by
   [elekloader/shop](https://github.com/elekloader/shop) with its list.
 - **The builder**, <https://elekloader.github.io/elekloader/> (`--page builder`,
-  this repository's `pages.yml`): the build, Make your own mod and Contribute,
-  for your own `.elemod` files. The library, the sections, the Splash screen
+  this repository's `pages.yml`): the build, Make your own mod, Contribute and
+  the +Drive mods view, for your own `.elemod` files. The library, the sections, the Splash screen
   maker and Submit are the shop's: the builder hides them, says where the shop
   is (the side bar, the top bar, a banner over the build, the phone's tab bar),
   and sends their addresses (`#library`, `#s/...`, `#splash`, `#submit`) to the
@@ -95,7 +95,8 @@ the worker returns (`blob:` URLs).
 
 The page shows the device's recovery text before it lets you download.
 Flash the file yourself, as with any OS update ([BUILDING.md](BUILDING.md#flash-it)).
-The page never talks to a device: it has no Web MIDI and no USB access.
+The build never talks to a device. Only [the +Drive mods view](#the-drive-mods-view)
+does, over Web MIDI, and it never flashes firmware.
 
 ## The mod shop: the library's cards
 
@@ -150,6 +151,11 @@ versions, the summary from the catalog, and its patch sites. The cover and
 and the files with their sha256.
 
 - **+ Add** puts the mod in your mods and ticks it with what it requires.
+  Of a required mod the shop lists in several versions (machine pages), every
+  version comes, and the build takes the newest that links with its mods
+  ([CORES.md](CORES.md), "How a build picks one").
+  Before you have given the stock file, it goes in your mods, and the page
+  ticks it when the stock file it is for comes; so with a file of your own.
 - **✓ In build** marks a mod in your build; a click takes it out of the
   build, and it stays in your mods.
 - **Remove** takes it out of your mods.
@@ -194,13 +200,20 @@ stock file.
   released yet.
 - **In the page,** a mod from the shop comes from this site like everything
   else, and the worker checks it against the catalog's sha256 again before
-  adding it. The page ticks the newest core of the device and OS, the one
-  it lists (docs/CORES.md, "How a build picks one"). If a mod needs a newer
+  adding it. The page ticks the core the build takes, the one it lists
+  (docs/CORES.md, "How a build picks one"): the newest of the device and OS,
+  or an older one of the site's while a ticked mod cannot link with the
+  newest (Tone+FX 4.0c on the Digitakt mk1 patches a place core 4.1
+  patches, so it builds with core 4.0). If a mod needs a newer
   core than one you ticked yourself (`needs_core`, or the file's own
-  `resources.core`), the newest is ticked in its place, and the page says
-  so. So is the newest when the ticked core's RAM does not hold the mods
+  `resources.core`), the newest is ticked in its place. So is the newest
+  when the ticked core's RAM does not hold the mods
   (core-dn1 4.0's 1.25 MB on the Digitone, core 4.0's 256 KB on the
-  Digitakt mk1, in place of 128 KB).
+  Digitakt mk1, in place of 128 KB). The page changes the core without a
+  word: it speaks of a core only when one stops a build. A card is greyed
+  out against the core when no core of the site's takes the build with it
+  (a mod in the build needs a newer core than the card's mod links with, or
+  the other way round), and the card says which; the check says the rest.
 
 To add a mod to the shop, publish its `.elemod` in a GitHub release and
 submit it with the **Submit a mod** form ([Submitting a mod](#submitting-a-mod)):
@@ -286,17 +299,18 @@ elekloader's `packaging/submit_mod.py` (from main) on it:
   - **its core:** the site has a core for its device and OS (the latest release's, or the shop's)
     at least as new as the one the file names (`resources.core`), or as the core its release
     carries. That version becomes the entry's `needs_core`. Cores come from elekloader's own
-    releases only: the page builds with the newest core for a device and OS, so a core from a
-    mod's release would become every build's. A mod's release that carries one is fine; the core
-    stays out;
+    releases only: the page builds with the newest core for a device and OS that takes the mods,
+    so a core from a mod's release would become every build's. A mod's release that carries one
+    is fine; the core stays out;
   - **the mods it requires** (machine-pages, fxkit, machines, ...): the shop's for its device and
     OS, or else the release's own, which comes along even when "Only these files" leaves it out
     (with the summary its file gives). A mod whose requirement is in neither is refused.
 - **The answer.** It comments on the issue with a table of what it found, and labels the issue
   `needs-changes` if nothing could be added. Editing the issue runs the check again. Under "Good to
-  know" it says, for each file that goes in, the core it builds with, its RAM, and the shop's mods
-  for its device and OS it can't share a build with (`build_web.clash`, the page's rules); that is
-  never a refusal. A note says when the issue isn't from the repository's owner.
+  know" it says, for each file that goes in, the core it builds with (the newest of the site's it
+  can share a build with: an older one, and why, for a file that patches a place the newest
+  patches), its RAM, and the shop's mods for its device and OS it can't share a build with
+  (`build_web.clash`, the page's rules); that is never a refusal. A note says when the issue isn't from the repository's owner.
 - **The pull request.** When files pass, it writes them into `catalog.json` (in the list's own
   layout, which `tests/test_units.py` keeps exact) and opens a pull request from branch
   `mod-submission/<issue>`. The pull request closes the issue when it merges, and the next deploy
@@ -381,12 +395,83 @@ python packaging/shop_updates.py --apply owner/name --catalog /tmp/catalog.json 
     --files-dir build/shop --cores-dir build/core
 ```
 
+## The +Drive mods view
+
+The page's +Drive mods view (`#drive`, `drive.js`) manages the `/mods`
+folder of a unit running a build with the Drive Loader (FORMAT.md, "+Drive
+mods"), over Web MIDI with SysEx. The browser asks for MIDI the first time
+the view opens, not before. It only puts mods on the unit: the build
+itself (`/mods/active`) is chosen on the unit, on its MODS page (SETTINGS >
+GLOBAL > MODS, LOAD TO BUILD), and the view never writes it. The view writes
+nothing but files in `/mods`:
+every request goes through `datarpc.Mods`, whose paths are inside that
+folder. It runs `js/`'s engine as the site serves it (`engine/`), not
+Pyodide, and `app.js` loads it only when the view first opens:
+- **Connect** picks a MIDI port (one named like "Rytm" first) and reads
+  `/mods/.build`, the build descriptor. The view shows the build (its
+  modules, the +Drive area's size with its addresses in brackets, the
+  largest file the loader takes) and each table's spare entries, folded
+  until clicked. Reads ask for
+  8 KB chunks; where a reply never arrives (Firefox's Web MIDI on Windows
+  drops SysEx over about 1 KB), the read starts again with 768-byte chunks
+  and the view keeps that size, so the first read there takes one timeout
+  (5 s) longer.
+- **Mods on +Drive** (the card for `/mods`) shows one folder at a time: its path on top (`/mods/fx/a`),
+  each part of which opens that folder, then its folders (`/NAME`) and its
+  `.elemod` files. A folder opens with a click. The view reads every folder when it connects, so an empty
+  folder shows too, and each file is downloaded for its id and version
+  (and for what it requires, when an upload needs it), with Download and Delete (one press deletes). A mod
+  `/mods/active` names, the saved build, can't be deleted, as the unit's
+  MOD IN USE: unload it there first. A folder row says how many mods are
+  below it. In a
+  folder 3 deep, a note says that nothing deeper shows: the route lists no
+  folder there, and the loader can't reach one.
+  The table spans the card: the Name column takes what the others leave.
+- **Move and rename**: a file or folder row dragged onto a folder row, or
+  onto a part of the path, moves there, and **Rename** on a row makes its
+  name a text box (Enter renames, Escape keeps it). Either is one upload of
+  `FROM\nTO` to `/mods/.mv` (`Mods.move`); the route moves a folder with what
+  is in it and keeps `/mods/active`'s lines naming them, so a mod in the
+  build can move too. The view refuses first a name already there, a folder
+  into itself, a file without a `.elemod` name, and a result past 3 deep or
+  127 bytes; while the MODS page hasn't caught up with the last move, the
+  route answers `Busy: the MODS page`, which the view shows.
+- **New folder** makes a folder in the open one (no `/`, not starting with
+  `.`, at most 63 bytes, 3 deep at most) on the unit, empty, and opens it.
+  The Data router has no request for a folder, so the view uploads nothing
+  to `FOLDER/.dir`, which the loader's route takes as one (`Mods.mkdir`),
+  and then reads the parent's listing to see it there. **Delete** on a folder row
+  deletes an empty folder (one press, no second ask), as SAMPLES' DELETE DIR;
+  a folder with anything in it can't be deleted, and the route refuses one
+  with `Folder not empty`.
+- **Uploads**, dropped or chosen, go into the open folder; files dropped on
+  a folder row, or on a part of the path, go into that folder. They are checked
+  first, together with the files in `/mods`, in any folder, that they
+  require. If one would not load, nothing is sent.
+- **The last boot** shows `/mods/.status`.
+- **The shop's mods** for the build's device and OS are each marked
+  **+Drive** or **flash** (`drive.flashOnly`: sites, storage and the other
+  things only a flashed build carries), and a +Drive one can be uploaded from
+  there, into the open folder. A shop mod already in `/mods`, in any folder
+  (found by its file name), reads Upload again and replaces that copy where
+  it is.
+
+`tests/test_drive_view.mjs` runs the view in Chromium (Playwright) against a
+mocked MIDI port: a fake unit with the made-up build of
+`js/test/drive-vectors.json`, whose uploads must be the requests
+`elekloader mods` sent, byte for byte. The fake unit keeps folders as the
+route does, and the test makes one, uploads into it, keeps a mod of the
+saved build from being deleted, checks the view never writes `/mods/active`, goes 3 deep, drops onto folder rows and the path, finds a shop mod's
+copy in a folder, deletes an empty folder, and moves and renames files and
+folders (its `.mv` moves them, and `/mods/active`'s lines, as the route does).
+
 ## What stays private, and how
 
 - **Nothing is sent anywhere.** No request ever carries your files. The
   page fetches only its own files (the page, the worker, Pyodide, the
-  elekloader package, the cores, the shop's list and its mods), all from
-  this site. There are no
+  elekloader package, the engine, the cores, the shop's list and its mods),
+  all from this site. The +Drive mods view sends the files you choose to
+  the unit you connect over USB MIDI, and nowhere else. There are no
   analytics, no fonts or scripts from elsewhere, and no server side.
 - **The page** carries a Content Security Policy in a `<meta>` tag:
   `default-src 'self'`, scripts from this site only, plus
@@ -416,10 +501,11 @@ python packaging/shop_updates.py --apply owner/name --catalog /tmp/catalog.json 
 
 | path | what |
 |---|---|
-| `index.html`, `style.css`, `app.js`, `worker.js`, `bridge.py` | `web/`, as committed, but for one change: index.html names `app.js?v=` and `style.css?v=` with the site's version (a hash of every other file), and the page and its worker pass that `?v=` on to every file they load, so a browser's cache never mixes two deploys |
+| `index.html`, `style.css`, `app.js`, `worker.js`, `bridge.py`, `drive.js` | `web/`, as committed, but for one change: index.html names `app.js?v=` and `style.css?v=` with the site's version (a hash of every other file), and the page and its worker pass that `?v=` on to every file they load, so a browser's cache never mixes two deploys |
+| `engine/<hash>/` | the TypeScript engine the [+Drive mods view](#the-drive-mods-view) loads (`js/tools/build.ts`'s output, in a folder named by its files' hash, which index.html names: a deploy never mixes two engines) |
 | `devices.json` | the devices the engine knows (key, name, OS versions), so the page lists them all before the engine has loaded |
 | `elekloader.zip` | the elekloader package, exactly as the commit has it (`git archive HEAD elekloader`), stored, sorted, fixed dates: its sha256 follows from the commit |
-| `core/*.elemod`, `core/index.json` | the cores of the latest release, and the cores the catalog lists, with their sha256; the worker loads the newest of each device and OS and checks it |
+| `core/*.elemod`, `core/index.json` | the cores of the latest release, and the cores the catalog lists, with their sha256; the worker loads and checks each one, and the page lists the one a build takes |
 | `shop/*.elemod`, `shop/index.json` | the shop: the catalog's mods, from their authors' releases, with what each file says about itself |
 | `shop/thumbs/<sha256>.png` | the cards' thumbnails: each the canonical 1-bit PNG of the picture the catalog pins (`packaging/thumbs.py`), named by the sha256 of the author's file |
 | `shop/claims.json` | the leaderboard: the to-do list's entries claimed by the repository's merged pull requests (`Claims:` lines; [CONTRIBUTE.md](CONTRIBUTE.md#claiming-an-entry)), from `gh pr list --state merged` |

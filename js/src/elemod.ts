@@ -97,7 +97,7 @@ export function partsBytes(parts: Part[], image: Uint8Array, dev: Device): Uint8
 export type Reloc = [number, string, string, number]          // offset, type, target, addend
 
 /** Each relocation type's size in bytes. */
-export const RSIZE = new Map([['abs32', 4], ['pc32', 4], ['pc16', 2], ['dsp24', 3]])
+export const RSIZE = new Map([['abs32', 4], ['abs16', 2], ['pc32', 4], ['pc16', 2], ['dsp24', 3]])
 export type Site = { addr: number; len: number; new: Uint8Array; kind: string; stock_sha256: string; relocs: Reloc[] }
 
 export function sharcSite(rel: Release, address: number): [string, string] | undefined {
@@ -192,9 +192,10 @@ export const cmpVersions = (a: string, b: string) => cmpKey(versionKey(a), versi
 
 /** The core a builder takes for a selection: of `versions` (the cores for one device and OS), the newest, if it is at
  * least `need`. Each core keeps all of the one before it, so a mod built for an older core links with the newest as it
- * did with its own. `fits`, if given, says for each core whether its RAM holds the selection's mods: only those that
- * do count, unless none new enough does. -> its index (the last of equals), or null when none is new enough.
- * elemod.pick_core. */
+ * did with its own, unless it patches a place the newer core has since taken. `fits`, if given, says for each core
+ * whether it takes the selection's mods (model.ts withCore: its RAM holds them, and it patches no place one of them
+ * patches): only those that do count, unless none new enough does. -> its index (the last of equals), or null when
+ * none is new enough. elemod.pick_core. */
 export function pickCore(versions: string[], need: string | null = null, fits: boolean[] | null = null): number | null {
   let ok = versions.map((_, i) => i).filter(i => need === null || cmpVersions(versions[i], need) >= 0)
   if (!ok.length) return null
@@ -202,6 +203,16 @@ export function pickCore(versions: string[], need: string | null = null, fits: b
   let best = ok[0]
   for (const i of ok) if (cmpVersions(versions[i], versions[best]) >= 0) best = i
   return best
+}
+
+/** Whether a core takes mods, each as describe() lists it (gui.with_core's takes): it holds them, its area (ram_area)
+ * at least their ram_bound and its own, and patches no byte one of them patches (sites). A whole build's sites count
+ * for nothing: it goes with no core at all, and the check says so. */
+export function coreTakes(core: Record<string, any>, mods: readonly Record<string, any>[]): boolean {
+  const ram = mods.reduce((n, x) => n + (x.ram_bound ?? 0), 0)
+  if ('ram_area' in core && ram + (core.ram_bound ?? 0) > core.ram_area) return false
+  const theirs = mods.filter(x => x.format !== 1).flatMap(x => (x.sites ?? []) as number[][]).map(s => [s[0], s[0] + s[1]])
+  return !((core.sites ?? []) as number[][]).some(s => theirs.some(([lo, hi]) => s[0] < hi && lo < s[0] + s[1]))
 }
 
 export const COMMON = new Set(['elemod', 'dtmod', 'id', 'version', 'title', 'description', 'category', 'author',

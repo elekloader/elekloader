@@ -58,11 +58,35 @@ BUNDLED = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'bundled')
 def with_requirements(descs, enabled, path):
     """-> `enabled` plus `path`, plus the mods it requires (and theirs) that are
     listed and made for the stock firmware, when none enabled already provides
-    them. descs: {path: describe(path)}. Of several files with the id, the last
-    (by file name) is taken, and for core the one with_core takes; a
-    requirement nothing provides is left for the check to report."""
+    them. descs: {path: describe(path)}. Of several files with the id (the
+    versions of a mod other mods build on, machine-pages say), the newest that
+    takes the selection is taken, the newest when none does, and for core the
+    one with_core takes; a requirement nothing provides is left for the check
+    to report. A file takes the selection when it patches no byte another mod
+    of it patches (describe's sites): a mod made for an older version of what
+    it requires, which patches a place the newer version has since taken,
+    builds with the version it was made for. A required mod that is enabled
+    and does not take the selection gives way to a version that does."""
     out = set(enabled) | {path}
     todo, core = [path], False
+
+    def spans(p):
+        x = descs.get(p, {})
+        return [] if x.get('format') == 1 else [(s[0], s[0] + s[1]) for s in x.get('sites', ())]
+
+    def versions(rid):
+        """The listed files with the id, made for the stock firmware, oldest first."""
+        return sorted((p for p, x in descs.items()
+                       if x.get('id') == rid and x.get('fits') and 'error' not in x),
+                      key=lambda p: (elemod.version_key(descs[p].get('version', '')), os.path.basename(p)))
+
+    def takes(p, rid):
+        """`p` patches no byte a mod of the selection patches (its other versions and the core apart)."""
+        mine = spans(p)
+        return not any(lo < h and l < hi for q in out
+                       if q != p and descs.get(q, {}).get('id') not in (rid, 'core')
+                       for l, h in spans(q) for lo, hi in mine)
+
     while todo:
         d = descs.get(todo.pop(), {})
         for rid in d.get('requires', []):
@@ -71,46 +95,60 @@ def with_requirements(descs, enabled, path):
                 continue
             if any(descs.get(p, {}).get('id') == rid for p in out):
                 continue
-            cands = sorted((p for p, x in descs.items()
-                            if x.get('id') == rid and x.get('fits') and 'error' not in x),
-                           key=os.path.basename)
+            cands = versions(rid)
             if cands:
-                out.add(cands[-1])
-                todo.append(cands[-1])
+                pick = ([p for p in cands if takes(p, rid)] or cands)[-1]
+                out.add(pick)
+                todo.append(pick)
+    # a required mod that is enabled and patches a place another mod of the selection patches: a version that
+    # does not, in its place (the one enabled stays when none does, for the check to say why)
+    for rid in sorted({r for p in out for r in descs.get(p, {}).get('requires', []) if r != 'core'}):
+        on = [p for p in out if descs.get(p, {}).get('id') == rid]
+        if len(on) == 1 and not takes(on[0], rid):
+            ok = [p for p in versions(rid) if takes(p, rid)]
+            if ok:
+                out = (out - set(on)) | {ok[-1]}
     return with_core(descs, out) if core else out
 
 
 def with_core(descs, out):
-    """-> `out` with the core its mods need (their resources.core) and whose RAM
-    holds them: the core enabled when it is new enough and holds them (or no
-    core listed for the stock firmware does both), else the one
-    elemod.pick_core takes of those listed, in its place (the newest, when none
-    is new enough, for the check to say so). A core holds the mods when its
-    area (describe's ram_area) is at least their ram_bound and its own."""
+    """-> `out` with the core its mods need (their resources.core) and that takes
+    them: the core enabled when it is new enough and takes them (or no core
+    listed for the stock firmware does both), else the one elemod.pick_core
+    takes of those listed, in its place (the newest, when none is new enough,
+    for the check to say so). A core takes the mods when it holds them, its
+    area (describe's ram_area) at least their ram_bound and its own, and
+    patches no byte one of them patches (describe's sites): a mod made before
+    a core took a place for every mod still patches that place itself, and
+    builds with the newest core that leaves the place alone."""
     need = None
     for p in out:
         v = descs.get(p, {}).get('needs_core')
         if v and (need is None or elemod.version_key(v) > elemod.version_key(need)):
             need = v
-    ram = sum(descs.get(p, {}).get('ram_bound', 0) for p in out
-              if descs.get(p, {}).get('id') != 'core')
+    mods = [descs.get(p, {}) for p in out if descs.get(p, {}).get('id') != 'core']
+    ram = sum(x.get('ram_bound', 0) for x in mods)
+    # (a whole build goes with no core at all: the check says so, whatever it patches)
+    theirs = [(s[0], s[0] + s[1]) for x in mods if x.get('format') != 1 for s in x.get('sites', ())]
 
     def new_enough(p):
         return need is None or elemod.version_key(descs[p].get('version', '')) >= elemod.version_key(need)
 
-    def holds(p):
-        return 'ram_area' not in descs[p] or ram + descs[p].get('ram_bound', 0) <= descs[p]['ram_area']
+    def takes(p):
+        if 'ram_area' in descs[p] and ram + descs[p].get('ram_bound', 0) > descs[p]['ram_area']:
+            return False
+        return not any(s[0] < hi and lo < s[0] + s[1] for s in descs[p].get('sites', ()) for lo, hi in theirs)
 
     on = [p for p in out if descs.get(p, {}).get('id') == 'core']
     cands = sorted((p for p, x in descs.items()
                     if x.get('id') == 'core' and x.get('fits') and 'error' not in x),
                    key=os.path.basename)
-    if on and all(new_enough(p) for p in on) and (all(holds(p) for p in on)
-                                                  or not any(new_enough(p) and holds(p) for p in cands)):
+    if on and all(new_enough(p) for p in on) and (all(takes(p) for p in on)
+                                                  or not any(new_enough(p) and takes(p) for p in cands)):
         return out
     if not cands:
         return out
-    i = elemod.pick_core([descs[p].get('version', '') for p in cands], need, [holds(p) for p in cands])
+    i = elemod.pick_core([descs[p].get('version', '') for p in cands], need, [takes(p) for p in cands])
     if i is None:
         if on:
             return out
@@ -1158,6 +1196,10 @@ class LoaderWindow:
 
 
 def main(argv=None):
+    argv = sys.argv[1:] if argv is None else list(argv)
+    if argv and argv[0] in ('check', 'link', 'mods'):   # the +Drive tools (drive.py)
+        from . import drive
+        return drive.main(argv)
     ap = argparse.ArgumentParser(prog='elekloader', description=__doc__.split('\n')[0])
     ap.add_argument('--stock', help='your stock OS .syx (default: the one chosen last time)')
     ap.add_argument('--mods', action='append', default=[],

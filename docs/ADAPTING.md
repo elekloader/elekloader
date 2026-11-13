@@ -102,7 +102,9 @@ what you see when it is broken (section 5 has the fixes).
     inside ... copied block"*.
 11. **Say what you need.** `requires` names the mods yours depends on (always
     `core` for format 2); `conflicts` names the ones it cannot live with.
-    *"X requires Y"*.
+    *"X requires Y"*. `resources.core` names the core you built for: the
+    file keeps building as newer cores come
+    ([CORES.md](CORES.md), "A mod and newer cores").
 12. **One file, one release.** A mod targets one stock release by hash.
     Porting to another OS version means finding every address again.
 
@@ -224,16 +226,16 @@ Analog Rytm MKII)"). What differs there:
 - core-ar2 exports no firmware locations (`fw_*`): a mod names each
   firmware address itself, for each OS (3.10).
 
-The Analog Four MKII's core (mods/core-a4 0.1, OS 1.56) is core-ar2 0.3 at
+The Analog Four MKII's core (mods/core-a4mk2 0.1, OS 1.56) is core-ar2 0.3 at
 the A4's sites: the same events, `ev_project` and mod storage ("Mod storage
-(core-a4 0.1, Analog Four MKII)"), with the same differences from the
+(core-a4mk2 0.1, Analog Four MKII)"), with the same differences from the
 Digitakt mk1. On the A4, the SETTINGS menu is the GLOBAL key's, and its rows
 come after SYSTEM; the render events cover the audio interrupt's digital
-path (the effects and the inputs), since the voices are analog. core-a4
+path (the effects and the inputs), since the voices are analog. core-a4mk2
 exports no firmware locations either. From 0.2 it has core-ar2 0.4's
-parameter routines and `core_audio_load` ("Parameter pages (core-a4 0.2,
-Analog Four MKII)"), and from 0.3 core-ar2 0.6's `core_page_fns`. `examples/hello-marker-a4`, `hooks-check-a4`,
-`store-check-a4`, `ddr-canary-a4` and `pages-check-a4` are mods for it.
+parameter routines and `core_audio_load` ("Parameter pages (core-a4mk2 0.2,
+Analog Four MKII)"), and from 0.3 core-ar2 0.6's `core_page_fns`. `examples/hello-marker-a4`, `hooks-check-a4mk2`,
+`store-check-a4mk2`, `ddr-canary-a4mk2` and `pages-check-a4mk2` are mods for it.
 
 The sites core owns (do not patch them):
 - Digitakt mk1 1.53 and 1.54: 0x40000538, 0x4000a770, 0x4000a7d6,
@@ -261,7 +263,7 @@ The sites core owns (do not patch them):
   more (32 in all; listed under "Mod storage");
 - Analog Four MKII 1.56: 0x40001180, 0x40098898, 0x40098900, 0x400999f8,
   0x40099a40, 0x400d05d2, 0x401013c6, 0x401040f6, and 28 more for mod
-  storage (mods/core-a4/README.md lists them); from core-a4 0.2, 0x400f6212,
+  storage (mods/core-a4mk2/README.md lists them); from core-a4mk2 0.2, 0x400f6212,
   0x40023d54, 0x400232e2 and 0x4009ea68 (the page routines), 0x400c2370
   and 0x400c4202 (the views), and the bytes at 0x400add22, 0x400add28,
   0x4000a758, 0x4000a774 and 0x4000a790 (the current view's range).
@@ -367,7 +369,7 @@ declares"*).
 | `ev_boot_done` (0.5) | once, when main has made its last init call | `void f(void)` | the OS's tasks exist, no project is loaded yet. In the main task |
 | `ev_idle` (0.5) | main's idle loop, over and over | `void f(void)` | the lowest priority: runs when nothing else does. It must not wait for anything: if main blocks, nothing is left to run. A build with an `ev_idle` handler runs main's idle loop in the core; without one main parks in the stock `bras .` |
 | `ev_tick120` (0.5) | the key-repeat task, 120 times a second | `void f(void)` | after the key-repeat step; that task has 2 KB of stack. Core's paced MIDI drains first |
-| `ev_project` (0.6) | a whole project was loaded (LOAD PROJECT, the power-up's load, RELOAD) or made (CREATE EMPTY PROJECT), when the firmware's job has ended | `void f(int how, unsigned dropped)` | as core-ar2's and core-a4's: `how` is `CORE_PROJECT_NEW` (0) or `CORE_PROJECT_LOADED` (1); `dropped` has `OT_DROPPED_PROJECT` when the project's blocks hold zeros, `OT_DROPPED_CARD` (the first event only) when the card's do. In the engine task, which may use the file calls. One load can bring it more than once |
+| `ev_project` (0.6) | a whole project was loaded (LOAD PROJECT, the power-up's load, RELOAD) or made (CREATE EMPTY PROJECT), when the firmware's job has ended | `void f(int how, unsigned dropped)` | as core-ar2's and core-a4mk2's: `how` is `CORE_PROJECT_NEW` (0) or `CORE_PROJECT_LOADED` (1); `dropped` has `OT_DROPPED_PROJECT` when the project's blocks hold zeros, `OT_DROPPED_CARD` (the first event only) when the card's do. In the engine task, which may use the file calls. One load can bring it more than once |
 | `ev_banks_load` (0.6) | a load of banks | `void f(unsigned pre, unsigned mask)` | 1 before, 0 after; `mask` bit n is bank n. Engine task |
 | `ev_banks_write` (0.6) | the bank writer (background saves, SAVE PROJECT, SAVE AS, a new project) | `void f(unsigned pre, unsigned mask)` | 1 before the first bank file, after the project folder is made; 0 after. Engine task |
 | `ev_project_store` (0.6) | SAVE PROJECT's copy of each `.work` file to `.strd` | `void f(unsigned pre, unsigned unused)` | 1 before, 0 after. Engine task |
@@ -982,7 +984,7 @@ ignore:
 
 The loader then refuses it beside an older core with *"needs core 3.0 or
 newer"*, and an older loader with the imports it cannot resolve. Core 3.0's
-files are on the [core-v3.0](https://github.com/irpina/elekloader/releases/tag/core-v3.0) pre-release and in the
+files are on the [core-v3.0](https://github.com/elekloader/elekloader/releases/tag/core-v3.0) pre-release and in the
 mod shop.
 
 **Which core a build takes.** A builder (the app, the web page, the kit)
@@ -990,9 +992,10 @@ takes the newest core it has for the stock OS, which keeps all of every
 older one: core 4.0 on the Digitakt mk1, core-dn1 4.0 on the Digitone, for
 a selection that needs nothing from 3.0 too. Of the cores new enough for
 every selected mod's `resources.core` (the catalog's `needs_core`), it
-takes the newest whose RAM holds the mods ("The mods' RAM", below;
-[CORES.md](CORES.md), "How a build picks one"). A core chosen by hand that
-is new enough and holds the mods is kept.
+takes the newest whose RAM holds the mods ("The mods' RAM", below) and
+that patches no place one of them patches
+([CORES.md](CORES.md), "How a build picks one"). A core chosen by hand that
+is new enough and takes the mods is kept.
 
 ### Firmware locations (core 3.0, Digitakt mk1)
 
@@ -1495,7 +1498,7 @@ works on the value. A lockable field's `min..max` should include its init.
 The init is part of the layout: a field whose `init` changes is a new field
 (new bits, a new code, its old data dropped), as one whose width changed.
 A build has at most 63 fields with an init, and a core without the table
-`core_field_inits` (core-ar2 before 0.10, core-a4) refuses them. Core exports
+`core_field_inits` (core-ar2 before 0.10, core-a4mk2) refuses them. Core exports
 no firmware locations, so a mod names the live objects it passes as `item`
 itself, for each OS. While an item is live its fields sit inside the stock
 object, so copy, paste, undo and pattern changes carry them with no extra
@@ -1580,8 +1583,8 @@ sets things up per project, subscribes to `ev_project`:
 
 | event | when | C prototype | notes |
 |---|---|---|---|
-| `ev_project` | Analog Rytm MKII (core-ar2 from 0.2) and Analog Four MKII (core-a4 0.1): after CREATE NEW or the project reset (`how` 0, `CORE_PROJECT_NEW`), and after every project load (`how` 1, `CORE_PROJECT_LOADED`: at boot too); the stored project and its mod data are in place | `void f(int how, unsigned dropped)` | `dropped` has `STORE_DROPPED(scope)` set for each of `STORE_GLOBAL`, `STORE_TRACK`, `STORE_PATTERN` and `STORE_PROJECT` that loaded as zeros: saved by another layout, or with no mods. Sounds and kits are checked one by one as they load, so they are not in it. It comes from inside the load: keep it short, and don't start another load or save from it |
-| `ev_project_save` | Analog Rytm MKII (core-ar2 0.10): before (`pre` 1) and after (`pre` 0) every whole save of the live project to a +Drive slot: SAVE PROJECT, SAVE PROJECT AS, the project manager's saves, SAVE ... BEFORE LOADING, and LOAD of an empty slot, which writes a new project there | `void f(unsigned pre, unsigned how)` | `CORE_SAVE_KIND(how)`: `CORE_SAVE_SAME` (the active slot), `CORE_SAVE_OTHER` (another slot, or a project with none yet), `CORE_SAVE_NEW` (the empty slot's LOAD, after `ev_project`'s `CORE_PROJECT_NEW`); `CORE_SAVE_SLOT(how)` 0..127, the screen's number less one (255: none); `CORE_SAVE_FAILED` in the call after when the slot was not written. A field set in the call before is in the saved copy. From the save's job, not a UI tick: keep it short, start no load or save, leave MIDI and USB to `ev_tick`, and don't call `core_project_edited` (mods/core-ar2/README.md, "The project save") |
+| `ev_project` | Analog Rytm MKII (core-ar2 from 0.2) and Analog Four MKII (core-a4mk2 0.1): after CREATE NEW or the project reset (`how` 0, `CORE_PROJECT_NEW`), and after every project load (`how` 1, `CORE_PROJECT_LOADED`: at boot too); the stored project and its mod data are in place | `void f(int how, unsigned dropped)` | `dropped` has `STORE_DROPPED(scope)` set for each of `STORE_GLOBAL`, `STORE_TRACK`, `STORE_PATTERN` and `STORE_PROJECT` that loaded as zeros: saved by another layout, or with no mods. Sounds and kits are checked one by one as they load, so they are not in it. It comes from inside the load: keep it short, and don't start another load or save from it |
+| `ev_project_save` | Analog Rytm MKII (core-ar2 0.10) and Analog Four MKII (core-a4mk2 0.6, `analog-four-mk2/store.h`; mods/core-a4mk2/README.md, "The project save (0.6)"): before (`pre` 1) and after (`pre` 0) every whole save of the live project to a +Drive slot: SAVE PROJECT, SAVE PROJECT AS, the project manager's saves, SAVE ... BEFORE LOADING, and LOAD of an empty slot, which writes a new project there | `void f(unsigned pre, unsigned how)` | `CORE_SAVE_KIND(how)`: `CORE_SAVE_SAME` (the active slot), `CORE_SAVE_OTHER` (another slot, or a project with none yet), `CORE_SAVE_NEW` (the empty slot's LOAD, after `ev_project`'s `CORE_PROJECT_NEW`); `CORE_SAVE_SLOT(how)` 0..127, the screen's number less one (255: none); `CORE_SAVE_FAILED` in the call after when the slot was not written. A field set in the call before is in the saved copy. From the save's job, not a UI tick: keep it short, start no load or save, leave MIDI and USB to `ev_tick`, and don't call `core_project_edited` (mods/core-ar2/README.md, "The project save") |
 
 Core-ar2 0.2 owns 22 more sites, the same on 1.73 and 1.74 except the file
 save (0x400b0804 on 1.73, 0x400b0870 on 1.74) and the SysEx copies: 0x4000937c and 0x40009146
@@ -1605,9 +1608,9 @@ the aftertouch menu's setRoute (0x4003391e).
 `examples/store-check-ar2` uses a field in each
 scope and shows which no longer read back.
 
-### Mod storage (core-a4 0.1, Analog Four MKII)
+### Mod storage (core-a4mk2 0.1, Analog Four MKII)
 
-core-a4 has the Rytm's mod storage, above, with the A4's own objects: the
+core-a4mk2 has the Rytm's mod storage, above, with the A4's own objects: the
 same six scopes, `storage` declarations, lockfile, tagged store, checks and
 `ev_project`. A mod includes `elekloader/sdk/include/analog-four-mk2/store.h`
 instead, and its lockfile defaults to `analog-four-mk2.lock.json`. What
@@ -1629,13 +1632,16 @@ differs:
   survives a power cycle straight after SAVE PROJECT AS: core copies what
   the save wrote of its own bytes back into the stored project.
 - No velocity routes: the sound's room needs no extra sites.
-- core-a4 owns 28 storage sites (mods/core-a4/README.md lists them), among
+- Field defaults (core-a4mk2 0.6): a field's `init` works as on the
+  Rytm (above), with no new sites: p-locks, destinations, MIDI and
+  `core_param_values` work on the value.
+- core-a4mk2 owns 28 storage sites (mods/core-a4mk2/README.md lists them), among
   them a kit init the Rytm's core does not need.
-- Checked in rytm-emu's A4 build and on a unit (store-check-a4). The spare sound and
+- Checked in rytm-emu's A4 build and on a unit (store-check-a4mk2). The spare sound and
   effects words reach an engine slot the stock OS appears not to use; on
   a unit, a pattern sounded the same by ear with every field set.
 
-`examples/store-check-a4` is store-check-ar2 for the A4.
+`examples/store-check-a4mk2` is store-check-ar2 for the A4.
 
 ### Parameter pages (core-ar2 0.4, Analog Rytm MKII)
 
@@ -1951,6 +1957,68 @@ The linker refuses a `core_params` or `core_param_locks` entry whose ids
 take 469..554, a `core_param_locks` entry below 555, and entries of two
 mods that share an id from 555.
 
+**Knob ids by count (core-ar2 0.13).** Rather than pick ids from 555 up,
+declare how many the mod needs in mod.json, `"knobs": 4`, and use
+`__knobs + k` for knob k. The linker gives each mod its own run past every
+other mod's ids and keeps it from build to build in the lockfile
+(docs/FORMAT.md, "Knob ids"):
+
+```c
+#include "analog-rytm-mk2/pages.h"
+CORE_KNOBS;                         /* extern char __knobs[] */
+const struct core_page my_page = {14, "MY PAGE", {CORE_KNOB(0), CORE_KNOB(1), CORE_KNOB(2), CORE_KNOB(3)}};
+const struct core_param_lock my_locks = {CORE_KNOB(0), CORE_KNOB(3), my_get, my_turn,
+                                         my_set, my_clear, my_label, my_name};
+```
+
+`CORE_KNOB(k)` is a constant in a const table (an `abs32`); a 16-bit field
+in assembly, `.short __knobs + 2`, is an `abs16`. The addend must be below
+the mod's `"knobs"`.
+
+Keep your values by `id - CORE_KNOB(0)`, never by the id itself: a build
+with other mods may give the mod other ids.
+
+### Knob looks (core-ar2 0.13, Analog Rytm MKII)
+
+A knob id of the mod's own (555 up) has no stock records: without more,
+stock draws it as record 0's dial with a range of 0..0, so its pointer
+never moves, whatever the value. To draw it as any stock knob draws (a
+switch, a select box, a bipolar dial, a dial with its own steps), give the
+ids a look in `core_knob_looks`, with `analog-rytm-mk2/pages.h`:
+
+```json
+{"to": "core_knob_looks", "order": 50, "data": "00000000",
+ "relocs": [[0, "abs32", "sym:my_looks", 0]]}
+```
+
+```c
+CORE_KNOBS;
+/* {first, last, look, ui, min, max} */
+const struct core_knob_look my_looks = {CORE_KNOB(0), CORE_KNOB(0), 457, 0, 0, 0};  /* CB TEST's switch */
+```
+
+- `look`: a stock id (1..468). The knob takes its UI record (the graphic,
+  the parts its flags draw, the turn's steps, its pop-ups) and its range.
+  Pick an id whose knob looks as yours should; any id with the same record
+  looks the same. `examples/look-check-ar2/looks.h` lists one sample id of
+  each of 1.74's 87 looks, and its `looks_table.py` prints their stock names
+  and the ids that share each from your own OS file.
+- `min`, `max`: when min < max, the knob's range (8.8) in place of look's:
+  the pop-ups and the header take it, and core moves the value the graphic
+  draws from min..max onto look's range (0..127 where look's is 0..0), so a
+  dial is at its start at min and at its end at max.
+- `ui(id)`: when not 0, an 84-byte UI record of your own for the id, or 0
+  for look's. Build it once from a stock one,
+  `memcpy(mine, core_knob_stock_ui(94), 84)`, and change fields (flags +0,
+  steps +4..+0x10, delegates +0x14, +0x24 the graphic, +0x34, +0x44): stock
+  builds its records at boot, so copy at the first call, not in `ev_boot`.
+  Its pointer is read from %a0 (in assembly, return it in %a0 and %d0).
+
+The label and name stay your `core_param_locks` entry's, the value and its
+text your `core_params` entry's; nothing else of the stock parameter (its
+sound slot, its lists, MIDI) comes with its look. The linker refuses an
+entry below 555 and two mods' entries that share an id.
+
 ### Step tags (core-ar2 0.11, Analog Rytm MKII)
 
 A mod that keeps a record of its own for some steps (for the Sidecar mods,
@@ -2146,6 +2214,52 @@ my_blob:
   A 1 MB payload that packs to about 80 % fits beside core and a check mod
   (sidecar-check-ar2 part 6).
 
+### Payloads (core-a4mk2 0.6, Analog Four MKII)
+
+The Rytm's payloads, above, with `analog-four-mk2/payload.h`. From
+core-a4mk2 0.6 the mods' area is 0x45650000-0x47C00000, 37.7 MB for code,
+tables, payloads and `.bss` (docs/DEVICES.md, the Analog Four MKII); a
+build with core-a4mk2 0.5 or older keeps the 128 KB at 0x47BE0000. As on
+the Rytm, the flash budget is the tighter limit for a payload, and the
+patcher says by how much a build is over.
+
+### Screen calls (core-ar2 0.13, Analog Rytm MKII)
+
+Text in stock's own fonts, a key handed back to stock, whether a stock
+overlay is up, the TRK LEVEL readout and stock's progress box
+(`analog-rytm-mk2/screen.h`; ask for `"core": "0.13"` in `resources`).
+All are for the UI task: `ev_tick`, `ev_draw`, `ev_key`, `ev_enc` and what
+they call. `examples/screen-check-ar2` uses each of them.
+
+- **Text.** `core_text_draw(bmp, font, x, y, align, str)` draws `str` in
+  one of stock's 17 fonts (16 is the main screen's) with stock's own
+  routine, into `ev_draw`'s frame or a bitmap you make over your own
+  buffers with `core_bitmap_init` (`CORE_BITMAP_SIZE` bytes; 1 KB of bits
+  for 128 x 64). `y` counts from the bottom: for a glass top row `t`, pass
+  `64 - core_font_height(font) - t`. `align` is `CORE_ALIGN_LEFT`,
+  `_CENTRE` or `_RIGHT`, with `CORE_TEXT_INVERT` for light text on a set
+  bar. A `%` in `str` is drawn as a `%`. `core_text_width` measures.
+- **Keys back to stock.** `core_stock_key(ev)` hands a key event to stock
+  alone, skipping the other mods' handlers. To act on a key and let stock
+  have it later, return 1 from `ev_key`, keep a copy of the event
+  (`CORE_KEY_EVENT_SIZE` bytes) and hand the copy over from `ev_tick`.
+- **Overlays.** `core_stock_overlay()` answers `CORE_OVERLAY_VIEW` while a
+  stock menu or overlay view is stacked over the main screen (TEMPO, SCALE,
+  the FUNC + key menus, a browser, TRK held), `CORE_OVERLAY_WINDOW` while
+  a stock window is up (a popup, a confirm box, a progress box) and
+  `CORE_OVERLAY_SCREEN` while the main screen isn't up at all (GLOBAL).
+  The pad modes' views don't count. A mod that draws over the screen steps
+  aside while it is not 0.
+- **The TRK LEVEL readout.** After a LEVEL turn that reached stock,
+  `core_level_readout()` counts down 47 ticks (2.35 s, inside stock's own
+  readout). Save the header's field with `core_level_field_save` before you
+  draw over it and put it back with `core_level_field_put`, and stock's
+  `TRK LEVEL <v>` shows through your page.
+- **The progress box.** `h = core_progress_open("TITLE")` shows stock's
+  progress box (up to four at once), `core_progress_set(h, done, total)`
+  fills its bar and `core_progress_close(h)` takes it away. The box takes
+  no keys: catch NO in your `ev_key` and close it.
+
 ### Mod scene and performance locks (core-ar2 0.8, Analog Rytm MKII)
 
 A lockable parameter is locked to a scene, or given a performance depth,
@@ -2297,9 +2411,9 @@ The NRPN follows the code, so it is a build's own (Lockable parameters,
 above): a controller mapped to it needs remapping after a build whose
 lockfile gave the parameter another code. Checked in the emulator only.
 
-### Parameter pages (core-a4 0.2, Analog Four MKII)
+### Parameter pages (core-a4mk2 0.2, Analog Four MKII)
 
-core-a4 0.2 has core-ar2 0.4's `core_pages` and `core_params` at the A4's
+core-a4mk2 0.2 has core-ar2 0.4's `core_pages` and `core_params` at the A4's
 four routines, with the same calls and answers as above, and core-ar2's
 `core_audio_load`. With `elekloader/sdk/include/analog-four-mk2/pages.h`
 (and `load.h`):
@@ -2340,7 +2454,7 @@ What differs from the Rytm:
   and shows each view's own title, so there is nothing to fix there.
 - A stock page's entry can be answered too (a `core_pages` entry with a
   stock id), to retitle a page a mod's view follows.
-- From core-a4 0.3, `core_page_fns` works as core-ar2 0.6's ("A page whose
+- From core-a4mk2 0.3, `core_page_fns` works as core-ar2 0.6's ("A page whose
   knobs follow the sound", above): `struct core_page_fn` is `{page, info}`,
   and `info(page)` returns the `core_pages` entry to answer, or 0 to pass.
   The knobs' draw, a knob's touch and a turn each look the knob up through
@@ -2348,17 +2462,33 @@ What differs from the Rytm:
   reads the name once, when core makes it at boot, so every entry `info`
   returns should carry the same name.
 
-`examples/pages-check-a4` is the smallest mod on it: AMP PAN's value as two
+`examples/pages-check-a4mk2` is the smallest mod on it: AMP PAN's value as two
 hex digits through `core_params`, and a CHECK page behind the AMP key. Its
-0.1, for core-a4 0.2, was checked in rytm-emu's A4 build and on a unit (23
-Oct 2026). From 0.2 (for core-a4 0.3) CHECK comes from `core_page_fns`, and
+0.1, for core-a4mk2 0.2, was checked in rytm-emu's A4 build and on a unit (23
+Oct 2026). From 0.2 (for core-a4mk2 0.3) CHECK comes from `core_page_fns`, and
 its knob B, AMP PAN again, is shown while the count of PAN's turn updates
 (the bar) is odd and empty while it is even. Checked in rytm-emu's A4 build
 and on a unit (24 Oct 2026).
 
-### Lockable parameters (core-a4 0.5, Analog Four MKII)
+### Knob looks (core-a4mk2 0.6, Analog Four MKII)
 
-core-a4 0.5 has the first part of the lock service, core-ar2's design
+The Rytm's knob looks (above) with `analog-four-mk2/pages.h`: an entry in
+`core_knob_looks` covers a mod's own knob ids, which on the A4 are above
+0x126, and `look` is a stock id, 1..0x126. The A4 has no `"knobs"` ids
+from the linker: a mod picks its ids as for `core_params`.
+
+### Screen calls (core-a4mk2 0.6, Analog Four MKII)
+
+The Rytm's screen calls (above) with `analog-four-mk2/screen.h` and
+`"core": "0.6"`. What differs: the Rytm's `core_stock_key` is
+`core_key_native` here, std1's name for it, and returns 0 once stock had
+the event (the A4's Brain::key doesn't pass on whether a view took it), the
+progress box is SAVE PROJECT's, and TOTAL RECALL counts as an overlay
+(mods/core-a4mk2/README.md, "Screen calls (0.6)").
+
+### Lockable parameters (core-a4mk2 0.5, Analog Four MKII)
+
+core-a4mk2 0.5 has the first part of the lock service, core-ar2's design
 ("Lockable parameters" and "Mod p-locks", above) with the A4's track
 kinds, from part 2 its destinations, from part 3 the value read and from
 part 4 MIDI.
@@ -2457,7 +2587,7 @@ int one = core_param_value(track, STORE(my_depth));
 A track's read is the voice its last trig went to. `CORE_PARAM_ENGINE`
 gives the engine's 0..0x7fff instead. A handle is a build's own number: look
 it up at boot or on the first read, and never keep one in a project. In the
-emulator the values match stock's own parameter block for block (core-a4's
+emulator the values match stock's own parameter block for block (core-a4mk2's
 README, "Checked so far").
 
 **MIDI (part 4).** Every lockable parameter is NRPN MSB 0, LSB its lock
@@ -2472,12 +2602,12 @@ live recording runs; a mod knob's turn sends its NRPN, or its CC, as
 PARAM OUTPUT says, on the channel stock's own knobs use. On a channel shared
 with PERF, an NRPN reaches the active track, as stock's do.
 
-`examples/lock-check-a4` is the smallest mod on it: one lockable parameter
+`examples/lock-check-a4mk2` is the smallest mod on it: one lockable parameter
 of each kind and a fine one, on a LOCK CHECK page per kind, with what it
 reads each audio block in `lk_seen` for the emulator, from 1.1 its value
 read beside a stock parameter's (`lk_ring`) and the read's cost, and from
 1.2 CCs on A and V and the stored values each tick (`lk_midi`).
-`examples/sound-check-a4` makes one heard: a test tone whose level (LVL)
+`examples/sound-check-a4mk2` makes one heard: a test tone whose level (LVL)
 and pitch (PIT) are lockable mod parameters, read on each synth voice every
 block with `core_param_values_voice` and added to the effects' return (the
 DAC words 4 and 5 of the TX block at `ev_render_out`).
@@ -2518,9 +2648,18 @@ sounds store the knobs and MIDI reaches them as any machine's. A knob
 whose name is 0 keeps its record as stock has it. Slots 35..42 have all
 eight records; 34 and 43 have five, and a knob with no record is ignored.
 Each entry's slot is the resource `machine:<n>`, which elekloader names
-for it, so a second mod with the same slot is refused at link. Slots
-44..52 (the TEST machines) are not offered, since mods already use their
-records as spare parameters.
+for it, so a second mod with the same slot is refused at link.
+
+The TEST machines' slots 44..52 are offered too (core-ar2 0.13: ask
+for `"core": "0.13"`). Their records have no MIDI of their own, so at
+boot core gives each record a knob uses the hidden machines' CC 16 + k
+and NRPN 1:k (k = the sound index less 9). They have fewer records: BD,
+RS and CY TEST (44, 46, 51) all eight; SD TEST (45) 9..12, 15 and 16;
+BT TEST (47) 9..13; LT and MT TEST (48, 49) 9..12; HH TEST (50) 9..13 and
+16; CB TEST (52) 10..12 and 16, with no LEV. Mods that kept spare
+parameters in those records (fx-sends, duck, voice-dac) move off them
+for this core; one that still uses a slot's records declares `"machine:<n>"` in
+its resources, and the linker refuses it next to a machine in that slot.
 
 The engine is called once per 32-frame block for each voice running the
 machine, from the audio interrupt, as stock's are: `frame` is the analog
@@ -2529,6 +2668,14 @@ sound's index 9 + k). It may call a stock engine (`CORE_ENGINE_*`) with a
 block it fills itself, which is how the AE TX machines are built. A value's
 text, or how a knob turns, can be changed through `core_params` (Parameter
 pages, above).
+
+The engine table holds core's trampoline for the slot,
+which latches the voice's trig and velocity and then calls the engine.
+In the engine, `core_voice_trigged(voice)` is 1 when the voice's track
+trigged this block (sequencer, pad, chromatic, MIDI in, a retrig of a
+sounding voice alike) and `core_voice_velocity(voice)` is the track's
+velocity, `velocity << 8` (a MIDI note at 64 gives `0x4000`), before
+accent.
 
 A kit or sound that uses the machine, loaded on a build without the mod,
 gets DISABLE on that track, as stock does for any machine its voice may
@@ -3590,7 +3737,7 @@ core has.
 | `sources` | `.c` and `.s` files, compiled/assembled with the device's flags |
 | `subscribe` | `{"event", "fn", "order"}`: `fn` is one of your global functions |
 | `sites` | patches to the stock image: `{"addr", "stock", "op", "target" or "new"}` (below) |
-| `collections`, `contribute` | tables you declare, and entries you add to others' ([FORMAT.md](FORMAT.md)) |
+| `collections`, `contribute` | tables you declare (`{"entry": 4}`, or just the entry size; a core may add `"spare"`, `"max"` and `"render"`, DRIVE.md, "The build descriptor"), and entries you add to others' ([FORMAT.md](FORMAT.md)) |
 | `weak` | names you import that may be missing; they then read as zero |
 | `dsp`, `subscribe_dsp` | DSP code, on a device whose OS runs some (below, "DSP code") |
 | `resources`, `requires`, `conflicts` | rules 9 and 11 |
@@ -4153,7 +4300,10 @@ Some differences from an octabam build, by design:
 | `adds to table T, which no given mod declares` | the table's owner is missing, or the event name is wrong | add core (or the owner); check the event name |
 | `T holds at most N entries on <device> <OS>; A and B add M` | the mods together add more to T than the OS uses (the device profile's `table_limits`; for `sdk_alpha_machines`, the SDK machines it lists) | build with fewer of those mods, or fewer machines in them |
 | `both export S` | two mods define the same global | prefix your globals with your mod id; make internals `static` |
-| `relocation type N` | a reference the linker cannot relocate (e.g. 16-bit absolute) | use 32-bit addressing for your own symbols; build with the SDK's flags |
+| `relocation type N` | a reference the linker cannot relocate (e.g. 8-bit) | use 32-bit addressing for your own symbols; build with the SDK's flags |
+| `a 16-bit value out of range` | an `abs16` names an address or a number past 65535 | use 32 bits; `abs16` is for ids such as `__knobs + k` |
+| `is a ... reference to __knobs+N; one takes abs32 or abs16 with an addend below its "knobs"` | the mod uses a knob past the count it declares, or a PC-relative reference to it | raise `"knobs"` in mod.json, or fix the index |
+| `asks for knob ids ("knobs"), which the <device> does not give mods` | only a device with mod knob ids (the Analog Rytm MKII) has them | drop `"knobs"` |
 | `section X is not one elekloader places` | code or data in a section the linker does not know | C: default sections; asm: `.section .run, "ax"`, `.fast` or `.bss` |
 | `the mods need RAM to ...` / `.fast code needs SRAM to ...` | over budget | shrink tables and buffers; keep `.fast` for the hottest code only |
 | `has .fast code, which needs ...` | `.fast` is copied in by FAST AUDIO | require `fast-audio`, or use `.run` |

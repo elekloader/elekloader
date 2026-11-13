@@ -758,11 +758,11 @@ def _(B):
 
 external('link.place', '<>: <> is a <> reference to a <> address', 'tests/test_octatrack.py',
          ('is a DSP reference to a ', 'is a ColdFire reference to a DSP address'))
-external('link.put', '<>: a DSP address out of range (0x<>)', 'tests/test_octatrack.py',
+external('put_reloc', '<>: a DSP address out of range (0x<>)', 'tests/test_octatrack.py',
          'a DSP address out of range (0x1000000)')
 
 
-@row('link.put', '<>: a 16-bit PC-relative reference spans <> bytes')
+@row('put_reloc', '<>: a 16-bit PC-relative reference spans <> bytes')
 def _(B):
     def far(at):
         def f(d):
@@ -894,7 +894,8 @@ def _(B):
 
 def knobs(B):
     c = B.core()
-    c['collections'].update({'core_params': {'entry': 4}, 'core_param_locks': {'entry': 4}})
+    c['collections'].update({'core_params': {'entry': 4}, 'core_param_locks': {'entry': 4},
+                             'core_knob_looks': {'entry': 4}})
     return c
 
 
@@ -907,7 +908,7 @@ def answering(B, first, last, table='core_params', ident='m'):
     return d
 
 
-@row('check', "<>: its <> entry takes ids <>..<>, and <>..<> are <>; a mod's own ids start at <>",
+@row('id_problems', "<>: its <> entry takes ids <>..<>, and <>..<> are <>; a mod's own ids start at <>",
      device='analog-rytm-mk2')
 def _(B):
     return [("m 1: its core_params entry takes ids 470..483, and 469..554 are core's lockable "
@@ -915,18 +916,61 @@ def _(B):
         [knobs(B), answering(B, 560, 573)]
 
 
-@row('check', "<>: its <> entry takes ids <>..<>; that table's ids start at <>", device='analog-rytm-mk2')
+@row('id_problems', "<>: its <> entry takes ids <>..<>; that table's ids start at <>", device='analog-rytm-mk2')
 def _(B):
     return [("m 1: its core_param_locks entry takes ids 1..4; that table's ids start at 555",
-             [knobs(B), answering(B, 1, 4, 'core_param_locks')])], \
+             [knobs(B), answering(B, 1, 4, 'core_param_locks')]),
+            ("m 1: its core_knob_looks entry takes ids 457..457; that table's ids start at 555",
+             [knobs(B), answering(B, 457, 457, 'core_knob_looks')])], \
         [knobs(B), answering(B, 1, 4)]
 
 
-@row('check', '<> and <> both take ids <>..<> (<>, <>)', device='analog-rytm-mk2')
+@row('id_problems', '<> and <> both take ids <>..<> (<>, <>)', device='analog-rytm-mk2')
 def _(B):
     return [('m 1 and n 1 both take ids 570..573 (core_params, core_param_locks)',
-             [knobs(B), answering(B, 560, 573), answering(B, 570, 580, 'core_param_locks', 'n')])], \
+             [knobs(B), answering(B, 560, 573), answering(B, 570, 580, 'core_param_locks', 'n')]),
+            ('m 1 and n 1 both take ids 573..573 (core_params, core_knob_looks)',
+             [knobs(B), answering(B, 560, 573), answering(B, 573, 573, 'core_knob_looks', 'n')])], \
         [knobs(B), both(B, 560, 573), answering(B, 574, 580, 'core_param_locks', 'n')]
+
+
+# ---- the build descriptor (core_desc, elekloader/desc.py) ------------------------------------------
+
+def loader(d):
+    """The plain mod `m` made a loader: it imports core_desc, so the build carries the descriptor."""
+    d[1]['imports'] = d[1]['imports'] + ['core_desc']
+
+
+@row('Mod2.__init__', '<>: table <> spare <> (0 to <>)', device='analog-rytm-mk2')
+def _(B):
+    return B.pair('core: table ev_x spare 4097 (0 to 4096)',
+                  lambda d: d[0]['collections']['ev_x'].update(spare=4097),
+                  lambda d: (d[0]['collections']['ev_x'].update(spare=4096), loader(d)))
+
+
+
+@row('Mod2.__init__', '<>: table <> max <> (1 to <>)', device='analog-rytm-mk2')
+def _(B):
+    return B.pair('core: table ev_x max 0 (1 to 4096)',
+                  lambda d: d[0]['collections']['ev_x'].update(max=0),
+                  lambda d: (d[0]['collections']['ev_x'].update(spare=8, max=8), loader(d)))
+
+@row('check', '<> exports <>, the name of the build descriptor the linker writes', device='analog-rytm-mk2')
+def _(B):
+    def thief(d):
+        d[1]['symbols']['core_desc'] = ['.run', 4]
+        d[1]['exports'] = ['core_desc']
+    return B.pair('m 1 exports core_desc, the name of the build descriptor the linker writes', thief, loader)
+
+
+@row('link', '<>: its entry for <> has the order <>; with a build descriptor an order is <> to <>',
+     device='analog-rytm-mk2')
+def _(B):
+    def late(d):
+        d[1]['contribute'][0]['order'] = 2147483647
+    return B.pair('m 1: its entry for ev_x has the order 2147483647; with a build descriptor an order is '
+                  '-2147483648 to 2147483646',
+                  lambda d: (late(d), loader(d)), late)
 
 
 def both(B, first, last):
@@ -934,6 +978,67 @@ def both(B, first, last):
     d = answering(B, first, last)
     d['contribute'].append(dict(d['contribute'][0], to='core_param_locks'))
     return d
+
+
+def knobbed(B, count=4, ident='k', add=(0, 3), typ='abs32', short_add=1):
+    """A mod with "knobs": count, whose core_param_locks entry answers for __knobs+add[0]..+add[1]
+    and whose .run holds a 16-bit knob list entry, __knobs+short_add, at +8."""
+    d = B.other(ident)
+    d['knobs'] = count
+    d['sections']['.run'] = {'align': 4, 'len': 12, 'parts': [['hex', '00' * 12]]}
+    d['symbols'] = {'e_' + ident: ['.run', 0]}
+    d['imports'] = ['core_fn', '__knobs']
+    d['relocs'] = [['.run', 0, typ, 'sym:__knobs', add[0]], ['.run', 4, 'abs32', 'sym:__knobs', add[1]],
+                   ['.run', 8, 'abs16', 'sym:__knobs', short_add]]
+    d['contribute'] = [{'to': 'core_param_locks', 'data': '00000000',
+                        'relocs': [[0, 'abs32', 'sym:e_' + ident, 0]]}]
+    return d
+
+
+@row('Mod2.__init__', '<>: "knobs" is a count of knob ids, 0..<>', device='analog-rytm-mk2')
+def _(B):
+    def count(n):
+        d = knobbed(B, 4)
+        d['knobs'] = n
+        return [knobs(B), d]
+    return [('k: "knobs" is a count of knob ids, 0..1024', count(1025)),
+            ('k: "knobs" is a count of knob ids, 0..1024', count('4'))], count(1024)
+
+
+@row('Mod2.__init__', "<>: <> is the linker's (its first knob id), not a symbol of a mod", device='analog-rytm-mk2')
+def _(B):
+    bad = knobbed(B)
+    bad['symbols']['__knobs'] = ['abs', 600]
+    return [("k: __knobs is the linker's (its first knob id), not a symbol of a mod", [knobs(B), bad])], \
+        [knobs(B), knobbed(B)]
+
+
+@row('check', '<> asks for knob ids ("knobs"), which the <> does not give mods')
+def _(B):
+    return B.pair('m 1 asks for knob ids ("knobs"), which the Octatrack does not give mods',
+                  lambda d: d[1].update(knobs=2), lambda d: d[1].update(knobs=0))
+
+
+@row('check', '<>: <> is a <> reference to <>+<>; one takes abs32 or abs16 with an addend below its "knobs" (<>)',
+     device='analog-rytm-mk2')
+def _(B):
+    return [('k 1: .run+0x0 is a abs32 reference to __knobs+4; one takes abs32 or abs16 with an addend below '
+             'its "knobs" (4)', [knobs(B), knobbed(B, 4, add=(4, 3))]),
+            ('k 1: .run+0x0 is a pc32 reference to __knobs+0; one takes abs32 or abs16 with an addend below '
+             'its "knobs" (4)', [knobs(B), knobbed(B, 4, typ='pc32')]),
+            ('k 1: .run+0x8 is a abs16 reference to __knobs+-1; one takes abs32 or abs16 with an addend below '
+             'its "knobs" (4)', [knobs(B), knobbed(B, 4, short_add=-1)])], \
+        [knobs(B), knobbed(B, 5, add=(4, 4))]
+
+
+@row('put_reloc', '<>: a 16-bit value out of range (<>)', device='analog-rytm-mk2')
+def _(B):
+    def short(tgt, add):
+        d = knobbed(B)
+        d['relocs'][2] = ['.run', 8, 'abs16', tgt, add]
+        return [knobs(B), d]
+    return [('.run+0x8: a 16-bit value out of range (%d)' % (0x47be0000), short('abs', 0x47be0000))], \
+        short('abs', 0xFFFF)
 
 
 # ---- the finished image against the stock one (link.image_problems) -------------------------------------------
@@ -1039,7 +1144,7 @@ def test_digitakt_fixtures():
 
 
 def test_analog_rytm_fixtures():
-    assert run_rows('analog-rytm-mk2') == 13
+    assert run_rows('analog-rytm-mk2') == 21
 
 
 def test_analog_rytm_mk1_fixtures():
@@ -1303,6 +1408,42 @@ def messages(path):
     return out
 
 
+def test_knob_ids_are_given_from_555_past_fixed_ids_and_written_as_abs32_and_abs16():
+    import struct
+    with Bench('analog-rytm-mk2') as B:
+        fixed = answering(B, 555, 560, 'core_param_locks', 'f')     # a mod with fixed ids 555..560
+        mods = [knobs(B), fixed, knobbed(B, 4, 'k', (0, 3), short_add=2), knobbed(B, 2, 'j', (0, 1))]
+        out = link.link([link.Mod2(d, d['id']) for d in mods], B.img)
+        assert out.knobs == {'j': [561, 2], 'k': [563, 4]}         # by mod id, past 555..560
+        assert out.knob_notes == ['j: knob ids 561..562', 'k: knob ids 563..566']
+        assert out.map['k:__knobs'] == 563 and out.store is None
+        run = out.layout['sections']['k .run'] - out.layout['ddr'][0]
+        at = out.layout['run_load'] - B.dev.main_load + run
+        assert struct.unpack('>IIH', out.image[at:at + 10]) == (563, 566, 565)
+        # the linked mods' ids are checked again: a run on another mod's ids is refused
+        k = link.Mod2(mods[2], 'k')
+        assert link.id_problems([k, link.Mod2(fixed, 'f')], B.img, {'k': 558}) == \
+            ['k 1 and f 1 both take ids 558..560 (core_param_locks, core_param_locks)']
+
+
+def test_a_core_with_a_lockfile_keeps_the_knob_ids_from_build_to_build():
+    with Bench('analog-rytm-mk2') as B:
+        core = keeper(B)
+        core['collections'].update(knobs(B)['collections'])
+
+        def build(lock, *mods):
+            return link.link([link.Mod2(copy.deepcopy(d), d['id']) for d in (core,) + mods], B.img, lock)
+        one = build(None, knobbed(B, 4, 'k'), knobbed(B, 2, 'j', (0, 1)))
+        assert one.knobs == {'j': [555, 2], 'k': [557, 4]}
+        assert one.store['knobs'] == [{'mod': 'j', 'first': 555, 'count': 2}, {'mod': 'k', 'first': 557, 'count': 4}]
+        two = build(one.store, knobbed(B, 4, 'k'), knobbed(B, 3, 'a', (0, 2)))      # j out, a in: k keeps its ids
+        assert two.knobs == {'a': [561, 3], 'k': [557, 4]}
+        assert two.store['id'] == one.store['id'] and store.from_image(two.image)['knobs'] == two.store['knobs']
+        three = build(two.store, knobbed(B, 4, 'k'), knobbed(B, 2, 'j', (0, 1)), knobbed(B, 3, 'a', (0, 2)))
+        assert three.knobs == {'a': [561, 3], 'j': [555, 2], 'k': [557, 4]}
+        assert three.knob_notes == ['j: back with knob ids 555..556']
+
+
 def test_every_refusal_has_a_fixture():
     found = set(messages('elekloader/link.py'))
     loader = [(fn, t) for fn, t in messages('elekloader/elemod.py')]
@@ -1317,6 +1458,139 @@ def test_every_refusal_has_a_fixture():
             held = fh.read()
         for t in ([text] if isinstance(text, str) else text):
             assert t in held, '%s no longer holds %r (%r)' % (path, t, key)
+
+
+def descriptor_mods(B, with_loader=True):
+    """A core with mod storage, two tables (one a render table with 2 spare entries) and a
+    storage table; `m`, which stores a field and (with_loader) imports core_desc; `n`, with entries
+    at two orders and a site. For the descriptor's tests and js/tools/desc_vectors.py."""
+    core = keeper(B)
+    core['collections'].update({'ev_render_x': {'entry': 4, 'render': True, 'spare': 2},
+                                'core_handles': {'entry': 4}})
+    core['symbols']['core_zero'] = ['.boot', 0]
+    core['exports'] = ['core_zero', 'core_fn']
+    m = B.mod('m', storage=[{'sym': 'st_a', 'scope': 'kit', 'bits': 5}],
+              resources={'names': ['sysex:7d']})
+    if with_loader:
+        m['imports'] = m['imports'] + ['core_desc']
+        m['relocs'] = [['.run', 4, 'abs32', 'sym:core_desc', 0]]
+        m['symbols']['drive_staging_size'] = ['abs', 0x80000]
+        m['exports'] = ['drive_staging_size']
+    n = B.mod('n')
+    n['contribute'] = [{'to': 'ev_x', 'order': 10, 'data': '0000000000000000',
+                        'relocs': [[0, 'abs32', 'sym:fn_n', 0], [4, 'abs32', 'sym:fn_n', 2]]},
+                       {'to': 'ev_render_x', 'order': 60, 'data': '00000000',
+                        'relocs': [[0, 'abs32', 'sym:fn_n', 0]]}]
+    n['sites'] = [B.jmp_site(B.at(0x1000), 'fn_n')]
+    return [core, m, n]
+
+
+def test_the_build_descriptor():
+    """A mod that imports core_desc makes the linker write the build descriptor (desc.py) after the
+    tables, with spare zero entries in each table more mods may join; it reads back as what was
+    linked, and the same mods without that import link to the image they always did."""
+    from elekloader import desc
+    with Bench('analog-rytm-mk2') as B:
+        out = link.link([link.Mod2(d, d['id']) for d in descriptor_mods(B)], B.img)
+        plain = link.link([link.Mod2(d, d['id']) for d in descriptor_mods(B, False)], B.img)
+        assert 'desc' not in plain.layout and b'ELKD' not in plain.image
+        assert desc.SYM not in plain.map
+        found = desc.find(out.image)
+        assert len(found) == 1
+        d = desc.decode(out.image, found[0])
+        at, end = out.layout['desc']
+        assert out.map['core_desc'] == at and found[0] == B.dev.image_end(B.rel) - B.dev.main_load \
+            + out.layout['run_load'] - out.layout['boot'][0] + at - out.layout['ddr'][0]
+        assert d['size'] == end - at and d['abi'] == (1, 1) and d['os'] == 'SYN'
+        assert (d['family'], d['device_key']) == (2, 'analog-rytm-mk2')
+        assert [(x['name'], x['kind'], x['flags'], len(x['exports'])) for x in d['modules']] == \
+            [('core', 0, 0, 2), ('m', 2, 0, 1), ('n', 1, 1, 0)]
+        assert d['modules'][0]['exports'] == [('core_fn', out.map['core_fn']), ('core_zero', out.map['core_zero'])]
+        tabs = {t['name']: t for t in d['tables']}
+        assert sorted(tabs) == sorted(out.tables)
+        for c, (a, n, e) in out.tables.items():
+            assert (tabs[c]['address'], tabs[c]['count'], tabs[c]['entry']) == (a, n, e), c
+        assert out.map['ev_x_n'] == 3 and tabs['ev_x']['capacity'] == 3 + desc.SPARE
+        assert tabs['ev_x']['entries'] == [(10, 2)] * 2 + [(50, 1)]
+        assert tabs['ev_x']['flags'] == desc.F_MORE
+        assert tabs['ev_render_x']['flags'] == desc.F_MORE | desc.F_RENDER
+        assert (tabs['ev_render_x']['count'], tabs['ev_render_x']['capacity']) == (1, 3)
+        ids = tabs['core_store_ids']
+        assert ids['flags'] == 0 and ids['capacity'] == ids['count'] == 1
+        assert ids['entries'] == [(desc.LINKER_ORDER, 0)]
+        assert d['claims'] == [(desc.CLAIM_NAME, 1, 'sysex:7d')]
+        end = out.layout['bss'][1]           # the +Drive area: the rest of core 0.11's, from 4 KB
+        assert d['area'] == (end, link._align(end, 0x1000), 0x47FFF000, 0, 0x80000)
+        kit = [s for s in d['storage']['scopes'] if s[0] == 'kit'][0]
+        assert kit[2] == 5 and kit[3] == 1
+        tr = d['storage']['trailer']
+        o = tr[0] - B.dev.main_load
+        assert out.image[o:o + 8] == store.TRAILER and len(out.image) == o + tr[1]
+        # each table: its entries, its zero entry and its spare zero entries, then the next one
+        ddr = out.image[found[0] - (at - out.layout['ddr'][0]):]
+        x = tabs['ev_x']
+        o = x['address'] - out.layout['ddr'][0]
+        assert ddr[o + 12:o + 4 * (x['capacity'] + 1)] == bytes(4 * (x['capacity'] - 2))
+        # the loader's reference to core_desc is relocated to it
+        run = out.layout['sections']['m .run'] - out.layout['ddr'][0]
+        assert int.from_bytes(ddr[run + 4:run + 8], 'big') == at
+        assert 'module 1 m 1 (loader)' in desc.dump(d)
+
+
+def test_the_build_descriptor_keeps_whole_orders():
+    """ABI 1.1: each entry's order as a signed 32-bit number (core-ar2 0.13's screen handlers are at
+    -1000000 and 1000000), the keys holding it to 0..65534 for a 1.0 reader; a 1.0 block's orders
+    are its keys'. The order the linker keeps for itself is refused, as are orders past 32 bits."""
+    import struct
+    import zlib
+    from elekloader import desc
+    with Bench('analog-rytm-mk2') as B:
+        docs = descriptor_mods(B)
+        docs[2]['contribute'][0]['order'] = -1000000
+        docs[2]['contribute'].append({'to': 'ev_x', 'order': 1000000, 'data': '00000000',
+                                      'relocs': [[0, 'abs32', 'sym:fn_n', 0]]})
+        out = link.link([link.Mod2(d, d['id']) for d in docs], B.img)
+        at = desc.find(out.image)[0]
+        d = desc.decode(out.image, at)
+        x = {t['name']: t for t in d['tables']}['ev_x']
+        assert x['entries'] == [(-1000000, 2)] * 2 + [(50, 1), (1000000, 2)], x['entries']
+        blk = bytearray(out.image[at:at + d['size']])
+        o_key = struct.unpack_from('>I', blk, o_tab_of(blk, 'ev_x') + 16)[0]
+        assert struct.unpack_from('>4I', blk, o_key) == (2, 2, 50 << 16 | 1, 0xFFFE << 16 | 2)
+        # the same block as ABI 1.0 wrote it: no orders, the keys' stand
+        struct.pack_into('>H', blk, 6, 0)
+        for i in range(struct.unpack_from('>H', blk, 0x24)[0]):
+            struct.pack_into('>I', blk, struct.unpack_from('>I', blk, 0x30)[0] + 24 * i + 20, 0)
+        struct.pack_into('>I', blk, 0x0c, 0)
+        struct.pack_into('>I', blk, 0x0c, zlib.crc32(bytes(blk)) & 0xFFFFFFFF)
+        old = desc.decode(bytes(blk))
+        assert old['abi'] == (1, 0)
+        assert {t['name']: t for t in old['tables']}['ev_x']['entries'] == [(0, 2)] * 2 + [(50, 1), (65534, 2)]
+        assert {t['name']: t for t in old['tables']}['core_store_ids']['entries'] == [(desc.LINKER_ORDER, 0)]
+        for bad in (desc.LINKER_ORDER, desc.ORDER_MIN - 1):
+            docs = descriptor_mods(B)
+            docs[2]['contribute'][0]['order'] = bad
+            try:
+                link.link([link.Mod2(d, d['id']) for d in docs], B.img)
+            except ModError as e:
+                assert 'with a build descriptor an order is -2147483648 to 2147483646' in str(e), e
+            else:
+                raise AssertionError('linked an order of %d' % bad)
+        docs = descriptor_mods(B)
+        docs[2]['contribute'][0]['order'] = desc.ORDER_MIN
+        link.link([link.Mod2(d, d['id']) for d in docs], B.img)
+
+
+def o_tab_of(blk, name):
+    """The offset of the table record named `name` in a descriptor block."""
+    import struct
+    pool, ntab, o_tab = struct.unpack_from('>I', blk, 0x18)[0], struct.unpack_from('>H', blk, 0x24)[0], \
+        struct.unpack_from('>I', blk, 0x30)[0]
+    for i in range(ntab):
+        n = struct.unpack_from('>I', blk, o_tab + 24 * i)[0]
+        if bytes(blk[pool + n:blk.index(b'\0', pool + n)]).decode() == name:
+            return o_tab + 24 * i
+    raise KeyError(name)
 
 
 if __name__ == '__main__':

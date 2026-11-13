@@ -15,7 +15,8 @@
 // - mk2 synth, struct dn2_voice_input (digitone-mk2/voice.h): output, slot, 8.8 pitch, flags
 //   (START the block after a trigger edge, whose block is silent), param (40 words), state;
 // - SDK machine, struct elek_voice (elekloader/sdk_alpha_machine.h): knob, track, start (as START),
-//   16.16 pitch, velocity, state, idle (0), cc (each CC since the slot's last render, or -1);
+//   16.16 pitch, velocity, state, idle (0), cc (each CC since the slot's last render, or -1); a knob is
+//   mapped again only when its frame halfword changed, or the slot's machine did;
 // - mk2 filter, struct dn2_filter_input (digitone-mk2/filter.h): samples, slot, flags (RESET on
 //   entering the filter and on a trigger edge), cutoff, resonance, g, state.
 // A slot's state is zeroed when its machine changes. A call that breaks its stack's guard word mutes
@@ -54,7 +55,7 @@
 .ALIGN 1200;
 .VAR input = 0;                     // word 1200: the kernel's input
 .ALIGN 1208;
-.VAR params = 0;                    // word 1208: an mk2 synth's 40 param words, an SDK machine's knobs
+.VAR params = 0;                    // word 1208: an mk2 synth's 40 param words
 .ALIGN 1248;
 .VAR cur = 0;                       // this call's kind block
 .VAR cap_astat = 0;
@@ -75,7 +76,8 @@
 // changed and it has not rendered since; cc_took per track, cc_count before its first CC on the machine
 // it had then << 7 | the machine; cc_seen per slot, cc_count at its last render; cc_table per track 128
 // words, a CC's cc_count << 7 | its value (0: none came); cc_built the 128 values a render's cc points
-// at, built for the track, from and now in cc_btrack, cc_bfrom and cc_bnow (cc_btrack -1: all -1).
+// at, built for the track, from and now in cc_btrack, cc_bfrom and cc_bnow (cc_btrack -1: all -1);
+// cc_track per track, cc_count at its last CC (0: none came): only a slot of a track one came on builds.
 .VAR cc_last = 0;                   // word 1318
 .VAR cc_count = 0;
 .VAR cc_fresh = 0;
@@ -90,6 +92,12 @@
 .ALIGN 1484;
 .VAR cc_table = 0;                  // word 1484
 .ALIGN 3532;
+.VAR cc_track = 0;                  // word 3532
+.ALIGN 3548;
+// SDK machines' knobs, 32 words a slot: +0 each knob's clamped frame halfword + 1 that its value was
+// mapped from (0: none), +16 the values, the kernel's knob.
+.VAR knobs = 0;                     // word 3548
+.ALIGN 4060;
 
 .SECTION/SW seg_swco;
 .GLOBAL dn2_voice_hook.;
@@ -204,6 +212,16 @@ DM(I4,M6)=R4;
 R3=R3-1;
 IF NE JUMP zero;
 zeroed:
+R4=LSHIFT R0 BY 7;                  // and its knobs have no value
+R3=knobs;
+R4=R4+R3;
+I4=R4;
+R4=0;
+R3=16;
+unmap:
+DM(I4,M6)=R4;
+R3=R3-1;
+IF NE JUMP unmap;
 R4=DM(cc_fresh);
 R4=R4 OR R7;
 DM(cc_fresh)=R4;
@@ -286,8 +304,12 @@ JUMP call;
 
 // An SDK machine's struct elek_voice: knob[k] is sdk_alpha_map of knob k's frame halfword.
 sdk_input:
-R4=params;
-DM(0,I5)=R4;
+R4=LSHIFT R0 BY 7;
+R3=knobs;
+R4=R4+R3;
+R3=64;
+R4=R4+R3;
+DM(0,I5)=R4;                        // knob: the slot's values
 // The slot's track: the DSP's slot-to-track map, a halfword a slot.
 R1=R0;
 R6=0x257898;
@@ -320,7 +342,10 @@ CALL cc_voice;
 R4=DM(3,I3);
 I0=R4;
 R5=DM(I0,M6);
-I1=params;
+R4=LSHIFT R0 BY 7;
+R3=knobs;
+R4=R4+R3;
+I1=R4;
 CALL first_knob;
 R5=PASS R5;
 IF EQ JUMP call;
@@ -334,6 +359,11 @@ clamped:
 R9=DM(I0,M6);                       // min
 R10=DM(I0,M6);                      // q
 R12=DM(I0,M6);                      // r
+R3=R2+1;
+R4=DM(0,I1);
+COMP(R3,R4);
+IF EQ JUMP mapped;                  // the value it has is this halfword's
+DM(0,I1)=R3;
 R10=R10*R2(SSI);
 R12=R12*R2(SSI);
 R3=16256;
@@ -369,7 +399,9 @@ divided:
 R12=R13;
 R9=R9+R10;
 R9=R9+R12;
-DM(I1,M6)=R9;
+DM(16,I1)=R9;
+mapped:
+R4=DM(I1,M6);                       // the next knob's
 R1=R1+1;
 R5=R5-1;
 IF NE JUMP knob;
@@ -546,6 +578,18 @@ R14=0x1ffffff;
 R3=R10-R9;
 R3=R3 AND R14;                      // the CCs since from
 IF EQ JUMP cc_none;
+R2=LSHIFT R1 BY 2;                  // none of them on this track: as none
+R4=cc_track;
+R2=R2+R4;
+I1=R2;
+R2=DM(0,I1);
+R2=PASS R2;
+IF EQ JUMP cc_none;
+R2=R2-R9;
+R2=R2-1;
+R2=R2 AND R14;
+COMPU(R2,R3);
+IF GE JUMP cc_none;
 R2=DM(cc_btrack);
 COMP(R2,R1);
 IF NE JUMP cc_build;
@@ -675,6 +719,11 @@ R4=LSHIFT R14 BY 7;
 R4=R4 OR R3;
 DM(0,I4)=R4;
 cc_kept:
+R3=LSHIFT R2 BY 2;
+R4=cc_track;
+R3=R3+R4;
+I4=R3;
+DM(0,I4)=R1;                        // the track's last CC
 R3=LSHIFT R2 BY 9;
 R4=cc_table;
 R3=R3+R4;

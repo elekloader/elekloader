@@ -101,7 +101,7 @@ class DspPeekTests(unittest.TestCase):
             firmware.write_bytes(outputs['syx'])
             sys.path.insert(0, DIGIKIT)
             from tools.control.digi_client import Emu
-            emu = Emu.spawn_coupled(STOCK, READY, binary=EMUD, timeout=300, run_dir=work / 'run', env={'SHARC_AOT': '0'})
+            emu = Emu.spawn_coupled(STOCK, READY, binary=EMUD, timeout=300, run_dir=work / 'run')
             try:
                 def wait(ms):
                     left = int(ms * MS)

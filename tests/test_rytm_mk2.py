@@ -165,7 +165,8 @@ def test_core_ar2_sites():
         assert x['op'] == 'jmp' and len(x['stock']) // 2 in (6, 8), x
         assert int(d[k], 16) == int(x['addr'], 16) + len(x['stock']) // 2, k
     # pages whose entry a function answers (core-ar2 0.6), asked before core_pages
-    assert mod['collections'].get('core_page_fns') == 4 and mod['collections'].get('core_pages') == 4
+    # (0.12: with the page key's room as +Drive spares, tests/test_units.py)
+    assert all(mod['collections'].get(c) == {'entry': 4, 'spare': 149} for c in ('core_page_fns', 'core_pages'))
     # the page keys' lists (core-ar2 0.4): each view's `moveq #n,%d1; movel
     # %d1,%sp@-; movel #list,%d0` is a site, and defsym has its list, length
     # and resume
@@ -199,8 +200,8 @@ def test_core_ar2_sites():
     # the project save to a +Drive slot (0.10, ev_project_save), and the six
     # length and scale setters (0.11, ev_steps' LENGTH), and the five moments (0.11: the SysEx
     # router, the kit select and push, the slot clear and paste), and the sequencer clock's two
-    # (0.11, ev_seq_step)
-    assert len(mod['sites']) == 122
+    # (0.11, ev_seq_step), and the knob looks' three (0.13: uirec, range and the graphic)
+    assert len(mod['sites']) == 125
     for addr in ('0x400c0ba2', '0x400c0c8c', '0x400ab8d0', '0x400aba02', '0x400aba7e', '0x400ab096'):
         assert [x for x in mod['sites'] if x['addr'] == addr and x['op'] == 'jmp'], addr
     # each moment's site is its routine's first whole instructions, and the body in moments.s
@@ -341,6 +342,41 @@ def test_core_ar2_machines():
     assert 'machines.c' in j['sources']
     assert ('core_machines', 0, 53, 'machine') in DEV.slot_claims
 
+
+def test_core_ar2_machine_slots_44_52():
+    """core-ar2 0.13 (machines.c): slots 44..52 are offered. Their TEST records have no MIDI
+    (+0x18 and +0x1c -1) and the indices machines.h lists; slot 35's record at index 9 + k
+    carries CC 16 + k (no LSB) and NRPN 1:k, which core copies; +0x20 is 0 on every hidden
+    record. The trig getters' sources: the owner bytes (8 voices, tracks 0..11) and the engine
+    table's 53 entries are data in the image."""
+    _r, _s, img = stock()
+    if REL.version != '1.74':
+        raise Skip('core-ar2 0.13 is for 1.74')
+
+    def l(a):
+        return struct.unpack('>I', img[a - DEV.main_load:a - DEV.main_load + 4])[0]
+    recs = {}
+    for i in range(469):
+        r = 0x401bfbc8 + 0x34 * i
+        recs.setdefault(l(r), {})[l(r + 4)] = r
+    for k in range(8):
+        r = recs[35][9 + k]
+        assert l(r + 0x18) == (16 + k) << 16 | 0xffff and l(r + 0x1c) == 1 << 7 | k, k
+    want = {44: range(9, 17), 45: [9, 10, 11, 12, 15, 16], 46: range(9, 17), 47: range(9, 14),
+            48: range(9, 13), 49: range(9, 13), 50: [9, 10, 11, 12, 13, 16], 51: range(9, 17),
+            52: [10, 11, 12, 16]}
+    for m, idx in want.items():
+        assert sorted(recs[m]) == list(idx), (m, sorted(recs[m]))
+        for r in recs[m].values():
+            assert l(r + 0x18) == 0xffffffff and l(r + 0x1c) == 0xffffffff, (m, hex(r))
+    for m in range(34, 53):
+        assert all(l(r + 0x20) == 0 for r in recs[m].values()), m
+    owner = img[0x40291138 - DEV.main_load:0x40291138 - DEV.main_load + 8]
+    assert all(t < 12 for t in owner), owner.hex()
+    with open(os.path.join(ROOT, 'mods', 'core-ar2', 'machines.c')) as fh:
+        src = fh.read()
+    assert '#define SLOT_LAST 52' in src and '0x40291138' in src and '0x8000e508' in src
+
 def test_no_copy_of_the_bootstrap_in_the_main_os():
     """The main OS holds no copy of the bootstrap (section 2). No 512 bytes of
     its first 0x7d94 (zero-padded tables and data follow them) are in
@@ -386,6 +422,111 @@ def test_every_flash_write_and_erase_in_the_os_is_known():
             assert any(lo <= r < hi for lo, hi in known), (hex(routine), hex(r))
     assert at(img, 0x4009f3c2, 6) == bytes.fromhex('267c00080000')        # a3 = 0x80000
     assert at(img, 0x4013bea0, 6) == bytes.fromhex('2f3c00040000')        # the bootstrap at 0x40000
+
+
+def here(img, addr, n):
+    """n bytes at addr in the stock file's own release (no moved())."""
+    return img[addr - DEV.main_load:addr - DEV.main_load + n]
+
+
+def _class(img, vt):
+    """A vtable's class name, from the RTTI before it (vtable - 4 -> typeinfo, +4 -> name)."""
+    def l(a):
+        return struct.unpack('>I', here(img, a, 4))[0]
+    nm = l(l(vt - 4) + 4) - DEV.main_load
+    return img[nm:img.index(b'\0', nm)].decode().lstrip('0123456789')
+
+
+def test_core_ar2_screen():
+    """core-ar2 0.13's screen calls (screen.c): what they assume of 1.74."""
+    _r, _s, img = stock()
+    if REL.version != '1.74':
+        raise Skip('core-ar2 0.13 is for 1.74')
+
+    def l(a):
+        return struct.unpack('>I', here(img, a, 4))[0]
+    # the 17 fonts: {vtable, data} at 0x417e381c + 8 i, each set up by one static initialiser
+    # (its stores at 0x4018964c..0x40189846); the next object is set up elsewhere (0x4018a29c)
+    init = img[0x40189640 - DEV.main_load:0x40189850 - DEV.main_load]
+    for i in range(17):
+        assert (0x417e381c + 8 * i).to_bytes(4, 'big') in init, i
+    assert (0x417e381c + 8 * 17).to_bytes(4, 'big') not in init
+    # the font's data: movea.l 4(sp),a0; move.l 4(a0),d0; rts
+    assert here(img, 0x40071be8, 10) == bytes.fromhex('206f000420280004' '4e75')
+    # the bitmap over a caller's buffers: vtable, +4 w, +8 h, +16 bits, +20 mask, +24 owned = 0
+    assert here(img, 0x4006fa2e, 10) == bytes.fromhex('206f0004202f000c' '20bc')
+    assert here(img, 0x4006fa54, 12) == bytes.fromhex('216f00100010' '216f00140014')
+    # the frame: a 128 x 64 bitmap over the frame buffer, drawn by drawAll(ctrl, bmp) with
+    # ctrl = the UI object's +32
+    assert here(img, 0x400a2ca8, 18) == bytes.fromhex('48780040' '48780080' '47eeffe4' '2f0b'
+                                                    '4eb94006')
+    # Brain::key(brain, ev): the UI object; its controller at +32
+    assert here(img, 0x400a0336, 24) == bytes.fromhex('4feffff048d70c0c266f0014242f001842ab07484aab0020')
+    # KeyEvent: 24 bytes, its ctor storing up to +20
+    assert _class(img, 0x401d67c8) == 'KeyEvent'
+    assert here(img, 0x40071e94, 18) == bytes.fromhex('256f0014000c' '256f00180010' '256f00200014')
+    # the views core_stock_overlay knows by address
+    assert _class(img, 0x4023502c) == 'SamplerLedView'
+    assert _class(img, 0x401d2124) == 'ScaleMenuView'
+    # the progress box: COPYING SOUNDS (0x400634cc) makes a ProgressWindow of 0x88 bytes,
+    # its shared_ptr's count, and shows it on the controller *(host + 100)
+    assert here(img, 0x4006350e, 4) == bytes.fromhex('48780088')
+    assert here(img, 0x40063520, 6) == bytes.fromhex('4eb940076c4a')
+    assert here(img, 0x4006352e, 6) == bytes.fromhex('4eb940185926')
+    assert _class(img, l(0x40076c6a + 2)) == 'ProgressWindow'
+    assert 'ProgressWindow' in _class(img, l(0x4018594a + 2))
+    assert here(img, 0x40078698, 4) == bytes.fromhex('4aa9002c')      # 0x40078684: host + 0x38 + 44
+    assert here(img, 0x400e97fe, 12) == bytes.fromhex('20542f2800644eb940079462')
+    # the push takes the controller's mutex at +4 and walks its list at +20, as drawAll does
+    assert here(img, 0x40079476, 4) == bytes.fromhex('486a0004')
+    assert here(img, 0x40079116, 4) == bytes.fromhex('486a0004')
+    assert here(img, 0x40079132, 4) == bytes.fromhex('266a001c')        # drawAll: the first node, +28
+    # the window's close, vtable +0x2c (the push closes another of the same class with it)
+    assert here(img, 0x40079504, 4) == bytes.fromhex('2069002c')
+    # core's own handlers: the key's first, the encoder's last, so the LEVEL window counts
+    # only turns that reach stock
+    with open(os.path.join(ROOT, 'mods', 'core-ar2', 'mod.json')) as fh:
+        j = json.load(fh)
+    sub = [(x['event'], x['fn'], x['order']) for x in j['subscribe']]
+    assert ('ev_key', 'core_screen_key', -1000000) in sub
+    assert ('ev_enc', 'core_screen_enc', 1000000) in sub
+    assert ('ev_tick', 'core_screen_tick', 3) in sub
+    assert 'screen.c' in j['sources'] and j['version'] == '0.13'
+
+
+def test_core_ar2_screen_check_needs_0_12():
+    """The screen check asks for core 0.13: refused with a core that says 0.11, built with
+    0.13 (needs the cross toolchain)."""
+    import shutil
+    import tempfile
+    from elekloader import patch
+    from elekloader.sdk import build as sdkbuild
+    stock()
+    if REL.version != '1.74':
+        raise Skip('core-ar2 0.13 is for 1.74')
+    if not shutil.which(os.environ.get('ELEKLOADER_CROSS', DEV.toolchain['prefix']) + 'as'):
+        raise Skip('no cross assembler (ELEKLOADER_CROSS)')
+    with tempfile.TemporaryDirectory() as tmp:
+        for d in ('core', 'core-ar2'):
+            shutil.copytree(os.path.join(ROOT, 'mods', d), os.path.join(tmp, 'mods', d))
+        cj = os.path.join(tmp, 'mods', 'core-ar2', 'mod.json')
+        with open(cj) as fh:
+            j = json.load(fh)
+        j['version'] = '0.11'
+        with open(cj, 'w') as fh:
+            json.dump(j, fh)
+        out = os.path.join(tmp, 'out')
+        old = sdkbuild.build(os.path.join(tmp, 'mods', 'core-ar2'), SYX, out)[0]
+        new = sdkbuild.build(os.path.join(ROOT, 'mods', 'core-ar2'), SYX, os.path.join(out, 'new'))[0]
+        app = sdkbuild.build(os.path.join(ROOT, 'examples', 'screen-check-ar2'), SYX, out)[0]
+        assert elemod.load_any(app).needs_core == '0.13'
+        try:
+            patch.build(SYX, [old, app], log=lambda *a: None)
+        except patch.PatchError as e:
+            assert 'needs core 0.13 or newer, and this build has core 0.11' in str(e), e
+        else:
+            raise AssertionError('the screen check linked with core 0.11')
+        patch.build(SYX, [new, app], version='1.74', log=lambda *a: None)
 
 
 if __name__ == '__main__':

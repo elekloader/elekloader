@@ -235,7 +235,7 @@ class DigiKit:
             import atexit
             from tools.control.digi_client import Emu
             self.coupled = Emu.spawn_coupled(self.stock, DN2_EMU_READY, binary=DIGI_EMUD_COUPLED, timeout=300,
-                                             run_dir=os.path.join(self.work, 'coupled'), env={'SHARC_AOT': '0'})
+                                             run_dir=os.path.join(self.work, 'coupled'))
             atexit.register(self.coupled.close)
         self.coupled.call('firmware.load', syx=self.syx, start='auto', force=True, auto_no=True)
         capture = os.path.join(self.work, 'coupled', 'pcm.f32')

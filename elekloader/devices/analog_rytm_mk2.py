@@ -97,7 +97,8 @@ DEVICE = Device(
             version='1.74',
             syx_sha256='cb0f99d620edde994fb860c0e79cc2464e427d06882828cfdfb00fc53700e123',
             main_sha256='34cd0c4da8e4b810d1b25284475a99ea53821e2ab7d30a978bf15dc578251f3b',
-            main_len=3005432),
+            main_len=3005432,
+            data_release=0x30313736),                 # a stock 1.74 project download's header
     },
     main_section=3,
     main_load=0x40000400,
@@ -112,13 +113,17 @@ DEVICE = Device(
     },
     ddr=(0x47BE0000, 0x47C00000),
     core_ddr=(('0.11', (0x47B10000, 0x47FFF000)),),   # core-ar2 0.11: 5 MB, above its step tags
+    drive_align=0x1000,                           # the +Drive mods' area: what the flashed build
+                                                  # leaves of core_ddr's, from a 4 KB boundary
+    data_family=2,                                # the data container's family id (stock checks it)
+    data_device=5,                                # ... and its device id (a stock project download's)
     recovery=('hold FUNC while powering on for the STARTUP menu, press TRIG 4 (OS UPGRADE), '
               'then send the stock .syx over MIDI DIN (not USB)'),
     slot_claims=(('core_machines', 0, 53, 'machine'),),   # a machine's descriptor names its slot at +0
     # core-ar2's knob ids: stock's records are 0..468, core's lockable parameters take 469..554
     # (469 + code - 42, lock.c) and a mod's own ids start at 555 (pages.h CORE_PARAM_LOCK_FIRST)
     param_ids=(555, (469, 554, "core's lockable parameters' ids"),
-               (('core_params', False), ('core_param_locks', True))),
+               (('core_params', False), ('core_param_locks', True), ('core_knob_looks', True))),
     toolchain={
         'prefix': 'm68k-linux-gnu-',              # or ELEKLOADER_CROSS=m68k-elf-
         'asflags': ['-mcpu=54455'],                 # ColdFire V4 (the MCF5441x's ISA), as the Digitakt mk1

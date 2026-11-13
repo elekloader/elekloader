@@ -113,7 +113,7 @@ a kit-scope "lfo" field there imports core_fx_lfo_dst: the linker places it,
 as the core's own kit field of the device's `fx_lock_dst` bits, in a build
 with a kit-scope "lfo" field (0 otherwise).
 
-Lock codes per track kind (core-a4 0.5, the Analog Four MKII). Stock keeps
+Lock codes per track kind (core-a4mk2 0.5, the Analog Four MKII). Stock keeps
 a parameter table per track kind, so a code is numbered within its kind,
 0x70..0x7f (112..127), 16 a kind: a sound field is the synth tracks'
 parameter (kind "synth"), a kit field the FX track's ("fx"), or the CV
@@ -128,7 +128,7 @@ A field whose kind changes is a new parameter: its old code is freed. The
 kind is part of the layout ID. On the A4 every modulation source can target
 a mod parameter, so `"mod": true` there covers the LFOs too (no "lfo"), and
 a kit field can have it. A CV field's code has CV_FLAG set in
-core_lock_codes. A `"cc": true` field takes a CC from the A4's pool (core-a4
+core_lock_codes. A `"cc": true` field takes a CC from the A4's pool (core-a4mk2
 0.5): the CCs no table of stock's maps on a track's channel; a kit field
 (FX or CV) only those the FX and CV tables leave free too.
 
@@ -156,6 +156,27 @@ lockfile's order, which core_handle_fields walks over every item of the
 project, so a mod can list every handle a project uses. A handle is not a
 parameter (no "lock") and has no init (0 is none).
 
+Knob ids (core-ar2 0.13). A mod that declares `"knobs": n` in its mod.json
+gets a run of n knob ids from the device's first mod id up (555 on the
+Analog Rytm MKII, the profile's param_ids), and the symbol `__knobs` is its
+first. The ids are not stored data (the core keeps no lock of a mod-kept
+knob, and saved locks name lock codes), so they are not part of the layout ID;
+the lockfile keeps them only so screens and test sheets stay the same from
+one build to the next, in three more keys written once a build has such a
+mod:
+
+     "knobs": [{"mod", "first", "count"}], "freed_knobs": [{"mod", "first", "count"}],
+     "next_knob": 567
+
+A mod keeps its run while it asks for the same count. A mod that leaves the
+build keeps its run in "freed_knobs" and gets it back when it returns. A mod
+whose count changes keeps its first id when the new run has room there, and
+otherwise takes never-used ids from "next_knob" up, past the ids other mods
+take (fixed ids in their entries included). Only when the never-used ids run
+out are the freed runs given out again. A core that keeps no lockfile still
+gets the same ids for the same mods: they are given out from the first id in
+the order of the mods' ids.
+
 Nothing here is random: the same lockfile (or none) and mods always link to
 the same bytes.
 """
@@ -180,10 +201,11 @@ FX_LOCK_DST = 'core_fx_lfo_dst'                 # core-ar2 0.9: the FX LFO's cod
 LFO_FLAG = 0x100                                # in core_lock_codes: the field is an LFO destination
 SMOOTH_OFF = 0x200                              # in core_lock_codes: the field's value jumps (core-ar2 0.9)
 ROUTE_FLAG = 0x400                              # in core_lock_codes: a velocity/aftertouch destination (core-ar2 0.9)
-CV_FLAG = 0x800                                 # in core_lock_codes: a kit field of the CV track (core-a4 0.5)
+CV_FLAG = 0x800                                 # in core_lock_codes: a kit field of the CV track (core-a4mk2 0.5)
 FIRST_CODE, LAST_CODE = 42, 127                 # a device's codes unless its spec says others
 INITS_TABLE = 'core_field_inits'                # core-ar2 0.10: the fields' inits, by slot
 HANDLES_TABLE = 'core_handles'                  # core-ar2 0.11: the handle fields' descriptors
+KNOB_TOP = 0xFFFF                               # the last knob id: page knob lists hold 16 bits (abs16)
 MAX_INITS = 63                                  # slots 1..63, in the descriptor's bits 16..21
 LOCK_SCOPES = ('sound', 'kit')
 KIND_NAMES = {'synth': 'the synth tracks', 'fx': 'the FX track', 'cv': 'the CV track'}
@@ -205,18 +227,18 @@ DEVICES = {
         # of the pool, the CCs stock maps on the FX channel (0x413dcb14): a kit field (the FX track's) gets none of them
         'fx_ccs_taken': (84, 85),
     },
-    'analog-four-mk2': {                            # core-a4 (mods/core-a4/store.c)
+    'analog-four-mk2': {                            # core-a4mk2 (mods/core-a4mk2/store.c)
         'fixed': {'sound': 32, 'kit': 128, 'global': 64},
         'live': {'track': 512, 'pattern': 512},
         'store': 4352 - 10,
         'items': {'track': 129 * 6, 'pattern': 129},
         'split': {'track': 2, 'pattern': 4},
-        # core-a4 0.5: codes per track kind (stock's synth, FX and CV parameter tables), 0x70..0x7f each;
+        # core-a4mk2 0.5: codes per track kind (stock's synth, FX and CV parameter tables), 0x70..0x7f each;
         # every source is a destination of a "mod" field, so no "lfo"
         'codes': (0x70, 0x7f),
         'kinds': ('synth', 'fx', 'cv'),
         'no_lfo': True,
-        # core-a4 0.5: the CCs no table of stock's maps on a track's channel (the synth kind's and the controller
+        # core-a4mk2 0.5: the CCs no table of stock's maps on a track's channel (the synth kind's and the controller
         # kinds' MISC, TRACK and PERF, nor bank select 0 and 32, from the records at 0x40186af4), those the FX and CV
         # kinds map first, so the synth tracks' fields take them before the CCs every kind leaves free
         'ccs': (12, 13, 14, 15, 28, 29, 30, 31, 35, 36, 37) + tuple(range(39, 48)) + (60, 61, 62, 63, 96, 97, 100, 101),
@@ -348,7 +370,7 @@ def parse_routes(m):
 
 
 def parse_cvs(m):
-    """A mod document's "storage" -> the syms of its fields declared "track": "cv" (core-a4 0.5), in order."""
+    """A mod document's "storage" -> the syms of its fields declared "track": "cv" (core-a4mk2 0.5), in order."""
     return [f['sym'] for f in m.get('storage', []) if isinstance(f, dict) and f.get('track') == 'cv']
 
 
@@ -437,7 +459,7 @@ def layout_id(lock):
         what.append([[f['scope'], f['offset'], f['bits'], f['mod'], f['sym']] + ([f['init']] if f.get('init') else [])
                      for f in sorted(lock[k], key=_field_key)])
     if lock.get('codes') or lock.get('freed_codes'):   # a lockfile with no codes keeps its ID
-        if isinstance(lock['next_code'], dict):         # codes per track kind (core-a4 0.5): the kind counts
+        if isinstance(lock['next_code'], dict):         # codes per track kind (core-a4mk2 0.5): the kind counts
             ks = kinds(lock['device'])
             what.append([[lock['next_code'][k] for k in ks]]
                         + [[c['code'], c['mod'], c['sym'], c['kind']] for k in ('codes', 'freed_codes')
@@ -514,7 +536,7 @@ def check_lock(lock, dev_key):
         first, last = code_range(dev_key)
         ks = kinds(dev_key)
         nc = lock.get('next_code')
-        if ks:                          # one range a track kind (core-a4 0.5)
+        if ks:                          # one range a track kind (core-a4mk2 0.5)
             if not isinstance(nc, dict) or set(nc) != set(ks) or \
                     not all(_whole(nc[k]) and first <= nc[k] <= last + 1 for k in ks):
                 raise ModError('lockfile: "next_code" %r' % (nc,))
@@ -557,6 +579,95 @@ def check_lock(lock, dev_key):
         coded = {(c['mod'], c['sym']) for c in lock.get('codes', [])}
         if any((c['mod'], c['sym']) not in coded for c in lock['ccs']):
             raise ModError('lockfile: a CC for a field that has no lock code')
+    _check_knobs(lock)
+
+
+def _check_knobs(lock):
+    if not any(k in lock for k in ('knobs', 'freed_knobs', 'next_knob')):
+        return
+    nk = lock.get('next_knob')
+    if not _whole(nk) or not 0 <= nk <= KNOB_TOP + 1:
+        raise ModError('lockfile: "next_knob" %r' % (nk,))
+    seen = set()
+    for k in ('knobs', 'freed_knobs'):
+        ks = lock.get(k)
+        if not isinstance(ks, list):
+            raise ModError('lockfile: "%s" is a list' % k)
+        for r in ks:
+            if not isinstance(r, dict) or set(r) != {'mod', 'first', 'count'} \
+                    or not isinstance(r['mod'], str) or not _whole(r['first']) or not _whole(r['count']) \
+                    or r['count'] < 1 or r['first'] < 0 or r['first'] + r['count'] > nk \
+                    or k == 'knobs' and r['mod'] in seen:
+                raise ModError('lockfile: a bad entry in "%s"' % k)
+            if k == 'knobs':
+                seen.add(r['mod'])
+    runs = sorted((r['first'], r['first'] + r['count'] - 1) for r in lock['knobs'])
+    if any(b[0] <= a[1] for a, b in zip(runs, runs[1:])):
+        raise ModError('lockfile: two mods\' knob ids overlap')
+
+
+def knobs(lock, want, first, fixed=(), top=KNOB_TOP):
+    """Give each mod in want ({mod id: count}) a run of knob ids from first up, in lock
+    (changed in place; a dict, {} for a build without a lockfile), past the runs in fixed
+    ([(first, last)]: ids mods' entries name themselves). Not part of the layout ID.
+    -> ({mod id: its first id}, [notes]). Raises ModError."""
+    had, freed0 = lock.get('knobs', []), lock.get('freed_knobs', [])
+    if not want and not had and not freed0:
+        return {}, []
+    fixed = [(a, b) for a, b in fixed if b >= first]
+    nxt = max(first, lock.get('next_knob', first))
+    notes, runs, freed = [], [], [dict(r) for r in freed0]
+
+    def clash(a, n, taken):
+        return [y for x, y in taken if a <= y and x <= a + n - 1]
+
+    def span(r):
+        return (r['first'], r['first'] + r['count'] - 1)
+    for r in had:
+        hit = clash(r['first'], r['count'], fixed)
+        if want.get(r['mod']) == r['count'] and not hit:
+            runs.append(dict(r))
+            continue
+        freed.append(dict(r))
+        if r['mod'] not in want:
+            notes.append('%s: knob ids %d..%d freed, and kept for it until the unused ids run out'
+                         % ((r['mod'],) + span(r)))
+    for mod in sorted(set(want) - {r['mod'] for r in runs}):
+        n = want[mod]
+        taken = fixed + [span(r) for r in runs] + [span(r) for r in freed if r['mod'] != mod]
+        at = next((r['first'] for r in reversed([r for r in freed if r['mod'] == mod])
+                   if r['first'] + n - 1 <= top and not clash(r['first'], n, taken)), None)
+        freed = [r for r in freed if r['mod'] != mod]
+        if at is not None:
+            notes.append('%s: back with knob ids %d..%d' % (mod, at, at + n - 1))
+        else:
+            for again in (False, True):
+                if again:              # the never-used ids are gone: give the freed runs out again
+                    if not freed:
+                        at = None
+                        break
+                    notes.append('knob ids freed by %s given out again' % ', '.join(sorted({r['mod'] for r in freed})))
+                    freed = []
+                    taken = fixed + [span(r) for r in runs]
+                at = first if again else nxt
+                while True:
+                    hit = clash(at, n, taken)
+                    if not hit:
+                        break
+                    at = max(hit) + 1
+                if at + n - 1 <= top:
+                    break
+                at = None
+            if at is None:
+                raise ModError('%s asks for %d knob ids, and ids %d..%d have no run that long free'
+                               % (mod, n, first, top))
+            notes.append('%s: knob ids %d..%d' % (mod, at, at + n - 1))
+        runs.append({'mod': mod, 'first': at, 'count': n})
+        nxt = max(nxt, at + n)
+    lock['knobs'] = sorted(runs, key=lambda r: r['first'])
+    lock['freed_knobs'] = freed
+    lock['next_knob'] = max([nxt] + [r['first'] + r['count'] for r in runs + freed])
+    return {r['mod']: r['first'] for r in runs}, notes
 
 
 def _whole(v):
@@ -572,7 +683,7 @@ def allocate(lock, decls, dev_key, core=None, locks=(), ccs=(), inits=None, cvs=
     scope, bits)]; core: the build's core's version (None: the newest core's
     room); locks: [(mod id, sym)] of the lockable fields; ccs: those of them
     with a CC; inits: {(mod id, sym): init} of the fields with an init other
-    than 0 (core-ar2 0.10); cvs: those declared "track": "cv" (core-a4 0.5).
+    than 0 (core-ar2 0.10); cvs: those declared "track": "cv" (core-a4mk2 0.5).
     -> (the new lockfile, [notes]). The lockfile given is not changed."""
     inits = {k: v for k, v in (inits or {}).items() if v}
     notes = []

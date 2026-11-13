@@ -131,7 +131,7 @@ def parse_sites(doc, name, dev, rel, relocs=False):
             for r in s.get('relocs', []):
                 off, typ, tgt, add = r
                 off = _int(off, what)
-                size = {'abs32': 4, 'pc32': 4, 'pc16': 2, 'dsp24': 3}.get(typ) \
+                size = {'abs32': 4, 'abs16': 2, 'pc32': 4, 'pc16': 2, 'dsp24': 3}.get(typ) \
                     if isinstance(typ, str) else None
                 if size is None or off < 0 or off + size > n:
                     raise ModError('%s: bad relocation %r' % (what, r))
@@ -183,8 +183,10 @@ def pick_core(versions, need=None, fits=None):
     device and OS), the newest, if it is at least `need`. Each core keeps all of
     the one before it (tests/test_sdk.py checks the newest against the released
     2.1 and 2.3), so a mod built for an older core links with the newest as it
-    did with its own. `fits`, if given, says for each core whether its RAM holds
-    the selection's mods: only those that do count, unless none new enough does.
+    did with its own, unless it patches a place the newer core has since taken.
+    `fits`, if given, says for each core whether it takes the selection's mods
+    (gui.with_core: its RAM holds them, and it patches no place one of them
+    patches): only those that do count, unless none new enough does.
     -> its index (the last of equals), or None when none is new enough."""
     ok = [i for i, v in enumerate(versions) if need is None or version_key(v) >= version_key(need)]
     if not ok:
