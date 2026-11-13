@@ -17,7 +17,8 @@
  *   ev_param_set  std_param_set  the three parameter sets' set virtuals
  *                                (vtable slots), queued and run at the next
  *                                tick in the UI task
- *   ev_clip       std_clip       23 copy, paste and clear routines (ui.s), the pattern view's 2 calls,
+ *   ev_clip       std_clip       23 copy, paste and clear routines (ui.s), the pattern view's 2 calls
+ *                                and the SONG editor's 2 chain calls,
  *                                the project list's copy (its handler and its job's end)
  *   ev_pattern    std_pattern    the UI task's pattern boundary message
  *                                (case 9, 0x40099c84), when the pattern changed
@@ -421,6 +422,41 @@ uint32_t core_clip_ppaste(void *pattern, int32_t a)
 uint32_t core_clip_pclear(void *pattern, int32_t whole, int32_t undo)
 {
     return pattern_op(PATTERN_CLEAR, CLIP_CLEAR, pattern, whole, undo);
+}
+
+/* The SONG editor's clear and paste virtuals (+0x38 0x400448d0, +0x3c
+ * 0x400449a6, from the shared view helper 0x40061912) first undo the last clear or paste of
+ * the same kind and row ("UNDO CLEAR", "UNDO PASTE"); only when there is
+ * none do they call the chain's own routines, hooked at those calls (keep2):
+ * 0x400b2412(song, row, 1) at 0x40044934 and 0x400b223a(song, row, 1) at
+ * 0x40044a02; a %d0 byte says each did it ("CLEAR CHAIN", "PASTE CHAIN").
+ * pre comes before the routine (an empty clipboard or a row with nothing to
+ * act on brings a pre without a post), post only when it acted; an undo
+ * brings neither. A take returns 0: stock shows nothing and keeps no undo. */
+typedef uint8_t (*cop_t)(void *, int32_t, int32_t);
+#define CHAIN_CLEAR ((cop_t)0x400b2412u)
+#define CHAIN_PASTE ((cop_t)0x400b223au)
+
+__attribute__((noipa)) static uint32_t chain_op(cop_t fn, unsigned op, void *song, int32_t row, int32_t a)
+{
+    const uint32_t code = CLIP_CHAIN | op << 8;
+    uint8_t r;
+    if (core_clip_pre(code, 0, 0))
+        return 0;
+    r = fn(song, row, a);
+    if (r)
+        core_clip_post(code, 0, 0);
+    return r;
+}
+
+uint32_t core_clip_cclear(void *song, int32_t row, int32_t a)
+{
+    return chain_op(CHAIN_CLEAR, CLIP_CLEAR, song, row, a);
+}
+
+uint32_t core_clip_cpaste(void *song, int32_t row, int32_t a)
+{
+    return chain_op(CHAIN_PASTE, CLIP_PASTE, song, row, a);
 }
 
 /* =============================== ev_pattern ================================ */

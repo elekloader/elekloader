@@ -186,6 +186,8 @@
   {"addr": "0x4002a440", "stock": "4e56ffb8206e0008", "op": "jmp", "target": "core_clip_pattern_clear"},
   {"addr": "0x400c0bc2", "stock": "4eb9400a2de0", "op": "keep2", "target": "core_clip_pclear"},
   {"addr": "0x400c0aea", "stock": "4eb9400a2cba", "op": "keep2", "target": "core_clip_ppaste"},
+  {"addr": "0x40044934", "stock": "4eb9400b2412", "op": "keep2", "target": "core_clip_cclear"},
+  {"addr": "0x40044a02", "stock": "4eb9400b223a", "op": "keep2", "target": "core_clip_cpaste"},
   {"addr": "0x4002a55e", "stock": "4e56ffd8206e0008", "op": "jmp", "target": "core_clip_pattern_paste"},
   {"addr": "0x400a2aa4", "stock": "4e56ffdc48d71c0c", "op": "jmp", "target": "core_clip_pattern_copy"},
   {"addr": "0x400b933c", "stock": "4e56ffd848d73c0c", "op": "jmp", "target": "core_clip_page_copy"},
