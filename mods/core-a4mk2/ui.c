@@ -450,8 +450,19 @@ static int pattern_req(unsigned pattern, unsigned how)
  * as it was, so the playing pattern stays. While it runs, the routines below
  * stay quiet (pattern_in_view), so one select is one event. Playing, the
  * playing pattern selected again while another is queued is a CANCEL;
- * stock queues its row again. The view's pattern modes report as QUEUE (stock changes at once in the direct modes), TEMP JUMP as START. */
+ * stock queues its row again. TEMP JUMP (view+0xc6) reports START.
+ * The pattern mode (PTN: SEQUENTIAL 0, DIRECT START 1, DIRECT
+ * JUMP 2), read with stock's getter 0x400adec8(view+0x74), picks the rest:
+ * in a direct mode the select, after queueing the row and moving the
+ * view's cursor to the playing row (0x40029a44), calls 0x4007c186 (flag 1
+ * from DIRECT START, 0 from DIRECT JUMP) and the tick changes the pattern
+ * at once, so it reports SET; SEQUENTIAL leaves the queue, QUEUE. That is
+ * the row branch, taken when 0x400ae1a4(view+0x74) is 0 and view+0xcc is
+ * clear; the other branch edits the chain at the view's cursor (0x400438f0)
+ * and still reports QUEUE. */
 #define QUEUED_ROW (*(volatile int32_t *)0x41281756u)
+#define VIEW_PTN_MODE(v) (((int (*)(void *))0x400adec8u)(*(void **)((v) + 0x74)))
+#define VIEW_CHAIN(v) (((int (*)(void *))0x400ae1a4u)(*(void **)((v) + 0x74)) || (v)[0xcc])
 static volatile uint8_t pattern_in_view;
 
 int core_pattern_view(uint8_t *view, uint32_t pattern)
@@ -463,6 +474,8 @@ int core_pattern_view(uint8_t *view, uint32_t pattern)
         how = PATTERN_NOW;
     else if (view[0xc6])
         how = PATTERN_START;
+    else if (!VIEW_CHAIN(view) && VIEW_PTN_MODE(view) != 0)
+        how = PATTERN_SET;
     else if (pattern == PATTERN_BYTE && QUEUED_ROW >= 0)
         how = PATTERN_CANCEL;
     else

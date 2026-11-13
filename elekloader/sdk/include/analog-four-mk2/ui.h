@@ -58,15 +58,16 @@ const char *core_view_name(const void *view);
  * or PATTERN_NONE. In the UI task, except PATTERN_SET from MIDI's multi map
  * and PATTERN_SPP, which come in the MIDI task. A stop drops a queued change
  * without an event. The pattern view's select reports once, before it
- * touches the song's row, so a take there leaves the playing pattern. The
- * view's pattern modes (PTN: SEQUENTIAL / DIRECT START / DIRECT JUMP) all
- * report PATTERN_QUEUE, although stock changes the pattern at once in the
- * direct modes (a known limit); TEMP JUMP reports PATTERN_START. */
+ * touches the song's row, so a take there leaves the playing pattern.
+ * Playing, its report follows the pattern mode: PTN: SEQUENTIAL
+ * reports PATTERN_QUEUE, DIRECT START and DIRECT JUMP PATTERN_SET (stock
+ * changes the pattern at once), TEMP JUMP PATTERN_START. A select while the
+ * view edits a chain reports PATTERN_QUEUE in every mode. */
 #define PATTERN_CHANGED 0               /* pre 0 */
 #define PATTERN_QUEUE 1                 /* playing: the change waits for the boundary */
 #define PATTERN_CANCEL 2                /* playing: a queued change is dropped (the playing pattern selected again, or PATTERN_NONE) */
 #define PATTERN_NOW 3                   /* stopped: the pattern changes at once */
-#define PATTERN_SET 4                   /* playing: MIDI's multi map (a PAT.PLAY entry with CHG MODE D.START or D.JUMP, a note on the PERF channel) [G]; not reached by keys */
+#define PATTERN_SET 4                   /* playing: the change happens at once: a pattern select with PTN: DIRECT START or DIRECT JUMP [G], or MIDI's multi map (a PAT.PLAY entry with CHG MODE D.START or D.JUMP, a note on the PERF channel) [G] */
 #define PATTERN_START 5                 /* playing: a pattern select in the view with TEMP JUMP on (FUNC+BANK_D) [G] */
 #define PATTERN_SPP 6                   /* stopped: a song position (MIDI SPP, a stop's return); pattern PATTERN_NONE */
 #define PATTERN_NONE 0xffu
