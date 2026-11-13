@@ -747,6 +747,19 @@ unsigned my_mute(unsigned kind, unsigned word)
 `"subscribe": [{"event": "ev_mute", "fn": "my_mute", "order": 50}]`, and
 `"resources": {"core": "0.9"}`. `tests/fixtures/octatrack-mute` is a probe.
 
+#### The sequencer's moments on the Octatrack (core-ot 0.10)
+
+Four observers, each before the stock routine runs; handlers return nothing.
+
+| event | when | handler | runs in |
+|---|---|---|---|
+| `ev_part_apply` | a pattern's Part is applied to the engine: a pattern change, the transport's start, a load | `void f(bank, part)` | the sys task and the frame interrupt: keep it short |
+| `ev_chain_add` | [PTN] adds a pattern to the chain; stock may still leave it out (full at 16, or already in it) | `void f(pattern)` | the sys task |
+| `ev_seq_reset` | the sequencer's stop and reset: STOP while stopped, and every menu that stops it first | `void f(void)` | the caller's task |
+| `ev_midi_panic` | the stop and reset is about to send CC 123 on each channel the MIDI tracks use | `void f(void)` | the caller's task |
+
+`tests/fixtures/octatrack-seq` is a probe of all four; `"resources": {"core": "0.10"}`.
+
 ### The DSP bus on the Octatrack (dspbus 0.1)
 
 `mods/dspbus-ot` is a second, optional bus, for code that runs on DSP core

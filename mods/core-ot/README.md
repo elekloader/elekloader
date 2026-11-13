@@ -286,6 +286,11 @@ changes nothing else the unit does.
   places that copy a live mute word into the Part (the tests prove the
   census); the handler returns the word the Part keeps (docs/ADAPTING.md,
   "Track mutes on the Octatrack").
+- **0.10: the sequencer's moments** (`seq.s`). Observers at four routines'
+  entries: `ev_part_apply(bank, part)` (0x40009e00; also in the frame
+  interrupt), `ev_chain_add(pattern)` (0x4009c634), `ev_seq_reset()`
+  (0x400a10c8) and `ev_midi_panic()` (0x4009f288) (docs/ADAPTING.md,
+  "The sequencer's moments on the Octatrack").
 - **The draw gate** (`gate.s`). The OS composes the screen twice before the
   boot site, so before `.run` is in the reserve. The draw site therefore
   calls `core_draw_gate`, which `mod.json` places (`fixed`) in the last 24
@@ -364,10 +369,6 @@ script:
   and nothing else changed.
 - **With every handler taking its event**, the firmware's key, encoder, CC
   and note handlers never ran.
-- **The v1.0 files.** Every hardware-test group (T0–T7), every variant and
-  every one of the 34 mods alone links with 0.2. Each image differs from
-  its 0.1 build only at core's new sites, and in pointers that point at the
-  same symbol plus offset as before.
 
 0.5, in ot_emu (the checks are a probe mod that logs each event, and a copy
 of ot_emu whose park range for main can be set, for the idle loop):

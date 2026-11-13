@@ -360,7 +360,9 @@ def test_the_core_moves_the_arena_past_its_reserve():
     calls = {s['target']: int(s['addr'], 16) for s in j['sites'] if s['op'] in ('jsr', 'jmp')}
     assert calls.pop('boot') == 0x4000050c
     mutes = {'core_mute_0x%08x' % m[0] for m in _mute_sites()}
-    assert set(calls) == set(BUS_SITES) | set(STORE_SITES) | set(VOICE_SITES) | set(EDIT_SITES) | mutes, calls
+    entries = {t for tab in ENTRY_TABLES for t in tab}
+    assert set(calls) == (set(BUS_SITES) | set(STORE_SITES) | set(VOICE_SITES) | set(EDIT_SITES) | mutes
+                          | entries), calls
 
 
 def reserve_docs(img, bss, fixed=False):
@@ -554,7 +556,8 @@ def test_the_core_bus_sites():
     assert sorted(j['collections']) == sorted({e for _a, _s, e in BUS_SITES.values()} | {'ev_idle'}
                                               | {v[2] for v in STORE_SITES.values() if v[2]}
                                               | set(STORE_TABLES) | {v[2] for v in VOICE_SITES.values()}
-                                              | {v[2] for v in EDIT_SITES.values()} | {'ev_mute'})
+                                              | {v[2] for v in EDIT_SITES.values()} | {'ev_mute'}
+                                              | {v[2] for tab in ENTRY_TABLES for v in tab.values()})
     assert j['collections']['ev_idle'] == 4
     for sym, target in JMP_BACK.items():       # a jmp stub goes back to the instruction after its site
         addr, stock_hex, _ev = BUS_SITES[target]
@@ -1017,6 +1020,111 @@ def test_the_core_mute_sites():
         assert tgt not in inside, (hex(pc), hex(tgt))
 
 
+# core-ot 0.10 (seq.s): four routines' entries, each an observer whose stub replays the entry and goes on.
+SEQ_SITES = {
+    'core_part_apply': (0x40009e00, '4fefffb448d77cfc', 'ev_part_apply'),     # lea -76(sp) ; movem.l
+    'core_chain_add': (0x4009c634, '2f02242f0008', 'ev_chain_add'),          # move.l d2,-(sp) ; move.l 8(sp),d2
+    'core_seq_reset': (0x400a10c8, '4fefffdc48d77c3c', 'ev_seq_reset'),
+    'core_midi_panic': (0x4009f288, '4fefffec48d70c1c', 'ev_midi_panic'),
+}
+
+
+def _branch_target(img, o):
+    """The target of a bra/bsr/bcc, an absolute jmp/jsr, or a pc-relative jmp/jsr/lea/pea at offset o."""
+    w = struct.unpack('>H', img[o:o + 2])[0]
+    pc = DEV.main_load + o
+    if w & 0xf000 == 0x6000:
+        d8 = w & 0xff
+        if d8 == 0:
+            return pc + 2 + struct.unpack('>h', img[o + 2:o + 4])[0]
+        if d8 == 0xff:
+            return pc + 2 + struct.unpack('>i', img[o + 2:o + 6])[0]
+        return pc + 2 + (d8 - 256 if d8 & 0x80 else d8)
+    if w in (0x4ef9, 0x4eb9):
+        return struct.unpack('>I', img[o + 2:o + 6])[0]
+    if w in (0x4efa, 0x4eba) or w == 0x487a or w & 0xf1ff == 0x41fa:
+        return pc + 2 + struct.unpack('>h', img[o + 2:o + 4])[0]
+    return None
+
+
+def _taken_before_seq():
+    with open(os.path.join(ROOT, 'mods', 'intercepts-ot', 'mod.json')) as fh:
+        icpt = [(int(x['addr'], 16), len(x['stock']) // 2) for x in json.load(fh)['sites']]
+    return ([(a, len(h) // 2) for a, h, _e in BUS_SITES.values()]
+            + [(a, len(h) // 2) for a, h, _e, _b in STORE_SITES.values()]
+            + [(a, len(h) // 2) for a, h, _e, _b in VOICE_SITES.values()]
+            + [(a, len(h) // 2) for a, h, _e, _b in EDIT_SITES.values()]
+            + [(m[0], 6) for m in _mute_sites()]
+            + icpt + list(V10_NEIGHBOURS) + list(V10_VOICE) + list(V10_BUILDERS) + list(V10_EDIT))
+
+
+def check_entry_sites(table, source):
+    """Sites at a routine's whole entry: stock bytes, whole instructions, the stub replays them and
+    jumps past, clear of every other site, no branch inside. (A reference to the entry itself, a call
+    or a `lea` for an indirect one, reaches the stub: these are observers, not wrappers.)"""
+    import re
+    with open(os.path.join(ROOT, 'mods', 'core-ot', 'mod.json')) as fh:
+        j = json.load(fh)
+    with open(os.path.join(ROOT, 'mods', 'core-ot', source)) as fh:
+        src = fh.read()
+    st, img = stock()
+    sites = {s['target']: s for s in j['sites']}
+    taken = _taken_before_seq() + [(a, len(h) // 2) for t2 in ENTRY_TABLES if t2 is not table
+                                   for a, h, _e in t2.values()]
+    inside = {}
+    for target, (addr, stock_hex, event) in table.items():
+        n = len(stock_hex) // 2
+        s = sites[target]
+        assert (int(s['addr'], 16), s['stock'], s['op']) == (addr, stock_hex, 'jmp'), target
+        o = addr - DEV.main_load
+        assert img[o:o + n].hex() == stock_hex, target
+        ok, note = elemod.insn_check(img, addr, n, DEV)
+        assert ok, (target, note)
+        assert j['collections'][event] == 4, event
+        body = src[src.index(target + ':'):].split('.globl')[0]
+        assert re.search(r'jmp\s+0x%08x' % (addr + n), body), target
+        for a, m in taken:
+            assert not (a < addr + n and addr < a + m), (target, hex(a))
+        for t in range(addr + 1, addr + n):
+            inside[t] = target
+    for o in range(0, len(img) - 6, 2):
+        tgt = _branch_target(img, o)
+        assert tgt not in inside, (hex(DEV.main_load + o), hex(tgt), inside.get(tgt))
+
+
+def test_the_core_seq_sites():
+    """core-ot 0.10's sites (seq.s): each a routine's whole entry; its stub replays it and goes on past it; clear of every other site."""
+    check_entry_sites(SEQ_SITES, 'seq.s')
+
+
+def probe_tables(fixture, pairs):
+    import shutil
+    from elekloader.sdk import build
+    need(SYX)
+    if not shutil.which(os.environ.get('ELEKLOADER_CROSS', DEV.toolchain['prefix']) + 'gcc'):
+        raise Skip('no m68k cross compiler')
+    st, img = stock()
+    with tempfile.TemporaryDirectory() as tmp:
+        core = elemod.load_any(build.build(os.path.join(ROOT, 'mods', 'core-ot'), SYX, tmp)[0])
+        probe, m = build.build(os.path.join(HERE, 'fixtures', fixture), SYX, tmp)
+        assert not m.imports, m.imports
+        alone = link.link([core], img)
+        ln = link.link([core, elemod.load_any(probe)], img)
+    for t, fn in pairs:
+        assert alone.tables[t][1] == 0, t
+        o = ln.layout['run_load'] + (ln.tables[t][0] - DEV.ddr[0]) - DEV.main_load
+        assert struct.unpack('>2I', ln.image[o:o + 8]) == (ln.map[fn], 0), t
+
+
+def test_the_seq_probe_links():
+    """tests/fixtures/octatrack-seq with core-ot 0.10: its handlers are the entries of the four tables."""
+    probe_tables('octatrack-seq', (('ev_part_apply', 'sq_part_apply'), ('ev_chain_add', 'sq_chain_add'),
+                                   ('ev_seq_reset', 'sq_seq_reset'), ('ev_midi_panic', 'sq_midi_panic')))
+
+
+ENTRY_TABLES = [SEQ_SITES]
+
+
 def test_the_mute_probe_links():
     """tests/fixtures/octatrack-mute with core-ot 0.9: its handler is ev_mute's entry; core-ot alone
     has none."""
@@ -1393,7 +1501,8 @@ def test_the_example_subscribes_to_the_bus():
                       'ev_dsp_record': 0, 'ev_clip': 0, 'ev_part_saving': 0, 'ev_part_reload': 0,
                       'ev_part_select': 0, 'ev_part_init': 0, 'ev_project_init': 0, 'ev_voice_reset': 0,
                       'ev_boot_early': 0, 'ev_track_icon': 0, 'ev_track_icon_draw': 0, 'ev_setup_dial': 0,
-                      'ev_mute': 0}, counts
+                      'ev_mute': 0, 'ev_part_apply': 0, 'ev_chain_add': 0, 'ev_seq_reset': 0,
+                      'ev_midi_panic': 0}, counts
     at = ln.tables['ev_draw'][0]
     o = ln.layout['run_load'] + (at - DEV.ddr[0]) - DEV.main_load
     assert struct.unpack('>II', ln.image[o:o + 8]) == (ln.map['hello_draw'], 0)

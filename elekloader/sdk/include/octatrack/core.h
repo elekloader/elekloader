@@ -421,4 +421,13 @@ enum { OT_MUTE_AUDIO = 0, OT_MUTE_MIDI = 1 };
 #define OT_PART_MUTES_AUDIO OT_L(0x100b14d4)    /* the Part's copies */
 #define OT_PART_MUTES_MIDI  OT_L(0x100b14d8)
 
+/* ---- the sequencer's moments (0.10) -----------------------------------------------------------------
+ * Observers, each before the stock routine (docs/ADAPTING.md, "The sequencer's moments on the Octatrack"):
+ *   void ev_part_apply(bank, part)   a pattern's Part is applied; also from the frame interrupt
+ *   void ev_chain_add(pattern)       [PTN] adds a pattern to the chain (OT_CHAIN_LEN entries before it)
+ *   void ev_seq_reset(void)          the sequencer's stop and reset
+ *   void ev_midi_panic(void)         CC 123 is about to go out on the MIDI tracks' channels */
+#define OT_CHAIN_LEN        OT_L(0x8000654e)
+#define OT_CHAIN(i)         OT_L(0x80006552 + 4 * (i))  /* 0-15 */
+
 #endif
