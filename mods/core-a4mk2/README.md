@@ -484,9 +484,8 @@ or SAVE ... BEFORE LOADING for another when the request asks for it.
 the shared_ptr at 0x418717c8 (written only by its get-or-create,
 0x401494de). Core calls it after a turn a mod's page knob takes and after
 a lockable parameter's CC or NRPN; a mod calls it after its own keys,
-encoders or settings change a field. Stock itself sets the mark on every
-page or track key and after every load, and only a save clears it, so core's
-mark matters after a save. RANDOMIZE and RELOAD PAGE on a mod knob are not
+encoders or settings change a field. Stock marks every page or track key
+and load, and only a save clears it. RANDOMIZE and RELOAD PAGE on a mod knob are not
 handled on the A4 yet.
 
 ## The project save (0.6)
@@ -504,8 +503,7 @@ its first 8 bytes (`jmp`, `st_proj_save`). Two jobs call it:
 - **The save job** (0x4003da46, its call at 0x4003dacc), built with its
   SAVING box by 0x4003d448, which 0x4003ecbe queues after its OVERWRITE and
   WRITE PROTECTED asks (the Rytm's 0x40052908 and 0x4005417e in one).
-  0x4003ecbe has six callers (0x4003eff8, 0x4003f07a, 0x40040380,
-  0x40040444, 0x400bf7ea, 0x400e13a0): the front panel's saves.
+  0x4003ecbe's six callers are the front panel's saves.
 - **The load job** (0x4003daf0): an empty slot's load runs CREATE NEW
   (0x400a9f1e(model, -1), so `ev_project` with `how` 0 first) and then the
   save, whose return address (0x4003dc26) tells `CORE_SAVE_NEW`. No panel
@@ -604,9 +602,11 @@ core-ar2 0.12's spares (its README, "Room for +Drive mods"): 256 in each
 event table, the audio interrupt's marked `"render"`; 16 in the page
 tables (pages.s `VIEW_MAX`); 256 in `core_params`.
 
-`ev_boot_drive`: f(), from 0x401061e8 in main() before stock's
-`jsr 0x400f1b18` (`store.s`): the +Drive is up and the power-off image
-read; audio and the UI task are not started (a factory boot skips it).
+`ev_boot_drive`: f(), from 0x401061e8 in main(), before `jsr 0x400f1b18`,
+the boot's project load (`store.s`); a factory boot skips it. The loader
+may set the live layout there (`core_store_ids`, `core_store_gens`, from
+core-ar2 0.14), which that load then reads with: no second load, and no
+`core_lfo_dsts` (the A4's LFOs take `"mod"` fields).
 `ev_drive_format`: f(fs), from 0x40074af6 in FORMAT +DRIVE, after the slot
 erases, before the header's rewrite. Both are the loader's: no spares.
 

@@ -70,7 +70,8 @@ st_proj_save_body:                      | 0x400a771a (0.6)
         jmp     0x400a7722
 
 | (0.8) the site 0x401061e8 in main() (0x40105fb6), stock `jsr 0x400f1b18.l`,
-| the only call of the parameter-table and state init, with one argument on
+| the boot's project load (the parameter maps, the stored image's check and
+| load into the live project, the boot word's reset), with one argument on
 | the stack (the boot word 0x401ff54c, pushed at 0x401061e2). Statics, the
 | heap and the +Drive's init are done and the power-off image read; the audio
 | interrupt (0x4010623a) and the UI task (0x40106302) come after. Factory

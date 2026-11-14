@@ -198,11 +198,31 @@ volatile unsigned char core_store_globals[4][GLOBAL_BYTES];
  * version loads */
 static unsigned char *st_image = S;
 
+/* (0.8) the live generations, one byte a scope (sound .. project): this
+ * build's from .boot, which the Drive Loader may change in ev_boot_drive to
+ * the live +Drive layout's, with the layout ID and its ancestors in
+ * core_store_ids; the T and P split stays the build's */
+unsigned char core_store_gens[6];
+
 static unsigned gen(int scope)
+{
+    return core_store_gens[scope - 1];
+}
+
+static unsigned built_gen(int scope)
 {
     unsigned g = scope <= SC_TRACK ? (unsigned)__store_gen : (unsigned)__store_gen2;
     return g >> (24 - 8 * ((scope - 1) & 3)) & 255;
 }
+
+/* (0.8) .boot (core_boot_init): this build's generations */
+void core_store_boot_init(void)
+{
+    int s;
+    for (s = SC_SOUND; s <= SC_PROJECT; s++)
+        core_store_gens[s - 1] = built_gen(s);
+}
+
 #define SPLIT_T ((unsigned)__store_gen2 >> 8 & 255)
 #define SPLIT_P ((unsigned)__store_gen2 & 255)
 #define PATTERNS_AT (HEADER + TRACKS * SPLIT_T)
@@ -1002,8 +1022,14 @@ int st_proj_save(void *model, int slot, void *progress)
  * init done (0x40106124..0x4010613a; its result word 0x41865e98 is 0 when it
  * came up, which a handler checks before it reads) and the power-off image
  * read (0x401061a4); the audio interrupt (0x4010623a) and the UI task
- * (0x40106302) have not started. A factory boot skips it. The Drive Loader
- * links the +Drive mods there. The collection has no spare entries: a +Drive
+ * (0x40106302) have not started. A factory boot skips it. 0x400f1b18 is the
+ * boot's project load (the parameter maps, then 0x400145f6, stock's
+ * check-and-load of the stored image into the live project through
+ * 0x40011054, the boot word's reset and an upgraded image's save), so
+ * nothing has loaded the live project yet: the Drive Loader links the +Drive
+ * mods and may set the live layout (core_store_ids, core_store_gens), and
+ * the boot's load and its ev_project(1) then read with it, unlike core-ar2
+ * 0.14's, which loads again. The collection has no spare entries: a +Drive
  * mod is not called in it. */
 typedef void (*ev_boot_drive_t)(void);
 extern const ev_boot_drive_t ev_boot_drive[];
