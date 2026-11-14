@@ -3,14 +3,8 @@
 The boot copier, the hook bus and mod storage for the Analog Four MKII, OS
 1.56. It builds the Digitakt mk1's `core.s`, `settings.s` and `render.s` with
 the A4's addresses, which `mod.json` gives (`defsym`, `sites`), as
-[core-ar2](../core-ar2) does for the Analog Rytm MKII, and its own `store.c`
-and `store.s` (Mod storage, below), and from 0.5 `lock.c`, `rows.c` and
-`rows.s` (Lockable parameters, Mod p-locks), `dests.c` and `dests.s`
-(Destinations), `value.c` (The value read) and `midi.c` and `midi.s` (Mod
-parameters on MIDI), and core-ar2 0.10..0.13's foundations (0.6, below):
-field defaults, the modified mark, `ev_project_save`, payloads in a 37.7 MB
-mods' area, knob looks (`looks.c`, `looks.s`) and the screen calls
-(`screen.c`).
+[core-ar2](../core-ar2) does for the Analog Rytm MKII; each section below
+names its own files.
 On its own it changes nothing the unit does.
 
 The A4 MKII is the Rytm MKII's platform (a ColdFire MCF5441x): its OS entry,
@@ -56,7 +50,7 @@ What differs from the Rytm at these sites:
 
 ## Parameter pages (0.2, 0.3)
 
-From 0.2, `pages.s` is core-ar2 0.4's parameter routines at the A4's
+`pages.s` is core-ar2 0.4's parameter routines at the A4's
 (docs/ADAPTING.md, "Parameter pages (core-a4mk2 0.2, Analog Four MKII)"), and
 core builds core-ar2's `load.s` for `core_audio_load`. Each A4 site is the
 Rytm 1.74 routine's counterpart, found by its code and its callers:
@@ -99,7 +93,7 @@ The FX track already keeps its page when it is shown again, and each view
 shows its own title, so core-ar2's FX fix and title push have no
 counterpart.
 
-From 0.3 page_info asks `core_page_fns` first, as core-ar2 0.6 does:
+page_info asks `core_page_fns` first, as core-ar2 0.6 does:
 `{page, info}`, where `info(page)` returns the `core_pages` entry to
 answer, or 0 to pass on to `core_pages` and stock. A page whose knobs
 change with the selected sound uses it. Every reader of a knob asks
@@ -157,17 +151,10 @@ view's page id only through page_info and to pick the parameter set
 (0x400a647c, which singles out pages 1, 3, 4, 5 and 47), so mod pages from
 48 are safe.
 
-On a unit (OS 1.56, 23 Oct 2026) [hw], PA56 (core 0.2 with pages-check
-and analoghealth's remote keys) passed the same plan as in the emulator,
-every screen checked identical to the emulator's: every synth, FX and CV
-page as on stock; AMP staying on AMP until PAN turned; PAN in hex and the
-bar growing; CHECK with knob A as PAN and the others hatched; AMP, CHECK,
-AMP. A project saved on CHECK opened on CHECK after loading another
-project and loading it back, and after a power cycle (with the bar
-cleared, as it is not saved); stock 1.56 opened it on PERFORMANCE. On fast
-turns the bar grows once per accelerated turn update, not once per value
-step; on slow turns they match. The SysEx settings round trip and core
-alone (A402) were not run on the unit.
+On a unit (OS 1.56) [hw], PA56 (core 0.2 with pages-check) passed the
+emulator's plan, every screen identical. On fast turns the bar grows once
+per accelerated turn update, not per value step. The SysEx settings round
+trip and core alone were not run on the unit.
 
 ## Mod storage
 
@@ -278,8 +265,8 @@ What it does not do:
 1.56 ends an OS upgrade as the Rytm's 1.74 does: SUCCESS! REBOOTING, a 3 s
 wait, `move #0x2700,sr` at 0x4007db24, then 0x40002766, which waits while
 bytes are pending behind the panel link's DMA (0x4133cfc0) or in the UART
-queue (0x4133cfd0), counts only their interrupts move on. From 0.4 core-a4mk2
-builds core-ar2's `finish.s` with these addresses (`FINISH_PANEL`,
+queue (0x4133cfd0), counts only their interrupts move on. Core builds
+core-ar2's `finish.s` with these addresses (`FINISH_PANEL`,
 `FINISH_UART`, `FINISH_DRAIN` in `mod.json`): interrupts are masked only once
 nothing is pending (core-ar2's README, "The OS upgrade's restart"). The A4's
 routine is the Rytm's instruction for instruction; the hang itself was seen
@@ -590,6 +577,24 @@ What differs from the Rytm:
   after a LEVEL turn (it keeps the kit's name), so `core_level_readout`'s
   window and the kept field (rows 0..8, columns 0..69) are the Rytm's
   until a unit shows where, and for how long, the A4 shows the level.
+
+## Standard events (0.7)
+
+`std.c` serves std1 (docs/ADAPTING.md, "Standard events (std1)") at sites
+core owns; A4 numbers are in `analog-four-mk2/keys.h`, `params.h`, `ports.h`
+(`leds.h` is empty).
+
+| std1 event | table | how |
+|---|---|---|
+| `ev_tick`, `ev_draw`, `ev_settings`, `ev_project`, `ev_render_in` | native | = or prefix, sorted by `order` |
+| `ev_boot` | `std_boot` | `.boot` calls `core_boot_init` (`BOOT_INIT`) |
+| `ev_key` | `std_key` | core's `ev_key` handler, order 0; bit 0 clear is `KEY_RELEASE` (none for a key a view took) |
+| `ev_param_turn` | `std_param_turn` | `param_apply_delta` after `core_params`: a plain turn's sound edit, not a lock; `knob` its encoder |
+
+`core_post` (32) and `core_timer` (16) run in core's first `ev_tick`
+handler, `core_redraw` in its last; `core_setting_add` and the draw
+helpers are in std.c. Not reported (std1 rule 6): a list parameter's turn.
+Unconfirmed: `keys.h`'s [emu] ids.
 
 ## Checked so far
 

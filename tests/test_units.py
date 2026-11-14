@@ -2202,6 +2202,45 @@ def test_core_ar2_0_12_room_for_drive_mods():
     assert cols['core_lock_params'] == 4      # +Drive mods have no storage, so no lock codes
 
 
+
+def test_core_a4mk2_0_7_std_map():
+    """core-a4mk2 0.7 serves std1 at the sites it owns: each map entry is a std1.h event and one
+    of core's tables, the native table for the same prototype or its first part, a std_ table of
+    its own for the thunks (std.c) that core's own handlers or sites call."""
+    import re
+    root = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
+    mdir = os.path.join(root, 'mods', 'core-a4mk2')
+    with open(os.path.join(mdir, 'mod.json'), encoding='utf-8') as fh:
+        doc = json.load(fh)
+    with open(os.path.join(root, 'elekloader', 'sdk', 'include', 'std1.h'), encoding='utf-8') as fh:
+        events = set(re.findall(r'\(\*std1_(ev_\w+)_fn\)', fh.read()))
+    std = doc['std']
+    assert set(std) == {'ev_boot', 'ev_tick', 'ev_draw', 'ev_key', 'ev_settings', 'ev_project',
+                        'ev_render_in', 'ev_param_turn'}
+    assert set(std) <= events
+    assert all(t in doc['collections'] for t in std.values())
+    native = {e for e, t in std.items() if t == e}
+    assert native == {'ev_tick', 'ev_draw', 'ev_settings', 'ev_project', 'ev_render_in'}
+    assert {std[e] for e in set(std) - native} == {'std_boot', 'std_key', 'std_param_turn'}
+    assert doc['defsym'].get('BOOT_INIT') == '1' and 'std.c' in doc['sources']
+    subs = {(x['event'], x['fn']): x['order'] for x in doc['subscribe']}
+    assert subs[('ev_key', 'core_std_key')] == 0
+    assert subs[('ev_enc', 'core_std_enc')] == -1000000
+    assert subs[('ev_tick', 'core_std_tick')] == -1000000
+    assert subs[('ev_tick', 'core_std_tick_end')] == 1000000
+    with open(os.path.join(mdir, 'std.c'), encoding='utf-8') as fh:
+        src = fh.read()
+    for fn in ('core_boot_init', 'core_std_key', 'core_std_enc', 'core_std_param_turn', 'core_redraw',
+               'core_post', 'core_timer', 'core_std_tick', 'core_std_tick_end'):
+        assert re.search(r'^\w[\w ]*\b%s\(' % fn, src, re.M), fn
+    with open(os.path.join(mdir, 'pages.s'), encoding='utf-8') as fh:
+        assert 'jsr     core_std_param_turn' in fh.read()
+    inc = os.path.join(root, 'elekloader', 'sdk', 'include', 'analog-four-mk2')
+    for h in ('keys.h', 'leds.h', 'params.h', 'ports.h'):
+        assert os.path.isfile(os.path.join(inc, h)), h
+    with open(os.path.join(inc, 'keys.h'), encoding='utf-8') as fh:
+        assert '#define CORE_TICK_HZ 20' in fh.read()
+
 if __name__ == '__main__':
     import traceback
     ok = failed = 0
