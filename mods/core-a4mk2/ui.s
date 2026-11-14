@@ -403,3 +403,53 @@ core_analog_frame_site:
         movem.l (%sp),%d0-%d1/%a0-%a1
         lea     16(%sp),%sp
 1:      rts
+
+| ---- ev_mod_set: the six modulation setters' entries, each void f(this,
+| slot, value), every argument stacked (the iface thunks subtract their
+| offset from this and bra to the entry). Each stub asks core_modset_pre(code,
+| this, slot, value, caller); unless a handler took it, it runs the setter
+| through a copy of its first instructions, then core_modset_post(code, this,
+| slot, value, caller). code = class | kind << 8: class 0 SoundModConf, 1 Velocity,
+| 2 PerfParam; kind 0 destination, 1 depth (ui.c). The copies start with a
+| link.w and do not depend on where they run.
+        .macro  MODSET name, addr, len, code, w0, w1, w2, w3=0
+        .globl  \name
+\name:
+        move.l  (%sp),-(%sp)              | caller
+        move.l  16(%sp),-(%sp)            | value
+        move.l  16(%sp),-(%sp)            | slot
+        move.l  16(%sp),-(%sp)            | this
+        move.l  #\code,-(%sp)
+        jsr     core_modset_pre
+        lea     20(%sp),%sp
+        tst.l   %d0
+        bne.s   9f
+        move.l  12(%sp),-(%sp)            | value
+        move.l  12(%sp),-(%sp)            | slot
+        move.l  12(%sp),-(%sp)            | this
+        jsr     \name\()_stock
+        lea     12(%sp),%sp
+        move.l  (%sp),-(%sp)
+        move.l  16(%sp),-(%sp)
+        move.l  16(%sp),-(%sp)
+        move.l  16(%sp),-(%sp)
+        move.l  #\code,-(%sp)
+        jsr     core_modset_post
+        lea     20(%sp),%sp
+9:      rts
+\name\()_stock:
+        .short  \w0, \w1, \w2
+        .if     \len == 8
+        .short  \w3
+        .endif
+        jmp     \addr + \len
+        .endm
+
+| destinations: `link.w %fp,#-24 (-20 PerfParam); movem.l %d2/%a2-%a3,(%sp)`
+| (8 bytes); depths: `link.w %fp,#-12 (-8 PerfParam); move.l %a2,-(%sp)` (6)
+        MODSET  core_modset_sound_dest,  0x4001f45e, 8, 0x0000, 0x4e56, 0xffe8, 0x48d7, 0x0c04
+        MODSET  core_modset_sound_depth, 0x4001f312, 6, 0x0100, 0x4e56, 0xfff4, 0x2f0a
+        MODSET  core_modset_vel_dest,    0x400ba35a, 8, 0x0001, 0x4e56, 0xffe8, 0x48d7, 0x0c04
+        MODSET  core_modset_vel_depth,   0x400ba0f6, 6, 0x0101, 0x4e56, 0xfff4, 0x2f0a
+        MODSET  core_modset_perf_dest,   0x400a3ce6, 8, 0x0002, 0x4e56, 0xffec, 0x48d7, 0x0c04
+        MODSET  core_modset_perf_depth,  0x400a3b78, 6, 0x0102, 0x4e56, 0xfff8, 0x2f0a

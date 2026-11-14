@@ -187,9 +187,9 @@ def test_core_a4mk2_sites():
     # 21 destination sites (dests.s): 15 in code and 6 vtable entries; and
     # 0.5's 2 MIDI sites (midi.s), the three sets' NRPN in and CC in, each a
     # jmp resuming after the 8 bytes it displaced; and 0.6's whole project
-    # save (store.s) and three knob look sites (looks.s); and 0.7's 50 UI and system sites (ui.s,
+    # save (store.s) and three knob look sites (looks.s); and 0.7's 56 UI and system sites (ui.s,
     # ui.c; tests/test_units.py, test_core_a4mk2_0_7_ui_sites)
-    assert len(mod['sites']) == 157
+    assert len(mod['sites']) == 163
     midi = [x for x in mod['sites'] if x.get('target') in ('core_nrpn_site', 'core_cc_site')]
     assert [(x['addr'], x['op'], x['stock']) for x in midi] == \
         [('0x4009ff56', 'jmp', '4fefffec48d7043c'), ('0x400a0b62', 'jmp', '4e56ffd848d71cfc')]
@@ -210,8 +210,8 @@ def test_core_a4mk2_sites():
         'core_boot_done_site', 'core_idle_start', 'core_crash_install', 'core_usb_site', 'core_key_leds_site',
         'core_pset', 'core_pattern_', 'core_mute_site', 'core_knob_site', 'core_clip_', 'core_view_push_site',
         'core_view_sweep_site', 'core_view_remove_site', 'core_view_replace_', 'core_level_site', 'core_mixer_site',
-        'core_analog_frame_site'))]
-    assert len(ui) == 50                # 0.7's UI and system sites (ui.s, ui.c)
+        'core_analog_frame_site', 'core_modset_'))]
+    assert len(ui) == 56                # 0.7's UI and system sites (ui.s, ui.c)
     locks = [x for x in mod['sites'] if x['addr'] not in {y['addr'] for y in j['sites'][:48]} and x not in midi
              and x not in new06 and x not in ui]
     dests = [x for x in locks if x.get('target', '').startswith(('core_dst', 'core_id_index', 'core_index_id',
