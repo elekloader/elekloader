@@ -103,7 +103,8 @@ typedef int (*ev_knob_turn_fn)(void *view, int id, int delta, int knob, int how)
 /* ---- ev_analog_frame(words), a native event (not std1): the analog
  * control frame, 100 words, after stock built it and before it is packed
  * for the analog board, in the audio interrupt, every block. A handler may
- * change the words; it must be short. Which word drives what is not mapped.
+ * change the words, and the pack sends what it leaves (checked on a unit by
+ * frame-check-a4mk2); it must be short. Which word drives what is not mapped.
  * A mod subscribes by contributing to the "ev_analog_frame" table. */
 typedef void (*ev_analog_frame_fn)(uint16_t *words);
 
