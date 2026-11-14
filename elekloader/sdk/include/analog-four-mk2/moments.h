@@ -41,6 +41,8 @@ void core_handle_fields(void (*fn)(unsigned field, void *item, int index, unsign
 int core_current_kit(void);
 void *core_current_kit_item(void);
 int core_current_track(void);
+/* the six tracks' mutes, bit t = track t muted (0 before the model exists) */
+unsigned core_mutes(void);
 void *core_current_sound_item(void);
 int core_current_pattern(void);
 void *core_current_pattern_item(void);

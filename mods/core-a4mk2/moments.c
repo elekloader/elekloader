@@ -94,6 +94,21 @@ int core_current_track(void)
     return (unsigned)t < 6 ? t : -1;
 }
 
+/* the six tracks' mutes, bit t = track t muted (0 before the model exists):
+ * the selection object's settings (its vtable +0x28) hold them at +0x24, as
+ * stock's mute getter 0x400ae098 and setter 0x400aeb8e read and write them.
+ * The settings come back in %d0 (a uint32_t, not a pointer: the a0 trap). */
+typedef uint32_t (*settings_of_t)(void *);
+unsigned core_mutes(void)
+{
+    unsigned char *m = MODEL;
+    uint32_t s;
+    if (!m)
+        return 0;
+    s = (*(settings_of_t *)(*(uint32_t *)(m + SELECTION) + 0x28))(m + SELECTION);
+    return s ? *(volatile uint32_t *)(s + 0x24) & 0x3fu : 0;
+}
+
 /* the current track's sound in the current kit; 0 on the FX and CV tracks
  * (their parameters are the kit's) */
 void *core_current_sound_item(void)

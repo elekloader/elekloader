@@ -1,0 +1,31 @@
+{
+ "id": "liverec-check",
+ "version": "0.1",
+ "title": "Live record check",
+ "category": "Examples",
+ "license": "GPL-2.0-or-later",
+ "description": "A test for core-a4mk2's ev_live_rec and core_mutes on the Analog Four MKII: it takes every live-record write on track 2 (stock writes nothing there) and lets the others through, counting each call by track and kind, and records core_mutes and ev_mute in liverec_check (liverec.c). Nothing else changes.",
+ "device": "analog-four-mk2",
+ "os": "1.56",
+ "sources": [
+  "liverec.c"
+ ],
+ "subscribe": [
+  {
+   "event": "ev_live_rec",
+   "fn": "lr_live",
+   "order": 60
+  },
+  {
+   "event": "ev_tick",
+   "fn": "lr_tick",
+   "order": 60
+  }
+ ],
+ "resources": {
+  "core": "0.8"
+ },
+ "requires": [
+  "core"
+ ]
+}

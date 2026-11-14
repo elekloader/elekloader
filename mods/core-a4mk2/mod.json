@@ -178,6 +178,9 @@
   {"addr": "0x401a17c4", "stock": "400a0f08", "op": "ptr", "target": "core_pset2_cv"},
   {"addr": "0x40099c84", "stock": "4e932f004eb9400a7966", "op": "jmp", "target": "core_pattern_site"},
   {"addr": "0x400aeb8e", "stock": "4e56ffd048d73c7c", "op": "jmp", "target": "core_mute_site"},
+  {"addr": "0x400a954a", "stock": "4fefffc8222f0058", "op": "jmp", "target": "core_live_note_site"},
+  {"addr": "0x400a6a08", "stock": "4fefffec48d7007c", "op": "jmp", "target": "core_live_value_site"},
+  {"addr": "0x400a690c", "stock": "4feffff048d7003c", "op": "jmp", "target": "core_live_lock_site"},
   {"addr": "0x40025b78", "stock": "2f2a00744eb9400adbd2", "op": "jmp", "target": "core_knob_site"},
   {"addr": "0x40027e14", "stock": "4e56ffe448d7040c", "op": "jmp", "target": "core_clip_track_copy"},
   {"addr": "0x40027e94", "stock": "4e56ffe448d70c04", "op": "jmp", "target": "core_clip_track_paste"},
@@ -241,6 +244,6 @@
   {"addr": "0x4016796c", "stock": "2f0a2f02747f", "op": "jmp", "target": "core_kit_select"},
   {"addr": "0x401012ec", "stock": "4fefffe848d77c04", "op": "jmp", "target": "core_kit_push"}
  ],
- "collections": {"ev_tick": 4, "ev_draw": 4, "ev_key": 4, "ev_enc": 4, "ev_settings": 4, "ev_render_in": 4, "ev_render_out": 4, "ev_project": 4, "ev_project_save": 4, "core_store_ids": 4, "core_pages": 4, "core_params": 4, "core_view_pages": 4, "core_page_fns": 4, "core_lock_params": 4, "core_lock_codes": 8, "core_lock_ccs": 8, "core_field_inits": 4, "core_payloads": 12, "core_knob_looks": 4, "std_boot": 4, "std_key": 4, "std_param_turn": 4, "std_midi_in": 4, "std_sysex_in": 4, "std_midi_cc": 4, "std_midi_pc": 4, "std_midi_out": 4, "std_seq_midi": 4, "std_seq_tick": 4, "std_voice_start": 4, "std_voice_end": 4, "std_boot_done": 4, "std_idle": 4, "std_crash": 4, "std_usb": 4, "std_key_leds": 4, "std_mode": 4, "std_param_set": 4, "std_clip": 4, "std_pattern": 4, "std_mute": 4, "ev_knob_turn": 4, "std_view": 4, "ev_analog_frame": 4, "ev_mod_set": 4, "ev_track_key": 4, "ev_voice_params": 4, "ev_sound_setup": 4, "ev_seq_step": 4, "ev_transport": 4, "core_handles": 4, "ev_kit": 4},
+ "collections": {"ev_tick": 4, "ev_draw": 4, "ev_key": 4, "ev_enc": 4, "ev_settings": 4, "ev_render_in": 4, "ev_render_out": 4, "ev_project": 4, "ev_project_save": 4, "core_store_ids": 4, "core_pages": 4, "core_params": 4, "core_view_pages": 4, "core_page_fns": 4, "core_lock_params": 4, "core_lock_codes": 8, "core_lock_ccs": 8, "core_field_inits": 4, "core_payloads": 12, "core_knob_looks": 4, "std_boot": 4, "std_key": 4, "std_param_turn": 4, "std_midi_in": 4, "std_sysex_in": 4, "std_midi_cc": 4, "std_midi_pc": 4, "std_midi_out": 4, "std_seq_midi": 4, "std_seq_tick": 4, "std_voice_start": 4, "std_voice_end": 4, "std_boot_done": 4, "std_idle": 4, "std_crash": 4, "std_usb": 4, "std_key_leds": 4, "std_mode": 4, "std_param_set": 4, "std_clip": 4, "std_pattern": 4, "std_mute": 4, "ev_knob_turn": 4, "std_view": 4, "ev_analog_frame": 4, "ev_mod_set": 4, "ev_track_key": 4, "ev_voice_params": 4, "ev_sound_setup": 4, "ev_seq_step": 4, "ev_transport": 4, "core_handles": 4, "ev_kit": 4, "ev_live_rec": 4},
  "resources": {"names": ["timer:DTIM0"]}
 }
