@@ -111,8 +111,10 @@ typedef void (*ev_analog_frame_fn)(uint16_t *words);
  * BREATH and AFTERTOUCH setups and the kit's PERF macros, at the six stock
  * setters every such edit goes through: the setup page's knobs (A..E the
  * destination, F..J the depth, FUNC+knob), its destination list, its keys
- * that move a slot's destination to another track's parameter. In the UI
- * task. pre 1 comes before the write, with the value asked for; nonzero
+ * that move a slot's destination to another track's parameter. A turn of
+ * knob A..E opens the destination list and each step in it is reported; YES
+ * closes it with no call, NO (or another knob) writes the old destination
+ * back, reported too [unit, T311]. In the UI task. pre 1 comes before the write, with the value asked for; nonzero
  * takes it (nothing is written, the page still shows its popup). pre 0
  * comes after, with the value stored. Not reported: PASTE MODULATIONS and
  * its undo (stock writes whole slots another way), project, kit and sound
