@@ -1,0 +1,25 @@
+{
+ "id": "std-check",
+ "version": "0.2",
+ "title": "std1 check",
+ "category": "Examples",
+ "license": "GPL-2.0-or-later",
+ "description": "A test for core-a4mk2 0.7's standard events on the Analog Four MKII: a std1 mod that subscribes to the eight events core maps, takes only the turns of one knob it is told to, counts the rest in std_check (std.c) and draws the counts as bars with core_fill; adds STD TEST and DRAW TEST rows to SETTINGS with core_setting_add, DRAW TEST drawing a pattern with core_px, core_fill, core_text and core_blit.",
+ "device": "analog-four-mk2",
+ "os": "1.56",
+ "events": "std1",
+ "sources": ["std.c"],
+ "subscribe": [
+  {"event": "ev_boot", "fn": "sc_boot", "order": 60},
+  {"event": "ev_tick", "fn": "sc_tick", "order": 60},
+  {"event": "ev_draw", "fn": "sc_draw", "order": 60},
+  {"event": "ev_key", "fn": "sc_key", "order": 60},
+  {"event": "ev_settings", "fn": "sc_settings", "order": 60},
+  {"event": "ev_project", "fn": "sc_project", "order": 60},
+  {"event": "ev_render_in", "fn": "sc_render_in", "order": 60},
+  {"event": "ev_param_turn", "fn": "sc_param_turn", "order": 60}
+ ],
+ "contribute": [{"to": "core_params", "order": 50, "data": "00000000", "relocs": [[0, "abs32", "sym:sc_params", 0]]}],
+ "resources": {"names": ["settings:STD TEST", "settings:DRAW TEST"], "core": "0.7"},
+ "requires": ["core"]
+}

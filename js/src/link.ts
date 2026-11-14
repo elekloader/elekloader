@@ -49,6 +49,7 @@ export function payloadId(modId: string): number {
 }
 const MAX_ALIGN = 4096                      // a section's alignment: a power of two up to this
 const LINKER_SYMS = new Set(['__run_load', '__run_start', '__run_words', '__bss_start', '__bss_end', '__bss_words', '__run_hash', desc.SYM])
+export const STD_SETS = ['std1']             // what a mod's "events" names (ADAPTING.md, "Standard events (std1)")
 const MAX_SPARE = 4096                      // a table's spare entries (a collection's "spare")
 // the tables a build descriptor gives no spare entries: the linker fills them, from storage and payloads
 const NO_SPARE = [store.IDS_TABLE, store.CODES_TABLE, store.CCS_TABLE, store.INITS_TABLE, store.HANDLES_TABLE, PAYLOADS]
@@ -79,7 +80,8 @@ function items(d: unknown): [string, any][] {
 }
 
 type Sec = { align: number; parts?: Part[]; len?: number; size?: number }
-export type Contribution = { to: string; order: number; data: Uint8Array; relocs: [number, string, string, number][]; claims: [number, number][]; i: number; linker?: boolean }
+export type Contribution = { to: string; order: number; data: Uint8Array; relocs: [number, string, string, number][]; claims: [number, number][]; i: number; linker?: boolean
+  event?: string; unmapped?: boolean }   // event: a std mod's standard event, whose table `to` is (stdTables)
 
 /** A loaded, validated format-2 mod. */
 export class Mod2 implements AnyMod {
@@ -106,6 +108,8 @@ export class Mod2 implements AnyMod {
   render: Set<string>                        // the render tables it declares
   dspTables: Map<string, [string, Uint8Array, Uint8Array]>   // name -> [payload tag, head, end]
   contribute: Contribution[]
+  events: string | null
+  std: Map<string, string>
   copied: [number, number, number][]
   storage: [string, string, number][]
   knobs: number
@@ -130,7 +134,7 @@ export class Mod2 implements AnyMod {
     this.sha256 = raw ? sha(raw) : null
     if (!pyEq(formatOf(doc), FORMAT2)) throw new ModError(`${name}: not a format-2 .elemod file`)
     const more = new Set(['sections', 'symbols', 'exports', 'imports', 'weak', 'relocs', 'collections', 'contribute', 'copied', 'storage', 'sharc',
-      'sharc_raw', 'knobs'])
+      'sharc_raw', 'knobs', 'events', 'std'])
     const extra = Object.keys(doc).filter(k => !COMMON.has(k) && !more.has(k)).sort()
     if (extra.length) throw new ModError(`${name}: unknown fields ${repr(extra)}`)
     for (const k of ['id', 'version', 'target', 'sections']) if (!(k in doc)) throw new ModError(`${name}: no "${k}"`)
@@ -218,6 +222,16 @@ export class Mod2 implements AnyMod {
       }
       this.collections.set(c, e)
     }
+    const events = get(doc, 'events', null)    // "std1": its subscriptions are standard events
+    if (events !== null && !STD_SETS.includes(events))
+      throw new ModError(`${name}: "events" is ${repr(events)}; the standard event set is ${STD_SETS.map(x => `"${x}"`).join(' or ')}`)
+    this.events = events
+    const std = get(doc, 'std', {})              // a core's map: standard event -> its own table
+    if (!isDict(std) || !Object.values(std).every(v => typeof v === 'string'))
+      throw new ModError(`${name}: "std" maps each standard event's name to a table of the core`)
+    if (Object.keys(std).length && !this.sections.has('.boot'))
+      throw new ModError(`${name}: a "std" map is a core's (the mod with .boot)`)
+    this.std = new Map(Object.entries(std as Record<string, string>))
     this.contribute = []
     iter(get(doc, 'contribute', [])).forEach((c, i) => {
       const what = `${name} contribution ${i}`
@@ -236,6 +250,12 @@ export class Mod2 implements AnyMod {
       })
       if (!isDict(c) || !('to' in c)) throw new KeyError(repr('to'))
       this.contribute.push({ to: str(c.to), order: int(get(c, 'order', 50), what), data, relocs: rel, claims, i })
+      const isStd = get(c, 'std', null)
+      if (isStd !== null) {                      // a subscription to a standard event: the core's map gives its table
+        if (isStd !== true || this.events === null)
+          throw new ModError(`${what}: a standard event's subscription ("std": true) needs the mod's "events"`)
+        this.contribute[this.contribute.length - 1].event = str(c.to)
+      }
     })
     try {
       this.storage = store.parseDecls(doc)
@@ -481,7 +501,35 @@ const byKindId = (a: string, b: string) => {
 }
 
 /** Static checks that need no layout. -> problems. */
+/** Each standard event a std mod subscribes to, to the table the core's "std" map names for it (in place: the
+ * contribution's `to`; its `event` keeps the name). -> problems. */
+export function stdTables(mods: Mod2[]): string[] {
+  const cores = mods.filter(m => m.sections.has('.boot'))
+  const core = cores.length === 1 ? cores[0] : null
+  const bad: string[] = []
+  if (core) {
+    const declared = new Set(mods.flatMap(m => [...m.collections.keys()]))
+    for (const ev of [...core.std.keys()].sort(cmp)) {
+      const t = core.std.get(ev)!
+      if (!declared.has(t)) bad.push(`${core.label()}: its std map sends ${ev} to ${t}, which no given mod declares`)
+    }
+  }
+  for (const m of mods) {
+    const missing: string[] = []
+    for (const c of m.contribute) {
+      if (c.event === undefined) continue
+      c.unmapped = !(core && core.std.has(c.event))
+      c.to = c.unmapped ? c.event : core!.std.get(c.event)!
+      if (c.unmapped && !missing.includes(c.event)) missing.push(c.event)
+    }
+    if (missing.length && core && !core.std.size) bad.push(`${m.label()} subscribes to ${m.events} events, and ${core.label()} maps none`)
+    else if (missing.length && core) bad.push(`${m.label()} subscribes to ${missing.join(', ')}, which ${core.label()} does not map`)
+  }
+  return bad
+}
+
 export function check(mods: Mod2[], image: Uint8Array): string[] {
+  const stdBad = stdTables(mods)
   const spans: Span<AnyMod>[] = []
   for (const m of mods) {
     for (const s of m.sites) spans.push([s.addr, s.addr + s.len, m, `site ${hex8(s.addr)}`])
@@ -500,6 +548,7 @@ export function check(mods: Mod2[], image: Uint8Array): string[] {
   }
   const bad = commonChecks(mods, image, spans)
   if (bad.length && bad[0].startsWith('the mods are for different firmware')) return bad
+  bad.push(...stdBad)
   const dev = mods[0].dev
   for (const m of mods) {
     const refs: [string, number][] = []
@@ -607,6 +656,7 @@ export function check(mods: Mod2[], image: Uint8Array): string[] {
       bad.push(`${m.label()} imports ${x}, which no given mod exports`)
     }
     for (const c of m.contribute) {
+      if (c.unmapped) continue                   // refused above (stdTables)
       if (!tables.has(c.to)) bad.push(`${m.label()} adds to table ${c.to}, which no given mod declares`)
       else if (c.data.length % tables.get(c.to)![1]) bad.push(`${m.label()}: an entry for ${c.to} is not ${tables.get(c.to)![1]} bytes`)
       else {

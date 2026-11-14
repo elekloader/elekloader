@@ -71,7 +71,8 @@ A format-2 mod is a relocatable object:
 | `imports`, `weak` | the names it uses from others; a weak one resolves to `core_zero` (zeros) if no mod provides it |
 | `relocs` | `[section, offset, "abs32"/"abs16"/"pc32"/"pc16"/"dsp24", target, addend]`; target `"sym:NAME"`, `"sec:NAME"` or `"abs"`; `abs16` writes two big-endian bytes, -32768..65535 |
 | `collections` | tables this mod declares: `{"ev_tick": {"entry": 4}}`, or a DSP table (below); a core's may add `"spare"` (0 to 4,096), `"max"` (1 to 4,096) and `"render": true` for the build descriptor (DRIVE.md, "The build descriptor") |
-| `contribute` | entries for tables: `{"to", "order", "data", "relocs", "claims"}` |
+| `contribute` | entries for tables: `{"to", "order", "data", "relocs", "claims"}`; `"std": true` makes `to` a standard event |
+| `events`, `std` | a mod's `"std1"`; a core's map of standard events to its tables (ADAPTING.md, "Standard events (std1)") |
 | `copied` | `[{"lo", "hi", "to"}]`: a block of the image this mod copies elsewhere at run time |
 | `knobs` | a count of knob ids, 0..1024, the linker gives this mod (the Analog Rytm MKII, core-ar2 0.13; "Knob ids" below) |
 | `storage` | fields this mod keeps with the project: `[{"sym", "scope", "bits"}]` (the Analog Rytm MKII from core-ar2 0.2, the Analog Four MKII from core-a4mk2 0.1; "Mod storage" below) |

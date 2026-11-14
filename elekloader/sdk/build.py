@@ -21,6 +21,9 @@ mod.json:
      "name_string": "my-mod",                         optional: str_name = "<it> <version>"
      "sites": [{"addr", "stock", "op", "target" | "new", "addend"}],
      "subscribe": [{"event": "ev_draw", "fn": "my_draw", "order": 60}],
+     "events": "std1",                                optional: "subscribe" then names standard
+                                                     events (std1.h), not the core's own
+     "std": {"ev_key": "std_key"},                    a core only: each standard event's table
      "machines": [{"id": 6, "descriptor": "my_machine"}],   SRC machines (Digitakt mk1)
      "collections": {"my_table": 8},                  tables you declare (entry size)
      "contribute": [{"to", "order", "data", "relocs", "claims"}],
@@ -571,9 +574,11 @@ def build(mdir, stock_path, out_dir=None, extra=None):
                       'new': new.hex(), 'kind': kind, 'relocs': rel_})
 
     contrib = []
-    for sub in mod.get('subscribe', []):
+    for sub in mod.get('subscribe', []):    # with "events": "std1", standard events (std1.h)
         contrib.append({'to': sub['event'], 'order': sub.get('order', 50), 'data': '00000000',
                         'relocs': [[0, 'abs32', 'sym:' + sub['fn'], 0]], 'claims': []})
+        if mod.get('events') is not None:
+            contrib[-1]['std'] = True
     for sub in mod.get('subscribe_dsp', []):    # an entry of a DSP table: jsr >fn (+addend words)
         contrib.append({'to': sub['event'], 'order': sub.get('order', 50),
                         'data': (DSP_JSR + bytes(3)).hex(),
@@ -632,6 +637,10 @@ def build(mdir, stock_path, out_dir=None, extra=None):
         doc['storage'] = mod['storage']
     if mod.get('knobs'):                    # knob ids the linker gives out (link.py, store.knobs)
         doc['knobs'] = mod['knobs']
+    if mod.get('events') is not None:       # the standard event set its subscriptions name
+        doc['events'] = mod['events']
+    if mod.get('std'):                      # a core's map: standard event -> its table
+        doc['std'] = mod['std']
     raw = (json.dumps(doc, indent=1) + '\n').encode()
     try:
         m = link.Mod2(json.loads(raw), mid)                # the loader's own validation
