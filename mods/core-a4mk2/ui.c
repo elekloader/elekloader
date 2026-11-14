@@ -20,8 +20,9 @@
  *                                tick in the UI task. An NRPN sent as CC 99,
  *                                98, 6, 38 sets twice: stock applies it on
  *                                CC 6 and again on CC 38
- *   ev_clip       std_clip       23 copy, paste and clear routines (ui.s), the pattern view's 2 calls
- *                                and the SONG editor's 2 chain calls, the sequencer view's trig paste call,
+ *   ev_clip       std_clip       23 copy, paste and clear routines (ui.s), the pattern view's 2 calls,
+ *                                the SONG editor's 2 chain calls, the grid's 2 page calls,
+ *                                the sequencer view's trig paste call,
  *                                the project list's copy (its handler and its job's end)
  *   ev_pattern    std_pattern    the UI task's pattern boundary message
  *                                (case 9, 0x40099c84), when the pattern changed
@@ -566,6 +567,44 @@ int32_t core_clip_tpaste(void *track, int32_t step)
     if (n > 0)
         core_clip_post(code, 0, 0);
     return n;
+}
+
+/* Grid record, PAGE held: STOP pastes the active track's current page and
+ * PLAY clears it (PatternGridView's keys, 0x4002805c, on a press only). Each
+ * first tries the page undo 0x400b8444(pt, kind) ("UNDO PASTE", "UNDO
+ * CLEAR"); only when there is nothing to undo does it call the page's own
+ * routine, hooked at that call (keep2): 0x400b8188(pt, 1) at 0x40028e92
+ * ("PASTE PAGE") and 0x400b916a(pt, 1) at 0x40028f40 ("CLEAR PAGE"), where
+ * pt is the pattern track and 1 asks for an undo entry; a %d0 byte says each
+ * did it. pre comes before the routine (an empty clipboard, or one holding
+ * no page, brings a pre without a post: stock shows nothing), post only when
+ * it acted; an undo brings neither. A take returns 0: the key is handled,
+ * nothing shown, nothing changed, as stock with an empty clipboard. Track
+ * and slot are CLIP_NONE, as the page copy's. */
+typedef uint8_t (*gop_t)(void *, int32_t);
+#define PAGE_PASTE ((gop_t)0x400b8188u)
+#define PAGE_CLEAR ((gop_t)0x400b916au)
+
+__attribute__((noipa)) static uint32_t page_op(gop_t fn, unsigned op, void *pt, int32_t a)
+{
+    const uint32_t code = CLIP_PAGE | op << 8;
+    uint8_t r;
+    if (core_clip_pre(code, 0, 0))
+        return 0;
+    r = fn(pt, a);
+    if (r)
+        core_clip_post(code, 0, 0);
+    return r;
+}
+
+uint32_t core_clip_gpaste(void *pt, int32_t a)
+{
+    return page_op(PAGE_PASTE, CLIP_PASTE, pt, a);
+}
+
+uint32_t core_clip_gclear(void *pt, int32_t a)
+{
+    return page_op(PAGE_CLEAR, CLIP_CLEAR, pt, a);
 }
 
 /* =============================== ev_pattern ================================ */

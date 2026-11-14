@@ -30,7 +30,8 @@
 #define CLIP_SOUND 3                    /* a sound in the project's pool */
 #define CLIP_SONG 4
 #define CLIP_TRACK_SOUND 5              /* the track's sound in the kit; track says which */
-#define CLIP_PAGE 6                     /* the active track's current 16-step page: PAGE held + REC */
+#define CLIP_PAGE 6                     /* the active track's current 16-step page, grid record: PAGE held + REC copy,
+                                         * + STOP paste, + PLAY clear (an UNDO brings none) */
 #define CLIP_TRIGS 7                    /* the held trigs of the active track: trigs held + REC copies, + STOP pastes (no clear) */
 #define CLIP_CHAIN 8                    /* a SONG edit row (chain): the song editor's copy, clear and paste (an UNDO brings none) */
 #define CLIP_PROJECT 9                  /* a project, slot says which: the PROJECT list's copy */
