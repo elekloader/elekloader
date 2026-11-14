@@ -327,6 +327,56 @@ def test_the_bytes_mod_storage_uses_are_stocks_spare():
         assert code.count(bytes.fromhex('beefbaba')) == 1 and bytes.fromhex('001f72d2') in code, hex(lo)
 
 
+def test_drive_loader_a4mk2_site_and_build():
+    """drive-loader-a4mk2's one site, the /mods route at 0x40095ec8 (the resolver's guard set, after
+    stock's two handlers are added, as the Rytm's 0x400a005e), and, with the cross compiler, a build
+    of core and the loader whose descriptor maps every site, the loader's too, and the A4's pre-link
+    ranges, and whose ev_boot_drive and ev_drive_format each call the loader."""
+    import shutil
+    import subprocess
+    import tempfile
+    from elekloader import desc
+    _r, _s, img = stock()
+    with open(os.path.join(ROOT, 'mods', 'drive-loader-a4mk2', 'mod.json')) as fh:
+        j = json.load(fh)
+    assert [(x['addr'], x['op'], x['stock'], x['target']) for x in j['sites']] == \
+        [('0x40095ec8', 'jsr', '700113c04182b33c', 'dl_route_site')]
+    assert at(img, 0x40095ec8, 8) == bytes.fromhex('700113c04182b33c')
+    assert at(img, 0x40095ed0, 4) == bytes.fromhex('4cd73c7c')          # then the getter's movem and return
+    subs = {(x['event'], x['fn']) for x in j['subscribe']}
+    assert {('ev_boot_drive', 'dl_boot'), ('ev_drive_format', 'dl_format')} <= subs
+    cross = os.environ.get('ELEKLOADER_CROSS', DEV.toolchain['prefix'])
+    if not shutil.which(cross + 'gcc'):
+        raise Skip('no %sgcc' % cross)
+    with tempfile.TemporaryDirectory() as work:
+        mods = []
+        for m in ('core-a4mk2', 'drive-loader-a4mk2'):
+            out = os.path.join(work, m)
+            subprocess.run([sys.executable, '-m', 'elekloader.sdk.build', os.path.join(ROOT, 'mods', m),
+                            '--stock', SYX, '--out', out], check=True, capture_output=True, cwd=ROOT)
+            mods += [os.path.join(out, f) for f in os.listdir(out) if f.endswith('.elemod')]
+        syx_out = os.path.join(work, 't.syx')
+        args = [sys.executable, '-m', 'elekloader.patch', '--stock', SYX, '--out', syx_out, '--version', '0001',
+                '--lockfile', os.path.join(work, 'lock.json')]
+        for m in mods:
+            args += ['--mod', m]
+        subprocess.run(args, check=True, capture_output=True, cwd=ROOT)
+        with open(syx_out, 'rb') as fh:
+            image = desc._main_image(fh.read(), DEV.key)
+    found = desc.find(image)
+    assert len(found) == 1
+    d = desc.decode(image, found[0])
+    names = [m['name'] for m in d['modules']]
+    assert names == ['core', 'drive-loader']
+    sites = {(lo, hi, k, m) for lo, hi, k, m in d['sites']}
+    assert (0x40095ec8, 0x40095ed0, desc.SITE_SITE, 1) in sites
+    assert (0x401061e8, 0x401061ee, desc.SITE_SITE, 0) in sites and (0x40074af6, 0x40074afc, desc.SITE_SITE, 0) in sites
+    assert len(d['prelink']) == len(REL.prelink) == 164
+    assert d['flags'] & desc.F_STAGE_TOP
+    lo, hi = d['area'][1], d['area'][2]
+    assert hi == 0x47C00000 and lo % 0x1000 == 0
+
+
 def test_no_copy_of_the_bootstrap_in_the_main_os():
     """The main OS holds no copy of the bootstrap (section 2). No 512 bytes of
     its first 0x6f94 (its code and data; a zero run and tables follow) are

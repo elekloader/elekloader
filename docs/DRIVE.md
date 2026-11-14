@@ -5,7 +5,10 @@ the +Drive mods `/mods/active` names at boot, and the computer's tools that
 do the same. What a +Drive mod may hold, `/mods/active`'s lines, the refusal
 codes and the data container are in [FORMAT.md](FORMAT.md), "+Drive mods";
 the loader's firmware side is in its
-[README](../mods/drive-loader-ar2/README.md).
+[README](../mods/drive-loader-ar2/README.md). The Analog Four MKII's loader
+(`mods/drive-loader-a4mk2/`) links the same way over a file store of its own,
+since the A4's +Drive has no file system; its
+[README](../mods/drive-loader-a4mk2/README.md) has the store.
 
 ## The boot link
 
