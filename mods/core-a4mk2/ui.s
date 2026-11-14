@@ -96,8 +96,8 @@ core_mute_site:
 | 0x400a690c `lea -0x10(%sp),%sp; movem.l %d2-%d5,(%sp)`. Taken: rts (the
 | three are void). The C call reads only the stack, as stock's entry does.
         .macro  LIVE_REC what
-        move.l  8(%sp),-(%sp)             | track
-        pea     \what
+        pea     \what                     | (what, then track: C's second argument is pushed first)
+        move.l  12(%sp),-(%sp)            | track (8 at the entry, 12 past the pea)
         jsr     core_live_rec_pre
         addq.l  #8,%sp
         tst.l   %d0
