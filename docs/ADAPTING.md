@@ -980,6 +980,14 @@ reads it. `tests/fixtures/octatrack-dsp1` sends 32 words to $6320, just past sto
 again with msg 0 when it has ended; core.h names job 16, the sample editor's render/commit. It only
 watches: card work of a mod's own goes through `ot_engine_post`. `tests/fixtures/octatrack-job` counts them.
 
+### Tempo, scenes, the card, previews and the recorders on the Octatrack (core-ot 0.41)
+
+Six events from the routine map, signatures in core.h: `ev_tempo` sees a tempo commit and may change it,
+`ev_scene_load` a scene loaded into A or B, `ev_card` the card's state after a mount, removal or remount,
+`ev_usb_disk` the start and end of USB DISK MODE (stop using the card between 1 and 0), `ev_preview` an
+audio preview's start and stop, `ev_rec_cmd` a recorder command from a REC key or MIDI note. All but
+`ev_tempo` only watch. Probes: `tests/fixtures/octatrack-tempo`, `-scene`, `-card`, `-preview`.
+
 ### SEQUENCER rows on the Octatrack (seqrows 0.1)
 
 PROJECT > CONTROL > SEQUENCER works as PERSONALIZE does, with `ot_seq_label`, `ot_seq_get` and `ot_seq_set`
