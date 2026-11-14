@@ -2501,6 +2501,23 @@ def test_core_a4mk2_drive_storage_hooks():
     assert 'core_lfo_dsts' not in store_c and 'boot_wait' not in store_c
 
 
+def test_the_a4_pre_link_ranges_are_ordered_and_inside_the_main_os():
+    """The Analog Four MKII 1.56's pre-link ranges (the boot-order trace of 2026-11-14): sorted, apart,
+    inside the main OS, holding main() up to the +Drive hook at 0x401061e8 but not the hook, and not
+    0x400f1b18, the boot's project load, which runs after it (core-a4mk2 README, "+Drive mods (0.8)")."""
+    from elekloader import devices
+    dev = [d for d in devices.devices() if d.key == 'analog-four-mk2'][0]
+    rel = dev.releases['1.56']
+    pre = rel.prelink
+    assert pre == tuple(sorted(pre)) and all(lo < hi for lo, hi, _k, _w in pre)
+    assert all(a[1] <= b[0] for a, b in zip(pre, pre[1:]))
+    assert all(dev.main_load <= lo and hi <= dev.image_end(rel) and k in (1, 2) for lo, hi, k, _w in pre)
+    assert any(lo == 0x40105fb6 and hi == 0x401061e8 for lo, hi, _k, _w in pre)
+    for at in (0x401061e8, 0x400f1b18, 0x400145f6, 0x40011054):
+        assert not any(lo <= at < hi for lo, hi, _k, _w in pre), hex(at)
+    assert sum(k == 1 and w.startswith('constructor') for lo, hi, k, w in pre) == 132
+
+
 if __name__ == '__main__':
     import traceback
     ok = failed = 0
