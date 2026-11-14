@@ -179,6 +179,7 @@ export const DIGITONE_MK1: Device = {
   areas: { ddr: [0x47be0000, 0x47c00000], bulk: [0x44000000, 0x47be0000] },
   ddr: [0x47be0000, 0x47c00000],
   coreDdr: [['4.0', [0x43ec0000, 0x44000000]]],   // core-dn1 4.0: 1.25 MB
+  driveAlign: 0x1000,                              // +Drive mods' area: what the flashed build leaves of coreDdr's, from a 4 KB boundary
   slotClaims: [['core_params', 8, 79, 'soundslot'],   // a parameter slot's descriptor names its sound slot at +8
     ['sdk_alpha_machines', 0, 128, 'dnmachine']],   // an SDK machine names its id at +0
   tableLimits: { sdk_alpha_machines: 15 },   // MACHINES lists 15 machines

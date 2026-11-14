@@ -1624,6 +1624,23 @@ def test_the_build_descriptor():
         assert 'module 1 m 1 (loader)' in desc.dump(d)
 
 
+def test_the_digitone_mk1_descriptor_has_a_drive_area():
+    """On the Digitone mk1 a loader of +Drive mods (TELOS, github.com/elekloader/telos) gets what the
+    flashed build leaves of core-dn1's linker area, from a 4 KB boundary (the profile's drive_align);
+    with core 4.0 and newer that area ends at 0x44000000."""
+    from elekloader import desc
+    with Bench('digitone-mk1') as B:
+        core = B.core(version='5.0')
+        m = B.mod('m')
+        m['imports'] = m['imports'] + ['core_desc']
+        m['relocs'] = [['.run', 4, 'abs32', 'sym:core_desc', 0]]
+        out = link.link([link.Mod2(d, d['id']) for d in (core, m)], B.img)
+        d = desc.decode(out.image, desc.find(out.image)[0])
+        end = out.layout['bss'][1]
+        assert end < 0x44000000 - 0x100000
+        assert d['area'] == (end, link._align(end, 0x1000), 0x44000000, 0, 0)
+
+
 def test_the_build_descriptor_keeps_whole_orders():
     """ABI 1.1: each entry's order as a signed 32-bit number (core-ar2 0.13's screen handlers are at
     -1000000 and 1000000), the keys holding it to 0..65534 for a 1.0 reader; a 1.0 block's orders
