@@ -70,22 +70,16 @@ st_proj_save_body:                      | 0x400a771a (0.6)
         jmp     0x400a7722
 
 | (0.8) the site 0x401061e8 in main() (0x40105fb6), stock `jsr 0x400f1b18.l`,
-| after the +Drive's init and the power-off image's load and before the audio
-| interrupt and the UI task: the displaced call first, with the stack as the
-| site had it (its own return address taken off and kept), then
-| core_boot_drive (store.c), ev_boot_drive. d0 as the call left it.
+| the only call of the parameter-table and state init, with one argument on
+| the stack (the boot word 0x401ff54c, pushed at 0x401061e2). Statics, the
+| heap and the +Drive's init are done and the power-off image read; the audio
+| interrupt (0x4010623a) and the UI task (0x40106302) come after. Factory
+| boots (boot word bit 0x40) branch past it (0x40106186). core_boot_drive
+| (store.c) runs ev_boot_drive, then the displaced call is a tail jump with
+| the stack as the site had it, so it returns to 0x401061ee.
         .globl  core_boot_drive_site
         .align  2
 core_boot_drive_site:
-        move.l  (%sp)+, boot_drive_ret
-        jsr     0x400f1b18
-        move.l  %d0, -(%sp)
         jsr     core_boot_drive
-        move.l  (%sp)+, %d0
-        move.l  boot_drive_ret, -(%sp)
-        rts
+        jmp     0x400f1b18
 
-        .bss
-        .align  4
-boot_drive_ret:
-        .skip   4

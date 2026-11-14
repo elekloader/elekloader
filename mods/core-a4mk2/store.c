@@ -998,11 +998,13 @@ int st_proj_save(void *model, int slot, void *progress)
 }
 
 /* (0.8) ev_boot_drive: f(), once at boot, from the site 0x401061e8 in main()
- * (store.s) after its own call: the +Drive is up (its init at
- * 0x40106124..0x4010613a) and the power-off image read (0x401061a4), and the
- * audio interrupt (0x4010623a) and the UI task (0x40106302) have not started.
- * The Drive Loader links the +Drive mods there. The collection has no spare
- * entries: a +Drive mod is not called in it. */
+ * (store.s), before its call of 0x400f1b18: the heap is up, the +Drive's
+ * init done (0x40106124..0x4010613a; its result word 0x41865e98 is 0 when it
+ * came up, which a handler checks before it reads) and the power-off image
+ * read (0x401061a4); the audio interrupt (0x4010623a) and the UI task
+ * (0x40106302) have not started. A factory boot skips it. The Drive Loader
+ * links the +Drive mods there. The collection has no spare entries: a +Drive
+ * mod is not called in it. */
 typedef void (*ev_boot_drive_t)(void);
 extern const ev_boot_drive_t ev_boot_drive[];
 
@@ -1012,3 +1014,4 @@ void core_boot_drive(void)
     for (f = ev_boot_drive; *f; f++)
         (*f)();
 }
+

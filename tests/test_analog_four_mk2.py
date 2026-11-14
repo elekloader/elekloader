@@ -206,8 +206,8 @@ def test_core_a4mk2_sites():
         ('0x400c8ba2', 'jmp', '4eb94005b6f0'), ('0x40103af6', 'jmp', '4eb9400fa2b0'),
         ('0x400e62c8', 'jmp', '20532e280008')]
     assert len(mod['sites']) == 117 + len(voice07) + 70 + len(track08) + 1
-    boot_drive = [x for x in mod['sites'] if x.get('target') == 'core_boot_drive_site']
-    assert [(x['addr'], x['op'], x['stock']) for x in boot_drive] == [('0x401061e8', 'jsr', '4eb9400f1b18')]
+    drive = [x for x in mod['sites'] if x.get('target') == 'core_boot_drive_site']
+    assert [(x['addr'], x['op'], x['stock']) for x in drive] == [('0x401061e8', 'jsr', '4eb9400f1b18')]
     midi = [x for x in mod['sites'] if x.get('target') in ('core_nrpn_site', 'core_cc_site')]
     assert [(x['addr'], x['op'], x['stock']) for x in midi] == \
         [('0x4009ff56', 'jmp', '4fefffec48d7043c'), ('0x400a0b62', 'jmp', '4e56ffd848d71cfc')]

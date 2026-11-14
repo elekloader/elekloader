@@ -600,15 +600,14 @@ Not reported (std1 rule 6): a list parameter's turn. Unconfirmed: `keys.h`'s
 
 ## +Drive mods (0.8)
 
-core-ar2 0.12's spare entries (its README, "Room for +Drive mods"): 256 in
-every event table, native and `std_*`, those the audio interrupt calls
-marked `"render"`; 16 in the page tables (pages.s `VIEW_MAX`, every A4
-page being a view); 256 in `core_params`. About 45 KB of RAM.
+core-ar2 0.12's spares (its README, "Room for +Drive mods"): 256 in each
+event table, the audio interrupt's marked `"render"`; 16 in the page
+tables (pages.s `VIEW_MAX`); 256 in `core_params`.
 
-`ev_boot_drive`: f(), once, from 0x401061e8 in main(), after stock's
+`ev_boot_drive`: f(), from 0x401061e8 in main() before stock's
 `jsr 0x400f1b18` (`store.s`): the +Drive is up and the power-off image
-read; audio and the UI task are not started. The Drive Loader links
-there; no spare entries.
+read; audio and the UI task are not started (a factory boot skips it).
+The Drive Loader's own: no spares.
 
 ## Checked so far
 
