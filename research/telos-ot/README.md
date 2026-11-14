@@ -111,6 +111,24 @@ settle it. Nothing here has run on a unit.
   by the bootloader, which stays stock. CS1's free range is 31 KB. The card
   is the only place large enough, and the user's own.
 
+## 7a. TELOS 0.1: built and run in the emulator (2026-11-14)
+
+`mods/telos-ot` (its README has the details) on core-ot 0.42, with a 2 MB area:
+- **Base build:** core, intercepts, machines-ot, settings-ot, seq-events-ot, trig-events-ot, TELOS.
+- **Card:** the 15 core-standard shop files and `active`.
+- **Result in ot_emu:**
+  - 13 loaded; the two refusals are right (LO-FI AMF FIX: `stock`, its DSP payload is gone by the mount; SCENES P2: `claim`, it clashes with MIDI SCENES);
+  - all 111 sites as linked;
+  - the area matches the computer's link of the same set (`tests/drive_link_host.c` built with `DL_SITES`), except 25 bytes the mods wrote while running;
+  - TUNER opened from the card with UP + TEMPO.
+- **Two emulator/compiler disagreements found on the way, both avoided in TELOS's code:**
+  - `move.b (a0)+,(0,a0,a1)`: GCC assumes the destination uses the old a0, ot_emu the new one; `dl_memcpy` is kept out of line;
+  - a byte push to `-(sp)`: GCC assumes it moves SP by 1, ot_emu by 2; `-fno-ipa-sra`.
+
+  Which reading the ColdFire itself takes is to check on a unit; neither pattern is left in the build.
+- **The stock shadow was not enough on its own.** The OS changes some of its image's data before the mount, so TELOS also keeps a copy of 0x400b9000..0x400e2324 from `ev_boot_early`, and stock parts come from that copy.
+- **Not built yet:** the MODS page, the skip key, `.armed`, the early-site list, `js/` parity for the descriptor's shadow, and DSP mods ([DSP.md](DSP.md)).
+
 ## 8. Building it
 
 1. **The descriptor's records for the Octatrack:** sites, stock shadow,

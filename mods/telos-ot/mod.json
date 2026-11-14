@@ -1,0 +1,17 @@
+{
+ "id": "telos",
+ "version": "0.1",
+ "title": "TELOS",
+ "category": "Framework",
+ "license": "GPL-2.0-or-later",
+ "author": "irpina",
+ "description": "Mods from the CF card for the Octatrack (OS 1.40C): at the card's first mount it links the .elemod files /ELEKLOADER/MODS/active names into a 2 MB area, sites included, and writes /ELEKLOADER/MODS/.status. The design is research/telos-ot.",
+ "device": "octatrack",
+ "os": "1.40C",
+ "sources": ["telos.s", "telos.c", "../drive-loader-ar2/dlink.c", "../drive-loader-ar2/json.c"],
+ "cflags": ["-DDL_SITES", "-fno-ipa-sra"],
+ "subscribe": [{"event": "ev_card", "fn": "telos_card", "order": 1},
+               {"event": "ev_boot_early", "fn": "telos_boot_early", "order": 1}],
+ "requires": ["core"],
+ "resources": {"core": "0.41"}
+}

@@ -35,8 +35,10 @@ into its string pool (UTF-8, NUL-terminated):
   storage (12 + 16 a scope): u32 address and u32 length of the lockfile's trailer in the main OS
     image (the host's: nothing on the unit reads it), u16 scope count, u16 0, then per scope: name,
     u32 room in bits, u32 bits used, u32 generation
-  shadow (ABI 1.2, only on a device whose profile asks for it, drive_shadow): +0x58 u32 its
-    offset, +0x5c u32 its count (0 without one: a reader takes it when the offset is not 0); per range, by address: u32 address, u32 length, then the stock
+  shadow (ABI 1.2, only on a device whose profile asks for it, drive_shadow, or in a build whose
+    loader keeps its own area, drive_area): +0x58 u32 its offset, +0x5c u32 its count (0 without
+    one: a reader takes it when the offset is not 0); per range, by address: u32 address, u32
+    length, then the stock
     bytes, padded to 4. Every range the flashed build writes, so a loader that copies a mod's stock
     parts on the unit copies stock's bytes where the build changed them. A block without one is
     ABI 1.1, byte for byte as before.
@@ -60,6 +62,7 @@ KIND_CORE, KIND_FLASHED, KIND_LOADER = 0, 1, 2
 CLAIM_NAME = 1
 CLAIM_REGION = 2                 # a region of the bulk area a flashed mod claims: "<lo> <hi> <name>", hex
 STAGING = ('drive_staging', 'drive_staging_size')
+AREA_SYMS = ('drive_area', 'drive_area_size')   # a loader's own area (TELOS on the Octatrack)
 MODULE, EXPORT, TABLE, CLAIM, AREA, SCOPE = 16, 8, 24, 8, 20, 16
 
 

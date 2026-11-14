@@ -7,7 +7,8 @@
  * [9] its read, [10] its word sum, [11] the engine's job switch count at the time (0: no job yet). */
 #include "octatrack/core.h"
 
-volatile uint32_t tp[12];
+volatile uint32_t tp[24];
+
 static struct ot_file f;
 static uint32_t big[65536];
 
@@ -25,7 +26,9 @@ void tp_card(unsigned state, int result, unsigned mode)
     tp_begin();
     tp[2] = (uint32_t)ot_file_open(&f, "/ELEKLOADER/TELOS/ACTIVE", "r") | 0x80000000u;
     if ((int32_t)(tp[2] << 1) >= 0) {
+        for (int q = 0; q < 6; q++) tp[12 + q] = ((uint32_t *)f.obj)[q];
         tp[3] = (uint32_t)ot_file_read(&f, (void *)&tp[4], 16);
+        for (int q = 0; q < 6; q++) tp[18 + q] = ((uint32_t *)f.obj)[q];
         ot_file_close(&f);
     }
     tp[8] = (uint32_t)ot_file_open(&f, "/ELEKLOADER/TELOS/MODS/BIG.BIN", "r") | 0x80000000u;
