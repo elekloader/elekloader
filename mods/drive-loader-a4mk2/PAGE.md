@@ -68,6 +68,15 @@ As the Rytm's page, with these differences:
   only while the page shows and its frames are drawn. `/mods/.status`'s `check: n/N` line is
   published the same way.
 
+## Parked data
+
+As the Rytm's: the mods whose fields `/mods/.store` keeps parked (no chosen mod declares them any
+more) are read when the page opens and after FORGET DATA (`park.h`), and the build list shows them
+after the build's rows with `PARK`. YES ticks one and shows its parked bits per scope, lock codes
+and CCs; FORGET DATA drops the ticked ones' parked data after its confirm, in steps (read, write
+`.store.tmp`, swap). With `/mods` empty but data parked, the panels still open, so FORGET DATA can
+be reached.
+
 ## Keys still to confirm
 
 From core-a4mk2's `analog-four-mk2/keys.h`: LEFT 0x40 and RIGHT 0x41 [read], YES 0x44 and NO
