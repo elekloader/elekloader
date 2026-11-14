@@ -282,7 +282,7 @@ changes nothing else the unit does.
     too; `ev_voice_reset` in tasks and the frame interrupt, with the
     interrupts not yet masked; `ev_boot_early` before the OS. None but the
     reset is on the frame interrupt's path.
-- **0.9 to 0.41: events and tables from the map** (`mute.s` to `dsp1.s`; 0.40 in `store.s`; 0.41 `tempo.s`, `card.s`, `preview.s`).
+- **0.9 to 0.41: events and tables from the map** (`mute.s` to `preview.s`).
   Each has its section in docs/ADAPTING.md, from "Track mutes on the
   Octatrack" on.
 - **The draw gate** (`gate.s`). The OS composes the screen twice before the
