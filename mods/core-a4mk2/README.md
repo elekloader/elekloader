@@ -600,33 +600,8 @@ Not reported (std1 rule 6): a list parameter's turn. Unconfirmed: `keys.h`'s
 
 ## The sequencer
 
-`seq.c` and `seq.s`: core-ar2 0.11's sequencer events, with its names and
-arguments, for the A4's 6 tracks (synth 0..3, FX 4, CV 5)
-(`elekloader/sdk/include/analog-four-mk2/seq.h`).
-
-| what | where (OS 1.56) | context |
-|---|---|---|
-| a track's next step made, and whether it trigs | in the tick's loop over the 6 tracks, after trig_fire (0x4007a1d2) filled the trig record (0x42872474) and it was copied to the trig queue: 0x4007b0e8, `tst.l 0x42872474` (`jsr`; core sets the same flags for the `beq` after it); the track is in `%d2` | the tick's interrupt |
-| `ev_transport(state)`, `ev_seq_step(steps, trigs)` | the tick's exit 0x4007badc, std1's `ev_seq_tick` site: `core_std_seq_tick` calls `core_seq_exit` before the `ev_seq_tick` table | the tick's interrupt |
-| `core_transport()` | 0x80006a88: 0 stopped, 1 playing, 2 paused | any |
-
-- **The tick** (0x4007a9b0, vector 121) runs 96 times a quarter note,
-  also while stopped; the sequencer works on every 4th (24 a quarter
-  note), so a 1x step is 6 of those clocks. A track at a step boundary
-  makes its next step's trig, one step ahead of the sound; trig_fire
-  leaves the record's first word 0 for a trigless step, a failed condition
-  or probability.
-- **The masks** gather at the fired site during the tick and go out once
-  at the exit, after `ev_transport`, in one `ev_seq_step` call.
-- **PLAY from stop** fires every track's first step in the PLAY tick
-  itself (its first-step flags, 0x80006b1a, still set at the fired site),
-  so that call carries `CORE_SEQ_FIRST`. **A resume** (PLAY after a pause,
-  0x4007bd14 sets the state to 2; MIDI Continue, 0x400797da) plays the step
-  it stopped on from records stock made at the pause (0x428722bc + track x
-  0x44) and fires only the step after it, so core seeds that step first:
-  `ev_seq_step(0x3f | CORE_SEQ_FIRST, trigs)`, trigs the tracks whose
-  record holds a trig.
-- **STOP and pause** run in the UI task; the next tick's exit sees them.
+`seq.c`, `seq.s`: core-ar2 0.11's sequencer events (`analog-four-mk2/seq.h`;
+[seq-check](../../examples/seq-check-a4mk2)).
 
 ## Checked so far
 
