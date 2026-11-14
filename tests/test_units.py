@@ -2342,8 +2342,8 @@ def test_core_a4mk2_0_7_ui_sites():
     globs |= {m for m in re.findall(r'^\s*(?:CLIP|PREQ)\s+(\w+),', asm, re.M)}
     cfns = set(re.findall(r'^\w[\w ]*?\b(core_\w+)\(', src, re.M))
     ui_sites = [s for s in doc['sites'] if s.get('target') in globs | cfns]
-    assert len(ui_sites) == 57
-    assert len([s for s in ui_sites if s['target'].startswith('core_clip_')]) == 29
+    assert len(ui_sites) == 58
+    assert len([s for s in ui_sites if s['target'].startswith('core_clip_')]) == 30
     assert len([s for s in ui_sites if s['target'].startswith('core_view_')]) == 5
     assert len([s for s in ui_sites if s['target'].startswith('core_pattern_') and s['target'] != 'core_pattern_site']) == 6
     for s in ui_sites:
