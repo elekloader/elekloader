@@ -2327,8 +2327,8 @@ def test_core_a4mk2_0_7_std_map():
 
 def test_core_a4mk2_0_7_ui_sites():
     """core-a4mk2 0.7's UI and system events (ui.c, ui.s): every site's target is a global of ui.s
-    or a function of ui.c, each std table is read in ui.c, the native ev_knob_turn and
-    ev_analog_frame have their tables, and core_ui_tick runs right after core_std_tick."""
+    or a function of ui.c, each std table is read in ui.c, the native ev_knob_turn,
+    ev_analog_frame and ev_mod_set have their tables, and core_ui_tick runs right after core_std_tick."""
     import re
     root = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
     mdir = os.path.join(root, 'mods', 'core-a4mk2')
@@ -2339,11 +2339,13 @@ def test_core_a4mk2_0_7_ui_sites():
     with open(os.path.join(mdir, 'ui.c'), encoding='utf-8') as fh:
         src = fh.read()
     globs = set(re.findall(r'^\s*\.globl\s+(\w+)', asm, re.M))
-    globs |= {m for m in re.findall(r'^\s*(?:CLIP|PREQ)\s+(\w+),', asm, re.M)}
+    globs |= {m for m in re.findall(r'^\s*(?:CLIP|PREQ|MODSET)\s+(\w+),', asm, re.M)}
     cfns = set(re.findall(r'^\w[\w ]*?\b(core_\w+)\(', src, re.M))
     ui_sites = [s for s in doc['sites'] if s.get('target') in globs | cfns]
-    assert len(ui_sites) == 64
+    assert len(ui_sites) == 70
     assert len([s for s in ui_sites if s['target'].startswith('core_clip_')]) == 36
+    modset = [s for s in ui_sites if s['target'].startswith('core_modset_')]
+    assert len(modset) == 6 and all(s['op'] == 'jmp' and s['stock'].startswith('4e56') for s in modset)
     assert len([s for s in ui_sites if s['target'].startswith('core_view_')]) == 5
     assert len([s for s in ui_sites if s['target'].startswith('core_pattern_') and s['target'] != 'core_pattern_site']) == 6
     for s in ui_sites:
@@ -2356,6 +2358,7 @@ def test_core_a4mk2_0_7_ui_sites():
     assert doc['collections']['ev_knob_turn'] == 4 and 'ev_knob_turn[0]' in src
     assert doc['collections']['std_view'] == 4 and doc['std']['ev_view'] == 'std_view'
     assert doc['collections']['ev_analog_frame'] == 4 and 'tst.l   ev_analog_frame' in asm
+    assert doc['collections']['ev_mod_set'] == 4 and 'ev_mod_set[0]' in src
     assert 'ui.c' in doc['sources'] and 'ui.s' in doc['sources']
     subs = {(x['event'], x['fn']): x['order'] for x in doc['subscribe']}
     assert subs[('ev_tick', 'core_ui_tick')] == -999999

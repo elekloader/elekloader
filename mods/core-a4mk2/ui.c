@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
 /* core-a4mk2 0.7: the standard events (std1) at new sites, the UI and the
  * system (README, "Standard events (0.7)"), and the A4's own turn event,
- * ev_knob_turn. OS 1.56; the sites are in ui.s and mod.json.
+ * ev_knob_turn and ev_mod_set. OS 1.56; the sites are in ui.s and mod.json.
  *
  *   ev_boot_done  std_boot_done  the UI task, once, after its init (0x4009995c)
  *   ev_idle       std_idle       main's task, after it started the UI task: the
@@ -43,6 +43,9 @@
  *                                position (0x4007c3bc)
  *   ev_analog_frame (native)     the analog frame before it is packed
  *                                (0x40103da6), audio interrupt
+ *   ev_mod_set    (native)       the six modulation setters' entries (SoundModConf
+ *                                0x4001f45e/0x4001f312, Velocity 0x400ba35a/
+ *                                0x400ba0f6, PerfParam 0x400a3ce6/0x400a3b78)
  */
 
 #include <stdint.h>
@@ -77,6 +80,7 @@ extern const ev_knob_turn_fn ev_knob_turn[];
 typedef int (*fn_view)(int, void *, void *, void *);
 extern const fn_view std_view[];
 extern const ev_analog_frame_fn ev_analog_frame[];
+extern const ev_mod_set_fn ev_mod_set[];
 
 static unsigned short irq_mask(void)
 {
@@ -998,4 +1002,104 @@ void core_ui_tick(void *ctrl)
         set_drain();
     if (std_mode[0])
         mode_poll();
+}
+
+/* ================================ ev_mod_set =============================== */
+
+/* ui.s's six setter stubs pass code = class | kind << 8, the setter's (this,
+ * slot, value) and its return address; this is the primary object. Its slots
+ * live in data = *(this + 0x10): SoundModConf's and Velocity's slot n at
+ * data + 4n, PerfParam's at data + 0x10 + 4n, each the depth (s16) and the
+ * destination's code in byte 3. A setter writes nothing when data is 0 or
+ * the slot is past 4, so neither call comes then. The objects: a Sound (the
+ * active kit's T1-T4 at kit + 0x60 + 0x3dc t, FX at kit + 0x1030, CV at
+ * kit + 0x1424, laid out alike) holds Velocity at +0x2c and SoundModConf at
+ * +0xd4 MOD WHEEL, +0x190 PITCH BEND, +0x24c BREATH, +0x308 AFTERTOUCH; the
+ * kit's PERF macro i (0..11) is at kit + 0x1818 + 0xb4 i. The pool's sounds
+ * hold the same objects; no caller was found passing one (MODSRC_NONE). The
+ * only caller outside the setup page is the SysEx receive's PERF depth
+ * (0x400f8be6, its jsr returning to 0x400f8bec), in a task not traced: not
+ * reported. */
+#define MODSET_SOUND 0u
+#define MODSET_VELOCITY 1u
+#define MODSET_PERF 2u
+#define MODSET_SYSEX_RET 0x400f8becu
+typedef uint32_t (*kit_of_t)(uint32_t app);   /* a pointer, returned in %d0 */
+#define KIT_OF ((kit_of_t)0x400a51f6u)
+#define APP_OF ((uint32_t (*)(void))0x401494deu)
+
+static uint8_t *modset_slot(uint32_t cls, void *self, uint32_t slot)
+{
+    uint8_t *data = *(uint8_t **)((uint8_t *)self + 0x10);
+    if (!data || slot > 4)
+        return 0;
+    return data + (cls == MODSET_PERF ? 0x10 : 0) + 4 * slot;
+}
+
+static void modset_who(uint32_t cls, void *self, struct core_mod_set *m)
+{
+    uint32_t kit = KIT_OF(APP_OF()), at = (uint32_t)self, t;
+    m->source = MODSRC_NONE;
+    m->track = 0xffu;
+    if (cls == MODSET_PERF) {
+        uint32_t off = at - (kit + 0x1818u);
+        if (off < 12u * 0xb4u && !(off % 0xb4u)) {
+            m->source = MODSRC_PERF;
+            m->track = (uint8_t)(off / 0xb4u);
+        }
+        return;
+    }
+    for (t = 0; t <= TRACK_CV; t++) {
+        uint32_t base = kit + (t < 4 ? 0x60u + 0x3dcu * t : t == TRACK_FX ? 0x1030u : 0x1424u);
+        uint32_t off = at - base;
+        uint8_t src;
+        if (cls == MODSET_VELOCITY)
+            src = off == 0x2c ? MODSRC_VELOCITY : MODSRC_NONE;
+        else if (off == 0xd4)
+            src = MODSRC_MOD_WHEEL;
+        else if (off == 0x190)
+            src = MODSRC_PITCH_BEND;
+        else if (off == 0x24c)
+            src = MODSRC_BREATH;
+        else if (off == 0x308)
+            src = MODSRC_AFTERTOUCH;
+        else
+            src = MODSRC_NONE;
+        if (src != MODSRC_NONE) {
+            m->source = src;
+            m->track = (uint8_t)t;
+            return;
+        }
+    }
+}
+
+static int modset_report(int pre, uint32_t code, void *self, int32_t slot, int32_t value)
+{
+    const ev_mod_set_fn *f;
+    struct core_mod_set m;
+    modset_who(code & 0xffu, self, &m);
+    m.slot = (uint8_t)slot;
+    m.kind = (uint8_t)(code >> 8);
+    m.value = value;
+    for (f = ev_mod_set; *f; f++)
+        if ((*f)(pre, &m) && pre)
+            return 1;
+    return 0;
+}
+
+int core_modset_pre(uint32_t code, void *self, int32_t slot, int32_t value, uint32_t caller)
+{
+    if (!ev_mod_set[0] || caller == MODSET_SYSEX_RET || !modset_slot(code & 0xffu, self, (uint32_t)slot))
+        return 0;
+    return modset_report(1, code, self, slot, value);
+}
+
+void core_modset_post(uint32_t code, void *self, int32_t slot, int32_t value, uint32_t caller)
+{
+    uint8_t *e;
+    if (!ev_mod_set[0] || caller == MODSET_SYSEX_RET || !(e = modset_slot(code & 0xffu, self, (uint32_t)slot)))
+        return;
+    if (code >> 8 == MOD_DEPTH)
+        value = (int16_t)(e[0] << 8 | e[1]);
+    modset_report(0, code, self, slot, value);
 }

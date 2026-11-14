@@ -1,0 +1,20 @@
+{
+ "id": "modset-check",
+ "version": "0.1",
+ "title": "ev_mod_set check",
+ "category": "Examples",
+ "license": "GPL-2.0-or-later",
+ "description": "A test for core-a4mk2 0.7's ev_mod_set on the Analog Four MKII: it records every modulation setup edit core reports (VELOCITY, MOD WHEEL, PITCH BEND, BREATH, AFTERTOUCH and PERF destinations and depths) in ms_check (modset.c); while armed (MS TEST in SETTINGS) it takes every depth change of slot 4 (knob J).",
+ "device": "analog-four-mk2",
+ "os": "1.56",
+ "events": "std1",
+ "sources": ["modset.c", "label.s"],
+ "defsym": {"STRING_CTOR": "0x4018471e"},
+ "subscribe": [
+  {"event": "ev_tick", "fn": "ms_tick", "order": 70},
+  {"event": "ev_settings", "fn": "ms_settings", "order": 70}
+ ],
+ "contribute": [{"to": "ev_mod_set", "order": 70, "data": "00000000", "relocs": [[0, "abs32", "sym:ms_mod_set", 0]]}],
+ "resources": {"names": ["settings:MS TEST"], "core": "0.7"},
+ "requires": ["core"]
+}

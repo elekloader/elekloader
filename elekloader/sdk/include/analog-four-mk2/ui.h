@@ -122,4 +122,37 @@ typedef int (*ev_knob_turn_fn)(void *view, int id, int delta, int knob, int how)
  * A mod subscribes by contributing to the "ev_analog_frame" table. */
 typedef void (*ev_analog_frame_fn)(uint16_t *words);
 
+/* ---- ev_mod_set(pre, m), a native event (not std1): a modulation slot's
+ * destination or depth on the sound's VELOCITY, MOD WHEEL, PITCH BEND,
+ * BREATH and AFTERTOUCH setups and the kit's PERF macros, at the six stock
+ * setters every such edit goes through: the setup page's knobs (A..E the
+ * destination, F..J the depth, FUNC+knob), its destination list, its keys
+ * that move a slot's destination to another track's parameter. A turn of
+ * knob A..E opens the destination list and each step in it is reported; YES
+ * closes it with no call, NO (or another knob) writes the old destination
+ * back, reported too [unit, T311]. In the UI task. pre 1 comes before the write, with the value asked for; nonzero
+ * takes it (nothing is written, the page still shows its popup). pre 0
+ * comes after, with the value stored. Not reported: PASTE MODULATIONS and
+ * its undo (stock writes whole slots another way), project, kit and sound
+ * loads (they don't go through these setters), and a PERF macro's depths
+ * received over SysEx. A mod subscribes by contributing to the "ev_mod_set"
+ * table. */
+#define MODSRC_VELOCITY 0               /* track: the sound's track */
+#define MODSRC_MOD_WHEEL 1
+#define MODSRC_PITCH_BEND 2
+#define MODSRC_BREATH 3
+#define MODSRC_AFTERTOUCH 4
+#define MODSRC_PERF 5                   /* track: the macro, 0..11 */
+#define MODSRC_NONE 0xffu               /* a sound not in the active kit (none seen) */
+#define MOD_DEST 0                      /* value: the parameter (0..PARAM_STOCK_LAST) */
+#define MOD_DEPTH 1                     /* value: signed 8.8 (0x100 one step), -0x8000..0x7f00 */
+struct core_mod_set {
+    uint8_t source;                     /* MODSRC_* */
+    uint8_t slot;                       /* 0..4, the page's knob column */
+    uint8_t kind;                       /* MOD_DEST or MOD_DEPTH */
+    uint8_t track;                      /* params.h's track (0..3, TRACK_FX, TRACK_CV), the macro for MODSRC_PERF, or 0xff */
+    int32_t value;                      /* pre: asked for (depth before the clamp); post: stored (destination as asked) */
+};
+typedef int (*ev_mod_set_fn)(int pre, const struct core_mod_set *m);
+
 #endif

@@ -591,6 +591,8 @@ comment lists its events, sites and contexts. A4 numbers: `analog-four-mk2/`
 | `ev_tick`, `ev_draw`, `ev_settings`, `ev_project`, `ev_render_in` | native (= or prefix) |
 | the others: `ev_boot`, `ev_key`, `ev_param_turn` (std.c), seven MIDI (stdmidi.c), two voice (voice.c), eleven UI (ui.c) | `std_` + the name |
 
+Native events (`ev_knob_turn`, `ev_analog_frame`, `ev_mod_set`) and the
+A4's numbering: `ui.h`.
 Not reported (std1 rule 6): a list parameter's turn. Unconfirmed: `keys.h`'s
 [emu] ids, the LED ids and colours. Test mods:
 [std-check](../../examples/std-check-a4mk2),
