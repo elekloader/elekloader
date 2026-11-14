@@ -663,8 +663,6 @@ The runs' logs are in their pull requests; what they established:
 ```bash
 # needs m68k-linux-gnu binutils and gcc (or set ELEKLOADER_CROSS to another prefix)
 python -m elekloader.sdk.build mods/core-a4mk2 --stock Analog-Four_MKII_OS1.56.syx
-python -m elekloader.sdk.build examples/store-check-a4mk2 --stock Analog-Four_MKII_OS1.56.syx
-python -m elekloader.patch --stock Analog-Four_MKII_OS1.56.syx \
-    --mod mods/core-a4mk2/out/core-0.8.elemod --mod examples/store-check-a4mk2/out/store-check-1.0.elemod \
-    --out a4-store.syx --version SC56 --lockfile a4-store.lock.json
 ```
+
+Lint and patch a check mod with it as docs/ADAPTING.md shows.
