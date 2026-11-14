@@ -614,6 +614,10 @@ struct ot_menu_row {
  * banks $2000 and $4000 taking turns, bits 16-23 set by the DSP; $6320 is the word after stock's block.
  * The mod owns that DSP memory: returns 1 when started, 0 when refused. ot_dsp1_fed counts the transfers
  * done. */
+/* void ev_engine_job(unsigned type, const void *msg) (0.40): in the engine task, as stock job `type` (0..45,
+ * the message's first byte) is about to run, msg its message; again with msg 0 when it has ended. Job 16
+ * is the sample editor's render/commit (msg+2 its kind, +6/+10/+14 the arguments). Watch only: stock's job
+ * runs either way; card work of your own goes through ot_engine_post. */
 #define OT_DSP_FEED1_MAX    256u
 int ot_dsp_feed1(const volatile void *block, unsigned words, unsigned at);
 extern volatile uint32_t ot_dsp1_fed;

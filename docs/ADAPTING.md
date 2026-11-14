@@ -974,6 +974,12 @@ core 1 one more block; core.h gives the limits and where the words land (the fra
 block). Core 1 has no event bus of its own, so the mod owns the DSP memory it writes and the DSP code that
 reads it. `tests/fixtures/octatrack-dsp1` sends 32 words to $6320, just past stock's block.
 
+### The engine task's jobs on the Octatrack (core-ot 0.40)
+
+`ev_engine_job(type, msg)` runs in the engine task as each stock job (0..45) starts, with its message, and
+again with msg 0 when it has ended; core.h names job 16, the sample editor's render/commit. It only
+watches: card work of a mod's own goes through `ot_engine_post`. `tests/fixtures/octatrack-job` counts them.
+
 ### SEQUENCER rows on the Octatrack (seqrows 0.1)
 
 PROJECT > CONTROL > SEQUENCER works as PERSONALIZE does, with `ot_seq_label`, `ot_seq_get` and `ot_seq_set`

@@ -574,7 +574,7 @@ def test_the_core_bus_sites():
                                                  'ot_ptn_rows', 'ot_track_rows', 'ot_midi_rows',
                                                  'ot_pers_label', 'ot_pers_get', 'ot_pers_set', 'ev_tstretch', 'ev_file', 'ev_track_double',
                                                  'ev_setup_open', 'ev_pattern_check', 'ev_fx_choose',
-                                                 'ev_boot_frame', 'ev_track_start', 'ev_dsp_feed1'})
+                                                 'ev_boot_frame', 'ev_track_start', 'ev_dsp_feed1', 'ev_engine_job'})
     assert j['collections']['ev_idle'] == 4
     for sym, target in JMP_BACK.items():       # a jmp stub goes back to the instruction after its site
         addr, stock_hex, _ev = BUS_SITES[target]
@@ -1845,6 +1845,28 @@ def test_the_core_dsp_feed1_site():
     assert 'ot_dsp1_fed' in ln.map and 'ot_dsp_feed1' in ln.map
 
 
+def test_the_core_engine_job_event():
+    """core-ot 0.40: ev_engine_job sits in core's own job switch (no new site): the stub skips types above
+    45 and an empty list, the job's end calls the handlers with msg 0; job 16's case (0x400858b8) is the
+    sample render/commit Modwerk's base hooks at 0x400858c0; the probe links and subscribes."""
+    src = open(os.path.join(ROOT, 'mods', 'core-ot', 'store.s')).read()
+    sw = src[src.index('core_job_switch:'):src.index('core_job_loop:')]
+    assert 'tst.l   ev_engine_job' in sw and 'bcs.s   2f' in sw and 'jsr     ots_job_start' in sw
+    c = open(os.path.join(ROOT, 'mods', 'core-ot', 'store.c')).read()
+    end = c[c.index('void ots_job_end(void)'):]
+    assert '(*f)((unsigned)job, 0)' in end[:end.index('switch (job)')]
+    st, img = stock()
+    o = 0x40084870 - DEV.main_load + 2 * 16
+    assert 0x40084870 + struct.unpack('>h', img[o:o + 2])[0] == 0x400858b8
+    from elekloader.sdk import build
+    with tempfile.TemporaryDirectory() as tmp:
+        core = elemod.load_any(build.build(os.path.join(ROOT, 'mods', 'core-ot'), SYX, tmp)[0])
+        probe = elemod.load_any(build.build(os.path.join(HERE, 'fixtures', 'octatrack-job'), SYX, tmp)[0])
+    ln = link.link([core, probe], img)
+    o = ln.layout['run_load'] + (ln.tables['ev_engine_job'][0] - DEV.ddr[0]) - DEV.main_load
+    assert struct.unpack('>II', ln.image[o:o + 8]) == (ln.map['jp_job'], 0)
+
+
 # seqrows-ot: CONTROL > SEQUENCER rows, a companion (QUANTIZER v1.0 owns the same places).
 SEQ_ARRAYS = {'ot_seq_label': (0x400b27d0, [0x40065bd8]), 'ot_seq_get': (0x400b27dc, [0x40065bde]),
               'ot_seq_set': (0x400b282c, [0x40065cc4, 0x40065d3e, 0x40065d58, 0x40065d72])}
@@ -2361,7 +2383,7 @@ def test_the_example_subscribes_to_the_bus():
                       'ot_ptn_rows': 6, 'ot_track_rows': 6, 'ot_midi_rows': 6,
                       'ot_pers_label': 16, 'ot_pers_get': 16, 'ot_pers_set': 16, 'ev_tstretch': 0, 'ev_file': 0, 'ev_track_double': 0,
                       'ev_setup_open': 0, 'ev_pattern_check': 0, 'ev_fx_choose': 0,
-                      'ev_boot_frame': 0, 'ev_track_start': 0, 'ev_dsp_feed1': 0}, counts
+                      'ev_boot_frame': 0, 'ev_track_start': 0, 'ev_dsp_feed1': 0, 'ev_engine_job': 0}, counts
     at = ln.tables['ev_draw'][0]
     o = ln.layout['run_load'] + (at - DEV.ddr[0]) - DEV.main_load
     assert struct.unpack('>II', ln.image[o:o + 8]) == (ln.map['hello_draw'], 0)
