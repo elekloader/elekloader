@@ -85,6 +85,8 @@ void core_seq_fired(int track)
 
 /* 0x4007badc, from core_std_seq_tick (stdmidi.c): the tick's exit, before
  * ev_seq_tick */
+void core_midi_irq_drain(void);
+
 void core_seq_exit(void)
 {
     const ev_seq_step_t *s;
@@ -113,7 +115,7 @@ void core_seq_exit(void)
         for (s = ev_seq_step; *s; s++)
             (*s)(st, tr);
     }
-    /* a MIDI drain for core_midi_try_send goes here, before ev_seq_tick */
+    core_midi_irq_drain();              /* what waited in core_midi_try_send's ring (send.c) */
 }
 
 /* the play state, from any task or interrupt: 0 stopped, 1 playing, 2 paused */

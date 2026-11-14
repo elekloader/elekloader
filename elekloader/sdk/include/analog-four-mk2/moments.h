@@ -8,6 +8,20 @@
 
 #include <stdint.h>
 
+/* a whole MIDI message (a status byte first; a SysEx F0 .. F7 in one call)
+ * out of USB, or nothing: 1 sent (or queued, from an interrupt), 0 not now
+ * (USB not configured, a stock SysEx under way, stock's sender busy or its
+ * buffer too full). It never waits, and messages leave in the order sent.
+ * From a task it goes through stock's sender under its mutex. From an
+ * interrupt it goes out at once (every interrupt masked for the send) when
+ * no task is in the sender and nothing waits before it; otherwise into
+ * core's ring of 1024 bytes, at most 128 a message, which the next
+ * sequencer tick or ev_tick sends. */
+int core_midi_try_send(int len, const unsigned char *msg);
+/* 1 while USB is on and the host has configured the MIDI port, else 0 (the
+ * first thing core_midi_try_send checks). Any task or interrupt. */
+int core_usb_midi_up(void);
+
 /* the live project's name: 16 bytes, not always zero-terminated. Any task. */
 const char *core_project_name(void);
 
