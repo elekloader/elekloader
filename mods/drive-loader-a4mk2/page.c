@@ -103,7 +103,7 @@ static struct dl_choice *choice;         /* a save's set, from the heap while it
 static struct dl_status *cst;
 static char (*cdet)[32];
 
-/* Parked data (PAGE.md, "Parked data"): the mods /mods/.store keeps fields of that no chosen mod
+/* Parked data (the build list's PARK rows, as the Rytm's): the mods /mods/.store keeps fields of that no chosen mod
  * declares any more, read when the page opens and after FORGET DATA. The build list shows them
  * after the build's rows. */
 static struct dl_park *parks;
