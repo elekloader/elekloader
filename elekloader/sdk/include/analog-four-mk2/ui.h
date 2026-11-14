@@ -2,7 +2,8 @@
 /* std1 on the Analog Four MKII (core-a4mk2 0.7, OS 1.56): what the A4's UI
  * and system events pass (elekloader/sdk/include/std1.h;
  * mods/core-a4mk2/README.md, "Standard events (0.7)"), and the A4's own turn
- * event, ev_knob_turn, and (0.8) ev_track_key. std1 has not numbered modes, mute scopes or clipboard
+ * event, ev_knob_turn, and (0.8) ev_track_key, ev_voice_params and
+ * ev_sound_setup. std1 has not numbered modes, mute scopes or clipboard
  * kinds yet, so these are the A4's. */
 #ifndef ELEKLOADER_A4_UI_H
 #define ELEKLOADER_A4_UI_H
@@ -177,5 +178,40 @@ unsigned core_track_held(void *view);
 int core_track_current(void *view);
 void *core_track_pattern(void *view);
 void core_popup(void *view, const char *text);
+
+/* ---- ev_voice_params, a native event (not std1, core-a4mk2 0.8): the four
+ * voices' parameter words after stock added their modulation (knob, p-locks,
+ * LFOs, envelopes) and clamped them to 0..0x7fff, before it builds the VCA,
+ * pan and filter words of the analog frame from them, in the audio
+ * interrupt, every block:
+ *     void f(uint16_t *words, const int32_t *voice_track)
+ * A handler may change the words; the frame is built from what it leaves.
+ * It must be short. VOICE_WORD(words, p, v) is parameter p of voice v (0..3);
+ * voice_track[v] is the voice's track. A mod subscribes by contributing to
+ * the "ev_voice_params" table. */
+#define VOICE_WORD(w, p, v) ((w)[4 * (p) + (v)])
+#define VP_F1_FREQ 24
+#define VP_F1_RES 25
+#define VP_F2_FREQ 28
+#define VP_F2_RES 29
+typedef void (*ev_voice_params_fn)(uint16_t *words, const int32_t *voice_track);
+
+/* ---- ev_sound_setup, a native event (not std1, core-a4mk2 0.8): SOUND
+ * SETUP (FUNC + OSC1) being built, after F1 RESONANCE BOOST's row, in the UI
+ * task:
+ *     void f(void *menu)
+ * A handler adds rows with core_sound_setup_toggle(menu, t): a checkbox row
+ * named t->name (as core_setting's names), drawn checked when t->get(t)
+ * returns 1, unchecked on 0, with no box below 0; YES flips it and the
+ * encoder sets it, through t->set(t, on). Rows follow BOOST's in the
+ * handlers' order. Keep t (and its name) in static storage. A mod subscribes
+ * by contributing to the "ev_sound_setup" table. */
+struct core_toggle {
+    const char *name;
+    int (*get)(const struct core_toggle *t);
+    void (*set)(const struct core_toggle *t, int on);
+};
+typedef void (*ev_sound_setup_fn)(void *menu);
+void core_sound_setup_toggle(void *menu, const struct core_toggle *t);
 
 #endif

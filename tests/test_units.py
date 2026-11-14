@@ -2406,6 +2406,35 @@ def test_core_a4mk2_0_8_track_key():
     for fn in ('core_track_held', 'core_track_current', 'core_track_pattern', 'core_popup'):
         assert fn + '(' in h, fn
 
+
+def test_core_a4mk2_0_8_sound_events():
+    """core-a4mk2 0.8's ev_voice_params and ev_sound_setup (sound.s, sound.c): each a jmp site whose stub runs
+    its table, then the displaced instructions, and resumes 6 bytes on; the tables, typedefs and the toggle row."""
+    import re
+    root = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
+    mdir = os.path.join(root, 'mods', 'core-a4mk2')
+    with open(os.path.join(mdir, 'mod.json'), encoding='utf-8') as fh:
+        doc = json.load(fh)
+    with open(os.path.join(mdir, 'sound.s'), encoding='utf-8') as fh:
+        asm = fh.read()
+    with open(os.path.join(mdir, 'sound.c'), encoding='utf-8') as fh:
+        src = fh.read()
+    assert 'sound.c' in doc['sources'] and 'sound.s' in doc['sources']
+    sites = {s.get('target'): s for s in doc['sites']}
+    assert sites['core_voice_params_site'] == {'addr': '0x40103af6', 'stock': '4eb9400fa2b0', 'op': 'jmp',
+                                               'target': 'core_voice_params_site'}
+    assert sites['core_sound_setup_site'] == {'addr': '0x400e62c8', 'stock': '20532e280008', 'op': 'jmp',
+                                              'target': 'core_sound_setup_site'}
+    assert re.search(r'jsr\s+0x400fa2b0\n\s+jmp\s+0x40103afc', asm)
+    assert re.search(r'movea.l\s+\(%a3\),%a0\n\s+move.l\s+8\(%a0\),%d7\n\s+jmp\s+0x400e62ce', asm)
+    for t in ('ev_voice_params', 'ev_sound_setup'):
+        assert doc['collections'][t] == 4 and 'tst.l   ' + t in asm, t
+    assert re.search(r'^void core_sound_setup_toggle\(void \*menu, const struct core_toggle \*t\)$', src, re.M)
+    with open(os.path.join(root, 'elekloader', 'sdk', 'include', 'analog-four-mk2', 'ui.h'), encoding='utf-8') as fh:
+        h = fh.read()
+    assert 'typedef void (*ev_voice_params_fn)(uint16_t *words, const int32_t *voice_track);' in h
+    assert 'typedef void (*ev_sound_setup_fn)(void *menu);' in h and 'struct core_toggle {' in h
+
 if __name__ == '__main__':
     import traceback
     ok = failed = 0
