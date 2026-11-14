@@ -17,7 +17,7 @@ each combination does what the other one did.
 python -m elekloader.sdk.build mods/core-dt2 --stock Digitakt_II_OS1.17.syx
 python -m elekloader.sdk.build examples/perform-direct --stock Digitakt_II_OS1.17.syx
 python -m elekloader.patch --stock Digitakt_II_OS1.17.syx \
-    --mod mods/core-dt2/out/core-1.0.elemod \
+    --mod mods/core-dt2/out/core-1.1.elemod \
     --mod examples/perform-direct/out/perform-direct-1.0.elemod --out perform.syx --version PD10
 ```
 

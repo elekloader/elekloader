@@ -31,6 +31,7 @@ older ones people still have:
 | Digitone mk1, Digitone Keys | 1.43, 1.44 | `core-dn1-5.3.elemod`, `core-dn1-5.3-os1.44.elemod` | on main, not released: build it ([below](#building-a-core)) |
 | Digitone mk1, Digitone Keys | 1.43, 1.44 | `core-dn1-2.0a.elemod`, `core-dn1-2.0a-os1.44.elemod` | the v0.4.0 release, built into its apps |
 | Digitakt II | 1.17 | `core-dt2-1.0.elemod` | the [v0.10.0](https://github.com/elekloader/elekloader/releases/tag/v0.10.0) release, built into its apps, and the web page |
+| Digitakt II | 1.17 | `core-dt2-1.1.elemod` | on main: build it ([below](#building-a-core)) |
 | Digitone II | 1.12 | `core-dn2-0.3.elemod` | the [v0.10.0](https://github.com/elekloader/elekloader/releases/tag/v0.10.0) release, built into its apps, and the web page (experimental) |
 | Analog Rytm MKII | 1.74 | `core-ar2-0.12.elemod` | on main: build it ([below](#building-a-core)). The Drive Loader needs it: the +Drive mods' spare entries in its tables |
 | Analog Rytm MKII | 1.74 | `core-ar2-0.11.elemod` | the [v0.10.0](https://github.com/elekloader/elekloader/releases/tag/v0.10.0) release, built into its apps, and the web page. Mods with pages built for 0.3 (rytm2_mods v1.2's lfo-rnd, voice-dac, euclid-accents, velocity-humanise, comp-preview) do not link with it: their sites overlap core's page sites |
@@ -194,7 +195,11 @@ the one a mod that uses it names in `resources.core`.
     `fw_note_on`, `fw_note_off`; 5.3), so mono machines play one key at a time.
 - **Digitakt II** ([mods/core-dt2](../mods/core-dt2)): SETTINGS and
   PERSONALIZE rows, and `.fast` code in SRAM. No render events: its audio
-  renders on the DSP.
+  renders on the DSP. Also:
+  - each frame's per-track parameter values (`ev_frame_params`) and key
+    LEDs over the stock views' (`ev_key_leds`);
+  - the mods' project and kit data, saved with the project and its kits
+    and copied with the kits, and value rows (ADAPTING.md, "Project data, kit data and value rows (core-dt2 1.1, Digitakt II)").
 - **Digitone II** ([mods/core-dn2](../mods/core-dn2), experimental): the
   Digitakt II's events and rows, without `.fast`; remote panel input and
   SysEx observers (ADAPTING.md, "Remote panel input and SysEx"); and SHARC
