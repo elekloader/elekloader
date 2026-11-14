@@ -598,6 +598,16 @@ Not reported (std1 rule 6): a list parameter's turn. Unconfirmed: `keys.h`'s
 [std-check](../../examples/std-check-a4mk2),
 [ui-check](../../examples/ui-check-a4mk2).
 
+## Room for +Drive mods (0.8)
+
+core-ar2 0.12's spare entries (its README, "Room for +Drive mods"), for
+an A4 Drive Loader: every event table, native and `std_*`, 256, the seven
+the audio interrupt calls marked `"render": true` (`ev_render_in`,
+`ev_render_out`, `ev_analog_frame`, `std_voice_start`, `std_voice_end`,
+`std_seq_midi`, `ev_voice_params`); `core_pages`, `core_page_fns` and
+`core_view_pages` 16, pages.s's `VIEW_MAX` (every A4 page is a view);
+`core_params` 256. About 45 KB of RAM, which the +Drive area gives up.
+
 ## Checked so far
 
 The runs' logs are in their pull requests; what they established:
@@ -647,11 +657,5 @@ The runs' logs are in their pull requests; what they established:
 
 ## Building
 
-```bash
-# needs m68k-linux-gnu binutils and gcc (or set ELEKLOADER_CROSS to another prefix)
-python -m elekloader.sdk.build mods/core-a4mk2 --stock Analog-Four_MKII_OS1.56.syx
-python -m elekloader.sdk.build examples/store-check-a4mk2 --stock Analog-Four_MKII_OS1.56.syx
-python -m elekloader.patch --stock Analog-Four_MKII_OS1.56.syx \
-    --mod mods/core-a4mk2/out/core-0.8.elemod --mod examples/store-check-a4mk2/out/store-check-1.0.elemod \
-    --out a4-store.syx --version SC56 --lockfile a4-store.lock.json
-```
+docs/CORES.md, "Building a core"; a check mod is then linted and patched
+with it as in AGENTS.md's loop.
