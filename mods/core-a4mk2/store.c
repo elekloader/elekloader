@@ -1015,3 +1015,18 @@ void core_boot_drive(void)
         (*f)();
 }
 
+/* (0.8) ev_drive_format: f(fs), from the site 0x40074af6 in FORMAT +DRIVE
+ * (0x40074984; store.s), after stock erased the project and sound slots and
+ * before it writes the header again, holding the store's mutex; fs is the
+ * MmcFs. Both formats reach it: the menu's, and the one at UI start on a card
+ * with no header. The Drive Loader empties its own store there. No spare
+ * entries. */
+typedef void (*ev_drive_format_t)(void *fs);
+extern const ev_drive_format_t ev_drive_format[];
+
+void core_drive_format(void *fs)
+{
+    const ev_drive_format_t *f;
+    for (f = ev_drive_format; *f; f++)
+        (*f)(fs);
+}

@@ -607,7 +607,8 @@ tables (pages.s `VIEW_MAX`); 256 in `core_params`.
 `ev_boot_drive`: f(), from 0x401061e8 in main() before stock's
 `jsr 0x400f1b18` (`store.s`): the +Drive is up and the power-off image
 read; audio and the UI task are not started (a factory boot skips it).
-The Drive Loader's own: no spares.
+`ev_drive_format`: f(fs), from 0x40074af6 in FORMAT +DRIVE, after the slot
+erases, before the header's rewrite. Both are the loader's: no spares.
 
 ## Checked so far
 
