@@ -325,6 +325,46 @@ core_sound_set:
         lea     12(%sp), %sp
 9:      rts
 
+| core_param_install(void) (5.4): what core_dn_boot does for core_params, again,
+| at run time: each contributed descriptor's record into its slot at PARAM_FREE
+| and its look into core_param_look, and the slot's UI record cleared so the
+| next core_param_ui builds it again. For a mod linked after boot (TELOS, at
+| ev_card_ready), whose entries the boot never saw. Slots no descriptor names
+| keep what they have. Any task, before the views use the slots.
+        .globl  core_param_install
+core_param_install:
+        lea     -12(%sp), %sp
+        movem.l %d2/%a2-%a3, (%sp)
+        lea     core_params, %a2
+1:      move.l  (%a2)+, %d0             | a descriptor, or 0
+        beq.s   9f
+        movea.l %d0, %a1
+        move.l  (%a1)+, %d2             | its id
+        subi.l  #SLOT0, %d2
+        cmpi.l  #SLOTS, %d2
+        bcc.s   1b                      | not a slot: left out
+        move.l  PREC(%a1), %d1          | its look, or 0
+        bne.s   2f
+        moveq   #LOOK_DEF, %d1
+2:      lea     core_param_look, %a0
+        move.l  %d1, (%a0,%d2.l*4)
+        moveq   #UREC, %d0              | its UI record: built again on first use
+        muls.l  %d2, %d0
+        lea     core_param_uirec, %a3
+        clr.l   0x1c(%a3,%d0.l)
+        moveq   #PREC, %d0
+        muls.l  %d2, %d0
+        lea     PARAM_FREE, %a0
+        adda.l  %d0, %a0
+        moveq   #PREC / 4, %d0
+3:      move.l  (%a1)+, (%a0)+
+        subq.l  #1, %d0
+        bne.s   3b
+        bra.s   1b
+9:      movem.l (%sp), %d2/%a2-%a3
+        lea     12(%sp), %sp
+        rts
+
 | The two tables from PARAM_FREE, filled at boot.
         .balign 4
         .globl  core_ptab_save

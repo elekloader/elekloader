@@ -328,6 +328,10 @@ typedef void (*ev_crash_fn)(void *frame);
 extern void core_restart(void);
 /* The same at once, for an interrupt or ev_crash. Never returns. */
 extern void core_restart_now(void);
+/* 5.4: install core_params' entries again, as the boot does, for a mod linked after it (a +Drive loader,
+ * after its link): each slot's record, its look, its UI record built again on first use. Before the views
+ * use the slots; a loader imports it weakly so it runs on older cores. */
+extern void core_param_install(void);
 /* The +Drive, 512-byte sectors, from a task only (never an interrupt): 0, or < 0. */
 extern int32_t fw_card_read(uint32_t sector, uint32_t bytes, void *buf);
 extern int32_t fw_card_write(uint32_t sector, uint32_t bytes, const void *buf);
