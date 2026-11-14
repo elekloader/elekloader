@@ -915,6 +915,73 @@ void core_store_set(unsigned field, void *item, int index, unsigned value)
         core_lock_cancel(field, item);         /* no slide of it now (rows.c, 0.5) */
 }
 
+/* ---- handles (core-ar2 0.11's): every handle field's value in the live project ----
+ * The linker gives core_handles, the descriptor of each field a mod declared
+ * "handle": true (zero-terminated). core_handle_fields calls fn(field, item,
+ * index, value) for each item of the live project whose handle is not 0,
+ * with the item and index core_store_get takes: the 128 kits as edited, then
+ * as last saved (the live project +0xbe0cea, what a project save writes),
+ * each followed by its 4 sounds; the 4 global slots; the 128 patterns and
+ * their 6 tracks; the project. The working pattern (the live project +0x10,
+ * a copy of one of the 128) is left out. The A4 has no sound pool in the
+ * live project. UI task. */
+extern const unsigned core_handles[];
+
+typedef void (*core_handle_fn)(unsigned field, void *item, int index, unsigned value);
+
+#define LIVE_KITS_SAVED 0x4b000                 /* the kits as last saved, after the 128 as edited */
+#define LIVE_PATTERN_0 ((unsigned char *)0x40653c5c + 0x16fda)  /* live pattern 0, after the working one */
+#define LIVE_PATTERN_SIZE 0x16fda
+
+static void handle_at(core_handle_fn fn, unsigned field, void *item, int index)
+{
+    unsigned v = core_store_get(field, item, index);
+    if (v)
+        fn(field, item, index, v);
+}
+
+void core_handle_fields(core_handle_fn fn)
+{
+    const unsigned *h;
+    unsigned char *kit, *p;
+    int k, t, s;
+    if (!fn)
+        return;
+    for (h = core_handles; *h; h++)
+        switch (*h >> 28) {
+        case SC_SOUND:
+        case SC_KIT:
+            for (s = 0; s < 2; s++)
+                for (k = 0; k < 128; k++) {
+                    kit = LIVE_KITS + (s ? LIVE_KITS_SAVED : 0) + LIVE_KIT_SIZE * k;
+                    if (*h >> 28 == SC_KIT)
+                        handle_at(fn, *h, kit, 0);
+                    else
+                        for (t = 0; t < 4; t++)
+                            handle_at(fn, *h, kit + KIT_SOUNDS + 0x152 * t, 0);
+                }
+            break;
+        case SC_GLOBAL:
+            for (k = 0; k < 4; k++)
+                handle_at(fn, *h, 0, k);
+            break;
+        case SC_TRACK:
+        case SC_PATTERN:
+            for (k = 0; k < 128; k++) {
+                p = LIVE_PATTERN_0 + LIVE_PATTERN_SIZE * k;
+                if (*h >> 28 == SC_PATTERN)
+                    handle_at(fn, *h, p, 0);
+                else
+                    for (t = 0; t < TRACKS_A_PATTERN; t++)
+                        handle_at(fn, *h, p, t);
+            }
+            break;
+        case SC_PROJECT:
+            handle_at(fn, *h, 0, 0);
+            break;
+        }
+}
+
 /* 0.6: the modified mark (core-ar2 0.8's). After an edit of the live
  * project, a project load asks first; stock marks the project modified
  * (SET_MODIFIED(model, 1)) from the UI task on the project's change signal,

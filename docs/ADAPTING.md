@@ -2407,7 +2407,8 @@ sites, with `analog-rytm-mk2/moments.h`:
 ### Moments (core-a4mk2, Analog Four MKII)
 
 The Rytm's moments, above, with `analog-four-mk2/moments.h`
-(after core-a4mk2 0.8, not yet in a release): `core_project_name()`. The SysEx handler is std1's
+(after core-a4mk2 0.8, not yet in a release): `core_project_name()` and `"handle": true` fields with
+`core_handle_fields` (4 sounds a kit, 6 tracks a pattern, no sound pool). The SysEx handler is std1's
 `ev_sysex_in` (core-a4mk2 0.7). What differs is in
 mods/core-a4mk2/README.md, "Moments".
 
