@@ -582,27 +582,17 @@ What differs from the Rytm:
 
 std1 (docs/ADAPTING.md, "Standard events (std1)"): `std.c` at sites core
 owns, `stdmidi.c` the MIDI events and `ev_seq_tick`, `voice.c` the voice
-events, `ui.c` and `ui.s` the UI and system events at new sites; each file's
-first comment lists its events, sites and contexts. A4 numbers are in
-`analog-four-mk2/keys.h`, `leds.h`, `params.h`, `ports.h` and `ui.h`.
+events, `ui.c` and `ui.s` the UI and system events; each file's first
+comment lists its events, sites and contexts. A4 numbers: `analog-four-mk2/`
+`keys.h`, `leds.h`, `params.h`, `ports.h`, `ui.h`.
 
-| std1 event | table | how |
-|---|---|---|
-| `ev_tick`, `ev_draw`, `ev_settings`, `ev_project`, `ev_render_in` | native | = or prefix, sorted by `order` |
-| `ev_boot` | `std_boot` | `.boot` calls `core_boot_init` (`BOOT_INIT`) |
-| `ev_key` | `std_key` | core's `ev_key` handler, order 0: the KeyEvent's code; bit 0 clear is `KEY_RELEASE` (none for a key a view took) |
-| `ev_param_turn` | `std_param_turn` | `param_apply_delta` after `core_params`: a plain turn's sound edit, not a held trig's lock (std.c); `knob` its encoder |
-| `ev_midi_in`, `_cc`, `_pc`, `_out`, `ev_sysex_in`, `ev_seq_midi`, `ev_seq_tick` | `std_` + name | stdmidi.c |
-| `ev_voice_start`, `ev_voice_end` | `std_voice_*` | apply 0x401025ac, frees 0x40102174, 0x40102e10; one end per start, steals too |
-| the eleven UI and system events in `ui.c` | `std_` + name | ui.c, ui.s |
+| std1 event | table |
+|---|---|
+| `ev_tick`, `ev_draw`, `ev_settings`, `ev_project`, `ev_render_in` | native (= or prefix) |
+| the others: `ev_boot`, `ev_key`, `ev_param_turn` (std.c), seven MIDI (stdmidi.c), two voice (voice.c), eleven UI (ui.c) | `std_` + the name |
 
-Native events and the A4's numbering for `ev_view`, `ev_pattern`'s requests
-and `ev_knob_turn`'s level turns: `ui.h`.
-
-`core_post` (32) and `core_timer` (16) run in core's first `ev_tick`
-handler, `core_redraw` in its last; `core_setting_add` and the draw
-helpers are in std.c. Not reported (std1 rule 6): a list parameter's turn.
-Unconfirmed: `keys.h`'s [emu] ids, the LED ids and colours. Test mods:
+Not reported (std1 rule 6): a list parameter's turn. Unconfirmed: `keys.h`'s
+[emu] ids, the LED ids and colours. Test mods:
 [std-check](../../examples/std-check-a4mk2),
 [ui-check](../../examples/ui-check-a4mk2).
 
