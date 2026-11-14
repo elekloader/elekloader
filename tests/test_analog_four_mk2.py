@@ -185,10 +185,14 @@ def test_core_a4mk2_sites():
     # 0.5's 2 MIDI sites (midi.s), the three sets' NRPN in and CC in, each a
     # jmp resuming after the 8 bytes it displaced; and 0.6's whole project
     # save (store.s) and three knob look sites (looks.s); and 0.7's 10 std1 MIDI and tick sites (stdmidi.s,
-    # checked in test_units)
+    # checked in test_units) and std1 voice frees (voice.s): a jsr over the cut's `jsr 0x40105410` and over
+    # the note length's `move.l d2,-(sp); jsr (a1); addq.l #4,sp`
     std07 = [x for x in mod['sites'] if x.get('target', '').startswith('core_std_')]
     assert len(std07) == 10
-    assert len(mod['sites']) == 117
+    voice07 = [x for x in mod['sites'] if x.get('target') in ('core_voice_free_cut', 'core_voice_free_len')]
+    assert [(x['addr'], x['op'], x['stock']) for x in voice07] == [
+        ('0x40102174', 'jsr', '4eb940105410'), ('0x40102e10', 'jsr', '2f024e91588f')]
+    assert len(mod['sites']) == 117 + len(voice07)
     midi = [x for x in mod['sites'] if x.get('target') in ('core_nrpn_site', 'core_cc_site')]
     assert [(x['addr'], x['op'], x['stock']) for x in midi] == \
         [('0x4009ff56', 'jmp', '4fefffec48d7043c'), ('0x400a0b62', 'jmp', '4e56ffd848d71cfc')]
@@ -206,7 +210,7 @@ def test_core_a4mk2_sites():
     with open(os.path.join(ROOT, 'mods', 'core-a4mk2', 'looks.s')) as fh:
         assert 'jmp     0x4009eab2' in fh.read()
     locks = [x for x in mod['sites'] if x['addr'] not in {y['addr'] for y in j['sites'][:48]} and x not in midi
-             and x not in new06 and x not in std07]
+             and x not in new06 and x not in std07 and x not in voice07]
     dests = [x for x in locks if x.get('target', '').startswith(('core_dst', 'core_id_index', 'core_index_id',
                                                                    'core_push_', 'core_set_'))]
     assert len(dests) == 21 and len([x for x in dests if x['op'] == 'ptr']) == 6

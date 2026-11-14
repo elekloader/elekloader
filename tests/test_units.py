@@ -2245,6 +2245,39 @@ def test_core_a4mk2_0_7_std_midi_sites():
     for name in ('CORE_MIDI_CC_AUTO', 'CORE_MIDI_PC_STOCK', 'CORE_MIDI_CC_PERF'):
         assert name in ports
 
+def test_core_a4mk2_0_7_voice_events():
+    """core-a4mk2 0.7's std1 voice events (voice.c, voice.s) run in the audio interrupt: the voice
+    apply (0x401025ac) passes the voice, the channel's track and the request's type, and the
+    interrupt's two frees (0x40102174, 0x40102e10) end a started voice before stock frees it."""
+    import re
+    root = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
+    mdir = os.path.join(root, 'mods', 'core-a4mk2')
+    with open(os.path.join(mdir, 'mod.json'), encoding='utf-8') as fh:
+        doc = json.load(fh)
+    assert doc['std']['ev_voice_start'] == 'std_voice_start'
+    assert doc['std']['ev_voice_end'] == 'std_voice_end'
+    assert doc['collections']['std_voice_start'] == doc['collections']['std_voice_end'] == 4
+    assert 'voice.c' in doc['sources'] and 'voice.s' in doc['sources']
+    sites = {s['addr']: s for s in doc['sites']}
+    assert sites['0x401025ac']['target'] == 'core_voice_apply'
+    assert sites['0x40102174']['stock'] == '4eb940105410' and sites['0x40102174']['target'] == 'core_voice_free_cut'
+    assert sites['0x40102e10']['stock'] == '2f024e91588f' and sites['0x40102e10']['target'] == 'core_voice_free_len'
+    with open(os.path.join(mdir, 'voice.c'), encoding='utf-8') as fh:
+        src = fh.read()
+    for fn in ('core_voice_end', 'core_voice_note'):
+        assert re.search(r'^void %s\(' % fn, src, re.M), fn
+    with open(os.path.join(mdir, 'rows.s'), encoding='utf-8') as fh:
+        body = fh.read().split('core_voice_apply:', 1)[1].split('rts', 1)[0]
+    assert body.index('jsr     core_rows_voice') < body.index('jsr     core_voice_note')
+    assert body.rstrip().endswith('moveq   #2,%d5')       # the displaced instructions, last
+    with open(os.path.join(mdir, 'voice.s'), encoding='utf-8') as fh:
+        vs = fh.read()
+    cut = vs.split('core_voice_free_cut:', 1)[1].split('core_voice_free_len:', 1)[0]
+    assert 'jmp     0x40105410' in cut                # the argument stock pushed stays for the free
+    ln = vs.split('core_voice_free_len:', 1)[1]
+    assert ln.index('jsr     core_voice_end') < ln.index('jsr     0x40105410') < ln.index('rts')
+
+
 def test_core_a4mk2_0_7_std_map():
     """core-a4mk2 0.7 serves std1 at the sites it owns: each map entry is a std1.h event and one
     of core's tables, the native table for the same prototype or its first part, a std_ table of
@@ -2258,7 +2291,7 @@ def test_core_a4mk2_0_7_std_map():
         events = set(re.findall(r'\(\*std1_(ev_\w+)_fn\)', fh.read()))
     std = doc['std']
     assert set(std) >= {'ev_boot', 'ev_tick', 'ev_draw', 'ev_key', 'ev_settings', 'ev_project',
-                        'ev_render_in', 'ev_param_turn'}
+                        'ev_render_in', 'ev_param_turn'}       # later phases add their own
     assert set(std) <= events
     assert all(t in doc['collections'] for t in std.values())
     native = {e for e, t in std.items() if t == e}
