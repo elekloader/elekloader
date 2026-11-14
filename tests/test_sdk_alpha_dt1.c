@@ -17,7 +17,7 @@ uint8_t *volatile fw_kit;
 volatile uint8_t fw_render_machine[8];
 volatile int32_t fw_voice_note[8];
 volatile int16_t fw_voice_vel[8];
-volatile int32_t fw_amp_env[3 * 8];
+volatile int32_t fw_amp_level[2 * 8];      /* all 0: idle, in decay at level 0 */
 volatile int16_t fw_voice_params[53 * 8];
 volatile uint8_t core_track_machine[8];
 static int32_t blocks[8 * ELEK_VOICE_FRAMES];
@@ -25,6 +25,8 @@ static uint8_t kit[0x20 + 8 * 0xa2];
 static uint32_t calls[8];
 static struct elek_voice last[8];
 static int32_t value[8], cc9[8], cc12[8], cc74[8];
+
+#define SOUNDING (-(1 << 20))           /* a decay level of 2^-11, negated Q31: audible */
 
 static int extras = 1;                      /* the track's machine has the extra values */
 const struct cm_ui32 *mp_src_for(int32_t machine) { (void)machine; return extras ? (void *)1 : 0; }
@@ -117,7 +119,7 @@ int main(void)
         fw_voice_note[t] = (60 + t) << 16;
         fw_voice_vel[t] = 100 << 8;
         fw_voice_params[53 * t] = t ? SDK_ALPHA_RAW_MAX : 0;
-        fw_amp_env[3 * t + 1] = 1;          /* sounding */
+        fw_amp_level[2 * t + 1] = SOUNDING;   /* in decay, audible */
     }
     fw_voice_start = 3;
     sdk_alpha_render(blocks);
@@ -141,23 +143,36 @@ int main(void)
     assert(!last[1].start);
     /* A track whose AMP envelope has ended and no trig starts is not rendered; idle counts its frames. */
     uint32_t before = calls[0], other = calls[1];
-    fw_amp_env[1] = 0;
+    fw_amp_level[1] = 0;
     sdk_alpha_render(blocks); sdk_alpha_render(blocks); sdk_alpha_render(blocks);
     assert(calls[0] == before && blocks[0] == 0);
     assert(calls[1] == other + 3 && last[1].idle == 0);
+    fw_amp_level[1] = -(1 << 14);               /* below -96 dB in decay counts as silent too */
+    sdk_alpha_render(blocks);
+    assert(calls[0] == before && blocks[0] == 0);
+    fw_amp_level[0] = FW_AMP_HOLD;              /* hold starts with the value at 0: full level, rendered */
+    sdk_alpha_render(blocks);
+    assert(calls[0] == before + 1);
+    fw_amp_level[0] = FW_AMP_ATTACK;
+    sdk_alpha_render(blocks);
+    assert(calls[0] == before + 2);
+    before = calls[0];
+    fw_amp_level[0] = FW_AMP_DECAY; fw_amp_level[1] = 0;
+    sdk_alpha_render(blocks); sdk_alpha_render(blocks); sdk_alpha_render(blocks);
+    assert(calls[0] == before && blocks[0] == 0);
     fw_voice_start = 1;                         /* a trig renders it while the level is still 0 */
     sdk_alpha_render(blocks);
     assert(calls[0] == before + 1 && last[0].start && last[0].idle == 3 * ELEK_VOICE_FRAMES);
-    fw_voice_start = 0; fw_amp_env[1] = 1;
+    fw_voice_start = 0; fw_amp_level[1] = SOUNDING;
     sdk_alpha_render(blocks);
     assert(last[0].idle == 0);
-    fw_amp_env[1] = 0;                          /* silent, then another machine: its first render gets 0 */
+    fw_amp_level[1] = 0;                          /* silent, then another machine: its first render gets 0 */
     sdk_alpha_render(blocks);
     fw_render_machine[0] = 0; sdk_alpha_render(blocks);
-    fw_render_machine[0] = 100; fw_amp_env[1] = 1; sdk_alpha_render(blocks);
+    fw_render_machine[0] = 100; fw_amp_level[1] = SOUNDING; sdk_alpha_render(blocks);
     assert(calls[0] == before + 3 && last[0].idle == 0 && blocks[0] == 1);
     /* CCs: each reaches its track's voice once, at its next render, the stock still applying it. */
-    fw_voice_start = 0; fw_amp_env[1] = fw_amp_env[4] = 1;
+    fw_voice_start = 0; fw_amp_level[1] = fw_amp_level[3] = SOUNDING;
     sdk_alpha_render(blocks);
     assert(cc9[0] == -1 && cc9[1] == -1);
     assert(sdk_alpha_midi_cc(0, 9, 64, 0) == 0);
@@ -169,11 +184,11 @@ int main(void)
     assert(cc9[0] == 100 && cc74[0] == -1 && cc9[1] == -1 && cc74[1] == 5);
     sdk_alpha_render(blocks);
     assert(cc9[0] == -1 && cc74[1] == -1);       /* once */
-    fw_amp_env[1] = 0;                           /* a silent track keeps it until it renders again */
+    fw_amp_level[1] = 0;                           /* a silent track keeps it until it renders again */
     sdk_alpha_midi_cc(0, 12, 1, 0);
     sdk_alpha_render(blocks); sdk_alpha_render(blocks);
     assert(cc12[1] == -1);
-    fw_amp_env[1] = 1;
+    fw_amp_level[1] = SOUNDING;
     sdk_alpha_render(blocks);
     assert(cc12[0] == 1);
     /* The track's voice takes a machine at its next note, after the kit has: a CC in between is for the
@@ -225,7 +240,7 @@ int main(void)
     FW_SOUND(kit, 2)[FW_SOUND_MACHINE] = 102;
     fw_render_machine[2] = 102;
     fw_voice_note[2] = 60 << 16;
-    fw_amp_env[3 * 2 + 1] = 1;
+    fw_amp_level[2 * 2 + 1] = SOUNDING;
     KEY(60, 90, 1, 0, "");
     KEY(64, 100, 1, 1, "");                     /* E: taken, the stock holds C */
     fw_voice_start = 0;
@@ -243,7 +258,7 @@ int main(void)
     /* Every raw value of every knob, kept ones too (knob 3 changes every second block); knob 8 is the
      * first extra value, 0 while the track's machine has none. */
     fw_render_machine[3] = 104;
-    fw_amp_env[3 * 3 + 1] = 1;
+    fw_amp_level[2 * 3 + 1] = SOUNDING;
     for (int32_t raw = -2; raw <= INT16_MAX; ++raw) {
         for (int k = 0; k < 9; ++k)
             edge_raw[k] = k == 3 ? raw / 2 : raw;

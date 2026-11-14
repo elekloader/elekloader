@@ -125,8 +125,8 @@ python -m elekloader.patch --stock $STOCK --mod build/core-*.elemod \
   --mod build/machine*.elemod --mod build/my-saw-*.elemod --out test.syx --version SAW1
 ```
 
-Lint prints two `OK:` lines, the second `OK: links as core 4.3 >
-machine-pages 1.10 > my-saw 0.1`; patch ends with `WROTE test.syx`. Load it
+Lint prints two `OK:` lines, the second `OK: links as core 4.4 >
+machine-pages 1.11 > my-saw 0.1`; patch ends with `WROTE test.syx`. Load it
 as in [Adapting your mod](ADAPTING.md).
 
 ## Reference
