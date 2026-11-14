@@ -1298,7 +1298,8 @@ use the names as they are.
 | `fw_voice_params` | 0x80002794 | the machine's 8 parameters A-H, 8.8, 106 bytes a track |
 | `fw_voice_note`, `fw_voice_vel` | 0x80001f28, 0x80001f18 | the trig's note (16.16) and velocity (8.8) |
 | `fw_voice_start` | 0x80001228 | bit t: track t starts a voice this block |
-| `fw_amp_env` | 0x4199df54 | the AMP envelope: phase +0, level +4, 12 bytes a track |
+| `fw_amp_env`, `fw_filter_env` (4.4) | 0x4199df54 | the FILTER envelope, despite the first name: phase +0, level +4, 12 bytes a track. Its level follows the filter page, not the sound |
+| `fw_amp_level` (4.4) | 0x4199dd64 | the AMP envelope: phase +0 (2 attack, 1 hold, 0 decay), value +4 (negated Q31; in decay the level), 8 bytes a track; all 0 when idle |
 | `fw_pitch_tab` | 0x4019b1c0 | 2^((i - 10752) / 2048) in Q29 |
 | `fw_active_track` | 0x4197b6b4 | the active track, 0-7 |
 | `fw_kit` | 0x4199dc44 | -> the UI kit: track t's sound at +0x20 + 0xa2 t, its machine at +0x7e |

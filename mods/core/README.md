@@ -83,20 +83,27 @@ are 1.53's.
   site is the CC router's flags load and FX check, 0x400158ec (the router
   is 0x400158d2, the same in 1.53 and 1.54). OB-1's CC hook, at the CC
   lookup's entry (0x4007919e), links beside it.
+- **4.4: the AMP envelope** ([fw.s](fw.s); no site, no code): `fw_amp_env`
+  is, despite its name, the FILTER envelope (0x40073304 fills it from the
+  filter page's attack, decay, sustain, release and delay), so its level
+  follows the filter page, not the sound. 4.4 exports it again by its right
+  name, `fw_filter_env`, and the AMP envelope as `fw_amp_level`: the amp
+  stage 0x400716c0's array, 0x4199dd64 (1.54: 0x4199ed64), phase +0 (2
+  attack, 1 hold, 0 decay) and value +4, 8 bytes a track.
 
 Build it with the SDK (it needs m68k binutils):
 
 ```bash
-python -m elekloader.sdk.build mods/core --stock Digitakt_OS1.53.syx      # out/core-4.3.elemod
-python -m elekloader.sdk.build mods/core --stock Digitakt_OS1.54.syx      # out/core-4.3-os1.54.elemod
-python -m elekloader.lint mods/core/out/core-4.3-os1.54.elemod --stock Digitakt_OS1.54.syx
+python -m elekloader.sdk.build mods/core --stock Digitakt_OS1.53.syx      # out/core-4.4.elemod
+python -m elekloader.sdk.build mods/core --stock Digitakt_OS1.54.syx      # out/core-4.4-os1.54.elemod
+python -m elekloader.lint mods/core/out/core-4.4-os1.54.elemod --stock Digitakt_OS1.54.syx
 ```
 
 Core 3.0's files are on the
 [core-v3.0](https://github.com/elekloader/elekloader/releases/tag/core-v3.0)
 pre-release and in the mod shop; 2.1's are in release v0.4.0;
 4.0's are on the [core-v4.0](https://github.com/elekloader/elekloader/releases/tag/core-v4.0)
-pre-release; 4.1's are in the latest release; 4.2 and 4.3 are on main, not
+pre-release; 4.1's are in the latest release; 4.2, 4.3 and 4.4 are on main, not
 released yet.
 
 The 1.54 port is the same core: the same code, sites and sections, built

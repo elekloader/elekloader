@@ -152,7 +152,8 @@ the one a mod that uses it names in `resources.core`.
   The notes played live on a track, before its voice, which a handler may
   take, and the stock routines past them (`ev_live_note`, `fw_note_on`,
   `fw_note_off`; core 4.2), so mono machines play one key at a time.
-  MIDI CCs before the stock applies them (`ev_midi_cc`, core 4.3).
+  MIDI CCs before the stock applies them (`ev_midi_cc`, core 4.3). The AMP
+  envelope (`fw_amp_level`, core 4.4; `fw_amp_env` is the filter envelope).
 - **Digitone mk1** ([mods/core-dn1](../mods/core-dn1)): the Digitakt mk1's
   events, and:
   - the voices' note-on, parameter slots, mod pages and project data

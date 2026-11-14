@@ -15,7 +15,19 @@
 |   fw_voice_note      0x80001f28  the trig's note, 16.16 (60 << 16 when none), a long a track
 |   fw_voice_vel       0x80001f18  its velocity, 8.8, a word a track
 |   fw_voice_start     0x80001228  bit t: track t starts a voice this block
-|   fw_amp_env         0x4199df54  the AMP envelope: phase +0, level +4, 12 B a track
+|   fw_amp_env         0x4199df54  the FILTER envelope (not the AMP one, despite the
+|                                  name, kept so mods built with it link): phase +0,
+|                                  level +4, 12 B a track; filled by 0x40073304 from
+|                                  the filter page's attack, decay, sustain, release
+|                                  and delay (voice bytes 76, 78, 80, 82, 88)
+|   fw_filter_env      0x4199df54  the same, by its right name (4.4)
+|   fw_amp_level       0x4199dd64  the AMP envelope (4.4): phase +0, value +4, 8 B a
+|                                  track, kept by the amp stage 0x400716c0 from the
+|                                  AMP page's attack, hold and decay. Phase 2 attack
+|                                  (the value rises, negated Q31, to 0x80000000),
+|                                  1 hold (the value counts time; full level), 0
+|                                  decay (the value is the level, negated Q31, falling
+|                                  towards 0). All 0 when idle.
 |   fw_pitch_tab       0x4019b1c0  2^((i - 10752) / 2048) in Q29, i = 0-14848
 | The UI (its task):
 |   fw_active_track    0x4197b6b4  the active track, 0-7 (a long)
@@ -47,6 +59,8 @@
         FW      fw_voice_vel, FW_VOICE_VEL
         FW      fw_voice_start, FW_VOICE_START
         FW      fw_amp_env, FW_AMP_ENV
+        FW      fw_filter_env, FW_AMP_ENV
+        FW      fw_amp_level, FW_AMP_LEVEL
         FW      fw_pitch_tab, FW_PITCH_TAB
         FW      fw_active_track, FW_ACTIVE_TRACK
         FW      fw_kit, FW_KIT
