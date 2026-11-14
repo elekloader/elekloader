@@ -71,8 +71,13 @@ const char *core_view_name(const void *view);
  * touches the song's row, so a take there leaves the playing pattern.
  * Playing, its report follows the pattern mode: PTN: SEQUENTIAL
  * reports PATTERN_QUEUE, DIRECT START and DIRECT JUMP PATTERN_SET (stock
- * changes the pattern at once), TEMP JUMP PATTERN_START. A select while the
- * view edits a chain reports PATTERN_QUEUE in every mode. */
+ * changes the pattern at once), TEMP JUMP PATTERN_START. In CHAIN or SONG
+ * mode, or with CHAIN held, a select writes the playing row's chain at the
+ * view's chain cursor instead; it reports only when the cursor is on the
+ * playing element: PATTERN_NOW stopped, PATTERN_SET in a direct mode,
+ * PATTERN_QUEUE in SEQUENTIAL when that element plays again next (nothing
+ * queued, and CHAIN mode off or a one-element chain); any other chain edit
+ * changes no pattern and reports nothing. */
 #define PATTERN_CHANGED 0               /* pre 0 */
 #define PATTERN_QUEUE 1                 /* playing: the change waits for the boundary */
 #define PATTERN_CANCEL 2                /* playing: a queued change is dropped (the playing pattern selected again, or PATTERN_NONE) */
