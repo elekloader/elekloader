@@ -19,4 +19,31 @@ const char *core_project_name(void);
  * task. */
 void core_handle_fields(void (*fn)(unsigned field, void *item, int index, unsigned value));
 
+/* the UI's current kit (0..127), track (0..5: 0..3 the synth tracks, 4 the
+ * FX track, 5 the CV track) and pattern (0..127), -1 for none; and their
+ * items for core_store_get/set: the live kit, the current track's sound in
+ * it (0 on the FX and CV tracks), the live pattern (a track field's index
+ * is the track). UI task. */
+int core_current_kit(void);
+void *core_current_kit_item(void);
+int core_current_track(void);
+void *core_current_sound_item(void);
+int core_current_pattern(void);
+void *core_current_pattern_item(void);
+/* live kit k (as edited) and live pattern p, 0..127 (0 out of range): the
+ * items core_handle_fields passes for them. Any task. */
+void *core_kit_item(int k);
+void *core_pattern_item(int p);
+
+/* ev_kit: void f(int32_t kit, int32_t how), at the next ev_tick (UI task)
+ *   CORE_KIT_SELECTED  the UI's current kit is now kit (a pattern of
+ *                      another kit, KIT menu LOAD, project load);
+ *   CORE_KIT_PUSHED    kit's whole data went to the engine (RELOAD KIT,
+ *                      project load, CREATE NEW, a SysEx kit in, a kit
+ *                      change); kit -1 for data in no kit slot.
+ * Several pushes of one kit since the last tick are one event; a select
+ * comes before the pushes of the same tick. */
+#define CORE_KIT_SELECTED 1
+#define CORE_KIT_PUSHED 2
+
 #endif
