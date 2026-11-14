@@ -2290,8 +2290,12 @@ def test_core_a4mk2_0_7_std_map():
     with open(os.path.join(root, 'elekloader', 'sdk', 'include', 'std1.h'), encoding='utf-8') as fh:
         events = set(re.findall(r'\(\*std1_(ev_\w+)_fn\)', fh.read()))
     std = doc['std']
-    assert set(std) >= {'ev_boot', 'ev_tick', 'ev_draw', 'ev_key', 'ev_settings', 'ev_project',
-                        'ev_render_in', 'ev_param_turn'}       # later phases add their own
+    ui = {'ev_boot_done', 'ev_idle', 'ev_crash', 'ev_usb', 'ev_key_leds', 'ev_mode', 'ev_param_set',
+          'ev_clip', 'ev_pattern', 'ev_mute', 'ev_view'}
+    midi = {'ev_midi_in', 'ev_sysex_in', 'ev_midi_cc', 'ev_midi_pc', 'ev_midi_out', 'ev_seq_midi', 'ev_seq_tick'}
+    voice = {'ev_voice_start', 'ev_voice_end'}
+    assert set(std) == {'ev_boot', 'ev_tick', 'ev_draw', 'ev_key', 'ev_settings', 'ev_project',
+                        'ev_render_in', 'ev_param_turn'} | ui | midi | voice
     assert set(std) <= events
     assert all(t in doc['collections'] for t in std.values())
     native = {e for e, t in std.items() if t == e}
@@ -2319,6 +2323,42 @@ def test_core_a4mk2_0_7_std_map():
         assert re.search(r'^\w[\w ]*\b%s\(' % fn, src, re.M), fn
     with open(os.path.join(mdir, 'pages.s'), encoding='utf-8') as fh:
         assert 'jsr     core_std_param_turn' in fh.read()
+
+
+def test_core_a4mk2_0_7_ui_sites():
+    """core-a4mk2 0.7's UI and system events (ui.c, ui.s): every site's target is a global of ui.s
+    or a function of ui.c, each std table is read in ui.c, the native ev_knob_turn and
+    ev_analog_frame have their tables, and core_ui_tick runs right after core_std_tick."""
+    import re
+    root = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
+    mdir = os.path.join(root, 'mods', 'core-a4mk2')
+    with open(os.path.join(mdir, 'mod.json'), encoding='utf-8') as fh:
+        doc = json.load(fh)
+    with open(os.path.join(mdir, 'ui.s'), encoding='utf-8') as fh:
+        asm = fh.read()
+    with open(os.path.join(mdir, 'ui.c'), encoding='utf-8') as fh:
+        src = fh.read()
+    globs = set(re.findall(r'^\s*\.globl\s+(\w+)', asm, re.M))
+    globs |= {m for m in re.findall(r'^\s*(?:CLIP|PREQ)\s+(\w+),', asm, re.M)}
+    cfns = set(re.findall(r'^\w[\w ]*?\b(core_\w+)\(', src, re.M))
+    ui_sites = [s for s in doc['sites'] if s.get('target') in globs | cfns]
+    assert len(ui_sites) == 50
+    assert len([s for s in ui_sites if s['target'].startswith('core_clip_')]) == 22
+    assert len([s for s in ui_sites if s['target'].startswith('core_view_')]) == 5
+    assert len([s for s in ui_sites if s['target'].startswith('core_pattern_') and s['target'] != 'core_pattern_site']) == 6
+    for s in ui_sites:
+        assert len(s['stock']) // 2 >= (4 if s['op'] == 'ptr' else 6), s
+        if s['op'] == 'keep2':
+            assert s['stock'].startswith('4eb9'), s
+    for t in ('std_boot_done', 'std_idle', 'std_crash', 'std_usb', 'std_key_leds', 'std_mode',
+              'std_param_set', 'std_clip', 'std_pattern', 'std_mute', 'std_view'):
+        assert re.search(r'\b%s\[' % t, src), t
+    assert doc['collections']['ev_knob_turn'] == 4 and 'ev_knob_turn[0]' in src
+    assert doc['collections']['std_view'] == 4 and doc['std']['ev_view'] == 'std_view'
+    assert doc['collections']['ev_analog_frame'] == 4 and 'tst.l   ev_analog_frame' in asm
+    assert 'ui.c' in doc['sources'] and 'ui.s' in doc['sources']
+    subs = {(x['event'], x['fn']): x['order'] for x in doc['subscribe']}
+    assert subs[('ev_tick', 'core_ui_tick')] == -999999
     inc = os.path.join(root, 'elekloader', 'sdk', 'include', 'analog-four-mk2')
     for h in ('keys.h', 'leds.h', 'params.h', 'ports.h'):
         assert os.path.isfile(os.path.join(inc, h)), h

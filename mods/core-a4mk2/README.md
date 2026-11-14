@@ -580,9 +580,11 @@ What differs from the Rytm:
 
 ## Standard events (0.7)
 
-`std.c` and `stdmidi.c` serve std1 (docs/ADAPTING.md, "Standard events
-(std1)"); A4 numbers are in `analog-four-mk2/keys.h`, `params.h`, `ports.h`
-(`leds.h` is empty).
+std1 (docs/ADAPTING.md, "Standard events (std1)"): `std.c` at sites core
+owns, `stdmidi.c` the MIDI events and `ev_seq_tick`, `voice.c` the voice
+events, `ui.c` and `ui.s` the UI and system events at new sites; each file's
+first comment lists its events, sites and contexts. A4 numbers are in
+`analog-four-mk2/keys.h`, `leds.h`, `params.h`, `ports.h` and `ui.h`.
 
 | std1 event | table | how |
 |---|---|---|
@@ -592,11 +594,17 @@ What differs from the Rytm:
 | `ev_param_turn` | `std_param_turn` | `param_apply_delta` after `core_params`: a plain turn's sound edit, not a held trig's lock (std.c); `knob` its encoder |
 | `ev_midi_in`, `_cc`, `_pc`, `_out`, `ev_sysex_in`, `ev_seq_midi`, `ev_seq_tick` | `std_` + name | stdmidi.c |
 | `ev_voice_start`, `ev_voice_end` | `std_voice_*` | apply 0x401025ac, frees 0x40102174, 0x40102e10; one end per start, steals too |
+| the eleven UI and system events in `ui.c` | `std_` + name | ui.c, ui.s |
+
+Native events and the A4's numbering for `ev_view`, `ev_pattern`'s requests
+and `ev_knob_turn`'s level turns: `ui.h`.
 
 `core_post` (32) and `core_timer` (16) run in core's first `ev_tick`
 handler, `core_redraw` in its last; `core_setting_add` and the draw
 helpers are in std.c. Not reported (std1 rule 6): a list parameter's turn.
-Unconfirmed: `keys.h`'s [emu] ids.
+Unconfirmed: `keys.h`'s [emu] ids, the LED ids and colours. Test mods:
+[std-check](../../examples/std-check-a4mk2),
+[ui-check](../../examples/ui-check-a4mk2).
 
 ## Checked so far
 

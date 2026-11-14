@@ -121,13 +121,16 @@ def test_core_a4mk2_sites():
         assert img[a - DEV.main_load:a - DEV.main_load + len(want)] == want, s
         if s['op'] == 'ptr':            # data (0.5): the lock get, set, clear and turn
             # (+0x48..+0x54) of the synth, FX and CV parameter sets' vtables; the turn is shared;
-            # and (part 2) their short and long names (+0x68, +0x6c), shared too
+            # and (part 2) their short and long names (+0x68, +0x6c), shared too; and (0.7, ui.c)
+            # their two value setters (+0x30, +0x38), ev_param_set's
             ptrs = {}
             for vt, (g, st, c) in ((0x401a164c, (0x400a0190, 0x400a0218, 0x400a02a4)),
                                    (0x401a16ec, (0x400a044a, 0x400a04d2, 0x400a055e)),
                                    (0x401a178c, (0x400a0704, 0x400a078c, 0x400a0818))):
                 ptrs.update({vt + 0x48: g, vt + 0x4c: st, vt + 0x50: c, vt + 0x54: 0x4009e74c,
                              vt + 0x68: 0x4009e79e, vt + 0x6c: 0x4009e7c2})
+            ptrs.update({0x401a1684: 0x400a0cec, 0x401a1724: 0x400a0e1e, 0x401a17c4: 0x400a0f08,
+                         0x401a167c: 0x400a0046, 0x401a171c: 0x400a0308, 0x401a17bc: 0x400a05c2})
             assert a in ptrs and want == ptrs[a].to_bytes(4, 'big'), s
             continue
         ok, note = elemod.insn_check(img, a, len(want), DEV)
@@ -192,7 +195,8 @@ def test_core_a4mk2_sites():
     voice07 = [x for x in mod['sites'] if x.get('target') in ('core_voice_free_cut', 'core_voice_free_len')]
     assert [(x['addr'], x['op'], x['stock']) for x in voice07] == [
         ('0x40102174', 'jsr', '4eb940105410'), ('0x40102e10', 'jsr', '2f024e91588f')]
-    assert len(mod['sites']) == 117 + len(voice07)
+    # and 0.7's 50 UI and system sites (ui.s, ui.c; tests/test_units.py, test_core_a4mk2_0_7_ui_sites)
+    assert len(mod['sites']) == 117 + len(voice07) + 50
     midi = [x for x in mod['sites'] if x.get('target') in ('core_nrpn_site', 'core_cc_site')]
     assert [(x['addr'], x['op'], x['stock']) for x in midi] == \
         [('0x4009ff56', 'jmp', '4fefffec48d7043c'), ('0x400a0b62', 'jmp', '4e56ffd848d71cfc')]
@@ -209,8 +213,14 @@ def test_core_a4mk2_sites():
         ('0x4009eaaa', '4feffff048d7003c')]             # lea -16(sp); movem.l d2-d5
     with open(os.path.join(ROOT, 'mods', 'core-a4mk2', 'looks.s')) as fh:
         assert 'jmp     0x4009eab2' in fh.read()
+    ui = [x for x in mod['sites'] if x.get('target', '').startswith((
+        'core_boot_done_site', 'core_idle_start', 'core_crash_install', 'core_usb_site', 'core_key_leds_site',
+        'core_pset', 'core_pattern_', 'core_mute_site', 'core_knob_site', 'core_clip_', 'core_view_push_site',
+        'core_view_sweep_site', 'core_view_remove_site', 'core_view_replace_', 'core_level_site', 'core_mixer_site',
+        'core_analog_frame_site'))]
+    assert len(ui) == 50                # 0.7's UI and system sites (ui.s, ui.c)
     locks = [x for x in mod['sites'] if x['addr'] not in {y['addr'] for y in j['sites'][:48]} and x not in midi
-             and x not in new06 and x not in std07 and x not in voice07]
+             and x not in new06 and x not in std07 and x not in voice07 and x not in ui]
     dests = [x for x in locks if x.get('target', '').startswith(('core_dst', 'core_id_index', 'core_index_id',
                                                                    'core_push_', 'core_set_'))]
     assert len(dests) == 21 and len([x for x in dests if x['op'] == 'ptr']) == 6
