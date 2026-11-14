@@ -161,8 +161,12 @@ typedef int (*ev_mod_set_fn)(int pre, const struct core_mod_set *m);
  * (0x400c8b90), before stock acts on it, in the UI task:
  *     int f(void *view, void *event, int key, int pressed)
  * view that view, event stock's KeyEvent, key its code (keys.h's ids),
- * pressed 1 for a press, 0 for a release. Only the keys that view gets
- * (core's ev_key, at the panel, sees every key first). Nonzero takes the key: stock
+ * pressed 1 for a press, 0 for a release. Views are asked newest first and
+ * the first to take a key stops the walk, so this sees the keys the views
+ * pushed after it pass on: a menu (GLOBAL, KIT, SOUND SETUP) takes 0x40..0x45
+ * and 0x70..0x7b but passes the track keys; MainScreenView's later children
+ * (QuickPerformance, PatternSelection, QuickMuteMenu, HelpBubble) come first.
+ * Core's ev_key, at the panel, sees every key before any view. Nonzero takes the key: stock
  * does nothing with it, reports it handled, and no later handler sees it. A
  * mod subscribes by contributing to the "ev_track_key" table.
  * The helpers take that view (from ev_track_key, in the UI task):

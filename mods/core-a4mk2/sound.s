@@ -34,6 +34,8 @@ core_voice_params_site:
 | after F1 RESONANCE BOOST's row, `movea.l (%a3),%a0; move.l 8(%a0),%d7`
 | (6 bytes, the next row's add method; resume 0x400e62ce); %a3 the menu.
 | Handlers: f(menu), in the UI task, whose rows follow BOOST's in their order.
+| %sp comes back unchanged (the builder pops the four functors' arguments
+| later) and %d7 holds the add method, read at 0x400e6356.
         .globl  core_sound_setup_site
 core_sound_setup_site:
         tst.l   ev_sound_setup

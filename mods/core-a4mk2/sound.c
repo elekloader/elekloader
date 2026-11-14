@@ -48,13 +48,15 @@ static void toggle_adjust(const struct core_toggle *const *f, int32_t unused, in
         t->set(t, step > 0);
 }
 
-static void toggle_draw(const struct core_toggle *const *f, int32_t unused, void *bmp, int32_t x, int32_t y)
+/* stock's draw: (functor, -, a3, a4, a5), and BOOST's checkbox is
+ * 0x4005aed4(a3, icon, a4 + 11, a5, 0) */
+static void toggle_draw(const struct core_toggle *const *f, int32_t unused, void *a3, int32_t a4, int32_t a5)
 {
     int on = toggle_get(*f);
     (void)unused;
     if (on < 0)
         return;
-    DRAW_ICON(bmp, ICON_FOR(ICON_SET, on ? 1 : 0, 0), x + 11, y, 0);
+    DRAW_ICON(a3, ICON_FOR(ICON_SET, on ? 1 : 0, 0), a4 + 11, a5, 0);
 }
 
 void core_sound_setup_toggle(void *menu, const struct core_toggle *t)
