@@ -81,7 +81,14 @@ boot:
         move.l  %d1, (%a1)
         movea.l #ot_meter + M_TPF + UNCACHED, %a1
         move.l  #FRAME_COUNTS, (%a1)    | the frame meter's first guess
-        moveq   #1, %d0                 | the draw gate may call into .run now
+        move.l  #ot_lfo_waves_n, %d0    | LFO waves (lfo.s): slots stop at 31, so
+        moveq   #13, %d1                | more than 13 mod waves count 32
+        cmp.l   %d1, %d0
+        bls.s   7f
+        moveq   #32, %d0
+        move.l  %d0, 0x400d38ac + UNCACHED
+        move.l  %d0, 0x400d4218 + UNCACHED
+7:      moveq   #1, %d0                 | the draw gate may call into .run now
         move.b  %d0, core_up
         movem.l (%sp), %d0-%d3/%a0-%a1
         lea     24(%sp), %sp

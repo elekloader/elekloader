@@ -1,0 +1,28 @@
+{
+ "id": "seq-probe", "version": "1",
+ "license": "GPL-2.0-or-later",
+ "title": "seq probe", "category": "Test", "author": "irpina",
+ "description": "A probe of core-ot 0.10's and 0.12's events: counts each one and logs its last arguments.",
+ "device": "octatrack", "os": "1.40C",
+ "sources": ["probe.c"],
+ "subscribe": [
+  {"event": "ev_part_apply", "fn": "sq_part_apply", "order": 50},
+  {"event": "ev_chain_add", "fn": "sq_chain_add", "order": 50},
+  {"event": "ev_seq_reset", "fn": "sq_seq_reset", "order": 50},
+  {"event": "ev_midi_panic", "fn": "sq_midi_panic", "order": 50},
+  {"event": "ev_track_length", "fn": "sq_track_length", "order": 50},
+  {"event": "ev_pattern_wrap", "fn": "sq_pattern_wrap", "order": 50},
+  {"event": "ev_rec_length", "fn": "sq_rec_length", "order": 50},
+  {"event": "ev_track_pattern", "fn": "sq_track_pattern", "order": 50},
+  {"event": "ev_ui_tick", "fn": "sq_ui_tick", "order": 50},
+  {"event": "ev_card_cmd", "fn": "sq_card_cmd", "order": 50},
+  {"event": "ev_task_switch", "fn": "sq_task_switch", "order": 50},
+  {"event": "ev_track_tab_draw", "fn": "sq_tab_draw", "order": 50},
+  {"event": "ev_card_done", "fn": "sq_card_done", "order": 50},
+  {"event": "ev_settings_load", "fn": "sq_settings_load", "order": 50},
+  {"event": "ev_lfo_step", "fn": "sq_lfo_step", "order": 50},
+  {"event": "ev_bank_copied", "fn": "sq_bank_copied", "order": 50}
+ ],
+ "requires": ["core"],
+ "resources": {"core": "0.27"}
+}

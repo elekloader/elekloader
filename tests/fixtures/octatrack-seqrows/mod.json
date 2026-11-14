@@ -1,0 +1,15 @@
+{
+ "id": "seqrows-probe", "version": "1",
+ "license": "GPL-2.0-or-later",
+ "title": "sequencer rows probe", "category": "Test", "author": "irpina",
+ "description": "A probe of seqrows 0.1: a row PROBE ROW, whose value its setter steps and its text shows, counting both.",
+ "device": "octatrack", "os": "1.40C",
+ "sources": ["probe.c"],
+ "contribute": [
+  {"to": "ot_seq_label", "order": 50, "data": "00000000", "relocs": [[0, "abs32", "sym:pr_label", 0]]},
+  {"to": "ot_seq_get", "order": 50, "data": "00000000", "relocs": [[0, "abs32", "sym:pr_get", 0]]},
+  {"to": "ot_seq_set", "order": 50, "data": "00000000", "relocs": [[0, "abs32", "sym:pr_set", 0]]}
+ ],
+ "requires": ["core", "seqrows"],
+ "resources": {"core": "0.6"}
+}

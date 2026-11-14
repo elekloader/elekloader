@@ -394,6 +394,7 @@ declares"*).
 | `ev_boot_early` (0.8) | once, at boot, before the OS | `void f(void)` | core's code and data are in place and the on-chip SRAM has its stock values; no task, interrupt or OS call yet |
 | `ev_track_icon` (0.8) | an audio track's box on the screen | `unsigned f(unsigned trk, unsigned state)` | returns the state the box shows (chained). Stock's: bit 0 the track plays, bits 1-2 its recorder |
 | `ev_track_icon_draw` (0.8) | a box in a state stock has no glyph for (above 3) | `int f(unsigned trk, unsigned state, int x, int y)` | draw it (`ot_blit`) and return nonzero; 0 leaves the box empty |
+| `ev_track_tab_draw` (0.17) | a track tab, right after stock drew its machine letter | `void f(unsigned trk, int x, int y)` | draw beside the letter (`ot_blit`); the UI task |
 | `ev_setup_dial` (0.8) | a page-2 knob of AMP, FX1 or FX2 SETUP is about to be drawn | `void f(struct ot_dial *d)` | change the value, the widget's flags or the widget (chained) |
 
 The sites core-ot owns (Octatrack 1.40C): the boot site 0x4000050c, the 28
@@ -714,7 +715,7 @@ Which octabam module needs what:
 | BRAIN, BUFFER SAVER, STORE | the Part initialiser's end; LOAD PROJECT's call of the empty project's RAM; the routine itself | `ev_part_init`, `ev_project_init` |
 | MUTE MODES | the voice reset's entry | `ev_voice_reset` |
 | BOOT TRACE | the boot after core's | `ev_boot_early` |
-| REC THRESHOLD, REC TRIG MUTE | the track icons | `ev_track_icon`, `ev_track_icon_draw` |
+| REC THRESHOLD, REC TRIG MUTE | the track icons and tabs | `ev_track_icon`, `ev_track_icon_draw`, `ev_track_tab_draw` |
 | SCENES P2 | the FX SETUP knobs' Part byte | `ev_setup_dial` |
 
 **Not in 0.8.** The ATTRIBUTES page and the playback rate (REPITCH in
@@ -724,6 +725,276 @@ v1.0) are places where a shop file holds the bytes, so core leaves them. The
 OS's entry (REMIX SWITCH's chainloader), the scheduler (BRAIN), MIDI injected
 as input (MIDI LOOPBACK) and the bank pointer's stores (MIDI SCENES v1.0) are
 one module's each.
+
+#### Track mutes on the Octatrack (core-ot 0.9)
+
+`ev_mute` fires each time a track's mute word changes, from the panel, MIDI,
+the mixer or a project job, in the task that changed it. The handler gets
+the word just stored live and returns the word the Part keeps, which a SAVE
+writes; what plays stays stock's. The words and their Part copies are in
+`octatrack/core.h` (`OT_MUTES_AUDIO`, `OT_PART_MUTES_AUDIO`, ...). A mod
+that keeps mutes per pattern returns the Part's old word:
+
+```c
+#include "octatrack/core.h"
+
+unsigned my_mute(unsigned kind, unsigned word)
+{
+    remember(kind, word);                   /* yours: per pattern, say */
+    return kind == OT_MUTE_MIDI ? OT_PART_MUTES_MIDI : OT_PART_MUTES_AUDIO;
+}
+```
+
+`"subscribe": [{"event": "ev_mute", "fn": "my_mute", "order": 50}]`, and
+`"resources": {"core": "0.9"}`. `tests/fixtures/octatrack-mute` is a probe.
+
+#### The sequencer's moments on the Octatrack (core-ot 0.10)
+
+Observers, each before the stock routine runs; handlers return nothing.
+
+| event | when | handler | runs in |
+|---|---|---|---|
+| `ev_part_apply` | a pattern's Part is applied to the engine: a pattern change, the transport's start, a load, the power-up and a Part change (the heavy apply, 0.21) | `void f(bank, part)` | the sys task and the frame interrupt: keep it short |
+| `ev_chain_add` | [PTN] adds a pattern to the chain; stock may still leave it out (full at 16, or already in it) | `void f(pattern)` | the sys task |
+| `ev_seq_reset` | the sequencer's stop and reset: STOP while stopped, and every menu that stops it first | `void f(void)` | the caller's task |
+| `ev_midi_panic` | the stop and reset is about to send CC 123 on each channel the MIDI tracks use | `void f(void)` | the caller's task |
+| `ev_ui_tick` (0.15) | each tick of the UI task, the task that draws the screen (60 a second), before its own timers | `void f(void)` | the UI task |
+
+Two more (core-ot 0.12) run in the sequencer's tick, a timer interrupt: keep them to a few dozen instructions.
+
+| event | when | handler |
+|---|---|---|
+| `ev_track_length` | each track's advance: its step counter has moved on and is compared with the length it wraps at | `int f(trk, len)`: the length (chained); `trk` 0-7 the audio tracks, 8-15 the MIDI tracks |
+| `ev_pattern_wrap` | the master pattern wrapped and goes on (a queued pattern is now playing) | `void f(bank, pattern, old_bank, old_pattern)` |
+
+`ev_rec_length` (core-ot 0.13) runs in the recorder (from the frame interrupt and the sys task): every way a take's
+length is worked out (RLEN 1-64, MAX, free and sequencer-armed takes) ends with `int f(trk, len)`,
+the length in samples, which the handler returns (chained). The Part's RLEN byte says which way it
+came. A mod that gives RLEN a new value (a PLEN, say) sets the length here.
+
+`ev_track_pattern` (core-ot 0.14) picks the pattern each track plays: `int f(trk, pattern, step,
+peek)` returns it (chained), at the four places stock passes the playing pattern to a track's step
+routine: the tick's audio and MIDI passes (the sequencer's interrupt, `peek` 0) and the rebuild after
+an edit (the sys task, `peek` 1: answer the same, change nothing). With `ev_track_length` it gives
+each track a pattern of its own, as octabam's TRACK PATTERNS does.
+
+System observers (core-ot 0.16, 0.18):
+
+| event | when | handler | runs in |
+|---|---|---|---|
+| `ev_card_cmd` | the CF card's dispatcher has issued a command (the 22-byte record, the ATA command byte at +5); `result` -1 means it is done, another value that the card's interrupt finishes it | `void f(const void *cmd, int result)` | a task or the card's interrupt |
+| `ev_task_switch` | at every RTOS switch, the outgoing task's registers saved in its block | `void f(void *task)` | that task's stack, every interrupt masked: a counter or a time stamp, nothing more |
+| `ev_card_done` (0.18) | a command left in flight has finished, in the card's interrupt, before the next one starts (the record still holds it) | `void f(const void *cmd)` | the card's interrupt |
+| `ev_settings_load` (0.18) | stock has just copied the battery-RAM settings record (0x100fff00, 100 bytes) to the live settings (0x80000070): at boot and two panel actions; `fresh` 1 when it wrote its defaults first | `void f(unsigned fresh)` | the caller's task |
+
+`tests/fixtures/octatrack-seq` is a probe of these and of `ev_track_tab_draw`; `"resources": {"core": "0.19"}`.
+
+`ev_lfo_step` (core-ot 0.19) runs in the frame interrupt for each of the three LFOs of every track,
+audio and MIDI (24 calls a frame): `int f(void *rec, unsigned lfo, int inc)` returns the phase
+increment this frame (chained): divide it for slower LFOs, as octabam's SLOW LFO does (its larger
+MULT range is a data site on the page table). The EMAC's accumulator is live there: handlers must
+not use it, and must be short.
+
+The audio inputs need no event of their own: each frame interrupt advances `OT_INPUT_INDEX` (0-7) and
+points the input DMA at that 256-byte page, `OT_INPUT_PAGE(i)` (`octatrack/core.h`); read them from
+`ev_frame_begin` or `ev_frame_end`, as a level meter or a record threshold would.
+
+#### Held edits, copies and MIDI notes on the Octatrack (core-ot 0.11)
+
+The places octabam's EVENTS module holds for PLOCKS P2 and MIDI FOLLOW (MIT).
+
+| event | when | handler | runs in |
+|---|---|---|---|
+| `ev_edit_held` | an encoder turned while a trig is held (the held-step editor) | `int f(enc, delta)`: nonzero = taken; the first taker wins and stock's editor does not run | the sys task |
+| `ev_scene_knob` (0.20) | an encoder turned while a scene is held (the scene-lock knob handler) | `int f(enc, delta)`: as `ev_edit_held` | the sys task |
+| `ev_arp_knob` (0.21) | an encoder turned on ARP SETUP | `int f(enc, delta)`: as `ev_edit_held` | the sys task |
+| `ev_tempo_open` (0.21) | the TEMPO key is about to open the TEMPO window | `int f(void)`: nonzero = taken, the window does not open (open your own) | the sys task |
+| `ev_copy` | before one of the pattern data's copies (the clipboard, the undo buffer, the bank: 22 memcpy places, not every copy) | `void f(dst, src, len)` | the sys task |
+| `ev_midi_note_sent` | a MIDI track's note has gone out | `void f(trk, note, vel, pool)`; pool 1 is the arpeggiator's | the sequencer's task |
+
+`tests/fixtures/octatrack-held` is a probe of these, `ev_knob_draw`, `ev_leds` and `ev_trig_box_draw`; `"resources": {"core": "0.27"}`.
+
+`ev_setup_dial` covers every SETUP window that draws its knobs with the stock widget: AMP, FX1 and
+FX2 SETUP, SRC / NOTE SETUP (`page` `OT_P2_PLAYBACK`) and MIDI ARP SETUP (`page` `OT_SETUP_ARP`; both
+core-ot 0.22), and the MIDI tracks' CTRL pages (`page` `OT_PAGE_CTRL`, core-ot 0.26).
+
+`ev_knob_draw` (core-ot 0.23) is the other knob widget's entry (0x400467a4): the pages whose parameter
+descriptors name it, RECORDING SETUP and two more drawers. `void f(struct ot_knob *k)` gets the widget's
+own arguments (x, y, mode, value, flags, formatter, canvas; `octatrack/core.h`) and may change the value,
+the flags or the formatter before it draws: RLEN PLEN's and REC THRESHOLD's formatters, say.
+
+`ev_leds` (core-ot 0.24) runs at the LED flush, just before the LED map (`OT_LED_MAP`, 17 bytes, a bit an
+LED) goes out to the panel: `void f(uint8_t *map)` sets or clears bits (`OT_LED_ON`, `OT_LED_OFF`). Stock
+rewrites its own bits on its next pass, so a handler sets its LEDs at every flush. The UI task, the
+key-repeat task and the redraws flush.
+
+`ev_trig_box_draw` (core-ot 0.25) runs as the trig mode box's drawer leaves (the keyboard of CHROMATIC,
+the slots, the arp): `void f(unsigned mode)` draws over the box (`ot_blit`); `mode` is `OT_TRIG_MODE`.
+
+`ev_bank_copied` (core-ot 0.27) runs on the engine task right after a per-bank SAVE (`.work` to `.strd`) or
+RELOAD (`.strd` to `.work`) copies the bank's file: `void f(const char *dst, const char *src, int result)`.
+`ev_project_store` and `ev_project_reload` see the whole-set copies; a mod that keeps a file per bank copies
+it here.
+
+### LFO waves on the Octatrack (core-ot 0.28)
+
+A mod adds a waveform to every audio and MIDI LFO's WAVE list by contributing a pointer to a
+`struct ot_lfo_wave {name, fn}` to `ot_lfo_waves` (`octatrack/core.h`):
+
+```c
+static void pulse(struct ot_lfo *l, int32_t restart)
+{
+    l->out = l->phase < 0x200000u ? 0x7fffff : -0x800000;    /* a 25 % pulse */
+}
+const struct ot_lfo_wave my_wave = {"PLS", pulse};
+```
+
+```json
+"contribute": [{"to": "ot_lfo_waves", "order": 50, "data": "00000000",
+                "relocs": [[0, "abs32", "sym:my_wave", 0]]}],
+"resources": {"core": "0.28"}
+```
+
+- **Where it shows.** After stock's 19 waves (TRI to RND, T1-T8), in the table's order: the first mod
+  wave is value 19. The WAVE cell shows its name (up to 4 characters) as text; stock's waves keep their
+  icons. Up to 13 waves; a project that names a wave whose mod is gone plays SAW there.
+- **The handler** runs every frame in the frame interrupt for each LFO set to it. `lfo->phase` runs
+  0 to 0x7fffff over one cycle; write `lfo->out`, where -0x800000 to 0x7fffff is full depth. `restart`
+  is nonzero when the LFO restarts. `state[]` is the LFO's own, shared with RND. Keep it short and leave
+  the EMAC alone.
+- `tests/fixtures/octatrack-lfo-wave` adds two (PLS and HALF).
+
+### Popup rows on the Octatrack (core-ot 0.29)
+
+Every popup list opens through one routine: the sample editor's SLICE, TRIM and EDIT menus, the file
+browser's, LFO DESIGN's, and every titled list dialog. `ev_popup` runs as one is about to open, with core's
+copies of its rows (`struct ot_popup`, `octatrack/core.h`). A handler changes them or adds rows:
+
+```c
+static void my_action(void) { /* the row was chosen: the list has closed */ }
+void my_popup(struct ot_popup *p)
+{
+    if (p->menu == OT_POPUP_SLICE)                   /* the SLICE menu, on a slice */
+        ot_popup_add(p, "MY ACTION", my_action);
+}
+```
+
+```json
+"subscribe": [{"event": "ev_popup", "fn": "my_popup", "order": 50}],
+"resources": {"core": "0.29"}
+```
+
+- **Which list.** `menu` is the caller's own labels array (`OT_POPUP_SLICE`, `OT_POPUP_SLICE_ADD`,
+  `OT_POPUP_VIEW`, or any other list's address) and `ret` the caller's return address.
+- **Rows.** Up to `OT_POPUP_MAX` (32); the list scrolls past four. On YES the list closes, stores the row
+  in `*out` when `out` is not 0, and calls the row's callback, `void f(void)`, in the UI task. A list no
+  handler changed opens exactly as stock opens it.
+- `tests/fixtures/octatrack-popup` adds PROBE ROW to the SLICE, CHANGE VIEW and LFO DESIGN lists.
+
+### The playback increment on the Octatrack (core-ot 0.30)
+
+`ev_play_increment` runs for each STATIC, FLEX and PICKUP track every frame, in the frame interrupt:
+`int32_t f(unsigned trk, int32_t inc)` gets stock's playback increment (Q26: 0x04000000 plays at the
+sample's own speed; PTCH and RATE applied) and returns the one the track plays. Handlers chain. core keeps
+stock's value per track, so a frame where stock reuses the stored increment hands handlers stock's again,
+not what they returned. Keep it short and leave the EMAC alone. The sites sit beside octabam REPITCH's
+(0x40004100), which keeps working beside it; `tests/fixtures/octatrack-rate` is a probe.
+
+### PATTERN SETTINGS rows on the Octatrack (core-ot 0.31)
+
+PATTERN SETTINGS (FUNC+PTN) lists 24-byte rows (`struct ot_menu_row`, `octatrack/core.h`): a label, an
+`edit(delta)` that runs on an encoder turn (delta +-) and on YES (0), and a `text()` that returns the value
+shown at the right; a row with neither is a heading. Each pane is a table: `ot_ptn_rows` (PAT),
+`ot_track_rows` (every audio track's), `ot_midi_rows` (every MIDI track's). core puts stock's six rows first;
+a mod's rows follow in contribution order, and the pane scrolls past six. `ot_pset_track()` says which track
+the pane shows (-1 on PAT). `tests/fixtures/octatrack-pset` adds a row to the audio tracks' panes.
+
+### PERSONALIZE rows on the Octatrack (core-ot 0.32)
+
+PROJECT > SYSTEM > PERSONALIZE keeps three parallel arrays, so a row is one entry in each of `ot_pers_label`
+(`const char *`), `ot_pers_get` (`const char *get(void)`, the value text) and `ot_pers_set`
+(`void set(int32_t delta, int32_t press)`; stock saves the settings after it). Contribute one entry to each,
+with the same order; core puts stock's 16 first. On an MKI, whose list stops before LED BRIGHTNESS, a mod's
+rows bring that row into view too. `tests/fixtures/octatrack-pers` adds one.
+
+### The time-stretch helper on the Octatrack (core-ot 0.33)
+
+The time-stretch helper is a task of its own; each pass it works out the stretch of every track whose
+machine stretches. `ev_tstretch` runs before each such track: `int f(unsigned trk)` returns nonzero to skip
+it this pass (the first taker wins), for a mod that plays the track itself or saves the work.
+`tests/fixtures/octatrack-tstretch` is a probe.
+
+### The card file calls on the Octatrack (core-ot 0.34)
+
+`ev_file` sees each call of stock's card file layer before it runs, from every task:
+`void f(unsigned op, void *f, const void *a, uintptr_t b)`, op 0 open (a = path, b = mode), 1 read and
+2 write (a = buffer, b = length), 3 close. A handler's own file calls do not come back to it; keep it short,
+as a card write may be waiting. `tests/fixtures/octatrack-file` counts them.
+
+### What a double tap and a SETUP key open on the Octatrack (core-ot 0.35)
+
+Both run in the UI task; a handler returns nonzero to take the gesture (the first taker wins), and stock
+then opens nothing, so the mod opens its own window. `int ev_track_double(unsigned trk)`: the current
+track's TRACK key tapped twice (stock opens the machine pool on an audio track, nothing in MIDI mode).
+`int ev_setup_open(unsigned kind)`: a page's SETUP window is about to open from FUNC + the page key, a
+double tap or a page change; kind 0 SRC/NOTE, 1 LFO, 2 AMP/ARP, 3 FX1/CTRL1, 4 FX2/CTRL2.
+`tests/fixtures/octatrack-opens` takes both.
+
+### A pattern's check and an effect's choice on the Octatrack (core-ot 0.36)
+
+`void ev_pattern_check(void *pattern)` runs just before stock's pattern validator checks a pattern: at
+boot's restore (all 16, before any mod's project data is back) and at every bank load. Stock clamps what it
+does not know, so a mod that keeps values in pattern bytes puts them right here. `int ev_fx_choose(unsigned
+slot, unsigned trk, unsigned id)` runs when YES in the FX1 (slot 0) or FX2 (slot 1) chooser is about to put
+effect `id` on track `trk`; nonzero refuses it (the first taker wins) and the chooser stays open.
+`tests/fixtures/octatrack-guard` is a probe of both.
+
+### The start-up art on the Octatrack (core-ot 0.37)
+
+`int ev_boot_frame(unsigned frame, void *plane)` runs at the start of each frame of the start-up
+animation, before any project loads: return nonzero after drawing the frame on `plane` yourself
+(`ot_blit`), and stock draws none of its logo; the screen flush and the LED sweep go on either way.
+`tests/fixtures/octatrack-bootart` draws a bar instead of the logo. A SETUP page that needs a knob with more
+labels than stock's widget shows (Modwerk's "wide dial") swaps the widget in `ev_setup_dial`; no site of its
+own.
+
+### A trig's START and the renderers' time on the Octatrack (core-ot 0.38)
+
+`ev_track_start(unsigned trk, unsigned type, stock)` runs in the frame interrupt as a track's trig is about
+to call its machine type's START: return a START to call instead (`start(trk, arg, flags)`, as stock's) or 0
+for the next handler; declare it returning `uint32_t`, since the bus reads d0. `ot_render_meter` (core.h)
+holds each track's renderer time, both of the frame builder's calls, on the frame meter's counter: last,
+worst, calls and total per track. `tests/fixtures/octatrack-start` and `octatrack-rmeter` use them.
+
+### A block to DSP core 1 on the Octatrack (core-ot 0.39)
+
+`ev_dsp_feed1` runs once a frame in the frame transfer's interrupt, after stock's push to DSP core 1, as
+usb-ot's `ev_dsp_feed` does for core 0. A handler may call `ot_dsp_feed1(block, words, at)` once to send
+core 1 one more block; core.h gives the limits and where the words land (the frame's bank, as stock's own
+block). Core 1 has no event bus of its own, so the mod owns the DSP memory it writes and the DSP code that
+reads it. `tests/fixtures/octatrack-dsp1` sends 32 words to $6320, just past stock's block.
+
+### The engine task's jobs on the Octatrack (core-ot 0.40)
+
+`ev_engine_job(type, msg)` runs in the engine task as each stock job (0..45) starts, with its message, and
+again with msg 0 when it has ended; core.h names job 16, the sample editor's render/commit. It only
+watches: card work of a mod's own goes through `ot_engine_post`. `tests/fixtures/octatrack-job` counts them.
+
+### SEQUENCER rows on the Octatrack (seqrows 0.1)
+
+PROJECT > CONTROL > SEQUENCER works as PERSONALIZE does, with `ot_seq_label`, `ot_seq_get` and `ot_seq_set`
+(stock's three first), but they come from `mods/seqrows-ot`, a companion: octabam's SCALE QUANTIZER v1.0
+patches the same places for its own rows, and the two refuse each other. A mod with rows there requires
+`"seqrows"`; the list scrolls past three. `tests/fixtures/octatrack-seqrows` adds one.
+
+### Timers and interrupt vectors on the Octatrack
+
+Two firmware services are calls in `octatrack/core.h`, no core site. `ot_timer_start(ticks, fn)` runs
+`fn` every `ticks` UI ticks (60 a second) in the UI task until `ot_timer_cancel(slot)`; it returns the slot,
+or -1 when stock's 32 are taken. `ot_vector_get(n)` and `ot_vector_set(n, handler)` read and write the
+interrupt vector table by the number stock installs with (0x41 the frame interrupt). `ot_vector_get`
+returns a `uint32_t`: the routine answers in d0, and GCC takes a returned pointer from a0.
+`tests/fixtures/octatrack-timer` uses both.
 
 ### The DSP bus on the Octatrack (dspbus 0.1)
 

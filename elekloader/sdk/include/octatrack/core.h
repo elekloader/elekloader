@@ -82,6 +82,15 @@ extern volatile struct ot_frame_meter ot_meter;
 #define OT_DTCN3            OT_L(0xfc07c00c)    /* the counter itself */
 #define OT_FRAME_COUNTS     47891u              /* tpf until the first 1,024 frames are measured */
 void ot_meter_reset(void);
+/* Each track's renderer time (0.38): the frame builder's two renderer calls a track (0-7), timed on the
+ * same counter. Read in a task; zero it yourself to start again. */
+struct ot_render_meter {
+    uint32_t last[8];           /* the last call's counts */
+    uint32_t worst[8];
+    uint32_t calls[8];
+    uint32_t total[8];          /* wraps */
+};
+extern volatile struct ot_render_meter ot_render_meter;
 
 /* ---- the boot check ----------------------------------------------------------------------------
  * .boot copies the RAM image the linker built into the reserve and hashes the copy against the
@@ -131,6 +140,31 @@ enum {
     OT_P2_FX2      = 3,
 };
 #define OT_P2_REFUSED       ((int32_t)0x80000000)
+#define OT_SETUP_ARP        4                   /* ev_setup_dial's page: MIDI ARP SETUP (0.22) */
+#define OT_PAGE_CTRL        5                   /* ev_setup_dial's page: the MIDI tracks' CTRL pages' knobs (0.26) */
+
+/* void ev_knob_draw(struct ot_knob *k) (0.23): the knob widget (0x400467a4) is about to draw a knob: the
+ * pages whose parameter descriptors name it, RECORDING SETUP, two more drawers; k is its own arguments: change the value, the
+ * flags or the formatter (fmt(buf, value), as stock's) and the widget draws that. In the drawing task. */
+/* void ev_leds(uint8_t *map) (0.24): the LED map (17 bytes, one bit an LED: id = byte * 8 + bit, the
+ * ids of the panel's LED list; trig and track LEDs are two-colour pairs, id and id + 1) is about to be
+ * sent to the panel; set or clear bits: stock rewrites its own on its next pass. */
+/* void ev_trig_box_draw(unsigned mode) (0.25): the trig mode box's drawer is done (mode = OT_TRIG_MODE); draw
+ * over the box (ot_blit). */
+#define OT_TRIG_MODE        OT_L(0x460d16f0)
+/* void ev_bank_copied(const char *dst, const char *src, int result) (0.27): a per-bank SAVE or RELOAD just
+ * copied the bank's file (engine task). */
+#define OT_LED_MAP          ((volatile uint8_t *)0x460ba98cu)
+#define OT_LED_ON(m, id)    ((m)[(id) >> 3] |= (uint8_t)(1u << ((id) & 7)))
+#define OT_LED_OFF(m, id)   ((m)[(id) >> 3] &= (uint8_t)~(1u << ((id) & 7)))
+
+struct ot_knob {
+    int32_t x, y, mode;
+    int32_t value;
+    uint32_t flags;
+    const void *fmt;
+    void *canvas;
+};
 int32_t ot_page2_write(unsigned trk, unsigned page, unsigned slot, int32_t val);
 
 /* ---- paced MIDI out -----------------------------------------------------------------------------
@@ -382,7 +416,9 @@ struct ot_part_select {
  *                                             0-3 and draws an empty box for the rest
  *   int ev_track_icon_draw(trk, state, x, y)  a state above 3: draw it (ot_blit at x, y; stock draws its
  *                                             7-wide glyphs at x, its 3-wide ones at x + 2) and return
- *                                             nonzero, or return 0 to leave the box empty */
+ *                                             nonzero, or return 0 to leave the box empty
+ *   void ev_track_tab_draw(trk, x, y)         a track tab, after stock drew its machine letter at x, y:
+ *                                             draw beside it (0.17) */
 struct ot_bitmap {
     uint32_t w, h;              /* at most 32 high */
     uint32_t one;               /* 1 */
@@ -397,7 +433,8 @@ struct ot_bitmap {
  * about to draw knob d->slot; a handler may change what it shows: the value, the widget's flags,
  * the widget itself. Handlers are chained. In the task that draws the screen, once a knob a draw. */
 struct ot_dial {
-    uint8_t page;               /* OT_P2_AMP, OT_P2_FX1 or OT_P2_FX2 */
+    uint8_t page;               /* OT_P2_PLAYBACK (SRC / NOTE SETUP, 0.22), OT_P2_AMP, OT_P2_FX1, OT_P2_FX2,
+                                   OT_SETUP_ARP (0.22), OT_PAGE_CTRL (0.26) */
     uint8_t slot;               /* 0-5 */
     uint8_t track, part;        /* OT_TRACK and OT_PART */
     int32_t value;              /* the value the knob shows: a signed byte (stock: the Part's) */
@@ -405,5 +442,201 @@ struct ot_dial {
     const void *fmt;            /* the knob's formatter */
     void *widget;               /* widget(x, y, knob, value, flags, fmt, canvas) */
 };
+
+/* ---- the track mutes (0.9) --------------------------------------------------------------------------
+ * The live mute words, one for the audio tracks and one for the MIDI tracks: three byte fields of eight
+ * tracks each (bits 16-23, 8-15, 0-7; the panel's mute toggles bit 16 + n of the audio word). Which
+ * field is the mute, the cue and the pending change is not all mapped yet: change only bits you have
+ * read stock set. Each change is stored live and then copied into the Part, which a SAVE keeps.
+ *   unsigned ev_mute(kind, word)   a word has just been stored live (kind OT_MUTE_AUDIO or OT_MUTE_MIDI):
+ *                                  return the word the Part keeps (chained; return word for stock's). The
+ *                                  live word is not changed. In the task that changed it: the panel's
+ *                                  (sys), the MIDI task's or the engine's (a project job) */
+enum { OT_MUTE_AUDIO = 0, OT_MUTE_MIDI = 1 };
+#define OT_MUTES_AUDIO      OT_L(0x80000008)
+#define OT_MUTES_MIDI       OT_L(0x8000000c)
+#define OT_PART_MUTES_AUDIO OT_L(0x100b14d4)    /* the Part's copies */
+#define OT_PART_MUTES_MIDI  OT_L(0x100b14d8)
+
+/* ---- the sequencer's moments (0.10) -----------------------------------------------------------------
+ * Observers, each before the stock routine (docs/ADAPTING.md, "The sequencer's moments on the Octatrack"):
+ *   void ev_part_apply(bank, part)   a pattern's Part is applied; also from the frame interrupt
+ *   void ev_chain_add(pattern)       [PTN] adds a pattern to the chain (OT_CHAIN_LEN entries before it)
+ *   void ev_seq_reset(void)          the sequencer's stop and reset
+ *   void ev_midi_panic(void)         CC 123 is about to go out on the MIDI tracks' channels
+ *   void ev_ui_tick(void)            each tick of the UI task (it draws the screen; 60 a second) (0.15)
+ *   void ev_card_cmd(cmd, result)    the card's dispatcher issued a command (ATA byte at cmd + 5); result
+ *                                    -1 = done, else the card's interrupt finishes it (0.16)
+ *   void ev_task_switch(task)        every RTOS switch, interrupts masked: a few instructions only (0.16)
+ *   void ev_card_done(cmd)           a command left in flight finished, in the card's interrupt (0.18)
+ *   void ev_settings_load(fresh)     the battery-RAM settings were copied to the live ones (OT_SETTINGS);
+ *                                    fresh 1 = stock's defaults were just written (0.18) */
+#define OT_SETTINGS_SRAM    ((volatile uint8_t *)0x100fff00u)   /* checksum, "ANDY", 252 bytes */
+#define OT_SETTINGS         ((volatile uint8_t *)0x80000070u)   /* the live copy of its first 100 bytes */
+/* The audio inputs: each frame interrupt advances OT_INPUT_INDEX (0-7) and points the input eDMA at
+ * that 256-byte page (0x4000ab66..0x4000ab80); read the pages from ev_frame_begin / ev_frame_end. */
+#define OT_INPUT_INDEX      OT_L(0x46104d00)
+#define OT_INPUT_PAGE(i)    ((volatile uint8_t *)(uintptr_t)(0x80005660u + 256u * ((i) & 7u)))
+/* The MIDI tracks' live settings (68 bytes a track): the channel, 1-16, 0 = OFF (the sequencer sends
+ * nothing for an OFF track; the panic walks the same table). */
+#define OT_MIDI_CHANNEL(t)  OT_B(0x46c76de0u + 68u * (t))
+
+/* int ev_lfo_step(void *rec, unsigned lfo, int inc) (0.19): each LFO (0-2) of each track, every frame, in
+ * the frame interrupt: return this frame's phase increment (chained). Do not touch the EMAC. */
+/*
+ * In the sequencer's tick (0.12; a timer interrupt: keep them short):
+ *   int ev_track_length(trk, len)    each track's advance: return the length it wraps at (chained);
+ *                                    trk 0-7 audio, 8-15 MIDI
+ *   void ev_pattern_wrap(bank, pattern, old_bank, old_pattern)   the master pattern wrapped and goes on
+ * In the recorder (0.13; the frame interrupt and the sys task):
+ *   int ev_rec_length(trk, len)      a take's length in samples, however it was worked out: return it
+ * The pattern each track plays (0.14):
+ *   int ev_track_pattern(trk, pattern, step, peek)   return it (chained); peek 1 (the rebuild after an
+ *                                    edit, the sys task): answer the same and change nothing; peek 0 in
+ *                                    the sequencer's interrupt */
+#define OT_CHAIN_LEN        OT_L(0x8000654e)
+#define OT_CHAIN(i)         OT_L(0x80006552 + 4 * (i))  /* 0-15 */
+
+/* ---- held edits, copies, MIDI notes (0.11) ---------------------------------------------------------
+ *   int ev_edit_held(enc, delta)            a trig held, an encoder turned: nonzero = you took it (the
+ *                                           first taker wins; stock's editor does not run)
+ *   int ev_scene_knob(enc, delta)           a scene held, an encoder turned: the same (0.20)
+ *   int ev_arp_knob(enc, delta)             ARP SETUP's encoders: the same (0.21)
+ *   int ev_tempo_open(void)                 the TEMPO key is about to open its window: nonzero = taken (0.21)
+ *   void ev_copy(dst, src, len)             before one of the pattern data's copies (clipboard, undo, bank)
+ *   void ev_midi_note_sent(trk, note, vel, pool)   a MIDI track's note has gone out; pool 1 = the arp's */
+
+/* ---- LFO waves (0.28) ---------------------------------------------------------------------------
+ * A mod adds a wave to every audio and MIDI LFO's WAVE list, after stock's 19 (TRI ... RND, T1-T8), in
+ * ot_lfo_waves order: value 19 is the first. Up to 13 (more count 32: the rest are SAW). Its handler runs
+ * every frame in the frame interrupt for each LFO set to it: read lfo->phase (0 .. 0x7fffff over one
+ * cycle), write lfo->out (-0x800000 .. 0x7fffff is full depth, as SAW's 2 * phase - 0x800000). restart is
+ * nonzero when the LFO restarts (a trig in TRIG, HOLD, ONE and HALF). state[] is the LFO's own (RND keeps
+ * its state there too, so start over on restart). Keep it short; do not touch the EMAC. The WAVE knob shows
+ * name (up to 4 characters) as text where stock draws an icon.
+ *   "contribute": [{"to": "ot_lfo_waves", "order": 50, "data": "00000000",
+ *                   "relocs": [[0, "abs32", "sym:my_wave", 0]]}]                                     */
+struct ot_lfo {
+    uint32_t phase;
+    int32_t out;
+    uint32_t r8;
+    uint32_t state[3];
+    uint32_t r24;
+};
+struct ot_lfo_wave {
+    const char *name;
+    void (*fn)(struct ot_lfo *lfo, int32_t restart);
+};
+#define OT_LFO_WAVE_FIRST   19
+
+/* ---- popup rows (0.29) --------------------------------------------------------------------------
+ * void ev_popup(struct ot_popup *p): a popup list is about to open (the sample editor's SLICE, TRIM and
+ * EDIT menus, the file browser, every choose() dialog ...; the UI task). p->labels and p->callbacks are
+ * core's copies of its rows: change them, or add rows with ot_popup_add. menu is the caller's own labels
+ * array and ret its return address: they say which list this is. On YES the list closes, stores the
+ * cursor in *out (when out is not 0) and calls callbacks[cursor](). A list nobody changed opens as stock. */
+#define OT_POPUP_MAX        32
+struct ot_popup {
+    uint32_t n;                         /* rows */
+    int32_t cursor;                     /* the row it opens on */
+    int32_t *out;
+    const char **labels;
+    void (**callbacks)(void);
+    const char *const *menu;            /* the caller's labels: which list */
+    uint32_t ret;                       /* the caller's return address */
+};
+static inline int ot_popup_add(struct ot_popup *p, const char *label, void (*cb)(void))
+{
+    if (p->n >= OT_POPUP_MAX)
+        return -1;
+    p->labels[p->n] = label;
+    p->callbacks[p->n] = cb;
+    return (int)p->n++;
+}
+/* menu values: the AED SLICE menu on a slice (DISABLE LOOP ... CHANGE VIEW), off one (ADD SLICE HERE ...),
+ * and its CHANGE VIEW list */
+#define OT_POPUP_SLICE      ((const char *const *)0x400cebc8u)
+#define OT_POPUP_SLICE_ADD  ((const char *const *)0x400ceb8cu)
+#define OT_POPUP_VIEW       ((const char *const *)0x400cebf8u)
+
+/* ---- the playback increment (0.30) --------------------------------------------------------------
+ * int32_t ev_play_increment(unsigned trk, int32_t inc): each STATIC, FLEX or PICKUP track (0-7), every
+ * frame, in the frame interrupt: inc is stock's playback increment (Q26, 0x04000000 = unity, PTCH and RATE
+ * applied); return the one it plays (chained). Stock's own is kept, so a handler always starts from it.
+ * Keep it short; do not touch the EMAC. */
+
+/* ---- PATTERN SETTINGS rows (0.31) ---------------------------------------------------------------
+ * PATTERN SETTINGS (FUNC+PTN) is data: each right pane lists 24-byte rows. A mod adds rows to a table:
+ * ot_ptn_rows (the PAT pane), ot_track_rows (each audio track's), ot_midi_rows (each MIDI track's), after
+ * stock's six, in contribution order. edit(delta) runs on an encoder turn (delta +-) and on YES (0);
+ * text() returns the value shown at the right. A row with neither is a heading. ot_pset_track() is the
+ * track the pane shows (0-7), -1 on the PAT pane. They run in the UI task.
+ *   "contribute": [{"to": "ot_track_rows", "order": 50, "data": "000000000000000000000000000000000000000000000000",
+ *                   "relocs": [[0, "abs32", "sym:my_label", 0], [8, "abs32", "sym:my_edit", 0],
+ *                              [12, "abs32", "sym:my_text", 0]]}]                                       */
+struct ot_menu_row {
+    const char *label;
+    uint32_t r4;
+    void (*edit)(int32_t delta);
+    const char *(*text)(void);
+    uint32_t r16, r20;
+};
+/* int ev_tstretch(unsigned trk) (0.33): the time-stretch helper task is about to work out a track's stretch
+ * (each pass, for each track whose machine stretches): nonzero = skip it this pass (the first taker wins). */
+/* void ev_file(unsigned op, void *f, const void *a, uintptr_t b) (0.34): the card file layer is about to run
+ * a call: op 0 open (a = path, b = mode string), 1 read, 2 write (a = buffer, b = length), 3 close (a, b 0).
+ * In whatever task calls (the engine task, the UI task, core's own project data). A handler's own file calls
+ * do not come back to it. Keep it short: a card write may be waiting. */
+/* In the UI task (0.35), nonzero = taken (the first taker wins; stock then opens nothing):
+ *   int ev_track_double(unsigned trk)   the current track's TRACK key tapped twice: stock opens the machine
+ *                                       pool on an audio track, nothing in MIDI mode (ot_midi_mode())
+ *   int ev_setup_open(unsigned kind)    a page's SETUP window is about to open, kind 0-4: SRC/NOTE, LFO,
+ *                                       AMP/ARP, FX1/CTRL1, FX2/CTRL2 (0x400a7280) */
+/* 0.36:
+ *   void ev_pattern_check(void *pattern)   stock's pattern validator is about to check a pattern (boot's
+ *                                          restore, all 16 before any project load; a bank load): put a
+ *                                          mod's pattern bytes right before stock clamps them
+ *   int ev_fx_choose(unsigned slot, unsigned trk, unsigned id)   YES in the FX1 (slot 0) or FX2 (1) chooser
+ *                                          is about to put effect id on track trk: nonzero = refused
+ *                                          (the first taker), the chooser stays open. In the UI task. */
+/* int ev_boot_frame(unsigned frame, void *plane) (0.37): each frame of the start-up animation, before stock
+ * draws it (the UI task, before any project): nonzero = you drew this frame on plane (ot_blit) and stock
+ * draws nothing of its own; the screen flush and the LED sweep go on either way. */
+/* void *ev_track_start(unsigned trk, unsigned type, void *stock) (0.38): a track's trig is about to call its
+ * machine type's START (in the frame interrupt): return a START to call instead, start(trk, arg, flags) as
+ * stock's, or 0 for the next handler (the first nonzero wins). Declare it returning uint32_t in C (a
+ * returned pointer is read from a0, the bus reads d0). */
+/* void ev_dsp_feed1(void) (0.39): once a frame, in the frame transfer's interrupt (level 6), after stock's
+ * push to DSP core 1: a handler may call ot_dsp_feed1(block, words, at) once to send core 1 one more
+ * block through stock's host command 0x88, as stock's own 672 words to $6080 go. `words` 16-bit words, a
+ * long each (multiples of 32, at most OT_DSP_FEED1_MAX; block 16-byte aligned, written through
+ * OT_USB_UNCACHED since the eDMA reads RAM) land in core 1's X memory at the frame's bank + (at & 0x1fff),
+ * banks $2000 and $4000 taking turns, bits 16-23 set by the DSP; $6320 is the word after stock's block.
+ * The mod owns that DSP memory: returns 1 when started, 0 when refused. ot_dsp1_fed counts the transfers
+ * done. */
+/* void ev_engine_job(unsigned type, const void *msg) (0.40): in the engine task, as stock job `type` (0..45,
+ * the message's first byte) is about to run, msg its message; again with msg 0 when it has ended. Job 16
+ * is the sample editor's render/commit (msg+2 its kind, +6/+10/+14 the arguments). Watch only: stock's job
+ * runs either way; card work of your own goes through ot_engine_post. */
+#define OT_DSP_FEED1_MAX    256u
+int ot_dsp_feed1(const volatile void *block, unsigned words, unsigned at);
+extern volatile uint32_t ot_dsp1_fed;
+/* ---- timers and interrupt vectors (firmware calls) -----------------------------------------------
+ * ot_timer_start(ticks, fn): fn runs every `ticks` UI ticks (60 a second), in the UI task, from the next
+ * due tick on, until ot_timer_cancel(slot); it returns the slot (0-31) or -1 when all 32 are busy (stock
+ * uses some). ot_vector_get(n) / ot_vector_set(n, handler): the interrupt vector table's entry n, the
+ * vector number stock installs with (0x41 the frame interrupt, 0x60 the sequencer's tick, 0xb6 the card).
+ * Some are installed after ev_boot_done: wrap a stock handler (get it, set yours, call the stock one from
+ * yours) from your first tick, not at boot. */
+#define ot_timer_start      ((int (*)(uint32_t ticks, void (*fn)(void)))0x40031a0cu)
+#define ot_timer_cancel     ((void (*)(int slot))0x40031abcu)
+#define ot_vector_get       ((uint32_t (*)(unsigned n))0x40000d64u)   /* d0: not void * (GCC reads a0) */
+#define ot_vector_set       ((void (*)(unsigned n, void *handler))0x40000d50u)
+
+static inline int ot_midi_mode(void) { return ((int (*)(void))0x40033970u)(); }
+static inline int ot_pset_track(void)
+{
+    return (int)*(volatile uint32_t *)(ot_midi_mode() ? 0x400d104cu : 0x400d0f34u) - 1;
+}
 
 #endif
