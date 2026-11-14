@@ -103,6 +103,8 @@ DEVICE = Device(
     },
     ddr=(0x47BE0000, 0x47C00000),
     core_ddr=(('0.6', (0x45650000, 0x47C00000)),),   # core-a4mk2 0.6: 37.7 MB, the gap and the area
+    drive_align=0x1000,                           # the +Drive mods' area: what the flashed build
+                                                  # leaves of core_ddr's, from a 4 KB boundary
     recovery=('hold FUNC while powering on for the STARTUP menu, press TRIG 4 (OS UPGRADE), '
               'then send the stock .syx over MIDI DIN (not USB)'),
     toolchain={

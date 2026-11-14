@@ -107,10 +107,10 @@ image>` prints it.
   entries the build has. The spare entries and the block count toward
   the RAM budget.
 - **The +Drive area.** On a device whose profile has `drive_align` (the
-  Analog Rytm MKII's is 4 KB), the +Drive mods' area is what the flashed
+  Analog Rytm MKII's and the Analog Four MKII's are 4 KB), the +Drive mods' area is what the flashed
   build leaves of the core's linker area: from the build's RAM end (its
   last `.bss`, the Drive Loader's own included) rounded up to `drive_align`,
-  to the top of that area (0x47FFF000 with core-ar2 0.11). A bigger flashed
+  to the top of that area (0x47FFF000 with core-ar2 0.11, 0x47C00000 with core-a4mk2 0.6). A bigger flashed
   build leaves a smaller area; the linker's own RAM limit is the only cap.
 - **The stock shadow.** On a device whose profile has `drive_shadow` (the
   Digitone mk1, for TELOS), the descriptor carries the stock bytes of every

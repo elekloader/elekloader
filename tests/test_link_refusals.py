@@ -1641,6 +1641,22 @@ def test_the_digitone_mk1_descriptor_has_a_drive_area():
         assert d['area'] == (end, link._align(end, 0x1000), 0x44000000, 0, 0)
 
 
+def test_the_build_descriptor_on_the_analog_four_mk2():
+    """The Analog Four MKII's +Drive area (its profile's drive_align, 4 KB): what the flashed build
+    leaves of core-a4mk2's linker area (core_ddr from 0.6, to 0x47C00000), from its RAM end rounded
+    up; the whole of core_ddr, with no cap below the top. Its data container's ids are not known
+    yet, so the descriptor names them 0."""
+    from elekloader import desc
+    with Bench('analog-four-mk2') as B:
+        assert B.dev.drive_align == 0x1000
+        out = link.link([link.Mod2(d, d['id']) for d in descriptor_mods(B)], B.img)
+        d = desc.decode(out.image, desc.find(out.image)[0])
+        assert d['device_key'] == 'analog-four-mk2' and (d['family'], d['device']) == (0, 0)
+        assert out.layout['ddr'][0] == 0x45650000
+        end = out.layout['bss'][1]
+        assert d['area'] == (end, link._align(end, 0x1000), 0x47C00000, 0, 0x80000)
+
+
 def test_the_build_descriptor_keeps_whole_orders():
     """ABI 1.1: each entry's order as a signed 32-bit number (core-ar2 0.13's screen handlers are at
     -1000000 and 1000000), the keys holding it to 0..65534 for a 1.0 reader; a 1.0 block's orders
