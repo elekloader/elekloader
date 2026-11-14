@@ -21,7 +21,7 @@
   "sha256.c",
   "dstore.c",
   "park.c",
-  "nopage.c"
+  "page.c"
  ],
  "sites": [
   {
@@ -55,12 +55,33 @@
    "event": "ev_tick",
    "fn": "dl_tick",
    "order": 99
+  },
+  {
+   "event": "ev_settings",
+   "fn": "dl_settings",
+   "order": 90
+  },
+  {
+   "event": "ev_key",
+   "fn": "dl_key",
+   "order": 1
+  },
+  {
+   "event": "ev_enc",
+   "fn": "dl_enc",
+   "order": 1
+  },
+  {
+   "event": "ev_draw",
+   "fn": "dl_draw",
+   "order": 95
   }
  ],
  "resources": {
   "core": "0.8",
   "names": [
-   "data-route:mods"
+   "data-route:mods",
+   "settings:MODS"
   ]
  },
  "requires": [

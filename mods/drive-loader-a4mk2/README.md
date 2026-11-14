@@ -7,7 +7,7 @@ carried over as a mod of its own; what differs is the A4's +Drive, which has no 
 
 State: built, linted and patched in the cloud against stock 1.56 with core-a4mk2 0.8; the store runs
 on the computer (tests/test_drive_a4_store.py). Not yet run in the emulator or on a unit. The MODS
-page is a later version (`page.c`; `nopage.c` stands in until then).
+page, drawn with core's std1 helpers, is in [PAGE.md](PAGE.md).
 
 ## The store
 
@@ -128,7 +128,7 @@ were never bounded by a stage here: `/mods` takes a file up to the largest free 
 | `dlink.c`, `json.c`, `json.h`, `sha256.c`, `dstore.c`, `dstore.h`, `park.c`, `park.h`, `names.inc` | unchanged (tests/test_drive_a4_store.py checks); dlink.c's payload skip is built only with `DL_PAYLOAD_SKIP` | the linker, +Drive storage, the route's names |
 | `dl.h`, `flush.s` | comments, and `DL_PAYLOAD_SKIP` | the linker's interface; the site writes and cache push (the A4 sets the Rytm's CACR and ACR0) |
 | `skip.c`, `skip.h`, `payload.c` | new | payload skip while staging (tests/test_drive_payload_skip.py), the Drive payload table and its reader |
-| `nopage.c` | new | the MODS page's calls until `page.c` |
+| `page.c`, `clip.inc` | model kept, view new (std1, no stock addresses) | the MODS page ([PAGE.md](PAGE.md); tests/test_drive_a4_page.py) |
 
 ## Still to prove
 
