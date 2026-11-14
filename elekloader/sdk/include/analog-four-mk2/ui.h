@@ -2,7 +2,7 @@
 /* std1 on the Analog Four MKII (core-a4mk2 0.7, OS 1.56): what the A4's UI
  * and system events pass (elekloader/sdk/include/std1.h;
  * mods/core-a4mk2/README.md, "Standard events (0.7)"), and the A4's own turn
- * event, ev_knob_turn. std1 has not numbered modes, mute scopes or clipboard
+ * event, ev_knob_turn, and (0.8) ev_seq_key. std1 has not numbered modes, mute scopes or clipboard
  * kinds yet, so these are the A4's. */
 #ifndef ELEKLOADER_A4_UI_H
 #define ELEKLOADER_A4_UI_H
@@ -154,5 +154,28 @@ struct core_mod_set {
     int32_t value;                      /* pre: asked for (depth before the clamp); post: stored (destination as asked) */
 };
 typedef int (*ev_mod_set_fn)(int pre, const struct core_mod_set *m);
+
+/* ---- ev_seq_key, a native event (not std1, core-a4mk2 0.8): a key the
+ * TrackSelectionView (the track keys' view) gets, at its key virtual
+ * (0x400c8b90), before stock acts on it, in the UI task:
+ *     int f(void *view, void *event, int key, int pressed)
+ * view that view, event stock's KeyEvent, key its code (keys.h's ids),
+ * pressed 1 for a press, 0 for a release. Only the keys that view gets
+ * (core's ev_key, at the panel, sees every key first). Nonzero takes the key: stock
+ * does nothing with it, reports it handled, and no later handler sees it. A
+ * mod subscribes by contributing to the "ev_seq_key" table.
+ * The helpers take that view (from ev_seq_key, in the UI task):
+ *   core_seq_held_tracks  the track keys held: bit k = track k (0..5), set
+ *                         on key 0x20 + k's press, cleared on its release
+ *   core_seq_track        the current track, params.h's (0..3, TRACK_FX,
+ *                         TRACK_CV), or -1
+ *   core_seq_track_pattern  the current track's TrackPattern, what stock's
+ *                         COPY, PASTE and CLEAR TRACK work on, or 0
+ *   core_popup            stock's pop-up on the view, showing text */
+typedef int (*ev_seq_key_fn)(void *view, void *event, int key, int pressed);
+unsigned core_seq_held_tracks(void *view);
+int core_seq_track(void *view);
+void *core_seq_track_pattern(void *view);
+void core_popup(void *view, const char *text);
 
 #endif

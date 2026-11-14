@@ -2376,6 +2376,36 @@ def test_core_a4mk2_0_7_ui_sites():
     with open(os.path.join(inc, 'keys.h'), encoding='utf-8') as fh:
         assert '#define CORE_TICK_HZ 20' in fh.read()
 
+
+def test_core_a4mk2_0_8_seq_key():
+    """core-a4mk2 0.8's ev_seq_key (seqkey.c, seqkey.s): one jmp site over the sequencer view's key-code
+    call, whose stub makes that call, resumes after it and leaves taken keys through the handled exit;
+    the table, its typedef and the helpers in ui.h."""
+    import re
+    root = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
+    mdir = os.path.join(root, 'mods', 'core-a4mk2')
+    with open(os.path.join(mdir, 'mod.json'), encoding='utf-8') as fh:
+        doc = json.load(fh)
+    with open(os.path.join(mdir, 'seqkey.s'), encoding='utf-8') as fh:
+        asm = fh.read()
+    with open(os.path.join(mdir, 'seqkey.c'), encoding='utf-8') as fh:
+        src = fh.read()
+    assert doc['version'] == '0.8' and 'seqkey.c' in doc['sources'] and 'seqkey.s' in doc['sources']
+    site = [s for s in doc['sites'] if s.get('target') == 'core_seq_key_site']
+    assert site == [{'addr': '0x400c8ba2', 'stock': '4eb94005b6f0', 'op': 'jmp', 'target': 'core_seq_key_site'}]
+    assert re.search(r'^core_seq_key_site:\n\s+jsr\s+0x4005b6f0$', asm, re.M)
+    assert 'jmp     0x400c8ba8' in asm and 'jmp     0x400c8f6a' in asm   # 0x400c8ba2 + 6; the handled exit
+    assert 'tst.l   ev_seq_key' in asm and 'ev_seq_key[]' in src
+    assert doc['collections']['ev_seq_key'] == 4
+    for fn in ('core_seq_held_tracks', 'core_seq_track', 'core_seq_track_pattern'):
+        assert re.search(r'^\w[\w *]*\b%s\(void \*view\)$' % fn, src, re.M), fn
+    assert '.globl  core_popup' in asm
+    with open(os.path.join(root, 'elekloader', 'sdk', 'include', 'analog-four-mk2', 'ui.h'), encoding='utf-8') as fh:
+        h = fh.read()
+    assert 'typedef int (*ev_seq_key_fn)(void *view, void *event, int key, int pressed);' in h
+    for fn in ('core_seq_held_tracks', 'core_seq_track', 'core_seq_track_pattern', 'core_popup'):
+        assert fn + '(' in h, fn
+
 if __name__ == '__main__':
     import traceback
     ok = failed = 0

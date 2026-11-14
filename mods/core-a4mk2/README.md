@@ -25,8 +25,8 @@ platform evidence).
 | `ev_render_in` | 0x401013c6 | 0x4011fb6e | the audio interrupt (vector 191, 0x401013be) |
 | `ev_render_out` | 0x401040f6 | 0x401216c2 | its only exit; the frame is 0xec (the Rytm's 0xb4) |
 
-The routines `core_additem` calls are the Rytm's, the same code with the
-addresses in it masked: `OP_NEW` 0x400653b8, `ITEM_CTOR` 0x4005c7c4,
+The routines `core_additem` calls are the Rytm's, matched with addresses
+masked: `OP_NEW` 0x400653b8, `ITEM_CTOR` 0x4005c7c4,
 `MENU_ADD` 0x4005bffa and `FN_MGR` 0x40164940. The A4 has no manager for the
 Rytm's function-pointer type (`PFSs15FileStorageInfoE`); 0x40164940 is the
 only one with this code, for `PFSsR15FileStorageInfoPhE`, and its code is the
@@ -591,8 +591,8 @@ comment lists its events, sites and contexts. A4 numbers: `analog-four-mk2/`
 | `ev_tick`, `ev_draw`, `ev_settings`, `ev_project`, `ev_render_in` | native (= or prefix) |
 | the others: `ev_boot`, `ev_key`, `ev_param_turn` (std.c), seven MIDI (stdmidi.c), two voice (voice.c), eleven UI (ui.c) | `std_` + the name |
 
-Native events (`ev_knob_turn`, `ev_analog_frame`, `ev_mod_set`) and the
-A4's numbering: `ui.h`.
+Native events (`ev_knob_turn`, `ev_analog_frame`, `ev_mod_set`,
+`ev_seq_key`) and the A4's numbering: `ui.h`.
 Not reported (std1 rule 6): a list parameter's turn. Unconfirmed: `keys.h`'s
 [emu] ids, the LED ids and colours. Test mods:
 [std-check](../../examples/std-check-a4mk2),
