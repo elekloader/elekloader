@@ -160,7 +160,8 @@ def test_core_a4mk2_sites():
     assert pages['core_param_get'] == pages['core_param_delta'] == '4feffff448d7040c'
     assert pages['core_param_text'] == '2f032f02242f0014'
     # pages whose entry a function answers (core-a4mk2 0.3, core-ar2 0.6's), asked before core_pages
-    assert mod['collections'].get('core_page_fns') == 4 and mod['collections'].get('core_pages') == 4
+    # (0.8: with the views' room as +Drive spares, tests/test_units.py)
+    assert all(mod['collections'].get(c) == {'entry': 4, 'spare': 16} for c in ('core_page_fns', 'core_pages'))
     # the audio load (0.2): core times its own render events, first in and last out
     sub = {x['event']: x for x in mod['subscribe']}
     assert sub['ev_render_in']['fn'] == 'core_load_in' and sub['ev_render_in']['order'] == 0
