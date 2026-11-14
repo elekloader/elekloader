@@ -2202,6 +2202,172 @@ def test_core_ar2_0_12_room_for_drive_mods():
     assert cols['core_lock_params'] == 4      # +Drive mods have no storage, so no lock codes
 
 
+
+def test_core_a4mk2_0_7_std_midi_sites():
+    """core-a4mk2 0.7's MIDI events and ev_seq_tick (stdmidi.c, stdmidi.s): seven std tables, a
+    site for each stock routine read in 1.56, every target a global of stdmidi.s, and each jmp
+    site's stub resuming right after the stock bytes it displaced (a jsr site's stub tail-calls the
+    status handler instead, and the tick's stub ends in rte)."""
+    import re
+    root = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
+    mdir = os.path.join(root, 'mods', 'core-a4mk2')
+    with open(os.path.join(mdir, 'mod.json'), encoding='utf-8') as fh:
+        doc = json.load(fh)
+    events = ('ev_midi_in', 'ev_sysex_in', 'ev_midi_cc', 'ev_midi_pc', 'ev_midi_out', 'ev_seq_midi',
+              'ev_seq_tick')
+    for e in events:
+        assert doc['std'][e] == 'std_' + e[3:] and doc['collections']['std_' + e[3:]] == 4, e
+    assert 'stdmidi.c' in doc['sources'] and 'stdmidi.s' in doc['sources']
+    with open(os.path.join(mdir, 'stdmidi.s'), encoding='utf-8') as fh:
+        asm = fh.read()
+    globs = set(re.findall(r'core_std_\w+_site', ' '.join(re.findall(r'\.globl\s+(.*)', asm))))
+    want = {'0x4006578a': ('jsr', 'core_std_in_din_site'), '0x40065818': ('jsr', 'core_std_in_usb_site'),
+            '0x40066320': ('jmp', 'core_std_sysex_site'), '0x40068632': ('jmp', 'core_std_cc_site'),
+            '0x40065e9e': ('jmp', 'core_std_pc_site'), '0x400687aa': ('jmp', 'core_std_send_site'),
+            '0x40068698': ('jmp', 'core_std_bits_site'), '0x40068704': ('jmp', 'core_std_rt_site'),
+            '0x40101acc': ('jmp', 'core_std_seq_midi_site'), '0x4007badc': ('jmp', 'core_std_seq_tick_site')}
+    sites = {s['addr']: s for s in doc['sites'] if s.get('target') in globs}
+    assert set(sites) == set(want)
+    for addr, (op, target) in want.items():
+        s = sites[addr]
+        assert (s['op'], s['target']) == (op, target), addr
+        stub = asm.split(target + ':', 1)[1].split('\n\n', 1)[0]
+        if op == 'jsr':
+            assert len(s['stock']) == 12 and 'jmp     (%a0)' in stub, addr
+        elif target == 'core_std_seq_tick_site':
+            assert stub.rstrip().endswith('rte')
+        else:
+            resume = int(addr, 16) + len(s['stock']) // 2
+            assert ('0x%08x' % resume) in stub, (addr, hex(resume))
+    with open(os.path.join(root, 'elekloader', 'sdk', 'include', 'analog-four-mk2', 'ports.h'),
+              encoding='utf-8') as fh:
+        ports = fh.read()
+    for name in ('CORE_MIDI_CC_AUTO', 'CORE_MIDI_PC_STOCK', 'CORE_MIDI_CC_PERF'):
+        assert name in ports
+
+def test_core_a4mk2_0_7_voice_events():
+    """core-a4mk2 0.7's std1 voice events (voice.c, voice.s) run in the audio interrupt: the voice
+    apply (0x401025ac) passes the voice, the channel's track and the request's type, and the
+    interrupt's two frees (0x40102174, 0x40102e10) end a started voice before stock frees it."""
+    import re
+    root = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
+    mdir = os.path.join(root, 'mods', 'core-a4mk2')
+    with open(os.path.join(mdir, 'mod.json'), encoding='utf-8') as fh:
+        doc = json.load(fh)
+    assert doc['std']['ev_voice_start'] == 'std_voice_start'
+    assert doc['std']['ev_voice_end'] == 'std_voice_end'
+    assert doc['collections']['std_voice_start'] == doc['collections']['std_voice_end'] == 4
+    assert 'voice.c' in doc['sources'] and 'voice.s' in doc['sources']
+    sites = {s['addr']: s for s in doc['sites']}
+    assert sites['0x401025ac']['target'] == 'core_voice_apply'
+    assert sites['0x40102174']['stock'] == '4eb940105410' and sites['0x40102174']['target'] == 'core_voice_free_cut'
+    assert sites['0x40102e10']['stock'] == '2f024e91588f' and sites['0x40102e10']['target'] == 'core_voice_free_len'
+    with open(os.path.join(mdir, 'voice.c'), encoding='utf-8') as fh:
+        src = fh.read()
+    for fn in ('core_voice_end', 'core_voice_note'):
+        assert re.search(r'^void %s\(' % fn, src, re.M), fn
+    with open(os.path.join(mdir, 'rows.s'), encoding='utf-8') as fh:
+        body = fh.read().split('core_voice_apply:', 1)[1].split('rts', 1)[0]
+    assert body.index('jsr     core_rows_voice') < body.index('jsr     core_voice_note')
+    assert body.rstrip().endswith('moveq   #2,%d5')       # the displaced instructions, last
+    with open(os.path.join(mdir, 'voice.s'), encoding='utf-8') as fh:
+        vs = fh.read()
+    cut = vs.split('core_voice_free_cut:', 1)[1].split('core_voice_free_len:', 1)[0]
+    assert 'jmp     0x40105410' in cut                # the argument stock pushed stays for the free
+    ln = vs.split('core_voice_free_len:', 1)[1]
+    assert ln.index('jsr     core_voice_end') < ln.index('jsr     0x40105410') < ln.index('rts')
+
+
+def test_core_a4mk2_0_7_std_map():
+    """core-a4mk2 0.7 serves std1 at the sites it owns: each map entry is a std1.h event and one
+    of core's tables, the native table for the same prototype or its first part, a std_ table of
+    its own for the thunks (std.c) that core's own handlers or sites call."""
+    import re
+    root = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
+    mdir = os.path.join(root, 'mods', 'core-a4mk2')
+    with open(os.path.join(mdir, 'mod.json'), encoding='utf-8') as fh:
+        doc = json.load(fh)
+    with open(os.path.join(root, 'elekloader', 'sdk', 'include', 'std1.h'), encoding='utf-8') as fh:
+        events = set(re.findall(r'\(\*std1_(ev_\w+)_fn\)', fh.read()))
+    std = doc['std']
+    ui = {'ev_boot_done', 'ev_idle', 'ev_crash', 'ev_usb', 'ev_key_leds', 'ev_mode', 'ev_param_set',
+          'ev_clip', 'ev_pattern', 'ev_mute', 'ev_view'}
+    midi = {'ev_midi_in', 'ev_sysex_in', 'ev_midi_cc', 'ev_midi_pc', 'ev_midi_out', 'ev_seq_midi', 'ev_seq_tick'}
+    voice = {'ev_voice_start', 'ev_voice_end'}
+    assert set(std) == {'ev_boot', 'ev_tick', 'ev_draw', 'ev_key', 'ev_settings', 'ev_project',
+                        'ev_render_in', 'ev_param_turn'} | ui | midi | voice
+    assert set(std) <= events
+    assert all(t in doc['collections'] for t in std.values())
+    native = {e for e, t in std.items() if t == e}
+    assert native == {'ev_tick', 'ev_draw', 'ev_settings', 'ev_project', 'ev_render_in'}
+    assert {std[e] for e in ('ev_boot', 'ev_key', 'ev_param_turn')} == {'std_boot', 'std_key', 'std_param_turn'}
+    # every other entry is core's own std_<event> table, which one of its C sources walks
+    csrc = ''
+    for name in doc['sources']:
+        if name.endswith('.c') and not name.startswith('..'):
+            with open(os.path.join(mdir, name), encoding='utf-8') as fh:
+                csrc += fh.read()
+    for e in set(std) - native:
+        assert std[e] == 'std_' + e[3:], e
+        assert re.search(r'^extern const \w+ %s\[\];' % std[e], csrc, re.M), e
+    assert doc['defsym'].get('BOOT_INIT') == '1' and 'std.c' in doc['sources']
+    subs = {(x['event'], x['fn']): x['order'] for x in doc['subscribe']}
+    assert subs[('ev_key', 'core_std_key')] == 0
+    assert subs[('ev_enc', 'core_std_enc')] == -1000000
+    assert subs[('ev_tick', 'core_std_tick')] == -1000000
+    assert subs[('ev_tick', 'core_std_tick_end')] == 1000000
+    with open(os.path.join(mdir, 'std.c'), encoding='utf-8') as fh:
+        src = fh.read()
+    for fn in ('core_boot_init', 'core_std_key', 'core_std_enc', 'core_std_param_turn', 'core_redraw',
+               'core_post', 'core_timer', 'core_std_tick', 'core_std_tick_end'):
+        assert re.search(r'^\w[\w ]*\b%s\(' % fn, src, re.M), fn
+    with open(os.path.join(mdir, 'pages.s'), encoding='utf-8') as fh:
+        assert 'jsr     core_std_param_turn' in fh.read()
+
+
+def test_core_a4mk2_0_7_ui_sites():
+    """core-a4mk2 0.7's UI and system events (ui.c, ui.s): every site's target is a global of ui.s
+    or a function of ui.c, each std table is read in ui.c, the native ev_knob_turn,
+    ev_analog_frame and ev_mod_set have their tables, and core_ui_tick runs right after core_std_tick."""
+    import re
+    root = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
+    mdir = os.path.join(root, 'mods', 'core-a4mk2')
+    with open(os.path.join(mdir, 'mod.json'), encoding='utf-8') as fh:
+        doc = json.load(fh)
+    with open(os.path.join(mdir, 'ui.s'), encoding='utf-8') as fh:
+        asm = fh.read()
+    with open(os.path.join(mdir, 'ui.c'), encoding='utf-8') as fh:
+        src = fh.read()
+    globs = set(re.findall(r'^\s*\.globl\s+(\w+)', asm, re.M))
+    globs |= {m for m in re.findall(r'^\s*(?:CLIP|PREQ|MODSET)\s+(\w+),', asm, re.M)}
+    cfns = set(re.findall(r'^\w[\w ]*?\b(core_\w+)\(', src, re.M))
+    ui_sites = [s for s in doc['sites'] if s.get('target') in globs | cfns]
+    assert len(ui_sites) == 70
+    assert len([s for s in ui_sites if s['target'].startswith('core_clip_')]) == 36
+    modset = [s for s in ui_sites if s['target'].startswith('core_modset_')]
+    assert len(modset) == 6 and all(s['op'] == 'jmp' and s['stock'].startswith('4e56') for s in modset)
+    assert len([s for s in ui_sites if s['target'].startswith('core_view_')]) == 5
+    assert len([s for s in ui_sites if s['target'].startswith('core_pattern_') and s['target'] != 'core_pattern_site']) == 6
+    for s in ui_sites:
+        assert len(s['stock']) // 2 >= (4 if s['op'] == 'ptr' else 6), s
+        if s['op'] == 'keep2':
+            assert s['stock'].startswith('4eb9'), s
+    for t in ('std_boot_done', 'std_idle', 'std_crash', 'std_usb', 'std_key_leds', 'std_mode',
+              'std_param_set', 'std_clip', 'std_pattern', 'std_mute', 'std_view'):
+        assert re.search(r'\b%s\[' % t, src), t
+    assert doc['collections']['ev_knob_turn'] == 4 and 'ev_knob_turn[0]' in src
+    assert doc['collections']['std_view'] == 4 and doc['std']['ev_view'] == 'std_view'
+    assert doc['collections']['ev_analog_frame'] == 4 and 'tst.l   ev_analog_frame' in asm
+    assert doc['collections']['ev_mod_set'] == 4 and 'ev_mod_set[0]' in src
+    assert 'ui.c' in doc['sources'] and 'ui.s' in doc['sources']
+    subs = {(x['event'], x['fn']): x['order'] for x in doc['subscribe']}
+    assert subs[('ev_tick', 'core_ui_tick')] == -999999
+    inc = os.path.join(root, 'elekloader', 'sdk', 'include', 'analog-four-mk2')
+    for h in ('keys.h', 'leds.h', 'params.h', 'ports.h'):
+        assert os.path.isfile(os.path.join(inc, h)), h
+    with open(os.path.join(inc, 'keys.h'), encoding='utf-8') as fh:
+        assert '#define CORE_TICK_HZ 20' in fh.read()
+
 if __name__ == '__main__':
     import traceback
     ok = failed = 0
