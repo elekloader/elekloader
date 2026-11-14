@@ -2477,6 +2477,30 @@ def test_core_a4mk2_room_for_drive_mods():
         assert not isinstance(cols[name], dict), name     # the linker fills these (link.NO_SPARE)
 
 
+def test_core_a4mk2_drive_storage_hooks():
+    """core-a4mk2 0.8 has core-ar2 0.14's +Drive storage contract where the A4 needs it (README, "+Drive
+    mods (0.8)"): the live generations core_store_gens, this build's from .boot, which every scope's check
+    reads; ev_boot_drive comes before 0x400f1b18, the boot's project load, so the A4 loads once (no
+    deferred load), and has no core_lfo_dsts (its LFOs are "mod" destinations)."""
+    d = os.path.join(HERE, '..', 'mods', 'core-a4mk2')
+    with open(os.path.join(d, 'store.c'), encoding='utf-8') as fh:
+        store_c = fh.read()
+    with open(os.path.join(d, 'std.c'), encoding='utf-8') as fh:
+        std_c = fh.read()
+    with open(os.path.join(d, 'store.s'), encoding='utf-8') as fh:
+        store_s = fh.read()
+    assert re.search(r'^unsigned char core_store_gens\[6\];', store_c, re.M)
+    gen = re.search(r'static unsigned gen\(int scope\)\s*\{(.*?)\}', store_c, re.S).group(1)
+    assert 'core_store_gens[scope - 1]' in gen and '__store_gen' not in gen
+    init = re.search(r'void core_store_boot_init\(void\)\s*\{(.*?)\n\}', store_c, re.S).group(1)
+    assert 'core_store_gens[s - 1] = built_gen(s)' in init
+    boot = re.search(r'void core_boot_init\(void\)\s*\{(.*?)\n\}', std_c, re.S).group(1)
+    assert boot.index('core_store_boot_init();') < boot.index('std_boot')     # before any ev_boot handler
+    site = re.search(r'core_boot_drive_site:\s*\n(.*?)\n\n', store_s, re.S).group(1).split('\n')
+    assert [l.split() for l in site] == [['jsr', 'core_boot_drive'], ['jmp', '0x400f1b18']]
+    assert 'core_lfo_dsts' not in store_c and 'boot_wait' not in store_c
+
+
 if __name__ == '__main__':
     import traceback
     ok = failed = 0
