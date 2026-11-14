@@ -58,5 +58,6 @@ then APPLY.
 
 ## Not yet
 
-The skip key, the crash flag (`.armed`), the early-site list and DSP mods
-(research/telos-ot/DSP.md).
+The skip key, the crash flag (`.armed`) and the early-site list. DSP code goes through
+`mods/dspload-ot` (`ot_dsp_load`), not through this loader's link: a TELOS mod hands its DSP words
+to it from `drive_init` (research/telos-ot/dsptone).

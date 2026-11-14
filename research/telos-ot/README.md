@@ -132,7 +132,9 @@ settle it. Nothing here has run on a unit.
   - a clash (SCENES P2 with MIDI SCENES) opens the swap dialog, and the swap works;
   - LO-FI AMF FIX is refused with its reason;
   - APPLY writes `active`, and the next start loads the new set.
-- **Not built yet:** the skip key, `.armed`, the early-site list, `js/` parity for the descriptor's shadow, and DSP mods ([DSP.md](DSP.md)).
+- **DSP mods (dspload-ot 0.1).** A TELOS mod's DSP code runs on core 0 from the card. In ot_emu
+  `--dsp`, the tone's ramp is in input A ([DSP.md](DSP.md), "Built").
+- **Not built yet:** the skip key, `.armed`, the early-site list, and `js/` parity for the descriptor's shadow.
 
 ## 8. Building it
 

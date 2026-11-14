@@ -32,6 +32,32 @@ run on a unit):
 - **Dispatch.** The stock dispatcher calls `INIT[id]` and `PROCESS[id]`; a demand effect's id
   goes to a stub that runs dry until BOUND, then the real code.
 
+## Built: dspload-ot 0.1 (2026-11-14)
+
+`mods/dspload-ot` (its README has the details): a flashed companion with the DSP bus.
+- **The copier** runs on core 1, in core 1's SPATIALIZER words (P:0x868-0x96c, the profile's
+  second DSP area), from a hook at payload B's frame head (P:0x76, `ev_dsp_b`).
+- **The dispatcher** runs on core 0 (`ev_dsp_rx`).
+- **The pump** runs on the ColdFire (`ev_frame_begin`, quiet frames only).
+- **`ot_dsp_load(blob)`** (`octatrack/dspload.h`): a TELOS mod hands it its DSP words, entry and
+  relocations. The SDK's `dsp_assemble` gives them; `dsptone/gen.py` writes them as a header.
+  The loader places the code in the window's gap (P:0x33dab..0x33fff, 597 words) and moves its
+  addresses there. So homes aren't fixed, and the on-device linker needs no DSP relocation of
+  its own.
+
+**Checked in ot_emu --dsp** (`dsptone/`, TELOS from the card, 300 frames):
+- 3 chunks and 3 doorbells were sent;
+- slot 0 is bound on both cores, and the code is in the window with its loop end moved;
+- core 0's input block holds the tone's ramp in input A (zeros without the mod).
+
+`tests/test_octatrack.py`, `test_the_dsp_loader`. Not run on a unit.
+
+**Open:**
+- the window gap's safety with non-default reverb settings (octabam's guard handles reverbs that
+  reach a home; dspload has none);
+- a per-mod DSP section in the `.elemod` format, instead of a C array;
+- DSP mods that need more than an `ev_dsp_rx` handler (an FX slot: octabam's stub per effect id).
+
 ## The design for TELOS
 
 The same split as for ColdFire mods: what must exist before the OS runs is flashed once; what a
@@ -63,8 +89,9 @@ flashed build doesn't export), `dsp-busy` (the pump has more queued than it can 
   reaching a home; TELOS v1 can take only homes no reverb reaches).
 - **A copier we can build [D].** Octabam is MIT (Sam Banks), so DLCOPY (`modules/dlcopy`:
   `dlcopy.asm`, `dlstub.asm`, `dlwrap.asm`) can be reused with its notice, as elekloader already
-  does for octabam's other code. A built `dsp_asm` is in WSL at
-  `/root/elek/octatrick/vendor/dsp56300/build/source/dsp_host/dsp_asm` (`ELEKLOADER_DSP_ASM`).
+  does for octabam's other code. The built `dsp_asm` is in WSL at
+  `/root/elek/octabam/vendor/dsp56300/build/source/dsp_host/dsp_asm` (`ELEKLOADER_DSP_ASM`;
+  octatrick's copy at the same path is a stand-in that exits 97).
 - **[O] The emulator.** `ot_emu --dsp` runs both cores; octabam's `verify_dlload` gate drives the
   same path, so a TELOS DSP gate can follow it.
 - **Order of work:** dspload-ot's ColdFire pump and copier with one test block (a tone into

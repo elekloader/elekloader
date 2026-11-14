@@ -135,7 +135,9 @@ DEVICE = Device(
                     '__arena_fill': (14603, -1), '__arena_clear': (0x05590800, -6144)}),
     dsp_payloads={'A': (0x400E2324, 0x136CB), 'B': (0x400F59EF, 0x12D05)},
     dsp_areas=(('A', 0x0AA8, 0x0BAD, 'dsp:harvest:SPATIALIZER',
-                "SPATIALIZER's code on payload A (core 0)"),),
+                "SPATIALIZER's code on payload A (core 0)"),
+               ('B', 0x0868, 0x096D, 'dsp:harvest:SPATIALIZER-B',
+                "SPATIALIZER's code on payload B (core 1): dspload-ot's copier")),
     recovery=('hold FUNC while powering on for the startup menu, press TRIG 3 (MIDI '
               'UPGRADE) and send the stock .syx over 5-pin MIDI (not USB)'),
     toolchain={

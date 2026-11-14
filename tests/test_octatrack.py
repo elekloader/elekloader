@@ -3432,6 +3432,7 @@ def test_the_machines_companion_lists_a_machine():
 
 HOOK = 0x400ef758               # payload A's P:0x88, move r2,x:>$204 (627000 000204)
 AREA = 0x400f1771               # payload A's P:0xaa8, SPATIALIZER's first word
+AREA_B = 0x401046c2             # payload B's P:0x868, SPATIALIZER's first word on core 1 (dspload-ot)
 
 
 def le24(*ws):
@@ -3481,7 +3482,7 @@ def test_dsp_payloads_parse():
     assert dsp.p_span(img, DEV, 'A', 0x88, 0x8a) == HOOK
     assert img[HOOK - DEV.main_load:HOOK - DEV.main_load + 6] == le24(0x627000, 0x000204)
     for tag, lo, hi, _nm, _w in DEV.dsp_areas:
-        assert dsp.p_span(img, DEV, tag, lo, hi) == AREA
+        assert dsp.p_span(img, DEV, tag, lo, hi) == {'A': AREA, 'B': AREA_B}[tag]
     expect(lambda: dsp.p_span(img, DEV, 'A', 0x0, 0x100000), 'does not load P:0x00000-0xfffff')
     expect(lambda: dsp.records(img, DEV, 'C'), 'has no DSP payload C')
 
@@ -3788,6 +3789,43 @@ def test_the_dsp_tone_example():
     o = AREA - DEV.main_load
     assert ln.image[o:o + len(want)] == want
     assert words(ln.image, AREA + 3 * n, 5) == [0x627000, 0x000204, 0x0bf080, 0xaa8, 0x0c]
+
+
+def test_the_dsp_loader():
+    """mods/dspload-ot: payload B's SPATIALIZER (P:0x868-0x96c, its dispatch words X:0x21a and
+    X:0x23a, both read from the stock payload) is freed for the copier, payload B's frame head
+    P:0x76 calls ev_dsp_b, and the dispatcher is an entry of ev_dsp_rx."""
+    from elekloader.sdk import build
+    if not os.path.isfile(os.environ.get('ELEKLOADER_DSP_ASM', '')):
+        raise Skip("ELEKLOADER_DSP_ASM (octabam's dsp_asm) not given")
+    st, img = stock()
+
+    def word(tag, space, addr):
+        for sp, a, cnt, at in dsp.records(img, DEV, tag):
+            if sp == space and a <= addr < a + cnt:
+                return dsp.w24(img, at + 3 * (addr - a) - DEV.main_load), at + 3 * (addr - a)
+    init, init_at = word('B', 1, 0x21a)
+    proc, proc_at = word('B', 1, 0x23a)
+    assert (init, proc) == (0x868, 0x872)               # SPATIALIZER on core 1, as on core 0 (0xaa8, 0xab2)
+    assert word('B', 1, 0x215)[0] == 0x588 and word('B', 1, 0x235)[0] == 0x589   # the null stubs
+    assert word('B', 1, 0x221)[0] == 0x96d             # the next effect's init starts right after it
+    assert word('B', 0, 0x96c)[0] == 0x00000c           # SPATIALIZER's last word is its rts
+    hook, hook_at = word('B', 0, 0x76)
+    assert (hook, word('B', 0, 0x77)[0]) == (0x667000, 0x000207)    # move r6,x:>$207
+    j = json.load(open(os.path.join(ROOT, 'mods', 'dspload-ot', 'mod.json')))
+    sites = {int(x['addr'], 16): x for x in j['sites']}
+    assert sites[hook_at]['stock'] == le24(0x667000, 0x000207).hex()
+    assert sites[init_at]['new'] == le24(0x588).hex() and sites[proc_at]['new'] == le24(0x589).hex()
+    assert j['collections']['ev_dsp_b']['head'] == le24(0x667000, 0x000207).hex()
+    with tempfile.TemporaryDirectory() as tmp:
+        core = elemod.load_any(build.build(os.path.join(ROOT, 'mods', 'core-ot'), SYX, tmp)[0])
+        bus = elemod.load_any(build.build(os.path.join(ROOT, 'mods', 'dspbus-ot'), SYX, tmp)[0])
+        ld = elemod.load_any(build.build(os.path.join(ROOT, 'mods', 'dspload-ot'), SYX, tmp)[0])
+    ln = link.link([core, bus, ld], img)
+    assert ln.layout['dsp']['B']['area'] == [0x868, 0x96d]
+    assert ln.tables['ev_dsp_b'][1] == 1 and ln.tables['ev_dsp_rx'][1] == 1
+    assert words(ln.image, hook_at, 2) == [0x0bf080, ln.map['ev_dsp_b']]   # jsr >ev_dsp_b
+    assert words(ln.image, init_at, 1) == [0x588] and words(ln.image, proc_at, 1) == [0x589]
 
 
 def test_mkmod_diff_round_trip():
