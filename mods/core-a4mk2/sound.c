@@ -21,6 +21,22 @@
 #define ICON_FOR ((uintptr_t (*)(void *, int32_t, int32_t))0x4005b380)
 #define DRAW_ICON ((void (*)(void *, uintptr_t, int32_t, int32_t, int32_t))0x4005aed4)
 #define MENU_ADD_VT 8                   /* the menu's vtable: add a row */
+#define VIEW_INVALIDATE ((void (*)(void *))0x40061a58)
+#define MENU_VIEW 0x38                  /* SoundSetupMenuView's View */
+
+/* MenuView's key handler (0x40060fbc) calls a row's select and change and
+ * redraws nothing after; stock's rows redraw because their setters send the
+ * sound's notice, whose observer invalidates menu + 0x38 (0x400e4094). A
+ * mod's set sends none, so the row does that itself, on the menu its row
+ * was added to: one SOUND SETUP exists at a time, and its builder (rerun
+ * when the sound changes) adds the rows again. */
+static void *setup_menu;
+
+static void setup_redraw(void)
+{
+    if (setup_menu)
+        VIEW_INVALIDATE((uint8_t *)setup_menu + MENU_VIEW);
+}
 
 struct fn { const void *payload[2]; uint32_t mgr; const void *invoke; };
 
@@ -35,8 +51,10 @@ static void toggle_yes(const struct core_toggle *const *f)
 {
     const struct core_toggle *t = *f;
     int on = toggle_get(t);
-    if (on >= 0 && t->set)
+    if (on >= 0 && t->set) {
         t->set(t, !on);
+        setup_redraw();
+    }
 }
 
 static void toggle_adjust(const struct core_toggle *const *f, int32_t unused, int32_t step)
@@ -44,8 +62,10 @@ static void toggle_adjust(const struct core_toggle *const *f, int32_t unused, in
     const struct core_toggle *t = *f;
     int on = toggle_get(t);
     (void)unused;
-    if (on >= 0 && step && t->set)
+    if (on >= 0 && step && t->set) {
         t->set(t, step > 0);
+        setup_redraw();
+    }
 }
 
 /* stock's draw: (functor, -, a3, a4, a5), and BOOST's checkbox is
@@ -72,5 +92,6 @@ void core_sound_setup_toggle(void *menu, const struct core_toggle *t)
     if (!it)
         return;
     ITEM_CTOR(it, &l, &c, &d, &h, -1, 8);
+    setup_menu = menu;
     (*(void (**)(void *, void *))(*(uint8_t **)menu + MENU_ADD_VT))(menu, it);
 }
