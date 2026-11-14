@@ -40,6 +40,9 @@
  *                 param_set (kept apart so a plan can read them after the
  *                 older fields)
  *   faults        UI CRASH selects that raised the fault
+ *   clip_slot     the last ev_clip's slot
+ *   clip_seen[3]  per op (copy, paste, clear), a bit 1 << kind for each kind
+ *                 whose post call came
  *
  * UI CRASH (a second SETTINGS row) raises an illegal instruction in the UI
  * task, but only while armed, so ev_crash runs on a real fault. From 0.4
@@ -81,6 +84,7 @@ struct ui_check {
     int32_t mode_last_new[4];
     uint32_t crash_magic, crash_head, crash_pc;
     uint32_t mute_n, set_n, faults;
+    uint32_t clip_slot, clip_seen[3];
 };
 volatile struct ui_check ui_check;
 static unsigned idle_sub;
@@ -281,6 +285,9 @@ int uc_clip(unsigned pre, const struct core_clip *c)
     ui_check.clip_kind = c->kind;
     ui_check.clip_op = c->op;
     ui_check.clip_track = c->track;
+    ui_check.clip_slot = c->slot;
+    if (!pre && c->op < 3)
+        ui_check.clip_seen[c->op] |= 1u << c->kind;
     return 0;
 }
 

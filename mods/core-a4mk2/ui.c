@@ -20,7 +20,9 @@
  *                                tick in the UI task. An NRPN sent as CC 99,
  *                                98, 6, 38 sets twice: stock applies it on
  *                                CC 6 and again on CC 38
- *   ev_clip       std_clip       19 copy, paste and clear routines (ui.s), the pattern view's 3 calls
+ *   ev_clip       std_clip       23 copy, paste and clear routines (ui.s), the pattern view's 2 calls
+ *                                and the SONG editor's 2 chain calls,
+ *                                the project list's copy (its handler and its job's end)
  *   ev_pattern    std_pattern    the UI task's pattern boundary message
  *                                (case 9, 0x40099c84), when the pattern changed
  *   ev_mute       std_mute       the mute setter's entry (0x400aeb8e), each
@@ -356,12 +358,43 @@ static void set_drain(void)
 #define CLIP_F_CONFIRM 1u
 #define CLIP_F_TRACK 2u
 #define CLIP_F_GRID 4u                  /* the sequencer view's FUNC+REC/STOP/PLAY */
+#define CLIP_F_HANDLED 8u               /* a view's virtual: a take still returns 1 */
 
 /* the sequencer view's copy, clear and paste virtuals act on the track only
  * in grid record (0x40021ca8: +0x161 and +0x168); otherwise they return 0
  * and the key goes on to the pattern's copy, clear and paste */
 typedef uint8_t (*grid_rec_t)(void *);
 #define GRID_REC ((grid_rec_t)0x40021ca8u)
+
+/* CLIP_CHAIN's slot: the row number the song editor shows. Stock passes
+ * a row's storage slot (0..63), which differs from the number shown once
+ * rows were inserted, moved or deleted. The song is 0x400a52fe(0x401494de())
+ * (the global object at 0x418717c8 + 0x2560); 0x400436d2(view) is the
+ * editor's cursor row's slot (-1 without song data) and 0x400b06c4(song,
+ * slot) its shown number, from 0 (-1 for the unnumbered end row "__:"). All
+ * three only read. The copy (a view's virtual) passes the view, the clear
+ * and paste calls the slot. */
+/* stock returns these pointers in %d0, so they are uint32_t here: a C
+ * pointer result is read from %a0 */
+typedef uint32_t (*objget_t)(void);
+typedef uint32_t (*songget_t)(uint32_t);
+typedef int32_t (*rowslot_t)(void *);
+typedef int32_t (*rownum_t)(uint32_t, int32_t);
+#define SONG_OBJ ((objget_t)0x401494deu)
+#define SONG_OF ((songget_t)0x400a52feu)
+#define SONG_ROW_SLOT ((rowslot_t)0x400436d2u)
+#define SONG_ROW_NUM ((rownum_t)0x400b06c4u)
+
+__attribute__((noipa)) static uint8_t chain_row(int32_t slot)
+{
+    int32_t n;
+    if (slot < 0 || slot > 63)
+        return CLIP_NONE;
+    n = SONG_ROW_NUM(SONG_OF(SONG_OBJ()), slot);
+    if (n < 0)
+        return CLIP_ROW_END;
+    return n < CLIP_ROW_END ? (uint8_t)n : CLIP_NONE;
+}
 
 static int clip_fill(struct core_clip *c, uint32_t code, uint32_t a1, uint32_t a2)
 {
@@ -373,12 +406,13 @@ static int clip_fill(struct core_clip *c, uint32_t code, uint32_t a1, uint32_t a
     c->kind = (uint8_t)code;
     c->op = (uint8_t)(code >> 8);
     c->track = (fl & CLIP_F_TRACK) ? (uint8_t)a2 : CLIP_NONE;
-    c->slot = CLIP_NONE;
+    c->slot = (uint8_t)code == CLIP_CHAIN ? chain_row(fl & CLIP_F_HANDLED ? SONG_ROW_SLOT((void *)a1) : (int32_t)a2)
+                                          : CLIP_NONE;
     return 1;
 }
 
-/* 0: not taken. Taken: 1, the stub returns 0; 3 (a grid routine), the stub
- * returns 1, "handled", so the key does not go on to the pattern's. */
+/* 0: not taken. Taken: 1, the stub returns 0; 3 (a grid routine or a view's
+ * virtual), the stub returns 1, "handled", so the key goes no further. */
 int core_clip_pre(uint32_t code, uint32_t a1, uint32_t a2)
 {
     struct core_clip c;
@@ -387,7 +421,7 @@ int core_clip_pre(uint32_t code, uint32_t a1, uint32_t a2)
         return 0;
     for (f = std_clip; *f; f++)
         if ((*f)(1, &c))
-            return (code >> 16) & CLIP_F_GRID ? 3 : 1;
+            return (code >> 16) & (CLIP_F_GRID | CLIP_F_HANDLED) ? 3 : 1;
     return 0;
 }
 
@@ -401,13 +435,55 @@ void core_clip_post(uint32_t code, uint32_t a1, uint32_t a2)
         (*f)(0, &c);
 }
 
-/* FUNC+REC, STOP and PLAY outside grid record: the pattern view's copy,
- * paste and clear (0x400c0908, 0x400c0a74, 0x400c0b48; paste and clear only
- * when no undo is possible) call the pattern's own routines, hooked at those
- * calls (keep2): 0x400a2aa4(pattern), 0x400a2cba(pattern, 1) and
- * 0x400a2de0(pattern, whole, undo); a %d0 byte says each did it */
+/* The PROJECT list's copy (ui.s): pre at its handler, which only queues
+ * the copy, post at the job's done callback in the UI task, whether the copy
+ * worked or showed ERROR. The slot is the list's item under the cursor
+ * (pm's +0x24 virtual, the cursor clamped as stock clamps it, then the
+ * 8-byte item at *(pm + 4)): its +4 is -1 for the working project, else
+ * 0..127. A done callback stock could not post (its ring entry busy) brings
+ * no post. */
+static uint8_t project_slot(int32_t slot)
+{
+    if (slot == -1)
+        return CLIP_SLOT_WORKING;
+    return slot >= 0 && slot < 128 ? (uint8_t)slot : CLIP_NONE;
+}
+
+int core_clip_project_pre(char *pm)
+{
+    typedef int32_t (*cursor_t)(void *);
+    struct core_clip c = {CLIP_PROJECT, CLIP_COPY, CLIP_NONE, CLIP_NONE};
+    const fn_clip *f;
+    int32_t idx;
+    if (!std_clip[0])
+        return 0;
+    idx = (*(cursor_t *)(*(char **)pm + 0x24))(pm);
+    c.slot = project_slot(*(int32_t *)(*(char **)(*(char **)(pm + 4) + idx * 8) + 4));
+    for (f = std_clip; *f; f++)
+        if ((*f)(1, &c))
+            return 1;
+    return 0;
+}
+
+void core_clip_project_post(int32_t **closure, int32_t ok)
+{
+    struct core_clip c = {CLIP_PROJECT, CLIP_COPY, CLIP_NONE, CLIP_NONE};
+    const fn_clip *f;
+    (void)ok;
+    if (!std_clip[0])
+        return;
+    c.slot = project_slot(**closure);
+    for (f = std_clip; *f; f++)
+        (*f)(0, &c);
+}
+
+/* STOP and PLAY outside grid record: the pattern view's paste and clear
+ * (0x400c0a74, 0x400c0b48; only when no undo is possible) call the pattern's
+ * own routines, hooked at those calls (keep2): 0x400a2cba(pattern, 1) and
+ * 0x400a2de0(pattern, whole, undo); a %d0 byte says each did it. The copy,
+ * 0x400a2aa4, is hooked at its entry (ui.s): its other caller, the pattern
+ * select view, calls it through a register. */
 typedef uint8_t (*pop_t)(void *, int32_t, int32_t);
-#define PATTERN_COPY ((pop_t)0x400a2aa4u)
 #define PATTERN_PASTE ((pop_t)0x400a2cbau)
 #define PATTERN_CLEAR ((pop_t)0x400a2de0u)
 
@@ -424,11 +500,6 @@ __attribute__((noipa)) static uint32_t pattern_op(pop_t fn, unsigned op, void *p
     return r;
 }
 
-uint32_t core_clip_pcopy(void *pattern)
-{
-    return pattern_op(PATTERN_COPY, CLIP_COPY, pattern, 0, 0);
-}
-
 uint32_t core_clip_ppaste(void *pattern, int32_t a)
 {
     return pattern_op(PATTERN_PASTE, CLIP_PASTE, pattern, a, 0);
@@ -437,6 +508,42 @@ uint32_t core_clip_ppaste(void *pattern, int32_t a)
 uint32_t core_clip_pclear(void *pattern, int32_t whole, int32_t undo)
 {
     return pattern_op(PATTERN_CLEAR, CLIP_CLEAR, pattern, whole, undo);
+}
+
+/* The SONG editor's clear and paste virtuals (+0x38 0x400448d0, +0x3c
+ * 0x400449a6, from the shared view helper 0x40061912) first undo the last clear or paste of
+ * the same kind and row ("UNDO CLEAR", "UNDO PASTE"); only when there is
+ * none do they call the chain's own routines, hooked at those calls (keep2):
+ * 0x400b2412(song, row, 1) at 0x40044934 and 0x400b223a(song, row, 1) at
+ * 0x40044a02; a %d0 byte says each did it ("CLEAR CHAIN", "PASTE CHAIN").
+ * pre comes before the routine (an empty clipboard or a row with nothing to
+ * act on brings a pre without a post), post only when it acted; an undo
+ * brings neither. A take returns 0: stock shows nothing and keeps no undo.
+ * Both carry the row (chain_row above). */
+typedef uint8_t (*cop_t)(void *, int32_t, int32_t);
+#define CHAIN_CLEAR ((cop_t)0x400b2412u)
+#define CHAIN_PASTE ((cop_t)0x400b223au)
+
+__attribute__((noipa)) static uint32_t chain_op(cop_t fn, unsigned op, void *song, int32_t row, int32_t a)
+{
+    const uint32_t code = CLIP_CHAIN | op << 8;
+    uint8_t r;
+    if (core_clip_pre(code, 0, (uint32_t)row))
+        return 0;
+    r = fn(song, row, a);
+    if (r)
+        core_clip_post(code, 0, (uint32_t)row);
+    return r;
+}
+
+uint32_t core_clip_cclear(void *song, int32_t row, int32_t a)
+{
+    return chain_op(CHAIN_CLEAR, CLIP_CLEAR, song, row, a);
+}
+
+uint32_t core_clip_cpaste(void *song, int32_t row, int32_t a)
+{
+    return chain_op(CHAIN_PASTE, CLIP_PASTE, song, row, a);
 }
 
 /* =============================== ev_pattern ================================ */
