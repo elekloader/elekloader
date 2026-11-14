@@ -8,10 +8,13 @@
  *   taken[t][w] the calls this mod took: every call on TAKE_TRACK (track 2, index 1)
  *   mutes       core_mutes() at the last tick; mutes_changes how often it changed
  *   ticks       ev_tick's calls
+ *   a01[2]      bit s = step s (0..15) of pattern A01 a note trig, tracks 1 and 2
+ *               (core_step_trig), at the last tick
  * Live recording on track 2 therefore writes nothing; tracks 1, 3..6 record as stock. */
 #include <stdint.h>
 #include "analog-four-mk2/ui.h"
 #include "analog-four-mk2/moments.h"
+#include "analog-four-mk2/seq.h"
 
 #define TRACKS 6
 #define TAKE_TRACK 1
@@ -20,6 +23,7 @@ struct liverec_check {
     uint32_t magic;
     uint32_t calls[TRACKS][4], taken[TRACKS][4];
     uint32_t mutes, mutes_changes, ticks;
+    uint32_t a01[2];
 } liverec_check;
 
 int lr_live(unsigned track, unsigned what)
@@ -45,5 +49,12 @@ void lr_tick(void)
     if (m != liverec_check.mutes) {
         liverec_check.mutes = m;
         liverec_check.mutes_changes++;
+    }
+    for (int t = 0; t < 2; t++) {
+        uint32_t b = 0;
+        for (int st = 0; st < 16; st++)
+            if (core_step_trig(0, t, st) == CORE_STEP_NOTE)
+                b |= 1u << st;
+        liverec_check.a01[t] = b;
     }
 }
