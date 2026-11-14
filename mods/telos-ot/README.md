@@ -39,8 +39,24 @@ and what was measured are in [research/telos-ot](../../research/telos-ot/README.
 - **`memcpy`.** `telos.c` exports one: GCC calls it for `dlink.c`'s struct copies, and core-ot
   has none.
 
+## On the unit: MAIN MENU > MODS (0.2)
+
+With settings-ot 0.2 (required), MODS starts with CARD MODS: one row per `.elemod` file in
+`/ELEKLOADER/MODS` (the FAT driver's opendir and readdir, 0x46c8240e and 0x46c8244e), by title,
+then APPLY.
+- **Each row** reads `<state> <title>`. The state is `ON`, `OFF`, `+ON` (ticked, loads at the
+  next start), `-OFF` (unticked, still running) or `ERR` (refused at this start).
+- **YES on a mod** unticks it, or ticks it after the boot's own checks (`dl_check`) on the set
+  as it would be:
+  - a clash with a ticked mod opens "CLASHES WITH <mod>", and YES swaps them;
+  - any other refusal opens "CAN'T LOAD <mod>" with the reason.
+- **APPLY** writes `active` (on the engine task) and says it applies at the next start.
+- **The checks see the OS as it was before the link.** The menu's checks run with mods already
+  running, so TELOS keeps what each site it wrote replaced (`dl_site_saving`), and the stock test
+  reads that, the boot-time copy of the data and the shadow (`dl_stock_read`). A site over a
+  range the flashed build wrote is refused outright (22 `flashed`).
+
 ## Not yet
 
-The MODS page, the skip key and the crash flag (`.armed`) are designed
-(research/telos-ot/ON-THE-UNIT.md) but not built. Neither are the early-site list and DSP mods
+The skip key, the crash flag (`.armed`), the early-site list and DSP mods
 (research/telos-ot/DSP.md).

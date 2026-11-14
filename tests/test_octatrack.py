@@ -2200,7 +2200,12 @@ def test_the_settings_companion():
     assert struct.unpack('>I', ln.image[o:o + 4])[0] == ln.map['ots_root_rows']
     o = 0x400cbd8c - DEV.main_load
     assert struct.unpack('>I', ln.image[o:o + 4])[0] == 5
-    assert j['resources']['core'] == '0.6'
+    # 0.2: rows that aren't settings (TELOS's card mods) come from ot_mod_rows, built again at the
+    # card's mount (ev_card, core 0.41)
+    assert j['resources']['core'] == '0.41'
+    assert j['collections'] == {'ot_mod_rows': 4}
+    assert {'event': 'ev_card', 'fn': 'ots_settings_card', 'order': 90} in j['subscribe']
+    assert 'ot_mod_rows' in ln.tables
 
 
 def _c_defs(path):

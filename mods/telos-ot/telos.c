@@ -173,11 +173,36 @@ void telos_boot_early(void)
     dl_memcpy(telos_stockdata, (const void *)DATA_LO, DATA_HI - DATA_LO);
 }
 
+/* What each site the boot wrote replaced: the menu's checks (menu.c) see the OS as it was before
+ * the link, so a mod already running checks as it did at boot. */
+#define SAVES 1024
+static struct { u32 addr; u16 len, off; } saved[SAVES];
+static u8 saved_bytes[0x8000];
+static u32 nsaved, saved_n;
+
+void dl_site_saving(u32 addr, u32 len)
+{
+    if (nsaved >= SAVES || saved_n + len > sizeof saved_bytes)
+        return;
+    saved[nsaved].addr = addr;
+    saved[nsaved].len = (u16)len;
+    saved[nsaved].off = (u16)saved_n;
+    dl_memcpy(saved_bytes + saved_n, (const void *)addr, len);
+    saved_n += len;
+    nsaved++;
+}
+
 void dl_stock_read(u8 *dst, u32 a, u32 n)
 {
-    u32 i;
-    for (i = 0; i < n; i++, a++)
-        dst[i] = a >= DATA_LO && a < DATA_HI ? telos_stockdata[a - DATA_LO] : *(const u8 *)a;
+    u32 i, k;
+    for (i = 0; i < n; i++)
+        dst[i] = a + i >= DATA_LO && a + i < DATA_HI ? telos_stockdata[a + i - DATA_LO] : *(const u8 *)(a + i);
+    for (k = 0; k < nsaved; k++) {
+        u32 lo = saved[k].addr > a ? saved[k].addr : a;
+        u32 hi = saved[k].addr + saved[k].len < a + n ? saved[k].addr + saved[k].len : a + n;
+        for (; lo < hi; lo++)
+            dst[lo - a] = saved_bytes[saved[k].off + (lo - saved[k].addr)];
+    }
 }
 
 /* ---- quiescence ------------------------------------------------------------------------------
@@ -305,7 +330,12 @@ static void write_status(int n)
 }
 
 /* ---- the boot ----------------------------------------------------------------------------------- */
-static struct dl_choice choice[64];
+struct dl_choice telos_choice[64];      /* the boot's set: menu.c reads it */
+int telos_nchoice;
+#define choice telos_choice
+void telos_menu_scan(void);
+
+void telos_heap_reset(void) { heap_used = 0; }
 static char active[8192];
 static u8 done;
 
@@ -328,6 +358,7 @@ static void telos_boot(void)
         return;
     }
     dl_parse_active(active, (u32)len, choice);
+    telos_nchoice = n;
     telos_state[2] = (u32)n;
     loaded = dl_link((u32)(uintptr_t)core_desc, choice, n, drive_staging,
                      (u32)(uintptr_t)drive_staging_size);
@@ -348,4 +379,5 @@ void telos_card(unsigned state, int result, unsigned mode)
         return;
     done = 1;
     telos_boot();
+    telos_menu_scan();                   /* the MODS rows (menu.c), settings-ot builds them next */
 }

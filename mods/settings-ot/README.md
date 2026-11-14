@@ -55,6 +55,20 @@ const struct ot_setting my_mode_setting = {
 - **Order.** Settings show in the table's order, under a heading wherever
   the `group` changes, so give a mod's settings neighbouring orders.
 
+## Rows that aren't settings (0.2)
+
+A mod can add its own rows to MODS, above the settings: it contributes to
+`ot_mod_rows` a pointer to a `struct ot_mod_rows` (`octatrack/core.h`): a
+heading, and functions that give the number of rows, each row's label and
+value, and the action for YES. The companion builds the rows at
+`ev_boot_done` and again at the card's mount (`ev_card`, order 90, after
+the providers that read the card), and asks a row's label and value again
+each time it is drawn. TELOS (`mods/telos-ot`) lists the card's mods this
+way. 0.2 needs core 0.41.
+
+0.2 also fixes the getters of rows 8 and on: 0.1 gave row 8 the value of
+row 10, and so on, which no build with fewer than 9 rows showed.
+
 ## How it works
 
 - **The menu's sites.** The MAIN MENU root's rows pointer (0x400cbda4) is

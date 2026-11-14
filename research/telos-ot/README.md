@@ -127,7 +127,12 @@ settle it. Nothing here has run on a unit.
 
   Which reading the ColdFire itself takes is to check on a unit; neither pattern is left in the build.
 - **The stock shadow was not enough on its own.** The OS changes some of its image's data before the mount, so TELOS also keeps a copy of 0x400b9000..0x400e2324 from `ev_boot_early`, and stock parts come from that copy.
-- **Not built yet:** the MODS page, the skip key, `.armed`, the early-site list, `js/` parity for the descriptor's shadow, and DSP mods ([DSP.md](DSP.md)).
+- **The MODS page (0.2).** CARD MODS rows in MAIN MENU > MODS (settings-ot 0.2's `ot_mod_rows`).
+  In ot_emu:
+  - a clash (SCENES P2 with MIDI SCENES) opens the swap dialog, and the swap works;
+  - LO-FI AMF FIX is refused with its reason;
+  - APPLY writes `active`, and the next start loads the new set.
+- **Not built yet:** the skip key, `.armed`, the early-site list, `js/` parity for the descriptor's shadow, and DSP mods ([DSP.md](DSP.md)).
 
 ## 8. Building it
 
