@@ -422,6 +422,61 @@ void core_clip_project_post(int32_t **closure, int32_t ok)
         (*f)(0, &c);
 }
 
+/* The PROJECT list's paste (FUNC+STOP) and clear (FUNC+PLAY) (ui.s): stock
+ * asks "Replace"/"Clear <name>" and CONFIRM Y/N; on YES the dialog callback
+ * (paste 0x4003c454, clear 0x4003c4fc) queues a "Project Paste"/"Project
+ * Clear" job, whose done callback (0x4003eb4e, 0x4003ec06) runs in the UI
+ * task. Pre at the callback on YES only, with the slot the dialog was opened
+ * on (its closure's +4: -1 the working project, else 0..127); a take returns
+ * at once, as NO does, and queues nothing. Post at the done callback: a
+ * paste's when it says pasted (0 is stock's ERROR: an empty or non-project
+ * clipboard, the working project, a slot that would not load); a clear's
+ * done is given no slot and no result, so the pre keeps the slot, and a
+ * clear of the working project, which stock leaves unchanged, brings no
+ * post. One clear is in flight at a time: the dialog is modal and the job
+ * done before the list takes keys again. */
+static uint8_t project_clear_slot = CLIP_NONE;
+
+int core_clip_project_ask(char **functor, uint32_t op)
+{
+    struct core_clip c = {CLIP_PROJECT, (uint8_t)op, CLIP_NONE, CLIP_NONE};
+    const fn_clip *f;
+    c.slot = project_slot(*(int32_t *)(*functor + 4));
+    if (op == CLIP_CLEAR)
+        project_clear_slot = c.slot;
+    if (!std_clip[0])
+        return 0;
+    for (f = std_clip; *f; f++)
+        if ((*f)(1, &c)) {
+            project_clear_slot = CLIP_NONE;
+            return 1;
+        }
+    return 0;
+}
+
+void core_clip_project_paste_post(int32_t **closure, int32_t ok)
+{
+    struct core_clip c = {CLIP_PROJECT, CLIP_PASTE, CLIP_NONE, CLIP_NONE};
+    const fn_clip *f;
+    if (!std_clip[0] || !ok)
+        return;
+    c.slot = project_slot(**closure);
+    for (f = std_clip; *f; f++)
+        (*f)(0, &c);
+}
+
+void core_clip_project_clear_post(void)
+{
+    struct core_clip c = {CLIP_PROJECT, CLIP_CLEAR, CLIP_NONE, CLIP_NONE};
+    const fn_clip *f;
+    c.slot = project_clear_slot;
+    project_clear_slot = CLIP_NONE;
+    if (!std_clip[0] || c.slot == CLIP_NONE || c.slot == CLIP_SLOT_WORKING)
+        return;
+    for (f = std_clip; *f; f++)
+        (*f)(0, &c);
+}
+
 /* STOP and PLAY outside grid record: the pattern view's paste and clear
  * (0x400c0a74, 0x400c0b48; only when no undo is possible) call the pattern's
  * own routines, hooked at those calls (keep2): 0x400a2cba(pattern, 1) and

@@ -32,7 +32,7 @@
 #define CLIP_PAGE 6                     /* the active track's current 16-step page: PAGE held + REC */
 #define CLIP_TRIGS 7                    /* the held trigs of the active track: trigs held + REC */
 #define CLIP_CHAIN 8                    /* a SONG edit row (chain): the song editor's copy, clear and paste (an UNDO brings none) */
-#define CLIP_PROJECT 9                  /* a project, slot says which: the PROJECT list's copy */
+#define CLIP_PROJECT 9                  /* a project, slot says which: the PROJECT list's copy, paste and clear */
 #define CLIP_SLOT_WORKING 0xfeu         /* slot: the working project */
 #define CLIP_ROW_END 0xfdu              /* slot, CLIP_CHAIN: the song's unnumbered end row "__:" */
 #define CLIP_COPY 0                     /* to the clipboard */

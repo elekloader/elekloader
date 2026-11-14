@@ -215,3 +215,61 @@ core_clip_project_done:
 core_clip_project_done_stock:
         .short  0x4e56, 0xffdc, 0x48d7, 0x040c
         jmp     0x4003ea9e
+
+| ---- ev_clip, the PROJECT list's paste and clear: their CONFIRM dialog's
+| callbacks 0x4003c454 / 0x4003c4fc(functor, yes) (lea -44(%sp),%sp;
+| movem.l %d2/%a2-%a3,(%sp): 8 bytes) queue the job on YES (arg2's low byte)
+| and return nothing. Pre here on YES (core_clip_project_ask: a take returns
+| at once); post after the jobs' done callbacks 0x4003eb4e / 0x4003ec06
+| (closure, ok) in the UI task (link.w %fp,#-36; movem.l %d2-%d3/%a2,(%sp):
+| 8 bytes), as the copy's.
+        .globl  core_clip_project_paste
+core_clip_project_paste:
+        tst.b   11(%sp)                   | NO: stock alone
+        beq.s   1f
+        pea     1                         | CLIP_PASTE
+        move.l  8(%sp),-(%sp)             | functor
+        jsr     core_clip_project_ask
+        addq.l  #8,%sp
+        tst.l   %d0
+        bne.s   2f
+1:      .short  0x4fef, 0xffd4, 0x48d7, 0x0c04
+        jmp     0x4003c45c
+2:      rts
+
+        .globl  core_clip_project_clear
+core_clip_project_clear:
+        tst.b   11(%sp)
+        beq.s   1f
+        pea     2                         | CLIP_CLEAR
+        move.l  8(%sp),-(%sp)
+        jsr     core_clip_project_ask
+        addq.l  #8,%sp
+        tst.l   %d0
+        bne.s   2f
+1:      .short  0x4fef, 0xffd4, 0x48d7, 0x0c04
+        jmp     0x4003c504
+2:      rts
+
+        .globl  core_clip_project_paste_done
+core_clip_project_paste_done:
+        move.l  8(%sp),-(%sp)             | ok
+        move.l  8(%sp),-(%sp)             | closure
+        jsr     core_clip_project_paste_done_stock
+        jsr     core_clip_project_paste_post
+        addq.l  #8,%sp
+        rts
+core_clip_project_paste_done_stock:
+        .short  0x4e56, 0xffdc, 0x48d7, 0x040c
+        jmp     0x4003eb56
+
+        .globl  core_clip_project_clear_done
+core_clip_project_clear_done:
+        move.l  8(%sp),-(%sp)
+        move.l  8(%sp),-(%sp)
+        jsr     core_clip_project_clear_done_stock
+        addq.l  #8,%sp
+        jmp     core_clip_project_clear_post
+core_clip_project_clear_done_stock:
+        .short  0x4e56, 0xffdc, 0x48d7, 0x040c
+        jmp     0x4003ec0e
