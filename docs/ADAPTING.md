@@ -966,6 +966,14 @@ for the next handler; declare it returning `uint32_t`, since the bus reads d0. `
 holds each track's renderer time, both of the frame builder's calls, on the frame meter's counter: last,
 worst, calls and total per track. `tests/fixtures/octatrack-start` and `octatrack-rmeter` use them.
 
+### A block to DSP core 1 on the Octatrack (core-ot 0.39)
+
+`ev_dsp_feed1` runs once a frame in the frame transfer's interrupt, after stock's push to DSP core 1, as
+usb-ot's `ev_dsp_feed` does for core 0. A handler may call `ot_dsp_feed1(block, words, at)` once to send
+core 1 one more block; core.h gives the limits and where the words land (the frame's bank, as stock's own
+block). Core 1 has no event bus of its own, so the mod owns the DSP memory it writes and the DSP code that
+reads it. `tests/fixtures/octatrack-dsp1` sends 32 words to $6320, just past stock's block.
+
 ### SEQUENCER rows on the Octatrack (seqrows 0.1)
 
 PROJECT > CONTROL > SEQUENCER works as PERSONALIZE does, with `ot_seq_label`, `ot_seq_get` and `ot_seq_set`

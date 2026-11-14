@@ -370,7 +370,7 @@ def test_the_core_moves_the_arena_past_its_reserve():
                           | {v[1] for v in LFO_CODE.values()} | {'core_popup'}
                           | {v[1] for v in RATE_SITES.values()} | {'core_pers_count', 'core_tstretch'} | set(FILE_SITES.values())
                           | {v[1] for v in OPENS_SITES.values()} | {v[1] for v in GUARD_SITES.values()}
-                          | {'core_boot_frame'} | {v[1] for v in START_SITES.values()}), calls
+                          | {'core_boot_frame', 'core_dsp_state3'} | {v[1] for v in START_SITES.values()}), calls
 
 
 def reserve_docs(img, bss, fixed=False):
@@ -574,7 +574,7 @@ def test_the_core_bus_sites():
                                                  'ot_ptn_rows', 'ot_track_rows', 'ot_midi_rows',
                                                  'ot_pers_label', 'ot_pers_get', 'ot_pers_set', 'ev_tstretch', 'ev_file', 'ev_track_double',
                                                  'ev_setup_open', 'ev_pattern_check', 'ev_fx_choose',
-                                                 'ev_boot_frame', 'ev_track_start'})
+                                                 'ev_boot_frame', 'ev_track_start', 'ev_dsp_feed1'})
     assert j['collections']['ev_idle'] == 4
     for sym, target in JMP_BACK.items():       # a jmp stub goes back to the instruction after its site
         addr, stock_hex, _ev = BUS_SITES[target]
@@ -1811,6 +1811,40 @@ def test_the_core_start_and_render_sites():
     assert 'ot_render_meter' in ln.map
 
 
+# core-ot 0.39 (dsp1.s, dsp1.c): one more block a frame to DSP core 1, at the frame chain's state 3.
+DSP1_SITE = 0x400049ca                  # clr.b d0 ; move.b d0,0xfc0a400c (state 3: host port to core 0)
+
+
+def test_the_core_dsp_feed1_site():
+    """core-ot 0.39's site: stock, whole, nothing branching inside; it is state 3's entry in the frame
+    chain's jump table; the stub goes on at 0x400049d2 (stock's next instruction) and leaves for the
+    chain's return at 0x40004bc8; the probe links and subscribes."""
+    with open(os.path.join(ROOT, 'mods', 'core-ot', 'mod.json')) as fh:
+        j = json.load(fh)
+    st, img = stock()
+    s = {int(x['addr'], 16): x for x in j['sites']}[DSP1_SITE]
+    assert (s['op'], s['stock'], s['target']) == ('jmp', '420013c0fc0a400c', 'core_dsp_state3')
+    o = DSP1_SITE - DEV.main_load
+    assert img[o:o + 8].hex() == s['stock']
+    ok, note = elemod.insn_check(img, DSP1_SITE, 8, DEV)
+    assert ok, note
+    tab = 0x400ab61a - DEV.main_load
+    assert DSP1_SITE in struct.unpack('>8I', img[tab:tab + 32])
+    src = open(os.path.join(ROOT, 'mods', 'core-ot', 'dsp1.s')).read()
+    assert '0x400049d2' in src and '0x40004bc8' in src
+    inside = {k: 'core_dsp_state3' for k in range(DSP1_SITE + 1, DSP1_SITE + 8)}
+    for k in range(0, len(img) - 6, 2):
+        assert _branch_into(img, k, inside) is None, hex(DEV.main_load + k)
+    from elekloader.sdk import build
+    with tempfile.TemporaryDirectory() as tmp:
+        core = elemod.load_any(build.build(os.path.join(ROOT, 'mods', 'core-ot'), SYX, tmp)[0])
+        probe = elemod.load_any(build.build(os.path.join(HERE, 'fixtures', 'octatrack-dsp1'), SYX, tmp)[0])
+    ln = link.link([core, probe], img)
+    o = ln.layout['run_load'] + (ln.tables['ev_dsp_feed1'][0] - DEV.ddr[0]) - DEV.main_load
+    assert struct.unpack('>II', ln.image[o:o + 8]) == (ln.map['d1_feed'], 0)
+    assert 'ot_dsp1_fed' in ln.map and 'ot_dsp_feed1' in ln.map
+
+
 # seqrows-ot: CONTROL > SEQUENCER rows, a companion (QUANTIZER v1.0 owns the same places).
 SEQ_ARRAYS = {'ot_seq_label': (0x400b27d0, [0x40065bd8]), 'ot_seq_get': (0x400b27dc, [0x40065bde]),
               'ot_seq_set': (0x400b282c, [0x40065cc4, 0x40065d3e, 0x40065d58, 0x40065d72])}
@@ -2327,7 +2361,7 @@ def test_the_example_subscribes_to_the_bus():
                       'ot_ptn_rows': 6, 'ot_track_rows': 6, 'ot_midi_rows': 6,
                       'ot_pers_label': 16, 'ot_pers_get': 16, 'ot_pers_set': 16, 'ev_tstretch': 0, 'ev_file': 0, 'ev_track_double': 0,
                       'ev_setup_open': 0, 'ev_pattern_check': 0, 'ev_fx_choose': 0,
-                      'ev_boot_frame': 0, 'ev_track_start': 0}, counts
+                      'ev_boot_frame': 0, 'ev_track_start': 0, 'ev_dsp_feed1': 0}, counts
     at = ln.tables['ev_draw'][0]
     o = ln.layout['run_load'] + (at - DEV.ddr[0]) - DEV.main_load
     assert struct.unpack('>II', ln.image[o:o + 8]) == (ln.map['hello_draw'], 0)

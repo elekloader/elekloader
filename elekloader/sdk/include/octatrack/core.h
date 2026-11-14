@@ -606,6 +606,17 @@ struct ot_menu_row {
  * machine type's START (in the frame interrupt): return a START to call instead, start(trk, arg, flags) as
  * stock's, or 0 for the next handler (the first nonzero wins). Declare it returning uint32_t in C (a
  * returned pointer is read from a0, the bus reads d0). */
+/* void ev_dsp_feed1(void) (0.39): once a frame, in the frame transfer's interrupt (level 6), after stock's
+ * push to DSP core 1: a handler may call ot_dsp_feed1(block, words, at) once to send core 1 one more
+ * block through stock's host command 0x88, as stock's own 672 words to $6080 go. `words` 16-bit words, a
+ * long each (multiples of 32, at most OT_DSP_FEED1_MAX; block 16-byte aligned, written through
+ * OT_USB_UNCACHED since the eDMA reads RAM) land in core 1's X memory at the frame's bank + (at & 0x1fff),
+ * banks $2000 and $4000 taking turns, bits 16-23 set by the DSP; $6320 is the word after stock's block.
+ * The mod owns that DSP memory: returns 1 when started, 0 when refused. ot_dsp1_fed counts the transfers
+ * done. */
+#define OT_DSP_FEED1_MAX    256u
+int ot_dsp_feed1(const volatile void *block, unsigned words, unsigned at);
+extern volatile uint32_t ot_dsp1_fed;
 /* ---- timers and interrupt vectors (firmware calls) -----------------------------------------------
  * ot_timer_start(ticks, fn): fn runs every `ticks` UI ticks (60 a second), in the UI task, from the next
  * due tick on, until ot_timer_cancel(slot); it returns the slot (0-31) or -1 when all 32 are busy (stock
