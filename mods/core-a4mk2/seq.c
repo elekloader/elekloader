@@ -123,3 +123,123 @@ int core_transport(void)
 {
     return PLAY_STATE;
 }
+
+/* ---- getters, from any task or interrupt ---- */
+
+#define PATTERN_NOW (*(volatile signed char *)0x80006acc)
+#define PATTERN_RESOLVED (*(volatile signed char *)0x80006acd) /* the resolver's answer at the end */
+#define RESOLVED (*(volatile int *)0x80006b58)          /* 1 from the resolve to the commit */
+#define SWITCH_ASKED (*(volatile int *)0x80006b2c)      /* a direct switch asked, not yet timed */
+#define SWITCH_COUNT (*(volatile int *)0x80006b28)      /* clocks to a timed direct switch */
+#define SWITCH_TO (*(volatile int *)0x80006b20)
+#define EL_PLAYING (*(volatile unsigned *)0x41281752)   /* the song's element playing */
+#define EL_QUEUED (*(volatile int *)0x41281756)         /* the element queued, -1 none */
+#define PLAY_MODE (*(volatile int *)0x412aa56a)         /* 0 pattern, 1 chain, 2 song */
+#define EL_NEXT(e) (*(volatile short *)(0x4127fbd2u + 0x14u * (unsigned)(e)))
+#define EL_ROW(e) (*(volatile short *)(0x4127fbd6u + 0x14u * (unsigned)(e)))
+#define EL_PATTERN(e) (*(volatile unsigned char *)(0x4127fbe5u + 0x14u * (unsigned)(e)))
+#define ROW_NEXT(r) (*(volatile short *)(0x41280fd4u + 0x1eu * (unsigned)(r)))
+#define ROW_HEAD(r) (*(volatile unsigned short *)(0x41280fd6u + 0x1eu * (unsigned)(r)))
+#define ROW_REPEATS(r) (*(volatile short *)(0x41280fdau + 0x1eu * (unsigned)(r)))
+#define ROW_REPEATED (*(volatile int *)0x80006b30)
+#define ROW_SKIP (*(volatile short *)0x4127f948)
+#define TEMPO (*(volatile unsigned *)0x40214818)        /* BPM x 120 */
+#define TRACK_STEP ((volatile signed char *)0x80006ab8) /* + track: the step sounding now */
+#define TRACK_SPEED ((volatile signed char *)0x80006aed) /* + track: 0..6, as the tick plays it */
+#define PATTERNS 0x4066ac36u                            /* live pattern p's object */
+#define PATTERN_SIZE 0x16fdau
+#define TRACK_REC 0x3b1u                                /* a track's record in the object */
+#define TR_LENGTH 0x1c5u                                /* the track's length, a word (per-track scale) */
+#define PAT_LENGTH 0x16ec6u                             /* the pattern's length, a word */
+#define PAT_SCALE 0x16eccu                              /* scale mode: 1 per track */
+
+int core_pattern_now(void)
+{
+    int p = PATTERN_NOW;
+    return (unsigned)p < 128 ? p : -1;
+}
+
+static int pattern_of(int e)
+{
+    int p;
+    if ((unsigned)e > 0xff)
+        return -1;
+    p = EL_PATTERN(e);
+    return p < 128 ? p : -1;
+}
+
+/* what the resolver (0x400793e4) will answer at the pattern's end, read
+ * without its side effects; a direct switch and an answer already made
+ * come first */
+int core_pattern_next(void)
+{
+    int q, e, r, n;
+    unsigned pl;
+    if (SWITCH_ASKED || SWITCH_COUNT > 0) {
+        n = SWITCH_TO & 0xff;
+        return n < 128 ? n : -1;
+    }
+    if (RESOLVED == 1) {
+        n = PATTERN_RESOLVED;
+        return (unsigned)n < 128 ? n : -1;
+    }
+    pl = EL_PLAYING;
+    if ((pl & 0xffff) > 0xff)
+        return -1;
+    q = EL_QUEUED;
+    e = (short)pl;
+    if (q >= 0)
+        return pattern_of((short)q);
+    if (PLAY_MODE == 0)
+        return pattern_of(e);
+    n = EL_NEXT(e);
+    if (n >= 0)
+        return pattern_of(n);
+    r = EL_ROW(e);
+    if ((unsigned)r > 0xff)
+        return -1;
+    if (PLAY_MODE == 2 && ROW_REPEATS(r) <= ROW_REPEATED) {
+        n = ROW_NEXT(r);
+        if (n < 0)
+            return -1;                          /* the song ends */
+        if (ROW_SKIP == n) {
+            n = ROW_NEXT(n);
+            if (n < 0)
+                return -1;
+        }
+        return pattern_of((short)ROW_HEAD(n));
+    }
+    return pattern_of((short)ROW_HEAD(r));
+}
+
+unsigned core_tempo(void)
+{
+    return TEMPO;
+}
+
+int core_track_speed(int track)
+{
+    return (unsigned)track < TRACKS ? TRACK_SPEED[track] : -1;
+}
+
+int core_track_step(int track)
+{
+    return (unsigned)track < TRACKS ? TRACK_STEP[track] : -1;
+}
+
+/* the length track's steps wrap at in the playing pattern's live object, as
+ * the tick reads it: the track's in per-track scale mode, else the
+ * pattern's. Odd track records sit at odd addresses: bytes only. */
+int core_track_length(int track)
+{
+    volatile unsigned char *o;
+    int p = PATTERN_NOW;
+    if ((unsigned)track >= TRACKS || (unsigned)p >= 128)
+        return -1;
+    o = (volatile unsigned char *)(PATTERNS + PATTERN_SIZE * (unsigned)p);
+    if (o[PAT_SCALE] == 1) {
+        o += TRACK_REC * (unsigned)track + TR_LENGTH;
+        return (short)(o[0] << 8 | o[1]);
+    }
+    return (short)(o[PAT_LENGTH] << 8 | o[PAT_LENGTH + 1]);
+}

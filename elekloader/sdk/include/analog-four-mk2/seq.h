@@ -41,4 +41,28 @@
 #define CORE_TRANSPORT_PAUSED 2
 int core_transport(void);
 
+/* the pattern playing (0..127), and the one it changes to next: a direct
+ * switch waiting for its moment, else what the pattern's end will choose,
+ * read without changing anything: the queued pattern, else in CHAIN mode the
+ * chain's next (its head after the last), in SONG mode the same within the
+ * row and, once the row's repeats are done, the next row's first; with
+ * none of them the one playing. -1 for none, or a song that ends there
+ * (playback stops) */
+int core_pattern_now(void);
+int core_pattern_next(void);
+/* the tempo, BPM x 120 */
+unsigned core_tempo(void);
+/* track t's speed as the tick plays it, 0..6: 0 2x, 1 3/2x, 2 1x, 3 3/4x,
+ * 4 1/2x, 5 1/4x, 6 1/8x (a 1x step is 6 sequencer clocks, 24 ticks); a
+ * change takes effect at the track's next step. And the step sounding now
+ * (0..63); -1 also from PLAY's setup until the first step sounds, and for a
+ * track out of range. The step a trig plays may differ from it: PLAYING
+ * PAGES and a euclidean track's map choose another step's trig */
+int core_track_speed(int track);
+int core_track_step(int track);
+/* the length track t's steps wrap at as the tick plays the pattern now
+ * playing: the track's own in per-track scale mode, else the pattern's,
+ * as stored. -1 for a track out of range or no pattern playing */
+int core_track_length(int track);
+
 #endif

@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
 /* seq-check: core-a4mk2's ev_seq_step, ev_transport and core_transport
  * (analog-four-mk2/seq.h), recorded in seq_check (an exported symbol) for an
- * emulator's or a unit's memory read. 724 bytes, big-endian:
+ * emulator's or a unit's memory read. 1008 bytes, big-endian:
  *   magic        0x53514134 ("SQA4") once an event ran
  *   steps_calls  ev_seq_step's calls; first_calls those with CORE_SEQ_FIRST
  *   tr_n         ev_transport's calls
@@ -15,6 +15,11 @@
  *   tr[8]        the last 8 ev_transport calls, at tr_n % 8: {clock, state}
  *   e[64]        the last 64 ev_seq_step calls: {clock, steps, trigs,
  *                bit 0 CORE_SEQ_FIRST, core_transport()}
+ *   now, next, tempo, speed[6], step[6], length[6]   (0.2) the getters' last
+ *                values, read in ev_seq_step
+ *   g[64]        (0.2) per ev_seq_step call, at the same n % 64 as e:
+ *                {core_pattern_now, core_pattern_next, core_track_step(0),
+ *                core_track_step(1)}
  * The clock is stock's sequencer time 0x4045c3f0 / 900000 (one a MIDI
  * clock), read in the event. */
 #include <stdint.h>
@@ -31,7 +36,13 @@ struct seq_check {
     uint32_t steps_n[TRACKS], trigs_n[TRACKS], dmin[TRACKS], dmax[TRACKS], last[TRACKS];
     struct trn tr[8];
     struct ent e[64];
-    uint32_t spare[2];
+    /* 0.2: the getters (core-a4mk2), at each ev_seq_step: the last values, and per call
+     * (at n % 64, as e) the pattern now and next and tracks 1 and 2's step sounding now */
+    int32_t now, next;
+    uint32_t tempo;
+    int8_t speed[TRACKS], step[TRACKS];
+    int16_t length[TRACKS];
+    struct { int8_t now, next, step0, step1; } g[64];
 } seq_check;
 
 static uint32_t running;               /* bit t: track t's steps since its first are timed */
@@ -52,6 +63,18 @@ void sq_step(uint32_t steps, uint32_t trigs)
     x->trigs = (uint8_t)trigs;
     x->flags = steps & CORE_SEQ_FIRST ? 1 : 0;
     x->state = (int8_t)core_transport();
+    seq_check.g[seq_check.n % 64].now = (int8_t)core_pattern_now();
+    seq_check.g[seq_check.n % 64].next = (int8_t)core_pattern_next();
+    seq_check.g[seq_check.n % 64].step0 = (int8_t)core_track_step(0);
+    seq_check.g[seq_check.n % 64].step1 = (int8_t)core_track_step(1);
+    seq_check.now = core_pattern_now();
+    seq_check.next = core_pattern_next();
+    seq_check.tempo = core_tempo();
+    for (t = 0; t < TRACKS; t++) {
+        seq_check.speed[t] = (int8_t)core_track_speed(t);
+        seq_check.step[t] = (int8_t)core_track_step(t);
+        seq_check.length[t] = (int16_t)core_track_length(t);
+    }
     seq_check.n++;
     for (t = 0; t < TRACKS; t++) {
         if (!(steps & (1u << t)))
