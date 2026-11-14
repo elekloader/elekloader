@@ -197,15 +197,17 @@ def test_core_a4mk2_sites():
     assert [(x['addr'], x['op'], x['stock']) for x in voice07] == [
         ('0x40102174', 'jsr', '4eb940105410'), ('0x40102e10', 'jsr', '2f024e91588f')]
     # and 0.7's 70 UI and system sites (ui.s, ui.c; tests/test_units.py, test_core_a4mk2_0_7_ui_sites),
-    # and 0.8's ev_track_key: a jmp over TrackSelectionView's `jsr 0x4005b6f0`, the key code (trackkey.s),
+    # 0.8's ev_track_key: a jmp over TrackSelectionView's `jsr 0x4005b6f0`, the key code (trackkey.s),
     # ev_voice_params over the audio interrupt's `jsr 0x400fa2b0` and ev_sound_setup over SOUND SETUP's
-    # `movea.l (a3),a0; move.l 8(a0),d7` (sound.s)
+    # `movea.l (a3),a0; move.l 8(a0),d7` (sound.s), and main()'s call at 0x401061e8 (ev_boot_drive)
     track08 = [x for x in mod['sites'] if x.get('target') in ('core_track_key_site', 'core_voice_params_site',
                                                                 'core_sound_setup_site')]
     assert [(x['addr'], x['op'], x['stock']) for x in track08] == [
         ('0x400c8ba2', 'jmp', '4eb94005b6f0'), ('0x40103af6', 'jmp', '4eb9400fa2b0'),
         ('0x400e62c8', 'jmp', '20532e280008')]
-    assert len(mod['sites']) == 117 + len(voice07) + 70 + len(track08)
+    assert len(mod['sites']) == 117 + len(voice07) + 70 + len(track08) + 1
+    boot_drive = [x for x in mod['sites'] if x.get('target') == 'core_boot_drive_site']
+    assert [(x['addr'], x['op'], x['stock']) for x in boot_drive] == [('0x401061e8', 'jsr', '4eb9400f1b18')]
     midi = [x for x in mod['sites'] if x.get('target') in ('core_nrpn_site', 'core_cc_site')]
     assert [(x['addr'], x['op'], x['stock']) for x in midi] == \
         [('0x4009ff56', 'jmp', '4fefffec48d7043c'), ('0x400a0b62', 'jmp', '4e56ffd848d71cfc')]

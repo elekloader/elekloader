@@ -68,3 +68,24 @@ st_proj_save_body:                      | 0x400a771a (0.6)
         lea     -48(%sp),%sp
         movem.l %d2-%d4/%a2-%a6,(%sp)
         jmp     0x400a7722
+
+| (0.8) the site 0x401061e8 in main() (0x40105fb6), stock `jsr 0x400f1b18.l`,
+| after the +Drive's init and the power-off image's load and before the audio
+| interrupt and the UI task: the displaced call first, with the stack as the
+| site had it (its own return address taken off and kept), then
+| core_boot_drive (store.c), ev_boot_drive. d0 as the call left it.
+        .globl  core_boot_drive_site
+        .align  2
+core_boot_drive_site:
+        move.l  (%sp)+, boot_drive_ret
+        jsr     0x400f1b18
+        move.l  %d0, -(%sp)
+        jsr     core_boot_drive
+        move.l  (%sp)+, %d0
+        move.l  boot_drive_ret, -(%sp)
+        rts
+
+        .bss
+        .align  4
+boot_drive_ret:
+        .skip   4
