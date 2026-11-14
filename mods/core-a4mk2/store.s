@@ -83,3 +83,16 @@ core_boot_drive_site:
         jsr     core_boot_drive
         jmp     0x400f1b18
 
+| (0.8) the site 0x40074af6 in FORMAT +DRIVE (0x40074984), stock
+| `move.l #0x24c18,%d0`: after the slot erases, before the header's rewrite,
+| under the store mutex, for the menu's format and a headerless card's first
+| one. %a2 is the MmcFs; %d0, %d1, %a0, %a1 are free there.
+| core_drive_format (store.c) runs ev_drive_format(fs), then %d0 as stock's.
+        .globl  core_drive_format_site
+        .align  2
+core_drive_format_site:
+        move.l  %a2, -(%sp)
+        jsr     core_drive_format
+        addq.l  #4, %sp
+        move.l  #0x24c18, %d0
+        rts

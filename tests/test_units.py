@@ -2452,14 +2452,14 @@ def test_core_a4mk2_room_for_drive_mods():
     the Drive Loader links (256), the audio interrupt's marked render; the page tables by the views'
     room (pages.s VIEW_MAX 16: every A4 page is a view), core_params by the loader's mods, and
     core_lock_params left to the linker's default (a +Drive mod has no storage, so no lock codes);
-    ev_boot_drive none: the Drive Loader runs in it, no +Drive mod."""
+    ev_boot_drive and ev_drive_format none: the Drive Loader runs in them, no +Drive mod."""
     with open(os.path.join(HERE, '..', 'mods', 'core-a4mk2', 'mod.json'), encoding='utf-8') as fh:
         doc = json.load(fh)
     cols = doc['collections']
     assert doc['version'] == '0.8'
     render = {'ev_render_in', 'ev_render_out', 'ev_analog_frame', 'std_voice_start', 'std_voice_end',
               'std_seq_midi', 'ev_voice_params'}
-    loader_only = ('ev_boot_drive',)
+    loader_only = ('ev_boot_drive', 'ev_drive_format')
     events = [n for n in cols if n.startswith(('ev_', 'std_')) and n not in loader_only]
     assert set(doc['std'].values()) <= set(events)
     for name in loader_only:                 # the Drive Loader's own: no +Drive mod is called in them
