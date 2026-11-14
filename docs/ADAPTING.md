@@ -2404,6 +2404,13 @@ sites, with `analog-rytm-mk2/moments.h`:
   handle a project uses. A core without the table `core_handles` refuses
   the mark at link time.
 
+### Moments (core-a4mk2, Analog Four MKII)
+
+The Rytm's moments, above, with `analog-four-mk2/moments.h`
+(after core-a4mk2 0.8, not yet in a release): `core_project_name()`. The SysEx handler is std1's
+`ev_sysex_in` (core-a4mk2 0.7). What differs is in
+mods/core-a4mk2/README.md, "Moments".
+
 ### The sequencer (core-ar2 0.11, Analog Rytm MKII)
 
 The sequencer clock's steps and ticks as events, with

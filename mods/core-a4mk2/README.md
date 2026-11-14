@@ -603,6 +603,14 @@ Not reported (std1 rule 6): a list parameter's turn. Unconfirmed: `keys.h`'s
 `seq.c`, `seq.s`: core-ar2 0.11's sequencer events (`analog-four-mk2/seq.h`;
 [seq-check](../../examples/seq-check-a4mk2)).
 
+## Moments
+
+core-ar2 0.11's moments, same names and arguments
+(`analog-four-mk2/moments.h`), at the addresses `send.c`, `store.c`,
+`moments.c` and `moments.s` explain. From an interrupt
+`core_midi_try_send` masks every interrupt for the send. No sound pool; a
+kit select keeps the playing trigs' mod locks. No `ev_project_slot`.
+
 ## Checked so far
 
 The runs' logs are in their pull requests; what they established:
