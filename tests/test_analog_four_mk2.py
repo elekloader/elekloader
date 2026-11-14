@@ -250,9 +250,10 @@ def test_core_a4mk2_sites():
         assert x['len'] >= (4 if x['op'] == 'ptr' else 6), x
         if x['op'] == 'keep2':
             assert sb(x, img).startswith('4eb9'), x
-    locks = [x for x in mod['sites'] if x['addr'] not in {y['addr'] for y in j['sites'][:48]} and x not in midi
+    first = [y for y in j['sites'] if y.get('target') not in ('core_boot_drive_site', 'core_drive_format_site')][:48]
+    locks = [x for x in mod['sites'] if x['addr'] not in {y['addr'] for y in first} and x not in midi
              and x not in new06 and x not in std07 and x not in voice07 and x not in ui
-             and x not in track08]
+             and x not in track08 and x not in drive]
     dests = [x for x in locks if x.get('target', '').startswith(('core_dst', 'core_id_index', 'core_index_id',
                                                                    'core_push_', 'core_set_'))]
     assert len(dests) == 21 and len([x for x in dests if x['op'] == 'ptr']) == 6
