@@ -56,7 +56,9 @@ void *core_pattern_item(int p);
  *                      project load, CREATE NEW, a SysEx kit in, a kit
  *                      change); kit -1 for data in no kit slot.
  * Several pushes of one kit since the last tick are one event; a select
- * comes before the pushes of the same tick. */
+ * comes before the pushes of the same tick. A select keeps the playing
+ * trigs' mod locks (core-ar2's stopped kit change drops them); a kit load
+ * resets them. */
 #define CORE_KIT_SELECTED 1
 #define CORE_KIT_PUSHED 2
 
