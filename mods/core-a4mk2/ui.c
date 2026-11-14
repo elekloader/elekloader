@@ -18,7 +18,7 @@
  *                                (vtable slots), queued and run at the next
  *                                tick in the UI task
  *   ev_clip       std_clip       23 copy, paste and clear routines (ui.s), the pattern view's 2 calls
- *                                and the SONG editor's 2 chain calls,
+ *                                and the SONG editor's 2 chain calls, the sequencer view's trig paste call,
  *                                the project list's copy (its handler and its job's end)
  *   ev_pattern    std_pattern    the UI task's pattern boundary message
  *                                (case 9, 0x40099c84), when the pattern changed
@@ -489,6 +489,28 @@ uint32_t core_clip_cclear(void *song, int32_t row, int32_t a)
 uint32_t core_clip_cpaste(void *song, int32_t row, int32_t a)
 {
     return chain_op(CHAIN_PASTE, CLIP_PASTE, song, row, a);
+}
+
+/* The sequencer view's STOP with trigs held on the shown page (0x4002805c,
+ * in grid record, FUNC or not) pastes the copied trigs from the first held
+ * step: 0x400b888a(pattern track, step), called only at 0x4002863c and
+ * hooked there (keep2), returns how many trigs it pasted ("PASTE %d TRIGS");
+ * 0 when the clipboard holds no trigs. pre comes before it, post only when
+ * it pasted one or more; there is no UNDO PASTE for trigs. A take returns 0:
+ * stock shows nothing. */
+typedef int32_t (*tpaste_t)(void *, int32_t);
+#define TRIGS_PASTE ((tpaste_t)0x400b888au)
+
+int32_t core_clip_tpaste(void *track, int32_t step)
+{
+    const uint32_t code = CLIP_TRIGS | CLIP_PASTE << 8;
+    int32_t n;
+    if (core_clip_pre(code, 0, 0))
+        return 0;
+    n = TRIGS_PASTE(track, step);
+    if (n > 0)
+        core_clip_post(code, 0, 0);
+    return n;
 }
 
 /* =============================== ev_pattern ================================ */
