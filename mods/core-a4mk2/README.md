@@ -598,15 +598,17 @@ Not reported (std1 rule 6): a list parameter's turn. Unconfirmed: `keys.h`'s
 [std-check](../../examples/std-check-a4mk2),
 [ui-check](../../examples/ui-check-a4mk2).
 
-## Room for +Drive mods (0.8)
+## +Drive mods (0.8)
 
-core-ar2 0.12's spare entries (its README, "Room for +Drive mods"), for
-an A4 Drive Loader: every event table, native and `std_*`, 256, the seven
-the audio interrupt calls marked `"render": true` (`ev_render_in`,
-`ev_render_out`, `ev_analog_frame`, `std_voice_start`, `std_voice_end`,
-`std_seq_midi`, `ev_voice_params`); `core_pages`, `core_page_fns` and
-`core_view_pages` 16, pages.s's `VIEW_MAX` (every A4 page is a view);
-`core_params` 256. About 45 KB of RAM, which the +Drive area gives up.
+core-ar2 0.12's spare entries (its README, "Room for +Drive mods"): 256 in
+every event table, native and `std_*`, those the audio interrupt calls
+marked `"render"`; 16 in the page tables (pages.s `VIEW_MAX`, every A4
+page being a view); 256 in `core_params`. About 45 KB of RAM.
+
+`ev_boot_drive`: f(), once, from 0x401061e8 in main(), after stock's
+`jsr 0x400f1b18` (`store.s`): the +Drive is up and the power-off image
+read; audio and the UI task are not started. The Drive Loader links
+there; no spare entries.
 
 ## Checked so far
 

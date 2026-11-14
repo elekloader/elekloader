@@ -2447,19 +2447,21 @@ def _entry(v):
 
 
 def test_core_a4mk2_room_for_drive_mods():
-    """core-a4mk2 0.8's tables have room for +Drive mods (mods/core-a4mk2/README.md, "Room for +Drive
-    mods (0.8)"), as core-ar2 0.12's: every event table, native and std1's, for as many handlers as
+    """core-a4mk2 0.8's tables have room for +Drive mods (mods/core-a4mk2/README.md,
+    "+Drive mods (0.8)"), as core-ar2 0.12's: every event table, native and std1's, for as many handlers as
     the Drive Loader links (256), the audio interrupt's marked render; the page tables by the views'
     room (pages.s VIEW_MAX 16: every A4 page is a view), core_params by the loader's mods, and
-    core_lock_params left to the linker's default (a +Drive mod has no storage, so no lock codes)."""
+    core_lock_params left to the linker's default (a +Drive mod has no storage, so no lock codes);
+    ev_boot_drive (0.8) none: the Drive Loader runs in it, and no +Drive mod is called there."""
     with open(os.path.join(HERE, '..', 'mods', 'core-a4mk2', 'mod.json'), encoding='utf-8') as fh:
         doc = json.load(fh)
     cols = doc['collections']
     assert doc['version'] == '0.8'
     render = {'ev_render_in', 'ev_render_out', 'ev_analog_frame', 'std_voice_start', 'std_voice_end',
               'std_seq_midi', 'ev_voice_params'}
-    events = [n for n in cols if n.startswith(('ev_', 'std_'))]
+    events = [n for n in cols if n.startswith(('ev_', 'std_')) and n != 'ev_boot_drive']
     assert set(doc['std'].values()) <= set(events)
+    assert cols['ev_boot_drive'] == {'entry': 4, 'spare': 0}    # a +Drive mod is not called in it
     for name in events:
         want = {'entry': 4, 'render': True, 'spare': 256} if name in render else {'entry': 4, 'spare': 256}
         assert cols[name] == want, (name, cols[name])
