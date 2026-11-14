@@ -457,30 +457,73 @@ static int pattern_req(unsigned pattern, unsigned how)
  * view's cursor to the playing row (0x40029a44), calls 0x4007c186 (flag 1
  * from DIRECT START, 0 from DIRECT JUMP) and the tick changes the pattern
  * at once, so it reports SET; SEQUENTIAL leaves the queue, QUEUE. That is
- * the row branch, taken when 0x400ae1a4(view+0x74) is 0 and view+0xcc is
- * clear; the other branch edits the chain at the view's cursor (0x400438f0)
- * and still reports QUEUE. */
+ * the row branch, taken when the play mode (0x400ae1a4(view+0x74): 0
+ * pattern, 1 CHAIN, 2 SONG; the CHAIN and SONG MODE keys) is 0 and CHAIN is
+ * not held (view+0xcc).
+ *
+ * The other, the chain branch, edits the playing row's chain (the song
+ * row of the playing chain element, 0x41281752) at the view's chain cursor
+ * (0x400438f0): on an element it writes the new pattern into it, on a gap
+ * it inserts one. It queues nothing; the change is the same tail as the
+ * row branch's, and only when the cursor's element is the playing one
+ * (stock's 0x400299ea(view), -1 on a gap, read here before the edit; the
+ * edit keeps it): stopped the pattern changes now (NOW); playing in a
+ * direct mode at once (SET); playing in SEQUENTIAL the element's new
+ * pattern plays when the tick next lands on it, which is the boundary when
+ * nothing is queued and the play mode is 0 or the row's chain is that one
+ * element (QUEUE). Any other chain edit changes no pattern, and reports
+ * nothing. TEMP JUMP comes first in stock, playing, in either branch. */
 #define QUEUED_ROW (*(volatile int32_t *)0x41281756u)
+#define PLAYING_ELEM (*(volatile int32_t *)0x41281752u)
 #define VIEW_PTN_MODE(v) (((int (*)(void *))0x400adec8u)(*(void **)((v) + 0x74)))
-#define VIEW_CHAIN(v) (((int (*)(void *))0x400ae1a4u)(*(void **)((v) + 0x74)) || (v)[0xcc])
+#define VIEW_PLAY_MODE(v) (((int (*)(void *))0x400ae1a4u)(*(void **)((v) + 0x74)))
+#define VIEW_CURSOR_ELEM(v) (((int (*)(void *))0x400299eau)(v))
+#define SONG_OF(p) (((uint32_t (*)(uint32_t))0x400a52feu)(p))   /* returns in d0 */
+#define SONG_ELEM_ROW(s, e) (((int (*)(uint32_t, int))0x400afe72u)((s), (e)))
+#define SONG_ROW_LEN(s, r) (((int (*)(uint32_t, int))0x400b071eu)((s), (r)))
 static volatile uint8_t pattern_in_view;
+
+/* the chain branch's request, PATTERN_NONE for none (see above) */
+static unsigned pattern_view_chain(uint8_t *view, int play_mode)
+{
+    int p = PLAYING_ELEM;
+    uint32_t song;
+    if (p < 0 || VIEW_CURSOR_ELEM(view) != p)
+        return PATTERN_NONE;
+    if (TRANSPORT != 1)
+        return PATTERN_NOW;
+    if (VIEW_PTN_MODE(view) != 0)
+        return PATTERN_SET;
+    if (QUEUED_ROW >= 0)
+        return PATTERN_NONE;
+    if (play_mode == 0)
+        return PATTERN_QUEUE;
+    song = SONG_OF(*(uint32_t *)(view + 0x68));
+    if (play_mode == 1 && SONG_ROW_LEN(song, SONG_ELEM_ROW(song, p)) == 1)
+        return PATTERN_QUEUE;
+    return PATTERN_NONE;
+}
 
 int core_pattern_view(uint8_t *view, uint32_t pattern)
 {
     unsigned how;
+    int play_mode;
     if (!std_pattern[0] || pattern > 0x7fu)
         return 0;
-    if (TRANSPORT != 1)
-        how = PATTERN_NOW;
-    else if (view[0xc6])
+    play_mode = VIEW_PLAY_MODE(view);
+    if (TRANSPORT == 1 && view[0xc6])
         how = PATTERN_START;
-    else if (!VIEW_CHAIN(view) && VIEW_PTN_MODE(view) != 0)
+    else if (play_mode != 0 || view[0xcc])
+        how = pattern_view_chain(view, play_mode);
+    else if (TRANSPORT != 1)
+        how = PATTERN_NOW;
+    else if (VIEW_PTN_MODE(view) != 0)
         how = PATTERN_SET;
     else if (pattern == PATTERN_BYTE && QUEUED_ROW >= 0)
         how = PATTERN_CANCEL;
     else
         how = PATTERN_QUEUE;
-    if (pattern_req(pattern, how))
+    if (how != PATTERN_NONE && pattern_req(pattern, how))
         return 1;
     pattern_in_view = 1;
     return 0;
