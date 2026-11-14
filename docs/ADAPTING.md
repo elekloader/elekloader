@@ -988,6 +988,14 @@ Six events from the routine map, signatures in core.h: `ev_tempo` sees a tempo c
 audio preview's start and stop, `ev_rec_cmd` a recorder command from a REC key or MIDI note. All but
 `ev_tempo` only watch. Probes: `tests/fixtures/octatrack-tempo`, `-scene`, `-card`, `-preview`.
 
+### Pages, tracks, windows, patterns and the arrangement on the Octatrack (core-ot 0.42)
+
+Ten events from the firmware sweep (signatures in core.h): `ev_page`, `ev_track_select` (refusable),
+`ev_window` (open and close, named by the caller's return address), `ev_crossfader` (may change the
+value), `ev_tempo_set` (the tempo knob, TAP and the rest `ev_tempo` leaves out), `ev_pattern_select`
+(refusable for user picks), `ev_pattern_edited`, `ev_arr_mode`, `ev_arr_row` and `ev_track_play`
+(refusable). `ev_scene_knob` now covers SCENE B too. Probe: `tests/fixtures/octatrack-ui42`.
+
 ### SEQUENCER rows on the Octatrack (seqrows 0.1)
 
 PROJECT > CONTROL > SEQUENCER works as PERSONALIZE does, with `ot_seq_label`, `ot_seq_get` and `ot_seq_set`

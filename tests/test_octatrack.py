@@ -370,7 +370,7 @@ def test_the_core_moves_the_arena_past_its_reserve():
                           | {v[1] for v in LFO_CODE.values()} | {'core_popup'}
                           | {v[1] for v in RATE_SITES.values()} | {'core_pers_count', 'core_tstretch'} | set(FILE_SITES.values())
                           | {v[1] for v in OPENS_SITES.values()} | {v[1] for v in GUARD_SITES.values()}
-                          | {'core_boot_frame', 'core_dsp_state3'} | {v[1] for v in MAP041_SITES.values()} | {v[1] for v in START_SITES.values()}), calls
+                          | {'core_boot_frame', 'core_dsp_state3'} | {v[1] for v in MAP041_SITES.values()} | {v[1] for v in MAP042_SITES.values()} | {v[1] for v in START_SITES.values()}), calls
 
 
 def reserve_docs(img, bss, fixed=False):
@@ -574,7 +574,7 @@ def test_the_core_bus_sites():
                                                  'ot_ptn_rows', 'ot_track_rows', 'ot_midi_rows',
                                                  'ot_pers_label', 'ot_pers_get', 'ot_pers_set', 'ev_tstretch', 'ev_file', 'ev_track_double',
                                                  'ev_setup_open', 'ev_pattern_check', 'ev_fx_choose',
-                                                 'ev_boot_frame', 'ev_track_start', 'ev_dsp_feed1', 'ev_engine_job', 'ev_tempo', 'ev_scene_load', 'ev_card', 'ev_usb_disk', 'ev_preview', 'ev_rec_cmd'})
+                                                 'ev_boot_frame', 'ev_track_start', 'ev_dsp_feed1', 'ev_engine_job', 'ev_tempo', 'ev_scene_load', 'ev_card', 'ev_usb_disk', 'ev_preview', 'ev_rec_cmd', 'ev_page', 'ev_track_select', 'ev_window', 'ev_crossfader', 'ev_tempo_set', 'ev_pattern_select', 'ev_pattern_edited', 'ev_arr_mode', 'ev_arr_row', 'ev_track_play'})
     assert j['collections']['ev_idle'] == 4
     for sym, target in JMP_BACK.items():       # a jmp stub goes back to the instruction after its site
         addr, stock_hex, _ev = BUS_SITES[target]
@@ -1922,6 +1922,71 @@ def test_the_core_map041_sites():
         assert struct.unpack('>II', ln.image[o:o + 8]) == (ln.map[fn], 0), ev
 
 
+# core-ot 0.42 (ui.s, moments.s, held.s): from the event sweep (ot-event-candidates).
+MAP042_SITES = {
+    0x40052e98: ('4fefffe048d70cfc', 'core_scene_knob_b', 0x40052ea0, 'held.s'),
+    0x400554ec: ('23c3460d1684', 'core_page', 0x400554f2, 'ui.s'),
+    0x40083bf8: ('2f0a2f02242f000c', 'core_track_select', 0x40083c00, 'ui.s'),
+    0x400555d8: ('13c1100b14cc', 'core_track_toggle', 0x400555de, 'ui.s'),
+    0x40058382: ('200a4cd73c7c', 'core_window_create', 0x40058388, 'ui.s'),
+    0x40055db4: ('2f0a246f0008', 'core_window_destroy', 0x40055dba, 'ui.s'),
+    0x40061e2e: ('23c2460d16c8', 'core_xfade_panel', 0x40061e34, 'ui.s'),
+    0x400626a8: ('23c4460d16c8', 'core_xfade_midi', 0x400626ae, 'ui.s'),
+    0x4009c72e: ('40c346fc2700', 'core_tempo_set0', 0x4009c734, 'moments.s'),
+    0x4009c822: ('40c346fc2700', 'core_tempo_set1', 0x4009c828, 'moments.s'),
+    0x40005c4a: ('23c080001814', 'core_tempo_clock', 0x40005c50, 'moments.s'),
+    0x400a1030: ('42a74878ffff', 'core_pattern_select', 0x400a1036, 'moments.s'),
+    0x4009e4be: ('4cd77cfc4fef0090', 'core_pattern_edited', None, 'moments.s'),   # ends in its own rts
+    0x4005200c: ('2f0a4ab9460d1aec', 'core_arr_enter', 0x40052014, 'moments.s'),
+    0x40055fcc: ('4eb9400131c8', 'core_arr_leave', 0x40055fd2, 'moments.s'),
+    0x4004a658: ('70ff4fef0014', 'core_arr_row', 0x4004a65e, 'moments.s'),
+    0x40005030: ('4fefffe848d7047c', 'core_track_play', 0x40005038, 'moments.s'),
+}
+
+
+def test_the_core_map042_sites():
+    """core-ot 0.42's sites: stock, whole instructions, nothing branching inside, clear of every other site;
+    each stub goes on where stock does; ARRANGEMENT's entry replays the tst.l last, for stock's bne; the
+    probe links and subscribes to all eleven events."""
+    with open(os.path.join(ROOT, 'mods', 'core-ot', 'mod.json')) as fh:
+        j = json.load(fh)
+    st, img = stock()
+    by = {int(x['addr'], 16): x for x in j['sites']}
+    others = [(a, len(x['stock']) // 2) for a, x in by.items() if a not in MAP042_SITES]
+    for d in glob.glob(os.path.join(ROOT, 'mods', '*-ot', 'mod.json')):
+        if 'core-ot' not in d:
+            others += [(int(x['addr'], 16), len(x['stock']) // 2) for x in json.load(open(d)).get('sites', [])]
+    inside = {}
+    for a, (h, target, nxt, f) in MAP042_SITES.items():
+        n = len(h) // 2
+        src = open(os.path.join(ROOT, 'mods', 'core-ot', f)).read()
+        assert (by[a]['op'], by[a]['stock'], by[a]['target']) == ('jmp', h, target)
+        assert img[a - DEV.main_load:a - DEV.main_load + n].hex() == h
+        ok, note = elemod.insn_check(img, a, n, DEV)
+        assert ok, note
+        assert not any(c < a + n and a < c + m for c, m in others), hex(a)
+        assert nxt is None or ('0x%08x' % nxt) in src, target
+        for k in range(a + 1, a + n):
+            inside[k] = target
+    for k in range(0, len(img) - 6, 2):
+        assert _branch_into(img, k, inside) is None, hex(DEV.main_load + k)
+    m = open(os.path.join(ROOT, 'mods', 'core-ot', 'moments.s')).read()
+    enter = m[m.index('core_arr_enter:'):m.index('core_arr_leave:')]
+    tail = [w for w in (ln.split('|')[0].split() for ln in enter.splitlines()) if w][-3:]
+    assert tail == [['1:', 'move.l', '%a2,', '-(%sp)'], ['tst.l', '0x460d1aec'], ['jmp', '0x40052014']], tail
+    from elekloader.sdk import build
+    with tempfile.TemporaryDirectory() as tmp:
+        core = elemod.load_any(build.build(os.path.join(ROOT, 'mods', 'core-ot'), SYX, tmp)[0])
+        probe = elemod.load_any(build.build(os.path.join(HERE, 'fixtures', 'octatrack-ui42'), SYX, tmp)[0])
+    ln = link.link([core, probe], img)
+    for ev, fn in (('ev_page', 'u_page'), ('ev_track_select', 'u_track'), ('ev_window', 'u_window'),
+                   ('ev_crossfader', 'u_xfade'), ('ev_tempo_set', 'u_tempo'), ('ev_pattern_select', 'u_psel'),
+                   ('ev_pattern_edited', 'u_pedit'), ('ev_arr_mode', 'u_arrmode'), ('ev_arr_row', 'u_arrrow'),
+                   ('ev_track_play', 'u_play'), ('ev_scene_knob', 'u_scene')):
+        o = ln.layout['run_load'] + (ln.tables[ev][0] - DEV.ddr[0]) - DEV.main_load
+        assert struct.unpack('>II', ln.image[o:o + 8]) == (ln.map[fn], 0), ev
+
+
 # seqrows-ot: CONTROL > SEQUENCER rows, a companion (QUANTIZER v1.0 owns the same places).
 SEQ_ARRAYS = {'ot_seq_label': (0x400b27d0, [0x40065bd8]), 'ot_seq_get': (0x400b27dc, [0x40065bde]),
               'ot_seq_set': (0x400b282c, [0x40065cc4, 0x40065d3e, 0x40065d58, 0x40065d72])}
@@ -2438,7 +2503,7 @@ def test_the_example_subscribes_to_the_bus():
                       'ot_ptn_rows': 6, 'ot_track_rows': 6, 'ot_midi_rows': 6,
                       'ot_pers_label': 16, 'ot_pers_get': 16, 'ot_pers_set': 16, 'ev_tstretch': 0, 'ev_file': 0, 'ev_track_double': 0,
                       'ev_setup_open': 0, 'ev_pattern_check': 0, 'ev_fx_choose': 0,
-                      'ev_boot_frame': 0, 'ev_track_start': 0, 'ev_dsp_feed1': 0, 'ev_engine_job': 0, 'ev_tempo': 0, 'ev_scene_load': 0, 'ev_card': 0, 'ev_usb_disk': 0, 'ev_preview': 0, 'ev_rec_cmd': 0}, counts
+                      'ev_boot_frame': 0, 'ev_track_start': 0, 'ev_dsp_feed1': 0, 'ev_engine_job': 0, 'ev_tempo': 0, 'ev_scene_load': 0, 'ev_card': 0, 'ev_usb_disk': 0, 'ev_preview': 0, 'ev_rec_cmd': 0, 'ev_page': 0, 'ev_track_select': 0, 'ev_window': 0, 'ev_crossfader': 0, 'ev_tempo_set': 0, 'ev_pattern_select': 0, 'ev_pattern_edited': 0, 'ev_arr_mode': 0, 'ev_arr_row': 0, 'ev_track_play': 0}, counts
     at = ln.tables['ev_draw'][0]
     o = ln.layout['run_load'] + (at - DEV.ddr[0]) - DEV.main_load
     assert struct.unpack('>II', ln.image[o:o + 8]) == (ln.map['hello_draw'], 0)
