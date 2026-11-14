@@ -9,18 +9,23 @@
  *   ev_crash      std_crash      core's crash handler in place of stock's
  *                                printer (0x400638da), which it calls after
  *   ev_usb        std_usb        the UI task's USB message (case 0x1e, 0x4009a248),
- *                                when its configured byte changes
+ *                                when its configured byte changes; the boot's
+ *                                level once at ev_boot_done
  *   ev_key_leds   std_key_leds   after the views composed the LEDs, before
  *                                the frame is sent (0x40096b42); mgr: the
  *                                LedManager, for core_led_set
  *   ev_mode       std_mode       the UI state's mode bytes, compared each tick
  *   ev_param_set  std_param_set  the three parameter sets' set virtuals
  *                                (vtable slots), queued and run at the next
- *                                tick in the UI task
+ *                                tick in the UI task. An NRPN sent as CC 99,
+ *                                98, 6, 38 sets twice: stock applies it on
+ *                                CC 6 and again on CC 38
  *   ev_clip       std_clip       19 copy, paste and clear routines (ui.s), the pattern view's 3 calls
  *   ev_pattern    std_pattern    the UI task's pattern boundary message
  *                                (case 9, 0x40099c84), when the pattern changed
- *   ev_mute       std_mute       the mute setter's entry (0x400aeb8e)
+ *   ev_mute       std_mute       the mute setter's entry (0x400aeb8e), each
+ *                                call, changed or not (stock notifies each
+ *                                time; a mute NRPN calls it twice, as above)
  *   ev_knob_turn  (native)       the page view's turn (0x4002598c) after its
  *                                step and lockout checks (0x40025b78), the
  *                                LEVEL encoder (0x400bedb2) and the mixer
@@ -84,9 +89,12 @@ static void irq_restore(unsigned short sr)
 
 /* ============================== ev_boot_done =============================== */
 
+static void usb_boot(void);
+
 void core_boot_done(void)
 {
     const fn_void *f;
+    usb_boot();
     for (f = std_boot_done; *f; f++)
         (*f)();
 }
@@ -133,7 +141,9 @@ void core_crash_install(fn_frame stock)
 /* the UI task's message 0x1e/1, one static record posted by 0x40004412 on
  * SET_CONFIGURATION, reset, suspend and detach: +8 the USB mode (4 USB MIDI,
  * 6 USB AUDIO/MIDI, 7 OVERBRIDGE), +9 configured. A level, so a handler
- * hears each change. */
+ * hears each change, as the record reads when the message is handled. A
+ * suspend posts the flag it finds, normally 1, so 1 does not prove a host is
+ * talking; a replug with Overbridge gave 1, 0, 1 on the unit (KB T290). */
 static unsigned usb_last = 0xffu;
 static volatile uint8_t usb_mode;
 
@@ -152,6 +162,26 @@ void core_usb_msg(const uint8_t *msg)
 unsigned core_usb_mode(void)
 {
     return usb_mode;
+}
+
+/* Posts made while booting are lost: USB starts in main (0x401062e6) before
+ * the UI task installs its queue (0x400996fc). So at ev_boot_done core reads
+ * the level stock keeps beside the record (0x4133dbc0, the int every poster
+ * writes) and the live mode (the int at 0x4133dbd8; the record's +8 holds
+ * nothing until a post), and reports it as the first level. */
+#define USB_MODE (*(volatile int32_t *)0x4133dbd8u)
+#define USB_CONFIGURED (*(volatile int32_t *)0x4133dbc0u)
+
+static void usb_boot(void)
+{
+    const fn_u *f;
+    unsigned configured = USB_CONFIGURED ? 1u : 0u;
+    usb_mode = (uint8_t)USB_MODE;
+    if (usb_last != 0xffu)
+        return;
+    usb_last = configured;
+    for (f = std_usb; *f; f++)
+        (*f)(configured);
 }
 
 /* =============================== ev_key_leds =============================== */
@@ -186,7 +216,7 @@ void core_led_set(void *mgr, unsigned led, unsigned colour)
 /* ================================= ev_mode ================================= */
 
 /* the UI state (0x4014b1f6 makes it once and keeps it at 0x418717f8): its
- * mode bytes, as each setter writes them (0x40021b38 keyboard, 0x40021d2c
+ * mode bytes, as each setter writes them (0x40021b38 trig held, 0x40021d2c
  * grid record, 0x40021ddc live record, 0x40021e1e step record) */
 #define UI_STATE (*(uint8_t *volatile *)0x418717f8u)
 static const uint16_t mode_at[MODE_COUNT] = {0x160, 0x168, 0x169, 0x16a};
@@ -272,10 +302,20 @@ int32_t core_pset_cv(void *set, int32_t id, int32_t value, int32_t track, int32_
     return r;
 }
 
+/* MIDI's sets come here (CC 0x400682a6, NRPN 0x4006818e). OSC1 TUN/FIN (40,
+ * 41) and OSC2 TUN/FIN (53, 54) are one stored 16-bit value, coarse in the
+ * high byte, and each pair shares its CC and NRPN; stock's receive map keeps
+ * the later id, so MIDI sets name FIN. Core reports the pair's first id, as
+ * a panel turn of TUN does. */
+static int32_t pair_id(int32_t id)
+{
+    return (id == 41 || id == 54) ? id - 1 : id;
+}
+
 int32_t core_pset2_synth(void *set, int32_t id, int32_t value, int32_t track, int32_t rec)
 {
     int32_t r = PSET2_SYNTH(set, id, value, track, rec, 0);
-    set_queue((unsigned)track, id, value);
+    set_queue((unsigned)track, pair_id(id), value);
     return r;
 }
 
@@ -634,7 +674,8 @@ int core_knob_turn(void *view, int32_t id, int32_t delta, int32_t knob)
  * Stock edits nothing on the CV track (5) unless it is external, nor with
  * FUNC held (it opens a view instead) unless the track is FX, or external,
  * or boot flag 0x100000 is set. ui.s passes the step's delta; the return is
- * the delta stock uses (0: taken, the level stays). */
+ * the delta stock uses, or 0: taken, and ui.s leaves the routine at its exit,
+ * so neither the level (nor Ext. Vol.) is set nor its popup shown. */
 typedef uint8_t (*is_level_t)(int32_t event);
 #define IS_LEVEL ((is_level_t)0x40058724u)
 #define BOOT_FLAGS (*(volatile uint32_t *)0x401ff54cu)
@@ -659,13 +700,14 @@ int32_t core_level_turn(void *view, int32_t event, int32_t track, uint32_t ext, 
 
 /* The mixer page (0x401a6d00, key 0xb3) handles knobs A..E itself: knob n
  * sets track n's level in whole steps, 0x4009dc3a(settings, n, old + counts,
- * send), with no accelerator. ui.s calls this in place of that call. */
+ * send), with no accelerator, then shows its "Tn LEVEL" popup. ui.s asks this
+ * before that call: 1 = taken, and ui.s skips the set and the popup. */
 typedef int32_t (*level_get_t)(void *settings, int32_t track);
 typedef int32_t (*level_set_t)(void *settings, int32_t track, int32_t value, int32_t send);
 #define LEVEL_GET ((level_get_t)0x4009c8d4u)
 #define LEVEL_SET ((level_set_t)0x4009dc3au)
 
-int32_t core_mixer_level(void *view, void *settings, int32_t track, int32_t value, int32_t send)
+int core_mixer_level(void *view, void *settings, int32_t track, int32_t value)
 {
     if (ev_knob_turn[0] && (uint32_t)track <= TRACK_FX) {
         int32_t delta = value - (int8_t)LEVEL_GET(settings, track);
@@ -673,10 +715,10 @@ int32_t core_mixer_level(void *view, void *settings, int32_t track, int32_t valu
             const ev_knob_turn_fn *f;
             for (f = ev_knob_turn; *f; f++)
                 if ((*f)(view, KNOB_ID_LEVEL(track), delta * 0x100, ENC_A + track, TURN_SOUND))
-                    return 0;
+                    return 1;
         }
     }
-    return LEVEL_SET(settings, track, value, send);
+    return 0;
 }
 
 /* ================================ the tick ================================= */
