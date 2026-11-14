@@ -243,3 +243,31 @@ int core_track_length(int track)
     }
     return (short)(o[PAT_LENGTH] << 8 | o[PAT_LENGTH + 1]);
 }
+
+#define TR_EUCLID 0x32au                                /* 1: euclidean mode */
+#define TR_EUCLID_MAP 0x331u                            /* + step: the euclidean map, < 0 no trig */
+#define TRIG_NOTE 0x0001u                               /* the step's trig word: a note trig */
+#define TRIG_LOCK 0x0002u                               /* a trigless lock trig (without 0x0001) */
+#define TRIG_OFF 0x0004u                                /* trig_fire makes no trig */
+
+/* step's trig in live pattern p, as trig_fire (0x4007a1d2) reads the word
+ * before conditions and probability: CORE_STEP_NOTE a note trig,
+ * CORE_STEP_LOCK a trigless lock trig, 0 none; in euclidean mode a note
+ * trig where the map holds one. Bytes only: odd tracks' records sit at odd
+ * addresses. */
+int core_step_trig(int pattern, int track, int step)
+{
+    volatile unsigned char *r;
+    unsigned w;
+    if ((unsigned)pattern >= 128 || (unsigned)track >= TRACKS || (unsigned)step >= 64)
+        return -1;
+    r = (volatile unsigned char *)(PATTERNS + PATTERN_SIZE * (unsigned)pattern + TRACK_REC * (unsigned)track);
+    w = (unsigned)r[2 * step] << 8 | r[2 * step + 1];
+    if (w & TRIG_OFF)
+        return 0;
+    if (r[TR_EUCLID] == 1)
+        return (signed char)r[TR_EUCLID_MAP + (unsigned)step] >= 0 ? 1 : 0;
+    if (w & TRIG_NOTE)
+        return 1;
+    return w & TRIG_LOCK ? 2 : 0;
+}

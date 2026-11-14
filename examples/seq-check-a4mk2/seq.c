@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
 /* seq-check: core-a4mk2's ev_seq_step, ev_transport and core_transport
  * (analog-four-mk2/seq.h), recorded in seq_check (an exported symbol) for an
- * emulator's or a unit's memory read. 1008 bytes, big-endian:
+ * emulator's or a unit's memory read. 1112 bytes, big-endian:
  *   magic        0x53514134 ("SQA4") once an event ran
  *   steps_calls  ev_seq_step's calls; first_calls those with CORE_SEQ_FIRST
  *   tr_n         ev_transport's calls
@@ -20,6 +20,10 @@
  *   g[64]        (0.2) per ev_seq_step call, at the same n % 64 as e:
  *                {core_pattern_now, core_pattern_next, core_track_step(0),
  *                core_track_step(1)}
+ *   note[6][2], lock[6][2]   (0.3) core_step_trig of the pattern now, at
+ *                each ev_seq_step: bit s % 32 of word s / 32 per track
+ *   probe        (0.3) core_step_trig(128, 0, 0) + (0, 6, 0) + (0, 0, 64): -3
+ *   trig_pattern (0.3) the pattern those were read in
  * The clock is stock's sequencer time 0x4045c3f0 / 900000 (one a MIDI
  * clock), read in the event. */
 #include <stdint.h>
@@ -43,6 +47,11 @@ struct seq_check {
     int8_t speed[TRACKS], step[TRACKS];
     int16_t length[TRACKS];
     struct { int8_t now, next, step0, step1; } g[64];
+    /* 0.3: core_step_trig of the pattern now at each ev_seq_step: bit s of note[t][s / 32]
+     * (s % 32) a note trig, of lock[t][..] a trigless lock trig; probe: core_step_trig's
+     * out-of-range answers (-1 each: pattern 128, track 6, step 64) summed, and its last pattern */
+    uint32_t note[TRACKS][2], lock[TRACKS][2];
+    int32_t probe, trig_pattern;
 } seq_check;
 
 static uint32_t running;               /* bit t: track t's steps since its first are timed */
@@ -75,6 +84,23 @@ void sq_step(uint32_t steps, uint32_t trigs)
         seq_check.step[t] = (int8_t)core_track_step(t);
         seq_check.length[t] = (int16_t)core_track_length(t);
     }
+    seq_check.trig_pattern = core_pattern_now();
+    for (t = 0; t < TRACKS; t++) {
+        uint32_t nt[2] = {0, 0}, lk[2] = {0, 0};
+        int st, k;
+        for (st = 0; st < 64; st++) {
+            k = core_step_trig(seq_check.trig_pattern < 0 ? 0 : seq_check.trig_pattern, t, st);
+            if (k == CORE_STEP_NOTE)
+                nt[st / 32] |= 1u << (st % 32);
+            else if (k == CORE_STEP_LOCK)
+                lk[st / 32] |= 1u << (st % 32);
+        }
+        seq_check.note[t][0] = nt[0];
+        seq_check.note[t][1] = nt[1];
+        seq_check.lock[t][0] = lk[0];
+        seq_check.lock[t][1] = lk[1];
+    }
+    seq_check.probe = core_step_trig(128, 0, 0) + core_step_trig(0, 6, 0) + core_step_trig(0, 0, 64);
     seq_check.n++;
     for (t = 0; t < TRACKS; t++) {
         if (!(steps & (1u << t)))

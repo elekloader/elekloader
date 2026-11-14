@@ -65,4 +65,17 @@ int core_track_step(int track);
  * as stored. -1 for a track out of range or no pattern playing */
 int core_track_length(int track);
 
+/* step (0..63) of track t in live pattern p (0..127), as stored:
+ * CORE_STEP_NOTE a note trig, CORE_STEP_LOCK a trigless lock trig, 0 none
+ * (a step stock marks not to play counts as none), -1 out of range. A track
+ * in euclidean mode answers from its map (note trigs only). Before
+ * conditions and probability, unlike ev_seq_step's trigs, and at the step's
+ * own place: PLAYING PAGES can make the tick play another step's trig.
+ * ev_seq_step's steps are one ahead of the sound, so at a pattern change a
+ * step it reports may be in core_pattern_next(), not core_pattern_now():
+ * pass the one the step belongs to. Any context. */
+#define CORE_STEP_NOTE 1
+#define CORE_STEP_LOCK 2
+int core_step_trig(int pattern, int track, int step);
+
 #endif
