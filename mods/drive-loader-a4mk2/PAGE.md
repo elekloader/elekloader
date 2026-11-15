@@ -66,7 +66,9 @@ As the Rytm's page, with these differences:
 - **Background work** is the Rytm's: one file a check, a stretch a tick, quiet for 1 s after any
   key or turn, at most a quarter of the UI task (`WORK_SHARE`, timed with DTIM0's count), and
   only while the page shows and its frames are drawn. `/mods/.status`'s `check: n/N` line is
-  published the same way.
+  published the same way. Each read stages the file as the boot does, its payload's hex
+  skipped (`skip.h`, `dl_stage_more`), so pass 1 sees what the boot sees and the CRC is the one
+  `/mods/active` names; a row's KB is the whole file on the +Drive, payload included.
 
 ## Parked data
 

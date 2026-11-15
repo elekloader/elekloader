@@ -25,6 +25,7 @@
 #include <analog-four-mk2/screen.h>
 #include "dl.h"
 #include "fs.h"
+#include "skip.h"
 #include "park.h"
 
 extern char core_desc[];
@@ -721,8 +722,9 @@ static int read_step(const char *name)
     if (!res)
         return 1;
     reading = 0;
-    rd_len = res == 1 ? (s32)rd.got : res;
-    rd_crc = ~rd.crc;                    /* -2 too: the reader read it to its end */
+    rd_len = res == 1 ? (s32)rd.st.got : res;
+    rd_crc = ~rd.st.crc;                 /* -2 too: the reader read it to its end; the staged
+                                          * file's CRC (payload hex skipped), as /mods/active's */
     return 0;
 }
 
@@ -754,16 +756,16 @@ static int inspect(struct file *r)
     len = rd_len;
     r->checked = 1;
     r->big = 0;
-    if (len == -2 && fits_area(rd.got)) {   /* the boot reads it in the area: it checks it */
+    if (len == -2 && fits_area(rd.st.got)) {   /* the boot reads it in the area: it checks it */
         r->big = 1;
-        r->size = rd.got;
+        r->size = rd.size;
         r->crc = rd_crc;
     } else if (len == -2)
         r->file_code = DL_R_TOO_BIG;
     else if (len < 0)
         r->file_code = DL_R_MISSING;
     else {
-        r->size = (u32)len;
+        r->size = rd.size;               /* the row's KB: the file on the +Drive, payload too */
         r->crc = rd_crc;
         copy_str(one.name, r->name, DL_LINE_NAME_MAX);
         one.crc = r->crc;

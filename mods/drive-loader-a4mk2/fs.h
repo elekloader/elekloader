@@ -99,18 +99,8 @@ int dl_fs_file_size(const char *path);   /* the data size of a file, or < 0 */
 int dl_fs_rmdir(const char *path);       /* 0, or < 0: an empty folder only */
 int dl_fs_mkdir(const char *path);       /* 0, or < 0: one folder, its parent there (DL_DIR is) */
 
-/* A file below DL_DIR read a stretch (32 KB) a call, its CRC-32 taken as it comes (the MODS
- * page's check). The caller holds dl_lock during each call. */
-struct dl_reader {
-    dl_file f;
-    unsigned got;                        /* bytes read so far */
-    unsigned crc;                        /* the CRC-32 register; ~crc is the file's at the end */
-    unsigned char open;
-    unsigned char over;                  /* past max: the rest is read for got and crc alone */
-};
-int dl_read_open(struct dl_reader *rd, const char *name);   /* 0, or -1 missing (closed) */
-int dl_read_more(struct dl_reader *rd, unsigned char *buf, unsigned max);
-void dl_read_close(struct dl_reader *rd);
+/* The MODS page's stepped read of a file below DL_DIR (struct dl_reader) is in skip.h: it stages
+ * as the boot does. */
 
 /* one entry of a folder below DL_DIR (route.c) */
 struct dl_ent {

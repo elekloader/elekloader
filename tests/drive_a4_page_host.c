@@ -187,14 +187,15 @@ int dl_read_open(struct dl_reader *rd, const char *name)
     if (!find(name))
         return -1;
     rd->open = 1;
-    rd->crc = 0xffffffffu;
+    rd->st.crc = 0xffffffffu;
     return 0;
 }
 int dl_read_more(struct dl_reader *rd, unsigned char *buf, unsigned max)
 {
     (void)buf, (void)max;
-    rd->got = 1000;                      /* every made-up file reads in one stretch */
-    rd->crc = ~0x12345678u;
+    rd->st.got = 1000;                   /* every made-up file reads in one stretch */
+    rd->st.crc = ~0x12345678u;
+    rd->size = 1000;
     rd->open = 0;
     return 1;
 }

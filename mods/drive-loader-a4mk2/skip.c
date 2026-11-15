@@ -220,3 +220,39 @@ s32 dl_stage_file(dl_read_at read, void *ctx, u8 *buf, u32 max, struct dl_pay *p
     }
     return (s32)got;
 }
+
+void dl_stage_rd_init(struct dl_stage_rd *s)
+{
+    dl_memset(s, 0, sizeof *s);
+    s->crc = 0xFFFFFFFFu;
+}
+
+s32 dl_stage_more(struct dl_stage_rd *s, dl_read_at read, void *ctx, u8 *buf, u32 max)
+{
+    u32 done = 0, off, room, want, k;
+    s32 r;
+    if (!max)
+        return -2;
+    while (done < DL_BREATHE) {
+        off = s->got < max ? s->got : 0;     /* past max: on over the buffer's start */
+        room = s->got < max ? max - s->got : max;
+        want = s->sk.near ? DL_STAGE_STEP : DL_BREATHE - done;
+        if (want > room)
+            want = room;
+        r = read(ctx, s->at, buf + off, want);
+        if (r < 0)
+            return -3;
+        if (r == 0)
+            return s->over ? -2 : 1;
+        k = dl_skip_feed(&s->sk, buf + off, (u32)r);
+        s->crc = dl_crc32_add(s->crc, buf + off, k);
+        if (s->got >= max)
+            s->over = 1;
+        s->got += k;
+        s->at += k;
+        done += k;
+        if (s->sk.act == DL_STAGE_GO)
+            s->at = 2 * s->sk.pay.len > 0xFFFFFFFFu - s->at ? 0xFFFFFFFFu : s->at + 2 * s->sk.pay.len;
+    }
+    return 0;
+}

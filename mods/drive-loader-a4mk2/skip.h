@@ -12,6 +12,7 @@
 #define DL_SKIP_H
 
 #include "dl.h"
+#include "fs.h"
 
 /* the payload a staged file skipped (len 0: none) */
 struct dl_pay {
@@ -61,6 +62,36 @@ u32 dl_skip_feed(struct dl_skip *s, const u8 *p, u32 n);
  * (pay->len 0 when none). */
 typedef s32 (*dl_read_at)(void *ctx, u32 at, u8 *dst, u32 n);
 s32 dl_stage_file(dl_read_at read, void *ctx, u8 *buf, u32 max, struct dl_pay *pay);
+
+/* dl_stage_file in calls of at most DL_BREATHE file bytes each (the MODS page's check, one call a
+ * tick: boot.c dl_read_more), with the staged bytes' CRC-32 taken as they come, so the page checks
+ * and CRCs a file as the boot stages it and as /mods/active names it. A file staged past max is
+ * read on to its end over the buffer's start, for its staged length and CRC alone. */
+struct dl_stage_rd {
+    struct dl_skip sk;
+    u32 at;                              /* the file's next byte to read */
+    u32 got;                             /* staged bytes so far */
+    u32 crc;                             /* the CRC-32 register; ~crc is the staged file's at the end */
+    u8 over;                             /* staged past max */
+};
+void dl_stage_rd_init(struct dl_stage_rd *s);
+/* -> 0 more to read, 1 staged whole (got bytes in buf), -2 staged past max (got and crc are the
+ * whole staged file's all the same), -3 a read error. */
+s32 dl_stage_more(struct dl_stage_rd *s, dl_read_at read, void *ctx, u8 *buf, u32 max);
+
+/* A file below DL_DIR staged a stretch (32 KB) a call (boot.c, over dl_stage_more), its CRC-32
+ * taken as it comes: the MODS page's check. st.got is the staged length, ~st.crc its CRC (the one
+ * /mods/active names), size the file's size on the +Drive. The caller holds dl_lock during each
+ * call. dl_read_more -> 0 more, 1 read, -2 past max, -3 a read error (closed after all but 0). */
+struct dl_reader {
+    dl_file f;
+    struct dl_stage_rd st;
+    u32 size;                            /* f.size at the open */
+    u8 open;
+};
+int dl_read_open(struct dl_reader *rd, const char *name);   /* 0, or -1 missing (closed) */
+int dl_read_more(struct dl_reader *rd, u8 *buf, u32 max);
+void dl_read_close(struct dl_reader *rd);
 
 /* ---- the Drive payload table (payload.c): what the boot skipped, for sidecar-core ------------ */
 /* One loaded mod's skipped payload. sidecar-core looks a payload up by id in core_payloads (a
