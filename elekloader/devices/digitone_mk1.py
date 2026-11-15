@@ -87,7 +87,8 @@ DEVICE = Device(
     },
     ddr=(0x47BE0000, 0x47C00000),
     core_ddr=(('4.0', (0x43EC0000, 0x44000000)),),   # core-dn1 4.0: 1.25 MB (above)
-    drive_align=0x1000,                       # +Drive mods' area (above): what the flashed build
+    drive_align=0x1000,
+    drive_shadow=True,                        # TELOS copies stock parts from RAM (POC)                       # +Drive mods' area (above): what the flashed build
                                               # leaves of core_ddr, from a 4 KB boundary
     # a parameter slot's descriptor (core-dn1 2.1, core_params) names the sound slot it edits at +8:
     # the mod claims it, so two mods that store in one of a sound's 79 slots never link together
