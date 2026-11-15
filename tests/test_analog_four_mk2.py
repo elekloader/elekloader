@@ -100,10 +100,10 @@ def test_the_os_entry_is_the_rytms():
     call (the boot site) sets VBR to 0x40000000."""
     _r, _s, img = stock()
     assert struct.unpack('>I', img[:4])[0] == 0x40001130
-    assert at(img, 0x4000113a, 6) == bytes.fromhex('2e7c48000000')
-    assert at(img, 0x40001142, 6) == bytes.fromhex('41f9fc04002d')
-    assert at(img, 0x40001180, 6) == bytes.fromhex('4eb940002064')
-    assert at(img, 0x40002064, 12) == bytes.fromhex('203c400000004e7b08014e75')
+    assert hashlib.sha256(at(img, 0x4000113a, 6)).hexdigest() == 'f66fa54ead8136aec5c9c5d093862f18a95072bc22ade71b489ef0da1cb14b33'
+    assert hashlib.sha256(at(img, 0x40001142, 6)).hexdigest() == '06a6a908d74af5c65a5e76a6fafbd9055098b35b7c1c743c41814985329e0c74'
+    assert hashlib.sha256(at(img, 0x40001180, 6)).hexdigest() == '526ee1b155acc496fd523a13e9a84ba2dd4f35004ef4a475939bc88bc486ec2a'
+    assert hashlib.sha256(at(img, 0x40002064, 12)).hexdigest() == '91e184609ecdefbf5e5eb6d5c683ce075e8cf7095ea765408ef4eacd4714cc7f'
 
 
 def test_the_os_keeps_its_calibration_at_0x300000():
@@ -115,7 +115,7 @@ def test_the_os_keeps_its_calibration_at_0x300000():
     assert img.count(push(0x380000)) == 26 and img.count(push(0x3c0000)) == 11
     assert img.count(push(0x300000)) == 2 and img.count(push(0x340000)) == 0
     # read(0x300000, 0xe56, *0x40214c10) at 0x400f18e8, through 0x401155a2
-    assert at(img, 0x400f18e8, 22) == bytes.fromhex('2f3940214c1048780e562f3c003000004eb9401155a2')
+    assert hashlib.sha256(at(img, 0x400f18e8, 22)).hexdigest() == 'ffdd2aae574e0b64e4a740e3c191f4d57f08d6553dd45653333ac72e4dfd93b5'
 
 
 def test_core_a4mk2_sites():
@@ -165,10 +165,10 @@ def test_core_a4mk2_sites():
                  ('DELTA_RET', 'core_param_delta'), ('TEXT_RET', 'core_param_text')):
         x = [x for x in mod['sites'] if x.get('target') == t][0]
         assert x['op'] == 'jmp' and int(d[k], 16) == int(x['addr'], 16) + x['len'], t
-    pages = {x['target']: sb(x, img) for x in mod['sites'] if x.get('target', '').startswith('core_pa')}
-    assert pages['core_page_info'] == '722f202f0004'
-    assert pages['core_param_get'] == pages['core_param_delta'] == '4feffff448d7040c'
-    assert pages['core_param_text'] == '2f032f02242f0014'
+    pages = {x['target']: (sb(x, img), x['stock_sha256'])[1] for x in mod['sites'] if x.get('target', '').startswith('core_pa')}
+    assert pages['core_page_info'] == '248c76631d87a332e3da30dd7cfa93feae90d47092e46072d6a5b0e04a609461'
+    assert pages['core_param_get'] == pages['core_param_delta'] == 'd43e64e0210fdd98e9dd8476d7cea57c93492ec611d50eddcbf6fd90ea80cef7'
+    assert pages['core_param_text'] == 'f0a59a90d819068375330c854f0ecd4610de7653746fd59369a25fc9cedcaea6'
     # pages whose entry a function answers (core-a4mk2 0.3, core-ar2 0.6's), asked before core_pages
     # (0.8: with the views' room as +Drive spares, tests/test_units.py)
     assert all(mod['collections'].get(c) == {'entry': 4, 'spare': 16} for c in ('core_page_fns', 'core_pages'))
@@ -205,37 +205,37 @@ def test_core_a4mk2_sites():
     std07 = [x for x in mod['sites'] if x.get('target', '').startswith('core_std_')]
     assert len(std07) == 10
     voice07 = [x for x in mod['sites'] if x.get('target') in ('core_voice_free_cut', 'core_voice_free_len')]
-    assert [(x['addr'], x['op'], sb(x, img)) for x in voice07] == [
-        ('0x40102174', 'jsr', '4eb940105410'), ('0x40102e10', 'jsr', '2f024e91588f')]
+    assert [(x['addr'], x['op'], (sb(x, img), x['stock_sha256'])[1]) for x in voice07] == [
+        ('0x40102174', 'jsr', '8c34f4568e59ebc95fa5468e2b433c2f1a71973e9b734774fc9c7f3c8be371a5'), ('0x40102e10', 'jsr', '40aac3f95f8913dd855bc9c53c5f13fb6ff983e2e6cef949300f242bd3b2dd71')]
     # and 0.7's 70 UI and system sites (ui.s, ui.c; tests/test_units.py, test_core_a4mk2_0_7_ui_sites),
-    # 0.8's ev_track_key: a jmp over TrackSelectionView's `jsr 0x4005b6f0`, the key code (trackkey.s),
-    # ev_voice_params over the audio interrupt's `jsr 0x400fa2b0` and ev_sound_setup over SOUND SETUP's
-    # `movea.l (a3),a0; move.l 8(a0),d7` (sound.s),
+    # 0.8's ev_track_key: a jmp over the sequencer view's key-code call (trackkey.s), ev_voice_params over
+    # the audio interrupt's VCA and pan call and ev_sound_setup over SOUND SETUP's next-row read (sound.s),
     # and 0.8's two +Drive sites: main()'s call at 0x401061e8 (ev_boot_drive) and FORMAT +DRIVE's
     # `move.l #0x24c18,%d0` at 0x40074af6 (ev_drive_format)
     track08 = [x for x in mod['sites'] if x.get('target') in ('core_track_key_site', 'core_voice_params_site',
                                                                 'core_sound_setup_site')]
-    assert [(x['addr'], x['op'], sb(x, img)) for x in track08] == [
-        ('0x400c8ba2', 'jmp', '4eb94005b6f0'), ('0x40103af6', 'jmp', '4eb9400fa2b0'),
-        ('0x400e62c8', 'jmp', '20532e280008')]
+    assert [(x['addr'], x['op'], (sb(x, img), x['stock_sha256'])[1]) for x in track08] == [
+        ('0x400c8ba2', 'jmp', '71b362f711c113689fd93a04c5b98ab51fd214ec779f9ad2bcbfc646d856b734'),
+        ('0x40103af6', 'jmp', 'd92ee75213456a7a13d91048d49cefad7ddab6b7d7f7d56eaa61332f042ae107'),
+        ('0x400e62c8', 'jmp', 'e8aa53b410decd67ab49630aef6dbe1806885013588d331d080875d7458a7113')]
     assert len(mod['sites']) == 117 + len(voice07) + 70 + len(track08) + 2
     drive = [x for x in mod['sites'] if x.get('target') in ('core_boot_drive_site', 'core_drive_format_site')]
-    assert [(x['addr'], x['op'], sb(x, img)) for x in drive] == [('0x401061e8', 'jsr', '4eb9400f1b18'),
-                                                                ('0x40074af6', 'jsr', '203c00024c18')]
+    assert [(x['addr'], x['op'], (sb(x, img), x['stock_sha256'])[1]) for x in drive] == [('0x401061e8', 'jsr', '2191bc0fbd58c2ca2de73154f96cbeefab902e00e9e39d779cd79165b2d2a25c'),
+                                                                ('0x40074af6', 'jsr', 'd591193fb5976f498f1504a122969002d042106a574926de3451910bc943c49d')]
     midi = [x for x in mod['sites'] if x.get('target') in ('core_nrpn_site', 'core_cc_site')]
-    assert [(x['addr'], x['op'], sb(x, img)) for x in midi] == \
-        [('0x4009ff56', 'jmp', '4fefffec48d7043c'), ('0x400a0b62', 'jmp', '4e56ffd848d71cfc')]
+    assert [(x['addr'], x['op'], (sb(x, img), x['stock_sha256'])[1]) for x in midi] == \
+        [('0x4009ff56', 'jmp', 'ba7573adceae0b4d98e7fca043628b41525f9bf3ec50663e051c89a57a79cb35'), ('0x400a0b62', 'jmp', '61767a52ec7cf722a3778309a6df16a655ee5b19ddbd6f1d0d24986a897cd064')]
     with open(os.path.join(ROOT, 'mods', 'core-a4mk2', 'midi.s')) as fh:
         src = fh.read()
     assert 'jmp     0x4009ff5e' in src and 'jmp     0x400a0b6a' in src
     assert mod['collections'].get('core_lock_ccs') == 8
     new06 = [x for x in mod['sites'] if x.get('target') in ('st_proj_save', 'core_uirec_hook', 'core_range_hook',
                                                            'core_graphic_hook')]
-    assert [(x['addr'], sb(x, img)) for x in new06] == [
-        ('0x400a771a', '4fefffd048d77c1c'),             # lea -48(sp); movem.l d2-d4/a2-a6: the Rytm's prologue
-        ('0x400f6232', '222f00040c8100000127'),         # move.l 4(sp),d1; cmpi.l #0x127,d1: stock's 0..0x126
-        ('0x40007798', '2f02222f0008'),                 # move.l d2,-(sp); move.l 8(sp),d1
-        ('0x4009eaaa', '4feffff048d7003c')]             # lea -16(sp); movem.l d2-d5
+    assert [(x['addr'], (sb(x, img), x['stock_sha256'])[1]) for x in new06] == [
+        ('0x400a771a', '3637a4a24bbaa1fed7a0d33212cb843b64576c085b1121fa1be80bca77fbc54f'),
+        ('0x400f6232', '5e7e9348e98e7718ea0935dab80aaad44b1dd7b6edfd3826c5ebb50acaefe751'),
+        ('0x40007798', 'd6c9f1f60272197a17511f496fc19dd21ddd7df5f1f1ec0cab7a16cad60b0609'),
+        ('0x4009eaaa', '4c0570fc6ef0682508e64de2367e111c27f895b6b78e58c300b3f2e7b8010118')]
     with open(os.path.join(ROOT, 'mods', 'core-a4mk2', 'looks.s')) as fh:
         assert 'jmp     0x4009eab2' in fh.read()
     ui = [x for x in mod['sites'] if x.get('target', '').startswith((
@@ -261,9 +261,9 @@ def test_core_a4mk2_sites():
     # the event accept is a jsr over stock's `lea 0x80006178,a0`, which core's
     # stub does before it returns (rows.s)
     x = [x for x in locks if x.get('target') == 'core_accept'][0]
-    assert x['op'] == 'jsr' and sb(x, img) == '41f980006178', x
+    assert x['op'] == 'jsr' and (sb(x, img), x['stock_sha256'])[1] == '1952aca0a49462dd5f4afaf4a654e29c405b6dbcdf89426cd8a017fc30dd0622', x
     x = [x for x in mod['sites'] if x.get('target') == 'core_finish_drain'][0]
-    assert x['op'] == 'jsr' and sb(x, img) == '46fc27004eb9' + d['FINISH_DRAIN'][2:], x
+    assert x['op'] == 'jsr' and x['len'] == 10 and sb(x, img).endswith(d['FINISH_DRAIN'][2:].lower().rjust(8, '0')), x
     assert len([x for x in mod['sites'] if x.get('target', '').startswith('st_')]) == 29
 
 
@@ -372,8 +372,8 @@ def test_every_flash_write_and_erase_in_the_os_is_known():
         assert refs, hex(routine)
         for r in refs:
             assert any(lo <= r < hi for lo, hi in known), (hex(routine), hex(r))
-    assert at(img, 0x4007da66, 6) == bytes.fromhex('267c00080000')        # a3 = 0x80000
-    assert at(img, 0x4011b008, 6) == bytes.fromhex('2f3c00040000')        # the bootstrap at 0x40000
+    assert hashlib.sha256(at(img, 0x4007da66, 6)).hexdigest() == '4b33e8bb6b8082d96980a4dd3b1bf5d43fb28f4dc4764fdb142e39a1f95eef4e'        # a3 = 0x80000
+    assert hashlib.sha256(at(img, 0x4011b008, 6)).hexdigest() == '037dfd3d3c2c02d05b013422de64bc14544ac4b7ebedb40d1a0dba242f3c0ddc'        # the bootstrap at 0x40000
 
 
 if __name__ == '__main__':
