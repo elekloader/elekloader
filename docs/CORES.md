@@ -28,7 +28,7 @@ older ones people still have:
 | Digitakt mk1 | 1.53, 1.54 | `core-4.2.elemod`, `core-4.2-os1.54.elemod` | on main, not released: build it ([below](#building-a-core)) |
 | Digitakt mk1 | 1.53, 1.54 | `core-2.1.elemod`, `core-2.1-os1.54.elemod` | the v0.4.0 release, built into its apps |
 | Digitone mk1, Digitone Keys | 1.43, 1.44 | `core-dn1-5.2.1.elemod`, `core-dn1-5.2.1-os1.44.elemod` | the [v0.10.0](https://github.com/elekloader/elekloader/releases/tag/v0.10.0) release, built into its apps, and the web page |
-| Digitone mk1, Digitone Keys | 1.43, 1.44 | `core-dn1-5.3.elemod`, `core-dn1-5.3-os1.44.elemod` | on main, not released: build it ([below](#building-a-core)) |
+| Digitone mk1, Digitone Keys | 1.43, 1.44 | `core-dn1-5.4.elemod`, `core-dn1-5.4-os1.44.elemod` | on main, not released: build it ([below](#building-a-core)) |
 | Digitone mk1, Digitone Keys | 1.43, 1.44 | `core-dn1-2.0a.elemod`, `core-dn1-2.0a-os1.44.elemod` | the v0.4.0 release, built into its apps |
 | Digitakt II | 1.17 | `core-dt2-1.0.elemod` | the [v0.10.0](https://github.com/elekloader/elekloader/releases/tag/v0.10.0) release, built into its apps, and the web page |
 | Digitone II | 1.12 | `core-dn2-0.3.elemod` | the [v0.10.0](https://github.com/elekloader/elekloader/releases/tag/v0.10.0) release, built into its apps, and the web page (experimental) |
@@ -152,7 +152,8 @@ the one a mod that uses it names in `resources.core`.
   The notes played live on a track, before its voice, which a handler may
   take, and the stock routines past them (`ev_live_note`, `fw_note_on`,
   `fw_note_off`; core 4.2), so mono machines play one key at a time.
-  MIDI CCs before the stock applies them (`ev_midi_cc`, core 4.3).
+  MIDI CCs before the stock applies them (`ev_midi_cc`, core 4.3). The AMP
+  envelope (`fw_amp_level`, core 4.4; `fw_amp_env` is the filter envelope).
 - **Digitone mk1** ([mods/core-dn1](../mods/core-dn1)): the Digitakt mk1's
   events, and:
   - the voices' note-on, parameter slots, mod pages and project data
@@ -191,7 +192,9 @@ the one a mod that uses it names in `resources.core`.
     parameter ids, knobs on the stock pages' empty boxes and a second TRIG page, and each note the
     sequencer builds (5.1; ADAPTING.md, "Lane parameters, knobs on pages and TRIG's second page");
   - the notes played live on a track, as the Digitakt's core 4.2 has them (`ev_live_note`,
-    `fw_note_on`, `fw_note_off`; 5.3), so mono machines play one key at a time.
+    `fw_note_on`, `fw_note_off`; 5.3), so mono machines play one key at a time;
+  - what a +Drive loader needs (TELOS): `core_param_install`, `core_stock_info` and `core_tasks` (5.4;
+    the core's README).
 - **Digitakt II** ([mods/core-dt2](../mods/core-dt2)): SETTINGS and
   PERSONALIZE rows, and `.fast` code in SRAM. No render events: its audio
   renders on the DSP.

@@ -71,7 +71,8 @@ A format-2 mod is a relocatable object:
 | `imports`, `weak` | the names it uses from others; a weak one resolves to `core_zero` (zeros) if no mod provides it |
 | `relocs` | `[section, offset, "abs32"/"abs16"/"pc32"/"pc16"/"dsp24", target, addend]`; target `"sym:NAME"`, `"sec:NAME"` or `"abs"`; `abs16` writes two big-endian bytes, -32768..65535 |
 | `collections` | tables this mod declares: `{"ev_tick": {"entry": 4}}`, or a DSP table (below); a core's may add `"spare"` (0 to 4,096), `"max"` (1 to 4,096) and `"render": true` for the build descriptor (DRIVE.md, "The build descriptor") |
-| `contribute` | entries for tables: `{"to", "order", "data", "relocs", "claims"}` |
+| `contribute` | entries for tables: `{"to", "order", "data", "relocs", "claims"}`; `"std": true` makes `to` a standard event |
+| `events`, `std` | a mod's `"std1"`; a core's map of standard events to its tables (ADAPTING.md, "Standard events (std1)") |
 | `copied` | `[{"lo", "hi", "to"}]`: a block of the image this mod copies elsewhere at run time |
 | `knobs` | a count of knob ids, 0..1024, the linker gives this mod (the Analog Rytm MKII, core-ar2 0.13; "Knob ids" below) |
 | `storage` | fields this mod keeps with the project: `[{"sym", "scope", "bits"}]` (the Analog Rytm MKII from core-ar2 0.2, the Analog Four MKII from core-a4mk2 0.1; "Mod storage" below) |
@@ -327,19 +328,17 @@ may hold; the boot link and the computer's tools are in
 **What a +Drive mod is.** A format-2 mod with only `.run` and `.bss`,
 relocations only in `.run` (`abs32`, `pc32`, `pc16`), and none of `sites`,
 `collections`, `copied`, `storage`, `sharc`, `resources.regions` or a
-contribution's `claims`. It adds entries only to tables whose descriptor
-flags say more may be added (not a DSP table), in whole entries, at an
-order of -2,147,483,648 to 2,147,483,646. Its imports are the build's exports, the tables'
-names and `NAME_n` (the count after the merge), `core_desc`, and the other
-+Drive mods' exports. Its own symbol `drive_init` (in `.run` or `.bss`), if
-it has one, is called after the link as `void drive_init(void)`, in id
-order; it is never a global name. Its id is under 28 bytes.
+contribution's `claims` (TELOS takes sites and regions). It adds
+whole entries only to tables whose descriptor allows more (not DSP
+tables), at an order below 2^31-1. It imports the build's exports, table
+names, `NAME_n` (the count after the merge), `core_desc` and other +Drive
+mods' exports. Its own `drive_init`, if any, is called after the link as
+`void drive_init(void)` in id order; never global. Its id is under 28 bytes.
 
-**`/mods/active`** lists the chosen files, one line each: the file's path
-below `/mods` (`x.elemod`, or in up to 3 folders, `fx/delays/x.elemod`), a
-space, its CRC-32 (zlib's, as 8 hex digits; `0x` is optional). Blank lines,
-`#` lines and lines without a CRC are skipped; the path is everything
-before the last run of spaces, under 128 bytes. More than 256 lines and
+**`/mods/active`**: one line per chosen file, its path below `/mods`
+(up to 3 folders deep), a space, its CRC-32 (zlib's, 8 hex digits, `0x`
+optional). Blank, `#` and CRC-less lines are skipped; the path
+is all before the last run of spaces, under 128 bytes. Over 256 lines and
 nothing loads.
 
 The link's order and its status records are in DRIVE.md, "The boot link".
@@ -376,6 +375,12 @@ The link's order and its status records are in DRIVE.md, "The boot link".
 | 18 | `range` | a `pc16` out of range |
 | 19 | `limit` | past the loader's own room (above) |
 | 20 | `count` | more than 256 lines in `/mods/active` |
+| 21 | `site` | sites overlap |
+| 22 | `flashed` | over the build's |
+| 24 | `stock` | not stock |
+| 26 | `busy` | |
+| 27 | `region` | regions overlap |
+| 28 | `outside` | no free area |
 
 When nothing is linked, the loader keeps why:
 

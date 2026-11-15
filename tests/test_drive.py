@@ -381,9 +381,56 @@ def test_every_refusal_has_a_fixture_that_is_refused_and_one_that_loads():
             assert [x.code for x in rl.choices] == [x.code for x in rb.choices], code
 
 
+TELOS_CODES = {'site', 'flashed', 'stock', 'region', 'outside'}   # test_telos_sites_and_regions has theirs
+
+
 def test_every_code_has_a_fixture():
-    host = set(drive.CODE) - set(drive.BOOT_ONLY) - {'ok'}
+    host = set(drive.CODE) - set(drive.BOOT_ONLY) - {'ok'} - TELOS_CODES
     assert host == set(ROWS), sorted(host ^ set(ROWS))
+
+
+def test_telos_sites_and_regions():
+    """POC: on a build whose descriptor carries the stock shadow (the Digitone mk1, drive_shadow), the twin
+    takes sites and regions as TELOS's boot linker (DL_SITES, DL_REGIONS): a site over the flashed build's
+    is refused 22, one whose bytes are not stock's 24, the later of two overlapping 21; a region over a
+    flashed mod's or an earlier mod's 27; and a stock part over a flashed site copies stock's bytes."""
+    with Bench('digitone-mk1') as B:
+        core = B.core(version='5.0', collections={'ev_tick': {'entry': 4}, 'ev_x': {'entry': 4}})
+        loader = B.other('telos', imports=['core_desc'], relocs=[['.run', 4, 'abs32', 'sym:core_desc', 0]])
+        fa = B.mod('flash-a', sites=[B.jmp_site(B.at(0x1000), 'fn_flash-a')],
+                   resources={'regions': [{'name': 'flash-a buf', 'lo': '0x45000000', 'hi': '0x45100000'}]})
+        out = link.link([link.Mod2(d, d['id']) for d in (core, loader, fa)], B.img)
+        b = drive.load_build(out.image)
+        assert b.telos and b.shadow and b.regions == [(0x45000000, 0x45100000, 'flash-a')]
+
+        def codes(*docs):
+            return [(c.code, c.detail) for c in drive.check(b, files(*docs)).choices]
+        site = lambda off: B.jmp_site(B.at(off), 'fn_drive-hello')
+        assert codes(hello(B, sites=[site(0x2000)])) == [(0, '')]
+        assert codes(hello(B, sites=[site(0x1000)])) == [(drive.CODE['flashed'], '0x%08x' % B.at(0x1000))]
+        bad = dict(site(0x2000), stock_sha256='00' * 32)
+        assert codes(hello(B, sites=[bad])) == [(drive.CODE['stock'], '0x%08x' % B.at(0x2000))]
+        later = dmod(B, 'later', sites=[dict(site(0x2002), relocs=[[2, 'abs32', 'sym:fn_later', 0]])])
+        assert codes(hello(B, sites=[site(0x2000)]), later) == [(0, ''), (drive.CODE['site'], 'drive-hello')]
+        reg = lambda lo, hi: {'regions': [{'name': 'r', 'lo': hex(lo), 'hi': hex(hi)}]}
+        assert codes(hello(B, resources=reg(0x45100000, 0x45200000))) == [(0, '')]
+        assert codes(hello(B, resources=reg(0x450f0000, 0x45110000))) == [(drive.CODE['region'], 'flash-a')]
+        assert codes(hello(B, resources=reg(0x43f00000, 0x44100000))) == [(drive.CODE['outside'], '0x43f00000')]
+        assert codes(hello(B, resources=reg(0x47bf0000, 0x47c00000))) == [(0, '')]   # the ddr area
+        assert codes(hello(B, resources=reg(0x45100000, 0x45200000)),
+                     dmod(B, 'later', resources=reg(0x451f0000, 0x45300000))) == \
+            [(0, ''), (drive.CODE['region'], 'drive-hello')]
+        # a stock part over flash-a's site: stock's bytes (the bench's nops), not the jmp the build wrote
+        d = hello(B)
+        d['sections']['.run']['parts'] = [['hex', '4e714e714e750000'], ['stock', '0x%08x' % B.at(0x1000), 4]]
+        d['relocs'] = [r for r in d['relocs'] if r[1] != 8]      # its word at +8 is the stock part here
+        r = drive.link(b, files(d))
+        assert r.choices[0].code == 0 and r.area[8:12] == B.img[0x1000:0x1004] != out.image[0x1000:0x1004]
+    with Bench('analog-rytm-mk2') as B:                  # no shadow: the Rytm's twin as before
+        _out, b = built(B)
+        assert not b.telos
+        r = drive.check(b, files(hello(B, sites=[B.jmp_site(B.at(0x1000), 'fn_drive-hello')])))
+        assert (r.choices[0].code, r.choices[0].detail) == (drive.CODE['feature'], 'sites')
 
 
 def test_each_feature_and_section_a_drive_mod_cannot_use_is_refused():

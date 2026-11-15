@@ -280,3 +280,39 @@ test('knob ids from 555 past fixed ids, abs32 and abs16, kept by the lockfile (t
     ar.releases.splice(ar.releases.indexOf(rel), 1)
   }
 })
+
+test('a std1 mod subscribes through the core\'s std map (tests/test_link_refusals.py\'s std rows)', () => {
+  const a4 = ANALOG_FOUR_MK2, r = a4.releases[0]
+  const image = new Uint8Array(r.mainLen)
+  const target = targetOf(a4, r)
+  const core = (std: Record<string, unknown>, more: Record<string, unknown> = {}) => new Mod2({
+    elemod: 2, id: 'core', version: '1', target, std,
+    sections: { '.boot': { align: 4, len: 2, parts: [['hex', '4e75']] } },
+    symbols: { core_fn: ['.boot', 0] }, exports: ['core_fn'],
+    collections: { ev_x: { entry: 4 }, ...more },
+  }, 'core')
+  const sub = (to: string, std: boolean) => ({ to, ...(std ? { std: true } : {}), data: '00000000', relocs: [[0, 'abs32', 'sym:fn', 0]] })
+  const mod = (id: string, events: string | null, ...contribute: Record<string, unknown>[]) => new Mod2({
+    elemod: 2, id, version: '1', target, requires: ['core'], ...(events === null ? {} : { events }),
+    sections: { '.run': { align: 4, len: 2, parts: [['hex', '4e75']] } }, symbols: { fn: ['.run', 0] },
+    contribute,
+  }, id)
+  const stdOnly = (p: string[]) => p.filter(x => /std|map/.test(x))
+  // = or prefix: the native table, beside a native mod's entry; thunk: the core's own std table
+  const s = mod('s', 'std1', sub('ev_tick', true), sub('ev_key', true))
+  const ok = check([core({ ev_tick: 'ev_x', ev_key: 'std_key' }, { std_key: { entry: 4 } }), mod('n', null, sub('ev_x', false)), s], image)
+  assert.deepEqual(stdOnly(ok), [])
+  assert.deepEqual(s.contribute.map(c => [c.event, c.to]), [['ev_tick', 'ev_x'], ['ev_key', 'std_key']])
+  assert.deepEqual(stdOnly(check([core({ ev_tick: 'ev_x' }), mod('s', 'std1', sub('ev_key', true))], image)),
+    ['s 1 subscribes to ev_key, which core 1 does not map'])
+  assert.deepEqual(stdOnly(check([core({ ev_tick: 'ev_x' }), mod('s', 'std1', sub('ev_x', true))], image)),
+    ['s 1 subscribes to ev_x, which core 1 does not map'])
+  assert.deepEqual(stdOnly(check([core({}), mod('s', 'std1', sub('ev_key', true))], image)),
+    ['s 1 subscribes to std1 events, and core 1 maps none'])
+  assert.deepEqual(stdOnly(check([core({ ev_key: 'std_key' }), mod('n', null, sub('ev_x', false))], image)),
+    ['core 1: its std map sends ev_key to std_key, which no given mod declares'])
+  assert.throws(() => mod('m', 'std2'), /m: "events" is 'std2'; the standard event set is "std1"/)
+  assert.throws(() => core({ ev_key: 3 }), /core: "std" maps each standard event's name to a table of the core/)
+  assert.throws(() => mod('m', null, sub('ev_key', true)), /m contribution 0: a standard event's subscription \("std": true\) needs the mod's "events"/)
+  assert.throws(() => new Mod2({ ...mod('m', null).doc, std: { ev_key: 'ev_x' } }, 'm'), /m: a "std" map is a core's \(the mod with \.boot\)/)
+})

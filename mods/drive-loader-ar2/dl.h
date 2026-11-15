@@ -52,11 +52,21 @@ enum {
     DL_R_RANGE = 18,                     /* a pc16 reference out of range */
     DL_R_LIMIT = 19,                     /* past the loader's own limits (symbols, entries) */
     DL_R_COUNT = 20,                     /* more than DL_MAX_MODS lines in /mods/active */
+    /* the Octatrack's TELOS (DL_SITES): mods that write sites */
+    DL_R_SITE = 21,                      /* a site overlaps another mod's (detail: its id) */
+    DL_R_FLASHED = 22,                   /* a site overlaps a range the flashed build wrote (detail: where) */
+    DL_R_STOCK = 24,                     /* a site's bytes are not stock's on the unit (detail: where) */
+    DL_R_BUSY = 26,                      /* no quiet moment to write the sites in */
+    /* DL_REGIONS (TELOS on the Digitone mk1, POC): mods that claim regions of the bulk area */
+    DL_R_REGION = 27,                    /* a region overlaps one the flashed build or an earlier mod
+                                          * claims (detail: the other's name) */
+    DL_R_OUTSIDE = 28,                   /* a region is not inside one of the device's free areas, as a
+                                          * flashed mod's must be (detail: its start) */
 };
 
 /* Why nothing was linked (dl_skip_reason). */
 enum { DL_SKIP_NONE, DL_SKIP_KEY, DL_SKIP_ARMED, DL_SKIP_DRIVE, DL_SKIP_ABI, DL_SKIP_UNSTABLE, DL_SKIP_COUNT,
-       DL_SKIP_MEMORY };
+       DL_SKIP_MEMORY, DL_SKIP_BUSY };
 
 /* dl_link's records, one per line of the set it was given (dl_status_n), taken from the heap
  * by dl_link and kept until the next dl_link (0 before the first). */
@@ -111,6 +121,30 @@ u32 dl_hash(const char *s, u32 n);       /* FNV-1a, 32 bits */
 /* Read /mods/<name> into buf (at most max bytes). -> its length, -1 missing, -2 larger
  * than max, -3 a read error. */
 s32 dl_read_file(const char *name, u8 *buf, u32 max);
+
+#ifdef DL_REGIONS
+int dl_region_ok(u32 lo, u32 hi);       /* [lo, hi) inside one of the device's free areas (the host's) */
+#endif
+
+#ifdef DL_SITES
+/* ---- sites (the Octatrack's TELOS) -----------------------------------------------------
+ * With DL_SITES the linker also takes a mod's "sites": each one's bytes on the unit must be
+ * stock's (sha256 against the running OS; the descriptor's shadow gives stock's bytes for a
+ * stock part the flashed build changed), no two mods' may overlap, and they are written with
+ * the tables' merge between dl_commit_begin and dl_commit_end, which the host provides:
+ * begin returns 1 with interrupts masked once no task is stopped inside a site (dl_site_live
+ * lists them), else 0 and nothing is written; end flushes the caches and unmasks. */
+#define DL_SITES_MAX 2048
+#define DL_SDATA_MAX 0x8000u
+void dl_sha256(const u8 *p, u32 n, u8 out[32]);
+int dl_site_ok(u32 addr, u32 len);       /* a range a mod may write: the OS image's code and data */
+void dl_stock_read(u8 *dst, u32 addr, u32 n);  /* the OS image's bytes as they were before the OS ran */
+void dl_site_saving(u32 addr, u32 len);  /* the commit is about to write a site: keep what it replaces */
+int dl_commit_begin(void);
+void dl_commit_end(void);
+int dl_site_live(u32 i, u32 *addr, u32 *len);   /* -> 1 for a site of a mod still in the link */
+u32 dl_sites_n(void);
+#endif
 
 /* ---- the linker (dlink.c) ------------------------------------------------------------ */
 struct dl_choice {

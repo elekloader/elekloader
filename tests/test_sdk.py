@@ -164,6 +164,9 @@ CORE_42_EXPORTS = ['fw_note_on', 'fw_note_off']
 # What core 4.3 adds, in midi.s after 4.2: the MIDI CCs the unit receives (ev_midi_cc at the CC router).
 CORE_43_SITES = ['core_midi_cc']
 CORE_43_TABLES = ['ev_midi_cc']
+# What core 4.4 adds: two firmware locations, absolute exports in fw.s (no site, no code): the filter envelope by
+# its right name (fw_amp_env is it too) and the AMP envelope.
+CORE_44_EXPORTS = ['fw_filter_env', 'fw_amp_level']
 
 
 def site_targets(sites):
@@ -184,12 +187,15 @@ def test_core_builds_and_lints():
     assert '.boot' in doc['sections'] and len(doc['sites']) == 39 + len(CORE_41_SITES + CORE_42_SITES + CORE_43_SITES)
     assert site_targets(doc['sites'][39:]) == [[x] for x in CORE_41_SITES + CORE_42_SITES + CORE_43_SITES]
     assert sorted(doc['collections']) == sorted(HOOK_BUS + ['core_machines'] + CORE_41_TABLES + CORE_42_TABLES + CORE_43_TABLES)
-    assert set(FW + CORE_41_EXPORTS + CORE_42_EXPORTS + ['core_machine', 'core_machine_ui']) <= set(doc['exports'])
-    assert all(doc['symbols'][x][0] == 'abs' for x in FW)
+    assert set(FW + CORE_41_EXPORTS + CORE_42_EXPORTS + CORE_44_EXPORTS + ['core_machine', 'core_machine_ui']) <= set(doc['exports'])
+    assert all(doc['symbols'][x][0] == 'abs' for x in FW + CORE_44_EXPORTS)
+    assert doc['symbols']['fw_filter_env'] == doc['symbols']['fw_amp_env']
     rc, r = lint_json(path, '--stock', stock())
     assert rc == 0 and r['link']['order'][0].startswith('core')
 
 
+with open(os.path.join(ROOT, 'mods', 'machine-pages', 'mod.json')) as _fh:
+    MP_VERSION = json.load(_fh)['version']            # machine-pages' version, for its messages below
 with open(os.path.join(ROOT, 'mods', 'machines-dn1', 'mod.json')) as _fh:
     MACH_VERSION = json.load(_fh)['version']          # the machines mod's version, for the link orders below
 with open(os.path.join(ROOT, 'examples', 'dn-sine-machine', 'mod.json')) as _fh:
@@ -237,10 +243,10 @@ def check_41_adds(old, new):
 CORE_40 = os.environ.get('ELEKLOADER_CORE_40', '')
 
 
-def test_digitakt_core_4_3_is_4_0_and_more():
-    """core 4.3 is 4.0, the master output and pages (4.1), the played notes (4.2) and the MIDI CCs: 4.0's
-    sites with the same bytes, its tables and exports, every symbol where it was, 4.0's .run at the start
-    of 4.3's."""
+def test_digitakt_core_4_4_is_4_0_and_more():
+    """core 4.4 is 4.0, the master output and pages (4.1), the played notes (4.2), the MIDI CCs (4.3) and two
+    envelope exports (4.4): 4.0's sites with the same bytes, its tables and exports, every symbol where it
+    was, 4.0's .run at the start of 4.4's."""
     if not CORE_40 or not os.path.exists(CORE_40):
         raise Skip('missing ELEKLOADER_CORE_40 (the released core-4.0.elemod)')
     new_path = built_core()
@@ -251,7 +257,7 @@ def test_digitakt_core_4_3_is_4_0_and_more():
     assert old['version'] == '4.0' and new['version'] == DT_VERSION
     check_41_adds(old, new)
     assert sorted(set(new['exports']) - set(old['exports'])) == sorted(
-        CORE_41_EXPORTS + CORE_41_SITES + CORE_42_EXPORTS + CORE_42_SITES + CORE_43_SITES)
+        CORE_41_EXPORTS + CORE_41_SITES + CORE_42_EXPORTS + CORE_42_SITES + CORE_43_SITES + CORE_44_EXPORTS)
     assert all(new['symbols'][k] == v for k, v in old['symbols'].items())
     stock_, dev, _rel = formats.load(stock())
     image = formats.main_image(stock_, dev)
@@ -378,7 +384,7 @@ def test_a_machine_in_c_describes_its_page():
             rc, r = lint_json(path, '--stock', stock(), '--with', CORE_21, '--with', mp)
             assert rc == 1 and set(r['problems']) == {
                 'pagetest 1.0 needs core 3.0 or newer, and this build has core 2.1',
-                'machine-pages 1.1 needs core 3.0 or newer, and this build has core 2.1'}, r['problems']
+                'machine-pages %s needs core 3.0 or newer, and this build has core 2.1' % MP_VERSION}, r['problems']
         if STOCK_154 and os.path.exists(STOCK_154):
             path4, m4 = build.build(d, STOCK_154, tmp)
             assert path4.endswith('pagetest-1.0-os1.54.elemod')
