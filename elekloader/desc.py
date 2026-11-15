@@ -53,6 +53,7 @@ ORDER_MIN = -0x80000000          # with a descriptor, an order is ORDER_MIN to L
 KEY_LINKER = 0xFFFF              # a key's order (ABI 1.0's field) for the linker's own entries
 KIND_CORE, KIND_FLASHED, KIND_LOADER = 0, 1, 2
 CLAIM_NAME = 1
+CLAIM_REGION = 2                 # a region of the bulk area a flashed mod claims: "<lo> <hi> <name>", hex
 STAGING = ('drive_staging', 'drive_staging_size')
 MODULE, EXPORT, TABLE, CLAIM, AREA, SCOPE = 16, 8, 24, 8, 20, 16
 

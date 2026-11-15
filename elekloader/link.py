@@ -1119,7 +1119,9 @@ def link(mods, image, lock=None, *, sharc_stream=None):
         return {'family': dev.data_family, 'device': dev.data_device, 'release': rel.data_release,
                 'device_key': dev.key,
                 'os': rel.version, 'modules': mods, 'tables': tabs,
-                'claims': [(desc.CLAIM_NAME, index[m.id], nm) for m in order for nm in m.names],
+                'claims': [(desc.CLAIM_NAME, index[m.id], nm) for m in order for nm in m.names]
+                + [(desc.CLAIM_REGION, index[m.id], '%#x %#x %s' % (g['lo'], g['hi'], g['name']))
+                   for m in order for g in m.regions],
                 'area': (w('bss_end'),) + drive_area(w('bss_end'))
                          + (w('glob', desc.STAGING[0]), w('glob', desc.STAGING[1])),
                 'storage': {'trailer': (w('trailer'), trailer_len), 'scopes': scopes}}
