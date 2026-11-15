@@ -341,17 +341,18 @@ def test_drive_loader_a4mk2_site_and_build():
     with open(os.path.join(ROOT, 'mods', 'drive-loader-a4mk2', 'mod.json')) as fh:
         j = json.load(fh)
     route, clamp = j['sites']
-    assert (route['addr'], route['op'], route['stock'], route['target']) == \
-        ('0x40095ec8', 'jsr', '700113c04182b33c', 'dl_route_site')
-    assert at(img, 0x40095ec8, 8) == bytes.fromhex('700113c04182b33c')
+    import hashlib
+    # the sites give their stock bytes by length and hash (the manifest holds none)
+    assert (route['addr'], route['len'], route['op'], route['target']) == ('0x40095ec8', 8, 'jsr', 'dl_route_site')
+    assert hashlib.sha256(at(img, 0x40095ec8, 8)).hexdigest() == route['stock_sha256']
     # the +Drive block writer's take bound (README, "Uploads in more than one chunk"), given by
     # length and hash: the conditional branch becomes an unconditional one to the same place
-    import hashlib
     assert (clamp['addr'], clamp['len'], clamp['op'], clamp['kind']) == ('0x4001da16', 2, 'bytes', 'code')
     was = at(img, 0x4001da16, 2)
     assert hashlib.sha256(was).hexdigest() == clamp['stock_sha256']
     assert bytes.fromhex(clamp['new']) == bytes([0x60]) + was[1:]
-    assert at(img, 0x40095ed0, 4) == bytes.fromhex('4cd73c7c')          # then the getter's movem and return
+    assert hashlib.sha256(at(img, 0x40095ed0, 4)).hexdigest() == \
+        '33d8a59f5abc7a2d24beae63293feee81fe9b16620106a871d5937d16a09ccf8'          # then the getter's movem and return
     subs = {(x['event'], x['fn']) for x in j['subscribe']}
     assert {('ev_boot_drive', 'dl_boot'), ('ev_drive_format', 'dl_format')} <= subs
     cross = os.environ.get('ELEKLOADER_CROSS', DEV.toolchain['prefix'])
