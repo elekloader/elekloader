@@ -4022,7 +4022,7 @@ core has.
 | `license` | an SPDX identifier. The example uses `GPL-2.0-or-later`, the loader's own licence. Put the same `SPDX-License-Identifier` line at the top of each source |
 | `sources` | `.c` and `.s` files, compiled/assembled with the device's flags |
 | `subscribe` | `{"event", "fn", "order"}`: `fn` is one of your global functions |
-| `sites` | patches to the stock image: `{"addr", "stock", "op", "target" or "new"}` (below) |
+| `sites` | patches to the stock image: `{"addr", "stock", "op", "target" or "new"}` (below); `"len"` and `"stock_sha256"` may stand in for `"stock"`, so the manifest holds no stock bytes |
 | `collections`, `contribute` | tables you declare (`{"entry": 4}`, or just the entry size; a core may add `"spare"`, `"max"` and `"render"`, DRIVE.md, "The build descriptor"), and entries you add to others' ([FORMAT.md](FORMAT.md)) |
 | `weak` | names you import that may be missing; they then read as zero |
 | `dsp`, `subscribe_dsp` | DSP code, on a device whose OS runs some (below, "DSP code") |
