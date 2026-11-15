@@ -1091,15 +1091,30 @@ export function link(mods: Mod2[], image: Uint8Array, lock: store.Lock | null = 
       const room = store.capacity(dev.key, newLock.split, core.version)
       scopes = store.SCOPES.map(s => [s, room[s], newLock!.next[s], newLock!.generation[s]])
     }
+    // A loader that keeps its own area (TELOS on the Octatrack) exports it as drive_area and drive_area_size; the
+    // descriptor then names it, and carries the stock shadow (desc.ts). The reserve's public names (arena_base) are
+    // the linker's, defined for the core: a mod linked on the unit imports them as it would here.
+    const ownArea = order.some(m => m.exports.includes(desc.AREA_SYMS[0]))
+    if (ownArea && dev.reserve) {
+      const extra = Object.keys(dev.reserve[1]).filter(nm => !nm.startsWith('__') && !core.exports.includes(nm))
+        .map(nm => [nm, w('glob', nm)] as [string, number])
+      modules[0].exports = [...modules[0].exports, ...extra].sort((a, b) => cmp(a[0], b[0]))
+    }
+    let area: [number, number]
+    if (ownArea) {
+      const lo = w('glob', desc.AREA_SYMS[0])
+      area = [lo, lo + w('glob', desc.AREA_SYMS[1])]
+    } else area = driveArea(w('bss_end'))
     return { family: dev.dataFamily, device: dev.dataDevice, release: rel.dataRelease ?? 0, deviceKey: dev.key, os: rel.version, modules, tables: tabs,
       claims: [...order.flatMap(m => m.names.map(nm => [desc.CLAIM_NAME, index.get(m.id)!, nm] as [number, number, string])),
         ...order.flatMap(m => m.regions.map(g => [desc.CLAIM_REGION, index.get(m.id)!,
           `0x${g.lo.toString(16)} 0x${g.hi.toString(16)} ${g.name}`] as [number, number, string]))],
-      area: [w('bss_end'), ...driveArea(w('bss_end')), w('glob', desc.STAGING[0]), w('glob', desc.STAGING[1])],
+      area: [w('bss_end'), ...area, w('glob', desc.STAGING[0]), w('glob', desc.STAGING[1])],
       storage: { trailer: [w('trailer'), trailerLen], scopes },
-      // the stock bytes of every range the flashed build writes, where the profile asks for them (driveShadow): a
-      // loader on the unit copies a mod's stock parts from the running OS, and lays these over it
-      shadow: !dev.driveShadow ? [] : order.flatMap(m => m.sites)
+      // the stock bytes of every range the flashed build writes, where the profile asks for them (driveShadow) or the
+      // loader keeps its own area: a loader on the unit copies a mod's stock parts from the running OS, and lays these
+      // over it
+      shadow: !dev.driveShadow && !ownArea ? [] : order.flatMap(m => m.sites)
         .filter(s => dev.mainLoad <= s.addr && s.addr + s.len <= dev.mainLoad + image.length)
         .map(s => [s.addr, image.slice(s.addr - dev.mainLoad, s.addr - dev.mainLoad + s.len)] as [number, Uint8Array])
         .sort((a, b) => a[0] - b[0] || cmpBytes(a[1], b[1])) }

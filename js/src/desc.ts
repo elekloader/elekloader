@@ -18,6 +18,7 @@ export const KIND_CORE = 0, KIND_FLASHED = 1, KIND_LOADER = 2
 export const CLAIM_NAME = 1
 export const CLAIM_REGION = 2               // a region of the bulk area a flashed mod claims: "<lo> <hi> <name>", hex
 export const STAGING = ['drive_staging', 'drive_staging_size'] as const
+export const AREA_SYMS = ['drive_area', 'drive_area_size'] as const   // a loader's own area (TELOS on the Octatrack)
 const MODULE = 16, EXPORT = 8, TABLE = 24, CLAIM = 8, AREA = 20, SCOPE = 16
 
 export type DescModule = { name: string; version: string; kind: number; flags: number; exports: [string, number][] }

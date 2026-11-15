@@ -207,7 +207,8 @@ export const OCTATRACK: Device = {
   reserve: [6144, { arena_base: [0x40a955e0, 6144], __arena_pages: [14602, -1], __arena_fill: [14603, -1],
     __arena_clear: [0x05590800, -6144] }],
   dspPayloads: { A: [0x400e2324, 0x136cb], B: [0x400f59ef, 0x12d05] },
-  dspAreas: [['A', 0xaa8, 0xbad, 'dsp:harvest:SPATIALIZER', "SPATIALIZER's code on payload A (core 0)"]],
+  dspAreas: [['A', 0xaa8, 0xbad, 'dsp:harvest:SPATIALIZER', "SPATIALIZER's code on payload A (core 0)"],
+    ['B', 0x868, 0x96d, 'dsp:harvest:SPATIALIZER-B', "SPATIALIZER's code on payload B (core 1): dspload-ot's copier"]],
   recovery: 'hold FUNC while powering on for the startup menu, press TRIG 3 (MIDI UPGRADE) and send the stock '
     + '.syx over 5-pin MIDI (not USB)',
 }
