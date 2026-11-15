@@ -304,8 +304,8 @@ def _exchanges(B, blk):
         return {'crc': b.crc, 'head': got['head']}
     step('build', [], build)
     head = got['head']
-    for name, raw in h + u:
-        step('put', [name, raw.hex()], lambda: mods.put(name, raw, head))
+    for name, raw in h + u:                 # `elekloader mods put`: each upload, then the unit's note or listing
+        step('upload', [name, raw.hex()], lambda: mods.upload(name, raw, head))
     step('ls', [], lambda: [list(x) for x in mods.ls()])
     text = drive.active_text(u + h)
     step('put', ['active', text.encode().hex()], lambda: mods.put('active', text.encode(), head))

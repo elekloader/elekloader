@@ -41,7 +41,7 @@ execFileSync('node', [join(ROOT, 'js', 'tools', 'build.ts'), join(site, 'engine'
 writeFileSync(join(site, 'engine', 'devices.js'), readFileSync(join(site, 'engine', 'devices.js'), 'utf8')
   + `\nANALOG_RYTM_MK2.releases.push(${JSON.stringify({ ...V.release, binSha256: '' })});\n`);
 // a shop with one mod that loads from +Drive and one that only a flashed build can carry
-const put = V.exchanges.filter(s => s.op === 'put' && s.args[0] !== 'active');
+const put = V.exchanges.filter(s => s.op === 'upload' && !s.args[0].includes('/'));   // the CLI's uploads of the two examples
 const hello = { name: put[0].args[0], raw: Buffer.from(put[0].args[1], 'hex') };
 const user = { name: put[1].args[0], raw: Buffer.from(put[1].args[1], 'hex') };
 const sites = V.cases.find(c => c.name === 'feature: refused').files[0];

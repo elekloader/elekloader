@@ -692,10 +692,10 @@ class FakeUnit:
             pre = sub + '/' if sub else ''
             kids = sorted({n[len(pre):].split('/')[0] for n in self.files if n.startswith(pre) and '/' in n[len(pre):]})
             for d in kids:                      # as the route: an item whose children byte is 1
-                extra += d.encode() + b'\0' + bytes((1, 2)) + struct.pack('>iIHBB', 0, 0, 0, 1, 0)
+                extra += d.encode('latin-1') + b'\0' + bytes((1, 2)) + struct.pack('>iIHBB', 0, 0, 0, 1, 0)
             for n in sorted(self.files):
                 if n.startswith(pre) and '/' not in n[len(pre):]:
-                    extra += n[len(pre):].encode() + b'\0' + bytes((0, 2)) + struct.pack('>iIHBB', 0, len(self.files[n]), 0, 1, 0)
+                    extra += n[len(pre):].encode('latin-1') + b'\0' + bytes((0, 2)) + struct.pack('>iIHBB', 0, len(self.files[n]), 0, 1, 0)
             extra = bytes(12) + extra
         elif cmd == datarpc.ROPEN:
             name = self.rel(a)
@@ -747,7 +747,7 @@ class FakeUnit:
     @staticmethod
     def rel(a):
         """A request's path, below /mods ('' for /mods itself)."""
-        p = a[:a.index(b'\0')].decode()
+        p = a[:a.index(b'\0')].decode('latin-1')           # the route's names are latin-1, as the requests send them
         return p[len('/mods/'):] if p.startswith('/mods/') else ''
 
     def receive(self, timeout):
@@ -957,7 +957,7 @@ class NotingUnit(FakeUnit):
         self.note('-')
 
     def note(self, text):
-        self.files['.status'] = b'drive-loader-a4mk2 route\nfolder /mods\nlast: %s\nio: 0 0 0 0\n' % text.encode()
+        self.files['.status'] = b'drive-loader-a4mk2 route\nfolder /mods\nlast: %s\nio: 0 0 0 0\n' % text.encode('latin-1')
 
     def send(self, raw):
         msg = datarpc.unframe(raw)
@@ -1007,6 +1007,10 @@ def test_an_upload_the_unit_did_not_save_is_an_error_not_uploaded():
             unit.folders.add(deep)
             assert datarpc.run(argparse.Namespace(op='put', files=[p], into=deep), mods, log.append) == 0
             assert datarpc.last_of(unit.files['.status'].decode()) == ('saved %s/%s' % (deep, name))[:63]
+            # a name past ASCII: the route's names (and its note) are latin-1 bytes, as the requests send them
+            unit.folders.add('café')
+            assert datarpc.run(argparse.Namespace(op='put', files=[p], into='café'), mods, log.append) == 0
+            assert unit.files['café/' + name] == raw
     assert datarpc.last_of('drive-loader route\nstage: 1 bytes\n') is None
     assert datarpc.last_of(None) is None
 
