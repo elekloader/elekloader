@@ -99,6 +99,12 @@ button.round:disabled { opacity: 0.35; cursor: default; }
 .side-empty { padding: 4px 10px 8px; color: var(--faint); font-size: 12.5px; }
 .side-foot { padding: 12px 18px 14px; border-top: 1px solid var(--line); color: var(--faint); font-size: 12px; }
 .side-foot p { margin: 3px 0; }
+.contact { display: flex; align-items: center; gap: 10px; margin: 0 -8px 10px; padding: 8px; border: 1px solid var(--line);
+  border-radius: 10px; color: var(--text); font-size: 13px; font-weight: 600; }
+.contact:hover { border-color: var(--accent); text-decoration: none; }
+.contact .ico { flex: none; width: 18px; height: 18px; color: var(--accent); }
+.contact span { display: flex; flex-direction: column; min-width: 0; line-height: 1.25; }
+.contact small { color: var(--muted); font-weight: 400; font-size: 12px; overflow: hidden; text-overflow: ellipsis; }
 .engine { display: flex; gap: 8px; align-items: baseline; }
 .engine::before { content: ""; flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--faint); transform: translateY(-1px); }
 .engine.ok { color: inherit; }

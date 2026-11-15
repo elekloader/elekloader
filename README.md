@@ -3,6 +3,7 @@
 A mod loader for Elektron firmware. You pick mods and supply the stock OS
 file Elektron publishes for your device. elekloader builds a custom OS
 file on your own machine, and you flash it the way you flash any OS update.
+Questions? See [Contact](#contact).
 
 - **Nothing from Elektron is distributed.** A mod (`.elemod`) carries only
   its author's bytes, the short instruction fragments needed to hook the OS,
@@ -114,6 +115,12 @@ The [docs](docs/README.md) are elekloader's wiki:
 | **Writing mods** | [Adapting your mod](docs/ADAPTING.md) · [Machine SDK](docs/SDK.md) · [Your mod in the shop](docs/SHOP.md) · [Growing the core](docs/CORE-CONTRIBUTING.md) · [Contribute](docs/CONTRIBUTE.md) · [The file format](docs/FORMAT.md) · [Adding a device](docs/DEVICES.md) · coding agents: [AGENTS.md](AGENTS.md) |
 | **On your own site** | [The kit](docs/INTEGRATING.md) · [The engine in TypeScript](js/README.md) |
 | **Maintaining it** | [Releasing](docs/RELEASING.md) · [The apps](docs/APPS.md) · [Tests](docs/TESTS.md) |
+
+## Contact
+
+Email the maintainer at **[itspina@protonmail.com](mailto:itspina@protonmail.com)**.
+Bugs and feature requests are best as [issues](https://github.com/elekloader/elekloader/issues),
+where others can find them.
 
 ## Licence
 
