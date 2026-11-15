@@ -16,6 +16,7 @@ sys.path.insert(0, ROOT)
 sys.path.insert(0, os.path.join(ROOT, 'tests'))
 
 from elekloader import container, datarpc, desc, drive    # noqa: E402
+from elekloader.elemod import ModError                     # noqa: E402
 import test_drive as T                                     # noqa: E402
 from test_link_refusals import Bench                       # noqa: E402
 
@@ -293,7 +294,7 @@ def _exchanges(B, blk):
         port.log = []
         try:
             out = f()
-        except datarpc.RpcError as e:
+        except ModError as e:                   # RpcError among them
             out = {'error': str(e)}
         steps.append({'op': op, 'args': args, 'out': out, 'log': port.log})
     got = {}
@@ -311,6 +312,11 @@ def _exchanges(B, blk):
     step('get', [h[0][0]], lambda: mods.get(h[0][0])[1].hex())
     step('rm', [h[0][0]], lambda: mods.rm(h[0][0]))
     step('get', [h[0][0]], lambda: mods.get(h[0][0])[1].hex())
+    # uploads checked against the route's `last:` note: one saved, one into a folder the unit didn't keep
+    port.unit = T.NotingUnit(blk, folders={'fx'})
+    for into in ('fx', 'gone'):
+        n = '%s/%s' % (into, u[0][0])
+        step('upload', [n, u[0][1].hex()], lambda: mods.upload(n, u[0][1], head))
     return steps
 
 

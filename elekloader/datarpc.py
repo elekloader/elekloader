@@ -254,6 +254,18 @@ class Mods:
         """Upload a file in a container with the unit's family, device and OS (from `head`)."""
         self.c.put(self.path(name), container.wrap(raw, head['family'], head['device'], head['release']))
 
+    def upload(self, name, raw, head):
+        """`put`, then make sure the unit kept the file: the route can't refuse once the upload is
+        in (a commit that fails, as into a folder that can't be made, still answers the upload), so
+        the `last:` line of `.status` says what happened to it, or without one, the listing."""
+        self.put(name, raw, head)
+        last = last_of(self.status())
+        if last is not None:
+            if last != _note('saved', name):
+                raise ModError('the unit did not save %s: %s' % (self.path(name), last))
+        elif not any(n == _base(name) and kind == 2 for n, kind, _s in self._ls(_parent(name))):
+            raise ModError('the unit did not save %s (see %s/.status)' % (self.path(name), self.folder))
+
     def rm(self, name):
         self.c.clear(self.path(name))
 
@@ -316,6 +328,23 @@ class Mods:
         if not there or not gone:
             raise ModError('the unit did not move %s/%s to %s/%s (see %s/.status)'
                            % (self.folder, frm, self.folder, to, self.folder))
+
+
+NOTE_MAX = 63                                   # route.c's dl_note: 64 bytes with its 0
+
+
+def _note(what, name):
+    """The route's note for `name` (route.c `note`), cut as it cuts it."""
+    return ('%s %s' % (what, name))[:NOTE_MAX]
+
+
+def last_of(status):
+    """`/mods/.status`'s text -> its `last:` line (the route's last commit, delete or move), or
+    None without one."""
+    for line in (status or '').splitlines():
+        if line.startswith('last: '):
+            return line[6:]
+    return None
 
 
 def _parent(p):
@@ -453,7 +482,7 @@ def run(a, mods, log=print):
             log('REFUSED: nothing was uploaded')
             return 1
         for name, raw in files:
-            mods.put(name, raw, head)
+            mods.upload(name, raw, head)
             log('UPLOADED %s (%d bytes, CRC-32 %08x)' % (mods.path(name), len(raw), drive.file_crc(raw)))
         return 0
     chosen = []                                 # active

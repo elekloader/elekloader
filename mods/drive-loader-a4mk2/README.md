@@ -76,6 +76,12 @@ are **+Drive entries (kind 2)** over their own sectors, with no RAM stage:
   write that fits what is left, so stock's other +Drive writers behave as before. [Traced in the
   emulator, 2026-11-15: an 18,466-byte upload in three chunks had 481 bytes in the ring at its
   last chunk, which took 2,125 bytes with 2,113 left to accept.]
+- **Folders an upload names.** The store keeps no file whose folder isn't in its directory, where
+  the Rytm's stock file system makes the folders as it writes. So `+0x4c` makes the file's missing
+  folders first (`make_parent`, as `FOLDER/.dir` does) and then commits; a folder it can't make (a
+  file of that name) leaves the run unused and notes `commit failed: no folder for NAME`. `+0x4c`
+  can't refuse, so the clients read `.status`'s `last:` line after each upload and report anything
+  but `saved NAME` (`Mods.upload`; tests/drive_a4_route_host.c, tests/test_drive.py).
 - **A new name** resolves to the scratch sector with size 0 and no Clear permission; a Clear of a
   file erases or zeroes at most its own first sector, then deletes it.
 - **Permissions** are read, write and clear only: Copy and Swap would make writers without a

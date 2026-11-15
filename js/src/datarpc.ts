@@ -25,6 +25,16 @@ export const MOVE = '.mv'              // an upload of "FROM\nTO" to .mv moves F
 export const NAME_MAX = 127, SEG_MAX = 63   // a path below FOLDER, one name in it, in bytes (DL_NAME_MAX, DL_SEG_MAX)
 const parentOf = (p: string) => { const i = p.lastIndexOf('/'); return i < 0 ? '' : p.slice(0, i) }
 const baseOf = (p: string) => p.slice(p.lastIndexOf('/') + 1)
+export const NOTE_MAX = 63              // the route's note (route.c dl_note): 64 bytes with its 0
+/** The route's note for `name` (route.c `note`), cut as it cuts it. datarpc._note. */
+const note = (what: string, name: string) => `${what} ${name}`.slice(0, NOTE_MAX)
+
+/** `/mods/.status`'s text -> its `last:` line (the route's last commit, delete or move), or null without one.
+ * datarpc.last_of. */
+export function lastOf(status: string | null | undefined): string | null {
+  for (const line of (status ?? '').split(/\r?\n/)) if (line.startsWith('last: ')) return line.slice(6)
+  return null
+}
 
 export class RpcError extends ModError {}
 
@@ -234,6 +244,24 @@ export class Mods {
   /** Upload a file in a container with the unit's family, device and OS (from `head`). */
   put(name: string, raw: Uint8Array, head: container.Head, progress?: (sent: number, total: number) => void): Promise<void> {
     return this.c.put(this.path(name), container.wrap(raw, head.family, head.device, head.release), progress)
+  }
+
+  /** `/mods/.status` as text, or null when it can't be read. datarpc.Mods.status. */
+  async status(): Promise<string | null> {
+    try { return new TextDecoder().decode((await this.get('.status'))[1]) } catch (e) { if (e instanceof ModError) return null; throw e }
+  }
+
+  /** `put`, then make sure the unit kept the file: the route can't refuse once the upload is in (a commit that fails, as
+   * into a folder that can't be made, still answers the upload), so the `last:` line of `.status` says what happened
+   * to it, or without one, the listing. datarpc.Mods.upload. */
+  async upload(name: string, raw: Uint8Array, head: container.Head, progress?: (sent: number, total: number) => void): Promise<void> {
+    await this.put(name, raw, head, progress)
+    const last = lastOf(await this.status())
+    if (last !== null) {
+      if (last !== note('saved', name)) throw new ModError(`the unit did not save ${this.path(name)}: ${last}`)
+    } else if (!(await this.lsOrNone(parentOf(name))).some(([n, kind]) => n === baseOf(name) && kind === 2)) {
+      throw new ModError(`the unit did not save ${this.path(name)} (see ${this.folder}/.status)`)
+    }
   }
 
   rm(name: string): Promise<void> { return this.c.clear(this.path(name)) }
