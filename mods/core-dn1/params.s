@@ -382,6 +382,26 @@ core_param_install:
 core_stock_info:
         .long   CORE_STOCK_COPY, CORE_IMAGE_LEN
 
+| core_tasks (5.4): the OS's ten static tasks, for a loader that must know no task
+| is stopped where it writes: {count, the init task's row, the TCB's saved-SP
+| offset}, then per task {TCB, stack's low end, stack size}. The init task runs
+| ev_card_ready; a task not created yet has a saved SP outside its stack. Every
+| address moves by CORE_TASK_SHIFT on 1.44.
+        .balign 4
+        .globl  core_tasks
+core_tasks:
+        .long   10, 1, 72
+        .long   0x4136f608+CORE_TASK_SHIFT, 0x4136f65c+CORE_TASK_SHIFT, 0x4000
+        .long   0x4137365c+CORE_TASK_SHIFT, 0x413736b0+CORE_TASK_SHIFT, 0x4000
+        .long   0x40525f08+CORE_TASK_SHIFT, 0x40525f5c+CORE_TASK_SHIFT, 0x1000
+        .long   0x40527628+CORE_TASK_SHIFT, 0x4052767c+CORE_TASK_SHIFT, 0x0800
+        .long   0x4137f94c+CORE_TASK_SHIFT, 0x4137b94c+CORE_TASK_SHIFT, 0x4000
+        .long   0x4321e9a0+CORE_TASK_SHIFT, 0x419c50a0+CORE_TASK_SHIFT, 0x4000
+        .long   0x4137b6b4+CORE_TASK_SHIFT, 0x413776b4+CORE_TASK_SHIFT, 0x4000
+        .long   0x419962a8+CORE_TASK_SHIFT, 0x419962fc+CORE_TASK_SHIFT, 0x8000
+        .long   0x4052a668+CORE_TASK_SHIFT, 0x4052aedc+CORE_TASK_SHIFT, 0x28000
+        .long   0x41394e1c+CORE_TASK_SHIFT, 0x41394e70+CORE_TASK_SHIFT, 0x4000
+
 | The two tables from PARAM_FREE, filled at boot.
         .balign 4
         .globl  core_ptab_save

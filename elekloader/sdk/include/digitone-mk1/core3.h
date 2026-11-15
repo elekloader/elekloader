@@ -332,6 +332,14 @@ extern void core_restart_now(void);
  * after its link): each slot's record, its look, its UI record built again on first use. Before the views
  * use the slots; a loader imports it weakly so it runs on older cores. */
 extern void core_param_install(void);
+/* 5.4: the OS image as it was before the OS ran (core_dn_boot's copy, in the bulk area), for a loader's
+ * stock bytes; and the OS's static tasks, for a loader that writes code only when no task is stopped there. */
+struct core_stock_info { unsigned long at, len; };
+extern const struct core_stock_info core_stock_info;
+struct core_task { unsigned long tcb, stack, size; };   /* the TCB; the stack's low end and size */
+struct core_tasks { unsigned long n, init, sp_at; struct core_task t[10]; };   /* init: the row ev_card_ready runs in;
+                                                                                  sp_at: the saved SP's offset in a TCB */
+extern const struct core_tasks core_tasks;
 /* The +Drive, 512-byte sectors, from a task only (never an interrupt): 0, or < 0. */
 extern int32_t fw_card_read(uint32_t sector, uint32_t bytes, void *buf);
 extern int32_t fw_card_write(uint32_t sector, uint32_t bytes, const void *buf);
