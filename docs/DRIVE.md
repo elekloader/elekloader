@@ -112,17 +112,28 @@ image>` prints it.
   last `.bss`, the Drive Loader's own included) rounded up to `drive_align`,
   to the top of that area (0x47FFF000 with core-ar2 0.11). A bigger flashed
   build leaves a smaller area; the linker's own RAM limit is the only cap.
+- **The stock shadow.** On a device whose profile has `drive_shadow` (the
+  Digitone mk1, for TELOS), the descriptor carries the stock bytes of every
+  range the flashed build writes (ABI 1.2), and a claim of kind 2 for each
+  region a flashed mod claims. TELOS's linker (`dlink.c` built with
+  `DL_SITES` and `DL_REGIONS`) then takes mods' sites and regions: a site
+  must be stock's on the unit, not over the flashed build's or another
+  mod's, and is written when no task is stopped in it; a region may not
+  overlap a flashed or earlier mod's and must lie in a free area (FORMAT.md, codes 21 to 28). A mod's
+  stock part over a flashed site copies the shadow's bytes. The twins
+  (drive.py, js/src/drive.ts) check the same, leaving the stock hash to the
+  unit when they have the descriptor alone.
 - **Orders.** Each entry's order is kept whole, a signed 32-bit number,
   so a +Drive entry sorts against core-ar2 0.13's screen handlers (at
   -1,000,000 and 1,000,000) as the flashed build's linker sorted them. An
   order must be -2,147,483,648 to 2,147,483,646; the linker's own entries
   (storage, payloads, `.fast` copies) have 2,147,483,647.
 
-Its bytes (ABI 1.1) are below, "The descriptor's bytes".
+Its bytes (ABI 1.2) are below, "The descriptor's bytes".
 
 ## The descriptor's bytes
 
-The build descriptor ("The build descriptor" above), ABI 1.1, is big-endian, its records 4-byte aligned, and its
+The build descriptor ("The build descriptor" above), ABI 1.2, is big-endian, its records 4-byte aligned, and its
 names offsets into its string pool (UTF-8, NUL-terminated):
 
 | offset | field |
@@ -132,7 +143,9 @@ names offsets into its string pool (UTF-8, NUL-terminated):
 | +0x18 | u32 string pool offset, u32 its size |
 | +0x20 | u16 counts: modules, exports, tables, claims |
 | +0x28 | u32 offsets: modules, exports, tables, claims, key arrays, area record, storage record |
-| +0x44 | u32 the device key, u32 the OS version (names); zero to +0x60 |
+| +0x44 | u32 the device key, u32 the OS version (names) |
+| +0x4c | zero to +0x58 |
+| +0x58 | u32 the shadow's offset, u32 its range count (ABI 1.2; 0 without one) |
 
 | record | bytes | fields |
 |---|---|---|
@@ -140,9 +153,10 @@ names offsets into its string pool (UTF-8, NUL-terminated):
 | export | 8 | name, u32 address. Grouped by module in module order, by name within a module |
 | table | 24 | name, u32 address, u16 entry size, u16 count, u16 capacity (count + spare), u16 flags (bit 0: more entries may be added; bit 1: a render table, the collection's `"render": true`; bit 2: a DSP table), u32 offset of its keys, u32 offset of its orders (0 in ABI 1.0) |
 | keys | 4 an entry | `order << 16 \| module index`, in table order, the order held to 0..65,534 (the linker's own entries 65,535) for an ABI 1.0 reader |
-| claim | 8 | u16 kind (1: a resource name), u16 module index, u32 the name |
+| claim | 8 | u16 kind (1: a resource name; 2: a region, `"<lo> <hi> <name>"` in hex), u16 module index, u32 the name |
 | area | 20 | the flashed build's RAM end, the +Drive area's start and end, the staging buffer's address and size (the exports `drive_staging` and `drive_staging_size`, else 0) |
 | storage | 12 + 16 a scope | u32 address and u32 length of the lockfile's trailer in the main OS image (for the host: nothing on the unit reads it), u16 scope count, u16 0; per scope: name, u32 room in bits, u32 bits used, u32 generation |
+| shadow | 8 + bytes a range | u32 address, u32 length, the stock bytes padded to 4; by address, before the string pool (ABI 1.2, where the profile asks; a block without one is ABI 1.1) |
 | orders | 4 an entry | s32: each entry's order, in table order; after the storage record (ABI 1.1). An ABI 1.0 block has none, and its keys' orders stand |
 
 A loader accepts any minor of its major; a minor adds fields in reserved

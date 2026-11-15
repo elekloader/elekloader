@@ -1119,10 +1119,21 @@ def link(mods, image, lock=None, *, sharc_stream=None):
         return {'family': dev.data_family, 'device': dev.data_device, 'release': rel.data_release,
                 'device_key': dev.key,
                 'os': rel.version, 'modules': mods, 'tables': tabs,
-                'claims': [(desc.CLAIM_NAME, index[m.id], nm) for m in order for nm in m.names],
+                'claims': [(desc.CLAIM_NAME, index[m.id], nm) for m in order for nm in m.names]
+                + [(desc.CLAIM_REGION, index[m.id], '%#x %#x %s' % (g['lo'], g['hi'], g['name']))
+                   for m in order for g in m.regions],
                 'area': (w('bss_end'),) + drive_area(w('bss_end'))
                          + (w('glob', desc.STAGING[0]), w('glob', desc.STAGING[1])),
-                'storage': {'trailer': (w('trailer'), trailer_len), 'scopes': scopes}}
+                'storage': {'trailer': (w('trailer'), trailer_len), 'scopes': scopes},
+                # the stock bytes of every range the flashed build writes, where the profile asks for
+                # them (drive_shadow): a loader on the unit copies a mod's stock parts from the
+                # running OS, and lays these over it
+                'shadow': sorted((s['addr'], bytes(image[s['addr'] - dev.main_load:
+                                                         s['addr'] - dev.main_load + s['len']]))
+                                 for m in order for s in m.sites
+                                 if dev.main_load <= s['addr']
+                                 and s['addr'] + s['len'] <= dev.main_load + len(image))
+                if dev.drive_shadow else []}
     desc_at = desc_len = None
     if with_desc:
         desc_len = len(desc.encode(desc_fields(None)))

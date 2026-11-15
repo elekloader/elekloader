@@ -10,6 +10,7 @@ import * as container from './container.ts'
 import * as desc from './desc.ts'
 import { ModError, cmpVersions, formatOf, isDict, pyEq } from './elemod.ts'
 import { FORMAT2, Mod2 } from './link.ts'
+import { devices } from './devices.ts'
 import { JSONDecodeError, UnicodeDecodeError, decodeUtf8, loads } from './pyjson.ts'
 import { repr, str, truthy } from './py.ts'
 import { crc32 } from './zip.ts'
@@ -49,8 +50,18 @@ export const CODES: [string, string][] = [
   ['range', 'a 16-bit PC-relative reference is out of range'],
   ['limit', 'past the loader\'s own limits'],
   ['count', 'more than 256 mods are chosen'],
+  // TELOS on the Digitone mk1 (a build whose descriptor carries the stock shadow): sites and regions
+  ['site', 'a site overlaps one of {detail}'],
+  ['flashed', 'a site at {detail} overlaps what the flashed build writes'],
+  ['', ''],                                 // 23: not a code
+  ['stock', 'the bytes at {detail} are not stock\'s'],
+  ['', ''],                                 // 25: not a code
+  ['busy', 'no quiet moment to write the sites in'],
+  ['region', 'a region overlaps one of {detail}'],
+  ['outside', 'a region at {detail} is outside the device\'s free areas'],
 ]
-export const CODE: Record<string, number> = Object.fromEntries(CODES.map(([n], i) => [n, i]))
+export const CODE: Record<string, number> = Object.fromEntries(CODES.flatMap(([n], i) => (n ? [[n, i]] : [])))
+export const BOOT_ONLY = ['missing', 'changed', 'busy']   // the host has the files it is given; busy is the unit's moment
 export const SKIPS = ['none', 'key', 'armed', 'drive', 'abi', 'unstable', 'count', 'memory']
 export const NO_FIELDS = ['sites', 'collections', 'copied', 'storage', 'sharc']
 const RSIZE: Record<string, number> = { abs32: 4, pc32: 4, pc16: 2 }
@@ -67,6 +78,24 @@ const cmp = (a: string, b: string) => {                                         
   for (let i = 0; i < Math.min(x.length, y.length); i++)
     if (x[i] !== y[i]) return x[i].codePointAt(0)! - y[i].codePointAt(0)!
   return x.length - y.length
+}
+
+/** Python's int(s, 0) on a string: decimal, 0x, 0o or 0b, underscores between digits. -> null (ValueError). */
+function pyInt0(s: string | null): number | null {
+  if (s === null) return null
+  const t = s.trim().toLowerCase(), m = /^([+-]?)(0x[0-9a-f](_?[0-9a-f])*|0o[0-7](_?[0-7])*|0b[01](_?[01])*|[1-9](_?\d)*|0(_?0)*)$/.exec(t)
+  if (!m) return null
+  const body = m[2].replace(/_/g, ''), v = /^0[xob]/.test(body) ? Number(body) : parseInt(body, 10)
+  return m[1] === '-' ? -v : v
+}
+/** Python's str(v) for int(str(v), 0): a string as it is, an int its digits; anything else no number (null). */
+const pyStr = (v: unknown): string | null => (typeof v === 'string' ? v : pyInt(v) ? String(v) : null)
+/** Python's int(v): an int or bool, a float truncated, a decimal string. -> null (ValueError/TypeError). */
+function pyIntOf(v: unknown): number | null {
+  if (typeof v === 'boolean') return Number(v)
+  if (typeof v === 'number') return Number.isFinite(v) ? Math.trunc(v) : null
+  if (typeof v !== 'string' || !/^\s*[+-]?\d(_?\d)*\s*$/.test(v)) return null
+  return parseInt(v.replace(/_/g, ''), 10)
 }
 
 /** A status's line, for a person. drive.message. */
@@ -90,6 +119,8 @@ export class Build {
   tables: desc.DescTable[]
   table: Map<string, number>
   claims: string[]
+  shadow: [number, Uint8Array][]; telos: boolean; regions: [number, number, string][]
+  areas: [number, number][]                 // a region must be inside one (TELOS)
   ramEnd: number; lo: number; hi: number; staging: number; stagingSize: number
   globals: Map<string, Global>
   nsyms: number
@@ -103,6 +134,15 @@ export class Build {
     this.tables = d.tables
     this.table = new Map(d.tables.map((t, i) => [t.name, i]))
     this.claims = d.claims.filter(([k]) => k === desc.CLAIM_NAME).map(([, , nm]) => nm)
+    // TELOS (a descriptor with the stock shadow, ABI 1.2): sites and regions are taken, checked as the boot linker
+    // checks them (DL_SITES, DL_REGIONS)
+    this.shadow = d.shadow ?? []
+    this.telos = this.shadow.length > 0
+    this.areas = Object.values(devices().find(x => x.key === d.deviceKey)?.areas ?? {}) as [number, number][]
+    this.regions = d.claims.filter(([k]) => k === desc.CLAIM_REGION).map(([, mi, nm]) => {
+      const [lo, hi] = nm.split(' ')
+      return [pyInt0(lo)!, pyInt0(hi)!, d.modules[mi].name]
+    })
     ;[this.ramEnd, this.lo, this.hi, this.staging, this.stagingSize] = d.area
     this.globals = new Map()
     const put = (k: string, v: Global) => { if (!this.globals.has(k)) this.globals.set(k, v) }
@@ -143,6 +183,7 @@ export class Choice {
   mod: Mod2 | null = null
   id: string | null = null
   exports: string[] = []
+  sites: [number, number][] = []; regions: [number, number][] = []   // TELOS: [lo, hi) each
   alive = false
 
   constructor(line: number, name: string, raw: Uint8Array | null) {
@@ -240,16 +281,40 @@ export function pass1(build: Build, c: Choice, state: State): boolean {
   const tgt = g(doc, 'target')
   if (!isDict(tgt) || g(tgt, 'device') !== build.deviceKey || g(tgt, 'os') !== build.os)
     return c.refuse('target', '', 0, isDict(tgt) ? `${str(g(tgt, 'device'))} ${str(g(tgt, 'os'))}` : 'no target')
-  for (const f of NO_FIELDS) if (!empty(g(doc, f))) return c.refuse('feature', f)
+  for (const f of NO_FIELDS) if (!(f === 'sites' && build.telos) && !empty(g(doc, f))) return c.refuse('feature', f)
   const secs = g(doc, 'sections')
   if (!isDict(secs)) return c.refuse('format', '', 0, 'its sections')
   for (const s of Object.keys(secs)) if (s !== '.run' && s !== '.bss') return c.refuse('feature', s)
   const res = g(doc, 'resources')
   if (res !== null && !isDict(res)) return c.refuse('format', '', 0, 'its resources')
   for (const [k, v] of Object.entries(res ?? {})) {
-    if (k === 'regions' && !empty(v)) return c.refuse('feature', 'regions')
+    if (k === 'regions' && !empty(v)) {
+      if (!build.telos) return c.refuse('feature', 'regions')
+      const rs: [number, number][] = []
+      for (const r of each(v)) {
+        const lo = isDict(r) && 'lo' in r ? pyInt0(pyStr(r.lo)) : null, hi = isDict(r) && 'hi' in r ? pyInt0(pyStr(r.hi)) : null
+        if (lo === null || hi === null) return c.refuse('format', '', 0, 'resources.regions')
+        rs.push([lo, hi])
+      }
+      if (rs.some(([lo, hi]) => hi <= lo)) return c.refuse('format', '', 0, 'resources.regions')
+      for (const [lo, hi] of rs)                // inside a free area, as a flashed mod's (dl_region_ok)
+        if (!build.areas.some(([a, z]) => a <= lo && hi <= z)) return c.refuse('outside', hex8(lo))
+      c.regions = rs
+    }
     if (k === 'names' && !keepList(v)) return c.refuse('limit', '', 0, 'resources.names')
     if (k === 'core' && v !== null && !(typeof v === 'string' && keep(v))) return c.refuse('format', '', 0, 'resources.core')
+  }
+  if (build.telos && !empty(g(doc, 'sites'))) {   // pass 1's checks of each site (dlink.c, scan_sites)
+    for (const x of each(doc.sites)) {
+      const ok = isDict(x) && ['addr', 'len', 'stock_sha256', 'new'].every(k => k in x)
+      const a = ok ? pyInt0(pyStr(x.addr)) : null, n = ok ? pyIntOf(x.len) : null
+      const want = ok ? fromhexLen(x.stock_sha256) : null, nw = ok ? fromhexLen(x.new) : null
+      if (a === null || n === null || want === null || nw === null) return c.refuse('format', '', 0, 'a site')
+      if (a <= 0 || !(n > 0 && n <= 256) || nw !== n || want !== 32) return c.refuse('format', '', 0, 'a site')
+      // the stock hash needs the main OS, which a build here (its descriptor) has not: the unit checks it
+      if (build.shadow.some(([sa, dt]) => a < sa + dt.length && sa < a + n)) return c.refuse('flashed', hex8(a))
+      c.sites.push([a, a + n])
+    }
   }
   for (const k of ['imports', 'weak', 'requires', 'conflicts']) if (!keepList(g(doc, k))) return c.refuse('limit', '', 0, k)
   const runLen = sectionLen(g(secs, '.run'))
@@ -325,6 +390,10 @@ function round(build: Build, order: Choice[]): number {
       if (w === undefined) w = earlier.find(o => m.conflicts.includes(o.id!) || o.mod!.conflicts.includes(c.id!))?.id ?? undefined
       if (w !== undefined) why = ['conflicts', w]
     }
+    if (!why && c.sites.length) {           // sites: the later of two that overlap goes
+      const w = earlier.find(o => c.sites.some(([a, b]) => o.sites.some(([x, y]) => a < y && x < b)))
+      if (w !== undefined) why = ['site', w.id!]
+    }
     if (!why) {
       const x = c.exports.find(x => build.globals.has(x) || earlier.some(o => o.exports.includes(x)))
       if (x !== undefined) why = ['export', x]
@@ -332,6 +401,11 @@ function round(build: Build, order: Choice[]): number {
     if (!why) {
       const x = m.names.find(n => build.claims.includes(n) || earlier.some(o => o.mod!.names.includes(n)))
       if (x !== undefined) why = ['claim', x]
+    }
+    if (!why && c.regions.length) {         // regions: the flashed build's, then earlier mods'
+      let w = c.regions.flatMap(([a, b]) => build.regions.filter(([x, y]) => a < y && x < b).map(r => r[2]))[0]
+      if (w === undefined) w = earlier.find(o => c.regions.some(([a, b]) => o.regions.some(([x, y]) => a < y && x < b)))?.id ?? undefined
+      if (w !== undefined) why = ['region', w]
     }
     if (!why) {
       const x = m.imports.find(x => !(build.globals.has(x) || alive.some(o => o.exports.includes(x))) && !m.weak.has(x))

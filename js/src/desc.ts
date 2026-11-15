@@ -16,6 +16,7 @@ export const ORDER_MIN = -0x80000000        // with a descriptor, an order is OR
 export const KEY_LINKER = 0xffff            // a key's order (ABI 1.0's field) for the linker's own entries
 export const KIND_CORE = 0, KIND_FLASHED = 1, KIND_LOADER = 2
 export const CLAIM_NAME = 1
+export const CLAIM_REGION = 2               // a region of the bulk area a flashed mod claims: "<lo> <hi> <name>", hex
 export const STAGING = ['drive_staging', 'drive_staging_size'] as const
 const MODULE = 16, EXPORT = 8, TABLE = 24, CLAIM = 8, AREA = 20, SCOPE = 16
 
@@ -27,6 +28,7 @@ export type DescFields = {
   modules: DescModule[]; tables: DescTable[]; claims: [number, number, string][]
   area: [number, number, number, number, number]
   storage: { trailer: [number, number]; scopes: [string, number, number, number][] }
+  shadow?: [number, Uint8Array][]             // ABI 1.2 (drive_shadow): the stock bytes of each range the build writes
 }
 
 const utf8 = new TextEncoder()
@@ -54,7 +56,9 @@ export function encode(d: DescFields): Uint8Array {
   const nkeys = d.tables.reduce((n, t) => n + t.entries.length, 0)
   const oMod = HEADER, oExp = oMod + MODULE * d.modules.length, oTab = oExp + EXPORT * exports.length
   const oClm = oTab + TABLE * d.tables.length, oKey = oClm + CLAIM * d.claims.length, oArea = oKey + 4 * nkeys
-  const oSto = oArea + AREA, oOrd = oSto + 12 + SCOPE * d.storage.scopes.length, oPool = oOrd + 4 * nkeys
+  const oSto = oArea + AREA, oOrd = oSto + 12 + SCOPE * d.storage.scopes.length, oShadow = oOrd + 4 * nkeys
+  const shadow = d.shadow ?? []
+  const oPool = oShadow + shadow.reduce((n, [, x]) => n + 8 + x.length + ((4 - (x.length % 4)) % 4), 0)
   // names first, so the pool's size is known before the block is laid out (as desc.py adds them while it packs)
   d.modules.forEach(m => { str(m.name); str(m.version) })
   for (const [nm] of exports) str(nm)
@@ -65,13 +69,14 @@ export function encode(d: DescFields): Uint8Array {
   const b = new Uint8Array(size), v = new DataView(b.buffer)
   const u32 = (o: number, x: number) => v.setUint32(o, ((x % 2 ** 32) + 2 ** 32) % 2 ** 32)
   b.set([0x45, 0x4c, 0x4b, 0x44], 0)                      // 'ELKD'
-  v.setUint16(4, ABI[0]); v.setUint16(6, ABI[1]); u32(8, size)
+  v.setUint16(4, ABI[0]); v.setUint16(6, shadow.length ? 2 : ABI[1]); u32(8, size)
   v.setUint16(0x10, d.family); v.setUint16(0x12, d.device); u32(0x14, d.release)
   u32(0x18, oPool); u32(0x1c, poolLen)
   v.setUint16(0x20, d.modules.length); v.setUint16(0x22, exports.length)
   v.setUint16(0x24, d.tables.length); v.setUint16(0x26, d.claims.length)
   ;[oMod, oExp, oTab, oClm, oKey, oArea, oSto].forEach((x, i) => u32(0x28 + 4 * i, x))
   u32(0x44, str(d.deviceKey)); u32(0x48, str(d.os))
+  if (shadow.length) { u32(0x58, oShadow); u32(0x5c, shadow.length) }   // clear of other 1.2 fields' words
   let o = oMod, first = 0
   d.modules.forEach((m, i) => {
     u32(o, str(m.name)); u32(o + 4, str(m.version)); b[o + 8] = m.kind; b[o + 9] = m.flags
@@ -94,6 +99,7 @@ export function encode(d: DescFields): Uint8Array {
   o += 12
   for (const [nm, room, used, gen] of d.storage.scopes) { u32(o, str(nm)); u32(o + 4, room); u32(o + 8, used); u32(o + 12, gen); o += SCOPE }
   for (const t of d.tables) for (const [ord] of t.entries) { v.setInt32(o, ord); o += 4 }
+  for (const [a, x] of shadow) { u32(o, a); u32(o + 4, x.length); b.set(x, o + 8); o += 8 + x.length + ((4 - (x.length % 4)) % 4) }
   b.set(pool, oPool)
   u32(0x0c, crc32(b))
   return b
@@ -152,8 +158,14 @@ export function decode(blk: Uint8Array, at = 0): Decoded {
     const o = oSto + 12 + SCOPE * i
     return [name(u32(o)), u32(o + 4), u32(o + 8), u32(o + 12)]
   })
+  const shadow: [number, Uint8Array][] = []
+  for (let i = 0, o = u32(0x58), n = o ? u32(0x5c) : 0; i < n; i++) {
+    const len = u32(o + 4)
+    shadow.push([u32(o), b.slice(o + 8, o + 8 + len)])
+    o += 8 + len + ((4 - (len % 4)) % 4)
+  }
   return { abi: [major, minor], size, crc, family: u16(0x10), device: u16(0x12), release: u32(0x14),
     deviceKey: name(u32(0x44)), os: name(u32(0x48)), modules, tables, claims,
     area: Array.from({ length: 5 }, (_, i) => u32(oArea + 4 * i)) as [number, number, number, number, number],
-    storage: { trailer: [u32(oSto), u32(oSto + 4)], scopes } }
+    storage: { trailer: [u32(oSto), u32(oSto + 4)], scopes }, shadow }
 }

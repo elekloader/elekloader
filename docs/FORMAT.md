@@ -328,19 +328,17 @@ may hold; the boot link and the computer's tools are in
 **What a +Drive mod is.** A format-2 mod with only `.run` and `.bss`,
 relocations only in `.run` (`abs32`, `pc32`, `pc16`), and none of `sites`,
 `collections`, `copied`, `storage`, `sharc`, `resources.regions` or a
-contribution's `claims`. It adds entries only to tables whose descriptor
-flags say more may be added (not a DSP table), in whole entries, at an
-order of -2,147,483,648 to 2,147,483,646. Its imports are the build's exports, the tables'
-names and `NAME_n` (the count after the merge), `core_desc`, and the other
-+Drive mods' exports. Its own symbol `drive_init` (in `.run` or `.bss`), if
-it has one, is called after the link as `void drive_init(void)`, in id
-order; it is never a global name. Its id is under 28 bytes.
+contribution's `claims` (TELOS takes sites and regions). It adds
+whole entries only to tables whose descriptor allows more (not DSP
+tables), at an order below 2^31-1. It imports the build's exports, table
+names, `NAME_n` (the count after the merge), `core_desc` and other +Drive
+mods' exports. Its own `drive_init`, if any, is called after the link as
+`void drive_init(void)` in id order; never global. Its id is under 28 bytes.
 
-**`/mods/active`** lists the chosen files, one line each: the file's path
-below `/mods` (`x.elemod`, or in up to 3 folders, `fx/delays/x.elemod`), a
-space, its CRC-32 (zlib's, as 8 hex digits; `0x` is optional). Blank lines,
-`#` lines and lines without a CRC are skipped; the path is everything
-before the last run of spaces, under 128 bytes. More than 256 lines and
+**`/mods/active`**: one line per chosen file, its path below `/mods`
+(up to 3 folders deep), a space, its CRC-32 (zlib's, 8 hex digits, `0x`
+optional). Blank, `#` and CRC-less lines are skipped; the path
+is all before the last run of spaces, under 128 bytes. Over 256 lines and
 nothing loads.
 
 The link's order and its status records are in DRIVE.md, "The boot link".
@@ -377,6 +375,12 @@ The link's order and its status records are in DRIVE.md, "The boot link".
 | 18 | `range` | a `pc16` out of range |
 | 19 | `limit` | past the loader's own room (above) |
 | 20 | `count` | more than 256 lines in `/mods/active` |
+| 21 | `site` | sites overlap |
+| 22 | `flashed` | over the build's |
+| 24 | `stock` | not stock |
+| 26 | `busy` | |
+| 27 | `region` | regions overlap |
+| 28 | `outside` | no free area |
 
 When nothing is linked, the loader keeps why:
 

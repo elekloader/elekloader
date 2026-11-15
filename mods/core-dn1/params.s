@@ -65,6 +65,16 @@
         .globl  core_dn_boot
 core_dn_boot:
         move.l  %a2, -(%sp)
+        | 0. (5.4) The OS image as the bootloader left it, before core or the OS
+        |    writes anything, to CORE_STOCK_COPY in the bulk area: a loader that
+        |    links mods at run time (TELOS) reads stock bytes from it, where the
+        |    OS has since changed its data (core_stock_info, in .run).
+        lea     0x40000400, %a0
+        movea.l #CORE_STOCK_COPY, %a1
+        move.l  #CORE_IMAGE_LEN / 4, %d0
+0:      move.l  (%a0)+, (%a1)+
+        subq.l  #1, %d0
+        bne.s   0b
         | 1. The tables at PARAM_FREE move to core_ptab_save.
         lea     core_ptab_save, %a1
         bsr.w   run2load
@@ -324,6 +334,73 @@ core_sound_set:
         jsr     SOUND_LIVE
         lea     12(%sp), %sp
 9:      rts
+
+| core_param_install(void) (5.4): what core_dn_boot does for core_params, again,
+| at run time: each contributed descriptor's record into its slot at PARAM_FREE
+| and its look into core_param_look, and the slot's UI record cleared so the
+| next core_param_ui builds it again. For a mod linked after boot (TELOS, at
+| ev_card_ready), whose entries the boot never saw. Slots no descriptor names
+| keep what they have. Any task, before the views use the slots.
+        .globl  core_param_install
+core_param_install:
+        lea     -12(%sp), %sp
+        movem.l %d2/%a2-%a3, (%sp)
+        lea     core_params, %a2
+1:      move.l  (%a2)+, %d0             | a descriptor, or 0
+        beq.s   9f
+        movea.l %d0, %a1
+        move.l  (%a1)+, %d2             | its id
+        subi.l  #SLOT0, %d2
+        cmpi.l  #SLOTS, %d2
+        bcc.s   1b                      | not a slot: left out
+        move.l  PREC(%a1), %d1          | its look, or 0
+        bne.s   2f
+        moveq   #LOOK_DEF, %d1
+2:      lea     core_param_look, %a0
+        move.l  %d1, (%a0,%d2.l*4)
+        moveq   #UREC, %d0              | its UI record: built again on first use
+        muls.l  %d2, %d0
+        lea     core_param_uirec, %a3
+        clr.l   0x1c(%a3,%d0.l)
+        moveq   #PREC, %d0
+        muls.l  %d2, %d0
+        lea     PARAM_FREE, %a0
+        adda.l  %d0, %a0
+        moveq   #PREC / 4, %d0
+3:      move.l  (%a1)+, (%a0)+
+        subq.l  #1, %d0
+        bne.s   3b
+        bra.s   1b
+9:      movem.l (%sp), %d2/%a2-%a3
+        lea     12(%sp), %sp
+        rts
+
+| core_stock_info (5.4): {where, bytes} of the OS image's copy core_dn_boot made
+| before the OS ran (0x40000400 on), for a loader's stock bytes.
+        .balign 4
+        .globl  core_stock_info
+core_stock_info:
+        .long   CORE_STOCK_COPY, CORE_IMAGE_LEN
+
+| core_tasks (5.4): the OS's ten static tasks, for a loader that must know no task
+| is stopped where it writes: {count, the init task's row, the TCB's saved-SP
+| offset}, then per task {TCB, stack's low end, stack size}. The init task runs
+| ev_card_ready; a task not created yet has a saved SP outside its stack. Every
+| address moves by CORE_TASK_SHIFT on 1.44.
+        .balign 4
+        .globl  core_tasks
+core_tasks:
+        .long   10, 1, 72
+        .long   0x4136f608+CORE_TASK_SHIFT, 0x4136f65c+CORE_TASK_SHIFT, 0x4000
+        .long   0x4137365c+CORE_TASK_SHIFT, 0x413736b0+CORE_TASK_SHIFT, 0x4000
+        .long   0x40525f08+CORE_TASK_SHIFT, 0x40525f5c+CORE_TASK_SHIFT, 0x1000
+        .long   0x40527628+CORE_TASK_SHIFT, 0x4052767c+CORE_TASK_SHIFT, 0x0800
+        .long   0x4137f94c+CORE_TASK_SHIFT, 0x4137b94c+CORE_TASK_SHIFT, 0x4000
+        .long   0x4321e9a0+CORE_TASK_SHIFT, 0x419c50a0+CORE_TASK_SHIFT, 0x4000
+        .long   0x4137b6b4+CORE_TASK_SHIFT, 0x413776b4+CORE_TASK_SHIFT, 0x4000
+        .long   0x419962a8+CORE_TASK_SHIFT, 0x419962fc+CORE_TASK_SHIFT, 0x8000
+        .long   0x4052a668+CORE_TASK_SHIFT, 0x4052aedc+CORE_TASK_SHIFT, 0x28000
+        .long   0x41394e1c+CORE_TASK_SHIFT, 0x41394e70+CORE_TASK_SHIFT, 0x4000
 
 | The two tables from PARAM_FREE, filled at boot.
         .balign 4
