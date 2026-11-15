@@ -62,6 +62,10 @@ are **+Drive entries (kind 2)** over their own sectors, with no RAM stage:
   run and writes its byte offset into the copy's `+0x0c`; `+0x6c` checks the header; `+0x4c`, after
   the writer reported every byte and the content hash passed, makes the run the file. A failed
   upload never reaches `+0x4c`, and its reservation is only in memory, so it costs nothing.
+  Every std::function slot of an entry holds its own copy of the closure, so the upload in flight
+  is the route's own record (one upload at a time per Data handler), not the closure's: `+0x1c`
+  keeps the copy there tagged with its resolution's serial, and `+0x3c` reserves only for the same
+  resolution (tests/test_drive_a4_route.py).
 - **A new name** resolves to the scratch sector with size 0 and no Clear permission; a Clear of a
   file erases or zeroes at most its own first sector, then deletes it.
 - **Permissions** are read, write and clear only: Copy and Swap would make writers without a
@@ -103,7 +107,7 @@ were never bounded by a stage here: `/mods` takes a file up to the largest free 
 | file | from drive-loader-ar2 | what |
 |---|---|---|
 | `store.c`, `fs.h` | new (replaces `fs.c`) | the store, the loader's mutex and the staging floor |
-| `route.c`, `route.s` | logic kept, glue retraced | the /mods route |
+| `route.c`, `route.s` | logic kept, glue retraced | the /mods route (tests/test_drive_a4_route.py) |
 | `boot.c` | logic kept, glue retraced | the boot, the crash guard, `dl_format` |
 | `dlink.c`, `json.c`, `json.h`, `sha256.c`, `dstore.c`, `dstore.h`, `park.c`, `park.h`, `names.inc` | unchanged (tests/test_drive_a4_store.py checks); dlink.c's payload skip is built only with `DL_PAYLOAD_SKIP` | the linker, +Drive storage, the route's names |
 | `dl.h`, `flush.s` | comments, and `DL_PAYLOAD_SKIP` | the linker's interface; the site writes and cache push (the A4 sets the Rytm's CACR and ACR0) |

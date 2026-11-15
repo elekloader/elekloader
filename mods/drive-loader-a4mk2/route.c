@@ -13,18 +13,25 @@
  * closure; +0x3c (kind 2 only, when the writer is made) reserves the run and writes its byte offset
  * into the copy's +0x0c, which the writer reads next; +0x6c checks the header after the first
  * chunk; +0x4c commits. +0x1c also runs before a read, and +0x3c alone before a Clear's writer, so
- * a reservation is made only when +0x1c ran first in the same closure.
+ * a reservation is made only when +0x1c ran first for the same resolution of the entry. Each
+ * function slot holds its own copy of the closure, so that state is the route's (`up`, one upload
+ * at a time per Data handler, lesson 2.6), tagged with the resolution's serial, not the closure's.
  *
  * Calls come from the SysEx receive tasks, never the UI task. Struct results come back through a
  * hidden pointer in %a0, which route.s's thunks pass to these functions as their first argument. */
 
 #include "fs.h"
 
-/* std::string(cstr, allocator) and its dtor (core-a4mk2's screen.c uses the same two) */
+/* std::string(cstr, allocator) and its dtor (core-a4mk2's screen.c uses the same two); operator new
+ * and delete. tests/drive_a4_route_host.c brings its own. */
+#ifndef STR_NEW
 #define STR_NEW ((void (*)(void *, const char *, void *))0x4018471e)
 #define STR_DEL ((void (*)(void *))0x40182c6e)
+#endif
+#ifndef NEW
 #define NEW ((void *(*)(unsigned))0x400653b8)  /* operator new (core's core_new) */
 #define DELETE ((void (*)(void *))0x400653c4)  /* operator delete */
+#endif
 
 /* the resolver's route tables: the pattern parse (&pattern, &segments) */
 #define PATTERN ((int (*)(void *, void *))0x4001ab98)
@@ -214,15 +221,22 @@ struct clo {
     char name[DL_NAME_MAX + 1];           /* a path below DL_DIR */
     unsigned size;                        /* a file's size when its entry was made */
     unsigned char exists;                 /* a file of that name was there */
-    unsigned char *pre;                   /* +0x1c ran: the entry copy it was handed */
+    unsigned serial;                      /* the resolution (dl_entry call) the entry came from */
 };
 
-/* The upload in flight: one at a time per Data handler (lesson 2.6), so one record. +0x3c fills it
- * with the run the store reserved, +0x4c commits it when the name and the payload size match. */
+/* The upload in flight: one at a time per Data handler (lesson 2.6), so one record, shared by all
+ * of an entry's functions. Each std::function slot holds a closure of its own (set_fn, and the
+ * manager's clone copies again), so nothing one function writes into its closure reaches another:
+ * +0x1c keeps the entry copy here, tagged with its resolution's serial, and +0x3c takes it only
+ * when its own closure carries the same serial. +0x3c fills the rest with the run the store
+ * reserved, +0x4c commits it when the name and the payload size match. Under dl_lock. */
 static struct {
+    unsigned serial;                      /* +0x1c ran for this resolution: pre is its copy */
+    unsigned char *pre;
     char name[DL_NAME_MAX + 1];
     unsigned token, sector, size;
 } up;
+static unsigned dl_serial;                /* the last resolution's serial; 0 never */
 
 /* the manager of every closure here: 0 type, 1 pointer, 2 clone, 3 destroy */
 static const int dl_typeinfo[2];
@@ -275,8 +289,8 @@ static void set_fn(unsigned char *slot, const struct clo *proto, void *inv)
 /* +0x1c, before a read stream and before an upload's first chunk: {u8 ok, string msg}. For an
  * upload the entry stock hands over is its copy with the header's payload size at +0x10; stock
  * writes the first chunk's body before the +0x6c check, so this is where an upload that can't fit
- * is refused (lesson 2.5). A read's size is the file's: not refused for room. The copy is kept for
- * +0x3c, which stock calls next on the same copy when it makes a writer. */
+ * is refused (lesson 2.5). A read's size is the file's: not refused for room. The copy is kept in
+ * `up` for +0x3c, which stock calls next on the same copy when it makes a writer. */
 unsigned dl_pre(unsigned char *res, void **f, unsigned char *entry)
 {
     struct clo *c = *f;
@@ -297,7 +311,10 @@ unsigned dl_pre(unsigned char *res, void **f, unsigned char *entry)
             set_str(res + 4, "No room on the +Drive (see /mods/.status, room)");
             return (unsigned)res;
         }
-        c->pre = entry;
+        dl_lock();
+        up.serial = c->serial;
+        up.pre = entry;
+        dl_unlock();
     }
     res[0] = 1;
     ok_str(res + 4);
@@ -305,17 +322,24 @@ unsigned dl_pre(unsigned char *res, void **f, unsigned char *entry)
 }
 
 /* +0x3c, kind 2, before stock makes the +Drive writer, which then reads +0x0c and +0x10 from the
- * same copy: reserve the run and point the copy at it. Without +0x1c first (a Clear) nothing
- * changes: the writer stays inside the file's own run. When no run is free the copy is pointed at
- * the scratch sector with size 0, so the writer writes nothing and the upload fails its count. */
+ * same copy: reserve the run and point the copy at it. Without +0x1c first in the same resolution
+ * (a Clear resolves on its own) nothing changes: the writer stays inside the file's own run. When
+ * no run is free the copy is pointed at the scratch sector with size 0, so the writer writes
+ * nothing and the upload fails its count. */
 void dl_reserve(void **f)
 {
     struct clo *c = *f;
-    unsigned char *e = c->pre;
+    unsigned char *e;
     unsigned size, token, at;
-    if (c->what != C_FILE || !e)
+    if (c->what != C_FILE)
         return;
-    c->pre = 0;
+    dl_lock();
+    e = up.serial == c->serial ? up.pre : 0;
+    up.serial = 0;
+    up.pre = 0;
+    dl_unlock();
+    if (!e)
+        return;
     size = *(const unsigned *)(e + E_SIZE);
     at = size ? ds_reserve(size, &token) : 0;
     dl_lock();
@@ -935,6 +959,11 @@ refused:
     }
 made:
     c.size = (unsigned)size;
+    dl_lock();                            /* this resolution's serial, for +0x1c and +0x3c (up) */
+    if (!++dl_serial)
+        dl_serial = 1;
+    c.serial = dl_serial;
+    dl_unlock();
     if (kind == KIND_DRIVE) {             /* the file's own run, or the scratch sector */
         char path[DL_PATH_MAX];
         unsigned sector = 0, bytes = 0;
