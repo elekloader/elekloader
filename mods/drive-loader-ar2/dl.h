@@ -60,6 +60,8 @@ enum {
     /* DL_REGIONS (TELOS on the Digitone mk1, POC): mods that claim regions of the bulk area */
     DL_R_REGION = 27,                    /* a region overlaps one the flashed build or an earlier mod
                                           * claims (detail: the other's name) */
+    DL_R_OUTSIDE = 28,                   /* a region is not inside one of the device's free areas, as a
+                                          * flashed mod's must be (detail: its start) */
 };
 
 /* Why nothing was linked (dl_skip_reason). */
@@ -119,6 +121,10 @@ u32 dl_hash(const char *s, u32 n);       /* FNV-1a, 32 bits */
 /* Read /mods/<name> into buf (at most max bytes). -> its length, -1 missing, -2 larger
  * than max, -3 a read error. */
 s32 dl_read_file(const char *name, u8 *buf, u32 max);
+
+#ifdef DL_REGIONS
+int dl_region_ok(u32 lo, u32 hi);       /* [lo, hi) inside one of the device's free areas (the host's) */
+#endif
 
 #ifdef DL_SITES
 /* ---- sites (the Octatrack's TELOS) -----------------------------------------------------

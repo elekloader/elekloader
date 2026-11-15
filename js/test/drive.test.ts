@@ -58,7 +58,7 @@ test('TELOS: sites and regions on a build with the stock shadow, as drive.py che
 })
 
 test('every host refusal code has a case refused with it and one that loads', () => {
-  const host = drive.CODES.map(([n]) => n).filter(n => n && !['ok', 'missing', 'changed', 'range', 'busy', 'site', 'flashed', 'stock', 'region'].includes(n))
+  const host = drive.CODES.map(([n]) => n).filter(n => n && !['ok', 'missing', 'changed', 'range', 'busy', 'site', 'flashed', 'stock', 'region', 'outside'].includes(n))
   for (const code of host) {
     assert.ok(V.cases.some((c: any) => c.name === `${code}: refused` && c.summary.choices.some((x: any) => x.reason === code)), code)
     assert.ok(V.cases.some((c: any) => c.name === `${code}: loads` && c.summary.choices.every((x: any) => x.state === 'loaded')), code)

@@ -10,6 +10,7 @@ import * as container from './container.ts'
 import * as desc from './desc.ts'
 import { ModError, cmpVersions, formatOf, isDict, pyEq } from './elemod.ts'
 import { FORMAT2, Mod2 } from './link.ts'
+import { devices } from './devices.ts'
 import { JSONDecodeError, UnicodeDecodeError, decodeUtf8, loads } from './pyjson.ts'
 import { repr, str, truthy } from './py.ts'
 import { crc32 } from './zip.ts'
@@ -57,6 +58,7 @@ export const CODES: [string, string][] = [
   ['', ''],                                 // 25: not a code
   ['busy', 'no quiet moment to write the sites in'],
   ['region', 'a region overlaps one of {detail}'],
+  ['outside', 'a region at {detail} is outside the device\'s free areas'],
 ]
 export const CODE: Record<string, number> = Object.fromEntries(CODES.flatMap(([n], i) => (n ? [[n, i]] : [])))
 export const BOOT_ONLY = ['missing', 'changed', 'busy']   // the host has the files it is given; busy is the unit's moment
@@ -118,6 +120,7 @@ export class Build {
   table: Map<string, number>
   claims: string[]
   shadow: [number, Uint8Array][]; telos: boolean; regions: [number, number, string][]
+  areas: [number, number][]                 // a region must be inside one (TELOS)
   ramEnd: number; lo: number; hi: number; staging: number; stagingSize: number
   globals: Map<string, Global>
   nsyms: number
@@ -135,6 +138,7 @@ export class Build {
     // checks them (DL_SITES, DL_REGIONS)
     this.shadow = d.shadow ?? []
     this.telos = this.shadow.length > 0
+    this.areas = Object.values(devices().find(x => x.key === d.deviceKey)?.areas ?? {}) as [number, number][]
     this.regions = d.claims.filter(([k]) => k === desc.CLAIM_REGION).map(([, mi, nm]) => {
       const [lo, hi] = nm.split(' ')
       return [pyInt0(lo)!, pyInt0(hi)!, d.modules[mi].name]
@@ -293,6 +297,8 @@ export function pass1(build: Build, c: Choice, state: State): boolean {
         rs.push([lo, hi])
       }
       if (rs.some(([lo, hi]) => hi <= lo)) return c.refuse('format', '', 0, 'resources.regions')
+      for (const [lo, hi] of rs)                // inside a free area, as a flashed mod's (dl_region_ok)
+        if (!build.areas.some(([a, z]) => a <= lo && hi <= z)) return c.refuse('outside', hex8(lo))
       c.regions = rs
     }
     if (k === 'names' && !keepList(v)) return c.refuse('limit', '', 0, 'resources.names')

@@ -702,12 +702,8 @@ static int target_ok(const char *p, const u8 *buf, u32 len)
     return dev && os && !j.err;
 }
 
-#ifdef DL_SITES
-/* ---- sites (the Octatrack's TELOS) ----------------------------------------------------------
- * A mod's "sites": [{"addr", "len", "stock_sha256", "new", "kind", "relocs"}]. Pass 1 checks
- * each against the running OS: its bytes there must still be stock's (sha256), so a site over
- * anything the flashed build wrote is refused (DL_R_STOCK), and records its range for the
- * overlap check. Pass 2 builds its bytes; the commit writes them. */
+#if defined(DL_SITES) || defined(DL_REGIONS)
+/* An address as a refusal's detail, "0x" and 8 digits. */
 static char hexdetail[12];
 
 static const char *hex_of(u32 v)
@@ -722,6 +718,14 @@ static const char *hex_of(u32 v)
     return hexdetail;
 }
 
+#endif
+
+#ifdef DL_SITES
+/* ---- sites (the Octatrack's TELOS) ----------------------------------------------------------
+ * A mod's "sites": [{"addr", "len", "stock_sha256", "new", "kind", "relocs"}]. Pass 1 checks
+ * each against the running OS: its bytes there must still be stock's (sha256), so a site over
+ * anything the flashed build wrote is refused (DL_R_STOCK), and records its range for the
+ * overlap check. Pass 2 builds its bytes; the commit writes them. */
 static int hexval(int c)
 {
     return c >= '0' && c <= '9' ? c - '0' : c >= 'a' && c <= 'f' ? c - 'a' + 10
@@ -1021,6 +1025,10 @@ static int scan(struct dmod *m, const u8 *buf, u32 len, const char **what)
                     }
                     if ((u32)hi <= (u32)lo)
                         return DL_R_FORMAT;
+                    if (!dl_region_ok((u32)lo, (u32)hi)) {   /* the host's rule: a free area */
+                        *what = hex_of((u32)lo);
+                        return DL_R_OUTSIDE;
+                    }
                     if (L.nregs >= DL_REGIONS_MAX)
                         return DL_R_LIMIT;
                     L.regs[L.nregs].lo = (u32)lo;

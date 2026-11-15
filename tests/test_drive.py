@@ -381,7 +381,7 @@ def test_every_refusal_has_a_fixture_that_is_refused_and_one_that_loads():
             assert [x.code for x in rl.choices] == [x.code for x in rb.choices], code
 
 
-TELOS_CODES = {'site', 'flashed', 'stock', 'region'}   # test_telos_sites_and_regions has theirs
+TELOS_CODES = {'site', 'flashed', 'stock', 'region', 'outside'}   # test_telos_sites_and_regions has theirs
 
 
 def test_every_code_has_a_fixture():
@@ -415,6 +415,8 @@ def test_telos_sites_and_regions():
         reg = lambda lo, hi: {'regions': [{'name': 'r', 'lo': hex(lo), 'hi': hex(hi)}]}
         assert codes(hello(B, resources=reg(0x45100000, 0x45200000))) == [(0, '')]
         assert codes(hello(B, resources=reg(0x450f0000, 0x45110000))) == [(drive.CODE['region'], 'flash-a')]
+        assert codes(hello(B, resources=reg(0x43f00000, 0x44100000))) == [(drive.CODE['outside'], '0x43f00000')]
+        assert codes(hello(B, resources=reg(0x47bf0000, 0x47c00000))) == [(0, '')]   # the ddr area
         assert codes(hello(B, resources=reg(0x45100000, 0x45200000)),
                      dmod(B, 'later', resources=reg(0x451f0000, 0x45300000))) == \
             [(0, ''), (drive.CODE['region'], 'drive-hello')]

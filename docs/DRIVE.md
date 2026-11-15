@@ -119,7 +119,7 @@ image>` prints it.
   `DL_SITES` and `DL_REGIONS`) then takes mods' sites and regions: a site
   must be stock's on the unit, not over the flashed build's or another
   mod's, and is written when no task is stopped in it; a region may not
-  overlap a flashed or earlier mod's (FORMAT.md, codes 21 to 27). A mod's
+  overlap a flashed or earlier mod's and must lie in a free area (FORMAT.md, codes 21 to 28). A mod's
   stock part over a flashed site copies the shadow's bytes. The twins
   (drive.py, js/src/drive.ts) check the same, leaving the stock hash to the
   unit when they have the descriptor alone.

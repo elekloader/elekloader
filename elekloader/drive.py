@@ -70,6 +70,7 @@ CODES = {
     24: ('stock', 'the bytes at {detail} are not stock\'s'),
     26: ('busy', 'no quiet moment to write the sites in'),
     27: ('region', 'a region overlaps one of {detail}'),
+    28: ('outside', 'a region at {detail} is outside the device\'s free areas'),
 }
 CODE = {name: c for c, (name, _m) in CODES.items()}
 BOOT_ONLY = ('missing', 'changed', 'busy')   # the host has the files it is given; busy is the unit's moment
@@ -134,6 +135,7 @@ class Build:
         self.pools = pools(self)
         dev = next((x for x in devices.devices() if x.key == self.device_key), None)
         self.main_load = dev.main_load if dev else None
+        self.areas = list(dev.areas.values()) if dev else []   # a region must be inside one (TELOS)
         self.image, self._ram, self.desc_at = image, None, None
         if image is not None:
             self._ram = self._locate(image, at)
@@ -345,6 +347,9 @@ def pass1(build, c, state):
                 return c.refuse('format', note='resources.regions')
             if any(hi <= lo for lo, hi in c.regions):
                 return c.refuse('format', note='resources.regions')
+            for lo, hi in c.regions:                 # inside a free area, as a flashed mod's (dl_region_ok)
+                if not any(a <= lo and hi <= z for a, z in build.areas):
+                    return c.refuse('outside', '0x%08x' % lo)
         if k == 'names' and not keep_list(v):
             return c.refuse('limit', note='resources.names')
         if k == 'core' and v is not None and not (isinstance(v, str) and keep(v)):

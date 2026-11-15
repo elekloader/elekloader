@@ -143,6 +143,8 @@ def _telos():
             ("a region over a flashed mod's", T.files(T.hello(B, resources=reg(0x450f0000, 0x45110000)))),
             ('two regions that overlap', T.files(T.hello(B, resources=reg(0x45100000, 0x45200000)),
                                                  T.dmod(B, 'later', resources=reg(0x451f0000, 0x45300000)))),
+            ('a region below the bulk area', T.files(T.hello(B, resources=reg(0x43f00000, 0x44100000)))),
+            ('a region across two areas', T.files(T.hello(B, resources=reg(0x47b00000, 0x47bf0000)))),
             ('a region upside down', T.files(T.hello(B, resources=reg(0x45200000, 0x45100000)))),
             ('a region without hi', T.files(T.hello(B, resources={'regions': [{'name': 'r', 'lo': '0x45100000'}]}))),
         ]

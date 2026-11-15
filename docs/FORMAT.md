@@ -375,11 +375,12 @@ The link's order and its status records are in DRIVE.md, "The boot link".
 | 18 | `range` | a `pc16` out of range |
 | 19 | `limit` | past the loader's own room (above) |
 | 20 | `count` | more than 256 lines in `/mods/active` |
-| 21 | `site` | TELOS: sites overlap |
-| 22 | `flashed` | TELOS: over the build's |
-| 24 | `stock` | TELOS: not stock |
-| 26 | `busy` | TELOS |
-| 27 | `region` | TELOS: regions overlap |
+| 21 | `site` | sites overlap |
+| 22 | `flashed` | over the build's |
+| 24 | `stock` | not stock |
+| 26 | `busy` | |
+| 27 | `region` | regions overlap |
+| 28 | `outside` | no free area |
 
 When nothing is linked, the loader keeps why:
 
