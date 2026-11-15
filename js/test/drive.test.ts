@@ -5,10 +5,11 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { ANALOG_RYTM_MK2 } from '../src/devices.ts'
+import { ANALOG_RYTM_MK2, DIGITONE_MK1 } from '../src/devices.ts'
 import { fromHex, toHex } from '../src/bytes.ts'
 import * as container from '../src/container.ts'
 import * as datarpc from '../src/datarpc.ts'
+import * as desc from '../src/desc.ts'
 import * as drive from '../src/drive.ts'
 import { ModError } from '../src/elemod.ts'
 
@@ -33,8 +34,31 @@ test('the build-checker: drive.py\'s results, set for set', () => {
   }
 })
 
+test('TELOS: sites and regions on a build with the stock shadow, as drive.py checks them', () => {
+  const T = V.telos
+  DIGITONE_MK1.releases.push({ ...T.release, binSha256: '' })
+  try {
+    const blk = fromHex(T.build)!
+    const d = desc.decode(blk)
+    assert.deepEqual(d.abi, T.abi)
+    assert.deepEqual(d.claims, T.claims)
+    assert.deepEqual(d.shadow!.map(([a, x]) => [a, toHex(x)]), T.shadow)
+    assert.deepEqual(desc.encode({ ...d, modules: d.modules }), blk)        // ABI 1.2 back, byte for byte
+    const build = drive.loadBuild(blk)
+    assert.ok(build.telos)
+    for (const c of T.cases) {
+      const r = drive.check(build, c.files.map(([n, f]: [string, any]) => [n, file(f)]))
+      assert.deepEqual(drive.summary(r), c.summary, c.name)
+      assert.equal(drive.statusText(r), c.status, c.name)
+      assert.deepEqual(drive.resultLines(r), c.lines, c.name)
+    }
+  } finally {
+    DIGITONE_MK1.releases.pop()
+  }
+})
+
 test('every host refusal code has a case refused with it and one that loads', () => {
-  const host = drive.CODES.map(([n]) => n).filter(n => !['ok', 'missing', 'changed', 'range'].includes(n))
+  const host = drive.CODES.map(([n]) => n).filter(n => n && !['ok', 'missing', 'changed', 'range', 'busy', 'site', 'flashed', 'stock', 'region', 'outside'].includes(n))
   for (const code of host) {
     assert.ok(V.cases.some((c: any) => c.name === `${code}: refused` && c.summary.choices.some((x: any) => x.reason === code)), code)
     assert.ok(V.cases.some((c: any) => c.name === `${code}: loads` && c.summary.choices.every((x: any) => x.state === 'loaded')), code)

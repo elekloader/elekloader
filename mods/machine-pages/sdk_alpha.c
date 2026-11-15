@@ -72,10 +72,14 @@ int32_t sdk_alpha_snapshot(const struct sdk_alpha_entry *e, int32_t page, void *
 }
 
 /* A track the AMP envelope has silenced and no trig starts: inaudible after the AMP page, so it is not
- * rendered (the level is 0 only then). render's idle counts its frames. */
+ * rendered. The envelope's decay multiplies its level down and need not land on 0, so below -96 dB
+ * (2^-16 of full scale) counts. render's idle counts its frames. */
+#define SILENT_LEVEL (1 << 15)
 static int silent(uint32_t track)
 {
-    return !(fw_voice_start & (1u << track)) && fw_amp_env[3 * track + 1] == 0;
+    int32_t v = fw_amp_level[2 * track + 1];
+    return !(fw_voice_start & (1u << track)) && fw_amp_level[2 * track] == FW_AMP_DECAY &&
+        v > -SILENT_LEVEL && v < SILENT_LEVEL;
 }
 
 void sdk_alpha_render(int32_t *blocks)

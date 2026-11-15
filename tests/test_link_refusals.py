@@ -498,6 +498,70 @@ def _(B):
     return B.pair('m 1 has .fast code, which needs the mod that declares fa_copies', fast, declared)
 
 
+# ---- standard events ("events": "std1" and the core's "std" map) ------------------------------------------
+
+def std_mod(d, event='ev_key'):
+    """Make `m` a std1 mod whose one entry subscribes to the standard event `event`."""
+    d[1].update(events='std1')
+    d[1]['contribute'][0].update(to=event, std=True)
+
+
+@row('Mod2.__init__', '<>: "events" is <>; the standard event set is <>')
+def _(B):
+    return B.pair('m: "events" is \'std2\'; the standard event set is "std1"',
+                  lambda d: d[1].update(events='std2'), lambda d: d[1].update(events='std1'))
+
+
+@row('Mod2.__init__', '<>: "std" maps each standard event\'s name to a table of the core')
+def _(B):
+    return B.pair('core: "std" maps each standard event\'s name to a table of the core',
+                  lambda d: d[0].update(std={'ev_key': 3}), lambda d: d[0].update(std={'ev_key': 'ev_x'}))
+
+
+@row('Mod2.__init__', '<>: a "std" map is a core\'s (the mod with .boot)')
+def _(B):
+    return B.pair('m: a "std" map is a core\'s (the mod with .boot)',
+                  lambda d: d[1].update(std={'ev_key': 'ev_x'}), lambda d: d[0].update(std={'ev_key': 'ev_x'}))
+
+
+@row('Mod2.__init__', '<>: a standard event\'s subscription ("std": true) needs the mod\'s "events"')
+def _(B):
+    def good(d):
+        std_mod(d)
+        d[0].update(std={'ev_key': 'ev_x'})
+    return B.pair('m contribution 0: a standard event\'s subscription ("std": true) needs the mod\'s "events"',
+                  lambda d: d[1]['contribute'][0].update(to='ev_key', std=True), good)
+
+
+@row('std_tables', '<> subscribes to <> events, and <> maps none')
+def _(B):
+    def good(d):
+        std_mod(d)
+        d[0].update(std={'ev_key': 'ev_x'})
+    return B.pair('m 1 subscribes to std1 events, and core 1 maps none', std_mod, good)
+
+
+@row('std_tables', '<> subscribes to <>, which <> does not map')
+def _(B):
+    def bad(d):                         # ev_x is a table, but std mods reach it only through the map
+        std_mod(d, 'ev_x')
+        d[0].update(std={'ev_key': 'ev_x'})
+
+    def good(d):
+        std_mod(d)
+        d[0].update(std={'ev_key': 'ev_x'})
+    return B.pair('m 1 subscribes to ev_x, which core 1 does not map', bad, good)
+
+
+@row('std_tables', '<>: its std map sends <> to <>, which no given mod declares')
+def _(B):
+    def good(d):
+        d[0].update(std={'ev_key': 'std_key'})
+        d[0]['collections']['std_key'] = {'entry': 4}
+    return B.pair('core 1: its std map sends ev_key to std_key, which no given mod declares',
+                  lambda d: d[0].update(std={'ev_key': 'std_key'}), good)
+
+
 @row('check', '<> holds at most <> entries on <> <>; <> add<> <>', device='digitakt-mk1')
 def _(B):
     def machines(n_m, n_n):
@@ -1444,6 +1508,29 @@ def test_a_core_with_a_lockfile_keeps_the_knob_ids_from_build_to_build():
         assert three.knob_notes == ['j: back with knob ids 555..556']
 
 
+def test_std_and_native_mods_share_the_core_tables_through_its_std_map():
+    """A std1 mod's subscriptions land in the table the core's map names for each standard event:
+    a native table (= or prefix) beside a native mod's entries, or the core's own std table
+    (thunk). The contribution keeps the standard name as its "event"."""
+    with Bench('octatrack') as B:
+        core = B.core(std={'ev_tick': 'ev_x', 'ev_key': 'std_key'})
+        core['collections']['std_key'] = {'entry': 4}
+        native = B.mod('n')
+        std = B.mod('s', events='std1')
+        std['contribute'] = [{'to': 'ev_tick', 'std': True, 'data': '00000000',
+                              'relocs': [[0, 'abs32', 'sym:fn_s', 0]]},
+                             {'to': 'ev_key', 'std': True, 'data': '00000000',
+                              'relocs': [[0, 'abs32', 'sym:fn_s', 0]]}]
+        mods = [link.Mod2(d, d['id']) for d in (core, native, std)]
+        out = link.link(mods, B.img)
+        assert out.tables['ev_x'][1] == 2 and out.tables['std_key'][1] == 1
+        assert [(c['event'], c['to']) for c in mods[2].contribute] == [('ev_tick', 'ev_x'), ('ev_key', 'std_key')]
+        # the same std mod with a core whose map lacks ev_key is refused; a native mod is not affected
+        bare = B.core(std={'ev_tick': 'ev_x'})
+        assert link.check([link.Mod2(d, d['id']) for d in (bare, native, std)], B.img) == \
+            ['s 1 subscribes to ev_key, which core 1 does not map']
+
+
 def test_every_refusal_has_a_fixture():
     found = set(messages('elekloader/link.py'))
     loader = [(fn, t) for fn, t in messages('elekloader/elemod.py')]
@@ -1535,6 +1622,23 @@ def test_the_build_descriptor():
         run = out.layout['sections']['m .run'] - out.layout['ddr'][0]
         assert int.from_bytes(ddr[run + 4:run + 8], 'big') == at
         assert 'module 1 m 1 (loader)' in desc.dump(d)
+
+
+def test_the_digitone_mk1_descriptor_has_a_drive_area():
+    """On the Digitone mk1 a loader of +Drive mods (TELOS, github.com/elekloader/telos) gets what the
+    flashed build leaves of core-dn1's linker area, from a 4 KB boundary (the profile's drive_align);
+    with core 4.0 and newer that area ends at 0x44000000."""
+    from elekloader import desc
+    with Bench('digitone-mk1') as B:
+        core = B.core(version='5.0')
+        m = B.mod('m')
+        m['imports'] = m['imports'] + ['core_desc']
+        m['relocs'] = [['.run', 4, 'abs32', 'sym:core_desc', 0]]
+        out = link.link([link.Mod2(d, d['id']) for d in (core, m)], B.img)
+        d = desc.decode(out.image, desc.find(out.image)[0])
+        end = out.layout['bss'][1]
+        assert end < 0x44000000 - 0x100000
+        assert d['area'] == (end, link._align(end, 0x1000), 0x44000000, 0, 0)
 
 
 def test_the_build_descriptor_keeps_whole_orders():

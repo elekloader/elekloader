@@ -907,18 +907,20 @@ function renderStart(all) {    // all: the Mod Shop's entries, not the sections'
   $('list-title').hidden = !!sd;
   if (sd) { renderNext(); return; }
   const devs = pickable();
-  $('dev-tiles').replaceChildren(...devs.map(d => {
-    const n = all.filter(en => en.device === d.key).length;
-    const on = lib.device === d.key;
-    return el('button', { type: 'button', class: 'dev-tile' + (on ? ' on' : ''), 'aria-pressed': String(on),
-      onclick: () => setFilter('device', on ? null : d.key) },
-    el('strong', {}, d.name), el('span', { class: 'os' }, 'OS ' + d.os),
-    el('span', { class: 'n' }, n ? `${n} mod${n === 1 ? '' : 's'}` : 'your own mods'));
+  const count = d => all.filter(en => en.device === d.key).length;
+  const sel = $('dev-select');
+  sel.replaceChildren(el('option', { value: '' }, 'Choose your device…'), ...devs.map(d => {
+    const n = count(d);
+    return el('option', { value: d.key }, `${d.name} · ${n ? `${n} mod${n === 1 ? '' : 's'}` : 'your own mods'}`);
   }));
+  sel.value = devs.some(x => x.key === lib.device) ? lib.device : '';
+  sel.onchange = () => setFilter('device', sel.value || null);
   const d = devs.find(x => x.key === lib.device);
   const dl = d && DOWNLOADS[d.key];
   const want = cur() && cur().sha ? cur() : null;  // a profile waiting for its stock file
   $('g-device').classList.toggle('done', !!d);
+  $('dev-os').hidden = !d;
+  if (d) $('dev-os').replaceChildren('Runs on ', el('strong', {}, 'OS ' + d.os), '.');
   $('g-stock-text').replaceChildren(...(want
     ? [`Your profile "${want.name}" uses `, el('strong', {}, osLabel(want)), ': drop ', el('code', {}, want.file),
       ' here', ...(dl ? [' (it is on ', el('a', { href: dl.url, rel: 'noreferrer', target: '_blank' }, 'Elektron\'s site'), ')'] : []), '.']

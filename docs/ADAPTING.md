@@ -151,6 +151,20 @@ Digitakt II's, at the Digitone II's sites, and no render events (its audio
 renders on the DSP). It has no `.fast`: SRAM is not qualified there, so a
 mod with `.fast` code is refused. Its tick rate has not been measured.
 
+### Standard events (std1)
+
+A mod that writes `"events": "std1"` in its mod.json subscribes to the
+standard events instead of the core's own: one prototype each on every core
+that serves it, in `elekloader/sdk/include/std1.h` (`#include <std1.h>`),
+with its return kind and context. The `subscribe` entries name them as
+usual. A core serves them through its `std` map, from each standard name to
+one of its tables: the native table when the prototype is the same or its
+first part, or a table of its own that it calls with converted arguments.
+std and native mods go in one build. A subscription to an event the core's
+map lacks is refused at link time; each core's README lists what it maps.
+The core's own events never change, so a mod without the flag builds as
+before.
+
 ### Remote panel input and SysEx (core-dn2 0.1, Digitone II)
 
 Include `digitone-mk2/core.h` and require `resources.core: "0.1"`.
@@ -1300,7 +1314,8 @@ use the names as they are.
 | `fw_voice_params` | 0x80002794 | the machine's 8 parameters A-H, 8.8, 106 bytes a track |
 | `fw_voice_note`, `fw_voice_vel` | 0x80001f28, 0x80001f18 | the trig's note (16.16) and velocity (8.8) |
 | `fw_voice_start` | 0x80001228 | bit t: track t starts a voice this block |
-| `fw_amp_env` | 0x4199df54 | the AMP envelope: phase +0, level +4, 12 bytes a track |
+| `fw_amp_env`, `fw_filter_env` (4.4) | 0x4199df54 | the FILTER envelope, despite the first name: phase +0, level +4, 12 bytes a track. Its level follows the filter page, not the sound |
+| `fw_amp_level` (4.4) | 0x4199dd64 | the AMP envelope: phase +0 (2 attack, 1 hold, 0 decay), value +4 (negated Q31; in decay the level), 8 bytes a track; all 0 when idle |
 | `fw_pitch_tab` | 0x4019b1c0 | 2^((i - 10752) / 2048) in Q29 |
 | `fw_active_track` | 0x4197b6b4 | the active track, 0-7 |
 | `fw_kit` | 0x4199dc44 | -> the UI kit: track t's sound at +0x20 + 0xa2 t, its machine at +0x7e |
@@ -4585,6 +4600,8 @@ Some differences from an octabam build, by design:
 | `CM_KNOB: draw= needs flags=CM_DRAW` or `CM_KNOB: with CM_DRAW, +36 is draw` (assembly, `core3.inc`) | a knob's `draw=` without `flags=CM_DRAW`, or its `gfx=` with it | give the knob `flags=CM_DRAW` with `draw=`, or `draw=` in place of `gfx=`; the page's `CM_UI` needs `abi=cm_ui_v31` |
 | `imports N, which no given mod exports` | a missing dependency, or a typo | add the mod that exports N, fix the name, or list N under `weak` |
 | `adds to table T, which no given mod declares` | the table's owner is missing, or the event name is wrong | add core (or the owner); check the event name |
+| `m subscribes to ev_x, which core does not map` | a std1 mod (`"events": "std1"`) names an event this core does not serve under std1 | use an event the core's `std` map has (its README), or drop `"events"` and use the core's own event |
+| `m subscribes to std1 events, and core maps none` | this core has no `std` map | build with a core that serves std1, or use the core's own events |
 | `T holds at most N entries on <device> <OS>; A and B add M` | the mods together add more to T than the OS uses (the device profile's `table_limits`; for `sdk_alpha_machines`, the SDK machines it lists) | build with fewer of those mods, or fewer machines in them |
 | `both export S` | two mods define the same global | prefix your globals with your mod id; make internals `static` |
 | `relocation type N` | a reference the linker cannot relocate (e.g. 8-bit) | use 32-bit addressing for your own symbols; build with the SDK's flags |

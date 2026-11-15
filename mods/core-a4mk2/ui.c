@@ -1,0 +1,1105 @@
+/* SPDX-License-Identifier: GPL-2.0-or-later */
+/* core-a4mk2 0.7: the standard events (std1) at new sites, the UI and the
+ * system (README, "Standard events (0.7)"), and the A4's own turn event,
+ * ev_knob_turn and ev_mod_set. OS 1.56; the sites are in ui.s and mod.json.
+ *
+ *   ev_boot_done  std_boot_done  the UI task, once, after its init (0x4009995c)
+ *   ev_idle       std_idle       main's task, after it started the UI task: the
+ *                                lowest priority (1), over and over (0x40106302)
+ *   ev_crash      std_crash      core's crash handler in place of stock's
+ *                                printer (0x400638da), which it calls after
+ *   ev_usb        std_usb        the UI task's USB message (case 0x1e, 0x4009a248),
+ *                                when its configured byte changes; the boot's
+ *                                level once at ev_boot_done
+ *   ev_key_leds   std_key_leds   after the views composed the LEDs, before
+ *                                the frame is sent (0x40096b42); mgr: the
+ *                                LedManager, for core_led_set
+ *   ev_mode       std_mode       the UI state's mode bytes, compared each tick
+ *   ev_param_set  std_param_set  the three parameter sets' set virtuals
+ *                                (vtable slots), queued and run at the next
+ *                                tick in the UI task. An NRPN sent as CC 99,
+ *                                98, 6, 38 sets twice: stock applies it on
+ *                                CC 6 and again on CC 38
+ *   ev_clip       std_clip       23 copy, paste and clear routines (ui.s), the pattern view's 2 calls,
+ *                                the SONG editor's 2 chain calls, the grid's 2 page calls,
+ *                                the sequencer view's trig paste call,
+ *                                the project list's copy, paste and clear (each handler and its job's end)
+ *   ev_pattern    std_pattern    the UI task's pattern boundary message
+ *                                (case 9, 0x40099c84), when the pattern changed
+ *   ev_mute       std_mute       the mute setter's entry (0x400aeb8e), each
+ *                                call, changed or not (stock notifies each
+ *                                time; a mute NRPN calls it twice, as above)
+ *   ev_knob_turn  (native)       the page view's turn (0x4002598c) after its
+ *                                step and lockout checks (0x40025b78), the
+ *                                LEVEL encoder (0x400bedb2) and the mixer
+ *                                page's level set (0x400c543a)
+ *   ev_view       std_view       the view stack's push (0x40062a60) and its
+ *                                three removes (0x40062c7c, 0x40062b00,
+ *                                0x400633c8); a page swap's new view (0x400633fc)
+ *   ev_pattern    std_pattern    also pre 1, the requests: the pattern view's
+ *                                select (0x40029b9e), queue (0x4007c6e4),
+ *                                jump now (0x4007c5fc), set while playing
+ *                                (0x4007c186), restart (0x40079eaa), song
+ *                                position (0x4007c3bc)
+ *   ev_analog_frame (native)     the analog frame before it is packed
+ *                                (0x40103da6), audio interrupt
+ *   ev_mod_set    (native)       the six modulation setters' entries (SoundModConf
+ *                                0x4001f45e/0x4001f312, Velocity 0x400ba35a/
+ *                                0x400ba0f6, PerfParam 0x400a3ce6/0x400a3b78)
+ */
+
+#include <stdint.h>
+#include <std1.h>
+#include "analog-four-mk2/keys.h"
+#include "analog-four-mk2/leds.h"
+#include "analog-four-mk2/pages.h"
+#include "analog-four-mk2/params.h"
+#include "analog-four-mk2/ui.h"
+
+typedef void (*fn_void)(void);
+typedef void (*fn_frame)(const void *frame);
+typedef void (*fn_u)(unsigned);
+typedef void (*fn_ptr)(void *);
+typedef void (*fn_mode)(int, int, int);
+typedef void (*fn_set)(unsigned, unsigned, int32_t);
+typedef int (*fn_clip)(unsigned, const struct core_clip *);
+typedef int (*fn_pattern)(unsigned, unsigned, unsigned);
+typedef int (*fn_mute)(unsigned, unsigned, unsigned);
+
+extern const fn_void std_boot_done[];
+extern const fn_void std_idle[];
+extern const fn_frame std_crash[];
+extern const fn_u std_usb[];
+extern const fn_ptr std_key_leds[];
+extern const fn_mode std_mode[];
+extern const fn_set std_param_set[];
+extern const fn_clip std_clip[];
+extern const fn_pattern std_pattern[];
+extern const fn_mute std_mute[];
+extern const ev_knob_turn_fn ev_knob_turn[];
+typedef int (*fn_view)(int, void *, void *, void *);
+extern const fn_view std_view[];
+extern const ev_analog_frame_fn ev_analog_frame[];
+extern const ev_mod_set_fn ev_mod_set[];
+
+static unsigned short irq_mask(void)
+{
+    unsigned short sr;
+    __asm__ volatile("move.w %%sr,%0\n\tmove.w #0x2700,%%sr" : "=d"(sr) : : "memory");
+    return sr;
+}
+
+static void irq_restore(unsigned short sr)
+{
+    __asm__ volatile("move.w %0,%%sr" : : "d"(sr) : "memory");
+}
+
+/* ============================== ev_boot_done =============================== */
+
+static void usb_boot(void);
+
+void core_boot_done(void)
+{
+    const fn_void *f;
+    usb_boot();
+    for (f = std_boot_done; *f; f++)
+        (*f)();
+}
+
+/* ================================ ev_idle ================================== */
+
+/* ui.s's core_idle_start calls this over and over, after main started the
+ * UI task; with no handler it is stock's spin */
+void core_idle_run(void)
+{
+    const fn_void *f;
+    for (f = std_idle; *f; f++)
+        (*f)();
+}
+
+/* ================================ ev_crash ================================= */
+
+/* The exception stub (0x40001906) masks interrupts, keeps the frame's place
+ * (0x4133cf58) and calls *0x4133cf54(frame), which 0x400638d6 sets to stock's
+ * printer at boot through 0x4000203a. core's install (ui.s) keeps that
+ * printer and puts core_crash there instead. */
+typedef void (*crash_set_t)(fn_frame);
+#define CRASH_SET ((crash_set_t)0x4000203au)
+
+static fn_frame crash_stock;
+
+static void core_crash(const void *frame)
+{
+    const fn_frame *f;
+    for (f = std_crash; *f; f++)
+        (*f)(frame);
+    if (crash_stock)
+        crash_stock(frame);
+}
+
+void core_crash_install(fn_frame stock)
+{
+    crash_stock = stock;
+    CRASH_SET(core_crash);
+}
+
+/* ================================= ev_usb ================================== */
+
+/* the UI task's message 0x1e/1, one static record posted by 0x40004412 on
+ * SET_CONFIGURATION, reset, suspend and detach: +8 the USB mode (4 USB MIDI,
+ * 6 USB AUDIO/MIDI, 7 OVERBRIDGE), +9 configured. A level, so a handler
+ * hears each change, as the record reads when the message is handled. A
+ * suspend posts the flag it finds, normally 1, so 1 does not prove a host is
+ * talking; a replug with Overbridge gave 1, 0, 1 on the unit (KB T290). */
+static unsigned usb_last = 0xffu;
+static volatile uint8_t usb_mode;
+
+void core_usb_msg(const uint8_t *msg)
+{
+    const fn_u *f;
+    unsigned configured = msg[9] ? 1u : 0u;
+    usb_mode = msg[8];
+    if (configured == usb_last)
+        return;
+    usb_last = configured;
+    for (f = std_usb; *f; f++)
+        (*f)(configured);
+}
+
+unsigned core_usb_mode(void)
+{
+    return usb_mode;
+}
+
+/* Posts made while booting are lost: USB starts in main (0x401062e6) before
+ * the UI task installs its queue (0x400996fc). So at ev_boot_done core reads
+ * the level stock keeps beside the record (0x4133dbc0, the int every poster
+ * writes) and the live mode (the int at 0x4133dbd8; the record's +8 holds
+ * nothing until a post), and reports it as the first level. */
+#define USB_MODE (*(volatile int32_t *)0x4133dbd8u)
+#define USB_CONFIGURED (*(volatile int32_t *)0x4133dbc0u)
+
+static void usb_boot(void)
+{
+    const fn_u *f;
+    unsigned configured = USB_CONFIGURED ? 1u : 0u;
+    usb_mode = (uint8_t)USB_MODE;
+    if (usb_last != 0xffu)
+        return;
+    usb_last = configured;
+    for (f = std_usb; *f; f++)
+        (*f)(configured);
+}
+
+/* =============================== ev_key_leds =============================== */
+
+/* 0x40096aee: the views compose the LEDs into the LedManager (0x40062652,
+ * then 0x4009638c), then 0x4007594c sends each of the frame's 24 bytes that
+ * changed. Handlers run between the two, so an LED a handler sets stays over
+ * the view's. */
+void core_key_leds(void *mgr)
+{
+    const fn_ptr *f;
+    for (f = std_key_leds; *f; f++)
+        (*f)(mgr);
+}
+
+/* the LedManager's set (0x4009624e): (mgr, led, mode, 0, colour); stock
+ * switches an LED off with mode 0 and colour 15, and its plain "on" helper
+ * (0x400962bc) passes mode 2 */
+typedef void (*led_set_t)(void *mgr, int32_t led, int32_t mode, int32_t b, int32_t colour);
+#define LED_SET ((led_set_t)0x4009624eu)
+
+void core_led_set(void *mgr, unsigned led, unsigned colour)
+{
+    if (!mgr)
+        return;
+    if (colour == LED_OFF)
+        LED_SET(mgr, (int32_t)led, 0, 0, 15);
+    else
+        LED_SET(mgr, (int32_t)led, 2, 0, (int32_t)colour);
+}
+
+/* ================================= ev_mode ================================= */
+
+/* the UI state (0x4014b1f6 makes it once and keeps it at 0x418717f8): its
+ * mode bytes, as each setter writes them (0x40021b38 trig held, 0x40021d2c
+ * grid record, 0x40021ddc live record, 0x40021e1e step record) */
+#define UI_STATE (*(uint8_t *volatile *)0x418717f8u)
+static const uint16_t mode_at[MODE_COUNT] = {0x160, 0x168, 0x169, 0x16a};
+static uint8_t mode_last[MODE_COUNT];
+static uint8_t mode_seen;
+
+static void mode_poll(void)
+{
+    const uint8_t *ui = UI_STATE;
+    int m;
+    if (!ui)
+        return;
+    for (m = 0; m < MODE_COUNT; m++) {
+        uint8_t now = ui[mode_at[m]];
+        if (mode_seen && now != mode_last[m]) {
+            const fn_mode *f;
+            for (f = std_mode; *f; f++)
+                (*f)(m, mode_last[m], now);
+        }
+        mode_last[m] = now;
+    }
+    mode_seen = 1;
+}
+
+/* ============================== ev_param_set =============================== */
+
+/* the sets' value setters, their vtables' +0x30 and +0x38. +0x30 (set, id,
+ * value, track, rec, notify) is the panel's: the turn (+0x34) and the other
+ * edits end in it; it clamps value to the parameter's range, rec also records
+ * it into the held or recording steps, and it returns the value it stored.
+ * +0x38 (set, id, value, track, rec) is the other setter (ids up to 0x67).
+ * Both run in the UI task or the MIDI task, so a set is queued and its
+ * handlers run at the next tick in the UI task. */
+typedef int32_t (*pset_t)(void *set, int32_t id, int32_t value, int32_t track, int32_t rec, int32_t notify);
+#define PSET_SYNTH ((pset_t)0x400a0046u)
+#define PSET_FX ((pset_t)0x400a0308u)
+#define PSET_CV ((pset_t)0x400a05c2u)
+#define PSET2_SYNTH ((pset_t)0x400a0cecu)
+#define PSET2_FX ((pset_t)0x400a0e1eu)
+#define PSET2_CV ((pset_t)0x400a0f08u)
+
+#define SETS 64                         /* a power of two */
+static struct { uint8_t track; uint16_t id; int32_t value; } sets[SETS];
+static volatile unsigned set_head, set_tail, set_dropped;
+
+static void set_queue(unsigned track, int32_t id, int32_t value)
+{
+    unsigned short sr;
+    unsigned h;
+    if (!std_param_set[0] || id < 0)
+        return;
+    sr = irq_mask();
+    h = set_head;
+    if (h - set_tail < SETS) {
+        sets[h & (SETS - 1)].track = (uint8_t)track;
+        sets[h & (SETS - 1)].id = (uint16_t)id;
+        sets[h & (SETS - 1)].value = value;
+        set_head = h + 1;
+    } else {
+        set_dropped++;
+    }
+    irq_restore(sr);
+}
+
+int32_t core_pset_synth(void *set, int32_t id, int32_t value, int32_t track, int32_t rec, int32_t notify)
+{
+    int32_t r = PSET_SYNTH(set, id, value, track, rec, notify);
+    set_queue((unsigned)track, id, r);
+    return r;
+}
+
+int32_t core_pset_fx(void *set, int32_t id, int32_t value, int32_t track, int32_t rec, int32_t notify)
+{
+    int32_t r = PSET_FX(set, id, value, track, rec, notify);
+    set_queue(TRACK_FX, id, r);
+    return r;
+}
+
+int32_t core_pset_cv(void *set, int32_t id, int32_t value, int32_t track, int32_t rec, int32_t notify)
+{
+    int32_t r = PSET_CV(set, id, value, track, rec, notify);
+    set_queue(TRACK_CV, id, r);
+    return r;
+}
+
+/* MIDI's sets come here (CC 0x400682a6, NRPN 0x4006818e). OSC1 TUN/FIN (40,
+ * 41) and OSC2 TUN/FIN (53, 54) are one stored 16-bit value, coarse in the
+ * high byte, and each pair shares its CC and NRPN; stock's receive map keeps
+ * the later id, so MIDI sets name FIN. Core reports the pair's first id, as
+ * a panel turn of TUN does. */
+static int32_t pair_id(int32_t id)
+{
+    return (id == 41 || id == 54) ? id - 1 : id;
+}
+
+int32_t core_pset2_synth(void *set, int32_t id, int32_t value, int32_t track, int32_t rec)
+{
+    int32_t r = PSET2_SYNTH(set, id, value, track, rec, 0);
+    set_queue((unsigned)track, pair_id(id), value);
+    return r;
+}
+
+int32_t core_pset2_fx(void *set, int32_t id, int32_t value, int32_t track, int32_t rec)
+{
+    int32_t r = PSET2_FX(set, id, value, track, rec, 0);
+    set_queue(TRACK_FX, id, value);
+    return r;
+}
+
+int32_t core_pset2_cv(void *set, int32_t id, int32_t value, int32_t track, int32_t rec)
+{
+    int32_t r = PSET2_CV(set, id, value, track, rec, 0);
+    set_queue(TRACK_CV, id, value);
+    return r;
+}
+
+static void set_drain(void)
+{
+    unsigned t, end = set_head;
+    while ((t = set_tail) != end) {
+        const fn_set *f;
+        unsigned track = sets[t & (SETS - 1)].track;
+        unsigned id = sets[t & (SETS - 1)].id;
+        int32_t value = sets[t & (SETS - 1)].value;
+        set_tail = t + 1;
+        for (f = std_param_set; *f; f++)
+            (*f)(track, id, value);
+    }
+}
+
+/* ================================= ev_clip ================================= */
+
+/* ui.s's 17 sites pass code = kind | op << 8 | flags << 16 and the routine's
+ * first two arguments. A confirm callback (CLIP_F_CONFIRM) does its work only
+ * when its second argument's low byte is set (YES on the dialog); otherwise
+ * neither call comes. CLIP_F_TRACK: the second argument is the track. */
+#define CLIP_F_CONFIRM 1u
+#define CLIP_F_TRACK 2u
+#define CLIP_F_GRID 4u                  /* the sequencer view's FUNC+REC/STOP/PLAY */
+#define CLIP_F_HANDLED 8u               /* a view's virtual: a take still returns 1 */
+
+/* the sequencer view's copy, clear and paste virtuals act on the track only
+ * in grid record (0x40021ca8: +0x161 and +0x168); otherwise they return 0
+ * and the key goes on to the pattern's copy, clear and paste */
+typedef uint8_t (*grid_rec_t)(void *);
+#define GRID_REC ((grid_rec_t)0x40021ca8u)
+
+/* CLIP_CHAIN's slot: the row number the song editor shows. Stock passes
+ * a row's storage slot (0..63), which differs from the number shown once
+ * rows were inserted, moved or deleted. The song is 0x400a52fe(0x401494de())
+ * (the global object at 0x418717c8 + 0x2560); 0x400436d2(view) is the
+ * editor's cursor row's slot (-1 without song data) and 0x400b06c4(song,
+ * slot) its shown number, from 0 (-1 for the unnumbered end row "__:"). All
+ * three only read. The copy (a view's virtual) passes the view, the clear
+ * and paste calls the slot. */
+/* stock returns these pointers in %d0, so they are uint32_t here: a C
+ * pointer result is read from %a0 */
+typedef uint32_t (*objget_t)(void);
+typedef uint32_t (*songget_t)(uint32_t);
+typedef int32_t (*rowslot_t)(void *);
+typedef int32_t (*rownum_t)(uint32_t, int32_t);
+#define SONG_OBJ ((objget_t)0x401494deu)
+#define SONG_OF ((songget_t)0x400a52feu)
+#define SONG_ROW_SLOT ((rowslot_t)0x400436d2u)
+#define SONG_ROW_NUM ((rownum_t)0x400b06c4u)
+
+__attribute__((noipa)) static uint8_t chain_row(int32_t slot)
+{
+    int32_t n;
+    if (slot < 0 || slot > 63)
+        return CLIP_NONE;
+    n = SONG_ROW_NUM(SONG_OF(SONG_OBJ()), slot);
+    if (n < 0)
+        return CLIP_ROW_END;
+    return n < CLIP_ROW_END ? (uint8_t)n : CLIP_NONE;
+}
+
+static int clip_fill(struct core_clip *c, uint32_t code, uint32_t a1, uint32_t a2)
+{
+    unsigned fl = code >> 16;
+    if ((fl & CLIP_F_CONFIRM) && !(a2 & 0xffu))
+        return 0;
+    if ((fl & CLIP_F_GRID) && !GRID_REC(*(void **)(a1 + 0x6c)))
+        return 0;
+    c->kind = (uint8_t)code;
+    c->op = (uint8_t)(code >> 8);
+    c->track = (fl & CLIP_F_TRACK) ? (uint8_t)a2 : CLIP_NONE;
+    c->slot = (uint8_t)code == CLIP_CHAIN ? chain_row(fl & CLIP_F_HANDLED ? SONG_ROW_SLOT((void *)a1) : (int32_t)a2)
+                                          : CLIP_NONE;
+    return 1;
+}
+
+/* 0: not taken. Taken: 1, the stub returns 0; 3 (a grid routine or a view's
+ * virtual), the stub returns 1, "handled", so the key goes no further. */
+int core_clip_pre(uint32_t code, uint32_t a1, uint32_t a2)
+{
+    struct core_clip c;
+    const fn_clip *f;
+    if (!std_clip[0] || !clip_fill(&c, code, a1, a2))
+        return 0;
+    for (f = std_clip; *f; f++)
+        if ((*f)(1, &c))
+            return (code >> 16) & (CLIP_F_GRID | CLIP_F_HANDLED) ? 3 : 1;
+    return 0;
+}
+
+void core_clip_post(uint32_t code, uint32_t a1, uint32_t a2)
+{
+    struct core_clip c;
+    const fn_clip *f;
+    if (!std_clip[0] || !clip_fill(&c, code, a1, a2))
+        return;
+    for (f = std_clip; *f; f++)
+        (*f)(0, &c);
+}
+
+/* The PROJECT list's copy (ui.s): pre at its handler, which only queues
+ * the copy, post at the job's done callback in the UI task, whether the copy
+ * worked or showed ERROR. The slot is the list's item under the cursor
+ * (pm's +0x24 virtual, the cursor clamped as stock clamps it, then the
+ * 8-byte item at *(pm + 4)): its +4 is -1 for the working project, else
+ * 0..127. A done callback stock could not post (its ring entry busy) brings
+ * no post. */
+static uint8_t project_slot(int32_t slot)
+{
+    if (slot == -1)
+        return CLIP_SLOT_WORKING;
+    return slot >= 0 && slot < 128 ? (uint8_t)slot : CLIP_NONE;
+}
+
+int core_clip_project_pre(char *pm)
+{
+    typedef int32_t (*cursor_t)(void *);
+    struct core_clip c = {CLIP_PROJECT, CLIP_COPY, CLIP_NONE, CLIP_NONE};
+    const fn_clip *f;
+    int32_t idx;
+    if (!std_clip[0])
+        return 0;
+    idx = (*(cursor_t *)(*(char **)pm + 0x24))(pm);
+    c.slot = project_slot(*(int32_t *)(*(char **)(*(char **)(pm + 4) + idx * 8) + 4));
+    for (f = std_clip; *f; f++)
+        if ((*f)(1, &c))
+            return 1;
+    return 0;
+}
+
+void core_clip_project_post(int32_t **closure, int32_t ok)
+{
+    struct core_clip c = {CLIP_PROJECT, CLIP_COPY, CLIP_NONE, CLIP_NONE};
+    const fn_clip *f;
+    (void)ok;
+    if (!std_clip[0])
+        return;
+    c.slot = project_slot(**closure);
+    for (f = std_clip; *f; f++)
+        (*f)(0, &c);
+}
+
+/* The PROJECT list's paste (FUNC+STOP) and clear (FUNC+PLAY) (ui.s): stock
+ * asks "Replace"/"Clear <name>" and CONFIRM Y/N; on YES the dialog callback
+ * (paste 0x4003c454, clear 0x4003c4fc) queues a "Project Paste"/"Project
+ * Clear" job, whose done callback (0x4003eb4e, 0x4003ec06) runs in the UI
+ * task. Pre at the callback on YES only, with the slot the dialog was opened
+ * on (its closure's +4: -1 the working project, else 0..127); a take returns
+ * at once, as NO does, and queues nothing. Post at the done callback: a
+ * paste's when it says pasted (0 is stock's ERROR: an empty or non-project
+ * clipboard, the working project, a slot that would not load); a clear's
+ * done is given no slot and no result, so the pre keeps the slot, and a
+ * clear of the working project, which stock leaves unchanged, brings no
+ * post. One clear is in flight at a time: the dialog is modal and the job
+ * done before the list takes keys again. */
+static uint8_t project_clear_slot = CLIP_NONE;
+
+int core_clip_project_ask(char **functor, uint32_t op)
+{
+    struct core_clip c = {CLIP_PROJECT, (uint8_t)op, CLIP_NONE, CLIP_NONE};
+    const fn_clip *f;
+    c.slot = project_slot(*(int32_t *)(*functor + 4));
+    if (op == CLIP_CLEAR)
+        project_clear_slot = c.slot;
+    if (!std_clip[0])
+        return 0;
+    for (f = std_clip; *f; f++)
+        if ((*f)(1, &c)) {
+            project_clear_slot = CLIP_NONE;
+            return 1;
+        }
+    return 0;
+}
+
+void core_clip_project_paste_post(int32_t **closure, int32_t ok)
+{
+    struct core_clip c = {CLIP_PROJECT, CLIP_PASTE, CLIP_NONE, CLIP_NONE};
+    const fn_clip *f;
+    if (!std_clip[0] || !ok)
+        return;
+    c.slot = project_slot(**closure);
+    for (f = std_clip; *f; f++)
+        (*f)(0, &c);
+}
+
+void core_clip_project_clear_post(void)
+{
+    struct core_clip c = {CLIP_PROJECT, CLIP_CLEAR, CLIP_NONE, CLIP_NONE};
+    const fn_clip *f;
+    c.slot = project_clear_slot;
+    project_clear_slot = CLIP_NONE;
+    if (!std_clip[0] || c.slot == CLIP_NONE || c.slot == CLIP_SLOT_WORKING)
+        return;
+    for (f = std_clip; *f; f++)
+        (*f)(0, &c);
+}
+
+/* STOP and PLAY outside grid record: the pattern view's paste and clear
+ * (0x400c0a74, 0x400c0b48; only when no undo is possible) call the pattern's
+ * own routines, hooked at those calls (keep2): 0x400a2cba(pattern, 1) and
+ * 0x400a2de0(pattern, whole, undo); a %d0 byte says each did it. The copy,
+ * 0x400a2aa4, is hooked at its entry (ui.s): its other caller, the pattern
+ * select view, calls it through a register. */
+typedef uint8_t (*pop_t)(void *, int32_t, int32_t);
+#define PATTERN_PASTE ((pop_t)0x400a2cbau)
+#define PATTERN_CLEAR ((pop_t)0x400a2de0u)
+
+/* noipa: gcc turns an inlined call of a constant address passed in as fn into
+ * __builtin_unreachable */
+__attribute__((noipa)) static uint32_t pattern_op(pop_t fn, unsigned op, void *pattern, int32_t a, int32_t b)
+{
+    const uint32_t code = CLIP_PATTERN | op << 8;
+    uint8_t r;
+    if (core_clip_pre(code, 0, 0))
+        return 0;
+    r = fn(pattern, a, b);
+    core_clip_post(code, 0, 0);
+    return r;
+}
+
+uint32_t core_clip_ppaste(void *pattern, int32_t a)
+{
+    return pattern_op(PATTERN_PASTE, CLIP_PASTE, pattern, a, 0);
+}
+
+uint32_t core_clip_pclear(void *pattern, int32_t whole, int32_t undo)
+{
+    return pattern_op(PATTERN_CLEAR, CLIP_CLEAR, pattern, whole, undo);
+}
+
+/* The SONG editor's clear and paste virtuals (+0x38 0x400448d0, +0x3c
+ * 0x400449a6, from the shared view helper 0x40061912) first undo the last clear or paste of
+ * the same kind and row ("UNDO CLEAR", "UNDO PASTE"); only when there is
+ * none do they call the chain's own routines, hooked at those calls (keep2):
+ * 0x400b2412(song, row, 1) at 0x40044934 and 0x400b223a(song, row, 1) at
+ * 0x40044a02; a %d0 byte says each did it ("CLEAR CHAIN", "PASTE CHAIN").
+ * pre comes before the routine (an empty clipboard or a row with nothing to
+ * act on brings a pre without a post), post only when it acted; an undo
+ * brings neither. A take returns 0: stock shows nothing and keeps no undo.
+ * Both carry the row (chain_row above). */
+typedef uint8_t (*cop_t)(void *, int32_t, int32_t);
+#define CHAIN_CLEAR ((cop_t)0x400b2412u)
+#define CHAIN_PASTE ((cop_t)0x400b223au)
+
+__attribute__((noipa)) static uint32_t chain_op(cop_t fn, unsigned op, void *song, int32_t row, int32_t a)
+{
+    const uint32_t code = CLIP_CHAIN | op << 8;
+    uint8_t r;
+    if (core_clip_pre(code, 0, (uint32_t)row))
+        return 0;
+    r = fn(song, row, a);
+    if (r)
+        core_clip_post(code, 0, (uint32_t)row);
+    return r;
+}
+
+uint32_t core_clip_cclear(void *song, int32_t row, int32_t a)
+{
+    return chain_op(CHAIN_CLEAR, CLIP_CLEAR, song, row, a);
+}
+
+uint32_t core_clip_cpaste(void *song, int32_t row, int32_t a)
+{
+    return chain_op(CHAIN_PASTE, CLIP_PASTE, song, row, a);
+}
+
+/* The sequencer view's STOP with trigs held on the shown page (0x4002805c,
+ * in grid record, FUNC or not) pastes the copied trigs from the first held
+ * step: 0x400b888a(pattern track, step), called only at 0x4002863c and
+ * hooked there (keep2), returns how many trigs it pasted ("PASTE %d TRIGS");
+ * 0 when the clipboard holds no trigs. pre comes before it, post only when
+ * it pasted one or more; there is no UNDO PASTE for trigs. A take returns 0:
+ * stock shows nothing. */
+typedef int32_t (*tpaste_t)(void *, int32_t);
+#define TRIGS_PASTE ((tpaste_t)0x400b888au)
+
+int32_t core_clip_tpaste(void *track, int32_t step)
+{
+    const uint32_t code = CLIP_TRIGS | CLIP_PASTE << 8;
+    int32_t n;
+    if (core_clip_pre(code, 0, 0))
+        return 0;
+    n = TRIGS_PASTE(track, step);
+    if (n > 0)
+        core_clip_post(code, 0, 0);
+    return n;
+}
+
+/* Grid record, PAGE held: STOP pastes the active track's current page and
+ * PLAY clears it (PatternGridView's keys, 0x4002805c, on a press only). Each
+ * first tries the page undo 0x400b8444(pt, kind) ("UNDO PASTE", "UNDO
+ * CLEAR"); only when there is nothing to undo does it call the page's own
+ * routine, hooked at that call (keep2): 0x400b8188(pt, 1) at 0x40028e92
+ * ("PASTE PAGE") and 0x400b916a(pt, 1) at 0x40028f40 ("CLEAR PAGE"), where
+ * pt is the pattern track and 1 asks for an undo entry; a %d0 byte says each
+ * did it. pre comes before the routine (an empty clipboard, or one holding
+ * no page, brings a pre without a post: stock shows nothing), post only when
+ * it acted; an undo brings neither. A take returns 0: the key is handled,
+ * nothing shown, nothing changed, as stock with an empty clipboard. Track
+ * and slot are CLIP_NONE, as the page copy's. */
+typedef uint8_t (*gop_t)(void *, int32_t);
+#define PAGE_PASTE ((gop_t)0x400b8188u)
+#define PAGE_CLEAR ((gop_t)0x400b916au)
+
+__attribute__((noipa)) static uint32_t page_op(gop_t fn, unsigned op, void *pt, int32_t a)
+{
+    const uint32_t code = CLIP_PAGE | op << 8;
+    uint8_t r;
+    if (core_clip_pre(code, 0, 0))
+        return 0;
+    r = fn(pt, a);
+    if (r)
+        core_clip_post(code, 0, 0);
+    return r;
+}
+
+uint32_t core_clip_gpaste(void *pt, int32_t a)
+{
+    return page_op(PAGE_PASTE, CLIP_PASTE, pt, a);
+}
+
+uint32_t core_clip_gclear(void *pt, int32_t a)
+{
+    return page_op(PAGE_CLEAR, CLIP_CLEAR, pt, a);
+}
+
+/* =============================== ev_pattern ================================ */
+
+/* The sequencer posts message 9 to the UI task at every pattern boundary:
+ * a queued change's commit, an immediate switch and a plain loop restart.
+ * The pattern byte (0x80006acc) tells a change from a restart. Only the
+ * change is reported, after it (pre 0, PATTERN_CHANGED). */
+#define PATTERN_BYTE (*(volatile uint8_t *)0x80006accu)
+static unsigned pattern_last = 0x100u;
+
+static void pattern_seed(void)
+{
+    if (pattern_last > 0xffu)
+        pattern_last = PATTERN_BYTE;
+}
+
+void core_pattern_msg(void)
+{
+    unsigned now = PATTERN_BYTE;
+    const fn_pattern *f;
+    if (pattern_last <= 0xffu && now != pattern_last)
+        for (f = std_pattern; *f; f++)
+            if ((*f)(0, now, PATTERN_CHANGED))
+                break;
+    pattern_last = now;
+}
+
+/* The requests (pre 1), each at its routine's entry (ui.s), before stock
+ * acts; nonzero from a handler takes it, and the routine returns at once.
+ * A queued change is a row of the active song's row table (0x4127fbd4,
+ * 0x14 bytes a row, 256 rows), whose pattern byte (+0x11) is the one the
+ * tick's resolver (0x400793e4) and the jump (0x4007c5fc) read. The pattern
+ * view writes the new pattern into the row (0x400afac2) before it queues
+ * it, so the byte is the request's. */
+#define TRANSPORT (*(volatile int32_t *)0x80006a88u)  /* 1 playing */
+#define ROW_PATTERN(r) (*(volatile uint8_t *)(0x4127fbe5u + (uint32_t)(r) * 0x14u))
+
+static int pattern_req(unsigned pattern, unsigned how)
+{
+    const fn_pattern *f;
+    for (f = std_pattern; *f; f++)
+        if ((*f)(1, pattern, how))
+            return 1;
+    return 0;
+}
+
+/* The pattern view's select (0x40029b9e(view, pattern), at its entry)
+ * reports its request itself, before it writes the new pattern into the
+ * playing row (0x400afac2) and queues that row: a take there leaves the row
+ * as it was, so the playing pattern stays. While it runs, the routines below
+ * stay quiet (pattern_in_view), so one select is one event. Playing, the
+ * playing pattern selected again while another is queued is a CANCEL;
+ * stock queues its row again. TEMP JUMP (view+0xc6) reports START.
+ * The pattern mode (PTN: SEQUENTIAL 0, DIRECT START 1, DIRECT
+ * JUMP 2), read with stock's getter 0x400adec8(view+0x74), picks the rest:
+ * in a direct mode the select, after queueing the row and moving the
+ * view's cursor to the playing row (0x40029a44), calls 0x4007c186 (flag 1
+ * from DIRECT START, 0 from DIRECT JUMP) and the tick changes the pattern
+ * at once, so it reports SET; SEQUENTIAL leaves the queue, QUEUE. That is
+ * the row branch, taken when the play mode (0x400ae1a4(view+0x74): 0
+ * pattern, 1 CHAIN, 2 SONG; the CHAIN and SONG MODE keys) is 0 and CHAIN is
+ * not held (view+0xcc).
+ *
+ * The other, the chain branch, edits the playing row's chain (the song
+ * row of the playing chain element, 0x41281752) at the view's chain cursor
+ * (0x400438f0): on an element it writes the new pattern into it, on a gap
+ * it inserts one. It queues nothing; the change is the same tail as the
+ * row branch's, and only when the cursor's element is the playing one
+ * (stock's 0x400299ea(view), -1 on a gap, read here before the edit; the
+ * edit keeps it): stopped the pattern changes now (NOW); playing in a
+ * direct mode at once (SET); playing in SEQUENTIAL the element's new
+ * pattern plays when the tick next lands on it, which is the boundary when
+ * nothing is queued and the play mode is 0 or the row's chain is that one
+ * element (QUEUE). Any other chain edit changes no pattern, and reports
+ * nothing. TEMP JUMP comes first in stock, playing, in either branch. */
+#define QUEUED_ROW (*(volatile int32_t *)0x41281756u)
+#define PLAYING_ELEM (*(volatile int32_t *)0x41281752u)
+#define VIEW_PTN_MODE(v) (((int (*)(void *))0x400adec8u)(*(void **)((v) + 0x74)))
+#define VIEW_PLAY_MODE(v) (((int (*)(void *))0x400ae1a4u)(*(void **)((v) + 0x74)))
+#define VIEW_CURSOR_ELEM(v) (((int (*)(void *))0x400299eau)(v))
+#define SONG_OF(p) (((uint32_t (*)(uint32_t))0x400a52feu)(p))   /* returns in d0 */
+#define SONG_ELEM_ROW(s, e) (((int (*)(uint32_t, int))0x400afe72u)((s), (e)))
+#define SONG_ROW_LEN(s, r) (((int (*)(uint32_t, int))0x400b071eu)((s), (r)))
+static volatile uint8_t pattern_in_view;
+
+/* the chain branch's request, PATTERN_NONE for none (see above) */
+static unsigned pattern_view_chain(uint8_t *view, int play_mode)
+{
+    int p = PLAYING_ELEM;
+    uint32_t song;
+    if (p < 0 || VIEW_CURSOR_ELEM(view) != p)
+        return PATTERN_NONE;
+    if (TRANSPORT != 1)
+        return PATTERN_NOW;
+    if (VIEW_PTN_MODE(view) != 0)
+        return PATTERN_SET;
+    if (QUEUED_ROW >= 0)
+        return PATTERN_NONE;
+    if (play_mode == 0)
+        return PATTERN_QUEUE;
+    song = SONG_OF(*(uint32_t *)(view + 0x68));
+    if (play_mode == 1 && SONG_ROW_LEN(song, SONG_ELEM_ROW(song, p)) == 1)
+        return PATTERN_QUEUE;
+    return PATTERN_NONE;
+}
+
+int core_pattern_view(uint8_t *view, uint32_t pattern)
+{
+    unsigned how;
+    int play_mode;
+    if (!std_pattern[0] || pattern > 0x7fu)
+        return 0;
+    play_mode = VIEW_PLAY_MODE(view);
+    if (TRANSPORT == 1 && view[0xc6])
+        how = PATTERN_START;
+    else if (play_mode != 0 || view[0xcc])
+        how = pattern_view_chain(view, play_mode);
+    else if (TRANSPORT != 1)
+        how = PATTERN_NOW;
+    else if (VIEW_PTN_MODE(view) != 0)
+        how = PATTERN_SET;
+    else if (pattern == PATTERN_BYTE && QUEUED_ROW >= 0)
+        how = PATTERN_CANCEL;
+    else
+        how = PATTERN_QUEUE;
+    if (how != PATTERN_NONE && pattern_req(pattern, how))
+        return 1;
+    pattern_in_view = 1;
+    return 0;
+}
+
+void core_pattern_view_end(void)
+{
+    pattern_in_view = 0;
+}
+
+/* 0x4007c6e4(row): queue a row, -1 cancels */
+int core_pattern_queue(int32_t row)
+{
+    if (!std_pattern[0] || pattern_in_view)
+        return 0;
+    if (row < 0)
+        return pattern_req(PATTERN_NONE, PATTERN_CANCEL);
+    if (row > 0xff)
+        return 0;
+    return pattern_req(ROW_PATTERN(row), PATTERN_QUEUE);
+}
+
+/* 0x4007c5fc(row, offset): stopped, go to a row now (stock ignores rows
+ * above 0xff) */
+int core_pattern_jump(uint32_t row)
+{
+    if (!std_pattern[0] || pattern_in_view || row > 0xffu)
+        return 0;
+    return pattern_req(ROW_PATTERN(row), PATTERN_NOW);
+}
+
+/* 0x4007c186(pattern, flag): playing, a request the tick takes; stopped,
+ * the pattern is set at once (the jump's and the song position's own call,
+ * reported there) */
+int core_pattern_set(uint32_t pattern)
+{
+    if (!std_pattern[0] || pattern_in_view || TRANSPORT != 1)
+        return 0;
+    return pattern_req(pattern & 0xffu, PATTERN_SET);
+}
+
+/* 0x40079eaa(pattern): playing only, the pattern view's request with its
+ * restart flag (view+0xc6) */
+int core_pattern_start(uint32_t pattern)
+{
+    if (!std_pattern[0] || pattern_in_view || TRANSPORT != 1)
+        return 0;
+    return pattern_req(pattern & 0xffu, PATTERN_START);
+}
+
+/* 0x4007c3bc(position): stopped only, stock stops, picks the row for the
+ * position and sets its pattern; the pattern is not known before */
+int core_pattern_spp(void)
+{
+    if (!std_pattern[0] || TRANSPORT == 1)
+        return 0;
+    return pattern_req(PATTERN_NONE, PATTERN_SPP);
+}
+
+/* ================================= ev_view ================================= */
+
+/* ui.s's sites: the push funnel's list insert (0x4006293a, at 0x40062a60),
+ * the close sweep (0x40062c1c), the remove of one view (0x40062a98) and the
+ * replace (0x40063330, the page swap: old out, new in). The view's class
+ * name is at view+0x28. */
+void core_view_report(int op, void *ctrl, void *view)
+{
+    const fn_view *f;
+    for (f = std_view; *f; f++)
+        (*f)(op, ctrl, view, 0);
+}
+
+const char *core_view_name(const void *view)
+{
+    return view ? *(const char *const *)((const uint8_t *)view + 0x28) : 0;
+}
+
+/* ============================= ev_analog_frame ============================= */
+
+/* 0x40103da6, in the audio interrupt: after the CV builder (0x400fc614),
+ * before 0x400639a4 packs the 100 words at 0x80003d6c */
+void core_analog_frame(void)
+{
+    const ev_analog_frame_fn *f;
+    for (f = ev_analog_frame; *f; f++)
+        (*f)((uint16_t *)0x80003d6cu);
+}
+
+/* ================================= ev_mute ================================= */
+
+/* 0x400aeb8e(settings, track 0..5, muted, send): the project's per-track
+ * mute, from FUNC + a track key (UI task) and MIDI CC 94 and the mute NRPN
+ * (the MIDI task). Nonzero takes it: stock sets nothing and sends nothing. */
+int core_mute_pre(int32_t track, int32_t muted)
+{
+    const fn_mute *f;
+    if ((uint32_t)track > TRACK_CV)
+        return 0;
+    for (f = std_mute; *f; f++)
+        if ((*f)((unsigned)track, (muted & 0xff) ? 1u : 0u, MUTE_SCOPE_PROJECT))
+            return 1;
+    return 0;
+}
+
+/* ============================== ev_knob_turn =============================== */
+
+/* 0x4002598c, the page view's turn, past its step (delta nonzero) and its
+ * lockout: the same tests stock makes next, to say which edit the turn
+ * becomes. A held track key (0x20..0x23, with neither 0x24 nor 0x25 held)
+ * on a synth track edits every held track; else a held trig or live record
+ * makes a p-lock; else the turn edits the sound (then ev_param_turn). */
+typedef int32_t (*key_held_t)(int32_t key);
+typedef int32_t (*track_of_t)(void *);
+typedef int32_t (*lock_rec_t)(void *);    /* a pointer, returned in %d0 */
+typedef uint8_t (*lock_live_t)(void *);
+#define KEY_HELD ((key_held_t)0x400647a2u)
+#define TRACK_OF ((track_of_t)0x400adbd2u)
+#define LOCK_REC ((lock_rec_t)0x400220beu)
+#define LOCK_LIVE ((lock_live_t)0x400221e8u)
+
+static int turn_how(void *view)
+{
+    void *seq = *(void **)((uint8_t *)view + 0x6c);
+    int32_t track = TRACK_OF(*(void **)((uint8_t *)view + 0x74));
+    if (track <= 3 && (KEY_HELD(0x20) || KEY_HELD(0x21) || KEY_HELD(0x22) || KEY_HELD(0x23))
+        && !KEY_HELD(0x24) && !KEY_HELD(0x25))
+        return TURN_MULTI;
+    if (LOCK_REC(seq) || LOCK_LIVE(seq))
+        return TURN_LOCK;
+    return TURN_SOUND;
+}
+
+int core_knob_turn(void *view, int32_t id, int32_t delta, int32_t knob)
+{
+    const ev_knob_turn_fn *f;
+    int how;
+    if (!ev_knob_turn[0])
+        return 0;
+    how = turn_how(view);
+    for (f = ev_knob_turn; *f; f++)
+        if ((*f)(view, id, delta, knob, how))
+            return 1;
+    return 0;
+}
+
+/* The LEVEL encoder: MainScreenView's encoder virtual (0x400bed54) steps
+ * every encoder event through the accelerator (0x400589ee, at 0x400bedb2)
+ * and only then tests it is the LEVEL encoder (0x40058724). Its edit
+ * (0x400beef4) sets the active track's level, or T1-T4's while their keys
+ * are held, by delta; an external or frozen track's turn is its Ext. Vol.
+ * Stock edits nothing on the CV track (5) unless it is external, nor with
+ * FUNC held (it opens a view instead) unless the track is FX, or external,
+ * or boot flag 0x100000 is set. ui.s passes the step's delta; the return is
+ * the delta stock uses, or 0: taken, and ui.s leaves the routine at its exit,
+ * so neither the level (nor Ext. Vol.) is set nor its popup shown. */
+typedef uint8_t (*is_level_t)(int32_t event);
+#define IS_LEVEL ((is_level_t)0x40058724u)
+#define BOOT_FLAGS (*(volatile uint32_t *)0x401ff54cu)
+
+int32_t core_level_turn(void *view, int32_t event, int32_t track, uint32_t ext, int32_t delta)
+{
+    const ev_knob_turn_fn *f;
+    int how;
+    ext &= 0xffu;
+    if (!ev_knob_turn[0] || !delta || !IS_LEVEL(event))
+        return delta;
+    if (track == TRACK_CV && !ext)
+        return delta;
+    if (!ext && !(BOOT_FLAGS & 0x100000u) && KEY_HELD(KEYID_FUNC) && track != TRACK_FX)
+        return delta;
+    how = (KEY_HELD(0x20) || KEY_HELD(0x21) || KEY_HELD(0x22) || KEY_HELD(0x23)) ? TURN_MULTI : TURN_SOUND;
+    for (f = ev_knob_turn; *f; f++)
+        if ((*f)(view, KNOB_ID_LEVEL(track), delta, ENC_LEVEL, how))
+            return 0;
+    return delta;
+}
+
+/* The mixer page (0x401a6d00, key 0xb3) handles knobs A..E itself: knob n
+ * sets track n's level in whole steps, 0x4009dc3a(settings, n, old + counts,
+ * send), with no accelerator, then shows its "Tn LEVEL" popup. ui.s asks this
+ * before that call: 1 = taken, and ui.s skips the set and the popup. */
+typedef int32_t (*level_get_t)(void *settings, int32_t track);
+typedef int32_t (*level_set_t)(void *settings, int32_t track, int32_t value, int32_t send);
+#define LEVEL_GET ((level_get_t)0x4009c8d4u)
+#define LEVEL_SET ((level_set_t)0x4009dc3au)
+
+int core_mixer_level(void *view, void *settings, int32_t track, int32_t value)
+{
+    if (ev_knob_turn[0] && (uint32_t)track <= TRACK_FX) {
+        int32_t delta = value - (int8_t)LEVEL_GET(settings, track);
+        if (delta) {
+            const ev_knob_turn_fn *f;
+            for (f = ev_knob_turn; *f; f++)
+                if ((*f)(view, KNOB_ID_LEVEL(track), delta * 0x100, ENC_A + track, TURN_SOUND))
+                    return 1;
+        }
+    }
+    return 0;
+}
+
+/* ================================ the tick ================================= */
+
+/* ev_tick (native), after core_std_tick: the queued sets and the modes */
+void core_ui_tick(void *ctrl)
+{
+    (void)ctrl;
+    pattern_seed();
+    if (std_param_set[0])
+        set_drain();
+    if (std_mode[0])
+        mode_poll();
+}
+
+/* ================================ ev_mod_set =============================== */
+
+/* ui.s's six setter stubs pass code = class | kind << 8, the setter's (this,
+ * slot, value) and its return address; this is the primary object. Its slots
+ * live in data = *(this + 0x10): SoundModConf's and Velocity's slot n at
+ * data + 4n, PerfParam's at data + 0x10 + 4n, each the depth (s16) and the
+ * destination's code in byte 3. A setter writes nothing when data is 0 or
+ * the slot is past 4, so neither call comes then. The objects: a Sound (the
+ * active kit's T1-T4 at kit + 0x60 + 0x3dc t, FX at kit + 0x1030, CV at
+ * kit + 0x1424, laid out alike) holds Velocity at +0x2c and SoundModConf at
+ * +0xd4 MOD WHEEL, +0x190 PITCH BEND, +0x24c BREATH, +0x308 AFTERTOUCH; the
+ * kit's PERF macro i (0..11) is at kit + 0x1818 + 0xb4 i. The pool's sounds
+ * hold the same objects; no caller was found passing one (MODSRC_NONE). The
+ * only caller outside the setup page is the SysEx receive's PERF depth
+ * (0x400f8be6, its jsr returning to 0x400f8bec), in a task not traced: not
+ * reported. */
+#define MODSET_SOUND 0u
+#define MODSET_VELOCITY 1u
+#define MODSET_PERF 2u
+#define MODSET_SYSEX_RET 0x400f8becu
+typedef uint32_t (*kit_of_t)(uint32_t app);   /* a pointer, returned in %d0 */
+#define KIT_OF ((kit_of_t)0x400a51f6u)
+#define APP_OF ((uint32_t (*)(void))0x401494deu)
+
+static uint8_t *modset_slot(uint32_t cls, void *self, uint32_t slot)
+{
+    uint8_t *data = *(uint8_t **)((uint8_t *)self + 0x10);
+    if (!data || slot > 4)
+        return 0;
+    return data + (cls == MODSET_PERF ? 0x10 : 0) + 4 * slot;
+}
+
+static void modset_who(uint32_t cls, void *self, struct core_mod_set *m)
+{
+    uint32_t kit = KIT_OF(APP_OF()), at = (uint32_t)self, t;
+    m->source = MODSRC_NONE;
+    m->track = 0xffu;
+    if (cls == MODSET_PERF) {
+        uint32_t off = at - (kit + 0x1818u);
+        if (off < 12u * 0xb4u && !(off % 0xb4u)) {
+            m->source = MODSRC_PERF;
+            m->track = (uint8_t)(off / 0xb4u);
+        }
+        return;
+    }
+    for (t = 0; t <= TRACK_CV; t++) {
+        uint32_t base = kit + (t < 4 ? 0x60u + 0x3dcu * t : t == TRACK_FX ? 0x1030u : 0x1424u);
+        uint32_t off = at - base;
+        uint8_t src;
+        if (cls == MODSET_VELOCITY)
+            src = off == 0x2c ? MODSRC_VELOCITY : MODSRC_NONE;
+        else if (off == 0xd4)
+            src = MODSRC_MOD_WHEEL;
+        else if (off == 0x190)
+            src = MODSRC_PITCH_BEND;
+        else if (off == 0x24c)
+            src = MODSRC_BREATH;
+        else if (off == 0x308)
+            src = MODSRC_AFTERTOUCH;
+        else
+            src = MODSRC_NONE;
+        if (src != MODSRC_NONE) {
+            m->source = src;
+            m->track = (uint8_t)t;
+            return;
+        }
+    }
+}
+
+static int modset_report(int pre, uint32_t code, void *self, int32_t slot, int32_t value)
+{
+    const ev_mod_set_fn *f;
+    struct core_mod_set m;
+    modset_who(code & 0xffu, self, &m);
+    m.slot = (uint8_t)slot;
+    m.kind = (uint8_t)(code >> 8);
+    m.value = value;
+    for (f = ev_mod_set; *f; f++)
+        if ((*f)(pre, &m) && pre)
+            return 1;
+    return 0;
+}
+
+int core_modset_pre(uint32_t code, void *self, int32_t slot, int32_t value, uint32_t caller)
+{
+    if (!ev_mod_set[0] || caller == MODSET_SYSEX_RET || !modset_slot(code & 0xffu, self, (uint32_t)slot))
+        return 0;
+    return modset_report(1, code, self, slot, value);
+}
+
+void core_modset_post(uint32_t code, void *self, int32_t slot, int32_t value, uint32_t caller)
+{
+    uint8_t *e;
+    if (!ev_mod_set[0] || caller == MODSET_SYSEX_RET || !(e = modset_slot(code & 0xffu, self, (uint32_t)slot)))
+        return;
+    if (code >> 8 == MOD_DEPTH)
+        value = (int16_t)(e[0] << 8 | e[1]);
+    modset_report(0, code, self, slot, value);
+}

@@ -99,6 +99,12 @@ button.round:disabled { opacity: 0.35; cursor: default; }
 .side-empty { padding: 4px 10px 8px; color: var(--faint); font-size: 12.5px; }
 .side-foot { padding: 12px 18px 14px; border-top: 1px solid var(--line); color: var(--faint); font-size: 12px; }
 .side-foot p { margin: 3px 0; }
+.contact { display: flex; align-items: center; gap: 10px; margin: 0 -8px 10px; padding: 8px; border: 1px solid var(--line);
+  border-radius: 10px; color: var(--text); font-size: 13px; font-weight: 600; }
+.contact:hover { border-color: var(--accent); text-decoration: none; }
+.contact .ico { flex: none; width: 18px; height: 18px; color: var(--accent); }
+.contact span { display: flex; flex-direction: column; min-width: 0; line-height: 1.25; }
+.contact small { color: var(--muted); font-weight: 400; font-size: 12px; overflow: hidden; text-overflow: ellipsis; }
 .engine { display: flex; gap: 8px; align-items: baseline; }
 .engine::before { content: ""; flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--faint); transform: translateY(-1px); }
 .engine.ok { color: inherit; }
@@ -179,16 +185,8 @@ h1 { margin: 0 0 6px; font-size: 32px; line-height: 1.1; font-weight: 800; lette
 .gtext { margin: 0; color: var(--muted); font-size: 13.5px; }
 .gtext strong { color: var(--text); }
 .gtext a { color: var(--text); text-decoration: underline; }
-.dev-tiles { display: grid; gap: 8px; }
-.dev-tile { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 1px 10px; width: 100%; padding: 9px 12px;
-  border: 1px solid var(--line-2); border-radius: 8px; background: var(--well); color: var(--text); text-align: left; cursor: pointer;
-  transition: border-color 0.15s, background 0.15s; }
-.dev-tile:hover { border-color: var(--outline); }
-.dev-tile strong { font-size: 14.5px; }
-.dev-tile .os { color: var(--faint); font: 12px var(--mono); }
-.dev-tile .n { grid-row: 1 / span 2; grid-column: 2; color: var(--muted); font-size: 12.5px; }
-.dev-tile.on { border-color: var(--accent); background: var(--accent-soft); }
-.dev-tile.on strong::after { content: " ✓"; color: var(--accent); }
+.dev-select { width: 100%; padding: 10px 12px; background: var(--well); color: var(--text); font-size: 14.5px; }
+#g-device.done .dev-select { border-color: var(--accent); background: var(--accent-soft); }
 .drop.mini { display: flex; align-items: center; gap: 12px; padding: 14px; text-align: left; font-size: 13.5px; }
 .drop.mini .drop-ico { flex: none; width: 26px; height: 26px; }
 .drop.mini.waiting { cursor: progress; opacity: 0.65; }
