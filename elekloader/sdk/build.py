@@ -398,8 +398,10 @@ def build(mdir, stock_path, out_dir=None, extra=None):
             sec_of[s.idx] = s.name
             if s.name == '.bss':
                 secs['.bss'] = {'align': max(4, s.align), 'size': s.size}
-            elif s.name == '.payload':          # data the mod ships: kept whole, never stock runs
-                secs[s.name] = {'align': max(4, s.align), 'len': s.size, 'parts': [['hex', s.data.hex()]]}
+            elif s.name == '.payload':          # data the mod ships: kept whole, never stock runs; one
+                secs[s.name] = {'align': max(4, s.align), 'len': s.size,   # hex part after its len and
+                                'sha256': hashlib.sha256(s.data).hexdigest(),   # sha256, so a +Drive
+                                'parts': [['hex', s.data.hex()]]}        # loader can skip it (DRIVE.md)
             else:
                 parts = stock_parts(s.data, image, STOCK_MIN, dev.main_load)
                 secs[s.name] = {'align': max(4, s.align), 'len': s.size,

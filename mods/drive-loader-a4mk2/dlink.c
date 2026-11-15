@@ -633,6 +633,77 @@ static int section(js_t *j, int bss, u32 *size, u32 *align)
     return !j->err;
 }
 
+#ifdef DL_PAYLOAD_SKIP
+/* A .payload the stage skipped (skip.h; docs/DRIVE.md, "Payloads on the +Drive"): {"align",
+ * "len", "sha256", "parts"} with "len" and a 64-digit "sha256" before "parts", and "parts" one
+ * ["hex", ""] part, the hex the stage left out. Its bytes stay on the +Drive: nothing is placed. */
+static int skipped_payload(js_t *j)
+{
+    const char *s;
+    u32 n;
+    s32 v;
+    int first = 1, f2 = 1, f3 = 1, have_len = 0, have_sha = 0, have_parts = 0;
+    if (!js_open(j, '{'))
+        return 0;
+    while (js_next(j, '}', &first)) {
+        if (!js_key(j, &s, &n))
+            return 0;
+        if (js_eq(s, n, "align")) {
+            if (!js_int(j, &v) || v < 1 || v > 4096 || (v & (v - 1)))
+                return 0;
+        } else if (js_eq(s, n, "len")) {
+            if (!js_int(j, &v) || v < 0)
+                return 0;
+            have_len = 1;
+        } else if (js_eq(s, n, "sha256")) {
+            if (!js_str(j, &s, &n) || n != 64)
+                return 0;
+            have_sha = 1;
+        } else if (js_eq(s, n, "parts")) {
+            if (!have_len || !have_sha || have_parts || !js_open(j, '[') || !js_next(j, ']', &f2)
+                || !js_open(j, '[') || !js_next(j, ']', &f3) || !js_str(j, &s, &n) || !js_eq(s, n, "hex")
+                || !js_next(j, ']', &f3) || !js_str(j, &s, &n) || n || js_next(j, ']', &f3)
+                || js_next(j, ']', &f2))
+                return 0;
+            have_parts = 1;
+        } else if (!js_skip(j)) {
+            return 0;
+        }
+    }
+    return have_parts && !j->err;
+}
+
+/* Relocations ([[..., "sec:.payload", ...], ...]) that point into a skipped .payload: -> 1 */
+static int payload_relocs(const char *p, const u8 *buf, u32 len)
+{
+    js_t j;
+    const char *s;
+    u32 n;
+    int first = 1, f2;
+    if (!p)
+        return 0;
+    at(&j, p, buf, len);
+    if (!js_open(&j, '['))
+        return 0;
+    while (js_next(&j, ']', &first)) {
+        f2 = 1;
+        if (!js_open(&j, '['))
+            return 0;
+        while (js_next(&j, ']', &f2)) {
+            if (js_peek(&j) == '"') {
+                if (!js_str(&j, &s, &n))
+                    return 0;
+                if (js_eq(s, n, "sec:.payload"))
+                    return 1;
+            } else if (!js_skip(&j)) {
+                return 0;
+            }
+        }
+    }
+    return 0;
+}
+#endif
+
 static int same(const char *a, const char *b, u32 n)
 {
     while (n--)
@@ -1135,6 +1206,13 @@ static int scan(struct dmod *m, const u8 *buf, u32 len, const char **what)
         } else if (js_eq(s, n, ".bss")) {
             if (!section(&j, 1, &m->bss_len, &m->bss_align))
                 return DL_R_FORMAT;
+#ifdef DL_PAYLOAD_SKIP
+        } else if (js_eq(s, n, ".payload")) {
+            if (!skipped_payload(&j)) {  /* bytes the stage didn't skip: a payload it can't keep */
+                *what = ".payload";
+                return DL_R_FEATURE;
+            }
+#endif
         } else {
             static char sec[24];
             u32 q = n < 23 ? n : 23;
@@ -1185,6 +1263,12 @@ static int scan(struct dmod *m, const u8 *buf, u32 len, const char **what)
         || !read_list(k[K_CONFLICTS], buf, len, &m->conflicts))
         return DL_R_LIMIT;
 
+#ifdef DL_PAYLOAD_SKIP
+    if (payload_relocs(k[K_RELOCS], buf, len)) {   /* the payload is never in RAM */
+        *what = "relocs into .payload";
+        return DL_R_FEATURE;
+    }
+#endif
     /* relocations: in .run, of the three kinds, inside it */
     if (k[K_RELOCS]) {
         at(&j, k[K_RELOCS], buf, len);
@@ -1256,6 +1340,11 @@ static int scan(struct dmod *m, const u8 *buf, u32 len, const char **what)
                         return DL_R_FEATURE;
                     }
                     js_skip(&j);
+#ifdef DL_PAYLOAD_SKIP
+                } else if (js_eq(s, n, "relocs") && payload_relocs(j.p, buf, len)) {
+                    *what = "relocs into .payload";
+                    return DL_R_FEATURE;
+#endif
                 } else if (!js_skip(&j)) {
                     return DL_R_FORMAT;
                 }

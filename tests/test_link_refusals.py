@@ -751,6 +751,20 @@ def _(B):
                   bad, good)
 
 
+@row('Mod2.__init__', '<> .payload: its bytes do not match its sha256')
+def _(B):
+    import hashlib
+
+    def with_sha(digest):
+        def f(d):
+            d[1]['sections'].update(payload(64))
+            d[1]['sections']['.payload']['sha256'] = digest
+            keeps_payloads(d)
+        return f
+    return B.pair('m .payload: its bytes do not match its sha256', with_sha('00' * 32),
+                  with_sha(hashlib.sha256(bytes.fromhex('a5' * 64)).hexdigest()))
+
+
 @row('link', 'the payloads (<> bytes) and the mods need RAM to 0x<>, past 0x<> (<> bytes over): the area has '
              'room for <> bytes of payload')
 def _(B):

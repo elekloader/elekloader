@@ -74,5 +74,9 @@ dl_handler:
 | itself (dl.h, dl_stage_top), so host tools lay a set out as the boot does
         .globl  drive_stage_top
         .set    drive_stage_top, 1
+| the build descriptor's flags bit 1: the boot stages each file without its
+| .payload's hex (skip.h), so host tools stage, check and CRC files as it does
+        .globl  drive_payload_skip
+        .set    drive_payload_skip, 1
         .globl  drive_staging_size
         .set    drive_staging_size, 0x400                    | fs.h DL_STAGING_SIZE

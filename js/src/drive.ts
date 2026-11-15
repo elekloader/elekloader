@@ -117,6 +117,134 @@ export function message(code: number, detail = '', arg = 0): string {
 /** A file's CRC-32 in /mods/active: zlib's (the boot linker's). The container's footer hash is container.crc. */
 export const fileCrc = (raw: Uint8Array): number => crc32(raw)
 
+// ---- payload skip (skip.c's twin) ---------------------------------------------------------------------------------
+
+export type Payload = { off: number; len: number; sha256: string }
+const isHex = (c: number) => (c >= 0x30 && c <= 0x39) || (c >= 0x61 && c <= 0x66) || (c >= 0x41 && c <= 0x46)
+const asText = (b: number[]) => String.fromCharCode(...b)
+
+/** A file as a loader with F_PAYLOAD_SKIP stages it (mods/drive-loader-a4mk2/skip.c): a skippable .payload's hex left
+ * out, "" in its place. -> [staged bytes, the payload or null]. Followed a byte at a time as the loader does. drive.stage. */
+export function stage(raw: Uint8Array): [Uint8Array, Payload | null] {
+  const P_NONE = 0, P_SECT = 1, P_PAY = 2, P_PARTS = 3, P_PART = 4
+  let depth = 0
+  const types: number[] = []
+  let instr = false, esc = false, iskey = false, keyexp = false
+  let path = P_NONE, key: string | null = null, skey: string | null = null, elem = 0, nparts = 0
+  let hexFirst = false, innum = false, haveLen = false, haveSha = false, done = false
+  let cap: number[] = [], num = 0, plen = 0, sha: string | null = null
+  const out: number[] = []
+  let i = 0, pay: Payload | null = null
+  const n = raw.length
+  while (i < n) {
+    const c = raw[i++]
+    out.push(c)
+    if (instr) {
+      if (esc) esc = false
+      else if (c === 0x5c) esc = true
+      else if (c === 0x22) {
+        instr = false
+        const w = cap.length <= 64 ? asText(cap) : null
+        if (iskey) {
+          key = null
+          if (depth === 1 && w === 'sections') key = 'sections'
+          else if (path === P_SECT && depth === 2 && w === '.payload') key = 'payload'
+          else if (path === P_PAY && depth === 3 && (w === 'len' || w === 'sha256' || w === 'parts')) key = w
+        } else if (skey === 'sha256') {
+          haveSha = w !== null && w.length === 64 && cap.every(isHex)
+          sha = haveSha ? w!.toLowerCase() : null
+        } else if (path === P_PART && depth === 5 && elem === 0) {
+          hexFirst = w === 'hex'
+        }
+        continue
+      }
+      if (cap.length <= 64) cap.push(c)
+      continue
+    }
+    if (innum) {
+      if (c >= 0x30 && c <= 0x39) {
+        num = num > Math.floor(0x7fffffff / 10) ? 0xffffffff : num * 10 + (c - 0x30)
+        continue
+      }
+      innum = false
+      haveLen = num <= 0x7fffffff
+      plen = num
+    }
+    if (c === 0x20 || c === 0x09 || c === 0x0a || c === 0x0d) continue
+    const top = depth > 0 && depth <= 8 ? types[depth - 1] : null
+    if (c === 0x3a) { keyexp = false; continue }
+    if (c === 0x2c) {
+      keyexp = top === 0x7b
+      if (path === P_PART && depth === 5) elem++
+      continue
+    }
+    if (c === 0x7d || c === 0x5d) {
+      if (path === P_PART && depth === 5) path = P_PARTS
+      else if (path === P_PARTS && depth === 4) path = P_PAY
+      else if (path === P_PAY && depth === 3) path = P_SECT
+      else if (path === P_SECT && depth === 2) path = P_NONE
+      if (depth) { depth--; types.length = Math.min(types.length, depth) }
+      keyexp = false; key = null
+      continue
+    }
+    if (c === 0x22 && keyexp && top === 0x7b) { instr = true; iskey = true; cap = []; continue }
+    const k = key
+    key = null
+    if (c === 0x22) {
+      instr = true; iskey = false; cap = []; skey = k
+      if (path === P_PART && depth === 5 && elem === 1 && hexFirst && nparts === 1 && haveLen && haveSha && !done) {
+        done = true; skey = null; cap = new Array(65).fill(0)
+        pay = { off: i, len: plen, sha256: sha! }
+        i = Math.min(n, i + 2 * plen)
+      }
+      continue
+    }
+    if (c === 0x7b || c === 0x5b) {
+      if (c === 0x7b && k === 'sections' && depth === 1) path = P_SECT
+      else if (c === 0x7b && k === 'payload') { path = P_PAY; haveLen = haveSha = false; nparts = 0 }
+      else if (c === 0x5b && k === 'parts' && path === P_PAY) path = P_PARTS
+      else if (c === 0x5b && path === P_PARTS && depth === 4) { path = P_PART; nparts++; elem = 0; hexFirst = false }
+      depth = Math.min(depth + 1, 0xff)
+      if (depth <= 8) types.push(c)
+      keyexp = c === 0x7b
+      continue
+    }
+    if (k === 'len' && c >= 0x30 && c <= 0x39) { innum = true; num = c - 0x30 }
+  }
+  return [Uint8Array.from(out), pay]
+}
+
+/** A file's bytes as the build's loader stages them: without a skippable payload's hex on F_PAYLOAD_SKIP. drive.staged. */
+export function staged(build: Build | null, raw: Uint8Array | null): Uint8Array | null {
+  return raw === null || !build?.payloadSkip ? raw : stage(raw)[0]
+}
+
+/** A .payload the stage skipped, as dlink.c reads it. drive._skipped_payload. */
+function skippedPayload(d: unknown): boolean {
+  if (!isDict(d)) return false
+  const have = new Set<string>()
+  for (const [k, v] of Object.entries(d)) {
+    if (k === 'align') {
+      if (!pyInt(v) || num(v) < 1 || num(v) > 4096 || num(v) & (num(v) - 1)) return false
+    } else if (k === 'len') {
+      if (!pyInt(v) || num(v) < 0 || num(v) > 0x7fffffff) return false
+      have.add(k)
+    } else if (k === 'sha256') {
+      if (typeof v !== 'string' || ulen(v) !== 64) return false
+      have.add(k)
+    } else if (k === 'parts') {
+      if (have.size !== 2 || !(Array.isArray(v) && v.length === 1 && Array.isArray(v[0]) && v[0].length === 2
+          && v[0][0] === 'hex' && v[0][1] === '')) return false
+      have.add(k)
+    }
+  }
+  return have.has('parts')
+}
+
+/** Relocations that point into a skipped .payload ("sec:.payload"). drive._payload_relocs. */
+const payloadRelocs = (v: unknown): boolean =>
+  Array.isArray(v) && v.some(r => Array.isArray(r) && r.includes('sec:.payload'))
+
 // ---- the build ---------------------------------------------------------------------------------------------------
 
 export type Global = ['abs' | 'table' | 'count' | 'desc', number]
@@ -134,6 +262,7 @@ export class Build {
   areas: [number, number][]                 // a region must be inside one (TELOS)
   ramEnd: number; lo: number; hi: number; staging: number; stagingSize: number
   stageTop: boolean                         // the boot reads each file into the area itself (F_STAGE_TOP)
+  payloadSkip: boolean                      // the boot stages each file without its .payload's hex (F_PAYLOAD_SKIP)
   globals: Map<string, Global>
   nsyms: number
   pools: Record<keyof typeof POOL_PER_MB, number>
@@ -160,6 +289,7 @@ export class Build {
     })
     ;[this.ramEnd, this.lo, this.hi, this.staging, this.stagingSize] = d.area
     this.stageTop = !!((d.flags ?? 0) & desc.F_STAGE_TOP)
+    this.payloadSkip = !!((d.flags ?? 0) & desc.F_PAYLOAD_SKIP)
     this.globals = new Map()
     const put = (k: string, v: Global) => { if (!this.globals.has(k)) this.globals.set(k, v) }
     for (const m of d.modules) for (const [nm, a] of m.exports) put(nm, ['abs', a])
@@ -393,7 +523,11 @@ export function pass1(build: Build, c: Choice, state: State): boolean {
   for (const f of NO_FIELDS) if (!(f === 'sites' && build.telos) && !(build.mainHi && SITE_FIELDS.includes(f)) && !empty(g(doc, f))) return c.refuse('feature', f)
   const secs = g(doc, 'sections')
   if (!isDict(secs)) return c.refuse('format', '', 0, 'its sections')
-  for (const s of Object.keys(secs)) if (s !== '.run' && s !== '.bss') return c.refuse('feature', s)
+  for (const s of Object.keys(secs)) {
+    if (s === '.payload' && build.payloadSkip) {
+      if (!skippedPayload(secs[s])) return c.refuse('feature', s)     // bytes the stage didn't skip
+    } else if (s !== '.run' && s !== '.bss') return c.refuse('feature', s)
+  }
   const res = g(doc, 'resources')
   if (res !== null && !isDict(res)) return c.refuse('format', '', 0, 'its resources')
   for (const [k, v] of Object.entries(res ?? {})) {
@@ -426,6 +560,7 @@ export function pass1(build: Build, c: Choice, state: State): boolean {
     }
   }
   for (const k of ['imports', 'weak', 'requires', 'conflicts']) if (!keepList(g(doc, k))) return c.refuse('limit', '', 0, k)
+  if (build.payloadSkip && payloadRelocs(g(doc, 'relocs'))) return c.refuse('feature', 'relocs into .payload')
   const runLen = sectionLen(g(secs, '.run'))
   for (const r of each(truthy(g(doc, 'relocs')) ? doc.relocs : [])) {
     if (!(Array.isArray(r) && r.length === 5) || r[0] !== '.run' || !(r[2] in RSIZE) || !pyIsInt(r[1])
@@ -449,6 +584,8 @@ export function pass1(build: Build, c: Choice, state: State): boolean {
         if (n === null) return c.refuse('format', '', 0, 'an entry\'s data')
       } else if (k === 'claims' && !empty(v)) {
         return c.refuse('feature', 'claims')
+      } else if (k === 'relocs' && build.payloadSkip && payloadRelocs(v)) {
+        return c.refuse('feature', 'relocs into .payload')
       }
     }
     if (to === null || n === null) return c.refuse('format', '', 0, 'a contribution without "to" or "data"')
@@ -468,9 +605,14 @@ export function pass1(build: Build, c: Choice, state: State): boolean {
   }
   const sites = scanSites(build, c, doc, state)
   if (sites === null) return false
+  let own: Record<string, unknown> = doc
+  if ('.payload' in secs && build.payloadSkip) {   // its bytes stay on the +Drive: nothing places it
+    own = { ...doc, sections: Object.fromEntries(Object.entries(secs).filter(([k]) => k !== '.payload')) }
+    if (isDict(syms)) own.symbols = Object.fromEntries(Object.entries(syms).filter(([, v]) => !(Array.isArray(v) && v[0] === '.payload')))
+  }
   let m: Mod2
   try {                                     // the host's own reading of the file, a last check
-    m = new Mod2(doc, c.name, c.raw)
+    m = new Mod2(own, c.name, c.raw)
   } catch (e) {
     if (e instanceof ModError) return c.refuse('format', '', 0, e.message)
     throw e
@@ -604,7 +746,7 @@ export type Result = {
 /** Pass 1, the check rounds and the layout. `files`: [[file name, bytes, or null for a missing file]] in
  * /mods/active's order. drive.check. */
 export function check(build: Build, files: [string, Uint8Array | null][]): Result {
-  let choices = files.map(([n, raw], i) => new Choice(i, n, raw))
+  let choices = files.map(([n, raw], i) => new Choice(i, n, staged(build, raw)))
   const r: Result = { build, skip: 'none', choices, live: [], base: new Map(), end: build.lo, inits: [] }
   if (choices.length > MAX_MODS) {          // the loader reads none of them
     r.skip = 'count'
@@ -692,13 +834,14 @@ export function resultLines(r: Result): string[] {
 
 // ---- /mods/active ------------------------------------------------------------------------------------------------
 
-/** `/mods/active` for [[file name, bytes]]: one line each, the name and its CRC-32. drive.active_text. */
-export function activeText(entries: [string, Uint8Array][]): string {
+/** `/mods/active` for [[file name, bytes]]: one line each, the name and the CRC-32 of the file as the build's loader
+ * stages it (staged()). drive.active_text. */
+export function activeText(entries: [string, Uint8Array][], build: Build | null = null): string {
   for (const [n] of entries) {
     if (!n || ulen(n) >= NAME_MAX || n !== n.trim() || n.startsWith('#') || /[\n\r]/.test(n))
       throw new ModError(`${repr(n)} cannot be a line of /mods/active`)
   }
-  return entries.map(([n, raw]) => `${n} ${fileCrc(raw).toString(16).padStart(8, '0')}\n`).join('')
+  return entries.map(([n, raw]) => `${n} ${fileCrc(staged(build, raw)!).toString(16).padStart(8, '0')}\n`).join('')
 }
 
 /** `/mods/active` -> [[name, crc]], as the boot linker reads it; null past MAX_MODS lines. drive.parse_active. */

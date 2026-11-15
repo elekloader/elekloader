@@ -87,6 +87,17 @@ linked with each file read into the area's top, the caches pushed, each mod's `d
 - The boot time in `.status` reads DTIM0's count as the Rytm does; that it runs at the Rytm's bus
   clock on the A4 is not traced.
 
+## Payloads
+
+A mod's `.payload` stays on the +Drive (docs/DRIVE.md, "Payloads on the +Drive"; decided 2026-11-15):
+the boot stages each file without the payload's hex (`skip.c`, through `dl_read_file` in `boot.c`),
+the linker places nothing for it, and the descriptor's `F_PAYLOAD_SKIP` (`drive_payload_skip` in
+`route.s`) tells host tools to stage, check and CRC files the same way. After the link `payload.c`
+keeps the loaded mods' payloads in `drive_payloads`, and sidecar-core reads one with
+`dl_payload_read` from its own task when the Pi is ready. A relocation into `.payload` is refused, so
+a mod that addresses its payload from code (sidecar-codetest's `abs32`) loads only flashed. Uploads
+were never bounded by a stage here: `/mods` takes a file up to the largest free run.
+
 ## Files
 
 | file | from drive-loader-ar2 | what |
@@ -94,15 +105,17 @@ linked with each file read into the area's top, the caches pushed, each mod's `d
 | `store.c`, `fs.h` | new (replaces `fs.c`) | the store, the loader's mutex and the staging floor |
 | `route.c`, `route.s` | logic kept, glue retraced | the /mods route |
 | `boot.c` | logic kept, glue retraced | the boot, the crash guard, `dl_format` |
-| `dlink.c`, `json.c`, `json.h`, `sha256.c`, `dstore.c`, `dstore.h`, `park.c`, `park.h`, `names.inc` | unchanged (tests/test_drive_a4_store.py checks) | the linker, +Drive storage, the route's names |
-| `dl.h`, `flush.s` | comments only | the linker's interface; the site writes and cache push (the A4 sets the Rytm's CACR and ACR0) |
+| `dlink.c`, `json.c`, `json.h`, `sha256.c`, `dstore.c`, `dstore.h`, `park.c`, `park.h`, `names.inc` | unchanged (tests/test_drive_a4_store.py checks); dlink.c's payload skip is built only with `DL_PAYLOAD_SKIP` | the linker, +Drive storage, the route's names |
+| `dl.h`, `flush.s` | comments, and `DL_PAYLOAD_SKIP` | the linker's interface; the site writes and cache push (the A4 sets the Rytm's CACR and ACR0) |
+| `skip.c`, `skip.h`, `payload.c` | new | payload skip while staging (tests/test_drive_payload_skip.py), the Drive payload table and its reader |
 | `nopage.c` | new | the MODS page's calls until `page.c` |
 
 ## Still to prove
 
 In the emulator (elkbench on the PC), before any unit run: the route's list item layout (0x14 bytes
 on the Rytm) and a whole upload, read, Clear, mkdir and move through kind-2 entries; the boot link
-of a test set; the crash guard; FORMAT +DRIVE emptying the store. On a unit: the `60 00` mode
+of a test set; the crash guard; FORMAT +DRIVE emptying the store; a set with a payload mod (the
+table filled, `dl_payload_read` against the file's bytes). On a unit: the `60 00` mode
 switch, the card's own sector count, boot time with a full area.
 
 ## Build

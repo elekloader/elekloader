@@ -116,6 +116,128 @@ def file_crc(raw):
     return zlib.crc32(bytes(raw)) & 0xFFFFFFFF
 
 
+# ---- payload skip (skip.c's twin) ---------------------------------------------------------------
+
+STAGE_STEP = 64                         # skip.h DL_STAGE_STEP (the twin stages whole files at once)
+_P_NONE, _P_SECT, _P_PAY, _P_PARTS, _P_PART = range(5)
+_HEXDIGITS = frozenset(b'0123456789abcdefABCDEF')
+
+
+def stage(raw):
+    """A file as a loader with F_PAYLOAD_SKIP stages it (mods/drive-loader-a4mk2/skip.c,
+    dl_stage_file): the hex of a skippable .payload (one ["hex", "..."] part, "len" and a 64-digit
+    "sha256" before "parts") left out, so the staged JSON has "" there. -> (staged bytes, None or
+    {'off': the hex's offset in the file, 'len': bytes, 'sha256': hex digits}). Followed a byte at a
+    time as the loader does, so a file the loader would stage differently stages differently here."""
+    raw = bytes(raw)
+    depth, types = 0, []
+    instr = esc = iskey = keyexp = False
+    path, key, skey, elem, nparts = _P_NONE, None, None, 0, 0
+    hex_first = innum = have_len = have_sha = done = False
+    cap, num, plen, sha = bytearray(), 0, 0, None
+    out = bytearray()
+    i, n = 0, len(raw)
+    pay = None
+    while i < n:
+        c = raw[i]
+        i += 1
+        out.append(c)
+        if instr:
+            if esc:
+                esc = False
+            elif c == 0x5c:
+                esc = True
+            elif c == 0x22:
+                instr = False
+                w = bytes(cap) if len(cap) <= 64 else None
+                if iskey:
+                    key = None
+                    if depth == 1 and w == b'sections':
+                        key = 'sections'
+                    elif path == _P_SECT and depth == 2 and w == b'.payload':
+                        key = 'payload'
+                    elif path == _P_PAY and depth == 3 and w in (b'len', b'sha256', b'parts'):
+                        key = w.decode()
+                elif skey == 'sha256':
+                    have_sha = w is not None and len(w) == 64 and all(x in _HEXDIGITS for x in w)
+                    sha = w.decode().lower() if have_sha else None
+                elif path == _P_PART and depth == 5 and elem == 0:
+                    hex_first = w == b'hex'
+                continue
+            if len(cap) <= 64:
+                cap.append(c)
+            continue
+        if innum:
+            if 0x30 <= c <= 0x39:
+                num = 0xFFFFFFFF if num > 0x7FFFFFFF // 10 else num * 10 + (c - 0x30)
+                continue
+            innum = False
+            have_len = num <= 0x7FFFFFFF
+            plen = num
+        if c in b' \t\n\r':
+            continue
+        top = types[depth - 1] if 0 < depth <= 8 else None
+        if c == 0x3a:
+            keyexp = False
+            continue
+        if c == 0x2c:
+            keyexp = top == 0x7b
+            if path == _P_PART and depth == 5:
+                elem += 1
+            continue
+        if c in b'}]':
+            if path == _P_PART and depth == 5:
+                path = _P_PARTS
+            elif path == _P_PARTS and depth == 4:
+                path = _P_PAY
+            elif path == _P_PAY and depth == 3:
+                path = _P_SECT
+            elif path == _P_SECT and depth == 2:
+                path = _P_NONE
+            if depth:
+                depth -= 1
+                del types[depth:]
+            keyexp, key = False, None
+            continue
+        if c == 0x22 and keyexp and top == 0x7b:
+            instr, iskey, cap = True, True, bytearray()
+            continue
+        k, key = key, None
+        if c == 0x22:
+            instr, iskey, cap, skey = True, False, bytearray(), k
+            if path == _P_PART and depth == 5 and elem == 1 and hex_first and nparts == 1 \
+                    and have_len and have_sha and not done:
+                done, skey, cap = True, None, bytearray(65)
+                pay = {'off': i, 'len': plen, 'sha256': sha}
+                i = min(n, i + 2 * plen)
+            continue
+        if c in b'{[':
+            if c == 0x7b and k == 'sections' and depth == 1:
+                path = _P_SECT
+            elif c == 0x7b and k == 'payload':
+                path, have_len, have_sha, nparts = _P_PAY, False, False, 0
+            elif c == 0x5b and k == 'parts' and path == _P_PAY:
+                path = _P_PARTS
+            elif c == 0x5b and path == _P_PARTS and depth == 4:
+                path, nparts, elem, hex_first = _P_PART, nparts + 1, 0, False
+            depth = min(depth + 1, 0xFF)
+            if depth <= 8:
+                types.append(c)
+            keyexp = c == 0x7b
+            continue
+        if k == 'len' and 0x30 <= c <= 0x39:
+            innum, num = True, c - 0x30
+    return bytes(out), pay
+
+
+def staged(build, raw):
+    """A file's bytes as the build's loader stages them: without a skippable payload's hex when the
+    descriptor has F_PAYLOAD_SKIP, else as they are."""
+    if raw is None or not getattr(build, 'payload_skip', False):
+        return raw
+    return stage(raw)[0]
+
+
 def _cut(s, n):
     """UTF-8 bytes of s, at most n - 1 of them (the boot linker copies bytes)."""
     return str(s).encode('utf-8')[:n - 1]
@@ -150,6 +272,9 @@ class Build:
         # each file into the area itself, so a file may be as large as the area, and the layout
         # places the mods by file length with room for each file above the code before it
         self.stage_top = bool(d.get('flags', 0) & desc.F_STAGE_TOP)
+        # payload skip (skip.c; F_PAYLOAD_SKIP): the boot stages each file without a skippable
+        # .payload's hex, so lengths, CRCs and the layout are the staged file's (stage())
+        self.payload_skip = bool(d.get('flags', 0) & desc.F_PAYLOAD_SKIP)
         # the global names, in the boot linker's order: flashed exports, tables, NAME_n, core_desc
         self.globals = {}
         for m in self.modules:
@@ -332,6 +457,37 @@ def _section_len(d):
     return n
 
 
+def _skipped_payload(d):
+    """A .payload the stage skipped, as dlink.c's skipped_payload reads it: "len" and a 64-digit
+    "sha256" before "parts", and "parts" one ["hex", ""] part."""
+    if not isinstance(d, dict):
+        return False
+    have = set()
+    for k, v in d.items():
+        if k == 'align':
+            if type(v) is not int or not 1 <= v <= 4096 or v & (v - 1):
+                return False
+        elif k == 'len':
+            if type(v) is not int or not 0 <= v <= 0x7FFFFFFF:
+                return False
+            have.add(k)
+        elif k == 'sha256':
+            if not isinstance(v, str) or len(v.encode('utf-8')) != 64:
+                return False
+            have.add(k)
+        elif k == 'parts':
+            if have != {'len', 'sha256'} or v != [['hex', '']]:
+                return False
+            have.add(k)
+    return 'parts' in have
+
+
+def _payload_relocs(v):
+    """Relocations that point into a skipped .payload ("sec:.payload"), as dlink.c's
+    payload_relocs finds them."""
+    return isinstance(v, list) and any(isinstance(r, list) and 'sec:.payload' in r for r in v)
+
+
 def _is_c_name(s):
     return bool(s) and (s[0].isascii() and (s[0].isalpha() or s[0] == '_')) and \
         all(ch.isascii() and (ch.isalnum() or ch == '_') for ch in s)
@@ -452,7 +608,10 @@ def pass1(build, c, state):
     if not isinstance(secs, dict):
         return c.refuse('format', note='its sections')
     for s in secs:
-        if s not in ('.run', '.bss'):
+        if s == '.payload' and build.payload_skip:
+            if not _skipped_payload(secs[s]):       # bytes the stage didn't skip
+                return c.refuse('feature', s)
+        elif s not in ('.run', '.bss'):
             return c.refuse('feature', s)
     res = doc.get('resources')
     if res is not None and not isinstance(res, dict):
@@ -496,6 +655,8 @@ def pass1(build, c, state):
     for k in ('imports', 'weak', 'requires', 'conflicts'):
         if not keep_list(doc.get(k)):
             return c.refuse('limit', note=k)
+    if build.payload_skip and _payload_relocs(doc.get('relocs')):   # the payload is never in RAM
+        return c.refuse('feature', 'relocs into .payload')
     run_len = _section_len(secs.get('.run'))
     for r in doc.get('relocs') or []:
         if not (isinstance(r, list) and len(r) == 5) or r[0] != '.run' \
@@ -526,6 +687,8 @@ def pass1(build, c, state):
                     return c.refuse('format', note='an entry\'s data')
             elif k == 'claims' and not _empty(v):
                 return c.refuse('feature', 'claims')
+            elif k == 'relocs' and build.payload_skip and _payload_relocs(v):
+                return c.refuse('feature', 'relocs into .payload')
         if to is None or n is None:
             return c.refuse('format', note='a contribution without "to" or "data"')
         if not desc.ORDER_MIN <= order < desc.LINKER_ORDER:
@@ -553,6 +716,9 @@ def pass1(build, c, state):
     sites = _scan_sites(build, c, doc, state)
     if sites is None:
         return False
+    if '.payload' in secs and build.payload_skip:   # its bytes stay on the +Drive: nothing places it
+        doc = dict(doc, sections={k: v for k, v in secs.items() if k != '.payload'},
+                   symbols={k: v for k, v in syms.items() if not (isinstance(v, list) and v[:1] == ['.payload'])})
     try:                                        # the host's own reading of the file, a last check
         m = linker.Mod2(doc, c.name, c.raw)
     except ModError as e:
@@ -1028,7 +1194,7 @@ def check(build, files, deep=False, store=None):
     +Drive storage's placement (drive_store.Placed, None on a build without +Drive storage)."""
     r = Result()
     r.build, r.skip = build, 'none'
-    choices = [Choice(i, n, raw) for i, (n, raw) in enumerate(files)]
+    choices = [Choice(i, n, staged(build, raw)) for i, (n, raw) in enumerate(files)]
     r.choices, r.live, r.base, r.end, r.area, r.tables, r.inits, r.glob = \
         choices, [], {}, build.lo, b'', {}, [], {}
     r.placed, r.gens = None, None
@@ -1230,14 +1396,14 @@ def write_layout(r, out_dir):
 
 # ---- /mods/active --------------------------------------------------------------------------------
 
-def active_text(entries):
+def active_text(entries, build=None):
     """`/mods/active` for [(file name, bytes)]: one line each, the name and its CRC-32 (8 hex
-    digits)."""
+    digits): the CRC of the file as the build's loader stages it (staged())."""
     for n, _raw in entries:
         if not n or len(n.encode('utf-8')) >= NAME_MAX or n != n.strip() or n.startswith('#') \
                 or any(ch in n for ch in '\n\r'):
             raise ModError('%r cannot be a line of /mods/active' % n)
-    return ''.join('%s %08x\n' % (n, file_crc(raw)) for n, raw in entries)
+    return ''.join('%s %08x\n' % (n, file_crc(staged(build, raw))) for n, raw in entries)
 
 
 def stage_of(status):
