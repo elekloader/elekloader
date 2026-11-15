@@ -10,6 +10,7 @@ Each test is the Analog Rytm MKII's (tests/test_rytm_mk2.py) with the A4's
 own addresses, measured on 1.56: the two OSes are the same platform, but no
 address or count is the Rytm's.
 """
+import hashlib
 import json
 import os
 import struct
@@ -50,6 +51,15 @@ def stock():
 
 def at(img, addr, n):
     return img[addr - DEV.main_load:addr - DEV.main_load + n]
+
+
+def sb(x, img):
+    """A site's stock bytes (hex) from the stock image; the manifest holds only their length and
+    SHA-256, which this checks."""
+    a, n = int(x['addr'], 16), x['len']
+    got = at(img, a, n)
+    assert len(got) == n and hashlib.sha256(got).hexdigest() == x['stock_sha256'], x
+    return got.hex()
 
 
 def test_profile():
@@ -117,8 +127,8 @@ def test_core_a4mk2_sites():
     mod, port = build.for_release(j, DEV, REL)
     assert not port and mod['device'] == DEV.key and mod['os'] == REL.version
     for s in mod['sites']:
-        a, want = int(s['addr'], 16), bytes.fromhex(s['stock'])
-        assert img[a - DEV.main_load:a - DEV.main_load + len(want)] == want, s
+        a, want = int(s['addr'], 16), bytes.fromhex(sb(s, img))
+        assert 'stock' not in s, s              # the manifest holds no stock bytes
         if s['op'] == 'ptr':            # data (0.5): the lock get, set, clear and turn
             # (+0x48..+0x54) of the synth, FX and CV parameter sets' vtables; the turn is shared;
             # and (part 2) their short and long names (+0x68, +0x6c), shared too; and (0.7, ui.c)
@@ -143,7 +153,7 @@ def test_core_a4mk2_sites():
     for t, k in (('boot', 'VBR_FN'), ('core_draw', 'DRAWALL'), ('core_key', 'KEYDISP'),
                  ('core_enc', 'ENCDISP')):
         x = [x for x in mod['sites'] if x.get('target') == t][0]
-        assert x['stock'] == '4eb9' + d[k][2:].lower().rjust(8, '0'), t
+        assert sb(x, img) == '4eb9' + d[k][2:].lower().rjust(8, '0'), t
     # SETTINGS: the jmp's 6 bytes, then where core_settings rejoins
     x = [x for x in mod['sites'] if x.get('target') == 'core_settings'][0]
     assert int(d['SETTINGS_RET'], 16) == int(x['addr'], 16) + 6
@@ -154,8 +164,8 @@ def test_core_a4mk2_sites():
     for k, t in (('PAGE_INFO_RET', 'core_page_info'), ('GET_RET', 'core_param_get'),
                  ('DELTA_RET', 'core_param_delta'), ('TEXT_RET', 'core_param_text')):
         x = [x for x in mod['sites'] if x.get('target') == t][0]
-        assert x['op'] == 'jmp' and int(d[k], 16) == int(x['addr'], 16) + len(x['stock']) // 2, t
-    pages = {x['target']: x['stock'] for x in mod['sites'] if x.get('target', '').startswith('core_pa')}
+        assert x['op'] == 'jmp' and int(d[k], 16) == int(x['addr'], 16) + x['len'], t
+    pages = {x['target']: sb(x, img) for x in mod['sites'] if x.get('target', '').startswith('core_pa')}
     assert pages['core_page_info'] == '722f202f0004'
     assert pages['core_param_get'] == pages['core_param_delta'] == '4feffff448d7040c'
     assert pages['core_param_text'] == '2f032f02242f0014'
@@ -180,8 +190,9 @@ def test_core_a4mk2_sites():
     clamps = [x for x in mod['sites'] if x['op'] == 'bytes']
     assert len(clamps) == 5
     for x in clamps:
-        assert x['stock'][2:] == '1c' and x['new'] == x['stock'][:2] + '2c', x
-        assert x['stock'][0] == '7' and int(x['stock'][1], 16) % 2 == 0, x     # moveq #28,Dn
+        was = sb(x, img)
+        assert was[2:] == '1c' and x['new'] == was[:2] + '2c', x
+        assert was[0] == '7' and int(was[1], 16) % 2 == 0, x     # moveq #28,Dn
     # mod storage's sites (core-a4mk2 0.1: 28 of the 36), and 0.2's 4 page
     # sites, 2 view sites and 5 range bytes, 0.4's OS upgrade restart, and
     # 0.5's 32 lock sites: 20 in code (rows.s; the voice apply among them) and 12 vtable entries; and 0.5's
@@ -194,7 +205,7 @@ def test_core_a4mk2_sites():
     std07 = [x for x in mod['sites'] if x.get('target', '').startswith('core_std_')]
     assert len(std07) == 10
     voice07 = [x for x in mod['sites'] if x.get('target') in ('core_voice_free_cut', 'core_voice_free_len')]
-    assert [(x['addr'], x['op'], x['stock']) for x in voice07] == [
+    assert [(x['addr'], x['op'], sb(x, img)) for x in voice07] == [
         ('0x40102174', 'jsr', '4eb940105410'), ('0x40102e10', 'jsr', '2f024e91588f')]
     # and 0.7's 70 UI and system sites (ui.s, ui.c; tests/test_units.py, test_core_a4mk2_0_7_ui_sites),
     # 0.8's ev_track_key: a jmp over TrackSelectionView's `jsr 0x4005b6f0`, the key code (trackkey.s),
@@ -204,15 +215,15 @@ def test_core_a4mk2_sites():
     # `move.l #0x24c18,%d0` at 0x40074af6 (ev_drive_format)
     track08 = [x for x in mod['sites'] if x.get('target') in ('core_track_key_site', 'core_voice_params_site',
                                                                 'core_sound_setup_site')]
-    assert [(x['addr'], x['op'], x['stock']) for x in track08] == [
+    assert [(x['addr'], x['op'], sb(x, img)) for x in track08] == [
         ('0x400c8ba2', 'jmp', '4eb94005b6f0'), ('0x40103af6', 'jmp', '4eb9400fa2b0'),
         ('0x400e62c8', 'jmp', '20532e280008')]
     assert len(mod['sites']) == 117 + len(voice07) + 70 + len(track08) + 2
     drive = [x for x in mod['sites'] if x.get('target') in ('core_boot_drive_site', 'core_drive_format_site')]
-    assert [(x['addr'], x['op'], x['stock']) for x in drive] == [('0x401061e8', 'jsr', '4eb9400f1b18'),
+    assert [(x['addr'], x['op'], sb(x, img)) for x in drive] == [('0x401061e8', 'jsr', '4eb9400f1b18'),
                                                                 ('0x40074af6', 'jsr', '203c00024c18')]
     midi = [x for x in mod['sites'] if x.get('target') in ('core_nrpn_site', 'core_cc_site')]
-    assert [(x['addr'], x['op'], x['stock']) for x in midi] == \
+    assert [(x['addr'], x['op'], sb(x, img)) for x in midi] == \
         [('0x4009ff56', 'jmp', '4fefffec48d7043c'), ('0x400a0b62', 'jmp', '4e56ffd848d71cfc')]
     with open(os.path.join(ROOT, 'mods', 'core-a4mk2', 'midi.s')) as fh:
         src = fh.read()
@@ -220,7 +231,7 @@ def test_core_a4mk2_sites():
     assert mod['collections'].get('core_lock_ccs') == 8
     new06 = [x for x in mod['sites'] if x.get('target') in ('st_proj_save', 'core_uirec_hook', 'core_range_hook',
                                                            'core_graphic_hook')]
-    assert [(x['addr'], x['stock']) for x in new06] == [
+    assert [(x['addr'], sb(x, img)) for x in new06] == [
         ('0x400a771a', '4fefffd048d77c1c'),             # lea -48(sp); movem.l d2-d4/a2-a6: the Rytm's prologue
         ('0x400f6232', '222f00040c8100000127'),         # move.l 4(sp),d1; cmpi.l #0x127,d1: stock's 0..0x126
         ('0x40007798', '2f02222f0008'),                 # move.l d2,-(sp); move.l 8(sp),d1
@@ -233,6 +244,12 @@ def test_core_a4mk2_sites():
         'core_view_sweep_site', 'core_view_remove_site', 'core_view_replace_', 'core_level_site', 'core_mixer_site',
         'core_analog_frame_site', 'core_modset_'))]
     assert len(ui) == 70                # 0.7's UI and system sites (ui.s, ui.c)
+    modset = [x for x in ui if x['target'].startswith('core_modset_')]
+    assert len(modset) == 6 and all(x['op'] == 'jmp' and sb(x, img).startswith('4e56') for x in modset)
+    for x in ui:
+        assert x['len'] >= (4 if x['op'] == 'ptr' else 6), x
+        if x['op'] == 'keep2':
+            assert sb(x, img).startswith('4eb9'), x
     locks = [x for x in mod['sites'] if x['addr'] not in {y['addr'] for y in j['sites'][:48]} and x not in midi
              and x not in new06 and x not in std07 and x not in voice07 and x not in ui
              and x not in track08]
@@ -244,9 +261,9 @@ def test_core_a4mk2_sites():
     # the event accept is a jsr over stock's `lea 0x80006178,a0`, which core's
     # stub does before it returns (rows.s)
     x = [x for x in locks if x.get('target') == 'core_accept'][0]
-    assert x['op'] == 'jsr' and x['stock'] == '41f980006178', x
+    assert x['op'] == 'jsr' and sb(x, img) == '41f980006178', x
     x = [x for x in mod['sites'] if x.get('target') == 'core_finish_drain'][0]
-    assert x['op'] == 'jsr' and x['stock'] == '46fc27004eb9' + d['FINISH_DRAIN'][2:], x
+    assert x['op'] == 'jsr' and sb(x, img) == '46fc27004eb9' + d['FINISH_DRAIN'][2:], x
     assert len([x for x in mod['sites'] if x.get('target', '').startswith('st_')]) == 29
 
 
@@ -263,7 +280,7 @@ def test_core_a4mk2_store_bodies():
     for name, addr, back in bodies:
         x = sites[name]
         assert int(x['addr'], 16) == int(addr, 16), name
-        assert int(back, 16) == int(addr, 16) + len(x['stock']) // 2 == int(addr, 16) + 8, name
+        assert int(back, 16) == int(addr, 16) + x['len'] == int(addr, 16) + 8, name
 
 
 def _disp16(img, lo, hi, d):

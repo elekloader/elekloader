@@ -2236,11 +2236,11 @@ def test_core_a4mk2_0_7_std_midi_sites():
         assert (s['op'], s['target']) == (op, target), addr
         stub = asm.split(target + ':', 1)[1].split('\n\n', 1)[0]
         if op == 'jsr':
-            assert len(s['stock']) == 12 and 'jmp     (%a0)' in stub, addr
+            assert s['len'] == 6 and 'jmp     (%a0)' in stub, addr
         elif target == 'core_std_seq_tick_site':
             assert stub.rstrip().endswith('rte')
         else:
-            resume = int(addr, 16) + len(s['stock']) // 2
+            resume = int(addr, 16) + s['len']
             assert ('0x%08x' % resume) in stub, (addr, hex(resume))
     with open(os.path.join(root, 'elekloader', 'sdk', 'include', 'analog-four-mk2', 'ports.h'),
               encoding='utf-8') as fh:
@@ -2265,8 +2265,9 @@ def test_core_a4mk2_0_7_voice_events():
     assert 'voice.c' in doc['sources'] and 'voice.s' in doc['sources']
     sites = {s['addr']: s for s in doc['sites']}
     assert sites['0x401025ac']['target'] == 'core_voice_apply'
-    assert sites['0x40102174']['stock'] == '4eb940105410' and sites['0x40102174']['target'] == 'core_voice_free_cut'
-    assert sites['0x40102e10']['stock'] == '2f024e91588f' and sites['0x40102e10']['target'] == 'core_voice_free_len'
+    # (their stock bytes are checked against the stock image in test_analog_four_mk2)
+    assert sites['0x40102174']['target'] == 'core_voice_free_cut' and sites['0x40102174']['len'] == 6
+    assert sites['0x40102e10']['target'] == 'core_voice_free_len' and sites['0x40102e10']['len'] == 6
     with open(os.path.join(mdir, 'voice.c'), encoding='utf-8') as fh:
         src = fh.read()
     for fn in ('core_voice_end', 'core_voice_note'):
@@ -2354,13 +2355,11 @@ def test_core_a4mk2_0_7_ui_sites():
     assert len(ui_sites) == 70
     assert len([s for s in ui_sites if s['target'].startswith('core_clip_')]) == 36
     modset = [s for s in ui_sites if s['target'].startswith('core_modset_')]
-    assert len(modset) == 6 and all(s['op'] == 'jmp' and s['stock'].startswith('4e56') for s in modset)
+    assert len(modset) == 6 and all(s['op'] == 'jmp' for s in modset)
     assert len([s for s in ui_sites if s['target'].startswith('core_view_')]) == 5
     assert len([s for s in ui_sites if s['target'].startswith('core_pattern_') and s['target'] != 'core_pattern_site']) == 6
     for s in ui_sites:
-        assert len(s['stock']) // 2 >= (4 if s['op'] == 'ptr' else 6), s
-        if s['op'] == 'keep2':
-            assert s['stock'].startswith('4eb9'), s
+        assert s['len'] >= (4 if s['op'] == 'ptr' else 6), s
     for t in ('std_boot_done', 'std_idle', 'std_crash', 'std_usb', 'std_key_leds', 'std_mode',
               'std_param_set', 'std_clip', 'std_pattern', 'std_mute', 'std_view'):
         assert re.search(r'\b%s\[' % t, src), t
@@ -2395,7 +2394,9 @@ def test_core_a4mk2_0_8_track_key():
         src = fh.read()
     assert doc['version'] == '0.8' and 'trackkey.c' in doc['sources'] and 'trackkey.s' in doc['sources']
     site = [s for s in doc['sites'] if s.get('target') == 'core_track_key_site']
-    assert site == [{'addr': '0x400c8ba2', 'stock': '4eb94005b6f0', 'op': 'jmp', 'target': 'core_track_key_site'}]
+    # (its stock bytes are checked against the stock image in test_analog_four_mk2)
+    assert site == [{'addr': '0x400c8ba2', 'len': 6, 'stock_sha256': '71b362f711c113689fd93a04c5b98ab51fd214ec779f9ad2bcbfc646d856b734', 'op': 'jmp',
+                     'target': 'core_track_key_site'}]
     assert re.search(r'^core_track_key_site:\n\s+jsr\s+0x4005b6f0$', asm, re.M)
     assert 'jmp     0x400c8ba8' in asm and 'jmp     0x400c8f6a' in asm   # 0x400c8ba2 + 6; the handled exit
     assert 'tst.l   ev_track_key' in asm and 'ev_track_key[]' in src
@@ -2426,9 +2427,12 @@ def test_core_a4mk2_0_8_sound_events():
         src = fh.read()
     assert 'sound.c' in doc['sources'] and 'sound.s' in doc['sources']
     sites = {s.get('target'): s for s in doc['sites']}
-    assert sites['core_voice_params_site'] == {'addr': '0x40103af6', 'stock': '4eb9400fa2b0', 'op': 'jmp',
+    # (their stock bytes are checked against the stock image in test_analog_four_mk2)
+    assert sites['core_voice_params_site'] == {'addr': '0x40103af6', 'len': 6, 'op': 'jmp',
+                                               'stock_sha256': 'd92ee75213456a7a13d91048d49cefad7ddab6b7d7f7d56eaa61332f042ae107',
                                                'target': 'core_voice_params_site'}
-    assert sites['core_sound_setup_site'] == {'addr': '0x400e62c8', 'stock': '20532e280008', 'op': 'jmp',
+    assert sites['core_sound_setup_site'] == {'addr': '0x400e62c8', 'len': 6, 'op': 'jmp',
+                                              'stock_sha256': 'e8aa53b410decd67ab49630aef6dbe1806885013588d331d080875d7458a7113',
                                               'target': 'core_sound_setup_site'}
     assert re.search(r'jsr\s+0x400fa2b0\n\s+jmp\s+0x40103afc', asm)
     assert re.search(r'movea.l\s+\(%a3\),%a0\n\s+move.l\s+8\(%a0\),%d7\n\s+jmp\s+0x400e62ce', asm)
