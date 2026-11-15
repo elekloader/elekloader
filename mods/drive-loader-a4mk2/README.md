@@ -66,6 +66,16 @@ are **+Drive entries (kind 2)** over their own sectors, with no RAM stage:
   is the route's own record (one upload at a time per Data handler), not the closure's: `+0x1c`
   keeps the copy there tagged with its resolution's serial, and `+0x3c` reserves only for the same
   resolution (tests/test_drive_a4_route.py).
+- **Uploads in more than one chunk.** Stock's +Drive block writer (the write at 0x4001d9fc) takes
+  at most the larger of the bytes it still has to write and the bytes it still has to accept.
+  Between chunks it keeps up to a sector's worth in its ring, so the first count is the larger
+  one, and the chunk that ends the payload also takes the container's 12-byte footer: the footer
+  is never processed and WriteClose refuses the upload ("Footer was not processed"). A one-chunk
+  upload has nothing left over, so it closes. The site at 0x4001da16 (2 bytes, stock SHA-256
+  16119cec...233dc2) makes that bound always the bytes still to accept. It changes nothing for a
+  write that fits what is left, so stock's other +Drive writers behave as before. [Traced in the
+  emulator, 2026-11-15: an 18,466-byte upload in three chunks had 481 bytes in the ring at its
+  last chunk, which took 2,125 bytes with 2,113 left to accept.]
 - **A new name** resolves to the scratch sector with size 0 and no Clear permission; a Clear of a
   file erases or zeroes at most its own first sector, then deletes it.
 - **Permissions** are read, write and clear only: Copy and Swap would make writers without a

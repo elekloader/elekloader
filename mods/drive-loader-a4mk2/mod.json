@@ -29,6 +29,14 @@
    "stock": "700113c04182b33c",
    "op": "jsr",
    "target": "dl_route_site"
+  },
+  {
+   "addr": "0x4001da16",
+   "len": 2,
+   "stock_sha256": "16119cec0c9bd0ee527bc127cab359c8d63963f92fd98acf348e652a91233dc2",
+   "op": "bytes",
+   "new": "6006",
+   "kind": "code"
   }
  ],
  "subscribe": [

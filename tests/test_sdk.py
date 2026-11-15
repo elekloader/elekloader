@@ -123,6 +123,42 @@ def test_build_refuses_wrong_stock_bytes():
             raise AssertionError('built with the wrong stock bytes')
 
 
+def test_build_site_by_length_and_hash():
+    # "len" and "stock_sha256" in place of "stock": the same site, the stock bytes left out of
+    # the manifest; a hash that isn't the stock bytes' is refused
+    import hashlib
+    with tempfile.TemporaryDirectory() as tmp:
+        d = data_only_mod(tmp)
+        _p, by_bytes = build.build(d, stock(), os.path.join(tmp, 'a'))
+        with open(os.path.join(d, 'mod.json')) as fh:
+            j = json.load(fh)
+        site = j['sites'][0]
+        site['len'] = len(bytes.fromhex(site['stock']))
+        site['stock_sha256'] = hashlib.sha256(bytes.fromhex(site.pop('stock'))).hexdigest()
+        with open(os.path.join(d, 'mod.json'), 'w') as fh:
+            json.dump(j, fh)
+        _p, by_hash = build.build(d, stock(), os.path.join(tmp, 'b'))
+        assert [(x['addr'], x['new']) for x in by_hash.sites] == [(x['addr'], x['new']) for x in by_bytes.sites]
+        site['stock_sha256'] = hashlib.sha256(bytes.fromhex('00000401')).hexdigest()
+        with open(os.path.join(d, 'mod.json'), 'w') as fh:
+            json.dump(j, fh)
+        try:
+            build.build(d, stock(), os.path.join(tmp, 'c'))
+        except build.BuildError as e:
+            assert 'SHA-256' in str(e)
+        else:
+            raise AssertionError('built with a hash that is not the stock bytes')
+        del site['stock_sha256']
+        with open(os.path.join(d, 'mod.json'), 'w') as fh:
+            json.dump(j, fh)
+        try:
+            build.build(d, stock(), os.path.join(tmp, 'd'))
+        except build.BuildError as e:
+            assert 'stock_sha256' in str(e)
+        else:
+            raise AssertionError('built a site with neither its stock bytes nor their hash')
+
+
 def test_lint():
     with tempfile.TemporaryDirectory() as tmp:
         path, _m = build.build(data_only_mod(tmp), stock())
