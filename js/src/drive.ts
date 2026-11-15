@@ -785,12 +785,13 @@ export function check(build: Build, files: [string, Uint8Array | null][]): Resul
   return r
 }
 
-/** `/mods/.status`'s text -> the live stage's size in bytes (its `stage:` line), or null for a loader without
- * the line. drive.stage_of. */
+/** `/mods/.status`'s text -> the most bytes one upload or read takes (the Rytm loader's `stage:` line, or the
+ * A4 MKII loader's `room:` line, its sector store's largest free run), or null for a loader without the line.
+ * drive.stage_of. */
 export function stageOf(status: string): number | null {
   for (const ln of status.split('\n')) {
     const w = ln.split(/\s+/).filter(x => x)
-    if (w.length >= 3 && w[0] === 'stage:' && /^[0-9]+$/.test(w[1]) && w[2] === 'bytes') return parseInt(w[1], 10)
+    if (w.length >= 3 && (w[0] === 'stage:' || w[0] === 'room:') && /^[0-9]+$/.test(w[1]) && w[2] === 'bytes') return parseInt(w[1], 10)
   }
   return null
 }

@@ -279,3 +279,9 @@ test('a name starting with a space is refused before sending, as the Python does
   await assert.rejects(mods.move('a.elemod', ' a.elemod', null, false), ModError)
   assert.equal(mods.path('Jazz Kit /x .elemod'), '/mods/Jazz Kit /x .elemod')
 })
+
+test('the upload room: the Rytm loader\'s stage: line and the A4 MKII loader\'s room: line (drive.stage_of)', () => {
+  assert.equal(drive.stageOf('drive-loader route\nstage: 3932160 bytes at 0x40c40000, free tail\n'), 3932160)
+  assert.equal(drive.stageOf('drive-loader-a4mk2 route\nroom: 249229312 bytes in one run, 249229312 free; directory generation 0\n'), 249229312)
+  assert.equal(drive.stageOf('drive-loader route\nlast: -\n'), null)
+})

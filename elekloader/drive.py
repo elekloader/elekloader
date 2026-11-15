@@ -1407,11 +1407,13 @@ def active_text(entries, build=None):
 
 
 def stage_of(status):
-    """`/mods/.status`'s text -> the live stage's size in bytes (its `stage:` line: the most a read
-    or an upload takes on that boot), or None for a loader without the line."""
+    """`/mods/.status`'s text -> the most bytes one upload or read takes on that boot, or None for
+    a loader without the line: the Rytm loader's `stage:` line (its live stage), or the A4 MKII
+    loader's `room:` line (`room: N bytes in one run, M free; ...`: the largest free run of its
+    sector store, which an upload goes straight into)."""
     for ln in status.split('\n'):
         w = ln.split()
-        if len(w) >= 3 and w[0] == 'stage:' and w[1].isdigit() and w[2] == 'bytes':
+        if len(w) >= 3 and w[0] in ('stage:', 'room:') and w[1].isdigit() and w[2] == 'bytes':
             return int(w[1])
     return None
 

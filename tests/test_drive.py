@@ -862,6 +862,9 @@ def test_the_live_stage_from_the_status_limits_uploads():
     import argparse
     assert drive.stage_of('drive-loader route\nstage: 3932160 bytes at 0x40c40000, free tail\n') == 3932160
     assert drive.stage_of('drive-loader route\nlast: -\n') is None
+    # drive-loader-a4mk2: its sector store's largest free run (seen in the emulator 2026-11-15)
+    assert drive.stage_of('drive-loader-a4mk2 route\nroom: 249229312 bytes in one run, 249229312 free; '
+                          'directory generation 0\n') == 249229312
     with Bench('analog-rytm-mk2') as B:
         out, b = built(B, 'top')
         blk = out.image[desc.find(out.image)[0]:]
