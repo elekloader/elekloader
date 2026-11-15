@@ -260,17 +260,18 @@ What it does not do:
   pattern sounded the same by ear before and after store-check set
   every sound's markers.
 
-## The OS upgrade's restart (0.4)
+## Restarts (0.4, 0.8)
 
-1.56 ends an OS upgrade as the Rytm's 1.74 does: SUCCESS! REBOOTING, a 3 s
-wait, `move #0x2700,sr` at 0x4007db24, then 0x40002766, which waits while
-bytes are pending behind the panel link's DMA (0x4133cfc0) or in the UART
-queue (0x4133cfd0), counts only their interrupts move on. Core builds
-core-ar2's `finish.s` with these addresses (`FINISH_PANEL`,
-`FINISH_UART`, `FINISH_DRAIN` in `mod.json`): interrupts are masked only once
-nothing is pending (core-ar2's README, "The OS upgrade's restart"). The A4's
-routine is the Rytm's instruction for instruction; the hang itself was seen
-in analog-emu on the Rytm only, and this site is not yet checked on the A4.
+An OS upgrade ends at 0x4007db24 as the Rytm's 1.74 does: interrupts
+masked, then a drain (0x40002766) waiting on the panel link's DMA
+(0x4133cfc0) and the UART queue (0x4133cfd0), counts only their interrupts
+move on. Core builds core-ar2's `finish.s` there (core-ar2's README, "The
+OS upgrade's restart"); on the A4 it is unchecked.
+
+`core_restart()` and `core_restart_now()` (`restart.s`, whose
+comment has the order and the limits; `analog-four-mk2/system.h`),
+core-dn1 5.0's calls: a reboot from a task once the +Drive's store and card
+are idle and those counts are 0, or at once.
 
 ## Lockable parameters (0.5)
 
