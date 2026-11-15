@@ -334,6 +334,7 @@ struct dl_choice telos_choice[64];      /* the boot's set: menu.c reads it */
 int telos_nchoice;
 #define choice telos_choice
 void telos_menu_scan(void);
+void telos_proj_boot(void);
 
 void telos_heap_reset(void) { heap_used = 0; }
 static char active[8192];
@@ -380,4 +381,5 @@ void telos_card(unsigned state, int result, unsigned mode)
     done = 1;
     telos_boot();
     telos_menu_scan();                   /* the MODS rows (menu.c), settings-ot builds them next */
+    telos_proj_boot();                   /* what runs, for the projects' lists (projset.c) */
 }

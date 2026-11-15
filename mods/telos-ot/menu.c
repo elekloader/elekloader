@@ -7,8 +7,8 @@
  * and offers the swap. APPLY writes /ELEKLOADER/MODS/active; the set changes at the next start.
  * The design: research/telos-ot/ON-THE-UNIT.md.
  */
-#include "../drive-loader-ar2/dl.h"
 #include "octatrack/core.h"
+#include "telos.h"
 
 extern char core_desc[];
 extern u8 drive_staging[];
@@ -23,18 +23,10 @@ void telos_heap_reset(void);
 #define DIALOG ((void (*)(const char *, u32, const char *const *, u32, void (*)(int)))0x4006d57c)
 #define MENU_REDRAW ((void (*)(void))0x40064d7c)
 
-#define NMOD 32
-#define TITLE 16
-struct cmod {
-    char name[64];                       /* the file, below /ELEKLOADER/MODS */
-    char id[DL_ID_MAX];
-    char title[TITLE];
-    u32 crc;
-    u8 boot_on, on;                      /* in active at boot; ticked now */
-    u8 state, code;                      /* the boot's record (DL_ST_*, DL_R_*) */
-};
-static struct cmod cm[NMOD];
-static int ncm;
+struct cmod telos_cm[NMOD];
+int telos_ncm;
+#define cm telos_cm
+#define ncm telos_ncm
 static u8 dirent[512];
 
 /* ---- reading the card ---------------------------------------------------------------------- */
@@ -109,6 +101,12 @@ void telos_menu_scan(void)
         m->crc = dl_crc32(drive_staging, (u32)len);
         field(drive_staging, (u32)len, "id", m->id, DL_ID_MAX, 0);
         field(drive_staging, (u32)len, "title", m->title, TITLE, 1);
+        {
+            char ver[16];
+            field(drive_staging, (u32)len, "version", ver, sizeof ver, 0);
+            m->hid = dl_hash(m->id, dl_strlen(m->id));
+            m->hver = dl_hash(ver, dl_strlen(ver));
+        }
         if (!m->title[0])
             for (i = 0; m->id[i] && i < TITLE - 1; i++)
                 m->title[i] = m->id[i];
@@ -267,6 +265,7 @@ static u16 redraw_in;
  * gone and the menu is back (it keeps trying for 5 s). */
 void telos_tick(void)
 {
+    telos_proj_tick();
     if (!redraw_in)
         return;
     if (redraw_in > 1000) {              /* the second redraw, 3 ticks after the first */
@@ -284,6 +283,8 @@ void telos_tick(void)
     MENU_REDRAW();
 }
 static void noop_answer(int c) { (void)c; }
+
+void telos_redraw_later(void) { redraw_in = 300; }
 
 static void swap_answer(int c)
 {
@@ -303,6 +304,11 @@ static void say(const char *a, const char *b, const char *c, void (*answer)(int)
     lines[1] = line2;
     lines[2] = c;
     DIALOG("TELOS", 3, lines, 3, answer);
+}
+
+void telos_say(const char *a, const char *b, const char *c, void (*answer)(int))
+{
+    say(a, b, c, answer ? answer : noop_answer);
 }
 
 static void cat(char *d, int n, const char *a, const char *b)
@@ -393,10 +399,12 @@ static void write_active(u32 unused)
     }
 }
 
+void telos_post_active(void) { ot_engine_post(write_active, 0); }
+
 static void rows_action(int i)
 {
     if (i >= ncm) {
-        ot_engine_post(write_active, 0);
+        telos_post_active();
         say("SAVED TO THE CARD", "APPLIES AT THE NEXT START", "", noop_answer);
         return;
     }

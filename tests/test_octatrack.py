@@ -3828,6 +3828,31 @@ def test_the_dsp_loader():
     assert words(ln.image, init_at, 1) == [0x588] and words(ln.image, proc_at, 1) == [0x589]
 
 
+def test_telos_on_the_octatrack():
+    """mods/telos-ot: a build with it names TELOS's own area in its descriptor (ABI 1.2), carries
+    the stock bytes of every range the flashed build writes (the shadow, at +0x58), lists the
+    reserve's arena_base with core's exports, and keeps the project's mod list (projdata:TLMS)."""
+    from elekloader import desc
+    from elekloader.sdk import build
+    st, img = stock()
+    with tempfile.TemporaryDirectory() as tmp:
+        mods = [elemod.load_any(build.build(os.path.join(ROOT, 'mods', m), SYX, tmp)[0])
+                for m in ('core-ot', 'settings-ot', 'telos-ot')]
+    ln = link.link(mods, img)
+    d = desc.decode(ln.image, desc.find(ln.image)[0])
+    assert d['abi'] == (1, 2)
+    lo = ln.map['drive_area']
+    assert d['area'][1:3] == (lo, lo + 2 * 1024 * 1024)
+    sites = sorted(s['addr'] for m in mods for s in m.sites
+                   if DEV.main_load <= s['addr'] < DEV.main_load + len(img))
+    assert [a for a, _b in d['shadow']] == sites
+    for a, b in d['shadow']:
+        assert b == img[a - DEV.main_load:a - DEV.main_load + len(b)]
+    assert 'arena_base' in dict(d['modules'][0]['exports'])
+    assert any(c[2] == 'projdata:TLMS' for c in d['claims'])
+    assert ln.tables['core_projdata'][1] >= 1 and ln.tables['ot_mod_rows'][1] == 1
+
+
 def test_mkmod_diff_round_trip():
     st, img = stock()
     blob = bytes(range(200))

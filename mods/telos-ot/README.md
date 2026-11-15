@@ -2,7 +2,7 @@
 
 Mods from the CF card for the Octatrack (MKI and MKII, OS 1.40C), with core-ot 0.41 or newer.
 A build flashed once with this mod links more mods at every boot from the card, with no new
-firmware. Version 0.1 is a first working version, run in octabam's emulator only. The design
+firmware. Version 0.3, run in octabam's emulator only. The design
 and what was measured are in [research/telos-ot](../../research/telos-ot/README.md).
 
 ## Using it
@@ -55,6 +55,23 @@ then APPLY.
   running, so TELOS keeps what each site it wrote replaced (`dl_site_saving`), and the stock test
   reads that, the boot-time copy of the data and the shadow (`dl_stock_read`). A site over a
   range the flashed build wrote is refused outright (22 `flashed`).
+
+## Projects and their mods (0.3)
+
+As on the Digitone mk1 (elekloader/telos). Each project keeps the list of mods that ran: a hash of
+each one's id and version, flashed and card mods both, in core-ot's project data (`TLMS`, order 95).
+- **When it is written.** After a project load, when what runs differs from the project's list,
+  TELOS marks the block changed; core writes the project's `.work` about 2 s later, and SAVE
+  PROJECT keeps it in `.strd`, as for any mod's project data.
+- **LOAD PROJECT** (and RELOAD) of a project whose mods differ opens LOAD PROJECT MODS? with the
+  counts: `+` to turn on, `-` to turn off, `~` the project's version of a mod (both files on the
+  card), and what YES can't do: `?` not on this card or in this build, `!` another version, or one
+  this start refused. YES ticks the card's mods as the project had them and writes `active` (MODS
+  shows the ticks); NO keeps them. A project that only has `?` or `!` says PROJECT MODS NOT ALL
+  HERE.
+- **The next start's own load** says only what is still not as the project had it (the list YES
+  left in `/ELEKLOADER/MODS/project`, cleared after). Otherwise the start's load says nothing,
+  nor does a project without the list.
 
 ## Not yet
 
