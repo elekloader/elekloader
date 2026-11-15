@@ -86,8 +86,8 @@ int main(int argc, char **argv)
         if (r == 1)
             fwrite(buf, 1, s.got, f);
         fclose(f);
-        printf("{\"r\": %d, \"got\": %u, \"crc\": %u, \"calls\": %u, \"hex_read\": %u}\n", r, s.got, ~s.crc,
-               calls + 1, hex_read);
+        printf("{\"r\": %d, \"got\": %u, \"crc\": %u, \"calls\": %u, \"hex_read\": %u, \"reads\": %u}\n", r, s.got,
+               ~s.crc, calls + 1, hex_read, reads);
         return 0;
     }
     r = dl_stage_file(read_at, 0, buf, max, &pay);

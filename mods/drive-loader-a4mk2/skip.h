@@ -67,6 +67,9 @@ s32 dl_stage_file(dl_read_at read, void *ctx, u8 *buf, u32 max, struct dl_pay *p
  * tick: boot.c dl_read_more), with the staged bytes' CRC-32 taken as they come, so the page checks
  * and CRCs a file as the boot stages it and as /mods/active names it. A file staged past max is
  * read on to its end over the buffer's start, for its staged length and CRC alone. */
+#define DL_STAGE_COST 512                /* what dl_stage_more counts a read below it as: a +Drive
+                                          * sector is read whole, so a call in DL_STAGE_STEP reads
+                                          * (a payload that isn't skipped) stops at 64 of them */
 struct dl_stage_rd {
     struct dl_skip sk;
     u32 at;                              /* the file's next byte to read */

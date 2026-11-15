@@ -71,7 +71,7 @@ SKIPS = type('SkipBuild', (), {'payload_skip': True})()   # a build whose loader
 
 def c_step(exe, data, work, max_, hex_range=None):
     """skip.c's dl_stage_more on data, one call a tick as the MODS page reads (boot.c dl_read_more).
-    -> (result, staged bytes when it fit, staged length, CRC-32, calls, hex bytes read)."""
+    -> (result, staged bytes when it fit, staged length, CRC-32, calls, hex bytes read, reads)."""
     fd, src = tempfile.mkstemp(dir=work)
     with os.fdopen(fd, 'wb') as fh:
         fh.write(data)
@@ -82,7 +82,7 @@ def c_step(exe, data, work, max_, hex_range=None):
     j = json.loads(subprocess.run(args, capture_output=True, text=True, check=True).stdout)
     with open(out, 'rb') as fh:
         staged = fh.read()
-    return j['r'], staged, j['got'], j['crc'], j['calls'], j['hex_read']
+    return j['r'], staged, j['got'], j['crc'], j['calls'], j['hex_read'], j['reads']
 
 
 def payload_section(data, **over):
@@ -168,16 +168,22 @@ def main():
                             ('a 400 KB payload', fb)):
             t_st = drive.stage(data_)[0]
             for mx in (len(t_st) + 1, len(t_st), 4 * KB + 1, 100):
-                r, st, got, crc, calls, _h = c_step(skip_exe, data_, work, mx)
+                r, st, got, crc, calls, _h, _n = c_step(skip_exe, data_, work, mx)
                 want = 1 if len(t_st) <= mx else -2
                 check('stepped read, %s, buffer %d: staged as the boot stages it, CRC as /mods/active' % (name, mx),
                       r == want and got == len(t_st) and crc == zlib.crc32(t_st)
                       and (r != 1 or st == t_st) and crc == int(drive.active_text([('x', data_)], SKIPS)
                                                                     .split()[1], 16),
                       (r, want, got, len(t_st), crc, zlib.crc32(t_st), calls))
-        r, _st, got, _crc, calls, hex_read = c_step(skip_exe, fb, work, len(sb) + 1, hex_range=(off, off + 2 * len(big)))
+        r, _st, got, _crc, calls, hex_read, _n = c_step(skip_exe, fb, work, len(sb) + 1,
+                                                        hex_range=(off, off + 2 * len(big)))
         check('stepped read, 400 KB payload: %d calls, %d hex bytes read' % (calls, hex_read),
               r == 1 and hex_read <= BREATHE and calls <= 2 + len(sb) // BREATHE + 8, (r, calls, hex_read))
+        ns = raw(_no_sha(with_payload(base, blob(20 * KB))))     # not skipped: its hex read in small steps
+        r, st, got, crc, calls, _h, reads = c_step(skip_exe, ns, work, len(ns) + 1)
+        check('stepped read, a payload not skipped: whole, at most 64 short reads a call (%d reads, %d calls)'
+              % (reads, calls), r == 1 and st == ns and crc == zlib.crc32(ns) and reads <= 65 * calls,
+              (r, reads, calls))
         not_skipped = {
             'no sha256': _no_sha(with_payload(base, data)),
             'sha256 after parts': None,

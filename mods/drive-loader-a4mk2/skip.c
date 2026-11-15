@@ -250,7 +250,7 @@ s32 dl_stage_more(struct dl_stage_rd *s, dl_read_at read, void *ctx, u8 *buf, u3
             s->over = 1;
         s->got += k;
         s->at += k;
-        done += k;
+        done += k < DL_STAGE_COST ? DL_STAGE_COST : k;   /* a short read costs a sector */
         if (s->sk.act == DL_STAGE_GO)
             s->at = 2 * s->sk.pay.len > 0xFFFFFFFFu - s->at ? 0xFFFFFFFFu : s->at + 2 * s->sk.pay.len;
     }
