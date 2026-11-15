@@ -44,6 +44,10 @@ struct local {
 
 struct list { u16 first, n; };
 
+#ifdef DL_REGIONS
+#define DL_REGIONS_MAX 64                    /* regions of all the mods in one link */
+#endif
+
 struct dmod {
     u16 choice;                          /* its line in /mods/active (its status record) */
     u8 alive, done;
@@ -55,7 +59,23 @@ struct dmod {
     u16 ctr_first, ctr_n;                /* its contributions */
     u8 init_sec;                         /* drive_init, if it has one */
     u32 init_off;
+#ifdef DL_SITES
+    u16 site_first, site_n;              /* its sites in L.sites */
+#endif
+#ifdef DL_REGIONS
+    u16 reg_first, reg_n;                /* its regions in L.regs */
+#endif
 };
+
+#ifdef DL_SITES
+/* A site a mod writes in the running OS (the Octatrack's TELOS, dl.h "sites"): its range, and
+ * from pass 2 its bytes (relocations applied) at sdata. Written only by dl_link's commit. */
+struct dsite {
+    u32 addr;
+    u16 len, mod;
+    u32 data;                            /* offset in L.sdata */
+};
+#endif
 
 struct contrib {
     s32 order;
@@ -114,9 +134,26 @@ static struct {
     u8 *mdata;
     struct dl_status *st;                /* where the records go: dl_status, or a check's */
     char (*det)[32];
+#ifdef DL_SITES
+    struct dsite *sites;
+    u8 *sdata;
+    u32 nsites, sdata_n;
+#endif
+#ifdef DL_REGIONS
+    struct { u32 lo, hi; } regs[DL_REGIONS_MAX];   /* the mods' regions, [lo, hi) */
+    u32 nregs;
+#endif
     u32 crc_table[256];
 } L;
 
+#ifdef DL_SITES
+volatile u32 dl_trace;                   /* where a link got to, for a debugger: 1 begin, 2 pass 1
+                                         * done, 3 checks, 4 layout, 0x100|i placing mod i,
+                                         * 0x200|i placed, 5 bind */
+#define TRACE(v) (dl_trace = (v))
+#else
+#define TRACE(v) ((void)0)
+#endif
 struct dl_status *dl_status;
 char (*dl_detail)[32];
 u32 dl_status_n;
@@ -126,6 +163,12 @@ u32 dl_inits_n;
 u32 dl_used_lo, dl_used_hi;
 
 /* ---- small helpers ---------------------------------------------------------------------- */
+#ifdef DL_SITES
+/* Out of line: inlined into a loop, GCC can make `move.b (a0)+,(0,a0,a1)` of it, the same
+ * register post-incremented as the source and indexing the destination, which octabam's
+ * ColdFire emulator reads with the incremented a0 (every byte one address late). */
+__attribute__((noinline))
+#endif
 void dl_memcpy(void *d, const void *s, u32 n)
 {
     u8 *a = d;
@@ -506,6 +549,10 @@ static int read_list(const char *p, const u8 *buf, u32 len, struct list *l)
     return !j.err;
 }
 
+#ifdef DL_SITES
+static void stock_copy(u8 *dst, u32 a, u32 n);
+#endif
+
 /* A section's parts -> their length (and, with dst, their bytes). */
 static int parts(js_t *j, u8 *dst, u32 max, u32 *len)
 {
@@ -528,7 +575,11 @@ static int parts(js_t *j, u8 *dst, u32 max, u32 *len)
                 || k <= 0 || (dst && (u32)k > max - total))
                 return 0;
             if (dst)
+#ifdef DL_SITES
+                stock_copy(dst + total, (u32)a, (u32)k);
+#else
                 dl_memcpy(dst + total, DL_MEM((u32)a), (u32)k);
+#endif
             total += (u32)k;
         } else {
             return 0;
@@ -651,6 +702,220 @@ static int target_ok(const char *p, const u8 *buf, u32 len)
     return dev && os && !j.err;
 }
 
+#ifdef DL_SITES
+/* ---- sites (the Octatrack's TELOS) ----------------------------------------------------------
+ * A mod's "sites": [{"addr", "len", "stock_sha256", "new", "kind", "relocs"}]. Pass 1 checks
+ * each against the running OS: its bytes there must still be stock's (sha256), so a site over
+ * anything the flashed build wrote is refused (DL_R_STOCK), and records its range for the
+ * overlap check. Pass 2 builds its bytes; the commit writes them. */
+static char hexdetail[12];
+
+static const char *hex_of(u32 v)
+{
+    static const char dg[] = "0123456789abcdef";
+    int i;
+    hexdetail[0] = '0';
+    hexdetail[1] = 'x';
+    for (i = 0; i < 8; i++)
+        hexdetail[2 + i] = dg[(v >> (28 - 4 * i)) & 15];
+    hexdetail[10] = 0;
+    return hexdetail;
+}
+
+static int hexval(int c)
+{
+    return c >= '0' && c <= '9' ? c - '0' : c >= 'a' && c <= 'f' ? c - 'a' + 10
+         : c >= 'A' && c <= 'F' ? c - 'A' + 10 : -1;
+}
+
+/* Stock bytes for [a, a+n): the OS image's before the OS ran (dl_stock_read), with the descriptor's shadow (ABI 1.2: the stock
+ * bytes of every range the flashed build wrote) laid over them. */
+static void stock_copy(u8 *dst, u32 a, u32 n)
+{
+    u32 o, cnt, i;
+    dl_stock_read(dst, a, n);            /* the host's: the running OS, or its boot-time copy */
+    if (dl_rd16(L.d + 6) < 2 || !(o = D32(0x4c)))
+        return;
+    cnt = D32(0x50);
+    for (i = 0; i < cnt; i++) {
+        u32 sa = D32(o), sn = D32(o + 4), lo, hi;
+        lo = sa > a ? sa : a;
+        hi = sa + sn < a + n ? sa + sn : a + n;
+        if (lo < hi)
+            dl_memcpy(dst + (lo - a), L.d + o + 8 + (lo - sa), hi - lo);
+        o += 8 + ((sn + 3) & ~3u);
+    }
+}
+
+static int scan_sites(struct dmod *m, const char *p, const u8 *buf, u32 len, const char **what)
+{
+    js_t j;
+    const char *s;
+    u32 n;
+    int first = 1;
+    m->site_first = (u16)L.nsites;
+    m->site_n = 0;
+    if (!p || empty(p, buf, len))
+        return 0;
+    at(&j, p, buf, len);
+    if (!js_open(&j, '['))
+        return DL_R_FORMAT;
+    while (js_next(&j, ']', &first)) {
+        int f2 = 1, i;
+        s32 addr = -1, slen = -1;
+        u32 nlen = 0;
+        const char *sha = 0;
+        u8 want[32], got[32];
+        if (!js_open(&j, '{'))
+            return DL_R_FORMAT;
+        while (js_next(&j, '}', &f2)) {
+            if (!js_key(&j, &s, &n))
+                return DL_R_FORMAT;
+            if (js_eq(s, n, "addr")) {
+                if (!js_int(&j, &addr))
+                    return DL_R_FORMAT;
+            } else if (js_eq(s, n, "len")) {
+                if (!js_int(&j, &slen))
+                    return DL_R_FORMAT;
+            } else if (js_eq(s, n, "stock_sha256")) {
+                if (!js_str(&j, &s, &n) || n != 64)
+                    return DL_R_FORMAT;
+                sha = s;
+            } else if (js_eq(s, n, "new")) {
+                if (!js_hex(&j, 0, 0, &nlen))
+                    return DL_R_FORMAT;
+            } else if (!js_skip(&j)) {
+                return DL_R_FORMAT;
+            }
+        }
+        if (j.err || addr <= 0 || slen <= 0 || slen > 256 || (u32)slen != nlen || !sha)
+            return DL_R_FORMAT;
+        if (!dl_site_ok((u32)addr, (u32)slen)) {     /* the host's own rule: the OS image only */
+            *what = hex_of((u32)addr);
+            return DL_R_STOCK;
+        }
+        for (i = 0; i < 32; i++) {
+            int hi = hexval(sha[2 * i]), lo = hexval(sha[2 * i + 1]);
+            if (hi < 0 || lo < 0)
+                return DL_R_FORMAT;
+            want[i] = (u8)(hi << 4 | lo);
+        }
+        {                                /* over the flashed build's own writes: never */
+            u32 o = dl_rd16(L.d + 6) >= 2 ? D32(0x4c) : 0, c = o ? D32(0x50) : 0, q;
+            for (q = 0; q < c; q++) {
+                u32 sa = D32(o), sn = D32(o + 4);
+                if ((u32)addr < sa + sn && sa < (u32)addr + (u32)slen) {
+                    *what = hex_of((u32)addr);
+                    return DL_R_FLASHED;
+                }
+                o += 8 + ((sn + 3) & ~3u);
+            }
+        }
+        {                                /* stock's bytes, as the OS had them before any link */
+            u8 tmp[256];
+            stock_copy(tmp, (u32)addr, (u32)slen);
+            dl_sha256(tmp, (u32)slen, got);
+        }
+        for (i = 0; i < 32 && got[i] == want[i]; i++)
+            ;
+        if (i < 32) {
+            *what = hex_of((u32)addr);
+            return DL_R_STOCK;
+        }
+        if (L.nsites >= DL_SITES_MAX)
+            return DL_R_LIMIT;
+        L.sites[L.nsites].addr = (u32)addr;
+        L.sites[L.nsites].len = (u16)slen;
+        L.sites[L.nsites].mod = (u16)(m - L.mods);
+        L.sites[L.nsites].data = 0;
+        L.nsites++;
+        m->site_n++;
+    }
+    return j.err ? DL_R_FORMAT : 0;
+}
+
+static int resolve(struct dmod *m, const char *s, u32 n, u32 *v);
+static int put(u8 *at_, int type, u32 value, u32 p);
+static int rtype(const char *s, u32 n);
+
+/* Pass 2: each site's bytes, its relocations applied at its own address. */
+static int place_sites(struct dmod *m, const char *p, const u8 *buf, u32 len, const char **what)
+{
+    js_t j;
+    const char *s;
+    u32 n, q = 0;
+    int first = 1;
+    if (!m->site_n)
+        return 0;
+    at(&j, p, buf, len);
+    js_open(&j, '[');
+    while (js_next(&j, ']', &first)) {
+        struct dsite *x = &L.sites[m->site_first + q++];
+        int f2 = 1;
+        u32 got;
+        if (L.sdata_n + x->len > DL_SDATA_MAX)
+            return DL_R_LIMIT;
+        x->data = L.sdata_n;
+        js_open(&j, '{');
+        while (js_next(&j, '}', &f2)) {
+            js_key(&j, &s, &n);
+            if (js_eq(s, n, "new")) {
+                if (!js_hex(&j, L.sdata + x->data, x->len, &got) || got != x->len)
+                    return DL_R_JSON;
+            } else if (js_eq(s, n, "relocs")) {
+                int f3 = 1;
+                js_open(&j, '[');
+                while (js_next(&j, ']', &f3)) {
+                    int f4 = 1, type;
+                    s32 off, add;
+                    u32 sv;
+                    js_open(&j, '[');
+                    js_next(&j, ']', &f4);
+                    js_int(&j, &off);
+                    js_next(&j, ']', &f4);
+                    js_str(&j, &s, &n);
+                    if (!js_eq(s, n, "abs32") && !js_eq(s, n, "pc32") && !js_eq(s, n, "pc16"))
+                        return DL_R_FORMAT;
+                    type = rtype(s, n);
+                    js_next(&j, ']', &f4);
+                    js_str(&j, &s, &n);
+                    if (!resolve(m, s, n, &sv)) {
+                        static char nm[32];
+                        u32 c = n > 4 ? (n - 4 < 31 ? n - 4 : 31) : 0;
+                        dl_memcpy(nm, s + 4, c);
+                        nm[c] = 0;
+                        *what = nm;
+                        return DL_R_IMPORT;
+                    }
+                    js_next(&j, ']', &f4);
+                    js_int(&j, &add);
+                    js_next(&j, ']', &f4);
+                    if (off < 0 || (u32)off + (type == R_PC16 ? 2 : 4) > x->len)
+                        return DL_R_FORMAT;
+                    if (!put(L.sdata + x->data + off, type, sv + (u32)add, x->addr + (u32)off))
+                        return DL_R_RANGE;
+                }
+            } else {
+                js_skip(&j);
+            }
+        }
+        L.sdata_n += x->len;
+    }
+    return j.err ? DL_R_JSON : 0;
+}
+
+int dl_site_live(u32 i, u32 *addr, u32 *len)
+{
+    if (i >= L.nsites || !L.mods[L.sites[i].mod].alive)
+        return 0;
+    *addr = L.sites[i].addr;
+    *len = L.sites[i].len;
+    return 1;
+}
+
+u32 dl_sites_n(void) { return L.nsites; }
+#endif
+
 /* Pass 1: read one file into m. -> 0, or a refusal code (detail in *what). */
 static int scan(struct dmod *m, const u8 *buf, u32 len, const char **what)
 {
@@ -678,7 +943,11 @@ static int scan(struct dmod *m, const u8 *buf, u32 len, const char **what)
         return DL_R_FORMAT;
     if (!target_ok(k[K_TARGET], buf, len))
         return DL_R_TARGET;
+#ifdef DL_SITES
+    for (i = 1; i < sizeof(nok) / sizeof(nok[0]); i++)   /* sites are read below */
+#else
     for (i = 0; i < sizeof(nok) / sizeof(nok[0]); i++)
+#endif
         if (!empty(k[nok[i]], buf, len)) {
             *what = no[i];
             return DL_R_FEATURE;
@@ -724,11 +993,48 @@ static int scan(struct dmod *m, const u8 *buf, u32 len, const char **what)
             if (!js_key(&j, &s, &n))
                 return DL_R_FORMAT;
             if (js_eq(s, n, "regions")) {
+#ifdef DL_REGIONS
+                int rf = 1;
+                m->reg_first = (u16)L.nregs;
+                m->reg_n = 0;
+                if (!js_open(&j, '['))
+                    return DL_R_FORMAT;
+                while (js_next(&j, ']', &rf)) {    /* each {"name", "lo", "hi"} */
+                    int of = 1;
+                    s32 lo = 0, hi = 0;
+                    if (!js_open(&j, '{'))
+                        return DL_R_FORMAT;
+                    while (js_next(&j, '}', &of)) {
+                        const char *ks;
+                        u32 kn;
+                        if (!js_key(&j, &ks, &kn))
+                            return DL_R_FORMAT;
+                        if (js_eq(ks, kn, "lo")) {
+                            if (!js_int(&j, &lo))
+                                return DL_R_FORMAT;
+                        } else if (js_eq(ks, kn, "hi")) {
+                            if (!js_int(&j, &hi))
+                                return DL_R_FORMAT;
+                        } else if (!js_skip(&j)) {
+                            return DL_R_FORMAT;
+                        }
+                    }
+                    if ((u32)hi <= (u32)lo)
+                        return DL_R_FORMAT;
+                    if (L.nregs >= DL_REGIONS_MAX)
+                        return DL_R_LIMIT;
+                    L.regs[L.nregs].lo = (u32)lo;
+                    L.regs[L.nregs].hi = (u32)hi;
+                    L.nregs++;
+                    m->reg_n++;
+                }
+#else
                 if (!empty(j.p, buf, len)) {
                     *what = "regions";
                     return DL_R_FEATURE;
                 }
                 js_skip(&j);
+#endif
             } else if (js_eq(s, n, "names")) {
                 if (!read_list(j.p, buf, len, &m->names))
                     return DL_R_LIMIT;
@@ -847,6 +1153,13 @@ static int scan(struct dmod *m, const u8 *buf, u32 len, const char **what)
             return DL_R_FORMAT;
     }
 
+#ifdef DL_SITES
+    {
+        int code = scan_sites(m, k[K_SITES], buf, len, what);
+        if (code)
+            return code;
+    }
+#endif
     /* exports: each a symbol it defines */
     m->exp_first = (u16)L.nsyms;
     m->exp_n = 0;
@@ -912,6 +1225,54 @@ static int name_claimed(const char *name, const struct dmod *self)
     return 0;
 }
 
+#ifdef DL_REGIONS
+/* A region of m's that overlaps one the flashed build claims (the descriptor's claims of kind 2,
+ * named "<lo> <hi> <name>" in hex) or one of an earlier living mod in id order. -> the other's
+ * name (a static buffer), or 0. */
+static const char *region_clash(const struct dmod *self)
+{
+    static char who[32];
+    u32 r, i;
+    int k;
+    for (r = self->reg_first; r < (u32)self->reg_first + self->reg_n; r++) {
+        u32 lo = L.regs[r].lo, hi = L.regs[r].hi;
+        for (i = 0; i < n_claims(); i++) {
+            const char *p = pool(D32(o_claim(i) + 4));
+            s32 a = 0, b = 0;
+            u32 q = 0;
+            if (D16(o_claim(i)) != 2)
+                continue;
+            while (p[q] && p[q] != ' ')
+                q++;
+            js_parse_int(p, q, &a);
+            p += q + (p[q] == ' ');
+            q = 0;
+            while (p[q] && p[q] != ' ')
+                q++;
+            js_parse_int(p, q, &b);
+            if (lo < (u32)b && (u32)a < hi)
+                return module_name(D16(o_claim(i) + 2));
+        }
+        for (k = 0; k < L.nmods; k++) {
+            const struct dmod *o = &L.mods[L.order[k]];
+            u32 x;
+            if (o == self)
+                break;
+            if (!o->alive)
+                continue;
+            for (x = o->reg_first; x < (u32)o->reg_first + o->reg_n; x++)
+                if (lo < L.regs[x].hi && L.regs[x].lo < hi) {
+                    u32 n = dl_strlen(astr(o->id));
+                    dl_memcpy(who, astr(o->id), n < 31 ? n : 31);
+                    who[n < 31 ? n : 31] = 0;
+                    return who;
+                }
+        }
+    }
+    return 0;
+}
+#endif
+
 static int known_global(const char *name)
 {
     return global(dl_hash(name, dl_strlen(name))) != 0;
@@ -975,6 +1336,32 @@ static int check_round(void)
                 continue;
             }
         }
+#ifdef DL_SITES
+        {                                /* sites: the later of two that overlap goes */
+            const char *with = 0;
+            u32 a, b;
+            for (a = 0; a < m->site_n && !with; a++) {
+                const struct dsite *x = &L.sites[m->site_first + a];
+                for (k = 0; k < i && !with; k++) {
+                    struct dmod *o = &L.mods[L.order[k]];
+                    if (!o->alive)
+                        continue;
+                    for (b = 0; b < o->site_n; b++) {
+                        const struct dsite *y = &L.sites[o->site_first + b];
+                        if (x->addr < y->addr + y->len && y->addr < x->addr + x->len) {
+                            with = astr(o->id);
+                            break;
+                        }
+                    }
+                }
+            }
+            if (with) {
+                refuse(m, DL_R_SITE, 0, with);
+                refused++;
+                continue;
+            }
+        }
+#endif
         {                                /* exports: names the build and earlier mods lack */
             u32 e, x;
             for (e = 0; e < m->exp_n; e++) {
@@ -1009,6 +1396,16 @@ static int check_round(void)
             refused++;
             continue;
         }
+#ifdef DL_REGIONS
+        {
+            const char *who = region_clash(m);
+            if (who) {
+                refuse(m, DL_R_REGION, 0, who);
+                refused++;
+                continue;
+            }
+        }
+#endif
         for (q = 0; q < m->imports.n; q++) {
             const char *nm = L.arena + L.lists[m->imports.first + q];
             if (!known_global(nm) && !in_list(&m->weak, nm))
@@ -1257,10 +1654,18 @@ static int place(struct dmod *m, const u8 *buf, u32 len, const char **what)
             js_next(&j, ']', &f2);
             if (!put(DL_MEM(m->run_base + off), type, sv + (u32)add, m->run_base + off))
                 return DL_R_RANGE;
+
         }
         if (j.err)
             return DL_R_JSON;
     }
+#ifdef DL_SITES
+    {
+        int code = place_sites(m, k[K_SITES], buf, len, what);
+        if (code)
+            return code;
+    }
+#endif
     /* table entries: their bytes and their relocations (placed at the merge) */
     if (k[K_CONTRIBUTE]) {
         at(&j, k[K_CONTRIBUTE], buf, len);
@@ -1497,7 +1902,11 @@ static void finish(void)
     void **p[] = {(void **)&L.mods, (void **)&L.order, (void **)&L.arena, (void **)&L.lists,
                   (void **)&L.syms, (void **)&L.sym_next, (void **)&L.sym_head, (void **)&L.locals,
                   (void **)&L.ctr, (void **)&L.ent, (void **)&L.edata, (void **)&L.erel,
-                  (void **)&L.items, (void **)&L.mdata};
+                  (void **)&L.items, (void **)&L.mdata,
+#ifdef DL_SITES
+                  (void **)&L.sites, (void **)&L.sdata,
+#endif
+                  };
     u32 i;
     for (i = 0; i < sizeof p / sizeof p[0]; i++) {
         dl_free(*p[i]);
@@ -1549,6 +1958,12 @@ static int pools(int n)
     L.erel = take(L.ERELOCS * sizeof *L.erel);
     L.items = take(L.MERGE * sizeof *L.items);
     L.mdata = take(L.MDATA);
+#ifdef DL_SITES
+    L.sites = take(DL_SITES_MAX * sizeof *L.sites);
+    L.sdata = take(DL_SDATA_MAX);
+    if (!L.sites || !L.sdata)
+        return 0;
+#endif
     return L.mods && L.order && L.arena && L.lists && L.syms && L.sym_next && L.locals && L.ctr
            && L.ent && L.edata && L.erel && L.items && L.mdata;
 }
@@ -1646,6 +2061,10 @@ static void begin_line(const struct dl_choice *ch, int i, s32 have, int why)
             L.nsyms = m->exp_first;
         if (m->ctr_n)
             L.nctr = m->ctr_first;
+#ifdef DL_SITES
+        if (m->site_n)
+            L.nsites = m->site_first;
+#endif
         return;
     }
     m->alive = 1;
@@ -1846,7 +2265,9 @@ static int link_set(u32 desc, const struct dl_choice *choice, int n, u8 *buf, u3
     u32 dirty_hi = 0;                    /* the highest end any pass 2 wrote to */
     const char *what;
 
+    TRACE(1);
     b = begin(desc, choice, n, buf, max, dl_status, dl_detail);
+    TRACE(2);
     if (b <= 0) {
         dl_skip_reason = b < 0 ? DL_SKIP_MEMORY : DL_SKIP_ABI;
         return 0;
@@ -1857,8 +2278,10 @@ static int link_set(u32 desc, const struct dl_choice *choice, int n, u8 *buf, u3
         int restart = 0;
         while (check_round())
             ;
+        TRACE(3);
         if (!layout())
             continue;
+        TRACE(4);
         L.nent = L.edata_n = L.nerel = 0;
         if (dirty_hi < dl_used_hi)       /* an earlier round's pass 2 may have written past */
             dirty_hi = dl_used_hi;       /* this layout's end: zero that too */
@@ -1876,7 +2299,9 @@ static int link_set(u32 desc, const struct dl_choice *choice, int n, u8 *buf, u3
                 restart = 1;
                 break;
             }
+            TRACE(0x100 | i);
             code = place(m, buf, (u32)len, &what);
+            TRACE(0x200 | i);
             if (code) {
                 refuse(m, code, 0, what);
                 restart = 1;
@@ -1885,6 +2310,7 @@ static int link_set(u32 desc, const struct dl_choice *choice, int n, u8 *buf, u3
         if (!restart)
             break;
     }
+    TRACE(5);
     if (rounds >= 4 * DL_MAX_MODS || !bind(0)) {
         dl_skip_reason = DL_SKIP_UNSTABLE;
         for (i = 0; i < L.nmods; i++)
@@ -1895,7 +2321,30 @@ static int link_set(u32 desc, const struct dl_choice *choice, int n, u8 *buf, u3
         dl_used_hi = dl_used_lo;
         return 0;
     }
+#ifdef DL_SITES
+    if (!dl_commit_begin()) {            /* the host found no quiet moment: nothing is written */
+        dl_skip_reason = DL_SKIP_BUSY;
+        for (i = 0; i < L.nmods; i++)
+            if (L.mods[i].alive)
+                refuse(&L.mods[i], DL_R_BUSY, 0, 0);
+        if (dirty_hi > dl_used_lo)
+            dl_memset(DL_MEM(dl_used_lo), 0, dirty_hi - dl_used_lo);
+        dl_used_hi = dl_used_lo;
+        return 0;
+    }
     bind(1);
+    {
+        u32 q;
+        for (q = 0; q < L.nsites; q++)
+            if (L.mods[L.sites[q].mod].alive) {
+                dl_site_saving(L.sites[q].addr, L.sites[q].len);
+                dl_memcpy(DL_MEM(L.sites[q].addr), L.sdata + L.sites[q].data, L.sites[q].len);
+            }
+    }
+    dl_commit_end();
+#else
+    bind(1);
+#endif
     for (i = 0; i < L.nmods; i++) {
         struct dmod *m = &L.mods[L.order[i]];
         if (!m->alive)
