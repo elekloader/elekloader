@@ -361,14 +361,12 @@ def pass1(build, c, state):
             if a <= 0 or not 0 < n <= 256 or len(new) != n or len(want) != 32:
                 return c.refuse('format', note='a site')
             where = '0x%08x' % a
-            if build.main_load is None or build.image is None or a < build.main_load \
-                    or a + n > build.main_load + len(build.image):
-                return c.refuse('stock', where)
             if any(a < sa + len(dt) and sa < a + n for sa, dt in build.shadow):
                 return c.refuse('flashed', where)
-            got = build.stock_bytes(a, n)
-            if got is None or hashlib.sha256(got).digest() != want:
-                return c.refuse('stock', where)
+            if build.image is not None:             # the descriptor alone (a .build file): the unit checks
+                got = build.stock_bytes(a, n)
+                if got is None or hashlib.sha256(got).digest() != want:
+                    return c.refuse('stock', where)
             c.sites.append((a, a + n))
     for k in ('imports', 'weak', 'requires', 'conflicts'):
         if not keep_list(doc.get(k)):

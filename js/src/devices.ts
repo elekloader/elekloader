@@ -95,6 +95,7 @@ export type Device = {
   paramIds: [number, [number, number, string], [string, boolean][]] | null   // [own, [lo, hi, what], [[table, ownOnly]]]: knob id ranges (link.Mod2.idRanges)
   tableLimits: Record<string, number>           // table -> the most entries all mods together may add to it: the OS uses no more (link.check)
   driveAlign: number                            // a build descriptor's +Drive mods' area: from the flashed build's RAM end rounded up to this, to the top of the core's linker area (ddrFor); 0: none
+  driveShadow: boolean                          // the build descriptor carries the stock bytes the flashed build writes (desc.ts, shadow): its +Drive loader copies stock parts from the running OS
   dataFamily: number                            // the family id of the data container's header (0: not known)
   dataDevice: number                            // ... and its device id (0: not known)
   sramCode: Range
@@ -111,7 +112,7 @@ const rel = (version: string, syxSha256: string, mainSha256: string, mainLen: nu
 
 const base = {
   mainSection: 3, mainLoad: 0x40000400, isa: 'coldfire' as const, hmacKeyFrom: null, container: 'ele3' as const,
-  versionLen: 4, versionAt: 0x14, versionOptional: false, protected: [], relocatable: [], keep: [], blobMax: null, driveAlign: 0, dataFamily: 0, dataDevice: 0, sramCode: [0, 0] as Range, coreDdr: [] as [string, Range][], slotClaims: [] as [string, number, number, string][], paramIds: null, tableLimits: {}, fastTable: '',
+  versionLen: 4, versionAt: 0x14, versionOptional: false, protected: [], relocatable: [], keep: [], blobMax: null, driveAlign: 0, driveShadow: false, dataFamily: 0, dataDevice: 0, sramCode: [0, 0] as Range, coreDdr: [] as [string, Range][], slotClaims: [] as [string, number, number, string][], paramIds: null, tableLimits: {}, fastTable: '',
   imageFree: [], reserve: null, dspPayloads: {}, dspAreas: [], trailer: null, updateMax: null, noLink: [] as [number, number, string][],
 }
 
@@ -180,6 +181,7 @@ export const DIGITONE_MK1: Device = {
   ddr: [0x47be0000, 0x47c00000],
   coreDdr: [['4.0', [0x43ec0000, 0x44000000]]],   // core-dn1 4.0: 1.25 MB
   driveAlign: 0x1000,                              // +Drive mods' area: what the flashed build leaves of coreDdr's, from a 4 KB boundary
+  driveShadow: true,                               // TELOS copies stock parts from RAM (desc.ts, shadow)
   slotClaims: [['core_params', 8, 79, 'soundslot'],   // a parameter slot's descriptor names its sound slot at +8
     ['sdk_alpha_machines', 0, 128, 'dnmachine']],   // an SDK machine names its id at +0
   tableLimits: { sdk_alpha_machines: 15 },   // MACHINES lists 15 machines

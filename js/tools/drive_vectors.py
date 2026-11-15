@@ -110,11 +110,52 @@ def main():
                       for n in (0, 1, 6, 7, 8, 13, 14, 15, 300)],
         }
         extra['exchanges'] = _exchanges(B, blk)
+    extra['telos'] = _telos()
     path = os.path.join(ROOT, 'js', 'test', 'drive-vectors.json')
     with open(path, 'w') as fh:
         json.dump({'release': release, **extra, 'cases': rows}, fh, indent=None, separators=(',', ':'))
         fh.write('\n')
     print('wrote %s: %d cases' % (path, len(rows)))
+
+
+def _telos():
+    """TELOS's sites and regions (test_drive.test_telos_sites_and_regions) on a made-up Digitone mk1
+    build whose descriptor carries the stock shadow, as the checker sees it: the descriptor alone."""
+    from elekloader import link
+    with Bench('digitone-mk1') as B:
+        core = B.core(version='5.0', collections={'ev_tick': {'entry': 4}, 'ev_x': {'entry': 4}})
+        loader = B.other('telos', imports=['core_desc'], relocs=[['.run', 4, 'abs32', 'sym:core_desc', 0]])
+        fa = B.mod('flash-a', sites=[B.jmp_site(B.at(0x1000), 'fn_flash-a')],
+                   resources={'regions': [{'name': 'flash-a buf', 'lo': '0x45000000', 'hi': '0x45100000'}]})
+        out = link.link([link.Mod2(d, d['id']) for d in (core, loader, fa)], B.img)
+        at = desc.find(out.image)[0]
+        blk = out.image[at:at + desc.decode(out.image, at)['size']]
+        site = lambda off: B.jmp_site(B.at(off), 'fn_drive-hello')
+        reg = lambda lo, hi: {'regions': [{'name': 'r', 'lo': hex(lo), 'hi': hex(hi)}]}
+        later = T.dmod(B, 'later', sites=[dict(site(0x2002), relocs=[[2, 'abs32', 'sym:fn_later', 0]])])
+        sets = [
+            ('a site', T.files(T.hello(B, sites=[site(0x2000)]))),
+            ("a site over the flashed build's", T.files(T.hello(B, sites=[site(0x1000)]))),
+            ('a site whose stock the unit checks', T.files(T.hello(B, sites=[dict(site(0x2000), stock_sha256='00' * 32)]))),
+            ('a site with a short hash', T.files(T.hello(B, sites=[dict(site(0x2000), stock_sha256='00')]))),
+            ('two sites that overlap', T.files(T.hello(B, sites=[site(0x2000)]), later)),
+            ('a region', T.files(T.hello(B, resources=reg(0x45100000, 0x45200000)))),
+            ("a region over a flashed mod's", T.files(T.hello(B, resources=reg(0x450f0000, 0x45110000)))),
+            ('two regions that overlap', T.files(T.hello(B, resources=reg(0x45100000, 0x45200000)),
+                                                 T.dmod(B, 'later', resources=reg(0x451f0000, 0x45300000)))),
+            ('a region upside down', T.files(T.hello(B, resources=reg(0x45200000, 0x45100000)))),
+            ('a region without hi', T.files(T.hello(B, resources={'regions': [{'name': 'r', 'lo': '0x45100000'}]}))),
+        ]
+        rows = []
+        for name, files in sets:
+            r = drive.check(drive.load_build(blk), files)
+            rows.append({'name': name, 'files': [[n, _enc(raw)] for n, raw in files],
+                         'summary': drive.summary(r), 'status': drive.status_text(r), 'lines': _lines(r)})
+        d = desc.decode(blk)
+        return {'release': {'version': B.rel.version, 'syxSha256': B.rel.syx_sha256, 'mainSha256': B.rel.main_sha256,
+                            'mainLen': B.rel.main_len},
+                'build': blk.hex(), 'abi': list(d['abi']), 'claims': [list(c) for c in d['claims']],
+                'shadow': [[a, x.hex()] for a, x in d['shadow']], 'cases': rows}
 
 
 class Recorder:

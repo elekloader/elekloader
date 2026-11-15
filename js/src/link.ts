@@ -57,6 +57,11 @@ export const HASH_SEED = 5381, HASH_MUL = 33       // __run_hash: h = seed; h = 
 
 const align = (v: number, a: number) => Math.ceil(v / a) * a
 
+const cmpBytes = (a: Uint8Array, b: Uint8Array) => {             // Python's bytes order
+  for (let i = 0; i < Math.min(a.length, b.length); i++) if (a[i] !== b[i]) return a[i] - b[i]
+  return a.length - b.length
+}
+
 /** The hash of the RAM image a core copies at boot (`__run_hash`): a rolling x33 over its 32-bit
  *  big-endian words, from the seed 5381. A core hashes the copy it made and halts on a mismatch. */
 export function runHash(ddr: Uint8Array): number {
@@ -1087,9 +1092,17 @@ export function link(mods: Mod2[], image: Uint8Array, lock: store.Lock | null = 
       scopes = store.SCOPES.map(s => [s, room[s], newLock!.next[s], newLock!.generation[s]])
     }
     return { family: dev.dataFamily, device: dev.dataDevice, release: rel.dataRelease ?? 0, deviceKey: dev.key, os: rel.version, modules, tables: tabs,
-      claims: order.flatMap(m => m.names.map(nm => [desc.CLAIM_NAME, index.get(m.id)!, nm] as [number, number, string])),
+      claims: [...order.flatMap(m => m.names.map(nm => [desc.CLAIM_NAME, index.get(m.id)!, nm] as [number, number, string])),
+        ...order.flatMap(m => m.regions.map(g => [desc.CLAIM_REGION, index.get(m.id)!,
+          `0x${g.lo.toString(16)} 0x${g.hi.toString(16)} ${g.name}`] as [number, number, string]))],
       area: [w('bss_end'), ...driveArea(w('bss_end')), w('glob', desc.STAGING[0]), w('glob', desc.STAGING[1])],
-      storage: { trailer: [w('trailer'), trailerLen], scopes } }
+      storage: { trailer: [w('trailer'), trailerLen], scopes },
+      // the stock bytes of every range the flashed build writes, where the profile asks for them (driveShadow): a
+      // loader on the unit copies a mod's stock parts from the running OS, and lays these over it
+      shadow: !dev.driveShadow ? [] : order.flatMap(m => m.sites)
+        .filter(s => dev.mainLoad <= s.addr && s.addr + s.len <= dev.mainLoad + image.length)
+        .map(s => [s.addr, image.slice(s.addr - dev.mainLoad, s.addr - dev.mainLoad + s.len)] as [number, Uint8Array])
+        .sort((a, b) => a[0] - b[0] || cmpBytes(a[1], b[1])) }
   }
   let descAt = 0, descLen = 0
   if (withDesc) {
