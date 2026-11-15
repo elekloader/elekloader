@@ -76,7 +76,7 @@ export function encode(d: DescFields): Uint8Array {
   v.setUint16(0x24, d.tables.length); v.setUint16(0x26, d.claims.length)
   ;[oMod, oExp, oTab, oClm, oKey, oArea, oSto].forEach((x, i) => u32(0x28 + 4 * i, x))
   u32(0x44, str(d.deviceKey)); u32(0x48, str(d.os))
-  if (shadow.length) { u32(0x4c, oShadow); u32(0x50, shadow.length) }
+  if (shadow.length) { u32(0x58, oShadow); u32(0x5c, shadow.length) }   // clear of other 1.2 fields' words
   let o = oMod, first = 0
   d.modules.forEach((m, i) => {
     u32(o, str(m.name)); u32(o + 4, str(m.version)); b[o + 8] = m.kind; b[o + 9] = m.flags
@@ -159,7 +159,7 @@ export function decode(blk: Uint8Array, at = 0): Decoded {
     return [name(u32(o)), u32(o + 4), u32(o + 8), u32(o + 12)]
   })
   const shadow: [number, Uint8Array][] = []
-  for (let i = 0, o = u32(0x4c), n = o ? u32(0x50) : 0; i < n; i++) {
+  for (let i = 0, o = u32(0x58), n = o ? u32(0x5c) : 0; i < n; i++) {
     const len = u32(o + 4)
     shadow.push([u32(o), b.slice(o + 8, o + 8 + len)])
     o += 8 + len + ((4 - (len % 4)) % 4)

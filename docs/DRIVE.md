@@ -144,7 +144,8 @@ names offsets into its string pool (UTF-8, NUL-terminated):
 | +0x20 | u16 counts: modules, exports, tables, claims |
 | +0x28 | u32 offsets: modules, exports, tables, claims, key arrays, area record, storage record |
 | +0x44 | u32 the device key, u32 the OS version (names) |
-| +0x4c | u32 the shadow's offset, u32 its range count (ABI 1.2; 0 without one); zero to +0x60 |
+| +0x4c | zero to +0x58 |
+| +0x58 | u32 the shadow's offset, u32 its range count (ABI 1.2; 0 without one) |
 
 | record | bytes | fields |
 |---|---|---|

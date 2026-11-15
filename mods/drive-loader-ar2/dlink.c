@@ -738,9 +738,9 @@ static void stock_copy(u8 *dst, u32 a, u32 n)
 {
     u32 o, cnt, i;
     dl_stock_read(dst, a, n);            /* the host's: the running OS, or its boot-time copy */
-    if (dl_rd16(L.d + 6) < 2 || !(o = D32(0x4c)))
+    if (dl_rd16(L.d + 6) < 2 || !(o = D32(0x58)))
         return;
-    cnt = D32(0x50);
+    cnt = D32(0x5c);
     for (i = 0; i < cnt; i++) {
         u32 sa = D32(o), sn = D32(o + 4), lo, hi;
         lo = sa > a ? sa : a;
@@ -805,7 +805,7 @@ static int scan_sites(struct dmod *m, const char *p, const u8 *buf, u32 len, con
             want[i] = (u8)(hi << 4 | lo);
         }
         {                                /* over the flashed build's own writes: never */
-            u32 o = dl_rd16(L.d + 6) >= 2 ? D32(0x4c) : 0, c = o ? D32(0x50) : 0, q;
+            u32 o = dl_rd16(L.d + 6) >= 2 ? D32(0x58) : 0, c = o ? D32(0x5c) : 0, q;
             for (q = 0; q < c; q++) {
                 u32 sa = D32(o), sn = D32(o + 4);
                 if ((u32)addr < sa + sn && sa < (u32)addr + (u32)slen) {

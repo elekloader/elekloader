@@ -35,8 +35,8 @@ into its string pool (UTF-8, NUL-terminated):
   storage (12 + 16 a scope): u32 address and u32 length of the lockfile's trailer in the main OS
     image (the host's: nothing on the unit reads it), u16 scope count, u16 0, then per scope: name,
     u32 room in bits, u32 bits used, u32 generation
-  shadow (ABI 1.2, only on a device whose profile asks for it, drive_shadow): +0x4c u32 its
-    offset, +0x50 u32 its count; per range, by address: u32 address, u32 length, then the stock
+  shadow (ABI 1.2, only on a device whose profile asks for it, drive_shadow): +0x58 u32 its
+    offset, +0x5c u32 its count (0 without one: a reader takes it when the offset is not 0); per range, by address: u32 address, u32 length, then the stock
     bytes, padded to 4. Every range the flashed build writes, so a loader that copies a mod's stock
     parts on the unit copies stock's bytes where the build changed them. A block without one is
     ABI 1.1, byte for byte as before.
@@ -138,9 +138,9 @@ def encode(d):
                        len(mods), len(exports), len(tables), len(claims),
                        o_mod, o_exp, o_tab, o_clm, o_key, o_area, o_sto,
                        pool(d['device_key']), pool(d['os']))
-    if shadow:
-        head += struct.pack('>II', o_shadow, len(shadow))
     blk = bytearray(head + bytes(HEADER - len(head)) + body + raw)
+    if shadow:                                  # +0x58: clear of the header words other 1.2 fields use
+        struct.pack_into('>II', blk, 0x58, o_shadow, len(shadow))
     struct.pack_into('>I', blk, 0x0c, zlib.crc32(bytes(blk)) & 0xFFFFFFFF)
     return bytes(blk)
 
@@ -189,7 +189,7 @@ def decode(blk, at=0):
     t_at, t_len, nsc, _z = struct.unpack_from('>IIHH', b, o_sto)
     scopes = [(name(n), r, u, g) for n, r, u, g in
               (struct.unpack_from('>4I', b, o_sto + 12 + SCOPE * i) for i in range(nsc))]
-    o_shadow, nshadow = struct.unpack_from('>II', b, 0x4c)
+    o_shadow, nshadow = struct.unpack_from('>II', b, 0x58)
     shadow, o = [], o_shadow
     for _ in range(nshadow if o_shadow else 0):
         addr, n = struct.unpack_from('>II', b, o)
