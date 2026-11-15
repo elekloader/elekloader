@@ -2211,6 +2211,8 @@ def test_core_a4mk2_0_7_std_midi_sites():
     import re
     root = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
     mdir = os.path.join(root, 'mods', 'core-a4mk2')
+    if not os.path.exists(os.path.join(mdir, 'mod.json')):
+        return      # under Pyodide (tests/test_web.mjs): a few of the repository's files, not its folders
     with open(os.path.join(mdir, 'mod.json'), encoding='utf-8') as fh:
         doc = json.load(fh)
     events = ('ev_midi_in', 'ev_sysex_in', 'ev_midi_cc', 'ev_midi_pc', 'ev_midi_out', 'ev_seq_midi',
@@ -2252,6 +2254,8 @@ def test_core_a4mk2_0_7_voice_events():
     import re
     root = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
     mdir = os.path.join(root, 'mods', 'core-a4mk2')
+    if not os.path.exists(os.path.join(mdir, 'mod.json')):
+        return      # under Pyodide (tests/test_web.mjs): a few of the repository's files, not its folders
     with open(os.path.join(mdir, 'mod.json'), encoding='utf-8') as fh:
         doc = json.load(fh)
     assert doc['std']['ev_voice_start'] == 'std_voice_start'
@@ -2285,6 +2289,8 @@ def test_core_a4mk2_0_7_std_map():
     import re
     root = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
     mdir = os.path.join(root, 'mods', 'core-a4mk2')
+    if not os.path.exists(os.path.join(mdir, 'mod.json')):
+        return      # under Pyodide (tests/test_web.mjs): a few of the repository's files, not its folders
     with open(os.path.join(mdir, 'mod.json'), encoding='utf-8') as fh:
         doc = json.load(fh)
     with open(os.path.join(root, 'elekloader', 'sdk', 'include', 'std1.h'), encoding='utf-8') as fh:
@@ -2332,6 +2338,8 @@ def test_core_a4mk2_0_7_ui_sites():
     import re
     root = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
     mdir = os.path.join(root, 'mods', 'core-a4mk2')
+    if not os.path.exists(os.path.join(mdir, 'mod.json')):
+        return      # under Pyodide (tests/test_web.mjs): a few of the repository's files, not its folders
     with open(os.path.join(mdir, 'mod.json'), encoding='utf-8') as fh:
         doc = json.load(fh)
     with open(os.path.join(mdir, 'ui.s'), encoding='utf-8') as fh:
