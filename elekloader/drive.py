@@ -64,9 +64,15 @@ CODES = {
     18: ('range', 'a 16-bit PC-relative reference is out of range'),
     19: ('limit', 'past the loader\'s own limits'),
     20: ('count', 'more than 256 mods are chosen'),
+    # TELOS on the Digitone mk1 (a build whose descriptor carries the stock shadow): sites and regions
+    21: ('site', 'a site overlaps one of {detail}'),
+    22: ('flashed', 'a site at {detail} overlaps what the flashed build writes'),
+    24: ('stock', 'the bytes at {detail} are not stock\'s'),
+    26: ('busy', 'no quiet moment to write the sites in'),
+    27: ('region', 'a region overlaps one of {detail}'),
 }
 CODE = {name: c for c, (name, _m) in CODES.items()}
-BOOT_ONLY = ('missing', 'changed')     # the host has the files it is given
+BOOT_ONLY = ('missing', 'changed', 'busy')   # the host has the files it is given; busy is the unit's moment
 SKIPS = {0: 'none', 1: 'key', 2: 'armed', 3: 'drive', 4: 'abi', 5: 'unstable', 6: 'count', 7: 'memory'}
 SKIP = {v: k for k, v in SKIPS.items()}
 NO_FIELDS = ('sites', 'collections', 'copied', 'storage', 'sharc')   # pass 1 refuses them, in order
@@ -103,6 +109,15 @@ class Build:
         self.tables = d['tables']                        # in descriptor order (by name)
         self.table = {t['name']: i for i, t in enumerate(self.tables)}
         self.claims = [nm for kind, _mi, nm in d['claims'] if kind == desc.CLAIM_NAME]
+        # TELOS (a descriptor with the stock shadow, ABI 1.2): sites and regions are taken, checked
+        # as the boot linker checks them (DL_SITES, DL_REGIONS)
+        self.shadow = d.get('shadow') or []
+        self.telos = bool(self.shadow)
+        self.regions = []
+        for kind, mi, nm in d['claims']:
+            if kind == getattr(desc, 'CLAIM_REGION', 2):
+                lo, hi = nm.split(' ')[:2]
+                self.regions.append((int(lo, 0), int(hi, 0), d['modules'][mi]['name']))
         self.ram_end, self.lo, self.hi, self.staging, self.staging_size = d['area']
         # the global names, in the boot linker's order: flashed exports, tables, NAME_n, core_desc
         self.globals = {}
@@ -151,6 +166,19 @@ class Build:
         o = addr - self.main_load
         b = bytes(self.image[o:o + n])
         return b if len(b) == n else None
+
+    def stock_bytes(self, addr, n):
+        """Stock's bytes at addr: the running main OS with the shadow (what the flashed build wrote
+        there, as stock had it) over it, as TELOS's stock_copy. None without an image."""
+        b = self.stock(addr, n)
+        if b is None:
+            return None
+        b = bytearray(b)
+        for sa, data in self.shadow:
+            lo, hi = max(sa, addr), min(sa + len(data), addr + n)
+            if lo < hi:
+                b[lo - addr:hi - addr] = data[lo - sa:hi - sa]
+        return bytes(b)
 
     def label(self):
         core = self.modules[0]
@@ -201,6 +229,7 @@ class Choice:
         self.label = name                       # the record's id: the file name, then the mod's id
         self.mod = self.id = None
         self.exports = []
+        self.sites, self.regions = [], []        # TELOS: [lo, hi) each
         self.alive = False
 
     def refuse(self, code, detail='', arg=0, note='', state=REFUSED):
@@ -293,6 +322,8 @@ def pass1(build, c, state):
         return c.refuse('target', note='%s %s' % (tgt.get('device'), tgt.get('os'))
                         if isinstance(tgt, dict) else 'no target')
     for f in NO_FIELDS:
+        if f == 'sites' and build.telos:
+            continue
         if not _empty(doc.get(f)):
             return c.refuse('feature', f)
     secs = doc.get('sections')
@@ -306,11 +337,39 @@ def pass1(build, c, state):
         return c.refuse('format', note='its resources')
     for k, v in (res or {}).items():            # in the file's order, as the boot linker reads it
         if k == 'regions' and not _empty(v):
-            return c.refuse('feature', 'regions')
+            if not build.telos:
+                return c.refuse('feature', 'regions')
+            try:
+                c.regions = [(int(str(g['lo']), 0), int(str(g['hi']), 0)) for g in v]
+            except (TypeError, ValueError, KeyError):
+                return c.refuse('format', note='resources.regions')
+            if any(hi <= lo for lo, hi in c.regions):
+                return c.refuse('format', note='resources.regions')
         if k == 'names' and not keep_list(v):
             return c.refuse('limit', note='resources.names')
         if k == 'core' and v is not None and not (isinstance(v, str) and keep(v)):
             return c.refuse('format', note='resources.core')
+    if build.telos and not _empty(doc.get('sites')):      # pass 1's checks of each site (dlink.c, scan_sites)
+        import hashlib
+        for x in doc['sites']:
+            try:
+                a, n = int(str(x['addr']), 0), int(x['len'])
+                want = bytes.fromhex(x['stock_sha256'])
+                new = bytes.fromhex(x['new'])
+            except (TypeError, ValueError, KeyError):
+                return c.refuse('format', note='a site')
+            if a <= 0 or not 0 < n <= 256 or len(new) != n or len(want) != 32:
+                return c.refuse('format', note='a site')
+            where = '0x%08x' % a
+            if build.main_load is None or build.image is None or a < build.main_load \
+                    or a + n > build.main_load + len(build.image):
+                return c.refuse('stock', where)
+            if any(a < sa + len(dt) and sa < a + n for sa, dt in build.shadow):
+                return c.refuse('flashed', where)
+            got = build.stock_bytes(a, n)
+            if got is None or hashlib.sha256(got).digest() != want:
+                return c.refuse('stock', where)
+            c.sites.append((a, a + n))
     for k in ('imports', 'weak', 'requires', 'conflicts'):
         if not keep_list(doc.get(k)):
             return c.refuse('limit', note=k)
@@ -406,6 +465,10 @@ def _round(build, order):
                 w = next((o.id for o in earlier if o.id in m.conflicts or c.id in o.mod.conflicts), None)
             if w is not None:
                 why = ('conflicts', w)
+        if why is None and c.sites:                 # sites: the later of two that overlap goes
+            w = next((o.id for o in earlier for a, b in c.sites for x, y in o.sites if a < y and x < b), None)
+            if w is not None:
+                why = ('site', w)
         if why is None:
             x = next((x for x in c.exports if x in build.globals
                       or any(x in o.exports for o in earlier)), None)
@@ -415,6 +478,12 @@ def _round(build, order):
             x = next((n for n in m.names if n in build.claims or any(n in o.mod.names for o in earlier)), None)
             if x is not None:
                 why = ('claim', x)
+        if why is None and c.regions:               # regions: the flashed build's, then earlier mods'
+            w = next((nm for a, b in c.regions for x, y, nm in build.regions if a < y and x < b), None)
+            if w is None:
+                w = next((o.id for o in earlier for a, b in c.regions for x, y in o.regions if a < y and x < b), None)
+            if w is not None:
+                why = ('region', w)
         if why is None:
             x = next((x for x in m.imports if not _resolvable(build, alive, x) and x not in m.weak), None)
             if x is not None:
@@ -511,7 +580,7 @@ def _pass2(build, c, base, glob, edata):
             if p[0] == 'hex':
                 run += p[1]
             else:
-                b = build.stock(p[1], p[2])
+                b = build.stock_bytes(p[1], p[2])
                 if b is None:
                     raise ModError('%s copies stock bytes at 0x%08x: link it against a built image, '
                                    'not a .build file' % (m.label(), p[1]))
