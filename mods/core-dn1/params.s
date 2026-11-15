@@ -65,6 +65,16 @@
         .globl  core_dn_boot
 core_dn_boot:
         move.l  %a2, -(%sp)
+        | 0. (5.4) The OS image as the bootloader left it, before core or the OS
+        |    writes anything, to CORE_STOCK_COPY in the bulk area: a loader that
+        |    links mods at run time (TELOS) reads stock bytes from it, where the
+        |    OS has since changed its data (core_stock_info, in .run).
+        lea     0x40000400, %a0
+        movea.l #CORE_STOCK_COPY, %a1
+        move.l  #CORE_IMAGE_LEN / 4, %d0
+0:      move.l  (%a0)+, (%a1)+
+        subq.l  #1, %d0
+        bne.s   0b
         | 1. The tables at PARAM_FREE move to core_ptab_save.
         lea     core_ptab_save, %a1
         bsr.w   run2load
@@ -364,6 +374,13 @@ core_param_install:
 9:      movem.l (%sp), %d2/%a2-%a3
         lea     12(%sp), %sp
         rts
+
+| core_stock_info (5.4): {where, bytes} of the OS image's copy core_dn_boot made
+| before the OS ran (0x40000400 on), for a loader's stock bytes.
+        .balign 4
+        .globl  core_stock_info
+core_stock_info:
+        .long   CORE_STOCK_COPY, CORE_IMAGE_LEN
 
 | The two tables from PARAM_FREE, filled at boot.
         .balign 4
