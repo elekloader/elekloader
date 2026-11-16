@@ -393,7 +393,7 @@ static void boot(void)
 }
 
 /* ev_tick: the MODS page's frames (page.c), and the crash guard comes off 10 s into
- * ticking; after a boot that applied a site (dl_sites_n), 60 s in and once the MODS page
+ * ticking; after a boot that applied a site (dl_applied_n), 60 s in and once the MODS page
  * doesn't show, whichever is later, so a site that breaks a page or the audio is caught. */
 void dl_page_tick(void *ctrl);
 int dl_page_shown(void);
@@ -401,9 +401,9 @@ int dl_page_shown(void);
 void dl_tick(void *ctrl)
 {
     dl_page_tick(ctrl);
-    if (!armed || ++armed_ticks < (dl_sites_n ? CRASH_TICKS_SITES : CRASH_TICKS))
+    if (!armed || ++armed_ticks < (dl_applied_n ? CRASH_TICKS_SITES : CRASH_TICKS))
         return;
-    if (dl_sites_n && dl_page_shown())
+    if (dl_applied_n && dl_page_shown())
         return;
     armed = 0;
     dl_lock();

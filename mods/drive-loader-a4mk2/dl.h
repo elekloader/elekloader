@@ -57,10 +57,11 @@ enum {
     DL_R_RANGE = 18,                     /* a pc16 reference out of range */
     DL_R_LIMIT = 19,                     /* past the loader's own limits (symbols, entries) */
     DL_R_COUNT = 20,                     /* more than DL_MAX_MODS lines in /mods/active */
-    DL_R_STORE = 21,                     /* +Drive storage room is short (detail: "WHAT NEED HAVE") */
-    DL_R_SITE = 22,                      /* a site or copied block clashes (arg: kind << 8 | line; detail: address) */
+    /* 21 to 28 are TELOS's (drive-loader-ar2's dl.h, DL_SITES and DL_REGIONS) */
+    DL_R_STORE = 29,                     /* +Drive storage room is short (detail: "WHAT NEED HAVE") */
+    DL_R_CLASH = 30,                     /* a site or copied block clashes (arg: kind << 8 | line; detail: address) */
 };
-enum { DL_SITE_CORE = 1, DL_SITE_MOD, DL_SITE_PRELINK, DL_SITE_STOCK };   /* DL_R_SITE's kind */
+enum { DL_SITE_CORE = 1, DL_SITE_MOD, DL_SITE_PRELINK, DL_SITE_STOCK };   /* DL_R_CLASH's kind */
 
 /* Why nothing was linked (dl_skip_reason). */
 enum { DL_SKIP_NONE, DL_SKIP_KEY, DL_SKIP_ARMED, DL_SKIP_DRIVE, DL_SKIP_ABI, DL_SKIP_UNSTABLE, DL_SKIP_COUNT,
@@ -158,7 +159,7 @@ int dl_area(u32 desc, u32 *lo, u32 *hi);
 /* The main OS a site may change runs from DL_MAIN_LO (the Rytm's and the A4's main_load) to the build's boot
  * copier, the first byte the flashed build appends (its site map's kind 4). */
 #define DL_MAIN_LO 0x40000400u
-/* The sites the boot applied, in id order and each mod's own order: dl_sites_n of them, with
+/* The sites the boot applied, in id order and each mod's own order: dl_applied_n of them, with
  * their stock bytes from dl_site_orig + orig, kept from the boot on (the heap). A later check
  * reads a site's stock bytes through them, and /mods/.status lists them. */
 struct dl_site {
@@ -169,7 +170,7 @@ struct dl_site {
 };
 extern struct dl_site *dl_sites;
 extern u8 *dl_site_orig;
-extern u32 dl_sites_n;
+extern u32 dl_applied_n;
 /* Write one site's bytes: interrupts masked (SR 0x2700), then the data cache's lines over it
  * pushed (flush.s). dl_flush after the last one invalidates the instruction cache. */
 void dl_apply_site(u32 addr, const u8 *src, u32 len);

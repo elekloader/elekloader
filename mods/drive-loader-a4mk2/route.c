@@ -91,7 +91,7 @@ struct dl_site_rec {
     unsigned orig;
 };
 extern struct dl_site_rec *dl_sites __attribute__((weak));
-extern unsigned dl_sites_n __attribute__((weak));
+extern unsigned dl_applied_n __attribute__((weak));
 extern volatile int dl_check_n __attribute__((weak));   /* the MODS page's check: files done, -1 none yet */
 extern volatile int dl_check_all __attribute__((weak)); /* ... of the open folder's files */
 extern char dl_check_dir[] __attribute__((weak));       /* ... that folder, below DL_DIR */
@@ -480,7 +480,7 @@ static int status_text(void)
     if (!&dl_status || !dl_status)
         n = 0;
     want = STATUS_HEAD + STATUS_LINE * (unsigned)n
-         + STATUS_SITE * (&dl_sites_n && &dl_sites && dl_sites ? dl_sites_n : 0);
+         + STATUS_SITE * (&dl_applied_n && &dl_sites && dl_sites ? dl_applied_n : 0);
     if (want > dl_status_cap) {              /* the records are the boot's: this happens once */
         char *t = NEW(want);
         if (!t)
@@ -569,9 +569,9 @@ static int status_text(void)
         }
         at = cat(at, end, "\n");
     }
-    if (&dl_sites_n && &dl_sites && dl_sites) {   /* each applied site, by its mod, in id order */
+    if (&dl_applied_n && &dl_sites && dl_sites) {   /* each applied site, by its mod, in id order */
         unsigned k;
-        for (k = 0; k < dl_sites_n; k++) {
+        for (k = 0; k < dl_applied_n; k++) {
             const struct dl_site_rec *t = &dl_sites[k];
             char id[29];
             int d;
