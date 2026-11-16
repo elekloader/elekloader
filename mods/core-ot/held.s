@@ -113,11 +113,13 @@ core_note_\addr:
         NOTE    0x4009fbb2, d1
         NOTE    0x4009fcfa, d0
 
-| ---- the scene-lock knob (core-ot 0.20) ---------------------------------------------------------------------
-| 0x40053498 (was: lea -36(sp),sp ; movem.l d2-d7/a2-a4,(sp)), the knob handler a held scene puts over every
-| encoder (its seven records at 0x400bae86 + 22 n point at it): 4(sp) the encoder, 8(sp) the turn; it
-| returns nothing. octabam's SCENES P2 and MIDI SCENES (MIT) take it to lock what stock cannot. Handlers:
-| int f(unsigned enc, int delta), the first nonzero takes the turn and stock's handler does not run.
+| ---- the scene-lock knob (core-ot 0.20; SCENE B and the scene argument 0.42) ---------------------------------
+| 0x40053498 (was: lea -36(sp),sp ; movem.l d2-d7/a2-a4,(sp)), the knob handler SCENE A held puts over every
+| encoder (its seven records at 0x400bae86 + 22 n point at it), and 0x40052e98 (was: lea -32(sp),sp ;
+| movem.l d2-d7/a2-a3,(sp)), SCENE B's (records 0x400bb1f4 + 22 n): 4(sp) the encoder, 8(sp) the turn; they
+| return nothing. octabam's SCENES P2 and MIDI SCENES (MIT) take A's to lock what stock cannot. Handlers:
+| int f(unsigned enc, int delta, unsigned scene) (scene 0 A, 1 B), the first nonzero takes the turn and
+| stock's handler does not run.
         .globl  core_scene_knob
 core_scene_knob:
         tst.l   ev_scene_knob
@@ -127,11 +129,12 @@ core_scene_knob:
         lea     ev_scene_knob, %a2
 1:      move.l  (%a2)+, %d1
         beq.s   2f
-        move.l  28(%sp), -(%sp)         | the turn
-        move.l  28(%sp), -(%sp)         | the encoder
+        pea     0                       | the scene: 0 A, 1 B
+        move.l  32(%sp), -(%sp)         | the turn
+        move.l  32(%sp), -(%sp)         | the encoder
         movea.l %d1, %a0
         jsr     (%a0)
-        addq.l  #8, %sp
+        lea     12(%sp), %sp
         tst.l   %d0
         beq.s   1b
         movem.l (%sp), %d0-%d1/%a0-%a2  | taken
@@ -142,6 +145,32 @@ core_scene_knob:
 9:      lea     -36(%sp), %sp
         movem.l %d2-%d7/%a2-%a4, (%sp)
         jmp     0x400534a0
+
+        .globl  core_scene_knob_b
+core_scene_knob_b:
+        tst.l   ev_scene_knob
+        beq.s   9f
+        lea     -20(%sp), %sp
+        movem.l %d0-%d1/%a0-%a2, (%sp)
+        lea     ev_scene_knob, %a2
+1:      move.l  (%a2)+, %d1
+        beq.s   2f
+        pea     1                       | the scene: 0 A, 1 B
+        move.l  32(%sp), -(%sp)         | the turn
+        move.l  32(%sp), -(%sp)         | the encoder
+        movea.l %d1, %a0
+        jsr     (%a0)
+        lea     12(%sp), %sp
+        tst.l   %d0
+        beq.s   1b
+        movem.l (%sp), %d0-%d1/%a0-%a2  | taken
+        lea     20(%sp), %sp
+        rts
+2:      movem.l (%sp), %d0-%d1/%a0-%a2
+        lea     20(%sp), %sp
+9:      lea     -32(%sp), %sp
+        movem.l %d2-%d7/%a2-%a3, (%sp)
+        jmp     0x40052ea0
 
 | ---- ARP SETUP's knobs (core-ot 0.21) --------------------------------------------------------------------
 | 0x4007a2ec (was: lea -36(sp),sp ; movem.l d2-d7/a2-a4,(sp)), ARP SETUP's encoder handler (its seven

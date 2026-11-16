@@ -636,6 +636,21 @@ struct ot_menu_row {
  * the low byte the action (0x10 start, 0x40 update, 0x80 stop), bit 15 set by some paths (TRACK+REC1 gives
  * 0x9010 then 0x1010); quant 1 = parked for the next step when trig quantization is on. Watch only. Not seen: sequencer REC trigs, stops written
  * to the mailbox, takes ended by their length (ev_rec_length). */
+/* 0.42 (ui.s, moments.s): void ev_page(old, new): a main page becomes current (SRC 0, LFO 1, AMP 2, FX1 3,
+ * FX2 4). int ev_track_select(old, new, how): how 0 before select_track (nonzero = refused), 1 the AUDIO/MIDI
+ * swap, after it. void ev_window(op, window, a, ra): op 0 created (a = its level), 1 about to be destroyed
+ * (a = its holder); ra = the opener's or closer's return address, the only name a window has. int
+ * ev_crossfader(value, source): source 0 panel, 1 MIDI CC 48; returns 0..127 to store or -1 for stock's.
+ * uint32_t ev_tempo_set(tempo, source, ra): the tempo set outside a commit (bpm*24): source 0 set_tempo (TAP,
+ * PICKUP, arrangement rows, project load/new), 1 the TEMPO window's knob and arrows, 2 the MIDI clock follower
+ * (watch only); nonzero = set this instead (clamped 720..7200). int ev_pattern_select(bank, pattern, ra,
+ * queued): a pattern picked; nonzero refuses PTN+TRIG, the BANK window and MIDI program change (loads and
+ * stop only watch). void ev_pattern_edited(trk, bank, pattern, load): a pattern rebuilt (trk 0-7 audio, 8-15
+ * MIDI, -1 all) after an edit or a track change (load 0), or a load or stop (load 1). int ev_arr_mode(on): ARRANGEMENT entered (on 1, nonzero =
+ * refused) or left (0, after). void ev_arr_row(row, how): the arranger took a row: how 0 set/cue, 1 start,
+ * 2 advance (sequencer interrupt), 3 end/chain. int ev_track_play(trk, slot, flags, mode): a live trig (slot
+ * -1 = the Part's); nonzero refuses it. ev_scene_knob also fires for SCENE B and gains a third argument,
+ * scene (0 A, 1 B). */
 #define OT_DSP_FEED1_MAX    256u
 int ot_dsp_feed1(const volatile void *block, unsigned words, unsigned at);
 extern volatile uint32_t ot_dsp1_fed;

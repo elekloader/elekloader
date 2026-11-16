@@ -1,0 +1,21 @@
+{
+ "id": "ui42-probe", "version": "1",
+ "license": "GPL-2.0-or-later",
+ "title": "core-ot 0.42 probe", "category": "Test", "author": "irpina",
+ "description": "A probe of core-ot 0.42's events: logs each call in order; a poked word makes ev_track_select, ev_track_play or ev_pattern_select refuse.",
+ "device": "octatrack", "os": "1.40C",
+ "sources": ["probe.c"],
+ "subscribe": [{"event": "ev_page", "fn": "u_page", "order": 50},
+               {"event": "ev_track_select", "fn": "u_track", "order": 50},
+               {"event": "ev_window", "fn": "u_window", "order": 50},
+               {"event": "ev_crossfader", "fn": "u_xfade", "order": 50},
+               {"event": "ev_tempo_set", "fn": "u_tempo", "order": 50},
+               {"event": "ev_pattern_select", "fn": "u_psel", "order": 50},
+               {"event": "ev_pattern_edited", "fn": "u_pedit", "order": 50},
+               {"event": "ev_arr_mode", "fn": "u_arrmode", "order": 50},
+               {"event": "ev_arr_row", "fn": "u_arrrow", "order": 50},
+               {"event": "ev_track_play", "fn": "u_play", "order": 50},
+               {"event": "ev_scene_knob", "fn": "u_scene", "order": 50}],
+ "requires": ["core"],
+ "resources": {"core": "0.42"}
+}
