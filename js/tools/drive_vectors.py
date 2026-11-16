@@ -148,11 +148,18 @@ def _telos():
             ('a region upside down', T.files(T.hello(B, resources=reg(0x45200000, 0x45100000)))),
             ('a region without hi', T.files(T.hello(B, resources={'regions': [{'name': 'r', 'lo': '0x45100000'}]}))),
         ]
+        early = [[B.at(0x3000), B.at(0x3010)]]       # as a profile's drive_early (the Octatrack's) gives them
+        sets += [('a site in what the OS used before the link', T.files(T.hello(B, sites=[site(0x300c)])), early),
+                 ('a site just after it', T.files(T.hello(B, sites=[site(0x3010)])), early)]
         rows = []
-        for name, files in sets:
-            r = drive.check(drive.load_build(blk), files)
-            rows.append({'name': name, 'files': [[n, _enc(raw)] for n, raw in files],
-                         'summary': drive.summary(r), 'status': drive.status_text(r), 'lines': _lines(r)})
+        for name, files, *ea in sets:
+            b = drive.load_build(blk)
+            if ea:
+                b.early = [tuple(x) for x in ea[0]]
+            r = drive.check(b, files)
+            rows.append(dict({'name': name, 'files': [[n, _enc(raw)] for n, raw in files],
+                              'summary': drive.summary(r), 'status': drive.status_text(r), 'lines': _lines(r)},
+                             **({'early': ea[0]} if ea else {})))
         d = desc.decode(blk)
         return {'release': {'version': B.rel.version, 'syxSha256': B.rel.syx_sha256, 'mainSha256': B.rel.main_sha256,
                             'mainLen': B.rel.main_len},

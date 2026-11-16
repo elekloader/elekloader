@@ -4042,6 +4042,7 @@ core has.
 | `collections`, `contribute` | tables you declare (`{"entry": 4}`, or just the entry size; a core may add `"spare"`, `"max"` and `"render"`, DRIVE.md, "The build descriptor"), and entries you add to others' ([FORMAT.md](FORMAT.md)) |
 | `weak` | names you import that may be missing; they then read as zero |
 | `dsp`, `subscribe_dsp` | DSP code, on a device whose OS runs some (below, "DSP code") |
+| `dsp_load` | DSP code sent at run time on the Octatrack, by dspload-ot 0.2 (its README): `{"source", "entry", "name"}`; a TELOS mod from the card can have it |
 | `resources`, `requires`, `conflicts` | rules 9 and 11 |
 | `ports` | the same mod for other OS versions of the device: per OS, the keys that differ there (3.10) |
 

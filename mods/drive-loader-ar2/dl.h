@@ -55,6 +55,8 @@ enum {
     /* the Octatrack's TELOS (DL_SITES): mods that write sites */
     DL_R_SITE = 21,                      /* a site overlaps another mod's (detail: its id) */
     DL_R_FLASHED = 22,                   /* a site overlaps a range the flashed build wrote (detail: where) */
+    DL_R_EARLY = 23,                     /* a site lies in code or data the OS used before the link and won't
+                                          * again before it matters (DL_EARLY; detail: where) */
     DL_R_STOCK = 24,                     /* a site's bytes are not stock's on the unit (detail: where) */
     DL_R_BUSY = 26,                      /* no quiet moment to write the sites in */
     /* DL_REGIONS (TELOS on the Digitone mk1, POC): mods that claim regions of the bulk area */
@@ -138,6 +140,9 @@ int dl_region_ok(u32 lo, u32 hi);       /* [lo, hi) inside one of the device's f
 #define DL_SDATA_MAX 0x8000u
 void dl_sha256(const u8 *p, u32 n, u8 out[32]);
 int dl_site_ok(u32 addr, u32 len);       /* a range a mod may write: the OS image's code and data */
+#ifdef DL_EARLY
+int dl_site_early(u32 addr, u32 len);    /* -> 1: the OS used it before the link, once (the host's list) */
+#endif
 void dl_stock_read(u8 *dst, u32 addr, u32 n);  /* the OS image's bytes as they were before the OS ran */
 void dl_site_saving(u32 addr, u32 len);  /* the commit is about to write a site: keep what it replaces */
 int dl_commit_begin(void);

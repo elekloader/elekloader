@@ -9,6 +9,7 @@ variables; a test whose inputs are missing is skipped, not passed:
 Building mods/core-ot also needs the cross assembler (m68k-linux-gnu-as).
 """
 import glob
+import shutil
 import json
 import re
 import os
@@ -2200,7 +2201,12 @@ def test_the_settings_companion():
     assert struct.unpack('>I', ln.image[o:o + 4])[0] == ln.map['ots_root_rows']
     o = 0x400cbd8c - DEV.main_load
     assert struct.unpack('>I', ln.image[o:o + 4])[0] == 5
-    assert j['resources']['core'] == '0.6'
+    # 0.2: rows that aren't settings (TELOS's card mods) come from ot_mod_rows, built again at the
+    # card's mount (ev_card, core 0.41)
+    assert j['resources']['core'] == '0.41'
+    assert j['collections'] == {'ot_mod_rows': 4}
+    assert {'event': 'ev_card', 'fn': 'ots_settings_card', 'order': 90} in j['subscribe']
+    assert 'ot_mod_rows' in ln.tables
 
 
 def _c_defs(path):
@@ -3427,6 +3433,7 @@ def test_the_machines_companion_lists_a_machine():
 
 HOOK = 0x400ef758               # payload A's P:0x88, move r2,x:>$204 (627000 000204)
 AREA = 0x400f1771               # payload A's P:0xaa8, SPATIALIZER's first word
+AREA_B = 0x401046c2             # payload B's P:0x868, SPATIALIZER's first word on core 1 (dspload-ot)
 
 
 def le24(*ws):
@@ -3476,7 +3483,7 @@ def test_dsp_payloads_parse():
     assert dsp.p_span(img, DEV, 'A', 0x88, 0x8a) == HOOK
     assert img[HOOK - DEV.main_load:HOOK - DEV.main_load + 6] == le24(0x627000, 0x000204)
     for tag, lo, hi, _nm, _w in DEV.dsp_areas:
-        assert dsp.p_span(img, DEV, tag, lo, hi) == AREA
+        assert dsp.p_span(img, DEV, tag, lo, hi) == {'A': AREA, 'B': AREA_B}[tag]
     expect(lambda: dsp.p_span(img, DEV, 'A', 0x0, 0x100000), 'does not load P:0x00000-0xfffff')
     expect(lambda: dsp.records(img, DEV, 'C'), 'has no DSP payload C')
 
@@ -3783,6 +3790,127 @@ def test_the_dsp_tone_example():
     o = AREA - DEV.main_load
     assert ln.image[o:o + len(want)] == want
     assert words(ln.image, AREA + 3 * n, 5) == [0x627000, 0x000204, 0x0bf080, 0xaa8, 0x0c]
+
+
+def test_the_dsp_loader():
+    """mods/dspload-ot: payload B's SPATIALIZER (P:0x868-0x96c, its dispatch words X:0x21a and
+    X:0x23a, both read from the stock payload) is freed for the copier, payload B's frame head
+    P:0x76 calls ev_dsp_b, and the dispatcher is an entry of ev_dsp_rx."""
+    from elekloader.sdk import build
+    if not os.path.isfile(os.environ.get('ELEKLOADER_DSP_ASM', '')):
+        raise Skip("ELEKLOADER_DSP_ASM (octabam's dsp_asm) not given")
+    st, img = stock()
+
+    def word(tag, space, addr):
+        for sp, a, cnt, at in dsp.records(img, DEV, tag):
+            if sp == space and a <= addr < a + cnt:
+                return dsp.w24(img, at + 3 * (addr - a) - DEV.main_load), at + 3 * (addr - a)
+    init, init_at = word('B', 1, 0x21a)
+    proc, proc_at = word('B', 1, 0x23a)
+    assert (init, proc) == (0x868, 0x872)               # SPATIALIZER on core 1, as on core 0 (0xaa8, 0xab2)
+    assert word('B', 1, 0x215)[0] == 0x588 and word('B', 1, 0x235)[0] == 0x589   # the null stubs
+    assert word('B', 1, 0x221)[0] == 0x96d             # the next effect's init starts right after it
+    assert word('B', 0, 0x96c)[0] == 0x00000c           # SPATIALIZER's last word is its rts
+    hook, hook_at = word('B', 0, 0x76)
+    assert (hook, word('B', 0, 0x77)[0]) == (0x667000, 0x000207)    # move r6,x:>$207
+    j = json.load(open(os.path.join(ROOT, 'mods', 'dspload-ot', 'mod.json')))
+    sites = {int(x['addr'], 16): x for x in j['sites']}
+    assert sites[hook_at]['stock'] == le24(0x667000, 0x000207).hex()
+    assert sites[init_at]['new'] == le24(0x588).hex() and sites[proc_at]['new'] == le24(0x589).hex()
+    assert j['collections']['ev_dsp_b']['head'] == le24(0x667000, 0x000207).hex()
+    with tempfile.TemporaryDirectory() as tmp:
+        core = elemod.load_any(build.build(os.path.join(ROOT, 'mods', 'core-ot'), SYX, tmp)[0])
+        bus = elemod.load_any(build.build(os.path.join(ROOT, 'mods', 'dspbus-ot'), SYX, tmp)[0])
+        ld = elemod.load_any(build.build(os.path.join(ROOT, 'mods', 'dspload-ot'), SYX, tmp)[0])
+    ln = link.link([core, bus, ld], img)
+    assert ln.layout['dsp']['B']['area'] == [0x868, 0x96d]
+    assert ln.tables['ev_dsp_b'][1] == 1 and ln.tables['ev_dsp_rx'][1] == 1
+    assert words(ln.image, hook_at, 2) == [0x0bf080, ln.map['ev_dsp_b']]   # jsr >ev_dsp_b
+    assert words(ln.image, init_at, 1) == [0x588] and words(ln.image, proc_at, 1) == [0x589]
+
+
+
+def test_dsp_load():
+    """mod.json "dsp_load" (dspload-ot 0.2): the SDK assembles the source into a struct ot_dsp_blob and
+    adds it to dspload's ot_dsp_blobs table; and pump.c's guard stub is what dsp_asm makes of
+    mods/dspload-ot/stub.asm, with the four addresses it fills in at 1, 7, 13 and 18."""
+    from elekloader.sdk import build
+    if not os.path.isfile(os.environ.get('ELEKLOADER_DSP_ASM', '')):
+        raise Skip("ELEKLOADER_DSP_ASM (octabam's dsp_asm) not given")
+    st, img = stock()
+    with tempfile.TemporaryDirectory() as tmp:
+        words, labels, rels = build.dsp_assemble(os.path.join(ROOT, 'mods', 'dspload-ot', 'stub.asm'), tmp)
+        assert not rels                                  # relative branches only: the same words anywhere
+        src = open(os.path.join(ROOT, 'mods', 'dspload-ot', 'pump.c')).read()
+        body = src.split('static const uint32_t stub[] = {')[1].split('};')[0]
+        pump = [0xc0ffee if w.strip() == 'GUARD' else int(w, 0) for w in body.split(',') if w.strip()]
+        fill = {1: 0x123456, 7: 0x234567, 13: 0x345678, 18: 0x033da3}
+        assert [fill.get(i, w) for i, w in enumerate(pump)] == words
+        d = os.path.join(tmp, 'tone')
+        os.makedirs(d)
+        shutil.copy(os.path.join(ROOT, 'examples', 'dsp-tone-ot', 'tone.asm'), d)
+        with open(os.path.join(d, 'mod.json'), 'w') as fh:
+            json.dump({'id': 'tone-load', 'version': '0.1', 'title': 'TONE', 'category': 'Test', 'author': 'test',
+                       'license': 'GPL-2.0-or-later', 'device': 'octatrack', 'os': '1.40C',
+                       'requires': ['core', 'dspload'],
+                       'dsp_load': [{'source': 'tone.asm', 'entry': 'tone', 'name': 'tone_dsp'}]}, fh)
+        mods = [elemod.load_any(build.build(p, SYX, tmp)[0]) for p in (
+            os.path.join(ROOT, 'mods', 'core-ot'), os.path.join(ROOT, 'mods', 'dspbus-ot'),
+            os.path.join(ROOT, 'mods', 'dspload-ot'), d)]
+        gen = open(os.path.join(tmp, 'tone-load.work', 'dsp-load-0.c')).read()
+        tw, tl, tr = build.dsp_assemble(os.path.join(d, 'tone.asm'), tmp)
+        for i, off in tr:
+            tw[i] = off
+        assert ', '.join('0x%06x' % w for w in tw) in gen
+        assert '{tone_dsp_w, %d, %d, tone_dsp_r, %d}' % (len(tw), tl['tone'], len(tr)) in gen
+    ln = link.link(mods, img)
+    assert ln.tables['ot_dsp_blobs'][1] == 1 and 'tone_dsp' in ln.map
+
+
+AREA_MOD = {'id': 'area', 'version': '0.1', 'title': 'AREA', 'category': 'Framework', 'author': 'test',
+            'license': 'GPL-2.0-or-later', 'device': 'octatrack', 'os': '1.40C', 'sources': ['area.s'],
+            'requires': ['core'], 'resources': {'core': '0.41'}}
+AREA_S = """
+        .data
+        .long   core_desc
+        .bss
+        .align  16
+        .globl  drive_area
+drive_area:
+        .skip   0x200000
+        .globl  drive_area_size
+        .set    drive_area_size, 0x200000
+"""
+
+
+def test_a_loaders_own_area_on_the_octatrack():
+    """A loader that keeps its own area (TELOS for the Octatrack, github.com/elekloader/telos):
+    a build with one names that area in its descriptor (ABI 1.2), carries the stock bytes of every
+    range the flashed build writes (the shadow, at +0x58), and lists the reserve's arena_base with
+    core's exports."""
+    from elekloader import desc
+    from elekloader.sdk import build
+    st, img = stock()
+    with tempfile.TemporaryDirectory() as tmp:
+        src = os.path.join(tmp, 'area')
+        os.makedirs(src)
+        with open(os.path.join(src, 'mod.json'), 'w') as fh:
+            json.dump(AREA_MOD, fh)
+        with open(os.path.join(src, 'area.s'), 'w') as fh:
+            fh.write(AREA_S)
+        mods = [elemod.load_any(build.build(p, SYX, tmp)[0])
+                for p in (os.path.join(ROOT, 'mods', 'core-ot'), os.path.join(ROOT, 'mods', 'settings-ot'), src)]
+    ln = link.link(mods, img)
+    d = desc.decode(ln.image, desc.find(ln.image)[0])
+    assert d['abi'] == (1, 2)
+    lo = ln.map['drive_area']
+    assert d['area'][1:3] == (lo, lo + 2 * 1024 * 1024)
+    sites = sorted(s['addr'] for m in mods for s in m.sites
+                   if DEV.main_load <= s['addr'] < DEV.main_load + len(img))
+    assert sites and [a for a, _b in d['shadow']] == sites
+    for a, b in d['shadow']:
+        assert b == img[a - DEV.main_load:a - DEV.main_load + len(b)]
+    assert 'arena_base' in dict(d['modules'][0]['exports'])
 
 
 def test_mkmod_diff_round_trip():

@@ -95,6 +95,7 @@ export type Device = {
   paramIds: [number, [number, number, string], [string, boolean][]] | null   // [own, [lo, hi, what], [[table, ownOnly]]]: knob id ranges (link.Mod2.idRanges)
   tableLimits: Record<string, number>           // table -> the most entries all mods together may add to it: the OS uses no more (link.check)
   driveAlign: number                            // a build descriptor's +Drive mods' area: from the flashed build's RAM end rounded up to this, to the top of the core's linker area (ddrFor); 0: none
+  driveEarly: [number, number, string][]        // what the OS uses before a +Drive loader links and not again before it matters: a site there is refused (23, early)
   driveShadow: boolean                          // the build descriptor carries the stock bytes the flashed build writes (desc.ts, shadow): its +Drive loader copies stock parts from the running OS
   dataFamily: number                            // the family id of the data container's header (0: not known)
   dataDevice: number                            // ... and its device id (0: not known)
@@ -112,7 +113,7 @@ const rel = (version: string, syxSha256: string, mainSha256: string, mainLen: nu
 
 const base = {
   mainSection: 3, mainLoad: 0x40000400, isa: 'coldfire' as const, hmacKeyFrom: null, container: 'ele3' as const,
-  versionLen: 4, versionAt: 0x14, versionOptional: false, protected: [], relocatable: [], keep: [], blobMax: null, driveAlign: 0, driveShadow: false, dataFamily: 0, dataDevice: 0, sramCode: [0, 0] as Range, coreDdr: [] as [string, Range][], slotClaims: [] as [string, number, number, string][], paramIds: null, tableLimits: {}, fastTable: '',
+  versionLen: 4, versionAt: 0x14, versionOptional: false, protected: [], relocatable: [], keep: [], blobMax: null, driveAlign: 0, driveShadow: false, driveEarly: [] as [number, number, string][], dataFamily: 0, dataDevice: 0, sramCode: [0, 0] as Range, coreDdr: [] as [string, Range][], slotClaims: [] as [string, number, number, string][], paramIds: null, tableLimits: {}, fastTable: '',
   imageFree: [], reserve: null, dspPayloads: {}, dspAreas: [], trailer: null, updateMax: null, noLink: [] as [number, number, string][],
 }
 
@@ -201,13 +202,16 @@ export const OCTATRACK: Device = {
   relocatable: [[0x400e2000, 18, [0x4001d82e], 'the USB device descriptor']],
   keep: [[0x400d24d0, 0x400d24e0, "the stock DELAY reads them past the end of its coefficient table, so a write "
     + "there changes the DELAY's output (octabam #771)"]],
+  driveEarly: [[0x4001dfbc, 0x4001e042, 'the USB init, run once before the card mounts'],
+               [0x400e2000, 0x400e21e0, 'the USB descriptor tables, read at the USB init']],
   areas: { ddr: [0x40a955e0, 0x41495de0] },
   ddr: [0x40a955e0, 0x41495de0],
   imageFree: [[0x400c45b0, 0x400c4702], [0x400d24e0, 0x400d2ce0], [0x400d64e0, 0x400d7c3c]],
   reserve: [6144, { arena_base: [0x40a955e0, 6144], __arena_pages: [14602, -1], __arena_fill: [14603, -1],
     __arena_clear: [0x05590800, -6144] }],
   dspPayloads: { A: [0x400e2324, 0x136cb], B: [0x400f59ef, 0x12d05] },
-  dspAreas: [['A', 0xaa8, 0xbad, 'dsp:harvest:SPATIALIZER', "SPATIALIZER's code on payload A (core 0)"]],
+  dspAreas: [['A', 0xaa8, 0xbad, 'dsp:harvest:SPATIALIZER', "SPATIALIZER's code on payload A (core 0)"],
+    ['B', 0x868, 0x96d, 'dsp:harvest:SPATIALIZER-B', "SPATIALIZER's code on payload B (core 1): dspload-ot's copier"]],
   recovery: 'hold FUNC while powering on for the startup menu, press TRIG 3 (MIDI UPGRADE) and send the stock '
     + '.syx over 5-pin MIDI (not USB)',
 }

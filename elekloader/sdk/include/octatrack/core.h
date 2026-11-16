@@ -285,6 +285,21 @@ struct ot_setting {
     void (*changed)(const struct ot_setting *s);    /* after an edit or a load; or 0 */
 };
 
+/* Rows of MODS that aren't settings (settings-ot 0.2): a mod contributes to settings-ot's ot_mod_rows
+ * a pointer to one of these, and MODS shows its heading and rows above the settings. settings-ot
+ * builds the rows at ev_boot_done and again at the card's mount (ev_card, after every handler of a
+ * lower order), and asks label and value again after an action. TELOS (mods/telos-ot) is one: the
+ * mods on the card. All calls come from the menu's task; buf holds n bytes with the NUL. */
+#define OT_MOD_ROWS_ABI     1u
+struct ot_mod_rows {
+    uint32_t abi;                   /* OT_MOD_ROWS_ABI */
+    const char *heading;            /* the heading row's text */
+    int (*count)(void);             /* the rows now */
+    void (*label)(int i, char *buf, int n);
+    void (*value)(int i, char *buf, int n);
+    void (*action)(int i);          /* YES on row i */
+};
+
 /* ==== core-ot 0.7: voices ========================================================================= */
 
 /* The frame interrupt's builder turns the sequencer's, the panel's and MIDI's requests (each track's

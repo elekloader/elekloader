@@ -1116,24 +1116,39 @@ def link(mods, image, lock=None, *, sharc_stream=None):
         if new_lock is not None:
             room = store.capacity(dev.key, new_lock['split'], core.version)
             scopes = [(s, room[s], new_lock['next'][s], new_lock['generation'][s]) for s in store.SCOPES]
+        # A loader that keeps its own area (TELOS on the Octatrack) exports it as drive_area and
+        # drive_area_size; the descriptor then names it, and carries the stock shadow: the stock
+        # bytes of every range the flashed build writes, for the stock parts a mod linked on the
+        # unit copies (desc.py, "shadow").
+        own_area = any(desc.AREA_SYMS[0] in m.exports for m in order)
+        if own_area and dev.reserve:
+            # the reserve's public names (arena_base) are the linker's, defined for the core:
+            # a mod linked on the unit imports them as it would here
+            extra = sorted((nm, w('glob', nm)) for nm in dev.reserve[1] if not nm.startswith('__'))
+            mods[0]['exports'] = sorted(mods[0]['exports'] + [x for x in extra if x[0] not in core.exports])
+        if own_area:
+            lo = w('glob', desc.AREA_SYMS[0])
+            area = (lo, lo + w('glob', desc.AREA_SYMS[1]))
+        else:
+            area = drive_area(w('bss_end'))
+        # the stock bytes of every range the flashed build writes, where the profile asks for them
+        # (drive_shadow) or the loader keeps its own area: a loader on the unit copies a mod's stock
+        # parts from the running OS, and lays these over it
+        shadow = []
+        if dev.drive_shadow or own_area:
+            shadow = sorted((s['addr'], bytes(image[s['addr'] - dev.main_load:s['addr'] - dev.main_load + s['len']]))
+                            for m in order for s in m.sites
+                            if dev.main_load <= s['addr'] and s['addr'] + s['len'] <= dev.main_load + len(image))
         return {'family': dev.data_family, 'device': dev.data_device, 'release': rel.data_release,
                 'device_key': dev.key,
                 'os': rel.version, 'modules': mods, 'tables': tabs,
                 'claims': [(desc.CLAIM_NAME, index[m.id], nm) for m in order for nm in m.names]
                 + [(desc.CLAIM_REGION, index[m.id], '%#x %#x %s' % (g['lo'], g['hi'], g['name']))
                    for m in order for g in m.regions],
-                'area': (w('bss_end'),) + drive_area(w('bss_end'))
+                'area': (w('bss_end'),) + area
                          + (w('glob', desc.STAGING[0]), w('glob', desc.STAGING[1])),
                 'storage': {'trailer': (w('trailer'), trailer_len), 'scopes': scopes},
-                # the stock bytes of every range the flashed build writes, where the profile asks for
-                # them (drive_shadow): a loader on the unit copies a mod's stock parts from the
-                # running OS, and lays these over it
-                'shadow': sorted((s['addr'], bytes(image[s['addr'] - dev.main_load:
-                                                         s['addr'] - dev.main_load + s['len']]))
-                                 for m in order for s in m.sites
-                                 if dev.main_load <= s['addr']
-                                 and s['addr'] + s['len'] <= dev.main_load + len(image))
-                if dev.drive_shadow else []}
+                'shadow': shadow}
     desc_at = desc_len = None
     if with_desc:
         desc_len = len(desc.encode(desc_fields(None)))
