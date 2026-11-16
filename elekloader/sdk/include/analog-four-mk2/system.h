@@ -11,5 +11,10 @@
 extern void core_restart(void);
 /* The same at once, without waiting: for an interrupt. Never returns. */
 extern void core_restart_now(void);
+/* core-a4mk2 0.10, from a task: repack the working project's image from the live project and
+ * write it to the +Drive, as stock's OS upgrade does before its reboot, so the
+ * next boot comes back on the project as it is now, mod fields included.
+ * Returns; call it before core_restart, never holding the store or card. */
+extern void core_project_keep(void);
 
 #endif
