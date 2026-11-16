@@ -616,7 +616,7 @@ The runs' logs are in their pull requests; what they established:
   frame; every mod storage case above (saves, loads, power cycles, the
   write-through, per-part saves, `ev_project`); no stock access to the live
   homes other than core's.
-- **The lock service (0.5)** [emu], with
+- **The lock service (0.5)** [emu], and on a unit (5-6 Nov 2026) [hw], with
   [lock-check](../../examples/lock-check-a4mk2) and
   [sound-check](../../examples/sound-check-a4mk2): p-locks set, copied,
   cleared, saved, loaded and played, with Param Slide, and stock 1.56
@@ -625,13 +625,12 @@ The runs' logs are in their pull requests; what they established:
   shown to be needed; the value read equal to stock's engine copy of a
   stock parameter under every modulation stage, on the synth, FX and CV
   tracks; NRPNs and CCs in and out, live recording and the PERF channel; a
-  mod parameter heard driving a test tone.
-- Not checked yet: the lock service on a unit; track clear, SysEx dump out
-  and in, the kit change's and CREATE NEW's clear of locks; a fine
-  parameter; RANDOMIZE landing on a mod parameter; the route screens'
-  lists; a kit of another layout; a poly track's two voices, a sound-locked
-  trig's pool sound, `"smooth": false`, CONTROL IN; an NRPN with a trig
-  held, USB MIDI.
+  mod parameter heard driving a test tone. On the unit also routes from
+  every source, RANDOMIZE, CONTROL IN, poly locks, another kit layout and
+  an NRPN with a trig held.
+- Not checked yet: track clear, SysEx dump out and in, the kit change's
+  and CREATE NEW's clear of locks; a fine parameter; the route screens'
+  lists; a sound-locked trig's pool sound, `"smooth": false`.
 - **0.6 on a unit** (OS 1.56, 11-12 Nov 2026) [hw]: the check mods'
   plans passed as in the emulator: `ev_project_save` around saves onto the
   active slot, into another and of a new project into an empty slot (stock's
