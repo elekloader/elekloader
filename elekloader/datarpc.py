@@ -445,7 +445,7 @@ def run(a, mods, log=print):
             log('REFUSED: nothing was uploaded')
             return 1
         room = mods.room(build)                 # the live stage: it changes with each boot's set
-        over = [(n, raw) for n, raw in files if room and len(raw) > room]
+        over = [(n, raw) for n, raw in files if room and len(drive.staged(build, raw)) > room]
         if over:
             for n, raw in over:
                 log('REFUSED: %s is %d bytes; the unit takes up to %d now (%s/.status, stage)'
@@ -468,7 +468,7 @@ def run(a, mods, log=print):
     if not all(c.state == drive.LOADED for c in r.choices):
         log('REFUSED: %s is unchanged' % mods.path('active'))
         return 1
-    text = drive.active_text(chosen)
+    text = drive.active_text(chosen, build)
     mods.put('active', text.encode('utf-8'), head)
     log('WROTE %s (%d mods)' % (mods.path('active'), len(chosen)))
     return 0

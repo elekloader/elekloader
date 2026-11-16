@@ -19,6 +19,11 @@ typedef int s32;
                                              * included: "a/b/c/x.elemod"), NUL included */
 #define DL_VER_MAX 12                        /* a version as dl_check reports it, NUL included */
 
+/* The A4 loader stages a file without its .payload's hex (skip.h): dlink.c takes a .payload left as
+ * one empty hex part and refuses relocations into it. drive-loader-ar2 carries the same dlink.c
+ * without it, so its files keep refusing any .payload. */
+#define DL_PAYLOAD_SKIP 1
+
 /* ---- status records: /mods/.status and the MODS page (32 bytes per /mods/active line) -- */
 struct dl_status {
     u8 state;                            /* DL_ST_* */

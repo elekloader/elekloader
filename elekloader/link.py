@@ -33,6 +33,7 @@ lockfile), and its own symbol `__knobs` is the run's first id. A relocation to `
 abs32 or an `abs16` (two big-endian bytes, for the 16-bit knob lists of const tables) with an
 addend of 0..n-1.
 """
+import hashlib
 import struct
 
 from . import desc, dsp, sharc, store, syx
@@ -184,6 +185,9 @@ class Mod2:
             n = sum(len(p[1]) if p[0] == 'hex' else p[2] for p in parts)
             if n != _int(d.get('len', n), name):
                 raise ModError('%s %s: parts make %d bytes, not %s' % (name, sec, n, d.get('len')))
+            if sec == '.payload' and 'sha256' in d and all(p[0] == 'hex' for p in parts) \
+                    and hashlib.sha256(b''.join(p[1] for p in parts)).hexdigest() != str(d['sha256']).lower():
+                raise ModError('%s .payload: its bytes do not match its sha256' % name)
             self.sections[sec] = {'align': align, 'parts': parts, 'len': n}
         if 'sharc' not in doc:
             self.sharc = None
@@ -1134,7 +1138,8 @@ def link(mods, image, lock=None, *, sharc_stream=None, drive=None):
                 'area': (w('bss_end'),) + drive_area(w('bss_end'))
                          + (w('glob', desc.STAGING[0]), w('glob', desc.STAGING[1])),
                 'storage': {'trailer': (w('trailer'), trailer_len), 'scopes': scopes},
-                'flags': desc.F_STAGE_TOP if w('glob', desc.STAGE_TOP) else 0,
+                'flags': (desc.F_STAGE_TOP if w('glob', desc.STAGE_TOP) else 0)
+                         | (desc.F_PAYLOAD_SKIP if w('glob', desc.PAYLOAD_SKIP) else 0),
                 'sites': site_map(w), 'prelink': [(lo, hi, k) for lo, hi, k, _what in rel.prelink],
                 # the stock bytes of every range the flashed build writes, where the profile asks for
                 # them (drive_shadow): a loader on the unit copies a mod's stock parts from the

@@ -96,6 +96,22 @@ test('/mods/active is written and read as the Python does', () => {
   for (const bad of ['#x', ' a', 'a\nb', '']) assert.throws(() => drive.activeText([[bad, new Uint8Array(0)]]), ModError)
 })
 
+test('payload skip: files staged as the Python stages them, and /mods/active\'s CRC of the staged file', () => {
+  for (const [f, staged, pay] of V.stage) {
+    const [got, p] = drive.stage(fromHex(f)!)
+    assert.equal(toHex(got), staged, f.slice(0, 80))
+    assert.deepEqual(p, pay, f.slice(0, 80))
+  }
+  ANALOG_RYTM_MK2.releases.push({ ...V.release, binSha256: '' })
+  try {
+    const b = drive.loadBuild(fromHex(V.active.skip.build)!)
+    assert.ok(b.payloadSkip)
+    assert.equal(drive.activeText(V.active.skip.files.map(([n, h]: [string, string]) => [n, fromHex(h)!]), b), V.active.skip.text)
+  } finally {
+    ANALOG_RYTM_MK2.releases.pop()
+  }
+})
+
 test('the 7-bit packing: the Python\'s bytes, and back', () => {
   for (const [data, packed] of V.pack7) {
     assert.equal(toHex(datarpc.pack7(fromHex(data)!)), packed)

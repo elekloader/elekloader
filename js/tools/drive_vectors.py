@@ -31,7 +31,66 @@ def sets(B):
         out += [(code + ': refused', bad, area), (code + ': loads', good, area)]
     h, u = T.hello(B), T.user(B)
     out = out + [(n, f, None) for n, f in _more(B, h, u)]
-    return out + _top(B)
+    return out + _top(B) + _skip(B)
+
+
+def _files(*docs):
+    """T.files without sorting the keys: a skippable .payload has "len" and "sha256" before "parts"."""
+    return [d if isinstance(d, tuple) else (d['id'] + '.elemod', json.dumps(d).encode('utf-8')) for d in docs]
+
+
+def _payload(m, data, **over):
+    import hashlib
+    m = json.loads(json.dumps(m))
+    m['sections']['.payload'] = dict({'align': 4, 'len': len(data), 'sha256': hashlib.sha256(data).hexdigest(),
+                                      'parts': [['hex', data.hex()]]}, **over)
+    return m
+
+
+def _skip(B):
+    """Sets on a build whose loader skips payloads (F_PAYLOAD_SKIP, the A4's): the file's .payload
+    staged without its hex (drive.stage), and what is refused."""
+    data = bytes(range(256)) * 3
+    h = T.hello(B)
+    no_sha = _payload(h, data)
+    del no_sha['sections']['.payload']['sha256']
+    reloc = _payload(h, data)
+    reloc['relocs'] = reloc['relocs'] + [['.run', 0, 'abs32', 'sec:.payload', 0]]
+    contrib = _payload(T.hello(B, contribute=[{'to': 'ev_tick', 'order': 50, 'data': '00000000',
+                                               'relocs': [[0, 'abs32', 'sec:.payload', 0]]}]), data)
+    two = _payload(h, data, parts=[['hex', data[:4].hex()], ['hex', data[4:].hex()]])
+    out = [('skip: a payload loads', _files(_payload(h, data), T.user(B)), 'skip'),
+            ('skip: a payload without sha256', _files(no_sha), 'skip'),
+            ('skip: a relocation into .payload', _files(reloc), 'skip'),
+            ('skip: a contribution relocation into .payload', _files(contrib), 'skip'),
+            ('skip: two parts', _files(two), 'skip'),
+            ('skip: no payload skip on this build', _files(_payload(h, data)), 'top')]
+    b = T.built(B, 'skip')[1]
+    got = [[(c.code, c.detail) for c in drive.check(b, f).choices] for _n, f, a in out if a == 'skip']
+    assert got == [[(0, ''), (0, '')], [(7, '.payload')], [(7, 'relocs into .payload')],
+                   [(7, 'relocs into .payload')], [(7, '.payload')]], got
+    return out
+
+
+def _stage_files(B):
+    """Files for drive.stage's vectors: skippable, not, and mutated ones."""
+    import random
+    data = bytes(range(200))
+    h = T.hello(B)
+    files = [_files(h)[0][1], _files(_payload(h, data))[0][1],
+             json.dumps(_payload(h, data), separators=(',', ':')).encode()]
+    for over in ({'sha256': 'ab' * 31}, {'parts': [['hex', data[:4].hex()], ['hex', data[4:].hex()]]}):
+        files.append(_files(_payload(h, data, **over))[0][1])
+    rnd = random.Random(1115)
+    small = _files(_payload(h, data[:24]))[0][1]
+    for _ in range(40):
+        b = bytearray(small)
+        for _k in range(rnd.randint(1, 3)):
+            at = rnd.randrange(len(b))
+            ch = rnd.choice(b'{}[]",:\\ 0123456789abx.')
+            [b.__setitem__, b.insert, lambda a, _c: b.__delitem__(a)][rnd.randrange(3)](at, ch)
+        files.append(bytes(b))
+    return files
 
 
 def _top(B):
@@ -45,14 +104,14 @@ def _top(B):
     # z-big: the longest file (about 22 KB) with 4 KB of code; a-small: 8 KB of code in a 17 KB file.
     # In id order a-small's code would sit under z-big's file; longest first, both fit.
     big, small = code_mod(B, 'z-big', 4 * 1024, pad=13000), code_mod(B, 'a-small', 8 * 1024)
-    bare = len(T.files(T.hello(B, description=''))[0][1])
-    out = [('top: a file over the staging buffer loads', T.files(T.hello(B, description='x' * (T.STAGING + 1))), 'top'),
-           ('top: the longest file first', T.files(small, big), area),
-           ('top: the longest file first, the other order', T.files(big, small), area),
-           ('top: one more mod is out of room', T.files(small, big, code_mod(B, 'm-more', 8 * 1024)), area),
+    bare = len(_files(T.hello(B, description=''))[0][1])
+    out = [('top: a file over the staging buffer loads', _files(T.hello(B, description='x' * (T.STAGING + 1))), 'top'),
+           ('top: the longest file first', _files(small, big), area),
+           ('top: the longest file first, the other order', _files(big, small), area),
+           ('top: one more mod is out of room', _files(small, big, code_mod(B, 'm-more', 8 * 1024)), area),
            ('top: a file that leaves no room for its own code',
-            T.files(T.hello(B, description='x' * (room - 8 - bare))), area),
-           ('top: a file over the area', T.files(T.hello(B, description='x' * (room + 1 - bare))), area)]
+            _files(T.hello(B, description='x' * (room - 8 - bare))), area),
+           ('top: a file over the area', _files(T.hello(B, description='x' * (room + 1 - bare))), area)]
     b = T.built(B, area)[1]
     got = [[c.code for c in drive.check(b, f).choices] for _n, f, _a in out[1:]]
     room_, big_ = drive.CODE['room'], drive.CODE['too-big']
@@ -142,7 +201,12 @@ def main():
             'build': blk.hex(), 'label': drive.load_build(blk).label(),
             'container': {'body': body.hex(), 'wrapped': wrapped.hex(),
                           'build': container.wrap(blk, 2, 5, 0x30313736).hex()},
+            'stage': [[f.hex(), drive.stage(f)[0].hex(), drive.stage(f)[1]] for f in _stage_files(B)],
             'active': {'text': drive.active_text([('a.elemod', b'x'), ('b c.elemod', b'')]),
+                       'skip': {'build': block('skip').hex(),
+                                'files': [[n, raw.hex()] for n, raw in _files(_payload(T.hello(B), bytes(64)))],
+                                'text': drive.active_text(_files(_payload(T.hello(B), bytes(64))),
+                                                          drive.load_build(block('skip')))},
                        'parsed': [[t, drive.parse_active(t)] for t in texts]},
             'pack7': [[bytes((i * 37 + 0x81) & 0xFF for i in range(n)).hex(),
                        datarpc.pack7(bytes((i * 37 + 0x81) & 0xFF for i in range(n))).hex()]

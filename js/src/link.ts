@@ -175,6 +175,9 @@ export class Mod2 implements AnyMod {
       const parts = parseParts(get(d, 'parts', []), name + ' ' + sec, this.dev, this.rel)
       const n = partsLen(parts)
       if (n !== int(get(d, 'len', n), name)) throw new ModError(`${name} ${sec}: parts make ${n} bytes, not ${str(get(d, 'len'))}`)
+      if (sec === '.payload' && 'sha256' in d && parts.every(p => p[0] === 'hex')
+          && sha(concat(parts.map(p => p[1] as Uint8Array))) !== str(d.sha256).toLowerCase())
+        throw new ModError(`${name} .payload: its bytes do not match its sha256`)
       this.sections.set(sec, { align: al, parts, len: n })
     }
     this.sharc = !('sharc' in doc) ? null : isDict(doc.sharc) && doc.sharc.abi === KERNEL_ABI ? kernelPayload(doc.sharc, this.rel.sharc)
@@ -1106,7 +1109,7 @@ export function link(mods: Mod2[], image: Uint8Array, lock: store.Lock | null = 
           `0x${g.lo.toString(16)} 0x${g.hi.toString(16)} ${g.name}`] as [number, number, string]))],
       area: [w('bss_end'), ...driveArea(w('bss_end')), w('glob', desc.STAGING[0]), w('glob', desc.STAGING[1])],
       storage: { trailer: [w('trailer'), trailerLen], scopes },
-      flags: w('glob', desc.STAGE_TOP) ? desc.F_STAGE_TOP : 0,
+      flags: (w('glob', desc.STAGE_TOP) ? desc.F_STAGE_TOP : 0) | (w('glob', desc.PAYLOAD_SKIP) ? desc.F_PAYLOAD_SKIP : 0),
       sites: siteMap(w), prelink: (rel.prelink ?? []).map(([lo, hi, k]) => [lo, hi, k] as [number, number, number]),
       // the stock bytes of every range the flashed build writes, where the profile asks for them (driveShadow): a
       // loader on the unit copies a mod's stock parts from the running OS, and lays these over it

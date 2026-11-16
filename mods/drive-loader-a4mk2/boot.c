@@ -13,6 +13,7 @@
 #include "dl.h"
 #include "fs.h"
 #include "dstore.h"
+#include "skip.h"
 
 /* The panel link (trace-phase0-sites.md section 6; emu-checks noskip, checked 2026-11-14) */
 typedef void (*v_fn)(void);
@@ -78,34 +79,40 @@ static void path_of(char *out, const char *name)
     out[k] = 0;
 }
 
+/* dl_stage_file's reads (skip.h): from the file at `at`, 32 KB at most, 1 ms for the tasks below
+ * after each outside the boot */
+static s32 read_at(void *ctx, u32 at, u8 *dst, u32 n)
+{
+    dl_file *f = ctx;
+    s32 r;
+    if (at >= f->size)
+        return 0;
+    f->pos = at;                         /* reads stream from f->pos (store.c): a seek is a store */
+    r = dl_fs_read(f, dst, n);
+    if (r > 0)
+        dl_breathe();
+    return r;
+}
+
+/* dl.h: a file read whole for the linker, its payload's hex skipped (skip.h). At boot each payload
+ * skipped is noted for the Drive payload table. */
 s32 dl_read_file(const char *name, u8 *buf, u32 max)
 {
     char path[DL_PATH_MAX];
     dl_file f;
-    u32 got = 0;
+    struct dl_pay pay;
     s32 r;
-    u8 more;
     path_of(path, name);
     dl_memset(&f, 0, sizeof f);
     if (dl_fs_open(&f, path, 0) < 0) {
         dl_fs_close(&f);
         return -1;
     }
-    while (got < max) {                  /* to the file's end, or max */
-        r = dl_fs_read(&f, buf + got, max - got < DL_BREATHE ? max - got : DL_BREATHE);
-        if (r > 0)                       /* 32 KB at a time, 1 ms for the tasks below between */
-            dl_breathe();
-        if (r < 0) {
-            dl_fs_close(&f);
-            return -3;
-        }
-        if (r == 0)
-            break;
-        got += (u32)r;
-    }
-    r = got == max ? dl_fs_read(&f, &more, 1) : 0;
+    r = dl_stage_file(read_at, &f, buf, max, &pay);
     dl_fs_close(&f);
-    return r > 0 ? -2 : (s32)got;
+    if (r >= 0 && pay.len && booting)
+        dl_payload_note(path, &pay);
+    return r;
 }
 
 int dl_read_open(struct dl_reader *rd, const char *name)
@@ -321,6 +328,7 @@ static void boot(void)
     char *active;
 
     dl_status_n = 0;
+    drive_payloads_n = drive_payloads_lost = 0;
     dl_skip_reason = DL_SKIP_NONE;
     if (ds_mount() != 0) {               /* SD init failed, no card, or a card too small */
         dl_skip_reason = DL_SKIP_DRIVE;
@@ -367,6 +375,8 @@ static void boot(void)
     write_armed();                       /* before the link, so a link that faults or hangs is
                                           * caught too: the next boot skips the set */
     loaded = dl_link((u32)core_desc, dl_boot_choice, n, 0, 0);   /* the stage at the top of the area */
+    if (dl_status)                       /* the payloads skipped: the loaded mods' kept (skip.h), */
+        dl_payload_keep(dl_status, dl_boot_choice, (int)dl_status_n);   /* before their drive_init */
     dl_flush();                          /* after the area, the tables and the sites (each site's
                                           * lines already pushed by dl_apply_site) */
     write_store();                       /* a set that left none loaded parks its fields too */

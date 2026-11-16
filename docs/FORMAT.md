@@ -322,13 +322,13 @@ Nothing is built unless all of these pass:
 A build with the Drive Loader (`mods/drive-loader-ar2/`, which imports
 `core_desc`) links more mods at boot from `/mods` on the unit's +Drive
 into the +Drive area. This section is what such a mod and `/mods/active`
-may hold; the boot link and the computer's tools are in
-[DRIVE.md](DRIVE.md).
+may hold; the link and the tools are in [DRIVE.md](DRIVE.md).
 
 **What a +Drive mod is.** A format-2 mod with only `.run` and `.bss`,
 relocations only in `.run` (`abs32`, `pc32`, `pc16`), no `collections`,
 `sharc` or contribution `claims`; `storage`, `sites`, `copied` and
-`resources.regions` only where the build takes them (DRIVE.md). It adds
+`resources.regions` only where the build takes them, a `.payload` only
+where the loader skips it (DRIVE.md). It adds
 whole entries only to tables whose descriptor allows more (not DSP
 tables), at an order below 2^31-1. It imports the build's exports, table
 names, `NAME_n` (the count after the merge), `core_desc` and other +Drive
@@ -337,11 +337,9 @@ mods' exports. Its own `drive_init`, if any, is called after the link as
 
 **`/mods/active`**: one line per chosen file, its path below `/mods`
 (up to 3 folders deep), a space, its CRC-32 (zlib's, 8 hex digits, `0x`
-optional). Blank, `#` and CRC-less lines are skipped; the path
+optional) as the loader stages it (DRIVE.md). Blank, `#` and CRC-less lines are skipped; the path
 is all before the last run of spaces, under 128 bytes. Over 256 lines and
 nothing loads.
-
-The link's order and its status records are in DRIVE.md, "The boot link".
 
 #### +Drive refusal codes
 

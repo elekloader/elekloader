@@ -12,12 +12,16 @@
  * from the check's own records, plus each file's version. A file MODS_DIR/.store is the
  * +Drive storage's /mods/.store as the boot reads it; the link's new one goes to OUT.bin.store
  * (on a build that keeps +Drive storage). With DL_HOST_TOP set, the stage is at the top of the
- * area (dl_stage_top): the link gets no buffer, and a check lays out with the reservation. */
+ * area (dl_stage_top): the link gets no buffer, and a check lays out with the reservation. Built
+ * with -DDL_PAYLOAD_SKIP and the A4's skip.c, it stages each file as the A4 loader does (skip.h). */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include "../mods/drive-loader-ar2/dl.h"
 #include "../mods/drive-loader-ar2/dstore.h"
+#ifdef DL_PAYLOAD_SKIP                   /* the A4 loader's payload skip (skip.c, linked in) */
+#include "../mods/drive-loader-a4mk2/skip.h"
+#endif
 
 static u8 *ram, *stock;
 static u32 ram_base, ram_len, stock_base, stock_len;
@@ -73,6 +77,21 @@ static u8 *slurp(const char *path, u32 *n)
     return b;
 }
 
+#ifdef DL_PAYLOAD_SKIP
+struct mem { const u8 *b; u32 n; };
+
+static s32 mem_read(void *ctx, u32 at, u8 *dst, u32 n)
+{
+    const struct mem *m = ctx;
+    if (at >= m->n)
+        return 0;
+    if (n > m->n - at)
+        n = m->n - at;
+    memcpy(dst, m->b + at, n);
+    return (s32)n;
+}
+#endif
+
 s32 dl_read_file(const char *name, u8 *buf, u32 max)
 {
     char path[1024];
@@ -82,6 +101,15 @@ s32 dl_read_file(const char *name, u8 *buf, u32 max)
     b = slurp(path, &n);
     if (!b)
         return -1;
+#ifdef DL_PAYLOAD_SKIP                   /* staged as the A4's boot.c stages it */
+    {
+        struct mem m = { b, n };
+        struct dl_pay pay;
+        s32 r = dl_stage_file(mem_read, &m, buf, max, &pay);
+        free(b);
+        return r;
+    }
+#endif
     if (n > max) {
         free(b);
         return -2;

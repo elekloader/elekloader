@@ -34,7 +34,7 @@ from test_link_refusals import Bench                                      # noqa
 STAGING = 0x10000
 
 
-def flashed(B, pad=0, store=False, stage_top=False):
+def flashed(B, pad=0, store=False, stage_top=False, payload_skip=False):
     core = B.core(collections={'ev_tick': {'entry': 4}, 'ev_draw': {'entry': 4},
                                'ev_x': {'entry': 4, 'spare': 1}, 'core_handles': {'entry': 4}})
     core['symbols']['core_zero'] = ['.boot', 0]
@@ -55,6 +55,9 @@ def flashed(B, pad=0, store=False, stage_top=False):
     if stage_top:                               # the loader stages files at the area's top (ABI 1.3)
         loader['symbols']['drive_stage_top'] = ['abs', 1]
         loader['exports'].append('drive_stage_top')
+    if payload_skip:                            # and stages them without a .payload's hex
+        loader['symbols']['drive_payload_skip'] = ['abs', 1]
+        loader['exports'].append('drive_payload_skip')
     fa = B.mod('flash-a', resources={'names': ['settings:A']})
     fa['contribute'] = [{'to': 'ev_draw', 'order': 60, 'data': '00000000',
                          'relocs': [[0, 'abs32', 'sym:fn_flash-a', 0]]}]
@@ -67,16 +70,18 @@ def flashed(B, pad=0, store=False, stage_top=False):
 def built(B, area=None):
     """The flashed build, and the Build the boot linker sees; with `area`, its loader's .bss grown
     until the +Drive area is about that many bytes (its pools are sized to the area)."""
-    top = area == 'top' or isinstance(area, tuple)   # 'top', or ('top', N): a loader that stages
-    if isinstance(area, tuple):                      # files at the area's top, and its area
-        area = area[1]
-    elif area == 'top':
+    top = area in ('top', 'skip') or isinstance(area, tuple)   # 'top', or ('top', N): a loader that
+    skip = area == 'skip' or isinstance(area, tuple) and area[0] == 'skip'   # stages files at the area's
+    if isinstance(area, tuple):                      # top, and its area; 'skip', ('skip', N): one that
+        area = area[1]                               # also skips payloads (the A4's)
+    elif area in ('top', 'skip'):
         area = None
     if top:
-        out = link.link([link.Mod2(d, d['id']) for d in flashed(B, stage_top=True)], B.img)
+        out = link.link([link.Mod2(d, d['id']) for d in flashed(B, stage_top=True, payload_skip=skip)], B.img)
         b = drive.load_build(out.image)
         if area is not None:
-            out = link.link([link.Mod2(d, d['id']) for d in flashed(B, b.hi - b.lo - area, stage_top=True)], B.img)
+            out = link.link([link.Mod2(d, d['id']) for d in flashed(B, b.hi - b.lo - area, stage_top=True,
+                                                                     payload_skip=skip)], B.img)
             b = drive.load_build(out.image)
         return out, b
     if area == 'store':                         # a build that keeps +Drive storage

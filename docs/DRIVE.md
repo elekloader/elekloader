@@ -90,6 +90,43 @@ in one file, 256 entries and 2,048 bytes of them with 256 relocations. A
 merge has room for the biggest table +Drive entries can go to. Global names
 are found through hash buckets, in the order a scan would find them.
 
+## Payloads on the +Drive
+
+A loader whose descriptor has `F_PAYLOAD_SKIP` (drive-loader-a4mk2, decided
+2026-11-15) keeps a mod's `.payload` on the +Drive: its bytes never take
+room in the area. The `.elemod` stays one JSON file.
+
+- **Skippable.** A `.payload` whose `"len"` and 64-digit `"sha256"` come
+  before `"parts"`, and whose `"parts"` is one `["hex", "..."]` part, as the
+  SDK's build writes it (the linker checks a `.payload`'s `sha256`). While the boot stages a file (`skip.c`,
+  `dl_stage_file`), it follows the JSON a byte at a time; at that hex
+  string's opening quote it notes the file offset, length and sha256, seeks
+  past the hex and stages on from the closing quote, so the staged JSON has
+  `""` there and the linker reads it unchanged. Reads turn to 64 bytes once
+  the `.payload` object opens, so the hex passes through the stage only
+  within a read, and is never kept.
+- **Linked.** The linker takes a `.payload` left as one empty hex part and
+  places nothing for it. Any other `.payload` is a `feature` refusal
+  (`.payload`), and so is a relocation to `sec:.payload`, in `relocs` or an
+  entry's (`relocs into .payload`): the payload is never in RAM. A symbol in
+  `.payload` is no symbol to the loader, so a reference to it is an
+  `import` refusal.
+- **Staged length and CRC.** Everything that sizes or checks a file uses the
+  staged file: the room it needs, the placement by length and the CRC
+  `/mods/active` names (`drive.stage`, `drive.staged`, `active_text(...,
+  build)`). A file with no skippable payload stages as it is.
+- **The table.** After the link the boot keeps, for each loaded mod with a
+  payload, {id (FNV-1a of the mod's id, as `core_payloads`), length, hex
+  offset, the file's first sector and size, sha256, path} in
+  `drive_payloads` (64 entries; more are counted in `drive_payloads_lost`),
+  before the mods' `drive_init`. `drive_payload_find(id)` looks one up and
+  `dl_payload_read(p, at, out, n)` decodes n bytes from byte at, under the
+  loader's mutex, from a task only; it refuses (-2) when the file's sector
+  or size changed since the boot, so a reader still checks the sha256 of
+  what it ships. sidecar-core looks a payload up in `core_payloads` (a
+  flashed mod's, in RAM) and then here; caching on the Pi by hash is its
+  side.
+
 ## Sites
 
 On a build whose descriptor has a site map (ABI 1.2), a +Drive mod may
@@ -346,7 +383,7 @@ names offsets into its string pool (UTF-8, NUL-terminated):
 | +0x44 | u32 the device key, u32 the OS version (names) |
 | +0x4c | ABI 1.2: u32 offset of the site map, u16 its count, u16 the pre-link count, u32 offset of the pre-link ranges |
 | +0x58 | u32 the shadow's offset, u32 its range count (ABI 1.2; 0 without one) |
-| +0x60 | ABI 1.3: u32 flags, bit 0 `F_STAGE_TOP`: the loader reads each file into the +Drive area itself at boot (a module's export `drive_stage_top`, nonzero); zero to +0x64 |
+| +0x60 | ABI 1.3: u32 flags, bit 0 `F_STAGE_TOP`: the loader reads each file into the +Drive area itself at boot (a module's export `drive_stage_top`, nonzero); bit 1 `F_PAYLOAD_SKIP`: it stages each file without its `.payload`'s hex ("Payloads on the +Drive"; the export `drive_payload_skip`); zero to +0x64 |
 
 | record | bytes | fields |
 |---|---|---|
