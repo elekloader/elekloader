@@ -599,9 +599,9 @@ Not reported (std1 rule 6): a list parameter's turn. Unconfirmed: `keys.h`'s
 
 ## +Drive mods
 
-core-ar2 0.12's spares (its README, "Room for +Drive mods"): 256 in each
-event table, the audio interrupt's marked `"render"`; 16 in the page
-tables (pages.s `VIEW_MAX`); 256 in `core_params`.
+core-ar2 0.12's spares (its README, "Room for +Drive mods"): 256 an event
+table, 16 a page table, 256 in `core_params`; +Drive storage needs
+`core_handles` (store.c) too.
 
 `ev_boot_drive`: f(), from 0x401061e8 in main(), before `jsr 0x400f1b18`,
 the boot's project load (`store.s`); a factory boot skips it. The loader
