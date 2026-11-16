@@ -191,8 +191,9 @@ flashed mod does. The checks:
   own address (a `pc16` or `abs16` out of range is `range`).
 
 A `clash` refusal's argument is its kind << 8, plus the earlier mod's line
-for kind 2; its detail is the site's or block's address as 8 hex digits,
-then for kind 1 the flashed owner's name when the site map names a module.
+for kind 2; its detail is the site's, block's or claim's address as 8 hex
+digits, then for kind 1 the flashed owner's name when the site map names a
+module.
 
 After the merge, the loader keeps each site's stock bytes (`dl_sites`, from
 the heap; with no room, nothing loads: skip `memory`), then writes each
@@ -207,6 +208,39 @@ and the MODS page doesn't show, whichever is later.
 On the computer, `link --device-layout` writes each site's bytes to
 `sites/ADDRESS.bin` and lists them in `summary.json`; the stock bytes are
 checked only against a built image (a `.build` file alone has none).
+
+## Claims
+
+On a build whose descriptor has `F_CLAIMS` (the A4's loader, `drive_claims`),
+a +Drive mod's contribution may carry `claims`, `[[lo, hi], ...]`: byte
+ranges of the main OS its entry relies on, which no other mod may change or
+claim, as the build's linker checks them (link.py `check`). Nothing is
+written for a claim. The site map then also lists each flashed
+contribution's claims (kind 7, by its module). The checks are the sites':
+
+- *Pass 1*, after the sites: each claim's form (two numbers, `lo` < `hi`,
+  inside the main OS), else `format`; claims count toward the loader's room
+  for sites (`limit`). Then refused `clash`: a claim over any range of the
+  site map (kind 1, with the flashed owner's name for a site, copied block
+  or claim) or a pre-link range (kind 3).
+- *Check rounds*, with the sites: a claim that shares a byte with an
+  earlier living mod's site or claim, or a site that shares one with an
+  earlier mod's claim (kind 2): the later in id order goes. A claim and a
+  copied block may overlap.
+
+A +Drive site over a flashed claim is refused as one over a flashed site.
+Without the flag (drive-loader-ar2), `claims` is the feature refusal
+`claims`.
+
+## Regions on the A4
+
+The A4's +Drive takes no `resources.regions`: it is the feature refusal
+`regions`. A region is a fixed address that nothing zeroes, kept across the
+boot link; since core-a4mk2
+0.6 the A4's free areas sit inside the mods' own RAM, where the +Drive area
+and the flashed mods' `.bss` are, so a region there would overlap memory
+the link places and zeroes. A +Drive mod that needs RAM of its own uses
+`.bss`.
 
 ## On the computer
 
@@ -392,7 +426,8 @@ image>` prints it.
 - **The site map.** Every byte range of the flashed main OS that is
   taken: each site and copied block with its module, the device's
   protected and kept ranges, the boot copier, the RAM image's copy and
-  the lockfile's trailer, so the loader can refuse a +Drive site that
+  the lockfile's trailer, and with `F_CLAIMS` each contribution's claims
+  with its module, so the loader can refuse a +Drive site or claim that
   overlaps one.
 - **Pre-link ranges.** Main OS code and data the OS is done with before
   the boot link runs (the release's `prelink` in its device profile), so
@@ -442,7 +477,7 @@ names offsets into its string pool (UTF-8, NUL-terminated):
 | +0x44 | u32 the device key, u32 the OS version (names) |
 | +0x4c | ABI 1.2: u32 offset of the site map, u16 its count, u16 the pre-link count, u32 offset of the pre-link ranges |
 | +0x58 | u32 the shadow's offset, u32 its range count (ABI 1.2; 0 without one) |
-| +0x60 | ABI 1.3: u32 flags, bit 0 `F_STAGE_TOP`: the loader reads each file into the +Drive area itself at boot (a module's export `drive_stage_top`, nonzero); bit 1 `F_PAYLOAD_SKIP`: it stages each file without its `.payload`'s hex ("Payloads on the +Drive"; the export `drive_payload_skip`); bit 2 `F_ABS16`: its boot linker takes `abs16` relocations (the export `drive_abs16`); bit 3 `F_STD_MAP`: it maps std1 subscriptions through the core's `std` map, which the claims of kind 3 carry (the export `drive_std_map`); bit 4 `F_COLLECTIONS`: +Drive mods may declare tables ("+Drive collections"; the export `drive_collections`); zero to +0x64 |
+| +0x60 | ABI 1.3: u32 flags, bit 0 `F_STAGE_TOP`: the loader reads each file into the +Drive area itself at boot (a module's export `drive_stage_top`, nonzero); bit 1 `F_PAYLOAD_SKIP`: it stages each file without its `.payload`'s hex ("Payloads on the +Drive"; the export `drive_payload_skip`); bit 2 `F_ABS16`: its boot linker takes `abs16` relocations (the export `drive_abs16`); bit 3 `F_STD_MAP`: it maps std1 subscriptions through the core's `std` map, which the claims of kind 3 carry (the export `drive_std_map`); bit 4 `F_COLLECTIONS`: +Drive mods may declare tables ("+Drive collections"; the export `drive_collections`); bit 5 `F_CLAIMS`: its boot linker takes contributions' `claims`, and the site map lists the flashed ones ("Claims"; the export `drive_claims`); zero to +0x64 |
 
 | record | bytes | fields |
 |---|---|---|
@@ -455,7 +490,7 @@ names offsets into its string pool (UTF-8, NUL-terminated):
 | storage | 12 + 16 a scope | u32 address and u32 length of the lockfile's trailer in the main OS image (for the host: nothing on the unit reads it), u16 scope count, u16 0; per scope: name, u32 room in bits, u32 bits used, u32 generation |
 | shadow | 8 + bytes a range | u32 address, u32 length, the stock bytes padded to 4; by address, before the string pool (ABI 1.2, where the profile asks; a block without one is ABI 1.1) |
 | orders | 4 an entry | s32: each entry's order, in table order; after the storage record (ABI 1.1). An ABI 1.0 block has none, and its keys' orders stand |
-| site map | 12 a range | u32 start, u32 end (exclusive), u16 kind (1 site, 2 copied block, 3 the device's protected or kept range, 4 boot copier, 5 the RAM image's copy, 6 lockfile trailer), u16 module index (0xFFFF: none); sorted by start, end, kind, module, and ranges may overlap; after the orders (ABI 1.2) |
+| site map | 12 a range | u32 start, u32 end (exclusive), u16 kind (1 site, 2 copied block, 3 the device's protected or kept range, 4 boot copier, 5 the RAM image's copy, 6 lockfile trailer, 7 a contribution's claim, with `F_CLAIMS`), u16 module index (0xFFFF: none); sorted by start, end, kind, module, and ranges may overlap; after the orders (ABI 1.2) |
 | pre-link | 12 a range | u32 start, u32 end, u16 kind (1 code, 2 data), u16 0; after the site map (ABI 1.2) |
 
 A loader accepts any minor of its major; a minor adds fields in reserved

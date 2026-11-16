@@ -260,7 +260,7 @@ export class Mod2 implements AnyMod {
           throw new ModError(`${what}: bad relocation ${repr(r)}`)
         rel.push([off, typ as string, tgt as string, int(add, what)])
       }
-      const claims = iter(get(c, 'claims', [])).map(ab => {
+      const claims = iter(truthy(get(c, 'claims')) ? get(c, 'claims') : []).map(ab => {   // `or []`: null is none
         const [a, b] = unpack(ab, 2)
         return [int(a, what), int(b, what)] as [number, number]
       })
@@ -1081,6 +1081,7 @@ export function link(mods: Mod2[], image: Uint8Array, lock: store.Lock | null = 
     return [Math.min(align(ramEnd, dev.driveAlign), ddrEnd), ddrEnd]
   }
   const stdMap = order.some(m => m.exports.includes(desc.STD_MAP))   // the loader maps std1 at boot
+  const claimsMap = order.some(m => m.exports.includes(desc.CLAIMS))   // the boot linker takes claims
   const descFields = (where: Where | null): desc.DescFields => {
     const w: Where = where ?? (() => 0)
     const modules = order.map(m => ({
@@ -1113,7 +1114,8 @@ export function link(mods: Mod2[], image: Uint8Array, lock: store.Lock | null = 
       storage: { trailer: [w('trailer'), trailerLen], scopes },
       flags: (w('glob', desc.STAGE_TOP) ? desc.F_STAGE_TOP : 0) | (w('glob', desc.PAYLOAD_SKIP) ? desc.F_PAYLOAD_SKIP : 0)
         | (w('glob', desc.ABS16) ? desc.F_ABS16 : 0) | (stdMap ? desc.F_STD_MAP : 0)
-        | (w('glob', desc.COLLECTIONS) ? desc.F_COLLECTIONS : 0),
+        | (w('glob', desc.COLLECTIONS) ? desc.F_COLLECTIONS : 0)
+        | (claimsMap ? desc.F_CLAIMS : 0),
       sites: siteMap(w), prelink: (rel.prelink ?? []).map(([lo, hi, k]) => [lo, hi, k] as [number, number, number]),
       // the stock bytes of every range the flashed build writes, where the profile asks for them (driveShadow): a
       // loader on the unit copies a mod's stock parts from the running OS, and lays these over it
@@ -1130,6 +1132,7 @@ export function link(mods: Mod2[], image: Uint8Array, lock: store.Lock | null = 
     for (const m of order) for (const s of m.sites) if (!sharcSite(rel, s.addr)) out.push([s.addr, s.addr + s.len, desc.SITE_SITE, index.get(m.id)!])
     for (const m of order) for (const [lo, hi] of m.copied) out.push([lo, hi, desc.SITE_COPIED, index.get(m.id)!])
     for (const [lo, hi] of [...dev.protected, ...dev.keep]) out.push([lo, hi, desc.SITE_DEVICE, desc.NO_MODULE])
+    if (claimsMap) for (const m of order) for (const c of m.contribute) for (const [a, b] of c.claims) out.push([a, b, desc.SITE_CLAIM, index.get(m.id)!])
     const boot = w('boot')
     out.push([boot, boot + bootLen, desc.SITE_BOOT, index.get(core.id)!])
     const run = w('run_image'), runLen = w('run_image_len')

@@ -276,7 +276,7 @@ class Mod2:
                 if typ not in RTYPES or off < 0 or off + RSIZE[typ] > len(data):
                     raise ModError('%s: bad relocation %r' % (what, r))
                 rel.append((off, typ, tgt, _int(add, what)))
-            claims = [(_int(a, what), _int(b, what)) for a, b in c.get('claims', [])]
+            claims = [(_int(a, what), _int(b, what)) for a, b in c.get('claims') or []]
             self.contribute.append({'to': str(c['to']), 'order': _int(c.get('order', 50), what),
                                     'data': data, 'relocs': rel, 'claims': claims, 'i': i})
             if c.get('std') is not None:        # a subscription to a standard event: the core's
@@ -1104,6 +1104,7 @@ def link(mods, image, lock=None, *, sharc_stream=None, drive=None):
         return (min(lo, ddr_end), ddr_end)
 
     std_map = any(desc.STD_MAP in m.exports for m in order)   # the loader maps std1 at boot
+    claims_map = any(desc.CLAIMS in m.exports for m in order)  # the boot linker takes claims
 
     def desc_fields(where):
         """The descriptor's fields; `where` (a function of the layout) gives the addresses, or None:
@@ -1146,7 +1147,8 @@ def link(mods, image, lock=None, *, sharc_stream=None, drive=None):
                          | (desc.F_PAYLOAD_SKIP if w('glob', desc.PAYLOAD_SKIP) else 0)
                          | (desc.F_ABS16 if w('glob', desc.ABS16) else 0)
                          | (desc.F_STD_MAP if std_map else 0)
-                         | (desc.F_COLLECTIONS if w('glob', desc.COLLECTIONS) else 0),
+                         | (desc.F_COLLECTIONS if w('glob', desc.COLLECTIONS) else 0)
+                         | (desc.F_CLAIMS if claims_map else 0),
                 'sites': site_map(w), 'prelink': [(lo, hi, k) for lo, hi, k, _what in rel.prelink],
                 # the stock bytes of every range the flashed build writes, where the profile asks for
                 # them (drive_shadow): a loader on the unit copies a mod's stock parts from the
@@ -1161,11 +1163,14 @@ def link(mods, image, lock=None, *, sharc_stream=None, drive=None):
     def site_map(w):
         """The flashed main OS's taken byte ranges, for the loader's conflict checks (ABI 1.2): each
         site and copied block (by its module), the device's protected and kept ranges, and the
-        appended code: the boot copier, the RAM image and the lockfile's trailer."""
+        appended code: the boot copier, the RAM image and the lockfile's trailer; with F_CLAIMS,
+        each contribution's claims (by its module)."""
         out = [(s['addr'], s['addr'] + s['len'], desc.SITE_SITE, index[m.id])
                for m in order for s in m.sites if not sharc_site(rel, s['addr'])]
         out += [(lo, hi, desc.SITE_COPIED, index[m.id]) for m in order for lo, hi, _to in m.copied]
         out += [(lo, hi, desc.SITE_DEVICE, desc.NO_MODULE) for lo, hi, _why in tuple(dev.protected) + tuple(dev.keep)]
+        if claims_map:
+            out += [(a, b, desc.SITE_CLAIM, index[m.id]) for m in order for c in m.contribute for a, b in c['claims']]
         boot = w('boot')
         out.append((boot, boot + boot_len, desc.SITE_BOOT, index[core.id]))
         run, run_len = w('run_image')

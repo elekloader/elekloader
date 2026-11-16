@@ -26,7 +26,9 @@ into its string pool (UTF-8, NUL-terminated):
   export drive_abs16; bit 3, F_STD_MAP: it maps a std1 mod's subscriptions through
   the core's std map, which the claims of kind 3 carry, a mod's export drive_std_map; docs/DRIVE.md,
   "The boot link"; bit 4, F_COLLECTIONS: +Drive mods may declare tables, a mod's export
-  drive_collections; docs/DRIVE.md, "+Drive collections"); zero to +0x64.
+  drive_collections; docs/DRIVE.md, "+Drive collections"; bit 5, F_CLAIMS: its boot linker takes
+  contributions' claims, and the site map carries the flashed contributions' claims (SITE_CLAIM),
+  a mod's export drive_claims); zero to +0x64.
 
   module (16): name, version, u8 kind (0 core, 1 flashed mod, 2 a mod that imports core_desc),
     u8 flags (bit 0: has sites), u16 index, u16 first export, u16 export count
@@ -90,11 +92,13 @@ STD_MAP = 'drive_std_map'        # a loader's export: sets F_STD_MAP and writes 
 F_STD_MAP = 8                    # flags bit 3: the loader maps std1 subscriptions (claims of kind 3)
 COLLECTIONS = 'drive_collections'   # a loader's export: nonzero sets F_COLLECTIONS
 F_COLLECTIONS = 16               # flags bit 4: +Drive mods may declare tables ("collections")
+CLAIMS = 'drive_claims'          # a loader's export: sets F_CLAIMS and maps the flashed claims
+F_CLAIMS = 32                    # flags bit 5: the boot linker takes contributions' claims (SITE_CLAIM)
 MODULE, EXPORT, TABLE, CLAIM, AREA, SCOPE, RANGE = 16, 8, 24, 8, 20, 16, 12
 # a site map range's kind (ABI 1.2)
-SITE_SITE, SITE_COPIED, SITE_DEVICE, SITE_BOOT, SITE_RUN, SITE_TRAILER = 1, 2, 3, 4, 5, 6
+SITE_SITE, SITE_COPIED, SITE_DEVICE, SITE_BOOT, SITE_RUN, SITE_TRAILER, SITE_CLAIM = 1, 2, 3, 4, 5, 6, 7
 SITE_KINDS = {SITE_SITE: 'site', SITE_COPIED: 'copied', SITE_DEVICE: 'device', SITE_BOOT: 'boot copier',
-              SITE_RUN: 'RAM image', SITE_TRAILER: 'lockfile trailer'}
+              SITE_RUN: 'RAM image', SITE_TRAILER: 'lockfile trailer', SITE_CLAIM: 'claim'}
 PRE_CODE, PRE_DATA = 1, 2                  # a pre-link range's kind (ABI 1.2)
 PRE_KINDS = {PRE_CODE: 'code', PRE_DATA: 'data'}
 NO_MODULE = 0xFFFF
@@ -297,7 +301,9 @@ def dump(d):
                + (', payloads skipped' if d.get('flags', 0) & F_PAYLOAD_SKIP else '')
                + (', abs16 relocations' if d.get('flags', 0) & F_ABS16 else '')
                + (', std1 mapped' if d.get('flags', 0) & F_STD_MAP else '')
-               + (', +Drive collections' if d.get('flags', 0) & F_COLLECTIONS else ''))
+               + (', +Drive collections' if d.get('flags', 0) & F_COLLECTIONS else '')
+
+               + (', claims taken' if d.get('flags', 0) & F_CLAIMS else ''))
     s = d['storage']
     out.append('lockfile trailer at 0x%08x, %d bytes' % s['trailer'])
     out += ['storage %s: %d of %d bits, generation %d' % (n, u, r, g) for n, r, u, g in s['scopes']]

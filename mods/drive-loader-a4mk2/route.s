@@ -90,5 +90,9 @@ dl_handler:
 | ("collections", dl.h DL_COLLECTIONS), so host tools check and lay out sets as it does
         .globl  drive_collections
         .set    drive_collections, 1
+| the build descriptor's flags bit 5: the boot linker takes contributions' claims, checked against
+| the site map, which then carries the flashed contributions' claims (dlink.c, scan_claims)
+        .globl  drive_claims
+        .set    drive_claims, 1
         .globl  drive_staging_size
         .set    drive_staging_size, 0x400                    | fs.h DL_STAGING_SIZE

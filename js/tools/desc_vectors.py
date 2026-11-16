@@ -71,6 +71,14 @@ def cases(B):
     d = copy.deepcopy(d)
     d[1]['exports'].remove('drive_std_map')
     out['a std map, a loader that does not map it'] = d
+    d = T.descriptor_mods(B)                   # F_CLAIMS: the flashed contributions' claims in the site map (kind 7)
+    d[2]['contribute'][0]['claims'] = [[B.at(0x2800), B.at(0x2810)], [B.at(0x2900), B.at(0x2904)]]
+    d[1]['symbols']['drive_claims'] = ['abs', 1]
+    d[1]['exports'] = d[1]['exports'] + ['drive_claims']
+    out['a loader that takes claims'] = d
+    d = copy.deepcopy(d)
+    d[1]['exports'].remove('drive_claims')
+    out['claims, a loader that does not take them'] = d
     return out
 
 

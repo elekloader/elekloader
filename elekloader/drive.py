@@ -317,6 +317,8 @@ class Build:
         boots = [lo for lo, _hi, k, _mi in self.site_map if k == desc.SITE_BOOT]
         self.main_lo = SITE_MAIN_LO
         self.main_hi = min(boots) if boots and min(boots) > SITE_MAIN_LO and not self.telos else 0
+        # contributions' claims (F_CLAIMS, the A4's dlink.c): taken where the site map can check them
+        self.take_claims = bool(d.get('flags', 0) & desc.F_CLAIMS) and bool(self.main_hi)
         self.applied = []                       # sites a boot applied: [(addr, stock bytes)]
         self.image, self._ram, self.desc_at = image, None, None
         if image is not None:
@@ -420,6 +422,7 @@ class Choice:
         self.fields = []                        # its +Drive storage fields (drive_store's documents)
         self.sites, self.regions = [], []        # TELOS: [lo, hi) each
         self.drive_sites = []                   # [(lo, hi, is_site)]: its sites, then its copied blocks
+        self.drive_claims = []                  # [(lo, hi)]: its contributions' claims (F_CLAIMS)
         self.alive = False
 
     def refuse(self, code, detail='', arg=0, note='', state=REFUSED):
@@ -758,7 +761,7 @@ def pass1(build, c, state):
                     n = len(bytes.fromhex(v))
                 except (TypeError, ValueError):
                     return c.refuse('format', note='an entry\'s data')
-            elif k == 'claims' and not _empty(v):
+            elif k == 'claims' and not _empty(v) and not build.take_claims:   # else read after the sites
                 return c.refuse('feature', 'claims')
             elif k == 'relocs' and build.payload_skip and _payload_relocs(v):
                 return c.refuse('feature', 'relocs into .payload')
@@ -809,6 +812,9 @@ def pass1(build, c, state):
     sites = _scan_sites(build, c, doc, state)
     if sites is None:
         return False
+    claims = _scan_claims(build, c, doc, state, len(sites))
+    if claims is None:
+        return False
     if '.payload' in secs and build.payload_skip:   # its bytes stay on the +Drive: nothing places it
         doc = dict(doc, sections={k: v for k, v in secs.items() if k != '.payload'},
                    symbols={k: v for k, v in syms.items() if not (isinstance(v, list) and v[:1] == ['.payload'])})
@@ -819,13 +825,13 @@ def pass1(build, c, state):
     for x in m.contribute:                      # a standard event's subscription: the table it maps to
         if 'event' in x and build.std_map:
             x['to'] = build.std[x['event']]
-    c.mod, c.exports, c.fields, c.drive_sites = m, exports, fields, sites
+    c.mod, c.exports, c.fields, c.drive_sites, c.drive_claims = m, exports, fields, sites, claims
     c.tables = tables
     state['syms'] += len(exports) + 2 * len(tables)
     state['colls'] += len(tables)
     state['fields'] += len(fields)
     state['contribs'] += contribs
-    state['sites'] += len(sites)
+    state['sites'] += len(sites) + len(claims)
     state['sdata'] += sum(hi - lo for lo, hi, is_site in sites if is_site)
     c.alive = True
     return True
@@ -935,7 +941,8 @@ def _scan_sites(build, c, doc, state):
             continue
         for a, b, kind, mi in build.site_map:
             if _overlap(lo, hi, a, b):
-                owner = names[mi] if kind in (desc.SITE_SITE, desc.SITE_COPIED) and mi < len(names) else ''
+                owner = names[mi] if kind in (desc.SITE_SITE, desc.SITE_COPIED, desc.SITE_CLAIM) \
+                    and mi < len(names) else ''
                 return c.refuse('clash', _site_detail(lo, owner), SITE_CORE << 8) or None
         for a, b, _kind in build.prelink:
             if _overlap(lo, hi, a, b):
@@ -953,6 +960,52 @@ def _scan_sites(build, c, doc, state):
                 return c.refuse('clash', _site_detail(lo, names[mi] if mi < len(names) else ''),
                                 SITE_CORE << 8) or None
     return out
+
+
+def _scan_claims(build, c, doc, state, nsites):
+    """Pass 1's part for the contributions' "claims" (F_CLAIMS), after the sites, as dlink.c's
+    scan_claims: each claim's form ([lo, hi], lo < hi, inside the main OS), the loader's room (its
+    sites' pool), then each against the flashed build's site map (every kind, the flashed claims
+    too) and the pre-link ranges. Nothing is written for a claim. -> [(lo, hi)], or None after
+    refusing c."""
+    out = []
+    if not build.take_claims:
+        return out
+    for x in doc.get('contribute') or []:
+        v = x.get('claims')
+        if _empty(v):
+            continue
+        if not isinstance(v, list):
+            return c.refuse('format', note='a contribution\'s claims') or None
+        for r in v:
+            lo, hi = (_num(r[0]), _num(r[1])) if isinstance(r, list) and len(r) == 2 else (None, None)
+            if lo is None or hi is None or lo < build.main_lo or hi > build.main_hi or not lo < hi:
+                return c.refuse('format', note='a claim %r' % (r,)) or None
+            if state['sites'] + nsites + len(out) >= build.pools['sites']:
+                return c.refuse('limit', note='sites') or None
+            out.append((lo, hi))
+    names = [m['name'] for m in build.modules]
+    for lo, hi in out:
+        for a, b, kind, mi in build.site_map:
+            if _overlap(lo, hi, a, b):
+                owner = names[mi] if kind in (desc.SITE_SITE, desc.SITE_COPIED, desc.SITE_CLAIM) \
+                    and mi < len(names) else ''
+                return c.refuse('clash', _site_detail(lo, owner), SITE_CORE << 8) or None
+        for a, b, _kind in build.prelink:
+            if _overlap(lo, hi, a, b):
+                return c.refuse('clash', _site_detail(lo), SITE_PRELINK << 8) or None
+    return out
+
+
+def _clashes(mine, theirs):
+    """Do two overlapping ranges of different mods clash: a site (1) with anything, a claim (2) with a
+    claim; a copied block (0) with a copied block or a claim does not."""
+    return mine == 1 or theirs == 1 or (mine == 2 and theirs == 2)
+
+
+def _ranges(c):
+    """A mod's ranges in dlink.c's order: its sites, its copied blocks, then its claims, with their kind."""
+    return [(lo, hi, 1 if s else 0) for lo, hi, s in c.drive_sites] + [(lo, hi, 2) for lo, hi in c.drive_claims]
 
 
 def _resolvable(build, alive, x):
@@ -1017,10 +1070,10 @@ def _round(build, order):
                     if o is None or len(x['data']) % dict(o.tables)[x['to']]:
                         why = ('table', x['to'])
                         break
-        if why is None:                         # sites against earlier living mods' sites and
-            for lo, hi, mine in c.drive_sites:  # copied blocks (two copied blocks may share bytes)
-                o = next((o for o in earlier if any((mine or theirs) and _overlap(lo, hi, a, b)
-                                                    for a, b, theirs in o.drive_sites)), None)
+        if why is None:                         # sites and claims against earlier living mods'
+            for lo, hi, mine in _ranges(c):     # sites, copied blocks and claims (_clashes)
+                o = next((o for o in earlier if any(_clashes(mine, theirs) and _overlap(lo, hi, a, b)
+                                                    for a, b, theirs in _ranges(o))), None)
                 if o is not None:
                     why = ('clash', _site_detail(lo), SITE_MOD << 8 | o.line)
                     break

@@ -32,7 +32,7 @@ def sets(B):
         out += [(code + ': refused', bad, area), (code + ': loads', good, area)]
     h, u = T.hello(B), T.user(B)
     out = out + [(n, f, None) for n, f in _more(B, h, u)]
-    return out + _top(B) + _skip(B) + _abs16(B) + _std(B) + _collections(B)
+    return out + _top(B) + _skip(B) + _abs16(B) + _std(B) + _collections(B) + _claims(B)
 
 
 def _collections(B):
@@ -59,6 +59,14 @@ def _collections(B):
         and got[3] == [(15, 'sc_cmds'), (14, 'nothing_has_this')] and got[4][0] == (12, 'sc_cmds') \
         and got[6] == [(7, 'collections')] and got[7][0][0] == got[8][0][0] == 5, got
     return out
+
+
+def _claims(B):
+    """Sets on a build whose boot linker takes contributions' claims (F_CLAIMS, the A4's; a flashed claim in its
+    site map), test_drive_claims's, and a claim on one that doesn't."""
+    import test_drive_claims as TC
+    out = [('claims: ' + n, _files(*mods), 'claims') for n, mods, _want in TC.sets(B)]
+    return out + [('claims: no F_CLAIMS on this build', _files(TC.cm(B, 'a-mod', [[B.at(0x1000), B.at(0x1010)]])), None)]
 
 
 def _std(B):

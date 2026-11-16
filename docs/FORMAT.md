@@ -326,7 +326,7 @@ may hold; the link and the tools are in [DRIVE.md](DRIVE.md).
 
 **What a +Drive mod is.** A format-2 mod with only `.run` and `.bss`,
 relocations only in `.run` (`abs32`, `pc32`, `pc16`; `abs16` on `F_ABS16`), no
-`sharc` or contribution `claims`; `storage`, `sites`, `copied`,
+`sharc`; `storage`, `sites`, `copied`, entry `claims`,
 `resources.regions` and `collections` only where the build takes them, a
 `.payload` only where the loader skips it. It adds whole entries to tables
 whose descriptor allows more (not DSP) or a +Drive mod declares, at an order below 2^31-1. It imports the build's exports,
@@ -379,7 +379,7 @@ nothing loads.
 | 27 | `region` | regions overlap |
 | 28 | `outside` | no free area |
 | 29 | `store` | storage room short (detail `WHAT NEED HAVE`) |
-| 30 | `clash` | a site or copied block clashes (argument: kind << 8 \| other's line; kinds 1 flashed, 2 +Drive, 3 pre-link, 4 not stock; detail: address) |
+| 30 | `clash` | a site, copied block or claim clashes (argument: kind << 8 \| other's line; kinds 1 flashed, 2 +Drive, 3 pre-link, 4 not stock; detail: address) |
 | 31 | `std` | a standard event the core's `std` map lacks (detail: it) |
 
 When nothing is linked, the loader keeps why:
