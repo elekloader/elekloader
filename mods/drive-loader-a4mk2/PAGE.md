@@ -20,11 +20,17 @@ addresses (`page.s`):
   `core_setting_add` would draw the row without one. The label is a std::string built by
   `0x4018471e`.
 - **The frame.** While the page shows, `ev_draw` (order 95) clears the whole 128 x 64 frame
-  and draws the page over stock's GLOBAL menu, which stays underneath unchanged: a title bar
-  (`MODS`, `MODS/folder` clipped from the left, or `MODS: BUILD`), six list rows of 9 pixels,
-  a scroll bar past six rows, and over them the side panels, the confirm window and the
-  message box. Text is `core_text`'s `TEXT_SMALL` (stock's font 16); the cursor's row is a set
-  bar with light text; a ticked row has a 3 x 3 square left of its label. The page asks for
+  and draws the page over stock's GLOBAL menu, which stays underneath unchanged, in the A4's
+  own list style (MANAGE PROJECTS and SOUND BROWSER): no title, eight list rows of 8 pixels
+  from the top; on the right MANAGE PROJECTS' dotted scroll track with a box thumb (the whole
+  track while every row shows) and edge line with the page-arrow mark at mid-height, on the
+  left SOUND BROWSER's edge line with its mark. The side panes split the screen as stock's
+  do: the list stays, cut by a full-height line carrying the mark, the action pane right of
+  x 65 as MANAGE PROJECTS' pane, VIEW BUILD / VIEW +DRIVE left as SOUND BROWSER's pane, as
+  wide as its label. Over them the confirm window and the message box. Text is
+  `core_text`'s `TEXT_SMALL` (stock's font 16); the cursor's row is a 7-row set bar with
+  light text, and while a pane has the keys an outline open on the pane's side, as MANAGE
+  PROJECTS draws it; a ticked row has a 3 x 3 square left of its label. The page asks for
   a frame (`core_redraw`) only when something on it changed.
 - **Keys and turns.** While the page shows, `ev_key` and `ev_enc` (order 1) take every event,
   so GLOBAL gets nothing. A key whose press the page took keeps its release from stock after

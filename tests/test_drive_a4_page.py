@@ -60,7 +60,7 @@ class Page(unittest.TestCase):
     def test_an_empty_folder_shows_the_placeholder_row_and_opens_no_panel(self):
         frames, takes, states = self.run_page('ofrlyfsns')
         for f in frames:
-            self.assertEqual(f, [(2, 2, True, 'MODS'), (8, 12, True, 'NO MODS ON +DRIVE')])
+            self.assertEqual(f, [(8, 1, True, 'NO MODS ON +DRIVE')])   # no title: row 0 at the top
         self.assertEqual(states[0]['panel'], '0')
         self.assertEqual(states[0]['open'], '1')
         self.assertEqual(states[1]['open'], '0')          # NO closes the page
@@ -75,15 +75,15 @@ class Page(unittest.TestCase):
     def test_rows_folders_sizes_and_ticks(self):
         frames, _takes, states = self.run_page('oTfdyTf', 'drums/', 'a.elemod:2000', 'b.txt:10',
                                                 'drums/k.elemod:1000')
-        self.assertEqual(self.texts(frames[0]), ['MODS', '(D)', 'drums', '1KB', 'a'])   # no .txt
+        self.assertEqual(self.texts(frames[0]), ['(D)', 'drums', '1KB', 'a'])   # no .txt
         ticked = frames[1]
-        self.assertIn((2, 22, True, 'TICK'), ticked)       # row 1 ticked, the cursor's (light on the bar)
-        self.assertIn((8, 21, True, 'a'), ticked)
+        self.assertIn((4, 10, True, 'TICK'), ticked)       # row 1 ticked, the cursor's (light on the bar)
+        self.assertIn((8, 9, True, 'a'), ticked)
 
     def test_a_folder_opens_and_dot_dot_goes_back_to_it(self):
         frames, _takes, states = self.run_page('oyfyfs', 'drums/', 'a.elemod', 'drums/k.elemod')
-        self.assertEqual(self.texts(frames[0])[:4], ['MODS/drums', '(D)', '..', 'k'])
-        self.assertEqual(frames[1][1:3], [(123, 12, True, '(D)'), (8, 12, True, 'drums')])   # back on it
+        self.assertEqual(self.texts(frames[0])[:4], ['(D)', '..', 'k'])
+        self.assertEqual(frames[1][0:2], [(117, 1, True, '(D)'), (8, 1, True, 'drums')])   # back on it
         self.assertEqual(states[0]['cur'], '0')
 
     def test_load_to_build_saves_the_ticked_files_after_its_confirm(self):
@@ -102,15 +102,15 @@ class Page(unittest.TestCase):
 
     def test_the_build_list_after_a_load(self):
         frames, _takes, _states = self.run_page('oyrddyyTnlyf', 'a.elemod', 'b.elemod')
-        self.assertEqual(self.texts(frames[-1]), ['MODS: BUILD', 'ADD', 'a'])
+        self.assertEqual(self.texts(frames[-1]), ['ADD', 'a'])
 
     def test_the_cursor_scrolls_with_up_down_func_and_the_data_encoder(self):
         files = ['m%02d.elemod' % i for i in range(10)]
         _frames, _takes, states = self.run_page('odddddddsUs++-sus', *files)
-        self.assertEqual((states[0]['cur'], states[0]['top']), ('7', '2'))
-        self.assertEqual((states[1]['cur'], states[1]['top']), ('9', '4'))   # FUNC: a page, to the end
-        self.assertEqual((states[2]['cur'], states[2]['top']), ('8', '4'))   # +, + at the end, then -
-        self.assertEqual((states[3]['cur'], states[3]['top']), ('7', '4'))
+        self.assertEqual((states[0]['cur'], states[0]['top']), ('7', '0'))   # eight rows
+        self.assertEqual((states[1]['cur'], states[1]['top']), ('9', '2'))   # FUNC: a page, to the end
+        self.assertEqual((states[2]['cur'], states[2]['top']), ('8', '2'))   # +, + at the end, then -
+        self.assertEqual((states[3]['cur'], states[3]['top']), ('7', '2'))
 
     def test_a_message_box_takes_the_next_key_and_closes_by_itself(self):
         _frames, _takes, states = self.run_page('orddysntsorddyTs', 'a.elemod')

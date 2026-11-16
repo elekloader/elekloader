@@ -790,26 +790,34 @@ static int inspect(struct file *r)
 
 /* ---- the page's view: drawn with std1's helpers ---- */
 
-/* The frame is 128 x 64, y 0 the top row. A title bar (rows 0..8), then ROWS list rows of
- * ROW_H pixels; the cursor's row is a set bar with light text, as stock's lists draw it. Text is
- * TEXT_SMALL, stock's font 16 (5 rows), which core_text_width measures for the clips. */
-#define TITLE_H 9
-#define ROW_H 9
-#define ROWS 6
-#define ROW_Y(r) (TITLE_H + 1 + (r) * ROW_H)
-#define TEXT_DY 2                        /* a row's text sits this far below its top */
+/* The frame is 128 x 64, y 0 the top row: ROWS list rows of ROW_H pixels from the top, no
+ * title, as the Rytm's MODS page (stock's SAMPLES view) draws its list. The cursor's row is a
+ * set bar with light text, an outline while a side panel has the keys. Text is TEXT_SMALL,
+ * stock's font 16 (5 rows, the font of the Rytm's file view), which core_text_width measures
+ * for the clips. */
+#define ROW_H 8
+#define ROWS 8
+#define ROW_Y(r) ((r) * ROW_H)
+#define LIST_TEXT TEXT_SMALL
+#define FONT_LIST 16                     /* LIST_TEXT's font (core-a4mk2 std.c) */
+#define TEXT_DY 1                        /* a row's text sits this far below its top */
+#define SPLIT_X 65                       /* the action panel's line, as MANAGE PROJECTS' pane */
+#define BAR_L 3                          /* the cursor bar: x BAR_L..BAR_R, BAR_H rows, between */
+#define BAR_R 119                        /* the edges as SOUND BROWSER and MANAGE PROJECTS draw it */
+#define BAR_H 7
 #define LABEL_X 8                        /* the label starts this far into a row (the tick before it) */
-#define COLUMN_X 123                     /* the right-hand column ends here (right-aligned) */
-#define BAR_X 126                        /* the scroll bar: x 126..127 */
+#define COLUMN_X 117                     /* the right-hand column ends here (right-aligned) */
+#define TRACK_X 121                      /* MANAGE PROJECTS' scroll column: a dotted track at x 122..124, */
+#define EDGE_X 127                       /* the thumb a box over x 121..125; the edge lines with the
+                                          * page-arrow marks at x 0..1 and 126..127 */
 #define STATE_GAP 3                      /* pixels kept free before the right-hand column */
 #define BOX_TICKS 60                     /* a message box closes by itself after 3 s */
-#define FONT_SMALL 16                    /* TEXT_SMALL's font (core-a4mk2 std.c) */
 
 #include "clip.inc"
 
 static int text_w(const char *s)
 {
-    return core_text_width(FONT_SMALL, s);
+    return core_text_width(FONT_LIST, s);
 }
 
 enum { M_DRIVE, M_BUILD };
@@ -1969,67 +1977,112 @@ static void frame_box(void *fb, int x, int y, int w, int h)
     core_fill(fb, x + w - 1, y, 1, h, 1);
 }
 
-/* the title: MODS and the open folder (clipped from the left), or BUILD */
-static void draw_title(void *fb)
+static const char *panel_label(int i)
 {
-    char t[48], p[DL_PATH_MAX];
-    core_fill(fb, 0, 0, 128, TITLE_H, 1);
-    if (mode == M_BUILD)
-        copy_str(p, "MODS: BUILD", sizeof p);
-    else
-        cat(cat(p, p + sizeof p, cwd[0] ? "MODS/" : "MODS"), p + sizeof p, cwd);
-    clip_tail(t, t + sizeof t, p, 124, text_w);
-    core_text(fb, 2, TEXT_DY, TEXT_SMALL | TEXT_LEFT | TEXT_INVERT, t);
+    return panel == PN_RIGHT ? act_label(i) : mode == M_DRIVE ? "VIEW BUILD" : "VIEW +DRIVE";
 }
+
+static int panel_w(void);
+static void draw_edge(void *fb);
 
 static void draw_list(void *fb)
 {
     char lab[48], col[16];
     int r, n = list_n();
+    draw_edge(fb);
     if (!n) {                            /* the placeholder row */
-        core_fill(fb, 0, ROW_Y(0), BAR_X - 1, ROW_H, 1);
-        core_text(fb, LABEL_X, ROW_Y(0) + TEXT_DY, TEXT_SMALL | TEXT_LEFT | TEXT_INVERT,
+        core_fill(fb, BAR_L, ROW_Y(0), BAR_R - BAR_L + 1, BAR_H, 1);
+        core_text(fb, LABEL_X, ROW_Y(0) + TEXT_DY, LIST_TEXT | TEXT_LEFT | TEXT_INVERT,
                   mode == M_DRIVE ? "NO MODS ON +DRIVE" : "BUILD EMPTY");
         return;
     }
     for (r = 0; r < ROWS && top + r < n; r++) {
-        int i = top + r, y = ROW_Y(r), hl = i == cur, w;
+        int i = top + r, y = ROW_Y(r), hl = i == cur && panel == PN_NONE, w;
         unsigned inv = hl ? TEXT_INVERT : 0;
         if (hl)
-            core_fill(fb, 0, y, BAR_X - 1, ROW_H, 1);
+            core_fill(fb, BAR_L, y, BAR_R - BAR_L + 1, BAR_H, 1);
         row_column(i, col, col + sizeof col);
         w = col[0] ? text_w(col) : 0;
         if (col[0])
-            core_text(fb, COLUMN_X, y + TEXT_DY, TEXT_SMALL | TEXT_RIGHT | inv, col);
+            core_text(fb, COLUMN_X, y + TEXT_DY, LIST_TEXT | TEXT_RIGHT | inv, col);
         row_label(i, lab, lab + sizeof lab, COLUMN_X - w - STATE_GAP - LABEL_X);
-        core_text(fb, LABEL_X, y + TEXT_DY, TEXT_SMALL | TEXT_LEFT | inv, lab);
+        core_text(fb, LABEL_X, y + TEXT_DY, LIST_TEXT | TEXT_LEFT | inv, lab);
         if (is_ticked(i))                /* the tick: a 3 x 3 square left of the label */
-            core_fill(fb, 2, y + TEXT_DY + 1, 3, 3, !hl);
+            core_fill(fb, 4, y + 2, 3, 3, !hl);
+        if (i == cur && !hl) {           /* a side panel has the keys: the cursor's outline */
+            /* MANAGE PROJECTS' outline: open on the pane's side */
+            int x0 = panel == PN_LEFT ? panel_w() + 3 : BAR_L, x1 = panel == PN_RIGHT ? SPLIT_X - 3 : BAR_R;
+            core_fill(fb, x0, y, x1 - x0 + 1, 1, 1);
+            core_fill(fb, x0, y + BAR_H - 1, x1 - x0 + 1, 1, 1);
+            core_fill(fb, panel == PN_RIGHT ? x0 : x1, y, 1, BAR_H, 1);
+        }
     }
-    if (n > ROWS) {                      /* the scroll bar */
-        int all = ROWS * ROW_H, h = all * ROWS / n, y;
-        if (h < 3)
-            h = 3;
-        y = ROW_Y(0) + (all - h) * top / (n - ROWS);
-        core_fill(fb, BAR_X, ROW_Y(0), 2, all, 0);
-        core_fill(fb, BAR_X + 1, y, 1, h, 1);
+    {                                    /* the thumb: the whole track while every row shows */
+        int h = n > ROWS ? 64 * ROWS / n : 64, y;
+        if (h < 4)
+            h = 4;
+        y = n > ROWS ? (64 - h) * top / (n - ROWS) : 0;
+        core_fill(fb, TRACK_X, y, 5, h, 0);
+        core_fill(fb, TRACK_X, y, 5, 1, 1);
+        core_fill(fb, TRACK_X, y + h - 1, 5, 1, 1);
+        core_fill(fb, TRACK_X, y, 1, h, 1);
+        core_fill(fb, TRACK_X + 4, y, 1, h, 1);
     }
 }
 
-/* the action panel (right, x 62..127) or the left one (x 0..55), over the list */
+/* the edges: on the right MANAGE PROJECTS' dotted scroll track and edge line with the
+ * page-arrow mark at mid-height (RIGHT opens a pane), on the left SOUND BROWSER's edge line
+ * with its mark (LEFT opens one) */
+static void draw_edge(void *fb)
+{
+    int y;
+    core_fill(fb, TRACK_X + 2, 0, 1, 64, 1);
+    for (y = 0; y < 64; y += 2) {
+        core_fill(fb, TRACK_X + 1, y, 1, 1, 1);
+        core_fill(fb, TRACK_X + 3, y, 1, 1, 1);
+    }
+    core_fill(fb, EDGE_X, 0, 1, 29, 1);
+    core_fill(fb, EDGE_X, 34, 1, 30, 1);
+    core_fill(fb, EDGE_X - 1, 30, 1, 3, 1);
+    core_fill(fb, EDGE_X, 31, 1, 1, 1);
+    core_fill(fb, 0, 0, 1, 29, 1);
+    core_fill(fb, 0, 34, 1, 30, 1);
+    core_fill(fb, 1, 30, 1, 3, 1);
+    core_fill(fb, 0, 31, 1, 1, 1);
+}
+
+
+/* The side panels split the screen as the A4's own panes do (MANAGE PROJECTS' on the right,
+ * SOUND BROWSER's on the left): the list stays, cut by a full-height line that carries the
+ * page-arrow mark, and the pane's rows from the top beside it, its cursor a 7-row bar. The
+ * action pane is right of x SPLIT_X; the left one (VIEW BUILD / VIEW +DRIVE) is as wide as its
+ * label, its line at x panel_w() + 1. */
+static int panel_w(void)
+{
+    return text_w(panel_label(0)) + 3;   /* the left pane's bar: x 0..panel_w() - 1 */
+}
+
 static void draw_panel(void *fb)
 {
-    int i, n = panel == PN_RIGHT ? NACT : 1, x = panel == PN_RIGHT ? 62 : 0, w = panel == PN_RIGHT ? 66 : 56;
-    frame_box(fb, x, TITLE_H, w, 64 - TITLE_H);
+    int i, n = panel == PN_RIGHT ? NACT : 1;
+    int line = panel == PN_RIGHT ? SPLIT_X : panel_w() + 1;
+    int x0 = panel == PN_RIGHT ? SPLIT_X + 2 : 0, x1 = panel == PN_RIGHT ? 127 : panel_w() - 1;
+    if (panel == PN_RIGHT)
+        core_fill(fb, SPLIT_X - 1, 0, 128 - SPLIT_X + 1, 64, 0);
+    else
+        core_fill(fb, 0, 0, line + 2, 64, 0);
+    core_fill(fb, line, 0, 1, 29, 1);    /* the line, broken round its mark at mid-height */
+    core_fill(fb, line, 30, 1, 3, 1);
+    core_fill(fb, line, 34, 1, 30, 1);
+    core_fill(fb, panel == PN_RIGHT ? line - 1 : line + 1, 31, 1, 1, 1);
     for (i = 0; i < n; i++) {
-        int y = TITLE_H + 2 + i * ROW_H;
-        const char *t = panel == PN_RIGHT ? act_label(i) : mode == M_DRIVE ? "VIEW BUILD" : "VIEW +DRIVE";
+        int y = ROW_Y(i);
         unsigned inv = 0;
         if (i == pcur) {
-            core_fill(fb, x + 1, y, w - 2, ROW_H, 1);
+            core_fill(fb, x0, y, x1 - x0 + 1, BAR_H, 1);
             inv = TEXT_INVERT;
         }
-        core_text(fb, x + 3, y + TEXT_DY, TEXT_SMALL | TEXT_LEFT | inv, t);
+        core_text(fb, x0 + 1, y + TEXT_DY, LIST_TEXT | TEXT_LEFT | inv, panel_label(i));
     }
 }
 
@@ -2066,7 +2119,6 @@ void dl_draw(void *fb, void *ctrl)
         return;
     drawn_at = ticks;
     core_fill(fb, 0, 0, 128, 64, 0);
-    draw_title(fb);
     draw_list(fb);
     if (panel != PN_NONE)
         draw_panel(fb);
