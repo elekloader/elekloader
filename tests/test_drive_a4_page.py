@@ -134,10 +134,11 @@ class Page(unittest.TestCase):
         self.assertEqual(self.restarts, [])
 
     def test_yes_on_the_restart_confirm_says_so_then_restarts_without_the_guard(self):
-        frames, takes, states = self.run_page('oyrddyyTnlyrdddddyysnft', 'a.elemod')
-        self.assertEqual(states[-1]['box'], 'RESTARTING')
-        self.assertEqual(states[-1]['panel'], '0')
-        self.assertIn('RESTARTING', self.texts(frames[-1]))   # NO after YES: the box stays
+        frames, takes, states = self.run_page('oyrddyyTnlyrdddddyystnfstt', 'a.elemod')
+        self.assertEqual(states[-2]['box'], 'RESTARTING')   # 1 s on: not yet
+        self.assertEqual(states[-2]['panel'], '0')
+        self.assertEqual(states[-1]['box'], 'RESTARTING')   # NO after YES: the box stays
+        self.assertIn('RESTARTING', self.texts(frames[-1]))
         self.assertEqual(self.restarts, ['locked=1 guard_off=1 box=RESTARTING'])
 
 

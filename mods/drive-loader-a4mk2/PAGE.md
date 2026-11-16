@@ -103,7 +103,8 @@ from the running one: a build row reads `ADD` or `DROP`, or `!` for a saved mod 
 refused or dropped (another boot tries it again). Parked data doesn't count: FORGET DATA
 rewrites it at once. Its confirm always warns, since a reboot drops what the project hasn't
 saved and core has no read of the modified mark. YES closes the pane, shows `RESTARTING` and
-takes no more keys; once that frame is drawn (or after 0.5 s) the page takes the crash guard off
+takes no more keys; 2 s later (as stock's SUCCESS! REBOOTING shows, and so YES's release and a
+remote key's status are answered first) the page takes the crash guard off
 (the restart is the user's, and the guard waits while the page shows after a boot that applied
 sites), takes `dl_lock` for good, so no upload or page write is cut between its store calls,
 and calls core-a4mk2's `core_restart` (`analog-four-mk2/system.h`), which waits for the +Drive

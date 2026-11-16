@@ -1604,12 +1604,11 @@ static void do_rmdir(void)
 /* APPLY & RESTART's YES: the page says RESTARTING and takes no more keys; dl_page_tick reboots
  * once that frame is drawn (restart_tick) */
 static u8 restarting;
-static u32 frames, restart_frame, restart_asked;   /* frames: dl_draw's count */
+static u32 restart_asked;
 
 static void do_restart(void)
 {
     restarting = 1;
-    restart_frame = frames;
     restart_asked = ticks;
     panel = PN_NONE;
     box_show("RESTARTING", 1);
@@ -2187,7 +2186,6 @@ void dl_draw(void *fb, void *ctrl)
     if (!page_on)
         return;
     drawn_at = ticks;
-    frames++;
     core_fill(fb, 0, 0, 128, 64, 0);
     draw_list(fb);
     if (panel != PN_NONE)
@@ -2326,19 +2324,21 @@ static void follow_route(void)
 #define TICK_US 50000u
 static u32 rest_until;                   /* the tick the background may work again */
 
-/* APPLY & RESTART, once its box is drawn (or RESTART_WAIT ticks on, should no frame come): the
+/* APPLY & RESTART, RESTART_TICKS after its YES: the box shows that long (as stock's SUCCESS!
+ * REBOOTING), and YES's release, and a remote key's status after it, are answered before the
+ * reset (the emulator gate's first try reset inside the remote tap, 2026-11-16). Then the
  * crash guard comes off first, since the restart is the user's and the running set got this far
  * (boot.c keeps it on while the page shows after a boot that applied sites), then dl_lock, held
  * for good, so no route upload or page write is cut between its store calls, then core_restart,
  * which waits for the +Drive store and card and the panel link and UART, and resets. An upload the
  * route hasn't committed is dropped, as at a power cut; the store's directory stays whole. */
-#define RESTART_WAIT 10
+#define RESTART_TICKS 40                 /* 2 s */
 
 void dl_guard_off(void);
 
 static void restart_tick(void)
 {
-    if (!restarting || (frames == restart_frame && ticks - restart_asked < RESTART_WAIT))
+    if (!restarting || ticks - restart_asked < RESTART_TICKS)
         return;
     dl_lock();
     dl_guard_off();
