@@ -25,8 +25,8 @@ platform evidence).
 | `ev_render_in` | 0x401013c6 | 0x4011fb6e | the audio interrupt (vector 191, 0x401013be) |
 | `ev_render_out` | 0x401040f6 | 0x401216c2 | its only exit; the frame is 0xec (the Rytm's 0xb4) |
 
-The routines `core_additem` calls are the Rytm's, the same code with the
-addresses in it masked: `OP_NEW` 0x400653b8, `ITEM_CTOR` 0x4005c7c4,
+The routines `core_additem` calls are the Rytm's, matched with addresses
+masked: `OP_NEW` 0x400653b8, `ITEM_CTOR` 0x4005c7c4,
 `MENU_ADD` 0x4005bffa and `FN_MGR` 0x40164940. The A4 has no manager for the
 Rytm's function-pointer type (`PFSs15FileStorageInfoE`); 0x40164940 is the
 only one with this code, for `PFSsR15FileStorageInfoPhE`, and its code is the
@@ -591,8 +591,8 @@ comment lists its events, sites and contexts. A4 numbers: `analog-four-mk2/`
 | `ev_tick`, `ev_draw`, `ev_settings`, `ev_project`, `ev_render_in` | native (= or prefix) |
 | the others: `ev_boot`, `ev_key`, `ev_param_turn` (std.c), seven MIDI (stdmidi.c), two voice (voice.c), eleven UI (ui.c) | `std_` + the name |
 
-Native events (`ev_knob_turn`, `ev_analog_frame`, `ev_mod_set`) and the
-A4's numbering: `ui.h`.
+The native events (`ev_knob_turn` and the rest) and the A4's numbering:
+`ui.h`.
 Not reported (std1 rule 6): a list parameter's turn. Unconfirmed: `keys.h`'s
 [emu] ids, the LED ids and colours. Test mods:
 [std-check](../../examples/std-check-a4mk2),
@@ -616,7 +616,7 @@ The runs' logs are in their pull requests; what they established:
   frame; every mod storage case above (saves, loads, power cycles, the
   write-through, per-part saves, `ev_project`); no stock access to the live
   homes other than core's.
-- **The lock service (0.5)** [emu], with
+- **The lock service (0.5)** [emu], and on a unit (5-6 Nov 2026) [hw], with
   [lock-check](../../examples/lock-check-a4mk2) and
   [sound-check](../../examples/sound-check-a4mk2): p-locks set, copied,
   cleared, saved, loaded and played, with Param Slide, and stock 1.56
@@ -625,13 +625,13 @@ The runs' logs are in their pull requests; what they established:
   shown to be needed; the value read equal to stock's engine copy of a
   stock parameter under every modulation stage, on the synth, FX and CV
   tracks; NRPNs and CCs in and out, live recording and the PERF channel; a
-  mod parameter heard driving a test tone.
-- Not checked yet: the lock service on a unit; track clear, SysEx dump out
-  and in, the kit change's and CREATE NEW's clear of locks; a fine
-  parameter; RANDOMIZE landing on a mod parameter; the route screens'
-  lists; a kit of another layout; a poly track's two voices, a sound-locked
-  trig's pool sound, `"smooth": false`, CONTROL IN; an NRPN with a trig
-  held, USB MIDI.
+  mod parameter heard driving a test tone; on the unit also RANDOMIZE,
+  CONTROL IN, poly locks, another kit layout, an NRPN with a trig held.
+- Not checked yet: track clear, SysEx dump out and in, the kit change's
+  and CREATE NEW's clear of locks; a fine parameter; the route screens'
+  lists; a sound-locked trig's pool sound, `"smooth": false`.
+- **0.8 on a unit** (16 Nov 2026) [hw]: `ev_track_key` with rand-track,
+  the voice and SOUND SETUP events with res-limit.
 - **0.6 on a unit** (OS 1.56, 11-12 Nov 2026) [hw]: the check mods'
   plans passed as in the emulator: `ev_project_save` around saves onto the
   active slot, into another and of a new project into an empty slot (stock's
@@ -651,9 +651,7 @@ The runs' logs are in their pull requests; what they established:
 # needs m68k-linux-gnu binutils and gcc (or set ELEKLOADER_CROSS to another prefix)
 python -m elekloader.sdk.build mods/core-a4mk2 --stock Analog-Four_MKII_OS1.56.syx
 python -m elekloader.sdk.build examples/store-check-a4mk2 --stock Analog-Four_MKII_OS1.56.syx
-python -m elekloader.lint examples/store-check-a4mk2/out/store-check-1.0.elemod \
-    --stock Analog-Four_MKII_OS1.56.syx --with mods/core-a4mk2/out/core-0.5.elemod
 python -m elekloader.patch --stock Analog-Four_MKII_OS1.56.syx \
-    --mod mods/core-a4mk2/out/core-0.5.elemod --mod examples/store-check-a4mk2/out/store-check-1.0.elemod \
+    --mod mods/core-a4mk2/out/core-0.8.elemod --mod examples/store-check-a4mk2/out/store-check-1.0.elemod \
     --out a4-store.syx --version SC56 --lockfile a4-store.lock.json
 ```
