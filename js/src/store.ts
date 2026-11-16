@@ -525,7 +525,11 @@ export function knobs(lock: Partial<Lock>, want: Map<string, number>, first: num
         if (a + n - 1 <= top) break
         at = null
       }
-      if (at === null) throw new ModError(`${mod} asks for ${n} knob ids, and ids ${first}..${top} have no run that long free`)
+      if (at === null) {
+        const e = new ModError(`${mod} asks for ${n} knob ids, and ids ${first}..${top} have no run that long free`)
+        ;(e as ModError & { mod?: string }).mod = mod     // the +Drive linker refuses that mod (drive.ts)
+        throw e
+      }
       notes.push(`${mod}: knob ids ${at}..${at + n - 1}`)
     }
     runs.push({ mod, first: at, count: n })

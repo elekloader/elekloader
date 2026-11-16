@@ -14,6 +14,7 @@ const char *const ds_what[DS_W_N] = {
 #define KIT 2                            /* the kit scope's number */
 static const u8 MAGIC[4] = {'D', 'L', 'S', 'T'};
 static const u8 ID_HASH[8] = {'E', 'L', 'K', 'D', 'R', 'I', 'V', 'E'};
+const struct ds_knobset *ds_knobs_in;
 
 /* the device's CC pool in the order fields get them, and those a kit field (the FX or the CV
  * track's) gets none of: the CCs the FX or CV tables map (store.DEVICES['analog-four-mk2']) */
@@ -234,7 +235,7 @@ u8 *ds_encode(const struct ds_state *st, u32 *n)
 {
     const struct ds_tag *tl[4] = {st->cd, st->fcd, st->cc, st->fcc};
     u32 tn[4] = {st->ncd, st->nfcd, st->ncc, st->nfcc};
-    u32 size = HEAD + SCOPE_REC * DS_SCOPES + 4 * st->nids, i, k, at;
+    u32 size = HEAD + SCOPE_REC * DS_SCOPES + 4 * st->nids, i, k, at, knobbed;
     u8 *p;
     for (k = 0; k < 2; k++)
         for (i = 0; i < (k ? st->npk : st->nf); i++) {
@@ -251,11 +252,22 @@ u8 *ds_encode(const struct ds_state *st, u32 *n)
                 return 0;
             size += 4 + pad4(lm + ls);
         }
+    knobbed = st->nkn || st->nfkn || st->next_knob;
+    if (knobbed) {                       /* format 3: u16 runs, u16 freed, u32 next, then the runs */
+        size += 8;
+        for (k = 0; k < 2; k++)
+            for (i = 0; i < (k ? st->nfkn : st->nkn); i++) {
+                u32 lm = dl_strlen((k ? st->fkn : st->kn)[i].mod);
+                if (!lm || lm > DS_NAME_MAX)
+                    return 0;
+                size += 8 + pad4(lm);
+            }
+    }
     p = dl_alloc(size);
     if (!p)
         return 0;
     dl_memcpy(p, MAGIC, 4);
-    dl_wr16(p + 4, DS_FORMAT);
+    dl_wr16(p + 4, knobbed ? DS_FORMAT_KNOBS : DS_FORMAT);
     dl_wr32(p + 8, size);
     dl_wr32(p + 0x10, st->flashed_id);
     dl_wr32(p + 0x14, st->id);
@@ -302,6 +314,22 @@ u8 *ds_encode(const struct ds_state *st, u32 *n)
             dl_memcpy(p + at + 4 + lm, tl[k][i].sym, ls);
             at += 4 + pad4(lm + ls);
         }
+    if (knobbed) {
+        dl_wr16(p + at, st->nkn);
+        dl_wr16(p + at + 2, st->nfkn);
+        dl_wr32(p + at + 4, st->next_knob);
+        at += 8;
+        for (k = 0; k < 2; k++)
+            for (i = 0; i < (k ? st->nfkn : st->nkn); i++) {
+                const struct ds_knob *r = &(k ? st->fkn : st->kn)[i];
+                u32 lm = dl_strlen(r->mod);
+                dl_wr32(p + at, r->first);
+                dl_wr16(p + at + 4, r->count);
+                p[at + 6] = (u8)lm;
+                dl_memcpy(p + at + 8, r->mod, lm);
+                at += 8 + pad4(lm);
+            }
+    }
     dl_wr32(p + 0x0c, crc_of(p, size));
     *n = size;
     return p;
@@ -332,7 +360,8 @@ struct ds_state *ds_decode(const u8 *p, u32 n)
     if (!p || n < HEAD + SCOPE_REC * DS_SCOPES || n > DS_MAX_FILE)
         return 0;
     size = dl_rd32(p + 8);
-    if (p[0] != 'D' || p[1] != 'L' || p[2] != 'S' || p[3] != 'T' || dl_rd16(p + 4) != DS_FORMAT || size != n)
+    if (p[0] != 'D' || p[1] != 'L' || p[2] != 'S' || p[3] != 'T'
+        || (dl_rd16(p + 4) != DS_FORMAT && dl_rd16(p + 4) != DS_FORMAT_KNOBS) || size != n)
         return 0;
     if (crc_of(p, n) != dl_rd32(p + 0x0c))
         return 0;
@@ -414,6 +443,34 @@ struct ds_state *ds_decode(const u8 *p, u32 n)
                 goto bad;
             at += 4 + pad4(lm + ls);
         }
+    if (dl_rd16(p + 4) == DS_FORMAT_KNOBS) {   /* the knob runs (drive_store.decode) */
+        if (at + 8 > n)
+            goto bad;
+        st->nkn = dl_rd16(p + at);
+        st->nfkn = dl_rd16(p + at + 2);
+        st->next_knob = dl_rd32(p + at + 4);
+        at += 8;
+        if (st->nkn > DS_MAX_KNOBS || st->nfkn > DS_MAX_KNOBS || st->next_knob > DS_KNOB_TOP + 1)
+            goto bad;
+        for (k = 0; k < 2; k++)
+            for (i = 0; i < (k ? st->nfkn : st->nkn); i++) {
+                struct ds_knob *r = &(k ? st->fkn : st->kn)[i];
+                u32 lm;
+                if (at + 8 > n)
+                    goto bad;
+                r->first = dl_rd32(p + at);
+                r->count = dl_rd16(p + at + 4);
+                lm = p[at + 6];
+                if (!lm || !r->count || r->first > DS_KNOB_TOP || r->first + r->count - 1 > DS_KNOB_TOP
+                    || at + 8 + lm > n || !utf8_ok(p + at + 8, lm))
+                    goto bad;
+                dl_memcpy(arena, p + at + 8, lm);
+                arena[lm] = 0;
+                r->mod = arena;
+                arena += lm + 1;
+                at += 8 + pad4(lm);
+            }
+    }
     if (at != size)
         goto bad;
     return st;
@@ -1157,6 +1214,15 @@ static int allocate(const struct ds_base *b, const u8 *prev, u32 nprev, const st
     }
     out->nfields = st->nf;
     out->nparked = st->npk;
+    if (ds_knobs_in) {                   /* the link's knob runs (drive.py check: Placed.state.update) */
+        st->nkn = ds_knobs_in->n;
+        st->nfkn = ds_knobs_in->nf;
+        st->next_knob = ds_knobs_in->next;
+        for (i = 0; i < st->nkn; i++)
+            st->kn[i] = ds_knobs_in->kn[i];
+        for (i = 0; i < st->nfkn; i++)
+            st->fkn[i] = ds_knobs_in->fkn[i];
+    }
     out->bytes = ds_encode(st, &out->nbytes);
     rc = out->bytes ? 0 : -1;
 done:

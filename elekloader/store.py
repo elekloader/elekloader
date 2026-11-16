@@ -725,8 +725,10 @@ def knobs(lock, want, first, fixed=(), top=KNOB_TOP):
                     break
                 at = None
             if at is None:
-                raise ModError('%s asks for %d knob ids, and ids %d..%d have no run that long free'
-                               % (mod, n, first, top))
+                e = ModError('%s asks for %d knob ids, and ids %d..%d have no run that long free'
+                             % (mod, n, first, top))
+                e.mod = mod                    # the +Drive linker refuses that mod (drive.py)
+                raise e
             notes.append('%s: knob ids %d..%d' % (mod, at, at + n - 1))
         runs.append({'mod': mod, 'first': at, 'count': n})
         nxt = max(nxt, at + n)

@@ -2768,8 +2768,7 @@ The Rytm's knob looks (above) with `analog-four-mk2/pages.h`: an entry in
 ### Knob ids by count (Analog Four MKII)
 
 The Rytm's knob ids by count (above) with `analog-four-mk2/pages.h`:
-declare `"knobs": n` and use `CORE_KNOB(k)`. The A4's ids (decided
-2026-11-16): stock's are 1..0x126, core-a4mk2 keeps 0x127..0x1ff (its lock
+declare `"knobs": n` and use `CORE_KNOB(k)`. The A4's ids: stock's are 1..0x126, core-a4mk2 keeps 0x127..0x1ff (its lock
 pseudo ids and room for more), a mod's own start at 0x200. Flashed mods'
 runs stay below 0x4000; 0x4000..0x7fff are the +Drive mods' (docs/DRIVE.md,
 "Knob ids on the +Drive"), so a reflash never moves them. A mod that picks

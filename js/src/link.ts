@@ -1089,6 +1089,16 @@ export function link(mods: Mod2[], image: Uint8Array, lock: store.Lock | null = 
   // the loader copies +Drive mods' stock parts through the shadow (A4: dlink.c stock_part); an export, not its value,
   // so the sizing pass carries the shadow too
   const stockShadow = order.some(m => m.exports.includes(desc.STOCK_SHADOW))
+  // the loader gives +Drive mods knob ids (F_KNOBS): the flashed ids go into claims of kind 4
+  const driveKnobs = !!(dev.driveKnobs && dev.paramIds && order.some(m => m.exports.includes(desc.KNOBS)))
+  const knobClaims = (): [number, number, string][] => !driveKnobs ? [] : order.flatMap(m => {
+    const kb = knobBase.get(m.id)
+    const set = new Map<string, [number, number]>()
+    for (const [, a, b] of m.idRanges(image, kb ?? null)) set.set(`${a} ${b}`, [a, b])
+    if (kb !== undefined) set.set(`${kb} ${kb + m.knobs - 1}`, [kb, kb + m.knobs - 1])
+    return [...set.values()].sort((x, y) => x[0] - y[0] || x[1] - y[1])
+      .map(([a, b]) => [desc.CLAIM_KNOBS, index.get(m.id)!, `0x${a.toString(16)} 0x${b.toString(16)}`] as [number, number, string])
+  })
   const descFields = (where: Where | null): desc.DescFields => {
     const w: Where = where ?? (() => 0)
     const modules = order.map(m => ({
@@ -1116,14 +1126,16 @@ export function link(mods: Mod2[], image: Uint8Array, lock: store.Lock | null = 
       claims: [...order.flatMap(m => m.names.map(nm => [desc.CLAIM_NAME, index.get(m.id)!, nm] as [number, number, string])),
         ...order.flatMap(m => m.regions.map(g => [desc.CLAIM_REGION, index.get(m.id)!,
           `0x${g.lo.toString(16)} 0x${g.hi.toString(16)} ${g.name}`] as [number, number, string])),
-        ...[...core.std.keys()].sort(cmp).filter(() => stdMap).map(ev => [desc.CLAIM_STD, index.get(core.id)!, `${ev} ${core.std.get(ev)}`] as [number, number, string])],
+        ...[...core.std.keys()].sort(cmp).filter(() => stdMap).map(ev => [desc.CLAIM_STD, index.get(core.id)!, `${ev} ${core.std.get(ev)}`] as [number, number, string]),
+        ...knobClaims()],
       area: [w('bss_end'), ...driveArea(w('bss_end')), w('glob', desc.STAGING[0]), w('glob', desc.STAGING[1])],
       storage: { trailer: [w('trailer'), trailerLen], scopes },
       flags: (w('glob', desc.STAGE_TOP) ? desc.F_STAGE_TOP : 0) | (w('glob', desc.PAYLOAD_SKIP) ? desc.F_PAYLOAD_SKIP : 0)
         | (w('glob', desc.ABS16) ? desc.F_ABS16 : 0) | (stdMap ? desc.F_STD_MAP : 0)
         | (w('glob', desc.COLLECTIONS) ? desc.F_COLLECTIONS : 0)
         | (claimsMap ? desc.F_CLAIMS : 0)
-        | (stockShadow ? desc.F_STOCK_SHADOW : 0),
+        | (stockShadow ? desc.F_STOCK_SHADOW : 0)
+        | (driveKnobs ? desc.F_KNOBS : 0),
       sites: siteMap(w), prelink: (rel.prelink ?? []).map(([lo, hi, k]) => [lo, hi, k] as [number, number, number]),
       // the stock bytes of every range the flashed build writes, where the profile asks for them (driveShadow) or the
       // loader does (drive_stock_shadow): a loader on the unit copies a mod's stock parts from the running OS, and lays

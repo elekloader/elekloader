@@ -381,6 +381,7 @@ nothing loads.
 | 29 | `store` | storage room short (detail `WHAT NEED HAVE`) |
 | 30 | `clash` | a site, copied block or claim clashes (argument: kind << 8 \| other's line; kinds 1 flashed, 2 +Drive, 3 pre-link, 4 not stock; detail: address) |
 | 31 | `std` | a standard event the core's `std` map lacks (detail: it) |
+| 32 | `ids` | knob ids taken, or no run free (detail: which) |
 
 When nothing is linked, the loader keeps why:
 
@@ -491,26 +492,25 @@ Four MKII)") has the rest.
 ### Knob ids
 
 On a device whose profile gives mods knob ids (`param_ids`: the Analog Rytm
-MKII's start at 555, the Analog Four MKII's at 0x200), a mod declares `"knobs": n` and the linker gives it n
-ids in a row. Its symbol `__knobs` is the first; it is the mod's own, so two
-mods' `__knobs` differ. A relocation to `__knobs` is an `abs32` or an `abs16`
-with an addend of 0..n-1, anything else is refused, as is `"knobs"` on a
-device without `param_ids` or a mod that defines `__knobs` itself.
+MKII's start at 555, the Analog Four MKII's 0x200), a mod declares
+`"knobs": n` and the linker gives it n ids in a row, the first its own
+symbol `__knobs`. A relocation to `__knobs` is an `abs32` or an `abs16` with
+an addend of 0..n-1, else refused, as is `"knobs"` on a device without
+`param_ids` or a mod that defines `__knobs` itself.
 
-The linker (`store.knobs`, the same in `js/src/store.ts`) gives the runs from
+The linker (`store.knobs`) gives the runs from
 the first id up, by mod id, past every id a mod's `core_params` or
 `core_param_locks` entry names in its own bytes, and checks the linked
 entries again with their runs. The lockfile keeps them in `knobs` and
-`freed_knobs` (`mod`, `first`, `count`) and `next_knob`, none of them part
-of the layout ID: the ids are not stored data. A mod keeps its run while its
-count stays; one that leaves keeps it in `freed_knobs` and gets it back when
-it returns; one whose count changes keeps its first id when the new run has
-room there; any other takes never-used ids from `next_knob` up. Only when
-those run out (past 65535, which an `abs16` holds; on the Analog Four MKII
-past 0x3fff, below the +Drive mods' ids, `drive_knobs`) are freed runs given out
-again. A build whose core keeps no lockfile gets the same ids for the same
-mods. The build's manifest carries the runs as `knobs` (`{mod: [first,
-count]}`).
+`freed_knobs` (`mod`, `first`, `count`) and `next_knob`, none of them in
+the layout ID. A mod keeps its run while its count holds; one that leaves
+keeps it in `freed_knobs` and gets it back when it returns; one whose count
+changes keeps its first id when the new run has room there; any other takes
+never-used ids from `next_knob` up. Only when those run out (past 65535,
+which an `abs16` holds; 0x3fff on the Analog Four MKII) are freed runs
+given out again. A build whose core keeps no lockfile gets the same ids for
+the same mods. The build's manifest carries the runs as `knobs` (`{mod:
+[first, count]}`).
 
 ### DSP code
 

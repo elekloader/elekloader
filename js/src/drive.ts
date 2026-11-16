@@ -9,7 +9,8 @@
 import * as container from './container.ts'
 import * as desc from './desc.ts'
 import { ModError, cmpVersions, formatOf, isDict, pyEq } from './elemod.ts'
-import { FORMAT2, Mod2, STD_SETS } from './link.ts'
+import { FORMAT2, KNOBS, Mod2, STD_SETS } from './link.ts'
+import * as store from './store.ts'
 import { devices } from './devices.ts'
 import { JSONDecodeError, UnicodeDecodeError, decodeUtf8, loads } from './pyjson.ts'
 import { pyInt as pyIntOf, repr, str, truthy } from './py.ts'
@@ -62,6 +63,8 @@ export const CODES: Record<number, [string, string]> = {
   // the boot-linked sites (a build whose descriptor carries the site map, no shadow); 29, storage, is the Python's alone
   30: ['clash', 'site 0x{detail}: {why}'],
   31: ['std', 'subscribes to {detail}, which the core does not map'],
+  // +Drive knob ids (F_KNOBS, the A4's dlink.c): a fixed id the rules refuse, or no run left
+  32: ['ids', 'knob ids {detail}'],
 }
 export const CODE: Record<string, number> = Object.fromEntries(Object.entries(CODES).map(([i, [n]]) => [n, Number(i)]))
 // DL_R_CLASH's kind (its argument's high byte; the low byte is the other mod's line for SITE_MOD)
@@ -270,6 +273,9 @@ export class Build {
   payloadSkip: boolean                      // the boot stages each file without its .payload's hex (F_PAYLOAD_SKIP)
   rsize: Record<string, number>             // the relocation kinds the boot linker takes, with their sizes (F_ABS16)
   collections: boolean                      // +Drive mods may declare tables (F_COLLECTIONS, the A4's dlink.c)
+  knobs: boolean                            // +Drive mods' "knobs" (F_KNOBS, on a device with driveKnobs)
+  knobRange: [number, number] | null; paramIds: NonNullable<ReturnType<typeof devices>[number]['paramIds']> | null
+  knobIds: [number, number, string][]       // the ids the flashed modules take (claims of kind 4)
   globals: Map<string, Global>
   nsyms: number
   pools: Record<keyof typeof POOL_PER_MB, number>
@@ -307,6 +313,16 @@ export class Build {
     this.payloadSkip = !!((d.flags ?? 0) & desc.F_PAYLOAD_SKIP)
     this.rsize = (d.flags ?? 0) & desc.F_ABS16 ? RSIZE16 : RSIZE
     this.collections = !!((d.flags ?? 0) & desc.F_COLLECTIONS)
+    // +Drive knob ids (F_KNOBS, docs/DRIVE.md "Knob ids on the +Drive"): the device's +Drive range and rules (the
+    // profile's driveKnobs and paramIds, which the A4's dlink.c has as constants), and the flashed modules' ids
+    const dev = devices().find(x => x.key === d.deviceKey)
+    this.knobs = !!((d.flags ?? 0) & desc.F_KNOBS) && !!(dev?.driveKnobs && dev.paramIds)
+    this.knobRange = this.knobs ? dev!.driveKnobs : null
+    this.paramIds = this.knobs ? dev!.paramIds : null
+    this.knobIds = d.claims.filter(([k]) => k === desc.CLAIM_KNOBS).map(([, mi, nm]) => {
+      const [a, b] = nm.split(' ')
+      return [parseInt(a, 16), parseInt(b, 16), d.modules[mi].name] as [number, number, string]
+    })
     this.globals = new Map()
     const put = (k: string, v: Global) => { if (!this.globals.has(k)) this.globals.set(k, v) }
     for (const m of d.modules) for (const [nm, a] of m.exports) put(nm, ['abs', a])
@@ -359,6 +375,7 @@ export class Choice {
   sites: [number, number][] = []; regions: [number, number][] = []   // TELOS: [lo, hi) each
   driveSites: [number, number, boolean][] = []   // [lo, hi, is a site]: its sites, then its copied blocks
   driveClaims: [number, number][] = []            // [lo, hi]: its contributions' claims (F_CLAIMS)
+  knobFixed: [string, number, number][] = []   // the knob ids its entries name (+Drive knob ids): [table, a, b]
   alive = false
 
   constructor(line: number, name: string, raw: Uint8Array | null) {
@@ -735,6 +752,11 @@ export function pass1(build: Build, c: Choice, state: State): boolean {
     if (e instanceof ModError) return c.refuse('format', '', 0, e.message)
     throw e
   }
+  if (build.knobs) {                        // with +Drive knob ids: link.check's rule for __knobs
+    for (const [, t, a] of m.knobRefs())
+      if (!(t === 'abs32' || t === 'abs16') || !(a >= 0 && a < m.knobs)) return c.refuse('format', '', 0, 'a reference to __knobs')
+  }
+  c.knobFixed = build.knobs ? m.idRanges(new Uint8Array(0)) : []   // its .run's hex parts only, as dlink.c reads them
   for (const x of m.contribute) if (x.event !== undefined && build.stdMap) x.to = build.std.get(x.event)!   // the table a standard event maps to
   c.mod = m; c.exports = exports; c.driveSites = sites; c.driveClaims = claims; c.tables = tables
   state.syms += exports.length + 2 * tables.length
@@ -744,6 +766,47 @@ export function pass1(build: Build, c: Choice, state: State): boolean {
   state.sdata += sites.reduce((n, [lo, hi, isSite]) => n + (isSite ? hi - lo : 0), 0)
   c.alive = true
   return true
+}
+
+const hx = (v: number) => '0x' + v.toString(16)
+
+/** link.idProblems for one +Drive mod against the flashed ids and the earlier living mods'. -> a refusal's detail,
+ * or null. drive._knob_problem. */
+function knobProblem(build: Build, c: Choice, earlier: Choice[]): string | null {
+  const [own, [lo, hi], kinds] = build.paramIds!
+  const ownOnly = new Set(kinds.filter(([, o]) => o).map(([t]) => t))
+  for (const [table, a0, b] of c.knobFixed) {
+    let a = a0
+    if (a <= hi && lo <= b) return `${hx(a)}-${hx(b)} are core's`
+    if (ownOnly.has(table) && a < own) return `${hx(a)}-${hx(b)} are below ${hx(own)}`
+    if (b >= own) {
+      a = Math.max(a, own)
+      const taken: [number, number, string][] = [...build.knobIds, ...earlier.flatMap(o => o.knobFixed.map(([, x, y]) => [x, y, o.id!] as [number, number, string]))]
+      for (const [x, y, nm] of taken) if (x <= b && a <= y) return `${hx(Math.max(a, x))}-${hx(Math.min(b, y))} are ${nm}'s`
+    }
+  }
+  return null
+}
+
+/** Each living "knobs" mod's run (store.knobs in the device's +Drive range, past the flashed ids and the living
+ * mods' own); a mod with no run left is refused. -> 1 when it refused one. drive._knob_runs (with no .store). */
+function knobRuns(build: Build, order: Choice[]): number {
+  if (!build.knobs) return 0
+  const alive = order.filter(c => c.alive)
+  const want = new Map(alive.filter(c => c.mod!.knobs).map(c => [c.id!, c.mod!.knobs] as [string, number]))
+  const fixed: [number, number][] = [...build.knobIds.map(([a, b]) => [a, b] as [number, number]),
+    ...alive.flatMap(c => c.knobFixed.map(([, a, b]) => [a, b] as [number, number]))]
+  const [lo, hi] = build.knobRange!
+  try {
+    store.knobs({}, want, lo, fixed, hi)
+  } catch (e) {
+    const mod = (e as ModError & { mod?: string }).mod
+    if (!(e instanceof ModError) || mod === undefined) throw e
+    const c = alive.find(c => c.id === mod)!
+    c.refuse('ids', `run of ${c.mod!.knobs}: none free`)
+    return 1
+  }
+  return 0
 }
 
 function round(build: Build, order: Choice[]): number {
@@ -777,13 +840,18 @@ function round(build: Build, order: Choice[]): number {
       const x = m.names.find(n => build.claims.includes(n) || earlier.some(o => o.mod!.names.includes(n)))
       if (x !== undefined) why = ['claim', x]
     }
+    if (!why && build.knobs) {                // knob ids: link.idProblems' rules
+      const x = knobProblem(build, c, earlier)
+      if (x !== null) why = ['ids', x]
+    }
     if (!why && c.regions.length) {         // regions: the flashed build's, then earlier mods'
       let w = c.regions.flatMap(([a, b]) => build.regions.filter(([x, y]) => a < y && x < b).map(r => r[2]))[0]
       if (w === undefined) w = earlier.find(o => c.regions.some(([a, b]) => o.regions.some(([x, y]) => a < y && x < b)))?.id ?? undefined
       if (w !== undefined) why = ['region', w]
     }
     if (!why) {
-      const x = m.imports.find(x => !(build.globals.has(x) || alive.some(o => names(o).includes(x))) && !m.weak.has(x))
+      const x = m.imports.find(x => !(build.globals.has(x) || alive.some(o => names(o).includes(x))) && !m.weak.has(x)
+        && !(x === KNOBS && build.knobs && m.knobs))
       if (x !== undefined) why = ['import', x]
     }
     if (!why && build.collections) {          // +Drive tables: a living mod declares each, of that entry
@@ -901,7 +969,10 @@ export function check(build: Build, files: [string, Uint8Array | null][]): Resul
   const order = choices.filter(c => c.alive).sort((a, b) => cmp(a.id!, b.id!))
   let lay: [Map<string, number>, number] | null = null
   for (let k = 0; k < 4 * MAX_MODS; k++) {
-    while (round(build, order));
+    for (;;) {
+      while (round(build, order));
+      if (!knobRuns(build, order)) break
+    }
     lay = layout(build, order)
     if (lay !== null) break
   }
