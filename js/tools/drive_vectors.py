@@ -32,7 +32,33 @@ def sets(B):
         out += [(code + ': refused', bad, area), (code + ': loads', good, area)]
     h, u = T.hello(B), T.user(B)
     out = out + [(n, f, None) for n, f in _more(B, h, u)]
-    return out + _top(B) + _skip(B) + _abs16(B) + _std(B)
+    return out + _top(B) + _skip(B) + _abs16(B) + _std(B) + _collections(B)
+
+
+def _collections(B):
+    """Sets on a build whose boot linker links +Drive mods' own tables (F_COLLECTIONS, the A4's), and the same
+    files on one that doesn't (the Rytm's): the tables laid out after every .bss there, a feature or table
+    refusal here."""
+    from test_drive_collections import adder, decl
+    two = decl(B, 'sc-b')
+    out = []
+    for area in ('a4', 'skip'):
+        out += [('%s: a table and two adders' % area, _files(adder(B, 'sc-zz', 40), adder(B, 'sc-aa', 60), decl(B)), area),
+                ('%s: an adder without its table' % area, _files(adder(B, 'sc-a')), area)]
+    out += [('a4: an entry of another size', _files(decl(B), adder(B, 'sc-a', data='00000000')), 'a4'),
+            ('a4: the declarer goes, then its adder',
+             _files(adder(B, 'sc-a'), decl(B, imports=['core_fn', 'nothing_has_this', 'sc_cmds', 'sc_cmds_n'])), 'a4'),
+            ('a4: two declare one name', _files(two, decl(B, 'sc-a'), adder(B, 'sc-x')), 'a4'),
+            ('a4: a table named as a flashed export', _files(decl(B, tables={'core_fn': {'entry': 4}})), 'a4'),
+            ('a4: a DSP table', _files(decl(B, tables={'dsp_t': {'space': 'dsp', 'entry': 3}})), 'a4'),
+            ('a4: an entry of 6', _files(decl(B, tables={'t6': {'entry': 6}})), 'a4'),
+            ('a4: a name of 60 bytes', _files(decl(B, tables={'x' * 60: {'entry': 4}})), 'a4')]
+    b = T.built(B, 'a4')[1]
+    got = [[(c.code, c.detail) for c in drive.check(b, f).choices] for _n, f, a in out if a == 'a4']
+    assert got[0] == [(0, '')] * 3 and got[1] == [(15, 'sc_cmds')] and got[2] == [(0, ''), (15, 'sc_cmds')] \
+        and got[3] == [(15, 'sc_cmds'), (14, 'nothing_has_this')] and got[4][0] == (12, 'sc_cmds') \
+        and got[6] == [(7, 'collections')] and got[7][0][0] == got[8][0][0] == 5, got
+    return out
 
 
 def _std(B):

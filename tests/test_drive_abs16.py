@@ -81,7 +81,7 @@ def main():
     with Bench('analog-rytm-mk2') as B:
         F = Built(B)
         check('a loader exporting drive_abs16 sets the descriptor\'s F_ABS16 (bit 2)',
-              F.build.d['flags'] == desc.F_STAGE_TOP | desc.F_PAYLOAD_SKIP | desc.F_ABS16 == 7
+              F.build.d['flags'] & 7 == desc.F_STAGE_TOP | desc.F_PAYLOAD_SKIP | desc.F_ABS16 == 7
               and 'abs16' in F.build.rsize, F.build.d['flags'])
         check('the descriptor\'s text names it', 'abs16 relocations' in desc.dump(F.build.d))
 

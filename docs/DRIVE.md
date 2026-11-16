@@ -23,9 +23,11 @@ The link runs in this order:
    contributions (with `F_STD_MAP`, `events` is `"std1"` or none and a
    `"std": true` contribution names a standard event, which the
    descriptor's claims of kind 3 map to the core's table; one they don't
-   map is a `std` refusal), exports, then storage fields (on a build that keeps
+   map is a `std` refusal; with `F_COLLECTIONS`, a `to` the build lacks is
+   kept for the check rounds), exports, then storage fields (on a build that keeps
    +Drive storage: each a global name, as an export is; a field the core
-   can't keep is a `format` refusal).
+   can't keep is a `format` refusal), then, with `F_COLLECTIONS`, the
+   tables it declares ("+Drive collections").
 2. *Check rounds* over the living mods in id order (UTF-8 bytes; of two
    files with one id the earlier line counts first), again until a round
    refuses nothing; a mod refused earlier in a round stops counting.
@@ -33,16 +35,19 @@ The link runs in this order:
    mod's; `resources.core` is newer than module 0's version; a `requires`
    is neither flashed nor a living mod; a `conflicts` is flashed, or an
    earlier living mod names it or is named by it (of a pair, the later one
-   goes); an export is a flashed name or an earlier living mod's; a
-   resource name is claimed by the build or an earlier living mod; an
-   import is none of the names above and not weak. Then each table in
+   goes); an export (a +Drive table's `NAME` and `NAME_n` too) is a flashed
+   name or an earlier living mod's; a resource name is claimed by the build
+   or an earlier living mod; an import is none of the names above and not
+   weak; with `F_COLLECTIONS`, a contribution to a table the build lacks has
+   no living mod declaring it, or its data is not whole entries of that
+   table (`table`). Then each table in
    descriptor order: while its count plus the living mods' entries pass its
    capacity, the last living mod in id order with an entry there is
    refused. Then the storage room ("+Drive storage", `fit`), one refusal
    at a time (`store`), and the rounds again, until neither refuses.
 3. *Layout* from the area's start: every `.run` in placement order at its
    alignment (at least 4), then every `.bss` likewise, each block ending
-   4-aligned. Past the area's end, the last living mod in id order is
+   4-aligned, then with `F_COLLECTIONS` each +Drive table. Past the area's end, the last living mod in id order is
    refused and the check runs again. Then the living mods' storage fields
    are placed from `/mods/.store` ("+Drive storage"), which gives each
    field's symbol its descriptor. The Drive Loader stages files at the
@@ -63,7 +68,8 @@ The link runs in this order:
    entries and the new ones sorted by (order, id, then the flashed position
    or the contribution's index and entry), the entries' relocations applied
    at their final address, then zero entries to capacity + 1. Other tables
-   are not touched.
+   are not touched. A +Drive table is written the same way, with no
+   flashed entries and one zero entry.
 6. *Storage*: `core_store_ids` gets the live layout ID and its ancestors,
    `core_store_gens` each scope's live generation, and `core_lock_codes`,
    `core_lock_ccs`, `core_field_inits` and `core_handles` the +Drive fields'
@@ -129,6 +135,36 @@ room in the area. The `.elemod` stays one JSON file.
   what it ships. sidecar-core looks a payload up in `core_payloads` (a
   flashed mod's, in RAM) and then here; caching on the Pi by hash is its
   side.
+
+## +Drive collections
+
+A loader whose descriptor has `F_COLLECTIONS` (drive-loader-a4mk2, decided
+2026-11-16) links tables +Drive mods declare, so a flashed mod's
+`collections` and the contributions to them load from the +Drive unchanged.
+Flashed code never reads a +Drive table: its link is done at build.
+
+- **Declaring.** Pass 1 reads each table of a mod's `collections`: a name
+  of 1 to 59 bytes and an `"entry"` that is a multiple of 4 (at most
+  65,535), else `format`. A DSP table (`"space"`) is a `feature` refusal
+  (`collections`). `"spare"`, `"max"` and `"render"` size a flashed build's
+  tables and are ignored here. `NAME` and `NAME_n` are the mod's global
+  names, checked as its exports are, so of two mods declaring one name the
+  later in id order goes (`export`), and so does one naming a flashed
+  table, export or `NAME_n`.
+- **Adding.** A contribution whose `to` the build lacks waits for the check
+  rounds: there it goes to the first living mod in id order that declares
+  that table, and is refused (`table`) when none does or its data is not
+  whole entries; when a declarer is refused, its adders go in the next
+  round, as a `requires` does. The order of `/mods/active` doesn't matter.
+- **Placed.** The layout puts each living mod's tables after every `.bss`,
+  in id order and the order the mod lists them: its living entries and a
+  zero entry, 4-aligned, so the area's end counts them. `NAME` is its
+  address and `NAME_n` its entries. The merge sorts them as it sorts a
+  flashed table's, by (order, id, the contribution's index and entry), and
+  applies their relocations there.
+- **Room.** A +Drive table has no capacity: its entries are bounded by the
+  entry bytes' pool, and the merge's room grows to fit them. The tables
+  come from a pool of their own (64 per started MB of the area).
 
 ## Sites
 
@@ -406,7 +442,7 @@ names offsets into its string pool (UTF-8, NUL-terminated):
 | +0x44 | u32 the device key, u32 the OS version (names) |
 | +0x4c | ABI 1.2: u32 offset of the site map, u16 its count, u16 the pre-link count, u32 offset of the pre-link ranges |
 | +0x58 | u32 the shadow's offset, u32 its range count (ABI 1.2; 0 without one) |
-| +0x60 | ABI 1.3: u32 flags, bit 0 `F_STAGE_TOP`: the loader reads each file into the +Drive area itself at boot (a module's export `drive_stage_top`, nonzero); bit 1 `F_PAYLOAD_SKIP`: it stages each file without its `.payload`'s hex ("Payloads on the +Drive"; the export `drive_payload_skip`); bit 2 `F_ABS16`: its boot linker takes `abs16` relocations (the export `drive_abs16`); bit 3 `F_STD_MAP`: it maps std1 subscriptions through the core's `std` map, which the claims of kind 3 carry (the export `drive_std_map`); zero to +0x64 |
+| +0x60 | ABI 1.3: u32 flags, bit 0 `F_STAGE_TOP`: the loader reads each file into the +Drive area itself at boot (a module's export `drive_stage_top`, nonzero); bit 1 `F_PAYLOAD_SKIP`: it stages each file without its `.payload`'s hex ("Payloads on the +Drive"; the export `drive_payload_skip`); bit 2 `F_ABS16`: its boot linker takes `abs16` relocations (the export `drive_abs16`); bit 3 `F_STD_MAP`: it maps std1 subscriptions through the core's `std` map, which the claims of kind 3 carry (the export `drive_std_map`); bit 4 `F_COLLECTIONS`: +Drive mods may declare tables ("+Drive collections"; the export `drive_collections`); zero to +0x64 |
 
 | record | bytes | fields |
 |---|---|---|

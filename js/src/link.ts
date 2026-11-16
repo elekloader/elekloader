@@ -1112,7 +1112,8 @@ export function link(mods: Mod2[], image: Uint8Array, lock: store.Lock | null = 
       area: [w('bss_end'), ...driveArea(w('bss_end')), w('glob', desc.STAGING[0]), w('glob', desc.STAGING[1])],
       storage: { trailer: [w('trailer'), trailerLen], scopes },
       flags: (w('glob', desc.STAGE_TOP) ? desc.F_STAGE_TOP : 0) | (w('glob', desc.PAYLOAD_SKIP) ? desc.F_PAYLOAD_SKIP : 0)
-        | (w('glob', desc.ABS16) ? desc.F_ABS16 : 0) | (stdMap ? desc.F_STD_MAP : 0),
+        | (w('glob', desc.ABS16) ? desc.F_ABS16 : 0) | (stdMap ? desc.F_STD_MAP : 0)
+        | (w('glob', desc.COLLECTIONS) ? desc.F_COLLECTIONS : 0),
       sites: siteMap(w), prelink: (rel.prelink ?? []).map(([lo, hi, k]) => [lo, hi, k] as [number, number, number]),
       // the stock bytes of every range the flashed build writes, where the profile asks for them (driveShadow): a
       // loader on the unit copies a mod's stock parts from the running OS, and lays these over it
