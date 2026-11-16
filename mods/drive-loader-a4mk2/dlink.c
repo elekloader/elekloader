@@ -78,7 +78,22 @@ struct dmod {
 #ifdef DL_REGIONS
     u16 reg_first, reg_n;                /* its regions in L.regs */
 #endif
+#ifdef DL_KNOBS
+    u16 knobs;                           /* its "knobs": how many ids it asks for */
+    u16 kfix_first, kfix_n;              /* the ids its entries name, in L.kfix */
+    u32 knob_base;                       /* its run's first id (knob_runs) */
+#endif
 };
+
+#ifdef DL_KNOBS
+/* Knob ids an entry names (link.Mod2.id_ranges), a +Drive mod's or (claims of kind 4) a flashed
+ * module's: [a, b], signed as link.py reads them. */
+struct kfix {
+    s32 a, b;
+    u16 who;                             /* the mod's index, or the flashed module's */
+    u8 own_only, pad;                    /* from a table whose ids are the mods' own (core_knob_looks) */
+};
+#endif
 
 #ifdef DL_SITES
 /* A site a mod writes in the running OS (the Octatrack's TELOS, dl.h "sites"): its range, and
@@ -211,6 +226,15 @@ static struct {
 #ifdef DL_REGIONS
     struct { u32 lo, hi; } regs[DL_REGIONS_MAX];   /* the mods' regions, [lo, hi) */
     u32 nregs;
+#endif
+#ifdef DL_KNOBS
+    int knobs;                           /* the build gives +Drive mods knob ids (F_KNOBS) */
+    struct kfix *kfix, *kflash;          /* the +Drive mods' fixed ids; the flashed modules' */
+    u32 nkfix, nkflash, KFIX;
+    struct ds_state *kprev;              /* /mods/.store's runs (ds_decode), 0 for none */
+    struct ds_knob *krun, *kfree;        /* knob_runs' runs and freed runs */
+    u32 nkrun, nkfree;
+    struct ds_knobset kset;              /* what ds_allocate writes (ds_knobs_in) */
 #endif
     u32 crc_table[256];
 } L;
@@ -385,6 +409,7 @@ static u32 o_pre(u32 i) { return D32(0x54) + 12 * i; }
  * flashed ones (kind 7) */
 static u32 d_flags(void) { return D16(4 + 2) >= 3 ? D32(0x60) : 0; }
 #define F_CLAIMS 32
+#define F_KNOBS 128                      /* bit 7: +Drive mods' knob ids (knob_start) */
 #define MAP_CLAIM 7
 /* An entry's order: ABI 1.1's orders array, else (1.0) the key's, 0xFFFF the linker's own */
 static s32 table_order(u32 i, u32 k)
@@ -577,11 +602,11 @@ static int version_cmp(const char *a, const char *b)
 /* The top-level values pass 1 and pass 2 read, found once per file. */
 enum { K_ELEMOD, K_ID, K_VERSION, K_TARGET, K_SECTIONS, K_SYMBOLS, K_EXPORTS, K_IMPORTS, K_WEAK,
        K_RELOCS, K_SITES, K_COLLECTIONS, K_CONTRIBUTE, K_COPIED, K_STORAGE, K_SHARC,
-       K_RESOURCES, K_REQUIRES, K_CONFLICTS, K_EVENTS, K_N };
+       K_RESOURCES, K_REQUIRES, K_CONFLICTS, K_EVENTS, K_KNOBS, K_N };
 static const char *const KEYS[K_N] = {
     "elemod", "id", "version", "target", "sections", "symbols", "exports", "imports", "weak",
     "relocs", "sites", "collections", "contribute", "copied", "storage", "sharc",
-    "resources", "requires", "conflicts", "events",
+    "resources", "requires", "conflicts", "events", "knobs",
 };
 
 static int top(const u8 *buf, u32 len, const char **at)
@@ -1686,6 +1711,10 @@ static int declarer(const char *name)
 }
 #endif
 
+#ifdef DL_KNOBS
+static int knob_scan(struct dmod *m, const char **k, const u8 *buf, u32 len);
+#endif
+
 static int scan(struct dmod *m, const u8 *buf, u32 len, const char **what)
 {
     const char *k[K_N], *s;
@@ -1713,6 +1742,23 @@ static int scan(struct dmod *m, const u8 *buf, u32 len, const char **what)
         return DL_R_FORMAT;
     if (!target_ok(k[K_TARGET], buf, len))
         return DL_R_TARGET;
+#ifdef DL_KNOBS
+    {                                    /* "knobs": 0..DL_KNOBS_MAX; __knobs is the linker's */
+        u8 sec;
+        u32 off;
+        m->knobs = 0;
+        m->kfix_first = (u16)L.nkfix;
+        m->kfix_n = 0;
+        if (k[K_KNOBS]) {
+            at(&j, k[K_KNOBS], buf, len);
+            if (!js_int(&j, &v) || v < 0 || v > DL_KNOBS_MAX)
+                return DL_R_FORMAT;
+            m->knobs = (u16)v;
+        }
+        if (find_symbol(k[K_SYMBOLS], buf, len, "__knobs", 7, &sec, &off))
+            return DL_R_FORMAT;
+    }
+#endif
 #ifdef DL_SITES
     for (i = 1; i < sizeof(nok) / sizeof(nok[0]); i++)   /* sites are read below */
 #else
@@ -2050,6 +2096,10 @@ static int scan(struct dmod *m, const u8 *buf, u32 len, const char **what)
         if (code)
             return code;
     }
+#ifdef DL_KNOBS
+    if (L.knobs && (i = (u32)knob_scan(m, k, buf, len)) != 0)
+        return (int)i;
+#endif
     m->init_sec = 0xFF;
     {
         u8 sec;
@@ -2061,6 +2111,544 @@ static int scan(struct dmod *m, const u8 *buf, u32 len, const char **what)
     }
     return 0;
 }
+
+#ifdef DL_KNOBS
+/* ---- knob ids (docs/DRIVE.md, "Knob ids on the +Drive") ----------------------------------------
+ * A +Drive mod may declare "knobs": n and gets a run of n ids in DL_KNOB_LO..DL_KNOB_HI, kept from
+ * boot to boot in /mods/.store (store.knobs, the lockfile's rules). Ids a mod's entries name in its
+ * own bytes follow link.id_problems: none of the core's, a core_knob_looks entry's from DL_KNOB_OWN
+ * up, and from there up no id taken twice, by a flashed module (claims of kind 4) or a mod. */
+#define KNOB_FREED_MAX DS_MAX_KNOBS      /* the freed runs a .store keeps: the last ones */
+#define KNOB_RUNS_MAX (DS_MAX_KNOBS + DL_MAX_MODS)
+static char *put_num(char *p, u32 v);
+
+/* The knob state for a build with F_KNOBS (ABI 1.3): the flashed modules' ids and the .store's runs.
+ * -> 0 when the heap has no room. */
+static int knob_start(void)
+{
+    u32 i, nk = 0;
+    ds_knobs_in = 0;
+    if (!(d_flags() & F_KNOBS))
+        return 1;
+    L.knobs = 1;
+    for (i = 0; i < n_claims(); i++)
+        if (D16(o_claim(i)) == 4)
+            nk++;
+    L.KFIX = 4 * L.CONTRIBS;
+    L.kfix = dl_alloc(L.KFIX * sizeof *L.kfix);
+    L.kflash = dl_alloc((nk ? nk : 1) * sizeof *L.kflash);
+    L.krun = dl_alloc(KNOB_RUNS_MAX * sizeof *L.krun);
+    L.kfree = dl_alloc(2 * DS_MAX_KNOBS * sizeof *L.kfree);
+    if (!L.kfix || !L.kflash || !L.krun || !L.kfree)
+        return 0;
+    for (i = 0; i < n_claims(); i++) {   /* "<first> <last>" in hex */
+        const char *p = pool(D32(o_claim(i) + 4));
+        struct kfix *f = &L.kflash[L.nkflash];
+        u32 q = 0;
+        if (D16(o_claim(i)) != 4)
+            continue;
+        while (p[q] && p[q] != ' ')
+            q++;
+        js_parse_int(p, q, &f->a);
+        p += q + (p[q] == ' ');
+        q = 0;
+        while (p[q] && p[q] != ' ')
+            q++;
+        js_parse_int(p, q, &f->b);
+        f->who = D16(o_claim(i) + 2);
+        f->own_only = 0;
+        L.nkflash++;
+    }
+    if (dl_store_prev)
+        L.kprev = ds_decode(dl_store_prev, dl_store_prev_n);   /* 0: none the allocator takes */
+    return 1;
+}
+
+/* Relocations at p ([[..., type, target, addend], ...]) to __knobs: each abs32 or abs16, its
+ * addend below knobs (link.check). -> 0 when one is not. */
+static int knob_refs_ok(const char *p, const u8 *buf, u32 len, u32 knobs)
+{
+    js_t j;
+    int first = 1;
+    if (!p)
+        return 1;
+    at(&j, p, buf, len);
+    if (!js_open(&j, '['))
+        return 1;                        /* its form is checked elsewhere */
+    while (js_next(&j, ']', &first)) {
+        const char *s, *typ = 0, *tgt = 0;
+        u32 n, tn = 0, gn = 0;
+        s32 add = 0, x;
+        int f2 = 1;
+        if (!js_open(&j, '['))
+            return 1;
+        while (js_next(&j, ']', &f2)) {
+            if (js_peek(&j) == '"') {
+                if (!js_str(&j, &s, &n))
+                    return 1;
+                typ = tgt;
+                tn = gn;
+                tgt = s;
+                gn = n;
+            } else if (js_int(&j, &x)) {
+                add = x;
+            } else if (!js_skip(&j)) {
+                return 1;
+            }
+        }
+        if (tgt && js_eq(tgt, gn, "sym:__knobs")
+            && (!typ || !(js_eq(typ, tn, "abs32") || js_eq(typ, tn, "abs16")) || add < 0 || (u32)add >= knobs))
+            return 0;
+    }
+    return 1;
+}
+
+/* The same for each object's "relocs" in a list of objects (sites, contributions). */
+static int knob_list_ok(const char *p, const u8 *buf, u32 len, u32 knobs)
+{
+    js_t j;
+    const char *s;
+    u32 n;
+    int first = 1;
+    if (!p)
+        return 1;
+    at(&j, p, buf, len);
+    if (!js_open(&j, '['))
+        return 1;
+    while (js_next(&j, ']', &first)) {
+        int f2 = 1;
+        if (!js_open(&j, '{'))
+            return 1;
+        while (js_next(&j, '}', &f2)) {
+            if (!js_key(&j, &s, &n))
+                return 1;
+            if (js_eq(s, n, "relocs") && !knob_refs_ok(j.p, buf, len, knobs))
+                return 0;
+            if (!js_skip(&j))
+                return 1;
+        }
+    }
+    return 1;
+}
+
+/* The value at key `name` of the object at p, or 0. */
+static const char *member(const char *p, const u8 *buf, u32 len, const char *name)
+{
+    js_t j;
+    const char *s;
+    u32 n;
+    int first = 1;
+    if (!p)
+        return 0;
+    at(&j, p, buf, len);
+    if (!js_open(&j, '{'))
+        return 0;
+    while (js_next(&j, '}', &first)) {
+        if (!js_key(&j, &s, &n))
+            return 0;
+        js_peek(&j);
+        if (js_eq(s, n, name))
+            return j.p;
+        if (!js_skip(&j))
+            return 0;
+    }
+    return 0;
+}
+
+/* The big-endian long at .run+off from its hex parts (link.Mod2._long without the stock image):
+ * -> 1, or 0 past .run, under a relocation or over a stock part. */
+static int run_long(const char **k, const char *parts_p, const u8 *buf, u32 len, u32 run_len, s32 off, u32 *v)
+{
+    js_t j;
+    const char *s;
+    u32 n, at_ = 0, got = 0;
+    u8 b[4];
+    int first = 1;
+    if (off < 0 || (u32)off + 4 > run_len || !parts_p)
+        return 0;
+    if (k[K_RELOCS]) {                   /* [".run", off, type, target, addend] */
+        at(&j, k[K_RELOCS], buf, len);
+        js_open(&j, '[');
+        while (js_next(&j, ']', &first)) {
+            int f2 = 1;
+            s32 o;
+            js_open(&j, '[');
+            js_next(&j, ']', &f2);
+            js_skip(&j);
+            js_next(&j, ']', &f2);
+            js_int(&j, &o);
+            js_next(&j, ']', &f2);
+            js_str(&j, &s, &n);
+            if (o < off + 4 && off < o + rsize(s, n))
+                return 0;
+            while (js_next(&j, ']', &f2))
+                js_skip(&j);
+        }
+    }
+    at(&j, parts_p, buf, len);
+    first = 1;
+    if (!js_open(&j, '['))
+        return 0;
+    while (js_next(&j, ']', &first)) {
+        int f2 = 1;
+        u32 cnt, lo, hi, q;
+        if (!js_open(&j, '[') || !js_next(&j, ']', &f2) || !js_str(&j, &s, &n))
+            return 0;
+        if (js_eq(s, n, "hex")) {
+            if (!js_next(&j, ']', &f2) || !js_str(&j, &s, &n))
+                return 0;
+            cnt = n / 2;
+            lo = (u32)off > at_ ? (u32)off : at_;
+            hi = (u32)off + 4 < at_ + cnt ? (u32)off + 4 : at_ + cnt;
+            for (q = lo; q < hi; q++)
+                b[got++] = (u8)(hexval(s[2 * (q - at_)]) << 4 | hexval(s[2 * (q - at_) + 1]));
+        } else {                         /* a stock part: no bytes here */
+            s32 a, c;
+            if (!js_next(&j, ']', &f2) || !js_int(&j, &a) || !js_next(&j, ']', &f2) || !js_int(&j, &c))
+                return 0;
+            cnt = (u32)c;
+            if ((u32)off < at_ + cnt && at_ < (u32)off + 4)
+                return 0;
+        }
+        while (js_next(&j, ']', &f2))
+            js_skip(&j);
+        at_ += cnt;
+        if (got == 4) {
+            *v = dl_rd32(b);
+            return 1;
+        }
+    }
+    return 0;
+}
+
+/* Pass 1's part for knob ids, on a build with F_KNOBS: the references to __knobs, then the ids the
+ * mod's entries name in its own bytes (link.Mod2.id_ranges: core_params' and core_knob_looks'
+ * entries point at a pair of longs, the first and last id). -> 0, or a refusal code. */
+static int knob_scan(struct dmod *m, const char **k, const u8 *buf, u32 len)
+{
+    static const char *const tabs[2] = {"core_params", "core_knob_looks"};
+    const char *parts_p = member(member(k[K_SECTIONS], buf, len, ".run"), buf, len, "parts");
+    u32 t;
+    if (!knob_refs_ok(k[K_RELOCS], buf, len, m->knobs) || !knob_list_ok(k[K_SITES], buf, len, m->knobs)
+        || !knob_list_ok(k[K_CONTRIBUTE], buf, len, m->knobs))
+        return DL_R_FORMAT;
+    m->kfix_first = (u16)L.nkfix;
+    m->kfix_n = 0;
+    if (!k[K_CONTRIBUTE])
+        return 0;
+    for (t = 0; t < 2; t++) {
+        js_t j;
+        const char *s;
+        u32 n;
+        int first = 1;
+        at(&j, k[K_CONTRIBUTE], buf, len);
+        js_open(&j, '[');
+        while (js_next(&j, ']', &first)) {
+            const char *obj, *rel, *to;
+            js_t q;
+            int f3 = 1;
+            js_peek(&j);
+            obj = j.p;
+            js_skip(&j);
+            to = member(obj, buf, len, "to");
+            if (!to)
+                continue;
+            at(&q, to, buf, len);
+            if (!js_str(&q, &s, &n) || !js_eq(s, n, tabs[t]) || !(rel = member(obj, buf, len, "relocs")))
+                continue;
+            at(&q, rel, buf, len);
+            js_open(&q, '[');
+            while (js_next(&q, ']', &f3)) {   /* [off, type, target, addend] */
+                int f4 = 1;
+                s32 off, add;
+                const char *ty, *tg;
+                u32 tyn, tgn, a, b;
+                s32 at_;
+                u8 sec;
+                u32 so;
+                js_open(&q, '[');
+                js_next(&q, ']', &f4);
+                js_int(&q, &off);
+                js_next(&q, ']', &f4);
+                js_str(&q, &ty, &tyn);
+                js_next(&q, ']', &f4);
+                js_str(&q, &tg, &tgn);
+                js_next(&q, ']', &f4);
+                tyn = js_int(&q, &add) ? tyn : 0;   /* an addend past s32: no entry of ours */
+                while (js_next(&q, ']', &f4))
+                    js_skip(&q);
+                if (off % 4 || !js_eq(ty, tyn, "abs32"))
+                    continue;
+                if (tgn > 4 && tg[0] == 's' && tg[1] == 'y' && tg[2] == 'm' && tg[3] == ':') {
+                    if (!find_symbol(k[K_SYMBOLS], buf, len, tg + 4, tgn - 4, &sec, &so) || sec != SEC_RUN)
+                        continue;
+                    at_ = (s32)so + add;
+                } else if (js_eq(tg, tgn, "sec:.run")) {
+                    at_ = add;
+                } else {
+                    continue;
+                }
+                if (!run_long(k, parts_p, buf, len, m->run_len, at_, &a)
+                    || !run_long(k, parts_p, buf, len, m->run_len, at_ + 4, &b) || (s32)a > (s32)b)
+                    continue;
+                if (L.nkfix >= L.KFIX)
+                    return DL_R_LIMIT;
+                L.kfix[L.nkfix].a = (s32)a;
+                L.kfix[L.nkfix].b = (s32)b;
+                L.kfix[L.nkfix].who = (u16)(m - L.mods);
+                L.kfix[L.nkfix].own_only = (u8)t;
+                L.nkfix++;
+                m->kfix_n++;
+            }
+        }
+    }
+    return 0;
+}
+
+/* Python's '%#x' of v */
+static char *put_xhex(char *p, s32 v)
+{
+    static const char dg[] = "0123456789abcdef";
+    u32 u = v < 0 ? 0u - (u32)v : (u32)v;
+    int i = 28;
+    if (v < 0)
+        *p++ = '-';
+    if (!u) {
+        *p++ = '0';
+        return p;
+    }
+    *p++ = '0';
+    *p++ = 'x';
+    while (!(u >> i))
+        i -= 4;
+    for (; i >= 0; i -= 4)
+        *p++ = dg[u >> i & 15];
+    return p;
+}
+
+static char knob_why[64];
+
+/* "<a>-<b> are <tail>" in knob_why */
+static const char *knob_detail(s32 a, s32 b, const char *tail, s32 own)
+{
+    char *p = put_xhex(knob_why, a);
+    *p++ = '-';
+    p = put_xhex(p, b);
+    *p++ = ' ';
+    *p++ = 'a';
+    *p++ = 'r';
+    *p++ = 'e';
+    *p++ = ' ';
+    if (own) {
+        const char *w = "below ";
+        while (*w)
+            *p++ = *w++;
+        p = put_xhex(p, own);
+    } else {
+        u32 q;
+        for (q = 0; tail[q] && p < knob_why + 60; q++)
+            *p++ = tail[q];
+        *p++ = '\'';
+        *p++ = 's';
+    }
+    *p = 0;
+    return knob_why;
+}
+
+/* link.id_problems for the mod at id order i against the flashed ids and the earlier living mods'.
+ * -> a refusal's detail, or 0. */
+static const char *knob_problem(int i, const struct dmod *m)
+{
+    u32 r, x;
+    int k;
+    for (r = m->kfix_first; r < (u32)m->kfix_first + m->kfix_n; r++) {
+        s32 a = L.kfix[r].a, b = L.kfix[r].b;
+        if (a <= DL_KNOB_CORE_HI && DL_KNOB_CORE_LO <= b)
+            return knob_detail(a, b, "core", 0);
+        if (L.kfix[r].own_only && a < DL_KNOB_OWN)
+            return knob_detail(a, b, 0, DL_KNOB_OWN);
+        if (b < DL_KNOB_OWN)
+            continue;
+        if (a < DL_KNOB_OWN)
+            a = DL_KNOB_OWN;
+        for (x = 0; x < L.nkflash; x++) {
+            const struct kfix *f = &L.kflash[x];
+            if (f->a <= b && a <= f->b)
+                return knob_detail(a > f->a ? a : f->a, b < f->b ? b : f->b, module_name(f->who), 0);
+        }
+        for (k = 0; k < i; k++) {
+            const struct dmod *o = &L.mods[L.order[k]];
+            if (!o->alive)
+                continue;
+            for (x = o->kfix_first; x < (u32)o->kfix_first + o->kfix_n; x++) {
+                const struct kfix *f = &L.kfix[x];
+                if (f->a <= b && a <= f->b)
+                    return knob_detail(a > f->a ? a : f->a, b < f->b ? b : f->b, astr(o->id), 0);
+            }
+        }
+    }
+    return 0;
+}
+
+/* store.knobs' clash: the highest last id of the taken runs [at, at+n-1] meets (fixed: the flashed
+ * ids and the living mods' from DL_KNOB_LO up; the runs; the freed runs not of mod), or -1. */
+static s32 knob_clash(u32 at_, u32 n, int runs, const char *mod)
+{
+    s32 hit = -1, lo = (s32)at_, hi = (s32)(at_ + n - 1);
+    u32 x;
+    int k;
+    for (x = 0; x < L.nkflash; x++)
+        if (L.kflash[x].b >= DL_KNOB_LO && L.kflash[x].a <= hi && lo <= L.kflash[x].b && L.kflash[x].b > hit)
+            hit = L.kflash[x].b;
+    for (k = 0; k < L.nmods; k++) {
+        const struct dmod *o = &L.mods[k];
+        if (!o->alive)
+            continue;
+        for (x = o->kfix_first; x < (u32)o->kfix_first + o->kfix_n; x++) {
+            const struct kfix *f = &L.kfix[x];
+            if (f->b >= DL_KNOB_LO && f->a <= hi && lo <= f->b && f->b > hit)
+                hit = f->b;
+        }
+    }
+    if (!runs)
+        return hit;
+    for (x = 0; x < L.nkrun; x++) {
+        const struct ds_knob *r = &L.krun[x];
+        s32 y = (s32)(r->first + r->count - 1);
+        if ((s32)r->first <= hi && lo <= y && y > hit)
+            hit = y;
+    }
+    for (x = 0; x < L.nkfree; x++) {
+        const struct ds_knob *r = &L.kfree[x];
+        s32 y = (s32)(r->first + r->count - 1);
+        if (dl_strcmp(r->mod, mod) && (s32)r->first <= hi && lo <= y && y > hit)
+            hit = y;
+    }
+    return hit;
+}
+
+static struct dmod *knob_mod(const char *id)
+{
+    int k;
+    for (k = 0; k < L.nmods; k++) {
+        struct dmod *o = &L.mods[L.order[k]];
+        if (o->alive && o->knobs && !dl_strcmp(astr(o->id), id))
+            return o;
+    }
+    return 0;
+}
+
+/* Each living "knobs" mod's run (store.knobs from the .store's runs, past the flashed ids and the
+ * living mods' own, in DL_KNOB_LO..DL_KNOB_HI): m->knob_base, and L.kset for the new .store. A mod
+ * with no run left is refused. -> 1 when it refused one. */
+static int knob_runs(void)
+{
+    const struct ds_state *p = L.kprev;
+    u32 nxt = p && p->next_knob > DL_KNOB_LO ? p->next_knob : DL_KNOB_LO, x, y;
+    int k, want = 0;
+    if (!L.knobs)
+        return 0;
+    ds_knobs_in = 0;
+    for (k = 0; k < L.nmods; k++)
+        if (L.mods[k].alive && L.mods[k].knobs)
+            want = 1;
+    L.kset.n = L.kset.nf = 0;
+    L.kset.next = p ? p->next_knob : 0;
+    L.kset.kn = p ? p->kn : 0;
+    L.kset.fkn = p ? p->fkn : 0;
+    if (!want && (!p || (!p->nkn && !p->nfkn))) {   /* nothing given, nothing held: as it was */
+        ds_knobs_in = &L.kset;
+        return 0;
+    }
+    L.nkrun = L.nkfree = 0;
+    if (p)
+        for (x = 0; x < p->nfkn; x++)
+            L.kfree[L.nkfree++] = p->fkn[x];
+    for (x = 0; p && x < p->nkn; x++) {  /* a run stays while its mod asks for as many, clear of fixed */
+        const struct ds_knob *r = &p->kn[x];
+        const struct dmod *o = knob_mod(r->mod);
+        if (o && o->knobs == r->count && knob_clash(r->first, r->count, 0, 0) < 0)
+            L.krun[L.nkrun++] = *r;
+        else
+            L.kfree[L.nkfree++] = *r;
+    }
+    for (k = 0; k < L.nmods; k++) {      /* the others in id order */
+        struct dmod *o = &L.mods[L.order[k]];
+        const char *id = astr(o->id);
+        u32 n = o->knobs, at_ = 0;
+        int found = 0, again;
+        if (!o->alive || !n)
+            continue;
+        for (x = 0; x < L.nkrun && dl_strcmp(L.krun[x].mod, id); x++)
+            ;
+        if (x < L.nkrun)
+            continue;
+        for (x = L.nkfree; x-- > 0;)     /* back where it was, the latest first */
+            if (!dl_strcmp(L.kfree[x].mod, id) && L.kfree[x].first + n - 1 <= DL_KNOB_HI
+                && knob_clash(L.kfree[x].first, n, 1, id) < 0) {
+                at_ = L.kfree[x].first;
+                found = 1;
+                break;
+            }
+        for (x = y = 0; x < L.nkfree; x++)
+            if (dl_strcmp(L.kfree[x].mod, id))
+                L.kfree[y++] = L.kfree[x];
+        L.nkfree = y;
+        for (again = 0; !found && again < 2; again++) {
+            s32 hit;
+            if (again) {                 /* the never-used ids are gone: the freed runs go out again */
+                if (!L.nkfree)
+                    break;
+                L.nkfree = 0;
+            }
+            at_ = again ? DL_KNOB_LO : nxt;
+            while ((hit = knob_clash(at_, n, 1, id)) >= 0)
+                at_ = (u32)hit + 1;
+            if (at_ + n - 1 <= DL_KNOB_HI)
+                found = 1;
+        }
+        if (!found) {
+            char d[32], *q = d;
+            const char *w = "run of ";
+            while (*w)
+                *q++ = *w++;
+            q = put_num(q, n);
+            w = ": none free";
+            while (*w)
+                *q++ = *w++;
+            *q = 0;
+            refuse(o, DL_R_IDS, 0, d);
+            return 1;
+        }
+        L.krun[L.nkrun].mod = id;
+        L.krun[L.nkrun].first = at_;
+        L.krun[L.nkrun].count = n;
+        L.nkrun++;
+        if (at_ + n > nxt)
+            nxt = at_ + n;
+    }
+    for (x = 1; x < L.nkrun; x++) {      /* by first id (an insertion sort) */
+        struct ds_knob r = L.krun[x];
+        for (y = x; y > 0 && L.krun[y - 1].first > r.first; y--)
+            L.krun[y] = L.krun[y - 1];
+        L.krun[y] = r;
+    }
+    for (x = 0; x < L.nkrun + L.nkfree; x++) {
+        const struct ds_knob *r = x < L.nkrun ? &L.krun[x] : &L.kfree[x - L.nkrun];
+        if (r->first + r->count > nxt)
+            nxt = r->first + r->count;
+        if (x < L.nkrun)
+            knob_mod(r->mod)->knob_base = r->first;
+    }
+    L.kset.n = L.nkrun;
+    L.kset.kn = L.krun;
+    L.kset.nf = L.nkfree > KNOB_FREED_MAX ? KNOB_FREED_MAX : L.nkfree;
+    L.kset.fkn = L.kfree + (L.nkfree - L.kset.nf);   /* the latest */
+    L.kset.next = nxt;
+    ds_knobs_in = &L.kset;
+    return 0;
+}
+#endif
 
 /* ---- check -------------------------------------------------------------------------------- */
 static struct dmod *by_id(const char *id, struct dmod *self)
@@ -2262,6 +2850,16 @@ static int check_round(void)
             refused++;
             continue;
         }
+#ifdef DL_KNOBS
+        if (L.knobs) {                   /* knob ids: link.id_problems' rules */
+            const char *why = knob_problem(i, m);
+            if (why) {
+                refuse(m, DL_R_IDS, 0, why);
+                refused++;
+                continue;
+            }
+        }
+#endif
 #ifdef DL_REGIONS
         {
             const char *who = region_clash(m);
@@ -2274,7 +2872,11 @@ static int check_round(void)
 #endif
         for (q = 0; q < m->imports.n; q++) {
             const char *nm = L.arena + L.lists[m->imports.first + q];
-            if (!known_global(nm) && !in_list(&m->weak, nm))
+            if (!known_global(nm) && !in_list(&m->weak, nm)
+#ifdef DL_KNOBS
+                && !(L.knobs && m->knobs && !dl_strcmp(nm, "__knobs"))   /* its run's first id */
+#endif
+                )
                 break;
         }
         if (q < m->imports.n) {
@@ -2479,6 +3081,12 @@ static int resolve(struct dmod *m, const char *s, u32 n, u32 *v)
     if (n > 4 && s[0] == 's' && s[1] == 'y' && s[2] == 'm' && s[3] == ':') {
         u32 h = dl_hash(s + 4, n - 4), i;
         const struct sym *g;
+#ifdef DL_KNOBS
+        if (L.knobs && m->knobs && js_eq(s + 4, n - 4, "__knobs")) {   /* its run's first id */
+            *v = m->knob_base;
+            return 1;
+        }
+#endif
         for (i = 0; i < L.nlocals; i++)
             if (L.locals[i].hash == h) {
                 u32 off = L.locals[i].val, sec = L.locals[i].sec;
@@ -2959,6 +3567,10 @@ int dl_parse_active(const char *text, u32 len, struct dl_choice *out)
 static void *take(u32 n) { return dl_alloc(n ? n : 4); }
 
 /* Every block begin() took goes back. */
+#ifdef DL_KNOBS
+static int knob_start(void);
+#endif
+
 static void finish(void)
 {
     static void **const p[] = {(void **)&L.mods, (void **)&L.order, (void **)&L.place, (void **)&L.arena, (void **)&L.lists,
@@ -2972,12 +3584,20 @@ static void finish(void)
 #ifdef DL_SITES
                                (void **)&L.sites, (void **)&L.tsdata,
 #endif
+#ifdef DL_KNOBS
+                               (void **)&L.kfix, (void **)&L.kflash, (void **)&L.krun, (void **)&L.kfree,
+#endif
                                };
     u32 i;
     for (i = 0; i < sizeof p / sizeof p[0]; i++) {
         dl_free(*p[i]);
         *p[i] = 0;
     }
+#ifdef DL_KNOBS
+    ds_state_free(L.kprev);
+    L.kprev = 0;
+    ds_knobs_in = 0;
+#endif
 }
 
 static u32 pool_n(u32 per, u32 mb, u32 base)
@@ -3195,13 +3815,17 @@ static int fit_round(void)
     return 1;
 }
 
-/* Check rounds and the room, until neither refuses a mod. */
+/* Check rounds, the room and the knob runs, until none refuses a mod. */
 static void settle(void)
 {
     do
         while (check_round())
             ;
+#ifdef DL_KNOBS
+    while (fit_round() || knob_runs());
+#else
     while (fit_round());
+#endif
 }
 
 /* The living mods' fields placed from /mods/.store (drive_store.allocate): their descriptors for
@@ -3300,6 +3924,10 @@ static int begin_start(u32 desc, int n, u8 *buf, u32 max, struct dl_status *st_o
 #endif
     if (!pools(n))
         return -1;
+#ifdef DL_KNOBS
+    if (!knob_start())
+        return -1;
+#endif
     L.arena_n = 1;                       /* offset 0 holds "" */
 
     /* the flashed build's names: exports, tables and their counts, core_desc */
@@ -3356,6 +3984,11 @@ static void begin_line(const struct dl_choice *ch, int i, s32 have, int why)
             L.nfld = m->fld_first;
         if (m->ctr_n)
             L.nctr = m->ctr_first;
+#ifdef DL_KNOBS
+        if (m->kfix_n)
+            L.nkfix = m->kfix_first;
+        m->kfix_n = 0;
+#endif
 #ifdef DL_COLLECTIONS
         if (m->coll_n)
             L.ncoll = m->coll_first;
@@ -3711,6 +4344,9 @@ static int link_set(u32 desc, const struct dl_choice *choice, int n, u8 *buf, u3
         if (dirty_hi > dl_used_lo)
             dl_memset(DL_MEM(dl_used_lo), 0, dirty_hi - dl_used_lo);
         dl_used_hi = dl_used_lo;
+#ifdef DL_KNOBS
+        ds_knobs_in = 0;                 /* and the knob runs stay the old .store's */
+#endif
         if (place_store())               /* nothing loads: every field parks */
             write_store();
         return 0;

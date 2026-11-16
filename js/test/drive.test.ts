@@ -5,12 +5,13 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { ANALOG_RYTM_MK2, DIGITONE_MK1 } from '../src/devices.ts'
+import { ANALOG_FOUR_MK2, ANALOG_RYTM_MK2, DIGITONE_MK1 } from '../src/devices.ts'
 import { fromHex, toHex } from '../src/bytes.ts'
 import * as container from '../src/container.ts'
 import * as datarpc from '../src/datarpc.ts'
 import * as desc from '../src/desc.ts'
 import * as drive from '../src/drive.ts'
+import * as drivestore from '../src/drivestore.ts'
 import { ModError } from '../src/elemod.ts'
 
 const V = JSON.parse(readFileSync(new URL('./drive-vectors.json', import.meta.url), 'utf8'))
@@ -57,12 +58,37 @@ test('TELOS: sites and regions on a build with the stock shadow, as drive.py che
   }
 })
 
+test('knob ids: runs and the ids entries name, on a build with F_KNOBS, as drive.py checks them', () => {
+  const K = V.knobs
+  ANALOG_FOUR_MK2.releases.push({ ...K.release, binSha256: '' })
+  try {
+    const blk = fromHex(K.build)!
+    assert.deepEqual(desc.decode(blk).claims, K.claims)
+    const build = drive.loadBuild(blk)
+    assert.ok(build.knobs)
+    for (const c of K.cases) {
+      const r = drive.check(build, c.files.map(([n, f]: [string, any]) => [n, file(f)]))
+      assert.deepEqual(drive.summary(r), c.summary, c.name)
+      assert.equal(drive.statusText(r), c.status, c.name)
+      assert.deepEqual(drive.resultLines(r), c.lines, c.name)
+    }
+    for (const [hex, want] of K.stores) {     // /mods/.store with runs (format 3), as the twin writes it
+      const st = drivestore.decode(fromHex(hex)!)!
+      assert.deepEqual({ knobs: st.knobs, freed_knobs: st.freed_knobs, next_knob: st.next_knob }, want)
+      assert.equal(toHex(drivestore.encode(st)), hex)
+    }
+  } finally {
+    ANALOG_FOUR_MK2.releases.pop()
+  }
+})
+
 test('every host refusal code has a case refused with it and one that loads', () => {
   const host = Object.values(drive.CODES).map(([n]) => n)
     .filter(n => !['ok', 'missing', 'changed', 'range', 'busy', 'site', 'flashed', 'stock', 'region', 'outside'].includes(n))
+  const cases = [...V.cases, ...V.knobs.cases]   // ids: on the A4's build
   for (const code of host) {
-    assert.ok(V.cases.some((c: any) => c.name === `${code}: refused` && c.summary.choices.some((x: any) => x.reason === code)), code)
-    assert.ok(V.cases.some((c: any) => c.name === `${code}: loads` && c.summary.choices.every((x: any) => x.state === 'loaded')), code)
+    assert.ok(cases.some((c: any) => c.name === `${code}: refused` && c.summary.choices.some((x: any) => x.reason === code)), code)
+    assert.ok(cases.some((c: any) => c.name === `${code}: loads` && c.summary.choices.every((x: any) => x.state === 'loaded')), code)
   }
 })
 

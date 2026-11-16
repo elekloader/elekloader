@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 """Parked data on the A4's MODS page: mods/drive-loader-a4mk2/park.c, built for the computer by
-tests/drive_a4_park_host.c, reads /mods/.store in the A4's format 2 (lock codes per track kind,
+tests/drive_a4_park_host.c, reads /mods/.store in the A4's formats 2 and 3 (lock codes per track kind,
 elekloader/drive_store.py FORMAT_KINDS) as drive_store.decode does, and FORGET DATA rewrites it byte
 for byte as drive_store.forget then encode. A format 1 file is one the A4's boot drops (dstore.c
 DS_FORMAT), so nothing in it is parked. tests/drive_a4_page_host.c stubs park.c; this is its test.
@@ -107,6 +107,22 @@ class Park(unittest.TestCase):
                 want, _ch = ds.forget(want, m)
             self.assertEqual(g, 'FORGET ' + ds.encode(want).hex(), a)
             self.assertIsNotNone(ds.decode(bytes.fromhex(g[7:])))
+
+    def test_a_format_3_store_keeps_its_knob_runs(self):
+        """With +Drive knob runs (format 3): the same mods listed, and FORGET DATA as drive_store's,
+        the runs kept."""
+        st = dict(state(), knobs=[{'mod': 'ka', 'first': 0x4000, 'count': 4}],
+                  freed_knobs=[{'mod': 'a-gone-mod', 'first': 0x4004, 'count': 2}], next_knob=0x4006)
+        raw = ds.encode(st)
+        self.assertEqual(raw[4:6], bytes([0, ds.FORMAT_KNOBS]))
+        self.assertEqual(self.ask(raw, 'count')[0], 'COUNT %d' % len(parked_mods(st)))
+        mods = parked_mods(st)
+        g = self.ask(raw, 'forget ' + '|'.join(mods))[0]
+        want = st
+        for m in mods:
+            want, _ch = ds.forget(want, m)
+        self.assertEqual(g, 'FORGET ' + ds.encode(want).hex())
+        self.assertEqual(ds.decode(bytes.fromhex(g[7:]))['knobs'], st['knobs'])
 
     def test_nothing_parked_after_forgetting_all(self):
         st = state()

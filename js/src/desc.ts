@@ -18,6 +18,7 @@ export const KIND_CORE = 0, KIND_FLASHED = 1, KIND_LOADER = 2
 export const CLAIM_NAME = 1
 export const CLAIM_REGION = 2               // a region of the bulk area a flashed mod claims: "<lo> <hi> <name>", hex
 export const CLAIM_STD = 3                  // with F_STD_MAP, the core's std map: "<event> <table>", one a standard event (link.stdTables)
+export const CLAIM_KNOBS = 4                // with F_KNOBS, knob ids a flashed module takes: "<first> <last>", hex
 export const STAGING = ['drive_staging', 'drive_staging_size'] as const
 export const STAGE_TOP = 'drive_stage_top'   // a loader's export: nonzero sets F_STAGE_TOP (ABI 1.3)
 export const F_STAGE_TOP = 1                 // the header's flags (ABI 1.3)
@@ -33,6 +34,8 @@ export const CLAIMS = 'drive_claims'         // a loader's export: sets F_CLAIMS
 export const F_CLAIMS = 32                   // flags bit 5: the boot linker takes contributions' claims (SITE_CLAIM)
 export const STOCK_SHADOW = 'drive_stock_shadow'   // a loader's export: the build carries the shadow, F_STOCK_SHADOW set
 export const F_STOCK_SHADOW = 64             // flags bit 6: the shadow serves stock parts only (no TELOS sites)
+export const KNOBS = 'drive_knobs'           // a loader's export (on a device with driveKnobs): sets F_KNOBS
+export const F_KNOBS = 128                   // flags bit 7: +Drive mods' "knobs" (claims of kind 4 name the flashed ids)
 const MODULE = 16, EXPORT = 8, TABLE = 24, CLAIM = 8, AREA = 20, SCOPE = 16, RANGE = 12
 // a site map range's kind (ABI 1.2)
 export const SITE_SITE = 1, SITE_COPIED = 2, SITE_DEVICE = 3, SITE_BOOT = 4, SITE_RUN = 5, SITE_TRAILER = 6, SITE_CLAIM = 7
@@ -50,7 +53,7 @@ export type DescFields = {
   sites?: [number, number, number, number][]   // ABI 1.2: [lo, hi, kind, module index], sorted
   prelink?: [number, number, number][]          // ABI 1.2: [lo, hi, kind]
   shadow?: [number, Uint8Array][]             // ABI 1.2 (drive_shadow): the stock bytes of each range the build writes
-  flags?: number                                // ABI 1.3: F_STAGE_TOP, F_PAYLOAD_SKIP, F_ABS16, F_STD_MAP, F_COLLECTIONS, F_CLAIMS, F_STOCK_SHADOW
+  flags?: number                                // ABI 1.3: F_STAGE_TOP, F_PAYLOAD_SKIP, F_ABS16, F_STD_MAP, F_COLLECTIONS, F_CLAIMS, F_STOCK_SHADOW, F_KNOBS
 }
 
 const utf8 = new TextEncoder()

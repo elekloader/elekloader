@@ -166,6 +166,35 @@ Flashed code never reads a +Drive table: its link is done at build.
   entry bytes' pool, and the merge's room grows to fit them. The tables
   come from a pool of their own (64 per started MB of the area).
 
+## Knob ids on the +Drive
+
+A loader whose descriptor has `F_KNOBS` (drive-loader-a4mk2) gives +Drive
+mods knob ids by count, as the linker gives flashed mods theirs
+(docs/ADAPTING.md, "Knob ids by count (Analog Four MKII)"), so a flashed
+mod's `"knobs"` and its `__knobs` relocations load from the +Drive
+unchanged. The flashed ids are below 0x4000; the +Drive's are 0x4000..0x7fff,
+so a reflash never moves them.
+
+- **The flashed ids.** The descriptor names the ids each flashed module's
+  `core_params` and `core_knob_looks` entries take, its run included, as
+  claims of kind 4 (`"<first> <last>"`, hex).
+- **Form.** `"knobs"` is 0..1024 and `__knobs` no mod's symbol; a relocation
+  to `__knobs` is `abs32` or `abs16` with an addend below `"knobs"` (else
+  `format`). `__knobs` is the import of a mod with `"knobs"` only.
+- **Fixed ids.** The ids a mod's entries name in its own `.run` bytes
+  follow the linker's rules, in the check rounds after `claim`: none of the
+  core's 0x127..0x1ff, a `core_knob_looks` entry's from 0x200 up, and from
+  0x200 up none a flashed module's or an earlier living mod's in id order
+  (`ids`, its detail the ids and whose).
+- **Runs.** After the room, each living `"knobs"` mod gets its run as
+  store.knobs gives a lockfile's: a run stays while its mod asks for as
+  many and no fixed id is in it; a freed run waits for its mod until the
+  never-used ids run out, then goes out again. A mod with no run left is
+  refused (`ids`, `run of N: none free`), and the rounds start again.
+- **Kept.** The runs, the freed runs (the latest 512) and the next id go into
+  `/mods/.store` (format 3). A link that never settles keeps the old ones;
+  FORGET DATA keeps them too.
+
 ## Sites
 
 On a build whose descriptor has a site map (ABI 1.2), a +Drive mod may
@@ -372,8 +401,8 @@ one mark: a build that grows past a scope's low mark, or repacks a scope the
 +Drive keeps bits in, is placed as before, and a note names the scope the
 loader repacks at its next boot.
 
-**/mods/.store** (format 1, big-endian, records 4-aligned; format 2 on the
-A4), rewritten only when its bytes change; a missing, short or bad file
+**/mods/.store** (format 1, big-endian, records 4-aligned; format 2 or 3 on
+the A4), rewritten only when its bytes change; a missing, short or bad file
 (magic, format, size, CRC) reads as none, a fresh placement:
 
 | offset | |
@@ -390,6 +419,12 @@ Format 2 (the A4, codes per track kind) is format 1 with: +0x18 the synth
 tracks' next code, +0x26 the FX track's and +0x27 the CV track's (format 1's
 u16 0); each code and freed code record's last header byte its kind (1 synth,
 2 FX, 3 CV); codes by kind, then code.
+
+Format 3 (the A4 with +Drive knob ids, written only when there are any) is
+format 2 with, after the CC records: u16 runs, u16 freed runs, u32 the next
+knob id, then each run and freed run (oldest first): u32 first id, u16
+count, u8 the mod's name length, u8 0, the name, zeros to 4. Not part of the
+layout ID.
 
 `js/tools/drivestore_vectors.py` writes the runs in
 `js/test/drivestore-vectors.json` and, for the A4,
@@ -484,7 +519,7 @@ names offsets into its string pool (UTF-8, NUL-terminated):
 | +0x44 | u32 the device key, u32 the OS version (names) |
 | +0x4c | ABI 1.2: u32 offset of the site map, u16 its count, u16 the pre-link count, u32 offset of the pre-link ranges |
 | +0x58 | u32 the shadow's offset, u32 its range count (ABI 1.2; 0 without one) |
-| +0x60 | ABI 1.3: u32 flags, bit 0 `F_STAGE_TOP`: the loader reads each file into the +Drive area itself at boot (a module's export `drive_stage_top`, nonzero); bit 1 `F_PAYLOAD_SKIP`: it stages each file without its `.payload`'s hex ("Payloads on the +Drive"; the export `drive_payload_skip`); bit 2 `F_ABS16`: its boot linker takes `abs16` relocations (the export `drive_abs16`); bit 3 `F_STD_MAP`: it maps std1 subscriptions through the core's `std` map, which the claims of kind 3 carry (the export `drive_std_map`); bit 4 `F_COLLECTIONS`: +Drive mods may declare tables ("+Drive collections"; the export `drive_collections`); bit 5 `F_CLAIMS`: its boot linker takes contributions' `claims`, and the site map lists the flashed ones ("Claims"; the export `drive_claims`); bit 6 `F_STOCK_SHADOW`: the descriptor carries the shadow for the loader's stock parts alone, not as TELOS's (the export `drive_stock_shadow`; "The stock shadow" above); zero to +0x64 |
+| +0x60 | ABI 1.3: u32 flags, bit 0 `F_STAGE_TOP`: the loader reads each file into the +Drive area itself at boot (a module's export `drive_stage_top`, nonzero); bit 1 `F_PAYLOAD_SKIP`: it stages each file without its `.payload`'s hex ("Payloads on the +Drive"; the export `drive_payload_skip`); bit 2 `F_ABS16`: its boot linker takes `abs16` relocations (the export `drive_abs16`); bit 3 `F_STD_MAP`: it maps std1 subscriptions through the core's `std` map, which the claims of kind 3 carry (the export `drive_std_map`); bit 4 `F_COLLECTIONS`: +Drive mods may declare tables ("+Drive collections"; the export `drive_collections`); bit 5 `F_CLAIMS`: its boot linker takes contributions' `claims`, and the site map lists the flashed ones ("Claims"; the export `drive_claims`); bit 6 `F_STOCK_SHADOW`: the descriptor carries the shadow for the loader's stock parts alone, not as TELOS's (the export `drive_stock_shadow`; "The stock shadow" above); bit 7 `F_KNOBS`: +Drive mods get knob ids, and the claims of kind 4 carry the flashed ones ("Knob ids on the +Drive"; the export `drive_knobs`); zero to +0x64 |
 
 | record | bytes | fields |
 |---|---|---|
@@ -492,7 +527,7 @@ names offsets into its string pool (UTF-8, NUL-terminated):
 | export | 8 | name, u32 address. Grouped by module in module order, by name within a module |
 | table | 24 | name, u32 address, u16 entry size, u16 count, u16 capacity (count + spare), u16 flags (bit 0: more entries may be added; bit 1: a render table, the collection's `"render": true`; bit 2: a DSP table; bit 3: the loader may add entries of its own, a mod's may not), u32 offset of its keys, u32 offset of its orders (0 in ABI 1.0) |
 | keys | 4 an entry | `order << 16 \| module index`, in table order, the order held to 0..65,534 (the linker's own entries 65,535) for an ABI 1.0 reader |
-| claim | 8 | u16 kind (1: a resource name; 2: a region, `"<lo> <hi> <name>"` in hex; 3, with `F_STD_MAP`: the core's `std` map, `"<event> <table>"`, one a standard event, by the core, in event order), u16 module index, u32 the name |
+| claim | 8 | u16 kind (1: a resource name; 2: a region, `"<lo> <hi> <name>"` in hex; 3, with `F_STD_MAP`: the core's `std` map, `"<event> <table>"`, one a standard event, by the core, in event order; 4, with `F_KNOBS`: the knob ids a module's entries take, `"<first> <last>"` in hex), u16 module index, u32 the name |
 | area | 20 | the flashed build's RAM end, the +Drive area's start and end, the staging buffer's address and size (the exports `drive_staging` and `drive_staging_size`, else 0) |
 | storage | 12 + 16 a scope | u32 address and u32 length of the lockfile's trailer in the main OS image (for the host: nothing on the unit reads it), u16 scope count, u16 0; per scope: name, u32 room in bits, u32 bits used, u32 generation |
 | shadow | 8 + bytes a range | u32 address, u32 length, the stock bytes padded to 4; by address, before the string pool (ABI 1.2, where the profile asks; a block without one is ABI 1.1) |

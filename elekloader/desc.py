@@ -30,7 +30,9 @@ into its string pool (UTF-8, NUL-terminated):
   contributions' claims, and the site map carries the flashed contributions' claims (SITE_CLAIM),
   a mod's export drive_claims; bit 6, F_STOCK_SHADOW: the shadow is there for a non-TELOS
   loader's stock parts alone, which it lays over the running OS, a mod's export
-  drive_stock_shadow; docs/DRIVE.md, "The stock shadow"); zero to +0x64.
+  drive_stock_shadow; docs/DRIVE.md, "The stock shadow"; bit 7, F_KNOBS: +Drive mods may declare
+  "knobs", given from the profile's drive_knobs range, a mod's export drive_knobs; docs/DRIVE.md,
+  "Knob ids on the +Drive"); zero to +0x64.
 
   module (16): name, version, u8 kind (0 core, 1 flashed mod, 2 a mod that imports core_desc),
     u8 flags (bit 0: has sites), u16 index, u16 first export, u16 export count
@@ -46,7 +48,9 @@ into its string pool (UTF-8, NUL-terminated):
     order; the linker's own entries have 0x7FFFFFFF. A 1.0 block has none: its key's order stands
   claim (8): u16 kind (1: a resource name; 2: a region of the bulk area a flashed mod claims,
     "<lo> <hi> <name>" in hex; 3, with F_STD_MAP: a standard event the core's "std" map sends to
-    one of its tables, "<event> <table>", by the core, in event order), u16 module index, u32 name
+    one of its tables, "<event> <table>", by the core, in event order; 4, with F_KNOBS: knob ids a
+    flashed module takes, its entries' and its "knobs" run, "<first> <last>" in hex), u16 module
+    index, u32 name
   area (20): the flashed build's RAM end, the +Drive mods' area (lo, hi), the staging buffer's
     address and size (a mod's exports drive_staging, drive_staging_size; 0 without)
   storage (12 + 16 a scope): u32 address and u32 length of the lockfile's trailer in the main OS
@@ -83,6 +87,7 @@ KIND_CORE, KIND_FLASHED, KIND_LOADER = 0, 1, 2
 CLAIM_NAME = 1
 CLAIM_REGION = 2                 # a region of the bulk area a flashed mod claims: "<lo> <hi> <name>", hex
 CLAIM_STD = 3                    # the core's std map: "<event> <table>", one a standard event (link.std_tables)
+CLAIM_KNOBS = 4                  # knob ids a flashed module takes: "<first> <last>", hex (F_KNOBS)
 STAGING = ('drive_staging', 'drive_staging_size')
 STAGE_TOP = 'drive_stage_top'    # a loader's export: nonzero sets F_STAGE_TOP (ABI 1.3)
 F_STAGE_TOP = 1                  # the header's flags (ABI 1.3)
@@ -98,6 +103,8 @@ CLAIMS = 'drive_claims'          # a loader's export: sets F_CLAIMS and maps the
 F_CLAIMS = 32                    # flags bit 5: the boot linker takes contributions' claims (SITE_CLAIM)
 STOCK_SHADOW = 'drive_stock_shadow'   # a loader's export: the build carries the shadow, F_STOCK_SHADOW set
 F_STOCK_SHADOW = 64              # flags bit 6: the shadow serves stock parts only (no TELOS sites)
+KNOBS = 'drive_knobs'            # a loader's export: nonzero (on a device with drive_knobs) sets F_KNOBS
+F_KNOBS = 128                    # flags bit 7: +Drive mods' "knobs" (claims of kind 4 name the flashed ids)
 MODULE, EXPORT, TABLE, CLAIM, AREA, SCOPE, RANGE = 16, 8, 24, 8, 20, 16, 12
 # a site map range's kind (ABI 1.2)
 SITE_SITE, SITE_COPIED, SITE_DEVICE, SITE_BOOT, SITE_RUN, SITE_TRAILER, SITE_CLAIM = 1, 2, 3, 4, 5, 6, 7
@@ -298,7 +305,7 @@ def dump(d):
         if t['entries']:
             out.append('  keys ' + ' '.join('%d:%d' % x for x in t['entries']))
     for kind, mi, n in d['claims']:
-        out.append('claim %s by module %d: %s' % ({CLAIM_NAME: 'name', CLAIM_STD: 'std'}.get(kind, kind), mi, n))
+        out.append('claim %s by module %d: %s' % ({CLAIM_NAME: 'name', CLAIM_STD: 'std', CLAIM_KNOBS: 'knob ids'}.get(kind, kind), mi, n))
     a = d['area']
     out.append('RAM end 0x%08x, +Drive area 0x%08x-0x%08x, staging 0x%08x (%d bytes)' % a
                + (', files staged at the area\'s top' if d.get('flags', 0) & F_STAGE_TOP else '')
@@ -308,7 +315,8 @@ def dump(d):
                + (', +Drive collections' if d.get('flags', 0) & F_COLLECTIONS else '')
 
                + (', claims taken' if d.get('flags', 0) & F_CLAIMS else '')
-               + (', stock parts through the shadow' if d.get('flags', 0) & F_STOCK_SHADOW else ''))
+               + (', stock parts through the shadow' if d.get('flags', 0) & F_STOCK_SHADOW else '')
+               + (', +Drive knob ids' if d.get('flags', 0) & F_KNOBS else ''))
     s = d['storage']
     out.append('lockfile trailer at 0x%08x, %d bytes' % s['trailer'])
     out += ['storage %s: %d of %d bits, generation %d' % (n, u, r, g) for n, r, u, g in s['scopes']]

@@ -29,6 +29,19 @@ typedef int s32;
  * built without it and refuses "collections". */
 #define DL_COLLECTIONS 1
 
+/* Knob ids on the +Drive (docs/DRIVE.md, "Knob ids on the +Drive"; decided 2026-11-16): a +Drive mod
+ * may declare "knobs": n and gets a run of n ids from DL_KNOB_LO up, kept from boot to boot in
+ * /mods/.store; its entries' own ids follow link.py's rules (id_problems). The A4 profile's
+ * param_ids and drive_knobs (elekloader/devices/analog_four_mk2.py). drive-loader-ar2's dlink.c is
+ * built without it. */
+#define DL_KNOBS 1
+#define DL_KNOB_LO 0x4000                /* the +Drive mods' runs: DL_KNOB_LO..DL_KNOB_HI */
+#define DL_KNOB_HI 0x7FFF
+#define DL_KNOB_OWN 0x200                /* a mod's own ids start here */
+#define DL_KNOB_CORE_LO 0x127            /* the core's ids, which no entry may take */
+#define DL_KNOB_CORE_HI 0x1FF
+#define DL_KNOBS_MAX 1024                /* a mod's "knobs" (link.MAX_KNOBS) */
+
 /* ---- status records: /mods/.status and the MODS page (32 bytes per /mods/active line) -- */
 struct dl_status {
     u8 state;                            /* DL_ST_* */
@@ -66,6 +79,7 @@ enum {
     DL_R_STORE = 29,                     /* +Drive storage room is short (detail: "WHAT NEED HAVE") */
     DL_R_CLASH = 30,                     /* a site or copied block clashes (arg: kind << 8 | line; detail: address) */
     DL_R_STD = 31,                       /* subscribes to a standard event the core does not map (detail: it) */
+    DL_R_IDS = 32,                       /* knob ids its entries name are taken, or no run is left (detail) */
 };
 enum { DL_SITE_CORE = 1, DL_SITE_MOD, DL_SITE_PRELINK, DL_SITE_STOCK };   /* DL_R_CLASH's kind */
 

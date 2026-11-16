@@ -95,6 +95,7 @@ export type Device = {
   coreDdr: [string, Range][]                   // [core version, area]: from that core on, the linker's area in place of ddr
   slotClaims: [string, number, number, string][]   // [table, at, count, prefix]: a contribution to table points at a descriptor whose long at +at is a sound slot; the mod claims prefix:<slot>
   paramIds: [number, [number, number, string], [string, boolean][]] | null   // [own, [lo, hi, what], [[table, ownOnly]]]: knob id ranges (link.Mod2.idRanges)
+  driveKnobs: [number, number] | null   // [lo, hi]: with paramIds, the +Drive mods' knob ids; flashed runs stay below lo
   tableLimits: Record<string, number>           // table -> the most entries all mods together may add to it: the OS uses no more (link.check)
   driveAlign: number                            // a build descriptor's +Drive mods' area: from the flashed build's RAM end rounded up to this, to the top of the core's linker area (ddrFor); 0: none
   driveShadow: boolean                          // the build descriptor carries the stock bytes the flashed build writes (desc.ts, shadow): its +Drive loader copies stock parts from the running OS
@@ -114,7 +115,7 @@ const rel = (version: string, syxSha256: string, mainSha256: string, mainLen: nu
 
 const base = {
   mainSection: 3, mainLoad: 0x40000400, isa: 'coldfire' as const, hmacKeyFrom: null, container: 'ele3' as const,
-  versionLen: 4, versionAt: 0x14, versionOptional: false, protected: [], relocatable: [], keep: [], blobMax: null, driveAlign: 0, driveShadow: false, dataFamily: 0, dataDevice: 0, sramCode: [0, 0] as Range, coreDdr: [] as [string, Range][], slotClaims: [] as [string, number, number, string][], paramIds: null, tableLimits: {}, fastTable: '',
+  versionLen: 4, versionAt: 0x14, versionOptional: false, protected: [], relocatable: [], keep: [], blobMax: null, driveAlign: 0, driveShadow: false, dataFamily: 0, dataDevice: 0, sramCode: [0, 0] as Range, coreDdr: [] as [string, Range][], slotClaims: [] as [string, number, number, string][], paramIds: null, driveKnobs: null, tableLimits: {}, fastTable: '',
   imageFree: [], reserve: null, dspPayloads: {}, dspAreas: [], trailer: null, updateMax: null, noLink: [] as [number, number, string][],
 }
 
@@ -399,6 +400,10 @@ export const ANALOG_FOUR_MK2: Device = {
   ddr: [0x47be0000, 0x47c00000],
   coreDdr: [['0.6', [0x45650000, 0x47c00000]]],   // core-a4mk2 0.6: 37.7 MB, the canary-checked gap and the area
   driveAlign: 0x1000,                              // the +Drive mods' area: what the flashed build leaves of coreDdr's, from a 4 KB boundary
+  // knob ids (decided 2026-11-16): stock 1..0x126, core-a4mk2's 0x127..0x1ff, a mod's own from 0x200; flashed runs
+  // below 0x4000, +Drive runs 0x4000..0x7fff
+  paramIds: [0x200, [0x127, 0x1ff, "core-a4mk2's lock pseudo ids and their room"], [['core_params', false], ['core_knob_looks', true]]],
+  driveKnobs: [0x4000, 0x7fff],
   recovery: 'hold FUNC while powering on for the STARTUP menu, press TRIG 4 (OS UPGRADE), '
     + 'then send the stock .syx over MIDI DIN (not USB)',
 }

@@ -20,6 +20,9 @@
 #define DS_LAST_CODE 0x7f
 #define DS_KINDS 3                       /* synth, FX, CV (format 2's kinds 1..3) */
 #define DS_FORMAT 2                      /* /mods/.store with codes per kind */
+#define DS_FORMAT_KNOBS 3                /* and the +Drive mods' knob runs (written only when it has any) */
+#define DS_MAX_KNOBS 512                 /* knob runs, and again freed runs, a .store keeps */
+#define DS_KNOB_TOP 0xFFFF               /* store.KNOB_TOP */
 #define DS_MAX_IDS 15                    /* ancestors kept */
 #define DS_MAX_INITS 63                  /* core_field_inits' slots 1..63 */
 #define DS_MAX_BITS 32
@@ -95,6 +98,10 @@ struct ds_tag {                          /* a code or a CC and its field */
     u8 v;
     u8 kind;                             /* a code's: 0 synth, 1 FX, 2 CV; 0 for a CC */
 };
+struct ds_knob {                         /* a mod's run of knob ids (store.knobs) */
+    const char *mod;
+    u32 first, count;
+};
 struct ds_state {
     u32 flashed_id, id;
     u8 next_code[DS_KINDS];              /* each kind's next never-used code, top down */
@@ -105,8 +112,17 @@ struct ds_state {
     u32 nf, npk, ncd, nfcd, ncc, nfcc;
     struct ds_field f[DS_MAX_FIELDS], pk[DS_MAX_FIELDS];
     struct ds_tag cd[DS_MAX_TAGS], fcd[DS_MAX_TAGS], cc[DS_MAX_TAGS], fcc[DS_MAX_TAGS];
+    u32 nkn, nfkn, next_knob;            /* format 3: the knob runs, the freed runs, the next id */
+    struct ds_knob kn[DS_MAX_KNOBS], fkn[DS_MAX_KNOBS];
     char *names;                         /* the decoded names (dl_alloc), 0 for none */
 };
+/* The knob runs the boot link gives (dlink.c knob_runs): ds_allocate writes them into the new
+ * .store in place of the old one's; 0 keeps the old one's (a link that loads nothing). */
+struct ds_knobset {
+    u32 n, nf, next;
+    const struct ds_knob *kn, *fkn;
+};
+extern const struct ds_knobset *ds_knobs_in;
 
 /* .store bytes -> a state from the heap, 0 for a file the allocator does not take (missing, cut
  * short, another format, a wrong CRC, a bad record, past the loader's room) or no memory. */

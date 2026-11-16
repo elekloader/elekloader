@@ -720,6 +720,7 @@ export function check(mods: Mod2[], image: Uint8Array): string[] {
  * relocated to __knobs too. -> [problems]. link.id_problems. */
 export function idProblems(mods: Mod2[], image: Uint8Array, knobs: Map<string, number> | null = null): string[] {
   const [own, [lo, hi, what], kinds] = mods[0].dev.paramIds!
+  const dk = mods[0].dev.driveKnobs
   const ownOnly = new Set(kinds.filter(([, o]) => o).map(([t]) => t))
   const taken: [Mod2, string, number, number][] = [], bad: string[] = []
   for (const m of mods) {
@@ -727,6 +728,8 @@ export function idProblems(mods: Mod2[], image: Uint8Array, knobs: Map<string, n
       let a = a0
       if (a <= hi && lo <= b) {
         bad.push(`${m.label()}: its ${table} entry takes ids ${a}..${b}, and ${lo}..${hi} are ${what}; a mod's own ids start at ${own}`)
+      } else if (dk && a <= dk[1] && dk[0] <= b) {
+        bad.push(`${m.label()}: its ${table} entry takes ids ${a}..${b}, and ${dk[0]}..${dk[1]} are the +Drive mods' knob ids`)
       } else if (ownOnly.has(table) && a < own) {
         bad.push(`${m.label()}: its ${table} entry takes ids ${a}..${b}; that table's ids start at ${own}`)
       } else if (b >= own) {
@@ -994,7 +997,8 @@ export function link(mods: Mod2[], image: Uint8Array, lock: store.Lock | null = 
   if (dev.paramIds && (order.some(m => m.knobs) || newLock?.knobs?.length || newLock?.freed_knobs?.length)) {
     const fixed = order.flatMap(m => m.idRanges(image).map(([, a, b]) => [a, b] as [number, number]))
     const held: Partial<store.Lock> = newLock ?? {}
-    ;[knobBase, knobNotes] = store.knobs(held, new Map(order.filter(m => m.knobs).map(m => [m.id, m.knobs])), dev.paramIds[0], fixed)
+    ;[knobBase, knobNotes] = store.knobs(held, new Map(order.filter(m => m.knobs).map(m => [m.id, m.knobs])), dev.paramIds[0], fixed,
+      dev.driveKnobs ? dev.driveKnobs[0] - 1 : store.KNOB_TOP)
     const bad = idProblems(order, image, knobBase)
     if (bad.length) throw new ModError('the linked mods break a rule:\n  ' + bad.join('\n  '))   // store.knobs keeps clear of them
   }
@@ -1085,6 +1089,16 @@ export function link(mods: Mod2[], image: Uint8Array, lock: store.Lock | null = 
   // the loader copies +Drive mods' stock parts through the shadow (A4: dlink.c stock_part); an export, not its value,
   // so the sizing pass carries the shadow too
   const stockShadow = order.some(m => m.exports.includes(desc.STOCK_SHADOW))
+  // the loader gives +Drive mods knob ids (F_KNOBS): the flashed ids go into claims of kind 4
+  const driveKnobs = !!(dev.driveKnobs && dev.paramIds && order.some(m => m.exports.includes(desc.KNOBS)))
+  const knobClaims = (): [number, number, string][] => !driveKnobs ? [] : order.flatMap(m => {
+    const kb = knobBase.get(m.id)
+    const set = new Map<string, [number, number]>()
+    for (const [, a, b] of m.idRanges(image, kb ?? null)) set.set(`${a} ${b}`, [a, b])
+    if (kb !== undefined) set.set(`${kb} ${kb + m.knobs - 1}`, [kb, kb + m.knobs - 1])
+    return [...set.values()].sort((x, y) => x[0] - y[0] || x[1] - y[1])
+      .map(([a, b]) => [desc.CLAIM_KNOBS, index.get(m.id)!, `0x${a.toString(16)} 0x${b.toString(16)}`] as [number, number, string])
+  })
   const descFields = (where: Where | null): desc.DescFields => {
     const w: Where = where ?? (() => 0)
     const modules = order.map(m => ({
@@ -1112,14 +1126,16 @@ export function link(mods: Mod2[], image: Uint8Array, lock: store.Lock | null = 
       claims: [...order.flatMap(m => m.names.map(nm => [desc.CLAIM_NAME, index.get(m.id)!, nm] as [number, number, string])),
         ...order.flatMap(m => m.regions.map(g => [desc.CLAIM_REGION, index.get(m.id)!,
           `0x${g.lo.toString(16)} 0x${g.hi.toString(16)} ${g.name}`] as [number, number, string])),
-        ...[...core.std.keys()].sort(cmp).filter(() => stdMap).map(ev => [desc.CLAIM_STD, index.get(core.id)!, `${ev} ${core.std.get(ev)}`] as [number, number, string])],
+        ...[...core.std.keys()].sort(cmp).filter(() => stdMap).map(ev => [desc.CLAIM_STD, index.get(core.id)!, `${ev} ${core.std.get(ev)}`] as [number, number, string]),
+        ...knobClaims()],
       area: [w('bss_end'), ...driveArea(w('bss_end')), w('glob', desc.STAGING[0]), w('glob', desc.STAGING[1])],
       storage: { trailer: [w('trailer'), trailerLen], scopes },
       flags: (w('glob', desc.STAGE_TOP) ? desc.F_STAGE_TOP : 0) | (w('glob', desc.PAYLOAD_SKIP) ? desc.F_PAYLOAD_SKIP : 0)
         | (w('glob', desc.ABS16) ? desc.F_ABS16 : 0) | (stdMap ? desc.F_STD_MAP : 0)
         | (w('glob', desc.COLLECTIONS) ? desc.F_COLLECTIONS : 0)
         | (claimsMap ? desc.F_CLAIMS : 0)
-        | (stockShadow ? desc.F_STOCK_SHADOW : 0),
+        | (stockShadow ? desc.F_STOCK_SHADOW : 0)
+        | (driveKnobs ? desc.F_KNOBS : 0),
       sites: siteMap(w), prelink: (rel.prelink ?? []).map(([lo, hi, k]) => [lo, hi, k] as [number, number, number]),
       // the stock bytes of every range the flashed build writes, where the profile asks for them (driveShadow) or the
       // loader does (drive_stock_shadow): a loader on the unit copies a mod's stock parts from the running OS, and lays

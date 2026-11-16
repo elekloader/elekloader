@@ -475,10 +475,11 @@ def test_every_refusal_has_a_fixture_that_is_refused_and_one_that_loads():
 
 
 TELOS_CODES = {'site', 'flashed', 'stock', 'region', 'outside'}   # test_telos_sites_and_regions has theirs
+KNOB_CODES = {'ids'}                                                # test_drive_knobs.py has its
 
 
 def test_every_code_has_a_fixture():
-    host = set(drive.CODE) - set(drive.BOOT_ONLY) - {'ok'} - TELOS_CODES
+    host = set(drive.CODE) - set(drive.BOOT_ONLY) - {'ok'} - TELOS_CODES - KNOB_CODES
     assert host == set(ROWS), sorted(host ^ set(ROWS))
 
 

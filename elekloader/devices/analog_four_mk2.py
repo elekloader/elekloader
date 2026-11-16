@@ -272,6 +272,13 @@ DEVICE = Device(
     core_ddr=(('0.6', (0x45650000, 0x47C00000)),),   # core-a4mk2 0.6: 37.7 MB, the gap and the area
     drive_align=0x1000,                           # the +Drive mods' area: what the flashed build
                                                   # leaves of core_ddr's, from a 4 KB boundary
+    # knob ids (decided 2026-11-16): stock's records are 1..0x126; core-a4mk2 keeps 0x127..0x1ff (its
+    # lock pseudo ids, 0x127 + 16 x kind + code - 0x70, and room for more kinds); a mod's own ids start
+    # at 0x200; flashed mods' "knobs" runs stay below 0x4000 and +Drive mods' take 0x4000..0x7fff, so a
+    # reflash never moves a +Drive mod's ids (and a 16-bit list reads them alike signed or unsigned)
+    param_ids=(0x200, (0x127, 0x1FF, "core-a4mk2's lock pseudo ids and their room"),
+               (('core_params', False), ('core_knob_looks', True))),
+    drive_knobs=(0x4000, 0x7FFF),
     recovery=('hold FUNC while powering on for the STARTUP menu, press TRIG 4 (OS UPGRADE), '
               'then send the stock .syx over MIDI DIN (not USB)'),
     toolchain={

@@ -99,5 +99,9 @@ dl_handler:
 | the site map, which then carries the flashed contributions' claims (dlink.c, scan_claims)
         .globl  drive_claims
         .set    drive_claims, 1
+| the build descriptor's flags bit 7: the boot linker gives +Drive mods knob ids ("knobs", dl.h
+| DL_KNOBS) and checks their entries' ids, so host tools check sets as it does
+        .globl  drive_knobs
+        .set    drive_knobs, 1
         .globl  drive_staging_size
         .set    drive_staging_size, 0x400                    | fs.h DL_STAGING_SIZE

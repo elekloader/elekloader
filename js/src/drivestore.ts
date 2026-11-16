@@ -16,6 +16,8 @@ import { crc32 } from './zip.ts'
 export const MAGIC = 'DLST'
 export const FORMAT = 1
 export const FORMAT_KINDS = 2                   // lock codes per track kind (the Analog Four MKII)
+export const FORMAT_KNOBS = 3                   // format 2 and the +Drive mods' knob ids
+export const MAX_KNOB_RUNS = 512   // knob runs, and again freed runs, a .store keeps (dstore.h)
 const KINDS = ['synth', 'fx', 'cv']             // format 2's kind numbers 1..3
 const HEAD = 0x28
 const SCOPE_REC = 8
@@ -55,6 +57,7 @@ export type State = {
   flashed_id: number; id: number; ids: number[]; scopes: Record<string, ScopeState>
   next_code: number | Record<string, number>
   fields: Field[]; parked: Field[]; codes: Code[]; freed_codes: Code[]; ccs: Cc[]; freed_ccs: Cc[]
+  knobs?: store.Knob[]; freed_knobs?: store.Knob[]; next_knob?: number   // format 3: the +Drive mods' knob runs
 }
 
 // ---- what the flashed build gives ----------------------------------------------------------------------------
@@ -291,8 +294,9 @@ const codeOrder = (a: Code, b: Code) => (a.kind ? KINDS.indexOf(a.kind) : 0) - (
 /** The state -> /mods/.store's bytes (format 2 for a state with codes per track kind). drive_store.encode. */
 export function encode(st: State): Uint8Array {
   const o = new Out(), kd = kinded(st), nc = st.next_code as any
+  const kn = kd && !!(st.knobs?.length || st.freed_knobs?.length || st.next_knob)
   for (const c of [...MAGIC]) o.u8(c.charCodeAt(0))
-  o.u16(kd ? FORMAT_KINDS : FORMAT); o.u16(0); o.u32(0); o.u32(0)
+  o.u16(kn ? FORMAT_KNOBS : kd ? FORMAT_KINDS : FORMAT); o.u16(0); o.u32(0); o.u32(0)
   o.u32(st.flashed_id); o.u32(st.id); o.u8(kd ? nc.synth : nc); o.u8(st.ids.length)
   for (const n of [st.fields.length, st.parked.length, st.codes.length, st.freed_codes.length, st.ccs.length, st.freed_ccs.length]) o.u16(n)
   o.u8(kd ? nc.fx : 0); o.u8(kd ? nc.cv : 0)
@@ -309,6 +313,15 @@ export function encode(st: State): Uint8Array {
       o.u8(c[v]); o.u8(m.length); o.u8(s.length); o.u8(kd && v === 'code' ? KINDS.indexOf(c.kind) + 1 : 0)
       o.bytes(m); o.bytes(s); o.pad()
     }
+  if (kn) {
+    const runs = st.knobs ?? [], freed = st.freed_knobs ?? []
+    o.u16(runs.length); o.u16(freed.length); o.u32(st.next_knob ?? 0)
+    for (const r of [...runs, ...freed]) {
+      const m = ub(r.mod)
+      if (!m.length || m.length > NAME_MAX) throw new ModError(`.store: a name of 1 to ${NAME_MAX} bytes`)
+      o.u32(r.first); o.u16(r.count); o.u8(m.length); o.u8(0); o.bytes(m); o.pad()
+    }
+  }
   const raw = new Uint8Array(o.b)
   const v = new DataView(raw.buffer)
   v.setUint32(8, raw.length)
@@ -323,9 +336,9 @@ export function decode(raw: Uint8Array | null): State | null {
     if (raw.length < HEAD + SCOPE_REC * 6) return null
     const v = new DataView(raw.buffer, raw.byteOffset, raw.length)
     const fmt = v.getUint16(4)
-    if (String.fromCharCode(...raw.subarray(0, 4)) !== MAGIC || (fmt !== FORMAT && fmt !== FORMAT_KINDS)
+    if (String.fromCharCode(...raw.subarray(0, 4)) !== MAGIC || (fmt !== FORMAT && fmt !== FORMAT_KINDS && fmt !== FORMAT_KNOBS)
       || v.getUint32(8) !== raw.length) return null
-    const kd = fmt === FORMAT_KINDS
+    const kd = fmt === FORMAT_KINDS || fmt === FORMAT_KNOBS
     const z = new Uint8Array(raw); z.fill(0, 0x0c, 0x10)
     if (crc32(z) !== v.getUint32(0x0c)) return null
     const nids = raw[0x19]
@@ -366,6 +379,24 @@ export function decode(raw: Uint8Array | null): State | null {
         }
         ;(list as any[]).push(e)
       }
+    }
+    if (fmt === FORMAT_KNOBS) {
+      if (at + 8 > raw.length) return null
+      const nk = v.getUint16(at), nfk = v.getUint16(at + 2), nxt = v.getUint32(at + 4)
+      at += 8
+      if (nk > MAX_KNOB_RUNS || nfk > MAX_KNOB_RUNS) return null
+      st.knobs = []; st.freed_knobs = []
+      for (const [list, n] of [[st.knobs, nk], [st.freed_knobs, nfk]] as const) {
+        for (let i = 0; i < n; i++) {
+          if (at + 8 > raw.length) return null
+          const first = v.getUint32(at), count = v.getUint16(at + 4), lm = raw[at + 6]
+          if (!lm || !count || at + 8 + lm > raw.length || first + count - 1 > store.KNOB_TOP) return null
+          list.push({ mod: utf8d.decode(raw.subarray(at + 8, at + 8 + lm)), first, count })
+          at += 8 + Math.ceil(lm / 4) * 4
+        }
+      }
+      if (nxt > store.KNOB_TOP + 1) return null
+      st.next_knob = nxt
     }
     if (at !== raw.length) return null
     return st

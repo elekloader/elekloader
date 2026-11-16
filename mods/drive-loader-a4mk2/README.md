@@ -163,6 +163,13 @@ descriptor carries the shadow, stock's bytes of every flashed site, and flags bi
 twin's `stock_bytes` does, and the flag keeps host tools from taking the build for TELOS.
 drive-loader-ar2 exports none (tests/test_drive_stock_shadow.py).
 
+## Knob ids
+
+A +Drive mod's `"knobs"` gets a run of ids in 0x4000..0x7fff, kept in `/mods/.store` (format 3), and
+the ids its entries name are checked as the build's linker checks them (docs/DRIVE.md, "Knob ids on
+the +Drive"): `dlink.c` with `DL_KNOBS` (`dl.h`), the flashed ids from the descriptor's claims of
+kind 4. `F_KNOBS` (`drive_knobs` in `route.s`) tells host tools (tests/test_drive_knobs.py).
+
 ## Files
 
 | file | from drive-loader-ar2 | what |
@@ -171,9 +178,9 @@ drive-loader-ar2 exports none (tests/test_drive_stock_shadow.py).
 | `route.c`, `route.s` | logic kept, glue retraced | the /mods route (tests/test_drive_a4_route.py) |
 | `boot.c` | logic kept, glue retraced | the boot, the crash guard, `dl_format` |
 | `json.c`, `json.h`, `sha256.c`, `names.inc` | unchanged (tests/test_drive_a4_store.py checks) | JSON, hashes, the route's names |
-| `park.c`, `park.h` | `.store` format 2 (tests/test_drive_a4_park.py) | parked mods |
-| `dlink.c` | storage fields as the A4 takes them: `"track": "cv"`, `"mod"` on a kit field, no `"lfo"`; `abs16`; std1; +Drive collections with `DL_COLLECTIONS`; the payload skip is built only with `DL_PAYLOAD_SKIP` | the linker |
-| `dstore.c`, `dstore.h` | lock codes per track kind (0x70..0x7f each), the A4's CC pool, `.store` format 2 (tests/test_drive_a4_dstore_host.py) | +Drive storage |
+| `park.c`, `park.h` | `.store` formats 2 and 3 (tests/test_drive_a4_park.py) | parked mods |
+| `dlink.c` | storage fields as the A4 takes them: `"track": "cv"`, `"mod"` on a kit field, no `"lfo"`; `abs16`; std1; +Drive collections with `DL_COLLECTIONS`; knob ids with `DL_KNOBS`; the payload skip is built only with `DL_PAYLOAD_SKIP` | the linker |
+| `dstore.c`, `dstore.h` | lock codes per track kind (0x70..0x7f each), the A4's CC pool, `.store` formats 2 and 3 (tests/test_drive_a4_dstore_host.py) | +Drive storage |
 | `dl.h`, `flush.s` | comments, `DL_PAYLOAD_SKIP` and `DL_COLLECTIONS` | the linker's interface; the site writes and cache push (the A4 sets the Rytm's CACR and ACR0) |
 | `skip.c`, `skip.h`, `payload.c` | new | payload skip while staging (tests/test_drive_payload_skip.py), the Drive payload table and its reader |
 | `page.c`, `page.s`, `clip.inc` | model kept, view new (std1; stock addresses only for the row's label and icon, `page.s`) | the MODS page ([PAGE.md](PAGE.md); tests/test_drive_a4_page.py) |

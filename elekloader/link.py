@@ -752,6 +752,7 @@ def id_problems(mods, image, knobs=None):
     whose ids are mods' own below them, and no id from there up taken twice. knobs: {mod id: its
     first knob id} (link), to count the entries relocated to __knobs too. -> [problems]."""
     own, (lo, hi, what), kinds = mods[0].dev.param_ids
+    dk = mods[0].dev.drive_knobs
     own_only = {t for t, o in kinds if o}
     taken, bad = [], []
     for m in mods:
@@ -759,6 +760,9 @@ def id_problems(mods, image, knobs=None):
             if a <= hi and lo <= b:
                 bad.append('%s: its %s entry takes ids %d..%d, and %d..%d are %s; a mod\'s own '
                            'ids start at %d' % (m.label(), table, a, b, lo, hi, what, own))
+            elif dk and a <= dk[1] and dk[0] <= b:
+                bad.append('%s: its %s entry takes ids %d..%d, and %d..%d are the +Drive mods\' knob '
+                           'ids' % (m.label(), table, a, b, dk[0], dk[1]))
             elif table in own_only and a < own:
                 bad.append('%s: its %s entry takes ids %d..%d; that table\'s ids start at %d'
                            % (m.label(), table, a, b, own))
@@ -1025,7 +1029,8 @@ def link(mods, image, lock=None, *, sharc_stream=None, drive=None):
         fixed = [(a, b) for m in order for _t, a, b in m.id_ranges(image)]
         held = new_lock if new_lock is not None else {}
         knob_base, knob_notes = store.knobs(held, {m.id: m.knobs for m in order if m.knobs},
-                                            dev.param_ids[0], fixed)
+                                            dev.param_ids[0], fixed,
+                                            dev.drive_knobs[0] - 1 if dev.drive_knobs else store.KNOB_TOP)
         bad = id_problems(order, image, knob_base)
         if bad:                                # store.knobs keeps clear of them: a self-check
             raise ModError('the linked mods break a rule:\n  ' + '\n  '.join(bad))
@@ -1108,6 +1113,8 @@ def link(mods, image, lock=None, *, sharc_stream=None, drive=None):
     # the loader copies +Drive mods' stock parts through the shadow (A4: dlink.c stock_part); an export,
     # not its value, so the sizing pass carries the shadow too
     stock_shadow = any(desc.STOCK_SHADOW in m.exports for m in order)
+    # the loader gives +Drive mods knob ids (F_KNOBS): the flashed ids go into claims of kind 4
+    drive_knobs = bool(dev.drive_knobs and dev.param_ids and any(desc.KNOBS in m.exports for m in order))
 
     def desc_fields(where):
         """The descriptor's fields; `where` (a function of the layout) gives the addresses, or None:
@@ -1142,7 +1149,12 @@ def link(mods, image, lock=None, *, sharc_stream=None, drive=None):
                 + [(desc.CLAIM_REGION, index[m.id], '%#x %#x %s' % (g['lo'], g['hi'], g['name']))
                    for m in order for g in m.regions]
                 + [(desc.CLAIM_STD, index[core.id], '%s %s' % x) for x in sorted(core.std.items())
-                   if std_map],
+                   if std_map]
+                + ([(desc.CLAIM_KNOBS, index[m.id], '%#x %#x' % ab) for m in order
+                    for ab in sorted({(a, b) for _t, a, b in m.id_ranges(image, knob_base.get(m.id))}
+                                     | ({(knob_base[m.id], knob_base[m.id] + m.knobs - 1)}
+                                        if m.id in knob_base else set()))]
+                   if drive_knobs else []),
                 'area': (w('bss_end'),) + drive_area(w('bss_end'))
                          + (w('glob', desc.STAGING[0]), w('glob', desc.STAGING[1])),
                 'storage': {'trailer': (w('trailer'), trailer_len), 'scopes': scopes},
@@ -1152,7 +1164,8 @@ def link(mods, image, lock=None, *, sharc_stream=None, drive=None):
                          | (desc.F_STD_MAP if std_map else 0)
                          | (desc.F_COLLECTIONS if w('glob', desc.COLLECTIONS) else 0)
                          | (desc.F_CLAIMS if claims_map else 0)
-                         | (desc.F_STOCK_SHADOW if stock_shadow else 0),
+                         | (desc.F_STOCK_SHADOW if stock_shadow else 0)
+                         | (desc.F_KNOBS if drive_knobs else 0),
                 'sites': site_map(w), 'prelink': [(lo, hi, k) for lo, hi, k, _what in rel.prelink],
                 # the stock bytes of every range the flashed build writes, where the profile asks for
                 # them (drive_shadow) or the loader does (drive_stock_shadow): a loader on the unit

@@ -306,6 +306,7 @@ def main():
         }
         extra['exchanges'] = _exchanges(B, blk)
     extra['telos'] = _telos()
+    extra['knobs'] = _knobs()
     path = os.path.join(ROOT, 'js', 'test', 'drive-vectors.json')
     with open(path, 'w') as fh:
         json.dump({'release': release, **extra, 'cases': rows}, fh, indent=None, separators=(',', ':'))
@@ -353,6 +354,43 @@ def _telos():
                             'mainLen': B.rel.main_len},
                 'build': blk.hex(), 'abi': list(d['abi']), 'claims': [list(c) for c in d['claims']],
                 'shadow': [[a, x.hex()] for a, x in d['shadow']], 'cases': rows}
+
+
+def _knobs():
+    """+Drive knob ids (tests/test_drive_knobs.py) on a made-up Analog Four MKII build whose loader exports
+    drive_knobs (F_KNOBS), as the checker sees it: runs from 0x4000, and the ids mods' entries name."""
+    from elekloader import link
+    from test_drive_knobs import flashed, km
+    with Bench('analog-four-mk2') as B:
+        out = link.link([link.Mod2(d, d['id']) for d in flashed(B)], B.img)
+        at = desc.find(out.image)[0]
+        blk = out.image[at:at + desc.decode(out.image, at)['size']]
+        refs = km(B, 'r1', 2, refs=[['.run', 12, 'abs32', 'sym:__knobs', 2]])
+        sets = [
+            ('ids: refused', T.files(km(B, 'ka', 4), km(B, 'f1', fixed=(0x150, 0x151)), km(B, 'f2', fixed=(0x302, 0x302)),
+                                     km(B, 'f3', fixed=(0x500, 0x501)), km(B, 'f4', fixed=(0x501, 0x502)),
+                                     km(B, 'f5', fixed=(0x10, 0x11), table='core_knob_looks'))),
+            ('ids: loads', T.files(km(B, 'ka', 4), km(B, 'kb', 2), km(B, 'f3', fixed=(0x500, 0x501)))),
+            ('ids: the range runs out', T.files(*[km(B, 'n%02d' % i, 1024, entry=False) for i in range(17)])),
+            ('ids: a reference past "knobs"', T.files(refs)),
+            ('ids: __knobs without "knobs"', T.files(dict(km(B, 'r5'), imports=['core_fn', '__knobs']))),
+        ]
+        rows = []
+        for name, files in sets:
+            r = drive.check(drive.load_build(blk), files)
+            rows.append({'name': name, 'files': [[n, _enc(raw)] for n, raw in files],
+                         'summary': drive.summary(r), 'status': drive.status_text(r), 'lines': _lines(r)})
+        assert [c['reason'] for c in rows[0]['summary']['choices']] == ['ok', 'ids', 'ids', 'ok', 'ids', 'ids'], rows[0]
+        # a .store with runs (format 3): boot 1 of test_drive_knobs, then boot 2 with it
+        from elekloader import drive_store as ds
+        full = drive.load_build(out.image)
+        st1 = drive.link(full, T.files(km(B, 'ka', 4), km(B, 'kb', 2))).placed.bytes
+        st2 = drive.link(full, T.files(km(B, 'kb', 2), km(B, 'kc', 3)), st1).placed.bytes
+        stores = [[x.hex(), {k: ds.decode(x)[k] for k in ('knobs', 'freed_knobs', 'next_knob')}] for x in (st1, st2)]
+        return {'release': {'version': B.rel.version, 'syxSha256': B.rel.syx_sha256, 'mainSha256': B.rel.main_sha256,
+                            'mainLen': B.rel.main_len},
+                'build': blk.hex(), 'claims': [list(c) for c in desc.decode(blk)['claims']], 'cases': rows,
+                'stores': stores}
 
 
 class Recorder:

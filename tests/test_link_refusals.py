@@ -1012,6 +1012,20 @@ def _(B):
         [knobs(B), both(B, 560, 573), answering(B, 574, 580, 'core_param_locks', 'n')]
 
 
+def a4knobs(B):
+    c = B.core()
+    c['collections'].update({'core_params': {'entry': 4}, 'core_knob_looks': {'entry': 4}})
+    return c
+
+
+@row('id_problems', "<>: its <> entry takes ids <>..<>, and <>..<> are the +Drive mods' knob ids",
+     device='analog-four-mk2')
+def _(B):
+    return [("m 1: its core_params entry takes ids 16380..16390, and 16384..32767 are the +Drive mods' "
+             "knob ids", [a4knobs(B), answering(B, 0x3ffc, 0x4006)])], \
+        [a4knobs(B), answering(B, 0x3ffc, 0x3fff)]
+
+
 # ---- the build descriptor (core_desc, elekloader/desc.py) ------------------------------------------
 
 def loader(d):
@@ -1502,6 +1516,31 @@ def test_knob_ids_are_given_from_555_past_fixed_ids_and_written_as_abs32_and_abs
         k = link.Mod2(mods[2], 'k')
         assert link.id_problems([k, link.Mod2(fixed, 'f')], B.img, {'k': 558}) == \
             ['k 1 and f 1 both take ids 558..560 (core_param_locks, core_param_locks)']
+
+
+def test_knob_ids_on_the_analog_four_mk2_start_at_0x200_and_stay_below_the_drive_range():
+    """The A4's flashed "knobs" runs come from 0x200 up, past fixed ids (the AE mods' 0x300..), and
+    never reach 0x4000..0x7fff, the +Drive mods' (decided 2026-11-16)."""
+    with Bench('analog-four-mk2') as B:
+        def a4knobbed(count, ident):
+            d = knobbed(B, count, ident)
+            d['contribute'][0]['to'] = 'core_params'
+            return d
+        mods = [a4knobs(B), answering(B, 0x300, 0x306, 'core_params', 'f'), a4knobbed(4, 'k'),
+                a4knobbed(0x100, 'j')]
+        out = link.link([link.Mod2(d, d['id']) for d in mods], B.img)
+        assert out.knobs == {'j': [0x200, 0x100], 'k': [0x307, 4]}
+        big = [a4knobs(B), a4knobbed(1024, 'a'), a4knobbed(1024, 'b'), a4knobbed(1024, 'c'),
+               a4knobbed(1024, 'd'), a4knobbed(1024, 'e'), a4knobbed(1024, 'g'), a4knobbed(1024, 'h'),
+               a4knobbed(1024, 'i'), a4knobbed(1024, 'l'), a4knobbed(1024, 'n'), a4knobbed(1024, 'o'),
+               a4knobbed(1024, 'p'), a4knobbed(1024, 'q'), a4knobbed(1024, 'r'), a4knobbed(1024, 'u'), a4knobbed(512, 's'),
+               a4knobbed(4, 't')]
+        try:
+            link.link([link.Mod2(d, d['id']) for d in big], B.img)
+        except ModError as e:
+            assert 'ids 512..16383 have no run that long free' in str(e), e
+        else:
+            raise AssertionError('a run past 0x3fff was given')
 
 
 def test_a_core_with_a_lockfile_keeps_the_knob_ids_from_build_to_build():

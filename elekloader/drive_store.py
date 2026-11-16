@@ -70,6 +70,11 @@ tracks' next code, +0x26 the FX track's and +0x27 the CV track's (format 1's u16
 code record's fourth byte is its kind (1 synth, 2 FX, 3 CV); CC records as format 1. The codes are by
 kind, then code.
 
+Format 3, format 2 with the +Drive mods' knob ids (docs/DRIVE.md, "Knob ids on the +Drive"; written only
+when the state holds any): after the CC records, u16 runs, u16 freed runs, u32 the next knob id, then each
+run (by first id), then each freed run (freed longest ago first): u32 first id, u16 count, u8 the mod id's
+length, u8 0, its bytes, zeros to 4. Not part of the layout ID: the ids are not stored data.
+
 A file that is missing, cut short, of another format (or of the other one of 1 and 2 than the device
 takes) or with a wrong CRC reads as none: a fresh placement, and the items then load those scopes at
 defaults.
@@ -84,6 +89,8 @@ from .elemod import ModError
 MAGIC = b'DLST'
 FORMAT = 1
 FORMAT_KINDS = 2                                # lock codes per track kind (the Analog Four MKII)
+FORMAT_KNOBS = 3                                # format 2 and the +Drive mods' knob ids
+MAX_KNOB_RUNS = 512                             # knob runs, and again freed runs, a .store keeps (dstore.h)
 KINDS = ('synth', 'fx', 'cv')                   # format 2's kind numbers 1..3
 HEAD = 0x28
 SCOPE_REC = 8
@@ -340,6 +347,10 @@ def _code_order(c):
     return (KINDS.index(c['kind']) if 'kind' in c else 0, c['code'])
 
 
+def _has_knobs(st):
+    return bool(st.get('knobs') or st.get('freed_knobs') or st.get('next_knob'))
+
+
 def encode(st):
     """The state -> /mods/.store's bytes (format 2 for a state with codes per track kind)."""
     kinded = _kinded(st)
@@ -358,8 +369,17 @@ def encode(st):
             m, s = _names(c['mod'], c['sym'])
             kn = KINDS.index(c['kind']) + 1 if kinded and v == 'code' else 0
             body += _pad(struct.pack('>BBBB', c[v], len(m), len(s), kn) + m + s)
+    knobbed = kinded and _has_knobs(st)
+    if knobbed:
+        body += struct.pack('>HHI', len(st.get('knobs', [])), len(st.get('freed_knobs', [])), st.get('next_knob', 0))
+        for r in st.get('knobs', []) + st.get('freed_knobs', []):
+            m = _b(r['mod'])
+            if not m or len(m) > NAME_MAX:
+                raise ModError('.store: a name of 1 to %d bytes' % NAME_MAX)
+            body += _pad(struct.pack('>IHBB', r['first'], r['count'], len(m), 0) + m)
     nc = st['next_code']
-    head = struct.pack('>4sHHII II BB 6H BB', MAGIC, FORMAT_KINDS if kinded else FORMAT, 0, HEAD + len(body), 0,
+    fmt = FORMAT_KNOBS if knobbed else FORMAT_KINDS if kinded else FORMAT
+    head = struct.pack('>4sHHII II BB 6H BB', MAGIC, fmt, 0, HEAD + len(body), 0,
                        st['flashed_id'], st['id'], nc['synth'] if kinded else nc, len(st['ids']),
                        len(st['fields']), len(st['parked']), len(st['codes']), len(st['freed_codes']),
                        len(st['ccs']), len(st['freed_ccs']), nc['fx'] if kinded else 0, nc['cv'] if kinded else 0)
@@ -376,11 +396,12 @@ def decode(raw):
     raw = bytes(raw)
     try:
         magic, fmt, _z, size, crc = struct.unpack_from('>4sHHII', raw, 0)
-        if magic != MAGIC or fmt not in (FORMAT, FORMAT_KINDS) or size != len(raw) or size < HEAD + SCOPE_REC * 6:
+        if magic != MAGIC or fmt not in (FORMAT, FORMAT_KINDS, FORMAT_KNOBS) or size != len(raw) \
+                or size < HEAD + SCOPE_REC * 6:
             return None
         if zlib.crc32(raw[:0x0c] + bytes(4) + raw[0x10:]) & 0xFFFFFFFF != crc:
             return None
-        kinded = fmt == FORMAT_KINDS
+        kinded = fmt in (FORMAT_KINDS, FORMAT_KNOBS)
         fid, lid, nc, nids, nf, npk, ncd, nfc, ncc, nfcc, nfx, ncv = struct.unpack_from('>II BB 6H BB', raw, 0x10)
         at = HEAD
         st = {'flashed_id': fid, 'id': lid, 'next_code': {'synth': nc, 'fx': nfx, 'cv': ncv} if kinded else nc,
@@ -420,6 +441,23 @@ def decode(raw):
                         return None
                     e['kind'] = KINDS[kn - 1]
                 st[k].append(e)
+        if fmt == FORMAT_KNOBS:
+            nk, nfk, nxt = struct.unpack_from('>HHI', raw, at)
+            at += 8
+            if nk > MAX_KNOB_RUNS or nfk > MAX_KNOB_RUNS:
+                return None
+            for k, n in (('knobs', nk), ('freed_knobs', nfk)):
+                st[k] = []
+                for _i in range(n):
+                    first, count, lm, _z5 = struct.unpack_from('>IHBB', raw, at)
+                    m = raw[at + 8:at + 8 + lm]
+                    if len(m) != lm or not lm or not count or first + count - 1 > store.KNOB_TOP:
+                        return None
+                    st[k].append({'mod': m.decode('utf-8'), 'first': first, 'count': count})
+                    at += 8 + -(-lm // 4) * 4
+            if nxt > store.KNOB_TOP + 1:
+                return None
+            st['next_knob'] = nxt
         if at != size:
             return None
     except (struct.error, ValueError, UnicodeDecodeError):

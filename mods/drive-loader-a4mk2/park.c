@@ -8,6 +8,7 @@ const char *const dl_store_scopes[DL_STORE_SCOPES] = {"sound", "kit", "global", 
 #define HEAD 0x28
 #define SCOPE_REC 8
 #define FORMAT 2                         /* the A4's: lock codes per track kind (dstore.h DS_FORMAT) */
+#define FORMAT_KNOBS 3                   /* and the +Drive mods' knob runs after the CCs (DS_FORMAT_KNOBS) */
 #define MAX_BITS 32
 #define MAX_RECS (DL_MAX_MODS * 64)      /* no store holds more records: a bound for a bad count */
 
@@ -29,18 +30,21 @@ struct walk {
     u32 len, at;
     u16 count[NCOUNTS];
     int list, left;
+    int knobs;                           /* format 3: the knob runs follow the CC records, kept whole */
 };
 
 /* Format 2 (drive_store.py FORMAT_KINDS) is format 1 with each code and freed code record's fourth
  * byte its track kind and the FX and CV tracks' next codes at +0x26/+0x27: nothing this walk reads.
- * A format 1 file is one the A4's boot drops (dstore.c), so nothing in it is parked. */
+ * Format 3 (FORMAT_KNOBS) adds the +Drive mods' knob runs after the CCs: no mod is parked for them, and
+ * FORGET DATA keeps them (drive_store.forget). A format 1 file is one the A4's boot drops (dstore.c), so
+ * nothing in it is parked. */
 static int walk_start(struct walk *w, const u8 *raw, u32 len)
 {
     u32 crc, i;
     if (!raw || len < HEAD + SCOPE_REC * DL_STORE_SCOPES)
         return -1;
-    if (raw[0] != 'D' || raw[1] != 'L' || raw[2] != 'S' || raw[3] != 'T' || dl_rd16(raw + 4) != FORMAT ||
-        dl_rd32(raw + 8) != len)
+    if (raw[0] != 'D' || raw[1] != 'L' || raw[2] != 'S' || raw[3] != 'T' ||
+        (dl_rd16(raw + 4) != FORMAT && dl_rd16(raw + 4) != FORMAT_KNOBS) || dl_rd32(raw + 8) != len)
         return -1;
     crc = dl_crc32_add(0xFFFFFFFF, raw, 0x0c);
     crc = dl_crc32_add(crc, (const u8 *)"\0\0\0\0", 4);
@@ -49,6 +53,7 @@ static int walk_start(struct walk *w, const u8 *raw, u32 len)
         return -1;
     w->raw = raw;
     w->len = len;
+    w->knobs = dl_rd16(raw + 4) == FORMAT_KNOBS;
     for (i = 0; i < NCOUNTS; i++)
         w->count[i] = dl_rd16(raw + 0x1a + 2 * i);
     w->at = HEAD + SCOPE_REC * DL_STORE_SCOPES + 4 * (u32)raw[0x19];   /* past the scopes and the IDs */
@@ -62,8 +67,8 @@ static int walk_next(struct walk *w, struct rec *r)
     const u8 *p;
     u32 lm, ls, head;
     while (!w->left) {
-        if (++w->list >= NCOUNTS)
-            return w->at == w->len ? 0 : -1;
+        if (++w->list >= NCOUNTS)     /* the end; in format 3 the knob runs' block (8 bytes and more) */
+            return w->at == w->len || (w->knobs && w->at + 8 <= w->len) ? 0 : -1;
         w->left = w->count[w->list];
     }
     w->left--;
@@ -202,6 +207,8 @@ s32 dl_park_forget(const u8 *raw, u32 len, const char *const *ids, int n, u8 *ou
         dl_memcpy(out + at, raw + r.at, r.size);
         at += r.size;
     }
+    dl_memcpy(out + at, raw + w.at, len - w.at);   /* format 3's knob runs, as they are */
+    at += len - w.at;
     for (i = 0; i < NCOUNTS; i++)
         dl_wr16(out + 0x1a + 2 * i, count[i]);
     dl_wr32(out + 8, at);

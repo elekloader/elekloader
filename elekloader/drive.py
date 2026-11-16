@@ -78,6 +78,8 @@ CODES = {
     29: ('store', 'storage: {what} needs {need} of {have}'),
     30: ('clash', 'site 0x{detail}: {why}'),
     31: ('std', 'subscribes to {detail}, which the core does not map'),
+    # +Drive knob ids (F_KNOBS, the A4's dlink.c): a fixed id the rules refuse, or no run left
+    32: ('ids', 'knob ids {detail}'),
 }
 # DL_R_CLASH's kind (its argument's high byte; the low byte is the other mod's line for SITE_MOD)
 SITE_CORE, SITE_MOD, SITE_PRELINK, SITE_STOCK = 1, 2, 3, 4
@@ -308,6 +310,17 @@ class Build:
         self.gens_at = exports.get(STORE_GENS)
         self.dsts_at = exports.get(ds.LFO_DSTS)          # core-ar2 0.14's core_lfo_dsts, None without
         dev = next((x for x in devices.devices() if x.key == self.device_key), None)
+        # +Drive knob ids (F_KNOBS, docs/DRIVE.md "Knob ids on the +Drive"): the device's +Drive range and
+        # rules (the profile's drive_knobs and param_ids, which the A4's dlink.c has as constants), and the
+        # ids the flashed modules take (claims of kind 4)
+        self.knobs = bool(d.get('flags', 0) & desc.F_KNOBS) and bool(dev and dev.drive_knobs and dev.param_ids)
+        self.knob_range = dev.drive_knobs if self.knobs else None
+        self.param_ids = dev.param_ids if self.knobs else None
+        self.knob_ids = []
+        for kind, mi, nm in d['claims']:
+            if kind == desc.CLAIM_KNOBS:
+                a, b = nm.split(' ')[:2]
+                self.knob_ids.append((int(a, 16), int(b, 16), d['modules'][mi]['name']))
         self.main_load = dev.main_load if dev else None
         self.areas = list(dev.areas.values()) if dev else []   # a region must be inside one (TELOS)
         # the main OS a +Drive site may change: from the device's main_load to the boot copier
@@ -424,6 +437,7 @@ class Choice:
         self.sites, self.regions = [], []        # TELOS: [lo, hi) each
         self.drive_sites = []                   # [(lo, hi, is_site)]: its sites, then its copied blocks
         self.drive_claims = []                  # [(lo, hi)]: its contributions' claims (F_CLAIMS)
+        self.knob_fixed = []                    # the knob ids its entries name (+Drive knob ids): [(table, a, b)]
         self.alive = False
 
     def refuse(self, code, detail='', arg=0, note='', state=REFUSED):
@@ -823,6 +837,11 @@ def pass1(build, c, state):
         m = linker.Mod2(doc, c.name, c.raw)
     except ModError as e:
         return c.refuse('format', note=str(e))
+    if build.knobs:                             # with +Drive knob ids: link.check's rule for __knobs
+        for _where, t, a in m.knob_refs():
+            if t not in ('abs32', 'abs16') or not 0 <= a < m.knobs:
+                return c.refuse('format', note='a reference to __knobs')
+    c.knob_fixed = _fixed_ids(build, m) if build.knobs else []
     for x in m.contribute:                      # a standard event's subscription: the table it maps to
         if 'event' in x and build.std_map:
             x['to'] = build.std[x['event']]
@@ -1007,6 +1026,52 @@ def _clashes(mine, theirs):
 def _ranges(c):
     """A mod's ranges in dlink.c's order: its sites, its copied blocks, then its claims, with their kind."""
     return [(lo, hi, 1 if s else 0) for lo, hi, s in c.drive_sites] + [(lo, hi, 2) for lo, hi in c.drive_claims]
+def _fixed_ids(build, m):
+    """The knob ids a +Drive mod's entries name in its own bytes (link.Mod2.id_ranges, its .run's hex
+    parts only, as dlink.c reads them): [(table, first, last)]. An entry relocated to __knobs is its run's."""
+    return m.id_ranges(b'')
+
+
+def _knob_problem(build, c, earlier):
+    """link.id_problems for one +Drive mod against the flashed ids and the earlier living mods'.
+    -> a refusal's detail, or None."""
+    own, (lo, hi, _what), kinds = build.param_ids
+    own_only = {t for t, o in kinds if o}
+    for table, a, b in c.knob_fixed:
+        if a <= hi and lo <= b:
+            return '%#x-%#x are core\'s' % (a, b)
+        if table in own_only and a < own:
+            return '%#x-%#x are below %#x' % (a, b, own)
+        if b >= own:
+            a = max(a, own)
+            for x, y, nm in build.knob_ids + [(x, y, o.id) for o in earlier for _t, x, y in o.knob_fixed]:
+                if x <= b and a <= y:
+                    return '%#x-%#x are %s\'s' % (max(a, x), min(b, y), nm)
+    return None
+
+
+def _knob_runs(build, order, kn):
+    """Each living "knobs" mod's run (store.knobs from the .store's runs, past the flashed ids and the
+    living mods' own, in the device's +Drive range): kn['base'] and kn['state']. A mod with no run
+    left is refused. -> 1 when it refused one."""
+    kn['base'], kn['state'] = {}, None
+    if not build.knobs:
+        return 0
+    alive = [c for c in order if c.alive]
+    want = {c.id: c.mod.knobs for c in alive if c.mod.knobs}
+    held = {k: [dict(r) for r in v] if isinstance(v, list) else v for k, v in kn['prev'].items()}
+    fixed = [(a, b) for a, b, _nm in build.knob_ids] + [(a, b) for c in alive for _t, a, b in c.knob_fixed]
+    lo, hi = build.knob_range
+    try:
+        kn['base'], _notes = mstore.knobs(held, want, lo, fixed, hi)
+    except ModError as e:
+        c = next(c for c in alive if c.id == e.mod)
+        c.refuse('ids', 'run of %d: none free' % c.mod.knobs)
+        return 1
+    if 'freed_knobs' in held:                   # the .store keeps the latest freed runs
+        held['freed_knobs'] = held['freed_knobs'][-ds.MAX_KNOB_RUNS:]
+    kn['state'] = held
+    return 0
 
 
 def _resolvable(build, alive, x):
@@ -1054,6 +1119,10 @@ def _round(build, order):
             x = next((n for n in m.names if n in build.claims or any(n in o.mod.names for o in earlier)), None)
             if x is not None:
                 why = ('claim', x)
+        if why is None and build.knobs:             # knob ids: link.id_problems' rules
+            x = _knob_problem(build, c, earlier)
+            if x is not None:
+                why = ('ids', x)
         if why is None and c.regions:               # regions: the flashed build's, then earlier mods'
             w = next((nm for a, b in c.regions for x, y, nm in build.regions if a < y and x < b), None)
             if w is None:
@@ -1061,7 +1130,8 @@ def _round(build, order):
             if w is not None:
                 why = ('region', w)
         if why is None:
-            x = next((x for x in m.imports if not _resolvable(build, alive, x) and x not in m.weak), None)
+            x = next((x for x in m.imports if not _resolvable(build, alive, x) and x not in m.weak
+                      and not (x == linker.KNOBS and build.knobs and m.knobs)), None)
             if x is not None:
                 why = ('import', x)
         if why is None and build.collections:   # +Drive tables: a living mod declares each, of that entry
@@ -1122,12 +1192,12 @@ def _fit(build, order):
     return 0
 
 
-def _settle(build, order):
-    """Check rounds and the room, until neither refuses a mod."""
+def _settle(build, order, kn):
+    """Check rounds, the room and the knob runs, until none refuses a mod."""
     while True:
         while _round(build, order):
             pass
-        if not _fit(build, order):
+        if not _fit(build, order) and not _knob_runs(build, order, kn):
             return
 
 
@@ -1245,7 +1315,7 @@ def _globals(build, order, base, dtab):
     return glob
 
 
-def _pass2(build, c, base, glob, edata):
+def _pass2(build, c, base, glob, edata, knob=None):
     """One living mod's .run, relocated, and its entries' bytes and relocations. -> ((run bytes,
     [(contribution, bytes, [(off, type, S + A)])]), None), or (None, (code, detail))."""
     m = c.mod
@@ -1266,6 +1336,8 @@ def _pass2(build, c, base, glob, edata):
             return base.get((c.id, nm)) if nm in ('.run', '.bss') else None
         if nm in own:
             return own[nm]
+        if nm == linker.KNOBS and knob is not None:
+            return knob
         if nm in glob:
             return glob[nm]()
         if nm in m.weak and 'core_zero' in glob:
@@ -1394,6 +1466,13 @@ class Result:
     pass
 
 
+def _knob_prev(build, raw):
+    """The runs /mods/.store keeps (format 3): {'knobs', 'freed_knobs', 'next_knob'}, or {} (none, or a
+    file the allocator does not take)."""
+    st = ds.decode(raw) if build.knobs and raw is not None else None
+    return {k: st[k] for k in ('knobs', 'freed_knobs', 'next_knob') if k in st} if st else {}
+
+
 def check(build, files, deep=False, store=None):
     """Pass 1, the check rounds and the layout; with `deep`, pass 2 and the merge too (link()).
     `files`: [(file name, bytes, or None for a missing file)] in /mods/active's order. -> Result:
@@ -1406,6 +1485,7 @@ def check(build, files, deep=False, store=None):
     r.choices, r.live, r.base, r.end, r.area, r.tables, r.inits, r.glob = \
         choices, [], {}, build.lo, b'', {}, [], {}
     r.placed, r.gens = None, None
+    r.knobs = {}
     r.drive_tables = {}
     r.sites = []
     if len(choices) > MAX_MODS:                 # the loader reads none of them
@@ -1427,8 +1507,9 @@ def check(build, files, deep=False, store=None):
             pass1(build, c, state)
     order = by_id(c for c in choices if c.alive)          # stable: of one id, the earlier line first
     lay = placed = glob = None
+    kn = {'prev': _knob_prev(build, store), 'base': {}, 'state': None}
     for _ in range(4 * MAX_MODS):
-        _settle(build, order)
+        _settle(build, order, kn)
         lay = _layout(build, order)
         if lay is None:
             continue
@@ -1444,7 +1525,7 @@ def check(build, files, deep=False, store=None):
                         glob[f['sym']] = (lambda v=r.placed.descriptors[(c.id, f['sym'])]: v)
         placed, edata, again = {}, [0, 0], False   # entry bytes, entry relocations
         for c in placement(build, order):          # in address order, as the boot reads them
-            got, why = _pass2(build, c, lay[0], glob, edata)
+            got, why = _pass2(build, c, lay[0], glob, edata, kn['base'].get(c.id))
             if why:
                 c.refuse(why[0], why[1])
                 again = True
@@ -1466,6 +1547,10 @@ def check(build, files, deep=False, store=None):
         return r
     base, end, dtab = lay
     r.live, r.base, r.end = live, base, end if live else build.lo
+    r.knobs = {c.id: [kn['base'][c.id], c.mod.knobs] for c in live if c.id in kn['base']}
+    if r.placed is not None and kn['state'] is not None:    # the runs go into /mods/.store (format 3)
+        r.placed.state.update(kn['state'])
+        r.placed.bytes = ds.encode(r.placed.state)
     r.drive_tables = {n: {k: v for k, v in t.items() if k != 'owner'} for n, t in dtab.items()}
     if deep:
         area = bytearray(r.end - build.lo)
