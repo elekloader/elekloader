@@ -328,8 +328,9 @@ def test_the_bytes_mod_storage_uses_are_stocks_spare():
 
 
 def test_drive_loader_a4mk2_site_and_build():
-    """drive-loader-a4mk2's one site, the /mods route at 0x40095ec8 (the resolver's guard set, after
-    stock's two handlers are added, as the Rytm's 0x400a005e), and, with the cross compiler, a build
+    """drive-loader-a4mk2's two sites, the /mods route at 0x40095ec8 (the resolver's guard set, after
+    stock's two handlers are added, as the Rytm's 0x400a005e) and the +Drive block writer's take
+    bound at 0x4001da16, and, with the cross compiler, a build
     of core and the loader whose descriptor maps every site, the loader's too, and the A4's pre-link
     ranges, and whose ev_boot_drive and ev_drive_format each call the loader."""
     import shutil
@@ -339,10 +340,19 @@ def test_drive_loader_a4mk2_site_and_build():
     _r, _s, img = stock()
     with open(os.path.join(ROOT, 'mods', 'drive-loader-a4mk2', 'mod.json')) as fh:
         j = json.load(fh)
-    assert [(x['addr'], x['op'], x['stock'], x['target']) for x in j['sites']] == \
-        [('0x40095ec8', 'jsr', '700113c04182b33c', 'dl_route_site')]
-    assert at(img, 0x40095ec8, 8) == bytes.fromhex('700113c04182b33c')
-    assert at(img, 0x40095ed0, 4) == bytes.fromhex('4cd73c7c')          # then the getter's movem and return
+    route, clamp = j['sites']
+    import hashlib
+    # the sites give their stock bytes by length and hash (the manifest holds none)
+    assert (route['addr'], route['len'], route['op'], route['target']) == ('0x40095ec8', 8, 'jsr', 'dl_route_site')
+    assert hashlib.sha256(at(img, 0x40095ec8, 8)).hexdigest() == route['stock_sha256']
+    # the +Drive block writer's take bound (README, "Uploads in more than one chunk"), given by
+    # length and hash: the conditional branch becomes an unconditional one to the same place
+    assert (clamp['addr'], clamp['len'], clamp['op'], clamp['kind']) == ('0x4001da16', 2, 'bytes', 'code')
+    was = at(img, 0x4001da16, 2)
+    assert hashlib.sha256(was).hexdigest() == clamp['stock_sha256']
+    assert bytes.fromhex(clamp['new']) == bytes([0x60]) + was[1:]
+    assert hashlib.sha256(at(img, 0x40095ed0, 4)).hexdigest() == \
+        '33d8a59f5abc7a2d24beae63293feee81fe9b16620106a871d5937d16a09ccf8'          # then the getter's movem and return
     subs = {(x['event'], x['fn']) for x in j['subscribe']}
     assert {('ev_boot_drive', 'dl_boot'), ('ev_drive_format', 'dl_format')} <= subs
     cross = os.environ.get('ELEKLOADER_CROSS', DEV.toolchain['prefix'])
@@ -370,6 +380,7 @@ def test_drive_loader_a4mk2_site_and_build():
     assert names == ['core', 'drive-loader']
     sites = {(lo, hi, k, m) for lo, hi, k, m in d['sites']}
     assert (0x40095ec8, 0x40095ed0, desc.SITE_SITE, 1) in sites
+    assert (0x4001da16, 0x4001da18, desc.SITE_SITE, 1) in sites
     assert (0x401061e8, 0x401061ee, desc.SITE_SITE, 0) in sites and (0x40074af6, 0x40074afc, desc.SITE_SITE, 0) in sites
     assert len(d['prelink']) == len(REL.prelink) == 164
     assert d['flags'] & desc.F_STAGE_TOP

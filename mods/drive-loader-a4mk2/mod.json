@@ -26,9 +26,18 @@
  "sites": [
   {
    "addr": "0x40095ec8",
-   "stock": "700113c04182b33c",
+   "len": 8,
+   "stock_sha256": "c0076371d1b7c405fb88b81ca115c36ff69a17862593f24dcc443b06411bb905",
    "op": "jsr",
    "target": "dl_route_site"
+  },
+  {
+   "addr": "0x4001da16",
+   "len": 2,
+   "stock_sha256": "16119cec0c9bd0ee527bc127cab359c8d63963f92fd98acf348e652a91233dc2",
+   "op": "bytes",
+   "new": "6006",
+   "kind": "code"
   }
  ],
  "subscribe": [
