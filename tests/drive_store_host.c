@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
 /* The Drive Loader's +Drive storage allocator (mods/drive-loader-ar2/dstore.c), run on the
  * computer: tests/test_drive_store_host.py builds it and replays js/test/drivestore-vectors.json
+ * (with --a4, mods/drive-loader-a4mk2/dstore.c and js/test/drivestore-a4-vectors.json)
  * through it, one step a run. The step comes on stdin as words:
  *
  *   ROOM USED GEN x6  FLASHED_ID  NANC ANC...  NCODES (DESC CODE)...  NCCS (DESC CC)...
@@ -11,7 +12,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "../mods/drive-loader-ar2/dstore.h"
+#include "dstore.h"                      /* the loader's, by -I: drive-loader-ar2 or -a4mk2 */
 
 void *dl_alloc(u32 n) { return calloc(n ? n : 1, 1); }
 void dl_free(void *p) { free(p); }

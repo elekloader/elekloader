@@ -5,8 +5,8 @@
 // The Drive Loader places a +Drive mod's storage fields in the bits each scope of the flashed build leaves free
 // (from the room's top down, past the build's used bits), keeps them in /mods/.store, parks a removed mod's fields
 // with their bits and values, repacks a scope under a new generation when its never-used bits run out or the flashed
-// build changes under it, gives lock codes from the top of the range down past the build's own and CCs from the
-// pool's end. drive_store.py's docstring has the rules and the file's layout.
+// build changes under it, gives lock codes from the top of the range down past the build's own (per track kind on
+// the Analog Four MKII) and CCs from the pool's end. drive_store.py's docstring has the rules and the file's layout.
 import { sha256 } from './bytes.ts'
 import { ModError } from './elemod.ts'
 import * as store from './store.ts'
@@ -15,6 +15,8 @@ import { crc32 } from './zip.ts'
 
 export const MAGIC = 'DLST'
 export const FORMAT = 1
+export const FORMAT_KINDS = 2                   // lock codes per track kind (the Analog Four MKII)
+const KINDS = ['synth', 'fx', 'cv']             // format 2's kind numbers 1..3
 const HEAD = 0x28
 const SCOPE_REC = 8
 const MAX_IDS = 15                              // the last 15 live IDs before this one
@@ -46,11 +48,12 @@ const bump = (g: number) => (g >= 255 ? 1 : g + 1)
 
 export type Field = { mod: string; sym: string; scope: string; offset: number; bits: number; init?: number }
 type NewField = { mod: string; sym: string; scope: string; offset: number | null; bits: number; init?: number }
-export type Code = { mod: string; sym: string; code: number }
+export type Code = { mod: string; sym: string; code: number; kind?: string }
 export type Cc = { mod: string; sym: string; cc: number }
 export type ScopeState = { fgen: number; gen: number; low: number }
 export type State = {
-  flashed_id: number; id: number; ids: number[]; scopes: Record<string, ScopeState>; next_code: number
+  flashed_id: number; id: number; ids: number[]; scopes: Record<string, ScopeState>
+  next_code: number | Record<string, number>
   fields: Field[]; parked: Field[]; codes: Code[]; freed_codes: Code[]; ccs: Cc[]; freed_ccs: Cc[]
 }
 
@@ -73,6 +76,7 @@ export class Base {
   fxTaken: number[]
   liveDst: boolean
   core: string
+  kinds: string[]
 
   constructor(device: string, scopes: Record<string, [number, number, number]>, flashedId: number | null,
     ancestors: number[] = [], codes: [number, number][] | null = [], ccs: [number, number][] | null = [], inits = 0,
@@ -89,11 +93,27 @@ export class Base {
     this.room = room !== null ? { ...room } : Object.fromEntries(TABLES.map(t => [t, 256]))
     ;[this.firstCode, this.lastCode] = store.codeRange(device)
     ;[this.pool, this.fxTaken] = store.ccPool(device)
-    if (store.kinds(device).length)
-      throw new ModError(`+Drive storage keeps one range of lock codes; the ${device} numbers them per track kind`)
+    this.kinds = store.kinds(device)              // [] where one range serves every track
   }
 
   codeSet(): Set<number> { return new Set((this.codes ?? []).map(([, c]) => c & 0xff)) }
+
+  /** A flashed core_lock_codes entry's kind (core-a4mk2's lock.c kind_of_entry), null without kinds. */
+  entryKind(d: number, c: number): string | null {
+    if (!this.kinds.length) return null
+    return d >>> 28 === 1 ? 'synth' : (c & store.CV_FLAG) !== 0 ? 'cv' : 'fx'
+  }
+
+  /** The flashed build's codes of a kind. */
+  kindCodes(kind: string): Set<number> {
+    return new Set((this.codes ?? []).filter(([d, c]) => this.entryKind(d, c) === kind).map(([, c]) => c & 0xff))
+  }
+
+  /** How many entries of core_lock_codes the flashed build has of a kind. */
+  kindCount(kind: string): number {
+    if (!this.kinds.length) return this.ncodes
+    return (this.codes ?? []).filter(([d, c]) => this.entryKind(d, c) === kind).length
+  }
   ccSet(): Set<number> { return new Set((this.ccs ?? []).map(([, c]) => c)) }
 
   /** Does the build place the core's LFO destination field for this scope? */
@@ -143,7 +163,7 @@ export class Want {
   mods: string[] = []
   decls: [string, string, string, number][] = []
   locks = new Set<string>(); ccs = new Set<string>(); lfos = new Set<string>(); rough = new Set<string>()
-  routes = new Set<string>(); handles = new Set<string>()
+  routes = new Set<string>(); handles = new Set<string>(); cvs = new Set<string>()
   inits = new Map<string, number>()
 
   constructor(mods: Record<string, any>[] = []) {
@@ -159,7 +179,7 @@ export class Want {
       for (const s of store.parseRoutes(m)) this.routes.add(K(mid, s))
       for (const s of store.parseHandles(m)) this.handles.add(K(mid, s))
       for (const [s, v] of store.parseInits(m)) this.inits.set(K(mid, s), v)
-      for (const s of store.parseCvs(m)) throw new ModError(`${mid}: storage field '${s}': +Drive storage has no CV track`)
+      for (const s of store.parseCvs(m)) this.cvs.add(K(mid, s))
     }
   }
 
@@ -169,10 +189,23 @@ export class Want {
     const mine = (k: string) => keep.has(unK(k)[0])
     w.mods = this.mods.filter(m => keep.has(m))
     w.decls = this.decls.filter(d => keep.has(d[0]))
-    for (const name of ['locks', 'ccs', 'lfos', 'rough', 'routes', 'handles'] as const)
+    for (const name of ['locks', 'ccs', 'lfos', 'rough', 'routes', 'handles', 'cvs'] as const)
       w[name] = new Set([...this[name]].filter(mine))
     w.inits = new Map([...this.inits].filter(([k]) => mine(k)))
     return w
+  }
+
+  /** A lockable field's track kind ('synth', 'fx' or 'cv'), on a device with kinds. */
+  kind(k: string): string {
+    const scope = this.decls.find(d => K(d[0], d[1]) === k)![2]
+    return scope === 'sound' ? 'synth' : this.cvs.has(k) ? 'cv' : 'fx'
+  }
+}
+
+function noCv(base: Base, want: Want) {
+  if (want.cvs.size && !base.kinds.includes('cv')) {
+    const [mid, s] = unK([...want.cvs].sort((a, b) => cmpKey(unK(a), unK(b)))[0])
+    throw new ModError(`${mid}: storage field '${s}': +Drive storage has no CV track`)
   }
 }
 
@@ -192,7 +225,13 @@ function needs(base: Base, w: Want): [string, number, number, (k: string) => boo
     const more = extra.filter(d => d[2] === s).reduce((n, d) => n + d[3], 0)
     out.push([s, w.decls.filter(d => d[2] === s).reduce((n, d) => n + d[3], 0) + more, room - used, k => mine.has(k)])
   }
-  out.push(['codes', w.locks.size, base.lastCode - base.firstCode + 1 - base.ncodes, k => w.locks.has(k)])
+  const span = base.lastCode - base.firstCode + 1
+  if (base.kinds.length) {                      // one range a track kind: 'codes-synth', 'codes-fx', 'codes-cv'
+    for (const kd of base.kinds) {
+      const mine = new Set([...w.locks].filter(k => w.kind(k) === kd))
+      out.push(['codes-' + kd, mine.size, span - base.kindCount(kd), k => mine.has(k)])
+    }
+  } else out.push(['codes', w.locks.size, span - base.ncodes, k => w.locks.has(k)])
   for (const [t, n, uses] of [[store.CODES_TABLE, w.locks.size, (k: string) => w.locks.has(k)],
     [store.INITS_TABLE, w.inits.size, (k: string) => w.inits.has(k)],
     [store.HANDLES_TABLE, w.handles.size, (k: string) => w.handles.has(k)]] as const) {
@@ -206,6 +245,7 @@ function needs(base: Base, w: Want): [string, number, number, (k: string) => boo
 /** Which mods the room refuses: the last in id order that needs what is short, again until the set fits.
  *  -> [mod id, what, short by][]. drive_store.fit. */
 export function fit(base: Base, want: Want): [string, string, number][] {
+  noCv(base, want)
   const alive = [...want.mods], out: [string, string, number][] = []
   for (;;) {
     const w = want.of(alive)
@@ -225,7 +265,8 @@ export function fresh(base: Base): State {
   return {
     flashed_id: base.flashedId ?? 0, id: base.flashedId ?? 0, ids: [],
     scopes: Object.fromEntries(SCOPES.map(s => [s, { fgen: base.scopes[s][2], gen: base.scopes[s][2], low: base.scopes[s][0] }])),
-    next_code: base.lastCode, fields: [], parked: [], codes: [], freed_codes: [], ccs: [], freed_ccs: [],
+    next_code: base.kinds.length ? Object.fromEntries(base.kinds.map(k => [k, base.lastCode])) : base.lastCode,
+    fields: [], parked: [], codes: [], freed_codes: [], ccs: [], freed_ccs: [],
   }
 }
 
@@ -244,13 +285,17 @@ class Out {
   pad() { while (this.b.length % 4) this.b.push(0) }
 }
 
-/** The state -> /mods/.store's bytes. drive_store.encode. */
+const kinded = (st: State) => typeof st.next_code === 'object'
+const codeOrder = (a: Code, b: Code) => (a.kind ? KINDS.indexOf(a.kind) : 0) - (b.kind ? KINDS.indexOf(b.kind) : 0) || a.code - b.code
+
+/** The state -> /mods/.store's bytes (format 2 for a state with codes per track kind). drive_store.encode. */
 export function encode(st: State): Uint8Array {
-  const o = new Out()
+  const o = new Out(), kd = kinded(st), nc = st.next_code as any
   for (const c of [...MAGIC]) o.u8(c.charCodeAt(0))
-  o.u16(FORMAT); o.u16(0); o.u32(0); o.u32(0)
-  o.u32(st.flashed_id); o.u32(st.id); o.u8(st.next_code); o.u8(st.ids.length)
-  for (const n of [st.fields.length, st.parked.length, st.codes.length, st.freed_codes.length, st.ccs.length, st.freed_ccs.length, 0]) o.u16(n)
+  o.u16(kd ? FORMAT_KINDS : FORMAT); o.u16(0); o.u32(0); o.u32(0)
+  o.u32(st.flashed_id); o.u32(st.id); o.u8(kd ? nc.synth : nc); o.u8(st.ids.length)
+  for (const n of [st.fields.length, st.parked.length, st.codes.length, st.freed_codes.length, st.ccs.length, st.freed_ccs.length]) o.u16(n)
+  o.u8(kd ? nc.fx : 0); o.u8(kd ? nc.cv : 0)
   for (const s of SCOPES) { const sc = st.scopes[s]; o.u8(sc.fgen); o.u8(sc.gen); o.u16(0); o.u32(sc.low) }
   for (const i of st.ids) o.u32(i)
   for (const f of [...st.fields, ...st.parked]) {
@@ -261,7 +306,8 @@ export function encode(st: State): Uint8Array {
   for (const [list, v] of [[st.codes, 'code'], [st.freed_codes, 'code'], [st.ccs, 'cc'], [st.freed_ccs, 'cc']] as const)
     for (const c of list as any[]) {
       const [m, s] = names(c.mod, c.sym)
-      o.u8(c[v]); o.u8(m.length); o.u8(s.length); o.u8(0); o.bytes(m); o.bytes(s); o.pad()
+      o.u8(c[v]); o.u8(m.length); o.u8(s.length); o.u8(kd && v === 'code' ? KINDS.indexOf(c.kind) + 1 : 0)
+      o.bytes(m); o.bytes(s); o.pad()
     }
   const raw = new Uint8Array(o.b)
   const v = new DataView(raw.buffer)
@@ -276,12 +322,16 @@ export function decode(raw: Uint8Array | null): State | null {
   try {
     if (raw.length < HEAD + SCOPE_REC * 6) return null
     const v = new DataView(raw.buffer, raw.byteOffset, raw.length)
-    if (String.fromCharCode(...raw.subarray(0, 4)) !== MAGIC || v.getUint16(4) !== FORMAT || v.getUint32(8) !== raw.length) return null
+    const fmt = v.getUint16(4)
+    if (String.fromCharCode(...raw.subarray(0, 4)) !== MAGIC || (fmt !== FORMAT && fmt !== FORMAT_KINDS)
+      || v.getUint32(8) !== raw.length) return null
+    const kd = fmt === FORMAT_KINDS
     const z = new Uint8Array(raw); z.fill(0, 0x0c, 0x10)
     if (crc32(z) !== v.getUint32(0x0c)) return null
     const nids = raw[0x19]
     const [nf, npk, ncd, nfc, ncc, nfcc] = [0, 1, 2, 3, 4, 5].map(i => v.getUint16(0x1a + 2 * i))
-    const st: State = { flashed_id: v.getUint32(0x10), id: v.getUint32(0x14), next_code: raw[0x18], ids: [], scopes: {},
+    const st: State = { flashed_id: v.getUint32(0x10), id: v.getUint32(0x14),
+      next_code: kd ? { synth: raw[0x18], fx: raw[0x26], cv: raw[0x27] } : raw[0x18], ids: [], scopes: {},
       fields: [], parked: [], codes: [], freed_codes: [], ccs: [], freed_ccs: [] }
     let at = HEAD
     for (const s of SCOPES) { st.scopes[s] = { fgen: raw[at], gen: raw[at + 1], low: v.getUint32(at + 4) }; at += SCOPE_REC }
@@ -306,10 +356,15 @@ export function decode(raw: Uint8Array | null): State | null {
     for (const [list, key, n] of [[st.codes, 'code', ncd], [st.freed_codes, 'code', nfc], [st.ccs, 'cc', ncc], [st.freed_ccs, 'cc', nfcc]] as const) {
       for (let i = 0; i < n; i++) {
         if (at + 4 > raw.length) return null
-        const c = raw[at]
+        const c = raw[at], kn = raw[at + 3]
         const [mod, sym, next] = nm(at + 4, raw[at + 1], raw[at + 2])
-        at = next;
-        (list as any[]).push({ mod, sym, [key]: c })
+        at = next
+        const e: any = { mod, sym, [key]: c }
+        if (kd && key === 'code') {
+          if (!(kn >= 1 && kn <= KINDS.length)) return null
+          e.kind = KINDS[kn - 1]
+        }
+        ;(list as any[]).push(e)
       }
     }
     if (at !== raw.length) return null
@@ -360,8 +415,9 @@ export function layoutId(st: State, base: Base): number {
     o.u8(SCOPE_NUM[f.scope]); o.u8(f.bits); o.u16(f.offset); o.u32(f.init ?? 0)
     o.u8(m.length); o.bytes(m); o.u8(s.length); o.bytes(s)
   }
-  for (const c of [...st.codes, ...st.freed_codes].sort((a, b) => a.code - b.code)) {
+  for (const c of [...st.codes, ...st.freed_codes].sort(codeOrder)) {
     const [m, s] = names(c.mod, c.sym)
+    if (c.kind) o.u8(KINDS.indexOf(c.kind) + 1)
     o.u8(c.code); o.u8(m.length); o.bytes(m); o.u8(s.length); o.bytes(s)
   }
   const h = sha256(new Uint8Array(o.b))
@@ -404,6 +460,7 @@ export class Placed {
       const k = K(c.mod, c.sym), sc = scopeOf.get(k)!
       const flags = (want.lfos.has(k) && (base.lfoDst(sc) || sc in this.lfoDsts) ? store.LFO_FLAG : 0)
         | (want.rough.has(k) ? store.SMOOTH_OFF : 0) | (want.routes.has(k) ? store.ROUTE_FLAG : 0)
+        | (c.kind === 'cv' ? store.CV_FLAG : 0)
       this.codeEntries.push(new Uint8Array([...be(this.descriptors.get(k)!), ...be(c.code | flags)]))
     }
     this.ccEntries = st.ccs.map(c => new Uint8Array([...be(this.descriptors.get(K(c.mod, c.sym))!), ...be(c.cc)]))
@@ -445,6 +502,7 @@ export function allocate(base: Base, prev: State | null, want: Want): Placed {
   const short = fit(base, want)
   if (short.length) throw new ModError(`${short[0][0]} does not fit: ${short[0][1]} is ${short[0][2]} short`)
   const notes: string[] = []
+  if (prev !== null && kinded(prev) !== base.kinds.length > 0) prev = null   // the other format's: a fresh placement
   const st = prev === null ? fresh(base) : decode(encode(prev))
   if (st === null) throw new ModError('.store: a bad state')
   const oldId = st.id
@@ -536,7 +594,8 @@ export function allocate(base: Base, prev: State | null, want: Want): Placed {
     else notes.push(`${f.mod} ${f.sym}: ${f.bits} bits of ${f.scope} storage at bit ${f.offset}`)
   }
   st.fields = fields.sort((a, b) => SCOPE_NUM[a.scope] - SCOPE_NUM[b.scope] || a.offset - b.offset)
-  codes(st, base, want.locks, new Set(kept.map(f => K(f.mod, f.sym))), back, notes)
+  if (base.kinds.length) kindCodes(st, base, want, new Set(kept.map(f => K(f.mod, f.sym))), back, notes)
+  else codes(st, base, want.locks, new Set(kept.map(f => K(f.mod, f.sym))), back, notes)
   ccs(st, base, want.ccs, new Set(fields.filter(f => f.scope === 'kit').map(f => K(f.mod, f.sym))), notes)
   const scopeOf = new Map(fields.map(f => [K(f.mod, f.sym), f.scope]))
   const placed = new Set(fields.filter(f => f.mod === base.core).map(f => f.sym))
@@ -577,7 +636,7 @@ function codes(st: State, base: Base, want: Set<string>, kept: Set<string>, back
     }
   }
   const have = new Set(out.map(c => K(c.mod, c.sym)))
-  let nxt = st.next_code
+  let nxt = st.next_code as number
   for (const k of [...want].filter(k => !have.has(k)).sort(keySort)) {
     const [m, s] = unK(k)
     const same = freed.filter(c => K(c.mod, c.sym) === k)
@@ -608,6 +667,62 @@ function codes(st: State, base: Base, want: Set<string>, kept: Set<string>, back
   st.codes = out.sort((a, b) => a.code - b.code)
   st.freed_codes = freed
   st.next_code = Math.max(nxt, base.firstCode - 1)
+}
+
+/** codes() per track kind (the Analog Four MKII): each kind its own range; a code freed in one kind is given again
+ *  only in that kind; a field whose kind changed is a new parameter. drive_store._kind_codes. */
+function kindCodes(st: State, base: Base, want: Want, kept: Set<string>, back: Set<string>, notes: string[]) {
+  const flashed = Object.fromEntries(base.kinds.map(kd => [kd, base.kindCodes(kd)]))
+  const top = Object.fromEntries(base.kinds.map(kd => [kd, flashed[kd].size ? Math.max(...flashed[kd]) : base.firstCode - 1]))
+  const of = (kd: string) => ({ synth: ' (synth tracks)', fx: ' (FX track)', cv: ' (CV track)' } as Record<string, string>)[kd]
+  const out: Code[] = []
+  let freed = st.freed_codes.filter(c => !flashed[c.kind!].has(c.code)).map(c => ({ ...c }))
+  for (const c of st.freed_codes)
+    if (flashed[c.kind!].has(c.code)) notes.push(`${c.mod} ${c.sym}: lock code ${c.code}${of(c.kind!)} is the flashed build's now`)
+  for (const c of st.codes) {
+    const k = K(c.mod, c.sym)
+    if (flashed[c.kind!].has(c.code)) notes.push(`${c.mod} ${c.sym}: lock code ${c.code}${of(c.kind!)} is the flashed build's now`)
+    else if (want.locks.has(k) && kept.has(k) && want.kind(k) === c.kind) out.push({ ...c })
+    else {
+      freed.push({ ...c })
+      notes.push(`${c.mod} ${c.sym}: lock code ${c.code}${of(c.kind!)} kept for it while it is out`)
+    }
+  }
+  const have = new Set(out.map(c => K(c.mod, c.sym)))
+  const nxt = { ...(st.next_code as Record<string, number>) }
+  for (const k of [...want.locks].filter(k => !have.has(k)).sort(keySort)) {
+    const [m, s] = unK(k), kd = want.kind(k)
+    const mine = freed.filter(c => c.kind === kd)
+    const same = mine.filter(c => K(c.mod, c.sym) === k)
+    let c: Code
+    if (same.length && back.has(k)) {
+      c = same.at(-1)!
+      freed.splice(freed.indexOf(c), 1)
+      notes.push(`${m} ${s}: back with lock code ${c.code}${of(kd)}`)
+    } else if (nxt[kd] > top[kd]) {
+      c = { mod: m, sym: s, code: nxt[kd], kind: kd }
+      nxt[kd] -= 1
+      notes.push(`${m} ${s}: lock code ${c.code}${of(kd)}`)
+    } else if (mine.length) {
+      const old = mine[0]
+      freed.splice(freed.indexOf(old), 1)
+      c = { mod: m, sym: s, code: old.code, kind: kd }
+      notes.push(`${m} ${s}: lock code ${c.code}${of(kd)} (was ${old.mod} ${old.sym}'s)`)
+    } else {
+      const used = new Set([...flashed[kd], ...out.filter(c => c.kind === kd).map(c => c.code)])
+      const free: number[] = []
+      for (let x = base.lastCode; x >= base.firstCode; x--) if (!used.has(x)) free.push(x)
+      if (!free.length) throw new ModError(`the +Drive mods have more lockable parameters than the build leaves codes on ${
+        { synth: 'the synth tracks', fx: 'the FX track', cv: 'the CV track' }[kd]}`)
+      c = { mod: m, sym: s, code: free[0], kind: kd }
+      notes.push(`${m} ${s}: lock code ${c.code}${of(kd)}`)
+    }
+    freed = freed.filter(d => K(d.mod, d.sym) !== k)
+    out.push(c)
+  }
+  st.codes = out.sort(codeOrder)
+  st.freed_codes = freed
+  st.next_code = Object.fromEntries(base.kinds.map(kd => [kd, Math.max(nxt[kd], base.firstCode - 1)]))
 }
 
 function ccs(st: State, base: Base, want: Set<string>, kits: Set<string>, notes: string[]) {

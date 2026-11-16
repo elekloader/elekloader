@@ -32,7 +32,10 @@ The rules mirror elekloader/store.py's, turned to face the flashed build:
 - lock codes come from the top of the device's range down (127, 126, ...), past every code the flashed
   build uses; a field keeps its code while it keeps its place, a parked field's code is kept for it, and
   only when the codes above the build's highest are gone is the code freed longest ago given out again.
-  A code the flashed build has taken since is given up;
+  A code the flashed build has taken since is given up. Where the device numbers codes per track kind
+  (the Analog Four MKII, store.py "Lock codes per track kind"), each kind has its own range and all of
+  this happens per kind: a sound field's code is the synth tracks', a kit field's the FX track's, or the
+  CV track's when it declares "track": "cv"; a field whose kind changes is a new parameter;
 - CCs come from the device's pool from its end, past the build's own; a field keeps its CC wherever it
   is placed, a parked field's CC is kept for it until the never-used CCs run out;
 - the core's LFO destination field of a scope (core_lfo_dst, core_fx_lfo_dst) is one more field, of the
@@ -62,8 +65,14 @@ allocate() places a set that fits. Nothing here reads a clock or iterates in has
   freed codes (freed longest ago first): u8 code, u8 and u8 the names' lengths, u8 0, the names, zeros to
   4; the CCs (by CC), then the freed CCs, likewise with the CC.
 
-A file that is missing, cut short, of another format or with a wrong CRC reads as none: a fresh
-placement, and the items then load those scopes at defaults.
+Format 2, the same with lock codes per track kind (written only for such a device): +0x18 the synth
+tracks' next code, +0x26 the FX track's and +0x27 the CV track's (format 1's u16 0); each code and freed
+code record's fourth byte is its kind (1 synth, 2 FX, 3 CV); CC records as format 1. The codes are by
+kind, then code.
+
+A file that is missing, cut short, of another format (or of the other one of 1 and 2 than the device
+takes) or with a wrong CRC reads as none: a fresh placement, and the items then load those scopes at
+defaults.
 """
 import hashlib
 import struct
@@ -74,6 +83,8 @@ from .elemod import ModError
 
 MAGIC = b'DLST'
 FORMAT = 1
+FORMAT_KINDS = 2                                # lock codes per track kind (the Analog Four MKII)
+KINDS = ('synth', 'fx', 'cv')                   # format 2's kind numbers 1..3
 HEAD = 0x28
 SCOPE_REC = 8
 MAX_IDS = store.MAX_ANCESTORS                   # the last 15 live IDs before this one
@@ -118,12 +129,27 @@ class Base:
         first, last = store.code_range(device)
         self.first_code, self.last_code = first, last
         self.pool, self.fx_taken = store.cc_pool(device)
-        if store.kinds(device):
-            raise ModError('+Drive storage keeps one range of lock codes; the %s numbers them per track kind'
-                           % device)
+        self.kinds = store.kinds(device)        # () where one range serves every track
 
     def code_set(self):
         return {c & 0xFF for _d, c in self.codes or ()}
+
+    def entry_kind(self, d, c):
+        """A flashed core_lock_codes entry's kind (core-a4mk2's lock.c kind_of_entry), None without kinds."""
+        if not self.kinds:
+            return None
+        return 'synth' if d >> 28 == 1 else 'cv' if c & store.CV_FLAG else 'fx'
+
+    def kind_codes(self, kind):
+        """The flashed build's codes of a kind (of every kind where codes have none)."""
+        return {c & 0xFF for d, c in self.codes or () if self.entry_kind(d, c) == kind}
+
+    def kind_count(self, kind):
+        """How many entries of core_lock_codes the flashed build has of a kind (from ncodes without
+        kinds or where its entries are not known)."""
+        if not self.kinds:
+            return self.ncodes
+        return sum(1 for d, c in self.codes or () if self.entry_kind(d, c) == kind)
 
     def cc_set(self):
         return {c for _d, c in self.ccs or ()}
@@ -202,7 +228,7 @@ class Want:
         """mods: [mod document (a dict with "id" and "storage")], any order."""
         self.mods = sorted((m['id'] for m in mods), key=_b)
         self.decls, self.locks, self.ccs, self.inits = [], set(), set(), {}
-        self.lfos, self.rough, self.routes, self.handles = set(), set(), set(), set()
+        self.lfos, self.rough, self.routes, self.handles, self.cvs = set(), set(), set(), set(), set()
         for m in sorted(mods, key=lambda m: _b(m['id'])):
             mid = m['id']
             for sym, scope, bits in store.parse_decls(m):
@@ -211,8 +237,7 @@ class Want:
                               ('rough', self.rough), ('routes', self.routes), ('handles', self.handles)):
                 out.update((mid, s) for s in getattr(store, 'parse_' + name)(m))
             self.inits.update({(mid, s): v for s, v in store.parse_inits(m).items()})
-            for s in store.parse_cvs(m):
-                raise ModError('%s: storage field %r: +Drive storage has no CV track' % (mid, s))
+            self.cvs.update((mid, s) for s in store.parse_cvs(m))
 
     def of(self, mods):
         """The same declarations, of the given mods only."""
@@ -220,10 +245,21 @@ class Want:
         keep = set(mods)
         w.mods = [m for m in self.mods if m in keep]
         w.decls = [d for d in self.decls if d[0] in keep]
-        for name in ('locks', 'ccs', 'lfos', 'rough', 'routes', 'handles'):
+        for name in ('locks', 'ccs', 'lfos', 'rough', 'routes', 'handles', 'cvs'):
             setattr(w, name, {k for k in getattr(self, name) if k[0] in keep})
         w.inits = {k: v for k, v in self.inits.items() if k[0] in keep}
         return w
+
+    def kind(self, k):
+        """A lockable field's track kind ('synth', 'fx' or 'cv'), on a device with kinds."""
+        scope = next(d[2] for d in self.decls if (d[0], d[1]) == k)
+        return 'synth' if scope == 'sound' else 'cv' if k in self.cvs else 'fx'
+
+
+def _no_cv(base, want):
+    if want.cvs and 'cv' not in base.kinds:
+        mid, s = min(want.cvs, key=lambda k: (_b(k[0]), _b(k[1])))
+        raise ModError('%s: storage field %r: +Drive storage has no CV track' % (mid, s))
 
 
 # ---- the room ----------------------------------------------------------------------------------
@@ -237,8 +273,13 @@ def _needs(base, w):
         mine = {(d[0], d[1]) for d in w.decls if d[2] == s}
         more = sum(d[3] for d in extra if d[2] == s)     # the core's LFO field, for the scope's "lfo" fields
         out.append((s, sum(d[3] for d in w.decls if d[2] == s) + more, room - used, mine.__contains__))
-    codes = base.last_code - base.first_code + 1 - base.ncodes
-    out.append(('codes', len(w.locks), codes, w.locks.__contains__))
+    span = base.last_code - base.first_code + 1
+    if base.kinds:                              # one range a track kind: 'codes-synth', 'codes-fx', 'codes-cv'
+        for kd in base.kinds:
+            mine = {k for k in w.locks if w.kind(k) == kd}
+            out.append(('codes-' + kd, len(mine), span - base.kind_count(kd), mine.__contains__))
+    else:
+        out.append(('codes', len(w.locks), span - base.ncodes, w.locks.__contains__))
     for t, n, uses in ((store.CODES_TABLE, len(w.locks), w.locks.__contains__),
                        (store.INITS_TABLE, len(w.inits), w.inits.__contains__),
                        (store.HANDLES_TABLE, len(w.handles), w.handles.__contains__)):
@@ -253,8 +294,9 @@ def fit(base, want):
     short (in that order: scopes in store.SCOPES order, codes, then the tables core_lock_codes,
     core_field_inits and core_handles), the last mod in id order that needs them is refused, and the check
     runs again. Parked fields never refuse a mod: a repack drops them. A full core_lock_ccs refuses nothing:
-    a field then has no CC. -> [(mod id, what, short by)], in refusal order; what is a scope, 'codes' or a
-    table's name."""
+    a field then has no CC. -> [(mod id, what, short by)], in refusal order; what is a scope, 'codes' (on
+    a device with kinds 'codes-synth', 'codes-fx' and 'codes-cv', in that order) or a table's name."""
+    _no_cv(base, want)
     alive, out = list(want.mods), []
     while True:
         w = want.of(alive)
@@ -274,7 +316,8 @@ def fresh(base):
     return {'flashed_id': base.flashed_id, 'id': base.flashed_id, 'ids': [],
             'scopes': {s: {'fgen': base.scopes[s][2], 'gen': base.scopes[s][2], 'low': base.scopes[s][0]}
                        for s in store.SCOPES},
-            'next_code': base.last_code, 'fields': [], 'parked': [], 'codes': [], 'freed_codes': [],
+            'next_code': {k: base.last_code for k in base.kinds} if base.kinds else base.last_code,
+            'fields': [], 'parked': [], 'codes': [], 'freed_codes': [],
             'ccs': [], 'freed_ccs': []}
 
 
@@ -289,8 +332,17 @@ def _names(mod, sym):
     return m, s
 
 
+def _kinded(st):
+    return isinstance(st['next_code'], dict)
+
+
+def _code_order(c):
+    return (KINDS.index(c['kind']) if 'kind' in c else 0, c['code'])
+
+
 def encode(st):
-    """The state -> /mods/.store's bytes."""
+    """The state -> /mods/.store's bytes (format 2 for a state with codes per track kind)."""
+    kinded = _kinded(st)
     body = bytearray()
     for s in store.SCOPES:
         sc = st['scopes'][s]
@@ -304,11 +356,13 @@ def encode(st):
     for k, v in (('codes', 'code'), ('freed_codes', 'code'), ('ccs', 'cc'), ('freed_ccs', 'cc')):
         for c in st[k]:
             m, s = _names(c['mod'], c['sym'])
-            body += _pad(struct.pack('>BBBB', c[v], len(m), len(s), 0) + m + s)
-    head = struct.pack('>4sHHII II BB 7H', MAGIC, FORMAT, 0, HEAD + len(body), 0,
-                       st['flashed_id'], st['id'], st['next_code'], len(st['ids']),
+            kn = KINDS.index(c['kind']) + 1 if kinded and v == 'code' else 0
+            body += _pad(struct.pack('>BBBB', c[v], len(m), len(s), kn) + m + s)
+    nc = st['next_code']
+    head = struct.pack('>4sHHII II BB 6H BB', MAGIC, FORMAT_KINDS if kinded else FORMAT, 0, HEAD + len(body), 0,
+                       st['flashed_id'], st['id'], nc['synth'] if kinded else nc, len(st['ids']),
                        len(st['fields']), len(st['parked']), len(st['codes']), len(st['freed_codes']),
-                       len(st['ccs']), len(st['freed_ccs']), 0)
+                       len(st['ccs']), len(st['freed_ccs']), nc['fx'] if kinded else 0, nc['cv'] if kinded else 0)
     raw = bytearray(head + body)
     struct.pack_into('>I', raw, 0x0c, zlib.crc32(bytes(raw)) & 0xFFFFFFFF)
     return bytes(raw)
@@ -322,13 +376,15 @@ def decode(raw):
     raw = bytes(raw)
     try:
         magic, fmt, _z, size, crc = struct.unpack_from('>4sHHII', raw, 0)
-        if magic != MAGIC or fmt != FORMAT or size != len(raw) or size < HEAD + SCOPE_REC * 6:
+        if magic != MAGIC or fmt not in (FORMAT, FORMAT_KINDS) or size != len(raw) or size < HEAD + SCOPE_REC * 6:
             return None
         if zlib.crc32(raw[:0x0c] + bytes(4) + raw[0x10:]) & 0xFFFFFFFF != crc:
             return None
-        fid, lid, nc, nids, nf, npk, ncd, nfc, ncc, nfcc, _z2 = struct.unpack_from('>II BB 7H', raw, 0x10)
+        kinded = fmt == FORMAT_KINDS
+        fid, lid, nc, nids, nf, npk, ncd, nfc, ncc, nfcc, nfx, ncv = struct.unpack_from('>II BB 6H BB', raw, 0x10)
         at = HEAD
-        st = {'flashed_id': fid, 'id': lid, 'next_code': nc, 'scopes': {}}
+        st = {'flashed_id': fid, 'id': lid, 'next_code': {'synth': nc, 'fx': nfx, 'cv': ncv} if kinded else nc,
+              'scopes': {}}
         for s in store.SCOPES:
             fg, g, _z3, low = struct.unpack_from('>BBHI', raw, at)
             st['scopes'][s] = {'fgen': fg, 'gen': g, 'low': low}
@@ -356,9 +412,14 @@ def decode(raw):
                         ('freed_ccs', 'cc', nfcc)):
             st[k] = []
             for _i in range(n):
-                c, lm, ls, _z5 = struct.unpack_from('>BBBB', raw, at)
+                c, lm, ls, kn = struct.unpack_from('>BBBB', raw, at)
                 mod, sym, at = names(at + 4, lm, ls)
-                st[k].append({'mod': mod, 'sym': sym, v: c})
+                e = {'mod': mod, 'sym': sym, v: c}
+                if kinded and v == 'code':
+                    if not 1 <= kn <= len(KINDS):
+                        return None
+                    e['kind'] = KINDS[kn - 1]
+                st[k].append(e)
         if at != size:
             return None
     except (struct.error, ValueError, UnicodeDecodeError):
@@ -393,7 +454,8 @@ def layout_id(st, base):
     otherwise the first 4 bytes of a SHA-256 of ID_HASH, the flashed ID, each scope's live generation, every
     field and parked field (by scope, then offset: u8 scope, u8 bits, u16 offset, u32 init, then the mod id
     and the symbol, each a u8 length and its bytes) and every lock code and freed code (by code: u8 code, the
-    two names), other than 0. Parked or live is not hashed: a park changes no bit."""
+    two names; by kind, then code, each after its kind's number 1..3, where codes have kinds), other than 0.
+    Parked or live is not hashed: a park changes no bit."""
     empty = not (st['fields'] or st['parked'] or st['codes'] or st['freed_codes'])
     if empty and all(st['scopes'][s]['gen'] == base.scopes[s][2] for s in store.SCOPES):
         return base.flashed_id
@@ -403,8 +465,10 @@ def layout_id(st, base):
         m, s = _names(f['mod'], f['sym'])
         h += struct.pack('>BBHI', store.SCOPE_NUM[f['scope']], f['bits'], f['offset'], f.get('init', 0))
         h += bytes([len(m)]) + m + bytes([len(s)]) + s
-    for c in sorted(st['codes'] + st['freed_codes'], key=lambda c: c['code']):
+    for c in sorted(st['codes'] + st['freed_codes'], key=_code_order):
         m, s = _names(c['mod'], c['sym'])
+        if 'kind' in c:
+            h += bytes([KINDS.index(c['kind']) + 1])
         h += bytes([c['code'], len(m)]) + m + bytes([len(s)]) + s
     return int.from_bytes(hashlib.sha256(bytes(h)).digest()[:4], 'big') or 1
 
@@ -446,7 +510,8 @@ class Placed:
             k = (c['mod'], c['sym'])
             lfo = base.lfo_dst(scope_of[k]) or scope_of[k] in self.lfo_dsts
             flags = (store.LFO_FLAG if k in want.lfos and lfo else 0) \
-                | (store.SMOOTH_OFF if k in want.rough else 0) | (store.ROUTE_FLAG if k in want.routes else 0)
+                | (store.SMOOTH_OFF if k in want.rough else 0) | (store.ROUTE_FLAG if k in want.routes else 0) \
+                | (store.CV_FLAG if c.get('kind') == 'cv' else 0)
             self.code_entries.append(self.descriptors[k].to_bytes(4, 'big') + (c['code'] | flags).to_bytes(4, 'big'))
         self.cc_entries = [self.descriptors[(c['mod'], c['sym'])].to_bytes(4, 'big') + c['cc'].to_bytes(4, 'big')
                            for c in st['ccs']]
@@ -495,6 +560,8 @@ def allocate(base, prev, want):
         m, what, by = short[0]
         raise ModError('%s does not fit: %s is %d short' % (m, what, by))
     notes = []
+    if prev is not None and _kinded(prev) != bool(base.kinds):
+        prev = None                             # the other format's file: a fresh placement, as the loader's
     st = fresh(base) if prev is None else decode(encode(prev))     # a copy, through the same checks
     if st is None:
         raise ModError('.store: a bad state')
@@ -601,7 +668,10 @@ def allocate(base, prev, want):
             notes.append('%s %s: %d bits of %s storage at bit %d'
                          % (f['mod'], f['sym'], f['bits'], f['scope'], f['offset']))
     st['fields'] = sorted(fields, key=lambda f: (store.SCOPE_NUM[f['scope']], f['offset']))
-    _codes(st, base, want.locks, {(f['mod'], f['sym']) for f in kept}, back, notes)
+    if base.kinds:
+        _kind_codes(st, base, want, {(f['mod'], f['sym']) for f in kept}, back, notes)
+    else:
+        _codes(st, base, want.locks, {(f['mod'], f['sym']) for f in kept}, back, notes)
     _ccs(st, base, want.ccs, {(f['mod'], f['sym']) for f in fields if f['scope'] == 'kit'}, notes)
     scope_of = {(f['mod'], f['sym']): f['scope'] for f in fields}
     placed = {f['sym'] for f in fields if f['mod'] == base.core}
@@ -668,6 +738,64 @@ def _codes(st, base, want, kept, back, notes):
     st['codes'] = sorted(codes, key=lambda c: c['code'])
     st['freed_codes'] = freed
     st['next_code'] = max(nxt, base.first_code - 1)
+
+
+def _kind_codes(st, base, want, kept, back, notes):
+    """_codes per track kind (codes numbered per kind: the Analog Four MKII): each lockable field its code
+    in its kind, top down, past the build's codes of that kind; a code freed in one kind is given again
+    only in that kind; a field whose kind changed is a new parameter, its old code freed."""
+    flashed = {kd: base.kind_codes(kd) for kd in base.kinds}
+    top = {kd: max(flashed[kd], default=base.first_code - 1) for kd in base.kinds}
+
+    def of(kd):
+        return ' (%s)' % store.KIND_NAMES[kd][4:]
+    codes, freed = [], [dict(c) for c in st['freed_codes'] if c['code'] not in flashed[c['kind']]]
+    for c in st['freed_codes']:
+        if c['code'] in flashed[c['kind']]:
+            notes.append('%s %s: lock code %d%s is the flashed build\'s now' % (c['mod'], c['sym'], c['code'],
+                                                                               of(c['kind'])))
+    for c in st['codes']:
+        k = (c['mod'], c['sym'])
+        if c['code'] in flashed[c['kind']]:
+            notes.append('%s %s: lock code %d%s is the flashed build\'s now' % (k[0], k[1], c['code'], of(c['kind'])))
+        elif k in want.locks and k in kept and want.kind(k) == c['kind']:
+            codes.append(dict(c))
+        else:
+            freed.append(dict(c))
+            notes.append('%s %s: lock code %d%s kept for it while it is out' % (k[0], k[1], c['code'], of(c['kind'])))
+    have = {(c['mod'], c['sym']) for c in codes}
+    nxt = dict(st['next_code'])
+    for k in sorted(set(want.locks) - have, key=lambda k: (_b(k[0]), _b(k[1]))):
+        kd = want.kind(k)
+        mine = [c for c in freed if c['kind'] == kd]
+        same = [c for c in mine if (c['mod'], c['sym']) == k]
+        if same and k in back:
+            c = same[-1]
+            freed.remove(c)
+            notes.append('%s %s: back with lock code %d%s' % (k[0], k[1], c['code'], of(kd)))
+        elif nxt[kd] > top[kd]:
+            c = {'mod': k[0], 'sym': k[1], 'code': nxt[kd], 'kind': kd}
+            nxt[kd] -= 1
+            notes.append('%s %s: lock code %d%s' % (k[0], k[1], c['code'], of(kd)))
+        elif mine:                              # the never-used codes are gone: the one freed longest ago
+            old = mine[0]
+            freed.remove(old)
+            c = {'mod': k[0], 'sym': k[1], 'code': old['code'], 'kind': kd}
+            notes.append('%s %s: lock code %d%s (was %s %s\'s)' % (k[0], k[1], c['code'], of(kd), old['mod'],
+                                                                  old['sym']))
+        else:
+            used = flashed[kd] | {c['code'] for c in codes if c['kind'] == kd}
+            free = [x for x in range(base.last_code, base.first_code - 1, -1) if x not in used]
+            if not free:
+                raise ModError('the +Drive mods have more lockable parameters than the build leaves codes on %s'
+                               % store.KIND_NAMES[kd])
+            c = {'mod': k[0], 'sym': k[1], 'code': free[0], 'kind': kd}
+            notes.append('%s %s: lock code %d%s' % (k[0], k[1], c['code'], of(kd)))
+        freed = [d for d in freed if (d['mod'], d['sym']) != k]
+        codes.append(c)
+    st['codes'] = sorted(codes, key=_code_order)
+    st['freed_codes'] = freed
+    st['next_code'] = {kd: max(nxt[kd], base.first_code - 1) for kd in base.kinds}
 
 
 def _ccs(st, base, want, kits, notes):

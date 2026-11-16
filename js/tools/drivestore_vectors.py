@@ -1,9 +1,9 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
-"""Writes js/test/drivestore-vectors.json: what elekloader's +Drive storage allocator
-(elekloader/drive_store.py) does through runs of sets, on made-up Analog Rytm MKII builds, so
-test/drivestore.test.ts can check drivestore.ts places the same fields, writes the same /mods/.store
-bytes and says the same notes. The Drive Loader's own host test can read the same file. Run from the
-repository root:
+"""Writes js/test/drivestore-vectors.json and js/test/drivestore-a4-vectors.json: what elekloader's
++Drive storage allocator (elekloader/drive_store.py) does through runs of sets, on made-up Analog Rytm
+MKII builds and Analog Four MKII builds (lock codes per track kind), so test/drivestore.test.ts can check
+drivestore.ts places the same fields, writes the same /mods/.store bytes and says the same notes. Each
+device's Drive Loader host test reads its file. Run from the repository root:
 
     python js/tools/drivestore_vectors.py
 """
@@ -20,9 +20,14 @@ from elekloader.elemod import ModError                     # noqa: E402
 import test_drive_store as T                               # noqa: E402
 
 
-def base_json(used=None, gen=None, codes=(), ccs=(), inits=0, spare=32, fid=T.FID, live=False):
+A4 = 'analog-four-mk2'
+A4_ROOM = {'sound': 32, 'kit': 128, 'global': 64, 'track': 16, 'pattern': 32, 'project': 18224}
+
+
+def base_json(used=None, gen=None, codes=(), ccs=(), inits=0, spare=32, fid=T.FID, live=False, dev=T.DEV):
     used, gen = used or {}, gen or {}
-    out = {'device': T.DEV, 'scopes': {s: [T.ROOM[s], used.get(s, 0), gen.get(s, 1)] for s in store.SCOPES},
+    room = A4_ROOM if dev == A4 else T.ROOM
+    out = {'device': dev, 'scopes': {s: [room[s], used.get(s, 0), gen.get(s, 1)] for s in store.SCOPES},
            'flashed_id': fid, 'ancestors': [0x1234], 'codes': [list(c) for c in codes],
            'ccs': [list(c) for c in ccs], 'inits': inits, 'room': {t: spare for t in ds.TABLES}}
     if live:                                    # a core with its LFO destinations' fields live (core_lfo_dsts)
@@ -88,18 +93,61 @@ RUNS = [
 ]
 
 
-def run(steps):
+def a4(**kw):
+    return base_json(dev=A4, **kw)
+
+
+SYN, FXT, CVT = 1 << 28, 2 << 28, 2 << 28                    # a flashed entry's scope: synth, FX and CV
+A4M = {'dist': T.mod('dist', T.f('dist_dig', 'sound', 1, lock=True), T.f('dist_chr', 'sound', 2, lock=True),
+                     *[T.f('dist_' + x, 'sound', 7, lock=True, mod=True, cc=True) for x in ('drv', 'bit', 'srr', 'lev')],
+                     T.f('dist_sld_f', 'sound', 1)),
+       'wave': T.mod('wave', T.f('wave_mode', 'sound', 2, lock=True),
+                     T.f('wave_chord', 'sound', 4, lock=True, mod=True, cc=True, smooth=False)),
+       'reslim': T.mod('res-limit', T.f('res_lim', 'kit', 4)),
+       'kfx': T.mod('kfx', T.f('kf_a', 'kit', 8, lock=True, mod=True, cc=True), T.f('kf_b', 'kit', 3, lock=True)),
+       'kcv': T.mod('kcv', T.f('kc_a', 'kit', 8, lock=True, cc=True, track='cv', init=3)),
+       'kcv2': T.mod('kcv', T.f('kc_a', 'kit', 8, lock=True, cc=True, init=3)),     # the same field, now the FX track's
+       'syn1': T.mod('syn1', T.f('y1', 'sound', 1, lock=True)),
+       'syn2': T.mod('syn2', T.f('y2', 'sound', 1, lock=True), T.f('y3', 'sound', 1, lock=True)),
+       'hand': T.mod('hand', T.f('hd', 'project', 16, handle=True), T.f('hg', 'global', 3, init=5))}
+A4_FLASHED = [(SYN, 0x70), (SYN | 1, 0x71), (FXT, 0x70), (CVT | 2, 0x70 | store.CV_FLAG)]
+A4_SYN_FULL = [(SYN | i, c) for i, c in enumerate(range(0x70, 0x7f))]         # 15 synth codes: one left
+
+A4_RUNS = [
+    ('a4 fresh, nothing', [(a4(), ['place', []])]),
+    ('a4 the AE mods', [(a4(used={'kit': 40}), ['place', ['wave', 'reslim']]),
+                        (a4(used={'kit': 40}), ['fit', ['dist', 'wave', 'reslim']]),
+                        (a4(used={'kit': 40}), ['place', ['dist', 'reslim']]),
+                        (a4(used={'kit': 40}), ['place', ['wave', 'reslim']])]),
+    ('a4 kinds', [(a4(codes=A4_FLASHED), ['place', ['wave', 'kfx', 'kcv']]),
+                  (a4(codes=A4_FLASHED), ['place', ['wave', 'kfx', 'kcv2']]),
+                  (a4(codes=A4_FLASHED), ['place', ['wave', 'kcv']]),
+                  (a4(codes=A4_FLASHED), ['place', ['wave', 'kfx', 'kcv']])]),
+    ('a4 flashed takes a code', [(a4(), ['place', ['wave', 'kfx']]),
+                                 (a4(codes=[(SYN, 0x7f), (FXT, 0x7f)]), ['place', ['wave', 'kfx']])]),
+    ('a4 codes run out', [(a4(codes=A4_SYN_FULL), ['place', ['syn2']]), (a4(codes=A4_SYN_FULL), ['place', ['syn1']]),
+                          (a4(codes=A4_SYN_FULL), ['fit', ['syn1', 'syn2', 'kfx']]),
+                          (a4(codes=A4_SYN_FULL), ['place', ['syn1', 'kfx']])]),
+    ('a4 park, forget, return', [(a4(), ['place', ['dist', 'kcv']]), (a4(), ['place', ['kcv']]),
+                                 (a4(), ['forget', 'dist']), (a4(), ['place', ['kcv', 'dist']])]),
+    ('a4 ccs', [(a4(ccs=[(0, 101)]), ['place', ['wave', 'kfx', 'kcv']]),
+                (a4(spare=0), ['fit', ['hand', 'wave']])]),
+    ('a4 handles and inits', [(a4(inits=2), ['place', ['hand', 'kcv']])]),
+]
+
+
+def run(steps, mods=M):
     out, st = [], None
     for bj, (op, arg) in steps:
         b = make_base(bj)
         if op == 'fit':
-            out.append({'fit': [list(r) for r in ds.fit(b, ds.Want([M[k] for k in arg]))]})
+            out.append({'fit': [list(r) for r in ds.fit(b, ds.Want([mods[k] for k in arg]))]})
         elif op == 'forget':
             st, changed = ds.forget(st, arg)
             out.append({'store': ds.encode(st).hex(), 'changed': changed})
         else:
             try:
-                p = ds.allocate(b, st, ds.Want([M[k] for k in arg]))
+                p = ds.allocate(b, st, ds.Want([mods[k] for k in arg]))
             except ModError as e:
                 out.append({'error': str(e)})
                 continue
@@ -110,13 +158,14 @@ def run(steps):
 
 
 def main():
-    data = {'mods': M, 'runs': [{'name': n, 'steps': [[bj, s] for bj, s in steps], 'results': run(steps)}
-                                for n, steps in RUNS]}
-    path = os.path.join(ROOT, 'js', 'test', 'drivestore-vectors.json')
-    with open(path, 'w') as fh:
-        json.dump(data, fh, indent=1, sort_keys=True)
-        fh.write('\n')
-    print('wrote %s: %d runs' % (path, len(RUNS)))
+    for name, mods, runs in (('drivestore-vectors.json', M, RUNS), ('drivestore-a4-vectors.json', A4M, A4_RUNS)):
+        data = {'mods': mods, 'runs': [{'name': n, 'steps': [[bj, s] for bj, s in steps],
+                                        'results': run(steps, mods)} for n, steps in runs]}
+        path = os.path.join(ROOT, 'js', 'test', name)
+        with open(path, 'w', newline='\n') as fh:
+            json.dump(data, fh, indent=1, sort_keys=True)
+            fh.write('\n')
+        print('wrote %s: %d runs' % (path, len(runs)))
 
 
 if __name__ == '__main__':

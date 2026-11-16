@@ -1,9 +1,11 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 """The Drive Loader's +Drive storage allocator (mods/drive-loader-ar2/dstore.c), built for the computer
 and run through every step of js/test/drivestore-vectors.json: the same placements, table entries,
-layout IDs, room refusals and /mods/.store bytes as elekloader/drive_store.py.
+layout IDs, room refusals and /mods/.store bytes as elekloader/drive_store.py. With --a4, the Analog
+Four MKII's (mods/drive-loader-a4mk2/dstore.c: lock codes per track kind) through
+js/test/drivestore-a4-vectors.json (tests/test_drive_a4_dstore_host.py runs that).
 
-    python tests/test_drive_store_host.py
+    python tests/test_drive_store_host.py [--a4]
 
 Needs a C compiler (cc). The notes drive_store.py writes for a person are not compared: the loader
 does not make them."""
@@ -17,16 +19,18 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 SRC = os.path.join(ROOT, 'mods', 'drive-loader-ar2')
 VECTORS = os.path.join(ROOT, 'js', 'test', 'drivestore-vectors.json')
+A4_SRC = os.path.join(ROOT, 'mods', 'drive-loader-a4mk2')
+A4_VECTORS = os.path.join(ROOT, 'js', 'test', 'drivestore-a4-vectors.json')
 SCOPES = ('sound', 'kit', 'global', 'track', 'pattern', 'project')
 TABLES = ('core_lock_codes', 'core_lock_ccs', 'core_field_inits', 'core_handles')
 FLAGS = (('lock', 1), ('cc', 2), ('lfo', 4), ('mod', 16), ('handle', 32))
 
 
-def build(work):
+def build(work, src=SRC):
     exe = os.path.join(work, 'drive_store_host')
-    subprocess.run(['cc', '-O1', '-Wall', '-DDL_HOST', '-o', exe, os.path.join(HERE, 'drive_store_host.c'),
-                    os.path.join(SRC, 'dstore.c'), os.path.join(SRC, 'sha256.c'), os.path.join(SRC, 'dlink.c'),
-                    os.path.join(SRC, 'json.c')], check=True)
+    subprocess.run(['cc', '-O1', '-Wall', '-DDL_HOST', '-I' + src, '-o', exe, os.path.join(HERE, 'drive_store_host.c'),
+                    os.path.join(src, 'dstore.c'), os.path.join(src, 'sha256.c'), os.path.join(src, 'dlink.c'),
+                    os.path.join(src, 'json.c')], check=True)
     return exe
 
 
@@ -35,7 +39,8 @@ def want_words(mods):
     out = []
     for m in sorted(mods, key=lambda m: m['id'].encode('utf-8')):
         for f in m['storage']:
-            flags = sum(v for k, v in FLAGS if f.get(k) is True) | (8 if f.get('smooth') is False else 0)
+            flags = sum(v for k, v in FLAGS if f.get(k) is True) | (8 if f.get('smooth') is False else 0) \
+                | (64 if f.get('track') == 'cv' else 0)
             out.append('%s %s %d %d %d %d' % (m['id'].encode('utf-8').hex(), f['sym'].encode('utf-8').hex(),
                                              SCOPES.index(f['scope']) + 1, f['bits'], f.get('init', 0), flags))
     return out
@@ -58,13 +63,15 @@ def step_input(bj, mods, prev, op, arg):
     return ' '.join(words) + '\n'
 
 
-def random_runs(exe, runs, steps, seed=5):
+def random_runs(exe, runs, steps, seed=5, a4=False):
     import random
     sys.path.insert(0, ROOT)
     from elekloader import drive_store as ds
     from elekloader.elemod import ModError
     rnd, fails = random.Random(seed), []
     room = {'sound': 56, 'kit': 64, 'global': 40, 'track': 16, 'pattern': 32, 'project': 3776}
+    if a4:
+        room = {'sound': 32, 'kit': 128, 'global': 64, 'track': 16, 'pattern': 32, 'project': 18224}
     names = ['a', 'b', 'duck', 'fx-sends', 'lfo-rnd', 'voice-dac', '\u00e9cho', 'zed', 'z2']
 
     def mod(i, ver):
@@ -78,12 +85,14 @@ def random_runs(exe, runs, steps, seed=5):
                 f['lock'] = True
                 if r.random() < 0.5:
                     f['cc'] = True
-                if r.random() < 0.3:
+                if r.random() < 0.3 and not a4:
                     f['lfo'] = True
                 if r.random() < 0.2:
                     f['smooth'] = False
-                if scope == 'sound' and r.random() < 0.2:
+                if (scope == 'sound' or a4) and r.random() < 0.2:
                     f['mod'] = True
+                if a4 and scope == 'kit' and r.random() < 0.4:
+                    f['track'] = 'cv'          # the CV track's
             elif r.random() < 0.2:
                 f['handle'] = True
             if not f.get('handle') and r.random() < 0.25:
@@ -94,12 +103,18 @@ def random_runs(exe, runs, steps, seed=5):
         st, prev = None, None
         used = {s: 0 for s in room}
         gen = {s: 1 for s in room}
-        codes = [(1 << 28, c) for c in sorted(rnd.sample(range(42, 128), rnd.choice([0, 2, 20, 80])))]
-        if codes and rnd.random() < 0.5:
-            codes[0] = (1 << 28 | 3 << 22, codes[0][1] | 0x100)
-        ccs = [(0, c) for c in rnd.sample([8, 9, 48, 84, 85, 119, 116], rnd.choice([0, 1, 3]))]
+        if a4:                                  # each kind's flashed codes: synth (sound), FX and CV (kit)
+            codes = []
+            for i, (d, fl) in enumerate(((1 << 28, 0), (2 << 28, 0), (2 << 28, 0x800))):
+                codes += [(d | i << 16, c | fl) for c in sorted(rnd.sample(range(0x70, 0x80), rnd.choice([0, 2, 14, 16])))]
+            ccs = [(0, c) for c in rnd.sample([12, 31, 47, 63, 96, 100, 101], rnd.choice([0, 1, 3]))]
+        else:
+            codes = [(1 << 28, c) for c in sorted(rnd.sample(range(42, 128), rnd.choice([0, 2, 20, 80])))]
+            if codes and rnd.random() < 0.5:
+                codes[0] = (1 << 28 | 3 << 22, codes[0][1] | 0x100)
+            ccs = [(0, c) for c in rnd.sample([8, 9, 48, 84, 85, 119, 116], rnd.choice([0, 1, 3]))]
         vers = [0] * len(names)
-        live = run % 2 == 1                     # odd runs: a core with its LFO fields live (core_lfo_dsts)
+        live = run % 2 == 1 and not a4          # odd runs: a core with its LFO fields live (core_lfo_dsts)
         for k in range(steps):
             if rnd.random() < 0.15:
                 s = rnd.choice(list(room))
@@ -109,7 +124,7 @@ def random_runs(exe, runs, steps, seed=5):
             if rnd.random() < 0.1:
                 vers[rnd.randrange(len(names))] += 1
             spare = rnd.choice([32, 32, 32, 2])
-            bj = {'device': 'analog-rytm-mk2', 'scopes': {s: [room[s], used[s], gen[s]] for s in room},
+            bj = {'device': 'analog-four-mk2' if a4 else 'analog-rytm-mk2', 'scopes': {s: [room[s], used[s], gen[s]] for s in room},
                   'flashed_id': 0x5a17c0de + run, 'ancestors': [0x1234], 'codes': [list(c) for c in codes],
                   'ccs': [list(c) for c in ccs], 'inits': rnd.choice([0, 3]), 'room': {t: spare for t in TABLES},
                   'live_dst': live}
@@ -155,10 +170,10 @@ def random_runs(exe, runs, steps, seed=5):
     return fails
 
 
-def main():
+def main(a4=False):
     work = tempfile.mkdtemp()
-    exe = build(work)
-    data = json.load(open(VECTORS))
+    exe = build(work, A4_SRC if a4 else SRC)
+    data = json.load(open(A4_VECTORS if a4 else VECTORS, encoding='utf-8'))
     M = data['mods']
     fails, n = [], 0
     for run in data['runs']:
@@ -196,7 +211,7 @@ def main():
             if not ok:
                 fails.append(name)
     # random runs against drive_store.py itself: sets coming and going on builds that change under them
-    fails += random_runs(exe, 40, 8)
+    fails += random_runs(exe, 40, 8, a4=a4)
     n += 40 * 8
     # a .store the loader does not take reads as a fresh placement
     bad = step_input(data['runs'][0]['steps'][0][0], [], b'DLST' + bytes(60), 'place', [])
@@ -213,4 +228,4 @@ def main():
 
 
 if __name__ == '__main__':
-    sys.exit(main())
+    sys.exit(main(a4='--a4' in sys.argv[1:]))

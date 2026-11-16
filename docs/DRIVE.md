@@ -249,10 +249,15 @@ descriptor alone (`/mods/.build`) is enough for `fit`, not for placing.
 - **Codes**: from the range's top down (127, 126, ...), past the build's
   highest code; kept while the field keeps its place, kept for a parked
   field, and the one freed longest ago is given out once the codes above
-  the build's are gone. A code the build has taken since is given up.
+  the build's are gone. A code the build has taken since is given up. On
+  the Analog Four MKII all of this is per track kind (0x70..0x7f each): a
+  sound field's code is the synth tracks', a kit field's the FX track's, or
+  the CV track's with `"track": "cv"`; a code freed in one kind is given out
+  again only in that kind, and a field whose kind changes takes a new code.
 - **CCs**: from the device's pool, from its end, past the build's own; a
-  kit field skips those stock maps on the FX channel. A full
-  `core_lock_ccs` leaves a field on its NRPN only.
+  kit field skips those stock maps on the FX channel (on the A4, those the
+  FX or CV tables map). A full `core_lock_ccs` leaves a field on its NRPN
+  only.
 - **LFO destinations**: an `"lfo"` field is an LFO destination only where
   the core keeps the LFO's code in its own field of that scope
   (`core_lfo_dst` sound, `core_fx_lfo_dst` kit, 7 bits each). A build
@@ -261,16 +266,20 @@ descriptor alone (`/mods/.build`) is enough for `fit`, not for placing.
   core's field as one more field of the core's id, only while a chosen mod
   has an `"lfo"` field of that scope and the build places none, and the
   loader writes its descriptor into `core_lfo_dsts`. It counts in the room,
-  parks and comes back like a mod's field.
+  parks and comes back like a mod's field. The A4 has none of this: its
+  LFOs take `"mod"` fields, so the link refuses `"lfo"`, and a kit field
+  may be `"mod"`.
 - **Room**: `fit` refuses the last mod in id order while a scope, the free
-  codes, or `core_lock_codes`', `core_field_inits`' or `core_handles`'
-  spare entries are short, and checks again.
+  codes (on the A4 each kind's: `codes-synth`, `codes-fx`, `codes-cv`), or
+  `core_lock_codes`', `core_field_inits`' or `core_handles`' spare entries
+  are short, and checks again.
 - **Layout ID**: the flashed ID while `.store` holds nothing and no
   generation moved; otherwise the first 4 bytes of a SHA-256 of `ELKDRIVE`,
   the flashed ID, each scope's generation, every field (parked too: u8
   scope, u8 bits, u16 offset, u32 init, then the mod id and symbol, each a
   u8 length and its bytes, by scope then offset) and every code and freed
-  code (u8 code, the two names, by code), 0 read as 1. A park moves no bit,
+  code (u8 code, the two names, by code; on the A4 by kind then code, each
+  after its kind's number), 0 read as 1. A park moves no bit,
   so it keeps the ID. The ancestors are the last 15 live IDs, then the
   flashed ID and its ancestors, at most 15.
 
@@ -288,9 +297,9 @@ one mark: a build that grows past a scope's low mark, or repacks a scope the
 +Drive keeps bits in, is placed as before, and a note names the scope the
 loader repacks at its next boot.
 
-**/mods/.store** (format 1, big-endian, records 4-aligned), rewritten only
-when its bytes change; a missing, short or bad file (magic, format, size,
-CRC) reads as none, a fresh placement:
+**/mods/.store** (format 1, big-endian, records 4-aligned; format 2 on the
+A4), rewritten only when its bytes change; a missing, short or bad file
+(magic, format, size, CRC) reads as none, a fresh placement:
 
 | offset | |
 |---|---|
@@ -302,9 +311,16 @@ CRC) reads as none, a fresh placement:
 | then | fields (by scope, offset), then parked fields (oldest first): u8 scope, u8 bits, u16 offset, u32 init, u8 and u8 the names' lengths, u16 0, the names, zeros to 4 |
 | then | codes (by code), freed codes (oldest first), CCs (by CC), freed CCs: u8 code or CC, u8 and u8 the names' lengths, u8 0, the names, zeros to 4 |
 
+Format 2 (the A4, codes per track kind) is format 1 with: +0x18 the synth
+tracks' next code, +0x26 the FX track's and +0x27 the CV track's (format 1's
+u16 0); each code and freed code record's last header byte its kind (1 synth,
+2 FX, 3 CV); codes by kind, then code.
+
 `js/tools/drivestore_vectors.py` writes the runs in
-`js/test/drivestore-vectors.json` (placements, notes and `.store` bytes);
-the loader's own host test can read them too.
+`js/test/drivestore-vectors.json` and, for the A4,
+`js/test/drivestore-a4-vectors.json` (placements, notes and `.store`
+bytes); each loader's host test replays its file
+(tests/test_drive_store_host.py, tests/test_drive_a4_dstore_host.py).
 
 ## The build descriptor
 

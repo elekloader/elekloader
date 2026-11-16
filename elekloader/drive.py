@@ -500,11 +500,12 @@ def _storage(v, fields, exports, state, build, keep):
         return None
     if not isinstance(v, list):
         return 'format', 'storage'
+    kinded = bool(mstore.kinds(build.device_key)) if mstore.supports(build.device_key) else False
     for f in v:
         if not isinstance(f, dict):
             return 'format', 'storage'
         sym = scope = bits = None
-        init, has_init, has_smooth, flags = 0, False, False, 0
+        init, has_init, has_smooth, flags, cv = 0, False, False, 0, False
         on = {}
         for k, x in f.items():                  # in the file's order, as the boot linker reads it
             if k == 'sym':
@@ -531,15 +532,22 @@ def _storage(v, fields, exports, state, build, keep):
                 on[k] = x
                 if k == 'smooth':
                     has_smooth = True
+            elif k == 'track' and kinded:       # the CV track's (codes per track kind: the Analog Four MKII)
+                if x != 'cv':
+                    return 'format', 'storage'
+                cv = True
             else:
-                return 'format', 'storage'      # "track" too: the Rytm has no CV track
+                return 'format', 'storage'      # "track" too where the device has no CV track
         if sym is None or scope is None or bits is None or not 1 <= bits <= mstore.MAX_BITS \
                 or not _is_c_name(sym) or len(sym.encode('utf-8')) > ds.NAME_MAX:
             return 'format', 'storage'
         lock = on.get('lock', False)
+        # on a device with kinds (the Analog Four MKII, store.check_flags): no "lfo" (its LFOs take "mod"
+        # fields), a kit field can be "mod" (the FX and CV tracks have routes), "track": "cv" a lockable kit field's
         if ((on.get('cc') or on.get('lfo') or on.get('mod') or has_smooth) and not lock) \
                 or (on.get('handle') and (lock or init)) or (lock and scope > 2) \
-                or (on.get('mod') and scope == 2) or (has_init and bits < 32 and init >> bits):
+                or (on.get('mod') and scope == 2 and not kinded) or (kinded and on.get('lfo')) \
+                or (cv and not (lock and scope == 2)) or (has_init and bits < 32 and init >> bits):
             return 'format', 'storage'
         if any(g['sym'] == sym for g in fields):
             return 'format', 'storage'
@@ -551,6 +559,8 @@ def _storage(v, fields, exports, state, build, keep):
                 doc[k] = True
         if on.get('smooth') is False:
             doc['smooth'] = False
+        if cv:
+            doc['track'] = 'cv'
         if init:
             doc['init'] = init
         fields.append(doc)
