@@ -38,7 +38,7 @@ STD = {'ev_boot': 'ev_x', 'ev_tick': 'ev_tick', 'ev_closed': 'core_handles'}
 
 
 def flashed(B, pad=0, store=False, stage_top=False, payload_skip=False, abs16=False, std_map=False,
-            collections=False):
+            collections=False, claims=False):
     core = B.core(collections={'ev_tick': {'entry': 4}, 'ev_draw': {'entry': 4},
                                'ev_x': {'entry': 4, 'spare': 1}, 'core_handles': {'entry': 4}})
     core['symbols']['core_zero'] = ['.boot', 0]
@@ -78,6 +78,10 @@ def flashed(B, pad=0, store=False, stage_top=False, payload_skip=False, abs16=Fa
     fa['symbols']['flash_fn'] = ['.run', 4]
     fa['exports'] = ['flash_fn']
     fa['sites'] = [B.jmp_site(B.at(0x2000), 'flash_fn')]   # in the site map, for the +Drive sites' rows
+    if claims:                                  # a boot linker that takes claims, and a flashed claim
+        loader['symbols']['drive_claims'] = ['abs', 1]
+        loader['exports'].append('drive_claims')
+        fa['contribute'][0]['claims'] = [[B.at(0x2800), B.at(0x2810)]]
     return [core, loader, fa]
 
 
@@ -102,6 +106,9 @@ def built(B, area=None):
                                                                      payload_skip=skip, abs16=abs16, collections=coll)], B.img)
             b = drive.load_build(out.image)
         return out, b
+    if area == 'claims':                        # a build whose boot linker takes contributions' claims
+        out = link.link([link.Mod2(d, d['id']) for d in flashed(B, claims=True)], B.img)
+        return out, drive.load_build(out.image)
     if area == 'std':                           # a build whose loader maps std1 subscriptions
         out = link.link([link.Mod2(d, d['id']) for d in flashed(B, std_map=True)], B.img)
         return out, drive.load_build(out.image)

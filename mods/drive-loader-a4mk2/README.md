@@ -143,6 +143,15 @@ entries, and merges them as it merges flashed tables. The descriptor's `F_COLLEC
 (`drive_collections` in `route.s`) tells host tools; drive-loader-ar2 refuses `collections`
 (tests/test_drive_collections.py).
 
+## Claims
+
+A contribution's `claims` (byte ranges of the main OS its entry relies on) load from the +Drive and
+are checked as sites are: against the site map, the pre-link ranges and the other mods' sites and
+claims; nothing is written for one. The loader exports `drive_claims` (`route.s`, `F_CLAIMS`), so
+the build lists the flashed contributions' claims in the site map (kind 7); `dlink.c`
+(`scan_claims`) reads them (DRIVE.md, "Claims"). `resources.regions` stays refused (DRIVE.md,
+"Regions on the A4"). drive-loader-ar2 takes no claims (tests/test_drive_claims.py).
+
 ## Files
 
 | file | from drive-loader-ar2 | what |

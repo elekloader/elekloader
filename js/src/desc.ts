@@ -29,9 +29,11 @@ export const STD_MAP = 'drive_std_map'       // a loader's export: sets F_STD_MA
 export const F_STD_MAP = 8                   // flags bit 3: the loader maps std1 subscriptions (claims of kind 3)
 export const COLLECTIONS = 'drive_collections'   // a loader's export: nonzero sets F_COLLECTIONS
 export const F_COLLECTIONS = 16              // flags bit 4: +Drive mods may declare tables ("collections")
+export const CLAIMS = 'drive_claims'         // a loader's export: sets F_CLAIMS and maps the flashed claims
+export const F_CLAIMS = 32                   // flags bit 5: the boot linker takes contributions' claims (SITE_CLAIM)
 const MODULE = 16, EXPORT = 8, TABLE = 24, CLAIM = 8, AREA = 20, SCOPE = 16, RANGE = 12
 // a site map range's kind (ABI 1.2)
-export const SITE_SITE = 1, SITE_COPIED = 2, SITE_DEVICE = 3, SITE_BOOT = 4, SITE_RUN = 5, SITE_TRAILER = 6
+export const SITE_SITE = 1, SITE_COPIED = 2, SITE_DEVICE = 3, SITE_BOOT = 4, SITE_RUN = 5, SITE_TRAILER = 6, SITE_CLAIM = 7
 export const PRE_CODE = 1, PRE_DATA = 2      // a pre-link range's kind (ABI 1.2)
 export const NO_MODULE = 0xffff
 
@@ -46,7 +48,7 @@ export type DescFields = {
   sites?: [number, number, number, number][]   // ABI 1.2: [lo, hi, kind, module index], sorted
   prelink?: [number, number, number][]          // ABI 1.2: [lo, hi, kind]
   shadow?: [number, Uint8Array][]             // ABI 1.2 (drive_shadow): the stock bytes of each range the build writes
-  flags?: number                                // ABI 1.3: F_STAGE_TOP, F_PAYLOAD_SKIP, F_ABS16, F_STD_MAP, F_COLLECTIONS
+  flags?: number                                // ABI 1.3: F_STAGE_TOP, F_PAYLOAD_SKIP, F_ABS16, F_STD_MAP, F_COLLECTIONS, F_CLAIMS
 }
 
 const utf8 = new TextEncoder()

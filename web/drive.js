@@ -506,7 +506,7 @@ async function catalog() {
     let raw = null, kind = 'flash', why = '';
     try {
       raw = new Uint8Array(await (await fetch(site(`./shop/${e.file}`))).arrayBuffer());
-      const only = drive.flashOnly(JSON.parse(new TextDecoder().decode(raw)));
+      const only = drive.flashOnly(JSON.parse(new TextDecoder().decode(raw)), S.build);
       if (only === null) kind = '+Drive'; else why = `uses ${only}`;
     } catch { why = 'not readable'; }
     S.shop.push({ e, raw, kind, why });

@@ -276,6 +276,7 @@ export class Build {
   siteMap: [number, number, number, number][]
   prelink: [number, number, number][]
   mainLo: number; mainHi: number
+  takeClaims: boolean                       // contributions' claims (F_CLAIMS, the A4's dlink.c), where the site map checks them
 
   constructor(d: desc.Decoded) {
     this.d = d
@@ -326,6 +327,7 @@ export class Build {
     const boots = this.siteMap.filter(x => x[2] === desc.SITE_BOOT).map(x => x[0])
     this.mainLo = SITE_MAIN_LO
     this.mainHi = !this.telos && boots.length && Math.min(...boots) > SITE_MAIN_LO ? Math.min(...boots) : 0
+    this.takeClaims = !!((d.flags ?? 0) & desc.F_CLAIMS) && !!this.mainHi
   }
 
   label(): string {
@@ -355,6 +357,7 @@ export class Choice {
   tables: [string, number][] = []           // the tables it declares (+Drive collections): [name, entry]
   sites: [number, number][] = []; regions: [number, number][] = []   // TELOS: [lo, hi) each
   driveSites: [number, number, boolean][] = []   // [lo, hi, is a site]: its sites, then its copied blocks
+  driveClaims: [number, number][] = []            // [lo, hi]: its contributions' claims (F_CLAIMS)
   alive = false
 
   constructor(line: number, name: string, raw: Uint8Array | null) {
@@ -485,7 +488,7 @@ function scanSites(build: Build, c: Choice, doc: Record<string, any>, state: Sta
     if (!isSite) continue
     for (const [a, b, kind, mi] of build.siteMap) {
       if (overlap(lo, hi, a, b)) {
-        const owner = (kind === desc.SITE_SITE || kind === desc.SITE_COPIED) && mi < names.length ? names[mi] : ''
+        const owner = (kind === desc.SITE_SITE || kind === desc.SITE_COPIED || kind === desc.SITE_CLAIM) && mi < names.length ? names[mi] : ''
         c.refuse('clash', siteDetail(lo, owner), SITE_CORE << 8); return null
       }
     }
@@ -501,6 +504,45 @@ function scanSites(build: Build, c: Choice, doc: Record<string, any>, state: Sta
   }
   return out
 }
+
+/** Pass 1's part for the contributions' "claims" (F_CLAIMS), after the sites: drive._scan_claims. Nothing is written
+ * for a claim. -> [lo, hi][], or null after refusing c. */
+function scanClaims(build: Build, c: Choice, doc: Record<string, any>, state: State, nsites: number): [number, number][] | null {
+  const out: [number, number][] = []
+  if (!build.takeClaims) return out
+  for (const x of (g(doc, 'contribute') ?? []) as Record<string, any>[]) {
+    const v = g(x, 'claims')
+    if (empty(v)) continue
+    if (!Array.isArray(v)) { c.refuse('format', '', 0, "a contribution's claims"); return null }
+    for (const r of v) {
+      const [lo, hi] = Array.isArray(r) && r.length === 2 ? [num32(r[0]), num32(r[1])] : [null, null]
+      if (lo === null || hi === null || lo < build.mainLo || hi > build.mainHi || !(lo < hi)) {
+        c.refuse('format', '', 0, `a claim ${repr(r)}`); return null
+      }
+      if (state.sites + nsites + out.length >= build.pools.sites) { c.refuse('limit', '', 0, 'sites'); return null }
+      out.push([lo, hi])
+    }
+  }
+  const names = build.modules.map(m => m.name)
+  for (const [lo, hi] of out) {
+    for (const [a, b, kind, mi] of build.siteMap) {
+      if (overlap(lo, hi, a, b)) {
+        const owner = (kind === desc.SITE_SITE || kind === desc.SITE_COPIED || kind === desc.SITE_CLAIM) && mi < names.length ? names[mi] : ''
+        c.refuse('clash', siteDetail(lo, owner), SITE_CORE << 8); return null
+      }
+    }
+    for (const [a, b] of build.prelink) if (overlap(lo, hi, a, b)) { c.refuse('clash', siteDetail(lo), SITE_PRELINK << 8); return null }
+  }
+  return out
+}
+
+/** Do two overlapping ranges of different mods clash: a site (1) with anything, a claim (2) with a claim; a copied
+ * block (0) with a copied block or a claim does not. drive._clashes. */
+const clashes = (mine: number, theirs: number) => mine === 1 || theirs === 1 || (mine === 2 && theirs === 2)
+
+/** A mod's ranges in dlink.c's order: its sites, its copied blocks, then its claims, with their kind. drive._ranges. */
+const ranges = (c: Choice): [number, number, number][] =>
+  [...c.driveSites.map(([lo, hi, s]) => [lo, hi, s ? 1 : 0] as [number, number, number]), ...c.driveClaims.map(([lo, hi]) => [lo, hi, 2] as [number, number, number])]
 
 /** Pass 1, one file: what the boot linker's scan tells from the file and the build alone, in its order. drive.pass1. */
 /** A mod's "collections", as the boot linker reads them (dlink.c collections()): each table's name and entry size
@@ -638,7 +680,7 @@ export function pass1(build: Build, c: Choice, state: State): boolean {
       } else if (k === 'data') {
         n = fromhexLen(v)
         if (n === null) return c.refuse('format', '', 0, 'an entry\'s data')
-      } else if (k === 'claims' && !empty(v)) {
+      } else if (k === 'claims' && !empty(v) && !build.takeClaims) {   // else read after the sites
         return c.refuse('feature', 'claims')
       } else if (k === 'relocs' && build.payloadSkip && payloadRelocs(v)) {
         return c.refuse('feature', 'relocs into .payload')
@@ -678,6 +720,8 @@ export function pass1(build: Build, c: Choice, state: State): boolean {
   }
   const sites = scanSites(build, c, doc, state)
   if (sites === null) return false
+  const claims = scanClaims(build, c, doc, state, sites.length)
+  if (claims === null) return false
   let own: Record<string, unknown> = build.collections ? { ...doc, collections: {} } : doc   // read here; Mod2 doesn't size them
   if ('.payload' in secs && build.payloadSkip) {   // its bytes stay on the +Drive: nothing places it
     own = { ...doc, sections: Object.fromEntries(Object.entries(secs).filter(([k]) => k !== '.payload')) }
@@ -691,11 +735,11 @@ export function pass1(build: Build, c: Choice, state: State): boolean {
     throw e
   }
   for (const x of m.contribute) if (x.event !== undefined && build.stdMap) x.to = build.std.get(x.event)!   // the table a standard event maps to
-  c.mod = m; c.exports = exports; c.driveSites = sites; c.tables = tables
+  c.mod = m; c.exports = exports; c.driveSites = sites; c.driveClaims = claims; c.tables = tables
   state.syms += exports.length + 2 * tables.length
   state.colls += tables.length
   state.contribs += contribs
-  state.sites += sites.length
+  state.sites += sites.length + claims.length
   state.sdata += sites.reduce((n, [lo, hi, isSite]) => n + (isSite ? hi - lo : 0), 0)
   c.alive = true
   return true
@@ -750,8 +794,8 @@ function round(build: Build, order: Choice[]): number {
     }
     let arg = 0
     if (!why) {                               // sites against earlier living mods' sites and copied blocks
-      for (const [lo, hi, mine] of c.driveSites) {
-        const o = earlier.find(o => o.driveSites.some(([a, b, theirs]) => (mine || theirs) && overlap(lo, hi, a, b)))
+      for (const [lo, hi, mine] of ranges(c)) {   // sites and claims against earlier living mods' ranges (clashes)
+        const o = earlier.find(o => ranges(o).some(([a, b, theirs]) => clashes(mine, theirs) && overlap(lo, hi, a, b)))
         if (o !== undefined) { why = ['clash', siteDetail(lo)]; arg = SITE_MOD << 8 | o.line; break }
       }
     }
@@ -962,8 +1006,9 @@ export function parseActive(text: string): [string, number][] | null {
 
 /** Can this mod ever load from +Drive? -> null, or the first feature only a flashed build can carry (pass 1's
  * feature checks, which need no build; sites and copied blocks load on a build with a site map, tables a mod declares
- * on one with F_COLLECTIONS, but never a DSP table). For a page that marks each mod "+Drive" or "flash". */
-export function flashOnly(doc: unknown): string | null {
+ * on one with F_COLLECTIONS, but never a DSP table, contributions' claims on `build` when it takes them, F_CLAIMS).
+ * For a page that marks each mod "+Drive" or "flash". */
+export function flashOnly(doc: unknown, build?: Build): string | null {
   if (!isDict(doc) || !pyEq(g(doc, 'elemod'), FORMAT2)) return 'format 1'
   for (const f of NO_FIELDS) {
     if (SITE_FIELDS.includes(f) || empty(g(doc, f))) continue
@@ -972,7 +1017,7 @@ export function flashOnly(doc: unknown): string | null {
   }
   if (isDict(doc.sections)) for (const s of Object.keys(doc.sections)) if (s !== '.run' && s !== '.bss') return s
   if (isDict(doc.resources) && !empty(g(doc.resources, 'regions'))) return 'regions'
-  if (Array.isArray(doc.contribute) && doc.contribute.some(x => isDict(x) && !empty(g(x, 'claims')))) return 'claims'
+  if (!build?.takeClaims && Array.isArray(doc.contribute) && doc.contribute.some(x => isDict(x) && !empty(g(x, 'claims')))) return 'claims'
   return null
 }
 
