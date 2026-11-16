@@ -78,6 +78,9 @@ class Device:
                                  # uses itself; ids from `own` up are a mod's own, so two mods' entries
                                  # may not share one; an own_only table's entries take only those
                                  # (link.Mod2.id_ranges, link.check)
+    drive_knobs: tuple = ()      # (lo, hi): with param_ids, the knob ids +Drive mods' "knobs" runs
+                                 # take (the boot linker's, desc.py's knob record); a flashed build's
+                                 # runs stay below lo and no flashed entry may name them (link.check)
     table_limits: dict = field(default_factory=dict)   # table -> the most entries all mods together
                                  # may add to it: the OS uses no more (link.check)
     drive_align: int = 0         # a build descriptor's +Drive mods' area (desc.py): from the

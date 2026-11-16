@@ -720,6 +720,7 @@ export function check(mods: Mod2[], image: Uint8Array): string[] {
  * relocated to __knobs too. -> [problems]. link.id_problems. */
 export function idProblems(mods: Mod2[], image: Uint8Array, knobs: Map<string, number> | null = null): string[] {
   const [own, [lo, hi, what], kinds] = mods[0].dev.paramIds!
+  const dk = mods[0].dev.driveKnobs
   const ownOnly = new Set(kinds.filter(([, o]) => o).map(([t]) => t))
   const taken: [Mod2, string, number, number][] = [], bad: string[] = []
   for (const m of mods) {
@@ -727,6 +728,8 @@ export function idProblems(mods: Mod2[], image: Uint8Array, knobs: Map<string, n
       let a = a0
       if (a <= hi && lo <= b) {
         bad.push(`${m.label()}: its ${table} entry takes ids ${a}..${b}, and ${lo}..${hi} are ${what}; a mod's own ids start at ${own}`)
+      } else if (dk && a <= dk[1] && dk[0] <= b) {
+        bad.push(`${m.label()}: its ${table} entry takes ids ${a}..${b}, and ${dk[0]}..${dk[1]} are the +Drive mods' knob ids`)
       } else if (ownOnly.has(table) && a < own) {
         bad.push(`${m.label()}: its ${table} entry takes ids ${a}..${b}; that table's ids start at ${own}`)
       } else if (b >= own) {
@@ -994,7 +997,8 @@ export function link(mods: Mod2[], image: Uint8Array, lock: store.Lock | null = 
   if (dev.paramIds && (order.some(m => m.knobs) || newLock?.knobs?.length || newLock?.freed_knobs?.length)) {
     const fixed = order.flatMap(m => m.idRanges(image).map(([, a, b]) => [a, b] as [number, number]))
     const held: Partial<store.Lock> = newLock ?? {}
-    ;[knobBase, knobNotes] = store.knobs(held, new Map(order.filter(m => m.knobs).map(m => [m.id, m.knobs])), dev.paramIds[0], fixed)
+    ;[knobBase, knobNotes] = store.knobs(held, new Map(order.filter(m => m.knobs).map(m => [m.id, m.knobs])), dev.paramIds[0], fixed,
+      dev.driveKnobs ? dev.driveKnobs[0] - 1 : store.KNOB_TOP)
     const bad = idProblems(order, image, knobBase)
     if (bad.length) throw new ModError('the linked mods break a rule:\n  ' + bad.join('\n  '))   // store.knobs keeps clear of them
   }

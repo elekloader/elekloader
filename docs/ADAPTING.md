@@ -2763,8 +2763,19 @@ and on a unit (24 Oct 2026).
 
 The Rytm's knob looks (above) with `analog-four-mk2/pages.h`: an entry in
 `core_knob_looks` covers a mod's own knob ids, which on the A4 are above
-0x126, and `look` is a stock id, 1..0x126. The A4 has no `"knobs"` ids
-from the linker: a mod picks its ids as for `core_params`.
+0x126, and `look` is a stock id, 1..0x126.
+
+### Knob ids by count (Analog Four MKII)
+
+The Rytm's knob ids by count (above) with `analog-four-mk2/pages.h`:
+declare `"knobs": n` and use `CORE_KNOB(k)`. The A4's ids (decided
+2026-11-16): stock's are 1..0x126, core-a4mk2 keeps 0x127..0x1ff (its lock
+pseudo ids and room for more), a mod's own start at 0x200. Flashed mods'
+runs stay below 0x4000; 0x4000..0x7fff are the +Drive mods' (docs/DRIVE.md,
+"Knob ids on the +Drive"), so a reflash never moves them. A mod that picks
+its ids itself still may, from 0x200 to 0x3fff: the linker refuses a
+`core_params` or `core_knob_looks` entry in 0x127..0x1ff or in the +Drive
+range, a `core_knob_looks` entry below 0x200, and two mods sharing an id.
 
 ### Screen calls (core-a4mk2 0.6, Analog Four MKII)
 

@@ -491,7 +491,7 @@ Four MKII)") has the rest.
 ### Knob ids
 
 On a device whose profile gives mods knob ids (`param_ids`: the Analog Rytm
-MKII's start at 555), a mod declares `"knobs": n` and the linker gives it n
+MKII's start at 555, the Analog Four MKII's at 0x200), a mod declares `"knobs": n` and the linker gives it n
 ids in a row. Its symbol `__knobs` is the first; it is the mod's own, so two
 mods' `__knobs` differ. A relocation to `__knobs` is an `abs32` or an `abs16`
 with an addend of 0..n-1, anything else is refused, as is `"knobs"` on a
@@ -506,7 +506,8 @@ of the layout ID: the ids are not stored data. A mod keeps its run while its
 count stays; one that leaves keeps it in `freed_knobs` and gets it back when
 it returns; one whose count changes keeps its first id when the new run has
 room there; any other takes never-used ids from `next_knob` up. Only when
-those run out (past 65535, which an `abs16` holds) are freed runs given out
+those run out (past 65535, which an `abs16` holds; on the Analog Four MKII
+past 0x3fff, below the +Drive mods' ids, `drive_knobs`) are freed runs given out
 again. A build whose core keeps no lockfile gets the same ids for the same
 mods. The build's manifest carries the runs as `knobs` (`{mod: [first,
 count]}`).

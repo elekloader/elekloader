@@ -752,6 +752,7 @@ def id_problems(mods, image, knobs=None):
     whose ids are mods' own below them, and no id from there up taken twice. knobs: {mod id: its
     first knob id} (link), to count the entries relocated to __knobs too. -> [problems]."""
     own, (lo, hi, what), kinds = mods[0].dev.param_ids
+    dk = mods[0].dev.drive_knobs
     own_only = {t for t, o in kinds if o}
     taken, bad = [], []
     for m in mods:
@@ -759,6 +760,9 @@ def id_problems(mods, image, knobs=None):
             if a <= hi and lo <= b:
                 bad.append('%s: its %s entry takes ids %d..%d, and %d..%d are %s; a mod\'s own '
                            'ids start at %d' % (m.label(), table, a, b, lo, hi, what, own))
+            elif dk and a <= dk[1] and dk[0] <= b:
+                bad.append('%s: its %s entry takes ids %d..%d, and %d..%d are the +Drive mods\' knob '
+                           'ids' % (m.label(), table, a, b, dk[0], dk[1]))
             elif table in own_only and a < own:
                 bad.append('%s: its %s entry takes ids %d..%d; that table\'s ids start at %d'
                            % (m.label(), table, a, b, own))
@@ -1025,7 +1029,8 @@ def link(mods, image, lock=None, *, sharc_stream=None, drive=None):
         fixed = [(a, b) for m in order for _t, a, b in m.id_ranges(image)]
         held = new_lock if new_lock is not None else {}
         knob_base, knob_notes = store.knobs(held, {m.id: m.knobs for m in order if m.knobs},
-                                            dev.param_ids[0], fixed)
+                                            dev.param_ids[0], fixed,
+                                            dev.drive_knobs[0] - 1 if dev.drive_knobs else store.KNOB_TOP)
         bad = id_problems(order, image, knob_base)
         if bad:                                # store.knobs keeps clear of them: a self-check
             raise ModError('the linked mods break a rule:\n  ' + '\n  '.join(bad))
