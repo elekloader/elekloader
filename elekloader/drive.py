@@ -275,6 +275,9 @@ class Build:
         # payload skip (skip.c; F_PAYLOAD_SKIP): the boot stages each file without a skippable
         # .payload's hex, so lengths, CRCs and the layout are the staged file's (stage())
         self.payload_skip = bool(d.get('flags', 0) & desc.F_PAYLOAD_SKIP)
+        # abs16 (F_ABS16, the A4's dlink.c): the relocation kinds the boot linker takes, with their sizes
+        self.rsize = dict({'abs32': 4, 'pc32': 4, 'pc16': 2},
+                          **({'abs16': 2} if d.get('flags', 0) & desc.F_ABS16 else {}))
         # the global names, in the boot linker's order: flashed exports, tables, NAME_n, core_desc
         self.globals = {}
         for m in self.modules:
@@ -670,8 +673,8 @@ def pass1(build, c, state):
     run_len = _section_len(secs.get('.run'))
     for r in doc.get('relocs') or []:
         if not (isinstance(r, list) and len(r) == 5) or r[0] != '.run' \
-                or r[2] not in ('abs32', 'pc32', 'pc16') or not isinstance(r[1], int) \
-                or r[1] < 0 or r[1] + linker.RSIZE[r[2]] > run_len:
+                or not isinstance(r[2], str) or r[2] not in build.rsize or not isinstance(r[1], int) \
+                or r[1] < 0 or r[1] + build.rsize[r[2]] > run_len:
             return c.refuse('format', note='a relocation %r' % (r,))
     contribs = 0
     for x in doc.get('contribute') or []:
@@ -820,7 +823,7 @@ def _scan_sites(build, c, doc, state):
                     if not isinstance(rel, list):
                         ok = False
                     for r in rel if isinstance(rel, list) else []:
-                        size = {'abs32': 4, 'pc32': 4, 'pc16': 2}.get(r[1]) if isinstance(r, list) and len(r) == 4 \
+                        size = build.rsize.get(r[1]) if isinstance(r, list) and len(r) == 4 \
                             and isinstance(r[1], str) else None
                         off = _num(r[0]) if size else None
                         if size is None or off is None or off < 0 or off + size > n or not isinstance(r[2], str) \
@@ -1128,6 +1131,8 @@ def _pass2(build, c, base, glob, edata):
         for off, typ, tgt, add in x['relocs']:
             if edata[1] >= build.pools['erelocs']:
                 return None, ('limit', '')
+            if typ not in build.rsize:          # dlink.c refuses it here, in pass 2
+                return None, ('format', '')
             v = value(tgt)
             if v is None:
                 return None, ('import', tgt.split(':', 1)[-1])

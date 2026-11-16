@@ -325,7 +325,7 @@ into the +Drive area. This section is what such a mod and `/mods/active`
 may hold; the link and the tools are in [DRIVE.md](DRIVE.md).
 
 **What a +Drive mod is.** A format-2 mod with only `.run` and `.bss`,
-relocations only in `.run` (`abs32`, `pc32`, `pc16`), no `collections`,
+relocations only in `.run` (`abs32`, `pc32`, `pc16`; `abs16` on `F_ABS16`), no `collections`,
 `sharc` or contribution `claims`; `storage`, `sites`, `copied` and
 `resources.regions` only where the build takes them, a `.payload` only
 where the loader skips it (DRIVE.md). It adds
@@ -370,7 +370,7 @@ nothing loads.
 | 15 | `table` | a table +Drive mods cannot add to, or not whole entries (detail: the table) |
 | 16 | `full` | argument: the table's spare entries; detail: the table |
 | 17 | `room` | argument: KB over the area, rounded up |
-| 18 | `range` | a `pc16` out of range |
+| 18 | `range` | a `pc16` or `abs16` out of range |
 | 19 | `limit` | past the loader's own room (above) |
 | 20 | `count` | more than 256 lines in `/mods/active` |
 | 21 | `site` | sites overlap |

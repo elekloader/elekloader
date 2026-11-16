@@ -53,7 +53,7 @@ The link runs in this order:
 4. *Pass 2*, in placement order: `.run` decoded into place (a `stock` part is
    copied from the running OS), `.bss` zeroed, relocations applied (a
    symbol is the mod's own first, then a global name, then `core_zero` for
-   a weak import). A `pc16` out of range refuses the mod and the check
+   a weak import). A `pc16` or `abs16` out of range refuses the mod and the check
    runs again. With the stage at the top, every `.bss` and the bytes above
    it, to the highest a read reached, are zeroed after pass 2.
 5. *Merge*: each table that gets an entry is rewritten with the flashed
@@ -135,7 +135,8 @@ flashed mod does. The checks:
 
 - *Pass 1*, after the exports, each file alone: every site's form (`addr`,
   `len`, `new` of that length, `kind` `code` or `data`, a 64-digit
-  `stock_sha256`, relocations `abs32`, `pc32` or `pc16` inside it) and
+  `stock_sha256`, relocations `abs32`, `pc32` or `pc16`, and `abs16` with
+  `F_ABS16`, inside it) and
   every copied block's (`lo` < `hi`, `to`), each inside the main OS (from
   its load address to the build's boot copier), else `format`; past the
   loader's room for them, `limit`. Then, refused `clash` (code 30): a site that
@@ -148,7 +149,7 @@ flashed mod does. The checks:
   earlier mod's copied block (kind 2, the line the earlier mod's): the
   later in id order goes. Two copied blocks may overlap.
 - *Pass 2*: each site's `new` bytes, its relocations applied at the site's
-  own address (a `pc16` out of range is `range`).
+  own address (a `pc16` or `abs16` out of range is `range`).
 
 A `clash` refusal's argument is its kind << 8, plus the earlier mod's line
 for kind 2; its detail is the site's or block's address as 8 hex digits,
@@ -402,7 +403,7 @@ names offsets into its string pool (UTF-8, NUL-terminated):
 | +0x44 | u32 the device key, u32 the OS version (names) |
 | +0x4c | ABI 1.2: u32 offset of the site map, u16 its count, u16 the pre-link count, u32 offset of the pre-link ranges |
 | +0x58 | u32 the shadow's offset, u32 its range count (ABI 1.2; 0 without one) |
-| +0x60 | ABI 1.3: u32 flags, bit 0 `F_STAGE_TOP`: the loader reads each file into the +Drive area itself at boot (a module's export `drive_stage_top`, nonzero); bit 1 `F_PAYLOAD_SKIP`: it stages each file without its `.payload`'s hex ("Payloads on the +Drive"; the export `drive_payload_skip`); zero to +0x64 |
+| +0x60 | ABI 1.3: u32 flags, bit 0 `F_STAGE_TOP`: the loader reads each file into the +Drive area itself at boot (a module's export `drive_stage_top`, nonzero); bit 1 `F_PAYLOAD_SKIP`: it stages each file without its `.payload`'s hex ("Payloads on the +Drive"; the export `drive_payload_skip`); bit 2 `F_ABS16`: its boot linker takes `abs16` relocations (the export `drive_abs16`); zero to +0x64 |
 
 | record | bytes | fields |
 |---|---|---|

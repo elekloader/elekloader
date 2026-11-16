@@ -78,5 +78,9 @@ dl_handler:
 | .payload's hex (skip.h), so host tools stage, check and CRC files as it does
         .globl  drive_payload_skip
         .set    drive_payload_skip, 1
+| the build descriptor's flags bit 2: the boot linker (dlink.c) takes abs16 relocations, so
+| host tools take them too
+        .globl  drive_abs16
+        .set    drive_abs16, 1
         .globl  drive_staging_size
         .set    drive_staging_size, 0x400                    | fs.h DL_STAGING_SIZE
