@@ -298,16 +298,18 @@ static const char *word(const char *s, char *at, char *end)
 }
 
 /* DL_R_STORE's second line from its detail "WHAT NEED HAVE" (decided 2026-11-10 with the
- * storage loader): "sound: 62 of 56 bits", "codes: 3 of 1 free", "core_handles: 3 of 2 spare" */
+ * storage loader): "sound: 62 of 56 bits", "codes-synth: 3 of 1 free" (a track kind's lock
+ * codes), "core_handles: 3 of 2 spare" */
 static void store_line(char *at, char *end, const char *d)
 {
     char what[32], need[12], have[12];
-    int i, scope = 0;
+    int i, scope = 0, codes;
     d = word(word(word(d, what, what + sizeof what), need, need + sizeof need), have, have + sizeof have);
+    codes = what[0] == 'c' && what[1] == 'o' && what[2] == 'd' && what[3] == 'e' && what[4] == 's';
     for (i = 0; i < DL_STORE_SCOPES; i++)
         scope |= !dl_strcmp(what, dl_store_scopes[i]);
     at = cat(cat(cat(cat(cat(cat(at, end, what), end, ": "), end, need), end, " of "), end, have), end,
-             scope ? " bits" : !dl_strcmp(what, "codes") ? " free" : " spare");
+             scope ? " bits" : codes ? " free" : " spare");
     (void)at;
 }
 

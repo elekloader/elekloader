@@ -2,7 +2,13 @@
 /* Drive Loader: +Drive storage, the boot allocator and /mods/.store (docs/DRIVE.md, "+Drive
  * storage"). A port of elekloader/drive_store.py, rule for rule: the same inputs give the same
  * placements, table entries and .store bytes (tests/drive_store_host.c replays
- * js/test/drivestore-vectors.json). Pure: memory only through dl_alloc and dl_free, no files.
+ * js/test/drivestore-a4-vectors.json). Pure: memory only through dl_alloc and dl_free, no files.
+ *
+ * The Analog Four MKII numbers lock codes per track kind (core-a4mk2's lock.c; store.py, "Lock
+ * codes per track kind"): 0x70..0x7f for the synth tracks (sound fields), the FX track (kit
+ * fields) and the CV track (kit fields declared "track": "cv"), each kind its own range; /mods/.store
+ * is format 2, with a kind on each code. Its LFOs take "mod" fields: the link refuses "lfo", and
+ * the core keeps no core_lfo_dsts, so the LFO destination fields below are never placed.
  *
  * The notes drive_store.py writes for a person are not made here; .status gives counts. */
 #ifndef DSTORE_H
@@ -10,8 +16,10 @@
 #include "dl.h"
 
 #define DS_SCOPES 6                      /* sound, kit, global, track, pattern, project (1..6) */
-#define DS_FIRST_CODE 42                 /* the Analog Rytm MKII's lock codes, 42..127 */
-#define DS_LAST_CODE 127
+#define DS_FIRST_CODE 0x70               /* the Analog Four MKII's lock codes, 0x70..0x7f a kind */
+#define DS_LAST_CODE 0x7f
+#define DS_KINDS 3                       /* synth, FX, CV (format 2's kinds 1..3) */
+#define DS_FORMAT 2                      /* /mods/.store with codes per kind */
 #define DS_MAX_IDS 15                    /* ancestors kept */
 #define DS_MAX_INITS 63                  /* core_field_inits' slots 1..63 */
 #define DS_MAX_BITS 32
@@ -25,15 +33,16 @@
 #define DS_LFO_FLAG 0x100
 #define DS_SMOOTH_OFF 0x200
 #define DS_ROUTE_FLAG 0x400
+#define DS_CV_FLAG 0x800                 /* a CV track's kit field */
 #define DS_LFO_DST_BITS 7                /* the core's LFO destination fields (store.py lock_dst) */
 
 /* a declared field's flags (mod.json "storage") */
-enum { DS_LOCK = 1, DS_CC = 2, DS_LFO = 4, DS_ROUGH = 8, DS_ROUTE = 16, DS_HANDLE = 32 };
+enum { DS_LOCK = 1, DS_CC = 2, DS_LFO = 4, DS_ROUGH = 8, DS_ROUTE = 16, DS_HANDLE = 32, DS_CV = 64 };
 
 /* what fit() finds short, in the order it checks them */
-enum { DS_W_SOUND, DS_W_KIT, DS_W_GLOBAL, DS_W_TRACK, DS_W_PATTERN, DS_W_PROJECT, DS_W_CODES,
-       DS_W_CODES_TABLE, DS_W_INITS_TABLE, DS_W_HANDLES_TABLE, DS_W_N };
-extern const char *const ds_what[DS_W_N];   /* "sound" ... "codes", "core_lock_codes" ... */
+enum { DS_W_SOUND, DS_W_KIT, DS_W_GLOBAL, DS_W_TRACK, DS_W_PATTERN, DS_W_PROJECT, DS_W_CODES_SYNTH,
+       DS_W_CODES_FX, DS_W_CODES_CV, DS_W_CODES_TABLE, DS_W_INITS_TABLE, DS_W_HANDLES_TABLE, DS_W_N };
+extern const char *const ds_what[DS_W_N];   /* "sound" ... "codes-synth" ... "core_lock_codes" ... */
 
 /* The flashed build, as the boot sees it (drive_store.Base). */
 struct ds_base {
@@ -84,10 +93,11 @@ struct ds_field {
 struct ds_tag {                          /* a code or a CC and its field */
     const char *mod, *sym;
     u8 v;
+    u8 kind;                             /* a code's: 0 synth, 1 FX, 2 CV; 0 for a CC */
 };
 struct ds_state {
     u32 flashed_id, id;
-    u8 next_code;
+    u8 next_code[DS_KINDS];              /* each kind's next never-used code, top down */
     u8 fgen[DS_SCOPES], gen[DS_SCOPES];
     u32 low[DS_SCOPES];
     u32 nids;

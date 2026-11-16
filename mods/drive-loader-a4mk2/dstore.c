@@ -5,7 +5,7 @@
 #include "dstore.h"
 
 const char *const ds_what[DS_W_N] = {
-    "sound", "kit", "global", "track", "pattern", "project", "codes",
+    "sound", "kit", "global", "track", "pattern", "project", "codes-synth", "codes-fx", "codes-cv",
     "core_lock_codes", "core_field_inits", "core_handles",
 };
 
@@ -15,12 +15,25 @@ const char *const ds_what[DS_W_N] = {
 static const u8 MAGIC[4] = {'D', 'L', 'S', 'T'};
 static const u8 ID_HASH[8] = {'E', 'L', 'K', 'D', 'R', 'I', 'V', 'E'};
 
-/* the device's CC pool in the order fields get them, and those a kit field gets none of
- * (store.DEVICES['analog-rytm-mk2']) */
-static const u8 CC_POOL[] = {8, 9, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63,
-                             65, 66, 67, 68, 69, 84, 85, 110, 111, 112, 113, 114, 115, 116, 119};
+/* the device's CC pool in the order fields get them, and those a kit field (the FX or the CV
+ * track's) gets none of: the CCs the FX or CV tables map (store.DEVICES['analog-four-mk2']) */
+static const u8 CC_POOL[] = {12, 13, 14, 15, 28, 29, 30, 31, 35, 36, 37, 39, 40, 41, 42, 43, 44, 45, 46, 47,
+                             60, 61, 62, 63, 96, 97, 100, 101};
 #define CC_POOL_N (sizeof CC_POOL)
-static int fx_taken(u32 cc) { return cc == 84 || cc == 85; }
+static int fx_taken(u32 cc) { return (cc >= 12 && cc <= 15) || (cc >= 28 && cc <= 31); }
+
+/* ---- track kinds (core-a4mk2's lock.c kind_of_entry; drive_store.Want.kind) ------------- */
+/* a wanted field's kind: 0 synth (a sound field), 1 FX (a kit field), 2 CV ("track": "cv") */
+static u32 want_kind(const struct ds_want *e)
+{
+    return e->scope == 1 ? 0 : (e->flags & DS_CV) ? 2 : 1;
+}
+
+/* a flashed core_lock_codes entry's kind */
+static u32 entry_kind(u32 d, u32 c)
+{
+    return d >> 28 == 1 ? 0 : (c & DS_CV_FLAG) ? 2 : 1;
+}
 
 /* ---- names ----------------------------------------------------------------------------- */
 static int keycmp(const char *am, const char *as, const char *bm, const char *bs)
@@ -122,7 +135,9 @@ static int uses(const struct ds_want *e, u32 what)
 {
     if (what < DS_SCOPES)
         return e->scope == what + 1;
-    if (what == DS_W_CODES || what == DS_W_CODES_TABLE)
+    if (what >= DS_W_CODES_SYNTH && what <= DS_W_CODES_CV)
+        return (e->flags & DS_LOCK) && want_kind(e) == what - DS_W_CODES_SYNTH;
+    if (what == DS_W_CODES_TABLE)
         return (e->flags & DS_LOCK) != 0;
     if (what == DS_W_INITS_TABLE)
         return e->init != 0;
@@ -158,8 +173,11 @@ int ds_fit_one(const struct ds_base *b, const struct ds_want *w, u32 n, const u8
                 need += x[i].bits;
         if (what < DS_SCOPES) {
             have = (s32)b->room[what] - (s32)b->used[what];
-        } else if (what == DS_W_CODES) {
-            have = DS_LAST_CODE - DS_FIRST_CODE + 1 - (s32)b->ncodes;
+        } else if (what <= DS_W_CODES_CV) {  /* one range a kind: its codes less the build's of it */
+            have = DS_LAST_CODE - DS_FIRST_CODE + 1;
+            for (i = 0; i < b->ncodes; i++)
+                if (entry_kind(dl_rd32(b->codes + 8 * i), dl_rd32(b->codes + 8 * i + 4)) == what - DS_W_CODES_SYNTH)
+                    have--;
         } else {
             sp = b->spare[what == DS_W_CODES_TABLE ? DS_T_CODES : what == DS_W_INITS_TABLE ? DS_T_INITS
                                                                                             : DS_T_HANDLES];
@@ -190,7 +208,8 @@ static struct ds_state *fresh(const struct ds_base *b)
         st->fgen[s] = st->gen[s] = (u8)b->gen[s];
         st->low[s] = b->room[s];
     }
-    st->next_code = DS_LAST_CODE;
+    for (s = 0; s < DS_KINDS; s++)
+        st->next_code[s] = DS_LAST_CODE;
     return st;
 }
 
@@ -236,11 +255,13 @@ u8 *ds_encode(const struct ds_state *st, u32 *n)
     if (!p)
         return 0;
     dl_memcpy(p, MAGIC, 4);
-    dl_wr16(p + 4, 1);
+    dl_wr16(p + 4, DS_FORMAT);
     dl_wr32(p + 8, size);
     dl_wr32(p + 0x10, st->flashed_id);
     dl_wr32(p + 0x14, st->id);
-    p[0x18] = st->next_code;
+    p[0x18] = st->next_code[0];
+    p[0x26] = st->next_code[1];
+    p[0x27] = st->next_code[2];
     p[0x19] = (u8)st->nids;
     dl_wr16(p + 0x1a, st->nf);
     dl_wr16(p + 0x1c, st->npk);
@@ -276,6 +297,7 @@ u8 *ds_encode(const struct ds_state *st, u32 *n)
             p[at] = tl[k][i].v;
             p[at + 1] = (u8)lm;
             p[at + 2] = (u8)ls;
+            p[at + 3] = k < 2 ? (u8)(tl[k][i].kind + 1) : 0;     /* a code's kind, 1..3 */
             dl_memcpy(p + at + 4, tl[k][i].mod, lm);
             dl_memcpy(p + at + 4 + lm, tl[k][i].sym, ls);
             at += 4 + pad4(lm + ls);
@@ -310,7 +332,7 @@ struct ds_state *ds_decode(const u8 *p, u32 n)
     if (!p || n < HEAD + SCOPE_REC * DS_SCOPES || n > DS_MAX_FILE)
         return 0;
     size = dl_rd32(p + 8);
-    if (p[0] != 'D' || p[1] != 'L' || p[2] != 'S' || p[3] != 'T' || dl_rd16(p + 4) != 1 || size != n)
+    if (p[0] != 'D' || p[1] != 'L' || p[2] != 'S' || p[3] != 'T' || dl_rd16(p + 4) != DS_FORMAT || size != n)
         return 0;
     if (crc_of(p, n) != dl_rd32(p + 0x0c))
         return 0;
@@ -323,7 +345,9 @@ struct ds_state *ds_decode(const u8 *p, u32 n)
     arena = st->names;
     st->flashed_id = dl_rd32(p + 0x10);
     st->id = dl_rd32(p + 0x14);
-    st->next_code = p[0x18];
+    st->next_code[0] = p[0x18];
+    st->next_code[1] = p[0x26];
+    st->next_code[2] = p[0x27];
     st->nids = p[0x19];
     st->nf = dl_rd16(p + 0x1a);
     st->npk = dl_rd16(p + 0x1c);
@@ -380,6 +404,12 @@ struct ds_state *ds_decode(const u8 *p, u32 n)
             tl[k][i].v = p[at];
             lm = p[at + 1];
             ls = p[at + 2];
+            tl[k][i].kind = 0;
+            if (k < 2) {
+                if (p[at + 3] < 1 || p[at + 3] > DS_KINDS)
+                    goto bad;
+                tl[k][i].kind = (u8)(p[at + 3] - 1);
+            }
             if (!names(p, n, at + 4, lm, ls, &arena, &tl[k][i].mod, &tl[k][i].sym))
                 goto bad;
             at += 4 + pad4(lm + ls);
@@ -443,7 +473,7 @@ static u32 layout_id(const struct ds_state *st, const struct ds_base *b, int *er
     }
     for (i = 0; i < nc; i++) {
         const struct ds_tag *c = i < st->ncd ? &st->cd[i] : &st->fcd[i - st->ncd];
-        size += 3 + dl_strlen(c->mod) + dl_strlen(c->sym);
+        size += 4 + dl_strlen(c->mod) + dl_strlen(c->sym);
     }
     h = dl_alloc(size);
     if (!fs || !cs || !h) {
@@ -453,7 +483,7 @@ static u32 layout_id(const struct ds_state *st, const struct ds_base *b, int *er
         *err = 1;
         return 0;
     }
-    /* fields then parked fields, a stable sort by (scope, offset); codes then freed codes by code */
+    /* fields then parked fields, a stable sort by (scope, offset); codes then freed codes by (kind, code) */
     for (i = 0; i < nf; i++) {
         const struct ds_field *x = i < st->nf ? &st->f[i] : &st->pk[i - st->nf];
         k = i;
@@ -466,7 +496,7 @@ static u32 layout_id(const struct ds_state *st, const struct ds_base *b, int *er
     for (i = 0; i < nc; i++) {
         const struct ds_tag *x = i < st->ncd ? &st->cd[i] : &st->fcd[i - st->ncd];
         k = i;
-        while (k > 0 && cs[k - 1]->v > x->v) {
+        while (k > 0 && (cs[k - 1]->kind > x->kind || (cs[k - 1]->kind == x->kind && cs[k - 1]->v > x->v))) {
             cs[k] = cs[k - 1];
             k--;
         }
@@ -493,6 +523,7 @@ static u32 layout_id(const struct ds_state *st, const struct ds_base *b, int *er
     }
     for (i = 0; i < nc; i++) {
         u32 lm = dl_strlen(cs[i]->mod), ls = dl_strlen(cs[i]->sym);
+        h[at++] = (u8)(cs[i]->kind + 1);
         h[at++] = cs[i]->v;
         h[at++] = (u8)lm;
         dl_memcpy(h + at, cs[i]->mod, lm);
@@ -613,38 +644,43 @@ static int in_kept(const struct work *W, u32 nkept, const char *m, const char *s
     return 0;
 }
 
-/* _codes: each lockable field its code, top down, past the build's codes */
+/* _kind_codes: each lockable field its code in its kind, top down, past the build's codes of that
+ * kind; a code freed in one kind is given again only in that kind */
 static int codes(struct ds_state *st, const struct ds_base *b, struct work *W, const struct ds_want *w, u32 n,
                  u32 nkept, u32 nf)
 {
-    u8 flashed[256];
-    s32 top = DS_FIRST_CODE - 1, nxt;
+    u8 flashed[DS_KINDS][256];
+    s32 top[DS_KINDS], nxt[DS_KINDS];
     u32 i, k, nt = 0, nfr = 0;
     dl_memset(flashed, 0, sizeof flashed);
+    for (k = 0; k < DS_KINDS; k++)
+        top[k] = DS_FIRST_CODE - 1;
     for (i = 0; i < b->ncodes; i++) {
-        u32 c = dl_rd32(b->codes + 8 * i + 4) & 0xFF;
-        flashed[c] = 1;
-        if ((s32)c > top)
-            top = (s32)c;
+        u32 d = dl_rd32(b->codes + 8 * i), c = dl_rd32(b->codes + 8 * i + 4), kd = entry_kind(d, c);
+        flashed[kd][c & 0xFF] = 1;
+        if ((s32)(c & 0xFF) > top[kd])
+            top[kd] = (s32)(c & 0xFF);
     }
     for (i = 0; i < st->nfcd; i++)
-        if (!flashed[st->fcd[i].v])
+        if (!flashed[st->fcd[i].kind][st->fcd[i].v])
             W->fr[nfr++] = st->fcd[i];
     for (i = 0; i < st->ncd; i++) {
         const struct ds_tag *c = &st->cd[i];
         const struct ds_want *x = want_of(w, n, c->mod, c->sym);
-        if (flashed[c->v])
+        if (flashed[c->kind][c->v])
             continue;
-        if (x && (x->flags & DS_LOCK) && in_kept(W, nkept, c->mod, c->sym))
+        if (x && (x->flags & DS_LOCK) && in_kept(W, nkept, c->mod, c->sym) && want_kind(x) == c->kind)
             W->t[nt++] = *c;
         else
             W->fr[nfr++] = *c;
     }
-    nxt = st->next_code;
+    for (k = 0; k < DS_KINDS; k++)
+        nxt[k] = st->next_code[k];
     for (;;) {                           /* the wanted keys not coded yet, in key order */
         const struct ds_want *x = 0;
         struct ds_tag c;
-        int j = -1, back = 0;
+        int j = -1, o = -1, back = 0;
+        u32 kd;
         for (i = 0; i < n; i++) {
             if (!(w[i].flags & DS_LOCK))
                 continue;
@@ -657,31 +693,35 @@ static int codes(struct ds_state *st, const struct ds_base *b, struct work *W, c
         }
         if (!x)
             break;
+        kd = want_kind(x);
         for (i = 0; i < nf; i++)
             if (W->back[i] && keyeq(W->fl[i].mod, W->fl[i].sym, x->mod, x->sym))
                 back = 1;
-        for (i = 0; i < nfr; i++)
+        for (i = 0; i < nfr; i++) {
+            if (W->fr[i].kind != kd)
+                continue;
+            if (o < 0)
+                o = (int)i;              /* the kind's freed longest ago */
             if (keyeq(W->fr[i].mod, W->fr[i].sym, x->mod, x->sym))
-                j = (int)i;
+                j = (int)i;              /* its own, the last */
+        }
         c.mod = x->mod;
         c.sym = x->sym;
-        if (j >= 0 && back) {
-            u32 q;
+        c.kind = (u8)kd;
+        if (j >= 0 && back) {            /* back in its old place: its old code */
             c = W->fr[j];
-            for (q = 0; !(keyeq(W->fr[q].mod, W->fr[q].sym, c.mod, c.sym) && W->fr[q].v == c.v); q++)
-                ;
-            remove_at(W->fr, sizeof W->fr[0], &nfr, q);
-        } else if (nxt > top) {
-            c.v = (u8)nxt--;
-        } else if (nfr) {
-            c.v = W->fr[0].v;
-            remove_at(W->fr, sizeof W->fr[0], &nfr, 0);
+            remove_at(W->fr, sizeof W->fr[0], &nfr, (u32)j);
+        } else if (nxt[kd] > top[kd]) {
+            c.v = (u8)nxt[kd]--;
+        } else if (o >= 0) {             /* the never-used codes are gone: the kind's freed longest ago */
+            c.v = W->fr[o].v;
+            remove_at(W->fr, sizeof W->fr[0], &nfr, (u32)o);
         } else {
             s32 v;
             for (v = DS_LAST_CODE; v >= DS_FIRST_CODE; v--) {
-                if (flashed[v])
+                if (flashed[kd][v])
                     continue;
-                for (k = 0; k < nt && W->t[k].v != v; k++)
+                for (k = 0; k < nt && !(W->t[k].kind == kd && W->t[k].v == v); k++)
                     ;
                 if (k == nt)
                     break;
@@ -698,9 +738,9 @@ static int codes(struct ds_state *st, const struct ds_base *b, struct work *W, c
             return 0;
         W->t[nt++] = c;
     }
-    for (i = 1; i < nt; i++) {           /* by code, stable */
+    for (i = 1; i < nt; i++) {           /* by (kind, code), stable */
         struct ds_tag c = W->t[i];
-        for (k = i; k > 0 && W->t[k - 1].v > c.v; k--)
+        for (k = i; k > 0 && (W->t[k - 1].kind > c.kind || (W->t[k - 1].kind == c.kind && W->t[k - 1].v > c.v)); k--)
             W->t[k] = W->t[k - 1];
         W->t[k] = c;
     }
@@ -710,7 +750,8 @@ static int codes(struct ds_state *st, const struct ds_base *b, struct work *W, c
         return 0;
     dl_memcpy(st->fcd, W->fr, nfr * sizeof W->fr[0]);
     st->nfcd = nfr;
-    st->next_code = (u8)(nxt > DS_FIRST_CODE - 1 ? nxt : DS_FIRST_CODE - 1);
+    for (k = 0; k < DS_KINDS; k++)
+        st->next_code[k] = (u8)(nxt[k] > DS_FIRST_CODE - 1 ? nxt[k] : DS_FIRST_CODE - 1);
     return 1;
 }
 
@@ -1100,6 +1141,8 @@ static int allocate(const struct ds_base *b, const u8 *prev, u32 nprev, const st
                 flags |= DS_SMOOTH_OFF;
             if (x && (x->flags & DS_ROUTE))
                 flags |= DS_ROUTE_FLAG;
+            if (c->kind == 2)
+                flags |= DS_CV_FLAG;
             dl_wr32(out->codes + 8 * i, d);
             dl_wr32(out->codes + 8 * i + 4, c->v | flags);
         }

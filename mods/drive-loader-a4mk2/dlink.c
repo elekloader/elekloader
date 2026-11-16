@@ -879,7 +879,7 @@ static int storage(struct dmod *m, const char *p, const u8 *buf, u32 len)
         s32 bits = -1;
         u32 init = 0;
         u16 sym = NONE;
-        u8 flags = 0, lock = 0, cc = 0, lfo = 0, route = 0, handle = 0;
+        u8 flags = 0, lock = 0, cc = 0, lfo = 0, route = 0, handle = 0, cv = 0, has_track = 0;
         struct fld *f;
         if (!js_open(&j, '{'))
             return DL_R_FORMAT;
@@ -924,15 +924,23 @@ static int storage(struct dmod *m, const char *p, const u8 *buf, u32 len)
                     route = (u8)v;
                 else
                     handle = (u8)v;
+            } else if (js_eq(s, n, "track")) {
+                if (!js_str(&j, &s, &n) || !js_eq(s, n, "cv"))
+                    return DL_R_FORMAT;  /* the CV track's: its one value */
+                has_track = cv = 1;
             } else {
-                return DL_R_FORMAT;      /* "track" too: the Rytm has no CV track */
+                return DL_R_FORMAT;
             }
         }
         if (j.err || sym == NONE || scope < 0 || bits < 1 || bits > DS_MAX_BITS || !c_name(L.arena + sym)
             || dl_strlen(L.arena + sym) > DS_NAME_MAX)
             return DL_R_FORMAT;
+        /* store.parse_decls and check_flags for the Analog Four MKII: its LFOs take "mod" fields (no
+         * "lfo"), a kit field can be "mod" (the FX and CV tracks have routes), and "track": "cv" is a
+         * lockable kit field's */
         if (((cc || lfo || route || has_smooth) && !lock) || (handle && (lock || init))
-            || (lock && scope > 1) || (route && scope == 1) || (has_init && bits < 32 && init >> bits))
+            || (lock && scope > 1) || lfo || (has_track && !(lock && scope == 1))
+            || (has_init && bits < 32 && init >> bits))
             return DL_R_FORMAT;
         for (q = 0; q < m->fld_n; q++)
             if (!dl_strcmp(L.arena + L.fld[m->fld_first + q].sym, L.arena + sym))
@@ -945,8 +953,8 @@ static int storage(struct dmod *m, const char *p, const u8 *buf, u32 len)
         f->scope = (u8)(scope + 1);
         f->bits = (u8)bits;
         f->init = init;
-        f->flags = flags | (lock ? DS_LOCK : 0) | (cc ? DS_CC : 0) | (lfo ? DS_LFO : 0) | (route ? DS_ROUTE : 0)
-                   | (handle ? DS_HANDLE : 0);
+        f->flags = flags | (lock ? DS_LOCK : 0) | (cc ? DS_CC : 0) | (route ? DS_ROUTE : 0)
+                   | (handle ? DS_HANDLE : 0) | (cv ? DS_CV : 0);
         add_sym(dl_hash(L.arena + sym, dl_strlen(L.arena + sym)), (u16)(m - L.mods), SEC_STORE, L.nfld);
         L.syms[L.nsyms - 1].name = sym;
         L.nfld++;

@@ -125,7 +125,9 @@ were never bounded by a stage here: `/mods` takes a file up to the largest free 
 | `store.c`, `fs.h` | new (replaces `fs.c`) | the store, the loader's mutex and the staging floor |
 | `route.c`, `route.s` | logic kept, glue retraced | the /mods route (tests/test_drive_a4_route.py) |
 | `boot.c` | logic kept, glue retraced | the boot, the crash guard, `dl_format` |
-| `dlink.c`, `json.c`, `json.h`, `sha256.c`, `dstore.c`, `dstore.h`, `park.c`, `park.h`, `names.inc` | unchanged (tests/test_drive_a4_store.py checks); dlink.c's payload skip is built only with `DL_PAYLOAD_SKIP` | the linker, +Drive storage, the route's names |
+| `json.c`, `json.h`, `sha256.c`, `park.c`, `park.h`, `names.inc` | unchanged (tests/test_drive_a4_store.py checks) | JSON, hashes, parked mods, the route's names |
+| `dlink.c` | storage fields as the A4 takes them: `"track": "cv"`, `"mod"` on a kit field, no `"lfo"`; the payload skip is built only with `DL_PAYLOAD_SKIP` | the linker |
+| `dstore.c`, `dstore.h` | lock codes per track kind (0x70..0x7f each), the A4's CC pool, `.store` format 2 (tests/test_drive_a4_dstore_host.py) | +Drive storage |
 | `dl.h`, `flush.s` | comments, and `DL_PAYLOAD_SKIP` | the linker's interface; the site writes and cache push (the A4 sets the Rytm's CACR and ACR0) |
 | `skip.c`, `skip.h`, `payload.c` | new | payload skip while staging (tests/test_drive_payload_skip.py), the Drive payload table and its reader |
 | `page.c`, `page.s`, `clip.inc` | model kept, view new (std1; stock addresses only for the row's label and icon, `page.s`) | the MODS page ([PAGE.md](PAGE.md); tests/test_drive_a4_page.py) |

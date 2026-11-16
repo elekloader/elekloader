@@ -75,10 +75,11 @@ extern u32 dl_status_n;
 extern u8 dl_skip_reason;
 
 /* ---- boot time (/mods/.status "boot:") ------------------------------------------------ */
-/* DTIM0's count (0xfc07000c), as on the Rytm, where it runs free from the 132 MHz bus clock (the
- * bootstrap sets its DTMR to 0x0b). On the A4 that it runs, and at that clock, is [I]: the same
- * ColdFire platform and cache setup (trace-phase0-sites.md section 4), not traced. It only times
- * the boot for /mods/.status. 32 bits wrap after 32 s, far past a boot. */
+/* DTIM0's count (0xfc07000c), free running from the 132 MHz bus clock, as on the Rytm (core.s
+ * starts it if nothing has). The A4's OS 1.56 times it as the Rytm's 1.74 does [G]: its clock-in
+ * tempo divides the same count by the same constant (0x40054270, the Rytm's 0x40069e28), and its
+ * microsecond sleep sets DMA timer 1 to the same mode and prescaler (0x400780dc). It only times the
+ * boot for /mods/.status. 32 bits wrap after 32 s, far past a boot. */
 #define DL_BUS_PER_US 132u
 static inline u32 dl_bus_us(u32 from, u32 to) { return (to - from) / DL_BUS_PER_US; }
 enum { DL_T_ALL, DL_T_CHECKS, DL_T_LINK, DL_T_INIT };   /* dl_boot_us[]: the whole, then its parts */
