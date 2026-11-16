@@ -50,7 +50,7 @@ python -m elekloader.patch --stock <stock.syx> --mod <core.elemod> --mod <mod.el
 | `elekloader/elek.py` | the Octatrack's family (ELEK, legacy SysEx, the ELUP card file): the same |
 | `elekloader/elemod.py` | the mod format: shared validation, format 1, the instruction check, `summarize` |
 | `elekloader/link.py` | format 2: the linker and its checks |
-| `elekloader/desc.py`, `drive.py`, `container.py`, `datarpc.py` | +Drive mods on the host (docs/DRIVE.md): the build descriptor, `elekloader check`, the boot linker's twin (rule for rule with `mods/drive-loader-ar2/dlink.c`), the data container and `elekloader mods`; `js/src/` ports the checker |
+| `elekloader/desc.py`, `drive.py`, `drive_store.py`, `container.py`, `datarpc.py` | +Drive mods on the host (docs/DRIVE.md): the descriptor, `elekloader check`, the twins of the boot linker (`dlink.c`) and of its storage allocator, the container, `elekloader mods`; `js/src/` ports them |
 | `elekloader/dsp.py` | the DSP code inside a main OS (the Octatrack's payloads): the linker places mods' DSP code in it |
 | `elekloader/sharc.py` | the Digitone II's DSP section (section 7, ADI boot records): reads it, and adds a SHARC mod's records and core's bridge (docs/SHARC-BOOT.md, docs/SHARC-DN2.md) |
 | `elekloader/patch.py` | the command line; `build()` is what the window calls too |

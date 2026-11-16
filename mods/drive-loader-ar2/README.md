@@ -1,17 +1,13 @@
 # drive-loader (Analog Rytm MKII)
 
-The +Drive mods loader's flashed part, for core-ar2 0.12 and newer on OS 1.74. It imports
+The +Drive mods loader's flashed part, for core-ar2 0.14 and newer on OS 1.74. It imports
 `core_desc`, so the linker writes the build descriptor into every build that has it
-(docs/DRIVE.md, "The build descriptor"), and it exports the staging buffer as `drive_staging`
-and `drive_staging_size` (512 KB, its `.bss`), which the descriptor's area record names.
-The 512 KB is the loader's own choice, not a limit of the unit, so a later version of the
-loader can change it: it is `DL_STAGING_SIZE` in `fs.h` and the `.space` and
-`drive_staging_size` in `route.s`, which would change together.
-The route, the boot link and the MODS page use `DL_STAGING_SIZE`, and `elekloader mods` and the
-web view read the size from the descriptor, so a build with another size refuses only files
-larger than its own buffer. The buffer is in the loader's
-`.bss`, which the +Drive area starts after, so every KB added to it is a KB less of area
-(below, "The area"), and a smaller buffer gives area back but takes smaller mod files.
+(docs/DRIVE.md, "The build descriptor"). It exports its staging buffer's floor as
+`drive_staging` and `drive_staging_size` (64 KB, its `.bss`; `DL_STAGING_SIZE` in `fs.h` and
+the `.space` in `route.s`, which change together), which the descriptor's area record names,
+and `drive_stage_top`, which sets the descriptor's `F_STAGE_TOP` (ABI 1.3). The boot reads
+each file into the +Drive area itself, and after it the route and the MODS page use the
+area's free tail (STAGE.md), so a mod file may be as large as the area.
 
 It holds the `/mods` route, links the mods `/mods/active` names into the +Drive
 mods' area at boot, and adds the MODS page in SETTINGS > GLOBAL, which writes `/mods/active`.
@@ -27,17 +23,18 @@ a third `RouteTypeHandler`, so the unit's Data root listing shows `mods`:
 
 | path | what |
 |---|---|
-| `/mods` | the folders and files in the +Drive's `/mods` folder (`DL_DIR` in `fs.h`), then `.build` and `.status` |
+| `/mods` | the folders and files in the +Drive's `/mods` folder (`DL_DIR` in `fs.h`), then `.build`, `.status` and `.store` |
 | `/mods/<folder>`... | one folder's folders and files, to 3 folders below `/mods` (`DL_DEPTH`). A folder inside a third-level one (made over USB) is left out of its listing and off the MODS page, and no route reaches it or its files (`tests/drive_depth_host.c`, `tests/test_drive_route.py`) |
 | `/mods/<name>`, `/mods/<folder>/.../<name>` | read, upload or Clear one file, in `/mods` or a folder up to 3 deep. Uploads take `*.elemod` (at any depth) and `active` (in `/mods` only); an upload makes the folders it needs. Other files can be read and cleared. A Clear of a folder removes it when it is empty, as SAMPLES' DELETE DIR |
 | `/mods/<folder>/.../.dir` | upload only: an upload (of nothing, `elekloader mods mkdir`) makes the folder, and any parents not there yet, empty, up to 3 deep. No file is written, and a folder already there is kept |
 | `/mods/.mv` | upload only: an upload of `FROM\nTO` (paths below `/mods`; `elekloader mods mv`) moves or renames a `.elemod` file or a folder with everything in it, and rewrites `/mods/active`'s lines naming FROM or a file below it. No file is written |
 | `/mods/.build` | read only: the build descriptor, byte for byte (`python -m elekloader.desc dump`) |
 | `/mods/.status` | read only: plain text, the route's last commit or delete, the MODS page's check (`check: n/N /mods/FOLDER`), the boot's time, then the boot linker's records |
+| `/mods/.store` | read only, when there is one: docs/DRIVE.md, "+Drive storage" |
 
 Each transfer goes through stock's data container (31-byte header, body, 12-byte footer with
 CRC-32). An upload's header must say family 2, file type `0x454d4f44` (`'EMOD'`), not
-compressed, and a payload no larger than the staging buffer (512 KB as built). Anything else is refused at the header, and
+compressed, and a payload no larger than the stage (STAGE.md). Anything else is refused at the header, and
 nothing is written. The router checks the CRC at the footer, and only a transfer that passes
 every check reaches the commit: the body goes to `<name>.tmp`, the old file is deleted, and the
 tmp file is renamed over it.
@@ -63,6 +60,11 @@ A unit test build may also set `-DDL_TEST_ARMED`, which lets the route take an u
 test can plant the crash flag (`elekloader mods`' clients do this on purpose only). Without it, the name is
 refused like any other dot file. Neither flag is set by default.
 
+### The stage
+
+The boot reads files into the +Drive area, and the route and the MODS page use its free tail
+after the link: [STAGE.md](STAGE.md).
+
 ### How it hooks stock
 
 - One site, `0x400a005e`, in the resolver's getter (`0x4009febc`): after stock adds its two
@@ -76,8 +78,9 @@ refused like any other dot file. Neither flag is set by default.
   folder or file name at most 63 (`DL_SEG_MAX`), no folder name starts with `.`, and no
   folder or file name starts with a space (`/mods/active`'s reader trims a
   line's leading blanks, so such a name would save and not load; the MODS page doesn't list one).
-- `/mods/*` resolves to a RAM entry (kind 1) over the staging buffer. Its functions do the rest:
-  `+0x1c` refuses with "busy" while a loader part holds the buffer (`dl_staging_take`); `+0x2c`
+- `/mods/*` resolves to a RAM entry (kind 1) over the stage. Its functions do the rest:
+  `+0x1c` refuses with "busy" while a loader part holds the buffer (`dl_staging_take`), and an
+  upload over the stage (STAGE.md); `+0x2c`
   fills the buffer from the file once a read stream exists; `+0x6c` checks the container's
   header; `+0x4c` is stock's after-change call. WriteClose calls it with the header after a
   successful upload, which is when the route commits. Clear calls it with no header, which is
@@ -135,15 +138,15 @@ All addresses are OS 1.74's. They were read in Ghidra.
 
 ## Linking at boot
 
-One more site, `0x401009e0` in `main()` (`0x401006ee`), stock `jsr 0x4009da0e`: `drive_boot`
-(`flush.s`) makes that call, then runs `dl_boot` (`boot.c`). There ekFS is mounted and the audio
-start and the UI task haven't run, so nothing reads the tables the link rewrites.
+`dl_boot` (`boot.c`) runs in core's `ev_boot_drive` (core-ar2's README, "+Drive storage at
+boot"): ekFS is mounted and the audio start and the UI task haven't run, so nothing reads the
+tables the link rewrites.
 
 - **Skip.** Nothing links when the eMMC (`0x419ae2c0`) or ekFS (`0x419ae2bc`) didn't come up;
   when [NO] is held (the panel query `61 01`, 20 ms, the key bitmap `0x418d1340` through
   `0x40081c28`, then `60 00` again); or when `/mods/.armed` is there, which it deletes.
 - **The link** (`dlink.c`, with the JSON reader `json.c`) reads one file at a time into the
-  staging buffer and works from `core_desc` only: pass 1, the checks in id order, the layout,
+  +Drive area (STAGE.md) and works from `core_desc` only: pass 1, the checks in id order, the layout,
   pass 2 and the tables' merge. A pass-2 refusal starts the checks again without that mod. It
   writes the status records `/mods/.status` shows.
 - **Limits and memory.** Up to 256 lines of `/mods/active` (`DL_MAX_MODS`); past that nothing
@@ -156,7 +159,7 @@ start and the UI task haven't run, so nothing reads the tables the link rewrites
   4.3 MB area) and given back when the link returns; the MODS page's checks do the same. When
   the heap has no room the boot skips (`memory`, `NO MEMORY`).
 - **The area** is what the flashed build leaves of core 0.11's: from the build's RAM end (this
-  loader's own `.bss`, the 512 KB staging buffer, included) rounded up to 4 KB, to 0x47FFF000.
+  loader's own `.bss`, the 64 KB floor, included) rounded up to 4 KB, to 0x47FFF000.
   The descriptor's area record names it; the loader reads it from there.
 - **Lookups.** Global names (the build's exports, the tables, `NAME_n` and the mods' exports)
   are found through hash buckets built after pass 1, each chain in the order the names were
@@ -165,9 +168,9 @@ start and the UI task haven't run, so nothing reads the tables the link rewrites
 - **The cache.** `dl_flush` pushes every data-cache line by set and way (the V4's CPUSHL takes
   an index, not an address), then sets CACR to `0xA40CE100`: stock's value without DCINVA.
 - **The crash guard.** With a set chosen, it writes `/mods/.armed` before the link, so a link
-  that faults or hangs is caught as well as the mods' inits. When the link loads nothing it
+  that faults or hangs is caught, and inits. When the link loads nothing it
   deletes `.armed` at once; otherwise it calls each `drive_init` in id order and deletes
-  `.armed` 200 `ev_tick`s (about 10 s) later.
+  `.armed` 200 `ev_tick`s (10 s; sites: DRIVE.md) on.
 - **The time.** `dl_boot` reads DTIM0's count (`0xfc07000c`, free running from the 132 MHz bus
   clock; stock's own clock at `0x401006bc` reads it) as it starts, after the checks, after the
   link and the flush, and as it ends. `/mods/.status` shows it as `boot: N us (checks N, link N, inits N)`
@@ -193,12 +196,14 @@ background checks and firmware calls are in [PAGE.md](PAGE.md).
 
 - `route.c`, `route.s`, `names.inc` (the name rules), `fs.c` (ekFS calls and the mutex): the
   route. Tests: `tests/drive_route_names_host.c`, `tests/drive_depth_host.c` (the 3-deep
-  limit), `tests/drive_move_host.c` (moves on a made-up ekFS), `tests/test_drive_route.py`.
-- `flush.s`, `boot.c`, `dlink.c`, `json.c`: the boot link. Tests: `tests/drive_link_host.c`,
-  `tests/test_drive_link.py`.
-- `page.c`, `page.s`, `clip.inc` (the build list's label clip): the MODS page. Tests:
-  `tests/drive_page_clip_host.c`, `tests/drive_build_rows_host.c` (the build list after
-  folder changes and moves over USB), `tests/drive_check_tick_host.c`,
+  limit), `tests/drive_move_host.c` (moves on a made-up ekFS, the stage in a guarded arena),
+  `tests/test_drive_route.py`.
+- `flush.s`, `boot.c`, `dlink.c`, `json.c`, `sha256.c`: the boot link. Tests: `tests/drive_link_host.c`,
+  `tests/test_drive_link.py`, `tests/test_drive_top_stage.py`.
+- `page.c`, `page.s`, `clip.inc` (the build list's label clip), `park.c` (parked data): the
+  MODS page. Tests: `tests/drive_page_clip_host.c`, `tests/drive_build_rows_host.c` (the build
+  list after folder changes and moves over USB, parked data against `elekloader/drive_store.py`),
+  `tests/drive_check_tick_host.c`, `tests/drive_reader_host.c` (a file over the stage),
   `tests/test_drive_page.py`.
 
 `tools/modsrpc.py` is a small Data RPC client (list, get, put, rm) for checking the route in an
@@ -207,5 +212,5 @@ emulator through its `--usb-midi-tcp` port.
 ```bash
 python -m elekloader.sdk.build mods/core-ar2 --stock Analog-Rytm_MKII_OS1.74.syx
 python -m elekloader.sdk.build mods/drive-loader-ar2 --stock Analog-Rytm_MKII_OS1.74.syx
-python -m elekloader.patch --stock Analog-Rytm_MKII_OS1.74.syx --mod core-0.12.elemod --mod drive-loader-0.4.elemod --out drive-loader.syx --version 1.74
+python -m elekloader.patch --stock Analog-Rytm_MKII_OS1.74.syx --mod core-0.14.elemod --mod drive-loader-0.6.elemod --out drive-loader.syx --version 1.74
 ```

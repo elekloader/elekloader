@@ -326,9 +326,9 @@ may hold; the boot link and the computer's tools are in
 [DRIVE.md](DRIVE.md).
 
 **What a +Drive mod is.** A format-2 mod with only `.run` and `.bss`,
-relocations only in `.run` (`abs32`, `pc32`, `pc16`), and none of `sites`,
-`collections`, `copied`, `storage`, `sharc`, `resources.regions` or a
-contribution's `claims` (TELOS takes sites and regions). It adds
+relocations only in `.run` (`abs32`, `pc32`, `pc16`), no `collections`,
+`sharc` or contribution `claims`; `storage`, `sites`, `copied` and
+`resources.regions` only where the build takes them (DRIVE.md). It adds
 whole entries only to tables whose descriptor allows more (not DSP
 tables), at an order below 2^31-1. It imports the build's exports, table
 names, `NAME_n` (the count after the merge), `core_desc` and other +Drive
@@ -357,7 +357,7 @@ The link's order and its status records are in DRIVE.md, "The boot link".
 | 0 | `ok` | |
 | 1 | `missing` | the file is not in `/mods` |
 | 2 | `changed` | its CRC-32 is not the one `/mods/active` has |
-| 3 | `too-big` | larger than the staging buffer |
+| 3 | `too-big` | too large for the boot to read in |
 | 4 | `json` | not a JSON object |
 | 5 | `format` | not a format-2 mod the loader reads (the id, version, a relocation, an order, an export) |
 | 6 | `target` | made for another device or OS |
@@ -381,6 +381,8 @@ The link's order and its status records are in DRIVE.md, "The boot link".
 | 26 | `busy` | |
 | 27 | `region` | regions overlap |
 | 28 | `outside` | no free area |
+| 29 | `store` | storage room short (detail `WHAT NEED HAVE`) |
+| 30 | `clash` | a site or copied block clashes (argument: kind << 8 \| other's line; kinds 1 flashed, 2 +Drive, 3 pre-link, 4 not stock; detail: address) |
 
 When nothing is linked, the loader keeps why:
 

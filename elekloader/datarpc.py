@@ -20,7 +20,8 @@ number at +2, its command | 0x80 at +4 and a status byte at +5 (1: done). The Da
   0x5c clear   path
 
 What goes through it is a data container (container.py). The Drive Loader's `/mods` route takes
-`.elemod` files and `active`, and serves `.build` (the build descriptor) and `.status`. The router has
+`.elemod` files and `active`, and serves `.build` (the build descriptor), `.status` and `.store`
+(+Drive storage's places, read only). The router has
 no command for a folder and refuses its own Rename on the route's entries: an upload of an empty
 file to `FOLDER/.dir` asks the route to make FOLDER (`Mods.mkdir`), an upload of "FROM\nTO" to `.mv`
 to move or rename a file or a folder (`Mods.move`; `/mods/active` follows it), and a clear of an
@@ -153,6 +154,9 @@ class Client:
             return data
 
     def _get(self, path, chunk):
+        # The bytes are counted here, never taken from a reply's progress word: stock's per-mille
+        # progress (ReadPartial, done * 1000 in 32 bits) wraps past 4,294,967 bytes, and with the
+        # stage in the +Drive area's free tail a read can be larger than that.
         msg = self.call(ROPEN, path.encode('latin-1') + b'\0' + struct.pack('>IB', chunk, 0))
         job = struct.unpack_from('>I', msg, 6)[0]
         data, seq = bytearray(), 0
@@ -229,6 +233,17 @@ class Mods:
     def get(self, name):
         """-> (the container's header, the file's bytes)."""
         return container.parse(self.c.get(self.path(name)))
+
+    def status(self):
+        """`/mods/.status` as text, or None when it can't be read."""
+        try:
+            return self.get('.status')[1].decode('utf-8', 'replace')
+        except (RpcError, ModError):
+            return None
+
+    def room(self, build):
+        """The most bytes one upload or read takes on the unit now (drive.upload_room)."""
+        return drive.upload_room(build, self.status())
 
     def build(self):
         """The unit's build (its descriptor, `.build`) and the container header it came in."""
@@ -363,7 +378,9 @@ def add_arguments(p):
     sub = p.add_subparsers(dest='op', required=True)
     q = sub.add_parser('ls', help='list /mods, or one of its folders')
     q.add_argument('folder_path', nargs='?', help='a folder below /mods (default: /mods itself)')
-    q = sub.add_parser('get', help='download a file (also .build and .status)')
+    sub.add_parser('room', help='the most bytes one upload or read takes on the unit now '
+                   '(/mods/.status, stage: the +Drive area\'s free tail, or the loader\'s buffer)')
+    q = sub.add_parser('get', help='download a file (also .build, .status and .store)')
     q.add_argument('name')
     q.add_argument('--out', help='where to write it (default: its name)')
     q = sub.add_parser('put', help='check the files against the unit\'s build, then upload them')
@@ -399,6 +416,10 @@ def run(a, mods, log=print):
         log('DELETED %s' % mods.path(a.name))
         return 0
     build, head = mods.build()
+    if a.op == 'room':
+        n = mods.room(build)
+        log('ROOM %s' % ('%d bytes' % n if n else 'unknown'))
+        return 0
     if a.op == 'mv':
         src, dest = a.source.strip('/'), a.dest.strip('/')
         if dest == '' or mods.is_folder(dest):
@@ -421,6 +442,14 @@ def run(a, mods, log=print):
         r = drive.check(build, files)
         drive.print_result(r, log)
         if not all(c.state == drive.LOADED for c in r.choices):
+            log('REFUSED: nothing was uploaded')
+            return 1
+        room = mods.room(build)                 # the live stage: it changes with each boot's set
+        over = [(n, raw) for n, raw in files if room and len(raw) > room]
+        if over:
+            for n, raw in over:
+                log('REFUSED: %s is %d bytes; the unit takes up to %d now (%s/.status, stage)'
+                    % (n, len(raw), room, mods.folder))
             log('REFUSED: nothing was uploaded')
             return 1
         for name, raw in files:

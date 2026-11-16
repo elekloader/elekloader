@@ -31,6 +31,32 @@ def sets(B):
         out += [(code + ': refused', bad, area), (code + ': loads', good, area)]
     h, u = T.hello(B), T.user(B)
     out = out + [(n, f, None) for n, f in _more(B, h, u)]
+    return out + _top(B)
+
+
+def _top(B):
+    """Sets on a build whose loader stages files at the area's top (ABI 1.3, F_STAGE_TOP): the
+    placement by file length, the room each file needs above the code before it, and too-big at the
+    area's size (drive._layout, placement)."""
+    from test_drive_top_stage import code_mod
+    area = ('top', 0x8000)
+    n = T.built(B, area)[1]
+    room = n.hi - n.lo
+    # z-big: the longest file (about 22 KB) with 4 KB of code; a-small: 8 KB of code in a 17 KB file.
+    # In id order a-small's code would sit under z-big's file; longest first, both fit.
+    big, small = code_mod(B, 'z-big', 4 * 1024, pad=13000), code_mod(B, 'a-small', 8 * 1024)
+    bare = len(T.files(T.hello(B, description=''))[0][1])
+    out = [('top: a file over the staging buffer loads', T.files(T.hello(B, description='x' * (T.STAGING + 1))), 'top'),
+           ('top: the longest file first', T.files(small, big), area),
+           ('top: the longest file first, the other order', T.files(big, small), area),
+           ('top: one more mod is out of room', T.files(small, big, code_mod(B, 'm-more', 8 * 1024)), area),
+           ('top: a file that leaves no room for its own code',
+            T.files(T.hello(B, description='x' * (room - 8 - bare))), area),
+           ('top: a file over the area', T.files(T.hello(B, description='x' * (room + 1 - bare))), area)]
+    b = T.built(B, area)[1]
+    got = [[c.code for c in drive.check(b, f).choices] for _n, f, _a in out[1:]]
+    room_, big_ = drive.CODE['room'], drive.CODE['too-big']
+    assert got[:2] == [[0, 0], [0, 0]] and room_ in got[2] and got[3:] == [[room_], [big_]], got
     return out
 
 
@@ -50,8 +76,7 @@ def _more(B, h, u):
     out.append(('a long id', T.files(T.hello(B, id='x' * 28))))
     out.append(('no target', T.files(T.hello(B, target=None))))
     out.append(('Mod2 refuses', T.files(T.hello(B, symbols={'fn_drive-hello': ['.nope', 0], 'drive-hello_count': ['.bss', 0]}))))
-    for field, value in (('collections', {'ev_mine': {'entry': 4}}), ('copied', [{'lo': 1, 'hi': 2, 'to': 3}]),
-                         ('storage', [{'sym': 'st', 'scope': 'kit', 'bits': 1}])):
+    for field, value in (('collections', {'ev_mine': {'entry': 4}}), ('storage', [{'sym': 'st', 'scope': 'kit', 'bits': 1}])):
         out.append(('feature ' + field, T.files(T.hello(B, **{field: value}))))
     for sec in ('.boot', '.fast', '.payload'):
         d = T.hello(B)
@@ -65,6 +90,20 @@ def _more(B, h, u):
     big = ['n%05d' % i for i in range(T.built(B)[1].pools['arena'] // 7)]
     out.append(('the arena', T.files(T.hello(B, resources={'names': big[:1000]}, exports=['not_a_symbol']),
                                      T.hello(B, resources={'names': big[1000:]}))))
+    # +Drive sites (the descriptor alone: no stock bytes to check)
+    jmp, wide = B.jmp_site(B.at(0x1000), 'fn_a-mod'), B.site(B.at(0x1004), 4)
+    block = {'lo': B.at(0x1000), 'hi': B.at(0x1100), 'to': 0}
+    out.append(('sites: two mods on one byte', T.files(T.dmod(B, 'z-mod', sites=[wide]), T.dmod(B, 'a-mod', sites=[jmp]))))
+    out.append(('sites: a site in a copied block', T.files(T.dmod(B, 'a-mod', copied=[block]), T.dmod(B, 'z-mod', sites=[wide]))))
+    out.append(('sites: two copied blocks', T.files(T.dmod(B, 'a-mod', copied=[block]), T.dmod(B, 'z-mod', copied=[block]))))
+    out.append(('sites: a copied block over a flashed site',
+                T.files(T.dmod(B, 'a-mod', copied=[dict(block, lo=B.at(0x1f00), hi=B.at(0x2001))]))))
+    for name, bad in (('outside the main OS', dict(jmp, addr=B.at(len(B.img) - 2))), ('a short new', dict(jmp, len=8)),
+                      ('kind both', dict(jmp, kind='both')), ('an abs16', dict(jmp, relocs=[[2, 'abs16', 'abs', 0]])),
+                      ('a sha not hex', dict(jmp, stock_sha256='x' * 64)), ('addr as text', dict(jmp, addr='0x40001400')),
+                      ('addr not a number', dict(jmp, addr='here'))):
+        out.append(('sites: ' + name, T.files(T.dmod(B, 'a-mod', sites=[bad]))))
+    out.append(('sites: an empty copied block', T.files(T.dmod(B, 'a-mod', copied=[dict(block, hi=block['lo'])]))))
     d = T.hello(B)
     d['symbols']['drive_init'] = ['.run', 2]
     d['exports'] = d['exports'] + ['drive_init']
@@ -88,7 +127,7 @@ def main():
             r = drive.check(drive.load_build(block(area)), files)
             row = {'name': name, 'files': [[n, _enc(raw)] for n, raw in files],
                    'summary': drive.summary(r), 'status': drive.status_text(r), 'lines': _lines(r)}
-            if area is not None:            # its own build: a smaller area, smaller pools
+            if area is not None:            # its own build: a smaller area, smaller pools, or the stage at the top
                 row['build'] = block(area).hex()
             rows.append(row)
         release = {'version': B.rel.version, 'syxSha256': B.rel.syx_sha256, 'mainSha256': B.rel.main_sha256,

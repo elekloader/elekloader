@@ -158,11 +158,16 @@ function renderBuild() {
   renderRoom();
 }
 
+/** The room: the area, and the most one upload or read takes now, the live stage of the unit's .status (with the
+ * stage at the area's top, the free tail above the set the last boot loaded; it changes with each boot's set). */
 function renderRoom() {
-  const b = S.build;
+  const b = S.build, room = S.room ?? drive.uploadRoom(b, null);
   $('dm-room').replaceChildren(
     el('dt', {}, '+Drive area'), el('dd', {}, `${kb(b.hi - b.lo)} (${hex8(b.lo)}..${hex8(b.hi)})`),
-    el('dt', {}, 'Largest file'), el('dd', {}, b.stagingSize ? kb(b.stagingSize) : 'no limit given'));
+    ...(b.stageTop ? [el('dt', {}, 'Largest file the boot links'), el('dd', {}, kb(b.hi - b.lo))] : []),
+    el('dt', {}, b.stageTop ? 'Largest upload now' : 'Largest file'),
+    el('dd', {}, room ? kb(room) : 'no limit given',
+      b.stageTop ? el('div', { class: 'muted small' }, 'the free room above the mods the unit loaded at its last boot') : ''));
 }
 
 // ---- /mods -----------------------------------------------------------------------------------------------------
@@ -209,8 +214,10 @@ async function refresh() {
     if (!(e instanceof datarpc.RpcError)) throw e;          // none yet
   }
   S.inUse = new Set(active.map(([n]) => n));
-  let status = '';
-  try { status = new TextDecoder().decode((await S.mods.get('.status'))[1]); } catch (e) { if (!(e instanceof datarpc.RpcError)) throw e; }
+  let status = '', read = false;
+  try { status = new TextDecoder().decode((await S.mods.get('.status'))[1]); read = true; } catch (e) { if (!(e instanceof datarpc.RpcError)) throw e; }
+  S.room = drive.uploadRoom(S.build, read ? status : null);   // the live stage
+  renderRoom();
   $('dm-status').hidden = false;
   $('dm-status-text').textContent = status.trim() || 'Nothing loaded at the last boot.';
   $('dm-files').hidden = false;
@@ -461,6 +468,11 @@ async function upload(files) {
     const bad = r.choices.filter(c => files.some(f => f.name === c.name) && c.state !== drive.LOADED);
     if (bad.length) {
       say('dm-upload-msg', `REFUSED: nothing was uploaded. ${bad.map(c => `${c.name}: ${c.why()}`).join('; ')}`, 'bad');
+      return;
+    }
+    const over = files.filter(f => S.room && f.raw.length > S.room);   // the unit's live stage
+    if (over.length) {
+      say('dm-upload-msg', `REFUSED: nothing was uploaded. ${over.map(f => `${f.name} is ${kb(f.raw.length)}; the unit takes up to ${kb(S.room)} now`).join('; ')}`, 'bad');
       return;
     }
     for (const f of files) {

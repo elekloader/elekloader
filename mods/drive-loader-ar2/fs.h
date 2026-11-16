@@ -19,6 +19,7 @@
 #define DL_PATH_MAX 144                /* DL_DIR "/" path ".tmp", with the NUL */
 #define DL_MKDIR ".dir"                /* an upload to FOLDER "/" DL_MKDIR makes FOLDER (names.inc) */
 #define DL_MOVE ".mv"                  /* an upload of "FROM\nTO" to DL_DIR "/" DL_MOVE moves or renames (names.inc) */
+#define DL_STORE ".store"              /* +Drive storage's places (docs/DRIVE.md): the route serves it read only */
 
 /* stock's ekFS file object (0x2c bytes, ctor 0x4007dcfa), kept opaque, then the
  * loader's own: the files carry a 16-byte header (README, "Files on the +Drive") */
@@ -52,9 +53,11 @@ struct dl_reader {
     unsigned got;                        /* bytes read so far */
     unsigned crc;                        /* the CRC-32 register; ~crc is the file's at the end */
     unsigned char open;
+    unsigned char over;                  /* past max: the rest is read for got and crc alone */
 };
 int dl_read_open(struct dl_reader *rd, const char *name);   /* 0, or -1 missing (closed) */
-/* -> 0 more to read, 1 at the end (rd->got bytes in buf), -2 larger than max, -3 a read
+/* -> 0 more to read, 1 at the end (rd->got bytes in buf), -2 larger than max (read to its end
+ * all the same: rd->got is its size and rd->crc its CRC, its bytes not kept), -3 a read
  * error; closed at any answer but 0 */
 int dl_read_more(struct dl_reader *rd, unsigned char *buf, unsigned max);
 void dl_read_close(struct dl_reader *rd);                   /* a read given up */
@@ -75,10 +78,20 @@ int dl_list_dir(const char *rel, struct dl_ent *out, int max);
 void dl_lock(void);
 void dl_unlock(void);
 
-/* the staging buffer (512 KB, .bss): the route's transfers and the boot
- * linker share it */
+/* the staging buffer's floor (64 KB, .bss). The boot links with the stage at the top of the
+ * +Drive area (dl.h, dl_stage_top), and after it the route's transfers and the MODS page's
+ * check use the live stage: the free tail of the area above the boot's layout when that is
+ * larger than the floor, else this buffer (STAGE.md). */
 extern unsigned char drive_staging[];
-#define DL_STAGING_SIZE 0x80000
+#define DL_STAGING_SIZE 0x10000
+
+/* The live stage (route.c owns it): its start and size. Every read, upload and page check
+ * goes through these two, never drive_staging directly. dl_stage_tail sets them once, at the
+ * end of the boot, to the area's free tail [lo, hi) when it is larger than the floor (lo
+ * rounded up to 16); otherwise they stay the floor. */
+extern unsigned char *volatile dl_stage_at;
+extern volatile unsigned dl_stage_len;
+void dl_stage_tail(unsigned lo, unsigned hi);
 
 /* who holds the staging buffer outside a transfer: a loader part (the MODS
  * page, a later linker run) takes it with dl_staging_take, and the route then

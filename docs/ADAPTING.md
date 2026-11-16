@@ -1854,7 +1854,9 @@ as when it was first made. Copies go in the build's manifest (`store`) and in th
 itself, after the mods' image (`ELKSTORE`, its length, then the lockfile's
 text; about 1-2 KB, never copied into RAM), so a lost lockfile comes back
 from the last .syx: `elekloader.patch --lockfile-from OLD.syx`. The unit
-itself can't give it back: it never sends its OS out.
+itself can't give it back: it never sends its OS out. On a unit with the
+Drive Loader, `--drive-store` keeps the lock codes and CCs its +Drive mods
+hold free (docs/DRIVE.md, "+Drive storage").
 
 **What is checked.** Sounds and kits carry the layout ID and their
 generation in their own spare bytes and are checked on every load. Pattern

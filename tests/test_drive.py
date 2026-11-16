@@ -15,6 +15,7 @@ imports core_desc and exports a small staging buffer; and a flashed mod `flash-a
 entry at order 60. Every refusal code the host can meet has a fixture that is refused and one that
 loads (ROWS), and test_every_code_has_a_fixture fails for a code without them.
 """
+import dataclasses
 import json
 import os
 import struct
@@ -33,27 +34,54 @@ from test_link_refusals import Bench                                      # noqa
 STAGING = 0x10000
 
 
-def flashed(B, pad=0):
+def flashed(B, pad=0, store=False, stage_top=False):
     core = B.core(collections={'ev_tick': {'entry': 4}, 'ev_draw': {'entry': 4},
                                'ev_x': {'entry': 4, 'spare': 1}, 'core_handles': {'entry': 4}})
     core['symbols']['core_zero'] = ['.boot', 0]
     core['exports'] = ['core_fn', 'core_zero']
+    if store:                                   # +Drive storage: core-ar2 0.14's side of it
+        core['imports'] = ['__store_gen', '__store_gen2']
+        core['collections'].update({k: {'entry': e} for k, e in (('core_store_ids', 4), ('core_lock_codes', 8),
+                                                                 ('core_lock_ccs', 8), ('core_field_inits', 4))})
+        core['sections']['.bss'] = {'align': 4, 'size': 16}
+        core['symbols']['core_store_gens'] = ['.bss', 0]
+        core['symbols']['core_lfo_dsts'] = ['.bss', 8]
+        core['exports'] += ['core_store_gens', 'core_lfo_dsts']
     loader = B.other('drive-loader', imports=['core_desc'],
                      relocs=[['.run', 4, 'abs32', 'sym:core_desc', 0]])
     loader['sections']['.bss'] = {'size': STAGING + pad}   # pad: a bigger build, a smaller area
     loader['symbols'].update({'drive_staging': ['.bss', 0], 'drive_staging_size': ['abs', STAGING]})
     loader['exports'] = ['drive_staging', 'drive_staging_size']
+    if stage_top:                               # the loader stages files at the area's top (ABI 1.3)
+        loader['symbols']['drive_stage_top'] = ['abs', 1]
+        loader['exports'].append('drive_stage_top')
     fa = B.mod('flash-a', resources={'names': ['settings:A']})
     fa['contribute'] = [{'to': 'ev_draw', 'order': 60, 'data': '00000000',
                          'relocs': [[0, 'abs32', 'sym:fn_flash-a', 0]]}]
     fa['symbols']['flash_fn'] = ['.run', 4]
     fa['exports'] = ['flash_fn']
+    fa['sites'] = [B.jmp_site(B.at(0x2000), 'flash_fn')]   # in the site map, for the +Drive sites' rows
     return [core, loader, fa]
 
 
 def built(B, area=None):
     """The flashed build, and the Build the boot linker sees; with `area`, its loader's .bss grown
     until the +Drive area is about that many bytes (its pools are sized to the area)."""
+    top = area == 'top' or isinstance(area, tuple)   # 'top', or ('top', N): a loader that stages
+    if isinstance(area, tuple):                      # files at the area's top, and its area
+        area = area[1]
+    elif area == 'top':
+        area = None
+    if top:
+        out = link.link([link.Mod2(d, d['id']) for d in flashed(B, stage_top=True)], B.img)
+        b = drive.load_build(out.image)
+        if area is not None:
+            out = link.link([link.Mod2(d, d['id']) for d in flashed(B, b.hi - b.lo - area, stage_top=True)], B.img)
+            b = drive.load_build(out.image)
+        return out, b
+    if area == 'store':                         # a build that keeps +Drive storage
+        out = link.link([link.Mod2(d, d['id']) for d in flashed(B, store=True)], B.img)
+        return out, drive.load_build(out.image)
     out = link.link([link.Mod2(d, d['id']) for d in flashed(B)], B.img)
     b = drive.load_build(out.image)
     if area is not None:
@@ -243,9 +271,15 @@ def _(B):
     return files(hello(B, target=t)), files(hello(B))
 
 
-@row('feature', detail='sites')
+@row('feature', detail='collections')
 def _(B):
-    return files(hello(B, sites=[B.jmp_site(B.at(0x1000), 'fn_drive-hello')])), files(hello(B, sites=[]))
+    return files(hello(B, collections={'ev_mine': {'entry': 4}})), files(hello(B, collections={}))
+
+
+@row('clash', detail='%08x flash-a' % 0x40002402, arg=drive.SITE_CORE << 8)
+def _(B):
+    return files(hello(B, sites=[B.jmp_site(B.at(0x2002), 'fn_drive-hello')])), \
+        files(hello(B, sites=[B.jmp_site(B.at(0x1000), 'fn_drive-hello')]))
 
 
 @row('duplicate', 1, detail='drive-hello')
@@ -357,6 +391,13 @@ def _(B):
     return files(*(good + [dmod(B, 'm256')])), files(*good)
 
 
+@row('store', 1, detail='sound 60 56', arg=0, deep=True, area='store')
+def _(B):
+    a = dmod(B, 'st-a', storage=[{'sym': 'st_a', 'scope': 'sound', 'bits': 32, 'lock': True}])
+    b = dmod(B, 'st-b', storage=[{'sym': 'st_b', 'scope': 'sound', 'bits': 28}])
+    return files(a, b), files(a)
+
+
 def test_every_refusal_has_a_fixture_that_is_refused_and_one_that_loads():
     with Bench('analog-rytm-mk2') as B:
         builds = {}
@@ -426,18 +467,17 @@ def test_telos_sites_and_regions():
         d['relocs'] = [r for r in d['relocs'] if r[1] != 8]      # its word at +8 is the stock part here
         r = drive.link(b, files(d))
         assert r.choices[0].code == 0 and r.area[8:12] == B.img[0x1000:0x1004] != out.image[0x1000:0x1004]
-    with Bench('analog-rytm-mk2') as B:                  # no shadow: the Rytm's twin as before
+    with Bench('analog-rytm-mk2') as B:                  # no shadow: the boot-linked sites (DRIVE.md, "Sites")
         _out, b = built(B)
-        assert not b.telos
+        assert not b.telos and b.main_hi
         r = drive.check(b, files(hello(B, sites=[B.jmp_site(B.at(0x1000), 'fn_drive-hello')])))
-        assert (r.choices[0].code, r.choices[0].detail) == (drive.CODE['feature'], 'sites')
+        assert r.choices[0].state == drive.LOADED, r.choices[0].why()
 
 
 def test_each_feature_and_section_a_drive_mod_cannot_use_is_refused():
     with Bench('analog-rytm-mk2') as B:
         _out, b = built(B)
-        for field, value in (('sites', [B.jmp_site(B.at(0x1000), 'fn_drive-hello')]),
-                             ('collections', {'ev_mine': {'entry': 4}}), ('copied', [{'lo': 1, 'hi': 2, 'to': 3}]),
+        for field, value in (('collections', {'ev_mine': {'entry': 4}}),
                              ('storage', [{'sym': 'st', 'scope': 'kit', 'bits': 1}]), ('sharc', {})):
             r = drive.check(b, files(hello(B, **{field: value})))
             want = 'sharc' if field == 'sharc' else field
@@ -455,6 +495,63 @@ def test_each_feature_and_section_a_drive_mod_cannot_use_is_refused():
         c = [{'to': 'ev_tick', 'order': 50, 'data': '00000000', 'relocs': [], 'claims': [[1, 2]]}]
         r = drive.check(b, files(hello(B, contribute=c)))
         assert (r.choices[0].code, r.choices[0].detail) == (drive.CODE['feature'], 'claims')
+
+
+def test_sites_load_and_each_clash_is_refused():
+    """+Drive sites (ABI 1.2's site map): one loads, relocated to its mod's code; one over a flashed
+    site, in a pre-link range or not over its stock bytes is refused, as is the later of two +Drive
+    mods whose sites (or a site and a copied block) share a byte; two copied blocks may."""
+    with Bench('analog-rytm-mk2') as B:
+        pre = (B.at(0x3000), B.at(0x3010), desc.PRE_CODE, 'test')
+        B.dev.releases['SYN'] = B.rel = dataclasses.replace(B.rel, prelink=(pre,))
+        docs = flashed(B)
+        out = link.link([link.Mod2(d, d['id']) for d in docs], B.img)
+        b = drive.load_build(out.image)
+        assert b.main_hi == B.at(len(B.img)), hex(b.main_hi)
+        bad = B.jmp_site(B.at(0x1000), 'fn_drive-hello')
+        bad['stock_sha256'] = '00' * 32
+        assert [(c.code, c.arg, c.detail) for c in drive.check(b, files(hello(B, sites=[bad]))).choices] == \
+            [(drive.CODE['clash'], drive.SITE_STOCK << 8, '%08x' % B.at(0x1000))]
+        blk = drive.load_build(out.image[desc.find(out.image)[0]:])   # the descriptor alone: no stock bytes
+        assert drive.check(blk, files(hello(B, sites=[bad]))).choices[0].state == drive.LOADED
+        site = B.jmp_site(B.at(0x1000), 'fn_drive-hello')
+        r = drive.link(b, files(hello(B, sites=[site])))
+        assert r.choices[0].state == drive.LOADED, r.choices[0].why()
+        assert r.sites == [('drive-hello', 0, B.at(0x1000), bytes.fromhex('4ef9') + struct.pack('>I', b.lo))], r.sites
+
+        def why(*docs, deep=False):
+            r = (drive.link if deep else drive.check)(b, files(*docs))
+            return [(c.code, c.arg, c.detail) if c.state != drive.LOADED else 0 for c in r.choices]
+        S = drive.CODE['clash']
+        assert why(hello(B, sites=[B.jmp_site(B.at(0x2002), 'fn_drive-hello')])) == \
+            [(S, drive.SITE_CORE << 8, '%08x flash-a' % B.at(0x2002))]
+        assert why(hello(B, sites=[B.jmp_site(B.at(0x300c), 'fn_drive-hello')])) == \
+            [(S, drive.SITE_PRELINK << 8, '%08x' % B.at(0x300c))]
+        assert why(hello(B, sites=[B.jmp_site(B.at(0x3010), 'fn_drive-hello')])) == [0]
+        a, z = dmod(B, 'a-mod', sites=[B.jmp_site(B.at(0x1000), 'fn_a-mod')]), \
+            dmod(B, 'z-mod', sites=[B.site(B.at(0x1004), 4)])
+        assert why(z, a) == [(S, drive.SITE_MOD << 8 | 1, '%08x' % B.at(0x1004)), 0]
+        assert drive.message(S, '%08x' % B.at(0x1004), drive.SITE_MOD << 8 | 1) == \
+            'site 0x40001404: taken by another +Drive mod (line 2)'
+        block = {'lo': B.at(0x1000), 'hi': B.at(0x1100), 'to': 0}
+        assert why(dmod(B, 'a-mod', copied=[block]), dmod(B, 'z-mod', sites=[B.site(B.at(0x1000), 4)])) == \
+            [0, (S, drive.SITE_MOD << 8, '%08x' % B.at(0x1000))]
+        assert why(dmod(B, 'a-mod', copied=[block]), dmod(B, 'z-mod', copied=[block])) == [0, 0]
+        assert why(hello(B, copied=[dict(block, lo=B.at(0x1f00), hi=B.at(0x2001))])) == \
+            [(S, drive.SITE_CORE << 8, '%08x flash-a' % B.at(0x1f00))]
+        for bad in (dict(site, addr=B.at(len(B.img) - 2)), dict(site, len=4), dict(site, kind='both'),
+                    dict(site, relocs=[[2, 'abs16', 'sym:fn_drive-hello', 0]]), dict(site, stock_sha256='x' * 64)):
+            assert why(hello(B, sites=[bad])) == [(drive.CODE['format'], 0, '')], bad
+        assert why(hello(B, copied=[dict(block, hi=block['lo'])])) == [(drive.CODE['format'], 0, '')]
+        # after the boot wrote them, the MODS page's check reads through the stock bytes it kept
+        r = drive.link(b, files(hello(B, sites=[site])))
+        drive.apply_sites(b, r)
+        assert b.stock(B.at(0x1000), 6) == r.sites[0][3]
+        assert why(hello(B, sites=[site])) == [0]
+        # a descriptor without a site map (ABI 1.1) takes no sites, as before
+        old = drive.Build(dict(b.d, abi=(1, 1)), b.image, b.desc_at + b._ram)
+        r = drive.check(old, files(hello(B, sites=[site])))
+        assert (r.choices[0].code, r.choices[0].detail) == (drive.CODE['feature'], 'sites')
 
 
 def test_of_a_conflicting_pair_the_later_by_id_goes():
@@ -675,6 +772,20 @@ class LossyUnit(FakeUnit):
             self.done.add(struct.unpack_from('>I', a)[0])
 
 
+class WrappingUnit(FakeUnit):
+    """A FakeUnit whose read replies carry stock's per-mille progress word, wrapping as stock's does."""
+
+    def send(self, raw):
+        super().send(raw)
+        msg = datarpc.unframe(raw)
+        if msg[4] == datarpc.READ:
+            rep = bytearray(datarpc.unframe(self.out[-1]))
+            j, s = struct.unpack_from('>II', msg, 5)
+            done = min((s + 1) * self.chunks[j], len(self.jobs[j]))
+            struct.pack_into('>I', rep, 14, (done * 1000 & 0xFFFFFFFF) // len(self.jobs[j]))
+            self.out[-1] = datarpc.frame(bytes(rep))
+
+
 def test_a_lost_read_reply_is_the_error_not_the_refused_close():
     """Every read reply lost: after the smaller chunk fails too, the error is the lost reply."""
     with Bench('analog-rytm-mk2') as B:
@@ -720,6 +831,63 @@ def test_a_read_whose_replies_are_lost_starts_again_with_small_chunks():
     assert client.read_chunk == 0x300
     assert mods.get('big.elemod')[1] == body          # whole, and at once this time
     assert client.read_chunk == 0x300
+
+
+def test_a_loader_that_stages_at_the_top_says_so_in_the_descriptor():
+    """ABI 1.3: the loader's export drive_stage_top sets the descriptor's F_STAGE_TOP, and the host's
+    twin then lays the set out as the boot does: a file over the staging buffer (now the floor)
+    but within the area passes; one over the area is too big."""
+    with Bench('analog-rytm-mk2') as B:
+        out, b = built(B, 'top')
+        assert b.d['abi'] == desc.ABI == (1, 3) and b.d['flags'] == desc.F_STAGE_TOP and b.stage_top
+        assert 'files staged at the area\'s top' in desc.dump(b.d)
+        _o, plain = built(B)
+        assert plain.d['flags'] == 0 and not plain.stage_top
+        big = files(hello(B, description='x' * STAGING))
+        assert drive.check(plain, big).choices[0].code == drive.CODE['too-big']
+        assert drive.check(b, big).choices[0].state == drive.LOADED
+        huge = files(hello(B, description='x' * (b.hi - b.lo)))
+        assert drive.check(b, huge).choices[0].code == drive.CODE['too-big']
+
+
+def test_the_live_stage_from_the_status_limits_uploads():
+    """`elekloader mods` reads /mods/.status's stage line (route.c): the most one upload or read
+    takes on that boot. A file the build takes but the stage can't hold is refused before any
+    upload; with no stage line, the build's staging buffer is the limit."""
+    import argparse
+    assert drive.stage_of('drive-loader route\nstage: 3932160 bytes at 0x40c40000, free tail\n') == 3932160
+    assert drive.stage_of('drive-loader route\nlast: -\n') is None
+    with Bench('analog-rytm-mk2') as B:
+        out, b = built(B, 'top')
+        blk = out.image[desc.find(out.image)[0]:]
+        unit = FakeUnit(blk[:struct.unpack_from('>I', blk, 8)[0]])
+        mods = datarpc.Mods(datarpc.Client(unit, timeout=0.5))
+        name, raw = files(hello(B, description='x' * (3 * STAGING)))[0]
+        assert drive.upload_room(b, None) == STAGING
+        log = []
+        with tempfile.TemporaryDirectory() as tmp:
+            p = os.path.join(tmp, name)
+            open(p, 'wb').write(raw)
+            unit.files['.status'] = b'drive-loader route\nstage: %d bytes at 0x40c40000, free tail\n' % (len(raw) - 1)
+            assert datarpc.run(argparse.Namespace(op='room'), mods, log.append) == 0
+            assert log[-1] == 'ROOM %d bytes' % (len(raw) - 1)
+            assert datarpc.run(argparse.Namespace(op='put', files=[p]), mods, log.append) == 1
+            assert name not in unit.files and 'the unit takes up to %d now' % (len(raw) - 1) in log[-2]
+            unit.files['.status'] = b'drive-loader route\nstage: %d bytes at 0x40c40000, free tail\n' % len(raw)
+            assert datarpc.run(argparse.Namespace(op='put', files=[p]), mods, log.append) == 0
+            assert unit.files[name] == raw
+            unit.files['.status'] = b'drive-loader route\n'          # no stage line: the floor
+            assert datarpc.run(argparse.Namespace(op='put', files=[p]), mods, log.append) == 1
+
+
+def test_a_read_ignores_the_wrapping_progress_word():
+    """Stock's ReadPartial reports per-mille progress as done * 1000 in 32 bits, which wraps past
+    4,294,967 bytes: the client counts the bytes it gets and never reads that word."""
+    body = bytes(range(256)) * (4300000 // 256 + 1)
+    unit = WrappingUnit(b'')
+    unit.files['big.elemod'] = body
+    mods = datarpc.Mods(datarpc.Client(unit, timeout=0.5))
+    assert mods.get('big.elemod')[1] == body
 
 
 def test_mods_put_ls_get_active_and_rm_over_the_data_router():

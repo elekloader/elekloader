@@ -148,6 +148,9 @@ export class Client {
     }
   }
 
+  // The bytes are counted here, never taken from a reply's progress word: stock's per-mille progress (ReadPartial,
+  // done * 1000 in 32 bits) wraps past 4,294,967 bytes, and with the stage in the +Drive area's free tail a read can
+  // be larger than that. Client._get.
   private async getChunked(path: string, chunk: number): Promise<Uint8Array> {
     let msg = await this.call(ROPEN, cat(path0(path), be([chunk, 4], [0, 1])))
     const job = rd32(msg, 6), parts: Uint8Array[] = []

@@ -177,6 +177,26 @@ out are the freed runs given out again. A core that keeps no lockfile still
 gets the same ids for the same mods: they are given out from the first id in
 the order of the mods' ids.
 
+What the +Drive keeps (docs/DRIVE.md, "+Drive storage"). The Drive Loader
+places +Drive mods' fields in the bits, lock codes and CCs the flashed build
+leaves free, from the top down, and keeps where in the unit's /mods/.store. A
+build given that file (`--drive-store`, drive_store.reserve) keeps it in one
+more key, which later builds read too until another .store replaces it:
+
+     "drive": {"id": "0x...", "low": {"sound": 56, ...}, "codes": [127], "ccs": [119]}
+
+"low" is each scope's low mark (the +Drive's lowest bit; nothing below it is
+the +Drive's), "codes" and "ccs" the codes and CCs its fields and parked
+fields hold. A new lockable field's code skips the +Drive's codes, and a
+code freed longest ago is given out again only when it is not one of them;
+a CC likewise. Only when nothing else is left does a field take one, with a
+note: the loader then gives the +Drive field another at its next boot. Bits
+cannot be kept that way: the boot allocator reads the build's used bits as
+one mark, so a build that grows past "low" (or repacks a scope the +Drive
+keeps bits in) is placed as before, with a note naming the scope the loader
+repacks at its next boot. The key is not stored data: it is not part of the
+layout ID.
+
 Nothing here is random: the same lockfile (or none) and mods always link to
 the same bytes.
 """
@@ -208,6 +228,7 @@ HANDLES_TABLE = 'core_handles'                  # core-ar2 0.11: the handle fiel
 KNOB_TOP = 0xFFFF                               # the last knob id: page knob lists hold 16 bits (abs16)
 MAX_INITS = 63                                  # slots 1..63, in the descriptor's bits 16..21
 LOCK_SCOPES = ('sound', 'kit')
+DRIVE_KEY = 'drive'                             # what the +Drive keeps (drive_store.reserve)
 KIND_NAMES = {'synth': 'the synth tracks', 'fx': 'the FX track', 'cv': 'the CV track'}
 
 # Per device: each scope's bits in its live home, and the tagged store.
@@ -260,6 +281,12 @@ def lock_dst_bits(dev_key):
 def fx_lock_dst_bits(dev_key):
     """The bits of core_fx_lfo_dst on the device, 0 where the core keeps none."""
     return _spec(dev_key).get('fx_lock_dst', 0)
+
+
+def cc_pool(dev_key):
+    """-> (the device's CC pool in the order fields get them, the CCs of it a kit field gets none of)."""
+    sp = _spec(dev_key)
+    return tuple(sp.get('ccs', ())), tuple(sp.get('fx_ccs_taken', ()))
 
 
 def code_range(dev_key):
@@ -579,7 +606,26 @@ def check_lock(lock, dev_key):
         coded = {(c['mod'], c['sym']) for c in lock.get('codes', [])}
         if any((c['mod'], c['sym']) not in coded for c in lock['ccs']):
             raise ModError('lockfile: a CC for a field that has no lock code')
+    if DRIVE_KEY in lock:
+        check_drive(lock[DRIVE_KEY], dev_key)
     _check_knobs(lock)
+
+
+def check_drive(d, dev_key):
+    """Validate what the +Drive keeps (the lockfile's "drive"). Raises ModError."""
+    first, last = code_range(dev_key) if supports(dev_key) else (0, -1)
+    pool = _spec(dev_key).get('ccs', ())
+    if not isinstance(d, dict) or set(d) != {'id', 'low', 'codes', 'ccs'}:
+        raise ModError('lockfile: "drive" gives id, low, codes and ccs')
+    _idval(d['id'], 'drive id')
+    low = d['low']
+    if not isinstance(low, dict) or set(low) != set(SCOPES) or \
+            not all(_whole(low[s]) and 0 <= low[s] <= 0xFFFF for s in SCOPES):
+        raise ModError('lockfile: "drive" "low" gives a bit per scope')
+    for k, ok in (('codes', lambda c: first <= c <= last), ('ccs', lambda c: c in pool)):
+        v = d[k]
+        if not isinstance(v, list) or not all(_whole(c) and ok(c) for c in v) or v != sorted(set(v)):
+            raise ModError('lockfile: "drive" "%s" is a sorted list of the device\'s %s' % (k, k))
 
 
 def _check_knobs(lock):
@@ -678,12 +724,14 @@ def _bump(g):
     return 1 if g >= 255 else g + 1
 
 
-def allocate(lock, decls, dev_key, core=None, locks=(), ccs=(), inits=None, cvs=()):
+def allocate(lock, decls, dev_key, core=None, locks=(), ccs=(), inits=None, cvs=(), drive=None):
     """lock: a lockfile (dict) or None for a new one; decls: [(mod id, sym,
     scope, bits)]; core: the build's core's version (None: the newest core's
     room); locks: [(mod id, sym)] of the lockable fields; ccs: those of them
     with a CC; inits: {(mod id, sym): init} of the fields with an init other
-    than 0 (core-ar2 0.10); cvs: those declared "track": "cv" (core-a4mk2 0.5).
+    than 0 (core-ar2 0.10); cvs: those declared "track": "cv" (core-a4mk2 0.5);
+    drive: what the unit's +Drive keeps (drive_store.reserve), None to keep the
+    lockfile's, False to drop it.
     -> (the new lockfile, [notes]). The lockfile given is not changed."""
     inits = {k: v for k, v in (inits or {}).items() if v}
     notes = []
@@ -694,6 +742,16 @@ def allocate(lock, decls, dev_key, core=None, locks=(), ccs=(), inits=None, cvs=
         check_lock(lock, dev_key)
         lock = copy.deepcopy(lock)
         new = False
+    if drive is False:
+        lock.pop(DRIVE_KEY, None)
+    elif drive is not None:
+        check_drive(drive, dev_key)
+        if kinds(dev_key):
+            raise ModError('+Drive storage keeps one range of lock codes; the %s numbers them per track kind'
+                           % dev_key)
+        lock[DRIVE_KEY] = copy.deepcopy(drive)
+    dr = lock.get(DRIVE_KEY)
+    gen0, next0 = dict(lock['generation']), dict(lock['next'])
     want = {}
     for mid, sym, scope, bits in decls:
         if any(k[1] == sym for k in want):
@@ -809,6 +867,8 @@ def allocate(lock, decls, dev_key, core=None, locks=(), ccs=(), inits=None, cvs=
             notes.append('%s %s: %d bits of %s storage at bit %d'
                          % (f['mod'], f['sym'], f['bits'], f['scope'], f['offset']))
     lock['fields'] = sorted(fields, key=lambda f: (SCOPE_NUM[f['scope']], f['offset']))
+    if dr:
+        _drive_bits(lock, dr, gen0, next0, cap, notes)
     # format 2 from the first init: an older elekloader refuses it rather than reading the inits' fields as 0
     if any(f.get('init') for k in ('fields', 'freed') for f in lock[k]):
         lock['elekloader_store'] = 2
@@ -816,9 +876,11 @@ def allocate(lock, decls, dev_key, core=None, locks=(), ccs=(), inits=None, cvs=
     cvs = set(cvs)
     recoded = _codes(lock, {k: kind_of(dev_key, scope_of.get(k), k in cvs) for k in locks},
                      {(f['mod'], f['sym']) for f in kept},
-                     {(f['mod'], f['sym']) for f in added if (f['mod'], f['sym']) in back}, notes, dev_key)
+                     {(f['mod'], f['sym']) for f in added if (f['mod'], f['sym']) in back}, notes, dev_key,
+                     dr['codes'] if dr else ())
     _ccs(lock, set(ccs), _spec(dev_key).get('ccs', ()), notes,
-         {(f['mod'], f['sym']) for f in fields if f['scope'] == 'kit'}, _spec(dev_key).get('fx_ccs_taken', ()))
+         {(f['mod'], f['sym']) for f in fields if f['scope'] == 'kit'}, _spec(dev_key).get('fx_ccs_taken', ()),
+         dr['ccs'] if dr else ())
     if new:
         lock['id'] = _idstr(layout_id(lock))
         notes.insert(0, 'a new lockfile, layout ID %s: projects and sounds saved by builds with '
@@ -837,11 +899,29 @@ def allocate(lock, decls, dev_key, core=None, locks=(), ccs=(), inits=None, cvs=
     return lock, notes
 
 
-def _codes(lock, want, kept, back, notes, dev_key):
+def _drive_bits(lock, dr, gen0, next0, cap, notes):
+    """Notes for each scope where the build meets the +Drive's bits: it grew past the +Drive's low mark, or
+    repacked a scope the +Drive keeps bits in. The boot allocator then repacks the scope."""
+    for s in SCOPES:
+        low = dr['low'][s]
+        if low >= cap[s] or next0[s] > low:
+            continue                    # the +Drive keeps nothing here, or it already repacks
+        if lock['generation'][s] != gen0[s]:
+            why = 'the build repacked it'
+        elif lock['next'][s] > low:
+            why = 'the build takes bits %d..%d, which the +Drive keeps' % (low, lock['next'][s] - 1)
+        else:
+            continue
+        notes.append('+Drive %s storage (from bit %d): %s, so the Drive Loader repacks it at the next boot, '
+                     'and items saved before load %s storage at defaults' % (s, low, why, s))
+
+
+def _codes(lock, want, kept, back, notes, dev_key, reserved=()):
     """Give each lockable field (mod, sym) in want ({field: kind}, kind None
     where the device has no kinds) its lock code, in lock (changed in
     place). kept: the fields that kept their place; back: freed fields that
-    came back to theirs. -> whether any code changed."""
+    came back to theirs; reserved: the codes the +Drive's fields hold, given
+    out only when nothing else is left. -> whether any code changed."""
     had = lock.get('codes', []), lock.get('freed_codes', [])
     if not want and not had[0] and not had[1]:
         return False                    # a lockfile that never had a lockable field stays as it was
@@ -867,28 +947,44 @@ def _codes(lock, want, kept, back, notes, dev_key):
                          'kept for it while it is out of the build' if k not in want or k not in kept
                          else 'freed'))
     have = {(c['mod'], c['sym']) for c in codes}
+    held = set(reserved)
     for k in sorted(set(want) - have):
         kind = want[k]
         mine = [c for c in freed if c.get('kind') == kind]
         same = [c for c in mine if (c['mod'], c['sym']) == k]
+        while nxt[kind] <= last and nxt[kind] in held:
+            nxt[kind] += 1              # the +Drive's: skipped, never given out later as never-used
+        spare = [c for c in mine if c['code'] not in held]
+        taken = {c['code'] for c in codes} | {c['code'] for c in freed}
         if same and k in back:          # back in its old place: its old code, with its rows
             c = same[-1]
             freed.remove(c)
-            notes.append('%s %s: back with lock code %d%s' % (k[0], k[1], c['code'], of(kind)))
+            notes.append('%s %s: back with lock code %d%s%s' % (k[0], k[1], c['code'], of(kind),
+                         ', which a +Drive field holds: the Drive Loader gives that field another'
+                         if c['code'] in held else ''))
         elif nxt[kind] <= last:
             c = {'mod': k[0], 'sym': k[1], 'code': nxt[kind]}
             if kind:
                 c['kind'] = kind
             nxt[kind] += 1
             notes.append('%s %s: lock code %d%s' % (k[0], k[1], c['code'], of(kind)))
-        elif mine:                      # the never-used codes are gone: the oldest freed one
-            old = mine[0]
+        elif spare or (mine and not held - taken):  # the never-used codes are gone: the oldest freed one
+            old = (spare or mine)[0]
             freed.remove(old)
             c = {'mod': k[0], 'sym': k[1], 'code': old['code']}
             if kind:
                 c['kind'] = kind
-            notes.append('%s %s: lock code %d%s (was %s %s\'s)' % (k[0], k[1], c['code'], of(kind),
-                                                                   old['mod'], old['sym']))
+            notes.append('%s %s: lock code %d%s (was %s %s\'s)%s' % (k[0], k[1], c['code'], of(kind),
+                                                                     old['mod'], old['sym'],
+                         ', which a +Drive field holds too: the Drive Loader gives that field another'
+                         if c['code'] in held else ''))
+        elif held - taken:              # only the +Drive's are left: the lowest
+            code = min(held - taken)
+            c = {'mod': k[0], 'sym': k[1], 'code': code}
+            if kind:
+                c['kind'] = kind
+            notes.append('%s %s: lock code %d%s, which a +Drive field holds: no other is left, so the Drive '
+                         'Loader gives that field another' % (k[0], k[1], code, of(kind)))
         else:
             raise ModError('the mods have more than %d lockable parameters%s'
                            % (last - first + 1, ' on %s' % KIND_NAMES[kind] if kind else ''))
@@ -902,10 +998,11 @@ def _codes(lock, want, kept, back, notes, dev_key):
     return changed
 
 
-def _ccs(lock, want, pool, notes, kits=(), fx_taken=()):
+def _ccs(lock, want, pool, notes, kits=(), fx_taken=(), reserved=()):
     """Give each field (mod, sym) in want its CC from pool, in lock (changed
-    in place); a field in kits (the FX track's) none in fx_taken. Not part of
-    the layout ID: a CC says nothing of where data is."""
+    in place); a field in kits (the FX track's) none in fx_taken; one in
+    reserved (the +Drive's) only when nothing else is left. Not part of the
+    layout ID: a CC says nothing of where data is."""
     had = lock.get('ccs', []), lock.get('freed_ccs', [])
     if not want and not had[0] and not had[1]:
         return
@@ -918,26 +1015,36 @@ def _ccs(lock, want, pool, notes, kits=(), fx_taken=()):
             notes.append('%s %s: CC %d freed, and kept for it until the unused CCs run out'
                          % (c['mod'], c['sym'], c['cc']))
     used = {c['cc'] for c in ccs} | {c['cc'] for c in freed}
-    unused = [cc for cc in pool if cc not in used]
+    held = set(reserved)
+    unused = [cc for cc in pool if cc not in used and cc not in held]
+    drives = [cc for cc in pool if cc not in used and cc in held]
     have = {(c['mod'], c['sym']) for c in ccs}
+    hint = ', which a +Drive field holds: the Drive Loader gives that field another'
     for k in sorted(want - have):
         ok = (lambda cc: cc not in fx_taken) if k in kits else (lambda cc: True)
         same = [c for c in freed if (c['mod'], c['sym']) == k and ok(c['cc'])]
         new = [cc for cc in unused if ok(cc)]
-        old = [c for c in freed if ok(c['cc'])]
+        old = [c for c in freed if ok(c['cc']) and c['cc'] not in held] \
+            or [c for c in freed if ok(c['cc'])]
+        last = [cc for cc in drives if ok(cc)]
         if same:
             c = same[-1]
             freed.remove(c)
-            notes.append('%s %s: back with CC %d' % (k[0], k[1], c['cc']))
+            notes.append('%s %s: back with CC %d%s' % (k[0], k[1], c['cc'], hint if c['cc'] in held else ''))
         elif new:
             unused.remove(new[0])
             c = {'mod': k[0], 'sym': k[1], 'cc': new[0]}
             notes.append('%s %s: CC %d' % (k[0], k[1], c['cc']))
-        elif old:                       # the never-used CCs are gone: the one freed longest ago
+        elif old and (old[0]['cc'] not in held or not last):  # the never-used CCs are gone: the one freed longest ago
             old = old[0]
             freed.remove(old)
             c = {'mod': k[0], 'sym': k[1], 'cc': old['cc']}
-            notes.append('%s %s: CC %d (was %s %s\'s)' % (k[0], k[1], c['cc'], old['mod'], old['sym']))
+            notes.append('%s %s: CC %d (was %s %s\'s)%s' % (k[0], k[1], c['cc'], old['mod'], old['sym'],
+                                                            hint if c['cc'] in held else ''))
+        elif last:                      # only the +Drive's are left
+            drives.remove(last[0])
+            c = {'mod': k[0], 'sym': k[1], 'cc': last[0]}
+            notes.append('%s %s: CC %d%s; no other is left' % (k[0], k[1], c['cc'], hint))
         else:
             notes.append('%s %s: no CC left (all %d are taken); it is on MIDI by its NRPN only'
                          % (k[0], k[1], len(pool)))

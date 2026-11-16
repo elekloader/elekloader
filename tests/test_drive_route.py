@@ -22,6 +22,8 @@ from elekloader import datarpc                                   # noqa: E402
 
 SRC = os.path.join(os.path.dirname(HERE), 'mods', 'drive-loader-ar2')
 DEPTH = 3                                  # fs.h DL_DEPTH: the route's patterns go to /mods/*/*/*/*
+FLOOR = 0x10000                            # fs.h DL_STAGING_SIZE: the stage's floor
+TOO_LARGE = 'Too large for the free room (see /mods/.status, stage)'   # route.c dl_pre
 
 
 # A /mods with a folder at every level to one past DL_DEPTH, each holding a file
@@ -67,6 +69,12 @@ class Route(unittest.TestCase):
     def test_the_build_and_status_reads_pass(self):
         # every put reads .build first: e37adef refused it ("Invalid name"), so no put went through
         self.assertEqual(self.entry('.build', '.status'), [(0, False, '.build'), (0, False, '.status')])
+
+    def test_the_store_is_a_name_only_at_the_top_and_never_writable(self):
+        # /mods/.store (+Drive storage's places): a build reads it (patch --drive-store); writable() keeps it
+        # read only, and dl_entry gives it P_READ alone
+        self.assertEqual(self.entry('.store'), [(0, False, '.store')])
+        self.assertEqual(self.entry('~T NAV/.store'), [None])
 
     def test_puts_flat_and_into_folders(self):
         for name in ('drive-hello-0.1.elemod', '~T a-0.1.elemod', '~T NAV/~T a-0.1.elemod',
@@ -182,6 +190,55 @@ class Moves(unittest.TestCase):
         self.assertIn('~T C/x.elemod', tree)
         self.assertNotIn('~T A/x.elemod', tree)
         self.assertEqual(active, '~T C/x.elemod 1234abcd|# a note|~T AB/y.elemod 00000001|~T A/~T B/z.elemod 00000002|')
+
+    def test_a_file_larger_than_staging_resolves_for_clear_and_listing(self):
+        # dl_entry refused a file over DL_STAGING_SIZE for every use, Clear included, so one left by
+        # a build with a larger buffer couldn't be deleted over Data. It resolves now without P_READ
+        # (the read is served from the stage); an upload over it checks its own payload (dl_pre, dl_hdr).
+        big = FLOOR + 1                   # one past the stage, here the floor
+        tree = self.TREE + ['~T A/big.elemod=@%d' % big, '~T A/fit.elemod=@%d' % FLOOR,
+                            '~T A/notes.txt=@%d' % big]
+        got = [a for a, _, _ in self.run_('entry ~T A/big.elemod', 'entry ~T A/fit.elemod',
+                                          'entry ~T A/notes.txt', 'entry ~T A/new.elemod',
+                                          'entry ~T A/new.txt', tree=tree)]
+        self.assertEqual(got, ['ok %d write clear' % big, 'ok %d read write clear' % FLOOR,
+                               'ok %d clear' % big, 'ok 0 read write clear', 'Invalid name'])
+
+    def test_a_read_follows_the_live_stage(self):
+        # with the stage in the area's free tail (dl_stage_tail), a file the floor can't hold reads
+        big = FLOOR * 3
+        tree = self.TREE + ['~T A/big.elemod=@%d' % big]
+        got = [a for a, _, _ in self.run_('stage %d' % (big - 1), 'entry ~T A/big.elemod',
+                                          'stage %d' % big, 'entry ~T A/big.elemod', tree=tree)]
+        self.assertEqual(got, ['ok', 'ok %d write clear' % big, 'ok', 'ok %d read write clear' % big])
+
+    def test_an_upload_over_the_stage_is_refused_before_its_first_chunk(self):
+        # stock 1.74 writes the first chunk to the entry's address before the +0x6c check
+        # (FUN_4008c1c6) and has no size cap of its own: +0x1c refuses first, +0x6c is the second line
+        n = 200000
+        got = [a for a, _, _ in self.run_('stage %d' % n, 'pre %d' % n, 'pre %d' % (n + 1),
+                                          'hdr %d' % n, 'hdr %d' % (n + 1))]
+        self.assertEqual(got[1:], ['ok GUARD ok', TOO_LARGE + ' GUARD ok', 'ok GUARD ok',
+                                   'Invalid payload size GUARD ok'])
+        # at the floor (no free tail), the floor is the limit
+        got = [a for a, _, _ in self.run_('pre %d' % FLOOR, 'pre %d' % (FLOOR + 1))]
+        self.assertEqual(got, ['ok', TOO_LARGE])
+
+    def test_reads_and_uploads_stay_inside_the_stage(self):
+        # the stage sits next to the mods' live code: every byte the route writes is inside it
+        n = 300001
+        tree = self.TREE + ['~T A/full.elemod=@%d' % n, '~T A/small.elemod=@%d' % 1000]
+        got = [a for a, _, _ in self.run_('stage %d' % n, 'put ~T A/full.elemod %d' % n, 'read ~T A/full.elemod',
+                                          'put ~T A/small.elemod 1000', 'read ~T A/small.elemod',
+                                          'put ~T A/over.elemod %d' % (n + 1), tree=tree)]
+        self.assertEqual(got[1:], ['saved ~T A/full.elemod %d GUARD ok' % n, 'read %d GUARD ok' % n,
+                                   'saved ~T A/small.elemod 1000 GUARD ok', 'read 1000 GUARD ok',
+                                   'upload dropped: ~T A/over.elemod -1 GUARD ok'])
+
+    def test_the_status_names_the_stage(self):
+        got = [a for a, _, _ in self.run_('status', 'stage 4000000', 'status')]
+        self.assertRegex(got[0], r'^stage: %d bytes at 0x[0-9a-f]{8}, floor$' % FLOOR)
+        self.assertRegex(got[2], r'^stage: 4000000 bytes at 0x[0-9a-f]{8}, free tail GUARD ok$')
 
     def test_a_file_is_renamed(self):
         (why, tree, active), = self.run_('mv ~T A/x.elemod|~T A/w.elemod')

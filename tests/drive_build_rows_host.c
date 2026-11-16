@@ -17,6 +17,12 @@
  *   boot PATH|ID  the boot's record of PATH holds ID (the mod's id, or dlink's path prefix),
  *                 as the page's opening reads it (boot_record)
  *   info N        INFO's box on build row N (from 0) -> "INFO line1~line2~..."
+ *   store HEX     /mods/.store's bytes, as the page's opening reads them (parks_from); the build
+ *                 list then shows the parked mods after the build's rows
+ *   forget ID|ID  park.c's FORGET DATA of those mods on the last store -> "FORGET HEX" (or -1)
+ *   setid N ID    the set's record N names ID (a site refusal's other mod)
+ *   reason C A D  the "!" box of refusal code C, arg A, detail D (the rest of the line), against
+ *                 the set's records -> "REASON line1~line2"
  * Only the functions these call are stubbed; the rest of page.c is linked against nothing and
  * never runs. */
 #include <stdio.h>
@@ -24,6 +30,28 @@
 #include <string.h>
 
 #include "../mods/drive-loader-ar2/page.c"
+#include "../mods/drive-loader-ar2/park.c"
+
+u32 dl_crc32_add(u32 c, const u8 *p, u32 n)   /* dlink.c's, which isn't linked here */
+{
+    int k;
+    while (n--)
+        for (c ^= *p++, k = 0; k < 8; k++)
+            c = c & 1 ? 0xEDB88320 ^ (c >> 1) : c >> 1;
+    return c;
+}
+
+static u8 store_hex[65536];
+static s32 store_n;
+static struct dl_status set_recs[DL_MAX_MODS];
+
+static void out_text(const char *kind, const char *t)
+{
+    printf("%s ", kind);
+    for (; *t; t++)
+        putchar(*t == '\n' ? '~' : *t);
+    printf("\n");
+}
 
 static char tree[64][DL_NAME_MAX + 2];
 static int ntree;
@@ -96,7 +124,7 @@ static void open_folder(const char *rel)
 
 int main(void)
 {
-    char line[512];
+    static char line[140000];
     int i, part = 0;
     files = calloc(64, sizeof *files);   /* the saved build, as scan() takes it from active */
     fcap = 64;
@@ -171,6 +199,51 @@ int main(void)
                 if (*c == '\n')
                     *c = '~';
             printf("INFO %s\n", t);
+        } else if (!strncmp(line, "store ", 6)) {
+            const char *h = line + 6;
+            for (store_n = 0; h[0] && h[1] && store_n < (s32)sizeof store_hex; h += 2) {
+                unsigned v;
+                sscanf(h, "%2x", &v);
+                store_hex[store_n++] = (u8)v;
+            }
+            parks_from(store_hex, store_n);
+        } else if (!strncmp(line, "forget ", 7)) {
+            static u8 out[65536];
+            const char *ids[16];
+            char *p = line + 7;
+            int n = 0;
+            s32 k;
+            while (p && n < 16) {
+                ids[n++] = p;
+                p = strchr(p, '|');
+                if (p)
+                    *p++ = 0;
+            }
+            k = dl_park_forget(store_hex, (u32)store_n, ids, n, out);
+            printf("FORGET ");
+            if (k < 0)
+                printf("-1");
+            for (i = 0; i < k; i++)
+                printf("%02x", out[i]);
+            printf("\n");
+        } else if (!strncmp(line, "setid ", 6)) {
+            char *id;
+            int n = (int)strtol(line + 6, &id, 10);
+            if (n >= 0 && n < DL_MAX_MODS && *id)
+                copy_str(set_recs[n].id, id + 1, DL_ID_MAX);
+        } else if (!strncmp(line, "reason ", 7)) {
+            char t[160], *d;
+            int c = (int)strtol(line + 7, &d, 10);
+            u32 a = (u32)strtoul(d, &d, 0);
+            reason(t, t + sizeof t, c, a, *d ? d + 1 : "", set_recs, DL_MAX_MODS);
+            out_text("REASON", t);
+        } else if (!strncmp(line, "parkinfo ", 9)) {
+            char t[160];
+            int k = atoi(line + 9);
+            if (k >= 0 && k < npark) {
+                park_text(&parks[k], t, t + sizeof t);
+                out_text("PARKINFO", t);
+            }
         } else if (!strcmp(line, "check")) {
             publish_check();
             printf("CHECK %d/%d %s\n", dl_check_n, dl_check_all, dl_check_dir);
@@ -185,8 +258,13 @@ int main(void)
         } else if (!strcmp(line, "build")) {
             mode = M_BUILD;
             printf("BUILD");
-            for (i = 0; i < nbuild; i++)
+            for (i = 0; i < list_n(); i++) {
+                char t[16];
+                row_column(i, t, t + sizeof t);
                 printf("%c%s", i ? '|' : ' ', (const char *)dl_page_text(i + 1));
+                if (park_k(i) >= 0)
+                    printf("=%s", t);
+            }
             printf("\n");
             mode = M_DRIVE;
         }

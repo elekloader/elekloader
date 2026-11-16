@@ -52,6 +52,17 @@ def cases(B):
     d[2]['symbols']['core_desc'] = ['.run', 0]
     d[2]['exports'] = ['core_desc']
     out['a mod exports core_desc'] = d
+    d = T.descriptor_mods(B)                   # ABI 1.2: the lock tables open to the loader, a copied block
+    d[0]['collections'].update({'core_lock_codes': {'entry': 8}, 'core_lock_ccs': {'entry': 8},
+                                'core_field_inits': {'entry': 4}, 'core_lock_params': {'entry': 4}})
+    d[1]['storage'] = [{'sym': 'st_a', 'scope': 'kit', 'bits': 5},
+                       {'sym': 'st_b', 'scope': 'sound', 'bits': 4, 'lock': True, 'cc': True, 'init': 3}]
+    d[2]['copied'] = [{'lo': hex(B.at(0x2000)), 'hi': hex(B.at(0x2010)), 'to': hex(B.at(0x2000))}]
+    out['the lock tables for the loader, a copied block'] = d
+    d = copy.deepcopy(d)
+    d[0]['collections']['core_field_inits']['max'] = 2
+    d[0]['collections']['core_lock_codes']['spare'] = 4
+    out['the lock tables with a spare and a max'] = d
     return out
 
 
