@@ -17,7 +17,7 @@ test('store.allocate with what the +Drive keeps: store.py\'s lockfiles, notes an
     const what = `allocation ${i + 1}`
     let got: [store.Lock, string[]]
     try {
-      got = store.allocate(c.lock, c.decls, c.device, null, c.locks, c.ccs, [], [], c.drive)
+      got = store.allocate(c.lock, c.decls, c.device, null, c.locks, c.ccs, [], c.cvs ?? [], c.drive)
     } catch (e) {
       assert.ok(e instanceof ModError, what)
       assert.equal((e as Error).message, c.error, what)

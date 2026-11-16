@@ -185,6 +185,10 @@ more key, which later builds read too until another .store replaces it:
 
      "drive": {"id": "0x...", "low": {"sound": 56, ...}, "codes": [127], "ccs": [119]}
 
+On a device that numbers lock codes per track kind (the Analog Four MKII),
+"codes" gives them per kind: {"synth": [127], "fx": [], "cv": [126]}, and a
+field skips only its own kind's.
+
 "low" is each scope's low mark (the +Drive's lowest bit; nothing below it is
 the +Drive's), "codes" and "ccs" the codes and CCs its fields and parked
 fields hold. A new lockable field's code skips the +Drive's codes, and a
@@ -622,10 +626,26 @@ def check_drive(d, dev_key):
     if not isinstance(low, dict) or set(low) != set(SCOPES) or \
             not all(_whole(low[s]) and 0 <= low[s] <= 0xFFFF for s in SCOPES):
         raise ModError('lockfile: "drive" "low" gives a bit per scope')
-    for k, ok in (('codes', lambda c: first <= c <= last), ('ccs', lambda c: c in pool)):
-        v = d[k]
-        if not isinstance(v, list) or not all(_whole(c) and ok(c) for c in v) or v != sorted(set(v)):
-            raise ModError('lockfile: "drive" "%s" is a sorted list of the device\'s %s' % (k, k))
+    ks = kinds(dev_key)
+
+    def sorted_in(v, ok):
+        return isinstance(v, list) and all(_whole(c) and ok(c) for c in v) and v == sorted(set(v))
+    codes = d['codes']
+    if ks:
+        if not isinstance(codes, dict) or set(codes) != set(ks) or \
+                not all(sorted_in(codes[k], lambda c: first <= c <= last) for k in ks):
+            raise ModError('lockfile: "drive" "codes" gives a sorted list of the device\'s codes per track kind '
+                           '(%s): the %s numbers them per kind' % (', '.join(ks), dev_key))
+    elif not sorted_in(codes, lambda c: first <= c <= last):
+        raise ModError('lockfile: "drive" "codes" is a sorted list of the device\'s codes')
+    if not sorted_in(d['ccs'], lambda c: c in pool):
+        raise ModError('lockfile: "drive" "ccs" is a sorted list of the device\'s ccs')
+
+
+def drive_codes(d):
+    """What the +Drive keeps (the lockfile's "drive") -> how many lock codes it holds, of every kind."""
+    c = d['codes']
+    return sum(len(v) for v in c.values()) if isinstance(c, dict) else len(c)
 
 
 def _check_knobs(lock):
@@ -746,9 +766,6 @@ def allocate(lock, decls, dev_key, core=None, locks=(), ccs=(), inits=None, cvs=
         lock.pop(DRIVE_KEY, None)
     elif drive is not None:
         check_drive(drive, dev_key)
-        if kinds(dev_key):
-            raise ModError('+Drive storage keeps one range of lock codes; the %s numbers them per track kind'
-                           % dev_key)
         lock[DRIVE_KEY] = copy.deepcopy(drive)
     dr = lock.get(DRIVE_KEY)
     gen0, next0 = dict(lock['generation']), dict(lock['next'])
@@ -920,8 +937,9 @@ def _codes(lock, want, kept, back, notes, dev_key, reserved=()):
     """Give each lockable field (mod, sym) in want ({field: kind}, kind None
     where the device has no kinds) its lock code, in lock (changed in
     place). kept: the fields that kept their place; back: freed fields that
-    came back to theirs; reserved: the codes the +Drive's fields hold, given
-    out only when nothing else is left. -> whether any code changed."""
+    came back to theirs; reserved: the codes the +Drive's fields hold ({kind:
+    [code]} where the device has kinds), given out only when nothing else is
+    left. -> whether any code changed."""
     had = lock.get('codes', []), lock.get('freed_codes', [])
     if not want and not had[0] and not had[1]:
         return False                    # a lockfile that never had a lockable field stays as it was
@@ -947,15 +965,15 @@ def _codes(lock, want, kept, back, notes, dev_key, reserved=()):
                          'kept for it while it is out of the build' if k not in want or k not in kept
                          else 'freed'))
     have = {(c['mod'], c['sym']) for c in codes}
-    held = set(reserved)
     for k in sorted(set(want) - have):
         kind = want[k]
+        held = set(reserved.get(kind, ()) if isinstance(reserved, dict) else reserved)
         mine = [c for c in freed if c.get('kind') == kind]
         same = [c for c in mine if (c['mod'], c['sym']) == k]
         while nxt[kind] <= last and nxt[kind] in held:
             nxt[kind] += 1              # the +Drive's: skipped, never given out later as never-used
         spare = [c for c in mine if c['code'] not in held]
-        taken = {c['code'] for c in codes} | {c['code'] for c in freed}
+        taken = {c['code'] for c in codes + freed if c.get('kind') == kind}
         if same and k in back:          # back in its old place: its old code, with its rows
             c = same[-1]
             freed.remove(c)

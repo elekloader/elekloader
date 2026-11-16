@@ -72,7 +72,7 @@ export type Lock = {
 }
 /** What the unit's +Drive keeps (store.py, "drive"; drivestore.reserve): its live layout ID, each scope's low mark,
  * and the codes and CCs its fields and parked fields hold. Not stored data: not part of the layout ID. */
-export type Drive = { id: string; low: Record<string, number>; codes: number[]; ccs: number[] }
+export type Drive = { id: string; low: Record<string, number>; codes: number[] | Record<string, number[]>; ccs: number[] }
 export const DRIVE_KEY = 'drive'
 export type Knob = { mod: string; first: number; count: number }
 export type Code = { mod: string; sym: string; code: number; kind?: string }
@@ -444,11 +444,21 @@ export function checkDrive(d: unknown, devKey: string): asserts d is Drive {
   const low = d.low
   if (!isDict(low) || !sameKeys(low, SCOPES) || !SCOPES.every(s => whole(low[s]) && low[s] >= 0 && low[s] <= 0xFFFF))
     throw new ModError('lockfile: "drive" "low" gives a bit per scope')
-  for (const [k, ok] of [['codes', (c: number) => c >= first && c <= last], ['ccs', (c: number) => pool.includes(c)]] as const) {
-    const v = d[k]
-    if (!Array.isArray(v) || !v.every(c => whole(c) && ok(c)) || !v.every((c, i) => i === 0 || c > v[i - 1]))
-      throw new ModError(`lockfile: "drive" "${k}" is a sorted list of the device's ${k}`)
-  }
+  const ks = kinds(devKey)
+  const sortedIn = (v: unknown, ok: (c: number) => boolean) =>
+    Array.isArray(v) && v.every(c => whole(c) && ok(c)) && v.every((c, i) => i === 0 || c > v[i - 1])
+  const inRange = (c: number) => c >= first && c <= last
+  const codes = d.codes
+  if (ks.length) {
+    if (!isDict(codes) || !sameKeys(codes, ks) || !ks.every(k => sortedIn(codes[k], inRange)))
+      throw new ModError(`lockfile: "drive" "codes" gives a sorted list of the device's codes per track kind (${ks.join(', ')}): the ${devKey} numbers them per kind`)
+  } else if (!sortedIn(codes, inRange)) throw new ModError('lockfile: "drive" "codes" is a sorted list of the device\'s codes')
+  if (!sortedIn(d.ccs, c => pool.includes(c))) throw new ModError('lockfile: "drive" "ccs" is a sorted list of the device\'s ccs')
+}
+
+/** What the +Drive keeps (the lockfile's "drive") -> how many lock codes it holds, of every kind. store.drive_codes. */
+export function driveCodes(d: Drive): number {
+  return Array.isArray(d.codes) ? d.codes.length : Object.values(d.codes).reduce((n, v) => n + v.length, 0)
 }
 
 function checkKnobs(lock: Record<string, any>): void {
@@ -555,7 +565,6 @@ export function allocate(lock0: Lock | null, decls: Decl[], devKey: string, core
   if (drive === false) delete lock.drive
   else if (drive !== null) {
     checkDrive(drive, devKey)
-    if (kinds(devKey).length) throw new ModError(`+Drive storage keeps one range of lock codes; the ${devKey} numbers them per track kind`)
     lock.drive = structuredClone(drive)
   }
   const dr = lock.drive
@@ -712,7 +721,7 @@ function driveBits(lock: Lock, dr: Drive, gen0: Record<string, number>, next0: R
  * reserved: the codes the +Drive's fields hold, given out only when nothing else is left. -> whether any code changed.
  * store._codes. */
 function setCodes(lock: Lock, want: Map<string, string | null>, kept: Set<string>, back: Set<string>, notes: string[], devKey: string,
-  reserved: number[] = []): boolean {
+  reserved: number[] | Record<string, number[]> = []): boolean {
   const had = lock.codes ?? [], hadFreed = lock.freed_codes ?? []
   if (!want.size && !had.length && !hadFreed.length) return false   // a lockfile that never had a lockable field stays as it was
   const [first, last] = codeRange(devKey)
@@ -736,16 +745,16 @@ function setCodes(lock: Lock, want: Map<string, string | null>, kept: Set<string
     }
   }
   const have = new Set(codes.map(key))
-  const held = new Set(reserved)
   const todo = [...want.keys()].filter(k => !have.has(k)).map(k => { const [mod, sym] = k.split('\0'); return { mod, sym } }).sort(byModSym)
   for (const { mod, sym } of todo) {
     const k = mod + '\0' + sym
     const kind = want.get(k)!
+    const held = new Set(Array.isArray(reserved) ? reserved : kind !== null ? reserved[kind] ?? [] : [])
     const mine = freed.filter(c => (c.kind ?? null) === kind)
     const same = mine.filter(c => key(c) === k)
     while (nxt.get(kind)! <= last && held.has(nxt.get(kind)!)) nxt.set(kind, nxt.get(kind)! + 1)   // the +Drive's: skipped
     const spare = mine.filter(c => !held.has(c.code))
-    const taken = new Set([...codes, ...freed].map(c => c.code))
+    const taken = new Set([...codes, ...freed].filter(c => (c.kind ?? null) === kind).map(c => c.code))
     const left = [...held].filter(x => !taken.has(x))
     let c: Code
     if (same.length && back.has(k)) {          // back in its old place: its old code, with its rows

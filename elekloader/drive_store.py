@@ -429,10 +429,15 @@ def decode(raw):
 
 def reserve(st):
     """The state (decode()'s) -> what the +Drive keeps, as a build's lockfile keeps it (store.py, "drive"):
-    the live layout ID, each scope's low mark, and the codes and CCs its fields and parked fields hold."""
+    the live layout ID, each scope's low mark, and the codes and CCs its fields and parked fields hold; the
+    codes by track kind ({kind: [code]}) for a state with codes per track kind (format 2)."""
+    held = st['codes'] + st['freed_codes']
+    if _kinded(st):
+        codes = {k: sorted({c['code'] for c in held if c['kind'] == k}) for k in KINDS}
+    else:
+        codes = sorted({c['code'] for c in held})
     return {'id': '0x%08x' % st['id'], 'low': {s: st['scopes'][s]['low'] for s in store.SCOPES},
-            'codes': sorted({c['code'] for c in st['codes'] + st['freed_codes']}),
-            'ccs': sorted({c['cc'] for c in st['ccs'] + st['freed_ccs']})}
+            'codes': codes, 'ccs': sorted({c['cc'] for c in st['ccs'] + st['freed_ccs']})}
 
 
 def forget(st, mod):
