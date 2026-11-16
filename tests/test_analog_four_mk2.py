@@ -195,8 +195,16 @@ def test_core_a4mk2_sites():
     voice07 = [x for x in mod['sites'] if x.get('target') in ('core_voice_free_cut', 'core_voice_free_len')]
     assert [(x['addr'], x['op'], x['stock']) for x in voice07] == [
         ('0x40102174', 'jsr', '4eb940105410'), ('0x40102e10', 'jsr', '2f024e91588f')]
-    # and 0.7's 70 UI and system sites (ui.s, ui.c; tests/test_units.py, test_core_a4mk2_0_7_ui_sites)
-    assert len(mod['sites']) == 117 + len(voice07) + 70
+    # and 0.7's 70 UI and system sites (ui.s, ui.c; tests/test_units.py, test_core_a4mk2_0_7_ui_sites),
+    # and 0.8's ev_track_key: a jmp over TrackSelectionView's `jsr 0x4005b6f0`, the key code (trackkey.s),
+    # ev_voice_params over the audio interrupt's `jsr 0x400fa2b0` and ev_sound_setup over SOUND SETUP's
+    # `movea.l (a3),a0; move.l 8(a0),d7` (sound.s)
+    track08 = [x for x in mod['sites'] if x.get('target') in ('core_track_key_site', 'core_voice_params_site',
+                                                                'core_sound_setup_site')]
+    assert [(x['addr'], x['op'], x['stock']) for x in track08] == [
+        ('0x400c8ba2', 'jmp', '4eb94005b6f0'), ('0x40103af6', 'jmp', '4eb9400fa2b0'),
+        ('0x400e62c8', 'jmp', '20532e280008')]
+    assert len(mod['sites']) == 117 + len(voice07) + 70 + len(track08)
     midi = [x for x in mod['sites'] if x.get('target') in ('core_nrpn_site', 'core_cc_site')]
     assert [(x['addr'], x['op'], x['stock']) for x in midi] == \
         [('0x4009ff56', 'jmp', '4fefffec48d7043c'), ('0x400a0b62', 'jmp', '4e56ffd848d71cfc')]
@@ -220,7 +228,8 @@ def test_core_a4mk2_sites():
         'core_analog_frame_site', 'core_modset_'))]
     assert len(ui) == 70                # 0.7's UI and system sites (ui.s, ui.c)
     locks = [x for x in mod['sites'] if x['addr'] not in {y['addr'] for y in j['sites'][:48]} and x not in midi
-             and x not in new06 and x not in std07 and x not in voice07 and x not in ui]
+             and x not in new06 and x not in std07 and x not in voice07 and x not in ui
+             and x not in track08]
     dests = [x for x in locks if x.get('target', '').startswith(('core_dst', 'core_id_index', 'core_index_id',
                                                                    'core_push_', 'core_set_'))]
     assert len(dests) == 21 and len([x for x in dests if x['op'] == 'ptr']) == 6
