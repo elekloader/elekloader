@@ -246,17 +246,15 @@ export class Mods {
     return this.c.put(this.path(name), container.wrap(raw, head.family, head.device, head.release), progress)
   }
 
-  /** `/mods/.status` as text, or null when it can't be read. datarpc.Mods.status. */
-  async status(): Promise<string | null> {
-    try { return new TextDecoder().decode((await this.get('.status'))[1]) } catch (e) { if (e instanceof ModError) return null; throw e }
-  }
-
   /** `put`, then make sure the unit kept the file: the route can't refuse once the upload is in (a commit that fails, as
    * into a folder that can't be made, still answers the upload), so the `last:` line of `.status` says what happened
    * to it, or without one, the listing. datarpc.Mods.upload. */
   async upload(name: string, raw: Uint8Array, head: container.Head, progress?: (sent: number, total: number) => void): Promise<void> {
     await this.put(name, raw, head, progress)
-    const last = lastOf(await this.status())
+    let last: string | null = null
+    try {                               // latin-1, as the route's names go out and come back
+      last = lastOf(Array.from((await this.get('.status'))[1], b => String.fromCharCode(b)).join(''))
+    } catch (e) { if (!(e instanceof ModError)) throw e }
     if (last !== null) {
       if (last !== note('saved', name)) throw new ModError(`the unit did not save ${this.path(name)}: ${last}`)
     } else if (!(await this.lsOrNone(parentOf(name))).some(([n, kind]) => n === baseOf(name) && kind === 2)) {

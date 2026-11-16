@@ -259,7 +259,10 @@ class Mods:
         in (a commit that fails, as into a folder that can't be made, still answers the upload), so
         the `last:` line of `.status` says what happened to it, or without one, the listing."""
         self.put(name, raw, head)
-        last = last_of(self.status())
+        try:                                    # latin-1, as the route's names go out and come back
+            last = last_of(self.get('.status')[1].decode('latin-1'))
+        except (RpcError, ModError):
+            last = None
         if last is not None:
             if last != _note('saved', name):
                 raise ModError('the unit did not save %s: %s' % (self.path(name), last))
