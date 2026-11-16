@@ -792,15 +792,15 @@ static int inspect(struct file *r)
 
 /* The frame is 128 x 64, y 0 the top row: ROWS list rows of ROW_H pixels from the top, no
  * title, as the Rytm's MODS page (stock's SAMPLES view) draws its list. The cursor's row is a
- * set bar with light text, an outline while a side panel has the keys. Text is TEXT_SMALL,
- * stock's font 16 (5 rows, the font of the Rytm's file view), which core_text_width measures
- * for the clips. */
+ * set bar with light text, an outline while a side panel has the keys. The list's and the
+ * panes' text is stock's font 13 (6 rows and a descent, bold), the font the Rytm's file view
+ * draws with (its font object 13 on 1.74) and the same font on the A4, drawn by core's screen
+ * calls (core_text_draw, y from the bottom); the boxes keep std1's TEXT_SMALL. */
 #define ROW_H 8
 #define ROWS 8
 #define ROW_Y(r) ((r) * ROW_H)
-#define LIST_TEXT TEXT_SMALL
-#define FONT_LIST 16                     /* LIST_TEXT's font (core-a4mk2 std.c) */
-#define TEXT_DY 1                        /* a row's text sits this far below its top */
+#define FONT_LIST 13                     /* stock's font 13 (core-a4mk2 screen calls) */
+#define TEXT_DY 0                        /* a row's text sits this far below its top */
 #define SPLIT_X 65                       /* the action panel's line, as MANAGE PROJECTS' pane */
 #define BAR_L 3                          /* the cursor bar: x BAR_L..BAR_R, BAR_H rows, between */
 #define BAR_R 119                        /* the edges as SOUND BROWSER and MANAGE PROJECTS draw it */
@@ -818,6 +818,16 @@ static int inspect(struct file *r)
 static int text_w(const char *s)
 {
     return core_text_width(FONT_LIST, s);
+}
+
+/* s in FONT_LIST with its top on row y, std1's alignment and TEXT_INVERT; returns its width */
+static int list_text(void *fb, int x, int y, unsigned style, const char *s)
+{
+    int w = text_w(s);
+    if ((style & 3) == TEXT_RIGHT)
+        x -= w - 1;
+    core_text_draw(fb, FONT_LIST, x, 64 - core_font_height(FONT_LIST) - y, CORE_ALIGN_LEFT | (style & TEXT_INVERT ? CORE_TEXT_INVERT : 0), s);
+    return w;
 }
 
 enum { M_DRIVE, M_BUILD };
@@ -1992,7 +2002,7 @@ static void draw_list(void *fb)
     draw_edge(fb);
     if (!n) {                            /* the placeholder row */
         core_fill(fb, BAR_L, ROW_Y(0), BAR_R - BAR_L + 1, BAR_H, 1);
-        core_text(fb, LABEL_X, ROW_Y(0) + TEXT_DY, LIST_TEXT | TEXT_LEFT | TEXT_INVERT,
+        list_text(fb, LABEL_X, ROW_Y(0) + TEXT_DY, TEXT_LEFT | TEXT_INVERT,
                   mode == M_DRIVE ? "NO MODS ON +DRIVE" : "BUILD EMPTY");
         return;
     }
@@ -2004,9 +2014,9 @@ static void draw_list(void *fb)
         row_column(i, col, col + sizeof col);
         w = col[0] ? text_w(col) : 0;
         if (col[0])
-            core_text(fb, COLUMN_X, y + TEXT_DY, LIST_TEXT | TEXT_RIGHT | inv, col);
+            list_text(fb, COLUMN_X, y + TEXT_DY, TEXT_RIGHT | inv, col);
         row_label(i, lab, lab + sizeof lab, COLUMN_X - w - STATE_GAP - LABEL_X);
-        core_text(fb, LABEL_X, y + TEXT_DY, LIST_TEXT | TEXT_LEFT | inv, lab);
+        list_text(fb, LABEL_X, y + TEXT_DY, TEXT_LEFT | inv, lab);
         if (is_ticked(i))                /* the tick: a 3 x 3 square left of the label */
             core_fill(fb, 4, y + 2, 3, 3, !hl);
         if (i == cur && !hl) {           /* a side panel has the keys: the cursor's outline */
@@ -2041,14 +2051,23 @@ static void draw_edge(void *fb)
         core_fill(fb, TRACK_X + 1, y, 1, 1, 1);
         core_fill(fb, TRACK_X + 3, y, 1, 1, 1);
     }
-    core_fill(fb, EDGE_X, 0, 1, 29, 1);
-    core_fill(fb, EDGE_X, 34, 1, 30, 1);
-    core_fill(fb, EDGE_X - 1, 30, 1, 3, 1);
-    core_fill(fb, EDGE_X, 31, 1, 1, 1);
-    core_fill(fb, 0, 0, 1, 29, 1);
-    core_fill(fb, 0, 34, 1, 30, 1);
-    core_fill(fb, 1, 30, 1, 3, 1);
-    core_fill(fb, 0, 31, 1, 1, 1);
+    /* while a pane is open only its own line carries a mark: the other edge is a plain line */
+    if (panel == PN_LEFT) {
+        core_fill(fb, EDGE_X, 0, 1, 64, 1);
+    } else {
+        core_fill(fb, EDGE_X, 0, 1, 29, 1);
+        core_fill(fb, EDGE_X, 34, 1, 30, 1);
+        core_fill(fb, EDGE_X - 1, 30, 1, 3, 1);
+        core_fill(fb, EDGE_X, 31, 1, 1, 1);
+    }
+    if (panel == PN_RIGHT) {
+        core_fill(fb, 0, 0, 1, 64, 1);
+    } else {
+        core_fill(fb, 0, 0, 1, 29, 1);
+        core_fill(fb, 0, 34, 1, 30, 1);
+        core_fill(fb, 1, 30, 1, 3, 1);
+        core_fill(fb, 0, 31, 1, 1, 1);
+    }
 }
 
 
@@ -2082,7 +2101,7 @@ static void draw_panel(void *fb)
             core_fill(fb, x0, y, x1 - x0 + 1, BAR_H, 1);
             inv = TEXT_INVERT;
         }
-        core_text(fb, x0 + 1, y + TEXT_DY, LIST_TEXT | TEXT_LEFT | inv, panel_label(i));
+        list_text(fb, x0 + 1, y + TEXT_DY, TEXT_LEFT | inv, panel_label(i));
     }
 }
 

@@ -27,8 +27,11 @@ addresses (`page.s`):
   left SOUND BROWSER's edge line with its mark. The side panes split the screen as stock's
   do: the list stays, cut by a full-height line carrying the mark, the action pane right of
   x 65 as MANAGE PROJECTS' pane, VIEW BUILD / VIEW +DRIVE left as SOUND BROWSER's pane, as
-  wide as its label. Over them the confirm window and the message box. Text is
-  `core_text`'s `TEXT_SMALL` (stock's font 16); the cursor's row is a 7-row set bar with
+  wide as its label; the other edge's line loses its mark while a pane is open, as on the
+  Rytm. Over them the confirm window and the message box. The list's and the panes' text is
+  stock's font 13 (bold, 6 rows), the font the Rytm's file view uses and the same font on
+  the A4, drawn by core's `core_text_draw`; the boxes keep `core_text`'s `TEXT_SMALL`
+  (font 16). The cursor's row is a 7-row set bar with
   light text, and while a pane has the keys an outline open on the pane's side, as MANAGE
   PROJECTS draws it; a ticked row has a 3 x 3 square left of its label. The page asks for
   a frame (`core_redraw`) only when something on it changed.

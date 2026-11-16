@@ -41,6 +41,15 @@ int core_text(void *fb, int x, int y, unsigned style, const char *str)
     return (int)strlen(str) * 4;
 }
 int core_text_width(int font, const char *str) { (void)font; return (int)strlen(str) * 4; }
+/* core's screen calls (font 13 for the list): y from the bottom, logged as the top row */
+int core_font_height(int font) { (void)font; return 6; }
+void core_text_draw(void *fb, int font, int x, int y, int align, const char *str)
+{
+    (void)fb;
+    if (nflog < 64)
+        snprintf(flog[nflog++], sizeof flog[0], "%3d %2d %s%s", x, 64 - core_font_height(font) - y,
+                 align & 0x10 ? "*" : " ", str);
+}
 /* core_additem: the row's select runs at once, with a functor whose payload is the menu */
 void core_additem(void *menu, const void *row)
 {

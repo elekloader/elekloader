@@ -60,7 +60,7 @@ class Page(unittest.TestCase):
     def test_an_empty_folder_shows_the_placeholder_row_and_opens_no_panel(self):
         frames, takes, states = self.run_page('ofrlyfsns')
         for f in frames:
-            self.assertEqual(f, [(8, 1, True, 'NO MODS ON +DRIVE')])   # no title: row 0 at the top
+            self.assertEqual(f, [(8, 0, True, 'NO MODS ON +DRIVE')])   # no title: row 0 at the top
         self.assertEqual(states[0]['panel'], '0')
         self.assertEqual(states[0]['open'], '1')
         self.assertEqual(states[1]['open'], '0')          # NO closes the page
@@ -78,12 +78,12 @@ class Page(unittest.TestCase):
         self.assertEqual(self.texts(frames[0]), ['(D)', 'drums', '1KB', 'a'])   # no .txt
         ticked = frames[1]
         self.assertIn((4, 10, True, 'TICK'), ticked)       # row 1 ticked, the cursor's (light on the bar)
-        self.assertIn((8, 9, True, 'a'), ticked)
+        self.assertIn((8, 8, True, 'a'), ticked)
 
     def test_a_folder_opens_and_dot_dot_goes_back_to_it(self):
         frames, _takes, states = self.run_page('oyfyfs', 'drums/', 'a.elemod', 'drums/k.elemod')
         self.assertEqual(self.texts(frames[0])[:4], ['(D)', '..', 'k'])
-        self.assertEqual(frames[1][0:2], [(117, 1, True, '(D)'), (8, 1, True, 'drums')])   # back on it
+        self.assertEqual(frames[1][0:2], [(106, 0, True, '(D)'), (8, 0, True, 'drums')])   # back on it; (D) right-aligned to x 117
         self.assertEqual(states[0]['cur'], '0')
 
     def test_load_to_build_saves_the_ticked_files_after_its_confirm(self):
