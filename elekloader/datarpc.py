@@ -501,7 +501,7 @@ def run(a, mods, log=print):
         log('REFUSED: %s is unchanged' % mods.path('active'))
         return 1
     text = drive.active_text(chosen, build)
-    mods.put('active', text.encode('utf-8'), head)
+    mods.upload('active', text.encode('utf-8'), head)   # the route's note says whether it kept it
     log('WROTE %s (%d mods)' % (mods.path('active'), len(chosen)))
     return 0
 

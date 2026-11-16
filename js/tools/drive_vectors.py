@@ -308,7 +308,7 @@ def _exchanges(B, blk):
         step('upload', [name, raw.hex()], lambda: mods.upload(name, raw, head))
     step('ls', [], lambda: [list(x) for x in mods.ls()])
     text = drive.active_text(u + h)
-    step('put', ['active', text.encode().hex()], lambda: mods.put('active', text.encode(), head))
+    step('upload', ['active', text.encode().hex()], lambda: mods.upload('active', text.encode(), head))   # mods active
     step('get', [h[0][0]], lambda: mods.get(h[0][0])[1].hex())
     step('rm', [h[0][0]], lambda: mods.rm(h[0][0]))
     step('get', [h[0][0]], lambda: mods.get(h[0][0])[1].hex())

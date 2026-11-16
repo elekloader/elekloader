@@ -954,6 +954,7 @@ class NotingUnit(FakeUnit):
     def __init__(self, build_blk, folders=()):
         super().__init__(build_blk)
         self.folders = set(folders)
+        self.lose = set()                       # names whose commit fails anyway (a store error)
         self.note('-')
 
     def note(self, text):
@@ -968,7 +969,7 @@ class NotingUnit(FakeUnit):
             super().send(raw)
             if name in self.files and self.files.get(name) is not had.get(name):
                 parent = name.rpartition('/')[0]
-                if parent and parent not in self.folders:
+                if (parent and parent not in self.folders) or name in self.lose:
                     if name in had:
                         self.files[name] = had[name]
                     else:
@@ -1011,6 +1012,18 @@ def test_an_upload_the_unit_did_not_save_is_an_error_not_uploaded():
             unit.folders.add('café')
             assert datarpc.run(argparse.Namespace(op='put', files=[p], into='café'), mods, log.append) == 0
             assert unit.files['café/' + name] == raw
+            # mods active goes through the same check: a lost commit of /mods/active is the error, not WROTE
+            assert datarpc.run(argparse.Namespace(op='active', names=['fx/' + name]), mods, log.append) == 0
+            assert log[-1] == 'WROTE /mods/active (1 mods)' and datarpc.last_of(unit.files['.status'].decode()) == 'saved active'
+            kept = unit.files['active']
+            unit.lose.add('active')
+            log.clear()
+            try:
+                datarpc.run(argparse.Namespace(op='active', names=['café/' + name]), mods, log.append)
+                assert False, 'a lost /mods/active passed'
+            except ModError as e:
+                assert str(e) == 'the unit did not save /mods/active: commit failed: active', e
+            assert not any(l.startswith('WROTE') for l in log) and unit.files['active'] == kept
     assert datarpc.last_of('drive-loader route\nstage: 1 bytes\n') is None
     assert datarpc.last_of(None) is None
 
