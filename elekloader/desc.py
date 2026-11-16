@@ -22,7 +22,8 @@ into its string pool (UTF-8, NUL-terminated):
   u32 flags (bit 0, F_STAGE_TOP: the loader reads each +Drive file into the area itself at boot, a
   mod's export drive_stage_top; docs/DRIVE.md, "The boot link"; bit 1, F_PAYLOAD_SKIP: it stages
   each file without its .payload's hex, a mod's export drive_payload_skip; docs/DRIVE.md,
-  "Payloads on the +Drive"); zero to +0x64.
+  "Payloads on the +Drive"; bit 2, F_ABS16: its boot linker takes abs16 relocations, a mod's
+  export drive_abs16); zero to +0x64.
 
   module (16): name, version, u8 kind (0 core, 1 flashed mod, 2 a mod that imports core_desc),
     u8 flags (bit 0: has sites), u16 index, u16 first export, u16 export count
@@ -77,6 +78,8 @@ STAGE_TOP = 'drive_stage_top'    # a loader's export: nonzero sets F_STAGE_TOP (
 F_STAGE_TOP = 1                  # the header's flags (ABI 1.3)
 PAYLOAD_SKIP = 'drive_payload_skip'   # a loader's export: nonzero sets F_PAYLOAD_SKIP
 F_PAYLOAD_SKIP = 2               # flags bit 1: the loader stages a file without its .payload's hex
+ABS16 = 'drive_abs16'            # a loader's export: nonzero sets F_ABS16
+F_ABS16 = 4                      # flags bit 2: the boot linker takes abs16 relocations
 MODULE, EXPORT, TABLE, CLAIM, AREA, SCOPE, RANGE = 16, 8, 24, 8, 20, 16, 12
 # a site map range's kind (ABI 1.2)
 SITE_SITE, SITE_COPIED, SITE_DEVICE, SITE_BOOT, SITE_RUN, SITE_TRAILER = 1, 2, 3, 4, 5, 6
@@ -281,7 +284,8 @@ def dump(d):
     a = d['area']
     out.append('RAM end 0x%08x, +Drive area 0x%08x-0x%08x, staging 0x%08x (%d bytes)' % a
                + (', files staged at the area\'s top' if d.get('flags', 0) & F_STAGE_TOP else '')
-               + (', payloads skipped' if d.get('flags', 0) & F_PAYLOAD_SKIP else ''))
+               + (', payloads skipped' if d.get('flags', 0) & F_PAYLOAD_SKIP else '')
+               + (', abs16 relocations' if d.get('flags', 0) & F_ABS16 else ''))
     s = d['storage']
     out.append('lockfile trailer at 0x%08x, %d bytes' % s['trailer'])
     out += ['storage %s: %d of %d bits, generation %d' % (n, u, r, g) for n, r, u, g in s['scopes']]

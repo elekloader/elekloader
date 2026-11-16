@@ -69,6 +69,7 @@ export const SKIPS = ['none', 'key', 'armed', 'drive', 'abi', 'unstable', 'count
 export const NO_FIELDS = ['sites', 'collections', 'copied', 'storage', 'sharc']
 export const SITE_FIELDS = ['sites', 'copied']   // ... except these on a build with a site map (ABI 1.2)
 const RSIZE: Record<string, number> = { abs32: 4, pc32: 4, pc16: 2 }
+const RSIZE16: Record<string, number> = { ...RSIZE, abs16: 2 }   // on F_ABS16 (the A4's dlink.c)
 
 const utf8 = new TextEncoder()
 const ulen = (s: string) => utf8.encode(s).length
@@ -263,6 +264,7 @@ export class Build {
   ramEnd: number; lo: number; hi: number; staging: number; stagingSize: number
   stageTop: boolean                         // the boot reads each file into the area itself (F_STAGE_TOP)
   payloadSkip: boolean                      // the boot stages each file without its .payload's hex (F_PAYLOAD_SKIP)
+  rsize: Record<string, number>             // the relocation kinds the boot linker takes, with their sizes (F_ABS16)
   globals: Map<string, Global>
   nsyms: number
   pools: Record<keyof typeof POOL_PER_MB, number>
@@ -290,6 +292,7 @@ export class Build {
     ;[this.ramEnd, this.lo, this.hi, this.staging, this.stagingSize] = d.area
     this.stageTop = !!((d.flags ?? 0) & desc.F_STAGE_TOP)
     this.payloadSkip = !!((d.flags ?? 0) & desc.F_PAYLOAD_SKIP)
+    this.rsize = (d.flags ?? 0) & desc.F_ABS16 ? RSIZE16 : RSIZE
     this.globals = new Map()
     const put = (k: string, v: Global) => { if (!this.globals.has(k)) this.globals.set(k, v) }
     for (const m of d.modules) for (const [nm, a] of m.exports) put(nm, ['abs', a])
@@ -443,7 +446,7 @@ function scanSites(build: Build, c: Choice, doc: Record<string, any>, state: Sta
           const rel = x.relocs
           if (!Array.isArray(rel)) ok = false
           else for (const r of rel) {
-            const size = Array.isArray(r) && r.length === 4 && typeof r[1] === 'string' ? RSIZE[r[1]] : undefined
+            const size = Array.isArray(r) && r.length === 4 && typeof r[1] === 'string' && Object.hasOwn(build.rsize, r[1]) ? build.rsize[r[1]] : undefined
             const off = size ? num32(r[0]) : null
             if (!size || off === null || off < 0 || off + size > n! || typeof r[2] !== 'string' || num32(r[3]) === null) { ok = false; break }
           }
@@ -563,8 +566,8 @@ export function pass1(build: Build, c: Choice, state: State): boolean {
   if (build.payloadSkip && payloadRelocs(g(doc, 'relocs'))) return c.refuse('feature', 'relocs into .payload')
   const runLen = sectionLen(g(secs, '.run'))
   for (const r of each(truthy(g(doc, 'relocs')) ? doc.relocs : [])) {
-    if (!(Array.isArray(r) && r.length === 5) || r[0] !== '.run' || !(r[2] in RSIZE) || !pyIsInt(r[1])
-        || num(r[1]) < 0 || num(r[1]) + RSIZE[r[2]] > runLen)
+    if (!(Array.isArray(r) && r.length === 5) || r[0] !== '.run' || typeof r[2] !== 'string' || !Object.hasOwn(build.rsize, r[2]) || !pyIsInt(r[1])
+        || num(r[1]) < 0 || num(r[1]) + build.rsize[r[2]] > runLen)
       return c.refuse('format', '', 0, `a relocation ${repr(r)}`)
   }
   let contribs = 0

@@ -1139,7 +1139,8 @@ def link(mods, image, lock=None, *, sharc_stream=None, drive=None):
                          + (w('glob', desc.STAGING[0]), w('glob', desc.STAGING[1])),
                 'storage': {'trailer': (w('trailer'), trailer_len), 'scopes': scopes},
                 'flags': (desc.F_STAGE_TOP if w('glob', desc.STAGE_TOP) else 0)
-                         | (desc.F_PAYLOAD_SKIP if w('glob', desc.PAYLOAD_SKIP) else 0),
+                         | (desc.F_PAYLOAD_SKIP if w('glob', desc.PAYLOAD_SKIP) else 0)
+                         | (desc.F_ABS16 if w('glob', desc.ABS16) else 0),
                 'sites': site_map(w), 'prelink': [(lo, hi, k) for lo, hi, k, _what in rel.prelink],
                 # the stock bytes of every range the flashed build writes, where the profile asks for
                 # them (drive_shadow): a loader on the unit copies a mod's stock parts from the

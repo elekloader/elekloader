@@ -24,8 +24,11 @@
  * and go back when it returns. The merge's room is the descriptor's biggest table. */
 
 enum { SEC_ABS, SEC_RUN, SEC_BSS, SEC_TABLE, SEC_COUNT, SEC_STORE };
-enum { R_ABS32, R_PC32, R_PC16 };
+enum { R_ABS32, R_PC32, R_PC16, R_ABS16 };   /* abs16: two big-endian bytes (link.py put_reloc) */
 #define FLASHED 0xFFFF
+/* A relocation kind's size in bytes, or 0 for one this loader doesn't take */
+#define rsize(s, n) (js_eq(s, n, "abs32") || js_eq(s, n, "pc32") ? 4 \
+                     : js_eq(s, n, "pc16") || js_eq(s, n, "abs16") ? 2 : 0)
 #define NONE 0xFFFF
 
 struct sym {
@@ -1040,7 +1043,7 @@ static int sha_is(const char *p, const u8 *buf, u32 len, u32 r, const u8 *h)
 }
 
 /* Pass 1's part for "sites" and "copied", after the rest of the file: each site's form (addr,
- * len, new, kind, stock_sha256, relocations of the three kinds inside it) and each copied
+ * len, new, kind, stock_sha256, relocations of the four kinds inside it) and each copied
  * block's (lo < hi, to), inside the main OS; then each site against the flashed build's site
  * map, the pre-link ranges and its stock bytes, and each copied block against the flashed
  * sites. -> 0, or a refusal code (DL_R_CLASH's argument in L.scan_arg). */
@@ -1126,7 +1129,7 @@ static int scan_sites(struct dmod *m, const char **k, const u8 *buf, u32 len, co
                     return DL_R_FORMAT;
                 lo = addr;
                 hi = addr + n_;
-                if (relp) {              /* [off, abs32 | pc32 | pc16, target, addend] */
+                if (relp) {              /* [off, abs32 | pc32 | pc16 | abs16, target, addend] */
                     js_t q;
                     int f3 = 1;
                     at(&q, relp, buf, len);
@@ -1138,7 +1141,7 @@ static int scan_sites(struct dmod *m, const char **k, const u8 *buf, u32 len, co
                         if (!js_open(&q, '[') || !js_next(&q, ']', &f4) || !js_int(&q, &off)
                             || !js_next(&q, ']', &f4) || !js_str(&q, &s, &n))
                             return DL_R_FORMAT;
-                        sz = js_eq(s, n, "abs32") || js_eq(s, n, "pc32") ? 4 : js_eq(s, n, "pc16") ? 2 : 0;
+                        sz = rsize(s, n);
                         if (!sz || off < 0 || off + sz > n_ || !js_next(&q, ']', &f4) || !js_str(&q, &s, &n)
                             || !js_next(&q, ']', &f4) || !js_int(&q, &add) || js_next(&q, ']', &f4))
                             return DL_R_FORMAT;
@@ -1383,7 +1386,7 @@ static int place_sites(struct dmod *m, const char *p, const u8 *buf, u32 len, co
                     js_int(&j, &off);
                     js_next(&j, ']', &f4);
                     js_str(&j, &s, &n);
-                    if (!js_eq(s, n, "abs32") && !js_eq(s, n, "pc32") && !js_eq(s, n, "pc16"))
+                    if (!rsize(s, n))
                         return DL_R_FORMAT;
                     type = rtype(s, n);
                     js_next(&j, ']', &f4);
@@ -1399,7 +1402,7 @@ static int place_sites(struct dmod *m, const char *p, const u8 *buf, u32 len, co
                     js_next(&j, ']', &f4);
                     js_int(&j, &add);
                     js_next(&j, ']', &f4);
-                    if (off < 0 || (u32)off + (type == R_PC16 ? 2 : 4) > x->len)
+                    if (off < 0 || (u32)off + (type == R_PC16 || type == R_ABS16 ? 2 : 4) > x->len)
                         return DL_R_FORMAT;
                     if (!put(L.tsdata + x->data + off, type, sv + (u32)add, x->addr + (u32)off))
                         return DL_R_RANGE;
@@ -1585,7 +1588,7 @@ static int scan(struct dmod *m, const u8 *buf, u32 len, const char **what)
         return DL_R_FEATURE;
     }
 #endif
-    /* relocations: in .run, of the three kinds, inside it */
+    /* relocations: in .run, of the four kinds, inside it */
     if (k[K_RELOCS]) {
         at(&j, k[K_RELOCS], buf, len);
         first = 1;
@@ -1601,7 +1604,7 @@ static int scan(struct dmod *m, const u8 *buf, u32 len, const char **what)
             }
             if (!js_next(&j, ']', &f2) || !js_int(&j, &v) || !js_next(&j, ']', &f2) || !js_str(&j, &s, &n))
                 return DL_R_FORMAT;
-            sz = js_eq(s, n, "abs32") || js_eq(s, n, "pc32") ? 4 : js_eq(s, n, "pc16") ? 2 : 0;
+            sz = rsize(s, n);
             if (!sz || v < 0 || (u32)v + sz > m->run_len)
                 return DL_R_FORMAT;
             if (!js_next(&j, ']', &f2) || !js_skip(&j) || !js_next(&j, ']', &f2) || !js_skip(&j)
@@ -2138,6 +2141,10 @@ static int put(u8 *at_, int type, u32 value, u32 p)
         dl_wr32(at_, value);
     } else if (type == R_PC32) {
         dl_wr32(at_, value - p);
+    } else if (type == R_ABS16) {        /* link.put_reloc: two bytes, -0x8000 to 0xFFFF */
+        if (value > 0xFFFF && value < 0xFFFF8000u)
+            return 0;
+        dl_wr16(at_, value);
     } else {
         s32 d = (s32)(value - p);
         if (d < -0x8000 || d >= 0x8000)
@@ -2149,7 +2156,7 @@ static int put(u8 *at_, int type, u32 value, u32 p)
 
 static int rtype(const char *s, u32 n)
 {
-    return js_eq(s, n, "abs32") ? R_ABS32 : js_eq(s, n, "pc32") ? R_PC32 : R_PC16;
+    return js_eq(s, n, "abs32") ? R_ABS32 : js_eq(s, n, "pc32") ? R_PC32 : js_eq(s, n, "abs16") ? R_ABS16 : R_PC16;
 }
 
 /* Pass 2 for one mod, its file in buf. -> 0, or a refusal code. */
@@ -2311,7 +2318,7 @@ static int place(struct dmod *m, const u8 *buf, u32 len, const char **what)
                             return DL_R_LIMIT;
                         r = &L.erel[L.nerel];
                         r->type = (u8)rtype(s, n);
-                        if (!js_eq(s, n, "abs32") && !js_eq(s, n, "pc32") && !js_eq(s, n, "pc16"))
+                        if (!rsize(s, n))
                             return DL_R_FORMAT;
                         js_next(&j, ']', &f4);
                         js_str(&j, &s, &n);
@@ -2326,7 +2333,7 @@ static int place(struct dmod *m, const u8 *buf, u32 len, const char **what)
                         js_next(&j, ']', &f4);
                         js_int(&j, &add);
                         js_next(&j, ']', &f4);
-                        if (off < 0 || (u32)off + (r->type == R_PC16 ? 2 : 4)
+                        if (off < 0 || (u32)off + (r->type == R_PC16 || r->type == R_ABS16 ? 2 : 4)
                                            > (u32)c->nent * table_entry(c->table))
                             return DL_R_FORMAT;
                         r->off = (u16)off;
@@ -2492,6 +2499,8 @@ static int bind(int write)
                 if (write)
                     put(DL_MEM(at_), r->type, r->value, at_);
                 else if (r->type == R_PC16 && ((s32)(r->value - at_) < -0x8000 || (s32)(r->value - at_) >= 0x8000))
+                    return 0;
+                else if (r->type == R_ABS16 && r->value > 0xFFFF && r->value < 0xFFFF8000u)
                     return 0;
             }
         }

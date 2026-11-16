@@ -32,7 +32,7 @@ def sets(B):
         out += [(code + ': refused', bad, area), (code + ': loads', good, area)]
     h, u = T.hello(B), T.user(B)
     out = out + [(n, f, None) for n, f in _more(B, h, u)]
-    return out + _top(B) + _skip(B)
+    return out + _top(B) + _skip(B) + _abs16(B)
 
 
 def _files(*docs):
@@ -70,6 +70,24 @@ def _skip(B):
     got = [[(c.code, c.detail) for c in drive.check(b, f).choices] for _n, f, a in out if a == 'skip']
     assert got == [[(0, ''), (0, '')], [(7, '.payload')], [(7, 'relocs into .payload')],
                    [(7, 'relocs into .payload')], [(7, '.payload')]], got
+    return out
+
+
+def _abs16(B):
+    """Sets on a build whose boot linker takes abs16 relocations (F_ABS16, the A4's), and the same files on one
+    that doesn't (the Rytm's): taken there, a format refusal here."""
+    run = T.hello(B, relocs=T.hello(B)['relocs'] + [['.run', 2, 'abs16', 'abs', 0x1234]])
+    end = T.hello(B, relocs=[['.run', 11, 'abs16', 'abs', 0]])
+    jmp = B.jmp_site(B.at(0x1000), 'fn_a-mod')
+    site = T.dmod(B, 'a-mod', sites=[dict(jmp, relocs=[[2, 'abs16', 'abs', 0]])])
+    out = []
+    for area in ('a4', 'skip'):
+        out += [('%s: abs16 in .run' % area, _files(run), area),
+                ('%s: abs16 past .run' % area, _files(end), area),
+                ('%s: abs16 in a site' % area, _files(site), area)]
+    b, s = T.built(B, 'a4')[1], T.built(B, 'skip')[1]
+    got = [[(c.code, c.detail) for c in drive.check(bb, f).choices] for bb in (b, s) for _n, f, _a in out[:3]]
+    assert got[0] == [(0, '')] and got[1][0][0] == got[3][0][0] == got[4][0][0] == drive.CODE['format'], got
     return out
 
 
