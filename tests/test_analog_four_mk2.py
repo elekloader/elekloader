@@ -222,7 +222,16 @@ def test_core_a4mk2_sites():
     with open(os.path.join(ROOT, 'mods', 'core-a4mk2', 'moments.s')) as fh:
         src = fh.read()
     assert 'jmp     0x40167972' in src and 'jmp     0x401012f4' in src
-    assert len(mod['sites']) == 117 + len(voice07) + 70 + len(track08) + len(seq_sites) + len(moments_sites)
+    # and ev_live_rec's 3 sites (ui.s, after 0.8): live record's pattern writes, each a jmp over the
+    # method's first 8 bytes, its body resuming past them (tests/test_units.py, test_core_a4mk2_0_7_ui_sites)
+    live_sites = [x for x in mod['sites'] if x.get('target', '').startswith('core_live_')]
+    assert [(x['addr'], x['op'], x['stock']) for x in live_sites] == [
+        ('0x400a954a', 'jmp', '4fefffc8222f0058'),      # lea -0x38(sp),sp; move.l 0x58(sp),d1: the played note
+        ('0x400a6a08', 'jmp', '4fefffec48d7007c'),      # lea -0x14(sp),sp; movem.l d2-d6,(sp): the step's value
+        ('0x400a690c', 'jmp', '4feffff048d7003c')]      # lea -0x10(sp),sp; movem.l d2-d5,(sp): the live p-lock
+    assert mod['collections'].get('ev_live_rec') == 4
+    assert len(mod['sites']) == 117 + len(voice07) + 70 + len(track08) + len(seq_sites) + len(moments_sites) \
+        + len(live_sites)
     midi = [x for x in mod['sites'] if x.get('target') in ('core_nrpn_site', 'core_cc_site')]
     assert [(x['addr'], x['op'], x['stock']) for x in midi] == \
         [('0x4009ff56', 'jmp', '4fefffec48d7043c'), ('0x400a0b62', 'jmp', '4e56ffd848d71cfc')]
@@ -248,7 +257,7 @@ def test_core_a4mk2_sites():
     locks = [x for x in mod['sites'] if x['addr'] not in {y['addr'] for y in j['sites'][:48]} and x not in midi
              and x not in new06 and x not in std07 and x not in voice07 and x not in ui
              and x not in track08 and x not in seq_sites
-             and x not in moments_sites]
+             and x not in moments_sites and x not in live_sites]
     dests = [x for x in locks if x.get('target', '').startswith(('core_dst', 'core_id_index', 'core_index_id',
                                                                    'core_push_', 'core_set_'))]
     assert len(dests) == 21 and len([x for x in dests if x['op'] == 'ptr']) == 6
