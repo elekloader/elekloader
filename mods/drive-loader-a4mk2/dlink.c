@@ -23,7 +23,7 @@
  * dl_check, sized to the set (the mods) and to the +Drive area (the pools, dl.h DL_POOL_*),
  * and go back when it returns. The merge's room is the descriptor's biggest table. */
 
-enum { SEC_ABS, SEC_RUN, SEC_BSS, SEC_TABLE, SEC_COUNT, SEC_STORE };
+enum { SEC_ABS, SEC_RUN, SEC_BSS, SEC_TABLE, SEC_COUNT, SEC_STORE, SEC_DTABLE, SEC_DCOUNT };
 enum { R_ABS32, R_PC32, R_PC16, R_ABS16 };   /* abs16: two big-endian bytes (link.py put_reloc) */
 #define FLASHED 0xFFFF
 /* A relocation kind's size in bytes, or 0 for one this loader doesn't take */
@@ -68,6 +68,9 @@ struct dmod {
     u16 site_first, site_n;              /* its sites and copied blocks */
     u32 sdata_first;                     /* where its sites' bytes start in sdata */
     u16 fld_first, fld_n;                /* its storage fields */
+#ifdef DL_COLLECTIONS
+    u16 coll_first, coll_n;              /* the tables it declares, in L.coll */
+#endif
 #ifdef DL_SITES
     u16 tsite_first, tsite_n;            /* its sites in L.sites */
 #endif
@@ -101,10 +104,28 @@ struct dsite {                           /* a site, or a copied block (data NONE
 
 struct contrib {
     s32 order;
-    u16 table;                           /* the descriptor's table index */
+    u16 table;                           /* the descriptor's table index; with DL_COLLECTIONS, DTAB | a
+                                          * +Drive table's index once a check round found it, NONE before */
     u16 nent;                            /* entries it adds */
     u16 index;                           /* its place in the mod's contribute list */
+#ifdef DL_COLLECTIONS
+    u16 tname;                           /* a +Drive table's name in the arena; NONE: a flashed table */
+    u16 dlen;                            /* its data's bytes */
+#endif
 };
+
+#ifdef DL_COLLECTIONS
+/* A table a +Drive mod declares (docs/DRIVE.md, "+Drive collections"): placed by the layout after
+ * every .bss, its living entries and a zero entry; NAME and NAME_n are its mod's global names. */
+#define DTAB 0x8000u
+struct coll {
+    u16 mod;
+    u16 name;                            /* in the arena */
+    u16 entry;
+    u16 count;                           /* its living entries, from the layout */
+    u32 addr;                            /* from the layout */
+};
+#endif
 
 struct entry {                           /* pass 2: one contribution's bytes */
     u16 mod, ctr;
@@ -173,6 +194,10 @@ static struct {
     struct fld *fld;
     u32 nfld;
     u32 *fdesc;                          /* each field's descriptor, once placed */
+#ifdef DL_COLLECTIONS
+    struct coll *coll;                   /* the +Drive tables of every file pass 1 read */
+    u32 ncoll, COLLS;
+#endif
     struct ds_want *want;                /* the living mods' fields, for dstore */
     u16 *want_fld;
     struct dl_status *st;                /* where the records go: dl_status, or a check's */
@@ -393,6 +418,18 @@ static const char *std_table(const char *s, u32 n)
     return 0;
 }
 
+/* A contribution's entry size: its table's. */
+static u32 ctr_entry(const struct contrib *c)
+{
+#ifdef DL_COLLECTIONS
+    if (c->table == NONE)
+        return 0;
+    if (c->table & DTAB)
+        return L.coll[c->table & ~DTAB].entry;
+#endif
+    return table_entry(c->table);
+}
+
 static int flashed_module(const char *name)
 {
     u32 i;
@@ -427,6 +464,12 @@ static u32 sym_value(const struct sym *s)
         return table_addr(s->val);
     case SEC_STORE:                      /* a storage field: its descriptor */
         return L.fdesc ? L.fdesc[s->val] : 0;
+#ifdef DL_COLLECTIONS
+    case SEC_DTABLE:                     /* a +Drive table: its address, from the layout */
+        return L.coll[s->val].addr;
+    case SEC_DCOUNT:                     /* its NAME_n: its living entries */
+        return L.coll[s->val].count;
+#endif
     case SEC_COUNT: {                    /* NAME_n: the count after the merge */
         u32 n = table_count(s->val), i, k;
         for (i = 0; i < (u32)L.nmods; i++)
@@ -1446,6 +1489,102 @@ u32 dl_sites_n(void) { return L.nsites; }
 #endif
 
 /* Pass 1: read one file into m. -> 0, or a refusal code (detail in *what). */
+#ifdef DL_COLLECTIONS
+/* A mod's "collections" (docs/DRIVE.md, "+Drive collections"): each table's name (1 to 59 bytes) and
+ * entry size (a multiple of 4, at most 0xFFFF) into L.coll, and NAME and NAME_n as its global names,
+ * after its exports and storage fields (so the check rounds treat them as exports). A DSP table
+ * ("space") is a feature refusal; "spare", "max" and "render" are a flashed build's and ignored. */
+static int collections(struct dmod *m, const char *p, const u8 *buf, u32 len, const char **what)
+{
+    js_t j;
+    const char *s;
+    u32 n;
+    int first = 1;
+    m->coll_first = (u16)L.ncoll;
+    m->coll_n = 0;
+    if (empty(p, buf, len))
+        return 0;
+    at(&j, p, buf, len);
+    if (!js_open(&j, '{'))
+        return DL_R_FORMAT;
+    while (js_next(&j, '}', &first)) {
+        char nm[64];
+        s32 k, entry = -1, v;
+        int f2 = 1;
+        u16 at_;
+        struct coll *c;
+        if (!js_key(&j, &s, &n) || (k = js_unescape(s, n, nm, 60)) <= 0)
+            return DL_R_FORMAT;
+        if (!js_open(&j, '{'))
+            return DL_R_FORMAT;
+        while (js_next(&j, '}', &f2)) {
+            const char *ks;
+            u32 kn;
+            if (!js_key(&j, &ks, &kn))
+                return DL_R_FORMAT;
+            if (js_eq(ks, kn, "entry")) {
+                if (!js_int(&j, &v) || v <= 0 || v > 0xFFFF || (v & 3))
+                    return DL_R_FORMAT;
+                entry = v;
+            } else if (js_eq(ks, kn, "space")) {   /* a DSP table: never on the +Drive */
+                *what = "collections";
+                return DL_R_FEATURE;
+            } else if (!js_skip(&j)) {
+                return DL_R_FORMAT;
+            }
+        }
+        if (j.err || entry < 0)
+            return DL_R_FORMAT;
+        /* its name and NAME_n into the arena, as keep() would put them */
+        if (L.ncoll >= L.COLLS || L.nsyms + 2 > L.SYMS || L.arena_n >= L.ARENA
+            || L.arena_n + (u32)k + 1 > L.ARENA)
+            return DL_R_LIMIT;
+        at_ = (u16)L.arena_n;
+        dl_memcpy(L.arena + at_, nm, (u32)k);
+        L.arena[at_ + k] = 0;
+        L.arena_n += (u32)k + 1;
+        if (L.arena_n >= L.ARENA || L.arena_n + (u32)k + 3 > L.ARENA)
+            return DL_R_LIMIT;
+        dl_memcpy(L.arena + L.arena_n, nm, (u32)k);
+        L.arena[L.arena_n + k] = '_';
+        L.arena[L.arena_n + k + 1] = 'n';
+        L.arena[L.arena_n + k + 2] = 0;
+        c = &L.coll[L.ncoll];
+        c->mod = (u16)(m - L.mods);
+        c->name = at_;
+        c->entry = (u16)entry;
+        c->count = 0;
+        c->addr = 0;
+        add_sym(dl_hash(nm, (u32)k), c->mod, SEC_DTABLE, L.ncoll);
+        L.syms[L.nsyms - 1].name = at_;
+        add_sym(dl_hash(L.arena + L.arena_n, (u32)k + 2), c->mod, SEC_DCOUNT, L.ncoll);
+        L.syms[L.nsyms - 1].name = (u16)L.arena_n;
+        L.arena_n += (u32)k + 3;
+        L.ncoll++;
+        m->coll_n++;
+        m->exp_n += 2;                   /* global names, as exports are */
+    }
+    return j.err ? DL_R_FORMAT : 0;
+}
+
+/* The living mod that declares the +Drive table name: the first in id order. -> its table's
+ * index in L.coll, or -1. */
+static int declarer(const char *name)
+{
+    int i;
+    u32 q;
+    for (i = 0; i < L.nmods; i++) {
+        const struct dmod *o = &L.mods[L.order[i]];
+        if (!o->alive)
+            continue;
+        for (q = o->coll_first; q < (u32)o->coll_first + o->coll_n; q++)
+            if (!dl_strcmp(L.arena + L.coll[q].name, name))
+                return (int)q;
+    }
+    return -1;
+}
+#endif
+
 static int scan(struct dmod *m, const u8 *buf, u32 len, const char **what)
 {
     const char *k[K_N], *s;
@@ -1479,6 +1618,9 @@ static int scan(struct dmod *m, const u8 *buf, u32 len, const char **what)
     for (i = 0; i < sizeof(nok) / sizeof(nok[0]); i++)
 #endif
         if (!(nok[i] == K_STORAGE && L.store) && (!L.main_hi || (nok[i] != K_SITES && nok[i] != K_COPIED))
+#ifdef DL_COLLECTIONS
+            && nok[i] != K_COLLECTIONS   /* read below (collections()) */
+#endif
             && !empty(k[nok[i]], buf, len)) {
             *what = no[i];
             return DL_R_FEATURE;
@@ -1655,6 +1797,9 @@ static int scan(struct dmod *m, const u8 *buf, u32 len, const char **what)
             u32 dlen = 0, had_data = 0, to_n = 0;
             const char *to = 0;
             struct contrib *c;
+#ifdef DL_COLLECTIONS
+            u16 tname = NONE;
+#endif
             if (!js_open(&j, '{'))
                 return DL_R_FORMAT;
             while (js_next(&j, '}', &f2)) {
@@ -1709,6 +1854,13 @@ static int scan(struct dmod *m, const u8 *buf, u32 len, const char **what)
             }
             if (to) {
                 t = find_table(to, to_n);
+#ifdef DL_COLLECTIONS
+                if (t < 0) {             /* a +Drive table's: found in the check rounds */
+                    if ((tname = keep(to, to_n)) == NONE)
+                        return DL_R_LIMIT;
+                    t = (int)NONE;
+                } else
+#endif
                 if (t < 0 || !(table_flags(t) & F_MORE) || (table_flags(t) & F_DSP)) {
                     static char tn[32];
                     u32 q = to_n < 31 ? to_n : 31;
@@ -1722,6 +1874,14 @@ static int scan(struct dmod *m, const u8 *buf, u32 len, const char **what)
                 return DL_R_FORMAT;
             if (order == 0x7FFFFFFF)     /* the linker's own entries' */
                 return DL_R_FORMAT;
+#ifdef DL_COLLECTIONS
+            if (tname != NONE) {
+                if (!dlen) {
+                    *what = astr(tname);
+                    return DL_R_TABLE;
+                }
+            } else
+#endif
             if (!dlen || dlen % table_entry(t)) {
                 *what = table_name(t);
                 return DL_R_TABLE;
@@ -1731,7 +1891,13 @@ static int scan(struct dmod *m, const u8 *buf, u32 len, const char **what)
             c = &L.ctr[L.nctr++];
             c->table = (u16)t;
             c->order = order;
+#ifdef DL_COLLECTIONS
+            c->tname = tname;
+            c->dlen = (u16)dlen;
+            c->nent = tname != NONE ? 0 : (u16)(dlen / table_entry(t));
+#else
             c->nent = (u16)(dlen / table_entry(t));
+#endif
             c->index = index++;
             m->ctr_n++;
         }
@@ -1772,6 +1938,10 @@ static int scan(struct dmod *m, const u8 *buf, u32 len, const char **what)
     }
     if (L.store && (i = (u32)storage(m, k[K_STORAGE], buf, len)) != 0)
         return (int)i;
+#ifdef DL_COLLECTIONS
+    if ((i = (u32)collections(m, k[K_COLLECTIONS], buf, len, what)) != 0)
+        return (int)i;
+#endif
     {
         int code = scan_sites(m, k, buf, len, what);
         if (code)
@@ -2009,6 +2179,26 @@ static int check_round(void)
             refused++;
             continue;
         }
+#ifdef DL_COLLECTIONS
+        for (q = 0; q < m->ctr_n; q++) {     /* +Drive tables: a living mod declares each, of that entry */
+            struct contrib *c = &L.ctr[m->ctr_first + q];
+            int d;
+            if (c->tname == NONE)
+                continue;
+            d = declarer(L.arena + c->tname);
+            if (d < 0 || c->dlen % L.coll[d].entry) {
+                c->table = NONE;
+                break;
+            }
+            c->table = (u16)(DTAB | (u32)d);
+            c->nent = (u16)(c->dlen / L.coll[d].entry);
+        }
+        if (q < m->ctr_n) {
+            refuse(m, DL_R_TABLE, 0, L.arena + L.ctr[m->ctr_first + q].tname);
+            refused++;
+            continue;
+        }
+#endif
         {                                /* sites against earlier living mods' sites and copied
                                           * blocks (two copied blocks may share bytes) */
             u32 a, b;
@@ -2129,6 +2319,26 @@ static int layout(void)
         }
     }
     a = align(a, 4);
+#ifdef DL_COLLECTIONS
+    for (i = 0; i < L.nmods; i++) {      /* the +Drive tables, in id order: living entries and a zero */
+        struct dmod *m = &L.mods[L.order[i]];
+        u32 q, x, k;
+        if (!m->alive)
+            continue;
+        for (q = m->coll_first; q < (u32)m->coll_first + m->coll_n; q++) {
+            struct coll *c = &L.coll[q];
+            u32 n = 0;
+            for (x = 0; x < (u32)L.nmods; x++)
+                if (L.mods[x].alive)
+                    for (k = 0; k < L.mods[x].ctr_n; k++)
+                        if (L.ctr[L.mods[x].ctr_first + k].table == (DTAB | q))
+                            n += L.ctr[L.mods[x].ctr_first + k].nent;
+            c->count = (u16)n;
+            c->addr = a;
+            a += (n + 1) * c->entry;
+        }
+    }
+#endif
     if (a > L.area_hi && a - L.area_hi > over)
         over = a - L.area_hi;
     if (over) {
@@ -2346,7 +2556,7 @@ static int place(struct dmod *m, const u8 *buf, u32 len, const char **what)
                 js_key(&j, &s, &n);
                 if (js_eq(s, n, "data")) {
                     u32 dn;
-                    if (L.edata_n + (u32)c->nent * table_entry(c->table) > L.EDATA)
+                    if (L.edata_n + (u32)c->nent * ctr_entry(c) > L.EDATA)
                         return DL_R_LIMIT;
                     if (!js_hex(&j, L.edata + L.edata_n, L.EDATA - L.edata_n, &dn))
                         return DL_R_JSON;
@@ -2384,7 +2594,7 @@ static int place(struct dmod *m, const u8 *buf, u32 len, const char **what)
                         js_int(&j, &add);
                         js_next(&j, ']', &f4);
                         if (off < 0 || (u32)off + (r->type == R_PC16 || r->type == R_ABS16 ? 2 : 4)
-                                           > (u32)c->nent * table_entry(c->table))
+                                           > (u32)c->nent * ctr_entry(c))
                             return DL_R_FORMAT;
                         r->off = (u16)off;
                         r->value = sv + (u32)add;
@@ -2481,17 +2691,39 @@ static int item_before(const struct item *a, const struct item *b)
 
 static int bind(int write)
 {
-    u32 t, i, k;
-    for (t = 0; t < n_tables(); t++) {
-        u32 esz = table_entry(t), cnt = table_count(t), n = 0, addr = table_addr(t);
-        u8 *tab = DL_MEM(addr);
+    u32 t, i, k, nt = n_tables();
+#ifdef DL_COLLECTIONS
+    nt += L.ncoll;                       /* then the +Drive tables: no flashed entries, in the area */
+#endif
+    for (t = 0; t < nt; t++) {
+        u32 tix = t, esz, cnt, n = 0, addr, cap;
+        u8 *tab;
         int any = 0;
+#ifdef DL_COLLECTIONS
+        if (t >= n_tables()) {
+            const struct coll *c = &L.coll[t - n_tables()];
+            if (!L.mods[c->mod].alive)
+                continue;
+            tix = DTAB | (t - n_tables());
+            esz = c->entry;
+            cnt = 0;
+            addr = c->addr;
+            cap = c->count;
+        } else
+#endif
+        {
+            esz = table_entry(t);
+            cnt = table_count(t);
+            addr = table_addr(t);
+            cap = table_cap(t);
+        }
+        tab = DL_MEM(addr);
         for (i = 0; i < L.nent; i++)
-            if (L.mods[L.ent[i].mod].alive && L.ctr[L.ent[i].ctr].table == t)
+            if (L.mods[L.ent[i].mod].alive && L.ctr[L.ent[i].ctr].table == tix)
                 any = 1;
         if (!any)
             continue;
-        if ((cnt + 1) * esz > L.MDATA)
+        if (cnt && (cnt + 1) * esz > L.MDATA)   /* a +Drive table has no flashed entries to keep */
             return 0;
         dl_memcpy(L.mdata, tab, cnt * esz);
         for (i = 0; i < cnt; i++) {
@@ -2506,7 +2738,7 @@ static int bind(int write)
         for (i = 0; i < L.nent; i++) {
             const struct entry *e = &L.ent[i];
             const struct contrib *c = &L.ctr[e->ctr];
-            if (!L.mods[e->mod].alive || c->table != t)
+            if (!L.mods[e->mod].alive || c->table != tix)
                 continue;
             for (k = 0; k < c->nent; k++) {
                 struct item *it;
@@ -2555,7 +2787,7 @@ static int bind(int write)
             }
         }
         if (write)
-            dl_memset(tab + n * esz, 0, (table_cap(t) + 1 - n) * esz);
+            dl_memset(tab + n * esz, 0, (cap + 1 - n) * esz);
     }
     return 1;
 }
@@ -2627,6 +2859,9 @@ static void finish(void)
                                (void **)&L.ctr, (void **)&L.ent, (void **)&L.edata, (void **)&L.erel,
                                (void **)&L.items, (void **)&L.mdata, (void **)&L.fld, (void **)&L.fdesc,
                                (void **)&L.want, (void **)&L.want_fld,
+#ifdef DL_COLLECTIONS
+                               (void **)&L.coll,
+#endif
 #ifdef DL_SITES
                                (void **)&L.sites, (void **)&L.tsdata,
 #endif
@@ -2671,6 +2906,14 @@ static int pools(int n)
     L.ERELOCS = pool_n(DL_POOL_ERELOCS, mb, 0);
     L.SITES = pool_n(DL_POOL_SITES, mb, 0);
     L.SDATA = pool_n(DL_POOL_SDATA, mb, 0);
+#ifdef DL_COLLECTIONS
+    L.COLLS = pool_n(DL_POOL_COLLS, mb, 0);
+    if (L.EDATA / 4 + 1 > L.MERGE)       /* a +Drive table's entries all fit the entry bytes' pool */
+        L.MERGE = L.EDATA / 4 + 1;
+    L.coll = take(L.COLLS * sizeof *L.coll);
+    if (!L.coll)
+        return 0;
+#endif
     L.mods = take((u32)n * sizeof *L.mods);
     L.order = take((u32)n * sizeof *L.order);
     L.place = take((u32)n * sizeof *L.place);
@@ -3006,6 +3249,10 @@ static void begin_line(const struct dl_choice *ch, int i, s32 have, int why)
             L.nfld = m->fld_first;
         if (m->ctr_n)
             L.nctr = m->ctr_first;
+#ifdef DL_COLLECTIONS
+        if (m->coll_n)
+            L.ncoll = m->coll_first;
+#endif
         if (m->site_n) {
             L.nsite = m->site_first;
             L.sdata_n = m->sdata_first;

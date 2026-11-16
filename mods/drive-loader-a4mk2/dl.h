@@ -24,6 +24,11 @@ typedef int s32;
  * without it, so its files keep refusing any .payload. */
 #define DL_PAYLOAD_SKIP 1
 
+/* +Drive collections (docs/DRIVE.md, "+Drive collections"): a +Drive mod may declare tables, which
+ * other +Drive mods add to; the layout places each after every .bss. drive-loader-ar2's dlink.c is
+ * built without it and refuses "collections". */
+#define DL_COLLECTIONS 1
+
 /* ---- status records: /mods/.status and the MODS page (32 bytes per /mods/active line) -- */
 struct dl_status {
     u8 state;                            /* DL_ST_* */
@@ -226,6 +231,7 @@ int dl_parse_active(const char *text, u32 len, struct dl_choice *out);
 #define DL_POOL_ERELOCS 256                  /* their relocations */
 #define DL_POOL_SITES 256                    /* +Drive sites and copied blocks */
 #define DL_POOL_SDATA 4096                   /* the sites' bytes */
+#define DL_POOL_COLLS 64                     /* +Drive tables (DL_COLLECTIONS) */
 #define DL_POOL_CAP 0xFFF0                   /* every pool's most */
 
 #endif

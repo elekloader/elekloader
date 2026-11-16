@@ -86,5 +86,9 @@ dl_handler:
 | std map, which the descriptor then carries (dlink.c, std_table)
         .globl  drive_std_map
         .set    drive_std_map, 1
+| the build descriptor's flags bit 4: the boot linker links tables +Drive mods declare
+| ("collections", dl.h DL_COLLECTIONS), so host tools check and lay out sets as it does
+        .globl  drive_collections
+        .set    drive_collections, 1
         .globl  drive_staging_size
         .set    drive_staging_size, 0x400                    | fs.h DL_STAGING_SIZE

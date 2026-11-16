@@ -325,14 +325,13 @@ into the +Drive area. This section is what such a mod and `/mods/active`
 may hold; the link and the tools are in [DRIVE.md](DRIVE.md).
 
 **What a +Drive mod is.** A format-2 mod with only `.run` and `.bss`,
-relocations only in `.run` (`abs32`, `pc32`, `pc16`; `abs16` on `F_ABS16`), no `collections`,
-`sharc` or contribution `claims`; `storage`, `sites`, `copied` and
-`resources.regions` only where the build takes them, a `.payload` only
-where the loader skips it (DRIVE.md). It adds
-whole entries only to tables whose descriptor allows more (not DSP
-tables), at an order below 2^31-1. It imports the build's exports, table
-names, `NAME_n` (the count after the merge), `core_desc` and other +Drive
-mods' exports. Its own `drive_init`, if any, is called after the link as
+relocations only in `.run` (`abs32`, `pc32`, `pc16`; `abs16` on `F_ABS16`), no
+`sharc` or contribution `claims`; `storage`, `sites`, `copied`,
+`resources.regions` and `collections` only where the build takes them, a
+`.payload` only where the loader skips it. It adds whole entries to tables
+whose descriptor allows more (not DSP) or a +Drive mod declares, at an order below 2^31-1. It imports the build's exports,
+table names, `NAME_n` (the count after the merge), `core_desc` and other
++Drive mods' globals. Its `drive_init`, if any, is called after the link as
 `void drive_init(void)` in id order; never global. Its id is under 28 bytes.
 
 **`/mods/active`**: one line per chosen file, its path below `/mods`

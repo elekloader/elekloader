@@ -134,6 +134,15 @@ on). The build writes the map into the descriptor as claims of kind 3 when the l
 lacks is the refusal `std` (31, EVENT NOT MAPPED on the MODS page) as at build. drive-loader-ar2
 maps none (tests/test_drive_std.py).
 
+## Collections
+
+A +Drive mod may declare `collections` as a flashed one does, and other +Drive mods add to them
+(docs/DRIVE.md, "+Drive collections"): `dlink.c` with `DL_COLLECTIONS` (`dl.h`) finds each
+contribution's table in the check rounds, places the tables after every `.bss` sized to their living
+entries, and merges them as it merges flashed tables. The descriptor's `F_COLLECTIONS`
+(`drive_collections` in `route.s`) tells host tools; drive-loader-ar2 refuses `collections`
+(tests/test_drive_collections.py).
+
 ## Files
 
 | file | from drive-loader-ar2 | what |
@@ -143,9 +152,9 @@ maps none (tests/test_drive_std.py).
 | `boot.c` | logic kept, glue retraced | the boot, the crash guard, `dl_format` |
 | `json.c`, `json.h`, `sha256.c`, `names.inc` | unchanged (tests/test_drive_a4_store.py checks) | JSON, hashes, the route's names |
 | `park.c`, `park.h` | `.store` format 2 (tests/test_drive_a4_park.py) | parked mods |
-| `dlink.c` | storage fields as the A4 takes them: `"track": "cv"`, `"mod"` on a kit field, no `"lfo"`; `abs16`; the payload skip is built only with `DL_PAYLOAD_SKIP` | the linker |
+| `dlink.c` | storage fields as the A4 takes them: `"track": "cv"`, `"mod"` on a kit field, no `"lfo"`; `abs16`; std1; +Drive collections with `DL_COLLECTIONS`; the payload skip is built only with `DL_PAYLOAD_SKIP` | the linker |
 | `dstore.c`, `dstore.h` | lock codes per track kind (0x70..0x7f each), the A4's CC pool, `.store` format 2 (tests/test_drive_a4_dstore_host.py) | +Drive storage |
-| `dl.h`, `flush.s` | comments, and `DL_PAYLOAD_SKIP` | the linker's interface; the site writes and cache push (the A4 sets the Rytm's CACR and ACR0) |
+| `dl.h`, `flush.s` | comments, `DL_PAYLOAD_SKIP` and `DL_COLLECTIONS` | the linker's interface; the site writes and cache push (the A4 sets the Rytm's CACR and ACR0) |
 | `skip.c`, `skip.h`, `payload.c` | new | payload skip while staging (tests/test_drive_payload_skip.py), the Drive payload table and its reader |
 | `page.c`, `page.s`, `clip.inc` | model kept, view new (std1; stock addresses only for the row's label and icon, `page.s`) | the MODS page ([PAGE.md](PAGE.md); tests/test_drive_a4_page.py) |
 

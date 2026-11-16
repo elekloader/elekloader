@@ -37,7 +37,8 @@ STAGING = 0x10000
 STD = {'ev_boot': 'ev_x', 'ev_tick': 'ev_tick', 'ev_closed': 'core_handles'}
 
 
-def flashed(B, pad=0, store=False, stage_top=False, payload_skip=False, abs16=False, std_map=False):
+def flashed(B, pad=0, store=False, stage_top=False, payload_skip=False, abs16=False, std_map=False,
+            collections=False):
     core = B.core(collections={'ev_tick': {'entry': 4}, 'ev_draw': {'entry': 4},
                                'ev_x': {'entry': 4, 'spare': 1}, 'core_handles': {'entry': 4}})
     core['symbols']['core_zero'] = ['.boot', 0]
@@ -68,6 +69,9 @@ def flashed(B, pad=0, store=False, stage_top=False, payload_skip=False, abs16=Fa
         core['std'] = STD
         loader['symbols']['drive_std_map'] = ['abs', 1]
         loader['exports'].append('drive_std_map')
+    if collections:                             # and links +Drive mods' own tables (the A4's)
+        loader['symbols']['drive_collections'] = ['abs', 1]
+        loader['exports'].append('drive_collections')
     fa = B.mod('flash-a', resources={'names': ['settings:A']})
     fa['contribute'] = [{'to': 'ev_draw', 'order': 60, 'data': '00000000',
                          'relocs': [[0, 'abs32', 'sym:fn_flash-a', 0]]}]
@@ -83,18 +87,19 @@ def built(B, area=None):
     top = area in ('top', 'skip', 'a4') or isinstance(area, tuple)   # 'top', or ('top', N): a loader that
     kind = area[0] if isinstance(area, tuple) else area   # stages files at the area's top, and its area;
     skip = kind in ('skip', 'a4')                    # 'skip', ('skip', N): one that also skips payloads;
-    abs16 = kind == 'a4'                             # 'a4', ('a4', N): and takes abs16 (the A4's)
+    abs16 = coll = kind == 'a4'                      # 'a4', ('a4', N): and takes abs16 and +Drive
+                                                     # collections (the A4's)
     if isinstance(area, tuple):
         area = area[1]
     elif area in ('top', 'skip', 'a4'):
         area = None
     if top:
         out = link.link([link.Mod2(d, d['id']) for d in flashed(B, stage_top=True, payload_skip=skip,
-                                                                 abs16=abs16)], B.img)
+                                                                 abs16=abs16, collections=coll)], B.img)
         b = drive.load_build(out.image)
         if area is not None:
             out = link.link([link.Mod2(d, d['id']) for d in flashed(B, b.hi - b.lo - area, stage_top=True,
-                                                                     payload_skip=skip, abs16=abs16)], B.img)
+                                                                     payload_skip=skip, abs16=abs16, collections=coll)], B.img)
             b = drive.load_build(out.image)
         return out, b
     if area == 'std':                           # a build whose loader maps std1 subscriptions

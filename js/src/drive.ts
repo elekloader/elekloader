@@ -22,7 +22,8 @@ export const NAME_MAX = 128                // a path below /mods in /mods/active
 export const RECORD = 32
 // the boot linker's own room (dl.h DL_POOL_*, dlink.c pools()): each pool per started MB of the +Drive area (at least
 // 1), the symbols past the flashed build's own names, each capped at POOL_CAP; past one a mod is refused with LIMIT
-export const POOL_PER_MB = { arena: 12288, lists: 1024, syms: 1024, contribs: 256, sites: 256, sdata: 4096 }
+export const POOL_PER_MB = { arena: 12288, lists: 1024, syms: 1024, contribs: 256, sites: 256, sdata: 4096, colls: 64 }
+export const NAME_N_MAX = 60               // a table's name is shorter, so NAME_n is a global name too
 export const POOL_CAP = 0xfff0
 export const INIT = 'drive_init'
 export const SITE_MAIN_LO = 0x40000400    // dl.h DL_MAIN_LO: the Rytm MKII's main_load, where a site may start
@@ -268,6 +269,7 @@ export class Build {
   stageTop: boolean                         // the boot reads each file into the area itself (F_STAGE_TOP)
   payloadSkip: boolean                      // the boot stages each file without its .payload's hex (F_PAYLOAD_SKIP)
   rsize: Record<string, number>             // the relocation kinds the boot linker takes, with their sizes (F_ABS16)
+  collections: boolean                      // +Drive mods may declare tables (F_COLLECTIONS, the A4's dlink.c)
   globals: Map<string, Global>
   nsyms: number
   pools: Record<keyof typeof POOL_PER_MB, number>
@@ -302,6 +304,7 @@ export class Build {
     this.stageTop = !!((d.flags ?? 0) & desc.F_STAGE_TOP)
     this.payloadSkip = !!((d.flags ?? 0) & desc.F_PAYLOAD_SKIP)
     this.rsize = (d.flags ?? 0) & desc.F_ABS16 ? RSIZE16 : RSIZE
+    this.collections = !!((d.flags ?? 0) & desc.F_COLLECTIONS)
     this.globals = new Map()
     const put = (k: string, v: Global) => { if (!this.globals.has(k)) this.globals.set(k, v) }
     for (const m of d.modules) for (const [nm, a] of m.exports) put(nm, ['abs', a])
@@ -315,7 +318,7 @@ export class Build {
     const mb = this.hi > this.lo ? Math.max(1, Math.floor((this.hi - this.lo + 0xfffff) / 0x100000)) : 1
     const pool = (k: keyof typeof POOL_PER_MB) => Math.min(POOL_CAP, POOL_PER_MB[k] * mb + (k === 'syms' ? this.nsyms : 0))
     this.pools = { arena: pool('arena'), lists: pool('lists'), syms: pool('syms'), contribs: pool('contribs'),
-      sites: pool('sites'), sdata: pool('sdata') }
+      sites: pool('sites'), sdata: pool('sdata'), colls: pool('colls') }
     // the main OS a +Drive site may change: from the device's main_load to the boot copier (the site map's kind 4);
     // 0 on a descriptor without a site map (ABI 1.0 and 1.1)
     this.siteMap = d.abi[1] >= 2 ? (d.sites ?? []) : []
@@ -349,6 +352,7 @@ export class Choice {
   mod: Mod2 | null = null
   id: string | null = null
   exports: string[] = []
+  tables: [string, number][] = []           // the tables it declares (+Drive collections): [name, entry]
   sites: [number, number][] = []; regions: [number, number][] = []   // TELOS: [lo, hi) each
   driveSites: [number, number, boolean][] = []   // [lo, hi, is a site]: its sites, then its copied blocks
   alive = false
@@ -412,7 +416,7 @@ function fromhexLen(v: unknown): number | null {
   return n
 }
 
-type State = { syms: number; contribs: number; arena: number; lists: number; sites: number; sdata: number }
+type State = { syms: number; contribs: number; arena: number; lists: number; sites: number; sdata: number; colls: number }
 
 /** A number as the boot linker's js_int reads it: a JSON integer or a string int(v, 0) reads, within 32 bits signed.
  * drive._num. */
@@ -499,6 +503,35 @@ function scanSites(build: Build, c: Choice, doc: Record<string, any>, state: Sta
 }
 
 /** Pass 1, one file: what the boot linker's scan tells from the file and the build alone, in its order. drive.pass1. */
+/** A mod's "collections", as the boot linker reads them (dlink.c collections()): each table's name and entry size
+ * into tables; NAME and NAME_n are global names. -> null, or the refusal's [code, detail, arg, note]. drive._collections. */
+function collections(v: unknown, tables: [string, number][], exports: string[], state: State, build: Build,
+  keep: (s: string) => boolean): [string, string, number, string] | null {
+  if (empty(v)) return null
+  if (!isDict(v)) return ['format', '', 0, 'collections']
+  for (const [name, d] of Object.entries(v)) {   // in the file's order, as the boot linker reads it
+    if (!isDict(d) || !(ulen(name) > 0 && ulen(name) < NAME_N_MAX)) return ['format', '', 0, 'collections']
+    let entry: number | null = null
+    for (const [k, x] of Object.entries(d)) {
+      if (k === 'entry') {
+        if (!pyInt(x) || !((x as number) > 0 && (x as number) <= 0xffff) || (x as number) % 4) return ['format', '', 0, 'collections']
+        entry = x as number
+      } else if (k === 'space') return ['feature', 'collections', 0, '']   // a DSP table: never on the +Drive
+    }
+    if (entry === null) return ['format', '', 0, 'collections']
+    if (state.colls + tables.length >= build.pools.colls || state.syms + exports.length + 2 * tables.length + 2 > build.pools.syms
+        || !keep(name) || !keep(name + '_n')) return ['limit', '', 0, 'collections']
+    tables.push([name, entry])
+  }
+  return null
+}
+
+/** The living mod that declares the +Drive table name: the first in id order. drive._declarer. */
+const declarer = (order: Choice[], name: string) => order.find(o => o.alive && o.tables.some(([t]) => t === name))
+
+/** The global names a mod defines: its exports, then each table's NAME and NAME_n. drive._names. */
+const names = (c: Choice) => [...c.exports, ...c.tables.flatMap(([t]) => [t, t + '_n'])]
+
 export function pass1(build: Build, c: Choice, state: State): boolean {
   const keep = (text: string) => {
     const n = ulen(text) + 1
@@ -532,7 +565,9 @@ export function pass1(build: Build, c: Choice, state: State): boolean {
   const tgt = g(doc, 'target')
   if (!isDict(tgt) || g(tgt, 'device') !== build.deviceKey || g(tgt, 'os') !== build.os)
     return c.refuse('target', '', 0, isDict(tgt) ? `${str(g(tgt, 'device'))} ${str(g(tgt, 'os'))}` : 'no target')
-  for (const f of NO_FIELDS) if (!(f === 'sites' && build.telos) && !(build.mainHi && SITE_FIELDS.includes(f)) && !empty(g(doc, f))) return c.refuse('feature', f)
+  for (const f of NO_FIELDS)
+    if (!(f === 'sites' && build.telos) && !(build.mainHi && SITE_FIELDS.includes(f)) && !(f === 'collections' && build.collections)
+        && !empty(g(doc, f))) return c.refuse('feature', f)
   const secs = g(doc, 'sections')
   if (!isDict(secs)) return c.refuse('format', '', 0, 'its sections')
   for (const s of Object.keys(secs)) {
@@ -583,13 +618,14 @@ export function pass1(build: Build, c: Choice, state: State): boolean {
   if (build.stdMap && events !== undefined && events !== null && !(typeof events === 'string' && STD_SETS.includes(events)))
     return c.refuse('format', '', 0, `"events" ${repr(events)}`)
   let contribs = 0
+  const late = build.stdMap || build.collections   // the A4's dlink.c finds the table after the keys
   for (const x of each(truthy(g(doc, 'contribute')) ? doc.contribute : [])) {
     if (!isDict(x)) return c.refuse('format', '', 0, 'a contribution')
     let to: unknown = null, n: number | null = null, order: unknown = 50, std = false
     for (const [k, v] of Object.entries(x)) {
       if (k === 'to') {
         to = v
-        if (!build.stdMap) {                    // without the std map (drive-loader-ar2): checked here
+        if (!late) {                            // without the std map (drive-loader-ar2): checked here
           const t = typeof v === 'string' ? build.table.get(v) : undefined
           if (t === undefined || !(build.tables[t].flags & desc.F_MORE) || build.tables[t].flags & desc.F_DSP) return c.refuse('table', v)
         }
@@ -614,14 +650,16 @@ export function pass1(build: Build, c: Choice, state: State): boolean {
       if (!build.std.has(to)) return c.refuse('std', to)
       to = build.std.get(to)!
     }
-    if (to !== null && build.stdMap) {         // with it, once the subscription is known
+    if (to !== null && late) {                 // with it, once the subscription is known
       const t = typeof to === 'string' ? build.table.get(to) : undefined
-      if (t === undefined || !(build.tables[t].flags & desc.F_MORE) || build.tables[t].flags & desc.F_DSP) return c.refuse('table', to)
+      if (t === undefined && typeof to === 'string' && build.collections) {
+        if (!keep(to)) return c.refuse('limit', '', 0, 'names')   // a +Drive table's: found in the check rounds
+      } else if (t === undefined || !(build.tables[t].flags & desc.F_MORE) || build.tables[t].flags & desc.F_DSP) return c.refuse('table', to)
     }
     if (to === null || n === null) return c.refuse('format', '', 0, 'a contribution without "to" or "data"')
     const o = order as number
     if (!(o >= desc.ORDER_MIN && o < desc.LINKER_ORDER)) return c.refuse('format', '', 0, `an order of ${repr(order)}`)
-    if (!n || n % build.tables[build.table.get(to as string)!].entry) return c.refuse('table', to)
+    if (!n || (build.table.has(to as string) && n % build.tables[build.table.get(to as string)!].entry)) return c.refuse('table', to)
     if (state.contribs + contribs >= build.pools.contribs) return c.refuse('limit', '', 0, 'contributions')
     contribs++
   }
@@ -633,9 +671,14 @@ export function pass1(build: Build, c: Choice, state: State): boolean {
     if (state.syms + exports.length >= build.pools.syms || !keep(x)) return c.refuse('limit', '', 0, 'symbols')
     exports.push(x)
   }
+  const tables: [string, number][] = []
+  if (build.collections) {
+    const why = collections(g(doc, 'collections'), tables, exports, state, build, keep)
+    if (why) return c.refuse(...why)
+  }
   const sites = scanSites(build, c, doc, state)
   if (sites === null) return false
-  let own: Record<string, unknown> = doc
+  let own: Record<string, unknown> = build.collections ? { ...doc, collections: {} } : doc   // read here; Mod2 doesn't size them
   if ('.payload' in secs && build.payloadSkip) {   // its bytes stay on the +Drive: nothing places it
     own = { ...doc, sections: Object.fromEntries(Object.entries(secs).filter(([k]) => k !== '.payload')) }
     if (isDict(syms)) own.symbols = Object.fromEntries(Object.entries(syms).filter(([, v]) => !(Array.isArray(v) && v[0] === '.payload')))
@@ -648,8 +691,9 @@ export function pass1(build: Build, c: Choice, state: State): boolean {
     throw e
   }
   for (const x of m.contribute) if (x.event !== undefined && build.stdMap) x.to = build.std.get(x.event)!   // the table a standard event maps to
-  c.mod = m; c.exports = exports; c.driveSites = sites
-  state.syms += exports.length
+  c.mod = m; c.exports = exports; c.driveSites = sites; c.tables = tables
+  state.syms += exports.length + 2 * tables.length
+  state.colls += tables.length
   state.contribs += contribs
   state.sites += sites.length
   state.sdata += sites.reduce((n, [lo, hi, isSite]) => n + (isSite ? hi - lo : 0), 0)
@@ -681,7 +725,7 @@ function round(build: Build, order: Choice[]): number {
       if (w !== undefined) why = ['site', w.id!]
     }
     if (!why) {
-      const x = c.exports.find(x => build.globals.has(x) || earlier.some(o => o.exports.includes(x)))
+      const x = names(c).find(x => build.globals.has(x) || earlier.some(o => names(o).includes(x)))
       if (x !== undefined) why = ['export', x]
     }
     if (!why) {
@@ -694,8 +738,15 @@ function round(build: Build, order: Choice[]): number {
       if (w !== undefined) why = ['region', w]
     }
     if (!why) {
-      const x = m.imports.find(x => !(build.globals.has(x) || alive.some(o => o.exports.includes(x))) && !m.weak.has(x))
+      const x = m.imports.find(x => !(build.globals.has(x) || alive.some(o => names(o).includes(x))) && !m.weak.has(x))
       if (x !== undefined) why = ['import', x]
+    }
+    if (!why && build.collections) {          // +Drive tables: a living mod declares each, of that entry
+      for (const x of m.contribute) {
+        if (build.table.has(x.to)) continue
+        const o = declarer(order, x.to)
+        if (o === undefined || x.data.length % o.tables.find(([t]) => t === x.to)![1]) { why = ['table', x.to]; break }
+      }
     }
     let arg = 0
     if (!why) {                               // sites against earlier living mods' sites and copied blocks
@@ -749,7 +800,7 @@ export function placement(build: Build, order: Choice[]): Choice[] {
     .map(([c]) => c) : live
 }
 
-/** In placement order from the area's start: every .run, then every .bss; with the stage at the top, each file above
+/** In placement order from the area's start: every .run, then every .bss, then the +Drive tables; with the stage at the top, each file above
  * its own .run's end. -> [base, end], or null after refusing the last living mod in id order for room. drive._layout. */
 function layout(build: Build, order: Choice[]): [Map<string, number>, number] | null {
   const placed = placement(build, order)
@@ -759,7 +810,16 @@ function layout(build: Build, order: Choice[]): [Map<string, number>, number] | 
     at = layOut([c.mod!], '.run', at, base)
     if (build.stageTop) over = Math.max(over, at - stageAt(build, c))
   }
-  const end = align(layOut(placed.map(c => c.mod!), '.bss', align(at, 4), base), 4)
+  let end = align(layOut(placed.map(c => c.mod!), '.bss', align(at, 4), base), 4)
+  for (const c of order) {                  // the +Drive tables, in id order: living entries and a zero entry
+    if (!c.alive) continue
+    for (const [name, e] of c.tables) {
+      let n = 0
+      for (const o of order) if (o.alive) for (const x of o.mod!.contribute) if (x.to === name && !build.table.has(x.to)) n += Math.floor(x.data.length / e)
+      base.set(`${c.id}\0#${name}`, end)
+      end += (n + 1) * e
+    }
+  }
   over = Math.max(over, end - build.hi)
   if (over > 0) {
     const alive = order.filter(c => c.alive)
@@ -785,7 +845,7 @@ export function check(build: Build, files: [string, Uint8Array | null][]): Resul
     for (const c of choices) c.refuse('count', '', 0, '', NONE)
     return r
   }
-  const state: State = { syms: build.nsyms, contribs: 0, arena: 1, lists: 0, sites: 0, sdata: 0 }
+  const state: State = { syms: build.nsyms, contribs: 0, arena: 1, lists: 0, sites: 0, sdata: 0, colls: 0 }
   for (const c of choices) {
     if (c.raw === null) c.refuse('missing', '', 0, '', DROPPED)
     else if (build.stageTop && c.raw.length > build.hi - build.lo) c.refuse('too-big')
@@ -901,10 +961,15 @@ export function parseActive(text: string): [string, number][] | null {
 // ---- the catalogue -----------------------------------------------------------------------------------------------
 
 /** Can this mod ever load from +Drive? -> null, or the first feature only a flashed build can carry (pass 1's
- * feature checks, which need no build; sites and copied blocks load on a build with a site map). For a page that marks each mod "+Drive" or "flash". */
+ * feature checks, which need no build; sites and copied blocks load on a build with a site map, tables a mod declares
+ * on one with F_COLLECTIONS, but never a DSP table). For a page that marks each mod "+Drive" or "flash". */
 export function flashOnly(doc: unknown): string | null {
   if (!isDict(doc) || !pyEq(g(doc, 'elemod'), FORMAT2)) return 'format 1'
-  for (const f of NO_FIELDS) if (!SITE_FIELDS.includes(f) && !empty(g(doc, f))) return f
+  for (const f of NO_FIELDS) {
+    if (SITE_FIELDS.includes(f) || empty(g(doc, f))) continue
+    if (f === 'collections' && isDict(doc.collections) && Object.values(doc.collections).every(d => !isDict(d) || !('space' in d))) continue
+    return f
+  }
   if (isDict(doc.sections)) for (const s of Object.keys(doc.sections)) if (s !== '.run' && s !== '.bss') return s
   if (isDict(doc.resources) && !empty(g(doc.resources, 'regions'))) return 'regions'
   if (Array.isArray(doc.contribute) && doc.contribute.some(x => isDict(x) && !empty(g(x, 'claims')))) return 'claims'

@@ -36,7 +36,8 @@ RECORD = 32                    # a status record's bytes
 # +Drive area (at least 1), the symbols past the flashed build's own names, each capped at
 # POOL_CAP; past one a mod, or the whole set, is refused with LIMIT
 POOL_PER_MB = {'arena': 12288, 'lists': 1024, 'syms': 1024, 'locals': 1024, 'contribs': 256,
-               'edata': 2048, 'erelocs': 256, 'sites': 256, 'sdata': 4096}
+               'edata': 2048, 'erelocs': 256, 'sites': 256, 'sdata': 4096, 'colls': 64}
+NAME_N_MAX = 60                # a table's name is shorter, so NAME_n is a global name too
 POOL_CAP = 0xFFF0
 INIT = 'drive_init'            # each mod's own init: void drive_init(void); never a global name
 SITE_MAIN_LO = 0x40000400      # dl.h DL_MAIN_LO: the Rytm MKII's main_load, where a site may start
@@ -282,6 +283,9 @@ class Build:
         # abs16 (F_ABS16, the A4's dlink.c): the relocation kinds the boot linker takes, with their sizes
         self.rsize = dict({'abs32': 4, 'pc32': 4, 'pc16': 2},
                           **({'abs16': 2} if d.get('flags', 0) & desc.F_ABS16 else {}))
+        # +Drive collections (dlink.c DL_COLLECTIONS; F_COLLECTIONS): a +Drive mod may declare tables,
+        # which other +Drive mods add to; each is placed after the .bss, sized to its entries
+        self.collections = bool(d.get('flags', 0) & desc.F_COLLECTIONS)
         # the global names, in the boot linker's order: flashed exports, tables, NAME_n, core_desc
         self.globals = {}
         for m in self.modules:
@@ -375,6 +379,8 @@ def pools(build):
     more = [t for t in build.tables if t['flags'] & desc.F_MORE and not t['flags'] & desc.F_DSP]
     out['merge'] = max([t['capacity'] + 1 for t in more] or [0])
     out['mdata'] = max([(t['capacity'] + 1) * t['entry'] for t in more] or [0])
+    if build.collections:                       # a +Drive table's entries all fit the entry bytes' pool
+        out['merge'] = max(out['merge'], out['edata'] // 4 + 1)
     return out
 
 
@@ -410,6 +416,7 @@ class Choice:
         self.label = name                       # the record's id: the file name, then the mod's id
         self.mod = self.id = None
         self.exports = []
+        self.tables = []                        # the tables it declares (+Drive collections): [(name, entry)]
         self.fields = []                        # its +Drive storage fields (drive_store's documents)
         self.sites, self.regions = [], []        # TELOS: [lo, hi) each
         self.drive_sites = []                   # [(lo, hi, is_site)]: its sites, then its copied blocks
@@ -575,6 +582,46 @@ def _storage(v, fields, exports, state, build, keep):
     return None
 
 
+def _collections(v, tables, exports, state, build, keep):
+    """A mod's "collections", as the boot linker reads them (dlink.c collections()): each table's
+    name and entry size into tables; NAME and NAME_n are global names. -> None, or (code, detail,
+    arg, note)."""
+    if _empty(v):
+        return None
+    if not isinstance(v, dict):
+        return 'format', '', 0, 'collections'
+    for name, d in v.items():                   # in the file's order, as the boot linker reads it
+        if not isinstance(d, dict) or not 0 < len(name.encode('utf-8')) < NAME_N_MAX:
+            return 'format', '', 0, 'collections'
+        entry = None
+        for k, x in d.items():
+            if k == 'entry':
+                if type(x) is not int or not 0 < x <= 0xFFFF or x % 4:
+                    return 'format', '', 0, 'collections'
+                entry = x
+            elif k == 'space':                  # a DSP table: never on the +Drive
+                return 'feature', 'collections'
+        if entry is None:
+            return 'format', '', 0, 'collections'
+        if state['colls'] + len(tables) >= build.pools['colls'] \
+                or state['syms'] + len(exports) + 2 * len(tables) + 2 > build.pools['syms'] \
+                or not keep(name) or not keep(name + '_n'):
+            return 'limit', '', 0, 'collections'
+        tables.append((name, entry))
+    return None
+
+
+def _declarer(order, name):
+    """The living mod that declares the +Drive table name: the first in id order, or None."""
+    return next((o for o in order if o.alive and any(t == name for t, _e in o.tables)), None)
+
+
+def _names(c):
+    """The global names a mod defines: its exports (storage fields too), then each table's NAME
+    and NAME_n."""
+    return c.exports + [x for t, _e in c.tables for x in (t, t + '_n')]
+
+
 def pass1(build, c, state):
     """Pass 1, one file: what the boot linker's scan tells from the file and the build alone, in
     its order. `state` counts the boot linker's shared room: symbols and contributions, which a
@@ -619,7 +666,7 @@ def pass1(build, c, state):
         if f == 'sites' and build.telos:
             continue
         if not (f == 'storage' and build.store) and not (build.main_hi and f in SITE_FIELDS) \
-                and not _empty(doc.get(f)):
+                and not (f == 'collections' and build.collections) and not _empty(doc.get(f)):
             return c.refuse('feature', f)
     secs = doc.get('sections')
     if not isinstance(secs, dict):
@@ -684,6 +731,7 @@ def pass1(build, c, state):
     if build.std_map and events is not None and events not in linker.STD_SETS:
         return c.refuse('format', note='"events" %r' % (events,))
     contribs = 0
+    late = build.std_map or build.collections   # the A4's dlink.c finds the table after the keys
     for x in doc.get('contribute') or []:
         if not isinstance(x, dict):
             return c.refuse('format', note='a contribution')
@@ -692,7 +740,7 @@ def pass1(build, c, state):
         for k, v in x.items():                  # in the file's order, as the boot linker reads it
             if k == 'to':
                 to = v
-                if not build.std_map:           # without the std map (drive-loader-ar2): checked here
+                if not late:                    # without the std map (drive-loader-ar2): checked here
                     t = build.table.get(v) if isinstance(v, str) else None
                     if t is None or not build.tables[t]['flags'] & desc.F_MORE \
                             or build.tables[t]['flags'] & desc.F_DSP:
@@ -720,16 +768,19 @@ def pass1(build, c, state):
             if to not in build.std:
                 return c.refuse('std', to)
             to = build.std[to]
-        if to is not None and build.std_map:    # with it, once the subscription is known
+        if to is not None and late:             # with it, once the subscription is known
             t = build.table.get(to) if isinstance(to, str) else None
-            if t is None or not build.tables[t]['flags'] & desc.F_MORE \
+            if t is None and isinstance(to, str) and build.collections:
+                if not keep(to):                # a +Drive table's: found in the check rounds
+                    return c.refuse('limit', note='names')
+            elif t is None or not build.tables[t]['flags'] & desc.F_MORE \
                     or build.tables[t]['flags'] & desc.F_DSP:
                 return c.refuse('table', to)
         if to is None or n is None:
             return c.refuse('format', note='a contribution without "to" or "data"')
         if not desc.ORDER_MIN <= order < desc.LINKER_ORDER:
             return c.refuse('format', note='an order of %r' % (order,))
-        if not n or n % build.tables[build.table[to]]['entry']:
+        if not n or (to in build.table and n % build.tables[build.table[to]]['entry']):
             return c.refuse('table', to)
         if state['contribs'] + contribs >= build.pools['contribs']:
             return c.refuse('limit', note='contributions')
@@ -749,6 +800,12 @@ def pass1(build, c, state):
         why = _storage(doc.get('storage'), fields, exports, state, build, keep)
         if why:
             return c.refuse(why[0], note=why[1])
+    tables = []
+    if build.collections:
+        why = _collections(doc.get('collections'), tables, exports, state, build, keep)
+        if why:
+            return c.refuse(*why)
+        doc = dict(doc, collections={})         # read here; the host's Mod2 below does not size them
     sites = _scan_sites(build, c, doc, state)
     if sites is None:
         return False
@@ -763,7 +820,9 @@ def pass1(build, c, state):
         if 'event' in x and build.std_map:
             x['to'] = build.std[x['event']]
     c.mod, c.exports, c.fields, c.drive_sites = m, exports, fields, sites
-    state['syms'] += len(exports)
+    c.tables = tables
+    state['syms'] += len(exports) + 2 * len(tables)
+    state['colls'] += len(tables)
     state['fields'] += len(fields)
     state['contribs'] += contribs
     state['sites'] += len(sites)
@@ -898,7 +957,7 @@ def _scan_sites(build, c, doc, state):
 
 def _resolvable(build, alive, x):
     """Is an import a global name: the build's, or a living +Drive mod's export (its own too)."""
-    return x in build.globals or any(x in o.exports for o in alive)
+    return x in build.globals or any(x in _names(o) for o in alive)
 
 
 def _round(build, order):
@@ -933,8 +992,8 @@ def _round(build, order):
             if w is not None:
                 why = ('site', w)
         if why is None:
-            x = next((x for x in c.exports if x in build.globals
-                      or any(x in o.exports for o in earlier)), None)
+            x = next((x for x in _names(c) if x in build.globals
+                      or any(x in _names(o) for o in earlier)), None)
             if x is not None:
                 why = ('export', x)
         if why is None:
@@ -951,6 +1010,13 @@ def _round(build, order):
             x = next((x for x in m.imports if not _resolvable(build, alive, x) and x not in m.weak), None)
             if x is not None:
                 why = ('import', x)
+        if why is None and build.collections:   # +Drive tables: a living mod declares each, of that entry
+            for x in m.contribute:
+                if x['to'] not in build.table:
+                    o = _declarer(order, x['to'])
+                    if o is None or len(x['data']) % dict(o.tables)[x['to']]:
+                        why = ('table', x['to'])
+                        break
         if why is None:                         # sites against earlier living mods' sites and
             for lo, hi, mine in c.drive_sites:  # copied blocks (two copied blocks may share bytes)
                 o = next((o for o in earlier if any((mine or theirs) and _overlap(lo, hi, a, b)
@@ -1056,10 +1122,26 @@ def placement(build, order):
     return sorted(live, key=lambda c: -len(c.raw)) if build.stage_top else live
 
 
+def _drive_tables(build, order, at):
+    """The living mods' tables (+Drive collections) from at, in id order and each mod's order:
+    its living entries and a zero entry. -> ({name: {'address', 'entry', 'count', 'owner'}}, end)."""
+    out = {}
+    for c in order:
+        if not c.alive:
+            continue
+        for name, e in c.tables:
+            n = sum(len(x['data']) // e for o in order if o.alive for x in o.mod.contribute
+                    if x['to'] == name and x['to'] not in build.table)
+            out[name] = {'address': at, 'entry': e, 'count': n, 'owner': c}
+            at += (n + 1) * e
+    return out, at
+
+
 def _layout(build, order):
-    """In placement order from the area's start: every .run at its alignment, then every .bss; with
-    the stage at the top, each file above its own .run's end. -> (base, end), or None after
-    refusing the last living mod in id order for room (the KB the worst point is over)."""
+    """In placement order from the area's start: every .run at its alignment, then every .bss, then
+    the +Drive tables; with the stage at the top, each file above its own .run's end. -> (base, end,
+    the +Drive tables), or None after refusing the last living mod in id order for room (the KB the
+    worst point is over)."""
     placed = placement(build, order)
     base, at, over = {}, build.lo, 0
     for c in placed:
@@ -1067,22 +1149,24 @@ def _layout(build, order):
         if build.stage_top:
             over = max(over, at - _stage_at(build, c))
     end = _align(lay_out([c.mod for c in placed], '.bss', _align(at, 4), base), 4)
+    dtab, end = _drive_tables(build, order, end)
     over = max(over, end - build.hi)
     if over > 0:
         last = [c for c in order if c.alive][-1]
         last.refuse('room', arg=(over + 1023) // 1024)
         return None
-    return base, end
+    return base, end, dtab
 
 
-def _globals(build, order, base):
+def _globals(build, order, base, dtab):
     """Name -> a function giving its value: the build's names first (NAME_n the count after the
-    merge), then the living +Drive mods' exports, in id order."""
+    merge), then the living +Drive mods' exports and tables, in id order."""
     alive = [c for c in order if c.alive]
     added = {}
     for c in alive:
         for x in c.mod.contribute:
-            added[x['to']] = added.get(x['to'], 0) + len(x['data']) // build.tables[build.table[x['to']]]['entry']
+            if x['to'] in build.table:
+                added[x['to']] = added.get(x['to'], 0) + len(x['data']) // build.tables[build.table[x['to']]]['entry']
     glob = {}
     for nm, (kind, v) in build.globals.items():
         if kind == 'abs':
@@ -1100,6 +1184,10 @@ def _globals(build, order, base):
                 sec, off = c.mod.symbols[x]
                 v = off if sec == 'abs' else base.get((c.id, sec), 0) + off
                 glob[x] = (lambda v=v: v)
+        for name, _e in c.tables:
+            t = dtab[name]
+            glob.setdefault(name, lambda v=t['address']: v)
+            glob.setdefault(name + '_n', lambda v=t['count']: v)
     return glob
 
 
@@ -1180,12 +1268,37 @@ def _pass2(build, c, base, glob, edata):
     return (bytes(run), ents, sites), None
 
 
-def _bind(build, live, placed):
+def _bind(build, live, placed, dtab):
     """Each table that gets an entry: flashed and +Drive entries sorted by (order, id, place),
-    entry relocations at their final address, then zero entries to capacity + 1. -> {name: {...}},
-    or None past the loader's room (then the whole set is refused)."""
+    entry relocations at their final address, then zero entries to capacity + 1; and each +Drive
+    table (dtab), its entries so, and its zero entry. -> {name: {...}}, or None past the loader's
+    room (then the whole set is refused)."""
     names = build.flashed
     out = {}
+    for name, d in dtab.items():
+        e = d['entry']
+        rows = []
+        for c, x, data, rel in ((c, x, data, rel) for c in live for x, data, rel in placed[c.id][1]
+                                if x['to'] == name):
+            for k in range(len(data) // e):
+                rows.append((entry_key(x['order'], c.id.encode('utf-8'), x['i'] << 8 | k), c.id, x['order'],
+                             data[k * e:(k + 1) * e],
+                             [(o - k * e, typ, v) for o, typ, v in rel if k * e <= o < (k + 1) * e]))
+        if len(rows) > build.pools['merge']:
+            return None
+        rows.sort(key=lambda row: row[0])
+        raw = bytearray()
+        for i, row in enumerate(rows):
+            b = bytearray(row[3])
+            for o, typ, v in row[4]:
+                try:
+                    put_reloc(b, o, typ, v, d['address'] + i * e + o, 'an entry of %s' % name)
+                except ModError:
+                    return None
+            raw += b
+        raw += bytes(e)
+        out[name] = {'address': d['address'], 'entry': e, 'capacity': d['count'], 'bytes': bytes(raw),
+                     'entries': [(row[1], row[2]) for row in rows], 'drive': d['owner'].id}
     for t in build.tables:
         e, cnt = t['entry'], t['count']
         new = [(c, x, data, rel) for c in live for x, data, rel in placed[c.id][1] if x['to'] == t['name']]
@@ -1239,6 +1352,7 @@ def check(build, files, deep=False, store=None):
     r.choices, r.live, r.base, r.end, r.area, r.tables, r.inits, r.glob = \
         choices, [], {}, build.lo, b'', {}, [], {}
     r.placed, r.gens = None, None
+    r.drive_tables = {}
     r.sites = []
     if len(choices) > MAX_MODS:                 # the loader reads none of them
         r.skip = 'count'
@@ -1246,7 +1360,7 @@ def check(build, files, deep=False, store=None):
         for c in r.choices:
             c.refuse('count', state=NONE)
         return r
-    state = {'syms': build.nsyms, 'contribs': 0, 'arena': 1, 'lists': 0, 'fields': 0,   # the arena's 0 is ""
+    state = {'syms': build.nsyms, 'contribs': 0, 'arena': 1, 'lists': 0, 'fields': 0, 'colls': 0,   # the arena's 0 is ""
              'sites': 0, 'sdata': 0}
     for c in choices:
         if c.raw is None:
@@ -1268,7 +1382,7 @@ def check(build, files, deep=False, store=None):
             break
         if build.store:
             r.placed = _place(build, order, store)
-        glob = _globals(build, order, lay[0])
+        glob = _globals(build, order, lay[0], lay[2])
         if r.placed is not None:
             for c in order:
                 if c.alive:
@@ -1286,7 +1400,7 @@ def check(build, files, deep=False, store=None):
             break
         lay = None
     live = [c for c in order if c.alive]
-    merged = _bind(build, live, placed) if lay is not None and deep else {}
+    merged = _bind(build, live, placed, lay[2]) if lay is not None and deep else {}
     if lay is None or merged is None:           # never settled, or past the loader's room
         r.skip = 'unstable'
         for c in live:
@@ -1296,8 +1410,9 @@ def check(build, files, deep=False, store=None):
             st_tables, r.gens = _store_tables(build, r.placed)
             r.tables = st_tables
         return r
-    base, end = lay
+    base, end, dtab = lay
     r.live, r.base, r.end = live, base, end if live else build.lo
+    r.drive_tables = {n: {k: v for k, v in t.items() if k != 'owner'} for n, t in dtab.items()}
     if deep:
         area = bytearray(r.end - build.lo)
         for c in live:
@@ -1305,6 +1420,9 @@ def check(build, files, deep=False, store=None):
             if run:
                 o = base[(c.id, '.run')] - build.lo
                 area[o:o + len(run)] = run
+        for name in dtab:                       # +Drive tables are in the area: their bytes there too
+            o = merged[name]['address'] - build.lo
+            area[o:o + len(merged[name]['bytes'])] = merged[name]['bytes']
         r.area, r.tables = bytes(area), merged
         if r.placed is not None:
             st_tables, r.gens = _store_tables(build, r.placed)
