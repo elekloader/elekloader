@@ -2350,6 +2350,15 @@ def test_core_a4mk2_0_7_ui_sites():
     globs |= {m for m in re.findall(r'^\s*(?:CLIP|PREQ|MODSET)\s+(\w+),', asm, re.M)}
     cfns = set(re.findall(r'^\w[\w ]*?\b(core_\w+)\(', src, re.M))
     ui_sites = [s for s in doc['sites'] if s.get('target') in globs | cfns]
+    # ev_live_rec (after 0.8): live record's three pattern writes, counted on their own
+    live = [s for s in ui_sites if s['target'].startswith('core_live_')]
+    assert [(s['addr'], s['op'], s['target']) for s in live] == [
+        ('0x400a954a', 'jmp', 'core_live_note_site'), ('0x400a6a08', 'jmp', 'core_live_value_site'),
+        ('0x400a690c', 'jmp', 'core_live_lock_site')]
+    for s in live:      # each stub resumes past the 8 bytes its jmp displaced
+        assert len(s['stock']) == 16 and 'jmp     0x%08x' % (int(s['addr'], 16) + 8) in asm, s
+    assert doc['collections']['ev_live_rec'] == 4 and 'ev_live_rec[]' in src
+    ui_sites = [s for s in ui_sites if s not in live]
     assert len(ui_sites) == 70
     assert len([s for s in ui_sites if s['target'].startswith('core_clip_')]) == 36
     modset = [s for s in ui_sites if s['target'].startswith('core_modset_')]
