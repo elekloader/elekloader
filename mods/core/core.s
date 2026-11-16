@@ -28,6 +28,11 @@
         .section .boot, "ax"
         .globl  boot
 boot:
+        .ifdef  CORE_STOCK_COPY
+        | The OS image as the bootloader left it, before anything writes to
+        | it (system.s, core_stock_info): the Digitakt mk1's, from 4.5.
+        jsr     core_stock_copy
+        .endif
         lea     __run_load, %a0         | where the DDR image was unpacked
         lea     __run_start, %a1        | where it runs
         move.l  #__run_words, %d0

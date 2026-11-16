@@ -74,3 +74,42 @@
         FW      fw_blit, BLIT
         FW      fw_op_new, OP_NEW
         FW      fw_invalidate, FW_INVALIDATE
+
+| From 4.5 (system.s): the +Drive's own routines, below its file system, for
+| a mod that keeps data in sectors nothing else uses (TELOS). A task, never
+| an interrupt; the card is up from ev_card_ready.
+|   fw_card_read       0x400e29ec  read(sector, bytes, buf) -> 0 or < 0 (512-byte sectors; 1.54: 0x400e2c14)
+|   fw_card_write      0x400e2bd2  write(sector, bytes, buf) -> 0 or < 0 (1.54: 0x400e2dfa)
+|   fw_card_erase      0x400e2904  erase(first, count) -> 0 or < 0 (1.54: 0x400e2b2c)
+|   fw_card_sectors    0x400e260c  sectors() -> the card's size, -1 before it is up (1.54: 0x400e2834)
+|   fw_sysex_send      0x400d6e1e  send(buf, len, volatile uint8_t *abort, port) -> nonzero: sent;
+|                                  in pieces of at most 144 bytes; port 1 the settings' output,
+|                                  2 USB, 3 DIN, 4 both (1.54: 0x400d7046)
+        FW      fw_card_read, FW_CARD_READ
+        FW      fw_card_write, FW_CARD_WRITE
+        FW      fw_card_erase, FW_CARD_ERASE
+        FW      fw_card_sectors, FW_CARD_SECTORS
+        FW      fw_sysex_send, SYSEX_SEND
+| From 4.5 (system.s): the +Drive's file system (ekFS), from ev_fs_ready on.
+| A task, never an interrupt, and never from inside another fs call: its
+| mutex is not recursive. Paths from "/", at most 255 bytes. A handle is four
+| words {node, position, writing, open}; set the position word to seek.
+| ekFS writes through to the card, 16 KB blocks.
+|   fw_fs_open    0x400cf178  open(path, mode, handle[4]) -> 0 or -1: mode "r", or "w"
+|                             (the file made if it is not there; never truncated)
+|   fw_fs_read    0x400ceebe  read(buf, len, handle) -> bytes read, or -1
+|   fw_fs_write   0x400cef1e  write(buf, len, handle) -> len, or -1 (grows the file)
+|   fw_fs_close   0x400cf136  close(handle) -> 0
+|   fw_fs_unlink  0x400cdb28  unlink(path) -> 0 or -1 (files only)
+|   fw_fs_mkdir   0x400cde0c  mkdir(path) -> 0 or -1 (there already, too)
+|   fw_fs_rename  0x400cd902  rename(from, to) -> 0 or -1
+|   fw_fs_stat    0x400cdc36  stat(path, out[4]) -> 0 (out[0] its node) or -1
+| 1.54: each + 0x228.
+        FW      fw_fs_open, FS_OPEN
+        FW      fw_fs_read, FS_READ
+        FW      fw_fs_write, FS_WRITE
+        FW      fw_fs_close, FS_CLOSE
+        FW      fw_fs_unlink, FS_UNLINK
+        FW      fw_fs_mkdir, FS_MKDIR
+        FW      fw_fs_rename, FS_RENAME
+        FW      fw_fs_stat, FS_STAT
