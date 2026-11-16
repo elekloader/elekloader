@@ -31,6 +31,8 @@ typedef int (*fn_cc)(int track, int cc, int value, int flags);
 typedef int (*fn_pc)(int channel, int program, int flags);
 typedef void (*fn_void)(void);
 
+void core_seq_exit(void);
+
 extern const fn_msg std_midi_in[];
 extern const fn_msg std_sysex_in[];
 extern const fn_cc std_midi_cc[];
@@ -213,6 +215,7 @@ int core_std_seq_note(const uint8_t *rec)
 void core_std_seq_tick(void)
 {
     const fn_void *f;
+    core_seq_exit();                    /* ev_transport, ev_seq_step (seq.c) */
     for (f = std_seq_tick; *f; f++)
         (*f)();
 }

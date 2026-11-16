@@ -611,6 +611,17 @@ core-ar2 0.14), which that load then reads with: no second load, and no
 `ev_drive_format`: f(fs), from 0x40074af6 in FORMAT +DRIVE, after the slot
 erases, before the header's rewrite. Both are the loader's: no spares.
 
+## The sequencer
+
+`seq.c`, `seq.s`: core-ar2 0.11's sequencer events (`analog-four-mk2/seq.h`;
+[seq-check](../../examples/seq-check-a4mk2)).
+
+## Moments
+
+core-ar2 0.11's moments (`analog-four-mk2/moments.h`; addresses in
+`send.c`, `store.c`, `moments.c`). From an interrupt `core_midi_try_send`
+masks every interrupt. No sound pool, no `ev_project_slot`.
+
 ## Checked so far
 
 The runs' logs are in their pull requests; what they established:
@@ -659,6 +670,11 @@ The runs' logs are in their pull requests; what they established:
   never name the bytes mod storage uses (tests/test_analog_four_mk2.py).
 
 ## Building
+
+```bash
+# needs m68k-linux-gnu binutils and gcc (or set ELEKLOADER_CROSS to another prefix)
+python -m elekloader.sdk.build mods/core-a4mk2 --stock Analog-Four_MKII_OS1.56.syx
+```
 
 docs/CORES.md, "Building a core"; a check mod is then linted and patched
 with it as in AGENTS.md's loop.
