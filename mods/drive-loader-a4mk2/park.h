@@ -1,8 +1,9 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
 /* Parked +Drive storage in /mods/.store, as the MODS page reads it (PAGE.md, "Parked data"):
  * which mods have parked fields, how many bits in each scope, and FORGET DATA's rewrite.
- * The file's layout is docs/DRIVE.md's, "+Drive storage" (format 1); elekloader/drive_store.py
- * is its twin (decode, forget, encode), and tests/test_drive_park.py checks these against it.
+ * The file's layout is docs/DRIVE.md's, "+Drive storage" (format 2 on the A4: lock codes per track
+ * kind); elekloader/drive_store.py is its twin (decode, forget, encode), and
+ * tests/test_drive_a4_park.py checks these against it.
  * Pure: bytes in, bytes out, no file calls. */
 #ifndef DL_PARK_H
 #define DL_PARK_H
