@@ -2451,8 +2451,8 @@ def _entry(v):
 
 
 def test_core_a4mk2_room_for_drive_mods():
-    """core-a4mk2 0.8's tables have room for +Drive mods (mods/core-a4mk2/README.md,
-    "+Drive mods (0.8)"), as core-ar2 0.12's: every event table, native and std1's, for as many handlers as
+    """core-a4mk2's tables have room for +Drive mods (mods/core-a4mk2/README.md,
+    "+Drive mods"), as core-ar2 0.12's: every event table, native and std1's, for as many handlers as
     the Drive Loader links (256), the audio interrupt's marked render; the page tables by the views'
     room (pages.s VIEW_MAX 16: every A4 page is a view), core_params by the loader's mods, and
     core_lock_params left to the linker's default (a +Drive mod has no storage, so no lock codes);
@@ -2460,7 +2460,6 @@ def test_core_a4mk2_room_for_drive_mods():
     with open(os.path.join(HERE, '..', 'mods', 'core-a4mk2', 'mod.json'), encoding='utf-8') as fh:
         doc = json.load(fh)
     cols = doc['collections']
-    assert doc['version'] == '0.8'
     render = {'ev_render_in', 'ev_render_out', 'ev_analog_frame', 'std_voice_start', 'std_voice_end',
               'std_seq_midi', 'ev_voice_params'}
     loader_only = ('ev_boot_drive', 'ev_drive_format')
@@ -2482,8 +2481,8 @@ def test_core_a4mk2_room_for_drive_mods():
 
 
 def test_core_a4mk2_drive_storage_hooks():
-    """core-a4mk2 0.8 has core-ar2 0.14's +Drive storage contract where the A4 needs it (README, "+Drive
-    mods (0.8)"): the live generations core_store_gens, this build's from .boot, which every scope's check
+    """core-a4mk2 has core-ar2 0.14's +Drive storage contract where the A4 needs it (README, "+Drive
+    mods"): the live generations core_store_gens, this build's from .boot, which every scope's check
     reads; ev_boot_drive comes before 0x400f1b18, the boot's project load, so the A4 loads once (no
     deferred load), and has no core_lfo_dsts (its LFOs are "mod" destinations)."""
     d = os.path.join(HERE, '..', 'mods', 'core-a4mk2')
@@ -2508,7 +2507,7 @@ def test_core_a4mk2_drive_storage_hooks():
 def test_the_a4_pre_link_ranges_are_ordered_and_inside_the_main_os():
     """The Analog Four MKII 1.56's pre-link ranges (the boot-order trace of 2026-11-14): sorted, apart,
     inside the main OS, holding main() up to the +Drive hook at 0x401061e8 but not the hook, and not
-    0x400f1b18, the boot's project load, which runs after it (core-a4mk2 README, "+Drive mods (0.8)")."""
+    0x400f1b18, the boot's project load, which runs after it (core-a4mk2 README, "+Drive mods")."""
     from elekloader import devices
     dev = [d for d in devices.devices() if d.key == 'analog-four-mk2'][0]
     rel = dev.releases['1.56']

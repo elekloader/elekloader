@@ -260,7 +260,7 @@ What it does not do:
   pattern sounded the same by ear before and after store-check set
   every sound's markers.
 
-## Restarts (0.4, 0.8)
+## Restarts
 
 An OS upgrade ends at 0x4007db24 as the Rytm's 1.74 does: interrupts
 masked, then a drain (0x40002766) waiting on the panel link's DMA
@@ -597,7 +597,7 @@ Not reported (std1 rule 6): a list parameter's turn. Unconfirmed: `keys.h`'s
 [std-check](../../examples/std-check-a4mk2),
 [ui-check](../../examples/ui-check-a4mk2).
 
-## +Drive mods (0.8)
+## +Drive mods
 
 core-ar2 0.12's spares (its README, "Room for +Drive mods"): 256 in each
 event table, the audio interrupt's marked `"render"`; 16 in the page

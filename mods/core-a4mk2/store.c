@@ -198,7 +198,7 @@ volatile unsigned char core_store_globals[4][GLOBAL_BYTES];
  * version loads */
 static unsigned char *st_image = S;
 
-/* (0.8) the live generations, one byte a scope (sound .. project): this
+/* the live generations, one byte a scope (sound .. project): this
  * build's from .boot, which the Drive Loader may change in ev_boot_drive to
  * the live +Drive layout's, with the layout ID and its ancestors in
  * core_store_ids; the T and P split stays the build's */
@@ -215,7 +215,7 @@ static unsigned built_gen(int scope)
     return g >> (24 - 8 * ((scope - 1) & 3)) & 255;
 }
 
-/* (0.8) .boot (core_boot_init): this build's generations */
+/* .boot (core_boot_init): this build's generations */
 void core_store_boot_init(void)
 {
     int s;
@@ -1017,7 +1017,7 @@ int st_proj_save(void *model, int slot, void *progress)
     return r;
 }
 
-/* (0.8) ev_boot_drive: f(), once at boot, from the site 0x401061e8 in main()
+/* ev_boot_drive: f(), once at boot, from the site 0x401061e8 in main()
  * (store.s), before its call of 0x400f1b18: the heap is up, the +Drive's
  * init done (0x40106124..0x4010613a; its result word 0x41865e98 is 0 when it
  * came up, which a handler checks before it reads) and the power-off image
@@ -1041,7 +1041,7 @@ void core_boot_drive(void)
         (*f)();
 }
 
-/* (0.8) ev_drive_format: f(fs), from the site 0x40074af6 in FORMAT +DRIVE
+/* ev_drive_format: f(fs), from the site 0x40074af6 in FORMAT +DRIVE
  * (0x40074984; store.s), after stock erased the project and sound slots and
  * before it writes the header again, holding the store's mutex; fs is the
  * MmcFs. Both formats reach it: the menu's, and the one at UI start on a card

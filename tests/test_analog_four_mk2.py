@@ -170,7 +170,7 @@ def test_core_a4mk2_sites():
     assert pages['core_param_get'] == pages['core_param_delta'] == 'd43e64e0210fdd98e9dd8476d7cea57c93492ec611d50eddcbf6fd90ea80cef7'
     assert pages['core_param_text'] == 'f0a59a90d819068375330c854f0ecd4610de7653746fd59369a25fc9cedcaea6'
     # pages whose entry a function answers (core-a4mk2 0.3, core-ar2 0.6's), asked before core_pages
-    # (0.8: with the views' room as +Drive spares, tests/test_units.py)
+    # (with the views' room as +Drive spares, tests/test_units.py)
     assert all(mod['collections'].get(c) == {'entry': 4, 'spare': 16} for c in ('core_page_fns', 'core_pages'))
     # the audio load (0.2): core times its own render events, first in and last out
     sub = {x['event']: x for x in mod['subscribe']}
@@ -210,8 +210,8 @@ def test_core_a4mk2_sites():
     # and 0.7's 70 UI and system sites (ui.s, ui.c; tests/test_units.py, test_core_a4mk2_0_7_ui_sites),
     # 0.8's ev_track_key: a jmp over the sequencer view's key-code call (trackkey.s), ev_voice_params over
     # the audio interrupt's VCA and pan call and ev_sound_setup over SOUND SETUP's next-row read (sound.s),
-    # and 0.8's two +Drive sites: main()'s call at 0x401061e8 (ev_boot_drive) and FORMAT +DRIVE's
-    # `move.l #0x24c18,%d0` at 0x40074af6 (ev_drive_format)
+    # and the two +Drive sites: main()'s call at 0x401061e8 (ev_boot_drive) and FORMAT +DRIVE's
+    # constant load at 0x40074af6 (ev_drive_format)
     track08 = [x for x in mod['sites'] if x.get('target') in ('core_track_key_site', 'core_voice_params_site',
                                                                 'core_sound_setup_site')]
     assert [(x['addr'], x['op'], (sb(x, img), x['stock_sha256'])[1]) for x in track08] == [

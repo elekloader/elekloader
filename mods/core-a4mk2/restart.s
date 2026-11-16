@@ -1,5 +1,5 @@
 | SPDX-License-Identifier: GPL-2.0-or-later
-| core-a4mk2 0.8: a restart a mod can ask for (Analog Four MKII), core-dn1
+| core-a4mk2: a restart a mod can ask for (Analog Four MKII), core-dn1
 | 5.0's core_restart with the A4's addresses. ColdFire V4; beside finish.s,
 | whose FINISH_PANEL, FINISH_UART and FINISH_DRAIN it uses.
 |
@@ -10,7 +10,7 @@
 |   CARD_MUTEX   the card's mutex, held across each raw sector transfer;
 |                MUTEX_LOCK locks it (the RTOS's plain mutex)
 |
-| ---- core_restart: reboot, from a task (0.8) --------------------------------
+| ---- core_restart: reboot, from a task ----------------------------------------
 | void core_restart(void). Waits for the +Drive to be idle: takes the store's
 | mutex, then the card's, in the order stock takes them, and never gives
 | them back, so no save, load or transfer starts or is cut short. Then lets
@@ -54,7 +54,7 @@ core_restart:
         move.w  %d1, %sr                | interrupts back on: send it
         bra.s   2b
 
-| ---- core_restart_now: reboot at once (0.8) ---------------------------------
+| ---- core_restart_now: reboot at once -----------------------------------------
 | void core_restart_now(void), never returns: the stock restart's last steps
 | without its drain, for an interrupt or an ev_crash handler.
         .globl  core_restart_now

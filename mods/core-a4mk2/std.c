@@ -51,7 +51,7 @@ static void irq_restore(unsigned short sr)
 
 /* .boot's BOOT_INIT call: the mods' RAM image is in place and their .bss
  * clear; the OS has not started, so a handler calls no firmware */
-void core_store_boot_init(void);    /* store.c (0.8) */
+void core_store_boot_init(void);    /* store.c */
 
 void core_boot_init(void)
 {

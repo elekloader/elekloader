@@ -69,7 +69,7 @@ st_proj_save_body:                      | 0x400a771a (0.6)
         movem.l %d2-%d4/%a2-%a6,(%sp)
         jmp     0x400a7722
 
-| (0.8) the site 0x401061e8 in main() (0x40105fb6), stock `jsr 0x400f1b18.l`,
+| The site 0x401061e8 in main() (0x40105fb6), stock's 6-byte call of 0x400f1b18,
 | the boot's project load (the parameter maps, the stored image's check and
 | load into the live project, the boot word's reset), with one argument on
 | the stack (the boot word 0x401ff54c, pushed at 0x401061e2). Statics, the
@@ -84,8 +84,8 @@ core_boot_drive_site:
         jsr     core_boot_drive
         jmp     0x400f1b18
 
-| (0.8) the site 0x40074af6 in FORMAT +DRIVE (0x40074984), stock
-| `move.l #0x24c18,%d0`: after the slot erases, before the header's rewrite,
+| The site 0x40074af6 in FORMAT +DRIVE (0x40074984), stock's
+| 6-byte load of the constant 0x24c18 into %d0: after the slot erases, before the header's rewrite,
 | under the store mutex, for the menu's format and a headerless card's first
 | one. %a2 is the MmcFs; %d0, %d1, %a0, %a1 are free there.
 | core_drive_format (store.c) runs ev_drive_format(fs), then %d0 as stock's.
