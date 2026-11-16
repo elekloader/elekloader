@@ -32,7 +32,29 @@ def sets(B):
         out += [(code + ': refused', bad, area), (code + ': loads', good, area)]
     h, u = T.hello(B), T.user(B)
     out = out + [(n, f, None) for n, f in _more(B, h, u)]
-    return out + _top(B) + _skip(B) + _abs16(B) + _std(B) + _collections(B) + _claims(B)
+    return out + _top(B) + _skip(B) + _abs16(B) + _std(B) + _collections(B) + _claims(B) + _shadow(B)
+
+
+def _shadow(B):
+    """Sets on a build whose descriptor carries the shadow for stock parts (F_STOCK_SHADOW, the A4's), and the
+    same files on the usual one: the build is no TELOS, so a boot-linked site checks as there, and a stock part
+    over the flashed site loads alike."""
+    site = T.dmod(B, 'a-mod', sites=[B.jmp_site(B.at(0x1000), 'fn_a-mod')])
+    over = T.dmod(B, 'b-mod')
+    over['sections']['.run'] = {'align': 4, 'len': 18, 'parts': over['sections']['.run']['parts']
+                                + [['stock', '0x%08x' % B.at(0x2000), 6]]}
+    clash = T.dmod(B, 'c-mod', sites=[B.jmp_site(B.at(0x2000), 'fn_c-mod')])   # over flash-a's site
+    out = []
+    for area in ('shadow', None):
+        tag = area or 'plain'
+        out += [('%s: a boot-linked site' % tag, _files(site), area),
+                ('%s: a stock part over the flashed site' % tag, _files(over), area),
+                ('%s: a site over the flashed site' % tag, _files(clash), area)]
+    b, p = T.built(B, 'shadow')[1], T.built(B)[1]
+    assert b.shadow and not b.telos and not p.shadow, (b.shadow, b.telos)
+    got = [[(c.code, c.detail) for c in drive.check(bb, f).choices] for bb in (b, p) for _n, f, _a in out[:3]]
+    assert got[:3] == got[3:] and got[2][0][0] == drive.CODE['clash'], got   # a TELOS build says 'flashed'
+    return out
 
 
 def _collections(B):

@@ -38,7 +38,7 @@ STD = {'ev_boot': 'ev_x', 'ev_tick': 'ev_tick', 'ev_closed': 'core_handles'}
 
 
 def flashed(B, pad=0, store=False, stage_top=False, payload_skip=False, abs16=False, std_map=False,
-            collections=False, claims=False):
+            collections=False, claims=False, stock_shadow=False):
     core = B.core(collections={'ev_tick': {'entry': 4}, 'ev_draw': {'entry': 4},
                                'ev_x': {'entry': 4, 'spare': 1}, 'core_handles': {'entry': 4}})
     core['symbols']['core_zero'] = ['.boot', 0]
@@ -82,6 +82,9 @@ def flashed(B, pad=0, store=False, stage_top=False, payload_skip=False, abs16=Fa
         loader['symbols']['drive_claims'] = ['abs', 1]
         loader['exports'].append('drive_claims')
         fa['contribute'][0]['claims'] = [[B.at(0x2800), B.at(0x2810)]]
+    if stock_shadow:                            # the descriptor carries the shadow for stock parts (the A4's)
+        loader['symbols'][desc.STOCK_SHADOW] = ['abs', 1]
+        loader['exports'].append(desc.STOCK_SHADOW)
     return [core, loader, fa]
 
 
@@ -106,6 +109,9 @@ def built(B, area=None):
                                                                      payload_skip=skip, abs16=abs16, collections=coll)], B.img)
             b = drive.load_build(out.image)
         return out, b
+    if area == 'shadow':                        # a build whose loader lays the shadow over stock parts
+        out = link.link([link.Mod2(d, d['id']) for d in flashed(B, stock_shadow=True)], B.img)
+        return out, drive.load_build(out.image)
     if area == 'claims':                        # a build whose boot linker takes contributions' claims
         out = link.link([link.Mod2(d, d['id']) for d in flashed(B, claims=True)], B.img)
         return out, drive.load_build(out.image)

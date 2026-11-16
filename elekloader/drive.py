@@ -264,9 +264,10 @@ class Build:
         self.std_map = bool(d.get('flags', 0) & desc.F_STD_MAP)
         self.std = dict(nm.split(' ', 1) for kind, _mi, nm in d['claims'] if kind == desc.CLAIM_STD)
         # TELOS (a descriptor with the stock shadow, ABI 1.2): sites and regions are taken, checked
-        # as the boot linker checks them (DL_SITES, DL_REGIONS)
+        # as the boot linker checks them (DL_SITES, DL_REGIONS). With F_STOCK_SHADOW (the A4's
+        # loader) the shadow serves the stock parts alone (stock_bytes), and the build is no TELOS
         self.shadow = d.get('shadow') or []
-        self.telos = bool(self.shadow)
+        self.telos = bool(self.shadow) and not d.get('flags', 0) & desc.F_STOCK_SHADOW
         self.regions = []
         for kind, mi, nm in d['claims']:
             if kind == getattr(desc, 'CLAIM_REGION', 2):

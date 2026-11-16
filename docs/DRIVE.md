@@ -454,6 +454,13 @@ image>` prints it.
   with the shadow. The twins
   (drive.py, js/src/drive.ts) check the same, leaving the stock hash to the
   unit when they have the descriptor alone.
+  A loader that exports `drive_stock_shadow` (the A4's) gets the same shadow
+  for its stock parts alone, with flags bit 6 `F_STOCK_SHADOW`: the build
+  matches each run of a mod's own code against the whole stock OS, so a
+  part can name an address a flashed site wrote, where the running OS no
+  longer holds stock's bytes. Its `dlink.c` lays the shadow over each stock
+  part it copies (`shadow_over`), and the twins take the build for no TELOS:
+  its sites keep the boot-linked sites' checks.
 - **Orders.** Each entry's order is kept whole, a signed 32-bit number,
   so a +Drive entry sorts against core-ar2 0.13's screen handlers (at
   -1,000,000 and 1,000,000) as the flashed build's linker sorted them. An
@@ -477,7 +484,7 @@ names offsets into its string pool (UTF-8, NUL-terminated):
 | +0x44 | u32 the device key, u32 the OS version (names) |
 | +0x4c | ABI 1.2: u32 offset of the site map, u16 its count, u16 the pre-link count, u32 offset of the pre-link ranges |
 | +0x58 | u32 the shadow's offset, u32 its range count (ABI 1.2; 0 without one) |
-| +0x60 | ABI 1.3: u32 flags, bit 0 `F_STAGE_TOP`: the loader reads each file into the +Drive area itself at boot (a module's export `drive_stage_top`, nonzero); bit 1 `F_PAYLOAD_SKIP`: it stages each file without its `.payload`'s hex ("Payloads on the +Drive"; the export `drive_payload_skip`); bit 2 `F_ABS16`: its boot linker takes `abs16` relocations (the export `drive_abs16`); bit 3 `F_STD_MAP`: it maps std1 subscriptions through the core's `std` map, which the claims of kind 3 carry (the export `drive_std_map`); bit 4 `F_COLLECTIONS`: +Drive mods may declare tables ("+Drive collections"; the export `drive_collections`); bit 5 `F_CLAIMS`: its boot linker takes contributions' `claims`, and the site map lists the flashed ones ("Claims"; the export `drive_claims`); zero to +0x64 |
+| +0x60 | ABI 1.3: u32 flags, bit 0 `F_STAGE_TOP`: the loader reads each file into the +Drive area itself at boot (a module's export `drive_stage_top`, nonzero); bit 1 `F_PAYLOAD_SKIP`: it stages each file without its `.payload`'s hex ("Payloads on the +Drive"; the export `drive_payload_skip`); bit 2 `F_ABS16`: its boot linker takes `abs16` relocations (the export `drive_abs16`); bit 3 `F_STD_MAP`: it maps std1 subscriptions through the core's `std` map, which the claims of kind 3 carry (the export `drive_std_map`); bit 4 `F_COLLECTIONS`: +Drive mods may declare tables ("+Drive collections"; the export `drive_collections`); bit 5 `F_CLAIMS`: its boot linker takes contributions' `claims`, and the site map lists the flashed ones ("Claims"; the export `drive_claims`); bit 6 `F_STOCK_SHADOW`: the descriptor carries the shadow for the loader's stock parts alone, not as TELOS's (the export `drive_stock_shadow`; "The stock shadow" above); zero to +0x64 |
 
 | record | bytes | fields |
 |---|---|---|
