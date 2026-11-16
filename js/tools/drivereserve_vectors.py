@@ -24,7 +24,7 @@ allocate, reserve = store.allocate, ds.reserve
 
 def rec_allocate(lock, decls, dev, core=None, locks=(), ccs=(), inits=None, cvs=(), drive=None):
     case = {'lock': lock, 'decls': [list(d) for d in decls], 'device': dev, 'locks': [list(k) for k in locks],
-            'ccs': [list(k) for k in ccs], 'drive': drive}
+            'ccs': [list(k) for k in ccs], 'cvs': [list(k) for k in cvs], 'drive': drive}
     try:
         new, notes = allocate(lock, decls, dev, core, locks, ccs, inits, cvs, drive)
     except ModError as e:

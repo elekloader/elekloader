@@ -179,6 +179,128 @@ def test_patch_reads_the_store_as_mods_get_saves_it():
             assert '--drive-store none' in str(e)
 
 
+# ---- the Analog Four MKII: lock codes per track kind ---------------------------------------------------------
+
+A4 = 'analog-four-mk2'
+A4_DRIVE_MOD = {'id': 'zz-drive', 'storage': [
+    {'sym': 'zs0', 'scope': 'sound', 'bits': 1, 'lock': True},
+    {'sym': 'zf0', 'scope': 'kit', 'bits': 1, 'lock': True},
+    {'sym': 'zf1', 'scope': 'kit', 'bits': 1, 'lock': True},
+    {'sym': 'zc0', 'scope': 'kit', 'bits': 1, 'lock': True, 'track': 'cv'}]}
+
+
+def a4_flashed(lock):
+    """An A4 lockfile -> the Base its build gives the boot allocator (a CV field's code with CV_FLAG)."""
+    cap = store.capacity(A4, lock['split'])
+    desc = store.descriptors(lock)
+    codes = [(desc[(c['mod'], c['sym'])], c['code'] | (store.CV_FLAG if c.get('kind') == 'cv' else 0))
+             for c in lock.get('codes', [])]
+    return ds.Base(A4, {s: (cap[s], lock['next'][s], lock['generation'][s]) for s in store.SCOPES},
+                   int(lock['id'], 16), [int(a, 16) for a in lock['ancestors']], codes, [], 0,
+                   {t: 64 for t in ds.TABLES})
+
+
+def a4_build(lock, fields, drive=None):
+    """fields: [(mod, sym, scope, cv?)], 1 bit each, all lockable -> (lockfile, notes)."""
+    decls = [(m, s, sc, 1) for m, s, sc, _cv in fields]
+    locks = [(m, s) for m, s, _sc, _cv in fields]
+    cvs = [(m, s) for m, s, _sc, cv in fields if cv]
+    return store.allocate(lock, decls, A4, None, locks, (), {}, cvs, drive)
+
+
+def a4_fields(n, kind, start=0):
+    scope = 'sound' if kind == 'synth' else 'kit'
+    return [('flash', '%s%03d' % (kind[0], i), scope, kind == 'cv') for i in range(start, start + n)]
+
+
+def a4_setup():
+    """L1: 10 synth, 4 FX and 2 CV lockable fields (0x70 up in each kind); the +Drive places A4_DRIVE_MOD on it."""
+    fl = a4_fields(10, 'synth') + a4_fields(4, 'fx') + a4_fields(2, 'cv')
+    l1, _ = a4_build(None, fl)
+    p1 = ds.allocate(a4_flashed(l1), None, ds.Want([A4_DRIVE_MOD]))
+    return l1, fl, p1
+
+
+def a4_drive_codes(p):
+    return {k: sorted(c['code'] for c in p.state['codes'] if c['kind'] == k) for k in ds.KINDS}
+
+
+def test_a4_reserve_keeps_codes_per_kind():
+    _l1, _fl, p1 = a4_setup()
+    r = ds.reserve(ds.decode(p1.bytes))
+    assert r['codes'] == {'synth': [127], 'fx': [126, 127], 'cv': [127]}, r
+    assert r['codes'] == a4_drive_codes(p1)
+    store.check_drive(r, A4)
+    assert store.drive_codes(r) == 4
+
+
+def test_a4_a_later_build_skips_the_drives_codes_of_its_own_kind():
+    # L2 drops s000, s001 and f000 and adds 6 synth and 11 FX fields: without the .store the synth codes run
+    # 122..127 and the FX ones 116..126, into the +Drive's; with it they stop below them and take freed ones.
+    # The CV kind grows into 126, which only the FX kind's +Drive field holds
+    l1, fl, p1 = a4_setup()
+    r = ds.reserve(ds.decode(p1.bytes))
+    keep = fl[2:10] + fl[11:] + a4_fields(6, 'synth', 100) + a4_fields(11, 'fx', 100) + a4_fields(13, 'cv', 100)
+    l2, notes = a4_build(l1, keep, r)
+    for k in ds.KINDS:
+        mine = {c['code'] for c in l2['codes'] if c['kind'] == k}
+        assert not mine & set(r['codes'][k]), (k, notes)
+    assert 126 in {c['code'] for c in l2['codes'] if c['kind'] == 'cv'}
+    assert not [n for n in notes if 'a +Drive field holds' in n], notes
+    assert l2['drive'] == r
+    store.check_lock(l2, A4)
+    p2 = ds.allocate(a4_flashed(l2), ds.decode(p1.bytes), ds.Want([A4_DRIVE_MOD]))
+    assert a4_drive_codes(p2) == a4_drive_codes(p1)
+    assert not [n for n in p2.notes if 'flashed build' in n], p2.notes
+    assert p2.state['fields'] == p1.state['fields']
+    # without it: the old collision, which the boot allocator then resolves by new codes
+    l2x, _ = a4_build(l1, keep)
+    assert any({c['code'] for c in l2x['codes'] if c['kind'] == k} & set(r['codes'][k]) for k in ds.KINDS)
+    p2x = ds.allocate(a4_flashed(l2x), ds.decode(p1.bytes), ds.Want([A4_DRIVE_MOD]))
+    assert [n for n in p2x.notes if 'is the flashed build\'s now' in n]
+
+
+def test_a4_only_the_drives_codes_left_takes_one_with_a_note():
+    l1, fl, p1 = a4_setup()                      # synth 112..121; the +Drive has 127
+    r = ds.reserve(ds.decode(p1.bytes))
+    l2, notes = a4_build(l1, fl + a4_fields(6, 'synth', 100), r)
+    assert [n for n in notes if 'a +Drive field holds' in n and '(synth tracks)' in n], notes
+    try:
+        a4_build(l1, fl + a4_fields(7, 'synth', 100), r)
+        raise AssertionError('more than 16 synth codes')
+    except ModError as e:
+        assert 'the synth tracks' in str(e)
+
+
+def test_a4_drive_codes_have_the_devices_shape():
+    l1, fl, p1 = a4_setup()
+    r = ds.reserve(ds.decode(p1.bytes))
+    flat = dict(r, codes=[126, 127])
+    for bad in (flat, dict(r, codes={'synth': [127], 'fx': []}), dict(r, codes=dict(r['codes'], cv=[42])),
+                dict(r, codes=dict(r['codes'], fx=[127, 126]))):
+        try:
+            a4_build(l1, fl, bad)
+            raise AssertionError(bad)
+        except ModError as e:
+            assert '"codes"' in str(e)
+    try:                                         # the A4's per-kind codes on the Rytm
+        store.check_drive(dict(r, codes={'synth': [127], 'fx': [], 'cv': []}, ccs=[]), DEV)
+        raise AssertionError('the Rytm')
+    except ModError:
+        pass
+
+
+def test_a4_patch_reads_the_store():
+    import tempfile
+    _l1, _fl, p1 = a4_setup()
+    with tempfile.TemporaryDirectory() as d:
+        raw = os.path.join(d, '.store')
+        with open(raw, 'wb') as fh:
+            fh.write(p1.bytes)
+        r = patch.read_drive_store(raw)
+        assert r == ds.reserve(p1.state) and isinstance(r['codes'], dict)
+
+
 if __name__ == '__main__':
     n = 0
     for name, fn in sorted(globals().items()):

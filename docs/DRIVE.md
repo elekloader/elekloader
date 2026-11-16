@@ -287,7 +287,8 @@ descriptor alone (`/mods/.build`) is enough for `fit`, not for placing.
 unit's `.store` (`elekloader mods get .store`, then `elekloader.patch
 --drive-store .store`; the route serves it read only). The lockfile keeps
 what it read under `"drive"` (each scope's low mark, the codes and CCs the
-+Drive's fields and parked fields hold), so later builds keep them free too
++Drive's fields and parked fields hold; on the A4 the codes per track kind,
+and a field skips only its own kind's), so later builds keep them free too
 until another `.store` replaces it (`--drive-store none` drops it). A new
 flashed code or CC skips the +Drive's, and a freed one is given out again
 only when it is not one of them; only when nothing else is left does the

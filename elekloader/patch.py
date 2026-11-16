@@ -320,7 +320,7 @@ def main(argv=None):
             print('REFUSED: %s' % e)
             return 1
         print('READ the +Drive\'s .store (layout ID %s) from %s: %d lock codes, %d CCs'
-              % (drive['id'], a.drive_store, len(drive['codes']), len(drive['ccs'])))
+              % (drive['id'], a.drive_store, store.drive_codes(drive), len(drive['ccs'])))
     try:
         outputs, man = build(a.stock, a.mod, a.version, a.check, lock=lock, drive=drive)
     except PatchError as e:
