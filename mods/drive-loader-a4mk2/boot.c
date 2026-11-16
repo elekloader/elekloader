@@ -125,7 +125,8 @@ int dl_read_open(struct dl_reader *rd, const char *name)
         return -1;
     }
     rd->open = 1;
-    rd->crc = 0xFFFFFFFF;
+    rd->size = rd->f.size;
+    dl_stage_rd_init(&rd->st);
     return 0;
 }
 
@@ -136,24 +137,29 @@ void dl_read_close(struct dl_reader *rd)
     rd->open = 0;
 }
 
+/* dl_read_more's reads: read_at without the breath (the page reads one stretch a tick) */
+static s32 read_page(void *ctx, u32 at, u8 *dst, u32 n)
+{
+    dl_file *f = ctx;
+    if (at >= f->size)
+        return 0;
+    f->pos = at;
+    return dl_fs_read(f, dst, n);
+}
+
+/* The page's reads stage as dl_read_file does (skip.h dl_stage_more): the linker's check then
+ * sees the payload's hex as the boot does, and the CRC is the staged file's, as /mods/active and
+ * the boot take it. A whole-file read gave payload mods "!" (BAD FILE) on the page, 2026-11-15. */
 int dl_read_more(struct dl_reader *rd, u8 *buf, u32 max)
 {
     s32 r;
-    u32 at = rd->got < max ? rd->got : 0;   /* past max: on over the buffer's start, for the
-                                             * size and CRC alone */
-    u32 room = rd->got < max ? max - rd->got : max;
     if (!rd->open)
         return -3;
-    r = dl_fs_read(&rd->f, buf + at, room < DL_BREATHE ? room : DL_BREATHE);   /* one stretch */
-    if (r > 0) {
-        rd->crc = dl_crc32_add(rd->crc, buf + at, (u32)r);
-        if (rd->got >= max)
-            rd->over = 1;
-        rd->got += (u32)r;
+    r = dl_stage_more(&rd->st, read_page, &rd->f, buf, max);
+    if (!r)
         return 0;
-    }
     dl_read_close(rd);
-    return r < 0 ? -3 : rd->over ? -2 : 1;
+    return r;
 }
 
 static int exists(const char *name)
@@ -409,6 +415,14 @@ void dl_tick(void *ctrl)
     dl_lock();
     remove_file(".armed");
     dl_unlock();
+}
+
+/* The MODS page's APPLY & RESTART, under dl_lock: the guard comes off before the reboot, as
+ * dl_tick would take it off had the page not shown (page.c, restart_tick) */
+void dl_guard_off(void)
+{
+    armed = 0;
+    remove_file(".armed");
 }
 
 /* ev_drive_format (core-a4mk2 0.8, 0x40074af6 in FORMAT +DRIVE, after the slot erases): the store
