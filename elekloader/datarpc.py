@@ -500,8 +500,9 @@ def run(a, mods, log=print):
     if not all(c.state == drive.LOADED for c in r.choices):
         log('REFUSED: %s is unchanged' % mods.path('active'))
         return 1
-    text = drive.active_text(chosen, build)
-    mods.put('active', text.encode('utf-8'), head)
+    # no mods: a `#` line, as the MODS page writes one; an empty upload makes no file on the A4's store
+    text = drive.active_text(chosen, build) or '# no mods chosen\n'
+    mods.upload('active', text.encode('utf-8'), head)   # the route's note says whether it kept it
     log('WROTE %s (%d mods)' % (mods.path('active'), len(chosen)))
     return 0
 
