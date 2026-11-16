@@ -63,7 +63,7 @@ heading, and functions that give the number of rows, each row's label and
 value, and the action for YES. The companion builds the rows at
 `ev_boot_done` and again at the card's mount (`ev_card`, order 90, after
 the providers that read the card), and asks a row's label and value again
-each time it is drawn. TELOS (`mods/telos-ot`) lists the card's mods this
+each time it is drawn. TELOS ([elekloader/telos](https://github.com/elekloader/telos), `octatrack/`) lists the card's mods this
 way. 0.2 needs core 0.41.
 
 0.2 also fixes the getters of rows 8 and on: 0.1 gave row 8 the value of

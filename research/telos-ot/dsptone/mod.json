@@ -1,9 +1,0 @@
-{
- "id": "telos-dsp-tone", "version": "0.1",
- "license": "GPL-2.0-or-later",
- "title": "DSP TONE", "category": "Examples", "author": "irpina",
- "description": "Input A becomes a quiet sawtooth: examples/dsp-tone-ot's DSP code, loaded from the card by TELOS and sent to the DSP at run time by dspload-ot.",
- "device": "octatrack", "os": "1.40C",
- "sources": ["tone.c"],
- "requires": ["core", "dspload"]
-}

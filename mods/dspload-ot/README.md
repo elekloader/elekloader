@@ -1,7 +1,7 @@
 # DSP loader for the Octatrack
 
 DSP code at run time (Octatrack MKI and MKII, OS 1.40C). A mod that isn't
-flashed, a TELOS mod from the card (`mods/telos-ot`), hands its DSP code to
+flashed, a TELOS mod from the card ([elekloader/telos](https://github.com/elekloader/telos), `octatrack/`), hands its DSP code to
 `ot_dsp_load` (`octatrack/dspload.h`). From the next audio frames on, the
 code runs on DSP core 0 as an `ev_dsp_rx` handler (`mods/dspbus-ot`). It
 needs the DSP bus.
@@ -52,7 +52,7 @@ a project that has it on tracks 1-4 runs core 1's null stub there.
 ## Checked
 
 In octabam's emulator (`ot_emu --dsp`, 300 frames), with TELOS loading
-`research/telos-ot/dsptone` from the card:
+telos's `octatrack/design/dsptone` from the card:
 - the pump sent 3 chunks and 3 doorbells on 150 quiet frames;
 - slot 0 is bound on both cores, and the window holds the tone's 10 words,
   its loop's end address moved to `0x33db3`;
