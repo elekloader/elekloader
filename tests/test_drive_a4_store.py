@@ -39,8 +39,9 @@ def test_a4_store_test_folder():
 # drive-loader-ar2's files the A4 loader carries unchanged (decided 2026-11-14: a separate mod, no
 # shared source; later Rytm fixes are ported by hand). A difference here is a fix to port, or a
 # change to make on purpose: then take the file off this list. dstore.c, dstore.h and dlink.c left it
-# for the A4's lock codes per track kind and its CV track (tests/test_drive_a4_dstore_host.py).
-SAME_AS_RYTM = ('json.c', 'json.h', 'sha256.c', 'park.c', 'park.h', 'names.inc')
+# for the A4's lock codes per track kind and its CV track (tests/test_drive_a4_dstore_host.py); park.c
+# and park.h for the store's format 2 (tests/test_drive_a4_park.py).
+SAME_AS_RYTM = ('json.c', 'json.h', 'sha256.c', 'names.inc')
 
 
 def test_portable_files_are_the_rytms():

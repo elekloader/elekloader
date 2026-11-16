@@ -7,7 +7,7 @@ const char *const dl_store_scopes[DL_STORE_SCOPES] = {"sound", "kit", "global", 
 
 #define HEAD 0x28
 #define SCOPE_REC 8
-#define FORMAT 1
+#define FORMAT 2                         /* the A4's: lock codes per track kind (dstore.h DS_FORMAT) */
 #define MAX_BITS 32
 #define MAX_RECS (DL_MAX_MODS * 64)      /* no store holds more records: a bound for a bad count */
 
@@ -31,6 +31,9 @@ struct walk {
     int list, left;
 };
 
+/* Format 2 (drive_store.py FORMAT_KINDS) is format 1 with each code and freed code record's fourth
+ * byte its track kind and the FX and CV tracks' next codes at +0x26/+0x27: nothing this walk reads.
+ * A format 1 file is one the A4's boot drops (dstore.c), so nothing in it is parked. */
 static int walk_start(struct walk *w, const u8 *raw, u32 len)
 {
     u32 crc, i;
