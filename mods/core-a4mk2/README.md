@@ -625,12 +625,13 @@ The runs' logs are in their pull requests; what they established:
   shown to be needed; the value read equal to stock's engine copy of a
   stock parameter under every modulation stage, on the synth, FX and CV
   tracks; NRPNs and CCs in and out, live recording and the PERF channel; a
-  mod parameter heard driving a test tone. On the unit also routes from
-  every source, RANDOMIZE, CONTROL IN, poly locks, another kit layout and
-  an NRPN with a trig held.
+  mod parameter heard driving a test tone; on the unit also RANDOMIZE,
+  CONTROL IN, poly locks, another kit layout, an NRPN with a trig held.
 - Not checked yet: track clear, SysEx dump out and in, the kit change's
   and CREATE NEW's clear of locks; a fine parameter; the route screens'
   lists; a sound-locked trig's pool sound, `"smooth": false`.
+- **0.8 on a unit** (16 Nov 2026) [hw]: `ev_track_key` with rand-track,
+  the voice and SOUND SETUP events with res-limit.
 - **0.6 on a unit** (OS 1.56, 11-12 Nov 2026) [hw]: the check mods'
   plans passed as in the emulator: `ev_project_save` around saves onto the
   active slot, into another and of a new project into an empty slot (stock's
@@ -650,9 +651,7 @@ The runs' logs are in their pull requests; what they established:
 # needs m68k-linux-gnu binutils and gcc (or set ELEKLOADER_CROSS to another prefix)
 python -m elekloader.sdk.build mods/core-a4mk2 --stock Analog-Four_MKII_OS1.56.syx
 python -m elekloader.sdk.build examples/store-check-a4mk2 --stock Analog-Four_MKII_OS1.56.syx
-python -m elekloader.lint examples/store-check-a4mk2/out/store-check-1.0.elemod \
-    --stock Analog-Four_MKII_OS1.56.syx --with mods/core-a4mk2/out/core-0.5.elemod
 python -m elekloader.patch --stock Analog-Four_MKII_OS1.56.syx \
-    --mod mods/core-a4mk2/out/core-0.5.elemod --mod examples/store-check-a4mk2/out/store-check-1.0.elemod \
+    --mod mods/core-a4mk2/out/core-0.8.elemod --mod examples/store-check-a4mk2/out/store-check-1.0.elemod \
     --out a4-store.syx --version SC56 --lockfile a4-store.lock.json
 ```
