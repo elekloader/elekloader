@@ -618,6 +618,24 @@ struct ot_menu_row {
  * the message's first byte) is about to run, msg its message; again with msg 0 when it has ended. Job 16
  * is the sample editor's render/commit (msg+2 its kind, +6/+10/+14 the arguments). Watch only: stock's job
  * runs either way; card work of your own goes through ot_engine_post. */
+/* uint32_t ev_tempo(uint32_t tempo, unsigned source) (0.41): the tempo committed from its source (bpm*24;
+ * source 1 the pattern's, 0 the project's), with interrupts masked: on project load, Part reload, the
+ * PATTERN TEMPO toggle, entering and leaving ARRANGEMENT. Nonzero = commit this instead (clamped 720..7200);
+ * the next handler sees it. The tempo knob, a pattern switch and external clock are not commits. */
+/* void ev_scene_load(unsigned slot, unsigned scene, unsigned bank, unsigned part) (0.41): a scene has been
+ * loaded into the live slot A (0) or B (1): SCENE A/B + TRIG, MIDI CC 55/56, re-apply after a paste/clear. */
+/* void ev_card(unsigned state, int result, unsigned mode) (0.41, sys task): the card's state after a change:
+ * state 0 none, 1 card, 2 the built-in ROM filesystem; result 0 or -1; mode 0 unmounted (start-up, removed),
+ * 1 inserted, 2 no card (ROM filesystem), 3 remounted (FILE MANAGER's close, USB DISK MODE's end). */
+/* void ev_usb_disk(unsigned on) (0.41, sys task): 1 as USB DISK MODE hands the card to the host (the banks
+ * are written; stop touching the card), 0 after it is back and remounted, before the project's reload. */
+/* void ev_preview(unsigned trk, unsigned on, unsigned flex, unsigned slot) (0.41, sys task): an audio preview
+ * starts or stops on a track: a static slot or a flex one (0x80..0x87: the recorder buffers). */
+/* void ev_rec_cmd(unsigned trk, unsigned cmd, unsigned quant) (0.41): a REC key or MIDI note gives the track's
+ * recorder a command, as stock builds it: bits 12-14 the inputs (REC1 0x1000, REC2 0x2000, REC3 0x4000),
+ * the low byte the action (0x10 start, 0x40 update, 0x80 stop), bit 15 set by some paths (TRACK+REC1 gives
+ * 0x9010 then 0x1010); quant 1 = parked for the next step when trig quantization is on. Watch only. Not seen: sequencer REC trigs, stops written
+ * to the mailbox, takes ended by their length (ev_rec_length). */
 #define OT_DSP_FEED1_MAX    256u
 int ot_dsp_feed1(const volatile void *block, unsigned words, unsigned at);
 extern volatile uint32_t ot_dsp1_fed;
