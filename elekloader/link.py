@@ -1103,6 +1103,8 @@ def link(mods, image, lock=None, *, sharc_stream=None, drive=None):
         lo = _align(ram_end, dev.drive_align)
         return (min(lo, ddr_end), ddr_end)
 
+    std_map = any(desc.STD_MAP in m.exports for m in order)   # the loader maps std1 at boot
+
     def desc_fields(where):
         """The descriptor's fields; `where` (a function of the layout) gives the addresses, or None:
         all 0, to size the block."""
@@ -1134,13 +1136,16 @@ def link(mods, image, lock=None, *, sharc_stream=None, drive=None):
                 'os': rel.version, 'modules': mods, 'tables': tabs,
                 'claims': [(desc.CLAIM_NAME, index[m.id], nm) for m in order for nm in m.names]
                 + [(desc.CLAIM_REGION, index[m.id], '%#x %#x %s' % (g['lo'], g['hi'], g['name']))
-                   for m in order for g in m.regions],
+                   for m in order for g in m.regions]
+                + [(desc.CLAIM_STD, index[core.id], '%s %s' % x) for x in sorted(core.std.items())
+                   if std_map],
                 'area': (w('bss_end'),) + drive_area(w('bss_end'))
                          + (w('glob', desc.STAGING[0]), w('glob', desc.STAGING[1])),
                 'storage': {'trailer': (w('trailer'), trailer_len), 'scopes': scopes},
                 'flags': (desc.F_STAGE_TOP if w('glob', desc.STAGE_TOP) else 0)
                          | (desc.F_PAYLOAD_SKIP if w('glob', desc.PAYLOAD_SKIP) else 0)
-                         | (desc.F_ABS16 if w('glob', desc.ABS16) else 0),
+                         | (desc.F_ABS16 if w('glob', desc.ABS16) else 0)
+                         | (desc.F_STD_MAP if std_map else 0),
                 'sites': site_map(w), 'prelink': [(lo, hi, k) for lo, hi, k, _what in rel.prelink],
                 # the stock bytes of every range the flashed build writes, where the profile asks for
                 # them (drive_shadow): a loader on the unit copies a mod's stock parts from the

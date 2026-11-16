@@ -161,7 +161,8 @@ usual. A core serves them through its `std` map, from each standard name to
 one of its tables: the native table when the prototype is the same or its
 first part, or a table of its own that it calls with converted arguments.
 std and native mods go in one build. A subscription to an event the core's
-map lacks is refused at link time; each core's README lists what it maps.
+map lacks is refused at link time, and by the Drive Loader at boot for a
++Drive mod (`std`); each core's README lists what it maps.
 The core's own events never change, so a mod without the flag builds as
 before.
 

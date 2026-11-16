@@ -32,9 +32,12 @@ from elekloader.elemod import ModError                                    # noqa
 from test_link_refusals import Bench                                      # noqa: E402
 
 STAGING = 0x10000
+# the made-up core's std map: ev_boot to a table of another name, ev_tick to its own, ev_closed to the
+# closed core_handles (std1's names are the core's to choose; these only test the mapping)
+STD = {'ev_boot': 'ev_x', 'ev_tick': 'ev_tick', 'ev_closed': 'core_handles'}
 
 
-def flashed(B, pad=0, store=False, stage_top=False, payload_skip=False, abs16=False):
+def flashed(B, pad=0, store=False, stage_top=False, payload_skip=False, abs16=False, std_map=False):
     core = B.core(collections={'ev_tick': {'entry': 4}, 'ev_draw': {'entry': 4},
                                'ev_x': {'entry': 4, 'spare': 1}, 'core_handles': {'entry': 4}})
     core['symbols']['core_zero'] = ['.boot', 0]
@@ -61,6 +64,10 @@ def flashed(B, pad=0, store=False, stage_top=False, payload_skip=False, abs16=Fa
     if abs16:                                   # and its boot linker takes abs16 relocations
         loader['symbols']['drive_abs16'] = ['abs', 1]
         loader['exports'].append('drive_abs16')
+    if std_map:                                 # the core's std map, and a loader that maps std1 with it
+        core['std'] = STD
+        loader['symbols']['drive_std_map'] = ['abs', 1]
+        loader['exports'].append('drive_std_map')
     fa = B.mod('flash-a', resources={'names': ['settings:A']})
     fa['contribute'] = [{'to': 'ev_draw', 'order': 60, 'data': '00000000',
                          'relocs': [[0, 'abs32', 'sym:fn_flash-a', 0]]}]
@@ -90,6 +97,9 @@ def built(B, area=None):
                                                                      payload_skip=skip, abs16=abs16)], B.img)
             b = drive.load_build(out.image)
         return out, b
+    if area == 'std':                           # a build whose loader maps std1 subscriptions
+        out = link.link([link.Mod2(d, d['id']) for d in flashed(B, std_map=True)], B.img)
+        return out, drive.load_build(out.image)
     if area == 'store':                         # a build that keeps +Drive storage
         out = link.link([link.Mod2(d, d['id']) for d in flashed(B, store=True)], B.img)
         return out, drive.load_build(out.image)
@@ -396,6 +406,19 @@ def test_the_boot_linkers_other_rooms_refuse_as_limit():
         assert (r.choices[0].code, r.skip) == (drive.CODE['limit'], 'none'), r.choices[0].why()
 
 
+def std_mod(B, event, ident='drive-std', **extra):
+    """A std1 +Drive mod subscribing to `event` (\"std\": true)."""
+    d = dmod(B, ident, **dict({'events': 'std1'}, **extra))
+    d.setdefault('contribute', [{'to': event, 'std': True, 'order': 50, 'data': '00000000',
+                                 'relocs': [[0, 'abs32', 'sym:fn_' + ident, 0]]}])
+    return d
+
+
+@row('std', detail='ev_nope', area='std')
+def _(B):
+    return files(std_mod(B, 'ev_nope')), files(std_mod(B, 'ev_boot'))
+
+
 @row('count')
 def _(B):
     good = [dmod(B, 'm%03d' % i) for i in range(256)]
@@ -439,6 +462,44 @@ TELOS_CODES = {'site', 'flashed', 'stock', 'region', 'outside'}   # test_telos_s
 def test_every_code_has_a_fixture():
     host = set(drive.CODE) - set(drive.BOOT_ONLY) - {'ok'} - TELOS_CODES
     assert host == set(ROWS), sorted(host ^ set(ROWS))
+
+
+def test_std1_subscriptions_go_through_the_cores_std_map():
+    """A build whose loader exports drive_std_map (F_STD_MAP) carries the core's std map as claims of
+    kind 3, and the twin sends a std1 mod's "std": true contribution to the table it names, as the
+    linker does at build; an unmapped event is a `std` refusal, a mapped one to a closed table a
+    `table` one. Without the flag the descriptor and the twin are as before."""
+    with Bench('analog-rytm-mk2') as B:
+        out, b = built(B, 'std')
+        d = desc.decode(out.image, desc.find(out.image)[0])
+        assert d['flags'] & desc.F_STD_MAP
+        assert [(k, n) for k, _mi, n in d['claims'] if k == desc.CLAIM_STD] == \
+            [(desc.CLAIM_STD, '%s %s' % x) for x in sorted(STD.items())]
+        assert b.std_map and b.std == STD
+        r = drive.link(b, files(std_mod(B, 'ev_boot'), std_mod(B, 'ev_tick', 'drive-std2')))
+        assert all(c.state == drive.LOADED for c in r.choices), [c.why() for c in r.choices]
+        assert [x['to'] for c in r.choices for x in c.mod.contribute] == ['ev_x', 'ev_tick']
+        # ev_x had one spare: its new entry is the +Drive mod's
+        assert len(r.tables['ev_x']['entries']) == b.tables[b.table['ev_x']]['count'] + 1
+        # the refusals
+        for doc, code, detail in (
+                (std_mod(B, 'ev_nope'), 'std', 'ev_nope'),
+                (std_mod(B, 'ev_closed'), 'table', 'core_handles'),
+                (std_mod(B, 'ev_x'), 'std', 'ev_x'),           # a table's name is not a standard event
+                (std_mod(B, 'ev_boot', events=None), 'format', None),
+                (std_mod(B, 'ev_boot', events='std2'), 'format', None),
+                (std_mod(B, 'ev_boot', contribute=[{'to': 'ev_boot', 'std': False, 'data': '00000000'}]),
+                 'format', None)):
+            c = drive.check(b, files(doc)).choices[0]
+            assert (c.code, detail is None or c.detail == detail) == (drive.CODE[code], True), (code, c.why())
+        # a native contribution beside the map is as before
+        assert drive.check(b, files(hello(B))).choices[0].state == drive.LOADED
+        # without the flag: no claims of kind 3, and "std" is not read (ev_boot is no table)
+        out0, b0 = built(B)
+        d0 = desc.decode(out0.image, desc.find(out0.image)[0])
+        assert not d0['flags'] & desc.F_STD_MAP and all(k != desc.CLAIM_STD for k, _m, _n in d0['claims'])
+        c = drive.check(b0, files(std_mod(B, 'ev_boot'))).choices[0]
+        assert (c.code, c.detail) == (drive.CODE['table'], 'ev_boot'), c.why()
 
 
 def test_telos_sites_and_regions():

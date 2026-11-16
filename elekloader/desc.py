@@ -23,7 +23,9 @@ into its string pool (UTF-8, NUL-terminated):
   mod's export drive_stage_top; docs/DRIVE.md, "The boot link"; bit 1, F_PAYLOAD_SKIP: it stages
   each file without its .payload's hex, a mod's export drive_payload_skip; docs/DRIVE.md,
   "Payloads on the +Drive"; bit 2, F_ABS16: its boot linker takes abs16 relocations, a mod's
-  export drive_abs16); zero to +0x64.
+  export drive_abs16; bit 3, F_STD_MAP: it maps a std1 mod's subscriptions through
+  the core's std map, which the claims of kind 3 carry, a mod's export drive_std_map; docs/DRIVE.md,
+  "The boot link"); zero to +0x64.
 
   module (16): name, version, u8 kind (0 core, 1 flashed mod, 2 a mod that imports core_desc),
     u8 flags (bit 0: has sites), u16 index, u16 first export, u16 export count
@@ -37,7 +39,9 @@ into its string pool (UTF-8, NUL-terminated):
     0xFFFF
   orders (ABI 1.1, after the storage record): one s32 per entry, in table order: the entry's
     order; the linker's own entries have 0x7FFFFFFF. A 1.0 block has none: its key's order stands
-  claim (8): u16 kind (1: a resource name), u16 module index, u32 name
+  claim (8): u16 kind (1: a resource name; 2: a region of the bulk area a flashed mod claims,
+    "<lo> <hi> <name>" in hex; 3, with F_STD_MAP: a standard event the core's "std" map sends to
+    one of its tables, "<event> <table>", by the core, in event order), u16 module index, u32 name
   area (20): the flashed build's RAM end, the +Drive mods' area (lo, hi), the staging buffer's
     address and size (a mod's exports drive_staging, drive_staging_size; 0 without)
   storage (12 + 16 a scope): u32 address and u32 length of the lockfile's trailer in the main OS
@@ -73,6 +77,7 @@ KEY_LINKER = 0xFFFF              # a key's order (ABI 1.0's field) for the linke
 KIND_CORE, KIND_FLASHED, KIND_LOADER = 0, 1, 2
 CLAIM_NAME = 1
 CLAIM_REGION = 2                 # a region of the bulk area a flashed mod claims: "<lo> <hi> <name>", hex
+CLAIM_STD = 3                    # the core's std map: "<event> <table>", one a standard event (link.std_tables)
 STAGING = ('drive_staging', 'drive_staging_size')
 STAGE_TOP = 'drive_stage_top'    # a loader's export: nonzero sets F_STAGE_TOP (ABI 1.3)
 F_STAGE_TOP = 1                  # the header's flags (ABI 1.3)
@@ -80,6 +85,8 @@ PAYLOAD_SKIP = 'drive_payload_skip'   # a loader's export: nonzero sets F_PAYLOA
 F_PAYLOAD_SKIP = 2               # flags bit 1: the loader stages a file without its .payload's hex
 ABS16 = 'drive_abs16'            # a loader's export: nonzero sets F_ABS16
 F_ABS16 = 4                      # flags bit 2: the boot linker takes abs16 relocations
+STD_MAP = 'drive_std_map'        # a loader's export: sets F_STD_MAP and writes the core's std map
+F_STD_MAP = 8                    # flags bit 3: the loader maps std1 subscriptions (claims of kind 3)
 MODULE, EXPORT, TABLE, CLAIM, AREA, SCOPE, RANGE = 16, 8, 24, 8, 20, 16, 12
 # a site map range's kind (ABI 1.2)
 SITE_SITE, SITE_COPIED, SITE_DEVICE, SITE_BOOT, SITE_RUN, SITE_TRAILER = 1, 2, 3, 4, 5, 6
@@ -280,12 +287,13 @@ def dump(d):
         if t['entries']:
             out.append('  keys ' + ' '.join('%d:%d' % x for x in t['entries']))
     for kind, mi, n in d['claims']:
-        out.append('claim %s by module %d: %s' % ('name' if kind == CLAIM_NAME else kind, mi, n))
+        out.append('claim %s by module %d: %s' % ({CLAIM_NAME: 'name', CLAIM_STD: 'std'}.get(kind, kind), mi, n))
     a = d['area']
     out.append('RAM end 0x%08x, +Drive area 0x%08x-0x%08x, staging 0x%08x (%d bytes)' % a
                + (', files staged at the area\'s top' if d.get('flags', 0) & F_STAGE_TOP else '')
                + (', payloads skipped' if d.get('flags', 0) & F_PAYLOAD_SKIP else '')
-               + (', abs16 relocations' if d.get('flags', 0) & F_ABS16 else ''))
+               + (', abs16 relocations' if d.get('flags', 0) & F_ABS16 else '')
+               + (', std1 mapped' if d.get('flags', 0) & F_STD_MAP else ''))
     s = d['storage']
     out.append('lockfile trailer at 0x%08x, %d bytes' % s['trailer'])
     out += ['storage %s: %d of %d bits, generation %d' % (n, u, r, g) for n, r, u, g in s['scopes']]

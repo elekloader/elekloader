@@ -60,6 +60,7 @@ enum {
     /* 21 to 28 are TELOS's (drive-loader-ar2's dl.h, DL_SITES and DL_REGIONS) */
     DL_R_STORE = 29,                     /* +Drive storage room is short (detail: "WHAT NEED HAVE") */
     DL_R_CLASH = 30,                     /* a site or copied block clashes (arg: kind << 8 | line; detail: address) */
+    DL_R_STD = 31,                       /* subscribes to a standard event the core does not map (detail: it) */
 };
 enum { DL_SITE_CORE = 1, DL_SITE_MOD, DL_SITE_PRELINK, DL_SITE_STOCK };   /* DL_R_CLASH's kind */
 

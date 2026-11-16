@@ -125,6 +125,15 @@ were never bounded by a stage here: `/mods` takes a file up to the largest free 
 `F_ABS16` (`drive_abs16` in `route.s`) tells host tools; drive-loader-ar2 takes none
 (tests/test_drive_abs16.py).
 
+## std1
+
+A std1 mod (`"events": "std1"`) loads from the +Drive as flashed: each `"std": true` contribution
+goes to the table the flashed core's `std` map names (core-a4mk2's `ev_boot` to `std_boot`, and so
+on). The build writes the map into the descriptor as claims of kind 3 when the loader exports
+`drive_std_map` (`route.s`, `F_STD_MAP`); `dlink.c` (`std_table`) reads them, and an event the map
+lacks is the refusal `std` (31, EVENT NOT MAPPED on the MODS page) as at build. drive-loader-ar2
+maps none (tests/test_drive_std.py).
+
 ## Files
 
 | file | from drive-loader-ar2 | what |

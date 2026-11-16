@@ -17,6 +17,7 @@ export const KEY_LINKER = 0xffff            // a key's order (ABI 1.0's field) f
 export const KIND_CORE = 0, KIND_FLASHED = 1, KIND_LOADER = 2
 export const CLAIM_NAME = 1
 export const CLAIM_REGION = 2               // a region of the bulk area a flashed mod claims: "<lo> <hi> <name>", hex
+export const CLAIM_STD = 3                  // with F_STD_MAP, the core's std map: "<event> <table>", one a standard event (link.stdTables)
 export const STAGING = ['drive_staging', 'drive_staging_size'] as const
 export const STAGE_TOP = 'drive_stage_top'   // a loader's export: nonzero sets F_STAGE_TOP (ABI 1.3)
 export const F_STAGE_TOP = 1                 // the header's flags (ABI 1.3)
@@ -24,6 +25,8 @@ export const PAYLOAD_SKIP = 'drive_payload_skip'   // a loader's export: nonzero
 export const F_PAYLOAD_SKIP = 2              // flags bit 1: the loader stages a file without its .payload's hex
 export const ABS16 = 'drive_abs16'           // a loader's export: nonzero sets F_ABS16
 export const F_ABS16 = 4                     // flags bit 2: the boot linker takes abs16 relocations
+export const STD_MAP = 'drive_std_map'       // a loader's export: sets F_STD_MAP and writes the core's std map
+export const F_STD_MAP = 8                   // flags bit 3: the loader maps std1 subscriptions (claims of kind 3)
 const MODULE = 16, EXPORT = 8, TABLE = 24, CLAIM = 8, AREA = 20, SCOPE = 16, RANGE = 12
 // a site map range's kind (ABI 1.2)
 export const SITE_SITE = 1, SITE_COPIED = 2, SITE_DEVICE = 3, SITE_BOOT = 4, SITE_RUN = 5, SITE_TRAILER = 6
@@ -41,7 +44,7 @@ export type DescFields = {
   sites?: [number, number, number, number][]   // ABI 1.2: [lo, hi, kind, module index], sorted
   prelink?: [number, number, number][]          // ABI 1.2: [lo, hi, kind]
   shadow?: [number, Uint8Array][]             // ABI 1.2 (drive_shadow): the stock bytes of each range the build writes
-  flags?: number                                // ABI 1.3: F_STAGE_TOP, F_PAYLOAD_SKIP, F_ABS16
+  flags?: number                                // ABI 1.3: F_STAGE_TOP, F_PAYLOAD_SKIP, F_ABS16, F_STD_MAP
 }
 
 const utf8 = new TextEncoder()
