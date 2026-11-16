@@ -90,8 +90,15 @@ void dl_memcpy(void *d, const void *s, u32 n) { memmove(d, s, n); }
 void dl_memset(void *d, int c, u32 n) { memset(d, c, n); }
 int dl_strcmp(const char *a, const char *b) { return strcmp(a, b); }
 u32 dl_strlen(const char *s) { return (u32)strlen(s); }
-void dl_lock(void) {}
-void dl_unlock(void) {}
+static int locked, guard_off;
+void dl_lock(void) { locked++; }
+void dl_unlock(void) { locked--; }
+void dl_guard_off(void) { guard_off = 1; }
+void core_restart(void)                  /* never returns: the script ends here */
+{
+    printf("RESTART locked=%d guard_off=%d box=%s\n", locked, guard_off, box);
+    exit(0);
+}
 int dl_staging_take_idle(unsigned now, unsigned stall) { (void)now, (void)stall; if (staging) return 0; staging = 1; return 1; }
 void dl_staging_give(void) { staging = 0; }
 void dl_readers_poll(unsigned now) { (void)now; }

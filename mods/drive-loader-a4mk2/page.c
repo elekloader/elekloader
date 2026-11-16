@@ -13,7 +13,8 @@
  * switches the list to the build. Every change runs the boot linker's own pass 1, checks and
  * layout on the new set (dl_check, dlink.c) against core_desc: a set that would load whole is
  * written to DL_DIR/active for the next boot, one that wouldn't is never saved and a box says why.
- * The page never loads or unloads code.
+ * The page never loads or unloads code: APPLY & RESTART, in the build list while the saved set
+ * differs from the running one, reboots the unit (core_restart) so the next boot loads it.
  *
  * Everything here runs in the UI task. The route runs in the SysEx tasks: the page takes the
  * staging buffer only while it reads one file (the background check of the listed files, one at
@@ -24,6 +25,7 @@
 
 #include <std1.h>
 #include <analog-four-mk2/screen.h>
+#include <analog-four-mk2/system.h>
 #include "dl.h"
 #include "fs.h"
 #include "skip.h"
@@ -834,7 +836,7 @@ static int list_text(void *fb, int x, int y, unsigned style, const char *s)
 }
 
 enum { M_DRIVE, M_BUILD };
-enum { P_NONE, P_LOAD, P_UNLOAD, P_DELETE, P_CLEAR, P_RMDIR, P_FORGET };
+enum { P_NONE, P_LOAD, P_UNLOAD, P_DELETE, P_CLEAR, P_RMDIR, P_FORGET, P_RESTART };
 enum { PN_NONE, PN_LEFT, PN_RIGHT };
 static u8 page_on;                       /* the page shows (UI task only) */
 static u8 mode;                          /* the list: the files, or the build */
@@ -919,8 +921,28 @@ static int delete_dir_now(void)
 }
 
 static const char *const acts_drive[] = {"SELECT ALL", "DESELECT ALL", "LOAD TO BUILD", "CLEAR BUILD", "DELETE"};
-static const char *const acts_build[] = {"SELECT ALL", "DESELECT ALL", "UNLOAD", "INFO", "FORGET DATA"};
-#define NACT 5
+static const char *const acts_build[] = {"SELECT ALL", "DESELECT ALL", "UNLOAD", "INFO", "FORGET DATA",
+                                         "APPLY & RESTART"};
+#define NACT 5                           /* the rows both panels always have */
+
+/* The saved set differs from the running one: a build row reads ADD (saved, not loaded now) or
+ * DROP (loaded now, not saved), and a "!" row of a saved mod the last boot refused or dropped
+ * counts as ADD, since another boot tries it again. Parked data doesn't count: FORGET DATA
+ * rewrites it at once. */
+static int set_differs(void)
+{
+    int i;
+    for (i = 0; i < nfiles; i++)
+        if (files[i].on != (files[i].boot == DL_ST_LOADED))
+            return 1;
+    return 0;
+}
+
+/* the action panel's rows: the build list adds APPLY & RESTART while the sets differ */
+static int n_acts(void)
+{
+    return mode == M_BUILD && set_differs() ? NACT + 1 : NACT;
+}
 
 static const char *act_label(int i)
 {
@@ -1579,6 +1601,20 @@ static void do_rmdir(void)
     cursor_to(i < nlrows ? i - 1 : nlrows - 1);   /* about where the folder was */
 }
 
+/* APPLY & RESTART's YES: the page says RESTARTING and takes no more keys; dl_page_tick reboots
+ * once that frame is drawn (restart_tick) */
+static u8 restarting;
+static u32 frames, restart_frame, restart_asked;   /* frames: dl_draw's count */
+
+static void do_restart(void)
+{
+    restarting = 1;
+    restart_frame = frames;
+    restart_asked = ticks;
+    panel = PN_NONE;
+    box_show("RESTARTING", 1);
+}
+
 static void page_yes(int yes)
 {
     if (yes && page_on) {                /* the action panel stays open, as stock's */
@@ -1594,6 +1630,8 @@ static void page_yes(int yes)
             do_rmdir();
         else if (pending == P_FORGET)
             do_forget();
+        else if (pending == P_RESTART)
+            do_restart();
     }
     pending = P_NONE;
 }
@@ -1780,6 +1818,10 @@ static void act_yes(int i)
     else if (i == 3 && mode == M_DRIVE) {
         pending = P_CLEAR;
         confirm("CLEAR THE BUILD?");
+    } else if (i == NACT && mode == M_BUILD && set_differs()) {
+        pending = P_RESTART;             /* a reboot drops what the project hasn't saved, and core
+                                          * can't tell whether it has: the window always says so */
+        confirm("RESTART NOW?\nUNSAVED PROJECT\nCHANGES ARE LOST");
     } else if (i == 4 && mode == M_DRIVE) {
         if (delete_dir_now()) {          /* as SAMPLES: "DELETE DIR?" over CONFIRM Y/N */
             copy_str(rmdir_name, lrows[cursor_row()].name, sizeof rmdir_name);
@@ -1877,7 +1919,7 @@ void dl_settings(void *menu)
 static void move(int by)
 {
     if (panel != PN_NONE) {
-        int n = panel == PN_RIGHT ? NACT : 1;
+        int n = panel == PN_RIGHT ? n_acts() : 1;
         pcur += by;
         pcur = pcur < 0 ? 0 : pcur >= n ? n - 1 : pcur;
         redraw = 1;
@@ -1892,6 +1934,8 @@ static void move(int by)
 /* one key press (or an UP / DOWN repeat) while the page shows */
 static void page_key(unsigned key, unsigned flags)
 {
+    if (restarting)                      /* the box stays until the reset */
+        return;
     if (box[0]) {                        /* any key closes the box, as stock's NO */
         box[0] = 0;
         redraw = 1;
@@ -2086,9 +2130,12 @@ static int panel_w(void)
 
 static void draw_panel(void *fb)
 {
-    int i, n = panel == PN_RIGHT ? NACT : 1;
+    int i, n = panel == PN_RIGHT ? n_acts() : 1;
     int line = panel == PN_RIGHT ? SPLIT_X : panel_w() + 1;
     int x0 = panel == PN_RIGHT ? SPLIT_X + 2 : 0, x1 = panel == PN_RIGHT ? 127 : panel_w() - 1;
+    if (pcur >= n)                       /* APPLY & RESTART went with the change that made the
+                                          * sets equal again */
+        pcur = n - 1;
     if (panel == PN_RIGHT)
         core_fill(fb, SPLIT_X - 1, 0, 128 - SPLIT_X + 1, 64, 0);
     else
@@ -2140,6 +2187,7 @@ void dl_draw(void *fb, void *ctrl)
     if (!page_on)
         return;
     drawn_at = ticks;
+    frames++;
     core_fill(fb, 0, 0, 128, 64, 0);
     draw_list(fb);
     if (panel != PN_NONE)
@@ -2278,6 +2326,25 @@ static void follow_route(void)
 #define TICK_US 50000u
 static u32 rest_until;                   /* the tick the background may work again */
 
+/* APPLY & RESTART, once its box is drawn (or RESTART_WAIT ticks on, should no frame come): the
+ * crash guard comes off first, since the restart is the user's and the running set got this far
+ * (boot.c keeps it on while the page shows after a boot that applied sites), then dl_lock, held
+ * for good, so no route upload or page write is cut between its store calls, then core_restart,
+ * which waits for the +Drive store and card and the panel link and UART, and resets. An upload the
+ * route hasn't committed is dropped, as at a power cut; the store's directory stays whole. */
+#define RESTART_WAIT 10
+
+void dl_guard_off(void);
+
+static void restart_tick(void)
+{
+    if (!restarting || (frames == restart_frame && ticks - restart_asked < RESTART_WAIT))
+        return;
+    dl_lock();
+    dl_guard_off();
+    core_restart();
+}
+
 void dl_page_tick(void *ctrl)
 {
     (void)ctrl;
@@ -2302,6 +2369,7 @@ void dl_page_tick(void *ctrl)
         if (page_on)
             core_redraw();
     }
+    restart_tick();
 }
 
 /* from route.c: the page's clock */

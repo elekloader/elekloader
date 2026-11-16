@@ -417,6 +417,14 @@ void dl_tick(void *ctrl)
     dl_unlock();
 }
 
+/* The MODS page's APPLY & RESTART, under dl_lock: the guard comes off before the reboot, as
+ * dl_tick would take it off had the page not shown (page.c, restart_tick) */
+void dl_guard_off(void)
+{
+    armed = 0;
+    remove_file(".armed");
+}
+
 /* ev_drive_format (core-a4mk2 0.8, 0x40074af6 in FORMAT +DRIVE, after the slot erases): the store
  * is emptied with the rest, /mods/active and every mod with it (decided 2026-11-14). The same
  * routine formats a card with no header at UI start, after the boot link: a fresh card's sectors

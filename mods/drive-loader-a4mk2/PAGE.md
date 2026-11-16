@@ -61,12 +61,14 @@ As the Rytm's page, with these differences:
   the left behind `<` to the room before its right-hand column (`clip.inc`, `core_text_width`).
 - **Action panel** (x 62..127): SELECT ALL, DESELECT ALL, LOAD TO BUILD (UPDATE BUILD), CLEAR
   BUILD, DELETE (DELETE DIR on a folder with nothing ticked here); in the build list SELECT ALL,
-  DESELECT ALL, UNLOAD, INFO, FORGET DATA. The panel stays open after its action, as stock's.
+  DESELECT ALL, UNLOAD, INFO, FORGET DATA, and APPLY & RESTART while the saved set differs
+  from the running one (below). The panel stays open after its action, as stock's.
 - **Left panel** (x 0..55): VIEW BUILD in the file list, VIEW +DRIVE in the build list; YES
   switches the list and closes the panel. The build list's ticks (UNLOAD's and FORGET DATA's
   choice) start empty each time it is shown.
 - **Confirm window**: the question (`LOAD 2 MODS?`, `UPDATE BUILD? (2 MODS)`, `CLEAR THE
-  BUILD?`, `DELETE DIR?`, `FORGET DATA? (n MODS)`) over `CONFIRM Y/N`, centred.
+  BUILD?`, `DELETE DIR?`, `FORGET DATA? (n MODS)`, `RESTART NOW?` with `UNSAVED PROJECT` and `CHANGES ARE
+  LOST` under it) over `CONFIRM Y/N`, centred.
 - **Message box**: centred, split at newlines (about 30 characters a line), closed by any key or
   by itself after 3 s; INFO's and a parked mod's INFO box stay until a key.
 - **No empty list.** An empty list draws one placeholder row, `NO MODS ON +DRIVE` or `BUILD
@@ -94,6 +96,21 @@ and CCs; FORGET DATA drops the ticked ones' parked data after its confirm, in st
 `.store.tmp`, swap). With `/mods` empty but data parked, the panels still open, so FORGET DATA can
 be reached.
 
+## APPLY & RESTART
+
+The build list's action pane gets a sixth row, APPLY & RESTART, while the saved set differs
+from the running one: a build row reads `ADD` or `DROP`, or `!` for a saved mod the last boot
+refused or dropped (another boot tries it again). Parked data doesn't count: FORGET DATA
+rewrites it at once. Its confirm always warns, since a reboot drops what the project hasn't
+saved and core has no read of the modified mark. YES closes the pane, shows `RESTARTING` and
+takes no more keys; once that frame is drawn (or after 0.5 s) the page takes the crash guard off
+(the restart is the user's, and the guard waits while the page shows after a boot that applied
+sites), takes `dl_lock` for good, so no upload or page write is cut between its store calls,
+and calls core-a4mk2's `core_restart` (`analog-four-mk2/system.h`), which waits for the +Drive
+store and card and the panel link and UART, then resets. An upload the route hasn't committed is
+dropped, as at a power cut; the store's directory stays whole. The next boot links the saved set
+(decided 2026-11-16: in VIEW BUILD's pane, shown only when the sets differ, warned every time).
+
 ## Keys still to confirm
 
 From core-a4mk2's `analog-four-mk2/keys.h`: LEFT 0x40 and RIGHT 0x41 [read], YES 0x44 and NO
@@ -109,5 +126,7 @@ with a made-up `/mods` and checks that pass every file: the empty page's placeho
 closed panels, every key and turn taken while the page shows and passed on after it closes
 (NO's release kept), rows, folders, sizes and ticks, `..` back onto the folder left, LOAD TO
 BUILD's confirm and the `/mods/active` it writes, NO on the confirm window, the build list after
-a load, scrolling by UP/DOWN, FUNC and the DATA encoder, and the message box's close by a key
-and by time.
+a load, scrolling by UP/DOWN, FUNC and the DATA encoder, the message box's close by a key
+and by time, and APPLY & RESTART: shown only while the sets differ, NO on its confirm doing
+nothing, YES showing `RESTARTING`, keeping it through a key, and calling `core_restart` with
+`dl_lock` held and the crash guard off.

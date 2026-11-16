@@ -37,6 +37,7 @@ class Page(unittest.TestCase):
         out = subprocess.run([self.exe, script] + list(files), capture_output=True, text=True,
                              check=True).stdout.splitlines()
         frames, frame, takes, states = [], None, [], []
+        self.restarts = [line[8:] for line in out if line.startswith('RESTART ')]
         for line in out:
             if line.startswith('F '):
                 body = line[2:]
@@ -117,6 +118,27 @@ class Page(unittest.TestCase):
         self.assertEqual(states[0]['box'], 'NO_MODS_SELECTED')
         self.assertEqual(states[1]['open'], '1')           # that NO closed the box, not the page
         self.assertEqual(states[2]['box'], '-')            # after 3 s
+
+    def test_apply_and_restart_shows_only_while_the_saved_set_differs(self):
+        frames, _takes, _states = self.run_page('olyrf', 'a.elemod')          # nothing saved or loaded
+        self.assertNotIn('APPLY & RESTART', self.texts(frames[-1]))
+        self.assertIn('FORGET DATA', self.texts(frames[-1]))
+        frames, _takes, _states = self.run_page('oyrddyyTnlyrf', 'a.elemod')  # a.elemod saved: ADD
+        self.assertEqual(self.texts(frames[-1])[-1], 'APPLY & RESTART')
+
+    def test_no_on_the_restart_confirm_does_nothing(self):
+        frames, _takes, states = self.run_page('oyrddyyTnlyrdddddyfntTs', 'a.elemod')
+        self.assertEqual(self.texts(frames[-1])[-4:], ['RESTART NOW?', 'UNSAVED PROJECT', 'CHANGES ARE LOST',
+                                                       'CONFIRM Y/N'])
+        self.assertEqual(states[-1]['pending'], '0')
+        self.assertEqual(self.restarts, [])
+
+    def test_yes_on_the_restart_confirm_says_so_then_restarts_without_the_guard(self):
+        frames, takes, states = self.run_page('oyrddyyTnlyrdddddyysnft', 'a.elemod')
+        self.assertEqual(states[-1]['box'], 'RESTARTING')
+        self.assertEqual(states[-1]['panel'], '0')
+        self.assertIn('RESTARTING', self.texts(frames[-1]))   # NO after YES: the box stays
+        self.assertEqual(self.restarts, ['locked=1 guard_off=1 box=RESTARTING'])
 
 
 if __name__ == '__main__':
