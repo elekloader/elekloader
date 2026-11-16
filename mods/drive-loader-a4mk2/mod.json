@@ -21,7 +21,8 @@
   "sha256.c",
   "dstore.c",
   "park.c",
-  "page.c"
+  "page.c",
+  "page.s"
  ],
  "sites": [
   {

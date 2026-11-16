@@ -9,10 +9,16 @@ does and where it differs.
 ## How it is drawn
 
 The A4 has no SAMPLES file view to build on, so the page draws itself with core-a4mk2's std1
-helpers (decided 2026-11-14: std1 where it reaches) and uses no stock address:
+helpers (decided 2026-11-14: std1 where it reaches); only the row's label and icon use stock
+addresses (`page.s`):
 
 - **The row.** A MODS row after SYSTEM in the GLOBAL key's menu (`ev_settings`,
-  `core_setting_add`). Selecting it opens the page on `/mods` itself.
+  `core_additem`). Selecting it opens the page on `/mods` itself. It has a 9 x 9 lightning-bolt
+  icon like the other GLOBAL rows, the Rytm loader's: its draw callback (`dl_mods_icon`,
+  `page.s`) is stock's icon thunk, tail-calling the bitmap blit `0x4005aed4` with a Bitmap of
+  stock's layout (vptr `0x401973f4`; one long a column, top row the lowest bit, a full mask).
+  `core_setting_add` would draw the row without one. The label is a std::string built by
+  `0x4018471e`.
 - **The frame.** While the page shows, `ev_draw` (order 95) clears the whole 128 x 64 frame
   and draws the page over stock's GLOBAL menu, which stays underneath unchanged: a title bar
   (`MODS`, `MODS/folder` clipped from the left, or `MODS: BUILD`), six list rows of 9 pixels,

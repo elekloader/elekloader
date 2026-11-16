@@ -41,7 +41,14 @@ int core_text(void *fb, int x, int y, unsigned style, const char *str)
     return (int)strlen(str) * 4;
 }
 int core_text_width(int font, const char *str) { (void)font; return (int)strlen(str) * 4; }
-void core_setting_add(void *menu, const struct core_setting *s) { (void)menu; s->select(s); }
+/* core_additem: the row's select runs at once, with a functor whose payload is the menu */
+void core_additem(void *menu, const void *row)
+{
+    void *f[2] = {menu, 0};
+    ((void (*)(void **))((const void *const *)row)[1])(f);
+}
+void dl_mods_label(void) {}
+void dl_mods_icon(void) {}
 
 /* ---- the made-up /mods ---- */
 struct ent { char path[DL_NAME_MAX + 1]; int dir; u32 size; };

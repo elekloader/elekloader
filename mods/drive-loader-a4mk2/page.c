@@ -1,7 +1,8 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
 /* drive-loader-a4mk2 (Analog Four MKII, OS 1.56): the MODS page (PAGE.md).
  *
- * A MODS row at the bottom of SETTINGS > GLOBAL (ev_settings, core_setting_add) opens a page on
+ * A MODS row at the bottom of SETTINGS > GLOBAL (ev_settings, core_additem: page.s draws its
+ * lightning-bolt icon as stock's GLOBAL rows draw theirs) opens a page on
  * the folders and .elemod files in DL_DIR, one folder at a time to DL_DEPTH deep. The A4 has no
  * SAMPLES file view to build on, so the page draws itself with core's std1 helpers (core_fill,
  * core_text) over the whole frame in ev_draw, and takes every key and encoder turn while it shows
@@ -29,6 +30,8 @@
 #include "park.h"
 
 extern char core_desc[];
+extern void core_additem(void *menu, const void *row);              /* core-a4mk2 settings.s */
+extern void dl_mods_label(void), dl_mods_icon(void);                /* page.s */
 
 /* ---- the panel (analog-four-mk2/keys.h, screen.c) ---- */
 #define K_LEFT 0x40
@@ -1801,13 +1804,13 @@ static void page_close(void)
 
 /* The MODS row's select: a new page each time, on DL_DIR itself. A save left running when the page
  * closed is dropped here (its arrays are the page's), as the Rytm's page does. */
-static void mods_open(const struct core_setting *s)
+static void mods_open(void **f)
 {
     static const char *const skip[] = {
         "", "SKIPPED: [NO] HELD", "SKIPPED: CRASH", "NO +DRIVE", "OLD DESCRIPTOR",
         "SET UNSTABLE", "OVER 256 LINES", "NO MEMORY"};
     int busy;
-    (void)s;
+    (void)f;                             /* the row's functor: its payload is the menu */
     read_stop();                         /* a read left running when its page closed */
     if (job.what) {                      /* a save left running when its page closed */
         if (job.what != J_FORGET && job.phase == JP_STEPS)
@@ -1830,12 +1833,22 @@ static void mods_open(const struct core_setting *s)
     core_redraw();
 }
 
-static const struct core_setting mods_row = {"MODS", mods_open};
+static int nothing(void)
+{
+    return 0;
+}
+
+/* core_additem's row: label, select, draw (the icon), change. Not core_setting_add, whose row
+ * draws no icon: MODS gets a 9 x 9 icon like the other GLOBAL rows (page.s). */
+static const void *const mods_row[4] = {
+    (const void *)dl_mods_label, (const void *)mods_open,
+    (const void *)dl_mods_icon, (const void *)nothing,
+};
 
 /* ev_settings: GLOBAL's rows are built; MODS goes last */
 void dl_settings(void *menu)
 {
-    core_setting_add(menu, &mods_row);
+    core_additem(menu, mods_row);
 }
 
 /* ---- keys and turns: every one is the page's while it shows ---- */
