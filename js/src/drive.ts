@@ -49,7 +49,7 @@ export const CODES: Record<number, [string, string]> = {
   15: ['table', 'adds to the table {detail}, which takes no +Drive entries of that size'],
   16: ['full', 'the table {detail} is full ({arg} spare)'],
   17: ['room', 'the +Drive area is {arg} KB short'],
-  18: ['range', 'a 16-bit PC-relative reference is out of range'],
+  18: ['range', 'a 16-bit reference is out of range'],
   19: ['limit', 'past the loader\'s own limits'],
   20: ['count', 'more than 256 mods are chosen'],
   // TELOS on the Digitone mk1 (a build whose descriptor carries the stock shadow): sites and regions
