@@ -250,7 +250,16 @@ def test_core_a4mk2_sites():
         ('0x400a6a08', 'jmp', '7357d174dda33b71e4d29ed8e6d02a3b96a76167a0a44ebe35f2a439406880f4'),
         ('0x400a690c', 'jmp', '4c0570fc6ef0682508e64de2367e111c27f895b6b78e58c300b3f2e7b8010118')]
     assert mod['collections'].get('ev_live_rec', {}).get('entry') == 4
-    assert len(mod['sites']) == 117 + len(voice07) + 70 + len(track08) + len(drive) + len(seq_sites)         + len(moments_sites) + len(live_sites)
+    # and core-a4mk2's four audio sites (audio.s): the dry mute at the track levels' volume load, the
+    # effects block's call (ev_fx_in, ev_fx_out) and the noise generator's two (ev_noise_fade, ev_noise_mix)
+    audio = [x for x in mod['sites'] if x.get('target') in ('core_dry_mute_site', 'core_fx_site',
+                                                              'core_noise_fade_site', 'core_noise_mix_site')]
+    assert [(x['addr'], x['op'], (sb(x, img), x['stock_sha256'])[1]) for x in audio] == [
+        ('0x400fa6c4', 'jmp', 'c8793e55b2c7814904664d2a8dbb102942ebad0f136e89ac8ed9608894fda28f'),
+        ('0x40103dda', 'keep2', '5c9c590e21b87701b529e5e723fb2005a885a9fb5cfd119dad6ea29ea98fc21a'),
+        ('0x400ffe04', 'jmp', 'd55b13612d182ef0959ac6d738f07b263d1bd09059d1ad1d76fb7235a847d138'),
+        ('0x400ffe50', 'jmp', 'c67d4c6618f227fb0f987c50bb947413f64b7356f40599c30a2533d390e5ce5a')]
+    assert len(mod['sites']) == 117 + len(voice07) + 70 + len(track08) + len(drive) + len(seq_sites)         + len(moments_sites) + len(live_sites) + len(audio)
     midi = [x for x in mod['sites'] if x.get('target') in ('core_nrpn_site', 'core_cc_site')]
     assert [(x['addr'], x['op'], (sb(x, img), x['stock_sha256'])[1]) for x in midi] == \
         [('0x4009ff56', 'jmp', 'ba7573adceae0b4d98e7fca043628b41525f9bf3ec50663e051c89a57a79cb35'), ('0x400a0b62', 'jmp', '61767a52ec7cf722a3778309a6df16a655ee5b19ddbd6f1d0d24986a897cd064')]
@@ -283,7 +292,7 @@ def test_core_a4mk2_sites():
     locks = [x for x in mod['sites'] if x['addr'] not in {y['addr'] for y in first} and x not in midi
              and x not in new06 and x not in std07 and x not in voice07 and x not in ui
              and x not in track08 and x not in drive and x not in seq_sites
-             and x not in moments_sites and x not in live_sites]
+             and x not in moments_sites and x not in live_sites and x not in audio]
     dests = [x for x in locks if x.get('target', '').startswith(('core_dst', 'core_id_index', 'core_index_id',
                                                                    'core_push_', 'core_set_'))]
     assert len(dests) == 21 and len([x for x in dests if x['op'] == 'ptr']) == 6

@@ -597,6 +597,25 @@ Not reported (std1 rule 6): a list parameter's turn. Unconfirmed: `keys.h`'s
 [std-check](../../examples/std-check-a4mk2),
 [ui-check](../../examples/ui-check-a4mk2).
 
+## Audio events
+
+`audio.s` has the sites,
+`ui.h` the calls; handlers follow the C ABI and leave the EMAC unit as they
+found it. Every one fires where the hook it replaces fired, with the same data.
+
+| event / table | where | what |
+|---|---|---|
+| `core_dry_mute` (a byte) | 0x400fa6c4, the track levels' volume load for the dry VCA words (no call: the accumulators are live) | bit v: voice v's dry words get volume 0 next block; core clears it in `ev_render_out` at order 0, mods set bits in theirs |
+| `ev_fx_in(frames, out, voice_track)` | before the effects block's only call, 0x40103dda (`keep2`) | voice v at slot 2 + v of 32 frames of 8 longs; handlers may rewrite them, chained by order; the sends hear the result |
+| `ev_fx_out(out, frames, voice_track)` | after that call | out (0x80007e68) is the block's output, 32 stereo pairs; handlers add and saturate |
+| `ev_noise_fade(env, voice_track)` | 0x400ffe04 in the noise generator | after the fade envelopes update, before the levels are read |
+| `ev_noise_mix(bufs, voice_track)` | 0x400ffe50 | the final noise mix's start; a voice's three sources (140 bytes a voice) |
+| `core_knob_names` | the synth, FX and CV sets' name calls core already owns | `{first_id, last_id, kind, name(id, long)}`, any id, stock ones too, asked before core's lock-param names and stock's |
+
+The effects block writes its output through `out` (traced 2026-11-16), so one
+site at its call serves both events. The other three parameter sets' name calls (vtables at
+0x401a15ac, 0x401a182c, 0x401a18cc) still go to stock.
+
 ## +Drive mods
 
 core-ar2 0.12's spares (its README, "Room for +Drive mods"): 256 an event

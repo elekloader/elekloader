@@ -2470,7 +2470,7 @@ def test_core_a4mk2_room_for_drive_mods():
         doc = json.load(fh)
     cols = doc['collections']
     render = {'ev_render_in', 'ev_render_out', 'ev_analog_frame', 'std_voice_start', 'std_voice_end',
-              'std_seq_midi', 'ev_voice_params'}
+              'std_seq_midi', 'ev_voice_params', 'ev_fx_in', 'ev_fx_out', 'ev_noise_fade', 'ev_noise_mix'}
     loader_only = ('ev_boot_drive', 'ev_drive_format')
     events = [n for n in cols if n.startswith(('ev_', 'std_')) and n not in loader_only]
     assert set(doc['std'].values()) <= set(events)
@@ -2485,9 +2485,47 @@ def test_core_a4mk2_room_for_drive_mods():
         assert cols[name] == {'entry': 4, 'spare': view_max}, name
     assert cols['core_params'] == {'entry': 4, 'spare': 256}
     assert cols['core_lock_params'] == 4 and cols['core_knob_looks'] == 4
+    assert cols['core_knob_names'] == {'entry': 4, 'spare': 256}
     for name in ('core_store_ids', 'core_lock_codes', 'core_lock_ccs', 'core_field_inits', 'core_payloads'):
         assert not isinstance(cols[name], dict), name     # the linker fills these (link.NO_SPARE)
 
+
+def test_core_a4mk2_audio_events():
+    """core-a4mk2's audio events (audio.s): the dry mute read at the track levels' volume load (a jmp
+    that makes no call: the accumulators are live there), ev_fx_in and ev_fx_out around the effects
+    block's only call (keep2, the block called with the caller's arguments), ev_noise_fade and
+    ev_noise_mix in the noise generator, each stub resuming where stock does; core clears core_dry_mute
+    in ev_render_out before the value snapshot; and core_knob_names is asked before core's own names."""
+    base = os.path.join(HERE, '..', 'mods', 'core-a4mk2')
+    with open(os.path.join(base, 'mod.json'), encoding='utf-8') as fh:
+        doc = json.load(fh)
+    with open(os.path.join(base, 'audio.s'), encoding='utf-8') as fh:
+        asm = fh.read()
+    with open(os.path.join(base, 'dests.c'), encoding='utf-8') as fh:
+        dests = fh.read()
+    assert 'audio.s' in doc['sources']
+    sites = {x['target']: x for x in doc['sites'] if 'target' in x}
+    want = {'core_dry_mute_site': ('0x400fa6c4', 'jmp', 'jmp     0x400fa6ca'),
+            'core_fx_site': ('0x40103dda', 'keep2', 'jsr     0x400fe73c'),
+            'core_noise_fade_site': ('0x400ffe04', 'jmp', 'jmp     0x400ffe0a'),
+            'core_noise_mix_site': ('0x400ffe50', 'jmp', 'jmp     0x400ffe56')}
+    for t, (addr, op, resume) in want.items():
+        assert sites[t]['addr'] == addr and sites[t]['op'] == op and sites[t]['len'] == 6, t
+        stub = asm.split('\n%s:' % t, 1)[1].split('\n| ----', 1)[0]
+        assert resume in stub, t
+    dry = asm.split('\ncore_dry_mute_site:', 1)[1].split('\n| ----', 1)[0]
+    assert 'jsr' not in dry and 'btst    %d2,core_dry_mute' in dry
+    sub = [(x['event'], x['fn'], x['order']) for x in doc['subscribe'] if x['event'] == 'ev_render_out']
+    assert ('ev_render_out', 'core_dry_mute_clear', 0) in sub
+    assert ('ev_render_out', 'core_value_snapshot', 1) in sub
+    short = dests.split('const char *core_set_short', 1)[1]
+    assert short.index('mod_name(set, id, 0)') < short.index('named(set, id)')
+    with open(os.path.join(HERE, '..', 'elekloader', 'sdk', 'include', 'analog-four-mk2', 'ui.h'),
+              encoding='utf-8') as fh:
+        h = fh.read()
+    for t in ('ev_fx_in_fn', 'ev_fx_out_fn', 'ev_noise_fade_fn', 'ev_noise_mix_fn', 'struct core_knob_name',
+              'extern volatile uint8_t core_dry_mute;'):
+        assert t in h, t
 
 def test_core_a4mk2_drive_storage_hooks():
     """core-a4mk2 has core-ar2 0.14's +Drive storage contract where the A4 needs it (README, "+Drive

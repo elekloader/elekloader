@@ -229,4 +229,57 @@ struct core_toggle {
 typedef void (*ev_sound_setup_fn)(void *menu);
 void core_sound_setup_toggle(void *menu, const struct core_toggle *t);
 
+/* ---- Audio events (native, not std1), in the audio interrupt,
+ * every block of 32 samples. Handlers follow the C ABI, must be short, and
+ * leave the EMAC unit (accumulators, MACSR, MASK) as they found it.
+ * voice_track[v] is voice v's track (0..3 synth).
+ *
+ * ev_fx_in(frames, out, voice_track): before the effects block. frames holds
+ * CORE_FX_FRAMES frames of CORE_FX_FRAME_SLOTS int32; voice v (0..3) at slot
+ * CORE_FX_VOICE_SLOT + v, the inputs at slots 6 and 7. A handler may rewrite
+ * the voice slots: the sends (chorus, delay, reverb) hear what it leaves.
+ * Handlers chain by order. out still holds the last block's output.
+ * ev_fx_out(out, frames, voice_track): after the effects block. out is its
+ * output, CORE_FX_FRAMES stereo pairs (L, R int32). Handlers add to it and
+ * saturate (sats.l), so their order does not matter; frames may already be
+ * overwritten, so a handler that needs its ev_fx_in input keeps a copy.
+ *
+ * ev_noise_fade(env, voice_track): in the noise generator, after the fade
+ * envelopes (env[v], 0..0x3fffffff) are updated, before the levels are taken
+ * from them; a handler may set them.
+ * ev_noise_mix(bufs, voice_track): at the start of the noise generator's final
+ * mix; bufs + CORE_NOISE_VSTRIDE / 4 * v is voice v's record: a 12-byte filter
+ * history, then three sources of 32 int32 at +0, +0x230 and +0x460 bytes from
+ * bufs (+ the voice's offset), which the mix crossfades by COL, scaled by the
+ * noise level and the fade. A handler may write them.
+ *
+ * core_dry_mute: bit v set = voice v's dry VCA words get volume 0 in the next
+ * block (as VOL 0; its sends and capture are kept). Core clears it in
+ * ev_render_out at order 0; a mod sets its bits in its own ev_render_out
+ * handler. Bits are ORed between mods.
+ *
+ * Mods subscribe by contributing to the "ev_fx_in", "ev_fx_out",
+ * "ev_noise_fade" and "ev_noise_mix" tables. */
+#define CORE_FX_FRAMES 32
+#define CORE_FX_FRAME_SLOTS 8
+#define CORE_FX_VOICE_SLOT 2
+#define CORE_NOISE_VSTRIDE 140
+typedef void (*ev_fx_in_fn)(int32_t *frames, int32_t *out, const int32_t *voice_track);
+typedef void (*ev_fx_out_fn)(int32_t *out, int32_t *frames, const int32_t *voice_track);
+typedef void (*ev_noise_fade_fn)(int32_t *env, const int32_t *voice_track);
+typedef void (*ev_noise_mix_fn)(int32_t *bufs, const int32_t *voice_track);
+extern volatile uint8_t core_dry_mute;
+
+/* ---- core_knob_names: a mod's names for knob ids of one
+ * parameter set kind (0 synth, 1 FX, 2 CV), stock ids included,
+ * asked before core's lock-param names and stock's, in contribution order.
+ * name(id, long_name) returns the name, or 0 for an id the entry leaves to the
+ * next. Called in the UI task. A mod contributes a pointer to its entry. */
+struct core_knob_name {
+    uint16_t first_id, last_id;
+    uint8_t kind;
+    uint8_t pad[3];
+    const char *(*name)(int32_t id, int32_t long_name);
+};
+
 #endif
