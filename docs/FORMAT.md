@@ -377,6 +377,7 @@ The link's order and its status records are in DRIVE.md, "The boot link".
 | 20 | `count` | more than 256 lines in `/mods/active` |
 | 21 | `site` | sites overlap |
 | 22 | `flashed` | over the build's |
+| 23 | `early` | used before the link (the profile's `drive_early`): flash it |
 | 24 | `stock` | not stock |
 | 26 | `busy` | |
 | 27 | `region` | regions overlap |

@@ -53,7 +53,7 @@ export const CODES: [string, string][] = [
   // TELOS on the Digitone mk1 (a build whose descriptor carries the stock shadow): sites and regions
   ['site', 'a site overlaps one of {detail}'],
   ['flashed', 'a site at {detail} overlaps what the flashed build writes'],
-  ['', ''],                                 // 23: not a code
+  ['early', 'a site at {detail} is in what the OS uses before the link: flash it'],
   ['stock', 'the bytes at {detail} are not stock\'s'],
   ['', ''],                                 // 25: not a code
   ['busy', 'no quiet moment to write the sites in'],
@@ -121,6 +121,7 @@ export class Build {
   claims: string[]
   shadow: [number, Uint8Array][]; telos: boolean; regions: [number, number, string][]
   areas: [number, number][]                 // a region must be inside one (TELOS)
+  early: [number, number][]                 // a site there is refused (23, early)
   ramEnd: number; lo: number; hi: number; staging: number; stagingSize: number
   globals: Map<string, Global>
   nsyms: number
@@ -138,7 +139,9 @@ export class Build {
     // checks them (DL_SITES, DL_REGIONS)
     this.shadow = d.shadow ?? []
     this.telos = this.shadow.length > 0
-    this.areas = Object.values(devices().find(x => x.key === d.deviceKey)?.areas ?? {}) as [number, number][]
+    const dev = devices().find(x => x.key === d.deviceKey)
+    this.areas = Object.values(dev?.areas ?? {}) as [number, number][]
+    this.early = (dev?.driveEarly ?? []).map(([lo, hi]) => [lo, hi] as [number, number])
     this.regions = d.claims.filter(([k]) => k === desc.CLAIM_REGION).map(([, mi, nm]) => {
       const [lo, hi] = nm.split(' ')
       return [pyInt0(lo)!, pyInt0(hi)!, d.modules[mi].name]
@@ -312,6 +315,7 @@ export function pass1(build: Build, c: Choice, state: State): boolean {
       if (a === null || n === null || want === null || nw === null) return c.refuse('format', '', 0, 'a site')
       if (a <= 0 || !(n > 0 && n <= 256) || nw !== n || want !== 32) return c.refuse('format', '', 0, 'a site')
       // the stock hash needs the main OS, which a build here (its descriptor) has not: the unit checks it
+      if (build.early.some(([lo, hi]) => a < hi && lo < a + n)) return c.refuse('early', hex8(a))
       if (build.shadow.some(([sa, dt]) => a < sa + dt.length && sa < a + n)) return c.refuse('flashed', hex8(a))
       c.sites.push([a, a + n])
     }

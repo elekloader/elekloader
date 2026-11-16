@@ -83,6 +83,9 @@ class Device:
     drive_shadow: bool = False   # the build descriptor carries the stock bytes the flashed build
                                  # writes (desc.py, "shadow"): its +Drive loader copies stock parts
                                  # from the running OS
+    drive_early: tuple = ()      # ((lo, hi, why), ...): what the OS uses before a +Drive loader
+                                 # links and not again before it matters; a site there is refused
+                                 # (code 23, early): such a mod must be flashed
     data_family: int = 0         # the family id of the data container's header (0: not known)
     data_device: int = 0         # ... and its device id (0: not known)
     sram_code: tuple = (0, 0)    # the linker's area for .fast code

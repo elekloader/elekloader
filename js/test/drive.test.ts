@@ -47,6 +47,7 @@ test('TELOS: sites and regions on a build with the stock shadow, as drive.py che
     const build = drive.loadBuild(blk)
     assert.ok(build.telos)
     for (const c of T.cases) {
+      build.early = c.early ?? []                 // as a profile's driveEarly (the Octatrack's) gives them
       const r = drive.check(build, c.files.map(([n, f]: [string, any]) => [n, file(f)]))
       assert.deepEqual(drive.summary(r), c.summary, c.name)
       assert.equal(drive.statusText(r), c.status, c.name)
@@ -58,7 +59,7 @@ test('TELOS: sites and regions on a build with the stock shadow, as drive.py che
 })
 
 test('every host refusal code has a case refused with it and one that loads', () => {
-  const host = drive.CODES.map(([n]) => n).filter(n => n && !['ok', 'missing', 'changed', 'range', 'busy', 'site', 'flashed', 'stock', 'region', 'outside'].includes(n))
+  const host = drive.CODES.map(([n]) => n).filter(n => n && !['ok', 'missing', 'changed', 'range', 'busy', 'site', 'flashed', 'early', 'stock', 'region', 'outside'].includes(n))
   for (const code of host) {
     assert.ok(V.cases.some((c: any) => c.name === `${code}: refused` && c.summary.choices.some((x: any) => x.reason === code)), code)
     assert.ok(V.cases.some((c: any) => c.name === `${code}: loads` && c.summary.choices.every((x: any) => x.state === 'loaded')), code)

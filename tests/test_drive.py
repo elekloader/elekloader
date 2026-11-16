@@ -381,7 +381,7 @@ def test_every_refusal_has_a_fixture_that_is_refused_and_one_that_loads():
             assert [x.code for x in rl.choices] == [x.code for x in rb.choices], code
 
 
-TELOS_CODES = {'site', 'flashed', 'stock', 'region', 'outside'}   # test_telos_sites_and_regions has theirs
+TELOS_CODES = {'site', 'flashed', 'early', 'stock', 'region', 'outside'}   # test_telos_sites_and_regions has theirs
 
 
 def test_every_code_has_a_fixture():
@@ -392,7 +392,8 @@ def test_every_code_has_a_fixture():
 def test_telos_sites_and_regions():
     """POC: on a build whose descriptor carries the stock shadow (the Digitone mk1, drive_shadow), the twin
     takes sites and regions as TELOS's boot linker (DL_SITES, DL_REGIONS): a site over the flashed build's
-    is refused 22, one whose bytes are not stock's 24, the later of two overlapping 21; a region over a
+    is refused 22, one in what the OS used before the link (the profile's drive_early) 23, one whose
+    bytes are not stock's 24, the later of two overlapping 21; a region over a
     flashed mod's or an earlier mod's 27; and a stock part over a flashed site copies stock's bytes."""
     with Bench('digitone-mk1') as B:
         core = B.core(version='5.0', collections={'ev_tick': {'entry': 4}, 'ev_x': {'entry': 4}})
@@ -408,6 +409,10 @@ def test_telos_sites_and_regions():
         site = lambda off: B.jmp_site(B.at(off), 'fn_drive-hello')
         assert codes(hello(B, sites=[site(0x2000)])) == [(0, '')]
         assert codes(hello(B, sites=[site(0x1000)])) == [(drive.CODE['flashed'], '0x%08x' % B.at(0x1000))]
+        b.early = [(B.at(0x3000), B.at(0x3010))]     # the profile's drive_early (the Octatrack's): 23
+        assert codes(hello(B, sites=[site(0x300c)])) == [(drive.CODE['early'], '0x%08x' % B.at(0x300c))]
+        assert codes(hello(B, sites=[site(0x3010)])) == [(0, '')]
+        b.early = []
         bad = dict(site(0x2000), stock_sha256='00' * 32)
         assert codes(hello(B, sites=[bad])) == [(drive.CODE['stock'], '0x%08x' % B.at(0x2000))]
         later = dmod(B, 'later', sites=[dict(site(0x2002), relocs=[[2, 'abs32', 'sym:fn_later', 0]])])

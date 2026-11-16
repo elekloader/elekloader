@@ -798,6 +798,12 @@ static int scan_sites(struct dmod *m, const char *p, const u8 *buf, u32 len, con
             *what = hex_of((u32)addr);
             return DL_R_STOCK;
         }
+#ifdef DL_EARLY
+        if (dl_site_early((u32)addr, (u32)slen)) {   /* too late from the card: flash it */
+            *what = hex_of((u32)addr);
+            return DL_R_EARLY;
+        }
+#endif
         for (i = 0; i < 32; i++) {
             int hi = hexval(sha[2 * i]), lo = hexval(sha[2 * i + 1]);
             if (hi < 0 || lo < 0)

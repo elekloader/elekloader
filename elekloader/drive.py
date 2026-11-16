@@ -67,6 +67,7 @@ CODES = {
     # TELOS on the Digitone mk1 (a build whose descriptor carries the stock shadow): sites and regions
     21: ('site', 'a site overlaps one of {detail}'),
     22: ('flashed', 'a site at {detail} overlaps what the flashed build writes'),
+    23: ('early', 'a site at {detail} is in what the OS uses before the link: flash it'),
     24: ('stock', 'the bytes at {detail} are not stock\'s'),
     26: ('busy', 'no quiet moment to write the sites in'),
     27: ('region', 'a region overlaps one of {detail}'),
@@ -136,6 +137,7 @@ class Build:
         dev = next((x for x in devices.devices() if x.key == self.device_key), None)
         self.main_load = dev.main_load if dev else None
         self.areas = list(dev.areas.values()) if dev else []   # a region must be inside one (TELOS)
+        self.early = [(lo, hi) for lo, hi, _w in dev.drive_early] if dev else []   # sites refused (23)
         self.image, self._ram, self.desc_at = image, None, None
         if image is not None:
             self._ram = self._locate(image, at)
@@ -366,6 +368,8 @@ def pass1(build, c, state):
             if a <= 0 or not 0 < n <= 256 or len(new) != n or len(want) != 32:
                 return c.refuse('format', note='a site')
             where = '0x%08x' % a
+            if any(a < hi and lo < a + n for lo, hi in build.early):
+                return c.refuse('early', where)
             if any(a < sa + len(dt) and sa < a + n for sa, dt in build.shadow):
                 return c.refuse('flashed', where)
             if build.image is not None:             # the descriptor alone (a .build file): the unit checks

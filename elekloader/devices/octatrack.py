@@ -126,6 +126,8 @@ DEVICE = Device(
            "the stock DELAY reads them past the end of its coefficient table, so a write "
            "there changes the DELAY's output (octabam #771)"),),
     blob_max=None,
+    drive_early=((0x4001dfbc, 0x4001e042, 'the USB init, run once before the card mounts'),
+                 (0x400e2000, 0x400e21e0, 'the USB descriptor tables, read at the USB init')),
     areas={
         'ddr': (0x40A955E0, 0x41495DE0),          # the arena's bottom 1,707 pages at most (core-ot)
     },
