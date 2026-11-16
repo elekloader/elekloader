@@ -218,10 +218,39 @@ def test_core_a4mk2_sites():
         ('0x400c8ba2', 'jmp', '71b362f711c113689fd93a04c5b98ab51fd214ec779f9ad2bcbfc646d856b734'),
         ('0x40103af6', 'jmp', 'd92ee75213456a7a13d91048d49cefad7ddab6b7d7f7d56eaa61332f042ae107'),
         ('0x400e62c8', 'jmp', 'e8aa53b410decd67ab49630aef6dbe1806885013588d331d080875d7458a7113')]
-    assert len(mod['sites']) == 117 + len(voice07) + 70 + len(track08) + 2
     drive = [x for x in mod['sites'] if x.get('target') in ('core_boot_drive_site', 'core_drive_format_site')]
     assert [(x['addr'], x['op'], (sb(x, img), x['stock_sha256'])[1]) for x in drive] == [('0x401061e8', 'jsr', '2191bc0fbd58c2ca2de73154f96cbeefab902e00e9e39d779cd79165b2d2a25c'),
                                                                 ('0x40074af6', 'jsr', 'd591193fb5976f498f1504a122969002d042106a574926de3451910bc943c49d')]
+    # and the sequencer's fired site (seq.s, after 0.8): a jsr over the tick loop's test of the trig queue,
+    # after trig_fire's record was copied there, whose flags the branch after it takes (the sequencer's exit is
+    # 0.7's std tick site, from which core_std_seq_tick calls core_seq_exit)
+    seq_sites = [x for x in mod['sites'] if x.get('target') == 'core_seq_fired_site']
+    assert [(x['addr'], x['op'], (sb(x, img), x['stock_sha256'])[1]) for x in seq_sites] == [
+        ('0x4007b0e8', 'jsr', '1728c70ebaf0b291875e7275910efd34aab1a1be81e6e14e4362aab0e7114e1c')]
+    assert hashlib.sha256(at(img, 0x4007b0ee, 2)).hexdigest() == '768c71d785bf6bbbf8c4d6af6582041f2659027140a962cd0c55b11eddfd5e3d'    # the branch after it
+    assert mod['collections'].get('ev_seq_step', {}).get('entry') == 4
+    assert mod['collections'].get('ev_transport', {}).get('entry') == 4
+    with open(os.path.join(ROOT, 'mods', 'core-a4mk2', 'stdmidi.c')) as fh:
+        assert 'core_seq_exit();' in fh.read()
+    # and the 2 moments sites (moments.s, after 0.8): the kit setter's and the kit push's first instructions,
+    # each body resuming after the bytes its jmp displaced
+    moments_sites = [x for x in mod['sites'] if x.get('target') in ('core_kit_select', 'core_kit_push')]
+    assert [(x['addr'], x['op'], (sb(x, img), x['stock_sha256'])[1]) for x in moments_sites] == [
+        ('0x4016796c', 'jmp', '4c19178dfb486a9c50e587ee5887b8a68f78e9adda993a3adb7b91c39498ec6d'),
+        ('0x401012ec', 'jmp', '784938370f9fb15c505636fe4e5a94b5efb1d9276ec09a27de55484f781bed1f')]
+    with open(os.path.join(ROOT, 'mods', 'core-a4mk2', 'moments.s')) as fh:
+        src = fh.read()
+    assert 'jmp     0x40167972' in src and 'jmp     0x401012f4' in src
+    # and ev_live_rec's 3 sites (ui.s, after 0.8): live record's pattern writes (the played note, the step's
+    # value, the live p-lock), each a jmp over the method's first 8 bytes, its body resuming past them
+    # (tests/test_units.py, test_core_a4mk2_0_7_ui_sites)
+    live_sites = [x for x in mod['sites'] if x.get('target', '').startswith('core_live_')]
+    assert [(x['addr'], x['op'], (sb(x, img), x['stock_sha256'])[1]) for x in live_sites] == [
+        ('0x400a954a', 'jmp', 'b5725950e3019ca68464d8f86145f60eb14e936167b7c9df85b7fdd3f1ddef87'),
+        ('0x400a6a08', 'jmp', '7357d174dda33b71e4d29ed8e6d02a3b96a76167a0a44ebe35f2a439406880f4'),
+        ('0x400a690c', 'jmp', '4c0570fc6ef0682508e64de2367e111c27f895b6b78e58c300b3f2e7b8010118')]
+    assert mod['collections'].get('ev_live_rec', {}).get('entry') == 4
+    assert len(mod['sites']) == 117 + len(voice07) + 70 + len(track08) + len(drive) + len(seq_sites)         + len(moments_sites) + len(live_sites)
     midi = [x for x in mod['sites'] if x.get('target') in ('core_nrpn_site', 'core_cc_site')]
     assert [(x['addr'], x['op'], (sb(x, img), x['stock_sha256'])[1]) for x in midi] == \
         [('0x4009ff56', 'jmp', 'ba7573adceae0b4d98e7fca043628b41525f9bf3ec50663e051c89a57a79cb35'), ('0x400a0b62', 'jmp', '61767a52ec7cf722a3778309a6df16a655ee5b19ddbd6f1d0d24986a897cd064')]
@@ -253,7 +282,8 @@ def test_core_a4mk2_sites():
     first = [y for y in j['sites'] if y.get('target') not in ('core_boot_drive_site', 'core_drive_format_site')][:48]
     locks = [x for x in mod['sites'] if x['addr'] not in {y['addr'] for y in first} and x not in midi
              and x not in new06 and x not in std07 and x not in voice07 and x not in ui
-             and x not in track08 and x not in drive]
+             and x not in track08 and x not in drive and x not in seq_sites
+             and x not in moments_sites and x not in live_sites]
     dests = [x for x in locks if x.get('target', '').startswith(('core_dst', 'core_id_index', 'core_index_id',
                                                                    'core_push_', 'core_set_'))]
     assert len(dests) == 21 and len([x for x in dests if x['op'] == 'ptr']) == 6
