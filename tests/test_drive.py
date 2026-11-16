@@ -966,6 +966,11 @@ class NotingUnit(FakeUnit):
             j = struct.unpack_from('>I', msg, 5)[0]
             name = self.jobs[j][0]
             had = dict(self.files)
+            if not container.parse(bytes(self.jobs[j][1]))[1]:     # an empty file: the store reserves no run
+                super().send(raw)
+                self.files = had
+                self.note(('upload dropped: %s' % name)[:63])
+                return
             super().send(raw)
             if name in self.files and self.files.get(name) is not had.get(name):
                 parent = name.rpartition('/')[0]
@@ -1024,6 +1029,10 @@ def test_an_upload_the_unit_did_not_save_is_an_error_not_uploaded():
             except ModError as e:
                 assert str(e) == 'the unit did not save /mods/active: commit failed: active', e
             assert not any(l.startswith('WROTE') for l in log) and unit.files['active'] == kept
+            # no mods: a # line the boot skips, not an empty upload the A4's store drops
+            unit.lose.clear()
+            assert datarpc.run(argparse.Namespace(op='active', names=[]), mods, log.append) == 0
+            assert drive.parse_active(unit.files['active'].decode()) == [] and unit.files['active'].startswith(b'#')
     assert datarpc.last_of('drive-loader route\nstage: 1 bytes\n') is None
     assert datarpc.last_of(None) is None
 
