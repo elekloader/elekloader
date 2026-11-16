@@ -163,7 +163,7 @@ class Parked(unittest.TestCase):
     """Parked data on the MODS page (decided 2026-11-10, +Drive v2 item 6): park.c reads /mods/.store
     as elekloader/drive_store.py writes it and FORGET DATA rewrites it byte for byte as
     drive_store.forget then encode; the build list shows each parked mod after the build's rows,
-    and the "!" box spells out storage-room and site refusals (dl.h DL_R_STORE, DL_R_SITE)."""
+    and the "!" box spells out storage-room and site refusals (dl.h DL_R_STORE, DL_R_CLASH)."""
 
     @classmethod
     def setUpClass(cls):

@@ -309,7 +309,7 @@ static void store_line(char *at, char *end, const char *d)
     (void)at;
 }
 
-/* DL_R_SITE's text from its arg (kind << 8 | line) and detail ("400a005e" and, for a flashed
+/* DL_R_CLASH's text from its arg (kind << 8 | line) and detail ("400a005e" and, for a flashed
  * site, the flashed module's name): "SITE 0x400a005e" then who has it. The other +Drive mod is
  * named from the set's records (set, nset: the boot's or the save's). */
 static void site_line(char *at, char *end, u32 arg, const char *d, const struct dl_status *set, u32 nset)
@@ -344,13 +344,16 @@ static void reason_line(const char *line, char *at, char *end, int code, u32 arg
         "", "FILE MISSING", "FILE CHANGED", "TOO BIG", "BAD FILE", "NOT FORMAT 2",
         "OTHER DEVICE/OS", "CAN'T USE", "SAME ID AS", "NEEDS CORE", "NEEDS", "CONFLICTS",
         "EXPORT TAKEN", "CLAIMED", "NOT FOUND", "TABLE", "FULL", "NO ROOM", "OUT OF RANGE",
-        "TOO MANY NAMES", "OVER 256 MODS", "NO STORAGE ROOM", "SITE"};
+        "TOO MANY NAMES", "OVER 256 MODS",
+        /* 21 to 28: TELOS's (DL_SITES, DL_REGIONS), which this loader doesn't build with */
+        "REFUSED", "REFUSED", "REFUSED", "REFUSED", "REFUSED", "REFUSED", "REFUSED", "REFUSED",
+        "NO STORAGE ROOM", "SITE"};
     at = cat(at, end, code < (int)(sizeof what / sizeof what[0]) ? what[code] : "REFUSED");
     if (code == DL_R_STORE) {            /* always on two lines: the detail is the whole of it */
         store_line(cat(at, end, "\n"), end, d ? d : "");
         return;
     }
-    if (code == DL_R_SITE) {
+    if (code == DL_R_CLASH) {
         site_line(at, end, arg, d ? d : "", set, nset);
         return;
     }
