@@ -359,7 +359,7 @@ The link's order and its status records are in DRIVE.md, "The boot link".
 | 2 | `changed` | its CRC-32 is not the one `/mods/active` has |
 | 3 | `too-big` | larger than the staging buffer |
 | 4 | `json` | not a JSON object |
-| 5 | `format` | not a format-2 mod the loader reads (the id, version, a relocation, an order, an export) |
+| 5 | `format` | not a format-2 mod the loader reads |
 | 6 | `target` | made for another device or OS |
 | 7 | `feature` | a field or section +Drive mods cannot use (detail: its name) |
 | 8 | `duplicate` | the id of a flashed module or of an earlier mod (detail: the id) |
@@ -377,7 +377,7 @@ The link's order and its status records are in DRIVE.md, "The boot link".
 | 20 | `count` | more than 256 lines in `/mods/active` |
 | 21 | `site` | sites overlap |
 | 22 | `flashed` | over the build's |
-| 23 | `early` | used before the link (the profile's `drive_early`): flash it |
+| 23 | `early` | used before the link (`drive_early`) |
 | 24 | `stock` | not stock |
 | 26 | `busy` | |
 | 27 | `region` | regions overlap |

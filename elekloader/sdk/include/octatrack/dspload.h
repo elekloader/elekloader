@@ -24,6 +24,16 @@ struct ot_dsp_blob {
 
 #define OT_DSP_SLOTS 4
 
+/* Each blob takes 22 words besides its code (0.2): a guard word at each end, which a stub before the
+ * code checks every frame; if a reverb's buffer has written over either, the slot is unbound and the
+ * code never runs again. */
+#define OT_DSP_WRAP 22
+
+/* The ot_dsp_blobs table (0.2): a mod's blobs from mod.json's "dsp_load" (elekloader.sdk.build), each
+ * sent once from ev_tick, in the table's order; ot_dsp_table_slot has what ot_dsp_load gave each. */
+extern const struct ot_dsp_blob *const ot_dsp_blobs[];
+extern volatile int32_t ot_dsp_table_slot[16];
+
 /* Queue a blob: -> its slot (0..3), or -1 (no slot, or no room in the gap). Call it from a task
  * (a TELOS mod's drive_init); the frame interrupt sends it to core 1 over the host port, three
  * times on quiet frames, and the copier there binds it. */

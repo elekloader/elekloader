@@ -9,6 +9,7 @@ variables; a test whose inputs are missing is skipped, not passed:
 Building mods/core-ot also needs the cross assembler (m68k-linux-gnu-as).
 """
 import glob
+import shutil
 import json
 import re
 import os
@@ -3826,6 +3827,44 @@ def test_the_dsp_loader():
     assert ln.tables['ev_dsp_b'][1] == 1 and ln.tables['ev_dsp_rx'][1] == 1
     assert words(ln.image, hook_at, 2) == [0x0bf080, ln.map['ev_dsp_b']]   # jsr >ev_dsp_b
     assert words(ln.image, init_at, 1) == [0x588] and words(ln.image, proc_at, 1) == [0x589]
+
+
+
+def test_dsp_load():
+    """mod.json "dsp_load" (dspload-ot 0.2): the SDK assembles the source into a struct ot_dsp_blob and
+    adds it to dspload's ot_dsp_blobs table; and pump.c's guard stub is what dsp_asm makes of
+    mods/dspload-ot/stub.asm, with the four addresses it fills in at 1, 7, 13 and 18."""
+    from elekloader.sdk import build
+    if not os.path.isfile(os.environ.get('ELEKLOADER_DSP_ASM', '')):
+        raise Skip("ELEKLOADER_DSP_ASM (octabam's dsp_asm) not given")
+    st, img = stock()
+    with tempfile.TemporaryDirectory() as tmp:
+        words, labels, rels = build.dsp_assemble(os.path.join(ROOT, 'mods', 'dspload-ot', 'stub.asm'), tmp)
+        assert not rels                                  # relative branches only: the same words anywhere
+        src = open(os.path.join(ROOT, 'mods', 'dspload-ot', 'pump.c')).read()
+        body = src.split('static const uint32_t stub[] = {')[1].split('};')[0]
+        pump = [0xc0ffee if w.strip() == 'GUARD' else int(w, 0) for w in body.split(',') if w.strip()]
+        fill = {1: 0x123456, 7: 0x234567, 13: 0x345678, 18: 0x033da3}
+        assert [fill.get(i, w) for i, w in enumerate(pump)] == words
+        d = os.path.join(tmp, 'tone')
+        os.makedirs(d)
+        shutil.copy(os.path.join(ROOT, 'examples', 'dsp-tone-ot', 'tone.asm'), d)
+        with open(os.path.join(d, 'mod.json'), 'w') as fh:
+            json.dump({'id': 'tone-load', 'version': '0.1', 'title': 'TONE', 'category': 'Test', 'author': 'test',
+                       'license': 'GPL-2.0-or-later', 'device': 'octatrack', 'os': '1.40C',
+                       'requires': ['core', 'dspload'],
+                       'dsp_load': [{'source': 'tone.asm', 'entry': 'tone', 'name': 'tone_dsp'}]}, fh)
+        mods = [elemod.load_any(build.build(p, SYX, tmp)[0]) for p in (
+            os.path.join(ROOT, 'mods', 'core-ot'), os.path.join(ROOT, 'mods', 'dspbus-ot'),
+            os.path.join(ROOT, 'mods', 'dspload-ot'), d)]
+        gen = open(os.path.join(tmp, 'tone-load.work', 'dsp-load-0.c')).read()
+        tw, tl, tr = build.dsp_assemble(os.path.join(d, 'tone.asm'), tmp)
+        for i, off in tr:
+            tw[i] = off
+        assert ', '.join('0x%06x' % w for w in tw) in gen
+        assert '{tone_dsp_w, %d, %d, tone_dsp_r, %d}' % (len(tw), tl['tone'], len(tr)) in gen
+    ln = link.link(mods, img)
+    assert ln.tables['ot_dsp_blobs'][1] == 1 and 'tone_dsp' in ln.map
 
 
 AREA_MOD = {'id': 'area', 'version': '0.1', 'title': 'AREA', 'category': 'Framework', 'author': 'test',

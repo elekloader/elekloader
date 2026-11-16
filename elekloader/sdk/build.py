@@ -28,6 +28,8 @@ mod.json:
      "collections": {"my_table": 8},                  tables you declare (entry size)
      "contribute": [{"to", "order", "data", "relocs", "claims"}],
      "dsp": [{"source": "my.asm", "payload": "A"}],   optional: DSP56300 code (see below)
+     "dsp_load": [{"source": "my.asm", "entry": "my", "name": "my_dsp"}],   optional: DSP code
+                                                     sent at run time (the Octatrack's dspload)
      "sharc_raw": "raw.json",                         optional: the Digitakt II's raw SHARC payload
                                                      (docs/FORMAT.md), a file in the mod folder
      "subscribe_dsp": [{"event", "fn", "addend", "order"}],   jsr >fn in a DSP table
@@ -71,6 +73,15 @@ as {"entry": 6, "space": "dsp.A", "head": hex, "end": hex}: its words are the
 head, the entries in order, then the end. The linker places DSP code and
 tables in the P words a mod frees (`dsp_areas`), so a mod with either needs
 the mod that frees them.
+
+"dsp_load" is DSP code a mod sends to the DSP at run time instead (the
+Octatrack's dspload-ot, `octatrack/dspload.h`; a TELOS mod from the card can
+have it). Each source is assembled as above into a `struct ot_dsp_blob` named
+`name` (its words, the label `entry` as the handler, the words that hold an
+address in the code) in the mod's data, with an entry in dspload's
+`ot_dsp_blobs` table; dspload sends each blob there once, from a task, and
+from the next audio frames on it runs on DSP core 0 as an `ev_dsp_rx`
+handler. The mod needs dspload (`"requires": [..., "dspload"]`).
 
 A `machines` entry adds an SRC machine (core 2.1's core_machines, Digitakt
 mk1): it contributes a pointer to the descriptor `descriptor` names and
@@ -339,6 +350,30 @@ def build(mdir, stock_path, out_dir=None, extra=None):
     os.makedirs(work, exist_ok=True)
 
     srcs = [os.path.join(mdir, s) for s in mod.get('sources', [])] + list(extra.get('sources', []))
+    load_contrib = []
+    for k, ds in enumerate(mod.get('dsp_load', [])):     # DSP code sent at run time (dspload-ot)
+        if not isinstance(ds, dict) or not all(isinstance(ds.get(x), str) for x in ('source', 'entry', 'name')) \
+                or not re.fullmatch(r'[A-Za-z_]\w*', ds['name']):
+            raise BuildError('mod.json: a dsp_load entry is {"source", "entry", "name"} (a C name)')
+        words, labels, rels = dsp_assemble(os.path.join(mdir, ds['source']), work)
+        if ds['entry'] not in labels:
+            raise BuildError('dsp_load: %s has no label %s' % (ds['source'], ds['entry']))
+        for i, off in rels:
+            words[i] = off                      # the address as an offset: ot_dsp_load adds the home
+        nm = ds['name']
+        p = os.path.join(work, 'dsp-load-%d.c' % k)
+        with open(p, 'w') as fh:
+            fh.write('/* %s, assembled for dspload (mod.json dsp_load): generated */\n'
+                     '#include "octatrack/dspload.h"\n'
+                     'static const uint32_t %s_w[] = {%s};\n'
+                     'static const uint16_t %s_r[] = {%s};\n'
+                     'const struct ot_dsp_blob %s = {%s_w, %d, %d, %s_r, %d};\n' % (
+                         ds['source'], nm, ', '.join('0x%06x' % w for w in words), nm,
+                         ', '.join(str(i) for i, _ in rels) or '0', nm, nm, len(words),
+                         labels[ds['entry']], nm, len(rels)))
+        srcs.append(p)
+        load_contrib.append({'to': 'ot_dsp_blobs', 'order': 50, 'data': '00000000',
+                             'relocs': [[0, 'abs32', 'sym:' + nm, 0]]})
     if mod.get('name_string'):
         p = os.path.join(work, 'name.s')
         with open(p, 'w') as fh:
@@ -595,7 +630,7 @@ def build(mdir, stock_path, out_dir=None, extra=None):
         names = list(resources.get('names', []))
         if 'machine:%d' % n not in names:
             resources['names'] = names + ['machine:%d' % n]
-    for c in mod.get('contribute', []) + list(extra.get('contribute', [])):
+    for c in mod.get('contribute', []) + list(extra.get('contribute', [])) + load_contrib:
         contrib.append({'to': c['to'], 'order': c.get('order', 50), 'data': c['data'],
                         'relocs': c.get('relocs', []), 'claims': c.get('claims', [])})
     for c in contrib:
