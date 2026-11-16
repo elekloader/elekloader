@@ -293,9 +293,10 @@ export class Build {
       return [nm.slice(0, sp), nm.slice(sp + 1)] as [string, string]
     }))
     // TELOS (a descriptor with the stock shadow, ABI 1.2): sites and regions are taken, checked as the boot linker
-    // checks them (DL_SITES, DL_REGIONS)
+    // checks them (DL_SITES, DL_REGIONS). With F_STOCK_SHADOW (the A4's loader) the shadow serves the stock parts
+    // alone (stockBytes), and the build is no TELOS
     this.shadow = d.shadow ?? []
-    this.telos = this.shadow.length > 0
+    this.telos = this.shadow.length > 0 && !((d.flags ?? 0) & desc.F_STOCK_SHADOW)
     this.areas = Object.values(devices().find(x => x.key === d.deviceKey)?.areas ?? {}) as [number, number][]
     this.regions = d.claims.filter(([k]) => k === desc.CLAIM_REGION).map(([, mi, nm]) => {
       const [lo, hi] = nm.split(' ')

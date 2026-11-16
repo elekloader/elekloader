@@ -1082,6 +1082,9 @@ export function link(mods: Mod2[], image: Uint8Array, lock: store.Lock | null = 
   }
   const stdMap = order.some(m => m.exports.includes(desc.STD_MAP))   // the loader maps std1 at boot
   const claimsMap = order.some(m => m.exports.includes(desc.CLAIMS))   // the boot linker takes claims
+  // the loader copies +Drive mods' stock parts through the shadow (A4: dlink.c stock_part); an export, not its value,
+  // so the sizing pass carries the shadow too
+  const stockShadow = order.some(m => m.exports.includes(desc.STOCK_SHADOW))
   const descFields = (where: Where | null): desc.DescFields => {
     const w: Where = where ?? (() => 0)
     const modules = order.map(m => ({
@@ -1115,11 +1118,13 @@ export function link(mods: Mod2[], image: Uint8Array, lock: store.Lock | null = 
       flags: (w('glob', desc.STAGE_TOP) ? desc.F_STAGE_TOP : 0) | (w('glob', desc.PAYLOAD_SKIP) ? desc.F_PAYLOAD_SKIP : 0)
         | (w('glob', desc.ABS16) ? desc.F_ABS16 : 0) | (stdMap ? desc.F_STD_MAP : 0)
         | (w('glob', desc.COLLECTIONS) ? desc.F_COLLECTIONS : 0)
-        | (claimsMap ? desc.F_CLAIMS : 0),
+        | (claimsMap ? desc.F_CLAIMS : 0)
+        | (stockShadow ? desc.F_STOCK_SHADOW : 0),
       sites: siteMap(w), prelink: (rel.prelink ?? []).map(([lo, hi, k]) => [lo, hi, k] as [number, number, number]),
-      // the stock bytes of every range the flashed build writes, where the profile asks for them (driveShadow): a
-      // loader on the unit copies a mod's stock parts from the running OS, and lays these over it
-      shadow: !dev.driveShadow ? [] : order.flatMap(m => m.sites)
+      // the stock bytes of every range the flashed build writes, where the profile asks for them (driveShadow) or the
+      // loader does (drive_stock_shadow): a loader on the unit copies a mod's stock parts from the running OS, and lays
+      // these over it
+      shadow: !dev.driveShadow && !stockShadow ? [] : order.flatMap(m => m.sites)
         .filter(s => dev.mainLoad <= s.addr && s.addr + s.len <= dev.mainLoad + image.length)
         .map(s => [s.addr, image.slice(s.addr - dev.mainLoad, s.addr - dev.mainLoad + s.len)] as [number, Uint8Array])
         .sort((a, b) => a[0] - b[0] || cmpBytes(a[1], b[1])) }

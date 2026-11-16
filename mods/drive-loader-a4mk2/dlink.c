@@ -675,6 +675,7 @@ static int read_list(const char *p, const u8 *buf, u32 len, struct list *l)
 #ifdef DL_SITES
 static void stock_copy(u8 *dst, u32 a, u32 n);
 #endif
+static void shadow_over(u8 *dst, u32 a, u32 n);
 
 /* A section's parts -> their length (and, with dst, their bytes). */
 static int parts(js_t *j, u8 *dst, u32 max, u32 *len)
@@ -701,7 +702,10 @@ static int parts(js_t *j, u8 *dst, u32 max, u32 *len)
 #ifdef DL_SITES
                 stock_copy(dst + total, (u32)a, (u32)k);
 #else
+            {                            /* the running OS, the flashed build's writes undone */
                 dl_memcpy(dst + total, DL_MEM((u32)a), (u32)k);
+                shadow_over(dst + total, (u32)a, (u32)k);
+            }
 #endif
             total += (u32)k;
         } else {
@@ -1381,18 +1385,14 @@ static const char *hex_of(u32 v)
 
 #endif
 
-#ifdef DL_SITES
-/* ---- sites (the Octatrack's TELOS) ----------------------------------------------------------
- * A mod's "sites": [{"addr", "len", "stock_sha256", "new", "kind", "relocs"}]. Pass 1 checks
- * each against the running OS: its bytes there must still be stock's (sha256), so a site over
- * anything the flashed build wrote is refused (DL_R_STOCK), and records its range for the
- * overlap check. Pass 2 builds its bytes; the commit writes them. */
-/* Stock bytes for [a, a+n): the OS image's before the OS ran (dl_stock_read), with the descriptor's shadow (ABI 1.2: the stock
- * bytes of every range the flashed build wrote) laid over them. */
-static void stock_copy(u8 *dst, u32 a, u32 n)
+/* The descriptor's shadow (ABI 1.2: the stock bytes of every range the flashed build wrote)
+ * laid over dst, which holds [a, a+n) as the running OS has it. A stock part of a +Drive mod
+ * names stock's bytes; where the flashed build wrote over them (a core site), the running OS
+ * holds the site's bytes instead, so the A4's build carries the shadow (drive_stock_shadow,
+ * route.s) and the copy takes stock's from it. A descriptor without one leaves dst as it is. */
+static void shadow_over(u8 *dst, u32 a, u32 n)
 {
     u32 o, cnt, i;
-    dl_stock_read(dst, a, n);            /* the host's: the running OS, or its boot-time copy */
     if (dl_rd16(L.d + 6) < 2 || !(o = D32(0x58)))
         return;
     cnt = D32(0x5c);
@@ -1404,6 +1404,20 @@ static void stock_copy(u8 *dst, u32 a, u32 n)
             dl_memcpy(dst + (lo - a), L.d + o + 8 + (lo - sa), hi - lo);
         o += 8 + ((sn + 3) & ~3u);
     }
+}
+
+#ifdef DL_SITES
+/* ---- sites (the Octatrack's TELOS) ----------------------------------------------------------
+ * A mod's "sites": [{"addr", "len", "stock_sha256", "new", "kind", "relocs"}]. Pass 1 checks
+ * each against the running OS: its bytes there must still be stock's (sha256), so a site over
+ * anything the flashed build wrote is refused (DL_R_STOCK), and records its range for the
+ * overlap check. Pass 2 builds its bytes; the commit writes them. */
+/* Stock bytes for [a, a+n): the OS image's before the OS ran (dl_stock_read), with the descriptor's shadow (ABI 1.2: the stock
+ * bytes of every range the flashed build wrote) laid over them. */
+static void stock_copy(u8 *dst, u32 a, u32 n)
+{
+    dl_stock_read(dst, a, n);            /* the host's: the running OS, or its boot-time copy */
+    shadow_over(dst, a, n);
 }
 
 static int scan_tsites(struct dmod *m, const char *p, const u8 *buf, u32 len, const char **what)

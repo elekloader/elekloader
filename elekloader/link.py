@@ -1105,6 +1105,9 @@ def link(mods, image, lock=None, *, sharc_stream=None, drive=None):
 
     std_map = any(desc.STD_MAP in m.exports for m in order)   # the loader maps std1 at boot
     claims_map = any(desc.CLAIMS in m.exports for m in order)  # the boot linker takes claims
+    # the loader copies +Drive mods' stock parts through the shadow (A4: dlink.c stock_part); an export,
+    # not its value, so the sizing pass carries the shadow too
+    stock_shadow = any(desc.STOCK_SHADOW in m.exports for m in order)
 
     def desc_fields(where):
         """The descriptor's fields; `where` (a function of the layout) gives the addresses, or None:
@@ -1148,17 +1151,18 @@ def link(mods, image, lock=None, *, sharc_stream=None, drive=None):
                          | (desc.F_ABS16 if w('glob', desc.ABS16) else 0)
                          | (desc.F_STD_MAP if std_map else 0)
                          | (desc.F_COLLECTIONS if w('glob', desc.COLLECTIONS) else 0)
-                         | (desc.F_CLAIMS if claims_map else 0),
+                         | (desc.F_CLAIMS if claims_map else 0)
+                         | (desc.F_STOCK_SHADOW if stock_shadow else 0),
                 'sites': site_map(w), 'prelink': [(lo, hi, k) for lo, hi, k, _what in rel.prelink],
                 # the stock bytes of every range the flashed build writes, where the profile asks for
-                # them (drive_shadow): a loader on the unit copies a mod's stock parts from the
-                # running OS, and lays these over it
+                # them (drive_shadow) or the loader does (drive_stock_shadow): a loader on the unit
+                # copies a mod's stock parts from the running OS, and lays these over it
                 'shadow': sorted((s['addr'], bytes(image[s['addr'] - dev.main_load:
                                                          s['addr'] - dev.main_load + s['len']]))
                                  for m in order for s in m.sites
                                  if dev.main_load <= s['addr']
                                  and s['addr'] + s['len'] <= dev.main_load + len(image))
-                if dev.drive_shadow else []}
+                if dev.drive_shadow or stock_shadow else []}
 
     def site_map(w):
         """The flashed main OS's taken byte ranges, for the loader's conflict checks (ABI 1.2): each

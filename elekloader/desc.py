@@ -28,7 +28,9 @@ into its string pool (UTF-8, NUL-terminated):
   "The boot link"; bit 4, F_COLLECTIONS: +Drive mods may declare tables, a mod's export
   drive_collections; docs/DRIVE.md, "+Drive collections"; bit 5, F_CLAIMS: its boot linker takes
   contributions' claims, and the site map carries the flashed contributions' claims (SITE_CLAIM),
-  a mod's export drive_claims); zero to +0x64.
+  a mod's export drive_claims; bit 6, F_STOCK_SHADOW: the shadow is there for a non-TELOS
+  loader's stock parts alone, which it lays over the running OS, a mod's export
+  drive_stock_shadow; docs/DRIVE.md, "The stock shadow"); zero to +0x64.
 
   module (16): name, version, u8 kind (0 core, 1 flashed mod, 2 a mod that imports core_desc),
     u8 flags (bit 0: has sites), u16 index, u16 first export, u16 export count
@@ -94,6 +96,8 @@ COLLECTIONS = 'drive_collections'   # a loader's export: nonzero sets F_COLLECTI
 F_COLLECTIONS = 16               # flags bit 4: +Drive mods may declare tables ("collections")
 CLAIMS = 'drive_claims'          # a loader's export: sets F_CLAIMS and maps the flashed claims
 F_CLAIMS = 32                    # flags bit 5: the boot linker takes contributions' claims (SITE_CLAIM)
+STOCK_SHADOW = 'drive_stock_shadow'   # a loader's export: the build carries the shadow, F_STOCK_SHADOW set
+F_STOCK_SHADOW = 64              # flags bit 6: the shadow serves stock parts only (no TELOS sites)
 MODULE, EXPORT, TABLE, CLAIM, AREA, SCOPE, RANGE = 16, 8, 24, 8, 20, 16, 12
 # a site map range's kind (ABI 1.2)
 SITE_SITE, SITE_COPIED, SITE_DEVICE, SITE_BOOT, SITE_RUN, SITE_TRAILER, SITE_CLAIM = 1, 2, 3, 4, 5, 6, 7
@@ -303,7 +307,8 @@ def dump(d):
                + (', std1 mapped' if d.get('flags', 0) & F_STD_MAP else '')
                + (', +Drive collections' if d.get('flags', 0) & F_COLLECTIONS else '')
 
-               + (', claims taken' if d.get('flags', 0) & F_CLAIMS else ''))
+               + (', claims taken' if d.get('flags', 0) & F_CLAIMS else '')
+               + (', stock parts through the shadow' if d.get('flags', 0) & F_STOCK_SHADOW else ''))
     s = d['storage']
     out.append('lockfile trailer at 0x%08x, %d bytes' % s['trailer'])
     out += ['storage %s: %d of %d bits, generation %d' % (n, u, r, g) for n, r, u, g in s['scopes']]

@@ -152,6 +152,17 @@ the build lists the flashed contributions' claims in the site map (kind 7); `dli
 (`scan_claims`) reads them (DRIVE.md, "Claims"). `resources.regions` stays refused (DRIVE.md,
 "Regions on the A4"). drive-loader-ar2 takes no claims (tests/test_drive_claims.py).
 
+## Stock parts
+
+A built `.elemod` carries no stock bytes: the build swaps each run of 8 or more bytes of a mod's own
+code that matches the stock OS for a `stock` part (an address and a length), which the loader copies
+at boot. A match can name an address the flashed build wrote (a core site), where the running OS
+holds the site's bytes, not stock's. The loader exports `drive_stock_shadow` (`route.s`), so the
+descriptor carries the shadow, stock's bytes of every flashed site, and flags bit 6
+`F_STOCK_SHADOW`; `dlink.c` (`shadow_over`) lays it over each stock part it copies, as the host
+twin's `stock_bytes` does, and the flag keeps host tools from taking the build for TELOS.
+drive-loader-ar2 exports none (tests/test_drive_stock_shadow.py).
+
 ## Files
 
 | file | from drive-loader-ar2 | what |
