@@ -76,6 +76,7 @@ CODES = {
     # +Drive storage and the boot-linked sites (a build whose descriptor carries the site map, no shadow)
     29: ('store', 'storage: {what} needs {need} of {have}'),
     30: ('clash', 'site 0x{detail}: {why}'),
+    31: ('std', 'subscribes to {detail}, which the core does not map'),
 }
 # DL_R_CLASH's kind (its argument's high byte; the low byte is the other mod's line for SITE_MOD)
 SITE_CORE, SITE_MOD, SITE_PRELINK, SITE_STOCK = 1, 2, 3, 4
@@ -258,6 +259,9 @@ class Build:
         self.tables = d['tables']                        # in descriptor order (by name)
         self.table = {t['name']: i for i, t in enumerate(self.tables)}
         self.claims = [nm for kind, _mi, nm in d['claims'] if kind == desc.CLAIM_NAME]
+        # the core's std map (F_STD_MAP, CLAIM_STD "<event> <table>"): a std mod's subscriptions' tables
+        self.std_map = bool(d.get('flags', 0) & desc.F_STD_MAP)
+        self.std = dict(nm.split(' ', 1) for kind, _mi, nm in d['claims'] if kind == desc.CLAIM_STD)
         # TELOS (a descriptor with the stock shadow, ABI 1.2): sites and regions are taken, checked
         # as the boot linker checks them (DL_SITES, DL_REGIONS)
         self.shadow = d.get('shadow') or []
@@ -676,19 +680,27 @@ def pass1(build, c, state):
                 or not isinstance(r[2], str) or r[2] not in build.rsize or not isinstance(r[1], int) \
                 or r[1] < 0 or r[1] + build.rsize[r[2]] > run_len:
             return c.refuse('format', note='a relocation %r' % (r,))
+    events = doc.get('events')                  # "std1": its "std" contributions are standard events
+    if build.std_map and events is not None and events not in linker.STD_SETS:
+        return c.refuse('format', note='"events" %r' % (events,))
     contribs = 0
     for x in doc.get('contribute') or []:
         if not isinstance(x, dict):
             return c.refuse('format', note='a contribution')
-        to = order = n = None
+        to = n = std = None
         order = 50
         for k, v in x.items():                  # in the file's order, as the boot linker reads it
             if k == 'to':
-                t = build.table.get(v) if isinstance(v, str) else None
-                if t is None or not build.tables[t]['flags'] & desc.F_MORE \
-                        or build.tables[t]['flags'] & desc.F_DSP:
-                    return c.refuse('table', v)
                 to = v
+                if not build.std_map:           # without the std map (drive-loader-ar2): checked here
+                    t = build.table.get(v) if isinstance(v, str) else None
+                    if t is None or not build.tables[t]['flags'] & desc.F_MORE \
+                            or build.tables[t]['flags'] & desc.F_DSP:
+                        return c.refuse('table', v)
+            elif k == 'std' and build.std_map:
+                if v is not None and v is not True:
+                    return c.refuse('format', note='"std": %r' % (v,))
+                std = v
             elif k == 'order':
                 if type(v) is not int:
                     return c.refuse('format', note='an order of %r' % (v,))
@@ -702,6 +714,17 @@ def pass1(build, c, state):
                 return c.refuse('feature', 'claims')
             elif k == 'relocs' and build.payload_skip and _payload_relocs(v):
                 return c.refuse('feature', 'relocs into .payload')
+        if std and events is None:
+            return c.refuse('format', note='a standard event\'s subscription without "events"')
+        if std and isinstance(to, str):         # the core's std map (the descriptor's CLAIM_STD)
+            if to not in build.std:
+                return c.refuse('std', to)
+            to = build.std[to]
+        if to is not None and build.std_map:    # with it, once the subscription is known
+            t = build.table.get(to) if isinstance(to, str) else None
+            if t is None or not build.tables[t]['flags'] & desc.F_MORE \
+                    or build.tables[t]['flags'] & desc.F_DSP:
+                return c.refuse('table', to)
         if to is None or n is None:
             return c.refuse('format', note='a contribution without "to" or "data"')
         if not desc.ORDER_MIN <= order < desc.LINKER_ORDER:
@@ -736,6 +759,9 @@ def pass1(build, c, state):
         m = linker.Mod2(doc, c.name, c.raw)
     except ModError as e:
         return c.refuse('format', note=str(e))
+    for x in m.contribute:                      # a standard event's subscription: the table it maps to
+        if 'event' in x and build.std_map:
+            x['to'] = build.std[x['event']]
     c.mod, c.exports, c.fields, c.drive_sites = m, exports, fields, sites
     state['syms'] += len(exports)
     state['fields'] += len(fields)

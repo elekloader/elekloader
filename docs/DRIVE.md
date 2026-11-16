@@ -20,7 +20,10 @@ The link runs in this order:
    file's own rules, first failure wins: JSON, format (`elemod` 2, the id,
    the version), target (`target.device` and `target.os` against the
    descriptor's), the fields above, sections, regions, relocations,
-   contributions, exports, then storage fields (on a build that keeps
+   contributions (with `F_STD_MAP`, `events` is `"std1"` or none and a
+   `"std": true` contribution names a standard event, which the
+   descriptor's claims of kind 3 map to the core's table; one they don't
+   map is a `std` refusal), exports, then storage fields (on a build that keeps
    +Drive storage: each a global name, as an export is; a field the core
    can't keep is a `format` refusal).
 2. *Check rounds* over the living mods in id order (UTF-8 bytes; of two
@@ -403,7 +406,7 @@ names offsets into its string pool (UTF-8, NUL-terminated):
 | +0x44 | u32 the device key, u32 the OS version (names) |
 | +0x4c | ABI 1.2: u32 offset of the site map, u16 its count, u16 the pre-link count, u32 offset of the pre-link ranges |
 | +0x58 | u32 the shadow's offset, u32 its range count (ABI 1.2; 0 without one) |
-| +0x60 | ABI 1.3: u32 flags, bit 0 `F_STAGE_TOP`: the loader reads each file into the +Drive area itself at boot (a module's export `drive_stage_top`, nonzero); bit 1 `F_PAYLOAD_SKIP`: it stages each file without its `.payload`'s hex ("Payloads on the +Drive"; the export `drive_payload_skip`); bit 2 `F_ABS16`: its boot linker takes `abs16` relocations (the export `drive_abs16`); zero to +0x64 |
+| +0x60 | ABI 1.3: u32 flags, bit 0 `F_STAGE_TOP`: the loader reads each file into the +Drive area itself at boot (a module's export `drive_stage_top`, nonzero); bit 1 `F_PAYLOAD_SKIP`: it stages each file without its `.payload`'s hex ("Payloads on the +Drive"; the export `drive_payload_skip`); bit 2 `F_ABS16`: its boot linker takes `abs16` relocations (the export `drive_abs16`); bit 3 `F_STD_MAP`: it maps std1 subscriptions through the core's `std` map, which the claims of kind 3 carry (the export `drive_std_map`); zero to +0x64 |
 
 | record | bytes | fields |
 |---|---|---|
@@ -411,7 +414,7 @@ names offsets into its string pool (UTF-8, NUL-terminated):
 | export | 8 | name, u32 address. Grouped by module in module order, by name within a module |
 | table | 24 | name, u32 address, u16 entry size, u16 count, u16 capacity (count + spare), u16 flags (bit 0: more entries may be added; bit 1: a render table, the collection's `"render": true`; bit 2: a DSP table; bit 3: the loader may add entries of its own, a mod's may not), u32 offset of its keys, u32 offset of its orders (0 in ABI 1.0) |
 | keys | 4 an entry | `order << 16 \| module index`, in table order, the order held to 0..65,534 (the linker's own entries 65,535) for an ABI 1.0 reader |
-| claim | 8 | u16 kind (1: a resource name; 2: a region, `"<lo> <hi> <name>"` in hex), u16 module index, u32 the name |
+| claim | 8 | u16 kind (1: a resource name; 2: a region, `"<lo> <hi> <name>"` in hex; 3, with `F_STD_MAP`: the core's `std` map, `"<event> <table>"`, one a standard event, by the core, in event order), u16 module index, u32 the name |
 | area | 20 | the flashed build's RAM end, the +Drive area's start and end, the staging buffer's address and size (the exports `drive_staging` and `drive_staging_size`, else 0) |
 | storage | 12 + 16 a scope | u32 address and u32 length of the lockfile's trailer in the main OS image (for the host: nothing on the unit reads it), u16 scope count, u16 0; per scope: name, u32 room in bits, u32 bits used, u32 generation |
 | shadow | 8 + bytes a range | u32 address, u32 length, the stock bytes padded to 4; by address, before the string pool (ABI 1.2, where the profile asks; a block without one is ABI 1.1) |

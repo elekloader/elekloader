@@ -381,6 +381,7 @@ nothing loads.
 | 28 | `outside` | no free area |
 | 29 | `store` | storage room short (detail `WHAT NEED HAVE`) |
 | 30 | `clash` | a site or copied block clashes (argument: kind << 8 \| other's line; kinds 1 flashed, 2 +Drive, 3 pre-link, 4 not stock; detail: address) |
+| 31 | `std` | a standard event the core's `std` map lacks (detail: it) |
 
 When nothing is linked, the loader keeps why:
 

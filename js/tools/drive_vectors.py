@@ -32,7 +32,24 @@ def sets(B):
         out += [(code + ': refused', bad, area), (code + ': loads', good, area)]
     h, u = T.hello(B), T.user(B)
     out = out + [(n, f, None) for n, f in _more(B, h, u)]
-    return out + _top(B) + _skip(B) + _abs16(B)
+    return out + _top(B) + _skip(B) + _abs16(B) + _std(B)
+
+
+def _std(B):
+    """Sets on a build whose loader maps std1 subscriptions through the core's std map (F_STD_MAP,
+    the A4's), and the same files on one that doesn't."""
+    s = T.std_mod
+    return [('std: two events, each to its table', _files(s(B, 'ev_boot'), s(B, 'ev_tick', 'drive-std2')), 'std'),
+            ('std: to a closed table', _files(s(B, 'ev_closed')), 'std'),
+            ('std: a table\'s name is no event', _files(s(B, 'ev_x')), 'std'),
+            ('std: without "events"', _files(s(B, 'ev_boot', events=None)), 'std'),
+            ('std: "events" of another set', _files(s(B, 'ev_boot', events='std2')), 'std'),
+            ('std: "std": false', _files(s(B, 'ev_boot', contribute=[{'to': 'ev_boot', 'std': False,
+                                                                      'data': '00000000'}])), 'std'),
+            ('std: "std": null is no subscription', _files(s(B, 'ev_x', contribute=[
+                {'to': 'ev_x', 'std': None, 'order': 50, 'data': '00000000',
+                 'relocs': [[0, 'abs32', 'sym:fn_drive-std', 0]]}])), 'std'),
+            ('std: no std map on this build', _files(s(B, 'ev_boot')), None)]
 
 
 def _files(*docs):

@@ -63,6 +63,14 @@ def cases(B):
     d[0]['collections']['core_field_inits']['max'] = 2
     d[0]['collections']['core_lock_codes']['spare'] = 4
     out['the lock tables with a spare and a max'] = d
+    d = T.descriptor_mods(B)                   # F_STD_MAP: the core's std map as claims of kind 3
+    d[0]['std'] = {'ev_tick': 'ev_x', 'ev_boot': 'ev_render_x'}
+    d[1]['symbols']['drive_std_map'] = ['abs', 1]
+    d[1]['exports'] = d[1]['exports'] + ['drive_std_map']
+    out['a loader that maps std1'] = d
+    d = copy.deepcopy(d)
+    d[1]['exports'].remove('drive_std_map')
+    out['a std map, a loader that does not map it'] = d
     return out
 
 

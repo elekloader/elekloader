@@ -9,7 +9,7 @@
 import * as container from './container.ts'
 import * as desc from './desc.ts'
 import { ModError, cmpVersions, formatOf, isDict, pyEq } from './elemod.ts'
-import { FORMAT2, Mod2 } from './link.ts'
+import { FORMAT2, Mod2, STD_SETS } from './link.ts'
 import { devices } from './devices.ts'
 import { JSONDecodeError, UnicodeDecodeError, decodeUtf8, loads } from './pyjson.ts'
 import { pyInt as pyIntOf, repr, str, truthy } from './py.ts'
@@ -60,6 +60,7 @@ export const CODES: Record<number, [string, string]> = {
   28: ['outside', 'a region at {detail} is outside the device\'s free areas'],
   // the boot-linked sites (a build whose descriptor carries the site map, no shadow); 29, storage, is the Python's alone
   30: ['clash', 'site 0x{detail}: {why}'],
+  31: ['std', 'subscribes to {detail}, which the core does not map'],
 }
 export const CODE: Record<string, number> = Object.fromEntries(Object.entries(CODES).map(([i, [n]]) => [n, Number(i)]))
 // DL_R_CLASH's kind (its argument's high byte; the low byte is the other mod's line for SITE_MOD)
@@ -259,6 +260,8 @@ export class Build {
   tables: desc.DescTable[]
   table: Map<string, number>
   claims: string[]
+  std: Map<string, string>
+  stdMap: boolean
   shadow: [number, Uint8Array][]; telos: boolean; regions: [number, number, string][]
   areas: [number, number][]                 // a region must be inside one (TELOS)
   ramEnd: number; lo: number; hi: number; staging: number; stagingSize: number
@@ -280,6 +283,12 @@ export class Build {
     this.tables = d.tables
     this.table = new Map(d.tables.map((t, i) => [t.name, i]))
     this.claims = d.claims.filter(([k]) => k === desc.CLAIM_NAME).map(([, , nm]) => nm)
+    // the core's std map (F_STD_MAP, CLAIM_STD "<event> <table>"): a std mod's subscriptions' tables
+    this.stdMap = !!((d.flags ?? 0) & desc.F_STD_MAP)
+    this.std = new Map(d.claims.filter(([k]) => k === desc.CLAIM_STD).map(([, , nm]) => {
+      const sp = nm.indexOf(' ')
+      return [nm.slice(0, sp), nm.slice(sp + 1)] as [string, string]
+    }))
     // TELOS (a descriptor with the stock shadow, ABI 1.2): sites and regions are taken, checked as the boot linker
     // checks them (DL_SITES, DL_REGIONS)
     this.shadow = d.shadow ?? []
@@ -570,15 +579,23 @@ export function pass1(build: Build, c: Choice, state: State): boolean {
         || num(r[1]) < 0 || num(r[1]) + build.rsize[r[2]] > runLen)
       return c.refuse('format', '', 0, `a relocation ${repr(r)}`)
   }
+  const events = g(doc, 'events')                // "std1": its "std" contributions are standard events
+  if (build.stdMap && events !== undefined && events !== null && !(typeof events === 'string' && STD_SETS.includes(events)))
+    return c.refuse('format', '', 0, `"events" ${repr(events)}`)
   let contribs = 0
   for (const x of each(truthy(g(doc, 'contribute')) ? doc.contribute : [])) {
     if (!isDict(x)) return c.refuse('format', '', 0, 'a contribution')
-    let to: string | null = null, n: number | null = null, order: unknown = 50
+    let to: unknown = null, n: number | null = null, order: unknown = 50, std = false
     for (const [k, v] of Object.entries(x)) {
       if (k === 'to') {
-        const t = typeof v === 'string' ? build.table.get(v) : undefined
-        if (t === undefined || !(build.tables[t].flags & desc.F_MORE) || build.tables[t].flags & desc.F_DSP) return c.refuse('table', v)
-        to = v as string
+        to = v
+        if (!build.stdMap) {                    // without the std map (drive-loader-ar2): checked here
+          const t = typeof v === 'string' ? build.table.get(v) : undefined
+          if (t === undefined || !(build.tables[t].flags & desc.F_MORE) || build.tables[t].flags & desc.F_DSP) return c.refuse('table', v)
+        }
+      } else if (k === 'std' && build.stdMap) {
+        if (v !== null && v !== true) return c.refuse('format', '', 0, `"std": ${repr(v)}`)
+        std = v === true
       } else if (k === 'order') {
         if (!pyInt(v)) return c.refuse('format', '', 0, `an order of ${repr(v)}`)
         order = v
@@ -591,10 +608,20 @@ export function pass1(build: Build, c: Choice, state: State): boolean {
         return c.refuse('feature', 'relocs into .payload')
       }
     }
+    if (std && (events === undefined || events === null))
+      return c.refuse('format', '', 0, 'a standard event\'s subscription without "events"')
+    if (std && typeof to === 'string') {        // the core's std map (the descriptor's CLAIM_STD)
+      if (!build.std.has(to)) return c.refuse('std', to)
+      to = build.std.get(to)!
+    }
+    if (to !== null && build.stdMap) {         // with it, once the subscription is known
+      const t = typeof to === 'string' ? build.table.get(to) : undefined
+      if (t === undefined || !(build.tables[t].flags & desc.F_MORE) || build.tables[t].flags & desc.F_DSP) return c.refuse('table', to)
+    }
     if (to === null || n === null) return c.refuse('format', '', 0, 'a contribution without "to" or "data"')
     const o = order as number
     if (!(o >= desc.ORDER_MIN && o < desc.LINKER_ORDER)) return c.refuse('format', '', 0, `an order of ${repr(order)}`)
-    if (!n || n % build.tables[build.table.get(to)!].entry) return c.refuse('table', to)
+    if (!n || n % build.tables[build.table.get(to as string)!].entry) return c.refuse('table', to)
     if (state.contribs + contribs >= build.pools.contribs) return c.refuse('limit', '', 0, 'contributions')
     contribs++
   }
@@ -620,6 +647,7 @@ export function pass1(build: Build, c: Choice, state: State): boolean {
     if (e instanceof ModError) return c.refuse('format', '', 0, e.message)
     throw e
   }
+  for (const x of m.contribute) if (x.event !== undefined && build.stdMap) x.to = build.std.get(x.event)!   // the table a standard event maps to
   c.mod = m; c.exports = exports; c.driveSites = sites
   state.syms += exports.length
   state.contribs += contribs

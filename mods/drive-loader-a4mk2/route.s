@@ -82,5 +82,9 @@ dl_handler:
 | host tools take them too
         .globl  drive_abs16
         .set    drive_abs16, 1
+| the build descriptor's flags bit 3: the boot maps a std1 mod's subscriptions through the core's
+| std map, which the descriptor then carries (dlink.c, std_table)
+        .globl  drive_std_map
+        .set    drive_std_map, 1
         .globl  drive_staging_size
         .set    drive_staging_size, 0x400                    | fs.h DL_STAGING_SIZE

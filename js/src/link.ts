@@ -1080,6 +1080,7 @@ export function link(mods: Mod2[], image: Uint8Array, lock: store.Lock | null = 
     if (!dev.driveAlign) return [0, 0]
     return [Math.min(align(ramEnd, dev.driveAlign), ddrEnd), ddrEnd]
   }
+  const stdMap = order.some(m => m.exports.includes(desc.STD_MAP))   // the loader maps std1 at boot
   const descFields = (where: Where | null): desc.DescFields => {
     const w: Where = where ?? (() => 0)
     const modules = order.map(m => ({
@@ -1106,11 +1107,12 @@ export function link(mods: Mod2[], image: Uint8Array, lock: store.Lock | null = 
     return { family: dev.dataFamily, device: dev.dataDevice, release: rel.dataRelease ?? 0, deviceKey: dev.key, os: rel.version, modules, tables: tabs,
       claims: [...order.flatMap(m => m.names.map(nm => [desc.CLAIM_NAME, index.get(m.id)!, nm] as [number, number, string])),
         ...order.flatMap(m => m.regions.map(g => [desc.CLAIM_REGION, index.get(m.id)!,
-          `0x${g.lo.toString(16)} 0x${g.hi.toString(16)} ${g.name}`] as [number, number, string]))],
+          `0x${g.lo.toString(16)} 0x${g.hi.toString(16)} ${g.name}`] as [number, number, string])),
+        ...[...core.std.keys()].sort(cmp).filter(() => stdMap).map(ev => [desc.CLAIM_STD, index.get(core.id)!, `${ev} ${core.std.get(ev)}`] as [number, number, string])],
       area: [w('bss_end'), ...driveArea(w('bss_end')), w('glob', desc.STAGING[0]), w('glob', desc.STAGING[1])],
       storage: { trailer: [w('trailer'), trailerLen], scopes },
       flags: (w('glob', desc.STAGE_TOP) ? desc.F_STAGE_TOP : 0) | (w('glob', desc.PAYLOAD_SKIP) ? desc.F_PAYLOAD_SKIP : 0)
-        | (w('glob', desc.ABS16) ? desc.F_ABS16 : 0),
+        | (w('glob', desc.ABS16) ? desc.F_ABS16 : 0) | (stdMap ? desc.F_STD_MAP : 0),
       sites: siteMap(w), prelink: (rel.prelink ?? []).map(([lo, hi, k]) => [lo, hi, k] as [number, number, number]),
       // the stock bytes of every range the flashed build writes, where the profile asks for them (driveShadow): a
       // loader on the unit copies a mod's stock parts from the running OS, and lays these over it

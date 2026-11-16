@@ -351,7 +351,7 @@ static void reason_line(const char *line, char *at, char *end, int code, u32 arg
         "TOO MANY NAMES", "OVER 256 MODS",
         /* 21 to 28: TELOS's (DL_SITES, DL_REGIONS), which this loader doesn't build with */
         "REFUSED", "REFUSED", "REFUSED", "REFUSED", "REFUSED", "REFUSED", "REFUSED", "REFUSED",
-        "NO STORAGE ROOM", "SITE"};
+        "NO STORAGE ROOM", "SITE", "EVENT NOT MAPPED"};
     at = cat(at, end, code < (int)(sizeof what / sizeof what[0]) ? what[code] : "REFUSED");
     if (code == DL_R_STORE) {            /* always on two lines: the detail is the whole of it */
         store_line(cat(at, end, "\n"), end, d ? d : "");
