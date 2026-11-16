@@ -102,8 +102,20 @@ static void **fn(unsigned char *e, int slot)
 static unsigned char *resolve(const char *name)
 {
     static unsigned char res[8 + ENTRY_SIZE];
-    const char *v[1] = {name};
-    void *caps[2] = {(void *)v, (void *)(v + 1)};
+    static char parts[DL_NAME_MAX + 1];
+    const char *v[8];
+    void *caps[2];
+    int n = 0;
+    char *p = parts;
+    strcpy(parts, name);                  /* one capture a path part, as the router's patterns give them */
+    v[n++] = p;
+    for (; *p; p++)
+        if (*p == '/') {
+            *p = 0;
+            v[n++] = p + 1;
+        }
+    caps[0] = (void *)v;
+    caps[1] = (void *)(v + n);
     dl_entry(res, 0, caps);
     if (!res[0]) {
         printf("  (refused: %s)\n", host_str);
@@ -227,6 +239,31 @@ int main(void)
     CHECK(upload("pay.elemod", 3000, 4, &why) == 0, "an upload after all that still saves");
     if (*why)
         printf("  (%s)\n", why);
+
+    /* an upload into folders not there yet makes them, as the Rytm's file system does */
+    CHECK(upload("fx/delays/tape.elemod", 2500, 5, &why) == 0, "an upload into missing folders makes them and saves");
+    if (*why)
+        printf("  (%s)\n", why);
+    path_of(path, "fx", "");
+    CHECK(dl_fs_file_size(path) < 0 && upload("fx/plate.elemod", 600, 6, &why) == 0,
+          "... fx is a folder, and takes another file");
+    if (*why)
+        printf("  (%s)\n", why);
+
+    /* a file where the folder would go: nothing is saved, and .status says why */
+    {
+        unsigned token, at2;
+        path_of(path, "blk", "");
+        at2 = ds_reserve(512, &token);
+        CHECK(at2 && ds_commit(path, token, 512) == 0, "a file named blk");
+    }
+    CHECK(upload("blk/a.elemod", 700, 7, &why) != 0 && strstr(why, "no folder") != 0,
+          "an upload into a folder a file's name blocks is not saved, noted as no folder");
+    if (*why)
+        printf("  (%s)\n", why);
+    path_of(path, "blk/a.elemod", "");
+    CHECK(dl_fs_file_size(path) < 0, "... and no file is there");
+    CHECK(upload("pay.elemod", 3000, 8, &why) == 0, "the next upload still saves");
 
     if (fails) {
         printf("FAILED %d\n", fails);

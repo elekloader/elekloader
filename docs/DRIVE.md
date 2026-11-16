@@ -186,7 +186,9 @@ inputs give the same bytes.
 Windows through winmm, `elekloader/winmm.py`, as python-rtmidi drops SysEx
 over 1 KB there; elsewhere with `mido` and `python-rtmidi`): `ls [FOLDER]`, `get NAME` (also `.build`,
 `.status` and `.store`), `put FILES... [--into FOLDER]` (`check` runs them against the unit's `.build` first;
-nothing is uploaded if one is refused; the folders are made as needed), `rm NAME` (a file, or an empty
+nothing is uploaded if one is refused; the folders are made as needed; after each upload the
+`last:` line of `/mods/.status` must read `saved NAME`, as the route can't refuse a commit that
+fails, else it stops with that line and no `UPLOADED`), `rm NAME` (a file, or an empty
 folder; the route refuses a folder with anything in it, `Folder not empty`) and `active NAMES...` (writes `/mods/active` when the set loads). A NAME is a path below
 `/mods`, in up to 3 folders (`fx/delays/x.elemod`); the route lists a folder as an item whose
 children byte is 1, as stock's `/soundbanks` lists its banks, and `Mods.walk` lists every folder. `--folder` names the route's

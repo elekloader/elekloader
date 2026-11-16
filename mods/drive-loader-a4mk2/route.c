@@ -390,6 +390,7 @@ unsigned dl_hdr(unsigned char *res, void **f, const unsigned char *h)
 }
 
 static int make_folder(const char *rel);
+static int make_parent(const char *rel);
 extern volatile unsigned dl_fs_gen;
 extern volatile int dl_move_seen;
 static const char *move(unsigned n);
@@ -450,6 +451,9 @@ void dl_change(void **f, const unsigned char *h)
     if (dl_staging_owner || !up.token || !same(up.name, c->name) || n > up.size) {
         note("upload dropped:", c->name);
         r = -2;
+    } else if (make_parent(c->name)) {    /* the store keeps no file without its folder */
+        note("commit failed: no folder for", c->name);
+        r = -3;
     } else {
         r = ds_commit(path, up.token, n);
         note(r ? "commit failed:" : "saved", c->name);
@@ -641,6 +645,21 @@ static int make_folder(const char *rel)
         dl_fs_mkdir(path);
     }
     return is_folder(rel) ? 0 : -1;
+}
+
+/* Make the folders a file's path below DL_DIR names, as the Rytm's stock file system makes them
+ * when it writes the file (DL_DIR itself is always there). Under dl_lock. -> 0, or -1 */
+static int make_parent(const char *rel)
+{
+    char sub[DL_NAME_MAX + 1];
+    unsigned k = len(rel);
+    while (k && rel[k - 1] != '/')
+        k--;
+    if (!k)
+        return 0;
+    copy(sub, rel, k - 1);
+    sub[k - 1] = 0;
+    return make_folder(sub);
 }
 
 /* What is under DL_DIR "/" rel: how many folder levels (0: no folder in it), to DL_DEPTH + 1 at

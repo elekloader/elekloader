@@ -946,6 +946,71 @@ def test_mods_put_ls_get_active_and_rm_over_the_data_router():
             assert not any(n.startswith('fx/') for n in unit.files)
 
 
+class NotingUnit(FakeUnit):
+    """A FakeUnit whose .status carries the route's `last:` note (route.c `note`), and whose store,
+    as drive-loader-a4mk2's before it made a file's folders at commit, keeps no file whose folder
+    isn't there: the upload still closes, the commit fails, and only the note says so."""
+
+    def __init__(self, build_blk, folders=()):
+        super().__init__(build_blk)
+        self.folders = set(folders)
+        self.note('-')
+
+    def note(self, text):
+        self.files['.status'] = b'drive-loader-a4mk2 route\nfolder /mods\nlast: %s\nio: 0 0 0 0\n' % text.encode()
+
+    def send(self, raw):
+        msg = datarpc.unframe(raw)
+        if msg[4] == datarpc.WCLOSE:
+            j = struct.unpack_from('>I', msg, 5)[0]
+            name = self.jobs[j][0]
+            had = dict(self.files)
+            super().send(raw)
+            if name in self.files and self.files.get(name) is not had.get(name):
+                parent = name.rpartition('/')[0]
+                if parent and parent not in self.folders:
+                    if name in had:
+                        self.files[name] = had[name]
+                    else:
+                        del self.files[name]
+                    self.note(('commit failed: %s' % name)[:63])
+                else:
+                    self.note(('saved %s' % name)[:63])
+            return
+        super().send(raw)
+
+
+def test_an_upload_the_unit_did_not_save_is_an_error_not_uploaded():
+    """`elekloader mods put` reads the route's `last:` note after each upload (it can't refuse once
+    the upload is in): a commit that failed, as into a folder the unit couldn't make, is the error,
+    not UPLOADED; one it saved passes; a name past the note's 63 bytes compares as cut."""
+    import argparse
+    with Bench('analog-rytm-mk2') as B:
+        out, b = built(B)
+        blk = out.image[desc.find(out.image)[0]:]
+        unit = NotingUnit(blk[:struct.unpack_from('>I', blk, 8)[0]], folders={'fx'})
+        mods = datarpc.Mods(datarpc.Client(unit, timeout=0.5))
+        log = []
+        with tempfile.TemporaryDirectory() as tmp:
+            name, raw = files(hello(B))[0]
+            p = os.path.join(tmp, name)
+            open(p, 'wb').write(raw)
+            try:
+                datarpc.run(argparse.Namespace(op='put', files=[p], into='gone'), mods, log.append)
+                assert False, 'a lost upload passed'
+            except ModError as e:
+                assert str(e) == 'the unit did not save /mods/gone/%s: commit failed: gone/%s' % (name, name), e
+            assert not any(l.startswith('UPLOADED') for l in log) and 'gone/' + name not in unit.files
+            assert datarpc.run(argparse.Namespace(op='put', files=[p], into='fx'), mods, log.append) == 0
+            assert log[-1].startswith('UPLOADED /mods/fx/%s' % name) and unit.files['fx/' + name] == raw
+            deep = 'a-folder-name-of-twenty-six/and-another-of-twenty-one'
+            unit.folders.add(deep)
+            assert datarpc.run(argparse.Namespace(op='put', files=[p], into=deep), mods, log.append) == 0
+            assert datarpc.last_of(unit.files['.status'].decode()) == ('saved %s/%s' % (deep, name))[:63]
+    assert datarpc.last_of('drive-loader route\nstage: 1 bytes\n') is None
+    assert datarpc.last_of(None) is None
+
+
 def test_the_7_bit_packing_round_trips():
     for n in (0, 1, 6, 7, 8, 13, 14, 15, 300):
         data = bytes((i * 37 + 0x81) & 0xFF for i in range(n))

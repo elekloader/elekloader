@@ -151,8 +151,10 @@ test('the Data router client: the CLI\'s requests, byte for byte, over its recor
         else if (s.op === 'ls') out = await mods.ls()
         else if (s.op === 'get') out = toHex((await mods.get(s.args[0]))[1])
         else if (s.op === 'rm') out = (await mods.rm(s.args[0])) ?? null
+        else if (s.op === 'upload') out = (await mods.upload(s.args[0], fromHex(s.args[1])!, head!)) ?? null
+        else throw new Error(`a step this test doesn't know: ${s.op}`)
       } catch (e) {
-        if (!(e instanceof datarpc.RpcError)) throw e
+        if (!(e instanceof ModError)) throw e
         out = { error: e.message }
       }
       assert.deepEqual(out, s.out, `${s.op} ${s.args[0] ?? ''}`)

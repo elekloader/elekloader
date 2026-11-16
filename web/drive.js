@@ -477,7 +477,7 @@ async function upload(files) {
     }
     for (const f of files) {
       try {
-        await S.mods.put(f.name, f.raw, S.head, (sent, total) => say('dm-upload-msg', `Uploading ${f.name}: ${Math.round(100 * sent / total)}%`));
+        await S.mods.upload(f.name, f.raw, S.head, (sent, total) => say('dm-upload-msg', `Uploading ${f.name}: ${Math.round(100 * sent / total)}%`));
       } catch (e) { say('dm-upload-msg', `${f.name}: ${e.message}`, 'bad'); await refresh(); return; }
     }
     say('dm-upload-msg', `Uploaded ${files.map(f => S.mods.path(f.name)).join(', ')}. Add ${files.length === 1 ? 'it' : 'them'} to the build on the unit (MODS, LOAD TO BUILD).`, 'ok');
