@@ -6,13 +6,22 @@
  *
  * RAM.bin is the flashed build's RAM from RAM_BASE up to 0x48000000 (the rest zero),
  * STOCK.bin the main OS image at STOCK_BASE (stock parts copy from it). MODS_DIR holds the
- * files and `active`. OUT.bin gets the RAM afterwards; stdout a JSON summary. With
+ * files and `active`. OUT.bin gets the RAM afterwards, OUT.bin.main the main OS (with the
+ * sites applied); stdout a JSON summary. With
  * DL_HOST_CHECK set it runs the MODS page's dl_check instead of dl_link: the same summary
- * from the check's own records, plus each file's version. */
+ * from the check's own records, plus each file's version. A file MODS_DIR/.store is the
+ * +Drive storage's /mods/.store as the boot reads it; the link's new one goes to OUT.bin.store
+ * (on a build that keeps +Drive storage). With DL_HOST_TOP set, the stage is at the top of the
+ * area (dl_stage_top): the link gets no buffer, and a check lays out with the reservation. Built
+ * with -DDL_PAYLOAD_SKIP and the A4's skip.c, it stages each file as the A4 loader does (skip.h). */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include "../mods/drive-loader-ar2/dl.h"
+#include "../mods/drive-loader-ar2/dstore.h"
+#ifdef DL_PAYLOAD_SKIP                   /* the A4 loader's payload skip (skip.c, linked in) */
+#include "../mods/drive-loader-a4mk2/skip.h"
+#endif
 
 static u8 *ram, *stock;
 static u32 ram_base, ram_len, stock_base, stock_len;
@@ -44,6 +53,12 @@ void dl_breathe(void)
 {
 }
 
+/* the unit masks interrupts and pushes the data cache (flush.s); here the bytes are enough */
+void dl_apply_site(u32 addr, const u8 *src, u32 len)
+{
+    memcpy(dl_host_mem(addr), src, len);
+}
+
 static u8 *slurp(const char *path, u32 *n)
 {
     FILE *f = fopen(path, "rb");
@@ -62,6 +77,21 @@ static u8 *slurp(const char *path, u32 *n)
     return b;
 }
 
+#ifdef DL_PAYLOAD_SKIP
+struct mem { const u8 *b; u32 n; };
+
+static s32 mem_read(void *ctx, u32 at, u8 *dst, u32 n)
+{
+    const struct mem *m = ctx;
+    if (at >= m->n)
+        return 0;
+    if (n > m->n - at)
+        n = m->n - at;
+    memcpy(dst, m->b + at, n);
+    return (s32)n;
+}
+#endif
+
 s32 dl_read_file(const char *name, u8 *buf, u32 max)
 {
     char path[1024];
@@ -71,6 +101,15 @@ s32 dl_read_file(const char *name, u8 *buf, u32 max)
     b = slurp(path, &n);
     if (!b)
         return -1;
+#ifdef DL_PAYLOAD_SKIP                   /* staged as the A4's boot.c stages it */
+    {
+        struct mem m = { b, n };
+        struct dl_pay pay;
+        s32 r = dl_stage_file(mem_read, &m, buf, max, &pay);
+        free(b);
+        return r;
+    }
+#endif
     if (n > max) {
         free(b);
         return -2;
@@ -127,6 +166,7 @@ int main(int argc, char **argv)
         printf("{\"skip\": \"count\"}\n");
         return 0;
     }
+    dl_stage_top = getenv("DL_HOST_TOP") != 0;
     if (getenv("DL_HOST_CHECK")) {
         static struct dl_status st[DL_MAX_MODS];
         static char det[DL_MAX_MODS][32], ver[DL_MAX_MODS][DL_VER_MAX];
@@ -168,14 +208,39 @@ int main(int argc, char **argv)
         printf("], \"boot_status_n\": %u}\n", dl_status_n);
         return 0;
     }
-    loaded = dl_link(strtoul(argv[5], 0, 0), ch, k, staging, sizeof staging);
+    snprintf(path, sizeof path, "%s/.store", dir);
+    dl_store_prev = slurp(path, &dl_store_prev_n);
+    /* top-staging: the link reads into the area itself */
+    loaded = dl_link(strtoul(argv[5], 0, 0), ch, k, dl_stage_top ? 0 : staging, dl_stage_top ? 0 : sizeof staging);
     f = fopen(argv[7], "wb");
     fwrite(ram, 1, ram_len, f);
     fclose(f);
+    if (dl_store_out.bytes) {
+        snprintf(path, sizeof path, "%s.store", argv[7]);
+        f = fopen(path, "wb");
+        fwrite(dl_store_out.bytes, 1, dl_store_out.nbytes, f);
+        fclose(f);
+    }
+    snprintf(path, sizeof path, "%s.main", argv[7]);
+    f = fopen(path, "wb");
+    fwrite(stock, 1, stock_len, f);
+    fclose(f);
+    if (getenv("DL_HOST_RECHECK")) {     /* the MODS page's check after this boot: the same set */
+        static struct dl_status st[DL_MAX_MODS];
+        static char det[DL_MAX_MODS][32];
+        int c = dl_check(strtoul(argv[5], 0, 0), ch, k, staging, sizeof staging, st, det, 0);
+        printf("{\"recheck\": %d, \"codes\": [", c);
+        for (i = 0; i < (u32)k; i++)
+            printf("%s%d", i ? ", " : "", st[i].code);
+        printf("]}\n");
+    }
     printf("{\"loaded\": %d, \"skip\": %d, \"used\": [%u, %u], \"inits\": [", loaded, dl_skip_reason,
            dl_used_lo, dl_used_hi);
     for (i = 0; i < dl_inits_n; i++)
         printf("%s%u", i ? ", " : "", dl_inits[i]);
+    printf("], \"sites\": [");
+    for (i = 0; i < dl_applied_n; i++)
+        printf("%s[%u, %u, %u]", i ? ", " : "", dl_sites[i].addr, dl_sites[i].len, dl_sites[i].line);
     printf("], \"status\": [");
     for (i = 0; i < dl_status_n; i++) {
         char id[DL_ID_MAX + 1];

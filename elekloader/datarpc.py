@@ -20,7 +20,8 @@ number at +2, its command | 0x80 at +4 and a status byte at +5 (1: done). The Da
   0x5c clear   path
 
 What goes through it is a data container (container.py). The Drive Loader's `/mods` route takes
-`.elemod` files and `active`, and serves `.build` (the build descriptor) and `.status`. The router has
+`.elemod` files and `active`, and serves `.build` (the build descriptor), `.status` and `.store`
+(+Drive storage's places, read only). The router has
 no command for a folder and refuses its own Rename on the route's entries: an upload of an empty
 file to `FOLDER/.dir` asks the route to make FOLDER (`Mods.mkdir`), an upload of "FROM\nTO" to `.mv`
 to move or rename a file or a folder (`Mods.move`; `/mods/active` follows it), and a clear of an
@@ -153,6 +154,9 @@ class Client:
             return data
 
     def _get(self, path, chunk):
+        # The bytes are counted here, never taken from a reply's progress word: stock's per-mille
+        # progress (ReadPartial, done * 1000 in 32 bits) wraps past 4,294,967 bytes, and with the
+        # stage in the +Drive area's free tail a read can be larger than that.
         msg = self.call(ROPEN, path.encode('latin-1') + b'\0' + struct.pack('>IB', chunk, 0))
         job = struct.unpack_from('>I', msg, 6)[0]
         data, seq = bytearray(), 0
@@ -230,6 +234,17 @@ class Mods:
         """-> (the container's header, the file's bytes)."""
         return container.parse(self.c.get(self.path(name)))
 
+    def status(self):
+        """`/mods/.status` as text, or None when it can't be read."""
+        try:
+            return self.get('.status')[1].decode('utf-8', 'replace')
+        except (RpcError, ModError):
+            return None
+
+    def room(self, build):
+        """The most bytes one upload or read takes on the unit now (drive.upload_room)."""
+        return drive.upload_room(build, self.status())
+
     def build(self):
         """The unit's build (its descriptor, `.build`) and the container header it came in."""
         head, body = self.get('.build')
@@ -238,6 +253,21 @@ class Mods:
     def put(self, name, raw, head):
         """Upload a file in a container with the unit's family, device and OS (from `head`)."""
         self.c.put(self.path(name), container.wrap(raw, head['family'], head['device'], head['release']))
+
+    def upload(self, name, raw, head):
+        """`put`, then make sure the unit kept the file: the route can't refuse once the upload is
+        in (a commit that fails, as into a folder that can't be made, still answers the upload), so
+        the `last:` line of `.status` says what happened to it, or without one, the listing."""
+        self.put(name, raw, head)
+        try:                                    # latin-1, as the route's names go out and come back
+            last = last_of(self.get('.status')[1].decode('latin-1'))
+        except (RpcError, ModError):
+            last = None
+        if last is not None:
+            if last != _note('saved', name):
+                raise ModError('the unit did not save %s: %s' % (self.path(name), last))
+        elif not any(n == _base(name) and kind == 2 for n, kind, _s in self._ls(_parent(name))):
+            raise ModError('the unit did not save %s (see %s/.status)' % (self.path(name), self.folder))
 
     def rm(self, name):
         self.c.clear(self.path(name))
@@ -303,6 +333,23 @@ class Mods:
                            % (self.folder, frm, self.folder, to, self.folder))
 
 
+NOTE_MAX = 63                                   # route.c's dl_note: 64 bytes with its 0
+
+
+def _note(what, name):
+    """The route's note for `name` (route.c `note`), cut as it cuts it."""
+    return ('%s %s' % (what, name))[:NOTE_MAX]
+
+
+def last_of(status):
+    """`/mods/.status`'s text -> its `last:` line (the route's last commit, delete or move), or
+    None without one."""
+    for line in (status or '').splitlines():
+        if line.startswith('last: '):
+            return line[6:]
+    return None
+
+
 def _parent(p):
     return p.rpartition('/')[0]
 
@@ -363,7 +410,9 @@ def add_arguments(p):
     sub = p.add_subparsers(dest='op', required=True)
     q = sub.add_parser('ls', help='list /mods, or one of its folders')
     q.add_argument('folder_path', nargs='?', help='a folder below /mods (default: /mods itself)')
-    q = sub.add_parser('get', help='download a file (also .build and .status)')
+    sub.add_parser('room', help='the most bytes one upload or read takes on the unit now '
+                   '(/mods/.status, stage: the +Drive area\'s free tail, or the loader\'s buffer)')
+    q = sub.add_parser('get', help='download a file (also .build, .status and .store)')
     q.add_argument('name')
     q.add_argument('--out', help='where to write it (default: its name)')
     q = sub.add_parser('put', help='check the files against the unit\'s build, then upload them')
@@ -399,6 +448,10 @@ def run(a, mods, log=print):
         log('DELETED %s' % mods.path(a.name))
         return 0
     build, head = mods.build()
+    if a.op == 'room':
+        n = mods.room(build)
+        log('ROOM %s' % ('%d bytes' % n if n else 'unknown'))
+        return 0
     if a.op == 'mv':
         src, dest = a.source.strip('/'), a.dest.strip('/')
         if dest == '' or mods.is_folder(dest):
@@ -423,8 +476,16 @@ def run(a, mods, log=print):
         if not all(c.state == drive.LOADED for c in r.choices):
             log('REFUSED: nothing was uploaded')
             return 1
+        room = mods.room(build)                 # the live stage: it changes with each boot's set
+        over = [(n, raw) for n, raw in files if room and len(drive.staged(build, raw)) > room]
+        if over:
+            for n, raw in over:
+                log('REFUSED: %s is %d bytes; the unit takes up to %d now (%s/.status, stage)'
+                    % (n, len(raw), room, mods.folder))
+            log('REFUSED: nothing was uploaded')
+            return 1
         for name, raw in files:
-            mods.put(name, raw, head)
+            mods.upload(name, raw, head)
             log('UPLOADED %s (%d bytes, CRC-32 %08x)' % (mods.path(name), len(raw), drive.file_crc(raw)))
         return 0
     chosen = []                                 # active
@@ -439,8 +500,9 @@ def run(a, mods, log=print):
     if not all(c.state == drive.LOADED for c in r.choices):
         log('REFUSED: %s is unchanged' % mods.path('active'))
         return 1
-    text = drive.active_text(chosen)
-    mods.put('active', text.encode('utf-8'), head)
+    # no mods: a `#` line, as the MODS page writes one; an empty upload makes no file on the A4's store
+    text = drive.active_text(chosen, build) or '# no mods chosen\n'
+    mods.upload('active', text.encode('utf-8'), head)   # the route's note says whether it kept it
     log('WROTE %s (%d mods)' % (mods.path('active'), len(chosen)))
     return 0
 

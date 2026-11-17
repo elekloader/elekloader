@@ -103,6 +103,11 @@ int dl_staging_take_idle(unsigned now, unsigned stall)
 }
 
 void dl_staging_give(void) { owner = 0; }
+static unsigned char stage[0x10000];     /* the live stage (route.c's): the floor */
+unsigned char *volatile dl_stage_at = stage;
+volatile unsigned dl_stage_len = sizeof stage;
+u8 dl_stage_top;
+int dl_area(u32 desc, u32 *lo, u32 *hi) { (void)desc; *lo = *hi = 0; return -1; }
 void dl_readers_poll(unsigned now) { (void)now; }
 void dl_lock(void) {}
 void dl_unlock(void) {}

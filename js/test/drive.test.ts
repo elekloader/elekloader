@@ -5,12 +5,13 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { ANALOG_RYTM_MK2, DIGITONE_MK1 } from '../src/devices.ts'
+import { ANALOG_FOUR_MK2, ANALOG_RYTM_MK2, DIGITONE_MK1 } from '../src/devices.ts'
 import { fromHex, toHex } from '../src/bytes.ts'
 import * as container from '../src/container.ts'
 import * as datarpc from '../src/datarpc.ts'
 import * as desc from '../src/desc.ts'
 import * as drive from '../src/drive.ts'
+import * as drivestore from '../src/drivestore.ts'
 import { ModError } from '../src/elemod.ts'
 
 const V = JSON.parse(readFileSync(new URL('./drive-vectors.json', import.meta.url), 'utf8'))
@@ -58,11 +59,37 @@ test('TELOS: sites and regions on a build with the stock shadow, as drive.py che
   }
 })
 
+test('knob ids: runs and the ids entries name, on a build with F_KNOBS, as drive.py checks them', () => {
+  const K = V.knobs
+  ANALOG_FOUR_MK2.releases.push({ ...K.release, binSha256: '' })
+  try {
+    const blk = fromHex(K.build)!
+    assert.deepEqual(desc.decode(blk).claims, K.claims)
+    const build = drive.loadBuild(blk)
+    assert.ok(build.knobs)
+    for (const c of K.cases) {
+      const r = drive.check(build, c.files.map(([n, f]: [string, any]) => [n, file(f)]))
+      assert.deepEqual(drive.summary(r), c.summary, c.name)
+      assert.equal(drive.statusText(r), c.status, c.name)
+      assert.deepEqual(drive.resultLines(r), c.lines, c.name)
+    }
+    for (const [hex, want] of K.stores) {     // /mods/.store with runs (format 3), as the twin writes it
+      const st = drivestore.decode(fromHex(hex)!)!
+      assert.deepEqual({ knobs: st.knobs, freed_knobs: st.freed_knobs, next_knob: st.next_knob }, want)
+      assert.equal(toHex(drivestore.encode(st)), hex)
+    }
+  } finally {
+    ANALOG_FOUR_MK2.releases.pop()
+  }
+})
+
 test('every host refusal code has a case refused with it and one that loads', () => {
-  const host = drive.CODES.map(([n]) => n).filter(n => n && !['ok', 'missing', 'changed', 'range', 'busy', 'site', 'flashed', 'early', 'stock', 'region', 'outside'].includes(n))
+  const host = Object.values(drive.CODES).map(([n]) => n)
+    .filter(n => !['ok', 'missing', 'changed', 'range', 'busy', 'site', 'flashed', 'early', 'stock', 'region', 'outside'].includes(n))
+  const cases = [...V.cases, ...V.knobs.cases]   // ids: on the A4's build
   for (const code of host) {
-    assert.ok(V.cases.some((c: any) => c.name === `${code}: refused` && c.summary.choices.some((x: any) => x.reason === code)), code)
-    assert.ok(V.cases.some((c: any) => c.name === `${code}: loads` && c.summary.choices.every((x: any) => x.state === 'loaded')), code)
+    assert.ok(cases.some((c: any) => c.name === `${code}: refused` && c.summary.choices.some((x: any) => x.reason === code)), code)
+    assert.ok(cases.some((c: any) => c.name === `${code}: loads` && c.summary.choices.every((x: any) => x.state === 'loaded')), code)
   }
 })
 
@@ -94,6 +121,22 @@ test('/mods/active is written and read as the Python does', () => {
   assert.equal(drive.activeText([['a.elemod', enc.encode('x')], ['b c.elemod', new Uint8Array(0)]]), V.active.text)
   for (const [text, parsed] of V.active.parsed) assert.deepEqual(drive.parseActive(text), parsed, text)
   for (const bad of ['#x', ' a', 'a\nb', '']) assert.throws(() => drive.activeText([[bad, new Uint8Array(0)]]), ModError)
+})
+
+test('payload skip: files staged as the Python stages them, and /mods/active\'s CRC of the staged file', () => {
+  for (const [f, staged, pay] of V.stage) {
+    const [got, p] = drive.stage(fromHex(f)!)
+    assert.equal(toHex(got), staged, f.slice(0, 80))
+    assert.deepEqual(p, pay, f.slice(0, 80))
+  }
+  ANALOG_RYTM_MK2.releases.push({ ...V.release, binSha256: '' })
+  try {
+    const b = drive.loadBuild(fromHex(V.active.skip.build)!)
+    assert.ok(b.payloadSkip)
+    assert.equal(drive.activeText(V.active.skip.files.map(([n, h]: [string, string]) => [n, fromHex(h)!]), b), V.active.skip.text)
+  } finally {
+    ANALOG_RYTM_MK2.releases.pop()
+  }
 })
 
 test('the 7-bit packing: the Python\'s bytes, and back', () => {
@@ -135,8 +178,10 @@ test('the Data router client: the CLI\'s requests, byte for byte, over its recor
         else if (s.op === 'ls') out = await mods.ls()
         else if (s.op === 'get') out = toHex((await mods.get(s.args[0]))[1])
         else if (s.op === 'rm') out = (await mods.rm(s.args[0])) ?? null
+        else if (s.op === 'upload') out = (await mods.upload(s.args[0], fromHex(s.args[1])!, head!)) ?? null
+        else throw new Error(`a step this test doesn't know: ${s.op}`)
       } catch (e) {
-        if (!(e instanceof datarpc.RpcError)) throw e
+        if (!(e instanceof ModError)) throw e
         out = { error: e.message }
       }
       assert.deepEqual(out, s.out, `${s.op} ${s.args[0] ?? ''}`)
@@ -262,4 +307,10 @@ test('a name starting with a space is refused before sending, as the Python does
   assert.throws(() => mods.folderPath(' Jazz Kit'), ModError)
   await assert.rejects(mods.move('a.elemod', ' a.elemod', null, false), ModError)
   assert.equal(mods.path('Jazz Kit /x .elemod'), '/mods/Jazz Kit /x .elemod')
+})
+
+test('the upload room: the Rytm loader\'s stage: line and the A4 MKII loader\'s room: line (drive.stage_of)', () => {
+  assert.equal(drive.stageOf('drive-loader route\nstage: 3932160 bytes at 0x40c40000, free tail\n'), 3932160)
+  assert.equal(drive.stageOf('drive-loader-a4mk2 route\nroom: 249229312 bytes in one run, 249229312 free; directory generation 0\n'), 249229312)
+  assert.equal(drive.stageOf('drive-loader route\nlast: -\n'), null)
 })
