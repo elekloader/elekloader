@@ -9,6 +9,7 @@
 #include "dl.h"
 #include "fs.h"
 #include "dstore.h"
+#include "skip.h"
 
 #define EMMC_ERROR (*(volatile u32 *)0x419ae2c0)     /* 0 = the eMMC came up */
 #define EKFS_MOUNT (*(volatile u32 *)0x419ae2bc)     /* 0 = ekFS is mounted */
@@ -79,34 +80,38 @@ static void path_of(char *out, const char *name)
     out[k] = 0;
 }
 
+/* dl_stage_file's reads (skip.h): from the file at `at` (dl_fs_seek), 32 KB at most, 1 ms for the
+ * tasks below after each outside the boot */
+static s32 read_at(void *ctx, u32 at, u8 *dst, u32 n)
+{
+    dl_file *f = ctx;
+    s32 r;
+    dl_fs_seek(f, at);
+    r = dl_fs_read(f, dst, n);
+    if (r > 0)
+        dl_breathe();
+    return r;
+}
+
+/* dl.h: a file read whole for the linker, its payload's hex skipped (skip.h). At boot each payload
+ * skipped is noted for the Drive payload table. */
 s32 dl_read_file(const char *name, u8 *buf, u32 max)
 {
     char path[DL_PATH_MAX];
     dl_file f;
-    u32 got = 0;
+    struct dl_pay pay;
     s32 r;
-    u8 more;
     path_of(path, name);
     dl_memset(&f, 0, sizeof f);
     if (dl_fs_open(&f, path, 0) < 0) {
         dl_fs_close(&f);
         return -1;
     }
-    while (got < max) {                  /* to the file's end, or max */
-        r = dl_fs_read(&f, buf + got, max - got < DL_BREATHE ? max - got : DL_BREATHE);
-        if (r > 0)                       /* 32 KB at a time, 1 ms for the tasks below between */
-            dl_breathe();
-        if (r < 0) {
-            dl_fs_close(&f);
-            return -3;
-        }
-        if (r == 0)
-            break;
-        got += (u32)r;
-    }
-    r = got == max ? dl_fs_read(&f, &more, 1) : 0;
+    r = dl_stage_file(read_at, &f, buf, max, &pay);
     dl_fs_close(&f);
-    return r > 0 ? -2 : (s32)got;
+    if (r >= 0 && pay.len && booting)
+        dl_payload_note(path, &pay);
+    return r;
 }
 
 int dl_read_open(struct dl_reader *rd, const char *name)
@@ -119,7 +124,8 @@ int dl_read_open(struct dl_reader *rd, const char *name)
         return -1;
     }
     rd->open = 1;
-    rd->crc = 0xFFFFFFFF;
+    rd->size = (u32)dl_fs_size(&rd->f);  /* before any read (fs.h) */
+    dl_stage_rd_init(&rd->st);
     return 0;
 }
 
@@ -130,24 +136,27 @@ void dl_read_close(struct dl_reader *rd)
     rd->open = 0;
 }
 
+/* dl_read_more's reads: read_at without the breath (the page reads one stretch a tick) */
+static s32 read_page(void *ctx, u32 at, u8 *dst, u32 n)
+{
+    dl_file *f = ctx;
+    dl_fs_seek(f, at);
+    return dl_fs_read(f, dst, n);
+}
+
+/* The page's reads stage as dl_read_file does (skip.h dl_stage_more): the linker's check then
+ * sees the payload's hex as the boot does, and the CRC is the staged file's, as /mods/active and
+ * the boot take it (the A4's page gave payload mods "!" with a whole-file read, 2026-11-15). */
 int dl_read_more(struct dl_reader *rd, u8 *buf, u32 max)
 {
     s32 r;
-    u32 at = rd->got < max ? rd->got : 0;   /* past max: on over the buffer's start, for the
-                                             * size and CRC alone */
-    u32 room = rd->got < max ? max - rd->got : max;
     if (!rd->open)
         return -3;
-    r = dl_fs_read(&rd->f, buf + at, room < DL_BREATHE ? room : DL_BREATHE);   /* one stretch */
-    if (r > 0) {
-        rd->crc = dl_crc32_add(rd->crc, buf + at, (u32)r);
-        if (rd->got >= max)
-            rd->over = 1;
-        rd->got += (u32)r;
+    r = dl_stage_more(&rd->st, read_page, &rd->f, buf, max);
+    if (!r)
         return 0;
-    }
     dl_read_close(rd);
-    return r < 0 ? -3 : rd->over ? -2 : 1;
+    return r;
 }
 
 static int exists(const char *name)
@@ -329,6 +338,7 @@ static void boot(void)
     char *active;
 
     dl_status_n = 0;
+    drive_payloads_n = drive_payloads_lost = 0;
     dl_skip_reason = DL_SKIP_NONE;
     if (EMMC_ERROR != 0 || EKFS_MOUNT != 0) {
         dl_skip_reason = DL_SKIP_DRIVE;
@@ -375,6 +385,8 @@ static void boot(void)
     write_armed();                       /* before the link, so a link that faults or hangs is
                                           * caught too: the next boot skips the set */
     loaded = dl_link((u32)core_desc, dl_boot_choice, n, 0, 0);   /* the stage at the top of the area */
+    if (dl_status)                       /* the payloads skipped: the loaded mods' kept (skip.h), */
+        dl_payload_keep(dl_status, dl_boot_choice, (int)dl_status_n);   /* before their drive_init */
     dl_flush();                          /* after the area, the tables and the sites (each site's
                                           * lines already pushed by dl_apply_site) */
     write_store();                       /* a set that left none loaded parks its fields too */

@@ -1,7 +1,8 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
-"""Payload skip (docs/DRIVE.md, "Payloads on the +Drive"): the A4 loader stages each +Drive file
-without its .payload's hex (mods/drive-loader-a4mk2/skip.c), and the boot linker (dlink.c with
-DL_PAYLOAD_SKIP) takes the .payload left as one empty hex part.
+"""Payload skip (docs/DRIVE.md, "Payloads on the +Drive"): both loaders stage each +Drive file
+without its .payload's hex (skip.c, the A4's and from drive-loader 0.8 the Rytm's copy, which this
+test builds), and the boot linker (dlink.c with DL_PAYLOAD_SKIP) takes the .payload left as one
+empty hex part.
 
 Built for the computer and run against the twin (elekloader/drive.py, stage() and
 Build.payload_skip): the C staging and the twin's agree byte for byte on files that skip, files that
@@ -40,12 +41,12 @@ BREATHE = 0x8000                         # dl.h DL_BREATHE: a read's most; in .p
 def build_hosts(work):
     skip = os.path.join(work, 'drive_skip_host')
     subprocess.run(['cc', '-O1', '-Wall', '-DDL_HOST', '-o', skip, os.path.join(HERE, 'drive_skip_host.c'),
-                    os.path.join(A4, 'skip.c')], check=True)
+                    os.path.join(AR2, 'skip.c')], check=True)
     link = os.path.join(work, 'drive_link_host_skip')
     subprocess.run(['cc', '-O1', '-Wall', '-DDL_HOST', '-DDL_PAYLOAD_SKIP', '-o', link,
                     os.path.join(HERE, 'drive_link_host.c'), os.path.join(AR2, 'dlink.c'),
                     os.path.join(AR2, 'json.c'), os.path.join(AR2, 'dstore.c'), os.path.join(AR2, 'sha256.c'),
-                    os.path.join(A4, 'skip.c')], check=True)
+                    os.path.join(AR2, 'skip.c')], check=True)
     return skip, link
 
 

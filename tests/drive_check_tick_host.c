@@ -66,7 +66,7 @@ int dl_read_open(struct dl_reader *rd, const char *name)
     bus_us += open_us;
     memset(rd, 0, sizeof *rd);
     rd->open = 1;
-    rd->crc = 0xffffffff;
+    rd->st.crc = 0xffffffff;
     return 0;
 }
 
@@ -74,8 +74,8 @@ int dl_read_more(struct dl_reader *rd, unsigned char *buf, unsigned max)
 {
     (void)buf, (void)max;
     bus_us += read_us;
-    if (!rd->got) {                      /* the file's bytes, then the end on the next call */
-        rd->got = 1000;
+    if (!rd->st.got) {                    /* the file's bytes, then the end on the next call */
+        rd->st.got = 1000;
         return 0;
     }
     rd->open = 0;

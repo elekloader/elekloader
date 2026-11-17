@@ -9,6 +9,17 @@ and `drive_stage_top`, which sets the descriptor's `F_STAGE_TOP` (ABI 1.3). The 
 each file into the +Drive area itself, and after it the route and the MODS page use the
 area's free tail (STAGE.md), so a mod file may be as large as the area.
 
+From 0.8 (decided 2026-11-17, the A4 loader's features, so a flashed mod loads from the +Drive
+unchanged) it also exports `drive_payload_skip`, `drive_collections` and `drive_knobs`, which set
+the descriptor's `F_PAYLOAD_SKIP`, `F_COLLECTIONS` and `F_KNOBS` (docs/DRIVE.md, "Payloads on the
++Drive", "+Drive collections", "Knob ids on the +Drive"): the boot stages each file without its
+`.payload`'s hex and keeps the loaded mods' payloads in `drive_payloads` for sidecar-core, the
+linker links tables +Drive mods declare, and +Drive mods get knob ids from 0x4000..0x7FFF, kept in
+`/mods/.store` (format 4). `skip.c`, `skip.h` and `payload.c` are the A4 loader's, `payload.c`
+reading ekFS; `dlink.c` has the A4's `DL_COLLECTIONS` and `DL_KNOBS` blocks with the Rytm's id rules
+in `dl.h`. abs16, claims, the std map and the stock shadow are the A4's alone until the shared
+linker core.
+
 It holds the `/mods` route, links the mods `/mods/active` names into the +Drive
 mods' area at boot, and adds the MODS page in SETTINGS > GLOBAL, which writes `/mods/active`.
 What a +Drive mod may hold, the refusal codes and skip reasons are docs/FORMAT.md's,
@@ -132,6 +143,7 @@ All addresses are OS 1.74's. They were read in Ghidra.
 | std::string ctor, dtor, the empty string | `0x401bcff0`, `0x401bb540`, `0x419f2a0c` |
 | operator new, delete | `0x40082a40`, `0x40082a4c` |
 | ekFS file ctor (0x2c bytes; 0 read, 1 write), dtor, read, write, node, node size (less 16, for FsSample's own header) | `0x4007dcfa`, `0x4007d956`, `0x4007d822`, `0x4007d860`, `0x4007d9d2`, `0x4007d9ec` |
+| ekFS read position (the seek, `dl_fs_seek`): the file object's u32 at +0x0c, the header included; each read starts there (`0x4007d822` -> `0x4007d28e` -> `0x4007cf1a`, 16 KB blocks from any position, 0 past the end) | file + `0x0c` |
 | ekFS delete (files only), rename (the bool wrapper of `0x4007bcd2`: a file to any folder, a folder within its parent; never over a name there), rmdir (an empty folder only; `0x4007daa4` is its bool wrapper), mkdir (one folder, its parent there; called by SAMPLES' CREATE DIR, `0x400ea5b6`) | `0x4007da78`, `0x4007da8c`, `0x4007bef8`, `0x4007c1dc` |
 | Directory ctor (0x130 bytes), dtor, count, child, shared_ptr release | `0x4007ed48`, `0x4007ee02`, `0x4007e1bc`, `0x4007e794`, `0x40170bd8` |
 | mutex lock, unlock | `0x400010bc`, `0x400011ee` |
@@ -199,7 +211,10 @@ background checks and firmware calls are in [PAGE.md](PAGE.md).
   limit), `tests/drive_move_host.c` (moves on a made-up ekFS, the stage in a guarded arena),
   `tests/test_drive_route.py`.
 - `flush.s`, `boot.c`, `dlink.c`, `json.c`, `sha256.c`: the boot link. Tests: `tests/drive_link_host.c`,
-  `tests/test_drive_link.py`, `tests/test_drive_top_stage.py`.
+  `tests/test_drive_link.py`, `tests/test_drive_top_stage.py`, `tests/test_drive_collections.py`,
+  `tests/test_drive_knobs.py`.
+- `skip.c`, `skip.h`, `payload.c`: payload skip and the Drive payload table. Tests:
+  `tests/drive_skip_host.c`, `tests/test_drive_payload_skip.py`.
 - `page.c`, `page.s`, `clip.inc` (the build list's label clip), `park.c` (parked data): the
   MODS page. Tests: `tests/drive_page_clip_host.c`, `tests/drive_build_rows_host.c` (the build
   list after folder changes and moves over USB, parked data against `elekloader/drive_store.py`),
@@ -212,5 +227,5 @@ emulator through its `--usb-midi-tcp` port.
 ```bash
 python -m elekloader.sdk.build mods/core-ar2 --stock Analog-Rytm_MKII_OS1.74.syx
 python -m elekloader.sdk.build mods/drive-loader-ar2 --stock Analog-Rytm_MKII_OS1.74.syx
-python -m elekloader.patch --stock Analog-Rytm_MKII_OS1.74.syx --mod core-0.14.elemod --mod drive-loader-0.7.elemod --out drive-loader.syx --version 1.74
+python -m elekloader.patch --stock Analog-Rytm_MKII_OS1.74.syx --mod core-0.14.elemod --mod drive-loader-0.8.elemod --out drive-loader.syx --version 1.74
 ```

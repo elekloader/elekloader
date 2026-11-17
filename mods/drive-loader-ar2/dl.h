@@ -19,6 +19,12 @@ typedef int s32;
                                              * included: "a/b/c/x.elemod"), NUL included */
 #define DL_VER_MAX 12                        /* a version as dl_check reports it, NUL included */
 
+/* Payloads on the +Drive (docs/DRIVE.md, "Payloads on the +Drive"; drive-loader 0.8, from the
+ * A4's skip.c and payload.c): the boot stages a file without its .payload's hex (skip.h), the linker
+ * takes a .payload left as one empty hex part and refuses relocations into it, and the loaded mods'
+ * payloads go into drive_payloads for sidecar-core. route.s exports drive_payload_skip. */
+#define DL_PAYLOAD_SKIP 1
+
 /* +Drive collections (docs/DRIVE.md, "+Drive collections"; drive-loader 0.8, from the A4's
  * dlink.c): a +Drive mod may declare tables, which other +Drive mods add to; the layout places
  * each after every .bss. route.s exports drive_collections, so the descriptor says so. */

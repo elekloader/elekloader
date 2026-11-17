@@ -31,7 +31,8 @@ def build_host(work):
     exe = os.path.join(work, 'drive_link_host')
     subprocess.run(['cc', '-O1', '-Wall', '-DDL_HOST', '-o', exe, os.path.join(HERE, 'drive_link_host.c'),
                     os.path.join(SRC, 'dlink.c'), os.path.join(SRC, 'json.c'),
-                    os.path.join(SRC, 'dstore.c'), os.path.join(SRC, 'sha256.c')], check=True)
+                    os.path.join(SRC, 'dstore.c'), os.path.join(SRC, 'sha256.c'),
+                    os.path.join(SRC, 'skip.c')], check=True)   # payload skip (drive-loader 0.8)
     return exe
 
 

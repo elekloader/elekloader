@@ -102,7 +102,7 @@ are found through hash buckets, in the order a scan would find them.
 ## Payloads on the +Drive
 
 A loader whose descriptor has `F_PAYLOAD_SKIP` (drive-loader-a4mk2, decided
-2026-11-15) keeps a mod's `.payload` on the +Drive: its bytes never take
+2026-11-15; drive-loader-ar2 from 0.8, decided 2026-11-17) keeps a mod's `.payload` on the +Drive: its bytes never take
 room in the area. The `.elemod` stays one JSON file.
 
 - **Skippable.** A `.payload` whose `"len"` and 64-digit `"sha256"` come
@@ -131,7 +131,8 @@ room in the area. The `.elemod` stays one JSON file.
   before the mods' `drive_init`. `drive_payload_find(id)` looks one up and
   `dl_payload_read(p, at, out, n)` decodes n bytes from byte at, under the
   loader's mutex, from a task only; it refuses (-2) when the file's sector
-  or size changed since the boot, so a reader still checks the sha256 of
+  or size changed since the boot (on the Rytm's ekFS, which has no sector,
+  the size alone: `sector` is 0), so a reader still checks the sha256 of
   what it ships. sidecar-core looks a payload up in `core_payloads` (a
   flashed mod's, in RAM) and then here; caching on the Pi by hash is its
   side.
