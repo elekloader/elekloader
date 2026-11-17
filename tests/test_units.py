@@ -3,6 +3,7 @@
 import json
 import os
 import random
+import re
 import struct
 import sys
 import tempfile
@@ -2218,7 +2219,7 @@ def test_core_a4mk2_0_7_std_midi_sites():
     events = ('ev_midi_in', 'ev_sysex_in', 'ev_midi_cc', 'ev_midi_pc', 'ev_midi_out', 'ev_seq_midi',
               'ev_seq_tick')
     for e in events:
-        assert doc['std'][e] == 'std_' + e[3:] and doc['collections']['std_' + e[3:]] == 4, e
+        assert doc['std'][e] == 'std_' + e[3:] and _entry(doc['collections']['std_' + e[3:]]) == 4, e
     assert 'stdmidi.c' in doc['sources'] and 'stdmidi.s' in doc['sources']
     with open(os.path.join(mdir, 'stdmidi.s'), encoding='utf-8') as fh:
         asm = fh.read()
@@ -2235,11 +2236,11 @@ def test_core_a4mk2_0_7_std_midi_sites():
         assert (s['op'], s['target']) == (op, target), addr
         stub = asm.split(target + ':', 1)[1].split('\n\n', 1)[0]
         if op == 'jsr':
-            assert len(s['stock']) == 12 and 'jmp     (%a0)' in stub, addr
+            assert s['len'] == 6 and 'jmp     (%a0)' in stub, addr
         elif target == 'core_std_seq_tick_site':
             assert stub.rstrip().endswith('rte')
         else:
-            resume = int(addr, 16) + len(s['stock']) // 2
+            resume = int(addr, 16) + s['len']
             assert ('0x%08x' % resume) in stub, (addr, hex(resume))
     with open(os.path.join(root, 'elekloader', 'sdk', 'include', 'analog-four-mk2', 'ports.h'),
               encoding='utf-8') as fh:
@@ -2260,12 +2261,13 @@ def test_core_a4mk2_0_7_voice_events():
         doc = json.load(fh)
     assert doc['std']['ev_voice_start'] == 'std_voice_start'
     assert doc['std']['ev_voice_end'] == 'std_voice_end'
-    assert doc['collections']['std_voice_start'] == doc['collections']['std_voice_end'] == 4
+    assert _entry(doc['collections']['std_voice_start']) == _entry(doc['collections']['std_voice_end']) == 4
     assert 'voice.c' in doc['sources'] and 'voice.s' in doc['sources']
     sites = {s['addr']: s for s in doc['sites']}
     assert sites['0x401025ac']['target'] == 'core_voice_apply'
-    assert sites['0x40102174']['stock'] == '4eb940105410' and sites['0x40102174']['target'] == 'core_voice_free_cut'
-    assert sites['0x40102e10']['stock'] == '2f024e91588f' and sites['0x40102e10']['target'] == 'core_voice_free_len'
+    # (their stock bytes are checked against the stock image in test_analog_four_mk2)
+    assert sites['0x40102174']['target'] == 'core_voice_free_cut' and sites['0x40102174']['len'] == 6
+    assert sites['0x40102e10']['target'] == 'core_voice_free_len' and sites['0x40102e10']['len'] == 6
     with open(os.path.join(mdir, 'voice.c'), encoding='utf-8') as fh:
         src = fh.read()
     for fn in ('core_voice_end', 'core_voice_note'):
@@ -2350,23 +2352,30 @@ def test_core_a4mk2_0_7_ui_sites():
     globs |= {m for m in re.findall(r'^\s*(?:CLIP|PREQ|MODSET)\s+(\w+),', asm, re.M)}
     cfns = set(re.findall(r'^\w[\w ]*?\b(core_\w+)\(', src, re.M))
     ui_sites = [s for s in doc['sites'] if s.get('target') in globs | cfns]
+    # ev_live_rec: live record's three pattern writes, counted on their own
+    live = [s for s in ui_sites if s['target'].startswith('core_live_')]
+    assert [(s['addr'], s['op'], s['target']) for s in live] == [
+        ('0x400a954a', 'jmp', 'core_live_note_site'), ('0x400a6a08', 'jmp', 'core_live_value_site'),
+        ('0x400a690c', 'jmp', 'core_live_lock_site')]
+    for s in live:      # each stub resumes past the 8 bytes its jmp displaced
+        assert s['len'] == 8 and 'jmp     0x%08x' % (int(s['addr'], 16) + 8) in asm, s
+    assert doc['collections']['ev_live_rec']['entry'] == 4 and 'ev_live_rec[]' in src
+    ui_sites = [s for s in ui_sites if s not in live]
     assert len(ui_sites) == 70
     assert len([s for s in ui_sites if s['target'].startswith('core_clip_')]) == 36
     modset = [s for s in ui_sites if s['target'].startswith('core_modset_')]
-    assert len(modset) == 6 and all(s['op'] == 'jmp' and s['stock'].startswith('4e56') for s in modset)
+    assert len(modset) == 6 and all(s['op'] == 'jmp' for s in modset)
     assert len([s for s in ui_sites if s['target'].startswith('core_view_')]) == 5
     assert len([s for s in ui_sites if s['target'].startswith('core_pattern_') and s['target'] != 'core_pattern_site']) == 6
     for s in ui_sites:
-        assert len(s['stock']) // 2 >= (4 if s['op'] == 'ptr' else 6), s
-        if s['op'] == 'keep2':
-            assert s['stock'].startswith('4eb9'), s
+        assert s['len'] >= (4 if s['op'] == 'ptr' else 6), s
     for t in ('std_boot_done', 'std_idle', 'std_crash', 'std_usb', 'std_key_leds', 'std_mode',
               'std_param_set', 'std_clip', 'std_pattern', 'std_mute', 'std_view'):
         assert re.search(r'\b%s\[' % t, src), t
-    assert doc['collections']['ev_knob_turn'] == 4 and 'ev_knob_turn[0]' in src
-    assert doc['collections']['std_view'] == 4 and doc['std']['ev_view'] == 'std_view'
-    assert doc['collections']['ev_analog_frame'] == 4 and 'tst.l   ev_analog_frame' in asm
-    assert doc['collections']['ev_mod_set'] == 4 and 'ev_mod_set[0]' in src
+    assert _entry(doc['collections']['ev_knob_turn']) == 4 and 'ev_knob_turn[0]' in src
+    assert _entry(doc['collections']['std_view']) == 4 and doc['std']['ev_view'] == 'std_view'
+    assert _entry(doc['collections']['ev_analog_frame']) == 4 and 'tst.l   ev_analog_frame' in asm
+    assert _entry(doc['collections']['ev_mod_set']) == 4 and 'ev_mod_set[0]' in src
     assert 'ui.c' in doc['sources'] and 'ui.s' in doc['sources']
     subs = {(x['event'], x['fn']): x['order'] for x in doc['subscribe']}
     assert subs[('ev_tick', 'core_ui_tick')] == -999999
@@ -2392,13 +2401,15 @@ def test_core_a4mk2_0_8_track_key():
         asm = fh.read()
     with open(os.path.join(mdir, 'trackkey.c'), encoding='utf-8') as fh:
         src = fh.read()
-    assert doc['version'] == '0.8' and 'trackkey.c' in doc['sources'] and 'trackkey.s' in doc['sources']
+    assert tuple(map(int, doc['version'].split('.'))) >= (0, 8) and 'trackkey.c' in doc['sources'] and 'trackkey.s' in doc['sources']
     site = [s for s in doc['sites'] if s.get('target') == 'core_track_key_site']
-    assert site == [{'addr': '0x400c8ba2', 'stock': '4eb94005b6f0', 'op': 'jmp', 'target': 'core_track_key_site'}]
+    # (its stock bytes are checked against the stock image in test_analog_four_mk2)
+    assert site == [{'addr': '0x400c8ba2', 'len': 6, 'stock_sha256': '71b362f711c113689fd93a04c5b98ab51fd214ec779f9ad2bcbfc646d856b734', 'op': 'jmp',
+                     'target': 'core_track_key_site'}]
     assert re.search(r'^core_track_key_site:\n\s+jsr\s+0x4005b6f0$', asm, re.M)
     assert 'jmp     0x400c8ba8' in asm and 'jmp     0x400c8f6a' in asm   # 0x400c8ba2 + 6; the handled exit
     assert 'tst.l   ev_track_key' in asm and 'ev_track_key[]' in src
-    assert doc['collections']['ev_track_key'] == 4
+    assert _entry(doc['collections']['ev_track_key']) == 4
     for fn in ('core_track_held', 'core_track_current', 'core_track_pattern'):
         assert re.search(r'^\w[\w *]*\b%s\(void \*view\)$' % fn, src, re.M), fn
     assert '.globl  core_popup' in asm
@@ -2425,19 +2436,137 @@ def test_core_a4mk2_0_8_sound_events():
         src = fh.read()
     assert 'sound.c' in doc['sources'] and 'sound.s' in doc['sources']
     sites = {s.get('target'): s for s in doc['sites']}
-    assert sites['core_voice_params_site'] == {'addr': '0x40103af6', 'stock': '4eb9400fa2b0', 'op': 'jmp',
+    # (their stock bytes are checked against the stock image in test_analog_four_mk2)
+    assert sites['core_voice_params_site'] == {'addr': '0x40103af6', 'len': 6, 'op': 'jmp',
+                                               'stock_sha256': 'd92ee75213456a7a13d91048d49cefad7ddab6b7d7f7d56eaa61332f042ae107',
                                                'target': 'core_voice_params_site'}
-    assert sites['core_sound_setup_site'] == {'addr': '0x400e62c8', 'stock': '20532e280008', 'op': 'jmp',
+    assert sites['core_sound_setup_site'] == {'addr': '0x400e62c8', 'len': 6, 'op': 'jmp',
+                                              'stock_sha256': 'e8aa53b410decd67ab49630aef6dbe1806885013588d331d080875d7458a7113',
                                               'target': 'core_sound_setup_site'}
     assert re.search(r'jsr\s+0x400fa2b0\n\s+jmp\s+0x40103afc', asm)
     assert re.search(r'movea.l\s+\(%a3\),%a0\n\s+move.l\s+8\(%a0\),%d7\n\s+jmp\s+0x400e62ce', asm)
     for t in ('ev_voice_params', 'ev_sound_setup'):
-        assert doc['collections'][t] == 4 and 'tst.l   ' + t in asm, t
+        assert _entry(doc['collections'][t]) == 4 and 'tst.l   ' + t in asm, t
     assert re.search(r'^void core_sound_setup_toggle\(void \*menu, const struct core_toggle \*t\)$', src, re.M)
     with open(os.path.join(root, 'elekloader', 'sdk', 'include', 'analog-four-mk2', 'ui.h'), encoding='utf-8') as fh:
         h = fh.read()
     assert 'typedef void (*ev_voice_params_fn)(uint16_t *words, const int32_t *voice_track);' in h
     assert 'typedef void (*ev_sound_setup_fn)(void *menu);' in h and 'struct core_toggle {' in h
+
+
+def _entry(v):
+    """A collection's entry size: a plain number, or a dict's "entry" (a core's spare entries)."""
+    return v['entry'] if isinstance(v, dict) else v
+
+
+def test_core_a4mk2_room_for_drive_mods():
+    """core-a4mk2's tables have room for +Drive mods (mods/core-a4mk2/README.md,
+    "+Drive mods"), as core-ar2 0.12's: every event table, native and std1's, for as many handlers as
+    the Drive Loader links (256), the audio interrupt's marked render; the page tables by the views'
+    room (pages.s VIEW_MAX 16: every A4 page is a view), core_params by the loader's mods, and
+    core_lock_params left to the linker's default (a +Drive mod has no storage, so no lock codes);
+    ev_boot_drive and ev_drive_format none: the Drive Loader runs in them, no +Drive mod."""
+    with open(os.path.join(HERE, '..', 'mods', 'core-a4mk2', 'mod.json'), encoding='utf-8') as fh:
+        doc = json.load(fh)
+    cols = doc['collections']
+    render = {'ev_render_in', 'ev_render_out', 'ev_analog_frame', 'std_voice_start', 'std_voice_end',
+              'std_seq_midi', 'ev_voice_params', 'ev_fx_in', 'ev_fx_out', 'ev_noise_fade', 'ev_noise_mix'}
+    loader_only = ('ev_boot_drive', 'ev_drive_format')
+    events = [n for n in cols if n.startswith(('ev_', 'std_')) and n not in loader_only]
+    assert set(doc['std'].values()) <= set(events)
+    for name in loader_only:                 # the Drive Loader's own: no +Drive mod is called in them
+        assert cols[name] == {'entry': 4, 'spare': 0}, name
+    for name in events:
+        want = {'entry': 4, 'render': True, 'spare': 256} if name in render else {'entry': 4, 'spare': 256}
+        assert cols[name] == want, (name, cols[name])
+    with open(os.path.join(HERE, '..', 'mods', 'core-a4mk2', 'pages.s'), encoding='utf-8') as fh:
+        view_max = int(re.search(r'\.equ\s+VIEW_MAX,\s*(\d+)', fh.read()).group(1))
+    for name in ('core_pages', 'core_page_fns', 'core_view_pages'):
+        assert cols[name] == {'entry': 4, 'spare': view_max}, name
+    assert cols['core_params'] == {'entry': 4, 'spare': 256}
+    assert cols['core_lock_params'] == 4 and cols['core_knob_looks'] == 4
+    assert cols['core_knob_names'] == {'entry': 4, 'spare': 256}
+    for name in ('core_store_ids', 'core_lock_codes', 'core_lock_ccs', 'core_field_inits', 'core_payloads'):
+        assert not isinstance(cols[name], dict), name     # the linker fills these (link.NO_SPARE)
+
+
+def test_core_a4mk2_audio_events():
+    """core-a4mk2's audio events (audio.s): the dry mute read at the track levels' volume load (a jmp
+    that makes no call: the accumulators are live there), ev_fx_in and ev_fx_out around the effects
+    block's only call (keep2, the block called with the caller's arguments), ev_noise_fade and
+    ev_noise_mix in the noise generator, each stub resuming where stock does; core clears core_dry_mute
+    in ev_render_out before the value snapshot; and core_knob_names is asked before core's own names."""
+    base = os.path.join(HERE, '..', 'mods', 'core-a4mk2')
+    with open(os.path.join(base, 'mod.json'), encoding='utf-8') as fh:
+        doc = json.load(fh)
+    with open(os.path.join(base, 'audio.s'), encoding='utf-8') as fh:
+        asm = fh.read()
+    with open(os.path.join(base, 'dests.c'), encoding='utf-8') as fh:
+        dests = fh.read()
+    assert 'audio.s' in doc['sources']
+    sites = {x['target']: x for x in doc['sites'] if 'target' in x}
+    want = {'core_dry_mute_site': ('0x400fa6c4', 'jmp', 'jmp     0x400fa6ca'),
+            'core_fx_site': ('0x40103dda', 'keep2', 'jsr     0x400fe73c'),
+            'core_noise_fade_site': ('0x400ffe04', 'jmp', 'jmp     0x400ffe0a'),
+            'core_noise_mix_site': ('0x400ffe50', 'jmp', 'jmp     0x400ffe56')}
+    for t, (addr, op, resume) in want.items():
+        assert sites[t]['addr'] == addr and sites[t]['op'] == op and sites[t]['len'] == 6, t
+        stub = asm.split('\n%s:' % t, 1)[1].split('\n| ----', 1)[0]
+        assert resume in stub, t
+    dry = asm.split('\ncore_dry_mute_site:', 1)[1].split('\n| ----', 1)[0]
+    assert 'jsr' not in dry and 'btst    %d2,core_dry_mute' in dry
+    sub = [(x['event'], x['fn'], x['order']) for x in doc['subscribe'] if x['event'] == 'ev_render_out']
+    assert ('ev_render_out', 'core_dry_mute_clear', 0) in sub
+    assert ('ev_render_out', 'core_value_snapshot', 1) in sub
+    short = dests.split('const char *core_set_short', 1)[1]
+    assert short.index('mod_name(set, id, 0)') < short.index('named(set, id)')
+    with open(os.path.join(HERE, '..', 'elekloader', 'sdk', 'include', 'analog-four-mk2', 'ui.h'),
+              encoding='utf-8') as fh:
+        h = fh.read()
+    for t in ('ev_fx_in_fn', 'ev_fx_out_fn', 'ev_noise_fade_fn', 'ev_noise_mix_fn', 'struct core_knob_name',
+              'extern volatile uint8_t core_dry_mute;'):
+        assert t in h, t
+
+def test_core_a4mk2_drive_storage_hooks():
+    """core-a4mk2 has core-ar2 0.14's +Drive storage contract where the A4 needs it (README, "+Drive
+    mods"): the live generations core_store_gens, this build's from .boot, which every scope's check
+    reads; ev_boot_drive comes before 0x400f1b18, the boot's project load, so the A4 loads once (no
+    deferred load), and has no core_lfo_dsts (its LFOs are "mod" destinations)."""
+    d = os.path.join(HERE, '..', 'mods', 'core-a4mk2')
+    with open(os.path.join(d, 'store.c'), encoding='utf-8') as fh:
+        store_c = fh.read()
+    with open(os.path.join(d, 'std.c'), encoding='utf-8') as fh:
+        std_c = fh.read()
+    with open(os.path.join(d, 'store.s'), encoding='utf-8') as fh:
+        store_s = fh.read()
+    assert re.search(r'^unsigned char core_store_gens\[6\];', store_c, re.M)
+    gen = re.search(r'static unsigned gen\(int scope\)\s*\{(.*?)\}', store_c, re.S).group(1)
+    assert 'core_store_gens[scope - 1]' in gen and '__store_gen' not in gen
+    init = re.search(r'void core_store_boot_init\(void\)\s*\{(.*?)\n\}', store_c, re.S).group(1)
+    assert 'core_store_gens[s - 1] = built_gen(s)' in init
+    boot = re.search(r'void core_boot_init\(void\)\s*\{(.*?)\n\}', std_c, re.S).group(1)
+    assert boot.index('core_store_boot_init();') < boot.index('std_boot')     # before any ev_boot handler
+    site = re.search(r'core_boot_drive_site:\s*\n(.*?)\n\n', store_s, re.S).group(1).split('\n')
+    assert [l.split() for l in site] == [['jsr', 'core_boot_drive'], ['jmp', '0x400f1b18']]
+    assert 'core_lfo_dsts' not in store_c and 'boot_wait' not in store_c
+
+
+def test_the_a4_pre_link_ranges_are_ordered_and_inside_the_main_os():
+    """The Analog Four MKII 1.56's pre-link ranges (the boot-order trace of 2026-11-14): sorted, apart,
+    inside the main OS, holding main() up to the +Drive hook at 0x401061e8 but not the hook, and not
+    0x400f1b18, the boot's project load, which runs after it (core-a4mk2 README, "+Drive mods")."""
+    from elekloader import devices
+    dev = [d for d in devices.devices() if d.key == 'analog-four-mk2'][0]
+    rel = dev.releases['1.56']
+    pre = rel.prelink
+    assert pre == tuple(sorted(pre)) and all(lo < hi for lo, hi, _k, _w in pre)
+    assert all(a[1] <= b[0] for a, b in zip(pre, pre[1:]))
+    assert all(dev.main_load <= lo and hi <= dev.image_end(rel) and k in (1, 2) for lo, hi, k, _w in pre)
+    assert any(lo == 0x40105fb6 and hi == 0x401061e8 for lo, hi, _k, _w in pre)
+    for at in (0x401061e8, 0x400f1b18, 0x400145f6, 0x40011054):
+        assert not any(lo <= at < hi for lo, hi, _k, _w in pre), hex(at)
+    assert sum(k == 1 and w.startswith('constructor') for lo, hi, k, w in pre) == 132
+
 
 if __name__ == '__main__':
     import traceback

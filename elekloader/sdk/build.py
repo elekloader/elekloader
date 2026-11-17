@@ -20,6 +20,8 @@ mod.json:
      "cflags": [...],                                 extra compiler flags, optional
      "name_string": "my-mod",                         optional: str_name = "<it> <version>"
      "sites": [{"addr", "stock", "op", "target" | "new", "addend"}],
+                                                     ("len" and "stock_sha256" in place of
+                                                     "stock": the stock bytes by length and hash)
      "subscribe": [{"event": "ev_draw", "fn": "my_draw", "order": 60}],
      "events": "std1",                                optional: "subscribe" then names standard
                                                      events (std1.h), not the core's own
@@ -431,8 +433,10 @@ def build(mdir, stock_path, out_dir=None, extra=None):
             sec_of[s.idx] = s.name
             if s.name == '.bss':
                 secs['.bss'] = {'align': max(4, s.align), 'size': s.size}
-            elif s.name == '.payload':          # data the mod ships: kept whole, never stock runs
-                secs[s.name] = {'align': max(4, s.align), 'len': s.size, 'parts': [['hex', s.data.hex()]]}
+            elif s.name == '.payload':          # data the mod ships: kept whole, never stock runs; one
+                secs[s.name] = {'align': max(4, s.align), 'len': s.size,   # hex part after its len and
+                                'sha256': hashlib.sha256(s.data).hexdigest(),   # sha256, so a +Drive
+                                'parts': [['hex', s.data.hex()]]}        # loader can skip it (DRIVE.md)
             else:
                 parts = stock_parts(s.data, image, STOCK_MIN, dev.main_load)
                 secs[s.name] = {'align': max(4, s.align), 'len': s.size,
@@ -544,18 +548,27 @@ def build(mdir, stock_path, out_dir=None, extra=None):
                       'new': s.data.hex(), 'kind': 'data', 'relocs': frel.get(idx, [])})
     for s in mod.get('sites', []) + list(extra.get('sites', [])):
         addr = int(s['addr'], 16) if isinstance(s['addr'], str) else s['addr']
-        stockb = bytes.fromhex(s['stock'])
+        if 'stock' in s:
+            n = len(bytes.fromhex(s['stock']))
+        elif 'len' in s and 'stock_sha256' in s:   # the stock bytes by length and hash only
+            n = int(s['len'])
+        else:
+            raise BuildError('site 0x%08x: give "stock" (hex) or "len" and "stock_sha256"' % addr)
         o = addr - dev.main_load
-        actual = image[o:o + len(stockb)]
+        actual = image[o:o + n]
         if elemod.sharc_site(rel, addr):
             from .. import sharc
-            actual = next((r.raw[16 + addr - r.target:16 + addr - r.target + len(stockb)]
+            actual = next((r.raw[16 + addr - r.target:16 + addr - r.target + n]
                            for r in sharc.parse(stock.section(rel.sharc['section']), rel.sharc)
                            if r.flags == sharc.LOAD and r.target <= addr
-                           and addr + len(stockb) <= r.target + r.count), b'')
-        if actual != stockb:
+                           and addr + n <= r.target + r.count), b'')
+        if 'stock' in s and actual != bytes.fromhex(s['stock']):
             raise BuildError('site 0x%08x: the stock bytes are %s, not %s'
                              % (addr, actual.hex(), s['stock']))
+        if 'stock' not in s and (len(actual) != n or sha(actual) != s['stock_sha256'].lower()):
+            raise BuildError('site 0x%08x: the %d stock bytes there do not have the SHA-256 the '
+                             'site gives' % (addr, n))
+        stockb = actual
         op, rel_ = s['op'], []
         add = int(s.get('addend', 0))
         if add and op not in OPS and op not in ('keep2', 'ptr', 'dsp_jsr'):

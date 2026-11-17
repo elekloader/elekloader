@@ -260,17 +260,12 @@ What it does not do:
   pattern sounded the same by ear before and after store-check set
   every sound's markers.
 
-## The OS upgrade's restart (0.4)
+## Restarts
 
-1.56 ends an OS upgrade as the Rytm's 1.74 does: SUCCESS! REBOOTING, a 3 s
-wait, `move #0x2700,sr` at 0x4007db24, then 0x40002766, which waits while
-bytes are pending behind the panel link's DMA (0x4133cfc0) or in the UART
-queue (0x4133cfd0), counts only their interrupts move on. Core builds
-core-ar2's `finish.s` with these addresses (`FINISH_PANEL`,
-`FINISH_UART`, `FINISH_DRAIN` in `mod.json`): interrupts are masked only once
-nothing is pending (core-ar2's README, "The OS upgrade's restart"). The A4's
-routine is the Rytm's instruction for instruction; the hang itself was seen
-in analog-emu on the Rytm only, and this site is not yet checked on the A4.
+An OS upgrade's restart builds core-ar2's `finish.s` (its README, "The OS
+upgrade's restart") at 0x4007db24; on the A4 it is unchecked.
+`core_restart()` and `core_restart_now()`: `analog-four-mk2/system.h`,
+`restart.s`.
 
 ## Lockable parameters (0.5)
 
@@ -484,9 +479,8 @@ or SAVE ... BEFORE LOADING for another when the request asks for it.
 the shared_ptr at 0x418717c8 (written only by its get-or-create,
 0x401494de). Core calls it after a turn a mod's page knob takes and after
 a lockable parameter's CC or NRPN; a mod calls it after its own keys,
-encoders or settings change a field. Stock itself sets the mark on every
-page or track key and after every load, and only a save clears it, so core's
-mark matters after a save. RANDOMIZE and RELOAD PAGE on a mod knob are not
+encoders or settings change a field. Stock marks every page or track key
+and load, and only a save clears it. RANDOMIZE and RELOAD PAGE on a mod knob are not
 handled on the A4 yet.
 
 ## The project save (0.6)
@@ -504,8 +498,7 @@ its first 8 bytes (`jmp`, `st_proj_save`). Two jobs call it:
 - **The save job** (0x4003da46, its call at 0x4003dacc), built with its
   SAVING box by 0x4003d448, which 0x4003ecbe queues after its OVERWRITE and
   WRITE PROTECTED asks (the Rytm's 0x40052908 and 0x4005417e in one).
-  0x4003ecbe has six callers (0x4003eff8, 0x4003f07a, 0x40040380,
-  0x40040444, 0x400bf7ea, 0x400e13a0): the front panel's saves.
+  0x4003ecbe's six callers are the front panel's saves.
 - **The load job** (0x4003daf0): an empty slot's load runs CREATE NEW
   (0x400a9f1e(model, -1), so `ev_project` with `how` 0 first) and then the
   save, whose return address (0x4003dc26) tells `CORE_SAVE_NEW`. No panel
@@ -598,6 +591,30 @@ Not reported (std1 rule 6): a list parameter's turn. Unconfirmed: `keys.h`'s
 [std-check](../../examples/std-check-a4mk2),
 [ui-check](../../examples/ui-check-a4mk2).
 
+## Audio events
+
+`ev_fx_in`, `ev_fx_out`, `ev_noise_fade`, `ev_noise_mix`, `core_dry_mute`,
+`core_knob_names`: calls in `analog-four-mk2/ui.h`, sites in `audio.s`.
+
+## +Drive mods
+
+core-ar2 0.12's spares (its README, "Room for +Drive mods") and
+`core_handles`. `ev_boot_drive` runs in main() before the boot's project
+load (`store.s`; not a factory boot), so a loader sets `core_store_ids`
+and `core_store_gens` (core-ar2 0.14's) first: no second load, no
+`core_lfo_dsts`. `ev_drive_format` runs in FORMAT +DRIVE after the slot
+erases. Both are the loader's alone.
+
+## The sequencer
+
+core-ar2 0.11's sequencer events: `seq.c`, `seq.s`, `analog-four-mk2/seq.h`,
+[seq-check](../../examples/seq-check-a4mk2).
+
+## Moments
+
+core-ar2 0.11's moments (`analog-four-mk2/moments.h`, `moments.c`), without
+a sound pool or `ev_project_slot`.
+
 ## Checked so far
 
 The runs' logs are in their pull requests; what they established:
@@ -650,8 +667,7 @@ The runs' logs are in their pull requests; what they established:
 ```bash
 # needs m68k-linux-gnu binutils and gcc (or set ELEKLOADER_CROSS to another prefix)
 python -m elekloader.sdk.build mods/core-a4mk2 --stock Analog-Four_MKII_OS1.56.syx
-python -m elekloader.sdk.build examples/store-check-a4mk2 --stock Analog-Four_MKII_OS1.56.syx
-python -m elekloader.patch --stock Analog-Four_MKII_OS1.56.syx \
-    --mod mods/core-a4mk2/out/core-0.8.elemod --mod examples/store-check-a4mk2/out/store-check-1.0.elemod \
-    --out a4-store.syx --version SC56 --lockfile a4-store.lock.json
 ```
+
+docs/CORES.md, "Building a core"; a check mod is then linted and patched
+with it as in AGENTS.md's loop.
