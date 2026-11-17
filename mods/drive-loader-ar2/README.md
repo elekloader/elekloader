@@ -17,8 +17,11 @@ the descriptor's `F_PAYLOAD_SKIP`, `F_COLLECTIONS` and `F_KNOBS` (docs/DRIVE.md,
 linker links tables +Drive mods declare, and +Drive mods get knob ids from 0x4000..0x7FFF, kept in
 `/mods/.store` (format 4). `skip.c`, `skip.h` and `payload.c` are the A4 loader's, `payload.c`
 reading ekFS; `dlink.c` has the A4's `DL_COLLECTIONS` and `DL_KNOBS` blocks with the Rytm's id rules
-in `dl.h`. abs16, claims, the std map and the stock shadow are the A4's alone until the shared
-linker core.
+in `dl.h`. It also exports `drive_stock_shadow` (`F_STOCK_SHADOW`): the descriptor carries stock's bytes
+of every range the flashed build wrote, and the boot lays them over a +Drive mod's stock parts,
+so a part on a core site copies stock's instructions, not the site's jump (sidecar 0.7 from the
++Drive hung the boot without it). abs16, claims and the std map are the A4's alone until the
+shared linker core.
 
 It holds the `/mods` route, links the mods `/mods/active` names into the +Drive
 mods' area at boot, and adds the MODS page in SETTINGS > GLOBAL, which writes `/mods/active`.

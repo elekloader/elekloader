@@ -95,6 +95,11 @@ drive_staging:
 | (skip.h), so host tools stage, check and CRC files as it does
         .globl  drive_payload_skip
         .set    drive_payload_skip, 1
+| the build descriptor carries the shadow, stock's bytes of every range the flashed build wrote,
+| and flags bit 6: the boot linker (dlink.c shadow_over) lays it over a +Drive mod's stock parts,
+| which the running OS would give as the flashed build's bytes
+        .globl  drive_stock_shadow
+        .set    drive_stock_shadow, 1
 | the build descriptor's flags bit 4: the boot linker links tables +Drive mods declare
 | ("collections", dl.h DL_COLLECTIONS), so host tools check and lay out sets as it does
         .globl  drive_collections
